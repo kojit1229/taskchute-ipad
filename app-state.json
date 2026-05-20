@@ -1,5 +1,5 @@
 {
-  "currentView": "pomodoro",
+  "currentView": "settings",
   "selectedDate": "2026-05-20",
   "settings": {
     "birthDate": "",
@@ -24,102 +24,80 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-20T14:30:00"
+      "lastSavedAt": ""
     },
-    "visionSection": "board",
+    "visionSection": "vision",
     "visionBoardIndex": 0
   },
   "projects": [
     {
-      "id": "e479665b-8811-4ad7-b513-bc6214385b74",
+      "id": "6e825312-063d-4f81-9953-8c92d546150d",
       "kind": "wish",
       "title": "Wish",
       "category": "回復",
       "status": "active",
       "twelveWeekStartDate": "",
-      "createdAt": "2026-05-20T14:17:00",
-      "updatedAt": "2026-05-20T14:17:00",
+      "createdAt": "2026-05-20T14:55:00",
+      "updatedAt": "2026-05-20T14:55:00",
       "deleted": false
     },
     {
-      "id": "a602bcd0-20ca-412d-a87d-9d596e58a4a6",
+      "id": "60ad2a81-5ec5-48f9-85f8-9c0f7a3b6ce4",
       "kind": "normal",
       "title": "Web版 TaskChute Journal を育てる",
       "category": "開発",
       "status": "active",
       "twelveWeekStartDate": "2026-05-20",
-      "createdAt": "2026-05-20T14:17:00",
-      "updatedAt": "2026-05-20T14:17:00",
-      "deleted": true
-    },
-    {
-      "id": "8ae19700-ddce-4d92-8e02-e921cbff0cb4",
-      "kind": "normal",
-      "title": "H1保守",
-      "category": "",
-      "status": "active",
-      "twelveWeekStartDate": "2026-05-20",
-      "createdAt": "2026-05-20T14:17:00",
-      "updatedAt": "2026-05-20T14:17:00",
+      "createdAt": "2026-05-20T14:55:00",
+      "updatedAt": "2026-05-20T14:55:00",
       "deleted": false
     }
   ],
   "tasks": [
     {
-      "id": "c47f763d-5539-4d75-bae3-4ae1d429d397",
-      "projectId": "a602bcd0-20ca-412d-a87d-9d596e58a4a6",
+      "id": "3d9f41a5-42ed-4562-af69-8ac3580eb40f",
+      "projectId": "60ad2a81-5ec5-48f9-85f8-9c0f7a3b6ce4",
       "title": "PWA版のMVPを確認する",
       "category": "開発",
       "status": "doing",
       "dueDate": "2026-05-20",
-      "createdAt": "2026-05-20T14:17:00",
-      "updatedAt": "2026-05-20T14:17:00",
+      "createdAt": "2026-05-20T14:55:00",
+      "updatedAt": "2026-05-20T14:55:00",
       "deleted": false
     },
     {
-      "id": "fbc8c05c-8f05-4e8d-bb82-f1cb2c1c68a6",
-      "projectId": "a602bcd0-20ca-412d-a87d-9d596e58a4a6",
+      "id": "ad6c6bba-1fc9-4731-9ec3-331e8d46b917",
+      "projectId": "60ad2a81-5ec5-48f9-85f8-9c0f7a3b6ce4",
       "title": "GitHub Pages公開手順を決める",
       "category": "開発",
       "status": "todo",
       "dueDate": "2026-05-21",
-      "createdAt": "2026-05-20T14:17:00",
-      "updatedAt": "2026-05-20T14:17:00",
+      "createdAt": "2026-05-20T14:55:00",
+      "updatedAt": "2026-05-20T14:55:00",
       "deleted": false
     },
     {
-      "id": "2adfff0a-2885-45f7-bdf7-475f45839f8b",
-      "projectId": "e479665b-8811-4ad7-b513-bc6214385b74",
+      "id": "1b252655-dbbc-49b5-b8ea-72a565894e9e",
+      "projectId": "6e825312-063d-4f81-9953-8c92d546150d",
       "title": "気分が上がる散歩コースを試す",
       "category": "回復",
       "status": "todo",
       "dueDate": "",
-      "createdAt": "2026-05-20T14:17:00",
-      "updatedAt": "2026-05-20T14:17:00",
-      "deleted": true
-    },
-    {
-      "id": "abd74bf7-b98f-4efb-b359-60fe62363f58",
-      "projectId": "e479665b-8811-4ad7-b513-bc6214385b74",
-      "title": "テスト",
-      "category": "",
-      "status": "todo",
-      "dueDate": "2026-05-20",
-      "createdAt": "2026-05-20T14:19:00",
-      "updatedAt": "2026-05-20T14:19:00",
+      "createdAt": "2026-05-20T14:55:00",
+      "updatedAt": "2026-05-20T14:55:00",
       "deleted": false
     }
   ],
   "blocks": [
     {
-      "id": "81699a65-8689-4a99-a2f8-c7c422f51f42",
-      "taskId": "c47f763d-5539-4d75-bae3-4ae1d429d397",
+      "id": "685aaf09-0e06-4802-ab51-dd5c5eafcdfa",
+      "taskId": "3d9f41a5-42ed-4562-af69-8ac3580eb40f",
       "date": "2026-05-20",
       "title": "PWA版をiPadで触る",
       "category": "開発",
       "plannedStartAt": "2026-05-20T09:00:00",
       "plannedEndAt": "2026-05-20T10:00:00",
-      "actualStartAt": "",
+      "actualStartAt": "2026-05-20T14:59:00",
       "actualEndAt": "",
       "completed": false,
       "charge": 2,
@@ -131,19 +109,19 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "createdAt": "2026-05-20T14:17:00",
-      "updatedAt": "2026-05-20T14:18:00",
-      "deleted": true
+      "createdAt": "2026-05-20T14:55:00",
+      "updatedAt": "2026-05-20T14:59:00",
+      "deleted": false
     },
     {
-      "id": "8c1d2241-ba8f-42c1-8cd8-4bc1e0cf4759",
+      "id": "53af6932-339e-43b6-a4ef-a7405fc43bca",
       "taskId": "",
       "date": "2026-05-20",
       "title": "昼のジャーナル",
       "category": "内省",
       "plannedStartAt": "2026-05-20T12:30:00",
       "plannedEndAt": "2026-05-20T12:45:00",
-      "actualStartAt": "",
+      "actualStartAt": "2026-05-20T14:59:00",
       "actualEndAt": "",
       "completed": false,
       "charge": 1,
@@ -152,16 +130,16 @@
       "expectedDischarge": "",
       "comment": "",
       "recurrenceGroupId": "",
-      "pomodoroCount": 0,
+      "pomodoroCount": 1,
       "migratedTo": "",
       "orderIndex": 0,
-      "createdAt": "2026-05-20T14:17:00",
-      "updatedAt": "2026-05-20T14:18:00",
-      "deleted": true
+      "createdAt": "2026-05-20T14:55:00",
+      "updatedAt": "2026-05-20T14:59:00",
+      "deleted": false
     },
     {
-      "id": "4818cb22-8a4f-4315-ae42-687aaabe1874",
-      "taskId": "fbc8c05c-8f05-4e8d-bb82-f1cb2c1c68a6",
+      "id": "3802e7b8-fe39-41bf-8487-d501535430db",
+      "taskId": "ad6c6bba-1fc9-4731-9ec3-331e8d46b917",
       "date": "2026-05-20",
       "title": "GitHub Pagesの公開準備",
       "category": "開発",
@@ -179,32 +157,8 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "createdAt": "2026-05-20T14:17:00",
-      "updatedAt": "2026-05-20T14:18:00",
-      "deleted": true
-    },
-    {
-      "id": "f68c83ba-bff4-45b5-8a6d-2adb90c21fe0",
-      "taskId": "abd74bf7-b98f-4efb-b359-60fe62363f58",
-      "date": "2026-05-20",
-      "title": "テスト",
-      "category": "Wish",
-      "plannedStartAt": "2026-05-20T14:00:00",
-      "plannedEndAt": "2026-05-20T15:00:00",
-      "actualStartAt": "",
-      "actualEndAt": "",
-      "completed": false,
-      "charge": 0,
-      "discharge": 0,
-      "expectedCharge": "",
-      "expectedDischarge": "",
-      "comment": "",
-      "recurrenceGroupId": "",
-      "pomodoroCount": 0,
-      "migratedTo": "",
-      "orderIndex": 0,
-      "createdAt": "2026-05-20T14:22:00",
-      "updatedAt": "2026-05-20T14:22:00",
+      "createdAt": "2026-05-20T14:55:00",
+      "updatedAt": "2026-05-20T14:55:00",
       "deleted": false
     }
   ],
@@ -215,26 +169,11 @@
   "reports": {},
   "pomodoro": {
     "running": false,
-    "blockId": "",
-    "startedAt": "",
-    "endsAt": "",
-    "mode": "focus",
-    "passive": {
-      "enabled": false,
-      "activeWeekdays": [
-        false,
-        true,
-        true,
-        true,
-        true,
-        true,
-        false
-      ],
-      "activeStartHHMM": "08:00",
-      "activeEndHHMM": "19:00",
-      "lastFiredKey": ""
-    },
-    "tab": "passive"
+    "blockId": "53af6932-339e-43b6-a4ef-a7405fc43bca",
+    "startedAt": "2026-05-20T14:59:00",
+    "endsAt": "2026-05-20T15:24:00",
+    "mode": "focus"
   },
-  "modal": null
+  "modal": null,
+  "timelineMode": "planned"
 }
