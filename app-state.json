@@ -1,5 +1,5 @@
 {
-  "currentView": "settings",
+  "currentView": "timeline",
   "selectedDate": "2026-05-20",
   "settings": {
     "birthDate": "",
@@ -24,24 +24,24 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-20T15:59:00"
+      "lastSavedAt": "2026-05-20T16:00:00"
     },
     "visionSection": "board",
     "visionBoardIndex": 2,
     "categories": [
       {
         "id": "392b1d14-76ae-4afa-96fd-e64e009a3f16",
-        "name": "開発",
+        "name": "仕事",
         "color": "#007AFF"
       },
       {
         "id": "7114bf04-24c7-4d38-b5e7-e07361efaf28",
-        "name": "内省",
+        "name": "家族",
         "color": "#34C759"
       },
       {
         "id": "b468525f-7831-4de5-8d10-bf95a5a41163",
-        "name": "営業",
+        "name": "個人",
         "color": "#FF9500"
       },
       {
@@ -58,6 +58,11 @@
         "id": "a1055c1a-6b1b-4039-916c-6d0d71667bd3",
         "name": "回復",
         "color": "#5AC8FA"
+      },
+      {
+        "id": "1081a024-af2f-45d0-914b-0f704daa196c",
+        "name": "ルーティン",
+        "color": "#FF2D55"
       }
     ],
     "breakMessages": [
@@ -103,7 +108,7 @@
       "id": "60ad2a81-5ec5-48f9-85f8-9c0f7a3b6ce4",
       "kind": "normal",
       "title": "Web版 TaskChute Journal を育てる",
-      "category": "開発",
+      "category": "開",
       "status": "active",
       "twelveWeekStartDate": "2026-05-20",
       "createdAt": "2026-05-20T14:55:00",
@@ -114,7 +119,7 @@
       "id": "65bab0a6-4adc-4b11-be94-0b5568ff4f4a",
       "kind": "normal",
       "title": "H1保守",
-      "category": "",
+      "category": "s",
       "status": "active",
       "twelveWeekStartDate": "",
       "createdAt": "2026-05-20T15:09:00",
@@ -130,7 +135,7 @@
       "id": "3d9f41a5-42ed-4562-af69-8ac3580eb40f",
       "projectId": "60ad2a81-5ec5-48f9-85f8-9c0f7a3b6ce4",
       "title": "PWA版のMVPを確認する",
-      "category": "開発",
+      "category": "開",
       "status": "doing",
       "dueDate": "2026-05-20",
       "createdAt": "2026-05-20T14:55:00",
@@ -141,7 +146,7 @@
       "id": "ad6c6bba-1fc9-4731-9ec3-331e8d46b917",
       "projectId": "60ad2a81-5ec5-48f9-85f8-9c0f7a3b6ce4",
       "title": "GitHub Pages公開手順を決める",
-      "category": "開発",
+      "category": "開",
       "status": "todo",
       "dueDate": "2026-05-21",
       "createdAt": "2026-05-20T14:55:00",
@@ -164,7 +169,7 @@
       "projectId": "65bab0a6-4adc-4b11-be94-0b5568ff4f4a",
       "parentTaskId": "",
       "title": "依頼調査",
-      "category": "",
+      "category": "s",
       "status": "todo",
       "dueDate": "2026-05-22",
       "description": "",
@@ -179,7 +184,7 @@
       "taskId": "",
       "date": "2026-05-20",
       "title": "PWA版をiPadで触る",
-      "category": "開発",
+      "category": "開",
       "plannedStartAt": "2026-05-20T09:00:00",
       "plannedEndAt": "2026-05-20T10:00:00",
       "actualStartAt": "2026-05-20T14:59:00",
@@ -203,7 +208,7 @@
       "taskId": "",
       "date": "2026-05-20",
       "title": "昼のジャーナル",
-      "category": "内省",
+      "category": "内",
       "plannedStartAt": "2026-05-20T12:30:00",
       "plannedEndAt": "2026-05-20T12:45:00",
       "actualStartAt": "2026-05-20T14:59:00",
@@ -227,7 +232,7 @@
       "taskId": "",
       "date": "2026-05-20",
       "title": "GitHub Pagesの公開準備",
-      "category": "開発",
+      "category": "開",
       "plannedStartAt": "2026-05-20T15:00:00",
       "plannedEndAt": "2026-05-20T16:00:00",
       "actualStartAt": "",
@@ -298,6 +303,9 @@
       "lastFiredKey": ""
     }
   },
-  "modal": null,
+  "modal": {
+    "type": "block",
+    "id": "1324e0fe-a664-4bfb-a90a-acbd1ed540c2"
+  },
   "timelineMode": "planned"
 }
