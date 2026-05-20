@@ -1,5 +1,5 @@
 {
-  "currentView": "vision",
+  "currentView": "tasks",
   "selectedDate": "2026-05-20",
   "settings": {
     "birthDate": "",
@@ -24,7 +24,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-20T15:07:00"
+      "lastSavedAt": "2026-05-20T15:08:00"
     },
     "visionSection": "board",
     "visionBoardIndex": 2
@@ -51,6 +51,20 @@
       "createdAt": "2026-05-20T14:55:00",
       "updatedAt": "2026-05-20T15:03:00",
       "deleted": true
+    },
+    {
+      "id": "65bab0a6-4adc-4b11-be94-0b5568ff4f4a",
+      "kind": "normal",
+      "title": "H1保守",
+      "category": "",
+      "status": "active",
+      "twelveWeekStartDate": "",
+      "createdAt": "2026-05-20T15:09:00",
+      "updatedAt": "2026-05-20T15:09:00",
+      "deleted": false,
+      "startDate": "",
+      "dueDate": "",
+      "description": ""
     }
   ],
   "tasks": [
@@ -86,6 +100,19 @@
       "createdAt": "2026-05-20T14:55:00",
       "updatedAt": "2026-05-20T15:03:00",
       "deleted": true
+    },
+    {
+      "id": "d7defa12-2fda-4c90-a589-2aaac453d2ad",
+      "projectId": "65bab0a6-4adc-4b11-be94-0b5568ff4f4a",
+      "parentTaskId": "",
+      "title": "依頼調査",
+      "category": "",
+      "status": "todo",
+      "dueDate": "2026-05-22",
+      "description": "",
+      "createdAt": "2026-05-20T15:09:00",
+      "updatedAt": "2026-05-20T15:09:00",
+      "deleted": false
     }
   ],
   "blocks": [
@@ -160,6 +187,30 @@
       "createdAt": "2026-05-20T14:55:00",
       "updatedAt": "2026-05-20T15:04:00",
       "deleted": true
+    },
+    {
+      "id": "9502914c-c37e-403d-989e-201863c87eb2",
+      "title": "依頼調査",
+      "date": "2026-05-20",
+      "category": "H1保守",
+      "taskId": "d7defa12-2fda-4c90-a589-2aaac453d2ad",
+      "plannedStartAt": "2026-05-20T16:00:00",
+      "plannedEndAt": "2026-05-20T16:30:00",
+      "actualStartAt": "",
+      "actualEndAt": "",
+      "charge": 0,
+      "discharge": 0,
+      "completed": false,
+      "comment": "",
+      "expectedCharge": "",
+      "expectedDischarge": "",
+      "recurrenceGroupId": "",
+      "pomodoroCount": 0,
+      "migratedTo": "",
+      "orderIndex": 0,
+      "createdAt": "2026-05-20T15:09:00",
+      "updatedAt": "2026-05-20T15:10:00",
+      "deleted": false
     }
   ],
   "journals": {
