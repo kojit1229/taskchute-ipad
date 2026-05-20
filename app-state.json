@@ -1,5 +1,5 @@
 {
-  "currentView": "settings",
+  "currentView": "wbs",
   "selectedDate": "2026-05-20",
   "settings": {
     "birthDate": "",
@@ -84,8 +84,8 @@
       "status": "todo",
       "dueDate": "",
       "createdAt": "2026-05-20T14:55:00",
-      "updatedAt": "2026-05-20T14:55:00",
-      "deleted": false
+      "updatedAt": "2026-05-20T15:03:00",
+      "deleted": true
     }
   ],
   "blocks": [
