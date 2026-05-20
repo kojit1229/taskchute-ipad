@@ -268,11 +268,11 @@
       "expectedCharge": "",
       "expectedDischarge": "",
       "recurrenceGroupId": "",
-      "pomodoroCount": 1,
+      "pomodoroCount": 2,
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-20T15:09:00",
-      "updatedAt": "2026-05-20T16:23:00",
+      "updatedAt": "2026-05-20T16:48:00",
       "deleted": false
     },
     {
@@ -9931,10 +9931,10 @@
   "reports": {},
   "pomodoro": {
     "running": true,
-    "blockId": "9502914c-c37e-403d-989e-201863c87eb2",
-    "startedAt": "2026-05-20T16:23:00",
-    "endsAt": "2026-05-20T16:48:00",
-    "mode": "focus",
+    "blockId": "",
+    "startedAt": "2026-05-20T16:48:00",
+    "endsAt": "2026-05-20T16:53:00",
+    "mode": "break",
     "passive": {
       "enabled": false,
       "activeWeekdays": [
