@@ -1,5 +1,5 @@
 {
-  "currentView": "pomodoro",
+  "currentView": "vision",
   "selectedDate": "2026-05-20",
   "settings": {
     "birthDate": "",
@@ -24,7 +24,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-20T15:00:00"
+      "lastSavedAt": "2026-05-20T15:01:00"
     },
     "visionSection": "vision",
     "visionBoardIndex": 0
