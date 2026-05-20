@@ -1,0 +1,19 @@
+{
+  "name": "TaskChute Journal",
+  "short_name": "TaskChute",
+  "description": "WBS、タスクシュート、タイムライン、ジャーナルを統合した個人用PWA。",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f7fa",
+  "theme_color": "#f7f7fa",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "./assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
