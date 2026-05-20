@@ -79,6 +79,8 @@ document.addEventListener("click", (event) => {
   if (action === "start-pomodoro") startPomodoro(target.dataset.blockId || "");
   if (action === "stop-pomodoro") stopPomodoro();
   if (action === "complete-pomodoro") completePomodoro();
+  if (action === "go-break") goBreakPomodoro();
+  if (action === "end-break") endBreakPomodoro();
   // === v2: 編集モーダル ===
   if (action === "edit-project") openProjectEditor(id);
   if (action === "edit-task") openTaskEditor(id);
@@ -110,6 +112,11 @@ document.addEventListener("click", (event) => {
     event.stopPropagation();
     completeBlockWithActual(id);
   }
+  // === v9: カテゴリ管理 / 休憩メッセージ管理 ===
+  if (action === "add-category") addCategory();
+  if (action === "delete-category") deleteCategory(target.dataset.catId);
+  if (action === "add-break-message") addBreakMessage();
+  if (action === "delete-break-message") deleteBreakMessage(target.dataset.msgId);
 });
 
 document.addEventListener("input", (event) => {
@@ -129,6 +136,14 @@ document.addEventListener("input", (event) => {
   if (target.matches("[data-github-field]")) {
     state.settings.github[target.dataset.githubField] = target.value.trim();
     saveState();
+  }
+  // === v9: カテゴリ編集 ===
+  if (target.matches("[data-cat-id][data-cat-field]")) {
+    updateCategoryField(target.dataset.catId, target.dataset.catField, target.value);
+  }
+  // === v9: 休憩メッセージ編集 ===
+  if (target.matches("[data-msg-id][data-msg-field]")) {
+    updateBreakMessageField(target.dataset.msgId, target.dataset.msgField, target.value);
   }
 });
 
@@ -156,6 +171,10 @@ document.addEventListener("change", (event) => {
     const date = target.dataset.feedbackUpload;
     const file = target.files?.[0];
     if (file) uploadFeedbackFile(date, file);
+  }
+  // v9: 編集モーダルのカテゴリselectで「+ 新規カテゴリ追加」を選んだ時
+  if (target.matches('[data-modal-field="category"]') && target.value === "__ADD_NEW__") {
+    handleAddCategoryFromModal(target);
   }
 });
 
@@ -193,6 +212,14 @@ function normalizeState(value) {
   if (typeof value.settings.visionBoardIndex !== "number") {
     value.settings.visionBoardIndex = 0;
   }
+  // v9: カテゴリーマスタ
+  if (!Array.isArray(value.settings.categories) || value.settings.categories.length === 0) {
+    value.settings.categories = defaultCategories();
+  }
+  // v9: 休憩メッセージマスタ
+  if (!Array.isArray(value.settings.breakMessages) || value.settings.breakMessages.length === 0) {
+    value.settings.breakMessages = defaultBreakMessages();
+  }
   value.projects ||= [];
   value.tasks ||= [];
   value.blocks ||= [];
@@ -201,6 +228,150 @@ function normalizeState(value) {
   value.reports ||= {};
   value.modal = null;  // 起動時はモーダル閉じた状態
   return value;
+}
+
+// v9: カテゴリーマスタのデフォルト
+function defaultCategories() {
+  return [
+    { id: crypto.randomUUID(), name: "開発", color: "#007AFF" },
+    { id: crypto.randomUUID(), name: "内省", color: "#34C759" },
+    { id: crypto.randomUUID(), name: "営業", color: "#FF9500" },
+    { id: crypto.randomUUID(), name: "学習", color: "#AF52DE" },
+    { id: crypto.randomUUID(), name: "休息", color: "#8E8E93" },
+    { id: crypto.randomUUID(), name: "回復", color: "#5AC8FA" }
+  ];
+}
+
+// v9: 休憩メッセージマスタのデフォルト(残り秒ベース)
+function defaultBreakMessages() {
+  return [
+    { id: crypto.randomUUID(), fromSec: 0,   toSec: 30,  message: "もうすぐ次のセッション。深呼吸して準備を。" },
+    { id: crypto.randomUUID(), fromSec: 30,  toSec: 120, message: "ゆっくり水を一口。" },
+    { id: crypto.randomUUID(), fromSec: 120, toSec: 240, message: "立ち上がって、肩を回しましょう。" },
+    { id: crypto.randomUUID(), fromSec: 240, toSec: 301, message: "目を閉じて、息を整えて。" }
+  ];
+}
+
+// v9: カラーパレット(iOS 標準色)
+const CATEGORY_COLOR_PRESETS = [
+  "#007AFF", "#34C759", "#FF9500", "#AF52DE", "#FF2D55",
+  "#5AC8FA", "#FFCC00", "#FF3B30", "#5856D6", "#8E8E93"
+];
+
+// v9: カテゴリ追加(設定画面の「+ カテゴリを追加」)
+function addCategory() {
+  const name = (window.prompt("新しいカテゴリ名") || "").trim();
+  if (!name) return;
+  const cats = state.settings.categories || [];
+  if (cats.some((c) => c.name === name)) {
+    showToast("同名のカテゴリが既にあります");
+    return;
+  }
+  const usedColors = cats.map((c) => c.color);
+  const nextColor = CATEGORY_COLOR_PRESETS.find((c) => !usedColors.includes(c)) || CATEGORY_COLOR_PRESETS[0];
+  state.settings.categories = [...cats, {
+    id: crypto.randomUUID(),
+    name,
+    color: nextColor
+  }];
+  saveAndRender(`カテゴリ「${name}」を追加しました`);
+}
+
+// v9: カテゴリ削除
+function deleteCategory(catId) {
+  const cat = (state.settings.categories || []).find((c) => c.id === catId);
+  if (!cat) return;
+  // 既存の Project/Task/Block で使用中なら警告
+  const usedCount = countCategoryUsage(cat.name);
+  const msg = usedCount > 0
+    ? `カテゴリ「${cat.name}」を削除しますか?\n(${usedCount} 件のレコードで使用中。既存のレコードのカテゴリ表示はグレーになります)`
+    : `カテゴリ「${cat.name}」を削除しますか?`;
+  if (!window.confirm(msg)) return;
+  state.settings.categories = (state.settings.categories || []).filter((c) => c.id !== catId);
+  saveAndRender(`カテゴリ「${cat.name}」を削除しました`);
+}
+
+// v9: 指定カテゴリ名を使用している Project/Task/Block の合計数
+function countCategoryUsage(name) {
+  let n = 0;
+  for (const p of state.projects || []) if (!p.deleted && p.category === name) n++;
+  for (const t of state.tasks || []) if (!t.deleted && t.category === name) n++;
+  for (const b of state.blocks || []) if (!b.deleted && b.category === name) n++;
+  return n;
+}
+
+// v9: カテゴリのフィールド編集(name / color)
+function updateCategoryField(catId, field, value) {
+  const cats = state.settings.categories || [];
+  const idx = cats.findIndex((c) => c.id === catId);
+  if (idx < 0) return;
+  const oldCat = cats[idx];
+  const newCat = { ...oldCat, [field]: value };
+  // 名前変更時は、既存の Project/Task/Block の category 値も追従させる
+  if (field === "name" && value && value !== oldCat.name) {
+    state.projects = state.projects.map((p) => p.category === oldCat.name ? { ...p, category: value } : p);
+    state.tasks = state.tasks.map((t) => t.category === oldCat.name ? { ...t, category: value } : t);
+    state.blocks = state.blocks.map((b) => b.category === oldCat.name ? { ...b, category: value } : b);
+  }
+  state.settings.categories = cats.map((c, i) => i === idx ? newCat : c);
+  saveState();
+  scheduleAutoSave();
+  // 色変更はリアルタイムで見えてほしいので、メイン画面のみ再描画(設定画面入力中はフォーカスを失わないように)
+  if (field === "color") {
+    // 設定画面では再描画しない(カラーピッカーが閉じる) → タイムライン rail などは次回ナビ時に更新される
+    // ただし、メインのレンダリングを軽く更新
+  }
+}
+
+// v9: 休憩メッセージ追加
+function addBreakMessage() {
+  const msgs = state.settings.breakMessages || [];
+  state.settings.breakMessages = [...msgs, {
+    id: crypto.randomUUID(),
+    fromSec: 0,
+    toSec: 30,
+    message: "新しいメッセージ"
+  }];
+  saveAndRender("休憩メッセージを追加しました");
+}
+
+// v9: 休憩メッセージ削除
+function deleteBreakMessage(msgId) {
+  if (!window.confirm("このメッセージを削除しますか?")) return;
+  state.settings.breakMessages = (state.settings.breakMessages || []).filter((m) => m.id !== msgId);
+  saveAndRender("削除しました");
+}
+
+// v9: 休憩メッセージのフィールド編集
+function updateBreakMessageField(msgId, field, value) {
+  const msgs = state.settings.breakMessages || [];
+  const idx = msgs.findIndex((m) => m.id === msgId);
+  if (idx < 0) return;
+  const parsed = (field === "fromSec" || field === "toSec") ? Number(value) : value;
+  state.settings.breakMessages = msgs.map((m, i) => i === idx ? { ...m, [field]: parsed } : m);
+  saveState();
+  scheduleAutoSave();
+}
+
+// v9: カテゴリー名から色を取得(マスタ未登録ならグレー)
+function getCategoryColor(name) {
+  if (!name) return "#8E8E93";
+  const cats = state.settings?.categories || [];
+  const found = cats.find((c) => c.name === name);
+  return found ? found.color : "#8E8E93";
+}
+
+// v9: カテゴリー名一覧(編集モーダルのドロップダウン用)
+function getCategoryNames() {
+  return (state.settings?.categories || []).map((c) => c.name);
+}
+
+// v9: 休憩中の残り秒に対応するメッセージを取得
+function getBreakMessage(remainingSec) {
+  const msgs = state.settings?.breakMessages || [];
+  const sec = Math.max(0, Math.floor(remainingSec));
+  const found = msgs.find((m) => sec >= m.fromSec && sec < m.toSec);
+  return found ? found.message : "";
 }
 
 function defaultGitHubSettings() {
@@ -213,6 +384,77 @@ function defaultGitHubSettings() {
     autoSave: false,
     lastSavedAt: ""
   };
+}
+
+// v9: 編集モーダルのカテゴリselectで「+ 新規カテゴリ追加」が選ばれた時の処理
+function handleAddCategoryFromModal(selectEl) {
+  const name = (window.prompt("新しいカテゴリ名を入力") || "").trim();
+  if (!name) {
+    // キャンセル: 元の値に戻す
+    selectEl.value = selectEl.dataset.prevValue || "";
+    return;
+  }
+  // 既存にあれば追加せず選択するだけ
+  const existing = (state.settings.categories || []).find((c) => c.name === name);
+  if (!existing) {
+    const usedColors = (state.settings.categories || []).map((c) => c.color);
+    const nextColor = CATEGORY_COLOR_PRESETS.find((c) => !usedColors.includes(c)) || CATEGORY_COLOR_PRESETS[0];
+    state.settings.categories = [...(state.settings.categories || []), {
+      id: crypto.randomUUID(),
+      name,
+      color: nextColor
+    }];
+    saveState();
+    showToast(`カテゴリ「${name}」を追加しました`);
+  }
+  // モーダル全体を再描画して、追加されたカテゴリを反映
+  rerenderActiveModal();
+  // 再描画後、追加したカテゴリを選択状態にする(rerenderActiveModal で select が再生成される)
+  setTimeout(() => {
+    const newSelect = modalRoot.querySelector('[data-modal-field="category"]');
+    if (newSelect) newSelect.value = name;
+  }, 0);
+}
+
+// v9: 現在開いているモーダルを再描画(state.modal の type を見て該当 editor を再オープン)
+function rerenderActiveModal() {
+  if (!state.modal) return;
+  // モーダル再描画前に現在のフォーム入力値を退避(category 以外の編集中の値を失わない)
+  const cached = {};
+  modalRoot.querySelectorAll("[data-modal-field]").forEach((el) => {
+    const key = el.dataset.modalField;
+    cached[key] = el.type === "checkbox" ? el.checked : el.value;
+  });
+  const { type, id } = state.modal;
+  // モーダルを再オープン
+  if (type === "project") openProjectEditor(id);
+  else if (type === "task") openTaskEditor(id);
+  else if (type === "block") openBlockEditor(id);
+  else return;
+  // 入力中の値を復元(category 以外)
+  modalRoot.querySelectorAll("[data-modal-field]").forEach((el) => {
+    const key = el.dataset.modalField;
+    if (key in cached && key !== "category") {
+      if (el.type === "checkbox") el.checked = cached[key];
+      else el.value = cached[key];
+    }
+  });
+}
+function renderCategorySelect(currentName) {
+  const names = getCategoryNames();
+  // 現在の値がマスタに無い旧データの場合は、それも候補として表示(失わせない)
+  const inMaster = names.includes(currentName);
+  const extraOption = (currentName && !inMaster)
+    ? `<option value="${escapeHTML(currentName)}" selected>${escapeHTML(currentName)}(マスタ外)</option>`
+    : "";
+  return `
+    <select class="select" data-modal-field="category">
+      <option value="" ${!currentName ? "selected" : ""}>(カテゴリなし)</option>
+      ${extraOption}
+      ${names.map((n) => `<option value="${escapeHTML(n)}" ${n === currentName ? "selected" : ""}>${escapeHTML(n)}</option>`).join("")}
+      <option value="__ADD_NEW__">+ 新規カテゴリ追加…</option>
+    </select>
+  `;
 }
 
 function seedState() {
@@ -511,7 +753,7 @@ function renderProjectTree(project) {
           <span class="badge ${project.kind === "wish" ? "purple" : "blue"}">${project.kind === "wish" ? "Wish" : "Project"}</span>
           ${is12WY ? `<span class="badge green">12WY</span>` : ""}
           <strong>${escapeHTML(project.title)}</strong>
-          ${project.category ? `<span class="badge">${escapeHTML(project.category)}</span>` : ""}
+          ${project.category ? `<span class="cat-chip" style="background:${getCategoryColor(project.category)}1f; color:${getCategoryColor(project.category)}; border:1px solid ${getCategoryColor(project.category)}66">${escapeHTML(project.category)}</span>` : ""}
         </div>
         <div class="row">
           <button class="btn" data-action="add-task-to-project" data-id="${project.id}">+ タスク</button>
@@ -550,7 +792,7 @@ function renderTaskRow(task, depth = 0) {
         <button class="checkbox-button ${task.status === "completed" ? "done" : ""}" data-action="toggle-task" data-id="${task.id}">✓</button>
         <span>${escapeHTML(task.title)}</span>
         <span class="badge">${task.status}</span>
-        ${task.category ? `<span class="badge">${escapeHTML(task.category)}</span>` : ""}
+        ${task.category ? `<span class="cat-chip" style="background:${getCategoryColor(task.category)}1f; color:${getCategoryColor(task.category)}; border:1px solid ${getCategoryColor(task.category)}66">${escapeHTML(task.category)}</span>` : ""}
         <span class="muted" style="font-size:11px">${dueLabel}</span>
       </div>
       <div class="row">
@@ -619,17 +861,18 @@ function renderBlockItem(block) {
   const start = block.plannedStartAt ? timeFromDateTime(block.plannedStartAt) : "未定";
   const end = block.plannedEndAt ? timeFromDateTime(block.plannedEndAt) : "";
   const task = block.taskId ? state.tasks.find((item) => item.id === block.taskId) : null;
+  const catColor = block.category ? getCategoryColor(block.category) : null;
   return `
-    <div class="item block-row">
+    <div class="item block-row" ${catColor ? `style="border-left:3px solid ${catColor}"` : ""}>
       <button class="checkbox-button ${block.completed ? "done" : ""}" data-action="toggle-block" data-id="${block.id}">✓</button>
       <div class="stack">
         <div class="title-line">
           <strong>${escapeHTML(block.title)}</strong>
           <span class="badge ${block.completed ? "green" : "blue"}">${start}${end ? `-${end}` : ""}</span>
           ${task ? `<span class="badge">${escapeHTML(projectName(task.projectId))}</span>` : `<span class="badge orange">単発</span>`}
+          ${block.category ? `<span class="cat-chip" style="background:${catColor}1f; color:${catColor}; border:1px solid ${catColor}66">${escapeHTML(block.category)}</span>` : ""}
         </div>
         <div class="block-meta">
-          <span class="muted">${escapeHTML(block.category || "カテゴリなし")}</span>
           <label>充電
             <select class="mini-select" data-block-field="charge" data-id="${block.id}">
               ${rangeOptions(0, 5, block.charge)}
@@ -716,9 +959,15 @@ function renderTimelineCard(block, rowHeight, startHour, mode = "planned") {
   const top = Math.max(0, ((start - startHour * 60) / 60) * rowHeight);
   const height = Math.max(38, ((end - start) / 60) * rowHeight);
   const isActual = mode === "actual";
+  // v9: カテゴリ色を反映(設定済みの場合のみ。未設定はデフォルト青/緑)
+  const catColor = block.category ? getCategoryColor(block.category) : null;
+  // カテゴリ色がある時は、それを背景(薄く)・左ボーダー・テキスト色のベースに
+  const catStyle = catColor
+    ? `background:${catColor}29; border-left:4px solid ${catColor}; color:${catColor};`
+    : "";
   return `
     <div class="timeline-card ${block.completed ? "completed" : ""} ${isActual ? "is-actual" : ""}"
-         style="top:${top}px;height:${height}px;"
+         style="top:${top}px;height:${height}px;${catStyle}"
          data-action="edit-block" data-id="${block.id}">
       ${!isActual ? `<button class="tl-complete-btn" data-action="complete-block-with-actual" data-id="${block.id}" aria-label="完了登録">○</button>` : ""}
       <div class="tl-card-body">
@@ -810,8 +1059,11 @@ function renderEnergyGraph(allBlocks, rowHeight, startHour, endHour) {
 
 function renderPomodoro() {
   const running = state.pomodoro.running;
-  // 2倍速表示: 残り時間 * 2 を 50:00 形式で
-  const remaining = running ? remainingText(state.pomodoro.endsAt, true) : "50:00";
+  const mode = state.pomodoro.mode || "focus";
+  // focus は 2倍速で 50:00 → 0:00、break は等速で 5:00 → 0:00
+  const remaining = running
+    ? remainingText(state.pomodoro.endsAt, mode === "focus")
+    : "50:00";
   const blockOptions = blocksForDate(state.selectedDate).filter((block) => !block.completed);
   const pomoTab = state.pomodoro.tab || "manual";
   return `
@@ -826,13 +1078,37 @@ function renderPomodoro() {
 
 function renderManualPomodoro(running, remaining, blockOptions) {
   if (running) {
-    // 進捗率を計算
+    const mode = state.pomodoro.mode || "focus";
     const endsAtMs = new Date(state.pomodoro.endsAt).getTime();
+    const remainingMs = Math.max(0, endsAtMs - Date.now());
+    const remainingSec = Math.floor(remainingMs / 1000);
+    const currentBlock = state.blocks.find((b) => b.id === state.pomodoro.blockId);
+
+    if (mode === "break") {
+      // 休憩フェーズ: 等速 5:00 → 0:00、オレンジ色
+      const breakTotalMs = 5 * 60 * 1000;
+      const progress = 1 - remainingMs / breakTotalMs;
+      const breakDisplay = remainingTextNormal(remainingMs);
+      const message = getBreakMessage(remainingSec);
+      return `
+        <section class="panel" style="display:grid; place-items:center; min-height:380px; padding:24px">
+          ${renderCircularProgress(progress, breakDisplay, "var(--orange)")}
+          <div style="text-align:center; margin-top:14px">
+            <div style="font-size:13px; font-weight:700; color:var(--orange)">☕️ 休憩中</div>
+            <div class="muted" style="font-size:11px; margin-top:4px">5:00 → 0:00(実時間)</div>
+            ${message ? `<div style="margin-top:10px; font-size:14px; font-weight:600; color:var(--text)">${escapeHTML(message)}</div>` : ""}
+          </div>
+          <div style="margin-top:18px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap">
+            <button class="btn green" data-action="end-break">✓ 休憩終了</button>
+            ${currentBlock ? `<button class="btn orange" data-action="start-pomodoro" data-block-id="${currentBlock.id}">🔁 もう一度(同じBlock)</button>` : ""}
+          </div>
+        </section>
+      `;
+    }
+    // focus フェーズ: 50:00 → 00:00、青色、2倍速
     const startedAtMs = new Date(state.pomodoro.startedAt).getTime();
     const totalMs = endsAtMs - startedAtMs;
-    const remainingMs = Math.max(0, endsAtMs - Date.now());
     const progress = 1 - remainingMs / totalMs;
-    const currentBlock = state.blocks.find((b) => b.id === state.pomodoro.blockId);
     return `
       <section class="panel" style="display:grid; place-items:center; min-height:380px; padding:24px">
         ${renderCircularProgress(progress, remaining, "var(--accent)")}
@@ -842,6 +1118,7 @@ function renderManualPomodoro(running, remaining, blockOptions) {
         </div>
         <div style="margin-top:18px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap">
           <button class="btn green" data-action="complete-pomodoro">✓ 完了</button>
+          <button class="btn orange" data-action="go-break">☕ 休憩へ</button>
           <button class="btn danger" data-action="stop-pomodoro">中断</button>
         </div>
       </section>
@@ -890,6 +1167,10 @@ function renderPassivePomodoro() {
   const now = new Date();
   const cycleStartMin = Math.floor(now.getMinutes() / 30) * 30;
   const cycleStartLabel = `${pad2(now.getHours())}:${pad2(cycleStartMin)}`;
+  // 休憩中は残り秒に応じた文言を表示(v9)
+  const breakMsg = session.phase === "break"
+    ? getBreakMessage(Math.floor(session.remainingMs / 1000))
+    : "";
   return `
     <section class="panel" style="display:grid; place-items:center; min-height:400px; padding:24px">
       ${renderCircularProgress(session.progress, remainingDisplay, color)}
@@ -900,6 +1181,7 @@ function renderPassivePomodoro() {
         <div class="muted" style="font-size:11px; margin-top:4px">
           ${session.phase === "focus" ? "50:00 → 00:00 を 2 倍速で進行(実時間 25 分)" : "残り休憩時間(実時間)"}
         </div>
+        ${breakMsg ? `<div style="margin-top:10px; font-size:14px; font-weight:600; color:var(--text)">${escapeHTML(breakMsg)}</div>` : ""}
         <div class="muted" style="font-size:11px; margin-top:8px">
           現サイクル開始: ${cycleStartLabel} / 毎時 00 分・30 分にリセット
         </div>
@@ -1212,10 +1494,66 @@ function renderSettings() {
         </div>
       </div>
       <div class="panel stack">
+        <h2>カテゴリ管理</h2>
+        <div class="muted" style="font-size:12px; line-height:1.6">
+          Project / Task / Block で選択できるカテゴリと色を管理します。タイムラインのブロック色などに反映されます。
+        </div>
+        ${renderCategoriesSettings()}
+        <button class="btn primary" data-action="add-category">+ カテゴリを追加</button>
+      </div>
+      <div class="panel stack">
+        <h2>休憩メッセージ</h2>
+        <div class="muted" style="font-size:12px; line-height:1.6">
+          休憩中(任意・常時タイマー)に、残り秒数の範囲に応じて表示されるメッセージです。
+        </div>
+        ${renderBreakMessagesSettings()}
+        <button class="btn primary" data-action="add-break-message">+ メッセージを追加</button>
+      </div>
+      <div class="panel stack">
         <h2>GitHub Pages</h2>
         <div class="muted">このフォルダをGitHubリポジトリへpushし、Pagesの公開元をルートにすると公開できます。</div>
       </div>
     </section>
+  `;
+}
+
+// v9: カテゴリ管理 UI(設定画面用)
+function renderCategoriesSettings() {
+  const cats = state.settings.categories || [];
+  if (!cats.length) return `<div class="muted">カテゴリ未登録</div>`;
+  return `
+    <div class="stack" style="gap:6px">
+      ${cats.map((c) => `
+        <div class="row" style="gap:8px; align-items:center; background:var(--panel-soft); padding:8px; border-radius:6px">
+          <input type="color" data-cat-id="${c.id}" data-cat-field="color" value="${c.color}" style="width:36px; height:36px; padding:0; border:none; background:transparent; cursor:pointer">
+          <input class="input" data-cat-id="${c.id}" data-cat-field="name" value="${escapeHTML(c.name)}" style="flex:1">
+          <button class="btn danger" data-action="delete-category" data-cat-id="${c.id}" aria-label="削除">×</button>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+// v9: 休憩メッセージ管理 UI
+function renderBreakMessagesSettings() {
+  const msgs = state.settings.breakMessages || [];
+  if (!msgs.length) return `<div class="muted">未登録</div>`;
+  return `
+    <div class="stack" style="gap:6px">
+      ${msgs.map((m) => `
+        <div class="stack" style="background:var(--panel-soft); padding:8px; border-radius:6px; gap:6px">
+          <div class="row" style="gap:6px; align-items:center; font-size:12px">
+            <span class="muted">残り</span>
+            <input class="input" type="number" min="0" max="300" data-msg-id="${m.id}" data-msg-field="fromSec" value="${m.fromSec}" style="width:70px">
+            <span class="muted">〜</span>
+            <input class="input" type="number" min="0" max="301" data-msg-id="${m.id}" data-msg-field="toSec" value="${m.toSec}" style="width:70px">
+            <span class="muted">秒</span>
+            <button class="btn danger" data-action="delete-break-message" data-msg-id="${m.id}" style="margin-left:auto">×</button>
+          </div>
+          <input class="input" data-msg-id="${m.id}" data-msg-field="message" value="${escapeHTML(m.message)}" placeholder="メッセージ">
+        </div>
+      `).join("")}
+    </div>
   `;
 }
 
@@ -1662,13 +2000,53 @@ function completePomodoro() {
   saveAndRender("ポモドーロを完了しました");
 }
 
+// v9: 「☕ 休憩へ」: focus → break に遷移(現在のセッションを完了扱いに + 5分休憩開始)
+function goBreakPomodoro() {
+  const blockId = state.pomodoro.blockId;
+  if (blockId) {
+    // 紐づく Block を完了扱いに(pomodoroCount +1、actualEndAt 記録)
+    state.blocks = state.blocks.map((block) => block.id === blockId
+      ? { ...block, pomodoroCount: Number(block.pomodoroCount || 0) + 1, actualEndAt: block.actualEndAt || nowDateTime(), updatedAt: nowDateTime() }
+      : block);
+  }
+  // mode を break に、endsAt を「今から5分後」に
+  state.pomodoro = {
+    ...state.pomodoro,
+    running: true,
+    blockId: "",  // 休憩中は Block 紐づけなし
+    startedAt: nowDateTime(),
+    endsAt: dateToLocalDateTime(new Date(Date.now() + 5 * 60 * 1000)),
+    mode: "break"
+  };
+  saveAndRender("休憩を開始しました");
+}
+
+// v9: 「✓ 休憩終了」: break セッションを終わって未起動状態に
+function endBreakPomodoro() {
+  state.pomodoro = {
+    ...state.pomodoro,
+    running: false,
+    blockId: "",
+    startedAt: "",
+    endsAt: "",
+    mode: "focus"
+  };
+  saveAndRender("休憩を終了しました");
+}
+
 function startTimerTicker() {
   clearInterval(timerTicker);
   timerTicker = setInterval(() => {
     // 任意タイマー
     if (state.pomodoro.running) {
       if (new Date(state.pomodoro.endsAt).getTime() <= Date.now()) {
-        completePomodoro();
+        // 時間切れ: focus → 自動で break に、break → セッション終了
+        if (state.pomodoro.mode === "break") {
+          endBreakPomodoro();
+        } else {
+          // focus フェーズ終了 → 自動で休憩へ
+          goBreakPomodoro();
+        }
       } else if (state.currentView === "pomodoro") {
         renderMain();
       }
@@ -2144,7 +2522,7 @@ function buildProjectModal(project) {
         </div>
         <div class="field">
           <label class="field-label">カテゴリ</label>
-          <input class="input" data-modal-field="category" value="${escapeHTML(project.category || "")}" placeholder="仕事 / 健康 / 学習 など">
+          ${renderCategorySelect(project.category || "")}
         </div>
         <div class="field-row">
           <div class="field">
@@ -2247,7 +2625,7 @@ function buildTaskModal(task) {
         <div class="field-row">
           <div class="field">
             <label class="field-label">カテゴリ</label>
-            <input class="input" data-modal-field="category" value="${escapeHTML(task.category || "")}">
+            ${renderCategorySelect(task.category || "")}
           </div>
           <div class="field">
             <label class="field-label">期限</label>
@@ -2326,7 +2704,7 @@ function buildBlockModal(block) {
           </div>
           <div class="field">
             <label class="field-label">カテゴリ</label>
-            <input class="input" data-modal-field="category" value="${escapeHTML(block.category || "")}">
+            ${renderCategorySelect(block.category || "")}
           </div>
         </div>
         <div class="field">
