@@ -1,16 +1,30 @@
-const CACHE_NAME = "taskchute-journal-pwa-v1";
+const CACHE_NAME = "taskchute-journal-pwa-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
   "./manifest.webmanifest",
-  "./assets/icon.svg"
+  "./assets/icon.svg",
+  "./data/vision/Vision.md",
+  "./data/affirmation/Daily_Affirmation.md",
+  "./data/vision_board/now_vision.pdf",
+  "./data/vision_board/45_vision.pdf",
+  "./data/vision_board/80_vision.pdf",
+  "https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"
 ];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
+    caches.open(CACHE_NAME).then((cache) =>
+      Promise.all(
+        APP_SHELL.map((url) =>
+          cache.add(url).catch(() => {
+            // 取得できなかったファイルは無視(初回デプロイ時にPDFが無い場合など)
+          })
+        )
+      )
+    )
   );
   self.skipWaiting();
 });
@@ -26,6 +40,25 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+  const url = new URL(event.request.url);
+  // GitHub API はキャッシュしない(常に最新)
+  if (url.hostname === "api.github.com") {
+    return;
+  }
+  // MD ファイルは network-first(編集が反映されるように)
+  if (url.pathname.endsWith(".md")) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+  // 他は cache-first
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
