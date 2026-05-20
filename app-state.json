@@ -31,67 +31,67 @@
   },
   "projects": [
     {
-      "id": "097f9a11-97b1-49e9-b567-bec239f427a9",
+      "id": "e479665b-8811-4ad7-b513-bc6214385b74",
       "kind": "wish",
       "title": "Wish",
       "category": "回復",
       "status": "active",
       "twelveWeekStartDate": "",
-      "createdAt": "2026-05-20T13:53:00",
-      "updatedAt": "2026-05-20T13:53:00",
+      "createdAt": "2026-05-20T14:17:00",
+      "updatedAt": "2026-05-20T14:17:00",
       "deleted": false
     },
     {
-      "id": "b2c5fa9b-e8d7-49de-a1b9-835a86c4c001",
+      "id": "a602bcd0-20ca-412d-a87d-9d596e58a4a6",
       "kind": "normal",
       "title": "Web版 TaskChute Journal を育てる",
       "category": "開発",
       "status": "active",
       "twelveWeekStartDate": "2026-05-20",
-      "createdAt": "2026-05-20T13:53:00",
-      "updatedAt": "2026-05-20T13:55:00",
-      "deleted": true
+      "createdAt": "2026-05-20T14:17:00",
+      "updatedAt": "2026-05-20T14:17:00",
+      "deleted": false
     }
   ],
   "tasks": [
     {
-      "id": "0267ac58-570b-4532-85dc-7fe82051fab6",
-      "projectId": "b2c5fa9b-e8d7-49de-a1b9-835a86c4c001",
+      "id": "c47f763d-5539-4d75-bae3-4ae1d429d397",
+      "projectId": "a602bcd0-20ca-412d-a87d-9d596e58a4a6",
       "title": "PWA版のMVPを確認する",
       "category": "開発",
       "status": "doing",
       "dueDate": "2026-05-20",
-      "createdAt": "2026-05-20T13:53:00",
-      "updatedAt": "2026-05-20T13:53:00",
+      "createdAt": "2026-05-20T14:17:00",
+      "updatedAt": "2026-05-20T14:17:00",
       "deleted": false
     },
     {
-      "id": "af4397bc-e3f8-4587-a441-1885e95046d1",
-      "projectId": "b2c5fa9b-e8d7-49de-a1b9-835a86c4c001",
+      "id": "fbc8c05c-8f05-4e8d-bb82-f1cb2c1c68a6",
+      "projectId": "a602bcd0-20ca-412d-a87d-9d596e58a4a6",
       "title": "GitHub Pages公開手順を決める",
       "category": "開発",
       "status": "todo",
       "dueDate": "2026-05-21",
-      "createdAt": "2026-05-20T13:53:00",
-      "updatedAt": "2026-05-20T13:53:00",
+      "createdAt": "2026-05-20T14:17:00",
+      "updatedAt": "2026-05-20T14:17:00",
       "deleted": false
     },
     {
-      "id": "fd4f2bff-1c53-418c-abb4-cbfe4d876d68",
-      "projectId": "097f9a11-97b1-49e9-b567-bec239f427a9",
+      "id": "2adfff0a-2885-45f7-bdf7-475f45839f8b",
+      "projectId": "e479665b-8811-4ad7-b513-bc6214385b74",
       "title": "気分が上がる散歩コースを試す",
       "category": "回復",
       "status": "todo",
       "dueDate": "",
-      "createdAt": "2026-05-20T13:53:00",
-      "updatedAt": "2026-05-20T13:55:00",
+      "createdAt": "2026-05-20T14:17:00",
+      "updatedAt": "2026-05-20T14:17:00",
       "deleted": true
     }
   ],
   "blocks": [
     {
-      "id": "8529e7b1-7627-4b58-a5f5-cec9592dd822",
-      "taskId": "0267ac58-570b-4532-85dc-7fe82051fab6",
+      "id": "81699a65-8689-4a99-a2f8-c7c422f51f42",
+      "taskId": "c47f763d-5539-4d75-bae3-4ae1d429d397",
       "date": "2026-05-20",
       "title": "PWA版をiPadで触る",
       "category": "開発",
@@ -109,12 +109,12 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "createdAt": "2026-05-20T13:53:00",
-      "updatedAt": "2026-05-20T13:53:00",
+      "createdAt": "2026-05-20T14:17:00",
+      "updatedAt": "2026-05-20T14:17:00",
       "deleted": false
     },
     {
-      "id": "24c22ae0-a140-4c2a-bcae-b3bd9971f473",
+      "id": "8c1d2241-ba8f-42c1-8cd8-4bc1e0cf4759",
       "taskId": "",
       "date": "2026-05-20",
       "title": "昼のジャーナル",
@@ -133,13 +133,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "createdAt": "2026-05-20T13:53:00",
-      "updatedAt": "2026-05-20T13:53:00",
+      "createdAt": "2026-05-20T14:17:00",
+      "updatedAt": "2026-05-20T14:17:00",
       "deleted": false
     },
     {
-      "id": "ee9243ef-9eb4-48d9-a888-dafcd4d012c9",
-      "taskId": "af4397bc-e3f8-4587-a441-1885e95046d1",
+      "id": "4818cb22-8a4f-4315-ae42-687aaabe1874",
+      "taskId": "fbc8c05c-8f05-4e8d-bb82-f1cb2c1c68a6",
       "date": "2026-05-20",
       "title": "GitHub Pagesの公開準備",
       "category": "開発",
@@ -157,8 +157,8 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "createdAt": "2026-05-20T13:53:00",
-      "updatedAt": "2026-05-20T13:53:00",
+      "createdAt": "2026-05-20T14:17:00",
+      "updatedAt": "2026-05-20T14:17:00",
       "deleted": false
     }
   ],
@@ -174,7 +174,7 @@
     "endsAt": "",
     "mode": "focus",
     "passive": {
-      "enabled": true,
+      "enabled": false,
       "activeWeekdays": [
         false,
         true,
@@ -186,9 +186,8 @@
       ],
       "activeStartHHMM": "08:00",
       "activeEndHHMM": "19:00",
-      "lastFiredKey": "Wed May 20 2026 14:00"
-    },
-    "tab": "passive"
+      "lastFiredKey": ""
+    }
   },
   "modal": null
 }
