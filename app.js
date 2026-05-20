@@ -96,6 +96,21 @@ document.addEventListener("click", (event) => {
   if (action === "request-notification-permission") requestNotificationPermission();
   // === v3: 日報のGitHub push ===
   if (action === "push-report") pushReportToGitHub();
+  // === v6: サブタスク追加 / Project直下にTask追加 ===
+  if (action === "add-task-to-project") addTaskToProject(id);
+  if (action === "add-subtask") addSubtask(target.dataset.parentTask);
+  // === v6: タイムラインから新規Block追加 ===
+  if (action === "timeline-new-block") {
+    const minute = Number(target.dataset.minute || 0);
+    openTimelineNewBlock(minute);
+  }
+  // === v7: タイムライン予定/実績切替 + 完了マーカー ===
+  if (action === "timeline-mode") setTimelineMode(target.dataset.mode);
+  if (action === "complete-block-with-actual") {
+    event.stopPropagation();
+    completeBlockWithActual(id);
+  }
+  if (action === "passive-test-start") passiveTestStart();
 });
 
 document.addEventListener("input", (event) => {
@@ -401,12 +416,17 @@ function renderTimelineRail() {
   }
   timelineRail.style.display = "";
   app.style.gridTemplateColumns = "";
+  const mode = state.timelineMode || "planned";
   timelineRail.innerHTML = `
-    <div class="row" style="margin-bottom:12px">
+    <div class="row" style="margin-bottom:10px">
       <h3>${formatDisplayDate(state.selectedDate)}</h3>
       <button class="btn ghost" data-action="nav" data-view="timeline">開く</button>
     </div>
-    ${renderTimeline({ compact: true })}
+    <div class="segmented" style="margin-bottom:10px">
+      <button class="${mode === "planned" ? "active" : ""}" data-action="timeline-mode" data-mode="planned">予定</button>
+      <button class="${mode === "actual" ? "active" : ""}" data-action="timeline-mode" data-mode="actual">実績</button>
+    </div>
+    ${renderTimeline({ compact: true, mode })}
   `;
 }
 
@@ -499,8 +519,9 @@ function renderWBS() {
 }
 
 function renderProjectTree(project) {
-  const tasks = state.tasks.filter((task) => !task.deleted && task.projectId === project.id);
-  const progress = taskProgress(tasks);
+  const allTasksOfProject = state.tasks.filter((task) => !task.deleted && task.projectId === project.id);
+  const rootTasks = allTasksOfProject.filter((t) => !t.parentTaskId);
+  const progress = taskProgress(allTasksOfProject);
   const is12WY = Boolean(project.twelveWeekStartDate);
   return `
     <div class="item">
@@ -512,23 +533,39 @@ function renderProjectTree(project) {
           ${project.category ? `<span class="badge">${escapeHTML(project.category)}</span>` : ""}
         </div>
         <div class="row">
+          <button class="btn" data-action="add-task-to-project" data-id="${project.id}">+ タスク</button>
           <button class="btn" data-action="edit-project" data-id="${project.id}">編集</button>
         </div>
       </div>
       ${project.description ? `<div class="muted" style="font-size:12px">${escapeHTML(project.description)}</div>` : ""}
       <div class="progress"><span style="width:${progress}%"></span></div>
       <div class="stack">
-        ${tasks.length ? tasks.map(renderTaskRow).join("") : `<div class="muted">Task未登録</div>`}
+        ${rootTasks.length
+          ? rootTasks.map((t) => renderTaskTree(t, allTasksOfProject, 0)).join("")
+          : `<div class="muted">Task未登録</div>`}
       </div>
     </div>
   `;
 }
 
-function renderTaskRow(task) {
+function renderTaskTree(task, allTasksOfProject, depth) {
+  const children = allTasksOfProject.filter((t) => t.parentTaskId === task.id);
+  const indent = depth * 18;
+  return `
+    <div style="margin-left:${indent}px">
+      ${renderTaskRow(task, depth)}
+      ${children.map((c) => renderTaskTree(c, allTasksOfProject, depth + 1)).join("")}
+    </div>
+  `;
+}
+
+function renderTaskRow(task, depth = 0) {
   const dueLabel = task.dueDate ? ` / 期限 ${task.dueDate}` : "";
+  const canAddSub = depth < 2;  // 最大 3 階層(0,1,2)、depth=2 の子はもう作らない
   return `
     <div class="row" style="border-top:1px solid var(--line-soft); padding-top:8px">
       <div class="title-line">
+        ${depth > 0 ? `<span class="muted" style="font-size:11px">${"└".padStart(depth, "　")}</span>` : ""}
         <button class="checkbox-button ${task.status === "completed" ? "done" : ""}" data-action="toggle-task" data-id="${task.id}">✓</button>
         <span>${escapeHTML(task.title)}</span>
         <span class="badge">${task.status}</span>
@@ -537,6 +574,7 @@ function renderTaskRow(task) {
       </div>
       <div class="row">
         <button class="btn" data-action="task-today" data-id="${task.id}">今日へ</button>
+        ${canAddSub ? `<button class="btn" data-action="add-subtask" data-parent-task="${task.id}">+ サブ</button>` : ""}
         <button class="btn" data-action="edit-task" data-id="${task.id}">編集</button>
       </div>
     </div>
@@ -576,17 +614,24 @@ function renderOpenTasks() {
   const taskIDsInBlocks = new Set(state.blocks.filter((block) => !block.deleted && block.date === state.selectedDate).map((block) => block.taskId));
   const open = state.tasks.filter((task) => !task.deleted && task.status !== "completed" && !taskIDsInBlocks.has(task.id));
   if (!open.length) return emptyPanel("持ち越すTaskはありません");
-  return open.map((task) => `
-    <div class="item">
-      <div class="row">
-        <div>
-          <strong>${escapeHTML(task.title)}</strong>
-          <div class="muted">${escapeHTML(projectName(task.projectId))} / ${escapeHTML(task.category || "カテゴリなし")}</div>
+  return open.map((task) => {
+    const dueLabel = task.dueDate ? ` / 期限 ${task.dueDate}` : "";
+    const isOverdue = task.dueDate && task.dueDate < state.selectedDate;
+    return `
+      <div class="item" ${isOverdue ? 'style="background:var(--red-soft)"' : ""}>
+        <div class="row">
+          <div style="min-width:0; flex:1">
+            <strong>${escapeHTML(task.title)}</strong>
+            <div class="muted" style="font-size:12px">${escapeHTML(projectName(task.projectId))} / ${escapeHTML(task.category || "カテゴリなし")}${dueLabel}</div>
+          </div>
+          <div class="row">
+            <button class="btn" data-action="task-today" data-id="${task.id}">今日へ</button>
+            <button class="btn" data-action="edit-task" data-id="${task.id}">編集</button>
+          </div>
         </div>
-        <button class="btn" data-action="task-today" data-id="${task.id}">今日へ</button>
       </div>
-    </div>
-  `).join("");
+    `;
+  }).join("");
 }
 
 function renderBlockItem(block) {
@@ -627,29 +672,78 @@ function renderBlockItem(block) {
 }
 
 function renderTimelineView() {
+  const nowMinute = (new Date().getHours() + 1) * 60;
+  const mode = state.timelineMode || "planned";
   return `
     ${renderHeader("時間軸とエネルギー", "タイムライン")}
     ${renderDateBar()}
-    ${renderTimeline({ compact: false })}
+    <div class="segmented" style="margin-bottom:10px">
+      <button class="${mode === "planned" ? "active" : ""}" data-action="timeline-mode" data-mode="planned">📅 予定</button>
+      <button class="${mode === "actual" ? "active" : ""}" data-action="timeline-mode" data-mode="actual">✅ 実績</button>
+    </div>
+    <div class="row" style="margin-bottom:10px; gap:8px; flex-wrap:wrap">
+      <button class="btn primary" data-action="timeline-new-block" data-minute="${nowMinute}">+ 新規Block</button>
+      <span class="muted" style="font-size:12px">空き時間タップで追加 / ○タップで完了登録 / カードタップで編集</span>
+    </div>
+    ${renderTimeline({ compact: false, mode })}
   `;
 }
 
-function renderTimeline({ compact }) {
-  // タイムラインは全 Block を表示(planned が空のものは時刻軸に出ないが、エネルギー累積には actualEndAt 持ちは寄与)
-  const blocks = blocksForDate(state.selectedDate);
-  const blocksWithPlanned = blocks.filter((block) => block.plannedStartAt);
-  const rowHeight = compact ? 34 : 40;
+function setTimelineMode(mode) {
+  state.timelineMode = mode;
+  saveState();
+  render();
+}
+
+function renderTimeline({ compact, mode = "planned" }) {
+  const allBlocks = blocksForDate(state.selectedDate);
+  // モードに応じてフィルタリングと表示位置決定
+  let blocksToRender;
+  if (mode === "actual") {
+    blocksToRender = allBlocks.filter((b) => b.actualStartAt);
+  } else {
+    // 予定モード: 未完了 + plannedStartAt あり(完了済みは予定から消す)
+    blocksToRender = allBlocks.filter((b) => b.plannedStartAt && !b.completed);
+  }
+  const rowHeight = compact ? 48 : 60;
   const startHour = 5;
   const endHour = 24;
   const rows = Array.from({ length: endHour - startHour + 1 }, (_, index) => startHour + index);
 
   return `
-    <div class="timeline" style="position:relative; ${compact ? "min-height:650px" : ""}">
+    <div class="timeline" style="position:relative; min-height:${rowHeight * (endHour - startHour + 1)}px">
       ${rows.map((hour) => `
-        <div class="time-row" style="top:${(hour - startHour) * rowHeight}px;height:${rowHeight}px">${String(hour).padStart(2, "0")}:00</div>
+        <div class="time-row" data-action="timeline-new-block" data-minute="${hour * 60}"
+             style="top:${(hour - startHour) * rowHeight}px;height:${rowHeight}px; cursor:pointer;">${String(hour).padStart(2, "0")}:00</div>
       `).join("")}
-      ${blocksWithPlanned.map((block) => renderTimelineCard(block, rowHeight, startHour)).join("")}
-      ${renderEnergyGraph(blocks, rowHeight, startHour, endHour)}
+      ${blocksToRender.map((block) => renderTimelineCard(block, rowHeight, startHour, mode)).join("")}
+      ${renderEnergyGraph(allBlocks, rowHeight, startHour, endHour)}
+    </div>
+  `;
+}
+
+function renderTimelineCard(block, rowHeight, startHour, mode = "planned") {
+  // モードに応じて表示時刻を決定
+  const startStr = mode === "actual" ? block.actualStartAt : block.plannedStartAt;
+  const endStr = mode === "actual"
+    ? (block.actualEndAt || nowDateTime())
+    : (block.plannedEndAt || null);
+  if (!startStr) return "";
+
+  const start = minutesOf(startStr);
+  const end = endStr ? minutesOf(endStr) : start + 30;
+  const top = Math.max(0, ((start - startHour * 60) / 60) * rowHeight);
+  const height = Math.max(38, ((end - start) / 60) * rowHeight);
+  const isActual = mode === "actual";
+  return `
+    <div class="timeline-card ${block.completed ? "completed" : ""} ${isActual ? "is-actual" : ""}"
+         style="top:${top}px;height:${height}px;"
+         data-action="edit-block" data-id="${block.id}">
+      ${!isActual ? `<button class="tl-complete-btn" data-action="complete-block-with-actual" data-id="${block.id}" aria-label="完了登録">○</button>` : ""}
+      <div class="tl-card-body">
+        <strong>${escapeHTML(block.title)}</strong>
+        <div class="tl-time">${timeFromDateTime(startStr)}${endStr ? `-${timeFromDateTime(endStr)}` : ""}</div>
+      </div>
     </div>
   `;
 }
@@ -733,22 +827,10 @@ function renderEnergyGraph(allBlocks, rowHeight, startHour, endHour) {
   `;
 }
 
-function renderTimelineCard(block, rowHeight, startHour) {
-  const start = minutesOf(block.plannedStartAt);
-  const end = block.plannedEndAt ? minutesOf(block.plannedEndAt) : start + 30;
-  const top = Math.max(0, ((start - startHour * 60) / 60) * rowHeight);
-  const height = Math.max(32, ((end - start) / 60) * rowHeight);
-  return `
-    <div class="timeline-card ${block.completed ? "completed" : ""}" style="top:${top}px;height:${height}px">
-      <strong>${escapeHTML(block.title)}</strong><br>
-      ${timeFromDateTime(block.plannedStartAt)}-${block.plannedEndAt ? timeFromDateTime(block.plannedEndAt) : ""}
-    </div>
-  `;
-}
-
 function renderPomodoro() {
   const running = state.pomodoro.running;
-  const remaining = running ? remainingText(state.pomodoro.endsAt) : "25:00";
+  // 2倍速表示: 残り時間 * 2 を 50:00 形式で
+  const remaining = running ? remainingText(state.pomodoro.endsAt, true) : "50:00";
   const blockOptions = blocksForDate(state.selectedDate).filter((block) => !block.completed);
   const passive = state.pomodoro.passive || defaultPassivePomodoro();
   const pomoTab = state.pomodoro.tab || "manual";
@@ -763,16 +845,35 @@ function renderPomodoro() {
 }
 
 function renderManualPomodoro(running, remaining, blockOptions) {
-  return `
-    <section class="panel" style="display:grid; place-items:center; min-height:300px">
-      <div style="text-align:center">
-        <div class="metric-value" style="font-size:56px; font-variant-numeric:tabular-nums">${remaining}</div>
-        <div class="muted">${running ? "任意タイマー実行中" : "Blockを選んで開始"}</div>
+  if (running) {
+    // 進捗率を計算
+    const endsAtMs = new Date(state.pomodoro.endsAt).getTime();
+    const startedAtMs = new Date(state.pomodoro.startedAt).getTime();
+    const totalMs = endsAtMs - startedAtMs;
+    const remainingMs = Math.max(0, endsAtMs - Date.now());
+    const progress = 1 - remainingMs / totalMs;
+    const currentBlock = state.blocks.find((b) => b.id === state.pomodoro.blockId);
+    return `
+      <section class="panel" style="display:grid; place-items:center; min-height:380px; padding:24px">
+        ${renderCircularProgress(progress, remaining, "var(--accent)")}
+        <div style="text-align:center; margin-top:14px">
+          <div class="muted" style="font-size:12px">作業中(50:00 → 00:00 を 2 倍速で進行)</div>
+          ${currentBlock ? `<div style="margin-top:4px; font-weight:700">${escapeHTML(currentBlock.title)}</div>` : ""}
+        </div>
         <div style="margin-top:18px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap">
-          ${running ? `
-            <button class="btn green" data-action="complete-pomodoro">完了</button>
-            <button class="btn danger" data-action="stop-pomodoro">中断</button>
-          ` : blockOptions.map((block) => `
+          <button class="btn green" data-action="complete-pomodoro">✓ 完了</button>
+          <button class="btn danger" data-action="stop-pomodoro">中断</button>
+        </div>
+      </section>
+    `;
+  }
+  return `
+    <section class="panel" style="display:grid; place-items:center; min-height:300px; padding:24px">
+      <div style="text-align:center">
+        ${renderCircularProgress(0, "50:00", "var(--faint)")}
+        <div class="muted" style="margin-top:14px">Blockを選んで開始</div>
+        <div style="margin-top:18px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; max-width:320px">
+          ${blockOptions.map((block) => `
             <button class="btn orange" data-action="start-pomodoro" data-block-id="${block.id}">${escapeHTML(block.title)}</button>
           `).join("") || `<button class="btn" data-action="nav" data-view="tasks">Blockを作る</button>`}
         </div>
@@ -781,53 +882,152 @@ function renderManualPomodoro(running, remaining, blockOptions) {
   `;
 }
 
+// 円形プログレスバー — progress: 0(始まり) 〜 1(終わり)、表示文字、進捗色
+function renderCircularProgress(progress, displayText, color = "var(--accent)") {
+  const R = 90;
+  const C = 2 * Math.PI * R;
+  const offset = C * (1 - Math.min(1, Math.max(0, progress)));
+  return `
+    <div class="pomo-circle-wrap">
+      <svg viewBox="0 0 200 200" class="pomo-circle">
+        <circle cx="100" cy="100" r="${R}" class="pomo-bg-circle"></circle>
+        <circle cx="100" cy="100" r="${R}" class="pomo-progress-circle"
+          style="stroke: ${color}; stroke-dasharray: ${C}; stroke-dashoffset: ${offset};"
+          transform="rotate(-90 100 100)"></circle>
+      </svg>
+      <div class="pomo-time-overlay">${displayText}</div>
+    </div>
+  `;
+}
+
 function renderPassivePomodoro(passive) {
-  const status = getPassivePomodoroStatus();
-  const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+  // 実行中セッションがあるか判定
+  const session = getPassiveSessionStatus();
+  if (session.active) {
+    const remainingDisplay = session.phase === "focus"
+      ? remainingText2x(session.remainingMs)
+      : remainingTextNormal(session.remainingMs);
+    const color = session.phase === "focus" ? "var(--accent)" : "var(--orange)";
+    return `
+      <section class="panel" style="display:grid; place-items:center; min-height:400px; padding:24px">
+        ${renderCircularProgress(session.progress, remainingDisplay, color)}
+        <div style="text-align:center; margin-top:14px">
+          <div style="font-size:13px; font-weight:700; color:${color}">
+            ${session.phase === "focus" ? "🎯 集中タイム" : "☕️ 休憩"}
+          </div>
+          <div class="muted" style="font-size:11px; margin-top:4px">
+            ${session.phase === "focus" ? "50:00 → 00:00 を 2 倍速で進行(実時間 25 分)" : "残り休憩時間(実時間)"}
+          </div>
+        </div>
+      </section>
+      <section class="panel stack" style="margin-top:12px">
+        <details>
+          <summary class="muted" style="cursor:pointer; font-size:13px">⚙️ 設定を変更</summary>
+          ${renderPassiveSettings(passive)}
+        </details>
+      </section>
+    `;
+  }
   return `
     <section class="panel stack">
       <h2>常時タイマー</h2>
       <div class="muted" style="font-size:12px; line-height:1.6">
-        指定した曜日・時間帯の毎時 00 分 / 30 分に自動的に通知が出ます。<br>
+        指定した曜日・時間帯の毎時 00 分 / 30 分に自動的に開始され、25 分の集中 + 5 分の休憩を促します。<br>
         PWA(またはブラウザタブ)が開いている間だけ動作します。
       </div>
       <div style="background:var(--panel-soft); padding:10px; border-radius:6px; font-size:13px">
-        <strong>状態:</strong> ${status}
+        <strong>状態:</strong> ${getPassivePomodoroStatus()}
       </div>
-      <label class="checkbox-line">
-        <input type="checkbox" data-passive-field="enabled" ${passive.enabled ? "checked" : ""}>
-        常時タイマーを有効にする
-      </label>
-      <div class="field">
-        <label class="field-label">対象曜日</label>
-        <div style="display:flex; gap:6px; flex-wrap:wrap">
-          ${weekdays.map((label, i) => `
-            <label class="checkbox-line" style="background:var(--panel-soft); padding:4px 10px; border-radius:6px">
-              <input type="checkbox" data-passive-weekday="${i}" ${passive.activeWeekdays[i] ? "checked" : ""}> ${label}
-            </label>
-          `).join("")}
-        </div>
-      </div>
-      <div class="field-row">
-        <div class="field">
-          <label class="field-label">開始時刻</label>
-          <input class="input" type="time" data-passive-field="activeStartHHMM" value="${passive.activeStartHHMM}">
-        </div>
-        <div class="field">
-          <label class="field-label">終了時刻</label>
-          <input class="input" type="time" data-passive-field="activeEndHHMM" value="${passive.activeEndHHMM}">
-        </div>
-      </div>
-      <div class="row">
-        <button class="btn" data-action="request-notification-permission">通知を許可</button>
-        <span class="muted" style="font-size:12px">通知の状態: ${getNotificationPermissionLabel()}</span>
-      </div>
-      <div class="muted" style="font-size:11px; line-height:1.6">
-        ※ iOS Safari の制約により、ホーム画面に追加した PWA でないと通知が動作しないことがあります。<br>
-        ※ アプリを閉じている間は通知が出ません。
-      </div>
+      ${renderPassiveSettings(passive)}
     </section>
   `;
+}
+
+function renderPassiveSettings(passive) {
+  const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+  return `
+    <label class="checkbox-line">
+      <input type="checkbox" data-passive-field="enabled" ${passive.enabled ? "checked" : ""}>
+      常時タイマーを有効にする
+    </label>
+    <div class="field">
+      <label class="field-label">対象曜日</label>
+      <div style="display:flex; gap:6px; flex-wrap:wrap">
+        ${weekdays.map((label, i) => `
+          <label class="checkbox-line" style="background:var(--panel-soft); padding:4px 10px; border-radius:6px">
+            <input type="checkbox" data-passive-weekday="${i}" ${passive.activeWeekdays[i] ? "checked" : ""}> ${label}
+          </label>
+        `).join("")}
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label class="field-label">開始時刻</label>
+        <input class="input" type="time" data-passive-field="activeStartHHMM" value="${passive.activeStartHHMM}">
+      </div>
+      <div class="field">
+        <label class="field-label">終了時刻</label>
+        <input class="input" type="time" data-passive-field="activeEndHHMM" value="${passive.activeEndHHMM}">
+      </div>
+    </div>
+    <div class="row">
+      <button class="btn" data-action="request-notification-permission">通知を許可</button>
+      <button class="btn ghost" data-action="passive-test-start">▶ テスト開始(今すぐ)</button>
+    </div>
+    <div class="muted" style="font-size:11px">通知の状態: ${getNotificationPermissionLabel()}</div>
+    <div class="muted" style="font-size:11px; line-height:1.6">
+      ※ ホーム画面に追加した PWA でないと通知が動かない場合があります。<br>
+      ※ アプリを閉じている間は通知が出ません。
+    </div>
+  `;
+}
+
+// 現在の常時タイマーセッションの状態を返す
+function getPassiveSessionStatus() {
+  const p = state.pomodoro?.passive;
+  if (!p?.enabled || !p.lastFiredAt) return { active: false };
+  const elapsed = Date.now() - p.lastFiredAt;
+  const focusMs = 25 * 60 * 1000;
+  const sessionMs = 30 * 60 * 1000;  // 作業 25 + 休憩 5
+  if (elapsed >= sessionMs) return { active: false };
+  if (elapsed < focusMs) {
+    return {
+      active: true,
+      phase: "focus",
+      progress: elapsed / focusMs,
+      remainingMs: focusMs - elapsed
+    };
+  }
+  return {
+    active: true,
+    phase: "break",
+    progress: (elapsed - focusMs) / (sessionMs - focusMs),
+    remainingMs: sessionMs - elapsed
+  };
+}
+
+function remainingText2x(remainingMs) {
+  const sec = Math.max(0, Math.floor(remainingMs / 1000)) * 2;
+  return `${pad2(Math.floor(sec / 60))}:${pad2(sec % 60)}`;
+}
+
+function remainingTextNormal(remainingMs) {
+  const sec = Math.max(0, Math.floor(remainingMs / 1000));
+  return `${pad2(Math.floor(sec / 60))}:${pad2(sec % 60)}`;
+}
+
+// テスト開始(今すぐ常時タイマーを発火)
+function passiveTestStart() {
+  state.pomodoro.passive ||= defaultPassivePomodoro();
+  const now = new Date();
+  state.pomodoro.passive.lastFiredAt = Date.now();
+  state.pomodoro.passive.lastFiredKey = `TEST_${Date.now()}`;
+  saveState();
+  fireNotification("ポモドーロ開始(テスト)", "25分の集中タイム");
+  setTimeout(() => fireNotification("作業終了", "5分の休憩を取りましょう"), 25 * 60 * 1000);
+  setTimeout(() => fireNotification("休憩終了", "次の集中タイムまで余裕があります"), 30 * 60 * 1000);
+  showToast("テスト開始しました");
+  render();
 }
 
 function renderJournal() {
@@ -1100,18 +1300,69 @@ function addTask() {
   const title = document.querySelector("#taskTitle")?.value.trim();
   const projectId = document.querySelector("#taskProject")?.value || "";
   if (!title) return showToast("Task名を入力してください");
-  state.tasks.push({
+  state.tasks.push(makeTask({ projectId, title }));
+  saveAndRender("Taskを追加しました");
+}
+
+function makeTask({ projectId = "", parentTaskId = "", title = "", category = "", dueDate = "" }) {
+  return {
     id: crypto.randomUUID(),
     projectId,
+    parentTaskId,
     title,
-    category: "",
+    category,
     status: "todo",
-    dueDate: state.selectedDate,
+    dueDate: dueDate || state.selectedDate,
+    description: "",
     createdAt: nowDateTime(),
     updatedAt: nowDateTime(),
     deleted: false
-  });
+  };
+}
+
+// Project 配下に Task を直接追加(prompt でタイトル入力)
+function addTaskToProject(projectId) {
+  const title = window.prompt("タスク名を入力してください");
+  if (!title || !title.trim()) return;
+  const task = makeTask({ projectId, title: title.trim() });
+  state.tasks.push(task);
   saveAndRender("Taskを追加しました");
+  // 即座に編集モーダルを開いて詳細を編集できるように
+  setTimeout(() => openTaskEditor(task.id), 50);
+}
+
+// Task のサブタスクを追加(prompt でタイトル入力、親と同じ projectId を継承)
+function addSubtask(parentTaskId) {
+  const parent = state.tasks.find((t) => t.id === parentTaskId);
+  if (!parent) return;
+  // 階層制限: 既に depth 2 の Task に対しては作らない
+  const depth = getTaskDepth(parent);
+  if (depth >= 2) {
+    showToast("これ以上の階層は作れません(最大 3 階層)");
+    return;
+  }
+  const title = window.prompt(`「${parent.title}」のサブタスク名を入力`);
+  if (!title || !title.trim()) return;
+  const task = makeTask({
+    projectId: parent.projectId,
+    parentTaskId,
+    title: title.trim(),
+    category: parent.category || ""
+  });
+  state.tasks.push(task);
+  saveAndRender("サブタスクを追加しました");
+  setTimeout(() => openTaskEditor(task.id), 50);
+}
+
+function getTaskDepth(task) {
+  let depth = 0;
+  let cur = task;
+  while (cur?.parentTaskId) {
+    depth++;
+    if (depth > 5) break;  // 循環参照対策
+    cur = state.tasks.find((t) => t.id === cur.parentTaskId);
+  }
+  return depth;
 }
 
 function toggleTask(id) {
@@ -1434,7 +1685,12 @@ function startTimerTicker() {
         renderMain();
       }
     }
-    // 常時タイマー(1 分に 1 回チェックすれば十分)
+    // 常時タイマーセッションがアクティブで、ポモドーロ画面表示中なら再描画
+    if (state.currentView === "pomodoro" && state.pomodoro?.tab === "passive") {
+      const session = getPassiveSessionStatus();
+      if (session.active) renderMain();
+    }
+    // 常時タイマー発火チェック(1 分に 1 回)
     secondsSinceLastPassiveCheck += 1;
     if (secondsSinceLastPassiveCheck >= 30) {
       secondsSinceLastPassiveCheck = 0;
@@ -1714,9 +1970,10 @@ function weekdayLabel(date) {
   return ["日", "月", "火", "水", "木", "金", "土"][parseDate(date).getDay()];
 }
 
-function remainingText(end) {
+function remainingText(end, doubleSpeed = false) {
   const remaining = Math.max(0, Math.floor((new Date(end).getTime() - Date.now()) / 1000));
-  return `${pad2(Math.floor(remaining / 60))}:${pad2(remaining % 60)}`;
+  const display = doubleSpeed ? remaining * 2 : remaining;
+  return `${pad2(Math.floor(display / 60))}:${pad2(display % 60)}`;
 }
 
 function signed(value) {
@@ -1848,6 +2105,8 @@ function submitModal() {
     saveTaskFromModal(state.modal.id, fields);
   } else if (state.modal.type === "block") {
     saveBlockFromModal(state.modal.id, fields);
+  } else if (state.modal.type === "actualEntry") {
+    saveActualEntryFromModal(state.modal.id, fields);
   }
 }
 
@@ -1964,6 +2223,14 @@ function buildTaskModal(task) {
       .filter((p) => !p.deleted)
       .map((p) => `<option value="${p.id}" ${task.projectId === p.id ? "selected" : ""}>${escapeHTML(p.title)}</option>`)
   ].join("");
+  // 親候補: 同じ projectId の他の Task で、自分自身でなく、自分の子孫でないもの
+  const parentCandidates = state.tasks.filter((t) =>
+    !t.deleted && t.projectId === task.projectId && t.id !== task.id && !isDescendantOf(t, task.id)
+  );
+  const parentOptions = [
+    `<option value="" ${!task.parentTaskId ? "selected" : ""}>(親なし = ルート)</option>`,
+    ...parentCandidates.map((t) => `<option value="${t.id}" ${task.parentTaskId === t.id ? "selected" : ""}>${escapeHTML(t.title)}</option>`)
+  ].join("");
   return `
     <div class="modal-card" role="dialog" aria-modal="true">
       <div class="modal-header">
@@ -1989,6 +2256,10 @@ function buildTaskModal(task) {
             </select>
           </div>
         </div>
+        <div class="field">
+          <label class="field-label">親 Task(サブタスクにする場合)</label>
+          <select class="select" data-modal-field="parentTaskId">${parentOptions}</select>
+        </div>
         <div class="field-row">
           <div class="field">
             <label class="field-label">カテゴリ</label>
@@ -2013,6 +2284,18 @@ function buildTaskModal(task) {
   `;
 }
 
+// 循環参照防止: targetId が ancestor の子孫かチェック
+function isDescendantOf(candidate, ancestorId) {
+  let cur = candidate;
+  let safety = 0;
+  while (cur?.parentTaskId && safety < 10) {
+    if (cur.parentTaskId === ancestorId) return true;
+    cur = state.tasks.find((t) => t.id === cur.parentTaskId);
+    safety++;
+  }
+  return false;
+}
+
 function saveTaskFromModal(id, fields) {
   state.tasks = state.tasks.map((t) => {
     if (t.id !== id) return t;
@@ -2020,6 +2303,7 @@ function saveTaskFromModal(id, fields) {
       ...t,
       title: (fields.title || "").trim() || t.title,
       projectId: fields.projectId || "",
+      parentTaskId: fields.parentTaskId || "",
       status: fields.status || t.status || "todo",
       category: fields.category || "",
       dueDate: fields.dueDate || "",
@@ -2109,6 +2393,21 @@ function buildBlockModal(block) {
           <label class="field-label">コメント</label>
           <textarea class="textarea" data-modal-field="comment" style="min-height:100px">${escapeHTML(block.comment || "")}</textarea>
         </div>
+        ${block._isNew ? `
+        <div class="field" style="background:var(--accent-soft); padding:10px; border-radius:8px">
+          <label class="field-label" style="color:var(--accent); font-weight:700">🔁 繰り返し設定(新規作成時のみ)</label>
+          <select class="select" data-modal-field="recurrenceKind" id="recurrenceKindSelect">
+            <option value="">繰り返さない(1 つだけ作成)</option>
+            <option value="daily">毎日</option>
+            <option value="weekdays">平日のみ(月〜金)</option>
+            <option value="weekly">毎週(同じ曜日)</option>
+            <option value="monthly">毎月(同じ日)</option>
+          </select>
+          <label class="field-label" style="margin-top:8px">終了日(これより前まで生成)</label>
+          <input class="input" type="date" data-modal-field="recurrenceUntil" value="${addDays(block.date || todayISO(), 90)}">
+          <div class="muted" style="font-size:11px; margin-top:4px">同じ groupId で複数の Block を一括生成します</div>
+        </div>
+        ` : ""}
       </div>
       <div class="modal-footer">
         <button class="btn danger" data-action="modal-delete">削除</button>
@@ -2120,27 +2419,143 @@ function buildBlockModal(block) {
 }
 
 function saveBlockFromModal(id, fields) {
-  state.blocks = state.blocks.map((b) => {
-    if (b.id !== id) return b;
-    return {
-      ...b,
-      title: (fields.title || "").trim() || b.title,
-      date: fields.date || b.date || todayISO(),
-      category: fields.category || "",
-      taskId: fields.taskId || "",
-      plannedStartAt: fromLocalInput(fields.plannedStartAt),
-      plannedEndAt: fromLocalInput(fields.plannedEndAt),
-      actualStartAt: fromLocalInput(fields.actualStartAt),
-      actualEndAt: fromLocalInput(fields.actualEndAt),
-      charge: Number(fields.charge) || 0,
-      discharge: Number(fields.discharge) || 0,
-      completed: Boolean(fields.completed),
-      comment: fields.comment || "",
-      updatedAt: nowDateTime()
-    };
-  });
-  closeModal();
-  saveAndRender("Blockを更新しました");
+  const existing = state.blocks.find((b) => b.id === id);
+  const isNew = !existing;
+  const updated = {
+    id: isNew ? id : existing.id,
+    title: (fields.title || "").trim() || (existing?.title || "新規Block"),
+    date: fields.date || existing?.date || todayISO(),
+    category: fields.category || "",
+    taskId: fields.taskId || "",
+    plannedStartAt: fromLocalInput(fields.plannedStartAt),
+    plannedEndAt: fromLocalInput(fields.plannedEndAt),
+    actualStartAt: fromLocalInput(fields.actualStartAt),
+    actualEndAt: fromLocalInput(fields.actualEndAt),
+    charge: Number(fields.charge) || 0,
+    discharge: Number(fields.discharge) || 0,
+    completed: Boolean(fields.completed),
+    comment: fields.comment || "",
+    expectedCharge: existing?.expectedCharge ?? "",
+    expectedDischarge: existing?.expectedDischarge ?? "",
+    recurrenceGroupId: existing?.recurrenceGroupId || "",
+    pomodoroCount: existing?.pomodoroCount || 0,
+    migratedTo: existing?.migratedTo || "",
+    orderIndex: existing?.orderIndex || 0,
+    createdAt: existing?.createdAt || nowDateTime(),
+    updatedAt: nowDateTime(),
+    deleted: false
+  };
+  if (isNew) {
+    state.blocks.push(updated);
+    // 繰り返し指定があれば、追加で生成
+    if (fields.recurrenceKind && fields.recurrenceUntil) {
+      const generated = generateRecurringBlocks(updated, fields.recurrenceKind, fields.recurrenceUntil);
+      closeModal();
+      saveAndRender(`Blockを ${1 + generated.length} 件作成しました(繰り返し含む)`);
+      return;
+    }
+    closeModal();
+    saveAndRender("Blockを追加しました");
+  } else {
+    state.blocks = state.blocks.map((b) => b.id === id ? updated : b);
+    closeModal();
+    saveAndRender("Blockを更新しました");
+  }
+}
+
+// 繰り返し Block を一括生成
+function generateRecurringBlocks(template, kind, untilDate) {
+  const groupId = crypto.randomUUID();
+  // 既存(template)にもgroupIdを付ける
+  state.blocks = state.blocks.map((b) => b.id === template.id ? { ...b, recurrenceGroupId: groupId } : b);
+
+  const startDate = parseDate(template.date);
+  const endDate = parseDate(untilDate);
+  const startTimeStr = template.plannedStartAt ? template.plannedStartAt.split("T")[1] || "" : "";
+  const endTimeStr = template.plannedEndAt ? template.plannedEndAt.split("T")[1] || "" : "";
+
+  const generated = [];
+  let cursor = new Date(startDate);
+  cursor.setDate(cursor.getDate() + 1);  // 翌日から
+  let safety = 0;
+  const maxIter = 400;  // 安全策
+
+  while (cursor.getTime() <= endDate.getTime() && safety < maxIter) {
+    safety++;
+    const wd = cursor.getDay();
+    let matches = false;
+    if (kind === "daily") {
+      matches = true;
+    } else if (kind === "weekdays") {
+      matches = wd >= 1 && wd <= 5;
+    } else if (kind === "weekly") {
+      matches = wd === startDate.getDay();
+    } else if (kind === "monthly") {
+      matches = cursor.getDate() === startDate.getDate();
+    }
+    if (matches) {
+      const date = dateToISO(cursor);
+      const newBlock = {
+        ...template,
+        id: crypto.randomUUID(),
+        date,
+        plannedStartAt: startTimeStr ? `${date}T${startTimeStr}` : "",
+        plannedEndAt: endTimeStr ? `${date}T${endTimeStr}` : "",
+        actualStartAt: "",
+        actualEndAt: "",
+        completed: false,
+        recurrenceGroupId: groupId,
+        createdAt: nowDateTime(),
+        updatedAt: nowDateTime()
+      };
+      state.blocks.push(newBlock);
+      generated.push(newBlock);
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return generated;
+}
+
+// タイムラインの空き時間行クリックで新規Block作成モーダル
+function openTimelineNewBlock(startMinute) {
+  const hour = Math.floor(startMinute / 60);
+  const minute = startMinute % 60;
+  const date = state.selectedDate;
+  const startISO = `${date}T${pad2(hour)}:${pad2(minute)}:00`;
+  const endISO = `${date}T${pad2(hour + 1)}:${pad2(minute)}:00`;
+  const newBlock = {
+    id: crypto.randomUUID(),
+    title: "",
+    date,
+    category: "",
+    taskId: "",
+    plannedStartAt: startISO,
+    plannedEndAt: endISO,
+    actualStartAt: "",
+    actualEndAt: "",
+    completed: false,
+    charge: 0,
+    discharge: 0,
+    expectedCharge: "",
+    expectedDischarge: "",
+    comment: "",
+    recurrenceGroupId: "",
+    pomodoroCount: 0,
+    migratedTo: "",
+    orderIndex: 0,
+    _isNew: true,  // モーダル表示時に繰り返し設定を表示するためのフラグ
+    createdAt: nowDateTime(),
+    updatedAt: nowDateTime(),
+    deleted: false
+  };
+  state.modal = { type: "block", id: newBlock.id };
+  // state.blocks に push せずに、モーダル表示してから保存時に push する
+  renderModal(buildBlockModal(newBlock));
+  // タイトル input にフォーカス
+  setTimeout(() => {
+    const titleInput = modalRoot.querySelector('[data-modal-field="title"]');
+    titleInput?.focus();
+  }, 50);
 }
 
 // ---------- datetime-local 変換 ----------
@@ -2238,6 +2653,7 @@ function checkPassivePomodoro() {
   const fireKey = `${now.toDateString()} ${pad2(now.getHours())}:${pad2(minute)}`;
   if (state.pomodoro.passive.lastFiredKey === fireKey) return;
   state.pomodoro.passive.lastFiredKey = fireKey;
+  state.pomodoro.passive.lastFiredAt = Date.now();
   saveState();
   fireNotification(
     "ポモドーロ開始",
@@ -2377,3 +2793,97 @@ setSelectedDate = function(date) {
   _originalSetSelectedDate(date);
   hydrateStaticMarkdown();
 };
+
+// ============================================================
+// 実績登録モーダル (v7) — タイムラインの○ボタンから呼ばれる
+// ============================================================
+
+function completeBlockWithActual(blockId) {
+  const block = state.blocks.find((b) => b.id === blockId);
+  if (!block) return;
+  // 予定をデフォルトに、なければ現在時刻
+  const defaultStart = block.actualStartAt || block.plannedStartAt || nowDateTime();
+  const defaultEnd = block.actualEndAt || block.plannedEndAt || nowDateTime();
+  state.modal = { type: "actualEntry", id: blockId };
+  renderModal(buildActualEntryModal(block, defaultStart, defaultEnd));
+}
+
+function buildActualEntryModal(block, defaultStart, defaultEnd) {
+  return `
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">✅ 実績を登録</h3>
+        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        <div style="background:var(--green-soft); padding:10px; border-radius:8px">
+          <strong>${escapeHTML(block.title)}</strong>
+          <div class="muted" style="font-size:12px; margin-top:4px">
+            予定: ${block.plannedStartAt ? timeFromDateTime(block.plannedStartAt) : "未定"}${block.plannedEndAt ? `-${timeFromDateTime(block.plannedEndAt)}` : ""}
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label class="field-label">実績開始</label>
+            <input class="input" type="datetime-local" data-modal-field="actualStartAt" value="${toLocalInput(defaultStart)}">
+          </div>
+          <div class="field">
+            <label class="field-label">実績終了</label>
+            <input class="input" type="datetime-local" data-modal-field="actualEndAt" value="${toLocalInput(defaultEnd)}">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label class="field-label">充電 (0-5)</label>
+            <select class="select" data-modal-field="charge" data-modal-kind="number">
+              ${rangeOptions(0, 5, block.charge || 0)}
+            </select>
+          </div>
+          <div class="field">
+            <label class="field-label">放電 (0-5)</label>
+            <select class="select" data-modal-field="discharge" data-modal-kind="number">
+              ${rangeOptions(0, 5, block.discharge || 0)}
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label">コメント</label>
+          <textarea class="textarea" data-modal-field="comment" style="min-height:80px" placeholder="所感、振り返りなど">${escapeHTML(block.comment || "")}</textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-action="modal-close">キャンセル</button>
+        <button class="btn green" data-action="modal-save">完了として登録</button>
+      </div>
+    </div>
+  `;
+}
+
+function saveActualEntryFromModal(blockId, fields) {
+  state.blocks = state.blocks.map((b) => {
+    if (b.id !== blockId) return b;
+    return {
+      ...b,
+      actualStartAt: fromLocalInput(fields.actualStartAt),
+      actualEndAt: fromLocalInput(fields.actualEndAt),
+      charge: Number(fields.charge) || 0,
+      discharge: Number(fields.discharge) || 0,
+      comment: fields.comment || "",
+      completed: true,
+      updatedAt: nowDateTime()
+    };
+  });
+  // Task の状態を doing に
+  const block = state.blocks.find((b) => b.id === blockId);
+  if (block?.taskId) {
+    state.tasks = state.tasks.map((t) =>
+      t.id === block.taskId && t.status === "todo"
+        ? { ...t, status: "doing", updatedAt: nowDateTime() }
+        : t
+    );
+  }
+  closeModal();
+  // 実績モードに切り替えて表示
+  state.timelineMode = "actual";
+  saveAndRender("✅ 実績を登録しました");
+}
