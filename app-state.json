@@ -1,5 +1,5 @@
 {
-  "currentView": "settings",
+  "currentView": "timeline",
   "selectedDate": "2026-05-20",
   "settings": {
     "birthDate": "",
@@ -24,7 +24,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-20T16:31:00"
+      "lastSavedAt": "2026-05-20T15:45:00"
     },
     "visionSection": "board",
     "visionBoardIndex": 2
@@ -223,22 +223,7 @@
     "blockId": "685aaf09-0e06-4802-ab51-dd5c5eafcdfa",
     "startedAt": "2026-05-20T15:00:00",
     "endsAt": "2026-05-20T15:25:00",
-    "mode": "focus",
-    "passive": {
-      "enabled": false,
-      "activeWeekdays": [
-        false,
-        true,
-        true,
-        true,
-        true,
-        true,
-        false
-      ],
-      "activeStartHHMM": "08:00",
-      "activeEndHHMM": "19:00",
-      "lastFiredKey": ""
-    }
+    "mode": "focus"
   },
   "modal": null,
   "timelineMode": "planned"
