@@ -1,5 +1,5 @@
 {
-  "currentView": "settings",
+  "currentView": "timeline",
   "selectedDate": "2026-05-20",
   "settings": {
     "birthDate": "",
@@ -24,9 +24,9 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": ""
+      "lastSavedAt": "2026-05-20T14:17:00"
     },
-    "visionSection": "vision",
+    "visionSection": "board",
     "visionBoardIndex": 0
   },
   "projects": [
@@ -46,6 +46,17 @@
       "kind": "normal",
       "title": "Web版 TaskChute Journal を育てる",
       "category": "開発",
+      "status": "active",
+      "twelveWeekStartDate": "2026-05-20",
+      "createdAt": "2026-05-20T14:17:00",
+      "updatedAt": "2026-05-20T14:17:00",
+      "deleted": true
+    },
+    {
+      "id": "8ae19700-ddce-4d92-8e02-e921cbff0cb4",
+      "kind": "normal",
+      "title": "H1保守",
+      "category": "",
       "status": "active",
       "twelveWeekStartDate": "2026-05-20",
       "createdAt": "2026-05-20T14:17:00",
@@ -86,6 +97,17 @@
       "createdAt": "2026-05-20T14:17:00",
       "updatedAt": "2026-05-20T14:17:00",
       "deleted": true
+    },
+    {
+      "id": "abd74bf7-b98f-4efb-b359-60fe62363f58",
+      "projectId": "e479665b-8811-4ad7-b513-bc6214385b74",
+      "title": "テスト",
+      "category": "",
+      "status": "todo",
+      "dueDate": "2026-05-20",
+      "createdAt": "2026-05-20T14:19:00",
+      "updatedAt": "2026-05-20T14:19:00",
+      "deleted": false
     }
   ],
   "blocks": [
@@ -110,8 +132,8 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-20T14:17:00",
-      "updatedAt": "2026-05-20T14:17:00",
-      "deleted": false
+      "updatedAt": "2026-05-20T14:18:00",
+      "deleted": true
     },
     {
       "id": "8c1d2241-ba8f-42c1-8cd8-4bc1e0cf4759",
@@ -134,8 +156,8 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-20T14:17:00",
-      "updatedAt": "2026-05-20T14:17:00",
-      "deleted": false
+      "updatedAt": "2026-05-20T14:18:00",
+      "deleted": true
     },
     {
       "id": "4818cb22-8a4f-4315-ae42-687aaabe1874",
@@ -158,8 +180,8 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-20T14:17:00",
-      "updatedAt": "2026-05-20T14:17:00",
-      "deleted": false
+      "updatedAt": "2026-05-20T14:18:00",
+      "deleted": true
     }
   ],
   "journals": {
