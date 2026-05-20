@@ -23,8 +23,8 @@
       "branch": "main",
       "path": "app-state.json",
       "token": "",
-      "autoSave": false,
-      "lastSavedAt": ""
+      "autoSave": true,
+      "lastSavedAt": "2026-05-20T15:59:00"
     },
     "visionSection": "board",
     "visionBoardIndex": 2,
