@@ -1,8 +1,8 @@
 {
-  "currentView": "timeline",
+  "currentView": "settings",
   "selectedDate": "2026-05-20",
   "settings": {
-    "birthDate": "",
+    "birthDate": "1992-12-29",
     "twelveWeekStartDate": "2026-05-20",
     "morningEnergyLog": {},
     "journalTemplate": "# 2026-05-20\n\n## 朝\n\n今日の方針:\n\n## 昼\n\n## 夕方\n\n## 夜\n\n",
@@ -24,7 +24,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-20T16:01:00"
+      "lastSavedAt": "2026-05-20T16:02:00"
     },
     "visionSection": "board",
     "visionBoardIndex": 2,
@@ -9898,6 +9898,30 @@
       "createdAt": "2026-05-20T16:02:00",
       "updatedAt": "2026-05-20T16:02:00",
       "deleted": false
+    },
+    {
+      "id": "818c7a65-9ddb-4de6-a27f-ee47ac49e647",
+      "title": "水を飲む",
+      "date": "2026-05-20",
+      "category": "ルーティン",
+      "taskId": "",
+      "plannedStartAt": "2026-05-20T05:31:00",
+      "plannedEndAt": "2026-05-20T05:32:00",
+      "actualStartAt": "",
+      "actualEndAt": "",
+      "charge": 0,
+      "discharge": 0,
+      "completed": false,
+      "comment": "",
+      "expectedCharge": "",
+      "expectedDischarge": "",
+      "recurrenceGroupId": "",
+      "pomodoroCount": 0,
+      "migratedTo": "",
+      "orderIndex": 0,
+      "createdAt": "2026-05-20T16:03:00",
+      "updatedAt": "2026-05-20T16:03:00",
+      "deleted": false
     }
   ],
   "journals": {
@@ -9927,9 +9951,6 @@
       "lastFiredKey": ""
     }
   },
-  "modal": {
-    "type": "block",
-    "id": "818c7a65-9ddb-4de6-a27f-ee47ac49e647"
-  },
+  "modal": null,
   "timelineMode": "planned"
 }
