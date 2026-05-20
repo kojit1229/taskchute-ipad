@@ -491,7 +491,7 @@ h3 {
 .timeline-card {
   position: absolute;
   left: 64px;
-  right: 16px;
+  right: 100px;
   min-height: 32px;
   border-radius: 7px;
   padding: 7px 9px;
@@ -509,23 +509,8 @@ h3 {
   border-left-color: var(--green);
 }
 
-.energy-line {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  right: 86px;
-  width: 1px;
-  background: var(--line);
-}
-
-.energy-point {
-  position: absolute;
-  right: 80px;
-  width: 13px;
-  height: 13px;
-  border-radius: 999px;
-  background: var(--orange);
-  border: 2px solid var(--panel);
+.energy-svg {
+  /* SVG はインラインstyleで配置 */
 }
 
 .journal-grid {

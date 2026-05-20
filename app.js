@@ -40,6 +40,7 @@ let toastTimer = null;
 let timerTicker = null;
 let cachedVisionMd = "";
 let cachedAffirmationMd = "";
+const cachedFeedback = {};  // { 'YYYY-MM-DD': '...md text...' }
 
 render();
 hydrateStaticMarkdown();
@@ -93,6 +94,8 @@ document.addEventListener("click", (event) => {
   // === v3: ポモドーロ常時起動 ===
   if (action === "pomo-tab") setPomodoroTab(target.dataset.tab);
   if (action === "request-notification-permission") requestNotificationPermission();
+  // === v3: 日報のGitHub push ===
+  if (action === "push-report") pushReportToGitHub();
 });
 
 document.addEventListener("input", (event) => {
@@ -153,6 +156,11 @@ document.addEventListener("change", (event) => {
     render();
   }
   if (target.matches("#importData")) importData(target.files?.[0]);
+  if (target.matches("[data-feedback-upload]")) {
+    const date = target.dataset.feedbackUpload;
+    const file = target.files?.[0];
+    if (file) uploadFeedbackFile(date, file);
+  }
 });
 
 function loadState() {
@@ -627,22 +635,101 @@ function renderTimelineView() {
 }
 
 function renderTimeline({ compact }) {
-  const blocks = blocksForDate(state.selectedDate).filter((block) => block.plannedStartAt);
+  // タイムラインは全 Block を表示(planned が空のものは時刻軸に出ないが、エネルギー累積には actualEndAt 持ちは寄与)
+  const blocks = blocksForDate(state.selectedDate);
+  const blocksWithPlanned = blocks.filter((block) => block.plannedStartAt);
   const rowHeight = compact ? 34 : 40;
   const startHour = 5;
   const endHour = 24;
   const rows = Array.from({ length: endHour - startHour + 1 }, (_, index) => startHour + index);
-  const points = energyPoints(blocks, rowHeight, startHour);
 
   return `
-    <div class="timeline" style="${compact ? "min-height:650px" : ""}">
+    <div class="timeline" style="position:relative; ${compact ? "min-height:650px" : ""}">
       ${rows.map((hour) => `
         <div class="time-row" style="top:${(hour - startHour) * rowHeight}px;height:${rowHeight}px">${String(hour).padStart(2, "0")}:00</div>
       `).join("")}
-      <div class="energy-line"></div>
-      ${blocks.map((block) => renderTimelineCard(block, rowHeight, startHour)).join("")}
-      ${points.map((point) => `<span class="energy-point" title="${point.value}" style="top:${point.top}px; right:${point.right}px"></span>`).join("")}
+      ${blocksWithPlanned.map((block) => renderTimelineCard(block, rowHeight, startHour)).join("")}
+      ${renderEnergyGraph(blocks, rowHeight, startHour, endHour)}
     </div>
+  `;
+}
+
+function renderEnergyGraph(allBlocks, rowHeight, startHour, endHour) {
+  const morning = state.settings.morningEnergyLog[state.selectedDate] ?? 5;
+  const totalHeight = rowHeight * (endHour - startHour + 1);
+  const startMinute = startHour * 60;
+  const endMinute = endHour * 60;
+
+  // 完了 Block を actualEndAt 順にソート(実線=実績)
+  const completed = allBlocks
+    .filter((b) => b.completed && b.actualEndAt)
+    .sort((a, b) => a.actualEndAt.localeCompare(b.actualEndAt));
+
+  // 累積実績点列
+  const realPoints = [{ minute: 0, value: morning }];
+  let cumulative = morning;
+  for (const b of completed) {
+    cumulative += Number(b.charge || 0) - Number(b.discharge || 0);
+    realPoints.push({ minute: minutesOf(b.actualEndAt), value: cumulative });
+  }
+  // 現在時刻まで延伸
+  const today = todayISO();
+  if (state.selectedDate === today) {
+    const now = new Date();
+    const nowMinute = now.getHours() * 60 + now.getMinutes();
+    realPoints.push({ minute: nowMinute, value: cumulative });
+  } else {
+    // 過去日付なら 24:00 まで延伸
+    realPoints.push({ minute: endMinute, value: cumulative });
+  }
+
+  // 予測点列(未完了 Block の planned ベース、expected_charge/discharge 使うが無ければ通常の charge/discharge を予測値として使う)
+  const isToday = state.selectedDate === today;
+  const futureBlocks = allBlocks
+    .filter((b) => !b.completed && b.plannedEndAt)
+    .sort((a, b) => a.plannedEndAt.localeCompare(b.plannedEndAt));
+  const predictPoints = [];
+  if (isToday && futureBlocks.length > 0) {
+    let predict = cumulative;
+    const now = new Date();
+    const nowMinute = now.getHours() * 60 + now.getMinutes();
+    predictPoints.push({ minute: nowMinute, value: predict });
+    for (const b of futureBlocks) {
+      const ec = Number(b.expectedCharge ?? b.charge ?? 0);
+      const ed = Number(b.expectedDischarge ?? b.discharge ?? 0);
+      predict += ec - ed;
+      predictPoints.push({ minute: minutesOf(b.plannedEndAt), value: predict });
+    }
+  }
+
+  // X 軸スケール: 値を -maxAbs 〜 +maxAbs にマップ
+  const allValues = [...realPoints, ...predictPoints].map((p) => Math.abs(p.value));
+  const maxAbs = Math.max(20, ...allValues);
+  // SVG viewBox 100x{totalHeight}、中央 x=50
+  const yOf = (minute) => Math.min(totalHeight, Math.max(0, ((minute - startMinute) / (endMinute - startMinute)) * totalHeight));
+  const xOf = (value) => 50 + (value / maxAbs) * 45;
+
+  const polyline = (pts, dashed) => {
+    if (pts.length < 2) return "";
+    const points = pts.map((p) => `${xOf(p.value)},${yOf(p.minute)}`).join(" ");
+    return `<polyline points="${points}" stroke="${dashed ? '#7b61ff' : '#2fb96d'}" stroke-width="1.5" fill="none" stroke-linejoin="round" ${dashed ? 'stroke-dasharray="3,2"' : ""}/>`;
+  };
+  const circles = (pts, color) =>
+    pts.map((p) => `<circle cx="${xOf(p.value)}" cy="${yOf(p.minute)}" r="1.8" fill="${color}"/>`).join("");
+
+  const endValue = realPoints[realPoints.length - 1]?.value ?? morning;
+
+  return `
+    <svg class="energy-svg" viewBox="0 0 100 ${totalHeight}" preserveAspectRatio="none"
+         style="position:absolute; top:0; right:0; width:90px; height:${totalHeight}px; pointer-events:none;">
+      <line x1="50" y1="0" x2="50" y2="${totalHeight}" stroke="#D1D1D6" stroke-width="0.4" stroke-dasharray="2,2"/>
+      ${polyline(realPoints, false)}
+      ${polyline(predictPoints, true)}
+      ${circles(realPoints, "#2fb96d")}
+    </svg>
+    <div style="position:absolute; top:2px; right:2px; font-size:9px; color:var(--faint); pointer-events:none;">エネルギー</div>
+    <div style="position:absolute; top:16px; right:2px; font-size:9px; color:var(--faint); pointer-events:none;">起点 ${morning}</div>
+    <div style="position:absolute; bottom:2px; right:2px; font-size:9px; color:var(--green); pointer-events:none;">終値 ${endValue >= 0 ? '+' : ''}${endValue}</div>
   `;
 }
 
@@ -746,24 +833,50 @@ function renderPassivePomodoro(passive) {
 function renderJournal() {
   ensureJournal(state.selectedDate);
   const previous = addDays(state.selectedDate, -1);
+  const date = state.selectedDate;
+  // AIフィードバックは git ファイル(優先)→ なければ localStorage の textarea
+  const feedbackFromFile = cachedFeedback[date];
+  const feedbackFromState = state.feedback[date] || "";
+  const feedbackText = feedbackFromFile || feedbackFromState;
+  const feedbackFromFilePrev = cachedFeedback[previous];
   return `
     ${renderHeader("過去の自分・今の自分・外部視点", "ジャーナル")}
     ${renderDateBar()}
     <section class="journal-grid">
       <div class="panel">
-        <h2>前日</h2>
-        <div class="readonly-md">${escapeHTML(state.journals[previous] || "記載なし")}</div>
+        <h2>📓 前日 (${previous})</h2>
+        <div class="md-render readonly-md">${renderMarkdown(state.journals[previous] || "記載なし")}</div>
       </div>
       <div class="panel">
         <div class="row" style="margin-bottom:10px">
-          <h2>当日編集</h2>
-          <button class="btn primary" data-action="generate-report">日報生成</button>
+          <h2>📝 当日編集</h2>
+          <div class="row">
+            <button class="btn primary" data-action="generate-report">📊 日報を生成</button>
+            ${(state.settings.github?.token && state.settings.github?.owner) ? `<button class="btn" data-action="push-report">📤 GitHubに日報push</button>` : ""}
+          </div>
         </div>
-        <textarea class="textarea" data-journal-date="${state.selectedDate}">${escapeHTML(state.journals[state.selectedDate])}</textarea>
+        <textarea class="textarea" data-journal-date="${date}">${escapeHTML(state.journals[date])}</textarea>
       </div>
       <div class="panel">
-        <h2>AIフィードバック</h2>
-        <textarea class="textarea" data-feedback-date="${state.selectedDate}" placeholder="外部AIの返答をここに貼り付け">${escapeHTML(state.feedback[state.selectedDate] || "")}</textarea>
+        <div class="row" style="margin-bottom:10px">
+          <h2>🤖 AIフィードバック</h2>
+          <label class="btn ghost" style="font-size:12px; padding:6px 10px; cursor:pointer">
+            📤 .mdアップロード
+            <input type="file" accept=".md,text/markdown,text/plain" data-feedback-upload="${date}" hidden>
+          </label>
+        </div>
+        ${feedbackFromFile ? `
+          <div class="vision-source" style="margin-bottom:6px">📄 <code>AIフィードバック_${date}.md</code> から読込</div>
+          <div class="md-render readonly-md">${renderMarkdown(feedbackFromFile)}</div>
+        ` : `
+          <textarea class="textarea" data-feedback-date="${date}" placeholder="外部AIの返答をここに貼り付け、または上のボタンで .md ファイルをアップロード">${escapeHTML(feedbackFromState)}</textarea>
+        `}
+        ${feedbackFromFilePrev && previous !== date ? `
+          <details style="margin-top:14px">
+            <summary class="muted" style="cursor:pointer; font-size:12px">前日(${previous})のフィードバックも見る</summary>
+            <div class="md-render readonly-md" style="margin-top:6px; opacity:0.85">${renderMarkdown(feedbackFromFilePrev)}</div>
+          </details>
+        ` : ""}
       </div>
     </section>
   `;
@@ -1367,7 +1480,22 @@ async function hydrateStaticMarkdown() {
     cachedAffirmationMd = affirmText;
     changed = true;
   }
-  if (changed && state.view === "vision") {
+  // AI フィードバック: 当日と前日を取得
+  const today = state.selectedDate;
+  const prev = addDays(today, -1);
+  const [todayFb, prevFb] = await Promise.all([
+    fetchText(`./AIフィードバック_${today}.md`),
+    fetchText(`./AIフィードバック_${prev}.md`)
+  ]);
+  if (todayFb && todayFb !== cachedFeedback[today]) {
+    cachedFeedback[today] = todayFb;
+    changed = true;
+  }
+  if (prevFb && prevFb !== cachedFeedback[prev]) {
+    cachedFeedback[prev] = prevFb;
+    changed = true;
+  }
+  if (changed && (state.view === "vision" || state.currentView === "journal")) {
     render();
   }
 }
@@ -2150,3 +2278,102 @@ function ensurePassivePomodoro() {
   }
 }
 ensurePassivePomodoro();
+
+// ============================================================
+// AI フィードバック アップロード + 日報 GitHub push (v3)
+// ============================================================
+
+function uploadFeedbackFile(date, file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    const text = reader.result || "";
+    // localStorage の state.feedback と cachedFeedback 両方に保存
+    state.feedback[date] = text;
+    cachedFeedback[date] = text;
+    saveState();
+    showToast(`AIフィードバック ${date} を保存しました`);
+    render();
+    // GitHub に設定があれば自動 push
+    if (state.settings.github?.token && state.settings.github?.owner) {
+      pushFileToGitHub(`AIフィードバック_${date}.md`, text, "アップロードAIフィードバック");
+    }
+  };
+  reader.onerror = () => showToast("ファイル読込に失敗しました");
+  reader.readAsText(file, "utf-8");
+}
+
+async function pushReportToGitHub() {
+  const date = state.selectedDate;
+  const report = state.reports[date];
+  if (!report) {
+    showToast("日報がまだ生成されていません");
+    return;
+  }
+  if (!state.settings.github?.token) {
+    showToast("GitHub設定が未入力です");
+    return;
+  }
+  await pushFileToGitHub(`日報_${date}.md`, report, `日報 ${date}`);
+}
+
+async function pushFileToGitHub(filename, content, label) {
+  try {
+    const cfg = state.settings.github;
+    if (!cfg.owner || !cfg.repo || !cfg.token) {
+      throw new Error("GitHub設定が未入力です");
+    }
+    const branch = cfg.branch || "main";
+    const url = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${encodeURIComponent(filename)}`;
+    // 既存ファイルのSHAを取得
+    let sha = "";
+    try {
+      const head = await fetch(`${url}?ref=${encodeURIComponent(branch)}`, {
+        headers: githubHeaders(cfg.token)
+      });
+      if (head.ok) {
+        const payload = await head.json();
+        sha = payload.sha || "";
+      }
+    } catch (e) {
+      // 新規ファイル
+    }
+    const response = await fetch(url, {
+      method: "PUT",
+      headers: githubHeaders(cfg.token),
+      body: JSON.stringify({
+        message: `chore: update ${filename} ${new Date().toISOString()}`,
+        content: toBase64(content),
+        branch,
+        ...(sha ? { sha } : {})
+      })
+    });
+    if (!response.ok) {
+      throw new Error(await gitHubErrorMessage(response));
+    }
+    showToast(`📤 ${label} をGitHubへpushしました`);
+  } catch (e) {
+    showToast(`push失敗: ${e.message}`);
+  }
+}
+
+// generateReport の最後で自動 push する(設定で auto なら)
+const _originalGenerateReport = generateReport;
+generateReport = function() {
+  _originalGenerateReport();
+  // 設定: autoSave が ON なら日報も自動 push
+  const cfg = state.settings.github;
+  if (cfg?.autoSave && cfg?.token && cfg?.owner) {
+    const date = state.selectedDate;
+    const report = state.reports[date];
+    if (report) {
+      pushFileToGitHub(`日報_${date}.md`, report, `日報 ${date}`);
+    }
+  }
+};
+
+// 日付変更時に AI フィードバックを再 fetch
+const _originalSetSelectedDate = setSelectedDate;
+setSelectedDate = function(date) {
+  _originalSetSelectedDate(date);
+  hydrateStaticMarkdown();
+};
