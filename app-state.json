@@ -1,5 +1,5 @@
 {
-  "currentView": "timeline",
+  "currentView": "pomodoro",
   "selectedDate": "2026-05-20",
   "settings": {
     "birthDate": "",
@@ -233,7 +233,8 @@
       "activeStartHHMM": "08:00",
       "activeEndHHMM": "19:00",
       "lastFiredKey": ""
-    }
+    },
+    "tab": "passive"
   },
   "modal": null
 }
