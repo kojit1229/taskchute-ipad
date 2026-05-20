@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v8";
+const CACHE_NAME = "taskchute-journal-pwa-v12";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -47,6 +47,11 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   // GitHub API はキャッシュしない(常に最新)
   if (url.hostname === "api.github.com") {
+    return;
+  }
+  // v12: 動画ファイルはレンジリクエストが使われるので SW を経由させない
+  // (ブラウザのストリーミング機構に任せる)
+  if (url.pathname.endsWith(".mp4") || url.pathname.endsWith(".webm")) {
     return;
   }
   // MD ファイルは network-first(編集が反映されるように)
