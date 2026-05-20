@@ -90,6 +90,9 @@ document.addEventListener("click", (event) => {
   if (action === "vision-board-tab") setVisionBoardIndex(Number(target.dataset.index));
   if (action === "open-md-in-github") openMdInGithub(target.dataset.path);
   if (action === "reload-md") reloadStaticMarkdown();
+  // === v3: ポモドーロ常時起動 ===
+  if (action === "pomo-tab") setPomodoroTab(target.dataset.tab);
+  if (action === "request-notification-permission") requestNotificationPermission();
 });
 
 document.addEventListener("input", (event) => {
@@ -123,6 +126,32 @@ document.addEventListener("change", (event) => {
     saveState();
     render();
   }
+  if (target.matches('[data-github-field="autoSave"]')) {
+    state.settings.github.autoSave = target.checked;
+    saveState();
+    updateAutoSaveStatus();
+    if (target.checked) {
+      showToast("自動保存を有効にしました");
+    }
+  }
+  if (target.matches("[data-passive-field]")) {
+    const field = target.dataset.passiveField;
+    state.pomodoro.passive ||= defaultPassivePomodoro();
+    if (target.type === "checkbox") {
+      state.pomodoro.passive[field] = target.checked;
+    } else {
+      state.pomodoro.passive[field] = target.value;
+    }
+    saveState();
+    render();
+  }
+  if (target.matches("[data-passive-weekday]")) {
+    const idx = Number(target.dataset.passiveWeekday);
+    state.pomodoro.passive ||= defaultPassivePomodoro();
+    state.pomodoro.passive.activeWeekdays[idx] = target.checked;
+    saveState();
+    render();
+  }
   if (target.matches("#importData")) importData(target.files?.[0]);
 });
 
@@ -137,7 +166,10 @@ function loadState() {
 }
 
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  // state.modal は永続化しない(モーダル状態はメモリのみ)
+  const persisted = { ...state, modal: null };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+  scheduleAutoSave();
 }
 
 function normalizeState(value) {
@@ -147,8 +179,12 @@ function normalizeState(value) {
   value.settings.github.owner ||= "kojit1229";
   value.settings.github.repo ||= "taskchute-ipad";
   value.settings.github.branch ||= "main";
-  value.settings.github.path ||= "data/app-state.json";
+  value.settings.github.path ||= "app-state.json";
   value.settings.github.token ||= "";
+  if (typeof value.settings.github.autoSave !== "boolean") {
+    value.settings.github.autoSave = false;
+  }
+  value.settings.github.lastSavedAt ||= "";
   value.settings.visionSection ||= "vision";
   if (typeof value.settings.visionBoardIndex !== "number") {
     value.settings.visionBoardIndex = 0;
@@ -168,8 +204,10 @@ function defaultGitHubSettings() {
     owner: "kojit1229",
     repo: "taskchute-ipad",
     branch: "main",
-    path: "data/app-state.json",
-    token: ""
+    path: "app-state.json",
+    token: "",
+    autoSave: false,
+    lastSavedAt: ""
   };
 }
 
@@ -625,9 +663,21 @@ function renderPomodoro() {
   const running = state.pomodoro.running;
   const remaining = running ? remainingText(state.pomodoro.endsAt) : "25:00";
   const blockOptions = blocksForDate(state.selectedDate).filter((block) => !block.completed);
+  const passive = state.pomodoro.passive || defaultPassivePomodoro();
+  const pomoTab = state.pomodoro.tab || "manual";
   return `
     ${renderHeader("集中タイマー", "ポモドーロ")}
-    <section class="panel" style="display:grid; place-items:center; min-height:360px">
+    <div class="segmented" style="margin-bottom:14px">
+      <button class="${pomoTab === "manual" ? "active" : ""}" data-action="pomo-tab" data-tab="manual">任意タイマー</button>
+      <button class="${pomoTab === "passive" ? "active" : ""}" data-action="pomo-tab" data-tab="passive">常時タイマー</button>
+    </div>
+    ${pomoTab === "manual" ? renderManualPomodoro(running, remaining, blockOptions) : renderPassivePomodoro(passive)}
+  `;
+}
+
+function renderManualPomodoro(running, remaining, blockOptions) {
+  return `
+    <section class="panel" style="display:grid; place-items:center; min-height:300px">
       <div style="text-align:center">
         <div class="metric-value" style="font-size:56px; font-variant-numeric:tabular-nums">${remaining}</div>
         <div class="muted">${running ? "任意タイマー実行中" : "Blockを選んで開始"}</div>
@@ -639,6 +689,55 @@ function renderPomodoro() {
             <button class="btn orange" data-action="start-pomodoro" data-block-id="${block.id}">${escapeHTML(block.title)}</button>
           `).join("") || `<button class="btn" data-action="nav" data-view="tasks">Blockを作る</button>`}
         </div>
+      </div>
+    </section>
+  `;
+}
+
+function renderPassivePomodoro(passive) {
+  const status = getPassivePomodoroStatus();
+  const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+  return `
+    <section class="panel stack">
+      <h2>常時タイマー</h2>
+      <div class="muted" style="font-size:12px; line-height:1.6">
+        指定した曜日・時間帯の毎時 00 分 / 30 分に自動的に通知が出ます。<br>
+        PWA(またはブラウザタブ)が開いている間だけ動作します。
+      </div>
+      <div style="background:var(--panel-soft); padding:10px; border-radius:6px; font-size:13px">
+        <strong>状態:</strong> ${status}
+      </div>
+      <label class="checkbox-line">
+        <input type="checkbox" data-passive-field="enabled" ${passive.enabled ? "checked" : ""}>
+        常時タイマーを有効にする
+      </label>
+      <div class="field">
+        <label class="field-label">対象曜日</label>
+        <div style="display:flex; gap:6px; flex-wrap:wrap">
+          ${weekdays.map((label, i) => `
+            <label class="checkbox-line" style="background:var(--panel-soft); padding:4px 10px; border-radius:6px">
+              <input type="checkbox" data-passive-weekday="${i}" ${passive.activeWeekdays[i] ? "checked" : ""}> ${label}
+            </label>
+          `).join("")}
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label class="field-label">開始時刻</label>
+          <input class="input" type="time" data-passive-field="activeStartHHMM" value="${passive.activeStartHHMM}">
+        </div>
+        <div class="field">
+          <label class="field-label">終了時刻</label>
+          <input class="input" type="time" data-passive-field="activeEndHHMM" value="${passive.activeEndHHMM}">
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn" data-action="request-notification-permission">通知を許可</button>
+        <span class="muted" style="font-size:12px">通知の状態: ${getNotificationPermissionLabel()}</span>
+      </div>
+      <div class="muted" style="font-size:11px; line-height:1.6">
+        ※ iOS Safari の制約により、ホーム画面に追加した PWA でないと通知が動作しないことがあります。<br>
+        ※ アプリを閉じている間は通知が出ません。
       </div>
     </section>
   `;
@@ -688,7 +787,7 @@ function renderVision() {
 }
 
 function renderVisionMd(kind) {
-  const path = kind === "vision" ? "data/vision/Vision.md" : "data/affirmation/Daily_Affirmation.md";
+  const path = kind === "vision" ? "Vision.md" : "Daily_Affirmation.md";
   const cached = kind === "vision" ? cachedVisionMd : cachedAffirmationMd;
   const rendered = renderMarkdown(cached || "（読み込み中...)");
   return `
@@ -711,7 +810,7 @@ function renderVisionBoard() {
   ];
   const idx = clamp(state.settings.visionBoardIndex || 0, 0, boards.length - 1);
   const current = boards[idx];
-  const src = `./data/vision_board/${current.file}`;
+  const src = `./${current.file}`;
   return `
     <div class="vision-pdf-tabs">
       ${boards.map((b, i) => `
@@ -719,10 +818,16 @@ function renderVisionBoard() {
       `).join("")}
     </div>
     <div class="vision-actions" style="margin-bottom:8px">
-      <span class="vision-source">📄 <code>data/vision_board/${current.file}</code></span>
-      <a class="btn ghost" href="${src}" target="_blank" rel="noopener">別タブで開く</a>
+      <span class="vision-source">📄 <code>${current.file}</code></span>
+      <a class="btn primary" href="${src}" target="_blank" rel="noopener">📂 別タブで開く</a>
     </div>
-    <iframe class="vision-pdf-frame" src="${src}" title="${escapeHTML(current.name)}"></iframe>
+    <object data="${src}#view=FitH" type="application/pdf" class="vision-pdf-frame" aria-label="${escapeHTML(current.name)}">
+      <div class="pdf-fallback">
+        <p>このブラウザではPDFをインライン表示できません。</p>
+        <p>上の <strong>「📂 別タブで開く」</strong> ボタンから表示してください。</p>
+        <p style="margin-top:12px"><a class="btn primary" href="${src}" target="_blank" rel="noopener">${escapeHTML(current.name)} を開く</a></p>
+      </div>
+    </object>
   `;
 }
 
@@ -774,7 +879,11 @@ function renderSettings() {
         <button class="btn danger" data-action="reset-demo">デモデータに戻す</button>
       </div>
       <div class="panel stack">
-        <h2>GitHub保存</h2>
+        <h2>GitHub保存(クラウド永続化)</h2>
+        <div class="muted" style="font-size:12px; line-height:1.6">
+          Safari の PWA からは iCloud Drive に直接書き込めないため、GitHub への保存でクラウド永続化を実現します。
+          自動保存を ON にすると変更後 30 秒で自動的に push されます。
+        </div>
         <label>Owner
           <input class="input" data-github-field="owner" value="${escapeHTML(github.owner)}" autocomplete="off">
         </label>
@@ -784,22 +893,43 @@ function renderSettings() {
         <label>Branch
           <input class="input" data-github-field="branch" value="${escapeHTML(github.branch)}" autocomplete="off">
         </label>
-        <label>保存先JSON
-          <input class="input" data-github-field="path" value="${escapeHTML(github.path)}" autocomplete="off">
+        <label>保存先パス
+          <input class="input" data-github-field="path" value="${escapeHTML(github.path)}" autocomplete="off" placeholder="app-state.json">
         </label>
+        <div class="muted" style="font-size:11px">推奨: <code>app-state.json</code>(リポジトリのルート直下)</div>
         <label>Fine-grained token
           <input class="input" type="password" data-github-field="token" value="${escapeHTML(github.token)}" autocomplete="off" placeholder="GitHub token">
         </label>
+        <label class="checkbox-line">
+          <input type="checkbox" data-github-field="autoSave" ${github.autoSave ? "checked" : ""}>
+          自動保存を有効にする(変更後 30 秒のデバウンス)
+        </label>
+        <div class="muted" data-auto-save-status style="font-size:12px">
+          ${github.lastSavedAt ? `最終保存: ${github.lastSavedAt.replace("T", " ")}` : (github.autoSave ? "自動保存: 有効(まだ保存していません)" : "自動保存: 無効")}
+        </div>
         <div class="row">
-          <button class="btn primary" data-action="save-github">GitHubへ保存</button>
+          <button class="btn primary" data-action="save-github">今すぐGitHubへ保存</button>
           <button class="btn" data-action="load-github">GitHubから読込</button>
         </div>
-        <div class="muted">TokenはGitHubへ保存しません。この端末のブラウザ内だけに保持します。</div>
+        <div class="muted" style="font-size:11px">TokenはGitHubへ保存しません。この端末のブラウザ内だけに保持します。</div>
+      </div>
+      <div class="panel stack">
+        <h2>現在のファイル構成</h2>
+        <pre style="background:var(--panel-soft); padding:10px; border-radius:6px; font-size:11px; overflow-x:auto; margin:0">リポジトリ直下:
+├── app-state.json          ← メインデータ(自動保存先)
+├── Vision.md
+├── Daily_Affirmation.md
+├── now_vision.pdf
+├── 45_vision.pdf
+└── 80_vision.pdf</pre>
+        <div class="muted" style="font-size:11px">
+          現状はすべてリポジトリのルート直下に配置。git の commit 履歴がデータ履歴になるので、復元可能。<br>
+          整理したい場合は <code>data/</code> サブフォルダに移動して、上の「保存先パス」と app.js のパスも合わせて変更してください。
+        </div>
       </div>
       <div class="panel stack">
         <h2>GitHub Pages</h2>
         <div class="muted">このフォルダをGitHubリポジトリへpushし、Pagesの公開元をルートにすると公開できます。</div>
-        <div class="muted">端末間で同じデータを使う場合は、上のGitHub保存/読込を使います。</div>
       </div>
     </section>
   `;
@@ -1009,7 +1139,7 @@ function importData(file) {
   reader.readAsText(file);
 }
 
-async function saveToGitHub() {
+async function saveToGitHub(silent = false) {
   try {
     const config = requireGitHubConfig();
     const sha = await fetchGitHubFileSHA(config);
@@ -1029,9 +1159,43 @@ async function saveToGitHub() {
       throw new Error(await gitHubErrorMessage(response));
     }
 
-    showToast("GitHubへ保存しました");
+    state.settings.github.lastSavedAt = nowDateTime();
+    saveState();
+    if (!silent) showToast("GitHubへ保存しました");
+    if (silent) updateAutoSaveStatus();
   } catch (error) {
-    showToast(`GitHub保存失敗: ${error.message}`);
+    if (!silent) showToast(`GitHub保存失敗: ${error.message}`);
+    else updateAutoSaveStatus(`失敗: ${error.message}`);
+  }
+}
+
+// 自動保存(変更後 30秒のデバウンス、Token + autoSave=true 時のみ)
+let autoSaveTimer = null;
+const AUTO_SAVE_DEBOUNCE_MS = 30000;
+
+function scheduleAutoSave() {
+  const cfg = state.settings.github || {};
+  if (!cfg.autoSave) return;
+  if (!cfg.token || !cfg.owner || !cfg.repo) return;
+  clearTimeout(autoSaveTimer);
+  updateAutoSaveStatus("変更検知 — 30秒後に保存予定");
+  autoSaveTimer = setTimeout(() => {
+    saveToGitHub(true);
+  }, AUTO_SAVE_DEBOUNCE_MS);
+}
+
+function updateAutoSaveStatus(text) {
+  const el = document.querySelector("[data-auto-save-status]");
+  if (!el) return;
+  const cfg = state.settings.github || {};
+  if (text) {
+    el.textContent = text;
+    return;
+  }
+  if (cfg.lastSavedAt) {
+    el.textContent = `最終保存: ${cfg.lastSavedAt.replace("T", " ")}`;
+  } else {
+    el.textContent = cfg.autoSave ? "自動保存: 有効(まだ保存していません)" : "自動保存: 無効";
   }
 }
 
@@ -1147,13 +1311,22 @@ function completePomodoro() {
 
 function startTimerTicker() {
   clearInterval(timerTicker);
+  let secondsSinceLastPassiveCheck = 0;
   timerTicker = setInterval(() => {
-    if (!state.pomodoro.running) return;
-    if (new Date(state.pomodoro.endsAt).getTime() <= Date.now()) {
-      completePomodoro();
-      return;
+    // 任意タイマー
+    if (state.pomodoro.running) {
+      if (new Date(state.pomodoro.endsAt).getTime() <= Date.now()) {
+        completePomodoro();
+      } else if (state.currentView === "pomodoro") {
+        renderMain();
+      }
     }
-    if (state.currentView === "pomodoro") renderMain();
+    // 常時タイマー(1 分に 1 回チェックすれば十分)
+    secondsSinceLastPassiveCheck += 1;
+    if (secondsSinceLastPassiveCheck >= 30) {
+      secondsSinceLastPassiveCheck = 0;
+      checkPassivePomodoro();
+    }
   }, 1000);
 }
 
@@ -1182,8 +1355,8 @@ function saveAndRender(message) {
 }
 
 async function hydrateStaticMarkdown() {
-  const visionPromise = fetchText("./data/vision/Vision.md");
-  const affirmPromise = fetchText("./data/affirmation/Daily_Affirmation.md");
+  const visionPromise = fetchText("./Vision.md");
+  const affirmPromise = fetchText("./Daily_Affirmation.md");
   const [visionText, affirmText] = await Promise.all([visionPromise, affirmPromise]);
   let changed = false;
   if (visionText && visionText !== cachedVisionMd) {
@@ -1393,13 +1566,16 @@ function daysBetween(start, end) {
 
 function minutesOf(dateTime) {
   if (!dateTime) return 0;
-  const time = dateTime.includes("T") ? dateTime.split("T")[1] : dateTime;
-  const [hour, minute] = time.slice(0, 5).split(":").map(Number);
-  return hour * 60 + minute;
+  const d = new Date(dateTime);
+  if (Number.isNaN(d.getTime())) return 0;
+  return d.getHours() * 60 + d.getMinutes();
 }
 
 function timeFromDateTime(dateTime) {
-  return dateTime ? dateTime.split("T")[1]?.slice(0, 5) || "" : "";
+  if (!dateTime) return "";
+  const d = new Date(dateTime);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
 function formatDisplayDate(date) {
@@ -1448,8 +1624,28 @@ function downloadText(filename, text, type) {
 
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  });
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => {
+    navigator.serviceWorker.register("./sw.js").then((reg) => {
+      reg.addEventListener("updatefound", () => {
+        const newWorker = reg.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener("statechange", () => {
+          if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+            // 新しい SW がインストール完了、既存の SW がいる(=更新)
+            showToast("新しいバージョンを取得中...");
+            newWorker.postMessage({ type: "SKIP_WAITING" });
+          }
+        });
+      });
+      // 起動時にも更新チェック
+      reg.update?.();
+    }).catch(() => {
       // localhost / https 以外では登録されない。開発中は無視してよい。
     });
   });
@@ -1832,9 +2028,9 @@ function toLocalInput(isoString) {
 
 function fromLocalInput(value) {
   if (!value) return "";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toISOString();
+  // datetime-local の値 ('YYYY-MM-DDTHH:mm') をそのまま使う(UTC変換しない)
+  // 秒を追加して 'YYYY-MM-DDTHH:mm:00' にする
+  return value.length === 16 ? `${value}:00` : value;
 }
 
 // ESC キーでモーダルを閉じる
@@ -1843,3 +2039,114 @@ document.addEventListener("keydown", (event) => {
     closeModal();
   }
 });
+
+// ============================================================
+// ポモドーロ常時起動 (v3)
+// ============================================================
+
+function defaultPassivePomodoro() {
+  return {
+    enabled: false,
+    activeWeekdays: [false, true, true, true, true, true, false],  // 平日
+    activeStartHHMM: "08:00",
+    activeEndHHMM: "19:00",
+    lastFiredKey: ""
+  };
+}
+
+function getPassivePomodoroStatus() {
+  const p = state.pomodoro?.passive || defaultPassivePomodoro();
+  if (!p.enabled) return "無効";
+  const now = new Date();
+  const weekday = now.getDay();
+  const dayLabel = ["日", "月", "火", "水", "木", "金", "土"][weekday];
+  if (!p.activeWeekdays[weekday]) return `今日(${dayLabel})は対象外`;
+  const currentHHMM = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+  if (currentHHMM < p.activeStartHHMM || currentHHMM > p.activeEndHHMM) {
+    return `時間帯外 (${p.activeStartHHMM}〜${p.activeEndHHMM})`;
+  }
+  return `アクティブ — 次の発火: 毎時 00 分 / 30 分`;
+}
+
+function getNotificationPermissionLabel() {
+  if (!("Notification" in window)) return "このブラウザは通知非対応";
+  if (Notification.permission === "granted") return "✓ 許可済み";
+  if (Notification.permission === "denied") return "拒否(Safariの設定から変更可能)";
+  return "未許可";
+}
+
+async function requestNotificationPermission() {
+  if (!("Notification" in window)) {
+    showToast("このブラウザは通知に対応していません");
+    return;
+  }
+  if (Notification.permission === "granted") {
+    showToast("既に許可されています");
+    return;
+  }
+  const result = await Notification.requestPermission();
+  showToast(result === "granted" ? "通知を許可しました" : "通知が許可されませんでした");
+  render();
+}
+
+function setPomodoroTab(tab) {
+  state.pomodoro.tab = tab;
+  saveState();
+  render();
+}
+
+function checkPassivePomodoro() {
+  const p = state.pomodoro?.passive;
+  if (!p?.enabled) return;
+  const now = new Date();
+  const weekday = now.getDay();
+  if (!p.activeWeekdays[weekday]) return;
+  const currentHHMM = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+  if (currentHHMM < p.activeStartHHMM) return;
+  if (currentHHMM > p.activeEndHHMM) return;
+  const minute = now.getMinutes();
+  if (minute !== 0 && minute !== 30) return;
+  // 重複発火防止
+  const fireKey = `${now.toDateString()} ${pad2(now.getHours())}:${pad2(minute)}`;
+  if (state.pomodoro.passive.lastFiredKey === fireKey) return;
+  state.pomodoro.passive.lastFiredKey = fireKey;
+  saveState();
+  fireNotification(
+    "ポモドーロ開始",
+    `${pad2(now.getHours())}:${pad2(minute)} から 25 分の集中タイム`
+  );
+  // 25分後の作業終了通知をスケジュール
+  setTimeout(() => {
+    fireNotification("ポモドーロ作業終了", "5 分の休憩を取りましょう");
+  }, 25 * 60 * 1000);
+  // 30分後(休憩終了)
+  setTimeout(() => {
+    fireNotification("休憩終了", "次の集中タイムまで余裕があります");
+  }, 30 * 60 * 1000);
+}
+
+function fireNotification(title, body) {
+  if (!("Notification" in window)) return;
+  if (Notification.permission !== "granted") return;
+  try {
+    new Notification(title, {
+      body,
+      icon: "./assets/icon.svg",
+      tag: "passive-pomodoro",
+      silent: false
+    });
+  } catch (e) {
+    console.warn("Notification failed:", e);
+  }
+}
+
+// normalizeState の補完
+function ensurePassivePomodoro() {
+  state.pomodoro ||= {};
+  state.pomodoro.passive ||= defaultPassivePomodoro();
+  // activeWeekdays が配列でない / 7 要素未満の場合フォールバック
+  if (!Array.isArray(state.pomodoro.passive.activeWeekdays) || state.pomodoro.passive.activeWeekdays.length !== 7) {
+    state.pomodoro.passive.activeWeekdays = [false, true, true, true, true, true, false];
+  }
+}
+ensurePassivePomodoro();

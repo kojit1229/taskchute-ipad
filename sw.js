@@ -1,16 +1,15 @@
-const CACHE_NAME = "taskchute-journal-pwa-v2";
+const CACHE_NAME = "taskchute-journal-pwa-v3";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
   "./manifest.webmanifest",
-  "./assets/icon.svg",
-  "./data/vision/Vision.md",
-  "./data/affirmation/Daily_Affirmation.md",
-  "./data/vision_board/now_vision.pdf",
-  "./data/vision_board/45_vision.pdf",
-  "./data/vision_board/80_vision.pdf",
+  "./Vision.md",
+  "./Daily_Affirmation.md",
+  "./now_vision.pdf",
+  "./45_vision.pdf",
+  "./80_vision.pdf",
   "https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"
 ];
 
@@ -20,13 +19,18 @@ self.addEventListener("install", (event) => {
       Promise.all(
         APP_SHELL.map((url) =>
           cache.add(url).catch(() => {
-            // 取得できなかったファイルは無視(初回デプロイ時にPDFが無い場合など)
+            // 取得できなかったファイルは無視
           })
         )
       )
     )
   );
-  self.skipWaiting();
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("activate", (event) => {
