@@ -1,5 +1,5 @@
 {
-  "currentView": "settings",
+  "currentView": "pomodoro",
   "selectedDate": "2026-05-20",
   "settings": {
     "birthDate": "",
@@ -110,7 +110,7 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-20T14:55:00",
-      "updatedAt": "2026-05-20T14:59:00",
+      "updatedAt": "2026-05-20T15:00:00",
       "deleted": false
     },
     {
@@ -169,9 +169,9 @@
   "reports": {},
   "pomodoro": {
     "running": false,
-    "blockId": "53af6932-339e-43b6-a4ef-a7405fc43bca",
-    "startedAt": "2026-05-20T14:59:00",
-    "endsAt": "2026-05-20T15:24:00",
+    "blockId": "685aaf09-0e06-4802-ab51-dd5c5eafcdfa",
+    "startedAt": "2026-05-20T15:00:00",
+    "endsAt": "2026-05-20T15:25:00",
     "mode": "focus"
   },
   "modal": null,
