@@ -24,10 +24,68 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-20T15:56:00"
+      "lastSavedAt": ""
     },
     "visionSection": "board",
-    "visionBoardIndex": 2
+    "visionBoardIndex": 2,
+    "categories": [
+      {
+        "id": "392b1d14-76ae-4afa-96fd-e64e009a3f16",
+        "name": "開発",
+        "color": "#007AFF"
+      },
+      {
+        "id": "7114bf04-24c7-4d38-b5e7-e07361efaf28",
+        "name": "内省",
+        "color": "#34C759"
+      },
+      {
+        "id": "b468525f-7831-4de5-8d10-bf95a5a41163",
+        "name": "営業",
+        "color": "#FF9500"
+      },
+      {
+        "id": "dc213a52-f008-410e-b970-2456bb0fc660",
+        "name": "学習",
+        "color": "#AF52DE"
+      },
+      {
+        "id": "abffb2e1-7a91-43da-b5a4-4852401383dc",
+        "name": "休息",
+        "color": "#8E8E93"
+      },
+      {
+        "id": "a1055c1a-6b1b-4039-916c-6d0d71667bd3",
+        "name": "回復",
+        "color": "#5AC8FA"
+      }
+    ],
+    "breakMessages": [
+      {
+        "id": "43c805f6-1863-45ea-9249-649b0a6ebd40",
+        "fromSec": 0,
+        "toSec": 30,
+        "message": "もうすぐ次のセッション。深呼吸して準備を。"
+      },
+      {
+        "id": "9e02277e-3f6d-476a-a940-3409813ed7a0",
+        "fromSec": 30,
+        "toSec": 120,
+        "message": "ゆっくり水を一口。"
+      },
+      {
+        "id": "8b6469c2-6bc0-45f8-916b-35d14fa5b2e0",
+        "fromSec": 120,
+        "toSec": 240,
+        "message": "立ち上がって、肩を回しましょう。"
+      },
+      {
+        "id": "79b2060d-90d4-49cb-950b-5f67a4c5f3ff",
+        "fromSec": 240,
+        "toSec": 301,
+        "message": "目を閉じて、息を整えて。"
+      }
+    ]
   },
   "projects": [
     {
