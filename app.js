@@ -110,7 +110,6 @@ document.addEventListener("click", (event) => {
     event.stopPropagation();
     completeBlockWithActual(id);
   }
-  if (action === "passive-test-start") passiveTestStart();
 });
 
 document.addEventListener("input", (event) => {
@@ -151,24 +150,6 @@ document.addEventListener("change", (event) => {
     if (target.checked) {
       showToast("自動保存を有効にしました");
     }
-  }
-  if (target.matches("[data-passive-field]")) {
-    const field = target.dataset.passiveField;
-    state.pomodoro.passive ||= defaultPassivePomodoro();
-    if (target.type === "checkbox") {
-      state.pomodoro.passive[field] = target.checked;
-    } else {
-      state.pomodoro.passive[field] = target.value;
-    }
-    saveState();
-    render();
-  }
-  if (target.matches("[data-passive-weekday]")) {
-    const idx = Number(target.dataset.passiveWeekday);
-    state.pomodoro.passive ||= defaultPassivePomodoro();
-    state.pomodoro.passive.activeWeekdays[idx] = target.checked;
-    saveState();
-    render();
   }
   if (target.matches("#importData")) importData(target.files?.[0]);
   if (target.matches("[data-feedback-upload]")) {
@@ -832,7 +813,6 @@ function renderPomodoro() {
   // 2倍速表示: 残り時間 * 2 を 50:00 形式で
   const remaining = running ? remainingText(state.pomodoro.endsAt, true) : "50:00";
   const blockOptions = blocksForDate(state.selectedDate).filter((block) => !block.completed);
-  const passive = state.pomodoro.passive || defaultPassivePomodoro();
   const pomoTab = state.pomodoro.tab || "manual";
   return `
     ${renderHeader("集中タイマー", "ポモドーロ")}
@@ -840,7 +820,7 @@ function renderPomodoro() {
       <button class="${pomoTab === "manual" ? "active" : ""}" data-action="pomo-tab" data-tab="manual">任意タイマー</button>
       <button class="${pomoTab === "passive" ? "active" : ""}" data-action="pomo-tab" data-tab="passive">常時タイマー</button>
     </div>
-    ${pomoTab === "manual" ? renderManualPomodoro(running, remaining, blockOptions) : renderPassivePomodoro(passive)}
+    ${pomoTab === "manual" ? renderManualPomodoro(running, remaining, blockOptions) : renderPassivePomodoro()}
   `;
 }
 
@@ -900,45 +880,30 @@ function renderCircularProgress(progress, displayText, color = "var(--accent)") 
   `;
 }
 
-function renderPassivePomodoro(passive) {
-  // 実行中セッションがあるか判定
+function renderPassivePomodoro() {
+  // 常時タイマーは壁時計ベースで常に動作中
   const session = getPassiveSessionStatus();
-  if (session.active) {
-    const remainingDisplay = session.phase === "focus"
-      ? remainingText2x(session.remainingMs)
-      : remainingTextNormal(session.remainingMs);
-    const color = session.phase === "focus" ? "var(--accent)" : "var(--orange)";
-    return `
-      <section class="panel" style="display:grid; place-items:center; min-height:400px; padding:24px">
-        ${renderCircularProgress(session.progress, remainingDisplay, color)}
-        <div style="text-align:center; margin-top:14px">
-          <div style="font-size:13px; font-weight:700; color:${color}">
-            ${session.phase === "focus" ? "🎯 集中タイム" : "☕️ 休憩"}
-          </div>
-          <div class="muted" style="font-size:11px; margin-top:4px">
-            ${session.phase === "focus" ? "50:00 → 00:00 を 2 倍速で進行(実時間 25 分)" : "残り休憩時間(実時間)"}
-          </div>
-        </div>
-      </section>
-      <section class="panel stack" style="margin-top:12px">
-        <details>
-          <summary class="muted" style="cursor:pointer; font-size:13px">⚙️ 設定を変更</summary>
-          ${renderPassiveSettings(passive)}
-        </details>
-      </section>
-    `;
-  }
+  const remainingDisplay = session.phase === "focus"
+    ? remainingText2x(session.remainingMs)
+    : remainingTextNormal(session.remainingMs);
+  const color = session.phase === "focus" ? "var(--accent)" : "var(--orange)";
+  const now = new Date();
+  const cycleStartMin = Math.floor(now.getMinutes() / 30) * 30;
+  const cycleStartLabel = `${pad2(now.getHours())}:${pad2(cycleStartMin)}`;
   return `
-    <section class="panel stack">
-      <h2>常時タイマー</h2>
-      <div class="muted" style="font-size:12px; line-height:1.6">
-        指定した曜日・時間帯の毎時 00 分 / 30 分に自動的に開始され、25 分の集中 + 5 分の休憩を促します。<br>
-        PWA(またはブラウザタブ)が開いている間だけ動作します。
+    <section class="panel" style="display:grid; place-items:center; min-height:400px; padding:24px">
+      ${renderCircularProgress(session.progress, remainingDisplay, color)}
+      <div style="text-align:center; margin-top:14px">
+        <div style="font-size:13px; font-weight:700; color:${color}">
+          ${session.phase === "focus" ? "🎯 集中タイム" : "☕️ 休憩"}
+        </div>
+        <div class="muted" style="font-size:11px; margin-top:4px">
+          ${session.phase === "focus" ? "50:00 → 00:00 を 2 倍速で進行(実時間 25 分)" : "残り休憩時間(実時間)"}
+        </div>
+        <div class="muted" style="font-size:11px; margin-top:8px">
+          現サイクル開始: ${cycleStartLabel} / 毎時 00 分・30 分にリセット
+        </div>
       </div>
-      <div style="background:var(--panel-soft); padding:10px; border-radius:6px; font-size:13px">
-        <strong>状態:</strong> ${getPassivePomodoroStatus()}
-      </div>
-      ${renderPassiveSettings(passive)}
     </section>
   `;
 }
@@ -982,33 +947,39 @@ function renderPassiveSettings(passive) {
   `;
 }
 
-// 現在の常時タイマーセッションの状態を返す
+// 現在の常時タイマーセッションの状態を返す(壁時計モデル: 常にアクティブ)
+// 30分サイクル(0〜24分59秒=集中、25〜29分59秒=休憩)を時計から直接読む
 function getPassiveSessionStatus() {
-  const p = state.pomodoro?.passive;
-  if (!p?.enabled || !p.lastFiredAt) return { active: false };
-  const elapsed = Date.now() - p.lastFiredAt;
-  const focusMs = 25 * 60 * 1000;
-  const sessionMs = 30 * 60 * 1000;  // 作業 25 + 休憩 5
-  if (elapsed >= sessionMs) return { active: false };
-  if (elapsed < focusMs) {
+  const now = new Date();
+  const minutesInCycle = now.getMinutes() % 30 + now.getSeconds() / 60 + now.getMilliseconds() / 60000;
+  const FOCUS_MIN = 25;
+  const BREAK_MIN = 5;
+  if (minutesInCycle < FOCUS_MIN) {
+    // 集中フェーズ(0〜24:59)
+    const elapsedMs = minutesInCycle * 60 * 1000;
+    const focusMs = FOCUS_MIN * 60 * 1000;
     return {
       active: true,
       phase: "focus",
-      progress: elapsed / focusMs,
-      remainingMs: focusMs - elapsed
+      progress: elapsedMs / focusMs,
+      remainingMs: focusMs - elapsedMs
     };
   }
+  // 休憩フェーズ(25:00〜29:59)
+  const elapsedInBreakMs = (minutesInCycle - FOCUS_MIN) * 60 * 1000;
+  const breakMs = BREAK_MIN * 60 * 1000;
   return {
     active: true,
     phase: "break",
-    progress: (elapsed - focusMs) / (sessionMs - focusMs),
-    remainingMs: sessionMs - elapsed
+    progress: elapsedInBreakMs / breakMs,
+    remainingMs: breakMs - elapsedInBreakMs
   };
 }
 
 function remainingText2x(remainingMs) {
-  const sec = Math.max(0, Math.floor(remainingMs / 1000)) * 2;
-  return `${pad2(Math.floor(sec / 60))}:${pad2(sec % 60)}`;
+  // 2倍速: 500ms = 表示1秒 として扱う(1秒ずつ自然に減る)
+  const display = Math.max(0, Math.floor(remainingMs / 500));
+  return `${pad2(Math.floor(display / 60))}:${pad2(display % 60)}`;
 }
 
 function remainingTextNormal(remainingMs) {
@@ -1648,7 +1619,9 @@ function resetDemoData() {
 
 function startPomodoro(blockId) {
   if (!blockId) return showToast("Blockを選んでください");
+  // 他フィールド(tab, passive)を保持しつつ、タイマー関連だけ毎回リセット
   state.pomodoro = {
+    ...state.pomodoro,
     running: true,
     blockId,
     startedAt: nowDateTime(),
@@ -1660,7 +1633,15 @@ function startPomodoro(blockId) {
 }
 
 function stopPomodoro() {
-  state.pomodoro.running = false;
+  // タイマー関連を明示的にクリア(再開時に確実に 50:00 から始まるように)
+  state.pomodoro = {
+    ...state.pomodoro,
+    running: false,
+    blockId: "",
+    startedAt: "",
+    endsAt: "",
+    mode: "focus"
+  };
   saveAndRender("ポモドーロを中断しました");
 }
 
@@ -1669,13 +1650,20 @@ function completePomodoro() {
   if (blockId) {
     state.blocks = state.blocks.map((block) => block.id === blockId ? { ...block, pomodoroCount: Number(block.pomodoroCount || 0) + 1, updatedAt: nowDateTime() } : block);
   }
-  state.pomodoro.running = false;
+  // 完了時もタイマー関連を明示的にクリア
+  state.pomodoro = {
+    ...state.pomodoro,
+    running: false,
+    blockId: "",
+    startedAt: "",
+    endsAt: "",
+    mode: "focus"
+  };
   saveAndRender("ポモドーロを完了しました");
 }
 
 function startTimerTicker() {
   clearInterval(timerTicker);
-  let secondsSinceLastPassiveCheck = 0;
   timerTicker = setInterval(() => {
     // 任意タイマー
     if (state.pomodoro.running) {
@@ -1685,18 +1673,11 @@ function startTimerTicker() {
         renderMain();
       }
     }
-    // 常時タイマーセッションがアクティブで、ポモドーロ画面表示中なら再描画
+    // 常時タイマー(壁時計モデル): ポモドーロ画面を開いている間は常に再描画
     if (state.currentView === "pomodoro" && state.pomodoro?.tab === "passive") {
-      const session = getPassiveSessionStatus();
-      if (session.active) renderMain();
+      renderMain();
     }
-    // 常時タイマー発火チェック(1 分に 1 回)
-    secondsSinceLastPassiveCheck += 1;
-    if (secondsSinceLastPassiveCheck >= 30) {
-      secondsSinceLastPassiveCheck = 0;
-      checkPassivePomodoro();
-    }
-  }, 1000);
+  }, 500);
 }
 
 function setView(view) {
@@ -1971,8 +1952,11 @@ function weekdayLabel(date) {
 }
 
 function remainingText(end, doubleSpeed = false) {
-  const remaining = Math.max(0, Math.floor((new Date(end).getTime() - Date.now()) / 1000));
-  const display = doubleSpeed ? remaining * 2 : remaining;
+  const remainingMs = Math.max(0, new Date(end).getTime() - Date.now());
+  // 2倍速: 500ms = 表示1秒 として扱う(実時間25分で 50:00 → 0:00、1秒ずつ自然に減る)
+  const display = doubleSpeed
+    ? Math.floor(remainingMs / 500)
+    : Math.floor(remainingMs / 1000);
   return `${pad2(Math.floor(display / 60))}:${pad2(display % 60)}`;
 }
 
