@@ -182,6 +182,30 @@
       "createdAt": "2026-05-20T14:17:00",
       "updatedAt": "2026-05-20T14:18:00",
       "deleted": true
+    },
+    {
+      "id": "f68c83ba-bff4-45b5-8a6d-2adb90c21fe0",
+      "taskId": "abd74bf7-b98f-4efb-b359-60fe62363f58",
+      "date": "2026-05-20",
+      "title": "テスト",
+      "category": "Wish",
+      "plannedStartAt": "2026-05-20T14:00:00",
+      "plannedEndAt": "2026-05-20T15:00:00",
+      "actualStartAt": "",
+      "actualEndAt": "",
+      "completed": false,
+      "charge": 0,
+      "discharge": 0,
+      "expectedCharge": "",
+      "expectedDischarge": "",
+      "comment": "",
+      "recurrenceGroupId": "",
+      "pomodoroCount": 0,
+      "migratedTo": "",
+      "orderIndex": 0,
+      "createdAt": "2026-05-20T14:22:00",
+      "updatedAt": "2026-05-20T14:22:00",
+      "deleted": false
     }
   ],
   "journals": {
