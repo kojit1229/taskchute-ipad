@@ -38,8 +38,11 @@ const toastEl = document.querySelector("#toast");
 let state = loadState();
 let toastTimer = null;
 let timerTicker = null;
+let cachedVisionMd = "";
+let cachedAffirmationMd = "";
 
 render();
+hydrateStaticMarkdown();
 registerServiceWorker();
 startTimerTicker();
 
@@ -69,10 +72,24 @@ document.addEventListener("click", (event) => {
   if (action === "generate-report") generateReport();
   if (action === "download-report") downloadReport();
   if (action === "download-data") downloadData();
+  if (action === "save-github") saveToGitHub();
+  if (action === "load-github") loadFromGitHub();
   if (action === "reset-demo") resetDemoData();
   if (action === "start-pomodoro") startPomodoro(target.dataset.blockId || "");
   if (action === "stop-pomodoro") stopPomodoro();
   if (action === "complete-pomodoro") completePomodoro();
+  // === v2: 編集モーダル ===
+  if (action === "edit-project") openProjectEditor(id);
+  if (action === "edit-task") openTaskEditor(id);
+  if (action === "edit-block") openBlockEditor(id);
+  if (action === "modal-close") closeModal();
+  if (action === "modal-save") submitModal();
+  if (action === "modal-delete") deleteFromModal();
+  // === v2: ビジョン画面のセグメント切替 ===
+  if (action === "vision-section") setVisionSection(target.dataset.section);
+  if (action === "vision-board-tab") setVisionBoardIndex(Number(target.dataset.index));
+  if (action === "open-md-in-github") openMdInGithub(target.dataset.path);
+  if (action === "reload-md") reloadStaticMarkdown();
 });
 
 document.addEventListener("input", (event) => {
@@ -87,6 +104,10 @@ document.addEventListener("input", (event) => {
   }
   if (target.matches("[data-vision-field]")) {
     state.settings[target.dataset.visionField] = target.value;
+    saveState();
+  }
+  if (target.matches("[data-github-field]")) {
+    state.settings.github[target.dataset.githubField] = target.value.trim();
     saveState();
   }
 });
@@ -107,16 +128,49 @@ document.addEventListener("change", (event) => {
 
 function loadState() {
   const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return seedState();
+  if (!raw) return normalizeState(seedState());
   try {
-    return { ...seedState(), ...JSON.parse(raw) };
+    return normalizeState({ ...seedState(), ...JSON.parse(raw) });
   } catch {
-    return seedState();
+    return normalizeState(seedState());
   }
 }
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function normalizeState(value) {
+  value.settings ||= {};
+  value.settings.staticFilesLoaded ||= { vision: false, affirmation: false };
+  value.settings.github ||= defaultGitHubSettings();
+  value.settings.github.owner ||= "kojit1229";
+  value.settings.github.repo ||= "taskchute-ipad";
+  value.settings.github.branch ||= "main";
+  value.settings.github.path ||= "data/app-state.json";
+  value.settings.github.token ||= "";
+  value.settings.visionSection ||= "vision";
+  if (typeof value.settings.visionBoardIndex !== "number") {
+    value.settings.visionBoardIndex = 0;
+  }
+  value.projects ||= [];
+  value.tasks ||= [];
+  value.blocks ||= [];
+  value.journals ||= {};
+  value.feedback ||= {};
+  value.reports ||= {};
+  value.modal = null;  // 起動時はモーダル閉じた状態
+  return value;
+}
+
+function defaultGitHubSettings() {
+  return {
+    owner: "kojit1229",
+    repo: "taskchute-ipad",
+    branch: "main",
+    path: "data/app-state.json",
+    token: ""
+  };
 }
 
 function seedState() {
@@ -137,7 +191,9 @@ function seedState() {
       journalTemplate: defaultJournal(today),
       vision: "# Vision\n\n人生の目的に沿ったプロジェクトを、日々の実行と振り返りで前に進める。",
       affirmation: "# Affirmation\n\n今日の一歩を、未来の自分に渡す。",
-      journalPanes: { leftWidthPct: 25, centerWidthPct: 50, rightWidthPct: 25 }
+      journalPanes: { leftWidthPct: 25, centerWidthPct: 50, rightWidthPct: 25 },
+      staticFilesLoaded: { vision: false, affirmation: false },
+      github: defaultGitHubSettings()
     },
     projects: [
       {
@@ -407,9 +463,13 @@ function renderProjectTree(project) {
           <span class="badge ${project.kind === "wish" ? "purple" : "blue"}">${project.kind === "wish" ? "Wish" : "Project"}</span>
           ${is12WY ? `<span class="badge green">12WY</span>` : ""}
           <strong>${escapeHTML(project.title)}</strong>
+          ${project.category ? `<span class="badge">${escapeHTML(project.category)}</span>` : ""}
         </div>
-        <button class="btn danger" data-action="delete-project" data-id="${project.id}">削除</button>
+        <div class="row">
+          <button class="btn" data-action="edit-project" data-id="${project.id}">編集</button>
+        </div>
       </div>
+      ${project.description ? `<div class="muted" style="font-size:12px">${escapeHTML(project.description)}</div>` : ""}
       <div class="progress"><span style="width:${progress}%"></span></div>
       <div class="stack">
         ${tasks.length ? tasks.map(renderTaskRow).join("") : `<div class="muted">Task未登録</div>`}
@@ -419,16 +479,19 @@ function renderProjectTree(project) {
 }
 
 function renderTaskRow(task) {
+  const dueLabel = task.dueDate ? ` / 期限 ${task.dueDate}` : "";
   return `
     <div class="row" style="border-top:1px solid var(--line-soft); padding-top:8px">
       <div class="title-line">
         <button class="checkbox-button ${task.status === "completed" ? "done" : ""}" data-action="toggle-task" data-id="${task.id}">✓</button>
         <span>${escapeHTML(task.title)}</span>
         <span class="badge">${task.status}</span>
+        ${task.category ? `<span class="badge">${escapeHTML(task.category)}</span>` : ""}
+        <span class="muted" style="font-size:11px">${dueLabel}</span>
       </div>
       <div class="row">
         <button class="btn" data-action="task-today" data-id="${task.id}">今日へ</button>
-        <button class="btn danger" data-action="delete-task" data-id="${task.id}">削除</button>
+        <button class="btn" data-action="edit-task" data-id="${task.id}">編集</button>
       </div>
     </div>
   `;
@@ -511,7 +574,7 @@ function renderBlockItem(block) {
         <button class="btn" data-action="now-start" data-id="${block.id}">開始</button>
         <button class="btn" data-action="now-end" data-id="${block.id}">終了</button>
         <button class="btn orange" data-action="start-pomodoro" data-block-id="${block.id}">25分</button>
-        <button class="btn danger" data-action="delete-block" data-id="${block.id}">削除</button>
+        <button class="btn" data-action="edit-block" data-id="${block.id}">編集</button>
       </div>
     </div>
   `;
@@ -608,19 +671,70 @@ function renderJournal() {
 }
 
 function renderVision() {
+  const section = state.settings.visionSection || "vision";
   return `
     ${renderHeader("方向性を見失わないための場所", "ビジョン")}
-    <section class="grid two">
-      <div class="panel">
-        <h2>Vision.md</h2>
-        <textarea class="textarea" data-vision-field="vision">${escapeHTML(state.settings.vision || "")}</textarea>
-      </div>
-      <div class="panel">
-        <h2>Affirmation.md</h2>
-        <textarea class="textarea" data-vision-field="affirmation">${escapeHTML(state.settings.affirmation || "")}</textarea>
-      </div>
-    </section>
+    <div class="segmented">
+      <button class="${section === "vision" ? "active" : ""}" data-action="vision-section" data-section="vision">ビジョン</button>
+      <button class="${section === "affirmation" ? "active" : ""}" data-action="vision-section" data-section="affirmation">アファメーション</button>
+      <button class="${section === "board" ? "active" : ""}" data-action="vision-section" data-section="board">ビジョンボード</button>
+    </div>
+    <div class="vision-stage">
+      ${section === "vision" ? renderVisionMd("vision") : ""}
+      ${section === "affirmation" ? renderVisionMd("affirmation") : ""}
+      ${section === "board" ? renderVisionBoard() : ""}
+    </div>
   `;
+}
+
+function renderVisionMd(kind) {
+  const path = kind === "vision" ? "data/vision/Vision.md" : "data/affirmation/Daily_Affirmation.md";
+  const cached = kind === "vision" ? cachedVisionMd : cachedAffirmationMd;
+  const rendered = renderMarkdown(cached || "（読み込み中...)");
+  return `
+    <div class="vision-actions">
+      <span class="vision-source">📄 <code>${path}</code></span>
+      <button class="btn" data-action="reload-md">最新を取得</button>
+      <button class="btn ghost" data-action="open-md-in-github" data-path="${path}">GitHubで編集</button>
+    </div>
+    <div class="panel">
+      <div class="md-render">${rendered}</div>
+    </div>
+  `;
+}
+
+function renderVisionBoard() {
+  const boards = [
+    { name: "今(33歳)", file: "now_vision.pdf" },
+    { name: "45歳", file: "45_vision.pdf" },
+    { name: "80歳", file: "80_vision.pdf" }
+  ];
+  const idx = clamp(state.settings.visionBoardIndex || 0, 0, boards.length - 1);
+  const current = boards[idx];
+  const src = `./data/vision_board/${current.file}`;
+  return `
+    <div class="vision-pdf-tabs">
+      ${boards.map((b, i) => `
+        <button class="${i === idx ? "active" : ""}" data-action="vision-board-tab" data-index="${i}">${escapeHTML(b.name)}</button>
+      `).join("")}
+    </div>
+    <div class="vision-actions" style="margin-bottom:8px">
+      <span class="vision-source">📄 <code>data/vision_board/${current.file}</code></span>
+      <a class="btn ghost" href="${src}" target="_blank" rel="noopener">別タブで開く</a>
+    </div>
+    <iframe class="vision-pdf-frame" src="${src}" title="${escapeHTML(current.name)}"></iframe>
+  `;
+}
+
+function renderMarkdown(text) {
+  if (typeof window.marked === "undefined") {
+    return `<pre style="white-space:pre-wrap; font-family:inherit">${escapeHTML(text)}</pre>`;
+  }
+  try {
+    return window.marked.parse(text || "", { breaks: true, gfm: true });
+  } catch {
+    return `<pre style="white-space:pre-wrap; font-family:inherit">${escapeHTML(text)}</pre>`;
+  }
 }
 
 function renderReports() {
@@ -637,6 +751,7 @@ function renderReports() {
 }
 
 function renderSettings() {
+  const github = state.settings.github || defaultGitHubSettings();
   return `
     ${renderHeader("Web版の保存と公開", "設定")}
     <section class="settings-grid">
@@ -659,9 +774,32 @@ function renderSettings() {
         <button class="btn danger" data-action="reset-demo">デモデータに戻す</button>
       </div>
       <div class="panel stack">
+        <h2>GitHub保存</h2>
+        <label>Owner
+          <input class="input" data-github-field="owner" value="${escapeHTML(github.owner)}" autocomplete="off">
+        </label>
+        <label>Repository
+          <input class="input" data-github-field="repo" value="${escapeHTML(github.repo)}" autocomplete="off">
+        </label>
+        <label>Branch
+          <input class="input" data-github-field="branch" value="${escapeHTML(github.branch)}" autocomplete="off">
+        </label>
+        <label>保存先JSON
+          <input class="input" data-github-field="path" value="${escapeHTML(github.path)}" autocomplete="off">
+        </label>
+        <label>Fine-grained token
+          <input class="input" type="password" data-github-field="token" value="${escapeHTML(github.token)}" autocomplete="off" placeholder="GitHub token">
+        </label>
+        <div class="row">
+          <button class="btn primary" data-action="save-github">GitHubへ保存</button>
+          <button class="btn" data-action="load-github">GitHubから読込</button>
+        </div>
+        <div class="muted">TokenはGitHubへ保存しません。この端末のブラウザ内だけに保持します。</div>
+      </div>
+      <div class="panel stack">
         <h2>GitHub Pages</h2>
         <div class="muted">このフォルダをGitHubリポジトリへpushし、Pagesの公開元をルートにすると公開できます。</div>
-        <div class="muted">端末間同期はまだありません。まずはローカル保存 + JSONエクスポート運用です。</div>
+        <div class="muted">端末間で同じデータを使う場合は、上のGitHub保存/読込を使います。</div>
       </div>
     </section>
   `;
@@ -862,7 +1000,7 @@ function importData(file) {
   const reader = new FileReader();
   reader.onload = () => {
     try {
-      state = JSON.parse(String(reader.result));
+      state = normalizeState(JSON.parse(String(reader.result)));
       saveAndRender("データをインポートしました");
     } catch {
       showToast("JSONを読み込めませんでした");
@@ -871,8 +1009,112 @@ function importData(file) {
   reader.readAsText(file);
 }
 
+async function saveToGitHub() {
+  try {
+    const config = requireGitHubConfig();
+    const sha = await fetchGitHubFileSHA(config);
+    const content = JSON.stringify(sanitizedStateForGitHub(), null, 2);
+    const response = await fetch(gitHubContentsURL(config), {
+      method: "PUT",
+      headers: githubHeaders(config.token),
+      body: JSON.stringify({
+        message: `chore: update app state ${new Date().toISOString()}`,
+        content: toBase64(content),
+        branch: config.branch,
+        ...(sha ? { sha } : {})
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(await gitHubErrorMessage(response));
+    }
+
+    showToast("GitHubへ保存しました");
+  } catch (error) {
+    showToast(`GitHub保存失敗: ${error.message}`);
+  }
+}
+
+async function loadFromGitHub() {
+  try {
+    const config = requireGitHubConfig();
+    const response = await fetch(`${gitHubContentsURL(config)}?ref=${encodeURIComponent(config.branch)}`, {
+      headers: githubHeaders(config.token)
+    });
+    if (!response.ok) {
+      throw new Error(await gitHubErrorMessage(response));
+    }
+    const payload = await response.json();
+    const loaded = JSON.parse(fromBase64(payload.content || ""));
+    const token = state.settings.github.token;
+    state = normalizeState(loaded);
+    state.settings.github = { ...config, token };
+    saveAndRender("GitHubから読み込みました");
+  } catch (error) {
+    showToast(`GitHub読込失敗: ${error.message}`);
+  }
+}
+
+function requireGitHubConfig() {
+  const config = state.settings.github || defaultGitHubSettings();
+  for (const key of ["owner", "repo", "branch", "path", "token"]) {
+    if (!config[key]) throw new Error(`${key} を入力してください`);
+  }
+  return config;
+}
+
+async function fetchGitHubFileSHA(config) {
+  const response = await fetch(`${gitHubContentsURL(config)}?ref=${encodeURIComponent(config.branch)}`, {
+    headers: githubHeaders(config.token)
+  });
+  if (response.status === 404) return "";
+  if (!response.ok) throw new Error(await gitHubErrorMessage(response));
+  const payload = await response.json();
+  return payload.sha || "";
+}
+
+function gitHubContentsURL(config) {
+  return `https://api.github.com/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/contents/${config.path.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+function githubHeaders(token) {
+  return {
+    "Accept": "application/vnd.github+json",
+    "Authorization": `Bearer ${token}`,
+    "X-GitHub-Api-Version": "2022-11-28"
+  };
+}
+
+async function gitHubErrorMessage(response) {
+  try {
+    const payload = await response.json();
+    return payload.message || `${response.status} ${response.statusText}`;
+  } catch {
+    return `${response.status} ${response.statusText}`;
+  }
+}
+
+function sanitizedStateForGitHub() {
+  const copy = structuredClone(state);
+  if (copy.settings?.github) copy.settings.github.token = "";
+  return copy;
+}
+
+function toBase64(text) {
+  const bytes = new TextEncoder().encode(text);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function fromBase64(text) {
+  const binary = atob(String(text).replace(/\s/g, ""));
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
 function resetDemoData() {
-  state = seedState();
+  state = normalizeState(seedState());
   saveAndRender("デモデータに戻しました");
 }
 
@@ -937,6 +1179,66 @@ function saveAndRender(message) {
   saveState();
   render();
   if (message) showToast(message);
+}
+
+async function hydrateStaticMarkdown() {
+  const visionPromise = fetchText("./data/vision/Vision.md");
+  const affirmPromise = fetchText("./data/affirmation/Daily_Affirmation.md");
+  const [visionText, affirmText] = await Promise.all([visionPromise, affirmPromise]);
+  let changed = false;
+  if (visionText && visionText !== cachedVisionMd) {
+    cachedVisionMd = visionText;
+    changed = true;
+  }
+  if (affirmText && affirmText !== cachedAffirmationMd) {
+    cachedAffirmationMd = affirmText;
+    changed = true;
+  }
+  if (changed && state.view === "vision") {
+    render();
+  }
+}
+
+async function reloadStaticMarkdown() {
+  cachedVisionMd = "";
+  cachedAffirmationMd = "";
+  showToast("最新を取得中...");
+  await hydrateStaticMarkdown();
+  render();
+  showToast("最新を読み込みました");
+}
+
+function openMdInGithub(path) {
+  const cfg = state.settings.github || {};
+  if (!cfg.owner || !cfg.repo) {
+    showToast("設定画面でGitHubのowner/repoを入れてください");
+    return;
+  }
+  const branch = cfg.branch || "main";
+  const url = `https://github.com/${cfg.owner}/${cfg.repo}/edit/${branch}/${path}`;
+  window.open(url, "_blank", "noopener");
+}
+
+function setVisionSection(section) {
+  state.settings.visionSection = section;
+  saveState();
+  render();
+}
+
+function setVisionBoardIndex(index) {
+  state.settings.visionBoardIndex = index;
+  saveState();
+  render();
+}
+
+async function fetchText(path) {
+  try {
+    const response = await fetch(path, { cache: "no-cache" });
+    if (!response.ok) return "";
+    return await response.text();
+  } catch {
+    return "";
+  }
 }
 
 function showToast(message) {
@@ -1152,3 +1454,392 @@ function registerServiceWorker() {
     });
   });
 }
+
+// ============================================================
+// 編集モーダル(Project / Task / Block)
+// ============================================================
+
+const modalRoot = document.querySelector("#modalRoot");
+
+function openProjectEditor(id) {
+  const project = state.projects.find((p) => p.id === id);
+  if (!project) return;
+  state.modal = { type: "project", id };
+  renderModal(buildProjectModal(project));
+}
+
+function openTaskEditor(id) {
+  const task = state.tasks.find((t) => t.id === id);
+  if (!task) return;
+  state.modal = { type: "task", id };
+  renderModal(buildTaskModal(task));
+}
+
+function openBlockEditor(id) {
+  const block = state.blocks.find((b) => b.id === id);
+  if (!block) return;
+  state.modal = { type: "block", id };
+  renderModal(buildBlockModal(block));
+}
+
+function renderModal(innerHTML) {
+  modalRoot.innerHTML = innerHTML;
+  modalRoot.classList.add("open");
+  modalRoot.setAttribute("aria-hidden", "false");
+  // 背景クリックで閉じる
+  modalRoot.onclick = (event) => {
+    if (event.target === modalRoot) closeModal();
+  };
+}
+
+function closeModal() {
+  state.modal = null;
+  modalRoot.classList.remove("open");
+  modalRoot.setAttribute("aria-hidden", "true");
+  modalRoot.innerHTML = "";
+  modalRoot.onclick = null;
+}
+
+function readModalFields() {
+  const fields = {};
+  modalRoot.querySelectorAll("[data-modal-field]").forEach((el) => {
+    const key = el.dataset.modalField;
+    if (el.type === "checkbox") {
+      fields[key] = el.checked;
+    } else if (el.type === "number" || el.dataset.modalKind === "number") {
+      fields[key] = el.value === "" ? null : Number(el.value);
+    } else {
+      fields[key] = el.value;
+    }
+  });
+  return fields;
+}
+
+function submitModal() {
+  if (!state.modal) return;
+  const fields = readModalFields();
+  if (state.modal.type === "project") {
+    saveProjectFromModal(state.modal.id, fields);
+  } else if (state.modal.type === "task") {
+    saveTaskFromModal(state.modal.id, fields);
+  } else if (state.modal.type === "block") {
+    saveBlockFromModal(state.modal.id, fields);
+  }
+}
+
+function deleteFromModal() {
+  if (!state.modal) return;
+  const ok = window.confirm("削除しますか? この操作は取り消せます(deleted フラグ)。");
+  if (!ok) return;
+  if (state.modal.type === "project") {
+    deleteProject(state.modal.id);
+  } else if (state.modal.type === "task") {
+    deleteTask(state.modal.id);
+  } else if (state.modal.type === "block") {
+    deleteBlock(state.modal.id);
+  }
+  closeModal();
+}
+
+// ---------- Project モーダル ----------
+
+function buildProjectModal(project) {
+  const status = project.status || "active";
+  const kind = project.kind || "normal";
+  const is12WY = Boolean(project.twelveWeekStartDate);
+  return `
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">Project を編集</h3>
+        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label class="field-label">タイトル</label>
+          <input class="input" data-modal-field="title" value="${escapeHTML(project.title || "")}">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label class="field-label">種別</label>
+            <select class="select" data-modal-field="kind">
+              <option value="normal" ${kind === "normal" ? "selected" : ""}>Project</option>
+              <option value="wish" ${kind === "wish" ? "selected" : ""}>Wish</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="field-label">ステータス</label>
+            <select class="select" data-modal-field="status">
+              ${["active", "paused", "completed", "archived", "cancelled"].map((s) => `
+                <option value="${s}" ${status === s ? "selected" : ""}>${s}</option>
+              `).join("")}
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label">カテゴリ</label>
+          <input class="input" data-modal-field="category" value="${escapeHTML(project.category || "")}" placeholder="仕事 / 健康 / 学習 など">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label class="field-label">開始日</label>
+            <input class="input" type="date" data-modal-field="startDate" value="${project.startDate || ""}">
+          </div>
+          <div class="field">
+            <label class="field-label">期限</label>
+            <input class="input" type="date" data-modal-field="dueDate" value="${project.dueDate || ""}">
+          </div>
+        </div>
+        <div class="field">
+          <label class="checkbox-line">
+            <input type="checkbox" data-modal-field="is12WY" ${is12WY ? "checked" : ""}>
+            12WY 期間に登録する(現在の 12WY 開始日: ${state.settings.twelveWeekStartDate || "未設定"})
+          </label>
+        </div>
+        <div class="field">
+          <label class="field-label">説明 / メモ</label>
+          <textarea class="textarea" data-modal-field="description" style="min-height:120px">${escapeHTML(project.description || "")}</textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn danger" data-action="modal-delete">削除</button>
+        <button class="btn" data-action="modal-close">キャンセル</button>
+        <button class="btn primary" data-action="modal-save">保存</button>
+      </div>
+    </div>
+  `;
+}
+
+function saveProjectFromModal(id, fields) {
+  const twelveWeekStartDate = fields.is12WY ? (state.settings.twelveWeekStartDate || todayISO()) : "";
+  state.projects = state.projects.map((p) => {
+    if (p.id !== id) return p;
+    return {
+      ...p,
+      title: (fields.title || "").trim() || p.title,
+      kind: fields.kind || p.kind || "normal",
+      status: fields.status || p.status || "active",
+      category: fields.category || "",
+      startDate: fields.startDate || "",
+      dueDate: fields.dueDate || "",
+      description: fields.description || "",
+      twelveWeekStartDate,
+      updatedAt: nowDateTime()
+    };
+  });
+  closeModal();
+  saveAndRender("Projectを更新しました");
+}
+
+// ---------- Task モーダル ----------
+
+function buildTaskModal(task) {
+  const status = task.status || "todo";
+  const projectOptions = [
+    `<option value="" ${!task.projectId ? "selected" : ""}>単発Task</option>`,
+    ...state.projects
+      .filter((p) => !p.deleted)
+      .map((p) => `<option value="${p.id}" ${task.projectId === p.id ? "selected" : ""}>${escapeHTML(p.title)}</option>`)
+  ].join("");
+  return `
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">Task を編集</h3>
+        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label class="field-label">タイトル</label>
+          <input class="input" data-modal-field="title" value="${escapeHTML(task.title || "")}">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label class="field-label">紐づくProject</label>
+            <select class="select" data-modal-field="projectId">${projectOptions}</select>
+          </div>
+          <div class="field">
+            <label class="field-label">ステータス</label>
+            <select class="select" data-modal-field="status">
+              ${["todo", "doing", "completed", "suspended", "cancelled"].map((s) => `
+                <option value="${s}" ${status === s ? "selected" : ""}>${s}</option>
+              `).join("")}
+            </select>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label class="field-label">カテゴリ</label>
+            <input class="input" data-modal-field="category" value="${escapeHTML(task.category || "")}">
+          </div>
+          <div class="field">
+            <label class="field-label">期限</label>
+            <input class="input" type="date" data-modal-field="dueDate" value="${task.dueDate || ""}">
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label">説明 / メモ</label>
+          <textarea class="textarea" data-modal-field="description" style="min-height:120px">${escapeHTML(task.description || "")}</textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn danger" data-action="modal-delete">削除</button>
+        <button class="btn" data-action="modal-close">キャンセル</button>
+        <button class="btn primary" data-action="modal-save">保存</button>
+      </div>
+    </div>
+  `;
+}
+
+function saveTaskFromModal(id, fields) {
+  state.tasks = state.tasks.map((t) => {
+    if (t.id !== id) return t;
+    return {
+      ...t,
+      title: (fields.title || "").trim() || t.title,
+      projectId: fields.projectId || "",
+      status: fields.status || t.status || "todo",
+      category: fields.category || "",
+      dueDate: fields.dueDate || "",
+      description: fields.description || "",
+      updatedAt: nowDateTime()
+    };
+  });
+  closeModal();
+  saveAndRender("Taskを更新しました");
+}
+
+// ---------- Block モーダル ----------
+
+function buildBlockModal(block) {
+  const taskOptions = [
+    `<option value="" ${!block.taskId ? "selected" : ""}>単発(Task紐づけなし)</option>`,
+    ...state.tasks
+      .filter((t) => !t.deleted)
+      .map((t) => `<option value="${t.id}" ${block.taskId === t.id ? "selected" : ""}>${escapeHTML(t.title)}</option>`)
+  ].join("");
+  return `
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">Block を編集</h3>
+        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label class="field-label">タイトル</label>
+          <input class="input" data-modal-field="title" value="${escapeHTML(block.title || "")}">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label class="field-label">日付</label>
+            <input class="input" type="date" data-modal-field="date" value="${block.date || todayISO()}">
+          </div>
+          <div class="field">
+            <label class="field-label">カテゴリ</label>
+            <input class="input" data-modal-field="category" value="${escapeHTML(block.category || "")}">
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label">紐づくTask</label>
+          <select class="select" data-modal-field="taskId">${taskOptions}</select>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label class="field-label">予定開始</label>
+            <input class="input" type="datetime-local" data-modal-field="plannedStartAt" value="${toLocalInput(block.plannedStartAt)}">
+          </div>
+          <div class="field">
+            <label class="field-label">予定終了</label>
+            <input class="input" type="datetime-local" data-modal-field="plannedEndAt" value="${toLocalInput(block.plannedEndAt)}">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label class="field-label">実績開始</label>
+            <input class="input" type="datetime-local" data-modal-field="actualStartAt" value="${toLocalInput(block.actualStartAt)}">
+          </div>
+          <div class="field">
+            <label class="field-label">実績終了</label>
+            <input class="input" type="datetime-local" data-modal-field="actualEndAt" value="${toLocalInput(block.actualEndAt)}">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label class="field-label">充電 (0-5)</label>
+            <select class="select" data-modal-field="charge" data-modal-kind="number">
+              ${rangeOptions(0, 5, block.charge || 0)}
+            </select>
+          </div>
+          <div class="field">
+            <label class="field-label">放電 (0-5)</label>
+            <select class="select" data-modal-field="discharge" data-modal-kind="number">
+              ${rangeOptions(0, 5, block.discharge || 0)}
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label class="checkbox-line">
+            <input type="checkbox" data-modal-field="completed" ${block.completed ? "checked" : ""}>
+            完了済み
+          </label>
+        </div>
+        <div class="field">
+          <label class="field-label">コメント</label>
+          <textarea class="textarea" data-modal-field="comment" style="min-height:100px">${escapeHTML(block.comment || "")}</textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn danger" data-action="modal-delete">削除</button>
+        <button class="btn" data-action="modal-close">キャンセル</button>
+        <button class="btn primary" data-action="modal-save">保存</button>
+      </div>
+    </div>
+  `;
+}
+
+function saveBlockFromModal(id, fields) {
+  state.blocks = state.blocks.map((b) => {
+    if (b.id !== id) return b;
+    return {
+      ...b,
+      title: (fields.title || "").trim() || b.title,
+      date: fields.date || b.date || todayISO(),
+      category: fields.category || "",
+      taskId: fields.taskId || "",
+      plannedStartAt: fromLocalInput(fields.plannedStartAt),
+      plannedEndAt: fromLocalInput(fields.plannedEndAt),
+      actualStartAt: fromLocalInput(fields.actualStartAt),
+      actualEndAt: fromLocalInput(fields.actualEndAt),
+      charge: Number(fields.charge) || 0,
+      discharge: Number(fields.discharge) || 0,
+      completed: Boolean(fields.completed),
+      comment: fields.comment || "",
+      updatedAt: nowDateTime()
+    };
+  });
+  closeModal();
+  saveAndRender("Blockを更新しました");
+}
+
+// ---------- datetime-local 変換 ----------
+
+function toLocalInput(isoString) {
+  if (!isoString) return "";
+  // ISO 8601 (例: 2026-05-17T14:30:00Z) → datetime-local の値 (2026-05-17T14:30)
+  const d = new Date(isoString);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function fromLocalInput(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toISOString();
+}
+
+// ESC キーでモーダルを閉じる
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && state.modal) {
+    closeModal();
+  }
+});
