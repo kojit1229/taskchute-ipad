@@ -1028,10 +1028,11 @@ function assignBlocksToLanes(blocks, mode, maxLanes) {
   return result;
 }
 
-// v10: 同じレーン内で物理位置(px)が重ならないように top を調整する
-// 短時間Blockが連続している場合、本来の時刻位置で配置すると視覚的に重なるので、
-// 同レーンで「前のカードの下端」以降にずらす。時刻軸とは多少ずれるが視認性優先。
+// v10/v13: 同じレーン内で物理位置(px)が重ならないように top を調整する
+// v13: 同じ開始時刻のBlockは強制的に同じ top に固定(視覚的に揃える)
 function adjustLaneTopPositions(assignments, rowHeight, startHour) {
+  // v13: 開始時刻ごとの「最終確定 top」をキャッシュ(同開始時刻は同じ top)
+  const topByStart = new Map();
   const laneBottoms = new Array(20).fill(-Infinity);  // 物理位置の最後の下端(レーンごと)
   return assignments.map((a) => {
     const naturalTop = ((a.start - startHour * 60) / 60) * rowHeight;
@@ -1039,8 +1040,15 @@ function adjustLaneTopPositions(assignments, rowHeight, startHour) {
     const isShort = durationMin < 5;
     const minHeight = isShort ? 14 : 38;
     const height = Math.max(minHeight, (durationMin / 60) * rowHeight);
-    // 前のカードと重ならないように top を調整(+1px の隙間)
-    const adjustedTop = Math.max(naturalTop, (laneBottoms[a.lane] === -Infinity ? 0 : laneBottoms[a.lane]) + 1);
+    // 同じ開始時刻が既出なら、その top を再利用(同じ高さに表示)
+    let adjustedTop;
+    if (topByStart.has(a.start)) {
+      adjustedTop = topByStart.get(a.start);
+    } else {
+      // 同じレーン内の前のBlockと物理重なりがあれば下にずらす(短時間連続対策)
+      adjustedTop = Math.max(naturalTop, (laneBottoms[a.lane] === -Infinity ? 0 : laneBottoms[a.lane]) + 1);
+      topByStart.set(a.start, adjustedTop);
+    }
     laneBottoms[a.lane] = adjustedTop + height;
     return { ...a, top: adjustedTop, height, isShort };
   });
@@ -1069,7 +1077,6 @@ function renderTimelineCard(positioned, mode = "planned", maxLanes = 5) {
       ${!isActual && !isShort ? `<button class="tl-complete-btn" data-action="complete-block-with-actual" data-id="${block.id}" aria-label="完了登録">○</button>` : ""}
       <div class="tl-card-body">
         <strong>${escapeHTML(block.title)}</strong>
-        ${!isShort ? `<div class="tl-time">${timeFromDateTime(startStr)}${endStr ? `-${timeFromDateTime(endStr)}` : ""}</div>` : ""}
       </div>
     </div>
   `;
@@ -1204,6 +1211,11 @@ function renderPomodoroFullscreen(running, remaining, blockOptions, pomoTab) {
 }
 
 function renderManualPomodoro(running, remaining, blockOptions) {
+  // v13セーフガード: running=true でも endsAt が空 / 過去なら未起動扱い(再開時の50:00保証)
+  if (running && (!state.pomodoro.endsAt || new Date(state.pomodoro.endsAt).getTime() <= Date.now())) {
+    running = false;
+    remaining = "50:00";
+  }
   if (running) {
     const mode = state.pomodoro.mode || "focus";
     const endsAtMs = new Date(state.pomodoro.endsAt).getTime();
@@ -1227,7 +1239,16 @@ function renderManualPomodoro(running, remaining, blockOptions) {
           </div>
           <div style="margin-top:18px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap">
             <button class="btn green" data-action="end-break">✓ 休憩終了</button>
-            ${currentBlock ? `<button class="btn orange" data-action="start-pomodoro" data-block-id="${currentBlock.id}">🔁 もう一度(同じBlock)</button>` : ""}
+          </div>
+        </section>
+        <section class="panel stack" style="margin-top:12px">
+          <div class="muted" style="font-size:12px">次にとりかかるタスクを選択(休憩を終了して即開始)</div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap">
+            ${blockOptions.length
+              ? blockOptions.map((block) => `
+                <button class="btn orange" data-action="start-pomodoro" data-block-id="${block.id}">${escapeHTML(block.title)}</button>
+              `).join("")
+              : `<div class="muted">選択可能な Block がありません</div>`}
           </div>
         </section>
       `;
@@ -2084,7 +2105,7 @@ function resetDemoData() {
 
 function startPomodoro(blockId) {
   if (!blockId) return showToast("Blockを選んでください");
-  // 他フィールド(tab, passive)を保持しつつ、タイマー関連だけ毎回リセット
+  // 他フィールド(tab, passive, fullscreen)を保持しつつ、タイマー関連だけ毎回リセット
   state.pomodoro = {
     ...state.pomodoro,
     running: true,
@@ -2093,11 +2114,19 @@ function startPomodoro(blockId) {
     endsAt: dateToLocalDateTime(new Date(Date.now() + 25 * 60 * 1000)),
     mode: "focus"
   };
+  // v13: ポモドーロ開始時、Blockの実績開始時間を自動記録(既存値があれば維持)
   updateBlockField(blockId, "actualStartAt", blockById(blockId)?.actualStartAt || nowDateTime());
   saveAndRender("ポモドーロを開始しました");
 }
 
 function stopPomodoro() {
+  // v13: 中断時、紐づくBlockの actualStartAt を消す(再開で改めて記録するため)
+  const blockId = state.pomodoro.blockId;
+  if (blockId) {
+    state.blocks = state.blocks.map((block) => block.id === blockId
+      ? { ...block, actualStartAt: "", updatedAt: nowDateTime() }
+      : block);
+  }
   // タイマー関連を明示的にクリア(再開時に確実に 50:00 から始まるように)
   state.pomodoro = {
     ...state.pomodoro,
@@ -2107,13 +2136,21 @@ function stopPomodoro() {
     endsAt: "",
     mode: "focus"
   };
-  saveAndRender("ポモドーロを中断しました");
+  saveAndRender("ポモドーロを中断しました(実績開始時刻をクリア)");
 }
 
 function completePomodoro() {
   const blockId = state.pomodoro.blockId;
   if (blockId) {
-    state.blocks = state.blocks.map((block) => block.id === blockId ? { ...block, pomodoroCount: Number(block.pomodoroCount || 0) + 1, updatedAt: nowDateTime() } : block);
+    // v13: 完了時、Blockの実績終了時間を自動記録 + pomodoroCount +1
+    state.blocks = state.blocks.map((block) => block.id === blockId
+      ? {
+          ...block,
+          pomodoroCount: Number(block.pomodoroCount || 0) + 1,
+          actualEndAt: nowDateTime(),
+          updatedAt: nowDateTime()
+        }
+      : block);
   }
   // 完了時もタイマー関連を明示的にクリア
   state.pomodoro = {
