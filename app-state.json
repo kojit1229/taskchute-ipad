@@ -24,7 +24,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-20T15:03:00"
+      "lastSavedAt": "2026-05-20T15:04:00"
     },
     "visionSection": "vision",
     "visionBoardIndex": 0
@@ -62,8 +62,8 @@
       "status": "doing",
       "dueDate": "2026-05-20",
       "createdAt": "2026-05-20T14:55:00",
-      "updatedAt": "2026-05-20T14:55:00",
-      "deleted": false
+      "updatedAt": "2026-05-20T15:04:00",
+      "deleted": true
     },
     {
       "id": "ad6c6bba-1fc9-4731-9ec3-331e8d46b917",
@@ -73,8 +73,8 @@
       "status": "todo",
       "dueDate": "2026-05-21",
       "createdAt": "2026-05-20T14:55:00",
-      "updatedAt": "2026-05-20T14:55:00",
-      "deleted": false
+      "updatedAt": "2026-05-20T15:04:00",
+      "deleted": true
     },
     {
       "id": "1b252655-dbbc-49b5-b8ea-72a565894e9e",
@@ -91,7 +91,7 @@
   "blocks": [
     {
       "id": "685aaf09-0e06-4802-ab51-dd5c5eafcdfa",
-      "taskId": "3d9f41a5-42ed-4562-af69-8ac3580eb40f",
+      "taskId": "",
       "date": "2026-05-20",
       "title": "PWA版をiPadで触る",
       "category": "開発",
@@ -110,8 +110,8 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-20T14:55:00",
-      "updatedAt": "2026-05-20T15:00:00",
-      "deleted": false
+      "updatedAt": "2026-05-20T15:04:00",
+      "deleted": true
     },
     {
       "id": "53af6932-339e-43b6-a4ef-a7405fc43bca",
@@ -134,12 +134,12 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-20T14:55:00",
-      "updatedAt": "2026-05-20T14:59:00",
-      "deleted": false
+      "updatedAt": "2026-05-20T15:04:00",
+      "deleted": true
     },
     {
       "id": "3802e7b8-fe39-41bf-8487-d501535430db",
-      "taskId": "ad6c6bba-1fc9-4731-9ec3-331e8d46b917",
+      "taskId": "",
       "date": "2026-05-20",
       "title": "GitHub Pagesの公開準備",
       "category": "開発",
@@ -158,8 +158,8 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-20T14:55:00",
-      "updatedAt": "2026-05-20T14:55:00",
-      "deleted": false
+      "updatedAt": "2026-05-20T15:04:00",
+      "deleted": true
     }
   ],
   "journals": {
