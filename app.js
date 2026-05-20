@@ -117,6 +117,21 @@ document.addEventListener("click", (event) => {
   if (action === "delete-category") deleteCategory(target.dataset.catId);
   if (action === "add-break-message") addBreakMessage();
   if (action === "delete-break-message") deleteBreakMessage(target.dataset.msgId);
+  // v10: タイムラインズーム
+  if (action === "tl-zoom") {
+    state.timelineZoom = Number(target.dataset.zoom) || 1;
+    saveAndRender();
+  }
+  // v11: サイドバー折りたたみ
+  if (action === "toggle-sidebar") {
+    state.settings.sidebarCollapsed = !state.settings.sidebarCollapsed;
+    saveAndRender();
+  }
+  // v12: ポモドーロ全画面切替
+  if (action === "toggle-pomo-fullscreen") {
+    state.pomodoro.fullscreen = !state.pomodoro.fullscreen;
+    saveAndRender();
+  }
 });
 
 document.addEventListener("input", (event) => {
@@ -594,16 +609,21 @@ function render() {
 }
 
 function renderSidebar() {
+  // v11: 折りたたみ状態を反映
+  const collapsed = state.settings?.sidebarCollapsed || false;
+  if (collapsed) sidebar.classList.add("collapsed");
+  else sidebar.classList.remove("collapsed");
   sidebar.innerHTML = `
     <div class="brand">
-      <div class="brand-title">TaskChute Journal</div>
-      <div class="brand-sub">PWA / Local-first MVP</div>
+      <div class="brand-title">${collapsed ? "TJ" : "TaskChute Journal"}</div>
+      ${collapsed ? "" : `<div class="brand-sub">PWA / Local-first MVP</div>`}
+      <button class="sidebar-toggle" data-action="toggle-sidebar" aria-label="${collapsed ? "サイドバーを開く" : "サイドバーを折りたたむ"}" title="${collapsed ? "サイドバーを開く" : "サイドバーを折りたたむ"}">${collapsed ? "▶" : "◁"}</button>
     </div>
     <div class="nav-list">
       ${navItems.map((item) => `
-        <button class="nav-button ${state.currentView === item.id ? "active" : ""}" data-action="nav" data-view="${item.id}">
+        <button class="nav-button ${state.currentView === item.id ? "active" : ""}" data-action="nav" data-view="${item.id}" title="${item.label}">
           <span class="nav-mark">${item.mark}</span>
-          <span>${item.label}</span>
+          <span class="nav-label">${item.label}</span>
         </button>
       `).join("")}
     </div>
@@ -632,13 +652,16 @@ function renderMain() {
 }
 
 function renderTimelineRail() {
-  if (state.currentView === "timeline" || state.currentView === "journal") {
+  // v11: サイドバーの幅(折りたたみ時 56px、通常 216px)
+  const sbWidth = state.settings?.sidebarCollapsed ? "56px" : "216px";
+  // v10: タスクシュート(tasks)時のみ右タイムライン rail を表示
+  if (state.currentView !== "tasks") {
     timelineRail.style.display = "none";
-    app.style.gridTemplateColumns = "216px minmax(0, 1fr)";
+    app.style.gridTemplateColumns = `${sbWidth} minmax(0, 1fr)`;
     return;
   }
   timelineRail.style.display = "";
-  app.style.gridTemplateColumns = "";
+  app.style.gridTemplateColumns = `${sbWidth} minmax(0, 1fr) 360px`;
   const mode = state.timelineMode || "planned";
   timelineRail.innerHTML = `
     <div class="row" style="margin-bottom:10px">
@@ -697,11 +720,13 @@ function renderHome() {
 
     <section class="section">
       <div class="row" style="margin-bottom:10px">
-        <h2>今日のBlock</h2>
-        <button class="btn ghost" data-action="nav" data-view="tasks">編集</button>
+        <h2>(予約領域)</h2>
       </div>
-      <div class="grid">
-        ${todayBlocks.length ? todayBlocks.map(renderBlockItem).join("") : emptyPanel("まだBlockがありません")}
+      <div class="panel muted" style="min-height:160px; display:grid; place-items:center; text-align:center">
+        <div>
+          <div style="font-size:14px">この枠は別途相談で内容を決定予定</div>
+          <div style="font-size:11px; margin-top:6px; opacity:0.7">タスクシュートと内容が重複しないよう、何を入れるか検討中</div>
+        </div>
       </div>
     </section>
   `;
@@ -929,50 +954,122 @@ function renderTimeline({ compact, mode = "planned" }) {
     // 予定モード: 未完了 + plannedStartAt あり(完了済みは予定から消す)
     blocksToRender = allBlocks.filter((b) => b.plannedStartAt && !b.completed);
   }
-  const rowHeight = compact ? 48 : 60;
+  // v10: ズームレベル(state.timelineZoom: 1.0 / 2.0 / 4.0 のいずれか)
+  const zoom = compact ? 1 : (state.timelineZoom || 1);
+  const rowHeight = (compact ? 48 : 60) * zoom;
   const startHour = 5;
   const endHour = 24;
   const rows = Array.from({ length: endHour - startHour + 1 }, (_, index) => startHour + index);
+  // v10: レーン分割(PC 5、iPhone 3)
+  const maxLanes = (typeof window !== "undefined" && window.innerWidth <= 720) ? 3 : 5;
+  const laneAssignments = assignBlocksToLanes(blocksToRender, mode, maxLanes);
+  // v10: 同レーン内で物理位置が重ならないよう top を調整
+  const positioned = adjustLaneTopPositions(laneAssignments, rowHeight, startHour);
+  // v10: ズームコントロール(コンパクトモードでは出さない)
+  const zoomControls = compact ? "" : `
+    <div class="tl-zoom-controls">
+      <button class="btn ghost ${zoom === 1 ? "active" : ""}" data-action="tl-zoom" data-zoom="1">1x</button>
+      <button class="btn ghost ${zoom === 2 ? "active" : ""}" data-action="tl-zoom" data-zoom="2">2x</button>
+      <button class="btn ghost ${zoom === 4 ? "active" : ""}" data-action="tl-zoom" data-zoom="4">4x</button>
+    </div>
+  `;
 
   return `
+    ${zoomControls}
     <div class="timeline" style="position:relative; min-height:${rowHeight * (endHour - startHour + 1)}px">
       ${rows.map((hour) => `
         <div class="time-row" data-action="timeline-new-block" data-minute="${hour * 60}"
              style="top:${(hour - startHour) * rowHeight}px;height:${rowHeight}px; cursor:pointer;">${String(hour).padStart(2, "0")}:00</div>
       `).join("")}
-      ${blocksToRender.map((block) => renderTimelineCard(block, rowHeight, startHour, mode)).join("")}
+      <div class="timeline-cards-area" style="position:absolute; top:0; left:60px; right:100px; height:100%;">
+        ${positioned.map((a) => renderTimelineCard(a, mode, maxLanes)).join("")}
+      </div>
       ${renderEnergyGraph(allBlocks, rowHeight, startHour, endHour)}
     </div>
   `;
 }
 
-function renderTimelineCard(block, rowHeight, startHour, mode = "planned") {
-  // モードに応じて表示時刻を決定
-  const startStr = mode === "actual" ? block.actualStartAt : block.plannedStartAt;
-  const endStr = mode === "actual"
-    ? (block.actualEndAt || nowDateTime())
-    : (block.plannedEndAt || null);
-  if (!startStr) return "";
+// v10: Blockをレーンに割り当てる(時刻軸方向の重なりを横並びに展開)
+function assignBlocksToLanes(blocks, mode, maxLanes) {
+  // 開始時刻でソート(同じ時刻なら短いもの優先)
+  const sorted = [...blocks]
+    .map((b) => {
+      const startStr = mode === "actual" ? b.actualStartAt : b.plannedStartAt;
+      const endStr = mode === "actual" ? (b.actualEndAt || nowDateTime()) : (b.plannedEndAt || null);
+      if (!startStr) return null;
+      const start = minutesOf(startStr);
+      const end = endStr ? minutesOf(endStr) : start + 1;  // 終了未定なら最低1分
+      return { block: b, start, end: Math.max(end, start + 1), startStr, endStr };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.start - b.start || (a.end - a.start) - (b.end - b.start));
 
-  const start = minutesOf(startStr);
-  const end = endStr ? minutesOf(endStr) : start + 30;
-  const top = Math.max(0, ((start - startHour * 60) / 60) * rowHeight);
-  const height = Math.max(38, ((end - start) / 60) * rowHeight);
+  // 各レーンの「最後の終了時刻(分単位)」を管理
+  const laneEnds = new Array(maxLanes).fill(-1);
+  const result = [];
+  for (const item of sorted) {
+    // 空いているレーン(最後の終了 ≤ 自分の開始)を探す
+    let lane = -1;
+    for (let i = 0; i < maxLanes; i++) {
+      if (laneEnds[i] <= item.start) {
+        lane = i;
+        break;
+      }
+    }
+    let isOverflow = false;
+    if (lane === -1) {
+      // 全レーン満杯: 最後のレーンに重ねる(視覚的に "+N" にする)
+      lane = maxLanes - 1;
+      isOverflow = true;
+    }
+    laneEnds[lane] = Math.max(laneEnds[lane], item.end);
+    result.push({ ...item, lane, isOverflow });
+  }
+  return result;
+}
+
+// v10: 同じレーン内で物理位置(px)が重ならないように top を調整する
+// 短時間Blockが連続している場合、本来の時刻位置で配置すると視覚的に重なるので、
+// 同レーンで「前のカードの下端」以降にずらす。時刻軸とは多少ずれるが視認性優先。
+function adjustLaneTopPositions(assignments, rowHeight, startHour) {
+  const laneBottoms = new Array(20).fill(-Infinity);  // 物理位置の最後の下端(レーンごと)
+  return assignments.map((a) => {
+    const naturalTop = ((a.start - startHour * 60) / 60) * rowHeight;
+    const durationMin = a.end - a.start;
+    const isShort = durationMin < 5;
+    const minHeight = isShort ? 14 : 38;
+    const height = Math.max(minHeight, (durationMin / 60) * rowHeight);
+    // 前のカードと重ならないように top を調整(+1px の隙間)
+    const adjustedTop = Math.max(naturalTop, (laneBottoms[a.lane] === -Infinity ? 0 : laneBottoms[a.lane]) + 1);
+    laneBottoms[a.lane] = adjustedTop + height;
+    return { ...a, top: adjustedTop, height, isShort };
+  });
+}
+
+function renderTimelineCard(positioned, mode = "planned", maxLanes = 5) {
+  const { block, startStr, endStr, lane, isOverflow, top, height, isShort } = positioned;
+
+  // v10: レーン位置(0〜maxLanes-1) を % で配置
+  const widthPercent = 100 / maxLanes;
+  const leftPercent = lane * widthPercent;
+
   const isActual = mode === "actual";
-  // v9: カテゴリ色を反映(設定済みの場合のみ。未設定はデフォルト青/緑)
+  // カテゴリ色を反映
   const catColor = block.category ? getCategoryColor(block.category) : null;
-  // カテゴリ色がある時は、それを背景(薄く)・左ボーダー・テキスト色のベースに
   const catStyle = catColor
     ? `background:${catColor}29; border-left:4px solid ${catColor}; color:${catColor};`
     : "";
+  const overflowAttr = isOverflow ? `data-overflow="true"` : "";
+
   return `
-    <div class="timeline-card ${block.completed ? "completed" : ""} ${isActual ? "is-actual" : ""}"
-         style="top:${top}px;height:${height}px;${catStyle}"
+    <div class="timeline-card ${block.completed ? "completed" : ""} ${isActual ? "is-actual" : ""} ${isShort ? "is-short" : ""}"
+         ${overflowAttr}
+         style="top:${top}px; height:${height}px; left:${leftPercent}%; width:calc(${widthPercent}% - 4px); ${catStyle}"
          data-action="edit-block" data-id="${block.id}">
-      ${!isActual ? `<button class="tl-complete-btn" data-action="complete-block-with-actual" data-id="${block.id}" aria-label="完了登録">○</button>` : ""}
+      ${!isActual && !isShort ? `<button class="tl-complete-btn" data-action="complete-block-with-actual" data-id="${block.id}" aria-label="完了登録">○</button>` : ""}
       <div class="tl-card-body">
         <strong>${escapeHTML(block.title)}</strong>
-        <div class="tl-time">${timeFromDateTime(startStr)}${endStr ? `-${timeFromDateTime(endStr)}` : ""}</div>
+        ${!isShort ? `<div class="tl-time">${timeFromDateTime(startStr)}${endStr ? `-${timeFromDateTime(endStr)}` : ""}</div>` : ""}
       </div>
     </div>
   `;
@@ -1064,15 +1161,45 @@ function renderPomodoro() {
   const remaining = running
     ? remainingText(state.pomodoro.endsAt, mode === "focus")
     : "50:00";
-  const blockOptions = blocksForDate(state.selectedDate).filter((block) => !block.completed);
+  // v10: ポモドーロには「ルーティン」カテゴリの Block は表示しない
+  const blockOptions = blocksForDate(state.selectedDate)
+    .filter((block) => !block.completed)
+    .filter((block) => block.category !== "ルーティン");
   const pomoTab = state.pomodoro.tab || "manual";
+  // v12: 全画面モード
+  const fullscreen = state.pomodoro.fullscreen || false;
+  if (fullscreen) {
+    return renderPomodoroFullscreen(running, remaining, blockOptions, pomoTab);
+  }
   return `
-    ${renderHeader("集中タイマー", "ポモドーロ")}
+    ${renderHeader("集中タイマー", "ポモドーロ", `<button class="btn" data-action="toggle-pomo-fullscreen">⛶ 全画面</button>`)}
     <div class="segmented" style="margin-bottom:14px">
       <button class="${pomoTab === "manual" ? "active" : ""}" data-action="pomo-tab" data-tab="manual">任意タイマー</button>
       <button class="${pomoTab === "passive" ? "active" : ""}" data-action="pomo-tab" data-tab="passive">常時タイマー</button>
     </div>
     ${pomoTab === "manual" ? renderManualPomodoro(running, remaining, blockOptions) : renderPassivePomodoro()}
+  `;
+}
+
+// v12: ポモドーロ全画面モード(背景動画 + 半透明フィルタ + 中央タイマー)
+function renderPomodoroFullscreen(running, remaining, blockOptions, pomoTab) {
+  return `
+    <div class="pomo-fullscreen" id="pomoFullscreen">
+      <video class="pomo-bg-video" autoplay muted loop playsinline poster="">
+        <source src="./study_with_me.mp4" type="video/mp4">
+      </video>
+      <div class="pomo-bg-overlay"></div>
+      <div class="pomo-fullscreen-content">
+        <button class="pomo-fullscreen-close" data-action="toggle-pomo-fullscreen" aria-label="全画面を解除" title="全画面を解除">✕</button>
+        <div class="segmented pomo-fs-tabs">
+          <button class="${pomoTab === "manual" ? "active" : ""}" data-action="pomo-tab" data-tab="manual">任意</button>
+          <button class="${pomoTab === "passive" ? "active" : ""}" data-action="pomo-tab" data-tab="passive">常時</button>
+        </div>
+        <div class="pomo-fs-stage">
+          ${pomoTab === "manual" ? renderManualPomodoro(running, remaining, blockOptions) : renderPassivePomodoro()}
+        </div>
+      </div>
+    </div>
   `;
 }
 
@@ -2216,11 +2343,15 @@ function metric(label, today, start, end) {
 function ageMetric(label, today, birthDate, age) {
   const target = addYears(birthDate, age);
   const remaining = Math.max(0, daysBetween(today, target));
+  // v10: 開始(生年月日) → 目標年齢 までの経過日数進捗
+  const totalDays = Math.max(1, daysBetween(birthDate, target));
+  const elapsedDays = Math.max(0, daysBetween(birthDate, today));
+  const progress = Math.min(100, Math.max(0, (elapsedDays / totalDays) * 100));
   return {
     label,
-    value: `あと${remaining}日`,
-    progress: 0,
-    note: target
+    value: `あと${remaining.toLocaleString()}日`,
+    progress,
+    note: `${target} (${progress.toFixed(1)}% 経過)`
   };
 }
 
