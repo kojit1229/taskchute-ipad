@@ -24,7 +24,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": ""
+      "lastSavedAt": "2026-05-20T17:04:00"
     },
     "visionSection": "board",
     "visionBoardIndex": 2,
@@ -9952,5 +9952,6 @@
     }
   },
   "modal": null,
-  "timelineMode": "planned"
+  "timelineMode": "planned",
+  "timelineZoom": 1
 }
