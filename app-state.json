@@ -1,5 +1,5 @@
 {
-  "currentView": "vision",
+  "currentView": "settings",
   "selectedDate": "2026-05-20",
   "settings": {
     "birthDate": "",
@@ -24,7 +24,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-20T15:01:00"
+      "lastSavedAt": "2026-05-20T15:03:00"
     },
     "visionSection": "vision",
     "visionBoardIndex": 0
@@ -49,8 +49,8 @@
       "status": "active",
       "twelveWeekStartDate": "2026-05-20",
       "createdAt": "2026-05-20T14:55:00",
-      "updatedAt": "2026-05-20T14:55:00",
-      "deleted": false
+      "updatedAt": "2026-05-20T15:03:00",
+      "deleted": true
     }
   ],
   "tasks": [
