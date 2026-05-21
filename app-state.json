@@ -1,5 +1,5 @@
 {
-  "currentView": "timeline",
+  "currentView": "tasks",
   "selectedDate": "2026-05-21",
   "settings": {
     "birthDate": "1992-12-29",
@@ -24,7 +24,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": ""
+      "lastSavedAt": "2026-05-21T10:31:00"
     },
     "visionSection": "board",
     "visionBoardIndex": 0,
@@ -31766,7 +31766,7 @@
   },
   "modal": {
     "type": "block",
-    "id": "a20c518c-719f-40d2-a398-f7edb905c60e"
+    "id": "f385c83b-0bf4-41fa-bbed-0aa894948ddd"
   },
   "timelineMode": "planned",
   "timelineZoom": 4
