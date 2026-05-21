@@ -313,10 +313,25 @@ function normalizeState(value) {
   });
   value.blocks ||= [];
   // v17: 既存 Block に isMIT のデフォルト値を補完(後方互換)
+  // v18: 壊れた時刻データを修復(text化で不正形式になった可能性に対応)
+  const fixDateTime = (val) => {
+    if (!val) return val;
+    const s = String(val).trim();
+    // 正しい形式 "YYYY-MM-DDTHH:mm:ss" or "YYYY-MM-DDTHH:mm"
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(s)) {
+      return s.length === 16 ? `${s}:00` : s;
+    }
+    // 不正形式は空に
+    return "";
+  };
   value.blocks = value.blocks.map((block) => ({
     isMIT: false,
     source: "",
-    ...block
+    ...block,
+    plannedStartAt: fixDateTime(block.plannedStartAt),
+    plannedEndAt: fixDateTime(block.plannedEndAt),
+    actualStartAt: fixDateTime(block.actualStartAt),
+    actualEndAt: fixDateTime(block.actualEndAt)
   }));
   // v16: Wish Project が削除/未作成なら自動作成(必ず1つ存在を保証)
   if (!value.projects.some((p) => p.kind === "wish" && !p.deleted)) {
@@ -2014,11 +2029,11 @@ function renderPassiveSettings(passive) {
     <div class="field-row">
       <div class="field">
         <label class="field-label">開始時刻</label>
-        <input class="input" type="text" inputmode="numeric" placeholder="HH:MM" data-passive-field="activeStartHHMM" value="${passive.activeStartHHMM}">
+        <input class="input" type="time" step="300" data-passive-field="activeStartHHMM" value="${passive.activeStartHHMM}">
       </div>
       <div class="field">
         <label class="field-label">終了時刻</label>
-        <input class="input" type="text" inputmode="numeric" placeholder="HH:MM" data-passive-field="activeEndHHMM" value="${passive.activeEndHHMM}">
+        <input class="input" type="time" step="300" data-passive-field="activeEndHHMM" value="${passive.activeEndHHMM}">
       </div>
     </div>
     <div class="row">
@@ -2244,10 +2259,10 @@ function renderSettings() {
       <div class="panel stack">
         <h2>プロフィール</h2>
         <label>生年月日
-          <input class="input" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" data-setting-field="birthDate" value="${state.settings.birthDate || ""}">
+          <input class="input" type="date" data-setting-field="birthDate" value="${state.settings.birthDate || ""}">
         </label>
         <label>12WY開始日
-          <input class="input" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" data-setting-field="twelveWeekStartDate" value="${state.settings.twelveWeekStartDate || todayISO()}">
+          <input class="input" type="date" data-setting-field="twelveWeekStartDate" value="${state.settings.twelveWeekStartDate || todayISO()}">
         </label>
       </div>
       <div class="panel stack">
@@ -2391,7 +2406,7 @@ function renderDateBar() {
   return `
     <div class="datebar">
       <button class="btn" data-action="date-prev">前日</button>
-      <input class="input" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" data-date-picker value="${state.selectedDate}">
+      <input class="input" type="date" data-date-picker value="${state.selectedDate}">
       <button class="btn" data-action="date-next">翌日</button>
     </div>
   `;
@@ -2547,17 +2562,10 @@ function toggleBlock(id) {
     return { ...block, completed, actualEndAt: completed && !block.actualEndAt ? nowDateTime() : block.actualEndAt, updatedAt: nowDateTime() };
   });
   saveAndRender("Blockを更新しました");
-  // v17/v18: 完了時の演出(常にランダム祝福 + 後続ルーティン表示)
+  // v17/v18: 完了時の演出(常にランダム祝福)
   if (justCompleted && completedBlock) {
-    const task = completedBlock.taskId ? state.tasks.find((t) => t.id === completedBlock.taskId) : null;
-    // ランダム祝福メッセージ(全タスク共通)
     const celebrateMsg = getRandomCelebrate();
-    // 後続ルーティン
-    let nextRoutine = null;
-    if (task && task.nextRoutineId) {
-      nextRoutine = state.tasks.find((t) => t.id === task.nextRoutineId && !t.deleted);
-    }
-    triggerCompletionEffect(celebrateMsg, completedBlock.isMIT, nextRoutine);
+    triggerCompletionEffect(celebrateMsg, completedBlock.isMIT);
   }
 }
 
@@ -2578,8 +2586,8 @@ function toggleMIT(blockId) {
   saveAndRender(block.isMIT ? "今日の主役から外しました" : "✦ 今日の主役に設定しました");
 }
 
-// v17/v18: 完了時の演出(花火 + ランダム祝福メッセージ + 後続ルーティン表示)
-function triggerCompletionEffect(message, isMIT, nextRoutine) {
+// v17: 完了時の演出(花火 + ランダム祝福メッセージ)
+function triggerCompletionEffect(message, isMIT) {
   const container = document.createElement("div");
   container.className = "completion-effect";
   // 粒子(8〜14個、ランダムな角度)
@@ -2597,22 +2605,14 @@ function triggerCompletionEffect(message, isMIT, nextRoutine) {
     particle.style.setProperty("--delay", `${i * 30}ms`);
     container.appendChild(particle);
   }
-  // 祝福メッセージ
   if (message) {
     const msgEl = document.createElement("div");
     msgEl.className = "ce-message";
     msgEl.textContent = message;
     container.appendChild(msgEl);
   }
-  // v18: 後続ルーティンがあれば「次: ○○」を小さく追加
-  if (nextRoutine) {
-    const nextEl = document.createElement("div");
-    nextEl.className = "ce-next";
-    nextEl.textContent = `次: ${nextRoutine.title}`;
-    container.appendChild(nextEl);
-  }
   document.body.appendChild(container);
-  setTimeout(() => container.remove(), 2000);
+  setTimeout(() => container.remove(), 1500);
 }
 
 function setBlockTime(id, field) {
@@ -3468,16 +3468,22 @@ function daysBetween(start, end) {
 
 function minutesOf(dateTime) {
   if (!dateTime) return 0;
-  const d = new Date(dateTime);
-  if (Number.isNaN(d.getTime())) return 0;
-  return d.getHours() * 60 + d.getMinutes();
+  // v18: Date を経由せず、文字列から直接抽出(iOS Safari の TZ 解釈バグを回避)
+  // "YYYY-MM-DDTHH:mm[:ss]" 形式から時:分を取り出す
+  const m1 = /T(\d{1,2}):(\d{2})/.exec(dateTime);
+  if (m1) return Number(m1[1]) * 60 + Number(m1[2]);
+  // "HH:mm" 単独
+  const m2 = /^(\d{1,2}):(\d{2})/.exec(dateTime);
+  if (m2) return Number(m2[1]) * 60 + Number(m2[2]);
+  return 0;
 }
 
 function timeFromDateTime(dateTime) {
   if (!dateTime) return "";
-  const d = new Date(dateTime);
-  if (Number.isNaN(d.getTime())) return "";
-  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  // v18: Date を経由せず、文字列から直接抽出(TZ 解釈バグ回避)
+  const m = /T(\d{1,2}):(\d{2})/.exec(dateTime);
+  if (m) return `${pad2(Number(m[1]))}:${m[2]}`;
+  return "";
 }
 
 function formatDisplayDate(date) {
@@ -3686,11 +3692,11 @@ function buildProjectModal(project) {
         <div class="field-row">
           <div class="field">
             <label class="field-label">開始日</label>
-            <input class="input" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" data-modal-field="startDate" value="${project.startDate || ""}">
+            <input class="input" type="date" data-modal-field="startDate" value="${project.startDate || ""}">
           </div>
           <div class="field">
             <label class="field-label">期限</label>
-            <input class="input" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" data-modal-field="dueDate" value="${project.dueDate || ""}">
+            <input class="input" type="date" data-modal-field="dueDate" value="${project.dueDate || ""}">
           </div>
         </div>
         <div class="field">
@@ -3788,37 +3794,13 @@ function buildTaskModal(task) {
           </div>
           <div class="field">
             <label class="field-label">期限</label>
-            <input class="input" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" data-modal-field="dueDate" value="${task.dueDate || ""}">
+            <input class="input" type="date" data-modal-field="dueDate" value="${task.dueDate || ""}">
           </div>
         </div>
         <div class="field">
           <label class="field-label">説明 / メモ</label>
           <textarea class="textarea" data-modal-field="description" style="min-height:120px">${escapeHTML(task.description || "")}</textarea>
         </div>
-        <details class="field" open style="padding:10px; background:var(--panel-soft); border-radius:8px; border-left:3px solid var(--accent)">
-          <summary style="cursor:pointer; font-size:13px; font-weight:600; color:var(--text)">🔗 ルーティン連携(チェーン)</summary>
-          <div style="margin-top:10px; display:grid; gap:10px">
-            <div class="muted" style="font-size:11px; line-height:1.6; padding:8px; background:rgba(0,0,0,0.03); border-radius:6px">
-              <strong>使い方</strong>: <br>
-              カテゴリが「<strong>ルーティン</strong>」のタスクで、完了後に続けてやるルーティンを指定できます。<br>
-              例: 「水を飲む → スクワット」のように連鎖を作って、習慣を繋げて定着させやすくします。<br>
-              完了時に「次: ○○」と画面に表示されます(押し付けず、ヒントのみ)。
-            </div>
-            <div class="field" style="margin:0">
-              <label class="field-label">後続のルーティン</label>
-              <select class="select" data-modal-field="nextRoutineId">
-                <option value="" ${!task.nextRoutineId ? "selected" : ""}>(指定しない)</option>
-                ${state.tasks
-                  .filter((t) => !t.deleted && t.id !== task.id && t.category === "ルーティン")
-                  .map((t) => `<option value="${t.id}" ${task.nextRoutineId === t.id ? "selected" : ""}>${escapeHTML(t.title)}</option>`)
-                  .join("")}
-              </select>
-              ${state.tasks.filter((t) => !t.deleted && t.id !== task.id && t.category === "ルーティン").length === 0
-                ? `<div class="muted" style="font-size:11px; margin-top:4px">他にカテゴリ「ルーティン」のタスクがありません。先にカテゴリ=ルーティンの Task を作成すると、ここで選択肢に出ます。</div>`
-                : ""}
-            </div>
-          </div>
-        </details>
       </div>
       <div class="modal-footer">
         <button class="btn danger" data-action="modal-delete">削除</button>
@@ -3884,7 +3866,7 @@ function buildBlockModal(block) {
         <div class="field-row">
           <div class="field">
             <label class="field-label">日付</label>
-            <input class="input" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" data-modal-field="date" value="${block.date || todayISO()}">
+            <input class="input" type="date" data-modal-field="date" value="${block.date || todayISO()}">
           </div>
           <div class="field">
             <label class="field-label">カテゴリ</label>
@@ -3898,21 +3880,21 @@ function buildBlockModal(block) {
         <div class="field-row">
           <div class="field">
             <label class="field-label">予定開始</label>
-            <input class="input" type="text" inputmode="numeric" placeholder="YYYY-MM-DDTHH:MM" data-modal-field="plannedStartAt" value="${toLocalInput(block.plannedStartAt)}">
+            <input class="input" type="datetime-local" step="300" data-modal-field="plannedStartAt" value="${toLocalInput(block.plannedStartAt)}">
           </div>
           <div class="field">
             <label class="field-label">予定終了</label>
-            <input class="input" type="text" inputmode="numeric" placeholder="YYYY-MM-DDTHH:MM" data-modal-field="plannedEndAt" value="${toLocalInput(block.plannedEndAt)}">
+            <input class="input" type="datetime-local" step="300" data-modal-field="plannedEndAt" value="${toLocalInput(block.plannedEndAt)}">
           </div>
         </div>
         <div class="field-row">
           <div class="field">
             <label class="field-label">実績開始</label>
-            <input class="input" type="text" inputmode="numeric" placeholder="YYYY-MM-DDTHH:MM" data-modal-field="actualStartAt" value="${toLocalInput(block.actualStartAt)}">
+            <input class="input" type="datetime-local" step="300" data-modal-field="actualStartAt" value="${toLocalInput(block.actualStartAt)}">
           </div>
           <div class="field">
             <label class="field-label">実績終了</label>
-            <input class="input" type="text" inputmode="numeric" placeholder="YYYY-MM-DDTHH:MM" data-modal-field="actualEndAt" value="${toLocalInput(block.actualEndAt)}">
+            <input class="input" type="datetime-local" step="300" data-modal-field="actualEndAt" value="${toLocalInput(block.actualEndAt)}">
           </div>
         </div>
         <div class="field-row">
@@ -4136,11 +4118,12 @@ function openTimelineNewBlock(startMinute) {
 
 function toLocalInput(isoString) {
   if (!isoString) return "";
-  // ISO 8601 (例: 2026-05-17T14:30:00Z) → datetime-local の値 (2026-05-17T14:30)
-  const d = new Date(isoString);
-  if (Number.isNaN(d.getTime())) return "";
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  // v18: Date を経由せず、文字列をそのまま使う(TZ 変換バグを避ける)
+  // 既に "YYYY-MM-DDTHH:mm" or "YYYY-MM-DDTHH:mm:ss" 形式ならそのまま 16 文字に整形
+  const s = String(isoString);
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/.exec(s);
+  if (m) return `${m[1]}T${m[2]}:${m[3]}`;
+  return "";
 }
 
 function fromLocalInput(value) {
@@ -4419,11 +4402,11 @@ function buildActualEntryModal(block, defaultStart, defaultEnd) {
         <div class="field-row">
           <div class="field">
             <label class="field-label">実績開始</label>
-            <input class="input" type="text" inputmode="numeric" placeholder="YYYY-MM-DDTHH:MM" data-modal-field="actualStartAt" value="${toLocalInput(defaultStart)}">
+            <input class="input" type="datetime-local" step="300" data-modal-field="actualStartAt" value="${toLocalInput(defaultStart)}">
           </div>
           <div class="field">
             <label class="field-label">実績終了</label>
-            <input class="input" type="text" inputmode="numeric" placeholder="YYYY-MM-DDTHH:MM" data-modal-field="actualEndAt" value="${toLocalInput(defaultEnd)}">
+            <input class="input" type="datetime-local" step="300" data-modal-field="actualEndAt" value="${toLocalInput(defaultEnd)}">
           </div>
         </div>
         <div class="field-row">
