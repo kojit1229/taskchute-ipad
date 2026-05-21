@@ -3,6 +3,8 @@ const STORAGE_KEY = "taskchute-journal-pwa-state-v1";
 const navItems = [
   { id: "home", label: "ホーム", mark: "H" },
   { id: "wbs", label: "WBS", mark: "W" },
+  { id: "wish", label: "やりたい", mark: "✦" },
+  { id: "avoid", label: "やらない", mark: "✕" },
   { id: "tasks", label: "タスクシュート", mark: "T" },
   { id: "timeline", label: "タイムライン", mark: "L" },
   { id: "pomodoro", label: "ポモドーロ", mark: "P" },
@@ -76,7 +78,13 @@ document.addEventListener("click", (event) => {
   if (action === "save-github") saveToGitHub();
   if (action === "load-github") loadFromGitHub();
   if (action === "reset-demo") resetDemoData();
-  if (action === "start-pomodoro") startPomodoro(target.dataset.blockId || "");
+  // v17: MIT(今日の主役)の切替(最大3個)
+  if (action === "toggle-mit") toggleMIT(id);
+  // v14: 開始前に既存セッションを強制リセット(中断/完了/休憩後の再開でも確実に50:00から)
+  if (action === "start-pomodoro") {
+    forceResetPomodoroSession();
+    startPomodoro(target.dataset.blockId || "");
+  }
   if (action === "stop-pomodoro") stopPomodoro();
   if (action === "complete-pomodoro") completePomodoro();
   if (action === "go-break") goBreakPomodoro();
@@ -160,6 +168,18 @@ document.addEventListener("input", (event) => {
   if (target.matches("[data-msg-id][data-msg-field]")) {
     updateBreakMessageField(target.dataset.msgId, target.dataset.msgField, target.value);
   }
+  // === v16: やりたいことリスト ===
+  if (action === "add-wish") addWish();
+  if (action === "open-wish") toggleWishOpen(id);
+  if (action === "add-wish-subtask") addWishSubtask(id);
+  if (action === "toggle-wish-subtask") toggleWishSubtask(id);
+  if (action === "wish-subtask-to-tasks") wishSubtaskToTasks(id);
+  if (action === "wish-realize") realizeWish(id);
+  if (action === "wish-unrealize") unrealizeWish(id);
+  if (action === "delete-wish") deleteWish(id);
+  // === v17: Avoid List ===
+  if (action === "add-avoid") addAvoid();
+  if (action === "delete-avoid") deleteAvoid(id);
 });
 
 document.addEventListener("change", (event) => {
@@ -190,6 +210,38 @@ document.addEventListener("change", (event) => {
   // v9: 編集モーダルのカテゴリselectで「+ 新規カテゴリ追加」を選んだ時
   if (target.matches('[data-modal-field="category"]') && target.value === "__ADD_NEW__") {
     handleAddCategoryFromModal(target);
+  }
+  // v16: Wish フィルタ・編集
+  if (target.matches('[data-action="wish-filter-area"]')) {
+    state.wishFilter = { ...(state.wishFilter || {}), area: target.value };
+    render();
+  }
+  if (target.matches('[data-action="wish-toggle-realized"]')) {
+    state.wishFilter = { ...(state.wishFilter || {}), showRealized: target.checked };
+    render();
+  }
+  if (target.matches('[data-action="wish-set-year"]')) {
+    const id = target.dataset.id;
+    const val = target.value ? Number(target.value) : null;
+    updateTaskField(id, "targetYear", val);
+  }
+  if (target.matches('[data-action="wish-set-area"]')) {
+    updateTaskField(target.dataset.id, "lifeArea", target.value);
+  }
+});
+
+// v16: Wish 関連のリアルタイム編集(input イベント = 入力中も保存)
+document.addEventListener("input", (event) => {
+  const target = event.target;
+  if (target.matches('[data-action="wish-set-motivation"]')) {
+    updateTaskField(target.dataset.id, "motivation", target.value);
+  }
+  if (target.matches('[data-action="wish-subtask-title"]')) {
+    updateTaskField(target.dataset.id, "title", target.value);
+  }
+  // v17: Avoid List のテキスト編集
+  if (target.matches('[data-avoid-id][data-avoid-field="text"]')) {
+    updateAvoidText(target.dataset.avoidId, target.value);
   }
 });
 
@@ -235,9 +287,48 @@ function normalizeState(value) {
   if (!Array.isArray(value.settings.breakMessages) || value.settings.breakMessages.length === 0) {
     value.settings.breakMessages = defaultBreakMessages();
   }
+  // v16: やりたいことリスト用の人生領域マスタ
+  if (!Array.isArray(value.settings.lifeAreas) || value.settings.lifeAreas.length === 0) {
+    value.settings.lifeAreas = defaultLifeAreas();
+  }
+  // v17: Avoid List(やらないこと)
+  if (!Array.isArray(value.settings.avoidList)) {
+    value.settings.avoidList = [];
+  }
   value.projects ||= [];
   value.tasks ||= [];
+  // v16/v17: 既存 Task に Wish + Habit Stacking 用フィールドのデフォルト値を補完(後方互換)
+  value.tasks = value.tasks.map((task) => ({
+    targetYear: null,
+    lifeArea: "",
+    motivation: "",
+    realized: false,
+    realizedDate: "",
+    trigger: "",
+    celebrate: "",
+    ...task
+  }));
   value.blocks ||= [];
+  // v17: 既存 Block に isMIT のデフォルト値を補完(後方互換)
+  value.blocks = value.blocks.map((block) => ({
+    isMIT: false,
+    source: "",
+    ...block
+  }));
+  // v16: Wish Project が削除/未作成なら自動作成(必ず1つ存在を保証)
+  if (!value.projects.some((p) => p.kind === "wish" && !p.deleted)) {
+    value.projects.push({
+      id: crypto.randomUUID(),
+      kind: "wish",
+      title: "Wish",
+      category: "回復",
+      status: "active",
+      twelveWeekStartDate: "",
+      createdAt: nowDateTime(),
+      updatedAt: nowDateTime(),
+      deleted: false
+    });
+  }
   value.journals ||= {};
   value.feedback ||= {};
   value.reports ||= {};
@@ -264,6 +355,20 @@ function defaultBreakMessages() {
     { id: crypto.randomUUID(), fromSec: 30,  toSec: 120, message: "ゆっくり水を一口。" },
     { id: crypto.randomUUID(), fromSec: 120, toSec: 240, message: "立ち上がって、肩を回しましょう。" },
     { id: crypto.randomUUID(), fromSec: 240, toSec: 301, message: "目を閉じて、息を整えて。" }
+  ];
+}
+
+// v16: 人生領域マスタ(やりたいことリストのカテゴリ)
+function defaultLifeAreas() {
+  return [
+    { id: crypto.randomUUID(), name: "健康", color: "#34C759" },
+    { id: crypto.randomUUID(), name: "仕事", color: "#007AFF" },
+    { id: crypto.randomUUID(), name: "家族", color: "#FF2D55" },
+    { id: crypto.randomUUID(), name: "趣味", color: "#FF9500" },
+    { id: crypto.randomUUID(), name: "旅",   color: "#5AC8FA" },
+    { id: crypto.randomUUID(), name: "学び", color: "#AF52DE" },
+    { id: crypto.randomUUID(), name: "経験", color: "#FFCC00" },
+    { id: crypto.randomUUID(), name: "持物", color: "#8E8E93" }
   ];
 }
 
@@ -641,6 +746,8 @@ function renderMain() {
   const view = state.currentView;
   if (view === "home") main.innerHTML = renderHome();
   if (view === "wbs") main.innerHTML = renderWBS();
+  if (view === "wish") main.innerHTML = renderWish();
+  if (view === "avoid") main.innerHTML = renderAvoid();
   if (view === "tasks") main.innerHTML = renderTasks();
   if (view === "timeline") main.innerHTML = renderTimelineView();
   if (view === "pomodoro") main.innerHTML = renderPomodoro();
@@ -691,11 +798,50 @@ function renderHeader(eyebrow, title, action = "") {
 function renderHome() {
   const morning = state.settings.morningEnergyLog[state.selectedDate];
   const metrics = computeMetrics();
-  const todayBlocks = blocksForDate(state.selectedDate).slice(0, 4);
+  const todayBlocks = blocksForDate(state.selectedDate);
+
+  // v17: 今日の MIT(今日の主役)Block
+  const mitBlocks = todayBlocks.filter((b) => b.isMIT);
+  const mitDone = mitBlocks.filter((b) => b.completed).length;
+  // v17: 前日の日報から「明日の MIT 候補」を抽出して当日に表示
+  const previous = addDays(state.selectedDate, -1);
+  const prevReport = state.reports?.[previous] || "";
+  const yesterdayCandidates = extractMITCandidatesFromReport(prevReport);
 
   return `
     ${renderHeader("今日の入口", "ホーム", `<button class="btn primary" data-action="today">今日へ</button>`)}
     ${renderDateBar()}
+
+    <section class="panel" style="margin-bottom:12px">
+      <div class="row" style="margin-bottom:8px; align-items:center">
+        <h2>✦ 今日の主役 (MIT)</h2>
+        <div class="muted" style="font-size:13px">${mitDone} / ${mitBlocks.length} 達成</div>
+      </div>
+      ${mitBlocks.length === 0 ? `
+        <div class="muted" style="font-size:13px; padding:8px 0">
+          ${yesterdayCandidates.length > 0
+            ? `<div style="margin-bottom:10px; padding:10px; background:rgba(255,214,10,0.08); border-radius:8px; border-left:3px solid #FFD60A">
+                <div style="font-weight:600; color:var(--text); margin-bottom:6px">📌 昨日のあなたが提案した MIT 候補</div>
+                ${yesterdayCandidates.map((c) => `<div style="margin:2px 0">• ${escapeHTML(c)}</div>`).join("")}
+              </div>`
+            : ""}
+          今日特に集中することを <strong>1〜3 個</strong> 選びましょう。<br>
+          タスクシュート画面の各 Block 横の <strong>☆</strong> ボタンで設定。
+          <div style="margin-top:8px"><button class="btn primary" data-action="nav" data-view="tasks">タスクシュートへ</button></div>
+        </div>
+      ` : `
+        <div class="grid" style="gap:8px">
+          ${mitBlocks.map((b) => `
+            <div class="row" style="align-items:center; padding:8px 10px; background:rgba(255,214,10,0.08); border-radius:8px; border-left:3px solid #FFD60A">
+              <span style="font-size:18px">${b.completed ? "✅" : "⬜"}</span>
+              <strong style="flex:1; ${b.completed ? "text-decoration:line-through; opacity:0.6" : ""}">${escapeHTML(b.title)}</strong>
+              <button class="btn ghost" data-action="nav" data-view="tasks">行く</button>
+            </div>
+          `).join("")}
+        </div>
+      `}
+    </section>
+
     <section class="panel">
       <h2>朝の体調</h2>
       <div class="segmented">
@@ -717,37 +863,492 @@ function renderHome() {
         </div>
       `).join("")}
     </section>
-
-    <section class="section">
-      <div class="row" style="margin-bottom:10px">
-        <h2>(予約領域)</h2>
-      </div>
-      <div class="panel muted" style="min-height:160px; display:grid; place-items:center; text-align:center">
-        <div>
-          <div style="font-size:14px">この枠は別途相談で内容を決定予定</div>
-          <div style="font-size:11px; margin-top:6px; opacity:0.7">タスクシュートと内容が重複しないよう、何を入れるか検討中</div>
-        </div>
-      </div>
-    </section>
   `;
 }
 
-function renderWBS() {
-  const activeProjects = state.projects.filter((project) => !project.deleted);
-  const sorted = [...activeProjects].sort((a, b) => {
-    if (a.kind === "wish" && b.kind !== "wish") return -1;
-    if (a.kind !== "wish" && b.kind === "wish") return 1;
-    return a.title.localeCompare(b.title, "ja");
+// v17: 前日の日報から「明日の MIT 候補」を抽出する
+function extractMITCandidatesFromReport(reportText) {
+  if (!reportText) return [];
+  // 「明日の MIT 候補:」の行から数行抽出(箇条書きまたは1行)
+  const lines = reportText.split("\n");
+  const idx = lines.findIndex((line) => /明日の\s*MIT\s*候補/i.test(line));
+  if (idx < 0) return [];
+  const candidates = [];
+  // 同じ行に「: 内容」がある場合
+  const sameLine = lines[idx].split(/:|:/).slice(1).join(":").trim();
+  if (sameLine) candidates.push(sameLine);
+  // 次の数行が「- 」「・」始まりなら抽出
+  for (let i = idx + 1; i < Math.min(idx + 6, lines.length); i++) {
+    const l = lines[i].trim();
+    if (!l) break;
+    if (l.startsWith("##") || l.startsWith("#")) break;
+    const m = l.match(/^[-・•*]\s*(.+)$/);
+    if (m) candidates.push(m[1].trim());
+    else if (i === idx + 1 && !l.startsWith("##")) candidates.push(l);
+  }
+  return candidates.filter(Boolean).slice(0, 3);
+}
+
+// =============================================================
+// v16: やりたいことリスト(Wish)タブ
+// =============================================================
+
+// Wish Project を取得(必ず1つ存在することは normalizeState で保証済み)
+function getWishProject() {
+  return state.projects.find((p) => p.kind === "wish" && !p.deleted);
+}
+
+// ある Wish (Task) のサブタスク(全階層)を再帰的に取得
+function getSubtasksOf(taskId) {
+  const direct = state.tasks.filter((t) => !t.deleted && t.parentTaskId === taskId);
+  let all = [...direct];
+  for (const child of direct) {
+    all = all.concat(getSubtasksOf(child.id));
+  }
+  return all;
+}
+
+// Wish の進捗(完了サブタスク数 / 総サブタスク数)
+function wishProgress(wishTaskId) {
+  const subs = getSubtasksOf(wishTaskId);
+  if (subs.length === 0) return { done: 0, total: 0, percent: 0 };
+  const done = subs.filter((t) => t.status === "completed").length;
+  return { done, total: subs.length, percent: Math.round((done / subs.length) * 100) };
+}
+
+// Wish の「次の一歩」= 未完了の最初のサブタスク
+function nextStepOf(wishTaskId) {
+  const subs = getSubtasksOf(wishTaskId).filter((t) => t.status !== "completed");
+  if (subs.length === 0) return null;
+  // dueDate がある順 → createdAt 順
+  subs.sort((a, b) => {
+    if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+    if (a.dueDate) return -1;
+    if (b.dueDate) return 1;
+    return (a.createdAt || "").localeCompare(b.createdAt || "");
   });
+  return subs[0];
+}
+
+// Wish の最終更新日(本体 or サブタスクの最も新しい updatedAt)
+function wishLastActivity(wishTaskId) {
+  const wish = state.tasks.find((t) => t.id === wishTaskId);
+  if (!wish) return "";
+  const subs = getSubtasksOf(wishTaskId);
+  const times = [wish.updatedAt || "", ...subs.map((t) => t.updatedAt || "")].filter(Boolean);
+  return times.sort().pop() || "";
+}
+
+// 60 日以上動いていないか
+function isWishStagnant(wishTaskId) {
+  const last = wishLastActivity(wishTaskId);
+  if (!last) return false;
+  const lastMs = new Date(last).getTime();
+  return Date.now() - lastMs > 60 * 24 * 60 * 60 * 1000;
+}
+
+// 時期グループ判定: targetYear と現在年から「~Nまで(あと M 年)」のラベル
+function wishGroupKey(wish) {
+  if (wish.realized) return "realized";
+  if (!wish.targetYear) return "someday";
+  return `by-${wish.targetYear}`;
+}
+
+function wishGroupLabel(key) {
+  if (key === "realized") return "✓ 実現済み";
+  if (key === "someday") return "いつか";
+  const year = Number(key.replace("by-", ""));
+  const now = new Date().getFullYear();
+  const diff = year - now;
+  if (diff <= 0) return `~${year} (今年・期限到来)`;
+  return `~${year} (あと ${diff} 年)`;
+}
+
+// 領域の色を取得
+function lifeAreaColor(name) {
+  const area = (state.settings.lifeAreas || []).find((a) => a.name === name);
+  return area?.color || "#8E8E93";
+}
+
+// メインレンダリング
+function renderWish() {
+  const wishProject = getWishProject();
+  if (!wishProject) {
+    return `
+      ${renderHeader("やりたいことリスト", "Wish")}
+      <section class="panel">Wish Project が存在しません。リロードしてください。</section>
+    `;
+  }
+
+  // フィルタ状態
+  const filter = state.wishFilter || { area: "", showRealized: false };
+  const wishes = state.tasks
+    .filter((t) => !t.deleted && t.projectId === wishProject.id && !t.parentTaskId)
+    .filter((t) => filter.area ? t.lifeArea === filter.area : true)
+    .filter((t) => filter.showRealized ? true : !t.realized);
+
+  // 実現率(全 Wish 中)
+  const allWishes = state.tasks.filter((t) => !t.deleted && t.projectId === wishProject.id && !t.parentTaskId);
+  const realizedCount = allWishes.filter((t) => t.realized).length;
+  const overallRate = allWishes.length === 0 ? 0 : Math.round((realizedCount / allWishes.length) * 100);
+
+  // 領域フィルタオプション
+  const lifeAreas = state.settings.lifeAreas || [];
+
+  // 時期グループでまとめる
+  const groups = {};
+  for (const w of wishes) {
+    const key = wishGroupKey(w);
+    groups[key] ||= [];
+    groups[key].push(w);
+  }
+  // グループ順: 今年→未来→いつか→実現済み
+  const groupOrder = Object.keys(groups).sort((a, b) => {
+    const order = (k) => {
+      if (k === "realized") return 9999;
+      if (k === "someday") return 9998;
+      return Number(k.replace("by-", "")) || 0;
+    };
+    return order(a) - order(b);
+  });
+
+  return `
+    ${renderHeader("やりたいことリスト", "Wish")}
+    <section class="panel" style="margin-bottom:12px">
+      <div class="row" style="align-items:center; gap:8px; flex-wrap:wrap">
+        <strong>実現率</strong>
+        <div style="font-size:20px; font-weight:700; color:var(--accent)">${realizedCount} / ${allWishes.length}</div>
+        <div class="muted">(${overallRate}%)</div>
+        <div class="progress" style="flex:1; min-width:120px"><span style="width:${overallRate}%; background:var(--accent)"></span></div>
+      </div>
+    </section>
+
+    <section class="form-strip">
+      <input id="wishTitle" class="input" placeholder="やりたいこと(壮大でOK)">
+      <button class="btn primary" data-action="add-wish">追加</button>
+    </section>
+
+    <section class="form-strip" style="margin-top:8px">
+      <select id="wishFilterArea" class="select" data-action="wish-filter-area">
+        <option value="">全領域</option>
+        ${lifeAreas.map((a) => `<option value="${escapeHTML(a.name)}" ${filter.area === a.name ? "selected" : ""}>${escapeHTML(a.name)}</option>`).join("")}
+      </select>
+      <label class="row" style="gap:6px; align-items:center; padding:0 8px">
+        <input type="checkbox" data-action="wish-toggle-realized" ${filter.showRealized ? "checked" : ""}>
+        <span class="muted" style="font-size:12px">実現済みも表示</span>
+      </label>
+    </section>
+
+    ${groupOrder.length === 0
+      ? `<section class="panel" style="margin-top:12px; text-align:center; padding:32px"><div class="muted">${filter.area ? `「${filter.area}」のやりたいことはまだありません` : "やりたいことを追加してみましょう(壮大なものでもOK)"}</div></section>`
+      : groupOrder.map((key) => `
+        <section class="section" style="margin-top:14px">
+          <div class="row" style="margin-bottom:8px">
+            <h3>${wishGroupLabel(key)}</h3>
+            <div class="muted">${groups[key].length} 件</div>
+          </div>
+          <div class="grid">
+            ${groups[key].map(renderWishCard).join("")}
+          </div>
+        </section>
+      `).join("")}
+  `;
+}
+
+// Wish カード(1個)
+function renderWishCard(wish) {
+  const progress = wishProgress(wish.id);
+  const nextStep = nextStepOf(wish.id);
+  const stagnant = isWishStagnant(wish.id);
+  const areaColor = lifeAreaColor(wish.lifeArea);
+  return `
+    <div class="panel wish-card ${wish.realized ? "is-realized" : ""}" style="border-left:4px solid ${areaColor}">
+      <div class="row" style="align-items:center; gap:8px">
+        <div style="flex:1; min-width:0">
+          <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap">
+            ${wish.realized ? "<span style=\"color:var(--green);font-size:14px\">✓</span>" : ""}
+            ${stagnant ? "<span title=\"60日以上動いていません\">🐢</span>" : ""}
+            <strong style="${wish.realized ? "text-decoration:line-through; opacity:0.6" : ""}">${escapeHTML(wish.title)}</strong>
+            ${wish.lifeArea ? `<span class="chip" style="background:${areaColor}22; color:${areaColor}; border:1px solid ${areaColor}55">${escapeHTML(wish.lifeArea)}</span>` : ""}
+          </div>
+          ${wish.motivation ? `<div class="muted" style="font-size:11px; margin-top:4px; font-style:italic">"${escapeHTML(wish.motivation)}"</div>` : ""}
+        </div>
+        <button class="btn ghost" data-action="open-wish" data-id="${wish.id}">${state.wishOpenId === wish.id ? "閉じる" : "開く"}</button>
+      </div>
+
+      <div class="row" style="align-items:center; gap:8px; margin-top:8px">
+        <div class="muted" style="font-size:12px; white-space:nowrap">${progress.done} / ${progress.total}</div>
+        <div class="progress" style="flex:1"><span style="width:${progress.percent}%"></span></div>
+        ${nextStep
+          ? `<div class="muted" style="font-size:11px; max-width:40%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" title="${escapeHTML(nextStep.title)}">次: ${escapeHTML(nextStep.title)}</div>`
+          : (wish.realized ? "" : "<div class=\"muted\" style=\"font-size:11px; color:var(--orange)\">↳ サブタスクを書く</div>")}
+      </div>
+
+      ${state.wishOpenId === wish.id ? renderWishDetail(wish) : ""}
+    </div>
+  `;
+}
+
+// Wish 詳細展開(サブタスク・編集)
+function renderWishDetail(wish) {
+  const subtasks = state.tasks.filter((t) => !t.deleted && t.parentTaskId === wish.id);
+  // dueDate あれば優先、なければ createdAt 順
+  subtasks.sort((a, b) => {
+    if (a.status === "completed" && b.status !== "completed") return 1;
+    if (a.status !== "completed" && b.status === "completed") return -1;
+    if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+    return (a.createdAt || "").localeCompare(b.createdAt || "");
+  });
+  const lifeAreas = state.settings.lifeAreas || [];
+  const currentYear = new Date().getFullYear();
+  const yearOptions = [
+    `<option value="" ${!wish.targetYear ? "selected" : ""}>いつか</option>`,
+    ...[0, 1, 2, 3, 5, 7, 10, 13, 20, 30].map((d) => {
+      const y = currentYear + d;
+      return `<option value="${y}" ${wish.targetYear === y ? "selected" : ""}>~${y} (${d === 0 ? "今年" : `あと${d}年`})</option>`;
+    })
+  ].join("");
+
+  return `
+    <div class="wish-detail" style="margin-top:12px; padding-top:12px; border-top:1px solid var(--line)">
+      <div class="form-strip" style="margin-bottom:10px">
+        <select class="select" data-action="wish-set-year" data-id="${wish.id}" style="flex:1">${yearOptions}</select>
+        <select class="select" data-action="wish-set-area" data-id="${wish.id}" style="flex:1">
+          <option value="">領域未設定</option>
+          ${lifeAreas.map((a) => `<option value="${escapeHTML(a.name)}" ${wish.lifeArea === a.name ? "selected" : ""}>${escapeHTML(a.name)}</option>`).join("")}
+        </select>
+      </div>
+
+      <div style="margin-bottom:10px">
+        <div class="muted" style="font-size:11px; margin-bottom:4px">なぜやりたい(モチベーションの源)</div>
+        <textarea class="textarea" data-action="wish-set-motivation" data-id="${wish.id}" rows="2" placeholder="子が小さいうちに3世代で旅したい…">${escapeHTML(wish.motivation || "")}</textarea>
+      </div>
+
+      <div class="row" style="margin-bottom:8px; align-items:center">
+        <strong>サブタスク</strong>
+        <button class="btn ghost" data-action="add-wish-subtask" data-id="${wish.id}">+ 追加</button>
+      </div>
+      <div class="grid">
+        ${subtasks.length === 0
+          ? `<div class="muted" style="padding:8px; font-size:12px">最初の一歩を1〜3個書いてみましょう。完璧でなくて大丈夫。</div>`
+          : subtasks.map((sub) => renderWishSubtask(sub)).join("")}
+      </div>
+
+      <div class="row" style="margin-top:12px; gap:8px; flex-wrap:wrap">
+        ${wish.realized
+          ? `<button class="btn ghost" data-action="wish-unrealize" data-id="${wish.id}">↩ 未実現に戻す</button>`
+          : `<button class="btn primary" data-action="wish-realize" data-id="${wish.id}">🎉 実現済みにする</button>`}
+        <button class="btn danger ghost" data-action="delete-wish" data-id="${wish.id}">削除</button>
+      </div>
+    </div>
+  `;
+}
+
+// サブタスク1行
+function renderWishSubtask(sub) {
+  const done = sub.status === "completed";
+  return `
+    <div class="row" style="gap:8px; align-items:center; padding:6px 8px; border-radius:8px; background:var(--panel-soft)">
+      <input type="checkbox" data-action="toggle-wish-subtask" data-id="${sub.id}" ${done ? "checked" : ""}>
+      <input type="text" class="input" value="${escapeHTML(sub.title)}" data-action="wish-subtask-title" data-id="${sub.id}" style="flex:1; ${done ? "text-decoration:line-through; opacity:0.6" : ""}">
+      ${done
+        ? ""
+        : `<button class="btn ghost" data-action="wish-subtask-to-tasks" data-id="${sub.id}" title="今日のタスクシュートに登録">📋 今日やる</button>`}
+      <button class="btn danger ghost" data-action="delete-task" data-id="${sub.id}" title="削除">✕</button>
+    </div>
+  `;
+}
+
+// =============================================================
+// v16: Wish アクション
+// =============================================================
+
+function addWish() {
+  const titleEl = document.querySelector("#wishTitle");
+  const title = titleEl?.value.trim();
+  if (!title) return showToast("やりたいことを入力してください");
+  const wishProject = getWishProject();
+  if (!wishProject) return showToast("Wish Project が見つかりません");
+  const task = makeTask({ projectId: wishProject.id, title });
+  state.tasks.push(task);
+  state.wishOpenId = task.id;  // 追加後すぐに開く
+  if (titleEl) titleEl.value = "";
+  saveAndRender("やりたいことを追加しました(サブタスクを書いて一歩を)");
+}
+
+function toggleWishOpen(id) {
+  state.wishOpenId = (state.wishOpenId === id) ? "" : id;
+  render();
+}
+
+function addWishSubtask(parentTaskId) {
+  const title = window.prompt("サブタスク(次の一歩)を入力してください") || "";
+  if (!title.trim()) return;
+  const parent = state.tasks.find((t) => t.id === parentTaskId);
+  if (!parent) return;
+  const sub = makeTask({ projectId: parent.projectId, parentTaskId, title: title.trim() });
+  state.tasks.push(sub);
+  saveAndRender("サブタスクを追加しました");
+}
+
+function toggleWishSubtask(id) {
+  state.tasks = state.tasks.map((t) => t.id === id
+    ? {
+        ...t,
+        status: t.status === "completed" ? "todo" : "completed",
+        updatedAt: nowDateTime()
+      }
+    : t);
+  saveAndRender("");
+}
+
+// Wish のサブタスクを今日のタスクシュート(Block)に登録
+function wishSubtaskToTasks(taskId) {
+  const task = state.tasks.find((t) => t.id === taskId);
+  if (!task) return showToast("タスクが見つかりません");
+  // 既に今日の Block 化されていないか
+  const exists = state.blocks.find((b) => !b.deleted && b.taskId === taskId && b.date === state.selectedDate);
+  if (exists) return showToast("既に今日のタスクシュートにあります");
+  // 新規 Block を作成。expectedCharge: 4(やりたいこと=充電源)を推奨値として
+  const block = makeBlock({
+    date: state.selectedDate,
+    title: task.title,
+    category: task.category || "回復",
+    taskId: task.id,
+    expectedCharge: 4,
+    expectedDischarge: 1
+  });
+  state.blocks.push(block);
+  // Task の status を "doing" に
+  state.tasks = state.tasks.map((t) => t.id === taskId ? { ...t, status: "doing", updatedAt: nowDateTime() } : t);
+  saveAndRender("今日のタスクシュートに登録しました");
+}
+
+function realizeWish(id) {
+  if (!window.confirm("このやりたいことを「実現済み」にしますか?")) return;
+  const today = todayISO();
+  state.tasks = state.tasks.map((t) => t.id === id
+    ? { ...t, realized: true, realizedDate: today, status: "completed", updatedAt: nowDateTime() }
+    : t);
+  saveAndRender("🎉 おめでとうございます!実現済みにしました");
+}
+
+function unrealizeWish(id) {
+  state.tasks = state.tasks.map((t) => t.id === id
+    ? { ...t, realized: false, realizedDate: "", status: "todo", updatedAt: nowDateTime() }
+    : t);
+  saveAndRender("未実現に戻しました");
+}
+
+function deleteWish(id) {
+  if (!window.confirm("このやりたいこと(およびサブタスク)を削除しますか?")) return;
+  // 本体 + 子孫サブタスクをすべて deleted フラグ
+  const allIds = new Set([id]);
+  // 子孫を再帰的に集める
+  const collect = (parentId) => {
+    state.tasks.forEach((t) => {
+      if (!t.deleted && t.parentTaskId === parentId) {
+        allIds.add(t.id);
+        collect(t.id);
+      }
+    });
+  };
+  collect(id);
+  state.tasks = state.tasks.map((t) => allIds.has(t.id) ? { ...t, deleted: true, updatedAt: nowDateTime() } : t);
+  if (state.wishOpenId === id) state.wishOpenId = "";
+  saveAndRender("削除しました");
+}
+
+// 汎用: Task のフィールド更新(saveState のみ、再描画なし)
+function updateTaskField(id, field, value) {
+  state.tasks = state.tasks.map((t) => t.id === id
+    ? { ...t, [field]: value, updatedAt: nowDateTime() }
+    : t);
+  saveState();
+}
+
+// =============================================================
+// v17: Avoid List(やらないこと)タブ
+// =============================================================
+
+function renderAvoid() {
+  const items = state.settings.avoidList || [];
+  return `
+    ${renderHeader("時間とエネルギーを守る", "やらないこと")}
+    <section class="panel" style="margin-bottom:12px">
+      <div class="muted" style="font-size:13px; line-height:1.6">
+        やりたいことを増やす前に、<strong>やらないこと</strong>を決めるほうが効きます。<br>
+        ここに書いたものは「自分との約束」。SNSのだらだら閲覧、夜の暴飲暴食、断れない誘いなど。
+      </div>
+    </section>
+
+    <section class="form-strip">
+      <input id="avoidTitle" class="input" placeholder="やらないことを 1 行で(例: 夜のスマホ、断れない誘い)">
+      <button class="btn primary" data-action="add-avoid">追加</button>
+    </section>
+
+    <section class="section grid" style="margin-top:14px">
+      ${items.length === 0
+        ? `<div class="panel muted" style="padding:24px; text-align:center; font-size:13px">
+            まだ何も書かれていません。<br>
+            「これに時間を使うのを今日からやめる」を 1〜3 個書いてみましょう。
+          </div>`
+        : items.map((item, idx) => `
+          <div class="panel" style="display:flex; align-items:center; gap:12px; padding:10px 14px">
+            <span style="color:var(--coral, #FF3B30); font-size:18px; font-weight:700">✕</span>
+            <input type="text" class="input" value="${escapeHTML(item.text)}" data-avoid-id="${item.id}" data-avoid-field="text" style="flex:1; border:none; background:transparent">
+            <span class="muted" style="font-size:11px; white-space:nowrap">${item.createdAt ? item.createdAt.slice(0, 10) : ""}</span>
+            <button class="btn danger ghost" data-action="delete-avoid" data-id="${item.id}" title="削除">✕</button>
+          </div>
+        `).join("")}
+    </section>
+
+    ${items.length > 0 ? `
+      <section class="panel muted" style="margin-top:14px; font-size:11px; line-height:1.6; padding:12px">
+        💡 ヒント:週に1回見直して、自分との約束を守れているか確認しましょう。<br>
+        破ったら自分を責めるのではなく「なぜ破ったか」を観察するのが続けるコツ。
+      </section>
+    ` : ""}
+  `;
+}
+
+function addAvoid() {
+  const input = document.querySelector("#avoidTitle");
+  const text = input?.value.trim();
+  if (!text) return showToast("やらないことを入力してください");
+  const item = {
+    id: crypto.randomUUID(),
+    text,
+    createdAt: nowDateTime()
+  };
+  state.settings.avoidList = [...(state.settings.avoidList || []), item];
+  if (input) input.value = "";
+  saveAndRender("やらないことを追加しました");
+}
+
+function deleteAvoid(id) {
+  state.settings.avoidList = (state.settings.avoidList || []).filter((it) => it.id !== id);
+  saveAndRender("削除しました");
+}
+
+function updateAvoidText(id, text) {
+  state.settings.avoidList = (state.settings.avoidList || []).map((it) =>
+    it.id === id ? { ...it, text, updatedAt: nowDateTime() } : it
+  );
+  saveState();
+}
+
+// =============================================================
+
+function renderWBS() {
+  // v16: Wish Project は WBS から除外(専用「やりたい」タブで表示)
+  const activeProjects = state.projects.filter((project) => !project.deleted && project.kind !== "wish");
+  const sorted = [...activeProjects].sort((a, b) => a.title.localeCompare(b.title, "ja"));
 
   return `
     ${renderHeader("ビジョンを実行へ落とす", "WBS")}
     <section class="form-strip">
       <input id="projectTitle" class="input" placeholder="Project名">
-      <select id="projectKind" class="select">
-        <option value="normal">通常Project</option>
-        <option value="wish">Wish Project</option>
-      </select>
       <button class="btn primary" data-action="add-project">Project追加</button>
     </section>
 
@@ -846,7 +1447,7 @@ function renderTasks() {
     </section>
 
     <section class="section grid">
-      ${blocksForDate(state.selectedDate).map(renderBlockItem).join("") || emptyPanel("この日のBlockはまだありません")}
+      ${blocksForDate(state.selectedDate).filter((b) => b.source !== "timeline").map(renderBlockItem).join("") || emptyPanel("この日のBlockはまだありません(タイムラインで追加したものは時間タブに表示)")}
     </section>
 
     <section class="section">
@@ -887,11 +1488,18 @@ function renderBlockItem(block) {
   const end = block.plannedEndAt ? timeFromDateTime(block.plannedEndAt) : "";
   const task = block.taskId ? state.tasks.find((item) => item.id === block.taskId) : null;
   const catColor = block.category ? getCategoryColor(block.category) : null;
+  // v17: MIT(今日の主役)
+  const isMIT = block.isMIT === true;
+  // MIT なら金色の左ボーダーを優先
+  const leftBorder = isMIT
+    ? `border-left:4px solid var(--gold, #FFD60A); background:linear-gradient(90deg, rgba(255,214,10,0.06), transparent 30%)`
+    : (catColor ? `border-left:3px solid ${catColor}` : "");
   return `
-    <div class="item block-row" ${catColor ? `style="border-left:3px solid ${catColor}"` : ""}>
+    <div class="item block-row ${isMIT ? "is-mit" : ""}" ${leftBorder ? `style="${leftBorder}"` : ""}>
       <button class="checkbox-button ${block.completed ? "done" : ""}" data-action="toggle-block" data-id="${block.id}">✓</button>
       <div class="stack">
         <div class="title-line">
+          ${isMIT ? `<span class="mit-star" title="今日の主役" style="color:#F5A623; font-weight:700">★</span>` : ""}
           <strong>${escapeHTML(block.title)}</strong>
           <span class="badge ${block.completed ? "green" : "blue"}">${start}${end ? `-${end}` : ""}</span>
           ${task ? `<span class="badge">${escapeHTML(projectName(task.projectId))}</span>` : `<span class="badge orange">単発</span>`}
@@ -911,6 +1519,7 @@ function renderBlockItem(block) {
         </div>
       </div>
       <div class="row">
+        <button class="btn ${isMIT ? "" : "ghost"}" data-action="toggle-mit" data-id="${block.id}" title="${isMIT ? "今日の主役から外す" : "今日の主役にする(最大3個)"}" style="${isMIT ? "color:#F5A623; font-weight:700" : ""}">${isMIT ? "★" : "☆"}</button>
         <button class="btn" data-action="now-start" data-id="${block.id}">開始</button>
         <button class="btn" data-action="now-end" data-id="${block.id}">終了</button>
         <button class="btn orange" data-action="start-pomodoro" data-block-id="${block.id}">25分</button>
@@ -1028,29 +1637,17 @@ function assignBlocksToLanes(blocks, mode, maxLanes) {
   return result;
 }
 
-// v10/v13: 同じレーン内で物理位置(px)が重ならないように top を調整する
-// v13: 同じ開始時刻のBlockは強制的に同じ top に固定(視覚的に揃える)
+// v15: 開始時刻 = top を厳守(レーンによる補正・連続重なりの縦ずらしを撤廃)
+// 同じ開始時刻なら必ず同じ高さに表示される
+// 異なる開始時刻なら、その時刻通りの top に配置される(階段表示=時刻違いの可視化)
 function adjustLaneTopPositions(assignments, rowHeight, startHour) {
-  // v13: 開始時刻ごとの「最終確定 top」をキャッシュ(同開始時刻は同じ top)
-  const topByStart = new Map();
-  const laneBottoms = new Array(20).fill(-Infinity);  // 物理位置の最後の下端(レーンごと)
   return assignments.map((a) => {
-    const naturalTop = ((a.start - startHour * 60) / 60) * rowHeight;
+    const top = ((a.start - startHour * 60) / 60) * rowHeight;
     const durationMin = a.end - a.start;
     const isShort = durationMin < 5;
     const minHeight = isShort ? 14 : 38;
     const height = Math.max(minHeight, (durationMin / 60) * rowHeight);
-    // 同じ開始時刻が既出なら、その top を再利用(同じ高さに表示)
-    let adjustedTop;
-    if (topByStart.has(a.start)) {
-      adjustedTop = topByStart.get(a.start);
-    } else {
-      // 同じレーン内の前のBlockと物理重なりがあれば下にずらす(短時間連続対策)
-      adjustedTop = Math.max(naturalTop, (laneBottoms[a.lane] === -Infinity ? 0 : laneBottoms[a.lane]) + 1);
-      topByStart.set(a.start, adjustedTop);
-    }
-    laneBottoms[a.lane] = adjustedTop + height;
-    return { ...a, top: adjustedTop, height, isShort };
+    return { ...a, top, height, isShort };
   });
 }
 
@@ -1211,10 +1808,36 @@ function renderPomodoroFullscreen(running, remaining, blockOptions, pomoTab) {
 }
 
 function renderManualPomodoro(running, remaining, blockOptions) {
-  // v13セーフガード: running=true でも endsAt が空 / 過去なら未起動扱い(再開時の50:00保証)
-  if (running && (!state.pomodoro.endsAt || new Date(state.pomodoro.endsAt).getTime() <= Date.now())) {
-    running = false;
-    remaining = "50:00";
+  // v14セーフガード強化: running フラグが残っていても、以下のいずれかなら未起動扱いに矯正:
+  //   1. endsAt が空
+  //   2. endsAt が過去(セッション切れ)
+  //   3. startedAt から60分以上経過(休憩込みでも30分なので、60分超は異常)
+  //   4. startedAt が未来(時計巻き戻し)
+  if (running) {
+    const endsAtMs = state.pomodoro.endsAt ? new Date(state.pomodoro.endsAt).getTime() : 0;
+    const startedAtMs = state.pomodoro.startedAt ? new Date(state.pomodoro.startedAt).getTime() : 0;
+    const now = Date.now();
+    const isInvalid =
+      !endsAtMs ||
+      endsAtMs <= now ||
+      (startedAtMs && (now - startedAtMs) > 60 * 60 * 1000) ||
+      (startedAtMs && startedAtMs > now + 60 * 1000);
+    if (isInvalid) {
+      // 自動修復: state も書き戻して 50:00 を保証
+      state.pomodoro = {
+        tab: state.pomodoro?.tab || "manual",
+        passive: state.pomodoro?.passive || defaultPassivePomodoro(),
+        fullscreen: state.pomodoro?.fullscreen || false,
+        running: false,
+        blockId: "",
+        startedAt: "",
+        endsAt: "",
+        mode: "focus"
+      };
+      saveState();
+      running = false;
+      remaining = "50:00";
+    }
   }
   if (running) {
     const mode = state.pomodoro.mode || "focus";
@@ -1456,6 +2079,17 @@ function renderJournal() {
             ${(state.settings.github?.token && state.settings.github?.owner) ? `<button class="btn" data-action="push-report">📤 GitHubに日報push</button>` : ""}
           </div>
         </div>
+        <details class="journal-prompts" style="margin-bottom:10px; padding:8px 12px; background:var(--panel-soft); border-radius:8px">
+          <summary style="cursor:pointer; font-size:13px; color:var(--muted); font-weight:600">💡 思考のヒント(クリックで開閉)</summary>
+          <div style="margin-top:10px; display:grid; gap:10px; font-size:12px">
+            ${Object.entries(JOURNAL_PROMPTS).map(([section, prompt]) => `
+              <div>
+                <div style="font-weight:600; color:var(--text); margin-bottom:2px">${section}</div>
+                <div class="muted" style="white-space:pre-line; line-height:1.5">${escapeHTML(prompt)}</div>
+              </div>
+            `).join("")}
+          </div>
+        </details>
         <textarea class="textarea" data-journal-date="${date}">${escapeHTML(state.journals[date])}</textarea>
       </div>
       <div class="panel">
@@ -1761,7 +2395,7 @@ function addTask() {
   saveAndRender("Taskを追加しました");
 }
 
-function makeTask({ projectId = "", parentTaskId = "", title = "", category = "", dueDate = "" }) {
+function makeTask({ projectId = "", parentTaskId = "", title = "", category = "", dueDate = "", targetYear = null, lifeArea = "", motivation = "" }) {
   return {
     id: crypto.randomUUID(),
     projectId,
@@ -1771,6 +2405,15 @@ function makeTask({ projectId = "", parentTaskId = "", title = "", category = ""
     status: "todo",
     dueDate: dueDate || state.selectedDate,
     description: "",
+    // v16: やりたいことリスト用フィールド
+    targetYear,         // いつまでに(数字の年、null なら「いつか」)
+    lifeArea,           // 人生領域(健康/仕事/家族/趣味/旅/学び/経験/持物)
+    motivation,         // なぜやりたいか(自由記述)
+    realized: false,    // 実現済みか
+    realizedDate: "",   // 実現日(YYYY-MM-DD)
+    // v17: Habit Stacking
+    trigger: "",        // 何の後にやる?(例: "朝のコーヒー")
+    celebrate: "",      // 完了時の祝福メッセージ(例: "Yes! 一歩進んだ!")
     createdAt: nowDateTime(),
     updatedAt: nowDateTime(),
     deleted: false
@@ -1857,15 +2500,77 @@ function addBlock() {
 }
 
 function toggleBlock(id) {
+  let justCompleted = false;
+  let completedBlock = null;
   state.blocks = state.blocks.map((block) => {
     if (block.id !== id) return block;
     const completed = !block.completed;
+    if (completed) {
+      justCompleted = true;
+      completedBlock = block;
+    }
     if (completed && block.taskId) {
       state.tasks = state.tasks.map((task) => task.id === block.taskId && task.status === "todo" ? { ...task, status: "doing", updatedAt: nowDateTime() } : task);
     }
     return { ...block, completed, actualEndAt: completed && !block.actualEndAt ? nowDateTime() : block.actualEndAt, updatedAt: nowDateTime() };
   });
   saveAndRender("Blockを更新しました");
+  // v17: 完了時の演出(花火 + celebrate メッセージ)
+  if (justCompleted && completedBlock) {
+    // 紐づく Task に celebrate メッセージがあれば取得
+    const task = completedBlock.taskId ? state.tasks.find((t) => t.id === completedBlock.taskId) : null;
+    const celebrateMsg = (task && task.celebrate) ? task.celebrate : (completedBlock.isMIT ? "Yes! 主役を1つやり切った!" : "");
+    triggerCompletionEffect(celebrateMsg, completedBlock.isMIT);
+  }
+}
+
+// v17: MIT(今日の主役)の切り替え。1日最大3個
+function toggleMIT(blockId) {
+  const block = state.blocks.find((b) => b.id === blockId);
+  if (!block) return;
+  if (!block.isMIT) {
+    // MIT に追加する場合、同日内の MIT 件数を確認
+    const sameDayMITs = state.blocks.filter((b) => !b.deleted && b.date === block.date && b.isMIT);
+    if (sameDayMITs.length >= 3) {
+      return showToast("今日の主役は最大3個まで。先に他を外してください");
+    }
+  }
+  state.blocks = state.blocks.map((b) => b.id === blockId
+    ? { ...b, isMIT: !b.isMIT, updatedAt: nowDateTime() }
+    : b);
+  saveAndRender(block.isMIT ? "今日の主役から外しました" : "✦ 今日の主役に設定しました");
+}
+
+// v17: 完了時の演出(花火 + celebrate メッセージ)
+function triggerCompletionEffect(message, isMIT) {
+  // DOM に演出要素を挿入(画面中央付近)
+  const container = document.createElement("div");
+  container.className = "completion-effect";
+  // 粒子(8〜14個、ランダムな角度)
+  const particleCount = isMIT ? 14 : 8;
+  for (let i = 0; i < particleCount; i++) {
+    const angle = (i / particleCount) * Math.PI * 2 + Math.random() * 0.5;
+    const distance = 60 + Math.random() * 60;
+    const tx = Math.cos(angle) * distance;
+    const ty = Math.sin(angle) * distance - 20;  // 少し上方向に
+    const particle = document.createElement("span");
+    particle.className = "ce-particle";
+    particle.textContent = isMIT ? "✦" : "✨";
+    particle.style.setProperty("--tx", `${tx}px`);
+    particle.style.setProperty("--ty", `${ty}px`);
+    particle.style.setProperty("--delay", `${i * 30}ms`);
+    container.appendChild(particle);
+  }
+  // celebrate メッセージ
+  if (message) {
+    const msgEl = document.createElement("div");
+    msgEl.className = "ce-message";
+    msgEl.textContent = message;
+    container.appendChild(msgEl);
+  }
+  document.body.appendChild(container);
+  // 1.5 秒後に自動削除
+  setTimeout(() => container.remove(), 1500);
 }
 
 function setBlockTime(id, field) {
@@ -1898,39 +2603,215 @@ function setMorningEnergy(value) {
 
 function generateReport() {
   ensureJournal(state.selectedDate);
-  const blocks = blocksForDate(state.selectedDate);
+  const date = state.selectedDate;
+  const blocks = blocksForDate(date);
   const completed = blocks.filter((block) => block.completed);
   const charge = blocks.reduce((sum, block) => sum + Number(block.charge || 0), 0);
   const discharge = blocks.reduce((sum, block) => sum + Number(block.discharge || 0), 0);
-  const morning = state.settings.morningEnergyLog[state.selectedDate] ?? 5;
+  const morning = state.settings.morningEnergyLog[date] ?? 5;
   const net = morning + charge - discharge;
-  const report = [
-    `# 日報 ${state.selectedDate} (${weekdayLabel(state.selectedDate)})`,
+
+  // v17: MIT(今日の主役)
+  const mitBlocks = blocks.filter((b) => b.isMIT);
+  const mitDone = mitBlocks.filter((b) => b.completed).length;
+
+  // v17: ポモドーロ完了数
+  const pomodoroCount = blocks.reduce((sum, b) => sum + Number(b.pomodoroCount || 0), 0);
+
+  // v17: 計画 vs 実行
+  const plannedMinutes = blocks.reduce((sum, b) => {
+    if (b.plannedStartAt && b.plannedEndAt) {
+      const s = minutesOf(b.plannedStartAt);
+      const e = minutesOf(b.plannedEndAt);
+      return sum + Math.max(0, e - s);
+    }
+    return sum;
+  }, 0);
+  const actualMinutes = blocks.filter((b) => b.completed).reduce((sum, b) => {
+    if (b.actualStartAt && b.actualEndAt) {
+      const s = minutesOf(b.actualStartAt);
+      const e = minutesOf(b.actualEndAt);
+      return sum + Math.max(0, e - s);
+    } else if (b.plannedStartAt && b.plannedEndAt) {
+      // 実績時刻が無い場合は予定で代替
+      const s = minutesOf(b.plannedStartAt);
+      const e = minutesOf(b.plannedEndAt);
+      return sum + Math.max(0, e - s);
+    }
+    return sum;
+  }, 0);
+  const blockCompletionRate = blocks.length === 0 ? 0 : Math.round((completed.length / blocks.length) * 100);
+  const timeCompletionRate = plannedMinutes === 0 ? 0 : Math.round((actualMinutes / plannedMinutes) * 100);
+  const fmtMinutes = (m) => `${Math.floor(m / 60)}h${m % 60 > 0 ? `${m % 60}m` : ""}`;
+
+  // v17: カテゴリ別時間配分(完了 Block のみ)
+  const catTime = {};
+  completed.forEach((b) => {
+    if (!b.actualStartAt || !b.actualEndAt) {
+      // 実績が無ければ予定時刻で代替
+      if (b.plannedStartAt && b.plannedEndAt) {
+        const dur = Math.max(0, minutesOf(b.plannedEndAt) - minutesOf(b.plannedStartAt));
+        const cat = b.category || "未分類";
+        catTime[cat] = (catTime[cat] || 0) + dur;
+      }
+      return;
+    }
+    const dur = Math.max(0, minutesOf(b.actualEndAt) - minutesOf(b.actualStartAt));
+    const cat = b.category || "未分類";
+    catTime[cat] = (catTime[cat] || 0) + dur;
+  });
+  const catTimeRows = Object.entries(catTime)
+    .sort((a, b) => b[1] - a[1])
+    .map(([cat, min]) => `- ${cat}: ${fmtMinutes(min)}`);
+
+  // v17: 12WY プロジェクトの今日進んだこと(完了 Block を Project ごとに集約)
+  const projectProgress = {};
+  completed.forEach((b) => {
+    if (!b.taskId) return;
+    const task = state.tasks.find((t) => t.id === b.taskId);
+    if (!task) return;
+    const project = state.projects.find((p) => p.id === task.projectId);
+    if (!project || project.kind === "wish") return;  // Wish は別セクション
+    if (!project.twelveWeekStartDate) return;  // 12WY プロジェクトのみ
+    projectProgress[project.title] = projectProgress[project.title] || [];
+    projectProgress[project.title].push(b.title);
+  });
+
+  // v17: 進んだ Wish(完了したサブタスクの親 Wish)
+  const wishProgress = {};
+  completed.forEach((b) => {
+    if (!b.taskId) return;
+    const task = state.tasks.find((t) => t.id === b.taskId);
+    if (!task || !task.parentTaskId) return;
+    const wish = state.tasks.find((t) => t.id === task.parentTaskId);
+    if (!wish) return;
+    const wishProject = state.projects.find((p) => p.id === wish.projectId);
+    if (!wishProject || wishProject.kind !== "wish") return;
+    wishProgress[wish.title] = wishProgress[wish.title] || [];
+    wishProgress[wish.title].push(b.title);
+  });
+
+  // v17: やり残し
+  const incomplete = blocks.filter((b) => !b.completed);
+
+  // v17: Block コメント抽出(comment があるもの)
+  const commentedBlocks = blocks.filter((b) => b.comment && b.comment.trim());
+
+  const lines = [
+    `# 日報 ${date} (${weekdayLabel(date)})`,
     "",
-    `> 今日はBlock ${completed.length}/${blocks.length}件完了、エネルギー終値 ${signed(net)}。`,
-    "",
-    "## 0. メタ情報",
-    `- 日付: ${state.selectedDate}`,
-    `- 生成日時: ${nowDateTime().replace("T", " ")}`,
-    "- データバージョン: Web MVP v1",
-    "",
-    "## 1. サマリー",
-    `| 指標 | 値 |`,
+    "## 1. サマリ",
+    "| 指標 | 値 |",
     "|---|---|",
-    `| 完了Block | ${completed.length} / ${blocks.length} |`,
-    `| 充電累計 | +${charge} |`,
-    `| 放電累計 | -${discharge} |`,
-    `| 朝の体調 | ${morning} |`,
-    `| 純エネルギー終値 | ${signed(net)} |`,
+    `| 朝の体調 | ${morning} / 10 |`,
+    `| 充電収支 | +${charge} / -${discharge} = ${signed(net - morning)} (起点${morning}→終値${net}) |`,
+    `| Block 実行 | ${completed.length} / ${blocks.length} (${blockCompletionRate}%) |`,
+    `| 時間実行 | ${fmtMinutes(actualMinutes)} / ${fmtMinutes(plannedMinutes)} (${timeCompletionRate}%) |`,
+    `| MIT 達成 | ${mitDone} / ${mitBlocks.length} |`,
+    `| ポモドーロ | ${pomodoroCount} 回 |`,
     "",
-    "## 2. タスク実行",
-    ...blocks.map((block) => `- [${block.completed ? "x" : " "}] ${block.title} | ${block.category || "カテゴリなし"} | 充電+${block.charge}/放電-${block.discharge}`),
-    "",
-    "## 3. ジャーナル",
-    state.journals[state.selectedDate] || ""
-  ].join("\n");
-  state.reports[state.selectedDate] = report;
-  saveAndRender("日報を生成しました");
+  ];
+
+  // MIT セクション
+  if (mitBlocks.length > 0) {
+    lines.push("## 2. 今日の主役 (MIT)");
+    mitBlocks.forEach((b) => {
+      lines.push(`- ${b.completed ? "✅" : "⬜"} ${b.title}`);
+    });
+    lines.push("");
+  }
+
+  // 12WY プロジェクト進捗
+  if (Object.keys(projectProgress).length > 0) {
+    lines.push("## 3. 12WY プロジェクトの進捗");
+    Object.entries(projectProgress).forEach(([projectName, items]) => {
+      lines.push(`### ${projectName}`);
+      items.forEach((t) => lines.push(`- ${t}`));
+    });
+    lines.push("");
+  }
+
+  // 進んだ Wish
+  if (Object.keys(wishProgress).length > 0) {
+    lines.push("## 4. 今日進んだ Wish");
+    Object.entries(wishProgress).forEach(([wishTitle, items]) => {
+      lines.push(`### ${wishTitle}`);
+      items.forEach((t) => lines.push(`- ${t}`));
+    });
+    lines.push("");
+  }
+
+  // 時間の使い方
+  lines.push("## 5. 時間の使い方");
+  if (catTimeRows.length > 0) {
+    lines.push("### カテゴリ別配分");
+    lines.push(...catTimeRows);
+    lines.push("");
+  }
+  lines.push("### 実行 Block(時刻順)");
+  lines.push("| 時刻 | 内容 | カテゴリ | 充電/放電 | コメント |");
+  lines.push("|---|---|---|---|---|");
+  const sortedBlocks = [...blocks].sort((a, b) => (a.plannedStartAt || "").localeCompare(b.plannedStartAt || ""));
+  sortedBlocks.forEach((b) => {
+    const time = b.plannedStartAt ? timeFromDateTime(b.plannedStartAt) : "—";
+    const status = b.completed ? "✅" : (b.isMIT ? "★" : "⬜");
+    const comment = (b.comment || "").replace(/\|/g, "\\|").replace(/\n/g, " ");
+    lines.push(`| ${time} | ${status} ${b.title} | ${b.category || "—"} | +${b.charge || 0}/-${b.discharge || 0} | ${comment} |`);
+  });
+  lines.push("");
+
+  // やり残し
+  if (incomplete.length > 0) {
+    lines.push("## 6. やり残し");
+    incomplete.forEach((b) => {
+      lines.push(`- ${b.isMIT ? "★ " : ""}${b.title}${b.category ? ` (${b.category})` : ""}`);
+    });
+    lines.push("");
+  }
+
+  // Block コメント抜粋
+  if (commentedBlocks.length > 0) {
+    lines.push("## 7. Block 内のコメント");
+    commentedBlocks.forEach((b) => {
+      lines.push(`### ${b.title}`);
+      lines.push(b.comment.trim());
+      lines.push("");
+    });
+  }
+
+  // ジャーナル
+  lines.push("## 8. ジャーナル");
+  lines.push(state.journals[date] || "(ジャーナル記載なし)");
+  lines.push("");
+
+  // 明日への接続
+  lines.push("## 9. 明日への接続");
+  lines.push("明日への一言:");
+  lines.push("");
+  lines.push("明日の MIT 候補:");
+  lines.push("- ");
+  lines.push("- ");
+  lines.push("- ");
+  lines.push("");
+
+  // AI フィードバック用プロンプト(コピペ用)
+  lines.push("---");
+  lines.push("");
+  lines.push("## 📋 AI へのコピペ用プロンプト");
+  lines.push("```");
+  lines.push("以下は今日の日報です。");
+  lines.push("");
+  lines.push("1. 客観事実から見える「良かった点・改善できる点」");
+  lines.push("2. パターンとして気をつけたいこと");
+  lines.push("3. 明日への具体的な提案(2〜3個)");
+  lines.push("");
+  lines.push("の観点で、簡潔にフィードバックをください。");
+  lines.push("(辛口でも構いません、ただし行動に繋がる具体性を重視)");
+  lines.push("```");
+
+  const report = lines.join("\n");
+  state.reports[date] = report;
+  saveAndRender("日報を生成しました(v17 仕様)");
   state.currentView = "reports";
   saveState();
   render();
@@ -2105,18 +2986,40 @@ function resetDemoData() {
 
 function startPomodoro(blockId) {
   if (!blockId) return showToast("Blockを選んでください");
-  // 他フィールド(tab, passive, fullscreen)を保持しつつ、タイマー関連だけ毎回リセット
+  // v14: state.pomodoro を完全再構築(spread を使わず、必要なフィールドだけ明示的に作成)
+  // これで以前のセッションの endsAt/startedAt/mode が確実にリセットされる
+  const tab = state.pomodoro?.tab || "manual";
+  const passive = state.pomodoro?.passive || defaultPassivePomodoro();
+  const fullscreen = state.pomodoro?.fullscreen || false;
+  const now = Date.now();
   state.pomodoro = {
-    ...state.pomodoro,
+    tab,
+    passive,
+    fullscreen,
     running: true,
     blockId,
-    startedAt: nowDateTime(),
-    endsAt: dateToLocalDateTime(new Date(Date.now() + 25 * 60 * 1000)),
+    startedAt: dateToLocalDateTime(new Date(now)),
+    endsAt: dateToLocalDateTime(new Date(now + 25 * 60 * 1000)),
     mode: "focus"
   };
   // v13: ポモドーロ開始時、Blockの実績開始時間を自動記録(既存値があれば維持)
   updateBlockField(blockId, "actualStartAt", blockById(blockId)?.actualStartAt || nowDateTime());
-  saveAndRender("ポモドーロを開始しました");
+  saveAndRender("ポモドーロを開始しました(50:00 から)");
+}
+
+// v14: ポモドーロセッションを強制完全リセット(他フィールド保持)
+// click ハンドラで start-pomodoro の前に呼んで、中断/完了/休憩後の再開で確実に 50:00 から始まることを保証
+function forceResetPomodoroSession() {
+  state.pomodoro = {
+    tab: state.pomodoro?.tab || "manual",
+    passive: state.pomodoro?.passive || defaultPassivePomodoro(),
+    fullscreen: state.pomodoro?.fullscreen || false,
+    running: false,
+    blockId: "",
+    startedAt: "",
+    endsAt: "",
+    mode: "focus"
+  };
 }
 
 function stopPomodoro() {
@@ -2127,9 +3030,11 @@ function stopPomodoro() {
       ? { ...block, actualStartAt: "", updatedAt: nowDateTime() }
       : block);
   }
-  // タイマー関連を明示的にクリア(再開時に確実に 50:00 から始まるように)
+  // v14: state.pomodoro を完全再構築(再開時に確実に 50:00 から)
   state.pomodoro = {
-    ...state.pomodoro,
+    tab: state.pomodoro?.tab || "manual",
+    passive: state.pomodoro?.passive || defaultPassivePomodoro(),
+    fullscreen: state.pomodoro?.fullscreen || false,
     running: false,
     blockId: "",
     startedAt: "",
@@ -2142,7 +3047,6 @@ function stopPomodoro() {
 function completePomodoro() {
   const blockId = state.pomodoro.blockId;
   if (blockId) {
-    // v13: 完了時、Blockの実績終了時間を自動記録 + pomodoroCount +1
     state.blocks = state.blocks.map((block) => block.id === blockId
       ? {
           ...block,
@@ -2152,9 +3056,11 @@ function completePomodoro() {
         }
       : block);
   }
-  // 完了時もタイマー関連を明示的にクリア
+  // v14: state.pomodoro を完全再構築
   state.pomodoro = {
-    ...state.pomodoro,
+    tab: state.pomodoro?.tab || "manual",
+    passive: state.pomodoro?.passive || defaultPassivePomodoro(),
+    fullscreen: state.pomodoro?.fullscreen || false,
     running: false,
     blockId: "",
     startedAt: "",
@@ -2168,18 +3074,20 @@ function completePomodoro() {
 function goBreakPomodoro() {
   const blockId = state.pomodoro.blockId;
   if (blockId) {
-    // 紐づく Block を完了扱いに(pomodoroCount +1、actualEndAt 記録)
     state.blocks = state.blocks.map((block) => block.id === blockId
       ? { ...block, pomodoroCount: Number(block.pomodoroCount || 0) + 1, actualEndAt: block.actualEndAt || nowDateTime(), updatedAt: nowDateTime() }
       : block);
   }
-  // mode を break に、endsAt を「今から5分後」に
+  // v14: 完全再構築 + 5分休憩開始
+  const now = Date.now();
   state.pomodoro = {
-    ...state.pomodoro,
+    tab: state.pomodoro?.tab || "manual",
+    passive: state.pomodoro?.passive || defaultPassivePomodoro(),
+    fullscreen: state.pomodoro?.fullscreen || false,
     running: true,
-    blockId: "",  // 休憩中は Block 紐づけなし
-    startedAt: nowDateTime(),
-    endsAt: dateToLocalDateTime(new Date(Date.now() + 5 * 60 * 1000)),
+    blockId: "",
+    startedAt: dateToLocalDateTime(new Date(now)),
+    endsAt: dateToLocalDateTime(new Date(now + 5 * 60 * 1000)),
     mode: "break"
   };
   saveAndRender("休憩を開始しました");
@@ -2187,8 +3095,11 @@ function goBreakPomodoro() {
 
 // v9: 「✓ 休憩終了」: break セッションを終わって未起動状態に
 function endBreakPomodoro() {
+  // v14: 完全再構築
   state.pomodoro = {
-    ...state.pomodoro,
+    tab: state.pomodoro?.tab || "manual",
+    passive: state.pomodoro?.passive || defaultPassivePomodoro(),
+    fullscreen: state.pomodoro?.fullscreen || false,
     running: false,
     blockId: "",
     startedAt: "",
@@ -2334,18 +3245,56 @@ function ensureJournal(date) {
   }
 }
 
+// v17: 統合版ジャーナルテンプレ(朝夜の分割を廃止、1ページに集約)
+// 思考プロンプトは画面表示のヒントとしてのみ機能(Markdown には含めない)
 function defaultJournal(date) {
-  return `# ${date}\n\n## 朝\n\n今日の方針:\n\n## 昼\n\n## 夕方\n\n## 夜\n\n`;
+  return [
+    `# ${date} のジャーナル`,
+    ``,
+    `## 🛏 睡眠`,
+    `就寝: __:__  /  起床: __:__`,
+    `質: ★★★☆☆`,
+    ``,
+    `## 🙏 感謝(3 つ)`,
+    `1. `,
+    `2. `,
+    `3. `,
+    ``,
+    `## ✨ 今日のハイライト`,
+    ``,
+    ``,
+    `## 💡 気付き・学び`,
+    ``,
+    ``,
+    `## 📝 自由記述`,
+    ``,
+    ``
+  ].join("\n");
 }
 
+// v17: 各セクションの思考プロンプト(画面表示用、Markdown 出力時は省く)
+const JOURNAL_PROMPTS = {
+  "🛏 睡眠": "ぐっすり眠れた?夢は覚えてる?",
+  "🙏 感謝(3 つ)": "当たり前すぎて忘れがちな何か。誰・何に対して?(例:朝のコーヒー、子の笑顔)",
+  "✨ 今日のハイライト": "今日いちばん心が動いた瞬間は? 嬉しい・面白い・誇らしい、どれでも。",
+  "💡 気付き・学び": "うまくいった/いかなかった理由は? 自分・他人・状況について、次に活かせること。",
+  "📝 自由記述": "・いまなに考えてる?\n・言葉にならない違和感を、まず雑に書き出す。コントロールできないことは手放してOK。\n・夢・思いつき・心配ごと・読書メモ・なんでも。"
+};
+
 function upsertMorningLine(markdown, line) {
+  // v17: 睡眠セクションがある新テンプレ、もしくは旧テンプレの両方に対応
+  // 朝の体調はホーム画面で記録するため、ここでは追記しない(将来的に削除可)
   if (markdown.includes("朝の体調:")) {
     return markdown.replace(/^朝の体調:.*$/m, line);
+  }
+  if (markdown.includes("## 🛏 睡眠")) {
+    // 新テンプレ: 睡眠セクションの後に体調行を追記しない(分離原則)
+    return markdown;
   }
   if (markdown.includes("## 朝")) {
     return markdown.replace("## 朝", `## 朝\n${line}`);
   }
-  return `## 朝\n${line}\n\n${markdown}`;
+  return `${line}\n\n${markdown}`;
 }
 
 function computeMetrics() {
@@ -2804,6 +3753,23 @@ function buildTaskModal(task) {
           <label class="field-label">説明 / メモ</label>
           <textarea class="textarea" data-modal-field="description" style="min-height:120px">${escapeHTML(task.description || "")}</textarea>
         </div>
+        <details class="field" style="padding:10px; background:var(--panel-soft); border-radius:8px">
+          <summary style="cursor:pointer; font-size:13px; font-weight:600; color:var(--muted)">🔗 Habit Stacking(任意 - ルーティン向け)</summary>
+          <div style="margin-top:10px; display:grid; gap:10px">
+            <div class="field" style="margin:0">
+              <label class="field-label">何の後にやる?(きっかけの習慣)</label>
+              <input class="input" data-modal-field="trigger" value="${escapeHTML(task.trigger || "")}" placeholder="例: 朝のコーヒー、歯磨きの後">
+            </div>
+            <div class="field" style="margin:0">
+              <label class="field-label">完了時の祝福メッセージ</label>
+              <input class="input" data-modal-field="celebrate" value="${escapeHTML(task.celebrate || "")}" placeholder="例: Yes! 一歩進んだ!">
+            </div>
+            <div class="muted" style="font-size:11px; line-height:1.6">
+              「<strong>何の後にやる?</strong>」を書くと、既存の習慣にぶら下げて新しい行動を定着させやすくなります(Atomic Habits / Habit Stacking)。<br>
+              「<strong>祝福メッセージ</strong>」は完了時に画面に表示されます(BJ Fogg / Tiny Habits)。
+            </div>
+          </div>
+        </details>
       </div>
       <div class="modal-footer">
         <button class="btn danger" data-action="modal-delete">削除</button>
@@ -2838,6 +3804,8 @@ function saveTaskFromModal(id, fields) {
       category: fields.category || "",
       dueDate: fields.dueDate || "",
       description: fields.description || "",
+      trigger: fields.trigger || "",
+      celebrate: fields.celebrate || "",
       updatedAt: nowDateTime()
     };
   });
@@ -3073,6 +4041,7 @@ function openTimelineNewBlock(startMinute) {
     pomodoroCount: 0,
     migratedTo: "",
     orderIndex: 0,
+    source: "timeline",  // v15: タイムライン由来。タスクシュート画面では非表示
     _isNew: true,  // モーダル表示時に繰り返し設定を表示するためのフラグ
     createdAt: nowDateTime(),
     updatedAt: nowDateTime(),
