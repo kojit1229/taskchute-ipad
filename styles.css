@@ -1523,3 +1523,120 @@ h3 {
     font-size: clamp(44px, 14vw, 80px) !important;
   }
 }
+
+/* === v16: やりたいことリスト(Wish) === */
+.wish-card {
+  transition: box-shadow 0.15s ease;
+}
+.wish-card:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.wish-card.is-realized {
+  opacity: 0.7;
+  background: var(--panel-soft);
+}
+.wish-detail .textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  resize: vertical;
+}
+.chip {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* === v17: 完了時の花火・きらめき演出 === */
+.completion-effect {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 10000;
+}
+
+.ce-particle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 22px;
+  opacity: 0;
+  transform: translate(0, 0);
+  color: #F5A623;
+  text-shadow: 0 0 8px rgba(245, 166, 35, 0.6);
+  animation: ce-burst 1.2s cubic-bezier(0.16, 0.84, 0.44, 1) forwards;
+  animation-delay: var(--delay, 0ms);
+}
+
+@keyframes ce-burst {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.3);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(calc(var(--tx) * 0.4), calc(var(--ty) * 0.4)) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--tx), var(--ty)) scale(0.8);
+  }
+}
+
+.ce-message {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -120%);
+  white-space: nowrap;
+  background: rgba(0, 0, 0, 0.75);
+  color: #FFE082;
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 700;
+  text-shadow: 0 0 6px rgba(245, 166, 35, 0.3);
+  animation: ce-msg 1.4s cubic-bezier(0.16, 0.84, 0.44, 1) forwards;
+}
+
+@keyframes ce-msg {
+  0% { opacity: 0; transform: translate(-50%, -100%) scale(0.5); }
+  20% { opacity: 1; transform: translate(-50%, -130%) scale(1.0); }
+  80% { opacity: 1; transform: translate(-50%, -135%) scale(1.0); }
+  100% { opacity: 0; transform: translate(-50%, -150%) scale(0.95); }
+}
+
+/* === v17: MIT 強調表示 === */
+.block-row.is-mit strong {
+  color: var(--text);
+}
+.mit-star {
+  margin-right: 4px;
+}
+
+/* === v17: Avoid List(やらないこと)タブ === */
+
+/* === v17: ジャーナルの思考プロンプト折りたたみ === */
+.journal-prompts summary {
+  list-style: none;
+}
+.journal-prompts summary::-webkit-details-marker { display: none; }
+.journal-prompts summary::before {
+  content: "▶ ";
+  display: inline-block;
+  transition: transform 0.15s ease;
+  font-size: 10px;
+  margin-right: 4px;
+}
+.journal-prompts[open] summary::before {
+  transform: rotate(90deg);
+}
