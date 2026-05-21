@@ -10863,7 +10863,7 @@
       "taskId": "d7defa12-2fda-4c90-a589-2aaac453d2ad",
       "plannedStartAt": "2026-05-21T13:00:00",
       "plannedEndAt": "2026-05-21T14:00:00",
-      "actualStartAt": "",
+      "actualStartAt": "2026-05-21T13:24:00",
       "actualEndAt": "",
       "charge": 0,
       "discharge": 0,
@@ -10878,7 +10878,7 @@
       "isMIT": false,
       "source": "",
       "createdAt": "2026-05-21T09:11:00",
-      "updatedAt": "2026-05-21T10:32:00",
+      "updatedAt": "2026-05-21T13:24:00",
       "deleted": false
     },
     {
@@ -31741,11 +31741,7 @@
   "feedback": {},
   "reports": {},
   "pomodoro": {
-    "running": false,
-    "blockId": "",
-    "startedAt": "",
-    "endsAt": "",
-    "mode": "focus",
+    "tab": "manual",
     "passive": {
       "enabled": false,
       "activeWeekdays": [
@@ -31761,8 +31757,12 @@
       "activeEndHHMM": "19:00",
       "lastFiredKey": ""
     },
-    "tab": "manual",
-    "fullscreen": true
+    "fullscreen": true,
+    "running": true,
+    "blockId": "f385c83b-0bf4-41fa-bbed-0aa894948ddd",
+    "startedAt": "2026-05-21T13:24:00",
+    "endsAt": "2026-05-21T13:49:00",
+    "mode": "focus"
   },
   "modal": null,
   "timelineMode": "planned",
