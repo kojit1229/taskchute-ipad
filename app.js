@@ -297,17 +297,20 @@ function normalizeState(value) {
   }
   value.projects ||= [];
   value.tasks ||= [];
-  // v16/v17: 既存 Task に Wish + Habit Stacking 用フィールドのデフォルト値を補完(後方互換)
-  value.tasks = value.tasks.map((task) => ({
-    targetYear: null,
-    lifeArea: "",
-    motivation: "",
-    realized: false,
-    realizedDate: "",
-    trigger: "",
-    celebrate: "",
-    ...task
-  }));
+  // v16/v18: 既存 Task にWish + ルーティン連携 用フィールドのデフォルト値を補完(後方互換)
+  value.tasks = value.tasks.map((task) => {
+    // v18: 古い trigger/celebrate フィールドは削除(あれば)
+    const { trigger, celebrate, ...rest } = task;
+    return {
+      targetYear: null,
+      lifeArea: "",
+      motivation: "",
+      realized: false,
+      realizedDate: "",
+      nextRoutineId: "",
+      ...rest
+    };
+  });
   value.blocks ||= [];
   // v17: 既存 Block に isMIT のデフォルト値を補完(後方互換)
   value.blocks = value.blocks.map((block) => ({
@@ -370,6 +373,25 @@ function defaultLifeAreas() {
     { id: crypto.randomUUID(), name: "経験", color: "#FFCC00" },
     { id: crypto.randomUUID(), name: "持物", color: "#8E8E93" }
   ];
+}
+
+// v18: Block 完了時の祝福メッセージ プール(ランダム表示用)
+const CELEBRATE_MESSAGES = [
+  "やったね、一歩前進!",
+  "ナイス、その調子だよ",
+  "お疲れさま、ちゃんとやり切れたね",
+  "すごい、毎日ちゃんと動けてる",
+  "えらいえらい、ちゃんと動けてるね",
+  "キミならできると思ってた!",
+  "その一歩、未来に効いてるよ",
+  "ふぁいと、ふぁいとー!",
+  "見てたよ、ナイスファイト",
+  "うん、いい感じ。一緒にがんばろ",
+  "うんうん、その調子その調子"
+];
+
+function getRandomCelebrate() {
+  return CELEBRATE_MESSAGES[Math.floor(Math.random() * CELEBRATE_MESSAGES.length)];
 }
 
 // v9: カラーパレット(iOS 標準色)
@@ -1447,7 +1469,18 @@ function renderTasks() {
     </section>
 
     <section class="section grid">
-      ${blocksForDate(state.selectedDate).filter((b) => b.source !== "timeline").map(renderBlockItem).join("") || emptyPanel("この日のBlockはまだありません(タイムラインで追加したものは時間タブに表示)")}
+      ${blocksForDate(state.selectedDate).filter((b) => {
+        // v15: タイムライン由来は除外
+        if (b.source === "timeline") return false;
+        // v18: ルーティン(繰り返し系列の Block)は表示する
+        if (b.recurrenceGroupId) return true;
+        // v18: taskId が無い単発 Block は除外
+        if (!b.taskId) return false;
+        // v18: 紐づく Task に Project がなければ(単発 Task)除外
+        const task = state.tasks.find((t) => t.id === b.taskId);
+        if (!task || !task.projectId) return false;
+        return true;
+      }).map(renderBlockItem).join("") || emptyPanel("この日のBlockはまだありません(Projectに紐づくTaskまたはルーティンがここに表示されます)")}
     </section>
 
     <section class="section">
@@ -1981,11 +2014,11 @@ function renderPassiveSettings(passive) {
     <div class="field-row">
       <div class="field">
         <label class="field-label">開始時刻</label>
-        <input class="input" type="time" data-passive-field="activeStartHHMM" value="${passive.activeStartHHMM}">
+        <input class="input" type="text" inputmode="numeric" placeholder="HH:MM" data-passive-field="activeStartHHMM" value="${passive.activeStartHHMM}">
       </div>
       <div class="field">
         <label class="field-label">終了時刻</label>
-        <input class="input" type="time" data-passive-field="activeEndHHMM" value="${passive.activeEndHHMM}">
+        <input class="input" type="text" inputmode="numeric" placeholder="HH:MM" data-passive-field="activeEndHHMM" value="${passive.activeEndHHMM}">
       </div>
     </div>
     <div class="row">
@@ -2211,10 +2244,10 @@ function renderSettings() {
       <div class="panel stack">
         <h2>プロフィール</h2>
         <label>生年月日
-          <input class="input" type="date" data-setting-field="birthDate" value="${state.settings.birthDate || ""}">
+          <input class="input" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" data-setting-field="birthDate" value="${state.settings.birthDate || ""}">
         </label>
         <label>12WY開始日
-          <input class="input" type="date" data-setting-field="twelveWeekStartDate" value="${state.settings.twelveWeekStartDate || todayISO()}">
+          <input class="input" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" data-setting-field="twelveWeekStartDate" value="${state.settings.twelveWeekStartDate || todayISO()}">
         </label>
       </div>
       <div class="panel stack">
@@ -2358,7 +2391,7 @@ function renderDateBar() {
   return `
     <div class="datebar">
       <button class="btn" data-action="date-prev">前日</button>
-      <input class="input" type="date" data-date-picker value="${state.selectedDate}">
+      <input class="input" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" data-date-picker value="${state.selectedDate}">
       <button class="btn" data-action="date-next">翌日</button>
     </div>
   `;
@@ -2411,9 +2444,8 @@ function makeTask({ projectId = "", parentTaskId = "", title = "", category = ""
     motivation,         // なぜやりたいか(自由記述)
     realized: false,    // 実現済みか
     realizedDate: "",   // 実現日(YYYY-MM-DD)
-    // v17: Habit Stacking
-    trigger: "",        // 何の後にやる?(例: "朝のコーヒー")
-    celebrate: "",      // 完了時の祝福メッセージ(例: "Yes! 一歩進んだ!")
+    // v18: ルーティン連携(カテゴリ「ルーティン」の Task のみ意味を持つ)
+    nextRoutineId: "",  // 完了時に「次:○○」として表示する後続ルーティン Task の ID
     createdAt: nowDateTime(),
     updatedAt: nowDateTime(),
     deleted: false
@@ -2515,12 +2547,17 @@ function toggleBlock(id) {
     return { ...block, completed, actualEndAt: completed && !block.actualEndAt ? nowDateTime() : block.actualEndAt, updatedAt: nowDateTime() };
   });
   saveAndRender("Blockを更新しました");
-  // v17: 完了時の演出(花火 + celebrate メッセージ)
+  // v17/v18: 完了時の演出(常にランダム祝福 + 後続ルーティン表示)
   if (justCompleted && completedBlock) {
-    // 紐づく Task に celebrate メッセージがあれば取得
     const task = completedBlock.taskId ? state.tasks.find((t) => t.id === completedBlock.taskId) : null;
-    const celebrateMsg = (task && task.celebrate) ? task.celebrate : (completedBlock.isMIT ? "Yes! 主役を1つやり切った!" : "");
-    triggerCompletionEffect(celebrateMsg, completedBlock.isMIT);
+    // ランダム祝福メッセージ(全タスク共通)
+    const celebrateMsg = getRandomCelebrate();
+    // 後続ルーティン
+    let nextRoutine = null;
+    if (task && task.nextRoutineId) {
+      nextRoutine = state.tasks.find((t) => t.id === task.nextRoutineId && !t.deleted);
+    }
+    triggerCompletionEffect(celebrateMsg, completedBlock.isMIT, nextRoutine);
   }
 }
 
@@ -2541,9 +2578,8 @@ function toggleMIT(blockId) {
   saveAndRender(block.isMIT ? "今日の主役から外しました" : "✦ 今日の主役に設定しました");
 }
 
-// v17: 完了時の演出(花火 + celebrate メッセージ)
-function triggerCompletionEffect(message, isMIT) {
-  // DOM に演出要素を挿入(画面中央付近)
+// v17/v18: 完了時の演出(花火 + ランダム祝福メッセージ + 後続ルーティン表示)
+function triggerCompletionEffect(message, isMIT, nextRoutine) {
   const container = document.createElement("div");
   container.className = "completion-effect";
   // 粒子(8〜14個、ランダムな角度)
@@ -2552,7 +2588,7 @@ function triggerCompletionEffect(message, isMIT) {
     const angle = (i / particleCount) * Math.PI * 2 + Math.random() * 0.5;
     const distance = 60 + Math.random() * 60;
     const tx = Math.cos(angle) * distance;
-    const ty = Math.sin(angle) * distance - 20;  // 少し上方向に
+    const ty = Math.sin(angle) * distance - 20;
     const particle = document.createElement("span");
     particle.className = "ce-particle";
     particle.textContent = isMIT ? "✦" : "✨";
@@ -2561,16 +2597,22 @@ function triggerCompletionEffect(message, isMIT) {
     particle.style.setProperty("--delay", `${i * 30}ms`);
     container.appendChild(particle);
   }
-  // celebrate メッセージ
+  // 祝福メッセージ
   if (message) {
     const msgEl = document.createElement("div");
     msgEl.className = "ce-message";
     msgEl.textContent = message;
     container.appendChild(msgEl);
   }
+  // v18: 後続ルーティンがあれば「次: ○○」を小さく追加
+  if (nextRoutine) {
+    const nextEl = document.createElement("div");
+    nextEl.className = "ce-next";
+    nextEl.textContent = `次: ${nextRoutine.title}`;
+    container.appendChild(nextEl);
+  }
   document.body.appendChild(container);
-  // 1.5 秒後に自動削除
-  setTimeout(() => container.remove(), 1500);
+  setTimeout(() => container.remove(), 2000);
 }
 
 function setBlockTime(id, field) {
@@ -3644,11 +3686,11 @@ function buildProjectModal(project) {
         <div class="field-row">
           <div class="field">
             <label class="field-label">開始日</label>
-            <input class="input" type="date" data-modal-field="startDate" value="${project.startDate || ""}">
+            <input class="input" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" data-modal-field="startDate" value="${project.startDate || ""}">
           </div>
           <div class="field">
             <label class="field-label">期限</label>
-            <input class="input" type="date" data-modal-field="dueDate" value="${project.dueDate || ""}">
+            <input class="input" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" data-modal-field="dueDate" value="${project.dueDate || ""}">
           </div>
         </div>
         <div class="field">
@@ -3746,27 +3788,34 @@ function buildTaskModal(task) {
           </div>
           <div class="field">
             <label class="field-label">期限</label>
-            <input class="input" type="date" data-modal-field="dueDate" value="${task.dueDate || ""}">
+            <input class="input" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" data-modal-field="dueDate" value="${task.dueDate || ""}">
           </div>
         </div>
         <div class="field">
           <label class="field-label">説明 / メモ</label>
           <textarea class="textarea" data-modal-field="description" style="min-height:120px">${escapeHTML(task.description || "")}</textarea>
         </div>
-        <details class="field" style="padding:10px; background:var(--panel-soft); border-radius:8px">
-          <summary style="cursor:pointer; font-size:13px; font-weight:600; color:var(--muted)">🔗 Habit Stacking(任意 - ルーティン向け)</summary>
+        <details class="field" open style="padding:10px; background:var(--panel-soft); border-radius:8px; border-left:3px solid var(--accent)">
+          <summary style="cursor:pointer; font-size:13px; font-weight:600; color:var(--text)">🔗 ルーティン連携(チェーン)</summary>
           <div style="margin-top:10px; display:grid; gap:10px">
-            <div class="field" style="margin:0">
-              <label class="field-label">何の後にやる?(きっかけの習慣)</label>
-              <input class="input" data-modal-field="trigger" value="${escapeHTML(task.trigger || "")}" placeholder="例: 朝のコーヒー、歯磨きの後">
+            <div class="muted" style="font-size:11px; line-height:1.6; padding:8px; background:rgba(0,0,0,0.03); border-radius:6px">
+              <strong>使い方</strong>: <br>
+              カテゴリが「<strong>ルーティン</strong>」のタスクで、完了後に続けてやるルーティンを指定できます。<br>
+              例: 「水を飲む → スクワット」のように連鎖を作って、習慣を繋げて定着させやすくします。<br>
+              完了時に「次: ○○」と画面に表示されます(押し付けず、ヒントのみ)。
             </div>
             <div class="field" style="margin:0">
-              <label class="field-label">完了時の祝福メッセージ</label>
-              <input class="input" data-modal-field="celebrate" value="${escapeHTML(task.celebrate || "")}" placeholder="例: Yes! 一歩進んだ!">
-            </div>
-            <div class="muted" style="font-size:11px; line-height:1.6">
-              「<strong>何の後にやる?</strong>」を書くと、既存の習慣にぶら下げて新しい行動を定着させやすくなります(Atomic Habits / Habit Stacking)。<br>
-              「<strong>祝福メッセージ</strong>」は完了時に画面に表示されます(BJ Fogg / Tiny Habits)。
+              <label class="field-label">後続のルーティン</label>
+              <select class="select" data-modal-field="nextRoutineId">
+                <option value="" ${!task.nextRoutineId ? "selected" : ""}>(指定しない)</option>
+                ${state.tasks
+                  .filter((t) => !t.deleted && t.id !== task.id && t.category === "ルーティン")
+                  .map((t) => `<option value="${t.id}" ${task.nextRoutineId === t.id ? "selected" : ""}>${escapeHTML(t.title)}</option>`)
+                  .join("")}
+              </select>
+              ${state.tasks.filter((t) => !t.deleted && t.id !== task.id && t.category === "ルーティン").length === 0
+                ? `<div class="muted" style="font-size:11px; margin-top:4px">他にカテゴリ「ルーティン」のタスクがありません。先にカテゴリ=ルーティンの Task を作成すると、ここで選択肢に出ます。</div>`
+                : ""}
             </div>
           </div>
         </details>
@@ -3804,8 +3853,7 @@ function saveTaskFromModal(id, fields) {
       category: fields.category || "",
       dueDate: fields.dueDate || "",
       description: fields.description || "",
-      trigger: fields.trigger || "",
-      celebrate: fields.celebrate || "",
+      nextRoutineId: fields.nextRoutineId || "",
       updatedAt: nowDateTime()
     };
   });
@@ -3836,7 +3884,7 @@ function buildBlockModal(block) {
         <div class="field-row">
           <div class="field">
             <label class="field-label">日付</label>
-            <input class="input" type="date" data-modal-field="date" value="${block.date || todayISO()}">
+            <input class="input" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" data-modal-field="date" value="${block.date || todayISO()}">
           </div>
           <div class="field">
             <label class="field-label">カテゴリ</label>
@@ -3850,21 +3898,21 @@ function buildBlockModal(block) {
         <div class="field-row">
           <div class="field">
             <label class="field-label">予定開始</label>
-            <input class="input" type="datetime-local" data-modal-field="plannedStartAt" value="${toLocalInput(block.plannedStartAt)}">
+            <input class="input" type="text" inputmode="numeric" placeholder="YYYY-MM-DDTHH:MM" data-modal-field="plannedStartAt" value="${toLocalInput(block.plannedStartAt)}">
           </div>
           <div class="field">
             <label class="field-label">予定終了</label>
-            <input class="input" type="datetime-local" data-modal-field="plannedEndAt" value="${toLocalInput(block.plannedEndAt)}">
+            <input class="input" type="text" inputmode="numeric" placeholder="YYYY-MM-DDTHH:MM" data-modal-field="plannedEndAt" value="${toLocalInput(block.plannedEndAt)}">
           </div>
         </div>
         <div class="field-row">
           <div class="field">
             <label class="field-label">実績開始</label>
-            <input class="input" type="datetime-local" data-modal-field="actualStartAt" value="${toLocalInput(block.actualStartAt)}">
+            <input class="input" type="text" inputmode="numeric" placeholder="YYYY-MM-DDTHH:MM" data-modal-field="actualStartAt" value="${toLocalInput(block.actualStartAt)}">
           </div>
           <div class="field">
             <label class="field-label">実績終了</label>
-            <input class="input" type="datetime-local" data-modal-field="actualEndAt" value="${toLocalInput(block.actualEndAt)}">
+            <input class="input" type="text" inputmode="numeric" placeholder="YYYY-MM-DDTHH:MM" data-modal-field="actualEndAt" value="${toLocalInput(block.actualEndAt)}">
           </div>
         </div>
         <div class="field-row">
@@ -3891,21 +3939,25 @@ function buildBlockModal(block) {
           <label class="field-label">コメント</label>
           <textarea class="textarea" data-modal-field="comment" style="min-height:100px">${escapeHTML(block.comment || "")}</textarea>
         </div>
-        ${block._isNew ? `
         <div class="field" style="background:var(--accent-soft); padding:10px; border-radius:8px">
-          <label class="field-label" style="color:var(--accent); font-weight:700">🔁 繰り返し設定(新規作成時のみ)</label>
+          <label class="field-label" style="color:var(--accent); font-weight:700">🔁 繰り返し設定</label>
           <select class="select" data-modal-field="recurrenceKind" id="recurrenceKindSelect">
-            <option value="">繰り返さない(1 つだけ作成)</option>
+            <option value="">繰り返さない(この日のみ)</option>
             <option value="daily">毎日</option>
             <option value="weekdays">平日のみ(月〜金)</option>
             <option value="weekly">毎週(同じ曜日)</option>
             <option value="monthly">毎月(同じ日)</option>
           </select>
-          <label class="field-label" style="margin-top:8px">終了日(これより前まで生成)</label>
-          <input class="input" type="date" data-modal-field="recurrenceUntil" value="${addDays(block.date || todayISO(), 90)}">
-          <div class="muted" style="font-size:11px; margin-top:4px">同じ groupId で複数の Block を一括生成します</div>
+          ${block.recurrenceGroupId ? `
+            <div class="muted" style="font-size:11px; margin-top:6px; line-height:1.5">
+              ⚠️ この Block は既存の繰り返しシリーズの一部です。<br>
+              繰り返しを<strong>変更</strong>すると、この日以降の同じシリーズの未来分が再生成されます。<br>
+              <strong>そのまま</strong>(変更なし)で保存すれば、シリーズ設定は維持されます。
+            </div>
+          ` : `
+            <div class="muted" style="font-size:11px; margin-top:6px">同じ groupId で複数の Block を一括生成します(終了日は内部的に 2035/12/31 まで)</div>
+          `}
         </div>
-        ` : ""}
       </div>
       <div class="modal-footer">
         <button class="btn danger" data-action="modal-delete">削除</button>
@@ -3919,6 +3971,8 @@ function buildBlockModal(block) {
 function saveBlockFromModal(id, fields) {
   const existing = state.blocks.find((b) => b.id === id);
   const isNew = !existing;
+  // v18: 繰り返し終了日は内部固定 2035-12-31
+  const RECURRENCE_UNTIL_DEFAULT = "2035-12-31";
   const updated = {
     id: isNew ? id : existing.id,
     title: (fields.title || "").trim() || (existing?.title || "新規Block"),
@@ -3939,15 +3993,17 @@ function saveBlockFromModal(id, fields) {
     pomodoroCount: existing?.pomodoroCount || 0,
     migratedTo: existing?.migratedTo || "",
     orderIndex: existing?.orderIndex || 0,
+    isMIT: existing?.isMIT || false,
+    source: existing?.source || "",
     createdAt: existing?.createdAt || nowDateTime(),
     updatedAt: nowDateTime(),
     deleted: false
   };
   if (isNew) {
     state.blocks.push(updated);
-    // 繰り返し指定があれば、追加で生成
-    if (fields.recurrenceKind && fields.recurrenceUntil) {
-      const generated = generateRecurringBlocks(updated, fields.recurrenceKind, fields.recurrenceUntil);
+    // 繰り返し指定があれば、追加で生成(終了日は内部固定 2035-12-31)
+    if (fields.recurrenceKind) {
+      const generated = generateRecurringBlocks(updated, fields.recurrenceKind, RECURRENCE_UNTIL_DEFAULT);
       closeModal();
       saveAndRender(`Blockを ${1 + generated.length} 件作成しました(繰り返し含む)`);
       return;
@@ -3956,6 +4012,25 @@ function saveBlockFromModal(id, fields) {
     saveAndRender("Blockを追加しました");
   } else {
     state.blocks = state.blocks.map((b) => b.id === id ? updated : b);
+    // v18: 既存Blockに対する繰り返し設定の変更
+    if (fields.recurrenceKind) {
+      // 1. 既に同じシリーズがあれば、この日以降の未来分(自分以外)を削除
+      if (existing.recurrenceGroupId) {
+        const todayDate = state.selectedDate;
+        const sameGroup = state.blocks.filter((b) =>
+          b.recurrenceGroupId === existing.recurrenceGroupId &&
+          b.id !== id &&
+          b.date > todayDate &&
+          !b.completed
+        );
+        state.blocks = state.blocks.map((b) => sameGroup.some((g) => g.id === b.id) ? { ...b, deleted: true, updatedAt: nowDateTime() } : b);
+      }
+      // 2. 新しいシリーズを生成
+      const generated = generateRecurringBlocks(updated, fields.recurrenceKind, RECURRENCE_UNTIL_DEFAULT);
+      closeModal();
+      saveAndRender(`シリーズを更新しました(この日以降 ${generated.length} 件を再生成)`);
+      return;
+    }
     closeModal();
     saveAndRender("Blockを更新しました");
   }
@@ -4070,9 +4145,29 @@ function toLocalInput(isoString) {
 
 function fromLocalInput(value) {
   if (!value) return "";
-  // datetime-local の値 ('YYYY-MM-DDTHH:mm') をそのまま使う(UTC変換しない)
-  // 秒を追加して 'YYYY-MM-DDTHH:mm:00' にする
-  return value.length === 16 ? `${value}:00` : value;
+  // v18: text input で柔軟に受け付ける
+  let v = String(value).trim();
+  // スラッシュ区切りをハイフンに(YYYY/MM/DD → YYYY-MM-DD)
+  v = v.replace(/\//g, "-");
+  // スペース区切りを T に(YYYY-MM-DD HH:MM → YYYY-MM-DDTHH:MM)
+  v = v.replace(/(\d{4}-\d{2}-\d{2})\s+(\d{1,2}:\d{2})/, (_, d, t) => {
+    const [h, m] = t.split(":");
+    return `${d}T${h.padStart(2, "0")}:${m}`;
+  });
+  // 単独の HH:MM の時刻パディング(8:30 → 08:30)
+  if (/^\d{1,2}:\d{2}$/.test(v)) {
+    const [h, m] = v.split(":");
+    return `${h.padStart(2, "0")}:${m}`;
+  }
+  // YYYY-MM-DDTHH:MM の 16 文字なら :00 を追加
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v)) {
+    return `${v}:00`;
+  }
+  // YYYY-MM-DD だけの 10 文字
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+    return v;
+  }
+  return v;
 }
 
 // ESC キーでモーダルを閉じる
@@ -4324,11 +4419,11 @@ function buildActualEntryModal(block, defaultStart, defaultEnd) {
         <div class="field-row">
           <div class="field">
             <label class="field-label">実績開始</label>
-            <input class="input" type="datetime-local" data-modal-field="actualStartAt" value="${toLocalInput(defaultStart)}">
+            <input class="input" type="text" inputmode="numeric" placeholder="YYYY-MM-DDTHH:MM" data-modal-field="actualStartAt" value="${toLocalInput(defaultStart)}">
           </div>
           <div class="field">
             <label class="field-label">実績終了</label>
-            <input class="input" type="datetime-local" data-modal-field="actualEndAt" value="${toLocalInput(defaultEnd)}">
+            <input class="input" type="text" inputmode="numeric" placeholder="YYYY-MM-DDTHH:MM" data-modal-field="actualEndAt" value="${toLocalInput(defaultEnd)}">
           </div>
         </div>
         <div class="field-row">
