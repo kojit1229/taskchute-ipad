@@ -31758,11 +31758,11 @@
       "lastFiredKey": ""
     },
     "fullscreen": true,
-    "running": true,
+    "running": false,
     "blockId": "",
-    "startedAt": "2026-05-21T13:49:00",
-    "endsAt": "2026-05-21T13:54:00",
-    "mode": "break"
+    "startedAt": "",
+    "endsAt": "",
+    "mode": "focus"
   },
   "modal": null,
   "timelineMode": "planned",
