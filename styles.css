@@ -1665,3 +1665,139 @@ h3 {
   85% { opacity: 1; transform: translate(-50%, 60%) scale(1); }
   100% { opacity: 0; transform: translate(-50%, 50%) scale(0.95); }
 }
+
+/* === v19: ルーティンタブ(Structured 風) === */
+.routine-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 40px;
+}
+
+.routine-card {
+  display: grid;
+  grid-template-columns: 64px 1fr 40px;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  background: var(--panel);
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.routine-card:hover {
+  border-color: var(--accent);
+  transform: translateX(2px);
+}
+
+.routine-card-time {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.routine-card-time-start {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.routine-card-time-end {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.routine-card-time-dur {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.routine-card-body {
+  min-width: 0;
+}
+.routine-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+  word-break: break-word;
+}
+.routine-card-meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* フェーズ別のスタイリング */
+.routine-card-done {
+  opacity: 0.5;
+  background: var(--panel-soft);
+}
+.routine-card-done .routine-card-title {
+  text-decoration: line-through;
+}
+
+.routine-card-current {
+  background: linear-gradient(90deg, rgba(245, 166, 35, 0.12), transparent 60%);
+  border-color: #F5A623;
+  box-shadow: 0 0 0 1px #F5A623, 0 4px 12px rgba(245, 166, 35, 0.15);
+}
+.routine-card-current .routine-card-title {
+  color: #F5A623;
+  font-weight: 700;
+}
+
+.routine-card-past {
+  opacity: 0.6;
+}
+
+.routine-card-future {
+  /* default */
+}
+
+/* 現在時刻マーカー */
+.routine-now-marker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 0 4px;
+}
+.routine-now-dot {
+  width: 10px;
+  height: 10px;
+  background: #FF3B30;
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px rgba(255, 59, 48, 0.2);
+  flex-shrink: 0;
+}
+.routine-now-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #FF3B30;
+  letter-spacing: 1px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.routine-now-line {
+  flex: 1;
+  height: 0;
+  border-top: 2px dashed #FF3B30;
+  opacity: 0.6;
+}
+
+@media (max-width: 720px) {
+  .routine-card {
+    grid-template-columns: 52px 1fr 32px;
+    padding: 10px 12px;
+    gap: 10px;
+  }
+  .routine-card-time-start {
+    font-size: 15px;
+  }
+}
+
+/* タイムラインの現在時刻線(.now-line は既にインライン定義) */
