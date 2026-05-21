@@ -10891,11 +10891,11 @@
       "taskId": "",
       "plannedStartAt": "2026-05-21T05:30:00",
       "plannedEndAt": "2026-05-21T05:35:00",
-      "actualStartAt": "",
-      "actualEndAt": "",
+      "actualStartAt": "2026-05-21T05:30:00",
+      "actualEndAt": "2026-05-21T05:35:00",
       "charge": 1,
       "discharge": 0,
-      "completed": false,
+      "completed": true,
       "comment": "",
       "expectedCharge": "",
       "expectedDischarge": "",
@@ -10904,7 +10904,7 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-21T09:26:00",
-      "updatedAt": "2026-05-21T09:26:00",
+      "updatedAt": "2026-05-21T13:08:00",
       "deleted": false
     },
     {
@@ -21317,11 +21317,11 @@
       "taskId": "",
       "plannedStartAt": "2026-05-21T05:30:00",
       "plannedEndAt": "2026-05-21T05:35:00",
-      "actualStartAt": "",
-      "actualEndAt": "",
+      "actualStartAt": "2026-05-21T05:30:00",
+      "actualEndAt": "2026-05-21T05:35:00",
       "charge": 1,
       "discharge": 0,
-      "completed": false,
+      "completed": true,
       "comment": "",
       "expectedCharge": "",
       "expectedDischarge": "",
@@ -21330,7 +21330,7 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-21T09:26:00",
-      "updatedAt": "2026-05-21T09:26:00",
+      "updatedAt": "2026-05-21T13:08:00",
       "deleted": false
     },
     {
@@ -31764,7 +31764,10 @@
     "tab": "passive",
     "fullscreen": false
   },
-  "modal": null,
+  "modal": {
+    "type": "block",
+    "id": "fd70d578-f073-458d-ace2-3bc6266c58f4"
+  },
   "timelineMode": "planned",
   "timelineZoom": 1
 }
