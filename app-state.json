@@ -31761,8 +31761,8 @@
       "activeEndHHMM": "19:00",
       "lastFiredKey": ""
     },
-    "tab": "passive",
-    "fullscreen": false
+    "tab": "manual",
+    "fullscreen": true
   },
   "modal": null,
   "timelineMode": "planned",
