@@ -10878,7 +10878,7 @@
       "isMIT": false,
       "source": "",
       "createdAt": "2026-05-21T09:11:00",
-      "updatedAt": "2026-05-21T13:49:00",
+      "updatedAt": "2026-05-21T14:02:00",
       "deleted": false
     },
     {
@@ -31758,10 +31758,10 @@
       "lastFiredKey": ""
     },
     "fullscreen": true,
-    "running": false,
-    "blockId": "",
-    "startedAt": "",
-    "endsAt": "",
+    "running": true,
+    "blockId": "f385c83b-0bf4-41fa-bbed-0aa894948ddd",
+    "startedAt": "2026-05-21T14:02:00",
+    "endsAt": "2026-05-21T14:27:00",
     "mode": "focus"
   },
   "modal": null,
