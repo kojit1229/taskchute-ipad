@@ -6,6 +6,7 @@ const navItems = [
   { id: "wish", label: "やりたい", mark: "✦" },
   { id: "avoid", label: "やらない", mark: "✕" },
   { id: "tasks", label: "タスクシュート", mark: "T" },
+  { id: "routine", label: "ルーティン", mark: "↻" },
   { id: "timeline", label: "タイムライン", mark: "L" },
   { id: "pomodoro", label: "ポモドーロ", mark: "P" },
   { id: "journal", label: "ジャーナル", mark: "J" },
@@ -80,6 +81,11 @@ document.addEventListener("click", (event) => {
   if (action === "reset-demo") resetDemoData();
   // v17: MIT(今日の主役)の切替(最大3個)
   if (action === "toggle-mit") toggleMIT(id);
+  // v19: ルーティンタブの表示モード切替
+  if (action === "routine-mode") {
+    state.routineViewMode = target.dataset.mode || "routine";
+    saveAndRender();
+  }
   // v14: 開始前に既存セッションを強制リセット(中断/完了/休憩後の再開でも確実に50:00から)
   if (action === "start-pomodoro") {
     forceResetPomodoroSession();
@@ -89,6 +95,9 @@ document.addEventListener("click", (event) => {
   if (action === "complete-pomodoro") completePomodoro();
   if (action === "go-break") goBreakPomodoro();
   if (action === "end-break") endBreakPomodoro();
+  // v19: 休憩中の3択
+  if (action === "continue-focus") continueFocusPomodoro();
+  if (action === "finish-block") finishBlockFromBreak();
   // === v2: 編集モーダル ===
   if (action === "edit-project") openProjectEditor(id);
   if (action === "edit-task") openTaskEditor(id);
@@ -786,6 +795,7 @@ function renderMain() {
   if (view === "wish") main.innerHTML = renderWish();
   if (view === "avoid") main.innerHTML = renderAvoid();
   if (view === "tasks") main.innerHTML = renderTasks();
+  if (view === "routine") main.innerHTML = renderRoutine();
   if (view === "timeline") main.innerHTML = renderTimelineView();
   if (view === "pomodoro") main.innerHTML = renderPomodoro();
   if (view === "journal") main.innerHTML = renderJournal();
@@ -1487,15 +1497,17 @@ function renderTasks() {
       ${blocksForDate(state.selectedDate).filter((b) => {
         // v15: タイムライン由来は除外
         if (b.source === "timeline") return false;
-        // v18: ルーティン(繰り返し系列の Block)は表示する
-        if (b.recurrenceGroupId) return true;
-        // v18: taskId が無い単発 Block は除外
+        // v19: カテゴリ「ルーティン」は専用ルーティンタブで表示
+        if (b.category === "ルーティン") return false;
+        // v19: 繰り返し系列(recurrenceGroupId 持ち)もルーティンタブへ
+        if (b.recurrenceGroupId) return false;
+        // taskId 無しの単発 Block は除外
         if (!b.taskId) return false;
-        // v18: 紐づく Task に Project がなければ(単発 Task)除外
+        // 紐づく Task に Project がなければ単発 → 除外
         const task = state.tasks.find((t) => t.id === b.taskId);
         if (!task || !task.projectId) return false;
         return true;
-      }).map(renderBlockItem).join("") || emptyPanel("この日のBlockはまだありません(Projectに紐づくTaskまたはルーティンがここに表示されます)")}
+      }).map(renderBlockItem).join("") || emptyPanel("この日のBlockはまだありません(Projectに紐づくTaskがここに表示されます。ルーティンは「ルーティン」タブへ)")}
     </section>
 
     <section class="section">
@@ -1508,21 +1520,29 @@ function renderTasks() {
 }
 
 function renderOpenTasks() {
-  const taskIDsInBlocks = new Set(state.blocks.filter((block) => !block.deleted && block.date === state.selectedDate).map((block) => block.taskId));
-  const open = state.tasks.filter((task) => !task.deleted && task.status !== "completed" && !taskIDsInBlocks.has(task.id));
-  if (!open.length) return emptyPanel("持ち越すTaskはありません");
+  // v19: 今日に既に Block 化されていても表示し続ける(1日に複数回追加することもあるため)
+  const open = state.tasks.filter((task) => !task.deleted && task.status !== "completed");
+  if (!open.length) return emptyPanel("未完了のTaskはありません");
+  // 今日 Block 化済みのカウント(参考表示用)
+  const blockCountByTaskId = {};
+  state.blocks
+    .filter((b) => !b.deleted && b.date === state.selectedDate)
+    .forEach((b) => {
+      if (b.taskId) blockCountByTaskId[b.taskId] = (blockCountByTaskId[b.taskId] || 0) + 1;
+    });
   return open.map((task) => {
     const dueLabel = task.dueDate ? ` / 期限 ${task.dueDate}` : "";
     const isOverdue = task.dueDate && task.dueDate < state.selectedDate;
+    const todayCount = blockCountByTaskId[task.id] || 0;
     return `
       <div class="item" ${isOverdue ? 'style="background:var(--red-soft)"' : ""}>
         <div class="row">
           <div style="min-width:0; flex:1">
             <strong>${escapeHTML(task.title)}</strong>
-            <div class="muted" style="font-size:12px">${escapeHTML(projectName(task.projectId))} / ${escapeHTML(task.category || "カテゴリなし")}${dueLabel}</div>
+            <div class="muted" style="font-size:12px">${escapeHTML(projectName(task.projectId))} / ${escapeHTML(task.category || "カテゴリなし")}${dueLabel}${todayCount > 0 ? ` <span style="color:var(--green); font-weight:600">/ 本日 ${todayCount} 件 Block 追加済み</span>` : ""}</div>
           </div>
           <div class="row">
-            <button class="btn" data-action="task-today" data-id="${task.id}">今日へ</button>
+            <button class="btn" data-action="task-today" data-id="${task.id}">今日へ追加</button>
             <button class="btn" data-action="edit-task" data-id="${task.id}">編集</button>
           </div>
         </div>
@@ -1589,11 +1609,140 @@ function renderTimelineView() {
     </div>
     <div class="row" style="margin-bottom:10px; gap:8px; flex-wrap:wrap">
       <button class="btn primary" data-action="timeline-new-block" data-minute="${nowMinute}">+ 新規Block</button>
-      <span class="muted" style="font-size:12px">空き時間タップで追加 / ○タップで完了登録 / カードタップで編集</span>
+      <span class="muted" style="font-size:12px">空き時間タップで追加 / ○タップで完了登録 / カードタップで編集 / 赤線は現在時刻</span>
     </div>
     ${renderTimeline({ compact: false, mode })}
   `;
 }
+
+// v19: ルーティンタブ(Structured 風、上から順にいま何をするか)
+function renderRoutine() {
+  // 表示モード: "routine"(ルーティンのみ) / "all"(ルーティン + タイムライン Block)
+  const viewMode = state.routineViewMode || "routine";
+  const allBlocks = blocksForDate(state.selectedDate);
+  let blocks;
+  if (viewMode === "routine") {
+    blocks = allBlocks.filter((b) => b.category === "ルーティン");
+  } else {
+    // "all" モード: ルーティン + 通常のスケジュール Block(タイムライン由来も含む)
+    blocks = allBlocks.filter((b) => b.plannedStartAt);
+  }
+  // 開始時刻でソート
+  blocks = blocks.filter((b) => b.plannedStartAt).sort((a, b) =>
+    a.plannedStartAt.localeCompare(b.plannedStartAt)
+  );
+
+  // 現在時刻
+  const now = new Date();
+  const isToday = state.selectedDate === todayISO();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+
+  // 各 Block の位置を判定
+  const enriched = blocks.map((b) => {
+    const startMin = minutesOf(b.plannedStartAt);
+    const endMin = b.plannedEndAt ? minutesOf(b.plannedEndAt) : startMin + 1;
+    let phase = "past";  // past / current / next / future
+    if (!isToday) {
+      phase = "future";
+    } else if (b.completed) {
+      phase = "done";
+    } else if (nowMin >= startMin && nowMin < endMin) {
+      phase = "current";
+    } else if (nowMin < startMin) {
+      phase = "future";
+    } else {
+      phase = "past";
+    }
+    return { ...b, startMin, endMin, phase };
+  });
+
+  // 現在時刻の挿入位置を決定(まだ来てないBlockの直前)
+  let nowInsertedAt = -1;
+  if (isToday) {
+    for (let i = 0; i < enriched.length; i++) {
+      if (enriched[i].startMin > nowMin && nowInsertedAt < 0) {
+        nowInsertedAt = i;
+        break;
+      }
+    }
+    if (nowInsertedAt < 0 && enriched.length > 0) {
+      const lastBlock = enriched[enriched.length - 1];
+      if (nowMin >= lastBlock.endMin) {
+        nowInsertedAt = enriched.length;
+      }
+    }
+  }
+
+  return `
+    ${renderHeader("今やること、次にやること", "ルーティン")}
+    ${renderDateBar()}
+
+    <div class="segmented" style="margin-bottom:14px">
+      <button class="${viewMode === "routine" ? "active" : ""}" data-action="routine-mode" data-mode="routine">↻ ルーティンのみ</button>
+      <button class="${viewMode === "all" ? "active" : ""}" data-action="routine-mode" data-mode="all">↻+📅 ルーティン+予定</button>
+    </div>
+
+    ${enriched.length === 0 ? `
+      <section class="panel muted" style="padding:32px; text-align:center; font-size:13px">
+        ${viewMode === "routine"
+          ? "カテゴリ「ルーティン」の Block がまだありません。<br>タイムラインで Block を作って、カテゴリを「ルーティン」にすると、ここに表示されます。"
+          : "本日の Block がまだありません。"}
+      </section>
+    ` : `
+      <div class="routine-stack">
+        ${enriched.map((b, i) => `
+          ${nowInsertedAt === i ? renderRoutineNowMarker(now) : ""}
+          ${renderRoutineCard(b)}
+        `).join("")}
+        ${nowInsertedAt === enriched.length ? renderRoutineNowMarker(now) : ""}
+      </div>
+    `}
+  `;
+}
+
+function renderRoutineCard(block) {
+  const start = block.plannedStartAt ? timeFromDateTime(block.plannedStartAt) : "—";
+  const end = block.plannedEndAt ? timeFromDateTime(block.plannedEndAt) : "";
+  const catColor = block.category ? getCategoryColor(block.category) : "#8E8E93";
+  const phaseClass = `routine-card-${block.phase}`;
+  const phaseLabel = {
+    done: "✓ 完了",
+    current: "▶ 進行中",
+    past: "(過ぎた)",
+    future: "・予定",
+  }[block.phase] || "";
+  const duration = block.endMin && block.startMin ? `${block.endMin - block.startMin}分` : "";
+  return `
+    <div class="routine-card ${phaseClass}" style="border-left:4px solid ${catColor}" data-action="edit-block" data-id="${block.id}">
+      <div class="routine-card-time">
+        <div class="routine-card-time-start">${start}</div>
+        ${end ? `<div class="routine-card-time-end">${end}</div>` : ""}
+        ${duration ? `<div class="routine-card-time-dur">${duration}</div>` : ""}
+      </div>
+      <div class="routine-card-body">
+        <div class="routine-card-title">${escapeHTML(block.title)}</div>
+        <div class="routine-card-meta">
+          ${block.category ? `<span class="cat-chip" style="background:${catColor}1f; color:${catColor}; border:1px solid ${catColor}66">${escapeHTML(block.category)}</span>` : ""}
+          <span class="muted" style="font-size:11px">${phaseLabel}</span>
+        </div>
+      </div>
+      <button class="checkbox-button ${block.completed ? "done" : ""}" data-action="toggle-block" data-id="${block.id}" onclick="event.stopPropagation()">✓</button>
+    </div>
+  `;
+}
+
+function renderRoutineNowMarker(now) {
+  const time = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+  return `
+    <div class="routine-now-marker">
+      <span class="routine-now-dot"></span>
+      <span class="routine-now-label">いま ${time}</span>
+      <span class="routine-now-line"></span>
+    </div>
+  `;
+}
+
+
 
 function setTimelineMode(mode) {
   state.timelineMode = mode;
@@ -1611,6 +1760,8 @@ function renderTimeline({ compact, mode = "planned" }) {
     // 予定モード: 未完了 + plannedStartAt あり(完了済みは予定から消す)
     blocksToRender = allBlocks.filter((b) => b.plannedStartAt && !b.completed);
   }
+  // v19: カテゴリ「ルーティン」は専用ルーティンタブで表示するためタイムラインから除外
+  blocksToRender = blocksToRender.filter((b) => b.category !== "ルーティン");
   // v10: ズームレベル(state.timelineZoom: 1.0 / 2.0 / 4.0 のいずれか)
   const zoom = compact ? 1 : (state.timelineZoom || 1);
   const rowHeight = (compact ? 48 : 60) * zoom;
@@ -1631,6 +1782,19 @@ function renderTimeline({ compact, mode = "planned" }) {
     </div>
   `;
 
+  // v19: 現在時刻ライン(本日表示時のみ)
+  const now = new Date();
+  const isToday = state.selectedDate === todayISO();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const nowTop = isToday && nowMinutes >= startHour * 60 && nowMinutes < endHour * 60
+    ? ((nowMinutes - startHour * 60) / 60) * rowHeight
+    : null;
+  const nowLine = nowTop !== null ? `
+    <div class="now-line" style="position:absolute; top:${nowTop}px; left:0; right:0; height:0; border-top:2px solid #FF3B30; z-index:5; pointer-events:none">
+      <span style="position:absolute; left:0; top:-10px; background:#FF3B30; color:#fff; font-size:10px; padding:1px 6px; border-radius:8px; font-weight:700">${pad2(now.getHours())}:${pad2(now.getMinutes())}</span>
+    </div>
+  ` : "";
+
   return `
     ${zoomControls}
     <div class="timeline" style="position:relative; min-height:${rowHeight * (endHour - startHour + 1)}px">
@@ -1641,6 +1805,7 @@ function renderTimeline({ compact, mode = "planned" }) {
       <div class="timeline-cards-area" style="position:absolute; top:0; left:60px; right:100px; height:100%;">
         ${positioned.map((a) => renderTimelineCard(a, mode, maxLanes)).join("")}
       </div>
+      ${nowLine}
       ${renderEnergyGraph(allBlocks, rowHeight, startHour, endHour)}
     </div>
   `;
@@ -1900,6 +2065,9 @@ function renderManualPomodoro(running, remaining, blockOptions) {
       const progress = 1 - remainingMs / breakTotalMs;
       const breakDisplay = remainingTextNormal(remainingMs);
       const message = getBreakMessage(remainingSec);
+      // v19: 休憩前の Block 情報(続ける/完了 の選択肢用)
+      const lastBlockId = state.pomodoro.lastFocusBlockId;
+      const lastBlock = lastBlockId ? state.blocks.find((b) => b.id === lastBlockId && !b.deleted) : null;
       return `
         <section class="panel" style="display:grid; place-items:center; min-height:380px; padding:24px">
           ${renderCircularProgress(progress, breakDisplay, "var(--orange)")}
@@ -1908,18 +2076,28 @@ function renderManualPomodoro(running, remaining, blockOptions) {
             <div class="muted" style="font-size:11px; margin-top:4px">5:00 → 0:00(実時間)</div>
             ${message ? `<div style="margin-top:10px; font-size:14px; font-weight:600; color:var(--text)">${escapeHTML(message)}</div>` : ""}
           </div>
-          <div style="margin-top:18px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap">
-            <button class="btn green" data-action="end-break">✓ 休憩終了</button>
+          ${lastBlock ? `
+            <div style="margin-top:14px; padding:10px; background:var(--panel-soft); border-radius:8px; text-align:center; max-width:340px">
+              <div class="muted" style="font-size:11px; margin-bottom:4px">直前のセッション:</div>
+              <strong style="font-size:13px">${escapeHTML(lastBlock.title)}</strong>
+              <div style="margin-top:10px; display:flex; gap:6px; justify-content:center; flex-wrap:wrap">
+                <button class="btn green" data-action="continue-focus">🔁 同じBlockで続ける</button>
+                <button class="btn primary" data-action="finish-block">✅ ここで完了する</button>
+              </div>
+            </div>
+          ` : ""}
+          <div style="margin-top:14px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap">
+            <button class="btn" data-action="end-break">✕ 別のタスクへ</button>
           </div>
         </section>
         <section class="panel stack" style="margin-top:12px">
-          <div class="muted" style="font-size:12px">次にとりかかるタスクを選択(休憩を終了して即開始)</div>
+          <div class="muted" style="font-size:12px">次にとりかかる別のBlockを選択(休憩を終了して即開始)</div>
           <div style="display:flex; gap:8px; flex-wrap:wrap">
             ${blockOptions.length
-              ? blockOptions.map((block) => `
+              ? blockOptions.filter((b) => b.id !== lastBlockId).map((block) => `
                 <button class="btn orange" data-action="start-pomodoro" data-block-id="${block.id}">${escapeHTML(block.title)}</button>
               `).join("")
-              : `<div class="muted">選択可能な Block がありません</div>`}
+              : `<div class="muted">他に選択可能な Block がありません</div>`}
           </div>
         </section>
       `;
@@ -3089,16 +3267,17 @@ function stopPomodoro() {
 function completePomodoro() {
   const blockId = state.pomodoro.blockId;
   if (blockId) {
+    // v19: 完了時、Block の完了フラグも立てる + 実績終了時刻記録
     state.blocks = state.blocks.map((block) => block.id === blockId
       ? {
           ...block,
           pomodoroCount: Number(block.pomodoroCount || 0) + 1,
           actualEndAt: nowDateTime(),
+          completed: true,
           updatedAt: nowDateTime()
         }
       : block);
   }
-  // v14: state.pomodoro を完全再構築
   state.pomodoro = {
     tab: state.pomodoro?.tab || "manual",
     passive: state.pomodoro?.passive || defaultPassivePomodoro(),
@@ -3109,7 +3288,7 @@ function completePomodoro() {
     endsAt: "",
     mode: "focus"
   };
-  saveAndRender("ポモドーロを完了しました");
+  saveAndRender("ポモドーロを完了しました(Blockに完了チェック)");
 }
 
 // v9: 「☕ 休憩へ」: focus → break に遷移(現在のセッションを完了扱いに + 5分休憩開始)
@@ -3121,6 +3300,7 @@ function goBreakPomodoro() {
       : block);
   }
   // v14: 完全再構築 + 5分休憩開始
+  // v19: lastFocusBlockId に保存(休憩後に「続ける/完了」選択用)
   const now = Date.now();
   state.pomodoro = {
     tab: state.pomodoro?.tab || "manual",
@@ -3128,6 +3308,7 @@ function goBreakPomodoro() {
     fullscreen: state.pomodoro?.fullscreen || false,
     running: true,
     blockId: "",
+    lastFocusBlockId: blockId || "",  // v19
     startedAt: dateToLocalDateTime(new Date(now)),
     endsAt: dateToLocalDateTime(new Date(now + 5 * 60 * 1000)),
     mode: "break"
@@ -3149,6 +3330,42 @@ function endBreakPomodoro() {
     mode: "focus"
   };
   saveAndRender("休憩を終了しました");
+}
+
+// v19: 休憩中「🔁 同じBlockで続ける」: 休憩を打ち切り、同じBlockで新セッション開始
+function continueFocusPomodoro() {
+  const lastBlockId = state.pomodoro.lastFocusBlockId;
+  if (!lastBlockId) return showToast("直前のBlock情報が見つかりません");
+  forceResetPomodoroSession();
+  startPomodoro(lastBlockId);
+}
+
+// v19: 休憩中「✅ ここで完了する」: Blockに完了フラグ + 実績終了時刻(=休憩開始時刻)を記録
+function finishBlockFromBreak() {
+  const lastBlockId = state.pomodoro.lastFocusBlockId;
+  const breakStartedAt = state.pomodoro.startedAt;  // 休憩開始時刻 = 直前セッションの終了時刻
+  if (lastBlockId) {
+    state.blocks = state.blocks.map((b) => b.id === lastBlockId
+      ? {
+          ...b,
+          completed: true,
+          actualEndAt: breakStartedAt || b.actualEndAt || nowDateTime(),
+          updatedAt: nowDateTime()
+        }
+      : b);
+  }
+  // タイマーを終了状態に
+  state.pomodoro = {
+    tab: state.pomodoro?.tab || "manual",
+    passive: state.pomodoro?.passive || defaultPassivePomodoro(),
+    fullscreen: state.pomodoro?.fullscreen || false,
+    running: false,
+    blockId: "",
+    startedAt: "",
+    endsAt: "",
+    mode: "focus"
+  };
+  saveAndRender("✅ Block を完了しました(実績終了時刻を記録)");
 }
 
 function startTimerTicker() {
