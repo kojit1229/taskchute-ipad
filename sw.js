@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v22";
+const CACHE_NAME = "taskchute-journal-pwa-v23";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -56,6 +56,27 @@ self.addEventListener("fetch", (event) => {
   }
   // MD ファイルは network-first(編集が反映されるように)
   if (url.pathname.endsWith(".md")) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+  // v23: アプリ本体(HTML/JS/CSS/manifest)も network-first にする。
+  // cache-first だとデプロイしても端末側の旧キャッシュが居座り続けるため。
+  // オンライン時は常に最新を取得し、オフライン時のみキャッシュにフォールバック。
+  if (
+    url.pathname.endsWith(".html") ||
+    url.pathname.endsWith(".js") ||
+    url.pathname.endsWith(".css") ||
+    url.pathname.endsWith(".webmanifest") ||
+    url.pathname.endsWith("/")
+  ) {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
