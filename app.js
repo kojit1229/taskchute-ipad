@@ -1726,7 +1726,7 @@ function renderRoutineCard(block) {
           <span class="muted" style="font-size:11px">${phaseLabel}</span>
         </div>
       </div>
-      <button class="checkbox-button ${block.completed ? "done" : ""}" data-action="toggle-block" data-id="${block.id}" onclick="event.stopPropagation()">✓</button>
+      <button class="checkbox-button ${block.completed ? "done" : ""}" data-action="toggle-block" data-id="${block.id}">✓</button>
     </div>
   `;
 }
