@@ -1,5 +1,9 @@
 const STORAGE_KEY = "taskchute-journal-pwa-state-v1";
 
+// v23: 繰り返し Block を実体化する期間(今日を基準)
+const RECURRENCE_KEEP_PAST_DAYS = 7;    // 過去はこの日数だけ実体を保持
+const RECURRENCE_FUTURE_DAYS = 31;      // 未来はこの日数先まで実体化
+
 const navItems = [
   { id: "home", label: "ホーム", mark: "H" },
   { id: "wbs", label: "WBS", mark: "W" },
@@ -44,6 +48,9 @@ let timerTicker = null;
 let cachedVisionMd = "";
 let cachedAffirmationMd = "";
 const cachedFeedback = {};  // { 'YYYY-MM-DD': '...md text...' }
+
+// v23: 起動時に繰り返し Block を実体化(期間外・未編集は破棄)
+maintainRecurrences({ purge: true });
 
 render();
 hydrateStaticMarkdown();
@@ -264,10 +271,20 @@ function loadState() {
   }
 }
 
+let _lastSaveError = null;
+
 function saveState() {
   // state.modal は永続化しない(モーダル状態はメモリのみ)
   const persisted = { ...state, modal: null };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+  // v23: localStorage 書き込みの失敗(容量超過など)で例外を投げない。
+  // 投げると呼び出し元(saveAndRender)で render() に到達できず画面が固まるため。
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+    _lastSaveError = null;
+  } catch (error) {
+    _lastSaveError = error;
+    console.error("saveState 失敗(端末内保存):", error);
+  }
   scheduleAutoSave();
 }
 
@@ -359,6 +376,9 @@ function normalizeState(value) {
   value.journals ||= {};
   value.feedback ||= {};
   value.reports ||= {};
+  // v23: 繰り返しをルール方式へ(旧データは初回のみ自動移行)
+  value.recurrences ||= [];
+  migrateRecurrencesIfNeeded(value);
   value.modal = null;  // 起動時はモーダル閉じた状態
   return value;
 }
@@ -2809,6 +2829,14 @@ function updateBlockField(id, field, value) {
 }
 
 function deleteBlock(id) {
+  const target = state.blocks.find((b) => b.id === id);
+  // v23: 繰り返し実体を削除したら、ルールの例外日に追加(再生成を防ぐ)
+  if (target && target.recurrenceGroupId) {
+    state.recurrences = (state.recurrences || []).map((r) =>
+      r.id === target.recurrenceGroupId
+        ? { ...r, exceptionDates: [...new Set([...(r.exceptionDates || []), target.date])], updatedAt: nowDateTime() }
+        : r);
+  }
   state.blocks = state.blocks.map((block) => block.id === id ? { ...block, deleted: true, updatedAt: nowDateTime() } : block);
   saveAndRender("Blockを削除しました");
 }
@@ -3053,6 +3081,7 @@ function importData(file) {
   reader.onload = () => {
     try {
       state = normalizeState(JSON.parse(String(reader.result)));
+      maintainRecurrences({ purge: true });
       saveAndRender("データをインポートしました");
     } catch {
       showToast("JSONを読み込めませんでした");
@@ -3149,6 +3178,7 @@ async function loadFromGitHub() {
     const token = state.settings.github.token;
     state = normalizeState(loaded);
     state.settings.github = { ...config, token };
+    maintainRecurrences({ purge: true });
     saveAndRender("GitHubから読み込みました");
   } catch (error) {
     showToast(`GitHub読込失敗: ${error.message}`);
@@ -3433,7 +3463,12 @@ function shiftSelectedDate(delta) {
 function saveAndRender(message) {
   saveState();
   render();
-  if (message) showToast(message);
+  // v23: 端末内保存に失敗したら、その旨を優先して伝える(操作自体は反映済み)
+  if (_lastSaveError) {
+    showToast("⚠️ 端末内保存に失敗(容量超過の可能性)。設定からGitHubへ保存してください");
+  } else if (message) {
+    showToast(message);
+  }
 }
 
 async function hydrateStaticMarkdown() {
@@ -3618,6 +3653,195 @@ function ageMetric(label, today, birthDate, age) {
     progress,
     note: `${target} (${progress.toFixed(1)}% 経過)`
   };
+}
+
+// ===== v23: 繰り返しエンジン(ルール + ローリングウィンドウ materialization) =====
+// 繰り返しは state.recurrences[] にルールとして保持する。表示用の Block は
+// 「今日を中心とした一定期間」だけ実体化し、期間外で未編集のものは破棄する。
+// これにより、以前のように 1 シリーズ 400 件を恒久保存することがなくなる。
+// 期間の定数 RECURRENCE_KEEP_PAST_DAYS / RECURRENCE_FUTURE_DAYS はファイル先頭で定義。
+
+// 「実績・編集が入っている」= 履歴として残すべき Block か
+function isTouchedBlock(b) {
+  return Boolean(
+    b.completed || b.actualStartAt || b.actualEndAt ||
+    Number(b.pomodoroCount || 0) > 0 || (b.comment || "").trim() ||
+    b.isMIT || Number(b.charge || 0) > 0 || Number(b.discharge || 0) > 0
+  );
+}
+
+function recurrenceKindLabel(kind) {
+  return { daily: "毎日", weekdays: "平日のみ", weekly: "毎週", monthly: "毎月" }[kind] || kind || "";
+}
+
+// ルールが指定日付に発生するか
+function recurrenceMatchesDate(rule, isoDate) {
+  if (!rule || rule.deleted) return false;
+  if (rule.anchorDate && isoDate < rule.anchorDate) return false;
+  if (Array.isArray(rule.exceptionDates) && rule.exceptionDates.includes(isoDate)) return false;
+  const d = parseDate(isoDate);
+  const wd = d.getDay();  // 0=日曜
+  switch (rule.kind) {
+    case "daily":    return true;
+    case "weekdays": return wd >= 1 && wd <= 5;
+    case "weekly":   return rule.anchorDate ? wd === parseDate(rule.anchorDate).getDay() : true;
+    case "monthly":  return rule.anchorDate ? d.getDate() === parseDate(rule.anchorDate).getDate() : true;
+    default:         return false;
+  }
+}
+
+// ルール + 日付 から表示用 Block(実体)を生成
+function makeRecurrenceInstance(rule, isoDate) {
+  return {
+    id: `rec_${rule.id}_${isoDate}`,
+    taskId: rule.taskId || "",
+    date: isoDate,
+    title: rule.title || "繰り返しBlock",
+    category: rule.category || "",
+    plannedStartAt: rule.startTime ? `${isoDate}T${rule.startTime}` : "",
+    plannedEndAt: rule.endTime ? `${isoDate}T${rule.endTime}` : "",
+    actualStartAt: "",
+    actualEndAt: "",
+    completed: false,
+    charge: 0,
+    discharge: 0,
+    expectedCharge: rule.expectedCharge ?? "",
+    expectedDischarge: rule.expectedDischarge ?? "",
+    comment: "",
+    recurrenceGroupId: rule.id,
+    pomodoroCount: 0,
+    migratedTo: "",
+    orderIndex: 0,
+    isMIT: false,
+    source: rule.source || "",
+    createdAt: nowDateTime(),
+    updatedAt: nowDateTime(),
+    deleted: false
+  };
+}
+
+// Block(テンプレート)から新しい繰り返しルールを作成
+function createRecurrenceRule(block, kind) {
+  const rule = {
+    id: crypto.randomUUID(),
+    title: block.title || "繰り返しBlock",
+    category: block.category || "",
+    taskId: block.taskId || "",
+    kind,
+    startTime: block.plannedStartAt ? (block.plannedStartAt.split("T")[1] || "") : "",
+    endTime: block.plannedEndAt ? (block.plannedEndAt.split("T")[1] || "") : "",
+    anchorDate: block.date || todayISO(),
+    expectedCharge: block.expectedCharge ?? "",
+    expectedDischarge: block.expectedDischarge ?? "",
+    source: block.source || "",
+    exceptionDates: [],
+    createdAt: nowDateTime(),
+    updatedAt: nowDateTime(),
+    deleted: false
+  };
+  state.recurrences ||= [];
+  state.recurrences.push(rule);
+  return rule;
+}
+
+// 指定期間に繰り返し Block を実体化(既存があれば温存)。
+// purge=true で「期間外 かつ 未編集」の繰り返し実体を破棄しファイルを小さく保つ。
+function maintainRecurrences({ purge = false } = {}) {
+  state.recurrences ||= [];
+  state.blocks ||= [];
+  const rules = state.recurrences.filter((r) => !r.deleted);
+  const today = todayISO();
+  const from = addDays(today, -RECURRENCE_KEEP_PAST_DAYS);
+  const to = addDays(today, RECURRENCE_FUTURE_DAYS);
+  // 既存の (ruleId + date) を索引化(削除済みも含めて重複生成を防ぐ)
+  const existing = new Set();
+  for (const b of state.blocks) {
+    if (b.recurrenceGroupId) existing.add(`${b.recurrenceGroupId}|${b.date}`);
+  }
+  // 期間内の発生日を実体化
+  for (const rule of rules) {
+    let cur = from;
+    let guard = 0;
+    while (cur <= to && guard < 800) {
+      guard++;
+      if (recurrenceMatchesDate(rule, cur) && !existing.has(`${rule.id}|${cur}`)) {
+        state.blocks.push(makeRecurrenceInstance(rule, cur));
+        existing.add(`${rule.id}|${cur}`);
+      }
+      cur = addDays(cur, 1);
+    }
+  }
+  // 破棄: 繰り返し実体 かつ 期間外 かつ 未編集 のものを取り除く
+  if (purge) {
+    const ruleIds = new Set(state.recurrences.map((r) => r.id));
+    state.blocks = state.blocks.filter((b) => {
+      const isRecInstance = b.recurrenceGroupId && ruleIds.has(b.recurrenceGroupId);
+      if (!isRecInstance) return true;                   // 通常 Block は残す
+      if (b.date >= from && b.date <= to) return true;   // 期間内は残す
+      if (isTouchedBlock(b)) return true;                // 実績ありは履歴として残す
+      return false;                                      // 期間外・未編集は破棄
+    });
+  }
+}
+
+// 旧データ(繰り返し Block を恒久展開)を、ルール方式へ一度だけ移行する
+function inferRecurrenceKind(sortedDates) {
+  const uniq = [...new Set(sortedDates)].sort();
+  if (uniq.length < 3) return "daily";
+  const diffs = [];
+  for (let i = 1; i < Math.min(uniq.length, 40); i++) {
+    diffs.push(daysBetween(uniq[i - 1], uniq[i]));
+  }
+  if (diffs.every((d) => d === 1)) return "daily";
+  if (diffs.every((d) => d === 7)) return "weekly";
+  const allWeekday = uniq.slice(0, 40).every((d) => {
+    const wd = parseDate(d).getDay();
+    return wd >= 1 && wd <= 5;
+  });
+  if (allWeekday && diffs.every((d) => d === 1 || d === 3)) return "weekdays";
+  if (diffs.every((d) => d >= 28 && d <= 31)) return "monthly";
+  return "daily";
+}
+
+function migrateRecurrencesIfNeeded(value) {
+  value.recurrences ||= [];
+  if (value.recurrences.length > 0) return;          // 既に移行済み
+  const recBlocks = (value.blocks || []).filter((b) => b.recurrenceGroupId);
+  if (recBlocks.length === 0) return;                // 繰り返しデータが無い
+  const groups = {};
+  for (const b of recBlocks) {
+    (groups[b.recurrenceGroupId] ||= []).push(b);
+  }
+  const rules = [];
+  for (const [groupId, blocks] of Object.entries(groups)) {
+    const dates = blocks.map((b) => b.date).filter(Boolean).sort();
+    const rep = blocks.slice().sort((a, b) => (a.date || "").localeCompare(b.date || ""))[0];
+    rules.push({
+      id: groupId,  // 既存 Block の recurrenceGroupId をそのままルール ID に再利用
+      title: rep.title || "繰り返しBlock",
+      category: rep.category || "",
+      taskId: rep.taskId || "",
+      kind: inferRecurrenceKind(dates),
+      startTime: rep.plannedStartAt ? (rep.plannedStartAt.split("T")[1] || "") : "",
+      endTime: rep.plannedEndAt ? (rep.plannedEndAt.split("T")[1] || "") : "",
+      anchorDate: dates[0] || todayISO(),
+      expectedCharge: rep.expectedCharge ?? "",
+      expectedDischarge: rep.expectedDischarge ?? "",
+      source: rep.source || "",
+      exceptionDates: [],
+      createdAt: nowDateTime(),
+      updatedAt: nowDateTime(),
+      deleted: false
+    });
+  }
+  value.recurrences = rules;
+  // 繰り返し Block は「実績あり」だけ履歴として残し、未編集の展開分は破棄。
+  // 削除済み Block もこの機会に物理削除する。
+  value.blocks = (value.blocks || []).filter((b) => {
+    if (b.deleted) return false;
+    if (!b.recurrenceGroupId) return true;
+    return isTouchedBlock(b);
+  });
 }
 
 function blocksForDate(date) {
@@ -4160,22 +4384,38 @@ function buildBlockModal(block) {
         </div>
         <div class="field" style="background:var(--accent-soft); padding:10px; border-radius:8px">
           <label class="field-label" style="color:var(--accent); font-weight:700">🔁 繰り返し設定</label>
-          <select class="select" data-modal-field="recurrenceKind" id="recurrenceKindSelect">
-            <option value="">繰り返さない(この日のみ)</option>
-            <option value="daily">毎日</option>
-            <option value="weekdays">平日のみ(月〜金)</option>
-            <option value="weekly">毎週(同じ曜日)</option>
-            <option value="monthly">毎月(同じ日)</option>
-          </select>
-          ${block.recurrenceGroupId ? `
-            <div class="muted" style="font-size:11px; margin-top:6px; line-height:1.5">
-              ⚠️ この Block は既存の繰り返しシリーズの一部です。<br>
-              繰り返しを<strong>変更</strong>すると、この日以降の同じシリーズの未来分が再生成されます。<br>
-              <strong>そのまま</strong>(変更なし)で保存すれば、シリーズ設定は維持されます。
-            </div>
-          ` : `
-            <div class="muted" style="font-size:11px; margin-top:6px">同じ groupId で複数の Block を一括生成します(終了日は内部的に 2035/12/31 まで)</div>
-          `}
+          ${(() => {
+            const liveRule = block.recurrenceGroupId
+              ? (state.recurrences || []).find((r) => r.id === block.recurrenceGroupId && !r.deleted)
+              : null;
+            if (liveRule) {
+              return `
+                <select class="select" data-modal-field="recurrenceKind">
+                  <option value="__keep__" selected>シリーズ設定を維持(変更しない)</option>
+                  <option value="daily">毎日に変更</option>
+                  <option value="weekdays">平日のみに変更</option>
+                  <option value="weekly">毎週に変更</option>
+                  <option value="monthly">毎月に変更</option>
+                  <option value="__end__">繰り返しを終了する</option>
+                </select>
+                <div class="muted" style="font-size:11px; margin-top:6px; line-height:1.5">
+                  この Block は繰り返しシリーズ(${recurrenceKindLabel(liveRule.kind)})の一部です。<br>
+                  実績・コメント・完了の編集は<strong>この日のみ</strong>に反映されます。<br>
+                  「終了する」を選ぶと今後の自動生成が止まります(過去の実績は残ります)。
+                </div>
+              `;
+            }
+            return `
+              <select class="select" data-modal-field="recurrenceKind">
+                <option value="" selected>繰り返さない(この日のみ)</option>
+                <option value="daily">毎日</option>
+                <option value="weekdays">平日のみ(月〜金)</option>
+                <option value="weekly">毎週(同じ曜日)</option>
+                <option value="monthly">毎月(同じ日)</option>
+              </select>
+              <div class="muted" style="font-size:11px; margin-top:6px">繰り返しはルールとして保存され、表示は直近${RECURRENCE_KEEP_PAST_DAYS + RECURRENCE_FUTURE_DAYS}日分のみ実体化されます。</div>
+            `;
+          })()}
         </div>
       </div>
       <div class="modal-footer">
@@ -4190,8 +4430,6 @@ function buildBlockModal(block) {
 function saveBlockFromModal(id, fields) {
   const existing = state.blocks.find((b) => b.id === id);
   const isNew = !existing;
-  // v18: 繰り返し終了日は内部固定 2035-12-31
-  const RECURRENCE_UNTIL_DEFAULT = "2035-12-31";
   const updated = {
     id: isNew ? id : existing.id,
     title: (fields.title || "").trim() || (existing?.title || "新規Block"),
@@ -4219,93 +4457,67 @@ function saveBlockFromModal(id, fields) {
     deleted: false
   };
   if (isNew) {
-    state.blocks.push(updated);
-    // 繰り返し指定があれば、追加で生成(終了日は内部固定 2035-12-31)
-    if (fields.recurrenceKind) {
-      const generated = generateRecurringBlocks(updated, fields.recurrenceKind, RECURRENCE_UNTIL_DEFAULT);
+    const rk = fields.recurrenceKind;
+    if (rk && rk !== "__keep__" && rk !== "__end__") {
+      // v23: 新規 Block を繰り返しシリーズ化(ルールを作り、期間分だけ実体化)
+      const rule = createRecurrenceRule(updated, rk);
+      updated.recurrenceGroupId = rule.id;
+      state.blocks.push(updated);
+      maintainRecurrences();
       closeModal();
-      saveAndRender(`Blockを ${1 + generated.length} 件作成しました(繰り返し含む)`);
+      saveAndRender(`繰り返し「${recurrenceKindLabel(rk)}」を設定しました`);
       return;
     }
+    state.blocks.push(updated);
     closeModal();
     saveAndRender("Blockを追加しました");
   } else {
     state.blocks = state.blocks.map((b) => b.id === id ? updated : b);
-    // v18: 既存Blockに対する繰り返し設定の変更
-    if (fields.recurrenceKind) {
-      // 1. 既に同じシリーズがあれば、この日以降の未来分(自分以外)を削除
-      if (existing.recurrenceGroupId) {
-        const todayDate = state.selectedDate;
-        const sameGroup = state.blocks.filter((b) =>
-          b.recurrenceGroupId === existing.recurrenceGroupId &&
-          b.id !== id &&
-          b.date > todayDate &&
-          !b.completed
-        );
-        state.blocks = state.blocks.map((b) => sameGroup.some((g) => g.id === b.id) ? { ...b, deleted: true, updatedAt: nowDateTime() } : b);
+    const rk = fields.recurrenceKind;
+    // v23: "__keep__"・空・未指定 → この Block の編集のみ(シリーズ設定は不変)
+    if (rk && rk !== "__keep__") {
+      if (rk === "__end__") {
+        // シリーズ終了(以降の自動生成を停止。実績履歴はそのまま残る)
+        if (existing.recurrenceGroupId) {
+          state.recurrences = (state.recurrences || []).map((r) =>
+            r.id === existing.recurrenceGroupId
+              ? { ...r, deleted: true, updatedAt: nowDateTime() }
+              : r);
+        }
+        closeModal();
+        saveAndRender("繰り返しシリーズを終了しました");
+        return;
       }
-      // 2. 新しいシリーズを生成
-      const generated = generateRecurringBlocks(updated, fields.recurrenceKind, RECURRENCE_UNTIL_DEFAULT);
+      // kind 変更、または 単発 Block の新規シリーズ化
+      const liveRule = (state.recurrences || []).find(
+        (r) => r.id === existing.recurrenceGroupId && !r.deleted);
+      if (liveRule) {
+        state.recurrences = state.recurrences.map((r) =>
+          r.id === liveRule.id
+            ? {
+                ...r,
+                kind: rk,
+                title: updated.title,
+                category: updated.category,
+                taskId: updated.taskId,
+                startTime: updated.plannedStartAt ? (updated.plannedStartAt.split("T")[1] || "") : "",
+                endTime: updated.plannedEndAt ? (updated.plannedEndAt.split("T")[1] || "") : "",
+                updatedAt: nowDateTime()
+              }
+            : r);
+      } else {
+        const rule = createRecurrenceRule(updated, rk);
+        updated.recurrenceGroupId = rule.id;
+        state.blocks = state.blocks.map((b) => b.id === id ? updated : b);
+      }
+      maintainRecurrences();
       closeModal();
-      saveAndRender(`シリーズを更新しました(この日以降 ${generated.length} 件を再生成)`);
+      saveAndRender("繰り返し設定を更新しました");
       return;
     }
     closeModal();
     saveAndRender("Blockを更新しました");
   }
-}
-
-// 繰り返し Block を一括生成
-function generateRecurringBlocks(template, kind, untilDate) {
-  const groupId = crypto.randomUUID();
-  // 既存(template)にもgroupIdを付ける
-  state.blocks = state.blocks.map((b) => b.id === template.id ? { ...b, recurrenceGroupId: groupId } : b);
-
-  const startDate = parseDate(template.date);
-  const endDate = parseDate(untilDate);
-  const startTimeStr = template.plannedStartAt ? template.plannedStartAt.split("T")[1] || "" : "";
-  const endTimeStr = template.plannedEndAt ? template.plannedEndAt.split("T")[1] || "" : "";
-
-  const generated = [];
-  let cursor = new Date(startDate);
-  cursor.setDate(cursor.getDate() + 1);  // 翌日から
-  let safety = 0;
-  const maxIter = 400;  // 安全策
-
-  while (cursor.getTime() <= endDate.getTime() && safety < maxIter) {
-    safety++;
-    const wd = cursor.getDay();
-    let matches = false;
-    if (kind === "daily") {
-      matches = true;
-    } else if (kind === "weekdays") {
-      matches = wd >= 1 && wd <= 5;
-    } else if (kind === "weekly") {
-      matches = wd === startDate.getDay();
-    } else if (kind === "monthly") {
-      matches = cursor.getDate() === startDate.getDate();
-    }
-    if (matches) {
-      const date = dateToISO(cursor);
-      const newBlock = {
-        ...template,
-        id: crypto.randomUUID(),
-        date,
-        plannedStartAt: startTimeStr ? `${date}T${startTimeStr}` : "",
-        plannedEndAt: endTimeStr ? `${date}T${endTimeStr}` : "",
-        actualStartAt: "",
-        actualEndAt: "",
-        completed: false,
-        recurrenceGroupId: groupId,
-        createdAt: nowDateTime(),
-        updatedAt: nowDateTime()
-      };
-      state.blocks.push(newBlock);
-      generated.push(newBlock);
-    }
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  return generated;
 }
 
 // タイムラインの空き時間行クリックで新規Block作成モーダル
