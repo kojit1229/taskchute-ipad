@@ -24,10 +24,10 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-22T10:28:00"
+      "lastSavedAt": "2026-05-22T10:29:00"
     },
-    "visionSection": "vision",
-    "visionBoardIndex": 0,
+    "visionSection": "board",
+    "visionBoardIndex": 2,
     "categories": [
       {
         "id": "4efa616b-60ff-416b-9000-b5b7d8d681d4",
