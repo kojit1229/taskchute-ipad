@@ -3131,7 +3131,21 @@ async function loadFromGitHub() {
       throw new Error(await gitHubErrorMessage(response));
     }
     const payload = await response.json();
-    const loaded = JSON.parse(fromBase64(payload.content || ""));
+    // v22: Contents API は 1MB を超えるファイルの content を返さない
+    // (encoding: "none", content: "")。その場合は Blob API から取得する。
+    let jsonText;
+    if (payload.content && payload.encoding === "base64") {
+      jsonText = fromBase64(payload.content);
+    } else {
+      if (!payload.sha) throw new Error("ファイル情報を取得できませんでした");
+      const blobURL = `https://api.github.com/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/git/blobs/${payload.sha}`;
+      const blobResp = await fetch(blobURL, { headers: githubHeaders(config.token) });
+      if (!blobResp.ok) throw new Error(await gitHubErrorMessage(blobResp));
+      const blob = await blobResp.json();
+      jsonText = fromBase64(blob.content || "");
+    }
+    if (!jsonText.trim()) throw new Error("ファイルが空です");
+    const loaded = JSON.parse(jsonText);
     const token = state.settings.github.token;
     state = normalizeState(loaded);
     state.settings.github = { ...config, token };
@@ -3164,9 +3178,15 @@ function gitHubContentsURL(config) {
 }
 
 function githubHeaders(token) {
+  // v22: 前後の空白(全角スペース・改行・BOM 含む)を除去し、
+  // HTTPヘッダーに使えない非 Latin-1 文字が混じっていたら分かりやすく弾く。
+  const clean = String(token || "").trim();
+  if (/[^\x00-\xFF]/.test(clean)) {
+    throw new Error("トークンに使用できない文字が含まれています。設定画面でトークンを貼り直してください");
+  }
   return {
     "Accept": "application/vnd.github+json",
-    "Authorization": `Bearer ${token}`,
+    "Authorization": `Bearer ${clean}`,
     "X-GitHub-Api-Version": "2022-11-28"
   };
 }
