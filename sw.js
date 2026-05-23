@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v23";
+const CACHE_NAME = "taskchute-journal-pwa-v24";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -45,6 +45,11 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
+  // v24: 同一オリジン以外(Google API・GIS・外部CDN等)は SW を経由させない。
+  //      cdn.jsdelivr.net の marked だけは APP_SHELL でキャッシュ済み。
+  if (url.origin !== self.location.origin && url.hostname !== "cdn.jsdelivr.net") {
+    return;
+  }
   // GitHub API はキャッシュしない(常に最新)
   if (url.hostname === "api.github.com") {
     return;
