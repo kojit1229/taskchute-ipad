@@ -4,14 +4,6 @@ const STORAGE_KEY = "taskchute-journal-pwa-state-v1";
 const RECURRENCE_KEEP_PAST_DAYS = 7;    // 過去はこの日数だけ実体を保持
 const RECURRENCE_FUTURE_DAYS = 31;      // 未来はこの日数先まで実体化
 
-// v24: Google Drive 連携用(起動時に driveStartup() から参照されるため先頭で宣言)
-const DRIVE_TOKEN_KEY = "taskchute-drive-token";
-const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
-let _driveToken = null;          // { accessToken, expiresAt }
-let _gisTokenClient = null;
-let _driveAuthResolve = null;
-let _driveAuthReject = null;
-
 const navItems = [
   { id: "home", label: "ホーム", mark: "H" },
   { id: "wbs", label: "WBS", mark: "W" },
@@ -64,8 +56,8 @@ render();
 hydrateStaticMarkdown();
 registerServiceWorker();
 startTimerTicker();
-// v24: Google Drive 設定済み & トークン有効なら起動時に自動読み込み
-driveStartup();
+// v25: 起動後、GitHub 側がローカルより新しければ取り込む(ローカルファースト)
+syncFromGitHubOnStartup();
 
 document.addEventListener("click", (event) => {
   const target = event.target.closest("[data-action]");
@@ -95,8 +87,6 @@ document.addEventListener("click", (event) => {
   if (action === "download-data") downloadData();
   if (action === "save-github") saveToGitHub();
   if (action === "load-github") loadFromGitHub();
-  if (action === "connect-drive") connectDrive();
-  if (action === "save-drive") saveToDrive(false);
   if (action === "reset-demo") resetDemoData();
   // v17: MIT(今日の主役)の切替(最大3個)
   if (action === "toggle-mit") toggleMIT(id);
@@ -188,10 +178,6 @@ document.addEventListener("input", (event) => {
     state.settings.github[target.dataset.githubField] = target.value.trim();
     saveState();
   }
-  if (target.matches("[data-drive-field]") && target.type !== "checkbox") {
-    state.settings.drive[target.dataset.driveField] = target.value.trim();
-    saveState();
-  }
   // === v9: カテゴリ編集 ===
   if (target.matches("[data-cat-id][data-cat-field]")) {
     updateCategoryField(target.dataset.catId, target.dataset.catField, target.value);
@@ -225,12 +211,12 @@ document.addEventListener("change", (event) => {
     saveState();
     render();
   }
-  if (target.matches('[data-drive-field="autoSave"]')) {
-    state.settings.drive.autoSave = target.checked;
+  if (target.matches('[data-github-field="autoSave"]')) {
+    state.settings.github.autoSave = target.checked;
     saveState();
-    updateDriveStatus();
+    updateAutoSaveStatus();
     if (target.checked) {
-      showToast("Drive 自動保存を有効にしました");
+      showToast("GitHub 自動保存を有効にしました");
       scheduleAutoSave();
     }
   }
@@ -304,6 +290,9 @@ function persistLocalNoSchedule() {
 }
 
 function saveState() {
+  // v25: 実データの変更時刻を記録(端末間の「新しい方が勝つ」判定に使用)。
+  //      persistLocalNoSchedule(リモート採用・GitHub保存)では更新しない。
+  state.dataModifiedAt = nowDateTime();
   // v23: localStorage 書き込み失敗で例外を投げない(画面が固まるのを防ぐ)
   persistLocalNoSchedule();
   scheduleAutoSave();
@@ -322,15 +311,8 @@ function normalizeState(value) {
     value.settings.github.autoSave = false;
   }
   value.settings.github.lastSavedAt ||= "";
-  // v24: Google Drive 連携設定
-  value.settings.drive ||= defaultDriveSettings();
-  value.settings.drive.clientId ||= "";
-  value.settings.drive.fileName ||= "taskchute_app_state.json";
-  value.settings.drive.fileId ||= "";
-  if (typeof value.settings.drive.autoSave !== "boolean") {
-    value.settings.drive.autoSave = false;
-  }
-  value.settings.drive.lastSavedAt ||= "";
+  // v25: データ最終更新時刻(端末間で「新しい方が勝つ」判定に使用)
+  value.dataModifiedAt ||= "";
   value.settings.visionSection ||= "vision";
   if (typeof value.settings.visionBoardIndex !== "number") {
     value.settings.visionBoardIndex = 0;
@@ -597,18 +579,6 @@ function defaultGitHubSettings() {
     branch: "main",
     path: "app-state.json",
     token: "",
-    autoSave: false,
-    lastSavedAt: ""
-  };
-}
-
-// v24: Google Drive 連携の設定。clientId は OAuth クライアントID(秘密ではない)。
-// アクセストークンはここには保存せず、別管理(_driveToken / 専用 localStorage キー)。
-function defaultDriveSettings() {
-  return {
-    clientId: "",
-    fileName: "taskchute_app_state.json",
-    fileId: "",
     autoSave: false,
     lastSavedAt: ""
   };
@@ -2493,7 +2463,6 @@ function renderReports() {
 
 function renderSettings() {
   const github = state.settings.github || defaultGitHubSettings();
-  const drive = state.settings.drive || defaultDriveSettings();
   return `
     ${renderHeader("Web版の保存と公開", "設定")}
     <section class="settings-grid">
@@ -2516,37 +2485,10 @@ function renderSettings() {
         <button class="btn danger" data-action="reset-demo">デモデータに戻す</button>
       </div>
       <div class="panel stack">
-        <h2>☁️ Google Drive 同期(メイン)</h2>
+        <h2>クラウド保存(GitHub)</h2>
         <div class="muted" style="font-size:12px; line-height:1.6">
-          データを Google Drive 上の 1 ファイルで管理します。起動時に自動読み込み、その後は変更のたびに自動保存(数秒のデバウンス)。<br>
-          初回のみ Google Cloud で <strong>OAuth クライアント ID</strong> を作成し、下に貼り付けてください(手順は別途案内)。スコープは <code>drive.file</code>(このアプリが作ったファイルのみ)に限定しています。
-        </div>
-        <label>OAuth クライアント ID
-          <input class="input" data-drive-field="clientId" value="${escapeHTML(drive.clientId || "")}" autocomplete="off" placeholder="xxxxxxxx.apps.googleusercontent.com">
-        </label>
-        <label>ファイル名
-          <input class="input" data-drive-field="fileName" value="${escapeHTML(drive.fileName || "taskchute_app_state.json")}" autocomplete="off" placeholder="taskchute_app_state.json">
-        </label>
-        <label class="checkbox-line">
-          <input type="checkbox" data-drive-field="autoSave" ${drive.autoSave ? "checked" : ""}>
-          自動保存を有効にする(変更のたびに Drive へ)
-        </label>
-        <div class="muted" data-drive-status style="font-size:12px">
-          ${drive.clientId ? (drive.lastSavedAt ? `最終保存: ${drive.lastSavedAt.replace("T", " ")}` : "まだ保存していません") : "Client ID 未設定"}
-        </div>
-        <div class="row">
-          <button class="btn primary" data-action="connect-drive">Google Drive に接続 / 読込</button>
-          <button class="btn" data-action="save-drive">今すぐ Drive に保存</button>
-        </div>
-        <div class="muted" style="font-size:11px; line-height:1.6">
-          認可は約1時間で失効します。失効後はもう一度「接続」を押してください(仕様上、ブラウザのみのアプリでは自動更新できません)。<br>
-          アクセストークンはこの端末内のみに保持し、Drive のファイルには書き込みません。
-        </div>
-      </div>
-      <div class="panel stack">
-        <h2>GitHub保存(予備)</h2>
-        <div class="muted" style="font-size:12px; line-height:1.6">
-          ⚠️ メインの保存先は Google Drive です。この GitHub 連携は、Drive の動作確認が取れるまでの<strong>予備のバックアップ手段</strong>として残しています(手動保存のみ・自動保存なし)。Drive が安定して動いたら撤去します。
+          データは端末内(localStorage)を主とし、GitHub 上の 1 ファイルを端末間の同期・バックアップに使います。<br>
+          自動保存を ON にすると変更後 30 秒で push。起動時に GitHub 側が新しければ自動で取り込みます(新しい方を採用)。
         </div>
         <label>Owner
           <input class="input" data-github-field="owner" value="${escapeHTML(github.owner)}" autocomplete="off">
@@ -2560,14 +2502,22 @@ function renderSettings() {
         <label>保存先パス
           <input class="input" data-github-field="path" value="${escapeHTML(github.path)}" autocomplete="off" placeholder="app-state.json">
         </label>
+        <div class="muted" style="font-size:11px">推奨: <code>app-state.json</code>(リポジトリのルート直下)</div>
         <label>Fine-grained token
           <input class="input" type="password" data-github-field="token" value="${escapeHTML(github.token)}" autocomplete="off" placeholder="GitHub token">
         </label>
+        <label class="checkbox-line">
+          <input type="checkbox" data-github-field="autoSave" ${github.autoSave ? "checked" : ""}>
+          自動保存を有効にする(変更後 30 秒のデバウンス)
+        </label>
+        <div class="muted" data-auto-save-status style="font-size:12px">
+          ${github.lastSavedAt ? `最終保存: ${github.lastSavedAt.replace("T", " ")}` : (github.autoSave ? "自動保存: 有効(まだ保存していません)" : "自動保存: 無効")}
+        </div>
         <div class="row">
           <button class="btn primary" data-action="save-github">今すぐGitHubへ保存</button>
           <button class="btn" data-action="load-github">GitHubから読込</button>
         </div>
-        <div class="muted" style="font-size:11px">TokenはGitHub/Driveへ保存しません。この端末のブラウザ内だけに保持します。</div>
+        <div class="muted" style="font-size:11px">TokenはGitHubへ保存しません。この端末のブラウザ内だけに保持します。</div>
       </div>
       <div class="panel stack">
         <h2>現在のファイル構成</h2>
@@ -3173,7 +3123,7 @@ async function saveToGitHub(silent = false) {
     }
 
     state.settings.github.lastSavedAt = nowDateTime();
-    saveState();
+    persistLocalNoSchedule();  // v25: 自動保存タイマーを再セットしない(無限保存ループ防止)
     if (!silent) showToast("GitHubへ保存しました");
     if (silent) updateAutoSaveStatus();
   } catch (error) {
@@ -3182,336 +3132,96 @@ async function saveToGitHub(silent = false) {
   }
 }
 
-// 自動保存(変更後 30秒のデバウンス、Token + autoSave=true 時のみ)
+// v25: 自動保存先は GitHub。token + owner + repo 設定済み & autoSave ON のときのみ。
 let autoSaveTimer = null;
-const AUTO_SAVE_DEBOUNCE_MS = 8000;  // v24: 変更後この時間で Drive へ自動保存
+const AUTO_SAVE_DEBOUNCE_MS = 30000;  // 変更後この時間で GitHub へ自動保存
 
-// v24: 自動保存先は Google Drive。clientId 設定済み + autoSave ON のときのみ。
 function scheduleAutoSave() {
-  const cfg = state.settings?.drive || {};
+  const cfg = state.settings?.github || {};
   if (!cfg.autoSave) return;
-  if (!cfg.clientId) return;
+  if (!cfg.token || !cfg.owner || !cfg.repo) return;
   clearTimeout(autoSaveTimer);
-  updateDriveStatus("変更を検知 — まもなく保存します");
+  updateAutoSaveStatus("変更を検知 — 30秒後に保存します");
   autoSaveTimer = setTimeout(() => {
-    saveToDrive(true);
+    saveToGitHub(true);
   }, AUTO_SAVE_DEBOUNCE_MS);
 }
 
-// GitHub 用の旧自動保存ステータス表示(予備パネルから参照される場合のため残置)
 function updateAutoSaveStatus(text) {
   const el = document.querySelector("[data-auto-save-status]");
   if (!el) return;
   const cfg = state.settings.github || {};
   if (text) { el.textContent = text; return; }
-  el.textContent = cfg.lastSavedAt ? `最終保存: ${cfg.lastSavedAt.replace("T", " ")}` : "手動保存のみ";
-}
-
-// ===== v24: Google Drive 連携 =====
-// 認可は OAuth(GIS トークンフロー)。ブラウザだけのアプリのためトークンは
-// 約1時間で失効し、リフレッシュトークンは持てない。失効後は「接続」タップで再取得する。
-// 関連の変数・定数(DRIVE_TOKEN_KEY 等)はファイル先頭で宣言。
-
-function loadDriveTokenFromCache() {
-  try {
-    const raw = localStorage.getItem(DRIVE_TOKEN_KEY);
-    _driveToken = raw ? JSON.parse(raw) : null;
-  } catch { _driveToken = null; }
-}
-function setDriveToken(accessToken, expiresInSec) {
-  // 2分のマージンを引いて失効扱いにする
-  _driveToken = { accessToken, expiresAt: Date.now() + (Math.max(0, expiresInSec - 120)) * 1000 };
-  try { localStorage.setItem(DRIVE_TOKEN_KEY, JSON.stringify(_driveToken)); } catch {}
-}
-function clearDriveToken() {
-  _driveToken = null;
-  try { localStorage.removeItem(DRIVE_TOKEN_KEY); } catch {}
-}
-function driveTokenValid() {
-  return !!(_driveToken && _driveToken.accessToken && _driveToken.expiresAt > Date.now());
-}
-
-// GIS ライブラリを動的ロード(index.html を編集せずに済む)
-function loadGIS() {
-  return new Promise((resolve, reject) => {
-    if (window.google && window.google.accounts && window.google.accounts.oauth2) {
-      return resolve();
-    }
-    let s = document.getElementById("gis-script");
-    if (s) {
-      s.addEventListener("load", () => resolve());
-      s.addEventListener("error", () => reject(new Error("Googleライブラリの読み込みに失敗")));
-      return;
-    }
-    s = document.createElement("script");
-    s.id = "gis-script";
-    s.src = "https://accounts.google.com/gsi/client";
-    s.async = true;
-    s.defer = true;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error("Googleライブラリの読み込みに失敗(オフライン?)"));
-    document.head.appendChild(s);
-  });
-}
-
-async function getGisTokenClient() {
-  await loadGIS();
-  const clientId = (state.settings.drive?.clientId || "").trim();
-  if (!clientId) throw new Error("Google Client ID が未設定です(設定画面で入力してください)");
-  if (!_gisTokenClient || _gisTokenClient._cid !== clientId) {
-    _gisTokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: clientId,
-      scope: DRIVE_SCOPE,
-      callback: (resp) => {
-        if (resp && resp.access_token) {
-          setDriveToken(resp.access_token, Number(resp.expires_in) || 3600);
-          if (_driveAuthResolve) _driveAuthResolve(resp.access_token);
-        } else if (_driveAuthReject) {
-          _driveAuthReject(new Error(resp && resp.error ? resp.error : "認可に失敗しました"));
-        }
-        _driveAuthResolve = _driveAuthReject = null;
-      },
-      error_callback: (err) => {
-        if (_driveAuthReject) _driveAuthReject(new Error(err && err.type ? err.type : "認可がキャンセルされました"));
-        _driveAuthResolve = _driveAuthReject = null;
-      }
-    });
-    _gisTokenClient._cid = clientId;
-  }
-  return _gisTokenClient;
-}
-
-// 対話的なトークン取得(必ずユーザー操作=ボタン押下の中から呼ぶこと)
-function requestDriveAuthInteractive() {
-  return new Promise((resolve, reject) => {
-    getGisTokenClient()
-      .then((client) => {
-        _driveAuthResolve = resolve;
-        _driveAuthReject = reject;
-        client.requestAccessToken({ prompt: "" });
-      })
-      .catch(reject);
-  });
-}
-
-// 有効なトークンを返す。interactive=false で失効していたら NEEDS_AUTH を投げる。
-async function ensureDriveToken(interactive) {
-  if (driveTokenValid()) return _driveToken.accessToken;
-  if (!interactive) throw new Error("NEEDS_AUTH");
-  return await requestDriveAuthInteractive();
-}
-
-// --- Drive REST API ---
-async function driveApiFindFile(token, name) {
-  const q = encodeURIComponent(`name='${String(name).replace(/'/g, "\\'")}' and trashed=false`);
-  const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&spaces=drive&fields=files(id,name,modifiedTime)`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  if (r.status === 401) { clearDriveToken(); throw new Error("NEEDS_AUTH"); }
-  if (!r.ok) throw new Error(`Drive検索失敗 (${r.status})`);
-  const data = await r.json();
-  return (data.files && data.files[0]) || null;
-}
-async function driveApiDownload(token, fileId) {
-  const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  if (r.status === 401) { clearDriveToken(); throw new Error("NEEDS_AUTH"); }
-  if (!r.ok) throw new Error(`Drive取得失敗 (${r.status})`);
-  return await r.text();
-}
-async function driveApiCreate(token, name, content) {
-  const boundary = "tcjbnd" + Date.now();
-  const body =
-    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
-    JSON.stringify({ name, mimeType: "application/json" }) +
-    `\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n` +
-    content +
-    `\r\n--${boundary}--`;
-  const r = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": `multipart/related; boundary=${boundary}` },
-    body
-  });
-  if (r.status === 401) { clearDriveToken(); throw new Error("NEEDS_AUTH"); }
-  if (!r.ok) throw new Error(`Drive作成失敗 (${r.status})`);
-  return (await r.json()).id;
-}
-async function driveApiUpdate(token, fileId, content) {
-  const r = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
-    method: "PATCH",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: content
-  });
-  if (r.status === 401) { clearDriveToken(); throw new Error("NEEDS_AUTH"); }
-  if (r.status === 404) throw new Error("FILE_GONE");
-  if (!r.ok) throw new Error(`Drive保存失敗 (${r.status})`);
-  return true;
-}
-
-// Drive へ書き出す state(modal 除外、GitHub トークンは秘匿のため空に)
-function driveStateJson() {
-  const copy = structuredClone(state);
-  copy.modal = null;
-  if (copy.settings && copy.settings.github) copy.settings.github.token = "";
-  return JSON.stringify(copy, null, 2);
-}
-
-function updateDriveStatus(text) {
-  const el = document.querySelector("[data-drive-status]");
-  if (!el) return;
-  const cfg = state.settings.drive || {};
-  if (text) { el.textContent = text; return; }
-  const conn = driveTokenValid() ? "接続中" : "未接続";
   if (cfg.lastSavedAt) {
-    el.textContent = `${conn} / 最終保存: ${cfg.lastSavedAt.replace("T", " ")}`;
+    el.textContent = `最終保存: ${cfg.lastSavedAt.replace("T", " ")}`;
   } else {
-    el.textContent = cfg.clientId ? `${conn} / まだ保存していません` : "Client ID 未設定";
+    el.textContent = cfg.autoSave ? "自動保存: 有効(まだ保存していません)" : "自動保存: 無効";
   }
 }
 
-// 「Google Drive に接続」ボタン: 認可 → 読み込み
-async function connectDrive() {
-  try {
-    showToast("Google Drive に接続中…");
-    const token = await ensureDriveToken(true);
-    await loadFromDriveWithToken(token, true);
-  } catch (error) {
-    if (error.message === "NEEDS_AUTH") showToast("接続がキャンセルされました");
-    else showToast(`Drive接続失敗: ${error.message}`);
-    updateDriveStatus();
-  }
-}
-
-// 起動時/手動の読み込み。interactive=false は起動時(失効時は黙って接続待ち)。
-async function loadFromDrive(interactive) {
-  try {
-    const token = await ensureDriveToken(interactive);
-    await loadFromDriveWithToken(token, interactive);
-  } catch (error) {
-    if (error.message === "NEEDS_AUTH") {
-      updateDriveStatus("接続が必要です — 「Google Drive に接続」を押してください");
-      if (interactive) showToast("認可が必要です");
-    } else {
-      showToast(`Drive読込失敗: ${error.message}`);
-    }
-  }
-}
-
-async function loadFromDriveWithToken(token, interactive) {
-  const cfg = state.settings.drive;
-  const name = cfg.fileName || "taskchute_app_state.json";
-  const file = await driveApiFindFile(token, name);
-  if (!file) {
-    // Drive 上にまだデータが無い。対話時のみ現在のローカル state を初回作成。
-    if (interactive) {
-      const id = await driveApiCreate(token, name, driveStateJson());
-      state.settings.drive.fileId = id;
-      state.settings.drive.lastSavedAt = nowDateTime();
-      saveAndRender("Drive に新規データファイルを作成しました");
-    } else {
-      updateDriveStatus("Drive にデータがありません(保存すると作成されます)");
-    }
-    return;
-  }
-  const text = await driveApiDownload(token, file.id);
-  const loaded = JSON.parse(text);
-  // 端末ローカルの設定(Client ID)は読み込みで上書きしない
-  const keepClientId = state.settings.drive?.clientId || "";
-  state = normalizeState(loaded);
-  state.settings.drive.fileId = file.id;
-  if (keepClientId) state.settings.drive.clientId = keepClientId;
-  maintainRecurrences({ purge: true });
-  saveAndRender("Google Drive から読み込みました");
-}
-
-// Drive へ保存。silent=true は自動保存(失効時はトーストを出さず状態表示のみ)。
-async function saveToDrive(silent) {
-  try {
-    const token = await ensureDriveToken(false);  // 保存は非対話。失効時は再接続を促す
-    const cfg = state.settings.drive;
-    const name = cfg.fileName || "taskchute_app_state.json";
-    let fileId = cfg.fileId;
-    const content = driveStateJson();
-    if (fileId) {
-      try {
-        await driveApiUpdate(token, fileId, content);
-      } catch (e) {
-        if (e.message === "FILE_GONE") { fileId = ""; }  // 消えていたら作り直す
-        else throw e;
-      }
-    }
-    if (!fileId) {
-      const existing = await driveApiFindFile(token, name);
-      fileId = existing ? existing.id : null;
-      if (fileId) await driveApiUpdate(token, fileId, content);
-      else fileId = await driveApiCreate(token, name, content);
-      state.settings.drive.fileId = fileId;
-    }
-    state.settings.drive.lastSavedAt = nowDateTime();
-    persistLocalNoSchedule();   // 自動保存ループを避けるためタイマー再セットなしで保存
-    updateDriveStatus();
-    if (!silent) showToast("Google Drive に保存しました");
-  } catch (error) {
-    if (error.message === "NEEDS_AUTH") {
-      updateDriveStatus("接続が切れています — 「Google Drive に接続」を押してください");
-      if (!silent) showToast("接続が切れています。再接続してください");
-    } else {
-      updateDriveStatus(`保存失敗: ${error.message}`);
-      if (!silent) showToast(`Drive保存失敗: ${error.message}`);
-    }
-  }
-}
-
-// 起動時: Client ID 設定済み & トークン有効なら自動で読み込む
-function driveStartup() {
-  loadDriveTokenFromCache();
-  const cfg = state.settings.drive || {};
-  if (cfg.clientId) {
-    // ライブラリを先読みしておく(接続タップ時に await で待たず、
-    // ユーザー操作の有効期限内に認可ポップアップを開けるようにする)
-    loadGIS().catch(() => {});
-  }
-  if (cfg.clientId && driveTokenValid()) {
-    loadFromDrive(false);
+// GitHub から app-state を取得し JSON テキストを返す(1MB 超は Blob API 経由)
+async function downloadGitHubStateText(config) {
+  const response = await fetch(`${gitHubContentsURL(config)}?ref=${encodeURIComponent(config.branch)}`, {
+    headers: githubHeaders(config.token)
+  });
+  if (!response.ok) throw new Error(await gitHubErrorMessage(response));
+  const payload = await response.json();
+  // v22: Contents API は 1MB 超のファイルの content を返さない → Blob API を使う
+  let jsonText;
+  if (payload.content && payload.encoding === "base64") {
+    jsonText = fromBase64(payload.content);
   } else {
-    updateDriveStatus();
+    if (!payload.sha) throw new Error("ファイル情報を取得できませんでした");
+    const blobURL = `https://api.github.com/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/git/blobs/${payload.sha}`;
+    const blobResp = await fetch(blobURL, { headers: githubHeaders(config.token) });
+    if (!blobResp.ok) throw new Error(await gitHubErrorMessage(blobResp));
+    const blob = await blobResp.json();
+    jsonText = fromBase64(blob.content || "");
   }
+  if (!jsonText.trim()) throw new Error("ファイルが空です");
+  return jsonText;
 }
 
-
+// 手動「GitHubから読込」: リモートを採用(dataModifiedAt はリモートの値を維持)
 async function loadFromGitHub() {
   try {
     const config = requireGitHubConfig();
-    const response = await fetch(`${gitHubContentsURL(config)}?ref=${encodeURIComponent(config.branch)}`, {
-      headers: githubHeaders(config.token)
-    });
-    if (!response.ok) {
-      throw new Error(await gitHubErrorMessage(response));
-    }
-    const payload = await response.json();
-    // v22: Contents API は 1MB を超えるファイルの content を返さない
-    // (encoding: "none", content: "")。その場合は Blob API から取得する。
-    let jsonText;
-    if (payload.content && payload.encoding === "base64") {
-      jsonText = fromBase64(payload.content);
-    } else {
-      if (!payload.sha) throw new Error("ファイル情報を取得できませんでした");
-      const blobURL = `https://api.github.com/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/git/blobs/${payload.sha}`;
-      const blobResp = await fetch(blobURL, { headers: githubHeaders(config.token) });
-      if (!blobResp.ok) throw new Error(await gitHubErrorMessage(blobResp));
-      const blob = await blobResp.json();
-      jsonText = fromBase64(blob.content || "");
-    }
-    if (!jsonText.trim()) throw new Error("ファイルが空です");
-    const loaded = JSON.parse(jsonText);
+    const loaded = JSON.parse(await downloadGitHubStateText(config));
     const token = state.settings.github.token;
     state = normalizeState(loaded);
     state.settings.github = { ...config, token };
     maintainRecurrences({ purge: true });
-    saveAndRender("GitHubから読み込みました");
+    persistLocalNoSchedule();  // 採用のため dataModifiedAt は更新しない
+    render();
+    showToast("GitHubから読み込みました");
   } catch (error) {
     showToast(`GitHub読込失敗: ${error.message}`);
+  }
+}
+
+// v25: 起動時、GitHub 側がローカルより新しければ取り込む(ローカルファースト)。
+// ローカルを即描画した後にバックグラウンドで実行される。
+async function syncFromGitHubOnStartup() {
+  const cfg = state.settings.github || {};
+  if (!cfg.token || !cfg.owner || !cfg.repo) return;  // 未設定なら何もしない
+  try {
+    const remote = JSON.parse(await downloadGitHubStateText(cfg));
+    const localT = state.dataModifiedAt || "";
+    const remoteT = remote.dataModifiedAt || "";
+    // リモートが新しいときだけ採用(ISO 文字列なので辞書順比較でよい)
+    if (remoteT && remoteT > localT) {
+      const token = state.settings.github.token;
+      state = normalizeState(remote);
+      state.settings.github = { ...cfg, token };
+      maintainRecurrences({ purge: true });
+      persistLocalNoSchedule();
+      render();
+      showToast("最新データを取り込みました");
+    }
+    // ローカルが新しい/同じ → 何もしない(次回保存で GitHub へ反映される)
+  } catch (error) {
+    // 起動時の同期失敗は致命的でない(ローカルで動作継続)
+    console.warn("起動時の GitHub 同期をスキップ:", error.message);
   }
 }
 
