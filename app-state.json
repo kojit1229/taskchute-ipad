@@ -1,5 +1,5 @@
 {
-  "currentView": "settings",
+  "currentView": "timeline",
   "selectedDate": "2026-05-24",
   "settings": {
     "birthDate": "1992-12-29",
@@ -27,7 +27,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-24T16:53:00"
+      "lastSavedAt": ""
     },
     "visionSection": "vision",
     "visionBoardIndex": 0,
@@ -22057,6 +22057,8 @@
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "d136f098-ba59-47eb-aa2c-ced028648bc0",
       "title": "サンマルク",
       "date": "2026-05-24",
@@ -22076,13 +22078,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T13:38:00",
       "updatedAt": "2026-05-24T15:20:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "2368f6b0-786e-4cd5-813f-6a15990c8d50",
       "title": "昼寝する",
       "date": "2026-05-24",
@@ -22102,13 +22104,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:38:00",
       "updatedAt": "2026-05-24T14:38:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_3cdef39c-c0c8-4702-adb8-91eb950dc61c_2026-05-25",
       "taskId": "",
       "date": "2026-05-25",
@@ -22128,13 +22130,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:38:00",
       "updatedAt": "2026-05-24T14:38:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_3cdef39c-c0c8-4702-adb8-91eb950dc61c_2026-05-26",
       "taskId": "",
       "date": "2026-05-26",
@@ -22154,13 +22156,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:38:00",
       "updatedAt": "2026-05-24T14:38:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_3cdef39c-c0c8-4702-adb8-91eb950dc61c_2026-05-27",
       "taskId": "",
       "date": "2026-05-27",
@@ -22180,13 +22182,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:38:00",
       "updatedAt": "2026-05-24T14:38:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_3cdef39c-c0c8-4702-adb8-91eb950dc61c_2026-05-28",
       "taskId": "",
       "date": "2026-05-28",
@@ -22206,13 +22208,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:38:00",
       "updatedAt": "2026-05-24T14:38:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_3cdef39c-c0c8-4702-adb8-91eb950dc61c_2026-05-29",
       "taskId": "",
       "date": "2026-05-29",
@@ -22232,13 +22234,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:38:00",
       "updatedAt": "2026-05-24T14:38:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_3cdef39c-c0c8-4702-adb8-91eb950dc61c_2026-06-01",
       "taskId": "",
       "date": "2026-06-01",
@@ -22258,13 +22260,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:38:00",
       "updatedAt": "2026-05-24T14:38:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_3cdef39c-c0c8-4702-adb8-91eb950dc61c_2026-06-02",
       "taskId": "",
       "date": "2026-06-02",
@@ -22284,13 +22286,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:38:00",
       "updatedAt": "2026-05-24T14:38:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_3cdef39c-c0c8-4702-adb8-91eb950dc61c_2026-06-03",
       "taskId": "",
       "date": "2026-06-03",
@@ -22310,13 +22312,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:38:00",
       "updatedAt": "2026-05-24T14:38:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_3cdef39c-c0c8-4702-adb8-91eb950dc61c_2026-06-04",
       "taskId": "",
       "date": "2026-06-04",
@@ -22336,13 +22338,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:38:00",
       "updatedAt": "2026-05-24T14:38:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_3cdef39c-c0c8-4702-adb8-91eb950dc61c_2026-06-05",
       "taskId": "",
       "date": "2026-06-05",
@@ -22362,13 +22364,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:38:00",
       "updatedAt": "2026-05-24T14:38:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_3cdef39c-c0c8-4702-adb8-91eb950dc61c_2026-06-08",
       "taskId": "",
       "date": "2026-06-08",
@@ -22388,13 +22390,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:38:00",
       "updatedAt": "2026-05-24T14:38:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_3cdef39c-c0c8-4702-adb8-91eb950dc61c_2026-06-09",
       "taskId": "",
       "date": "2026-06-09",
@@ -22414,13 +22416,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:38:00",
       "updatedAt": "2026-05-24T14:38:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_3cdef39c-c0c8-4702-adb8-91eb950dc61c_2026-06-10",
       "taskId": "",
       "date": "2026-06-10",
@@ -22440,13 +22442,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:38:00",
       "updatedAt": "2026-05-24T14:38:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_3cdef39c-c0c8-4702-adb8-91eb950dc61c_2026-06-11",
       "taskId": "",
       "date": "2026-06-11",
@@ -22466,13 +22468,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:38:00",
       "updatedAt": "2026-05-24T14:38:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_3cdef39c-c0c8-4702-adb8-91eb950dc61c_2026-06-12",
       "taskId": "",
       "date": "2026-06-12",
@@ -22492,13 +22494,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:38:00",
       "updatedAt": "2026-05-24T14:38:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_3cdef39c-c0c8-4702-adb8-91eb950dc61c_2026-06-15",
       "taskId": "",
       "date": "2026-06-15",
@@ -22518,13 +22520,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:38:00",
       "updatedAt": "2026-05-24T14:38:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_3cdef39c-c0c8-4702-adb8-91eb950dc61c_2026-06-16",
       "taskId": "",
       "date": "2026-06-16",
@@ -22544,13 +22546,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:38:00",
       "updatedAt": "2026-05-24T14:38:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_3cdef39c-c0c8-4702-adb8-91eb950dc61c_2026-06-17",
       "taskId": "",
       "date": "2026-06-17",
@@ -22570,13 +22572,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:38:00",
       "updatedAt": "2026-05-24T14:38:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_3cdef39c-c0c8-4702-adb8-91eb950dc61c_2026-06-18",
       "taskId": "",
       "date": "2026-06-18",
@@ -22596,13 +22598,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:38:00",
       "updatedAt": "2026-05-24T14:38:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_3cdef39c-c0c8-4702-adb8-91eb950dc61c_2026-06-19",
       "taskId": "",
       "date": "2026-06-19",
@@ -22622,13 +22624,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:38:00",
       "updatedAt": "2026-05-24T14:38:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_3cdef39c-c0c8-4702-adb8-91eb950dc61c_2026-06-22",
       "taskId": "",
       "date": "2026-06-22",
@@ -22648,13 +22650,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:38:00",
       "updatedAt": "2026-05-24T14:38:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_3cdef39c-c0c8-4702-adb8-91eb950dc61c_2026-06-23",
       "taskId": "",
       "date": "2026-06-23",
@@ -22674,13 +22676,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:38:00",
       "updatedAt": "2026-05-24T14:38:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_3cdef39c-c0c8-4702-adb8-91eb950dc61c_2026-06-24",
       "taskId": "",
       "date": "2026-06-24",
@@ -22700,13 +22702,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:38:00",
       "updatedAt": "2026-05-24T14:38:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "6441dca0-4ce9-4f8a-bd08-70da240e2b08",
       "title": "部門定例",
       "date": "2026-05-25",
@@ -22726,13 +22728,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:56:00",
       "updatedAt": "2026-05-24T14:56:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_e07d7a22-a24c-4732-a0cc-2abcf350da25_2026-06-01",
       "taskId": "",
       "date": "2026-06-01",
@@ -22752,13 +22754,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:56:00",
       "updatedAt": "2026-05-24T14:56:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_e07d7a22-a24c-4732-a0cc-2abcf350da25_2026-06-08",
       "taskId": "",
       "date": "2026-06-08",
@@ -22778,13 +22780,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:56:00",
       "updatedAt": "2026-05-24T14:56:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_e07d7a22-a24c-4732-a0cc-2abcf350da25_2026-06-15",
       "taskId": "",
       "date": "2026-06-15",
@@ -22804,13 +22806,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:56:00",
       "updatedAt": "2026-05-24T14:56:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_e07d7a22-a24c-4732-a0cc-2abcf350da25_2026-06-22",
       "taskId": "",
       "date": "2026-06-22",
@@ -22830,13 +22832,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:56:00",
       "updatedAt": "2026-05-24T14:56:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "d05efcf9-cc94-4c80-9b67-e5d9cef14e9c",
       "title": "事例化MTG",
       "date": "2026-05-25",
@@ -22856,13 +22858,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:56:00",
       "updatedAt": "2026-05-24T14:56:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "f1c4c6d2-cfdf-443a-a711-2c4f8080da5b",
       "title": "A鉄工保守定例",
       "date": "2026-05-25",
@@ -22882,13 +22884,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:57:00",
       "updatedAt": "2026-05-24T14:57:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "0f2e8a13-0f9c-48e7-99f7-de79b4586893",
       "title": "本部定例",
       "date": "2026-05-25",
@@ -22908,13 +22910,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:57:00",
       "updatedAt": "2026-05-24T14:57:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "bbd0a712-cfd4-4e7d-8196-65363f10daeb",
       "title": "本部長MTG",
       "date": "2026-05-25",
@@ -22934,13 +22936,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T15:00:00",
       "updatedAt": "2026-05-24T15:00:00",
       "deleted": false
     },
     {
+      "isMIT": true,
+      "source": "",
       "id": "881ac67d-d43f-4709-8b5d-6411d6d5dbe0",
       "title": "1W ジム①",
       "date": "2026-05-25",
@@ -22960,13 +22962,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": true,
-      "source": "",
       "createdAt": "2026-05-24T15:01:00",
       "updatedAt": "2026-05-24T15:18:00",
       "deleted": true
     },
     {
+      "isMIT": true,
+      "source": "",
       "id": "0e0258fe-f9e1-4bf5-8ecf-fd6a894ddcc2",
       "title": "1W ジム①",
       "date": "2026-05-24",
@@ -22986,8 +22988,6 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": true,
-      "source": "",
       "createdAt": "2026-05-24T15:18:00",
       "updatedAt": "2026-05-24T16:29:00",
       "deleted": false
@@ -23307,5 +23307,5 @@
     }
   ],
   "timelineMode": "actual",
-  "dataModifiedAt": "2026-05-24T16:53:00"
+  "dataModifiedAt": "2026-05-24T16:59:00"
 }
