@@ -24,7 +24,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-24T14:42:00"
+      "lastSavedAt": "2026-05-24T14:56:00"
     },
     "visionSection": "affirmation",
     "visionBoardIndex": 0,
@@ -22832,6 +22832,84 @@
       "createdAt": "2026-05-24T14:56:00",
       "updatedAt": "2026-05-24T14:56:00",
       "deleted": false
+    },
+    {
+      "id": "d05efcf9-cc94-4c80-9b67-e5d9cef14e9c",
+      "title": "事例化MTG",
+      "date": "2026-05-25",
+      "category": "仕事",
+      "taskId": "",
+      "plannedStartAt": "2026-05-25T11:00:00",
+      "plannedEndAt": "2026-05-25T12:00:00",
+      "actualStartAt": "2026-05-24T14:56:00",
+      "actualEndAt": "",
+      "charge": 0,
+      "discharge": 0,
+      "completed": false,
+      "comment": "",
+      "expectedCharge": "",
+      "expectedDischarge": "",
+      "recurrenceGroupId": "",
+      "pomodoroCount": 0,
+      "migratedTo": "",
+      "orderIndex": 0,
+      "isMIT": false,
+      "source": "",
+      "createdAt": "2026-05-24T14:56:00",
+      "updatedAt": "2026-05-24T14:56:00",
+      "deleted": false
+    },
+    {
+      "id": "f1c4c6d2-cfdf-443a-a711-2c4f8080da5b",
+      "title": "A鉄工保守定例",
+      "date": "2026-05-25",
+      "category": "仕事",
+      "taskId": "",
+      "plannedStartAt": "2026-05-25T14:00:00",
+      "plannedEndAt": "2026-05-25T15:00:00",
+      "actualStartAt": "",
+      "actualEndAt": "",
+      "charge": 0,
+      "discharge": 0,
+      "completed": false,
+      "comment": "",
+      "expectedCharge": "",
+      "expectedDischarge": "",
+      "recurrenceGroupId": "",
+      "pomodoroCount": 0,
+      "migratedTo": "",
+      "orderIndex": 0,
+      "isMIT": false,
+      "source": "",
+      "createdAt": "2026-05-24T14:57:00",
+      "updatedAt": "2026-05-24T14:57:00",
+      "deleted": false
+    },
+    {
+      "id": "0f2e8a13-0f9c-48e7-99f7-de79b4586893",
+      "title": "本部定例",
+      "date": "2026-05-25",
+      "category": "仕事",
+      "taskId": "",
+      "plannedStartAt": "2026-05-25T16:00:00",
+      "plannedEndAt": "2026-05-25T17:00:00",
+      "actualStartAt": "",
+      "actualEndAt": "",
+      "charge": 0,
+      "discharge": 0,
+      "completed": false,
+      "comment": "",
+      "expectedCharge": "",
+      "expectedDischarge": "",
+      "recurrenceGroupId": "",
+      "pomodoroCount": 0,
+      "migratedTo": "",
+      "orderIndex": 0,
+      "isMIT": false,
+      "source": "",
+      "createdAt": "2026-05-24T14:57:00",
+      "updatedAt": "2026-05-24T14:57:00",
+      "deleted": false
     }
   ],
   "journals": {
@@ -22866,10 +22944,7 @@
       "lastFiredKey": ""
     }
   },
-  "modal": {
-    "type": "block",
-    "id": "d05efcf9-cc94-4c80-9b67-e5d9cef14e9c"
-  },
+  "modal": null,
   "routineViewMode": "routine",
   "timelineZoom": 1,
   "recurrences": [
@@ -23151,5 +23226,5 @@
     }
   ],
   "timelineMode": "planned",
-  "dataModifiedAt": "2026-05-24T14:56:00"
+  "dataModifiedAt": "2026-05-24T14:58:00"
 }
