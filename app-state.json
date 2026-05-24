@@ -24,7 +24,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-24T13:27:00"
+      "lastSavedAt": "2026-05-24T13:37:00"
     },
     "visionSection": "affirmation",
     "visionBoardIndex": 0,
@@ -10848,30 +10848,30 @@
       "deleted": false
     },
     {
-      "isMIT": false,
-      "source": "",
       "id": "rec_7dde151b-2346-4872-8690-7331ea9ba9c8_2026-05-24",
-      "taskId": "",
-      "date": "2026-05-24",
       "title": "宣言（今日も最高の一日にします！）",
-      "category": "仕事",
+      "date": "2026-05-24",
+      "category": "ルーティン",
+      "taskId": "",
       "plannedStartAt": "2026-05-24T05:30:00",
       "plannedEndAt": "2026-05-24T05:30:00",
       "actualStartAt": "",
       "actualEndAt": "",
-      "completed": false,
       "charge": 0,
       "discharge": 0,
+      "completed": false,
+      "comment": "",
       "expectedCharge": "",
       "expectedDischarge": "",
-      "comment": "",
       "recurrenceGroupId": "7dde151b-2346-4872-8690-7331ea9ba9c8",
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
+      "isMIT": false,
+      "source": "",
       "createdAt": "2026-05-22T11:43:00",
-      "updatedAt": "2026-05-22T11:43:00",
-      "deleted": false
+      "updatedAt": "2026-05-24T13:37:00",
+      "deleted": true
     },
     {
       "isMIT": false,
@@ -22085,7 +22085,10 @@
       "lastFiredKey": ""
     }
   },
-  "modal": null,
+  "modal": {
+    "type": "block",
+    "id": "d136f098-ba59-47eb-aa2c-ced028648bc0"
+  },
   "routineViewMode": "routine",
   "timelineZoom": 1,
   "recurrences": [
@@ -22118,9 +22121,11 @@
       "expectedCharge": "",
       "expectedDischarge": "",
       "source": "",
-      "exceptionDates": [],
+      "exceptionDates": [
+        "2026-05-24"
+      ],
       "createdAt": "2026-05-22T11:43:00",
-      "updatedAt": "2026-05-22T11:43:00",
+      "updatedAt": "2026-05-24T13:37:00",
       "deleted": false
     },
     {
@@ -22328,6 +22333,6 @@
       "deleted": false
     }
   ],
-  "timelineMode": "actual",
+  "timelineMode": "planned",
   "dataModifiedAt": "2026-05-24T13:37:00"
 }
