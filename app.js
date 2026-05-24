@@ -1843,7 +1843,9 @@ function renderTimeline({ compact, mode = "planned" }) {
   `;
 }
 
-// v10: Blockをレーンに割り当てる(時刻軸方向の重なりを横並びに展開)
+// v26: Block をレーンに割り当てる。重なり合うブロック群(クラスタ)ごとに
+// 使用レーン数 laneCount を求め、横幅 = 100/laneCount で配置できるようにする。
+// (重なりが無ければ laneCount=1 で全幅、2つ重なれば 2 で 50:50)
 function assignBlocksToLanes(blocks, mode, maxLanes) {
   // 開始時刻でソート(同じ時刻なら短いもの優先)
   const sorted = [...blocks]
@@ -1858,27 +1860,44 @@ function assignBlocksToLanes(blocks, mode, maxLanes) {
     .filter(Boolean)
     .sort((a, b) => a.start - b.start || (a.end - a.start) - (b.end - b.start));
 
-  // 各レーンの「最後の終了時刻(分単位)」を管理
-  const laneEnds = new Array(maxLanes).fill(-1);
   const result = [];
+  let cluster = [];          // 現在のクラスタの項目(lane 付与済み)
+  let clusterLaneEnds = [];  // クラスタ内・各レーンの終了時刻(分)
+  let clusterMaxEnd = -1;    // クラスタ内の最遅終了時刻
+
+  const flushCluster = () => {
+    const laneCount = Math.max(1, clusterLaneEnds.length);
+    for (const it of cluster) result.push({ ...it, laneCount });
+    cluster = [];
+    clusterLaneEnds = [];
+    clusterMaxEnd = -1;
+  };
+
   for (const item of sorted) {
-    // 空いているレーン(最後の終了 ≤ 自分の開始)を探す
+    // 現クラスタのどのブロックとも重ならない(全て終了済み)なら、クラスタを確定
+    if (clusterMaxEnd >= 0 && item.start >= clusterMaxEnd) {
+      flushCluster();
+    }
+    // クラスタ内で空いているレーン(終了 ≤ 自分の開始)を探す
     let lane = -1;
-    for (let i = 0; i < maxLanes; i++) {
-      if (laneEnds[i] <= item.start) {
-        lane = i;
-        break;
-      }
+    for (let i = 0; i < clusterLaneEnds.length; i++) {
+      if (clusterLaneEnds[i] <= item.start) { lane = i; break; }
     }
     let isOverflow = false;
     if (lane === -1) {
-      // 全レーン満杯: 最後のレーンに重ねる(視覚的に "+N" にする)
-      lane = maxLanes - 1;
-      isOverflow = true;
+      if (clusterLaneEnds.length < maxLanes) {
+        lane = clusterLaneEnds.length;     // 新しいレーンを追加
+        clusterLaneEnds.push(-1);
+      } else {
+        lane = maxLanes - 1;               // 上限超過: 最後のレーンに重ねる
+        isOverflow = true;
+      }
     }
-    laneEnds[lane] = Math.max(laneEnds[lane], item.end);
-    result.push({ ...item, lane, isOverflow });
+    clusterLaneEnds[lane] = Math.max(clusterLaneEnds[lane], item.end);
+    clusterMaxEnd = Math.max(clusterMaxEnd, item.end);
+    cluster.push({ ...item, lane, isOverflow });
   }
+  flushCluster();
   return result;
 }
 
@@ -1897,10 +1916,12 @@ function adjustLaneTopPositions(assignments, rowHeight, startHour) {
 }
 
 function renderTimelineCard(positioned, mode = "planned", maxLanes = 5) {
-  const { block, startStr, endStr, lane, isOverflow, top, height, isShort } = positioned;
+  const { block, startStr, endStr, lane, isOverflow, top, height, isShort, laneCount } = positioned;
 
-  // v10: レーン位置(0〜maxLanes-1) を % で配置
-  const widthPercent = 100 / maxLanes;
+  // v26: 横幅は「同時に重なっているブロック数(クラスタのレーン数)」で決まる。
+  // 重なり無し → laneCount 1 → 全幅 / 2つ重なり → 2 → 50:50
+  const lanes = Math.max(1, laneCount || 1);
+  const widthPercent = 100 / lanes;
   const leftPercent = lane * widthPercent;
 
   const isActual = mode === "actual";
