@@ -27,7 +27,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-25T06:48:00"
+      "lastSavedAt": "2026-05-25T06:50:00"
     },
     "visionSection": "vision",
     "visionBoardIndex": 2,
@@ -23412,26 +23412,28 @@
     },
     {
       "id": "c58f42a6-bcce-4d25-b9aa-d18258b7c2c6",
-      "taskId": "ed42fd9f-d3b6-4331-b850-a442a322a847",
-      "date": "2026-05-25",
       "title": "来期検討資料作成",
+      "date": "2026-05-25",
       "category": "仕事",
-      "plannedStartAt": "",
-      "plannedEndAt": "",
+      "taskId": "ed42fd9f-d3b6-4331-b850-a442a322a847",
+      "plannedStartAt": "2026-05-25T15:00:00",
+      "plannedEndAt": "2026-05-25T16:00:00",
       "actualStartAt": "",
       "actualEndAt": "",
-      "completed": false,
       "charge": 0,
       "discharge": 0,
+      "completed": false,
+      "comment": "",
       "expectedCharge": "",
       "expectedDischarge": "",
-      "comment": "",
       "recurrenceGroupId": "",
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
+      "isMIT": false,
+      "source": "",
       "createdAt": "2026-05-25T06:50:00",
-      "updatedAt": "2026-05-25T06:50:00",
+      "updatedAt": "2026-05-25T06:51:00",
       "deleted": false
     },
     {
@@ -23456,6 +23458,32 @@
       "orderIndex": 0,
       "createdAt": "2026-05-25T06:50:00",
       "updatedAt": "2026-05-25T06:50:00",
+      "deleted": false
+    },
+    {
+      "id": "f999f5e1-5333-4a68-94fc-ddf03b3459e0",
+      "title": "来期検討資料作成",
+      "date": "2026-05-25",
+      "category": "仕事",
+      "taskId": "ed42fd9f-d3b6-4331-b850-a442a322a847",
+      "plannedStartAt": "2026-05-25T17:00:00",
+      "plannedEndAt": "2026-05-25T18:00:00",
+      "actualStartAt": "",
+      "actualEndAt": "",
+      "charge": 0,
+      "discharge": 0,
+      "completed": false,
+      "comment": "",
+      "expectedCharge": "",
+      "expectedDischarge": "",
+      "recurrenceGroupId": "",
+      "pomodoroCount": 0,
+      "migratedTo": "",
+      "orderIndex": 0,
+      "isMIT": true,
+      "source": "",
+      "createdAt": "2026-05-25T06:51:00",
+      "updatedAt": "2026-05-25T06:51:00",
       "deleted": false
     }
   ],
@@ -23494,10 +23522,7 @@
       "lastFiredKey": ""
     }
   },
-  "modal": {
-    "type": "block",
-    "id": "c58f42a6-bcce-4d25-b9aa-d18258b7c2c6"
-  },
+  "modal": null,
   "routineViewMode": "routine",
   "timelineZoom": 1,
   "recurrences": [
@@ -23779,5 +23804,5 @@
     }
   ],
   "timelineMode": "planned",
-  "dataModifiedAt": "2026-05-25T06:50:00"
+  "dataModifiedAt": "2026-05-25T06:51:00"
 }
