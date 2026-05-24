@@ -1,5 +1,5 @@
 {
-  "currentView": "wbs",
+  "currentView": "routine",
   "selectedDate": "2026-05-24",
   "settings": {
     "birthDate": "1992-12-29",
@@ -24,7 +24,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-24T13:38:00"
+      "lastSavedAt": "2026-05-24T14:36:00"
     },
     "visionSection": "affirmation",
     "visionBoardIndex": 0,
@@ -22357,5 +22357,5 @@
     }
   ],
   "timelineMode": "planned",
-  "dataModifiedAt": "2026-05-24T14:35:00"
+  "dataModifiedAt": "2026-05-24T14:37:00"
 }
