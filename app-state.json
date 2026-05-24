@@ -24,7 +24,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-24T12:49:00"
+      "lastSavedAt": "2026-05-24T13:16:00"
     },
     "visionSection": "affirmation",
     "visionBoardIndex": 0,
@@ -226,6 +226,12 @@
       "deleted": true
     },
     {
+      "targetYear": null,
+      "lifeArea": "",
+      "motivation": "",
+      "realized": false,
+      "realizedDate": "",
+      "nextRoutineId": "",
       "id": "58c8c841-38c4-4c33-a4c7-df871bc8aca7",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -234,17 +240,17 @@
       "status": "todo",
       "dueDate": "2026-05-24",
       "description": "",
+      "createdAt": "2026-05-24T12:45:00",
+      "updatedAt": "2026-05-24T12:45:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-24T12:45:00",
-      "updatedAt": "2026-05-24T12:45:00",
-      "deleted": false
-    },
-    {
       "id": "04c59fbd-b728-4d20-b01e-119c23a97377",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -253,12 +259,6 @@
       "status": "todo",
       "dueDate": "2026-05-27",
       "description": "",
-      "targetYear": null,
-      "lifeArea": "",
-      "motivation": "",
-      "realized": false,
-      "realizedDate": "",
-      "nextRoutineId": "",
       "createdAt": "2026-05-24T12:46:00",
       "updatedAt": "2026-05-24T12:46:00",
       "deleted": false
@@ -19012,6 +19012,8 @@
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_7dde151b-2346-4872-8690-7331ea9ba9c8_2026-06-23",
       "taskId": "",
       "date": "2026-06-23",
@@ -19031,13 +19033,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T12:43:00",
       "updatedAt": "2026-05-24T12:43:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_7dde151b-2346-4872-8690-7331ea9ba9c8_2026-06-24",
       "taskId": "",
       "date": "2026-06-24",
@@ -19057,13 +19059,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T12:43:00",
       "updatedAt": "2026-05-24T12:43:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_606bf0f3-5cd5-4690-b9ab-9e5f652044ba_2026-06-23",
       "taskId": "",
       "date": "2026-06-23",
@@ -19083,13 +19085,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T12:43:00",
       "updatedAt": "2026-05-24T12:43:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_606bf0f3-5cd5-4690-b9ab-9e5f652044ba_2026-06-24",
       "taskId": "",
       "date": "2026-06-24",
@@ -19109,13 +19111,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T12:43:00",
       "updatedAt": "2026-05-24T12:43:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_2e1a06b6-968f-4da4-bb5c-be6ca8f68bcb_2026-06-23",
       "taskId": "",
       "date": "2026-06-23",
@@ -19135,13 +19137,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T12:43:00",
       "updatedAt": "2026-05-24T12:43:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_2e1a06b6-968f-4da4-bb5c-be6ca8f68bcb_2026-06-24",
       "taskId": "",
       "date": "2026-06-24",
@@ -19161,13 +19163,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T12:43:00",
       "updatedAt": "2026-05-24T12:43:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_7be664be-24bd-4994-abbf-e7b4f5ed568b_2026-06-23",
       "taskId": "",
       "date": "2026-06-23",
@@ -19187,13 +19189,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T12:43:00",
       "updatedAt": "2026-05-24T12:43:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_7be664be-24bd-4994-abbf-e7b4f5ed568b_2026-06-24",
       "taskId": "",
       "date": "2026-06-24",
@@ -19213,13 +19215,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T12:43:00",
       "updatedAt": "2026-05-24T12:43:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_5f56d71d-1999-44e6-9bbb-843728309fc6_2026-06-23",
       "taskId": "",
       "date": "2026-06-23",
@@ -19239,13 +19241,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T12:43:00",
       "updatedAt": "2026-05-24T12:43:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_5f56d71d-1999-44e6-9bbb-843728309fc6_2026-06-24",
       "taskId": "",
       "date": "2026-06-24",
@@ -19265,13 +19267,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T12:43:00",
       "updatedAt": "2026-05-24T12:43:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_ead4621a-47a3-4fc8-b141-57b6194ab5f2_2026-06-23",
       "taskId": "",
       "date": "2026-06-23",
@@ -19291,13 +19293,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T12:43:00",
       "updatedAt": "2026-05-24T12:43:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_ead4621a-47a3-4fc8-b141-57b6194ab5f2_2026-06-24",
       "taskId": "",
       "date": "2026-06-24",
@@ -19317,13 +19319,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T12:43:00",
       "updatedAt": "2026-05-24T12:43:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_a03b51fa-09b5-4bbb-b972-d17dc9b14866_2026-06-23",
       "taskId": "",
       "date": "2026-06-23",
@@ -19343,13 +19345,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T12:43:00",
       "updatedAt": "2026-05-24T12:43:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_a03b51fa-09b5-4bbb-b972-d17dc9b14866_2026-06-24",
       "taskId": "",
       "date": "2026-06-24",
@@ -19369,13 +19371,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T12:43:00",
       "updatedAt": "2026-05-24T12:43:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_37b52ce0-fe36-415d-b22a-85f14c4ec375_2026-06-23",
       "taskId": "",
       "date": "2026-06-23",
@@ -19395,13 +19397,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T12:43:00",
       "updatedAt": "2026-05-24T12:43:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_37b52ce0-fe36-415d-b22a-85f14c4ec375_2026-06-24",
       "taskId": "",
       "date": "2026-06-24",
@@ -19421,13 +19423,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T12:43:00",
       "updatedAt": "2026-05-24T12:43:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_26e8b3fa-7b59-4474-b06f-82cffdab9837_2026-06-23",
       "taskId": "",
       "date": "2026-06-23",
@@ -19447,13 +19449,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T12:43:00",
       "updatedAt": "2026-05-24T12:43:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_26e8b3fa-7b59-4474-b06f-82cffdab9837_2026-06-24",
       "taskId": "",
       "date": "2026-06-24",
@@ -19473,13 +19475,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T12:43:00",
       "updatedAt": "2026-05-24T12:43:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_083310ad-0984-4b99-8250-6ef7b95349f4_2026-06-23",
       "taskId": "",
       "date": "2026-06-23",
@@ -19499,13 +19501,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T12:43:00",
       "updatedAt": "2026-05-24T12:43:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_083310ad-0984-4b99-8250-6ef7b95349f4_2026-06-24",
       "taskId": "",
       "date": "2026-06-24",
@@ -19525,8 +19527,6 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T12:43:00",
       "updatedAt": "2026-05-24T12:43:00",
       "deleted": false
@@ -19755,5 +19755,5 @@
     }
   ],
   "timelineMode": "actual",
-  "dataModifiedAt": "2026-05-24T13:15:00"
+  "dataModifiedAt": "2026-05-24T13:17:00"
 }
