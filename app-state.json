@@ -27,7 +27,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-24T15:20:00"
+      "lastSavedAt": "2026-05-24T16:29:00"
     },
     "visionSection": "vision",
     "visionBoardIndex": 0,
@@ -240,11 +240,11 @@
       "parentTaskId": "",
       "title": "1W ジム①",
       "category": "仕事",
-      "status": "todo",
+      "status": "doing",
       "dueDate": "2026-05-24",
       "description": "",
       "createdAt": "2026-05-24T12:45:00",
-      "updatedAt": "2026-05-24T12:45:00",
+      "updatedAt": "2026-05-24T16:29:00",
       "deleted": false
     },
     {
@@ -22974,12 +22974,12 @@
       "taskId": "58c8c841-38c4-4c33-a4c7-df871bc8aca7",
       "plannedStartAt": "2026-05-24T15:30:00",
       "plannedEndAt": "2026-05-24T16:30:00",
-      "actualStartAt": "",
-      "actualEndAt": "",
+      "actualStartAt": "2026-05-24T15:30:00",
+      "actualEndAt": "2026-05-24T16:45:00",
       "charge": 0,
       "discharge": 0,
-      "completed": false,
-      "comment": "",
+      "completed": true,
+      "comment": "ベンチプレス　40kg 10回　1セット\nベンチプレス　50kg 5回　3セット\nベンチプレス　40kg 10回　1セット\nベンチプレス　40kg 6回　2セット\nデットリフト　40kg 10回　1セット\nデットリフト　60kg  5回　5セット\nサイドレイズ　8kg 10回　4セット\nダンベルカール　8kg 10回　2セット\nラットプルダウン　39kg 5回　1セット\nラットプルダウン　52kg ネガティブ5回　2セット\nウォーキング　6キロ毎時　傾斜3 15",
       "expectedCharge": "",
       "expectedDischarge": "",
       "recurrenceGroupId": "",
@@ -22989,7 +22989,7 @@
       "isMIT": true,
       "source": "",
       "createdAt": "2026-05-24T15:18:00",
-      "updatedAt": "2026-05-24T15:20:00",
+      "updatedAt": "2026-05-24T16:29:00",
       "deleted": false
     }
   ],
@@ -23306,6 +23306,6 @@
       "deleted": false
     }
   ],
-  "timelineMode": "planned",
-  "dataModifiedAt": "2026-05-24T15:20:00"
+  "timelineMode": "actual",
+  "dataModifiedAt": "2026-05-24T16:29:00"
 }
