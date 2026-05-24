@@ -1,5 +1,5 @@
 {
-  "currentView": "vision",
+  "currentView": "timeline",
   "selectedDate": "2026-05-24",
   "settings": {
     "birthDate": "1992-12-29",
@@ -24,7 +24,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-24T13:16:00"
+      "lastSavedAt": "2026-05-24T13:23:00"
     },
     "visionSection": "affirmation",
     "visionBoardIndex": 0,
@@ -14082,8 +14082,8 @@
       "plannedStartAt": "2026-05-24T09:00:00",
       "plannedEndAt": "2026-05-24T09:00:00",
       "actualStartAt": "",
-      "actualEndAt": "",
-      "completed": false,
+      "actualEndAt": "2026-05-24T13:23:00",
+      "completed": true,
       "charge": 0,
       "discharge": 0,
       "expectedCharge": "",
@@ -14094,7 +14094,7 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-22T11:43:00",
-      "updatedAt": "2026-05-22T11:43:00",
+      "updatedAt": "2026-05-24T13:23:00",
       "deleted": false
     },
     {
@@ -14888,8 +14888,8 @@
       "plannedStartAt": "2026-05-24T09:01:00",
       "plannedEndAt": "2026-05-24T09:01:00",
       "actualStartAt": "",
-      "actualEndAt": "",
-      "completed": false,
+      "actualEndAt": "2026-05-24T13:23:00",
+      "completed": true,
       "charge": 0,
       "discharge": 0,
       "expectedCharge": "",
@@ -14900,7 +14900,7 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-22T11:43:00",
-      "updatedAt": "2026-05-22T11:43:00",
+      "updatedAt": "2026-05-24T13:23:00",
       "deleted": false
     },
     {
@@ -19755,5 +19755,5 @@
     }
   ],
   "timelineMode": "actual",
-  "dataModifiedAt": "2026-05-24T13:17:00"
+  "dataModifiedAt": "2026-05-24T13:24:00"
 }
