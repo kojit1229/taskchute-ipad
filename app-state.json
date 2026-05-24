@@ -1,11 +1,12 @@
 {
-  "currentView": "vision",
-  "selectedDate": "2026-05-25",
+  "currentView": "timeline",
+  "selectedDate": "2026-05-24",
   "settings": {
     "birthDate": "1992-12-29",
     "twelveWeekStartDate": "2026-05-23",
     "morningEnergyLog": {
-      "2026-05-25": 5
+      "2026-05-25": 5,
+      "2026-05-24": 5
     },
     "journalTemplate": "# 2026-05-22 のジャーナル\n\n## 🛏 睡眠\n就寝: __:__  /  起床: __:__\n質: ★★★☆☆\n\n## 🙏 感謝(3 つ)\n1. \n2. \n3. \n\n## ✨ 今日のハイライト\n\n\n## 💡 気付き・学び\n\n\n## 📝 自由記述\n\n",
     "vision": "# Vision\n\n人生の目的に沿ったプロジェクトを、日々の実行と振り返りで前に進める。",
@@ -22962,7 +22963,33 @@
       "isMIT": true,
       "source": "",
       "createdAt": "2026-05-24T15:01:00",
-      "updatedAt": "2026-05-24T15:01:00",
+      "updatedAt": "2026-05-24T15:18:00",
+      "deleted": true
+    },
+    {
+      "id": "0e0258fe-f9e1-4bf5-8ecf-fd6a894ddcc2",
+      "title": "1W ジム①",
+      "date": "2026-05-24",
+      "category": "運動",
+      "taskId": "58c8c841-38c4-4c33-a4c7-df871bc8aca7",
+      "plannedStartAt": "2026-05-24T15:30:00",
+      "plannedEndAt": "2026-05-24T16:30:00",
+      "actualStartAt": "",
+      "actualEndAt": "",
+      "charge": 0,
+      "discharge": 0,
+      "completed": false,
+      "comment": "",
+      "expectedCharge": "",
+      "expectedDischarge": "",
+      "recurrenceGroupId": "",
+      "pomodoroCount": 0,
+      "migratedTo": "",
+      "orderIndex": 0,
+      "isMIT": true,
+      "source": "",
+      "createdAt": "2026-05-24T15:18:00",
+      "updatedAt": "2026-05-24T15:19:00",
       "deleted": false
     }
   ],
@@ -22998,7 +23025,10 @@
       "lastFiredKey": ""
     }
   },
-  "modal": null,
+  "modal": {
+    "type": "block",
+    "id": "d136f098-ba59-47eb-aa2c-ced028648bc0"
+  },
   "routineViewMode": "routine",
   "timelineZoom": 1,
   "recurrences": [
@@ -23280,5 +23310,5 @@
     }
   ],
   "timelineMode": "planned",
-  "dataModifiedAt": "2026-05-24T15:03:00"
+  "dataModifiedAt": "2026-05-24T15:19:00"
 }
