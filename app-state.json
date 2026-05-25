@@ -27,7 +27,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-25T16:05:00"
+      "lastSavedAt": "2026-05-25T16:13:00"
     },
     "visionSection": "vision",
     "visionBoardIndex": 2,
@@ -546,6 +546,120 @@
       "nextRoutineId": "",
       "createdAt": "2026-05-25T16:12:00",
       "updatedAt": "2026-05-25T16:12:00",
+      "deleted": false
+    },
+    {
+      "id": "53d00237-e897-4b0e-b123-427d655b8bec",
+      "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
+      "parentTaskId": "",
+      "title": "4Wジム①",
+      "category": "運動",
+      "status": "todo",
+      "dueDate": "2026-06-14",
+      "description": "",
+      "targetYear": null,
+      "lifeArea": "",
+      "motivation": "",
+      "realized": false,
+      "realizedDate": "",
+      "nextRoutineId": "",
+      "createdAt": "2026-05-25T16:14:00",
+      "updatedAt": "2026-05-25T16:14:00",
+      "deleted": false
+    },
+    {
+      "id": "55ce764b-89fb-49b4-b7e9-26a3112455e2",
+      "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
+      "parentTaskId": "",
+      "title": "4Wジム②",
+      "category": "運動",
+      "status": "todo",
+      "dueDate": "2026-06-16",
+      "description": "",
+      "targetYear": null,
+      "lifeArea": "",
+      "motivation": "",
+      "realized": false,
+      "realizedDate": "",
+      "nextRoutineId": "",
+      "createdAt": "2026-05-25T16:14:00",
+      "updatedAt": "2026-05-25T16:14:00",
+      "deleted": false
+    },
+    {
+      "id": "cb505873-600b-4f3a-8122-d0de46b1aa9c",
+      "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
+      "parentTaskId": "",
+      "title": "4Wジム③",
+      "category": "運動",
+      "status": "todo",
+      "dueDate": "2026-06-19",
+      "description": "",
+      "targetYear": null,
+      "lifeArea": "",
+      "motivation": "",
+      "realized": false,
+      "realizedDate": "",
+      "nextRoutineId": "",
+      "createdAt": "2026-05-25T16:15:00",
+      "updatedAt": "2026-05-25T16:15:00",
+      "deleted": false
+    },
+    {
+      "id": "42e631c0-3f5d-4d36-aba9-4cb16e27e5cb",
+      "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
+      "parentTaskId": "",
+      "title": "4W銭湯",
+      "category": "回復",
+      "status": "todo",
+      "dueDate": "2026-06-19",
+      "description": "",
+      "targetYear": null,
+      "lifeArea": "",
+      "motivation": "",
+      "realized": false,
+      "realizedDate": "",
+      "nextRoutineId": "",
+      "createdAt": "2026-05-25T16:15:00",
+      "updatedAt": "2026-05-25T16:15:00",
+      "deleted": false
+    },
+    {
+      "id": "8af48897-ba6d-4b45-9bf7-64153edddf82",
+      "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
+      "parentTaskId": "",
+      "title": "5Wジム①",
+      "category": "運動",
+      "status": "todo",
+      "dueDate": "2026-06-21",
+      "description": "",
+      "targetYear": null,
+      "lifeArea": "",
+      "motivation": "",
+      "realized": false,
+      "realizedDate": "",
+      "nextRoutineId": "",
+      "createdAt": "2026-05-25T16:15:00",
+      "updatedAt": "2026-05-25T16:16:00",
+      "deleted": false
+    },
+    {
+      "id": "9af6146c-b168-40c3-a556-886a05f8c8dc",
+      "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
+      "parentTaskId": "",
+      "title": "5Wジム②",
+      "category": "",
+      "status": "todo",
+      "dueDate": "2026-05-25",
+      "description": "",
+      "targetYear": null,
+      "lifeArea": "",
+      "motivation": "",
+      "realized": false,
+      "realizedDate": "",
+      "nextRoutineId": "",
+      "createdAt": "2026-05-25T16:16:00",
+      "updatedAt": "2026-05-25T16:16:00",
       "deleted": false
     }
   ],
@@ -23830,7 +23944,10 @@
       "lastFiredKey": ""
     }
   },
-  "modal": null,
+  "modal": {
+    "type": "task",
+    "id": "9af6146c-b168-40c3-a556-886a05f8c8dc"
+  },
   "routineViewMode": "all",
   "timelineZoom": 1,
   "recurrences": [
@@ -24112,5 +24229,5 @@
     }
   ],
   "timelineMode": "actual",
-  "dataModifiedAt": "2026-05-25T16:12:00"
+  "dataModifiedAt": "2026-05-25T16:16:00"
 }
