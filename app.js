@@ -76,6 +76,7 @@ document.addEventListener("click", (event) => {
   if (action === "add-task") addTask();
   if (action === "toggle-task") toggleTask(id);
   if (action === "task-today") createBlockFromTask(id);
+  if (action === "home-add-today") addTaskToToday(id);
   if (action === "delete-task") deleteTask(id);
   if (action === "add-block") addBlock();
   if (action === "toggle-block") toggleBlock(id);
@@ -300,6 +301,8 @@ function saveState() {
 
 function normalizeState(value) {
   value.settings ||= {};
+  // v31: 残り時間表示用の生年月日(未設定なら補完)
+  if (!value.settings.birthDate) value.settings.birthDate = "1992-12-29";
   value.settings.staticFilesLoaded ||= { vision: false, affirmation: false };
   value.settings.github ||= defaultGitHubSettings();
   value.settings.github.owner ||= "kojit1229";
@@ -928,75 +931,314 @@ function renderHeader(eyebrow, title, action = "") {
   `;
 }
 
+// =============================================================
+// v31: ホーム(コックピット)— 信条 / 残り時間 / 行動パネル群
+// =============================================================
 function renderHome() {
-  const morning = state.settings.morningEnergyLog[state.selectedDate];
+  const today = state.selectedDate;
+  const isToday = today === todayISO();
+  const blocks = blocksForDate(today);
   const metrics = computeMetrics();
-  const todayBlocks = blocksForDate(state.selectedDate);
-
-  // v17: 今日の MIT(今日の主役)Block
-  const mitBlocks = todayBlocks.filter((b) => b.isMIT);
-  const mitDone = mitBlocks.filter((b) => b.completed).length;
-  // v17: 前日の日報から「明日の MIT 候補」を抽出して当日に表示
-  const previous = addDays(state.selectedDate, -1);
-  const prevReport = state.reports?.[previous] || "";
-  const yesterdayCandidates = extractMITCandidatesFromReport(prevReport);
-
   return `
     ${renderHeader("今日の入口", "ホーム", `<button class="btn primary" data-action="today">今日へ</button>`)}
     ${renderDateBar()}
-
-    <section class="panel" style="margin-bottom:12px">
-      <div class="row" style="margin-bottom:8px; align-items:center">
-        <h2>✦ 今日の主役 (MIT)</h2>
-        <div class="muted" style="font-size:13px">${mitDone} / ${mitBlocks.length} 達成</div>
-      </div>
-      ${mitBlocks.length === 0 ? `
-        <div class="muted" style="font-size:13px; padding:8px 0">
-          ${yesterdayCandidates.length > 0
-            ? `<div style="margin-bottom:10px; padding:10px; background:rgba(255,214,10,0.08); border-radius:8px; border-left:3px solid #FFD60A">
-                <div style="font-weight:600; color:var(--text); margin-bottom:6px">📌 昨日のあなたが提案した MIT 候補</div>
-                ${yesterdayCandidates.map((c) => `<div style="margin:2px 0">• ${escapeHTML(c)}</div>`).join("")}
-              </div>`
-            : ""}
-          今日特に集中することを <strong>1〜3 個</strong> 選びましょう。<br>
-          タスクシュート画面の各 Block 横の <strong>☆</strong> ボタンで設定。
-          <div style="margin-top:8px"><button class="btn primary" data-action="nav" data-view="tasks">タスクシュートへ</button></div>
-        </div>
-      ` : `
-        <div class="grid" style="gap:8px">
-          ${mitBlocks.map((b) => `
-            <div class="row" style="align-items:center; padding:8px 10px; background:rgba(255,214,10,0.08); border-radius:8px; border-left:3px solid #FFD60A">
-              <span style="font-size:18px">${b.completed ? "✅" : "⬜"}</span>
-              <strong style="flex:1; ${b.completed ? "text-decoration:line-through; opacity:0.6" : ""}">${escapeHTML(b.title)}</strong>
-              <button class="btn ghost" data-action="nav" data-view="tasks">行く</button>
-            </div>
-          `).join("")}
-        </div>
-      `}
-    </section>
-
-    <section class="panel">
-      <h2>朝の体調</h2>
-      <div class="segmented">
-        ${energyLevels.map((level) => `
-          <button class="${Number(morning) === level.value ? "active" : ""}" data-action="set-morning" data-value="${level.value}">
-            ${level.label} ${level.value}
-          </button>
-        `).join("")}
-      </div>
-    </section>
-
-    <section class="section grid two">
-      ${metrics.map((metric) => `
-        <div class="panel metric">
-          <div class="metric-label">${metric.label}</div>
-          <div class="metric-value">${metric.value}</div>
-          <div class="progress"><span style="width:${clamp(metric.progress, 0, 100)}%"></span></div>
-          <div class="muted">${metric.note}</div>
-        </div>
-      `).join("")}
-    </section>
+    ${homeCreed()}
+    ${homeLifespan(metrics)}
+    <div class="home-grid">
+      ${homeHero(blocks, isToday)}
+      ${homeMIT(blocks)}
+      ${homeTaskchute(blocks)}
+      ${homeFlow(blocks, isToday)}
+      ${homeRoutine(blocks)}
+      ${homeCycle(metrics)}
+      ${homeBacklog()}
+      ${homeSteps(blocks)}
+    </div>
   `;
+}
+
+// --- 三つの信条 ---
+function homeCreed() {
+  const creeds = [
+    "着手第一主義！やればやる気が出てくる。",
+    "悩んだら、ヒンメルはどうするか考えろ。",
+    "笑顔でエネルギッシュで最高の1日を過ごそう。"
+  ];
+  const nums = ["一", "二", "三"];
+  return `
+    <section class="panel home-creed">
+      <div class="home-creed-head">三 つ の 信 条</div>
+      ${creeds.map((c, i) => `
+        <div class="home-creed-row">
+          <span class="home-creed-num">${nums[i]}</span>
+          <span class="home-creed-text">${escapeHTML(c)}</span>
+        </div>`).join("")}
+    </section>`;
+}
+
+// --- 残り時間(今年 / 45歳 / 80歳)---
+function homeLifespan(metrics) {
+  const items = metrics.filter((m) => m.label !== "12WY");
+  if (items.length === 0) return "";
+  return `
+    <section class="panel home-life">
+      ${items.map((m) => `
+        <div class="home-life-cell">
+          <div class="home-life-top">
+            <span class="home-life-label">${m.label}</span>
+            <span class="home-life-pct">${Math.round(m.progress)}%経過</span>
+          </div>
+          <div class="home-life-num">${(m.value || "").replace("あと", "")}</div>
+          <div class="progress"><span style="width:${clamp(m.progress, 0, 100)}%"></span></div>
+        </div>`).join("")}
+    </section>`;
+}
+
+// 予定時刻の範囲表示
+function plannedRange(b) {
+  const s = b.plannedStartAt ? timeFromDateTime(b.plannedStartAt) : "—";
+  const e = b.plannedEndAt ? timeFromDateTime(b.plannedEndAt) : "—";
+  return `${s} – ${e}`;
+}
+
+// --- いま、これ(進行中 / 次のブロック)---
+function homeHero(blocks, isToday) {
+  const doing = blocks.find((b) => !b.completed && b.actualStartAt);
+  const next = blocks.find((b) => !b.completed && !b.actualStartAt);
+  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  let body;
+  if (doing) {
+    const s = minutesOf(doing.plannedStartAt);
+    const e = minutesOf(doing.plannedEndAt || doing.plannedStartAt);
+    const pct = e > s ? clamp(Math.round(((nowMin - s) / (e - s)) * 100), 0, 100) : 0;
+    const left = Math.max(0, e - nowMin);
+    body = `
+      <div class="home-hero-title" data-action="edit-block" data-id="${doing.id}">${escapeHTML(doing.title)}</div>
+      <div class="muted" style="font-size:12px;margin-top:4px">予定 ${plannedRange(doing)}</div>
+      <div class="progress" style="margin:11px 0 7px"><span style="width:${pct}%"></span></div>
+      <div style="font-size:13px">取り組み中 — 残り <strong>${left}分</strong></div>
+      <button class="btn green home-hero-btn" data-action="complete-block-with-actual" data-id="${doing.id}">✓ 完了にする</button>`;
+  } else if (next) {
+    body = `
+      <div class="home-hero-title" data-action="edit-block" data-id="${next.id}">${escapeHTML(next.title)}</div>
+      <div class="muted" style="font-size:12px;margin-top:4px">予定 ${plannedRange(next)}</div>
+      <div style="font-size:13px;margin-top:11px">まだ着手していません。</div>
+      <div style="font-size:12px;color:var(--orange);margin-top:2px">まず5分でいい。やれば乗ってくる。</div>
+      <button class="btn orange home-hero-btn" data-action="now-start" data-id="${next.id}">▶ いま着手する</button>`;
+  } else {
+    body = `<div style="font-size:15px;font-weight:600;color:var(--green);padding:10px 0">
+      ${blocks.length ? "今日のブロックは全部完了。おつかれさまでした。" : "今日のブロックはまだありません。"}</div>`;
+  }
+  return `<section class="panel home-hero">
+    <div class="eyebrow" style="color:var(--orange)">いま、これ</div>${body}</section>`;
+}
+
+// チェック+編集できる行(Block 用)
+function homeCheckRow(b, star) {
+  const act = b.completed ? "toggle-block" : "complete-block-with-actual";
+  return `<div class="home-ck ${b.completed ? "done" : ""}">
+    <span class="home-box" data-action="${act}" data-id="${b.id}">${b.completed ? "✓" : ""}</span>
+    <span class="home-ck-name" data-action="edit-block" data-id="${b.id}">${escapeHTML(b.title)}</span>
+    ${star ? `<span class="home-star">${star}</span>` : ""}
+  </div>`;
+}
+
+// --- 今日の主役(MIT)---
+function homeMIT(blocks) {
+  const mit = blocks.filter((b) => b.isMIT);
+  const done = mit.filter((b) => b.completed).length;
+  const rows = mit.length
+    ? mit.map((b) => homeCheckRow(b, "★")).join("")
+    : `<div class="muted" style="font-size:13px;padding:6px 0">タスクシュート画面の ☆ で、今日の主役(最大3)を設定できます。</div>`;
+  return `<section class="panel">
+    <div class="home-plabel orange">今日の主役<span class="home-count">${done} / ${mit.length}</span></div>
+    ${rows}
+    ${mit.length ? `<div class="home-foot">今日はこの${mit.length}つ。ここに集中する。</div>` : ""}
+  </section>`;
+}
+
+// --- 今日のタスクシュート(着手率)---
+function homeTaskchute(blocks) {
+  if (!blocks.length) {
+    return `<section class="panel"><div class="home-plabel">今日のタスクシュート</div>
+      <div class="muted" style="font-size:13px">本日のブロックがありません。</div></section>`;
+  }
+  const started = blocks.filter((b) => b.completed || b.actualStartAt).length;
+  const pct = Math.round((started / blocks.length) * 100);
+  const rows = blocks.map((b) => {
+    const st = b.completed ? "done" : (b.actualStartAt ? "doing" : "todo");
+    const badge = st === "doing" ? `<span class="home-badge doing">着手中</span>`
+      : (st === "todo" ? `<span class="home-badge todo">未着手</span>` : "");
+    const act = b.completed ? "toggle-block" : "complete-block-with-actual";
+    return `<div class="home-tc ${st}">
+      <span class="home-dot ${st}" data-action="${act}" data-id="${b.id}">${b.completed ? "✓" : ""}</span>
+      <span class="home-tc-name" data-action="edit-block" data-id="${b.id}">${escapeHTML(b.title)}</span>${badge}</div>`;
+  }).join("");
+  return `<section class="panel"><div class="home-plabel">今日のタスクシュート</div>
+    <div class="home-rate"><span class="home-rate-cap">着手率</span>
+      <span class="home-rate-pct">${pct}%</span>
+      <span class="home-rate-frac">${started} / ${blocks.length} ブロック</span></div>
+    <div class="progress" style="margin-bottom:10px"><span style="width:${pct}%"></span></div>
+    ${rows}</section>`;
+}
+
+// --- 今日のながれ ---
+function homeFlow(blocks, isToday) {
+  if (!blocks.length) {
+    return `<section class="panel"><div class="home-plabel">今日のながれ</div>
+      <div class="muted" style="font-size:13px">本日のブロックがありません。</div></section>`;
+  }
+  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  const rows = blocks.map((b) => {
+    const s = minutesOf(b.plannedStartAt);
+    const e = minutesOf(b.plannedEndAt || b.plannedStartAt);
+    const isNow = isToday && !b.completed && nowMin >= s && nowMin < e;
+    const cls = b.completed ? "done" : (isNow ? "now" : "");
+    return `<div class="home-flow ${cls}">
+      <span class="home-flow-time">${b.plannedStartAt ? timeFromDateTime(b.plannedStartAt) : "—"}</span>
+      <span class="home-dot ${b.completed ? "done" : ""}" data-action="${b.completed ? "toggle-block" : "complete-block-with-actual"}" data-id="${b.id}">${b.completed ? "✓" : ""}</span>
+      <span class="home-flow-name" data-action="edit-block" data-id="${b.id}">${escapeHTML(b.title)}</span>
+      ${isNow ? `<span class="home-badge doing">NOW</span>` : ""}</div>`;
+  }).join("");
+  return `<section class="panel"><div class="home-plabel">今日のながれ</div>${rows}</section>`;
+}
+
+// --- 今日のルーティン(実行率)---
+function homeRoutine(blocks) {
+  const r = blocks.filter((b) => b.category === "ルーティン");
+  const done = r.filter((b) => b.completed).length;
+  const pct = r.length ? Math.round((done / r.length) * 100) : 0;
+  const rows = r.length
+    ? r.map((b) => homeCheckRow(b, "")).join("")
+    : `<div class="muted" style="font-size:13px">カテゴリ「ルーティン」のBlockがここに表示されます。</div>`;
+  return `<section class="panel"><div class="home-plabel green">今日のルーティン</div>
+    ${r.length ? `<div class="home-rate"><span class="home-rate-cap">実行率</span>
+      <span class="home-rate-pct green">${pct}%</span>
+      <span class="home-rate-frac">${done} / ${r.length}</span></div>
+      <div class="progress" style="margin-bottom:10px"><span style="width:${pct}%"></span></div>` : ""}
+    ${rows}</section>`;
+}
+
+// 週(月〜日)の範囲
+function weekRange(dateISO) {
+  const d = new Date(dateISO + "T00:00:00");
+  const dow = (d.getDay() + 6) % 7; // Mon=0
+  const mon = addDays(dateISO, -dow);
+  return { weekStart: mon, weekEnd: addDays(mon, 6) };
+}
+
+// --- 12週サイクル(B案: Project=目標 / Task=戦術)---
+function homeCycle(metrics) {
+  const m12 = metrics.find((m) => m.label === "12WY");
+  const start = state.settings.twelveWeekStartDate || todayISO();
+  const wk = clamp(Math.floor(daysBetween(start, state.selectedDate) / 7) + 1, 1, 12);
+  const goals = state.projects.filter((p) =>
+    !p.deleted && p.kind === "normal" && p.status === "active");
+  const goalIds = goals.map((p) => p.id);
+  const allTasks = state.tasks.filter((t) => !t.deleted && goalIds.includes(t.projectId));
+  const overall = allTasks.length
+    ? Math.round((allTasks.filter((t) => t.status === "completed").length / allTasks.length) * 100) : 0;
+  const { weekStart, weekEnd } = weekRange(state.selectedDate);
+  const weekTasks = allTasks.filter((t) => t.dueDate && t.dueDate >= weekStart && t.dueDate <= weekEnd);
+  const weekPct = weekTasks.length
+    ? Math.round((weekTasks.filter((t) => t.status === "completed").length / weekTasks.length) * 100) : 0;
+  const goalHTML = goals.length ? goals.map((p) => {
+    const tac = state.tasks
+      .filter((t) => !t.deleted && t.projectId === p.id && t.status !== "completed")
+      .sort((a, b) => (a.dueDate || "99").localeCompare(b.dueDate || "99"))
+      .slice(0, 4);
+    return `<div class="home-goal">
+      <div class="home-goal-title">${escapeHTML(p.title)}</div>
+      ${tac.length ? tac.map((t) => `<div class="home-ck">
+        <span class="home-box" data-action="toggle-task" data-id="${t.id}"></span>
+        <span class="home-ck-name" data-action="edit-task" data-id="${t.id}">${escapeHTML(t.title)}</span>
+      </div>`).join("") : `<div class="muted" style="font-size:12px;padding-left:2px">未完了のタスクなし</div>`}
+    </div>`;
+  }).join("") : `<div class="muted" style="font-size:13px">WBSでProjectを作ると、ここにサイクル目標として表示されます。</div>`;
+  return `<section class="panel"><div class="home-plabel blue">12週サイクル</div>
+    <div class="home-wk"><span>Week <strong>${wk}</strong> / 12</span>
+      <span class="muted" style="font-size:12px">${m12 ? m12.value : ""}</span></div>
+    <div class="home-stat"><span class="home-stat-cap">全体の進捗</span>
+      <div class="progress"><span style="width:${overall}%"></span></div>
+      <span class="home-stat-pct">${overall}%</span></div>
+    <div class="home-stat"><span class="home-stat-cap">今週の進捗</span>
+      <div class="progress"><span style="width:${weekPct}%"></span></div>
+      <span class="home-stat-pct">${weekPct}%</span></div>
+    <div class="home-divider"></div>
+    ${goalHTML}</section>`;
+}
+
+// --- 未完了タスク(今日に追加できる)---
+function homeBacklog() {
+  const excluded = state.projects
+    .filter((p) => p.kind === "wish" || p.kind === "other")
+    .map((p) => p.id);
+  const tasks = state.tasks
+    .filter((t) => !t.deleted && t.status !== "completed" && !excluded.includes(t.projectId))
+    .sort((a, b) => (a.dueDate || "99").localeCompare(b.dueDate || "99"));
+  const todayTaskIds = new Set(blocksForDate(state.selectedDate).map((b) => b.taskId).filter(Boolean));
+  const rows = tasks.slice(0, 8).map((t) => {
+    const scheduled = todayTaskIds.has(t.id);
+    const due = t.dueDate ? `締切 ${t.dueDate.slice(5).replace("-", "/")}` : "締切なし";
+    return `<div class="home-due">
+      <div class="home-due-main" data-action="edit-task" data-id="${t.id}">
+        <div class="home-due-name">${escapeHTML(t.title)}</div>
+        <div class="home-due-sub">${escapeHTML(projectName(t.projectId))} ・ ${due}</div>
+      </div>
+      ${scheduled
+        ? `<button class="btn ghost" disabled style="font-size:11px;padding:7px 10px">追加済み</button>`
+        : `<button class="btn ghost home-add" data-action="home-add-today" data-id="${t.id}" style="font-size:11px;padding:7px 10px">＋今日に追加</button>`}
+    </div>`;
+  }).join("");
+  return `<section class="panel"><div class="home-plabel orange">未完了タスク<span class="home-count">${tasks.length}件</span></div>
+    ${tasks.length ? rows : `<div class="muted" style="font-size:13px">未完了のタスクはありません。</div>`}</section>`;
+}
+
+// --- 今日の足あと ---
+function homeSteps(blocks) {
+  const done = blocks.filter((b) => b.completed);
+  const total = blocks.length || 1;
+  const charge = done.reduce((s, b) => s + Number(b.charge || 0), 0);
+  const discharge = done.reduce((s, b) => s + Number(b.discharge || 0), 0);
+  const C = 226.2;
+  const off = (C * (1 - done.length / total)).toFixed(1);
+  return `<section class="panel"><div class="home-plabel green">今日の足あと</div>
+    <div class="home-steps">
+      <div class="home-ring">
+        <svg width="78" height="78" viewBox="0 0 84 84">
+          <circle cx="42" cy="42" r="36" fill="none" stroke="var(--line-soft)" stroke-width="7"/>
+          <circle cx="42" cy="42" r="36" fill="none" stroke="var(--green)" stroke-width="7"
+            stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${off}"
+            transform="rotate(-90 42 42)"/>
+        </svg>
+        <div class="home-ring-txt">${done.length}/${blocks.length}</div>
+      </div>
+      <div style="flex:1;min-width:0">
+        ${done.length
+          ? done.map((b) => `<div class="muted" style="font-size:12.5px">✓ ${escapeHTML(b.title)}</div>`).join("")
+          : `<div class="muted" style="font-size:12.5px">まだ完了したブロックがありません。</div>`}
+        <div class="home-energy">充電 <strong style="color:var(--green)">+${charge}</strong>
+          ／ 放電 <strong style="color:var(--orange)">−${discharge}</strong></div>
+      </div>
+    </div></section>`;
+}
+
+// v31: 未完了タスクを今日のBlockにして編集画面を開く(予定時刻を入力できる)
+function addTaskToToday(taskId) {
+  const task = state.tasks.find((t) => t.id === taskId);
+  if (!task) return;
+  const { plannedStartAt, plannedEndAt } = defaultPlannedTimes();
+  const block = makeBlock({
+    taskId,
+    date: state.selectedDate,
+    title: task.title,
+    category: task.category || projectName(task.projectId),
+    plannedStartAt,
+    plannedEndAt
+  });
+  state.blocks.push(block);
+  saveState();
+  openBlockEditor(block.id);
 }
 
 // v17: 前日の日報から「明日の MIT 候補」を抽出する

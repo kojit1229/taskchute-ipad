@@ -1808,3 +1808,139 @@ h3 {
 }
 
 /* タイムラインの現在時刻線(.now-line は既にインライン定義) */
+
+/* ============================================================
+   v31: ホーム(コックピット)
+   ============================================================ */
+.home-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 12px; }
+@media (min-width: 760px) { .home-grid { grid-template-columns: 1fr 1fr; } }
+
+.home-creed {
+  margin-top: 12px; border-color: var(--orange);
+  background: linear-gradient(180deg, var(--orange-soft), transparent);
+}
+.home-creed-head {
+  font-size: 11px; letter-spacing: 0.32em; color: var(--orange);
+  font-weight: 700; text-align: center; margin-bottom: 14px;
+}
+.home-creed-row { display: flex; align-items: center; gap: 13px; padding: 5px 2px; }
+.home-creed-num {
+  font-size: 30px; font-weight: 700; color: var(--orange);
+  width: 30px; text-align: center; flex: none; line-height: 1;
+}
+.home-creed-text { font-size: 15px; font-weight: 600; line-height: 1.6; }
+@media (min-width: 760px) {
+  .home-creed-row { padding: 5px 14px; }
+  .home-creed { display: flex; gap: 6px; flex-wrap: wrap; }
+  .home-creed-head { width: 100%; }
+  .home-creed-row { flex: 1; min-width: 220px; }
+}
+
+.home-life {
+  margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 0; padding: 0;
+}
+.home-life-cell { padding: 15px 14px; border-right: 1px solid var(--line-soft); }
+.home-life-cell:last-child { border-right: none; }
+.home-life-top { display: flex; justify-content: space-between; align-items: baseline; }
+.home-life-label { font-size: 12px; font-weight: 700; color: var(--muted); }
+.home-life-pct { font-size: 11px; font-weight: 700; color: var(--accent); }
+.home-life-num { font-size: 25px; font-weight: 300; margin: 3px 0 8px; }
+
+.home-hero { border-color: var(--orange); }
+.home-hero-title { font-size: 20px; font-weight: 800; line-height: 1.4; cursor: pointer; }
+.home-hero-btn { width: 100%; margin-top: 13px; font-size: 15px; padding: 12px 0; }
+
+.home-plabel {
+  display: flex; align-items: center; gap: 7px; font-size: 11px;
+  font-weight: 700; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 12px;
+}
+.home-plabel::before {
+  content: ""; width: 11px; height: 2px; border-radius: 2px;
+  background: var(--muted); flex: none;
+}
+.home-plabel.orange { color: var(--orange); }
+.home-plabel.orange::before { background: var(--orange); }
+.home-plabel.blue { color: var(--accent); }
+.home-plabel.blue::before { background: var(--accent); }
+.home-plabel.green { color: var(--green); }
+.home-plabel.green::before { background: var(--green); }
+.home-count { margin-left: auto; font-weight: 700; }
+.home-foot {
+  margin-top: 11px; padding-top: 9px; border-top: 1px solid var(--line-soft);
+  font-size: 12px; color: var(--muted);
+}
+
+.home-ck, .home-tc, .home-flow, .home-due {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 6px; margin: 0 -6px; border-radius: 7px;
+}
+.home-ck:hover, .home-tc:hover, .home-flow:hover, .home-due:hover { background: var(--panel-soft); }
+.home-tc, .home-flow { border-bottom: 1px solid var(--line-soft); }
+.home-box {
+  width: 20px; height: 20px; border-radius: 6px; border: 2px solid var(--line);
+  flex: none; display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: #fff; cursor: pointer;
+}
+.home-ck.done .home-box { background: var(--green); border-color: var(--green); }
+.home-dot {
+  width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line);
+  flex: none; display: flex; align-items: center; justify-content: center;
+  font-size: 10px; color: #fff; cursor: pointer;
+}
+.home-dot.done { background: var(--green); border-color: var(--green); }
+.home-dot.doing { border-color: var(--orange); background: var(--orange); }
+.home-ck-name, .home-tc-name, .home-flow-name, .home-due-main {
+  flex: 1; min-width: 0; cursor: pointer; font-size: 13.5px;
+}
+.home-ck.done .home-ck-name, .home-tc.done .home-tc-name, .home-flow.done .home-flow-name {
+  color: var(--faint); text-decoration: line-through;
+}
+.home-star { color: var(--orange); font-size: 12px; }
+.home-flow-time { font-size: 12px; color: var(--muted); width: 42px; flex: none; }
+.home-flow.now {
+  background: var(--orange-soft); border-radius: 7px; border-bottom-color: transparent;
+}
+.home-badge {
+  font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 5px; flex: none;
+}
+.home-badge.doing { color: var(--orange); background: var(--orange-soft); }
+.home-badge.todo { color: var(--faint); background: var(--panel-soft); }
+
+.home-rate { display: flex; align-items: baseline; gap: 8px; margin-bottom: 7px; }
+.home-rate-cap { font-size: 11px; font-weight: 700; color: var(--muted); }
+.home-rate-pct { font-size: 22px; font-weight: 800; color: var(--orange); }
+.home-rate-pct.green { color: var(--green); }
+.home-rate-frac { font-size: 11px; color: var(--muted); margin-left: auto; }
+
+.home-stat { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
+.home-stat-cap { font-size: 11px; font-weight: 700; color: var(--muted); width: 66px; flex: none; }
+.home-stat .progress { flex: 1; }
+.home-stat-pct {
+  font-size: 12px; font-weight: 800; color: var(--accent);
+  width: 38px; text-align: right; flex: none;
+}
+.home-wk {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 11px; font-size: 14px; font-weight: 700;
+}
+.home-wk strong { color: var(--accent); font-size: 19px; }
+.home-divider { height: 1px; background: var(--line-soft); margin: 12px 0; }
+.home-goal { margin-top: 11px; }
+.home-goal:first-of-type { margin-top: 0; }
+.home-goal-title { font-size: 13.5px; font-weight: 700; margin-bottom: 5px; }
+
+.home-due-name { font-size: 13px; }
+.home-due-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.home-add { white-space: nowrap; }
+
+.home-steps { display: flex; align-items: center; gap: 16px; }
+.home-ring { position: relative; width: 78px; height: 78px; flex: none; }
+.home-ring-txt {
+  position: absolute; inset: 0; display: flex; align-items: center;
+  justify-content: center; font-size: 17px; font-weight: 800;
+}
+.home-energy {
+  margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line-soft);
+  font-size: 12px; color: var(--muted);
+}
