@@ -1,5 +1,5 @@
 {
-  "currentView": "home",
+  "currentView": "routine",
   "selectedDate": "2026-05-25",
   "settings": {
     "birthDate": "1992-12-29",
@@ -27,7 +27,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-25T16:39:00"
+      "lastSavedAt": "2026-05-25T16:49:00"
     },
     "visionSection": "vision",
     "visionBoardIndex": 2,
@@ -182,10 +182,13 @@
       "title": "部門来期検討",
       "category": "",
       "status": "active",
-      "twelveWeekStartDate": "2026-05-23",
+      "twelveWeekStartDate": "",
       "createdAt": "2026-05-25T06:49:00",
-      "updatedAt": "2026-05-25T06:49:00",
-      "deleted": false
+      "updatedAt": "2026-05-25T17:01:00",
+      "deleted": false,
+      "startDate": "",
+      "dueDate": "",
+      "description": ""
     },
     {
       "id": "dd5b7a8d-f08f-4b1a-81db-89654d2b0f54",
@@ -204,10 +207,13 @@
       "title": "A鉄工保守",
       "category": "",
       "status": "active",
-      "twelveWeekStartDate": "2026-05-23",
+      "twelveWeekStartDate": "",
       "createdAt": "2026-05-25T09:18:00",
-      "updatedAt": "2026-05-25T09:18:00",
-      "deleted": false
+      "updatedAt": "2026-05-25T17:01:00",
+      "deleted": false,
+      "startDate": "",
+      "dueDate": "",
+      "description": ""
     }
   ],
   "tasks": [
@@ -359,6 +365,12 @@
       "deleted": false
     },
     {
+      "targetYear": null,
+      "lifeArea": "",
+      "motivation": "",
+      "realized": false,
+      "realizedDate": "",
+      "nextRoutineId": "",
       "id": "37c21938-609f-45d6-906e-a21a6879efea",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -367,17 +379,17 @@
       "status": "todo",
       "dueDate": "2026-05-29",
       "description": "",
+      "createdAt": "2026-05-25T16:07:00",
+      "updatedAt": "2026-05-25T16:08:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:07:00",
-      "updatedAt": "2026-05-25T16:08:00",
-      "deleted": false
-    },
-    {
       "id": "4f67e87c-d204-4837-9cc8-fba2f8a0f6ce",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -386,17 +398,17 @@
       "status": "todo",
       "dueDate": "2026-05-26",
       "description": "",
+      "createdAt": "2026-05-25T16:07:00",
+      "updatedAt": "2026-05-25T16:09:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:07:00",
-      "updatedAt": "2026-05-25T16:09:00",
-      "deleted": false
-    },
-    {
       "id": "1f134bcd-aa2e-4ca7-b5e5-79694dc818a1",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -405,17 +417,17 @@
       "status": "todo",
       "dueDate": "2026-05-31",
       "description": "",
+      "createdAt": "2026-05-25T16:08:00",
+      "updatedAt": "2026-05-25T16:08:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:08:00",
-      "updatedAt": "2026-05-25T16:08:00",
-      "deleted": false
-    },
-    {
       "id": "241d9f63-1be8-4d63-9379-40976d56844e",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -424,17 +436,17 @@
       "status": "todo",
       "dueDate": "2026-06-02",
       "description": "",
+      "createdAt": "2026-05-25T16:09:00",
+      "updatedAt": "2026-05-25T16:09:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:09:00",
-      "updatedAt": "2026-05-25T16:09:00",
-      "deleted": false
-    },
-    {
       "id": "e019c9ea-f479-4185-80a1-d7601b8bbefd",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -443,17 +455,17 @@
       "status": "todo",
       "dueDate": "2026-06-05",
       "description": "",
+      "createdAt": "2026-05-25T16:09:00",
+      "updatedAt": "2026-05-25T16:10:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:09:00",
-      "updatedAt": "2026-05-25T16:10:00",
-      "deleted": false
-    },
-    {
       "id": "329548e7-db09-4974-a2fc-4b24968d2883",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -462,17 +474,17 @@
       "status": "todo",
       "dueDate": "2026-06-05",
       "description": "",
+      "createdAt": "2026-05-25T16:10:00",
+      "updatedAt": "2026-05-25T16:10:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:10:00",
-      "updatedAt": "2026-05-25T16:10:00",
-      "deleted": false
-    },
-    {
       "id": "fa988a15-1af6-486d-b480-07a2a026098a",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -481,17 +493,17 @@
       "status": "todo",
       "dueDate": "2026-06-07",
       "description": "",
+      "createdAt": "2026-05-25T16:11:00",
+      "updatedAt": "2026-05-25T16:11:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:11:00",
-      "updatedAt": "2026-05-25T16:11:00",
-      "deleted": false
-    },
-    {
       "id": "521cc7fd-954a-424f-b14e-d5301d8f8c9f",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -500,17 +512,17 @@
       "status": "todo",
       "dueDate": "2026-06-09",
       "description": "",
+      "createdAt": "2026-05-25T16:11:00",
+      "updatedAt": "2026-05-25T16:11:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:11:00",
-      "updatedAt": "2026-05-25T16:11:00",
-      "deleted": false
-    },
-    {
       "id": "65e365f1-7e64-4932-907e-8ff3cb086745",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -519,17 +531,17 @@
       "status": "todo",
       "dueDate": "2026-06-12",
       "description": "",
+      "createdAt": "2026-05-25T16:12:00",
+      "updatedAt": "2026-05-25T16:12:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:12:00",
-      "updatedAt": "2026-05-25T16:12:00",
-      "deleted": false
-    },
-    {
       "id": "d4ef9392-a1cd-4bed-8334-e4c8cd4a22db",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -538,17 +550,17 @@
       "status": "todo",
       "dueDate": "2026-06-12",
       "description": "",
+      "createdAt": "2026-05-25T16:12:00",
+      "updatedAt": "2026-05-25T16:12:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:12:00",
-      "updatedAt": "2026-05-25T16:12:00",
-      "deleted": false
-    },
-    {
       "id": "53d00237-e897-4b0e-b123-427d655b8bec",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -557,17 +569,17 @@
       "status": "todo",
       "dueDate": "2026-06-14",
       "description": "",
+      "createdAt": "2026-05-25T16:14:00",
+      "updatedAt": "2026-05-25T16:14:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:14:00",
-      "updatedAt": "2026-05-25T16:14:00",
-      "deleted": false
-    },
-    {
       "id": "55ce764b-89fb-49b4-b7e9-26a3112455e2",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -576,17 +588,17 @@
       "status": "todo",
       "dueDate": "2026-06-16",
       "description": "",
+      "createdAt": "2026-05-25T16:14:00",
+      "updatedAt": "2026-05-25T16:14:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:14:00",
-      "updatedAt": "2026-05-25T16:14:00",
-      "deleted": false
-    },
-    {
       "id": "cb505873-600b-4f3a-8122-d0de46b1aa9c",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -595,17 +607,17 @@
       "status": "todo",
       "dueDate": "2026-06-19",
       "description": "",
+      "createdAt": "2026-05-25T16:15:00",
+      "updatedAt": "2026-05-25T16:15:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:15:00",
-      "updatedAt": "2026-05-25T16:15:00",
-      "deleted": false
-    },
-    {
       "id": "42e631c0-3f5d-4d36-aba9-4cb16e27e5cb",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -614,17 +626,17 @@
       "status": "todo",
       "dueDate": "2026-06-19",
       "description": "",
+      "createdAt": "2026-05-25T16:15:00",
+      "updatedAt": "2026-05-25T16:15:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:15:00",
-      "updatedAt": "2026-05-25T16:15:00",
-      "deleted": false
-    },
-    {
       "id": "8af48897-ba6d-4b45-9bf7-64153edddf82",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -633,17 +645,17 @@
       "status": "todo",
       "dueDate": "2026-06-21",
       "description": "",
+      "createdAt": "2026-05-25T16:15:00",
+      "updatedAt": "2026-05-25T16:16:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:15:00",
-      "updatedAt": "2026-05-25T16:16:00",
-      "deleted": false
-    },
-    {
       "id": "9af6146c-b168-40c3-a556-886a05f8c8dc",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -652,17 +664,17 @@
       "status": "todo",
       "dueDate": "2026-06-23",
       "description": "",
+      "createdAt": "2026-05-25T16:16:00",
+      "updatedAt": "2026-05-25T16:17:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:16:00",
-      "updatedAt": "2026-05-25T16:17:00",
-      "deleted": false
-    },
-    {
       "id": "8460f5bf-31b0-4ce2-9d12-d91d2e92224d",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -671,17 +683,17 @@
       "status": "todo",
       "dueDate": "2026-06-26",
       "description": "",
+      "createdAt": "2026-05-25T16:17:00",
+      "updatedAt": "2026-05-25T16:18:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:17:00",
-      "updatedAt": "2026-05-25T16:18:00",
-      "deleted": false
-    },
-    {
       "id": "b9ad6760-b7de-4547-9561-6887150816c1",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -690,17 +702,17 @@
       "status": "todo",
       "dueDate": "2026-06-26",
       "description": "",
+      "createdAt": "2026-05-25T16:18:00",
+      "updatedAt": "2026-05-25T16:18:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:18:00",
-      "updatedAt": "2026-05-25T16:18:00",
-      "deleted": false
-    },
-    {
       "id": "cfba5723-dd88-4eae-89bd-076e906e267a",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -709,17 +721,17 @@
       "status": "todo",
       "dueDate": "2026-06-28",
       "description": "",
+      "createdAt": "2026-05-25T16:18:00",
+      "updatedAt": "2026-05-25T16:19:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:18:00",
-      "updatedAt": "2026-05-25T16:19:00",
-      "deleted": false
-    },
-    {
       "id": "3049602d-7404-46af-b62d-e330b2b049a0",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -728,17 +740,17 @@
       "status": "todo",
       "dueDate": "2026-06-30",
       "description": "",
+      "createdAt": "2026-05-25T16:19:00",
+      "updatedAt": "2026-05-25T16:19:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:19:00",
-      "updatedAt": "2026-05-25T16:19:00",
-      "deleted": false
-    },
-    {
       "id": "24980aec-f9eb-4ad8-b424-381d2292bc10",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -747,17 +759,17 @@
       "status": "todo",
       "dueDate": "2026-07-03",
       "description": "",
+      "createdAt": "2026-05-25T16:19:00",
+      "updatedAt": "2026-05-25T16:19:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:19:00",
-      "updatedAt": "2026-05-25T16:19:00",
-      "deleted": false
-    },
-    {
       "id": "acc7cb72-9ff7-4f58-b263-db0cf33e29ca",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -766,17 +778,17 @@
       "status": "todo",
       "dueDate": "2026-07-03",
       "description": "",
+      "createdAt": "2026-05-25T16:20:00",
+      "updatedAt": "2026-05-25T16:20:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:20:00",
-      "updatedAt": "2026-05-25T16:20:00",
-      "deleted": false
-    },
-    {
       "id": "b59cfa8a-a391-4af4-b2ae-e91a2cd4a23d",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -785,17 +797,17 @@
       "status": "todo",
       "dueDate": "2026-07-05",
       "description": "",
+      "createdAt": "2026-05-25T16:20:00",
+      "updatedAt": "2026-05-25T16:20:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:20:00",
-      "updatedAt": "2026-05-25T16:20:00",
-      "deleted": false
-    },
-    {
       "id": "89867f13-62d5-4c27-972c-c74fd1112229",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -804,17 +816,17 @@
       "status": "todo",
       "dueDate": "2026-07-07",
       "description": "",
+      "createdAt": "2026-05-25T16:21:00",
+      "updatedAt": "2026-05-25T16:21:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:21:00",
-      "updatedAt": "2026-05-25T16:21:00",
-      "deleted": false
-    },
-    {
       "id": "2791dbeb-b813-4223-9767-a6c7bc6cd72f",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -823,17 +835,17 @@
       "status": "todo",
       "dueDate": "2026-07-10",
       "description": "",
+      "createdAt": "2026-05-25T16:21:00",
+      "updatedAt": "2026-05-25T16:21:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:21:00",
-      "updatedAt": "2026-05-25T16:21:00",
-      "deleted": false
-    },
-    {
       "id": "873167e1-b13e-45df-bf07-286ac3261077",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -842,17 +854,17 @@
       "status": "todo",
       "dueDate": "2026-07-10",
       "description": "",
+      "createdAt": "2026-05-25T16:22:00",
+      "updatedAt": "2026-05-25T16:22:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:22:00",
-      "updatedAt": "2026-05-25T16:22:00",
-      "deleted": false
-    },
-    {
       "id": "c24b293c-170d-4917-a337-ab9ec1c1e0b1",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -861,17 +873,17 @@
       "status": "todo",
       "dueDate": "2026-07-12",
       "description": "",
+      "createdAt": "2026-05-25T16:22:00",
+      "updatedAt": "2026-05-25T16:22:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:22:00",
-      "updatedAt": "2026-05-25T16:22:00",
-      "deleted": false
-    },
-    {
       "id": "3ee0984f-9c88-4817-bfab-c99d641dddf5",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -880,17 +892,17 @@
       "status": "todo",
       "dueDate": "2026-07-14",
       "description": "",
+      "createdAt": "2026-05-25T16:23:00",
+      "updatedAt": "2026-05-25T16:23:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:23:00",
-      "updatedAt": "2026-05-25T16:23:00",
-      "deleted": false
-    },
-    {
       "id": "756b2661-1892-4f95-87c5-3c9900e52c1a",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -899,17 +911,17 @@
       "status": "todo",
       "dueDate": "2026-07-17",
       "description": "",
+      "createdAt": "2026-05-25T16:23:00",
+      "updatedAt": "2026-05-25T16:23:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:23:00",
-      "updatedAt": "2026-05-25T16:23:00",
-      "deleted": false
-    },
-    {
       "id": "47897022-e71d-4789-aca6-c8efc2f43a38",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -918,17 +930,17 @@
       "status": "todo",
       "dueDate": "2026-07-17",
       "description": "",
+      "createdAt": "2026-05-25T16:23:00",
+      "updatedAt": "2026-05-25T16:23:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:23:00",
-      "updatedAt": "2026-05-25T16:23:00",
-      "deleted": false
-    },
-    {
       "id": "46548a18-2447-4fe5-a02b-8c5815caf7db",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -937,17 +949,17 @@
       "status": "todo",
       "dueDate": "2026-07-19",
       "description": "",
+      "createdAt": "2026-05-25T16:24:00",
+      "updatedAt": "2026-05-25T16:29:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:24:00",
-      "updatedAt": "2026-05-25T16:29:00",
-      "deleted": false
-    },
-    {
       "id": "49803e7c-dae3-4325-ac95-719286644fd3",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -956,17 +968,17 @@
       "status": "todo",
       "dueDate": "2026-07-21",
       "description": "",
+      "createdAt": "2026-05-25T16:24:00",
+      "updatedAt": "2026-05-25T16:29:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:24:00",
-      "updatedAt": "2026-05-25T16:29:00",
-      "deleted": false
-    },
-    {
       "id": "975d0bbf-642e-4fbe-bbf6-94fa5c817b05",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -975,17 +987,17 @@
       "status": "todo",
       "dueDate": "2026-07-24",
       "description": "",
+      "createdAt": "2026-05-25T16:30:00",
+      "updatedAt": "2026-05-25T16:30:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:30:00",
-      "updatedAt": "2026-05-25T16:30:00",
-      "deleted": false
-    },
-    {
       "id": "6d25966d-9d8a-451d-8a0a-8f37ec4573f5",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -994,17 +1006,17 @@
       "status": "todo",
       "dueDate": "2026-07-24",
       "description": "",
+      "createdAt": "2026-05-25T16:30:00",
+      "updatedAt": "2026-05-25T16:30:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:30:00",
-      "updatedAt": "2026-05-25T16:30:00",
-      "deleted": false
-    },
-    {
       "id": "754dd252-bb04-4837-9cfb-6689ccb61491",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -1013,17 +1025,17 @@
       "status": "todo",
       "dueDate": "2026-07-26",
       "description": "",
+      "createdAt": "2026-05-25T16:30:00",
+      "updatedAt": "2026-05-25T16:31:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:30:00",
-      "updatedAt": "2026-05-25T16:31:00",
-      "deleted": false
-    },
-    {
       "id": "a8699797-898d-4d90-88bb-34ad8ba525b4",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -1032,17 +1044,17 @@
       "status": "todo",
       "dueDate": "2026-07-28",
       "description": "",
+      "createdAt": "2026-05-25T16:31:00",
+      "updatedAt": "2026-05-25T16:31:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:31:00",
-      "updatedAt": "2026-05-25T16:31:00",
-      "deleted": false
-    },
-    {
       "id": "27dc12e5-1dca-48dd-a95b-0db6a3458760",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -1051,17 +1063,17 @@
       "status": "todo",
       "dueDate": "2026-07-31",
       "description": "",
+      "createdAt": "2026-05-25T16:31:00",
+      "updatedAt": "2026-05-25T16:31:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:31:00",
-      "updatedAt": "2026-05-25T16:31:00",
-      "deleted": false
-    },
-    {
       "id": "b91c016f-cc03-414d-8537-f0ab8b9f04d4",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -1070,17 +1082,17 @@
       "status": "todo",
       "dueDate": "2026-07-31",
       "description": "",
+      "createdAt": "2026-05-25T16:32:00",
+      "updatedAt": "2026-05-25T16:32:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:32:00",
-      "updatedAt": "2026-05-25T16:32:00",
-      "deleted": false
-    },
-    {
       "id": "6bd211cb-1186-4028-bf16-4b5b312b768c",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -1089,17 +1101,17 @@
       "status": "todo",
       "dueDate": "2026-08-02",
       "description": "",
+      "createdAt": "2026-05-25T16:32:00",
+      "updatedAt": "2026-05-25T16:39:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:32:00",
-      "updatedAt": "2026-05-25T16:39:00",
-      "deleted": false
-    },
-    {
       "id": "64be3c89-72e7-4298-9658-904825211aca",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -1108,17 +1120,17 @@
       "status": "todo",
       "dueDate": "2026-08-04",
       "description": "",
+      "createdAt": "2026-05-25T16:33:00",
+      "updatedAt": "2026-05-25T16:33:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:33:00",
-      "updatedAt": "2026-05-25T16:33:00",
-      "deleted": false
-    },
-    {
       "id": "69a81fc0-51f7-4f15-8d7d-2059d6f4f565",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -1127,17 +1139,17 @@
       "status": "todo",
       "dueDate": "2026-08-07",
       "description": "",
+      "createdAt": "2026-05-25T16:33:00",
+      "updatedAt": "2026-05-25T16:33:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:33:00",
-      "updatedAt": "2026-05-25T16:33:00",
-      "deleted": false
-    },
-    {
       "id": "5b49a04e-8ac5-4096-8ecd-48d487887019",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -1146,17 +1158,17 @@
       "status": "todo",
       "dueDate": "2026-08-07",
       "description": "",
+      "createdAt": "2026-05-25T16:33:00",
+      "updatedAt": "2026-05-25T16:34:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:33:00",
-      "updatedAt": "2026-05-25T16:34:00",
-      "deleted": false
-    },
-    {
       "id": "09099316-267f-47b6-9fbd-992f914264dd",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -1165,17 +1177,17 @@
       "status": "todo",
       "dueDate": "2026-08-09",
       "description": "",
+      "createdAt": "2026-05-25T16:34:00",
+      "updatedAt": "2026-05-25T16:34:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:34:00",
-      "updatedAt": "2026-05-25T16:34:00",
-      "deleted": false
-    },
-    {
       "id": "74170412-6575-4370-947d-cd9c5a48f627",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -1184,17 +1196,17 @@
       "status": "todo",
       "dueDate": "2026-08-11",
       "description": "",
+      "createdAt": "2026-05-25T16:34:00",
+      "updatedAt": "2026-05-25T16:34:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:34:00",
-      "updatedAt": "2026-05-25T16:34:00",
-      "deleted": false
-    },
-    {
       "id": "b8632f92-bd8f-48cb-afa0-077bf8803fff",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -1203,17 +1215,17 @@
       "status": "todo",
       "dueDate": "2026-08-14",
       "description": "",
+      "createdAt": "2026-05-25T16:35:00",
+      "updatedAt": "2026-05-25T16:35:00",
+      "deleted": false
+    },
+    {
       "targetYear": null,
       "lifeArea": "",
       "motivation": "",
       "realized": false,
       "realizedDate": "",
       "nextRoutineId": "",
-      "createdAt": "2026-05-25T16:35:00",
-      "updatedAt": "2026-05-25T16:35:00",
-      "deleted": false
-    },
-    {
       "id": "22cd90ae-3124-49b3-97e4-38c7723fc8c8",
       "projectId": "9ccd5097-1a3b-4db1-8b0b-661f9b959793",
       "parentTaskId": "",
@@ -1222,12 +1234,6 @@
       "status": "todo",
       "dueDate": "2026-08-14",
       "description": "",
-      "targetYear": null,
-      "lifeArea": "",
-      "motivation": "",
-      "realized": false,
-      "realizedDate": "",
-      "nextRoutineId": "",
       "createdAt": "2026-05-25T16:35:00",
       "updatedAt": "2026-05-25T16:35:00",
       "deleted": false
@@ -24484,7 +24490,7 @@
     "2026-05-23": "# 2026-05-22 のジャーナル\n\n## 🛏 睡眠\n就寝: __:__  /  起床: __:__\n質: ★★★☆☆\n\n## 🙏 感謝(3 つ)\n1. \n2. \n3. \n\n## ✨ 今日のハイライト\n\n\n## 💡 気付き・学び\n\n\n## 📝 自由記述\n\n",
     "2026-05-21": "# 2026-05-22 のジャーナル\n\n## 🛏 睡眠\n就寝: __:__  /  起床: __:__\n質: ★★★☆☆\n\n## 🙏 感謝(3 つ)\n1. \n2. \n3. \n\n## ✨ 今日のハイライト\n\n\n## 💡 気付き・学び\n\n\n## 📝 自由記述\n\n",
     "2026-05-24": "# 2026-05-25のジャーナル\n\n## 🛏 睡眠\n就寝: 23:00  /  起床: 6:30\n質: ★★★☆☆\n\n## 🙏 感謝(3 つ)\n1. 星さん、いつもベビーシッターありがとう\n2. コストコ、ワクワクと美味しい商品をありがとう\n3. タクシーの運転手、コストコ帰りの重い荷物ある中、家までありがとう。\n\n## ✨ 今日のハイライト\n\n\n## 💡 気付き・学び\n全身の筋トレをしたが、最後の背中は力尽きてほとんどできなかった。\n重量を伸ばすには、一回しか挙げられない重さにトライしていくのも大事かも。\nベンチプレスは左手がプルプルして上がらなくなる。対策が必要かも。\n\n## 📝 自由記述\n\n",
-    "2026-05-25": "# 2026-05-25のジャーナル\n\n## 🛏 睡眠\n就寝: 23:00  /  起床: 6:30\n質: ★★★☆☆\n\n## 🙏 感謝(3 つ)\n1. 星さん、いつもベビーシッターありがとう\n2. コストコ、ワクワクと美味しい商品をありがとう\n3. タクシーの運転手、コストコ帰りの重い荷物ある中、家までありがとう。\n\n## ✨ 今日のハイライト\n\n\n## 💡 気付き・学び\n全身の筋トレをしたが、最後の背中は力尽きてほとんどできなかった。\n重量を伸ばすには、一回しか挙げられない重さにトライしていくのも大事かも。\nベンチプレスは左手がプルプルして上がらなくなる。対策が必要かも。\n\n## 📝 自由記述\n\n",
+    "2026-05-25": "# 2026-05-25のジャーナル\n\n## 🛏 睡眠\n就寝: 23:00  /  起床: 6:30\n質: ★★★☆☆\n\n## 🙏 感謝(3 つ)\n1. 小太刀さん、建入さん、H1様の事例化に向けて進めてくれてありがとう\n2. 玉井さん、A鉄工の保守ありがとう\n3. はるちゃん、翠ちゃんのお迎えありがとう\n\n## ✨ 今日のハイライト\n\n\n## 💡 気付き・学び\n雑用をさっさと着手して先送りしなかった！\n大した量ではないけど達成感があった。\n一方で本格的に対応しないといけない来期検討を先延ばしにしてしまった\nとりあえず少しだけ進めたが、明日頑張る\n直前にならないと頑張れないのどうにかしたいなと思いつつ、逆にそれを活かして締め切りを早めに設定して進めるしかないのかもしれない\n## 📝 自由記述\n今日はアプリの改修に時間を使ってしまった\nけれど機能がバラバラだったものをホーム画面に統一したから、その後の仕事の進み方は良かった気がする\nアプリ開発楽しいからついやってしまうけどほどほどにしないといけない。\n",
     "2026-05-26": "# 2026-05-22 のジャーナル\n\n## 🛏 睡眠\n就寝: __:__  /  起床: __:__\n質: ★★★☆☆\n\n## 🙏 感謝(3 つ)\n1. \n2. \n3. \n\n## ✨ 今日のハイライト\n\n\n## 💡 気付き・学び\n\n\n## 📝 自由記述\n\n"
   },
   "feedback": {},
@@ -24796,5 +24802,5 @@
     }
   ],
   "timelineMode": "actual",
-  "dataModifiedAt": "2026-05-25T16:48:00"
+  "dataModifiedAt": "2026-05-25T17:40:00"
 }
