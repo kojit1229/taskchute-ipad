@@ -1003,31 +1003,41 @@ function plannedRange(b) {
 
 // --- いま、これ(進行中 / 次のブロック)---
 function homeHero(blocks, isToday) {
-  const doing = blocks.find((b) => !b.completed && b.actualStartAt);
-  const next = blocks.find((b) => !b.completed && !b.actualStartAt);
+  // タイムラインと同じ対象(カテゴリ「ルーティン」は除外)
+  const tl = blocks.filter((b) => b.category !== "ルーティン" && b.plannedStartAt);
   const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  // タイムラインの「現在時刻ブロック」= 予定時間が今を含む未完了Block
+  const current = isToday ? tl.find((b) => !b.completed
+    && minutesOf(b.plannedStartAt) <= nowMin
+    && nowMin < minutesOf(b.plannedEndAt || b.plannedStartAt)) : null;
+  // 現在時刻にブロックが無ければ、次の未着手ブロック
+  const target = current || tl.find((b) => !b.completed && !b.actualStartAt);
   let body;
-  if (doing) {
-    const s = minutesOf(doing.plannedStartAt);
-    const e = minutesOf(doing.plannedEndAt || doing.plannedStartAt);
-    const pct = e > s ? clamp(Math.round(((nowMin - s) / (e - s)) * 100), 0, 100) : 0;
-    const left = Math.max(0, e - nowMin);
-    body = `
-      <div class="home-hero-title" data-action="edit-block" data-id="${doing.id}">${escapeHTML(doing.title)}</div>
-      <div class="muted" style="font-size:12px;margin-top:4px">予定 ${plannedRange(doing)}</div>
-      <div class="progress" style="margin:11px 0 7px"><span style="width:${pct}%"></span></div>
-      <div style="font-size:13px">取り組み中 — 残り <strong>${left}分</strong></div>
-      <button class="btn green home-hero-btn" data-action="complete-block-with-actual" data-id="${doing.id}">✓ 完了にする</button>`;
-  } else if (next) {
-    body = `
-      <div class="home-hero-title" data-action="edit-block" data-id="${next.id}">${escapeHTML(next.title)}</div>
-      <div class="muted" style="font-size:12px;margin-top:4px">予定 ${plannedRange(next)}</div>
-      <div style="font-size:13px;margin-top:11px">まだ着手していません。</div>
-      <div style="font-size:12px;color:var(--orange);margin-top:2px">まず5分でいい。やれば乗ってくる。</div>
-      <button class="btn orange home-hero-btn" data-action="now-start" data-id="${next.id}">▶ いま着手する</button>`;
-  } else {
+  if (!target) {
     body = `<div style="font-size:15px;font-weight:600;color:var(--green);padding:10px 0">
-      ${blocks.length ? "今日のブロックは全部完了。おつかれさまでした。" : "今日のブロックはまだありません。"}</div>`;
+      ${tl.length ? "いまの時間のブロックはありません。" : "今日のブロックはまだありません。"}</div>`;
+  } else {
+    const started = Boolean(target.actualStartAt);
+    let mid;
+    if (target === current) {
+      const s = minutesOf(target.plannedStartAt);
+      const e = minutesOf(target.plannedEndAt || target.plannedStartAt);
+      const pct = e > s ? clamp(Math.round(((nowMin - s) / (e - s)) * 100), 0, 100) : 0;
+      const left = Math.max(0, e - nowMin);
+      mid = `<div class="progress" style="margin:11px 0 7px"><span style="width:${pct}%"></span></div>
+        <div style="font-size:13px">${started ? "取り組み中" : "いまの時間です"} — 残り <strong>${left}分</strong></div>`;
+    } else {
+      mid = `<div style="font-size:13px;margin-top:11px">まだ着手していません。</div>
+        <div style="font-size:12px;color:var(--orange);margin-top:2px">まず5分でいい。やれば乗ってくる。</div>`;
+    }
+    const btn = started
+      ? `<button class="btn green home-hero-btn" data-action="complete-block-with-actual" data-id="${target.id}">✓ 完了にする</button>`
+      : `<button class="btn orange home-hero-btn" data-action="now-start" data-id="${target.id}">▶ いま着手する</button>`;
+    body = `
+      <div class="home-hero-title" data-action="edit-block" data-id="${target.id}">${escapeHTML(target.title)}</div>
+      <div class="muted" style="font-size:12px;margin-top:4px">予定 ${plannedRange(target)}</div>
+      ${mid}
+      ${btn}`;
   }
   return `<section class="panel home-hero">
     <div class="eyebrow" style="color:var(--orange)">いま、これ</div>${body}</section>`;
@@ -1059,13 +1069,22 @@ function homeMIT(blocks) {
 
 // --- 今日のタスクシュート(着手率)---
 function homeTaskchute(blocks) {
-  if (!blocks.length) {
+  // タスクシュートタブと同じ抽出: Project に紐づく Block のみ
+  const list = blocks.filter((b) => {
+    if (b.source === "timeline") return false;
+    if (b.category === "ルーティン") return false;
+    if (b.recurrenceGroupId) return false;
+    if (!b.taskId) return false;
+    const task = state.tasks.find((t) => t.id === b.taskId);
+    return Boolean(task && task.projectId);
+  });
+  if (!list.length) {
     return `<section class="panel"><div class="home-plabel">今日のタスクシュート</div>
-      <div class="muted" style="font-size:13px">本日のブロックがありません。</div></section>`;
+      <div class="muted" style="font-size:13px">Projectに紐づくBlockがありません。</div></section>`;
   }
-  const started = blocks.filter((b) => b.completed || b.actualStartAt).length;
-  const pct = Math.round((started / blocks.length) * 100);
-  const rows = blocks.map((b) => {
+  const started = list.filter((b) => b.completed || b.actualStartAt).length;
+  const pct = Math.round((started / list.length) * 100);
+  const rows = list.map((b) => {
     const st = b.completed ? "done" : (b.actualStartAt ? "doing" : "todo");
     const badge = st === "doing" ? `<span class="home-badge doing">着手中</span>`
       : (st === "todo" ? `<span class="home-badge todo">未着手</span>` : "");
@@ -1077,19 +1096,21 @@ function homeTaskchute(blocks) {
   return `<section class="panel"><div class="home-plabel">今日のタスクシュート</div>
     <div class="home-rate"><span class="home-rate-cap">着手率</span>
       <span class="home-rate-pct">${pct}%</span>
-      <span class="home-rate-frac">${started} / ${blocks.length} ブロック</span></div>
+      <span class="home-rate-frac">${started} / ${list.length} ブロック</span></div>
     <div class="progress" style="margin-bottom:10px"><span style="width:${pct}%"></span></div>
     ${rows}</section>`;
 }
 
 // --- 今日のながれ ---
 function homeFlow(blocks, isToday) {
-  if (!blocks.length) {
+  // タイムラインと同様、カテゴリ「ルーティン」は除外
+  const list = blocks.filter((b) => b.category !== "ルーティン");
+  if (!list.length) {
     return `<section class="panel"><div class="home-plabel">今日のながれ</div>
       <div class="muted" style="font-size:13px">本日のブロックがありません。</div></section>`;
   }
   const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
-  const rows = blocks.map((b) => {
+  const rows = list.map((b) => {
     const s = minutesOf(b.plannedStartAt);
     const e = minutesOf(b.plannedEndAt || b.plannedStartAt);
     const isNow = isToday && !b.completed && nowMin >= s && nowMin < e;
