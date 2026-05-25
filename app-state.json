@@ -27,7 +27,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": ""
+      "lastSavedAt": "2026-05-25T09:20:00"
     },
     "visionSection": "vision",
     "visionBoardIndex": 2,
@@ -23500,29 +23500,29 @@
       "deleted": false
     },
     {
-      "isMIT": false,
-      "source": "",
       "id": "e950af51-23dd-4ef9-91cf-6df596edb5f4",
-      "taskId": "ed42fd9f-d3b6-4331-b850-a442a322a847",
-      "date": "2026-05-25",
       "title": "来期検討資料作成",
+      "date": "2026-05-25",
       "category": "仕事",
-      "plannedStartAt": "",
-      "plannedEndAt": "",
+      "taskId": "ed42fd9f-d3b6-4331-b850-a442a322a847",
+      "plannedStartAt": "2026-05-25T13:30:00",
+      "plannedEndAt": "2026-05-25T14:00:00",
       "actualStartAt": "",
       "actualEndAt": "",
-      "completed": false,
       "charge": 0,
       "discharge": 0,
+      "completed": false,
+      "comment": "",
       "expectedCharge": "",
       "expectedDischarge": "",
-      "comment": "",
       "recurrenceGroupId": "",
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
+      "isMIT": false,
+      "source": "",
       "createdAt": "2026-05-25T06:50:00",
-      "updatedAt": "2026-05-25T06:50:00",
+      "updatedAt": "2026-05-25T09:20:00",
       "deleted": false
     },
     {
@@ -23575,6 +23575,30 @@
       "source": "",
       "createdAt": "2026-05-25T09:19:00",
       "updatedAt": "2026-05-25T09:19:00",
+      "deleted": false
+    },
+    {
+      "id": "43e254e1-6187-45d5-b0ca-351296479187",
+      "taskId": "ed42fd9f-d3b6-4331-b850-a442a322a847",
+      "date": "2026-05-25",
+      "title": "来期検討資料作成",
+      "category": "仕事",
+      "plannedStartAt": "2026-05-25T09:15:00",
+      "plannedEndAt": "2026-05-25T10:15:00",
+      "actualStartAt": "",
+      "actualEndAt": "",
+      "completed": false,
+      "charge": 0,
+      "discharge": 0,
+      "expectedCharge": "",
+      "expectedDischarge": "",
+      "comment": "",
+      "recurrenceGroupId": "",
+      "pomodoroCount": 0,
+      "migratedTo": "",
+      "orderIndex": 0,
+      "createdAt": "2026-05-25T09:20:00",
+      "updatedAt": "2026-05-25T09:20:00",
       "deleted": false
     }
   ],
@@ -23895,5 +23919,5 @@
     }
   ],
   "timelineMode": "planned",
-  "dataModifiedAt": "2026-05-25T09:19:00"
+  "dataModifiedAt": "2026-05-25T09:21:00"
 }
