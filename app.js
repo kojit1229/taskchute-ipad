@@ -4,19 +4,23 @@ const STORAGE_KEY = "taskchute-journal-pwa-state-v1";
 const RECURRENCE_KEEP_PAST_DAYS = 7;    // 過去はこの日数だけ実体を保持
 const RECURRENCE_FUTURE_DAYS = 31;      // 未来はこの日数先まで実体化
 
+// v33: タブ順をユーザー指定の並びに変更
+//   ホーム / ジャーナル / ビジョン / タスクシュート / タイムライン /
+//   ルーティン / ポモドーロ / やりたい / やらない / 日報 / 設定
+//   ※ WBS は指定リストに無いため、機能を残しつつ末尾に配置(不要なら削除可)
 const navItems = [
   { id: "home", label: "ホーム", mark: "H" },
-  { id: "wbs", label: "WBS", mark: "W" },
-  { id: "wish", label: "やりたい", mark: "✦" },
-  { id: "avoid", label: "やらない", mark: "✕" },
-  { id: "tasks", label: "タスクシュート", mark: "T" },
-  { id: "routine", label: "ルーティン", mark: "↻" },
-  { id: "timeline", label: "タイムライン", mark: "L" },
-  { id: "pomodoro", label: "ポモドーロ", mark: "P" },
   { id: "journal", label: "ジャーナル", mark: "J" },
   { id: "vision", label: "ビジョン", mark: "V" },
+  { id: "tasks", label: "タスクシュート", mark: "T" },
+  { id: "timeline", label: "タイムライン", mark: "L" },
+  { id: "routine", label: "ルーティン", mark: "↻" },
+  { id: "pomodoro", label: "ポモドーロ", mark: "P" },
+  { id: "wish", label: "やりたい", mark: "✦" },
+  { id: "avoid", label: "やらない", mark: "✕" },
   { id: "reports", label: "日報", mark: "R" },
-  { id: "settings", label: "設定", mark: "S" }
+  { id: "settings", label: "設定", mark: "S" },
+  { id: "wbs", label: "WBS", mark: "W" }
 ];
 
 const mobileNav = [
@@ -77,6 +81,11 @@ document.addEventListener("click", (event) => {
   if (action === "toggle-task") toggleTask(id);
   if (action === "task-today") createBlockFromTask(id);
   if (action === "home-add-today") addTaskToToday(id);
+  // v33: ホームのスコアボード → 対応ゾーンへスクロール
+  if (action === "home-jump") {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
   if (action === "delete-task") deleteTask(id);
   if (action === "add-block") addBlock();
   if (action === "toggle-block") toggleBlock(id);
@@ -944,15 +953,34 @@ function renderHome() {
     ${renderDateBar()}
     ${homeCreed()}
     ${homeLifespan(metrics)}
-    <div class="home-grid">
-      ${homeHero(blocks, isToday)}
-      ${homeMIT(blocks)}
-      ${homeTaskchute(blocks)}
-      ${homeFlow(blocks, isToday)}
-      ${homeRoutine(blocks)}
-      ${homeCycle(metrics)}
-      ${homeBacklog()}
-      ${homeSteps(blocks)}
+    ${homeHero(blocks, isToday)}
+    ${homeScoreboard(blocks)}
+    <div class="home-zone-block z-amber" id="homezone-1">
+      <div class="home-zone amber">今日、すすめる</div>
+      <div class="home-grid">
+        ${homeMIT(blocks)}
+        ${homeTaskchute(blocks)}
+      </div>
+    </div>
+    <div class="home-zone-block z-teal" id="homezone-2">
+      <div class="home-zone teal">今日のリズム</div>
+      <div class="home-grid">
+        ${homeFlow(blocks, isToday)}
+        ${homeRoutine(blocks)}
+      </div>
+    </div>
+    <div class="home-zone-block z-blue" id="homezone-3">
+      <div class="home-zone blue">長い弧をたしかめる</div>
+      <div class="home-grid">
+        ${homeCycle(metrics)}
+        ${homeBacklog()}
+      </div>
+    </div>
+    <div class="home-zone-block z-green" id="homezone-4">
+      <div class="home-zone green">今日の足あと</div>
+      <div class="home-grid single">
+        ${homeSteps(blocks)}
+      </div>
     </div>
   `;
 }
@@ -1001,10 +1029,12 @@ function plannedRange(b) {
   return `${s} – ${e}`;
 }
 
-// --- いま、これ(進行中 / 次のブロック)---
+// --- いま、これ(進行中 / 次のブロック)── v33: フル幅・2カラム ---
 function homeHero(blocks, isToday) {
-  // タイムラインと同じ対象(カテゴリ「ルーティン」は除外)
-  const tl = blocks.filter((b) => b.category !== "ルーティン" && b.plannedStartAt);
+  // タイムラインと同じ対象(カテゴリ「ルーティン」は除外)。時刻順にソート
+  const tl = blocks
+    .filter((b) => b.category !== "ルーティン" && b.plannedStartAt)
+    .sort((a, b) => minutesOf(a.plannedStartAt) - minutesOf(b.plannedStartAt));
   const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
   // タイムラインの「現在時刻ブロック」= 予定時間が今を含む未完了Block
   const current = isToday ? tl.find((b) => !b.completed
@@ -1012,35 +1042,110 @@ function homeHero(blocks, isToday) {
     && nowMin < minutesOf(b.plannedEndAt || b.plannedStartAt)) : null;
   // 現在時刻にブロックが無ければ、次の未着手ブロック
   const target = current || tl.find((b) => !b.completed && !b.actualStartAt);
-  let body;
   if (!target) {
-    body = `<div style="font-size:15px;font-weight:600;color:var(--green);padding:10px 0">
-      ${tl.length ? "いまの時間のブロックはありません。" : "今日のブロックはまだありません。"}</div>`;
-  } else {
-    const started = Boolean(target.actualStartAt);
-    let mid;
-    if (target === current) {
-      const s = minutesOf(target.plannedStartAt);
-      const e = minutesOf(target.plannedEndAt || target.plannedStartAt);
-      const pct = e > s ? clamp(Math.round(((nowMin - s) / (e - s)) * 100), 0, 100) : 0;
-      const left = Math.max(0, e - nowMin);
-      mid = `<div class="progress" style="margin:11px 0 7px"><span style="width:${pct}%"></span></div>
-        <div style="font-size:13px">${started ? "取り組み中" : "いまの時間です"} — 残り <strong>${left}分</strong></div>`;
-    } else {
-      mid = `<div style="font-size:13px;margin-top:11px">まだ着手していません。</div>
-        <div style="font-size:12px;color:var(--orange);margin-top:2px">まず5分でいい。やれば乗ってくる。</div>`;
-    }
-    const btn = started
-      ? `<button class="btn green home-hero-btn" data-action="complete-block-with-actual" data-id="${target.id}">✓ 完了にする</button>`
-      : `<button class="btn orange home-hero-btn" data-action="now-start" data-id="${target.id}">▶ いま着手する</button>`;
-    body = `
-      <div class="home-hero-title" data-action="edit-block" data-id="${target.id}">${escapeHTML(target.title)}</div>
-      <div class="muted" style="font-size:12px;margin-top:4px">予定 ${plannedRange(target)}</div>
-      ${mid}
-      ${btn}`;
+    return `<section class="panel home-hero">
+      <div class="eyebrow" style="color:var(--orange)">いま、これ</div>
+      <div style="font-size:15px;font-weight:700;color:var(--green);padding:8px 0">
+        ${tl.length ? "いまの時間のブロックはありません。" : "今日のブロックはまだありません。"}</div>
+    </section>`;
   }
+  const started = Boolean(target.actualStartAt);
+  let mid;
+  if (target === current) {
+    const s = minutesOf(target.plannedStartAt);
+    const e = minutesOf(target.plannedEndAt || target.plannedStartAt);
+    const pct = e > s ? clamp(Math.round(((nowMin - s) / (e - s)) * 100), 0, 100) : 0;
+    const left = Math.max(0, e - nowMin);
+    mid = `<div class="progress" style="margin:12px 0 8px"><span style="width:${pct}%"></span></div>
+      <div style="font-size:13.5px">${started ? "取り組み中" : "いまの時間です"} — 残り <strong>${left}分</strong></div>`;
+  } else {
+    mid = `<div style="font-size:13.5px;margin-top:12px">まだ着手していません。</div>
+      <div style="font-size:12.5px;color:var(--orange);font-weight:600;margin-top:3px">まず5分でいい。やれば乗ってくる。</div>`;
+  }
+  const btn = started
+    ? `<button class="btn green home-hero-btn" data-action="complete-block-with-actual" data-id="${target.id}">✓ 完了にする</button>`
+    : `<button class="btn orange home-hero-btn" data-action="now-start" data-id="${target.id}">▶ いま着手する</button>`;
+  // このあとのブロック
+  const after = tl.filter((b) => !b.completed && minutesOf(b.plannedStartAt) > nowMin)[current ? 0 : 1];
+  const nextBox = after
+    ? `<div class="home-hero-next"><span class="home-hero-next-lab">このあと</span>
+        <strong>${after.plannedStartAt ? timeFromDateTime(after.plannedStartAt) : ""}</strong> ${escapeHTML(after.title)}</div>`
+    : "";
   return `<section class="panel home-hero">
-    <div class="eyebrow" style="color:var(--orange)">いま、これ</div>${body}</section>`;
+    <div class="eyebrow" style="color:var(--orange)">いま、これ</div>
+    <div class="home-hero-grid">
+      <div class="home-hero-main">
+        <div class="home-hero-title" data-action="edit-block" data-id="${target.id}">${escapeHTML(target.title)}</div>
+        <div class="muted" style="font-size:12.5px;margin-top:5px">予定 ${plannedRange(target)}${
+          target.category ? `<span class="home-hero-cat">${escapeHTML(target.category)}</span>` : ""}</div>
+        ${mid}
+      </div>
+      <div class="home-hero-side">
+        ${btn}
+        ${nextBox}
+      </div>
+    </div>
+  </section>`;
+}
+
+// v33: 12週サイクル「今週の進捗」(homeCycle と同一ロジック)
+function cycleWeekProgress(dateISO) {
+  const date = dateISO || state.selectedDate;
+  const goals = state.projects.filter((p) =>
+    !p.deleted && p.kind === "normal" && p.status === "active");
+  const goalIds = goals.map((p) => p.id);
+  const allTasks = state.tasks.filter((t) => !t.deleted && goalIds.includes(t.projectId));
+  const { weekStart, weekEnd } = weekRange(date);
+  const weekTasks = allTasks.filter((t) => t.dueDate && t.dueDate >= weekStart && t.dueDate <= weekEnd);
+  const done = weekTasks.filter((t) => t.status === "completed").length;
+  const total = weekTasks.length;
+  return { done, total, pct: total ? Math.round((done / total) * 100) : 0 };
+}
+
+// v33: タスクシュート着手率(homeTaskchute と同一の抽出)
+function taskchuteStartRate(blocks) {
+  const list = blocks.filter((b) => {
+    if (b.source === "timeline") return false;
+    if (b.category === "ルーティン") return false;
+    if (b.recurrenceGroupId) return false;
+    if (!b.taskId) return false;
+    const task = state.tasks.find((t) => t.id === b.taskId);
+    return Boolean(task && task.projectId);
+  });
+  const done = list.filter((b) => b.completed || b.actualStartAt).length;
+  return { done, total: list.length, pct: list.length ? Math.round((done / list.length) * 100) : 0 };
+}
+
+// v33: ルーティン実行率
+function routineRate(blocks) {
+  const list = blocks.filter((b) => b.category === "ルーティン");
+  const done = list.filter((b) => b.completed).length;
+  return { done, total: list.length, pct: list.length ? Math.round((done / list.length) * 100) : 0 };
+}
+
+// --- ひと目スコアボード(4つの達成率)── v33 ---
+function homeScoreboard(blocks) {
+  const tc = taskchuteStartRate(blocks);
+  const rt = routineRate(blocks);
+  const wk = cycleWeekProgress();
+  const mit = blocks.filter((b) => b.isMIT);
+  const mitDone = mit.filter((b) => b.completed).length;
+  const mitPct = mit.length ? Math.round((mitDone / mit.length) * 100) : 0;
+  const cell = (cls, lab, num, unit, frac, pct, jump) => `
+    <div class="home-score ${cls}" data-action="home-jump" data-id="${jump}">
+      <div class="home-score-lab">${lab}</div>
+      <div class="home-score-val">
+        <span class="home-score-num">${num}</span><span class="home-score-unit">${unit}</span>
+        <span class="home-score-frac">${frac}</span>
+      </div>
+      <div class="progress home-score-bar"><span style="width:${pct}%"></span></div>
+    </div>`;
+  return `<div class="home-scoreboard">
+    ${cell("orange", "タスクシュート着手", tc.pct, "%", `${tc.done}/${tc.total}`, tc.pct, "homezone-1")}
+    ${cell("orange", "今日の主役", mitDone, `/${mit.length}`, "MIT", mitPct, "homezone-1")}
+    ${cell("green", "ルーティン実行", rt.pct, "%", `${rt.done}/${rt.total}`, rt.pct, "homezone-2")}
+    ${cell("blue", "12週 今週", wk.pct, "%", `${wk.done}/${wk.total}`, wk.pct, "homezone-3")}
+  </div>`;
 }
 
 // チェック+編集できる行(Block 用)
@@ -3256,6 +3361,16 @@ function generateReport() {
   // v17: ポモドーロ完了数
   const pomodoroCount = blocks.reduce((sum, b) => sum + Number(b.pomodoroCount || 0), 0);
 
+  // v33: ホームの4つの達成率(スコアボードと同一ロジック)
+  const rateTaskchute = taskchuteStartRate(blocks);
+  const rateMIT = {
+    done: mitDone,
+    total: mitBlocks.length,
+    pct: mitBlocks.length ? Math.round((mitDone / mitBlocks.length) * 100) : 0
+  };
+  const rateRoutine = routineRate(blocks);
+  const rateCycleWeek = cycleWeekProgress(date);
+
   // v17: 計画 vs 実行
   const plannedMinutes = blocks.reduce((sum, b) => {
     if (b.plannedStartAt && b.plannedEndAt) {
@@ -3347,6 +3462,14 @@ function generateReport() {
     `| 時間実行 | ${fmtMinutes(actualMinutes)} / ${fmtMinutes(plannedMinutes)} (${timeCompletionRate}%) |`,
     `| MIT 達成 | ${mitDone} / ${mitBlocks.length} |`,
     `| ポモドーロ | ${pomodoroCount} 回 |`,
+    "",
+    "### 達成率",
+    "| 指標 | 達成 | 率 |",
+    "|---|---|---|",
+    `| タスクシュート着手率 | ${rateTaskchute.done} / ${rateTaskchute.total} | ${rateTaskchute.pct}% |`,
+    `| 今日の主役 (MIT) | ${rateMIT.done} / ${rateMIT.total} | ${rateMIT.pct}% |`,
+    `| ルーティン実行率 | ${rateRoutine.done} / ${rateRoutine.total} | ${rateRoutine.pct}% |`,
+    `| 12週 今週の進捗 | ${rateCycleWeek.done} / ${rateCycleWeek.total} | ${rateCycleWeek.pct}% |`,
     "",
   ];
 
