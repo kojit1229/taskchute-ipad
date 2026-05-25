@@ -27,7 +27,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-25T13:46:00"
+      "lastSavedAt": ""
     },
     "visionSection": "vision",
     "visionBoardIndex": 2,
@@ -22798,6 +22798,8 @@
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "6441dca0-4ce9-4f8a-bd08-70da240e2b08",
       "title": "部門定例",
       "date": "2026-05-25",
@@ -22817,8 +22819,6 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-24T14:56:00",
       "updatedAt": "2026-05-25T13:43:00",
       "deleted": false
@@ -23921,5 +23921,5 @@
     }
   ],
   "timelineMode": "actual",
-  "dataModifiedAt": "2026-05-25T13:48:00"
+  "dataModifiedAt": "2026-05-25T15:57:00"
 }
