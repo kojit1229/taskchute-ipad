@@ -27,7 +27,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-25T11:43:00"
+      "lastSavedAt": "2026-05-25T13:36:00"
     },
     "visionSection": "vision",
     "visionBoardIndex": 2,
@@ -22937,11 +22937,11 @@
       "taskId": "d20eb842-2721-4422-ba66-65c6f741ccd5",
       "plannedStartAt": "2026-05-25T11:00:00",
       "plannedEndAt": "2026-05-25T12:00:00",
-      "actualStartAt": "2026-05-24T14:56:00",
-      "actualEndAt": "",
+      "actualStartAt": "2026-05-25T11:00:00",
+      "actualEndAt": "2026-05-25T12:00:00",
       "charge": 0,
       "discharge": 0,
-      "completed": false,
+      "completed": true,
       "comment": "",
       "expectedCharge": "",
       "expectedDischarge": "",
@@ -22950,7 +22950,7 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-24T14:56:00",
-      "updatedAt": "2026-05-24T14:56:00",
+      "updatedAt": "2026-05-25T13:36:00",
       "deleted": false
     },
     {
@@ -23639,10 +23639,7 @@
       "lastFiredKey": ""
     }
   },
-  "modal": {
-    "type": "actualEntry",
-    "id": "d05efcf9-cc94-4c80-9b67-e5d9cef14e9c"
-  },
+  "modal": null,
   "routineViewMode": "all",
   "timelineZoom": 1,
   "recurrences": [
@@ -23923,6 +23920,6 @@
       "deleted": false
     }
   ],
-  "timelineMode": "planned",
-  "dataModifiedAt": "2026-05-25T13:35:00"
+  "timelineMode": "actual",
+  "dataModifiedAt": "2026-05-25T13:36:00"
 }
