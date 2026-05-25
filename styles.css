@@ -538,7 +538,10 @@ h3 {
 }
 
 .timeline-card {
-  position: absolute;
+  /* v30: タイムラインカードは必ず絶対配置。!important で、後方の重複
+     .timeline-card ルールに position を上書きされないよう固定する
+     (relative になると通常フローで積み上がり時刻がずれる不具合の根治)。 */
+  position: absolute !important;
   min-height: 14px;
   border-radius: 7px;
   padding: 7px 9px;
@@ -1245,7 +1248,11 @@ h3 {
 /* ============ タイムラインカード(v7改修) ============ */
 .timeline-card {
   padding-left: 36px !important;
-  position: relative;
+  /* v27: position は absolute を維持する。
+     ここで relative にすると top 配置に加えて通常フローでも積み上がり、
+     後のブロックほど下にずれる不具合になる(タイムラインの時刻ズレの原因)。
+     ○ボタン(position:absolute)の配置基準は absolute でも成立する。 */
+  position: absolute;
   display: flex;
   flex-direction: column;
   justify-content: center;
