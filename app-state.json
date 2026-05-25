@@ -1,5 +1,5 @@
 {
-  "currentView": "home",
+  "currentView": "wish",
   "selectedDate": "2026-05-25",
   "settings": {
     "birthDate": "1992-12-29",
@@ -27,7 +27,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": ""
+      "lastSavedAt": "2026-05-25T13:43:00"
     },
     "visionSection": "vision",
     "visionBoardIndex": 2,
@@ -23921,5 +23921,5 @@
     }
   ],
   "timelineMode": "actual",
-  "dataModifiedAt": "2026-05-25T13:43:00"
+  "dataModifiedAt": "2026-05-25T13:46:00"
 }
