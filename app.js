@@ -385,6 +385,60 @@ function normalizeState(value) {
       deleted: false
     });
   }
+  // v28: 「その他」Project(タスクシュート画面から直接追加した Block の受け皿)。
+  //      必ず1つ存在を保証する。
+  let otherProject = value.projects.find((p) => p.kind === "other" && !p.deleted);
+  if (!otherProject) {
+    otherProject = {
+      id: crypto.randomUUID(),
+      kind: "other",
+      title: "その他",
+      category: "",
+      status: "active",
+      twelveWeekStartDate: "",
+      createdAt: nowDateTime(),
+      updatedAt: nowDateTime(),
+      deleted: false
+    };
+    value.projects.push(otherProject);
+  }
+  // v28: 「その他」Project 直下の受け皿 Task。直接追加した Block はこれに紐づく。
+  //      normalizeState は state 確定前にも走るため、makeTask は使わず直接構築する。
+  let otherTask = value.tasks.find((t) => t.kind === "other" && !t.deleted);
+  if (!otherTask) {
+    otherTask = {
+      id: crypto.randomUUID(),
+      kind: "other",
+      projectId: otherProject.id,
+      parentTaskId: "",
+      title: "その他",
+      category: "",
+      status: "active",
+      dueDate: "",
+      description: "",
+      targetYear: null,
+      lifeArea: "",
+      motivation: "",
+      realized: false,
+      realizedDate: "",
+      nextRoutineId: "",
+      createdAt: nowDateTime(),
+      updatedAt: nowDateTime(),
+      deleted: false
+    };
+    value.tasks.push(otherTask);
+  }
+  // v28: 既存の孤立 Block(タスクシュート画面で追加されたが Task 未紐づけ)を
+  //      「その他」Task に紐づけ、タスクシュート画面に表示されるようにする。
+  //      timeline 由来・ルーティン・繰り返し系列は対象外。
+  for (const block of value.blocks) {
+    if (block.deleted) continue;
+    if (block.taskId) continue;
+    if (block.source === "timeline") continue;
+    if (block.category === "ルーティン") continue;
+    if (block.recurrenceGroupId) continue;
+    block.taskId = otherTask.id;
+  }
   value.journals ||= {};
   value.feedback ||= {};
   value.reports ||= {};
@@ -1289,13 +1343,17 @@ function wishSubtaskToTasks(taskId) {
   const exists = state.blocks.find((b) => !b.deleted && b.taskId === taskId && b.date === state.selectedDate);
   if (exists) return showToast("既に今日のタスクシュートにあります");
   // 新規 Block を作成。expectedCharge: 4(やりたいこと=充電源)を推奨値として
+  // v29: 予定の開始/終了日時をデフォルトで入れる
+  const { plannedStartAt, plannedEndAt } = defaultPlannedTimes();
   const block = makeBlock({
     date: state.selectedDate,
     title: task.title,
     category: task.category || "回復",
     taskId: task.id,
     expectedCharge: 4,
-    expectedDischarge: 1
+    expectedDischarge: 1,
+    plannedStartAt,
+    plannedEndAt
   });
   state.blocks.push(block);
   // Task の status を "doing" に
@@ -1553,7 +1611,8 @@ function renderTasks() {
 
 function renderOpenTasks() {
   // v19: 今日に既に Block 化されていても表示し続ける(1日に複数回追加することもあるため)
-  const open = state.tasks.filter((task) => !task.deleted && task.status !== "completed");
+  // v28: 「その他」受け皿 Task は実体のあるタスクではないので未完了リストから除外
+  const open = state.tasks.filter((task) => !task.deleted && task.status !== "completed" && task.kind !== "other");
   if (!open.length) return emptyPanel("未完了のTaskはありません");
   // 今日 Block 化済みのカウント(参考表示用)
   const blockCountByTaskId = {};
@@ -2760,20 +2819,55 @@ function deleteTask(id) {
 function createBlockFromTask(taskId) {
   const task = state.tasks.find((item) => item.id === taskId);
   if (!task) return;
+  // v29: 予定の開始/終了日時をデフォルトで入れる
+  const { plannedStartAt, plannedEndAt } = defaultPlannedTimes();
   state.blocks.push(makeBlock({
     taskId,
     date: state.selectedDate,
     title: task.title,
-    category: task.category || projectName(task.projectId)
+    category: task.category || projectName(task.projectId),
+    plannedStartAt,
+    plannedEndAt
   }));
   saveAndRender("今日のBlockに追加しました");
+}
+
+// v28: 「その他」Project 直下の受け皿 Task を取得
+function getOtherTask() {
+  return state.tasks.find((t) => t.kind === "other" && !t.deleted);
+}
+
+// v29: Block 作成時のデフォルト予定時刻。
+// 現在時刻を 15 分単位に切り捨てた時刻を開始、その 1 時間後を終了とする。
+// 当日 23:59 を上限にクランプ。日付は選択中の日付。
+function defaultPlannedTimes() {
+  const now = new Date();
+  const maxMin = 24 * 60 - 1;  // 23:59
+  let startMin = now.getHours() * 60 + Math.floor(now.getMinutes() / 15) * 15;
+  if (startMin > maxMin) startMin = maxMin;
+  let endMin = startMin + 60;
+  if (endMin > maxMin) endMin = maxMin;
+  const fmt = (mins) => `${state.selectedDate}T${pad2(Math.floor(mins / 60))}:${pad2(mins % 60)}:00`;
+  return { plannedStartAt: fmt(startMin), plannedEndAt: fmt(endMin) };
 }
 
 function addBlock() {
   const title = document.querySelector("#blockTitle")?.value.trim();
   const category = document.querySelector("#blockCategory")?.value || "";
   if (!title) return showToast("Block名を入力してください");
-  state.blocks.push(makeBlock({ date: state.selectedDate, title, category }));
+  // v28: タスクシュート画面から追加した Block は「その他」Project に自動で紐づける
+  //      (Task 紐づけが無いとタスクシュート画面に表示されないため)
+  const otherTask = getOtherTask();
+  // v29: 予定の開始/終了日時をデフォルトで入れる
+  const { plannedStartAt, plannedEndAt } = defaultPlannedTimes();
+  state.blocks.push(makeBlock({
+    date: state.selectedDate,
+    title,
+    category,
+    taskId: otherTask ? otherTask.id : "",
+    plannedStartAt,
+    plannedEndAt
+  }));
   saveAndRender("Blockを追加しました");
 }
 
@@ -4517,6 +4611,11 @@ function saveBlockFromModal(id, fields) {
     updatedAt: nowDateTime(),
     deleted: false
   };
+  // v29: 予定の開始・終了日時は必須。空のままでは登録/保存させない。
+  if (!updated.plannedStartAt || !updated.plannedEndAt) {
+    showToast("予定の開始・終了日時を入力してください");
+    return;
+  }
   if (isNew) {
     const rk = fields.recurrenceKind;
     if (rk && rk !== "__keep__" && rk !== "__end__") {
