@@ -136,7 +136,8 @@
         "color": "#8E8E93"
       }
     ],
-    "avoidList": []
+    "avoidList": [],
+    "sidebarCollapsed": true
   },
   "projects": [
     {
@@ -23921,5 +23922,5 @@
     }
   ],
   "timelineMode": "actual",
-  "dataModifiedAt": "2026-05-25T15:57:00"
+  "dataModifiedAt": "2026-05-25T16:04:00"
 }
