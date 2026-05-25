@@ -1102,16 +1102,24 @@ function cycleWeekProgress(dateISO) {
   return { done, total, pct: total ? Math.round((done / total) * 100) : 0 };
 }
 
-// v33: タスクシュート着手率(homeTaskchute と同一の抽出)
-function taskchuteStartRate(blocks) {
-  const list = blocks.filter((b) => {
+// v33: 今日のタスクシュート対象ブロック(homeTaskchute と着手率で共用)
+//   Project に紐づく Block のみ。単発ブロック(kind:"other" の受け皿 Task)は除外。
+function taskchuteBlocks(blocks) {
+  return blocks.filter((b) => {
     if (b.source === "timeline") return false;
     if (b.category === "ルーティン") return false;
     if (b.recurrenceGroupId) return false;
     if (!b.taskId) return false;
     const task = state.tasks.find((t) => t.id === b.taskId);
-    return Boolean(task && task.projectId);
+    if (!task || !task.projectId) return false;
+    if (task.kind === "other") return false;  // 単発ブロックは非表示
+    return true;
   });
+}
+
+// v33: タスクシュート着手率(homeTaskchute と同一の抽出)
+function taskchuteStartRate(blocks) {
+  const list = taskchuteBlocks(blocks);
   const done = list.filter((b) => b.completed || b.actualStartAt).length;
   return { done, total: list.length, pct: list.length ? Math.round((done / list.length) * 100) : 0 };
 }
@@ -1174,17 +1182,10 @@ function homeMIT(blocks) {
 
 // --- 今日のタスクシュート(着手率)---
 function homeTaskchute(blocks) {
-  // タスクシュートタブと同じ抽出: Project に紐づく Block のみ
-  const list = blocks.filter((b) => {
-    if (b.source === "timeline") return false;
-    if (b.category === "ルーティン") return false;
-    if (b.recurrenceGroupId) return false;
-    if (!b.taskId) return false;
-    const task = state.tasks.find((t) => t.id === b.taskId);
-    return Boolean(task && task.projectId);
-  });
+  // v33: Project に紐づく Block のみ(単発ブロックは taskchuteBlocks で除外)
+  const list = taskchuteBlocks(blocks);
   if (!list.length) {
-    return `<section class="panel"><div class="home-plabel">今日のタスクシュート</div>
+    return `<section class="panel"><div class="home-plabel orange">今日のタスクシュート</div>
       <div class="muted" style="font-size:13px">Projectに紐づくBlockがありません。</div></section>`;
   }
   const started = list.filter((b) => b.completed || b.actualStartAt).length;
@@ -1198,11 +1199,11 @@ function homeTaskchute(blocks) {
       <span class="home-dot ${st}" data-action="${act}" data-id="${b.id}">${b.completed ? "✓" : ""}</span>
       <span class="home-tc-name" data-action="edit-block" data-id="${b.id}">${escapeHTML(b.title)}</span>${badge}</div>`;
   }).join("");
-  return `<section class="panel"><div class="home-plabel">今日のタスクシュート</div>
+  return `<section class="panel"><div class="home-plabel orange">今日のタスクシュート</div>
     <div class="home-rate"><span class="home-rate-cap">着手率</span>
       <span class="home-rate-pct">${pct}%</span>
       <span class="home-rate-frac">${started} / ${list.length} ブロック</span></div>
-    <div class="progress" style="margin-bottom:10px"><span style="width:${pct}%"></span></div>
+    <div class="progress" style="margin-bottom:10px"><span style="width:${pct}%;background:var(--orange)"></span></div>
     ${rows}</section>`;
 }
 
@@ -1316,7 +1317,7 @@ function homeBacklog() {
         : `<button class="btn ghost home-add" data-action="home-add-today" data-id="${t.id}" style="font-size:11px;padding:7px 10px">＋今日に追加</button>`}
     </div>`;
   }).join("");
-  return `<section class="panel"><div class="home-plabel orange">未完了タスク<span class="home-count">${tasks.length}件</span></div>
+  return `<section class="panel"><div class="home-plabel blue">未完了タスク<span class="home-count">${tasks.length}件</span></div>
     ${tasks.length ? rows : `<div class="muted" style="font-size:13px">未完了のタスクはありません。</div>`}</section>`;
 }
 
