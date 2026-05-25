@@ -18,6 +18,8 @@
   --orange-soft: #fff1db;
   --purple: #7b61ff;
   --purple-soft: #efebff;
+  --teal: #13b5a6;
+  --teal-soft: #d6f4f1;
   --radius: 8px;
   --shadow: 0 1px 2px rgba(20, 20, 30, 0.08);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Hiragino Sans", "Noto Sans JP", sans-serif;
@@ -38,6 +40,7 @@
     --red-soft: #451917;
     --orange-soft: #432b0b;
     --purple-soft: #2b244e;
+    --teal-soft: #0c3733;
     --shadow: none;
   }
 }
@@ -1944,3 +1947,93 @@ h3 {
   margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line-soft);
   font-size: 12px; color: var(--muted);
 }
+
+/* ============================================================
+   v33: ホーム — フル幅ヒーロー / スコアボード / ゾーン別テーマ色
+   ============================================================ */
+
+/* いま、これ(フル幅・2カラム) */
+.home-hero { margin-top: 12px; }
+.home-hero-grid {
+  display: grid; grid-template-columns: 1fr; gap: 14px;
+  align-items: center; margin-top: 4px;
+}
+@media (min-width: 760px) {
+  .home-hero-grid { grid-template-columns: 1fr 240px; gap: 22px; }
+}
+.home-hero-main { min-width: 0; }
+.home-hero-title { font-size: 22px; }
+.home-hero-cat {
+  display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 6px;
+  font-size: 11px; font-weight: 700; color: var(--orange); background: var(--orange-soft);
+}
+.home-hero-side { display: flex; flex-direction: column; gap: 9px; }
+.home-hero-btn { margin-top: 0; }
+.home-hero-next {
+  font-size: 12px; color: var(--muted); padding: 9px 11px;
+  border: 1px solid var(--line-soft); border-radius: 8px;
+}
+.home-hero-next-lab { color: var(--orange); font-weight: 700; margin-right: 6px; }
+.home-hero-next strong { color: var(--text); }
+
+/* ひと目スコアボード(4つの達成率) */
+.home-scoreboard {
+  margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+}
+@media (min-width: 760px) {
+  .home-scoreboard { grid-template-columns: repeat(4, 1fr); }
+}
+.home-score {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 12px 13px;
+  cursor: pointer; box-shadow: var(--shadow);
+}
+.home-score:active { transform: scale(0.985); }
+.home-score-lab { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: 0.03em; }
+.home-score-val { display: flex; align-items: baseline; gap: 4px; margin: 7px 0 9px; }
+.home-score-num { font-size: 26px; font-weight: 800; line-height: 1; }
+.home-score-unit { font-size: 13px; font-weight: 800; }
+.home-score-frac {
+  margin-left: auto; font-size: 11px; color: var(--muted);
+  font-weight: 700; align-self: flex-end;
+}
+.home-score-bar { height: 5px; }
+.home-score.orange .home-score-num, .home-score.orange .home-score-unit { color: var(--orange); }
+.home-score.orange .home-score-bar > span { background: var(--orange); }
+.home-score.green .home-score-num, .home-score.green .home-score-unit { color: var(--green); }
+.home-score.green .home-score-bar > span { background: var(--green); }
+.home-score.blue .home-score-num, .home-score.blue .home-score-unit { color: var(--accent); }
+.home-score.blue .home-score-bar > span { background: var(--accent); }
+
+/* ゾーン見出し */
+.home-zone {
+  display: flex; align-items: center; gap: 10px; margin: 6px 2px 0;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.18em; color: var(--muted);
+}
+.home-zone::before {
+  content: ""; width: 7px; height: 7px; border-radius: 2px;
+  background: var(--muted); flex: none;
+}
+.home-zone::after { content: ""; flex: 1; height: 1px; background: var(--line-soft); }
+.home-zone.amber { color: var(--orange); } .home-zone.amber::before { background: var(--orange); }
+.home-zone.teal  { color: var(--teal); }   .home-zone.teal::before  { background: var(--teal); }
+.home-zone.blue  { color: var(--accent); } .home-zone.blue::before  { background: var(--accent); }
+.home-zone.green { color: var(--green); }  .home-zone.green::before { background: var(--green); }
+
+/* ゾーン・バンド(背景をテーマ色へ少し寄せる) */
+.home-zone-block {
+  margin-top: 14px; border: 1px solid var(--zl); border-radius: 14px;
+  padding: 4px 11px 13px; background: var(--zb);
+}
+.home-zone-block .home-grid { margin-top: 8px; }
+.home-grid.single { grid-template-columns: 1fr; }
+.z-amber { --zb: rgba(255, 149, 0, 0.075); --zl: rgba(255, 149, 0, 0.24); }
+.z-teal  { --zb: rgba(19, 181, 166, 0.085); --zl: rgba(19, 181, 166, 0.26); }
+.z-blue  { --zb: rgba(0, 122, 255, 0.065); --zl: rgba(0, 122, 255, 0.22); }
+.z-green { --zb: rgba(47, 185, 109, 0.075); --zl: rgba(47, 185, 109, 0.22); }
+
+/* ゾーン内パネルも背景をテーマ色へごく薄く寄せる */
+.z-amber .panel { background: linear-gradient(0deg, rgba(255, 149, 0, 0.045), rgba(255, 149, 0, 0.045)), var(--panel); }
+.z-teal  .panel { background: linear-gradient(0deg, rgba(19, 181, 166, 0.05), rgba(19, 181, 166, 0.05)), var(--panel); }
+.z-blue  .panel { background: linear-gradient(0deg, rgba(0, 122, 255, 0.04), rgba(0, 122, 255, 0.04)), var(--panel); }
+.z-green .panel { background: linear-gradient(0deg, rgba(47, 185, 109, 0.045), rgba(47, 185, 109, 0.045)), var(--panel); }
