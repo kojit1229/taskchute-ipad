@@ -1,5 +1,5 @@
 {
-  "currentView": "home",
+  "currentView": "timeline",
   "selectedDate": "2026-05-26",
   "settings": {
     "birthDate": "1992-12-29",
@@ -27,7 +27,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-26T18:07:00"
+      "lastSavedAt": "2026-05-26T18:08:00"
     },
     "visionSection": "board",
     "visionBoardIndex": 1,
@@ -24738,12 +24738,12 @@
       "taskId": "d20eb842-2721-4422-ba66-65c6f741ccd5",
       "plannedStartAt": "2026-05-26T15:30:00",
       "plannedEndAt": "2026-05-26T18:00:00",
-      "actualStartAt": "",
-      "actualEndAt": "",
+      "actualStartAt": "2026-05-26T15:30:00",
+      "actualEndAt": "2026-05-26T18:00:00",
       "charge": 0,
       "discharge": 0,
-      "completed": false,
-      "comment": "",
+      "completed": true,
+      "comment": "適正検査、パズルや複数の言葉に共通することを説明したり、図形の法則、数字の暗記、制限時間ありで左と同じ図形に◯をつける、制限時間ありで数字に対応した記号を書く、などなど色々やった。\n数字覚えるのはつまらなかった。図形の法則を見つけるのは楽しかった。制限時間系はゲーム感覚で楽しかった。\n自分の生い立ちとかをしゃべってすっきりした。やっぱり家事/育児と仕事がシームレスにつながっているのはストレスかかるから、休憩時間をしっかり取るように設計した方がいいと言われた。",
       "expectedCharge": "",
       "expectedDischarge": "",
       "recurrenceGroupId": "",
@@ -24751,7 +24751,7 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-25T21:49:00",
-      "updatedAt": "2026-05-25T21:49:00",
+      "updatedAt": "2026-05-26T18:17:00",
       "deleted": false
     },
     {
@@ -25442,8 +25442,8 @@
     }
   },
   "modal": {
-    "type": "actualEntry",
-    "id": "f768e32c-e961-494a-96ea-1180d7bced6f"
+    "type": "block",
+    "id": "d1b97c6b-b72d-4a32-9b8d-9722d389e084"
   },
   "routineViewMode": "all",
   "timelineZoom": 1,
@@ -25726,5 +25726,5 @@
     }
   ],
   "timelineMode": "actual",
-  "dataModifiedAt": "2026-05-26T18:08:00"
+  "dataModifiedAt": "2026-05-26T18:17:00"
 }
