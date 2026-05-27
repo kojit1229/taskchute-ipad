@@ -27,7 +27,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": ""
+      "lastSavedAt": "2026-05-27T13:38:00"
     },
     "visionSection": "board",
     "visionBoardIndex": 1,
@@ -137,7 +137,7 @@
       }
     ],
     "avoidList": [],
-    "sidebarCollapsed": false
+    "sidebarCollapsed": true
   },
   "projects": [
     {
@@ -26275,5 +26275,5 @@
     }
   ],
   "timelineMode": "actual",
-  "dataModifiedAt": "2026-05-27T13:37:00"
+  "dataModifiedAt": "2026-05-27T14:31:00"
 }
