@@ -27,7 +27,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-27T09:15:00"
+      "lastSavedAt": "2026-05-26T23:50:00"
     },
     "visionSection": "board",
     "visionBoardIndex": 1,
@@ -12145,6 +12145,8 @@
       "deleted": true
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_7dde151b-2346-4872-8690-7331ea9ba9c8_2026-05-28",
       "title": "宣言（今日も最高の一日にします！）",
       "date": "2026-05-28",
@@ -12164,8 +12166,6 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-22T11:43:00",
       "updatedAt": "2026-05-27T09:09:00",
       "deleted": true
@@ -25509,6 +25509,8 @@
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_7dde151b-2346-4872-8690-7331ea9ba9c8_2026-06-27",
       "taskId": "",
       "date": "2026-06-27",
@@ -25528,13 +25530,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-27T09:00:00",
       "updatedAt": "2026-05-27T09:00:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_606bf0f3-5cd5-4690-b9ab-9e5f652044ba_2026-06-27",
       "taskId": "",
       "date": "2026-06-27",
@@ -25554,13 +25556,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-27T09:00:00",
       "updatedAt": "2026-05-27T09:00:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_2e1a06b6-968f-4da4-bb5c-be6ca8f68bcb_2026-06-27",
       "taskId": "",
       "date": "2026-06-27",
@@ -25580,13 +25582,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-27T09:00:00",
       "updatedAt": "2026-05-27T09:00:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_7be664be-24bd-4994-abbf-e7b4f5ed568b_2026-06-27",
       "taskId": "",
       "date": "2026-06-27",
@@ -25606,13 +25608,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-27T09:00:00",
       "updatedAt": "2026-05-27T09:00:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_5f56d71d-1999-44e6-9bbb-843728309fc6_2026-06-27",
       "taskId": "",
       "date": "2026-06-27",
@@ -25632,13 +25634,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-27T09:00:00",
       "updatedAt": "2026-05-27T09:00:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_ead4621a-47a3-4fc8-b141-57b6194ab5f2_2026-06-27",
       "taskId": "",
       "date": "2026-06-27",
@@ -25658,13 +25660,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-27T09:00:00",
       "updatedAt": "2026-05-27T09:00:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_a03b51fa-09b5-4bbb-b972-d17dc9b14866_2026-06-27",
       "taskId": "",
       "date": "2026-06-27",
@@ -25684,13 +25686,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-27T09:00:00",
       "updatedAt": "2026-05-27T09:00:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_37b52ce0-fe36-415d-b22a-85f14c4ec375_2026-06-27",
       "taskId": "",
       "date": "2026-06-27",
@@ -25710,13 +25712,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-27T09:00:00",
       "updatedAt": "2026-05-27T09:00:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_26e8b3fa-7b59-4474-b06f-82cffdab9837_2026-06-27",
       "taskId": "",
       "date": "2026-06-27",
@@ -25736,13 +25738,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-27T09:00:00",
       "updatedAt": "2026-05-27T09:00:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_083310ad-0984-4b99-8250-6ef7b95349f4_2026-06-27",
       "taskId": "",
       "date": "2026-06-27",
@@ -25762,13 +25764,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-27T09:00:00",
       "updatedAt": "2026-05-27T09:00:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_48679328-e390-48a9-9ae2-da87ffaedaa8_2026-06-27",
       "taskId": "",
       "date": "2026-06-27",
@@ -25788,13 +25790,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-27T09:00:00",
       "updatedAt": "2026-05-27T09:00:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_2a673190-cd81-4c6f-aff2-05adc4260c85_2026-06-27",
       "taskId": "",
       "date": "2026-06-27",
@@ -25814,13 +25816,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-27T09:00:00",
       "updatedAt": "2026-05-27T09:00:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_bac2c422-feee-4d8f-b7c8-9bea1684add1_2026-06-27",
       "taskId": "",
       "date": "2026-06-27",
@@ -25840,18 +25842,18 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-27T09:00:00",
       "updatedAt": "2026-05-27T09:00:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "de7d7bb6-46fb-4198-bd8d-0ea63d4b39e4",
       "title": "DNC検収書送付",
       "date": "2026-05-27",
       "category": "仕事",
-      "taskId": "",
+      "taskId": "d20eb842-2721-4422-ba66-65c6f741ccd5",
       "plannedStartAt": "2026-05-27T09:15:00",
       "plannedEndAt": "2026-05-27T09:30:00",
       "actualStartAt": "",
@@ -25866,13 +25868,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-27T09:15:00",
       "updatedAt": "2026-05-27T09:15:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "e6eec878-2e86-4f4e-a231-83fb464c1b8b",
       "title": "佐藤さん1on1",
       "date": "2026-05-28",
@@ -25892,13 +25894,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-27T09:18:00",
       "updatedAt": "2026-05-27T09:18:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "eb78c133-865e-449b-a7ad-b397221f71b6",
       "title": "松下さん1on1",
       "date": "2026-05-29",
@@ -25918,13 +25920,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-27T09:18:00",
       "updatedAt": "2026-05-27T09:19:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "10735e44-7e32-41ba-af6a-f8f40724148f",
       "title": "武捨さん1on1",
       "date": "2026-05-29",
@@ -25944,8 +25946,6 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-05-27T09:18:00",
       "updatedAt": "2026-05-27T09:19:00",
       "deleted": false
