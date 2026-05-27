@@ -1,5 +1,5 @@
 {
-  "currentView": "timeline",
+  "currentView": "home",
   "selectedDate": "2026-05-27",
   "settings": {
     "birthDate": "1992-12-29",
@@ -27,7 +27,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-27T17:22:00"
+      "lastSavedAt": "2026-05-27T17:29:00"
     },
     "visionSection": "board",
     "visionBoardIndex": 1,
@@ -13741,11 +13741,11 @@
       "taskId": "",
       "plannedStartAt": "2026-05-27T05:25:00",
       "plannedEndAt": "2026-05-27T05:25:00",
-      "actualStartAt": "",
-      "actualEndAt": "",
+      "actualStartAt": "2026-05-27T05:25:00",
+      "actualEndAt": "2026-05-27T05:25:00",
       "charge": 0,
       "discharge": 0,
-      "completed": false,
+      "completed": true,
       "comment": "",
       "expectedCharge": 1,
       "expectedDischarge": 0,
@@ -13754,7 +13754,7 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-22T11:43:00",
-      "updatedAt": "2026-05-27T11:40:00",
+      "updatedAt": "2026-05-27T17:34:00",
       "deleted": false
     },
     {
@@ -18655,11 +18655,11 @@
       "taskId": "",
       "plannedStartAt": "2026-05-27T12:55:00",
       "plannedEndAt": "2026-05-27T13:00:00",
-      "actualStartAt": "",
-      "actualEndAt": "",
+      "actualStartAt": "2026-05-27T12:55:00",
+      "actualEndAt": "2026-05-27T13:00:00",
       "charge": 0,
       "discharge": 0,
-      "completed": false,
+      "completed": true,
       "comment": "",
       "expectedCharge": 1,
       "expectedDischarge": 0,
@@ -18668,7 +18668,7 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-22T11:43:00",
-      "updatedAt": "2026-05-27T11:40:00",
+      "updatedAt": "2026-05-27T17:34:00",
       "deleted": false
     },
     {
@@ -26000,6 +26000,32 @@
       "createdAt": "2026-05-27T17:21:00",
       "updatedAt": "2026-05-27T17:21:00",
       "deleted": false
+    },
+    {
+      "id": "37b079ba-cbc4-4c9b-a4c9-0099693ace08",
+      "title": "1on1(白濱さん)",
+      "date": "2026-05-27",
+      "category": "仕事",
+      "taskId": "",
+      "plannedStartAt": "2026-05-27T13:00:00",
+      "plannedEndAt": "2026-05-27T14:00:00",
+      "actualStartAt": "2026-05-27T13:00:00",
+      "actualEndAt": "2026-05-27T14:00:00",
+      "charge": 0,
+      "discharge": 0,
+      "completed": true,
+      "comment": "白濱さんと島澤さんが1on1を実施しその内容を共有受けた。白濱さんが退任する場合は部門を存続させないということで、白濱さんがあと2、3年継続することになった。それに伴い自分が室長になるというのは先延ばし。ただ澤さんは退任されるためコンサルタントが不足する課題は引き続き残る。部門残すにしても今の本部のままなのか、製造DX企画と合体するか、役員直下になるかは未定だが、いずれにしても課題は山積。ひとまず自分の方で考えていた来期検討については一旦ストップして、プリセールスに専念していく。またGeminiも使えるようになったので色々機能検証する。",
+      "expectedCharge": "",
+      "expectedDischarge": "",
+      "recurrenceGroupId": "",
+      "pomodoroCount": 0,
+      "migratedTo": "",
+      "orderIndex": 0,
+      "isMIT": false,
+      "source": "",
+      "createdAt": "2026-05-27T17:33:00",
+      "updatedAt": "2026-05-27T17:34:00",
+      "deleted": false
     }
   ],
   "journals": {
@@ -26041,10 +26067,7 @@
       "lastFiredKey": ""
     }
   },
-  "modal": {
-    "type": "block",
-    "id": "37b079ba-cbc4-4c9b-a4c9-0099693ace08"
-  },
+  "modal": null,
   "routineViewMode": "routine",
   "timelineZoom": 2,
   "recurrences": [
@@ -26329,5 +26352,5 @@
     }
   ],
   "timelineMode": "actual",
-  "dataModifiedAt": "2026-05-27T17:29:00"
+  "dataModifiedAt": "2026-05-27T17:34:00"
 }
