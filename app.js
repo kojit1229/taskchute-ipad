@@ -4,23 +4,22 @@ const STORAGE_KEY = "taskchute-journal-pwa-state-v1";
 const RECURRENCE_KEEP_PAST_DAYS = 7;    // 過去はこの日数だけ実体を保持
 const RECURRENCE_FUTURE_DAYS = 31;      // 未来はこの日数先まで実体化
 
-// v33: タブ順をユーザー指定の並びに変更
-//   ホーム / ジャーナル / ビジョン / タスクシュート / タイムライン /
+// v33: タブ順 — WBS はタスクシュートの直下に配置
+//   ホーム / ジャーナル / ビジョン / タスクシュート / WBS / タイムライン /
 //   ルーティン / ポモドーロ / やりたい / やらない / 日報 / 設定
-//   ※ WBS は指定リストに無いため、機能を残しつつ末尾に配置(不要なら削除可)
 const navItems = [
   { id: "home", label: "ホーム", mark: "H" },
   { id: "journal", label: "ジャーナル", mark: "J" },
   { id: "vision", label: "ビジョン", mark: "V" },
   { id: "tasks", label: "タスクシュート", mark: "T" },
+  { id: "wbs", label: "WBS", mark: "W" },
   { id: "timeline", label: "タイムライン", mark: "L" },
   { id: "routine", label: "ルーティン", mark: "↻" },
   { id: "pomodoro", label: "ポモドーロ", mark: "P" },
   { id: "wish", label: "やりたい", mark: "✦" },
   { id: "avoid", label: "やらない", mark: "✕" },
   { id: "reports", label: "日報", mark: "R" },
-  { id: "settings", label: "設定", mark: "S" },
-  { id: "wbs", label: "WBS", mark: "W" }
+  { id: "settings", label: "設定", mark: "S" }
 ];
 
 const mobileNav = [
@@ -87,6 +86,9 @@ document.addEventListener("click", (event) => {
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   }
   if (action === "delete-task") deleteTask(id);
+  // v33: WBS の折りたたみ
+  if (action === "toggle-project-collapse") toggleProjectCollapse(id);
+  if (action === "toggle-task-collapse") toggleTaskCollapse(id);
   if (action === "add-block") addBlock();
   if (action === "toggle-block") toggleBlock(id);
   if (action === "now-start") setBlockTime(id, "actualStartAt");
@@ -1091,8 +1093,9 @@ function homeHero(blocks, isToday) {
 // v33: 12週サイクル「今週の進捗」(homeCycle と同一ロジック)
 function cycleWeekProgress(dateISO) {
   const date = dateISO || state.selectedDate;
+  // v33: 12WY にチェック済みの Project のみ(homeCycle と一致)
   const goals = state.projects.filter((p) =>
-    !p.deleted && p.kind === "normal" && p.status === "active");
+    !p.deleted && p.kind === "normal" && p.status === "active" && p.twelveWeekStartDate);
   const goalIds = goals.map((p) => p.id);
   const allTasks = state.tasks.filter((t) => !t.deleted && goalIds.includes(t.projectId));
   const { weekStart, weekEnd } = weekRange(date);
@@ -1259,8 +1262,9 @@ function homeCycle(metrics) {
   const m12 = metrics.find((m) => m.label === "12WY");
   const start = state.settings.twelveWeekStartDate || todayISO();
   const wk = clamp(Math.floor(daysBetween(start, state.selectedDate) / 7) + 1, 1, 12);
+  // v33: 12WY にチェック(twelveWeekStartDate あり)の Project のみをサイクル目標とする
   const goals = state.projects.filter((p) =>
-    !p.deleted && p.kind === "normal" && p.status === "active");
+    !p.deleted && p.kind === "normal" && p.status === "active" && p.twelveWeekStartDate);
   const goalIds = goals.map((p) => p.id);
   const allTasks = state.tasks.filter((t) => !t.deleted && goalIds.includes(t.projectId));
   const overall = allTasks.length
@@ -1281,7 +1285,7 @@ function homeCycle(metrics) {
         <span class="home-ck-name" data-action="edit-task" data-id="${t.id}">${escapeHTML(t.title)}</span>
       </div>`).join("") : `<div class="muted" style="font-size:12px;padding-left:2px">未完了のタスクなし</div>`}
     </div>`;
-  }).join("") : `<div class="muted" style="font-size:13px">WBSでProjectを作ると、ここにサイクル目標として表示されます。</div>`;
+  }).join("") : `<div class="muted" style="font-size:13px">WBSでProjectの「12WY期間に登録する」にチェックすると、ここにサイクル目標として表示されます。</div>`;
   return `<section class="panel"><div class="home-plabel blue">12週サイクル</div>
     <div class="home-wk"><span>Week <strong>${wk}</strong> / 12</span>
       <span class="muted" style="font-size:12px">${m12 ? m12.value : ""}</span></div>
@@ -1300,17 +1304,21 @@ function homeBacklog() {
   const excluded = state.projects
     .filter((p) => p.kind === "wish" || p.kind === "other")
     .map((p) => p.id);
+  // v33: 期限切れ + 当日から1週間以内のタスクのみ(期限なしは除外)。量が多すぎる対策。
+  const limit = addDays(state.selectedDate, 7);
   const tasks = state.tasks
-    .filter((t) => !t.deleted && t.status !== "completed" && !excluded.includes(t.projectId))
+    .filter((t) => !t.deleted && t.status !== "completed" && !excluded.includes(t.projectId)
+      && t.dueDate && t.dueDate <= limit)
     .sort((a, b) => (a.dueDate || "99").localeCompare(b.dueDate || "99"));
   const todayTaskIds = new Set(blocksForDate(state.selectedDate).map((b) => b.taskId).filter(Boolean));
   const rows = tasks.slice(0, 8).map((t) => {
     const scheduled = todayTaskIds.has(t.id);
-    const due = t.dueDate ? `締切 ${t.dueDate.slice(5).replace("-", "/")}` : "締切なし";
-    return `<div class="home-due">
+    const overdue = t.dueDate < state.selectedDate;
+    const due = `締切 ${t.dueDate.slice(5).replace("-", "/")}`;
+    return `<div class="home-due${overdue ? " overdue" : ""}">
       <div class="home-due-main" data-action="edit-task" data-id="${t.id}">
         <div class="home-due-name">${escapeHTML(t.title)}</div>
-        <div class="home-due-sub">${escapeHTML(projectName(t.projectId))} ・ ${due}</div>
+        <div class="home-due-sub">${escapeHTML(projectName(t.projectId))} ・ ${due}${overdue ? "(期限切れ)" : ""}</div>
       </div>
       ${scheduled
         ? `<button class="btn ghost" disabled style="font-size:11px;padding:7px 10px">追加済み</button>`
@@ -1318,7 +1326,7 @@ function homeBacklog() {
     </div>`;
   }).join("");
   return `<section class="panel"><div class="home-plabel blue">未完了タスク<span class="home-count">${tasks.length}件</span></div>
-    ${tasks.length ? rows : `<div class="muted" style="font-size:13px">未完了のタスクはありません。</div>`}</section>`;
+    ${tasks.length ? rows : `<div class="muted" style="font-size:13px">期限が近い未完了タスクはありません。</div>`}</section>`;
 }
 
 // --- 今日の足あと ---
@@ -1878,10 +1886,12 @@ function renderProjectTree(project) {
   const rootTasks = allTasksOfProject.filter((t) => !t.parentTaskId);
   const progress = taskProgress(allTasksOfProject);
   const is12WY = Boolean(project.twelveWeekStartDate);
+  const collapsed = Boolean(project.collapsed);  // v33: 折りたたみ
   return `
     <div class="item">
       <div class="row">
         <div class="title-line">
+          <button class="wbs-caret" data-action="toggle-project-collapse" data-id="${project.id}" aria-label="${collapsed ? "展開" : "折りたたむ"}">${collapsed ? "▸" : "▾"}</button>
           <span class="badge ${project.kind === "wish" ? "purple" : "blue"}">${project.kind === "wish" ? "Wish" : "Project"}</span>
           ${is12WY ? `<span class="badge green">12WY</span>` : ""}
           <strong>${escapeHTML(project.title)}</strong>
@@ -1894,33 +1904,55 @@ function renderProjectTree(project) {
       </div>
       ${project.description ? `<div class="muted" style="font-size:12px">${escapeHTML(project.description)}</div>` : ""}
       <div class="progress"><span style="width:${progress}%"></span></div>
-      <div class="stack">
-        ${rootTasks.length
-          ? rootTasks.map((t) => renderTaskTree(t, allTasksOfProject, 0)).join("")
-          : `<div class="muted">Task未登録</div>`}
-      </div>
+      ${collapsed
+        ? `<div class="muted" style="font-size:12px; margin-top:6px">${rootTasks.length ? `${allTasksOfProject.length}件のタスク(折りたたみ中)` : "Task未登録"}</div>`
+        : `<div class="stack">
+            ${rootTasks.length
+              ? rootTasks.map((t) => renderTaskTree(t, allTasksOfProject, 0)).join("")
+              : `<div class="muted">Task未登録</div>`}
+          </div>`}
     </div>
   `;
+}
+
+// v33: WBS の折りたたみトグル(状態は project/task に保存し永続化)
+function toggleProjectCollapse(id) {
+  state.projects = state.projects.map((p) =>
+    p.id === id ? { ...p, collapsed: !p.collapsed } : p);
+  saveAndRender();
+}
+function toggleTaskCollapse(id) {
+  state.tasks = state.tasks.map((t) =>
+    t.id === id ? { ...t, collapsed: !t.collapsed } : t);
+  saveAndRender();
 }
 
 function renderTaskTree(task, allTasksOfProject, depth) {
   const children = allTasksOfProject.filter((t) => t.parentTaskId === task.id);
   const indent = depth * 18;
+  const collapsed = Boolean(task.collapsed);  // v33: 折りたたみ
   return `
     <div style="margin-left:${indent}px">
-      ${renderTaskRow(task, depth)}
-      ${children.map((c) => renderTaskTree(c, allTasksOfProject, depth + 1)).join("")}
+      ${renderTaskRow(task, depth, children.length > 0, collapsed)}
+      ${children.length && !collapsed
+        ? children.map((c) => renderTaskTree(c, allTasksOfProject, depth + 1)).join("")
+        : ""}
     </div>
   `;
 }
 
-function renderTaskRow(task, depth = 0) {
+function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false) {
   const dueLabel = task.dueDate ? ` / 期限 ${task.dueDate}` : "";
   const canAddSub = depth < 2;  // 最大 3 階層(0,1,2)、depth=2 の子はもう作らない
+  // v33: 子を持つタスクには折りたたみキャレット、無ければ位置合わせのスペーサー
+  const caret = hasChildren
+    ? `<button class="wbs-caret" data-action="toggle-task-collapse" data-id="${task.id}" aria-label="${collapsed ? "展開" : "折りたたむ"}">${collapsed ? "▸" : "▾"}</button>`
+    : `<span class="wbs-caret-spacer"></span>`;
   return `
     <div class="row" style="border-top:1px solid var(--line-soft); padding-top:8px">
       <div class="title-line">
         ${depth > 0 ? `<span class="muted" style="font-size:11px">${"└".padStart(depth, "　")}</span>` : ""}
+        ${caret}
         <button class="checkbox-button ${task.status === "completed" ? "done" : ""}" data-action="toggle-task" data-id="${task.id}">✓</button>
         <span>${escapeHTML(task.title)}</span>
         <span class="badge">${task.status}</span>
