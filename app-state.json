@@ -27,7 +27,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-27T13:38:00"
+      "lastSavedAt": "2026-05-27T14:31:00"
     },
     "visionSection": "board",
     "visionBoardIndex": 1,
@@ -25466,11 +25466,11 @@
       "taskId": "d20eb842-2721-4422-ba66-65c6f741ccd5",
       "plannedStartAt": "2026-05-26T12:00:00",
       "plannedEndAt": "2026-05-26T12:30:00",
-      "actualStartAt": "",
-      "actualEndAt": "",
+      "actualStartAt": "2026-05-26T12:00:00",
+      "actualEndAt": "2026-05-26T12:30:00",
       "charge": 0,
       "discharge": 0,
-      "completed": false,
+      "completed": true,
       "comment": "",
       "expectedCharge": "",
       "expectedDischarge": "",
@@ -25479,7 +25479,7 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-26T23:33:00",
-      "updatedAt": "2026-05-26T23:33:00",
+      "updatedAt": "2026-05-27T14:55:00",
       "deleted": false
     },
     {
@@ -26275,5 +26275,5 @@
     }
   ],
   "timelineMode": "actual",
-  "dataModifiedAt": "2026-05-27T14:31:00"
+  "dataModifiedAt": "2026-05-27T14:55:00"
 }
