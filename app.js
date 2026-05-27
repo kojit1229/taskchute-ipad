@@ -217,6 +217,7 @@ document.addEventListener("change", (event) => {
   if (target.matches("[data-date-picker]")) setSelectedDate(target.value);
   if (target.matches("[data-block-field]")) {
     updateBlockField(target.dataset.id, target.dataset.blockField, target.value);
+    render();  // v33: 充電/放電などの変更を画面に即反映
   }
   if (target.matches("[data-setting-field]")) {
     state.settings[target.dataset.settingField] = target.value;
@@ -1160,12 +1161,23 @@ function homeScoreboard(blocks) {
 }
 
 // チェック+編集できる行(Block 用)
-function homeCheckRow(b, star) {
+// v33: ホーム行のインライン充電/放電セレクト(編集画面を開かず記録)
+function homeChargeSelects(b) {
+  return `<span class="home-cd-wrap">
+    <span class="home-cd-lab c">充</span>
+    <select class="home-cd" data-block-field="charge" data-id="${b.id}" aria-label="充電(0-5)">${rangeOptions(0, 5, b.charge || 0)}</select>
+    <span class="home-cd-lab d">放</span>
+    <select class="home-cd" data-block-field="discharge" data-id="${b.id}" aria-label="放電(0-5)">${rangeOptions(0, 5, b.discharge || 0)}</select>
+  </span>`;
+}
+
+function homeCheckRow(b, star, showCD) {
   const act = b.completed ? "toggle-block" : "complete-block-with-actual";
   return `<div class="home-ck ${b.completed ? "done" : ""}">
     <span class="home-box" data-action="${act}" data-id="${b.id}">${b.completed ? "✓" : ""}</span>
     <span class="home-ck-name" data-action="edit-block" data-id="${b.id}">${escapeHTML(b.title)}</span>
     ${star ? `<span class="home-star">${star}</span>` : ""}
+    ${showCD ? homeChargeSelects(b) : ""}
   </div>`;
 }
 
@@ -1200,7 +1212,8 @@ function homeTaskchute(blocks) {
     const act = b.completed ? "toggle-block" : "complete-block-with-actual";
     return `<div class="home-tc ${st}">
       <span class="home-dot ${st}" data-action="${act}" data-id="${b.id}">${b.completed ? "✓" : ""}</span>
-      <span class="home-tc-name" data-action="edit-block" data-id="${b.id}">${escapeHTML(b.title)}</span>${badge}</div>`;
+      <span class="home-tc-name" data-action="edit-block" data-id="${b.id}">${escapeHTML(b.title)}</span>${badge}
+      ${homeChargeSelects(b)}</div>`;
   }).join("");
   return `<section class="panel"><div class="home-plabel orange">今日のタスクシュート</div>
     <div class="home-rate"><span class="home-rate-cap">着手率</span>
@@ -1228,7 +1241,8 @@ function homeFlow(blocks, isToday) {
       <span class="home-flow-time">${b.plannedStartAt ? timeFromDateTime(b.plannedStartAt) : "—"}</span>
       <span class="home-dot ${b.completed ? "done" : ""}" data-action="${b.completed ? "toggle-block" : "complete-block-with-actual"}" data-id="${b.id}">${b.completed ? "✓" : ""}</span>
       <span class="home-flow-name" data-action="edit-block" data-id="${b.id}">${escapeHTML(b.title)}</span>
-      ${isNow ? `<span class="home-badge doing">NOW</span>` : ""}</div>`;
+      ${isNow ? `<span class="home-badge doing">NOW</span>` : ""}
+      ${homeChargeSelects(b)}</div>`;
   }).join("");
   return `<section class="panel"><div class="home-plabel">今日のながれ</div>${rows}</section>`;
 }
@@ -1239,7 +1253,7 @@ function homeRoutine(blocks) {
   const done = r.filter((b) => b.completed).length;
   const pct = r.length ? Math.round((done / r.length) * 100) : 0;
   const rows = r.length
-    ? r.map((b) => homeCheckRow(b, "")).join("")
+    ? r.map((b) => homeCheckRow(b, "", true)).join("")
     : `<div class="muted" style="font-size:13px">カテゴリ「ルーティン」のBlockがここに表示されます。</div>`;
   return `<section class="panel"><div class="home-plabel green">今日のルーティン</div>
     ${r.length ? `<div class="home-rate"><span class="home-rate-cap">実行率</span>
@@ -3598,9 +3612,13 @@ function generateReport() {
   lines.push("1. 客観事実から見える「良かった点・改善できる点」");
   lines.push("2. パターンとして気をつけたいこと");
   lines.push("3. 明日への具体的な提案(2〜3個)");
+  lines.push("4. この日報を踏まえ、明日「0秒思考」で思考を深めるべきテーマ(2〜3個)");
+  lines.push("   ※ 各テーマは1分で書き出せる問い形式で示すこと");
   lines.push("");
   lines.push("の観点で、簡潔にフィードバックをください。");
   lines.push("(辛口でも構いません、ただし行動に繋がる具体性を重視)");
+  lines.push("");
+  lines.push("レビュー結果は Markdown 形式の .md ファイルとして出力してください。");
   lines.push("```");
 
   const report = lines.join("\n");
@@ -4277,8 +4295,9 @@ function makeRecurrenceInstance(rule, isoDate) {
     actualStartAt: "",
     actualEndAt: "",
     completed: false,
-    charge: 0,
-    discharge: 0,
+    // v33: ルーティンはルールの既定 充電/放電 をすべての実体に適用
+    charge: rule.category === "ルーティン" ? (Number(rule.expectedCharge) || 0) : 0,
+    discharge: rule.category === "ルーティン" ? (Number(rule.expectedDischarge) || 0) : 0,
     expectedCharge: rule.expectedCharge ?? "",
     expectedDischarge: rule.expectedDischarge ?? "",
     comment: "",
@@ -4977,6 +4996,19 @@ function buildBlockModal(block) {
                   実績・コメント・完了の編集は<strong>この日のみ</strong>に反映されます。<br>
                   「終了する」を選ぶと今後の自動生成が止まります(過去の実績は残ります)。
                 </div>
+                ${block.category === "ルーティン" ? `
+                <div class="field-row" style="margin-top:10px">
+                  <div class="field">
+                    <label class="field-label">充電の既定値 (0-5)</label>
+                    <select class="select" data-modal-field="expectedCharge" data-modal-kind="number">${rangeOptions(0, 5, Number(liveRule.expectedCharge) || 0)}</select>
+                  </div>
+                  <div class="field">
+                    <label class="field-label">放電の既定値 (0-5)</label>
+                    <select class="select" data-modal-field="expectedDischarge" data-modal-kind="number">${rangeOptions(0, 5, Number(liveRule.expectedDischarge) || 0)}</select>
+                  </div>
+                </div>
+                <div class="muted" style="font-size:11px; margin-top:4px">既定値を変更すると、未完了のすべての繰り返しに充電/放電が一括適用されます(個別の日の値はホーム画面で変更できます)。</div>
+                ` : ""}
               `;
             }
             return `
@@ -5018,8 +5050,8 @@ function saveBlockFromModal(id, fields) {
     discharge: Number(fields.discharge) || 0,
     completed: Boolean(fields.completed),
     comment: fields.comment || "",
-    expectedCharge: existing?.expectedCharge ?? "",
-    expectedDischarge: existing?.expectedDischarge ?? "",
+    expectedCharge: fields.expectedCharge != null ? Number(fields.expectedCharge) : (existing?.expectedCharge ?? ""),
+    expectedDischarge: fields.expectedDischarge != null ? Number(fields.expectedDischarge) : (existing?.expectedDischarge ?? ""),
     recurrenceGroupId: existing?.recurrenceGroupId || "",
     pomodoroCount: existing?.pomodoroCount || 0,
     migratedTo: existing?.migratedTo || "",
@@ -5081,6 +5113,8 @@ function saveBlockFromModal(id, fields) {
                 taskId: updated.taskId,
                 startTime: updated.plannedStartAt ? (updated.plannedStartAt.split("T")[1] || "") : "",
                 endTime: updated.plannedEndAt ? (updated.plannedEndAt.split("T")[1] || "") : "",
+                expectedCharge: updated.expectedCharge,
+                expectedDischarge: updated.expectedDischarge,
                 updatedAt: nowDateTime()
               }
             : r);
@@ -5093,6 +5127,23 @@ function saveBlockFromModal(id, fields) {
       closeModal();
       saveAndRender("繰り返し設定を更新しました");
       return;
+    }
+    // v33: ルーティンの「既定の充電/放電」を変更したら、ルールと未完了の全実体に一括適用
+    if (existing.recurrenceGroupId && fields.expectedCharge != null) {
+      const rule = (state.recurrences || []).find(
+        (r) => r.id === existing.recurrenceGroupId && !r.deleted);
+      if (rule && (Number(rule.expectedCharge) !== updated.expectedCharge
+        || Number(rule.expectedDischarge) !== updated.expectedDischarge)) {
+        state.recurrences = state.recurrences.map((r) => r.id === rule.id
+          ? { ...r, expectedCharge: updated.expectedCharge, expectedDischarge: updated.expectedDischarge, updatedAt: nowDateTime() }
+          : r);
+        // 未完了の全実体に既定値を適用(完了済みは履歴として保持。編集中の当日Blockは除く)
+        state.blocks = state.blocks.map((b) =>
+          (b.recurrenceGroupId === rule.id && !b.completed && b.id !== id)
+            ? { ...b, charge: updated.expectedCharge, discharge: updated.expectedDischarge,
+                expectedCharge: updated.expectedCharge, expectedDischarge: updated.expectedDischarge }
+            : b);
+      }
     }
     closeModal();
     saveAndRender("Blockを更新しました");
