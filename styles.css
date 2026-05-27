@@ -2037,3 +2037,16 @@ h3 {
 .z-teal  .panel { background: linear-gradient(0deg, rgba(19, 181, 166, 0.05), rgba(19, 181, 166, 0.05)), var(--panel); }
 .z-blue  .panel { background: linear-gradient(0deg, rgba(0, 122, 255, 0.04), rgba(0, 122, 255, 0.04)), var(--panel); }
 .z-green .panel { background: linear-gradient(0deg, rgba(47, 185, 109, 0.045), rgba(47, 185, 109, 0.045)), var(--panel); }
+
+/* v33: WBS 折りたたみキャレット */
+.wbs-caret {
+  border: none; background: transparent; cursor: pointer;
+  color: var(--muted); font-size: 11px; line-height: 1;
+  padding: 3px 4px; border-radius: 4px; flex: none;
+}
+.wbs-caret:hover { background: var(--panel-soft); color: var(--text); }
+.wbs-caret-spacer { display: inline-block; width: 19px; flex: none; }
+
+/* v33: 未完了タスク — 期限切れ行の強調 */
+.home-due.overdue { box-shadow: inset 3px 0 0 var(--red); padding-left: 9px; border-radius: 6px; }
+.home-due.overdue .home-due-sub { color: var(--red); }
