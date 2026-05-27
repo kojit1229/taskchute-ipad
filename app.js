@@ -991,9 +991,9 @@ function renderHome() {
 // --- 三つの信条 ---
 function homeCreed() {
   const creeds = [
-    "着手第一主義！やればやる気が出てくる。",
-    "悩んだら、ヒンメルはどうするか考えろ。",
-    "笑顔でエネルギッシュで最高の1日を過ごそう。"
+    ["着手第一主義！", "雑でもいいからやればやる気が出てくる"],
+    ["悩んだときは", "ヒンメルならどうするか考えて行動せよ"],
+    ["笑顔でエネルギッシュで", "今日も最高の1日を過ごそう！"]
   ];
   const nums = ["一", "二", "三"];
   return `
@@ -1002,7 +1002,7 @@ function homeCreed() {
       ${creeds.map((c, i) => `
         <div class="home-creed-row">
           <span class="home-creed-num">${nums[i]}</span>
-          <span class="home-creed-text">${escapeHTML(c)}</span>
+          <span class="home-creed-text">${escapeHTML(c[0])}<br>${escapeHTML(c[1])}</span>
         </div>`).join("")}
     </section>`;
 }
@@ -1263,12 +1263,12 @@ function homeRoutine(blocks) {
     ${rows}</section>`;
 }
 
-// 週(月〜日)の範囲
+// 週の範囲(12週サイクル用) v33: 土曜〜金曜を1週とみなす
 function weekRange(dateISO) {
   const d = new Date(dateISO + "T00:00:00");
-  const dow = (d.getDay() + 6) % 7; // Mon=0
-  const mon = addDays(dateISO, -dow);
-  return { weekStart: mon, weekEnd: addDays(mon, 6) };
+  const dow = (d.getDay() + 1) % 7; // Sat=0, Sun=1, ... Fri=6
+  const sat = addDays(dateISO, -dow);
+  return { weekStart: sat, weekEnd: addDays(sat, 6) };
 }
 
 // --- 12週サイクル(B案: Project=目標 / Task=戦術)---
@@ -1302,7 +1302,7 @@ function homeCycle(metrics) {
   }).join("") : `<div class="muted" style="font-size:13px">WBSでProjectの「12WY期間に登録する」にチェックすると、ここにサイクル目標として表示されます。</div>`;
   return `<section class="panel"><div class="home-plabel blue">12週サイクル</div>
     <div class="home-wk"><span>Week <strong>${wk}</strong> / 12</span>
-      <span class="muted" style="font-size:12px">${m12 ? m12.value : ""}</span></div>
+      <span class="home-wk-days">残り ${Math.max(0, daysBetween(state.selectedDate, addDays(start, 84)))}日</span></div>
     <div class="home-stat"><span class="home-stat-cap">全体の進捗</span>
       <div class="progress"><span style="width:${overall}%"></span></div>
       <span class="home-stat-pct">${overall}%</span></div>
@@ -1349,6 +1349,7 @@ function homeSteps(blocks) {
   const total = blocks.length || 1;
   const charge = done.reduce((s, b) => s + Number(b.charge || 0), 0);
   const discharge = done.reduce((s, b) => s + Number(b.discharge || 0), 0);
+  const net = charge - discharge;  // v33: エネルギー量(集計値)
   const C = 226.2;
   const off = (C * (1 - done.length / total)).toFixed(1);
   return `<section class="panel"><div class="home-plabel green">今日の足あと</div>
@@ -1366,8 +1367,11 @@ function homeSteps(blocks) {
         ${done.length
           ? done.map((b) => `<div class="muted" style="font-size:12.5px">✓ ${escapeHTML(b.title)}</div>`).join("")
           : `<div class="muted" style="font-size:12.5px">まだ完了したブロックがありません。</div>`}
-        <div class="home-energy">充電 <strong style="color:var(--green)">+${charge}</strong>
-          ／ 放電 <strong style="color:var(--orange)">−${discharge}</strong></div>
+        <div class="home-energy">
+          <span class="home-energy-item">充電 <strong style="color:var(--green)">+${charge}</strong></span>
+          <span class="home-energy-item">放電 <strong style="color:var(--orange)">−${discharge}</strong></span>
+          <span class="home-energy-item">エネルギー <strong style="color:${net >= 0 ? "var(--green)" : "var(--orange)"}">${net >= 0 ? "+" : ""}${net}</strong></span>
+        </div>
       </div>
     </div></section>`;
 }
