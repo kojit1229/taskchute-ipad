@@ -2050,3 +2050,18 @@ h3 {
 /* v33: 未完了タスク — 期限切れ行の強調 */
 .home-due.overdue { box-shadow: inset 3px 0 0 var(--red); padding-left: 9px; border-radius: 6px; }
 .home-due.overdue .home-due-sub { color: var(--red); }
+
+/* v33: ホーム行のインライン充電/放電セレクト */
+.home-cd-wrap {
+  display: inline-flex; align-items: center; gap: 3px;
+  margin-left: auto; flex: none; padding-left: 6px;
+}
+.home-cd-lab { font-size: 10px; font-weight: 800; }
+.home-cd-lab.c { color: var(--green); }
+.home-cd-lab.d { color: var(--orange); }
+.home-cd {
+  font-family: inherit; font-size: 12px; font-weight: 700;
+  padding: 3px 2px 3px 4px; border: 1px solid var(--line);
+  border-radius: 6px; background: var(--panel-soft); color: var(--text);
+}
+.home-tc, .home-flow, .home-ck { flex-wrap: wrap; }
