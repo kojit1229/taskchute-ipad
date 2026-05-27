@@ -27,7 +27,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-27T09:07:00"
+      "lastSavedAt": "2026-05-27T09:10:00"
     },
     "visionSection": "board",
     "visionBoardIndex": 1,
@@ -1278,11 +1278,11 @@
       "parentTaskId": "",
       "title": "1on1設定",
       "category": "仕事",
-      "status": "todo",
+      "status": "doing",
       "dueDate": "2026-05-27",
       "description": "",
       "createdAt": "2026-05-26T15:23:00",
-      "updatedAt": "2026-05-26T15:24:00",
+      "updatedAt": "2026-05-27T09:12:00",
       "deleted": false
     },
     {
@@ -25180,11 +25180,11 @@
       "taskId": "5b80bf0e-b141-482e-9d7d-7488b9e94aa0",
       "plannedStartAt": "2026-05-27T09:15:00",
       "plannedEndAt": "2026-05-27T09:30:00",
-      "actualStartAt": "",
-      "actualEndAt": "",
+      "actualStartAt": "2026-05-27T09:15:00",
+      "actualEndAt": "2026-05-27T09:30:00",
       "charge": 0,
       "discharge": 0,
-      "completed": false,
+      "completed": true,
       "comment": "",
       "expectedCharge": "",
       "expectedDischarge": "",
@@ -25193,7 +25193,7 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-26T15:39:00",
-      "updatedAt": "2026-05-26T15:40:00",
+      "updatedAt": "2026-05-27T09:12:00",
       "deleted": false
     },
     {
@@ -26170,6 +26170,6 @@
       "deleted": false
     }
   ],
-  "timelineMode": "planned",
-  "dataModifiedAt": "2026-05-27T09:09:00"
+  "timelineMode": "actual",
+  "dataModifiedAt": "2026-05-27T09:12:00"
 }
