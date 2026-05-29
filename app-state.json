@@ -27,7 +27,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-29T13:43:00"
+      "lastSavedAt": "2026-05-29T13:44:00"
     },
     "visionSection": "board",
     "visionBoardIndex": 2,
@@ -16302,8 +16302,8 @@
       "plannedStartAt": "2026-05-29T09:01:00",
       "plannedEndAt": "2026-05-29T09:01:00",
       "actualStartAt": "",
-      "actualEndAt": "",
-      "completed": false,
+      "actualEndAt": "2026-05-29T13:44:00",
+      "completed": true,
       "charge": 2,
       "discharge": 0,
       "expectedCharge": 2,
@@ -16314,7 +16314,7 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-22T11:43:00",
-      "updatedAt": "2026-05-22T11:43:00",
+      "updatedAt": "2026-05-29T13:44:00",
       "deleted": false
     },
     {
