@@ -27,7 +27,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-29T17:50:00"
+      "lastSavedAt": "2026-05-29T19:31:00"
     },
     "visionSection": "board",
     "visionBoardIndex": 2,
@@ -1298,7 +1298,7 @@
       "createdAt": "2026-05-26T15:23:00",
       "updatedAt": "2026-05-27T09:20:00",
       "deleted": false,
-      "collapsed": true
+      "collapsed": false
     },
     {
       "targetYear": null,
@@ -1312,11 +1312,11 @@
       "parentTaskId": "5b80bf0e-b141-482e-9d7d-7488b9e94aa0",
       "title": "佐藤さん1on1",
       "category": "仕事",
-      "status": "doing",
+      "status": "completed",
       "dueDate": "2026-05-28",
       "description": "",
       "createdAt": "2026-05-26T15:27:00",
-      "updatedAt": "2026-05-29T13:35:00",
+      "updatedAt": "2026-05-29T19:32:00",
       "deleted": false
     },
     {
@@ -1331,11 +1331,11 @@
       "parentTaskId": "5b80bf0e-b141-482e-9d7d-7488b9e94aa0",
       "title": "松下さん1on1",
       "category": "仕事",
-      "status": "doing",
+      "status": "completed",
       "dueDate": "2026-05-29",
       "description": "",
       "createdAt": "2026-05-26T15:28:00",
-      "updatedAt": "2026-05-29T17:42:00",
+      "updatedAt": "2026-05-29T19:32:00",
       "deleted": false
     },
     {
@@ -1350,11 +1350,11 @@
       "parentTaskId": "5b80bf0e-b141-482e-9d7d-7488b9e94aa0",
       "title": "武捨さん1on1",
       "category": "仕事",
-      "status": "doing",
+      "status": "completed",
       "dueDate": "2026-05-29",
       "description": "",
       "createdAt": "2026-05-26T15:28:00",
-      "updatedAt": "2026-05-29T17:42:00",
+      "updatedAt": "2026-05-29T19:32:00",
       "deleted": false
     },
     {
@@ -29046,5 +29046,5 @@
     }
   ],
   "timelineMode": "actual",
-  "dataModifiedAt": "2026-05-29T19:31:00"
+  "dataModifiedAt": "2026-05-29T19:32:00"
 }
