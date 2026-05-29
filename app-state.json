@@ -27,7 +27,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-29T13:45:00"
+      "lastSavedAt": "2026-05-29T17:44:00"
     },
     "visionSection": "board",
     "visionBoardIndex": 2,
@@ -21787,9 +21787,9 @@
       "category": "ルーティン",
       "plannedStartAt": "2026-05-29T12:40:00",
       "plannedEndAt": "2026-05-29T12:45:00",
-      "actualStartAt": "",
-      "actualEndAt": "",
-      "completed": false,
+      "actualStartAt": "2026-05-29T12:40:00",
+      "actualEndAt": "2026-05-29T12:45:00",
+      "completed": true,
       "charge": 0,
       "discharge": 0,
       "expectedCharge": "",
@@ -21800,7 +21800,7 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-24T13:26:00",
-      "updatedAt": "2026-05-24T13:26:00",
+      "updatedAt": "2026-05-29T17:44:00",
       "deleted": false
     },
     {
@@ -26984,5 +26984,5 @@
     }
   ],
   "timelineMode": "actual",
-  "dataModifiedAt": "2026-05-29T17:43:00"
+  "dataModifiedAt": "2026-05-29T17:44:00"
 }
