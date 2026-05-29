@@ -10,6 +10,7 @@ const RECURRENCE_FUTURE_DAYS = 31;      // 未来はこの日数先まで実体�
 const navItems = [
   { id: "home", label: "ホーム", mark: "H" },
   { id: "journal", label: "ジャーナル", mark: "J" },
+  { id: "zero", label: "0秒思考", mark: "○" },
   { id: "vision", label: "ビジョン", mark: "V" },
   { id: "tasks", label: "タスクシュート", mark: "T" },
   { id: "wbs", label: "WBS", mark: "W" },
@@ -51,6 +52,14 @@ let timerTicker = null;
 let cachedVisionMd = "";
 let cachedAffirmationMd = "";
 const cachedFeedback = {};  // { 'YYYY-MM-DD': '...md text...' }
+
+// v34: 0秒思考 — 画面内の一時状態(永続化しない)
+let ztTab = "other";          // "other" | "fav"
+let ztAddOpen = false;         // テーマ追加パネルの開閉
+let ztCurrent = null;          // 書く画面の対象 { id, text, fav } / null=一覧
+let ztSearch = "";             // 履歴検索ワード
+let ztTimerInterval = null;    // 書く画面のカウントダウン
+let ztTimerLeft = 60;
 
 // v23: 起動時に繰り返し Block を実体化(期間外・未編集は破棄)
 maintainRecurrences({ purge: true });
@@ -170,6 +179,31 @@ document.addEventListener("click", (event) => {
     state.pomodoro.fullscreen = !state.pomodoro.fullscreen;
     saveAndRender();
   }
+  // === v16: やりたいことリスト(v34: input リスナーから click へ移設) ===
+  if (action === "add-wish") addWish();
+  if (action === "open-wish") toggleWishOpen(id);
+  if (action === "add-wish-subtask") addWishSubtask(id);
+  if (action === "toggle-wish-subtask") toggleWishSubtask(id);
+  if (action === "wish-subtask-to-tasks") wishSubtaskToTasks(id);
+  if (action === "wish-realize") realizeWish(id);
+  if (action === "wish-unrealize") unrealizeWish(id);
+  if (action === "delete-wish") deleteWish(id);
+  // === v17: Avoid List(v34: input リスナーから click へ移設) ===
+  if (action === "add-avoid") addAvoid();
+  if (action === "delete-avoid") deleteAvoid(id);
+  // v34: 0秒思考
+  if (action === "zt-add-toggle") {
+    ztAddOpen = !ztAddOpen;
+    render();
+    if (ztAddOpen) setTimeout(() => document.querySelector("#zt-add-text")?.focus(), 60);
+  }
+  if (action === "zt-add-cancel") { ztAddOpen = false; render(); }
+  if (action === "zt-add-submit") ztAddSubmit();
+  if (action === "zt-tab") { ztTab = target.dataset.tab || "other"; render(); }
+  if (action === "zt-fav-toggle") ztToggleFav(id);
+  if (action === "zt-write") openZtWrite(id);
+  if (action === "zt-save") saveZtEntry();
+  if (action === "zt-discard") discardZtWrite();
 });
 
 document.addEventListener("input", (event) => {
@@ -181,6 +215,14 @@ document.addEventListener("input", (event) => {
   if (target.matches("[data-feedback-date]")) {
     state.feedback[target.dataset.feedbackDate] = target.value;
     saveState();
+  }
+  // v34: 0秒思考の履歴検索(全体を再描画せず履歴リストだけ更新 → 入力フォーカス維持)
+  if (target.matches("#zt-search")) {
+    ztSearch = target.value;
+    const listEl = document.querySelector("#zt-history-list");
+    const cntEl = document.querySelector("#zt-history-count");
+    if (listEl) listEl.innerHTML = ztHistoryListHTML();
+    if (cntEl) cntEl.textContent = ztHistoryCountLabel();
   }
   if (target.matches("[data-vision-field]")) {
     state.settings[target.dataset.visionField] = target.value;
@@ -198,18 +240,9 @@ document.addEventListener("input", (event) => {
   if (target.matches("[data-msg-id][data-msg-field]")) {
     updateBreakMessageField(target.dataset.msgId, target.dataset.msgField, target.value);
   }
-  // === v16: やりたいことリスト ===
-  if (action === "add-wish") addWish();
-  if (action === "open-wish") toggleWishOpen(id);
-  if (action === "add-wish-subtask") addWishSubtask(id);
-  if (action === "toggle-wish-subtask") toggleWishSubtask(id);
-  if (action === "wish-subtask-to-tasks") wishSubtaskToTasks(id);
-  if (action === "wish-realize") realizeWish(id);
-  if (action === "wish-unrealize") unrealizeWish(id);
-  if (action === "delete-wish") deleteWish(id);
-  // === v17: Avoid List ===
-  if (action === "add-avoid") addAvoid();
-  if (action === "delete-avoid") deleteAvoid(id);
+  // v34: ここにあった Wish/Avoid のクリック処理(add-wish 等)は
+  //      input リスナーでは action/id が未定義で動かず、毎入力で例外を投げていた。
+  //      → click リスナー(上部)へ移設して修正済み。
 });
 
 document.addEventListener("change", (event) => {
@@ -457,6 +490,10 @@ function normalizeState(value) {
   value.journals ||= {};
   value.feedback ||= {};
   value.reports ||= {};
+  // v34: 0秒思考(未知フィールドはデフォルトに足すだけで既存データを壊さない)
+  value.zeroThinking ||= { themes: [], entries: [] };
+  if (!Array.isArray(value.zeroThinking.themes)) value.zeroThinking.themes = [];
+  if (!Array.isArray(value.zeroThinking.entries)) value.zeroThinking.entries = [];
   // v23: 繰り返しをルール方式へ(旧データは初回のみ自動移行)
   value.recurrences ||= [];
   migrateRecurrencesIfNeeded(value);
@@ -735,6 +772,7 @@ function seedState() {
   return {
     currentView: "home",
     selectedDate: today,
+    zeroThinking: { themes: [], entries: [] },
     settings: {
       birthDate: "",
       twelveWeekStartDate: today,
@@ -900,6 +938,7 @@ function renderMain() {
   if (view === "timeline") main.innerHTML = renderTimelineView();
   if (view === "pomodoro") main.innerHTML = renderPomodoro();
   if (view === "journal") main.innerHTML = renderJournal();
+  if (view === "zero") main.innerHTML = renderZeroThinking();
   if (view === "vision") main.innerHTML = renderVision();
   if (view === "reports") main.innerHTML = renderReports();
   if (view === "settings") main.innerHTML = renderSettings();
@@ -3111,6 +3150,228 @@ function renderMore() {
   `;
 }
 
+// v34: =========================================================
+//  0秒思考(Zero Second Thinking)
+//  - 一覧: テーマ追加(トグル)/ タブ(それ以外・お気に入り)/ ★切替 / 書く
+//  - 書く: 1分カウントダウン(0で停止・入力は継続可)/ 保存で履歴へ
+//  - 保存: ★テーマは残す、それ以外は書いたら一覧から消える
+//  - 日報: generateReport にその日の 0秒思考を出力
+// =========================================================
+function renderZeroThinking() {
+  if (ztCurrent) return renderZtWrite();
+
+  const zt = state.zeroThinking || { themes: [], entries: [] };
+  const favList = zt.themes.filter((t) => t.fav);
+  const otherList = zt.themes.filter((t) => !t.fav);
+  const todayCount = zt.entries.filter((e) => e.date === todayISO()).length;
+  const items = ztTab === "fav" ? favList : otherList;
+
+  const themeItemsHTML = items.length
+    ? items.map((t) => `
+        <div class="zt-theme-item ${t.fav ? "is-fav" : ""}">
+          <button class="zt-star ${t.fav ? "on" : ""}" data-action="zt-fav-toggle" data-id="${t.id}" title="お気に入り">${t.fav ? "★" : "☆"}</button>
+          <div class="zt-theme-text" data-action="zt-write" data-id="${t.id}">${escapeHTML(t.text)}</div>
+          <button class="zt-theme-go" data-action="zt-write" data-id="${t.id}">書く →</button>
+        </div>`).join("")
+    : ztTab === "fav"
+      ? `<div class="zt-empty">お気に入りはまだありません。<span class="zt-empty-sub">☆ をタップして登録すると、書いてもここに残り続けます。</span></div>`
+      : `<div class="zt-empty">テーマがありません。<span class="zt-empty-sub">「+ テーマを追加」から登録してください。</span></div>`;
+
+  return `
+    <div class="view-header">
+      <div>
+        <div class="eyebrow">0 SECOND THINKING</div>
+        <h1>0秒思考</h1>
+      </div>
+      <div class="zt-day-count">
+        <div class="zt-day-count-v">今日 <b>${todayCount}</b> 本</div>
+        <div class="zt-day-count-sub">→ 日報に含まれます</div>
+      </div>
+    </div>
+    <div class="zt-lead">1テーマ・<b>1分</b>・手早く書き出す。<b>★お気に入り</b>はずっと残り、それ以外は書いたら消えます。</div>
+
+    <section class="panel zt-section">
+      <div class="zt-plabel">
+        テーマ一覧
+        <span class="zt-plabel-count">全 ${zt.themes.length} 件</span>
+        <span class="zt-plabel-spacer"></span>
+        <button class="zt-mini-btn ${ztAddOpen ? "is-on" : ""}" data-action="zt-add-toggle">${ztAddOpen ? "閉じる" : "+ テーマを追加"}</button>
+      </div>
+
+      <div class="zt-add-wrap ${ztAddOpen ? "show" : ""}">
+        <textarea class="zt-add-text" id="zt-add-text" placeholder="例:&#10;昨日の提案で伝わらなかった理由は&#10;来期、室長として最初の一手は&#10;来週やめるべきことは"></textarea>
+        <div class="zt-add-row">
+          <button class="btn ghost" data-action="zt-add-cancel">閉じる</button>
+          <button class="btn primary" data-action="zt-add-submit">追加する</button>
+        </div>
+        <div class="zt-add-hint">日報の「明日の0秒思考テーマ」をコピペすると、まとめて登録できます。</div>
+      </div>
+
+      <div class="zt-tab-row">
+        <button class="zt-tab ${ztTab === "other" ? "active" : ""}" data-action="zt-tab" data-tab="other">それ以外 <span class="zt-tab-count">${otherList.length}</span></button>
+        <button class="zt-tab ${ztTab === "fav" ? "active" : ""}" data-action="zt-tab" data-tab="fav">★ お気に入り <span class="zt-tab-count">${favList.length}</span></button>
+      </div>
+
+      <div class="zt-theme-list">${themeItemsHTML}</div>
+    </section>
+
+    <section class="panel zt-section">
+      <div class="zt-plabel blue">
+        過去のテーマ
+        <span class="zt-plabel-count" id="zt-history-count">${ztHistoryCountLabel()}</span>
+      </div>
+      <div class="zt-search-row">
+        <input class="zt-search-input" id="zt-search" type="search" placeholder="テーマや本文で検索" value="${escapeHTML(ztSearch)}">
+      </div>
+      <div class="zt-history-list" id="zt-history-list">${ztHistoryListHTML()}</div>
+    </section>
+  `;
+}
+
+function renderZtWrite() {
+  const cur = ztCurrent;
+  return `
+    <div class="zt-write-head">
+      <button class="zt-back-btn" data-action="zt-discard">← 一覧へ戻る(破棄)</button>
+      <div class="zt-write-date">${escapeHTML(ztFormatDate(todayISO()))}</div>
+    </div>
+
+    <div class="zt-write-card run">
+      <div class="zt-write-eyebrow"><span class="zt-write-sq"></span>WRITING — 1 MINUTE</div>
+      <div class="zt-write-theme">${escapeHTML(cur.text)}</div>
+      <div class="zt-timer-bar">
+        <div class="zt-timer-time running" id="zt-timer-time">1:00</div>
+        <div class="zt-timer-state running" id="zt-timer-state">進行中</div>
+      </div>
+      <textarea class="zt-write-input" id="zt-write-input" placeholder="・&#10;・&#10;・&#10;・"></textarea>
+      <div class="zt-write-actions">
+        <button class="btn ghost" data-action="zt-discard">破棄</button>
+        <button class="btn green" data-action="zt-save">保存して一覧へ</button>
+      </div>
+      <div class="zt-write-tip">1分過ぎても入力は続けられます。短く・速く・素直に。完璧に書こうとしない。</div>
+    </div>
+  `;
+}
+
+// ---- 履歴(新しい順) ----
+function ztFilteredHistory() {
+  const zt = state.zeroThinking || { entries: [] };
+  const ql = (ztSearch || "").trim().toLowerCase();
+  return (zt.entries || [])
+    .filter((e) => !ql || (e.theme || "").toLowerCase().includes(ql) || (e.body || "").toLowerCase().includes(ql))
+    .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+}
+function ztHistoryCountLabel() {
+  const zt = state.zeroThinking || { entries: [] };
+  const total = (zt.entries || []).length;
+  const ql = (ztSearch || "").trim();
+  return ql ? `${total} 件 ・ 一致 ${ztFilteredHistory().length}` : `${total} 件`;
+}
+function ztHistoryListHTML() {
+  const zt = state.zeroThinking || { entries: [] };
+  const list = ztFilteredHistory();
+  if (!list.length) {
+    return `<div class="zt-empty">${(zt.entries || []).length ? "該当なし" : "履歴はまだありません"}</div>`;
+  }
+  return list.map((h) => `
+    <div class="zt-hi-item">
+      <div class="zt-hi-meta">${escapeHTML(h.date)}<span class="zt-hi-dot"></span>0秒思考</div>
+      <div class="zt-hi-theme">${escapeHTML(h.theme)}</div>
+      <div class="zt-hi-snippet">${escapeHTML((h.body || "").replace(/\n/g, " / "))}</div>
+    </div>`).join("");
+}
+
+function ztFormatDate(iso) {
+  const [y, m, d] = iso.split("-");
+  return `${Number(y)}年${Number(m)}月${Number(d)}日 (${weekdayLabel(iso)})`;
+}
+
+// ---- 操作 ----
+function ztAddSubmit() {
+  const raw = document.querySelector("#zt-add-text")?.value || "";
+  const lines = raw.split("\n").map((s) => s.trim()).filter(Boolean);
+  if (!lines.length) return showToast("テーマを入力してください");
+  lines.forEach((text) => state.zeroThinking.themes.push({
+    id: crypto.randomUUID(), text, fav: false, createdAt: nowDateTime()
+  }));
+  ztAddOpen = false;
+  ztTab = "other";  // 追加したテーマはまず「それ以外」に出る
+  saveAndRender(`${lines.length}件 追加しました`);
+}
+
+function ztToggleFav(id) {
+  const t = state.zeroThinking.themes.find((x) => x.id === id);
+  if (!t) return;
+  t.fav = !t.fav;
+  saveAndRender();
+}
+
+function openZtWrite(id) {
+  const t = state.zeroThinking.themes.find((x) => x.id === id);
+  if (!t) return;
+  ztCurrent = { id: t.id, text: t.text, fav: t.fav };
+  render();          // 書く画面を描画(DOM 確定)
+  startZtTimer();    // その後にタイマー開始
+  setTimeout(() => document.querySelector("#zt-write-input")?.focus(), 60);
+}
+
+function discardZtWrite() {
+  const body = (document.querySelector("#zt-write-input")?.value || "").trim();
+  if (body && !confirm("入力を破棄して一覧へ戻りますか?")) return;
+  stopZtTimer();
+  ztCurrent = null;
+  render();
+}
+
+function saveZtEntry() {
+  if (!ztCurrent) return;
+  const body = (document.querySelector("#zt-write-input")?.value || "").trim();
+  if (!body) return showToast("空のままでは保存できません");
+  const cur = ztCurrent;
+  state.zeroThinking.entries.push({
+    id: crypto.randomUUID(),
+    date: todayISO(),
+    theme: cur.text,
+    body,
+    createdAt: nowDateTime()
+  });
+  // ★テーマは残す、それ以外は書いたら一覧から消す(履歴には残る)
+  if (!cur.fav) {
+    state.zeroThinking.themes = state.zeroThinking.themes.filter((x) => x.id !== cur.id);
+  }
+  stopZtTimer();
+  ztCurrent = null;
+  saveAndRender(cur.fav ? "保存しました(★は残ります) — 日報に追加" : "保存しました — 日報に追加");
+}
+
+// ---- タイマー(1分カウントダウン。0で停止のみ、入力は継続可) ----
+function startZtTimer() {
+  clearInterval(ztTimerInterval);
+  ztTimerLeft = 60;
+  updateZtTimerDisplay();
+  ztTimerInterval = setInterval(() => {
+    ztTimerLeft--;
+    updateZtTimerDisplay();
+    if (ztTimerLeft <= 0) {
+      clearInterval(ztTimerInterval);
+      ztTimerInterval = null;
+      const s = document.querySelector("#zt-timer-state");
+      const t = document.querySelector("#zt-timer-time");
+      if (s) { s.textContent = "終了 — 書き終えたら保存"; s.className = "zt-timer-state done"; }
+      if (t) t.className = "zt-timer-time done";
+    }
+  }, 1000);
+}
+function updateZtTimerDisplay() {
+  const left = Math.max(0, ztTimerLeft);
+  const el = document.querySelector("#zt-timer-time");
+  if (el) el.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+}
+function stopZtTimer() {
+  clearInterval(ztTimerInterval);
+  ztTimerInterval = null;
+}
+
 function renderDateBar() {
   return `
     <div class="datebar">
@@ -3523,6 +3784,21 @@ function generateReport() {
     `| 12週 今週の進捗 | ${rateCycleWeek.done} / ${rateCycleWeek.total} | ${rateCycleWeek.pct}% |`,
     "",
   ];
+
+  // v34: 0秒思考(その日に書いたもの、書いた順)
+  const ztToday = (state.zeroThinking?.entries || [])
+    .filter((e) => e.date === date)
+    .sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
+  if (ztToday.length) {
+    lines.push("## 🧠 0秒思考");
+    lines.push("");
+    ztToday.forEach((e) => {
+      lines.push(`### ${e.theme}`);
+      lines.push("");
+      lines.push(e.body);
+      lines.push("");
+    });
+  }
 
   // MIT セクション
   if (mitBlocks.length > 0) {
@@ -4039,6 +4315,11 @@ function startTimerTicker() {
 }
 
 function setView(view) {
+  // v34: 0秒思考の書く画面から離脱するときはタイマー停止 + 一時状態リセット
+  if (state.currentView === "zero" && view !== "zero") {
+    stopZtTimer();
+    ztCurrent = null;
+  }
   state.currentView = view;
   saveState();
   render();
