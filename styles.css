@@ -2074,3 +2074,103 @@ h3 {
   display: flex; flex-wrap: wrap; gap: 3px 16px;
 }
 .home-energy-item strong { font-size: 15px; }
+
+/* ============================================================
+   v34: 0秒思考(Zero Second Thinking)
+   配色はアプリの CSS 変数に追従(light/dark 両対応)。
+   amber → --orange, blue → --accent にマッピング。
+   ============================================================ */
+.zt-section { margin-bottom: 14px; }
+
+.zt-day-count { text-align: right; flex: none; }
+.zt-day-count-v { font-size: 13px; color: var(--muted); font-weight: 700; }
+.zt-day-count-v b { color: var(--orange); font-weight: 900; font-size: 17px; margin: 0 3px; }
+.zt-day-count-sub { font-size: 11px; color: var(--muted); font-weight: 700; margin-top: 2px; }
+
+.zt-lead { font-size: 13.5px; color: var(--muted); margin: 0 0 16px; font-weight: 500; line-height: 1.6; }
+.zt-lead b { color: var(--orange); font-weight: 800; }
+
+/* パネル見出し(色付きバー付き) */
+.zt-plabel { display: flex; align-items: center; gap: 9px; font-size: 13.5px; font-weight: 800; color: var(--text); margin-bottom: 13px; }
+.zt-plabel::before { content: ""; width: 14px; height: 3px; border-radius: 2px; background: var(--orange); flex: none; }
+.zt-plabel.blue::before { background: var(--accent); }
+.zt-plabel-count { font-size: 12px; color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; }
+.zt-plabel-spacer { flex: 1; }
+
+/* + テーマを追加 トグルボタン */
+.zt-mini-btn { font: inherit; font-size: 12.5px; font-weight: 800; background: var(--panel-soft); color: var(--text); border: 1px solid var(--line); padding: 6px 11px; border-radius: 8px; cursor: pointer; }
+.zt-mini-btn.is-on { background: var(--orange-soft); color: var(--orange); border-color: var(--orange); }
+
+/* テーマ追加パネル */
+.zt-add-wrap { display: none; margin: 0 0 14px; }
+.zt-add-wrap.show { display: block; }
+.zt-add-text { width: 100%; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 10px; color: var(--text); font: inherit; font-size: 14px; padding: 12px 13px; min-height: 84px; resize: vertical; line-height: 1.6; }
+.zt-add-text:focus { outline: none; border-color: var(--orange); }
+.zt-add-row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 9px; }
+.zt-add-hint { font-size: 11.5px; color: var(--muted); margin-top: 8px; font-weight: 500; line-height: 1.6; }
+
+/* タブ(それ以外 / お気に入り) */
+.zt-tab-row { display: flex; gap: 5px; margin: 0 0 12px; padding: 4px; background: var(--panel-soft); border: 1px solid var(--line-soft); border-radius: 11px; }
+.zt-tab { flex: 1; font: inherit; font-size: 13.5px; font-weight: 800; background: none; color: var(--muted); border: none; padding: 9px 10px; border-radius: 8px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; }
+.zt-tab:hover { color: var(--text); }
+.zt-tab.active { background: var(--panel); color: var(--text); box-shadow: var(--shadow); }
+.zt-tab-count { font-size: 11px; color: var(--muted); font-weight: 700; background: rgba(127, 127, 127, 0.14); padding: 2px 7px; border-radius: 6px; min-width: 22px; text-align: center; }
+.zt-tab.active[data-tab="fav"] .zt-tab-count { background: var(--orange-soft); color: var(--orange); }
+.zt-tab.active[data-tab="other"] .zt-tab-count { background: var(--accent-soft); color: var(--accent); }
+
+/* テーマ行 */
+.zt-theme-list { display: flex; flex-direction: column; gap: 4px; }
+.zt-theme-item { display: flex; align-items: center; gap: 11px; padding: 11px 10px; margin: 0 -10px; border-radius: 9px; }
+.zt-theme-item:hover { background: var(--panel-soft); }
+.zt-theme-item.is-fav { background: var(--orange-soft); }
+.zt-star { background: none; border: none; cursor: pointer; font-size: 18px; color: var(--faint); padding: 0; line-height: 1; flex: none; }
+.zt-star.on { color: var(--orange); }
+.zt-theme-text { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; line-height: 1.5; cursor: pointer; }
+.zt-theme-go { font: inherit; font-size: 12.5px; font-weight: 900; color: var(--orange); background: var(--orange-soft); border: 1px solid var(--orange-soft); padding: 7px 12px; border-radius: 8px; cursor: pointer; flex: none; white-space: nowrap; }
+.zt-theme-go:hover { filter: brightness(0.97); }
+.zt-empty { font-size: 13px; color: var(--muted); padding: 18px 4px; font-weight: 500; text-align: center; line-height: 1.7; }
+.zt-empty-sub { font-size: 11.5px; color: var(--faint); margin-top: 3px; display: block; }
+
+/* 履歴検索 */
+.zt-search-row { position: relative; margin-bottom: 10px; }
+.zt-search-input { width: 100%; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 10px; color: var(--text); font: inherit; font-size: 14px; padding: 11px 13px 11px 36px; }
+.zt-search-input:focus { outline: none; border-color: var(--accent); }
+.zt-search-row::before { content: "🔍"; position: absolute; left: 11px; top: 50%; transform: translateY(-50%); font-size: 13px; opacity: 0.55; pointer-events: none; }
+
+/* 履歴リスト */
+.zt-history-list { display: flex; flex-direction: column; gap: 4px; }
+.zt-hi-item { padding: 11px 12px; margin: 0 -12px; border-radius: 9px; }
+.zt-hi-item:hover { background: var(--panel-soft); }
+.zt-hi-meta { font-size: 11px; color: var(--muted); font-weight: 700; margin-bottom: 3px; display: flex; gap: 8px; align-items: center; }
+.zt-hi-dot { width: 3px; height: 3px; background: var(--faint); border-radius: 50%; }
+.zt-hi-theme { font-size: 14.5px; font-weight: 700; line-height: 1.45; }
+.zt-hi-snippet { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.55; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+/* 書く画面 */
+.zt-write-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+.zt-back-btn { background: none; border: none; color: var(--muted); cursor: pointer; font: inherit; font-size: 13.5px; font-weight: 700; padding: 6px 4px; }
+.zt-back-btn:hover { color: var(--text); }
+.zt-write-date { font-family: "Hiragino Mincho ProN", "Yu Mincho", YuMincho, "Noto Serif JP", "Shippori Mincho", serif; font-size: 14px; color: var(--muted); }
+
+.zt-write-card { background: var(--panel); border: 1px solid var(--orange); border-radius: 16px; padding: 22px 24px; position: relative; overflow: hidden; box-shadow: var(--shadow); }
+.zt-write-card::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--orange); transform-origin: left; transform: scaleX(1); }
+.zt-write-card.run::before { animation: zt-drain 60s linear forwards; }
+@keyframes zt-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+.zt-write-eyebrow { font-size: 11px; letter-spacing: 0.2em; color: var(--orange); font-weight: 800; margin-bottom: 8px; display: flex; align-items: center; gap: 9px; }
+.zt-write-sq { width: 7px; height: 7px; background: var(--orange); animation: zt-pulse 1.7s ease-in-out infinite; }
+@keyframes zt-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+.zt-write-theme { font-family: "Hiragino Mincho ProN", "Yu Mincho", YuMincho, "Noto Serif JP", "Shippori Mincho", serif; font-size: 23px; font-weight: 700; line-height: 1.45; color: var(--text); margin-bottom: 18px; }
+
+.zt-timer-bar { display: flex; justify-content: space-between; align-items: center; background: var(--panel-soft); border: 1px solid var(--line-soft); border-radius: 10px; padding: 11px 15px; margin-bottom: 14px; }
+.zt-timer-time { font-size: 30px; font-weight: 900; font-variant-numeric: tabular-nums; color: var(--orange); line-height: 1; }
+.zt-timer-time.done { color: var(--red); }
+.zt-timer-state { font-size: 12px; color: var(--muted); font-weight: 700; }
+.zt-timer-state.running { color: var(--orange); }
+.zt-timer-state.done { color: var(--red); }
+
+.zt-write-input { width: 100%; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 11px; color: var(--text); font: inherit; font-size: 16px; line-height: 1.8; padding: 14px 16px; min-height: 240px; resize: vertical; }
+.zt-write-input:focus { outline: none; border-color: var(--orange); }
+.zt-write-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 14px; }
+.zt-write-tip { font-size: 11.5px; color: var(--muted); margin-top: 10px; font-weight: 500; text-align: center; line-height: 1.6; }
