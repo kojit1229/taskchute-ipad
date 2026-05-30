@@ -1,6 +1,6 @@
 {
   "currentView": "home",
-  "selectedDate": "2026-05-29",
+  "selectedDate": "2026-05-30",
   "settings": {
     "birthDate": "1992-12-29",
     "twelveWeekStartDate": "2026-05-23",
@@ -27,7 +27,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": ""
+      "lastSavedAt": "2026-05-30T09:18:00"
     },
     "visionSection": "board",
     "visionBoardIndex": 2,
@@ -1856,11 +1856,11 @@
       "taskId": "",
       "plannedStartAt": "2026-05-30T05:30:00",
       "plannedEndAt": "2026-05-30T05:30:00",
-      "actualStartAt": "",
-      "actualEndAt": "",
+      "actualStartAt": "2026-05-30T05:30:00",
+      "actualEndAt": "2026-05-30T05:30:00",
       "charge": 1,
       "discharge": 0,
-      "completed": false,
+      "completed": true,
       "comment": "",
       "expectedCharge": 1,
       "expectedDischarge": 0,
@@ -1869,7 +1869,7 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-22T10:27:00",
-      "updatedAt": "2026-05-22T10:27:00",
+      "updatedAt": "2026-05-30T09:18:00",
       "deleted": false
     },
     {
@@ -13114,9 +13114,9 @@
       "category": "ルーティン",
       "plannedStartAt": "2026-05-30T05:31:00",
       "plannedEndAt": "2026-05-30T05:31:00",
-      "actualStartAt": "",
-      "actualEndAt": "",
-      "completed": false,
+      "actualStartAt": "2026-05-30T05:31:00",
+      "actualEndAt": "2026-05-30T05:31:00",
+      "completed": true,
       "charge": 1,
       "discharge": 0,
       "expectedCharge": 1,
@@ -13127,7 +13127,7 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-22T11:43:00",
-      "updatedAt": "2026-05-22T11:43:00",
+      "updatedAt": "2026-05-30T09:18:00",
       "deleted": false
     },
     {
@@ -13920,9 +13920,9 @@
       "category": "ルーティン",
       "plannedStartAt": "2026-05-30T05:25:00",
       "plannedEndAt": "2026-05-30T05:25:00",
-      "actualStartAt": "",
-      "actualEndAt": "",
-      "completed": false,
+      "actualStartAt": "2026-05-30T05:25:00",
+      "actualEndAt": "2026-05-30T05:25:00",
+      "completed": true,
       "charge": 1,
       "discharge": 0,
       "expectedCharge": 1,
@@ -13933,7 +13933,7 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-22T11:43:00",
-      "updatedAt": "2026-05-22T11:43:00",
+      "updatedAt": "2026-05-30T09:18:00",
       "deleted": false
     },
     {
@@ -14726,9 +14726,9 @@
       "category": "ルーティン",
       "plannedStartAt": "2026-05-30T05:32:00",
       "plannedEndAt": "2026-05-30T05:32:00",
-      "actualStartAt": "",
-      "actualEndAt": "",
-      "completed": false,
+      "actualStartAt": "2026-05-30T05:32:00",
+      "actualEndAt": "2026-05-30T05:32:00",
+      "completed": true,
       "charge": 1,
       "discharge": 0,
       "expectedCharge": 1,
@@ -14739,7 +14739,7 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-22T11:43:00",
-      "updatedAt": "2026-05-22T11:43:00",
+      "updatedAt": "2026-05-30T09:18:00",
       "deleted": false
     },
     {
@@ -15532,9 +15532,9 @@
       "category": "ルーティン",
       "plannedStartAt": "2026-05-30T09:00:00",
       "plannedEndAt": "2026-05-30T09:00:00",
-      "actualStartAt": "",
-      "actualEndAt": "",
-      "completed": false,
+      "actualStartAt": "2026-05-30T09:00:00",
+      "actualEndAt": "2026-05-30T09:00:00",
+      "completed": true,
       "charge": 1,
       "discharge": 0,
       "expectedCharge": 1,
@@ -15545,7 +15545,7 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-22T11:43:00",
-      "updatedAt": "2026-05-22T11:43:00",
+      "updatedAt": "2026-05-30T09:18:00",
       "deleted": false
     },
     {
@@ -16338,9 +16338,9 @@
       "category": "ルーティン",
       "plannedStartAt": "2026-05-30T09:01:00",
       "plannedEndAt": "2026-05-30T09:01:00",
-      "actualStartAt": "",
-      "actualEndAt": "",
-      "completed": false,
+      "actualStartAt": "2026-05-30T09:01:00",
+      "actualEndAt": "2026-05-30T09:01:00",
+      "completed": true,
       "charge": 2,
       "discharge": 0,
       "expectedCharge": 2,
@@ -16351,7 +16351,7 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-22T11:43:00",
-      "updatedAt": "2026-05-22T11:43:00",
+      "updatedAt": "2026-05-30T09:19:00",
       "deleted": false
     },
     {
@@ -27050,9 +27050,9 @@
       "category": "ルーティン",
       "plannedStartAt": "2026-05-30T06:00:00",
       "plannedEndAt": "2026-05-30T06:05:00",
-      "actualStartAt": "",
-      "actualEndAt": "",
-      "completed": false,
+      "actualStartAt": "2026-05-30T06:00:00",
+      "actualEndAt": "2026-05-30T06:05:00",
+      "completed": true,
       "charge": 0,
       "discharge": 0,
       "expectedCharge": "",
@@ -27063,7 +27063,7 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-29T19:30:00",
-      "updatedAt": "2026-05-29T19:30:00",
+      "updatedAt": "2026-05-30T09:18:00",
       "deleted": false
     },
     {
@@ -29078,7 +29078,8 @@
     "2026-05-26": "# 2026-05-26のジャーナル\n\n## 🛏 睡眠\n就寝: 22:44  /  起床: 6:24\n質: ★★★☆☆\n\n## 🙏 感謝(3 つ)\n1. 精神科の先生、いつも相談乗ってくれてありがとう\n2. \n3. \n\n## ✨ 今日のハイライト\n\n\n## 💡 気付き・学び\n経営層から話のあったFDEは顧客企業の社員として業務を遂行しつつ、自社への仕事を創出するという意味でかなり負荷がかかる仕事。実際に自分たちがやるかどうかは慎重に判断が必要。逆にどれくらいのレベル感ならできそうか考える必要があるか。\n\n## 📝 自由記述\n今日は13時に打合せがあったから、それに向けて来期検討資料を一気に作成できた。締切を早く設定して仕事を進めるやり方が自分にはあってそう。\nその分、H1保守が対応できていないから明日は保守を対応する。\n子供の寝かしつけに1.5時間かかって自分の時間が全くない。カウンセラーにももっと休んで自分を大切にしてください、と言われたがそれができたら苦労しないんだよな…。\n",
     "2026-05-27": "# 2026-05-22 のジャーナル\n\n## 🛏 睡眠\n就寝: __:__  /  起床: __:__\n質: ★★★☆☆\n\n## 🙏 感謝(3 つ)\n1. \n2. \n3. \n\n## ✨ 今日のハイライト\n\n\n## 💡 気付き・学び\n\n\n## 📝 自由記述\nこのアプリ自体は日々を着実に進めることに有益と感じている。一方でこのアプリも生成AIも生産性の向上という意味ではある程度活用できている（もっと効率化した方がいいのだた）が、生産性を上げて楽になる、時間ができるというのも大事だけど、どちらかというと生成AIを使って10倍の価値を出すことを考えていかないと変化の早いこの時代に取り残されてしまうのではという危機感を持っている。今のアプリにこのあたりの考え方を取り込んでいきたいと考えている。\n",
     "2026-05-28": "# 2026-05-22 のジャーナル\n\n## 🛏 睡眠\n就寝: __:__  /  起床: __:__\n質: ★★★☆☆\n\n## 🙏 感謝(3 つ)\n1. \n2. \n3. \n\n## ✨ 今日のハイライト\n\n\n## 💡 気付き・学び\n\n\n## 📝 自由記述\n毎朝6時に子供に起こされ、そこから育児or家事をして9時に保育園連れて行って、すぐ在宅で仕事、仕事が終わってなくても18時ぴったりに切り上げてそこからまた育児&家事して22時の寝かしつけまでほぼ休みなし。(10分の隙間時間が1,2回あるくらい)。それでもうヘトヘトで自分の時間もないし、なんから残業をそこからスタートする感じで、育児家事仕事で毎日が終わっている。週末もほぼほぼつきっきりで公園やらおうち遊びやらして、昼寝の時間だけ一緒に寝たり少し本読んだりしているくらい。日曜の13-17時でシッターさんがきてくれるが、引き継ぎや移動などを考慮すると13:30-16:30くらいしか実質的な時間がなく、この短時間でできることが限られていて十分回復できていないです。この時間は大体ジム行くか、喫茶店で本読むか、銭湯行くけど充分回復できていない。結構しんどい。\n",
-    "2026-05-29": "# 2026-05-22 のジャーナル\n\n## 🛏 睡眠\n就寝: __:__  /  起床: __:__\n質: ★★★☆☆\n\n## 🙏 感謝(3 つ)\n1. \n2. \n3. \n\n## ✨ 今日のハイライト\n\n\n## 💡 気付き・学び\n\n\n## 📝 自由記述\n\n"
+    "2026-05-29": "# 2026-05-22 のジャーナル\n\n## 🛏 睡眠\n就寝: __:__  /  起床: __:__\n質: ★★★☆☆\n\n## 🙏 感謝(3 つ)\n1. \n2. \n3. \n\n## ✨ 今日のハイライト\n\n\n## 💡 気付き・学び\n\n\n## 📝 自由記述\n\n",
+    "2026-05-30": "# 2026-05-22 のジャーナル\n\n## 🛏 睡眠\n就寝: __:__  /  起床: __:__\n質: ★★★☆☆\n\n## 🙏 感謝(3 つ)\n1. \n2. \n3. \n\n## ✨ 今日のハイライト\n\n\n## 💡 気付き・学び\n\n\n## 📝 自由記述\n\n"
   },
   "feedback": {},
   "reports": {
@@ -29429,7 +29430,7 @@
     }
   ],
   "timelineMode": "actual",
-  "dataModifiedAt": "2026-05-30T09:18:00",
+  "dataModifiedAt": "2026-05-30T09:19:00",
   "zeroThinking": {
     "themes": [],
     "entries": []
