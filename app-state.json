@@ -68,7 +68,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-31T13:19:00"
+      "lastSavedAt": "2026-05-31T14:07:00"
     },
     "visionSection": "board",
     "visionBoardIndex": 2,
@@ -29498,6 +29498,32 @@
       "createdAt": "2026-05-31T13:13:00",
       "updatedAt": "2026-05-31T14:07:00",
       "deleted": false
+    },
+    {
+      "id": "6041f895-90fb-4029-9515-5bde98cfc1d3",
+      "title": "子供とテレビ",
+      "date": "2026-05-31",
+      "category": "回復",
+      "taskId": "",
+      "plannedStartAt": "2026-05-31T09:00:00",
+      "plannedEndAt": "2026-05-31T12:00:00",
+      "actualStartAt": "2026-05-31T09:00:00",
+      "actualEndAt": "2026-05-31T12:00:00",
+      "charge": 0,
+      "discharge": 0,
+      "completed": true,
+      "comment": "子供が風邪ひいてたから一緒にテレビを見てゴロゴロ",
+      "expectedCharge": "",
+      "expectedDischarge": "",
+      "recurrenceGroupId": "",
+      "pomodoroCount": 0,
+      "migratedTo": "",
+      "orderIndex": 0,
+      "isMIT": false,
+      "source": "",
+      "createdAt": "2026-05-31T14:07:00",
+      "updatedAt": "2026-05-31T14:07:00",
+      "deleted": false
     }
   ],
   "journals": {
@@ -29543,10 +29569,7 @@
       "lastFiredKey": ""
     }
   },
-  "modal": {
-    "type": "block",
-    "id": "6041f895-90fb-4029-9515-5bde98cfc1d3"
-  },
+  "modal": null,
   "routineViewMode": "routine",
   "timelineZoom": 2,
   "recurrences": [
