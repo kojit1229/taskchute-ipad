@@ -68,7 +68,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-05-31T14:07:00"
+      "lastSavedAt": "2026-05-31T14:09:00"
     },
     "visionSection": "board",
     "visionBoardIndex": 2,
@@ -29474,29 +29474,29 @@
       "deleted": false
     },
     {
-      "isMIT": true,
-      "source": "",
       "id": "c6382708-4898-4248-89ab-424ab3f59b09",
-      "taskId": "1f134bcd-aa2e-4ca7-b5e5-79694dc818a1",
-      "date": "2026-05-31",
       "title": "2W ジム①",
+      "date": "2026-05-31",
       "category": "運動",
+      "taskId": "1f134bcd-aa2e-4ca7-b5e5-79694dc818a1",
       "plannedStartAt": "2026-05-31T13:00:00",
       "plannedEndAt": "2026-05-31T14:00:00",
       "actualStartAt": "2026-05-31T13:00:00",
       "actualEndAt": "2026-05-31T14:00:00",
-      "completed": true,
       "charge": 0,
       "discharge": 0,
+      "completed": true,
+      "comment": "ベンチプレス　40kg 10回　1セット\nベンチプレス　50kg 10回　1セット\nベンチプレス　55kg 5回　1セット\nベンチプレス　57.5kg 5回　1セット\nベンチプレス　60kg 3回　1セット\nベンチプレス　50kg 8回　1セット\nベンチプレス　50kg 6回　1セット\nデットリフト　40kg 10回　1セット\nデットリフト　60kg  5回　1セット\nデットリフト　70kg  5回　3セット\n\nジム前に家でアブローラーしていくと腹圧がうまく使える気がする\n意外とベンチプレスも60kg、デッドリフトも70kg持てた。今日は疲労溜まったけど、毎週日曜はマックス更新にチャレンジしてもいいかも。普段のベースの重量も少し上げる。最終的にボリュームが足りない時は50kgとかを高回数で稼ぐ。",
       "expectedCharge": "",
       "expectedDischarge": "",
-      "comment": "ベンチプレス　40kg 10回　1セット\nベンチプレス　50kg 10回　1セット\nベンチプレス　55kg 5回　1セット\nベンチプレス　57.5kg 5回　1セット\nベンチプレス　60kg 3回　1セット\nベンチプレス　50kg 8回　1セット\nベンチプレス　50kg 6回　1セット\nデットリフト　40kg 10回　1セット\nデットリフト　60kg  5回　1セット\nデットリフト　70kg  5回　5セット\n\nジム前に家でアブローラーしていくと腹圧がうまく使える気がする\n意外とベンチプレスも60kg、デッドリフトも70kg持てた。今日は疲労溜まったけど、毎週日曜はマックス更新にチャレンジしてもいいかも。普段のベースの重量も少し上げる。最終的にボリュームが足りない時は50kgとかを高回数で稼ぐ。",
       "recurrenceGroupId": "",
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
+      "isMIT": true,
+      "source": "",
       "createdAt": "2026-05-31T13:13:00",
-      "updatedAt": "2026-05-31T14:07:00",
+      "updatedAt": "2026-05-31T14:09:00",
       "deleted": false
     },
     {
@@ -29888,5 +29888,5 @@
     }
   ],
   "timelineMode": "actual",
-  "dataModifiedAt": "2026-05-31T14:07:00"
+  "dataModifiedAt": "2026-05-31T14:09:00"
 }
