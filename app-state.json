@@ -1,6 +1,6 @@
 {
-  "currentView": "settings",
-  "selectedDate": "2026-05-31",
+  "currentView": "home",
+  "selectedDate": "2026-06-04",
   "zeroThinking": {
     "themes": [
       {
@@ -68,7 +68,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-06-04T14:46:00"
+      "lastSavedAt": "2026-06-04T14:57:00"
     },
     "visionSection": "board",
     "visionBoardIndex": 2,
@@ -271,7 +271,8 @@
       "deleted": false,
       "startDate": "",
       "dueDate": "",
-      "description": ""
+      "description": "",
+      "collapsed": true
     },
     {
       "id": "7b54f548-f197-4a76-9fdf-ac0a950f5f5e",
@@ -508,11 +509,11 @@
       "parentTaskId": "",
       "title": "2W ジム①",
       "category": "運動",
-      "status": "doing",
+      "status": "completed",
       "dueDate": "2026-05-31",
       "description": "",
       "createdAt": "2026-05-25T16:08:00",
-      "updatedAt": "2026-05-31T14:07:00",
+      "updatedAt": "2026-06-04T17:55:00",
       "deleted": false
     },
     {
@@ -2027,11 +2028,11 @@
       "taskId": "",
       "plannedStartAt": "2026-06-04T05:30:00",
       "plannedEndAt": "2026-06-04T05:30:00",
-      "actualStartAt": "",
-      "actualEndAt": "",
+      "actualStartAt": "2026-06-04T05:30:00",
+      "actualEndAt": "2026-06-04T05:30:00",
       "charge": 1,
       "discharge": 0,
-      "completed": false,
+      "completed": true,
       "comment": "",
       "expectedCharge": 1,
       "expectedDischarge": 0,
@@ -2040,7 +2041,7 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-22T10:27:00",
-      "updatedAt": "2026-05-22T10:27:00",
+      "updatedAt": "2026-06-04T17:55:00",
       "deleted": false
     },
     {
@@ -13155,9 +13156,9 @@
       "category": "ルーティン",
       "plannedStartAt": "2026-06-04T05:31:00",
       "plannedEndAt": "2026-06-04T05:31:00",
-      "actualStartAt": "",
-      "actualEndAt": "",
-      "completed": false,
+      "actualStartAt": "2026-06-04T05:31:00",
+      "actualEndAt": "2026-06-04T05:31:00",
+      "completed": true,
       "charge": 1,
       "discharge": 0,
       "expectedCharge": 1,
@@ -13168,7 +13169,7 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-22T11:43:00",
-      "updatedAt": "2026-05-22T11:43:00",
+      "updatedAt": "2026-06-04T17:55:00",
       "deleted": false
     },
     {
@@ -13961,9 +13962,9 @@
       "category": "ルーティン",
       "plannedStartAt": "2026-06-04T05:25:00",
       "plannedEndAt": "2026-06-04T05:25:00",
-      "actualStartAt": "",
-      "actualEndAt": "",
-      "completed": false,
+      "actualStartAt": "2026-06-04T05:25:00",
+      "actualEndAt": "2026-06-04T05:25:00",
+      "completed": true,
       "charge": 1,
       "discharge": 0,
       "expectedCharge": 1,
@@ -13974,7 +13975,7 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-22T11:43:00",
-      "updatedAt": "2026-05-22T11:43:00",
+      "updatedAt": "2026-06-04T17:54:00",
       "deleted": false
     },
     {
@@ -14767,9 +14768,9 @@
       "category": "ルーティン",
       "plannedStartAt": "2026-06-04T05:32:00",
       "plannedEndAt": "2026-06-04T05:32:00",
-      "actualStartAt": "",
-      "actualEndAt": "",
-      "completed": false,
+      "actualStartAt": "2026-06-04T05:32:00",
+      "actualEndAt": "2026-06-04T05:32:00",
+      "completed": true,
       "charge": 1,
       "discharge": 0,
       "expectedCharge": 1,
@@ -14780,7 +14781,7 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-22T11:43:00",
-      "updatedAt": "2026-05-22T11:43:00",
+      "updatedAt": "2026-06-04T17:55:00",
       "deleted": false
     },
     {
@@ -20877,9 +20878,9 @@
       "category": "ルーティン",
       "plannedStartAt": "2026-06-04T12:50:00",
       "plannedEndAt": "2026-06-04T13:00:00",
-      "actualStartAt": "",
-      "actualEndAt": "",
-      "completed": false,
+      "actualStartAt": "2026-06-04T04:35:00",
+      "actualEndAt": "2026-06-04T04:45:00",
+      "completed": true,
       "charge": 1,
       "discharge": 0,
       "expectedCharge": 1,
@@ -20890,7 +20891,7 @@
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-24T13:25:00",
-      "updatedAt": "2026-05-24T13:25:00",
+      "updatedAt": "2026-06-04T17:55:00",
       "deleted": false
     },
     {
@@ -26779,20 +26780,20 @@
       "category": "ルーティン",
       "plannedStartAt": "2026-06-04T06:00:00",
       "plannedEndAt": "2026-06-04T06:05:00",
-      "actualStartAt": "",
-      "actualEndAt": "",
-      "completed": false,
+      "actualStartAt": "2026-06-04T06:00:00",
+      "actualEndAt": "2026-06-04T06:05:00",
+      "completed": true,
       "charge": 0,
       "discharge": 0,
       "expectedCharge": "",
       "expectedDischarge": "",
-      "comment": "",
+      "comment": "10回2セット",
       "recurrenceGroupId": "0d65874b-2451-4538-9d63-c0139d1f9d4f",
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
       "createdAt": "2026-05-29T19:30:00",
-      "updatedAt": "2026-05-29T19:30:00",
+      "updatedAt": "2026-06-04T17:55:00",
       "deleted": false
     },
     {
@@ -29136,6 +29137,8 @@
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_606bf0f3-5cd5-4690-b9ab-9e5f652044ba_2026-07-02",
       "taskId": "",
       "date": "2026-07-02",
@@ -29155,13 +29158,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_606bf0f3-5cd5-4690-b9ab-9e5f652044ba_2026-07-03",
       "taskId": "",
       "date": "2026-07-03",
@@ -29181,13 +29184,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_606bf0f3-5cd5-4690-b9ab-9e5f652044ba_2026-07-04",
       "taskId": "",
       "date": "2026-07-04",
@@ -29207,13 +29210,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_606bf0f3-5cd5-4690-b9ab-9e5f652044ba_2026-07-05",
       "taskId": "",
       "date": "2026-07-05",
@@ -29233,13 +29236,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_2e1a06b6-968f-4da4-bb5c-be6ca8f68bcb_2026-07-02",
       "taskId": "",
       "date": "2026-07-02",
@@ -29259,13 +29262,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_2e1a06b6-968f-4da4-bb5c-be6ca8f68bcb_2026-07-03",
       "taskId": "",
       "date": "2026-07-03",
@@ -29285,13 +29288,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_2e1a06b6-968f-4da4-bb5c-be6ca8f68bcb_2026-07-04",
       "taskId": "",
       "date": "2026-07-04",
@@ -29311,13 +29314,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_2e1a06b6-968f-4da4-bb5c-be6ca8f68bcb_2026-07-05",
       "taskId": "",
       "date": "2026-07-05",
@@ -29337,13 +29340,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_7be664be-24bd-4994-abbf-e7b4f5ed568b_2026-07-02",
       "taskId": "",
       "date": "2026-07-02",
@@ -29363,13 +29366,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_7be664be-24bd-4994-abbf-e7b4f5ed568b_2026-07-03",
       "taskId": "",
       "date": "2026-07-03",
@@ -29389,13 +29392,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_7be664be-24bd-4994-abbf-e7b4f5ed568b_2026-07-04",
       "taskId": "",
       "date": "2026-07-04",
@@ -29415,13 +29418,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_7be664be-24bd-4994-abbf-e7b4f5ed568b_2026-07-05",
       "taskId": "",
       "date": "2026-07-05",
@@ -29441,13 +29444,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_5f56d71d-1999-44e6-9bbb-843728309fc6_2026-07-02",
       "taskId": "",
       "date": "2026-07-02",
@@ -29467,13 +29470,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_5f56d71d-1999-44e6-9bbb-843728309fc6_2026-07-03",
       "taskId": "",
       "date": "2026-07-03",
@@ -29493,13 +29496,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_5f56d71d-1999-44e6-9bbb-843728309fc6_2026-07-04",
       "taskId": "",
       "date": "2026-07-04",
@@ -29519,13 +29522,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_5f56d71d-1999-44e6-9bbb-843728309fc6_2026-07-05",
       "taskId": "",
       "date": "2026-07-05",
@@ -29545,13 +29548,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_ead4621a-47a3-4fc8-b141-57b6194ab5f2_2026-07-02",
       "taskId": "",
       "date": "2026-07-02",
@@ -29571,13 +29574,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_ead4621a-47a3-4fc8-b141-57b6194ab5f2_2026-07-03",
       "taskId": "",
       "date": "2026-07-03",
@@ -29597,13 +29600,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_ead4621a-47a3-4fc8-b141-57b6194ab5f2_2026-07-04",
       "taskId": "",
       "date": "2026-07-04",
@@ -29623,13 +29626,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_ead4621a-47a3-4fc8-b141-57b6194ab5f2_2026-07-05",
       "taskId": "",
       "date": "2026-07-05",
@@ -29649,13 +29652,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_a03b51fa-09b5-4bbb-b972-d17dc9b14866_2026-07-02",
       "taskId": "",
       "date": "2026-07-02",
@@ -29675,13 +29678,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_a03b51fa-09b5-4bbb-b972-d17dc9b14866_2026-07-03",
       "taskId": "",
       "date": "2026-07-03",
@@ -29701,13 +29704,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_a03b51fa-09b5-4bbb-b972-d17dc9b14866_2026-07-04",
       "taskId": "",
       "date": "2026-07-04",
@@ -29727,13 +29730,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_a03b51fa-09b5-4bbb-b972-d17dc9b14866_2026-07-05",
       "taskId": "",
       "date": "2026-07-05",
@@ -29753,13 +29756,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_37b52ce0-fe36-415d-b22a-85f14c4ec375_2026-07-02",
       "taskId": "",
       "date": "2026-07-02",
@@ -29779,13 +29782,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_37b52ce0-fe36-415d-b22a-85f14c4ec375_2026-07-03",
       "taskId": "",
       "date": "2026-07-03",
@@ -29805,13 +29808,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_37b52ce0-fe36-415d-b22a-85f14c4ec375_2026-07-04",
       "taskId": "",
       "date": "2026-07-04",
@@ -29831,13 +29834,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_37b52ce0-fe36-415d-b22a-85f14c4ec375_2026-07-05",
       "taskId": "",
       "date": "2026-07-05",
@@ -29857,13 +29860,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_26e8b3fa-7b59-4474-b06f-82cffdab9837_2026-07-02",
       "taskId": "",
       "date": "2026-07-02",
@@ -29883,13 +29886,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_26e8b3fa-7b59-4474-b06f-82cffdab9837_2026-07-03",
       "taskId": "",
       "date": "2026-07-03",
@@ -29909,13 +29912,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_26e8b3fa-7b59-4474-b06f-82cffdab9837_2026-07-04",
       "taskId": "",
       "date": "2026-07-04",
@@ -29935,13 +29938,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_26e8b3fa-7b59-4474-b06f-82cffdab9837_2026-07-05",
       "taskId": "",
       "date": "2026-07-05",
@@ -29961,13 +29964,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_083310ad-0984-4b99-8250-6ef7b95349f4_2026-07-02",
       "taskId": "",
       "date": "2026-07-02",
@@ -29987,13 +29990,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_083310ad-0984-4b99-8250-6ef7b95349f4_2026-07-03",
       "taskId": "",
       "date": "2026-07-03",
@@ -30013,13 +30016,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_083310ad-0984-4b99-8250-6ef7b95349f4_2026-07-04",
       "taskId": "",
       "date": "2026-07-04",
@@ -30039,13 +30042,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_083310ad-0984-4b99-8250-6ef7b95349f4_2026-07-05",
       "taskId": "",
       "date": "2026-07-05",
@@ -30065,13 +30068,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_48679328-e390-48a9-9ae2-da87ffaedaa8_2026-07-02",
       "taskId": "",
       "date": "2026-07-02",
@@ -30091,13 +30094,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_48679328-e390-48a9-9ae2-da87ffaedaa8_2026-07-03",
       "taskId": "",
       "date": "2026-07-03",
@@ -30117,13 +30120,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_48679328-e390-48a9-9ae2-da87ffaedaa8_2026-07-04",
       "taskId": "",
       "date": "2026-07-04",
@@ -30143,13 +30146,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_48679328-e390-48a9-9ae2-da87ffaedaa8_2026-07-05",
       "taskId": "",
       "date": "2026-07-05",
@@ -30169,13 +30172,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_2a673190-cd81-4c6f-aff2-05adc4260c85_2026-07-02",
       "taskId": "",
       "date": "2026-07-02",
@@ -30195,13 +30198,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_2a673190-cd81-4c6f-aff2-05adc4260c85_2026-07-03",
       "taskId": "",
       "date": "2026-07-03",
@@ -30221,13 +30224,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_2a673190-cd81-4c6f-aff2-05adc4260c85_2026-07-04",
       "taskId": "",
       "date": "2026-07-04",
@@ -30247,13 +30250,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_2a673190-cd81-4c6f-aff2-05adc4260c85_2026-07-05",
       "taskId": "",
       "date": "2026-07-05",
@@ -30273,13 +30276,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_bac2c422-feee-4d8f-b7c8-9bea1684add1_2026-07-02",
       "taskId": "",
       "date": "2026-07-02",
@@ -30299,13 +30302,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_bac2c422-feee-4d8f-b7c8-9bea1684add1_2026-07-03",
       "taskId": "",
       "date": "2026-07-03",
@@ -30325,13 +30328,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_bac2c422-feee-4d8f-b7c8-9bea1684add1_2026-07-04",
       "taskId": "",
       "date": "2026-07-04",
@@ -30351,13 +30354,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_bac2c422-feee-4d8f-b7c8-9bea1684add1_2026-07-05",
       "taskId": "",
       "date": "2026-07-05",
@@ -30377,13 +30380,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_3cdef39c-c0c8-4702-adb8-91eb950dc61c_2026-07-02",
       "taskId": "",
       "date": "2026-07-02",
@@ -30403,13 +30406,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_3cdef39c-c0c8-4702-adb8-91eb950dc61c_2026-07-03",
       "taskId": "",
       "date": "2026-07-03",
@@ -30429,13 +30432,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_0d65874b-2451-4538-9d63-c0139d1f9d4f_2026-07-02",
       "taskId": "",
       "date": "2026-07-02",
@@ -30455,13 +30458,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_0d65874b-2451-4538-9d63-c0139d1f9d4f_2026-07-03",
       "taskId": "",
       "date": "2026-07-03",
@@ -30481,13 +30484,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_0d65874b-2451-4538-9d63-c0139d1f9d4f_2026-07-04",
       "taskId": "",
       "date": "2026-07-04",
@@ -30507,13 +30510,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_0d65874b-2451-4538-9d63-c0139d1f9d4f_2026-07-05",
       "taskId": "",
       "date": "2026-07-05",
@@ -30533,13 +30536,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_6df3e3d2-050c-4694-809f-a69cb76efbb0_2026-07-02",
       "taskId": "",
       "date": "2026-07-02",
@@ -30559,13 +30562,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_6df3e3d2-050c-4694-809f-a69cb76efbb0_2026-07-03",
       "taskId": "",
       "date": "2026-07-03",
@@ -30585,13 +30588,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_6df3e3d2-050c-4694-809f-a69cb76efbb0_2026-07-04",
       "taskId": "",
       "date": "2026-07-04",
@@ -30611,13 +30614,13 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
       "deleted": false
     },
     {
+      "isMIT": false,
+      "source": "",
       "id": "rec_6df3e3d2-050c-4694-809f-a69cb76efbb0_2026-07-05",
       "taskId": "",
       "date": "2026-07-05",
@@ -30637,10 +30640,32 @@
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
-      "isMIT": false,
-      "source": "",
       "createdAt": "2026-06-04T14:46:00",
       "updatedAt": "2026-06-04T14:46:00",
+      "deleted": false
+    },
+    {
+      "id": "73a6e86a-89ae-480b-932e-03c5e4fd20aa",
+      "taskId": "241d9f63-1be8-4d63-9379-40976d56844e",
+      "date": "2026-06-04",
+      "title": "2W ジム②",
+      "category": "運動",
+      "plannedStartAt": "2026-06-04T17:45:00",
+      "plannedEndAt": "2026-06-04T18:45:00",
+      "actualStartAt": "",
+      "actualEndAt": "",
+      "completed": false,
+      "charge": 0,
+      "discharge": 0,
+      "expectedCharge": "",
+      "expectedDischarge": "",
+      "comment": "",
+      "recurrenceGroupId": "",
+      "pomodoroCount": 0,
+      "migratedTo": "",
+      "orderIndex": 0,
+      "createdAt": "2026-06-04T17:56:00",
+      "updatedAt": "2026-06-04T17:56:00",
       "deleted": false
     }
   ],
@@ -30655,7 +30680,8 @@
     "2026-05-28": "# 2026-05-22 のジャーナル\n\n## 🛏 睡眠\n就寝: __:__  /  起床: __:__\n質: ★★★☆☆\n\n## 🙏 感謝(3 つ)\n1. \n2. \n3. \n\n## ✨ 今日のハイライト\n\n\n## 💡 気付き・学び\n\n\n## 📝 自由記述\n毎朝6時に子供に起こされ、そこから育児or家事をして9時に保育園連れて行って、すぐ在宅で仕事、仕事が終わってなくても18時ぴったりに切り上げてそこからまた育児&家事して22時の寝かしつけまでほぼ休みなし。(10分の隙間時間が1,2回あるくらい)。それでもうヘトヘトで自分の時間もないし、なんから残業をそこからスタートする感じで、育児家事仕事で毎日が終わっている。週末もほぼほぼつきっきりで公園やらおうち遊びやらして、昼寝の時間だけ一緒に寝たり少し本読んだりしているくらい。日曜の13-17時でシッターさんがきてくれるが、引き継ぎや移動などを考慮すると13:30-16:30くらいしか実質的な時間がなく、この短時間でできることが限られていて十分回復できていないです。この時間は大体ジム行くか、喫茶店で本読むか、銭湯行くけど充分回復できていない。結構しんどい。\n",
     "2026-05-29": "# 2026-05-22 のジャーナル\n\n## 🛏 睡眠\n就寝: __:__  /  起床: __:__\n質: ★★★☆☆\n\n## 🙏 感謝(3 つ)\n1. \n2. \n3. \n\n## ✨ 今日のハイライト\n\n\n## 💡 気付き・学び\n\n\n## 📝 自由記述\n\n",
     "2026-05-30": "# 2026-05-22 のジャーナル\n\n## 🛏 睡眠\n就寝: __:__  /  起床: __:__\n質: ★★★☆☆\n\n## 🙏 感謝(3 つ)\n1. \n2. \n3. \n\n## ✨ 今日のハイライト\n\n\n## 💡 気付き・学び\n\n\n## 📝 自由記述\n\n",
-    "2026-05-31": "# 2026-05-22 のジャーナル\n\n## 🛏 睡眠\n就寝: __:__  /  起床: __:__\n質: ★★★☆☆\n\n## 🙏 感謝(3 つ)\n1. \n2. \n3. \n\n## ✨ 今日のハイライト\n\n\n## 💡 気付き・学び\n\n\n## 📝 自由記述\n\n"
+    "2026-05-31": "# 2026-05-22 のジャーナル\n\n## 🛏 睡眠\n就寝: __:__  /  起床: __:__\n質: ★★★☆☆\n\n## 🙏 感謝(3 つ)\n1. \n2. \n3. \n\n## ✨ 今日のハイライト\n\n\n## 💡 気付き・学び\n\n\n## 📝 自由記述\n\n",
+    "2026-06-04": "# 2026-05-22 のジャーナル\n\n## 🛏 睡眠\n就寝: __:__  /  起床: __:__\n質: ★★★☆☆\n\n## 🙏 感謝(3 つ)\n1. \n2. \n3. \n\n## ✨ 今日のハイライト\n\n\n## 💡 気付き・学び\n\n\n## 📝 自由記述\n\n"
   },
   "feedback": {},
   "reports": {
@@ -30663,7 +30689,8 @@
     "2026-05-24": "# 日報 2026-05-24 (日)\n\n## 1. サマリ\n| 指標 | 値 |\n|---|---|\n| 朝の体調 | 5 / 10 |\n| 充電収支 | +5 / -0 = +5 (起点5→終値10) |\n| Block 実行 | 9 / 17 (53%) |\n| 時間実行 | 5h45m / 6h18m (91%) |\n| MIT 達成 | 1 / 1 |\n| ポモドーロ | 0 回 |\n\n## 2. 今日の主役 (MIT)\n- ✅ 1W ジム①\n\n## 3. 12WY プロジェクトの進捗\n### ベンチプレス100kg\n- 1W ジム①\n\n## 5. 時間の使い方\n### カテゴリ別配分\n- 未分類: 3h\n- 休息: 1h30m\n- 運動: 1h15m\n- ルーティン: 0h\n\n### 実行 Block(時刻順)\n| 時刻 | 内容 | カテゴリ | 充電/放電 | コメント |\n|---|---|---|---|---|\n| 05:25 | ✅ 目薬指す | ルーティン | +0/-0 |  |\n| 05:30 | ✅ 宣言（今日も最高の一日にします！） | ルーティン | +1/-0 |  |\n| 05:31 | ✅ 水飲む | ルーティン | +0/-0 |  |\n| 05:32 | ✅ スクワットする | ルーティン | +0/-0 |  |\n| 08:55 | ⬜ ジャーナル | ルーティン | +0/-0 |  |\n| 09:00 | ✅ アファメーション | ルーティン | +0/-0 |  |\n| 09:00 | ✅ コストコ | — | +2/-0 | 家族でコストコにお出かけ。巨大倉庫に魅力的な商品がたくさんあってワクワクする。帰宅して食べたハイローラーは相変わらず美味しい。 |\n| 09:01 | ✅ ビジョンボード見る | ルーティン | +0/-0 |  |\n| 09:02 | ⬜ Kindleハイライト | ルーティン | +0/-0 |  |\n| 09:05 | ⬜ 0秒思考 | ルーティン | +0/-0 |  |\n| 12:30 | ⬜ 昼寝する | ルーティン | +0/-0 |  |\n| 12:40 | ⬜ Langaku | ルーティン | +0/-0 |  |\n| 12:50 | ⬜ 瞑想 | ルーティン | +0/-0 |  |\n| 12:55 | ⬜ ジャーナル | ルーティン | +0/-0 |  |\n| 13:30 | ✅ サンマルク | 休息 | +2/-0 | 抹茶のチョコクロとピーチスムージー飲んだ。どっちも美味しくて満足。 リゼロ23巻読了。24巻読みはじめ。 |\n| 15:30 | ✅ 1W ジム① | 運動 | +0/-0 | ベンチプレス　40kg 10回　1セット ベンチプレス　50kg 5回　3セット ベンチプレス　40kg 10回　1セット ベンチプレス　40kg 6回　2セット デットリフト　40kg 10回　1セット デットリフト　60kg  5回　5セット サイドレイズ　8kg 10回　4セット ダンベルカール　8kg 10回　2セット ラットプルダウン　39kg 5回　1セット ラットプルダウン　52kg ネガティブ5回　2セット ウォーキング　6キロ毎時　傾斜3 15 |\n| 21:55 | ⬜ ジャーナル | ルーティン | +0/-0 |  |\n\n## 6. やり残し\n- ジャーナル (ルーティン)\n- Kindleハイライト (ルーティン)\n- 0秒思考 (ルーティン)\n- 昼寝する (ルーティン)\n- Langaku (ルーティン)\n- 瞑想 (ルーティン)\n- ジャーナル (ルーティン)\n- ジャーナル (ルーティン)\n\n## 7. Block 内のコメント\n### コストコ\n家族でコストコにお出かけ。巨大倉庫に魅力的な商品がたくさんあってワクワクする。帰宅して食べたハイローラーは相変わらず美味しい。\n\n### サンマルク\n抹茶のチョコクロとピーチスムージー飲んだ。どっちも美味しくて満足。\nリゼロ23巻読了。24巻読みはじめ。\n\n### 1W ジム①\nベンチプレス　40kg 10回　1セット\nベンチプレス　50kg 5回　3セット\nベンチプレス　40kg 10回　1セット\nベンチプレス　40kg 6回　2セット\nデットリフト　40kg 10回　1セット\nデットリフト　60kg  5回　5セット\nサイドレイズ　8kg 10回　4セット\nダンベルカール　8kg 10回　2セット\nラットプルダウン　39kg 5回　1セット\nラットプルダウン　52kg ネガティブ5回　2セット\nウォーキング　6キロ毎時　傾斜3 15\n\n## 8. ジャーナル\n# 2026-05-25のジャーナル\n\n## 🛏 睡眠\n就寝: 23:00  /  起床: 6:30\n質: ★★★☆☆\n\n## 🙏 感謝(3 つ)\n1. 星さん、いつもベビーシッターありがとう\n2. コストコ、ワクワクと美味しい商品をありがとう\n3. タクシーの運転手、コストコ帰りの重い荷物ある中、家までありがとう。\n\n## ✨ 今日のハイライト\n\n\n## 💡 気付き・学び\n全身の筋トレをしたが、最後の背中は力尽きてほとんどできなかった。\n重量を伸ばすには、一回しか挙げられない重さにトライしていくのも大事かも。\nベンチプレスは左手がプルプルして上がらなくなる。対策が必要かも。\n\n## 📝 自由記述\n\n\n\n## 9. 明日への接続\n明日への一言:\n\n明日の MIT 候補:\n- \n- \n- \n\n---\n\n## 📋 AI へのコピペ用プロンプト\n```\n以下は今日の日報です。\n\n1. 客観事実から見える「良かった点・改善できる点」\n2. パターンとして気をつけたいこと\n3. 明日への具体的な提案(2〜3個)\n\nの観点で、簡潔にフィードバックをください。\n(辛口でも構いません、ただし行動に繋がる具体性を重視)\n```",
     "2026-05-26": "# 日報 2026-05-26 (火)\n\n## 1. サマリ\n| 指標 | 値 |\n|---|---|\n| 朝の体調 | 5 / 10 |\n| 充電収支 | +3 / -0 = +3 (起点5→終値8) |\n| Block 実行 | 12 / 19 (63%) |\n| 時間実行 | 7h10m / 8h23m (85%) |\n| MIT 達成 | 1 / 1 |\n| ポモドーロ | 0 回 |\n\n### 達成率\n| 指標 | 達成 | 率 |\n|---|---|---|\n| タスクシュート着手率 | 1 / 1 | 100% |\n| 今日の主役 (MIT) | 1 / 1 | 100% |\n| ルーティン実行率 | 8 / 14 | 57% |\n| 12週 今週の進捗 | 2 / 16 | 13% |\n\n## 2. 今日の主役 (MIT)\n- ✅ 来期検討資料作成\n\n## 5. 時間の使い方\n### カテゴリ別配分\n- 仕事: 4h30m\n- 私用: 2h30m\n- ルーティン: 0h10m\n\n### 実行 Block(時刻順)\n| 時刻 | 内容 | カテゴリ | 充電/放電 | コメント |\n|---|---|---|---|---|\n| 05:25 | ✅ 目薬指す | ルーティン | +0/-0 |  |\n| 05:30 | ✅ 宣言（今日も最高の一日にします！） | ルーティン | +1/-0 |  |\n| 05:31 | ✅ 水飲む | ルーティン | +0/-0 |  |\n| 05:32 | ✅ スクワットする | ルーティン | +0/-0 |  |\n| 08:55 | ✅ ジャーナル | ルーティン | +0/-0 |  |\n| 09:00 | ✅ アファメーション | ルーティン | +0/-0 |  |\n| 09:00 | ✅ 来期検討資料作成 | 仕事 | +0/-0 |  |\n| 09:01 | ✅ ビジョンボード見る | ルーティン | +0/-0 |  |\n| 09:02 | ⬜ Kindleハイライト | ルーティン | +0/-0 |  |\n| 09:05 | ⬜ 0秒思考 | ルーティン | +0/-0 |  |\n| 11:30 | ✅ 本部長MTG | 仕事 | +0/-0 |  |\n| 12:30 | ⬜ 昼寝する | ルーティン | +0/-0 |  |\n| 12:40 | ⬜ Langaku | ルーティン | +0/-0 |  |\n| 12:50 | ⬜ 瞑想 | ルーティン | +0/-0 |  |\n| 12:55 | ✅ ジャーナル | ルーティン | +0/-0 |  |\n| 13:00 | ✅ 来期検討MTG | 仕事 | +0/-0 |  |\n| 15:30 | ✅ 精神科＆適正試験 | 私用 | +0/-0 | 適正検査、パズルや複数の言葉に共通することを説明したり、図形の法則、数字の暗記、制限時間ありで左と同じ図形に◯をつける、制限時間ありで数字に対応した記号を書く、などなど色々やった。 数字覚えるのはつまらなかった。図形の法則を見つけるのは楽しかった。制限時間系はゲーム感覚で楽しかった。 自分の生い立ちとかをしゃべってすっきりした。やっぱり家事/育児と仕事がシームレスにつながっているのはストレスかかるから、休憩時間をしっかり取るように設計した方がいいと言われた。 |\n| 18:10 | ⬜ ドトール | 回復 | +2/-0 | 精神科のカウンセリングに従ってドトールで少しのんびりする時間を取った。 |\n| 21:55 | ⬜ ジャーナル | ルーティン | +0/-0 |  |\n\n## 6. やり残し\n- Kindleハイライト (ルーティン)\n- 0秒思考 (ルーティン)\n- 昼寝する (ルーティン)\n- Langaku (ルーティン)\n- 瞑想 (ルーティン)\n- ドトール (回復)\n- ジャーナル (ルーティン)\n\n## 7. Block 内のコメント\n### 精神科＆適正試験\n適正検査、パズルや複数の言葉に共通することを説明したり、図形の法則、数字の暗記、制限時間ありで左と同じ図形に◯をつける、制限時間ありで数字に対応した記号を書く、などなど色々やった。\n数字覚えるのはつまらなかった。図形の法則を見つけるのは楽しかった。制限時間系はゲーム感覚で楽しかった。\n自分の生い立ちとかをしゃべってすっきりした。やっぱり家事/育児と仕事がシームレスにつながっているのはストレスかかるから、休憩時間をしっかり取るように設計した方がいいと言われた。\n\n### ドトール\n精神科のカウンセリングに従ってドトールで少しのんびりする時間を取った。\n\n## 8. ジャーナル\n# 2026-05-26のジャーナル\n\n## 🛏 睡眠\n就寝: 22:44  /  起床: 6:24\n質: ★★★☆☆\n\n## 🙏 感謝(3 つ)\n1. 精神科の先生、いつも相談乗ってくれてありがとう\n2. \n3. \n\n## ✨ 今日のハイライト\n\n\n## 💡 気付き・学び\n経営層から話のあったFDEは顧客企業の社員として業務を遂行しつつ、自社への仕事を創出するという意味でかなり負荷がかかる仕事。実際に自分たちがやるかどうかは慎重に判断が必要。逆にどれくらいのレベル感ならできそうか考える必要があるか。\n\n## 📝 自由記述\n今日は13時に打合せがあったから、それに向けて来期検討資料を一気に作成できた。締切を早く設定して仕事を進めるやり方が自分にはあってそう。\nその分、H1保守が対応できていないから明日は保守を対応する。\n子供の寝かしつけに1.5時間かかって自分の時間が全くない。カウンセラーにももっと休んで自分を大切にしてください、と言われたがそれができたら苦労しないんだよな…。\n\n\n## 9. 明日への接続\n明日への一言:\n\n明日の MIT 候補:\n- \n- \n- \n\n---\n\n## 📋 AI へのコピペ用プロンプト\n```\n以下は今日の日報です。\n\n1. 客観事実から見える「良かった点・改善できる点」\n2. パターンとして気をつけたいこと\n3. 明日への具体的な提案(2〜3個)\n\nの観点で、簡潔にフィードバックをください。\n(辛口でも構いません、ただし行動に繋がる具体性を重視)\n```",
     "2026-05-28": "# 日報 2026-05-28 (木)\n\n## 1. サマリ\n| 指標 | 値 |\n|---|---|\n| 朝の体調 | 5 / 10 |\n| 充電収支 | +13 / -0 = +13 (起点5→終値18) |\n| Block 実行 | 7 / 23 (30%) |\n| 時間実行 | 6h45m / 9h3m (75%) |\n| MIT 達成 | 2 / 2 |\n| ポモドーロ | 0 回 |\n\n### 達成率\n| 指標 | 達成 | 率 |\n|---|---|---|\n| タスクシュート着手率 | 6 / 7 | 86% |\n| 今日の主役 (MIT) | 2 / 2 | 100% |\n| ルーティン実行率 | 0 / 14 | 0% |\n| 12週 今週の進捗 | 3 / 4 | 75% |\n\n## 2. 今日の主役 (MIT)\n- ✅ リリース前資材確認\n- ✅ 数値差異原因調査\n\n## 5. 時間の使い方\n### カテゴリ別配分\n- 仕事: 6h30m\n- 私用: 0h15m\n\n### 実行 Block(時刻順)\n| 時刻 | 内容 | カテゴリ | 充電/放電 | コメント |\n|---|---|---|---|---|\n| 11:45 | ✅ 薬取りに行く | 私用 | +0/-0 |  |\n| 05:25 | ⬜ 目薬指す | ルーティン | +1/-0 |  |\n| 05:30 | ⬜ 宣言（今日も最高の一日にします！） | ルーティン | +1/-0 |  |\n| 05:31 | ⬜ 水飲む | ルーティン | +1/-0 |  |\n| 05:32 | ⬜ スクワットする | ルーティン | +1/-0 |  |\n| 08:55 | ⬜ ジャーナル | ルーティン | +1/-0 |  |\n| 09:00 | ⬜ アファメーション | ルーティン | +1/-0 |  |\n| 09:01 | ⬜ ビジョンボード見る | ルーティン | +2/-0 |  |\n| 09:02 | ⬜ Kindleハイライト | ルーティン | +0/-0 |  |\n| 09:05 | ⬜ 0秒思考 | ルーティン | +0/-0 |  |\n| 09:30 | ✅ リリース前資材確認 | 仕事 | +0/-0 |  |\n| 09:45 | ✅ 数値差異原因調査 | 仕事 | +0/-0 |  |\n| 10:00 | ✅ 佐藤さん1on1 | 仕事 | +0/-0 |  |\n| 11:00 | ⬜ 部門MTG | 仕事 | +0/-0 |  |\n| 12:30 | ⬜ 昼寝する | ルーティン | +2/-0 |  |\n| 12:40 | ⬜ Langaku | ルーティン | +0/-0 |  |\n| 12:50 | ⬜ 瞑想 | ルーティン | +1/-0 |  |\n| 12:55 | ⬜ ジャーナル | ルーティン | +1/-0 |  |\n| 13:00 | ✅ 打合せ | 仕事 | +0/-0 |  |\n| 13:30 | ✅ 打合せ | 仕事 | +0/-0 |  |\n| 14:00 | ✅ 数値差異原因調査 | 仕事 | +0/-0 |  |\n| 16:00 | ⬜ 原価管理事例作成 | 仕事 | +0/-0 |  |\n| 21:55 | ⬜ ジャーナル | ルーティン | +1/-0 |  |\n\n## 6. やり残し\n- 目薬指す (ルーティン)\n- 宣言（今日も最高の一日にします！） (ルーティン)\n- 水飲む (ルーティン)\n- スクワットする (ルーティン)\n- ジャーナル (ルーティン)\n- アファメーション (ルーティン)\n- ビジョンボード見る (ルーティン)\n- Kindleハイライト (ルーティン)\n- 0秒思考 (ルーティン)\n- 部門MTG (仕事)\n- 昼寝する (ルーティン)\n- Langaku (ルーティン)\n- 瞑想 (ルーティン)\n- ジャーナル (ルーティン)\n- 原価管理事例作成 (仕事)\n- ジャーナル (ルーティン)\n\n## 8. ジャーナル\n# 2026-05-22 のジャーナル\n\n## 🛏 睡眠\n就寝: __:__  /  起床: __:__\n質: ★★★☆☆\n\n## 🙏 感謝(3 つ)\n1. \n2. \n3. \n\n## ✨ 今日のハイライト\n\n\n## 💡 気付き・学び\n\n\n## 📝 自由記述\n毎朝6時に子供に起こされ、そこから育児or家事をして9時に保育園連れて行って、すぐ在宅で仕事、仕事が終わってなくても18時ぴったりに切り上げてそこからまた育児&家事して22時の寝かしつけまでほぼ休みなし。(10分の隙間時間が1,2回あるくらい)。それでもうヘトヘトで自分の時間もないし、なんから残業をそこからスタートする感じで、育児家事仕事で毎日が終わっている。週末もほぼほぼつきっきりで公園やらおうち遊びやらして、昼寝の時間だけ一緒に寝たり少し本読んだりしているくらい。日曜の13-17時でシッターさんがきてくれるが、引き継ぎや移動などを考慮すると13:30-16:30くらいしか実質的な時間がなく、この短時間でできることが限られていて十分回復できていないです。この時間は大体ジム行くか、喫茶店で本読むか、銭湯行くけど充分回復できていない。結構しんどい。\n\n\n## 9. 明日への接続\n明日への一言:\n\n明日の MIT 候補:\n- \n- \n- \n\n---\n\n## 📋 AI へのコピペ用プロンプト\n```\n以下は今日の日報です。\n\n1. 客観事実から見える「良かった点・改善できる点」\n2. パターンとして気をつけたいこと\n3. 明日への具体的な提案(2〜3個)\n4. この日報を踏まえ、明日「0秒思考」で思考を深めるべきテーマ(2〜3個)\n   ※ 各テーマは1分で書き出せる問い形式で示すこと\n\nの観点で、簡潔にフィードバックをください。\n(辛口でも構いません、ただし行動に繋がる具体性を重視)\n\nレビュー結果は Markdown 形式の .md ファイルとして出力してください。\n```",
-    "2026-05-29": "# 日報 2026-05-29 (金)\n\n## 1. サマリ\n| 指標 | 値 |\n|---|---|\n| 朝の体調 | 5 / 10 |\n| 充電収支 | +13 / -0 = +13 (起点5→終値18) |\n| Block 実行 | 13 / 21 (62%) |\n| 時間実行 | 4h40m / 5h28m (85%) |\n| MIT 達成 | 1 / 1 |\n| ポモドーロ | 0 回 |\n\n### 達成率\n| 指標 | 達成 | 率 |\n|---|---|---|\n| タスクシュート着手率 | 4 / 4 | 100% |\n| 今日の主役 (MIT) | 1 / 1 | 100% |\n| ルーティン実行率 | 8 / 16 | 50% |\n| 12週 今週の進捗 | 3 / 4 | 75% |\n\n## 2. 今日の主役 (MIT)\n- ✅ 数値差異原因調査\n\n## 3. 12WY プロジェクトの進捗\n### ベンチプレス100kg\n- 1Wジム③\n\n## 5. 時間の使い方\n### カテゴリ別配分\n- 仕事: 3h\n- 運動: 1h\n- 私用: 0h30m\n- ルーティン: 0h10m\n\n### 実行 Block(時刻順)\n| 時刻 | 内容 | カテゴリ | 充電/放電 | コメント |\n|---|---|---|---|---|\n| 12:30 | ✅ オオゼキでデュワーズ買う | 私用 | +0/-0 |  |\n| 05:25 | ✅ 目薬指す | ルーティン | +1/-0 |  |\n| 05:30 | ✅ 宣言（今日も最高の一日にします！） | ルーティン | +1/-0 |  |\n| 05:31 | ✅ 水飲む | ルーティン | +1/-0 |  |\n| 05:32 | ✅ スクワットする | ルーティン | +1/-0 |  |\n| 06:00 | ✅ アブローラー | ルーティン | +0/-0 |  |\n| 06:05 | ⬜ ブリッジ | ルーティン | +0/-0 |  |\n| 08:55 | ⬜ ジャーナル | ルーティン | +1/-0 |  |\n| 09:00 | ✅ アファメーション | ルーティン | +1/-0 |  |\n| 09:01 | ✅ ビジョンボード見る | ルーティン | +2/-0 |  |\n| 09:02 | ⬜ Kindleハイライト | ルーティン | +0/-0 |  |\n| 09:05 | ⬜ 0秒思考 | ルーティン | +0/-0 |  |\n| 12:30 | ⬜ 昼寝する | ルーティン | +2/-0 |  |\n| 12:30 | ✅ 1Wジム③ | 運動 | +0/-0 | ベンチプレス　40kg 10回　1セット ベンチプレス　50kg 10回　1セット ベンチプレス　50kg 9回　1セット ベンチプレス　55kg 5回　1セット ディップス 4回（二の腕が攣ってトレーニング終了） ウォーキング　6キロ毎時　傾斜3 15分 ラックアップ後にまた空気を吸い込んで胸を膨らませると力が出る。白い靴の方が安定する。 ベンチプレス50kgを高回数上げられるようになった、55kgも少しできてきた。これからも重量を伸ばしていく。 ウォーキングしながらアニメ「ようこそ実力至上主義の教室シーズン4 12話鑑賞」 |\n| 12:40 | ✅ Langaku | ルーティン | +0/-0 |  |\n| 12:50 | ⬜ 瞑想 | ルーティン | +1/-0 |  |\n| 12:55 | ⬜ ジャーナル | ルーティン | +1/-0 |  |\n| 13:30 | ✅ 数値差異原因調査 | 仕事 | +0/-0 |  |\n| 14:00 | ✅ 武捨さん1on1 | 仕事 | +0/-0 |  |\n| 15:00 | ✅ 松下さん1on1 | 仕事 | +0/-0 |  |\n| 21:55 | ⬜ ジャーナル | ルーティン | +1/-0 |  |\n\n## 6. やり残し\n- ブリッジ (ルーティン)\n- ジャーナル (ルーティン)\n- Kindleハイライト (ルーティン)\n- 0秒思考 (ルーティン)\n- 昼寝する (ルーティン)\n- 瞑想 (ルーティン)\n- ジャーナル (ルーティン)\n- ジャーナル (ルーティン)\n\n## 7. Block 内のコメント\n### 1Wジム③\nベンチプレス　40kg 10回　1セット\nベンチプレス　50kg 10回　1セット\nベンチプレス　50kg 9回　1セット\nベンチプレス　55kg 5回　1セット\nディップス 4回（二の腕が攣ってトレーニング終了）\nウォーキング　6キロ毎時　傾斜3 15分\nラックアップ後にまた空気を吸い込んで胸を膨らませると力が出る。白い靴の方が安定する。\nベンチプレス50kgを高回数上げられるようになった、55kgも少しできてきた。これからも重量を伸ばしていく。\nウォーキングしながらアニメ「ようこそ実力至上主義の教室シーズン4 12話鑑賞」\n\n## 8. ジャーナル\n# 2026-05-22 のジャーナル\n\n## 🛏 睡眠\n就寝: __:__  /  起床: __:__\n質: ★★★☆☆\n\n## 🙏 感謝(3 つ)\n1. \n2. \n3. \n\n## ✨ 今日のハイライト\n\n\n## 💡 気付き・学び\n\n\n## 📝 自由記述\n\n\n\n## 9. 明日への接続\n明日への一言:\n\n明日の MIT 候補:\n- \n- \n- \n\n---\n\n## 📋 AI へのコピペ用プロンプト\n```\n以下は今日の日報です。\n\n1. 客観事実から見える「良かった点・改善できる点」\n2. パターンとして気をつけたいこと\n3. 明日への具体的な提案(2〜3個)\n4. この日報を踏まえ、明日「0秒思考」で思考を深めるべきテーマ(2〜3個)\n   ※ 各テーマは1分で書き出せる問い形式で示すこと\n\nの観点で、簡潔にフィードバックをください。\n(辛口でも構いません、ただし行動に繋がる具体性を重視)\n\nレビュー結果は Markdown 形式の .md ファイルとして出力してください。\n```"
+    "2026-05-29": "# 日報 2026-05-29 (金)\n\n## 1. サマリ\n| 指標 | 値 |\n|---|---|\n| 朝の体調 | 5 / 10 |\n| 充電収支 | +13 / -0 = +13 (起点5→終値18) |\n| Block 実行 | 13 / 21 (62%) |\n| 時間実行 | 4h40m / 5h28m (85%) |\n| MIT 達成 | 1 / 1 |\n| ポモドーロ | 0 回 |\n\n### 達成率\n| 指標 | 達成 | 率 |\n|---|---|---|\n| タスクシュート着手率 | 4 / 4 | 100% |\n| 今日の主役 (MIT) | 1 / 1 | 100% |\n| ルーティン実行率 | 8 / 16 | 50% |\n| 12週 今週の進捗 | 3 / 4 | 75% |\n\n## 2. 今日の主役 (MIT)\n- ✅ 数値差異原因調査\n\n## 3. 12WY プロジェクトの進捗\n### ベンチプレス100kg\n- 1Wジム③\n\n## 5. 時間の使い方\n### カテゴリ別配分\n- 仕事: 3h\n- 運動: 1h\n- 私用: 0h30m\n- ルーティン: 0h10m\n\n### 実行 Block(時刻順)\n| 時刻 | 内容 | カテゴリ | 充電/放電 | コメント |\n|---|---|---|---|---|\n| 12:30 | ✅ オオゼキでデュワーズ買う | 私用 | +0/-0 |  |\n| 05:25 | ✅ 目薬指す | ルーティン | +1/-0 |  |\n| 05:30 | ✅ 宣言（今日も最高の一日にします！） | ルーティン | +1/-0 |  |\n| 05:31 | ✅ 水飲む | ルーティン | +1/-0 |  |\n| 05:32 | ✅ スクワットする | ルーティン | +1/-0 |  |\n| 06:00 | ✅ アブローラー | ルーティン | +0/-0 |  |\n| 06:05 | ⬜ ブリッジ | ルーティン | +0/-0 |  |\n| 08:55 | ⬜ ジャーナル | ルーティン | +1/-0 |  |\n| 09:00 | ✅ アファメーション | ルーティン | +1/-0 |  |\n| 09:01 | ✅ ビジョンボード見る | ルーティン | +2/-0 |  |\n| 09:02 | ⬜ Kindleハイライト | ルーティン | +0/-0 |  |\n| 09:05 | ⬜ 0秒思考 | ルーティン | +0/-0 |  |\n| 12:30 | ⬜ 昼寝する | ルーティン | +2/-0 |  |\n| 12:30 | ✅ 1Wジム③ | 運動 | +0/-0 | ベンチプレス　40kg 10回　1セット ベンチプレス　50kg 10回　1セット ベンチプレス　50kg 9回　1セット ベンチプレス　55kg 5回　1セット ディップス 4回（二の腕が攣ってトレーニング終了） ウォーキング　6キロ毎時　傾斜3 15分 ラックアップ後にまた空気を吸い込んで胸を膨らませると力が出る。白い靴の方が安定する。 ベンチプレス50kgを高回数上げられるようになった、55kgも少しできてきた。これからも重量を伸ばしていく。 ウォーキングしながらアニメ「ようこそ実力至上主義の教室シーズン4 12話鑑賞」 |\n| 12:40 | ✅ Langaku | ルーティン | +0/-0 |  |\n| 12:50 | ⬜ 瞑想 | ルーティン | +1/-0 |  |\n| 12:55 | ⬜ ジャーナル | ルーティン | +1/-0 |  |\n| 13:30 | ✅ 数値差異原因調査 | 仕事 | +0/-0 |  |\n| 14:00 | ✅ 武捨さん1on1 | 仕事 | +0/-0 |  |\n| 15:00 | ✅ 松下さん1on1 | 仕事 | +0/-0 |  |\n| 21:55 | ⬜ ジャーナル | ルーティン | +1/-0 |  |\n\n## 6. やり残し\n- ブリッジ (ルーティン)\n- ジャーナル (ルーティン)\n- Kindleハイライト (ルーティン)\n- 0秒思考 (ルーティン)\n- 昼寝する (ルーティン)\n- 瞑想 (ルーティン)\n- ジャーナル (ルーティン)\n- ジャーナル (ルーティン)\n\n## 7. Block 内のコメント\n### 1Wジム③\nベンチプレス　40kg 10回　1セット\nベンチプレス　50kg 10回　1セット\nベンチプレス　50kg 9回　1セット\nベンチプレス　55kg 5回　1セット\nディップス 4回（二の腕が攣ってトレーニング終了）\nウォーキング　6キロ毎時　傾斜3 15分\nラックアップ後にまた空気を吸い込んで胸を膨らませると力が出る。白い靴の方が安定する。\nベンチプレス50kgを高回数上げられるようになった、55kgも少しできてきた。これからも重量を伸ばしていく。\nウォーキングしながらアニメ「ようこそ実力至上主義の教室シーズン4 12話鑑賞」\n\n## 8. ジャーナル\n# 2026-05-22 のジャーナル\n\n## 🛏 睡眠\n就寝: __:__  /  起床: __:__\n質: ★★★☆☆\n\n## 🙏 感謝(3 つ)\n1. \n2. \n3. \n\n## ✨ 今日のハイライト\n\n\n## 💡 気付き・学び\n\n\n## 📝 自由記述\n\n\n\n## 9. 明日への接続\n明日への一言:\n\n明日の MIT 候補:\n- \n- \n- \n\n---\n\n## 📋 AI へのコピペ用プロンプト\n```\n以下は今日の日報です。\n\n1. 客観事実から見える「良かった点・改善できる点」\n2. パターンとして気をつけたいこと\n3. 明日への具体的な提案(2〜3個)\n4. この日報を踏まえ、明日「0秒思考」で思考を深めるべきテーマ(2〜3個)\n   ※ 各テーマは1分で書き出せる問い形式で示すこと\n\nの観点で、簡潔にフィードバックをください。\n(辛口でも構いません、ただし行動に繋がる具体性を重視)\n\nレビュー結果は Markdown 形式の .md ファイルとして出力してください。\n```",
+    "2026-05-31": "# 日報 2026-05-31 (日)\n\n## 1. サマリ\n| 指標 | 値 |\n|---|---|\n| 朝の体調 | 5 / 10 |\n| 充電収支 | +11 / -0 = +11 (起点5→終値16) |\n| Block 実行 | 2 / 18 (11%) |\n| 時間実行 | 4h / 4h48m (83%) |\n| MIT 達成 | 1 / 1 |\n| ポモドーロ | 0 回 |\n\n### 達成率\n| 指標 | 達成 | 率 |\n|---|---|---|\n| タスクシュート着手率 | 1 / 1 | 100% |\n| 今日の主役 (MIT) | 1 / 1 | 100% |\n| ルーティン実行率 | 0 / 15 | 0% |\n| 12週 今週の進捗 | 0 / 4 | 0% |\n\n## 2. 今日の主役 (MIT)\n- ✅ 2W ジム①\n\n## 3. 12WY プロジェクトの進捗\n### ベンチプレス100kg\n- 2W ジム①\n\n## 5. 時間の使い方\n### カテゴリ別配分\n- 回復: 3h\n- 運動: 1h\n\n### 実行 Block(時刻順)\n| 時刻 | 内容 | カテゴリ | 充電/放電 | コメント |\n|---|---|---|---|---|\n| 05:25 | ⬜ 目薬指す | ルーティン | +1/-0 |  |\n| 05:30 | ⬜ 宣言（今日も最高の一日にします！） | ルーティン | +1/-0 |  |\n| 05:30 | ⬜ 宣言（今日も最高の一日にします！） | 仕事 | +0/-0 |  |\n| 05:31 | ⬜ 水飲む | ルーティン | +1/-0 |  |\n| 05:32 | ⬜ スクワットする | ルーティン | +1/-0 |  |\n| 06:00 | ⬜ アブローラー | ルーティン | +0/-0 |  |\n| 06:05 | ⬜ ブリッジ | ルーティン | +0/-0 |  |\n| 08:55 | ⬜ ジャーナル | ルーティン | +1/-0 |  |\n| 09:00 | ⬜ アファメーション | ルーティン | +1/-0 |  |\n| 09:00 | ✅ 子供とテレビ | 回復 | +0/-0 | 子供が風邪ひいてたから一緒にテレビを見てゴロゴロ |\n| 09:01 | ⬜ ビジョンボード見る | ルーティン | +2/-0 |  |\n| 09:02 | ⬜ Kindleハイライト | ルーティン | +0/-0 |  |\n| 09:05 | ⬜ 0秒思考 | ルーティン | +0/-0 |  |\n| 12:40 | ⬜ Langaku | ルーティン | +0/-0 |  |\n| 12:50 | ⬜ 瞑想 | ルーティン | +1/-0 |  |\n| 12:55 | ⬜ ジャーナル | ルーティン | +1/-0 |  |\n| 13:00 | ✅ 2W ジム① | 運動 | +0/-0 | ベンチプレス　40kg 10回　1セット ベンチプレス　50kg 10回　1セット ベンチプレス　55kg 5回　1セット ベンチプレス　57.5kg 5回　1セット ベンチプレス　60kg 3回　1セット ベンチプレス　50kg 8回　1セット ベンチプレス　50kg 6回　1セット デットリフト　40kg 10回　1セット デットリフト　60kg  5回　1セット デットリフト　70kg  5回　3セット  ジム前に家でアブローラーしていくと腹圧がうまく使える気がする 意外とベンチプレスも60kg、デッドリフトも70kg持てた。今日は疲労溜まったけど、毎週日曜はマックス更新にチャレンジしてもいいかも。普段のベースの重量も少し上げる。最終的にボリュームが足りない時は50kgとかを高回数で稼ぐ。 |\n| 21:55 | ⬜ ジャーナル | ルーティン | +1/-0 |  |\n\n## 6. やり残し\n- 目薬指す (ルーティン)\n- 宣言（今日も最高の一日にします！） (ルーティン)\n- 宣言（今日も最高の一日にします！） (仕事)\n- 水飲む (ルーティン)\n- スクワットする (ルーティン)\n- アブローラー (ルーティン)\n- ブリッジ (ルーティン)\n- ジャーナル (ルーティン)\n- アファメーション (ルーティン)\n- ビジョンボード見る (ルーティン)\n- Kindleハイライト (ルーティン)\n- 0秒思考 (ルーティン)\n- Langaku (ルーティン)\n- 瞑想 (ルーティン)\n- ジャーナル (ルーティン)\n- ジャーナル (ルーティン)\n\n## 7. Block 内のコメント\n### 子供とテレビ\n子供が風邪ひいてたから一緒にテレビを見てゴロゴロ\n\n### 2W ジム①\nベンチプレス　40kg 10回　1セット\nベンチプレス　50kg 10回　1セット\nベンチプレス　55kg 5回　1セット\nベンチプレス　57.5kg 5回　1セット\nベンチプレス　60kg 3回　1セット\nベンチプレス　50kg 8回　1セット\nベンチプレス　50kg 6回　1セット\nデットリフト　40kg 10回　1セット\nデットリフト　60kg  5回　1セット\nデットリフト　70kg  5回　3セット\n\nジム前に家でアブローラーしていくと腹圧がうまく使える気がする\n意外とベンチプレスも60kg、デッドリフトも70kg持てた。今日は疲労溜まったけど、毎週日曜はマックス更新にチャレンジしてもいいかも。普段のベースの重量も少し上げる。最終的にボリュームが足りない時は50kgとかを高回数で稼ぐ。\n\n## 8. ジャーナル\n# 2026-05-22 のジャーナル\n\n## 🛏 睡眠\n就寝: __:__  /  起床: __:__\n質: ★★★☆☆\n\n## 🙏 感謝(3 つ)\n1. \n2. \n3. \n\n## ✨ 今日のハイライト\n\n\n## 💡 気付き・学び\n\n\n## 📝 自由記述\n\n\n\n## 9. 明日への接続\n明日への一言:\n\n明日の MIT 候補:\n- \n- \n- \n\n---\n\n## 📋 AI へのコピペ用プロンプト\n```\n以下は今日の日報です。\n\n1. 客観事実から見える「良かった点・改善できる点」\n2. パターンとして気をつけたいこと\n3. 明日への具体的な提案(2〜3個)\n4. この日報を踏まえ、明日「0秒思考」で思考を深めるべきテーマ(2〜3個)\n   ※ 各テーマは1分で書き出せる問い形式で示すこと\n\nの観点で、簡潔にフィードバックをください。\n(辛口でも構いません、ただし行動に繋がる具体性を重視)\n\nレビュー結果は Markdown 形式の .md ファイルとして出力してください。\n```"
   },
   "pomodoro": {
     "running": false,
@@ -30687,7 +30714,10 @@
       "lastFiredKey": ""
     }
   },
-  "modal": null,
+  "modal": {
+    "type": "block",
+    "id": "73a6e86a-89ae-480b-932e-03c5e4fd20aa"
+  },
   "routineViewMode": "routine",
   "timelineZoom": 2,
   "recurrences": [
@@ -31006,5 +31036,5 @@
     }
   ],
   "timelineMode": "actual",
-  "dataModifiedAt": "2026-06-04T14:46:00"
+  "dataModifiedAt": "2026-06-04T17:56:00"
 }
