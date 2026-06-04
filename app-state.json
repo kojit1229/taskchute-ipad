@@ -1,5 +1,5 @@
 {
-  "currentView": "home",
+  "currentView": "timeline",
   "selectedDate": "2026-06-04",
   "zeroThinking": {
     "themes": [
@@ -68,7 +68,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-06-04T14:57:00"
+      "lastSavedAt": "2026-06-04T17:57:00"
     },
     "visionSection": "board",
     "visionBoardIndex": 2,
@@ -528,11 +528,11 @@
       "parentTaskId": "",
       "title": "2W ジム②",
       "category": "運動",
-      "status": "todo",
+      "status": "doing",
       "dueDate": "2026-06-02",
       "description": "",
       "createdAt": "2026-05-25T16:09:00",
-      "updatedAt": "2026-05-25T16:09:00",
+      "updatedAt": "2026-06-04T17:58:00",
       "deleted": false
     },
     {
@@ -30646,26 +30646,54 @@
     },
     {
       "id": "73a6e86a-89ae-480b-932e-03c5e4fd20aa",
-      "taskId": "241d9f63-1be8-4d63-9379-40976d56844e",
-      "date": "2026-06-04",
       "title": "2W ジム②",
+      "date": "2026-06-04",
       "category": "運動",
-      "plannedStartAt": "2026-06-04T17:45:00",
-      "plannedEndAt": "2026-06-04T18:45:00",
-      "actualStartAt": "",
-      "actualEndAt": "",
-      "completed": false,
+      "taskId": "241d9f63-1be8-4d63-9379-40976d56844e",
+      "plannedStartAt": "2026-06-04T05:00:00",
+      "plannedEndAt": "2026-06-04T05:45:00",
+      "actualStartAt": "2026-06-04T05:00:00",
+      "actualEndAt": "2026-06-04T05:45:00",
       "charge": 0,
       "discharge": 0,
+      "completed": true,
+      "comment": "ベンチプレス　50kg 10回　1セット\nベンチプレス　60kg 6回　1セット\nベンチプレス　65kg 3回　1セット\nベンチプレス　70kg 1回　1セット\nベンチプレス　50kg 10回　2セット\nベンチプレス　50kg 8回　1セット\n懸垂(アシスト50kg) 5回　4セット\nディップス(アシスト50kg) 10回　2セット\n\nデッドリフトは腰を痛めそうになった。10日ほど空けないといけないかも。\n懸垂とディップスがうまくできないからアシスト使って練習する\nウォーキングはトレッドミルではなくて近くにある文庫の森公園や戸越公園を歩くようにする。日光浴と自然を感じることでストレス軽減できる気がする。\nあとダッシュ20メートル3本も取り入れる。体力向上、ミトコンドリアの活性化、筋トレしたものを身体操作に繋げる。",
       "expectedCharge": "",
       "expectedDischarge": "",
-      "comment": "",
       "recurrenceGroupId": "",
       "pomodoroCount": 0,
       "migratedTo": "",
       "orderIndex": 0,
+      "isMIT": false,
+      "source": "",
       "createdAt": "2026-06-04T17:56:00",
-      "updatedAt": "2026-06-04T17:56:00",
+      "updatedAt": "2026-06-04T17:58:00",
+      "deleted": false
+    },
+    {
+      "id": "74433794-e0c0-4320-a569-bb73c49712c1",
+      "title": "散歩",
+      "date": "2026-06-04",
+      "category": "",
+      "taskId": "",
+      "plannedStartAt": "2026-06-04T05:45:00",
+      "plannedEndAt": "2026-06-04T06:15:00",
+      "actualStartAt": "",
+      "actualEndAt": "",
+      "charge": 0,
+      "discharge": 0,
+      "completed": false,
+      "comment": "",
+      "expectedCharge": "",
+      "expectedDischarge": "",
+      "recurrenceGroupId": "",
+      "pomodoroCount": 0,
+      "migratedTo": "",
+      "orderIndex": 0,
+      "isMIT": false,
+      "source": "",
+      "createdAt": "2026-06-04T17:58:00",
+      "updatedAt": "2026-06-04T17:58:00",
       "deleted": false
     }
   ],
@@ -30715,8 +30743,8 @@
     }
   },
   "modal": {
-    "type": "block",
-    "id": "73a6e86a-89ae-480b-932e-03c5e4fd20aa"
+    "type": "actualEntry",
+    "id": "74433794-e0c0-4320-a569-bb73c49712c1"
   },
   "routineViewMode": "routine",
   "timelineZoom": 2,
@@ -31035,6 +31063,6 @@
       "deleted": false
     }
   ],
-  "timelineMode": "actual",
-  "dataModifiedAt": "2026-06-04T17:56:00"
+  "timelineMode": "planned",
+  "dataModifiedAt": "2026-06-04T17:58:00"
 }
