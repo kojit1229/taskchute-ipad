@@ -1,5 +1,5 @@
 {
-  "currentView": "home",
+  "currentView": "vision",
   "selectedDate": "2026-07-01",
   "zeroThinking": {
     "themes": [
@@ -71,7 +71,7 @@
       "lastSavedAt": ""
     },
     "visionSection": "board",
-    "visionBoardIndex": 2,
+    "visionBoardIndex": 0,
     "categories": [
       {
         "id": "4efa616b-60ff-416b-9000-b5b7d8d681d4",
@@ -37463,5 +37463,5 @@
     }
   ],
   "timelineMode": "actual",
-  "dataModifiedAt": "2026-07-01T15:58:00"
+  "dataModifiedAt": "2026-07-01T17:40:00"
 }
