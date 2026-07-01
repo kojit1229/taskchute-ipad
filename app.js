@@ -98,6 +98,15 @@ document.addEventListener("click", (event) => {
   // v33: WBS の折りたたみ
   if (action === "toggle-project-collapse") toggleProjectCollapse(id);
   if (action === "toggle-task-collapse") toggleTaskCollapse(id);
+  // v35: 中断 / 再開
+  if (action === "suspend-project") suspendProject(id);
+  if (action === "resume-project") resumeProject(id);
+  if (action === "suspend-task") suspendTask(id);
+  if (action === "resume-task") resumeTask(id);
+  if (action === "toggle-show-suspended") {
+    state.settings.showSuspended = !state.settings.showSuspended;
+    saveAndRender();
+  }
   if (action === "add-block") addBlock();
   if (action === "toggle-block") toggleBlock(id);
   if (action === "now-start") setBlockTime(id, "actualStartAt");
@@ -361,6 +370,10 @@ function normalizeState(value) {
   value.settings.github.lastSavedAt ||= "";
   // v25: データ最終更新時刻(端末間で「新しい方が勝つ」判定に使用)
   value.dataModifiedAt ||= "";
+  // v35: WBS で中断中の項目を表示するかどうか(既定は非表示)
+  if (typeof value.settings.showSuspended !== "boolean") {
+    value.settings.showSuspended = false;
+  }
   value.settings.visionSection ||= "vision";
   if (typeof value.settings.visionBoardIndex !== "number") {
     value.settings.visionBoardIndex = 0;
@@ -1137,7 +1150,7 @@ function cycleWeekProgress(dateISO) {
   const goals = state.projects.filter((p) =>
     !p.deleted && p.kind === "normal" && p.status === "active" && p.twelveWeekStartDate);
   const goalIds = goals.map((p) => p.id);
-  const allTasks = state.tasks.filter((t) => !t.deleted && goalIds.includes(t.projectId));
+  const allTasks = state.tasks.filter((t) => !t.deleted && goalIds.includes(t.projectId) && isTaskCountable(t));  // v35: 中断/中止は分母から除外
   const { weekStart, weekEnd } = weekRange(date);
   const weekTasks = allTasks.filter((t) => t.dueDate && t.dueDate >= weekStart && t.dueDate <= weekEnd);
   const done = weekTasks.filter((t) => t.status === "completed").length;
@@ -1319,7 +1332,7 @@ function homeCycle(metrics) {
   const goals = state.projects.filter((p) =>
     !p.deleted && p.kind === "normal" && p.status === "active" && p.twelveWeekStartDate);
   const goalIds = goals.map((p) => p.id);
-  const allTasks = state.tasks.filter((t) => !t.deleted && goalIds.includes(t.projectId));
+  const allTasks = state.tasks.filter((t) => !t.deleted && goalIds.includes(t.projectId) && isTaskCountable(t));  // v35: 中断/中止は分母から除外
   const overall = allTasks.length
     ? Math.round((allTasks.filter((t) => t.status === "completed").length / allTasks.length) * 100) : 0;
   const { weekStart, weekEnd } = weekRange(state.selectedDate);
@@ -1328,7 +1341,7 @@ function homeCycle(metrics) {
     ? Math.round((weekTasks.filter((t) => t.status === "completed").length / weekTasks.length) * 100) : 0;
   const goalHTML = goals.length ? goals.map((p) => {
     const tac = state.tasks
-      .filter((t) => !t.deleted && t.projectId === p.id && t.status !== "completed")
+      .filter((t) => !t.deleted && t.projectId === p.id && !isTaskDead(t))
       .sort((a, b) => (a.dueDate || "99").localeCompare(b.dueDate || "99"))
       .slice(0, 4);
     return `<div class="home-goal">
@@ -1360,7 +1373,7 @@ function homeBacklog() {
   // v33: 期限切れ + 当日から1週間以内のタスクのみ(期限なしは除外)。量が多すぎる対策。
   const limit = addDays(state.selectedDate, 7);
   const tasks = state.tasks
-    .filter((t) => !t.deleted && t.status !== "completed" && !excluded.includes(t.projectId)
+    .filter((t) => !t.deleted && !isTaskDead(t) && !excluded.includes(t.projectId)
       && t.dueDate && t.dueDate <= limit)
     .sort((a, b) => (a.dueDate || "99").localeCompare(b.dueDate || "99"));
   const todayTaskIds = new Set(blocksForDate(state.selectedDate).map((b) => b.taskId).filter(Boolean));
@@ -1916,8 +1929,18 @@ function renderWBS() {
   const activeProjects = state.projects.filter((project) => !project.deleted && project.kind !== "wish");
   const sorted = [...activeProjects].sort((a, b) => a.title.localeCompare(b.title, "ja"));
 
+  // v35: 中断中の項目は既定で非表示。トグルで再表示して再開できる。
+  const showSusp = Boolean(state.settings.showSuspended);
+  const suspCount = activeProjects.filter(isProjectSuspended).length
+    + state.tasks.filter((t) => !t.deleted && t.kind !== "other" && isTaskSuspended(t)
+        && !(state.projects.find((p) => p.id === t.projectId)?.kind === "wish")).length;
+  const visibleProjects = sorted.filter((p) => showSusp || !isProjectSuspended(p));
+  const toggleBtn = (suspCount > 0 || showSusp)
+    ? `<button class="btn ${showSusp ? "primary" : "ghost"}" data-action="toggle-show-suspended">${showSusp ? "中断を隠す" : `中断を表示 (${suspCount})`}</button>`
+    : "";
+
   return `
-    ${renderHeader("ビジョンを実行へ落とす", "WBS")}
+    ${renderHeader("ビジョンを実行へ落とす", "WBS", toggleBtn)}
     <section class="form-strip">
       <input id="projectTitle" class="input" placeholder="Project名">
       <button class="btn primary" data-action="add-project">Project追加</button>
@@ -1933,39 +1956,47 @@ function renderWBS() {
     </section>
 
     <section class="section grid">
-      ${sorted.map(renderProjectTree).join("")}
+      ${visibleProjects.map(renderProjectTree).join("")}
     </section>
   `;
 }
 
 function renderProjectTree(project) {
   const allTasksOfProject = state.tasks.filter((task) => !task.deleted && task.projectId === project.id);
-  const rootTasks = allTasksOfProject.filter((t) => !t.parentTaskId);
   const progress = taskProgress(allTasksOfProject);
   const is12WY = Boolean(project.twelveWeekStartDate);
   const collapsed = Boolean(project.collapsed);  // v33: 折りたたみ
+  // v35: 中断
+  const showSusp = Boolean(state.settings.showSuspended);
+  const suspended = isProjectSuspended(project);
+  const visibleTasks = allTasksOfProject.filter((t) => showSusp || !isTaskSuspended(t));
+  const rootTasks = visibleTasks.filter((t) => !t.parentTaskId);
   return `
-    <div class="item">
+    <div class="item${suspended ? " is-suspended" : ""}">
       <div class="row">
         <div class="title-line">
           <button class="wbs-caret" data-action="toggle-project-collapse" data-id="${project.id}" aria-label="${collapsed ? "展開" : "折りたたむ"}">${collapsed ? "▸" : "▾"}</button>
           <span class="badge ${project.kind === "wish" ? "purple" : "blue"}">${project.kind === "wish" ? "Wish" : "Project"}</span>
           ${is12WY ? `<span class="badge green">12WY</span>` : ""}
+          ${suspended ? `<span class="badge gray">中断</span>` : ""}
           <strong>${escapeHTML(project.title)}</strong>
           ${project.category ? `<span class="cat-chip" style="background:${getCategoryColor(project.category)}1f; color:${getCategoryColor(project.category)}; border:1px solid ${getCategoryColor(project.category)}66">${escapeHTML(project.category)}</span>` : ""}
         </div>
         <div class="row">
           <button class="btn" data-action="add-task-to-project" data-id="${project.id}">+ タスク</button>
+          ${suspended
+            ? `<button class="btn" data-action="resume-project" data-id="${project.id}">再開</button>`
+            : `<button class="btn ghost" data-action="suspend-project" data-id="${project.id}">中断</button>`}
           <button class="btn" data-action="edit-project" data-id="${project.id}">編集</button>
         </div>
       </div>
       ${project.description ? `<div class="muted" style="font-size:12px">${escapeHTML(project.description)}</div>` : ""}
       <div class="progress"><span style="width:${progress}%"></span></div>
       ${collapsed
-        ? `<div class="muted" style="font-size:12px; margin-top:6px">${rootTasks.length ? `${allTasksOfProject.length}件のタスク(折りたたみ中)` : "Task未登録"}</div>`
+        ? `<div class="muted" style="font-size:12px; margin-top:6px">${rootTasks.length ? `${visibleTasks.length}件のタスク(折りたたみ中)` : "Task未登録"}</div>`
         : `<div class="stack">
             ${rootTasks.length
-              ? rootTasks.map((t) => renderTaskTree(t, allTasksOfProject, 0)).join("")
+              ? rootTasks.map((t) => renderTaskTree(t, visibleTasks, 0)).join("")
               : `<div class="muted">Task未登録</div>`}
           </div>`}
     </div>
@@ -2005,20 +2036,24 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false) 
   const caret = hasChildren
     ? `<button class="wbs-caret" data-action="toggle-task-collapse" data-id="${task.id}" aria-label="${collapsed ? "展開" : "折りたたむ"}">${collapsed ? "▸" : "▾"}</button>`
     : `<span class="wbs-caret-spacer"></span>`;
+  const suspended = isTaskSuspended(task);  // v35
   return `
-    <div class="row" style="border-top:1px solid var(--line-soft); padding-top:8px">
+    <div class="row${suspended ? " is-suspended" : ""}" style="border-top:1px solid var(--line-soft); padding-top:8px">
       <div class="title-line">
         ${depth > 0 ? `<span class="muted" style="font-size:11px">${"└".padStart(depth, "　")}</span>` : ""}
         ${caret}
         <button class="checkbox-button ${task.status === "completed" ? "done" : ""}" data-action="toggle-task" data-id="${task.id}">✓</button>
         <span>${escapeHTML(task.title)}</span>
-        <span class="badge">${task.status}</span>
+        <span class="badge ${suspended ? "gray" : ""}">${taskStatusLabel(task.status)}</span>
         ${task.category ? `<span class="cat-chip" style="background:${getCategoryColor(task.category)}1f; color:${getCategoryColor(task.category)}; border:1px solid ${getCategoryColor(task.category)}66">${escapeHTML(task.category)}</span>` : ""}
         <span class="muted" style="font-size:11px">${dueLabel}</span>
       </div>
       <div class="row">
         <button class="btn" data-action="task-today" data-id="${task.id}">今日へ</button>
         ${canAddSub ? `<button class="btn" data-action="add-subtask" data-parent-task="${task.id}">+ サブ</button>` : ""}
+        ${suspended
+          ? `<button class="btn" data-action="resume-task" data-id="${task.id}">再開</button>`
+          : `<button class="btn ghost" data-action="suspend-task" data-id="${task.id}">中断</button>`}
         <button class="btn" data-action="edit-task" data-id="${task.id}">編集</button>
       </div>
     </div>
@@ -2070,7 +2105,8 @@ function renderTasks() {
 function renderOpenTasks() {
   // v19: 今日に既に Block 化されていても表示し続ける(1日に複数回追加することもあるため)
   // v28: 「その他」受け皿 Task は実体のあるタスクではないので未完了リストから除外
-  const open = state.tasks.filter((task) => !task.deleted && task.status !== "completed" && task.kind !== "other");
+  // v35: 中断・中止したタスクは未完了リストから外す(途中でやめたものを残さない)
+  const open = state.tasks.filter((task) => !task.deleted && !isTaskDead(task) && task.kind !== "other");
   if (!open.length) return emptyPanel("未完了のTaskはありません");
   // 今日 Block 化済みのカウント(参考表示用)
   const blockCountByTaskId = {};
@@ -2092,6 +2128,7 @@ function renderOpenTasks() {
           </div>
           <div class="row">
             <button class="btn" data-action="task-today" data-id="${task.id}">今日へ追加</button>
+            <button class="btn ghost" data-action="suspend-task" data-id="${task.id}">中断</button>
             <button class="btn" data-action="edit-task" data-id="${task.id}">編集</button>
           </div>
         </div>
@@ -3028,22 +3065,33 @@ function renderSettings() {
           データは端末内(localStorage)を主とし、GitHub 上の 1 ファイルを端末間の同期・バックアップに使います。<br>
           自動保存を ON にすると変更後 30 秒で push。起動時に GitHub 側が新しければ自動で取り込みます(新しい方を採用)。
         </div>
-        <label>Owner
-          <input class="input" data-github-field="owner" value="${escapeHTML(github.owner)}" autocomplete="off">
-        </label>
-        <label>Repository
-          <input class="input" data-github-field="repo" value="${escapeHTML(github.repo)}" autocomplete="off">
-        </label>
-        <label>Branch
-          <input class="input" data-github-field="branch" value="${escapeHTML(github.branch)}" autocomplete="off">
-        </label>
-        <label>保存先パス
-          <input class="input" data-github-field="path" value="${escapeHTML(github.path)}" autocomplete="off" placeholder="app-state.json">
-        </label>
-        <div class="muted" style="font-size:11px">推奨: <code>app-state.json</code>(リポジトリのルート直下)</div>
-        <label>Fine-grained token
-          <input class="input" type="password" data-github-field="token" value="${escapeHTML(github.token)}" autocomplete="off" placeholder="GitHub token">
-        </label>
+        <form class="stack" autocomplete="on" onsubmit="return false">
+          <label>Owner
+            <input class="input" data-github-field="owner" value="${escapeHTML(github.owner)}"
+              id="gh-owner" name="gh-username" autocomplete="username"
+              autocapitalize="off" autocorrect="off" spellcheck="false">
+          </label>
+          <label>Repository
+            <input class="input" data-github-field="repo" value="${escapeHTML(github.repo)}" autocomplete="off">
+          </label>
+          <label>Branch
+            <input class="input" data-github-field="branch" value="${escapeHTML(github.branch)}" autocomplete="off">
+          </label>
+          <label>保存先パス
+            <input class="input" data-github-field="path" value="${escapeHTML(github.path)}" autocomplete="off" placeholder="app-state.json">
+          </label>
+          <div class="muted" style="font-size:11px">推奨: <code>app-state.json</code>(リポジトリのルート直下)</div>
+          <label>Fine-grained token
+            <input class="input" type="password" data-github-field="token" value="${escapeHTML(github.token)}"
+              id="gh-token" name="gh-token" autocomplete="current-password"
+              autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="GitHub token">
+          </label>
+          <div class="muted" style="font-size:11px; line-height:1.6">
+            🔑 Owner と Token を入力すると、iOS が「パスワードを保存」を提案します。保存すると次回から
+            <b>タップで自動入力</b>でき、iCloud キーチェーン経由で他の Apple 端末にも同期されます
+            (トークンは端末内の安全な保管庫にのみ保存され、GitHub には送られません)。
+          </div>
+        </form>
         <label class="checkbox-line">
           <input type="checkbox" data-github-field="autoSave" ${github.autoSave ? "checked" : ""}>
           自動保存を有効にする(変更後 30 秒のデバウンス)
@@ -3055,7 +3103,7 @@ function renderSettings() {
           <button class="btn primary" data-action="save-github">今すぐGitHubへ保存</button>
           <button class="btn" data-action="load-github">GitHubから読込</button>
         </div>
-        <div class="muted" style="font-size:11px">TokenはGitHubへ保存しません。この端末のブラウザ内だけに保持します。</div>
+        <div class="muted" style="font-size:11px">TokenはGitHubへ保存しません。この端末のブラウザ内(＋任意でiOSキーチェーン)だけに保持します。</div>
       </div>
       <div class="panel stack">
         <h2>現在のファイル構成</h2>
@@ -4737,9 +4785,54 @@ function projectName(projectId) {
   return state.projects.find((project) => project.id === projectId)?.title || "Projectなし";
 }
 
+// v35: 進捗の分母は「まだ生きているタスク」だけ。中断/中止は完了扱いせず分母からも外す。
 function taskProgress(tasks) {
-  if (!tasks.length) return 0;
-  return Math.round((tasks.filter((task) => task.status === "completed").length / tasks.length) * 100);
+  const live = tasks.filter((task) => isTaskCountable(task));
+  if (!live.length) return 0;
+  return Math.round((live.filter((task) => task.status === "completed").length / live.length) * 100);
+}
+
+// =========================================================
+// v35: 「中断」ステータス
+//   途中でやらなくなったものをずっと残さないための状態。
+//   Project は status:"paused"、Task は status:"suspended" を「中断」とみなす。
+//   中断したものは一覧・進捗から外れ、WBS の「中断を表示」でいつでも再開できる。
+// =========================================================
+function isProjectSuspended(p) { return (p?.status || "active") === "paused"; }
+function isTaskSuspended(t) { return (t?.status || "todo") === "suspended"; }
+// 進捗の分母に含めるか(完了は含める / 中断・中止は含めない)
+function isTaskCountable(t) {
+  const s = t?.status || "todo";
+  return s !== "suspended" && s !== "cancelled";
+}
+// これ以上進めない(完了・中断・中止)= 未完了リストから外す対象
+function isTaskDead(t) {
+  const s = t?.status || "todo";
+  return s === "completed" || s === "suspended" || s === "cancelled";
+}
+// 日本語ステータスラベル(関数宣言=巻き上げされるので描画前でも安全)
+function projectStatusLabel(s) {
+  return ({ active: "進行中", paused: "中断", completed: "完了", archived: "アーカイブ", cancelled: "中止" })[s] || s || "進行中";
+}
+function taskStatusLabel(s) {
+  return ({ todo: "未着手", doing: "着手中", completed: "完了", suspended: "中断", cancelled: "中止" })[s] || s || "未着手";
+}
+
+function suspendProject(id) {
+  state.projects = state.projects.map((p) => p.id === id ? { ...p, status: "paused", updatedAt: nowDateTime() } : p);
+  saveAndRender("プロジェクトを中断しました");
+}
+function resumeProject(id) {
+  state.projects = state.projects.map((p) => p.id === id ? { ...p, status: "active", updatedAt: nowDateTime() } : p);
+  saveAndRender("プロジェクトを再開しました");
+}
+function suspendTask(id) {
+  state.tasks = state.tasks.map((t) => t.id === id ? { ...t, status: "suspended", updatedAt: nowDateTime() } : t);
+  saveAndRender("タスクを中断しました");
+}
+function resumeTask(id) {
+  state.tasks = state.tasks.map((t) => t.id === id ? { ...t, status: "todo", updatedAt: nowDateTime() } : t);
+  saveAndRender("タスクを再開しました");
 }
 
 function energyPoints(blocks, rowHeight, startHour) {
@@ -5019,7 +5112,7 @@ function buildProjectModal(project) {
             <label class="field-label">ステータス</label>
             <select class="select" data-modal-field="status">
               ${["active", "paused", "completed", "archived", "cancelled"].map((s) => `
-                <option value="${s}" ${status === s ? "selected" : ""}>${s}</option>
+                <option value="${s}" ${status === s ? "selected" : ""}>${projectStatusLabel(s)}</option>
               `).join("")}
             </select>
           </div>
@@ -5117,7 +5210,7 @@ function buildTaskModal(task) {
             <label class="field-label">ステータス</label>
             <select class="select" data-modal-field="status">
               ${["todo", "doing", "completed", "suspended", "cancelled"].map((s) => `
-                <option value="${s}" ${status === s ? "selected" : ""}>${s}</option>
+                <option value="${s}" ${status === s ? "selected" : ""}>${taskStatusLabel(s)}</option>
               `).join("")}
             </select>
           </div>
