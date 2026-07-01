@@ -467,6 +467,21 @@ h3 {
   color: var(--red);
 }
 
+/* v35: 中断バッジ / 中断中の行・カードは淡く見せる */
+.badge.gray {
+  background: rgba(142, 142, 147, 0.16);
+  color: #8E8E93;
+}
+
+.is-suspended {
+  opacity: 0.55;
+}
+
+.is-suspended strong {
+  text-decoration: line-through;
+  text-decoration-color: rgba(142, 142, 147, 0.6);
+}
+
 .checkbox-button {
   width: 30px;
   height: 30px;
