@@ -3065,22 +3065,33 @@ function renderSettings() {
           データは端末内(localStorage)を主とし、GitHub 上の 1 ファイルを端末間の同期・バックアップに使います。<br>
           自動保存を ON にすると変更後 30 秒で push。起動時に GitHub 側が新しければ自動で取り込みます(新しい方を採用)。
         </div>
-        <label>Owner
-          <input class="input" data-github-field="owner" value="${escapeHTML(github.owner)}" autocomplete="off">
-        </label>
-        <label>Repository
-          <input class="input" data-github-field="repo" value="${escapeHTML(github.repo)}" autocomplete="off">
-        </label>
-        <label>Branch
-          <input class="input" data-github-field="branch" value="${escapeHTML(github.branch)}" autocomplete="off">
-        </label>
-        <label>保存先パス
-          <input class="input" data-github-field="path" value="${escapeHTML(github.path)}" autocomplete="off" placeholder="app-state.json">
-        </label>
-        <div class="muted" style="font-size:11px">推奨: <code>app-state.json</code>(リポジトリのルート直下)</div>
-        <label>Fine-grained token
-          <input class="input" type="password" data-github-field="token" value="${escapeHTML(github.token)}" autocomplete="off" placeholder="GitHub token">
-        </label>
+        <form class="stack" autocomplete="on" onsubmit="return false">
+          <label>Owner
+            <input class="input" data-github-field="owner" value="${escapeHTML(github.owner)}"
+              id="gh-owner" name="gh-username" autocomplete="username"
+              autocapitalize="off" autocorrect="off" spellcheck="false">
+          </label>
+          <label>Repository
+            <input class="input" data-github-field="repo" value="${escapeHTML(github.repo)}" autocomplete="off">
+          </label>
+          <label>Branch
+            <input class="input" data-github-field="branch" value="${escapeHTML(github.branch)}" autocomplete="off">
+          </label>
+          <label>保存先パス
+            <input class="input" data-github-field="path" value="${escapeHTML(github.path)}" autocomplete="off" placeholder="app-state.json">
+          </label>
+          <div class="muted" style="font-size:11px">推奨: <code>app-state.json</code>(リポジトリのルート直下)</div>
+          <label>Fine-grained token
+            <input class="input" type="password" data-github-field="token" value="${escapeHTML(github.token)}"
+              id="gh-token" name="gh-token" autocomplete="current-password"
+              autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="GitHub token">
+          </label>
+          <div class="muted" style="font-size:11px; line-height:1.6">
+            🔑 Owner と Token を入力すると、iOS が「パスワードを保存」を提案します。保存すると次回から
+            <b>タップで自動入力</b>でき、iCloud キーチェーン経由で他の Apple 端末にも同期されます
+            (トークンは端末内の安全な保管庫にのみ保存され、GitHub には送られません)。
+          </div>
+        </form>
         <label class="checkbox-line">
           <input type="checkbox" data-github-field="autoSave" ${github.autoSave ? "checked" : ""}>
           自動保存を有効にする(変更後 30 秒のデバウンス)
@@ -3092,7 +3103,7 @@ function renderSettings() {
           <button class="btn primary" data-action="save-github">今すぐGitHubへ保存</button>
           <button class="btn" data-action="load-github">GitHubから読込</button>
         </div>
-        <div class="muted" style="font-size:11px">TokenはGitHubへ保存しません。この端末のブラウザ内だけに保持します。</div>
+        <div class="muted" style="font-size:11px">TokenはGitHubへ保存しません。この端末のブラウザ内(＋任意でiOSキーチェーン)だけに保持します。</div>
       </div>
       <div class="panel stack">
         <h2>現在のファイル構成</h2>
