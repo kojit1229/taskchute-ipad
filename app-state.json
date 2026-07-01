@@ -1,5 +1,5 @@
 {
-  "currentView": "home",
+  "currentView": "tasks",
   "selectedDate": "2026-07-01",
   "zeroThinking": {
     "themes": [
@@ -68,7 +68,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-06-06T08:16:00"
+      "lastSavedAt": ""
     },
     "visionSection": "board",
     "visionBoardIndex": 2,
@@ -37463,5 +37463,5 @@
     }
   ],
   "timelineMode": "actual",
-  "dataModifiedAt": "2026-07-01T13:33:00"
+  "dataModifiedAt": "2026-07-01T13:35:00"
 }
