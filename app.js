@@ -4242,8 +4242,13 @@ async function syncFromGitHubOnStartup() {
       setLastSyncedSha(sha);   // v37: この端末はこのリモート状態と同期済み
       render();
       showToast("最新データを取り込みました");
+    } else {
+      // ローカルが新しい/同じ → データは変更しない(次回保存で GitHub へ反映される)。
+      // v38: ただしリモートの現状は確認済みなので「同期済みSHA」だけ記録する。
+      //      これが無いと、稼働中の既存端末が(SHA未記録のため)一度手動で
+      //      「GitHubから読込」するまで自動保存を見送り続けてしまう。
+      setLastSyncedSha(sha);
     }
-    // ローカルが新しい/同じ → 何もしない(次回保存で GitHub へ反映される)
   } catch (error) {
     // 起動時の同期失敗は致命的でない(ローカルで動作継続)
     console.warn("起動時の GitHub 同期をスキップ:", error.message);
