@@ -1,16 +1,16 @@
-const CACHE_NAME = "taskchute-journal-pwa-v36";
+const CACHE_NAME = "taskchute-journal-pwa-v38";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
+  "./marked.min.js",
   "./manifest.webmanifest",
   "./Vision.md",
   "./Daily_Affirmation.md",
   "./now_vision.pdf",
   "./45_vision.pdf",
-  "./80_vision.pdf",
-  "https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"
+  "./80_vision.pdf"
 ];
 
 self.addEventListener("install", (event) => {
@@ -45,9 +45,9 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
-  // v24: 同一オリジン以外(Google API・GIS・外部CDN等)は SW を経由させない。
-  //      cdn.jsdelivr.net の marked だけは APP_SHELL でキャッシュ済み。
-  if (url.origin !== self.location.origin && url.hostname !== "cdn.jsdelivr.net") {
+  // v24/v38: 同一オリジン以外(Google API・外部CDN等)は SW を経由させない。
+  //          marked はリポジトリ同梱にしたため CDN の特別扱いは廃止。
+  if (url.origin !== self.location.origin) {
     return;
   }
   // GitHub API はキャッシュしない(常に最新)
@@ -64,11 +64,14 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          // v37: 正常応答のみキャッシュ(500等のエラーで正常キャッシュを潰さない)
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
           return response;
         })
-        .catch(() => caches.match(event.request))
+        .catch(() => caches.match(event.request, { ignoreSearch: true }))
     );
     return;
   }
@@ -85,11 +88,16 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          // v37: 正常応答のみキャッシュ。サーバーが一時的に 500/404 を返しても
+          //      オフライン用の正常なキャッシュを上書きしない(上書きするとオフライン起動が壊れる)
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
           return response;
         })
-        .catch(() => caches.match(event.request))
+        // v37: ignoreSearch — "?utm=..." 等のクエリ付きURLでもキャッシュ済みシェルを返す
+        .catch(() => caches.match(event.request, { ignoreSearch: true }))
     );
     return;
   }
@@ -98,8 +106,12 @@ self.addEventListener("fetch", (event) => {
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
       return fetch(event.request).then((response) => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        // v37: 正常応答のみ永続キャッシュ(初回404/500を永遠に配り続けない)。
+        //      v38: marked 同梱でクロスオリジンは SW を通らなくなったため opaque の考慮は不要。
+        if (response.ok) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        }
         return response;
       });
     })
