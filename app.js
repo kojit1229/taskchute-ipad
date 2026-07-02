@@ -47,6 +47,10 @@ const bottomNav = document.querySelector("#bottomNav");
 const toastEl = document.querySelector("#toast");
 
 let state = loadState();
+// v37: 起動時点のデータ更新時刻を退避。
+//      起動同期(syncFromGitHubOnStartup)の新旧比較はこの値と行う。
+//      (fetch 完了前にユーザー操作で saveState が走っても比較が壊れないように)
+const _startupDataModifiedAt = state.dataModifiedAt || "";
 let toastTimer = null;
 let timerTicker = null;
 let cachedVisionMd = "";
@@ -123,7 +127,8 @@ document.addEventListener("click", (event) => {
   // v19: ルーティンタブの表示モード切替
   if (action === "routine-mode") {
     state.routineViewMode = target.dataset.mode || "routine";
-    saveAndRender();
+    persistLocalNoSchedule();  // v37: UI 操作(dataModifiedAt を汚さない)
+    render();
   }
   // v14: 開始前に既存セッションを強制リセット(中断/完了/休憩後の再開でも確実に50:00から)
   if (action === "start-pomodoro") {
@@ -173,20 +178,23 @@ document.addEventListener("click", (event) => {
   if (action === "delete-category") deleteCategory(target.dataset.catId);
   if (action === "add-break-message") addBreakMessage();
   if (action === "delete-break-message") deleteBreakMessage(target.dataset.msgId);
-  // v10: タイムラインズーム
+  // v10: タイムラインズーム(v37: UI 操作なので dataModifiedAt を汚さない)
   if (action === "tl-zoom") {
     state.timelineZoom = Number(target.dataset.zoom) || 1;
-    saveAndRender();
+    persistLocalNoSchedule();
+    render();
   }
-  // v11: サイドバー折りたたみ
+  // v11: サイドバー折りたたみ(v37: 同上)
   if (action === "toggle-sidebar") {
     state.settings.sidebarCollapsed = !state.settings.sidebarCollapsed;
-    saveAndRender();
+    persistLocalNoSchedule();
+    render();
   }
-  // v12: ポモドーロ全画面切替
+  // v12: ポモドーロ全画面切替(v37: 同上)
   if (action === "toggle-pomo-fullscreen") {
     state.pomodoro.fullscreen = !state.pomodoro.fullscreen;
-    saveAndRender();
+    persistLocalNoSchedule();
+    render();
   }
   // === v16: やりたいことリスト(v34: input リスナーから click へ移設) ===
   if (action === "add-wish") addWish();
@@ -238,6 +246,10 @@ document.addEventListener("input", (event) => {
     saveState();
   }
   if (target.matches("[data-github-field]")) {
+    // v37: autoSave チェックボックスもこのセレクタに一致してしまい、
+    //      value("on"という文字列)で autoSave を上書き + OFF操作でも自動保存を予約していた。
+    //      チェックボックスは change ハンドラ側で処理するのでここでは除外する。
+    if (target.type === "checkbox") return;
     state.settings.github[target.dataset.githubField] = target.value.trim();
     saveState();
   }
@@ -325,7 +337,13 @@ function loadState() {
   try {
     return normalizeState({ ...seedState(), ...JSON.parse(raw) });
   } catch {
-    return normalizeState(seedState());
+    // v37: 壊れたデータを黙って捨てない。復旧用に退避してから初期状態で起動する。
+    //      (そのまま自動保存が走ると、壊れる前のGitHub側データまで初期状態で上書きしかねない)
+    try { localStorage.setItem(`${STORAGE_KEY}-corrupt-backup`, raw); } catch { /* 退避失敗はやむなし */ }
+    console.error("保存データが壊れていたため初期状態で起動します(-corrupt-backup に退避済み)");
+    const seeded = normalizeState(seedState());
+    seeded.settings.github.autoSave = false;  // 事故防止: 自動保存は手動で入れ直してもらう
+    return seeded;
   }
 }
 
@@ -344,12 +362,22 @@ function persistLocalNoSchedule() {
   }
 }
 
+let _quotaToastShown = false;
+
 function saveState() {
   // v25: 実データの変更時刻を記録(端末間の「新しい方が勝つ」判定に使用)。
   //      persistLocalNoSchedule(リモート採用・GitHub保存)では更新しない。
   state.dataModifiedAt = nowDateTime();
   // v23: localStorage 書き込み失敗で例外を投げない(画面が固まるのを防ぐ)
   persistLocalNoSchedule();
+  // v37: 容量超過などで保存できていない場合、黙って入力を失わせず一度は知らせる
+  //      (ジャーナル入力は keystroke ごとにここを通るため、毎回は出さない)
+  if (_lastSaveError && !_quotaToastShown) {
+    _quotaToastShown = true;
+    showToast("⚠ 端末への保存に失敗しています(容量不足の可能性)。エクスポートでバックアップを取ってください");
+  } else if (!_lastSaveError) {
+    _quotaToastShown = false;
+  }
   scheduleAutoSave();
 }
 
@@ -358,6 +386,9 @@ function normalizeState(value) {
   // v31: 残り時間表示用の生年月日(未設定なら補完)
   if (!value.settings.birthDate) value.settings.birthDate = "1992-12-29";
   value.settings.staticFilesLoaded ||= { vision: false, affirmation: false };
+  // v37: インポート/同期で欠けていると描画がクラッシュするキーを補完
+  value.settings.morningEnergyLog ||= {};
+  value.pomodoro ||= { running: false, blockId: "", startedAt: "", endsAt: "", mode: "focus" };
   value.settings.github ||= defaultGitHubSettings();
   value.settings.github.owner ||= "kojit1229";
   value.settings.github.repo ||= "taskchute-ipad";
@@ -629,6 +660,9 @@ function updateCategoryField(catId, field, value) {
     state.projects = state.projects.map((p) => p.category === oldCat.name ? { ...p, category: value } : p);
     state.tasks = state.tasks.map((t) => t.category === oldCat.name ? { ...t, category: value } : t);
     state.blocks = state.blocks.map((b) => b.category === oldCat.name ? { ...b, category: value } : b);
+    // v37: 繰り返しルールにも追従(これを忘れると、明日以降に実体化されるブロックが旧名のまま生成され、
+    //      「ルーティン」カテゴリの改名ではルーティン画面から消える)
+    state.recurrences = (state.recurrences || []).map((r) => r.category === oldCat.name ? { ...r, category: value } : r);
   }
   state.settings.categories = cats.map((c, i) => i === idx ? newCat : c);
   saveState();
@@ -765,7 +799,7 @@ function renderCategorySelect(currentName) {
     ? `<option value="${escapeHTML(currentName)}" selected>${escapeHTML(currentName)}(マスタ外)</option>`
     : "";
   return `
-    <select class="select" data-modal-field="category">
+    <select class="select" data-modal-field="category" data-prev-value="${escapeHTML(currentName || "")}">
       <option value="" ${!currentName ? "selected" : ""}>(カテゴリなし)</option>
       ${extraOption}
       ${names.map((n) => `<option value="${escapeHTML(n)}" ${n === currentName ? "selected" : ""}>${escapeHTML(n)}</option>`).join("")}
@@ -1121,7 +1155,10 @@ function homeHero(blocks, isToday) {
     ? `<button class="btn green home-hero-btn" data-action="complete-block-with-actual" data-id="${target.id}">✓ 完了にする</button>`
     : `<button class="btn orange home-hero-btn" data-action="now-start" data-id="${target.id}">▶ いま着手する</button>`;
   // このあとのブロック
-  const after = tl.filter((b) => !b.completed && minutesOf(b.plannedStartAt) > nowMin)[current ? 0 : 1];
+  // v37: 「target の次」は target 自身を除いた最初の未来ブロック。
+  //      以前の [current ? 0 : 1] は、target が過去枠(期限切れの未着手)のときに
+  //      本来の次ブロックを飛ばして2番目を表示していた。
+  const after = tl.find((b) => !b.completed && b !== target && minutesOf(b.plannedStartAt) > nowMin);
   const nextBox = after
     ? `<div class="home-hero-next"><span class="home-hero-next-lab">このあと</span>
         <strong>${after.plannedStartAt ? timeFromDateTime(after.plannedStartAt) : ""}</strong> ${escapeHTML(after.title)}</div>`
@@ -1620,7 +1657,7 @@ function renderWish() {
     </section>
 
     ${groupOrder.length === 0
-      ? `<section class="panel" style="margin-top:12px; text-align:center; padding:32px"><div class="muted">${filter.area ? `「${filter.area}」のやりたいことはまだありません` : "やりたいことを追加してみましょう(壮大なものでもOK)"}</div></section>`
+      ? `<section class="panel" style="margin-top:12px; text-align:center; padding:32px"><div class="muted">${filter.area ? `「${escapeHTML(filter.area)}」のやりたいことはまだありません` : "やりたいことを追加してみましょう(壮大なものでもOK)"}</div></section>`
       : groupOrder.map((key) => `
         <section class="section" style="margin-top:14px">
           <div class="row" style="margin-bottom:8px">
@@ -2106,7 +2143,11 @@ function renderOpenTasks() {
   // v19: 今日に既に Block 化されていても表示し続ける(1日に複数回追加することもあるため)
   // v28: 「その他」受け皿 Task は実体のあるタスクではないので未完了リストから除外
   // v35: 中断・中止したタスクは未完了リストから外す(途中でやめたものを残さない)
-  const open = state.tasks.filter((task) => !task.deleted && !isTaskDead(task) && task.kind !== "other");
+  // v37: Wish Project 配下のタスクは専用「やりたい」タブで扱うため、ここには出さない
+  //      (WBS・ホームの未完了リストと同じ除外基準に揃える)
+  const wishProjectIds = state.projects.filter((p) => p.kind === "wish").map((p) => p.id);
+  const open = state.tasks.filter((task) => !task.deleted && !isTaskDead(task) && task.kind !== "other"
+    && !wishProjectIds.includes(task.projectId));
   if (!open.length) return emptyPanel("未完了のTaskはありません");
   // 今日 Block 化済みのカウント(参考表示用)
   const blockCountByTaskId = {};
@@ -2228,10 +2269,11 @@ function renderRoutine() {
     const startMin = minutesOf(b.plannedStartAt);
     const endMin = b.plannedEndAt ? minutesOf(b.plannedEndAt) : startMin + 1;
     let phase = "past";  // past / current / next / future
-    if (!isToday) {
-      phase = "future";
-    } else if (b.completed) {
+    // v37: 完了判定を最優先(過去日を見返したとき、完了済みが「予定」表示になっていた)
+    if (b.completed) {
       phase = "done";
+    } else if (!isToday) {
+      phase = state.selectedDate > todayISO() ? "future" : "past";
     } else if (nowMin >= startMin && nowMin < endMin) {
       phase = "current";
     } else if (nowMin < startMin) {
@@ -2332,7 +2374,7 @@ function renderRoutineNowMarker(now) {
 
 function setTimelineMode(mode) {
   state.timelineMode = mode;
-  saveState();
+  persistLocalNoSchedule();  // v37: 表示モード切替は UI 操作(dataModifiedAt を汚さない)
   render();
 }
 
@@ -3012,12 +3054,38 @@ function renderVisionBoard() {
   `;
 }
 
+// v37: marked の出力から危険な要素・属性を取り除く。
+//      ジャーナルやAIフィードバック(貼り付け/アップロード/GitHub同期)経由の
+//      HTMLがそのまま実行されると、localStorage のトークン窃取まで可能になるため。
+//      見出し・リスト・強調などの安全なHTMLはそのまま残す。
+function sanitizeHTML(html) {
+  const template = document.createElement("template");
+  template.innerHTML = html;
+  const BLOCKED_TAGS = ["SCRIPT", "IFRAME", "OBJECT", "EMBED", "STYLE", "LINK", "META", "FORM", "BASE"];
+  const walk = (node) => {
+    for (const el of [...node.querySelectorAll("*")]) {
+      if (BLOCKED_TAGS.includes(el.tagName)) { el.remove(); continue; }
+      for (const attr of [...el.attributes]) {
+        const name = attr.name.toLowerCase();
+        const val = String(attr.value || "").replace(/\s+/g, "").toLowerCase();
+        if (name.startsWith("on")) el.removeAttribute(attr.name);                       // onerror= 等
+        else if ((name === "href" || name === "src" || name === "xlink:href")
+          && (val.startsWith("javascript:") || val.startsWith("data:text/html"))) {
+          el.removeAttribute(attr.name);
+        }
+      }
+    }
+  };
+  walk(template.content);
+  return template.innerHTML;
+}
+
 function renderMarkdown(text) {
   if (typeof window.marked === "undefined") {
     return `<pre style="white-space:pre-wrap; font-family:inherit">${escapeHTML(text)}</pre>`;
   }
   try {
-    return window.marked.parse(text || "", { breaks: true, gfm: true });
+    return sanitizeHTML(window.marked.parse(text || "", { breaks: true, gfm: true }));
   } catch {
     return `<pre style="white-space:pre-wrap; font-family:inherit">${escapeHTML(text)}</pre>`;
   }
@@ -3044,7 +3112,7 @@ function renderSettings() {
       <div class="panel stack">
         <h2>プロフィール</h2>
         <label>生年月日
-          <input class="input" type="date" data-setting-field="birthDate" value="${state.settings.birthDate || ""}">
+          <input class="input" type="date" data-setting-field="birthDate" value="${escapeHTML(state.settings.birthDate || "")}">
         </label>
         <label>12WY開始日
           <input class="input" type="date" data-setting-field="twelveWeekStartDate" value="${state.settings.twelveWeekStartDate || todayISO()}">
@@ -3151,7 +3219,7 @@ function renderCategoriesSettings() {
     <div class="stack" style="gap:6px">
       ${cats.map((c) => `
         <div class="row" style="gap:8px; align-items:center; background:var(--panel-soft); padding:8px; border-radius:6px">
-          <input type="color" data-cat-id="${c.id}" data-cat-field="color" value="${c.color}" style="width:36px; height:36px; padding:0; border:none; background:transparent; cursor:pointer">
+          <input type="color" data-cat-id="${escapeHTML(c.id)}" data-cat-field="color" value="${escapeHTML(c.color)}" style="width:36px; height:36px; padding:0; border:none; background:transparent; cursor:pointer">
           <input class="input" data-cat-id="${c.id}" data-cat-field="name" value="${escapeHTML(c.name)}" style="flex:1">
           <button class="btn danger" data-action="delete-category" data-cat-id="${c.id}" aria-label="削除">×</button>
         </div>
@@ -3170,9 +3238,9 @@ function renderBreakMessagesSettings() {
         <div class="stack" style="background:var(--panel-soft); padding:8px; border-radius:6px; gap:6px">
           <div class="row" style="gap:6px; align-items:center; font-size:12px">
             <span class="muted">残り</span>
-            <input class="input" type="number" min="0" max="300" data-msg-id="${m.id}" data-msg-field="fromSec" value="${m.fromSec}" style="width:70px">
+            <input class="input" type="number" min="0" max="300" data-msg-id="${escapeHTML(m.id)}" data-msg-field="fromSec" value="${Number(m.fromSec) || 0}" style="width:70px">
             <span class="muted">〜</span>
-            <input class="input" type="number" min="0" max="301" data-msg-id="${m.id}" data-msg-field="toSec" value="${m.toSec}" style="width:70px">
+            <input class="input" type="number" min="0" max="301" data-msg-id="${escapeHTML(m.id)}" data-msg-field="toSec" value="${Number(m.toSec) || 0}" style="width:70px">
             <span class="muted">秒</span>
             <button class="btn danger" data-action="delete-break-message" data-msg-id="${m.id}" style="margin-left:auto">×</button>
           </div>
@@ -3964,7 +4032,9 @@ function downloadReport() {
 }
 
 function downloadData() {
-  downloadText(`taskchute_journal_backup_${todayISO()}.json`, JSON.stringify(state, null, 2), "application/json");
+  // v37: バックアップにトークンを含めない(共有・保管されるファイルに秘密情報を残さない)。
+  //      GitHub保存(sanitizedStateForGitHub)と同じ方針。
+  downloadText(`taskchute_journal_backup_${todayISO()}.json`, JSON.stringify(sanitizedStateForGitHub(), null, 2), "application/json");
 }
 
 function importData(file) {
@@ -3972,7 +4042,14 @@ function importData(file) {
   const reader = new FileReader();
   reader.onload = () => {
     try {
-      state = normalizeState(JSON.parse(String(reader.result)));
+      // v37: 全処理が成功してから state を差し替える。
+      //      途中で例外が出ると「読み込めませんでした」と表示しつつ
+      //      中途半端な state で動き続ける事故を防ぐ。
+      const token = state.settings?.github?.token || "";
+      const next = normalizeState(JSON.parse(String(reader.result)));
+      // バックアップはトークンを含まないので、この端末のトークンを引き継ぐ
+      if (!next.settings.github.token) next.settings.github.token = token;
+      state = next;
       maintainRecurrences({ purge: true });
       saveAndRender("データをインポートしました");
     } catch {
@@ -3982,10 +4059,58 @@ function importData(file) {
   reader.readAsText(file);
 }
 
+// v37: 端末ごとの「最後に同期したリモートSHA」。
+//      state 本体には持たせない(ファイル内容は自分自身のSHAを含められないため、端末ローカルに持つ)。
+const LAST_SYNCED_SHA_KEY = "taskchute-journal-last-synced-sha";
+function getLastSyncedSha() {
+  try { return localStorage.getItem(LAST_SYNCED_SHA_KEY) || ""; } catch { return ""; }
+}
+function setLastSyncedSha(sha) {
+  try { localStorage.setItem(LAST_SYNCED_SHA_KEY, sha || ""); } catch { /* 保存できなくても致命的ではない */ }
+}
+
+// v37: 保存の同時実行ガード(自動保存と手動保存が同じSHAでPUTして409になるのを防ぐ)
+let _githubSaveInFlight = false;
+
 async function saveToGitHub(silent = false) {
+  if (_githubSaveInFlight) {
+    if (!silent) showToast("GitHub保存が進行中です。少し待ってください");
+    return;
+  }
+  _githubSaveInFlight = true;
+  // 手動・自動どちらでも、これから保存するのだから待機中の自動保存は不要
+  clearTimeout(autoSaveTimer);
   try {
     const config = requireGitHubConfig();
     const sha = await fetchGitHubFileSHA(config);
+    const lastSynced = getLastSyncedSha();
+
+    // v37: リモートが「この端末が最後に同期した状態」から進んでいる場合の保護。
+    //      別端末の新しいデータを、この端末の古い全量で黙って上書きしない。
+    if (sha && sha !== lastSynced) {
+      if (!lastSynced) {
+        // この端末はまだ一度も読込/保存していない(初期設定直後・localStorage消去後など)
+        if (silent) {
+          updateAutoSaveStatus("GitHubに既存データあり — 一度「GitHubから読込」してください(自動保存を見送りました)");
+          return;
+        }
+        const ok = window.confirm(
+          "GitHub 上に既存のデータがあります。\nこの端末の内容で上書きしますか?\n\n(別端末のデータを引き継ぐ場合は、キャンセルして先に「GitHubから読込」を押してください)"
+        );
+        if (!ok) { showToast("保存を中止しました"); return; }
+      } else {
+        // 読込以降にリモートが更新されている → 新しい方を優先
+        let remoteT = "";
+        try { remoteT = (JSON.parse((await downloadGitHubStateText(config)).text).dataModifiedAt) || ""; } catch { /* 比較不能なら進む */ }
+        if (remoteT && remoteT > (state.dataModifiedAt || "")) {
+          const msg = "GitHub側にこの端末より新しいデータがあります。「GitHubから読込」で取り込んでから保存してください";
+          if (silent) { updateAutoSaveStatus(`見送り: ${msg}`); return; }
+          showToast(`保存を中止: ${msg}`);
+          return;
+        }
+      }
+    }
+
     const content = JSON.stringify(sanitizedStateForGitHub(), null, 2);
     const response = await fetch(gitHubContentsURL(config), {
       method: "PUT",
@@ -4002,6 +4127,12 @@ async function saveToGitHub(silent = false) {
       throw new Error(await gitHubErrorMessage(response));
     }
 
+    // 保存後のファイルSHAを記録(次回の競合判定に使う)
+    try {
+      const result = await response.json();
+      if (result.content?.sha) setLastSyncedSha(result.content.sha);
+    } catch { /* SHAが取れなくても次回の保存前チェックで補正される */ }
+
     state.settings.github.lastSavedAt = nowDateTime();
     persistLocalNoSchedule();  // v25: 自動保存タイマーを再セットしない(無限保存ループ防止)
     if (!silent) showToast("GitHubへ保存しました");
@@ -4009,6 +4140,8 @@ async function saveToGitHub(silent = false) {
   } catch (error) {
     if (!silent) showToast(`GitHub保存失敗: ${error.message}`);
     else updateAutoSaveStatus(`失敗: ${error.message}`);
+  } finally {
+    _githubSaveInFlight = false;
   }
 }
 
@@ -4018,7 +4151,9 @@ const AUTO_SAVE_DEBOUNCE_MS = 30000;  // 変更後この時間で GitHub へ自�
 
 function scheduleAutoSave() {
   const cfg = state.settings?.github || {};
-  if (!cfg.autoSave) return;
+  // v37: OFF になったら予約済みのタイマーも解除する
+  //      (OFF直前の変更で予約された保存が30秒後に飛ぶのを防ぐ)
+  if (!cfg.autoSave) { clearTimeout(autoSaveTimer); return; }
   if (!cfg.token || !cfg.owner || !cfg.repo) return;
   clearTimeout(autoSaveTimer);
   updateAutoSaveStatus("変更を検知 — 30秒後に保存します");
@@ -4039,7 +4174,7 @@ function updateAutoSaveStatus(text) {
   }
 }
 
-// GitHub から app-state を取得し JSON テキストを返す(1MB 超は Blob API 経由)
+// GitHub から app-state を取得し { text, sha } を返す(1MB 超は Blob API 経由)
 async function downloadGitHubStateText(config) {
   const response = await fetch(`${gitHubContentsURL(config)}?ref=${encodeURIComponent(config.branch)}`, {
     headers: githubHeaders(config.token)
@@ -4059,19 +4194,23 @@ async function downloadGitHubStateText(config) {
     jsonText = fromBase64(blob.content || "");
   }
   if (!jsonText.trim()) throw new Error("ファイルが空です");
-  return jsonText;
+  return { text: jsonText, sha: payload.sha || "" };
 }
 
 // 手動「GitHubから読込」: リモートを採用(dataModifiedAt はリモートの値を維持)
 async function loadFromGitHub() {
   try {
     const config = requireGitHubConfig();
-    const loaded = JSON.parse(await downloadGitHubStateText(config));
+    const { text, sha } = await downloadGitHubStateText(config);
+    const loaded = JSON.parse(text);
+    // v37: 読込前の編集で予約された自動保存を取り消す(読込直後の無意味なpush防止)
+    clearTimeout(autoSaveTimer);
     const token = state.settings.github.token;
     state = normalizeState(loaded);
     state.settings.github = { ...config, token };
     maintainRecurrences({ purge: true });
     persistLocalNoSchedule();  // 採用のため dataModifiedAt は更新しない
+    setLastSyncedSha(sha);     // v37: この端末はこのリモート状態と同期済み
     render();
     showToast("GitHubから読み込みました");
   } catch (error) {
@@ -4085,16 +4224,22 @@ async function syncFromGitHubOnStartup() {
   const cfg = state.settings.github || {};
   if (!cfg.token || !cfg.owner || !cfg.repo) return;  // 未設定なら何もしない
   try {
-    const remote = JSON.parse(await downloadGitHubStateText(cfg));
-    const localT = state.dataModifiedAt || "";
+    const { text, sha } = await downloadGitHubStateText(cfg);
+    const remote = JSON.parse(text);
+    // v37: 比較は「起動時点のローカル更新時刻」と行う。
+    //      fetch中にユーザーがタブを触るなどして saveState が走ると localT が進み、
+    //      本来取り込むべき新しいリモートを永遠に取りこぼす問題への対策。
+    const localT = _startupDataModifiedAt || "";
     const remoteT = remote.dataModifiedAt || "";
     // リモートが新しいときだけ採用(ISO 文字列なので辞書順比較でよい)
     if (remoteT && remoteT > localT) {
+      clearTimeout(autoSaveTimer);
       const token = state.settings.github.token;
       state = normalizeState(remote);
       state.settings.github = { ...cfg, token };
       maintainRecurrences({ purge: true });
       persistLocalNoSchedule();
+      setLastSyncedSha(sha);   // v37: この端末はこのリモート状態と同期済み
       render();
       showToast("最新データを取り込みました");
     }
@@ -4105,10 +4250,26 @@ async function syncFromGitHubOnStartup() {
   }
 }
 
+// v37: 設定画面が開いている場合、DOM の入力値を state に同期する。
+//      iOS のキーチェーン自動入力は input イベントを発火しないことがあり、
+//      画面に値が見えているのに state が空のまま、というズレを防ぐ。
+function syncGitHubFieldsFromDOM() {
+  document.querySelectorAll("[data-github-field]").forEach((el) => {
+    const key = el.dataset.githubField;
+    if (el.type === "checkbox") return;  // autoSave は change ハンドラで処理済み
+    const val = (el.value || "").trim();
+    if (val !== (state.settings.github[key] || "")) {
+      state.settings.github[key] = val;
+    }
+  });
+}
+
 function requireGitHubConfig() {
+  syncGitHubFieldsFromDOM();
   const config = state.settings.github || defaultGitHubSettings();
+  const labels = { owner: "Owner", repo: "Repository", branch: "Branch", path: "保存先パス", token: "Token" };
   for (const key of ["owner", "repo", "branch", "path", "token"]) {
-    if (!config[key]) throw new Error(`${key} を入力してください`);
+    if (!config[key]) throw new Error(`${labels[key]} を入力してください`);
   }
   return config;
 }
@@ -4142,17 +4303,27 @@ function githubHeaders(token) {
 }
 
 async function gitHubErrorMessage(response) {
+  let raw;
   try {
     const payload = await response.json();
-    return payload.message || `${response.status} ${response.statusText}`;
+    raw = payload.message || `${response.status} ${response.statusText}`;
   } catch {
-    return `${response.status} ${response.statusText}`;
+    raw = `${response.status} ${response.statusText}`;
   }
+  // v37: よくある失敗は原因のヒント付きで返す(素の "Not Found" では対処が分からない)
+  const hints = {
+    401: "トークンが無効か期限切れです。設定画面で貼り直してください",
+    403: "トークンにこのリポジトリへの権限がありません(Fine-grained tokenの Repository access / Contents 権限を確認)",
+    404: "ファイルが見つかりません。Owner / Repository / Branch / 保存先パスの綴りを確認してください"
+  };
+  const hint = hints[response.status];
+  return hint ? `${raw} — ${hint}` : raw;
 }
 
 function sanitizedStateForGitHub() {
   const copy = structuredClone(state);
   if (copy.settings?.github) copy.settings.github.token = "";
+  copy.modal = null;  // v37: ローカル保存(persistLocalNoSchedule)と同様、モーダル状態は共有しない
   return copy;
 }
 
@@ -4369,7 +4540,10 @@ function setView(view) {
     ztCurrent = null;
   }
   state.currentView = view;
-  saveState();
+  // v37: 画面切替は「データの変更」ではない。dataModifiedAt を汚すと
+  //      端末間の新旧比較が壊れる(タブを触っただけの古い端末が「最新」扱いになる)ため、
+  //      永続化のみ行い、更新時刻スタンプと自動保存はしない。
+  persistLocalNoSchedule();
   render();
 }
 
@@ -4377,7 +4551,7 @@ function setSelectedDate(date) {
   if (!date) return;
   state.selectedDate = date;
   ensureJournal(date);
-  saveState();
+  persistLocalNoSchedule();  // v37: 日付移動も UI 操作(setView と同じ理由)
   render();
 }
 
@@ -4424,7 +4598,9 @@ async function hydrateStaticMarkdown() {
     cachedFeedback[prev] = prevFb;
     changed = true;
   }
-  if (changed && (state.view === "vision" || state.currentView === "journal")) {
+  // v37: state.view というプロパティは存在しない(正しくは currentView)。
+  //      このタイポのせいで、ビジョン画面を開いたまま読み込みが終わっても再描画されなかった。
+  if (changed && (state.currentView === "vision" || state.currentView === "journal")) {
     render();
   }
 }
@@ -4451,13 +4627,13 @@ function openMdInGithub(path) {
 
 function setVisionSection(section) {
   state.settings.visionSection = section;
-  saveState();
+  persistLocalNoSchedule();  // v37: UI 操作(dataModifiedAt を汚さない)
   render();
 }
 
 function setVisionBoardIndex(index) {
   state.settings.visionBoardIndex = index;
-  saveState();
+  persistLocalNoSchedule();  // v37: 同上
   render();
 }
 
@@ -4588,11 +4764,29 @@ function ageMetric(label, today, birthDate, age) {
 
 // 「実績・編集が入っている」= 履歴として残すべき Block か
 function isTouchedBlock(b) {
+  // v37: タイトルがルールから変えられている実体も「編集済み」として保持する
+  //      (リネームしただけの未完了インスタンスが期間外パージで消えていた)
+  const rule = b.recurrenceGroupId
+    ? (state.recurrences || []).find((r) => r.id === b.recurrenceGroupId)
+    : null;
+  const renamed = rule ? b.title !== rule.title : false;
   return Boolean(
     b.completed || b.actualStartAt || b.actualEndAt ||
     Number(b.pomodoroCount || 0) > 0 || (b.comment || "").trim() ||
-    b.isMIT || Number(b.charge || 0) > 0 || Number(b.discharge || 0) > 0
+    b.isMIT || Number(b.charge || 0) > 0 || Number(b.discharge || 0) > 0 ||
+    renamed
   );
+}
+
+// v37: 指定ルールの「未編集の実体」を取り除く(fromDate 以降のみ / 編集中のブロックは除外)。
+//      シリーズ終了・種別変更時の掃除に使う。実績のある実体は isTouchedBlock が守る。
+function removeUntouchedInstances(ruleId, { fromDate = "", excludeId = "" } = {}) {
+  state.blocks = state.blocks.filter((b) => {
+    if (b.recurrenceGroupId !== ruleId) return true;
+    if (excludeId && b.id === excludeId) return true;
+    if (fromDate && b.date < fromDate) return true;
+    return isTouchedBlock(b);
+  });
 }
 
 function recurrenceKindLabel(kind) {
@@ -4873,7 +5067,9 @@ function dateToISO(date) {
 }
 
 function dateToLocalDateTime(date) {
-  return `${dateToISO(date)}T${pad2(date.getHours())}:${pad2(date.getMinutes())}:00`;
+  // v37: 秒を切り捨てない(ポモドーロの endsAt に使われるため、
+  //      切り捨てると 10:00:45 開始のセッションが 10:25:00 で終わり最大59秒短くなる)
+  return `${dateToISO(date)}T${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
 }
 
 function parseDate(date) {
@@ -5267,7 +5463,9 @@ function saveTaskFromModal(id, fields) {
       category: fields.category || "",
       dueDate: fields.dueDate || "",
       description: fields.description || "",
-      nextRoutineId: fields.nextRoutineId || "",
+      // v37: モーダルに nextRoutineId の入力欄はないため、undefined なら既存値を保持
+      //      (以前は保存のたびに "" で消えていた)
+      nextRoutineId: fields.nextRoutineId !== undefined ? fields.nextRoutineId : (t.nextRoutineId || ""),
       updatedAt: nowDateTime()
     };
   });
@@ -5461,6 +5659,15 @@ function saveBlockFromModal(id, fields) {
     closeModal();
     saveAndRender("Blockを追加しました");
   } else {
+    // v37: 繰り返しインスタンスの日付を動かした場合、元の日付をルールの例外日に登録する。
+    //      登録しないと次回の実体化(起動時)で元の日付に同じブロックが再生成され、
+    //      「明日に延期したのに今日にも残っている」二重状態になる。
+    if (existing.recurrenceGroupId && updated.date !== existing.date) {
+      state.recurrences = (state.recurrences || []).map((r) =>
+        r.id === existing.recurrenceGroupId && !r.deleted
+          ? { ...r, exceptionDates: [...new Set([...(r.exceptionDates || []), existing.date])], updatedAt: nowDateTime() }
+          : r);
+    }
     state.blocks = state.blocks.map((b) => b.id === id ? updated : b);
     const rk = fields.recurrenceKind;
     // v23: "__keep__"・空・未指定 → この Block の編集のみ(シリーズ設定は不変)
@@ -5472,6 +5679,9 @@ function saveBlockFromModal(id, fields) {
             r.id === existing.recurrenceGroupId
               ? { ...r, deleted: true, updatedAt: nowDateTime() }
               : r);
+          // v37: 実体化済みの未来分(未編集)も取り除く。
+          //      残すと「終了したのに31日先まで表示され続ける」状態になる。
+          removeUntouchedInstances(existing.recurrenceGroupId, { fromDate: todayISO(), excludeId: id });
         }
         closeModal();
         saveAndRender("繰り返しシリーズを終了しました");
@@ -5496,6 +5706,9 @@ function saveBlockFromModal(id, fields) {
                 updatedAt: nowDateTime()
               }
             : r);
+        // v37: 旧kindで実体化済みの未来分(未編集)を取り除いてから再実体化する。
+        //      残すと「毎日→毎週」に変えても毎日分が31日先まで表示され続ける。
+        removeUntouchedInstances(liveRule.id, { fromDate: todayISO(), excludeId: id });
       } else {
         const rule = createRecurrenceRule(updated, rk);
         updated.recurrenceGroupId = rule.id;
@@ -5530,11 +5743,13 @@ function saveBlockFromModal(id, fields) {
 
 // タイムラインの空き時間行クリックで新規Block作成モーダル
 function openTimelineNewBlock(startMinute) {
-  const hour = Math.floor(startMinute / 60);
-  const minute = startMinute % 60;
+  // v37: 23時台や最下段の目盛りから追加しても "24:00"/"25:00" という
+  //      不正な時刻を作らない(datetime-local が空欄になり保存できなかった)
+  const clampedStart = Math.min(Math.max(0, startMinute), 23 * 60);
+  const endMinute = Math.min(clampedStart + 60, 23 * 60 + 59);
   const date = state.selectedDate;
-  const startISO = `${date}T${pad2(hour)}:${pad2(minute)}:00`;
-  const endISO = `${date}T${pad2(hour + 1)}:${pad2(minute)}:00`;
+  const startISO = `${date}T${pad2(Math.floor(clampedStart / 60))}:${pad2(clampedStart % 60)}:00`;
+  const endISO = `${date}T${pad2(Math.floor(endMinute / 60))}:${pad2(endMinute % 60)}:00`;
   const newBlock = {
     id: crypto.randomUUID(),
     title: "",
@@ -5668,7 +5883,7 @@ async function requestNotificationPermission() {
 
 function setPomodoroTab(tab) {
   state.pomodoro.tab = tab;
-  saveState();
+  persistLocalNoSchedule();  // v37: タブ切替は UI 操作(dataModifiedAt を汚さない)
   render();
 }
 

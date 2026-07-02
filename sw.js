@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v36";
+const CACHE_NAME = "taskchute-journal-pwa-v37";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -64,11 +64,14 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          // v37: 正常応答のみキャッシュ(500等のエラーで正常キャッシュを潰さない)
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
           return response;
         })
-        .catch(() => caches.match(event.request))
+        .catch(() => caches.match(event.request, { ignoreSearch: true }))
     );
     return;
   }
@@ -85,11 +88,16 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          // v37: 正常応答のみキャッシュ。サーバーが一時的に 500/404 を返しても
+          //      オフライン用の正常なキャッシュを上書きしない(上書きするとオフライン起動が壊れる)
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
           return response;
         })
-        .catch(() => caches.match(event.request))
+        // v37: ignoreSearch — "?utm=..." 等のクエリ付きURLでもキャッシュ済みシェルを返す
+        .catch(() => caches.match(event.request, { ignoreSearch: true }))
     );
     return;
   }
@@ -98,8 +106,13 @@ self.addEventListener("fetch", (event) => {
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
       return fetch(event.request).then((response) => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        // v37: 正常応答のみ永続キャッシュ(初回404/500を永遠に配り続けない)。
+        //      opaque(クロスオリジンのCDNスクリプト等)は中身を検査できないため従来通り許容
+        //      — 弾くと marked がオフライン用にキャッシュされなくなる。
+        if (response.ok || response.type === "opaque") {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        }
         return response;
       });
     })
