@@ -65,15 +65,9 @@ let ztSearch = "";             // 履歴検索ワード
 let ztTimerInterval = null;    // 書く画面のカウントダウン
 let ztTimerLeft = 60;
 
-// v23: 起動時に繰り返し Block を実体化(期間外・未編集は破棄)
-maintainRecurrences({ purge: true });
-
-render();
-hydrateStaticMarkdown();
-registerServiceWorker();
-startTimerTicker();
-// v25: 起動後、GitHub 側がローカルより新しければ取り込む(ローカルファースト)
-syncFromGitHubOnStartup();
+// v38: 起動処理(maintainRecurrences / render / 各種初期化)はファイル末尾で実行する。
+//      ここで render() を呼ぶと、後方で宣言される const(JOURNAL_PROMPTS 等)が
+//      未初期化のまま参照され、最後に開いていた画面によっては起動時に例外で全停止していた。
 
 document.addEventListener("click", (event) => {
   const target = event.target.closest("[data-action]");
@@ -124,6 +118,8 @@ document.addEventListener("click", (event) => {
   if (action === "reset-demo") resetDemoData();
   // v17: MIT(今日の主役)の切替(最大3個)
   if (action === "toggle-mit") toggleMIT(id);
+  // v38: AIフィードバックのMIT候補 → 今日の主役ブロック化
+  if (action === "mit-candidate-add") addMITCandidate(target.dataset.title);
   // v19: ルーティンタブの表示モード切替
   if (action === "routine-mode") {
     state.routineViewMode = target.dataset.mode || "routine";
@@ -156,7 +152,6 @@ document.addEventListener("click", (event) => {
   if (action === "reload-md") reloadStaticMarkdown();
   // === v3: ポモドーロ常時起動 ===
   if (action === "pomo-tab") setPomodoroTab(target.dataset.tab);
-  if (action === "request-notification-permission") requestNotificationPermission();
   // === v3: 日報のGitHub push ===
   if (action === "push-report") pushReportToGitHub();
   // === v6: サブタスク追加 / Project直下にTask追加 ===
@@ -1277,11 +1272,47 @@ function homeMIT(blocks) {
   const rows = mit.length
     ? mit.map((b) => homeCheckRow(b, "★")).join("")
     : `<div class="muted" style="font-size:13px;padding:6px 0">タスクシュート画面の ☆ で、今日の主役(最大3)を設定できます。</div>`;
+  // v38: 反省→行動ループの結線 — 前日のAIフィードバックの「明日のMIT候補」を提示し、
+  //      ワンタップで今日の主役ブロックにできる(枠が空いている日のみ)
+  let candidatesHTML = "";
+  const isToday = state.selectedDate === todayISO();
+  if (isToday && mit.length < 3) {
+    const prev = addDays(state.selectedDate, -1);
+    const feedbackText = cachedFeedback[prev] || state.feedback[prev] || "";
+    const existingTitles = new Set(blocks.map((b) => b.title));
+    const candidates = extractMITCandidatesFromReport(feedbackText)
+      .filter((c) => !existingTitles.has(c))
+      .slice(0, 3 - mit.length);
+    if (candidates.length) {
+      candidatesHTML = `
+        <div class="home-divider"></div>
+        <div class="muted" style="font-size:11.5px; font-weight:700; margin-bottom:6px">🤖 昨日のフィードバックからの候補</div>
+        ${candidates.map((c) => `
+          <div class="home-ck">
+            <button class="btn ghost" style="font-size:11px; padding:5px 9px" data-action="mit-candidate-add" data-title="${escapeHTML(c)}">＋ 主役に</button>
+            <span class="home-ck-name">${escapeHTML(c)}</span>
+          </div>`).join("")}`;
+    }
+  }
   return `<section class="panel">
     <div class="home-plabel orange">今日の主役<span class="home-count">${done} / ${mit.length}</span></div>
     ${rows}
     ${mit.length ? `<div class="home-foot">今日はこの${mit.length}つ。ここに集中する。</div>` : ""}
+    ${candidatesHTML}
   </section>`;
+}
+
+// v38: AIフィードバックのMIT候補を、今日の主役ブロックとして追加する
+function addMITCandidate(title) {
+  const text = (title || "").trim();
+  if (!text) return;
+  const today = todayISO();
+  const sameDayMITs = state.blocks.filter((b) => !b.deleted && b.date === today && b.isMIT);
+  if (sameDayMITs.length >= 3) return showToast("今日の主役は最大3個まで。先に他を外してください");
+  const block = makeBlock({ date: today, title: text });
+  block.isMIT = true;
+  state.blocks.push(block);
+  saveAndRender("✦ 今日の主役に追加しました(時間はタスクシュート画面で設定できます)");
 }
 
 // --- 今日のタスクシュート(着手率)---
@@ -2836,44 +2867,6 @@ function renderPassivePomodoro() {
   `;
 }
 
-function renderPassiveSettings(passive) {
-  const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
-  return `
-    <label class="checkbox-line">
-      <input type="checkbox" data-passive-field="enabled" ${passive.enabled ? "checked" : ""}>
-      常時タイマーを有効にする
-    </label>
-    <div class="field">
-      <label class="field-label">対象曜日</label>
-      <div style="display:flex; gap:6px; flex-wrap:wrap">
-        ${weekdays.map((label, i) => `
-          <label class="checkbox-line" style="background:var(--panel-soft); padding:4px 10px; border-radius:6px">
-            <input type="checkbox" data-passive-weekday="${i}" ${passive.activeWeekdays[i] ? "checked" : ""}> ${label}
-          </label>
-        `).join("")}
-      </div>
-    </div>
-    <div class="field-row">
-      <div class="field">
-        <label class="field-label">開始時刻</label>
-        <input class="input" type="time" step="300" data-passive-field="activeStartHHMM" value="${passive.activeStartHHMM}">
-      </div>
-      <div class="field">
-        <label class="field-label">終了時刻</label>
-        <input class="input" type="time" step="300" data-passive-field="activeEndHHMM" value="${passive.activeEndHHMM}">
-      </div>
-    </div>
-    <div class="row">
-      <button class="btn" data-action="request-notification-permission">通知を許可</button>
-      <button class="btn ghost" data-action="passive-test-start">▶ テスト開始(今すぐ)</button>
-    </div>
-    <div class="muted" style="font-size:11px">通知の状態: ${getNotificationPermissionLabel()}</div>
-    <div class="muted" style="font-size:11px; line-height:1.6">
-      ※ ホーム画面に追加した PWA でないと通知が動かない場合があります。<br>
-      ※ アプリを閉じている間は通知が出ません。
-    </div>
-  `;
-}
 
 // 現在の常時タイマーセッションの状態を返す(壁時計モデル: 常にアクティブ)
 // 30分サイクル(0〜24分59秒=集中、25〜29分59秒=休憩)を時計から直接読む
@@ -2915,18 +2908,22 @@ function remainingTextNormal(remainingMs) {
   return `${pad2(Math.floor(sec / 60))}:${pad2(sec % 60)}`;
 }
 
-// テスト開始(今すぐ常時タイマーを発火)
-function passiveTestStart() {
-  state.pomodoro.passive ||= defaultPassivePomodoro();
-  const now = new Date();
-  state.pomodoro.passive.lastFiredAt = Date.now();
-  state.pomodoro.passive.lastFiredKey = `TEST_${Date.now()}`;
-  saveState();
-  fireNotification("ポモドーロ開始(テスト)", "25分の集中タイム");
-  setTimeout(() => fireNotification("作業終了", "5分の休憩を取りましょう"), 25 * 60 * 1000);
-  setTimeout(() => fireNotification("休憩終了", "次の集中タイムまで余裕があります"), 30 * 60 * 1000);
-  showToast("テスト開始しました");
-  render();
+
+// v38: 朝の体調ピッカー(ジャーナル当日編集の上部)。
+//      記録するとエネルギーグラフの始点と、ジャーナル本文の「朝の体調」行に反映される。
+//      これまで setMorningEnergy は存在するのに呼び出すUIがなく、常に既定値(5)だった。
+function renderMorningEnergyPicker(date) {
+  const current = state.settings.morningEnergyLog?.[date];
+  return `
+    <div class="row" style="gap:6px; flex-wrap:wrap; margin-bottom:10px; align-items:center">
+      <span class="muted" style="font-size:12.5px; font-weight:700">🌅 朝の体調</span>
+      ${energyLevels.map((l) => `
+        <button class="btn ${current === l.value ? "primary" : "ghost"}" style="font-size:12px; padding:6px 10px"
+          data-action="set-morning" data-value="${l.value}">${l.label}</button>
+      `).join("")}
+      ${current === undefined ? `<span class="muted" style="font-size:11px">未記録(タップで記録 → エネルギーグラフの始点になります)</span>` : ""}
+    </div>
+  `;
 }
 
 function renderJournal() {
@@ -2954,6 +2951,7 @@ function renderJournal() {
             ${(state.settings.github?.token && state.settings.github?.owner) ? `<button class="btn" data-action="push-report">📤 GitHubに日報push</button>` : ""}
           </div>
         </div>
+        ${renderMorningEnergyPicker(date)}
         <details class="journal-prompts" style="margin-bottom:10px; padding:8px 12px; background:var(--panel-soft); border-radius:8px">
           <summary style="cursor:pointer; font-size:13px; color:var(--muted); font-weight:600">💡 思考のヒント(クリックで開閉)</summary>
           <div style="margin-top:10px; display:grid; gap:10px; font-size:12px">
@@ -4010,6 +4008,8 @@ function generateReport() {
   lines.push("3. 明日への具体的な提案(2〜3個)");
   lines.push("4. この日報を踏まえ、明日「0秒思考」で思考を深めるべきテーマ(2〜3個)");
   lines.push("   ※ 各テーマは1分で書き出せる問い形式で示すこと");
+  lines.push("5. 明日の MIT 候補(最大3つ)");
+  lines.push("   ※ 「明日のMIT候補」という見出しの下に「- 」の箇条書きで示すこと(アプリが読み取ります)");
   lines.push("");
   lines.push("の観点で、簡潔にフィードバックをください。");
   lines.push("(辛口でも構いません、ただし行動に繋がる具体性を重視)");
@@ -4656,7 +4656,11 @@ function showToast(message) {
 
 function ensureJournal(date) {
   if (!state.journals[date]) {
-    state.journals[date] = state.settings.journalTemplate || defaultJournal(date);
+    // v38: journalTemplate には作成時の日付が「# YYYY-MM-DD のジャーナル」として
+    //      焼き込まれているため、その日の日付に置き換えてから使う
+    //      (毎日同じ日付のジャーナルが生成されていた)
+    const tpl = state.settings.journalTemplate || defaultJournal(date);
+    state.journals[date] = tpl.replace(/^# \d{4}-\d{2}-\d{2} のジャーナル/m, `# ${date} のジャーナル`);
   }
 }
 
@@ -5846,40 +5850,8 @@ function defaultPassivePomodoro() {
   };
 }
 
-function getPassivePomodoroStatus() {
-  const p = state.pomodoro?.passive || defaultPassivePomodoro();
-  if (!p.enabled) return "無効";
-  const now = new Date();
-  const weekday = now.getDay();
-  const dayLabel = ["日", "月", "火", "水", "木", "金", "土"][weekday];
-  if (!p.activeWeekdays[weekday]) return `今日(${dayLabel})は対象外`;
-  const currentHHMM = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
-  if (currentHHMM < p.activeStartHHMM || currentHHMM > p.activeEndHHMM) {
-    return `時間帯外 (${p.activeStartHHMM}〜${p.activeEndHHMM})`;
-  }
-  return `アクティブ — 次の発火: 毎時 00 分 / 30 分`;
-}
 
-function getNotificationPermissionLabel() {
-  if (!("Notification" in window)) return "このブラウザは通知非対応";
-  if (Notification.permission === "granted") return "✓ 許可済み";
-  if (Notification.permission === "denied") return "拒否(Safariの設定から変更可能)";
-  return "未許可";
-}
 
-async function requestNotificationPermission() {
-  if (!("Notification" in window)) {
-    showToast("このブラウザは通知に対応していません");
-    return;
-  }
-  if (Notification.permission === "granted") {
-    showToast("既に許可されています");
-    return;
-  }
-  const result = await Notification.requestPermission();
-  showToast(result === "granted" ? "通知を許可しました" : "通知が許可されませんでした");
-  render();
-}
 
 function setPomodoroTab(tab) {
   state.pomodoro.tab = tab;
@@ -5887,51 +5859,7 @@ function setPomodoroTab(tab) {
   render();
 }
 
-function checkPassivePomodoro() {
-  const p = state.pomodoro?.passive;
-  if (!p?.enabled) return;
-  const now = new Date();
-  const weekday = now.getDay();
-  if (!p.activeWeekdays[weekday]) return;
-  const currentHHMM = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
-  if (currentHHMM < p.activeStartHHMM) return;
-  if (currentHHMM > p.activeEndHHMM) return;
-  const minute = now.getMinutes();
-  if (minute !== 0 && minute !== 30) return;
-  // 重複発火防止
-  const fireKey = `${now.toDateString()} ${pad2(now.getHours())}:${pad2(minute)}`;
-  if (state.pomodoro.passive.lastFiredKey === fireKey) return;
-  state.pomodoro.passive.lastFiredKey = fireKey;
-  state.pomodoro.passive.lastFiredAt = Date.now();
-  saveState();
-  fireNotification(
-    "ポモドーロ開始",
-    `${pad2(now.getHours())}:${pad2(minute)} から 25 分の集中タイム`
-  );
-  // 25分後の作業終了通知をスケジュール
-  setTimeout(() => {
-    fireNotification("ポモドーロ作業終了", "5 分の休憩を取りましょう");
-  }, 25 * 60 * 1000);
-  // 30分後(休憩終了)
-  setTimeout(() => {
-    fireNotification("休憩終了", "次の集中タイムまで余裕があります");
-  }, 30 * 60 * 1000);
-}
 
-function fireNotification(title, body) {
-  if (!("Notification" in window)) return;
-  if (Notification.permission !== "granted") return;
-  try {
-    new Notification(title, {
-      body,
-      icon: "./assets/icon.svg",
-      tag: "passive-pomodoro",
-      silent: false
-    });
-  } catch (e) {
-    console.warn("Notification failed:", e);
-  }
-}
 
 // normalizeState の補完
 function ensurePassivePomodoro() {
@@ -5942,7 +5870,6 @@ function ensurePassivePomodoro() {
     state.pomodoro.passive.activeWeekdays = [false, true, true, true, true, true, false];
   }
 }
-ensurePassivePomodoro();
 
 // ============================================================
 // AI フィードバック アップロード + 日報 GitHub push (v3)
@@ -6136,3 +6063,19 @@ function saveActualEntryFromModal(blockId, fields) {
   state.timelineMode = "actual";
   saveAndRender("✅ 実績を登録しました");
 }
+
+// ============================================================
+// v38: 起動処理 — 必ずモジュール末尾で実行する。
+// これより上のすべての関数・const が初期化済みであることを保証するため。
+// (以前はファイル先頭付近で render() していて、ジャーナル画面を開いたまま
+//  再起動すると JOURNAL_PROMPTS 未初期化の例外でアプリ全体が起動不能だった)
+// ============================================================
+ensurePassivePomodoro();
+// v23: 起動時に繰り返し Block を実体化(期間外・未編集は破棄)
+maintainRecurrences({ purge: true });
+render();
+hydrateStaticMarkdown();
+registerServiceWorker();
+startTimerTicker();
+// v25: 起動後、GitHub 側がローカルより新しければ取り込む(ローカルファースト)
+syncFromGitHubOnStartup();
