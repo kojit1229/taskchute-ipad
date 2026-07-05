@@ -2323,3 +2323,9 @@ h3 {
 .weekly-cycle-link { display: block; text-align: center; font-size: 13px; font-weight: 700; color: var(--accent); background: rgba(0,122,255,.06); border: 1px solid rgba(0,122,255,.2); border-radius: 10px; padding: 11px; margin-bottom: 14px; cursor: pointer; }
 .cycle-goal { margin-bottom: 12px; }
 .cycle-goal-top { display: flex; justify-content: space-between; font-size: 13.5px; font-weight: 600; margin-bottom: 5px; gap: 10px; }
+
+/* v46: 未完了ブロックの繰り越し */
+.carryover-panel { margin-bottom: 12px; padding: 10px 12px; background: rgba(124,178,228,.08); border: 1px solid rgba(124,178,228,.28); border-radius: 10px; }
+.carryover-cap { font-size: 12px; font-weight: 800; color: var(--muted); margin-bottom: 6px; }
+.carryover-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 0; }
+.carryover-title { font-size: 13.5px; font-weight: 600; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
