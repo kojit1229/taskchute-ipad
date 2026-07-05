@@ -2318,3 +2318,8 @@ h3 {
 
 /* v44: 問い→プロジェクト橋 — 実行リンク */
 .q-linked { margin-top: 8px; font-size: 12.5px; font-weight: 700; color: var(--accent); cursor: pointer; }
+
+/* v45: 12週サイクルレビュー */
+.weekly-cycle-link { display: block; text-align: center; font-size: 13px; font-weight: 700; color: var(--accent); background: rgba(0,122,255,.06); border: 1px solid rgba(0,122,255,.2); border-radius: 10px; padding: 11px; margin-bottom: 14px; cursor: pointer; }
+.cycle-goal { margin-bottom: 12px; }
+.cycle-goal-top { display: flex; justify-content: space-between; font-size: 13.5px; font-weight: 600; margin-bottom: 5px; gap: 10px; }
