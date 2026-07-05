@@ -1,5 +1,5 @@
 {
-  "currentView": "weekly",
+  "currentView": "wbs",
   "selectedDate": "2026-07-01",
   "zeroThinking": {
     "themes": [
@@ -74,7 +74,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-07-01T13:32:00"
+      "lastSavedAt": "2026-07-06T05:07:15"
     },
     "visionSection": "board",
     "visionBoardIndex": 0,
@@ -229,7 +229,8 @@
       "deleted": false,
       "startDate": "",
       "dueDate": "",
-      "description": ""
+      "description": "",
+      "collapsed": true
     },
     {
       "id": "6631735e-936f-42eb-87d6-86e5d80324da",
@@ -243,7 +244,8 @@
       "deleted": false,
       "startDate": "",
       "dueDate": "",
-      "description": ""
+      "description": "",
+      "collapsed": true
     },
     {
       "id": "dd5b7a8d-f08f-4b1a-81db-89654d2b0f54",
@@ -311,7 +313,8 @@
       "deleted": false,
       "startDate": "",
       "dueDate": "",
-      "description": ""
+      "description": "",
+      "collapsed": true
     },
     {
       "id": "04f7156d-2bf7-4069-8430-fd4db6dd0af4",
@@ -1365,7 +1368,7 @@
       "createdAt": "2026-05-26T15:23:00",
       "updatedAt": "2026-05-27T09:20:00",
       "deleted": false,
-      "collapsed": false
+      "collapsed": true
     },
     {
       "targetYear": null,
@@ -40083,7 +40086,7 @@
     }
   ],
   "timelineMode": "actual",
-  "dataModifiedAt": "2026-07-06T05:06:42",
+  "dataModifiedAt": "2026-07-06T05:10:01",
   "journalMeta": {},
   "questions": [],
   "weeklyReviews": {},
