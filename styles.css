@@ -2293,3 +2293,8 @@ h3 {
 .wk-net-val { font-size: 11.5px; font-weight: 800; text-align: center; margin-top: 3px; color: var(--muted); }
 .wk-net-val.pos { color: var(--green); }
 .wk-net-val.neg { color: var(--red); }
+
+/* v41: 見込み終了時刻(色分け・警告なし。有限性を時刻で見せるだけ) */
+.projected-end { font-size: 12.5px; font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; }
+.projected-end:empty { display: none; }
+.home-zone .projected-end { margin-left: auto; font-size: 12px; }
