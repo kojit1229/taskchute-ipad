@@ -240,6 +240,15 @@ document.addEventListener("click", (event) => {
   if (action === "weekly-download") downloadWeekly(target.dataset.week);
   if (action === "weekly-push") pushWeeklyToGitHub(target.dataset.week);
   if (action === "weekly-open-question") { state.settings.zeroTab = "question"; persistLocalNoSchedule(); setView("zero"); }
+  // v42: AIループ搬送
+  if (action === "report-copy-ai") copyReportToClipboard();
+  if (action === "report-share-ai") shareReport();
+  if (action === "journal-import-ai") {
+    const d = target.dataset.date;
+    openAiImportModal(d, parseAiFeedback(state.feedback[d] || cachedFeedback[d] || ""));
+  }
+  if (action === "ai-import-submit") submitAiImport();
+  if (action === "ai-mit-adopt") adoptAiMit(Number(target.dataset.index));
   // v39/v40: エネルギー構造からの行動導線
   if (action === "energy-open-routine") openRoutineForWeekday(Number(target.dataset.day));
   if (action === "energy-open-category") {
@@ -578,6 +587,12 @@ function normalizeState(value) {
     block.taskId = otherTask.id;
   }
   value.journals ||= {};
+  // v42: 日ごとのメタ(AIフィードバック取り込み由来。journals は文字列なので別ストア)
+  value.journalMeta ||= {};
+  Object.values(value.journalMeta).forEach((j) => {
+    if (!Array.isArray(j.aiMitCandidates)) j.aiMitCandidates = [];
+    if (!("aiImported" in j)) j.aiImported = false;
+  });
   value.feedback ||= {};
   value.reports ||= {};
   // v34: 0秒思考(未知フィールドはデフォルトに足すだけで既存データを壊さない)
@@ -1622,11 +1637,130 @@ function addTaskToToday(taskId) {
 }
 
 // v17: 前日の日報から「明日の MIT 候補」を抽出する
+// v42: =========================================================
+//  AIループ搬送自動化(日報 ⇄ AI の運搬だけを自動化。思考は自動化しない)
+// =========================================================
+
+// 出力: 1タップ搬出(コピー / 共有)
+async function copyReportToClipboard() {
+  const report = state.reports[state.selectedDate];
+  if (!report) return showToast("先に日報を生成してください");
+  try {
+    await navigator.clipboard.writeText(report);
+    showToast("コピーしました — AIに貼り付けてください");
+  } catch {
+    // フォールバック: textarea を選択して execCommand
+    const ta = document.querySelector(".report-output");
+    if (ta) { ta.removeAttribute("readonly"); ta.select(); try { document.execCommand("copy"); } catch {} ta.setAttribute("readonly", ""); showToast("コピーしました"); }
+    else showToast("コピーに失敗しました");
+  }
+}
+async function shareReport() {
+  const report = state.reports[state.selectedDate];
+  if (!report) return showToast("先に日報を生成してください");
+  try { await navigator.share({ text: report }); } catch { /* キャンセル等は無視 */ }
+}
+
+// 入力: 貼り付けテキストをセクション抽出(^## 見出しで分割し「- 」行を候補化)
+function parseAiFeedback(text) {
+  const out = { themes: [], mits: [], questions: [] };
+  const map = [["0秒思考テーマ", "themes"], ["MIT候補", "mits"], ["問い候補", "questions"]];
+  let cur = null;
+  (text || "").split("\n").forEach((line) => {
+    const h = line.match(/^#{1,6}\s*(.+?)\s*$/);
+    if (h) { const hit = map.find(([kw]) => h[1].includes(kw)); cur = hit ? hit[1] : null; return; }
+    if (cur) { const m = line.match(/^\s*[-・•*]\s*(.+?)\s*$/); if (m && m[1]) out[cur].push(m[1].trim()); }
+  });
+  return out;
+}
+
+let _aiImportCtx = null;  // { date, parsed } — 非永続
+function openAiImportModal(date, parsed) {
+  const total = parsed.themes.length + parsed.mits.length + parsed.questions.length;
+  if (!total) return showToast("取り込める候補が見つかりませんでした(見出し構成をご確認ください)");
+  _aiImportCtx = { date, parsed };
+  state.modal = { type: "aiImport", id: date };
+  renderModal(buildAiImportModal(parsed));
+}
+function buildAiImportModal(parsed) {
+  const sec = (title, key, items) => items.length ? `
+    <div class="ai-import-sec">
+      <div class="ai-import-h">${title}</div>
+      ${items.map((t, i) => `<label class="ai-import-row"><input type="checkbox" data-ai-type="${key}" data-ai-index="${i}" checked><span>${escapeHTML(t)}</span></label>`).join("")}
+    </div>` : "";
+  return `
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">🤖 AIフィードバックから取り込み</h3>
+        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        ${sec("💭 0秒思考テーマ", "themes", parsed.themes)}
+        ${sec("★ MIT候補", "mits", parsed.mits)}
+        ${sec("❓ 問い候補", "questions", parsed.questions)}
+        <div class="muted" style="font-size:11.5px; line-height:1.6; margin-top:6px">チェックした項目だけ登録します。MIT候補は Block 化せず、翌日のタスクシュート上部に候補として並び、タップで採用します(採用判断は人間)。</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-action="modal-close">キャンセル</button>
+        <button class="btn primary" data-action="ai-import-submit">取り込む</button>
+      </div>
+    </div>`;
+}
+function submitAiImport() {
+  if (!_aiImportCtx) return closeModal();
+  const { date, parsed } = _aiImportCtx;
+  const picked = { themes: [], mits: [], questions: [] };
+  modalRoot.querySelectorAll("input[data-ai-type]:checked").forEach((el) => {
+    picked[el.dataset.aiType].push(parsed[el.dataset.aiType][Number(el.dataset.aiIndex)]);
+  });
+  // テーマ: 完全一致は skip(二重防止)
+  const existing = new Set(state.zeroThinking.themes.map((t) => t.text));
+  picked.themes.forEach((text) => {
+    if (!existing.has(text)) state.zeroThinking.themes.push({ id: crypto.randomUUID(), text, fav: false, questionId: null, createdAt: nowDateTime() });
+  });
+  // MIT候補: Block化せず journalMeta へ(翌日チップ表示、当日限り)
+  const meta = (state.journalMeta[date] ||= { aiMitCandidates: [], aiImported: false });
+  picked.mits.forEach((t) => { if (!meta.aiMitCandidates.includes(t)) meta.aiMitCandidates.push(t); });
+  // 問い候補: origin:'ai' で追加
+  picked.questions.forEach((text) => state.questions.push(makeQuestion({ text, origin: "ai" })));
+  meta.aiImported = true;
+  _aiImportCtx = null;
+  closeModal();
+  saveAndRender(`取り込みました(テーマ${picked.themes.length}・MIT${picked.mits.length}・問い${picked.questions.length})`);
+}
+
+// タスクシュート上部の MIT候補チップ(前日フィードバックの取り込み分、当日限り)
+function aiMitChips() {
+  const today = todayISO();
+  if (state.selectedDate !== today) return "";
+  const prev = addDays(today, -1);
+  const cands = state.journalMeta[prev]?.aiMitCandidates || [];
+  if (!cands.length) return "";
+  return `<div class="ai-mit-chips">
+    <span class="ai-mit-cap">MIT候補(昨日のAIより):</span>
+    ${cands.map((t, i) => `<button class="ai-mit-chip" data-action="ai-mit-adopt" data-index="${i}">＋ ${escapeHTML(t)}</button>`).join("")}
+  </div>`;
+}
+function adoptAiMit(index) {
+  const prev = addDays(todayISO(), -1);
+  const meta = state.journalMeta[prev];
+  const title = meta?.aiMitCandidates?.[index];
+  if (!title) return;
+  const today = todayISO();
+  const sameDayMITs = state.blocks.filter((b) => !b.deleted && b.date === today && b.isMIT);
+  if (sameDayMITs.length >= 3) return showToast("今日の主役は最大3個まで。先に他を外してください");
+  const block = makeBlock({ date: today, title });
+  block.isMIT = true;
+  state.blocks.push(block);
+  meta.aiMitCandidates.splice(index, 1);  // 採用したら候補から外す
+  saveAndRender("✦ 今日の主役に追加しました");
+}
+
 function extractMITCandidatesFromReport(reportText) {
   if (!reportText) return [];
   // 「明日の MIT 候補:」の行から数行抽出(箇条書きまたは1行)
   const lines = reportText.split("\n");
-  const idx = lines.findIndex((line) => /明日の\s*MIT\s*候補/i.test(line));
+  const idx = lines.findIndex((line) => /(?:明日の)?\s*MIT\s*候補/i.test(line));  // v42: "## MIT候補" 固定フォーマットにも対応
   if (idx < 0) return [];
   const candidates = [];
   // 同じ行に「: 内容」がある場合
@@ -2239,6 +2373,7 @@ function renderTasks() {
   return `
     ${renderHeader("今日の実行リスト", "タスクシュート", projectedEndBadge())}
     ${renderDateBar()}
+    ${aiMitChips()}
     <section class="form-strip">
       <input id="blockTitle" class="input" placeholder="Block名">
       <select id="blockCategory" class="select">
@@ -3104,6 +3239,7 @@ function renderJournal() {
         ` : `
           <textarea class="textarea" data-feedback-date="${date}" placeholder="外部AIの返答をここに貼り付け、または上のボタンで .md ファイルをアップロード">${escapeHTML(feedbackFromState)}</textarea>
         `}
+        <button class="btn ghost" data-action="journal-import-ai" data-date="${date}" style="font-size:12px; margin-top:8px">🤖 AI返信から取り込み(テーマ/MIT/問い)</button>
         ${feedbackFromFilePrev && previous !== date ? `
           <details style="margin-top:14px">
             <summary class="muted" style="cursor:pointer; font-size:12px">前日(${previous})のフィードバックも見る</summary>
@@ -3219,10 +3355,13 @@ function renderReports() {
   return `
     ${renderHeader("生成AIへ渡す素材", "日報")}
     ${renderDateBar()}
-    <div class="row" style="margin-bottom:12px">
+    <div class="row" style="margin-bottom:12px; flex-wrap:wrap; gap:8px">
       <button class="btn primary" data-action="generate-report">日報を生成</button>
+      ${report ? `<button class="btn" data-action="report-copy-ai">📋 AI用にコピー</button>` : ""}
+      ${report && typeof navigator !== "undefined" && navigator.share ? `<button class="btn" data-action="report-share-ai">↗ 共有</button>` : ""}
       <button class="btn" data-action="download-report">Markdown保存</button>
     </div>
+    ${report ? `<div class="muted" style="font-size:11.5px; margin-bottom:10px; line-height:1.6">コピー/共有 → AI(Claude等)へ貼付 → 返信をジャーナルの「AIフィードバック」に貼ると、テーマ/MIT候補/問い候補を取り込めます。</div>` : ""}
     <textarea class="textarea report-output" readonly>${escapeHTML(report || "まだ日報がありません。")}</textarea>
   `;
 }
@@ -4690,6 +4829,14 @@ function generateReport() {
   lines.push("(辛口でも構いません、ただし行動に繋がる具体性を重視)");
   lines.push("");
   lines.push("レビュー結果は Markdown 形式の .md ファイルとして出力してください。");
+  // v42: 出力フォーマットを固定(アプリのパーサ前提)。頑健性はプロンプト側で買う。
+  lines.push("");
+  lines.push("回答は必ず次の見出し構成で出力してください。各候補は「- 」で始まる箇条書き。");
+  lines.push("## フィードバック");
+  lines.push("## 明日の0秒思考テーマ");
+  lines.push("## MIT候補");
+  lines.push("## 問い候補");
+  lines.push("該当がないセクションは見出しごと省略してください。");
   lines.push("```");
 
   const report = lines.join("\n");
@@ -6877,4 +7024,19 @@ syncFromGitHubOnStartup();
 //      日付判定入りなので何度呼んでも安全(展開の完了は演出しない)。
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && runDailyOpen()) render();
+});
+
+// v42: AIフィードバック欄への貼り付けで、構造化取り込みモーダルを開く
+//      (抽出ゼロなら何もしない = 従来の自由貼り付けも壊さない)
+document.addEventListener("paste", (event) => {
+  const t = event.target;
+  if (!t || !t.matches || !t.matches("[data-feedback-date]")) return;
+  const date = t.dataset.feedbackDate;
+  setTimeout(() => {
+    const text = t.value || "";
+    state.feedback[date] = text;
+    saveState();
+    const parsed = parseAiFeedback(text);
+    if (parsed.themes.length + parsed.mits.length + parsed.questions.length > 0) openAiImportModal(date, parsed);
+  }, 0);
 });
