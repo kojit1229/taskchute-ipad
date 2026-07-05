@@ -2,13 +2,15 @@
 
 iPad / iPhone / PC のブラウザで使える、タスクシュート + WBS + タイムライン + ジャーナルのWebアプリです。
 
+> 📐 技術構造の詳細は **[`設計書.md`](./設計書.md)** を参照。設計思想は `CONCEPT.md`(リポジトリ外で管理)。
+
 ## 方針
 
 - iOSネイティブではなく PWA として実装
 - GitHub Pages で公開可能
 - iPhone/iPad は Safari から「ホーム画面に追加」で利用
-- 初期データ保存はブラウザの `localStorage`
-- 端末間同期は後フェーズで Supabase / Firebase / Cloudflare などを検討
+- データ保存はブラウザの `localStorage` を主とし、GitHub 上の `app-state.json` 1ファイルで端末間同期・バックアップ
+- 実行時依存はゼロ(Markdown パーサ `marked` のみ同梱、CDN 非依存)
 
 ## 起動
 
@@ -24,24 +26,28 @@ npm run dev
 
 | ファイル | 役割 |
 |---|---|
-| `index.html` | アプリの入口 |
-| `styles.css` | レスポンシブUI |
-| `app.js` | PWA版MVPの画面・状態管理 |
+| `index.html` | アプリの入口(静的な骨格のみ) |
+| `app.js` | 本体。状態管理・全画面描画・同期・繰り返し等すべて |
+| `styles.css` | レスポンシブUI・テーマ |
+| `marked.min.js` | Markdown パーサ(同梱) |
 | `manifest.webmanifest` | ホーム画面追加用 manifest |
 | `sw.js` | オフラインキャッシュ用 service worker |
-| `Docs/WebAppPivot.md` | iOSネイティブ版からWeb/PWA版への方針転換メモ |
+| `app-state.json` | GitHub 同期先(token は除去して保存) |
+| `設計書.md` | 技術設計書 |
 
 ## 現在できること
 
-- ホーム: 朝の体調、12WY/今年のアンドン、今日のBlock表示
-- WBS: Project / Task 追加、Taskを今日のBlockへ登録
-- タスクシュート: Block追加、完了、開始/終了時刻、充電/放電
-- タイムライン: 予定Blockの時間軸表示、累積エネルギーポイント
-- ポモドーロ: Blockに紐づく25分タイマー
-- ジャーナル: 前日/当日/AIフィードバックの3ペイン
-- 日報: Markdown生成、ダウンロード
-- ビジョン: Vision / Affirmation の編集
-- 設定: プロフィール、JSONエクスポート/インポート
+- ホーム(コックピット): 信条・寿命カウントダウン・スコアボード・4ゾーン
+- WBS: Project / Task ツリー、中断、Taskを今日のBlockへ登録
+- タスクシュート: Block追加、着手/完了、実績時刻、充電/放電
+- タイムライン: 予定/実績の時間軸表示、累積エネルギー
+- ルーティン / ポモドーロ(任意・常時)
+- ジャーナル: 前日/当日/AIフィードバックの3ペイン、朝の体調
+- 0秒思考: 1テーマ1分の書き出し、履歴、日報連携
+- やりたいこと / やらないこと リスト
+- 日報: Markdown生成・ダウンロード・GitHub push
+- ビジョン: Vision / Affirmation / ビジョンボード
+- 設定: プロフィール・GitHub同期・マスタ編集・JSON入出力
 
 ## GitHub Pages 公開
 
