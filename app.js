@@ -502,6 +502,7 @@ function normalizeState(value) {
   value.blocks = value.blocks.map((block) => ({
     isMIT: false,
     source: "",
+    estimateMin: null,   // v41: 見積時間(分)。null は解決順で埋める(入力必須にしない)
     ...block,
     plannedStartAt: fixDateTime(block.plannedStartAt),
     plannedEndAt: fixDateTime(block.plannedEndAt),
@@ -603,6 +604,8 @@ function normalizeState(value) {
   // v40: 週カーソル / ルーティン曜日フィルタ(UI状態、null=未設定)
   if (!("weeklySelectedWeek" in value.settings)) value.settings.weeklySelectedWeek = null;
   if (!("routineDayFilter" in value.settings)) value.settings.routineDayFilter = null;
+  // v41: 日次オープン処理が最後に走った日付
+  value.settings.lastOpenedDate ||= "";
   // v23: 繰り返しをルール方式へ(旧データは初回のみ自動移行)
   value.recurrences ||= [];
   migrateRecurrencesIfNeeded(value);
@@ -991,6 +994,7 @@ function makeBlock(input) {
     discharge: Number(input.discharge || 0),
     expectedCharge: input.expectedCharge ?? "",
     expectedDischarge: input.expectedDischarge ?? "",
+    estimateMin: input.estimateMin ?? null,   // v41: 見積時間(分)
     comment: input.comment || "",
     recurrenceGroupId: input.recurrenceGroupId || "",
     pomodoroCount: Number(input.pomodoroCount || 0),
@@ -1113,7 +1117,7 @@ function renderHome() {
     ${homeHero(blocks, isToday)}
     ${homeScoreboard(blocks)}
     <div class="home-zone-block z-amber" id="homezone-1">
-      <div class="home-zone amber">今日、すすめる</div>
+      <div class="home-zone amber">今日、すすめる${projectedEndBadge()}</div>
       <div class="home-grid">
         ${homeMIT(blocks)}
         ${homeTaskchute(blocks)}
@@ -2233,7 +2237,7 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false) 
 
 function renderTasks() {
   return `
-    ${renderHeader("今日の実行リスト", "タスクシュート")}
+    ${renderHeader("今日の実行リスト", "タスクシュート", projectedEndBadge())}
     ${renderDateBar()}
     <section class="form-strip">
       <input id="blockTitle" class="input" placeholder="Block名">
@@ -5207,6 +5211,8 @@ function startTimerTicker() {
     if (state.currentView === "pomodoro" && state.pomodoro?.tab === "passive") {
       renderMain();
     }
+    // v41: 見込み終了時刻は該当 span のみ差し替え(全再描画しない)
+    updateProjectedEndTick();
   }, 500);
 }
 
@@ -6212,6 +6218,10 @@ function buildBlockModal(block) {
             <input class="input" type="datetime-local" step="300" data-modal-field="actualEndAt" value="${toLocalInput(block.actualEndAt)}">
           </div>
         </div>
+        <div class="field">
+          <label class="field-label">見積時間(分・任意)</label>
+          <input class="input" type="number" min="0" step="5" data-modal-field="estimateMin" data-modal-kind="number" value="${block.estimateMin ?? ""}" placeholder="空欄なら過去実績/30分で自動">
+        </div>
         <div class="field-row">
           <div class="field">
             <label class="field-label">充電 (0-5)</label>
@@ -6319,6 +6329,8 @@ function saveBlockFromModal(id, fields) {
     orderIndex: existing?.orderIndex || 0,
     isMIT: existing?.isMIT || false,
     source: existing?.source || "",
+    // v41: 見積時間(分)。空欄は null(解決順で補完)
+    estimateMin: (fields.estimateMin != null && fields.estimateMin !== "") ? Number(fields.estimateMin) : (existing?.estimateMin ?? null),
     createdAt: existing?.createdAt || nowDateTime(),
     updatedAt: nowDateTime(),
     deleted: false
@@ -6666,6 +6678,10 @@ function completeBlockWithActual(blockId) {
 }
 
 function buildActualEntryModal(block, defaultStart, defaultEnd) {
+  // v41: 充電/放電プリフィル(過去実績の中央値)。注記は付けない — 静かに入っているだけ。
+  const pf = prefillEnergy(block);
+  const chargeSel = pf ? pf.charge : (block.charge || 0);
+  const dischargeSel = pf ? pf.discharge : (block.discharge || 0);
   return `
     <div class="modal-card" role="dialog" aria-modal="true">
       <div class="modal-header">
@@ -6693,13 +6709,13 @@ function buildActualEntryModal(block, defaultStart, defaultEnd) {
           <div class="field">
             <label class="field-label">充電 (0-5)</label>
             <select class="select" data-modal-field="charge" data-modal-kind="number">
-              ${rangeOptions(0, 5, block.charge || 0)}
+              ${rangeOptions(0, 5, chargeSel)}
             </select>
           </div>
           <div class="field">
             <label class="field-label">放電 (0-5)</label>
             <select class="select" data-modal-field="discharge" data-modal-kind="number">
-              ${rangeOptions(0, 5, block.discharge || 0)}
+              ${rangeOptions(0, 5, dischargeSel)}
             </select>
           </div>
         </div>
@@ -6746,17 +6762,119 @@ function saveActualEntryFromModal(blockId, fields) {
 }
 
 // ============================================================
+// v41: =========================================================
+//  自動化(実行系の質改善)— 搬送は自動化、判断は自動化しない。
+// =========================================================
+
+// §2 日次オープン: 日付が変わって最初の起動/復帰でルーティンを自動展開。
+//   展開の冪等性は maintainRecurrences 側(recurrenceGroupId×date 既存なら skip)で担保。
+//   変えた日を lastOpenedDate に記録。新しい日を検出したら true を返す。
+function runDailyOpen({ force = false } = {}) {
+  const today = todayISO();
+  const isNewDay = state.settings.lastOpenedDate !== today;
+  if (!force && !isNewDay) return false;
+  maintainRecurrences({ purge: true });  // 既存の展開ロジックを流用
+  if (isNewDay) {
+    state.settings.lastOpenedDate = today;
+    saveState();  // 実データ変更(dataModifiedAt 更新)
+  }
+  return isNewDay;
+}
+
+// §3 見込み終了時刻 -------------------------------------------------
+function _energyMedian(nums) {
+  if (!nums.length) return null;
+  const s = [...nums].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2);
+}
+function _actualDurationMin(b) {
+  if (!b.actualStartAt || !b.actualEndAt) return null;
+  const d = minutesOf(b.actualEndAt) - minutesOf(b.actualStartAt);
+  return d > 0 ? d : null;
+}
+// 見積の解決順: ①手入力 estimateMin → ②同 recurrenceGroupId の過去実績中央値 → ③30分
+function resolveEstimateMin(block) {
+  if (Number.isFinite(block.estimateMin) && block.estimateMin > 0) return block.estimateMin;
+  if (block.recurrenceGroupId) {
+    const past = state.blocks
+      .filter((b) => !b.deleted && b.completed && b.recurrenceGroupId === block.recurrenceGroupId && b.id !== block.id)
+      .map(_actualDurationMin).filter((v) => v != null);
+    const med = _energyMedian(past);
+    if (med) return med;
+  }
+  return 30;
+}
+// 見込み終了(分)= 今 + Σ(残りブロックの残見積)
+function computeProjectedEnd(dateISO, nowMin) {
+  let sum = 0;
+  blocksForDate(dateISO).filter((b) => !b.completed).forEach((b) => {
+    const est = resolveEstimateMin(b);
+    if (b.actualStartAt) {
+      const elapsed = Math.max(0, nowMin - minutesOf(b.actualStartAt));  // 着手中は残りのみ
+      sum += Math.max(0, est - elapsed);
+    } else {
+      sum += est;  // 未着手は満額
+    }
+  });
+  return nowMin + sum;
+}
+// テキスト部分だけ返す(毎分の textContent 差し替えで使う)。残なし/今日以外は空。
+function projectedEndText() {
+  const today = todayISO();
+  if (state.selectedDate !== today) return "";
+  const remaining = blocksForDate(today).filter((b) => !b.completed);
+  if (!remaining.length) return "";
+  const now = new Date();
+  const end = computeProjectedEnd(today, now.getHours() * 60 + now.getMinutes());
+  const hh = Math.floor((end % 1440) / 60);
+  const mm = end % 60;
+  const over = end >= 1440 ? "翌" : "";
+  return `見込み終了 ${over}${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+}
+// 表示要素(色分け・警告なし。有限性を時刻で見せるだけ。CONCEPT §4.8）
+function projectedEndBadge() {
+  const t = projectedEndText();
+  return t ? `<span class="projected-end" id="projected-end">${t}</span>` : `<span class="projected-end" id="projected-end"></span>`;
+}
+// 毎分ティックで該当 span のみ差し替え(全再描画しない=入力フォーカス破壊防止)
+function updateProjectedEndTick() {
+  const el = document.getElementById("projected-end");
+  if (el) el.textContent = projectedEndText();
+}
+
+// §4 充電/放電プリフィル -------------------------------------------
+// 過去実績(直近8週・3件以上)の中央値を初期値に。満たなければ null(既定値のまま)。
+function prefillEnergy(block) {
+  const since = addDays(todayISO(), -56);
+  const pool = (pred) => state.blocks.filter((b) =>
+    !b.deleted && b.completed && b.id !== block.id && b.date >= since && pred(b));
+  const src = block.recurrenceGroupId
+    ? pool((b) => b.recurrenceGroupId === block.recurrenceGroupId)
+    : pool((b) => b.title && b.title === block.title);
+  if (src.length < 3) return null;
+  return {
+    charge: _energyMedian(src.map((b) => Number(b.charge || 0))),
+    discharge: _energyMedian(src.map((b) => Number(b.discharge || 0)))
+  };
+}
+
 // v38: 起動処理 — 必ずモジュール末尾で実行する。
 // これより上のすべての関数・const が初期化済みであることを保証するため。
 // (以前はファイル先頭付近で render() していて、ジャーナル画面を開いたまま
 //  再起動すると JOURNAL_PROMPTS 未初期化の例外でアプリ全体が起動不能だった)
 // ============================================================
 ensurePassivePomodoro();
-// v23: 起動時に繰り返し Block を実体化(期間外・未編集は破棄)
-maintainRecurrences({ purge: true });
+// v23/v41: 起動時に繰り返し Block を実体化(期間外・未編集は破棄)+ 日次オープン記録
+runDailyOpen({ force: true });
 render();
 hydrateStaticMarkdown();
 registerServiceWorker();
 startTimerTicker();
 // v25: 起動後、GitHub 側がローカルより新しければ取り込む(ローカルファースト)
 syncFromGitHubOnStartup();
+// v41: PWA を開きっぱなしで日付が変わったら、復帰時にルーティンを自動展開。
+//      日付判定入りなので何度呼んでも安全(展開の完了は演出しない)。
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && runDailyOpen()) render();
+});
