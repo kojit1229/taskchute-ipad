@@ -20,6 +20,7 @@ const navItems = [
   { id: "wish", label: "やりたい", mark: "✦" },
   { id: "avoid", label: "やらない", mark: "✕" },
   { id: "reports", label: "日報", mark: "R" },
+  { id: "weekly", label: "週次レビュー", mark: "◷" },
   { id: "settings", label: "設定", mark: "S" }
 ];
 
@@ -216,6 +217,40 @@ document.addEventListener("click", (event) => {
   if (action === "zt-write") openZtWrite(id);
   if (action === "zt-save") saveZtEntry();
   if (action === "zt-discard") discardZtWrite();
+  // v39: 0秒思考の上位タブ(テーマ / 問い)
+  if (action === "zero-tab") {
+    state.settings.zeroTab = target.dataset.tab || "theme";
+    persistLocalNoSchedule();  // UI状態(dataModifiedAt を汚さない)
+    render();
+  }
+  // v39: 問い
+  if (action === "question-add") openQuestionEditor("");
+  if (action === "question-edit") openQuestionEditor(id);
+  if (action === "question-to-theme") questionToTheme(id);
+  if (action === "question-settle") settleQuestion(id);
+  if (action === "question-reopen") reopenQuestion(id);
+  if (action === "question-delete") deleteQuestion(id);
+  if (action === "entry-to-question") entryToQuestion(id);
+  if (action === "open-questions") { state.settings.zeroTab = "question"; persistLocalNoSchedule(); setView("zero"); }
+  // v39: 週次レビュー
+  if (action === "open-weekly") setView("weekly");
+  if (action === "weekly-prev") shiftWeeklyWeek(-1);
+  if (action === "weekly-next") shiftWeeklyWeek(1);
+  if (action === "weekly-change-theme") weeklyChangeTheme(target.dataset.week);
+  if (action === "weekly-download") downloadWeekly(target.dataset.week);
+  if (action === "weekly-push") pushWeeklyToGitHub(target.dataset.week);
+  // v39: エネルギー構造からの行動導線
+  if (action === "energy-open-routine") setView("routine");
+  if (action === "energy-open-category") {
+    state.settings.timelineCategoryFilter = target.dataset.cat || "";
+    persistLocalNoSchedule();
+    setView("timeline");
+  }
+  if (action === "timeline-clear-cat") {
+    state.settings.timelineCategoryFilter = "";
+    persistLocalNoSchedule();
+    render();
+  }
 });
 
 document.addEventListener("input", (event) => {
@@ -226,6 +261,13 @@ document.addEventListener("input", (event) => {
   }
   if (target.matches("[data-feedback-date]")) {
     state.feedback[target.dataset.feedbackDate] = target.value;
+    saveState();
+  }
+  // v39: 週次レビューメモ(実データ = saveState)
+  if (target.matches("[data-weekly-md]")) {
+    const wk = target.dataset.weeklyMd;
+    const prev = state.weeklyReviews[wk] || { md: "", changeThemeCreated: false, createdAt: nowDateTime() };
+    state.weeklyReviews[wk] = { ...prev, md: target.value, updatedAt: nowDateTime() };
     saveState();
   }
   // v34: 0秒思考の履歴検索(全体を再描画せず履歴リストだけ更新 → 入力フォーカス維持)
@@ -533,6 +575,23 @@ function normalizeState(value) {
   value.zeroThinking ||= { themes: [], entries: [] };
   if (!Array.isArray(value.zeroThinking.themes)) value.zeroThinking.themes = [];
   if (!Array.isArray(value.zeroThinking.entries)) value.zeroThinking.entries = [];
+  // v39: 問い(Question)エンティティ。効率化(2x)ではなく価値の中身(10x)を掘る器。
+  if (!Array.isArray(value.questions)) value.questions = [];
+  value.questions = value.questions.map((q) => ({
+    origin: "manual",       // 'manual' | 'zero' | 'review'
+    status: "open",         // 'open' | 'deepening' | 'settled'
+    settledNote: "",
+    settledAt: null,
+    lastTouchedAt: null,
+    ...q
+  }));
+  // v39: theme / entry に questionId を補完(どの問いの下で書かれたか)
+  value.zeroThinking.themes = value.zeroThinking.themes.map((t) =>
+    "questionId" in t ? t : { ...t, questionId: null });
+  value.zeroThinking.entries = value.zeroThinking.entries.map((e) =>
+    "questionId" in e ? e : { ...e, questionId: null });
+  // v39: 週次レビュー(キー = 週開始土曜 'YYYY-MM-DD')。指標は都度計算、メモのみ永続化。
+  if (!value.weeklyReviews || typeof value.weeklyReviews !== "object") value.weeklyReviews = {};
   // v23: 繰り返しをルール方式へ(旧データは初回のみ自動移行)
   value.recurrences ||= [];
   migrateRecurrencesIfNeeded(value);
@@ -983,6 +1042,7 @@ function renderMain() {
   if (view === "zero") main.innerHTML = renderZeroThinking();
   if (view === "vision") main.innerHTML = renderVision();
   if (view === "reports") main.innerHTML = renderReports();
+  if (view === "weekly") main.innerHTML = renderWeekly();
   if (view === "settings") main.innerHTML = renderSettings();
   if (view === "more") main.innerHTML = renderMore();
 }
@@ -1058,7 +1118,9 @@ function renderHome() {
       <div class="home-grid">
         ${homeCycle(metrics)}
         ${homeBacklog()}
+        ${homeQuestions()}
       </div>
+      ${homeWeeklyLink()}
     </div>
     <div class="home-zone-block z-green" id="homezone-4">
       <div class="home-zone green">今日の足あと</div>
@@ -1431,6 +1493,33 @@ function homeCycle(metrics) {
       <span class="home-stat-pct">${weekPct}%</span></div>
     <div class="home-divider"></div>
     ${goalHTML}</section>`;
+}
+
+// v39: 開いている問い(Zone 3)。最大3件、deepening を lastTouchedAt 降順で優先。
+//      バッチ思考対策として全表示しない(CONCEPT §5.1)。空なら何も出さない。
+function homeQuestions() {
+  const qs = (state.questions || []).filter((q) => !q.deleted && q.status !== "settled");
+  if (!qs.length) return "";
+  const sorted = [...qs].sort((a, b) => {
+    if ((a.status === "deepening") !== (b.status === "deepening")) return a.status === "deepening" ? -1 : 1;
+    return (b.lastTouchedAt || "").localeCompare(a.lastTouchedAt || "");
+  }).slice(0, 3);
+  return `<section class="panel">
+    <div class="home-plabel blue">開いている問い<span class="home-count">${qs.length}</span></div>
+    ${sorted.map((q) => `<div class="home-q" data-action="open-questions">
+      <span class="home-q-badge ${q.status}">${q.status === "deepening" ? "深" : "開"}</span>
+      <span class="home-q-text">${escapeHTML(q.text)}</span>
+    </div>`).join("")}
+    ${qs.length > 3 ? `<div class="home-foot">ほか ${qs.length - 3} 件 — タップで一覧へ</div>` : `<div class="home-foot">10xの問いを、少しずつ掘る。</div>`}
+  </section>`;
+}
+
+// v39: 週次レビューへの静かな導線(土曜のみ、催促なし。CONCEPT §5.4)
+function homeWeeklyLink() {
+  if (weekRange(state.selectedDate).weekStart !== state.selectedDate) return "";  // 土曜 = 週の起点
+  return `<div class="home-weekly-link" data-action="open-weekly">
+    <span>🗓 今週をふりかえる</span><span class="home-weekly-arrow">週次レビュー →</span>
+  </div>`;
 }
 
 // --- 未完了タスク(今日に追加できる)---
@@ -2269,6 +2358,10 @@ function renderTimelineView() {
       <button class="btn primary" data-action="timeline-new-block" data-minute="${nowMinute}">+ 新規Block</button>
       <span class="muted" style="font-size:12px">空き時間タップで追加 / ○タップで完了登録 / カードタップで編集 / 赤線は現在時刻</span>
     </div>
+    ${state.settings.timelineCategoryFilter ? `<div class="row" style="margin-bottom:10px; gap:8px; align-items:center">
+      <span class="cat-chip" style="background:${getCategoryColor(state.settings.timelineCategoryFilter)}1f; color:${getCategoryColor(state.settings.timelineCategoryFilter)}; border:1px solid ${getCategoryColor(state.settings.timelineCategoryFilter)}66">カテゴリ: ${escapeHTML(state.settings.timelineCategoryFilter)}</span>
+      <button class="btn ghost" data-action="timeline-clear-cat" style="font-size:12px">フィルタ解除 ✕</button>
+    </div>` : ""}
     ${renderTimeline({ compact: false, mode })}
   `;
 }
@@ -2421,6 +2514,9 @@ function renderTimeline({ compact, mode = "planned" }) {
   }
   // v19: カテゴリ「ルーティン」は専用ルーティンタブで表示するためタイムラインから除外
   blocksToRender = blocksToRender.filter((b) => b.category !== "ルーティン");
+  // v39: エネルギー構造分析からのカテゴリフィルタ(UI状態)
+  const catFilter = state.settings.timelineCategoryFilter || "";
+  if (catFilter) blocksToRender = blocksToRender.filter((b) => (b.category || "未分類") === catFilter);
   // v10: ズームレベル(state.timelineZoom: 1.0 / 2.0 / 4.0 のいずれか)
   const zoom = compact ? 1 : (state.timelineZoom || 1);
   const rowHeight = (compact ? 48 : 60) * zoom;
@@ -3264,6 +3360,446 @@ function renderMore() {
   `;
 }
 
+// v39: =========================================================
+//  週次レビュー + エネルギー構造分析
+//  日(日報)と84日(12週)の間に抜けている「週スケール」を埋める。
+//  週定義 = 土曜〜金曜(既存 weekRange の起点が土曜)。
+// =========================================================
+
+// 週開始(土曜)を返す。既存 weekRange を再利用し new Date(string) を新規に使わない。
+function weekStartFor(dateStr) { return weekRange(dateStr).weekStart; }
+function weekDays(weekStart) { return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)); }
+function weekLabelShort(weekStart) {
+  const end = addDays(weekStart, 6);
+  return `${weekStart.slice(5).replace("-", "/")} 〜 ${end.slice(5).replace("-", "/")}`;
+}
+function blocksForWeek(weekStart) {
+  const days = new Set(weekDays(weekStart));
+  return state.blocks.filter((b) => !b.deleted && days.has(b.date));
+}
+
+// 週の実行スコア・エネルギー(blocks から都度計算、非正規化しない)
+function computeWeeklyMetrics(weekStart) {
+  const days = weekDays(weekStart);
+  const weekBlocks = blocksForWeek(weekStart);
+  const tc = taskchuteStartRate(weekBlocks);
+  const rt = routineRate(weekBlocks);
+  const mit = weekBlocks.filter((b) => b.isMIT);
+  const mitDone = mit.filter((b) => b.completed).length;
+  const completedW = weekBlocks.filter((b) => b.completed);
+  const charge = completedW.reduce((s, b) => s + Number(b.charge || 0), 0);
+  const discharge = completedW.reduce((s, b) => s + Number(b.discharge || 0), 0);
+  const daily = days.map((d) => {
+    const db = weekBlocks.filter((b) => b.date === d);
+    const dtc = taskchuteStartRate(db);
+    const dc = db.filter((b) => b.completed);
+    const net = dc.reduce((s, b) => s + Number(b.charge || 0) - Number(b.discharge || 0), 0);
+    return { date: d, wd: weekdayLabel(d), startPct: dtc.pct, startTotal: dtc.total, net };
+  });
+  const start12 = state.settings.twelveWeekStartDate;
+  const wkNum = start12 ? clamp(Math.floor(daysBetween(start12, weekStart) / 7) + 1, 1, 12) : null;
+  const daysLeft12 = start12 ? Math.max(0, daysBetween(weekStart, addDays(start12, 84))) : null;
+  return {
+    days, tc, rt,
+    mit: { done: mitDone, total: mit.length, pct: mit.length ? Math.round((mitDone / mit.length) * 100) : 0 },
+    charge, discharge, net: charge - discharge, daily, wkNum, daysLeft12
+  };
+}
+
+// エネルギー構造分析: 直近 weeks 週の completed blocks から、放電超過を上位3件だけ返す。
+// データが weeks 週に満たなければ null(不正確な "構造" を見せない)。
+function computeEnergyStructure(endDate, weeks = 4) {
+  const startDate = addDays(endDate, -(weeks * 7 - 1));
+  const all = state.blocks.filter((b) => !b.deleted);
+  if (!all.length) return null;
+  const earliest = all.reduce((m, b) => (b.date < m ? b.date : m), all[0].date);
+  if (earliest > startDate) return null;  // 4週未満
+
+  const inRange = all.filter((b) => b.completed && b.date >= startDate && b.date <= endDate);
+  // 曜日別 平均差引
+  const wd = ["日", "月", "火", "水", "木", "金", "土"].map((label) => ({ type: "weekday", label: `${label}曜`, net: 0, count: 0 }));
+  inRange.forEach((b) => {
+    const i = parseDate(b.date).getDay();  // 0=日..6=土(parseDate=安全な文字列パース)
+    wd[i].net += Number(b.charge || 0) - Number(b.discharge || 0);
+    wd[i].count += 1;
+  });
+  const worstWeekday = wd.filter((r) => r.count > 0).map((r) => ({ ...r, avg: r.net / r.count }))
+    .filter((r) => r.avg < 0).sort((a, b) => a.avg - b.avg)[0];
+  // カテゴリ別 差引合計
+  const catSum = {};
+  inRange.forEach((b) => {
+    const c = b.category || "未分類";
+    catSum[c] = (catSum[c] || 0) + Number(b.charge || 0) - Number(b.discharge || 0);
+  });
+  const worstCats = Object.entries(catSum).map(([key, total]) => ({ type: "category", key, label: `〈${key}〉`, total }))
+    .filter((r) => r.total < 0).sort((a, b) => a.total - b.total);
+  // 曜日1件 + カテゴリを混ぜ、最大3件(曜日の信号がカテゴリ合計に埋もれないよう先頭固定)
+  const out = [];
+  if (worstWeekday) out.push(worstWeekday);
+  worstCats.forEach((c) => { if (out.length < 3) out.push(c); });
+  return out.slice(0, 3);
+}
+
+function renderEnergyStructure(endDate) {
+  const rows = computeEnergyStructure(endDate);
+  if (rows === null) return "";  // 4週未満は非表示
+  if (!rows.length) {
+    return `<div class="weekly-sec"><h3>エネルギー構造(直近4週)</h3>
+      <div class="muted" style="font-size:13px">構造的な放電超過は見当たりません。いい状態です。</div></div>`;
+  }
+  return `<div class="weekly-sec"><h3>エネルギー構造(直近4週)</h3>
+    ${rows.map((r, i) => r.type === "weekday"
+      ? `<div class="weekly-struct-row">
+          <span class="weekly-struct-desc">${i + 1}. ${escapeHTML(r.label)}が構造的にマイナス(平均 ${r.avg.toFixed(1)})</span>
+          <button class="btn ghost" data-action="energy-open-routine">この曜日のルーティンを見る</button>
+        </div>`
+      : `<div class="weekly-struct-row">
+          <span class="weekly-struct-desc">${i + 1}. ${escapeHTML(r.label)}が放電超過(${signed(r.total)})</span>
+          <button class="btn ghost" data-action="energy-open-category" data-cat="${escapeHTML(r.key)}">カテゴリのブロックを見る</button>
+        </div>`).join("")}
+  </div>`;
+}
+
+function currentWeeklyWeek() {
+  // 既定 = 直近の完了週(今日を含む週の1つ前の土曜)
+  const def = addDays(weekStartFor(todayISO()), -7);
+  return state.settings.weeklySelectedWeek || def;
+}
+
+function shiftWeeklyWeek(dir) {
+  state.settings.weeklySelectedWeek = addDays(currentWeeklyWeek(), dir * 7);
+  persistLocalNoSchedule();  // 週カーソルは UI 状態
+  render();
+}
+
+function renderWeekly() {
+  const week = currentWeeklyWeek();
+  const m = computeWeeklyMetrics(week);
+  const review = state.weeklyReviews[week] || { md: "", changeThemeCreated: false };
+
+  // 実行スコアの日別バー
+  const execBars = m.daily.map((d) => `
+    <div class="wk-bar-cell">
+      <div class="wk-bar"><div class="wk-bar-fill" style="height:${d.startPct}%"></div></div>
+      <div class="wk-bar-lab">${d.wd}</div>
+    </div>`).join("");
+  // エネルギー日別(差引、マイナス赤)
+  const energyBars = m.daily.map((d) => `
+    <div class="wk-bar-cell">
+      <div class="wk-net ${d.net < 0 ? "neg" : d.net > 0 ? "pos" : ""}">${signed(d.net)}</div>
+      <div class="wk-bar-lab">${d.wd}</div>
+    </div>`).join("");
+
+  // 問いの動き
+  const days = new Set(m.days);
+  const weekEntries = (state.zeroThinking?.entries || []).filter((e) => days.has(e.date) && e.questionId);
+  const movedMap = {};
+  weekEntries.forEach((e) => { movedMap[e.questionId] = (movedMap[e.questionId] || 0) + 1; });
+  const moved = Object.entries(movedMap)
+    .map(([qid, cnt]) => ({ q: state.questions.find((x) => x.id === qid), cnt }))
+    .filter((x) => x.q && !x.q.deleted);
+  const stalled = (state.questions || []).filter((q) =>
+    !q.deleted && q.status !== "settled" && q.lastTouchedAt && daysBetween(q.lastTouchedAt, todayISO()) >= 14);
+
+  // 12週の弧: この週に締切があるサイクル目標タスク
+  const goals = state.projects.filter((p) => !p.deleted && p.kind === "normal" && p.status === "active" && p.twelveWeekStartDate);
+  const goalIds = goals.map((p) => p.id);
+  const weekTasks = state.tasks.filter((t) => !t.deleted && goalIds.includes(t.projectId)
+    && t.dueDate && days.has(t.dueDate));
+
+  return `
+    ${renderHeader("週スケールでふりかえる", "週次レビュー")}
+    <div class="weekly-nav">
+      <button class="btn" data-action="weekly-prev">◀ 前週</button>
+      <div class="weekly-week">${weekLabelShort(week)}<span class="weekly-week-dow">(土〜金)</span></div>
+      <button class="btn" data-action="weekly-next">次週 ▶</button>
+    </div>
+
+    <div class="weekly-sec">
+      <h3>実行スコア</h3>
+      <div class="weekly-metric-row">
+        <div class="weekly-metric"><span class="weekly-metric-lab">タスクシュート着手</span>
+          <span class="weekly-metric-val">${m.tc.pct}<small>%</small></span><span class="weekly-metric-sub">${m.tc.done}/${m.tc.total}</span></div>
+        <div class="weekly-metric"><span class="weekly-metric-lab">今日の主役</span>
+          <span class="weekly-metric-val">${m.mit.done}<small>/${m.mit.total}</small></span><span class="weekly-metric-sub">${m.mit.pct}%</span></div>
+        <div class="weekly-metric"><span class="weekly-metric-lab">ルーティン実行</span>
+          <span class="weekly-metric-val">${m.rt.pct}<small>%</small></span><span class="weekly-metric-sub">${m.rt.done}/${m.rt.total}</span></div>
+      </div>
+      <div class="wk-bars">${execBars}</div>
+    </div>
+
+    <div class="weekly-sec">
+      <h3>エネルギー収支</h3>
+      <div class="weekly-energy-tot">充電 <b class="pos">+${m.charge}</b> / 放電 <b class="neg">-${m.discharge}</b> / 差引 <b class="${m.net < 0 ? "neg" : "pos"}">${signed(m.net)}</b></div>
+      <div class="wk-bars">${energyBars}</div>
+    </div>
+
+    ${renderEnergyStructure(week === weekStartFor(todayISO()) ? todayISO() : addDays(week, 6))}
+
+    <div class="weekly-sec">
+      <h3>12週の弧</h3>
+      ${m.wkNum ? `<div class="weekly-12wy">第 <b>${m.wkNum}</b> 週 / 12週　<span class="muted">残り ${m.daysLeft12} 日</span></div>` : `<div class="muted" style="font-size:13px">12WY 開始日が未設定です。</div>`}
+      ${weekTasks.length
+        ? `<div class="weekly-tasklist">${weekTasks.map((t) => `<div class="home-ck">
+            <span class="home-box ${t.status === "completed" ? "" : ""}" data-action="toggle-task" data-id="${t.id}">${t.status === "completed" ? "✓" : ""}</span>
+            <span class="home-ck-name" data-action="edit-task" data-id="${t.id}">${escapeHTML(t.title)}</span>
+          </div>`).join("")}</div>`
+        : `<div class="muted" style="font-size:13px">この週に締切のサイクル目標タスクはありません。</div>`}
+    </div>
+
+    <div class="weekly-sec">
+      <h3>問いの動き</h3>
+      ${moved.length ? moved.map((x) => `<div class="weekly-q-row"><span class="weekly-q-move">動いた</span>${escapeHTML(x.q.text)} <span class="muted">(+${x.cnt} 本)</span></div>`).join("") : `<div class="muted" style="font-size:13px">この週に問いへ紐づく0秒思考はありませんでした。</div>`}
+      ${stalled.map((q) => `<div class="weekly-q-row"><span class="weekly-q-stall">止まっている</span>${escapeHTML(q.text)} <span class="muted">(${daysBetween(q.lastTouchedAt, todayISO())}日)</span></div>`).join("")}
+    </div>
+
+    <div class="weekly-sec weekly-close">
+      <h3>締め</h3>
+      <button class="btn primary weekly-change-btn" data-action="weekly-change-theme" data-week="${week}" ${review.changeThemeCreated ? "disabled" : ""}>
+        ${review.changeThemeCreated ? "✓ 「変えること」をテーマ化済み" : "「この週から何を変えるか」を0秒思考テーマにする"}
+      </button>
+      <textarea class="textarea" data-weekly-md="${week}" style="min-height:120px; margin-top:12px" placeholder="この週の気づき・来週変えることをメモ(Markdown)">${escapeHTML(review.md || "")}</textarea>
+      <div class="row" style="gap:8px; margin-top:10px; flex-wrap:wrap">
+        <button class="btn" data-action="weekly-download" data-week="${week}">週次mdをダウンロード</button>
+        ${(state.settings.github?.token && state.settings.github?.owner) ? `<button class="btn" data-action="weekly-push" data-week="${week}">GitHubへpush</button>` : ""}
+      </div>
+    </div>
+  `;
+}
+
+function weeklyChangeTheme(week) {
+  if (!week) return;
+  const label = weekLabelShort(week);
+  state.zeroThinking.themes.push({
+    id: crypto.randomUUID(),
+    text: `【週次】${label} の週から、何を変えるか?`,
+    fav: false, questionId: null, createdAt: nowDateTime()
+  });
+  const prev = state.weeklyReviews[week] || { md: "", createdAt: nowDateTime() };
+  state.weeklyReviews[week] = { ...prev, changeThemeCreated: true, updatedAt: nowDateTime() };
+  state.settings.zeroTab = "theme";
+  ztTab = "other";
+  saveAndRender("「変えること」をテーマにしました");
+  setView("zero");
+}
+
+function buildWeeklyMarkdown(week) {
+  const m = computeWeeklyMetrics(week);
+  const review = state.weeklyReviews[week] || { md: "" };
+  const lines = [
+    `# 週次レビュー ${weekLabelShort(week)}(土〜金)`,
+    "",
+    "## 実行スコア",
+    `- タスクシュート着手: ${m.tc.pct}%(${m.tc.done}/${m.tc.total})`,
+    `- 今日の主役(MIT): ${m.mit.done}/${m.mit.total}`,
+    `- ルーティン実行: ${m.rt.pct}%(${m.rt.done}/${m.rt.total})`,
+    "",
+    "## エネルギー収支",
+    `- 充電 +${m.charge} / 放電 -${m.discharge} / 差引 ${signed(m.net)}`,
+    ""
+  ];
+  if (m.wkNum) { lines.push("## 12週の弧", `- 第 ${m.wkNum} 週 / 12週(残り ${m.daysLeft12} 日)`, ""); }
+  if (review.md && review.md.trim()) { lines.push("## メモ", "", review.md, ""); }
+  return lines.join("\n");
+}
+
+function downloadWeekly(week) {
+  if (!week) return;
+  downloadText(`週次_${week}.md`, buildWeeklyMarkdown(week), "text/markdown");
+}
+
+async function pushWeeklyToGitHub(week) {
+  if (!week) return;
+  if (!state.settings.github?.token) return showToast("GitHub設定が未入力です");
+  await pushFileToGitHub(`週次_${week}.md`, buildWeeklyMarkdown(week), `週次 ${week}`);
+}
+
+// v39: =========================================================
+//  問い(Question)エンティティ
+//  数週間〜12週スパンで持ち続ける「10xの問い」を第一級オブジェクトにし、
+//  0秒思考テーマ化 → entry紐づけ → 日報AIループ → 週次レビューに接続する。
+// =========================================================
+function makeQuestion({ text = "", origin = "manual" } = {}) {
+  return {
+    id: crypto.randomUUID(),
+    text,
+    origin,               // 'manual' | 'zero'(気づきから昇格) | 'review'(週次から)
+    status: "open",       // 'open' | 'deepening' | 'settled'
+    settledNote: "",
+    settledAt: null,
+    lastTouchedAt: null,  // 最後に entry が紐づいた日(鮮度判定)
+    createdAt: nowDateTime(),
+    updatedAt: nowDateTime(),
+    deleted: false
+  };
+}
+
+// 問いに紐づく entry 数
+function questionEntryCount(qId) {
+  return (state.zeroThinking?.entries || []).filter((e) => e.questionId === qId).length;
+}
+
+const QUESTION_STATUS_LABEL = { open: "未着手", deepening: "深掘り中", settled: "結論" };
+
+function renderQuestionCard(q) {
+  const count = questionEntryCount(q.id);
+  // 鮮度: 最後の紐づけから30日以上の open/deepening はグレー(自動削除・警告はしない=静かな道具)
+  const stale = q.status !== "settled" && q.lastTouchedAt && daysBetween(q.lastTouchedAt, todayISO()) >= 30;
+  const touched = q.lastTouchedAt ? `最終 ${q.lastTouchedAt.slice(5).replace("-", "/")}` : "未着手";
+  return `
+    <div class="q-card ${q.status}${stale ? " is-stale" : ""}">
+      <div class="q-card-main">
+        <span class="q-badge ${q.status}">${QUESTION_STATUS_LABEL[q.status]}</span>
+        <span class="q-text" data-action="question-edit" data-id="${q.id}">${escapeHTML(q.text)}</span>
+      </div>
+      <div class="q-card-meta">
+        <span>${count} 本</span><span class="q-dot"></span><span>${touched}</span>
+      </div>
+      ${q.status === "settled" && q.settledNote ? `<div class="q-settled-note">${escapeHTML(q.settledNote)}</div>` : ""}
+      <div class="q-card-actions">
+        ${q.status === "settled"
+          ? `<button class="btn ghost" data-action="question-reopen" data-id="${q.id}">再び開く</button>`
+          : `<button class="btn primary" data-action="question-to-theme" data-id="${q.id}">この問いで書く →</button>
+             <button class="btn ghost" data-action="question-settle" data-id="${q.id}">結論にする</button>`}
+        <button class="btn ghost" data-action="question-edit" data-id="${q.id}">編集</button>
+        <button class="btn ghost" data-action="question-delete" data-id="${q.id}">削除</button>
+      </div>
+    </div>`;
+}
+
+function renderZtQuestionTab() {
+  const qs = (state.questions || []).filter((q) => !q.deleted);
+  const active = qs.filter((q) => q.status !== "settled").sort((a, b) => {
+    // deepening を上に、次に lastTouchedAt 降順
+    if ((a.status === "deepening") !== (b.status === "deepening")) return a.status === "deepening" ? -1 : 1;
+    return (b.lastTouchedAt || "").localeCompare(a.lastTouchedAt || "");
+  });
+  const settled = qs.filter((q) => q.status === "settled")
+    .sort((a, b) => (b.settledAt || "").localeCompare(a.settledAt || ""));
+  return `
+    <div class="zt-lead">効率化(2x)ではなく<b>価値の中身(10x)</b>を掘る問い。数週間〜12週で持ち続け、0秒思考で少しずつ深める。</div>
+    <section class="panel zt-section">
+      <div class="zt-plabel">
+        開いている問い
+        <span class="zt-plabel-count">${active.length} 件</span>
+        <span class="zt-plabel-spacer"></span>
+        <button class="zt-mini-btn" data-action="question-add">+ 問いを追加</button>
+      </div>
+      ${active.length
+        ? `<div class="q-list">${active.map(renderQuestionCard).join("")}</div>`
+        : `<div class="zt-empty">問いがありません。<span class="zt-empty-sub">「+ 問いを追加」で立てるか、履歴の気づきから昇格できます。</span></div>`}
+    </section>
+    ${settled.length ? `
+      <details class="panel zt-section">
+        <summary class="zt-plabel" style="cursor:pointer">結論が出た問い <span class="zt-plabel-count">${settled.length} 件</span></summary>
+        <div class="q-list" style="margin-top:12px">${settled.map(renderQuestionCard).join("")}</div>
+      </details>` : ""}
+  `;
+}
+
+// ---- 問い CRUD ----
+function openQuestionEditor(id) {
+  const q = id ? state.questions.find((x) => x.id === id) : null;
+  state.modal = { type: "question", id: id || "" };
+  renderModal(buildQuestionModal(q));
+}
+
+function buildQuestionModal(q) {
+  const isNew = !q;
+  const status = q?.status || "open";
+  return `
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">${isNew ? "問いを追加" : "問いを編集"}</h3>
+        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label class="field-label">問い(数週間持ち続ける "10x" の問い)</label>
+          <textarea class="textarea" data-modal-field="text" style="min-height:96px" placeholder="例: SEJ案件で "効率化提案" を "経営指標提案" に変えるには何が要るか">${escapeHTML(q?.text || "")}</textarea>
+        </div>
+        ${isNew ? "" : `
+          <div class="field">
+            <label class="field-label">ステータス</label>
+            <select class="select" data-modal-field="status">
+              ${["open", "deepening", "settled"].map((s) => `<option value="${s}" ${status === s ? "selected" : ""}>${QUESTION_STATUS_LABEL[s]}</option>`).join("")}
+            </select>
+          </div>
+          <div class="field">
+            <label class="field-label">結論・行動化したこと(任意)</label>
+            <textarea class="textarea" data-modal-field="settledNote" style="min-height:72px">${escapeHTML(q?.settledNote || "")}</textarea>
+          </div>`}
+      </div>
+      <div class="modal-footer">
+        ${isNew ? "" : `<button class="btn danger" data-action="modal-delete">削除</button>`}
+        <button class="btn" data-action="modal-close">キャンセル</button>
+        <button class="btn primary" data-action="modal-save">保存</button>
+      </div>
+    </div>`;
+}
+
+function saveQuestionFromModal(id, fields) {
+  const text = (fields.text || "").trim();
+  if (!text) return showToast("問いを入力してください");
+  if (id) {
+    state.questions = state.questions.map((q) => {
+      if (q.id !== id) return q;
+      const status = fields.status || q.status;
+      return {
+        ...q, text, status,
+        settledNote: fields.settledNote ?? q.settledNote,
+        // settled になった瞬間だけ settledAt を刻む。外れたら消す。
+        settledAt: status === "settled" ? (q.settledAt || todayISO()) : null,
+        updatedAt: nowDateTime()
+      };
+    });
+  } else {
+    state.questions.push(makeQuestion({ text, origin: "manual" }));
+  }
+  closeModal();
+  saveAndRender(id ? "問いを更新しました" : "問いを追加しました");
+}
+
+// この問いで 0秒思考を書く(テーマ化 → 書く画面へ)
+function questionToTheme(qId) {
+  const q = state.questions.find((x) => x.id === qId);
+  if (!q) return;
+  const theme = { id: crypto.randomUUID(), text: q.text, fav: false, questionId: qId, createdAt: nowDateTime() };
+  state.zeroThinking.themes.push(theme);
+  saveState();            // テーマを永続化してから
+  openZtWrite(theme.id);  // 1分書く画面へ
+}
+
+function settleQuestion(qId) {
+  state.questions = state.questions.map((q) => q.id === qId
+    ? { ...q, status: "settled", settledAt: q.settledAt || todayISO(), updatedAt: nowDateTime() }
+    : q);
+  saveAndRender("結論にしました(お疲れさま)");
+}
+
+function reopenQuestion(qId) {
+  state.questions = state.questions.map((q) => q.id === qId
+    ? { ...q, status: "deepening", settledAt: null, updatedAt: nowDateTime() }
+    : q);
+  saveAndRender("問いを再び開きました");
+}
+
+function deleteQuestion(qId) {
+  if (!window.confirm("この問いを削除しますか?(復元可能)")) return;
+  state.questions = state.questions.map((q) => q.id === qId
+    ? { ...q, deleted: true, updatedAt: nowDateTime() } : q);
+  saveAndRender("問いを削除しました");
+}
+
+// 0秒思考の気づき(履歴 entry)を問いに昇格する
+function entryToQuestion(entryId) {
+  const e = (state.zeroThinking?.entries || []).find((x) => x.id === entryId);
+  if (!e) return;
+  state.questions.push(makeQuestion({ text: e.theme || (e.body || "").split("\n")[0] || "問い", origin: "zero" }));
+  state.settings.zeroTab = "question";
+  saveAndRender("この気づきを問いにしました");
+}
+
 // v34: =========================================================
 //  0秒思考(Zero Second Thinking)
 //  - 一覧: テーマ追加(トグル)/ タブ(それ以外・お気に入り)/ ★切替 / 書く
@@ -3275,21 +3811,9 @@ function renderZeroThinking() {
   if (ztCurrent) return renderZtWrite();
 
   const zt = state.zeroThinking || { themes: [], entries: [] };
-  const favList = zt.themes.filter((t) => t.fav);
-  const otherList = zt.themes.filter((t) => !t.fav);
   const todayCount = zt.entries.filter((e) => e.date === todayISO()).length;
-  const items = ztTab === "fav" ? favList : otherList;
-
-  const themeItemsHTML = items.length
-    ? items.map((t) => `
-        <div class="zt-theme-item ${t.fav ? "is-fav" : ""}">
-          <button class="zt-star ${t.fav ? "on" : ""}" data-action="zt-fav-toggle" data-id="${t.id}" title="お気に入り">${t.fav ? "★" : "☆"}</button>
-          <div class="zt-theme-text" data-action="zt-write" data-id="${t.id}">${escapeHTML(t.text)}</div>
-          <button class="zt-theme-go" data-action="zt-write" data-id="${t.id}">書く →</button>
-        </div>`).join("")
-    : ztTab === "fav"
-      ? `<div class="zt-empty">お気に入りはまだありません。<span class="zt-empty-sub">☆ をタップして登録すると、書いてもここに残り続けます。</span></div>`
-      : `<div class="zt-empty">テーマがありません。<span class="zt-empty-sub">「+ テーマを追加」から登録してください。</span></div>`;
+  const zeroTab = state.settings.zeroTab || "theme";  // v39: テーマ / 問い の2タブ
+  const openQ = (state.questions || []).filter((q) => !q.deleted && q.status !== "settled").length;
 
   return `
     <div class="view-header">
@@ -3302,6 +3826,33 @@ function renderZeroThinking() {
         <div class="zt-day-count-sub">→ 日報に含まれます</div>
       </div>
     </div>
+    <div class="zt-toptab-row">
+      <button class="zt-toptab ${zeroTab === "theme" ? "active" : ""}" data-action="zero-tab" data-tab="theme">テーマ</button>
+      <button class="zt-toptab ${zeroTab === "question" ? "active" : ""}" data-action="zero-tab" data-tab="question">問い <span class="zt-tab-count">${openQ}</span></button>
+    </div>
+    ${zeroTab === "question" ? renderZtQuestionTab() : renderZtThemeTab()}
+  `;
+}
+
+// v39: テーマタブ(従来の 0秒思考 一覧)
+function renderZtThemeTab() {
+  const zt = state.zeroThinking || { themes: [], entries: [] };
+  const favList = zt.themes.filter((t) => t.fav);
+  const otherList = zt.themes.filter((t) => !t.fav);
+  const items = ztTab === "fav" ? favList : otherList;
+
+  const themeItemsHTML = items.length
+    ? items.map((t) => `
+        <div class="zt-theme-item ${t.fav ? "is-fav" : ""}">
+          <button class="zt-star ${t.fav ? "on" : ""}" data-action="zt-fav-toggle" data-id="${t.id}" title="お気に入り">${t.fav ? "★" : "☆"}</button>
+          <div class="zt-theme-text" data-action="zt-write" data-id="${t.id}">${escapeHTML(t.text)}${t.questionId ? `<span class="zt-theme-qtag">問い</span>` : ""}</div>
+          <button class="zt-theme-go" data-action="zt-write" data-id="${t.id}">書く →</button>
+        </div>`).join("")
+    : ztTab === "fav"
+      ? `<div class="zt-empty">お気に入りはまだありません。<span class="zt-empty-sub">☆ をタップして登録すると、書いてもここに残り続けます。</span></div>`
+      : `<div class="zt-empty">テーマがありません。<span class="zt-empty-sub">「+ テーマを追加」から登録してください。</span></div>`;
+
+  return `
     <div class="zt-lead">1テーマ・<b>1分</b>・手早く書き出す。<b>★お気に入り</b>はずっと残り、それ以外は書いたら消えます。</div>
 
     <section class="panel zt-section">
@@ -3389,7 +3940,10 @@ function ztHistoryListHTML() {
   }
   return list.map((h) => `
     <div class="zt-hi-item">
-      <div class="zt-hi-meta">${escapeHTML(h.date)}<span class="zt-hi-dot"></span>0秒思考</div>
+      <div class="zt-hi-meta">${escapeHTML(h.date)}<span class="zt-hi-dot"></span>0秒思考
+        <span class="zt-hi-spacer"></span>
+        <button class="zt-hi-promote" data-action="entry-to-question" data-id="${h.id}" title="この気づきを問いにする">→ 問いにする</button>
+      </div>
       <div class="zt-hi-theme">${escapeHTML(h.theme)}</div>
       <div class="zt-hi-snippet">${escapeHTML((h.body || "").replace(/\n/g, " / "))}</div>
     </div>`).join("");
@@ -3423,7 +3977,7 @@ function ztToggleFav(id) {
 function openZtWrite(id) {
   const t = state.zeroThinking.themes.find((x) => x.id === id);
   if (!t) return;
-  ztCurrent = { id: t.id, text: t.text, fav: t.fav };
+  ztCurrent = { id: t.id, text: t.text, fav: t.fav, questionId: t.questionId || null };  // v39: 問い紐づけを保持
   render();          // 書く画面を描画(DOM 確定)
   startZtTimer();    // その後にタイマー開始
   setTimeout(() => document.querySelector("#zt-write-input")?.focus(), 60);
@@ -3447,8 +4001,15 @@ function saveZtEntry() {
     date: todayISO(),
     theme: cur.text,
     body,
+    questionId: cur.questionId || null,  // v39: どの問いの下で書いたか
     createdAt: nowDateTime()
   });
+  // v39: 問いに紐づく entry なら、問いの鮮度を更新し open→deepening へ自動遷移
+  if (cur.questionId) {
+    state.questions = state.questions.map((q) => q.id === cur.questionId
+      ? { ...q, lastTouchedAt: todayISO(), status: q.status === "open" ? "deepening" : q.status, updatedAt: nowDateTime() }
+      : q);
+  }
   // ★テーマは残す、それ以外は書いたら一覧から消す(履歴には残る)
   if (!cur.fav) {
     state.zeroThinking.themes = state.zeroThinking.themes.filter((x) => x.id !== cur.id);
@@ -3899,14 +4460,29 @@ function generateReport() {
     "",
   ];
 
-  // v34: 0秒思考(その日に書いたもの、書いた順)
+  // v34/v39: 0秒思考(その日に書いたもの、書いた順)。v39 で問い別にグルーピング。
   const ztToday = (state.zeroThinking?.entries || [])
     .filter((e) => e.date === date)
     .sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
   if (ztToday.length) {
     lines.push("## 🧠 0秒思考");
     lines.push("");
-    ztToday.forEach((e) => {
+    const underQuestion = ztToday.filter((e) => e.questionId);
+    const standalone = ztToday.filter((e) => !e.questionId);
+    // 問いに紐づくものは問いごとにまとめる
+    const byQ = {};
+    underQuestion.forEach((e) => { (byQ[e.questionId] ||= []).push(e); });
+    Object.entries(byQ).forEach(([qid, entries]) => {
+      const q = (state.questions || []).find((x) => x.id === qid);
+      lines.push(`### 【問い】${q ? q.text : entries[0].theme}`);
+      lines.push("");
+      entries.forEach((e) => {
+        if (e.theme && e.theme !== (q && q.text)) lines.push(`**${e.theme}**`);
+        lines.push(e.body);
+        lines.push("");
+      });
+    });
+    standalone.forEach((e) => {
       lines.push(`### ${e.theme}`);
       lines.push("");
       lines.push(e.body);
@@ -4010,6 +4586,16 @@ function generateReport() {
   lines.push("   ※ 各テーマは1分で書き出せる問い形式で示すこと");
   lines.push("5. 明日の MIT 候補(最大3つ)");
   lines.push("   ※ 「明日のMIT候補」という見出しの下に「- 」の箇条書きで示すこと(アプリが読み取ります)");
+  // v39: 開いている問い(10x)を提示し、問いを一段深める明日のテーマを求める
+  const openQuestions = (state.questions || []).filter((q) => !q.deleted && q.status !== "settled");
+  if (openQuestions.length) {
+    lines.push("");
+    lines.push("いま持ち続けている「問い」:");
+    openQuestions.slice(0, 5).forEach((q) => lines.push(`- ${q.text}`));
+    lines.push("");
+    lines.push("6. 上の各問いを一段深める明日のテーマを最大2つ提案せよ。");
+    lines.push("   答えを出すのではなく、より良い問いへの分解を優先すること。");
+  }
   lines.push("");
   lines.push("の観点で、簡潔にフィードバックをください。");
   lines.push("(辛口でも構いません、ただし行動に繋がる具体性を重視)");
@@ -5271,6 +5857,8 @@ function submitModal() {
     saveBlockFromModal(state.modal.id, fields);
   } else if (state.modal.type === "actualEntry") {
     saveActualEntryFromModal(state.modal.id, fields);
+  } else if (state.modal.type === "question") {
+    saveQuestionFromModal(state.modal.id, fields);  // v39
   }
 }
 
@@ -5284,6 +5872,8 @@ function deleteFromModal() {
     deleteTask(state.modal.id);
   } else if (state.modal.type === "block") {
     deleteBlock(state.modal.id);
+  } else if (state.modal.type === "question") {
+    deleteQuestion(state.modal.id);  // v39
   }
   closeModal();
 }
