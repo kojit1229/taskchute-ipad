@@ -242,6 +242,13 @@ document.addEventListener("click", (event) => {
   if (action === "weekly-download") downloadWeekly(target.dataset.week);
   if (action === "weekly-push") pushWeeklyToGitHub(target.dataset.week);
   if (action === "weekly-open-question") { state.settings.zeroTab = "question"; persistLocalNoSchedule(); setView("zero"); }
+  // v45: 12週サイクルレビュー
+  if (action === "open-cycle") setView("cycle");
+  if (action === "cycle-prev") shiftCycle(-1);
+  if (action === "cycle-next") shiftCycle(1);
+  if (action === "cycle-start-new") cycleStartNew();
+  if (action === "cycle-download") downloadCycle(target.dataset.cycle);
+  if (action === "cycle-push") pushCycleToGitHub(target.dataset.cycle);
   // v42: AIループ搬送
   if (action === "report-copy-ai") copyReportToClipboard();
   if (action === "report-share-ai") shareReport();
@@ -286,6 +293,13 @@ document.addEventListener("input", (event) => {
     const wk = target.dataset.weeklyMd;
     const prev = state.weeklyReviews[wk] || { md: "", changeThemeCreated: false, createdAt: nowDateTime() };
     state.weeklyReviews[wk] = { ...prev, md: target.value, updatedAt: nowDateTime() };
+    saveState();
+  }
+  // v45: 12週サイクルレビューメモ
+  if (target.matches("[data-cycle-md]")) {
+    const cs = target.dataset.cycleMd;
+    const prev = state.cycleReviews[cs] || { md: "", createdAt: nowDateTime() };
+    state.cycleReviews[cs] = { ...prev, md: target.value, updatedAt: nowDateTime() };
     saveState();
   }
   // v34: 0秒思考の履歴検索(全体を再描画せず履歴リストだけ更新 → 入力フォーカス維持)
@@ -639,6 +653,9 @@ function normalizeState(value) {
     "questionId" in e ? e : { ...e, questionId: null });
   // v39: 週次レビュー(キー = 週開始土曜 'YYYY-MM-DD')。指標は都度計算、メモのみ永続化。
   if (!value.weeklyReviews || typeof value.weeklyReviews !== "object") value.weeklyReviews = {};
+  // v45: 12週サイクルレビュー(キー = サイクル開始日)。メモのみ永続化、指標は都度計算。
+  if (!value.cycleReviews || typeof value.cycleReviews !== "object") value.cycleReviews = {};
+  if (!("cycleSelectedStart" in value.settings)) value.settings.cycleSelectedStart = null;
   // v40: 週カーソル / ルーティン曜日フィルタ(UI状態、null=未設定)
   if (!("weeklySelectedWeek" in value.settings)) value.settings.weeklySelectedWeek = null;
   if (!("routineDayFilter" in value.settings)) value.settings.routineDayFilter = null;
@@ -1099,6 +1116,7 @@ function renderMain() {
   if (view === "vision") main.innerHTML = renderVision();
   if (view === "reports") main.innerHTML = renderReports();
   if (view === "weekly") main.innerHTML = renderWeekly();
+  if (view === "cycle") main.innerHTML = renderCycle();
   if (view === "settings") main.innerHTML = renderSettings();
   if (view === "more") main.innerHTML = renderMore();
 }
@@ -1573,10 +1591,21 @@ function homeQuestions() {
 
 // v39: 週次レビューへの静かな導線(土曜のみ、催促なし。CONCEPT §5.4)
 function homeWeeklyLink() {
-  if (weekRange(state.selectedDate).weekStart !== state.selectedDate) return "";  // 土曜 = 週の起点
-  return `<div class="home-weekly-link" data-action="open-weekly">
-    <span>🗓 今週をふりかえる</span><span class="home-weekly-arrow">週次レビュー →</span>
-  </div>`;
+  const links = [];
+  if (weekRange(state.selectedDate).weekStart === state.selectedDate) {  // 土曜 = 週の起点
+    links.push(`<div class="home-weekly-link" data-action="open-weekly">
+      <span>🗓 今週をふりかえる</span><span class="home-weekly-arrow">週次レビュー →</span></div>`);
+  }
+  // v45: 12週サイクルの節目(残り7日以内)は、静かにサイクルレビューへ誘導
+  const start12 = state.settings.twelveWeekStartDate;
+  if (start12) {
+    const left = daysBetween(todayISO(), addDays(start12, 84));
+    if (left >= 0 && left <= 7) {
+      links.push(`<div class="home-weekly-link" data-action="open-cycle">
+        <span>◷ 12週サイクルの節目(残り ${left} 日)</span><span class="home-weekly-arrow">サイクルレビュー →</span></div>`);
+    }
+  }
+  return links.join("");
 }
 
 // --- 未完了タスク(今日に追加できる)---
@@ -3812,6 +3841,8 @@ function renderWeekly() {
       ${stalled.map((q) => `<div class="weekly-q-row" data-action="weekly-open-question"><span class="weekly-q-stall">止まっている</span>${escapeHTML(q.text)} <span class="muted">(${daysBetween(q.lastTouchedAt, todayISO())}日)</span></div>`).join("")}
     </div>` : ""}
 
+    <div class="weekly-cycle-link" data-action="open-cycle">◷ 12週サイクルをふりかえる(節目のレビュー) →</div>
+
     <div class="weekly-sec weekly-close">
       <h3>締め</h3>
       <button class="btn primary weekly-change-btn" data-action="weekly-change-theme" data-week="${week}">
@@ -3871,6 +3902,148 @@ async function pushWeeklyToGitHub(week) {
   if (!week) return;
   if (!state.settings.github?.token) return showToast("GitHub設定が未入力です");
   await pushFileToGitHub(`週次_${week}.md`, buildWeeklyMarkdown(week), `週次 ${week}`);
+}
+
+// v45: =========================================================
+//  12週サイクルの節目レビュー(「第13週」の儀式)
+//  日(日報)・週(週次)の上に、最長の実行ループ(12週=84日)を閉じる。
+//  指標は都度計算、締めのメモのみ永続化。CONCEPT §4.4 の最長スケール。
+// =========================================================
+function cycleDays(cycleStart) { return Array.from({ length: 84 }, (_, i) => addDays(cycleStart, i)); }
+function cycleLabelShort(cycleStart) {
+  return `${cycleStart.replace(/-/g, "/")} 〜 ${addDays(cycleStart, 83).replace(/-/g, "/")}`;
+}
+function currentCycleStart() {
+  return state.settings.cycleSelectedStart || state.settings.twelveWeekStartDate || todayISO();
+}
+function shiftCycle(dir) {
+  const next = addDays(currentCycleStart(), dir * 84);
+  const cur = state.settings.twelveWeekStartDate || todayISO();
+  if (next > cur) return;  // 未来サイクルへは進めない
+  state.settings.cycleSelectedStart = next;
+  persistLocalNoSchedule();  // サイクルカーソルは UI 状態
+  render();
+}
+function computeCycleMetrics(cycleStart) {
+  const start = cycleStart, end = addDays(cycleStart, 83);
+  const inRange = state.blocks.filter((b) => !b.deleted && b.date >= start && b.date <= end);
+  const tc = taskchuteStartRate(inRange);
+  const rt = routineRate(inRange);
+  const completed = inRange.filter((b) => b.completed);
+  const charge = completed.reduce((s, b) => s + Number(b.charge || 0), 0);
+  const discharge = completed.reduce((s, b) => s + Number(b.discharge || 0), 0);
+  const mit = inRange.filter((b) => b.isMIT);
+  const mitDone = mit.filter((b) => b.completed).length;
+  const goals = state.projects.filter((p) => !p.deleted && p.kind === "normal" && p.status === "active" && p.twelveWeekStartDate);
+  const goalStats = goals.map((p) => {
+    const tasks = state.tasks.filter((t) => !t.deleted && t.projectId === p.id && isTaskCountable(t));
+    const done = tasks.filter((t) => t.status === "completed").length;
+    return { title: p.title, done, total: tasks.length, pct: tasks.length ? Math.round(done / tasks.length * 100) : 0 };
+  });
+  const days = new Set(cycleDays(cycleStart));
+  const movedQ = new Set((state.zeroThinking?.entries || []).filter((e) => e.questionId && days.has(e.date)).map((e) => e.questionId)).size;
+  const inCycle = (d) => d && d >= start && d <= end;
+  const settledQ = (state.questions || []).filter((q) => !q.deleted && q.status === "settled" && inCycle(q.settledAt)).length;
+  const bridgedQ = (state.questions || []).filter((q) => !q.deleted && q.linkedProjectId && inCycle(q.settledAt)).length;
+  const isCurrent = cycleStart === (state.settings.twelveWeekStartDate || cycleStart);
+  const weekNo = isCurrent ? clamp(Math.floor(daysBetween(cycleStart, todayISO()) / 7) + 1, 1, 12) : 12;
+  const daysLeft = isCurrent ? Math.max(0, daysBetween(todayISO(), addDays(cycleStart, 84))) : 0;
+  return { start, end, tc, rt, charge, discharge, net: charge - discharge, mit: { done: mitDone, total: mit.length }, goalStats, movedQ, settledQ, bridgedQ, weekNo, daysLeft, isCurrent };
+}
+
+function renderCycle() {
+  const cycleStart = currentCycleStart();
+  const m = computeCycleMetrics(cycleStart);
+  const review = state.cycleReviews[cycleStart] || { md: "" };
+  const atCurrent = cycleStart >= (state.settings.twelveWeekStartDate || todayISO());
+  const spark = startRateHistory(weekStartFor(m.end), 12);  // 12週の週次着手率
+  const sparkMax = Math.max(100, ...spark.map((s) => s.pct));
+  return `
+    ${renderHeader("12週スケールでふりかえる", "12週サイクル")}
+    <div class="weekly-nav">
+      <button class="btn" data-action="cycle-prev">◀ 前サイクル</button>
+      <div class="weekly-week">${cycleLabelShort(cycleStart)}<span class="weekly-week-dow">${m.isCurrent ? `・第${m.weekNo}週/12(残り${m.daysLeft}日)` : "・完了"}</span></div>
+      <button class="btn" data-action="cycle-next" ${atCurrent ? "disabled" : ""}>次サイクル ▶</button>
+    </div>
+
+    <div class="weekly-sec">
+      <h3>サイクルの実行スコア</h3>
+      <div class="weekly-metric-row">
+        <div class="weekly-metric"><span class="weekly-metric-lab">タスクシュート着手</span>
+          <span class="weekly-metric-val">${m.tc.pct}<small>%</small></span><span class="weekly-metric-sub">${m.tc.done}/${m.tc.total}</span></div>
+        <div class="weekly-metric"><span class="weekly-metric-lab">今日の主役(MIT)</span>
+          <span class="weekly-metric-val">${m.mit.done}<small>/${m.mit.total}</small></span><span class="weekly-metric-sub">12週合計</span></div>
+        <div class="weekly-metric"><span class="weekly-metric-lab">ルーティン実行</span>
+          <span class="weekly-metric-val">${m.rt.pct}<small>%</small></span><span class="weekly-metric-sub">${m.rt.done}/${m.rt.total}</span></div>
+      </div>
+      <div class="wk-spark-wrap"><span class="wk-spark-cap">週次着手率(12週)</span>
+        <div class="wk-spark">${spark.map((s) => `<div class="wk-spark-bar" style="height:${Math.round((s.pct / sparkMax) * 100)}%" title="${s.week}: ${s.pct}%"></div>`).join("")}</div></div>
+    </div>
+
+    <div class="weekly-sec">
+      <h3>エネルギー収支(12週合計)</h3>
+      <div class="weekly-energy-tot">充電 <b class="pos">+${m.charge}</b> / 放電 <b class="neg">-${m.discharge}</b> / 差引 <b class="${m.net < 0 ? "neg" : "pos"}">${signed(m.net)}</b></div>
+    </div>
+
+    ${m.goalStats.length ? `<div class="weekly-sec">
+      <h3>サイクル目標の到達</h3>
+      ${m.goalStats.map((g) => `<div class="cycle-goal">
+        <div class="cycle-goal-top"><span>${escapeHTML(g.title)}</span><span class="muted">${g.done}/${g.total} ・ ${g.pct}%</span></div>
+        <div class="progress"><span style="width:${g.pct}%"></span></div>
+      </div>`).join("")}
+    </div>` : ""}
+
+    <div class="weekly-sec">
+      <h3>問いの動き(このサイクル)</h3>
+      <div class="weekly-q-row" data-action="open-questions">動いた問い <b>${m.movedQ}</b> ・ 結論に至った <b>${m.settledQ}</b> ・ 実行へ橋渡し <b>${m.bridgedQ}</b></div>
+    </div>
+
+    <div class="weekly-sec weekly-close">
+      <h3>締め — 次の12週へ</h3>
+      <div class="muted" style="font-size:12.5px; margin-bottom:10px; line-height:1.7">
+        次サイクルの主役プロジェクトは <span data-action="nav" data-view="wbs" style="color:var(--accent);cursor:pointer">WBS</span> の「12WY期間に登録する」で選び直せます。持ち越す問いは 0秒思考の「問い」タブに残ります。
+      </div>
+      <textarea class="textarea" data-cycle-md="${cycleStart}" style="min-height:120px" placeholder="この12週の総括・次サイクルで変えること(Markdown)">${escapeHTML(review.md || "")}</textarea>
+      <div class="row" style="gap:8px; margin-top:10px; flex-wrap:wrap">
+        <button class="btn" data-action="cycle-download" data-cycle="${cycleStart}">サイクルmdをダウンロード</button>
+        ${(state.settings.github?.token && state.settings.github?.owner) ? `<button class="btn" data-action="cycle-push" data-cycle="${cycleStart}">GitHubへpush</button>` : ""}
+      </div>
+      <button class="btn primary" data-action="cycle-start-new" style="margin-top:12px; width:100%">新しい12週を今日から始める</button>
+    </div>
+  `;
+}
+
+function cycleStartNew() {
+  if (!window.confirm("新しい12週サイクルを今日から始めますか?\n(12WY開始日を今日に更新します)")) return;
+  state.settings.twelveWeekStartDate = todayISO();
+  state.settings.cycleSelectedStart = todayISO();
+  saveAndRender("新しい12週を始めました。次の主役プロジェクトを WBS で選びましょう");
+  setView("wbs");
+}
+function buildCycleMarkdown(cs) {
+  const m = computeCycleMetrics(cs);
+  const review = state.cycleReviews[cs] || { md: "" };
+  const lines = [
+    `# 12週サイクルレビュー ${cycleLabelShort(cs)}`, "",
+    "## 実行スコア",
+    `- タスクシュート着手: ${m.tc.pct}%(${m.tc.done}/${m.tc.total})`,
+    `- 今日の主役(MIT): ${m.mit.done}/${m.mit.total}`,
+    `- ルーティン実行: ${m.rt.pct}%(${m.rt.done}/${m.rt.total})`, "",
+    "## エネルギー収支(12週合計)",
+    `- 充電 +${m.charge} / 放電 -${m.discharge} / 差引 ${signed(m.net)}`, "",
+    "## サイクル目標の到達",
+    ...(m.goalStats.length ? m.goalStats.map((g) => `- ${g.title}: ${g.pct}%(${g.done}/${g.total})`) : ["- (サイクル目標なし)"]), "",
+    "## 問いの動き",
+    `- 動いた ${m.movedQ} / 結論 ${m.settledQ} / 実行へ橋渡し ${m.bridgedQ}`, ""
+  ];
+  if (review.md && review.md.trim()) lines.push("## 総括", "", review.md, "");
+  return lines.join("\n");
+}
+function downloadCycle(cs) { if (cs) downloadText(`12週_${cs}.md`, buildCycleMarkdown(cs), "text/markdown"); }
+async function pushCycleToGitHub(cs) {
+  if (!cs) return;
+  if (!state.settings.github?.token) return showToast("GitHub設定が未入力です");
+  await pushFileToGitHub(`12週_${cs}.md`, buildCycleMarkdown(cs), `12週 ${cs}`);
 }
 
 // v39: =========================================================
