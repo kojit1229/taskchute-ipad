@@ -258,6 +258,7 @@ document.addEventListener("click", (event) => {
   }
   if (action === "ai-import-submit") submitAiImport();
   if (action === "ai-mit-adopt") adoptAiMit(Number(target.dataset.index));
+  if (action === "carry-over") carryOverBlock(id);  // v46: 未完了ブロックを今日へ繰り越し
   // v39/v40: エネルギー構造からの行動導線
   if (action === "energy-open-routine") openRoutineForWeekday(Number(target.dataset.day));
   if (action === "energy-open-category") {
@@ -1809,6 +1810,44 @@ function adoptAiMit(index) {
   saveAndRender("✦ 今日の主役に追加しました");
 }
 
+// v46: =========================================================
+//  未完了ブロックの繰り越し(先送り)。migratedTo を活用。
+//  昨日分のみ提示 = バックログ化しない(CONCEPT §5.1)。判断は人間、搬送だけ自動。
+// =========================================================
+function carryableBlocks() {
+  const prev = addDays(todayISO(), -1);
+  return state.blocks.filter((b) => !b.deleted && b.date === prev && !b.completed && !b.migratedTo
+    && b.category !== "ルーティン" && !b.recurrenceGroupId);  // ルーティン/繰り返しは翌日自動生成されるので対象外
+}
+function carryOverPanel() {
+  if (state.selectedDate !== todayISO()) return "";  // 今日を見ている時だけ
+  const list = carryableBlocks();
+  if (!list.length) return "";
+  return `<div class="carryover-panel">
+    <div class="carryover-cap">昨日の未完了(${list.length}件)— 今日に繰り越す?</div>
+    ${list.map((b) => `<div class="carryover-row">
+      <span class="carryover-title">${escapeHTML(b.title)}${b.plannedStartAt ? ` <span class="muted">${timeFromDateTime(b.plannedStartAt)}</span>` : ""}${b.category ? `<span class="cat-chip" style="background:${getCategoryColor(b.category)}1f; color:${getCategoryColor(b.category)}; border:1px solid ${getCategoryColor(b.category)}66">${escapeHTML(b.category)}</span>` : ""}</span>
+      <button class="btn ghost" data-action="carry-over" data-id="${b.id}">→ 今日へ</button>
+    </div>`).join("")}
+  </div>`;
+}
+function carryOverBlock(id) {
+  const src = blockById(id);
+  if (!src || src.migratedTo) return;
+  const today = todayISO();
+  const shift = (dt) => dt ? `${today}${dt.slice(10)}` : "";  // 予定時刻は同 HH:mm のまま今日へ
+  const block = makeBlock({
+    taskId: src.taskId, date: today, title: src.title, category: src.category,
+    plannedStartAt: shift(src.plannedStartAt), plannedEndAt: shift(src.plannedEndAt),
+    estimateMin: src.estimateMin
+  });
+  block.source = src.source || "";
+  state.blocks.push(block);
+  // 旧ブロックを「繰り越し済み」に(未完了リストから外れ、再提案されない)
+  state.blocks = state.blocks.map((b) => b.id === src.id ? { ...b, migratedTo: block.id, updatedAt: nowDateTime() } : b);
+  saveAndRender("今日へ繰り越しました");
+}
+
 function extractMITCandidatesFromReport(reportText) {
   if (!reportText) return [];
   // 「明日の MIT 候補:」の行から数行抽出(箇条書きまたは1行)
@@ -2427,6 +2466,7 @@ function renderTasks() {
     ${renderHeader("今日の実行リスト", "タスクシュート", projectedEndBadge())}
     ${renderDateBar()}
     ${aiMitChips()}
+    ${carryOverPanel()}
     <section class="form-strip">
       <input id="blockTitle" class="input" placeholder="Block名">
       <select id="blockCategory" class="select">
