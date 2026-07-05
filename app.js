@@ -229,6 +229,8 @@ document.addEventListener("click", (event) => {
   if (action === "question-to-theme") questionToTheme(id);
   if (action === "question-settle") settleQuestion(id);
   if (action === "question-reopen") reopenQuestion(id);
+  if (action === "question-bridge") openQuestionBridge(id);          // v44
+  if (action === "question-bridge-submit") submitQuestionBridge();   // v44
   if (action === "question-delete") deleteQuestion(id);
   if (action === "entry-to-question") entryToQuestion(id);
   if (action === "open-questions") { state.settings.zeroTab = "question"; persistLocalNoSchedule(); setView("zero"); }
@@ -621,11 +623,13 @@ function normalizeState(value) {
   // v39: 問い(Question)エンティティ。効率化(2x)ではなく価値の中身(10x)を掘る器。
   if (!Array.isArray(value.questions)) value.questions = [];
   value.questions = value.questions.map((q) => ({
-    origin: "manual",       // 'manual' | 'zero' | 'review'
+    origin: "manual",       // 'manual' | 'zero' | 'review' | 'ai'
     status: "open",         // 'open' | 'deepening' | 'settled'
     settledNote: "",
     settledAt: null,
     lastTouchedAt: null,
+    linkedProjectId: null,  // v44: 結論を実行に移した先(what→how の橋)
+    linkedTaskId: null,     // v44
     ...q
   }));
   // v39: theme / entry に questionId を補完(どの問いの下で書かれたか)
@@ -3883,6 +3887,8 @@ function makeQuestion({ text = "", origin = "manual" } = {}) {
     settledNote: "",
     settledAt: null,
     lastTouchedAt: null,  // 最後に entry が紐づいた日(鮮度判定)
+    linkedProjectId: null,  // v44: 結論を実行に移した先
+    linkedTaskId: null,     // v44
     createdAt: nowDateTime(),
     updatedAt: nowDateTime(),
     deleted: false
@@ -3911,9 +3917,12 @@ function renderQuestionCard(q) {
         <span>${count} 本</span><span class="q-dot"></span><span>${touched}</span>
       </div>
       ${q.status === "settled" && q.settledNote ? `<div class="q-settled-note">${escapeHTML(q.settledNote)}</div>` : ""}
+      ${q.status === "settled" && q.linkedProjectId
+        ? `<div class="q-linked" data-action="nav" data-view="wbs">→ 実行中: ${escapeHTML(projectName(q.linkedProjectId))}</div>` : ""}
       <div class="q-card-actions">
         ${q.status === "settled"
-          ? `<button class="btn ghost" data-action="question-reopen" data-id="${q.id}">再び開く</button>`
+          ? `${q.linkedProjectId ? "" : `<button class="btn primary" data-action="question-bridge" data-id="${q.id}">→ 実行へ</button>`}
+             <button class="btn ghost" data-action="question-reopen" data-id="${q.id}">再び開く</button>`
           : `<button class="btn primary" data-action="question-to-theme" data-id="${q.id}">この問いで書く →</button>
              <button class="btn ghost" data-action="question-settle" data-id="${q.id}">結論にする</button>`}
         <button class="btn ghost" data-action="question-edit" data-id="${q.id}">編集</button>
@@ -4029,7 +4038,75 @@ function settleQuestion(qId) {
   state.questions = state.questions.map((q) => q.id === qId
     ? { ...q, status: "settled", settledAt: q.settledAt || todayISO(), updatedAt: nowDateTime() }
     : q);
-  saveAndRender("結論にしました(お疲れさま)");
+  saveState();
+  render();
+  openQuestionBridge(qId);  // v44: 結論を実行へ渡す(what→how)。スキップ可。
+}
+
+// v44: 問い→プロジェクト橋。結論を 12WY プロジェクト/タスクに接続する。
+function openQuestionBridge(qId) {
+  const q = state.questions.find((x) => x.id === qId);
+  if (!q || q.linkedProjectId) return;  // 既に橋渡し済みなら何もしない
+  state.modal = { type: "questionBridge", id: qId };
+  renderModal(buildQuestionBridgeModal(q));
+}
+function buildQuestionBridgeModal(q) {
+  const defaultText = (q.settledNote || "").trim() || q.text;
+  const projects = state.projects.filter((p) => !p.deleted && p.kind === "normal");
+  return `
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">問いを実行へ</h3>
+        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="muted" style="font-size:12.5px; line-height:1.6; margin-bottom:12px">「${escapeHTML(q.text)}」に結論が出ました。<br>この結論を実行に移しますか?(スキップも可)</div>
+        <div class="field">
+          <label class="field-label">実行内容</label>
+          <textarea class="textarea" data-qb-text style="min-height:72px">${escapeHTML(defaultText)}</textarea>
+        </div>
+        <div class="field">
+          <label class="field-label">接続先</label>
+          <select class="select" data-qb-target>
+            <option value="__new__" selected>＋ 新規 12WY プロジェクトにする</option>
+            ${projects.map((p) => `<option value="${p.id}">＋ タスクとして追加: ${escapeHTML(p.title)}</option>`).join("")}
+            <option value="__skip__">接続しない(結論だけ残す)</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-action="modal-close">スキップ</button>
+        <button class="btn primary" data-action="question-bridge-submit">この結論を実行へ</button>
+      </div>
+    </div>`;
+}
+function submitQuestionBridge() {
+  if (!state.modal || state.modal.type !== "questionBridge") return;
+  const qId = state.modal.id;
+  const q = state.questions.find((x) => x.id === qId);
+  const text = (modalRoot.querySelector("[data-qb-text]")?.value || "").trim();
+  const target = modalRoot.querySelector("[data-qb-target]")?.value || "__skip__";
+  if (!text || target === "__skip__") { closeModal(); return saveAndRender(); }
+  const note = `問いから: ${q ? q.text : ""}`;
+  if (target === "__new__") {
+    const proj = {
+      id: crypto.randomUUID(), kind: "normal", title: text, category: "", status: "active",
+      twelveWeekStartDate: state.settings.twelveWeekStartDate || todayISO(),
+      description: note, createdAt: nowDateTime(), updatedAt: nowDateTime(), deleted: false
+    };
+    state.projects.push(proj);
+    if (q) { q.linkedProjectId = proj.id; q.updatedAt = nowDateTime(); }
+    closeModal();
+    saveAndRender("結論を 12WY プロジェクトにしました");
+  } else {
+    const task = makeTask({ projectId: target, title: text });
+    task.description = note;
+    state.tasks.push(task);
+    if (q) { q.linkedProjectId = target; q.linkedTaskId = task.id; q.updatedAt = nowDateTime(); }
+    closeModal();
+    saveAndRender("結論をタスクにしました");
+  }
+  setView("wbs");  // 実行先(WBS)へ。view 遷移は永続化される。
 }
 
 function reopenQuestion(qId) {

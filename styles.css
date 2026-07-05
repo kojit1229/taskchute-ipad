@@ -2315,3 +2315,6 @@ h3 {
 .sync-dot.ok { background: var(--green); opacity: .7; }
 .sync-dot.pending { background: var(--orange); opacity: 1; }
 .sync-banner { background: rgba(255,149,0,.12); border: 1px solid rgba(255,149,0,.35); color: var(--text); font-size: 12.5px; font-weight: 700; padding: 10px 14px; border-radius: 10px; margin-bottom: 14px; cursor: pointer; }
+
+/* v44: 問い→プロジェクト橋 — 実行リンク */
+.q-linked { margin-top: 8px; font-size: 12.5px; font-weight: 700; color: var(--accent); cursor: pointer; }
