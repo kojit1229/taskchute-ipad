@@ -340,6 +340,20 @@ document.addEventListener("change", (event) => {
       scheduleAutoSave();
     }
   }
+  // v43: 自動同期トグル
+  if (target.matches("[data-setting-autosync]")) {
+    state.settings.autoSync = target.checked;
+    saveState();
+    if (target.checked) {
+      showToast("自動同期を有効にしました");
+      runAutoSyncPull();  // 有効化直後に一度 pull を試す
+      scheduleAutoSync();
+    } else {
+      clearTimeout(_autoSyncTimer);
+      clearSyncBanner();
+    }
+    render();
+  }
   if (target.matches("#importData")) importData(target.files?.[0]);
   if (target.matches("[data-feedback-upload]")) {
     const date = target.dataset.feedbackUpload;
@@ -433,6 +447,7 @@ function saveState() {
     _quotaToastShown = false;
   }
   scheduleAutoSave();
+  scheduleAutoSync();  // v43: 自動同期 ON のとき 3分デバウンスで push
 }
 
 function normalizeState(value) {
@@ -453,6 +468,10 @@ function normalizeState(value) {
     value.settings.github.autoSave = false;
   }
   value.settings.github.lastSavedAt ||= "";
+  // v43: 自動同期(既定OFF・保守的)。lastPushedAt = 最後に push した時の dataModifiedAt。
+  if (typeof value.settings.autoSync !== "boolean") value.settings.autoSync = false;
+  if (!("lastPushedAt" in value.settings)) value.settings.lastPushedAt = null;
+  if (!("lastPulledAt" in value.settings)) value.settings.lastPulledAt = null;
   // v25: データ最終更新時刻(端末間で「新しい方が勝つ」判定に使用)
   value.dataModifiedAt ||= "";
   // v35: WBS で中断中の項目を表示するかどうか(既定は非表示)
@@ -1027,6 +1046,7 @@ function render() {
   renderBottomNav();
   renderMain();
   renderTimelineRail();
+  renderSyncBanner();  // v43: 全再描画で消えるバナーを再注入
   // v40: 着手ジュースは1回の描画で消費する(次の描画では付かない)。CSS アニメは挿入時に1回再生。
   state._justStartedBlockId = null;
 }
@@ -1038,7 +1058,7 @@ function renderSidebar() {
   else sidebar.classList.remove("collapsed");
   sidebar.innerHTML = `
     <div class="brand">
-      <div class="brand-title">${collapsed ? "TJ" : "TaskChute Journal"}</div>
+      <div class="brand-title">${collapsed ? "TJ" : "TaskChute Journal"}<span class="sync-dot ${syncDotClass()}" title="同期状態"></span></div>
       ${collapsed ? "" : `<div class="brand-sub">PWA / Local-first MVP</div>`}
       <button class="sidebar-toggle" data-action="toggle-sidebar" aria-label="${collapsed ? "サイドバーを開く" : "サイドバーを折りたたむ"}" title="${collapsed ? "サイドバーを開く" : "サイドバーを折りたたむ"}">${collapsed ? "▶" : "◁"}</button>
     </div>
@@ -3429,6 +3449,16 @@ function renderSettings() {
         <div class="muted" data-auto-save-status style="font-size:12px">
           ${github.lastSavedAt ? `最終保存: ${github.lastSavedAt.replace("T", " ")}` : (github.autoSave ? "自動保存: 有効(まだ保存していません)" : "自動保存: 無効")}
         </div>
+        <label class="checkbox-line">
+          <input type="checkbox" data-setting-autosync ${state.settings.autoSync ? "checked" : ""}>
+          🔄 自動同期(push 3分デバウンス + 起動/復帰時に pull)
+        </label>
+        <div class="muted" style="font-size:11px; line-height:1.7">
+          ${state.settings.autoSync ? `<span class="sync-dot ${syncDotClass()}"></span> 有効` : "無効(既定)"}
+          ${state.settings.github.lastSavedAt ? ` ・ 最終push: ${state.settings.github.lastSavedAt.replace("T", " ")}` : ""}
+          ${state.settings.lastPulledAt ? ` ・ 最終pull: ${state.settings.lastPulledAt.replace("T", " ")}` : ""}
+          <br>競合(両方に未反映の変更)時は自動適用せず、手動判断に委ねます。
+        </div>
         <div class="row">
           <button class="btn primary" data-action="save-github">今すぐGitHubへ保存</button>
           <button class="btn" data-action="load-github">GitHubから読込</button>
@@ -4973,6 +5003,8 @@ const AUTO_SAVE_DEBOUNCE_MS = 30000;  // 変更後この時間で GitHub へ自�
 
 function scheduleAutoSave() {
   const cfg = state.settings?.github || {};
+  // v43: 自動同期 ON のときは legacy 30秒 autoSave をバイパス(二重push防止)
+  if (state.settings.autoSync) { clearTimeout(autoSaveTimer); return; }
   // v37: OFF になったら予約済みのタイマーも解除する
   //      (OFF直前の変更で予約された保存が30秒後に飛ぶのを防ぐ)
   if (!cfg.autoSave) { clearTimeout(autoSaveTimer); return; }
@@ -4982,6 +5014,107 @@ function scheduleAutoSave() {
   autoSaveTimer = setTimeout(() => {
     saveToGitHub(true);
   }, AUTO_SAVE_DEBOUNCE_MS);
+}
+
+// v43: =========================================================
+//  GitHub 自動同期(既定OFF・保守的・既存の手動push/pull関数の上に載せる)
+//  マージはしない。競合時は必ず人間判断に落とす。自動系が壊れても手動は生きている。
+// =========================================================
+let _autoSyncTimer = null;
+let _lastPullCheckAt = 0;      // Date.now() ベース(スロットル)。非永続。
+let _syncBanner = null;        // 競合バナー文言。非永続。
+const AUTO_SYNC_PUSH_MS = 3 * 60 * 1000;   // 3分デバウンス
+const AUTO_SYNC_PULL_THROTTLE_MS = 60 * 1000;
+
+function autoSyncReady() {
+  const cfg = state.settings.github || {};
+  if (!state.settings.autoSync || !cfg.token || !cfg.owner || !cfg.repo) return false;
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
+  return true;
+}
+
+// 自動 push(3分デバウンス)
+function scheduleAutoSync() {
+  if (!state.settings.autoSync) return;
+  clearTimeout(_autoSyncTimer);
+  _autoSyncTimer = setTimeout(runAutoSyncPush, AUTO_SYNC_PUSH_MS);
+}
+async function runAutoSyncPush() {
+  if (!autoSyncReady()) return;
+  const cfg = state.settings.github;
+  if (!(state.dataModifiedAt && state.dataModifiedAt > (state.settings.lastPushedAt || ""))) return;  // 未変更
+  try {
+    // push前ガード: remote の dataModifiedAt を確認(別端末が進めていたら中止)
+    const remoteT = (JSON.parse((await downloadGitHubStateText(cfg)).text).dataModifiedAt) || "";
+    if (remoteT && remoteT > (state.settings.lastPushedAt || "")) {
+      setSyncBanner("リモートに新しいデータがあります。設定から pull を確認してください");
+      return;
+    }
+    const before = state.settings.github.lastSavedAt;
+    const pushed = state.dataModifiedAt;
+    await saveToGitHub(true);  // 既存の手動push経路(SHAガード付き)を共用
+    if (state.settings.github.lastSavedAt !== before) {  // 成功
+      state.settings.lastPushedAt = pushed;
+      clearSyncBanner();
+      persistLocalNoSchedule();
+    }
+    updateSyncDot();
+  } catch { /* オフライン/APIエラー: 次のデバウンスで再試行(演出なし) */ }
+}
+
+// 自動 pull(起動 + visibilitychange、60秒スロットル)
+async function runAutoSyncPull() {
+  if (!autoSyncReady()) return;
+  const now = Date.now();
+  if (now - _lastPullCheckAt < AUTO_SYNC_PULL_THROTTLE_MS) return;
+  _lastPullCheckAt = now;
+  const cfg = state.settings.github;
+  try {
+    const { text, sha } = await downloadGitHubStateText(cfg);
+    const remote = JSON.parse(text);
+    const remoteT = remote.dataModifiedAt || "";
+    const localT = state.dataModifiedAt || "";
+    if (!remoteT || remoteT <= localT) { if (runDailyOpen()) render(); return; }  // remote 古い/同じ
+    const hasUnpushed = localT !== (state.settings.lastPushedAt || "");
+    if (hasUnpushed) {
+      // 両方に未反映の変更 → 自動適用しない(どちらを取るかは人間)
+      setSyncBanner("リモートに新しいデータ。ローカルにも未pushの変更があります。設定から手動で確認してください");
+      if (runDailyOpen()) render();
+      return;
+    }
+    // 自動適用(ローカルに未push変更なし & remote が新しい)
+    clearTimeout(autoSaveTimer);
+    const token = cfg.token;
+    state = normalizeState(remote);
+    state.settings.github = { ...cfg, token };
+    state.settings.lastPushedAt = remoteT;   // 取り込んだ = リモートと一致
+    state.settings.lastPulledAt = nowDateTime();
+    setLastSyncedSha(sha);
+    maintainRecurrences({ purge: true });
+    runDailyOpen();  // §2: pull 後に日次オープン(古いstate展開→pullで消える事故を防ぐ)
+    clearSyncBanner();
+    persistLocalNoSchedule();
+    render();
+    showToast("最新データを取り込みました");
+  } catch { if (runDailyOpen()) render(); }
+}
+
+function setSyncBanner(msg) { _syncBanner = msg; renderSyncBanner(); updateSyncDot(); }
+function clearSyncBanner() { _syncBanner = null; renderSyncBanner(); updateSyncDot(); }
+function renderSyncBanner() {
+  const existing = document.querySelector(".sync-banner");
+  if (existing) existing.remove();
+  // モーダルで作業を止めず、#main 先頭に静かなバナー(タップで設定へ)
+  if (_syncBanner && main) main.insertAdjacentHTML("afterbegin",
+    `<div class="sync-banner" data-action="nav" data-view="settings">⚠ ${escapeHTML(_syncBanner)} — 設定へ</div>`);
+}
+function syncDotClass() {
+  if (!state.settings.autoSync) return "off";
+  return (state.dataModifiedAt && state.dataModifiedAt !== (state.settings.lastPushedAt || "")) ? "pending" : "ok";
+}
+function updateSyncDot() {
+  const el = document.querySelector(".sync-dot");
+  if (el) el.className = `sync-dot ${syncDotClass()}`;
 }
 
 function updateAutoSaveStatus(text) {
@@ -7018,12 +7151,14 @@ render();
 hydrateStaticMarkdown();
 registerServiceWorker();
 startTimerTicker();
-// v25: 起動後、GitHub 側がローカルより新しければ取り込む(ローカルファースト)
-syncFromGitHubOnStartup();
-// v41: PWA を開きっぱなしで日付が変わったら、復帰時にルーティンを自動展開。
-//      日付判定入りなので何度呼んでも安全(展開の完了は演出しない)。
+// v25/v43: 起動後の pull。自動同期 ON なら v43 の pull(競合バナー付き)、OFF なら従来の起動時同期。
+if (state.settings.autoSync) runAutoSyncPull();
+else syncFromGitHubOnStartup();
+// v41/v43: 復帰時。自動同期 ON なら pull(内部で日次オープン)、OFF なら日次オープンのみ。
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && runDailyOpen()) render();
+  if (document.visibilityState !== "visible") return;
+  if (state.settings.autoSync) runAutoSyncPull();
+  else if (runDailyOpen()) render();
 });
 
 // v42: AIフィードバック欄への貼り付けで、構造化取り込みモーダルを開く
