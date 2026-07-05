@@ -2260,3 +2260,36 @@ h3 {
 .weekly-q-stall { font-size: 11px; font-weight: 800; color: var(--muted); background: rgba(0,0,0,.06); border-radius: 6px; padding: 1px 7px; margin-right: 8px; }
 .weekly-close .weekly-change-btn { width: 100%; }
 .weekly-close .weekly-change-btn:disabled { opacity: .55; }
+
+/* =========================================================
+   v40: 着手ジュース / 4週スパークライン / 双極エネルギーバー
+   ========================================================= */
+
+/* 着手ジュース: 着手の瞬間だけ軽いスケール+amberグロー(0.3s、1回)。音・粒子なし。 */
+@keyframes just-started-juice {
+  0%   { transform: scale(1);    box-shadow: 0 0 0 0 rgba(255,149,0,0); }
+  35%  { transform: scale(1.015); box-shadow: 0 0 0 4px rgba(255,149,0,.28); }
+  100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(255,149,0,0); }
+}
+.just-started { animation: just-started-juice 0.3s ease-out; }
+@media (prefers-reduced-motion: reduce) { .just-started { animation: none; } }
+
+/* 実行スコア 4週スパークライン(目標線・達成色なし=鏡) */
+.wk-spark-wrap { display: flex; align-items: center; gap: 12px; margin: 4px 0 14px; }
+.wk-spark-cap { font-size: 11.5px; color: var(--muted); font-weight: 700; flex: none; }
+.wk-spark { display: flex; align-items: flex-end; gap: 4px; height: 32px; }
+.wk-spark-bar { width: 8px; min-height: 2px; background: var(--accent); border-radius: 2px 2px 0 0; opacity: .5; }
+.wk-spark-bar:last-of-type { opacity: 1; }
+.wk-spark-val { font-size: 12px; color: var(--muted); font-weight: 700; margin-left: 6px; align-self: center; }
+
+/* 日別差引バー: ゼロ軸中央、正=teal(green)/ 負=red */
+.wk-net-bar { width: 100%; max-width: 34px; height: 56px; display: flex; flex-direction: column; margin: 0 auto; }
+.wk-net-pos, .wk-net-neg { flex: 1; display: flex; }
+.wk-net-pos { align-items: flex-end; }
+.wk-net-pos span { width: 100%; background: var(--green); border-radius: 4px 4px 0 0; }
+.wk-net-neg { align-items: flex-start; }
+.wk-net-neg span { width: 100%; background: var(--red); border-radius: 0 0 4px 4px; }
+.wk-net-zero { height: 1px; background: var(--line); }
+.wk-net-val { font-size: 11.5px; font-weight: 800; text-align: center; margin-top: 3px; color: var(--muted); }
+.wk-net-val.pos { color: var(--green); }
+.wk-net-val.neg { color: var(--red); }
