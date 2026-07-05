@@ -20,7 +20,7 @@ const navItems = [
   { id: "wish", label: "やりたい", mark: "✦" },
   { id: "avoid", label: "やらない", mark: "✕" },
   { id: "reports", label: "日報", mark: "R" },
-  { id: "weekly", label: "週次レビュー", mark: "◷" },
+  { id: "weekly", label: "週次", mark: "◷" },
   { id: "settings", label: "設定", mark: "S" }
 ];
 
@@ -232,15 +232,16 @@ document.addEventListener("click", (event) => {
   if (action === "question-delete") deleteQuestion(id);
   if (action === "entry-to-question") entryToQuestion(id);
   if (action === "open-questions") { state.settings.zeroTab = "question"; persistLocalNoSchedule(); setView("zero"); }
-  // v39: 週次レビュー
+  // v39/v40: 週次レビュー
   if (action === "open-weekly") setView("weekly");
   if (action === "weekly-prev") shiftWeeklyWeek(-1);
   if (action === "weekly-next") shiftWeeklyWeek(1);
   if (action === "weekly-change-theme") weeklyChangeTheme(target.dataset.week);
   if (action === "weekly-download") downloadWeekly(target.dataset.week);
   if (action === "weekly-push") pushWeeklyToGitHub(target.dataset.week);
-  // v39: エネルギー構造からの行動導線
-  if (action === "energy-open-routine") setView("routine");
+  if (action === "weekly-open-question") { state.settings.zeroTab = "question"; persistLocalNoSchedule(); setView("zero"); }
+  // v39/v40: エネルギー構造からの行動導線
+  if (action === "energy-open-routine") openRoutineForWeekday(Number(target.dataset.day));
   if (action === "energy-open-category") {
     state.settings.timelineCategoryFilter = target.dataset.cat || "";
     persistLocalNoSchedule();
@@ -248,6 +249,12 @@ document.addEventListener("click", (event) => {
   }
   if (action === "timeline-clear-cat") {
     state.settings.timelineCategoryFilter = "";
+    persistLocalNoSchedule();
+    render();
+  }
+  // v40: ルーティンの曜日フィルタ解除
+  if (action === "routine-clear-day") {
+    state.settings.routineDayFilter = null;
     persistLocalNoSchedule();
     render();
   }
@@ -389,7 +396,8 @@ let _lastSaveError = null;
 // localStorage への書き込みのみ(自動保存タイマーを再セットしない)。
 // 保存ルーチン内部からの保存に使い、自動保存の無限ループを防ぐ。
 function persistLocalNoSchedule() {
-  const persisted = { ...state, modal: null };
+  // v40: _justStartedBlockId は非永続(modal と同様、シリアライズ時に落とす)
+  const persisted = { ...state, modal: null, _justStartedBlockId: null };
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
     _lastSaveError = null;
@@ -592,6 +600,9 @@ function normalizeState(value) {
     "questionId" in e ? e : { ...e, questionId: null });
   // v39: 週次レビュー(キー = 週開始土曜 'YYYY-MM-DD')。指標は都度計算、メモのみ永続化。
   if (!value.weeklyReviews || typeof value.weeklyReviews !== "object") value.weeklyReviews = {};
+  // v40: 週カーソル / ルーティン曜日フィルタ(UI状態、null=未設定)
+  if (!("weeklySelectedWeek" in value.settings)) value.settings.weeklySelectedWeek = null;
+  if (!("routineDayFilter" in value.settings)) value.settings.routineDayFilter = null;
   // v23: 繰り返しをルール方式へ(旧データは初回のみ自動移行)
   value.recurrences ||= [];
   migrateRecurrencesIfNeeded(value);
@@ -997,6 +1008,8 @@ function render() {
   renderBottomNav();
   renderMain();
   renderTimelineRail();
+  // v40: 着手ジュースは1回の描画で消費する(次の描画では付かない)。CSS アニメは挿入時に1回再生。
+  state._justStartedBlockId = null;
 }
 
 function renderSidebar() {
@@ -1220,7 +1233,8 @@ function homeHero(blocks, isToday) {
     ? `<div class="home-hero-next"><span class="home-hero-next-lab">このあと</span>
         <strong>${after.plannedStartAt ? timeFromDateTime(after.plannedStartAt) : ""}</strong> ${escapeHTML(after.title)}</div>`
     : "";
-  return `<section class="panel home-hero">
+  const heroJuice = target.id === state._justStartedBlockId ? " just-started" : "";  // v40: 着手ジュース
+  return `<section class="panel home-hero${heroJuice}">
     <div class="eyebrow" style="color:var(--orange)">いま、これ</div>
     <div class="home-hero-grid">
       <div class="home-hero-main">
@@ -2309,8 +2323,9 @@ function renderBlockItem(block) {
   const leftBorder = isMIT
     ? `border-left:4px solid var(--gold, #FFD60A); background:linear-gradient(90deg, rgba(255,214,10,0.06), transparent 30%)`
     : (catColor ? `border-left:3px solid ${catColor}` : "");
+  const justStarted = block.id === state._justStartedBlockId ? " just-started" : "";  // v40: 着手ジュース
   return `
-    <div class="item block-row ${isMIT ? "is-mit" : ""}" ${leftBorder ? `style="${leftBorder}"` : ""}>
+    <div class="item block-row ${isMIT ? "is-mit" : ""}${justStarted}" ${leftBorder ? `style="${leftBorder}"` : ""}>
       <button class="checkbox-button ${block.completed ? "done" : ""}" data-action="toggle-block" data-id="${block.id}">✓</button>
       <div class="stack">
         <div class="title-line">
@@ -2425,9 +2440,19 @@ function renderRoutine() {
     }
   }
 
+  // v40: エネルギー構造からの曜日フィルタ(該当曜日の直近日へジャンプ済み)。チップで解除可能。
+  const dayFilter = state.settings.routineDayFilter;
+  const dayChip = (dayFilter !== null && dayFilter !== undefined)
+    ? `<div class="row" style="margin-bottom:10px; gap:8px; align-items:center">
+        <span class="cat-chip" style="background:rgba(0,122,255,.12); color:var(--accent); border:1px solid rgba(0,122,255,.3)">${WEEKDAY_LABELS[dayFilter]}曜のルーティン(エネルギー構造から)</span>
+        <button class="btn ghost" data-action="routine-clear-day" style="font-size:12px">解除 ✕</button>
+      </div>`
+    : "";
+
   return `
     ${renderHeader("今やること、次にやること", "ルーティン")}
     ${renderDateBar()}
+    ${dayChip}
 
     <div class="segmented" style="margin-bottom:14px">
       <button class="${viewMode === "routine" ? "active" : ""}" data-action="routine-mode" data-mode="routine">↻ ルーティンのみ</button>
@@ -3406,68 +3431,100 @@ function computeWeeklyMetrics(weekStart) {
   };
 }
 
-// エネルギー構造分析: 直近 weeks 週の completed blocks から、放電超過を上位3件だけ返す。
-// データが weeks 週に満たなければ null(不正確な "構造" を見せない)。
-function computeEnergyStructure(endDate, weeks = 4) {
-  const startDate = addDays(endDate, -(weeks * 7 - 1));
-  const all = state.blocks.filter((b) => !b.deleted);
-  if (!all.length) return null;
-  const earliest = all.reduce((m, b) => (b.date < m ? b.date : m), all[0].date);
-  if (earliest > startDate) return null;  // 4週未満
+// v40: エネルギー構造分析。weekStart を含む直近 weeks 週の completed blocks から
+//      放電超過(曜日別平均・カテゴリ別合計)を上位3件だけ返す。
+//      対象期間の completed が 28件未満なら eligible:false(不正確な "構造" を見せない)。
+const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
+function computeEnergyStructure(weekStart, weeks = 4) {
+  const startDate = addDays(weekStart, -7 * (weeks - 1));
+  const endDate = addDays(weekStart, 6);
+  const inRange = state.blocks.filter((b) => !b.deleted && b.completed && b.date >= startDate && b.date <= endDate);
+  if (inRange.length < weeks * 7) return { eligible: false, findings: [] };  // 28件未満
 
-  const inRange = all.filter((b) => b.completed && b.date >= startDate && b.date <= endDate);
-  // 曜日別 平均差引
-  const wd = ["日", "月", "火", "水", "木", "金", "土"].map((label) => ({ type: "weekday", label: `${label}曜`, net: 0, count: 0 }));
+  // 曜日別 平均差引(n>=3、平均が負)
+  const wd = WEEKDAY_LABELS.map((label, i) => ({ dayIndex: i, label: `${label}曜`, net: 0, n: 0 }));
   inRange.forEach((b) => {
-    const i = parseDate(b.date).getDay();  // 0=日..6=土(parseDate=安全な文字列パース)
+    const i = parseDate(b.date).getDay();  // 0=日..6=土(parseDate=安全な数値コンストラクタ)
     wd[i].net += Number(b.charge || 0) - Number(b.discharge || 0);
-    wd[i].count += 1;
+    wd[i].n += 1;
   });
-  const worstWeekday = wd.filter((r) => r.count > 0).map((r) => ({ ...r, avg: r.net / r.count }))
-    .filter((r) => r.avg < 0).sort((a, b) => a.avg - b.avg)[0];
-  // カテゴリ別 差引合計
-  const catSum = {};
+  const worstWeekday = wd.filter((r) => r.n >= 3 && r.net / r.n < 0)
+    .map((r) => ({ type: "weekday", dayIndex: r.dayIndex, label: r.label, value: r.net / r.n, n: r.n }))
+    .sort((a, b) => a.value - b.value)[0];
+  // カテゴリ別 差引合計(n>=3、合計が負)
+  const cat = {};
   inRange.forEach((b) => {
     const c = b.category || "未分類";
-    catSum[c] = (catSum[c] || 0) + Number(b.charge || 0) - Number(b.discharge || 0);
+    (cat[c] ||= { net: 0, n: 0 });
+    cat[c].net += Number(b.charge || 0) - Number(b.discharge || 0);
+    cat[c].n += 1;
   });
-  const worstCats = Object.entries(catSum).map(([key, total]) => ({ type: "category", key, label: `〈${key}〉`, total }))
-    .filter((r) => r.total < 0).sort((a, b) => a.total - b.total);
-  // 曜日1件 + カテゴリを混ぜ、最大3件(曜日の信号がカテゴリ合計に埋もれないよう先頭固定)
-  const out = [];
-  if (worstWeekday) out.push(worstWeekday);
-  worstCats.forEach((c) => { if (out.length < 3) out.push(c); });
-  return out.slice(0, 3);
+  const worstCats = Object.entries(cat).filter(([, v]) => v.n >= 3 && v.net < 0)
+    .map(([key, v]) => ({ type: "category", key, label: `〈${key}〉`, value: v.net, n: v.n }))
+    .sort((a, b) => a.value - b.value);
+  // 曜日の信号がカテゴリ合計に埋もれないよう、曜日1件を先頭に置いてから上位3件
+  const findings = [];
+  if (worstWeekday) findings.push(worstWeekday);
+  worstCats.forEach((c) => { if (findings.length < 3) findings.push(c); });
+  return { eligible: true, findings };
 }
 
-function renderEnergyStructure(endDate) {
-  const rows = computeEnergyStructure(endDate);
-  if (rows === null) return "";  // 4週未満は非表示
-  if (!rows.length) {
+function renderEnergyStructure(weekStart) {
+  const { eligible, findings } = computeEnergyStructure(weekStart);
+  if (!eligible) return "";  // 4週分(28件)のデータが無ければ非表示
+  if (!findings.length) {
     return `<div class="weekly-sec"><h3>エネルギー構造(直近4週)</h3>
-      <div class="muted" style="font-size:13px">構造的な放電超過は見当たりません。いい状態です。</div></div>`;
+      <div class="muted" style="font-size:13px">構造的な放電超過は見つかりません。いい状態です。</div></div>`;
   }
   return `<div class="weekly-sec"><h3>エネルギー構造(直近4週)</h3>
-    ${rows.map((r, i) => r.type === "weekday"
+    ${findings.map((r, i) => r.type === "weekday"
       ? `<div class="weekly-struct-row">
-          <span class="weekly-struct-desc">${i + 1}. ${escapeHTML(r.label)}が構造的にマイナス(平均 ${r.avg.toFixed(1)})</span>
-          <button class="btn ghost" data-action="energy-open-routine">この曜日のルーティンを見る</button>
+          <span class="weekly-struct-desc">${i + 1}. ${escapeHTML(r.label)}が構造的にマイナス(平均 ${r.value.toFixed(1)})</span>
+          <button class="btn ghost" data-action="energy-open-routine" data-day="${r.dayIndex}">${escapeHTML(r.label)}のルーティンを見る</button>
         </div>`
       : `<div class="weekly-struct-row">
-          <span class="weekly-struct-desc">${i + 1}. ${escapeHTML(r.label)}が放電超過(${signed(r.total)})</span>
-          <button class="btn ghost" data-action="energy-open-category" data-cat="${escapeHTML(r.key)}">カテゴリのブロックを見る</button>
+          <span class="weekly-struct-desc">${i + 1}. ${escapeHTML(r.label)}が放電超過(${signed(r.value)})</span>
+          <button class="btn ghost" data-action="energy-open-category" data-cat="${escapeHTML(r.key)}">ブロックを見る</button>
         </div>`).join("")}
   </div>`;
 }
 
+// v40: 直近 n 週の着手率(スパークライン用。古い→新しい)
+function startRateHistory(weekStart, n = 4) {
+  const out = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const ws = addDays(weekStart, -7 * i);
+    const r = taskchuteStartRate(blocksForWeek(ws));
+    out.push({ week: ws, pct: r.pct, total: r.total });
+  }
+  return out;
+}
+
+// v40: エネルギー構造の曜日 finding から、その曜日の直近日へ移動して routine を見る
+function openRoutineForWeekday(dayIndex) {
+  if (!Number.isInteger(dayIndex)) return setView("routine");
+  let d = todayISO();
+  for (let i = 0; i < 7; i++) {
+    if (parseDate(d).getDay() === dayIndex) break;
+    d = addDays(d, -1);
+  }
+  state.selectedDate = d;
+  state.settings.routineDayFilter = dayIndex;
+  persistLocalNoSchedule();  // UI カーソル(dataModifiedAt を汚さない)
+  setView("routine");
+}
+
 function currentWeeklyWeek() {
-  // 既定 = 直近の完了週(今日を含む週の1つ前の土曜)
-  const def = addDays(weekStartFor(todayISO()), -7);
+  // v40: 既定 = 直近の「完了した週」。今日が土曜なら先週、それ以外は今週(進行中)。
+  const ws = weekStartFor(todayISO());
+  const def = todayISO() === ws ? addDays(ws, -7) : ws;
   return state.settings.weeklySelectedWeek || def;
 }
 
 function shiftWeeklyWeek(dir) {
-  state.settings.weeklySelectedWeek = addDays(currentWeeklyWeek(), dir * 7);
+  const next = addDays(currentWeeklyWeek(), dir * 7);
+  if (next > weekStartFor(todayISO())) return;  // v40: 未来週へは進めない(今週まで)
+  state.settings.weeklySelectedWeek = next;
   persistLocalNoSchedule();  // 週カーソルは UI 状態
   render();
 }
@@ -3476,19 +3533,40 @@ function renderWeekly() {
   const week = currentWeeklyWeek();
   const m = computeWeeklyMetrics(week);
   const review = state.weeklyReviews[week] || { md: "", changeThemeCreated: false };
+  const thisWeek = weekStartFor(todayISO());
+  const inProgress = week === thisWeek;              // v40: 進行中の週か
+  const atCurrent = week >= thisWeek;                // これ以上先へは進めない
+  const weekBlocks = blocksForWeek(week);
+  const noRecord = weekBlocks.length === 0;          // v40: 記録ゼロの週
 
-  // 実行スコアの日別バー
+  // v40: 実行スコアの4週推移スパークライン(目標線・達成色分けなし=鏡)
+  const spark = startRateHistory(week, 4);
+  const sparkMax = Math.max(100, ...spark.map((s) => s.pct));
+  const sparkHTML = `<div class="wk-spark" title="直近4週の着手率">
+    ${spark.map((s, i) => `<div class="wk-spark-bar" style="height:${Math.round((s.pct / sparkMax) * 100)}%" title="${s.week}: ${s.pct}%"></div>`).join("")}
+    <span class="wk-spark-val">${spark.map((s) => `${s.pct}%`).join(" → ")}</span>
+  </div>`;
+
+  // 日別バー(着手率)
   const execBars = m.daily.map((d) => `
     <div class="wk-bar-cell">
       <div class="wk-bar"><div class="wk-bar-fill" style="height:${d.startPct}%"></div></div>
       <div class="wk-bar-lab">${d.wd}</div>
     </div>`).join("");
-  // エネルギー日別(差引、マイナス赤)
-  const energyBars = m.daily.map((d) => `
-    <div class="wk-bar-cell">
-      <div class="wk-net ${d.net < 0 ? "neg" : d.net > 0 ? "pos" : ""}">${signed(d.net)}</div>
+  // v40: 日別差引バー(ゼロ軸中央、正=teal / 負=red)
+  const netMax = Math.max(1, ...m.daily.map((d) => Math.abs(d.net)));
+  const energyBars = m.daily.map((d) => {
+    const h = Math.round((Math.abs(d.net) / netMax) * 100);
+    return `<div class="wk-bar-cell">
+      <div class="wk-net-bar">
+        <div class="wk-net-pos">${d.net > 0 ? `<span style="height:${h}%"></span>` : ""}</div>
+        <div class="wk-net-zero"></div>
+        <div class="wk-net-neg">${d.net < 0 ? `<span style="height:${h}%"></span>` : ""}</div>
+      </div>
+      <div class="wk-net-val ${d.net < 0 ? "neg" : d.net > 0 ? "pos" : ""}">${d.net === 0 ? "0" : signed(d.net)}</div>
       <div class="wk-bar-lab">${d.wd}</div>
-    </div>`).join("");
+    </div>`;
+  }).join("");
 
   // 問いの動き
   const days = new Set(m.days);
@@ -3500,6 +3578,7 @@ function renderWeekly() {
     .filter((x) => x.q && !x.q.deleted);
   const stalled = (state.questions || []).filter((q) =>
     !q.deleted && q.status !== "settled" && q.lastTouchedAt && daysBetween(q.lastTouchedAt, todayISO()) >= 14);
+  const anyQuestions = (state.questions || []).some((q) => !q.deleted);
 
   // 12週の弧: この週に締切があるサイクル目標タスク
   const goals = state.projects.filter((p) => !p.deleted && p.kind === "normal" && p.status === "active" && p.twelveWeekStartDate);
@@ -3511,10 +3590,11 @@ function renderWeekly() {
     ${renderHeader("週スケールでふりかえる", "週次レビュー")}
     <div class="weekly-nav">
       <button class="btn" data-action="weekly-prev">◀ 前週</button>
-      <div class="weekly-week">${weekLabelShort(week)}<span class="weekly-week-dow">(土〜金)</span></div>
-      <button class="btn" data-action="weekly-next">次週 ▶</button>
+      <div class="weekly-week">${weekLabelShort(week)}<span class="weekly-week-dow">(土〜金)${inProgress ? " ・進行中" : ""}</span></div>
+      <button class="btn" data-action="weekly-next" ${atCurrent ? "disabled" : ""}>次週 ▶</button>
     </div>
 
+    ${noRecord ? `<div class="weekly-sec"><div class="muted" style="font-size:13px">この週は記録がありません。記録ゼロという事実も、ふり返りの対象です。</div></div>` : `
     <div class="weekly-sec">
       <h3>実行スコア</h3>
       <div class="weekly-metric-row">
@@ -3525,6 +3605,7 @@ function renderWeekly() {
         <div class="weekly-metric"><span class="weekly-metric-lab">ルーティン実行</span>
           <span class="weekly-metric-val">${m.rt.pct}<small>%</small></span><span class="weekly-metric-sub">${m.rt.done}/${m.rt.total}</span></div>
       </div>
+      <div class="wk-spark-wrap"><span class="wk-spark-cap">着手率の推移(4週)</span>${sparkHTML}</div>
       <div class="wk-bars">${execBars}</div>
     </div>
 
@@ -3534,29 +3615,30 @@ function renderWeekly() {
       <div class="wk-bars">${energyBars}</div>
     </div>
 
-    ${renderEnergyStructure(week === weekStartFor(todayISO()) ? todayISO() : addDays(week, 6))}
+    ${renderEnergyStructure(week)}
+    `}
 
-    <div class="weekly-sec">
+    ${m.wkNum ? `<div class="weekly-sec">
       <h3>12週の弧</h3>
-      ${m.wkNum ? `<div class="weekly-12wy">第 <b>${m.wkNum}</b> 週 / 12週　<span class="muted">残り ${m.daysLeft12} 日</span></div>` : `<div class="muted" style="font-size:13px">12WY 開始日が未設定です。</div>`}
+      <div class="weekly-12wy">第 <b>${m.wkNum}</b> 週 / 12週　<span class="muted">残り ${m.daysLeft12} 日</span></div>
       ${weekTasks.length
         ? `<div class="weekly-tasklist">${weekTasks.map((t) => `<div class="home-ck">
-            <span class="home-box ${t.status === "completed" ? "" : ""}" data-action="toggle-task" data-id="${t.id}">${t.status === "completed" ? "✓" : ""}</span>
+            <span class="home-box" data-action="toggle-task" data-id="${t.id}">${t.status === "completed" ? "✓" : ""}</span>
             <span class="home-ck-name" data-action="edit-task" data-id="${t.id}">${escapeHTML(t.title)}</span>
           </div>`).join("")}</div>`
         : `<div class="muted" style="font-size:13px">この週に締切のサイクル目標タスクはありません。</div>`}
-    </div>
+    </div>` : ""}
 
-    <div class="weekly-sec">
+    ${anyQuestions ? `<div class="weekly-sec">
       <h3>問いの動き</h3>
-      ${moved.length ? moved.map((x) => `<div class="weekly-q-row"><span class="weekly-q-move">動いた</span>${escapeHTML(x.q.text)} <span class="muted">(+${x.cnt} 本)</span></div>`).join("") : `<div class="muted" style="font-size:13px">この週に問いへ紐づく0秒思考はありませんでした。</div>`}
-      ${stalled.map((q) => `<div class="weekly-q-row"><span class="weekly-q-stall">止まっている</span>${escapeHTML(q.text)} <span class="muted">(${daysBetween(q.lastTouchedAt, todayISO())}日)</span></div>`).join("")}
-    </div>
+      ${moved.length ? moved.map((x) => `<div class="weekly-q-row" data-action="weekly-open-question"><span class="weekly-q-move">動いた</span>${escapeHTML(x.q.text)} <span class="muted">(+${x.cnt} 本)</span></div>`).join("") : `<div class="muted" style="font-size:13px">この週に問いへ紐づく0秒思考はありませんでした。</div>`}
+      ${stalled.map((q) => `<div class="weekly-q-row" data-action="weekly-open-question"><span class="weekly-q-stall">止まっている</span>${escapeHTML(q.text)} <span class="muted">(${daysBetween(q.lastTouchedAt, todayISO())}日)</span></div>`).join("")}
+    </div>` : ""}
 
     <div class="weekly-sec weekly-close">
       <h3>締め</h3>
-      <button class="btn primary weekly-change-btn" data-action="weekly-change-theme" data-week="${week}" ${review.changeThemeCreated ? "disabled" : ""}>
-        ${review.changeThemeCreated ? "✓ 「変えること」をテーマ化済み" : "「この週から何を変えるか」を0秒思考テーマにする"}
+      <button class="btn primary weekly-change-btn" data-action="weekly-change-theme" data-week="${week}">
+        ${review.changeThemeCreated ? "✓ 発行済み — もう一度テーマ化する" : "この週から何を変えるか → 0秒思考へ"}
       </button>
       <textarea class="textarea" data-weekly-md="${week}" style="min-height:120px; margin-top:12px" placeholder="この週の気づき・来週変えることをメモ(Markdown)">${escapeHTML(review.md || "")}</textarea>
       <div class="row" style="gap:8px; margin-top:10px; flex-wrap:wrap">
@@ -4297,6 +4379,9 @@ function triggerCompletionEffect(message, isMIT) {
 
 function setBlockTime(id, field) {
   updateBlockField(id, field, nowDateTime());
+  // v40: 着手ジュース — 着手(actualStartAt)の瞬間だけ、その行に一度きりの感覚フィードバック。
+  //      完了ではなく着手を祝う(着手第一主義の報酬設計を感覚レベルで補強)。非永続。
+  if (field === "actualStartAt") state._justStartedBlockId = id;
   render();
   showToast(field === "actualStartAt" ? "開始時刻を入れました" : "終了時刻を入れました");
 }
@@ -4915,6 +5000,7 @@ function sanitizedStateForGitHub() {
   const copy = structuredClone(state);
   if (copy.settings?.github) copy.settings.github.token = "";
   copy.modal = null;  // v37: ローカル保存(persistLocalNoSchedule)と同様、モーダル状態は共有しない
+  delete copy._justStartedBlockId;  // v40: 非永続の着手ジュースフラグは同期しない
   return copy;
 }
 
