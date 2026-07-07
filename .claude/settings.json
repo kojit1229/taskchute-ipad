@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "additionalDirectories": [
+      "../taskchute-notes"
+    ],
+    "allow": [
+      "Bash(git -C ../taskchute-notes:*)",
+      "Bash(cd ../taskchute-notes:*)"
+    ]
+  }
+}
