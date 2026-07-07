@@ -2329,3 +2329,12 @@ h3 {
 .carryover-cap { font-size: 12px; font-weight: 800; color: var(--muted); margin-bottom: 6px; }
 .carryover-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 0; }
 .carryover-title { font-size: 13.5px; font-weight: 600; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* v47: UI/UX 改善 — WBS・タスクシュートの痒いところ */
+.wbs-overdue { color: var(--red); font-weight: 800; }
+.block-row.is-doing { box-shadow: inset 0 0 0 1px rgba(47,185,109,.35); }
+/* モバイル: 行アクションのボタンを圧縮して折り返しを減らす */
+@media (max-width: 720px) {
+  .block-actions .btn, .wbs-actions .btn { padding: 6px 9px; font-size: 12px; }
+  .datebar { flex-wrap: wrap; }
+}
