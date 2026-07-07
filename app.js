@@ -5196,7 +5196,199 @@ function renderStats() {
       </div>`;
   }
 
-  const body = rateChart + energyChart + heatmap + estimateCard;
+  // 範囲内の完了Block(カテゴリ集計・折れ線・ヒストグラムで共用)
+  const doneInRange = state.blocks.filter((b) => !b.deleted && b.date >= since && b.date <= today && b.completed);
+
+  // 5) カテゴリ別 時間配分(ドーナツ / inline SVG)
+  const catMin = {};
+  doneInRange.forEach((b) => {
+    const min = _actualDurationMin(b) ?? (b.plannedStartAt && b.plannedEndAt ? Math.max(0, minutesOf(b.plannedEndAt) - minutesOf(b.plannedStartAt)) : 0);
+    if (min > 0) catMin[b.category || "未分類"] = (catMin[b.category || "未分類"] || 0) + min;
+  });
+  const catEntries = Object.entries(catMin).sort((a, b) => b[1] - a[1]);
+  const totalMin = catEntries.reduce((s, [, m]) => s + m, 0);
+  let donutCard = "";
+  if (catEntries.length && totalMin > 0) {
+    // 上位6 + その他(凡例が長くなりすぎないように)
+    const top = catEntries.slice(0, 6);
+    const restMin = catEntries.slice(6).reduce((s, [, m]) => s + m, 0);
+    const segs = top.map(([cat, m]) => ({ cat, m, color: getCategoryColor(cat) }));
+    if (restMin > 0) segs.push({ cat: "その他", m: restMin, color: "#8E8E93" });
+    // r=15.915 → 円周≈100。各弧は dasharray="長さ (100-長さ)"、offset を累積。
+    // セグメント間に 1 単位の隙間(surface gap)を入れて隣接を分離。
+    const GAP = segs.length > 1 ? 1 : 0;
+    let offset = 25;  // 12時方向から開始
+    const circles = segs.map((sg) => {
+      const frac = (sg.m / totalMin) * 100;
+      const len = Math.max(0, frac - GAP);
+      const c = `<circle cx="21" cy="21" r="15.915" fill="none" stroke="${sg.color}" stroke-width="7"
+        stroke-dasharray="${len.toFixed(2)} ${(100 - len).toFixed(2)}" stroke-dashoffset="${offset.toFixed(2)}"></circle>`;
+      offset -= frac;  // 次の弧の開始位置(反時計回りに減算)
+      return c;
+    }).join("");
+    const legend = segs.map((sg) =>
+      `<div class="stats-legend-row"><span class="stats-swatch" style="background:${sg.color}"></span>
+        <span class="stats-legend-name">${escapeHTML(sg.cat)}</span>
+        <span class="stats-legend-val">${fmtMinShort(sg.m)} ・ ${Math.round((sg.m / totalMin) * 100)}%</span></div>`).join("");
+    donutCard = `
+      <div class="panel stack">
+        <h2>カテゴリ別 時間配分</h2>
+        <div class="stats-donut-wrap">
+          <svg class="stats-donut" viewBox="0 0 42 42" role="img" aria-label="カテゴリ別の時間配分">
+            <circle cx="21" cy="21" r="15.915" fill="none" stroke="var(--panel-soft)" stroke-width="7"></circle>
+            ${circles}
+            <text x="21" y="20.5" class="stats-donut-c1">${fmtMinShort(totalMin)}</text>
+            <text x="21" y="25" class="stats-donut-c2">合計</text>
+          </svg>
+          <div class="stats-legend">${legend}</div>
+        </div>
+        <div class="muted stats-axis">完了Blockの実績時間(無ければ計画時間)をカテゴリ別に集計</div>
+      </div>`;
+  }
+
+  // 6) カテゴリ別 エネルギー収支(横向き双極バー)
+  const catNet = {};
+  doneInRange.forEach((b) => {
+    const n = Number(b.charge || 0) - Number(b.discharge || 0);
+    const c = b.category || "未分類";
+    if (!catNet[c]) catNet[c] = { net: 0, n: 0 };
+    catNet[c].net += n; catNet[c].n++;
+  });
+  const netRows = Object.entries(catNet).map(([cat, v]) => ({ cat, ...v })).sort((a, b) => b.net - a.net);
+  let catEnergyCard = "";
+  if (doneInRange.length >= 5 && netRows.length) {
+    const maxAbs = Math.max(1, ...netRows.map((r) => Math.abs(r.net)));
+    const rows = netRows.map((r) => {
+      const w = Math.round((Math.abs(r.net) / maxAbs) * 50);  // 中央から最大50%
+      const pos = r.net > 0, neg = r.net < 0;
+      return `<div class="stats-div-row" title="${escapeHTML(r.cat)}: ${signed(r.net)}(${r.n}件)">
+        <span class="stats-div-label">${escapeHTML(r.cat)}</span>
+        <span class="stats-div-track">
+          <span class="stats-div-neg">${neg ? `<span style="width:${w}%"></span>` : ""}</span>
+          <span class="stats-div-axis"></span>
+          <span class="stats-div-pos">${pos ? `<span style="width:${w}%"></span>` : ""}</span>
+        </span>
+        <span class="stats-div-val ${neg ? "neg" : pos ? "pos" : ""}">${signed(r.net)}</span>
+      </div>`;
+    }).join("");
+    catEnergyCard = `
+      <div class="panel stack">
+        <h2>カテゴリ別 エネルギー収支</h2>
+        ${rows}
+        <div class="muted stats-axis">Σ(充電 − 放電)。右(緑)=充電源 / 左(赤)=放電源</div>
+      </div>`;
+  }
+
+  // 7) 主要指標の推移(複数折れ線 / inline SVG)。着手率 / MIT / ルーティン。
+  const trend = hist.map((h) => {
+    const wb = blocksForWeek(h.week);
+    const mit = wb.filter((b) => b.isMIT);
+    const rt = routineRate(wb);
+    return {
+      week: h.week,
+      start: h.total ? h.pct : null,
+      mit: mit.length ? Math.round((mit.filter((b) => b.completed).length / mit.length) * 100) : null,
+      routine: rt.total ? rt.pct : null
+    };
+  });
+  const trendSeries = [
+    { key: "start", label: "着手率", color: "var(--accent)" },
+    { key: "routine", label: "ルーティン", color: "var(--green)" },
+    { key: "mit", label: "MIT", color: "var(--orange)" }
+  ].filter((s) => trend.filter((t) => t[s.key] !== null).length >= 2);
+  let trendCard = "";
+  if (trend.filter((t) => t.start !== null).length >= 2 && trendSeries.length) {
+    const W = 100, H = 44, padY = 4;
+    const xOf = (i) => trend.length > 1 ? (i / (trend.length - 1)) * W : W / 2;
+    const yOf = (pct) => padY + (1 - pct / 100) * (H - padY * 2);
+    // 注記: viewBox は非等比(preserveAspectRatio=none)で横に伸びるため、SVG内にテキストは置かない
+    //       (歪む)。最新値は凡例側に直値表示する = コントラスト WARN の緑/橙も識別できる直ラベル。
+    const latest = {};
+    const lines = trendSeries.map((s) => {
+      const pts = trend.map((t, i) => ({ i, v: t[s.key] })).filter((p) => p.v !== null);
+      latest[s.key] = pts.length ? pts[pts.length - 1].v : null;
+      const poly = pts.map((p) => `${xOf(p.i).toFixed(1)},${yOf(p.v).toFixed(1)}`).join(" ");
+      const dots = pts.map((p) => `<circle cx="${xOf(p.i).toFixed(1)}" cy="${yOf(p.v).toFixed(1)}" r="1" fill="${s.color}"/>`).join("");
+      return `<polyline points="${poly}" fill="none" stroke="${s.color}" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>${dots}`;
+    }).join("");
+    const legend = trendSeries.map((s) =>
+      `<span class="stats-legend-inline"><span class="stats-swatch" style="background:${s.color}"></span>${s.label}${latest[s.key] !== null ? ` <b>${latest[s.key]}%</b>` : ""}</span>`).join("");
+    trendCard = `
+      <div class="panel stack stats-wide">
+        <h2>主要指標の推移</h2>
+        <div class="stats-legend-inline-row">${legend}</div>
+        <svg class="stats-line-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="着手率・ルーティン・MITの週次推移">
+          <line x1="0" y1="${yOf(50)}" x2="${W}" y2="${yOf(50)}" stroke="var(--line)" stroke-width="0.4" stroke-dasharray="2,2"/>
+          ${lines}
+        </svg>
+        <div class="muted stats-axis">週次の実行率(%)。点線=50%。凡例の太字が最新週の値</div>
+      </div>`;
+  }
+
+  // 8) 記録の継続(コントリビューション・カレンダー / CSS grid)
+  const actScore = {};
+  const bump = (d, n = 1) => { if (d) actScore[d] = (actScore[d] || 0) + n; };
+  Object.entries(state.journals || {}).forEach(([d, t]) => { if (d >= since && d <= today && String(t).trim()) bump(d); });
+  Object.entries(state.reports || {}).forEach(([d, t]) => { if (d >= since && d <= today && String(t).trim()) bump(d); });
+  (state.zeroThinking?.entries || []).forEach((e) => { if (e.date >= since && e.date <= today) bump(e.date); });
+  doneInRange.forEach((b) => bump(b.date));
+  const activeDays = Object.keys(actScore).length;
+  let calendarCard = "";
+  if (activeDays >= 3) {
+    // 週(列)× 曜日(行、土→金)。since を含む週の土曜から今週まで。
+    const firstSat = weekStartFor(since);
+    const weekCols = [];
+    for (let ws = firstSat; ws <= thisWeek; ws = addDays(ws, 7)) weekCols.push(ws);
+    const bucket = (n) => n === 0 ? 0 : n === 1 ? 1 : n <= 3 ? 2 : 3;  // 強度4段階
+    const rows = [0, 1, 2, 3, 4, 5, 6].map((row) => {
+      const cells = weekCols.map((ws) => {
+        const d = addDays(ws, row);
+        if (d > today) return `<span class="stats-cal-cell out"></span>`;
+        const n = actScore[d] || 0;
+        return `<span class="stats-cal-cell lv${bucket(n)}" title="${d}: 活動 ${n}"></span>`;
+      }).join("");
+      return `<div class="stats-cal-row">${cells}</div>`;
+    }).join("");
+    calendarCard = `
+      <div class="panel stack stats-wide">
+        <h2>記録の継続</h2>
+        <div class="stats-cal-scroll"><div class="stats-cal">${rows}</div></div>
+        <div class="stats-cal-legend muted">
+          <span>少</span>
+          <span class="stats-cal-cell lv0"></span><span class="stats-cal-cell lv1"></span><span class="stats-cal-cell lv2"></span><span class="stats-cal-cell lv3"></span>
+          <span>多</span>
+          <span style="margin-left:auto">記録した日=${activeDays}日(日報・ジャーナル・0秒思考・完了Block)</span>
+        </div>
+      </div>`;
+  }
+
+  // 9) 時間帯別の活動量(ヒストグラム)。実際に着手した時刻の分布。
+  const hourStart = 5, hourEnd = 23;
+  const hourCounts = Array.from({ length: hourEnd - hourStart + 1 }, () => 0);
+  let startTotal = 0;
+  state.blocks.filter((b) => !b.deleted && b.date >= since && b.date <= today && b.actualStartAt).forEach((b) => {
+    const h = Math.floor(minutesOf(b.actualStartAt) / 60);
+    if (h >= hourStart && h <= hourEnd) { hourCounts[h - hourStart]++; startTotal++; }
+  });
+  let histCard = "";
+  if (startTotal >= 5) {
+    const hmax = Math.max(1, ...hourCounts);
+    const bars = hourCounts.map((c, i) => {
+      const hr = hourStart + i;
+      return `<div class="stats-hist-cell" title="${hr}時台: ${c}件">
+        <div class="stats-hist-bar">${c ? `<div class="stats-hist-fill" style="height:${Math.round((c / hmax) * 100)}%"></div>` : ""}</div>
+        <div class="stats-hist-lab">${hr % 3 === (hourStart % 3) ? hr : ""}</div>
+      </div>`;
+    }).join("");
+    histCard = `
+      <div class="panel stack stats-wide">
+        <h2>時間帯別の活動量</h2>
+        <div class="stats-hist">${bars}</div>
+        <div class="muted stats-axis">実際に着手した時刻の分布(${startTotal}件)</div>
+      </div>`;
+  }
+
+  const body = rateChart + energyChart + donutCard + catEnergyCard + trendCard + heatmap + histCard + estimateCard + calendarCard;
   return `
     ${renderHeader("数字で見る実行の実態", "計器盤")}
     <div class="segmented" style="margin-bottom:10px">
