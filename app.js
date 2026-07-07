@@ -32,6 +32,60 @@ const mobileNav = [
   { id: "more", label: "その他" }
 ];
 
+// v51: AIプロンプトの既定値(設定画面で編集可能。空文字は「意図的に空」)。
+//      出力フォーマット(JSON/見出し契約)はアプリが解析するためここには含めず、コード側で常に付与する。
+//      ※ state 初期化(normalizeState)より前に宣言が必要。
+const AI_DEFAULT_PROMPTS = {
+  // 共通コンテキスト: すべてのAI呼び出しの冒頭に付く「私について」
+  context: [
+    "私について:",
+    "- タスクシュート(1日の時間実行)× 12 Week Year(12週サイクル)× 0秒思考 × ジャーナルを1つにした自作アプリで自己管理している",
+    "- 完了率より「着手率」を重視する。小さくても手を付けたことを評価する",
+    "- エネルギー会計(充電/放電)で消耗と回復のバランスを見る。時間の量より質",
+    "- 反省は必ず行動につなげる。気づきで終わる指摘は不要で、翌日実行できる形まで落とすこと",
+    "- 詰め込みは私の失敗パターン。余白と休憩を残す計画を良しとする",
+    "- 長期の方向は問い・12週目標で自分で決める。AIには判断ではなく、質の高い判断材料を求める"
+  ].join("\n"),
+  // カスタム指示: 文体・トーンなどの追加指示(自由に書き換える欄)
+  custom: [
+    "口調はフラットで簡潔に。忖度・一般論・抽象的な励ましは不要。",
+    "事実(数字)を根拠に、明日の行動が変わる指摘だけをする。"
+  ].join("\n"),
+  // ① WBSタスク分解の指示部
+  decompose: [
+    "あなたはプロジェクトのWBS(作業分解)を手伝うアシスタントです。",
+    "次のプロジェクトを、着手しやすいタスクに分解してください。",
+    "",
+    "条件:",
+    "- タスクは3〜8個。各タスクは「最初の一歩に30〜60分で着手できる」粒度にする",
+    "- 必要なら各タスクに最大3個のサブタスクを付けてよい",
+    "- 曖昧な動詞(検討する・考える)を避け、完了が判定できる表現にする",
+    "- 実行順に意味がある場合は、その順に並べる"
+  ].join("\n"),
+  // ② スケジュール下書きの指示部
+  schedule: [
+    "あなたはタスクシュート(1日のタイムボックス計画)を手伝うアシスタントです。",
+    "スケジュールの空き時間に、候補タスクを仮配置してください。",
+    "",
+    "条件:",
+    "- 提案は最大5件。全部を無理に配置しない(詰め込み禁物、休憩の余白を残す)",
+    "- 確定済みの予定と時間を重ねない。時刻は15分刻み、1件は15〜120分",
+    "- 期限が近いもの・MIT候補を優先する",
+    "- 集中が必要な作業は午前などエネルギーが高い時間帯に置く"
+  ].join("\n"),
+  // 今日のタスク提案の指示部
+  todaySuggest: [
+    "あなたは1日の立ち上げを手伝うアシスタントです。",
+    "昨日の日報とAIフィードバックを踏まえて、今日やるべきタスクを提案してください。",
+    "",
+    "条件:",
+    "- 提案は最大5件。1日で現実的にこなせる量に絞る(詰め込み禁物)",
+    "- 昨日のやり残し・昨日のフィードバックでの提案・期限が近いWBSタスクを優先する",
+    "- 各提案に「なぜ今日か」を一言添える",
+    "- すでに今日の予定にあるものは提案しない"
+  ].join("\n")
+};
+
 const energyLevels = [
   { value: 10, label: "良い" },
   { value: 7, label: "少し良い" },
@@ -291,6 +345,19 @@ document.addEventListener("click", (event) => {
   // v50: ④ 0秒思考のまとめ所感
   if (action === "zt-ai-comment") runAiZeroComment();
   if (action === "zt-ai-import") openAiImportModal(todayISO(), parseAiFeedback(_ztAiComment?.text || ""));
+  // v51: 今日のタスク提案(昨日の日報+フィードバックから)
+  if (action === "ai-today-suggest") runAiTodaySuggest();
+  if (action === "ai-today-submit") submitAiToday();
+  // v51: プロンプトを既定に戻す
+  if (action === "ai-prompt-reset") {
+    const key = target.dataset.key;
+    if (key in AI_DEFAULT_PROMPTS) {
+      state.settings.ai.prompts[key] = AI_DEFAULT_PROMPTS[key];
+      saveState();
+      render();
+      showToast("既定のプロンプトに戻しました");
+    }
+  }
   // v49: 世代バックアップ
   if (action === "open-backup-list") openBackupListModal();
   if (action === "restore-backup") restoreBackup(target.dataset.date);
@@ -379,6 +446,11 @@ document.addEventListener("input", (event) => {
     state.settings.ai[target.dataset.aiField] = target.value.trim();
     saveState();
   }
+  // v51: プロンプトテンプレの編集(空文字も「意図的に空」として保存)
+  if (target.matches("textarea[data-ai-prompt]")) {
+    state.settings.ai.prompts[target.dataset.aiPrompt] = target.value;
+    saveState();
+  }
   // v49: 横断検索(結果リストだけ差し替え = 入力フォーカス維持。0秒思考検索と同じ手法)
   if (target.matches("#cross-search-input")) {
     clearTimeout(_searchTimer);
@@ -418,6 +490,12 @@ document.addEventListener("change", (event) => {
     state.settings.ai[target.dataset.aiField] = target.value;
     saveState();
     render();
+  }
+  // v51: 朝イチ自動レビューのトグル
+  if (target.matches("[data-ai-automorning]")) {
+    state.settings.ai.autoMorningReview = target.checked;
+    saveState();
+    if (target.checked) showToast("朝イチ自動レビューを有効にしました(翌朝から)");
   }
   if (target.matches('[data-github-field="autoSave"]')) {
     state.settings.github.autoSave = target.checked;
@@ -561,6 +639,14 @@ function normalizeState(value) {
   value.settings.ai ||= {};
   value.settings.ai.apiKey ||= "";
   value.settings.ai.model ||= "claude-opus-4-8";
+  // v51: プロンプト設定(共通コンテキスト・カスタム指示・機能別テンプレ)。
+  //      空文字は「意図的に空」として尊重するため、未定義のときだけ既定を入れる。
+  value.settings.ai.prompts ||= {};
+  for (const k of Object.keys(AI_DEFAULT_PROMPTS)) {
+    if (typeof value.settings.ai.prompts[k] !== "string") value.settings.ai.prompts[k] = AI_DEFAULT_PROMPTS[k];
+  }
+  // v51: 朝イチ自動レビュー(既定OFF。ONなら日付が変わって最初に開いた時、昨日の日報レビューを自動実行)
+  if (typeof value.settings.ai.autoMorningReview !== "boolean") value.settings.ai.autoMorningReview = false;
   // v43: 自動同期(既定OFF・保守的)。lastPushedAt = 最後に push した時の dataModifiedAt。
   if (typeof value.settings.autoSync !== "boolean") value.settings.autoSync = false;
   if (!("lastPushedAt" in value.settings)) value.settings.lastPushedAt = null;
@@ -1991,6 +2077,27 @@ function aiEnabled() {
   return Boolean((state.settings.ai?.apiKey || "").trim());
 }
 
+// v51: 機能別プロンプトテンプレ(設定で編集可。未編集なら既定値)
+function aiPrompt(key) {
+  const p = state.settings.ai?.prompts || {};
+  return typeof p[key] === "string" ? p[key] : (AI_DEFAULT_PROMPTS[key] || "");
+}
+
+// v51: 全AI呼び出しの冒頭に付く共通前置き
+//      = 共通コンテキスト(私について)+ 現在の12週目標(動的)+ カスタム指示
+function aiCommonPreamble() {
+  const parts = [];
+  const context = aiPrompt("context").trim();
+  if (context) parts.push(context);
+  const goals = state.projects
+    .filter((p) => !p.deleted && p.kind === "normal" && p.status === "active" && p.twelveWeekStartDate)
+    .map((p) => p.title);
+  if (goals.length) parts.push(`現在の12週サイクルの目標プロジェクト: ${goals.join(" / ")}`);
+  const custom = aiPrompt("custom").trim();
+  if (custom) parts.push(`追加の指示:\n${custom}`);
+  return parts.length ? `${parts.join("\n\n")}\n\n---\n\n` : "";
+}
+
 // v50: 応答からJSONを取り出す(```json フェンス優先、無ければ最初の { 〜 最後の })
 function extractAiJson(text) {
   const fence = String(text).match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -2014,7 +2121,7 @@ async function runAiReview(date) {
   _aiReviewPending = true;
   render();  // ボタンを「レビュー中…」に
   try {
-    const text = await callClaude(report);
+    const text = await callClaude(aiCommonPreamble() + report);  // v51: 共通コンテキストを前置き
     state.feedback[date] = text;  // ジャーナルの AIフィードバック欄と同じ置き場(貼り付けと等価)
     delete cachedFeedback[date];  // 過去に .md を読込済みでも、今回の新しいレビューを表示する
     saveState();
@@ -2054,20 +2161,15 @@ async function runAiDecompose(projectId) {
   const existing = state.tasks
     .filter((t) => !t.deleted && t.projectId === projectId)
     .map((t) => t.title);
+  // v51: 指示部はテンプレ(設定で編集可)。データと出力契約はコード側で常に付与。
   const prompt = [
-    "あなたはプロジェクトのWBS(作業分解)を手伝うアシスタントです。",
-    "次のプロジェクトを、着手しやすいタスクに分解してください。",
+    aiCommonPreamble() + aiPrompt("decompose"),
     "",
     `プロジェクト名: ${project.title}`,
     project.description ? `説明: ${project.description}` : "",
     project.dueDate ? `期限: ${project.dueDate}` : "",
     project.twelveWeekStartDate ? `12週サイクル(12 Week Year)の目標プロジェクトです(開始 ${project.twelveWeekStartDate})` : "",
     existing.length ? `既存タスク(重複させないこと):\n${existing.map((t) => `- ${t}`).join("\n")}` : "",
-    "",
-    "条件:",
-    "- タスクは3〜8個。各タスクは「最初の一歩に30〜60分で着手できる」粒度にする",
-    "- 必要なら各タスクに最大3個のサブタスクを付けてよい",
-    "- 曖昧な動詞(検討する・考える)を避け、完了が判定できる表現にする",
     "",
     "回答は次の形式のJSONだけを ```json コードブロックで返してください。",
     '{"tasks":[{"title":"...","subtasks":["...","..."]}]}'
@@ -2184,9 +2286,11 @@ async function runAiSchedule() {
     .map((b) => `- ${timeFromDateTime(b.plannedStartAt)}〜${b.plannedEndAt ? timeFromDateTime(b.plannedEndAt) : "?"} ${b.title}`);
   const isToday = date === todayISO();
   const now = new Date();
+  // v51: 指示部はテンプレ(設定で編集可)。データと動的制約・出力契約はコード側で常に付与。
   const prompt = [
-    "あなたはタスクシュート(1日のタイムボックス計画)を手伝うアシスタントです。",
-    `${date}(${weekdayLabel(date)})のスケジュールの空き時間に、候補タスクを仮配置してください。`,
+    aiCommonPreamble() + aiPrompt("schedule"),
+    "",
+    `対象日: ${date}(${weekdayLabel(date)})`,
     "",
     "確定済みの予定(動かせない):",
     existing.length ? existing.join("\n") : "- (まだ予定はありません)",
@@ -2194,11 +2298,7 @@ async function runAiSchedule() {
     "候補タスク(id で指定すること):",
     candidates.map((c) => `- id:${c.id} ${c.title}${c.note ? `(${c.note})` : ""}`).join("\n"),
     "",
-    "条件:",
-    "- 提案は最大5件。全部を無理に配置しない(詰め込み禁物、休憩の余白を残す)",
-    "- 確定済みの予定と時間を重ねない。時刻は15分刻み、1件は15〜120分",
-    `- 05:00〜23:00 の範囲内${isToday ? `。現在時刻 ${pad2(now.getHours())}:${pad2(now.getMinutes())} より前には置かない` : ""}`,
-    "- 期限が近いもの・MIT候補を優先する",
+    `制約: 時刻は 05:00〜23:00 の範囲内${isToday ? `。現在時刻 ${pad2(now.getHours())}:${pad2(now.getMinutes())} より前には置かない` : ""}`,
     "",
     "回答は次の形式のJSONだけを ```json コードブロックで返してください。",
     '{"plan":[{"id":"候補のid","start":"HH:MM","minutes":45}]}'
@@ -2338,7 +2438,7 @@ async function runAiWeekly(week) {
   render();
   try {
     const prompt = [
-      "以下は私の週次レビューです(タスクシュート + 12 Week Year の運用。着手率を完了率より重視)。",
+      aiCommonPreamble() + "以下は私の週次レビューです。",
       "",
       buildWeeklyMarkdown(week),
       "",
@@ -2369,7 +2469,7 @@ async function runAiCycle(cycleStart) {
   render();
   try {
     const prompt = [
-      "以下は私の12週サイクル(12 Week Year)の節目レビューです。",
+      aiCommonPreamble() + "以下は私の12週サイクル(12 Week Year)の節目レビューです。",
       "",
       buildCycleMarkdown(cycleStart),
       "",
@@ -2409,7 +2509,7 @@ async function runAiZeroComment() {
     .slice(-20);
   if (entries.length < 2) return showToast("直近7日の0秒思考が2件以上たまってから使えます");
   const prompt = [
-    "以下は私が直近7日間に「0秒思考」(1テーマ1分の書き出し)で書いたメモです。",
+    aiCommonPreamble() + "以下は私が直近7日間に「0秒思考」(1テーマ1分の書き出し)で書いたメモです。",
     "1件ずつではなく、全体を眺めてまとめて所感をください。",
     "",
     ...entries.map((e) => `### ${e.date} ${e.theme || "(テーマなし)"}\n${e.body || ""}`),
@@ -2453,6 +2553,142 @@ function buildZtAiCommentModal() {
         <button class="btn primary" data-action="zt-ai-import">テーマ/問いを取り込む</button>
       </div>
     </div>`;
+}
+
+// v51: =========================================================
+//  今日のタスク提案(昨日の日報+フィードバック → 今日の候補 → 選択登録)
+//  「今日、何から手を付けるか」の立ち上げを軽くする。登録判断は人間。
+// =========================================================
+let _aiTodayCtx = null;  // { date, suggestions:[{title,taskId,minutes,reason}] } 非永続
+
+async function runAiTodaySuggest() {
+  if (_aiReviewPending) return showToast("AIを実行中です。少し待ってください");
+  const today = todayISO();
+  const yest = addDays(today, -1);
+  // 昨日の素材(日報が未生成なら静かに生成して使う)
+  const report = state.reports[yest] || generateReport(yest, { quiet: true }) || "";
+  const feedback = state.feedback[yest] || cachedFeedback[yest] || "";
+  const wbsCands = aiScheduleCandidates(today).filter((c) => c.taskId);  // WBS未完了(今日Block化済み除外は共通)
+  const todayBlocks = blocksForDate(today)
+    .filter((b) => !isStaleBlock(b))
+    .map((b) => `- ${b.title}${b.plannedStartAt ? `(${timeFromDateTime(b.plannedStartAt)})` : ""}`);
+  const prompt = [
+    aiCommonPreamble() + aiPrompt("todaySuggest"),
+    "",
+    `今日: ${today}(${weekdayLabel(today)})`,
+    "",
+    "今日すでに入っている予定(これらは提案しない):",
+    todayBlocks.length ? todayBlocks.join("\n") : "- (まだありません)",
+    "",
+    "WBSの未完了タスク(該当があれば taskId で参照すること):",
+    wbsCands.length ? wbsCands.map((c) => `- taskId:${c.id} ${c.title}${c.note ? `(${c.note})` : ""}`).join("\n") : "- (なし)",
+    "",
+    "----- 昨日の日報 -----",
+    report || "(昨日の日報はありません)",
+    feedback ? `\n----- 昨日のAIフィードバック -----\n${feedback}` : "",
+    "",
+    "回答は次の形式のJSONだけを ```json コードブロックで返してください。",
+    '{"suggestions":[{"title":"...","taskId":"WBSのtaskIdまたは空文字","minutes":30,"reason":"なぜ今日か"}]}'
+  ].join("\n");
+  _aiReviewPending = true;
+  render();
+  try {
+    const json = extractAiJson(await callClaude(prompt));
+    const validIds = new Set(wbsCands.map((c) => String(c.id)));
+    const suggestions = (Array.isArray(json.suggestions) ? json.suggestions : [])
+      .map((s) => ({
+        title: String(s?.title || "").trim(),
+        taskId: validIds.has(String(s?.taskId || "")) ? String(s.taskId) : "",
+        minutes: clamp(Math.round(Number(s?.minutes || 30) / 15) * 15 || 30, 15, 240),
+        reason: String(s?.reason || "").trim()
+      }))
+      .filter((s) => s.title)
+      .slice(0, 5);
+    if (!suggestions.length) throw new Error("提案を読み取れませんでした");
+    _aiTodayCtx = { date: today, suggestions };
+    state.modal = { type: "aiToday" };
+    renderModal(buildAiTodayModal(suggestions));
+  } catch (error) {
+    showToast(`AIタスク提案失敗: ${error.message}`);
+  } finally {
+    _aiReviewPending = false;
+    render();
+  }
+}
+
+function buildAiTodayModal(suggestions) {
+  return `
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">🤖 今日のタスク提案(昨日の日報より)</h3>
+        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        ${suggestions.map((s, i) => `
+          <label class="ai-import-row">
+            <input type="checkbox" data-ai-today="${i}" checked>
+            <span><b>${escapeHTML(s.title)}</b> <span class="muted" style="font-size:11px">約${s.minutes}分${s.taskId ? " ・ WBS連携" : ""}</span>
+            ${s.reason ? `<br><span class="muted" style="font-size:11.5px">${escapeHTML(s.reason)}</span>` : ""}</span>
+          </label>`).join("")}
+        <div class="muted" style="font-size:11.5px; line-height:1.6; margin-top:6px">チェックした項目を今日のタスクシュートに登録します(時間は未定のまま。「🤖 下書きスケジュール」で空き時間に配置できます)。</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-action="modal-close">キャンセル</button>
+        <button class="btn primary" data-action="ai-today-submit">今日へ登録</button>
+      </div>
+    </div>`;
+}
+
+function submitAiToday() {
+  if (!_aiTodayCtx) return closeModal();
+  const { date, suggestions } = _aiTodayCtx;
+  let count = 0;
+  suggestions.forEach((s, i) => {
+    if (!modalRoot.querySelector(`input[data-ai-today="${i}"]`)?.checked) return;
+    state.blocks.push(makeBlock({ date, title: s.title, taskId: s.taskId || "", estimateMin: s.minutes }));
+    count++;
+  });
+  _aiTodayCtx = null;
+  closeModal();
+  if (!count) return saveAndRender();
+  saveAndRender(`🤖 ${count}件を今日のタスクシュートに登録しました`);
+}
+
+// v51: =========================================================
+//  朝イチ自動レビュー(opt-in・既定OFF)
+//  日付が変わって最初に開いた時、昨日の日報生成 → AIレビューをバックグラウンド実行。
+//  朝は「読むだけ」になる。画面は動かさず、完了時にトーストだけ。
+// =========================================================
+const AUTO_REVIEW_DATE_KEY = "taskchute-auto-review-date";  // 端末ローカル(失敗リトライの暴走防止)
+
+async function maybeAutoMorningReview() {
+  if (!state.settings.ai?.autoMorningReview || !aiEnabled() || _aiReviewPending) return;
+  const today = todayISO();
+  const yest = addDays(today, -1);
+  try {
+    if (localStorage.getItem(AUTO_REVIEW_DATE_KEY) === today) return;  // 1日1回(失敗しても再試行しない)
+  } catch { /* 読めなければ続行 */ }
+  // 既にレビュー済み(他端末含む)なら何もしない
+  if ((state.feedback[yest] || "").trim() || (cachedFeedback[yest] || "").trim()) return;
+  // 昨日に実行データもジャーナルも無ければレビューする意味がない
+  const hadActivity = blocksForDate(yest).length > 0 || (state.journals[yest] || "").trim();
+  if (!hadActivity) return;
+  try { localStorage.setItem(AUTO_REVIEW_DATE_KEY, today); } catch { /* 記録できなくても続行 */ }
+  const report = state.reports[yest] || generateReport(yest, { quiet: true });
+  if (!report) return;
+  _aiReviewPending = true;
+  try {
+    const text = await callClaude(aiCommonPreamble() + report);
+    state.feedback[yest] = text;
+    delete cachedFeedback[yest];
+    saveState();
+    render();
+    showToast("🤖 昨日のAIレビューが届いています(ジャーナルで確認)");
+  } catch (error) {
+    console.warn("朝イチ自動レビューをスキップ:", error.message);  // 静かに(手動実行は常に可能)
+  } finally {
+    _aiReviewPending = false;
+  }
 }
 
 // v49: =========================================================
@@ -3257,9 +3493,10 @@ function renderTasks() {
     ${renderDateBar()}
     ${aiMitChips()}
     ${carryOverPanel()}
-    ${aiEnabled() ? `<div class="row" style="margin-bottom:10px">
+    ${aiEnabled() ? `<div class="row" style="margin-bottom:10px; flex-wrap:wrap; gap:8px">
+      ${state.selectedDate === todayISO() ? `<button class="btn" data-action="ai-today-suggest" ${_aiReviewPending ? "disabled" : ""}>${_aiReviewPending ? "⏳ AI実行中…" : "🤖 今日のタスク提案"}</button>` : ""}
       <button class="btn" data-action="ai-schedule" ${_aiReviewPending ? "disabled" : ""}>${_aiReviewPending ? "⏳ AI実行中…" : "🤖 空き時間に下書きスケジュール"}</button>
-      <span class="muted" style="font-size:11.5px">AIが空きに仮配置 → タイムラインでドラッグ調整 → 確定</span>
+      <span class="muted" style="font-size:11.5px">提案=昨日の日報から今日の候補 / 下書き=空きに仮配置→ドラッグ調整→確定</span>
     </div>` : ""}
     <section class="form-strip">
       <input id="blockTitle" class="input" placeholder="Block名">
@@ -4375,6 +4612,31 @@ function renderSettings() {
           🔒 APIキーはこの端末のブラウザ内にのみ保存します。GitHub同期・JSONエクスポートには含まれません。<br>
           月額目安は「毎日1回の日報レビュー(入力2〜4千トークン+出力0.5〜1.5千トークン)」での概算です。
         </div>
+        <label class="checkbox-line">
+          <input type="checkbox" data-ai-automorning ${state.settings.ai?.autoMorningReview ? "checked" : ""}>
+          🌅 朝イチ自動レビュー(日付が変わって最初に開いた時、昨日の日報レビューを自動実行)
+        </label>
+        <details>
+          <summary style="cursor:pointer; font-size:13px; font-weight:700">🛠 プロンプト設定(上級)</summary>
+          <div class="stack" style="margin-top:10px">
+            <div class="muted" style="font-size:11.5px; line-height:1.6">
+              すべてのAI機能に共通で付く「私について」と、機能別の指示部を編集できます。
+              出力フォーマット(JSON・見出し)はアプリが解析するため固定で、ここには含まれません。空にすればその部分は送られません。
+            </div>
+            ${[
+              ["context", "共通コンテキスト(私について — 全AI機能の冒頭に付く)"],
+              ["custom", "カスタム指示(文体・トーンなどの追加指示)"],
+              ["decompose", "WBSタスク分解の指示"],
+              ["schedule", "スケジュール下書きの指示"],
+              ["todaySuggest", "今日のタスク提案の指示"]
+            ].map(([key, label]) => `
+              <label>${label}
+                <textarea class="textarea" data-ai-prompt="${key}" style="min-height:110px; font-size:12px">${escapeHTML(aiPrompt(key))}</textarea>
+              </label>
+              <button class="btn ghost" data-action="ai-prompt-reset" data-key="${key}" style="font-size:11.5px; align-self:flex-start">↺ 既定に戻す</button>
+            `).join("")}
+          </div>
+        </details>
       </div>
       <div class="panel stack">
         <h2>現在のファイル構成</h2>
@@ -5743,9 +6005,11 @@ function setMorningEnergy(value) {
   saveAndRender("朝の体調を保存しました");
 }
 
-function generateReport() {
-  ensureJournal(state.selectedDate);
-  const date = state.selectedDate;
+// v51: dateArg で任意日を生成可能に(朝イチ自動レビュー・今日のタスク提案が昨日分を使う)。
+//      quiet = 画面遷移・トーストなしで生成だけ行う(バックグラウンド用)。
+function generateReport(dateArg, { quiet = false } = {}) {
+  const date = dateArg || state.selectedDate;
+  ensureJournal(date);
   const blocks = blocksForDate(date);
   const completed = blocks.filter((block) => block.completed);
   const charge = blocks.reduce((sum, block) => sum + Number(block.charge || 0), 0);
@@ -6025,10 +6289,12 @@ function generateReport() {
 
   const report = lines.join("\n");
   state.reports[date] = report;
+  if (quiet) { saveState(); return report; }  // v51: バックグラウンド生成(画面を動かさない)
   saveAndRender("日報を生成しました(v17 仕様)");
   state.currentView = "reports";
   saveState();
   render();
+  return report;
 }
 
 function downloadReport() {
@@ -8246,18 +8512,21 @@ async function pushFileToGitHub(filename, content, label) {
 }
 
 // generateReport の最後で自動 push する(設定で auto なら)
+// v51: 引数(dateArg / quiet)と戻り値を素通しする。以前は握りつぶしていたため、
+//      任意日・quiet 指定の生成が常に「selectedDate・画面遷移あり」になっていた。
+//      quiet(バックグラウンド生成)のときは自動 push もしない。
 const _originalGenerateReport = generateReport;
-generateReport = function() {
-  _originalGenerateReport();
-  // 設定: autoSave が ON なら日報も自動 push
+generateReport = function(dateArg, opts = {}) {
+  const result = _originalGenerateReport(dateArg, opts);
   const cfg = state.settings.github;
-  if (cfg?.autoSave && cfg?.token && cfg?.owner) {
-    const date = state.selectedDate;
+  if (!opts.quiet && cfg?.autoSave && cfg?.token && cfg?.owner) {
+    const date = dateArg || state.selectedDate;
     const report = state.reports[date];
     if (report) {
       pushFileToGitHub(`日報_${date}.md`, report, `日報 ${date}`);
     }
   }
+  return result;
 };
 
 // 日付変更時に AI フィードバックを再 fetch
@@ -8478,11 +8747,15 @@ startTimerTicker();
 // v25/v43: 起動後の pull。自動同期 ON なら v43 の pull(競合バナー付き)、OFF なら従来の起動時同期。
 if (state.settings.autoSync) runAutoSyncPull();
 else syncFromGitHubOnStartup();
+// v51: 朝イチ自動レビュー(opt-in・既定OFF)。起動直後は同期(pull)に少し譲ってから実行し、
+//      別端末で実行済みのフィードバックを取り込んだ後に重複実行しないようにする。
+setTimeout(maybeAutoMorningReview, 4000);
 // v41/v43: 復帰時。自動同期 ON なら pull(内部で日次オープン)、OFF なら日次オープンのみ。
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
   if (state.settings.autoSync) runAutoSyncPull();
   else if (runDailyOpen()) render();
+  setTimeout(maybeAutoMorningReview, 4000);  // v51: 日をまたいで復帰したケース
 });
 
 // v42: AIフィードバック欄への貼り付けで、構造化取り込みモーダルを開く
