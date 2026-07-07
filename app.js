@@ -1274,8 +1274,9 @@ function plannedRange(b) {
 // --- いま、これ(進行中 / 次のブロック)── v33: フル幅・2カラム ---
 function homeHero(blocks, isToday) {
   // タイムラインと同じ対象(カテゴリ「ルーティン」は除外)。時刻順にソート
+  // v48: 中断/中止タスクの未完了 Block は「いま、これ」に出さない
   const tl = blocks
-    .filter((b) => b.category !== "ルーティン" && b.plannedStartAt)
+    .filter((b) => b.category !== "ルーティン" && b.plannedStartAt && !isStaleBlock(b))
     .sort((a, b) => minutesOf(a.plannedStartAt) - minutesOf(b.plannedStartAt));
   const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
   // タイムラインの「現在時刻ブロック」= 予定時間が今を含む未完了Block
@@ -1351,12 +1352,23 @@ function cycleWeekProgress(dateISO) {
 
 // v33: 今日のタスクシュート対象ブロック(homeTaskchute と着手率で共用)
 //   Project に紐づく Block のみ。単発ブロック(kind:"other" の受け皿 Task)は除外。
+// v48: 紐づく Task が中断/中止/削除された未完了 Block は「もう実行しない計画」。
+//      一覧・着手率・繰り越し提案から外す(完了済み Block は実績として残す)。
+//      Task 完了時の残 Block は toggleTask の確認ダイアログで人が整理する(自動では隠さない)。
+function isStaleBlock(b) {
+  if (b.completed || !b.taskId) return false;
+  const task = state.tasks.find((t) => t.id === b.taskId);
+  if (!task) return false;
+  return task.deleted || task.status === "suspended" || task.status === "cancelled";
+}
+
 function taskchuteBlocks(blocks) {
   return blocks.filter((b) => {
     if (b.source === "timeline") return false;
     if (b.category === "ルーティン") return false;
     if (b.recurrenceGroupId) return false;
     if (!b.taskId) return false;
+    if (isStaleBlock(b)) return false;  // v48: 中断/中止/削除タスクの未完了分は分母から外す
     const task = state.tasks.find((t) => t.id === b.taskId);
     if (!task || !task.projectId) return false;
     if (task.kind === "other") return false;  // 単発ブロックは非表示
@@ -1838,7 +1850,8 @@ function adoptAiMit(index) {
 function carryableBlocks() {
   const prev = addDays(todayISO(), -1);
   return state.blocks.filter((b) => !b.deleted && b.date === prev && !b.completed && !b.migratedTo
-    && b.category !== "ルーティン" && !b.recurrenceGroupId);  // ルーティン/繰り返しは翌日自動生成されるので対象外
+    && b.category !== "ルーティン" && !b.recurrenceGroupId   // ルーティン/繰り返しは翌日自動生成されるので対象外
+    && !isStaleBlock(b));                                    // v48: 中断/中止タスクの分は繰り越し提案しない
 }
 function carryOverPanel() {
   if (state.selectedDate !== todayISO()) return "";  // 今日を見ている時だけ
@@ -2392,6 +2405,32 @@ function renderWBS() {
   `;
 }
 
+// v48: WBS のタスク並び順 — 未完了(期限昇順・期限なしは後ろ)→ 完了は下に沈む
+function wbsTaskCompare(a, b) {
+  const ac = a.status === "completed", bc = b.status === "completed";
+  if (ac !== bc) return ac ? 1 : -1;
+  const ad = a.dueDate || "9999", bd = b.dueDate || "9999";
+  if (ad !== bd) return ad < bd ? -1 : 1;
+  return (a.createdAt || "").localeCompare(b.createdAt || "");
+}
+
+// v48: Task に費やした実績(完了 Block の回数と累計時間)
+function taskBlockStats(taskId) {
+  const done = state.blocks.filter((b) => !b.deleted && b.taskId === taskId && b.completed);
+  let minutes = 0;
+  done.forEach((b) => {
+    const d = _actualDurationMin(b)
+      ?? ((b.plannedStartAt && b.plannedEndAt) ? Math.max(0, minutesOf(b.plannedEndAt) - minutesOf(b.plannedStartAt)) : 0);
+    minutes += d;
+  });
+  return { count: done.length, minutes };
+}
+function fmtMinShort(m) {
+  if (!m) return "";
+  const h = Math.floor(m / 60);
+  return h ? `${h}h${m % 60 ? `${m % 60}m` : ""}` : `${m}m`;
+}
+
 function renderProjectTree(project) {
   const allTasksOfProject = state.tasks.filter((task) => !task.deleted && task.projectId === project.id);
   const progress = taskProgress(allTasksOfProject);
@@ -2407,7 +2446,11 @@ function renderProjectTree(project) {
       t.parentTaskId === task.id && (t.status !== "completed" || hasOpenDescendant(t)));
     visibleTasks = visibleTasks.filter((t) => t.status !== "completed" || hasOpenDescendant(t));
   }
-  const rootTasks = visibleTasks.filter((t) => !t.parentTaskId);
+  const rootTasks = visibleTasks.filter((t) => !t.parentTaskId).sort(wbsTaskCompare);  // v48: 未完了→期限順、完了は下へ
+  // v48: プロジェクトの数値サマリ(進捗バーだけでは規模が見えない)
+  const liveTasks = allTasksOfProject.filter(isTaskCountable);
+  const doneCount = liveTasks.filter((t) => t.status === "completed").length;
+  const projDue = project.dueDate ? ` ・ 期限 ${project.dueDate.slice(5).replace("-", "/")}` : "";
   return `
     <div class="item${suspended ? " is-suspended" : ""}">
       <div class="row">
@@ -2416,7 +2459,7 @@ function renderProjectTree(project) {
           <span class="badge ${project.kind === "wish" ? "purple" : "blue"}">${project.kind === "wish" ? "Wish" : "Project"}</span>
           ${is12WY ? `<span class="badge green">12WY</span>` : ""}
           ${suspended ? `<span class="badge gray">中断</span>` : ""}
-          <strong>${escapeHTML(project.title)}</strong>
+          <strong data-action="edit-project" data-id="${project.id}" style="cursor:pointer">${escapeHTML(project.title)}</strong>
           ${project.category ? `<span class="cat-chip" style="background:${getCategoryColor(project.category)}1f; color:${getCategoryColor(project.category)}; border:1px solid ${getCategoryColor(project.category)}66">${escapeHTML(project.category)}</span>` : ""}
         </div>
         <div class="row">
@@ -2429,6 +2472,7 @@ function renderProjectTree(project) {
       </div>
       ${project.description ? `<div class="muted" style="font-size:12px">${escapeHTML(project.description)}</div>` : ""}
       <div class="progress"><span style="width:${progress}%"></span></div>
+      <div class="muted wbs-proj-meta">${doneCount} / ${liveTasks.length} 完了${projDue}</div>
       ${collapsed
         ? `<div class="muted" style="font-size:12px; margin-top:6px">${rootTasks.length ? `${visibleTasks.length}件のタスク(折りたたみ中)` : "Task未登録"}</div>`
         : `<div class="stack">
@@ -2453,7 +2497,7 @@ function toggleTaskCollapse(id) {
 }
 
 function renderTaskTree(task, allTasksOfProject, depth) {
-  const children = allTasksOfProject.filter((t) => t.parentTaskId === task.id);
+  const children = allTasksOfProject.filter((t) => t.parentTaskId === task.id).sort(wbsTaskCompare);  // v48
   const indent = depth * 18;
   const collapsed = Boolean(task.collapsed);  // v33: 折りたたみ
   return `
@@ -2479,6 +2523,10 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false) 
     ? `<span class="${overdue ? "wbs-overdue" : "muted"}" style="font-size:11px">期限 ${task.dueDate.slice(5).replace("-", "/")}${overdue ? "!" : ""}</span>`
     : "";
   const scheduledToday = state.blocks.some((b) => !b.deleted && b.taskId === task.id && b.date === todayISO());
+  // v48: 子タスクの進捗(2/5)と、この Task に費やした実績(回数・累計時間)
+  const kids = state.tasks.filter((t) => !t.deleted && t.parentTaskId === task.id && isTaskCountable(t));
+  const kidsDone = kids.filter((t) => t.status === "completed").length;
+  const stats = taskBlockStats(task.id);
   return `
     <div class="row${suspended ? " is-suspended" : ""}" style="border-top:1px solid var(--line-soft); padding-top:8px">
       <div class="title-line">
@@ -2487,9 +2535,11 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false) 
         <button class="checkbox-button ${task.status === "completed" ? "done" : ""}" data-action="toggle-task" data-id="${task.id}">✓</button>
         <span data-action="edit-task" data-id="${task.id}" style="cursor:pointer">${escapeHTML(task.title)}</span>
         <span class="badge ${suspended ? "gray" : ""}">${taskStatusLabel(task.status)}</span>
+        ${kids.length ? `<span class="badge">子 ${kidsDone}/${kids.length}</span>` : ""}
         ${scheduledToday ? `<span class="badge green">今日✓</span>` : ""}
         ${task.category ? `<span class="cat-chip" style="background:${getCategoryColor(task.category)}1f; color:${getCategoryColor(task.category)}; border:1px solid ${getCategoryColor(task.category)}66">${escapeHTML(task.category)}</span>` : ""}
         ${dueHTML}
+        ${stats.count ? `<span class="muted" style="font-size:11px">⏱ ${stats.count}回${stats.minutes ? `・${fmtMinShort(stats.minutes)}` : ""}</span>` : ""}
       </div>
       <div class="row wbs-actions">
         <button class="btn" data-action="task-today" data-id="${task.id}">${scheduledToday ? "＋もう一度" : "今日へ"}</button>
@@ -2528,6 +2578,8 @@ function renderTasks() {
         if (b.recurrenceGroupId) return false;
         // taskId 無しの単発 Block は除外
         if (!b.taskId) return false;
+        // v48: 中断/中止/削除タスクの未完了 Block は表示しない(実績は残す)
+        if (isStaleBlock(b)) return false;
         // 紐づく Task に Project がなければ単発 → 除外
         const task = state.tasks.find((t) => t.id === b.taskId);
         if (!task || !task.projectId) return false;
@@ -4750,11 +4802,26 @@ function getTaskDepth(task) {
 }
 
 function toggleTask(id) {
-  state.tasks = state.tasks.map((task) => {
-    if (task.id !== id) return task;
-    return { ...task, status: task.status === "completed" ? "todo" : "completed", updatedAt: nowDateTime() };
-  });
-  saveAndRender("Taskを更新しました");
+  const task = state.tasks.find((t) => t.id === id);
+  if (!task) return;
+  if (task.status === "completed") {
+    // v48: 完了解除時、Block の着手実績があれば doing に戻す(todo に落とすと実績が見えなくなる)
+    const hasProgress = state.blocks.some((b) => !b.deleted && b.taskId === id && (b.completed || b.actualStartAt));
+    state.tasks = state.tasks.map((t) => t.id === id
+      ? { ...t, status: hasProgress ? "doing" : "todo", updatedAt: nowDateTime() } : t);
+    saveAndRender("Taskを未完了に戻しました");
+    return;
+  }
+  state.tasks = state.tasks.map((t) => t.id === id
+    ? { ...t, status: "completed", updatedAt: nowDateTime() } : t);
+  // v48: 完了した Task の今日以降の「未着手」予定 Block(ゾンビ予定)を確認つきで整理。
+  //      完了済みはもちろん、着手済み(actualStartAt あり)も実績なので対象外。
+  const stale = state.blocks.filter((b) => !b.deleted && b.taskId === id && !b.completed && !b.actualStartAt && b.date >= todayISO());
+  if (stale.length && window.confirm(`このTaskの今日以降の未完了Block ${stale.length}件も削除しますか?\n(完了済みの実績はそのまま残ります)`)) {
+    const ids = new Set(stale.map((b) => b.id));
+    state.blocks = state.blocks.map((b) => ids.has(b.id) ? { ...b, deleted: true, updatedAt: nowDateTime() } : b);
+  }
+  saveAndRender("Taskを完了しました");
 }
 
 function deleteTask(id) {
@@ -4889,9 +4956,18 @@ function triggerCompletionEffect(message, isMIT) {
 
 function setBlockTime(id, field) {
   updateBlockField(id, field, nowDateTime());
-  // v40: 着手ジュース — 着手(actualStartAt)の瞬間だけ、その行に一度きりの感覚フィードバック。
-  //      完了ではなく着手を祝う(着手第一主義の報酬設計を感覚レベルで補強)。非永続。
-  if (field === "actualStartAt") state._justStartedBlockId = id;
+  if (field === "actualStartAt") {
+    // v48: 着手した瞬間に Task を doing へ(従来は Block 完了時のみで、
+    //      「着手率>完了率」の哲学に反して着手が Task に反映されていなかった)
+    const blk = blockById(id);
+    if (blk?.taskId) {
+      state.tasks = state.tasks.map((t) => t.id === blk.taskId && t.status === "todo"
+        ? { ...t, status: "doing", updatedAt: nowDateTime() } : t);
+      saveState();
+    }
+    // v40: 着手ジュース — 着手の瞬間だけ、その行に一度きりの感覚フィードバック。非永続。
+    state._justStartedBlockId = id;
+  }
   render();
   showToast(field === "actualStartAt" ? "開始時刻を入れました" : "終了時刻を入れました");
 }
