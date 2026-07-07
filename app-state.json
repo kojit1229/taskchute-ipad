@@ -74,7 +74,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-07-01T13:33:00"
+      "lastSavedAt": "2026-07-07T20:16:44"
     },
     "visionSection": "board",
     "visionBoardIndex": 0,
@@ -205,7 +205,7 @@
       },
       "autoMorningReview": false
     },
-    "statsRange": "4w",
+    "statsRange": "12w",
     "autoArchive": true,
     "lastArchivedAt": "",
     "wbsHideCompleted": false
@@ -40349,7 +40349,7 @@
     }
   ],
   "timelineMode": "actual",
-  "dataModifiedAt": "2026-07-07T21:17:29",
+  "dataModifiedAt": "2026-07-07T21:20:15",
   "journalMeta": {},
   "questions": [],
   "weeklyReviews": {},
