@@ -67,6 +67,16 @@ if ! gh auth status >/dev/null 2>&1; then
 fi
 echo "✅ gh 認証OK"
 
+# ---- 2.5) git のコミット者情報を確認(未設定だと commit で失敗するため事前に)----
+if ! git config user.email >/dev/null 2>&1 || ! git config user.name >/dev/null 2>&1; then
+  echo "❌ git のコミット者情報(user.name / user.email)が未設定です。"
+  echo "   下の2行を実行してから、もう一度セットアップを実行してください:"
+  echo "     git config --global user.email \"あなたのメールアドレス\""
+  echo "     git config --global user.name \"あなたの名前\""
+  exit 1
+fi
+echo "✅ git コミット者情報OK($(git config user.name) <$(git config user.email)>)"
+
 # ---- 3) taskchute-notes を親ディレクトリに用意 ------------------------------
 if [ -d "${DEST}/.git" ]; then
   echo "ℹ️  ${DEST} は既に存在します。作成/clone をスキップします。"
@@ -95,9 +105,10 @@ write_if_absent() {
   fi
 }
 
-# CRLF 警告の予防: *.md を LF に固定(最初に置いてから md を作る)
+# CRLF 警告の予防: 全テキストを LF に固定(最初に置いてから他ファイルを作る)。
+# *.md だけだと .gitignore / .gitattributes 自身に CRLF 警告が出るため全体を対象にする。
 write_if_absent .gitattributes <<'EOF'
-*.md text eol=lf
+* text=auto eol=lf
 EOF
 
 write_if_absent handoff.md <<'EOF'
@@ -150,14 +161,18 @@ desktop.ini
 EOF
 
 # ---- 5) commit & push -------------------------------------------------------
+# push は commit と切り離す(コミット済み・未pushの状態で再実行しても push されるように)。
 git add -A
 if git diff --cached --quiet; then
-  echo "ℹ️  変更なし。commit をスキップします。"
+  echo "ℹ️  コミットする変更はありません(既にコミット済み)。"
 else
   git commit -m "initial vault setup"
-  git push
-  echo "🚀 push 完了"
+  echo "✅ コミットしました"
 fi
+# 初回は upstream が無いので -u で設定。HEAD で現在のブランチ(master/main どちらでも)を push。
+# 既に最新なら「Everything up-to-date」で正常終了する(冪等)。
+git push -u origin HEAD
+echo "🚀 push 完了"
 
 # ---- 6) taskchute-ipad 側との整合確認 ---------------------------------------
 echo ""
