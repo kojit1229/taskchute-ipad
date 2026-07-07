@@ -271,6 +271,26 @@ document.addEventListener("click", (event) => {
   }
   if (action === "ai-import-submit") submitAiImport();
   if (action === "ai-mit-adopt") adoptAiMit(Number(target.dataset.index));
+  // v49: AIレビュー直接統合(日報 → Anthropic API → フィードバック)
+  if (action === "report-ai-review") runAiReview(state.selectedDate);
+  // v49: 世代バックアップ
+  if (action === "open-backup-list") openBackupListModal();
+  if (action === "restore-backup") restoreBackup(target.dataset.date);
+  // v49: 横断検索
+  if (action === "open-search") openSearchModal();
+  if (action === "search-jump") {
+    const view = target.dataset.view || "home";
+    const date = target.dataset.date || "";
+    const zeroTab = target.dataset.zeroTab || "";
+    const ztQuery = target.dataset.ztSearch;
+    closeModal();
+    if (zeroTab) state.settings.zeroTab = zeroTab;
+    if (ztQuery !== undefined) ztSearch = ztQuery;  // 0秒思考の履歴検索に引き継ぐ
+    if (date) { state.selectedDate = date; ensureJournal(date); }
+    state.currentView = view;
+    persistLocalNoSchedule();  // 画面移動は UI 操作(dataModifiedAt を汚さない)
+    render();
+  }
   if (action === "carry-over") carryOverBlock(id);  // v46: 未完了ブロックを今日へ繰り越し
   // v39/v40: エネルギー構造からの行動導線
   if (action === "energy-open-routine") openRoutineForWeekday(Number(target.dataset.day));
@@ -336,6 +356,20 @@ document.addEventListener("input", (event) => {
     state.settings.github[target.dataset.githubField] = target.value.trim();
     saveState();
   }
+  // v49: AIレビュー設定(APIキー。model の select は change ハンドラ側)
+  if (target.matches("input[data-ai-field]")) {
+    state.settings.ai[target.dataset.aiField] = target.value.trim();
+    saveState();
+  }
+  // v49: 横断検索(結果リストだけ差し替え = 入力フォーカス維持。0秒思考検索と同じ手法)
+  if (target.matches("#cross-search-input")) {
+    clearTimeout(_searchTimer);
+    const query = target.value;
+    _searchTimer = setTimeout(() => {
+      const box = document.querySelector("#cross-search-results");
+      if (box) box.innerHTML = crossSearchResultsHTML(query);
+    }, 150);
+  }
   // === v9: カテゴリ編集 ===
   if (target.matches("[data-cat-id][data-cat-field]")) {
     updateCategoryField(target.dataset.catId, target.dataset.catField, target.value);
@@ -358,6 +392,12 @@ document.addEventListener("change", (event) => {
   }
   if (target.matches("[data-setting-field]")) {
     state.settings[target.dataset.settingField] = target.value;
+    saveState();
+    render();
+  }
+  // v49: AIレビューのモデル選択
+  if (target.matches("select[data-ai-field]")) {
+    state.settings.ai[target.dataset.aiField] = target.value;
     saveState();
     render();
   }
@@ -498,6 +538,11 @@ function normalizeState(value) {
     value.settings.github.autoSave = false;
   }
   value.settings.github.lastSavedAt ||= "";
+  // v49: AIレビュー(Anthropic API)。apiKey は GitHub token と同様に端末内のみ
+  //      (同期・エクスポート時は sanitizedStateForGitHub で除去される)。
+  value.settings.ai ||= {};
+  value.settings.ai.apiKey ||= "";
+  value.settings.ai.model ||= "claude-opus-4-8";
   // v43: 自動同期(既定OFF・保守的)。lastPushedAt = 最後に push した時の dataModifiedAt。
   if (typeof value.settings.autoSync !== "boolean") value.settings.autoSync = false;
   if (!("lastPushedAt" in value.settings)) value.settings.lastPushedAt = null;
@@ -1841,6 +1886,200 @@ function adoptAiMit(index) {
   state.blocks.push(block);
   meta.aiMitCandidates.splice(index, 1);  // 採用したら候補から外す
   saveAndRender("✦ 今日の主役に追加しました");
+}
+
+// v49: =========================================================
+//  AIレビュー直接統合(日報 → Anthropic Messages API → フィードバック)
+//  搬送を完全自動化する。コピペ搬送(v42)は API 障害時の手動経路として残す。
+//  APIキーは GitHub token と同じ扱い: この端末の localStorage のみに保持し、
+//  同期・エクスポート(sanitizedStateForGitHub)からは必ず除去する。
+// =========================================================
+const AI_MODELS = [
+  { id: "claude-opus-4-8", label: "Claude Opus 4.8 — 高品質(目安 ¥90〜180/月)" },
+  { id: "claude-sonnet-5", label: "Claude Sonnet 5 — バランス(目安 ¥45〜110/月)" },
+  { id: "claude-haiku-4-5", label: "Claude Haiku 4.5 — 最安(目安 ¥25〜55/月)" }
+];
+let _aiReviewPending = false;  // 実行中ガード(非永続)
+
+// iOS キーチェーンの自動入力は input イベントを発火しないことがある(GitHub 版と同じ対策)
+function syncAiFieldsFromDOM() {
+  document.querySelectorAll("input[data-ai-field]").forEach((el) => {
+    const key = el.dataset.aiField;
+    const val = (el.value || "").trim();
+    if (val !== (state.settings.ai[key] || "")) state.settings.ai[key] = val;
+  });
+}
+
+async function aiErrorMessage(response) {
+  let raw;
+  try {
+    const payload = await response.json();
+    raw = payload.error?.message || `${response.status} ${response.statusText}`;
+  } catch {
+    raw = `${response.status} ${response.statusText}`;
+  }
+  if (response.status === 400 && /credit|billing/i.test(raw)) {
+    return `${raw} — クレジット残高を確認してください(Anthropic Console → Billing)`;
+  }
+  const hints = {
+    401: "APIキーが無効です。設定画面で貼り直してください",
+    403: "このAPIキーでは実行できません(Console でキーの状態を確認)",
+    429: "レート制限中です。少し待ってから再実行してください",
+    529: "Anthropic 側が混雑しています。少し待ってから再実行してください"
+  };
+  const hint = hints[response.status];
+  return hint ? `${raw} — ${hint}` : raw;
+}
+
+async function runAiReview(date) {
+  if (_aiReviewPending) return showToast("AIレビューを実行中です。少し待ってください");
+  syncAiFieldsFromDOM();
+  const key = (state.settings.ai?.apiKey || "").trim();
+  if (!key) return showToast("設定画面で Anthropic APIキーを登録してください");
+  if (/[^\x00-\xFF]/.test(key)) return showToast("APIキーに使用できない文字が含まれています。貼り直してください");
+  // 日報が未生成なら先に生成(日報自体が AI へのプロンプトを含む = v42 のコピペ搬送と同じ素材を送る)
+  if (!state.reports[date]) generateReport();
+  const report = state.reports[date];
+  if (!report) return showToast("日報を生成できませんでした");
+  _aiReviewPending = true;
+  render();  // ボタンを「レビュー中…」に
+  try {
+    const model = state.settings.ai.model || "claude-opus-4-8";
+    const body = {
+      model,
+      max_tokens: 4096,
+      messages: [{ role: "user", content: report }]
+    };
+    // 4.6 以降のモデルは adaptive thinking(Haiku 4.5 は未対応なので付けない)
+    if (model !== "claude-haiku-4-5") body.thinking = { type: "adaptive" };
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        // ブラウザから直接呼ぶための CORS オプトイン。キーは端末外に同期しない前提(単一ユーザー・自分の鍵)。
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify(body)
+    });
+    if (!response.ok) throw new Error(await aiErrorMessage(response));
+    const data = await response.json();
+    const text = (data.content || [])
+      .filter((b) => b.type === "text")
+      .map((b) => b.text)
+      .join("\n")
+      .trim();
+    if (!text) throw new Error("応答が空でした。少し待ってから再実行してください");
+    state.feedback[date] = text;  // ジャーナルの AIフィードバック欄と同じ置き場(貼り付けと等価)
+    delete cachedFeedback[date];  // 過去に .md を読込済みでも、今回の新しいレビューを表示する
+    saveState();
+    render();
+    showToast("🤖 AIレビューを受信しました");
+    // テーマ / MIT / 問い の取り込み候補があれば、既存の取り込みモーダルへ(採用判断は人間)
+    const parsed = parseAiFeedback(text);
+    if (parsed.themes.length + parsed.mits.length + parsed.questions.length > 0) {
+      openAiImportModal(date, parsed);
+    }
+  } catch (error) {
+    showToast(`AIレビュー失敗: ${error.message}`);
+  } finally {
+    _aiReviewPending = false;
+    render();
+  }
+}
+
+// 日報ビュー / ジャーナルの AIフィードバック欄に置く実行ボタン
+function aiReviewButton() {
+  if (_aiReviewPending) return `<button class="btn" disabled>⏳ AIレビュー中…</button>`;
+  const hasKey = !!(state.settings.ai?.apiKey || "").trim();
+  if (!hasKey) return `<button class="btn" disabled title="設定画面で Anthropic APIキーを登録すると使えます">🤖 AIレビュー(要APIキー)</button>`;
+  return `<button class="btn primary" data-action="report-ai-review">🤖 AIレビュー実行</button>`;
+}
+
+// v49: =========================================================
+//  横断検索(0秒思考・ジャーナル・問い・AIフィードバック・日報)
+//  溜まったストックを一発で引けるようにする。モーダル内で完結し、ナビは増やさない。
+// =========================================================
+let _searchTimer = null;  // 入力デバウンス(非永続)
+const SEARCH_MAX_RESULTS = 50;
+
+function openSearchModal() {
+  state.modal = { type: "search" };
+  renderModal(buildSearchModal());
+  setTimeout(() => document.querySelector("#cross-search-input")?.focus(), 60);
+}
+
+function buildSearchModal() {
+  return `
+    <div class="modal-card search-modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">🔍 横断検索</h3>
+        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        <input class="input" id="cross-search-input" type="search" autocomplete="off"
+          placeholder="0秒思考・ジャーナル・問い・AIフィードバック・日報 を検索">
+        <div id="cross-search-results" class="search-results">
+          <div class="muted" style="font-size:12px">2文字以上で検索します。</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+// マッチ位置の前後を切り出し、ヒット部分を <mark> で強調(全体を escapeHTML してから組む)
+function searchSnippet(text, idx, qlen) {
+  const start = Math.max(0, idx - 30);
+  const end = Math.min(text.length, idx + qlen + 45);
+  const clean = (s) => escapeHTML(s.replace(/\s+/g, " "));
+  return `${start > 0 ? "…" : ""}${clean(text.slice(start, idx))}<mark>${clean(text.slice(idx, idx + qlen))}</mark>${clean(text.slice(idx + qlen, end))}${end < text.length ? "…" : ""}`;
+}
+
+function crossSearchHits(query) {
+  const q = query.trim().toLowerCase();
+  if (q.length < 2) return null;
+  const hits = [];
+  const push = (kind, label, date, text, jump) => {
+    const idx = (text || "").toLowerCase().indexOf(q);
+    if (idx === -1) return;
+    hits.push({ kind, label, date: date || "", snippet: searchSnippet(text, idx, q.length), jump });
+  };
+  (state.zeroThinking?.entries || []).forEach((e) => {
+    push("zero", "0秒思考", e.date, `${e.theme || ""}\n${e.body || ""}`, { view: "zero", ztSearch: query.trim() });
+  });
+  Object.entries(state.journals || {}).forEach(([date, text]) => {
+    push("journal", "ジャーナル", date, text, { view: "journal", date });
+  });
+  (state.questions || []).filter((x) => !x.deleted).forEach((x) => {
+    push("question", "問い", (x.createdAt || "").slice(0, 10), `${x.text}\n${x.settledNote || ""}`, { view: "zero", zeroTab: "question" });
+  });
+  Object.entries(state.feedback || {}).forEach(([date, text]) => {
+    push("feedback", "AIフィードバック", date, text, { view: "journal", date });
+  });
+  Object.entries(state.reports || {}).forEach(([date, text]) => {
+    push("report", "日報", date, text, { view: "reports", date });
+  });
+  hits.sort((a, b) => b.date.localeCompare(a.date));  // 新しい順
+  return hits;
+}
+
+function crossSearchResultsHTML(query) {
+  const hits = crossSearchHits(query);
+  if (hits === null) return `<div class="muted" style="font-size:12px">2文字以上で検索します。</div>`;
+  if (!hits.length) return `<div class="muted" style="font-size:12px">「${escapeHTML(query.trim())}」に一致するものはありません。</div>`;
+  const shown = hits.slice(0, SEARCH_MAX_RESULTS);
+  return `
+    <div class="muted" style="font-size:11.5px; margin-bottom:6px">${hits.length}件${hits.length > shown.length ? `(新しい順に${shown.length}件を表示)` : ""}</div>
+    ${shown.map((h) => `
+      <button class="search-hit" data-action="search-jump" data-view="${h.jump.view}"
+        ${h.jump.date ? `data-date="${h.jump.date}"` : ""}
+        ${h.jump.zeroTab ? `data-zero-tab="${h.jump.zeroTab}"` : ""}
+        ${h.jump.ztSearch !== undefined ? `data-zt-search="${escapeHTML(h.jump.ztSearch)}"` : ""}>
+        <span class="search-kind search-kind-${h.kind}">${h.label}</span>
+        <span class="search-date">${h.date}</span>
+        <span class="search-snippet">${h.snippet}</span>
+      </button>`).join("")}
+  `;
 }
 
 // v46: =========================================================
@@ -3433,7 +3672,10 @@ function renderJournal() {
         ` : `
           <textarea class="textarea" data-feedback-date="${date}" placeholder="外部AIの返答をここに貼り付け、または上のボタンで .md ファイルをアップロード">${escapeHTML(feedbackFromState)}</textarea>
         `}
-        <button class="btn ghost" data-action="journal-import-ai" data-date="${date}" style="font-size:12px; margin-top:8px">🤖 AI返信から取り込み(テーマ/MIT/問い)</button>
+        <div class="row" style="margin-top:8px; flex-wrap:wrap; gap:6px">
+          ${aiReviewButton()}
+          <button class="btn ghost" data-action="journal-import-ai" data-date="${date}" style="font-size:12px">🤖 AI返信から取り込み(テーマ/MIT/問い)</button>
+        </div>
         ${feedbackFromFilePrev && previous !== date ? `
           <details style="margin-top:14px">
             <summary class="muted" style="cursor:pointer; font-size:12px">前日(${previous})のフィードバックも見る</summary>
@@ -3551,11 +3793,12 @@ function renderReports() {
     ${renderDateBar()}
     <div class="row" style="margin-bottom:12px; flex-wrap:wrap; gap:8px">
       <button class="btn primary" data-action="generate-report">日報を生成</button>
+      ${report ? aiReviewButton() : ""}
       ${report ? `<button class="btn" data-action="report-copy-ai">📋 AI用にコピー</button>` : ""}
       ${report && typeof navigator !== "undefined" && navigator.share ? `<button class="btn" data-action="report-share-ai">↗ 共有</button>` : ""}
       <button class="btn" data-action="download-report">Markdown保存</button>
     </div>
-    ${report ? `<div class="muted" style="font-size:11.5px; margin-bottom:10px; line-height:1.6">コピー/共有 → AI(Claude等)へ貼付 → 返信をジャーナルの「AIフィードバック」に貼ると、テーマ/MIT候補/問い候補を取り込めます。</div>` : ""}
+    ${report ? `<div class="muted" style="font-size:11.5px; margin-bottom:10px; line-height:1.6">「🤖 AIレビュー実行」でこの日報を Claude API へ直接送り、返信をジャーナルの「AIフィードバック」に自動反映します(テーマ/MIT候補/問い候補の取り込みモーダルも自動で開きます)。コピー/共有 → 手貼りの経路もそのまま使えます。</div>` : ""}
     <textarea class="textarea report-output" readonly>${escapeHTML(report || "まだ日報がありません。")}</textarea>
   `;
 }
@@ -3638,6 +3881,34 @@ function renderSettings() {
           <button class="btn" data-action="load-github">GitHubから読込</button>
         </div>
         <div class="muted" style="font-size:11px">TokenはGitHubへ保存しません。この端末のブラウザ内(＋任意でiOSキーチェーン)だけに保持します。</div>
+        <button class="btn" data-action="open-backup-list">📦 バックアップ世代から復元</button>
+        <div class="muted" style="font-size:11px; line-height:1.6">
+          GitHub保存時に1日1回、<code>backups/app-state-日付.json</code> の日次スナップショットを自動で残します(直近14日分)。
+          誤った同期で上書きしてしまった時は、ここから任意の日の状態に戻せます。
+        </div>
+      </div>
+      <div class="panel stack">
+        <h2>AIレビュー(Anthropic API)</h2>
+        <div class="muted" style="font-size:12px; line-height:1.6">
+          日報の「🤖 AIレビュー実行」ボタンで Claude API を直接呼び、フィードバックをジャーナルに自動反映します。<br>
+          従量課金です(<a href="https://console.anthropic.com/" target="_blank" rel="noopener">Anthropic Console</a> でAPIキーを発行し、クレジットを事前チャージ。最低 $5)。
+        </div>
+        <form class="stack" autocomplete="on" onsubmit="return false">
+          <label>APIキー
+            <input class="input" type="password" data-ai-field="apiKey" value="${escapeHTML(state.settings.ai?.apiKey || "")}"
+              id="ai-api-key" name="anthropic-api-key" autocomplete="current-password"
+              autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="sk-ant-...">
+          </label>
+        </form>
+        <label>モデル
+          <select class="input" data-ai-field="model">
+            ${AI_MODELS.map((m) => `<option value="${m.id}" ${(state.settings.ai?.model || "claude-opus-4-8") === m.id ? "selected" : ""}>${escapeHTML(m.label)}</option>`).join("")}
+          </select>
+        </label>
+        <div class="muted" style="font-size:11px; line-height:1.6">
+          🔒 APIキーはこの端末のブラウザ内にのみ保存します。GitHub同期・JSONエクスポートには含まれません。<br>
+          月額目安は「毎日1回の日報レビュー(入力2〜4千トークン+出力0.5〜1.5千トークン)」での概算です。
+        </div>
       </div>
       <div class="panel stack">
         <h2>現在のファイル構成</h2>
@@ -4702,6 +4973,7 @@ function renderDateBar() {
       <input class="input" type="date" data-date-picker value="${state.selectedDate}">
       <button class="btn" data-action="date-next">翌日</button>
       ${isToday ? "" : `<button class="btn primary" data-action="today">今日へ</button>`}
+      <button class="btn ghost" data-action="open-search" title="横断検索(0秒思考・ジャーナル・問い・日報)" aria-label="横断検索">🔍</button>
     </div>
   `;
 }
@@ -5402,6 +5674,7 @@ async function saveToGitHub(silent = false) {
     persistLocalNoSchedule();  // v25: 自動保存タイマーを再セットしない(無限保存ループ防止)
     if (!silent) showToast("GitHubへ保存しました");
     if (silent) updateAutoSaveStatus();
+    maybeWriteBackupSnapshot();  // v49: 保存成功後、1日1回の世代スナップショット(await しない)
   } catch (error) {
     if (!silent) showToast(`GitHub保存失敗: ${error.message}`);
     else updateAutoSaveStatus(`失敗: ${error.message}`);
@@ -5696,6 +5969,7 @@ async function gitHubErrorMessage(response) {
 function sanitizedStateForGitHub() {
   const copy = structuredClone(state);
   if (copy.settings?.github) copy.settings.github.token = "";
+  if (copy.settings?.ai) copy.settings.ai.apiKey = "";  // v49: AIのAPIキーも同期・エクスポートに含めない
   copy.modal = null;  // v37: ローカル保存(persistLocalNoSchedule)と同様、モーダル状態は共有しない
   delete copy._justStartedBlockId;  // v40: 非永続の着手ジュースフラグは同期しない
   return copy;
@@ -5712,6 +5986,156 @@ function fromBase64(text) {
   const binary = atob(String(text).replace(/\s/g, ""));
   const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
   return new TextDecoder().decode(bytes);
+}
+
+// v49: =========================================================
+//  世代バックアップ(backups/app-state-YYYY-MM-DD.json)
+//  app-state.json は単一ファイル上書きのため、誤同期すると過去に戻れない。
+//  GitHub保存の成功後、1日1回だけ日次スナップショットを静かに残す(直近14日分)。
+//  失敗しても本体同期は成功済みなので、トーストは出さず console.warn のみ。
+// =========================================================
+const BACKUP_LAST_DATE_KEY = "taskchute-backup-last-date";  // 端末ローカル(state を汚さない)
+const BACKUP_KEEP_DAYS = 14;
+const BACKUP_DIR = "backups";
+
+function gitHubBackupURL(cfg, name) {
+  const base = `https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${BACKUP_DIR}`;
+  return name ? `${base}/${encodeURIComponent(name)}` : base;
+}
+
+async function maybeWriteBackupSnapshot() {
+  const cfg = state.settings.github || {};
+  if (!cfg.token || !cfg.owner || !cfg.repo) return;
+  const today = todayISO();
+  try {
+    if (localStorage.getItem(BACKUP_LAST_DATE_KEY) === today) return;  // 1日1回
+  } catch { /* localStorage 不可でも続行(同日再PUTになるだけ) */ }
+  try {
+    const name = `app-state-${today}.json`;
+    const url = gitHubBackupURL(cfg, name);
+    // 同日ファイルが既にあれば sha を取得して上書き(別端末が先に書いた場合など)
+    let sha = "";
+    const head = await fetch(`${url}?ref=${encodeURIComponent(cfg.branch)}`, { headers: githubHeaders(cfg.token) });
+    if (head.ok) {
+      try { sha = (await head.json()).sha || ""; } catch { /* sha 不明なら新規作成として試す */ }
+    }
+    const put = await fetch(url, {
+      method: "PUT",
+      headers: githubHeaders(cfg.token),
+      body: JSON.stringify({
+        message: `backup: app-state snapshot ${today}`,
+        content: toBase64(JSON.stringify(sanitizedStateForGitHub(), null, 2)),
+        branch: cfg.branch,
+        ...(sha ? { sha } : {})
+      })
+    });
+    if (!put.ok) throw new Error(await gitHubErrorMessage(put));
+    try { localStorage.setItem(BACKUP_LAST_DATE_KEY, today); } catch { /* 記録できなくても致命的ではない */ }
+    pruneOldBackups(cfg, today);  // await しない(整理の失敗は本体に影響させない)
+  } catch (error) {
+    console.warn("世代バックアップをスキップ:", error.message);
+  }
+}
+
+async function listBackups(cfg) {
+  const resp = await fetch(`${gitHubBackupURL(cfg)}?ref=${encodeURIComponent(cfg.branch)}`, {
+    headers: githubHeaders(cfg.token)
+  });
+  if (resp.status === 404) return [];  // まだバックアップなし
+  if (!resp.ok) throw new Error(await gitHubErrorMessage(resp));
+  const items = await resp.json();
+  return (Array.isArray(items) ? items : [])
+    .map((it) => {
+      const m = String(it.name || "").match(/^app-state-(\d{4}-\d{2}-\d{2})\.json$/);
+      return m ? { date: m[1], name: it.name, sha: it.sha || "" } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.date.localeCompare(a.date));  // 新しい順
+}
+
+async function pruneOldBackups(cfg, today) {
+  try {
+    const cutoff = addDays(today, -BACKUP_KEEP_DAYS);
+    const backups = await listBackups(cfg);
+    for (const b of backups) {
+      if (b.date >= cutoff || !b.sha) continue;
+      await fetch(gitHubBackupURL(cfg, b.name), {
+        method: "DELETE",
+        headers: githubHeaders(cfg.token),
+        body: JSON.stringify({ message: `backup: prune ${b.name}`, sha: b.sha, branch: cfg.branch })
+      });
+    }
+  } catch (error) {
+    console.warn("バックアップ整理をスキップ:", error.message);
+  }
+}
+
+async function openBackupListModal() {
+  try {
+    const cfg = requireGitHubConfig();
+    showToast("バックアップ一覧を取得中…");
+    const backups = await listBackups(cfg);
+    if (!backups.length) return showToast("バックアップはまだありません(次回のGitHub保存時に作成されます)");
+    state.modal = { type: "backupList" };
+    renderModal(buildBackupListModal(backups));
+  } catch (error) {
+    showToast(`一覧取得失敗: ${error.message}`);
+  }
+}
+
+function buildBackupListModal(backups) {
+  return `
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">📦 バックアップ世代から復元</h3>
+        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="muted" style="font-size:12px; line-height:1.6; margin-bottom:8px">
+          各日の GitHub 保存時点のスナップショットです。復元するとこの端末のデータが置き換わり、
+          次回の保存/自動同期で GitHub 側にも反映されます。
+        </div>
+        ${backups.map((b) => `
+          <div class="backup-row">
+            <span class="backup-date">📦 ${b.date}</span>
+            <button class="btn" data-action="restore-backup" data-date="${b.date}">この時点に復元</button>
+          </div>`).join("")}
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-action="modal-close">閉じる</button>
+      </div>
+    </div>`;
+}
+
+async function restoreBackup(date) {
+  const ok = window.confirm(
+    `${date} 時点のバックアップに復元しますか?\n\n現在のデータは置き換わり、次回の保存/自動同期で GitHub にも反映されます。`
+  );
+  if (!ok) return;
+  try {
+    const cfg = requireGitHubConfig();
+    const resp = await fetch(`${gitHubBackupURL(cfg, `app-state-${date}.json`)}?ref=${encodeURIComponent(cfg.branch)}`, {
+      headers: githubHeaders(cfg.token)
+    });
+    if (!resp.ok) throw new Error(await gitHubErrorMessage(resp));
+    const payload = await resp.json();
+    const text = fromBase64(payload.content || "");
+    // スナップショットは token / APIキー を含まないので、この端末の値を引き継ぐ
+    const token = state.settings.github.token;
+    const aiKey = state.settings.ai?.apiKey || "";
+    clearTimeout(autoSaveTimer);
+    const next = normalizeState(JSON.parse(text));
+    next.settings.github = { ...next.settings.github, ...cfg, token };
+    if (!next.settings.ai.apiKey) next.settings.ai.apiKey = aiKey;
+    state = next;
+    maintainRecurrences({ purge: true });
+    closeModal();
+    // saveState = dataModifiedAt を今に更新。「復元」をこの端末発の最新変更として扱うことで、
+    // 直後の自動 pull がリモート(誤同期後の状態)で復元を黙って上書きするのを防ぐ。
+    saveAndRender(`📦 ${date} 時点に復元しました。内容を確認してください`);
+  } catch (error) {
+    showToast(`復元失敗: ${error.message}`);
+  }
 }
 
 function resetDemoData() {
