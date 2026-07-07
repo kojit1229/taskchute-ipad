@@ -1,5 +1,5 @@
 {
-  "currentView": "tasks",
+  "currentView": "settings",
   "selectedDate": "2026-07-06",
   "zeroThinking": {
     "themes": [
@@ -74,7 +74,7 @@
       "path": "app-state.json",
       "token": "",
       "autoSave": true,
-      "lastSavedAt": "2026-07-07T21:18:08"
+      "lastSavedAt": "2026-07-07T21:20:49"
     },
     "visionSection": "board",
     "visionBoardIndex": 0,
@@ -205,7 +205,7 @@
       },
       "autoMorningReview": false
     },
-    "statsRange": "4w",
+    "statsRange": "12w",
     "autoArchive": true,
     "lastArchivedAt": "",
     "wbsHideCompleted": false
@@ -40349,7 +40349,7 @@
     }
   ],
   "timelineMode": "actual",
-  "dataModifiedAt": "2026-07-07T21:17:29",
+  "dataModifiedAt": "2026-07-07T21:20:15",
   "journalMeta": {},
   "questions": [],
   "weeklyReviews": {},
