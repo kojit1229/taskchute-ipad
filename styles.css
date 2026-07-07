@@ -2341,3 +2341,26 @@ h3 {
 
 /* v48: WBS 強化 */
 .wbs-proj-meta { font-size: 11.5px; margin-top: 5px; }
+
+/* v49: 横断検索モーダル */
+.search-modal { max-width: 640px; width: min(640px, 94vw); }
+.search-results { margin-top: 10px; max-height: 58vh; overflow-y: auto; display: grid; gap: 6px; }
+.search-hit { display: grid; grid-template-columns: auto auto 1fr; align-items: baseline; gap: 8px; width: 100%; text-align: left; padding: 8px 10px; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; color: var(--text); font: inherit; }
+.search-hit:hover { border-color: var(--accent); }
+.search-kind { font-size: 10.5px; font-weight: 800; padding: 2px 7px; border-radius: 8px; white-space: nowrap; background: rgba(0,122,255,.1); color: var(--accent); }
+.search-kind-zero { background: rgba(47,185,109,.12); color: var(--green); }
+.search-kind-question { background: rgba(255,149,0,.12); color: var(--orange); }
+.search-kind-feedback { background: rgba(175,82,222,.12); color: #af52de; }
+.search-kind-report { background: rgba(124,178,228,.16); color: var(--accent); }
+.search-date { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.search-snippet { font-size: 12.5px; line-height: 1.5; overflow-wrap: anywhere; }
+.search-snippet mark { background: rgba(255,214,10,.4); color: inherit; border-radius: 3px; padding: 0 1px; }
+@media (max-width: 720px) {
+  .search-hit { grid-template-columns: auto 1fr; }
+  .search-snippet { grid-column: 1 / -1; }
+}
+
+/* v49: 世代バックアップ */
+.backup-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.backup-row:last-of-type { border-bottom: none; }
+.backup-date { font-size: 13.5px; font-weight: 700; }
