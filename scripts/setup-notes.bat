@@ -50,11 +50,14 @@ rem ---- (3) セットアップ本体を実行 ----
 echo == taskchute-notes セットアップを実行 ==
 "!BASH!" scripts/setup-notes.sh
 set "RC=!errorlevel!"
+
+rem 最終メッセージ(if/else ブロック内に半角カッコを置くと cmd が誤解釈するため goto で分岐)
 echo.
-if "!RC!"=="0" (
-    echo == 完了しました。上に表示されたパスを Obsidian で開いてください ==
-) else (
-    echo == 途中で停止しました。上のメッセージ(gh のインストール/認証など)に従って、もう一度この bat を実行してください ==
-)
+if "!RC!"=="0" goto :SETUP_OK
+echo == 途中で停止しました。上のメッセージ（gh のインストール/認証など）に従って、もう一度この bat を実行してください ==
+goto :SETUP_END
+:SETUP_OK
+echo == 完了しました。上に表示されたパスを Obsidian で開いてください ==
+:SETUP_END
 pause
 exit /b %RC%
