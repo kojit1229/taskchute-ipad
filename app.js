@@ -21,6 +21,7 @@ const navItems = [
   { id: "avoid", label: "やらない", mark: "✕" },
   { id: "reports", label: "日報", mark: "R" },
   { id: "weekly", label: "週次", mark: "◷" },
+  { id: "stats", label: "計器盤", mark: "◔" },  // v53
   { id: "settings", label: "設定", mark: "S" }
 ];
 
@@ -371,6 +372,13 @@ document.addEventListener("click", (event) => {
   // v49: 世代バックアップ
   if (action === "open-backup-list") openBackupListModal();
   if (action === "restore-backup") restoreBackup(target.dataset.date);
+  // v53: 計器盤の期間切替(UI状態)と手動アーカイブ
+  if (action === "stats-range") {
+    state.settings.statsRange = target.dataset.range || "4w";
+    persistLocalNoSchedule();
+    render();
+  }
+  if (action === "run-archive") runArchive({ manual: true });
   // v49: 横断検索
   if (action === "open-search") openSearchModal();
   if (action === "search-jump") {
@@ -506,6 +514,16 @@ document.addEventListener("change", (event) => {
     state.settings.ai.autoMorningReview = target.checked;
     saveState();
     if (target.checked) showToast("朝イチ自動レビューを有効にしました(翌朝から)");
+  }
+  // v53: 自動アーカイブのトグル
+  if (target.matches("[data-setting-autoarchive]")) {
+    state.settings.autoArchive = target.checked;
+    saveState();
+  }
+  // v53: 横断検索のアーカイブ合流トグル(lazy fetch)
+  if (target.matches("#cross-search-archive")) {
+    if (target.checked) loadArchiveForSearch();
+    else refreshSearchResults();
   }
   if (target.matches('[data-github-field="autoSave"]')) {
     state.settings.github.autoSave = target.checked;
@@ -660,6 +678,10 @@ function normalizeState(value) {
   // v52: AIスケジュール学習ログ。AIの仮配置に対するユーザの採否・修正を記録し、
   //      次回のAIスケジューリング時に傾向として注入する(端末間で同期される)。
   if (!Array.isArray(value.aiScheduleHistory)) value.aiScheduleHistory = [];
+  // v53: 計器盤の期間カーソル(UI状態)と自動アーカイブ設定
+  value.settings.statsRange ||= "4w";
+  if (typeof value.settings.autoArchive !== "boolean") value.settings.autoArchive = true;
+  value.settings.lastArchivedAt ||= "";
   // v43: 自動同期(既定OFF・保守的)。lastPushedAt = 最後に push した時の dataModifiedAt。
   if (typeof value.settings.autoSync !== "boolean") value.settings.autoSync = false;
   if (!("lastPushedAt" in value.settings)) value.settings.lastPushedAt = null;
@@ -1301,6 +1323,7 @@ function renderMain() {
   if (view === "reports") main.innerHTML = renderReports();
   if (view === "weekly") main.innerHTML = renderWeekly();
   if (view === "cycle") main.innerHTML = renderCycle();
+  if (view === "stats") main.innerHTML = renderStats();  // v53: 計器盤
   if (view === "settings") main.innerHTML = renderSettings();
   if (view === "more") main.innerHTML = renderMore();
 }
@@ -2306,6 +2329,7 @@ async function runAiSchedule() {
     aiCommonPreamble() + aiPrompt("schedule"),
     "",
     `対象日: ${date}(${weekdayLabel(date)})`,
+    state.settings.morningEnergyLog?.[date] !== undefined ? `今朝の体調: ${state.settings.morningEnergyLog[date]}/10(低い日は軽め・少なめに)` : "",  // v53
     "",
     "確定済みの予定(動かせない):",
     existing.length ? existing.join("\n") : "- (まだ予定はありません)",
@@ -2422,6 +2446,30 @@ function recordScheduleHistory(item, outcome, date) {
   }
 }
 
+// v53: 朝の体調(morningEnergyLog: 10/7/5/3/0 の5段階)と着手率の相関。
+//      低い日(≤3)と良い日(≥7)で二分(普通=5 は除外)、各群 n≥5 のときだけ1行返す。
+function morningEnergyCorrelation(pastBlocks) {
+  const today = todayISO();
+  const since = addDays(today, -56);
+  const past = pastBlocks || state.blocks.filter((b) => !b.deleted && b.date >= since && b.date < today && b.plannedStartAt);
+  const lowDays = new Set();
+  const highDays = new Set();
+  Object.entries(state.settings.morningEnergyLog || {}).forEach(([d, v]) => {
+    if (d < since || d >= today) return;
+    if (Number(v) <= 3) lowDays.add(d);
+    else if (Number(v) >= 7) highDays.add(d);
+  });
+  const rateFor = (days) => {
+    const bs = past.filter((b) => days.has(b.date));
+    if (bs.length < 5) return null;
+    return { pct: Math.round((bs.filter((b) => b.actualStartAt).length / bs.length) * 100), n: bs.length };
+  };
+  const low = rateFor(lowDays);
+  const high = rateFor(highDays);
+  if (!low || !high) return "";
+  return `- 朝の体調が低い日(3以下)の着手率${low.pct}%(${low.n}件) / 良い日(7以上)は${high.pct}%(${high.n}件)`;
+}
+
 // 過去データを集計した「傾向」テキスト(スケジュール系プロンプトに注入)。
 // 直近8週。n が少ない行は出さない(ノイズを学習させない)。
 function buildScheduleLearningDigest(targetDate) {
@@ -2479,6 +2527,10 @@ function buildScheduleLearningDigest(targetDate) {
     const started = sameWd.filter((b) => b.actualStartAt).length;
     lines.push(`- ${weekdayLabel(targetDate)}曜の過去8週: 計画${sameWd.length}件、着手率${Math.round((started / sameWd.length) * 100)}%`);
   }
+
+  // 5) 朝の体調と着手率の相関(v53)
+  const corr = morningEnergyCorrelation(past);
+  if (corr) lines.push(corr);
 
   // 4) 時間帯別のエネルギー収支(完了Blockの充電-放電)
   const done = state.blocks.filter((b) => !b.deleted && b.completed && b.date >= since && (b.actualStartAt || b.plannedStartAt));
@@ -2570,10 +2622,18 @@ async function runAiWeekly(week) {
   _aiReviewPending = true;
   render();
   try {
+    // v53: 朝の体調の補足(その週の平均 + 8週の相関)
+    const wkDays = computeWeeklyMetrics(week).days;
+    const wkMoods = wkDays.map((d) => state.settings.morningEnergyLog?.[d]).filter((v) => v !== undefined).map(Number);
+    const corr = morningEnergyCorrelation();
+    const moodLines = [];
+    if (wkMoods.length) moodLines.push(`- この週の朝の体調平均: ${(wkMoods.reduce((a, b) => a + b, 0) / wkMoods.length).toFixed(1)}/10(記録${wkMoods.length}日)`);
+    if (corr) moodLines.push(corr);
     const prompt = [
       aiCommonPreamble() + "以下は私の週次レビューです。",
       "",
       buildWeeklyMarkdown(week),
+      moodLines.length ? `\n補足データ(朝の体調):\n${moodLines.join("\n")}` : "",
       "",
       "このデータから、簡潔にフィードバックをください(辛口可、行動に繋がる具体性を重視)。",
       "回答は必ず次の見出し構成のMarkdownで:",
@@ -2709,6 +2769,7 @@ async function runAiTodaySuggest() {
     aiCommonPreamble() + aiPrompt("todaySuggest"),
     "",
     `今日: ${today}(${weekdayLabel(today)})`,
+    state.settings.morningEnergyLog?.[today] !== undefined ? `今朝の体調: ${state.settings.morningEnergyLog[today]}/10(低い日は軽め・少なめに)` : "",  // v53
     "",
     "今日すでに入っている予定(これらは提案しない):",
     todayBlocks.length ? todayBlocks.join("\n") : "- (まだありません)",
@@ -2848,6 +2909,10 @@ function buildSearchModal() {
       <div class="modal-body">
         <input class="input" id="cross-search-input" type="search" autocomplete="off"
           placeholder="0秒思考・ジャーナル・問い・AIフィードバック・日報 を検索">
+        ${(state.settings.github?.token) ? `<label class="checkbox-line" style="font-size:12px; margin-top:8px">
+          <input type="checkbox" id="cross-search-archive" ${_archiveCache ? "checked" : ""}>
+          📦 アーカイブも検索(GitHubの archive/ から読込)
+        </label>` : ""}
         <div id="cross-search-results" class="search-results">
           <div class="muted" style="font-size:12px">2文字以上で検索します。</div>
         </div>
@@ -2887,26 +2952,38 @@ function crossSearchHits(query) {
   Object.entries(state.reports || {}).forEach(([date, text]) => {
     push("report", "日報", date, text, { view: "reports", date });
   });
+  // v53: アーカイブ合流(オプトイン時のみ。ジャンプ先は無い=スニペット閲覧)
+  if (_archiveCache && document.querySelector("#cross-search-archive")?.checked) {
+    Object.entries(_archiveCache.journals || {}).forEach(([date, text]) => push("arch", "旧ジャーナル", date, text, null));
+    Object.entries(_archiveCache.feedback || {}).forEach(([date, text]) => push("arch", "旧AIフィードバック", date, text, null));
+    Object.entries(_archiveCache.reports || {}).forEach(([date, text]) => push("arch", "旧日報", date, text, null));
+  }
   hits.sort((a, b) => b.date.localeCompare(a.date));  // 新しい順
   return hits;
 }
 
 function crossSearchResultsHTML(query) {
+  // v53: アーカイブ読込中の表示
+  const loadingNote = _archiveLoadState === "loading"
+    ? `<div class="muted" style="font-size:11.5px; margin-bottom:6px">📦 アーカイブを読み込み中…</div>` : "";
   const hits = crossSearchHits(query);
-  if (hits === null) return `<div class="muted" style="font-size:12px">2文字以上で検索します。</div>`;
-  if (!hits.length) return `<div class="muted" style="font-size:12px">「${escapeHTML(query.trim())}」に一致するものはありません。</div>`;
+  if (hits === null) return `${loadingNote}<div class="muted" style="font-size:12px">2文字以上で検索します。</div>`;
+  if (!hits.length) return `${loadingNote}<div class="muted" style="font-size:12px">「${escapeHTML(query.trim())}」に一致するものはありません。</div>`;
   const shown = hits.slice(0, SEARCH_MAX_RESULTS);
+  const inner = (h) => `
+        <span class="search-kind search-kind-${h.kind}">${h.label}</span>
+        <span class="search-date">${h.date}</span>
+        <span class="search-snippet">${h.snippet}</span>`;
   return `
+    ${loadingNote}
     <div class="muted" style="font-size:11.5px; margin-bottom:6px">${hits.length}件${hits.length > shown.length ? `(新しい順に${shown.length}件を表示)` : ""}</div>
-    ${shown.map((h) => `
+    ${shown.map((h) => h.jump ? `
       <button class="search-hit" data-action="search-jump" data-view="${h.jump.view}"
         ${h.jump.date ? `data-date="${h.jump.date}"` : ""}
         ${h.jump.zeroTab ? `data-zero-tab="${h.jump.zeroTab}"` : ""}
-        ${h.jump.ztSearch !== undefined ? `data-zt-search="${escapeHTML(h.jump.ztSearch)}"` : ""}>
-        <span class="search-kind search-kind-${h.kind}">${h.label}</span>
-        <span class="search-date">${h.date}</span>
-        <span class="search-snippet">${h.snippet}</span>
-      </button>`).join("")}
+        ${h.jump.ztSearch !== undefined ? `data-zt-search="${escapeHTML(h.jump.ztSearch)}"` : ""}>${inner(h)}
+      </button>` : `
+      <div class="search-hit is-archive" title="アーカイブ済み(閲覧のみ)">${inner(h)}</div>`).join("")}
   `;
 }
 
@@ -4662,6 +4739,20 @@ function renderSettings() {
           <input id="importData" type="file" accept="application/json" hidden>
         </label>
         <button class="btn danger" data-action="reset-demo">デモデータに戻す</button>
+        <div style="border-top:1px solid var(--line); padding-top:10px">
+          <div style="font-weight:700; font-size:13.5px; margin-bottom:6px">📦 アーカイブ(容量対策)</div>
+          <div class="muted" style="font-size:11.5px; line-height:1.7">
+            端末内データ: <b>${stateSizeLabel()}</b>(localStorage の目安上限 約5MB)<br>
+            ${ARCHIVE_TEXT_KEEP_DAYS}日より古い日報・AIフィードバック・ジャーナルと、${ARCHIVE_BLOCK_KEEP_DAYS}日より古いBlockを
+            <code>archive/archive-年.json</code> へ退避して本体を軽く保ちます。退避分は横断検索の「アーカイブも検索」から読めます。
+            ${state.settings.lastArchivedAt ? `<br>最終アーカイブ: ${state.settings.lastArchivedAt.replace("T", " ")}` : ""}
+          </div>
+          <label class="checkbox-line">
+            <input type="checkbox" data-setting-autoarchive ${state.settings.autoArchive ? "checked" : ""}>
+            自動アーカイブ(1日1回、GitHub保存の書き込み成功後にのみ削除)
+          </label>
+          <button class="btn" data-action="run-archive" style="margin-top:6px">今すぐアーカイブ</button>
+        </div>
       </div>
       <div class="panel stack">
         <h2>クラウド保存(GitHub)</h2>
@@ -4978,6 +5069,143 @@ function startRateHistory(weekStart, n = 4) {
     out.push({ week: ws, pct: r.pct, total: r.total });
   }
   return out;
+}
+
+// v53: =========================================================
+//  計器盤(統計ダッシュボード)
+//  溜まったデータの長期トレンドを見る「静かな計器」。目標線・達成色分け・催促なし。
+//  集計は都度計算(保存しない)。データ不足のセクションは出さない。
+// =========================================================
+function statsRangeWeeks() {
+  const r = state.settings.statsRange || "4w";
+  if (r === "4w") return 4;
+  if (r === "12w") return 12;
+  // all: ローカルに残っている最古Blockの週から今週まで(表示上限2年)
+  const dates = state.blocks.filter((b) => !b.deleted && b.date).map((b) => b.date);
+  if (!dates.length) return 4;
+  const oldest = dates.reduce((a, b) => (a < b ? a : b));
+  return clamp(Math.ceil((daysBetween(oldest, todayISO()) + 1) / 7) + 1, 4, 104);
+}
+
+function renderStats() {
+  const range = state.settings.statsRange || "4w";
+  const weeks = statsRangeWeeks();
+  const thisWeek = weekStartFor(todayISO());
+  const today = todayISO();
+  const since = addDays(thisWeek, -7 * (weeks - 1));
+  const median = (arr) => {
+    const s = [...arr].sort((a, b) => a - b);
+    return s.length ? (s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2) : 0;
+  };
+
+  // 1) 着手率の週次推移
+  const hist = startRateHistory(thisWeek, weeks);
+  const withData = hist.filter((h) => h.total > 0);
+  const rateChart = withData.length >= 2 ? `
+    <div class="panel stack">
+      <h2>着手率の週次推移</h2>
+      <div class="stats-bars">
+        ${hist.map((h) => `
+          <div class="stats-bar-cell" title="${h.week}〜: ${h.total ? `${h.pct}%(${h.total}件)` : "記録なし"}">
+            <div class="stats-bar">${h.total ? `<div class="stats-bar-fill" style="height:${h.pct}%"></div>` : ""}</div>
+          </div>`).join("")}
+      </div>
+      <div class="muted stats-axis">${hist[0].week.slice(5).replace("-", "/")} 〜 今週 ・ 記録週の平均 ${Math.round(withData.reduce((s, h) => s + h.pct, 0) / withData.length)}%</div>
+    </div>` : "";
+
+  // 2) エネルギー収支の週次推移(完了Blockの Σ(充電−放電))
+  const nets = hist.map((h) => {
+    const done = blocksForWeek(h.week).filter((b) => b.completed);
+    return { week: h.week, n: done.length, net: done.reduce((s, b) => s + Number(b.charge || 0) - Number(b.discharge || 0), 0) };
+  });
+  const netMax = Math.max(1, ...nets.map((x) => Math.abs(x.net)));
+  const energyChart = nets.filter((x) => x.n > 0).length >= 2 ? `
+    <div class="panel stack">
+      <h2>エネルギー収支の週次推移</h2>
+      <div class="stats-bars">
+        ${nets.map((x) => `
+          <div class="stats-bar-cell" title="${x.week}〜: ${x.n ? signed(x.net) : "記録なし"}">
+            <div class="wk-net-bar">
+              <div class="wk-net-pos">${x.net > 0 ? `<span style="height:${Math.round((x.net / netMax) * 100)}%"></span>` : ""}</div>
+              <div class="wk-net-zero"></div>
+              <div class="wk-net-neg">${x.net < 0 ? `<span style="height:${Math.round((-x.net / netMax) * 100)}%"></span>` : ""}</div>
+            </div>
+          </div>`).join("")}
+      </div>
+      <div class="muted stats-axis">週ごとの Σ(充電 − 放電)。上=充電超過 / 下=放電超過</div>
+    </div>` : "";
+
+  // 3) 時間帯 × 曜日の着手ヒートマップ(計画Blockのうち実際に着手した率)
+  const past = state.blocks.filter((b) => !b.deleted && b.date >= since && b.date <= today && b.plannedStartAt);
+  const wdOrder = [6, 0, 1, 2, 3, 4, 5];  // 週定義に合わせて 土曜始まり
+  const wdLabels = ["土", "日", "月", "火", "水", "木", "金"];
+  let hmHasData = false;
+  const hmRows = SCHED_BANDS.map(([s, e, label]) => {
+    const cells = wdOrder.map((wd, i) => {
+      const cellBlocks = past.filter((b) => {
+        if (parseDate(b.date).getDay() !== wd) return false;
+        const m = minutesOf(b.plannedStartAt);
+        return m >= s * 60 && m < e * 60;
+      });
+      if (cellBlocks.length < 3) return `<td class="stats-hm-cell empty"></td>`;  // n不足はノイズなので出さない
+      hmHasData = true;
+      const rate = cellBlocks.filter((b) => b.actualStartAt).length / cellBlocks.length;
+      return `<td class="stats-hm-cell" style="background:rgba(47,185,109,${(0.08 + rate * 0.5).toFixed(2)})" title="${wdLabels[i]}曜 ${label}: 着手${Math.round(rate * 100)}%(${cellBlocks.length}件)">${Math.round(rate * 100)}</td>`;
+    }).join("");
+    return `<tr><th class="stats-hm-band">${label}</th>${cells}</tr>`;
+  }).join("");
+  const heatmap = hmHasData ? `
+    <div class="panel stack">
+      <h2>時間帯 × 曜日の着手率</h2>
+      <div style="overflow-x:auto">
+        <table class="stats-hm">
+          <tr><th></th>${wdLabels.map((w) => `<th class="stats-hm-wd">${w}</th>`).join("")}</tr>
+          ${hmRows}
+        </table>
+      </div>
+      <div class="muted stats-axis">計画Blockのうち実際に着手した率(%)。3件未満のマスは表示しません</div>
+    </div>` : "";
+
+  // 4) 見積 vs 実績(見積と実績時刻が両方あるBlock)
+  const est = past
+    .filter((b) => b.completed && Number(b.estimateMin) > 0)
+    .map((b) => ({ b, actual: _actualDurationMin(b) }))
+    .filter((x) => x.actual && x.actual > 0);
+  let estimateCard = "";
+  if (est.length >= 5) {
+    const ratios = est.map((x) => x.actual / Number(x.b.estimateMin));
+    const medRatio = Math.round(median(ratios) * 100);
+    const meanAbsErr = Math.round(est.reduce((s, x) => s + Math.abs(x.actual - Number(x.b.estimateMin)), 0) / est.length);
+    const byCat = {};
+    est.forEach((x) => { (byCat[x.b.category || "未分類"] ||= []).push(x.actual / Number(x.b.estimateMin)); });
+    const catRows = Object.entries(byCat)
+      .filter(([, arr]) => arr.length >= 3)
+      .map(([cat, arr]) => ({ cat, med: median(arr), n: arr.length }))
+      .sort((a, b) => Math.abs(b.med - 1) - Math.abs(a.med - 1))
+      .slice(0, 5);
+    estimateCard = `
+      <div class="panel stack">
+        <h2>見積 vs 実績</h2>
+        <div class="stats-est-head">実績は見積の中央値 <b>${medRatio}%</b> ・ 平均のズレ <b>${meanAbsErr}分</b> <span class="muted">(${est.length}件)</span></div>
+        ${catRows.length ? `
+          <table class="stats-est">
+            <tr><th>カテゴリ</th><th>実績/見積(中央値)</th><th>件数</th></tr>
+            ${catRows.map((r) => `<tr><td>${escapeHTML(r.cat)}</td><td>${Math.round(r.med * 100)}%</td><td>${r.n}</td></tr>`).join("")}
+          </table>
+          <div class="muted stats-axis">見積からのズレが大きい順(100%=見積どおり)。3件未満のカテゴリは表示しません</div>` : ""}
+      </div>`;
+  }
+
+  const body = rateChart + energyChart + heatmap + estimateCard;
+  return `
+    ${renderHeader("数字で見る実行の実態", "計器盤")}
+    <div class="segmented" style="margin-bottom:10px">
+      ${[["4w", "4週"], ["12w", "12週"], ["all", "全期間"]].map(([k, l]) =>
+        `<button class="${range === k ? "active" : ""}" data-action="stats-range" data-range="${k}">${l}</button>`).join("")}
+    </div>
+    ${range === "all" ? `<div class="muted" style="font-size:11px; margin-bottom:10px">全期間 = この端末に残っているデータの範囲(アーカイブ済みの期間は含みません)</div>` : ""}
+    ${body ? `<section class="stats-grid">${body}</section>` : emptyPanel("まだ十分なデータがありません。実績が数週間分たまると表示されます。")}
+  `;
 }
 
 // v40: エネルギー構造の曜日 finding から、その曜日の直近日へ移動して routine を見る
@@ -7007,6 +7235,181 @@ async function restoreBackup(date) {
   }
 }
 
+// v53: =========================================================
+//  自動アーカイブ(データ肥大対策)
+//  localStorage は約5MBが上限で、日報・AIフィードバック・ジャーナル・Block は
+//  無限に溜まり続ける。古い分を archive/archive-<年>.json へ退避して本体を軽く保つ。
+//  最重要ルール: GitHub への書き込みが成功して初めてローカルから削除する。逆順は書かない。
+// =========================================================
+const ARCHIVE_LAST_DATE_KEY = "taskchute-archive-last-date";  // 端末ローカル(1日1回ガード)
+const ARCHIVE_TEXT_KEEP_DAYS = 90;    // reports / feedback / journals の保持日数
+const ARCHIVE_BLOCK_KEEP_DAYS = 180;  // Block の保持日数(生きている集計の最長84日を安全に超える幅)
+
+function gitHubFileURL(cfg, filePath) {
+  return `https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${filePath.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+// JSONファイルを取得(1MB超は Blob API へフォールバック)。404 は null。
+async function fetchGitHubJSONFile(cfg, filePath) {
+  const resp = await fetch(`${gitHubFileURL(cfg, filePath)}?ref=${encodeURIComponent(cfg.branch)}`, {
+    headers: githubHeaders(cfg.token)
+  });
+  if (resp.status === 404) return null;
+  if (!resp.ok) throw new Error(await gitHubErrorMessage(resp));
+  const payload = await resp.json();
+  let text;
+  if (payload.content && payload.encoding === "base64") {
+    text = fromBase64(payload.content);
+  } else {
+    const blobResp = await fetch(
+      `https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/git/blobs/${payload.sha}`,
+      { headers: githubHeaders(cfg.token) }
+    );
+    if (!blobResp.ok) throw new Error(await gitHubErrorMessage(blobResp));
+    text = fromBase64((await blobResp.json()).content || "");
+  }
+  return { obj: JSON.parse(text), sha: payload.sha || "" };
+}
+
+// 退避対象を年ごとに集める(削除はまだしない)
+function collectArchivable() {
+  const today = todayISO();
+  const textCut = addDays(today, -ARCHIVE_TEXT_KEEP_DAYS);
+  const blockCut = addDays(today, -ARCHIVE_BLOCK_KEEP_DAYS);
+  const byYear = {};
+  const bucket = (date) => (byYear[date.slice(0, 4)] ||= { reports: {}, feedback: {}, journals: {}, blocks: [] });
+  Object.entries(state.reports || {}).forEach(([d, md]) => { if (d < textCut && md) bucket(d).reports[d] = md; });
+  Object.entries(state.feedback || {}).forEach(([d, md]) => { if (d < textCut && md) bucket(d).feedback[d] = md; });
+  Object.entries(state.journals || {}).forEach(([d, md]) => { if (d < textCut && md) bucket(d).journals[d] = md; });
+  state.blocks.forEach((b) => { if (!b.deleted && b.date && b.date < blockCut) bucket(b.date).blocks.push(b); });
+  return { byYear, textCut, blockCut };
+}
+
+async function runArchive({ manual = false } = {}) {
+  const cfg = state.settings.github || {};
+  if (!cfg.token || !cfg.owner || !cfg.repo) {
+    if (manual) showToast("アーカイブには GitHub 設定(token)が必要です");
+    return;
+  }
+  const { byYear, textCut, blockCut } = collectArchivable();
+  const years = Object.keys(byYear).sort();
+  if (!years.length) {
+    if (manual) showToast(`アーカイブ対象はありません(日報等は${ARCHIVE_TEXT_KEEP_DAYS}日・Blockは${ARCHIVE_BLOCK_KEEP_DAYS}日より古い分が対象)`);
+    return;
+  }
+  if (manual) showToast("📦 アーカイブ中…");
+  try {
+    for (const year of years) {
+      const filePath = `archive/archive-${year}.json`;
+      // 既存アーカイブを読み込んでマージ(日付キー / Block id で冪等)
+      const existing = await fetchGitHubJSONFile(cfg, filePath);
+      const merged = existing?.obj && typeof existing.obj === "object"
+        ? { reports: {}, feedback: {}, journals: {}, blocks: [], ...existing.obj }
+        : { reports: {}, feedback: {}, journals: {}, blocks: [] };
+      Object.assign(merged.reports, byYear[year].reports);
+      Object.assign(merged.feedback, byYear[year].feedback);
+      Object.assign(merged.journals, byYear[year].journals);
+      const seen = new Set(merged.blocks.map((b) => b.id));
+      byYear[year].blocks.forEach((b) => { if (!seen.has(b.id)) merged.blocks.push(b); });
+      const put = await fetch(gitHubFileURL(cfg, filePath), {
+        method: "PUT",
+        headers: githubHeaders(cfg.token),
+        body: JSON.stringify({
+          message: `archive: ${year} update ${todayISO()}`,
+          content: toBase64(JSON.stringify(merged, null, 1)),
+          branch: cfg.branch,
+          ...(existing?.sha ? { sha: existing.sha } : {})
+        })
+      });
+      if (!put.ok) throw new Error(await gitHubErrorMessage(put));
+    }
+    // ここまで到達 = 全ての年の書き込みに成功。初めてローカルから削除する。
+    let removed = 0;
+    for (const d of Object.keys(state.reports || {})) if (d < textCut) { delete state.reports[d]; removed++; }
+    for (const d of Object.keys(state.feedback || {})) if (d < textCut) { delete state.feedback[d]; removed++; }
+    for (const d of Object.keys(state.journals || {})) if (d < textCut) { delete state.journals[d]; removed++; }
+    const before = state.blocks.length;
+    state.blocks = state.blocks.filter((b) => !(b.date && b.date < blockCut));  // 削除済み(tombstone)も古ければ落とす
+    removed += before - state.blocks.length;
+    state.settings.lastArchivedAt = nowDateTime();
+    _archiveCache = null;  // 検索キャッシュは次回読み直し
+    saveState();
+    render();
+    showToast(`📦 ${removed}件をアーカイブへ退避しました(archive/)`);
+  } catch (error) {
+    // 何も削除していないので安全。手動時のみ通知、自動時は静かに。
+    if (manual) showToast(`アーカイブ失敗: ${error.message}`);
+    else console.warn("自動アーカイブをスキップ:", error.message);
+  }
+}
+
+function maybeAutoArchive() {
+  if (!state.settings.autoArchive) return;
+  const cfg = state.settings.github || {};
+  if (!cfg.token || !cfg.owner || !cfg.repo) return;
+  const today = todayISO();
+  try {
+    if (localStorage.getItem(ARCHIVE_LAST_DATE_KEY) === today) return;  // 1日1回(失敗しても再試行しない)
+    localStorage.setItem(ARCHIVE_LAST_DATE_KEY, today);
+  } catch { /* 記録できなければ続行(重複マージは冪等) */ }
+  runArchive();
+}
+
+// 端末内データ量の目安表示(localStorage は UTF-16 なので文字数×2バイト換算)
+function stateSizeLabel() {
+  try {
+    const bytes = JSON.stringify(state).length * 2;
+    return bytes >= 1048576 ? `${(bytes / 1048576).toFixed(2)}MB` : `${Math.round(bytes / 1024)}KB`;
+  } catch {
+    return "?";
+  }
+}
+
+// ---- 横断検索へのアーカイブ合流(オプトイン・lazy fetch・非永続キャッシュ) ----
+let _archiveCache = null;      // { reports:{}, feedback:{}, journals:{} } 全年マージ
+let _archiveLoadState = "";    // "" | "loading" | "loaded" | "error"
+
+function refreshSearchResults() {
+  const input = document.querySelector("#cross-search-input");
+  const box = document.querySelector("#cross-search-results");
+  if (input && box) box.innerHTML = crossSearchResultsHTML(input.value);
+}
+
+async function loadArchiveForSearch() {
+  if (_archiveCache) return refreshSearchResults();
+  if (_archiveLoadState === "loading") return;
+  const cfg = state.settings.github || {};
+  if (!cfg.token || !cfg.owner || !cfg.repo) return showToast("アーカイブ検索には GitHub 設定が必要です");
+  _archiveLoadState = "loading";
+  refreshSearchResults();
+  try {
+    const dirResp = await fetch(`${gitHubFileURL(cfg, "archive")}?ref=${encodeURIComponent(cfg.branch)}`, {
+      headers: githubHeaders(cfg.token)
+    });
+    const merged = { reports: {}, feedback: {}, journals: {} };
+    if (dirResp.status !== 404) {
+      if (!dirResp.ok) throw new Error(await gitHubErrorMessage(dirResp));
+      const items = await dirResp.json();
+      const files = (Array.isArray(items) ? items : [])
+        .map((it) => String(it.name || ""))
+        .filter((n) => /^archive-\d{4}\.json$/.test(n));
+      for (const name of files) {
+        const file = await fetchGitHubJSONFile(cfg, `archive/${name}`);
+        if (!file?.obj) continue;
+        Object.assign(merged.reports, file.obj.reports || {});
+        Object.assign(merged.feedback, file.obj.feedback || {});
+        Object.assign(merged.journals, file.obj.journals || {});
+      }
+    }
+    _archiveCache = merged;
+    _archiveLoadState = "loaded";
+  } catch (error) {
+    _archiveLoadState = "error";
+    showToast(`アーカイブ読込失敗: ${error.message}`);
+  }
+  refreshSearchResults();
+}
+
 function resetDemoData() {
   state = normalizeState(seedState());
   saveAndRender("デモデータに戻しました");
@@ -8884,12 +9287,15 @@ else syncFromGitHubOnStartup();
 // v51: 朝イチ自動レビュー(opt-in・既定OFF)。起動直後は同期(pull)に少し譲ってから実行し、
 //      別端末で実行済みのフィードバックを取り込んだ後に重複実行しないようにする。
 setTimeout(maybeAutoMorningReview, 4000);
+// v53: 自動アーカイブ(既定ON・1日1回)。同期・自動レビューの後に静かに実行。
+setTimeout(maybeAutoArchive, 8000);
 // v41/v43: 復帰時。自動同期 ON なら pull(内部で日次オープン)、OFF なら日次オープンのみ。
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
   if (state.settings.autoSync) runAutoSyncPull();
   else if (runDailyOpen()) render();
   setTimeout(maybeAutoMorningReview, 4000);  // v51: 日をまたいで復帰したケース
+  setTimeout(maybeAutoArchive, 8000);        // v53: 同上
 });
 
 // v42: AIフィードバック欄への貼り付けで、構造化取り込みモーダルを開く
