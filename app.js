@@ -273,6 +273,24 @@ document.addEventListener("click", (event) => {
   if (action === "ai-mit-adopt") adoptAiMit(Number(target.dataset.index));
   // v49: AIレビュー直接統合(日報 → Anthropic API → フィードバック)
   if (action === "report-ai-review") runAiReview(state.selectedDate);
+  // v50: ① AIタスク分解(WBS)
+  if (action === "ai-decompose") runAiDecompose(id);
+  if (action === "ai-decompose-submit") submitAiDecompose();
+  // v50: ② AIスケジュール下書き(仮配置 → D&D調整 → 確定)
+  if (action === "ai-schedule") runAiSchedule();
+  if (action === "draft-confirm") confirmScheduleDraft();
+  if (action === "draft-discard") { _scheduleDraft = null; render(); showToast("下書きを破棄しました"); }
+  if (action === "draft-remove" && _scheduleDraft) {
+    _scheduleDraft.items = _scheduleDraft.items.filter((x) => x.id !== id);
+    if (!_scheduleDraft.items.length) _scheduleDraft = null;
+    render();
+  }
+  // v50: ③ 週次 / 12週サイクルのAI壁打ち
+  if (action === "weekly-ai") runAiWeekly(target.dataset.week);
+  if (action === "cycle-ai") runAiCycle(target.dataset.cycle);
+  // v50: ④ 0秒思考のまとめ所感
+  if (action === "zt-ai-comment") runAiZeroComment();
+  if (action === "zt-ai-import") openAiImportModal(todayISO(), parseAiFeedback(_ztAiComment?.text || ""));
   // v49: 世代バックアップ
   if (action === "open-backup-list") openBackupListModal();
   if (action === "restore-backup") restoreBackup(target.dataset.date);
@@ -1931,12 +1949,64 @@ async function aiErrorMessage(response) {
   return hint ? `${raw} — ${hint}` : raw;
 }
 
-async function runAiReview(date) {
-  if (_aiReviewPending) return showToast("AIレビューを実行中です。少し待ってください");
+// v50: 共通呼び出し(全AI機能で共用)。プロンプトを送りテキスト応答を返す。
+//      呼び出し側が _aiReviewPending ガードとトースト演出を担当する。
+async function callClaude(prompt, { maxTokens = 4096 } = {}) {
   syncAiFieldsFromDOM();
   const key = (state.settings.ai?.apiKey || "").trim();
-  if (!key) return showToast("設定画面で Anthropic APIキーを登録してください");
-  if (/[^\x00-\xFF]/.test(key)) return showToast("APIキーに使用できない文字が含まれています。貼り直してください");
+  if (!key) throw new Error("設定画面で Anthropic APIキーを登録してください");
+  if (/[^\x00-\xFF]/.test(key)) throw new Error("APIキーに使用できない文字が含まれています。貼り直してください");
+  const model = state.settings.ai.model || "claude-opus-4-8";
+  const body = {
+    model,
+    max_tokens: maxTokens,
+    messages: [{ role: "user", content: prompt }]
+  };
+  // 4.6 以降のモデルは adaptive thinking(Haiku 4.5 は未対応なので付けない)
+  if (model !== "claude-haiku-4-5") body.thinking = { type: "adaptive" };
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": key,
+      "anthropic-version": "2023-06-01",
+      // ブラウザから直接呼ぶための CORS オプトイン。キーは端末外に同期しない前提(単一ユーザー・自分の鍵)。
+      "anthropic-dangerous-direct-browser-access": "true"
+    },
+    body: JSON.stringify(body)
+  });
+  if (!response.ok) throw new Error(await aiErrorMessage(response));
+  const data = await response.json();
+  const text = (data.content || [])
+    .filter((b) => b.type === "text")
+    .map((b) => b.text)
+    .join("\n")
+    .trim();
+  if (!text) throw new Error("応答が空でした。少し待ってから再実行してください");
+  return text;
+}
+
+// v50: APIキーが登録済みか(AI系ボタンの表示ゲート)
+function aiEnabled() {
+  return Boolean((state.settings.ai?.apiKey || "").trim());
+}
+
+// v50: 応答からJSONを取り出す(```json フェンス優先、無ければ最初の { 〜 最後の })
+function extractAiJson(text) {
+  const fence = String(text).match(/```(?:json)?\s*([\s\S]*?)```/);
+  const raw = fence ? fence[1] : String(text);
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start === -1 || end <= start) throw new Error("応答からJSONを読み取れませんでした。もう一度実行してください");
+  try {
+    return JSON.parse(raw.slice(start, end + 1));
+  } catch {
+    throw new Error("応答のJSONが壊れていました。もう一度実行してください");
+  }
+}
+
+async function runAiReview(date) {
+  if (_aiReviewPending) return showToast("AIを実行中です。少し待ってください");
   // 日報が未生成なら先に生成(日報自体が AI へのプロンプトを含む = v42 のコピペ搬送と同じ素材を送る)
   if (!state.reports[date]) generateReport();
   const report = state.reports[date];
@@ -1944,33 +2014,7 @@ async function runAiReview(date) {
   _aiReviewPending = true;
   render();  // ボタンを「レビュー中…」に
   try {
-    const model = state.settings.ai.model || "claude-opus-4-8";
-    const body = {
-      model,
-      max_tokens: 4096,
-      messages: [{ role: "user", content: report }]
-    };
-    // 4.6 以降のモデルは adaptive thinking(Haiku 4.5 は未対応なので付けない)
-    if (model !== "claude-haiku-4-5") body.thinking = { type: "adaptive" };
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": key,
-        "anthropic-version": "2023-06-01",
-        // ブラウザから直接呼ぶための CORS オプトイン。キーは端末外に同期しない前提(単一ユーザー・自分の鍵)。
-        "anthropic-dangerous-direct-browser-access": "true"
-      },
-      body: JSON.stringify(body)
-    });
-    if (!response.ok) throw new Error(await aiErrorMessage(response));
-    const data = await response.json();
-    const text = (data.content || [])
-      .filter((b) => b.type === "text")
-      .map((b) => b.text)
-      .join("\n")
-      .trim();
-    if (!text) throw new Error("応答が空でした。少し待ってから再実行してください");
+    const text = await callClaude(report);
     state.feedback[date] = text;  // ジャーナルの AIフィードバック欄と同じ置き場(貼り付けと等価)
     delete cachedFeedback[date];  // 過去に .md を読込済みでも、今回の新しいレビューを表示する
     saveState();
@@ -1992,9 +2036,423 @@ async function runAiReview(date) {
 // 日報ビュー / ジャーナルの AIフィードバック欄に置く実行ボタン
 function aiReviewButton() {
   if (_aiReviewPending) return `<button class="btn" disabled>⏳ AIレビュー中…</button>`;
-  const hasKey = !!(state.settings.ai?.apiKey || "").trim();
-  if (!hasKey) return `<button class="btn" disabled title="設定画面で Anthropic APIキーを登録すると使えます">🤖 AIレビュー(要APIキー)</button>`;
+  if (!aiEnabled()) return `<button class="btn" disabled title="設定画面で Anthropic APIキーを登録すると使えます">🤖 AIレビュー(要APIキー)</button>`;
   return `<button class="btn primary" data-action="report-ai-review">🤖 AIレビュー実行</button>`;
+}
+
+// v50: =========================================================
+//  ① AIタスク分解(WBS)
+//  白紙のプロジェクトで最初の一歩が出ない問題に効かせる。
+//  AIは候補を出すだけ、登録するものはチェックボックスで人間が選ぶ(v42と同型)。
+// =========================================================
+let _aiDecomposeCtx = null;  // { projectId, tasks:[{title, subtasks[]}] } 非永続
+
+async function runAiDecompose(projectId) {
+  if (_aiReviewPending) return showToast("AIを実行中です。少し待ってください");
+  const project = state.projects.find((p) => p.id === projectId && !p.deleted);
+  if (!project) return;
+  const existing = state.tasks
+    .filter((t) => !t.deleted && t.projectId === projectId)
+    .map((t) => t.title);
+  const prompt = [
+    "あなたはプロジェクトのWBS(作業分解)を手伝うアシスタントです。",
+    "次のプロジェクトを、着手しやすいタスクに分解してください。",
+    "",
+    `プロジェクト名: ${project.title}`,
+    project.description ? `説明: ${project.description}` : "",
+    project.dueDate ? `期限: ${project.dueDate}` : "",
+    project.twelveWeekStartDate ? `12週サイクル(12 Week Year)の目標プロジェクトです(開始 ${project.twelveWeekStartDate})` : "",
+    existing.length ? `既存タスク(重複させないこと):\n${existing.map((t) => `- ${t}`).join("\n")}` : "",
+    "",
+    "条件:",
+    "- タスクは3〜8個。各タスクは「最初の一歩に30〜60分で着手できる」粒度にする",
+    "- 必要なら各タスクに最大3個のサブタスクを付けてよい",
+    "- 曖昧な動詞(検討する・考える)を避け、完了が判定できる表現にする",
+    "",
+    "回答は次の形式のJSONだけを ```json コードブロックで返してください。",
+    '{"tasks":[{"title":"...","subtasks":["...","..."]}]}'
+  ].filter(Boolean).join("\n");
+  _aiReviewPending = true;
+  render();
+  try {
+    const json = extractAiJson(await callClaude(prompt));
+    const tasks = (Array.isArray(json.tasks) ? json.tasks : [])
+      .map((t) => ({
+        title: String(t?.title || "").trim(),
+        subtasks: (Array.isArray(t?.subtasks) ? t.subtasks : []).map((s) => String(s).trim()).filter(Boolean).slice(0, 3)
+      }))
+      .filter((t) => t.title)
+      .slice(0, 8);
+    if (!tasks.length) throw new Error("タスク候補を読み取れませんでした");
+    _aiDecomposeCtx = { projectId, tasks };
+    state.modal = { type: "aiDecompose", id: projectId };
+    renderModal(buildAiDecomposeModal(project, tasks));
+  } catch (error) {
+    showToast(`AIタスク分解失敗: ${error.message}`);
+  } finally {
+    _aiReviewPending = false;
+    render();
+  }
+}
+
+function buildAiDecomposeModal(project, tasks) {
+  return `
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">🤖 AIタスク分解 — ${escapeHTML(project.title)}</h3>
+        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        ${tasks.map((t, i) => `
+          <div class="ai-import-sec">
+            <label class="ai-import-row"><input type="checkbox" data-ai-task="${i}" checked><span><b>${escapeHTML(t.title)}</b></span></label>
+            ${t.subtasks.map((s, j) => `<label class="ai-import-row" style="margin-left:24px"><input type="checkbox" data-ai-subtask="${i}:${j}" checked><span>${escapeHTML(s)}</span></label>`).join("")}
+          </div>`).join("")}
+        <div class="muted" style="font-size:11.5px; line-height:1.6; margin-top:6px">チェックした項目だけWBSに登録します(タイトル・期限・粒度は登録後にいつでも編集できます)。</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-action="modal-close">キャンセル</button>
+        <button class="btn primary" data-action="ai-decompose-submit">WBSに登録</button>
+      </div>
+    </div>`;
+}
+
+function submitAiDecompose() {
+  if (!_aiDecomposeCtx) return closeModal();
+  const { projectId, tasks } = _aiDecomposeCtx;
+  const project = state.projects.find((p) => p.id === projectId);
+  let count = 0;
+  tasks.forEach((t, i) => {
+    const parentChecked = modalRoot.querySelector(`input[data-ai-task="${i}"]`)?.checked;
+    const pickedSubs = t.subtasks.filter((s, j) => modalRoot.querySelector(`input[data-ai-subtask="${i}:${j}"]`)?.checked);
+    if (!parentChecked && !pickedSubs.length) return;
+    const parent = makeTask({ projectId, title: t.title, category: project?.category || "" });
+    parent.dueDate = project?.dueDate || "";  // 期限は自動で付けない(全部「今日」になると翌日全て赤くなる)
+    state.tasks.push(parent);
+    count++;
+    pickedSubs.forEach((s) => {
+      const sub = makeTask({ projectId, parentTaskId: parent.id, title: s, category: project?.category || "" });
+      sub.dueDate = "";
+      state.tasks.push(sub);
+      count++;
+    });
+  });
+  _aiDecomposeCtx = null;
+  closeModal();
+  if (!count) return saveAndRender();
+  saveAndRender(`🤖 ${count}件のタスクをWBSに登録しました`);
+}
+
+// v50: =========================================================
+//  ② AIスケジュール下書き(空き時間への仮配置 → D&Dで調整 → 確定)
+//  AIがやるのは「並べる下書き」まで。動かす・削る・確定は人間。
+//  下書きは非永続(確定するまで実データに触れない)。
+// =========================================================
+let _scheduleDraft = null;  // { date, items:[{id,title,taskId,category,start(分),minutes}] } 非永続
+let _draftDrag = null;      // ドラッグ中の一時情報 非永続
+
+function minToHHMM(min) {
+  const m = clamp(Math.round(min), 0, 24 * 60 - 1);
+  return `${pad2(Math.floor(m / 60))}:${pad2(m % 60)}`;
+}
+
+// 配置候補: 昨日のMIT候補 + WBSの未完了タスク(Wish/中断/今日Block化済みを除く、期限順)
+function aiScheduleCandidates(date) {
+  const out = [];
+  const prev = addDays(date, -1);
+  (state.journalMeta[prev]?.aiMitCandidates || []).forEach((t, i) =>
+    out.push({ id: `mit-${i}`, title: t, taskId: "", category: "", note: "MIT候補" }));
+  const wishIds = new Set(state.projects.filter((p) => p.kind === "wish").map((p) => p.id));
+  state.tasks
+    .filter((t) => !t.deleted && (t.status === "todo" || t.status === "doing") && t.projectId && !wishIds.has(t.projectId))
+    .filter((t) => !isTaskSuspended(t))
+    .filter((t) => !state.blocks.some((b) => !b.deleted && b.taskId === t.id && b.date === date))
+    .sort(wbsTaskCompare)
+    .slice(0, 15)
+    .forEach((t) => out.push({ id: t.id, title: t.title, taskId: t.id, category: t.category || "", note: t.dueDate ? `期限 ${t.dueDate}` : "" }));
+  return out;
+}
+
+async function runAiSchedule() {
+  if (_aiReviewPending) return showToast("AIを実行中です。少し待ってください");
+  const date = state.selectedDate;
+  const candidates = aiScheduleCandidates(date);
+  if (!candidates.length) return showToast("配置できる候補がありません(WBSの未完了タスクが対象です)");
+  const existing = blocksForDate(date)
+    .filter((b) => b.plannedStartAt && !isStaleBlock(b))
+    .sort((a, b) => a.plannedStartAt.localeCompare(b.plannedStartAt))
+    .map((b) => `- ${timeFromDateTime(b.plannedStartAt)}〜${b.plannedEndAt ? timeFromDateTime(b.plannedEndAt) : "?"} ${b.title}`);
+  const isToday = date === todayISO();
+  const now = new Date();
+  const prompt = [
+    "あなたはタスクシュート(1日のタイムボックス計画)を手伝うアシスタントです。",
+    `${date}(${weekdayLabel(date)})のスケジュールの空き時間に、候補タスクを仮配置してください。`,
+    "",
+    "確定済みの予定(動かせない):",
+    existing.length ? existing.join("\n") : "- (まだ予定はありません)",
+    "",
+    "候補タスク(id で指定すること):",
+    candidates.map((c) => `- id:${c.id} ${c.title}${c.note ? `(${c.note})` : ""}`).join("\n"),
+    "",
+    "条件:",
+    "- 提案は最大5件。全部を無理に配置しない(詰め込み禁物、休憩の余白を残す)",
+    "- 確定済みの予定と時間を重ねない。時刻は15分刻み、1件は15〜120分",
+    `- 05:00〜23:00 の範囲内${isToday ? `。現在時刻 ${pad2(now.getHours())}:${pad2(now.getMinutes())} より前には置かない` : ""}`,
+    "- 期限が近いもの・MIT候補を優先する",
+    "",
+    "回答は次の形式のJSONだけを ```json コードブロックで返してください。",
+    '{"plan":[{"id":"候補のid","start":"HH:MM","minutes":45}]}'
+  ].join("\n");
+  _aiReviewPending = true;
+  render();
+  try {
+    const json = extractAiJson(await callClaude(prompt));
+    const byId = new Map(candidates.map((c) => [String(c.id), c]));
+    const items = (Array.isArray(json.plan) ? json.plan : [])
+      .map((p) => {
+        const c = byId.get(String(p?.id));
+        const m = String(p?.start || "").match(/^(\d{1,2}):(\d{2})$/);
+        if (!c || !m) return null;
+        const start = Number(m[1]) * 60 + Number(m[2]);
+        if (start < 5 * 60 || start >= 24 * 60) return null;  // タイムラインの表示レンジ(5〜24時)内のみ
+        const minutes = clamp(Math.round(Number(p?.minutes || 30) / 15) * 15 || 30, 15, 240);
+        return { id: crypto.randomUUID(), title: c.title, taskId: c.taskId, category: c.category, start, minutes };
+      })
+      .filter(Boolean)
+      .slice(0, 6);
+    if (!items.length) throw new Error("配置案を読み取れませんでした");
+    _scheduleDraft = { date, items };
+    state.timelineMode = "planned";
+    setView("timeline");
+    showToast("🤖 下書きを配置しました — ドラッグで調整して「確定」してください");
+  } catch (error) {
+    showToast(`AI下書き失敗: ${error.message}`);
+  } finally {
+    _aiReviewPending = false;
+    render();
+  }
+}
+
+// タイムライン上の下書きレイヤ(点線ブロック。ドラッグ移動 / 下端で長さ調整 / ×で削除)
+function renderDraftLayer(rowHeight, startHour) {
+  if (!_scheduleDraft || _scheduleDraft.date !== state.selectedDate) return "";
+  return `
+    <div class="draft-layer" style="position:absolute; top:0; left:60px; right:100px; height:100%; z-index:6; pointer-events:none">
+      ${_scheduleDraft.items.map((it) => {
+        const top = ((it.start - startHour * 60) / 60) * rowHeight;
+        const height = Math.max(26, (it.minutes / 60) * rowHeight);
+        const catColor = it.category ? getCategoryColor(it.category) : null;
+        return `
+        <div class="draft-block" data-draft-id="${it.id}" data-row-height="${rowHeight}"
+             style="top:${top}px; height:${height}px; ${catColor ? `border-color:${catColor};` : ""}">
+          <div class="draft-block-time">${minToHHMM(it.start)}〜${minToHHMM(it.start + it.minutes)}(${it.minutes}分)</div>
+          <div class="draft-block-title">${escapeHTML(it.title)}</div>
+          <button class="draft-remove" data-action="draft-remove" data-id="${it.id}" aria-label="この下書きを外す">×</button>
+          <div class="draft-resize" data-draft-resize="${it.id}"></div>
+        </div>`;
+      }).join("")}
+    </div>`;
+}
+
+function draftBarHTML() {
+  if (!_scheduleDraft || _scheduleDraft.date !== state.selectedDate) return "";
+  return `
+    <div class="draft-bar">
+      <span>🤖 下書き ${_scheduleDraft.items.length}件 — ドラッグで移動 / 下端をドラッグで長さ調整 / ×で外す</span>
+      <span class="row" style="gap:6px">
+        <button class="btn primary" data-action="draft-confirm">確定して登録</button>
+        <button class="btn ghost" data-action="draft-discard">破棄</button>
+      </span>
+    </div>`;
+}
+
+function confirmScheduleDraft() {
+  if (!_scheduleDraft || !_scheduleDraft.items.length) return;
+  const { date, items } = _scheduleDraft;
+  items.forEach((it) => {
+    state.blocks.push(makeBlock({
+      date,
+      title: it.title,
+      taskId: it.taskId || "",
+      category: it.category || "",
+      plannedStartAt: `${date}T${minToHHMM(it.start)}`,
+      plannedEndAt: `${date}T${minToHHMM(it.start + it.minutes)}`,
+      estimateMin: it.minutes
+    }));
+  });
+  _scheduleDraft = null;
+  saveAndRender(`🤖 ${items.length}件のBlockを登録しました`);
+}
+
+// D&D(Pointer Events = iPadタッチ / マウス両対応)。15分スナップ。
+// ドラッグ中は該当要素の style だけ更新し、pointerup で正規化再描画(フォーカス・スクロール保護)。
+document.addEventListener("pointerdown", (event) => {
+  if (!_scheduleDraft) return;
+  const resizeEl = event.target.closest("[data-draft-resize]");
+  const blockEl = event.target.closest(".draft-block");
+  if (!resizeEl && !blockEl) return;
+  if (event.target.closest("[data-action]")) return;  // ×ボタンは click 側で処理
+  const id = resizeEl ? resizeEl.dataset.draftResize : blockEl.dataset.draftId;
+  const item = _scheduleDraft.items.find((x) => x.id === id);
+  const el = resizeEl ? resizeEl.closest(".draft-block") : blockEl;
+  if (!item || !el) return;
+  const rowHeight = Number(el.dataset.rowHeight) || 60;
+  _draftDrag = { id, mode: resizeEl ? "resize" : "move", startY: event.clientY, origStart: item.start, origMinutes: item.minutes, rowHeight, el };
+  el.classList.add("is-dragging");
+  event.preventDefault();
+});
+document.addEventListener("pointermove", (event) => {
+  if (!_draftDrag || !_scheduleDraft) return;
+  const item = _scheduleDraft.items.find((x) => x.id === _draftDrag.id);
+  if (!item) return;
+  const { rowHeight, el } = _draftDrag;
+  const dMin = Math.round(((event.clientY - _draftDrag.startY) / rowHeight) * 60 / 15) * 15;
+  if (_draftDrag.mode === "move") {
+    item.start = clamp(_draftDrag.origStart + dMin, 5 * 60, 24 * 60 - item.minutes);
+    el.style.top = `${((item.start - 5 * 60) / 60) * rowHeight}px`;
+  } else {
+    item.minutes = clamp(_draftDrag.origMinutes + dMin, 15, 24 * 60 - item.start);
+    el.style.height = `${Math.max(26, (item.minutes / 60) * rowHeight)}px`;
+  }
+  const label = el.querySelector(".draft-block-time");
+  if (label) label.textContent = `${minToHHMM(item.start)}〜${minToHHMM(item.start + item.minutes)}(${item.minutes}分)`;
+  event.preventDefault();
+});
+const endDraftDrag = () => {
+  if (!_draftDrag) return;
+  _draftDrag.el.classList.remove("is-dragging");
+  _draftDrag = null;
+  render();  // 位置・ラベルを正規化
+};
+document.addEventListener("pointerup", endDraftDrag);
+document.addEventListener("pointercancel", endDraftDrag);
+
+// v50: =========================================================
+//  ③ 週次 / 12週サイクルレビューのAI壁打ち
+//  所感はメモ欄に追記する(自分の総括を上書きしない)。変更案は1つに絞らせる。
+// =========================================================
+async function runAiWeekly(week) {
+  if (!week) return;
+  if (_aiReviewPending) return showToast("AIを実行中です。少し待ってください");
+  _aiReviewPending = true;
+  render();
+  try {
+    const prompt = [
+      "以下は私の週次レビューです(タスクシュート + 12 Week Year の運用。着手率を完了率より重視)。",
+      "",
+      buildWeeklyMarkdown(week),
+      "",
+      "このデータから、簡潔にフィードバックをください(辛口可、行動に繋がる具体性を重視)。",
+      "回答は必ず次の見出し構成のMarkdownで:",
+      "## 気づき(構造・パターン)",
+      "## 来週の変更案(1つだけ)"
+    ].join("\n");
+    const text = await callClaude(prompt, { maxTokens: 2048 });
+    const prev = state.weeklyReviews[week] || { md: "", changeThemeCreated: false, createdAt: nowDateTime() };
+    const sep = prev.md && prev.md.trim() ? "\n\n---\n" : "";
+    state.weeklyReviews[week] = { ...prev, md: `${prev.md || ""}${sep}#### 🤖 AI壁打ち(${todayISO()})\n\n${text}`, updatedAt: nowDateTime() };
+    saveState();
+    render();
+    showToast("🤖 AIの所感をメモ欄に追記しました");
+  } catch (error) {
+    showToast(`AI壁打ち失敗: ${error.message}`);
+  } finally {
+    _aiReviewPending = false;
+    render();
+  }
+}
+
+async function runAiCycle(cycleStart) {
+  if (!cycleStart) return;
+  if (_aiReviewPending) return showToast("AIを実行中です。少し待ってください");
+  _aiReviewPending = true;
+  render();
+  try {
+    const prompt = [
+      "以下は私の12週サイクル(12 Week Year)の節目レビューです。",
+      "",
+      buildCycleMarkdown(cycleStart),
+      "",
+      "この12週のデータから、簡潔にフィードバックをください(辛口可、行動に繋がる具体性を重視)。",
+      "回答は必ず次の見出し構成のMarkdownで:",
+      "## 気づき(構造・パターン)",
+      "## 次サイクルの変更案(1つだけ)"
+    ].join("\n");
+    const text = await callClaude(prompt, { maxTokens: 2048 });
+    const prev = state.cycleReviews[cycleStart] || { md: "", createdAt: nowDateTime() };
+    const sep = prev.md && prev.md.trim() ? "\n\n---\n" : "";
+    state.cycleReviews[cycleStart] = { ...prev, md: `${prev.md || ""}${sep}#### 🤖 AI壁打ち(${todayISO()})\n\n${text}`, updatedAt: nowDateTime() };
+    saveState();
+    render();
+    showToast("🤖 AIの所感を総括メモに追記しました");
+  } catch (error) {
+    showToast(`AI壁打ち失敗: ${error.message}`);
+  } finally {
+    _aiReviewPending = false;
+    render();
+  }
+}
+
+// v50: =========================================================
+//  ④ 0秒思考のまとめ所感
+//  書く前ではなく「書いた後」の履歴に対してだけ使う(1分書き切りの趣旨を壊さない)。
+//  直近7日分をまとめて送り、構造・見えていない角度・問い候補をもらう。所感自体は保存しない。
+// =========================================================
+let _ztAiComment = null;  // { text, count, since } 非永続
+
+async function runAiZeroComment() {
+  if (_aiReviewPending) return showToast("AIを実行中です。少し待ってください");
+  const since = addDays(todayISO(), -7);
+  const entries = (state.zeroThinking?.entries || [])
+    .filter((e) => (e.date || "") >= since)
+    .sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""))
+    .slice(-20);
+  if (entries.length < 2) return showToast("直近7日の0秒思考が2件以上たまってから使えます");
+  const prompt = [
+    "以下は私が直近7日間に「0秒思考」(1テーマ1分の書き出し)で書いたメモです。",
+    "1件ずつではなく、全体を眺めてまとめて所感をください。",
+    "",
+    ...entries.map((e) => `### ${e.date} ${e.theme || "(テーマなし)"}\n${e.body || ""}`),
+    "",
+    "観点: ①複数メモに共通する構造・思考のクセ ②本人に見えていなさそうな角度 ③このメモ群から立てるべき問い",
+    "回答は必ず次の見出し構成のMarkdown(候補は「- 」の箇条書き):",
+    "## 所感",
+    "## 明日の0秒思考テーマ",
+    "## 問い候補",
+    "該当がないセクションは見出しごと省略してください。"
+  ].join("\n");
+  _aiReviewPending = true;
+  render();
+  try {
+    const text = await callClaude(prompt);
+    _ztAiComment = { text, count: entries.length, since };
+    state.modal = { type: "ztAiComment" };
+    renderModal(buildZtAiCommentModal());
+  } catch (error) {
+    showToast(`AI所感失敗: ${error.message}`);
+  } finally {
+    _aiReviewPending = false;
+    render();
+  }
+}
+
+function buildZtAiCommentModal() {
+  if (!_ztAiComment) return "";
+  return `
+    <div class="modal-card search-modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">🤖 0秒思考への所感(直近7日・${_ztAiComment.count}件)</h3>
+        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body" style="max-height:58vh; overflow-y:auto">
+        <div class="md-render">${renderMarkdown(_ztAiComment.text)}</div>
+        <div class="muted" style="font-size:11.5px; line-height:1.6; margin-top:10px">この所感は保存されません(考える材料としてその場で読む用)。残したい部分はジャーナルへ。テーマ・問いは下のボタンで取り込めます。</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-action="modal-close">閉じる</button>
+        <button class="btn primary" data-action="zt-ai-import">テーマ/問いを取り込む</button>
+      </div>
+    </div>`;
 }
 
 // v49: =========================================================
@@ -2703,6 +3161,7 @@ function renderProjectTree(project) {
         </div>
         <div class="row">
           <button class="btn" data-action="add-task-to-project" data-id="${project.id}">+ タスク</button>
+          ${aiEnabled() && !suspended ? `<button class="btn ghost" data-action="ai-decompose" data-id="${project.id}" title="AIにタスク分解の候補を出させる(登録は自分で選ぶ)" ${_aiReviewPending ? "disabled" : ""}>🤖 分解</button>` : ""}
           ${suspended
             ? `<button class="btn" data-action="resume-project" data-id="${project.id}">再開</button>`
             : `<button class="btn ghost" data-action="suspend-project" data-id="${project.id}">中断</button>`}
@@ -2798,6 +3257,10 @@ function renderTasks() {
     ${renderDateBar()}
     ${aiMitChips()}
     ${carryOverPanel()}
+    ${aiEnabled() ? `<div class="row" style="margin-bottom:10px">
+      <button class="btn" data-action="ai-schedule" ${_aiReviewPending ? "disabled" : ""}>${_aiReviewPending ? "⏳ AI実行中…" : "🤖 空き時間に下書きスケジュール"}</button>
+      <span class="muted" style="font-size:11.5px">AIが空きに仮配置 → タイムラインでドラッグ調整 → 確定</span>
+    </div>` : ""}
     <section class="form-strip">
       <input id="blockTitle" class="input" placeholder="Block名">
       <select id="blockCategory" class="select">
@@ -2943,8 +3406,10 @@ function renderTimelineView() {
     </div>
     <div class="row" style="margin-bottom:10px; gap:8px; flex-wrap:wrap">
       <button class="btn primary" data-action="timeline-new-block" data-minute="${nowMinute}">+ 新規Block</button>
+      ${aiEnabled() && !_scheduleDraft ? `<button class="btn" data-action="ai-schedule" ${_aiReviewPending ? "disabled" : ""}>${_aiReviewPending ? "⏳ AI実行中…" : "🤖 下書きスケジュール"}</button>` : ""}
       <span class="muted" style="font-size:12px">空き時間タップで追加 / ○タップで完了登録 / カードタップで編集 / 赤線は現在時刻</span>
     </div>
+    ${draftBarHTML()}
     ${state.settings.timelineCategoryFilter ? `<div class="row" style="margin-bottom:10px; gap:8px; align-items:center">
       <span class="cat-chip" style="background:${getCategoryColor(state.settings.timelineCategoryFilter)}1f; color:${getCategoryColor(state.settings.timelineCategoryFilter)}; border:1px solid ${getCategoryColor(state.settings.timelineCategoryFilter)}66">カテゴリ: ${escapeHTML(state.settings.timelineCategoryFilter)}</span>
       <button class="btn ghost" data-action="timeline-clear-cat" style="font-size:12px">フィルタ解除 ✕</button>
@@ -3158,6 +3623,7 @@ function renderTimeline({ compact, mode = "planned" }) {
         ${positioned.map((a) => renderTimelineCard(a, mode, maxLanes)).join("")}
       </div>
       ${nowLine}
+      ${!compact && mode === "planned" ? renderDraftLayer(rowHeight, startHour) : ""}
       ${renderEnergyGraph(allBlocks, rowHeight, startHour, endHour)}
     </div>
   `;
@@ -4262,6 +4728,7 @@ function renderWeekly() {
       </button>
       <textarea class="textarea" data-weekly-md="${week}" style="min-height:120px; margin-top:12px" placeholder="この週の気づき・来週変えることをメモ(Markdown)">${escapeHTML(review.md || "")}</textarea>
       <div class="row" style="gap:8px; margin-top:10px; flex-wrap:wrap">
+        ${aiEnabled() ? `<button class="btn" data-action="weekly-ai" data-week="${week}" ${_aiReviewPending ? "disabled" : ""}>${_aiReviewPending ? "⏳ AI実行中…" : "🤖 AIと振り返る"}</button>` : ""}
         <button class="btn" data-action="weekly-download" data-week="${week}">週次mdをダウンロード</button>
         ${(state.settings.github?.token && state.settings.github?.owner) ? `<button class="btn" data-action="weekly-push" data-week="${week}">GitHubへpush</button>` : ""}
       </div>
@@ -4417,6 +4884,7 @@ function renderCycle() {
       </div>
       <textarea class="textarea" data-cycle-md="${cycleStart}" style="min-height:120px" placeholder="この12週の総括・次サイクルで変えること(Markdown)">${escapeHTML(review.md || "")}</textarea>
       <div class="row" style="gap:8px; margin-top:10px; flex-wrap:wrap">
+        ${aiEnabled() ? `<button class="btn" data-action="cycle-ai" data-cycle="${cycleStart}" ${_aiReviewPending ? "disabled" : ""}>${_aiReviewPending ? "⏳ AI実行中…" : "🤖 AIと振り返る"}</button>` : ""}
         <button class="btn" data-action="cycle-download" data-cycle="${cycleStart}">サイクルmdをダウンロード</button>
         ${(state.settings.github?.token && state.settings.github?.owner) ? `<button class="btn" data-action="cycle-push" data-cycle="${cycleStart}">GitHubへpush</button>` : ""}
       </div>
@@ -4805,6 +5273,7 @@ function renderZtThemeTab() {
       <div class="zt-search-row">
         <input class="zt-search-input" id="zt-search" type="search" placeholder="テーマや本文で検索" value="${escapeHTML(ztSearch)}">
       </div>
+      ${aiEnabled() ? `<button class="btn ghost" data-action="zt-ai-comment" style="font-size:12px; margin:2px 0 8px" ${_aiReviewPending ? "disabled" : ""}>${_aiReviewPending ? "⏳ AI実行中…" : "🤖 直近7日のメモにまとめて所感をもらう"}</button>` : ""}
       <div class="zt-history-list" id="zt-history-list">${ztHistoryListHTML()}</div>
     </section>
   `;
