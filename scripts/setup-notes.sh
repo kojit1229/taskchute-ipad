@@ -161,14 +161,18 @@ desktop.ini
 EOF
 
 # ---- 5) commit & push -------------------------------------------------------
+# push は commit と切り離す(コミット済み・未pushの状態で再実行しても push されるように)。
 git add -A
 if git diff --cached --quiet; then
-  echo "ℹ️  変更なし。commit をスキップします。"
+  echo "ℹ️  コミットする変更はありません(既にコミット済み)。"
 else
   git commit -m "initial vault setup"
-  git push
-  echo "🚀 push 完了"
+  echo "✅ コミットしました"
 fi
+# 初回は upstream が無いので -u で設定。HEAD で現在のブランチ(master/main どちらでも)を push。
+# 既に最新なら「Everything up-to-date」で正常終了する(冪等)。
+git push -u origin HEAD
+echo "🚀 push 完了"
 
 # ---- 6) taskchute-ipad 側との整合確認 ---------------------------------------
 echo ""
