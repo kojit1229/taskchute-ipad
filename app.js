@@ -106,6 +106,19 @@ document.addEventListener("click", (event) => {
     state.settings.showSuspended = !state.settings.showSuspended;
     saveAndRender();
   }
+  // v47: WBS の完了非表示トグル(UI状態)と一括開閉
+  if (action === "toggle-wbs-hide-done") {
+    state.settings.wbsHideCompleted = !state.settings.wbsHideCompleted;
+    persistLocalNoSchedule();
+    render();
+  }
+  if (action === "wbs-collapse-all") {
+    const targets = state.projects.filter((p) => !p.deleted && p.kind !== "wish");
+    const collapse = !targets.every((p) => p.collapsed);  // 全閉なら開く、そうでなければ閉じる
+    state.projects = state.projects.map((p) =>
+      (!p.deleted && p.kind !== "wish") ? { ...p, collapsed: collapse } : p);
+    saveAndRender();
+  }
   if (action === "add-block") addBlock();
   if (action === "toggle-block") toggleBlock(id);
   if (action === "now-start") setBlockTime(id, "actualStartAt");
@@ -662,6 +675,8 @@ function normalizeState(value) {
   if (!("routineDayFilter" in value.settings)) value.settings.routineDayFilter = null;
   // v41: 日次オープン処理が最後に走った日付
   value.settings.lastOpenedDate ||= "";
+  // v47: WBS の完了タスク非表示(UI状態、既定は表示)
+  if (typeof value.settings.wbsHideCompleted !== "boolean") value.settings.wbsHideCompleted = false;
   // v23: 繰り返しをルール方式へ(旧データは初回のみ自動移行)
   value.recurrences ||= [];
   migrateRecurrencesIfNeeded(value);
@@ -1110,7 +1125,13 @@ function renderMain() {
   if (view === "avoid") main.innerHTML = renderAvoid();
   if (view === "tasks") main.innerHTML = renderTasks();
   if (view === "routine") main.innerHTML = renderRoutine();
-  if (view === "timeline") main.innerHTML = renderTimelineView();
+  if (view === "timeline") {
+    main.innerHTML = renderTimelineView();
+    // v47: 今日を表示中なら現在時刻ラインへ自動スクロール(探す手間をなくす)
+    if (state.selectedDate === todayISO()) {
+      setTimeout(() => document.querySelector(".now-line")?.scrollIntoView({ block: "center" }), 50);
+    }
+  }
   if (view === "pomodoro") main.innerHTML = renderPomodoro();
   if (view === "journal") main.innerHTML = renderJournal();
   if (view === "zero") main.innerHTML = renderZeroThinking();
@@ -2339,9 +2360,18 @@ function renderWBS() {
   const toggleBtn = (suspCount > 0 || showSusp)
     ? `<button class="btn ${showSusp ? "primary" : "ghost"}" data-action="toggle-show-suspended">${showSusp ? "中断を隠す" : `中断を表示 (${suspCount})`}</button>`
     : "";
+  // v47: 完了タスクの表示トグル + 全プロジェクトの一括開閉
+  const hideDone = Boolean(state.settings.wbsHideCompleted);
+  const allCollapsed = visibleProjects.length > 0 && visibleProjects.every((p) => p.collapsed);
+  const wbsTools = `
+    <div class="row" style="gap:8px; flex-wrap:wrap">
+      <button class="btn ${hideDone ? "primary" : "ghost"}" data-action="toggle-wbs-hide-done">${hideDone ? "完了を表示" : "完了を隠す"}</button>
+      <button class="btn ghost" data-action="wbs-collapse-all">${allCollapsed ? "すべて展開" : "すべて折りたたむ"}</button>
+      ${toggleBtn}
+    </div>`;
 
   return `
-    ${renderHeader("ビジョンを実行へ落とす", "WBS", toggleBtn)}
+    ${renderHeader("ビジョンを実行へ落とす", "WBS", wbsTools)}
     <section class="form-strip">
       <input id="projectTitle" class="input" placeholder="Project名">
       <button class="btn primary" data-action="add-project">Project追加</button>
@@ -2370,7 +2400,13 @@ function renderProjectTree(project) {
   // v35: 中断
   const showSusp = Boolean(state.settings.showSuspended);
   const suspended = isProjectSuspended(project);
-  const visibleTasks = allTasksOfProject.filter((t) => showSusp || !isTaskSuspended(t));
+  let visibleTasks = allTasksOfProject.filter((t) => showSusp || !isTaskSuspended(t));
+  // v47: 完了を隠す(未完了の子孫を持つ完了タスクは、子を迷子にしないため残す)
+  if (state.settings.wbsHideCompleted) {
+    const hasOpenDescendant = (task) => allTasksOfProject.some((t) =>
+      t.parentTaskId === task.id && (t.status !== "completed" || hasOpenDescendant(t)));
+    visibleTasks = visibleTasks.filter((t) => t.status !== "completed" || hasOpenDescendant(t));
+  }
   const rootTasks = visibleTasks.filter((t) => !t.parentTaskId);
   return `
     <div class="item${suspended ? " is-suspended" : ""}">
@@ -2431,31 +2467,37 @@ function renderTaskTree(task, allTasksOfProject, depth) {
 }
 
 function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false) {
-  const dueLabel = task.dueDate ? ` / 期限 ${task.dueDate}` : "";
   const canAddSub = depth < 2;  // 最大 3 階層(0,1,2)、depth=2 の子はもう作らない
   // v33: 子を持つタスクには折りたたみキャレット、無ければ位置合わせのスペーサー
   const caret = hasChildren
     ? `<button class="wbs-caret" data-action="toggle-task-collapse" data-id="${task.id}" aria-label="${collapsed ? "展開" : "折りたたむ"}">${collapsed ? "▸" : "▾"}</button>`
     : `<span class="wbs-caret-spacer"></span>`;
   const suspended = isTaskSuspended(task);  // v35
+  // v47: 期限切れは赤く、今日 Block 化済みならチップで示す(押した結果が見える)
+  const overdue = task.dueDate && task.dueDate < todayISO() && task.status !== "completed";
+  const dueHTML = task.dueDate
+    ? `<span class="${overdue ? "wbs-overdue" : "muted"}" style="font-size:11px">期限 ${task.dueDate.slice(5).replace("-", "/")}${overdue ? "!" : ""}</span>`
+    : "";
+  const scheduledToday = state.blocks.some((b) => !b.deleted && b.taskId === task.id && b.date === todayISO());
   return `
     <div class="row${suspended ? " is-suspended" : ""}" style="border-top:1px solid var(--line-soft); padding-top:8px">
       <div class="title-line">
         ${depth > 0 ? `<span class="muted" style="font-size:11px">${"└".padStart(depth, "　")}</span>` : ""}
         ${caret}
         <button class="checkbox-button ${task.status === "completed" ? "done" : ""}" data-action="toggle-task" data-id="${task.id}">✓</button>
-        <span>${escapeHTML(task.title)}</span>
+        <span data-action="edit-task" data-id="${task.id}" style="cursor:pointer">${escapeHTML(task.title)}</span>
         <span class="badge ${suspended ? "gray" : ""}">${taskStatusLabel(task.status)}</span>
+        ${scheduledToday ? `<span class="badge green">今日✓</span>` : ""}
         ${task.category ? `<span class="cat-chip" style="background:${getCategoryColor(task.category)}1f; color:${getCategoryColor(task.category)}; border:1px solid ${getCategoryColor(task.category)}66">${escapeHTML(task.category)}</span>` : ""}
-        <span class="muted" style="font-size:11px">${dueLabel}</span>
+        ${dueHTML}
       </div>
-      <div class="row">
-        <button class="btn" data-action="task-today" data-id="${task.id}">今日へ</button>
-        ${canAddSub ? `<button class="btn" data-action="add-subtask" data-parent-task="${task.id}">+ サブ</button>` : ""}
+      <div class="row wbs-actions">
+        <button class="btn" data-action="task-today" data-id="${task.id}">${scheduledToday ? "＋もう一度" : "今日へ"}</button>
+        ${canAddSub ? `<button class="btn ghost" data-action="add-subtask" data-parent-task="${task.id}">+ サブ</button>` : ""}
         ${suspended
           ? `<button class="btn" data-action="resume-task" data-id="${task.id}">再開</button>`
           : `<button class="btn ghost" data-action="suspend-task" data-id="${task.id}">中断</button>`}
-        <button class="btn" data-action="edit-task" data-id="${task.id}">編集</button>
+        <button class="btn ghost" data-action="edit-task" data-id="${task.id}">編集</button>
       </div>
     </div>
   `;
@@ -2470,11 +2512,8 @@ function renderTasks() {
     <section class="form-strip">
       <input id="blockTitle" class="input" placeholder="Block名">
       <select id="blockCategory" class="select">
-        <option value="仕事">仕事</option>
-        <option value="開発">開発</option>
-        <option value="生活">生活</option>
-        <option value="回復">回復</option>
-        <option value="内省">内省</option>
+        ${getCategoryNames().map((n) => `<option value="${escapeHTML(n)}">${escapeHTML(n)}</option>`).join("")}
+        <option value="">(カテゴリなし)</option>
       </select>
       <button class="btn primary" data-action="add-block">Block追加</button>
     </section>
@@ -2556,14 +2595,25 @@ function renderBlockItem(block) {
     ? `border-left:4px solid var(--gold, #FFD60A); background:linear-gradient(90deg, rgba(255,214,10,0.06), transparent 30%)`
     : (catColor ? `border-left:3px solid ${catColor}` : "");
   const justStarted = block.id === state._justStartedBlockId ? " just-started" : "";  // v40: 着手ジュース
+  // v47: 開始/終了は状態に応じて片方だけ(常時両方はボタン過多で迷う)
+  const started = Boolean(block.actualStartAt);
+  const doing = started && !block.completed && !block.actualEndAt;
+  const startEndBtn = block.completed
+    ? ""
+    : (!started
+      ? `<button class="btn" data-action="now-start" data-id="${block.id}">▶ 開始</button>`
+      : (doing
+        ? `<button class="btn green" data-action="now-end" data-id="${block.id}">■ 終了</button>`
+        : ""));
   return `
-    <div class="item block-row ${isMIT ? "is-mit" : ""}${justStarted}" ${leftBorder ? `style="${leftBorder}"` : ""}>
+    <div class="item block-row ${isMIT ? "is-mit" : ""}${doing ? " is-doing" : ""}${justStarted}" ${leftBorder ? `style="${leftBorder}"` : ""}>
       <button class="checkbox-button ${block.completed ? "done" : ""}" data-action="toggle-block" data-id="${block.id}">✓</button>
       <div class="stack">
         <div class="title-line">
           ${isMIT ? `<span class="mit-star" title="今日の主役" style="color:#F5A623; font-weight:700">★</span>` : ""}
-          <strong>${escapeHTML(block.title)}</strong>
+          <strong data-action="edit-block" data-id="${block.id}" style="cursor:pointer">${escapeHTML(block.title)}</strong>
           <span class="badge ${block.completed ? "green" : "blue"}">${start}${end ? `-${end}` : ""}</span>
+          ${doing ? `<span class="badge orange">着手中 ${timeFromDateTime(block.actualStartAt)}〜</span>` : ""}
           ${task ? `<span class="badge">${escapeHTML(projectName(task.projectId))}</span>` : `<span class="badge orange">単発</span>`}
           ${block.category ? `<span class="cat-chip" style="background:${catColor}1f; color:${catColor}; border:1px solid ${catColor}66">${escapeHTML(block.category)}</span>` : ""}
         </div>
@@ -2580,11 +2630,10 @@ function renderBlockItem(block) {
           </label>
         </div>
       </div>
-      <div class="row">
+      <div class="row block-actions">
         <button class="btn ${isMIT ? "" : "ghost"}" data-action="toggle-mit" data-id="${block.id}" title="${isMIT ? "今日の主役から外す" : "今日の主役にする(最大3個)"}" style="${isMIT ? "color:#F5A623; font-weight:700" : ""}">${isMIT ? "★" : "☆"}</button>
-        <button class="btn" data-action="now-start" data-id="${block.id}">開始</button>
-        <button class="btn" data-action="now-end" data-id="${block.id}">終了</button>
-        <button class="btn orange" data-action="start-pomodoro" data-block-id="${block.id}">25分</button>
+        ${startEndBtn}
+        ${block.completed ? "" : `<button class="btn orange" data-action="start-pomodoro" data-block-id="${block.id}">25分</button>`}
         <button class="btn" data-action="edit-block" data-id="${block.id}">編集</button>
       </div>
     </div>
@@ -4593,11 +4642,14 @@ function stopZtTimer() {
 }
 
 function renderDateBar() {
+  // v47: 別日を見ている時だけ「今日へ」を出す(戻り道を1タップに)
+  const isToday = state.selectedDate === todayISO();
   return `
     <div class="datebar">
       <button class="btn" data-action="date-prev">前日</button>
       <input class="input" type="date" data-date-picker value="${state.selectedDate}">
       <button class="btn" data-action="date-next">翌日</button>
+      ${isToday ? "" : `<button class="btn primary" data-action="today">今日へ</button>`}
     </div>
   `;
 }
@@ -4658,17 +4710,12 @@ function makeTask({ projectId = "", parentTaskId = "", title = "", category = ""
 }
 
 // Project 配下に Task を直接追加(prompt でタイトル入力)
+// v47: prompt をやめ、最初から編集モーダルで新規作成(1画面で名前も詳細も入る)
 function addTaskToProject(projectId) {
-  const title = window.prompt("タスク名を入力してください");
-  if (!title || !title.trim()) return;
-  const task = makeTask({ projectId, title: title.trim() });
-  state.tasks.push(task);
-  saveAndRender("Taskを追加しました");
-  // 即座に編集モーダルを開いて詳細を編集できるように
-  setTimeout(() => openTaskEditor(task.id), 50);
+  openTaskCreator({ projectId });
 }
 
-// Task のサブタスクを追加(prompt でタイトル入力、親と同じ projectId を継承)
+// Task のサブタスクを追加(親と同じ projectId / カテゴリを継承)
 function addSubtask(parentTaskId) {
   const parent = state.tasks.find((t) => t.id === parentTaskId);
   if (!parent) return;
@@ -4678,17 +4725,17 @@ function addSubtask(parentTaskId) {
     showToast("これ以上の階層は作れません(最大 3 階層)");
     return;
   }
-  const title = window.prompt(`「${parent.title}」のサブタスク名を入力`);
-  if (!title || !title.trim()) return;
-  const task = makeTask({
-    projectId: parent.projectId,
-    parentTaskId,
-    title: title.trim(),
-    category: parent.category || ""
-  });
-  state.tasks.push(task);
-  saveAndRender("サブタスクを追加しました");
-  setTimeout(() => openTaskEditor(task.id), 50);
+  openTaskCreator({ projectId: parent.projectId, parentTaskId, category: parent.category || "" });
+}
+
+// v47: 新規タスク作成モーダル(既存のタスクモーダルを新規モードで流用)
+function openTaskCreator({ projectId = "", parentTaskId = "", category = "" } = {}) {
+  const stub = makeTask({ projectId, parentTaskId, category });
+  stub.id = "";           // id 空 = 新規(保存時に採番)
+  stub.title = "";
+  state.modal = { type: "task", id: "" };
+  renderModal(buildTaskModal(stub));
+  setTimeout(() => modalRoot.querySelector('[data-modal-field="title"]')?.focus(), 60);
 }
 
 function getTaskDepth(task) {
@@ -6650,7 +6697,7 @@ function buildTaskModal(task) {
   return `
     <div class="modal-card" role="dialog" aria-modal="true">
       <div class="modal-header">
-        <h3 class="modal-title">Task を編集</h3>
+        <h3 class="modal-title">${task.id ? "Task を編集" : "Task を追加"}</h3>
         <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
       </div>
       <div class="modal-body">
@@ -6692,9 +6739,9 @@ function buildTaskModal(task) {
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn danger" data-action="modal-delete">削除</button>
+        ${task.id ? `<button class="btn danger" data-action="modal-delete">削除</button>` : ""}
         <button class="btn" data-action="modal-close">キャンセル</button>
-        <button class="btn primary" data-action="modal-save">保存</button>
+        <button class="btn primary" data-action="modal-save">${task.id ? "保存" : "追加"}</button>
       </div>
     </div>
   `;
@@ -6713,6 +6760,24 @@ function isDescendantOf(candidate, ancestorId) {
 }
 
 function saveTaskFromModal(id, fields) {
+  // v47: id 空 = 新規作成モード(WBS の「+ タスク」「+ サブ」から)
+  if (!id) {
+    const title = (fields.title || "").trim();
+    if (!title) return showToast("タスク名を入力してください");
+    const task = makeTask({
+      projectId: fields.projectId || "",
+      parentTaskId: fields.parentTaskId || "",
+      title,
+      category: fields.category || "",
+      dueDate: fields.dueDate || ""
+    });
+    task.status = fields.status || "todo";
+    task.description = fields.description || "";
+    state.tasks.push(task);
+    closeModal();
+    saveAndRender("Taskを追加しました");
+    return;
+  }
   state.tasks = state.tasks.map((t) => {
     if (t.id !== id) return t;
     return {
