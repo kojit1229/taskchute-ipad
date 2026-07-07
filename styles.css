@@ -2397,3 +2397,56 @@ h3 {
 .search-hit.is-archive { opacity: .78; cursor: default; }
 .search-hit.is-archive:hover { border-color: var(--line); }
 .search-kind-arch { background: rgba(120,120,128,.16); color: var(--muted); }
+
+/* v54: 計器盤の追加チャート */
+.stats-wide { grid-column: 1 / -1; }
+
+/* ドーナツ + 凡例 */
+.stats-donut-wrap { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.stats-donut { width: 132px; height: 132px; flex: none; }
+.stats-donut circle { transition: none; }
+.stats-donut-c1 { font-size: 6px; font-weight: 800; text-anchor: middle; fill: var(--text); }
+.stats-donut-c2 { font-size: 3.2px; text-anchor: middle; fill: var(--muted); }
+.stats-legend { display: flex; flex-direction: column; gap: 5px; min-width: 160px; flex: 1; }
+.stats-legend-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+.stats-swatch { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+.stats-legend-name { font-weight: 600; }
+.stats-legend-val { margin-left: auto; color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+.stats-legend-inline-row { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 8px; }
+.stats-legend-inline { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
+
+/* カテゴリ別 双極(横)バー */
+.stats-div-row { display: grid; grid-template-columns: 84px 1fr 44px; align-items: center; gap: 8px; padding: 3px 0; }
+.stats-div-label { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stats-div-track { position: relative; display: flex; align-items: center; height: 16px; }
+.stats-div-neg, .stats-div-pos { flex: 1; display: flex; align-items: center; height: 10px; }
+.stats-div-neg { justify-content: flex-end; }
+.stats-div-neg > span { height: 100%; background: var(--red); border-radius: 3px 0 0 3px; }
+.stats-div-pos > span { height: 100%; background: var(--green); border-radius: 0 3px 3px 0; }
+.stats-div-axis { width: 1px; height: 16px; background: var(--line); flex: none; }
+.stats-div-val { font-size: 11.5px; font-weight: 700; text-align: right; color: var(--muted); }
+.stats-div-val.pos { color: var(--green); }
+.stats-div-val.neg { color: var(--red); }
+
+/* 複数折れ線 */
+.stats-line-svg { width: 100%; height: 120px; }
+
+/* コントリビューション・カレンダー */
+.stats-cal-scroll { overflow-x: auto; padding-bottom: 4px; }
+.stats-cal { display: flex; flex-direction: column; gap: 3px; width: max-content; }
+.stats-cal-row { display: flex; gap: 3px; }
+.stats-cal-cell { width: 12px; height: 12px; border-radius: 3px; background: var(--panel-soft); flex: none; }
+.stats-cal-cell.out { background: transparent; }
+.stats-cal-cell.lv0 { background: var(--panel-soft); }
+.stats-cal-cell.lv1 { background: rgba(0,122,255,.30); }
+.stats-cal-cell.lv2 { background: rgba(0,122,255,.55); }
+.stats-cal-cell.lv3 { background: rgba(0,122,255,.85); }
+.stats-cal-legend { display: flex; align-items: center; gap: 4px; font-size: 11px; margin-top: 8px; }
+.stats-cal-legend .stats-cal-cell { width: 11px; height: 11px; }
+
+/* 時間帯ヒストグラム */
+.stats-hist { display: flex; align-items: flex-end; gap: 3px; height: 96px; }
+.stats-hist-cell { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 6px; height: 100%; }
+.stats-hist-bar { flex: 1; width: 100%; display: flex; align-items: flex-end; background: var(--panel-soft); border-radius: 3px; overflow: hidden; }
+.stats-hist-fill { width: 100%; background: var(--accent); opacity: .7; border-radius: 3px 3px 0 0; }
+.stats-hist-lab { font-size: 9px; color: var(--muted); height: 12px; line-height: 12px; }
