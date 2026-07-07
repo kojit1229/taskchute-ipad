@@ -333,10 +333,20 @@ document.addEventListener("click", (event) => {
   // v50: ② AIスケジュール下書き(仮配置 → D&D調整 → 確定)
   if (action === "ai-schedule") runAiSchedule();
   if (action === "draft-confirm") confirmScheduleDraft();
-  if (action === "draft-discard") { _scheduleDraft = null; render(); showToast("下書きを破棄しました"); }
+  if (action === "draft-discard" && _scheduleDraft) {
+    // v52: 破棄も「この提案は不要だった」という学習シグナルとして記録
+    _scheduleDraft.items.forEach((it) => recordScheduleHistory(it, "discarded", _scheduleDraft.date));
+    _scheduleDraft = null;
+    saveState();
+    render();
+    showToast("下書きを破棄しました");
+  }
   if (action === "draft-remove" && _scheduleDraft) {
+    const removed = _scheduleDraft.items.find((x) => x.id === id);
+    if (removed) recordScheduleHistory(removed, "removed", _scheduleDraft.date);  // v52: 却下シグナル
     _scheduleDraft.items = _scheduleDraft.items.filter((x) => x.id !== id);
     if (!_scheduleDraft.items.length) _scheduleDraft = null;
+    saveState();
     render();
   }
   // v50: ③ 週次 / 12週サイクルのAI壁打ち
@@ -647,6 +657,9 @@ function normalizeState(value) {
   }
   // v51: 朝イチ自動レビュー(既定OFF。ONなら日付が変わって最初に開いた時、昨日の日報レビューを自動実行)
   if (typeof value.settings.ai.autoMorningReview !== "boolean") value.settings.ai.autoMorningReview = false;
+  // v52: AIスケジュール学習ログ。AIの仮配置に対するユーザの採否・修正を記録し、
+  //      次回のAIスケジューリング時に傾向として注入する(端末間で同期される)。
+  if (!Array.isArray(value.aiScheduleHistory)) value.aiScheduleHistory = [];
   // v43: 自動同期(既定OFF・保守的)。lastPushedAt = 最後に push した時の dataModifiedAt。
   if (typeof value.settings.autoSync !== "boolean") value.settings.autoSync = false;
   if (!("lastPushedAt" in value.settings)) value.settings.lastPushedAt = null;
@@ -2286,6 +2299,8 @@ async function runAiSchedule() {
     .map((b) => `- ${timeFromDateTime(b.plannedStartAt)}〜${b.plannedEndAt ? timeFromDateTime(b.plannedEndAt) : "?"} ${b.title}`);
   const isToday = date === todayISO();
   const now = new Date();
+  // v52: 過去の採否・実績・エネルギー傾向を注入(あれば)
+  const digest = buildScheduleLearningDigest(date);
   // v51: 指示部はテンプレ(設定で編集可)。データと動的制約・出力契約はコード側で常に付与。
   const prompt = [
     aiCommonPreamble() + aiPrompt("schedule"),
@@ -2297,6 +2312,7 @@ async function runAiSchedule() {
     "",
     "候補タスク(id で指定すること):",
     candidates.map((c) => `- id:${c.id} ${c.title}${c.note ? `(${c.note})` : ""}`).join("\n"),
+    digest ? `\n過去の実績から自動集計した傾向(過去のAI提案がどう修正・却下されたか、時間帯ごとの着手実態。これを踏まえて配置を最適化すること):\n${digest}` : "",
     "",
     `制約: 時刻は 05:00〜23:00 の範囲内${isToday ? `。現在時刻 ${pad2(now.getHours())}:${pad2(now.getMinutes())} より前には置かない` : ""}`,
     "",
@@ -2316,7 +2332,8 @@ async function runAiSchedule() {
         const start = Number(m[1]) * 60 + Number(m[2]);
         if (start < 5 * 60 || start >= 24 * 60) return null;  // タイムラインの表示レンジ(5〜24時)内のみ
         const minutes = clamp(Math.round(Number(p?.minutes || 30) / 15) * 15 || 30, 15, 240);
-        return { id: crypto.randomUUID(), title: c.title, taskId: c.taskId, category: c.category, start, minutes };
+        // v52: aiStart/aiMinutes = AIの元提案(D&Dで動かしても保持)。確定時に学習ログへ残す。
+        return { id: crypto.randomUUID(), title: c.title, taskId: c.taskId, category: c.category, start, minutes, aiStart: start, aiMinutes: minutes };
       })
       .filter(Boolean)
       .slice(0, 6);
@@ -2366,11 +2383,123 @@ function draftBarHTML() {
     </div>`;
 }
 
+// v52: =========================================================
+//  AIスケジュールの学習ループ
+//  AIの元提案(aiStart/aiMinutes)・ユーザ確定・却下を aiScheduleHistory に記録し、
+//  実績(actualStartAt 等)は Block 側の aiPlan から突き合わせる。
+//  次回の runAiSchedule / runAiTodaySuggest でこれらを集計した「傾向」を注入する。
+//  ※ モデルの再学習ではなく、実データの要約をプロンプトに載せる方式(in-context)。
+// =========================================================
+const AI_SCHED_HISTORY_MAX = 300;
+const SCHED_BANDS = [
+  [5, 9, "早朝(5-9時)"],
+  [9, 12, "午前(9-12時)"],
+  [12, 15, "昼(12-15時)"],
+  [15, 18, "午後(15-18時)"],
+  [18, 23, "夜(18-23時)"]
+];
+
+function hhmmToMin(hhmm) {
+  const m = String(hhmm || "").match(/(\d{1,2}):(\d{2})/);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+
+// 採用/却下を1件記録(採用時は確定値も)
+function recordScheduleHistory(item, outcome, date) {
+  state.aiScheduleHistory.push({
+    date,
+    title: item.title,
+    category: item.category || "",
+    aiStart: minToHHMM(item.aiStart ?? item.start),
+    aiMin: item.aiMinutes ?? item.minutes,
+    outcome,  // 'confirmed' | 'removed' | 'discarded'
+    userStart: outcome === "confirmed" ? minToHHMM(item.start) : null,
+    userMin: outcome === "confirmed" ? item.minutes : null,
+    at: nowDateTime()
+  });
+  if (state.aiScheduleHistory.length > AI_SCHED_HISTORY_MAX) {
+    state.aiScheduleHistory = state.aiScheduleHistory.slice(-AI_SCHED_HISTORY_MAX);
+  }
+}
+
+// 過去データを集計した「傾向」テキスト(スケジュール系プロンプトに注入)。
+// 直近8週。n が少ない行は出さない(ノイズを学習させない)。
+function buildScheduleLearningDigest(targetDate) {
+  const lines = [];
+  const today = todayISO();
+  const since = addDays(today, -56);
+
+  // 1) AI提案に対するユーザの採否・修正傾向(aiScheduleHistory)
+  const hist = (state.aiScheduleHistory || []).filter((h) => h.date >= since);
+  if (hist.length >= 3) {
+    const conf = hist.filter((h) => h.outcome === "confirmed");
+    lines.push(`- AI下書きの過去実績: ${hist.length}件提案 → 採用${conf.length} / 却下${hist.length - conf.length}`);
+    SCHED_BANDS.forEach(([s, e, label]) => {
+      const inBand = hist.filter((h) => { const m = hhmmToMin(h.aiStart); return m !== null && m >= s * 60 && m < e * 60; });
+      if (inBand.length < 3) return;
+      const bandConf = inBand.filter((h) => h.outcome === "confirmed" && h.userStart);
+      const rejRate = Math.round(((inBand.length - bandConf.length) / inBand.length) * 100);
+      let detail = "";
+      if (bandConf.length) {
+        const avgShift = Math.round(bandConf.reduce((sum, h) => sum + (hhmmToMin(h.userStart) - hhmmToMin(h.aiStart)), 0) / bandConf.length);
+        const avgDur = Math.round(bandConf.reduce((sum, h) => sum + (h.userMin / Math.max(1, h.aiMin)), 0) / bandConf.length * 100);
+        detail = `、採用時はユーザが平均 ${avgShift >= 0 ? "+" : ""}${avgShift}分 移動・所要時間を平均${avgDur}%に調整`;
+      }
+      lines.push(`  - ${label}への提案: ${inBand.length}件、却下率${rejRate}%${detail}`);
+    });
+  }
+
+  // 2) 計画 vs 実績(全Block・時間帯別の着手率と開始ズレ)
+  const past = state.blocks.filter((b) => !b.deleted && b.date >= since && b.date < today && b.plannedStartAt);
+  if (past.length >= 5) {
+    SCHED_BANDS.forEach(([s, e, label]) => {
+      const inBand = past.filter((b) => { const m = minutesOf(b.plannedStartAt); return m >= s * 60 && m < e * 60; });
+      if (inBand.length < 5) return;
+      const started = inBand.filter((b) => b.actualStartAt);
+      const rate = Math.round((started.length / inBand.length) * 100);
+      let delayTxt = "";
+      if (started.length >= 3) {
+        const avgDelay = Math.round(started.reduce((sum, b) => sum + (minutesOf(b.actualStartAt) - minutesOf(b.plannedStartAt)), 0) / started.length);
+        delayTxt = `、実際の開始は予定より平均 ${avgDelay >= 0 ? "+" : ""}${avgDelay}分`;
+      }
+      lines.push(`- ${label}の計画Block: 着手率${rate}%(${started.length}/${inBand.length})${delayTxt}`);
+    });
+    // AI下書き経由のBlockの着手率(提案どおり動けているか)
+    const aiBlocks = past.filter((b) => b.aiPlan);
+    if (aiBlocks.length >= 3) {
+      const started = aiBlocks.filter((b) => b.actualStartAt).length;
+      lines.push(`- AI下書き経由のBlock: ${aiBlocks.length}件、着手率${Math.round((started / aiBlocks.length) * 100)}%`);
+    }
+  }
+
+  // 3) 対象日の曜日の傾向(直近8週の同曜日)
+  const wd = parseDate(targetDate).getDay();
+  const sameWd = past.filter((b) => parseDate(b.date).getDay() === wd);
+  if (sameWd.length >= 5) {
+    const started = sameWd.filter((b) => b.actualStartAt).length;
+    lines.push(`- ${weekdayLabel(targetDate)}曜の過去8週: 計画${sameWd.length}件、着手率${Math.round((started / sameWd.length) * 100)}%`);
+  }
+
+  // 4) 時間帯別のエネルギー収支(完了Blockの充電-放電)
+  const done = state.blocks.filter((b) => !b.deleted && b.completed && b.date >= since && (b.actualStartAt || b.plannedStartAt));
+  const bandNet = SCHED_BANDS.map(([s, e, label]) => {
+    const inBand = done.filter((b) => { const m = minutesOf(b.actualStartAt || b.plannedStartAt); return m >= s * 60 && m < e * 60; });
+    if (inBand.length < 5) return null;
+    const net = inBand.reduce((sum, b) => sum + Number(b.charge || 0) - Number(b.discharge || 0), 0) / inBand.length;
+    return { label, net: Math.round(net * 10) / 10 };
+  }).filter(Boolean);
+  if (bandNet.length >= 2) {
+    lines.push(`- 時間帯別の平均エネルギー収支: ${bandNet.map((x) => `${x.label} ${x.net >= 0 ? "+" : ""}${x.net}`).join(" / ")}`);
+  }
+
+  return lines.join("\n");
+}
+
 function confirmScheduleDraft() {
   if (!_scheduleDraft || !_scheduleDraft.items.length) return;
   const { date, items } = _scheduleDraft;
   items.forEach((it) => {
-    state.blocks.push(makeBlock({
+    const block = makeBlock({
       date,
       title: it.title,
       taskId: it.taskId || "",
@@ -2378,7 +2507,11 @@ function confirmScheduleDraft() {
       plannedStartAt: `${date}T${minToHHMM(it.start)}`,
       plannedEndAt: `${date}T${minToHHMM(it.start + it.minutes)}`,
       estimateMin: it.minutes
-    }));
+    });
+    // v52: AIの元提案を Block に残す(確定・実績との突き合わせ = 学習の元データ)
+    block.aiPlan = { start: minToHHMM(it.aiStart ?? it.start), minutes: it.aiMinutes ?? it.minutes };
+    state.blocks.push(block);
+    recordScheduleHistory(it, "confirmed", date);
   });
   _scheduleDraft = null;
   saveAndRender(`🤖 ${items.length}件のBlockを登録しました`);
@@ -2582,6 +2715,7 @@ async function runAiTodaySuggest() {
     "",
     "WBSの未完了タスク(該当があれば taskId で参照すること):",
     wbsCands.length ? wbsCands.map((c) => `- taskId:${c.id} ${c.title}${c.note ? `(${c.note})` : ""}`).join("\n") : "- (なし)",
+    (() => { const d = buildScheduleLearningDigest(today); return d ? `\n過去の実績から自動集計した傾向(提案量・内容の目安にすること):\n${d}` : ""; })(),  // v52
     "",
     "----- 昨日の日報 -----",
     report || "(昨日の日報はありません)",
