@@ -167,6 +167,16 @@ document.addEventListener("click", (event) => {
     persistLocalNoSchedule();
     render();
   }
+  // v55: WBS インライン編集モードの切替(UI状態)
+  if (action === "toggle-wbs-edit") {
+    state.settings.wbsEditMode = !state.settings.wbsEditMode;
+    persistLocalNoSchedule();
+    render();
+  }
+  // v55: AI一括編集(自然文→変更案→確認→反映)
+  if (action === "ai-bulk-edit") openAiBulkEditModal();
+  if (action === "ai-bulk-edit-run") runAiBulkEdit();
+  if (action === "ai-bulk-edit-submit") submitAiBulkEdit();
   if (action === "wbs-collapse-all") {
     const targets = state.projects.filter((p) => !p.deleted && p.kind !== "wish");
     const collapse = !targets.every((p) => p.collapsed);  // 全閉なら開く、そうでなければ閉じる
@@ -494,6 +504,11 @@ document.addEventListener("input", (event) => {
 document.addEventListener("change", (event) => {
   const target = event.target;
   if (target.matches("[data-date-picker]")) setSelectedDate(target.value);
+  // v55: WBS インライン編集(期限/状態/カテゴリを行内で直接編集)
+  if (target.matches("[data-wbs-edit]")) {
+    updateTaskField(target.dataset.id, target.dataset.wbsEdit, target.value);
+    render();  // 状態変更での並び替え・完了非表示などを即反映(change なので入力を妨げない)
+  }
   if (target.matches("[data-block-field]")) {
     updateBlockField(target.dataset.id, target.dataset.blockField, target.value);
     render();  // v33: 充電/放電などの変更を画面に即反映
@@ -861,6 +876,8 @@ function normalizeState(value) {
   value.settings.lastOpenedDate ||= "";
   // v47: WBS の完了タスク非表示(UI状態、既定は表示)
   if (typeof value.settings.wbsHideCompleted !== "boolean") value.settings.wbsHideCompleted = false;
+  // v55: WBS のインライン編集モード(UI状態、既定OFF)
+  if (typeof value.settings.wbsEditMode !== "boolean") value.settings.wbsEditMode = false;
   // v23: 繰り返しをルール方式へ(旧データは初回のみ自動移行)
   value.recurrences ||= [];
   migrateRecurrencesIfNeeded(value);
@@ -2281,6 +2298,146 @@ function submitAiDecompose() {
   saveAndRender(`🤖 ${count}件のタスクをWBSに登録しました`);
 }
 
+// v55: =========================================================
+//  AI一括編集(WBS)
+//  「〇〇の期限を全部金曜に」等を自然文で指示 → AIが変更案(taskId×field×value)
+//  を返す → チェックで確認 → updateTaskField で反映(採用判断は人間)。
+// =========================================================
+const AI_BULK_FIELDS = { dueDate: "期限", status: "状態", title: "タイトル", category: "カテゴリ" };
+const TASK_STATUSES = ["todo", "doing", "completed", "suspended", "cancelled"];
+let _aiBulkEditCtx = null;  // { changes:[{taskId,title,field,label,current,value}] } 非永続
+
+// WBSスコープのタスク(Wishプロジェクト・削除・単発otherを除く)
+function wbsEditableTasks() {
+  const wishIds = new Set(state.projects.filter((p) => p.kind === "wish").map((p) => p.id));
+  return state.tasks.filter((t) => !t.deleted && t.projectId && !wishIds.has(t.projectId) && t.kind !== "other");
+}
+
+function openAiBulkEditModal() {
+  if (_aiReviewPending) return showToast("AIを実行中です。少し待ってください");
+  if (!wbsEditableTasks().length) return showToast("編集対象のタスクがありません");
+  state.modal = { type: "aiBulkEditPrompt" };
+  renderModal(`
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">🤖 まとめて編集</h3>
+        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="muted" style="font-size:12px; line-height:1.6; margin-bottom:8px">
+          変更したい内容を自然文で書いてください。AIが変更案を出すので、チェックで選んでから反映します。<br>
+          例:「英語学習プロジェクトの未完了タスクの期限を全部今週金曜に」「〇〇と△△を中断に」「期限切れのタスクを1週間後ろに」
+        </div>
+        <textarea class="textarea" id="ai-bulk-instruction" style="min-height:90px" placeholder="変更内容を書く"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-action="modal-close">キャンセル</button>
+        <button class="btn primary" data-action="ai-bulk-edit-run">🤖 変更案を出す</button>
+      </div>
+    </div>`);
+  setTimeout(() => document.querySelector("#ai-bulk-instruction")?.focus(), 60);
+}
+
+async function runAiBulkEdit() {
+  if (_aiReviewPending) return;
+  const instruction = (document.querySelector("#ai-bulk-instruction")?.value || "").trim();
+  if (!instruction) return showToast("変更内容を入力してください");
+  const tasks = wbsEditableTasks();
+  const projName = (id) => state.projects.find((p) => p.id === id)?.title || "(単発)";
+  const list = tasks.slice(0, 150).map((t) =>
+    `- id:${t.id} 「${t.title}」 [P:${projName(t.projectId)} / 状態:${taskStatusLabel(t.status)} / 期限:${t.dueDate || "なし"} / カテゴリ:${t.category || "なし"}]`).join("\n");
+  const prompt = [
+    aiCommonPreamble() + "あなたはWBSのタスク一括編集を手伝うアシスタントです。",
+    "下のタスク一覧に対して、ユーザの指示どおりに変更すべき項目だけを返してください。",
+    "",
+    `今日: ${todayISO()}(${weekdayLabel(todayISO())})`,
+    "",
+    "ユーザの指示:",
+    instruction,
+    "",
+    "タスク一覧(id で指定すること):",
+    list,
+    "",
+    "制約:",
+    `- field は次のいずれか: dueDate(YYYY-MM-DD、空文字で期限クリア) / status(${TASK_STATUSES.join("/")}) / title / category`,
+    "- 指示に該当するタスクのみ。該当しないものは含めない。推測で余計な変更をしない",
+    "- 日付の相対指定(来週金曜・1週間後ろ 等)は今日を基準に具体的な YYYY-MM-DD に変換する",
+    "",
+    "回答は次の形式のJSONだけを ```json コードブロックで返してください。",
+    '{"changes":[{"taskId":"...","field":"dueDate","value":"2026-07-10","reason":"なぜこの変更か"}]}'
+  ].join("\n");
+  _aiReviewPending = true;
+  render();
+  try {
+    const json = extractAiJson(await callClaude(prompt));
+    const byId = new Map(tasks.map((t) => [t.id, t]));
+    const cats = new Set(getCategoryNames());
+    const changes = (Array.isArray(json.changes) ? json.changes : [])
+      .map((c) => {
+        const t = byId.get(String(c?.taskId || ""));
+        const field = String(c?.field || "");
+        if (!t || !(field in AI_BULK_FIELDS)) return null;
+        let value = c?.value;
+        // 型・値の検証(不正な変更は捨てる)
+        if (field === "dueDate") { value = String(value || ""); if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null; }
+        else if (field === "status") { value = String(value || ""); if (!TASK_STATUSES.includes(value)) return null; }
+        else if (field === "category") { value = String(value || ""); if (value && !cats.has(value)) return null; }
+        else if (field === "title") { value = String(value || "").trim(); if (!value) return null; }
+        if (String(t[field] || "") === String(value)) return null;  // 変化なしは除外
+        const fmt = (f, v) => f === "status" ? taskStatusLabel(v) : (v || "(なし)");
+        return { taskId: t.id, title: t.title, field, label: AI_BULK_FIELDS[field], current: fmt(field, t[field]), value, valueLabel: fmt(field, value) };
+      })
+      .filter(Boolean)
+      .slice(0, 60);
+    if (!changes.length) throw new Error("反映できる変更が見つかりませんでした(対象・指示をご確認ください)");
+    _aiBulkEditCtx = { changes };
+    state.modal = { type: "aiBulkEdit" };
+    renderModal(buildAiBulkEditConfirm(changes));
+  } catch (error) {
+    showToast(`AI一括編集失敗: ${error.message}`);
+  } finally {
+    _aiReviewPending = false;
+    render();
+  }
+}
+
+function buildAiBulkEditConfirm(changes) {
+  return `
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">🤖 変更案(${changes.length}件)</h3>
+        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        ${changes.map((c, i) => `
+          <label class="ai-import-row">
+            <input type="checkbox" data-ai-bulk="${i}" checked>
+            <span><b>${escapeHTML(c.title)}</b> — ${c.label}: <span class="muted">${escapeHTML(c.current)}</span> → <b>${escapeHTML(c.valueLabel)}</b></span>
+          </label>`).join("")}
+        <div class="muted" style="font-size:11.5px; line-height:1.6; margin-top:6px">チェックした変更だけを反映します。</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-action="modal-close">キャンセル</button>
+        <button class="btn primary" data-action="ai-bulk-edit-submit">選択した変更を反映</button>
+      </div>
+    </div>`;
+}
+
+function submitAiBulkEdit() {
+  if (!_aiBulkEditCtx) return closeModal();
+  const { changes } = _aiBulkEditCtx;
+  let count = 0;
+  changes.forEach((c, i) => {
+    if (!modalRoot.querySelector(`input[data-ai-bulk="${i}"]`)?.checked) return;
+    updateTaskField(c.taskId, c.field, c.value);  // saveState 内包
+    count++;
+  });
+  _aiBulkEditCtx = null;
+  closeModal();
+  if (!count) return saveAndRender();
+  saveAndRender(`🤖 ${count}件の変更を反映しました`);
+}
+
 // v50: =========================================================
 //  ② AIスケジュール下書き(空き時間への仮配置 → D&Dで調整 → 確定)
 //  AIがやるのは「並べる下書き」まで。動かす・削る・確定は人間。
@@ -3520,8 +3677,12 @@ function renderWBS() {
   // v47: 完了タスクの表示トグル + 全プロジェクトの一括開閉
   const hideDone = Boolean(state.settings.wbsHideCompleted);
   const allCollapsed = visibleProjects.length > 0 && visibleProjects.every((p) => p.collapsed);
+  // v55: インライン編集モード + AI一括編集
+  const editMode = Boolean(state.settings.wbsEditMode);
   const wbsTools = `
     <div class="row" style="gap:8px; flex-wrap:wrap">
+      <button class="btn ${editMode ? "primary" : "ghost"}" data-action="toggle-wbs-edit">${editMode ? "✏️ 編集モード中" : "✏️ 編集モード"}</button>
+      ${aiEnabled() ? `<button class="btn ghost" data-action="ai-bulk-edit" ${_aiReviewPending ? "disabled" : ""}>🤖 まとめて編集</button>` : ""}
       <button class="btn ${hideDone ? "primary" : "ghost"}" data-action="toggle-wbs-hide-done">${hideDone ? "完了を表示" : "完了を隠す"}</button>
       <button class="btn ghost" data-action="wbs-collapse-all">${allCollapsed ? "すべて展開" : "すべて折りたたむ"}</button>
       ${toggleBtn}
@@ -3672,6 +3833,20 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false) 
   const kids = state.tasks.filter((t) => !t.deleted && t.parentTaskId === task.id && isTaskCountable(t));
   const kidsDone = kids.filter((t) => t.status === "completed").length;
   const stats = taskBlockStats(task.id);
+  // v55: インライン編集モード — 期限/状態/カテゴリを行内で直接編集(モーダルを開かない)
+  const editMode = Boolean(state.settings.wbsEditMode);
+  const inlineEdit = editMode ? `
+    <span class="wbs-inline">
+      <select class="wbs-inline-input" data-wbs-edit="status" data-id="${task.id}" aria-label="状態">
+        ${["todo", "doing", "completed", "suspended", "cancelled"].map((s) =>
+          `<option value="${s}" ${task.status === s ? "selected" : ""}>${taskStatusLabel(s)}</option>`).join("")}
+      </select>
+      <input class="wbs-inline-input" type="date" data-wbs-edit="dueDate" data-id="${task.id}" value="${task.dueDate || ""}" aria-label="期限">
+      <select class="wbs-inline-input" data-wbs-edit="category" data-id="${task.id}" aria-label="カテゴリ">
+        <option value="">(カテゴリなし)</option>
+        ${getCategoryNames().map((n) => `<option value="${escapeHTML(n)}" ${task.category === n ? "selected" : ""}>${escapeHTML(n)}</option>`).join("")}
+      </select>
+    </span>` : "";
   return `
     <div class="row${suspended ? " is-suspended" : ""}" style="border-top:1px solid var(--line-soft); padding-top:8px">
       <div class="title-line">
@@ -3679,12 +3854,13 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false) 
         ${caret}
         <button class="checkbox-button ${task.status === "completed" ? "done" : ""}" data-action="toggle-task" data-id="${task.id}">✓</button>
         <span data-action="edit-task" data-id="${task.id}" style="cursor:pointer">${escapeHTML(task.title)}</span>
+        ${editMode ? inlineEdit : `
         <span class="badge ${suspended ? "gray" : ""}">${taskStatusLabel(task.status)}</span>
         ${kids.length ? `<span class="badge">子 ${kidsDone}/${kids.length}</span>` : ""}
         ${scheduledToday ? `<span class="badge green">今日✓</span>` : ""}
         ${task.category ? `<span class="cat-chip" style="background:${getCategoryColor(task.category)}1f; color:${getCategoryColor(task.category)}; border:1px solid ${getCategoryColor(task.category)}66">${escapeHTML(task.category)}</span>` : ""}
         ${dueHTML}
-        ${stats.count ? `<span class="muted" style="font-size:11px">⏱ ${stats.count}回${stats.minutes ? `・${fmtMinShort(stats.minutes)}` : ""}</span>` : ""}
+        ${stats.count ? `<span class="muted" style="font-size:11px">⏱ ${stats.count}回${stats.minutes ? `・${fmtMinShort(stats.minutes)}` : ""}</span>` : ""}`}
       </div>
       <div class="row wbs-actions">
         <button class="btn" data-action="task-today" data-id="${task.id}">${scheduledToday ? "＋もう一度" : "今日へ"}</button>

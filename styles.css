@@ -2450,3 +2450,12 @@ h3 {
 .stats-hist-bar { flex: 1; width: 100%; display: flex; align-items: flex-end; background: var(--panel-soft); border-radius: 3px; overflow: hidden; }
 .stats-hist-fill { width: 100%; background: var(--accent); opacity: .7; border-radius: 3px 3px 0 0; }
 .stats-hist-lab { font-size: 9px; color: var(--muted); height: 12px; line-height: 12px; }
+
+/* v55: WBS インライン編集(編集モード時の行内フォーム) */
+.wbs-inline { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.wbs-inline-input { font-size: 16px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); max-width: 150px; }
+.wbs-inline-input[type="date"] { max-width: 150px; }
+@media (max-width: 720px) {
+  .wbs-inline { gap: 4px; }
+  .wbs-inline-input { max-width: 118px; padding: 4px 5px; }
+}
