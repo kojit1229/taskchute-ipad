@@ -1,0 +1,13 @@
+{
+  "name": "taskchute-journal-pwa",
+  "version": "53.0.0",
+  "private": true,
+  "description": "TaskChute Journal PWA(実行時依存ゼロ。devDependencies はE2Eテスト用のみ)",
+  "scripts": {
+    "dev": "node tests/serve.js",
+    "test": "node tests/run-all.js"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.61.1"
+  }
+}
