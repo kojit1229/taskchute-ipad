@@ -116,6 +116,10 @@ function check(name, cond, extra = "") {
   check("13:00〜13:45 (45分) で仮配置", label.includes("13:00") && label.includes("45分"), label);
 
   // ドラッグ移動: 60px 下へ(zoom1 = 60px/時 → +60分)
+  // タイムラインは現在時刻へ自動スクロールするため、実行時刻によってはブロックが
+  // 画面外に出る。ドラッグ前に必ずビューへスクロールして座標を安定させる(フレーク対策)。
+  await page.locator(".draft-block").scrollIntoViewIfNeeded();
+  await page.waitForTimeout(100);
   let box = await page.locator(".draft-block").boundingBox();
   await page.mouse.move(box.x + box.width / 2, box.y + 8);
   await page.mouse.down();
@@ -126,6 +130,9 @@ function check(name, cond, extra = "") {
   check("ドラッグで 14:00〜 に移動(15分スナップ)", label.includes("14:00"), label);
 
   // 下端リサイズ: +30px(=+30分 → 75分)
+  // 移動でブロックが下がると下端(リサイズハンドル)が画面外に出るため、再度スクロールして掴む。
+  await page.locator(".draft-block").scrollIntoViewIfNeeded();
+  await page.waitForTimeout(100);
   box = await page.locator(".draft-block").boundingBox();
   await page.mouse.move(box.x + box.width / 2, box.y + box.height - 5);
   await page.mouse.down();
