@@ -344,21 +344,25 @@ document.addEventListener("click", (event) => {
   // v50: ② AIスケジュール下書き(仮配置 → D&D調整 → 確定)
   if (action === "ai-schedule") runAiSchedule();
   if (action === "draft-confirm") confirmScheduleDraft();
-  if (action === "draft-discard" && _scheduleDraft) {
-    // v52: 破棄も「この提案は不要だった」という学習シグナルとして記録
-    _scheduleDraft.items.forEach((it) => recordScheduleHistory(it, "discarded", _scheduleDraft.date));
-    _scheduleDraft = null;
-    saveState();
-    render();
-    showToast("下書きを破棄しました");
-  }
+  if (action === "draft-discard" && _scheduleDraft) openDraftDiscardModal();  // v57: 却下理由メモ付き破棄
+  if (action === "draft-discard-submit") submitDraftDiscard();
+  if (action === "draft-undo") undoDraft();  // v57
+  if (action === "draft-redo") redoDraft();  // v57
   if (action === "draft-remove" && _scheduleDraft) {
+    commitDraftHistory();  // v57: 削除前にスナップショット(Undoで戻せる)
     const removed = _scheduleDraft.items.find((x) => x.id === id);
     if (removed) recordScheduleHistory(removed, "removed", _scheduleDraft.date);  // v52: 却下シグナル
     _scheduleDraft.items = _scheduleDraft.items.filter((x) => x.id !== id);
-    if (!_scheduleDraft.items.length) _scheduleDraft = null;
+    // v57: items が空でも _scheduleDraft は残す(Undoで復元可能に)。片付けは「破棄」で。
     saveState();
     render();
+  }
+  // v57: 計器盤ドリルダウン(チャート要素 → 該当Block明細)
+  if (action === "stats-drill") openStatsDrill(target.dataset.drill, target.dataset);
+  if (action === "stats-drill-jump") {
+    closeModal();
+    state.selectedDate = target.dataset.date;
+    setView("tasks");
   }
   // v50: ③ 週次 / 12週サイクルのAI壁打ち
   if (action === "weekly-ai") runAiWeekly(target.dataset.week);
@@ -2448,6 +2452,34 @@ function submitAiBulkEdit() {
 // =========================================================
 let _scheduleDraft = null;  // { date, items:[{id,title,taskId,category,start(分),minutes}] } 非永続
 let _draftDrag = null;      // ドラッグ中の一時情報 非永続
+// v57: 下書きの Undo/Redo(非永続)。past/future は items のスナップショット配列。
+let _draftHistory = { past: [], future: [] };
+const DRAFT_HISTORY_MAX = 50;
+
+function cloneDraftItems() {
+  return _scheduleDraft ? _scheduleDraft.items.map((it) => ({ ...it })) : [];
+}
+function resetDraftHistory() {
+  _draftHistory = { past: [], future: [] };
+}
+// 変更を1ステップとして past に積む(future はクリア)。呼び出し側は mutation の直前に。
+function commitDraftHistory(snapshot) {
+  _draftHistory.past.push(snapshot || cloneDraftItems());
+  if (_draftHistory.past.length > DRAFT_HISTORY_MAX) _draftHistory.past.shift();
+  _draftHistory.future = [];
+}
+function undoDraft() {
+  if (!_scheduleDraft || !_draftHistory.past.length) return;
+  _draftHistory.future.push(cloneDraftItems());
+  _scheduleDraft.items = _draftHistory.past.pop();
+  render();
+}
+function redoDraft() {
+  if (!_scheduleDraft || !_draftHistory.future.length) return;
+  _draftHistory.past.push(cloneDraftItems());
+  _scheduleDraft.items = _draftHistory.future.pop();
+  render();
+}
 
 function minToHHMM(min) {
   const m = clamp(Math.round(min), 0, 24 * 60 - 1);
@@ -2523,6 +2555,7 @@ async function runAiSchedule() {
       .slice(0, 6);
     if (!items.length) throw new Error("配置案を読み取れませんでした");
     _scheduleDraft = { date, items };
+    resetDraftHistory();  // v57: 新しい下書きで Undo/Redo 履歴をリセット
     state.timelineMode = "planned";
     setView("timeline");
     showToast("🤖 下書きを配置しました — ドラッグで調整して「確定」してください");
@@ -2557,11 +2590,14 @@ function renderDraftLayer(rowHeight, startHour) {
 
 function draftBarHTML() {
   if (!_scheduleDraft || _scheduleDraft.date !== state.selectedDate) return "";
+  const n = _scheduleDraft.items.length;
   return `
     <div class="draft-bar">
-      <span>🤖 下書き ${_scheduleDraft.items.length}件 — ドラッグで移動 / 下端をドラッグで長さ調整 / ×で外す</span>
+      <span>🤖 下書き ${n}件 — ドラッグで移動 / 下端をドラッグで長さ調整 / ×で外す</span>
       <span class="row" style="gap:6px">
-        <button class="btn primary" data-action="draft-confirm">確定して登録</button>
+        <button class="btn ghost" data-action="draft-undo" ${_draftHistory.past.length ? "" : "disabled"} title="元に戻す" aria-label="元に戻す">↶ 戻す</button>
+        <button class="btn ghost" data-action="draft-redo" ${_draftHistory.future.length ? "" : "disabled"} title="やり直し" aria-label="やり直し">↷ 進む</button>
+        <button class="btn primary" data-action="draft-confirm" ${n ? "" : "disabled"}>確定して登録</button>
         <button class="btn ghost" data-action="draft-discard">破棄</button>
       </span>
     </div>`;
@@ -2588,8 +2624,8 @@ function hhmmToMin(hhmm) {
   return m ? Number(m[1]) * 60 + Number(m[2]) : null;
 }
 
-// 採用/却下を1件記録(採用時は確定値も)
-function recordScheduleHistory(item, outcome, date) {
+// 採用/却下を1件記録(採用時は確定値も / v57: 却下理由メモ reason は任意)
+function recordScheduleHistory(item, outcome, date, reason) {
   state.aiScheduleHistory.push({
     date,
     title: item.title,
@@ -2599,6 +2635,7 @@ function recordScheduleHistory(item, outcome, date) {
     outcome,  // 'confirmed' | 'removed' | 'discarded'
     userStart: outcome === "confirmed" ? minToHHMM(item.start) : null,
     userMin: outcome === "confirmed" ? item.minutes : null,
+    reason: (reason || "").trim(),  // v57: 却下理由メモ(任意)
     at: nowDateTime()
   });
   if (state.aiScheduleHistory.length > AI_SCHED_HISTORY_MAX) {
@@ -2655,6 +2692,12 @@ function buildScheduleLearningDigest(targetDate) {
       }
       lines.push(`  - ${label}への提案: ${inBand.length}件、却下率${rejRate}%${detail}`);
     });
+    // v57: 却下理由メモ(直近5件)。ユーザが言語化した「合わない理由」を次の配置に反映させる。
+    const reasons = hist.filter((h) => h.outcome !== "confirmed" && (h.reason || "").trim());
+    if (reasons.length) {
+      const recent = reasons.slice(-5).map((h) => `「${h.reason.trim()}」`).join(" / ");
+      lines.push(`  - 却下理由メモ(直近): ${recent}`);
+    }
   }
 
   // 2) 計画 vs 実績(全Block・時間帯別の着手率と開始ズレ)
@@ -2726,7 +2769,47 @@ function confirmScheduleDraft() {
     recordScheduleHistory(it, "confirmed", date);
   });
   _scheduleDraft = null;
+  resetDraftHistory();  // v57
   saveAndRender(`🤖 ${items.length}件のBlockを登録しました`);
+}
+
+// v57: 破棄は「この提案は不要だった」学習シグナル。任意の却下理由メモを添えて記録する。
+function openDraftDiscardModal() {
+  if (!_scheduleDraft) return;
+  state.modal = { type: "draftDiscard" };
+  renderModal(`
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">下書きを破棄</h3>
+        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="muted" style="font-size:13px; line-height:1.6; margin-bottom:8px">
+          ${_scheduleDraft.items.length}件の下書きを破棄します。理由メモ(任意)は次回以降のAI下書きの精度向上に使われます。
+        </div>
+        <div class="field">
+          <label class="field-label">却下理由メモ(任意)</label>
+          <textarea class="textarea" data-modal-field="reason" style="min-height:80px; font-size:16px" placeholder="例: 午前に会議が入るので午前の配置は合わない / 見積もりが短すぎる"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-action="modal-close">キャンセル</button>
+        <button class="btn danger" data-action="draft-discard-submit">破棄する</button>
+      </div>
+    </div>`);
+}
+
+function submitDraftDiscard() {
+  if (!_scheduleDraft) { closeModal(); return; }
+  const reason = (readModalFields().reason || "").trim();
+  const date = _scheduleDraft.date;
+  _scheduleDraft.items.forEach((it) => recordScheduleHistory(it, "discarded", date, reason));
+  _scheduleDraft = null;
+  resetDraftHistory();
+  closeModal();
+  saveState();
+  render();
+  showToast("下書きを破棄しました");
 }
 
 // D&D(Pointer Events = iPadタッチ / マウス両対応)。15分スナップ。
@@ -2742,7 +2825,8 @@ document.addEventListener("pointerdown", (event) => {
   const el = resizeEl ? resizeEl.closest(".draft-block") : blockEl;
   if (!item || !el) return;
   const rowHeight = Number(el.dataset.rowHeight) || 60;
-  _draftDrag = { id, mode: resizeEl ? "resize" : "move", startY: event.clientY, origStart: item.start, origMinutes: item.minutes, rowHeight, el };
+  // v57: ドラッグ開始時点のスナップショット。実際に動いたときだけ endDraftDrag で履歴化する。
+  _draftDrag = { id, mode: resizeEl ? "resize" : "move", startY: event.clientY, origStart: item.start, origMinutes: item.minutes, rowHeight, el, snapshot: cloneDraftItems() };
   el.classList.add("is-dragging");
   event.preventDefault();
 });
@@ -2765,6 +2849,10 @@ document.addEventListener("pointermove", (event) => {
 });
 const endDraftDrag = () => {
   if (!_draftDrag) return;
+  // v57: タップだけ(移動なし)なら履歴に残さない。実際に start/minutes が変わったときのみ commit。
+  const item = _scheduleDraft?.items.find((x) => x.id === _draftDrag.id);
+  const changed = item && (item.start !== _draftDrag.origStart || item.minutes !== _draftDrag.origMinutes);
+  if (changed) commitDraftHistory(_draftDrag.snapshot);
   _draftDrag.el.classList.remove("is-dragging");
   _draftDrag = null;
   render();  // 位置・ラベルを正規化
@@ -5319,7 +5407,7 @@ function renderStats() {
   const wdOrder = [6, 0, 1, 2, 3, 4, 5];  // 週定義に合わせて 土曜始まり
   const wdLabels = ["土", "日", "月", "火", "水", "木", "金"];
   let hmHasData = false;
-  const hmRows = SCHED_BANDS.map(([s, e, label]) => {
+  const hmRows = SCHED_BANDS.map(([s, e, label], bandIdx) => {
     const cells = wdOrder.map((wd, i) => {
       const cellBlocks = past.filter((b) => {
         if (parseDate(b.date).getDay() !== wd) return false;
@@ -5329,7 +5417,8 @@ function renderStats() {
       if (cellBlocks.length < 3) return `<td class="stats-hm-cell empty"></td>`;  // n不足はノイズなので出さない
       hmHasData = true;
       const rate = cellBlocks.filter((b) => b.actualStartAt).length / cellBlocks.length;
-      return `<td class="stats-hm-cell" style="background:rgba(47,185,109,${(0.08 + rate * 0.5).toFixed(2)})" title="${wdLabels[i]}曜 ${label}: 着手${Math.round(rate * 100)}%(${cellBlocks.length}件)">${Math.round(rate * 100)}</td>`;
+      // v57: 各マスからその曜日×時間帯の計画Block明細へドリルできる。
+      return `<td class="stats-hm-cell is-drill" data-action="stats-drill" data-drill="hmcell" data-wd="${wd}" data-band="${bandIdx}" style="background:rgba(47,185,109,${(0.08 + rate * 0.5).toFixed(2)})" title="${wdLabels[i]}曜 ${label}: 着手${Math.round(rate * 100)}%(${cellBlocks.length}件)">${Math.round(rate * 100)}</td>`;
     }).join("");
     return `<tr><th class="stats-hm-band">${label}</th>${cells}</tr>`;
   }).join("");
@@ -5405,10 +5494,13 @@ function renderStats() {
       offset -= frac;  // 次の弧の開始位置(反時計回りに減算)
       return c;
     }).join("");
-    const legend = segs.map((sg) =>
-      `<div class="stats-legend-row"><span class="stats-swatch" style="background:${sg.color}"></span>
+    const legend = segs.map((sg) => {
+      // v57: 「その他」は集約なのでドリル対象外。実カテゴリは該当Block明細へドリルできる。
+      const drill = sg.cat !== "その他" ? `data-action="stats-drill" data-drill="cat" data-cat="${escapeHTML(sg.cat)}"` : "";
+      return `<div class="stats-legend-row ${sg.cat !== "その他" ? "is-drill" : ""}" ${drill}><span class="stats-swatch" style="background:${sg.color}"></span>
         <span class="stats-legend-name">${escapeHTML(sg.cat)}</span>
-        <span class="stats-legend-val">${fmtMinShort(sg.m)} ・ ${Math.round((sg.m / totalMin) * 100)}%</span></div>`).join("");
+        <span class="stats-legend-val">${fmtMinShort(sg.m)} ・ ${Math.round((sg.m / totalMin) * 100)}%</span></div>`;
+    }).join("");
     donutCard = `
       <div class="panel stack">
         <h2>カテゴリ別 時間配分</h2>
@@ -5440,7 +5532,7 @@ function renderStats() {
     const rows = netRows.map((r) => {
       const w = Math.round((Math.abs(r.net) / maxAbs) * 50);  // 中央から最大50%
       const pos = r.net > 0, neg = r.net < 0;
-      return `<div class="stats-div-row" title="${escapeHTML(r.cat)}: ${signed(r.net)}(${r.n}件)">
+      return `<div class="stats-div-row is-drill" data-action="stats-drill" data-drill="cat" data-cat="${escapeHTML(r.cat)}" title="${escapeHTML(r.cat)}: ${signed(r.net)}(${r.n}件)">
         <span class="stats-div-label">${escapeHTML(r.cat)}</span>
         <span class="stats-div-track">
           <span class="stats-div-neg">${neg ? `<span style="width:${w}%"></span>` : ""}</span>
@@ -5524,7 +5616,9 @@ function renderStats() {
         const d = addDays(ws, row);
         if (d > today) return `<span class="stats-cal-cell out"></span>`;
         const n = actScore[d] || 0;
-        return `<span class="stats-cal-cell lv${bucket(n)}" title="${d}: 活動 ${n}"></span>`;
+        // v57: 活動のある日は、その日の完了Block・記録の明細へドリルできる。
+        const drill = n > 0 ? `data-action="stats-drill" data-drill="day" data-date="${d}"` : "";
+        return `<span class="stats-cal-cell lv${bucket(n)} ${n > 0 ? "is-drill" : ""}" ${drill} title="${d}: 活動 ${n}"></span>`;
       }).join("");
       return `<div class="stats-cal-row">${cells}</div>`;
     }).join("");
@@ -5554,7 +5648,9 @@ function renderStats() {
     const hmax = Math.max(1, ...hourCounts);
     const bars = hourCounts.map((c, i) => {
       const hr = hourStart + i;
-      return `<div class="stats-hist-cell" title="${hr}時台: ${c}件">
+      // v57: 件数のある時間帯は、その時刻に着手したBlock明細へドリルできる。
+      const drill = c ? `data-action="stats-drill" data-drill="hour" data-hour="${hr}"` : "";
+      return `<div class="stats-hist-cell ${c ? "is-drill" : ""}" ${drill} title="${hr}時台: ${c}件">
         <div class="stats-hist-bar">${c ? `<div class="stats-hist-fill" style="height:${Math.round((c / hmax) * 100)}%"></div>` : ""}</div>
         <div class="stats-hist-lab">${hr % 3 === (hourStart % 3) ? hr : ""}</div>
       </div>`;
@@ -5577,6 +5673,98 @@ function renderStats() {
     ${range === "all" ? `<div class="muted" style="font-size:11px; margin-bottom:10px">全期間 = この端末に残っているデータの範囲(アーカイブ済みの期間は含みません)</div>` : ""}
     ${body ? `<section class="stats-grid">${body}</section>` : emptyPanel("まだ十分なデータがありません。実績が数週間分たまると表示されます。")}
   `;
+}
+
+// v57: 計器盤ドリルダウン — チャート要素クリックで該当Blockの明細をモーダル表示。
+//      表示範囲(since〜today)は renderStats と同じ statsRangeWeeks に合わせる。
+function statsDrillRange() {
+  const weeks = statsRangeWeeks();
+  const thisWeek = weekStartFor(todayISO());
+  return { since: addDays(thisWeek, -7 * (weeks - 1)), today: todayISO() };
+}
+
+function openStatsDrill(kind, params) {
+  state.modal = { type: "statsDrill" };
+  renderModal(buildStatsDrillModal(kind, params || {}));
+}
+
+function buildStatsDrillModal(kind, params) {
+  const { since, today } = statsDrillRange();
+  const inRange = (b) => !b.deleted && b.date >= since && b.date <= today;
+  let title = "明細";
+  let subtitle = "";
+  let blocks = [];
+  if (kind === "cat") {
+    const cat = params.cat || "未分類";
+    title = `カテゴリ: ${cat}`;
+    subtitle = "範囲内の完了Block";
+    blocks = state.blocks.filter((b) => inRange(b) && b.completed && (b.category || "未分類") === cat);
+  } else if (kind === "hour") {
+    const h = Number(params.hour);
+    title = `${h}時台に着手`;
+    subtitle = "実際に着手した時刻で集計";
+    blocks = state.blocks.filter((b) => inRange(b) && b.actualStartAt && Math.floor(minutesOf(b.actualStartAt) / 60) === h);
+  } else if (kind === "day") {
+    const d = params.date;
+    title = formatDisplayDate(d);
+    subtitle = "その日の完了Block";
+    blocks = state.blocks.filter((b) => b.date === d && !b.deleted && b.completed);
+    const acts = [];
+    if ((state.journals?.[d] || "").trim()) acts.push("ジャーナル");
+    if ((state.reports?.[d] || "").trim()) acts.push("日報");
+    if ((state.zeroThinking?.entries || []).some((e) => e.date === d)) acts.push("0秒思考");
+    if (acts.length) subtitle += ` ・ 記録: ${acts.join(" / ")}`;
+  } else if (kind === "hmcell") {
+    const wd = Number(params.wd);
+    const band = SCHED_BANDS[Number(params.band)] || [0, 24, ""];
+    const [s, e, label] = band;
+    title = `${["日", "月", "火", "水", "木", "金", "土"][wd] || ""}曜 ${label}`;
+    subtitle = "この時間帯に着手予定だった計画Block";
+    blocks = state.blocks.filter((b) => {
+      if (!inRange(b) || !b.plannedStartAt || parseDate(b.date).getDay() !== wd) return false;
+      const m = minutesOf(b.plannedStartAt);
+      return m >= s * 60 && m < e * 60;
+    });
+  }
+  // 日付降順 → 同日は時刻降順。件数は上限80。
+  blocks = blocks.sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    return minutesOf(b.actualStartAt || b.plannedStartAt) - minutesOf(a.actualStartAt || a.plannedStartAt);
+  });
+  const shown = blocks.slice(0, 80);
+  const rows = shown.length
+    ? shown.map((b) => statsDrillRow(b)).join("")
+    : `<div class="muted" style="padding:12px">該当するBlockはありません。</div>`;
+  const more = blocks.length > shown.length ? `<div class="muted" style="font-size:11px; margin-top:6px">ほか ${blocks.length - shown.length} 件(上位80件を表示)</div>` : "";
+  return `
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">${escapeHTML(title)}</h3>
+        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="muted" style="font-size:12px; margin-bottom:8px">${escapeHTML(subtitle)}(${blocks.length}件) ・ 行タップでその日へ</div>
+        <div class="stats-drill-list">${rows}</div>
+        ${more}
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-action="modal-close">閉じる</button>
+      </div>
+    </div>`;
+}
+
+function statsDrillRow(b) {
+  const start = b.actualStartAt || b.plannedStartAt || "";
+  const timeTxt = start ? timeFromDateTime(start) : "";
+  const net = Number(b.charge || 0) - Number(b.discharge || 0);
+  const cat = b.category || "";
+  const catColor = cat ? getCategoryColor(cat) : "var(--muted)";
+  return `
+    <div class="stats-drill-row" data-action="stats-drill-jump" data-date="${b.date}">
+      <span class="stats-drill-date">${b.date.slice(5).replace("-", "/")}${timeTxt ? ` ${timeTxt}` : ""}</span>
+      <span class="stats-drill-title">${escapeHTML(b.title)}${cat ? `<span class="stats-drill-cat" style="background:${catColor}">${escapeHTML(cat)}</span>` : ""}</span>
+      <span class="stats-drill-net ${net > 0 ? "pos" : net < 0 ? "neg" : ""}">${net === 0 ? "±0" : signed(net)}</span>
+    </div>`;
 }
 
 // v40: エネルギー構造の曜日 finding から、その曜日の直近日へ移動して routine を見る

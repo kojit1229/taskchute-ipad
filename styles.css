@@ -2464,3 +2464,23 @@ h3 {
   .wbs-inline { gap: 4px; }
   .wbs-inline-input { max-width: 118px; padding: 4px 5px; }
 }
+
+/* v57: 計器盤ドリルダウン — クリック可能なチャート要素 + 明細モーダル */
+.is-drill { cursor: pointer; }
+.stats-legend-row.is-drill:hover,
+.stats-div-row.is-drill:hover { background: var(--panel-soft); border-radius: 6px; }
+.stats-hm-cell.is-drill:hover,
+.stats-hist-cell.is-drill:hover .stats-hist-bar,
+.stats-cal-cell.is-drill:hover { outline: 2px solid var(--accent); outline-offset: -1px; }
+.stats-drill-list { display: flex; flex-direction: column; gap: 3px; max-height: 60vh; overflow-y: auto; }
+.stats-drill-row {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  border-radius: 8px; cursor: pointer; background: var(--panel-soft);
+}
+.stats-drill-row:hover { background: var(--line); }
+.stats-drill-date { font-size: 12px; color: var(--muted); white-space: nowrap; min-width: 76px; }
+.stats-drill-title { flex: 1; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.stats-drill-cat { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 999px; color: #fff; margin-left: 6px; vertical-align: middle; }
+.stats-drill-net { font-size: 12px; font-weight: 700; white-space: nowrap; color: var(--muted); }
+.stats-drill-net.pos { color: var(--green); }
+.stats-drill-net.neg { color: var(--red); }

@@ -154,11 +154,15 @@ function check(name, cond, extra = "") {
   const sp2 = await page.evaluate(() => window.__aiPrompts[0] || "");
   check("AI下書き経由Blockの着手率が注入される", sp2.includes("AI下書き経由のBlock: ") && sp2.includes("着手率100%"), sp2.split("\n").filter((l) => l.includes("AI下書き")).join(" | "));
   check("採否が更新される(6件提案 → 採用2 / 却下4)", sp2.includes("6件提案 → 採用2 / 却下4"), sp2.split("\n").filter((l) => l.includes("件提案")).join(" | "));
-  // 破棄も記録される
+  // 破棄も記録される(v57: 破棄は理由メモ付きモーダル → 理由を入れて submit)
   await page.click('[data-action="draft-discard"]');
+  await page.waitForTimeout(200);
+  await page.fill('[data-modal-field="reason"]', "午前は会議で埋まっている");
+  await page.click('[data-action="draft-discard-submit"]');
   await page.waitForTimeout(300);
   const lastH = await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).aiScheduleHistory.slice(-1)[0], KEY);
   check("破棄が discarded として記録される", lastH && lastH.outcome === "discarded" && lastH.title === "次の作業", JSON.stringify(lastH));
+  check("却下理由メモが記録される", lastH && lastH.reason === "午前は会議で埋まっている", lastH && lastH.reason);
 
   // ---- [4] 今日のタスク提案にもダイジェスト注入 / 後方互換 ----
   console.log("[4] 今日のタスク提案への注入 / 後方互換");

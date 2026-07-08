@@ -124,8 +124,10 @@ const b64ToObj = (b64) => JSON.parse(Buffer.from(b64, "base64").toString("utf8")
   const sp = await page.evaluate(() => window.__aiPrompts[0] || "");
   check("相関行が学習ダイジェストに入る", /朝の体調が低い日\(3以下\)の着手率1[0-9]%.*良い日\(7以上\)は100%/.test(sp), sp.split("\n").filter((l) => l.includes("体調")).join(" | "));
   check("今朝の体調がプロンプトに入る", sp.includes("今朝の体調: 3/10"));
-  // 下書きは破棄しておく
+  // 下書きは破棄しておく(v57: 破棄は理由メモ付きモーダル → submit で確定)
   await page.evaluate(() => document.querySelector('[data-action="draft-discard"]')?.click());
+  await page.waitForTimeout(200);
+  await page.evaluate(() => document.querySelector('[data-action="draft-discard-submit"]')?.click());
   await page.waitForTimeout(300);
 
   // ---- [3] アーカイブ ----
