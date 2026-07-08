@@ -843,6 +843,9 @@ function normalizeState(value) {
   });
   value.feedback ||= {};
   value.reports ||= {};
+  // v56: GitHub に push 済みの AIフィードバック_*.md の日付を記録する集合。
+  //      起動時の optional fetch を「存在が判っている日付」に限定し、404ノイズを出さない。
+  if (!Array.isArray(value.feedbackFiles)) value.feedbackFiles = [];
   // v34: 0秒思考(未知フィールドはデフォルトに足すだけで既存データを壊さない)
   value.zeroThinking ||= { themes: [], entries: [] };
   if (!Array.isArray(value.zeroThinking.themes)) value.zeroThinking.themes = [];
@@ -1758,7 +1761,7 @@ function homeRoutine(blocks) {
 
 // 週の範囲(12週サイクル用) v33: 土曜〜金曜を1週とみなす
 function weekRange(dateISO) {
-  const d = new Date(dateISO + "T00:00:00");
+  const d = parseDate(dateISO); // v56: new Date("...T00:00:00") は iOS で UTC 誤解釈のため parseDate に統一
   const dow = (d.getDay() + 1) % 7; // Sat=0, Sun=1, ... Fri=6
   const sat = addDays(dateISO, -dow);
   return { weekStart: sat, weekEnd: addDays(sat, 6) };
@@ -3259,7 +3262,7 @@ function wishLastActivity(wishTaskId) {
 function isWishStagnant(wishTaskId) {
   const last = wishLastActivity(wishTaskId);
   if (!last) return false;
-  const lastMs = new Date(last).getTime();
+  const lastMs = localDateTimeToMs(last); // v56: updatedAt はローカル日時文字列。iOS TZ 誤解釈回避
   return Date.now() - lastMs > 60 * 24 * 60 * 60 * 1000;
 }
 
@@ -4490,8 +4493,8 @@ function renderManualPomodoro(running, remaining, blockOptions) {
   //   3. startedAt から60分以上経過(休憩込みでも30分なので、60分超は異常)
   //   4. startedAt が未来(時計巻き戻し)
   if (running) {
-    const endsAtMs = state.pomodoro.endsAt ? new Date(state.pomodoro.endsAt).getTime() : 0;
-    const startedAtMs = state.pomodoro.startedAt ? new Date(state.pomodoro.startedAt).getTime() : 0;
+    const endsAtMs = state.pomodoro.endsAt ? localDateTimeToMs(state.pomodoro.endsAt) : 0;
+    const startedAtMs = state.pomodoro.startedAt ? localDateTimeToMs(state.pomodoro.startedAt) : 0;
     const now = Date.now();
     const isInvalid =
       !endsAtMs ||
@@ -4517,7 +4520,7 @@ function renderManualPomodoro(running, remaining, blockOptions) {
   }
   if (running) {
     const mode = state.pomodoro.mode || "focus";
-    const endsAtMs = new Date(state.pomodoro.endsAt).getTime();
+    const endsAtMs = localDateTimeToMs(state.pomodoro.endsAt);
     const remainingMs = Math.max(0, endsAtMs - Date.now());
     const remainingSec = Math.floor(remainingMs / 1000);
     const currentBlock = state.blocks.find((b) => b.id === state.pomodoro.blockId);
@@ -4566,7 +4569,7 @@ function renderManualPomodoro(running, remaining, blockOptions) {
       `;
     }
     // focus フェーズ: 50:00 → 00:00、青色、2倍速
-    const startedAtMs = new Date(state.pomodoro.startedAt).getTime();
+    const startedAtMs = localDateTimeToMs(state.pomodoro.startedAt);
     const totalMs = endsAtMs - startedAtMs;
     const progress = 1 - remainingMs / totalMs;
     return `
@@ -5032,7 +5035,7 @@ function renderSettings() {
               ["todaySuggest", "今日のタスク提案の指示"]
             ].map(([key, label]) => `
               <label>${label}
-                <textarea class="textarea" data-ai-prompt="${key}" style="min-height:110px; font-size:12px">${escapeHTML(aiPrompt(key))}</textarea>
+                <textarea class="textarea" data-ai-prompt="${key}" style="min-height:110px; font-size:16px">${escapeHTML(aiPrompt(key))}</textarea>
               </label>
               <button class="btn ghost" data-action="ai-prompt-reset" data-key="${key}" style="font-size:11.5px; align-self:flex-start">↺ 既定に戻す</button>
             `).join("")}
@@ -6025,7 +6028,7 @@ function buildQuestionModal(q) {
       <div class="modal-body">
         <div class="field">
           <label class="field-label">問い(数週間持ち続ける "10x" の問い)</label>
-          <textarea class="textarea" data-modal-field="text" style="min-height:96px" placeholder="例: SEJ案件で "効率化提案" を "経営指標提案" に変えるには何が要るか">${escapeHTML(q?.text || "")}</textarea>
+          <textarea class="textarea" data-modal-field="text" style="min-height:96px" placeholder="例: SEJ案件で「効率化提案」を「経営指標提案」に変えるには何が要るか">${escapeHTML(q?.text || "")}</textarea>
         </div>
         ${isNew ? "" : `
           <div class="field">
@@ -7952,7 +7955,7 @@ function startTimerTicker() {
   timerTicker = setInterval(() => {
     // 任意タイマー
     if (state.pomodoro.running) {
-      if (new Date(state.pomodoro.endsAt).getTime() <= Date.now()) {
+      if (localDateTimeToMs(state.pomodoro.endsAt) <= Date.now()) {
         // 時間切れ: focus → 自動で break に、break → セッション終了
         if (state.pomodoro.mode === "break") {
           endBreakPomodoro();
@@ -8024,11 +8027,15 @@ async function hydrateStaticMarkdown() {
     changed = true;
   }
   // AI フィードバック: 当日と前日を取得
+  // v56: push 済みが判っていて、かつ手元に本文が無い日付のみ fetch。
+  //      これで存在しない .md への 404(コンソールノイズ)を出さない。
+  const files = Array.isArray(state.feedbackFiles) ? state.feedbackFiles : [];
   const today = state.selectedDate;
   const prev = addDays(today, -1);
+  const wantFetch = (d) => files.includes(d) && !(state.feedback[d] || "").trim() && !cachedFeedback[d];
   const [todayFb, prevFb] = await Promise.all([
-    fetchText(`./AIフィードバック_${today}.md`),
-    fetchText(`./AIフィードバック_${prev}.md`)
+    wantFetch(today) ? fetchText(`./AIフィードバック_${today}.md`) : Promise.resolve(""),
+    wantFetch(prev) ? fetchText(`./AIフィードバック_${prev}.md`) : Promise.resolve("")
   ]);
   if (todayFb && todayFb !== cachedFeedback[today]) {
     cachedFeedback[today] = todayFb;
@@ -8521,6 +8528,20 @@ function parseDate(date) {
   return new Date(year, month - 1, day);
 }
 
+// v56: ローカル日時文字列 "YYYY-MM-DDTHH:mm[:ss]"(または "YYYY-MM-DD")を、
+//      new Date(string) の TZ 解釈を経由せず数値コンストラクタで ms に変換する。
+//      iOS Safari は timezone 無しの ISO 風文字列を UTC と誤解釈するため、
+//      endsAt/startedAt/updatedAt を new Date(str) で読むと最大9時間ズレる。
+function localDateTimeToMs(dateTime) {
+  if (!dateTime) return 0;
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{1,2}):(\d{2})(?::(\d{2}))?)?/.exec(dateTime);
+  if (!m) return 0;
+  return new Date(
+    Number(m[1]), Number(m[2]) - 1, Number(m[3]),
+    Number(m[4] || 0), Number(m[5] || 0), Number(m[6] || 0)
+  ).getTime();
+}
+
 function addDays(date, delta) {
   const d = parseDate(date);
   d.setDate(d.getDate() + delta);
@@ -8567,7 +8588,7 @@ function weekdayLabel(date) {
 }
 
 function remainingText(end, doubleSpeed = false) {
-  const remainingMs = Math.max(0, new Date(end).getTime() - Date.now());
+  const remainingMs = Math.max(0, localDateTimeToMs(end) - Date.now());
   // 2倍速: 500ms = 表示1秒 として扱う(実時間25分で 50:00 → 0:00、1秒ずつ自然に減る)
   const display = doubleSpeed
     ? Math.floor(remainingMs / 500)
@@ -9343,6 +9364,17 @@ function ensurePassivePomodoro() {
 // AI フィードバック アップロード + 日報 GitHub push (v3)
 // ============================================================
 
+// v56: AIフィードバック_<date>.md を push した日付を記録(重複なし)。
+//      起動時 hydrate はこの記録に載る日付だけを fetch し、存在しないファイルへの
+//      リクエスト(=DevTools コンソールに残る 404)を出さない。
+function recordFeedbackFile(date) {
+  if (!Array.isArray(state.feedbackFiles)) state.feedbackFiles = [];
+  if (!state.feedbackFiles.includes(date)) {
+    state.feedbackFiles.push(date);
+    saveState();
+  }
+}
+
 function uploadFeedbackFile(date, file) {
   const reader = new FileReader();
   reader.onload = () => {
@@ -9355,6 +9387,7 @@ function uploadFeedbackFile(date, file) {
     render();
     // GitHub に設定があれば自動 push
     if (state.settings.github?.token && state.settings.github?.owner) {
+      recordFeedbackFile(date); // v56: 起動時 fetch を存在既知の日付に限定(404ノイズ回避)
       pushFileToGitHub(`AIフィードバック_${date}.md`, text, "アップロードAIフィードバック");
     }
   };

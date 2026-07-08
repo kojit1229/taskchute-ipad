@@ -1205,10 +1205,12 @@ h3 {
   color: var(--accent);
   font-weight: 700;
 }
-/* タイムラインカードのホバー */
+/* タイムラインカードのホバー
+   v56: transform:translateX で位置をずらすと、絶対配置(top/left)前提の
+   タイムライン当たり判定と食い違うため、位置を動かさない box-shadow で表現する。 */
 .timeline-card[data-action="edit-block"]:hover {
-  transform: translateX(-2px);
-  transition: transform 0.1s;
+  box-shadow: -2px 0 0 0 var(--accent), 0 2px 8px rgba(0,0,0,.18);
+  transition: box-shadow 0.1s;
 }
 
 /* + サブ ボタンを少し小さく */
@@ -2075,7 +2077,7 @@ h3 {
 .home-cd-lab.c { color: var(--green); }
 .home-cd-lab.d { color: var(--orange); }
 .home-cd {
-  font-family: inherit; font-size: 12px; font-weight: 700;
+  font-family: inherit; font-size: 16px; font-weight: 700;
   padding: 3px 2px 3px 4px; border: 1px solid var(--line);
   border-radius: 6px; background: var(--panel-soft); color: var(--text);
 }
@@ -2119,7 +2121,7 @@ h3 {
 /* テーマ追加パネル */
 .zt-add-wrap { display: none; margin: 0 0 14px; }
 .zt-add-wrap.show { display: block; }
-.zt-add-text { width: 100%; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 10px; color: var(--text); font: inherit; font-size: 14px; padding: 12px 13px; min-height: 84px; resize: vertical; line-height: 1.6; }
+.zt-add-text { width: 100%; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 10px; color: var(--text); font: inherit; font-size: 16px; padding: 12px 13px; min-height: 84px; resize: vertical; line-height: 1.6; }
 .zt-add-text:focus { outline: none; border-color: var(--orange); }
 .zt-add-row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 9px; }
 .zt-add-hint { font-size: 11.5px; color: var(--muted); margin-top: 8px; font-weight: 500; line-height: 1.6; }
@@ -2148,7 +2150,7 @@ h3 {
 
 /* 履歴検索 */
 .zt-search-row { position: relative; margin-bottom: 10px; }
-.zt-search-input { width: 100%; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 10px; color: var(--text); font: inherit; font-size: 14px; padding: 11px 13px 11px 36px; }
+.zt-search-input { width: 100%; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 10px; color: var(--text); font: inherit; font-size: 16px; padding: 11px 13px 11px 36px; }
 .zt-search-input:focus { outline: none; border-color: var(--accent); }
 .zt-search-row::before { content: "🔍"; position: absolute; left: 11px; top: 50%; transform: translateY(-50%); font-size: 13px; opacity: 0.55; pointer-events: none; }
 
@@ -2371,7 +2373,10 @@ h3 {
 .draft-block.is-dragging { cursor: grabbing; box-shadow: 0 8px 20px rgba(0,0,0,.22); opacity: .92; z-index: 9; }
 .draft-block-time { font-size: 10.5px; font-weight: 800; color: var(--accent); }
 .draft-block-title { font-size: 12px; font-weight: 700; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; }
-.draft-remove { position: absolute; top: 1px; right: 3px; background: none; border: none; color: var(--muted); font-size: 15px; cursor: pointer; padding: 2px 6px; }
+/* v56: 削除(×)は下端リサイズ帯(.draft-resize)より前面に置く。
+   短い下書きBlockでは resize 帯が × に重なり、DOM 上あとに来る resize 側に
+   クリックを奪われて削除できなくなるため、z-index で × を優先させる。 */
+.draft-remove { position: absolute; top: 1px; right: 3px; z-index: 2; background: none; border: none; color: var(--muted); font-size: 15px; cursor: pointer; padding: 2px 6px; }
 .draft-resize { position: absolute; left: 0; right: 0; bottom: 0; height: 14px; cursor: ns-resize; touch-action: none; }
 .draft-resize::after { content: ""; display: block; width: 36px; height: 4px; margin: 5px auto 0; border-radius: 2px; background: var(--accent); opacity: .55; }
 
