@@ -3,6 +3,7 @@
 iPad / iPhone / PC のブラウザで使える、タスクシュート + WBS + タイムライン + ジャーナルのWebアプリです。
 
 > 📐 技術構造の詳細は **[`設計書.md`](./設計書.md)** を参照。設計思想は `CONCEPT.md`(リポジトリ外で管理)。
+> 🤝 Claude Code × Codex × Obsidian の協働レビュー環境を他アプリでも作る手順は **[`docs/collaboration-setup.md`](./docs/collaboration-setup.md)**。
 
 ## 方針
 
