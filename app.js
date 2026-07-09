@@ -58,6 +58,7 @@ let timerTicker = null;
 let cachedVisionMd = "";
 let cachedAffirmationMd = "";
 const cachedFeedback = {};  // { 'YYYY-MM-DD': '...md text...' }
+const cachedWeeklyReviewMd = {};  // v62: { '週開始土曜YYYY-MM-DD': '...md text...' }(自宅PCバッチ生成)
 
 // v34: 0秒思考 — 画面内の一時状態(永続化しない)
 let ztTab = "other";          // "other" | "fav"
@@ -284,20 +285,61 @@ document.addEventListener("click", (event) => {
   if (action === "ai-morning-plan") runAiMorningPlan();
   if (action === "draft-confirm") confirmScheduleDraft();
   if (action === "draft-discard" && _scheduleDraft) {
-    // v52: 破棄も「この提案は不要だった」という学習シグナルとして記録
-    _scheduleDraft.items.forEach((it) => recordScheduleHistory(it, "discarded", _scheduleDraft.date));
+    // v52: 破棄も「この提案は不要だった」という学習シグナルとして記録(v62: source区別も記録)
+    _scheduleDraft.items.forEach((it) => recordScheduleHistory(it, "discarded", _scheduleDraft.date, _scheduleDraft.source || "deterministic"));
     _scheduleDraft = null;
+    _draftUndo = null;  // v62: 破棄はUndo対象外(下書き自体が消える)
+    _draftUndoHistoryEntry = null;
     saveState();
     render();
     showToast("下書きを破棄しました");
   }
   if (action === "draft-remove" && _scheduleDraft) {
     const removed = _scheduleDraft.items.find((x) => x.id === id);
-    if (removed) recordScheduleHistory(removed, "removed", _scheduleDraft.date);  // v52: 却下シグナル
+    let removedHistoryEntry = null;
+    if (removed) removedHistoryEntry = recordScheduleHistory(removed, "removed", _scheduleDraft.date, _scheduleDraft.source || "deterministic");  // v52: 却下シグナル
+    // v62(m2): 削除直前の下書き状態を1段Undoとして退避。このremovedエントリも一緒に退避し、
+    //          Undoで取り消せるようにする(Undo→再確定でremoved/confirmedが二重計上されないため)。
+    snapshotDraftForUndo(removedHistoryEntry);
     _scheduleDraft.items = _scheduleDraft.items.filter((x) => x.id !== id);
     if (!_scheduleDraft.items.length) _scheduleDraft = null;
+    // v62: 却下理由をワンタップで選べる軽量ピッカーを出す(任意・非ブロッキング。選ばなくても削除は既に完了している)
+    if (removed && removedHistoryEntry) _pendingRejectReason = { title: removed.title, entry: removedHistoryEntry };
     saveState();
     render();
+  }
+  if (action === "draft-undo" && _draftUndo) {
+    // v62: 下書きレイヤ操作(×削除・ドラッグ移動/リサイズ)の直前状態へ1段だけ戻す
+    _scheduleDraft = _draftUndo;
+    _draftUndo = null;
+    // v62(m2): 削除操作のUndoなら、その削除で積んだremovedエントリも取り消す(aiScheduleHistoryの
+    //          二重計上防止。ドラッグ操作由来のUndoでは_draftUndoHistoryEntryがnullなので何もしない)
+    if (_draftUndoHistoryEntry) {
+      const idx = state.aiScheduleHistory.indexOf(_draftUndoHistoryEntry);
+      if (idx !== -1) state.aiScheduleHistory.splice(idx, 1);
+      if (_pendingRejectReason && _pendingRejectReason.entry === _draftUndoHistoryEntry) {
+        _pendingRejectReason = null;  // 取り消したentryを参照していた却下理由ピッカーも畳む
+      }
+      _draftUndoHistoryEntry = null;
+    }
+    saveState();
+    render();
+    showToast("元に戻しました");
+  }
+  if (action === "draft-remove-reason" && _pendingRejectReason) {
+    // v62: 却下理由のワンタップ選択(今日は無理/価値が薄い/時間帯が合わない/その他)。aiScheduleHistoryへ追記する
+    _pendingRejectReason.entry.reason = target.dataset.reason || "";
+    _pendingRejectReason = null;
+    saveState();
+    render();
+  }
+  if (action === "draft-remove-reason-dismiss") {
+    _pendingRejectReason = null;
+    render();
+  }
+  // v62: 週次レビュー_*.md の「来週のタスク提案」から1件ずつWBSへ登録(一括登録はしない)
+  if (action === "weekly-suggest-add") {
+    addWeeklySuggestedTask(target.dataset.week, Number(target.dataset.index));
   }
   // v49: 世代バックアップ
   if (action === "open-backup-list") openBackupListModal();
@@ -603,6 +645,9 @@ function normalizeState(value) {
   if (typeof value.settings.ai.autoMorningPlan !== "boolean") value.settings.ai.autoMorningPlan = false;
   // v52: スケジュール実績ログ(決定論配置の元値に対するユーザの採否・修正を記録)。
   if (!Array.isArray(value.aiScheduleHistory)) value.aiScheduleHistory = [];
+  // v62: aiScheduleHistory の各エントリに source/reason のデフォルトを補完(後方互換。
+  //      v62以前のエントリには無いフィールドのため、既存値優先で埋める)
+  value.aiScheduleHistory = value.aiScheduleHistory.map((h) => ({ source: "unknown", reason: "", ...h }));
   // v53: 計器盤の期間カーソル(UI状態)と自動アーカイブ設定
   value.settings.statsRange ||= "4w";
   if (typeof value.settings.autoArchive !== "boolean") value.settings.autoArchive = true;
@@ -1349,11 +1394,13 @@ function renderHome() {
 }
 
 // --- 三つの信条 ---
+// v62: Daily_Affirmation.md v4.1(実データ裏付け型に刷新)と整合させ、ハードコードの
+//      標語からKの実データ(MIT達成率100%・実行率と充電の無相関・朝型)に基づく文言へ更新。
 function homeCreed() {
   const creeds = [
-    ["着手第一主義！", "雑でもいいからやればやる気が出てくる"],
-    ["悩んだときは", "ヒンメルならどうするか考えて行動せよ"],
-    ["笑顔でエネルギッシュで", "今日も最高の1日を過ごそう！"]
+    ["決めた一つは、", "必ずやり切れる(MIT達成率100%)"],
+    ["進んだ量で測る。", "実行率で自分を裁かない"],
+    ["朝に全部を注ぐ。", "夜は手放して充電する"]
   ];
   const nums = ["一", "二", "三"];
   return `
@@ -2042,8 +2089,11 @@ function adoptAiMit(index) {
 //  AIがやるのは「並べる下書き」まで。動かす・削る・確定は人間。
 //  下書きは非永続(確定するまで実データに触れない)。
 // =========================================================
-let _scheduleDraft = null;  // { date, items:[{id,title,taskId,category,start(分),minutes}], skipped:[{title,reason}] } 非永続(v59でskippedを追加)
+let _scheduleDraft = null;  // { date, items:[{id,title,taskId,category,start(分),minutes}], skipped:[{title,reason}], source } 非永続(v59でskippedを追加、v62でsourceを追加)
 let _draftDrag = null;      // ドラッグ中の一時情報 非永続
+let _draftUndo = null;      // v62: 下書きレイヤ操作(×削除・ドラッグ)の直前スナップショット(1段Undo)非永続
+let _draftUndoHistoryEntry = null;  // v62(m2): _draftUndoが削除操作由来なら、その時記録したaiScheduleHistoryエントリの参照(Undoで取り消す)
+let _pendingRejectReason = null;  // v62: ×直後の却下理由ワンタップ選択(任意・非ブロッキング)非永続 { title, entry }
 
 function minToHHMM(min) {
   const m = clamp(Math.round(min), 0, 24 * 60 - 1);
@@ -2120,7 +2170,8 @@ function runAiSchedule() {
   if (!freeGaps.length) return showToast("空き時間がありません(予定が埋まっています)");
   const { items, skipped } = fallbackMorningPlan(candidates, freeGaps);
   if (!items.length) return showToast("空き時間に配置できる候補がありませんでした");
-  _scheduleDraft = { date, items: items.slice(0, 6), skipped };
+  _scheduleDraft = { date, items: items.slice(0, 6), skipped, source: "deterministic" };  // v62: source区別
+  _draftUndo = null; _draftUndoHistoryEntry = null;  // v62: 新規下書きでは前セッションのUndoを持ち越さない
   state.timelineMode = "planned";
   setView("timeline");
   showToast("空き時間へ自動配置しました — ドラッグで調整して「確定」してください");
@@ -2138,11 +2189,14 @@ function renderDraftLayer(rowHeight, startHour) {
         const catColor = it.category ? getCategoryColor(it.category) : null;
         // v61: 繰越由来の下書きは、確定するとこの回数の繰り越しになる、という予告バッジ
         const draftBadge = it.carryFromId ? migrationBadgeHTML(migrationNextCount(it.carryFromId)) : "";
+        // v62: AIプラン由来の reason は下書きバー確認+ツールチップ(title属性)で見えるようにする
         return `
         <div class="draft-block" data-draft-id="${it.id}" data-row-height="${rowHeight}"
-             style="top:${top}px; height:${height}px; ${catColor ? `border-color:${catColor};` : ""}">
+             style="top:${top}px; height:${height}px; ${catColor ? `border-color:${catColor};` : ""}"
+             ${it.reason ? `title="${escapeHTML(it.reason)}"` : ""}>
           <div class="draft-block-time">${minToHHMM(it.start)}〜${minToHHMM(it.start + it.minutes)}(${it.minutes}分)</div>
           <div class="draft-block-title">${escapeHTML(it.title)}${draftBadge}</div>
+          ${it.reason ? `<div class="draft-block-reason">${escapeHTML(it.reason)}</div>` : ""}
           <button class="draft-remove" data-action="draft-remove" data-id="${it.id}" aria-label="この下書きを外す">×</button>
           <div class="draft-resize" data-draft-resize="${it.id}"></div>
         </div>`;
@@ -2153,17 +2207,52 @@ function renderDraftLayer(rowHeight, startHour) {
 function draftBarHTML() {
   if (!_scheduleDraft || _scheduleDraft.date !== state.selectedDate) return "";
   const skipped = _scheduleDraft.skipped || [];  // v59: 朝プランで「配置しない」と判断した候補
+  // v62: AI由来(自宅PCバッチ生成のAIプラン)か決定論配置由来かを小さく区別表示する
+  const sourceLabel = _scheduleDraft.source === "ai-plan" ? "🤖 AIプラン由来" : "⚙ 決定論配置";
   return `
     <div class="draft-bar">
-      <span>📋 下書き ${_scheduleDraft.items.length}件 — ドラッグで移動 / 下端をドラッグで長さ調整 / ×で外す</span>
+      <span>📋 下書き ${_scheduleDraft.items.length}件(${sourceLabel}) — ドラッグで移動 / 下端をドラッグで長さ調整 / ×で外す</span>
       <span class="row" style="gap:6px">
+        ${_draftUndo ? `<button class="btn ghost" data-action="draft-undo">↩ 元に戻す</button>` : ""}
         <button class="btn primary" data-action="draft-confirm">確定して登録</button>
         <button class="btn ghost" data-action="draft-discard">破棄</button>
       </span>
     </div>
     ${skipped.length ? `<div class="muted" style="font-size:11.5px; line-height:1.6; margin:-4px 0 8px">
-      ${skipped.map((s) => `見送り: ${escapeHTML(s.title)}${s.reason ? `(${escapeHTML(s.reason)})` : ""}`).join(" ／ ")}
+      ${skipped.map((s) => {
+        // v62(M1レビュー対応): kind="expired" は空き時間との不整合で個別ドロップされた項目
+        // (判断の透明化のため「見送り」とは別ラベルで表示する)
+        const label = s.kind === "expired" ? "時間切れで除外" : "見送り";
+        return `${label}: ${escapeHTML(s.title)}${s.reason ? `(${escapeHTML(s.reason)})` : ""}`;
+      }).join(" ／ ")}
     </div>` : ""}`;
+}
+
+// v62: 下書きレイヤ操作(×削除・ドラッグ移動/リサイズ)の直前状態を退避する(1段Undo)。
+// _scheduleDraft は非永続のため、ここでの退避もモジュール変数のディープコピーで完結する。
+// historyEntry: 削除操作由来のUndoなら、その削除で記録したaiScheduleHistoryエントリを渡す。
+// ドラッグ操作由来のUndo(履歴レコードを伴わない)では省略する。
+function snapshotDraftForUndo(historyEntry = null) {
+  if (!_scheduleDraft) return;
+  _draftUndo = JSON.parse(JSON.stringify(_scheduleDraft));
+  _draftUndoHistoryEntry = historyEntry;
+}
+
+const DRAFT_REJECT_REASONS = ["今日は無理", "価値が薄い", "時間帯が合わない", "その他"];
+
+// v62: ×で外した直後だけ出す軽量な却下理由ピッカー(任意・非ブロッキング)。
+// モーダルにはしない(即座に削除は完了しており、理由選択はあとから追加できる情報)。
+// aiScheduleHistory の該当entryへ直接reasonを書き込む(v64の学習データ)。
+function draftRejectReasonPickerHTML() {
+  if (!_pendingRejectReason) return "";
+  return `
+    <div class="draft-reject-picker">
+      <span>「${escapeHTML(_pendingRejectReason.title)}」を外しました。理由(任意):</span>
+      <span class="row" style="gap:6px; flex-wrap:wrap">
+        ${DRAFT_REJECT_REASONS.map((r) => `<button class="btn ghost" data-action="draft-remove-reason" data-reason="${escapeHTML(r)}">${escapeHTML(r)}</button>`).join("")}
+        <button class="btn ghost" data-action="draft-remove-reason-dismiss">閉じる</button>
+      </span>
+    </div>`;
 }
 
 // v60(旧v52): スケジュール実績ログ。決定論配置の元値(aiStart/aiMinutes、フィールド名は
@@ -2182,27 +2271,33 @@ const SCHED_BANDS = [
   [18, 23, "夜(18-23時)"]
 ];
 
-// 採用/却下を1件記録(採用時は確定値も)
-function recordScheduleHistory(item, outcome, date) {
-  state.aiScheduleHistory.push({
+// 採用/却下を1件記録(採用時は確定値も)。v62: source(ai-plan/deterministic)・reason(却下理由)を追加し、
+// 呼び出し元が却下理由をあとから紐付けられるよう push した entry 自体を返す(v64の学習データ)。
+function recordScheduleHistory(item, outcome, date, source = "deterministic", reason = "") {
+  const entry = {
     date,
     title: item.title,
     category: item.category || "",
     aiStart: minToHHMM(item.aiStart ?? item.start),
     aiMin: item.aiMinutes ?? item.minutes,
     outcome,  // 'confirmed' | 'removed' | 'discarded'
+    source,   // v62: 'ai-plan' | 'deterministic' — 提案の出どころ
+    reason: reason || "",  // v62: 却下理由(removed時のみ、ワンタップ選択・任意)
     userStart: outcome === "confirmed" ? minToHHMM(item.start) : null,
     userMin: outcome === "confirmed" ? item.minutes : null,
     at: nowDateTime()
-  });
+  };
+  state.aiScheduleHistory.push(entry);
   if (state.aiScheduleHistory.length > AI_SCHED_HISTORY_MAX) {
     state.aiScheduleHistory = state.aiScheduleHistory.slice(-AI_SCHED_HISTORY_MAX);
   }
+  return entry;
 }
 
 function confirmScheduleDraft() {
   if (!_scheduleDraft || !_scheduleDraft.items.length) return;
   const { date, items } = _scheduleDraft;
+  const draftSource = _scheduleDraft.source || "deterministic";  // v62: 確定記録にも出どころを残す
   // v61: マイグレーション儀式 — 繰越由来(carryFromId)の項目が3回目の繰り越しになる場合は、
   //      一括確定の前に一呼吸置く。既に選択済み(_ritualResolved)の項目はスキップする。
   const ritualItem = items.find((it) =>
@@ -2234,13 +2329,14 @@ function confirmScheduleDraft() {
       block.carryCount = (src?.carryCount || 0) + 1;  // v61: 繰り越し回数を1つ積み上げる
     }
     state.blocks.push(block);
-    recordScheduleHistory(it, "confirmed", date);
+    recordScheduleHistory(it, "confirmed", date, draftSource);
     // v59: 繰り越し由来の下書きは元Blockに migratedTo を設定(carryOverBlockと同じ二重繰越防止セマンティクス)
     if (it.carryFromId) {
       state.blocks = state.blocks.map((b) => b.id === it.carryFromId ? { ...b, migratedTo: block.id, updatedAt: nowDateTime() } : b);
     }
   });
   _scheduleDraft = null;
+  _draftUndo = null; _draftUndoHistoryEntry = null;  // v62: 確定済みの下書きへのUndoは意味を持たない
   saveAndRender(`📋 ${items.length}件のBlockを登録しました`);
 }
 
@@ -2294,11 +2390,78 @@ function fallbackMorningPlan(candidates, freeGaps) {
   return { items: items.slice(0, 15), skipped };
 }
 
+// v62: 自宅PCバッチ生成の AIプラン_YYYY-MM-DD.json(plan-daily-validate.py が権威スキーマ。
+// date/generatedAt/plan[]/skipped[]、plan項目はtitle/taskId/blockId/start/minutes/category/reason/carryFromId)
+// を当日限定でfetchし、構造検証+現在状態との整合性(二重繰越参照・空き時間との重複)を確認する。
+// 構造が壊れている(パース不能・日付不一致・型不正)場合はプラン全体を null にして決定論配置へ
+// フォールバックするが、空き時間との不整合(過去時刻・既存Blockと衝突)は項目単位でドロップし、
+// 採用可能な項目が1件も無い場合のみ null にする(M1レビュー対応: 一部だけ古くても全体を
+// 捨てない)。
+async function tryFetchAiPlan(date, freeGaps) {
+  const raw = await fetchText(`./AIプラン_${date}.json`);
+  if (!raw) return null;  // 取得失敗(404含む。fetchTextは404で空文字を返す)
+  let data;
+  try { data = JSON.parse(raw); } catch { return null; }  // 不正JSON
+  if (!data || typeof data !== "object") return null;
+  if (data.date !== date) return null;  // 当日分でない(古い/取り違え)
+  if (!Array.isArray(data.plan) || !Array.isArray(data.skipped)) return null;
+
+  const START_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+  const items = [];
+  for (const p of data.plan) {
+    if (!p || typeof p !== "object") return null;
+    if (typeof p.title !== "string" || !p.title.trim()) return null;
+    if (typeof p.start !== "string" || !START_RE.test(p.start)) return null;
+    if (typeof p.minutes !== "number" || !Number.isInteger(p.minutes) || p.minutes < 1 || p.minutes > 600) return null;
+    const carryFromId = typeof p.carryFromId === "string" ? p.carryFromId : "";
+    // v61の二重繰越防止セマンティクス(migratedTo)をAIプラン経由でも維持: 参照先が既に
+    // 繰り越し済み/削除済み/存在しなければ、この項目だけ不採用にする(プラン全体は活かす)
+    if (carryFromId) {
+      const src = blockById(carryFromId);
+      if (!src || src.deleted || src.migratedTo) continue;
+    }
+    const taskId = typeof p.taskId === "string" ? p.taskId : "";
+    if (taskId) {
+      const t = state.tasks.find((x) => x.id === taskId);
+      if (!t || t.deleted || t.status === "completed") continue;  // 生成後に完了/削除済みなら不採用
+    }
+    const start = minutesOf(p.start);
+    items.push({
+      id: crypto.randomUUID(),
+      title: p.title,
+      taskId,
+      category: typeof p.category === "string" ? p.category : "",
+      start, minutes: p.minutes, aiStart: start, aiMinutes: p.minutes,
+      carryFromId,
+      reason: typeof p.reason === "string" ? p.reason : ""  // v62: 下書きバー/ツールチップで見せる
+    });
+  }
+  const skipped = [];
+  for (const s of data.skipped) {
+    if (!s || typeof s !== "object" || typeof s.title !== "string") return null;
+    skipped.push({ title: s.title, reason: typeof s.reason === "string" ? s.reason : "", kind: "ai" });  // v62: AI自身が「配置しない」と判断した候補
+  }
+  if (!items.length) return null;  // 採用できる項目が無ければ決定論へフォールバック
+  // v62(M1レビュー対応): 空き時間との整合性を項目単位で確認する。バッチ生成(05:00)から
+  // fetch(数時間後もありうる)までの間に過去時刻になった・既存Blockと衝突した項目だけを
+  // 個別にドロップし(プラン全体は活かす)、除外理由が見えるようskippedと同じ形で
+  // 「時間切れで除外」として表示する(判断の透明化)。採用可能な項目が1件も残らない場合のみ
+  // 決定論へフォールバックする。
+  const fittingItems = [];
+  for (const it of items) {
+    const fits = freeGaps.some(([s, e]) => it.start >= s && it.start + it.minutes <= e);
+    if (fits) fittingItems.push(it);
+    else skipped.push({ title: it.title, reason: "", kind: "expired" });
+  }
+  if (!fittingItems.length) return null;  // 採用可能な項目が0件なら決定論へフォールバック
+  return { items: fittingItems, skipped };
+}
+
 // v60: 決定論配置(fallbackMorningPlan)を正規経路に昇格。Claude API 呼び出しは全廃。
-function runAiMorningPlan({ auto = false } = {}) {
+// v62: 自宅PCバッチ生成のAIプランJSONを優先採用し、取得/検証に失敗した場合のみ決定論配置へ
+//      フォールバックする(v60の経路は無傷で維持)。
+async function runAiMorningPlan({ auto = false } = {}) {
   const date = todayISO();
-  const candidates = aiMorningPlanCandidates(date);
-  if (!candidates.length) { if (!auto) showToast("配置できる候補がありません(繰越・WBS未完了が対象です)"); return; }
   const DAY_START = 5 * 60, DAY_END = 23 * 60;
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
@@ -2307,6 +2470,21 @@ function runAiMorningPlan({ auto = false } = {}) {
   const freeGaps = computeFreeGaps(date, DAY_START, DAY_END)
     .map(([s, e]) => [Math.max(s, nowFloor), e])
     .filter(([s, e]) => e - s >= 15);
+
+  const aiPlan = freeGaps.length ? await tryFetchAiPlan(date, freeGaps) : null;
+  if (aiPlan) {
+    _scheduleDraft = { date, items: aiPlan.items, skipped: aiPlan.skipped, source: "ai-plan" };
+    _draftUndo = null; _draftUndoHistoryEntry = null;  // v62: 新規下書きでは前セッションのUndoを持ち越さない
+    if (!auto) { state.timelineMode = "planned"; setView("timeline"); }
+    showToast(auto
+      ? "🌅 AIプランの下書きを置きました。タイムラインで調整→確定してください"
+      : "🌅 AIプランを下書きに置きました — 確認して「確定」してください");
+    render();
+    return;
+  }
+
+  const candidates = aiMorningPlanCandidates(date);
+  if (!candidates.length) { if (!auto) showToast("配置できる候補がありません(繰越・WBS未完了が対象です)"); return; }
   if (!freeGaps.length) { if (!auto) showToast("今日は空き時間がありません(予定が埋まっています)"); return; }
 
   const { items, skipped } = fallbackMorningPlan(candidates, freeGaps);
@@ -2316,7 +2494,8 @@ function runAiMorningPlan({ auto = false } = {}) {
     return;
   }
 
-  _scheduleDraft = { date, items, skipped };
+  _scheduleDraft = { date, items, skipped, source: "deterministic" };
+  _draftUndo = null; _draftUndoHistoryEntry = null;  // v62: 新規下書きでは前セッションのUndoを持ち越さない
   if (!auto) { state.timelineMode = "planned"; setView("timeline"); }
   showToast(auto
     ? "🌅 今日の下書きプランを置きました。タイムラインで調整→確定してください"
@@ -2341,10 +2520,14 @@ function maybeAutoMorningPlan() {
     !b.deleted && b.date === today && b.category !== "ルーティン" && !b.recurrenceGroupId);
   if (hasNonRoutineToday) return;  // 既に当日のBlockがあれば白紙提案の出番ではない
   try { localStorage.setItem(AUTO_MORNING_PLAN_KEY, today); } catch { /* 記録できなくても続行 */ }
+  // v62: runAiMorningPlan は AIプランJSONのfetchを含むため async 化した。同期 throw は
+  //      try/catch で、非同期 reject は .catch() で拾い、どちらも静かに握りつぶす(手動実行は常に可能)。
   try {
-    runAiMorningPlan({ auto: true });
+    runAiMorningPlan({ auto: true }).catch((error) => {
+      console.warn("朝プラン自動下書きをスキップ:", error.message);
+    });
   } catch (error) {
-    console.warn("朝プラン自動下書きをスキップ:", error.message);  // 静かに(手動実行は常に可能)
+    console.warn("朝プラン自動下書きをスキップ:", error.message);
   }
 }
 
@@ -2361,6 +2544,7 @@ document.addEventListener("pointerdown", (event) => {
   const el = resizeEl ? resizeEl.closest(".draft-block") : blockEl;
   if (!item || !el) return;
   const rowHeight = Number(el.dataset.rowHeight) || 60;
+  snapshotDraftForUndo();  // v62: ドラッグ開始前の状態を1段Undoとして退避(historyEntryなし)
   _draftDrag = { id, mode: resizeEl ? "resize" : "move", startY: event.clientY, origStart: item.start, origMinutes: item.minutes, rowHeight, el };
   el.classList.add("is-dragging");
   event.preventDefault();
@@ -3548,6 +3732,7 @@ function renderTimelineView() {
       <span class="muted" style="font-size:12px">空き時間タップで追加 / ○タップで完了登録 / カードタップで編集 / 赤線は現在時刻</span>
     </div>
     ${draftBarHTML()}
+    ${draftRejectReasonPickerHTML()}
     ${state.settings.timelineCategoryFilter ? `<div class="row" style="margin-bottom:10px; gap:8px; align-items:center">
       <span class="cat-chip" style="background:${getCategoryColor(state.settings.timelineCategoryFilter)}1f; color:${getCategoryColor(state.settings.timelineCategoryFilter)}; border:1px solid ${getCategoryColor(state.settings.timelineCategoryFilter)}66">カテゴリ: ${escapeHTML(state.settings.timelineCategoryFilter)}</span>
       <button class="btn ghost" data-action="timeline-clear-cat" style="font-size:12px">フィルタ解除 ✕</button>
@@ -5081,6 +5266,91 @@ function shiftWeeklyWeek(dir) {
   render();
 }
 
+// v62: 週次レビュー_*.md の「## 来週のタスク提案」節から `- [ ]` 行を抜き出し、
+// それ以外は通常のMarkdownとして renderMarkdown() に渡せるよう本文を分離する。
+function splitWeeklyReviewMd(md) {
+  const lines = md.split("\n");
+  const startIdx = lines.findIndex((l) => l.trim() === "## 来週のタスク提案");
+  if (startIdx === -1) return { rest: md, tasks: [], sectionNote: "" };
+  let endIdx = lines.length;
+  for (let i = startIdx + 1; i < lines.length; i++) {
+    if (/^##\s/.test(lines[i])) { endIdx = i; break; }
+  }
+  const sectionLines = lines.slice(startIdx + 1, endIdx);
+  const tasks = [];
+  const noteLines = [];
+  sectionLines.forEach((l) => {
+    const m = /^-\s*\[ \]\s*(.+)$/.exec(l.trim());
+    if (m) tasks.push(m[1].trim());
+    else if (l.trim()) noteLines.push(l.trim());
+  });
+  const rest = [...lines.slice(0, startIdx), ...lines.slice(endIdx)].join("\n");
+  return { rest, tasks, sectionNote: noteLines.join(" ") };
+}
+
+const _weeklySuggestRegistered = new Set();  // v62: 二重登録防止(セッション内のみ、非永続) "week:index"
+
+// v62: 週次レビュータブの「AI週次レビュー」セクション。直近土曜分のみ表示し、無ければ空文字
+// (=非表示)。renderMarkdown() は「来週のタスク提案」節以外に使い、その節だけは行ごとに
+// 「+登録」ボタンを添えた独自リストにする(一括登録はしない。Kが1件ずつ判断する)。
+function aiWeeklyReviewSectionHTML() {
+  const week = weekStartFor(todayISO());
+  const md = cachedWeeklyReviewMd[week] || "";
+  if (!md) return "";
+  const { rest, tasks, sectionNote } = splitWeeklyReviewMd(md);
+  return `
+    <div class="weekly-sec">
+      <h3>🤖 AI週次レビュー(${week})</h3>
+      <div class="md-render readonly-md">${renderMarkdown(rest)}</div>
+      ${tasks.length ? `
+        <div class="ai-weekly-suggest">
+          <div class="ai-weekly-suggest-cap">来週のタスク提案</div>
+          ${sectionNote ? `<div class="muted" style="font-size:11.5px; margin-bottom:6px">${escapeHTML(sectionNote)}</div>` : ""}
+          ${tasks.map((t, i) => {
+            const key = `${week}:${i}`;
+            const registered = _weeklySuggestRegistered.has(key);
+            return `
+            <div class="ai-weekly-suggest-row">
+              <span class="ai-weekly-suggest-text">${escapeHTML(t)}</span>
+              ${registered
+                ? `<span class="muted" style="font-size:12px">✓ 登録済み</span>`
+                : `<button class="btn ghost" data-action="weekly-suggest-add" data-week="${week}" data-index="${i}">+登録</button>`}
+            </div>`;
+          }).join("")}
+        </div>` : ""}
+    </div>`;
+}
+
+// v62(m7): 提案行末尾の見積表記「(30分)」「(45分)」(半角/全角括弧どちらも)を estimateMin へ
+// 抜き出し、タイトルからは取り除く。無ければそのまま(estimateMinはnull)。
+const SUGGEST_ESTIMATE_RE = /[((]\s*(\d+)\s*分\s*[))]\s*$/;
+function parseSuggestedTaskTitle(raw) {
+  const m = SUGGEST_ESTIMATE_RE.exec(raw.trim());
+  if (!m) return { title: raw.trim(), estimateMin: null };
+  return { title: raw.slice(0, m.index).trim(), estimateMin: Number(m[1]) };
+}
+
+// 「来週のタスク提案」の1行をWBSタスク(todo、「その他」Project直下)として登録する。
+// 一括登録はしない設計のため、この関数は常に1件のみを扱う。
+function addWeeklySuggestedTask(week, idx) {
+  if (!week || !Number.isInteger(idx)) return;
+  const key = `${week}:${idx}`;
+  if (_weeklySuggestRegistered.has(key)) return;
+  const md = cachedWeeklyReviewMd[week] || "";
+  const { tasks } = splitWeeklyReviewMd(md);
+  const raw = tasks[idx];
+  if (!raw) return;
+  const { title, estimateMin } = parseSuggestedTaskTitle(raw);
+  if (!title) return;
+  const otherProject = state.projects.find((p) => p.kind === "other" && !p.deleted);
+  if (!otherProject) return showToast("登録先プロジェクトが見つかりません");
+  const task = makeTask({ projectId: otherProject.id, title });
+  if (estimateMin) task.estimateMin = estimateMin;  // v62(m7): 見積分数をWBSの estimateMin に反映
+  state.tasks.push(task);
+  _weeklySuggestRegistered.add(key);
+  saveAndRender(`「${title}」をWBSに登録しました`);
+}
+
 function renderWeekly() {
   const week = currentWeeklyWeek();
   const m = computeWeeklyMetrics(week);
@@ -5186,6 +5456,8 @@ function renderWeekly() {
       ${moved.length ? moved.map((x) => `<div class="weekly-q-row" data-action="weekly-open-question"><span class="weekly-q-move">動いた</span>${escapeHTML(x.q.text)} <span class="muted">(+${x.cnt} 本)</span></div>`).join("") : `<div class="muted" style="font-size:13px">この週に問いへ紐づく0秒思考はありませんでした。</div>`}
       ${stalled.map((q) => `<div class="weekly-q-row" data-action="weekly-open-question"><span class="weekly-q-stall">止まっている</span>${escapeHTML(q.text)} <span class="muted">(${daysBetween(q.lastTouchedAt, todayISO())}日)</span></div>`).join("")}
     </div>` : ""}
+
+    ${aiWeeklyReviewSectionHTML()}
 
     <div class="weekly-cycle-link" data-action="open-cycle">◷ 12週サイクルをふりかえる(節目のレビュー) →</div>
 
@@ -7530,9 +7802,19 @@ async function hydrateStaticMarkdown() {
     // v57: 直push検知した前日分は、以後の起動時fetchが正規ルートに乗るよう記録する
     if (!files.includes(prev)) recordFeedbackFile(prev);
   }
+  // v62: AI週次レビュー(自宅PCバッチ生成)。直近土曜1件のみ、無ければ404を静かに無視する
+  //      (fetchTextの仕様どおり)。週次レビュータブを開くたび同じ週の再fetchはしない。
+  const weeklyReviewWeek = weekStartFor(todayISO());
+  if (!cachedWeeklyReviewMd[weeklyReviewWeek]) {
+    const weeklyReviewMd = await fetchText(`./週次レビュー_${weeklyReviewWeek}.md`);
+    if (weeklyReviewMd && weeklyReviewMd !== cachedWeeklyReviewMd[weeklyReviewWeek]) {
+      cachedWeeklyReviewMd[weeklyReviewWeek] = weeklyReviewMd;
+      changed = true;
+    }
+  }
   // v37: state.view というプロパティは存在しない(正しくは currentView)。
   //      このタイポのせいで、ビジョン画面を開いたまま読み込みが終わっても再描画されなかった。
-  if (changed && (state.currentView === "vision" || state.currentView === "journal")) {
+  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly")) {
     render();
   }
 }

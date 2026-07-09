@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v61";
+const CACHE_NAME = "taskchute-journal-pwa-v62";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -60,8 +60,10 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.endsWith(".mp4") || url.pathname.endsWith(".webm")) {
     return;
   }
-  // MD ファイルは network-first(編集が反映されるように)
-  if (url.pathname.endsWith(".md")) {
+  // MD/JSON ファイルは network-first(編集が反映されるように)。
+  // v62(m5): AIプラン_*.json(バッチ生成物の日次fetch)もmd/htmlと同じ扱いに統一する
+  // (cache-firstだと当日分が来ても端末に旧キャッシュが居座り、下書きに反映されなくなるため)。
+  if (url.pathname.endsWith(".md") || url.pathname.endsWith(".json")) {
     event.respondWith(
       fetch(event.request)
         .then((response) => {

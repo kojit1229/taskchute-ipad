@@ -125,6 +125,10 @@ function check(name, cond, extra = "") {
   // 下限に近い最短の有効値として15分を使う。高さは Math.max(26, minutes/60*rowHeight) の
   // 下限26pxに張り付く、という検証対象は変わらない)。
   console.log("[4] 短い下書きBlockの削除ボタンがクリック可能");
+  // v62レビュー対応: runAiSchedule()はcomputeFreeGaps(「現在時刻〜23:00」)に依存するため、
+  // 23:00境界付近の実行だとfreeGapsが消えてフレーキーになる(v61で v50/v59/v60 に適用した
+  // page.clock対策がこのシナリオだけ未適用だった)。日中時刻に固定して決定論化する。
+  await page.clock.setFixedTime(new Date(now.getFullYear(), now.getMonth(), now.getDate(), 10, 0, 0));
   const TODAY = isoDate(now);
   await page.evaluate(({ KEY, TODAY }) => {
     const s = JSON.parse(localStorage.getItem(KEY));

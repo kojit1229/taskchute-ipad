@@ -2498,4 +2498,21 @@ h3 {
   background: var(--panel);
   color: var(--text);
 }
+
+/* v62: AIプランの reason(下書きBlock内の小さな注記) */
+.draft-block-reason { font-size: 10px; color: var(--muted); line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* v62: ×直後の却下理由ワンタップピッカー(任意・非ブロッキング) */
+.draft-reject-picker {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+  background: rgba(120,120,128,.10); border: 1.5px dashed var(--line); border-radius: 10px;
+  padding: 8px 12px; margin-bottom: 10px; font-size: 12px;
+}
+
+/* v62: AI週次レビュー(週次レビュー_*.mdの「来週のタスク提案」)の1行ずつ登録リスト */
+.ai-weekly-suggest { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line-soft); }
+.ai-weekly-suggest-cap { font-size: 12.5px; font-weight: 700; margin-bottom: 6px; }
+.ai-weekly-suggest-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line-soft); }
+.ai-weekly-suggest-row:last-child { border-bottom: none; }
+.ai-weekly-suggest-text { font-size: 13px; flex: 1; }
 .home-ideal-input::placeholder { color: var(--faint); }
