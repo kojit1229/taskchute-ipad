@@ -67,7 +67,8 @@ function check(name, cond, extra = "") {
   await page.click('[data-action="nav"][data-view="settings"]');
   await page.waitForTimeout(300);
   check("朝イチ自動レビューのトグルがある", await page.locator("[data-ai-automorning]").count() === 1);
-  check("プロンプト編集欄が5つ", await page.locator("textarea[data-ai-prompt]").count() === 5);
+  // v59: 朝の一括プランニングの指示部(morningPlan)が追加され6つになった
+  check("プロンプト編集欄が6つ", await page.locator("textarea[data-ai-prompt]").count() === 6);
   await page.locator('summary:has-text("プロンプト設定")').click();
   await page.waitForTimeout(200);
   const ctxDefault = await page.locator('textarea[data-ai-prompt="context"]').inputValue();

@@ -84,6 +84,18 @@ const AI_DEFAULT_PROMPTS = {
     "- 昨日のやり残し・昨日のフィードバックでの提案・期限が近いWBSタスクを優先する",
     "- 各提案に「なぜ今日か」を一言添える",
     "- すでに今日の予定にあるものは提案しない"
+  ].join("\n"),
+  // v59: 朝の一括プランニングの指示部
+  morningPlan: [
+    "あなたは1日の立ち上げを手伝うアシスタントです。",
+    "昨日の未完了(繰り越し)・WBSの未完了タスク・昨日のMIT候補をまとめて見て、今日の空き時間に仮配置してください。",
+    "",
+    "条件:",
+    "- 詰め込み禁物。全部を無理に配置しない(余白を残す)。配置しない候補は理由付きでskippedへ",
+    "- 確定済みの予定・ルーティンとは時間を重ねない。時刻は15分刻み、1件は15〜120分",
+    "- MIT候補は最初の大きな空き枠に優先配置する",
+    "- 繰り越し(昨日未完了)は「まだやる理由が薄い」と判断したら無理に配置せずskippedへ",
+    "- 集中が必要な作業は午前などエネルギーが高い時間帯に置く"
   ].join("\n")
 };
 
@@ -343,6 +355,8 @@ document.addEventListener("click", (event) => {
   if (action === "ai-decompose-submit") submitAiDecompose();
   // v50: ② AIスケジュール下書き(仮配置 → D&D調整 → 確定)
   if (action === "ai-schedule") runAiSchedule();
+  // v59: 朝の一括プランニング(繰越+WBS+MIT候補 → 空き時間へ仮配置)
+  if (action === "ai-morning-plan") runAiMorningPlan();
   if (action === "draft-confirm") confirmScheduleDraft();
   if (action === "draft-discard" && _scheduleDraft) {
     // v52: 破棄も「この提案は不要だった」という学習シグナルとして記録
@@ -530,6 +544,12 @@ document.addEventListener("change", (event) => {
     saveState();
     if (target.checked) showToast("朝イチ自動レビューを有効にしました(翌朝から)");
   }
+  // v59: 朝の一括プランニングの自動下書きトグル
+  if (target.matches("[data-ai-automorningplan]")) {
+    state.settings.ai.autoMorningPlan = target.checked;
+    saveState();
+    if (target.checked) showToast("朝の一括プランニングを有効にしました(翌朝から)");
+  }
   // v53: 自動アーカイブのトグル
   if (target.matches("[data-setting-autoarchive]")) {
     state.settings.autoArchive = target.checked;
@@ -690,6 +710,8 @@ function normalizeState(value) {
   }
   // v51: 朝イチ自動レビュー(既定OFF。ONなら日付が変わって最初に開いた時、昨日の日報レビューを自動実行)
   if (typeof value.settings.ai.autoMorningReview !== "boolean") value.settings.ai.autoMorningReview = false;
+  // v59: 朝の一括プランニングの自動下書き(既定OFF。ONなら10:00以前の初回起動・当日の非ルーティンBlock0件時に自動実行)
+  if (typeof value.settings.ai.autoMorningPlan !== "boolean") value.settings.ai.autoMorningPlan = false;
   // v52: AIスケジュール学習ログ。AIの仮配置に対するユーザの採否・修正を記録し、
   //      次回のAIスケジューリング時に傾向として注入する(端末間で同期される)。
   if (!Array.isArray(value.aiScheduleHistory)) value.aiScheduleHistory = [];
@@ -2454,6 +2476,38 @@ function minToHHMM(min) {
   return `${pad2(Math.floor(m / 60))}:${pad2(m % 60)}`;
 }
 
+// v59: 空き時間計算(純粋関数)。plannedStartAt/plannedEndAt を持つ当日Block(ルーティンのrec Blockも含む)
+//      から占有区間を作り、dayStartMin〜dayEndMin の空き枠([start,end] 分・昇順)を返す。
+//      Date を経由せず minutesOf(文字列パース)で分抽出する(iOS Safari の9時間ズレ回避ルール)。
+function computeFreeGaps(date, dayStartMin = 5 * 60, dayEndMin = 23 * 60) {
+  if (dayEndMin <= dayStartMin) return [];
+  const occupied = blocksForDate(date)
+    .filter((b) => b.plannedStartAt && b.plannedEndAt)
+    .map((b) => {
+      const s = clamp(minutesOf(b.plannedStartAt), dayStartMin, dayEndMin);
+      const e = clamp(minutesOf(b.plannedEndAt), dayStartMin, dayEndMin);
+      return [Math.min(s, e), Math.max(s, e)];
+    })
+    .filter(([s, e]) => e > s)
+    .sort((a, b) => a[0] - b[0]);
+  // 重複・隣接区間をマージ
+  const merged = [];
+  occupied.forEach(([s, e]) => {
+    const last = merged[merged.length - 1];
+    if (last && s <= last[1]) last[1] = Math.max(last[1], e);
+    else merged.push([s, e]);
+  });
+  // マージ済み占有区間の「隙間」を空き枠として拾う
+  const gaps = [];
+  let cursor = dayStartMin;
+  merged.forEach(([s, e]) => {
+    if (s > cursor) gaps.push([cursor, s]);
+    cursor = Math.max(cursor, e);
+  });
+  if (cursor < dayEndMin) gaps.push([cursor, dayEndMin]);
+  return gaps;
+}
+
 // 配置候補: 昨日のMIT候補 + WBSの未完了タスク(Wish/中断/今日Block化済みを除く、期限順)
 function aiScheduleCandidates(date) {
   const out = [];
@@ -2557,6 +2611,7 @@ function renderDraftLayer(rowHeight, startHour) {
 
 function draftBarHTML() {
   if (!_scheduleDraft || _scheduleDraft.date !== state.selectedDate) return "";
+  const skipped = _scheduleDraft.skipped || [];  // v59: 朝プランで「配置しない」と判断した候補
   return `
     <div class="draft-bar">
       <span>🤖 下書き ${_scheduleDraft.items.length}件 — ドラッグで移動 / 下端をドラッグで長さ調整 / ×で外す</span>
@@ -2564,7 +2619,10 @@ function draftBarHTML() {
         <button class="btn primary" data-action="draft-confirm">確定して登録</button>
         <button class="btn ghost" data-action="draft-discard">破棄</button>
       </span>
-    </div>`;
+    </div>
+    ${skipped.length ? `<div class="muted" style="font-size:11.5px; line-height:1.6; margin:-4px 0 8px">
+      ${skipped.map((s) => `見送り: ${escapeHTML(s.title)}${s.reason ? `(${escapeHTML(s.reason)})` : ""}`).join(" ／ ")}
+    </div>` : ""}`;
 }
 
 // v52: =========================================================
@@ -2724,9 +2782,197 @@ function confirmScheduleDraft() {
     block.aiPlan = { start: minToHHMM(it.aiStart ?? it.start), minutes: it.aiMinutes ?? it.minutes };
     state.blocks.push(block);
     recordScheduleHistory(it, "confirmed", date);
+    // v59: 繰り越し由来の下書きは元Blockに migratedTo を設定(carryOverBlockと同じ二重繰越防止セマンティクス)
+    if (it.carryFromId) {
+      state.blocks = state.blocks.map((b) => b.id === it.carryFromId ? { ...b, migratedTo: block.id, updatedAt: nowDateTime() } : b);
+    }
   });
   _scheduleDraft = null;
   saveAndRender(`🤖 ${items.length}件のBlockを登録しました`);
+}
+
+// v59: =========================================================
+//  朝の一括プランニング(繰越+WBS+MIT候補 → 空き時間へ仮配置 → 既存の下書きUIで確定)
+//  ②のAIスケジュール下書きを「1日ぶん全部」に拡張したもの。既存の draft 機構をそのまま使い、
+//  新規UIは最小限(ホームAI行のボタン1つ + skipped の一覧表示)に留める。
+// =========================================================
+
+// 候補合成: 繰越(carryableBlocks)+ aiScheduleCandidates(MIT候補+WBS)。
+// 同taskId/同titleが両方に居る場合は繰越側を優先して1本化する(繰越は既に実体Blockがあり、
+// 二重に別候補として提案すると確定時に同じ作業が2件登録されてしまうため)。
+function aiMorningPlanCandidates(date) {
+  const carryList = carryableBlocks().map((b) => ({
+    id: `carry-${b.id}`,
+    title: b.title,
+    taskId: b.taskId || "",
+    category: b.category || "",
+    note: b.plannedStartAt ? `昨日未完了・元は${timeFromDateTime(b.plannedStartAt)}` : "昨日未完了",
+    carryFromId: b.id,
+    estimateMin: resolveEstimateMin(b)
+  }));
+  const carriedTaskIds = new Set(carryList.filter((c) => c.taskId).map((c) => c.taskId));
+  const carriedTitles = new Set(carryList.map((c) => c.title));
+  const rest = aiScheduleCandidates(date).filter((c) =>
+    !(c.taskId && carriedTaskIds.has(c.taskId)) && !carriedTitles.has(c.title));
+  return [...carryList, ...rest];
+}
+
+// AI不使用時のフォールバック(決定論配置): MIT候補 → 繰越 → WBS の順に、
+// 各候補の見積分数(estimateMin、無ければ30分)で空き枠へ前詰め配置する。
+// 空き枠に入り切らない候補は skipped(理由: 空き枠なし)に回す。
+function fallbackMorningPlan(candidates, freeGaps) {
+  const rank = (c) => (c.carryFromId ? 1 : (String(c.id).startsWith("mit-") ? 0 : 2));  // MIT=0 → 繰越=1 → WBS=2
+  const ordered = [...candidates].sort((a, b) => rank(a) - rank(b));
+  const gaps = freeGaps.map(([s, e]) => [s, e]);  // 前詰めで消費するのでコピーして破壊的に使う
+  const items = [];
+  const skipped = [];
+  ordered.forEach((c) => {
+    const minutes = clamp(Math.round((c.estimateMin || 30) / 15) * 15 || 30, 15, 240);
+    const gapIdx = gaps.findIndex((g) => g[1] - g[0] >= minutes);
+    if (gapIdx === -1) { skipped.push({ title: c.title, reason: "空き枠なし" }); return; }
+    const start = gaps[gapIdx][0];
+    items.push({
+      id: crypto.randomUUID(), title: c.title, taskId: c.taskId || "", category: c.category || "",
+      start, minutes, aiStart: start, aiMinutes: minutes, carryFromId: c.carryFromId || ""
+    });
+    gaps[gapIdx][0] += minutes;
+    if (gaps[gapIdx][1] - gaps[gapIdx][0] < 15) gaps.splice(gapIdx, 1);  // 15分未満の端数はもう空き扱いしない
+  });
+  return { items: items.slice(0, 15), skipped };
+}
+
+async function runAiMorningPlan({ auto = false } = {}) {
+  if (_aiReviewPending) { if (!auto) showToast("AIを実行中です。少し待ってください"); return; }
+  const date = todayISO();
+  const candidates = aiMorningPlanCandidates(date);
+  if (!candidates.length) { if (!auto) showToast("配置できる候補がありません(繰越・WBS未完了が対象です)"); return; }
+  const DAY_START = 5 * 60, DAY_END = 23 * 60;
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  // 今日の当日プランなので、現在時刻より前は「空き」から除く(15分単位に切り上げ)
+  const nowFloor = Math.min(DAY_END, Math.ceil(nowMin / 15) * 15);
+  const freeGaps = computeFreeGaps(date, DAY_START, DAY_END)
+    .map(([s, e]) => [Math.max(s, nowFloor), e])
+    .filter(([s, e]) => e - s >= 15);
+  if (!freeGaps.length) { if (!auto) showToast("今日は空き時間がありません(予定が埋まっています)"); return; }
+  const existing = blocksForDate(date)
+    .filter((b) => b.plannedStartAt && !isStaleBlock(b))
+    .sort((a, b) => a.plannedStartAt.localeCompare(b.plannedStartAt))
+    .map((b) => `- ${timeFromDateTime(b.plannedStartAt)}〜${b.plannedEndAt ? timeFromDateTime(b.plannedEndAt) : "?"} ${b.title}${b.category === "ルーティン" ? "(ルーティン)" : ""}`);
+  const yest = addDays(date, -1);
+  const feedback = state.feedback[yest] || cachedFeedback[yest] || "";
+  const digest = buildScheduleLearningDigest(date);
+
+  let items = null;
+  let skipped = [];
+  let usedAi = false;
+
+  if (aiEnabled() && navigator.onLine !== false) {
+    const prompt = [
+      aiCommonPreamble() + aiPrompt("morningPlan"),
+      "",
+      `対象日: ${date}(${weekdayLabel(date)})・現在時刻 ${pad2(now.getHours())}:${pad2(now.getMinutes())}`,
+      state.settings.morningEnergyLog?.[date] !== undefined ? `今朝の体調: ${state.settings.morningEnergyLog[date]}/10(低い日は軽め・少なめに)` : "",
+      "",
+      "確定済みの予定・ルーティン(動かせない):",
+      existing.length ? existing.join("\n") : "- (まだ予定はありません)",
+      "",
+      "今日の空き枠:",
+      freeGaps.map(([s, e]) => `- ${minToHHMM(s)}〜${minToHHMM(e)}(${e - s}分)`).join("\n"),
+      "",
+      "候補タスク(id で指定すること。「昨日未完了」は繰り越し候補):",
+      candidates.map((c) => `- id:${c.id} ${c.title}${c.note ? `(${c.note})` : ""}`).join("\n"),
+      feedback ? `\n昨日のAIフィードバック:\n${feedback}` : "",
+      digest ? `\n過去の実績から自動集計した傾向(過去のAI提案がどう修正・却下されたか。これを踏まえて配置を最適化すること):\n${digest}` : "",
+      "",
+      `制約: 時刻は 05:00〜23:00 の範囲内。現在時刻 ${pad2(now.getHours())}:${pad2(now.getMinutes())} より前には置かない。上記の空き枠内に収めること`,
+      "",
+      "回答は次の形式のJSONだけを ```json コードブロックで返してください。配置しない候補は理由付きでskippedへ。",
+      '{"plan":[{"id":"候補のid","start":"HH:MM","minutes":45}],"skipped":[{"id":"候補のid","reason":"配置しない理由"}]}'
+    ].join("\n");
+    _aiReviewPending = true;
+    render();
+    try {
+      const json = extractAiJson(await callClaude(prompt));
+      const byId = new Map(candidates.map((c) => [String(c.id), c]));
+      const parsedItems = (Array.isArray(json.plan) ? json.plan : [])
+        .map((p) => {
+          const c = byId.get(String(p?.id));
+          const m = String(p?.start || "").match(/^(\d{1,2}):(\d{2})$/);
+          if (!c || !m) return null;
+          const start = Number(m[1]) * 60 + Number(m[2]);
+          if (start < DAY_START || start >= 24 * 60) return null;  // タイムラインの表示レンジ(5〜24時)内のみ
+          const minutes = clamp(Math.round(Number(p?.minutes || c.estimateMin || 30) / 15) * 15 || 30, 15, 240);
+          return {
+            id: crypto.randomUUID(), title: c.title, taskId: c.taskId || "", category: c.category || "",
+            start, minutes, aiStart: start, aiMinutes: minutes, carryFromId: c.carryFromId || ""
+          };
+        })
+        .filter(Boolean)
+        .slice(0, 12);
+      if (!parsedItems.length) throw new Error("配置案を読み取れませんでした");
+      items = parsedItems;
+      skipped = (Array.isArray(json.skipped) ? json.skipped : [])
+        .map((s) => {
+          const c = byId.get(String(s?.id));
+          return c ? { title: c.title, reason: String(s?.reason || "").trim() } : null;
+        })
+        .filter(Boolean);
+      usedAi = true;
+    } catch (error) {
+      console.warn("朝プランAI失敗、決定論配置にフォールバックします:", error.message);
+      items = null;
+    } finally {
+      _aiReviewPending = false;
+    }
+  }
+
+  if (!items) {
+    const fb = fallbackMorningPlan(candidates, freeGaps);
+    items = fb.items;
+    skipped = fb.skipped;
+  }
+
+  if (!items.length) {
+    render();
+    if (!auto) showToast("空き時間に配置できる候補がありませんでした");
+    return;
+  }
+
+  _scheduleDraft = { date, items, skipped };
+  if (!auto) { state.timelineMode = "planned"; setView("timeline"); }
+  showToast(auto
+    ? "🌅 今日の下書きプランを置きました。タイムラインで調整→確定してください"
+    : (usedAi
+      ? "🌅 朝の下書きプランを配置しました — ドラッグで調整して「確定」してください"
+      : "🌅 空き時間へ自動配置しました(AI未使用)— 確認して「確定」してください"));
+  render();
+}
+
+// v59: 朝の一括プランニングの自動起動(opt-in・既定OFF)。maybeAutoMorningReview と同じパターン。
+//      その日初めてアプリを開いたのが10:00以前 かつ 当日の非ルーティンBlockが0件のときだけ実行し、
+//      1日1回ガード(localStorage)。ガードは実行を決めた時点で立てるため、破棄しても再自動起動しない。
+const AUTO_MORNING_PLAN_KEY = "taskchute-auto-morning-plan-date";  // 端末ローカル
+
+async function maybeAutoMorningPlan() {
+  // v59: フォールバック配置はAPIキー無しでも動くため、ここでは aiEnabled() を必須にしない
+  //      (「AIなしでも機能する」の方針。AI呼び出し自体の可否は runAiMorningPlan 内で判定する)
+  if (!state.settings.ai?.autoMorningPlan || _aiReviewPending) return;
+  const today = todayISO();
+  try {
+    if (localStorage.getItem(AUTO_MORNING_PLAN_KEY) === today) return;  // 1日1回(失敗・破棄後も再試行しない)
+  } catch { /* 読めなければ続行 */ }
+  const now = new Date();
+  if (now.getHours() * 60 + now.getMinutes() > 10 * 60) return;  // 10:00より後の初回起動は対象外
+  const hasNonRoutineToday = state.blocks.some((b) =>
+    !b.deleted && b.date === today && b.category !== "ルーティン" && !b.recurrenceGroupId);
+  if (hasNonRoutineToday) return;  // 既に当日のBlockがあれば白紙提案の出番ではない
+  try { localStorage.setItem(AUTO_MORNING_PLAN_KEY, today); } catch { /* 記録できなくても続行 */ }
+  try {
+    await runAiMorningPlan({ auto: true });
+  } catch (error) {
+    console.warn("朝プラン自動下書きをスキップ:", error.message);  // 静かに(手動実行は常に可能)
+  }
 }
 
 // D&D(Pointer Events = iPadタッチ / マウス両対応)。15分スナップ。
@@ -3886,7 +4132,8 @@ function renderTasks() {
     ${aiEnabled() ? `<div class="row" style="margin-bottom:10px; flex-wrap:wrap; gap:8px">
       ${state.selectedDate === todayISO() ? `<button class="btn" data-action="ai-today-suggest" ${_aiReviewPending ? "disabled" : ""}>${_aiReviewPending ? "⏳ AI実行中…" : "🤖 今日のタスク提案"}</button>` : ""}
       <button class="btn" data-action="ai-schedule" ${_aiReviewPending ? "disabled" : ""}>${_aiReviewPending ? "⏳ AI実行中…" : "🤖 空き時間に下書きスケジュール"}</button>
-      <span class="muted" style="font-size:11.5px">提案=昨日の日報から今日の候補 / 下書き=空きに仮配置→ドラッグ調整→確定</span>
+      ${state.selectedDate === todayISO() ? `<button class="btn" data-action="ai-morning-plan" ${_aiReviewPending ? "disabled" : ""}>${_aiReviewPending ? "⏳ AI実行中…" : "🌅 朝プラン"}</button>` : ""}
+      <span class="muted" style="font-size:11.5px">提案=昨日の日報から今日の候補 / 下書き=空きに仮配置→ドラッグ調整→確定 / 朝プラン=繰越+WBS+MITをまとめて1日ぶん下書き</span>
     </div>` : ""}
     <section class="form-strip">
       <input id="blockTitle" class="input" placeholder="Block名">
@@ -5020,6 +5267,10 @@ function renderSettings() {
           <input type="checkbox" data-ai-automorning ${state.settings.ai?.autoMorningReview ? "checked" : ""}>
           🌅 朝イチ自動レビュー(日付が変わって最初に開いた時、昨日の日報レビューを自動実行)
         </label>
+        <label class="checkbox-line">
+          <input type="checkbox" data-ai-automorningplan ${state.settings.ai?.autoMorningPlan ? "checked" : ""}>
+          🌅 朝の一括プランニング(10:00までの初回起動で当日の予定が空なら、繰越+WBS+MITの下書きを自動配置。APIキー未設定でも空き時間へ機械的に仮配置)
+        </label>
         <details>
           <summary style="cursor:pointer; font-size:13px; font-weight:700">🛠 プロンプト設定(上級)</summary>
           <div class="stack" style="margin-top:10px">
@@ -5032,7 +5283,8 @@ function renderSettings() {
               ["custom", "カスタム指示(文体・トーンなどの追加指示)"],
               ["decompose", "WBSタスク分解の指示"],
               ["schedule", "スケジュール下書きの指示"],
-              ["todaySuggest", "今日のタスク提案の指示"]
+              ["todaySuggest", "今日のタスク提案の指示"],
+              ["morningPlan", "朝の一括プランニングの指示"]
             ].map(([key, label]) => `
               <label>${label}
                 <textarea class="textarea" data-ai-prompt="${key}" style="min-height:110px; font-size:16px">${escapeHTML(aiPrompt(key))}</textarea>
@@ -9696,6 +9948,8 @@ else syncFromGitHubOnStartup();
 // v51: 朝イチ自動レビュー(opt-in・既定OFF)。起動直後は同期(pull)に少し譲ってから実行し、
 //      別端末で実行済みのフィードバックを取り込んだ後に重複実行しないようにする。
 setTimeout(maybeAutoMorningReview, 4000);
+// v59: 朝の一括プランニングの自動下書き(opt-in・既定OFF)。同期・自動レビューの後に実行。
+setTimeout(maybeAutoMorningPlan, 4500);
 // v53: 自動アーカイブ(既定ON・1日1回)。同期・自動レビューの後に静かに実行。
 setTimeout(maybeAutoArchive, 8000);
 // v41/v43: 復帰時。自動同期 ON なら pull(内部で日次オープン)、OFF なら日次オープンのみ。
@@ -9704,6 +9958,7 @@ document.addEventListener("visibilitychange", () => {
   if (state.settings.autoSync) runAutoSyncPull();
   else if (runDailyOpen()) render();
   setTimeout(maybeAutoMorningReview, 4000);  // v51: 日をまたいで復帰したケース
+  setTimeout(maybeAutoMorningPlan, 4500);    // v59: 同上
   setTimeout(maybeAutoArchive, 8000);        // v53: 同上
 });
 
