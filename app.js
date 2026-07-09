@@ -843,6 +843,11 @@ function normalizeState(value) {
   // v23: 繰り返しをルール方式へ(旧データは初回のみ自動移行)
   value.recurrences ||= [];
   migrateRecurrencesIfNeeded(value);
+  // v63: WIP上限アラート(提案2)用の優先度フィールド(高/中/低)。既存Projectは「中」で後方互換補完。
+  //      wish/other の自動生成Projectもここで拾われる(map は自動生成の push より後に実行するため)。
+  value.projects = value.projects.map((p) => ({ priority: "中", ...p }));
+  // v63: 戦略/雑用/休息ゲージ(提案6)用のカテゴリ属性。未設定は空文字("未分類")のまま正直に扱う。
+  value.settings.categories = (value.settings.categories || []).map((c) => ({ bucket: "", ...c }));
   value.modal = null;  // 起動時はモーダル閉じた状態
   return value;
 }
@@ -3360,6 +3365,28 @@ function updateAvoidText(id, text) {
 
 // =============================================================
 
+// v63: WIP上限アラート(提案2)。「進行中の仕事は3つまで」の原則に対し、
+//      アクティブ(status=active・kind=normal)なProjectが4件以上になったら気づかせる。
+//      実行率で裁く色(赤系)ではなく、情報を渡すだけのアクセントトーンにする。
+function renderWipBanner() {
+  const activeNormal = state.projects.filter((p) =>
+    !p.deleted && p.kind === "normal" && (p.status || "active") === "active");
+  if (activeNormal.length < 4) return "";
+  return `
+    <div class="wip-banner">
+      <div class="wip-banner-msg">進行中プロジェクトが${activeNormal.length}件。Kの原則は3件まで——1つ潜らせますか?</div>
+      <div class="wip-banner-list">
+        ${activeNormal.map((p) => `
+          <div class="wip-banner-row">
+            <span class="wip-banner-name">${escapeHTML(p.title)}</span>
+            <button class="btn ghost" data-action="suspend-project" data-id="${p.id}">保留</button>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
 function renderWBS() {
   // v16: Wish Project は WBS から除外(専用「やりたい」タブで表示)
   const activeProjects = state.projects.filter((project) => !project.deleted && project.kind !== "wish");
@@ -3389,6 +3416,7 @@ function renderWBS() {
 
   return `
     ${renderHeader("ビジョンを実行へ落とす", "WBS", wbsTools)}
+    ${renderWipBanner()}
     <section class="form-strip">
       <input id="projectTitle" class="input" placeholder="Project名">
       <button class="btn primary" data-action="add-project">Project追加</button>
@@ -4748,11 +4776,20 @@ function renderCategoriesSettings() {
         <div class="row" style="gap:8px; align-items:center; background:var(--panel-soft); padding:8px; border-radius:6px">
           <input type="color" data-cat-id="${escapeHTML(c.id)}" data-cat-field="color" value="${escapeHTML(c.color)}" style="width:36px; height:36px; padding:0; border:none; background:transparent; cursor:pointer">
           <input class="input" data-cat-id="${c.id}" data-cat-field="name" value="${escapeHTML(c.name)}" style="flex:1">
+          <select class="select" data-cat-id="${escapeHTML(c.id)}" data-cat-field="bucket" style="flex:0 0 auto" aria-label="バケット(戦略/雑用/休息)">
+            ${["", "strategy", "chore", "rest"].map((b) =>
+              `<option value="${b}" ${(c.bucket || "") === b ? "selected" : ""}>${bucketLabel(b)}</option>`).join("")}
+          </select>
           <button class="btn danger" data-action="delete-category" data-cat-id="${c.id}" aria-label="削除">×</button>
         </div>
       `).join("")}
     </div>
   `;
+}
+
+// v63: 戦略/雑用/休息ゲージ(提案6)のバケット表示ラベル
+function bucketLabel(bucket) {
+  return ({ strategy: "戦略", chore: "雑用", rest: "休息" })[bucket] || "未分類";
 }
 
 // v9: 休憩メッセージ管理 UI
@@ -4805,6 +4842,56 @@ function weekDays(weekStart) { return Array.from({ length: 7 }, (_, i) => addDay
 function weekLabelShort(weekStart) {
   const end = addDays(weekStart, 6);
   return `${weekStart.slice(5).replace("-", "/")} 〜 ${end.slice(5).replace("-", "/")}`;
+}
+
+// v63: 戦略/雑用/休息ゲージ(提案6)。カテゴリ名からバケット(strategy/chore/rest)を引く。
+//      カテゴリ未登録・bucket未設定は空文字("未分類"として扱う)。
+function getCategoryBucket(name) {
+  if (!name) return "";
+  const cat = (state.settings?.categories || []).find((c) => c.name === name);
+  return cat?.bucket || "";
+}
+
+// v63: 指定週の完了Blockを戦略/雑用/休息/未分類の4バケットで時間集計する(分)。
+//      既存のカテゴリ別ドーナツ集計(renderStats)と同じ「実績優先・無ければ計画」の時間算出を再利用。
+function weeklyBucketMinutes(weekBlocks) {
+  const totals = { strategy: 0, chore: 0, rest: 0, unclassified: 0 };
+  weekBlocks.filter((b) => !b.deleted && b.completed).forEach((b) => {
+    const min = _actualDurationMin(b) ?? (b.plannedStartAt && b.plannedEndAt
+      ? Math.max(0, minutesOf(b.plannedEndAt) - minutesOf(b.plannedStartAt)) : 0);
+    if (min <= 0) return;
+    const bucket = getCategoryBucket(b.category) || "unclassified";
+    totals[bucket] = (totals[bucket] || 0) + min;
+  });
+  return totals;
+}
+
+// v63: 戦略/雑用/休息ゲージのHTML(横棒 + 時間・%併記の凡例)。目標値は持たず現実を見るだけ。
+function renderBucketGauge(weekBlocks) {
+  const totals = weeklyBucketMinutes(weekBlocks);
+  const totalMin = totals.strategy + totals.chore + totals.rest + totals.unclassified;
+  if (totalMin <= 0) {
+    return `<div class="muted" style="font-size:13px">この週は完了Blockの記録がありません。</div>`;
+  }
+  const order = [
+    { key: "strategy", label: "戦略" },
+    { key: "chore", label: "雑用" },
+    { key: "rest", label: "休息" },
+    { key: "unclassified", label: "未分類" }
+  ];
+  const bar = order.map(({ key }) => {
+    const pct = (totals[key] / totalMin) * 100;
+    return pct > 0 ? `<span class="bucket-gauge-seg ${key}" style="width:${pct.toFixed(2)}%" title="${bucketLabel(key === "unclassified" ? "" : key)}"></span>` : "";
+  }).join("");
+  const legend = order.map(({ key, label }) => {
+    const pct = Math.round((totals[key] / totalMin) * 100);
+    return `<div class="bucket-gauge-legend-row">
+      <span class="bucket-gauge-swatch ${key}"></span>
+      <span class="bucket-gauge-name">${label}</span>
+      <span class="bucket-gauge-val">${fmtMinShort(totals[key]) || "0m"} ・ ${pct}%</span>
+    </div>`;
+  }).join("");
+  return `<div class="bucket-gauge"><div class="bucket-gauge-bar">${bar}</div><div class="bucket-gauge-legend">${legend}</div></div>`;
 }
 function blocksForWeek(weekStart) {
   const days = new Set(weekDays(weekStart));
@@ -5435,6 +5522,12 @@ function renderWeekly() {
       <h3>エネルギー収支</h3>
       <div class="weekly-energy-tot">充電 <b class="pos">+${m.charge}</b> / 放電 <b class="neg">-${m.discharge}</b> / 差引 <b class="${m.net < 0 ? "neg" : "pos"}">${signed(m.net)}</b></div>
       <div class="wk-bars">${energyBars}</div>
+    </div>
+
+    <div class="weekly-sec">
+      <h3>戦略 / 雑用 / 休息 配分</h3>
+      ${renderBucketGauge(weekBlocks)}
+      <div class="muted stats-axis">完了Blockの実績時間(無ければ計画時間)をカテゴリ管理の「バケット」で集計。目標値は設定しません — まず現実を見るための道具です。</div>
     </div>
 
     ${renderEnergyStructure(week)}
@@ -6194,6 +6287,7 @@ function addProject() {
     title,
     category: "",
     status: "active",
+    priority: "中",  // v63: WIP上限アラート(提案2)
     twelveWeekStartDate: kind === "normal" ? state.settings.twelveWeekStartDate || "" : "",
     createdAt: nowDateTime(),
     updatedAt: nowDateTime(),
@@ -8552,6 +8646,14 @@ function buildProjectModal(project) {
           </div>
         </div>
         <div class="field">
+          <label class="field-label">優先度</label>
+          <select class="select" data-modal-field="priority">
+            ${["高", "中", "低"].map((pr) => `
+              <option value="${pr}" ${(project.priority || "中") === pr ? "selected" : ""}>${pr}</option>
+            `).join("")}
+          </select>
+        </div>
+        <div class="field">
           <label class="field-label">カテゴリ</label>
           ${renderCategorySelect(project.category || "")}
         </div>
@@ -8594,6 +8696,7 @@ function saveProjectFromModal(id, fields) {
       title: (fields.title || "").trim() || p.title,
       kind: fields.kind || p.kind || "normal",
       status: fields.status || p.status || "active",
+      priority: fields.priority || p.priority || "中",  // v63: WIP上限アラート(提案2)
       category: fields.category || "",
       startDate: fields.startDate || "",
       dueDate: fields.dueDate || "",
