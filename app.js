@@ -485,6 +485,15 @@ document.addEventListener("change", (event) => {
     updateBlockField(target.dataset.id, target.dataset.blockField, target.value);
     render();  // v33: 充電/放電などの変更を画面に即反映
   }
+  // v66: レバレッジ台帳の累計節約メモ(任意1行)。Block/Taskどちらの資産かで更新先を分ける。
+  if (target.matches("[data-ledger-note-id]")) {
+    const noteId = target.dataset.ledgerNoteId;
+    if (target.dataset.ledgerNoteKind === "task") {
+      updateTaskField(noteId, "leverageNote", target.value);
+    } else {
+      updateBlockField(noteId, "leverageNote", target.value);
+    }
+  }
   if (target.matches("[data-setting-field]")) {
     state.settings[target.dataset.settingField] = target.value;
     saveState();
@@ -707,6 +716,7 @@ function normalizeState(value) {
       realizedDate: "",
       nextRoutineId: "",
       leverageType: "",  // v65: 10x機構(2-1)。"asset"|"eliminate"|"oneoff"|""(未設定)
+      leverageNote: "",  // v66: 10x機構(2-2レバレッジ台帳)。資産の累計節約・成果の自己申告メモ(任意1行)
       ...rest
     };
   });
@@ -729,6 +739,7 @@ function normalizeState(value) {
     estimateMin: null,   // v41: 見積時間(分)。null は解決順で埋める(入力必須にしない)
     carryCount: 0,        // v61: マイグレーション儀式(提案1)。繰り越された回数(未繰り越しは0)
     leverageType: "",     // v65: 10x機構(2-1)。"asset"|"eliminate"|"oneoff"|""(未設定)
+    leverageNote: "",     // v66: 10x機構(2-2レバレッジ台帳)。資産の累計節約・成果の自己申告メモ(任意1行)
     ...block,
     plannedStartAt: fixDateTime(block.plannedStartAt),
     plannedEndAt: fixDateTime(block.plannedEndAt),
@@ -2875,7 +2886,7 @@ function logMigrationRitual(block, choice) {
     blockId: block?.id || "",
     title: block?.title || "",
     carryCount: (block?.carryCount || 0) + 1,
-    choice,  // 'today' | 'decompose' | 'release' | 'carry'
+    choice,  // 'today' | 'decompose' | 'release' | 'avoid' | 'carry'
     at: nowDateTime()
   });
   if (state.migrationRitualLog.length > MIGRATION_RITUAL_LOG_MAX) {
@@ -2905,6 +2916,7 @@ function buildMigrationRitualModal(block, nextCount) {
           <button class="btn" data-action="migration-ritual-choice" data-choice="today">今日やる(MIT候補に)</button>
           <button class="btn" data-action="migration-ritual-choice" data-choice="decompose">分解する(タイトル編集へ)</button>
           <button class="btn" data-action="migration-ritual-choice" data-choice="release">手放す(Wishへ移動 or 削除)</button>
+          <button class="btn ghost" data-action="migration-ritual-choice" data-choice="avoid">Avoid Listへ記録して手放す</button>
           <button class="btn ghost" data-action="migration-ritual-choice" data-choice="carry">それでも繰り越す</button>
         </div>
       </div>
@@ -2934,6 +2946,29 @@ function resolveMigrationRitual(choice) {
     }
     closeModal();
     saveAndRender(releaseMsg);
+    return;
+  }
+
+  // v66: 10x機構(designs/10x-mechanism.md 2-4)。「手放す」の第3の選択肢 — 3回以上繰り越された
+  // タスクは「無自覚な繰り返し作業」の実データそのものであり削除候補として精度が高いため、
+  // 既存のAvoid List(state.settings.avoidList、addAvoidと同じ形の項目)へそのまま記録して手放す。
+  // Wishへ迷わせず即座に「やらないこと」へ倒す点が release(Wish or 削除の二択)との違い。
+  if (choice === "avoid") {
+    const text = (src?.title || "").trim();
+    if (text) {
+      state.settings.avoidList = [...(state.settings.avoidList || []), {
+        id: crypto.randomUUID(),
+        text,
+        createdAt: nowDateTime()
+      }];
+    }
+    state.blocks = state.blocks.map((b) => b.id === srcId ? { ...b, deleted: true, updatedAt: nowDateTime() } : b);
+    if (origin === "draft" && _scheduleDraft) {
+      _scheduleDraft.items = _scheduleDraft.items.filter((x) => x.id !== draftItemId);
+      if (!_scheduleDraft.items.length) _scheduleDraft = null;
+    }
+    closeModal();
+    saveAndRender(text ? "Avoid Listへ記録し、手放しました" : "手放しました(削除)");
     return;
   }
 
@@ -5010,6 +5045,102 @@ function renderLeverageSummaryLine(weekBlocks) {
     単発 ${fmtMinShort(totals.oneoff) || "0m"} ・ 未設定 ${fmtMinShort(totals.unset) || "0m"}
   </div>`;
 }
+
+// v66: 10x機構(designs/10x-mechanism.md 2-1後段)。週次の1行集計(v65)を発展させ、
+// 直近n週の「10x時間(資産+削減) : 2x時間(単発+未設定)」比をならしたトレンドを見る。
+// ライブラリは使わずCSSの横棒セグメントのみで表現する。総時間0の週は割り算せず「記録なし」扱いにする。
+function leverageRatioHistory(weekStart, n = 8) {
+  const out = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const ws = addDays(weekStart, -7 * i);
+    const totals = weeklyLeverageMinutes(blocksForWeek(ws));
+    const tenXMin = totals.asset + totals.eliminate;
+    const twoXMin = totals.oneoff + totals.unset;
+    const totalMin = tenXMin + twoXMin;
+    out.push({ week: ws, tenXMin, twoXMin, totalMin, pct: totalMin > 0 ? Math.round((tenXMin / totalMin) * 100) : null });
+  }
+  return out;
+}
+
+// leverageRatioHistory を週ごとの小さな横棒(2セグメント)として描画する。
+function renderLeverageTrend(weekStart) {
+  const history = leverageRatioHistory(weekStart, 8);
+  const rows = history.map((h) => {
+    const label = h.week.slice(5).replace("-", "/");
+    if (h.totalMin <= 0) {
+      return `<div class="lev-trend-row">
+        <span class="lev-trend-label">${label}</span>
+        <div class="lev-trend-bar"><span class="lev-trend-empty" title="この週は完了Blockの記録がありません"></span></div>
+        <span class="lev-trend-pct muted">記録なし</span>
+      </div>`;
+    }
+    const tenXPct = (h.tenXMin / h.totalMin) * 100;
+    const twoXPct = 100 - tenXPct;
+    return `<div class="lev-trend-row">
+      <span class="lev-trend-label">${label}</span>
+      <div class="lev-trend-bar">
+        <span class="lev-trend-seg tenx" style="width:${tenXPct.toFixed(2)}%" title="10x(資産+削減) ${fmtMinShort(h.tenXMin) || "0m"}"></span>
+        <span class="lev-trend-seg twox" style="width:${twoXPct.toFixed(2)}%" title="2x(単発+未設定) ${fmtMinShort(h.twoXMin) || "0m"}"></span>
+      </div>
+      <span class="lev-trend-pct">${h.pct}%</span>
+    </div>`;
+  }).join("");
+  return `<div class="lev-trend">${rows}</div>`;
+}
+
+// v66: 10x機構(designs/10x-mechanism.md 2-2レバレッジ台帳)。専用の永続ログは持たず、
+// leverageType=asset を付けて完了したTask/Blockそのものを「作った資産」の実データとして
+// 都度集計する(二重入力をさせない — v65で既にleverageTypeを付けているならそれで足りる)。
+function assetLedgerItems() {
+  const blockItems = (state.blocks || [])
+    .filter((b) => !b.deleted && b.completed && b.leverageType === "asset")
+    .map((b) => ({
+      id: b.id, kind: "block", title: b.title,
+      date: b.date || (b.actualEndAt ? b.actualEndAt.slice(0, 10) : ""),
+      note: b.leverageNote || ""
+    }));
+  const taskItems = (state.tasks || [])
+    .filter((t) => !t.deleted && t.status === "completed" && t.leverageType === "asset")
+    .map((t) => ({
+      id: t.id, kind: "task", title: t.title,
+      date: t.realizedDate || (t.updatedAt ? t.updatedAt.slice(0, 10) : ""),
+      note: t.leverageNote || ""
+    }));
+  return [...blockItems, ...taskItems]
+    .filter((it) => it.date)
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+}
+
+// 指定週(weekStart起点7日)に完了した資産の件数。「今週、資産を1つ作ったか?」の判定に使う。
+function assetLedgerCountForWeek(weekStart) {
+  const days = new Set(weekDays(weekStart));
+  return assetLedgerItems().filter((it) => days.has(it.date)).length;
+}
+
+// レバレッジ台帳セクション本体。先頭に「今週、資産を1つ作ったか?」の問い(作った週は✓+件数、
+// 作っていない週は問いだけを裁かずに表示)、その下に全期間の資産一覧(タイトル/完了日/
+// 累計節約の自己申告メモ=任意1行入力)を積む。
+function renderLeverageLedger(weekStart) {
+  const items = assetLedgerItems();
+  const weekCount = assetLedgerCountForWeek(weekStart);
+  const prompt = weekCount > 0
+    ? `<div class="lev-ledger-prompt lev-ledger-prompt-yes">✓ 今週、資産を ${weekCount} 個作った</div>`
+    : `<div class="lev-ledger-prompt muted">今週、資産を1つ作ったか?</div>`;
+  const list = items.length
+    ? `<div class="lev-ledger-list">${items.map((it) => `
+        <div class="lev-ledger-row">
+          <span class="lev-ledger-date muted">${it.date.slice(5)}</span>
+          <span class="lev-ledger-title">${escapeHTML(it.title)}</span>
+          <input type="text" class="input lev-ledger-note" placeholder="累計節約メモ(任意・自己申告)"
+            value="${escapeHTML(it.note)}" data-ledger-note-id="${it.id}" data-ledger-note-kind="${it.kind}">
+        </div>`).join("")}</div>`
+    : `<div class="muted" style="font-size:13px; margin-top:8px">
+        まだ「資産」に分類して完了したTask/Blockがありません。Task/Block編集モーダルで
+        レバレッジ(10x機構)を「資産」にして完了すると、ここに自動で積み上がります。
+      </div>`;
+  return `<div class="lev-ledger">${prompt}${list}</div>`;
+}
+
 function blocksForWeek(weekStart) {
   const days = new Set(weekDays(weekStart));
   return state.blocks.filter((b) => !b.deleted && days.has(b.date));
@@ -5650,6 +5781,17 @@ function renderWeekly() {
 
     ${renderEnergyStructure(week)}
     `}
+
+    <div class="weekly-sec">
+      <h3>2x:10x 時間比トレンド(直近8週)</h3>
+      ${renderLeverageTrend(week)}
+      <div class="muted stats-axis">完了Blockの実績時間で、資産化+削減(10x)と単発+未設定(2x)の比率を週ごとにならしただけです。目標値はありません。</div>
+    </div>
+
+    <div class="weekly-sec">
+      <h3>レバレッジ台帳</h3>
+      ${renderLeverageLedger(week)}
+    </div>
 
     ${m.wkNum ? `<div class="weekly-sec">
       <h3>12週の弧</h3>

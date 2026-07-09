@@ -155,7 +155,8 @@ function check(name, cond, extra = "") {
   check("儀式モーダルが出る(3回目)", await page.locator(".migration-ritual-modal").count() === 1);
   const ritualTitle = await page.locator(".migration-ritual-modal .modal-title").textContent().catch(() => "");
   check("モーダルに「3回目」の文言がある", (ritualTitle || "").includes("3"), ritualTitle);
-  check("4つの選択肢が表示される", await page.locator('.migration-ritual-modal [data-action="migration-ritual-choice"]').count() === 4);
+  // v66: 「Avoid Listへ記録して手放す」選択肢が増えたため4→5(designs/10x-mechanism.md 2-4)
+  check("5つの選択肢が表示される(v66でAvoid List選択肢を追加)", await page.locator('.migration-ritual-modal [data-action="migration-ritual-choice"]').count() === 5);
   // モーダルを閉じてから次のシナリオへ(選択せず×で閉じても後の状態に影響しないこと)
   await page.click('[data-action="modal-close"]');
   await page.waitForTimeout(200);

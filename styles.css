@@ -2577,4 +2577,27 @@ h3 {
 .bucket-gauge-swatch.rest { background: #34C759; }
 .bucket-gauge-swatch.unclassified { background: #8E8E93; }
 .bucket-gauge-name { min-width: 70px; }
+
+/* v66: 2x:10x 時間比トレンド(直近8週、CSS横棒のみ・ライブラリ不使用) */
+.lev-trend { display: flex; flex-direction: column; gap: 6px; }
+.lev-trend-row { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+.lev-trend-label { width: 42px; flex: none; color: var(--muted); }
+.lev-trend-bar { flex: 1; height: 14px; border-radius: 4px; overflow: hidden; background: var(--panel-soft); display: flex; }
+.lev-trend-seg { height: 100%; min-width: 2px; }
+.lev-trend-seg.tenx { background: var(--teal); }
+.lev-trend-seg.twox { background: #8E8E93; }
+.lev-trend-empty { display: block; width: 100%; height: 100%; }
+.lev-trend-pct { width: 44px; flex: none; text-align: right; color: var(--muted); }
+
+/* v66: レバレッジ台帳(designs/10x-mechanism.md 2-2)。専用ログではなく
+   leverageType=asset で完了したTask/Blockそのものを都度集計する派生ビュー。 */
+.lev-ledger { display: flex; flex-direction: column; gap: 10px; }
+.lev-ledger-prompt { font-size: 13px; font-weight: 700; }
+.lev-ledger-prompt-yes { color: var(--green); }
+.lev-ledger-list { display: flex; flex-direction: column; gap: 6px; }
+.lev-ledger-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) 1fr; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line-soft); }
+.lev-ledger-row:last-child { border-bottom: none; }
+.lev-ledger-date { font-size: 11px; white-space: nowrap; }
+.lev-ledger-title { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lev-ledger-note { padding: 6px 8px; }  /* iOS Safariズーム防止: font-sizeは.input既定(16px)のまま変更しない */
 .bucket-gauge-val { color: var(--muted); }
