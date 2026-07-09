@@ -20,6 +20,8 @@ function check(name, cond, extra = "") {
 
   const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const TODAY = iso(new Date());
+  const now = new Date();
+  const YESTERDAY = iso(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
 
   await page.goto(`http://localhost:${PORT}/`);
   await page.waitForTimeout(600);
@@ -162,7 +164,14 @@ function check(name, cond, extra = "") {
   await page.waitForTimeout(200);
   check("旧stateから feedbackFiles(配列)が補完される",
     await page.evaluate((KEY) => Array.isArray(JSON.parse(localStorage.getItem(KEY)).feedbackFiles), KEY));
-  check("feedbackFiles が空なら AIフィードバック fetch を出さない", reqsEmpty.length === 0, JSON.stringify(reqsEmpty));
+  // v57: feedbackFiles が空でも「今日から見た昨日」1日分だけは無条件fetchする例外が入った
+  //      (ローカルAIコーチングの直push検知)。ここでの selectedDate は TODAY のままなので、
+  //      許容されるfetchは AIフィードバック_<YESTERDAY>.md ちょうど1件のみ。
+  //      それ以外の日付への fetch が1件でもあれば失敗とする(F1: 過去日ブラウズ時の
+  //      無条件fetchは v57.test.js 側で回帰確認する)。
+  check("feedbackFiles が空でも fetch は「今日から見た昨日」1件のみ(それ以外は出さない)",
+    reqsEmpty.length === 1 && reqsEmpty[0].includes(`AIフィードバック_${YESTERDAY}.md`),
+    JSON.stringify(reqsEmpty));
 
   // (c) feedbackFiles に日付があり手元本文が無い → その日付だけ fetch する
   await page.evaluate(({ KEY, TODAY }) => {

@@ -8029,13 +8029,19 @@ async function hydrateStaticMarkdown() {
   // AI フィードバック: 当日と前日を取得
   // v56: push 済みが判っていて、かつ手元に本文が無い日付のみ fetch。
   //      これで存在しない .md への 404(コンソールノイズ)を出さない。
+  // v57: 前日1日分だけは、ローカルAIコーチングがリポジトリ直下へ直接pushしたケース
+  //      (アプリ内アップロードを経ていない=feedbackFiles未登録)を拾うため、
+  //      feedbackFiles未登録でも常に fetch を試す。404は fetchText 側で静かに無視される。
   const files = Array.isArray(state.feedbackFiles) ? state.feedbackFiles : [];
   const today = state.selectedDate;
   const prev = addDays(today, -1);
   const wantFetch = (d) => files.includes(d) && !(state.feedback[d] || "").trim() && !cachedFeedback[d];
+  // v57: 無条件fetchは「今日から見た昨日」1日分に限定(過去日ブラウズ時の404ノイズ回避は維持)
+  const wantFetchPrev = (d) =>
+    d === addDays(todayISO(), -1) && !(state.feedback[d] || "").trim() && !cachedFeedback[d];
   const [todayFb, prevFb] = await Promise.all([
     wantFetch(today) ? fetchText(`./AIフィードバック_${today}.md`) : Promise.resolve(""),
-    wantFetch(prev) ? fetchText(`./AIフィードバック_${prev}.md`) : Promise.resolve("")
+    wantFetchPrev(prev) ? fetchText(`./AIフィードバック_${prev}.md`) : Promise.resolve("")
   ]);
   if (todayFb && todayFb !== cachedFeedback[today]) {
     cachedFeedback[today] = todayFb;
@@ -8044,6 +8050,8 @@ async function hydrateStaticMarkdown() {
   if (prevFb && prevFb !== cachedFeedback[prev]) {
     cachedFeedback[prev] = prevFb;
     changed = true;
+    // v57: 直push検知した前日分は、以後の起動時fetchが正規ルートに乗るよう記録する
+    if (!files.includes(prev)) recordFeedbackFile(prev);
   }
   // v37: state.view というプロパティは存在しない(正しくは currentView)。
   //      このタイポのせいで、ビジョン画面を開いたまま読み込みが終わっても再描画されなかった。
