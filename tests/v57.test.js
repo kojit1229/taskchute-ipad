@@ -26,6 +26,10 @@ function check(name, cond, extra = "") {
 
   const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const now = new Date();
+  // v65レビュー対応: 深夜0時跨ぎで real new Date() が [1]/[2] 間にズレるとTODAY/YESTERDAY判定が
+  // 食い違いフレーキーになるため、他スイート(v61/v63等)と同じく page.clock.setFixedTime で
+  // ページ内の現在時刻を日中(10:00)に固定し、実行時刻に依存しないようにする(アプリ本体は無改修)。
+  now.setHours(10, 0, 0, 0);
   const TODAY = iso(now);
   const YESTERDAY = iso(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
   // 実「昨日」と隣接しない過去日(前日=6日前になり、実「昨日」とは一致しない)
@@ -34,6 +38,7 @@ function check(name, cond, extra = "") {
   const feedbackPath = path.join(ROOT, `AIフィードバック_${YESTERDAY}.md`);
 
   try {
+    await page.clock.setFixedTime(now);  // goto前に固定してアプリ起動時のnew Date()から一貫させる
     await page.goto(`http://localhost:${PORT}/`);
     await page.waitForTimeout(600);
 

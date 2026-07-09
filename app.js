@@ -167,6 +167,17 @@ document.addEventListener("click", (event) => {
   if (action === "modal-close") closeModal();
   if (action === "modal-save") submitModal();
   if (action === "modal-delete") deleteFromModal();
+  // v65: 10x機構 — 10秒判定3問(任意ヘルプ)のチェック数をその場で数え、
+  //      leverageType セレクトへ反映するだけ(state未変更・保存は「保存」ボタン時のみ)
+  if (action === "lev-judge") {
+    const card = target.closest(".modal-card");
+    const checkedCount = card ? card.querySelectorAll("[data-lev-q]:checked").length : 0;
+    const select = card?.querySelector('[data-modal-field="leverageType"]');
+    if (select) {
+      select.value = checkedCount >= 2 ? "asset" : "";
+      showToast(checkedCount >= 2 ? "⚙ 「資産」を提案しました(保存で反映)" : "迷うなら未設定のままでOK");
+    }
+  }
   // === v2: ビジョン画面のセグメント切替 ===
   if (action === "vision-section") setVisionSection(target.dataset.section);
   if (action === "vision-board-tab") setVisionBoardIndex(Number(target.dataset.index));
@@ -695,6 +706,7 @@ function normalizeState(value) {
       realized: false,
       realizedDate: "",
       nextRoutineId: "",
+      leverageType: "",  // v65: 10x機構(2-1)。"asset"|"eliminate"|"oneoff"|""(未設定)
       ...rest
     };
   });
@@ -716,6 +728,7 @@ function normalizeState(value) {
     source: "",
     estimateMin: null,   // v41: 見積時間(分)。null は解決順で埋める(入力必須にしない)
     carryCount: 0,        // v61: マイグレーション儀式(提案1)。繰り越された回数(未繰り越しは0)
+    leverageType: "",     // v65: 10x機構(2-1)。"asset"|"eliminate"|"oneoff"|""(未設定)
     ...block,
     plannedStartAt: fixDateTime(block.plannedStartAt),
     plannedEndAt: fixDateTime(block.plannedEndAt),
@@ -800,6 +813,11 @@ function normalizeState(value) {
   });
   // v61: マイグレーション儀式(3回目以降の繰り越し確認)の選択ログ。将来のバッチ分析用に軽量記録。
   if (!Array.isArray(value.migrationRitualLog)) value.migrationRitualLog = [];
+  // v65(v64設計§3残余): AIプラン自身が「配置しない」と判断した候補のログ({date,title,reason,at}、上限300件)。
+  //      migrationRitualLog/aiScheduleHistoryと同じ軽量配列の思想。v62でAIプラン取り込みは実装済みだったが
+  //      skippedのkind:"ai"分は永続化されておらず、v64設計§3の「AIプランのskipped理由」学習シグナルが
+  //      アプリ側で欠けていたため今回吸収する。
+  if (!Array.isArray(value.aiPlanSkippedLog)) value.aiPlanSkippedLog = [];
   value.feedback ||= {};
   value.reports ||= {};
   // v56: GitHub に push 済みの AIフィードバック_*.md の日付を記録する集合。
@@ -1239,6 +1257,7 @@ function makeBlock(input) {
     pomodoroCount: Number(input.pomodoroCount || 0),
     migratedTo: "",
     carryCount: Number(input.carryCount || 0),  // v61: マイグレーション儀式(繰り越し回数)
+    leverageType: input.leverageType || "",  // v65: 10x機構(2-1)
     orderIndex: 0,
     createdAt: nowDateTime(),
     updatedAt: nowDateTime(),
@@ -2195,12 +2214,14 @@ function renderDraftLayer(rowHeight, startHour) {
         // v61: 繰越由来の下書きは、確定するとこの回数の繰り越しになる、という予告バッジ
         const draftBadge = it.carryFromId ? migrationBadgeHTML(migrationNextCount(it.carryFromId)) : "";
         // v62: AIプラン由来の reason は下書きバー確認+ツールチップ(title属性)で見えるようにする
+        // v65: AIプランのtitle先頭「[資産]」検出分は、下書き段階から控えめマークで見せる
+        const draftLev = leverageTypeMarkHTML(it.leverageType || "");
         return `
         <div class="draft-block" data-draft-id="${it.id}" data-row-height="${rowHeight}"
              style="top:${top}px; height:${height}px; ${catColor ? `border-color:${catColor};` : ""}"
              ${it.reason ? `title="${escapeHTML(it.reason)}"` : ""}>
           <div class="draft-block-time">${minToHHMM(it.start)}〜${minToHHMM(it.start + it.minutes)}(${it.minutes}分)</div>
-          <div class="draft-block-title">${escapeHTML(it.title)}${draftBadge}</div>
+          <div class="draft-block-title">${escapeHTML(it.title)}${draftBadge}${draftLev}</div>
           ${it.reason ? `<div class="draft-block-reason">${escapeHTML(it.reason)}</div>` : ""}
           <button class="draft-remove" data-action="draft-remove" data-id="${it.id}" aria-label="この下書きを外す">×</button>
           <div class="draft-resize" data-draft-resize="${it.id}"></div>
@@ -2324,6 +2345,8 @@ function confirmScheduleDraft() {
     });
     // v52: 決定論配置の元値を Block に残す(確定・実績との突き合わせ = 実績データ。フィールド名は互換のため維持)
     block.aiPlan = { start: minToHHMM(it.aiStart ?? it.start), minutes: it.aiMinutes ?? it.minutes };
+    // v65: AIプランのtitle先頭「[資産]」検出分は確定時にleverageType=assetを引き継ぐ
+    if (it.leverageType) block.leverageType = it.leverageType;
     if (it.forceMIT) {
       // v61: マイグレーション儀式で「今日やる」を選んだ項目はMIT化(既存の最大3個ルールは尊重する)
       const sameDayMITs = state.blocks.filter((b) => !b.deleted && b.date === date && b.isMIT);
@@ -2431,14 +2454,18 @@ async function tryFetchAiPlan(date, freeGaps) {
       if (!t || t.deleted || t.status === "completed") continue;  // 生成後に完了/削除済みなら不採用
     }
     const start = minutesOf(p.start);
+    // v65レビュー対応: leverageType検出は元のtitle(プレフィックス付き)に対して行い、
+    // 下書き・確定Blockのtitleにはプレフィックスを残さない(⚙資産マークと二重表示になるため)。
+    const detectedLev = detectLeverageTypeFromTitle(p.title);
     items.push({
       id: crypto.randomUUID(),
-      title: p.title,
+      title: p.title.replace(/^\[資産\]\s*/, ""),
       taskId,
       category: typeof p.category === "string" ? p.category : "",
       start, minutes: p.minutes, aiStart: start, aiMinutes: p.minutes,
       carryFromId,
-      reason: typeof p.reason === "string" ? p.reason : ""  // v62: 下書きバー/ツールチップで見せる
+      reason: typeof p.reason === "string" ? p.reason : "",  // v62: 下書きバー/ツールチップで見せる
+      leverageType: detectedLev  // v65: title先頭「[資産]」→ leverageType=asset を自動付与
     });
   }
   const skipped = [];
@@ -2480,6 +2507,18 @@ async function runAiMorningPlan({ auto = false } = {}) {
   if (aiPlan) {
     _scheduleDraft = { date, items: aiPlan.items, skipped: aiPlan.skipped, source: "ai-plan" };
     _draftUndo = null; _draftUndoHistoryEntry = null;  // v62: 新規下書きでは前セッションのUndoを持ち越さない
+    // v65(v64設計§3残余): AI自身が「配置しない」と判断した候補(kind:"ai")を永続ログへ記録。
+    //      "expired"(空き時間との不整合で機械的に除外)は対象外 — AIの判断そのものではないため。
+    const aiSkipped = aiPlan.skipped.filter((s) => s.kind === "ai");
+    if (aiSkipped.length) {
+      aiSkipped.forEach((s) => {
+        state.aiPlanSkippedLog.push({ date, title: s.title, reason: s.reason || "", at: nowDateTime() });
+      });
+      if (state.aiPlanSkippedLog.length > AI_PLAN_SKIPPED_LOG_MAX) {
+        state.aiPlanSkippedLog = state.aiPlanSkippedLog.slice(-AI_PLAN_SKIPPED_LOG_MAX);
+      }
+      saveState();
+    }
     if (!auto) { state.timelineMode = "planned"; setView("timeline"); }
     showToast(auto
       ? "🌅 AIプランの下書きを置きました。タイムラインで調整→確定してください"
@@ -2708,6 +2747,58 @@ function carryOverPanel() {
     </div>`).join("")}
   </div>`;
 }
+
+// v65: 10x機構(designs/10x-mechanism.md 2-1・§1)==============================
+// Task/Blockに「資産を作る/繰り返しを消す/一回きり」を選べる任意属性(leverageType)。
+// 「10xか2xか」を毎タスクに問うルーティン化はしない(設計書6章の歯止め)ため、
+// 属性は完全に任意・未設定を裁かない。一覧・タイムラインには控えめなマークのみ出す。
+function leverageTypeLabel(type) {
+  return ({ asset: "資産", eliminate: "削減", oneoff: "単発" })[type] || "";
+}
+// 一覧・タイムライン用の控えめマーク。oneoff(単発=通常の2x)は視覚ノイズを増やさないため無表示。
+function leverageTypeMarkHTML(type) {
+  const icon = ({ asset: "⚙", eliminate: "✂" })[type];
+  return icon ? `<span class="lev-mark lev-${type}" title="${leverageTypeLabel(type)}(10x機構)">${icon}${leverageTypeLabel(type)}</span>` : "";
+}
+// Task/Block編集モーダルの leverageType セレクト用オプション
+function leverageTypeOptionsHTML(current) {
+  const opts = [
+    ["", "(未設定)"],
+    ["asset", "⚙ 資産を作る(寝てても稼ぐ)"],
+    ["eliminate", "✂ 繰り返しを消す"],
+    ["oneoff", "・ 一回きり"]
+  ];
+  return opts.map(([v, label]) =>
+    `<option value="${v}" ${(current || "") === v ? "selected" : ""}>${label}</option>`).join("");
+}
+// 設計書§1「10秒判定の3問」を、任意で開ける折りたたみヘルプとして編集モーダルに埋め込む。
+// AI呼び出しはせず(v60方針)、チェック数をその場でカウントして leverageType セレクトへ反映するだけ。
+// 保存(モーダルの「保存」ボタン)を押すまでは state に一切書き込まない。
+function leverageJudgeHelperHTML() {
+  return `
+    <details class="lev-helper">
+      <summary>10秒で判定する(任意)</summary>
+      <div class="lev-helper-body">
+        <label class="checkbox-line"><input type="checkbox" data-lev-q="1"> 今日で終わらず、明日以降も自分の代わりに働き続けるか</label>
+        <label class="checkbox-line"><input type="checkbox" data-lev-q="2"> やった後、同じ問題が来たとき自分の時間はもう要らなくなっているか</label>
+        <label class="checkbox-line"><input type="checkbox" data-lev-q="3"> 代替可能な作業ではなく、自分にしか蓄積できない特殊知識か</label>
+        <div class="row" style="gap:8px; margin-top:8px; align-items:center">
+          <button type="button" class="btn" data-action="lev-judge">判定結果を反映</button>
+          <span class="muted" style="font-size:11px">2問以上Yesなら「資産」。迷うなら未設定のままでOK。</span>
+        </div>
+      </div>
+    </details>
+  `;
+}
+// v65: AIプラン(自宅PCバッチ生成)側で付けた「[資産]」プレフィックスの検出(設計書2-3)。
+// loop/plan/daily-plan.md に既に10x判定3問が入っており、AIがtitle先頭にこの印を付けたときだけ
+// アプリ側がleverageType=assetを自動付与する(アプリ内AI呼び出しはしない。v60方針)。
+const ASSET_TITLE_PREFIX = "[資産]";
+function detectLeverageTypeFromTitle(title) {
+  return (title || "").startsWith(ASSET_TITLE_PREFIX) ? "asset" : "";
+}
+// v65(v64設計§3残余): AIプランのskipped(kind:"ai")ログの上限。migrationRitualLogと同じ思想。
+const AI_PLAN_SKIPPED_LOG_MAX = 300;
 
 // v61: マイグレーション儀式(提案1)==============================
 // 繰り越し回数(carryCount)を積み上げ、2回目以降は視覚マーク、3回目の繰り越しでは
@@ -3585,6 +3676,7 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false) 
         ${kids.length ? `<span class="badge">子 ${kidsDone}/${kids.length}</span>` : ""}
         ${scheduledToday ? `<span class="badge green">今日✓</span>` : ""}
         ${task.category ? `<span class="cat-chip" style="background:${getCategoryColor(task.category)}1f; color:${getCategoryColor(task.category)}; border:1px solid ${getCategoryColor(task.category)}66">${escapeHTML(task.category)}</span>` : ""}
+        ${leverageTypeMarkHTML(task.leverageType)}
         ${dueHTML}
         ${stats.count ? `<span class="muted" style="font-size:11px">⏱ ${stats.count}回${stats.minutes ? `・${fmtMinShort(stats.minutes)}` : ""}</span>` : ""}`}
       </div>
@@ -3720,6 +3812,7 @@ function renderBlockItem(block) {
           ${doing ? `<span class="badge orange">着手中 ${timeFromDateTime(block.actualStartAt)}〜</span>` : ""}
           ${task ? `<span class="badge">${escapeHTML(projectName(task.projectId))}</span>` : `<span class="badge orange">単発</span>`}
           ${block.category ? `<span class="cat-chip" style="background:${catColor}1f; color:${catColor}; border:1px solid ${catColor}66">${escapeHTML(block.category)}</span>` : ""}
+          ${leverageTypeMarkHTML(block.leverageType)}
         </div>
         <div class="block-meta">
           <label>充電
@@ -4076,7 +4169,7 @@ function renderTimelineCard(positioned, mode = "planned", maxLanes = 5) {
          data-action="edit-block" data-id="${block.id}">
       ${!isActual && !isShort ? `<button class="tl-complete-btn" data-action="complete-block-with-actual" data-id="${block.id}" aria-label="完了登録">○</button>` : ""}
       <div class="tl-card-body">
-        <strong>${escapeHTML(block.title)}${migrationBadgeHTML(block.carryCount)}</strong>
+        <strong>${escapeHTML(block.title)}${migrationBadgeHTML(block.carryCount)}${leverageTypeMarkHTML(block.leverageType)}</strong>
       </div>
     </div>
   `;
@@ -4893,6 +4986,30 @@ function renderBucketGauge(weekBlocks) {
   }).join("");
   return `<div class="bucket-gauge"><div class="bucket-gauge-bar">${bar}</div><div class="bucket-gauge-legend">${legend}</div></div>`;
 }
+
+// v65: 10x機構(designs/10x-mechanism.md 2-1)の最小集計。指定週の完了Blockを
+// leverageType(asset/eliminate/oneoff/未設定)別に時間集計する(分)。本格可視化はv66で。
+function weeklyLeverageMinutes(weekBlocks) {
+  const totals = { asset: 0, eliminate: 0, oneoff: 0, unset: 0 };
+  weekBlocks.filter((b) => !b.deleted && b.completed).forEach((b) => {
+    const min = _actualDurationMin(b) ?? (b.plannedStartAt && b.plannedEndAt
+      ? Math.max(0, minutesOf(b.plannedEndAt) - minutesOf(b.plannedStartAt)) : 0);
+    if (min <= 0) return;
+    const key = ["asset", "eliminate", "oneoff"].includes(b.leverageType) ? b.leverageType : "unset";
+    totals[key] += min;
+  });
+  return totals;
+}
+// weeklyLeverageMinutes の集計を1行テキストにする(bucketゲージの下に添える控えめな表示)。
+function renderLeverageSummaryLine(weekBlocks) {
+  const totals = weeklyLeverageMinutes(weekBlocks);
+  const totalMin = totals.asset + totals.eliminate + totals.oneoff + totals.unset;
+  if (totalMin <= 0) return "";
+  return `<div class="muted lev-week-summary" style="font-size:12px; margin-top:6px">
+    ⚙資産 ${fmtMinShort(totals.asset) || "0m"} ・ ✂削減 ${fmtMinShort(totals.eliminate) || "0m"} ・
+    単発 ${fmtMinShort(totals.oneoff) || "0m"} ・ 未設定 ${fmtMinShort(totals.unset) || "0m"}
+  </div>`;
+}
 function blocksForWeek(weekStart) {
   const days = new Set(weekDays(weekStart));
   return state.blocks.filter((b) => !b.deleted && days.has(b.date));
@@ -5528,6 +5645,7 @@ function renderWeekly() {
       <h3>戦略 / 雑用 / 休息 配分</h3>
       ${renderBucketGauge(weekBlocks)}
       <div class="muted stats-axis">完了Blockの実績時間(無ければ計画時間)をカテゴリ管理の「バケット」で集計。目標値は設定しません — まず現実を見るための道具です。</div>
+      ${renderLeverageSummaryLine(weekBlocks)}
     </div>
 
     ${renderEnergyStructure(week)}
@@ -6309,7 +6427,7 @@ function addTask() {
   saveAndRender("Taskを追加しました");
 }
 
-function makeTask({ projectId = "", parentTaskId = "", title = "", category = "", dueDate = "", targetYear = null, lifeArea = "", motivation = "" }) {
+function makeTask({ projectId = "", parentTaskId = "", title = "", category = "", dueDate = "", targetYear = null, lifeArea = "", motivation = "", leverageType = "" }) {
   return {
     id: crypto.randomUUID(),
     projectId,
@@ -6319,6 +6437,7 @@ function makeTask({ projectId = "", parentTaskId = "", title = "", category = ""
     status: "todo",
     dueDate: dueDate || state.selectedDate,
     description: "",
+    leverageType,  // v65: 10x機構(2-1)。"asset"|"eliminate"|"oneoff"|""(未設定)
     // v16: やりたいことリスト用フィールド
     targetYear,         // いつまでに(数字の年、null なら「いつか」)
     lifeArea,           // 人生領域(健康/仕事/家族/趣味/旅/学び/経験/持物)
@@ -8767,6 +8886,13 @@ function buildTaskModal(task) {
           </div>
         </div>
         <div class="field">
+          <label class="field-label">レバレッジ(10x機構・任意)</label>
+          <select class="select" data-modal-field="leverageType">
+            ${leverageTypeOptionsHTML(task.leverageType || "")}
+          </select>
+          ${leverageJudgeHelperHTML()}
+        </div>
+        <div class="field">
           <label class="field-label">説明 / メモ</label>
           <textarea class="textarea" data-modal-field="description" style="min-height:120px">${escapeHTML(task.description || "")}</textarea>
         </div>
@@ -8802,7 +8928,8 @@ function saveTaskFromModal(id, fields) {
       parentTaskId: fields.parentTaskId || "",
       title,
       category: fields.category || "",
-      dueDate: fields.dueDate || ""
+      dueDate: fields.dueDate || "",
+      leverageType: fields.leverageType || ""  // v65: 10x機構
     });
     task.status = fields.status || "todo";
     task.description = fields.description || "";
@@ -8822,6 +8949,7 @@ function saveTaskFromModal(id, fields) {
       category: fields.category || "",
       dueDate: fields.dueDate || "",
       description: fields.description || "",
+      leverageType: fields.leverageType !== undefined ? fields.leverageType : (t.leverageType || ""),  // v65: 10x機構
       // v37: モーダルに nextRoutineId の入力欄はないため、undefined なら既存値を保持
       //      (以前は保存のたびに "" で消えていた)
       nextRoutineId: fields.nextRoutineId !== undefined ? fields.nextRoutineId : (t.nextRoutineId || ""),
@@ -8865,6 +8993,13 @@ function buildBlockModal(block) {
         <div class="field">
           <label class="field-label">紐づくTask</label>
           <select class="select" data-modal-field="taskId">${taskOptions}</select>
+        </div>
+        <div class="field">
+          <label class="field-label">レバレッジ(10x機構・任意)</label>
+          <select class="select" data-modal-field="leverageType">
+            ${leverageTypeOptionsHTML(block.leverageType || "")}
+          </select>
+          ${leverageJudgeHelperHTML()}
         </div>
         <div class="field-row">
           <div class="field">
@@ -8995,6 +9130,7 @@ function saveBlockFromModal(id, fields) {
     pomodoroCount: existing?.pomodoroCount || 0,
     migratedTo: existing?.migratedTo || "",
     carryCount: existing?.carryCount || 0,  // v61: マイグレーション儀式(繰り越し回数、編集では変えない)
+    leverageType: fields.leverageType !== undefined ? fields.leverageType : (existing?.leverageType || ""),  // v65: 10x機構
     orderIndex: existing?.orderIndex || 0,
     isMIT: existing?.isMIT || false,
     source: existing?.source || "",

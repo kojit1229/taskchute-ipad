@@ -2482,6 +2482,37 @@ h3 {
 .migration-ritual-choices { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
 .migration-ritual-choices .btn { width: 100%; text-align: left; padding: 11px 14px; }
 
+/* v65: 10x機構 — leverageType の控えめマーク + 10秒判定ヘルプの折りたたみ */
+.lev-mark {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.lev-mark.lev-asset { background: var(--green-soft); color: var(--green); }
+.lev-mark.lev-eliminate { background: var(--purple-soft); color: var(--purple); }
+.lev-helper { margin-top: 8px; }
+.lev-helper summary {
+  list-style: none;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.lev-helper summary::-webkit-details-marker { display: none; }
+.lev-helper summary::before {
+  content: "▶ ";
+  display: inline-block;
+  transition: transform 0.15s ease;
+  font-size: 10px;
+  margin-right: 4px;
+}
+.lev-helper[open] summary::before { transform: rotate(90deg); }
+.lev-helper-body { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+
 /* v61: 今日の理想ワンライナー + 3日リトライ */
 .home-ideal { margin-top: 12px; padding: 10px 14px; }
 .home-ideal-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }

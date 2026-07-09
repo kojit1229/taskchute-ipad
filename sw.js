@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v63";
+const CACHE_NAME = "taskchute-journal-pwa-v65";
 const APP_SHELL = [
   "./",
   "./index.html",
