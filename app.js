@@ -134,7 +134,17 @@ document.addEventListener("click", (event) => {
   if (action === "now-start") setBlockTime(id, "actualStartAt");
   if (action === "now-end") setBlockTime(id, "actualEndAt");
   if (action === "delete-block") deleteBlock(id);
-  if (action === "generate-report") generateReport();
+  // v68: 日報生成前に「今日AIに聞きたいこと」欄(#reportAskInput、日報タブのみ存在)があれば
+  //      origin:"user" の問いとして1件積む(空なら何もしない=節ごと省略される)
+  if (action === "generate-report") {
+    const askInput = document.querySelector("#reportAskInput");
+    const askText = (askInput?.value || "").trim();
+    if (askText) {
+      state.questions.push(makeQuestion({ text: askText, origin: "user" }));
+      askInput.value = "";
+    }
+    generateReport();
+  }
   if (action === "download-report") downloadReport();
   if (action === "download-data") downloadData();
   if (action === "save-github") saveToGitHub();
@@ -188,6 +198,12 @@ document.addEventListener("click", (event) => {
   // v67: AI作業ワーカー連携(柱2) — 実績還流カードのワンタップ承認 / 質問への橋渡し
   if (action === "ai-work-approve") approveAiWorkResult(target.dataset.resultId);
   if (action === "ai-work-question") raiseAiWorkQuestion(target.dataset.resultId);
+  // v68: 人生実験機構(実験中カードのCRUD + 昇格候補コピー)
+  if (action === "experiment-add") addExperimentOrGuard();
+  if (action === "edit-experiment") openExperimentEditor(id);
+  if (action === "experiment-keep") keepExperiment(id);
+  if (action === "experiment-drop") dropExperiment(id);
+  if (action === "experiment-copy-conclusion") copyExperimentConclusion(id);
   // === v3: ポモドーロ常時起動 ===
   if (action === "pomo-tab") setPomodoroTab(target.dataset.tab);
   // === v3: 日報のGitHub push ===
@@ -855,7 +871,7 @@ function normalizeState(value) {
   // v39: 問い(Question)エンティティ。効率化(2x)ではなく価値の中身(10x)を掘る器。
   if (!Array.isArray(value.questions)) value.questions = [];
   value.questions = value.questions.map((q) => ({
-    origin: "manual",       // 'manual' | 'zero' | 'review' | 'ai'
+    origin: "manual",       // 'manual' | 'zero' | 'review' | 'ai' | 'user'(v68: 日報の「今日AIに聞きたいこと」)
     status: "open",         // 'open' | 'deepening' | 'settled'
     settledNote: "",
     settledAt: null,
@@ -863,6 +879,21 @@ function normalizeState(value) {
     linkedProjectId: null,  // v44: 結論を実行に移した先(what→how の橋)
     linkedTaskId: null,     // v44
     ...q
+  }));
+  // v68: 人生実験カード。1件のみ「実験中(running)」を推奨する軽量ログ
+  //      (migrationRitualLog/aiPlanSkippedLogと同じ思想。判定は結論欄にKが書く=機構は集計まで)。
+  if (!Array.isArray(value.experiments)) value.experiments = [];
+  value.experiments = value.experiments.map((e) => ({
+    hypothesis: "",
+    metric: "",
+    startDate: todayISO(),
+    endDate: addDays(todayISO(), 14),
+    status: "running",   // 'running' | 'kept' | 'dropped'
+    conclusion: "",
+    createdAt: nowDateTime(),
+    updatedAt: nowDateTime(),
+    deleted: false,
+    ...e
   }));
   // v39: theme / entry に questionId を補完(どの問いの下で書かれたか)
   value.zeroThinking.themes = value.zeroThinking.themes.map((t) =>
@@ -4606,6 +4637,7 @@ function renderJournal() {
   return `
     ${renderHeader("過去の自分・今の自分・外部視点", "ジャーナル")}
     ${renderDateBar()}
+    ${renderExperimentSection()}
     <section class="journal-grid">
       <div class="panel">
         <h2>📓 前日 (${previous})</h2>
@@ -4649,6 +4681,7 @@ function renderJournal() {
         `}
         <div class="row" style="margin-top:8px; flex-wrap:wrap; gap:6px">
           <button class="btn ghost" data-action="journal-import-ai" data-date="${date}" style="font-size:12px">🤖 AI返信から取り込み(テーマ/MIT/問い)</button>
+          <button class="btn ghost" data-action="experiment-add" style="font-size:12px">🧪 実験にする</button>
         </div>
         ${feedbackFromFilePrev && previous !== date ? `
           <details style="margin-top:14px">
@@ -4765,6 +4798,11 @@ function renderReports() {
   return `
     ${renderHeader("生成AIへ渡す素材", "日報")}
     ${renderDateBar()}
+    <div class="field" style="margin-bottom:10px">
+      <label class="field-label">今日AIに聞きたいこと(任意・1行)</label>
+      <input class="input" id="reportAskInput" style="font-size:16px" placeholder="例: 来週の12WY目標、このペースで間に合いそう?">
+      <div class="muted" style="font-size:11px; margin-top:4px">日報生成時に「## AIへの質問」節として日報へ加わり、翌朝のAIコーチングが冒頭で回答します。空欄なら節ごと省略されます。</div>
+    </div>
     <div class="row" style="margin-bottom:12px; flex-wrap:wrap; gap:8px">
       <button class="btn primary" data-action="generate-report">日報を生成</button>
       ${report ? `<button class="btn" data-action="report-copy-ai">📋 AI用にコピー</button>` : ""}
@@ -5781,6 +5819,8 @@ function renderWeekly() {
       <button class="btn" data-action="weekly-next" ${atCurrent ? "disabled" : ""}>次週 ▶</button>
     </div>
 
+    ${renderExperimentSection()}
+
     ${noRecord ? `<div class="weekly-sec"><div class="muted" style="font-size:13px">この週は記録がありません。記録ゼロという事実も、ふり返りの対象です。</div></div>` : `
     <div class="weekly-sec">
       <h3>実行スコア</h3>
@@ -6304,6 +6344,209 @@ function entryToQuestion(entryId) {
   state.questions.push(makeQuestion({ text: e.theme || (e.body || "").split("\n")[0] || "問い", origin: "zero" }));
   state.settings.zeroTab = "question";
   saveAndRender("この気づきを問いにしました");
+}
+
+// v68: =========================================================
+//  人生実験カード(state.experiments)
+//  仮説を1つだけ走らせ、期限で「続ける(kept)/手放す(dropped)」を判定する軽量ログ。
+//  同時に複数走らせない思想(migrationRitualLog/aiPlanSkippedLogと同じ軽量配列の型見本を踏襲)。
+//  判定材料の自動集計はバッチ(weekly-extract.py)側。結論はKが書く(機構は集計まで=v39問いと同じ分業)。
+// =========================================================
+function makeExperiment({ hypothesis = "", metric = "", startDate = "", endDate = "" } = {}) {
+  const start = startDate || todayISO();
+  return {
+    id: crypto.randomUUID(),
+    hypothesis,
+    metric,
+    startDate: start,
+    endDate: endDate || addDays(start, 14),
+    status: "running",   // 'running' | 'kept' | 'dropped'
+    conclusion: "",
+    createdAt: nowDateTime(),
+    updatedAt: nowDateTime(),
+    deleted: false
+  };
+}
+
+// 「実験中(running)」は常に高々1件(2件目は addExperimentOrGuard() で抑止する)
+function activeExperiment() {
+  return (state.experiments || []).find((e) => !e.deleted && e.status === "running") || null;
+}
+
+// アファメーション昇格候補として表示する、直近の kept 実験(結論があるもののみ)
+function latestKeptExperiment() {
+  return (state.experiments || [])
+    .filter((e) => !e.deleted && e.status === "kept" && e.conclusion)
+    .sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""))[0] || null;
+}
+
+// 「+ 実験を始める」「別の実験を試したい」の共通入口。実験中があれば開かず、絞る文言だけ返す。
+function addExperimentOrGuard() {
+  if (activeExperiment()) {
+    showToast("実験は1つに絞りましょう — 今の実験の結論を出してから次へ");
+    return;
+  }
+  openExperimentEditor(null);
+}
+
+function openExperimentEditor(id) {
+  const e = id ? state.experiments.find((x) => x.id === id) : null;
+  state.modal = { type: "experiment", id: id || "" };
+  renderModal(buildExperimentModal(e));
+}
+
+function buildExperimentModal(e) {
+  const isNew = !e;
+  const startDate = e?.startDate || todayISO();
+  const endDate = e?.endDate || addDays(startDate, 14);
+  return `
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">${isNew ? "実験を始める" : "実験を編集"}</h3>
+        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="muted" style="font-size:11.5px; line-height:1.6; margin-bottom:10px">同時に走らせる実験は1つまで。仮説を1つ選び、期限を決めて試し、期限が来たら「続ける/手放す」を判定します。</div>
+        <div class="field">
+          <label class="field-label">仮説(1文)</label>
+          <textarea class="textarea" data-modal-field="hypothesis" style="min-height:72px; font-size:16px" placeholder="例: 締切を1日前倒しすると着手率が上がる">${escapeHTML(e?.hypothesis || "")}</textarea>
+        </div>
+        <div class="field">
+          <label class="field-label">判定に使う数字(任意)</label>
+          <input class="input" data-modal-field="metric" style="font-size:16px" placeholder="例: 該当タスクの着手率" value="${escapeHTML(e?.metric || "")}">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label class="field-label">開始日</label>
+            <input class="input" type="date" data-modal-field="startDate" value="${startDate}">
+          </div>
+          <div class="field">
+            <label class="field-label">終了日(既定14日後)</label>
+            <input class="input" type="date" data-modal-field="endDate" value="${endDate}">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        ${isNew ? "" : `<button class="btn danger" data-action="modal-delete">削除</button>`}
+        <button class="btn" data-action="modal-close">キャンセル</button>
+        <button class="btn primary" data-action="modal-save">${isNew ? "始める" : "保存"}</button>
+      </div>
+    </div>`;
+}
+
+function saveExperimentFromModal(id, fields) {
+  const hypothesis = (fields.hypothesis || "").trim();
+  if (!hypothesis) return showToast("仮説を入力してください");
+  const metric = (fields.metric || "").trim();
+  const startDate = fields.startDate || todayISO();
+  const endDate = fields.endDate || addDays(startDate, 14);
+  if (id) {
+    state.experiments = state.experiments.map((e) => e.id === id
+      ? { ...e, hypothesis, metric, startDate, endDate, updatedAt: nowDateTime() }
+      : e);
+    closeModal();
+    saveAndRender("実験を更新しました");
+    return;
+  }
+  // v68: 新規作成の直前にもう一度ガード(モーダルを開いた後に他端末同期等で実験中になった場合の保険)
+  if (activeExperiment()) {
+    closeModal();
+    return showToast("実験は1つに絞りましょう — 今の実験の結論を出してから次へ");
+  }
+  state.experiments.push(makeExperiment({ hypothesis, metric, startDate, endDate }));
+  closeModal();
+  saveAndRender("実験を始めました(終了日を過ぎたら判定を促します)");
+}
+
+// deleteFromModal() 側で既に確認ダイアログ済みのため、ここでは重ねて confirm しない
+// (deleteProject/deleteTask/deleteBlockと同じ流儀)
+function deleteExperiment(id) {
+  state.experiments = state.experiments.map((e) => e.id === id
+    ? { ...e, deleted: true, updatedAt: nowDateTime() } : e);
+  saveAndRender("実験を削除しました");
+}
+
+// 終了日超過後の判定: 結論(1行)は #exp-conclusion-input から読む(zt-add-text等と同じ、
+// 都度再描画を避けるため state には都度バインドしない一回読み取りパターン)
+function readExperimentConclusionInput() {
+  return (document.querySelector("#exp-conclusion-input")?.value || "").trim();
+}
+
+function keepExperiment(id) {
+  const conclusion = readExperimentConclusionInput();
+  if (!conclusion) return showToast("結論を1行、書いてください");
+  state.experiments = state.experiments.map((e) => e.id === id
+    ? { ...e, status: "kept", conclusion, updatedAt: nowDateTime() }
+    : e);
+  saveAndRender("実験を続けることにしました — 原則への昇格候補に残ります");
+}
+
+function dropExperiment(id) {
+  const conclusion = readExperimentConclusionInput();
+  if (!conclusion) return showToast("結論を1行、書いてください");
+  state.experiments = state.experiments.map((e) => e.id === id
+    ? { ...e, status: "dropped", conclusion, updatedAt: nowDateTime() }
+    : e);
+  saveAndRender("実験を手放しました");
+}
+
+// kept実験の結論を Daily_Affirmation.md への追記候補としてコピーしやすくする(自動書き換えはしない)
+async function copyExperimentConclusion(id) {
+  const e = (state.experiments || []).find((x) => x.id === id);
+  if (!e || !e.conclusion) return;
+  try {
+    await navigator.clipboard.writeText(e.conclusion);
+    showToast("コピーしました — Daily_Affirmation.mdへの追記候補として使えます");
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = e.conclusion;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); showToast("コピーしました"); } catch { showToast("コピーに失敗しました"); }
+    document.body.removeChild(ta);
+  }
+}
+
+// ジャーナル/週次レビュー両タブで共有する実験カード。
+function renderExperimentSection() {
+  const exp = activeExperiment();
+  const kept = latestKeptExperiment();
+  const overdue = Boolean(exp && exp.endDate && todayISO() > exp.endDate);
+  const runningHTML = !exp
+    ? `
+      <div class="muted" style="font-size:12.5px; line-height:1.6; margin-bottom:10px">今、走らせている実験はありません。仮説を1つ選び、期限を決めて試します(同時に走らせる実験は1つまで)。</div>
+      <button class="btn primary" data-action="experiment-add">+ 実験を始める</button>`
+    : `
+      <div class="exp-hypothesis">${escapeHTML(exp.hypothesis)}</div>
+      ${exp.metric ? `<div class="muted" style="font-size:12px; margin-top:4px">判定材料: ${escapeHTML(exp.metric)}</div>` : ""}
+      <div class="muted" style="font-size:11.5px; margin-top:6px">${exp.startDate} 〜 ${exp.endDate}${overdue ? "・終了日を過ぎています" : ""}</div>
+      ${overdue ? `
+        <div class="exp-judge" style="margin-top:10px">
+          <label class="field-label">結論(1行)</label>
+          <input class="input" id="exp-conclusion-input" style="font-size:16px" placeholder="続ける/手放す理由を1行で">
+          <div class="row" style="gap:8px; margin-top:8px; flex-wrap:wrap">
+            <button class="btn primary" data-action="experiment-keep" data-id="${exp.id}">続ける(kept)</button>
+            <button class="btn" data-action="experiment-drop" data-id="${exp.id}">手放す(dropped)</button>
+          </div>
+        </div>` : `
+        <div class="row" style="gap:8px; margin-top:10px; flex-wrap:wrap">
+          <button class="btn ghost" data-action="edit-experiment" data-id="${exp.id}" style="font-size:12px">編集</button>
+          <button class="btn ghost" data-action="experiment-add" style="font-size:12px">別の実験を試したい</button>
+        </div>`}`;
+  const keptHTML = kept ? `
+    <div class="exp-promote" style="margin-top:14px; padding-top:12px; border-top:1px solid var(--line-soft)">
+      <div class="muted" style="font-size:11.5px; margin-bottom:4px">原則(アファメーション)への昇格候補</div>
+      <div class="exp-hypothesis">${escapeHTML(kept.conclusion)}</div>
+      <button class="btn ghost" data-action="experiment-copy-conclusion" data-id="${kept.id}" style="font-size:12px; margin-top:8px">結論をコピー</button>
+    </div>` : "";
+  return `
+    <div class="weekly-sec exp-card">
+      <h3>🧪 人生実験</h3>
+      ${runningHTML}
+      ${keptHTML}
+    </div>`;
 }
 
 // v34: =========================================================
@@ -7002,6 +7245,17 @@ function generateReport(dateArg, { quiet = false } = {}) {
     `| 12週 今週の進捗 | ${rateCycleWeek.done} / ${rateCycleWeek.total} | ${rateCycleWeek.pct}% |`,
     "",
   ];
+
+  // v68: 非同期AI対話 — 日報タブの「今日AIに聞きたいこと」(origin:"user")のうち未解決のものを
+  //      「## AIへの質問」節として出す。空(該当なし)なら節ごと省略。coach-daily.sh は日報全文を
+  //      そのまま読むため、この節を追加するだけで翌朝のAIコーチングが応答できる(バッチ側改修不要)。
+  const userQuestions = (state.questions || []).filter((q) =>
+    !q.deleted && q.origin === "user" && q.status !== "settled");
+  if (userQuestions.length) {
+    lines.push("## AIへの質問");
+    userQuestions.forEach((q) => lines.push(`- ${q.text}`));
+    lines.push("");
+  }
 
   // v34/v39: 0秒思考(その日に書いたもの、書いた順)。v39 で問い別にグルーピング。
   const ztToday = (state.zeroThinking?.entries || [])
@@ -9076,6 +9330,8 @@ function submitModal() {
     saveActualEntryFromModal(state.modal.id, fields);
   } else if (state.modal.type === "question") {
     saveQuestionFromModal(state.modal.id, fields);  // v39
+  } else if (state.modal.type === "experiment") {
+    saveExperimentFromModal(state.modal.id, fields);  // v68
   }
 }
 
@@ -9091,6 +9347,8 @@ function deleteFromModal() {
     deleteBlock(state.modal.id);
   } else if (state.modal.type === "question") {
     deleteQuestion(state.modal.id);  // v39
+  } else if (state.modal.type === "experiment") {
+    deleteExperiment(state.modal.id);  // v68
   }
   closeModal();
 }

@@ -2621,4 +2621,10 @@ h3 {
 .lev-ledger-date { font-size: 11px; white-space: nowrap; }
 .lev-ledger-title { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lev-ledger-note { padding: 6px 8px; }  /* iOS Safariズーム防止: font-sizeは.input既定(16px)のまま変更しない */
+
+/* v68: 人生実験カード(ジャーナル/週次レビュー両タブ共通)。同時に1件だけ走らせる思想のため、
+   実験中は結論記入までカードのまま留まる(リスト化しない)。 */
+.exp-card .exp-hypothesis { font-size: 15px; font-weight: 700; line-height: 1.5; }
+.exp-card .exp-judge { padding: 10px 12px; background: rgba(255,149,0,.08); border: 1px solid rgba(255,149,0,.25); border-radius: 10px; }
+.exp-card .exp-promote .exp-hypothesis { color: var(--green); }
 .bucket-gauge-val { color: var(--muted); }
