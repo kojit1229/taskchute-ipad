@@ -2318,6 +2318,27 @@ h3 {
 .sync-dot.pending { background: var(--orange); opacity: 1; }
 .sync-banner { background: rgba(255,149,0,.12); border: 1px solid rgba(255,149,0,.35); color: var(--text); font-size: 12.5px; font-weight: 700; padding: 10px 14px; border-radius: 10px; margin-bottom: 14px; cursor: pointer; }
 
+/* v67: AI連携の鮮度インジケータ(柱1b)。sync-dot/sync-banner と同じ見た目の思想を、
+   別のクラス名(ai-freshness-*)で複製する(git同期とAI連携は別の鮮度シグナルのため)。 */
+.ai-freshness-line { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); margin: 6px 2px 0; }
+.ai-freshness-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; flex: none; }
+.ai-freshness-dot.ok { background: var(--green); opacity: .7; }
+.ai-freshness-dot.warn { background: var(--orange); opacity: 1; }
+.ai-freshness-banner {
+  background: rgba(255,149,0,.12); border: 1px solid rgba(255,149,0,.35); color: var(--text);
+  font-size: 12.5px; font-weight: 700; padding: 10px 14px; border-radius: 10px;
+  margin: 8px 0 0; cursor: pointer;
+}
+
+/* v67: AI作業ワーカー連携(柱2) — WBS行の🤝マーク + ホームの「AIが処理した作業」カード */
+.ai-work-flag { margin-left: 6px; font-size: 12px; opacity: .85; }
+.ai-work-row { display: flex; align-items: center; gap: 10px; padding: 9px 6px; margin: 0 -6px; border-radius: 7px; border-bottom: 1px solid var(--line-soft); }
+.ai-work-row:last-child { border-bottom: none; }
+.ai-work-row:hover { background: var(--panel-soft); }
+.ai-work-row-main { flex: 1; min-width: 0; }
+.ai-work-title { font-size: 14.5px; font-weight: 600; }
+.ai-work-summary { font-size: 12.5px; color: var(--muted); margin-top: 2px; line-height: 1.5; }
+
 /* v44: 問い→プロジェクト橋 — 実行リンク */
 .q-linked { margin-top: 8px; font-size: 12.5px; font-weight: 700; color: var(--accent); cursor: pointer; }
 

@@ -59,6 +59,8 @@ let cachedVisionMd = "";
 let cachedAffirmationMd = "";
 const cachedFeedback = {};  // { 'YYYY-MM-DD': '...md text...' }
 const cachedWeeklyReviewMd = {};  // v62: { '週開始土曜YYYY-MM-DD': '...md text...' }(自宅PCバッチ生成)
+// v67: AI作業結果_<today>.json のパース済み配列(非永続、当日分のみ)。二重登録防止のIDは state.aiWorkProcessedIds 側で永続化する。
+let cachedAiWorkResults = null;
 
 // v34: 0秒思考 — 画面内の一時状態(永続化しない)
 let ztTab = "other";          // "other" | "fav"
@@ -183,6 +185,9 @@ document.addEventListener("click", (event) => {
   if (action === "vision-board-tab") setVisionBoardIndex(Number(target.dataset.index));
   if (action === "open-md-in-github") openMdInGithub(target.dataset.path);
   if (action === "reload-md") reloadStaticMarkdown();
+  // v67: AI作業ワーカー連携(柱2) — 実績還流カードのワンタップ承認 / 質問への橋渡し
+  if (action === "ai-work-approve") approveAiWorkResult(target.dataset.resultId);
+  if (action === "ai-work-question") raiseAiWorkQuestion(target.dataset.resultId);
   // === v3: ポモドーロ常時起動 ===
   if (action === "pomo-tab") setPomodoroTab(target.dataset.tab);
   // === v3: 日報のGitHub push ===
@@ -717,6 +722,8 @@ function normalizeState(value) {
       nextRoutineId: "",
       leverageType: "",  // v65: 10x機構(2-1)。"asset"|"eliminate"|"oneoff"|""(未設定)
       leverageNote: "",  // v66: 10x機構(2-2レバレッジ台帳)。資産の累計節約・成果の自己申告メモ(任意1行)
+      aiWork: false,      // v67: AI作業ワーカー連携(柱2)。trueならバッチ側がこのTaskを拾って作業する
+      aiWorkBrief: "",    // v67: 何をしてほしいか・成果物の置き場希望(1〜2行)
       ...rest
     };
   });
@@ -829,6 +836,13 @@ function normalizeState(value) {
   //      skippedのkind:"ai"分は永続化されておらず、v64設計§3の「AIプランのskipped理由」学習シグナルが
   //      アプリ側で欠けていたため今回吸収する。
   if (!Array.isArray(value.aiPlanSkippedLog)) value.aiPlanSkippedLog = [];
+  // v67: AI連携の鮮度インジケータ(柱1b)。最後に取得成功した AIフィードバック_*.md /
+  //      AIプラン_*.json の日付("YYYY-MM-DD")。取得成功のたびに前進のみさせる(後退させない)。
+  if (!value.aiLinkFreshness || typeof value.aiLinkFreshness !== "object") value.aiLinkFreshness = {};
+  if (!("feedbackAt" in value.aiLinkFreshness)) value.aiLinkFreshness.feedbackAt = null;
+  if (!("planAt" in value.aiLinkFreshness)) value.aiLinkFreshness.planAt = null;
+  // v67: AI作業結果_*.json の処理済みresultId(taskId+dateから合成)。二重登録防止用。
+  if (!Array.isArray(value.aiWorkProcessedIds)) value.aiWorkProcessedIds = [];
   value.feedback ||= {};
   value.reports ||= {};
   // v56: GitHub に push 済みの AIフィードバック_*.md の日付を記録する集合。
@@ -1391,9 +1405,11 @@ function renderHome() {
   return `
     ${renderHeader("今日の入口", "ホーム", `<button class="btn primary" data-action="today">今日へ</button>`)}
     ${renderDateBar()}
+    ${aiFreshnessLine()}
     ${homeCreed()}
     ${homeLifespan(metrics)}
     ${homeIdeal(isToday)}
+    ${homeAiWork(isToday)}
     ${homeHero(blocks, isToday)}
     ${homeScoreboard(blocks)}
     <div class="home-zone-block z-amber" id="homezone-1">
@@ -2498,6 +2514,19 @@ async function tryFetchAiPlan(date, freeGaps) {
   }
   if (!fittingItems.length) return null;  // 採用可能な項目が0件なら決定論へフォールバック
   return { items: fittingItems, skipped };
+}
+
+// v67: AIプラン_<date>.json の存在確認のみ(下書きへの適用はtryFetchAiPlan/runAiMorningPlanの専管)。
+//      state.aiLinkFreshness.planAt 更新用の軽量シグナル。厳密な項目検証はしない(存在=鮮度の証拠で足りる)。
+async function fetchAiPlanFreshnessDate(date) {
+  const raw = await fetchText(`./AIプラン_${date}.json`);
+  if (!raw) return null;
+  try {
+    const data = JSON.parse(raw);
+    return (data && typeof data === "object" && data.date === date) ? date : null;
+  } catch {
+    return null;
+  }
 }
 
 // v60: 決定論配置(fallbackMorningPlan)を正規経路に昇格。Claude API 呼び出しは全廃。
@@ -3712,6 +3741,7 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false) 
         ${scheduledToday ? `<span class="badge green">今日✓</span>` : ""}
         ${task.category ? `<span class="cat-chip" style="background:${getCategoryColor(task.category)}1f; color:${getCategoryColor(task.category)}; border:1px solid ${getCategoryColor(task.category)}66">${escapeHTML(task.category)}</span>` : ""}
         ${leverageTypeMarkHTML(task.leverageType)}
+        ${task.aiWork ? `<span class="ai-work-flag" title="AIに作業依頼中${task.aiWorkBrief ? ": " + escapeHTML(task.aiWorkBrief) : ""}">🤝</span>` : ""}
         ${dueHTML}
         ${stats.count ? `<span class="muted" style="font-size:11px">⏱ ${stats.count}回${stats.minutes ? `・${fmtMinShort(stats.minutes)}` : ""}</span>` : ""}`}
       </div>
@@ -6580,6 +6610,8 @@ function makeTask({ projectId = "", parentTaskId = "", title = "", category = ""
     dueDate: dueDate || state.selectedDate,
     description: "",
     leverageType,  // v65: 10x機構(2-1)。"asset"|"eliminate"|"oneoff"|""(未設定)
+    aiWork: false,      // v67: AI作業ワーカー連携(柱2)
+    aiWorkBrief: "",    // v67: 何をしてほしいか・成果物の置き場希望(1〜2行)
     // v16: やりたいことリスト用フィールド
     targetYear,         // いつまでに(数字の年、null なら「いつか」)
     lifeArea,           // 人生領域(健康/仕事/家族/趣味/旅/学び/経験/持物)
@@ -8157,6 +8189,21 @@ async function hydrateStaticMarkdown() {
     // v57: 直push検知した前日分は、以後の起動時fetchが正規ルートに乗るよう記録する
     if (!files.includes(prev)) recordFeedbackFile(prev);
   }
+  // v67: AI連携の鮮度インジケータ(柱1b)。「今日」を見ているときのfetch結果のみを鮮度シグナルとして
+  //      採用する(過去日ブラウズ中のfetchはその日の閲覧目的であり、パイプライン鮮度とは無関係)。
+  //      前進のみ(後退させない)。
+  const realToday = todayISO();
+  let freshnessDirty = false;
+  if (today === realToday) {
+    if (todayFb && (!state.aiLinkFreshness.feedbackAt || state.aiLinkFreshness.feedbackAt < today)) {
+      state.aiLinkFreshness.feedbackAt = today;
+      freshnessDirty = true;
+    }
+    if (prevFb && (!state.aiLinkFreshness.feedbackAt || state.aiLinkFreshness.feedbackAt < prev)) {
+      state.aiLinkFreshness.feedbackAt = prev;
+      freshnessDirty = true;
+    }
+  }
   // v62: AI週次レビュー(自宅PCバッチ生成)。直近土曜1件のみ、無ければ404を静かに無視する
   //      (fetchTextの仕様どおり)。週次レビュータブを開くたび同じ週の再fetchはしない。
   const weeklyReviewWeek = weekStartFor(todayISO());
@@ -8167,9 +8214,25 @@ async function hydrateStaticMarkdown() {
       changed = true;
     }
   }
+  // v67: AIプラン_<今日>.json の存在確認(下書きへの適用はrunAiMorningPlan側の専管で、
+  //      ここでは鮮度シグナル専用の軽量fetch)。既に今日分を確認済みなら再fetchしない。
+  if (!state.aiLinkFreshness.planAt || state.aiLinkFreshness.planAt < realToday) {
+    const planDate = await fetchAiPlanFreshnessDate(realToday);
+    if (planDate) {
+      state.aiLinkFreshness.planAt = planDate;
+      freshnessDirty = true;
+      changed = true;
+    }
+  }
+  // v67: 鮮度シグナルはユーザー操作を経ないため、autoSyncのpush対象(saveState)にはせず
+  //      ローカル保存のみで足す(端末をまたいだ鮮度比較は現状不要。過剰なpushを避ける)。
+  if (freshnessDirty) persistLocalNoSchedule();
+  // v67: AI作業結果_<今日>.json(柱2・実績還流)。当日分のみ、network-first(sw.jsのjson扱いを流用)。
+  const gotAiWork = await hydrateAiWorkResults();
+  if (gotAiWork) changed = true;
   // v37: state.view というプロパティは存在しない(正しくは currentView)。
   //      このタイポのせいで、ビジョン画面を開いたまま読み込みが終わっても再描画されなかった。
-  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly")) {
+  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly" || state.currentView === "home")) {
     render();
   }
 }
@@ -8181,6 +8244,166 @@ async function reloadStaticMarkdown() {
   await hydrateStaticMarkdown();
   render();
   showToast("最新を読み込みました");
+}
+
+// v67: =========================================================
+//  AI作業ワーカー連携(柱2・実績還流) — AI作業結果_YYYY-MM-DD.json の取り込み表示
+//  スキーマ(権威): [{taskId,title,status:"completed"|"blocked"|"queued",summary,outputPath,minutes}]
+//  当日分のみ同一オリジンfetch(AIプラン_*.jsonと同じ流儀)。アプリ側は自動登録せず、
+//  completedはワンタップ承認(実績Block化)、blockedは既存state.questionsへ橋渡し、
+//  queuedは表示のみ(K指示「最終判断はK」)。
+// =========================================================
+
+// 当日の AI作業結果_<today>.json を取得・検証し cachedAiWorkResults を更新する。
+// resultId は taskId(無ければ配列index)+日付で合成し、二重登録防止の照合キーにする。
+async function hydrateAiWorkResults() {
+  const date = todayISO();
+  const raw = await fetchText(`./AI作業結果_${date}.json`);
+  if (!raw) { cachedAiWorkResults = null; return false; }
+  let data;
+  try { data = JSON.parse(raw); } catch { cachedAiWorkResults = null; return false; }
+  if (!Array.isArray(data)) { cachedAiWorkResults = null; return false; }
+  const VALID_STATUS = ["completed", "blocked", "queued"];
+  const items = [];
+  data.forEach((r, idx) => {
+    if (!r || typeof r !== "object") return;
+    if (!VALID_STATUS.includes(r.status)) return;
+    const taskId = typeof r.taskId === "string" ? r.taskId : "";
+    items.push({
+      resultId: `${date}__${taskId || `idx${idx}`}`,
+      taskId,
+      title: typeof r.title === "string" ? r.title : "",
+      status: r.status,
+      summary: typeof r.summary === "string" ? r.summary : "",
+      outputPath: typeof r.outputPath === "string" ? r.outputPath : "",
+      minutes: Number.isFinite(r.minutes) ? r.minutes : 0
+    });
+  });
+  const changed = JSON.stringify(items) !== JSON.stringify(cachedAiWorkResults);
+  cachedAiWorkResults = items;
+  return changed;
+}
+
+// 未処理(state.aiWorkProcessedIds に無い)の結果のみをホームカードへ出す
+function pendingAiWorkResults() {
+  if (!Array.isArray(cachedAiWorkResults)) return [];
+  const processed = new Set(state.aiWorkProcessedIds || []);
+  return cachedAiWorkResults.filter((r) => !processed.has(r.resultId));
+}
+
+function markAiWorkResultProcessed(resultId) {
+  if (!Array.isArray(state.aiWorkProcessedIds)) state.aiWorkProcessedIds = [];
+  if (!state.aiWorkProcessedIds.includes(resultId)) state.aiWorkProcessedIds.push(resultId);
+}
+
+// completed: ワンタップで実績Blockとして承認登録する(自動登録はしない — 最終判断はK)。
+// カテゴリ"AI作業"、所要minutes分。空き時間があればそこへ、無ければ現在時刻付近の適当な枠でよい
+// (設計注記どおり厳密な衝突検知はしない)。紐づくtaskIdがあればTaskも完了化する。
+function approveAiWorkResult(resultId) {
+  const r = (cachedAiWorkResults || []).find((x) => x.resultId === resultId);
+  if (!r) return;
+  markAiWorkResultProcessed(resultId);
+  const date = todayISO();
+  const minutes = clamp(Math.round(r.minutes || 30), 1, 24 * 60);
+  const gaps = computeFreeGaps(date).filter(([s, e]) => e - s >= minutes);
+  let start;
+  if (gaps.length) {
+    start = gaps[0][0];
+  } else {
+    const now = new Date();
+    start = clamp(now.getHours() * 60 + now.getMinutes(), 0, 24 * 60 - minutes);
+  }
+  const block = makeBlock({
+    date,
+    title: r.title || "AI作業",
+    taskId: r.taskId || "",
+    category: "AI作業",
+    plannedStartAt: `${date}T${minToHHMM(start)}`,
+    plannedEndAt: `${date}T${minToHHMM(start + minutes)}`,
+    actualStartAt: `${date}T${minToHHMM(start)}`,
+    actualEndAt: `${date}T${minToHHMM(start + minutes)}`,
+    estimateMin: minutes,
+    completed: true,
+    comment: r.summary || ""
+  });
+  state.blocks.push(block);
+  if (r.taskId) {
+    state.tasks = state.tasks.map((t) => (t.id === r.taskId && !t.deleted)
+      ? { ...t, status: "completed", updatedAt: nowDateTime() }
+      : t);
+  }
+  saveAndRender("AIの作業実績を登録しました");
+}
+
+// blocked: 既存の問い(state.questions)機構へ橋渡しする(v39のmakeQuestionをそのまま使う)
+function raiseAiWorkQuestion(resultId) {
+  const r = (cachedAiWorkResults || []).find((x) => x.resultId === resultId);
+  if (!r) return;
+  markAiWorkResultProcessed(resultId);
+  const q = makeQuestion({ text: r.summary || r.title || "AIからの質問", origin: "ai" });
+  state.questions.push(q);
+  saveAndRender("AIからの質問を「問い」に積みました");
+}
+
+function aiWorkResultRowHTML(r) {
+  const title = escapeHTML(r.title || "(無題)");
+  if (r.status === "completed") {
+    return `<div class="ai-work-row">
+      <div class="ai-work-row-main">
+        <div class="ai-work-title">${title}</div>
+        ${r.summary ? `<div class="ai-work-summary">${escapeHTML(r.summary)}</div>` : ""}
+        ${r.minutes ? `<div class="muted" style="font-size:11px">所要 ${r.minutes}分</div>` : ""}
+      </div>
+      <button class="btn primary" data-action="ai-work-approve" data-result-id="${r.resultId}">実績として登録</button>
+    </div>`;
+  }
+  if (r.status === "blocked") {
+    return `<div class="ai-work-row">
+      <div class="ai-work-row-main">
+        <div class="ai-work-title">${title}</div>
+        <div class="ai-work-summary">${escapeHTML(r.summary || "(質問内容なし)")}</div>
+      </div>
+      <button class="btn" data-action="ai-work-question" data-result-id="${r.resultId}">質問として積む</button>
+    </div>`;
+  }
+  // queued: 表示のみ(PC側のqueueで承認待ち。アプリ側からの操作はない)
+  return `<div class="ai-work-row">
+    <div class="ai-work-row-main">
+      <div class="ai-work-title">${title}</div>
+      <div class="muted" style="font-size:12px">承認待ち(PC側のqueueにあります)</div>
+    </div>
+  </div>`;
+}
+
+// ホームカード: 「AIが処理した作業」。未処理が無ければ静かに非表示。
+function homeAiWork(isToday) {
+  if (!isToday) return "";
+  const items = pendingAiWorkResults();
+  if (!items.length) return "";
+  return `<section class="panel">
+    <div class="home-plabel orange">AIが処理した作業<span class="home-count">${items.length}</span></div>
+    ${items.map((r) => aiWorkResultRowHTML(r)).join("")}
+  </section>`;
+}
+
+// v67: AI連携の鮮度インジケータ(柱1b)。フィードバック/プランそれぞれの最終取得成功日からの
+// 経過日数を1行表示する。3日以上(どちらか)途絶えたら sync-banner と同じ静かな見た目で注意喚起
+// する(責める色は使わない)。
+function aiFreshnessLine() {
+  const today = todayISO();
+  const fbAt = state.aiLinkFreshness?.feedbackAt || null;
+  const planAt = state.aiLinkFreshness?.planAt || null;
+  const fbDays = fbAt ? daysBetween(fbAt, today) : null;
+  const planDays = planAt ? daysBetween(planAt, today) : null;
+  const fmt = (d) => d === null ? "まだ届いていません" : (d === 0 ? "今日届いた" : `${d}日前`);
+  const stale = fbDays === null || fbDays >= 3 || planDays === null || planDays >= 3;
+  return `
+    <div class="ai-freshness-line">
+      <span class="ai-freshness-dot ${stale ? "warn" : "ok"}"></span>
+      AI連携: フィードバック ${fmt(fbDays)} / プラン ${fmt(planDays)}
+    </div>
+    ${stale ? `<div class="ai-freshness-banner" data-action="nav" data-view="settings">⚠ AI連携が止まっているかも。PCのタスクスケジューラを確認 — 設定へ</div>` : ""}
+  `;
 }
 
 function openMdInGithub(path) {
@@ -9035,6 +9258,14 @@ function buildTaskModal(task) {
           ${leverageJudgeHelperHTML()}
         </div>
         <div class="field">
+          <label class="field-label">🤝 AI作業ワーカー連携(任意)</label>
+          <label class="checkbox-line">
+            <input type="checkbox" data-modal-field="aiWork" ${task.aiWork ? "checked" : ""}>
+            このTaskをAI(Claude Code)に作業してもらう
+          </label>
+          <textarea class="textarea" data-modal-field="aiWorkBrief" style="min-height:48px; font-size:16px" placeholder="何をしてほしいか・成果物の置き場希望(1〜2行)">${escapeHTML(task.aiWorkBrief || "")}</textarea>
+        </div>
+        <div class="field">
           <label class="field-label">説明 / メモ</label>
           <textarea class="textarea" data-modal-field="description" style="min-height:120px">${escapeHTML(task.description || "")}</textarea>
         </div>
@@ -9075,6 +9306,8 @@ function saveTaskFromModal(id, fields) {
     });
     task.status = fields.status || "todo";
     task.description = fields.description || "";
+    task.aiWork = Boolean(fields.aiWork);  // v67: AI作業ワーカー連携
+    task.aiWorkBrief = (fields.aiWorkBrief || "").trim();
     state.tasks.push(task);
     closeModal();
     saveAndRender("Taskを追加しました");
@@ -9092,6 +9325,8 @@ function saveTaskFromModal(id, fields) {
       dueDate: fields.dueDate || "",
       description: fields.description || "",
       leverageType: fields.leverageType !== undefined ? fields.leverageType : (t.leverageType || ""),  // v65: 10x機構
+      aiWork: Boolean(fields.aiWork),  // v67: AI作業ワーカー連携
+      aiWorkBrief: (fields.aiWorkBrief || "").trim(),
       // v37: モーダルに nextRoutineId の入力欄はないため、undefined なら既存値を保持
       //      (以前は保存のたびに "" で消えていた)
       nextRoutineId: fields.nextRoutineId !== undefined ? fields.nextRoutineId : (t.nextRoutineId || ""),
