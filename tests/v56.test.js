@@ -46,19 +46,17 @@ function check(name, cond, extra = "") {
   check(".zt-search-input が16px以上", clsSizes.search >= 16, clsSizes.search);
   check(".home-cd(充放電select)が16px以上", clsSizes.cd >= 16, clsSizes.cd);
 
-  // #3: 設定画面のAIプロンプト textarea(inline style)
-  await page.evaluate((KEY) => {
-    const s = JSON.parse(localStorage.getItem(KEY));
-    s.settings.ai = { apiKey: "sk-ant-test", model: "claude-opus-4-8" };
-    s.currentView = "settings";
-    localStorage.setItem(KEY, JSON.stringify(s));
-  }, KEY);
-  await page.reload();
-  await page.waitForTimeout(500);
-  const promptTa = page.locator('[data-ai-prompt="context"]');
-  check("AIプロンプト textarea が存在", await promptTa.count() === 1);
-  const promptFs = await promptTa.first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
-  check("AIプロンプト textarea が16px以上(inline style)", promptFs >= 16, promptFs);
+  // #3: inline style で font-size を指定した textarea も 16px 未満に落ちない(グローバル既定への
+  //     依存だけでなく、inline style の値自体が 16px 以上であることの回帰確認)。
+  //     v60でこの回帰の元ネタだった設定画面のAIプロンプトtextareaは機能ごと削除されたため、
+  //     同じ属性を持つ要素を都度生成して検証する(クラス指定と同じ手法)。
+  const inlineFs = await page.evaluate(() => {
+    const el = document.createElement("textarea");
+    el.setAttribute("style", "min-height:110px; font-size:16px");
+    document.body.appendChild(el);
+    return parseFloat(getComputedStyle(el).fontSize);
+  });
+  check("inline style指定のtextareaが16px以上", inlineFs >= 16, inlineFs);
 
   // ---- [2] タイムラインカードのhoverは位置をずらさない(#4)----
   console.log("[2] タイムラインカードのhoverは位置をずらさない");

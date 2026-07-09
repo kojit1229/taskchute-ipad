@@ -1,6 +1,9 @@
 // v57 検証: ローカルAIコーチングがリポジトリ直下に直接pushした前日フィードバックの自動読込
 //            (feedbackFiles未登録でも「今日から見た昨日」1日分だけは fetch する)
 //            + F1: その無条件fetchは過去日ブラウズ時には出さない(前日ノイズ回避の回帰確認)
+//
+// v60メモ: このfetch(AIフィードバック_日付.md)は自宅PCバッチ→ファイル連携の経路であり、
+// アプリ内Claude API直接呼び出しとは別物なのでv60でも削除していない。
 const path = require("path");
 const fs = require("fs");
 const { chromium, launchOptions, startServer, ROOT } = require("./helpers");
@@ -61,30 +64,18 @@ function check(name, cond, extra = "") {
       reqsPast.length === 0, JSON.stringify(reqsPast));
 
     // ---- [2] 直push検知: feedbackFiles未登録でも「今日から見た昨日」分はリポジトリ直下から読み込む ----
-    console.log("[2] 直push検知: feedbackFiles未登録でも昨日分を読み込み、提案に反映される");
+    // v60メモ: 元は fetch した前日フィードバックが「今日のタスク提案」(ai-today-suggest)の
+    // callClaudeプロンプトへ反映されることまで確認していたが、v60でその機能はアプリ内AI呼び出し
+    // 全廃に伴い削除した(朝の一括プランニングが上位互換のため)。ここでは fetch 経路自体
+    // (feedbackFilesへの登録・回数)と、取得した本文がジャーナルの「前日のフィードバック」欄に
+    // 実際に描画されることで代替確認する(詳細はCHANGES_v60.md)。
+    console.log("[2] 直push検知: feedbackFiles未登録でも昨日分を読み込み、ジャーナルに反映される");
     fs.writeFileSync(feedbackPath, `# 昨日のAIフィードバック\n\n${FEEDBACK_MARKER}\n`, "utf8");
-
-    // callClaude(api.anthropic.com宛)だけモックし、それ以外は素通しする(md/manifest等の実fetchは維持)
-    await page.addInitScript(() => {
-      window.__aiPrompts = [];
-      const orig = window.fetch;
-      window.fetch = (url, opts = {}) => {
-        const u = String(url);
-        if (!u.includes("api.anthropic.com")) return orig(url, opts);
-        const prompt = String(JSON.parse(opts.body).messages[0].content);
-        window.__aiPrompts.push(prompt);
-        return Promise.resolve(new Response(JSON.stringify({
-          content: [{ type: "text", text:
-            '```json\n{"suggestions":[{"title":"テスト提案","minutes":30,"reason":"テスト"}]}\n```' }]
-        }), { status: 200 }));
-      };
-    });
 
     await page.evaluate(({ KEY, TODAY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.feedbackFiles = [];
       s.selectedDate = TODAY;
-      s.settings.ai = { apiKey: "sk-ant-test", model: "claude-opus-4-8" };
       s.currentView = "tasks";
       if (s.feedback) delete s.feedback[TODAY];
       localStorage.setItem(KEY, JSON.stringify(s));
@@ -101,17 +92,12 @@ function check(name, cond, extra = "") {
     check("直push検知した前日分が feedbackFiles に登録される(以後は正規ルート)",
       Array.isArray(ffAfter) && ffAfter.includes(YESTERDAY), JSON.stringify(ffAfter));
 
-    check("「今日のタスク提案」ボタンが表示される(当日表示+APIキー設定済み)",
-      await page.locator('[data-action="ai-today-suggest"]').count() === 1);
-    await page.click('[data-action="ai-today-suggest"]');
-    await page.waitForTimeout(700);
-
-    const prompts = await page.evaluate(() => window.__aiPrompts || []);
-    check("AI提案が実行される(callClaudeが呼ばれる)", prompts.length === 1, JSON.stringify(prompts.length));
-    const prompt = prompts[0] || "";
-    check("プロンプトに「昨日のAIフィードバック」節が含まれる", prompt.includes("----- 昨日のAIフィードバック -----"));
-    check("プロンプトに直push分のフィードバック本文が反映されている(マーカー一致)",
-      prompt.includes(FEEDBACK_MARKER));
+    // ジャーナル(今日選択中)の「前日(昨日)のフィードバックも見る」欄に、直pushした本文が反映される
+    await page.click('[data-action="nav"][data-view="journal"]');
+    await page.waitForTimeout(400);
+    const journalText = await page.locator(".journal-grid").textContent();
+    check("取得した前日フィードバックの本文がジャーナルに反映される(マーカー一致)",
+      journalText.includes(FEEDBACK_MARKER), journalText.slice(0, 200));
   } finally {
     // リポジトリ直下に書いたテスト用ファイルは必ず削除する
     try { if (fs.existsSync(feedbackPath)) fs.unlinkSync(feedbackPath); } catch { /* ignore */ }

@@ -1,4 +1,9 @@
-// v49 検証: AIレビュー直接統合 / 世代バックアップ / 横断検索
+// v49 検証: 世代バックアップ / 横断検索
+//
+// v60メモ: 本スイートはもともと「AIレビュー直接統合(日報 → Anthropic API → フィードバック)」
+// も検証していたが、v60でアプリ内からのClaude API直接呼び出しを全廃したため、AIレビュー実行・
+// APIキー入力・モデル選択に関する検証は削除した(機能自体が削除されたため。詳細は
+// CHANGES_v60.md 参照)。世代バックアップ・横断検索は無関係の機能なのでそのまま残す。
 const { chromium, ROOT, launchOptions, startServer } = require("./helpers");
 
 const PORT = 4199;
@@ -17,37 +22,16 @@ function check(name, cond, extra = "") {
   const page = await ctx.newPage();
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
 
-  // ---- 起動 & v48相当stateの後方互換(normalizeState) ----
-  console.log("[1] 起動 / normalizeState 後方互換");
+  // ---- 起動 ----
+  console.log("[1] 起動");
   await page.goto(`http://localhost:${PORT}/`);
   await page.waitForTimeout(600);
-  const aiDefaults = await page.evaluate(() => {
-    const raw = JSON.parse(localStorage.getItem("taskchute-journal-pwa-state-v1") || "{}");
-    return { hasAi: !!raw.settings?.ai, model: raw.settings?.ai?.model, key: raw.settings?.ai?.apiKey };
-  });
-  // 初回は state 未保存の可能性 → 画面内 state を直接見る手段がないので、設定画面経由で確認
   await page.click('[data-action="nav"][data-view="settings"]');
   await page.waitForTimeout(300);
-  check("設定に AIレビュー カードが表示される", await page.locator("h2", { hasText: "AIレビュー(Anthropic API)" }).count() === 1);
-  check("APIキー入力欄がある", await page.locator('input[data-ai-field="apiKey"]').count() === 1);
-  check("モデル select の既定が claude-opus-4-8", await page.locator('select[data-ai-field="model"]').inputValue() === "claude-opus-4-8");
   check("バックアップ復元ボタンがある", await page.locator('[data-action="open-backup-list"]').count() === 1);
 
-  // ---- APIキー入力 → state 反映 & エクスポートに含まれない ----
-  console.log("[2] APIキーの保存とサニタイズ");
-  await page.fill('input[data-ai-field="apiKey"]', "sk-ant-test-key-123");
-  await page.waitForTimeout(200);
-  const st = await page.evaluate(() => JSON.parse(localStorage.getItem("taskchute-journal-pwa-state-v1")));
-  check("apiKey が localStorage state に入る", st.settings.ai.apiKey === "sk-ant-test-key-123");
-  // モデル変更
-  await page.selectOption('select[data-ai-field="model"]', "claude-sonnet-5");
-  await page.waitForTimeout(200);
-  const st2 = await page.evaluate(() => JSON.parse(localStorage.getItem("taskchute-journal-pwa-state-v1")));
-  check("model 変更が保存される", st2.settings.ai.model === "claude-sonnet-5");
-  await page.selectOption('select[data-ai-field="model"]', "claude-opus-4-8");
-  await page.waitForTimeout(200);
-
-  // sanitizedStateForGitHub 相当: JSONエクスポートの中身を検証(download をフック)
+  // ---- エクスポートに github token が含まれない ----
+  console.log("[2] エクスポートのサニタイズ");
   const exported = await page.evaluate(() => new Promise((resolve) => {
     const orig = URL.createObjectURL;
     URL.createObjectURL = (blob) => { blob.text().then((t) => resolve(t)); return "blob:fake"; };
@@ -55,88 +39,10 @@ function check(name, cond, extra = "") {
     setTimeout(() => resolve(""), 2000);
   }));
   const expObj = JSON.parse(exported || "{}");
-  check("エクスポートJSONに apiKey が含まれない", expObj.settings?.ai?.apiKey === "");
   check("エクスポートJSONに github token が含まれない", expObj.settings?.github?.token === "");
 
-  // ---- AIレビュー実行(fetch モック) ----
-  console.log("[3] AIレビュー実行(fetch モック)");
-  await page.evaluate(() => {
-    window.__aiCalls = [];
-    const origFetch = window.fetch;
-    window.fetch = (url, opts) => {
-      if (String(url).includes("api.anthropic.com")) {
-        window.__aiCalls.push({ url: String(url), opts: { headers: opts.headers, body: JSON.parse(opts.body) } });
-        return Promise.resolve(new Response(JSON.stringify({
-          content: [
-            { type: "thinking", thinking: "…" },
-            { type: "text", text: "## フィードバック\n良い一日でした。\n## 明日の0秒思考テーマ\n- なぜ午後に失速したのか?\n## MIT候補\n- 企画書を仕上げる\n## 問い候補\n- 本当に必要な会議はどれか?" }
-          ]
-        }), { status: 200, headers: { "content-type": "application/json" } }));
-      }
-      return origFetch(url, opts);
-    };
-  });
-  // 日報ビューへ → 日報生成 → AIレビュー実行
-  await page.click('[data-action="nav"][data-view="reports"]');
-  await page.waitForTimeout(300);
-  await page.click('[data-action="generate-report"]');
-  await page.waitForTimeout(300);
-  check("AIレビュー実行ボタンが表示される(キーあり)", await page.locator('[data-action="report-ai-review"]').count() >= 1);
-  await page.click('[data-action="report-ai-review"]');
-  await page.waitForTimeout(800);
-  const aiCall = await page.evaluate(() => window.__aiCalls[0] || null);
-  check("Messages API が呼ばれた", !!aiCall);
-  if (aiCall) {
-    check("x-api-key ヘッダ", aiCall.opts.headers["x-api-key"] === "sk-ant-test-key-123");
-    check("CORS オプトインヘッダ", aiCall.opts.headers["anthropic-dangerous-direct-browser-access"] === "true");
-    check("model = claude-opus-4-8", aiCall.opts.body.model === "claude-opus-4-8");
-    check("adaptive thinking 付与", aiCall.opts.body.thinking?.type === "adaptive");
-    check("日報がプロンプトとして送られる", String(aiCall.opts.body.messages[0].content).includes("# 日報"));
-  }
-  const fb = await page.evaluate(() => {
-    const s = JSON.parse(localStorage.getItem("taskchute-journal-pwa-state-v1"));
-    return s.feedback[s.selectedDate] || "";
-  });
-  check("feedback[date] にレビューが保存される(thinking除外)", fb.startsWith("## フィードバック") && !fb.includes("…"));
-  check("取り込みモーダルが自動で開く", await page.locator(".ai-import-row").count() === 3);
-  await page.click('[data-action="modal-close"]');
-  await page.waitForTimeout(200);
-
-  // Haiku選択時は thinking なし
-  await page.click('[data-action="nav"][data-view="settings"]');
-  await page.waitForTimeout(200);
-  await page.selectOption('select[data-ai-field="model"]', "claude-haiku-4-5");
-  await page.waitForTimeout(200);
-  await page.click('[data-action="nav"][data-view="reports"]');
-  await page.waitForTimeout(200);
-  await page.click('[data-action="report-ai-review"]');
-  await page.waitForTimeout(600);
-  const call2 = await page.evaluate(() => window.__aiCalls[1] || null);
-  check("Haiku では thinking を送らない", call2 && call2.opts.body.model === "claude-haiku-4-5" && !("thinking" in call2.opts.body));
-  await page.evaluate(() => document.querySelector('[data-action="modal-close"]')?.click());
-  await page.waitForTimeout(200);
-
-  // エラー経路(401)
-  await page.evaluate(() => {
-    window.fetch = (url) => {
-      if (String(url).includes("api.anthropic.com")) {
-        return Promise.resolve(new Response(JSON.stringify({ error: { message: "invalid x-api-key" } }), { status: 401 }));
-      }
-      return Promise.reject(new Error("unexpected"));
-    };
-  });
-  await page.click('[data-action="report-ai-review"]');
-  await page.waitForTimeout(600);
-  const toast = await page.evaluate(() => document.querySelector(".toast")?.textContent || "");
-  check("401 でヒント付きトースト", toast.includes("AIレビュー失敗") && toast.includes("APIキー"), `got: ${toast}`);
-
-  // ---- ジャーナル側のボタン ----
-  await page.click('[data-action="nav"][data-view="journal"]');
-  await page.waitForTimeout(300);
-  check("ジャーナルにも AIレビューボタン", await page.locator('[data-action="report-ai-review"]').count() === 1);
-
   // ---- 横断検索 ----
-  console.log("[4] 横断検索");
+  console.log("[3] 横断検索");
   await page.evaluate(() => {
     const s = JSON.parse(localStorage.getItem("taskchute-journal-pwa-state-v1"));
     s.journals["2026-07-01"] = "今日はギターの練習を30分やった。";
@@ -148,6 +54,9 @@ function check(name, cond, extra = "") {
   });
   await page.reload();
   await page.waitForTimeout(600);
+  // 日付バー(検索ボタンを含む)があるビューへ移動(設定画面には日付バーが無い)
+  await page.click('[data-action="nav"][data-view="journal"]');
+  await page.waitForTimeout(300);
   check("日付バーに 🔍 ボタン", await page.locator('[data-action="open-search"]').count() >= 1);
   await page.locator('[data-action="open-search"]').first().click();
   await page.waitForTimeout(300);
@@ -175,7 +84,7 @@ function check(name, cond, extra = "") {
   await page.waitForTimeout(200);
 
   // ---- 世代バックアップ(fetch モック) ----
-  console.log("[5] 世代バックアップ");
+  console.log("[4] 世代バックアップ");
   await page.evaluate(() => {
     // GitHub 設定を投入
     const s = JSON.parse(localStorage.getItem("taskchute-journal-pwa-state-v1"));
@@ -257,27 +166,11 @@ function check(name, cond, extra = "") {
   await page.waitForTimeout(800);
   const restored = await page.evaluate(() => {
     const s = JSON.parse(localStorage.getItem("taskchute-journal-pwa-state-v1"));
-    return { j: s.journals["2026-07-06"], token: s.settings.github.token, aiKey: s.settings.ai.apiKey, t: s.dataModifiedAt };
+    return { j: s.journals["2026-07-06"], token: s.settings.github.token, t: s.dataModifiedAt };
   });
   check("復元でスナップショット内容が反映", restored.j === "スナップショットのジャーナル");
   check("復元後も token を引き継ぐ", restored.token === "ghp_test");
-  check("復元後も APIキーを引き継ぐ", restored.aiKey === "sk-ant-test-key-123");
   check("復元は最新変更として dataModifiedAt 更新", restored.t > "2026-07-06T20:00");
-
-  // ---- キー未設定時のボタン状態 ----
-  console.log("[6] キー未設定時");
-  await page.evaluate(() => {
-    const s = JSON.parse(localStorage.getItem("taskchute-journal-pwa-state-v1"));
-    s.settings.ai.apiKey = "";
-    s.currentView = "reports";
-    localStorage.setItem("taskchute-journal-pwa-state-v1", JSON.stringify(s));
-  });
-  await page.reload();
-  await page.waitForTimeout(600);
-  await page.click('[data-action="generate-report"]');
-  await page.waitForTimeout(300);
-  const disabledBtn = await page.locator('button:has-text("AIレビュー(要APIキー)")').count();
-  check("キー未設定は disabled ボタン + ヒント", disabledBtn >= 1);
 
   await browser.close();
   server.close();

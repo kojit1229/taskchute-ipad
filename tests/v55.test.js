@@ -1,4 +1,9 @@
-// v55 検証: WBSのインライン編集 + AI一括編集
+// v55 検証: WBSのインライン編集
+//
+// v60メモ: 本スイートはもともと「AI一括編集」(自然文指示→callClaudeで変更案生成→確認→反映)も
+// 検証していたが、v60でアプリ内からのClaude API直接呼び出しを全廃したのに伴い機能ごと削除した
+// ため、該当セクションは削除した(詳細はCHANGES_v60.md)。インライン編集はAIと無関係の機能
+// なのでそのまま残す。
 const { chromium, launchOptions, startServer } = require("./helpers");
 
 const PORT = 4191;
@@ -28,7 +33,6 @@ function check(name, cond, extra = "") {
   // ---- seed: プロジェクト + タスク3件 + カテゴリ ----
   await page.evaluate(({ KEY, TODAY }) => {
     const s = JSON.parse(localStorage.getItem(KEY));
-    s.settings.ai = { apiKey: "sk-ant-test", model: "claude-opus-4-8" };
     s.settings.categories = [{ id: "c1", name: "開発", color: "#007aff" }, { id: "c2", name: "学習", color: "#2fb96d" }];
     // デモの normal プロジェクトは除去して件数を決定的に(wish/other は残す)
     s.projects = s.projects.filter((p) => p.kind !== "normal");
@@ -73,60 +77,8 @@ function check(name, cond, extra = "") {
   await page.waitForTimeout(300);
   check("編集モードOFFでフォームが消える", await page.locator('[data-wbs-edit]').count() === 0);
 
-  // ---- [2] AI一括編集 ----
-  console.log("[2] AI一括編集");
-  // [1] で変更した値をベースラインに戻す(AI提案が「変化なし」で除外されないように)
-  await page.evaluate((KEY) => {
-    const s = JSON.parse(localStorage.getItem(KEY));
-    s.tasks.forEach((t) => { if (t.id === "task-A") t.dueDate = ""; if (t.id === "task-C") t.status = "todo"; });
-    localStorage.setItem(KEY, JSON.stringify(s));
-  }, KEY);
-  await page.reload();
-  await page.waitForTimeout(400);
-  await page.evaluate(() => {
-    window.__aiPrompts = [];
-    window.fetch = (url, opts = {}) => {
-      if (!String(url).includes("api.anthropic.com")) return Promise.resolve(new Response("{}", { status: 200 }));
-      const prompt = String(JSON.parse(opts.body).messages[0].content);
-      window.__aiPrompts.push(prompt);
-      // task-A の期限を来週金曜(=NEXTWK相当)に、task-C を完了に
-      const nw = (prompt.match(/id:task-A[^\n]*/) ? "" : "");
-      return Promise.resolve(new Response(JSON.stringify({ content: [{ type: "text", text:
-        '```json\n{"changes":[' +
-        '{"taskId":"task-A","field":"dueDate","value":"' + window.__NEXTWK + '","reason":"指示"},' +
-        '{"taskId":"task-C","field":"status","value":"completed","reason":"指示"},' +
-        '{"taskId":"task-A","field":"status","value":"BOGUS","reason":"不正値は捨てられるはず"},' +
-        '{"taskId":"nope","field":"dueDate","value":"2026-07-10","reason":"存在しないid"}' +
-        ']}\n```' }] }), { status: 200 }));
-    };
-  });
-  await page.evaluate((nw) => { window.__NEXTWK = nw; }, NEXTWK);
-  check("WBSに まとめて編集 ボタン", await page.locator('[data-action="ai-bulk-edit"]').count() === 1);
-  await page.click('[data-action="ai-bulk-edit"]');
-  await page.waitForTimeout(300);
-  check("指示入力モーダルが開く", await page.locator("#ai-bulk-instruction").count() === 1);
-  await page.fill("#ai-bulk-instruction", "task-Aの期限を来週金曜に、task-Cを完了に");
-  await page.click('[data-action="ai-bulk-edit-run"]');
-  await page.waitForTimeout(700);
-  const prompt = await page.evaluate(() => window.__aiPrompts[0] || "");
-  check("プロンプトにタスク一覧(id付き)が入る", prompt.includes("id:task-A") && prompt.includes("英語学習"));
-  const rows = await page.locator('input[data-ai-bulk]').count();
-  check("有効な変更2件のみ確認に出る(不正値・存在しないidは除外)", rows === 2, `rows=${rows}`);
-  const bodyText = await page.evaluate(() => document.querySelector(".modal-card").textContent);
-  check("現在→新の表示", bodyText.includes("→") && bodyText.includes("完了"));
-  // 2件目(task-C 完了)のチェックを外し、1件目だけ反映
-  await page.locator('input[data-ai-bulk="1"]').uncheck();
-  await page.click('[data-action="ai-bulk-edit-submit"]');
-  await page.waitForTimeout(400);
-  const after = await page.evaluate((KEY) => {
-    const s = JSON.parse(localStorage.getItem(KEY));
-    return { aDue: s.tasks.find((t) => t.id === "task-A").dueDate, cStatus: s.tasks.find((t) => t.id === "task-C").status };
-  }, KEY);
-  check("チェックした変更のみ反映(task-A期限)", after.aDue === NEXTWK);
-  check("外した変更は反映されない(task-C未完了のまま)", after.cStatus !== "completed");
-
-  // ---- [3] 後方互換 ----
-  console.log("[3] 後方互換");
+  // ---- [2] 後方互換 ----
+  console.log("[2] 後方互換");
   await page.evaluate((KEY) => { const s = JSON.parse(localStorage.getItem(KEY)); delete s.settings.wbsEditMode; localStorage.setItem(KEY, JSON.stringify(s)); }, KEY);
   await page.reload();
   await page.waitForTimeout(400);

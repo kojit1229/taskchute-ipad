@@ -44,4 +44,12 @@ git -C ../taskchute-notes push
 
 - taskchute-ipad 本体の変更手順・規約は `設計書.md` の「9. 規約」を参照
   (`// vNN:` コメント、保存3系統の使い分け、`parseDate()` 必須、SW `CACHE_NAME` の +1 等)。
-- テストは `npm test`(`tests/` の E2E スイート、push/PR で GitHub Actions が実行)。
+- テストは `tests/` の E2E スイート(`tests/vNN.test.js`)。push/PR で GitHub Actions が全量実行する。
+
+### テスト実行方針(v60〜)
+- **開発中**: 改修に関連するスイート + 最新スイートだけ実行してよい。
+  `node tests/run-all.js v59 v60`(スイート名の一部一致でも可)、または
+  `node tests/vNN.test.js` で個別実行。速く回すことを優先する。
+- **push前 / CI(GitHub Actions)では必ず全量**(`npm test` = `node tests/run-all.js` 引数なし)。
+  これが唯一の安全網なので、納品前に1回は全量 ALL PASS を確認してからpushする。
+- `npm run test:quick -- vNN` でも同じ絞り込みができる(`--` の後にスイート名を渡す)。

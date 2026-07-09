@@ -33,72 +33,6 @@ const mobileNav = [
   { id: "more", label: "その他" }
 ];
 
-// v51: AIプロンプトの既定値(設定画面で編集可能。空文字は「意図的に空」)。
-//      出力フォーマット(JSON/見出し契約)はアプリが解析するためここには含めず、コード側で常に付与する。
-//      ※ state 初期化(normalizeState)より前に宣言が必要。
-const AI_DEFAULT_PROMPTS = {
-  // 共通コンテキスト: すべてのAI呼び出しの冒頭に付く「私について」
-  context: [
-    "私について:",
-    "- タスクシュート(1日の時間実行)× 12 Week Year(12週サイクル)× 0秒思考 × ジャーナルを1つにした自作アプリで自己管理している",
-    "- 完了率より「着手率」を重視する。小さくても手を付けたことを評価する",
-    "- エネルギー会計(充電/放電)で消耗と回復のバランスを見る。時間の量より質",
-    "- 反省は必ず行動につなげる。気づきで終わる指摘は不要で、翌日実行できる形まで落とすこと",
-    "- 詰め込みは私の失敗パターン。余白と休憩を残す計画を良しとする",
-    "- 長期の方向は問い・12週目標で自分で決める。AIには判断ではなく、質の高い判断材料を求める"
-  ].join("\n"),
-  // カスタム指示: 文体・トーンなどの追加指示(自由に書き換える欄)
-  custom: [
-    "口調はフラットで簡潔に。忖度・一般論・抽象的な励ましは不要。",
-    "事実(数字)を根拠に、明日の行動が変わる指摘だけをする。"
-  ].join("\n"),
-  // ① WBSタスク分解の指示部
-  decompose: [
-    "あなたはプロジェクトのWBS(作業分解)を手伝うアシスタントです。",
-    "次のプロジェクトを、着手しやすいタスクに分解してください。",
-    "",
-    "条件:",
-    "- タスクは3〜8個。各タスクは「最初の一歩に30〜60分で着手できる」粒度にする",
-    "- 必要なら各タスクに最大3個のサブタスクを付けてよい",
-    "- 曖昧な動詞(検討する・考える)を避け、完了が判定できる表現にする",
-    "- 実行順に意味がある場合は、その順に並べる"
-  ].join("\n"),
-  // ② スケジュール下書きの指示部
-  schedule: [
-    "あなたはタスクシュート(1日のタイムボックス計画)を手伝うアシスタントです。",
-    "スケジュールの空き時間に、候補タスクを仮配置してください。",
-    "",
-    "条件:",
-    "- 提案は最大5件。全部を無理に配置しない(詰め込み禁物、休憩の余白を残す)",
-    "- 確定済みの予定と時間を重ねない。時刻は15分刻み、1件は15〜120分",
-    "- 期限が近いもの・MIT候補を優先する",
-    "- 集中が必要な作業は午前などエネルギーが高い時間帯に置く"
-  ].join("\n"),
-  // 今日のタスク提案の指示部
-  todaySuggest: [
-    "あなたは1日の立ち上げを手伝うアシスタントです。",
-    "昨日の日報とAIフィードバックを踏まえて、今日やるべきタスクを提案してください。",
-    "",
-    "条件:",
-    "- 提案は最大5件。1日で現実的にこなせる量に絞る(詰め込み禁物)",
-    "- 昨日のやり残し・昨日のフィードバックでの提案・期限が近いWBSタスクを優先する",
-    "- 各提案に「なぜ今日か」を一言添える",
-    "- すでに今日の予定にあるものは提案しない"
-  ].join("\n"),
-  // v59: 朝の一括プランニングの指示部
-  morningPlan: [
-    "あなたは1日の立ち上げを手伝うアシスタントです。",
-    "昨日の未完了(繰り越し)・WBSの未完了タスク・昨日のMIT候補をまとめて見て、今日の空き時間に仮配置してください。",
-    "",
-    "条件:",
-    "- 詰め込み禁物。全部を無理に配置しない(余白を残す)。配置しない候補は理由付きでskippedへ",
-    "- 確定済みの予定・ルーティンとは時間を重ねない。時刻は15分刻み、1件は15〜120分",
-    "- MIT候補は最初の大きな空き枠に優先配置する",
-    "- 繰り越し(昨日未完了)は「まだやる理由が薄い」と判断したら無理に配置せずskippedへ",
-    "- 集中が必要な作業は午前などエネルギーが高い時間帯に置く"
-  ].join("\n")
-};
-
 const energyLevels = [
   { value: 10, label: "良い" },
   { value: 7, label: "少し良い" },
@@ -185,10 +119,6 @@ document.addEventListener("click", (event) => {
     persistLocalNoSchedule();
     render();
   }
-  // v55: AI一括編集(自然文→変更案→確認→反映)
-  if (action === "ai-bulk-edit") openAiBulkEditModal();
-  if (action === "ai-bulk-edit-run") runAiBulkEdit();
-  if (action === "ai-bulk-edit-submit") submitAiBulkEdit();
   if (action === "wbs-collapse-all") {
     const targets = state.projects.filter((p) => !p.deleted && p.kind !== "wish");
     const collapse = !targets.every((p) => p.collapsed);  // 全閉なら開く、そうでなければ閉じる
@@ -348,12 +278,7 @@ document.addEventListener("click", (event) => {
   }
   if (action === "ai-import-submit") submitAiImport();
   if (action === "ai-mit-adopt") adoptAiMit(Number(target.dataset.index));
-  // v49: AIレビュー直接統合(日報 → Anthropic API → フィードバック)
-  if (action === "report-ai-review") runAiReview(state.selectedDate);
-  // v50: ① AIタスク分解(WBS)
-  if (action === "ai-decompose") runAiDecompose(id);
-  if (action === "ai-decompose-submit") submitAiDecompose();
-  // v50: ② AIスケジュール下書き(仮配置 → D&D調整 → 確定)
+  // v60: 下書きスケジュール(空き時間への決定論配置 → D&D調整 → 確定)
   if (action === "ai-schedule") runAiSchedule();
   // v59: 朝の一括プランニング(繰越+WBS+MIT候補 → 空き時間へ仮配置)
   if (action === "ai-morning-plan") runAiMorningPlan();
@@ -373,25 +298,6 @@ document.addEventListener("click", (event) => {
     if (!_scheduleDraft.items.length) _scheduleDraft = null;
     saveState();
     render();
-  }
-  // v50: ③ 週次 / 12週サイクルのAI壁打ち
-  if (action === "weekly-ai") runAiWeekly(target.dataset.week);
-  if (action === "cycle-ai") runAiCycle(target.dataset.cycle);
-  // v50: ④ 0秒思考のまとめ所感
-  if (action === "zt-ai-comment") runAiZeroComment();
-  if (action === "zt-ai-import") openAiImportModal(todayISO(), parseAiFeedback(_ztAiComment?.text || ""));
-  // v51: 今日のタスク提案(昨日の日報+フィードバックから)
-  if (action === "ai-today-suggest") runAiTodaySuggest();
-  if (action === "ai-today-submit") submitAiToday();
-  // v51: プロンプトを既定に戻す
-  if (action === "ai-prompt-reset") {
-    const key = target.dataset.key;
-    if (key in AI_DEFAULT_PROMPTS) {
-      state.settings.ai.prompts[key] = AI_DEFAULT_PROMPTS[key];
-      saveState();
-      render();
-      showToast("既定のプロンプトに戻しました");
-    }
   }
   // v49: 世代バックアップ
   if (action === "open-backup-list") openBackupListModal();
@@ -483,16 +389,6 @@ document.addEventListener("input", (event) => {
     state.settings.github[target.dataset.githubField] = target.value.trim();
     saveState();
   }
-  // v49: AIレビュー設定(APIキー。model の select は change ハンドラ側)
-  if (target.matches("input[data-ai-field]")) {
-    state.settings.ai[target.dataset.aiField] = target.value.trim();
-    saveState();
-  }
-  // v51: プロンプトテンプレの編集(空文字も「意図的に空」として保存)
-  if (target.matches("textarea[data-ai-prompt]")) {
-    state.settings.ai.prompts[target.dataset.aiPrompt] = target.value;
-    saveState();
-  }
   // v49: 横断検索(結果リストだけ差し替え = 入力フォーカス維持。0秒思考検索と同じ手法)
   if (target.matches("#cross-search-input")) {
     clearTimeout(_searchTimer);
@@ -531,18 +427,6 @@ document.addEventListener("change", (event) => {
     state.settings[target.dataset.settingField] = target.value;
     saveState();
     render();
-  }
-  // v49: AIレビューのモデル選択
-  if (target.matches("select[data-ai-field]")) {
-    state.settings.ai[target.dataset.aiField] = target.value;
-    saveState();
-    render();
-  }
-  // v51: 朝イチ自動レビューのトグル
-  if (target.matches("[data-ai-automorning]")) {
-    state.settings.ai.autoMorningReview = target.checked;
-    saveState();
-    if (target.checked) showToast("朝イチ自動レビューを有効にしました(翌朝から)");
   }
   // v59: 朝の一括プランニングの自動下書きトグル
   if (target.matches("[data-ai-automorningplan]")) {
@@ -697,23 +581,18 @@ function normalizeState(value) {
     value.settings.github.autoSave = false;
   }
   value.settings.github.lastSavedAt ||= "";
-  // v49: AIレビュー(Anthropic API)。apiKey は GitHub token と同様に端末内のみ
-  //      (同期・エクスポート時は sanitizedStateForGitHub で除去される)。
+  // v60: Claude API 直接呼び出しは全廃した(コスト理由。AI活用は自宅PCのバッチ→ファイル連携に限定)。
+  //      APIキー・モデル選択・プロンプトテンプレ・朝イチ自動レビューの設定UIは削除済み。
+  //      過去に保存されたキー等が端末のlocalStorageに残らないよう、既存値があれば明示的に消す。
   value.settings.ai ||= {};
-  value.settings.ai.apiKey ||= "";
-  value.settings.ai.model ||= "claude-opus-4-8";
-  // v51: プロンプト設定(共通コンテキスト・カスタム指示・機能別テンプレ)。
-  //      空文字は「意図的に空」として尊重するため、未定義のときだけ既定を入れる。
-  value.settings.ai.prompts ||= {};
-  for (const k of Object.keys(AI_DEFAULT_PROMPTS)) {
-    if (typeof value.settings.ai.prompts[k] !== "string") value.settings.ai.prompts[k] = AI_DEFAULT_PROMPTS[k];
-  }
-  // v51: 朝イチ自動レビュー(既定OFF。ONなら日付が変わって最初に開いた時、昨日の日報レビューを自動実行)
-  if (typeof value.settings.ai.autoMorningReview !== "boolean") value.settings.ai.autoMorningReview = false;
-  // v59: 朝の一括プランニングの自動下書き(既定OFF。ONなら10:00以前の初回起動・当日の非ルーティンBlock0件時に自動実行)
+  delete value.settings.ai.apiKey;
+  delete value.settings.ai.model;
+  delete value.settings.ai.prompts;
+  delete value.settings.ai.autoMorningReview;
+  // v59: 朝の一括プランニングの自動下書き(既定OFF。ONなら10:00以前の初回起動・当日の非ルーティンBlock0件時に自動実行)。
+  //      v60でAI呼び出しは無くなったが、決定論配置の自動下書き機能として引き続き有効。
   if (typeof value.settings.ai.autoMorningPlan !== "boolean") value.settings.ai.autoMorningPlan = false;
-  // v52: AIスケジュール学習ログ。AIの仮配置に対するユーザの採否・修正を記録し、
-  //      次回のAIスケジューリング時に傾向として注入する(端末間で同期される)。
+  // v52: スケジュール実績ログ(決定論配置の元値に対するユーザの採否・修正を記録)。
   if (!Array.isArray(value.aiScheduleHistory)) value.aiScheduleHistory = [];
   // v53: 計器盤の期間カーソル(UI状態)と自動アーカイブ設定
   value.settings.statsRange ||= "4w";
@@ -2070,405 +1949,19 @@ function adoptAiMit(index) {
   saveAndRender("✦ 今日の主役に追加しました");
 }
 
-// v49: =========================================================
-//  AIレビュー直接統合(日報 → Anthropic Messages API → フィードバック)
-//  搬送を完全自動化する。コピペ搬送(v42)は API 障害時の手動経路として残す。
-//  APIキーは GitHub token と同じ扱い: この端末の localStorage のみに保持し、
-//  同期・エクスポート(sanitizedStateForGitHub)からは必ず除去する。
+// v60: =========================================================
+//  Claude API 直接呼び出しは全廃した(コスト理由。AI活用は自宅PCのバッチ処理→
+//  ファイル連携[AIフィードバック_日付.md の自動fetch・手動.mdアップロード]に限定)。
+//  ここにあった callClaude / aiEnabled / aiPrompt / AI_DEFAULT_PROMPTS / AIタスク分解 /
+//  AI一括編集 / AIレビュー(日報直接統合)は全て削除。詳細は CHANGES_v60.md 参照。
 // =========================================================
-const AI_MODELS = [
-  { id: "claude-opus-4-8", label: "Claude Opus 4.8 — 高品質(目安 ¥90〜180/月)" },
-  { id: "claude-sonnet-5", label: "Claude Sonnet 5 — バランス(目安 ¥45〜110/月)" },
-  { id: "claude-haiku-4-5", label: "Claude Haiku 4.5 — 最安(目安 ¥25〜55/月)" }
-];
-let _aiReviewPending = false;  // 実行中ガード(非永続)
 
-// iOS キーチェーンの自動入力は input イベントを発火しないことがある(GitHub 版と同じ対策)
-function syncAiFieldsFromDOM() {
-  document.querySelectorAll("input[data-ai-field]").forEach((el) => {
-    const key = el.dataset.aiField;
-    const val = (el.value || "").trim();
-    if (val !== (state.settings.ai[key] || "")) state.settings.ai[key] = val;
-  });
-}
-
-async function aiErrorMessage(response) {
-  let raw;
-  try {
-    const payload = await response.json();
-    raw = payload.error?.message || `${response.status} ${response.statusText}`;
-  } catch {
-    raw = `${response.status} ${response.statusText}`;
-  }
-  if (response.status === 400 && /credit|billing/i.test(raw)) {
-    return `${raw} — クレジット残高を確認してください(Anthropic Console → Billing)`;
-  }
-  const hints = {
-    401: "APIキーが無効です。設定画面で貼り直してください",
-    403: "このAPIキーでは実行できません(Console でキーの状態を確認)",
-    429: "レート制限中です。少し待ってから再実行してください",
-    529: "Anthropic 側が混雑しています。少し待ってから再実行してください"
-  };
-  const hint = hints[response.status];
-  return hint ? `${raw} — ${hint}` : raw;
-}
-
-// v50: 共通呼び出し(全AI機能で共用)。プロンプトを送りテキスト応答を返す。
-//      呼び出し側が _aiReviewPending ガードとトースト演出を担当する。
-async function callClaude(prompt, { maxTokens = 4096 } = {}) {
-  syncAiFieldsFromDOM();
-  const key = (state.settings.ai?.apiKey || "").trim();
-  if (!key) throw new Error("設定画面で Anthropic APIキーを登録してください");
-  if (/[^\x00-\xFF]/.test(key)) throw new Error("APIキーに使用できない文字が含まれています。貼り直してください");
-  const model = state.settings.ai.model || "claude-opus-4-8";
-  const body = {
-    model,
-    max_tokens: maxTokens,
-    messages: [{ role: "user", content: prompt }]
-  };
-  // 4.6 以降のモデルは adaptive thinking(Haiku 4.5 は未対応なので付けない)
-  if (model !== "claude-haiku-4-5") body.thinking = { type: "adaptive" };
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": key,
-      "anthropic-version": "2023-06-01",
-      // ブラウザから直接呼ぶための CORS オプトイン。キーは端末外に同期しない前提(単一ユーザー・自分の鍵)。
-      "anthropic-dangerous-direct-browser-access": "true"
-    },
-    body: JSON.stringify(body)
-  });
-  if (!response.ok) throw new Error(await aiErrorMessage(response));
-  const data = await response.json();
-  const text = (data.content || [])
-    .filter((b) => b.type === "text")
-    .map((b) => b.text)
-    .join("\n")
-    .trim();
-  if (!text) throw new Error("応答が空でした。少し待ってから再実行してください");
-  return text;
-}
-
-// v50: APIキーが登録済みか(AI系ボタンの表示ゲート)
-function aiEnabled() {
-  return Boolean((state.settings.ai?.apiKey || "").trim());
-}
-
-// v51: 機能別プロンプトテンプレ(設定で編集可。未編集なら既定値)
-function aiPrompt(key) {
-  const p = state.settings.ai?.prompts || {};
-  return typeof p[key] === "string" ? p[key] : (AI_DEFAULT_PROMPTS[key] || "");
-}
-
-// v51: 全AI呼び出しの冒頭に付く共通前置き
-//      = 共通コンテキスト(私について)+ 現在の12週目標(動的)+ カスタム指示
-function aiCommonPreamble() {
-  const parts = [];
-  const context = aiPrompt("context").trim();
-  if (context) parts.push(context);
-  const goals = state.projects
-    .filter((p) => !p.deleted && p.kind === "normal" && p.status === "active" && p.twelveWeekStartDate)
-    .map((p) => p.title);
-  if (goals.length) parts.push(`現在の12週サイクルの目標プロジェクト: ${goals.join(" / ")}`);
-  const custom = aiPrompt("custom").trim();
-  if (custom) parts.push(`追加の指示:\n${custom}`);
-  return parts.length ? `${parts.join("\n\n")}\n\n---\n\n` : "";
-}
-
-// v50: 応答からJSONを取り出す(```json フェンス優先、無ければ最初の { 〜 最後の })
-function extractAiJson(text) {
-  const fence = String(text).match(/```(?:json)?\s*([\s\S]*?)```/);
-  const raw = fence ? fence[1] : String(text);
-  const start = raw.indexOf("{");
-  const end = raw.lastIndexOf("}");
-  if (start === -1 || end <= start) throw new Error("応答からJSONを読み取れませんでした。もう一度実行してください");
-  try {
-    return JSON.parse(raw.slice(start, end + 1));
-  } catch {
-    throw new Error("応答のJSONが壊れていました。もう一度実行してください");
-  }
-}
-
-async function runAiReview(date) {
-  if (_aiReviewPending) return showToast("AIを実行中です。少し待ってください");
-  // 日報が未生成なら先に生成(日報自体が AI へのプロンプトを含む = v42 のコピペ搬送と同じ素材を送る)
-  if (!state.reports[date]) generateReport();
-  const report = state.reports[date];
-  if (!report) return showToast("日報を生成できませんでした");
-  _aiReviewPending = true;
-  render();  // ボタンを「レビュー中…」に
-  try {
-    const text = await callClaude(aiCommonPreamble() + report);  // v51: 共通コンテキストを前置き
-    state.feedback[date] = text;  // ジャーナルの AIフィードバック欄と同じ置き場(貼り付けと等価)
-    delete cachedFeedback[date];  // 過去に .md を読込済みでも、今回の新しいレビューを表示する
-    saveState();
-    render();
-    showToast("🤖 AIレビューを受信しました");
-    // テーマ / MIT / 問い の取り込み候補があれば、既存の取り込みモーダルへ(採用判断は人間)
-    const parsed = parseAiFeedback(text);
-    if (parsed.themes.length + parsed.mits.length + parsed.questions.length > 0) {
-      openAiImportModal(date, parsed);
-    }
-  } catch (error) {
-    showToast(`AIレビュー失敗: ${error.message}`);
-  } finally {
-    _aiReviewPending = false;
-    render();
-  }
-}
-
-// 日報ビュー / ジャーナルの AIフィードバック欄に置く実行ボタン
-function aiReviewButton() {
-  if (_aiReviewPending) return `<button class="btn" disabled>⏳ AIレビュー中…</button>`;
-  if (!aiEnabled()) return `<button class="btn" disabled title="設定画面で Anthropic APIキーを登録すると使えます">🤖 AIレビュー(要APIキー)</button>`;
-  return `<button class="btn primary" data-action="report-ai-review">🤖 AIレビュー実行</button>`;
-}
-
-// v50: =========================================================
-//  ① AIタスク分解(WBS)
-//  白紙のプロジェクトで最初の一歩が出ない問題に効かせる。
-//  AIは候補を出すだけ、登録するものはチェックボックスで人間が選ぶ(v42と同型)。
-// =========================================================
-let _aiDecomposeCtx = null;  // { projectId, tasks:[{title, subtasks[]}] } 非永続
-
-async function runAiDecompose(projectId) {
-  if (_aiReviewPending) return showToast("AIを実行中です。少し待ってください");
-  const project = state.projects.find((p) => p.id === projectId && !p.deleted);
-  if (!project) return;
-  const existing = state.tasks
-    .filter((t) => !t.deleted && t.projectId === projectId)
-    .map((t) => t.title);
-  // v51: 指示部はテンプレ(設定で編集可)。データと出力契約はコード側で常に付与。
-  const prompt = [
-    aiCommonPreamble() + aiPrompt("decompose"),
-    "",
-    `プロジェクト名: ${project.title}`,
-    project.description ? `説明: ${project.description}` : "",
-    project.dueDate ? `期限: ${project.dueDate}` : "",
-    project.twelveWeekStartDate ? `12週サイクル(12 Week Year)の目標プロジェクトです(開始 ${project.twelveWeekStartDate})` : "",
-    existing.length ? `既存タスク(重複させないこと):\n${existing.map((t) => `- ${t}`).join("\n")}` : "",
-    "",
-    "回答は次の形式のJSONだけを ```json コードブロックで返してください。",
-    '{"tasks":[{"title":"...","subtasks":["...","..."]}]}'
-  ].filter(Boolean).join("\n");
-  _aiReviewPending = true;
-  render();
-  try {
-    const json = extractAiJson(await callClaude(prompt));
-    const tasks = (Array.isArray(json.tasks) ? json.tasks : [])
-      .map((t) => ({
-        title: String(t?.title || "").trim(),
-        subtasks: (Array.isArray(t?.subtasks) ? t.subtasks : []).map((s) => String(s).trim()).filter(Boolean).slice(0, 3)
-      }))
-      .filter((t) => t.title)
-      .slice(0, 8);
-    if (!tasks.length) throw new Error("タスク候補を読み取れませんでした");
-    _aiDecomposeCtx = { projectId, tasks };
-    state.modal = { type: "aiDecompose", id: projectId };
-    renderModal(buildAiDecomposeModal(project, tasks));
-  } catch (error) {
-    showToast(`AIタスク分解失敗: ${error.message}`);
-  } finally {
-    _aiReviewPending = false;
-    render();
-  }
-}
-
-function buildAiDecomposeModal(project, tasks) {
-  return `
-    <div class="modal-card" role="dialog" aria-modal="true">
-      <div class="modal-header">
-        <h3 class="modal-title">🤖 AIタスク分解 — ${escapeHTML(project.title)}</h3>
-        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
-      </div>
-      <div class="modal-body">
-        ${tasks.map((t, i) => `
-          <div class="ai-import-sec">
-            <label class="ai-import-row"><input type="checkbox" data-ai-task="${i}" checked><span><b>${escapeHTML(t.title)}</b></span></label>
-            ${t.subtasks.map((s, j) => `<label class="ai-import-row" style="margin-left:24px"><input type="checkbox" data-ai-subtask="${i}:${j}" checked><span>${escapeHTML(s)}</span></label>`).join("")}
-          </div>`).join("")}
-        <div class="muted" style="font-size:11.5px; line-height:1.6; margin-top:6px">チェックした項目だけWBSに登録します(タイトル・期限・粒度は登録後にいつでも編集できます)。</div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn" data-action="modal-close">キャンセル</button>
-        <button class="btn primary" data-action="ai-decompose-submit">WBSに登録</button>
-      </div>
-    </div>`;
-}
-
-function submitAiDecompose() {
-  if (!_aiDecomposeCtx) return closeModal();
-  const { projectId, tasks } = _aiDecomposeCtx;
-  const project = state.projects.find((p) => p.id === projectId);
-  let count = 0;
-  tasks.forEach((t, i) => {
-    const parentChecked = modalRoot.querySelector(`input[data-ai-task="${i}"]`)?.checked;
-    const pickedSubs = t.subtasks.filter((s, j) => modalRoot.querySelector(`input[data-ai-subtask="${i}:${j}"]`)?.checked);
-    if (!parentChecked && !pickedSubs.length) return;
-    const parent = makeTask({ projectId, title: t.title, category: project?.category || "" });
-    parent.dueDate = project?.dueDate || "";  // 期限は自動で付けない(全部「今日」になると翌日全て赤くなる)
-    state.tasks.push(parent);
-    count++;
-    pickedSubs.forEach((s) => {
-      const sub = makeTask({ projectId, parentTaskId: parent.id, title: s, category: project?.category || "" });
-      sub.dueDate = "";
-      state.tasks.push(sub);
-      count++;
-    });
-  });
-  _aiDecomposeCtx = null;
-  closeModal();
-  if (!count) return saveAndRender();
-  saveAndRender(`🤖 ${count}件のタスクをWBSに登録しました`);
-}
-
-// v55: =========================================================
-//  AI一括編集(WBS)
-//  「〇〇の期限を全部金曜に」等を自然文で指示 → AIが変更案(taskId×field×value)
-//  を返す → チェックで確認 → updateTaskField で反映(採用判断は人間)。
-// =========================================================
-const AI_BULK_FIELDS = { dueDate: "期限", status: "状態", title: "タイトル", category: "カテゴリ" };
-const TASK_STATUSES = ["todo", "doing", "completed", "suspended", "cancelled"];
-let _aiBulkEditCtx = null;  // { changes:[{taskId,title,field,label,current,value}] } 非永続
-
-// WBSスコープのタスク(Wishプロジェクト・削除・単発otherを除く)
-function wbsEditableTasks() {
-  const wishIds = new Set(state.projects.filter((p) => p.kind === "wish").map((p) => p.id));
-  return state.tasks.filter((t) => !t.deleted && t.projectId && !wishIds.has(t.projectId) && t.kind !== "other");
-}
-
-function openAiBulkEditModal() {
-  if (_aiReviewPending) return showToast("AIを実行中です。少し待ってください");
-  if (!wbsEditableTasks().length) return showToast("編集対象のタスクがありません");
-  state.modal = { type: "aiBulkEditPrompt" };
-  renderModal(`
-    <div class="modal-card" role="dialog" aria-modal="true">
-      <div class="modal-header">
-        <h3 class="modal-title">🤖 まとめて編集</h3>
-        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
-      </div>
-      <div class="modal-body">
-        <div class="muted" style="font-size:12px; line-height:1.6; margin-bottom:8px">
-          変更したい内容を自然文で書いてください。AIが変更案を出すので、チェックで選んでから反映します。<br>
-          例:「英語学習プロジェクトの未完了タスクの期限を全部今週金曜に」「〇〇と△△を中断に」「期限切れのタスクを1週間後ろに」
-        </div>
-        <textarea class="textarea" id="ai-bulk-instruction" style="min-height:90px" placeholder="変更内容を書く"></textarea>
-      </div>
-      <div class="modal-footer">
-        <button class="btn" data-action="modal-close">キャンセル</button>
-        <button class="btn primary" data-action="ai-bulk-edit-run">🤖 変更案を出す</button>
-      </div>
-    </div>`);
-  setTimeout(() => document.querySelector("#ai-bulk-instruction")?.focus(), 60);
-}
-
-async function runAiBulkEdit() {
-  if (_aiReviewPending) return;
-  const instruction = (document.querySelector("#ai-bulk-instruction")?.value || "").trim();
-  if (!instruction) return showToast("変更内容を入力してください");
-  const tasks = wbsEditableTasks();
-  const projName = (id) => state.projects.find((p) => p.id === id)?.title || "(単発)";
-  const list = tasks.slice(0, 150).map((t) =>
-    `- id:${t.id} 「${t.title}」 [P:${projName(t.projectId)} / 状態:${taskStatusLabel(t.status)} / 期限:${t.dueDate || "なし"} / カテゴリ:${t.category || "なし"}]`).join("\n");
-  const prompt = [
-    aiCommonPreamble() + "あなたはWBSのタスク一括編集を手伝うアシスタントです。",
-    "下のタスク一覧に対して、ユーザの指示どおりに変更すべき項目だけを返してください。",
-    "",
-    `今日: ${todayISO()}(${weekdayLabel(todayISO())})`,
-    "",
-    "ユーザの指示:",
-    instruction,
-    "",
-    "タスク一覧(id で指定すること):",
-    list,
-    "",
-    "制約:",
-    `- field は次のいずれか: dueDate(YYYY-MM-DD、空文字で期限クリア) / status(${TASK_STATUSES.join("/")}) / title / category`,
-    "- 指示に該当するタスクのみ。該当しないものは含めない。推測で余計な変更をしない",
-    "- 日付の相対指定(来週金曜・1週間後ろ 等)は今日を基準に具体的な YYYY-MM-DD に変換する",
-    "",
-    "回答は次の形式のJSONだけを ```json コードブロックで返してください。",
-    '{"changes":[{"taskId":"...","field":"dueDate","value":"2026-07-10","reason":"なぜこの変更か"}]}'
-  ].join("\n");
-  _aiReviewPending = true;
-  render();
-  try {
-    const json = extractAiJson(await callClaude(prompt));
-    const byId = new Map(tasks.map((t) => [t.id, t]));
-    const cats = new Set(getCategoryNames());
-    const changes = (Array.isArray(json.changes) ? json.changes : [])
-      .map((c) => {
-        const t = byId.get(String(c?.taskId || ""));
-        const field = String(c?.field || "");
-        if (!t || !(field in AI_BULK_FIELDS)) return null;
-        let value = c?.value;
-        // 型・値の検証(不正な変更は捨てる)
-        if (field === "dueDate") { value = String(value || ""); if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null; }
-        else if (field === "status") { value = String(value || ""); if (!TASK_STATUSES.includes(value)) return null; }
-        else if (field === "category") { value = String(value || ""); if (value && !cats.has(value)) return null; }
-        else if (field === "title") { value = String(value || "").trim(); if (!value) return null; }
-        if (String(t[field] || "") === String(value)) return null;  // 変化なしは除外
-        const fmt = (f, v) => f === "status" ? taskStatusLabel(v) : (v || "(なし)");
-        return { taskId: t.id, title: t.title, field, label: AI_BULK_FIELDS[field], current: fmt(field, t[field]), value, valueLabel: fmt(field, value) };
-      })
-      .filter(Boolean)
-      .slice(0, 60);
-    if (!changes.length) throw new Error("反映できる変更が見つかりませんでした(対象・指示をご確認ください)");
-    _aiBulkEditCtx = { changes };
-    state.modal = { type: "aiBulkEdit" };
-    renderModal(buildAiBulkEditConfirm(changes));
-  } catch (error) {
-    showToast(`AI一括編集失敗: ${error.message}`);
-  } finally {
-    _aiReviewPending = false;
-    render();
-  }
-}
-
-function buildAiBulkEditConfirm(changes) {
-  return `
-    <div class="modal-card" role="dialog" aria-modal="true">
-      <div class="modal-header">
-        <h3 class="modal-title">🤖 変更案(${changes.length}件)</h3>
-        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
-      </div>
-      <div class="modal-body">
-        ${changes.map((c, i) => `
-          <label class="ai-import-row">
-            <input type="checkbox" data-ai-bulk="${i}" checked>
-            <span><b>${escapeHTML(c.title)}</b> — ${c.label}: <span class="muted">${escapeHTML(c.current)}</span> → <b>${escapeHTML(c.valueLabel)}</b></span>
-          </label>`).join("")}
-        <div class="muted" style="font-size:11.5px; line-height:1.6; margin-top:6px">チェックした変更だけを反映します。</div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn" data-action="modal-close">キャンセル</button>
-        <button class="btn primary" data-action="ai-bulk-edit-submit">選択した変更を反映</button>
-      </div>
-    </div>`;
-}
-
-function submitAiBulkEdit() {
-  if (!_aiBulkEditCtx) return closeModal();
-  const { changes } = _aiBulkEditCtx;
-  let count = 0;
-  changes.forEach((c, i) => {
-    if (!modalRoot.querySelector(`input[data-ai-bulk="${i}"]`)?.checked) return;
-    updateTaskField(c.taskId, c.field, c.value);  // saveState 内包
-    count++;
-  });
-  _aiBulkEditCtx = null;
-  closeModal();
-  if (!count) return saveAndRender();
-  saveAndRender(`🤖 ${count}件の変更を反映しました`);
-}
-
-// v50: =========================================================
-//  ② AIスケジュール下書き(空き時間への仮配置 → D&Dで調整 → 確定)
+// v60: =========================================================
+//  ② スケジュール下書き(空き時間への仮配置 → D&Dで調整 → 確定)
 //  AIがやるのは「並べる下書き」まで。動かす・削る・確定は人間。
 //  下書きは非永続(確定するまで実データに触れない)。
 // =========================================================
-let _scheduleDraft = null;  // { date, items:[{id,title,taskId,category,start(分),minutes}] } 非永続
+let _scheduleDraft = null;  // { date, items:[{id,title,taskId,category,start(分),minutes}], skipped:[{title,reason}] } 非永続(v59でskippedを追加)
 let _draftDrag = null;      // ドラッグ中の一時情報 非永続
 
 function minToHHMM(min) {
@@ -2521,71 +2014,36 @@ function aiScheduleCandidates(date) {
     .filter((t) => !state.blocks.some((b) => !b.deleted && b.taskId === t.id && b.date === date))
     .sort(wbsTaskCompare)
     .slice(0, 15)
-    .forEach((t) => out.push({ id: t.id, title: t.title, taskId: t.id, category: t.category || "", note: t.dueDate ? `期限 ${t.dueDate}` : "" }));
+    .forEach((t) => out.push({
+      id: t.id, title: t.title, taskId: t.id, category: t.category || "",
+      note: t.dueDate ? `期限 ${t.dueDate}` : "",
+      estimateMin: t.estimateMin || null  // v60: 決定論配置の見積分数(未設定なら fallbackMorningPlan が既定30分を使う)
+    }));
   return out;
 }
 
-async function runAiSchedule() {
-  if (_aiReviewPending) return showToast("AIを実行中です。少し待ってください");
+// v60: 空き時間に候補を機械的に前詰め配置する(Claude API 呼び出しは全廃したため決定論配置のみ)。
+//      配置ロジックは runAiMorningPlan と共通の fallbackMorningPlan を再利用する
+//      (この画面には繰越候補が無いため実質「MIT候補→WBS」の優先順)。
+function runAiSchedule() {
   const date = state.selectedDate;
   const candidates = aiScheduleCandidates(date);
   if (!candidates.length) return showToast("配置できる候補がありません(WBSの未完了タスクが対象です)");
-  const existing = blocksForDate(date)
-    .filter((b) => b.plannedStartAt && !isStaleBlock(b))
-    .sort((a, b) => a.plannedStartAt.localeCompare(b.plannedStartAt))
-    .map((b) => `- ${timeFromDateTime(b.plannedStartAt)}〜${b.plannedEndAt ? timeFromDateTime(b.plannedEndAt) : "?"} ${b.title}`);
+  const DAY_START = 5 * 60, DAY_END = 23 * 60;
   const isToday = date === todayISO();
   const now = new Date();
-  // v52: 過去の採否・実績・エネルギー傾向を注入(あれば)
-  const digest = buildScheduleLearningDigest(date);
-  // v51: 指示部はテンプレ(設定で編集可)。データと動的制約・出力契約はコード側で常に付与。
-  const prompt = [
-    aiCommonPreamble() + aiPrompt("schedule"),
-    "",
-    `対象日: ${date}(${weekdayLabel(date)})`,
-    state.settings.morningEnergyLog?.[date] !== undefined ? `今朝の体調: ${state.settings.morningEnergyLog[date]}/10(低い日は軽め・少なめに)` : "",  // v53
-    "",
-    "確定済みの予定(動かせない):",
-    existing.length ? existing.join("\n") : "- (まだ予定はありません)",
-    "",
-    "候補タスク(id で指定すること):",
-    candidates.map((c) => `- id:${c.id} ${c.title}${c.note ? `(${c.note})` : ""}`).join("\n"),
-    digest ? `\n過去の実績から自動集計した傾向(過去のAI提案がどう修正・却下されたか、時間帯ごとの着手実態。これを踏まえて配置を最適化すること):\n${digest}` : "",
-    "",
-    `制約: 時刻は 05:00〜23:00 の範囲内${isToday ? `。現在時刻 ${pad2(now.getHours())}:${pad2(now.getMinutes())} より前には置かない` : ""}`,
-    "",
-    "回答は次の形式のJSONだけを ```json コードブロックで返してください。",
-    '{"plan":[{"id":"候補のid","start":"HH:MM","minutes":45}]}'
-  ].join("\n");
-  _aiReviewPending = true;
+  const nowFloor = isToday ? Math.min(DAY_END, Math.ceil((now.getHours() * 60 + now.getMinutes()) / 15) * 15) : DAY_START;
+  const freeGaps = computeFreeGaps(date, DAY_START, DAY_END)
+    .map(([s, e]) => [Math.max(s, nowFloor), e])
+    .filter(([s, e]) => e - s >= 15);
+  if (!freeGaps.length) return showToast("空き時間がありません(予定が埋まっています)");
+  const { items, skipped } = fallbackMorningPlan(candidates, freeGaps);
+  if (!items.length) return showToast("空き時間に配置できる候補がありませんでした");
+  _scheduleDraft = { date, items: items.slice(0, 6), skipped };
+  state.timelineMode = "planned";
+  setView("timeline");
+  showToast("空き時間へ自動配置しました — ドラッグで調整して「確定」してください");
   render();
-  try {
-    const json = extractAiJson(await callClaude(prompt));
-    const byId = new Map(candidates.map((c) => [String(c.id), c]));
-    const items = (Array.isArray(json.plan) ? json.plan : [])
-      .map((p) => {
-        const c = byId.get(String(p?.id));
-        const m = String(p?.start || "").match(/^(\d{1,2}):(\d{2})$/);
-        if (!c || !m) return null;
-        const start = Number(m[1]) * 60 + Number(m[2]);
-        if (start < 5 * 60 || start >= 24 * 60) return null;  // タイムラインの表示レンジ(5〜24時)内のみ
-        const minutes = clamp(Math.round(Number(p?.minutes || 30) / 15) * 15 || 30, 15, 240);
-        // v52: aiStart/aiMinutes = AIの元提案(D&Dで動かしても保持)。確定時に学習ログへ残す。
-        return { id: crypto.randomUUID(), title: c.title, taskId: c.taskId, category: c.category, start, minutes, aiStart: start, aiMinutes: minutes };
-      })
-      .filter(Boolean)
-      .slice(0, 6);
-    if (!items.length) throw new Error("配置案を読み取れませんでした");
-    _scheduleDraft = { date, items };
-    state.timelineMode = "planned";
-    setView("timeline");
-    showToast("🤖 下書きを配置しました — ドラッグで調整して「確定」してください");
-  } catch (error) {
-    showToast(`AI下書き失敗: ${error.message}`);
-  } finally {
-    _aiReviewPending = false;
-    render();
-  }
 }
 
 // タイムライン上の下書きレイヤ(点線ブロック。ドラッグ移動 / 下端で長さ調整 / ×で削除)
@@ -2614,7 +2072,7 @@ function draftBarHTML() {
   const skipped = _scheduleDraft.skipped || [];  // v59: 朝プランで「配置しない」と判断した候補
   return `
     <div class="draft-bar">
-      <span>🤖 下書き ${_scheduleDraft.items.length}件 — ドラッグで移動 / 下端をドラッグで長さ調整 / ×で外す</span>
+      <span>📋 下書き ${_scheduleDraft.items.length}件 — ドラッグで移動 / 下端をドラッグで長さ調整 / ×で外す</span>
       <span class="row" style="gap:6px">
         <button class="btn primary" data-action="draft-confirm">確定して登録</button>
         <button class="btn ghost" data-action="draft-discard">破棄</button>
@@ -2625,14 +2083,14 @@ function draftBarHTML() {
     </div>` : ""}`;
 }
 
-// v52: =========================================================
-//  AIスケジュールの学習ループ
-//  AIの元提案(aiStart/aiMinutes)・ユーザ確定・却下を aiScheduleHistory に記録し、
-//  実績(actualStartAt 等)は Block 側の aiPlan から突き合わせる。
-//  次回の runAiSchedule / runAiTodaySuggest でこれらを集計した「傾向」を注入する。
-//  ※ モデルの再学習ではなく、実データの要約をプロンプトに載せる方式(in-context)。
-// =========================================================
+// v60(旧v52): スケジュール実績ログ。決定論配置の元値(aiStart/aiMinutes、フィールド名は
+//  互換のため維持)・ユーザ確定・却下を aiScheduleHistory に記録する。かつては
+//  buildScheduleLearningDigest() がこれを集計してAIプロンプトへ注入していたが、
+//  Claude API呼び出しの全廃に伴いその注入経路は削除した(digest生成自体が呼び出し元を
+//  失ったため同時に削除)。ここでの記録自体は「配置提案に対する採否」の実データとして
+//  引き続き蓄積する(将来、自宅PCバッチでの分析に使える可能性があるため残置)。
 const AI_SCHED_HISTORY_MAX = 300;
+// v53: 計器盤(統計)の時間帯×曜日ヒートマップでも使う(削除しないこと)
 const SCHED_BANDS = [
   [5, 9, "早朝(5-9時)"],
   [9, 12, "午前(9-12時)"],
@@ -2640,11 +2098,6 @@ const SCHED_BANDS = [
   [15, 18, "午後(15-18時)"],
   [18, 23, "夜(18-23時)"]
 ];
-
-function hhmmToMin(hhmm) {
-  const m = String(hhmm || "").match(/(\d{1,2}):(\d{2})/);
-  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
-}
 
 // 採用/却下を1件記録(採用時は確定値も)
 function recordScheduleHistory(item, outcome, date) {
@@ -2664,107 +2117,6 @@ function recordScheduleHistory(item, outcome, date) {
   }
 }
 
-// v53: 朝の体調(morningEnergyLog: 10/7/5/3/0 の5段階)と着手率の相関。
-//      低い日(≤3)と良い日(≥7)で二分(普通=5 は除外)、各群 n≥5 のときだけ1行返す。
-function morningEnergyCorrelation(pastBlocks) {
-  const today = todayISO();
-  const since = addDays(today, -56);
-  const past = pastBlocks || state.blocks.filter((b) => !b.deleted && b.date >= since && b.date < today && b.plannedStartAt);
-  const lowDays = new Set();
-  const highDays = new Set();
-  Object.entries(state.settings.morningEnergyLog || {}).forEach(([d, v]) => {
-    if (d < since || d >= today) return;
-    if (Number(v) <= 3) lowDays.add(d);
-    else if (Number(v) >= 7) highDays.add(d);
-  });
-  const rateFor = (days) => {
-    const bs = past.filter((b) => days.has(b.date));
-    if (bs.length < 5) return null;
-    return { pct: Math.round((bs.filter((b) => b.actualStartAt).length / bs.length) * 100), n: bs.length };
-  };
-  const low = rateFor(lowDays);
-  const high = rateFor(highDays);
-  if (!low || !high) return "";
-  return `- 朝の体調が低い日(3以下)の着手率${low.pct}%(${low.n}件) / 良い日(7以上)は${high.pct}%(${high.n}件)`;
-}
-
-// 過去データを集計した「傾向」テキスト(スケジュール系プロンプトに注入)。
-// 直近8週。n が少ない行は出さない(ノイズを学習させない)。
-function buildScheduleLearningDigest(targetDate) {
-  const lines = [];
-  const today = todayISO();
-  const since = addDays(today, -56);
-
-  // 1) AI提案に対するユーザの採否・修正傾向(aiScheduleHistory)
-  const hist = (state.aiScheduleHistory || []).filter((h) => h.date >= since);
-  if (hist.length >= 3) {
-    const conf = hist.filter((h) => h.outcome === "confirmed");
-    lines.push(`- AI下書きの過去実績: ${hist.length}件提案 → 採用${conf.length} / 却下${hist.length - conf.length}`);
-    SCHED_BANDS.forEach(([s, e, label]) => {
-      const inBand = hist.filter((h) => { const m = hhmmToMin(h.aiStart); return m !== null && m >= s * 60 && m < e * 60; });
-      if (inBand.length < 3) return;
-      const bandConf = inBand.filter((h) => h.outcome === "confirmed" && h.userStart);
-      const rejRate = Math.round(((inBand.length - bandConf.length) / inBand.length) * 100);
-      let detail = "";
-      if (bandConf.length) {
-        const avgShift = Math.round(bandConf.reduce((sum, h) => sum + (hhmmToMin(h.userStart) - hhmmToMin(h.aiStart)), 0) / bandConf.length);
-        const avgDur = Math.round(bandConf.reduce((sum, h) => sum + (h.userMin / Math.max(1, h.aiMin)), 0) / bandConf.length * 100);
-        detail = `、採用時はユーザが平均 ${avgShift >= 0 ? "+" : ""}${avgShift}分 移動・所要時間を平均${avgDur}%に調整`;
-      }
-      lines.push(`  - ${label}への提案: ${inBand.length}件、却下率${rejRate}%${detail}`);
-    });
-  }
-
-  // 2) 計画 vs 実績(全Block・時間帯別の着手率と開始ズレ)
-  const past = state.blocks.filter((b) => !b.deleted && b.date >= since && b.date < today && b.plannedStartAt);
-  if (past.length >= 5) {
-    SCHED_BANDS.forEach(([s, e, label]) => {
-      const inBand = past.filter((b) => { const m = minutesOf(b.plannedStartAt); return m >= s * 60 && m < e * 60; });
-      if (inBand.length < 5) return;
-      const started = inBand.filter((b) => b.actualStartAt);
-      const rate = Math.round((started.length / inBand.length) * 100);
-      let delayTxt = "";
-      if (started.length >= 3) {
-        const avgDelay = Math.round(started.reduce((sum, b) => sum + (minutesOf(b.actualStartAt) - minutesOf(b.plannedStartAt)), 0) / started.length);
-        delayTxt = `、実際の開始は予定より平均 ${avgDelay >= 0 ? "+" : ""}${avgDelay}分`;
-      }
-      lines.push(`- ${label}の計画Block: 着手率${rate}%(${started.length}/${inBand.length})${delayTxt}`);
-    });
-    // AI下書き経由のBlockの着手率(提案どおり動けているか)
-    const aiBlocks = past.filter((b) => b.aiPlan);
-    if (aiBlocks.length >= 3) {
-      const started = aiBlocks.filter((b) => b.actualStartAt).length;
-      lines.push(`- AI下書き経由のBlock: ${aiBlocks.length}件、着手率${Math.round((started / aiBlocks.length) * 100)}%`);
-    }
-  }
-
-  // 3) 対象日の曜日の傾向(直近8週の同曜日)
-  const wd = parseDate(targetDate).getDay();
-  const sameWd = past.filter((b) => parseDate(b.date).getDay() === wd);
-  if (sameWd.length >= 5) {
-    const started = sameWd.filter((b) => b.actualStartAt).length;
-    lines.push(`- ${weekdayLabel(targetDate)}曜の過去8週: 計画${sameWd.length}件、着手率${Math.round((started / sameWd.length) * 100)}%`);
-  }
-
-  // 5) 朝の体調と着手率の相関(v53)
-  const corr = morningEnergyCorrelation(past);
-  if (corr) lines.push(corr);
-
-  // 4) 時間帯別のエネルギー収支(完了Blockの充電-放電)
-  const done = state.blocks.filter((b) => !b.deleted && b.completed && b.date >= since && (b.actualStartAt || b.plannedStartAt));
-  const bandNet = SCHED_BANDS.map(([s, e, label]) => {
-    const inBand = done.filter((b) => { const m = minutesOf(b.actualStartAt || b.plannedStartAt); return m >= s * 60 && m < e * 60; });
-    if (inBand.length < 5) return null;
-    const net = inBand.reduce((sum, b) => sum + Number(b.charge || 0) - Number(b.discharge || 0), 0) / inBand.length;
-    return { label, net: Math.round(net * 10) / 10 };
-  }).filter(Boolean);
-  if (bandNet.length >= 2) {
-    lines.push(`- 時間帯別の平均エネルギー収支: ${bandNet.map((x) => `${x.label} ${x.net >= 0 ? "+" : ""}${x.net}`).join(" / ")}`);
-  }
-
-  return lines.join("\n");
-}
-
 function confirmScheduleDraft() {
   if (!_scheduleDraft || !_scheduleDraft.items.length) return;
   const { date, items } = _scheduleDraft;
@@ -2778,7 +2130,7 @@ function confirmScheduleDraft() {
       plannedEndAt: `${date}T${minToHHMM(it.start + it.minutes)}`,
       estimateMin: it.minutes
     });
-    // v52: AIの元提案を Block に残す(確定・実績との突き合わせ = 学習の元データ)
+    // v52: 決定論配置の元値を Block に残す(確定・実績との突き合わせ = 実績データ。フィールド名は互換のため維持)
     block.aiPlan = { start: minToHHMM(it.aiStart ?? it.start), minutes: it.aiMinutes ?? it.minutes };
     state.blocks.push(block);
     recordScheduleHistory(it, "confirmed", date);
@@ -2788,7 +2140,7 @@ function confirmScheduleDraft() {
     }
   });
   _scheduleDraft = null;
-  saveAndRender(`🤖 ${items.length}件のBlockを登録しました`);
+  saveAndRender(`📋 ${items.length}件のBlockを登録しました`);
 }
 
 // v59: =========================================================
@@ -2817,7 +2169,7 @@ function aiMorningPlanCandidates(date) {
   return [...carryList, ...rest];
 }
 
-// AI不使用時のフォールバック(決定論配置): MIT候補 → 繰越 → WBS の順に、
+// v60: 決定論配置(唯一の配置経路。旧称フォールバックのまま維持): MIT候補 → 繰越 → WBS の順に、
 // 各候補の見積分数(estimateMin、無ければ30分)で空き枠へ前詰め配置する。
 // 空き枠に入り切らない候補は skipped(理由: 空き枠なし)に回す。
 function fallbackMorningPlan(candidates, freeGaps) {
@@ -2841,8 +2193,8 @@ function fallbackMorningPlan(candidates, freeGaps) {
   return { items: items.slice(0, 15), skipped };
 }
 
-async function runAiMorningPlan({ auto = false } = {}) {
-  if (_aiReviewPending) { if (!auto) showToast("AIを実行中です。少し待ってください"); return; }
+// v60: 決定論配置(fallbackMorningPlan)を正規経路に昇格。Claude API 呼び出しは全廃。
+function runAiMorningPlan({ auto = false } = {}) {
   const date = todayISO();
   const candidates = aiMorningPlanCandidates(date);
   if (!candidates.length) { if (!auto) showToast("配置できる候補がありません(繰越・WBS未完了が対象です)"); return; }
@@ -2855,84 +2207,8 @@ async function runAiMorningPlan({ auto = false } = {}) {
     .map(([s, e]) => [Math.max(s, nowFloor), e])
     .filter(([s, e]) => e - s >= 15);
   if (!freeGaps.length) { if (!auto) showToast("今日は空き時間がありません(予定が埋まっています)"); return; }
-  const existing = blocksForDate(date)
-    .filter((b) => b.plannedStartAt && !isStaleBlock(b))
-    .sort((a, b) => a.plannedStartAt.localeCompare(b.plannedStartAt))
-    .map((b) => `- ${timeFromDateTime(b.plannedStartAt)}〜${b.plannedEndAt ? timeFromDateTime(b.plannedEndAt) : "?"} ${b.title}${b.category === "ルーティン" ? "(ルーティン)" : ""}`);
-  const yest = addDays(date, -1);
-  const feedback = state.feedback[yest] || cachedFeedback[yest] || "";
-  const digest = buildScheduleLearningDigest(date);
 
-  let items = null;
-  let skipped = [];
-  let usedAi = false;
-
-  if (aiEnabled() && navigator.onLine !== false) {
-    const prompt = [
-      aiCommonPreamble() + aiPrompt("morningPlan"),
-      "",
-      `対象日: ${date}(${weekdayLabel(date)})・現在時刻 ${pad2(now.getHours())}:${pad2(now.getMinutes())}`,
-      state.settings.morningEnergyLog?.[date] !== undefined ? `今朝の体調: ${state.settings.morningEnergyLog[date]}/10(低い日は軽め・少なめに)` : "",
-      "",
-      "確定済みの予定・ルーティン(動かせない):",
-      existing.length ? existing.join("\n") : "- (まだ予定はありません)",
-      "",
-      "今日の空き枠:",
-      freeGaps.map(([s, e]) => `- ${minToHHMM(s)}〜${minToHHMM(e)}(${e - s}分)`).join("\n"),
-      "",
-      "候補タスク(id で指定すること。「昨日未完了」は繰り越し候補):",
-      candidates.map((c) => `- id:${c.id} ${c.title}${c.note ? `(${c.note})` : ""}`).join("\n"),
-      feedback ? `\n昨日のAIフィードバック:\n${feedback}` : "",
-      digest ? `\n過去の実績から自動集計した傾向(過去のAI提案がどう修正・却下されたか。これを踏まえて配置を最適化すること):\n${digest}` : "",
-      "",
-      `制約: 時刻は 05:00〜23:00 の範囲内。現在時刻 ${pad2(now.getHours())}:${pad2(now.getMinutes())} より前には置かない。上記の空き枠内に収めること`,
-      "",
-      "回答は次の形式のJSONだけを ```json コードブロックで返してください。配置しない候補は理由付きでskippedへ。",
-      '{"plan":[{"id":"候補のid","start":"HH:MM","minutes":45}],"skipped":[{"id":"候補のid","reason":"配置しない理由"}]}'
-    ].join("\n");
-    _aiReviewPending = true;
-    render();
-    try {
-      const json = extractAiJson(await callClaude(prompt));
-      const byId = new Map(candidates.map((c) => [String(c.id), c]));
-      const parsedItems = (Array.isArray(json.plan) ? json.plan : [])
-        .map((p) => {
-          const c = byId.get(String(p?.id));
-          const m = String(p?.start || "").match(/^(\d{1,2}):(\d{2})$/);
-          if (!c || !m) return null;
-          const start = Number(m[1]) * 60 + Number(m[2]);
-          if (start < DAY_START || start >= 24 * 60) return null;  // タイムラインの表示レンジ(5〜24時)内のみ
-          const minutes = clamp(Math.round(Number(p?.minutes || c.estimateMin || 30) / 15) * 15 || 30, 15, 240);
-          return {
-            id: crypto.randomUUID(), title: c.title, taskId: c.taskId || "", category: c.category || "",
-            start, minutes, aiStart: start, aiMinutes: minutes, carryFromId: c.carryFromId || ""
-          };
-        })
-        .filter(Boolean)
-        .slice(0, 12);
-      if (!parsedItems.length) throw new Error("配置案を読み取れませんでした");
-      items = parsedItems;
-      skipped = (Array.isArray(json.skipped) ? json.skipped : [])
-        .map((s) => {
-          const c = byId.get(String(s?.id));
-          return c ? { title: c.title, reason: String(s?.reason || "").trim() } : null;
-        })
-        .filter(Boolean);
-      usedAi = true;
-    } catch (error) {
-      console.warn("朝プランAI失敗、決定論配置にフォールバックします:", error.message);
-      items = null;
-    } finally {
-      _aiReviewPending = false;
-    }
-  }
-
-  if (!items) {
-    const fb = fallbackMorningPlan(candidates, freeGaps);
-    items = fb.items;
-    skipped = fb.skipped;
-  }
-
+  const { items, skipped } = fallbackMorningPlan(candidates, freeGaps);
   if (!items.length) {
     render();
     if (!auto) showToast("空き時間に配置できる候補がありませんでした");
@@ -2943,9 +2219,7 @@ async function runAiMorningPlan({ auto = false } = {}) {
   if (!auto) { state.timelineMode = "planned"; setView("timeline"); }
   showToast(auto
     ? "🌅 今日の下書きプランを置きました。タイムラインで調整→確定してください"
-    : (usedAi
-      ? "🌅 朝の下書きプランを配置しました — ドラッグで調整して「確定」してください"
-      : "🌅 空き時間へ自動配置しました(AI未使用)— 確認して「確定」してください"));
+    : "🌅 空き時間へ自動配置しました — 確認して「確定」してください");
   render();
 }
 
@@ -2954,10 +2228,8 @@ async function runAiMorningPlan({ auto = false } = {}) {
 //      1日1回ガード(localStorage)。ガードは実行を決めた時点で立てるため、破棄しても再自動起動しない。
 const AUTO_MORNING_PLAN_KEY = "taskchute-auto-morning-plan-date";  // 端末ローカル
 
-async function maybeAutoMorningPlan() {
-  // v59: フォールバック配置はAPIキー無しでも動くため、ここでは aiEnabled() を必須にしない
-  //      (「AIなしでも機能する」の方針。AI呼び出し自体の可否は runAiMorningPlan 内で判定する)
-  if (!state.settings.ai?.autoMorningPlan || _aiReviewPending) return;
+function maybeAutoMorningPlan() {
+  if (!state.settings.ai?.autoMorningPlan) return;
   const today = todayISO();
   try {
     if (localStorage.getItem(AUTO_MORNING_PLAN_KEY) === today) return;  // 1日1回(失敗・破棄後も再試行しない)
@@ -2969,7 +2241,7 @@ async function maybeAutoMorningPlan() {
   if (hasNonRoutineToday) return;  // 既に当日のBlockがあれば白紙提案の出番ではない
   try { localStorage.setItem(AUTO_MORNING_PLAN_KEY, today); } catch { /* 記録できなくても続行 */ }
   try {
-    await runAiMorningPlan({ auto: true });
+    runAiMorningPlan({ auto: true });
   } catch (error) {
     console.warn("朝プラン自動下書きをスキップ:", error.message);  // 静かに(手動実行は常に可能)
   }
@@ -3018,279 +2290,10 @@ const endDraftDrag = () => {
 document.addEventListener("pointerup", endDraftDrag);
 document.addEventListener("pointercancel", endDraftDrag);
 
-// v50: =========================================================
-//  ③ 週次 / 12週サイクルレビューのAI壁打ち
-//  所感はメモ欄に追記する(自分の総括を上書きしない)。変更案は1つに絞らせる。
-// =========================================================
-async function runAiWeekly(week) {
-  if (!week) return;
-  if (_aiReviewPending) return showToast("AIを実行中です。少し待ってください");
-  _aiReviewPending = true;
-  render();
-  try {
-    // v53: 朝の体調の補足(その週の平均 + 8週の相関)
-    const wkDays = computeWeeklyMetrics(week).days;
-    const wkMoods = wkDays.map((d) => state.settings.morningEnergyLog?.[d]).filter((v) => v !== undefined).map(Number);
-    const corr = morningEnergyCorrelation();
-    const moodLines = [];
-    if (wkMoods.length) moodLines.push(`- この週の朝の体調平均: ${(wkMoods.reduce((a, b) => a + b, 0) / wkMoods.length).toFixed(1)}/10(記録${wkMoods.length}日)`);
-    if (corr) moodLines.push(corr);
-    const prompt = [
-      aiCommonPreamble() + "以下は私の週次レビューです。",
-      "",
-      buildWeeklyMarkdown(week),
-      moodLines.length ? `\n補足データ(朝の体調):\n${moodLines.join("\n")}` : "",
-      "",
-      "このデータから、簡潔にフィードバックをください(辛口可、行動に繋がる具体性を重視)。",
-      "回答は必ず次の見出し構成のMarkdownで:",
-      "## 気づき(構造・パターン)",
-      "## 来週の変更案(1つだけ)"
-    ].join("\n");
-    const text = await callClaude(prompt, { maxTokens: 2048 });
-    const prev = state.weeklyReviews[week] || { md: "", changeThemeCreated: false, createdAt: nowDateTime() };
-    const sep = prev.md && prev.md.trim() ? "\n\n---\n" : "";
-    state.weeklyReviews[week] = { ...prev, md: `${prev.md || ""}${sep}#### 🤖 AI壁打ち(${todayISO()})\n\n${text}`, updatedAt: nowDateTime() };
-    saveState();
-    render();
-    showToast("🤖 AIの所感をメモ欄に追記しました");
-  } catch (error) {
-    showToast(`AI壁打ち失敗: ${error.message}`);
-  } finally {
-    _aiReviewPending = false;
-    render();
-  }
-}
-
-async function runAiCycle(cycleStart) {
-  if (!cycleStart) return;
-  if (_aiReviewPending) return showToast("AIを実行中です。少し待ってください");
-  _aiReviewPending = true;
-  render();
-  try {
-    const prompt = [
-      aiCommonPreamble() + "以下は私の12週サイクル(12 Week Year)の節目レビューです。",
-      "",
-      buildCycleMarkdown(cycleStart),
-      "",
-      "この12週のデータから、簡潔にフィードバックをください(辛口可、行動に繋がる具体性を重視)。",
-      "回答は必ず次の見出し構成のMarkdownで:",
-      "## 気づき(構造・パターン)",
-      "## 次サイクルの変更案(1つだけ)"
-    ].join("\n");
-    const text = await callClaude(prompt, { maxTokens: 2048 });
-    const prev = state.cycleReviews[cycleStart] || { md: "", createdAt: nowDateTime() };
-    const sep = prev.md && prev.md.trim() ? "\n\n---\n" : "";
-    state.cycleReviews[cycleStart] = { ...prev, md: `${prev.md || ""}${sep}#### 🤖 AI壁打ち(${todayISO()})\n\n${text}`, updatedAt: nowDateTime() };
-    saveState();
-    render();
-    showToast("🤖 AIの所感を総括メモに追記しました");
-  } catch (error) {
-    showToast(`AI壁打ち失敗: ${error.message}`);
-  } finally {
-    _aiReviewPending = false;
-    render();
-  }
-}
-
-// v50: =========================================================
-//  ④ 0秒思考のまとめ所感
-//  書く前ではなく「書いた後」の履歴に対してだけ使う(1分書き切りの趣旨を壊さない)。
-//  直近7日分をまとめて送り、構造・見えていない角度・問い候補をもらう。所感自体は保存しない。
-// =========================================================
-let _ztAiComment = null;  // { text, count, since } 非永続
-
-async function runAiZeroComment() {
-  if (_aiReviewPending) return showToast("AIを実行中です。少し待ってください");
-  const since = addDays(todayISO(), -7);
-  const entries = (state.zeroThinking?.entries || [])
-    .filter((e) => (e.date || "") >= since)
-    .sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""))
-    .slice(-20);
-  if (entries.length < 2) return showToast("直近7日の0秒思考が2件以上たまってから使えます");
-  const prompt = [
-    aiCommonPreamble() + "以下は私が直近7日間に「0秒思考」(1テーマ1分の書き出し)で書いたメモです。",
-    "1件ずつではなく、全体を眺めてまとめて所感をください。",
-    "",
-    ...entries.map((e) => `### ${e.date} ${e.theme || "(テーマなし)"}\n${e.body || ""}`),
-    "",
-    "観点: ①複数メモに共通する構造・思考のクセ ②本人に見えていなさそうな角度 ③このメモ群から立てるべき問い",
-    "回答は必ず次の見出し構成のMarkdown(候補は「- 」の箇条書き):",
-    "## 所感",
-    "## 明日の0秒思考テーマ",
-    "## 問い候補",
-    "該当がないセクションは見出しごと省略してください。"
-  ].join("\n");
-  _aiReviewPending = true;
-  render();
-  try {
-    const text = await callClaude(prompt);
-    _ztAiComment = { text, count: entries.length, since };
-    state.modal = { type: "ztAiComment" };
-    renderModal(buildZtAiCommentModal());
-  } catch (error) {
-    showToast(`AI所感失敗: ${error.message}`);
-  } finally {
-    _aiReviewPending = false;
-    render();
-  }
-}
-
-function buildZtAiCommentModal() {
-  if (!_ztAiComment) return "";
-  return `
-    <div class="modal-card search-modal" role="dialog" aria-modal="true">
-      <div class="modal-header">
-        <h3 class="modal-title">🤖 0秒思考への所感(直近7日・${_ztAiComment.count}件)</h3>
-        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
-      </div>
-      <div class="modal-body" style="max-height:58vh; overflow-y:auto">
-        <div class="md-render">${renderMarkdown(_ztAiComment.text)}</div>
-        <div class="muted" style="font-size:11.5px; line-height:1.6; margin-top:10px">この所感は保存されません(考える材料としてその場で読む用)。残したい部分はジャーナルへ。テーマ・問いは下のボタンで取り込めます。</div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn" data-action="modal-close">閉じる</button>
-        <button class="btn primary" data-action="zt-ai-import">テーマ/問いを取り込む</button>
-      </div>
-    </div>`;
-}
-
-// v51: =========================================================
-//  今日のタスク提案(昨日の日報+フィードバック → 今日の候補 → 選択登録)
-//  「今日、何から手を付けるか」の立ち上げを軽くする。登録判断は人間。
-// =========================================================
-let _aiTodayCtx = null;  // { date, suggestions:[{title,taskId,minutes,reason}] } 非永続
-
-async function runAiTodaySuggest() {
-  if (_aiReviewPending) return showToast("AIを実行中です。少し待ってください");
-  const today = todayISO();
-  const yest = addDays(today, -1);
-  // 昨日の素材(日報が未生成なら静かに生成して使う)
-  const report = state.reports[yest] || generateReport(yest, { quiet: true }) || "";
-  const feedback = state.feedback[yest] || cachedFeedback[yest] || "";
-  const wbsCands = aiScheduleCandidates(today).filter((c) => c.taskId);  // WBS未完了(今日Block化済み除外は共通)
-  const todayBlocks = blocksForDate(today)
-    .filter((b) => !isStaleBlock(b))
-    .map((b) => `- ${b.title}${b.plannedStartAt ? `(${timeFromDateTime(b.plannedStartAt)})` : ""}`);
-  const prompt = [
-    aiCommonPreamble() + aiPrompt("todaySuggest"),
-    "",
-    `今日: ${today}(${weekdayLabel(today)})`,
-    state.settings.morningEnergyLog?.[today] !== undefined ? `今朝の体調: ${state.settings.morningEnergyLog[today]}/10(低い日は軽め・少なめに)` : "",  // v53
-    "",
-    "今日すでに入っている予定(これらは提案しない):",
-    todayBlocks.length ? todayBlocks.join("\n") : "- (まだありません)",
-    "",
-    "WBSの未完了タスク(該当があれば taskId で参照すること):",
-    wbsCands.length ? wbsCands.map((c) => `- taskId:${c.id} ${c.title}${c.note ? `(${c.note})` : ""}`).join("\n") : "- (なし)",
-    (() => { const d = buildScheduleLearningDigest(today); return d ? `\n過去の実績から自動集計した傾向(提案量・内容の目安にすること):\n${d}` : ""; })(),  // v52
-    "",
-    "----- 昨日の日報 -----",
-    report || "(昨日の日報はありません)",
-    feedback ? `\n----- 昨日のAIフィードバック -----\n${feedback}` : "",
-    "",
-    "回答は次の形式のJSONだけを ```json コードブロックで返してください。",
-    '{"suggestions":[{"title":"...","taskId":"WBSのtaskIdまたは空文字","minutes":30,"reason":"なぜ今日か"}]}'
-  ].join("\n");
-  _aiReviewPending = true;
-  render();
-  try {
-    const json = extractAiJson(await callClaude(prompt));
-    const validIds = new Set(wbsCands.map((c) => String(c.id)));
-    const suggestions = (Array.isArray(json.suggestions) ? json.suggestions : [])
-      .map((s) => ({
-        title: String(s?.title || "").trim(),
-        taskId: validIds.has(String(s?.taskId || "")) ? String(s.taskId) : "",
-        minutes: clamp(Math.round(Number(s?.minutes || 30) / 15) * 15 || 30, 15, 240),
-        reason: String(s?.reason || "").trim()
-      }))
-      .filter((s) => s.title)
-      .slice(0, 5);
-    if (!suggestions.length) throw new Error("提案を読み取れませんでした");
-    _aiTodayCtx = { date: today, suggestions };
-    state.modal = { type: "aiToday" };
-    renderModal(buildAiTodayModal(suggestions));
-  } catch (error) {
-    showToast(`AIタスク提案失敗: ${error.message}`);
-  } finally {
-    _aiReviewPending = false;
-    render();
-  }
-}
-
-function buildAiTodayModal(suggestions) {
-  return `
-    <div class="modal-card" role="dialog" aria-modal="true">
-      <div class="modal-header">
-        <h3 class="modal-title">🤖 今日のタスク提案(昨日の日報より)</h3>
-        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
-      </div>
-      <div class="modal-body">
-        ${suggestions.map((s, i) => `
-          <label class="ai-import-row">
-            <input type="checkbox" data-ai-today="${i}" checked>
-            <span><b>${escapeHTML(s.title)}</b> <span class="muted" style="font-size:11px">約${s.minutes}分${s.taskId ? " ・ WBS連携" : ""}</span>
-            ${s.reason ? `<br><span class="muted" style="font-size:11.5px">${escapeHTML(s.reason)}</span>` : ""}</span>
-          </label>`).join("")}
-        <div class="muted" style="font-size:11.5px; line-height:1.6; margin-top:6px">チェックした項目を今日のタスクシュートに登録します(時間は未定のまま。「🤖 下書きスケジュール」で空き時間に配置できます)。</div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn" data-action="modal-close">キャンセル</button>
-        <button class="btn primary" data-action="ai-today-submit">今日へ登録</button>
-      </div>
-    </div>`;
-}
-
-function submitAiToday() {
-  if (!_aiTodayCtx) return closeModal();
-  const { date, suggestions } = _aiTodayCtx;
-  let count = 0;
-  suggestions.forEach((s, i) => {
-    if (!modalRoot.querySelector(`input[data-ai-today="${i}"]`)?.checked) return;
-    state.blocks.push(makeBlock({ date, title: s.title, taskId: s.taskId || "", estimateMin: s.minutes }));
-    count++;
-  });
-  _aiTodayCtx = null;
-  closeModal();
-  if (!count) return saveAndRender();
-  saveAndRender(`🤖 ${count}件を今日のタスクシュートに登録しました`);
-}
-
-// v51: =========================================================
-//  朝イチ自動レビュー(opt-in・既定OFF)
-//  日付が変わって最初に開いた時、昨日の日報生成 → AIレビューをバックグラウンド実行。
-//  朝は「読むだけ」になる。画面は動かさず、完了時にトーストだけ。
-// =========================================================
-const AUTO_REVIEW_DATE_KEY = "taskchute-auto-review-date";  // 端末ローカル(失敗リトライの暴走防止)
-
-async function maybeAutoMorningReview() {
-  if (!state.settings.ai?.autoMorningReview || !aiEnabled() || _aiReviewPending) return;
-  const today = todayISO();
-  const yest = addDays(today, -1);
-  try {
-    if (localStorage.getItem(AUTO_REVIEW_DATE_KEY) === today) return;  // 1日1回(失敗しても再試行しない)
-  } catch { /* 読めなければ続行 */ }
-  // 既にレビュー済み(他端末含む)なら何もしない
-  if ((state.feedback[yest] || "").trim() || (cachedFeedback[yest] || "").trim()) return;
-  // 昨日に実行データもジャーナルも無ければレビューする意味がない
-  const hadActivity = blocksForDate(yest).length > 0 || (state.journals[yest] || "").trim();
-  if (!hadActivity) return;
-  try { localStorage.setItem(AUTO_REVIEW_DATE_KEY, today); } catch { /* 記録できなくても続行 */ }
-  const report = state.reports[yest] || generateReport(yest, { quiet: true });
-  if (!report) return;
-  _aiReviewPending = true;
-  try {
-    const text = await callClaude(aiCommonPreamble() + report);
-    state.feedback[yest] = text;
-    delete cachedFeedback[yest];
-    saveState();
-    render();
-    showToast("🤖 昨日のAIレビューが届いています(ジャーナルで確認)");
-  } catch (error) {
-    console.warn("朝イチ自動レビューをスキップ:", error.message);  // 静かに(手動実行は常に可能)
-  } finally {
-    _aiReviewPending = false;
-  }
-}
+// v60: 週次/12週サイクルのAI壁打ち(runAiWeekly/runAiCycle)・0秒思考のまとめ所感
+//      (runAiZeroComment)・今日のタスク提案(runAiTodaySuggest。朝の一括プランニングが
+//      上位互換のため削除)・朝イチ自動レビュー(maybeAutoMorningReview)は、いずれも
+//      Claude API 呼び出し前提の機能だったため全廃した。詳細は CHANGES_v60.md 参照。
 
 // v49: =========================================================
 //  横断検索(0秒思考・ジャーナル・問い・AIフィードバック・日報)
@@ -3926,12 +2929,11 @@ function renderWBS() {
   // v47: 完了タスクの表示トグル + 全プロジェクトの一括開閉
   const hideDone = Boolean(state.settings.wbsHideCompleted);
   const allCollapsed = visibleProjects.length > 0 && visibleProjects.every((p) => p.collapsed);
-  // v55: インライン編集モード + AI一括編集
+  // v55: インライン編集モード
   const editMode = Boolean(state.settings.wbsEditMode);
   const wbsTools = `
     <div class="row" style="gap:8px; flex-wrap:wrap">
       <button class="btn ${editMode ? "primary" : "ghost"}" data-action="toggle-wbs-edit">${editMode ? "✏️ 編集モード中" : "✏️ 編集モード"}</button>
-      ${aiEnabled() ? `<button class="btn ghost" data-action="ai-bulk-edit" ${_aiReviewPending ? "disabled" : ""}>🤖 まとめて編集</button>` : ""}
       <button class="btn ${hideDone ? "primary" : "ghost"}" data-action="toggle-wbs-hide-done">${hideDone ? "完了を表示" : "完了を隠す"}</button>
       <button class="btn ghost" data-action="wbs-collapse-all">${allCollapsed ? "すべて展開" : "すべて折りたたむ"}</button>
       ${toggleBtn}
@@ -4018,7 +3020,6 @@ function renderProjectTree(project) {
         </div>
         <div class="row">
           <button class="btn" data-action="add-task-to-project" data-id="${project.id}">+ タスク</button>
-          ${aiEnabled() && !suspended ? `<button class="btn ghost" data-action="ai-decompose" data-id="${project.id}" title="AIにタスク分解の候補を出させる(登録は自分で選ぶ)" ${_aiReviewPending ? "disabled" : ""}>🤖 分解</button>` : ""}
           ${suspended
             ? `<button class="btn" data-action="resume-project" data-id="${project.id}">再開</button>`
             : `<button class="btn ghost" data-action="suspend-project" data-id="${project.id}">中断</button>`}
@@ -4129,12 +3130,11 @@ function renderTasks() {
     ${renderDateBar()}
     ${aiMitChips()}
     ${carryOverPanel()}
-    ${aiEnabled() ? `<div class="row" style="margin-bottom:10px; flex-wrap:wrap; gap:8px">
-      ${state.selectedDate === todayISO() ? `<button class="btn" data-action="ai-today-suggest" ${_aiReviewPending ? "disabled" : ""}>${_aiReviewPending ? "⏳ AI実行中…" : "🤖 今日のタスク提案"}</button>` : ""}
-      <button class="btn" data-action="ai-schedule" ${_aiReviewPending ? "disabled" : ""}>${_aiReviewPending ? "⏳ AI実行中…" : "🤖 空き時間に下書きスケジュール"}</button>
-      ${state.selectedDate === todayISO() ? `<button class="btn" data-action="ai-morning-plan" ${_aiReviewPending ? "disabled" : ""}>${_aiReviewPending ? "⏳ AI実行中…" : "🌅 朝プラン"}</button>` : ""}
-      <span class="muted" style="font-size:11.5px">提案=昨日の日報から今日の候補 / 下書き=空きに仮配置→ドラッグ調整→確定 / 朝プラン=繰越+WBS+MITをまとめて1日ぶん下書き</span>
-    </div>` : ""}
+    <div class="row" style="margin-bottom:10px; flex-wrap:wrap; gap:8px">
+      <button class="btn" data-action="ai-schedule">📋 下書きスケジュール</button>
+      ${state.selectedDate === todayISO() ? `<button class="btn" data-action="ai-morning-plan">🌅 朝プラン</button>` : ""}
+      <span class="muted" style="font-size:11.5px">下書き=空きに仮配置→ドラッグ調整→確定 / 朝プラン=繰越+WBS+MITをまとめて1日ぶん下書き</span>
+    </div>
     <section class="form-strip">
       <input id="blockTitle" class="input" placeholder="Block名">
       <select id="blockCategory" class="select">
@@ -4280,7 +3280,7 @@ function renderTimelineView() {
     </div>
     <div class="row" style="margin-bottom:10px; gap:8px; flex-wrap:wrap">
       <button class="btn primary" data-action="timeline-new-block" data-minute="${nowMinute}">+ 新規Block</button>
-      ${aiEnabled() && !_scheduleDraft ? `<button class="btn" data-action="ai-schedule" ${_aiReviewPending ? "disabled" : ""}>${_aiReviewPending ? "⏳ AI実行中…" : "🤖 下書きスケジュール"}</button>` : ""}
+      ${!_scheduleDraft ? `<button class="btn" data-action="ai-schedule">📋 下書きスケジュール</button>` : ""}
       <span class="muted" style="font-size:12px">空き時間タップで追加 / ○タップで完了登録 / カードタップで編集 / 赤線は現在時刻</span>
     </div>
     ${draftBarHTML()}
@@ -5013,7 +4013,6 @@ function renderJournal() {
           <textarea class="textarea" data-feedback-date="${date}" placeholder="外部AIの返答をここに貼り付け、または上のボタンで .md ファイルをアップロード">${escapeHTML(feedbackFromState)}</textarea>
         `}
         <div class="row" style="margin-top:8px; flex-wrap:wrap; gap:6px">
-          ${aiReviewButton()}
           <button class="btn ghost" data-action="journal-import-ai" data-date="${date}" style="font-size:12px">🤖 AI返信から取り込み(テーマ/MIT/問い)</button>
         </div>
         ${feedbackFromFilePrev && previous !== date ? `
@@ -5133,12 +4132,11 @@ function renderReports() {
     ${renderDateBar()}
     <div class="row" style="margin-bottom:12px; flex-wrap:wrap; gap:8px">
       <button class="btn primary" data-action="generate-report">日報を生成</button>
-      ${report ? aiReviewButton() : ""}
       ${report ? `<button class="btn" data-action="report-copy-ai">📋 AI用にコピー</button>` : ""}
       ${report && typeof navigator !== "undefined" && navigator.share ? `<button class="btn" data-action="report-share-ai">↗ 共有</button>` : ""}
       <button class="btn" data-action="download-report">Markdown保存</button>
     </div>
-    ${report ? `<div class="muted" style="font-size:11.5px; margin-bottom:10px; line-height:1.6">「🤖 AIレビュー実行」でこの日報を Claude API へ直接送り、返信をジャーナルの「AIフィードバック」に自動反映します(テーマ/MIT候補/問い候補の取り込みモーダルも自動で開きます)。コピー/共有 → 手貼りの経路もそのまま使えます。</div>` : ""}
+    ${report ? `<div class="muted" style="font-size:11.5px; margin-bottom:10px; line-height:1.6">コピー/共有で外部AIへ渡し、返信はジャーナルの「AIフィードバック」欄に貼り付け(または .md アップロード)で取り込めます。</div>` : ""}
     <textarea class="textarea report-output" readonly>${escapeHTML(report || "まだ日報がありません。")}</textarea>
   `;
 }
@@ -5242,57 +4240,16 @@ function renderSettings() {
         </div>
       </div>
       <div class="panel stack">
-        <h2>AIレビュー(Anthropic API)</h2>
+        <h2>朝の一括プランニング</h2>
         <div class="muted" style="font-size:12px; line-height:1.6">
-          日報の「🤖 AIレビュー実行」ボタンで Claude API を直接呼び、フィードバックをジャーナルに自動反映します。<br>
-          従量課金です(<a href="https://console.anthropic.com/" target="_blank" rel="noopener">Anthropic Console</a> でAPIキーを発行し、クレジットを事前チャージ。最低 $5)。
+          v60でアプリ内からのClaude API直接呼び出しは廃止しました(コスト理由)。「📋 下書きスケジュール」
+          「🌅 朝プラン」は、繰越・WBS・MIT候補を空き時間へ機械的に前詰め配置する決定論ロジックで動作します
+          (APIキーは不要)。AI活用は自宅PCのバッチ処理からのファイル連携(下記AIフィードバック欄)に限定しています。
         </div>
-        <form class="stack" autocomplete="on" onsubmit="return false">
-          <label>APIキー
-            <input class="input" type="password" data-ai-field="apiKey" value="${escapeHTML(state.settings.ai?.apiKey || "")}"
-              id="ai-api-key" name="anthropic-api-key" autocomplete="current-password"
-              autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="sk-ant-...">
-          </label>
-        </form>
-        <label>モデル
-          <select class="input" data-ai-field="model">
-            ${AI_MODELS.map((m) => `<option value="${m.id}" ${(state.settings.ai?.model || "claude-opus-4-8") === m.id ? "selected" : ""}>${escapeHTML(m.label)}</option>`).join("")}
-          </select>
-        </label>
-        <div class="muted" style="font-size:11px; line-height:1.6">
-          🔒 APIキーはこの端末のブラウザ内にのみ保存します。GitHub同期・JSONエクスポートには含まれません。<br>
-          月額目安は「毎日1回の日報レビュー(入力2〜4千トークン+出力0.5〜1.5千トークン)」での概算です。
-        </div>
-        <label class="checkbox-line">
-          <input type="checkbox" data-ai-automorning ${state.settings.ai?.autoMorningReview ? "checked" : ""}>
-          🌅 朝イチ自動レビュー(日付が変わって最初に開いた時、昨日の日報レビューを自動実行)
-        </label>
         <label class="checkbox-line">
           <input type="checkbox" data-ai-automorningplan ${state.settings.ai?.autoMorningPlan ? "checked" : ""}>
-          🌅 朝の一括プランニング(10:00までの初回起動で当日の予定が空なら、繰越+WBS+MITの下書きを自動配置。APIキー未設定でも空き時間へ機械的に仮配置)
+          🌅 朝の一括プランニングを自動実行(10:00までの初回起動で当日の予定が空なら、繰越+WBS+MITの下書きを自動配置)
         </label>
-        <details>
-          <summary style="cursor:pointer; font-size:13px; font-weight:700">🛠 プロンプト設定(上級)</summary>
-          <div class="stack" style="margin-top:10px">
-            <div class="muted" style="font-size:11.5px; line-height:1.6">
-              すべてのAI機能に共通で付く「私について」と、機能別の指示部を編集できます。
-              出力フォーマット(JSON・見出し)はアプリが解析するため固定で、ここには含まれません。空にすればその部分は送られません。
-            </div>
-            ${[
-              ["context", "共通コンテキスト(私について — 全AI機能の冒頭に付く)"],
-              ["custom", "カスタム指示(文体・トーンなどの追加指示)"],
-              ["decompose", "WBSタスク分解の指示"],
-              ["schedule", "スケジュール下書きの指示"],
-              ["todaySuggest", "今日のタスク提案の指示"],
-              ["morningPlan", "朝の一括プランニングの指示"]
-            ].map(([key, label]) => `
-              <label>${label}
-                <textarea class="textarea" data-ai-prompt="${key}" style="min-height:110px; font-size:16px">${escapeHTML(aiPrompt(key))}</textarea>
-              </label>
-              <button class="btn ghost" data-action="ai-prompt-reset" data-key="${key}" style="font-size:11.5px; align-self:flex-start">↺ 既定に戻す</button>
-            `).join("")}
-          </div>
-        </details>
       </div>
       <div class="panel stack">
         <h2>現在のファイル構成</h2>
@@ -5975,7 +4932,6 @@ function renderWeekly() {
       </button>
       <textarea class="textarea" data-weekly-md="${week}" style="min-height:120px; margin-top:12px" placeholder="この週の気づき・来週変えることをメモ(Markdown)">${escapeHTML(review.md || "")}</textarea>
       <div class="row" style="gap:8px; margin-top:10px; flex-wrap:wrap">
-        ${aiEnabled() ? `<button class="btn" data-action="weekly-ai" data-week="${week}" ${_aiReviewPending ? "disabled" : ""}>${_aiReviewPending ? "⏳ AI実行中…" : "🤖 AIと振り返る"}</button>` : ""}
         <button class="btn" data-action="weekly-download" data-week="${week}">週次mdをダウンロード</button>
         ${(state.settings.github?.token && state.settings.github?.owner) ? `<button class="btn" data-action="weekly-push" data-week="${week}">GitHubへpush</button>` : ""}
       </div>
@@ -6131,7 +5087,6 @@ function renderCycle() {
       </div>
       <textarea class="textarea" data-cycle-md="${cycleStart}" style="min-height:120px" placeholder="この12週の総括・次サイクルで変えること(Markdown)">${escapeHTML(review.md || "")}</textarea>
       <div class="row" style="gap:8px; margin-top:10px; flex-wrap:wrap">
-        ${aiEnabled() ? `<button class="btn" data-action="cycle-ai" data-cycle="${cycleStart}" ${_aiReviewPending ? "disabled" : ""}>${_aiReviewPending ? "⏳ AI実行中…" : "🤖 AIと振り返る"}</button>` : ""}
         <button class="btn" data-action="cycle-download" data-cycle="${cycleStart}">サイクルmdをダウンロード</button>
         ${(state.settings.github?.token && state.settings.github?.owner) ? `<button class="btn" data-action="cycle-push" data-cycle="${cycleStart}">GitHubへpush</button>` : ""}
       </div>
@@ -6520,7 +5475,6 @@ function renderZtThemeTab() {
       <div class="zt-search-row">
         <input class="zt-search-input" id="zt-search" type="search" placeholder="テーマや本文で検索" value="${escapeHTML(ztSearch)}">
       </div>
-      ${aiEnabled() ? `<button class="btn ghost" data-action="zt-ai-comment" style="font-size:12px; margin:2px 0 8px" ${_aiReviewPending ? "disabled" : ""}>${_aiReviewPending ? "⏳ AI実行中…" : "🤖 直近7日のメモにまとめて所感をもらう"}</button>` : ""}
       <div class="zt-history-list" id="zt-history-list">${ztHistoryListHTML()}</div>
     </section>
   `;
@@ -7689,7 +6643,6 @@ async function gitHubErrorMessage(response) {
 function sanitizedStateForGitHub() {
   const copy = structuredClone(state);
   if (copy.settings?.github) copy.settings.github.token = "";
-  if (copy.settings?.ai) copy.settings.ai.apiKey = "";  // v49: AIのAPIキーも同期・エクスポートに含めない
   copy.modal = null;  // v37: ローカル保存(persistLocalNoSchedule)と同様、モーダル状態は共有しない
   delete copy._justStartedBlockId;  // v40: 非永続の着手ジュースフラグは同期しない
   return copy;
@@ -7840,13 +6793,11 @@ async function restoreBackup(date) {
     if (!resp.ok) throw new Error(await gitHubErrorMessage(resp));
     const payload = await resp.json();
     const text = fromBase64(payload.content || "");
-    // スナップショットは token / APIキー を含まないので、この端末の値を引き継ぐ
+    // スナップショットは token を含まないので、この端末の値を引き継ぐ
     const token = state.settings.github.token;
-    const aiKey = state.settings.ai?.apiKey || "";
     clearTimeout(autoSaveTimer);
     const next = normalizeState(JSON.parse(text));
     next.settings.github = { ...next.settings.github, ...cfg, token };
-    if (!next.settings.ai.apiKey) next.settings.ai.apiKey = aiKey;
     state = next;
     maintainRecurrences({ purge: true });
     closeModal();
@@ -9945,10 +8896,7 @@ startTimerTicker();
 // v25/v43: 起動後の pull。自動同期 ON なら v43 の pull(競合バナー付き)、OFF なら従来の起動時同期。
 if (state.settings.autoSync) runAutoSyncPull();
 else syncFromGitHubOnStartup();
-// v51: 朝イチ自動レビュー(opt-in・既定OFF)。起動直後は同期(pull)に少し譲ってから実行し、
-//      別端末で実行済みのフィードバックを取り込んだ後に重複実行しないようにする。
-setTimeout(maybeAutoMorningReview, 4000);
-// v59: 朝の一括プランニングの自動下書き(opt-in・既定OFF)。同期・自動レビューの後に実行。
+// v59: 朝の一括プランニングの自動下書き(opt-in・既定OFF)。起動直後は同期(pull)に少し譲ってから実行する。
 setTimeout(maybeAutoMorningPlan, 4500);
 // v53: 自動アーカイブ(既定ON・1日1回)。同期・自動レビューの後に静かに実行。
 setTimeout(maybeAutoArchive, 8000);
@@ -9957,8 +8905,7 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
   if (state.settings.autoSync) runAutoSyncPull();
   else if (runDailyOpen()) render();
-  setTimeout(maybeAutoMorningReview, 4000);  // v51: 日をまたいで復帰したケース
-  setTimeout(maybeAutoMorningPlan, 4500);    // v59: 同上
+  setTimeout(maybeAutoMorningPlan, 4500);    // v59: 日をまたいで復帰したケース
   setTimeout(maybeAutoArchive, 8000);        // v53: 同上
 });
 

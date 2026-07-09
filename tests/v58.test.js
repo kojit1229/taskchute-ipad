@@ -119,35 +119,25 @@ function check(name, cond, extra = "") {
     await page.locator('[data-action="open-weekly"]').count() === 0, isoDate(fri));
 
   // ---- [4] 短い下書きBlockの削除ボタン(×)が .draft-resize にクリックを奪われない ----
+  // v60メモ: 元はAIモックで「15分」の配置案を返させていたが、v60で下書きスケジュールは
+  // 決定論配置(computeFreeGaps→fallbackMorningPlan)になったため、候補タスクの
+  // estimateMin=15 を与えて同じ「15分の極短Block」を再現する(15分刻みに丸められる実装のため
+  // 下限に近い最短の有効値として15分を使う。高さは Math.max(26, minutes/60*rowHeight) の
+  // 下限26pxに張り付く、という検証対象は変わらない)。
   console.log("[4] 短い下書きBlockの削除ボタンがクリック可能");
   const TODAY = isoDate(now);
   await page.evaluate(({ KEY, TODAY }) => {
     const s = JSON.parse(localStorage.getItem(KEY));
-    s.settings.ai = { apiKey: "sk-ant-test", model: "claude-opus-4-8" };
-    s.projects = s.projects || [];
+    s.projects = (s.projects || []).filter((p) => p.kind !== "normal");
     s.projects.push({ id: "proj-short", kind: "normal", title: "短時間案件", category: "", status: "active", description: "", dueDate: "", twelveWeekStartDate: "", createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false, collapsed: false });
-    s.tasks = s.tasks || [];
-    s.tasks.push({ id: "task-short", projectId: "proj-short", parentTaskId: "", title: "短時間タスク", category: "", status: "todo", dueDate: TODAY, description: "", createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false });
+    s.tasks = [{ id: "task-short", projectId: "proj-short", parentTaskId: "", title: "短時間タスク", category: "", status: "todo", dueDate: TODAY, description: "", estimateMin: 15, createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false }];
+    s.blocks = [];
     s.selectedDate = TODAY;
     s.currentView = "tasks";
     localStorage.setItem(KEY, JSON.stringify(s));
   }, { KEY, TODAY });
   await page.reload();
   await page.waitForTimeout(500);
-
-  // fetch モック: AIスケジュール案として「15分」の極短タスクを返す
-  // (15分刻みに丸められる実装のため、下限に近い最短の有効値として15分を使う。
-  //  高さは Math.max(26, minutes/60*rowHeight) の下限26pxに張り付く)
-  await page.evaluate(() => {
-    window.fetch = (url, opts = {}) => {
-      if (!String(url).includes("api.anthropic.com")) return Promise.resolve(new Response("{}", { status: 200 }));
-      const body = JSON.parse(opts.body);
-      const prompt = String(body.messages[0].content);
-      const m = prompt.match(/id:(task-[A-Za-z0-9-]+)/);
-      const text = '```json\n{"plan":[{"id":"' + (m ? m[1] : "task-short") + '","start":"09:00","minutes":15}]}\n```';
-      return Promise.resolve(new Response(JSON.stringify({ content: [{ type: "text", text }] }), { status: 200 }));
-    };
-  });
 
   await page.click('[data-action="nav"][data-view="tasks"]');
   await page.waitForTimeout(200);
@@ -168,7 +158,7 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(300);
     check("削除後は下書きBlockが消える", await page.locator(".draft-block").count() === 0);
   } else {
-    check("AI下書きボタンが見つからずスキップ", false, "ai-schedule button not found");
+    check("下書きボタンが見つからずスキップ", false, "ai-schedule button not found");
   }
 
   await browser.close();

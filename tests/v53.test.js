@@ -1,4 +1,10 @@
-// v53 検証: 計器盤(統計) / 自動アーカイブ / 朝の体調相関の学習注入
+// v53 検証: 計器盤(統計) / 自動アーカイブ
+//
+// v60メモ: 本スイートはもともと「朝の体調相関の学習注入」(下書きスケジュールのAIプロンプトへ
+// buildScheduleLearningDigest() の集計結果を注入する機能)も検証していたが、v60でアプリ内からの
+// Claude API直接呼び出しを全廃したのに伴い、そのプロンプト注入経路(および呼び出し元を失った
+// buildScheduleLearningDigest/morningEnergyCorrelation自体)を削除したため、該当セクションは
+// 削除した(詳細はCHANGES_v60.md)。計器盤・自動アーカイブはAI呼び出しと無関係なのでそのまま残す。
 const { chromium, launchOptions, startServer } = require("./helpers");
 
 const PORT = 4194;
@@ -29,7 +35,6 @@ const b64ToObj = (b64) => JSON.parse(Buffer.from(b64, "base64").toString("utf8")
   // ---- seed ----
   await page.evaluate(({ TODAY, KEY, daysAgoMap }) => {
     const s = JSON.parse(localStorage.getItem(KEY));
-    s.settings.ai = { apiKey: "sk-ant-test", model: "claude-opus-4-8" };
     s.settings.github = { ...s.settings.github, owner: "kojit1229", repo: "taskchute-ipad", branch: "main", path: "app-state.json", token: "ghp_test" };
     s.projects.push({ id: "proj-1", kind: "normal", title: "P", category: "", status: "active", description: "", dueDate: "", twelveWeekStartDate: TODAY, createdAt: "2026-01-01T00:00", updatedAt: "2026-01-01T00:00", deleted: false });
     s.tasks.push({ id: "task-A", projectId: "proj-1", parentTaskId: "", title: "資料作成", category: "", status: "todo", dueDate: TODAY, description: "", createdAt: "2026-01-02T00:00", updatedAt: "2026-01-02T00:00", deleted: false });
@@ -85,19 +90,13 @@ const b64ToObj = (b64) => JSON.parse(Buffer.from(b64, "base64").toString("utf8")
   await page.waitForTimeout(300);
   check("期間切替が保存される(UI状態)", await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).settings.statsRange, KEY) === "12w");
 
-  // ---- [2] 朝の体調相関のAI注入 ----
-  console.log("[2] 体調相関の注入");
+  // ---- [2] アーカイブ用のGitHub fetchモックを設置 ----
   await page.evaluate(() => {
-    window.__aiPrompts = [];
     window.__gh = { puts: [], failPut: false, existing2026: null, dirList: null };
     const enc = (obj) => btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
     window.fetch = (url, opts = {}) => {
       const u = String(url);
       const m = opts.method || "GET";
-      if (u.includes("api.anthropic.com")) {
-        window.__aiPrompts.push(String(JSON.parse(opts.body).messages[0].content));
-        return Promise.resolve(new Response(JSON.stringify({ content: [{ type: "text", text: '```json\n{"plan":[{"id":"task-A","start":"13:00","minutes":30}]}\n```' }] }), { status: 200 }));
-      }
       if (u.includes("/contents/archive/archive-") && m === "GET") {
         const year = u.match(/archive-(\d{4})/)[1];
         if (year === "2026" && window.__gh.existing2026) {
@@ -117,16 +116,6 @@ const b64ToObj = (b64) => JSON.parse(Buffer.from(b64, "base64").toString("utf8")
       return Promise.resolve(new Response("{}", { status: 200 }));
     };
   });
-  await page.click('[data-action="nav"][data-view="tasks"]');
-  await page.waitForTimeout(300);
-  await page.click('[data-action="ai-schedule"]');
-  await page.waitForTimeout(700);
-  const sp = await page.evaluate(() => window.__aiPrompts[0] || "");
-  check("相関行が学習ダイジェストに入る", /朝の体調が低い日\(3以下\)の着手率1[0-9]%.*良い日\(7以上\)は100%/.test(sp), sp.split("\n").filter((l) => l.includes("体調")).join(" | "));
-  check("今朝の体調がプロンプトに入る", sp.includes("今朝の体調: 3/10"));
-  // 下書きは破棄しておく
-  await page.evaluate(() => document.querySelector('[data-action="draft-discard"]')?.click());
-  await page.waitForTimeout(300);
 
   // ---- [3] アーカイブ ----
   console.log("[3] 自動アーカイブ");

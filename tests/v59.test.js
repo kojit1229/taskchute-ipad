@@ -1,11 +1,12 @@
 // v59 検証: 朝の一括プランニング(繰越+WBS+MIT候補 → 空き時間へ仮配置 → 既存の下書きUIで確定)。
 //
 // 方針: app.js は type="module" で内部関数を window に露出しないため、既存スイート(v49〜v58)と
-// 同じくブラウザ操作 + localStorage 状態の直接注入 + window.fetch モックで観測する。
-// AI呼び出しは Anthropic API を常に失敗させ(fetch を reject)、決定論フォールバック
-// (fallbackMorningPlan)の配置だけを検証する。フォールバックは computeFreeGaps の
-// 出力をそのまま使うため、フォールバックの配置境界を見ることで computeFreeGaps の
-// 境界(占有なし/連続占有/日跨ぎ端)も間接的に検証できる。
+// 同じくブラウザ操作 + localStorage 状態の直接注入で観測する。
+// v60でアプリ内からのClaude API直接呼び出しを全廃し、決定論配置(fallbackMorningPlan)が
+// 唯一の配置経路になったため、本スイートが検証していた「AI失敗時のフォールバック」は
+// そのまま「常用経路」の検証として引き続き成立する(fallbackMorningPlan自体は無改修)。
+// フォールバックは computeFreeGaps の出力をそのまま使うため、配置境界を見ることで
+// computeFreeGaps の境界(占有なし/連続占有/日跨ぎ端)も間接的に検証できる。
 const { chromium, launchOptions, startServer } = require("./helpers");
 
 const PORT = 4194;
@@ -31,15 +32,7 @@ function check(name, cond, extra = "") {
   const TODAY = isoDate(now0);
   const YEST = isoDate(new Date(now0.getTime() - 24 * 60 * 60 * 1000));
 
-  // AIは常に失敗させ、決定論フォールバックの配置だけを検証する(このテストの主目的)。
-  const installFailingAiFetch = () => page.evaluate(() => {
-    window.fetch = (url, opts = {}) => {
-      if (String(url).includes("api.anthropic.com")) return Promise.reject(new Error("network down (test)"));
-      return Promise.resolve(new Response("{}", { status: 200 }));
-    };
-  });
-
-  // 各シナリオ共通の下地: blocks/tasks/projects を丸ごと差し替え、選択日・APIキーを設定して reload。
+  // 各シナリオ共通の下地: blocks/tasks/projects を丸ごと差し替え、選択日を設定して reload。
   // projects=[] にしても normalizeState が Wish/その他 Project を再生成するので安全。
   async function seed({ blocks = [], tasks = [], projects = [] } = {}) {
     await page.evaluate(({ KEY, blocks, tasks, projects, TODAY }) => {
@@ -47,16 +40,12 @@ function check(name, cond, extra = "") {
       s.blocks = blocks;
       s.tasks = tasks;
       s.projects = projects;
-      s.settings.ai = s.settings.ai || {};
-      s.settings.ai.apiKey = "sk-ant-test";
-      s.settings.ai.model = "claude-opus-4-8";
       s.selectedDate = TODAY;
       s.currentView = "tasks";
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, blocks, tasks, projects, TODAY });
     await page.reload();
     await page.waitForTimeout(400);
-    await installFailingAiFetch();
   }
 
   function planBlock({ id, date, title, startMin, endMin, taskId = "", category = "", migratedTo = "" }) {
@@ -106,7 +95,7 @@ function check(name, cond, extra = "") {
   // ---- [1] 空き時間の境界: 占有なし ----
   console.log("[1] computeFreeGaps 境界(占有なし)— 今〜23:00の1本に収まる");
   await seed({ tasks: [wbsTask("test-task-1", "占有なし候補タスク")], projects: [testProject()] });
-  check("🌅 朝プランボタンが存在する(APIキー設定・今日を選択中)", await page.locator('[data-action="ai-morning-plan"]').count() === 1);  // (e)
+  check("🌅 朝プランボタンが存在する(APIキー不要・今日を選択中)", await page.locator('[data-action="ai-morning-plan"]').count() === 1);  // (e)
   await runMorningPlan();
   const gaps1 = await draftBlocks();
   check("候補1件が下書きとして1件だけ配置される", gaps1.length === 1, JSON.stringify(gaps1));
