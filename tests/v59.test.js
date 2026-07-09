@@ -29,6 +29,11 @@ function check(name, cond, extra = "") {
   const isoDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
   const hhmm = (min) => `${pad2(Math.floor(min / 60))}:${pad2(min % 60)}`;
   const now0 = new Date();
+  // コーディネーター指摘(2026-07-09, v61レビュー): computeFreeGaps は「現在時刻〜23:00」を
+  // 空き枠として扱うため、深夜23:00付近に実行すると空き枠が消えてフレーキーになっていた。
+  // page.clock でページ内の現在時刻を日中(10:00)に固定し、実行時刻に依存しないようにする
+  // (アプリ本体のロジックは無改修。以降のテスト内 now2 相当の計算も now0 を再利用する)。
+  now0.setHours(10, 0, 0, 0);
   const TODAY = isoDate(now0);
   const YEST = isoDate(new Date(now0.getTime() - 24 * 60 * 60 * 1000));
 
@@ -89,6 +94,7 @@ function check(name, cond, extra = "") {
     }).filter(Boolean);
   }
 
+  await page.clock.setFixedTime(now0);  // goto前に固定してアプリ起動時のnew Date()から一貫させる
   await page.goto(`http://localhost:${PORT}/`);
   await page.waitForTimeout(500);
 
@@ -106,8 +112,8 @@ function check(name, cond, extra = "") {
 
   // ---- [2] 空き時間の境界: 連続占有はマージされ、隙間に配置されない / フォールバックは空き枠と重ならない ----
   console.log("[2] computeFreeGaps 境界(連続占有)/ フォールバック配置が空き枠と重ならない");
-  const now2 = new Date();
-  const nowFloor2 = Math.min(23 * 60, Math.ceil((now2.getHours() * 60 + now2.getMinutes()) / 15) * 15);
+  // now0 は既に固定済み(10:00)なので、その値をそのまま再利用する(new Date()で取り直さない)。
+  const nowFloor2 = Math.min(23 * 60, Math.ceil((now0.getHours() * 60 + now0.getMinutes()) / 15) * 15);
   const occStart = nowFloor2 + 15;   // 直前に15分だけ空き(30分候補には狭すぎる)
   const occMid = occStart + 30;
   const occEnd = occMid + 30;        // occStart〜occEnd の60分が「連続する2つのBlock」で占有

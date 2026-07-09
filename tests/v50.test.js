@@ -25,6 +25,11 @@ function check(name, cond, extra = "") {
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
 
   const today = new Date();
+  // コーディネーター指摘(2026-07-09, v61レビュー): このスイートは「現在時刻からの空き枠」を
+  // 前提に境界値を計算するため、深夜23:00付近に実行すると空き枠が消えてフレーキーになっていた。
+  // page.clock で「ページ内から見える現在時刻」を日中(10:00)に固定し、実行時刻に関係なく
+  // 決定論的な結果になるようにする(アプリ本体のロジックは無改修)。
+  today.setHours(10, 0, 0, 0);
   const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const TODAY = iso(today);
   const pad2 = (n) => String(n).padStart(2, "0");
@@ -38,6 +43,7 @@ function check(name, cond, extra = "") {
   const occupiedUntil = Math.min(22 * 60, nowFloor + 60);  // 23:00に寄りすぎて空き枠が消えないようclamp
   const expectedStart = occupiedUntil;
 
+  await page.clock.setFixedTime(today);  // goto前に固定してアプリ起動時のnew Date()から一貫させる
   await page.goto(`http://localhost:${PORT}/`);
   await page.waitForTimeout(600);
 

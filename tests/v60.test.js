@@ -29,6 +29,11 @@ function check(name, cond, extra = "") {
   const pad2 = (n) => String(n).padStart(2, "0");
   const isoDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
   const now0 = new Date();
+  // コーディネーター指摘(2026-07-09, v61レビュー): 本スイートは朝プラン/下書きスケジュールを
+  // 実行するため、内部の computeFreeGaps が「現在時刻〜23:00」の空き枠に依存する。深夜23:00
+  // 付近に実行すると見積45分のタスクが入り切らずフレーキーになっていたため、page.clock で
+  // ページ内の現在時刻を日中(10:00)に固定する(アプリ本体のロジックは無改修)。
+  now0.setHours(10, 0, 0, 0);
   const TODAY = isoDate(now0);
   const YEST = isoDate(new Date(now0.getTime() - 24 * 60 * 60 * 1000));
 
@@ -43,6 +48,7 @@ function check(name, cond, extra = "") {
     };
   });
 
+  await page.clock.setFixedTime(now0);  // goto前に固定してアプリ起動時のnew Date()から一貫させる
   await page.goto(`http://localhost:${PORT}/`);
   await page.waitForTimeout(600);
 

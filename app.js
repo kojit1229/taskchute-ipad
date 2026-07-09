@@ -324,7 +324,9 @@ document.addEventListener("click", (event) => {
     persistLocalNoSchedule();  // 画面移動は UI 操作(dataModifiedAt を汚さない)
     render();
   }
-  if (action === "carry-over") carryOverBlock(id);  // v46: 未完了ブロックを今日へ繰り越し
+  if (action === "carry-over") requestCarryOver(id);  // v46: 未完了ブロックを今日へ繰り越し(v61: 3回目以降は儀式モーダルを挟む)
+  if (action === "migration-ritual-choice") resolveMigrationRitual(target.dataset.choice);  // v61: マイグレーション儀式の選択
+  if (action === "ideal-retry") resolveIdealRetry(target.dataset.choice);  // v61: 今日の理想の3日リトライ(続ける/手放す)
   // v39/v40: エネルギー構造からの行動導線
   if (action === "energy-open-routine") openRoutineForWeekday(Number(target.dataset.day));
   if (action === "energy-open-category") {
@@ -349,6 +351,13 @@ document.addEventListener("input", (event) => {
   const target = event.target;
   if (target.matches("[data-journal-date]")) {
     state.journals[target.dataset.journalDate] = target.value;
+    saveState();
+  }
+  // v61: 今日の理想ワンライナー(入力中も保存。全再描画しないのでフォーカスは維持される)
+  if (target.matches("[data-ideal-date]")) {
+    const d = target.dataset.idealDate;
+    const meta = (state.journalMeta[d] ||= { aiMitCandidates: [], aiImported: false, ideal: "" });
+    meta.ideal = target.value;
     saveState();
   }
   if (target.matches("[data-feedback-date]")) {
@@ -661,6 +670,7 @@ function normalizeState(value) {
     isMIT: false,
     source: "",
     estimateMin: null,   // v41: 見積時間(分)。null は解決順で埋める(入力必須にしない)
+    carryCount: 0,        // v61: マイグレーション儀式(提案1)。繰り越された回数(未繰り越しは0)
     ...block,
     plannedStartAt: fixDateTime(block.plannedStartAt),
     plannedEndAt: fixDateTime(block.plannedEndAt),
@@ -741,7 +751,10 @@ function normalizeState(value) {
   Object.values(value.journalMeta).forEach((j) => {
     if (!Array.isArray(j.aiMitCandidates)) j.aiMitCandidates = [];
     if (!("aiImported" in j)) j.aiImported = false;
+    if (!("ideal" in j)) j.ideal = "";  // v61: 今日の理想ワンライナー(提案8)
   });
+  // v61: マイグレーション儀式(3回目以降の繰り越し確認)の選択ログ。将来のバッチ分析用に軽量記録。
+  if (!Array.isArray(value.migrationRitualLog)) value.migrationRitualLog = [];
   value.feedback ||= {};
   value.reports ||= {};
   // v56: GitHub に push 済みの AIフィードバック_*.md の日付を記録する集合。
@@ -1175,6 +1188,7 @@ function makeBlock(input) {
     recurrenceGroupId: input.recurrenceGroupId || "",
     pomodoroCount: Number(input.pomodoroCount || 0),
     migratedTo: "",
+    carryCount: Number(input.carryCount || 0),  // v61: マイグレーション儀式(繰り越し回数)
     orderIndex: 0,
     createdAt: nowDateTime(),
     updatedAt: nowDateTime(),
@@ -1299,6 +1313,7 @@ function renderHome() {
     ${renderDateBar()}
     ${homeCreed()}
     ${homeLifespan(metrics)}
+    ${homeIdeal(isToday)}
     ${homeHero(blocks, isToday)}
     ${homeScoreboard(blocks)}
     <div class="home-zone-block z-amber" id="homezone-1">
@@ -1375,6 +1390,72 @@ function plannedRange(b) {
   const s = b.plannedStartAt ? timeFromDateTime(b.plannedStartAt) : "—";
   const e = b.plannedEndAt ? timeFromDateTime(b.plannedEndAt) : "—";
   return `${s} – ${e}`;
+}
+
+// v61: =========================================================
+//  「今日の理想」ワンライナー + 3日リトライ(提案8)
+//  朝イチで書く軽量版の理想(長期のVision/Affirmationとは別粒度)。
+//  journalMeta[date].ideal に保存し、書いた日から3日間ホームに残す。3日目には
+//  達成/未達を問わず「続けるか手放すか」だけを一言で尋ね、翌日以降も見えるようにする。
+// =========================================================
+const IDEAL_RETRY_WINDOW_DAYS = 3;
+
+// 今日を起点に直近3日以内で最後に「今日の理想」が書かれた日を探す(今日→昨日→一昨日の順)。
+// dayNum: 1=書いた当日 / 2=翌日 / 3=3日目(続ける/手放すを問う日)
+function idealActiveEntry(today) {
+  for (let offset = 0; offset < IDEAL_RETRY_WINDOW_DAYS; offset++) {
+    const d = addDays(today, -offset);
+    const text = state.journalMeta[d]?.ideal;
+    if (text) return { date: d, text, dayNum: offset + 1 };
+  }
+  return null;
+}
+
+// ホームの「いま、これ」の上に表示する軽量カード。未入力日はUIを邪魔しない(空なら非表示に近い最小表示)。
+function homeIdeal(isToday) {
+  if (!isToday) return "";
+  const today = todayISO();
+  const active = idealActiveEntry(today);
+  if (!active) {
+    return `<section class="panel home-ideal home-ideal-empty">
+      <input type="text" class="home-ideal-input" maxlength="60"
+        placeholder="今日の理想を一行で(任意・スキップ可)"
+        data-ideal-date="${today}" value="">
+    </section>`;
+  }
+  const retryDay = active.dayNum >= IDEAL_RETRY_WINDOW_DAYS;
+  return `<section class="panel home-ideal">
+    <div class="home-ideal-row">
+      <span class="home-ideal-eyebrow">今日の理想(${active.dayNum}日目)</span>
+      <span class="home-ideal-text">${escapeHTML(active.text)}</span>
+    </div>
+    ${retryDay ? `
+      <div class="home-ideal-retry">
+        <span class="muted" style="font-size:12px">3日間、この理想と過ごしました。続けますか、手放しますか?</span>
+        <span class="row" style="gap:6px; margin-top:6px">
+          <button class="btn" data-action="ideal-retry" data-choice="continue">続ける</button>
+          <button class="btn ghost" data-action="ideal-retry" data-choice="release">手放す</button>
+        </span>
+      </div>` : ""}
+  </section>`;
+}
+
+// 3日目の「続ける/手放す」選択を解決する
+function resolveIdealRetry(choice) {
+  const today = todayISO();
+  const active = idealActiveEntry(today);
+  if (!active || active.dayNum < IDEAL_RETRY_WINDOW_DAYS) return;
+  if (choice === "continue") {
+    // 今日を起点に新しい3日間サイクルを始める(同じ理想のまま継続)
+    const meta = (state.journalMeta[today] ||= { aiMitCandidates: [], aiImported: false, ideal: "" });
+    meta.ideal = active.text;
+    saveAndRender("理想を続けます");
+  } else {
+    // 手放す: 元の理想を空にして3日間の表示窓を閉じる(否定ではなく次への区切り)
+    const meta = state.journalMeta[active.date];
+    if (meta) meta.ideal = "";
+    saveAndRender("また次の理想を見つけましょう");
+  }
 }
 
 // --- いま、これ(進行中 / 次のブロック)── v33: フル幅・2カラム ---
@@ -2055,11 +2136,13 @@ function renderDraftLayer(rowHeight, startHour) {
         const top = ((it.start - startHour * 60) / 60) * rowHeight;
         const height = Math.max(26, (it.minutes / 60) * rowHeight);
         const catColor = it.category ? getCategoryColor(it.category) : null;
+        // v61: 繰越由来の下書きは、確定するとこの回数の繰り越しになる、という予告バッジ
+        const draftBadge = it.carryFromId ? migrationBadgeHTML(migrationNextCount(it.carryFromId)) : "";
         return `
         <div class="draft-block" data-draft-id="${it.id}" data-row-height="${rowHeight}"
              style="top:${top}px; height:${height}px; ${catColor ? `border-color:${catColor};` : ""}">
           <div class="draft-block-time">${minToHHMM(it.start)}〜${minToHHMM(it.start + it.minutes)}(${it.minutes}分)</div>
-          <div class="draft-block-title">${escapeHTML(it.title)}</div>
+          <div class="draft-block-title">${escapeHTML(it.title)}${draftBadge}</div>
           <button class="draft-remove" data-action="draft-remove" data-id="${it.id}" aria-label="この下書きを外す">×</button>
           <div class="draft-resize" data-draft-resize="${it.id}"></div>
         </div>`;
@@ -2120,6 +2203,15 @@ function recordScheduleHistory(item, outcome, date) {
 function confirmScheduleDraft() {
   if (!_scheduleDraft || !_scheduleDraft.items.length) return;
   const { date, items } = _scheduleDraft;
+  // v61: マイグレーション儀式 — 繰越由来(carryFromId)の項目が3回目の繰り越しになる場合は、
+  //      一括確定の前に一呼吸置く。既に選択済み(_ritualResolved)の項目はスキップする。
+  const ritualItem = items.find((it) =>
+    it.carryFromId && !it._ritualResolved && migrationNextCount(it.carryFromId) >= MIGRATION_RITUAL_THRESHOLD);
+  if (ritualItem) {
+    openMigrationRitual(ritualItem.carryFromId, migrationNextCount(ritualItem.carryFromId),
+      { origin: "draft", draftItemId: ritualItem.id });
+    return;
+  }
   items.forEach((it) => {
     const block = makeBlock({
       date,
@@ -2132,6 +2224,15 @@ function confirmScheduleDraft() {
     });
     // v52: 決定論配置の元値を Block に残す(確定・実績との突き合わせ = 実績データ。フィールド名は互換のため維持)
     block.aiPlan = { start: minToHHMM(it.aiStart ?? it.start), minutes: it.aiMinutes ?? it.minutes };
+    if (it.forceMIT) {
+      // v61: マイグレーション儀式で「今日やる」を選んだ項目はMIT化(既存の最大3個ルールは尊重する)
+      const sameDayMITs = state.blocks.filter((b) => !b.deleted && b.date === date && b.isMIT);
+      if (sameDayMITs.length < 3) block.isMIT = true;
+    }
+    if (it.carryFromId) {
+      const src = blockById(it.carryFromId);
+      block.carryCount = (src?.carryCount || 0) + 1;  // v61: 繰り越し回数を1つ積み上げる
+    }
     state.blocks.push(block);
     recordScheduleHistory(it, "confirmed", date);
     // v59: 繰り越し由来の下書きは元Blockに migratedTo を設定(carryOverBlockと同じ二重繰越防止セマンティクス)
@@ -2413,12 +2514,46 @@ function carryOverPanel() {
   return `<div class="carryover-panel">
     <div class="carryover-cap">昨日の未完了(${list.length}件)— 今日に繰り越す?</div>
     ${list.map((b) => `<div class="carryover-row">
-      <span class="carryover-title">${escapeHTML(b.title)}${b.plannedStartAt ? ` <span class="muted">${timeFromDateTime(b.plannedStartAt)}</span>` : ""}${b.category ? `<span class="cat-chip" style="background:${getCategoryColor(b.category)}1f; color:${getCategoryColor(b.category)}; border:1px solid ${getCategoryColor(b.category)}66">${escapeHTML(b.category)}</span>` : ""}</span>
+      <span class="carryover-title">${escapeHTML(b.title)}${migrationBadgeHTML(b.carryCount)}${b.plannedStartAt ? ` <span class="muted">${timeFromDateTime(b.plannedStartAt)}</span>` : ""}${b.category ? `<span class="cat-chip" style="background:${getCategoryColor(b.category)}1f; color:${getCategoryColor(b.category)}; border:1px solid ${getCategoryColor(b.category)}66">${escapeHTML(b.category)}</span>` : ""}</span>
       <button class="btn ghost" data-action="carry-over" data-id="${b.id}">→ 今日へ</button>
     </div>`).join("")}
   </div>`;
 }
-function carryOverBlock(id) {
+
+// v61: マイグレーション儀式(提案1)==============================
+// 繰り越し回数(carryCount)を積み上げ、2回目以降は視覚マーク、3回目の繰り越しでは
+// 即座に繰り越さず一呼吸置く確認モーダルを挟む。「書き写す手間が価値の審査になる」
+// というバレットジャーナルの思想を、既存の carryOverBlock / 朝プラン確定(confirmScheduleDraft)
+// の両経路に対して同じルールで適用する。
+const MIGRATION_RITUAL_THRESHOLD = 3;
+const MIGRATION_RITUAL_LOG_MAX = 300;
+let _migrationRitualCtx = null;  // { srcId, nextCount, origin: 'panel'|'draft', draftItemId } 非永続
+
+// 2回目以降の繰り越しBlockに付ける小さなバッジ(派手にしない)
+function migrationBadgeHTML(carryCount) {
+  const n = Number(carryCount || 0);
+  return n >= 2 ? `<span class="migration-badge" title="${n}回目の繰り越しです">↻${n}</span>` : "";
+}
+
+// この Block を今繰り越すと何回目になるか
+function migrationNextCount(id) {
+  const src = blockById(id);
+  return (src?.carryCount || 0) + 1;
+}
+
+// carryOverPanel の「→ 今日へ」入口。3回目以降は儀式モーダルを先に出す。
+function requestCarryOver(id) {
+  const src = blockById(id);
+  if (!src || src.migratedTo) return;
+  const nextCount = migrationNextCount(id);
+  if (nextCount >= MIGRATION_RITUAL_THRESHOLD) {
+    openMigrationRitual(id, nextCount, { origin: "panel" });
+    return;
+  }
+  carryOverBlock(id);
+}
+
+function carryOverBlock(id, { forceMIT = false } = {}) {
   const src = blockById(id);
   if (!src || src.migratedTo) return;
   const today = todayISO();
@@ -2429,10 +2564,139 @@ function carryOverBlock(id) {
     estimateMin: src.estimateMin
   });
   block.source = src.source || "";
+  block.carryCount = (src.carryCount || 0) + 1;  // v61: 繰り越し回数を1つ積み上げる
+  if (forceMIT) {
+    // v61: 儀式で「今日やる」を選んだ場合はMIT化(既存の最大3個ルールは尊重する)
+    const sameDayMITs = state.blocks.filter((b) => !b.deleted && b.date === today && b.isMIT);
+    if (sameDayMITs.length < 3) block.isMIT = true;
+  }
   state.blocks.push(block);
   // 旧ブロックを「繰り越し済み」に(未完了リストから外れ、再提案されない)
   state.blocks = state.blocks.map((b) => b.id === src.id ? { ...b, migratedTo: block.id, updatedAt: nowDateTime() } : b);
   saveAndRender("今日へ繰り越しました");
+}
+
+// 手放す選択時の「Wishへ移動」実行(Block削除は呼び出し側で行う)。
+// 戻り値: Wishタスクを実際に作成できたか。normalizeStateがWish Projectの存在を必ず保証する
+// ため通常は false にならないが、念のための防御(v61レビュー対応: トースト文言の実態合わせ)。
+function moveBlockToWish(id) {
+  const src = blockById(id);
+  if (!src) return false;
+  const wishProject = getWishProject();
+  if (!wishProject) return false;
+  const task = makeTask({ projectId: wishProject.id, title: src.title });
+  state.tasks.push(task);
+  return true;
+}
+
+// 選択結果を軽量ログに記録(将来のバッチ分析用。aiScheduleHistoryと同じ思想)
+function logMigrationRitual(block, choice) {
+  state.migrationRitualLog.push({
+    blockId: block?.id || "",
+    title: block?.title || "",
+    carryCount: (block?.carryCount || 0) + 1,
+    choice,  // 'today' | 'decompose' | 'release' | 'carry'
+    at: nowDateTime()
+  });
+  if (state.migrationRitualLog.length > MIGRATION_RITUAL_LOG_MAX) {
+    state.migrationRitualLog = state.migrationRitualLog.slice(-MIGRATION_RITUAL_LOG_MAX);
+  }
+}
+
+function openMigrationRitual(srcId, nextCount, ctx) {
+  const src = blockById(srcId);
+  if (!src) return;
+  _migrationRitualCtx = { srcId, nextCount, ...ctx };
+  state.modal = { type: "migrationRitual", id: srcId };
+  renderModal(buildMigrationRitualModal(src, nextCount));
+}
+
+function buildMigrationRitualModal(block, nextCount) {
+  return `
+    <div class="modal-card migration-ritual-modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">↻ ${nextCount}回目の繰り越しです</h3>
+        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="migration-ritual-title">${escapeHTML(block.title)}</p>
+        <p class="muted" style="font-size:13px; line-height:1.6">${nextCount}回持ち越しています。まだ価値がありますか?</p>
+        <div class="migration-ritual-choices">
+          <button class="btn" data-action="migration-ritual-choice" data-choice="today">今日やる(MIT候補に)</button>
+          <button class="btn" data-action="migration-ritual-choice" data-choice="decompose">分解する(タイトル編集へ)</button>
+          <button class="btn" data-action="migration-ritual-choice" data-choice="release">手放す(Wishへ移動 or 削除)</button>
+          <button class="btn ghost" data-action="migration-ritual-choice" data-choice="carry">それでも繰り越す</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function resolveMigrationRitual(choice) {
+  if (!_migrationRitualCtx) return closeModal();
+  const { srcId, origin, draftItemId } = _migrationRitualCtx;
+  const src = blockById(srcId);
+  logMigrationRitual(src, choice);
+  _migrationRitualCtx = null;
+
+  if (choice === "release") {
+    const toWish = window.confirm(`「${src?.title || ""}」をWishへ移動しますか?\n(キャンセルで削除)`);
+    // v61レビュー対応: Wish Projectが存在せず移動できなかった場合は、実態(削除のみ)に
+    // 合わせてトースト文言を変える(normalizeStateが保証するため通常は起きないが念のため)。
+    let releaseMsg = "手放しました(削除)";
+    if (toWish) {
+      releaseMsg = moveBlockToWish(srcId) ? "Wishへ移動しました" : "Blockを削除しました(Wishプロジェクトなし)";
+    }
+    state.blocks = state.blocks.map((b) => b.id === srcId ? { ...b, deleted: true, updatedAt: nowDateTime() } : b);
+    if (origin === "draft" && _scheduleDraft) {
+      _scheduleDraft.items = _scheduleDraft.items.filter((x) => x.id !== draftItemId);
+      if (!_scheduleDraft.items.length) _scheduleDraft = null;
+    }
+    closeModal();
+    saveAndRender(releaseMsg);
+    return;
+  }
+
+  if (choice === "decompose") {
+    if (origin === "draft" && _scheduleDraft) {
+      _scheduleDraft.items = _scheduleDraft.items.filter((x) => x.id !== draftItemId);
+      if (!_scheduleDraft.items.length) _scheduleDraft = null;
+    }
+    // v61レビュー対応: saveState()だけだと下書きから除外した項目がタイムラインに残存表示される
+    // (renderModal はモーダル部分しか書き換えないため)。既存の saveAndRender 慣習に合わせ、
+    // 先に render() で背後の画面(下書きレイヤ等)を最新化してからモーダルを開く。
+    saveAndRender();
+    openBlockEditor(srcId);  // タイトル編集モーダルへ(分解のきっかけ)。renderModalが上書きするのでcloseModal不要
+    return;
+  }
+
+  if (choice === "today") {
+    if (origin === "panel") {
+      carryOverBlock(srcId, { forceMIT: true });
+      closeModal();
+    } else if (origin === "draft" && _scheduleDraft) {
+      const it = _scheduleDraft.items.find((x) => x.id === draftItemId);
+      if (it) { it.forceMIT = true; it._ritualResolved = true; }
+      closeModal();
+      confirmScheduleDraft();  // この項目は解決済みなので再スキャンでスキップされ、そのまま確定処理へ進む
+    } else {
+      closeModal();
+    }
+    return;
+  }
+
+  // choice === "carry"(それでも繰り越す)
+  if (origin === "panel") {
+    carryOverBlock(srcId);
+    closeModal();
+  } else if (origin === "draft" && _scheduleDraft) {
+    const it = _scheduleDraft.items.find((x) => x.id === draftItemId);
+    if (it) it._ritualResolved = true;
+    closeModal();
+    confirmScheduleDraft();
+  } else {
+    closeModal();
+  }
 }
 
 function extractMITCandidatesFromReport(reportText) {
@@ -3599,7 +3863,7 @@ function renderTimelineCard(positioned, mode = "planned", maxLanes = 5) {
          data-action="edit-block" data-id="${block.id}">
       ${!isActual && !isShort ? `<button class="tl-complete-btn" data-action="complete-block-with-actual" data-id="${block.id}" aria-label="完了登録">○</button>` : ""}
       <div class="tl-card-body">
-        <strong>${escapeHTML(block.title)}</strong>
+        <strong>${escapeHTML(block.title)}${migrationBadgeHTML(block.carryCount)}</strong>
       </div>
     </div>
   `;
@@ -5956,6 +6220,9 @@ function generateReport(dateArg, { quiet = false } = {}) {
   const morning = state.settings.morningEnergyLog[date] ?? 5;
   const net = morning + charge - discharge;
 
+  // v61: 今日の理想ワンライナー(提案8)。達成/未達は判定せず、翌日以降も見えることだけを添える。
+  const idealText = state.journalMeta[date]?.ideal || "";
+
   // v17: MIT(今日の主役)
   const mitBlocks = blocks.filter((b) => b.isMIT);
   const mitDone = mitBlocks.filter((b) => b.completed).length;
@@ -6055,6 +6322,8 @@ function generateReport(dateArg, { quiet = false } = {}) {
   const lines = [
     `# 日報 ${date} (${weekdayLabel(date)})`,
     "",
+    // v61: 今日の理想ワンライナー(未入力日は行ごと出さない)
+    ...(idealText ? [`> 🌱 今日の理想: ${idealText}`, ""] : []),
     "## 1. サマリ",
     "| 指標 | 値 |",
     "|---|---|",
@@ -6179,6 +6448,11 @@ function generateReport(dateArg, { quiet = false } = {}) {
 
   // 明日への接続
   lines.push("## 9. 明日への接続");
+  // v61: 達成/未達を自己申告させるのではなく、翌日以降もこの理想が見えることだけを示す(3日リトライ)
+  if (idealText) {
+    lines.push(`理想「${idealText}」は、明日・明後日もホームに小さく残ります。達成できたかどうかは問いません。3日目に続けるか手放すかだけ選びます。`);
+    lines.push("");
+  }
   lines.push("明日への一言:");
   lines.push("");
   lines.push("明日の MIT 候補:");
@@ -7493,6 +7767,7 @@ function makeRecurrenceInstance(rule, isoDate) {
     recurrenceGroupId: rule.id,
     pomodoroCount: 0,
     migratedTo: "",
+    carryCount: 0,  // v61: ルーティン実体は繰り越し対象外(carryableBlocksで除外)
     orderIndex: 0,
     isMIT: false,
     source: rule.source || "",
@@ -7910,6 +8185,7 @@ function closeModal() {
   modalRoot.setAttribute("aria-hidden", "true");
   modalRoot.innerHTML = "";
   modalRoot.onclick = null;
+  _migrationRitualCtx = null;  // v61: 選択せずに閉じた場合も一時状態を残さない
 }
 
 function readModalFields() {
@@ -8333,6 +8609,7 @@ function saveBlockFromModal(id, fields) {
     recurrenceGroupId: existing?.recurrenceGroupId || "",
     pomodoroCount: existing?.pomodoroCount || 0,
     migratedTo: existing?.migratedTo || "",
+    carryCount: existing?.carryCount || 0,  // v61: マイグレーション儀式(繰り越し回数、編集では変えない)
     orderIndex: existing?.orderIndex || 0,
     isMIT: existing?.isMIT || false,
     source: existing?.source || "",

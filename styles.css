@@ -2464,3 +2464,38 @@ h3 {
   .wbs-inline { gap: 4px; }
   .wbs-inline-input { max-width: 118px; padding: 4px 5px; }
 }
+
+/* v61: マイグレーション儀式(繰り越し回数バッジ・確認モーダル) */
+.migration-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--orange-soft);
+  color: var(--orange);
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.migration-ritual-title { font-size: 15px; font-weight: 700; margin: 0 0 4px; }
+.migration-ritual-choices { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.migration-ritual-choices .btn { width: 100%; text-align: left; padding: 11px 14px; }
+
+/* v61: 今日の理想ワンライナー + 3日リトライ */
+.home-ideal { margin-top: 12px; padding: 10px 14px; }
+.home-ideal-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.home-ideal-eyebrow { color: var(--accent); font-size: 11.5px; font-weight: 800; white-space: nowrap; }
+.home-ideal-text { font-size: 14px; font-weight: 600; }
+.home-ideal-retry { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line-soft); }
+.home-ideal-empty { padding: 8px 14px; }
+.home-ideal-input {
+  width: 100%;
+  font-size: 16px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--text);
+}
+.home-ideal-input::placeholder { color: var(--faint); }
