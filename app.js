@@ -70,6 +70,12 @@ let ztSearch = "";             // 履歴検索ワード
 let ztTimerInterval = null;    // 書く画面のカウントダウン
 let ztTimerLeft = 60;
 
+// v70: Now画面(実行コンベア)— 画面内の一時状態(永続化しない。normalizeStateは不要)
+let nowMode = false;             // trueの間、renderMain()は通常ビューの代わりに全画面コンベアを描く
+let _nowSkippedIds = new Set();  // このNowセッション中に「スキップ」したBlock id(セッションを抜けるとクリア)
+// v70: フォーカスタイマー「中断」の理由ワンタップピッカー(チョコ停記録)。非永続。
+let _pendingInterruptBlockId = null;
+
 // v38: 起動処理(maintainRecurrences / render / 各種初期化)はファイル末尾で実行する。
 //      ここで render() を呼ぶと、後方で宣言される const(JOURNAL_PROMPTS 等)が
 //      未初期化のまま参照され、最後に開いていた画面によっては起動時に例外で全停止していた。
@@ -134,6 +140,13 @@ document.addEventListener("click", (event) => {
   if (action === "now-start") setBlockTime(id, "actualStartAt");
   if (action === "now-end") setBlockTime(id, "actualEndAt");
   if (action === "delete-block") deleteBlock(id);
+  // v70: 「予定通りだった」一括承認(当日の未記録Blockに計画時刻を実績としてコピー+completed化)
+  if (action === "bulk-approve-planned") bulkApproveAsPlanned();
+  // v70: Now画面(実行コンベア)の開閉 + 3ボタン(開始はnow-startを再利用)
+  if (action === "now-mode-open") openNowMode();
+  if (action === "now-mode-close") closeNowMode();
+  if (action === "now-conveyor-complete") nowConveyorComplete(id);
+  if (action === "now-conveyor-skip") { _nowSkippedIds.add(id); render(); }
   // v68: 日報生成前に「今日AIに聞きたいこと」欄(#reportAskInput、日報タブのみ存在)があれば
   //      origin:"user" の問いとして1件積む(空なら何もしない=節ごと省略される)
   if (action === "generate-report") {
@@ -165,7 +178,25 @@ document.addEventListener("click", (event) => {
     forceResetPomodoroSession();
     startPomodoro(target.dataset.blockId || "");
   }
-  if (action === "stop-pomodoro") stopPomodoro();
+  // v70: 「中断」は理由ワンタップピッカーを経由する(チョコ停記録)。実際の停止(stopPomodoro)は
+  //      理由選択後に行う。紐づくBlockが無いセッションは記録の意味が無いので従来通り即中断する。
+  if (action === "stop-pomodoro") {
+    if (state.pomodoro.blockId) {
+      _pendingInterruptBlockId = state.pomodoro.blockId;
+      render();
+    } else {
+      stopPomodoro();
+    }
+  }
+  if (action === "interrupt-reason") {
+    if (_pendingInterruptBlockId) recordBlockInterruption(_pendingInterruptBlockId, target.dataset.reason || "その他");
+    _pendingInterruptBlockId = null;
+    stopPomodoro();
+  }
+  if (action === "interrupt-reason-cancel") {
+    _pendingInterruptBlockId = null;
+    render();
+  }
   if (action === "complete-pomodoro") completePomodoro();
   if (action === "go-break") goBreakPomodoro();
   if (action === "end-break") endBreakPomodoro();
@@ -531,6 +562,11 @@ document.addEventListener("change", (event) => {
     state.settings.autoArchive = target.checked;
     saveState();
   }
+  // v70: Block開始でフォーカスタイマーを自動起動するかのトグル
+  if (target.matches("[data-setting-focustimerauto]")) {
+    state.settings.focusTimerAuto = target.checked;
+    saveState();
+  }
   // v53: 横断検索のアーカイブ合流トグル(lazy fetch)
   if (target.matches("#cross-search-archive")) {
     if (target.checked) loadArchiveForSearch();
@@ -695,6 +731,8 @@ function normalizeState(value) {
   value.settings.lastArchivedAt ||= "";
   // v43: 自動同期(既定OFF・保守的)。lastPushedAt = 最後に push した時の dataModifiedAt。
   if (typeof value.settings.autoSync !== "boolean") value.settings.autoSync = false;
+  // v70: Block開始でフォーカスタイマー(ポモドーロ)を自動起動するか(既定ON)。
+  if (typeof value.settings.focusTimerAuto !== "boolean") value.settings.focusTimerAuto = true;
   if (!("lastPushedAt" in value.settings)) value.settings.lastPushedAt = null;
   if (!("lastPulledAt" in value.settings)) value.settings.lastPulledAt = null;
   // v25: データ最終更新時刻(端末間で「新しい方が勝つ」判定に使用)
@@ -763,11 +801,13 @@ function normalizeState(value) {
     carryCount: 0,        // v61: マイグレーション儀式(提案1)。繰り越された回数(未繰り越しは0)
     leverageType: "",     // v65: 10x機構(2-1)。"asset"|"eliminate"|"oneoff"|""(未設定)
     leverageNote: "",     // v66: 10x機構(2-2レバレッジ台帳)。資産の累計節約・成果の自己申告メモ(任意1行)
+    interruptions: [],    // v70: フォーカスタイマー中断(チョコ停)記録 [{at, reason}]
     ...block,
     plannedStartAt: fixDateTime(block.plannedStartAt),
     plannedEndAt: fixDateTime(block.plannedEndAt),
     actualStartAt: fixDateTime(block.actualStartAt),
-    actualEndAt: fixDateTime(block.actualEndAt)
+    actualEndAt: fixDateTime(block.actualEndAt),
+    interruptions: Array.isArray(block.interruptions) ? block.interruptions : []  // 壊れた形状は初期化
   }));
   // v16: Wish Project が削除/未作成なら自動作成(必ず1つ存在を保証)
   if (!value.projects.some((p) => p.kind === "wish" && !p.deleted)) {
@@ -1314,6 +1354,7 @@ function makeBlock(input) {
     migratedTo: "",
     carryCount: Number(input.carryCount || 0),  // v61: マイグレーション儀式(繰り越し回数)
     leverageType: input.leverageType || "",  // v65: 10x機構(2-1)
+    interruptions: [],  // v70: フォーカスタイマー中断(チョコ停)記録
     orderIndex: 0,
     createdAt: nowDateTime(),
     updatedAt: nowDateTime(),
@@ -1362,6 +1403,11 @@ function renderBottomNav() {
 }
 
 function renderMain() {
+  // v70: Now画面(実行コンベア)は全ビューに優先する全画面オーバーレイ(閉じるまで通常UIへ戻らない)
+  if (nowMode) {
+    main.innerHTML = renderNowConveyor();
+    return;
+  }
   const view = state.currentView;
   if (view === "home") main.innerHTML = renderHome();
   if (view === "wbs") main.innerHTML = renderWBS();
@@ -1434,7 +1480,10 @@ function renderHome() {
   const blocks = blocksForDate(today);
   const metrics = computeMetrics();
   return `
-    ${renderHeader("今日の入口", "ホーム", `<button class="btn primary" data-action="today">今日へ</button>`)}
+    ${renderHeader("今日の入口", "ホーム", `<div class="row" style="gap:8px">
+      <button class="btn orange" data-action="now-mode-open">▶ Now</button>
+      <button class="btn primary" data-action="today">今日へ</button>
+    </div>`)}
     ${renderDateBar()}
     ${aiFreshnessLine()}
     ${homeCreed()}
@@ -3946,7 +3995,9 @@ function renderTimelineView() {
     <div class="row" style="margin-bottom:10px; gap:8px; flex-wrap:wrap">
       <button class="btn primary" data-action="timeline-new-block" data-minute="${nowMinute}">+ 新規Block</button>
       ${!_scheduleDraft ? `<button class="btn" data-action="ai-schedule">📋 下書きスケジュール</button>` : ""}
-      <span class="muted" style="font-size:12px">空き時間タップで追加 / ○タップで完了登録 / カードタップで編集 / 赤線は現在時刻</span>
+      ${mode === "planned" && state.selectedDate === todayISO()
+        ? `<button class="btn" data-action="bulk-approve-planned">✅ 予定通りだった(一括承認)</button>` : ""}
+      <span class="muted" style="font-size:12px">空き時間タップで追加 / ○タップで完了登録 / ▶いま開始・■いま終了でワンタップ実績 / カードタップで編集 / 赤線は現在時刻</span>
     </div>
     ${draftBarHTML()}
     ${draftRejectReasonPickerHTML()}
@@ -4257,6 +4308,15 @@ function renderTimelineCard(positioned, mode = "planned", maxLanes = 5) {
     ? `background:${catColor}29; border-left:4px solid ${catColor}; color:${catColor};`
     : "";
   const overflowAttr = isOverflow ? `data-overflow="true"` : "";
+  // v70: ワンタップ実績(▶いま開始 / ■いま終了)。既存○ボタン(完了登録モーダル)とは別の軽量アクション。
+  //      実績モード・極小カード・完了済みは既存○ボタンと同じ理由で対象外。
+  const started = Boolean(block.actualStartAt);
+  const inProgress = started && !block.completed && !block.actualEndAt;
+  const startEndBtn = (!isActual && !isShort && !block.completed)
+    ? (!started
+      ? `<button class="tl-start-btn" data-action="now-start" data-id="${block.id}" aria-label="いま開始">▶</button>`
+      : (inProgress ? `<button class="tl-start-btn tl-end-btn" data-action="now-end" data-id="${block.id}" aria-label="いま終了">■</button>` : ""))
+    : "";
 
   return `
     <div class="timeline-card ${block.completed ? "completed" : ""} ${isActual ? "is-actual" : ""} ${isShort ? "is-short" : ""}"
@@ -4264,6 +4324,7 @@ function renderTimelineCard(positioned, mode = "planned", maxLanes = 5) {
          style="top:${top}px; height:${height}px; left:${leftPercent}%; width:calc(${widthPercent}% - 4px); ${catStyle}"
          data-action="edit-block" data-id="${block.id}">
       ${!isActual && !isShort ? `<button class="tl-complete-btn" data-action="complete-block-with-actual" data-id="${block.id}" aria-label="完了登録">○</button>` : ""}
+      ${startEndBtn}
       <div class="tl-card-body">
         <strong>${escapeHTML(block.title)}${migrationBadgeHTML(block.carryCount)}${leverageTypeMarkHTML(block.leverageType)}</strong>
       </div>
@@ -4492,11 +4553,12 @@ function renderManualPomodoro(running, remaining, blockOptions) {
           <div class="muted" style="font-size:12px">作業中(50:00 → 00:00 を 2 倍速で進行)</div>
           ${currentBlock ? `<div style="margin-top:4px; font-weight:700">${escapeHTML(currentBlock.title)}</div>` : ""}
         </div>
+        ${_pendingInterruptBlockId === state.pomodoro.blockId ? interruptReasonPickerHTML() : `
         <div style="margin-top:18px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap">
           <button class="btn green" data-action="complete-pomodoro">✓ 完了</button>
           <button class="btn orange" data-action="go-break">☕ 休憩へ</button>
           <button class="btn danger" data-action="stop-pomodoro">中断</button>
-        </div>
+        </div>`}
       </section>
     `;
   }
@@ -4922,6 +4984,17 @@ function renderSettings() {
         <label class="checkbox-line">
           <input type="checkbox" data-ai-automorningplan ${state.settings.ai?.autoMorningPlan ? "checked" : ""}>
           🌅 朝の一括プランニングを自動実行(10:00までの初回起動で当日の予定が空なら、繰越+WBS+MITの下書きを自動配置)
+        </label>
+      </div>
+      <div class="panel stack">
+        <h2>実行(v70)</h2>
+        <div class="muted" style="font-size:12px; line-height:1.6">
+          Blockを開始する(▶いま開始/いま着手する/Now画面の開始)と、既存のポモドーロUIを流用した
+          フォーカスタイマー(25分)を自動で起動します。既に別のタイマーが動いている場合は乗っ取りません。
+        </div>
+        <label class="checkbox-line">
+          <input type="checkbox" data-setting-focustimerauto ${state.settings.focusTimerAuto ? "checked" : ""}>
+          ⏱ Block開始でフォーカスタイマーを自動起動
         </label>
       </div>
       <div class="panel stack">
@@ -7075,9 +7148,117 @@ function setBlockTime(id, field) {
     }
     // v40: 着手ジュース — 着手の瞬間だけ、その行に一度きりの感覚フィードバック。非永続。
     state._justStartedBlockId = id;
+    // v70: Block開始でフォーカスタイマー(ポモドーロ)を自動起動(設定focusTimerAuto、既定ON)。
+    //      既に別セッションが動いている場合は乗っ取らない(既存の集中を尊重)。
+    //      startPomodoro自身がrender/toastまで行うので、この分岐では末尾のrender/toastを重ねない。
+    if (state.settings.focusTimerAuto && !state.pomodoro.running) {
+      forceResetPomodoroSession();
+      startPomodoro(id);
+      return;
+    }
   }
   render();
   showToast(field === "actualStartAt" ? "開始時刻を入れました" : "終了時刻を入れました");
+}
+
+// v70: 「予定通りだった」一括承認。当日の未記録Block(plannedあり・actual一切なし・完了扱いにしたい
+// もの)に計画時刻をそのまま実績としてコピーし、completed化する。確認は window.confirm 一回
+// (既存の deleteProject 等と同じ流儀)。Taskの状態は toggleBlock と同じ思想で "todo"→"doing" のみ
+// (自動で "completed" までは進めない — Task完了は既存フロー同様、人の判断に委ねる)。
+function bulkApproveAsPlanned() {
+  const today = todayISO();
+  const targets = state.blocks.filter((b) =>
+    !b.deleted && b.date === today && b.category !== "ルーティン" &&
+    b.plannedStartAt && !b.completed && !b.actualStartAt && !b.actualEndAt && !isStaleBlock(b));
+  if (!targets.length) return showToast("対象のBlockがありません(すでに実績があるか、予定が無いBlockのみ)");
+  if (!window.confirm(`${targets.length}件のBlockを「予定通り」実績として記録しますか?\n(計画時刻をそのまま実績にコピーし、完了にします)`)) return;
+  const ids = new Set(targets.map((b) => b.id));
+  state.blocks = state.blocks.map((b) => ids.has(b.id)
+    ? { ...b, actualStartAt: b.plannedStartAt, actualEndAt: b.plannedEndAt || b.plannedStartAt, completed: true, updatedAt: nowDateTime() }
+    : b);
+  const taskIds = new Set(targets.map((b) => b.taskId).filter(Boolean));
+  if (taskIds.size) {
+    state.tasks = state.tasks.map((t) => taskIds.has(t.id) && t.status === "todo"
+      ? { ...t, status: "doing", updatedAt: nowDateTime() } : t);
+  }
+  saveAndRender(`${targets.length}件を予定通り完了にしました`);
+}
+
+// =============================================================
+// v70: Now画面(実行コンベア)— 「今のBlock 1個」+ 開始/完了/スキップの3ボタンのみ。
+// 新しい状態は nowMode(全画面フラグ)と _nowSkippedIds(このセッション中のスキップ集合)だけで、
+// どちらも非永続のモジュール変数(normalizeStateへの補完は不要)。
+// =============================================================
+function openNowMode() {
+  nowMode = true;
+  _nowSkippedIds = new Set();
+  if (state.selectedDate !== todayISO()) {
+    setSelectedDate(todayISO());  // 内部でrender()まで行う
+  } else {
+    render();
+  }
+}
+
+function closeNowMode() {
+  nowMode = false;
+  _nowSkippedIds = new Set();
+  render();
+}
+
+// homeHero と同じ「現在時刻に該当するBlock、無ければ次(未着手優先)」の抽出ロジックに
+// スキップ集合の除外を加えたもの。当日固定(Nowモードに入る時点でselectedDateは今日に揃えている)。
+function nowConveyorTarget() {
+  const today = todayISO();
+  const tl = blocksForDate(today)
+    .filter((b) => b.category !== "ルーティン" && b.plannedStartAt && !b.completed &&
+      !isStaleBlock(b) && !_nowSkippedIds.has(b.id))
+    .sort((a, b) => minutesOf(a.plannedStartAt) - minutesOf(b.plannedStartAt));
+  if (!tl.length) return null;
+  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  const current = tl.find((b) =>
+    minutesOf(b.plannedStartAt) <= nowMin && nowMin < minutesOf(b.plannedEndAt || b.plannedStartAt));
+  return current || tl.find((b) => !b.actualStartAt) || tl[0];
+}
+
+// v70: Now画面の「完了」。フォーカスタイマーがこのBlockで動いていれば completePomodoro() に委ね
+// (pomodoroCount加算・タイマー状態の後始末まで一致させる)、動いていなければ toggleBlock で完了化する。
+function nowConveyorComplete(id) {
+  if (state.pomodoro.running && state.pomodoro.blockId === id) {
+    completePomodoro();
+  } else {
+    toggleBlock(id);
+  }
+}
+
+function renderNowConveyor() {
+  const target = nowConveyorTarget();
+  const closeBtn = `<button class="now-fullscreen-close" data-action="now-mode-close" aria-label="閉じる" title="閉じる">✕</button>`;
+  if (!target) {
+    return `
+      <div class="now-fullscreen" id="nowFullscreen">
+        ${closeBtn}
+        <div class="now-fullscreen-content">
+          <div class="now-eyebrow">▶ Now</div>
+          <div class="now-empty">今日のBlockはすべて片づきました。</div>
+        </div>
+      </div>`;
+  }
+  const started = Boolean(target.actualStartAt);
+  return `
+    <div class="now-fullscreen" id="nowFullscreen">
+      ${closeBtn}
+      <div class="now-fullscreen-content">
+        <div class="now-eyebrow">いまのBlock</div>
+        <div class="now-title">${escapeHTML(target.title)}</div>
+        <div class="now-meta">予定 ${plannedRange(target)}${target.category ? `<span class="now-cat">${escapeHTML(target.category)}</span>` : ""}</div>
+        ${started ? `<div class="now-status">着手中 ${timeFromDateTime(target.actualStartAt)}〜</div>` : ""}
+        <div class="now-actions">
+          <button class="btn orange now-btn" data-action="now-start" data-id="${target.id}" ${started ? "disabled" : ""}>▶ 開始</button>
+          <button class="btn green now-btn" data-action="now-conveyor-complete" data-id="${target.id}">✓ 完了</button>
+          <button class="btn now-btn" data-action="now-conveyor-skip" data-id="${target.id}">→ スキップ</button>
+        </div>
+      </div>
+    </div>`;
 }
 
 function updateBlockField(id, field, value) {
@@ -8212,6 +8393,32 @@ function forceResetPomodoroSession() {
     endsAt: "",
     mode: "focus"
   };
+}
+
+// v70: フォーカスタイマー「中断」時のチョコ停記録。中断そのもの(actualStartAtのクリア等)は
+// 既存の stopPomodoro() の挙動をそのまま維持し、追加で block.interruptions[] に理由を積むだけ。
+// 集計・分析は行わない(バッチ側の領分。設計方針「実行の道具に痩せさせる」に合わせる)。
+const INTERRUPT_REASONS = ["割込み", "疲労", "迷い", "その他"];
+
+function recordBlockInterruption(blockId, reason) {
+  if (!blockId) return;
+  state.blocks = state.blocks.map((b) => b.id === blockId
+    ? { ...b, interruptions: [...(b.interruptions || []), { at: nowDateTime(), reason }], updatedAt: nowDateTime() }
+    : b);
+  saveState();
+}
+
+// 「中断」ボタン押下直後だけ出す軽量な理由ピッカー(v62の却下理由ピッカーと同じ思想)。
+// キャンセルすればタイマーは止まらない(理由選択がトラップにならないよう退路を残す)。
+function interruptReasonPickerHTML() {
+  return `
+    <div class="interrupt-reason-picker">
+      <div class="muted" style="font-size:12px; margin-bottom:6px">中断の理由(チョコ停として記録します):</div>
+      <div class="row" style="gap:6px; justify-content:center; flex-wrap:wrap">
+        ${INTERRUPT_REASONS.map((r) => `<button class="btn ghost" data-action="interrupt-reason" data-reason="${escapeHTML(r)}">${escapeHTML(r)}</button>`).join("")}
+        <button class="btn ghost" data-action="interrupt-reason-cancel">キャンセル</button>
+      </div>
+    </div>`;
 }
 
 function stopPomodoro() {

@@ -14,10 +14,8 @@
 //
 // 方針: 既存スイート(v61/v62/v63)と同じく、app.js は type="module" のため内部関数は window に
 // 露出しない。ブラウザ操作 + localStorage 状態の直接注入で観測する。AIプランのfetchは
-// v62.test.js と同じく実ファイルをリポジトリ直下に一時的に書いて読ませ、finally で必ず削除する。
-const path = require("path");
-const fs = require("fs");
-const { chromium, launchOptions, startServer, ROOT } = require("./helpers");
+// v70でv62.test.jsと同じくpage.route(実ファイル不使用)によるモックへ書き換えた(理由はv62.test.js参照)。
+const { chromium, launchOptions, startServer } = require("./helpers");
 
 const PORT = 4204;
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -51,7 +49,8 @@ function check(name, cond, extra = "") {
     return isoDate(date);
   }
   const WEEK = weekStartOf(TODAY);
-  const aiPlanPath = path.join(ROOT, `AIプラン_${TODAY}.json`);
+  // v70: 実ファイルを書く代わりに、この変数をfetchのモック応答として使う(null=404)。
+  let aiPlanFixture = null;
 
   const hhmm = (min) => `${pad2(Math.floor(min / 60))}:${pad2(min % 60)}`;
   function makeBlockFixture({ id, date = TODAY, title, startMin = 9 * 60, minutes = 30, category = "",
@@ -106,6 +105,12 @@ function check(name, cond, extra = "") {
   }
 
   try {
+    // v70: AIプラン_<TODAY>.json のfetchを常にモックする(実ファイル不使用)。
+    await page.route((url) => decodeURIComponent(url.pathname) === `/AIプラン_${TODAY}.json`, (route) => {
+      if (aiPlanFixture === null) return route.fulfill({ status: 404, body: "not found (test-fixture)" });
+      route.fulfill({ status: 200, contentType: "application/json", body: aiPlanFixture });
+    });
+
     await page.clock.setFixedTime(now0);  // goto前に固定してアプリ起動時のnew Date()から一貫させる
     await page.goto(`http://localhost:${PORT}/`);
     await page.waitForTimeout(500);
@@ -250,7 +255,7 @@ function check(name, cond, extra = "") {
     // (e) AIプランのtitle先頭「[資産]」検出 + (f) aiPlanSkippedLogへの記録
     // ============================================================
     console.log("[7] AIプランのtitle先頭「[資産]」検出 → 下書きマーク表示 → 確定後Blockにleverage=assetが付与される");
-    fs.writeFileSync(aiPlanPath, JSON.stringify({
+    aiPlanFixture = JSON.stringify({
       date: TODAY,
       generatedAt: `${TODAY}T05:00`,
       plan: [
@@ -260,7 +265,7 @@ function check(name, cond, extra = "") {
       skipped: [
         { title: "AIが見送ったタスク", reason: "時間帯が合わない" }
       ]
-    }, null, 2), "utf8");
+    }, null, 2);
     await seed({ tasks: [], projects: [] });
     await page.click('[data-action="nav"][data-view="tasks"]');
     await page.waitForTimeout(150);
@@ -317,8 +322,7 @@ function check(name, cond, extra = "") {
     check("単発の実績時間(15m)が集計に含まれる", summaryText.includes("単発") && summaryText.includes("15m"), summaryText);
     check("未設定の実績時間(45m)が集計に含まれる", summaryText.includes("未設定") && summaryText.includes("45m"), summaryText);
   } finally {
-    // リポジトリ直下に書いたテスト用ファイルは必ず削除する
-    try { if (fs.existsSync(aiPlanPath)) fs.unlinkSync(aiPlanPath); } catch { /* ignore */ }
+    // v70: page.routeでモックしているため、実ファイルの後始末は不要(何も書いていない)。
     await browser.close();
     server.close();
   }

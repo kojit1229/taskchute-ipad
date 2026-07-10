@@ -2628,3 +2628,89 @@ h3 {
 .exp-card .exp-judge { padding: 10px 12px; background: rgba(255,149,0,.08); border: 1px solid rgba(255,149,0,.25); border-radius: 10px; }
 .exp-card .exp-promote .exp-hypothesis { color: var(--green); }
 .bucket-gauge-val { color: var(--muted); }
+
+/* v70: タイムラインカードのワンタップ実績ボタン(▶いま開始/■いま終了)。
+   既存○ボタン(左・完了登録モーダル)とは別に右上へ配置し、指サイズより見た目を優先する
+   極小アイコンボタンという既存の tl-complete-btn と同じ流儀に合わせた。 */
+.tl-start-btn {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  background: var(--panel);
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  font-size: 10px;
+  line-height: 1;
+  display: inline-grid;
+  place-items: center;
+  z-index: 2;
+}
+.tl-start-btn.tl-end-btn {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+/* v70: フォーカスタイマー「中断」直後の理由ワンタップピッカー(チョコ停記録)。
+   v62の却下理由ピッカー(.draft-reject-picker)と同じ見た目の流儀。 */
+.interrupt-reason-picker {
+  margin-top: 18px;
+  padding: 10px 12px;
+  background: rgba(255,59,48,.06);
+  border: 1.5px dashed var(--line);
+  border-radius: 10px;
+  text-align: center;
+}
+
+/* v70: Now画面(実行コンベア)。pomo-fullscreen と同じ position:fixed; inset:0 の全画面手法
+   (iOS Safariの100vh問題を避け、動画背景の代わりにテーマ変数の背景色を使う)。 */
+.now-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.now-fullscreen-content {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom));
+}
+.now-fullscreen-close {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 18px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  line-height: 1;
+  z-index: 3;
+}
+.now-eyebrow { color: var(--orange); font-size: 13px; font-weight: 700; letter-spacing: 0.02em; }
+.now-title { font-size: 26px; font-weight: 800; margin-top: 10px; line-height: 1.35; color: var(--text); }
+.now-meta { color: var(--muted); font-size: 13px; margin-top: 10px; }
+.now-cat { margin-left: 8px; padding: 2px 8px; border-radius: 10px; background: var(--panel-soft); font-size: 11.5px; }
+.now-status { margin-top: 8px; font-size: 13px; font-weight: 700; color: var(--orange); }
+.now-empty { font-size: 16px; font-weight: 700; color: var(--green); margin-top: 8px; }
+.now-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 26px; width: 100%; }
+.now-btn { flex: 1 1 120px; min-height: 48px; font-size: 16px; }
+.now-btn:disabled { opacity: 0.35; cursor: default; }

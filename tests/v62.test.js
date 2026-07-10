@@ -14,11 +14,11 @@
 //
 // 方針: app.js は type="module" で内部関数を window に露出しないため、既存スイート(v49〜v61)と
 // 同じくブラウザ操作 + localStorage 状態の直接注入で観測する。AIプラン/週次レビューのfetchは
-// tests/serve.js がリポジトリルートを配信する実サーバのため、v57.test.js と同じく実ファイルを
-// リポジトリ直下に一時的に書いて読ませ、finally で必ず削除する。
-const path = require("path");
-const fs = require("fs");
-const { chromium, launchOptions, startServer, ROOT } = require("./helpers");
+// v67以降の流儀(page.route)でモックする。以前は実ファイルをリポジトリ直下に一時的に書いて
+// finally で削除していたが、本番バッチ(plan-daily.sh等)が同名の実ファイルを日次でcommitする
+// ため、実行日によってはテスト終了後に実ファイルが一時的に消える環境依存の副作用があった
+// (v67 CHANGES参照)。v70でこれを恒久修正し、実ファイルには一切触れない。
+const { chromium, launchOptions, startServer } = require("./helpers");
 
 const PORT = 4202;
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -54,8 +54,10 @@ function check(name, cond, extra = "") {
   }
   const WEEK = weekStartOf(TODAY);
 
-  const aiPlanPath = path.join(ROOT, `AIプラン_${TODAY}.json`);
-  const weeklyReviewPath = path.join(ROOT, `週次レビュー_${WEEK}.md`);
+  // v70: 実ファイルを書く代わりに、この2変数をfetchのモック応答として使う(null=404)。
+  //      page.route登録後は、シナリオごとにこの変数を書き換えるだけで良い(実ファイル操作なし)。
+  let aiPlanFixture = null;
+  let weeklyReviewFixture = null;
 
   function planBlock({ id, date, title, startMin, endMin, taskId = "", category = "", migratedTo = "" }) {
     const hhmm = (min) => `${pad2(Math.floor(min / 60))}:${pad2(min % 60)}`;
@@ -117,6 +119,17 @@ function check(name, cond, extra = "") {
   }
 
   try {
+    // v70: AIプラン_<TODAY>.json / 週次レビュー_<WEEK>.md のfetchを常にモックする(実ファイル不使用)。
+    //      aiPlanFixture/weeklyReviewFixtureがnullなら404、文字列ならその内容で200を返す。
+    await page.route((url) => decodeURIComponent(url.pathname) === `/AIプラン_${TODAY}.json`, (route) => {
+      if (aiPlanFixture === null) return route.fulfill({ status: 404, body: "not found (test-fixture)" });
+      route.fulfill({ status: 200, contentType: "application/json", body: aiPlanFixture });
+    });
+    await page.route((url) => decodeURIComponent(url.pathname) === `/週次レビュー_${WEEK}.md`, (route) => {
+      if (weeklyReviewFixture === null) return route.fulfill({ status: 404, body: "not found (test-fixture)" });
+      route.fulfill({ status: 200, contentType: "text/markdown", body: weeklyReviewFixture });
+    });
+
     await page.clock.setFixedTime(now0);  // goto前に固定してアプリ起動時のnew Date()から一貫させる
     await page.goto(`http://localhost:${PORT}/`);
     await page.waitForTimeout(500);
@@ -151,7 +164,7 @@ function check(name, cond, extra = "") {
     // (a) AIプラン正常fetch → 下書きにAI由来として反映
     // ============================================================
     console.log("[1] AIプランJSON正常fetch → 下書き採用(source=ai-plan・reason表示・skipped表示)");
-    fs.writeFileSync(aiPlanPath, JSON.stringify({
+    aiPlanFixture = JSON.stringify({
       date: TODAY,
       generatedAt: `${TODAY}T05:00`,
       plan: [
@@ -160,7 +173,7 @@ function check(name, cond, extra = "") {
       skipped: [
         { title: "AIプラン見送りタスク", reason: "時間帯が合わない" }
       ]
-    }, null, 2), "utf8");
+    }, null, 2);
     await seed({ tasks: [], projects: [] });
     await runMorningPlan();
     const titles1 = await draftTitles();
@@ -187,7 +200,7 @@ function check(name, cond, extra = "") {
     // (b) 不正JSON → 決定論配置へフォールバック
     // ============================================================
     console.log("[2] 不正JSON(パース不能) → 決定論配置へフォールバック");
-    fs.writeFileSync(aiPlanPath, "{ これはJSONとして壊れている ,,, ", "utf8");
+    aiPlanFixture = "{ これはJSONとして壊れている ,,, ";
     await seed({ tasks: [wbsTask("task-fb1", "決定論フォールバックA")], projects: [testProject()] });
     await runMorningPlan();
     const titles2 = await draftTitles();
@@ -204,12 +217,12 @@ function check(name, cond, extra = "") {
     // (b) 日付不一致(古いプラン) → フォールバック
     // ============================================================
     console.log("[3] AIプランのdateが当日と不一致(古いプラン) → フォールバック");
-    fs.writeFileSync(aiPlanPath, JSON.stringify({
+    aiPlanFixture = JSON.stringify({
       date: YEST,  // 当日ではない
       generatedAt: `${YEST}T05:00`,
       plan: [{ title: "古いプランのタスク", taskId: null, blockId: null, start: "10:30", minutes: 30, category: "", reason: "古い", carryFromId: null }],
       skipped: []
-    }), "utf8");
+    });
     await seed({ tasks: [wbsTask("task-fb2", "決定論フォールバックB")], projects: [testProject()] });
     await runMorningPlan();
     const titles3 = await draftTitles();
@@ -220,12 +233,12 @@ function check(name, cond, extra = "") {
     // (b) 空き時間との不整合(既存Blockと衝突=状態が生成時から動いた) → フォールバック
     // ============================================================
     console.log("[4] AIプランの配置先が既存Blockと衝突(状態がズレている) → フォールバック");
-    fs.writeFileSync(aiPlanPath, JSON.stringify({
+    aiPlanFixture = JSON.stringify({
       date: TODAY,
       generatedAt: `${TODAY}T05:00`,
       plan: [{ title: "衝突するプランのタスク", taskId: null, blockId: null, start: "10:30", minutes: 30, category: "", reason: "衝突", carryFromId: null }],
       skipped: []
-    }), "utf8");
+    });
     await seed({
       blocks: [planBlock({ id: "occ-1", date: TODAY, title: "既存の予定", startMin: 10 * 60 + 30, endMin: 11 * 60 })],
       tasks: [wbsTask("task-fb3", "決定論フォールバックC")],
@@ -240,12 +253,12 @@ function check(name, cond, extra = "") {
     // (b) carryFromIdが既に繰り越し済み(二重繰越防止) → 該当項目は不採用 → 他に無ければフォールバック
     // ============================================================
     console.log("[5] carryFromIdが既に繰り越し済みBlockを参照 → 不採用 → フォールバック(二重繰越防止の維持)");
-    fs.writeFileSync(aiPlanPath, JSON.stringify({
+    aiPlanFixture = JSON.stringify({
       date: TODAY,
       generatedAt: `${TODAY}T05:00`,
       plan: [{ title: "二重繰越になるはずのタスク", taskId: null, blockId: null, start: "10:30", minutes: 30, category: "", reason: "繰越", carryFromId: "already-migrated" }],
       skipped: []
-    }), "utf8");
+    });
     await seed({
       blocks: [planBlock({ id: "already-migrated", date: YEST, title: "既に繰り越し済みの元Block", startMin: 10 * 60, endMin: 10 * 60 + 30, migratedTo: "some-existing-block" })],
       tasks: [wbsTask("task-fb4", "決定論フォールバックD")],
@@ -261,7 +274,7 @@ function check(name, cond, extra = "") {
     // 残りの項目は採用される(プラン全体を不採用にしない)
     // ============================================================
     console.log("[5b] AIプランの一部項目のみ過去時刻 → その項目だけ「時間切れで除外」、残りは採用される");
-    fs.writeFileSync(aiPlanPath, JSON.stringify({
+    aiPlanFixture = JSON.stringify({
       date: TODAY,
       generatedAt: `${TODAY}T05:00`,
       plan: [
@@ -269,7 +282,7 @@ function check(name, cond, extra = "") {
         { title: "採用されるタスク", taskId: null, blockId: null, start: "11:00", minutes: 30, category: "", reason: "午前中OK", carryFromId: null }
       ],
       skipped: []
-    }), "utf8");
+    });
     await seed({ tasks: [], projects: [] });
     await runMorningPlan();
     const titles5b = await draftTitles();
@@ -285,7 +298,7 @@ function check(name, cond, extra = "") {
     // (e) 下書きUndo・却下理由ワンタップ選択
     // ============================================================
     console.log("[6] 下書きUndo: ×で削除 → 「元に戻す」で直前状態へ復元");
-    if (fs.existsSync(aiPlanPath)) fs.unlinkSync(aiPlanPath);  // 以降のシナリオはAIプラン非依存(ai-scheduleを使う)
+    aiPlanFixture = null;  // 以降のシナリオはAIプラン非依存(ai-scheduleを使う)
     await seed({
       tasks: [wbsTask("task-u1", "Undo検証タスクA", { estimateMin: 30 }), wbsTask("task-u2", "Undo検証タスクB", { estimateMin: 30 })],
       projects: [testProject()]
@@ -376,13 +389,13 @@ function check(name, cond, extra = "") {
     // (d) 週次レビュー_*.md のアプリ内表示(無い場合は非表示 → ある場合は表示+登録)
     // ============================================================
     console.log("[8] 週次レビュー_*.mdが無い週は「AI週次レビュー」セクションが非表示");
-    if (fs.existsSync(weeklyReviewPath)) fs.unlinkSync(weeklyReviewPath);
+    weeklyReviewFixture = null;
     await seed({ view: "weekly" });
     await page.waitForTimeout(600);
     check("AI週次レビュー見出しが出ない(ファイル無し)", await page.locator('.weekly-sec h3:has-text("AI週次レビュー")').count() === 0);
 
     console.log("[9] 週次レビュー_*.mdがある週は表示され、「+登録」で1件ずつWBSへ登録できる");
-    fs.writeFileSync(weeklyReviewPath, [
+    weeklyReviewFixture = [
       `# 週次レビュー ${WEEK}`,
       "",
       "## 今週の事実",
@@ -405,7 +418,7 @@ function check(name, cond, extra = "") {
       "",
       "## アプリ改善の種",
       "なし"
-    ].join("\n"), "utf8");
+    ].join("\n");
     await seed({ view: "weekly" });
     await page.waitForTimeout(700);
     check("AI週次レビュー見出しが表示される", await page.locator('.weekly-sec h3:has-text("AI週次レビュー")').count() === 1);
@@ -438,9 +451,7 @@ function check(name, cond, extra = "") {
     check("「朝に全部を注ぐ。夜は手放して充電する」が含まれる", creedText.includes("朝に全部を注ぐ。") && creedText.includes("夜は手放して充電する"), creedText);
     check("旧文言(着手第一主義!)は残っていない", !creedText.includes("着手第一主義"));
   } finally {
-    // リポジトリ直下に書いたテスト用ファイルは必ず削除する
-    try { if (fs.existsSync(aiPlanPath)) fs.unlinkSync(aiPlanPath); } catch { /* ignore */ }
-    try { if (fs.existsSync(weeklyReviewPath)) fs.unlinkSync(weeklyReviewPath); } catch { /* ignore */ }
+    // v70: page.routeでモックしているため、実ファイルの後始末は不要(何も書いていない)。
     await browser.close();
     server.close();
   }
