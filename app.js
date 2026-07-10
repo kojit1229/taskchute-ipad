@@ -8921,12 +8921,32 @@ async function gitHubErrorMessage(response) {
     raw = `${response.status} ${response.statusText}`;
   }
   // v37: よくある失敗は原因のヒント付きで返す(素の "Not Found" では対処が分からない)
+  // v78: 【原因分析】K報告「日報生成でパスが違う趣旨のエラー」の実体はこの404ヒントだった。
+  //      URL組み立て(personalDataPath/セグメントencode)自体は現物確認の結果すべての呼び出し元
+  //      (日報/週次/12週/app-state.json)で正しく `taskchute/<file>` 一本に統一されており、
+  //      二重プレフィックスやURL構築のバグは無かった(v76で疑われた懸念はこの環境の現物では
+  //      再現しなかった)。一方 `repos/personal-data` の実コミット履歴を全数確認したところ、
+  //      v72移行(2026-07-10)の初回移行コミット以降、アプリ自身が生成するはずのコミット
+  //      (`chore: update <file> <ISO>`)が1件も存在しなかった(日報だけでなくapp-state.jsonの
+  //      自動保存も同様)。これはCHANGES_v72.md記載の移行手順2「既存Fine-grained PATの
+  //      Repository access に personal-data を追加し、Contents: Read and write権限を付与する」が
+  //      未実施/不足のままアプリだけ新リポジトリ設定に切り替わった状態と整合する。GitHubは
+  //      fine-grained tokenがアクセス権を持たないprivateリポジトリに対して(存在の有無を隠す
+  //      ため)403ではなく404を返すため、実際の原因が「トークンの権限不足」であっても本ヒントは
+  //      「パス/Owner/Repoの綴り」しか案内しておらず誤誘導になっていた。404のヒントに権限確認の
+  //      案内を追記し、401/403/404はいずれもトークン設定の見直しが必要になり得るため、既存の
+  //      読み込み失敗時(401)と同じ設定画面誘導バナーもあわせて出す(Kの端末のトークン実値・
+  //      実際のRepository access設定はこの環境から確認できないため、アプリ側で確認可能な範囲=
+  //      案内文言とバナー表示の是正までを対応した)。
   const hints = {
     401: "トークンが無効か期限切れです。設定画面で貼り直してください",
     403: "トークンにこのリポジトリへの権限がありません(Fine-grained tokenの Repository access / Contents 権限を確認)",
-    404: "ファイルが見つかりません。Owner / Repository / Branch / 保存先パスの綴りを確認してください"
+    404: "ファイルが見つからないか、トークンがこのリポジトリにアクセスできません。Owner / Repository / Branch / 保存先パスの綴り、またはFine-grained tokenの Repository access(対象repoが選択されているか)・Contents: Read and write 権限を確認してください"
   };
   const hint = hints[response.status];
+  if ([401, 403, 404].includes(response.status)) {
+    setPersonalDataAuthError("GitHub保存/読込に失敗しました。トークンのRepository access(personal-data)・Contents権限、またはOwner/Repository/Branch/パスの設定を確認してください");
+  }
   return hint ? `${raw} — ${hint}` : raw;
 }
 
