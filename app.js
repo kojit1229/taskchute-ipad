@@ -124,6 +124,13 @@ document.addEventListener("click", (event) => {
   if (action === "date-next") shiftSelectedDate(1);
   if (action === "today") setSelectedDate(todayISO());
   if (action === "set-morning") setMorningEnergy(Number(target.dataset.value));
+  // v73: コンディションOS(睡眠/服薬/余力/夜の記録/運動ログ)
+  if (action === "set-sleep") setConditionSleep(state.selectedDate, Number(target.dataset.value));
+  if (action === "toggle-meds") toggleConditionMeds(state.selectedDate);
+  if (action === "set-capacity") setConditionCapacity(state.selectedDate, target.dataset.value);
+  if (action === "set-evening-mood") setEveningMood(state.selectedDate, Number(target.dataset.value));
+  if (action === "add-gym-entry") addGymEntry(target.dataset.date || state.selectedDate);
+  if (action === "delete-gym-entry") deleteGymEntry(target.dataset.date || state.selectedDate, id);
   if (action === "add-project") addProject();
   if (action === "delete-project") deleteProject(id);
   if (action === "add-task") addTask();
@@ -525,6 +532,14 @@ document.addEventListener("input", (event) => {
   }
   if (target.matches("[data-feedback-date]")) {
     state.feedback[target.dataset.feedbackDate] = target.value;
+    saveState();
+  }
+  // v73: コンディションOS — 夜のひとこと(入力中も保存。全再描画しないのでフォーカスは維持される)
+  if (target.matches("[data-condition-note-date]")) {
+    const d = target.dataset.conditionNoteDate;
+    const log = ensureConditionLog(d);
+    log.eveningNote = target.value;
+    log.eveningRecordedAt ||= nowDateTime();
     saveState();
   }
   // v39: 週次レビューメモ(実データ = saveState)
@@ -1023,6 +1038,25 @@ function normalizeState(value) {
   value.projects = value.projects.map((p) => ({ priority: "中", ...p }));
   // v63: 戦略/雑用/休息ゲージ(提案6)用のカテゴリ属性。未設定は空文字("未分類")のまま正直に扱う。
   value.settings.categories = (value.settings.categories || []).map((c) => ({ bucket: "", ...c }));
+  // v73: コンディションOS — 睡眠/服薬/余力/夜の記録/運動ログの軽量ログ(日付キー)。
+  //      体調そのもの(1〜10相当)は既存の朝の体調ピッカー(state.settings.morningEnergyLog)を
+  //      引き続き使い、二重管理にしない(CHANGES_v73.md参照)。
+  if (!value.condition || typeof value.condition !== "object") value.condition = {};
+  if (!value.condition.logs || typeof value.condition.logs !== "object") value.condition.logs = {};
+  value.condition.logs = Object.fromEntries(
+    Object.entries(value.condition.logs).map(([date, log]) => [date, {
+      sleepHours: null,
+      meds: null,
+      capacity: "",
+      morningRecordedAt: "",
+      eveningMood: null,
+      eveningNote: "",
+      eveningRecordedAt: "",
+      gym: [],
+      ...(log || {}),
+      gym: Array.isArray(log?.gym) ? log.gym : []
+    }])
+  );
   value.modal = null;  // 起動時はモーダル閉じた状態
   return value;
 }
@@ -1607,6 +1641,9 @@ function renderHome() {
   const isToday = today === todayISO();
   const blocks = blocksForDate(today);
   const metrics = computeMetrics();
+  // v73: 縮退モード。今日を見ている時だけ発火する(過去日を振り返っている時にまで
+  //      「最低限だけ」と出すのは意味が違うため)。
+  const degraded = isToday && isConditionDegraded(today);
   return `
     ${renderHeader("今日の入口", "ホーム", `<div class="row" style="gap:8px">
       <button class="btn orange" data-action="now-mode-open">▶ Now</button>
@@ -1616,9 +1653,12 @@ function renderHome() {
     ${homeFoldSection("creed", true, "home-creed", "home-creed-head", "三 つ の 信 条", homeCreedBody())}
     ${homeFoldSection("lifespan", true, "", "", "寿命カウントダウン(残り時間)", homeLifespanBody(metrics))}
     ${homeIdeal(isToday)}
+    ${degraded ? homeDegradedBanner() : ""}
     ${homeHero(blocks, isToday)}
     <div id="home-mit-anchor">${homeMIT(blocks)}</div>
-    ${homeAiHub(blocks, isToday)}
+    ${degraded
+      ? homeFoldSection("ai-hub-degraded", false, "home-ai-hub", "", "AIから(たたんでいます)", homeAiHubBody(blocks, isToday))
+      : homeAiHub(blocks, isToday)}
     ${homeScoreboard(blocks)}
     <div class="home-zone-block z-amber" id="homezone-1">
       <div class="home-zone amber">今日、すすめる${projectedEndBadge()}</div>
@@ -1627,11 +1667,23 @@ function renderHome() {
       </div>
     </div>
     <div class="home-zone-block z-teal" id="homezone-2">
-      <div class="home-zone teal">今日のリズム</div>
-      <div class="home-grid">
-        ${homeFlow(blocks, isToday)}
-        ${homeRoutine(blocks)}
-      </div>
+      ${degraded ? `
+        <details class="home-fold" data-fold-id="zone2-degraded" ${isHomeFoldOpen("zone2-degraded", false) ? "open" : ""}>
+          <summary class="home-zone teal home-fold-summary"><span class="home-fold-chevron">▶</span>今日のリズム(たたんでいます)</summary>
+          <div class="home-fold-body">
+            <div class="home-grid">
+              ${homeFlow(blocks, isToday)}
+              ${homeRoutine(blocks)}
+            </div>
+          </div>
+        </details>
+      ` : `
+        <div class="home-zone teal">今日のリズム</div>
+        <div class="home-grid">
+          ${homeFlow(blocks, isToday)}
+          ${homeRoutine(blocks)}
+        </div>
+      `}
     </div>
     <div class="home-zone-block z-blue" id="homezone-3">
       <details class="home-fold" data-fold-id="zone3" ${isHomeFoldOpen("zone3", false) ? "open" : ""}>
@@ -4802,6 +4854,106 @@ function renderMorningEnergyPicker(date) {
   `;
 }
 
+// v73: コンディションOS ==========================================================
+// 「朝の体調」欄(上のrenderMorningEnergyPicker)を入口として拡張する。体調の値そのものは
+// 既存の morningEnergyLog を継続利用し(二重管理を避ける)、ここでは睡眠・服薬・今日の余力
+// という新しい軽量フィールドだけを state.condition.logs[date] に足す。
+const CONDITION_SLEEP_PRESETS = [5, 6, 7, 8, 9];  // 9は「9h+」表記
+const CONDITION_CAPACITY_OPTIONS = [
+  { value: "full", label: "全力でいける" },
+  { value: "normal", label: "普通" },
+  { value: "minimal", label: "最低限で" }
+];
+
+function renderConditionMorningExtra(date) {
+  const log = state.condition.logs[date] || {};
+  return `
+    <div class="cond-row" style="margin-bottom:8px">
+      <span class="muted cond-row-label">💤 睡眠</span>
+      <span class="row cond-btn-row">
+        ${CONDITION_SLEEP_PRESETS.map((h) => `
+          <button class="btn ${log.sleepHours === h ? "primary" : "ghost"}" style="font-size:12px; padding:6px 10px"
+            data-action="set-sleep" data-value="${h}">${h}${h === 9 ? "h+" : "h"}</button>
+        `).join("")}
+      </span>
+    </div>
+    <div class="cond-row" style="margin-bottom:8px">
+      <span class="muted cond-row-label">💊 服薬</span>
+      <button class="btn ${log.meds ? "primary" : "ghost"}" style="font-size:12px; padding:6px 10px" data-action="toggle-meds">
+        ${log.meds ? "済み" : "まだ"}
+      </button>
+    </div>
+    <div class="cond-row" style="margin-bottom:10px">
+      <span class="muted cond-row-label">🔋 今日の余力</span>
+      <span class="row cond-btn-row">
+        ${CONDITION_CAPACITY_OPTIONS.map((c) => `
+          <button class="btn ${log.capacity === c.value ? "primary" : "ghost"}" style="font-size:12px; padding:6px 10px"
+            data-action="set-capacity" data-value="${c.value}">${c.label}</button>
+        `).join("")}
+      </span>
+    </div>
+    <div class="muted cond-week-note" style="font-size:11px; margin-bottom:10px">📝 今週は${conditionRecordedCountThisWeek()}回書けました</div>
+  `;
+}
+
+// 夜の記録: 体調(朝と同じ5段階を再利用)+ ひとこと(任意)。加点式のため空欄でも何も咎めない。
+function renderEveningConditionCard(date) {
+  const log = state.condition.logs[date] || {};
+  return `
+    <div class="row" style="gap:6px; flex-wrap:wrap; margin-bottom:6px; align-items:center">
+      <span class="muted" style="font-size:12.5px; font-weight:700">🌙 夜の体調</span>
+      ${energyLevels.map((l) => `
+        <button class="btn ${log.eveningMood === l.value ? "primary" : "ghost"}" style="font-size:12px; padding:6px 10px"
+          data-action="set-evening-mood" data-value="${l.value}">${l.label}</button>
+      `).join("")}
+    </div>
+    <input type="text" class="cond-evening-note" maxlength="80" placeholder="今日のひとこと(任意)"
+      data-condition-note-date="${date}" value="${escapeHTML(log.eveningNote || "")}" style="margin-bottom:10px">
+  `;
+}
+
+// 運動記録: 体調記録の入口から1タップで追記。「①タスク名から目標重量を表示」は無理をせず見送り、
+// 代わりに同じ種目の直近記録を軽い目安として添えるだけに留める(CHANGES_v73.md参照)。
+const CONDITION_GYM_PRESETS = ["ベンチプレス", "デッドリフト", "スクワット"];
+
+function lastGymRecord(exercise, excludeDate) {
+  const rows = [];
+  Object.entries(state.condition.logs).forEach(([date, log]) => {
+    if (date === excludeDate) return;
+    (log.gym || []).forEach((g) => { if (g.exercise === exercise) rows.push({ date, ...g }); });
+  });
+  rows.sort((a, b) => b.date.localeCompare(a.date));
+  return rows[0] || null;
+}
+
+function renderGymLogCard(date) {
+  const log = state.condition.logs[date] || {};
+  const entries = (log.gym || []).slice().reverse();
+  return `
+    <div class="cond-gym-card" style="margin-bottom:10px">
+      <span class="muted" style="font-size:12.5px; font-weight:700">🏋 運動記録</span>
+      <div class="row cond-gym-add" style="gap:6px; flex-wrap:wrap; margin-top:6px">
+        <input type="text" id="gym-exercise-input" list="gym-exercise-presets" placeholder="種目" class="cond-gym-input" style="width:120px">
+        <datalist id="gym-exercise-presets">${CONDITION_GYM_PRESETS.map((p) => `<option value="${escapeHTML(p)}">`).join("")}</datalist>
+        <input type="number" id="gym-weight-input" placeholder="kg" class="cond-gym-input" style="width:70px" step="2.5" min="0">
+        <span class="muted">kg ×</span>
+        <input type="number" id="gym-reps-input" placeholder="回" class="cond-gym-input" style="width:60px" min="0">
+        <button class="btn primary" style="font-size:12px; padding:6px 12px" data-action="add-gym-entry" data-date="${date}">記録</button>
+      </div>
+      ${entries.length ? `<div class="cond-gym-list" style="margin-top:8px">
+        ${entries.map((g) => {
+          const best = lastGymRecord(g.exercise, date);
+          return `<div class="home-ck">
+            <span class="home-ck-name">${escapeHTML(g.exercise)} ${g.weight}kg × ${g.reps}${best ? `<span class="muted" style="font-size:11px"> (前回 ${best.weight}kg×${best.reps} / ${best.date})</span>` : ""}</span>
+            <button class="btn ghost" style="font-size:11px; padding:4px 8px" data-action="delete-gym-entry" data-date="${date}" data-id="${g.id}">×</button>
+          </div>`;
+        }).join("")}
+      </div>` : `<div class="muted" style="font-size:11px; margin-top:6px">まだ記録がありません</div>`}
+    </div>
+  `;
+}
+// ========================================================================
+
 function renderJournal() {
   ensureJournal(state.selectedDate);
   const previous = addDays(state.selectedDate, -1);
@@ -4829,6 +4981,9 @@ function renderJournal() {
           </div>
         </div>
         ${renderMorningEnergyPicker(date)}
+        ${renderConditionMorningExtra(date)}
+        ${renderEveningConditionCard(date)}
+        ${renderGymLogCard(date)}
         <details class="journal-prompts" style="margin-bottom:10px; padding:8px 12px; background:var(--panel-soft); border-radius:8px">
           <summary style="cursor:pointer; font-size:13px; color:var(--muted); font-weight:600">💡 思考のヒント(クリックで開閉)</summary>
           <div style="margin-top:10px; display:grid; gap:10px; font-size:12px">
@@ -5418,9 +5573,15 @@ function computeWeeklyMetrics(weekStart) {
   const daily = days.map((d) => {
     const db = weekBlocks.filter((b) => b.date === d);
     const dtc = taskchuteStartRate(db);
+    const drt = routineRate(db);  // v73: 週次の体調×実行率ミニ相関で使う日別ルーティン実行率
     const dc = db.filter((b) => b.completed);
     const net = dc.reduce((s, b) => s + Number(b.charge || 0) - Number(b.discharge || 0), 0);
-    return { date: d, wd: weekdayLabel(d), startPct: dtc.pct, startTotal: dtc.total, net };
+    return {
+      date: d, wd: weekdayLabel(d),
+      startPct: dtc.pct, startTotal: dtc.total,
+      routinePct: drt.pct, routineTotal: drt.total,
+      net
+    };
   });
   const start12 = state.settings.twelveWeekStartDate;
   const wkNum = start12 ? clamp(Math.floor(daysBetween(start12, weekStart) / 7) + 1, 1, 12) : null;
@@ -5468,6 +5629,38 @@ function computeEnergyStructure(weekStart, weeks = 4) {
   if (worstWeekday) findings.push(worstWeekday);
   worstCats.forEach((c) => { if (findings.length < 3) findings.push(c); });
   return { eligible: true, findings };
+}
+
+// v73: コンディションOS — 体調×ルーティン実行率×タスク実行率の週次ミニ相関。
+// 深い分析(相関係数等)はバッチの領分。ここでは7日分を横並びで見せるだけの軽い可視化に留める。
+function renderConditionCorrelation(m) {
+  const rows = m.daily.map((d) => {
+    const mood = state.settings.morningEnergyLog[d.date];
+    const log = state.condition.logs[d.date];
+    return { ...d, mood, eveningMood: log?.eveningMood };
+  });
+  const hasAny = rows.some((r) => r.mood !== undefined || r.eveningMood !== undefined && r.eveningMood !== null);
+  if (!hasAny) return "";
+  const moodLabel = (v) => (v === undefined || v === null) ? "—" : `${v}`;
+  return `
+    <div class="weekly-sec">
+      <h3>体調 × 実行率(7日)</h3>
+      <div class="cond-corr-table">
+        <div class="cond-corr-row cond-corr-head">
+          <span>曜日</span><span>朝体調</span><span>夜体調</span><span>タスク着手</span><span>ルーティン</span>
+        </div>
+        ${rows.map((r) => `
+          <div class="cond-corr-row">
+            <span>${r.wd}</span>
+            <span>${moodLabel(r.mood)}</span>
+            <span>${moodLabel(r.eveningMood)}</span>
+            <span>${r.startTotal ? `${r.startPct}%` : "—"}</span>
+            <span>${r.routineTotal ? `${r.routinePct}%` : "—"}</span>
+          </div>`).join("")}
+      </div>
+      <div class="muted stats-axis">数値の並びを見るだけの軽い一覧です(相関係数などの分析はしていません)。</div>
+    </div>
+  `;
 }
 
 function renderEnergyStructure(weekStart) {
@@ -6038,6 +6231,8 @@ function renderWeekly() {
       <div class="muted stats-axis">完了Blockの実績時間(無ければ計画時間)をカテゴリ管理の「バケット」で集計。目標値は設定しません — まず現実を見るための道具です。</div>
       ${renderLeverageSummaryLine(weekBlocks)}
     </div>
+
+    ${renderConditionCorrelation(m)}
 
     ${renderEnergyStructure(week)}
     `}
@@ -7405,8 +7600,94 @@ function setMorningEnergy(value) {
   ensureJournal(state.selectedDate);
   const label = energyLevels.find((level) => level.value === value)?.label || "";
   state.journals[state.selectedDate] = upsertMorningLine(state.journals[state.selectedDate], `朝の体調: ${label} (${value})`);
+  // v73: 「今週書けた日数」の加点式カウントに乗せるため、既存の朝の体調ピッカーだけを
+  //      使った日もコンディションログの記録印(morningRecordedAt)を残す。
+  ensureConditionLog(state.selectedDate).morningRecordedAt ||= nowDateTime();
   saveAndRender("朝の体調を保存しました");
 }
+
+// v73: コンディションOS ==========================================================
+function ensureConditionLog(date) {
+  state.condition.logs[date] ||= {
+    sleepHours: null, meds: null, capacity: "",
+    morningRecordedAt: "", eveningMood: null, eveningNote: "", eveningRecordedAt: "", gym: []
+  };
+  return state.condition.logs[date];
+}
+
+// 加点式: ストリーク・連続日数は出さない。「その週に書けた日数」だけを数える肯定表現用。
+function conditionRecordedDates(days) {
+  return days.filter((d) => {
+    const log = state.condition.logs[d];
+    return state.settings.morningEnergyLog[d] !== undefined || !!log?.morningRecordedAt || !!log?.eveningRecordedAt;
+  });
+}
+function conditionRecordedCountThisWeek() {
+  const { weekStart } = weekRange(todayISO());
+  return conditionRecordedDates(weekDays(weekStart)).length;
+}
+
+// v73: 縮退モードの閾値。SPEC(condition-os/SPEC.md)は「体調1〜10・4以下」だが、既存の朝の
+// 体調ピッカーは離散5段階(悪い0/少し悪い3/普通5/少し良い7/良い10)であり、二重のピッカーを
+// 増やさずこの離散値へ読み替えた: 下位2段(悪い・少し悪い = 3以下)を縮退トリガーとする
+// (CHANGES_v73.md参照)。
+const CONDITION_DEGRADED_THRESHOLD = 3;
+function isConditionDegraded(date) {
+  const v = state.settings.morningEnergyLog[date];
+  return typeof v === "number" && v <= CONDITION_DEGRADED_THRESHOLD;
+}
+
+function setConditionSleep(date, hours) {
+  const log = ensureConditionLog(date);
+  log.sleepHours = hours;
+  log.morningRecordedAt ||= nowDateTime();
+  saveAndRender("睡眠時間を記録しました");
+}
+
+function toggleConditionMeds(date) {
+  const log = ensureConditionLog(date);
+  log.meds = !log.meds;
+  log.morningRecordedAt ||= nowDateTime();
+  saveAndRender(log.meds ? "服薬済みを記録しました" : "服薬記録を戻しました");
+}
+
+function setConditionCapacity(date, capacity) {
+  const log = ensureConditionLog(date);
+  log.capacity = log.capacity === capacity ? "" : capacity;  // 同じボタンの再タップで解除
+  log.morningRecordedAt ||= nowDateTime();
+  saveAndRender("今日の余力を記録しました");
+}
+
+function setEveningMood(date, value) {
+  const log = ensureConditionLog(date);
+  log.eveningMood = value;
+  log.eveningRecordedAt = nowDateTime();
+  saveAndRender("夜の記録を保存しました");
+}
+
+function addGymEntry(date) {
+  const exInput = document.querySelector("#gym-exercise-input");
+  const wInput = document.querySelector("#gym-weight-input");
+  const rInput = document.querySelector("#gym-reps-input");
+  const exercise = (exInput?.value || "").trim();
+  const weight = Number(wInput?.value || 0);
+  const reps = Number(rInput?.value || 0);
+  if (!exercise || !weight || !reps) {
+    showToast("種目・重量・回数を入力してください");
+    return;
+  }
+  const log = ensureConditionLog(date);
+  log.gym.push({ id: crypto.randomUUID(), exercise, weight, reps, at: nowDateTime() });
+  log.morningRecordedAt ||= nowDateTime();
+  saveAndRender(`${exercise} ${weight}kg×${reps} を記録しました`);
+}
+
+function deleteGymEntry(date, entryId) {
+  const log = ensureConditionLog(date);
+  log.gym = log.gym.filter((g) => g.id !== entryId);
+  saveAndRender("削除しました");
+}
+// ========================================================================
 
 // v51: dateArg で任意日を生成可能に(朝イチ自動レビュー・今日のタスク提案が昨日分を使う)。
 //      quiet = 画面遷移・トーストなしで生成だけ行う(バックグラウンド用)。
@@ -9051,18 +9332,32 @@ function aiWorkResultRowHTML(r) {
 //      個々の中身(pendingAiWorkResults/aiWorkResultRowHTML/aiFreshnessLine/
 //      extractMITCandidatesFromReport)自体は変更せず、置き場所だけをまとめている。
 function homeAiHub(blocks, isToday) {
+  return `<section class="panel home-ai-hub">${homeAiHubBody(blocks, isToday)}</section>`;
+}
+
+// v73: 縮退モードでhomeFoldSection(details)に相乗りできるよう、外側の<section>無しの
+//      中身だけを返す形に分離した(homeAiHub自身の見た目・挙動は無変更)。
+function homeAiHubBody(blocks, isToday) {
   const workItems = isToday ? pendingAiWorkResults() : [];
   const workHTML = workItems.length ? `
     <div class="home-divider"></div>
     <div class="home-ai-sub">AIが処理した作業<span class="home-count">${workItems.length}</span></div>
     ${workItems.map((r) => aiWorkResultRowHTML(r)).join("")}` : "";
   const candidatesHTML = isToday ? aiFeedbackCandidatesHTML(blocks) : "";
-  return `<section class="panel home-ai-hub">
+  return `
     <div class="home-plabel orange">AIから</div>
     ${aiFreshnessLine()}
     ${workHTML}
     ${candidatesHTML}
-  </section>`;
+  `;
+}
+
+// v73: コンディションOS — 縮退モードの案内バナー。責めない・煽らないトーン(wip-bannerと同じ
+// 「情報を渡すだけ」の思想)。タップでジャーナル(体調記録の入口)へ。
+function homeDegradedBanner() {
+  return `<div class="cond-degraded-banner" data-action="nav" data-view="journal">
+    今日は最低限だけでいい日です。MITと体調記録だけ見えていれば十分。
+  </div>`;
 }
 
 // v71: homeMIT内にあった「前日AIフィードバックのMIT候補」提示を分離(枠が空いている日のみ)。

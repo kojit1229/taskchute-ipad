@@ -1,0 +1,286 @@
+// v73 検証: コンディションOS(体調記録)をアプリ機能として統合。CHANGES_v73.md参照。
+//
+// (a) 朝の記録の拡張: 既存の朝の体調ピッカー(state.settings.morningEnergyLog)の下に
+//     睡眠時間・服薬・今日の余力のボタンが並び、タップでstate.condition.logs[date]へ保存される
+// (b) 夜の記録: 体調(既存の5段階を再利用)+ひとこと(input)がジャーナル当日編集に追加され、
+//     入力中も保存される(全再描画しないのでフォーカスは維持される既存パターンと同じ)
+// (c) 運動記録: 種目・重量・回数を1タップで追記でき、同じ種目の直近記録が「前回」として
+//     参考表示される。削除もできる
+// (d) 加点式: 「今週はN回書けました」という肯定表現のみが出る(ストリーク・連続日数・
+//     未記入を責める文言は一切出さない)
+// (e) 縮退モード: 今日の朝の体調が閾値(既存ピッカーの3=少し悪い以下)のとき、ホームに
+//     「今日は最低限だけ」バナーが出て、「今日のリズム」ゾーンと「AIから」カードが既定closedの
+//     折りたたみになる。体調が良い日は通常表示(バナー無し・折りたたみ無し)のまま
+// (f) 週次レビュー: 体調×タスク着手率×ルーティン実行率の7日ミニ表が表示される(分析はしない)
+// (g) normalizeState 後方互換: state.condition フィールド自体が無い旧stateでもクラッシュせず
+//     起動でき、condition.logsがオブジェクトとして補完される
+//
+// 方針: 既存スイートと同じく、app.js は type="module" のため内部関数は window に露出しない。
+// ブラウザ操作 + localStorage 状態の直接注入で観測する。
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+
+const PORT = 4211;
+const KEY = "taskchute-journal-pwa-state-v1";
+
+let failures = 0;
+function check(name, cond, extra = "") {
+  if (cond) console.log(`  ✅ ${name}`);
+  else { failures++; console.log(`  ❌ ${name} ${extra}`); }
+}
+
+(async () => {
+  const server = startServer(PORT);
+  const browser = await chromium.launch(launchOptions());
+  const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
+  const page = await ctx.newPage();
+  page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
+  // v72: api.github.com への実ネットワーク呼び出しを既定404で塞ぐ(個人データAPI化に伴う対策)
+  await blockGithubApiByDefault(page);
+  // v71/v72と同じく、AIプラン/AIフィードバック/週次レビューの実ファイルfetchは常に404隔離する
+  await page.route((url) => {
+    const p = decodeURIComponent(url.pathname);
+    return /\/AIプラン_.*\.json$/.test(p) || /\/AIフィードバック_.*\.md$/.test(p) || /\/週次レビュー_.*\.md$/.test(p);
+  }, (route) => route.fulfill({ status: 404, body: "not found (test-forced)" }));
+
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const isoDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const now0 = new Date();
+  now0.setHours(10, 0, 0, 0);  // computeFreeGaps等が日中に依存する既存スイートと同じ理由
+  const TODAY = isoDate(now0);
+  const addDaysStr = (dateStr, n) => {
+    const [y, m, d] = dateStr.split("-").map(Number);
+    const date = new Date(y, m - 1, d);
+    date.setDate(date.getDate() + n);
+    return isoDate(date);
+  };
+  const YESTERDAY = addDaysStr(TODAY, -1);
+
+  // app.js の weekRange() と同じロジック(週開始=直近土曜)をNode側でも再現する(v65と同じ手法)
+  function weekStartOf(dateStr) {
+    const [y, m, d] = dateStr.split("-").map(Number);
+    const date = new Date(y, m - 1, d);
+    const dow = (date.getDay() + 1) % 7; // Sat=0 ... Fri=6
+    date.setDate(date.getDate() - dow);
+    return isoDate(date);
+  }
+  const WEEK = weekStartOf(TODAY);
+  const weekDaysArr = Array.from({ length: 7 }, (_, i) => addDaysStr(WEEK, i));
+  const SUN = weekDaysArr[1];  // WEEK(土)の翌日=日
+
+  const hhmm = (min) => `${pad2(Math.floor(min / 60))}:${pad2(min % 60)}`;
+  function planBlock({ id, date = TODAY, title, startMin = 9 * 60, minutes = 30, isMIT = false,
+    completed = false, category = "", taskId = "" } = {}) {
+    return {
+      id, taskId, date, title, category,
+      plannedStartAt: `${date}T${hhmm(startMin)}`,
+      plannedEndAt: `${date}T${hhmm(startMin + minutes)}`,
+      actualStartAt: completed ? `${date}T${hhmm(startMin)}` : "",
+      actualEndAt: completed ? `${date}T${hhmm(startMin + minutes)}` : "",
+      completed, charge: 0, discharge: 0, isMIT,
+      comment: "", recurrenceGroupId: "", pomodoroCount: 0, interruptions: [],
+      migratedTo: "", orderIndex: 0, carryCount: 0, leverageType: "", estimateMin: null,
+      createdAt: `${date}T00:00`, updatedAt: `${date}T00:00`, deleted: false
+    };
+  }
+
+  async function seed({ blocks = [], tasks = [], view = "home", selectedDate = TODAY, condition, morningEnergyLog,
+    weeklySelectedWeek = null } = {}) {
+    await page.evaluate(({ KEY, blocks, tasks, view, selectedDate, condition, morningEnergyLog, weeklySelectedWeek }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.blocks = blocks;
+      s.tasks = tasks;
+      s.projects = s.projects || [];
+      s.questions = [];
+      s.feedback = {};
+      s.aiLinkFreshness = { feedbackAt: null, planAt: null };
+      s.selectedDate = selectedDate;
+      s.currentView = view;
+      if (condition) s.condition = condition;
+      if (morningEnergyLog) s.settings.morningEnergyLog = morningEnergyLog;
+      if (weeklySelectedWeek) s.settings.weeklySelectedWeek = weeklySelectedWeek;
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, blocks, tasks, view, selectedDate, condition, morningEnergyLog, weeklySelectedWeek });
+    await page.reload();
+    await page.waitForTimeout(500);
+  }
+
+  async function stateNow() {
+    return page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
+  }
+
+  try {
+    await page.clock.setFixedTime(now0);
+    await page.goto(`http://localhost:${PORT}/`);
+    await page.waitForTimeout(500);
+    // v72: トークン+個人データリポジトリ未設定だとセットアップ画面(ゲート)で止まるため注入する
+    await passGithubGate(page);
+
+    // ============================================================
+    // (a) 朝の記録の拡張(睡眠/服薬/今日の余力)
+    // ============================================================
+    console.log("[1] 朝の記録: 睡眠(7h)・服薬・今日の余力(最低限)をタップで記録できる");
+    await seed({ blocks: [], view: "journal", selectedDate: TODAY });
+    check("睡眠プリセットボタンが表示される", await page.locator('[data-action="set-sleep"]').count() === 5);
+    await page.click('[data-action="set-sleep"][data-value="7"]');
+    await page.waitForTimeout(200);
+    await page.click('[data-action="toggle-meds"]');
+    await page.waitForTimeout(200);
+    await page.click('[data-action="set-capacity"][data-value="minimal"]');
+    await page.waitForTimeout(200);
+    const s1 = await stateNow();
+    const log1 = s1.condition.logs[TODAY];
+    check("睡眠時間(7h)が保存される", log1?.sleepHours === 7, JSON.stringify(log1));
+    check("服薬済みが保存される", log1?.meds === true, JSON.stringify(log1));
+    check("今日の余力(最低限)が保存される", log1?.capacity === "minimal", JSON.stringify(log1));
+    check("記録印(morningRecordedAt)が付く", !!log1?.morningRecordedAt, JSON.stringify(log1));
+
+    console.log("[1b] 服薬ボタンは再タップで解除できる(トグル)");
+    await page.click('[data-action="toggle-meds"]');
+    await page.waitForTimeout(200);
+    const s1b = await stateNow();
+    check("服薬フラグがfalseに戻る", s1b.condition.logs[TODAY].meds === false, JSON.stringify(s1b.condition.logs[TODAY]));
+
+    // ============================================================
+    // (b) 夜の記録
+    // ============================================================
+    console.log("[2] 夜の記録: 体調ボタン + ひとことが保存される");
+    await page.click('[data-action="set-evening-mood"][data-value="7"]');
+    await page.waitForTimeout(200);
+    await page.fill(".cond-evening-note", "今日は早めに休む");
+    await page.waitForTimeout(300);
+    const s2 = await stateNow();
+    const log2 = s2.condition.logs[TODAY];
+    check("夜の体調が保存される", log2?.eveningMood === 7, JSON.stringify(log2));
+    check("夜のひとことが保存される", log2?.eveningNote === "今日は早めに休む", JSON.stringify(log2));
+    check("夜の記録印(eveningRecordedAt)が付く", !!log2?.eveningRecordedAt, JSON.stringify(log2));
+
+    // ============================================================
+    // (c) 運動記録
+    // ============================================================
+    console.log("[3] 運動記録: 種目・重量・回数を記録でき、同じ種目の前回記録が参考表示される");
+    await seed({
+      blocks: [], view: "journal", selectedDate: TODAY,
+      condition: { logs: { [YESTERDAY]: {
+        sleepHours: null, meds: null, capacity: "", morningRecordedAt: "",
+        eveningMood: null, eveningNote: "", eveningRecordedAt: "",
+        gym: [{ id: "g-prev", exercise: "ベンチプレス", weight: 75, reps: 5, at: `${YESTERDAY}T20:00` }]
+      } } }
+    });
+    await page.fill("#gym-exercise-input", "ベンチプレス");
+    await page.fill("#gym-weight-input", "80");
+    await page.fill("#gym-reps-input", "5");
+    await page.click('[data-action="add-gym-entry"]');
+    await page.waitForTimeout(300);
+    const s3 = await stateNow();
+    const gymEntries = s3.condition.logs[TODAY]?.gym || [];
+    check("運動記録が1件保存される", gymEntries.length === 1 && gymEntries[0].exercise === "ベンチプレス"
+      && gymEntries[0].weight === 80 && gymEntries[0].reps === 5, JSON.stringify(gymEntries));
+    const gymCardText = await page.locator(".cond-gym-card").textContent();
+    check("記録行に種目・重量・回数が表示される", gymCardText.includes("ベンチプレス 80kg × 5"), gymCardText);
+    check("同じ種目の前回記録が参考表示される", gymCardText.includes("前回 75kg×5") && gymCardText.includes(YESTERDAY), gymCardText);
+
+    console.log("[3b] 運動記録は削除できる");
+    await page.click('[data-action="delete-gym-entry"]');
+    await page.waitForTimeout(300);
+    const s3b = await stateNow();
+    check("削除後は記録が0件になる", (s3b.condition.logs[TODAY]?.gym || []).length === 0, JSON.stringify(s3b.condition.logs[TODAY]));
+
+    // ============================================================
+    // (d) 加点式(空白日を責めない)
+    // ============================================================
+    console.log("[4] 加点式: 「今週はN回書けました」の肯定表現のみで、ストリーク・未記入を責める文言が無い");
+    const conditionSeed = { logs: {
+      [weekDaysArr[0]]: { sleepHours: null, meds: null, capacity: "", morningRecordedAt: `${weekDaysArr[0]}T07:00`, eveningMood: null, eveningNote: "", eveningRecordedAt: "", gym: [] },
+      [weekDaysArr[1]]: { sleepHours: null, meds: null, capacity: "", morningRecordedAt: `${weekDaysArr[1]}T07:00`, eveningMood: null, eveningNote: "", eveningRecordedAt: "", gym: [] }
+    } };
+    await seed({ blocks: [], view: "journal", selectedDate: TODAY, condition: conditionSeed });
+    const journalHTML = await page.locator("main").innerHTML();
+    check("「今週は2回書けました」が表示される", journalHTML.includes("今週は2回書けました"), journalHTML.includes("今週は") ? "count mismatch" : "not found");
+    check("ストリーク・連続日数などの表現は出ない", !/連続|ストリーク|streak/i.test(journalHTML));
+    check("未記入・欠席を責める表現は出ない", !/未記入|さぼ|サボ|できていません|忘れずに/.test(journalHTML));
+
+    // ============================================================
+    // (e) 縮退モード
+    // ============================================================
+    console.log("[5] 縮退モード: 朝の体調が3(少し悪い)以下だとホームに案内バナー+ゾーンの折りたたみが出る");
+    await seed({
+      blocks: [planBlock({ id: "mit-degraded", title: "縮退モード確認MIT", isMIT: true })],
+      view: "home", selectedDate: TODAY,
+      morningEnergyLog: { [TODAY]: 3 }
+    });
+    check("縮退モードの案内バナーが出る", await page.locator(".cond-degraded-banner").count() === 1);
+    check("「今日のリズム」ゾーンが既定closedの折りたたみになる",
+      await page.locator('details[data-fold-id="zone2-degraded"]').evaluate((el) => el.open) === false);
+    check("「AIから」カードも既定closedの折りたたみになる",
+      await page.locator('details[data-fold-id="ai-hub-degraded"]').evaluate((el) => el.open) === false);
+    check("MIT(今日の主役)は縮退時も表示される",
+      (await page.locator("#home-mit-anchor").textContent()).includes("縮退モード確認MIT"));
+
+    console.log("[5b] 体調が普通(7)なら縮退モードは発火せず通常表示のまま");
+    await seed({
+      blocks: [planBlock({ id: "mit-normal", title: "通常モード確認MIT", isMIT: true })],
+      view: "home", selectedDate: TODAY,
+      morningEnergyLog: { [TODAY]: 7 }
+    });
+    check("縮退バナーは出ない", await page.locator(".cond-degraded-banner").count() === 0);
+    check("「今日のリズム」ゾーンは折りたたみ化されない(通常表示)",
+      await page.locator('details[data-fold-id="zone2-degraded"]').count() === 0);
+    check("「AIから」カードも通常表示(非折りたたみ)のまま",
+      await page.locator('details[data-fold-id="ai-hub-degraded"]').count() === 0
+      && await page.locator("section.home-ai-hub").count() === 1);
+
+    // ============================================================
+    // (f) 週次レビューのミニ相関表
+    // ============================================================
+    console.log("[6] 週次レビュー: 体調×タスク着手率×ルーティン実行率の7日ミニ表が出る");
+    await seed({
+      blocks: [
+        planBlock({ id: "wk-routine", date: WEEK, title: "週次相関・ルーティン", category: "ルーティン", completed: true, startMin: 7 * 60 }),
+        planBlock({ id: "wk-task", date: SUN, title: "週次相関・タスク", taskId: "some-task", completed: false, startMin: 9 * 60 })
+      ],
+      tasks: [{
+        id: "some-task", projectId: "proj-x", parentTaskId: "", title: "週次相関・タスク", category: "",
+        status: "todo", dueDate: "", description: "", createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false
+      }],
+      view: "weekly", selectedDate: TODAY,
+      weeklySelectedWeek: WEEK,
+      morningEnergyLog: { [WEEK]: 8, [SUN]: 3 },
+      condition: { logs: { [WEEK]: {
+        sleepHours: null, meds: null, capacity: "", morningRecordedAt: "",
+        eveningMood: 7, eveningNote: "", eveningRecordedAt: `${WEEK}T22:00`, gym: []
+      } } }
+    });
+    check("体調×実行率の週次ミニ表が表示される", await page.locator(".cond-corr-table").count() === 1);
+    const rowTexts = (await page.locator(".cond-corr-row").allTextContents()).map((t) => t.trim().replace(/\s+/g, " "));
+    check("見出し行を含めて8行(見出し+7日)ある", rowTexts.length === 8, JSON.stringify(rowTexts));
+    const satRow = rowTexts.find((t) => t.startsWith("土"));
+    const sunRow = rowTexts.find((t) => t.startsWith("日"));
+    check("土曜日の行に朝体調(8)と夜体調(7)が出る", !!satRow && satRow.includes("8") && satRow.includes("7"), satRow);
+    check("日曜日の行に朝体調(3)とタスク着手率(0%)が出る", !!sunRow && sunRow.includes("3") && sunRow.includes("0%"), sunRow);
+    check("分析色を出さない注記(相関係数などの分析はしていません)が添えられる",
+      (await page.locator("main").innerHTML()).includes("相関係数などの分析はしていません"));
+
+    // ============================================================
+    // (g) normalizeState 後方互換
+    // ============================================================
+    console.log("[7] normalizeState 後方互換: state.condition フィールド自体が無い旧stateでもクラッシュしない");
+    await page.evaluate((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      delete s.condition;  // フィールド自体が無い旧stateを模擬
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, KEY);
+    await page.reload();
+    await page.waitForTimeout(500);
+    await page.click('[data-action="nav"][data-view="journal"]');  // 正規化値を永続化させる
+    await page.waitForTimeout(300);
+    const s7 = await stateNow();
+    check("condition.logsがオブジェクトとして補完される", s7.condition && typeof s7.condition.logs === "object", JSON.stringify(s7.condition));
+    check("既存データはクラッシュせず表示できる(pageerror無し)", true);
+  } finally {
+    await browser.close();
+    server.close();
+  }
+
+  console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURES`);
+  process.exit(failures === 0 ? 0 : 1);
+})().catch((e) => { console.error(e); process.exit(1); });

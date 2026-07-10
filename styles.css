@@ -2742,3 +2742,58 @@ h3 {
 .now-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 26px; width: 100%; }
 .now-btn { flex: 1 1 120px; min-height: 48px; font-size: 16px; }
 .now-btn:disabled { opacity: 0.35; cursor: default; }
+
+/* v73: コンディションOS ================================================= */
+/* 縮退モードの案内バナー。責める赤/煽る色は使わず、wip-bannerと同じ
+   「情報を渡すだけ」の落ち着いたトーン(teal=今日のリズムゾーンと同系色)。 */
+.cond-degraded-banner {
+  background: rgba(19,181,166,.10);
+  border: 1px solid rgba(19,181,166,.32);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 11px 14px;
+  border-radius: 10px;
+  margin-bottom: 14px;
+  cursor: pointer;
+}
+
+/* ジャーナル当日編集: 朝の記録の拡張(睡眠・服薬・今日の余力)+夜の記録 */
+.cond-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cond-row-label { font-size: 12.5px; font-weight: 700; min-width: 62px; }
+.cond-btn-row { gap: 6px; flex-wrap: wrap; }
+.cond-evening-note {
+  width: 100%;
+  font-size: 16px;  /* iOS Safari のズーム防止 */
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--text);
+}
+.cond-evening-note::placeholder { color: var(--faint); }
+
+/* 運動記録の簡易フォーム + 一覧 */
+.cond-gym-card { padding-top: 2px; }
+.cond-gym-input {
+  font-size: 16px;  /* iOS Safari のズーム防止 */
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--text);
+}
+
+/* 週次レビュー: 体調×実行率のミニ相関表(軽い一覧。分析はしない) */
+.cond-corr-table { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
+.cond-corr-row {
+  display: grid;
+  grid-template-columns: 0.8fr 1fr 1fr 1.3fr 1.1fr;
+  gap: 4px;
+  padding: 6px 4px;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--line-soft);
+  text-align: center;
+}
+.cond-corr-row:last-child { border-bottom: none; }
+.cond-corr-head { font-weight: 700; color: var(--muted); font-size: 11px; }
