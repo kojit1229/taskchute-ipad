@@ -67,6 +67,13 @@ let cachedAiWorkResults = null;
 // v74: 読書複利化 — taskchute/reading/highlights.json の books 配列(null=未取得。永続化しない、
 //      他のcached*と同じくアプリ内メモリのみ。ハイライト本体は個人データリポジトリが正)
 let cachedReadingHighlights = null;
+// v77: AIフィードバック等の自動再表示(起動時fetchのみだと開きっぱなしのPWAで新着に気づけない)。
+//      visibilitychange復帰時 + 定期(30分毎)にhydrateStaticMarkdownを再実行するためのスロットル状態。
+//      非永続(端末内メモリのみ、再起動すれば起動時fetchからやり直しでよい)。
+let _lastFeedbackHydrateAt = Date.now();  // 起動時に一度hydrateStaticMarkdown()を呼ぶため、その時刻を起点にする
+let _feedbackHydrateInFlight = false;     // 多重発火防止(同時に複数fetchを走らせない)
+const FEEDBACK_REFRESH_INTERVAL_MS = 30 * 60 * 1000;  // 定期再fetchの間隔(30分)
+const FEEDBACK_REFRESH_MIN_GAP_MS = 60 * 1000;        // visibilitychange連打等の多重発火防止(60秒)
 // v74: 自分が保存した言語化の当日分エコー表示用({ 'YYYY-MM-DD': '入力文字列' }、非永続)。
 //      保存済み内容の真実は reflections.json 側。リロード時は hydrateReadingData() が再取得する
 const cachedReadingReflections = {};
@@ -2652,6 +2659,10 @@ function computeFreeGaps(date, dayStartMin = 5 * 60, dayEndMin = 23 * 60) {
 }
 
 // 配置候補: 昨日のMIT候補 + WBSの未完了タスク(Wish/中断/今日Block化済みを除く、期限順)
+// v77: 詰め込み防止の第一段 — dueDateが対象日より後(翌日以降)のタスクは候補から除外する。
+//      期限なし(dueDate未設定)のタスクは対象に残す(wbsTaskCompareが "9999" 扱いで
+//      最後尾ソートするため、期限付きタスクを圧迫せず、空いた枠があれば埋める filler として働く)。
+//      期限が対象日以前(=期日超過・当日締切)のタスクは当然対象。
 function aiScheduleCandidates(date) {
   const out = [];
   const prev = addDays(date, -1);
@@ -2661,6 +2672,7 @@ function aiScheduleCandidates(date) {
   state.tasks
     .filter((t) => !t.deleted && (t.status === "todo" || t.status === "doing") && t.projectId && !wishIds.has(t.projectId))
     .filter((t) => !isTaskSuspended(t))
+    .filter((t) => !t.dueDate || t.dueDate <= date)  // v77: 翌日以降が期限のタスクは今日の下書きに詰め込まない
     .filter((t) => !state.blocks.some((b) => !b.deleted && b.taskId === t.id && b.date === date))
     .sort(wbsTaskCompare)
     .slice(0, 15)
@@ -2757,7 +2769,7 @@ function zeroSecThemeBarHTML() {
   if (!_zeroSecThemeDraft || _zeroSecThemeDraft.date !== state.selectedDate || !_zeroSecThemeDraft.items.length) return "";
   return `
     <div class="draft-bar" style="flex-direction:column; align-items:stretch; gap:6px">
-      <span>🧠 0秒思考のテーマ提案(AIプラン由来)</span>
+      <span>🧠 0秒思考のテーマ提案</span>
       ${_zeroSecThemeDraft.items.map((t, i) => `
         <div class="home-ck" style="flex-wrap:wrap">
           <div style="flex:1; min-width:180px">
@@ -2935,14 +2947,31 @@ function aiMorningPlanCandidates(date) {
 // v60: 決定論配置(唯一の配置経路。旧称フォールバックのまま維持): MIT候補 → 繰越 → WBS の順に、
 // 各候補の見積分数(estimateMin、無ければ30分)で空き枠へ前詰め配置する。
 // 空き枠に入り切らない候補は skipped(理由: 空き枠なし)に回す。
+// v77: 詰め込み防止の第二段 — (a) ブロック長は見積分数(estimateMin)にそのまま一致させる
+//      (旧実装は15分刻みに丸めており、見積表示とズレていた)。(b) 空き時間合計の
+//      CAPACITY_RATIO(65%。60-70%目安の中央値)を配置上限とし、超える候補は「配置しない」
+//      (切り詰めない)。ただし1日の残り時間がもともと少ない(例: 終業間際で残り45分)日まで
+//      機械的に締め出すと既存の「入り切る分は素直に置く」挙動を壊すため、
+//      CAPACITY_MIN_FLOOR(60分)を下限として必ず確保する(実質、空き時間が短い日は
+//      比率の影響を受けない。安全枠が効くのは空き時間が十分にある日のみ)。
+//      (c) ブロック間に BUFFER_MIN(10分)の余白を残し、隙間なく連続配置しない。
+//      いずれも既存の「入り切らなければ配置しない」方針(items.slice等での切り詰めはしない)を維持する。
+const MORNING_PLAN_CAPACITY_RATIO = 0.65;
+const MORNING_PLAN_CAPACITY_MIN_FLOOR = 60;
+const MORNING_PLAN_BUFFER_MIN = 10;
 function fallbackMorningPlan(candidates, freeGaps) {
   const rank = (c) => (c.carryFromId ? 1 : (String(c.id).startsWith("mit-") ? 0 : 2));  // MIT=0 → 繰越=1 → WBS=2
   const ordered = [...candidates].sort((a, b) => rank(a) - rank(b));
   const gaps = freeGaps.map(([s, e]) => [s, e]);  // 前詰めで消費するのでコピーして破壊的に使う
+  const totalFreeMin = gaps.reduce((sum, [s, e]) => sum + (e - s), 0);
+  // v77: 空き時間を全部埋めない安全枠(空き時間が短い日は下限floorが優先され実質無効化される)
+  const capacityMin = Math.max(MORNING_PLAN_CAPACITY_MIN_FLOOR, Math.floor(totalFreeMin * MORNING_PLAN_CAPACITY_RATIO));
   const items = [];
   const skipped = [];
+  let placedMin = 0;
   ordered.forEach((c) => {
-    const minutes = clamp(Math.round((c.estimateMin || 30) / 15) * 15 || 30, 15, 240);
+    const minutes = clamp(Math.round(c.estimateMin || 30), 15, 240);  // v77: 見積分数そのまま(15分丸め廃止)
+    if (placedMin + minutes > capacityMin) { skipped.push({ title: c.title, reason: "安全枠超過(空き時間を埋め過ぎない)" }); return; }
     const gapIdx = gaps.findIndex((g) => g[1] - g[0] >= minutes);
     if (gapIdx === -1) { skipped.push({ title: c.title, reason: "空き枠なし" }); return; }
     const start = gaps[gapIdx][0];
@@ -2950,7 +2979,8 @@ function fallbackMorningPlan(candidates, freeGaps) {
       id: crypto.randomUUID(), title: c.title, taskId: c.taskId || "", category: c.category || "",
       start, minutes, aiStart: start, aiMinutes: minutes, carryFromId: c.carryFromId || ""
     });
-    gaps[gapIdx][0] += minutes;
+    placedMin += minutes;
+    gaps[gapIdx][0] += minutes + MORNING_PLAN_BUFFER_MIN;  // v77: ブロック間バッファ
     if (gaps[gapIdx][1] - gaps[gapIdx][0] < 15) gaps.splice(gapIdx, 1);  // 15分未満の端数はもう空き扱いしない
   });
   return { items: items.slice(0, 15), skipped };
@@ -3057,6 +3087,44 @@ async function fetchZeroSecThemes(date) {
   return items.length ? items : null;
 }
 
+// v77: AIフィードバック_<date>.md 本文の「## 0秒思考テーマ」見出し(- [ ] テーマ: 理由 形式、
+//      「## 明日への提案」と同じチェックボックス書式)から0秒思考テーマ候補を抽出する。
+//      extractMITCandidatesFromReportと同じ頑健化パターン(見出し直後の空行スキップ・
+//      コロン分割・全角:対応)を踏襲。存在しない/旧形式のFB(見出し自体が無い)では
+//      空配列を返し、呼び出し側(fetchZeroSecThemesFromFeedback)がnull化して後方互換を保つ。
+function extractZeroSecThemesFromReport(reportText) {
+  if (!reportText) return [];
+  const lines = reportText.split("\n");
+  const idx = lines.findIndex((line) => /0秒思考テーマ/.test(line));
+  if (idx < 0) return [];
+  const items = [];
+  let sawContent = false;
+  for (let i = idx + 1; i < Math.min(idx + 8, lines.length); i++) {
+    const l = lines[i].trim();
+    if (!l) { if (sawContent) break; else continue; }
+    if (l.startsWith("##") || l.startsWith("#")) break;
+    const m = l.match(/^[-・•*]\s*(.+)$/);
+    if (!m) { sawContent = true; continue; }  // 箇条書きでない行(説明文等)は候補化しない
+    const raw = m[1].replace(/^\[[ xX]\]\s*/, "").trim();
+    const colonIdx = raw.search(/[:：]/);
+    const theme = (colonIdx >= 0 ? raw.slice(0, colonIdx) : raw).trim();
+    const reason = colonIdx >= 0 ? raw.slice(colonIdx + 1).trim() : "";
+    if (theme) items.push({ theme, reason });
+    sawContent = true;
+  }
+  return items.slice(0, 3);
+}
+
+// v77: AIフィードバック_<date>.md を軽量fetchし、上記extractZeroSecThemesFromReportで
+//      0秒思考テーマを抽出する。fetchZeroSecThemes(AIプラン_*.json由来)と対になる独立経路
+//      (呼び出し側のrunAiMorningPlanで両方をマージし、同一テーマ文字列は重複排除する)。
+async function fetchZeroSecThemesFromFeedback(date) {
+  const raw = await fetchGitHubRawText(`AIフィードバック_${date}.md`);
+  if (!raw) return null;
+  const items = extractZeroSecThemesFromReport(raw);
+  return items.length ? items : null;
+}
+
 // v75 should-fix: スケジュール側(繰越・WBS候補や空き時間)が0件で下書きを置けない日でも、
 // zeroSecThemesの提案が残っていれば「何も起きなかった」ように見せず、タイムラインへ案内する。
 // _zeroSecThemeDraftが無い/対象日と不一致/空なら何もせずfalseを返す(呼び出し元は従来どおりの
@@ -3086,10 +3154,25 @@ async function runAiMorningPlan({ auto = false } = {}) {
   // v75: zeroSecThemes はスケジュール配置(freeGaps/candidates)の成否と無関係に独立して取得する
   //      (下の早期returnより前で確定させ、配置できる候補が無い日でもテーマ提案だけは出す)。
   //      同日に既に採否判断済み(state.zeroSecThemeLog)のテーマは再提示しない。
-  const zeroSecThemes = await fetchZeroSecThemes(date);
-  if (zeroSecThemes) {
+  // v77: AIプラン_*.json由来(fetchZeroSecThemes)に加え、AIフィードバック_*.md内「## 0秒思考テーマ」
+  //      見出し由来(fetchZeroSecThemesFromFeedback)も同じ _zeroSecThemeDraft へ合流させる。
+  //      同一テーマ文字列は重複排除(先に見つかった方=プラン側を優先して残す)。どちらも取得
+  //      失敗/該当セクションなしなら null を返す設計なので、両方 null なら従来どおり
+  //      _zeroSecThemeDraft は触らない(前回セッションの状態を保持)。
+  const [planZeroSecThemes, feedbackZeroSecThemes] = await Promise.all([
+    fetchZeroSecThemes(date),
+    fetchZeroSecThemesFromFeedback(date)
+  ]);
+  if (planZeroSecThemes || feedbackZeroSecThemes) {
+    const seenThemes = new Set();
+    const mergedThemes = [];
+    (planZeroSecThemes || []).concat(feedbackZeroSecThemes || []).forEach((t) => {
+      if (seenThemes.has(t.theme)) return;
+      seenThemes.add(t.theme);
+      mergedThemes.push(t);
+    });
     const decided = new Set(state.zeroSecThemeLog.filter((l) => l.date === date).map((l) => l.theme));
-    const pending = zeroSecThemes.filter((t) => !decided.has(t.theme));
+    const pending = mergedThemes.filter((t) => !decided.has(t.theme));
     _zeroSecThemeDraft = pending.length ? { date, items: pending } : null;
   }
 
@@ -9418,6 +9501,8 @@ function startTimerTicker() {
     }
     // v41: 見込み終了時刻は該当 span のみ差し替え(全再描画しない)
     updateProjectedEndTick();
+    // v77: AIフィードバック等の定期再fetch(30分毎)。visibilitychange側と同じ入口・スロットルを共有する。
+    if (Date.now() - _lastFeedbackHydrateAt >= FEEDBACK_REFRESH_INTERVAL_MS) maybeRefreshFeedback();
   }, 500);
 }
 
@@ -9555,6 +9640,22 @@ async function hydrateStaticMarkdown() {
   if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly" || state.currentView === "home")) {
     render();
   }
+}
+
+// v77: AIフィードバック等の自動再表示 — visibilitychange復帰時 + 定期(30分毎、startTimerTickerの
+//      500msティックに相乗り)に呼ぶ入口。personalDataReadyでない(GitHub未接続)なら何もしない。
+//      多重発火防止(_feedbackHydrateInFlight)+ 最短間隔ガード(FEEDBACK_REFRESH_MIN_GAP_MS)を掛け、
+//      失敗は静かに握りつぶして次回タイミング(次のvisibilitychangeか30分後)に任せる(即時リトライしない)。
+function maybeRefreshFeedback() {
+  if (!personalDataReady(state.settings.github)) return;
+  if (_feedbackHydrateInFlight) return;
+  const now = Date.now();
+  if (now - _lastFeedbackHydrateAt < FEEDBACK_REFRESH_MIN_GAP_MS) return;
+  _lastFeedbackHydrateAt = now;
+  _feedbackHydrateInFlight = true;
+  hydrateStaticMarkdown()
+    .catch((error) => console.warn("AIフィードバック等の自動再取得をスキップ:", error?.message || error))
+    .finally(() => { _feedbackHydrateInFlight = false; });
 }
 
 async function reloadStaticMarkdown() {
@@ -11493,6 +11594,7 @@ document.addEventListener("visibilitychange", () => {
   else if (runDailyOpen()) render();
   setTimeout(maybeAutoMorningPlan, 4500);    // v59: 日をまたいで復帰したケース
   setTimeout(maybeAutoArchive, 8000);        // v53: 同上
+  maybeRefreshFeedback();                    // v77: フォアグラウンド復帰時にAIフィードバック等を再fetch
 });
 
 // v42: AIフィードバック欄への貼り付けで、構造化取り込みモーダルを開く
