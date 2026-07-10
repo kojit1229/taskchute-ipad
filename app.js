@@ -4,24 +4,27 @@ const STORAGE_KEY = "taskchute-journal-pwa-state-v1";
 const RECURRENCE_KEEP_PAST_DAYS = 7;    // 過去はこの日数だけ実体を保持
 const RECURRENCE_FUTURE_DAYS = 31;      // 未来はこの日数先まで実体化
 
-// v33: タブ順 — WBS はタスクシュートの直下に配置
-//   ホーム / ジャーナル / ビジョン / タスクシュート / WBS / タイムライン /
-//   ルーティン / ポモドーロ / やりたい / やらない / 日報 / 設定
+// v71: タブ順 — 利用頻度・時間帯順に並び替え(CHANGES_v71.md参照)。
+//   実行系(ホーム/タスクシュート/タイムライン/WBS/ルーティン)を先頭に、
+//   日次1回系(ジャーナル/週次/日報)→参照系(計器盤/やりたい/やらない/ビジョン/0秒思考)→
+//   ポモドーロ(v70でBlock開始時に自動起動するため独立タブの優先度を下げた)→設定 の順。
+//   v33の順序: ホーム/ジャーナル/0秒思考/ビジョン/タスクシュート/WBS/タイムライン/
+//              ルーティン/ポモドーロ/やりたい/やらない/日報/週次/計器盤/設定
 const navItems = [
   { id: "home", label: "ホーム", mark: "H" },
-  { id: "journal", label: "ジャーナル", mark: "J" },
-  { id: "zero", label: "0秒思考", mark: "○" },
-  { id: "vision", label: "ビジョン", mark: "V" },
   { id: "tasks", label: "タスクシュート", mark: "T" },
-  { id: "wbs", label: "WBS", mark: "W" },
   { id: "timeline", label: "タイムライン", mark: "L" },
+  { id: "wbs", label: "WBS", mark: "W" },
   { id: "routine", label: "ルーティン", mark: "↻" },
-  { id: "pomodoro", label: "ポモドーロ", mark: "P" },
+  { id: "journal", label: "ジャーナル", mark: "J" },
+  { id: "weekly", label: "週次", mark: "◷" },
+  { id: "reports", label: "日報", mark: "R" },
+  { id: "stats", label: "計器盤", mark: "◔" },  // v53
   { id: "wish", label: "やりたい", mark: "✦" },
   { id: "avoid", label: "やらない", mark: "✕" },
-  { id: "reports", label: "日報", mark: "R" },
-  { id: "weekly", label: "週次", mark: "◷" },
-  { id: "stats", label: "計器盤", mark: "◔" },  // v53
+  { id: "vision", label: "ビジョン", mark: "V" },
+  { id: "zero", label: "0秒思考", mark: "○" },
+  { id: "pomodoro", label: "ポモドーロ", mark: "P" },  // v70: Block開始で自動起動するため独立タブの優先度を下げた
   { id: "settings", label: "設定", mark: "S" }
 ];
 
@@ -76,6 +79,35 @@ let _nowSkippedIds = new Set();  // このNowセッション中に「スキッ�
 // v70: フォーカスタイマー「中断」の理由ワンタップピッカー(チョコ停記録)。非永続。
 let _pendingInterruptBlockId = null;
 
+// v71: ホームの折りたたみカード(details)の開閉状態。端末ローカルのUI状態であり、
+//      GitHub同期やエクスポートの対象になる state オブジェクトとは意図的に分離するため、
+//      専用の localStorage キーに保存する(AUTO_MORNING_PLAN_KEY等と同じ「非致命・try/catch」流儀)。
+const HOME_FOLD_KEY = "taskchute-journal-home-fold-v1";
+function readHomeFoldMap() {
+  try { return JSON.parse(localStorage.getItem(HOME_FOLD_KEY) || "{}"); } catch { return {}; }
+}
+function isHomeFoldOpen(id, defaultOpen) {
+  const stored = readHomeFoldMap()[id];
+  return typeof stored === "boolean" ? stored : Boolean(defaultOpen);
+}
+function setHomeFoldOpen(id, open) {
+  try {
+    const map = readHomeFoldMap();
+    map[id] = open;
+    localStorage.setItem(HOME_FOLD_KEY, JSON.stringify(map));
+  } catch { /* 保存できなくても致命的ではない(UI状態のみ) */ }
+}
+// 折りたたみカードの共通ラッパー。bodyHTML が空なら(非表示条件を満たさない場合)カードごと出さない。
+// wrapperClass は details 自体に付与(既存の .home-creed 等のパネル装飾をそのまま活かすため)。
+function homeFoldSection(id, defaultOpen, wrapperClass, summaryClass, summaryText, bodyHTML) {
+  if (!bodyHTML) return "";
+  const open = isHomeFoldOpen(id, defaultOpen);
+  return `<details class="home-fold panel ${wrapperClass || ""}" data-fold-id="${id}" ${open ? "open" : ""}>
+    <summary class="home-fold-summary ${summaryClass || ""}"><span class="home-fold-chevron">▶</span>${escapeHTML(summaryText)}</summary>
+    <div class="home-fold-body">${bodyHTML}</div>
+  </details>`;
+}
+
 // v38: 起動処理(maintainRecurrences / render / 各種初期化)はファイル末尾で実行する。
 //      ここで render() を呼ぶと、後方で宣言される const(JOURNAL_PROMPTS 等)が
 //      未初期化のまま参照され、最後に開いていた画面によっては起動時に例外で全停止していた。
@@ -99,9 +131,14 @@ document.addEventListener("click", (event) => {
   if (action === "task-today") createBlockFromTask(id);
   if (action === "home-add-today") addTaskToToday(id);
   // v33: ホームのスコアボード → 対応ゾーンへスクロール
+  // v71: ジャンプ先が折りたたみ(details)の中にある場合は、閉じたままだと中身が見えないので開く
   if (action === "home-jump") {
     const el = document.getElementById(id);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (el) {
+      const fold = el.matches?.("details[data-fold-id]") ? el : el.querySelector?.("details[data-fold-id]");
+      if (fold && !fold.open) { fold.open = true; setHomeFoldOpen(fold.dataset.foldId, true); }
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }
   if (action === "delete-task") deleteTask(id);
   // v33: WBS の折りたたみ
@@ -451,6 +488,15 @@ document.addEventListener("click", (event) => {
     render();
   }
 });
+
+// v71: ホームの折りたたみカード(details)の開閉をlocalStorageへ即時記憶する。
+// "toggle" イベントは bubbles しない仕様のため、document への委譲はキャプチャフェーズで行う
+// (キャプチャは非バブリングイベントでもターゲットまでの経路を通過するため、これで拾える)。
+document.addEventListener("toggle", (event) => {
+  const el = event.target;
+  if (!el?.dataset?.foldId) return;
+  setHomeFoldOpen(el.dataset.foldId, el.open);
+}, true);
 
 document.addEventListener("input", (event) => {
   const target = event.target;
@@ -1474,6 +1520,12 @@ function renderHeader(eyebrow, title, action = "") {
 // =============================================================
 // v31: ホーム(コックピット)— 信条 / 残り時間 / 行動パネル群
 // =============================================================
+// v71: 情報過多だったコックピットを整理。
+//   最上部(常時表示・折りたたみ無し): Now(いま、これ)→ MIT(今日の主役)→ 「AIから」
+//     (鮮度/AI作業結果/AIフィードバック候補の集約カード)→ スコアボード → 今日、すすめる/今日のリズム
+//     (実行系ゾーンは従来どおり展開のまま)。
+//   参照系(信条・寿命カウントダウン・長い弧・足あと)は折りたたみ既定closedにして下段へ。
+//   開閉状態はlocalStorage記憶(homeFoldSection / isHomeFoldOpen+setHomeFoldOpen)。詳細はCHANGES_v71.md。
 function renderHome() {
   const today = state.selectedDate;
   const isToday = today === todayISO();
@@ -1485,17 +1537,14 @@ function renderHome() {
       <button class="btn primary" data-action="today">今日へ</button>
     </div>`)}
     ${renderDateBar()}
-    ${aiFreshnessLine()}
-    ${homeCreed()}
-    ${homeLifespan(metrics)}
     ${homeIdeal(isToday)}
-    ${homeAiWork(isToday)}
     ${homeHero(blocks, isToday)}
+    <div id="home-mit-anchor">${homeMIT(blocks)}</div>
+    ${homeAiHub(blocks, isToday)}
     ${homeScoreboard(blocks)}
     <div class="home-zone-block z-amber" id="homezone-1">
       <div class="home-zone amber">今日、すすめる${projectedEndBadge()}</div>
-      <div class="home-grid">
-        ${homeMIT(blocks)}
+      <div class="home-grid single">
         ${homeTaskchute(blocks)}
       </div>
     </div>
@@ -1506,20 +1555,30 @@ function renderHome() {
         ${homeRoutine(blocks)}
       </div>
     </div>
+    ${homeFoldSection("creed", false, "home-creed", "home-creed-head", "三 つ の 信 条", homeCreedBody())}
+    ${homeFoldSection("lifespan", false, "", "", "寿命カウントダウン(残り時間)", homeLifespanBody(metrics))}
     <div class="home-zone-block z-blue" id="homezone-3">
-      <div class="home-zone blue">長い弧をたしかめる</div>
-      <div class="home-grid">
-        ${homeCycle(metrics)}
-        ${homeBacklog()}
-        ${homeQuestions()}
-      </div>
-      ${homeWeeklyLink()}
+      <details class="home-fold" data-fold-id="zone3" ${isHomeFoldOpen("zone3", false) ? "open" : ""}>
+        <summary class="home-zone blue home-fold-summary"><span class="home-fold-chevron">▶</span>長い弧をたしかめる</summary>
+        <div class="home-fold-body">
+          <div class="home-grid">
+            ${homeCycle(metrics)}
+            ${homeBacklog()}
+            ${homeQuestions()}
+          </div>
+          ${homeWeeklyLink()}
+        </div>
+      </details>
     </div>
     <div class="home-zone-block z-green" id="homezone-4">
-      <div class="home-zone green">今日の足あと</div>
-      <div class="home-grid single">
-        ${homeSteps(blocks)}
-      </div>
+      <details class="home-fold" data-fold-id="zone4" ${isHomeFoldOpen("zone4", false) ? "open" : ""}>
+        <summary class="home-zone green home-fold-summary"><span class="home-fold-chevron">▶</span>今日の足あと</summary>
+        <div class="home-fold-body">
+          <div class="home-grid single">
+            ${homeSteps(blocks)}
+          </div>
+        </div>
+      </details>
     </div>
   `;
 }
@@ -1527,30 +1586,30 @@ function renderHome() {
 // --- 三つの信条 ---
 // v62: Daily_Affirmation.md v4.1(実データ裏付け型に刷新)と整合させ、ハードコードの
 //      標語からKの実データ(MIT達成率100%・実行率と充電の無相関・朝型)に基づく文言へ更新。
-function homeCreed() {
+// v71: 参照系セクションとして折りたたみ化(homeFoldSection)するため、本体行のみを返す
+//      body専用関数にした(見出し「三 つ の 信 条」は折りたたみのsummary側で表示する)。
+function homeCreedBody() {
   const creeds = [
     ["決めた一つは、", "必ずやり切れる(MIT達成率100%)"],
     ["進んだ量で測る。", "実行率で自分を裁かない"],
     ["朝に全部を注ぐ。", "夜は手放して充電する"]
   ];
   const nums = ["一", "二", "三"];
-  return `
-    <section class="panel home-creed">
-      <div class="home-creed-head">三 つ の 信 条</div>
-      ${creeds.map((c, i) => `
-        <div class="home-creed-row">
-          <span class="home-creed-num">${nums[i]}</span>
-          <span class="home-creed-text">${escapeHTML(c[0])}<br>${escapeHTML(c[1])}</span>
-        </div>`).join("")}
-    </section>`;
+  return creeds.map((c, i) => `
+    <div class="home-creed-row">
+      <span class="home-creed-num">${nums[i]}</span>
+      <span class="home-creed-text">${escapeHTML(c[0])}<br>${escapeHTML(c[1])}</span>
+    </div>`).join("");
 }
 
 // --- 残り時間(今年 / 45歳 / 80歳)---
-function homeLifespan(metrics) {
+// v71: 参照系セクションとして折りたたみ化(homeFoldSection)するため、本体(.home-life グリッド)
+//      のみを返すbody専用関数にした。
+function homeLifespanBody(metrics) {
   const items = metrics.filter((m) => m.label !== "12WY");
   if (items.length === 0) return "";
   return `
-    <section class="panel home-life">
+    <div class="home-life">
       ${items.map((m) => `
         <div class="home-life-cell">
           <div class="home-life-top">
@@ -1560,7 +1619,7 @@ function homeLifespan(metrics) {
           <div class="home-life-num">${(m.value || "").replace("あと", "")}</div>
           <div class="progress"><span style="width:${clamp(m.progress, 0, 100)}%"></span></div>
         </div>`).join("")}
-    </section>`;
+    </div>`;
 }
 
 // 予定時刻の範囲表示
@@ -1772,9 +1831,10 @@ function homeScoreboard(blocks) {
       </div>
       <div class="progress home-score-bar"><span style="width:${pct}%"></span></div>
     </div>`;
+  // v71: 「今日の主役」はhomeMITがトップ(home-mit-anchor)に移動したため、ジャンプ先もそこに追従
   return `<div class="home-scoreboard">
     ${cell("orange", "タスクシュート着手", tc.pct, "%", `${tc.done}/${tc.total}`, tc.pct, "homezone-1")}
-    ${cell("orange", "今日の主役", mitDone, `/${mit.length}`, "MIT", mitPct, "homezone-1")}
+    ${cell("orange", "今日の主役", mitDone, `/${mit.length}`, "MIT", mitPct, "home-mit-anchor")}
     ${cell("green", "ルーティン実行", rt.pct, "%", `${rt.done}/${rt.total}`, rt.pct, "homezone-2")}
     ${cell("blue", "12週 今週", wk.pct, "%", `${wk.done}/${wk.total}`, wk.pct, "homezone-3")}
   </div>`;
@@ -1802,39 +1862,18 @@ function homeCheckRow(b, star, showCD) {
 }
 
 // --- 今日の主役(MIT)---
+// v71: 前日AIフィードバックのMIT候補ブロックは「AIから」カード(homeAiHub / aiFeedbackCandidatesHTML)へ
+//      移動した(散らばったAI系表示の集約)。追加アクション自体(mit-candidate-add)は変更していない。
 function homeMIT(blocks) {
   const mit = blocks.filter((b) => b.isMIT);
   const done = mit.filter((b) => b.completed).length;
   const rows = mit.length
     ? mit.map((b) => homeCheckRow(b, "★")).join("")
     : `<div class="muted" style="font-size:13px;padding:6px 0">タスクシュート画面の ☆ で、今日の主役(最大3)を設定できます。</div>`;
-  // v38: 反省→行動ループの結線 — 前日のAIフィードバックの「明日のMIT候補」を提示し、
-  //      ワンタップで今日の主役ブロックにできる(枠が空いている日のみ)
-  let candidatesHTML = "";
-  const isToday = state.selectedDate === todayISO();
-  if (isToday && mit.length < 3) {
-    const prev = addDays(state.selectedDate, -1);
-    const feedbackText = cachedFeedback[prev] || state.feedback[prev] || "";
-    const existingTitles = new Set(blocks.map((b) => b.title));
-    const candidates = extractMITCandidatesFromReport(feedbackText)
-      .filter((c) => !existingTitles.has(c))
-      .slice(0, 3 - mit.length);
-    if (candidates.length) {
-      candidatesHTML = `
-        <div class="home-divider"></div>
-        <div class="muted" style="font-size:11.5px; font-weight:700; margin-bottom:6px">🤖 昨日のフィードバックからの候補</div>
-        ${candidates.map((c) => `
-          <div class="home-ck">
-            <button class="btn ghost" style="font-size:11px; padding:5px 9px" data-action="mit-candidate-add" data-title="${escapeHTML(c)}">＋ 主役に</button>
-            <span class="home-ck-name">${escapeHTML(c)}</span>
-          </div>`).join("")}`;
-    }
-  }
   return `<section class="panel">
     <div class="home-plabel orange">今日の主役<span class="home-count">${done} / ${mit.length}</span></div>
     ${rows}
     ${mit.length ? `<div class="home-foot">今日はこの${mit.length}つ。ここに集中する。</div>` : ""}
-    ${candidatesHTML}
   </section>`;
 }
 
@@ -8836,15 +8875,45 @@ function aiWorkResultRowHTML(r) {
   </div>`;
 }
 
-// ホームカード: 「AIが処理した作業」。未処理が無ければ静かに非表示。
-function homeAiWork(isToday) {
-  if (!isToday) return "";
-  const items = pendingAiWorkResults();
-  if (!items.length) return "";
-  return `<section class="panel">
-    <div class="home-plabel orange">AIが処理した作業<span class="home-count">${items.length}</span></div>
-    ${items.map((r) => aiWorkResultRowHTML(r)).join("")}
+// v71: 散らばっていたAI系表示(鮮度インジケータ・AI作業結果・前日AIフィードバックのMIT候補)を
+//      「AIから」1カードに集約した(旧homeAiWork+旧aiFreshnessLine単独表示+旧homeMIT内候補を統合)。
+//      個々の中身(pendingAiWorkResults/aiWorkResultRowHTML/aiFreshnessLine/
+//      extractMITCandidatesFromReport)自体は変更せず、置き場所だけをまとめている。
+function homeAiHub(blocks, isToday) {
+  const workItems = isToday ? pendingAiWorkResults() : [];
+  const workHTML = workItems.length ? `
+    <div class="home-divider"></div>
+    <div class="home-ai-sub">AIが処理した作業<span class="home-count">${workItems.length}</span></div>
+    ${workItems.map((r) => aiWorkResultRowHTML(r)).join("")}` : "";
+  const candidatesHTML = isToday ? aiFeedbackCandidatesHTML(blocks) : "";
+  return `<section class="panel home-ai-hub">
+    <div class="home-plabel orange">AIから</div>
+    ${aiFreshnessLine()}
+    ${workHTML}
+    ${candidatesHTML}
   </section>`;
+}
+
+// v71: homeMIT内にあった「前日AIフィードバックのMIT候補」提示を分離(枠が空いている日のみ)。
+//      ワンタップで今日の主役ブロックに追加できる(mit-candidate-add アクションは既存のまま)。
+function aiFeedbackCandidatesHTML(blocks) {
+  const mit = blocks.filter((b) => b.isMIT);
+  if (mit.length >= 3) return "";
+  const prev = addDays(state.selectedDate, -1);
+  const feedbackText = cachedFeedback[prev] || state.feedback[prev] || "";
+  const existingTitles = new Set(blocks.map((b) => b.title));
+  const candidates = extractMITCandidatesFromReport(feedbackText)
+    .filter((c) => !existingTitles.has(c))
+    .slice(0, 3 - mit.length);
+  if (!candidates.length) return "";
+  return `
+    <div class="home-divider"></div>
+    <div class="home-ai-sub">🤖 昨日のフィードバックからの候補</div>
+    ${candidates.map((c) => `
+      <div class="home-ck">
+        <button class="btn ghost" style="font-size:11px; padding:5px 9px" data-action="mit-candidate-add" data-title="${escapeHTML(c)}">＋ 主役に</button>
+        <span class="home-ck-name">${escapeHTML(c)}</span>
+      </div>`).join("")}`;
 }
 
 // v67: AI連携の鮮度インジケータ(柱1b)。フィードバック/プランそれぞれの最終取得成功日からの

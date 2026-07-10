@@ -213,7 +213,8 @@ function check(name, cond, extra = "") {
     const resultIdCompleted = `${TODAY}__ai-task-1`;
     const resultIdBlocked = `${TODAY}__ai-task-2`;
     const resultIdQueued = `${TODAY}__idx2`;
-    check("「AIが処理した作業」カードが表示される", await page.locator('.home-plabel:has-text("AIが処理した作業")').count() === 1);
+    // v71: 「AIが処理した作業」は独立カードから「AIから」集約カード内のサブ見出し(.home-ai-sub)に変更された
+    check("「AIが処理した作業」カードが表示される", await page.locator('.home-ai-sub:has-text("AIが処理した作業")').count() === 1);
     check("3件のai-work-rowが表示される", await page.locator(".ai-work-row").count() === 3);
     check("completed行に「実績として登録」ボタンがある",
       await page.locator(`[data-action="ai-work-approve"][data-result-id="${resultIdCompleted}"]`).count() === 1);
