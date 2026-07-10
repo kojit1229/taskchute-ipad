@@ -15,7 +15,7 @@
 // 方針: 既存スイート(v61/v62/v63)と同じく、app.js は type="module" のため内部関数は window に
 // 露出しない。ブラウザ操作 + localStorage 状態の直接注入で観測する。AIプランのfetchは
 // v70でv62.test.jsと同じくpage.route(実ファイル不使用)によるモックへ書き換えた(理由はv62.test.js参照)。
-const { chromium, launchOptions, startServer } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
 
 const PORT = 4204;
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -32,6 +32,8 @@ function check(name, cond, extra = "") {
   const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
+  // v72: api.github.com への実ネットワーク呼び出しを既定404で塞ぐ(個人データAPI化に伴う対策。tests/helpers.js参照)
+  await blockGithubApiByDefault(page);
 
   const pad2 = (n) => String(n).padStart(2, "0");
   const isoDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
@@ -106,7 +108,11 @@ function check(name, cond, extra = "") {
 
   try {
     // v70: AIプラン_<TODAY>.json のfetchを常にモックする(実ファイル不使用)。
-    await page.route((url) => decodeURIComponent(url.pathname) === `/AIプラン_${TODAY}.json`, (route) => {
+    // v72: 個人データはGitHub Contents API(personal-data リポジトリの taskchute/ 配下)経由に
+    //      なったため、判定を同一オリジンの絶対パスから api.github.com のcontents URL末尾一致に更新。
+    await page.route((url) =>
+      url.hostname === "api.github.com" && decodeURIComponent(url.pathname).endsWith(`/taskchute/AIプラン_${TODAY}.json`),
+    (route) => {
       if (aiPlanFixture === null) return route.fulfill({ status: 404, body: "not found (test-fixture)" });
       route.fulfill({ status: 200, contentType: "application/json", body: aiPlanFixture });
     });
@@ -114,6 +120,9 @@ function check(name, cond, extra = "") {
     await page.clock.setFixedTime(now0);  // goto前に固定してアプリ起動時のnew Date()から一貫させる
     await page.goto(`http://localhost:${PORT}/`);
     await page.waitForTimeout(500);
+    // v72: トークン+個人データリポジトリ未設定だとセットアップ画面(ゲート)で止まるため、
+    // 既存スイートの前提(設定済みstate)を保つためテスト用トークンを注入する(tests/helpers.js参照)
+    await passGithubGate(page);
 
     // ============================================================
     // (a) normalizeState 後方互換

@@ -1,5 +1,5 @@
 // v54 検証: 計器盤の追加チャート(ドーナツ / カテゴリ双極 / 複数折れ線 / カレンダー / ヒストグラム)
-const { chromium, launchOptions, startServer } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
 
 const PORT = 4193;
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -16,6 +16,8 @@ function check(name, cond, extra = "") {
   const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 1200 } });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
+  // v72: api.github.com への実ネットワーク呼び出しを既定404で塞ぐ(個人データAPI化に伴う対策。tests/helpers.js参照)
+  await blockGithubApiByDefault(page);
 
   const today = new Date();
   const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -24,6 +26,9 @@ function check(name, cond, extra = "") {
 
   await page.goto(`http://localhost:${PORT}/`);
   await page.waitForTimeout(600);
+  // v72: トークン+個人データリポジトリ未設定だとセットアップ画面(ゲート)で止まるため、
+  // 既存スイートの前提(設定済みstate)を保つためテスト用トークンを注入する(tests/helpers.js参照)
+  await passGithubGate(page);
 
   // ---- seed: 過去4週の実績Block(カテゴリ・充放電・実績時刻)+ 記録日 ----
   await page.evaluate(({ KEY, days, TODAY }) => {

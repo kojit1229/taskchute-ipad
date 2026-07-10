@@ -8,7 +8,7 @@
 //     confirmed(userStart/userMin付き)/removed/discarded が記録される
 //     (旧v52.test.jsが検証していた recordScheduleHistory/block.aiPlan は app.js から
 //     削除していない現存コードのため、v52削除に伴いここへ検証を移設した)
-const { chromium, launchOptions, startServer } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
 
 const PORT = 4190;
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -25,6 +25,8 @@ function check(name, cond, extra = "") {
   const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
+  // v72: api.github.com への実ネットワーク呼び出しを既定404で塞ぐ(個人データAPI化に伴う対策。tests/helpers.js参照)
+  await blockGithubApiByDefault(page);
 
   const pad2 = (n) => String(n).padStart(2, "0");
   const isoDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
@@ -51,6 +53,9 @@ function check(name, cond, extra = "") {
   await page.clock.setFixedTime(now0);  // goto前に固定してアプリ起動時のnew Date()から一貫させる
   await page.goto(`http://localhost:${PORT}/`);
   await page.waitForTimeout(600);
+  // v72: トークン+個人データリポジトリ未設定だとセットアップ画面(ゲート)で止まるため、
+  // 既存スイートの前提(設定済みstate)を保つためテスト用トークンを注入する(tests/helpers.js参照)
+  await passGithubGate(page);
 
   // ---- (b) 旧stateにAPIキー等が残っていても normalizeState で掃除される ----
   console.log("[1] 旧保存値の掃除(APIキー・モデル・プロンプト・自動レビュー)");

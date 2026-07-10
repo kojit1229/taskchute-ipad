@@ -199,6 +199,18 @@ document.addEventListener("click", (event) => {
   if (action === "download-data") downloadData();
   if (action === "save-github") saveToGitHub();
   if (action === "load-github") loadFromGitHub();
+  // v72: セットアップ画面(トークンゲート)の「設定してはじめる」。dataOwner/dataRepo/token
+  // 自体は data-github-field の input ハンドラで既に state.settings.github へ保存済みなので、
+  // ここでは再判定して render() するだけ(未入力ならトーストで案内)。
+  if (action === "gate-continue") {
+    syncGitHubFieldsFromDOM();
+    if (!personalDataReady(state.settings.github)) {
+      showToast("Owner・Repository・トークンをすべて入力してください");
+    } else {
+      render();
+      syncFromGitHubOnStartup().then(() => hydrateStaticMarkdown());
+    }
+  }
   if (action === "reset-demo") resetDemoData();
   // v17: MIT(今日の主役)の切替(最大3個)
   if (action === "toggle-mit") toggleMIT(id);
@@ -755,6 +767,9 @@ function normalizeState(value) {
     value.settings.github.autoSave = false;
   }
   value.settings.github.lastSavedAt ||= "";
+  // v72: 個人データ用リポジトリ(既定 kojit1229/personal-data)。token/branchは既存フィールド共用。
+  value.settings.github.dataOwner ||= "kojit1229";
+  value.settings.github.dataRepo ||= "personal-data";
   // v60: Claude API 直接呼び出しは全廃した(コスト理由。AI活用は自宅PCのバッチ→ファイル連携に限定)。
   //      APIキー・モデル選択・プロンプトテンプレ・朝イチ自動レビューの設定UIは削除済み。
   //      過去に保存されたキー等が端末のlocalStorageに残らないよう、既存値があれば明示的に消す。
@@ -1200,7 +1215,12 @@ function defaultGitHubSettings() {
     path: "app-state.json",
     token: "",
     autoSave: false,
-    lastSavedAt: ""
+    lastSavedAt: "",
+    // v72: 個人データ(app-state.json/日報/AIフィードバック/AIプラン/週次レビュー/AI作業結果/
+    // Vision・Affirmation)は private リポジトリへ分離する。token/branch は上記フィールドを共用し、
+    // 保存先の owner/repo だけをこの2フィールドで切り替える(既定 kojit1229/personal-data)。
+    dataOwner: "kojit1229",
+    dataRepo: "personal-data"
   };
 }
 
@@ -1409,14 +1429,70 @@ function makeBlock(input) {
 }
 
 function render() {
+  // v72: トークン+個人データリポジトリ未設定の端末は、セットアップ画面だけを表示して
+  // タイムライン等の中身を一切出さない(実質ログインゲート)。localStorageの設定有無判定のみで
+  // 判定し、有効性はここでは検証しない(検証は初回API呼び出しの成否=401バナーに委ねる)。
+  if (!personalDataReady(state.settings.github)) {
+    app.dataset.view = "gate";
+    renderGate();
+    return;
+  }
   app.dataset.view = state.currentView;
   renderSidebar();
   renderBottomNav();
   renderMain();
   renderTimelineRail();
   renderSyncBanner();  // v43: 全再描画で消えるバナーを再注入
+  renderPersonalDataAuthBanner();  // v72: 401時の案内(全再描画で消えるため再注入)
   // v40: 着手ジュースは1回の描画で消費する(次の描画では付かない)。CSS アニメは挿入時に1回再生。
   state._justStartedBlockId = null;
+}
+
+// v72: 起動時セットアップ画面(トークンゲート)。sidebar/bottomNav/timelineRailは空にし、
+// #main だけにフォーム(Owner/Repository/Token)を出す。data-github-fieldは既存の
+// input/changeハンドラをそのまま再利用する(設定タブの実装と同じ属性名)。
+function renderGate() {
+  sidebar.innerHTML = "";
+  bottomNav.innerHTML = "";
+  timelineRail.innerHTML = "";
+  const github = state.settings.github || defaultGitHubSettings();
+  main.innerHTML = `
+    <div style="max-width:480px; margin:48px auto; padding:0 16px">
+      <div class="panel stack" style="padding:20px">
+        <h2>🔒 個人データの保護設定</h2>
+        <div class="muted" style="font-size:13px; line-height:1.7">
+          このアプリは日報・ジャーナル・AIフィードバックなどの個人データを、あなた専用の
+          private GitHubリポジトリ(既定 <code>${escapeHTML(github.dataOwner || "kojit1229")}/${escapeHTML(github.dataRepo || "personal-data")}</code>)へ
+          GitHub API 経由で保存します。正しく設定されるまでアプリの中身は表示されません。
+        </div>
+        <div class="muted" style="font-size:12px; line-height:1.8">
+          <b>設定手順</b><br>
+          1. GitHubで private リポジトリ(既定名 <code>personal-data</code>)を作成<br>
+          2. Fine-grained Personal Access Token を発行し、そのリポジトリへの
+          <b>Contents: Read and write</b> 権限を付与<br>
+          3. 下の欄にトークンと Owner / Repository を入力して「設定してはじめる」
+        </div>
+        <form class="stack" autocomplete="on" onsubmit="return false">
+          <label>Owner
+            <input class="input" data-github-field="dataOwner" value="${escapeHTML(github.dataOwner || "")}"
+              id="gh-owner" name="gh-username" autocomplete="username"
+              autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="kojit1229">
+          </label>
+          <label>Repository
+            <input class="input" data-github-field="dataRepo" value="${escapeHTML(github.dataRepo || "")}"
+              autocomplete="off" placeholder="personal-data">
+          </label>
+          <label>Fine-grained token
+            <input class="input" type="password" data-github-field="token" value="${escapeHTML(github.token || "")}"
+              id="gh-token" name="gh-token" autocomplete="current-password"
+              autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="GitHub token">
+          </label>
+        </form>
+        <button class="btn primary" data-action="gate-continue">設定してはじめる</button>
+        ${_personalDataAuthError ? `<div class="muted" style="color:#c0392b; font-size:12px; margin-top:6px">⚠ ${escapeHTML(_personalDataAuthError)}</div>` : ""}
+      </div>
+    </div>
+  `;
 }
 
 function renderSidebar() {
@@ -1537,6 +1613,8 @@ function renderHome() {
       <button class="btn primary" data-action="today">今日へ</button>
     </div>`)}
     ${renderDateBar()}
+    ${homeFoldSection("creed", true, "home-creed", "home-creed-head", "三 つ の 信 条", homeCreedBody())}
+    ${homeFoldSection("lifespan", true, "", "", "寿命カウントダウン(残り時間)", homeLifespanBody(metrics))}
     ${homeIdeal(isToday)}
     ${homeHero(blocks, isToday)}
     <div id="home-mit-anchor">${homeMIT(blocks)}</div>
@@ -1555,8 +1633,6 @@ function renderHome() {
         ${homeRoutine(blocks)}
       </div>
     </div>
-    ${homeFoldSection("creed", false, "home-creed", "home-creed-head", "三 つ の 信 条", homeCreedBody())}
-    ${homeFoldSection("lifespan", false, "", "", "寿命カウントダウン(残り時間)", homeLifespanBody(metrics))}
     <div class="home-zone-block z-blue" id="homezone-3">
       <details class="home-fold" data-fold-id="zone3" ${isHomeFoldOpen("zone3", false) ? "open" : ""}>
         <summary class="home-zone blue home-fold-summary"><span class="home-fold-chevron">▶</span>長い弧をたしかめる</summary>
@@ -2572,7 +2648,7 @@ function fallbackMorningPlan(candidates, freeGaps) {
 // 採用可能な項目が1件も無い場合のみ null にする(M1レビュー対応: 一部だけ古くても全体を
 // 捨てない)。
 async function tryFetchAiPlan(date, freeGaps) {
-  const raw = await fetchText(`./AIプラン_${date}.json`);
+  const raw = await fetchGitHubRawText(`AIプラン_${date}.json`);
   if (!raw) return null;  // 取得失敗(404含む。fetchTextは404で空文字を返す)
   let data;
   try { data = JSON.parse(raw); } catch { return null; }  // 不正JSON
@@ -2638,7 +2714,7 @@ async function tryFetchAiPlan(date, freeGaps) {
 // v67: AIプラン_<date>.json の存在確認のみ(下書きへの適用はtryFetchAiPlan/runAiMorningPlanの専管)。
 //      state.aiLinkFreshness.planAt 更新用の軽量シグナル。厳密な項目検証はしない(存在=鮮度の証拠で足りる)。
 async function fetchAiPlanFreshnessDate(date) {
-  const raw = await fetchText(`./AIプラン_${date}.json`);
+  const raw = await fetchGitHubRawText(`AIプラン_${date}.json`);
   if (!raw) return null;
   try {
     const data = JSON.parse(raw);
@@ -4749,7 +4825,7 @@ function renderJournal() {
           <h2>📝 当日編集</h2>
           <div class="row">
             <button class="btn primary" data-action="generate-report">📊 日報を生成</button>
-            ${(state.settings.github?.token && state.settings.github?.owner) ? `<button class="btn" data-action="push-report">📤 GitHubに日報push</button>` : ""}
+            ${personalDataReady(state.settings.github) ? `<button class="btn" data-action="push-report">📤 GitHubに日報push</button>` : ""}
           </div>
         </div>
         ${renderMorningEnergyPicker(date)}
@@ -4953,27 +5029,29 @@ function renderSettings() {
         </div>
       </div>
       <div class="panel stack">
-        <h2>クラウド保存(GitHub)</h2>
+        <h2>クラウド保存(個人データリポジトリ)</h2>
         <div class="muted" style="font-size:12px; line-height:1.6">
-          データは端末内(localStorage)を主とし、GitHub 上の 1 ファイルを端末間の同期・バックアップに使います。<br>
+          個人データ(app-state.json・日報・AIフィードバック・AIプラン・週次レビュー・AI作業結果・
+          Vision/Affirmation)は、あなた専用の <b>private</b> GitHubリポジトリの <code>taskchute/</code> 配下に
+          Contents API 経由で保存します(v72。旧・同一オリジンfetchへのフォールバックはありません)。<br>
           自動保存を ON にすると変更後 30 秒で push。起動時に GitHub 側が新しければ自動で取り込みます(新しい方を採用)。
         </div>
         <form class="stack" autocomplete="on" onsubmit="return false">
           <label>Owner
-            <input class="input" data-github-field="owner" value="${escapeHTML(github.owner)}"
+            <input class="input" data-github-field="dataOwner" value="${escapeHTML(github.dataOwner || "")}"
               id="gh-owner" name="gh-username" autocomplete="username"
               autocapitalize="off" autocorrect="off" spellcheck="false">
           </label>
           <label>Repository
-            <input class="input" data-github-field="repo" value="${escapeHTML(github.repo)}" autocomplete="off">
+            <input class="input" data-github-field="dataRepo" value="${escapeHTML(github.dataRepo || "")}" autocomplete="off" placeholder="personal-data">
           </label>
           <label>Branch
             <input class="input" data-github-field="branch" value="${escapeHTML(github.branch)}" autocomplete="off">
           </label>
-          <label>保存先パス
+          <label>保存先ファイル名(taskchute/配下)
             <input class="input" data-github-field="path" value="${escapeHTML(github.path)}" autocomplete="off" placeholder="app-state.json">
           </label>
-          <div class="muted" style="font-size:11px">推奨: <code>app-state.json</code>(リポジトリのルート直下)</div>
+          <div class="muted" style="font-size:11px">推奨: <code>app-state.json</code>(実際の保存先は <code>taskchute/app-state.json</code>)</div>
           <label>Fine-grained token
             <input class="input" type="password" data-github-field="token" value="${escapeHTML(github.token)}"
               id="gh-token" name="gh-token" autocomplete="current-password"
@@ -6004,7 +6082,7 @@ function renderWeekly() {
       <textarea class="textarea" data-weekly-md="${week}" style="min-height:120px; margin-top:12px" placeholder="この週の気づき・来週変えることをメモ(Markdown)">${escapeHTML(review.md || "")}</textarea>
       <div class="row" style="gap:8px; margin-top:10px; flex-wrap:wrap">
         <button class="btn" data-action="weekly-download" data-week="${week}">週次mdをダウンロード</button>
-        ${(state.settings.github?.token && state.settings.github?.owner) ? `<button class="btn" data-action="weekly-push" data-week="${week}">GitHubへpush</button>` : ""}
+        ${personalDataReady(state.settings.github) ? `<button class="btn" data-action="weekly-push" data-week="${week}">GitHubへpush</button>` : ""}
       </div>
     </div>
   `;
@@ -6159,7 +6237,7 @@ function renderCycle() {
       <textarea class="textarea" data-cycle-md="${cycleStart}" style="min-height:120px" placeholder="この12週の総括・次サイクルで変えること(Markdown)">${escapeHTML(review.md || "")}</textarea>
       <div class="row" style="gap:8px; margin-top:10px; flex-wrap:wrap">
         <button class="btn" data-action="cycle-download" data-cycle="${cycleStart}">サイクルmdをダウンロード</button>
-        ${(state.settings.github?.token && state.settings.github?.owner) ? `<button class="btn" data-action="cycle-push" data-cycle="${cycleStart}">GitHubへpush</button>` : ""}
+        ${personalDataReady(state.settings.github) ? `<button class="btn" data-action="cycle-push" data-cycle="${cycleStart}">GitHubへpush</button>` : ""}
       </div>
       <button class="btn primary" data-action="cycle-start-new" style="margin-top:12px; width:100%">新しい12週を今日から始める</button>
     </div>
@@ -7775,7 +7853,7 @@ function scheduleAutoSave() {
   // v37: OFF になったら予約済みのタイマーも解除する
   //      (OFF直前の変更で予約された保存が30秒後に飛ぶのを防ぐ)
   if (!cfg.autoSave) { clearTimeout(autoSaveTimer); return; }
-  if (!cfg.token || !cfg.owner || !cfg.repo) return;
+  if (!personalDataReady(cfg)) return;
   clearTimeout(autoSaveTimer);
   updateAutoSaveStatus("変更を検知 — 30秒後に保存します");
   autoSaveTimer = setTimeout(() => {
@@ -7795,7 +7873,7 @@ const AUTO_SYNC_PULL_THROTTLE_MS = 60 * 1000;
 
 function autoSyncReady() {
   const cfg = state.settings.github || {};
-  if (!state.settings.autoSync || !cfg.token || !cfg.owner || !cfg.repo) return false;
+  if (!state.settings.autoSync || !personalDataReady(cfg)) return false;
   if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
   return true;
 }
@@ -7812,7 +7890,7 @@ async function runAutoSyncPush() {
   if (!(state.dataModifiedAt && state.dataModifiedAt > (state.settings.lastPushedAt || ""))) return;  // 未変更
   try {
     // push前ガード: remote の dataModifiedAt を確認(別端末が進めていたら中止)
-    const remoteT = (JSON.parse((await downloadGitHubStateText(cfg)).text).dataModifiedAt) || "";
+    const remoteT = (JSON.parse((await downloadGitHubStateText(personalDataFileConfig(cfg))).text).dataModifiedAt) || "";
     if (remoteT && remoteT > (state.settings.lastPushedAt || "")) {
       setSyncBanner("リモートに新しいデータがあります。設定から pull を確認してください");
       return;
@@ -7837,7 +7915,7 @@ async function runAutoSyncPull() {
   _lastPullCheckAt = now;
   const cfg = state.settings.github;
   try {
-    const { text, sha } = await downloadGitHubStateText(cfg);
+    const { text, sha } = await downloadGitHubStateText(personalDataFileConfig(cfg));
     const remote = JSON.parse(text);
     const remoteT = remote.dataModifiedAt || "";
     const localT = state.dataModifiedAt || "";
@@ -7944,9 +8022,9 @@ async function loadFromGitHub() {
 // ローカルを即描画した後にバックグラウンドで実行される。
 async function syncFromGitHubOnStartup() {
   const cfg = state.settings.github || {};
-  if (!cfg.token || !cfg.owner || !cfg.repo) return;  // 未設定なら何もしない
+  if (!personalDataReady(cfg)) return;  // 未設定なら何もしない
   try {
-    const { text, sha } = await downloadGitHubStateText(cfg);
+    const { text, sha } = await downloadGitHubStateText(personalDataFileConfig(cfg));
     const remote = JSON.parse(text);
     // v37: 比較は「起動時点のローカル更新時刻」と行う。
     //      fetch中にユーザーがタブを触るなどして saveState が走ると localT が進み、
@@ -7991,14 +8069,97 @@ function syncGitHubFieldsFromDOM() {
   });
 }
 
+// v72: =========================================================
+//  個人データリポジトリ(既定 kojit1229/personal-data)への全面切替。
+//  日報・AIフィードバック・AIプラン・週次レビュー・AI作業結果・app-state.json・
+//  Vision/Affirmation は全てここ経由(taskchute/ 配下)で読み書きする。
+//  token/branch は既存のGitHub設定フィールドを共用し、owner/repoだけを
+//  dataOwner/dataRepo に差し替える(旧owner/repoフィールドはこの用途では使わない)。
+// =========================================================
+const PERSONAL_DATA_DIR = "taskchute";
+
+function personalDataReady(rawCfg) {
+  const cfg = rawCfg || state.settings.github || {};
+  return !!(cfg.token && cfg.dataOwner && cfg.dataRepo);
+}
+
+// {owner, repo, branch, token} = 個人データリポジトリへの接続情報
+function personalDataConn(rawCfg) {
+  const cfg = rawCfg || state.settings.github || {};
+  const defaults = defaultGitHubSettings();
+  return {
+    owner: cfg.dataOwner || defaults.dataOwner,
+    repo: cfg.dataRepo || defaults.dataRepo,
+    branch: cfg.branch || "main",
+    token: cfg.token || ""
+  };
+}
+
+function personalDataPath(name) {
+  return `${PERSONAL_DATA_DIR}/${name}`;
+}
+
+// 接続情報 + 単一ファイルのpathをまとめて返す(gitHubContentsURL等の既存ヘルパーへそのまま渡せる形)
+function personalDataFileConfig(rawCfg, name) {
+  const cfg = rawCfg || state.settings.github || {};
+  return { ...personalDataConn(cfg), path: personalDataPath(name || cfg.path || "app-state.json") };
+}
+
+// v72: personal-data リポジトリからの読み込み専用GET(Contents API、raw取得)。
+// 未設定/404は静かに空文字を返す(既存fetchTextと同じ「無ければ無視」流儀)。
+// 401(トークン権限不足)だけは具体的なバナーを出す(セットアップ画面通過後に起きうる)。
+async function fetchGitHubRawText(name) {
+  const cfg = state.settings.github || {};
+  if (!personalDataReady(cfg)) return "";
+  const conn = personalDataConn(cfg);
+  try {
+    const path = personalDataPath(name).split("/").map(encodeURIComponent).join("/");
+    const url = `https://api.github.com/repos/${encodeURIComponent(conn.owner)}/${encodeURIComponent(conn.repo)}/contents/${path}?ref=${encodeURIComponent(conn.branch)}`;
+    const response = await fetch(url, {
+      headers: { ...githubHeaders(conn.token), "Accept": "application/vnd.github.raw+json" }
+    });
+    if (response.status === 401) {
+      setPersonalDataAuthError("トークンに personal-data リポジトリの権限が必要です(Fine-grained tokenのRepository access / Contents権限を確認してください)");
+      return "";
+    }
+    if (!response.ok) return "";  // 404等は「まだ無い」として静かに無視する
+    clearPersonalDataAuthError();
+    return await response.text();
+  } catch {
+    return "";
+  }
+}
+
+// v72: 401時のみ表示する具体的な案内バナー(非永続)。renderSyncBanner と同じ「モーダルで
+// 作業を止めない」思想で、#main先頭に静かに差し込む。
+let _personalDataAuthError = "";
+function setPersonalDataAuthError(msg) {
+  if (_personalDataAuthError === msg) return;
+  _personalDataAuthError = msg;
+  renderPersonalDataAuthBanner();
+}
+function clearPersonalDataAuthError() {
+  if (!_personalDataAuthError) return;
+  _personalDataAuthError = "";
+  renderPersonalDataAuthBanner();
+}
+function renderPersonalDataAuthBanner() {
+  const existing = document.querySelector(".pd-auth-banner");
+  if (existing) existing.remove();
+  if (_personalDataAuthError && main) {
+    main.insertAdjacentHTML("afterbegin",
+      `<div class="pd-auth-banner sync-banner" data-action="nav" data-view="settings">⚠ ${escapeHTML(_personalDataAuthError)} — 設定へ</div>`);
+  }
+}
+
 function requireGitHubConfig() {
   syncGitHubFieldsFromDOM();
-  const config = state.settings.github || defaultGitHubSettings();
-  const labels = { owner: "Owner", repo: "Repository", branch: "Branch", path: "保存先パス", token: "Token" };
-  for (const key of ["owner", "repo", "branch", "path", "token"]) {
-    if (!config[key]) throw new Error(`${labels[key]} を入力してください`);
+  const raw = state.settings.github || defaultGitHubSettings();
+  const labels = { dataOwner: "個人データ Owner", dataRepo: "個人データ Repository", token: "Token" };
+  for (const key of ["dataOwner", "dataRepo", "token"]) {
+    if (!raw[key]) throw new Error(`${labels[key]} を入力してください`);
   }
-  return config;
+  return personalDataFileConfig(raw, raw.path || "app-state.json");
 }
 
 async function fetchGitHubFileSHA(config) {
@@ -8076,7 +8237,7 @@ function fromBase64(text) {
 // =========================================================
 const BACKUP_LAST_DATE_KEY = "taskchute-backup-last-date";  // 端末ローカル(state を汚さない)
 const BACKUP_KEEP_DAYS = 14;
-const BACKUP_DIR = "backups";
+const BACKUP_DIR = "taskchute/backups";  // v72: 個人データリポジトリのtaskchute/配下へ移動
 
 function gitHubBackupURL(cfg, name) {
   const base = `https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${BACKUP_DIR}`;
@@ -8084,8 +8245,9 @@ function gitHubBackupURL(cfg, name) {
 }
 
 async function maybeWriteBackupSnapshot() {
-  const cfg = state.settings.github || {};
-  if (!cfg.token || !cfg.owner || !cfg.repo) return;
+  const raw = state.settings.github || {};
+  if (!personalDataReady(raw)) return;
+  const cfg = personalDataConn(raw);  // v72: owner/repoは個人データリポジトリのものを使う
   const today = todayISO();
   try {
     if (localStorage.getItem(BACKUP_LAST_DATE_KEY) === today) return;  // 1日1回
@@ -8200,11 +8362,15 @@ async function restoreBackup(date) {
     if (!resp.ok) throw new Error(await gitHubErrorMessage(resp));
     const payload = await resp.json();
     const text = fromBase64(payload.content || "");
-    // スナップショットは token を含まないので、この端末の値を引き継ぐ
-    const token = state.settings.github.token;
+    // v72: スナップショットの settings.github(dataOwner/dataRepo/branch/path/token等)は
+    // 復元時点の値であり得るため採用せず、常にこの端末の現在の接続設定をそのまま維持する
+    // (cfg は requireGitHubConfig() の変換済み形状で owner/repo が dataOwner/dataRepo の値に
+    //  なっているため、そのまま next.settings.github へ流し込むと dataOwner/dataRepo/path が
+    //  壊れる。token を含め素の raw 設定を丸ごと引き継ぐのが正しい)。
+    const currentGithubSettings = state.settings.github;
     clearTimeout(autoSaveTimer);
     const next = normalizeState(JSON.parse(text));
-    next.settings.github = { ...next.settings.github, ...cfg, token };
+    next.settings.github = { ...next.settings.github, ...currentGithubSettings };
     state = next;
     maintainRecurrences({ purge: true });
     closeModal();
@@ -8267,11 +8433,12 @@ function collectArchivable() {
 }
 
 async function runArchive({ manual = false } = {}) {
-  const cfg = state.settings.github || {};
-  if (!cfg.token || !cfg.owner || !cfg.repo) {
-    if (manual) showToast("アーカイブには GitHub 設定(token)が必要です");
+  const raw = state.settings.github || {};
+  if (!personalDataReady(raw)) {
+    if (manual) showToast("アーカイブには GitHub 設定(個人データリポジトリ・token)が必要です");
     return;
   }
+  const cfg = personalDataConn(raw);  // v72: 個人データリポジトリへ
   const { byYear, textCut, blockCut } = collectArchivable();
   const years = Object.keys(byYear).sort();
   if (!years.length) {
@@ -8281,7 +8448,7 @@ async function runArchive({ manual = false } = {}) {
   if (manual) showToast("📦 アーカイブ中…");
   try {
     for (const year of years) {
-      const filePath = `archive/archive-${year}.json`;
+      const filePath = personalDataPath(`archive/archive-${year}.json`);
       // 既存アーカイブを読み込んでマージ(日付キー / Block id で冪等)
       const existing = await fetchGitHubJSONFile(cfg, filePath);
       const merged = existing?.obj && typeof existing.obj === "object"
@@ -8326,8 +8493,7 @@ async function runArchive({ manual = false } = {}) {
 
 function maybeAutoArchive() {
   if (!state.settings.autoArchive) return;
-  const cfg = state.settings.github || {};
-  if (!cfg.token || !cfg.owner || !cfg.repo) return;
+  if (!personalDataReady(state.settings.github)) return;
   const today = todayISO();
   try {
     if (localStorage.getItem(ARCHIVE_LAST_DATE_KEY) === today) return;  // 1日1回(失敗しても再試行しない)
@@ -8359,12 +8525,13 @@ function refreshSearchResults() {
 async function loadArchiveForSearch() {
   if (_archiveCache) return refreshSearchResults();
   if (_archiveLoadState === "loading") return;
-  const cfg = state.settings.github || {};
-  if (!cfg.token || !cfg.owner || !cfg.repo) return showToast("アーカイブ検索には GitHub 設定が必要です");
+  const raw = state.settings.github || {};
+  if (!personalDataReady(raw)) return showToast("アーカイブ検索には GitHub 設定(個人データリポジトリ)が必要です");
+  const cfg = personalDataConn(raw);  // v72: 個人データリポジトリへ
   _archiveLoadState = "loading";
   refreshSearchResults();
   try {
-    const dirResp = await fetch(`${gitHubFileURL(cfg, "archive")}?ref=${encodeURIComponent(cfg.branch)}`, {
+    const dirResp = await fetch(`${gitHubFileURL(cfg, personalDataPath("archive"))}?ref=${encodeURIComponent(cfg.branch)}`, {
       headers: githubHeaders(cfg.token)
     });
     const merged = { reports: {}, feedback: {}, journals: {} };
@@ -8375,7 +8542,7 @@ async function loadArchiveForSearch() {
         .map((it) => String(it.name || ""))
         .filter((n) => /^archive-\d{4}\.json$/.test(n));
       for (const name of files) {
-        const file = await fetchGitHubJSONFile(cfg, `archive/${name}`);
+        const file = await fetchGitHubJSONFile(cfg, personalDataPath(`archive/${name}`));
         if (!file?.obj) continue;
         Object.assign(merged.reports, file.obj.reports || {});
         Object.assign(merged.feedback, file.obj.feedback || {});
@@ -8599,12 +8766,15 @@ function startTimerTicker() {
           // focus フェーズ終了 → 自動で休憩へ
           goBreakPomodoro();
         }
-      } else if (state.currentView === "pomodoro") {
+      } else if (state.currentView === "pomodoro" && personalDataReady(state.settings.github)) {
+        // v72レビュー対応: renderMain()はrender()のトークンゲート判定を経由しないため、
+        // トークン喪失等でゲートに戻るべき状態のままここが直接呼ばれると、ゲート画面の
+        // 裏で#mainだけが再描画され続ける穴になる。ここでも同じ判定を明示的にかける。
         renderMain();
       }
     }
     // 常時タイマー(壁時計モデル): ポモドーロ画面を開いている間は常に再描画
-    if (state.currentView === "pomodoro" && state.pomodoro?.tab === "passive") {
+    if (state.currentView === "pomodoro" && state.pomodoro?.tab === "passive" && personalDataReady(state.settings.github)) {
       renderMain();
     }
     // v41: 見込み終了時刻は該当 span のみ差し替え(全再描画しない)
@@ -8650,8 +8820,9 @@ function saveAndRender(message) {
 }
 
 async function hydrateStaticMarkdown() {
-  const visionPromise = fetchText("./Vision.md");
-  const affirmPromise = fetchText("./Daily_Affirmation.md");
+  // v72: 個人データリポジトリ(taskchute/content/配下)からのGitHub API取得に切替(同一オリジンfetch廃止)
+  const visionPromise = fetchGitHubRawText("content/Vision.md");
+  const affirmPromise = fetchGitHubRawText("content/Daily_Affirmation.md");
   const [visionText, affirmText] = await Promise.all([visionPromise, affirmPromise]);
   let changed = false;
   if (visionText && visionText !== cachedVisionMd) {
@@ -8676,8 +8847,8 @@ async function hydrateStaticMarkdown() {
   const wantFetchPrev = (d) =>
     d === addDays(todayISO(), -1) && !(state.feedback[d] || "").trim() && !cachedFeedback[d];
   const [todayFb, prevFb] = await Promise.all([
-    wantFetch(today) ? fetchText(`./AIフィードバック_${today}.md`) : Promise.resolve(""),
-    wantFetchPrev(prev) ? fetchText(`./AIフィードバック_${prev}.md`) : Promise.resolve("")
+    wantFetch(today) ? fetchGitHubRawText(`AIフィードバック_${today}.md`) : Promise.resolve(""),
+    wantFetchPrev(prev) ? fetchGitHubRawText(`AIフィードバック_${prev}.md`) : Promise.resolve("")
   ]);
   if (todayFb && todayFb !== cachedFeedback[today]) {
     cachedFeedback[today] = todayFb;
@@ -8708,7 +8879,7 @@ async function hydrateStaticMarkdown() {
   //      (fetchTextの仕様どおり)。週次レビュータブを開くたび同じ週の再fetchはしない。
   const weeklyReviewWeek = weekStartFor(todayISO());
   if (!cachedWeeklyReviewMd[weeklyReviewWeek]) {
-    const weeklyReviewMd = await fetchText(`./週次レビュー_${weeklyReviewWeek}.md`);
+    const weeklyReviewMd = await fetchGitHubRawText(`週次レビュー_${weeklyReviewWeek}.md`);
     if (weeklyReviewMd && weeklyReviewMd !== cachedWeeklyReviewMd[weeklyReviewWeek]) {
       cachedWeeklyReviewMd[weeklyReviewWeek] = weeklyReviewMd;
       changed = true;
@@ -8758,7 +8929,7 @@ async function reloadStaticMarkdown() {
 // resultId は taskId(無ければ配列index)+日付で合成し、二重登録防止の照合キーにする。
 async function hydrateAiWorkResults() {
   const date = todayISO();
-  const raw = await fetchText(`./AI作業結果_${date}.json`);
+  const raw = await fetchGitHubRawText(`AI作業結果_${date}.json`);
   if (!raw) { cachedAiWorkResults = null; return false; }
   let data;
   try { data = JSON.parse(raw); } catch { cachedAiWorkResults = null; return false; }
@@ -8936,14 +9107,20 @@ function aiFreshnessLine() {
   `;
 }
 
+// v72レビュー対応: Vision/Affirmationの実体は個人データリポジトリの taskchute/content/ 配下に
+// 移行済みのため、旧 state.settings.github の owner/repo(=このアプリ自身のpublicリポジトリ)
+// ではなく personalDataConn/personalDataPath で個人データリポジトリ側の編集URLを組む
+// (呼び出し元 renderVisionMd の data-path は "Vision.md"/"Daily_Affirmation.md" のままでよく、
+// ここで "content/" プレフィックスを補う)。
 function openMdInGithub(path) {
   const cfg = state.settings.github || {};
-  if (!cfg.owner || !cfg.repo) {
-    showToast("設定画面でGitHubのowner/repoを入れてください");
+  if (!personalDataReady(cfg)) {
+    showToast("設定画面で個人データリポジトリ(Owner/Repository/Token)を入れてください");
     return;
   }
-  const branch = cfg.branch || "main";
-  const url = `https://github.com/${cfg.owner}/${cfg.repo}/edit/${branch}/${path}`;
+  const conn = personalDataConn(cfg);
+  const fullPath = personalDataPath(`content/${path}`);
+  const url = `https://github.com/${conn.owner}/${conn.repo}/edit/${conn.branch}/${fullPath}`;
   window.open(url, "_blank", "noopener");
 }
 
@@ -8957,16 +9134,6 @@ function setVisionBoardIndex(index) {
   state.settings.visionBoardIndex = index;
   persistLocalNoSchedule();  // v37: 同上
   render();
-}
-
-async function fetchText(path) {
-  try {
-    const response = await fetch(path, { cache: "no-cache" });
-    if (!response.ok) return "";
-    return await response.text();
-  } catch {
-    return "";
-  }
 }
 
 function showToast(message) {
@@ -10305,8 +10472,8 @@ function uploadFeedbackFile(date, file) {
     saveState();
     showToast(`AIフィードバック ${date} を保存しました`);
     render();
-    // GitHub に設定があれば自動 push
-    if (state.settings.github?.token && state.settings.github?.owner) {
+    // GitHub(個人データリポジトリ)に設定があれば自動 push
+    if (personalDataReady(state.settings.github)) {
       recordFeedbackFile(date); // v56: 起動時 fetch を存在既知の日付に限定(404ノイズ回避)
       pushFileToGitHub(`AIフィードバック_${date}.md`, text, "アップロードAIフィードバック");
     }
@@ -10322,21 +10489,23 @@ async function pushReportToGitHub() {
     showToast("日報がまだ生成されていません");
     return;
   }
-  if (!state.settings.github?.token) {
-    showToast("GitHub設定が未入力です");
+  if (!personalDataReady(state.settings.github)) {
+    showToast("GitHub設定(個人データリポジトリ)が未入力です");
     return;
   }
   await pushFileToGitHub(`日報_${date}.md`, report, `日報 ${date}`);
 }
 
+// v72: 個人データリポジトリ(taskchute/配下)への書き込み専用PUT
 async function pushFileToGitHub(filename, content, label) {
   try {
-    const cfg = state.settings.github;
-    if (!cfg.owner || !cfg.repo || !cfg.token) {
-      throw new Error("GitHub設定が未入力です");
+    const raw = state.settings.github;
+    if (!personalDataReady(raw)) {
+      throw new Error("GitHub設定(個人データリポジトリ・token)が未入力です");
     }
+    const cfg = personalDataConn(raw);
     const branch = cfg.branch || "main";
-    const url = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${encodeURIComponent(filename)}`;
+    const url = `https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${personalDataPath(encodeURIComponent(filename))}`;
     // 既存ファイルのSHAを取得
     let sha = "";
     try {
@@ -10377,7 +10546,7 @@ const _originalGenerateReport = generateReport;
 generateReport = function(dateArg, opts = {}) {
   const result = _originalGenerateReport(dateArg, opts);
   const cfg = state.settings.github;
-  if (!opts.quiet && cfg?.autoSave && cfg?.token && cfg?.owner) {
+  if (!opts.quiet && cfg?.autoSave && personalDataReady(cfg)) {
     const date = dateArg || state.selectedDate;
     const report = state.reports[date];
     if (report) {

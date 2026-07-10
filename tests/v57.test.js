@@ -4,9 +4,10 @@
 //
 // v60メモ: このfetch(AIフィードバック_日付.md)は自宅PCバッチ→ファイル連携の経路であり、
 // アプリ内Claude API直接呼び出しとは別物なのでv60でも削除していない。
-const path = require("path");
-const fs = require("fs");
-const { chromium, launchOptions, startServer, ROOT } = require("./helpers");
+// v72: 個人データはGitHub Contents API(personal-data リポジトリの taskchute/ 配下)経由に
+//      なったため、リポジトリ直下への実ファイル書き込みをやめ、v62等と同じくpage.routeの
+//      可変fixtureでモックする。
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
 
 const PORT = 4193;
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -35,19 +36,35 @@ function check(name, cond, extra = "") {
   // 実「昨日」と隣接しない過去日(前日=6日前になり、実「昨日」とは一致しない)
   const PAST = iso(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 5));
   const FEEDBACK_MARKER = "v57テスト用マーカー_" + Date.now();
-  const feedbackPath = path.join(ROOT, `AIフィードバック_${YESTERDAY}.md`);
+  // v72: 実ファイルの代わりにこの変数をfetchのモック応答として使う(null=404)
+  let feedbackFixture = null;
 
   try {
+    // v72: api.github.com への実ネットワーク呼び出しを既定404で塞ぐ(個人データAPI化に伴う対策)
+    await blockGithubApiByDefault(page);
+    await page.route((url) =>
+      url.hostname === "api.github.com" && decodeURIComponent(url.pathname).endsWith(`/taskchute/AIフィードバック_${YESTERDAY}.md`),
+    (route) => {
+      if (feedbackFixture === null) return route.fulfill({ status: 404, body: "not found (test-fixture)" });
+      route.fulfill({ status: 200, contentType: "text/markdown", body: feedbackFixture });
+    });
+
     await page.clock.setFixedTime(now);  // goto前に固定してアプリ起動時のnew Date()から一貫させる
     await page.goto(`http://localhost:${PORT}/`);
     await page.waitForTimeout(600);
+    // v72: トークン+個人データリポジトリ未設定だとセットアップ画面(ゲート)で止まるため、
+    // 既存スイートの前提(設定済みstate)を保つためテスト用トークンを注入する(tests/helpers.js参照)
+    await passGithubGate(page);
 
     // fetch監視: 実fetchは素通しし、AIフィードバック_*.md への要求だけ記録する(v56と同様の手法)
     await page.addInitScript(() => {
       window.__fbReqs = [];
       const orig = window.fetch;
       window.fetch = (url, opts) => {
-        const u = String(url);
+        // v72: fetch先がGitHub Contents API(パスがpercent-encodeされる)になったため、
+        // 生のURL文字列には日本語ファイル名がそのまま現れない。decodeしてから判定する。
+        let u = String(url);
+        try { u = decodeURIComponent(u); } catch { /* デコード不能ならそのまま */ }
         if (u.includes("AIフィードバック_")) window.__fbReqs.push(u);
         return orig(url, opts);
       };
@@ -75,7 +92,7 @@ function check(name, cond, extra = "") {
     // (feedbackFilesへの登録・回数)と、取得した本文がジャーナルの「前日のフィードバック」欄に
     // 実際に描画されることで代替確認する(詳細はCHANGES_v60.md)。
     console.log("[2] 直push検知: feedbackFiles未登録でも昨日分を読み込み、ジャーナルに反映される");
-    fs.writeFileSync(feedbackPath, `# 昨日のAIフィードバック\n\n${FEEDBACK_MARKER}\n`, "utf8");
+    feedbackFixture = `# 昨日のAIフィードバック\n\n${FEEDBACK_MARKER}\n`;
 
     await page.evaluate(({ KEY, TODAY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
@@ -104,8 +121,6 @@ function check(name, cond, extra = "") {
     check("取得した前日フィードバックの本文がジャーナルに反映される(マーカー一致)",
       journalText.includes(FEEDBACK_MARKER), journalText.slice(0, 200));
   } finally {
-    // リポジトリ直下に書いたテスト用ファイルは必ず削除する
-    try { if (fs.existsSync(feedbackPath)) fs.unlinkSync(feedbackPath); } catch { /* ignore */ }
     await browser.close();
     server.close();
   }

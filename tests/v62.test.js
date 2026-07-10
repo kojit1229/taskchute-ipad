@@ -18,7 +18,7 @@
 // finally で削除していたが、本番バッチ(plan-daily.sh等)が同名の実ファイルを日次でcommitする
 // ため、実行日によってはテスト終了後に実ファイルが一時的に消える環境依存の副作用があった
 // (v67 CHANGES参照)。v70でこれを恒久修正し、実ファイルには一切触れない。
-const { chromium, launchOptions, startServer } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
 
 const PORT = 4202;
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -35,6 +35,8 @@ function check(name, cond, extra = "") {
   const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
+  // v72: api.github.com への実ネットワーク呼び出しを既定404で塞ぐ(個人データAPI化に伴う対策。tests/helpers.js参照)
+  await blockGithubApiByDefault(page);
 
   const pad2 = (n) => String(n).padStart(2, "0");
   const isoDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
@@ -121,11 +123,17 @@ function check(name, cond, extra = "") {
   try {
     // v70: AIプラン_<TODAY>.json / 週次レビュー_<WEEK>.md のfetchを常にモックする(実ファイル不使用)。
     //      aiPlanFixture/weeklyReviewFixtureがnullなら404、文字列ならその内容で200を返す。
-    await page.route((url) => decodeURIComponent(url.pathname) === `/AIプラン_${TODAY}.json`, (route) => {
+    // v72: 個人データはGitHub Contents API(personal-data リポジトリの taskchute/ 配下)経由に
+    //      なったため、判定を同一オリジンの絶対パスから api.github.com のcontents URL末尾一致に更新。
+    await page.route((url) =>
+      url.hostname === "api.github.com" && decodeURIComponent(url.pathname).endsWith(`/taskchute/AIプラン_${TODAY}.json`),
+    (route) => {
       if (aiPlanFixture === null) return route.fulfill({ status: 404, body: "not found (test-fixture)" });
       route.fulfill({ status: 200, contentType: "application/json", body: aiPlanFixture });
     });
-    await page.route((url) => decodeURIComponent(url.pathname) === `/週次レビュー_${WEEK}.md`, (route) => {
+    await page.route((url) =>
+      url.hostname === "api.github.com" && decodeURIComponent(url.pathname).endsWith(`/taskchute/週次レビュー_${WEEK}.md`),
+    (route) => {
       if (weeklyReviewFixture === null) return route.fulfill({ status: 404, body: "not found (test-fixture)" });
       route.fulfill({ status: 200, contentType: "text/markdown", body: weeklyReviewFixture });
     });
@@ -133,6 +141,9 @@ function check(name, cond, extra = "") {
     await page.clock.setFixedTime(now0);  // goto前に固定してアプリ起動時のnew Date()から一貫させる
     await page.goto(`http://localhost:${PORT}/`);
     await page.waitForTimeout(500);
+    // v72: トークン+個人データリポジトリ未設定だとセットアップ画面(ゲート)で止まるため、
+    // 既存スイートの前提(設定済みstate)を保つためテスト用トークンを注入する(tests/helpers.js参照)
+    await passGithubGate(page);
 
     // ============================================================
     // (m4レビュー対応) normalizeState 後方互換: 旧aiScheduleHistoryエントリにsource/reasonが無くても

@@ -51,4 +51,38 @@ function startServer(port) {
   }).listen(port);
 }
 
-module.exports = { chromium, ROOT, launchOptions, startServer };
+// v72: 個人データはGitHub Contents API(private リポジトリ)経由になり、token+個人データ
+// リポジトリ(dataOwner/dataRepo)未設定の端末は起動時セットアップ画面(トークンゲート)で
+// 止まるようになった。既存スイートは「設定済み」state前提のため、この2つのヘルパーで
+// 影響を1箇所に吸収する:
+//   (1) blockGithubApiByDefault: api.github.com への予期しない実ネットワーク呼び出しを
+//       既定404で塞ぐ(個別スイートが後からより具体的な page.route を追加登録すれば、
+//       Playwrightは後発ハンドラを優先するのでそちらが勝つ)。goto前、他のpage.route
+//       登録より先に呼ぶこと。
+//   (2) passGithubGate: 初回goto(+waitForTimeout)で永続化済みのフルstateへ
+//       token/dataOwner/dataRepoを追加してreloadする(他フィールドは一切壊さない)。
+//       各スイートは初回goto直後に1回呼ぶだけでよい。
+const STATE_KEY = "taskchute-journal-pwa-state-v1";
+const GITHUB_API_HOST = "api.github.com";
+
+async function blockGithubApiByDefault(page) {
+  await page.route((url) => url.hostname === GITHUB_API_HOST, (route) =>
+    route.fulfill({ status: 404, contentType: "application/json", body: "{}" }));
+}
+
+async function passGithubGate(page, keyName = STATE_KEY) {
+  await page.evaluate((KEY) => {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    s.settings.github.token = s.settings.github.token || "test-token-v72";
+    s.settings.github.dataOwner = s.settings.github.dataOwner || "kojit1229";
+    s.settings.github.dataRepo = s.settings.github.dataRepo || "personal-data";
+    localStorage.setItem(KEY, JSON.stringify(s));
+  }, keyName);
+  await page.reload();
+  await page.waitForTimeout(500);
+}
+
+module.exports = {
+  chromium, ROOT, launchOptions, startServer,
+  blockGithubApiByDefault, passGithubGate, GITHUB_API_HOST, STATE_KEY
+};

@@ -19,7 +19,7 @@
 // 露出しない。ブラウザ操作 + localStorage 状態の直接注入で観測する。Clock APIで時刻を固定し、
 // AIプラン/AIフィードバック/週次レビューの実ファイルfetchはpage.routeで常に404隔離する
 // (本番バッチが実際にこれらを日次でcommitするため、実ファイル有無に結果が左右されないようにする)。
-const { chromium, launchOptions, startServer } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
 
 const PORT = 4209;
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -37,6 +37,8 @@ function check(name, cond, extra = "") {
   const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
+  // v72: api.github.com への実ネットワーク呼び出しを既定404で塞ぐ(個人データAPI化に伴う対策。tests/helpers.js参照)
+  await blockGithubApiByDefault(page);
 
   await page.route((url) => {
     const p = decodeURIComponent(url.pathname);
@@ -98,6 +100,9 @@ function check(name, cond, extra = "") {
     await page.clock.setFixedTime(now0);
     await page.goto(`http://localhost:${PORT}/`);
     await page.waitForTimeout(500);
+    // v72: トークン+個人データリポジトリ未設定だとセットアップ画面(ゲート)で止まるため、
+    // 既存スイートの前提(設定済みstate)を保つためテスト用トークンを注入する(tests/helpers.js参照)
+    await passGithubGate(page);
 
     // ============================================================
     // (a) タブ順
@@ -119,24 +124,32 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (b) ホームの折りたたみ
     // ============================================================
-    console.log("[2] ホームの折りたたみ4種は既定closed(信条/寿命/長い弧/足あと)");
+    // v72(K指示・追加要件): 信条/寿命はホーム最上部(Now/MITより上)へ移動し、既定openに変更。
+    // 長い弧/今日の足あとは既存どおり下部・既定closedのまま(CHANGES_v72.md参照)。
+    console.log("[2] ホームの折りたたみ: 信条/寿命は既定open(v72でトップ移動)、長い弧/足あとは既定closed");
     await page.evaluate((FOLD_KEY) => localStorage.removeItem(FOLD_KEY), FOLD_KEY);
     await seed({ blocks: [], view: "home" });
-    for (const id of ["creed", "lifespan", "zone3", "zone4"]) {
+    for (const id of ["creed", "lifespan"]) {
+      const isOpen = await page.locator(`details[data-fold-id="${id}"]`).evaluate((el) => el.open);
+      check(`${id} は既定open(v72)`, isOpen === true, String(isOpen));
+    }
+    for (const id of ["zone3", "zone4"]) {
       const isOpen = await page.locator(`details[data-fold-id="${id}"]`).evaluate((el) => el.open);
       check(`${id} は既定closed`, isOpen === false, String(isOpen));
     }
 
-    console.log("[3] 折りたたみを開くとlocalStorage(state本体とは別キー)に記憶され、リロード後も維持される");
-    await page.click('details[data-fold-id="creed"] > summary');
+    console.log("[3] 折りたたみを閉じる/開くとlocalStorage(state本体とは別キー)に記憶され、リロード後も維持される");
+    // v72: creedは既定openになったため、ここではまだ未操作のzone4(既定closed)で
+    // 「操作→記憶→リロード後も維持」の仕組み自体を検証する(v71時点の趣旨を維持)。
+    await page.click('details[data-fold-id="zone4"] > summary');
     await page.waitForTimeout(200);
-    check("creedを開くとopen属性が付く", await page.locator('details[data-fold-id="creed"]').evaluate((el) => el.open));
+    check("zone4を開くとopen属性が付く", await page.locator('details[data-fold-id="zone4"]').evaluate((el) => el.open));
     const fm1 = await foldMap();
-    check("localStorageにcreed:trueが記録される", fm1.creed === true, JSON.stringify(fm1));
+    check("localStorageにzone4:trueが記録される", fm1.zone4 === true, JSON.stringify(fm1));
     check("他の折りたたみ(zone3)は記録を汚さずfalseのまま", fm1.zone3 !== true, JSON.stringify(fm1));
     await page.reload();
     await page.waitForTimeout(400);
-    check("リロード後もcreedはopenのまま", await page.locator('details[data-fold-id="creed"]').evaluate((el) => el.open));
+    check("リロード後もzone4はopenのまま", await page.locator('details[data-fold-id="zone4"]').evaluate((el) => el.open));
     check("リロード後もzone3はclosedのまま", await page.locator('details[data-fold-id="zone3"]').evaluate((el) => el.open) === false);
 
     // ============================================================

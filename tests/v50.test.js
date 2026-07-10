@@ -5,7 +5,7 @@
 // 全廃したため、①③④(いずれもcallClaude前提)は機能ごと削除した。②のスケジュール下書きは
 // 決定論配置(computeFreeGaps→fallbackMorningPlan)に置き換えて存続するため、本スイートは
 // D&D操作(ドラッグ・リサイズ・確定・破棄)の検証として残す。AIのfetchモックは使わない。
-const { chromium, ROOT, launchOptions, startServer } = require("./helpers");
+const { chromium, ROOT, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
 
 const PORT = 4198;
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -23,6 +23,8 @@ function check(name, cond, extra = "") {
   const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
+  // v72: api.github.com への実ネットワーク呼び出しを既定404で塞ぐ(個人データAPI化に伴う対策。tests/helpers.js参照)
+  await blockGithubApiByDefault(page);
 
   const today = new Date();
   // コーディネーター指摘(2026-07-09, v61レビュー): このスイートは「現在時刻からの空き枠」を
@@ -46,6 +48,9 @@ function check(name, cond, extra = "") {
   await page.clock.setFixedTime(today);  // goto前に固定してアプリ起動時のnew Date()から一貫させる
   await page.goto(`http://localhost:${PORT}/`);
   await page.waitForTimeout(600);
+  // v72: トークン+個人データリポジトリ未設定だとセットアップ画面(ゲート)で止まるため、
+  // 既存スイートの前提(設定済みstate)を保つためテスト用トークンを注入する(tests/helpers.js参照)
+  await passGithubGate(page);
 
   // ---- seed: プロジェクト/タスク + 既存Block(空き枠の開始を固定するため) ----
   await page.evaluate(({ TODAY, KEY, occupiedUntil }) => {

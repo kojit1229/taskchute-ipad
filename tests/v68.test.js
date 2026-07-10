@@ -19,7 +19,7 @@
 // 方針: v62/v65/v67と同じく、app.js は type="module" のため内部関数はwindowに露出しない。
 // ブラウザ操作 + localStorage 状態の直接注入で観測する。AIプラン/AIフィードバック/週次レビューの
 // 実ファイルfetchはpage.routeで常に404隔離し、リポジトリの実ファイル有無に結果が左右されないようにする。
-const { chromium, launchOptions, startServer } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
 
 const PORT = 4207;
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -36,6 +36,8 @@ function check(name, cond, extra = "") {
   const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
+  // v72: api.github.com への実ネットワーク呼び出しを既定404で塞ぐ(個人データAPI化に伴う対策。tests/helpers.js参照)
+  await blockGithubApiByDefault(page);
 
   // v67と同じ理由: 本番バッチが実際にAIプラン_*.json/AIフィードバック_*.md/週次レビュー_*.mdを
   // 日次でcommitするため、これらを常に404にルーティングして環境依存を消す。
@@ -103,6 +105,9 @@ function check(name, cond, extra = "") {
     await page.clock.setFixedTime(now0);
     await page.goto(`http://localhost:${PORT}/`);
     await page.waitForTimeout(500);
+    // v72: トークン+個人データリポジトリ未設定だとセットアップ画面(ゲート)で止まるため、
+    // 既存スイートの前提(設定済みstate)を保つためテスト用トークンを注入する(tests/helpers.js参照)
+    await passGithubGate(page);
 
     // ============================================================
     // (g) normalizeState 後方互換

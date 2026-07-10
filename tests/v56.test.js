@@ -1,6 +1,6 @@
 // v56 検証: Codexレビュー反映(入力16px / hoverオフセット撤去 / 下書き削除の前面化 /
 //            アイコン404解消 / placeholder引用符 / AIフィードバックfetchの404ノイズ解消)
-const { chromium, launchOptions, startServer } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
 
 const PORT = 4192;
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -17,6 +17,8 @@ function check(name, cond, extra = "") {
   const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
+  // v72: api.github.com への実ネットワーク呼び出しを既定404で塞ぐ(個人データAPI化に伴う対策。tests/helpers.js参照)
+  await blockGithubApiByDefault(page);
 
   const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const TODAY = iso(new Date());
@@ -25,6 +27,9 @@ function check(name, cond, extra = "") {
 
   await page.goto(`http://localhost:${PORT}/`);
   await page.waitForTimeout(600);
+  // v72: トークン+個人データリポジトリ未設定だとセットアップ画面(ゲート)で止まるため、
+  // 既存スイートの前提(設定済みstate)を保つためテスト用トークンを注入する(tests/helpers.js参照)
+  await passGithubGate(page);
 
   // ---- [1] 入力の font-size 16px 以上(#2 クラス指定 / #3 インラインstyle)----
   console.log("[1] 入力の font-size 16px 以上");
@@ -142,7 +147,11 @@ function check(name, cond, extra = "") {
     window.__fbReqs = [];
     const orig = window.fetch;
     window.fetch = (url, opts) => {
-      const u = String(url);
+      // v72: 個人データAPI化でfetch先がGitHub Contents API(パス部分がpercent-encode
+      // される)になったため、生のURL文字列には日本語のファイル名がそのまま現れない。
+      // decodeURIComponentしてから判定する(v56/v57 共通の対応)。
+      let u = String(url);
+      try { u = decodeURIComponent(u); } catch { /* デコード不能ならそのまま */ }
       if (u.includes("AIフィードバック_")) window.__fbReqs.push(u);
       return orig(url, opts);
     };

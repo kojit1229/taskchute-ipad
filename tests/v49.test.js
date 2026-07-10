@@ -4,7 +4,7 @@
 // も検証していたが、v60でアプリ内からのClaude API直接呼び出しを全廃したため、AIレビュー実行・
 // APIキー入力・モデル選択に関する検証は削除した(機能自体が削除されたため。詳細は
 // CHANGES_v60.md 参照)。世代バックアップ・横断検索は無関係の機能なのでそのまま残す。
-const { chromium, ROOT, launchOptions, startServer } = require("./helpers");
+const { chromium, ROOT, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
 
 const PORT = 4199;
 
@@ -21,11 +21,16 @@ function check(name, cond, extra = "") {
   const ctx = await browser.newContext({ serviceWorkers: "block" });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
+  // v72: api.github.com への実ネットワーク呼び出しを既定404で塞ぐ(個人データAPI化に伴う対策。tests/helpers.js参照)
+  await blockGithubApiByDefault(page);
 
   // ---- 起動 ----
   console.log("[1] 起動");
   await page.goto(`http://localhost:${PORT}/`);
   await page.waitForTimeout(600);
+  // v72: トークン+個人データリポジトリ未設定だとセットアップ画面(ゲート)で止まるため、
+  // 既存スイートの前提(設定済みstate)を保つためテスト用トークンを注入する(tests/helpers.js参照)
+  await passGithubGate(page);
   await page.click('[data-action="nav"][data-view="settings"]');
   await page.waitForTimeout(300);
   check("バックアップ復元ボタンがある", await page.locator('[data-action="open-backup-list"]').count() === 1);
@@ -100,28 +105,28 @@ function check(name, cond, extra = "") {
     window.fetch = (url, opts = {}) => {
       const u = String(url); const method = opts.method || "GET";
       window.__ghCalls.push({ url: u, method });
-      // メインファイル SHA / 本文
-      if (u.includes("/contents/app-state.json") && method === "GET") {
+      // メインファイル SHA / 本文(v72: 個人データリポジトリの taskchute/ 配下)
+      if (u.includes("/contents/taskchute/app-state.json") && method === "GET") {
         return Promise.resolve(new Response(JSON.stringify({ sha: "sha-main-1", content: btoa(unescape(encodeURIComponent(JSON.stringify({ dataModifiedAt: "" })))), encoding: "base64" }), { status: 200 }));
       }
-      if (u.includes("/contents/app-state.json") && method === "PUT") {
+      if (u.includes("/contents/taskchute/app-state.json") && method === "PUT") {
         return Promise.resolve(new Response(JSON.stringify({ content: { sha: "sha-main-2" } }), { status: 200 }));
       }
-      // backups: 今日のファイルはまだ無い
-      if (u.includes("/contents/backups/app-state-") && method === "GET") {
+      // backups: 今日のファイルはまだ無い(v72: taskchute/backups/配下)
+      if (u.includes("/contents/taskchute/backups/app-state-") && method === "GET") {
         return Promise.resolve(new Response(JSON.stringify({ message: "Not Found" }), { status: 404 }));
       }
-      if (u.includes("/contents/backups/app-state-") && method === "PUT") {
+      if (u.includes("/contents/taskchute/backups/app-state-") && method === "PUT") {
         return Promise.resolve(new Response(JSON.stringify({ content: { sha: "sha-bk-1" } }), { status: 200 }));
       }
       // backups ディレクトリ一覧(古いものを1つ混ぜる)
-      if (u.match(/\/contents\/backups\?/) && method === "GET") {
+      if (u.match(/\/contents\/taskchute\/backups\?/) && method === "GET") {
         return Promise.resolve(new Response(JSON.stringify([
           { name: "app-state-2026-05-01.json", sha: "sha-old" },
           { name: "app-state-2026-07-06.json", sha: "sha-recent" }
         ]), { status: 200 }));
       }
-      if (u.includes("/contents/backups/app-state-2026-05-01.json") && method === "DELETE") {
+      if (u.includes("/contents/taskchute/backups/app-state-2026-05-01.json") && method === "DELETE") {
         return Promise.resolve(new Response("{}", { status: 200 }));
       }
       return Promise.resolve(new Response("{}", { status: 200 }));
@@ -132,7 +137,7 @@ function check(name, cond, extra = "") {
   await page.click('[data-action="save-github"]');
   await page.waitForTimeout(1200);
   const ghCalls = await page.evaluate(() => window.__ghCalls);
-  const snapPut = ghCalls.find((c) => c.method === "PUT" && c.url.includes("/contents/backups/app-state-"));
+  const snapPut = ghCalls.find((c) => c.method === "PUT" && c.url.includes("/contents/taskchute/backups/app-state-"));
   const pruneDel = ghCalls.find((c) => c.method === "DELETE" && c.url.includes("app-state-2026-05-01.json"));
   check("保存成功後にスナップショット PUT", !!snapPut, JSON.stringify(ghCalls.map((c) => `${c.method} ${c.url.split("repos/")[1] || c.url}`)));
   check("14日より古い世代を DELETE(プルーニング)", !!pruneDel);
@@ -142,16 +147,16 @@ function check(name, cond, extra = "") {
   await page.click('[data-action="save-github"]');
   await page.waitForTimeout(800);
   const ghCalls2 = await page.evaluate(() => window.__ghCalls);
-  check("同日2回目はスナップショットをスキップ", !ghCalls2.some((c) => c.method === "PUT" && c.url.includes("/contents/backups/")));
+  check("同日2回目はスナップショットをスキップ", !ghCalls2.some((c) => c.method === "PUT" && c.url.includes("/contents/taskchute/backups/")));
 
   // 復元フロー
   await page.evaluate(() => {
     window.fetch = (url, opts = {}) => {
       const u = String(url); const method = opts.method || "GET";
-      if (u.match(/\/contents\/backups\?/) && method === "GET") {
+      if (u.match(/\/contents\/taskchute\/backups\?/) && method === "GET") {
         return Promise.resolve(new Response(JSON.stringify([{ name: "app-state-2026-07-06.json", sha: "sha-recent" }]), { status: 200 }));
       }
-      if (u.includes("/contents/backups/app-state-2026-07-06.json") && method === "GET") {
+      if (u.includes("/contents/taskchute/backups/app-state-2026-07-06.json") && method === "GET") {
         const snap = { dataModifiedAt: "2026-07-06T20:00", journals: { "2026-07-06": "スナップショットのジャーナル" }, settings: {} };
         return Promise.resolve(new Response(JSON.stringify({ sha: "sha-recent", encoding: "base64", content: btoa(unescape(encodeURIComponent(JSON.stringify(snap)))) }), { status: 200 }));
       }

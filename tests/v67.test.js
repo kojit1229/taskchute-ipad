@@ -16,10 +16,9 @@
 //
 // 方針: 既存スイート(v62/v65)と同じく、app.js は type="module" のため内部関数は window に
 // 露出しない。ブラウザ操作 + localStorage 状態の直接注入で観測する。AI作業結果_*.json のfetchは
-// v62.test.js と同じく実ファイルをリポジトリ直下に一時的に書いて読ませ、finally で必ず削除する。
-const path = require("path");
-const fs = require("fs");
-const { chromium, launchOptions, startServer, ROOT } = require("./helpers");
+// v70でpage.route(実ファイル不使用)によるモックへ書き換えた(v62.test.js参照。本番バッチが
+// 同名の実ファイルを日次でcommitするため、実行日依存を避ける)。
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
 
 const PORT = 4206;
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -36,6 +35,8 @@ function check(name, cond, extra = "") {
   const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
+  // v72: api.github.com への実ネットワーク呼び出しを既定404で塞ぐ(個人データAPI化に伴う対策。tests/helpers.js参照)
+  await blockGithubApiByDefault(page);
 
   // v67レビュー対応: このリポジトリには本番バッチ(plan-daily.sh等)が実際に
   // AIプラン_<今日>.json / AIフィードバック_<日付>.md / 週次レビュー_<週>.md を日次でcommitする。
@@ -43,11 +44,19 @@ function check(name, cond, extra = "") {
   // 「未取得(null)」を前提にしたシナリオ(鮮度のnormalizeState補完テスト等)が実行日に
   // よってREDになる環境依存バグを生む。v67.test.jsはこの3種のfetchを常に404にルーティングし、
   // リポジトリに実ファイルが有っても無くても結果が変わらないようにする。
-  // (AI作業結果_<今日>.json は本スイートが自前でファイルを書き/消して制御するため対象外)
+  // (AI作業結果_<今日>.json はこのスイート専用の可変fixture経由でモックする。下記参照)
   await page.route((url) => {
     const p = decodeURIComponent(url.pathname);
     return /\/AIプラン_.*\.json$/.test(p) || /\/AIフィードバック_.*\.md$/.test(p) || /\/週次レビュー_.*\.md$/.test(p);
   }, (route) => route.fulfill({ status: 404, body: "not found (test-forced)" }));
+
+  // v70(v62と同じ手法): 実ファイルを書く代わりに、この変数をfetchのモック応答として使う
+  // (null=404)。書き換えるだけで良く、テスト終了時の実ファイル後始末も不要。
+  let aiWorkResultFixture = null;
+  await page.route((url) => /\/AI作業結果_.*\.json$/.test(decodeURIComponent(url.pathname)), (route) => {
+    if (aiWorkResultFixture === null) return route.fulfill({ status: 404, body: "not found (test-fixture)" });
+    route.fulfill({ status: 200, contentType: "application/json", body: aiWorkResultFixture });
+  });
 
   const pad2 = (n) => String(n).padStart(2, "0");
   const isoDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
@@ -63,8 +72,6 @@ function check(name, cond, extra = "") {
   };
   const D3AGO = addDaysStr(TODAY, -3);
   const D1AGO = addDaysStr(TODAY, -1);
-
-  const aiWorkResultPath = path.join(ROOT, `AI作業結果_${TODAY}.json`);
 
   function wbsTask(id, title, extra = {}) {
     return {
@@ -103,6 +110,9 @@ function check(name, cond, extra = "") {
     await page.clock.setFixedTime(now0);  // goto前に固定してアプリ起動時のnew Date()から一貫させる
     await page.goto(`http://localhost:${PORT}/`);
     await page.waitForTimeout(500);
+    // v72: トークン+個人データリポジトリ未設定だとセットアップ画面(ゲート)で止まるため、
+    // 既存スイートの前提(設定済みstate)を保つためテスト用トークンを注入する(tests/helpers.js参照)
+    await passGithubGate(page);
 
     // ============================================================
     // (a) normalizeState 後方互換
@@ -196,11 +206,11 @@ function check(name, cond, extra = "") {
     // (d)〜(g) AI作業結果の取り込み(completed/blocked/queued)
     // ============================================================
     console.log("[7] AI作業結果_<今日>.json の3ステータスがホームカードに正しく表示される");
-    fs.writeFileSync(aiWorkResultPath, JSON.stringify([
+    aiWorkResultFixture = JSON.stringify([
       { taskId: "ai-task-1", title: "顧客資料の下調べ", status: "completed", summary: "候補3社をリスト化し比較表を作成した", outputPath: "workbench/out/2026-07-09-research/summary.md", minutes: 45 },
       { taskId: "ai-task-2", title: "請求書テンプレ更新", status: "blocked", summary: "テンプレの過去バージョンが2つあり、どちらを正とするか確認が必要", outputPath: "", minutes: 0 },
       { taskId: "", title: "本番環境への反映", status: "queued", summary: "", outputPath: "", minutes: 0 }
-    ]), "utf8");
+    ]);
     await seed({
       tasks: [
         wbsTask("ai-task-1", "顧客資料の下調べ", { aiWork: true, aiWorkBrief: "候補3社を比較してまとめてほしい" }),
@@ -267,7 +277,6 @@ function check(name, cond, extra = "") {
   } finally {
     await browser.close();
     server.close();
-    try { if (fs.existsSync(aiWorkResultPath)) fs.unlinkSync(aiWorkResultPath); } catch { /* ignore */ }
   }
 
   console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURES`);

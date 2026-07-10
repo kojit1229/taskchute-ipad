@@ -7,7 +7,7 @@
 // そのまま「常用経路」の検証として引き続き成立する(fallbackMorningPlan自体は無改修)。
 // フォールバックは computeFreeGaps の出力をそのまま使うため、配置境界を見ることで
 // computeFreeGaps の境界(占有なし/連続占有/日跨ぎ端)も間接的に検証できる。
-const { chromium, launchOptions, startServer } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
 
 const PORT = 4194;
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -24,6 +24,8 @@ function check(name, cond, extra = "") {
   const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
+  // v72: api.github.com への実ネットワーク呼び出しを既定404で塞ぐ(個人データAPI化に伴う対策。tests/helpers.js参照)
+  await blockGithubApiByDefault(page);
 
   const pad2 = (n) => String(n).padStart(2, "0");
   const isoDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
@@ -97,6 +99,9 @@ function check(name, cond, extra = "") {
   await page.clock.setFixedTime(now0);  // goto前に固定してアプリ起動時のnew Date()から一貫させる
   await page.goto(`http://localhost:${PORT}/`);
   await page.waitForTimeout(500);
+  // v72: トークン+個人データリポジトリ未設定だとセットアップ画面(ゲート)で止まるため、
+  // 既存スイートの前提(設定済みstate)を保つためテスト用トークンを注入する(tests/helpers.js参照)
+  await passGithubGate(page);
 
   // ---- [1] 空き時間の境界: 占有なし ----
   console.log("[1] computeFreeGaps 境界(占有なし)— 今〜23:00の1本に収まる");

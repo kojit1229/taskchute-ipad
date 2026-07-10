@@ -5,7 +5,7 @@
 // Claude API直接呼び出しを全廃したのに伴い、そのプロンプト注入経路(および呼び出し元を失った
 // buildScheduleLearningDigest/morningEnergyCorrelation自体)を削除したため、該当セクションは
 // 削除した(詳細はCHANGES_v60.md)。計器盤・自動アーカイブはAI呼び出しと無関係なのでそのまま残す。
-const { chromium, launchOptions, startServer } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
 
 const PORT = 4194;
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -23,6 +23,8 @@ const b64ToObj = (b64) => JSON.parse(Buffer.from(b64, "base64").toString("utf8")
   const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
+  // v72: api.github.com への実ネットワーク呼び出しを既定404で塞ぐ(個人データAPI化に伴う対策。tests/helpers.js参照)
+  await blockGithubApiByDefault(page);
 
   const today = new Date();
   const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -31,6 +33,9 @@ const b64ToObj = (b64) => JSON.parse(Buffer.from(b64, "base64").toString("utf8")
 
   await page.goto(`http://localhost:${PORT}/`);
   await page.waitForTimeout(600);
+  // v72: トークン+個人データリポジトリ未設定だとセットアップ画面(ゲート)で止まるため、
+  // 既存スイートの前提(設定済みstate)を保つためテスト用トークンを注入する(tests/helpers.js参照)
+  await passGithubGate(page);
 
   // ---- seed ----
   await page.evaluate(({ TODAY, KEY, daysAgoMap }) => {
@@ -97,19 +102,19 @@ const b64ToObj = (b64) => JSON.parse(Buffer.from(b64, "base64").toString("utf8")
     window.fetch = (url, opts = {}) => {
       const u = String(url);
       const m = opts.method || "GET";
-      if (u.includes("/contents/archive/archive-") && m === "GET") {
+      if (u.includes("/contents/taskchute/archive/archive-") && m === "GET") {
         const year = u.match(/archive-(\d{4})/)[1];
         if (year === "2026" && window.__gh.existing2026) {
           return Promise.resolve(new Response(JSON.stringify({ sha: "sha-a26", encoding: "base64", content: enc(window.__gh.existing2026) }), { status: 200 }));
         }
         return Promise.resolve(new Response(JSON.stringify({ message: "Not Found" }), { status: 404 }));
       }
-      if (u.includes("/contents/archive/archive-") && m === "PUT") {
+      if (u.includes("/contents/taskchute/archive/archive-") && m === "PUT") {
         if (window.__gh.failPut) return Promise.resolve(new Response(JSON.stringify({ message: "boom" }), { status: 500 }));
         window.__gh.puts.push({ url: u, body: JSON.parse(opts.body) });
         return Promise.resolve(new Response(JSON.stringify({ content: { sha: "sha-new" } }), { status: 200 }));
       }
-      if (u.match(/\/contents\/archive\?/) && m === "GET") {
+      if (u.match(/\/contents\/taskchute\/archive\?/) && m === "GET") {
         if (window.__gh.dirList) return Promise.resolve(new Response(JSON.stringify(window.__gh.dirList), { status: 200 }));
         return Promise.resolve(new Response(JSON.stringify({ message: "Not Found" }), { status: 404 }));
       }
@@ -171,19 +176,19 @@ const b64ToObj = (b64) => JSON.parse(Buffer.from(b64, "base64").toString("utf8")
     window.fetch = (url, opts = {}) => {
       const u = String(url);
       const m = opts.method || "GET";
-      if (u.includes("/contents/archive/archive-") && m === "GET") {
+      if (u.includes("/contents/taskchute/archive/archive-") && m === "GET") {
         const year = u.match(/archive-(\d{4})/)[1];
         if (year === "2026" && window.__gh.existing2026) {
           return Promise.resolve(new Response(JSON.stringify({ sha: "sha-a26", encoding: "base64", content: enc(window.__gh.existing2026) }), { status: 200 }));
         }
         return Promise.resolve(new Response(JSON.stringify({ message: "Not Found" }), { status: 404 }));
       }
-      if (u.includes("/contents/archive/archive-") && m === "PUT") {
+      if (u.includes("/contents/taskchute/archive/archive-") && m === "PUT") {
         if (window.__gh.failPut) return Promise.resolve(new Response(JSON.stringify({ message: "boom" }), { status: 500 }));
         window.__gh.puts.push({ url: u, body: JSON.parse(opts.body) });
         return Promise.resolve(new Response(JSON.stringify({ content: { sha: "sha-new" } }), { status: 200 }));
       }
-      if (u.match(/\/contents\/archive\?/) && m === "GET") {
+      if (u.match(/\/contents\/taskchute\/archive\?/) && m === "GET") {
         if (window.__gh.dirList) return Promise.resolve(new Response(JSON.stringify(window.__gh.dirList), { status: 200 }));
         return Promise.resolve(new Response(JSON.stringify({ message: "Not Found" }), { status: 404 }));
       }
