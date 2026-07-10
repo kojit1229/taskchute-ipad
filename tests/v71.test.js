@@ -177,7 +177,12 @@ function check(name, cond, extra = "") {
     const s5 = await stateNow();
     const added = (s5.blocks || []).find((b) => b.title === "テスト候補タスクX");
     check("候補がMITブロックとして追加される", !!added && added.isMIT === true, JSON.stringify(added));
-    check("追加後は候補カードから消える(既存タイトルは除外される)", !(await page.locator(".home-ai-hub").textContent()).includes("テスト候補タスクX"));
+    // v75: 「AIから」カードにAIフィードバック本文をそのまま読めるdetails(homeAiFeedbackReadHTML)が
+    // 追加されたため、.home-ai-hub 全体のtextContentには(既に候補から除外された後でも)元のraw
+    // フィードバック本文として「テスト候補タスクX」という文字列が残り得る(意図した仕様。CHANGES_v75.md参照)。
+    // ここで検証したい「既存タイトルは候補として二重に出ない」は、候補行(追加ボタン)の消滅で判定する。
+    check("追加後は候補(追加ボタン)がカードから消える(既存タイトルは除外される)",
+      await page.locator('.home-ai-hub [data-action="mit-candidate-add"][data-title="テスト候補タスクX"]').count() === 0);
 
     console.log("[6] MITが3件埋まっていれば候補セクション自体を出さない(既存仕様を踏襲)");
     await seed({
@@ -189,8 +194,13 @@ function check(name, cond, extra = "") {
       view: "home",
       feedback: { [YESTERDAY]: "## 明日のMIT候補\n- 埋まっているはずの候補\n" }
     });
+    // v75: 上と同じ理由で、raw本文を読めるdetailsのぶん .home-ai-hub のtextContentには
+    // フィードバック本文がそのまま出るため、「候補セクション自体が無い」ことは候補見出しの不在で判定する。
     const hubTextFull = await page.locator(".home-ai-hub").textContent();
-    check("MIT3件埋まっていれば候補は出ない", !hubTextFull.includes("埋まっているはずの候補"), hubTextFull);
+    check("MIT3件埋まっていれば候補セクション(見出し・追加ボタン)は出ない",
+      !hubTextFull.includes("昨日のフィードバックからの候補")
+        && await page.locator('.home-ai-hub [data-action="mit-candidate-add"]').count() === 0,
+      hubTextFull);
 
     // ============================================================
     // (d) スコアボードのジャンプ先

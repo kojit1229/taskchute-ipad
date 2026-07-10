@@ -412,6 +412,9 @@ document.addEventListener("click", (event) => {
   if (action === "ai-schedule") runAiSchedule();
   // v59: 朝の一括プランニング(繰越+WBS+MIT候補 → 空き時間へ仮配置)
   if (action === "ai-morning-plan") runAiMorningPlan();
+  // v75: 0秒思考テーマ提案(zeroSecThemes)のワンタップ選定
+  if (action === "zerosec-theme-add") decideZeroSecTheme(Number(target.dataset.idx), "added");
+  if (action === "zerosec-theme-skip") decideZeroSecTheme(Number(target.dataset.idx), "skipped");
   if (action === "draft-confirm") confirmScheduleDraft();
   if (action === "draft-discard" && _scheduleDraft) {
     // v52: 破棄も「この提案は不要だった」という学習シグナルとして記録(v62: source区別も記録)
@@ -978,6 +981,9 @@ function normalizeState(value) {
   //      skippedのkind:"ai"分は永続化されておらず、v64設計§3の「AIプランのskipped理由」学習シグナルが
   //      アプリ側で欠けていたため今回吸収する。
   if (!Array.isArray(value.aiPlanSkippedLog)) value.aiPlanSkippedLog = [];
+  // v75: AIプラン_*.json の zeroSecThemes(0秒思考テーマ提案)に対する採否ログ。
+  //      aiPlanSkippedLog/migrationRitualLogと同じ軽量配列の思想(学習ループ用データ)。
+  if (!Array.isArray(value.zeroSecThemeLog)) value.zeroSecThemeLog = [];
   // v67: AI連携の鮮度インジケータ(柱1b)。最後に取得成功した AIフィードバック_*.md /
   //      AIプラン_*.json の日付("YYYY-MM-DD")。取得成功のたびに前進のみさせる(後退させない)。
   if (!value.aiLinkFreshness || typeof value.aiLinkFreshness !== "object") value.aiLinkFreshness = {};
@@ -2606,6 +2612,7 @@ let _draftDrag = null;      // ドラッグ中の一時情報 非永続
 let _draftUndo = null;      // v62: 下書きレイヤ操作(×削除・ドラッグ)の直前スナップショット(1段Undo)非永続
 let _draftUndoHistoryEntry = null;  // v62(m2): _draftUndoが削除操作由来なら、その時記録したaiScheduleHistoryエントリの参照(Undoで取り消す)
 let _pendingRejectReason = null;  // v62: ×直後の却下理由ワンタップ選択(任意・非ブロッキング)非永続 { title, entry }
+let _zeroSecThemeDraft = null;  // v75: AIプラン_*.jsonのzeroSecThemes提案(0秒思考テーマ)。{ date, items:[{theme,reason}] } 非永続(_scheduleDraftと同じ思想)
 
 function minToHHMM(min) {
   const m = clamp(Math.round(min), 0, 24 * 60 - 1);
@@ -2741,6 +2748,49 @@ function draftBarHTML() {
       }).join(" ／ ")}
     </div>` : ""}`;
 }
+
+// v75: 朝の一括プランニング(runAiMorningPlan)が取得したAIプラン_*.jsonの zeroSecThemes を、
+//      下書きスケジュールバー(draftBarHTML)と同じタイムライン最上部に表示する。
+//      スケジュール下書きの有無とは独立(_scheduleDraftがnullでも出す)。ワンタップで
+//      「0秒思考リストに追加」または「見送り」を選べ、選ぶとカードから消える(新タブは作らない)。
+function zeroSecThemeBarHTML() {
+  if (!_zeroSecThemeDraft || _zeroSecThemeDraft.date !== state.selectedDate || !_zeroSecThemeDraft.items.length) return "";
+  return `
+    <div class="draft-bar" style="flex-direction:column; align-items:stretch; gap:6px">
+      <span>🧠 0秒思考のテーマ提案(AIプラン由来)</span>
+      ${_zeroSecThemeDraft.items.map((t, i) => `
+        <div class="home-ck" style="flex-wrap:wrap">
+          <div style="flex:1; min-width:180px">
+            <div class="home-ck-name">${escapeHTML(t.theme)}</div>
+            ${t.reason ? `<div class="muted" style="font-size:11px">${escapeHTML(t.reason)}</div>` : ""}
+          </div>
+          <button class="btn ghost" style="font-size:11px; padding:5px 9px" data-action="zerosec-theme-add" data-idx="${i}">＋ 0秒思考リストに追加</button>
+          <button class="btn ghost" style="font-size:11px; padding:5px 9px" data-action="zerosec-theme-skip" data-idx="${i}">見送り</button>
+        </div>`).join("")}
+    </div>`;
+}
+
+// v75: 上のカードの「追加」「見送り」ボタンの実処理。採否は zeroSecThemeLog へ記録し
+//      (aiPlanSkippedLogと同じ学習ループの型)、対象は下書きから外す(再表示しない)。
+function decideZeroSecTheme(idx, outcome) {
+  if (!_zeroSecThemeDraft) return;
+  const item = _zeroSecThemeDraft.items[idx];
+  if (!item) return;
+  if (outcome === "added") {
+    const existing = new Set(state.zeroThinking.themes.map((t) => t.text));
+    if (!existing.has(item.theme)) {
+      state.zeroThinking.themes.push({ id: crypto.randomUUID(), text: item.theme, fav: false, questionId: null, createdAt: nowDateTime() });
+    }
+  }
+  state.zeroSecThemeLog.push({ date: _zeroSecThemeDraft.date, theme: item.theme, reason: item.reason || "", outcome, at: nowDateTime() });
+  if (state.zeroSecThemeLog.length > ZERO_SEC_THEME_LOG_MAX) {
+    state.zeroSecThemeLog = state.zeroSecThemeLog.slice(-ZERO_SEC_THEME_LOG_MAX);
+  }
+  _zeroSecThemeDraft.items = _zeroSecThemeDraft.items.filter((_, i) => i !== idx);
+  if (!_zeroSecThemeDraft.items.length) _zeroSecThemeDraft = null;
+  saveAndRender(outcome === "added" ? "🧠 0秒思考リストに追加しました" : "見送りました");
+}
+const ZERO_SEC_THEME_LOG_MAX = 300;
 
 // v62: 下書きレイヤ操作(×削除・ドラッグ移動/リサイズ)の直前状態を退避する(1段Undo)。
 // _scheduleDraft は非永続のため、ここでの退避もモジュール変数のディープコピーで完結する。
@@ -2990,6 +3040,35 @@ async function fetchAiPlanFreshnessDate(date) {
   }
 }
 
+// v75: AIプラン_<date>.json トップレベルの zeroSecThemes([{theme,reason}])を取得する。
+//      存在しない日もある(後方互換必須)ので、無い/壊れている場合は静かに null を返す。
+//      tryFetchAiPlan(スケジュール項目の検証)とは独立: plan/skippedが空でzeroSecThemesだけの
+//      日でも拾えるよう、専用に軽量fetchする。
+async function fetchZeroSecThemes(date) {
+  const raw = await fetchGitHubRawText(`AIプラン_${date}.json`);
+  if (!raw) return null;
+  let data;
+  try { data = JSON.parse(raw); } catch { return null; }
+  if (!data || typeof data !== "object" || data.date !== date) return null;
+  if (!Array.isArray(data.zeroSecThemes)) return null;
+  const items = data.zeroSecThemes
+    .filter((t) => t && typeof t.theme === "string" && t.theme.trim())
+    .map((t) => ({ theme: t.theme.trim(), reason: typeof t.reason === "string" ? t.reason.trim() : "" }));
+  return items.length ? items : null;
+}
+
+// v75 should-fix: スケジュール側(繰越・WBS候補や空き時間)が0件で下書きを置けない日でも、
+// zeroSecThemesの提案が残っていれば「何も起きなかった」ように見せず、タイムラインへ案内する。
+// _zeroSecThemeDraftが無い/対象日と不一致/空なら何もせずfalseを返す(呼び出し元は従来どおりの
+// 「候補なし」トーストを出す)。
+function showZeroSecThemesOnlyIfAny(date, auto) {
+  if (!_zeroSecThemeDraft || _zeroSecThemeDraft.date !== date || !_zeroSecThemeDraft.items.length) return false;
+  if (!auto) { state.timelineMode = "planned"; setView("timeline"); }
+  showToast("🧠 0秒思考のテーマ提案があります — タイムラインでご確認ください");
+  render();
+  return true;
+}
+
 // v60: 決定論配置(fallbackMorningPlan)を正規経路に昇格。Claude API 呼び出しは全廃。
 // v62: 自宅PCバッチ生成のAIプランJSONを優先採用し、取得/検証に失敗した場合のみ決定論配置へ
 //      フォールバックする(v60の経路は無傷で維持)。
@@ -3003,6 +3082,16 @@ async function runAiMorningPlan({ auto = false } = {}) {
   const freeGaps = computeFreeGaps(date, DAY_START, DAY_END)
     .map(([s, e]) => [Math.max(s, nowFloor), e])
     .filter(([s, e]) => e - s >= 15);
+
+  // v75: zeroSecThemes はスケジュール配置(freeGaps/candidates)の成否と無関係に独立して取得する
+  //      (下の早期returnより前で確定させ、配置できる候補が無い日でもテーマ提案だけは出す)。
+  //      同日に既に採否判断済み(state.zeroSecThemeLog)のテーマは再提示しない。
+  const zeroSecThemes = await fetchZeroSecThemes(date);
+  if (zeroSecThemes) {
+    const decided = new Set(state.zeroSecThemeLog.filter((l) => l.date === date).map((l) => l.theme));
+    const pending = zeroSecThemes.filter((t) => !decided.has(t.theme));
+    _zeroSecThemeDraft = pending.length ? { date, items: pending } : null;
+  }
 
   const aiPlan = freeGaps.length ? await tryFetchAiPlan(date, freeGaps) : null;
   if (aiPlan) {
@@ -3029,11 +3118,20 @@ async function runAiMorningPlan({ auto = false } = {}) {
   }
 
   const candidates = aiMorningPlanCandidates(date);
-  if (!candidates.length) { if (!auto) showToast("配置できる候補がありません(繰越・WBS未完了が対象です)"); return; }
-  if (!freeGaps.length) { if (!auto) showToast("今日は空き時間がありません(予定が埋まっています)"); return; }
+  if (!candidates.length) {
+    if (showZeroSecThemesOnlyIfAny(date, auto)) return;
+    if (!auto) showToast("配置できる候補がありません(繰越・WBS未完了が対象です)");
+    return;
+  }
+  if (!freeGaps.length) {
+    if (showZeroSecThemesOnlyIfAny(date, auto)) return;
+    if (!auto) showToast("今日は空き時間がありません(予定が埋まっています)");
+    return;
+  }
 
   const { items, skipped } = fallbackMorningPlan(candidates, freeGaps);
   if (!items.length) {
+    if (showZeroSecThemesOnlyIfAny(date, auto)) return;
     render();
     if (!auto) showToast("空き時間に配置できる候補がありませんでした");
     return;
@@ -3507,21 +3605,37 @@ function resolveMigrationRitual(choice) {
 function extractMITCandidatesFromReport(reportText) {
   if (!reportText) return [];
   // 「明日の MIT 候補:」の行から数行抽出(箇条書きまたは1行)
+  // v75: loop/coach-daily.sh の実出力は「## 明日への提案」見出し + "- [ ] " チェックボックス箇条書き
+  //      (「MIT候補」の文言は使われていない)ため、この見出しにも対応する(現物のAIフィードバック_*.mdで確認)。
   const lines = reportText.split("\n");
-  const idx = lines.findIndex((line) => /(?:明日の)?\s*MIT\s*候補/i.test(line));  // v42: "## MIT候補" 固定フォーマットにも対応
+  const idx = lines.findIndex((line) => /(?:明日の)?\s*MIT\s*候補|明日への提案/i.test(line));  // v42: "## MIT候補" 固定フォーマットにも対応
   if (idx < 0) return [];
   const candidates = [];
   // 同じ行に「: 内容」がある場合
   const sameLine = lines[idx].split(/:|:/).slice(1).join(":").trim();
   if (sameLine) candidates.push(sameLine);
-  // 次の数行が「- 」「・」始まりなら抽出
-  for (let i = idx + 1; i < Math.min(idx + 6, lines.length); i++) {
+  // 次の数行が「- 」「・」始まりなら抽出(v75: 先頭の "[ ] "/"[x] " チェックボックス表記は候補文言から除く)
+  // v75 should-fix2 対応中に判明: coach-daily.sh の実出力は見出しの直後に空行(Markdownの段落区切り)
+  // を挟んでから箇条書きが始まる(例: "## 明日への提案\n\n- [ ] ...")。以前は最初の空行で即break
+  // していたため、この見出し形式では候補抽出が常に0件だった。見出し直後の空行はスキップし、
+  // 本文(箇条書き)が始まった後の空行でのみ終端するよう修正した。
+  let sawContent = false;
+  for (let i = idx + 1; i < Math.min(idx + 8, lines.length); i++) {
     const l = lines[i].trim();
-    if (!l) break;
+    if (!l) { if (sawContent) break; else continue; }
     if (l.startsWith("##") || l.startsWith("#")) break;
     const m = l.match(/^[-・•*]\s*(.+)$/);
-    if (m) candidates.push(m[1].trim());
-    else if (i === idx + 1 && !l.startsWith("##")) candidates.push(l);
+    if (m) {
+      const raw = m[1].replace(/^\[[ xX]\]\s*/, "").trim();
+      // v75 should-fix1: 「タスク名: 理由」形式(coach-daily.shの「明日への提案」実出力)は
+      // 先頭コロン(半角:/全角:)より前のタスク名部分だけを候補にする。コロンが無ければ
+      // 全文を候補にする(コロン無しの旧フォーマット互換)。
+      const colonIdx = raw.search(/[:：]/);
+      candidates.push((colonIdx >= 0 ? raw.slice(0, colonIdx) : raw).trim());
+    } else if (!sawContent) {
+      candidates.push(l);
+    }
+    sawContent = true;
   }
   return candidates.filter(Boolean).slice(0, 3);
 }
@@ -4381,6 +4495,7 @@ function renderTimelineView() {
       <span class="muted" style="font-size:12px">空き時間タップで追加 / ○タップで完了登録 / ▶いま開始・■いま終了でワンタップ実績 / カードタップで編集 / 赤線は現在時刻</span>
     </div>
     ${draftBarHTML()}
+    ${zeroSecThemeBarHTML()}
     ${draftRejectReasonPickerHTML()}
     ${state.settings.timelineCategoryFilter ? `<div class="row" style="margin-bottom:10px; gap:8px; align-items:center">
       <span class="cat-chip" style="background:${getCategoryColor(state.settings.timelineCategoryFilter)}1f; color:${getCategoryColor(state.settings.timelineCategoryFilter)}; border:1px solid ${getCategoryColor(state.settings.timelineCategoryFilter)}66">カテゴリ: ${escapeHTML(state.settings.timelineCategoryFilter)}</span>
@@ -5341,9 +5456,19 @@ function renderMarkdown(text) {
 
 function renderReports() {
   const report = state.reports[state.selectedDate] || "";
+  // v75: 日報を書く前に前日のAIフィードバックを参照できるよう、既定closedのdetailsで表示する
+  //      (フェイルソフト: 無ければ何も出さない)。読み取り経路は「AIから」カードと同じcachedFeedback。
+  const prevDate = addDays(state.selectedDate, -1);
+  const prevFb = cachedFeedback[prevDate] || state.feedback[prevDate] || "";
+  const prevFeedbackHTML = prevFb ? `
+    <details class="report-prev-feedback" style="margin-bottom:12px">
+      <summary class="muted" style="cursor:pointer; font-size:12px; font-weight:600">🤖 前日(${escapeHTML(prevDate)})のAIフィードバックを見る</summary>
+      <div class="md-render readonly-md" style="margin-top:8px">${renderMarkdown(prevFb)}</div>
+    </details>` : "";
   return `
     ${renderHeader("生成AIへ渡す素材", "日報")}
     ${renderDateBar()}
+    ${prevFeedbackHTML}
     <div class="field" style="margin-bottom:10px">
       <label class="field-label">今日AIに聞きたいこと(任意・1行)</label>
       <input class="input" id="reportAskInput" style="font-size:16px" placeholder="例: 来週の12WY目標、このペースで間に合いそう?">
@@ -9574,12 +9699,41 @@ function homeAiHubBody(blocks, isToday) {
     <div class="home-ai-sub">AIが処理した作業<span class="home-count">${workItems.length}</span></div>
     ${workItems.map((r) => aiWorkResultRowHTML(r)).join("")}` : "";
   const candidatesHTML = isToday ? aiFeedbackCandidatesHTML(blocks) : "";
+  // v75: 「AIから」カードは鮮度表示とMIT候補抽出のみで、フィードバック本文そのものを読む手段が
+  //      無かった(README不具合「ホームAIからでAIフィードバックが見れない」の実体)。ジャーナルタブと
+  //      同じ「details 既定closed」パターンで本文を読めるようにする(新規UIコンポーネントは作らず流用)。
+  const readHTML = isToday ? homeAiFeedbackReadHTML() : "";
   return `
     <div class="home-plabel orange">AIから</div>
     ${aiFreshnessLine()}
     ${workHTML}
+    ${readHTML}
     ${candidatesHTML}
   `;
+}
+
+// v75: 「AIから」カードから、当日/前日のAIフィードバック本文を読めるようにする(既定closed)。
+//      読み取り経路は cachedFeedback(hydrateStaticMarkdown が personal-data API=fetchGitHubRawText
+//      経由で埋める。v72から同一オリジンfetchは使っていない)をそのまま流用する。
+function homeAiFeedbackReadHTML() {
+  const today = state.selectedDate;
+  const prev = addDays(today, -1);
+  const todayFb = cachedFeedback[today] || state.feedback[today] || "";
+  const prevFb = cachedFeedback[prev] || state.feedback[prev] || "";
+  if (!todayFb && !prevFb) return "";
+  return `
+    <div class="home-divider"></div>
+    <details class="home-ai-feedback-read">
+      <summary class="muted" style="cursor:pointer; font-size:12px; font-weight:600">🤖 AIフィードバックを読む</summary>
+      <div style="margin-top:8px">
+        ${todayFb ? `<div class="md-render readonly-md">${renderMarkdown(todayFb)}</div>` : ""}
+        ${prevFb ? (todayFb ? `
+        <details style="margin-top:10px">
+          <summary class="muted" style="cursor:pointer; font-size:11.5px">前日(${escapeHTML(prev)})のフィードバックも見る</summary>
+          <div class="md-render readonly-md" style="margin-top:6px; opacity:0.85">${renderMarkdown(prevFb)}</div>
+        </details>` : `<div class="md-render readonly-md">${renderMarkdown(prevFb)}</div>`) : ""}
+      </div>
+    </details>`;
 }
 
 // v73: コンディションOS — 縮退モードの案内バナー。責めない・煽らないトーン(wip-bannerと同じ
