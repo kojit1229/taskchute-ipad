@@ -2597,6 +2597,27 @@ h3 {
 .ai-weekly-suggest-text { font-size: 13px; flex: 1; }
 .home-ideal-input::placeholder { color: var(--faint); }
 
+/* v74: 読書複利化 — 今日の1冊カード */
+.home-reading-book { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+.home-reading-highlight {
+  font-size: 14px; line-height: 1.7; font-style: italic; color: var(--text);
+  padding: 10px 12px; margin-bottom: 10px;
+  border-left: 3px solid var(--accent); background: var(--panel-soft); border-radius: 0 8px 8px 0;
+}
+.home-reading-input {
+  width: 100%;
+  font-size: 16px;  /* iOS Safari のズーム防止: 16px 以上で zoom しない */
+  line-height: 1.5;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--text);
+  resize: vertical;
+  min-height: 44px;
+}
+.home-reading-input::placeholder { color: var(--faint); }
+
 /* v63: WIP上限アラート(提案2)。実行率で裁く赤ではなく、情報を渡すだけのアクセントトーン。 */
 .wip-banner {
   background: rgba(0,122,255,.06);

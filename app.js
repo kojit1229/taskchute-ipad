@@ -64,6 +64,14 @@ const cachedFeedback = {};  // { 'YYYY-MM-DD': '...md text...' }
 const cachedWeeklyReviewMd = {};  // v62: { '週開始土曜YYYY-MM-DD': '...md text...' }(自宅PCバッチ生成)
 // v67: AI作業結果_<today>.json のパース済み配列(非永続、当日分のみ)。二重登録防止のIDは state.aiWorkProcessedIds 側で永続化する。
 let cachedAiWorkResults = null;
+// v74: 読書複利化 — taskchute/reading/highlights.json の books 配列(null=未取得。永続化しない、
+//      他のcached*と同じくアプリ内メモリのみ。ハイライト本体は個人データリポジトリが正)
+let cachedReadingHighlights = null;
+// v74: 自分が保存した言語化の当日分エコー表示用({ 'YYYY-MM-DD': '入力文字列' }、非永続)。
+//      保存済み内容の真実は reflections.json 側。リロード時は hydrateReadingData() が再取得する
+const cachedReadingReflections = {};
+// v74: taskchute/reading/summary_YYYY-MM.md(月次AI要約、自宅PCバッチ生成予定・404はフェイルソフト)
+const cachedReadingSummaryMd = {};
 
 // v34: 0秒思考 — 画面内の一時状態(永続化しない)
 let ztTab = "other";          // "other" | "fav"
@@ -285,6 +293,8 @@ document.addEventListener("click", (event) => {
   // v67: AI作業ワーカー連携(柱2) — 実績還流カードのワンタップ承認 / 質問への橋渡し
   if (action === "ai-work-approve") approveAiWorkResult(target.dataset.resultId);
   if (action === "ai-work-question") raiseAiWorkQuestion(target.dataset.resultId);
+  // v74: 読書複利化 — 今日の1冊カードの言語化を保存
+  if (action === "reading-save") saveReadingReflection();
   // v68: 人生実験機構(実験中カードのCRUD + 昇格候補コピー)
   if (action === "experiment-add") addExperimentOrGuard();
   if (action === "edit-experiment") openExperimentEditor(id);
@@ -1653,6 +1663,7 @@ function renderHome() {
     ${homeFoldSection("creed", true, "home-creed", "home-creed-head", "三 つ の 信 条", homeCreedBody())}
     ${homeFoldSection("lifespan", true, "", "", "寿命カウントダウン(残り時間)", homeLifespanBody(metrics))}
     ${homeIdeal(isToday)}
+    ${degraded ? "" : homeReadingCard()}
     ${degraded ? homeDegradedBanner() : ""}
     ${homeHero(blocks, isToday)}
     <div id="home-mit-anchor">${homeMIT(blocks)}</div>
@@ -1821,6 +1832,209 @@ function resolveIdealRetry(choice) {
     if (meta) meta.ideal = "";
     saveAndRender("また次の理想を見つけましょう");
   }
+}
+
+// v74: 読書複利化 — =========================================================
+//  既存49冊分のKindleハイライト(個人データリポジトリ taskchute/reading/highlights.json)を
+//  日替わりで1件だけ提示し、「自分の言葉で1行言語化する」入力を reading/reflections.json へ
+//  push する。新しいタブは作らず、ホームカード1枚+週次レビューの折りたたみで完結させる。
+// =========================================================
+
+// 文字列から決定論的な整数ハッシュを作る(日付ごとに毎回違う書籍/ハイライトを選ぶため。
+// 「日にち mod 冊数」だと月をまたいで同じ選ばれ方に偏るので、日付文字列全体をハッシュ化する)
+function dateHashSeed(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (Math.imul(h, 31) + str.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+// 今日提示するハイライトを1件選ぶ(cachedReadingHighlights未取得/0件ならnull)
+function todaysReadingPick() {
+  const books = cachedReadingHighlights;
+  if (!Array.isArray(books) || books.length === 0) return null;
+  const date = todayISO();
+  const bookIdx = dateHashSeed(date) % books.length;
+  const book = books[bookIdx];
+  const highlights = Array.isArray(book?.highlights) ? book.highlights : [];
+  if (highlights.length === 0) return null;
+  const hIdx = dateHashSeed(`${date}|${book.id || bookIdx}`) % highlights.length;
+  const h = highlights[hIdx];
+  return {
+    bookId: book.id || "",
+    bookTitle: book.title || "",
+    author: book.author || "",
+    ref: h.ref || "",
+    text: h.text || ""
+  };
+}
+
+// ホームカード: 今日のハイライト提示 + 1行言語化の入力欄。ハイライトが引けない
+// (未取得・personal-data未設定・0冊)なら何も出さない(既存の404フェイルソフトと同じ流儀)
+function homeReadingCard() {
+  const pick = todaysReadingPick();
+  if (!pick) return "";
+  const date = todayISO();
+  const saved = cachedReadingReflections[date] || "";
+  return `<section class="panel home-reading">
+    <div class="home-plabel blue">今日の1冊から</div>
+    <div class="home-reading-book">${escapeHTML(pick.bookTitle)}${pick.author ? `<span class="muted" style="font-size:12px"> — ${escapeHTML(pick.author)}</span>` : ""}</div>
+    <div class="home-reading-highlight">${escapeHTML(pick.text)}</div>
+    <textarea class="home-reading-input" data-reading-reflection-input rows="2"
+      placeholder="読んで何を思うか、一行で">${escapeHTML(saved)}</textarea>
+    <div class="row" style="justify-content:flex-end;margin-top:6px">
+      <button class="btn primary" data-action="reading-save">保存</button>
+    </div>
+  </section>`;
+}
+
+// v74: personal-data リポジトリのサブディレクトリpath("reading/reflections.json"等)への
+// 書き込み専用PUT。既存 pushFileToGitHub は `personalDataPath(encodeURIComponent(filename))`
+// という組み立てのため、filename に "/" が含まれると丸ごと%2Fにエンコードされてしまい
+// サブディレクトリを正しく指せない(既存の呼び出し元は全てフラットなファイル名のため顕在化して
+// いなかった)。fetchGitHubRawText / gitHubContentsURL と同じ「セグメントごとにencodeして"/"で
+// 結合」方式で正しいURLを組み立てる。
+async function pushGitHubPath(relPath, content, label) {
+  const raw = state.settings.github;
+  if (!personalDataReady(raw)) {
+    throw new Error("GitHub設定(個人データリポジトリ・token)が未入力です");
+  }
+  const cfg = personalDataConn(raw);
+  const branch = cfg.branch || "main";
+  const encPath = personalDataPath(relPath).split("/").map(encodeURIComponent).join("/");
+  const url = `https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${encPath}`;
+  let sha = "";
+  try {
+    const head = await fetch(`${url}?ref=${encodeURIComponent(branch)}`, {
+      headers: githubHeaders(cfg.token)
+    });
+    if (head.ok) {
+      const payload = await head.json();
+      sha = payload.sha || "";
+    }
+  } catch (e) {
+    // 新規ファイル
+  }
+  const response = await fetch(url, {
+    method: "PUT",
+    headers: githubHeaders(cfg.token),
+    body: JSON.stringify({
+      message: `chore: update ${relPath} ${new Date().toISOString()}`,
+      content: toBase64(content),
+      branch,
+      ...(sha ? { sha } : {})
+    })
+  });
+  if (!response.ok) {
+    throw new Error(await gitHubErrorMessage(response));
+  }
+  if (label) showToast(`📤 ${label} をGitHubへpushしました`);
+}
+
+// reflections.json のスキーマ(このアプリが正): { "entries": [{ date, bookId, bookTitle, author,
+// highlightRef, highlightText, reflection, savedAt }, ...] }。1日1件(同じdateは上書き)。
+// loop/scripts/reading-monthly-extract.py の寛容パース仕様(トップレベル配列 or {entries:[...]}、
+// 各要素は "date" キー必須)に適合させている。
+function parseReadingReflections(raw) {
+  if (!raw) return [];
+  let data;
+  try { data = JSON.parse(raw); } catch { return []; }
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.entries)) return data.entries;
+  return [];
+}
+
+// 今日の言語化入力を読み→マージ→書き込みする(読み込み専用GET + 書き込み専用PUTの単純flow。
+// 楽観排他はしない設計。他日のエントリを消さないよう、必ず既存entriesを取得してから
+// 今日の分だけ差し替える)
+async function saveReadingReflection() {
+  const el = document.querySelector("[data-reading-reflection-input]");
+  if (!el) return;
+  const text = (el.value || "").trim();
+  if (!text) { showToast("言語化を入力してください"); return; }
+  if (!personalDataReady(state.settings.github)) {
+    showToast("GitHub設定(個人データリポジトリ)が未入力です");
+    return;
+  }
+  const pick = todaysReadingPick();
+  if (!pick) { showToast("今日のハイライトを取得できていません"); return; }
+  const date = todayISO();
+  try {
+    // v74 should-fix: 404(本当に無い)と401/5xx/ネットワーク例外(読めたかどうか分からない)を
+    // 区別する。後者を「まだ無い」として空配列から始めてしまうと、一過性の読み失敗の直後に
+    // pushGitHubPathが成功した場合、reflections.jsonが「今日の1件だけ」に上書きされ、
+    // 過去の全言語化が消失しうる。そのため非404失敗時は空ベースでの上書きを禁止し、保存自体を
+    // 中断する(throw → 下のcatchでtoast表示、pushGitHubPathは呼ばれない)。
+    const result = await fetchGitHubRawResult("reading/reflections.json");
+    let entries;
+    if (result.ok) {
+      entries = parseReadingReflections(result.text);
+    } else if (result.status === 404) {
+      entries = [];  // 真の404(初回保存)のみ空から始めてよい
+    } else {
+      throw new Error(`既存データの読み込みに失敗したため保存を中止しました(status: ${result.status || "network"})`);
+    }
+    entries = entries.filter((e) => !(e && e.date === date));
+    entries.push({
+      date,
+      bookId: pick.bookId,
+      bookTitle: pick.bookTitle,
+      author: pick.author,
+      highlightRef: pick.ref,
+      highlightText: pick.text,
+      reflection: text,
+      savedAt: nowDateTime()
+    });
+    entries.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+    await pushGitHubPath("reading/reflections.json", JSON.stringify({ entries }, null, 2) + "\n", "読書の言語化");
+    cachedReadingReflections[date] = text;
+    saveAndRender("言語化を保存しました");
+  } catch (e) {
+    showToast(`保存失敗: ${e.message}`);
+  }
+}
+
+// hydrateStaticMarkdown から呼ばれる。(1) highlights.json は一度取得できたらキャッシュのまま
+// 使い回す(ほぼ静的データのため)。(2) 当日分の reflections.json は起動のたび1回だけ取得し、
+// 既に保存済みなら入力欄をプリフィルする。(3) 今月の summary_YYYY-MM.md は月1回だけ取得を試み、
+// 404はフェイルソフト(非表示のまま)。戻り値: 再描画が必要な変更があったか
+async function hydrateReadingData() {
+  let changed = false;
+  if (cachedReadingHighlights === null) {
+    const raw = await fetchGitHubRawText("reading/highlights.json");
+    if (raw) {
+      try {
+        const data = JSON.parse(raw);
+        if (data && Array.isArray(data.books)) {
+          cachedReadingHighlights = data.books;
+          changed = true;
+        }
+      } catch { /* 壊れたJSONは無視。cachedReadingHighlightsはnullのままで次回起動時に再取得を試みる */ }
+    }
+  }
+  const date = todayISO();
+  if (!(date in cachedReadingReflections)) {
+    const raw = await fetchGitHubRawText("reading/reflections.json");
+    const entry = parseReadingReflections(raw).find((e) => e && e.date === date);
+    cachedReadingReflections[date] = (entry && typeof entry.reflection === "string") ? entry.reflection : "";
+    changed = true;
+  }
+  const month = date.slice(0, 7);
+  if (!(month in cachedReadingSummaryMd)) {
+    const md = await fetchGitHubRawText(`reading/summary_${month}.md`);
+    cachedReadingSummaryMd[month] = md || "";
+    if (md) changed = true;
+  }
+  return changed;
+}
+
+// v74: 週次レビュータブの折りたたみ表示。今月分が無ければ(バッチ未生成/404)何も出さない
+function readingMonthlySummarySectionHTML() {
+  const month = todayISO().slice(0, 7);
+  const md = cachedReadingSummaryMd[month] || "";
+  if (!md) return "";
+  return homeFoldSection(`reading-summary-${month}`, false, "", "",
+    `📖 今月の読書ふりかえり(${month})`,
+    `<div class="md-render readonly-md">${renderMarkdown(md)}</div>`);
 }
 
 // --- いま、これ(進行中 / 次のブロック)── v33: フル幅・2カラム ---
@@ -6267,6 +6481,8 @@ function renderWeekly() {
 
     ${aiWeeklyReviewSectionHTML()}
 
+    ${readingMonthlySummarySectionHTML()}
+
     <div class="weekly-cycle-link" data-action="open-cycle">◷ 12週サイクルをふりかえる(節目のレビュー) →</div>
 
     <div class="weekly-sec weekly-close">
@@ -8389,9 +8605,15 @@ function personalDataFileConfig(rawCfg, name) {
 // v72: personal-data リポジトリからの読み込み専用GET(Contents API、raw取得)。
 // 未設定/404は静かに空文字を返す(既存fetchTextと同じ「無ければ無視」流儀)。
 // 401(トークン権限不足)だけは具体的なバナーを出す(セットアップ画面通過後に起きうる)。
-async function fetchGitHubRawText(name) {
+// v74: fetchGitHubRawText の内部実装。「本文」だけでなく「404(本当に無い)」と
+// 「401/5xx/ネットワーク例外(読めたかどうか分からない)」を区別して返す。
+// read-merge-write で書き戻す保存経路(saveReadingReflection)は、この区別が無いと
+// 一過性の読み失敗を「まだ無い」と誤認し、空配列ベースで上書きして既存データを
+// 消失させかねない(should-fixレビュー対応)。既存の呼び出し元(fetchGitHubRawText経由)
+// への挙動は一切変えていない。
+async function fetchGitHubRawResult(name) {
   const cfg = state.settings.github || {};
-  if (!personalDataReady(cfg)) return "";
+  if (!personalDataReady(cfg)) return { ok: false, status: 0, text: "" };
   const conn = personalDataConn(cfg);
   try {
     const path = personalDataPath(name).split("/").map(encodeURIComponent).join("/");
@@ -8401,14 +8623,19 @@ async function fetchGitHubRawText(name) {
     });
     if (response.status === 401) {
       setPersonalDataAuthError("トークンに personal-data リポジトリの権限が必要です(Fine-grained tokenのRepository access / Contents権限を確認してください)");
-      return "";
+      return { ok: false, status: 401, text: "" };
     }
-    if (!response.ok) return "";  // 404等は「まだ無い」として静かに無視する
+    if (!response.ok) return { ok: false, status: response.status, text: "" };  // 404等
     clearPersonalDataAuthError();
-    return await response.text();
+    return { ok: true, status: response.status, text: await response.text() };
   } catch {
-    return "";
+    return { ok: false, status: 0, text: "" };  // ネットワーク例外(status: 0 = 通信自体が不成立)
   }
+}
+
+async function fetchGitHubRawText(name) {
+  const result = await fetchGitHubRawResult(name);
+  return result.ok ? result.text : "";
 }
 
 // v72: 401時のみ表示する具体的な案内バナー(非永続)。renderSyncBanner と同じ「モーダルで
@@ -9182,6 +9409,9 @@ async function hydrateStaticMarkdown() {
   // v67: AI作業結果_<今日>.json(柱2・実績還流)。当日分のみ、network-first(sw.jsのjson扱いを流用)。
   const gotAiWork = await hydrateAiWorkResults();
   if (gotAiWork) changed = true;
+  // v74: 読書複利化 — 今日のハイライト(初回のみ) + 当日の言語化(起動毎) + 今月の要約(月1回)
+  const gotReading = await hydrateReadingData();
+  if (gotReading) changed = true;
   // v37: state.view というプロパティは存在しない(正しくは currentView)。
   //      このタイポのせいで、ビジョン画面を開いたまま読み込みが終わっても再描画されなかった。
   if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly" || state.currentView === "home")) {
