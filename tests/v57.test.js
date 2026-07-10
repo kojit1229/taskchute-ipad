@@ -1,9 +1,20 @@
 // v57 検証: ローカルAIコーチングがリポジトリ直下に直接pushした前日フィードバックの自動読込
 //            (feedbackFiles未登録でも「今日から見た昨日」1日分だけは fetch する)
-//            + F1: その無条件fetchは過去日ブラウズ時には出さない(前日ノイズ回避の回帰確認)
+//            + F1: その無条件fetchは過去日ブラウズ時の「閲覧中の日付自身」のfetchノイズは出さない
 //
 // v60メモ: このfetch(AIフィードバック_日付.md)は自宅PCバッチ→ファイル連携の経路であり、
 // アプリ内Claude API直接呼び出しとは別物なのでv60でも削除していない。
+//
+// v76メモ(仕様変更・[1]の期待値更新): 「今日から見た昨日」1日分の無条件fetchは、
+// state.selectedDate に関わらず常に実行するよう変更した(CHANGES_v76.md参照)。旧実装は
+// この無条件fetch自体が selectedDate===今日 のときしか発火せず、ホーム/ジャーナルで
+// 過去日を閲覧している間(＝前回セッションの閲覧日が永続化されている場合を含む)は
+// 「今日から見た昨日」のフィードバックが一切読めなくなる実バグがあった。F1が守りたかった
+// 「過去日ブラウズ時のfetchノイズ回避」の対象は本来「閲覧中の(無関係な)日付自身」への
+// fetchであり、「今日から見た昨日」1日分の無条件fetクトは対象外だったため、[1]の期待値を
+// 「fetch 0件」から「実際の昨日分のみ1件・閲覧中の無関係な過去日自身へのfetchは無い」に更新する
+// (検証意図であるノイズ回避そのものは弱めていない。閲覧中の日付自身へのfetch有無は
+// [1]で引き続き確認する)。
 // v72: 個人データはGitHub Contents API(personal-data リポジトリの taskchute/ 配下)経由に
 //      なったため、リポジトリ直下への実ファイル書き込みをやめ、v62等と同じくpage.routeの
 //      可変fixtureでモックする。
@@ -70,8 +81,10 @@ function check(name, cond, extra = "") {
       };
     });
 
-    // ---- [1] F1回帰: 過去日ブラウズ中は前日分の無条件fetchを出さない ----
-    console.log("[1] 過去日ブラウズでは前日分の無条件fetchを出さない(F1)");
+    // ---- [1] F1回帰(v76で期待値更新): 過去日ブラウズ中も「閲覧中の日付自身」への
+    //          fetchノイズは出さない。ただし「今日から見た昨日」1日分の無条件fetchは
+    //          selectedDateに関わらず常に行う(v76の仕様変更。CHANGES_v76.md参照) ----
+    console.log("[1] 過去日ブラウズ中でも『閲覧中の日付自身』へのfetchノイズは出ない(F1)。ただし今日から見た昨日分は常にfetchする(v76)");
     await page.evaluate(({ KEY, PAST }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.feedbackFiles = [];
@@ -82,8 +95,10 @@ function check(name, cond, extra = "") {
     await page.reload();
     await page.waitForTimeout(700);
     const reqsPast = await page.evaluate(() => (window.__fbReqs || []).slice());
-    check("過去日表示中は AIフィードバック fetch を一切出さない(前日分含む)",
-      reqsPast.length === 0, JSON.stringify(reqsPast));
+    check("閲覧中の(無関係な)過去日自身へのfetchは出さない(ノイズ回避は維持)",
+      !reqsPast.some((u) => u.includes(`AIフィードバック_${PAST}.md`)), JSON.stringify(reqsPast));
+    check("『今日から見た昨日』1日分は、閲覧中の日付に関わらず常にfetchされる(v76仕様変更)",
+      reqsPast.length === 1 && reqsPast[0].includes(`AIフィードバック_${YESTERDAY}.md`), JSON.stringify(reqsPast));
 
     // ---- [2] 直push検知: feedbackFiles未登録でも「今日から見た昨日」分はリポジトリ直下から読み込む ----
     // v60メモ: 元は fetch した前日フィードバックが「今日のタスク提案」(ai-today-suggest)の

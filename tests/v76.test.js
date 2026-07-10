@@ -1,0 +1,198 @@
+// v76 検証: 「ホームのAIからで昨日のフィードバックが読めない」不具合の原因調査+回帰確認
+// と、ジャーナルタブでの前日AIフィードバック閲覧機能の追加。CHANGES_v76.md参照。
+//
+// 調査結果(詳細はCHANGES_v76.md): ホーム側の不具合は v75(同日, f7e90f6)の
+// homeAiFeedbackReadHTML() 追加により既に修正済みで、本スイートでは
+// (1) 実際の personal-data/taskchute/AIフィードバック_*.md と同じ見出し構造(「## 明日への提案」)
+//     を使った回帰確認、(4) fetch失敗を「以後ずっと再fetchしない」形でキャッシュしていないことの検証
+// を行う。(2) ジャーナルタブに今日基準の前日フィードバックを常に読める details を追加した回帰、
+// (3) フィードバックファイルが404でもクラッシュしない(フェイルソフト)ことを検証する。
+// (5) pushFileToGitHub(日報push等)のURL組み立てをpushGitHubPathと同じセグメント単位encodeに
+//     統一したことの回帰(PUT先パスに%2Fが混入しないこと)。
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+
+const PORT = 4214;
+const KEY = "taskchute-journal-pwa-state-v1";
+const API_HOST = "api.github.com";
+
+let failures = 0;
+function check(name, cond, extra = "") {
+  if (cond) console.log(`  ✅ ${name}`);
+  else { failures++; console.log(`  ❌ ${name} ${extra}`); }
+}
+
+(async () => {
+  const server = startServer(PORT);
+  const browser = await chromium.launch(launchOptions());
+  const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
+  const page = await ctx.newPage();
+  page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
+
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const isoDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const now0 = new Date();
+  now0.setHours(10, 0, 0, 0);
+  const TODAY = isoDate(now0);
+  const addDaysStr = (dateStr, n) => {
+    const [y, m, d] = dateStr.split("-").map(Number);
+    const date = new Date(y, m - 1, d);
+    date.setDate(date.getDate() + n);
+    return isoDate(date);
+  };
+  const PREV = addDaysStr(TODAY, -1);
+  const PREV2 = addDaysStr(TODAY, -2);
+
+  // 実際の AIフィードバック_2026-07-09.md と同じ見出し構造(「## 明日への提案」+ チェックボックス箇条書き)
+  const REAL_SHAPED_FEEDBACK = `# AIコーチングフィードバック ${PREV}\n\n## 良かった点\n\n- テスト用の良かった点_v76\n\n## 気づき(データから)\n\n- テスト用の気づき_v76\n\n## 明日への提案\n\n- [ ] 提案1_v76\n- [ ] 提案2_v76\n\n## 明日への問い\n\n問い_v76\n`;
+
+  let feedbackFixture = { [PREV]: REAL_SHAPED_FEEDBACK };
+  const feedbackApiRequests = [];
+  // (5)用: pushFileToGitHub(日報push等)が実際に叩いたPUT先の生パス(%2Fの有無を見るためdecodeしない)を記録
+  const pushApiRequests = [];
+
+  await blockGithubApiByDefault(page);
+  await page.route((url) => url.hostname === API_HOST, (route) => {
+    const req = route.request();
+    const u = new URL(req.url());
+    const p = decodeURIComponent(u.pathname);
+    const fbMatch = p.match(/\/contents\/taskchute\/AIフィードバック_(.+)\.md$/);
+    if (fbMatch) {
+      feedbackApiRequests.push(p);
+      const body = feedbackFixture[fbMatch[1]];
+      if (!body) return route.fulfill({ status: 404, body: "not found (test-fixture)" });
+      return route.fulfill({ status: 200, contentType: "text/markdown", body });
+    }
+    if (req.method() === "PUT") {
+      pushApiRequests.push({ rawPath: u.pathname, decodedPath: p });
+      return route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ content: { sha: "test-sha" } }) });
+    }
+    return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
+  });
+
+  async function stateNow() {
+    return page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
+  }
+
+  async function seed({ feedbackFiles = [], view = "home", selectedDate = TODAY } = {}) {
+    await page.evaluate(({ KEY, feedbackFiles, selectedDate, view }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.blocks = [];
+      s.feedbackFiles = feedbackFiles;
+      s.feedback = {};
+      s.selectedDate = selectedDate;
+      s.currentView = view;
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, feedbackFiles, selectedDate, view });
+    await page.reload();
+    await page.waitForTimeout(700);
+  }
+
+  try {
+    await page.clock.setFixedTime(now0);
+    await page.goto(`http://localhost:${PORT}/`);
+    await page.waitForTimeout(500);
+    await passGithubGate(page);
+
+    // ============================================================
+    // (1) 回帰: ホーム「AIから」で、実データと同じ見出し構造の前日フィードバック本文が読める
+    // ============================================================
+    console.log("[1] ホーム『AIから』で、実際のAIフィードバック_*.mdと同じ見出し構造の前日本文が読める(回帰)");
+    await seed({ view: "home" });
+    check("api.github.comへ前日分のfetchが実際に飛んでいる", feedbackApiRequests.some((p) => p.endsWith(`AIフィードバック_${PREV}.md`)), JSON.stringify(feedbackApiRequests));
+    const detailsCount = await page.locator(".home-ai-feedback-read").count();
+    check("「AIフィードバックを読む」detailsが1つ表示される", detailsCount === 1);
+    const openAttr = await page.locator(".home-ai-feedback-read").getAttribute("open").catch(() => null);
+    check("既定closed", openAttr === null, String(openAttr));
+    const homeText = await page.locator("main").textContent();
+    check("前日フィードバックの本文(実データ構造)が読める", homeText.includes("提案1_v76") && homeText.includes("提案2_v76"), homeText.slice(0, 300));
+
+    console.log("[1b] 根本原因の回帰: Home で state.selectedDate が『今日』以外(=前回セッションの閲覧日が永続化された状態)でも読める");
+    await seed({ view: "home", selectedDate: PREV2 });
+    const homeDetailsCountPastDay = await page.locator(".home-ai-feedback-read").count();
+    const homeTextPastDay = await page.locator("main").textContent();
+    check("selectedDateが2日前でも、実際の今日から見た前日フィードバックが読める(selectedDate依存バグの回帰)",
+      homeDetailsCountPastDay === 1 && homeTextPastDay.includes("提案1_v76"), homeTextPastDay.slice(0, 300));
+    await seed({ view: "home" });  // 以降の検証のため selectedDate を今日へ戻す
+
+    // ============================================================
+    // (2) ジャーナルタブ: 今日基準の前日フィードバックが読める(選択中日付に依存しない)
+    // ============================================================
+    console.log("[2] ジャーナルタブに『昨日のAIフィードバック』の折りたたみ(既定closed)が出る");
+    await page.click('[data-action="nav"][data-view="journal"]');
+    await page.waitForTimeout(300);
+    const journalDetailsCount = await page.locator(".journal-yesterday-feedback").count();
+    check("ジャーナルタブに前日フィードバックのdetailsが1つ出る", journalDetailsCount === 1);
+    const journalOpenAttr = await page.locator(".journal-yesterday-feedback").getAttribute("open").catch(() => null);
+    check("ジャーナルタブのdetailsも既定closed", journalOpenAttr === null, String(journalOpenAttr));
+    const journalText = await page.locator("main").textContent();
+    check("ジャーナルタブでも前日フィードバック本文が読める", journalText.includes("提案1_v76") && journalText.includes("提案2_v76"), journalText.slice(0, 300));
+
+    console.log("[2b] ジャーナルで過去日(2日前)を開いても、対象は選択中日付の前日ではなく『今日基準の前日』のまま");
+    await seed({ view: "journal", selectedDate: PREV2 });
+    const journalPastText = await page.locator("main").textContent();
+    const journalPastDetailsCount = await page.locator(".journal-yesterday-feedback").count();
+    check("2日前の journal を開いても、今日基準の前日フィードバックが(選択日と無関係に)引き続き表示される",
+      journalPastDetailsCount === 1 && journalPastText.includes("提案1_v76"), journalPastText.slice(0, 300));
+
+    // ============================================================
+    // (3) フィードバックファイルが無い(404)日でも壊れない(フェイルソフト)
+    // ============================================================
+    console.log("[3] 前日分のAIフィードバックファイルが存在しない(404)日は、home/journalどちらもクラッシュせずdetails自体が出ない");
+    feedbackFixture = {};  // 全部404
+    await seed({ view: "home" });
+    const detailsCount404 = await page.locator(".home-ai-feedback-read").count();
+    check("ホーム: 前日分が無ければdetails自体が出ない(フェイルソフト)", detailsCount404 === 0);
+    await page.click('[data-action="nav"][data-view="journal"]');
+    await page.waitForTimeout(300);
+    const journalDetailsCount404 = await page.locator(".journal-yesterday-feedback").count();
+    check("ジャーナル: 前日分が無ければdetails自体が出ない(フェイルソフト)", journalDetailsCount404 === 0);
+    check("404が続いてもクラッシュしていない(pageerror無し。ここまで到達していれば正常)", true);
+
+    // ============================================================
+    // (4) 失敗した/空だったfetchを「以後ずっと再fetchしない」形でキャッシュしていないことの確認
+    //     (前日分が404だった直後に本文を用意しても、再読み込みすれば正しく取得できることを見る)
+    // ============================================================
+    console.log("[4] 404直後に前日分が用意されても、次回起動時には再fetchされて読める(失敗を永続キャッシュしていない)");
+    feedbackFixture = { [PREV]: REAL_SHAPED_FEEDBACK };  // ここで初めて用意する
+    await seed({ view: "home" });
+    const homeTextAfterRecover = await page.locator("main").textContent();
+    const detailsCountRecover = await page.locator(".home-ai-feedback-read").count();
+    check("直前は404だったが、ファイルが用意された後の再起動では正しく取得・表示される(失敗の永続キャッシュなし)",
+      detailsCountRecover === 1 && homeTextAfterRecover.includes("提案1_v76"), homeTextAfterRecover.slice(0, 300));
+
+    // ============================================================
+    // (5) 日報push(pushFileToGitHub)のPUT先URLパスに %2F が含まれず、taskchute/日報_*.md
+    //     形式であることの確認(v74で発覚した「filenameに"/"を含む場合は壊れる」欠陥の
+    //     本体側修正の回帰。日報_*.mdのfilename自体には"/"を含まないため旧実装でも
+    //     このケース自体は壊れていなかったが、pushGitHubPathと生成規則を統一したことの確認)
+    // ============================================================
+    console.log("[5] 日報push(GitHubに日報push)のPUT先URLパスに%2Fが含まれず、taskchute/日報_*.md形式である");
+    await page.evaluate(({ KEY, TODAY }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.reports = s.reports || {};
+      s.reports[TODAY] = `# 日報 ${TODAY}\n\nv76テスト用の日報本文です。`;
+      s.selectedDate = TODAY;
+      s.currentView = "journal";
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, TODAY });
+    await page.reload();
+    await page.waitForTimeout(700);
+    await page.click('[data-action="push-report"]');
+    await page.waitForTimeout(500);
+    const reportPush = pushApiRequests.find((r) => r.decodedPath.includes(`日報_${TODAY}.md`));
+    check("日報pushのPUTが実際に発生している", Boolean(reportPush), JSON.stringify(pushApiRequests));
+    check("PUT先の生パスに%2Fが含まれない(サブディレクトリ区切りが壊れていない)",
+      Boolean(reportPush) && !reportPush.rawPath.includes("%2F") && !reportPush.rawPath.includes("%2f"), JSON.stringify(reportPush));
+    check("PUT先が taskchute/日報_<date>.md 形式になっている(taskchuteサブディレクトリを正しく指せている)",
+      Boolean(reportPush) && reportPush.decodedPath.endsWith(`/contents/taskchute/日報_${TODAY}.md`), JSON.stringify(reportPush));
+    const pushToast = await page.locator("#toast").textContent().catch(() => "");
+    check("pushトーストが成功メッセージになっている(push失敗トーストではない)",
+      /GitHubへpushしました/.test(pushToast || ""), pushToast);
+  } finally {
+    await browser.close();
+    server.close();
+  }
+
+  console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURES`);
+  process.exit(failures === 0 ? 0 : 1);
+})().catch((e) => { console.error(e); process.exit(1); });

@@ -5291,7 +5291,13 @@ function renderJournal() {
   const feedbackFromFile = cachedFeedback[date];
   const feedbackFromState = state.feedback[date] || "";
   const feedbackText = feedbackFromFile || feedbackFromState;
-  const feedbackFromFilePrev = cachedFeedback[previous];
+  // v76: 「前日のフィードバックも見る」は選択中日付(previous = selectedDateの前日)基準ではなく、
+  // 今日基準の前日(hydrateStaticMarkdownが無条件fetchする唯一の前日ファイル)に固定する。
+  // 旧実装は selectedDate をジャーナルで過去日にめくると previous が実際に fetch 済みの
+  // 日付と一致しなくなり、黙って非表示になっていた(ホーム「AIから」で読めない不具合の報告と
+  // 同根の「選択日依存」問題)。新規fetchは追加せず cachedFeedback/state.feedback をそのまま流用する。
+  const yesterdayReal = addDays(todayISO(), -1);
+  const feedbackFromFilePrev = cachedFeedback[yesterdayReal] || state.feedback[yesterdayReal] || "";
   return `
     ${renderHeader("過去の自分・今の自分・外部視点", "ジャーナル")}
     ${renderDateBar()}
@@ -5344,9 +5350,9 @@ function renderJournal() {
           <button class="btn ghost" data-action="journal-import-ai" data-date="${date}" style="font-size:12px">🤖 AI返信から取り込み(テーマ/MIT/問い)</button>
           <button class="btn ghost" data-action="experiment-add" style="font-size:12px">🧪 実験にする</button>
         </div>
-        ${feedbackFromFilePrev && previous !== date ? `
-          <details style="margin-top:14px">
-            <summary class="muted" style="cursor:pointer; font-size:12px">前日(${previous})のフィードバックも見る</summary>
+        ${feedbackFromFilePrev && yesterdayReal !== date ? `
+          <details class="journal-yesterday-feedback" style="margin-top:14px">
+            <summary class="muted" style="cursor:pointer; font-size:12px">🤖 昨日(${escapeHTML(yesterdayReal)})のAIフィードバックを見る</summary>
             <div class="md-render readonly-md" style="margin-top:6px; opacity:0.85">${renderMarkdown(feedbackFromFilePrev)}</div>
           </details>
         ` : ""}
@@ -9474,11 +9480,16 @@ async function hydrateStaticMarkdown() {
   //      feedbackFiles未登録でも常に fetch を試す。404は fetchText 側で静かに無視される。
   const files = Array.isArray(state.feedbackFiles) ? state.feedbackFiles : [];
   const today = state.selectedDate;
-  const prev = addDays(today, -1);
+  // v76: 「前日1日分の無条件fetch」対象は selectedDate(閲覧中の日付)ではなく、常に
+  //      実際の今日から見た昨日(todayISO()基準)に固定する。旧実装は prev = addDays(today, -1)
+  //      と selectedDate に連動しており、ホーム/ジャーナルで過去日を閲覧している間(state.selectedDate
+  //      が今日以外)は wantFetchPrev(d) の d===addDays(todayISO(),-1) 判定に一致せず、fetchそのものが
+  //      発火しなくなっていた(= 「ホームのAIからで昨日のフィードバックが読めない」の実バグ。
+  //      state.selectedDateはタブ間で共有され前回セッションの閲覧日がそのまま永続化されるため、
+  //      再現条件は珍しくない)。CHANGES_v76.md参照。
+  const prev = addDays(todayISO(), -1);
   const wantFetch = (d) => files.includes(d) && !(state.feedback[d] || "").trim() && !cachedFeedback[d];
-  // v57: 無条件fetchは「今日から見た昨日」1日分に限定(過去日ブラウズ時の404ノイズ回避は維持)
-  const wantFetchPrev = (d) =>
-    d === addDays(todayISO(), -1) && !(state.feedback[d] || "").trim() && !cachedFeedback[d];
+  const wantFetchPrev = (d) => !(state.feedback[d] || "").trim() && !cachedFeedback[d];
   const [todayFb, prevFb] = await Promise.all([
     wantFetch(today) ? fetchGitHubRawText(`AIフィードバック_${today}.md`) : Promise.resolve(""),
     wantFetchPrev(prev) ? fetchGitHubRawText(`AIフィードバック_${prev}.md`) : Promise.resolve("")
@@ -9493,9 +9504,11 @@ async function hydrateStaticMarkdown() {
     // v57: 直push検知した前日分は、以後の起動時fetchが正規ルートに乗るよう記録する
     if (!files.includes(prev)) recordFeedbackFile(prev);
   }
-  // v67: AI連携の鮮度インジケータ(柱1b)。「今日」を見ているときのfetch結果のみを鮮度シグナルとして
-  //      採用する(過去日ブラウズ中のfetchはその日の閲覧目的であり、パイプライン鮮度とは無関係)。
-  //      前進のみ(後退させない)。
+  // v67: AI連携の鮮度インジケータ(柱1b)。todayFbは selectedDate 連動の fetch なので「今日」を
+  //      見ているときの結果のみ鮮度シグナルに採用する(過去日ブラウズ中のfetchはその日の閲覧目的
+  //      であり、パイプライン鮮度とは無関係)。前進のみ(後退させない)。
+  //      v76: prevFbは上記のとおり selectedDate に依らず常に実際の昨日分なので、この鮮度判定も
+  //      selectedDateに関わらず反映してよい(todayとprevで判定を分離)。
   const realToday = todayISO();
   let freshnessDirty = false;
   if (today === realToday) {
@@ -9503,10 +9516,10 @@ async function hydrateStaticMarkdown() {
       state.aiLinkFreshness.feedbackAt = today;
       freshnessDirty = true;
     }
-    if (prevFb && (!state.aiLinkFreshness.feedbackAt || state.aiLinkFreshness.feedbackAt < prev)) {
-      state.aiLinkFreshness.feedbackAt = prev;
-      freshnessDirty = true;
-    }
+  }
+  if (prevFb && (!state.aiLinkFreshness.feedbackAt || state.aiLinkFreshness.feedbackAt < prev)) {
+    state.aiLinkFreshness.feedbackAt = prev;
+    freshnessDirty = true;
   }
   // v62: AI週次レビュー(自宅PCバッチ生成)。直近土曜1件のみ、無ければ404を静かに無視する
   //      (fetchTextの仕様どおり)。週次レビュータブを開くたび同じ週の再fetchはしない。
@@ -9702,7 +9715,11 @@ function homeAiHubBody(blocks, isToday) {
   // v75: 「AIから」カードは鮮度表示とMIT候補抽出のみで、フィードバック本文そのものを読む手段が
   //      無かった(README不具合「ホームAIからでAIフィードバックが見れない」の実体)。ジャーナルタブと
   //      同じ「details 既定closed」パターンで本文を読めるようにする(新規UIコンポーネントは作らず流用)。
-  const readHTML = isToday ? homeAiFeedbackReadHTML() : "";
+  // v76: isToday(= state.selectedDate === 今日)でゲートしていたため、Home で過去日を閲覧中は
+  //      本文があってもこのdetails自体が出なかった(homeAiFeedbackReadHTML側もselectedDate基準の
+  //      不具合を併発しており、二重の原因で「読めない」symptomになっていた。CHANGES_v76.md参照)。
+  //      読む機能自体は閲覧中の日付に関係なく常に出す。
+  const readHTML = homeAiFeedbackReadHTML();
   return `
     <div class="home-plabel orange">AIから</div>
     ${aiFreshnessLine()}
@@ -9715,8 +9732,12 @@ function homeAiHubBody(blocks, isToday) {
 // v75: 「AIから」カードから、当日/前日のAIフィードバック本文を読めるようにする(既定closed)。
 //      読み取り経路は cachedFeedback(hydrateStaticMarkdown が personal-data API=fetchGitHubRawText
 //      経由で埋める。v72から同一オリジンfetchは使っていない)をそのまま流用する。
+// v76: today を state.selectedDate ではなく実際の今日(todayISO())に固定した。selectedDateは
+//      タブ間で共有・永続化されるため、Homeで過去日を閲覧している間はここが「今日」ではなく
+//      「閲覧中の日付」を基準にしてしまい、hydrateStaticMarkdown側が埋めた cachedFeedback[実際の昨日]
+//      と鍵が一致せず本文が出ない不具合があった(CHANGES_v76.md参照)。
 function homeAiFeedbackReadHTML() {
-  const today = state.selectedDate;
+  const today = todayISO();
   const prev = addDays(today, -1);
   const todayFb = cachedFeedback[today] || state.feedback[today] || "";
   const prevFb = cachedFeedback[prev] || state.feedback[prev] || "";
@@ -11176,6 +11197,13 @@ async function pushReportToGitHub() {
 }
 
 // v72: 個人データリポジトリ(taskchute/配下)への書き込み専用PUT
+// v76: URL組み立てを personalDataPath(encodeURIComponent(filename)) から
+//      personalDataPath(filename).split("/").map(encodeURIComponent).join("/") に統一した。
+//      旧実装は filename に "/" が含まれると丸ごと %2F にエンコードされサブディレクトリを
+//      指せなくなる欠陥があり(v74で発覚、pushGitHubPathを新設して回避していた)、
+//      本体側は直っていなかった(v74レビューのnit)。日報_*.md 等の呼び出し元(filenameに"/"を
+//      含まない)では旧実装と生成URLは完全に一致する(既存の正常系は無変更)ため、
+//      安全な統一である。fetchGitHubRawResult/gitHubContentsURL/pushGitHubPathと同じ方式。
 async function pushFileToGitHub(filename, content, label) {
   try {
     const raw = state.settings.github;
@@ -11184,7 +11212,8 @@ async function pushFileToGitHub(filename, content, label) {
     }
     const cfg = personalDataConn(raw);
     const branch = cfg.branch || "main";
-    const url = `https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${personalDataPath(encodeURIComponent(filename))}`;
+    const encPath = personalDataPath(filename).split("/").map(encodeURIComponent).join("/");
+    const url = `https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${encPath}`;
     // 既存ファイルのSHAを取得
     let sha = "";
     try {
