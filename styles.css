@@ -1562,6 +1562,95 @@ h3 {
   opacity: 0.7;
   background: var(--panel-soft);
 }
+.wish-check {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+}
+
+/* === v79: 月間プランニングボード === */
+.wish-board-pool-body,
+.wish-board-month-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 44px;
+  border-radius: 8px;
+  transition: box-shadow 0.1s ease;
+}
+.wish-board-pool-body {
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 8px;
+  background: var(--panel-soft);
+}
+.wish-board-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+.wish-board-month {
+  background: var(--panel);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 8px;
+}
+.wish-board-month-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.wish-board-month-body {
+  padding: 2px;
+  background: var(--panel-soft);
+}
+.wish-board-empty {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  padding: 10px 4px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+}
+.month-zone.drag-over {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.wish-board-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--panel);
+  cursor: grab;
+  touch-action: none;
+}
+.wish-board-card.is-dragging {
+  opacity: 0.85;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+  z-index: 50;
+  position: relative;
+  cursor: grabbing;
+  pointer-events: none; /* ドラッグ中は自分自身を透過させ、elementFromPointが下の月枠を拾えるようにする */
+}
+.wish-board-card-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.wish-board-card-month {
+  width: 74px;
+  flex-shrink: 0;
+  padding: 4px 4px;
+  font-size: 16px; /* iOS: 16px未満は自動ズームするため */
+}
 .wish-detail .textarea {
   width: 100%;
   border: 1px solid var(--line);

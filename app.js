@@ -93,6 +93,11 @@ let nowMode = false;             // trueの間、renderMain()は通常ビュー�
 let _nowSkippedIds = new Set();  // このNowセッション中に「スキップ」したBlock id(セッションを抜けるとクリア)
 // v70: フォーカスタイマー「中断」の理由ワンタップピッカー(チョコ停記録)。非永続。
 let _pendingInterruptBlockId = null;
+// v79: 月間プランニングボードのカードドラッグ(Pointer Events。既存の下書きBlockドラッグ
+//      (_draftDrag)と同じ「pointerdown/move/upで見た目だけ動かしupで正規化」方式を流用)。
+//      { id, el, startX, startY, moved } 非永続。moved=trueになって初めてドラッグ確定(タップの
+//      月選択セレクト操作を邪魔しないための閾値判定)。
+let _wishDrag = null;
 
 // v71: ホームの折りたたみカード(details)の開閉状態。端末ローカルのUI状態であり、
 //      GitHub同期やエクスポートの対象になる state オブジェクトとは意図的に分離するため、
@@ -358,6 +363,12 @@ document.addEventListener("click", (event) => {
   if (action === "wish-realize") realizeWish(id);
   if (action === "wish-unrealize") unrealizeWish(id);
   if (action === "delete-wish") deleteWish(id);
+  // v79: 月間プランニングボードの表示切替(リスト⇔ボード。UI状態のみ)
+  if (action === "wish-view-mode") {
+    state.wishViewMode = target.dataset.mode || "list";
+    persistLocalNoSchedule();
+    render();
+  }
   // === v17: Avoid List(v34: input リスナーから click へ移設) ===
   if (action === "add-avoid") addAvoid();
   if (action === "delete-avoid") deleteAvoid(id);
@@ -715,6 +726,18 @@ document.addEventListener("change", (event) => {
   if (target.matches('[data-action="wish-set-area"]')) {
     updateTaskField(target.dataset.id, "lifeArea", target.value);
   }
+  // v79: Wish編集の期限(任意)。表示側(バッジ等)は作らない — 週次レビューが読むだけ。
+  if (target.matches('[data-action="wish-set-duedate"]')) {
+    updateTaskField(target.dataset.id, "dueDate", target.value);
+  }
+  // v79: 月間プランニングボードのカード上「月選択」(タップ代替)。
+  //      updateTaskFieldはsaveStateのみでrenderしないため、これを呼ばないとカードが
+  //      新しい月枠へ視覚的に移動せず「未定」プールに残ったまま見える(データは保存済み)。
+  //      ボードの主眼=空間配置を成立させるため、選択直後に再描画する。
+  if (target.matches('[data-action="wish-set-month"]')) {
+    updateTaskField(target.dataset.id, "targetMonth", target.value ? Number(target.value) : null);
+    render();
+  }
 });
 
 // v16: Wish 関連のリアルタイム編集(input イベント = 入力中も保存)
@@ -865,6 +888,7 @@ function normalizeState(value) {
     const { trigger, celebrate, ...rest } = task;
     return {
       targetYear: null,
+      targetMonth: null,  // v79: 月間プランニングボード用(1-12 or null="未定"。targetYearとは独立)
       lifeArea: "",
       motivation: "",
       realized: false,
@@ -951,6 +975,7 @@ function normalizeState(value) {
       dueDate: "",
       description: "",
       targetYear: null,
+      targetMonth: null,  // v79: 月間プランニングボード用(1-12 or null)
       lifeArea: "",
       motivation: "",
       realized: false,
@@ -3301,6 +3326,56 @@ const endDraftDrag = () => {
 document.addEventListener("pointerup", endDraftDrag);
 document.addEventListener("pointercancel", endDraftDrag);
 
+// v79: 月間プランニングボードのカードD&D(Pointer Events。iPadタッチ対応)。
+// 上の下書きBlockドラッグと同じ「pointerdown/move/upで見た目だけ動かし、upでstateに反映して
+// render()で正規化」方式を流用しつつ、こちらは連続位置ではなく「どの月枠の上で離したか」を
+// document.elementFromPoint で判定する離散ドロップ。移動量が閾値未満はタップ(カード上の月選択
+// セレクト操作)とみなし何もしない。
+const WISH_DRAG_THRESHOLD = 8; // px
+document.addEventListener("pointerdown", (event) => {
+  const card = event.target.closest(".wish-board-card");
+  if (!card) return;
+  if (event.target.closest("[data-action]")) return;  // 月選択セレクトは通常のタップ操作に譲る
+  _wishDrag = { id: card.dataset.wishDragId, el: card, startX: event.clientX, startY: event.clientY, moved: false };
+});
+document.addEventListener("pointermove", (event) => {
+  if (!_wishDrag) return;
+  const dx = event.clientX - _wishDrag.startX;
+  const dy = event.clientY - _wishDrag.startY;
+  if (!_wishDrag.moved && Math.hypot(dx, dy) < WISH_DRAG_THRESHOLD) return;
+  _wishDrag.moved = true;
+  _wishDrag.el.classList.add("is-dragging");
+  _wishDrag.el.style.transform = `translate(${dx}px, ${dy}px)`;
+  document.querySelectorAll(".month-zone.drag-over").forEach((z) => z.classList.remove("drag-over"));
+  const zone = document.elementFromPoint(event.clientX, event.clientY)?.closest(".month-zone");
+  if (zone) zone.classList.add("drag-over");
+  event.preventDefault();
+});
+const endWishDrag = (event) => {
+  if (!_wishDrag) return;
+  const { id, el, moved } = _wishDrag;
+  el.classList.remove("is-dragging");
+  el.style.transform = "";
+  document.querySelectorAll(".month-zone.drag-over").forEach((z) => z.classList.remove("drag-over"));
+  if (moved && event) {
+    const zone = document.elementFromPoint(event.clientX, event.clientY)?.closest(".month-zone");
+    if (zone) {
+      const monthStr = zone.dataset.month || "";
+      updateTaskField(id, "targetMonth", monthStr ? Number(monthStr) : null);
+    }
+  }
+  _wishDrag = null;
+  if (moved) render();  // カード位置をstateどおりに正規化(ドロップ先が無ければ元の位置に戻る)
+};
+document.addEventListener("pointerup", endWishDrag);
+document.addEventListener("pointercancel", () => {
+  if (!_wishDrag) return;
+  _wishDrag.el.classList.remove("is-dragging");
+  _wishDrag.el.style.transform = "";
+  document.querySelectorAll(".month-zone.drag-over").forEach((z) => z.classList.remove("drag-over"));
+  _wishDrag = null;
+});
+
 // v60: 週次/12週サイクルのAI壁打ち(runAiWeekly/runAiCycle)・0秒思考のまとめ所感
 //      (runAiZeroComment)・今日のタスク提案(runAiTodaySuggest。朝の一括プランニングが
 //      上位互換のため削除)・朝イチ自動レビュー(maybeAutoMorningReview)は、いずれも
@@ -3547,6 +3622,8 @@ function moveBlockToWish(id) {
   const wishProject = getWishProject();
   if (!wishProject) return false;
   const task = makeTask({ projectId: wishProject.id, title: src.title });
+  // v79: addWish()と同じ理由でdueDateの「今日」既定を持ち込まない(Wishは期限任意)。
+  task.dueDate = "";
   state.tasks.push(task);
   return true;
 }
@@ -3829,6 +3906,9 @@ function renderWish() {
   // 領域フィルタオプション
   const lifeAreas = state.settings.lifeAreas || [];
 
+  // v79: 表示切替(リスト⇔ボード)。UI状態のみ・dataModifiedAtは汚さない(routineViewModeと同じ扱い)。
+  const viewMode = state.wishViewMode || "list";
+
   // 時期グループでまとめる
   const groups = {};
   for (const w of wishes) {
@@ -3873,7 +3953,12 @@ function renderWish() {
       </label>
     </section>
 
-    ${groupOrder.length === 0
+    <div class="segmented" style="margin-top:8px">
+      <button class="${viewMode === "list" ? "active" : ""}" data-action="wish-view-mode" data-mode="list">☰ リスト</button>
+      <button class="${viewMode === "board" ? "active" : ""}" data-action="wish-view-mode" data-mode="board">🗓 月間ボード</button>
+    </div>
+
+    ${viewMode === "board" ? renderWishBoard(wishes) : (groupOrder.length === 0
       ? `<section class="panel" style="margin-top:12px; text-align:center; padding:32px"><div class="muted">${filter.area ? `「${escapeHTML(filter.area)}」のやりたいことはまだありません` : "やりたいことを追加してみましょう(壮大なものでもOK)"}</div></section>`
       : groupOrder.map((key) => `
         <section class="section" style="margin-top:14px">
@@ -3885,7 +3970,64 @@ function renderWish() {
             ${groups[key].map(renderWishCard).join("")}
           </div>
         </section>
-      `).join("")}
+      `).join(""))}
+  `;
+}
+
+// v79: 月間プランニングボード ==============================
+// 「未定」プール + 1〜12月の枠。ドラッグ&ドロップ(iPadタッチ対応: pointer events)+
+// タップ代替(カード上の月選択セレクト)の両方で targetMonth を割り当てる。
+// wishes は renderWish() で既にarea/showRealizedフィルタ済みのものをそのまま使う。
+function renderWishBoard(wishes) {
+  const unassigned = wishes.filter((w) => !w.targetMonth);
+  const monthGroups = Array.from({ length: 12 }, (_, i) => i + 1)
+    .map((m) => ({ month: m, items: wishes.filter((w) => w.targetMonth === m) }));
+
+  return `
+    <section class="section wish-board" style="margin-top:14px">
+      <div class="wish-board-pool">
+        <div class="row" style="margin-bottom:6px; align-items:center">
+          <h3>未定</h3>
+          <div class="muted">${unassigned.length} 件</div>
+        </div>
+        <div class="wish-board-pool-body month-zone" data-month="">
+          ${unassigned.length === 0
+            ? `<div class="muted" style="font-size:12px; padding:8px">すべて月に割り当て済みです</div>`
+            : unassigned.map(renderWishBoardCard).join("")}
+        </div>
+      </div>
+      <div class="wish-board-grid">
+        ${monthGroups.map(({ month, items }) => `
+          <div class="wish-board-month">
+            <div class="wish-board-month-head">
+              <strong>${month}月</strong>
+              <span class="muted" style="font-size:11px">${items.length}件</span>
+            </div>
+            <div class="wish-board-month-body month-zone" data-month="${month}">
+              ${items.length === 0
+                ? `<div class="wish-board-empty">ここへドラッグ</div>`
+                : items.map(renderWishBoardCard).join("")}
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+// 月間ボードのカード1個(コンパクト表示。ドラッグ対象 + タップ代替の月選択セレクト同居)
+function renderWishBoardCard(wish) {
+  const areaColor = lifeAreaColor(wish.lifeArea);
+  const monthOptions = [
+    `<option value="">未定</option>`,
+    ...Array.from({ length: 12 }, (_, i) => i + 1)
+      .map((m) => `<option value="${m}" ${wish.targetMonth === m ? "selected" : ""}>${m}月</option>`)
+  ].join("");
+  return `
+    <div class="wish-board-card" draggable="true" data-wish-drag-id="${wish.id}" style="border-left:3px solid ${areaColor}">
+      <span class="wish-board-card-title" title="${escapeHTML(wish.title)}">${escapeHTML(wish.title)}</span>
+      <select class="select wish-board-card-month" data-action="wish-set-month" data-id="${wish.id}" aria-label="月を選ぶ">${monthOptions}</select>
+    </div>
   `;
 }
 
@@ -3898,9 +4040,9 @@ function renderWishCard(wish) {
   return `
     <div class="panel wish-card ${wish.realized ? "is-realized" : ""}" style="border-left:4px solid ${areaColor}">
       <div class="row" style="align-items:center; gap:8px">
+        <input type="checkbox" class="wish-check" data-action="${wish.realized ? "wish-unrealize" : "wish-realize"}" data-id="${wish.id}" ${wish.realized ? "checked" : ""} title="実現済みにする" aria-label="実現済みにする">
         <div style="flex:1; min-width:0">
           <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap">
-            ${wish.realized ? "<span style=\"color:var(--green);font-size:14px\">✓</span>" : ""}
             ${stagnant ? "<span title=\"60日以上動いていません\">🐢</span>" : ""}
             <strong style="${wish.realized ? "text-decoration:line-through; opacity:0.6" : ""}">${escapeHTML(wish.title)}</strong>
             ${wish.lifeArea ? `<span class="chip" style="background:${areaColor}22; color:${areaColor}; border:1px solid ${areaColor}55">${escapeHTML(wish.lifeArea)}</span>` : ""}
@@ -3954,6 +4096,11 @@ function renderWishDetail(wish) {
       </div>
 
       <div style="margin-bottom:10px">
+        <div class="muted" style="font-size:11px; margin-bottom:4px">期限(任意。週次レビューで参照)</div>
+        <input class="input" type="date" data-action="wish-set-duedate" data-id="${wish.id}" value="${wish.dueDate || ""}">
+      </div>
+
+      <div style="margin-bottom:10px">
         <div class="muted" style="font-size:11px; margin-bottom:4px">なぜやりたい(モチベーションの源)</div>
         <textarea class="textarea" data-action="wish-set-motivation" data-id="${wish.id}" rows="2" placeholder="子が小さいうちに3世代で旅したい…">${escapeHTML(wish.motivation || "")}</textarea>
       </div>
@@ -4004,6 +4151,9 @@ function addWish() {
   const wishProject = getWishProject();
   if (!wishProject) return showToast("Wish Project が見つかりません");
   const task = makeTask({ projectId: wishProject.id, title });
+  // v79: makeTask の dueDate 既定(未指定時="今日")はタスクシュート実行前提の値で、
+  //      長期的な「やりたいこと」には合わないため、Wish作成時だけ空に戻す(期限は任意)。
+  task.dueDate = "";
   state.tasks.push(task);
   state.wishOpenId = task.id;  // 追加後すぐに開く
   if (titleEl) titleEl.value = "";
@@ -4021,6 +4171,9 @@ function addWishSubtask(parentTaskId) {
   const parent = state.tasks.find((t) => t.id === parentTaskId);
   if (!parent) return;
   const sub = makeTask({ projectId: parent.projectId, parentTaskId, title: title.trim() });
+  // v79: addWish()と同じ理由でdueDateの「今日」既定を持ち込まない(Wishサブタスクも期限は任意)。
+  //      Kフォローアップ指示: Wish関連の全作成経路でdueDateが既定で埋まらないようにする。
+  sub.dueDate = "";
   state.tasks.push(sub);
   saveAndRender("サブタスクを追加しました");
 }
@@ -4063,7 +4216,10 @@ function wishSubtaskToTasks(taskId) {
 }
 
 function realizeWish(id) {
-  if (!window.confirm("このやりたいことを「実現済み」にしますか?")) return;
+  // v79: ネイティブcheckboxはクリック時点でchecked属性が先に反転済みのため、confirmを
+  // キャンセルしてここでreturnするだけだとチェックが見た目だけONに残ってしまう(state.realized
+  // は変わっていないのに)。render()でDOMをstateに合わせて戻す。
+  if (!window.confirm("このやりたいことを「実現済み」にしますか?")) { render(); return; }
   const today = todayISO();
   state.tasks = state.tasks.map((t) => t.id === id
     ? { ...t, realized: true, realizedDate: today, status: "completed", updatedAt: nowDateTime() }
@@ -7657,7 +7813,7 @@ function addTask() {
   saveAndRender("Taskを追加しました");
 }
 
-function makeTask({ projectId = "", parentTaskId = "", title = "", category = "", dueDate = "", targetYear = null, lifeArea = "", motivation = "", leverageType = "" }) {
+function makeTask({ projectId = "", parentTaskId = "", title = "", category = "", dueDate = "", targetYear = null, targetMonth = null, lifeArea = "", motivation = "", leverageType = "" }) {
   return {
     id: crypto.randomUUID(),
     projectId,
@@ -7672,6 +7828,7 @@ function makeTask({ projectId = "", parentTaskId = "", title = "", category = ""
     aiWorkBrief: "",    // v67: 何をしてほしいか・成果物の置き場希望(1〜2行)
     // v16: やりたいことリスト用フィールド
     targetYear,         // いつまでに(数字の年、null なら「いつか」)
+    targetMonth,        // v79: 月間プランニングボード用(1-12、null なら「未定」。targetYearとは独立)
     lifeArea,           // 人生領域(健康/仕事/家族/趣味/旅/学び/経験/持物)
     motivation,         // なぜやりたいか(自由記述)
     realized: false,    // 実現済みか
