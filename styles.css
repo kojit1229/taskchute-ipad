@@ -1569,63 +1569,80 @@ h3 {
   accent-color: var(--accent);
 }
 
-/* === v79: 月間プランニングボード === */
-.wish-board-pool-body,
-.wish-board-month-body {
+/* === v79: 月間プランニングボード(v80でグリッド→縦積みリストに変更。詳細はapp.jsのコメント参照) === */
+.wish-board-pool-body {
   display: flex;
   flex-direction: column;
   gap: 6px;
   min-height: 44px;
   border-radius: 8px;
   transition: box-shadow 0.1s ease;
-}
-.wish-board-pool-body {
   max-height: 260px;
   overflow-y: auto;
   padding: 8px;
   background: var(--panel-soft);
 }
-.wish-board-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 10px;
+/* v80: ボード上部の補助行(縦積みの説明 + 「今月へ」ジャンプボタン) */
+.wish-board-toolbar {
   margin-top: 14px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
 }
-.wish-board-month {
+/* v80: 1〜12月を縦一列に並べるリスト(旧: auto-fill grid) */
+.wish-board-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+/* v80: 月1行。month-zone を行全体に付けているので、空月でもヘッダだけの行自体が
+   ドロップターゲットになる(D&D実装(app.js)は closest(".month-zone") で判定するため)。 */
+.wish-board-month-row {
   background: var(--panel);
   border: 1px solid var(--line-soft);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 8px;
+  padding: 8px 10px;
+  transition: box-shadow 0.1s ease;
+}
+.wish-board-month-row.is-empty {
+  padding: 6px 10px;
+  opacity: 0.6;
+}
+.wish-board-month-row.is-current {
+  border-color: var(--accent);
+}
+.wish-board-current-badge {
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--accent);
+  color: #fff;
+  padding: 1px 7px;
+  border-radius: 999px;
 }
 .wish-board-month-head {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 6px;
+  align-items: center;
+  gap: 8px;
 }
 .wish-board-month-body {
-  padding: 2px;
-  background: var(--panel-soft);
-}
-.wish-board-empty {
-  font-size: 11px;
-  color: var(--muted);
-  text-align: center;
-  padding: 10px 4px;
-  border: 1px dashed var(--line);
-  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
 }
 .month-zone.drag-over {
   box-shadow: inset 0 0 0 2px var(--accent);
 }
 .wish-board-card {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
   border-radius: 8px;
-  background: var(--panel);
+  background: var(--panel-soft);
   cursor: grab;
   touch-action: none;
 }
@@ -1637,13 +1654,26 @@ h3 {
   cursor: grabbing;
   pointer-events: none; /* ドラッグ中は自分自身を透過させ、elementFromPointが下の月枠を拾えるようにする */
 }
-.wish-board-card-title {
+.wish-board-card-main {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* v80: 見切れ対策の本丸。単一行ellipsisをやめ、2行までは折り返して全文を読めるようにする */
+.wish-board-card-title {
   font-size: 13px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.wish-board-card-area {
+  font-size: 10px;
+  opacity: 0.85;
 }
 .wish-board-card-month {
   width: 74px;

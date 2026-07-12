@@ -368,7 +368,13 @@ document.addEventListener("click", (event) => {
     state.wishViewMode = target.dataset.mode || "list";
     persistLocalNoSchedule();
     render();
+    // v80: ボードに切り替えた瞬間だけ現在月へ自動スクロール(縦積みリストで1月から
+    // 探す手間を省く小さな補助。以後の再描画では毎回スクロール位置を戻さない=
+    // ドラッグ中などにユーザーのスクロール位置を奪わないため、ここでの一度きりに限定)
+    if (state.wishViewMode === "board") scrollWishBoardToCurrentMonth();
   }
+  // v80: 「今月へ」ジャンプボタン(縦積みリストの一覧性補助)
+  if (action === "wish-board-jump-current") scrollWishBoardToCurrentMonth();
   // === v17: Avoid List(v34: input リスナーから click へ移設) ===
   if (action === "add-avoid") addAvoid();
   if (action === "delete-avoid") deleteAvoid(id);
@@ -3978,8 +3984,18 @@ function renderWish() {
 // 「未定」プール + 1〜12月の枠。ドラッグ&ドロップ(iPadタッチ対応: pointer events)+
 // タップ代替(カード上の月選択セレクト)の両方で targetMonth を割り当てる。
 // wishes は renderWish() で既にarea/showRealizedフィルタ済みのものをそのまま使う。
+//
+// v80: レイアウトを「小さい固定グリッド」から縦積みリスト型に変更。
+// 理由(Kフィードバック: 「月カードが小さくて、入れるとやりたいことが見切れてしまう」):
+// 旧実装は auto-fill grid(minmax(150px,1fr))で、主端末のiPhone(縦持ち・幅約390px)では
+// 実質2列にしかならず、カード幅が狭すぎてタイトルが省略記号(ellipsis)で切れていた。
+// 1〜12月を縦一列に並べれば、カード幅は画面幅いっぱいまで使えるためタイトルを折り返せる。
+// 空月まで毎回フルサイズの枠を描くと12ヶ月分でスクロールが長大になるため、
+// 中身が無い月はヘッダ行だけの薄い行に縮小する(=ドロップ先としても残す。month-zoneは
+// 行全体に付けているので、空月でも「ヘッダだけの行」自体がドロップターゲットになる)。
 function renderWishBoard(wishes) {
   const unassigned = wishes.filter((w) => !w.targetMonth);
+  const currentMonth = Number(todayISO().slice(5, 7));  // "YYYY-MM-DD" の月部分(文字列抽出。new Date(string)は使わない)
   const monthGroups = Array.from({ length: 12 }, (_, i) => i + 1)
     .map((m) => ({ month: m, items: wishes.filter((w) => w.targetMonth === m) }));
 
@@ -3996,18 +4012,24 @@ function renderWishBoard(wishes) {
             : unassigned.map(renderWishBoardCard).join("")}
         </div>
       </div>
-      <div class="wish-board-grid">
+
+      <div class="row wish-board-toolbar">
+        <div class="muted" style="font-size:11px">1月〜12月を縦に並べています。空の月はヘッダのみ表示です。</div>
+        <button class="btn ghost" data-action="wish-board-jump-current">📍 ${currentMonth}月(今月)へ</button>
+      </div>
+
+      <div class="wish-board-list">
         ${monthGroups.map(({ month, items }) => `
-          <div class="wish-board-month">
+          <div class="wish-board-month-row month-zone ${items.length === 0 ? "is-empty" : ""} ${month === currentMonth ? "is-current" : ""}"
+               data-month="${month}" data-month-row="${month}">
             <div class="wish-board-month-head">
               <strong>${month}月</strong>
-              <span class="muted" style="font-size:11px">${items.length}件</span>
+              ${month === currentMonth ? `<span class="wish-board-current-badge">今月</span>` : ""}
+              <span class="muted" style="font-size:11px">${items.length > 0 ? `${items.length}件` : "空き"}</span>
             </div>
-            <div class="wish-board-month-body month-zone" data-month="${month}">
-              ${items.length === 0
-                ? `<div class="wish-board-empty">ここへドラッグ</div>`
-                : items.map(renderWishBoardCard).join("")}
-            </div>
+            ${items.length > 0
+              ? `<div class="wish-board-month-body">${items.map(renderWishBoardCard).join("")}</div>`
+              : ""}
           </div>
         `).join("")}
       </div>
@@ -4015,7 +4037,16 @@ function renderWishBoard(wishes) {
   `;
 }
 
-// 月間ボードのカード1個(コンパクト表示。ドラッグ対象 + タップ代替の月選択セレクト同居)
+// v80: 月間ボードを現在月の行までスクロール(自動起動時・「今月へ」ボタン共用)
+function scrollWishBoardToCurrentMonth() {
+  const currentMonth = Number(todayISO().slice(5, 7));
+  setTimeout(() => {
+    document.querySelector(`[data-month-row="${currentMonth}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, 60);
+}
+
+// 月間ボードのカード1個(ドラッグ対象 + タップ代替の月選択セレクト同居)。
+// v80: タイトルを単一行ellipsisから2行までのline-clampへ変更(見切れ対策の本丸)。
 function renderWishBoardCard(wish) {
   const areaColor = lifeAreaColor(wish.lifeArea);
   const monthOptions = [
@@ -4025,7 +4056,10 @@ function renderWishBoardCard(wish) {
   ].join("");
   return `
     <div class="wish-board-card" draggable="true" data-wish-drag-id="${wish.id}" style="border-left:3px solid ${areaColor}">
-      <span class="wish-board-card-title" title="${escapeHTML(wish.title)}">${escapeHTML(wish.title)}</span>
+      <div class="wish-board-card-main">
+        <span class="wish-board-card-title" title="${escapeHTML(wish.title)}">${escapeHTML(wish.title)}</span>
+        ${wish.lifeArea ? `<span class="wish-board-card-area" style="color:${areaColor}">${escapeHTML(wish.lifeArea)}</span>` : ""}
+      </div>
       <select class="select wish-board-card-month" data-action="wish-set-month" data-id="${wish.id}" aria-label="月を選ぶ">${monthOptions}</select>
     </div>
   `;
