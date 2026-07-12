@@ -1328,6 +1328,13 @@ h3 {
   font-size: 14px;
   font-weight: 800;
 }
+/* v81: 見た目は24px(mobile 22px)のまま、::afterで当たり判定だけ44px相当に拡張(UX監査A3)。
+   ::beforeはホバー時のチェックマーク表示に使用中のため衝突を避け::afterを使う。 */
+.tl-complete-btn::after {
+  content: "";
+  position: absolute;
+  inset: -10px;
+}
 
 /* 実績モードのカードは緑系 */
 .timeline-card.is-actual {
@@ -1347,6 +1354,9 @@ h3 {
     width: 22px;
     height: 22px;
     left: 5px;
+  }
+  .tl-complete-btn::after {
+    inset: -11px;
   }
 }
 
@@ -1567,6 +1577,28 @@ h3 {
   height: 24px;
   flex-shrink: 0;
   accent-color: var(--accent);
+}
+/* v81: ネイティブcheckboxはpaddingで当たり判定を拡張できない(Chromium/iOS Safariとも
+   type=checkboxのpaddingは無視される、実機検証で確認済み)ため、<label>でラップして
+   当たり判定を拡張する(見た目はwish-checkの24pxのまま。UX監査A3)。
+   ::beforeによる拡張ではなく、labelの実ボックス自体をpadding+負のmarginで44px相当に
+   広げる方式を採用: absolute配置の擬似要素は positioned descendant として通常フローの
+   子要素(input)より手前に描画され、クリックがinput自身ではなくlabel側で奪われてしまう
+   (v79回帰テストで発覚)。実ボックス拡張ならinputは非配置のまま最前面に残るため、
+   input自体への直接クリック(既存テスト)を妨げない。
+   labelでネイティブform要素をラップして生成されたクリックはブラウザがinputへ転送するため、
+   data-action委譲・checked状態のロジックは無変更で済む。 */
+.wish-check-wrap {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  box-sizing: content-box;
+  width: 24px;
+  height: 24px;
+  padding: 10px;
+  margin: -10px;
+  cursor: pointer;
 }
 
 /* === v79: 月間プランニングボード(v80でグリッド→縦積みリストに変更。詳細はapp.jsのコメント参照) === */
@@ -2022,15 +2054,23 @@ h3 {
   width: 20px; height: 20px; border-radius: 6px; border: 2px solid var(--line);
   flex: none; display: flex; align-items: center; justify-content: center;
   font-size: 11px; color: #fff; cursor: pointer;
+  position: relative;
 }
 .home-ck.done .home-box { background: var(--green); border-color: var(--green); }
 .home-dot {
   width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line);
   flex: none; display: flex; align-items: center; justify-content: center;
   font-size: 10px; color: #fff; cursor: pointer;
+  position: relative;
 }
 .home-dot.done { background: var(--green); border-color: var(--green); }
 .home-dot.doing { border-color: var(--orange); background: var(--orange); }
+/* v81: 見た目は20pxのまま、::beforeで当たり判定だけ44px相当に拡張(UX監査A1) */
+.home-box::before, .home-dot::before {
+  content: "";
+  position: absolute;
+  inset: -12px;
+}
 .home-ck-name, .home-tc-name, .home-flow-name, .home-due-main {
   flex: 1; min-width: 0; cursor: pointer; font-size: 14.5px;
 }

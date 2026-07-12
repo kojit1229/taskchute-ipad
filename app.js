@@ -1837,11 +1837,19 @@ function homeIdeal(isToday) {
   const today = todayISO();
   const active = idealActiveEntry(today);
   if (!active) {
-    return `<section class="panel home-ideal home-ideal-empty">
-      <input type="text" class="home-ideal-input" maxlength="60"
+    // v81: 未入力日は常時フル表示のカードでは場所を取りすぎるため(UX監査A5)、
+    // 既存の折りたたみ機構(homeFoldSection)を再利用し、既定は閉じた1行プレースホルダに縮小する。
+    // 保存ロジック(input handlerのdata-ideal-date処理)自体は変更しない。
+    return homeFoldSection(
+      "home-ideal-empty",
+      false,
+      "home-ideal home-ideal-empty",
+      "muted",
+      "今日の理想を一行で(任意・タップで記入)",
+      `<input type="text" class="home-ideal-input" maxlength="60"
         placeholder="今日の理想を一行で(任意・スキップ可)"
-        data-ideal-date="${today}" value="">
-    </section>`;
+        data-ideal-date="${today}" value="">`
+    );
   }
   const retryDay = active.dayNum >= IDEAL_RETRY_WINDOW_DAYS;
   return `<section class="panel home-ideal">
@@ -4074,7 +4082,9 @@ function renderWishCard(wish) {
   return `
     <div class="panel wish-card ${wish.realized ? "is-realized" : ""}" style="border-left:4px solid ${areaColor}">
       <div class="row" style="align-items:center; gap:8px">
-        <input type="checkbox" class="wish-check" data-action="${wish.realized ? "wish-unrealize" : "wish-realize"}" data-id="${wish.id}" ${wish.realized ? "checked" : ""} title="実現済みにする" aria-label="実現済みにする">
+        <label class="wish-check-wrap">
+          <input type="checkbox" class="wish-check" data-action="${wish.realized ? "wish-unrealize" : "wish-realize"}" data-id="${wish.id}" ${wish.realized ? "checked" : ""} title="実現済みにする" aria-label="実現済みにする">
+        </label>
         <div style="flex:1; min-width:0">
           <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap">
             ${stagnant ? "<span title=\"60日以上動いていません\">🐢</span>" : ""}
@@ -5448,7 +5458,7 @@ function renderMorningEnergyPicker(date) {
     <div class="row" style="gap:6px; flex-wrap:wrap; margin-bottom:10px; align-items:center">
       <span class="muted" style="font-size:12.5px; font-weight:700">🌅 朝の体調</span>
       ${energyLevels.map((l) => `
-        <button class="btn ${current === l.value ? "primary" : "ghost"}" style="font-size:12px; padding:6px 10px"
+        <button class="btn ${current === l.value ? "primary" : "ghost"}" style="font-size:12px; padding:6px 10px; min-height:44px; display:inline-flex; align-items:center"
           data-action="set-morning" data-value="${l.value}">${l.label}</button>
       `).join("")}
       ${current === undefined ? `<span class="muted" style="font-size:11px">未記録(タップで記録 → エネルギーグラフの始点になります)</span>` : ""}
@@ -5474,14 +5484,14 @@ function renderConditionMorningExtra(date) {
       <span class="muted cond-row-label">💤 睡眠</span>
       <span class="row cond-btn-row">
         ${CONDITION_SLEEP_PRESETS.map((h) => `
-          <button class="btn ${log.sleepHours === h ? "primary" : "ghost"}" style="font-size:12px; padding:6px 10px"
+          <button class="btn ${log.sleepHours === h ? "primary" : "ghost"}" style="font-size:12px; padding:6px 10px; min-height:44px; display:inline-flex; align-items:center"
             data-action="set-sleep" data-value="${h}">${h}${h === 9 ? "h+" : "h"}</button>
         `).join("")}
       </span>
     </div>
     <div class="cond-row" style="margin-bottom:8px">
       <span class="muted cond-row-label">💊 服薬</span>
-      <button class="btn ${log.meds ? "primary" : "ghost"}" style="font-size:12px; padding:6px 10px" data-action="toggle-meds">
+      <button class="btn ${log.meds ? "primary" : "ghost"}" style="font-size:12px; padding:6px 10px; min-height:44px; display:inline-flex; align-items:center" data-action="toggle-meds">
         ${log.meds ? "済み" : "まだ"}
       </button>
     </div>
@@ -5489,7 +5499,7 @@ function renderConditionMorningExtra(date) {
       <span class="muted cond-row-label">🔋 今日の余力</span>
       <span class="row cond-btn-row">
         ${CONDITION_CAPACITY_OPTIONS.map((c) => `
-          <button class="btn ${log.capacity === c.value ? "primary" : "ghost"}" style="font-size:12px; padding:6px 10px"
+          <button class="btn ${log.capacity === c.value ? "primary" : "ghost"}" style="font-size:12px; padding:6px 10px; min-height:44px; display:inline-flex; align-items:center"
             data-action="set-capacity" data-value="${c.value}">${c.label}</button>
         `).join("")}
       </span>
@@ -5505,7 +5515,7 @@ function renderEveningConditionCard(date) {
     <div class="row" style="gap:6px; flex-wrap:wrap; margin-bottom:6px; align-items:center">
       <span class="muted" style="font-size:12.5px; font-weight:700">🌙 夜の体調</span>
       ${energyLevels.map((l) => `
-        <button class="btn ${log.eveningMood === l.value ? "primary" : "ghost"}" style="font-size:12px; padding:6px 10px"
+        <button class="btn ${log.eveningMood === l.value ? "primary" : "ghost"}" style="font-size:12px; padding:6px 10px; min-height:44px; display:inline-flex; align-items:center"
           data-action="set-evening-mood" data-value="${l.value}">${l.label}</button>
       `).join("")}
     </div>
@@ -8616,7 +8626,10 @@ function generateReport(dateArg, { quiet = false } = {}) {
   const report = lines.join("\n");
   state.reports[date] = report;
   if (quiet) { saveState(); return report; }  // v51: バックグラウンド生成(画面を動かさない)
-  saveAndRender("日報を生成しました(v17 仕様)");
+  // v81: このあと currentView を "reports" に切り替えるが、トーストがそれを予告しないまま
+  // 画面が切り替わり「押したら黙って画面が変わった」体験になっていた(UX監査A4)。
+  // 遷移することを文言で明示する。
+  saveAndRender("日報を生成しました → 日報タブに移動します");
   state.currentView = "reports";
   saveState();
   render();

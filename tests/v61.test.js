@@ -306,6 +306,10 @@ function check(name, cond, extra = "") {
   check("入力欄は16px以上(iOS自動ズーム対策)", parseFloat(fontSize) >= 16, fontSize);
 
   console.log("[12] 今日の理想: 入力→保存→1日目表示");
+  // v81: 未入力日のカードは既定で閉じた折りたたみ(<details>)になった(UX監査A5)ため、
+  // 入力欄はタップで展開してから操作する(保存ロジック自体は無変更)。
+  await page.click('details[data-fold-id="home-ideal-empty"] summary');
+  await page.waitForTimeout(150);
   await idealInput.fill("家族と穏やかに過ごす");
   await page.waitForTimeout(300);
   let s12 = await stateNow();
