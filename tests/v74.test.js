@@ -129,11 +129,22 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(700);
     const homeText = await page.locator("main").textContent();
     check("カード見出し「今日の1冊から」が表示される", homeText.includes("今日の1冊から"), homeText.slice(0, 300));
-    check("書籍タイトルが表示される", homeText.includes("テスト書籍タイトル_v74"));
-    check("著者名が表示される", homeText.includes("テスト著者_v74"));
-    check("ハイライト本文が表示される", homeText.includes("テストハイライト本文_v74"));
+    check("書籍タイトルが表示される(閉じたdetails内でもDOM上には存在する)", homeText.includes("テスト書籍タイトル_v74"));
+    check("著者名が表示される(閉じたdetails内でもDOM上には存在する)", homeText.includes("テスト著者_v74"));
+    check("ハイライト本文が表示される(閉じたdetails内でもDOM上には存在する)", homeText.includes("テストハイライト本文_v74"));
     check("言語化欄は保存前は空", await page.locator("[data-reading-reflection-input]").inputValue() === "");
     check("保存ボタンがある", await page.locator('[data-action="reading-save"]').count() === 1);
+
+    // v82(UX監査B3・K承認): 読書カードは常時フル表示だとホームの一等地を占有するため、
+    // 既定closedの折りたたみ(homeFoldSection, data-fold-id="home-reading")に縮小した
+    // (CHANGES_v82.md参照)。以降の入力操作(fill/click)は要素の可視性を要求するため、
+    // ここで一度サマリーをタップして開く(開閉状態はlocalStorageに記憶され、以降のreloadでも開いたまま)。
+    console.log("[1b] v82: 読書カードは既定closedの折りたたみ。タップで開くと入力欄が操作できる");
+    const readingFold = page.locator('details[data-fold-id="home-reading"]');
+    check("既定で閉じている(open属性が無い)", !(await readingFold.evaluate((el) => el.open)));
+    await readingFold.locator("summary").click();
+    await page.waitForTimeout(150);
+    check("タップで開く(open属性が付く)", await readingFold.evaluate((el) => el.open));
 
     // ============================================================
     // (b) 1行言語化の保存(read-merge-write。他日のエントリを消さない)

@@ -4,8 +4,9 @@
 //
 // (a) タブ順: navItems(サイドバー/「その他」メニュー)が実行系優先の新しい順序になっている
 //     (home, tasks, timeline, wbs, routine, journal, weekly, reports, stats, wish, avoid,
-//      vision, zero, pomodoro, settings)。mobileNav(下部4タブ)は意図的に変更していない
-//     (CHANGES_v71.md参照: iPhone/iPadの筋肉記憶を壊さないためのリスク最小化判断)。
+//      vision, zero, pomodoro, settings)。
+//     ※ mobileNav(下部タブ)はv71時点では意図的に不変更だったが、v82(UX監査B1)で
+//        WBS→ジャーナルに入れ替えた。下記[1b]はv82仕様に追従済み(詳細はCHANGES_v82.md/v82.test.js)。
 // (b) ホームの折りたたみ: 信条(creed)/寿命カウントダウン(lifespan)/長い弧(zone3)/足あと(zone4)は
 //     既定closed。開閉するとlocalStorage(taskchute-journal-home-fold-v1、stateとは別キー)に
 //     即時記憶され、リロード後も維持される。
@@ -117,9 +118,12 @@ function check(name, cond, extra = "") {
     ];
     check("navItemsの並びが期待どおり", JSON.stringify(navLabels) === JSON.stringify(expectedOrder), JSON.stringify(navLabels));
 
-    console.log("[1b] 下部タブ(mobileNav)は従来どおり home/WBS/実行/時間/その他(意図的に不変更)");
+    // v82(UX監査B1・K承認): 日課動線(朝: ホーム→ジャーナルで体調記録)を1タップにするため、
+    // 不定期にしか触らないWBSを「その他」へ降ろし、ジャーナルをbottom-navへ昇格した。
+    // WBSが「その他」の受け皿に出ることはv82.test.jsで別途検証する。
+    console.log("[1b] 下部タブ(mobileNav)は home/ジャーナル/実行/時間/その他(v82でWBS→ジャーナルに入替)");
     const bottomLabels = await page.locator("#bottomNav button").allTextContents();
-    check("mobileNavは変更していない", JSON.stringify(bottomLabels) === JSON.stringify(["ホーム", "WBS", "実行", "時間", "その他"]), JSON.stringify(bottomLabels));
+    check("mobileNavはv82の新構成", JSON.stringify(bottomLabels) === JSON.stringify(["ホーム", "ジャーナル", "実行", "時間", "その他"]), JSON.stringify(bottomLabels));
 
     // ============================================================
     // (b) ホームの折りたたみ
@@ -210,6 +214,10 @@ function check(name, cond, extra = "") {
     await seed({ blocks: [planBlock({ id: "mit-jump", title: "ジャンプ確認MIT", startMin: 9 * 60, isMIT: true })], view: "home" });
     check("#home-mit-anchorが存在し今日の主役を含む", (await page.locator("#home-mit-anchor").textContent()).includes("ジャンプ確認MIT"));
     check("zone3は開始時点でclosed", await page.locator('details[data-fold-id="zone3"]').evaluate((el) => el.open) === false);
+    // v82: スコアボード自体も既定closedの折りたたみになった(CHANGES_v82.md)ため、
+    // 中の「今日の主役」セルをクリックするには先にスコアボードを開く必要がある。
+    await page.locator('details[data-fold-id="home-scoreboard"] summary').click();
+    await page.waitForTimeout(150);
     await page.click('.home-score[data-id="homezone-3"]');
     await page.waitForTimeout(300);
     check("「長い弧」ジャンプでzone3が自動的に開く", await page.locator('details[data-fold-id="zone3"]').evaluate((el) => el.open));

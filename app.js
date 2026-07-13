@@ -28,9 +28,12 @@ const navItems = [
   { id: "settings", label: "設定", mark: "S" }
 ];
 
+// v82: UX監査B1 — 日課動線(朝: ホーム→ジャーナルで体調記録)を1タップにするため、
+//      不定期にしか触らないWBSを「その他」へ降ろし、ジャーナルをbottom-navへ昇格した。
+//      WBSはrenderMore(その他グリッド)の受け皿に含まれる(除外リストから外すだけで自動的に出る)。
 const mobileNav = [
   { id: "home", label: "ホーム" },
-  { id: "wbs", label: "WBS" },
+  { id: "journal", label: "ジャーナル" },
   { id: "tasks", label: "実行" },
   { id: "timeline", label: "時間" },
   { id: "more", label: "その他" }
@@ -1724,7 +1727,7 @@ function renderHome() {
     <div class="home-zone-block z-teal" id="homezone-2">
       ${degraded ? `
         <details class="home-fold" data-fold-id="zone2-degraded" ${isHomeFoldOpen("zone2-degraded", false) ? "open" : ""}>
-          <summary class="home-zone teal home-fold-summary"><span class="home-fold-chevron">▶</span>今日のリズム(たたんでいます)</summary>
+          <summary class="home-zone teal home-fold-summary"><span class="home-fold-chevron">▶</span>今日のリズム(たたんでいます)・${homeZone2Summary(blocks)}</summary>
           <div class="home-fold-body">
             <div class="home-grid">
               ${homeFlow(blocks, isToday)}
@@ -1733,11 +1736,15 @@ function renderHome() {
           </div>
         </details>
       ` : `
-        <div class="home-zone teal">今日のリズム</div>
-        <div class="home-grid">
-          ${homeFlow(blocks, isToday)}
-          ${homeRoutine(blocks)}
-        </div>
+        <details class="home-fold" data-fold-id="zone2" ${isHomeFoldOpen("zone2", false) ? "open" : ""}>
+          <summary class="home-zone teal home-fold-summary"><span class="home-fold-chevron">▶</span>今日のリズム・${homeZone2Summary(blocks)}</summary>
+          <div class="home-fold-body">
+            <div class="home-grid">
+              ${homeFlow(blocks, isToday)}
+              ${homeRoutine(blocks)}
+            </div>
+          </div>
+        </details>
       `}
     </div>
     <div class="home-zone-block z-blue" id="homezone-3">
@@ -1927,16 +1934,19 @@ function homeReadingCard() {
   if (!pick) return "";
   const date = todayISO();
   const saved = cachedReadingReflections[date] || "";
-  return `<section class="panel home-reading">
-    <div class="home-plabel blue">今日の1冊から</div>
+  // v82(B3): 常時フル表示だとホームの一等地を占有するため既定closedの折りたたみへ縮小。
+  //      ただし1行言語化の入力があるカードなので、朝の動線で気づけるよう書名+記入状況を
+  //      summary行に出す(タップで展開すればハイライト本文と入力欄が現れる。保存ロジックは無変更)。
+  const body = `
     <div class="home-reading-book">${escapeHTML(pick.bookTitle)}${pick.author ? `<span class="muted" style="font-size:12px"> — ${escapeHTML(pick.author)}</span>` : ""}</div>
     <div class="home-reading-highlight">${escapeHTML(pick.text)}</div>
     <textarea class="home-reading-input" data-reading-reflection-input rows="2"
       placeholder="読んで何を思うか、一行で">${escapeHTML(saved)}</textarea>
     <div class="row" style="justify-content:flex-end;margin-top:6px">
       <button class="btn primary" data-action="reading-save">保存</button>
-    </div>
-  </section>`;
+    </div>`;
+  const summary = `今日の1冊から: ${pick.bookTitle}${saved ? "(記入済み)" : "(未記入)"}`;
+  return homeFoldSection("home-reading", false, "home-reading", "", summary, body);
 }
 
 // v74: personal-data リポジトリのサブディレクトリpath("reading/reflections.json"等)への
@@ -2226,12 +2236,16 @@ function homeScoreboard(blocks) {
       <div class="progress home-score-bar"><span style="width:${pct}%"></span></div>
     </div>`;
   // v71: 「今日の主役」はhomeMITがトップ(home-mit-anchor)に移動したため、ジャンプ先もそこに追従
-  return `<div class="home-scoreboard">
+  const body = `<div class="home-scoreboard">
     ${cell("orange", "タスクシュート着手", tc.pct, "%", `${tc.done}/${tc.total}`, tc.pct, "homezone-1")}
     ${cell("orange", "今日の主役", mitDone, `/${mit.length}`, "MIT", mitPct, "home-mit-anchor")}
     ${cell("green", "ルーティン実行", rt.pct, "%", `${rt.done}/${rt.total}`, rt.pct, "homezone-2")}
     ${cell("blue", "12週 今週", wk.pct, "%", `${wk.done}/${wk.total}`, wk.pct, "homezone-3")}
   </div>`;
+  // v82(B3): ホーム常時表示スリム化のため既定closedの折りたたみへ。集計値自体は
+  //      summary行に要約表示するので、閉じたままでも「ひと目」の用は足りる。
+  const summary = `ひと目スコア: 着手${tc.pct}% ・ 主役${mitDone}/${mit.length} ・ ルーティン${rt.pct}% ・ 12週${wk.pct}%`;
+  return homeFoldSection("home-scoreboard", false, "", "", summary, body);
 }
 
 // チェック+編集できる行(Block 用)
@@ -2350,6 +2364,19 @@ function homeRoutine(blocks) {
       <span class="home-rate-frac">${done} / ${r.length}</span></div>
       <div class="progress" style="margin-bottom:10px"><span style="width:${pct}%"></span></div>` : ""}
     ${rows}</section>`;
+}
+
+// v82(B2): 「今日のリズム」ゾーンを既定折りたたみにする際、集計値(ながれの完了数・
+//      ルーティン実行率)を失わないよう畳んだsummary行に要約表示するための文言。
+//      degraded/非degradedの両方のsummaryで共用する。
+function homeZone2Summary(blocks) {
+  const flowList = blocks.filter((b) => b.category !== "ルーティン");
+  const flowDone = flowList.filter((b) => b.completed).length;
+  const rt = routineRate(blocks);
+  const parts = [];
+  if (flowList.length) parts.push(`ながれ ${flowDone}/${flowList.length}`);
+  if (rt.total) parts.push(`ルーティン実行 ${rt.pct}%(${rt.done}/${rt.total})`);
+  return parts.length ? parts.join(" ・ ") : "記録なし";
 }
 
 // 週の範囲(12週サイクル用) v33: 土曜〜金曜を1週とみなす
@@ -5985,7 +6012,9 @@ function renderBreakMessagesSettings() {
 }
 
 function renderMore() {
-  const moreItems = navItems.filter((item) => !["home", "wbs", "tasks", "timeline"].includes(item.id));
+  // v82: bottom-navの構成変更(B1)に追従。WBSはbottom-navから外れたためここに出す側へ、
+  //      ジャーナルはbottom-navへ移ったため除外側へ入れ替えた。
+  const moreItems = navItems.filter((item) => !["home", "journal", "tasks", "timeline"].includes(item.id));
   return `
     ${renderHeader("追加画面", "その他")}
     <section class="grid">
