@@ -1431,6 +1431,27 @@ h3 {
   z-index: 0;
 }
 
+/* v88: Study With Me 全画面背景(YouTube iframe)。
+   iframeにはobject-fitが効かない(Safari含め挙動不安定)ため、
+   16:9の実寸をCSSのmax()でvw/vhの大きい方に合わせて拡大し、中央からはみ出た分を
+   親のoverflow:hiddenでクリップする「cover」相当のクラシックな手法を使う。 */
+.pomo-fs-bg-wrap {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: #000;
+}
+.pomo-fs-bg-iframe {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max(100vw, 177.78vh);   /* 100vh を16:9の横幅に換算(100vh * 16/9) */
+  height: max(100vh, 56.25vw);   /* 100vw を16:9の高さに換算(100vw * 9/16) */
+  transform: translate(-50%, -50%);
+  border: 0;
+}
+
 /* 半透明グレーフィルタ */
 .pomo-bg-overlay {
   position: absolute;
@@ -1438,6 +1459,7 @@ h3 {
   background: rgba(20, 20, 25, 0.55);
   backdrop-filter: blur(2px);
   z-index: 1;
+  pointer-events: none;  /* v88: 下の動画(mp4/iframe)へのタップを妨げない */
 }
 
 /* 全画面コンテンツ層 */
@@ -1476,6 +1498,48 @@ h3 {
 }
 .pomo-fullscreen-close:hover {
   background: rgba(0, 0, 0, 0.5);
+}
+
+/* v88: 全画面内のStudy With Meトグル(✕ボタンの左隣) */
+.pomo-fullscreen-swm-toggle {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  right: 64px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(0, 0, 0, 0.3);
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  line-height: 1;
+  z-index: 3;
+}
+.pomo-fullscreen-swm-toggle.active {
+  background: rgba(255, 59, 92, 0.75);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+/* v88: 背景がStudy With Me動画のとき、HUD(タイマー・操作パネル一式)は下の動画への
+   タップを妨げないようpointer-events:noneにする。実際に押す必要があるボタン・select・
+   input・aだけ個別にautoへ戻す(再生状態のJS監視はせず、CSSだけで「タップは動画へ、
+   操作はボタンへ」を成立させる)。 */
+.pomo-fullscreen.has-swm-bg .pomo-fullscreen-content {
+  pointer-events: none;
+}
+.pomo-fullscreen.has-swm-bg .pomo-fullscreen-content button,
+.pomo-fullscreen.has-swm-bg .pomo-fullscreen-content select,
+.pomo-fullscreen.has-swm-bg .pomo-fullscreen-content input,
+.pomo-fullscreen.has-swm-bg .pomo-fullscreen-content a {
+  pointer-events: auto;
+}
+/* v88: タイマーHUD自体は半透明にして「動画の上に重ねた表示」であることを見せる */
+.pomo-fullscreen.has-swm-bg .pomo-circle-wrap {
+  opacity: 0.9;
 }
 
 /* 全画面でのタブ切替 */

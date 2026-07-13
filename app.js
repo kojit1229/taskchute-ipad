@@ -2553,18 +2553,24 @@ function homeWeeklyLink() {
 }
 
 // --- 未完了タスク(今日に追加できる)---
+// v88: 表示過多対策として「当日〜+3日」を既定表示、「+4日以降」は既存のhomeFoldSection
+// (details、開閉記憶あり)に格納する(完全非表示にはしない=見えなくなる事故防止)。
+// 期限切れ(dueDate < 当日)は従来どおり最優先で常時表示(当日+3日の枠に自然に含まれる)。
+// 期限なしタスクは従来から除外(t.dueDate の真偽チェック)で、この扱いは変更していない。
 function homeBacklog() {
   const excluded = state.projects
     .filter((p) => p.kind === "wish" || p.kind === "other")
     .map((p) => p.id);
   // v33: 期限切れ + 当日から1週間以内のタスクのみ(期限なしは除外)。量が多すぎる対策。
+  // v88: この7日という全体の取得上限は維持し、その中を「当日+3日」で表示/折りたたみに分ける。
   const limit = addDays(state.selectedDate, 7);
+  const nearLimit = addDays(state.selectedDate, 3);
   const tasks = state.tasks
     .filter((t) => !t.deleted && !isTaskDead(t) && !excluded.includes(t.projectId)
       && t.dueDate && t.dueDate <= limit)
     .sort((a, b) => (a.dueDate || "99").localeCompare(b.dueDate || "99"));
   const todayTaskIds = new Set(blocksForDate(state.selectedDate).map((b) => b.taskId).filter(Boolean));
-  const rows = tasks.slice(0, 8).map((t) => {
+  const renderRow = (t) => {
     const scheduled = todayTaskIds.has(t.id);
     const overdue = t.dueDate < state.selectedDate;
     const due = `締切 ${t.dueDate.slice(5).replace("-", "/")}`;
@@ -2577,9 +2583,23 @@ function homeBacklog() {
         ? `<button class="btn ghost" disabled style="font-size:11px;padding:7px 10px">追加済み</button>`
         : `<button class="btn ghost home-add" data-action="home-add-today" data-id="${t.id}" style="font-size:11px;padding:7px 10px">＋今日に追加</button>`}
     </div>`;
-  }).join("");
+  };
+  const nearTasks = tasks.filter((t) => t.dueDate <= nearLimit);
+  const farTasks = tasks.filter((t) => t.dueDate > nearLimit);
+  const nearRows = nearTasks.slice(0, 8).map(renderRow).join("");
+  const farRows = farTasks.map(renderRow).join("");
+  // v88: homeBacklog()自体が既に<section class="panel">なので、homeFoldSection()の
+  // 自動付与"panel"クラスは二重の箱に見えてしまう。zone2〜4と同じ「既存パネル内の
+  // 素の<details class="home-fold">」パターンを使う(開閉記憶はisHomeFoldOpenを直接利用)。
+  const farFold = farTasks.length
+    ? `<details class="home-fold" data-fold-id="home-backlog-far" ${isHomeFoldOpen("home-backlog-far", false) ? "open" : ""}>
+        <summary class="home-fold-summary"><span class="home-fold-chevron">▶</span>＋4日以降 ${farTasks.length}件</summary>
+        <div class="home-fold-body">${farRows}</div>
+      </details>`
+    : "";
   return `<section class="panel"><div class="home-plabel blue">未完了タスク<span class="home-count">${tasks.length}件</span></div>
-    ${tasks.length ? rows : `<div class="muted" style="font-size:13px">期限が近い未完了タスクはありません。</div>`}</section>`;
+    ${nearTasks.length ? nearRows : `<div class="muted" style="font-size:13px">期限が近い未完了タスクはありません。</div>`}
+    ${farFold}</section>`;
 }
 
 // --- 今日の足あと ---
@@ -5327,18 +5347,41 @@ function renderPomodoro() {
 // 全再描画でiframeが再読込されないよう、startTimerTicker側はこの表示中、時刻・進捗の
 // 差分パッチ(updatePomodoroTick)に切り替える。autoplay は一切付与しない(iOS Safariは
 // 音付き自動再生不可なので、再生開始は常にユーザーのタップに委ねる)。
-function renderStudyWithMeFrame() {
+// v88: src組み立てを共通化(通常表示の16:9埋め込みと、全画面背景レイヤの両方から使う)。
+// 静的URLのみを組み立てる(トークン等の個人情報は一切含めない)。videoId未設定なら空文字。
+function studyWithMeSrc() {
   const swm = state.settings.studyWithMe || {};
   const videoId = String(swm.videoId || "").trim();
-  if (!videoId) {
+  if (!videoId) return "";
+  const startSec = Math.max(0, Math.floor(Number(swm.startSec) || 0));
+  return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?start=${startSec}`;
+}
+
+function renderStudyWithMeFrame() {
+  const src = studyWithMeSrc();
+  if (!src) {
     return `<div class="muted" style="margin:0 0 10px; font-size:12px">Study With Me: 設定 → Study With Me で動画IDを指定してください</div>`;
   }
-  const startSec = Math.max(0, Math.floor(Number(swm.startSec) || 0));
-  // 静的URLのみ(トークン等の個人情報は一切含めない)
-  const src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?start=${startSec}`;
   return `
     <div class="study-with-me-frame-wrap">
       <iframe class="study-with-me-frame" src="${escapeHTML(src)}" title="Study With Me"
+        allow="encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe>
+    </div>
+  `;
+}
+
+// v88: ポモドーロ全画面モードの背景レイヤ。Study With Me ON時、YouTube iframeを
+// 画面いっぱいに(16:9を維持したままCSSのmax()でcover相当に拡大・中央クリップ)敷き、
+// 円形プログレス+残り時間のHUD(.pomo-fullscreen-content)を半透明で前面に重ねる。
+// タップ制御: HUD全体をpointer-events:noneにし(styles.css)、動画の初回再生タップを
+// どこからでも妨げないようにする。ボタン・select・input・aだけCSS側で個別にautoへ戻す
+// (YouTube IFrame APIでの再生状態監視は行わない — 過剰実装を避けた)。
+function renderStudyWithMeFullscreenBg() {
+  const src = studyWithMeSrc();
+  if (!src) return "";
+  return `
+    <div class="pomo-fs-bg-wrap">
+      <iframe class="pomo-fs-bg-iframe" src="${escapeHTML(src)}" title="Study With Me"
         allow="encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe>
     </div>
   `;
@@ -5367,15 +5410,21 @@ function parseYouTubeUrl(text) {
 }
 
 // v12: ポモドーロ全画面モード(背景動画 + 半透明フィルタ + 中央タイマー)
+// v88: Study With Me ON時は背景をYouTube iframe(画面いっぱいにcover表示)へ切り替える。
 function renderPomodoroFullscreen(running, remaining, blockOptions, pomoTab) {
+  const studyWithMeOn = state.pomodoro?.studyWithMeOn || false;
+  const swmBgHTML = studyWithMeOn ? renderStudyWithMeFullscreenBg() : "";
+  const hasSwmBg = Boolean(swmBgHTML);  // videoId未設定ならOFF扱いと同じ(mp4背景にフォールバック)
   return `
-    <div class="pomo-fullscreen" id="pomoFullscreen">
+    <div class="pomo-fullscreen${hasSwmBg ? " has-swm-bg" : ""}" id="pomoFullscreen">
+      ${hasSwmBg ? swmBgHTML : `
       <video class="pomo-bg-video" autoplay muted loop playsinline poster="">
         <source src="./study_with_me.mp4" type="video/mp4">
-      </video>
+      </video>`}
       <div class="pomo-bg-overlay"></div>
       <div class="pomo-fullscreen-content">
         <button class="pomo-fullscreen-close" data-action="toggle-pomo-fullscreen" aria-label="全画面を解除" title="全画面を解除">✕</button>
+        <button class="pomo-fullscreen-swm-toggle ${studyWithMeOn ? "active" : ""}" data-action="toggle-study-with-me" aria-label="Study With Me切替" title="Study With Me切替">🎥</button>
         <div class="segmented pomo-fs-tabs">
           <button class="${pomoTab === "manual" ? "active" : ""}" data-action="pomo-tab" data-tab="manual">任意</button>
           <button class="${pomoTab === "passive" ? "active" : ""}" data-action="pomo-tab" data-tab="passive">常時</button>
