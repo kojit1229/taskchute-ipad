@@ -403,6 +403,7 @@ document.addEventListener("click", (event) => {
   if (action === "zt-add-submit") ztAddSubmit();
   if (action === "zt-tab") { ztTab = target.dataset.tab || "other"; render(); }
   if (action === "zt-fav-toggle") ztToggleFav(id);
+  if (action === "zt-theme-delete") deleteZtTheme(id);  // v86: テーマのワンタップ削除
   if (action === "zt-write") openZtWrite(id);
   if (action === "zt-save") saveZtEntry();
   if (action === "zt-discard") discardZtWrite();
@@ -1071,6 +1072,9 @@ function normalizeState(value) {
   // v75: AIプラン_*.json の zeroSecThemes(0秒思考テーマ提案)に対する採否ログ。
   //      aiPlanSkippedLog/migrationRitualLogと同じ軽量配列の思想(学習ループ用データ)。
   if (!Array.isArray(value.zeroSecThemeLog)) value.zeroSecThemeLog = [];
+  // v86: AIフィードバック自動取り込み(autoIngestFeedback)の冪等マーカー。取り込み済みの
+  //      フィードバック日付("YYYY-MM-DD")を記録し、同じ.mdからの二重登録を防ぐ。
+  if (!Array.isArray(value.feedbackIngestedDates)) value.feedbackIngestedDates = [];
   // v67: AI連携の鮮度インジケータ(柱1b)。最後に取得成功した AIフィードバック_*.md /
   //      AIプラン_*.json の日付("YYYY-MM-DD")。取得成功のたびに前進のみさせる(後退させない)。
   if (!value.aiLinkFreshness || typeof value.aiLinkFreshness !== "object") value.aiLinkFreshness = {};
@@ -1117,6 +1121,10 @@ function normalizeState(value) {
   // v39: theme / entry に questionId を補完(どの問いの下で書かれたか)
   value.zeroThinking.themes = value.zeroThinking.themes.map((t) =>
     "questionId" in t ? t : { ...t, questionId: null });
+  // v86: theme に source を補完(既存データはnull=手動/旧経路。自動取り込み分は"ai-feedback"。
+  //      ワンタップ削除時にAI由来かどうかを判定し、AI由来ならzeroSecThemeLogへ不採用記録する)。
+  value.zeroThinking.themes = value.zeroThinking.themes.map((t) =>
+    "source" in t ? t : { ...t, source: null });
   value.zeroThinking.entries = value.zeroThinking.entries.map((e) =>
     "questionId" in e ? e : { ...e, questionId: null });
   // v39: 週次レビュー(キー = 週開始土曜 'YYYY-MM-DD')。指標は都度計算、メモのみ永続化。
@@ -3203,7 +3211,10 @@ async function fetchZeroSecThemes(date) {
 //      「## 明日への提案」と同じチェックボックス書式)から0秒思考テーマ候補を抽出する。
 //      extractMITCandidatesFromReportと同じ頑健化パターン(見出し直後の空行スキップ・
 //      コロン分割・全角:対応)を踏襲。存在しない/旧形式のFB(見出し自体が無い)では
-//      空配列を返し、呼び出し側(fetchZeroSecThemesFromFeedback)がnull化して後方互換を保つ。
+//      空配列を返す(呼び出し側で length===0 を「該当なし」として扱えば後方互換になる)。
+// v86: 呼び出し元は hydrateStaticMarkdown 内の autoIngestFeedback に一本化した(旧
+//      fetchZeroSecThemesFromFeedback は同じ.mdの二重fetchになっていたため削除。
+//      CHANGES_v86.md参照)。この抽出関数自体は変更していない。
 function extractZeroSecThemesFromReport(reportText) {
   if (!reportText) return [];
   const lines = reportText.split("\n");
@@ -3225,16 +3236,6 @@ function extractZeroSecThemesFromReport(reportText) {
     sawContent = true;
   }
   return items.slice(0, 3);
-}
-
-// v77: AIフィードバック_<date>.md を軽量fetchし、上記extractZeroSecThemesFromReportで
-//      0秒思考テーマを抽出する。fetchZeroSecThemes(AIプラン_*.json由来)と対になる独立経路
-//      (呼び出し側のrunAiMorningPlanで両方をマージし、同一テーマ文字列は重複排除する)。
-async function fetchZeroSecThemesFromFeedback(date) {
-  const raw = await fetchGitHubRawText(`AIフィードバック_${date}.md`);
-  if (!raw) return null;
-  const items = extractZeroSecThemesFromReport(raw);
-  return items.length ? items : null;
 }
 
 // v75 should-fix: スケジュール側(繰越・WBS候補や空き時間)が0件で下書きを置けない日でも、
@@ -3266,25 +3267,19 @@ async function runAiMorningPlan({ auto = false } = {}) {
   // v75: zeroSecThemes はスケジュール配置(freeGaps/candidates)の成否と無関係に独立して取得する
   //      (下の早期returnより前で確定させ、配置できる候補が無い日でもテーマ提案だけは出す)。
   //      同日に既に採否判断済み(state.zeroSecThemeLog)のテーマは再提示しない。
-  // v77: AIプラン_*.json由来(fetchZeroSecThemes)に加え、AIフィードバック_*.md内「## 0秒思考テーマ」
-  //      見出し由来(fetchZeroSecThemesFromFeedback)も同じ _zeroSecThemeDraft へ合流させる。
-  //      同一テーマ文字列は重複排除(先に見つかった方=プラン側を優先して残す)。どちらも取得
-  //      失敗/該当セクションなしなら null を返す設計なので、両方 null なら従来どおり
-  //      _zeroSecThemeDraft は触らない(前回セッションの状態を保持)。
-  const [planZeroSecThemes, feedbackZeroSecThemes] = await Promise.all([
-    fetchZeroSecThemes(date),
-    fetchZeroSecThemesFromFeedback(date)
-  ]);
-  if (planZeroSecThemes || feedbackZeroSecThemes) {
-    const seenThemes = new Set();
-    const mergedThemes = [];
-    (planZeroSecThemes || []).concat(feedbackZeroSecThemes || []).forEach((t) => {
-      if (seenThemes.has(t.theme)) return;
-      seenThemes.add(t.theme);
-      mergedThemes.push(t);
-    });
+  // v86: AIフィードバック_*.md内「## 0秒思考テーマ」見出し由来分は、hydrateStaticMarkdown側の
+  //      autoIngestFeedbackが自動的にzeroThinking.themesへ直接登録するようになったため、ここでの
+  //      取得・選定UIへの合流はやめた(v77で足したfetchZeroSecThemesFromFeedbackとのマージは削除)。
+  //      AIプラン_*.json由来(fetchZeroSecThemes)だけを引き続きこの「追加/見送り」選定カードで
+  //      扱う(JSON側は自動登録の対象にしていない、まだ人の判断を挟む設計のため)。
+  //      取得失敗/zeroSecThemesキー無しなら null → 従来どおり _zeroSecThemeDraft は触らない
+  //      (前回セッションの状態を保持)。既にzeroThinking.themesへ入っている(=自動取り込み済み)
+  //      テーマ文字列は候補から除く(二重提示防止)。
+  const planZeroSecThemes = await fetchZeroSecThemes(date);
+  if (planZeroSecThemes) {
     const decided = new Set(state.zeroSecThemeLog.filter((l) => l.date === date).map((l) => l.theme));
-    const pending = mergedThemes.filter((t) => !decided.has(t.theme));
+    const existingThemeTexts = new Set(state.zeroThinking.themes.map((t) => t.text));
+    const pending = planZeroSecThemes.filter((t) => !decided.has(t.theme) && !existingThemeTexts.has(t.theme));
     _zeroSecThemeDraft = pending.length ? { date, items: pending } : null;
   }
 
@@ -7818,8 +7813,9 @@ function renderZtThemeTab() {
     ? items.map((t) => `
         <div class="zt-theme-item ${t.fav ? "is-fav" : ""}">
           <button class="zt-star ${t.fav ? "on" : ""}" data-action="zt-fav-toggle" data-id="${t.id}" title="お気に入り">${t.fav ? "★" : "☆"}</button>
-          <div class="zt-theme-text" data-action="zt-write" data-id="${t.id}">${escapeHTML(t.text)}${t.questionId ? `<span class="zt-theme-qtag">問い</span>` : ""}</div>
+          <div class="zt-theme-text" data-action="zt-write" data-id="${t.id}">${escapeHTML(t.text)}${t.questionId ? `<span class="zt-theme-qtag">問い</span>` : ""}${t.source === "ai-feedback" ? `<span class="zt-theme-qtag" style="background:#eef; color:#448">🤖 AI提案</span>` : ""}</div>
           <button class="zt-theme-go" data-action="zt-write" data-id="${t.id}">書く →</button>
+          <button class="zt-theme-del" data-action="zt-theme-delete" data-id="${t.id}" title="削除" aria-label="このテーマを削除">×</button>
         </div>`).join("")
     : ztTab === "fav"
       ? `<div class="zt-empty">お気に入りはまだありません。<span class="zt-empty-sub">☆ をタップして登録すると、書いてもここに残り続けます。</span></div>`
@@ -7945,6 +7941,26 @@ function ztToggleFav(id) {
   if (!t) return;
   t.fav = !t.fav;
   saveAndRender();
+}
+
+// v86: テーマのワンタップ削除。themesスキーマにdeletedフラグ(=復元可能な軟削除)が無いため、
+//      確認は軽めのconfirm()で行う(スキルの「undo可能ならconfirm省略・無理ならconfirm」に従う)。
+//      AI由来テーマ(自動取り込みで追加された = source==="ai-feedback")の削除は「不採用」として
+//      zeroSecThemeLogへ記録する。自動追加は人の事前承認を経ないため、否定シグナルが自動追加で
+//      失われていた——削除という行為でそれを回収し、v75と同じ学習ループ(採否ログ)に乗せる。
+//      手動追加のテーマ(source===null)はAIの提案ではないため記録しない。
+function deleteZtTheme(id) {
+  const t = state.zeroThinking.themes.find((x) => x.id === id);
+  if (!t) return;
+  if (!confirm(`「${t.text}」を削除しますか?`)) return;
+  if (t.source === "ai-feedback") {
+    state.zeroSecThemeLog.push({ date: todayISO(), theme: t.text, reason: "", outcome: "skipped", at: nowDateTime() });
+    if (state.zeroSecThemeLog.length > ZERO_SEC_THEME_LOG_MAX) {
+      state.zeroSecThemeLog = state.zeroSecThemeLog.slice(-ZERO_SEC_THEME_LOG_MAX);
+    }
+  }
+  state.zeroThinking.themes = state.zeroThinking.themes.filter((x) => x.id !== id);
+  saveAndRender("削除しました");
 }
 
 function openZtWrite(id) {
@@ -10042,6 +10058,67 @@ function saveAndRender(message) {
   }
 }
 
+// v86: AIフィードバック_<date>.md の新着本文から「## 明日への提案」→当日の未完了タスク、
+//      「## 0秒思考テーマ」→0秒思考テーマ一覧、へ自動登録する(K指示: v75の「選んでから追加」
+//      UIに代わり、確認なしで確定登録する方針へ転換)。
+//      冪等性: state.feedbackIngestedDates にこのフィードバック自身の日付("YYYY-MM-DD"。
+//      today/prevどちらの枠から呼ばれたかは問わない)を記録し、同じ日付からの取り込みは1回のみ
+//      行う。hydrateStaticMarkdownはcachedFeedbackがセッション(ページ再読込)毎にリセットされる
+//      ため同じ.mdを複数セッションに跨いで何度も再fetchしうるが、ここが唯一の冪等ゲートになる。
+//      重複排除: タスクは現在生きている未完了(todo/doing)タスクに同名があればスキップする
+//      (前日以前から残っている繰越タスクとの重複も防ぐ)。テーマは zeroThinking.themes の
+//      既存テキストと同名ならスキップする(themesは日付を持たず永続なので、前日から残っている
+//      ものも自然に対象になる)。
+//      登録形状: タスクは既存の makeTask() 慣習をそのまま使う。projectId="" は WBS「単発Task」
+//      (renderWBSのtaskProjectセレクトに存在する既存の一級パターン)を流用しており、ホームの
+//      「未完了タスク」パネル(homeBacklog、wish/other種別のProjectだけを除外表示)には自然に
+//      出る。dueDateは当日(K指示どおり——フィードバック自身の日付ではなく「Kが読む日」に
+//      見えることが目的)。
+//      テーマには source:"ai-feedback" を付け、手動追加(source:null)と区別する。ワンタップ削除
+//      (deleteZtTheme)がAI由来かどうかを判定し、AI由来ならzeroSecThemeLogへ不採用記録する。
+function autoIngestFeedback(date, text) {
+  if (!text) return null;
+  if (!Array.isArray(state.feedbackIngestedDates)) state.feedbackIngestedDates = [];
+  if (state.feedbackIngestedDates.includes(date)) return null;  // 冪等: 同じ日付は1回のみ
+
+  const todayDate = todayISO();
+  let addedTasks = 0, addedThemes = 0;
+
+  const mitCandidates = extractMITCandidatesFromReport(text);
+  if (mitCandidates.length) {
+    const liveTitles = new Set(state.tasks
+      .filter((t) => !t.deleted && (t.status === "todo" || t.status === "doing"))
+      .map((t) => t.title));
+    mitCandidates.forEach((title) => {
+      if (liveTitles.has(title)) return;  // 重複排除(繰越含む)
+      state.tasks.push(makeTask({ title, dueDate: todayDate }));
+      liveTitles.add(title);
+      addedTasks++;
+    });
+  }
+
+  const themeCandidates = extractZeroSecThemesFromReport(text);
+  if (themeCandidates.length) {
+    const existingThemeTexts = new Set(state.zeroThinking.themes.map((t) => t.text));
+    themeCandidates.forEach(({ theme }) => {
+      if (existingThemeTexts.has(theme)) return;  // 重複排除(前日から残っているもの含む)
+      state.zeroThinking.themes.push({
+        id: crypto.randomUUID(), text: theme, fav: false, questionId: null,
+        createdAt: nowDateTime(), source: "ai-feedback"
+      });
+      existingThemeTexts.add(theme);
+      addedThemes++;
+    });
+  }
+
+  state.feedbackIngestedDates.push(date);
+  if (state.feedbackIngestedDates.length > FEEDBACK_INGESTED_DATES_MAX) {
+    state.feedbackIngestedDates = state.feedbackIngestedDates.slice(-FEEDBACK_INGESTED_DATES_MAX);
+  }
+  return { addedTasks, addedThemes };
+}
+const FEEDBACK_INGESTED_DATES_MAX = 300;  // aiPlanSkippedLog/zeroSecThemeLogと同じ軽量上限の思想
+
 async function hydrateStaticMarkdown() {
   // v72: 個人データリポジトリ(taskchute/content/配下)からのGitHub API取得に切替(同一オリジンfetch廃止)
   const visionPromise = fetchGitHubRawText("content/Vision.md");
@@ -10105,6 +10182,31 @@ async function hydrateStaticMarkdown() {
     state.aiLinkFreshness.feedbackAt = prev;
     freshnessDirty = true;
   }
+  // v86: 新着フィードバックの自動取り込み(K指示: 「選んでから追加」を廃し自動追加へ方針転換)。
+  //      冪等判定はautoIngestFeedback内部(state.feedbackIngestedDates)で行うため、ここでは
+  //      新着本文(todayFb/prevFb)があるときに渡すだけでよい(cachedFeedbackはセッション毎に
+  //      リセットされ同じ.mdを何度も再取得しうるが、feedbackIngestedDatesは永続化されるため
+  //      実際の登録は日付ごとに1回だけ発生する)。
+  // v86 should-fix: today枠は state.selectedDate 連動のfetchのため、過去日を閲覧中にその日の
+  //      FBがまだキャッシュされていないと todayFb に過去日のフィードバックが入ることがある。
+  //      それをそのまま自動登録すると「過去日を見ているだけ」で過去FBの提案が実今日のタスクとして
+  //      注入されてしまう(dueDateはautoIngestFeedback内部でtodayISO()固定のため)。
+  //      today === realToday(実際の今日を閲覧中)のときだけ取り込む。prev枠は selectedDateに
+  //      依らず常に実際の昨日固定のフェッチなので、この制限は不要(現状のままでよい)。
+  let ingestedTasksTotal = 0, ingestedThemesTotal = 0;
+  if (todayFb && today === realToday) {
+    const r = autoIngestFeedback(today, todayFb);
+    if (r) { ingestedTasksTotal += r.addedTasks; ingestedThemesTotal += r.addedThemes; }
+  }
+  if (prevFb) {
+    const r = autoIngestFeedback(prev, prevFb);
+    if (r) { ingestedTasksTotal += r.addedTasks; ingestedThemesTotal += r.addedThemes; }
+  }
+  if (ingestedTasksTotal || ingestedThemesTotal) {
+    changed = true;
+    saveState();
+    showToast(`🤖 AIの提案からタスク${ingestedTasksTotal}件・テーマ${ingestedThemesTotal}件を追加しました`);
+  }
   // v62: AI週次レビュー(自宅PCバッチ生成)。直近土曜1件のみ、無ければ404を静かに無視する
   //      (fetchTextの仕様どおり)。週次レビュータブを開くたび同じ週の再fetchはしない。
   const weeklyReviewWeek = weekStartFor(todayISO());
@@ -10136,7 +10238,9 @@ async function hydrateStaticMarkdown() {
   if (gotReading) changed = true;
   // v37: state.view というプロパティは存在しない(正しくは currentView)。
   //      このタイポのせいで、ビジョン画面を開いたまま読み込みが終わっても再描画されなかった。
-  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly" || state.currentView === "home")) {
+  // v86 should-fix: "zero"(0秒思考タブ)を追加。autoIngestFeedbackがテーマを自動追加しても、
+  //      このタブを開いたまま待っていると一覧がライブ更新されなかったため。
+  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly" || state.currentView === "home" || state.currentView === "zero")) {
     render();
   }
 }

@@ -12,8 +12,12 @@
 // ③ブロック長=見積時間(15分丸め廃止)
 // ④visibilitychange復帰時にAIフィードバック等が再fetchされ、再起動なしで新着が自動表示される
 // ⑤既存draft機構(繰越→下書き→確定→migratedTo付与)の回帰
-// ⑥AIフィードバック_*.md内「## 0秒思考テーマ」見出しからの抽出 → 既存zeroSecThemes選定UIへの
-//   合流(AIプラン由来との重複排除)・後方互換(見出しが無い旧形式FBでもクラッシュしない)
+// ⑥AIフィードバック_*.md内「## 0秒思考テーマ」見出しからの抽出。
+//   v86でautoIngestFeedback(hydrateStaticMarkdown経由の自動登録)へ移管したため、ここでは
+//   「選定カードには出ずzeroThinking.themesへ直接入る」「AIプランjson由来の選定カードは
+//   自動登録済みの同名テーマを重複表示しない」の回帰確認のみ行う(冪等・重複排除・削除時の
+//   採否ログ記録などの詳細はtests/v86.test.jsを参照)。後方互換(見出しが無い旧形式FBでも
+//   クラッシュしない)は維持。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
 
 const PORT = 4215;
@@ -94,8 +98,8 @@ function check(name, cond, extra = "") {
     deleted: false, collapsed: false
   });
 
-  async function seed({ blocks = [], tasks = [], projects = [testProject()], view = "tasks", zeroSecThemeLog = [], zeroThinkingThemes = [] } = {}) {
-    await page.evaluate(({ KEY, blocks, tasks, projects, TODAY, view, zeroSecThemeLog, zeroThinkingThemes }) => {
+  async function seed({ blocks = [], tasks = [], projects = [testProject()], view = "tasks", zeroSecThemeLog = [], zeroThinkingThemes = [], feedbackIngestedDates = [] } = {}) {
+    await page.evaluate(({ KEY, blocks, tasks, projects, TODAY, view, zeroSecThemeLog, zeroThinkingThemes, feedbackIngestedDates }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.blocks = blocks;
       s.tasks = tasks;
@@ -105,8 +109,12 @@ function check(name, cond, extra = "") {
       s.feedback = {};
       s.zeroSecThemeLog = zeroSecThemeLog;
       s.zeroThinking = { themes: zeroThinkingThemes, entries: [] };
+      // v86: フィードバック自動取り込みの冪等マーカーもテストごとにリセットする(既定[]で
+      // クリーンな状態から始める。個々のテストで同じYEST日付のFB内容を差し替えて使うため、
+      // マーカーを持ち越すと2回目以降が「取り込み済み」として無視されてしまう)。
+      s.feedbackIngestedDates = feedbackIngestedDates;
       localStorage.setItem(KEY, JSON.stringify(s));
-    }, { KEY, blocks, tasks, projects, TODAY, view, zeroSecThemeLog, zeroThinkingThemes });
+    }, { KEY, blocks, tasks, projects, TODAY, view, zeroSecThemeLog, zeroThinkingThemes, feedbackIngestedDates });
     await page.reload();
     await page.waitForTimeout(400);
   }
@@ -214,6 +222,9 @@ function check(name, cond, extra = "") {
       afterCount4 === 1 && afterText4.includes("新着提案_v77"), afterText4.slice(0, 300));
     check("api.github.comへ前日分の再fetchが実際に飛んでいる(裏取り)",
       feedbackApiRequests.filter((p) => p.endsWith(`AIフィードバック_${YEST}.md`)).length >= 2, JSON.stringify(feedbackApiRequests));
+    // v86: このFB本文(「新着提案_v77」)はautoIngestFeedbackで自動的にタスク化される副作用がある。
+    // 後続テストへ影響しないよう、次のseed()に入る前にfixtureをリセットしておく。
+    feedbackFixture = {};
 
     // ============================================================
     // [5] 既存draft機構の回帰: 繰越候補のdraft搭載 → 確定でmigratedTo付与
@@ -238,28 +249,35 @@ function check(name, cond, extra = "") {
       !!srcBlock && !!newBlock && srcBlock.migratedTo === newBlock.id);
 
     // ============================================================
-    // [6] AIフィードバック_*.md内「## 0秒思考テーマ」見出しからの抽出・選定UI合流・後方互換
+    // [6] AIフィードバック_*.md内「## 0秒思考テーマ」見出しからの抽出
+    // v86で選定UI(追加/見送りカード)への合流をやめ、hydrateStaticMarkdown経由の自動取り込み
+    // (autoIngestFeedback)へ一本化した。詳細はCHANGES_v86.md/tests/v86.test.js。
+    // ここでは「FB由来はカードを介さず自動登録される」「AIプランjson由来は引き続き選定カードで
+    // 扱われ、既に自動登録済みの同名テーマは二重提示されない」という新しい役割分担だけを回帰確認する
+    // (冪等・重複排除・削除時のログ記録など詳細な検証はv86.test.js側で行う)。
     // ============================================================
-    console.log("[6a] AIプランjsonが無く(404)、FBの「## 0秒思考テーマ」見出しだけがある場合の抽出・選定・採否記録");
+    console.log("[6a] AIプランjsonが無く(404)、前日FBの「## 0秒思考テーマ」「## 明日への提案」は選定UIを介さずhydrateStaticMarkdown経由で自動登録される");
     aiPlanFixture = null;
     feedbackFixture = {
-      [TODAY]: "# AIフィードバック本文TODAY_v77\n\n## 0秒思考テーマ\n\n- [ ] テーマFB1_v77: 理由FB1_v77\n- [ ] テーマFB2_v77: 理由FB2_v77\n\n## 明日への提案\n\n- [ ] 提案1_v77\n"
+      [YEST]: "# AIフィードバック本文YEST_v77\n\n## 0秒思考テーマ\n\n- [ ] テーマFB1_v77: 理由FB1_v77\n- [ ] テーマFB2_v77: 理由FB2_v77\n\n## 明日への提案\n\n- [ ] 提案1_v77\n"
     };
     await seed({ tasks: [] });
+    const s6a = await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
+    check("FB由来の0秒思考テーマ2件がzeroThinking.themesへ自動登録される(選定操作なしで)",
+      (s6a.zeroThinking?.themes || []).some((t) => t.text === "テーマFB1_v77" && t.source === "ai-feedback") &&
+      (s6a.zeroThinking?.themes || []).some((t) => t.text === "テーマFB2_v77" && t.source === "ai-feedback"),
+      JSON.stringify(s6a.zeroThinking));
+    check("FB由来の「明日への提案」も当日dueDateの未完了タスクとして自動登録される",
+      (s6a.tasks || []).some((t) => t.title === "提案1_v77" && t.dueDate === TODAY), JSON.stringify(s6a.tasks));
+    check("取り込み済みマーカー(feedbackIngestedDates)に前日日付が記録される(冪等ゲート)",
+      (s6a.feedbackIngestedDates || []).includes(YEST), JSON.stringify(s6a.feedbackIngestedDates));
+
     await runMorningPlan();
     const zst6aText = await page.locator("main").textContent();
-    check("FB由来の0秒思考テーマ2件がカードとして表示される",
-      zst6aText.includes("テーマFB1_v77") && zst6aText.includes("理由FB1_v77") &&
-      zst6aText.includes("テーマFB2_v77") && zst6aText.includes("理由FB2_v77"), zst6aText.slice(0, 500));
-    await page.click('[data-action="zerosec-theme-add"][data-idx="0"]');
-    await page.waitForTimeout(300);
-    const s6a = await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
-    check("「追加」でzeroThinking.themesに入る", (s6a.zeroThinking?.themes || []).some((t) => t.text === "テーマFB1_v77"), JSON.stringify(s6a.zeroThinking));
-    check("zeroSecThemeLogにoutcome='added'で記録される(FB由来も既存の採否ログに乗る)",
-      (s6a.zeroSecThemeLog || []).some((l) => l.theme === "テーマFB1_v77" && l.outcome === "added" && l.date === TODAY),
-      JSON.stringify(s6a.zeroSecThemeLog));
+    check("自動登録済みのFB由来テーマは選定カード(追加/見送り)には出ない(二重提示しない)",
+      !zst6aText.includes("0秒思考のテーマ提案"), zst6aText.slice(0, 500));
 
-    console.log("[6b] AIプラン由来とFB由来のテーマが同一文字列で重複する場合、1件に統合される(プラン側の理由を残す)");
+    console.log("[6b] AIプランjson由来のテーマが、前日FB由来で既に自動登録済みの同名テーマと重複する場合は選定カードに再掲されない(プラン限定分だけ出る)");
     aiPlanFixture = JSON.stringify({
       date: TODAY, generatedAt: `${TODAY}T05:00`, plan: [], skipped: [],
       zeroSecThemes: [
@@ -268,27 +286,37 @@ function check(name, cond, extra = "") {
       ]
     });
     feedbackFixture = {
-      [TODAY]: "# AIフィードバック本文_v77\n\n## 0秒思考テーマ\n\n- [ ] テーマ重複_v77: FB側理由_v77(表示されないはず)\n- [ ] テーマFB限定_v77: FB限定理由_v77\n"
+      [YEST]: "# AIフィードバック本文_v77\n\n## 0秒思考テーマ\n\n- [ ] テーマ重複_v77: FB側理由_v77\n- [ ] テーマFB限定_v77: FB限定理由_v77\n"
     };
     await seed({ tasks: [] });
+    const s6b = await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
+    check("前日FB由来の2テーマ(のちにプランとも重複する1件を含む)は起動時点で既に自動登録済み",
+      (s6b.zeroThinking?.themes || []).some((t) => t.text === "テーマ重複_v77") &&
+      (s6b.zeroThinking?.themes || []).some((t) => t.text === "テーマFB限定_v77"), JSON.stringify(s6b.zeroThinking));
+
     await runMorningPlan();
     const zst6bRowsCount = await page.locator(".home-ck").count();
     const zst6bText = await page.locator("main").textContent();
-    check("重複テーマは1件に統合され、合計3件(重複1+プラン限定1+FB限定1)になる", zst6bRowsCount === 3, `count=${zst6bRowsCount}`);
-    check("重複テーマの理由はプラン側が残る", zst6bText.includes("プラン側理由_v77"), zst6bText.slice(0, 500));
-    check("重複テーマのFB側の理由は表示されない(統合されて消える)", !zst6bText.includes("FB側理由_v77"), zst6bText.slice(0, 500));
-    check("プラン限定テーマも表示される", zst6bText.includes("テーマプラン限定_v77"), zst6bText.slice(0, 500));
-    check("FB限定テーマも表示される", zst6bText.includes("テーマFB限定_v77"), zst6bText.slice(0, 500));
+    check("プラン由来のうち既に自動登録済みの同名テーマ(重複)はカードに出ず、プラン限定の1件だけ出る",
+      zst6bRowsCount === 1, `count=${zst6bRowsCount}`);
+    check("プラン限定テーマが表示される", zst6bText.includes("テーマプラン限定_v77") && zst6bText.includes("プラン限定理由_v77"), zst6bText.slice(0, 500));
+    check("重複テーマはカードに再掲されない(二重提示防止)", !zst6bText.includes("プラン側理由_v77"), zst6bText.slice(0, 500));
 
-    console.log("[6c] 「## 0秒思考テーマ」見出しが無い旧形式のFB(かつAIプランも無い)でもクラッシュせず、カードが出ない");
+    console.log("[6c] 見出しが一切無い旧形式のFBでもクラッシュせず、タスクもテーマも増えない");
     aiPlanFixture = null;
     feedbackFixture = {
-      [TODAY]: "# AIフィードバック本文_v77(旧形式)\n\n## 明日への提案\n\n- [ ] 提案1_v77\n\n## 明日への問い\n\n問い_v77\n"
+      [YEST]: "# AIフィードバック本文_v77(旧形式)\n\n所感のみで見出し構造が無い本文です。\n"
     };
     await seed({ tasks: [] });
+    const s6c = await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
+    check("旧形式FBでもクラッシュしない(pageerror無し。ここまで到達していれば正常)", true);
+    // normalizeStateが単発ブロック受け皿の kind:"other" Task を自動生成するため、それ以外に
+    // 増えていないことを確認する(単純な長さ0チェックだと既存の正常な自動生成と衝突する)。
+    check("見出しが無いので新規タスクは増えない", (s6c.tasks || []).every((t) => t.kind === "other"), JSON.stringify(s6c.tasks));
+    check("見出しが無いので新規テーマは増えない", (s6c.zeroThinking?.themes || []).length === 0, JSON.stringify(s6c.zeroThinking));
+
     await runMorningPlan();
     const zst6cCount = await page.locator(".home-ck").count();
-    check("0秒思考テーマ見出しが無い旧形式FBでもクラッシュしない(pageerror無し。ここまで到達していれば正常)", true);
     check("0秒思考テーマのカードは出ない(候補0件)", zst6cCount === 0, `count=${zst6cCount}`);
   } finally {
     await browser.close();

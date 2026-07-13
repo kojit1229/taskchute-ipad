@@ -2376,6 +2376,9 @@ h3 {
 .zt-theme-text { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; line-height: 1.5; cursor: pointer; }
 .zt-theme-go { font: inherit; font-size: 12.5px; font-weight: 900; color: var(--orange); background: var(--orange-soft); border: 1px solid var(--orange-soft); padding: 7px 12px; border-radius: 8px; cursor: pointer; flex: none; white-space: nowrap; }
 .zt-theme-go:hover { filter: brightness(0.97); }
+/* v86: 0秒思考テーマのワンタップ削除。44px当たり判定を確保しつつ視覚的には控えめに。 */
+.zt-theme-del { font: inherit; font-size: 18px; line-height: 1; color: var(--faint); background: none; border: none; cursor: pointer; flex: none; min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 8px; }
+.zt-theme-del:hover { color: var(--danger, #d33); background: var(--panel-soft); }
 .zt-empty { font-size: 13px; color: var(--muted); padding: 18px 4px; font-weight: 500; text-align: center; line-height: 1.7; }
 .zt-empty-sub { font-size: 11.5px; color: var(--faint); margin-top: 3px; display: block; }
 
