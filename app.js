@@ -5759,7 +5759,34 @@ function sanitizeHTML(html) {
   return template.innerHTML;
 }
 
+// v83: UX監査B8 — renderMarkdownの結果メモ化。
+// ジャーナル/ホーム「AIから」/日報タブは再描画(完了トグル1回等)のたびに前日分まで
+// marked.parse→sanitizeHTMLを再実行していた(B7と重複する無駄な再計算)。
+// 入力テキストそのものをキー、サニタイズ済みHTMLを値とする単純キャッシュで再計算を避ける。
+// cachedFeedback[date]は新着fetchで文字列自体が変わるため、キーが変わり自然に新規parseされる
+// (=明示的invalidationは不要)。上限件数を超えたら最も古く触っていないものから捨てる(簡易LRU)。
+const MARKDOWN_RENDER_CACHE_LIMIT = 50;
+const markdownRenderCache = new Map();
+
 function renderMarkdown(text) {
+  const key = text || "";
+  if (markdownRenderCache.has(key)) {
+    const cached = markdownRenderCache.get(key);
+    // Map挿入順=最終アクセス順として使うため、ヒット時は末尾へ移動(簡易LRU)
+    markdownRenderCache.delete(key);
+    markdownRenderCache.set(key, cached);
+    return cached;
+  }
+  const html = renderMarkdownUncached(key);
+  markdownRenderCache.set(key, html);
+  if (markdownRenderCache.size > MARKDOWN_RENDER_CACHE_LIMIT) {
+    const oldestKey = markdownRenderCache.keys().next().value;
+    markdownRenderCache.delete(oldestKey);
+  }
+  return html;
+}
+
+function renderMarkdownUncached(text) {
   if (typeof window.marked === "undefined") {
     return `<pre style="white-space:pre-wrap; font-family:inherit">${escapeHTML(text)}</pre>`;
   }

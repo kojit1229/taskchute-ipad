@@ -1572,11 +1572,37 @@ h3 {
   opacity: 0.7;
   background: var(--panel-soft);
 }
+/* v83: UX監査B4 — ネイティブcheckboxの見た目(角丸四角+システム既定チェック)を、
+   他の完了トグル(home-box/home-dot/checkbox-button/tl-complete-btn)と揃えた丸チェックに変更。
+   appearance:none で既定描画を消し、塗り+✓は他要素と同じ表現に統一する。
+   DOM(<input type="checkbox">)・data-action・checked属性は無変更なので、
+   既存のwish-check-wrapによる44px当たり判定拡張(v81)・イベント委譲には影響しない。 */
 .wish-check {
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
   width: 24px;
   height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  background: var(--panel);
   flex-shrink: 0;
-  accent-color: var(--accent);
+  margin: 0;
+  cursor: pointer;
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+}
+.wish-check:checked {
+  background: var(--green);
+  border-color: var(--green);
+}
+.wish-check:checked::after {
+  content: "✓";
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
 }
 /* v81: ネイティブcheckboxはpaddingで当たり判定を拡張できない(Chromium/iOS Safariとも
    type=checkboxのpaddingは無視される、実機検証で確認済み)ため、<label>でラップして
@@ -2051,7 +2077,8 @@ h3 {
 .home-ck:hover, .home-tc:hover, .home-flow:hover, .home-due:hover { background: var(--panel-soft); }
 .home-tc, .home-flow { border-bottom: 1px solid var(--line-soft); }
 .home-box {
-  width: 20px; height: 20px; border-radius: 6px; border: 2px solid var(--line);
+  /* v83: UX監査B4 — 完了トグルの形状を丸チェックに統一(角丸四角→円)。サイズ・当たり判定は現状維持 */
+  width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line);
   flex: none; display: flex; align-items: center; justify-content: center;
   font-size: 11px; color: #fff; cursor: pointer;
   position: relative;
