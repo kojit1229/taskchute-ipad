@@ -101,6 +101,18 @@ function check(name, cond, extra = "") {
     return page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
   }
 
+  // v87: now-start/now-end は「宣言→終了報告ループ」のモーダルを経由するようになった。
+  // このスイート(v70)はその機能追加前の挙動(即実行)を検証する趣旨のため、
+  // 宣言/報告モーダルが出たら「宣言せず開始」/「スキップ」を選び、従来どおりの結果に揃える。
+  async function clickAndSkipLifecycleModal(selector) {
+    await page.click(selector);
+    await page.waitForTimeout(150);
+    const declareSkip = page.locator('[data-action="declare-skip"]');
+    if (await declareSkip.count() > 0) { await declareSkip.click(); return; }
+    const reportSkip = page.locator('[data-action="report-skip"]');
+    if (await reportSkip.count() > 0) { await reportSkip.click(); }
+  }
+
   try {
     await page.clock.setFixedTime(now0);
     await page.goto(`http://localhost:${PORT}/`);
@@ -172,7 +184,7 @@ function check(name, cond, extra = "") {
     });
     check("未着手カードに▶いま開始ボタンが出る", await page.locator('.timeline-card [data-action="now-start"][data-id="tl-block-1"]').count() === 1);
     check("未着手カードに■いま終了ボタンはまだ出ない", await page.locator('.timeline-card [data-action="now-end"][data-id="tl-block-1"]').count() === 0);
-    await page.click('.timeline-card [data-action="now-start"][data-id="tl-block-1"]');
+    await clickAndSkipLifecycleModal('.timeline-card [data-action="now-start"][data-id="tl-block-1"]');
     await page.waitForTimeout(300);
     const s2a = await stateNow();
     const b2a = (s2a.blocks || []).find((b) => b.id === "tl-block-1");
@@ -180,7 +192,7 @@ function check(name, cond, extra = "") {
     check("focusTimerAuto:falseなのでポモドーロは自動起動しない", s2a.pomodoro?.running !== true, JSON.stringify(s2a.pomodoro));
     check("着手後は■いま終了ボタンに切り替わる", await page.locator('.timeline-card [data-action="now-end"][data-id="tl-block-1"]').count() === 1);
     check("着手後は▶いま開始ボタンは消える", await page.locator('.timeline-card [data-action="now-start"][data-id="tl-block-1"]').count() === 0);
-    await page.click('.timeline-card [data-action="now-end"][data-id="tl-block-1"]');
+    await clickAndSkipLifecycleModal('.timeline-card [data-action="now-end"][data-id="tl-block-1"]');
     await page.waitForTimeout(300);
     const s2b = await stateNow();
     const b2b = (s2b.blocks || []).find((b) => b.id === "tl-block-1");
@@ -251,7 +263,7 @@ function check(name, cond, extra = "") {
     check("Now全画面が開く", await page.locator("#nowFullscreen").count() === 1);
     check("現在時刻を含むBlockが表示される", (await page.locator(".now-title").textContent()).includes("いまのBlock"));
     check("開始ボタンが出る(未着手)", await page.locator('.now-fullscreen [data-action="now-start"]').count() === 1);
-    await page.click('.now-fullscreen [data-action="now-start"]');
+    await clickAndSkipLifecycleModal('.now-fullscreen [data-action="now-start"]');
     await page.waitForTimeout(300);
     check("開始後は「開始」ボタンが disabled になる", await page.locator('.now-fullscreen [data-action="now-start"]').isDisabled());
     check("着手中の表示が出る", (await page.locator(".now-status").textContent()).includes("着手中"));
@@ -285,7 +297,7 @@ function check(name, cond, extra = "") {
       view: "timeline",
       focusTimerAuto: true
     });
-    await page.click('.timeline-card [data-action="now-start"][data-id="auto-timer-block"]');
+    await clickAndSkipLifecycleModal('.timeline-card [data-action="now-start"][data-id="auto-timer-block"]');
     await page.waitForTimeout(300);
     const s5a = await stateNow();
     check("ポモドーロが自動起動する(running:true)", s5a.pomodoro?.running === true, JSON.stringify(s5a.pomodoro));
@@ -301,7 +313,7 @@ function check(name, cond, extra = "") {
       focusTimerAuto: true,
       pomodoro: { running: true, blockId: "running-block", startedAt: `${TODAY}T09:55:00`, endsAt: `${TODAY}T10:20:00`, mode: "focus", tab: "manual" }
     });
-    await page.click('.timeline-card [data-action="now-start"][data-id="another-block"]');
+    await clickAndSkipLifecycleModal('.timeline-card [data-action="now-start"][data-id="another-block"]');
     await page.waitForTimeout(300);
     const s5b = await stateNow();
     check("既存タイマーは乗っ取られない(blockIdは元のまま)", s5b.pomodoro?.blockId === "running-block", JSON.stringify(s5b.pomodoro));

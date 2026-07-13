@@ -669,7 +669,9 @@ h3 {
   padding: 10px 14px;
   border-radius: 999px;
   font-size: 13px;
-  z-index: 40;
+  /* v87 should-fix: 全画面レイヤ(.now-fullscreen/.pomo-fullscreen, z-index:9999)の裏に
+     隠れて決定論フィードバックトーストが見えなくなっていた。全画面超・モーダル(10050)未満に。 */
+  z-index: 10001;
 }
 
 .toast.show {
@@ -949,7 +951,10 @@ h3 {
 .modal-root {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  /* v87: 宣言/終了報告モーダルは pomo-fullscreen(9999)・now-fullscreen(9999)・
+     completion-effect(10000)より上に来る必要がある(Now画面/ポモドーロ全画面中でも
+     操作できるように)。50のままだと全画面モードの裏に隠れてタップできなくなる。 */
+  z-index: 10050;
   display: none;
   align-items: center;
   justify-content: center;

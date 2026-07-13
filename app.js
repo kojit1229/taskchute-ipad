@@ -102,6 +102,9 @@ let nowMode = false;             // trueの間、renderMain()は通常ビュー�
 let _nowSkippedIds = new Set();  // このNowセッション中に「スキップ」したBlock id(セッションを抜けるとクリア)
 // v70: フォーカスタイマー「中断」の理由ワンタップピッカー(チョコ停記録)。非永続。
 let _pendingInterruptBlockId = null;
+// v87: 宣言/終了報告モーダルが解決するまでの一時コンテキスト。非永続。
+// { blockId, phase: "declare"|"report", kind: "pomodoro"|"block" }
+let _pendingLifecycleCtx = null;
 // v79: 月間プランニングボードのカードドラッグ(Pointer Events。既存の下書きBlockドラッグ
 //      (_draftDrag)と同じ「pointerdown/move/upで見た目だけ動かしupで正規化」方式を流用)。
 //      { id, el, startX, startY, moved } 非永続。moved=trueになって初めてドラッグ確定(タップの
@@ -210,8 +213,10 @@ document.addEventListener("click", (event) => {
   }
   if (action === "add-block") addBlock();
   if (action === "toggle-block") toggleBlock(id);
-  if (action === "now-start") setBlockTime(id, "actualStartAt");
-  if (action === "now-end") setBlockTime(id, "actualEndAt");
+  // v87: 開始/終了に「宣言→終了報告ループ」を軽量に挿入(ROADMAP v91)。
+  //      宣言・報告はいずれもスキップ可能で、スキップ時は従来どおり即座に実行される。
+  if (action === "now-start") openDeclareModal(id, "block");
+  if (action === "now-end") openReportModal(id, "block");
   if (action === "delete-block") deleteBlock(id);
   // v70: 「予定通りだった」一括承認(当日の未記録Blockに計画時刻を実績としてコピー+completed化)
   if (action === "bulk-approve-planned") bulkApproveAsPlanned();
@@ -259,9 +264,10 @@ document.addEventListener("click", (event) => {
     render();
   }
   // v14: 開始前に既存セッションを強制リセット(中断/完了/休憩後の再開でも確実に50:00から)
+  // v87: ポモドーロ開始も宣言ループの対象(スキップ可能)。実際の強制リセット+開始は
+  //      resumeLifecycleStart() 内で行う(宣言確定/スキップいずれの経路からも通る)。
   if (action === "start-pomodoro") {
-    forceResetPomodoroSession();
-    startPomodoro(target.dataset.blockId || "");
+    openDeclareModal(target.dataset.blockId || "", "pomodoro");
   }
   // v70: 「中断」は理由ワンタップピッカーを経由する(チョコ停記録)。実際の停止(stopPomodoro)は
   //      理由選択後に行う。紐づくBlockが無いセッションは記録の意味が無いので従来通り即中断する。
@@ -282,7 +288,17 @@ document.addEventListener("click", (event) => {
     _pendingInterruptBlockId = null;
     render();
   }
-  if (action === "complete-pomodoro") completePomodoro();
+  // v87: ポモドーロ完了も終了報告ループの対象(スキップ可能)。実際の完了処理は
+  //      resumeLifecycleFinish() 内で行う(報告確定/スキップいずれの経路からも通る)。
+  if (action === "complete-pomodoro") openReportModal(state.pomodoro.blockId, "pomodoro");
+  // v87: 宣言/報告モーダルの操作
+  if (action === "declare-confirm") confirmDeclare();
+  if (action === "declare-skip") skipDeclare();
+  if (action === "report-outcome") {
+    const note = modalRoot.querySelector("[data-report-note]")?.value || "";
+    finishReport(target.dataset.outcome || "", note);
+  }
+  if (action === "report-skip") finishReport("", "");
   if (action === "go-break") goBreakPomodoro();
   if (action === "end-break") endBreakPomodoro();
   // v19: 休憩中の3択
@@ -1168,6 +1184,21 @@ function normalizeState(value) {
       gym: Array.isArray(log?.gym) ? log.gym : []
     }])
   );
+  // v87: 宣言→終了報告ログ(ROADMAP v91)。上限300件で永続化肥大化を防ぐ(既存値優先で補完)。
+  if (!Array.isArray(value.declarations)) value.declarations = [];
+  value.declarations = value.declarations.slice(-300).map((d) => ({
+    id: d.id || crypto.randomUUID(),
+    blockId: d.blockId || "",
+    date: d.date || "",
+    title: d.title || "",
+    estimateMin: d.estimateMin ?? null,
+    note: d.note || "",
+    declaredAt: d.declaredAt || "",
+    reportedAt: d.reportedAt || "",
+    outcome: d.outcome || "",
+    resultNote: d.resultNote || "",
+    ...d
+  }));
   value.modal = null;  // 起動時はモーダル閉じた状態
   return value;
 }
@@ -9863,6 +9894,222 @@ function completePomodoro() {
   saveAndRender("ポモドーロを完了しました(Blockに完了チェック)");
 }
 
+// ============================================================
+// v87: 宣言→終了報告ループ(ROADMAP v91・実番号v87)
+// Focusmateの効果成分のうち「目標の宣言」と「終了報告」だけを取り出す。摩擦最小のため
+// どちらもワンタップで確定でき、スキップすれば従来どおりの動作(宣言/報告なし)になる。
+// アプリ内Claude API呼び出しは全廃済み(v60)のため、フィードバックは決定論(定型文+簡易集計)
+// のみ。宣言・報告ログは state.declarations に保存し(normalizeStateで上限300件・後方互換)、
+// GitHub自動push(app-state.json)経由でバッチ側(coach-daily.sh)が翌朝読む。
+// ============================================================
+
+// ブロックの見積時間(分)。ポモドーロは固定25分、通常BlockはestimateMin→予定時刻差→無しの順。
+function estimateMinutesForBlock(block, kind) {
+  if (kind === "pomodoro") return 25;
+  if (block && block.estimateMin != null && block.estimateMin !== "") return Number(block.estimateMin);
+  if (block && block.plannedStartAt && block.plannedEndAt) {
+    const diff = minutesOf(block.plannedEndAt) - minutesOf(block.plannedStartAt);
+    if (diff > 0) return diff;
+  }
+  return null;
+}
+
+// 宣言ログを1件追加(上限300件は正規化側でも担保するが、ここでも即時に切り詰める)
+function logDeclaration(blockId, note, estimateMin) {
+  const block = state.blocks.find((b) => b.id === blockId);
+  const entry = {
+    id: crypto.randomUUID(),
+    blockId,
+    date: todayISO(),
+    title: block?.title || "",
+    estimateMin: estimateMin != null ? estimateMin : null,
+    note: (note || "").trim(),
+    declaredAt: nowDateTime(),
+    reportedAt: "",
+    outcome: "",
+    resultNote: ""
+  };
+  state.declarations = [...(state.declarations || []), entry].slice(-300);
+  return entry;
+}
+
+// 終了報告を記録する。当日・同じBlockで未報告の宣言があればそこに合流、無ければ
+// 「宣言なしの終了報告」として新規エントリを作る(宣言・報告いずれも独立して任意のため)。
+function reportForBlock(blockId, outcome, resultNote) {
+  const today = todayISO();
+  const list = state.declarations || [];
+  let idx = -1;
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (list[i].blockId === blockId && list[i].date === today && !list[i].reportedAt) { idx = i; break; }
+  }
+  if (idx === -1) {
+    const block = state.blocks.find((b) => b.id === blockId);
+    const entry = {
+      id: crypto.randomUUID(),
+      blockId,
+      date: today,
+      title: block?.title || "",
+      estimateMin: null,
+      note: "",
+      declaredAt: "",
+      reportedAt: nowDateTime(),
+      outcome: outcome || "",
+      resultNote: (resultNote || "").trim()
+    };
+    state.declarations = [...list, entry].slice(-300);
+    return entry;
+  }
+  const updated = { ...list[idx], reportedAt: nowDateTime(), outcome: outcome || "", resultNote: (resultNote || "").trim() };
+  state.declarations = [...list.slice(0, idx), updated, ...list.slice(idx + 1)];
+  return updated;
+}
+
+// 決定論フィードバック(定型文+簡易集計のみ。AI呼び出しはしない)
+function buildDeclareFeedback(entry) {
+  const parts = [];
+  const outcomeLabel = { done: "できた", partial: "一部できた", derailed: "脱線した" }[entry.outcome] || "";
+  if (outcomeLabel) parts.push(outcomeLabel);
+  if (entry.declaredAt && entry.reportedAt) {
+    const durMin = Math.max(0, Math.round((localDateTimeToMs(entry.reportedAt) - localDateTimeToMs(entry.declaredAt)) / 60000));
+    const est = (entry.estimateMin != null && entry.estimateMin !== "") ? `(宣言時見積${entry.estimateMin}分)` : "";
+    parts.push(`宣言→完了まで${durMin}分${est}`);
+  }
+  const today = todayISO();
+  const todays = (state.declarations || []).filter((e) => e.date === today && e.declaredAt);
+  if (todays.length > 0) {
+    const achieved = todays.filter((e) => e.outcome === "done").length;
+    parts.push(`今日の宣言達成 ${achieved}/${todays.length}`);
+  }
+  return parts.join("。");
+}
+
+// ---------- 宣言モーダル ----------
+
+function openDeclareModal(blockId, kind) {
+  const block = state.blocks.find((b) => b.id === blockId && !b.deleted);
+  if (!block) {
+    // Blockが見つからない(空id等)場合は宣言をスキップし従来どおり即実行
+    resumeLifecycleStart({ blockId, kind });
+    return;
+  }
+  _pendingLifecycleCtx = { blockId, phase: "declare", kind };
+  state.modal = { type: "declare", id: blockId };
+  renderModal(buildDeclareModal(block, estimateMinutesForBlock(block, kind)));
+}
+
+function buildDeclareModal(block, estimateMin) {
+  const estText = estimateMin ? `${estimateMin}分` : "";
+  return `
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">宣言</h3>
+        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size:15px; font-weight:600">今から「${escapeHTML(block.title)}」を${estText}やる</div>
+        <div class="field" style="margin-top:10px">
+          <label class="field-label">一言(任意)</label>
+          <input class="input" style="font-size:16px" data-declare-note placeholder="意気込み・やり方など">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-action="declare-skip">宣言せず開始</button>
+        <button class="btn primary" data-action="declare-confirm">宣言して開始</button>
+      </div>
+    </div>
+  `;
+}
+
+function resumeLifecycleStart(ctx) {
+  if (ctx.kind === "pomodoro") {
+    forceResetPomodoroSession();
+    startPomodoro(ctx.blockId);
+  } else {
+    setBlockTime(ctx.blockId, "actualStartAt");
+  }
+}
+
+function confirmDeclare() {
+  if (!_pendingLifecycleCtx) return;
+  const ctx = _pendingLifecycleCtx;
+  const note = modalRoot.querySelector("[data-declare-note]")?.value || "";
+  const block = state.blocks.find((b) => b.id === ctx.blockId);
+  const estimateMin = estimateMinutesForBlock(block, ctx.kind);
+  logDeclaration(ctx.blockId, note, estimateMin);
+  _pendingLifecycleCtx = null;
+  closeModal();
+  resumeLifecycleStart(ctx);
+}
+
+function skipDeclare() {
+  if (!_pendingLifecycleCtx) return;
+  const ctx = _pendingLifecycleCtx;
+  _pendingLifecycleCtx = null;
+  closeModal();
+  resumeLifecycleStart(ctx);
+}
+
+// ---------- 終了報告モーダル ----------
+
+const REPORT_OUTCOMES = [
+  { value: "done", label: "できた" },
+  { value: "partial", label: "一部できた" },
+  { value: "derailed", label: "脱線した" }
+];
+
+function openReportModal(blockId, kind) {
+  const block = state.blocks.find((b) => b.id === blockId && !b.deleted);
+  if (!block) {
+    // Blockが見つからない(空id等)場合は報告をスキップし従来どおり即実行
+    resumeLifecycleFinish({ blockId, kind });
+    return;
+  }
+  _pendingLifecycleCtx = { blockId, phase: "report", kind };
+  state.modal = { type: "report", id: blockId };
+  renderModal(buildReportModal(block));
+}
+
+function buildReportModal(block) {
+  return `
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">終了報告</h3>
+        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size:14px">「${escapeHTML(block.title)}」お疲れさまでした</div>
+        <div class="field" style="margin-top:10px">
+          <label class="field-label">一言(任意)</label>
+          <input class="input" style="font-size:16px" data-report-note placeholder="成果・気づきなど">
+        </div>
+      </div>
+      <div class="modal-footer" style="flex-wrap:wrap">
+        ${REPORT_OUTCOMES.map((o) => `<button class="btn" data-action="report-outcome" data-outcome="${o.value}">${o.label}</button>`).join("")}
+        <button class="btn ghost" data-action="report-skip">スキップ</button>
+      </div>
+    </div>
+  `;
+}
+
+function resumeLifecycleFinish(ctx) {
+  if (ctx.kind === "pomodoro") completePomodoro();
+  else setBlockTime(ctx.blockId, "actualEndAt");
+}
+
+// outcome が空("スキップ")の場合はログを残さず従来どおりの完了トーストのまま終える。
+function finishReport(outcome, note) {
+  if (!_pendingLifecycleCtx) return;
+  const ctx = _pendingLifecycleCtx;
+  _pendingLifecycleCtx = null;
+  closeModal();
+  const entry = outcome ? reportForBlock(ctx.blockId, outcome, note) : null;
+  resumeLifecycleFinish(ctx);
+  if (entry) {
+    const feedback = buildDeclareFeedback(entry);
+    if (feedback) showToast(feedback);
+  }
+}
+
 // v9: 「☕ 休憩へ」: focus → break に遷移(現在のセッションを完了扱いに + 5分休憩開始)
 function goBreakPomodoro() {
   const blockId = state.pomodoro.blockId;
@@ -11147,6 +11394,7 @@ function closeModal() {
   modalRoot.innerHTML = "";
   modalRoot.onclick = null;
   _migrationRitualCtx = null;  // v61: 選択せずに閉じた場合も一時状態を残さない
+  _pendingLifecycleCtx = null;  // v87: 宣言/報告モーダルを×で閉じた場合は開始/終了自体も取り消す
 }
 
 function readModalFields() {
