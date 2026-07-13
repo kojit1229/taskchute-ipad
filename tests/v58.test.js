@@ -102,24 +102,30 @@ function check(name, cond, extra = "") {
   const sat = new Date(now.getFullYear(), now.getMonth(), now.getDate() + satOffset);
   const fri = new Date(sat.getTime() - 24 * 60 * 60 * 1000); // 前週金曜(週をまたぐ境界)
 
-  await page.evaluate(({ KEY, satISO }) => {
+  // v85: 起動時は常にselectedDate=今日に強制されるため(各タブ既定=今日)、検証したい曜日
+  // (土曜/金曜)へはreload後にセッション中の日付ピッカー操作で移動する(起動時injectionは無効化された)。
+  await page.evaluate(({ KEY }) => {
     const s = JSON.parse(localStorage.getItem(KEY));
-    s.selectedDate = satISO;
     s.currentView = "home";
     localStorage.setItem(KEY, JSON.stringify(s));
-  }, { KEY, satISO: isoDate(sat) });
+  }, { KEY });
   await page.reload();
   await page.waitForTimeout(500);
+  await page.evaluate((satISO) => {
+    const el = document.querySelector("[data-date-picker]");
+    el.value = satISO;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }, isoDate(sat));
+  await page.waitForTimeout(200);
   check("土曜日は週次レビュー導線が表示される(weekStart===selectedDate)",
     await page.locator('[data-action="open-weekly"]').count() === 1, isoDate(sat));
 
-  await page.evaluate(({ KEY, friISO }) => {
-    const s = JSON.parse(localStorage.getItem(KEY));
-    s.selectedDate = friISO;
-    localStorage.setItem(KEY, JSON.stringify(s));
-  }, { KEY, friISO: isoDate(fri) });
-  await page.reload();
-  await page.waitForTimeout(500);
+  await page.evaluate((friISO) => {
+    const el = document.querySelector("[data-date-picker]");
+    el.value = friISO;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }, isoDate(fri));
+  await page.waitForTimeout(200);
   check("金曜日(前週扱い)は週次レビュー導線が表示されない(9時間ズレなら曜日判定がずれ得る)",
     await page.locator('[data-action="open-weekly"]').count() === 0, isoDate(fri));
 

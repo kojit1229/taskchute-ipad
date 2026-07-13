@@ -280,14 +280,30 @@ function check(name, cond, extra = "") {
     console.log("[B8-1] renderMarkdownの結果メモ化: 同一テキストはmarked.parse再実行なし、異なるテキストは正しく再描画される");
     // ジャーナルの「前日」パネルは renderMarkdown(state.journals[previous]) を毎回呼ぶ。
     // selectedDate=YESTERDAY → previous=DAY_BEFORE_YESTERDAY(テキストA)を表示させて初回parseさせる。
-    await page.evaluate(({ KEY, YESTERDAY }) => {
+    // v85メモ: 起動時(reload)は必ずselectedDate=今日に強制されるため、YESTERDAYへは
+    // reload後にセッション中の日付ピッカー操作で移動する(以前のようにlocalStorage注入では
+    // 起動時リセットで上書きされてしまう)。ここで重要なのは、起動直後にjournalタブを
+    // selectedDate=今日のまま一度でも描画してしまうと、その時点の「前日パネル」=YESTERDAY
+    // (テキストB)が先にmarked.parseでキャッシュされてしまい、後段の「date-next後は
+    // キャッシュミスでparseが走る」検証が偽陰性になる。そのため、日付移動を終えてから
+    // 初めてjournalタブへ入る順序にする(home→日付ピッカーでYESTERDAYへ→journalへnav)。
+    await page.evaluate(({ KEY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
-      s.selectedDate = YESTERDAY;
-      s.currentView = "journal";
+      s.currentView = "home";
       localStorage.setItem(KEY, JSON.stringify(s));
-    }, { KEY, YESTERDAY });
+    }, { KEY });
     await page.reload();
     await page.waitForTimeout(400);
+    await page.evaluate((d) => {
+      const el = document.querySelector("[data-date-picker]");
+      el.value = d;
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    }, YESTERDAY);
+    await page.waitForTimeout(200);
+    // viewport 390px(mobile)ではサイドバーnavが非表示になり#bottomNav側だけが可視のため、
+    // #bottomNav配下を明示して2要素ヒットの曖昧さを避ける
+    await page.click('#bottomNav [data-action="nav"][data-view="journal"]');
+    await page.waitForTimeout(200);
     const journalTextInitial = await page.locator(".journal-grid").textContent();
     check("初期表示(前日パネル)にテキストAが表示されている", (journalTextInitial || "").includes("v83キャッシュ検証テキストA_"), (journalTextInitial || "").slice(0, 200));
 

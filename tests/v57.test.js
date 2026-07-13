@@ -84,15 +84,31 @@ function check(name, cond, extra = "") {
     // ---- [1] F1回帰(v76で期待値更新): 過去日ブラウズ中も「閲覧中の日付自身」への
     //          fetchノイズは出さない。ただし「今日から見た昨日」1日分の無条件fetchは
     //          selectedDateに関わらず常に行う(v76の仕様変更。CHANGES_v76.md参照) ----
+    // v85メモ: 「各タブは基本的に今日を表示」導入により、起動時(reload)は必ずselectedDate=今日に
+    // 強制されるようになった。旧実装は localStorage に selectedDate=PAST を仕込んでからreloadし、
+    // 起動時のhydrateStaticMarkdownがPASTを見た状態で走ることを期待していたが、v85後は
+    // reload直後は常に「今日」から始まる。過去日ブラウズ中の検証は、reload後にセッション中の
+    // 操作(日付ピッカー)でPASTへ移動して行う。setSelectedDate は「日付変更時にAIフィードバックを
+    // 再fetchする」ラッパー(hydrateStaticMarkdown呼び出し)が既に掛かっているため、日付ピッカーの
+    // change イベント自体がこのテストで検証したい再fetchの引き金になる(visibilitychangeの
+    // 追加発火は不要)。
     console.log("[1] 過去日ブラウズ中でも『閲覧中の日付自身』へのfetchノイズは出ない(F1)。ただし今日から見た昨日分は常にfetchする(v76)");
-    await page.evaluate(({ KEY, PAST }) => {
+    await page.evaluate(({ KEY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.feedbackFiles = [];
-      s.selectedDate = PAST;
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY });
+    await page.reload();
+    await page.waitForTimeout(700);
+    await page.evaluate(({ KEY, PAST }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
       if (s.feedback) delete s.feedback[PAST];
       localStorage.setItem(KEY, JSON.stringify(s));
+      window.__fbReqs = [];  // 起動時hydrateぶんの記録はリセットし、これ以降(日付移動時のfetch)だけを見る
+      const el = document.querySelector("[data-date-picker]");
+      el.value = PAST;
+      el.dispatchEvent(new Event("change", { bubbles: true }));
     }, { KEY, PAST });
-    await page.reload();
     await page.waitForTimeout(700);
     const reqsPast = await page.evaluate(() => (window.__fbReqs || []).slice());
     check("閲覧中の(無関係な)過去日自身へのfetchは出さない(ノイズ回避は維持)",

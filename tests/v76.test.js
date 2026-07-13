@@ -84,7 +84,9 @@ function check(name, cond, extra = "") {
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, feedbackFiles, selectedDate, view });
     await page.reload();
-    await page.waitForTimeout(700);
+    // v85: 起動処理に selectedDate強制リセット等が加わりわずかに重くなったぶん、
+    // 起動時hydrateStaticMarkdown完了までの待ち時間を少し余裕を持たせる(700→900ms)。
+    await page.waitForTimeout(900);
   }
 
   try {
@@ -106,8 +108,17 @@ function check(name, cond, extra = "") {
     const homeText = await page.locator("main").textContent();
     check("前日フィードバックの本文(実データ構造)が読める", homeText.includes("提案1_v76") && homeText.includes("提案2_v76"), homeText.slice(0, 300));
 
-    console.log("[1b] 根本原因の回帰: Home で state.selectedDate が『今日』以外(=前回セッションの閲覧日が永続化された状態)でも読める");
-    await seed({ view: "home", selectedDate: PREV2 });
+    // v85メモ: 「各タブは基本的に今日を表示」導入で起動時(reload)は必ずselectedDate=今日に
+    // 強制される。2日前を見ている状態は、reload後にセッション中の日付ピッカー操作で再現する
+    // (以前のように selectedDate をlocalStorageへ仕込んでreloadでは今日に上書きされてしまう)。
+    console.log("[1b] 根本原因の回帰: Home で state.selectedDate が『今日』以外(=セッション中に過去日へ移動した状態)でも読める");
+    await seed({ view: "home" });
+    await page.evaluate((d) => {
+      const el = document.querySelector("[data-date-picker]");
+      el.value = d;
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    }, PREV2);
+    await page.waitForTimeout(300);
     const homeDetailsCountPastDay = await page.locator(".home-ai-feedback-read").count();
     const homeTextPastDay = await page.locator("main").textContent();
     check("selectedDateが2日前でも、実際の今日から見た前日フィードバックが読める(selectedDate依存バグの回帰)",
@@ -128,7 +139,14 @@ function check(name, cond, extra = "") {
     check("ジャーナルタブでも前日フィードバック本文が読める", journalText.includes("提案1_v76") && journalText.includes("提案2_v76"), journalText.slice(0, 300));
 
     console.log("[2b] ジャーナルで過去日(2日前)を開いても、対象は選択中日付の前日ではなく『今日基準の前日』のまま");
-    await seed({ view: "journal", selectedDate: PREV2 });
+    await seed({ view: "journal" });
+    // v85: 起動時は必ず今日から始まるため、2日前へはセッション中に日付ピッカーで移動する
+    await page.evaluate((d) => {
+      const el = document.querySelector("[data-date-picker]");
+      el.value = d;
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    }, PREV2);
+    await page.waitForTimeout(300);
     const journalPastText = await page.locator("main").textContent();
     const journalPastDetailsCount = await page.locator(".journal-yesterday-feedback").count();
     check("2日前の journal を開いても、今日基準の前日フィードバックが(選択日と無関係に)引き続き表示される",

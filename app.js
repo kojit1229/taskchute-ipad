@@ -63,6 +63,12 @@ let toastTimer = null;
 let timerTicker = null;
 let cachedVisionMd = "";
 let cachedAffirmationMd = "";
+// v85: ビジョンボード(45/80/nowの各PDF)はpersonal-dataリポジトリのtaskchute/content/配下にあり、
+// GitHub Pages(このアプリの同一オリジン)にはv72移行時から存在しない。Contents APIから認証ヘッダ付きで
+// バイナリ取得し、Blob URL化してから<object>に埋め込む(取得できるまでは埋め込まない=公開URLへの
+// フォールバックはしない。壊れたsrcを一瞬でも出さないため)。
+const cachedVisionPdfUrls = {};      // { 'now_vision.pdf': 'blob:...' }(取得成功後のみキーが増える)
+const _visionPdfLoadInFlight = {};   // { 'now_vision.pdf': true }(多重fetch防止)
 const cachedFeedback = {};  // { 'YYYY-MM-DD': '...md text...' }
 const cachedWeeklyReviewMd = {};  // v62: { '週開始土曜YYYY-MM-DD': '...md text...' }(自宅PCバッチ生成)
 // v67: AI作業結果_<today>.json のパース済み配列(非永続、当日分のみ)。二重登録防止のIDは state.aiWorkProcessedIds 側で永続化する。
@@ -5795,6 +5801,12 @@ function renderVisionMd(kind) {
   `;
 }
 
+// v85: ビジョンボードPDF(45/80/now)は個人データリポジトリ(taskchute/content/配下)にあり、
+// GitHub Pagesの同一オリジンには存在しない(v72の個人データ分離移行時に除去済み)。
+// K報告「ビジョンボードが見れない」の原因はこれ — 旧実装が `./now_vision.pdf` という
+// 同一オリジン相対パスをそのまま<object>のsrcに使っており、v72後は404で見れなくなっていた
+// (Vision.md/Daily_Affirmation.mdはfetchGitHubRawText経由に既に直っていたが、PDF側だけ
+// 取り残されていた)。fetchGitHubRawBlob→Blob URL化で埋め込む(personalDataReadyゲート下)。
 function renderVisionBoard() {
   const boards = [
     { name: "今(33歳)", file: "now_vision.pdf" },
@@ -5803,13 +5815,30 @@ function renderVisionBoard() {
   ];
   const idx = clamp(state.settings.visionBoardIndex || 0, 0, boards.length - 1);
   const current = boards[idx];
-  const src = `./${current.file}`;
-  return `
+  const tabs = `
     <div class="vision-pdf-tabs">
       ${boards.map((b, i) => `
         <button class="${i === idx ? "active" : ""}" data-action="vision-board-tab" data-index="${i}">${escapeHTML(b.name)}</button>
       `).join("")}
     </div>
+  `;
+  if (!personalDataReady(state.settings.github)) {
+    return `
+      ${tabs}
+      <div class="panel"><p>設定画面で個人データリポジトリ(Owner/Repository/Token)を接続すると、ビジョンボードのPDFを読み込めます。</p></div>
+    `;
+  }
+  ensureVisionPdfLoaded(current.file);
+  const src = cachedVisionPdfUrls[current.file] || "";
+  if (!src) {
+    return `
+      ${tabs}
+      <div class="vision-actions" style="margin-bottom:8px"><span class="vision-source">📄 <code>${current.file}</code></span></div>
+      <div class="panel"><p>読み込み中...</p></div>
+    `;
+  }
+  return `
+    ${tabs}
     <div class="vision-actions" style="margin-bottom:8px">
       <span class="vision-source">📄 <code>${current.file}</code></span>
       <a class="btn primary" href="${src}" target="_blank" rel="noopener">📂 別タブで開く</a>
@@ -5822,6 +5851,23 @@ function renderVisionBoard() {
       </div>
     </object>
   `;
+}
+
+// v85: personal-data から取得したPDFをBlob URL化してキャッシュする(1ファイル1回だけfetch)。
+// 取得後、ビジョンボードを開いたままなら再描画して表示する(未取得中の再renderは何もしない)。
+function ensureVisionPdfLoaded(file) {
+  if (cachedVisionPdfUrls[file] || _visionPdfLoadInFlight[file]) return;
+  if (!personalDataReady(state.settings.github)) return;
+  _visionPdfLoadInFlight[file] = true;
+  fetchGitHubRawBlob(`content/${file}`)
+    .then((blob) => {
+      if (blob) {
+        cachedVisionPdfUrls[file] = URL.createObjectURL(blob);
+        if (state.currentView === "vision" && (state.settings.visionSection || "vision") === "board") render();
+      }
+    })
+    .catch((error) => console.warn("ビジョンボードPDFの取得に失敗:", error?.message || error))
+    .finally(() => { _visionPdfLoadInFlight[file] = false; });
 }
 
 // v37: marked の出力から危険な要素・属性を取り除く。
@@ -9192,9 +9238,13 @@ function personalDataFileConfig(rawCfg, name) {
 // 一過性の読み失敗を「まだ無い」と誤認し、空配列ベースで上書きして既存データを
 // 消失させかねない(should-fixレビュー対応)。既存の呼び出し元(fetchGitHubRawText経由)
 // への挙動は一切変えていない。
-async function fetchGitHubRawResult(name) {
+// v85: kind="blob" でバイナリ(PDF等)もこの経路で取得できるようにした。Accept: raw+json は
+// GitHubのContents APIで1〜100MBのファイルに対してもraw bytesを返す(1MB以下限定ではない)ため、
+// response.text() の代わりに response.blob() を使えばテキストと同じ経路で画像・PDFも読める。
+// 既存呼び出し元(fetchGitHubRawText経由、kind省略=text)の挙動は一切変えていない。
+async function fetchGitHubRawResult(name, kind = "text") {
   const cfg = state.settings.github || {};
-  if (!personalDataReady(cfg)) return { ok: false, status: 0, text: "" };
+  if (!personalDataReady(cfg)) return { ok: false, status: 0, text: "", blob: null };
   const conn = personalDataConn(cfg);
   try {
     const path = personalDataPath(name).split("/").map(encodeURIComponent).join("/");
@@ -9204,19 +9254,26 @@ async function fetchGitHubRawResult(name) {
     });
     if (response.status === 401) {
       setPersonalDataAuthError("トークンに personal-data リポジトリの権限が必要です(Fine-grained tokenのRepository access / Contents権限を確認してください)");
-      return { ok: false, status: 401, text: "" };
+      return { ok: false, status: 401, text: "", blob: null };
     }
-    if (!response.ok) return { ok: false, status: response.status, text: "" };  // 404等
+    if (!response.ok) return { ok: false, status: response.status, text: "", blob: null };  // 404等
     clearPersonalDataAuthError();
-    return { ok: true, status: response.status, text: await response.text() };
+    if (kind === "blob") return { ok: true, status: response.status, text: "", blob: await response.blob() };
+    return { ok: true, status: response.status, text: await response.text(), blob: null };
   } catch {
-    return { ok: false, status: 0, text: "" };  // ネットワーク例外(status: 0 = 通信自体が不成立)
+    return { ok: false, status: 0, text: "", blob: null };  // ネットワーク例外(status: 0 = 通信自体が不成立)
   }
 }
 
 async function fetchGitHubRawText(name) {
   const result = await fetchGitHubRawResult(name);
   return result.ok ? result.text : "";
+}
+
+// v85: ビジョンボードPDF専用のバイナリ取得(personal-data Contents API → Blob)。
+async function fetchGitHubRawBlob(name) {
+  const result = await fetchGitHubRawResult(name, "blob");
+  return result.ok ? result.blob : null;
 }
 
 // v72: 401時のみ表示する具体的な案内バナー(非永続)。renderSyncBanner と同じ「モーダルで
@@ -11927,6 +11984,13 @@ function runDailyOpen({ force = false } = {}) {
   maintainRecurrences({ purge: true });  // 既存の展開ロジックを流用
   if (isNewDay) {
     state.settings.lastOpenedDate = today;
+    // v85: 日をまたいでの復帰(前回操作日から暦日が変わった)は、閲覧中の日付を「今日」へ戻す。
+    // ここはvisibilitychange復帰時にも通る唯一の日跨ぎ検知ポイントなので、起動時リセット(モジュール
+    // 末尾)と合わせてこの1箇所だけで「各タブは基本的に今日を表示」の(a)(b)を満たす。
+    // セッション中に日をまたがずに行った意図的な日付移動(date-prev/date-next等)はここを通らない
+    // ため上書きされない((c)を維持)。
+    state.selectedDate = today;
+    ensureJournal(today);
     saveState();  // 実データ変更(dataModifiedAt 更新)
   }
   return isNewDay;
@@ -12015,6 +12079,15 @@ function prefillEnergy(block) {
 // (以前はファイル先頭付近で render() していて、ジャーナル画面を開いたまま
 //  再起動すると JOURNAL_PROMPTS 未初期化の例外でアプリ全体が起動不能だった)
 // ============================================================
+// v85: 各タブは基本的に「今日」を表示する(K報告: 過去日を見たまま離脱すると次回起動も
+// 過去日のままだった)。永続化された selectedDate(前回セッションの閲覧日)をそのまま初期表示に
+// 使わず、起動時は必ず todayISO() へ強制する。セッション中にユーザーが意図的に日付移動した場合
+// (date-prev/date-next/日付ピッカー)はそのまま尊重し続ける — ここでのリセットは起動直後の
+// 一度きりで、以後はrunDailyOpen()の「日をまたいだ場合」のみが再度リセットする(下記参照)。
+state.selectedDate = todayISO();
+ensureJournal(state.selectedDate);
+persistLocalNoSchedule();
+
 ensurePassivePomodoro();
 // v23/v41: 起動時に繰り返し Block を実体化(期間外・未編集は破棄)+ 日次オープン記録
 runDailyOpen({ force: true });

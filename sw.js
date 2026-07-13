@@ -1,4 +1,8 @@
-const CACHE_NAME = "taskchute-journal-pwa-v84";
+const CACHE_NAME = "taskchute-journal-pwa-v85";
+// v85: Vision.md / Daily_Affirmation.md / *_vision.pdf は v72の個人データ分離で
+// personal-dataリポジトリ(GitHub Contents API経由)へ移った同一オリジンには存在しないファイル群。
+// ここに残っていても cache.add() が個別に404失敗するだけ(無視される)で実害は無いが、
+// 「ビジョンボードが見れない」原因調査で見つかった同根の残骸なので合わせて削除する。
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -6,12 +10,7 @@ const APP_SHELL = [
   "./app.js",
   "./marked.min.js",
   "./manifest.webmanifest",
-  "./assets/icon.svg",
-  "./Vision.md",
-  "./Daily_Affirmation.md",
-  "./now_vision.pdf",
-  "./45_vision.pdf",
-  "./80_vision.pdf"
+  "./assets/icon.svg"
 ];
 
 self.addEventListener("install", (event) => {
