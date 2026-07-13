@@ -263,6 +263,8 @@ document.addEventListener("click", (event) => {
     persistLocalNoSchedule();  // v37: UI 操作(dataModifiedAt を汚さない)
     render();
   }
+  // v89: ゼロ摩擦ルーティンチェック — 「ここまで全部やった」一括確定
+  if (action === "routine-bulk-check") bulkCheckRoutinesUpToNow();
   // v14: 開始前に既存セッションを強制リセット(中断/完了/休憩後の再開でも確実に50:00から)
   // v87: ポモドーロ開始も宣言ループの対象(スキップ可能)。実際の強制リセット+開始は
   //      resumeLifecycleStart() 内で行う(宣言確定/スキップいずれの経路からも通る)。
@@ -1796,7 +1798,7 @@ function renderHome() {
     ${homeFoldSection("lifespan", true, "", "", "寿命カウントダウン(残り時間)", homeLifespanBody(metrics))}
     ${homeIdeal(isToday)}
     ${degraded ? "" : homeReadingCard()}
-    ${degraded ? homeDegradedBanner() : ""}
+    ${degraded ? homeDegradedBanner() : homeRoutineCheckBanner(blocks, isToday)}
     ${homeHero(blocks, isToday)}
     <div id="home-mit-anchor">${homeMIT(blocks)}</div>
     ${degraded
@@ -1816,7 +1818,7 @@ function renderHome() {
           <div class="home-fold-body">
             <div class="home-grid">
               ${homeFlow(blocks, isToday)}
-              ${homeRoutine(blocks)}
+              ${homeRoutine(blocks, isToday)}
             </div>
           </div>
         </details>
@@ -1826,7 +1828,7 @@ function renderHome() {
           <div class="home-fold-body">
             <div class="home-grid">
               ${homeFlow(blocks, isToday)}
-              ${homeRoutine(blocks)}
+              ${homeRoutine(blocks, isToday)}
             </div>
           </div>
         </details>
@@ -2303,6 +2305,17 @@ function routineRate(blocks) {
   return { done, total: list.length, pct: list.length ? Math.round((done / list.length) * 100) : 0 };
 }
 
+// v89: ゼロ摩擦ルーティンチェック(ROADMAP v93)。「予定時刻を過ぎているのに未チェック」の
+// ルーティンBlockを返す(一括確定ボタン・提案バナー共通のソース。決定論・副作用なし)。
+// plannedStartAt/nowDateTimeはどちらも"YYYY-MM-DDTHH:mm"形式のローカル文字列のため、
+// Dateを経由せず文字列比較でよい(iOS Safari注意点そのまま踏襲)。
+function overdueUncheckedRoutines(blocks) {
+  const now = nowDateTime();
+  return blocks
+    .filter((b) => !b.deleted && b.category === "ルーティン" && !b.completed && b.plannedStartAt && b.plannedStartAt <= now)
+    .sort((a, b) => a.plannedStartAt.localeCompare(b.plannedStartAt));
+}
+
 // --- ひと目スコアボード(4つの達成率)── v33 ---
 function homeScoreboard(blocks) {
   const tc = taskchuteStartRate(blocks);
@@ -2436,18 +2449,21 @@ function homeFlow(blocks, isToday) {
 }
 
 // --- 今日のルーティン(実行率)---
-function homeRoutine(blocks) {
+// v89: isToday引数を追加(ゼロ摩擦ルーティンチェックの一括確定ボタンは今日のみ表示するため)。
+function homeRoutine(blocks, isToday) {
   const r = blocks.filter((b) => b.category === "ルーティン");
   const done = r.filter((b) => b.completed).length;
   const pct = r.length ? Math.round((done / r.length) * 100) : 0;
   const rows = r.length
     ? r.map((b) => homeCheckRow(b, "", true)).join("")
     : `<div class="muted" style="font-size:13px">カテゴリ「ルーティン」のBlockがここに表示されます。</div>`;
+  const overdue = isToday ? overdueUncheckedRoutines(r) : [];
   return `<section class="panel"><div class="home-plabel green">今日のルーティン</div>
     ${r.length ? `<div class="home-rate"><span class="home-rate-cap">実行率</span>
       <span class="home-rate-pct green">${pct}%</span>
       <span class="home-rate-frac">${done} / ${r.length}</span></div>
       <div class="progress" style="margin-bottom:10px"><span style="width:${pct}%"></span></div>` : ""}
+    ${overdue.length ? `<button class="btn primary" data-action="routine-bulk-check" style="width:100%; margin-bottom:10px">✓ ここまで全部やった(${overdue.length}件を一括チェック)</button>` : ""}
     ${rows}</section>`;
 }
 
@@ -4975,6 +4991,10 @@ function renderRoutine() {
       </div>`
     : "";
 
+  // v89: ゼロ摩擦ルーティンチェック — viewMode(表示絞り込み)に関わらず、カテゴリ「ルーティン」の
+  // 予定時刻超過・未チェックはallBlocksから常に判定する(主戦場となる一括確定ボタン)。
+  const overdueRoutines = isToday ? overdueUncheckedRoutines(allBlocks) : [];
+
   return `
     ${renderHeader("今やること、次にやること", "ルーティン")}
     ${renderDateBar()}
@@ -4984,6 +5004,12 @@ function renderRoutine() {
       <button class="${viewMode === "routine" ? "active" : ""}" data-action="routine-mode" data-mode="routine">↻ ルーティンのみ</button>
       <button class="${viewMode === "all" ? "active" : ""}" data-action="routine-mode" data-mode="all">↻+📅 ルーティン+予定</button>
     </div>
+
+    ${overdueRoutines.length ? `
+      <button class="btn primary" data-action="routine-bulk-check" style="width:100%; margin-bottom:14px">
+        ✓ ここまで全部やった(${overdueRoutines.length}件を一括チェック)
+      </button>
+    ` : ""}
 
     ${enriched.length === 0 ? `
       <section class="panel muted" style="padding:32px; text-align:center; font-size:13px">
@@ -8337,6 +8363,29 @@ function toggleBlock(id) {
   }
 }
 
+// v89: ゼロ摩擦ルーティンチェック — 「ここまで全部やった」一括確定(ROADMAP v93)。
+// 現在時刻以前で未完了のルーティンBlockだけをまとめてcompleted化する(toggleBlockと同じ
+// 副作用=taskId連動のtask status更新・actualEndAt補完を1件ずつ適用)。今日以外では発火させない
+// (ボタン自体もisToday時のみ描画されるが、二重の防御として関数側にも入れておく)。
+// 個別解除は既存のtoggle-block(チェックボックス)でそのまま行える——「強制しない」の方針どおり、
+// 一括ONの取り消しは1件ずつのタップに委ねる。連打的な祝福演出は出さず、まとめて1回のトーストのみ
+// (N件同時の完了エフェクトは視覚的にうるさく、責めない/派手すぎないトーンの方針に合わないため)。
+function bulkCheckRoutinesUpToNow() {
+  if (state.selectedDate !== todayISO()) return;
+  const targets = overdueUncheckedRoutines(blocksForDate(state.selectedDate));
+  if (!targets.length) return;
+  const targetIds = new Set(targets.map((b) => b.id));
+  state.blocks = state.blocks.map((block) => {
+    if (!targetIds.has(block.id)) return block;
+    if (block.taskId) {
+      state.tasks = state.tasks.map((task) =>
+        task.id === block.taskId && task.status === "todo" ? { ...task, status: "doing", updatedAt: nowDateTime() } : task);
+    }
+    return { ...block, completed: true, actualEndAt: block.actualEndAt || nowDateTime(), updatedAt: nowDateTime() };
+  });
+  saveAndRender(`${targets.length}件のルーティンをまとめて記録しました`);
+}
+
 // v17: MIT(今日の主役)の切り替え。1日最大3個
 function toggleMIT(blockId) {
   const block = state.blocks.find((b) => b.id === blockId);
@@ -10762,6 +10811,20 @@ function homeAiFeedbackReadHTML() {
 function homeDegradedBanner() {
   return `<div class="cond-degraded-banner" data-action="nav" data-view="journal">
     今日は最低限だけでいい日です。MITと体調記録だけ見えていれば十分。
+  </div>`;
+}
+
+// v89: ゼロ摩擦ルーティンチェック — 時刻ベースの自動チェック提案バナー(ROADMAP v93)。
+// 「予定時刻を過ぎた未チェックのルーティンがある」ときだけ、責めないトーンで一括確定へ誘導する。
+// 呼び出し元(renderHome)でdegraded(v73縮退モード)日はhomeDegradedBannerと排他表示にする
+// (縮退モードの日にまで「やっていないこと」を思い出させるのは方針に反するため)。
+// タップでルーティンタブへ(そこで「ここまで全部やった」ボタンから一括確定できる)。
+function homeRoutineCheckBanner(blocks, isToday) {
+  if (!isToday) return "";
+  const overdue = overdueUncheckedRoutines(blocks);
+  if (!overdue.length) return "";
+  return `<div class="routine-check-banner" data-action="nav" data-view="routine">
+    ${overdue.length}件のルーティン、やっていたら1タップで記録 →
   </div>`;
 }
 
