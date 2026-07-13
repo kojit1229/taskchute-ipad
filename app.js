@@ -357,6 +357,12 @@ document.addEventListener("click", (event) => {
     persistLocalNoSchedule();
     render();
   }
+  // v84: Study With Me トグル(UI操作なのでfullscreenと同じくdataModifiedAtは汚さない)
+  if (action === "toggle-study-with-me") {
+    state.pomodoro.studyWithMeOn = !state.pomodoro.studyWithMeOn;
+    persistLocalNoSchedule();
+    render();
+  }
   // === v16: やりたいことリスト(v34: input リスナーから click へ移設) ===
   if (action === "add-wish") addWish();
   if (action === "open-wish") toggleWishOpen(id);
@@ -608,6 +614,22 @@ document.addEventListener("input", (event) => {
     state.settings[target.dataset.visionField] = target.value;
     saveState();
   }
+  // v84: Study With Me のURL貼り付けから動画ID・開始秒を自動抽出。
+  //      貼り付け直後の1入力イベントで完結するため render() してよいが、他の入力欄の
+  //      フォーカスを奪わないよう、対象2フィールドはDOM直接更新に留める(vision/github欄と同じ方針)。
+  if (target.matches("#study-with-me-url-input")) {
+    const parsed = parseYouTubeUrl(target.value);
+    if (parsed.videoId) {
+      state.settings.studyWithMe.videoId = parsed.videoId;
+      if (parsed.startSec !== null) state.settings.studyWithMe.startSec = parsed.startSec;
+      saveState();
+      const idEl = document.querySelector('[data-swm-field="videoId"]');
+      const secEl = document.querySelector('[data-swm-field="startSec"]');
+      if (idEl) idEl.value = state.settings.studyWithMe.videoId;
+      if (secEl) secEl.value = state.settings.studyWithMe.startSec;
+      showToast(`Study With Me: 動画ID/開始秒を抽出しました(${parsed.videoId} / ${state.settings.studyWithMe.startSec}秒)`);
+    }
+  }
   if (target.matches("[data-github-field]")) {
     // v37: autoSave チェックボックスもこのセレクタに一致してしまい、
     //      value("on"という文字列)で autoSave を上書き + OFF操作でも自動保存を予約していた。
@@ -679,6 +701,17 @@ document.addEventListener("change", (event) => {
   if (target.matches("[data-setting-focustimerauto]")) {
     state.settings.focusTimerAuto = target.checked;
     saveState();
+  }
+  // v84: Study With Me の動画ID・開始秒(直接編集)
+  if (target.matches("[data-swm-field]")) {
+    const field = target.dataset.swmField;
+    if (field === "startSec") {
+      state.settings.studyWithMe.startSec = Math.max(0, Math.floor(Number(target.value) || 0));
+    } else {
+      state.settings.studyWithMe.videoId = target.value.trim();
+    }
+    saveState();
+    render();
   }
   // v53: 横断検索のアーカイブ合流トグル(lazy fetch)
   if (target.matches("#cross-search-archive")) {
@@ -824,6 +857,13 @@ function normalizeState(value) {
   // v37: インポート/同期で欠けていると描画がクラッシュするキーを補完
   value.settings.morningEnergyLog ||= {};
   value.pomodoro ||= { running: false, blockId: "", startedAt: "", endsAt: "", mode: "focus" };
+  // v84: Study With Me(YouTube埋め込み)のトグル状態。既定OFF(常時ロード禁止のため)。
+  //      pomodoroオブジェクトが既にある既存端末でもここで補完する(既存値優先)。
+  if (typeof value.pomodoro.studyWithMeOn !== "boolean") value.pomodoro.studyWithMeOn = false;
+  // v84: Study With Me の動画設定(動画ID・開始秒)。既定はKが指定した動画。既存値優先。
+  value.settings.studyWithMe ||= {};
+  value.settings.studyWithMe.videoId ||= "WgxzRsiIwb8";
+  if (typeof value.settings.studyWithMe.startSec !== "number") value.settings.studyWithMe.startSec = 1986;
   value.settings.github ||= defaultGitHubSettings();
   value.settings.github.owner ||= "kojit1229";
   value.settings.github.repo ||= "taskchute-ipad";
@@ -5234,14 +5274,64 @@ function renderPomodoro() {
   if (fullscreen) {
     return renderPomodoroFullscreen(running, remaining, blockOptions, pomoTab);
   }
+  const studyWithMeOn = state.pomodoro.studyWithMeOn || false;  // v84
   return `
-    ${renderHeader("集中タイマー", "ポモドーロ", `<button class="btn" data-action="toggle-pomo-fullscreen">⛶ 全画面</button>`)}
+    ${renderHeader("集中タイマー", "ポモドーロ", `
+      <button class="btn" data-action="toggle-pomo-fullscreen">⛶ 全画面</button>
+      <button class="btn ${studyWithMeOn ? "primary" : ""}" data-action="toggle-study-with-me">🎥 Study With Me</button>
+    `)}
+    ${studyWithMeOn ? renderStudyWithMeFrame() : ""}
     <div class="segmented" style="margin-bottom:14px">
       <button class="${pomoTab === "manual" ? "active" : ""}" data-action="pomo-tab" data-tab="manual">任意タイマー</button>
       <button class="${pomoTab === "passive" ? "active" : ""}" data-action="pomo-tab" data-tab="passive">常時タイマー</button>
     </div>
     ${pomoTab === "manual" ? renderManualPomodoro(running, remaining, blockOptions) : renderPassivePomodoro()}
   `;
+}
+
+// v84: Study With Me — ポモドーロ画面に「疑似同席」のBGM的環境としてYouTube動画を埋め込む。
+// ONの間だけiframeをDOM生成し、OFF/タブ離脱(main.innerHTMLの全再描画)で自然に破棄される
+// (常時ロード禁止 — iOS PWAのメモリとタブの軽さを守るため)。500ms tickによる頻繁な
+// 全再描画でiframeが再読込されないよう、startTimerTicker側はこの表示中、時刻・進捗の
+// 差分パッチ(updatePomodoroTick)に切り替える。autoplay は一切付与しない(iOS Safariは
+// 音付き自動再生不可なので、再生開始は常にユーザーのタップに委ねる)。
+function renderStudyWithMeFrame() {
+  const swm = state.settings.studyWithMe || {};
+  const videoId = String(swm.videoId || "").trim();
+  if (!videoId) {
+    return `<div class="muted" style="margin:0 0 10px; font-size:12px">Study With Me: 設定 → Study With Me で動画IDを指定してください</div>`;
+  }
+  const startSec = Math.max(0, Math.floor(Number(swm.startSec) || 0));
+  // 静的URLのみ(トークン等の個人情報は一切含めない)
+  const src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?start=${startSec}`;
+  return `
+    <div class="study-with-me-frame-wrap">
+      <iframe class="study-with-me-frame" src="${escapeHTML(src)}" title="Study With Me"
+        allow="encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe>
+    </div>
+  `;
+}
+
+// v84: YouTube URL文字列から videoId / 開始秒 を抽出する(正規表現のみ、new Date は使わない)。
+// 対応形式: watch?v=/youtu.be//embed//shorts/ の videoId、t=/start= の秒数指定(数値 or 1h2m3s形式)。
+function parseYouTubeUrl(text) {
+  const s = String(text || "").trim();
+  const idMatch = s.match(/(?:youtu\.be\/|[?&]v=|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/);
+  const videoId = idMatch ? idMatch[1] : "";
+  let startSec = null;
+  const tMatch = s.match(/[?&#](?:t|start)=([0-9hms]+)/i);
+  if (tMatch) {
+    const raw = tMatch[1];
+    if (/^\d+$/.test(raw)) {
+      startSec = Number(raw);
+    } else {
+      const hm = raw.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/i);
+      if (hm && (hm[1] || hm[2] || hm[3])) {
+        startSec = Number(hm[1] || 0) * 3600 + Number(hm[2] || 0) * 60 + Number(hm[3] || 0);
+      }
+    }
+  }
+  return { videoId, startSec };
 }
 
 // v12: ポモドーロ全画面モード(背景動画 + 半透明フィルタ + 中央タイマー)
@@ -5287,6 +5377,7 @@ function renderManualPomodoro(running, remaining, blockOptions) {
         tab: state.pomodoro?.tab || "manual",
         passive: state.pomodoro?.passive || defaultPassivePomodoro(),
         fullscreen: state.pomodoro?.fullscreen || false,
+        studyWithMeOn: state.pomodoro?.studyWithMeOn || false,  // v84
         running: false,
         blockId: "",
         startedAt: "",
@@ -5949,6 +6040,22 @@ function renderSettings() {
         <label class="checkbox-line">
           <input type="checkbox" data-setting-focustimerauto ${state.settings.focusTimerAuto ? "checked" : ""}>
           ⏱ Block開始でフォーカスタイマーを自動起動
+        </label>
+      </div>
+      <div class="panel stack">
+        <h2>🎥 Study With Me(v84)</h2>
+        <div class="muted" style="font-size:12px; line-height:1.6">
+          ポモドーロタブの「Study With Me」トグルで表示するYouTube動画です。ONの間だけ埋め込み、
+          OFF・タブ離脱で破棄します(常時ロードしません)。再生はタップで開始してください(自動再生なし)。
+        </div>
+        <label>YouTube URLを貼り付け(動画ID・開始秒を自動抽出)
+          <input class="input" type="text" id="study-with-me-url-input" placeholder="https://www.youtube.com/watch?v=...&t=...s" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+        </label>
+        <label>動画ID
+          <input class="input" type="text" data-swm-field="videoId" value="${escapeHTML(state.settings.studyWithMe.videoId)}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+        </label>
+        <label>開始秒
+          <input class="input" type="number" min="0" step="1" data-swm-field="startSec" value="${state.settings.studyWithMe.startSec}">
         </label>
       </div>
       <div class="panel stack">
@@ -9572,11 +9679,13 @@ function startPomodoro(blockId) {
   const tab = state.pomodoro?.tab || "manual";
   const passive = state.pomodoro?.passive || defaultPassivePomodoro();
   const fullscreen = state.pomodoro?.fullscreen || false;
+  const studyWithMeOn = state.pomodoro?.studyWithMeOn || false;  // v84
   const now = Date.now();
   state.pomodoro = {
     tab,
     passive,
     fullscreen,
+    studyWithMeOn,
     running: true,
     blockId,
     startedAt: dateToLocalDateTime(new Date(now)),
@@ -9595,6 +9704,7 @@ function forceResetPomodoroSession() {
     tab: state.pomodoro?.tab || "manual",
     passive: state.pomodoro?.passive || defaultPassivePomodoro(),
     fullscreen: state.pomodoro?.fullscreen || false,
+    studyWithMeOn: state.pomodoro?.studyWithMeOn || false,  // v84
     running: false,
     blockId: "",
     startedAt: "",
@@ -9642,6 +9752,7 @@ function stopPomodoro() {
     tab: state.pomodoro?.tab || "manual",
     passive: state.pomodoro?.passive || defaultPassivePomodoro(),
     fullscreen: state.pomodoro?.fullscreen || false,
+    studyWithMeOn: state.pomodoro?.studyWithMeOn || false,  // v84
     running: false,
     blockId: "",
     startedAt: "",
@@ -9669,6 +9780,7 @@ function completePomodoro() {
     tab: state.pomodoro?.tab || "manual",
     passive: state.pomodoro?.passive || defaultPassivePomodoro(),
     fullscreen: state.pomodoro?.fullscreen || false,
+    studyWithMeOn: state.pomodoro?.studyWithMeOn || false,  // v84
     running: false,
     blockId: "",
     startedAt: "",
@@ -9693,6 +9805,7 @@ function goBreakPomodoro() {
     tab: state.pomodoro?.tab || "manual",
     passive: state.pomodoro?.passive || defaultPassivePomodoro(),
     fullscreen: state.pomodoro?.fullscreen || false,
+    studyWithMeOn: state.pomodoro?.studyWithMeOn || false,  // v84
     running: true,
     blockId: "",
     lastFocusBlockId: blockId || "",  // v19
@@ -9710,6 +9823,7 @@ function endBreakPomodoro() {
     tab: state.pomodoro?.tab || "manual",
     passive: state.pomodoro?.passive || defaultPassivePomodoro(),
     fullscreen: state.pomodoro?.fullscreen || false,
+    studyWithMeOn: state.pomodoro?.studyWithMeOn || false,  // v84
     running: false,
     blockId: "",
     startedAt: "",
@@ -9746,6 +9860,7 @@ function finishBlockFromBreak() {
     tab: state.pomodoro?.tab || "manual",
     passive: state.pomodoro?.passive || defaultPassivePomodoro(),
     fullscreen: state.pomodoro?.fullscreen || false,
+    studyWithMeOn: state.pomodoro?.studyWithMeOn || false,  // v84
     running: false,
     blockId: "",
     startedAt: "",
@@ -9753,6 +9868,51 @@ function finishBlockFromBreak() {
     mode: "focus"
   };
   saveAndRender("✅ Block を完了しました(実績終了時刻を記録)");
+}
+
+// v84: ポモドーロのtick更新(500ms毎)。Study With Me表示中は main.innerHTML の丸ごと
+// 置換(renderMain())をせず、時刻テキストと進捗円のみをDOM直接更新する。
+// renderPomodoro()が返す文字列自体は毎回同じでも、innerHTML代入はDOMノードを作り直すため、
+// 埋め込み中のiframeがtick毎(1秒に2回)に再読込されてしまう(v34の検索欄差分パッチと同じ理由)。
+// Study With Me非表示時は従来どおり renderMain() にフォールバックする(挙動変更なし)。
+function updatePomodoroTick() {
+  if (!state.pomodoro.studyWithMeOn || state.currentView !== "pomodoro") {
+    renderMain();
+    return;
+  }
+  const overlay = document.querySelector(".pomo-time-overlay");
+  const circle = document.querySelector(".pomo-progress-circle");
+  if (!overlay || !circle) { renderMain(); return; }  // 想定外の構造なら安全側でフル再描画
+  const R = 90;
+  const C = 2 * Math.PI * R;
+  const pomoTab = state.pomodoro.tab || "manual";
+  let text, progress, color;
+  if (pomoTab === "passive") {
+    const session = getPassiveSessionStatus();
+    text = session.phase === "focus" ? remainingText2x(session.remainingMs) : remainingTextNormal(session.remainingMs);
+    progress = session.progress;
+    color = session.phase === "focus" ? "var(--accent)" : "var(--orange)";
+  } else if (state.pomodoro.running) {
+    const mode = state.pomodoro.mode || "focus";
+    const endsAtMs = localDateTimeToMs(state.pomodoro.endsAt);
+    const remainingMs = Math.max(0, endsAtMs - Date.now());
+    if (mode === "break") {
+      text = remainingTextNormal(remainingMs);
+      progress = 1 - remainingMs / (5 * 60 * 1000);
+      color = "var(--orange)";
+    } else {
+      const startedAtMs = localDateTimeToMs(state.pomodoro.startedAt);
+      text = remainingText(state.pomodoro.endsAt, true);
+      progress = 1 - remainingMs / (endsAtMs - startedAtMs);
+      color = "var(--accent)";
+    }
+  } else {
+    return;  // 手動タブ未起動時は表示が変化しないので何もしない
+  }
+  overlay.textContent = text;
+  circle.style.stroke = color;
+  circle.style.strokeDasharray = String(C);
+  circle.style.strokeDashoffset = String(C * (1 - Math.min(1, Math.max(0, progress))));
 }
 
 function startTimerTicker() {
@@ -9772,12 +9932,14 @@ function startTimerTicker() {
         // v72レビュー対応: renderMain()はrender()のトークンゲート判定を経由しないため、
         // トークン喪失等でゲートに戻るべき状態のままここが直接呼ばれると、ゲート画面の
         // 裏で#mainだけが再描画され続ける穴になる。ここでも同じ判定を明示的にかける。
-        renderMain();
+        // v84: renderMain()直呼びをupdatePomodoroTick()に置換(Study With Me表示中に
+        // iframeを500msごとに再生成させないため。中は従来どおりrenderMain()にフォールバック)
+        updatePomodoroTick();
       }
     }
     // 常時タイマー(壁時計モデル): ポモドーロ画面を開いている間は常に再描画
     if (state.currentView === "pomodoro" && state.pomodoro?.tab === "passive" && personalDataReady(state.settings.github)) {
-      renderMain();
+      updatePomodoroTick();
     }
     // v41: 見込み終了時刻は該当 span のみ差し替え(全再描画しない)
     updateProjectedEndTick();
