@@ -82,7 +82,16 @@ async function passGithubGate(page, keyName = STATE_KEY) {
   await page.waitForTimeout(500);
 }
 
+// v93: 各スイートのPORTは従来固定値だった(同じ値を使い回すスイートも複数あり)。
+// 二重実行(例: 2ターミナルで同時にnpm testを回す、CIとローカルpush前ゲートが重なる等)で
+// EADDRINUSEによる偽失敗が起きるため、実行のたびにランダムなポートを払い出す。
+// 個々のtests/vNN.test.jsは `const PORT = randomPort();` を呼ぶだけで、
+// PORTの使い方(startServer/page.goto/page.route等)は一切変えなくてよい。
+function randomPort(min = 20000, max = 40000) {
+  return min + Math.floor(Math.random() * (max - min));
+}
+
 module.exports = {
   chromium, ROOT, launchOptions, startServer,
-  blockGithubApiByDefault, passGithubGate, GITHUB_API_HOST, STATE_KEY
+  blockGithubApiByDefault, passGithubGate, GITHUB_API_HOST, STATE_KEY, randomPort
 };

@@ -18,9 +18,9 @@
 // 露出しない。ブラウザ操作 + localStorage 状態の直接注入で観測する。AI作業結果_*.json のfetchは
 // v70でpage.route(実ファイル不使用)によるモックへ書き換えた(v62.test.js参照。本番バッチが
 // 同名の実ファイルを日次でcommitするため、実行日依存を避ける)。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4206;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 
 let failures = 0;

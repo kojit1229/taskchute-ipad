@@ -8,9 +8,9 @@
 //     confirmed(userStart/userMin付き)/removed/discarded が記録される
 //     (旧v52.test.jsが検証していた recordScheduleHistory/block.aiPlan は app.js から
 //     削除していない現存コードのため、v52削除に伴いここへ検証を移設した)
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4190;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 
 let failures = 0;

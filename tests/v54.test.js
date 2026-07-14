@@ -1,7 +1,7 @@
 // v54 検証: 計器盤の追加チャート(ドーナツ / カテゴリ双極 / 複数折れ線 / カレンダー / ヒストグラム)
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4193;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 
 let failures = 0;

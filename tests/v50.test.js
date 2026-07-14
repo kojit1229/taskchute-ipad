@@ -5,9 +5,9 @@
 // 全廃したため、①③④(いずれもcallClaude前提)は機能ごと削除した。②のスケジュール下書きは
 // 決定論配置(computeFreeGaps→fallbackMorningPlan)に置き換えて存続するため、本スイートは
 // D&D操作(ドラッグ・リサイズ・確定・破棄)の検証として残す。AIのfetchモックは使わない。
-const { chromium, ROOT, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, ROOT, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4198;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 
 let failures = 0;

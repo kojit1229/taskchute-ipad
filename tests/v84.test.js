@@ -6,9 +6,9 @@
 //   ⑤normalizeStateの後方互換マイグレーション(既存値優先)
 //   +プライバシー: iframe src はトークン等を含まない静的URLのみ
 //   +tick安定性: 500ms tickの再描画(常時タイマー)でiframeのDOMノードが壊れない
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4221;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 
 let failures = 0;

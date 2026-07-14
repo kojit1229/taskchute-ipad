@@ -5,9 +5,9 @@
 // Claude API直接呼び出しを全廃したのに伴い、そのプロンプト注入経路(および呼び出し元を失った
 // buildScheduleLearningDigest/morningEnergyCorrelation自体)を削除したため、該当セクションは
 // 削除した(詳細はCHANGES_v60.md)。計器盤・自動アーカイブはAI呼び出しと無関係なのでそのまま残す。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4194;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 
 let failures = 0;

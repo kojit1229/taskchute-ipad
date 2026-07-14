@@ -10,9 +10,9 @@
 //       長い弧zone3/足あとzone4は既存どおり)。読書カードは書名+記入状況をsummaryに出す。
 //
 // 主端末=iPhone縦持ち(幅390px)想定のviewportで検証する(bottom-navの検証に必須)。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4219;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 const FOLD_KEY = "taskchute-journal-home-fold-v1";
 

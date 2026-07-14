@@ -6,9 +6,9 @@
 // D&Dの実機タッチ操作(Pointer Events)はPlaywrightでの再現コストが高いため、本スイートは
 // 指示どおり「タップ代替経路(カード上の<select>で月を選ぶ)」でtargetMonthが保存されることを
 // 検証する。ドラッグ実装自体は目視確認(../taskchute-notes/handoff.mdに記載)に委ねる。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4216;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 
 let failures = 0;

@@ -7,9 +7,9 @@
 //   A4: 「日報を生成」のトーストに遷移予告文言を追加
 //   A5: 「今日の理想」空欄カードを既定で閉じた1行プレースホルダ(homeFoldSection再利用)に縮小
 // 主端末=iPhone縦持ち(幅390px)を想定した viewport で検証する。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4218;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 
 let failures = 0;

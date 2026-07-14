@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "node tests/serve.js",
     "test": "node tests/run-all.js",
-    "test:quick": "node tests/run-all.js"
+    "test:quick": "node tests/run-all.js",
+    "test:core": "node tests/run-core.js"
   },
   "devDependencies": {
     "playwright-core": "^1.61.1"

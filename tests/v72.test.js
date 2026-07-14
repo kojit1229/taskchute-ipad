@@ -19,9 +19,9 @@
 // ブラウザ操作 + localStorage 状態の直接注入 + page.route(api.github.com の偽装)で観測する。
 // このスイートは意図的に tests/helpers.js の passGithubGate/blockGithubApiByDefault を
 // (ゲート自体を検証するため)使わず、個々のシナリオで必要な分だけ page.route を組む。
-const { chromium, launchOptions, startServer } = require("./helpers");
+const { chromium, launchOptions, startServer, randomPort } = require("./helpers");
 
-const PORT = 4210;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 const API_HOST = "api.github.com";
 

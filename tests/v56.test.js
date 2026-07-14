@@ -1,8 +1,8 @@
 // v56 検証: Codexレビュー反映(入力16px / hoverオフセット撤去 / 下書き削除の前面化 /
 //            アイコン404解消 / placeholder引用符 / AIフィードバックfetchの404ノイズ解消)
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4192;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 
 let failures = 0;

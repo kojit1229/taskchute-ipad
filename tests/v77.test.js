@@ -18,9 +18,9 @@
 //   自動登録済みの同名テーマを重複表示しない」の回帰確認のみ行う(冪等・重複排除・削除時の
 //   採否ログ記録などの詳細はtests/v86.test.jsを参照)。後方互換(見出しが無い旧形式FBでも
 //   クラッシュしない)は維持。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4215;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 const API_HOST = "api.github.com";
 

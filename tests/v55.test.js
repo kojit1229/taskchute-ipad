@@ -4,9 +4,9 @@
 // 検証していたが、v60でアプリ内からのClaude API直接呼び出しを全廃したのに伴い機能ごと削除した
 // ため、該当セクションは削除した(詳細はCHANGES_v60.md)。インライン編集はAIと無関係の機能
 // なのでそのまま残す。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4191;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 
 let failures = 0;

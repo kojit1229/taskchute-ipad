@@ -6,9 +6,9 @@
 //       同一テキストの再描画はmarked.parseを再実行しない。cachedFeedback更新(新着fetch)時は
 //       テキスト自体が変わるためキーが変わり、表示は正しく更新される(明示的invalidation不要)。
 // 主端末=iPhone縦持ち(幅390px)を想定した viewport で検証する。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4220;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 
 let failures = 0;

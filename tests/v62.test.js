@@ -18,9 +18,9 @@
 // finally で削除していたが、本番バッチ(plan-daily.sh等)が同名の実ファイルを日次でcommitする
 // ため、実行日によってはテスト終了後に実ファイルが一時的に消える環境依存の副作用があった
 // (v67 CHANGES参照)。v70でこれを恒久修正し、実ファイルには一切触れない。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4202;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 
 let failures = 0;

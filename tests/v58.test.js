@@ -8,9 +8,9 @@
 //   - weekRange()/isWishStagnant()/Pomodoro 系の日時文字列パース(9時間ズレ回避)
 //   - AI下書きスケジュールの削除ボタン(.draft-remove)が .draft-resize に
 //     クリックを奪われる問題(短い下書きBlockで顕著)
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4193;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 
 let failures = 0;

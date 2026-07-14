@@ -46,10 +46,32 @@ git -C ../taskchute-notes push
   (`// vNN:` コメント、保存3系統の使い分け、`parseDate()` 必須、SW `CACHE_NAME` の +1 等)。
 - テストは `tests/` の E2E スイート(`tests/vNN.test.js`)。push/PR で GitHub Actions が全量実行する。
 
-### テスト実行方針(v60〜)
+### テスト実行方針(v60〜、コアセットはv93〜)
 - **開発中**: 改修に関連するスイート + 最新スイートだけ実行してよい。
   `node tests/run-all.js v59 v60`(スイート名の一部一致でも可)、または
   `node tests/vNN.test.js` で個別実行。速く回すことを優先する。
-- **push前 / CI(GitHub Actions)では必ず全量**(`npm test` = `node tests/run-all.js` 引数なし)。
-  これが唯一の安全網なので、納品前に1回は全量 ALL PASS を確認してからpushする。
+- **push前ローカルは `npm run test:core`**(コアセット、目標3分以内)。
+- **CI(GitHub Actions)では必ず全量**(`npm test` = `node tests/run-all.js` 引数なし)。
+  これが唯一の完全な安全網。push後は必ずGitHub ActionsのCI成功を確認すること
+  (test:coreは範囲を絞ったローカル既定であり、全量の代替ではない)。
 - `npm run test:quick -- vNN` でも同じ絞り込みができる(`--` の後にスイート名を渡す)。
+
+#### コアセット(`npm run test:core` = `tests/run-core.js`)
+push前にローカルで毎回全量(現在40本)を回すと時間がかかるため、「実質的にカバー範囲が広い」
+サブセットに絞ったもの。**スイートの削除・スキップ・弱体化ではない**——`npm test`(全量)・CIは無改変。
+構成 = 以下を合わせて計10本前後:
+- **直近5バージョン**(動的: `tests/`のvNN.test.jsを番号降順で上位5本。新規スイート追加で自動追従)
+- **固定の横断コア5本**(選定理由。新しい代表例が出たら随時見直してよい):
+  - v72: privacy/同期ゲート(GitHub Contents APIへの移行・起動時ゲート)を唯一直接検証
+  - v59: 朝の一括プランニング=下書き(`_scheduleDraft`)機構の代表(承認/却下/確定)
+  - v67: `normalizeState`の新フィールド移行を最も広く踏む(後方互換ケース含む)
+  - v50: タイムライン上のスケジュール下書きD&D(タイムライン描画+下書き操作の複合)
+  - v70: タイムラインカードの実行接点(いま開始/いま終了ボタン)描画
+
+#### ポートのランダム化(v93〜)
+各スイートの`PORT`は`tests/helpers.js`の`randomPort()`(20000〜40000のランダム値)を使う。
+固定ポートのまま2プロセスが同時に同じ/近いポートでサーバを立てるとEADDRINUSEで偽失敗する
+(2ターミナルでの同時実行、CIとローカルpush前ゲートが重なる場合など)ため、実行のたびに
+払い出す。各`tests/vNN.test.js`は`const PORT = randomPort();`と書くだけで、
+`startServer`/`page.goto`/`page.route`等の使い方は従来どおり(PORTという名前の定数を
+参照する構造は変えていない)。

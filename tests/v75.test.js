@@ -21,9 +21,9 @@
 //
 // 方針: 既存スイート(v62/v72/v74)と同じく、app.js は type="module" のため内部関数は window に
 // 露出しない。ブラウザ操作 + page.route(api.github.com の偽装)+ localStorage 直接注入で観測する。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4213;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 const API_HOST = "api.github.com";
 

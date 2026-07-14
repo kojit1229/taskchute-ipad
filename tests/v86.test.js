@@ -10,9 +10,9 @@
 //
 // ①新着FBで自動取り込み(routeモック) ②冪等(2回hydrateで二重登録なし) ③重複スキップ
 // ④テーマ削除+AI由来の不採用記録 ⑤旧形式FB(セクション無し)で何も起きない
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4230;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 const API_HOST = "api.github.com";
 

@@ -20,9 +20,9 @@
 //     %2F・taskchute二重・root直下を明示的に否定)と、
 // (2) 実際にGitHubがトークン権限不足で404を返すケースを模擬し、案内文言とバナー表示が
 //     「パスの綴り」だけでなく「トークンの権限」も指し示すことを検証する。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4215;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 const API_HOST = "api.github.com";
 const OWNER = "kojit1229";

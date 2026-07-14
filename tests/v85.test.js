@@ -16,9 +16,9 @@
 //   (a) 起動時は永続化された selectedDate を無視し、常に todayISO() から始まる。
 //   (b) 日をまたいでのフォアグラウンド復帰(runDailyOpenのisNewDay検知)でも今日へリセットする。
 //   (c) セッション中にユーザーが日付ピッカー等で意図的に移動した場合は、日をまたがない限り尊重する。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4285;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 const API_HOST = "api.github.com";
 

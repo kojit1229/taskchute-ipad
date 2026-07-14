@@ -12,9 +12,9 @@
 //   トーストに出る(アプリ内AI呼び出しは無し・定型文+簡易集計のみ)。
 // ⑤normalizeStateの後方互換: 旧state(declarationsフィールド無し)から[]が補完され、
 //   上限300件で切り詰められる。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4222;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 
 let failures = 0;

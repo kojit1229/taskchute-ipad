@@ -7,9 +7,9 @@
 // ③一覧は取れるが該当種類が0件→フェイルソフト(生成方法の1行ガイド)を表示
 // ④公開オリジン(同一オリジン = GitHub Pages相当のテストサーバ)へレポートファイル名のfetchが
 //   一切飛ばない(否定アサーション。auth不要な公開URLへのフォールバックを作っていないことの確認)
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4227;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 
 let failures = 0;

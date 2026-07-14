@@ -8,9 +8,9 @@
 //   ④ 勝手にチェックされない: ボタンをタップするまでは何もcompletedにならない。
 //   ⑤ normalizeStateの後方互換: 新フィールドを追加していないため、旧形状のstate
 //      (declarations等の新しめのフィールドが無い最小限のstate)でも描画がクラッシュしないこと。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4224;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 
 let failures = 0;

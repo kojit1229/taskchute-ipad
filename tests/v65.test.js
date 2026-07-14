@@ -15,9 +15,9 @@
 // 方針: 既存スイート(v61/v62/v63)と同じく、app.js は type="module" のため内部関数は window に
 // 露出しない。ブラウザ操作 + localStorage 状態の直接注入で観測する。AIプランのfetchは
 // v70でv62.test.jsと同じくpage.route(実ファイル不使用)によるモックへ書き換えた(理由はv62.test.js参照)。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4204;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 
 let failures = 0;

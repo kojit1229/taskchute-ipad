@@ -9,9 +9,9 @@
 // ③既存契約「## 8. ジャーナル」見出し自体が壊れていない
 // ④normalizeState 後方互換: 既存端末のjournalTemplateに「### 依頼」が無ければ追記され、
 //   既に持っている場合は二重に追記されない
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4226;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 
 let failures = 0;

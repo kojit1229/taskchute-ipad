@@ -9,9 +9,9 @@
 // (3) フィードバックファイルが404でもクラッシュしない(フェイルソフト)ことを検証する。
 // (5) pushFileToGitHub(日報push等)のURL組み立てをpushGitHubPathと同じセグメント単位encodeに
 //     統一したことの回帰(PUT先パスに%2Fが混入しないこと)。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4214;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 const API_HOST = "api.github.com";
 

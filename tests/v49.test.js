@@ -4,9 +4,9 @@
 // も検証していたが、v60でアプリ内からのClaude API直接呼び出しを全廃したため、AIレビュー実行・
 // APIキー入力・モデル選択に関する検証は削除した(機能自体が削除されたため。詳細は
 // CHANGES_v60.md 参照)。世代バックアップ・横断検索は無関係の機能なのでそのまま残す。
-const { chromium, ROOT, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, ROOT, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4199;
+const PORT = randomPort();
 
 let failures = 0;
 function check(name, cond, extra = "") {

@@ -7,9 +7,9 @@
 // そのまま「常用経路」の検証として引き続き成立する(fallbackMorningPlan自体は無改修)。
 // フォールバックは computeFreeGaps の出力をそのまま使うため、配置境界を見ることで
 // computeFreeGaps の境界(占有なし/連続占有/日跨ぎ端)も間接的に検証できる。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4194;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 
 let failures = 0;

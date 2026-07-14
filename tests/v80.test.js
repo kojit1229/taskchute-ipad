@@ -7,9 +7,9 @@
 //   (3) 月割当(タップ代替=カード上の月選択)がレイアウト変更後も回帰なく機能すること
 //   (4) 現在月ジャンプ(ボタン+表示切替時の自動スクロール)がscrollIntoViewを呼ぶこと
 // を検証する。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4217;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 
 let failures = 0;

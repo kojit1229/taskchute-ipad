@@ -6,9 +6,9 @@
 //
 // ①グループ作成・テーマ所属表示 ②グループ折りたたみ記憶 ③グループ削除で配下が未分類へ
 // ④未分類テーマの従来動作 ⑤AI取り込みが未分類に入る ⑥normalizeState後方互換
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4225;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 
 let failures = 0;

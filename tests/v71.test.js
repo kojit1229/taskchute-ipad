@@ -20,9 +20,9 @@
 // 露出しない。ブラウザ操作 + localStorage 状態の直接注入で観測する。Clock APIで時刻を固定し、
 // AIプラン/AIフィードバック/週次レビューの実ファイルfetchはpage.routeで常に404隔離する
 // (本番バッチが実際にこれらを日次でcommitするため、実ファイル有無に結果が左右されないようにする)。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4209;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 const FOLD_KEY = "taskchute-journal-home-fold-v1";
 

@@ -17,9 +17,9 @@
 //
 // 方針: 既存スイートと同じく、app.js は type="module" のため内部関数は window に露出しない。
 // ブラウザ操作 + localStorage 状態の直接注入で観測する。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4211;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 
 let failures = 0;

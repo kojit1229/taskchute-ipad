@@ -18,9 +18,9 @@
 // v72: 個人データはGitHub Contents API(personal-data リポジトリの taskchute/ 配下)経由に
 //      なったため、リポジトリ直下への実ファイル書き込みをやめ、v62等と同じくpage.routeの
 //      可変fixtureでモックする。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
-const PORT = 4193;
+const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 
 let failures = 0;
