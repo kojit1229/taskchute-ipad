@@ -422,6 +422,12 @@ document.addEventListener("click", (event) => {
   if (action === "zt-tab") { ztTab = target.dataset.tab || "other"; render(); }
   if (action === "zt-fav-toggle") ztToggleFav(id);
   if (action === "zt-theme-delete") deleteZtTheme(id);  // v86: テーマのワンタップ削除
+  // v90: テーマ一覧の大テーマ(グループ)階層。追加/リネーム/削除は既存のカテゴリ管理
+  //      (addCategory等)と同じ軽量な window.prompt/confirm 方式に揃えた(モーダルを増やさない)。
+  if (action === "zt-group-add") ztGroupAdd();
+  if (action === "zt-group-rename") ztGroupRename(id);
+  if (action === "zt-group-delete") ztGroupDelete(id);
+  if (action === "zt-group-toggle") ztGroupToggleOpen(id);
   if (action === "zt-write") openZtWrite(id);
   if (action === "zt-save") saveZtEntry();
   if (action === "zt-discard") discardZtWrite();
@@ -805,6 +811,13 @@ document.addEventListener("change", (event) => {
     updateTaskField(target.dataset.id, "targetMonth", target.value ? Number(target.value) : null);
     render();
   }
+  // v90: 0秒思考テーマの大テーマ割り当て(v79月間ボードの月選択と同じ「select常時同居」の
+  //      タップ代替。ドラッグ&ドロップは作らない)。選択直後にグループ間の見た目の移動を
+  //      反映するため render() する。
+  if (target.matches('[data-action="zt-theme-set-group"]')) {
+    ztThemeSetGroup(target.dataset.id, target.value || null);
+    render();
+  }
 });
 
 // v16: Wish 関連のリアルタイム編集(input イベント = 入力中も保存)
@@ -1109,6 +1122,9 @@ function normalizeState(value) {
   value.zeroThinking ||= { themes: [], entries: [] };
   if (!Array.isArray(value.zeroThinking.themes)) value.zeroThinking.themes = [];
   if (!Array.isArray(value.zeroThinking.entries)) value.zeroThinking.entries = [];
+  // v90: 大テーマ(グループ)。WBSのProjectと同じ「大枠→中身」の階層をテーマ一覧に持たせる。
+  //      groups自体が欠損している旧端末データでもここで[]補完されるため消えない。
+  if (!Array.isArray(value.zeroThinking.groups)) value.zeroThinking.groups = [];
   // v39: 問い(Question)エンティティ。効率化(2x)ではなく価値の中身(10x)を掘る器。
   if (!Array.isArray(value.questions)) value.questions = [];
   value.questions = value.questions.map((q) => ({
@@ -1143,6 +1159,9 @@ function normalizeState(value) {
   //      ワンタップ削除時にAI由来かどうかを判定し、AI由来ならzeroSecThemeLogへ不採用記録する)。
   value.zeroThinking.themes = value.zeroThinking.themes.map((t) =>
     "source" in t ? t : { ...t, source: null });
+  // v90: theme に groupId を補完(既存テーマは全て未分類=null。既存値優先で上書きしない)。
+  value.zeroThinking.themes = value.zeroThinking.themes.map((t) =>
+    "groupId" in t ? t : { ...t, groupId: null });
   value.zeroThinking.entries = value.zeroThinking.entries.map((e) =>
     "questionId" in e ? e : { ...e, questionId: null });
   // v39: 週次レビュー(キー = 週開始土曜 'YYYY-MM-DD')。指標は都度計算、メモのみ永続化。
@@ -1484,7 +1503,7 @@ function seedState() {
   return {
     currentView: "home",
     selectedDate: today,
-    zeroThinking: { themes: [], entries: [] },
+    zeroThinking: { themes: [], entries: [], groups: [] },  // v90: groups=大テーマ
     settings: {
       birthDate: "",
       twelveWeekStartDate: today,
@@ -7909,20 +7928,71 @@ function renderZeroThinking() {
 }
 
 // v39: テーマタブ(従来の 0秒思考 一覧)
-function renderZtThemeTab() {
-  const zt = state.zeroThinking || { themes: [], entries: [] };
-  const favList = zt.themes.filter((t) => t.fav);
-  const otherList = zt.themes.filter((t) => !t.fav);
-  const items = ztTab === "fav" ? favList : otherList;
-
-  const themeItemsHTML = items.length
-    ? items.map((t) => `
+// v90: テーマ1件分の行(グループ表示・未分類表示・グループ無しのフラット表示すべてで共用)。
+//      groupsSorted は <select> の選択肢生成に使う(グループ移動のタップ代替)。
+function ztRenderThemeItem(t, groupsSorted) {
+  return `
         <div class="zt-theme-item ${t.fav ? "is-fav" : ""}">
           <button class="zt-star ${t.fav ? "on" : ""}" data-action="zt-fav-toggle" data-id="${t.id}" title="お気に入り">${t.fav ? "★" : "☆"}</button>
           <div class="zt-theme-text" data-action="zt-write" data-id="${t.id}">${escapeHTML(t.text)}${t.questionId ? `<span class="zt-theme-qtag">問い</span>` : ""}${t.source === "ai-feedback" ? `<span class="zt-theme-qtag" style="background:#eef; color:#448">🤖 AI提案</span>` : ""}</div>
+          ${groupsSorted.length ? `
+          <select class="select zt-theme-group-select" data-action="zt-theme-set-group" data-id="${t.id}" aria-label="大テーマを選ぶ" title="大テーマへ割り当て">
+            <option value="">未分類</option>
+            ${groupsSorted.map((g) => `<option value="${g.id}" ${t.groupId === g.id ? "selected" : ""}>${escapeHTML(g.title)}</option>`).join("")}
+          </select>` : ""}
           <button class="zt-theme-go" data-action="zt-write" data-id="${t.id}">書く →</button>
           <button class="zt-theme-del" data-action="zt-theme-delete" data-id="${t.id}" title="削除" aria-label="このテーマを削除">×</button>
-        </div>`).join("")
+        </div>`;
+}
+
+// v90: 1つの大テーマ(グループ)見出し+配下テーマ。折りたたみ状態はztGroupIsOpenで記憶。
+function ztRenderGroupSection(group, themesInGroup, groupsSorted) {
+  const open = ztGroupIsOpen(group.id);
+  return `
+      <div class="zt-group">
+        <div class="zt-group-head">
+          <button class="zt-group-caret" data-action="zt-group-toggle" data-id="${group.id}" aria-label="${open ? "折りたたむ" : "展開"}">${open ? "▾" : "▸"}</button>
+          <span class="zt-group-title" data-action="zt-group-rename" data-id="${group.id}" title="タップして名前変更">${escapeHTML(group.title)}</span>
+          <span class="zt-plabel-count">${themesInGroup.length} 件</span>
+          <span class="zt-plabel-spacer"></span>
+          <button class="zt-mini-btn" data-action="zt-group-delete" data-id="${group.id}" title="大テーマを削除(配下は未分類に戻ります)">削除</button>
+        </div>
+        ${open ? `<div class="zt-group-body">${themesInGroup.map((t) => ztRenderThemeItem(t, groupsSorted)).join("")}</div>` : ""}
+      </div>`;
+}
+
+// v90: グループが1件も無ければ従来どおりのフラット表示(既存ユーザーの見た目を変えない)。
+//      グループを作った時点で初めて、グループ見出し + 末尾「未分類」ゾーンの階層表示に切り替わる。
+function ztThemeListHTML(items, groupsSorted) {
+  if (!groupsSorted.length) return items.map((t) => ztRenderThemeItem(t, groupsSorted)).join("");
+  const sections = groupsSorted.map((g) => {
+    const inGroup = items.filter((t) => t.groupId === g.id);
+    return inGroup.length ? ztRenderGroupSection(g, inGroup, groupsSorted) : "";
+  }).filter(Boolean);
+  const groupIds = new Set(groupsSorted.map((g) => g.id));
+  const ungrouped = items.filter((t) => !t.groupId || !groupIds.has(t.groupId));
+  if (ungrouped.length) {
+    sections.push(`
+      <div class="zt-group zt-group-unclassified">
+        <div class="zt-group-head static">
+          <span class="zt-group-title">未分類</span>
+          <span class="zt-plabel-count">${ungrouped.length} 件</span>
+        </div>
+        <div class="zt-group-body">${ungrouped.map((t) => ztRenderThemeItem(t, groupsSorted)).join("")}</div>
+      </div>`);
+  }
+  return sections.join("");
+}
+
+function renderZtThemeTab() {
+  const zt = state.zeroThinking || { themes: [], entries: [], groups: [] };
+  const favList = zt.themes.filter((t) => t.fav);
+  const otherList = zt.themes.filter((t) => !t.fav);
+  const items = ztTab === "fav" ? favList : otherList;
+  const groupsSorted = (zt.groups || []).slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+  const themeItemsHTML = items.length
+    ? ztThemeListHTML(items, groupsSorted)
     : ztTab === "fav"
       ? `<div class="zt-empty">お気に入りはまだありません。<span class="zt-empty-sub">☆ をタップして登録すると、書いてもここに残り続けます。</span></div>`
       : `<div class="zt-empty">テーマがありません。<span class="zt-empty-sub">「+ テーマを追加」から登録してください。</span></div>`;
@@ -7935,6 +8005,7 @@ function renderZtThemeTab() {
         テーマ一覧
         <span class="zt-plabel-count">全 ${zt.themes.length} 件</span>
         <span class="zt-plabel-spacer"></span>
+        <button class="zt-mini-btn" data-action="zt-group-add">+ 大テーマ</button>
         <button class="zt-mini-btn ${ztAddOpen ? "is-on" : ""}" data-action="zt-add-toggle">${ztAddOpen ? "閉じる" : "+ テーマを追加"}</button>
       </div>
 
@@ -8067,6 +8138,65 @@ function deleteZtTheme(id) {
   }
   state.zeroThinking.themes = state.zeroThinking.themes.filter((x) => x.id !== id);
   saveAndRender("削除しました");
+}
+
+// ---- v90: テーマ一覧の大テーマ(グループ)階層 ----
+// K指示「WBSのプロジェクトのように大テーマ、小テーマの階層構造にしてください」への対応。
+// ドラッグ&ドロップは作らず、v79月間ボードのカード上「月選択」と同じ「select常時同居」の
+// タップ代替のみで小テーマのグループ移動を成立させる(実装コストと誤操作リスクを避ける)。
+// 開閉状態はホームの折りたたみカード(v71 isHomeFoldOpen/setHomeFoldOpen)と同じ
+// localStorageベースの記憶機構をそのまま再利用する(専用のstate/永続化を増やさない)。
+function ztGroupAdd() {
+  const title = (window.prompt("大テーマ名を入力してください") || "").trim();
+  if (!title) return;
+  const groups = state.zeroThinking.groups || [];
+  const nextOrder = groups.length ? Math.max(...groups.map((g) => g.order ?? 0)) + 1 : 0;
+  state.zeroThinking.groups = [...groups, {
+    id: crypto.randomUUID(), title, order: nextOrder, createdAt: nowDateTime()
+  }];
+  saveAndRender(`大テーマ「${title}」を追加しました`);
+}
+
+function ztGroupRename(id) {
+  const g = (state.zeroThinking.groups || []).find((x) => x.id === id);
+  if (!g) return;
+  const title = (window.prompt("大テーマ名を変更", g.title) || "").trim();
+  if (!title || title === g.title) return;
+  state.zeroThinking.groups = state.zeroThinking.groups.map((x) => x.id === id ? { ...x, title } : x);
+  saveAndRender("大テーマ名を変更しました");
+}
+
+// v90: グループ削除。配下テーマはグループごと消さず未分類(groupId:null)へ落とす
+//      (指示どおり「テーマは消さない」。deleteProjectの子孫orphan方式とは違い、
+//      ここでは明示的にgroupIdをnullへ書き戻す=未分類ゾーンへ実際に移動して見える)。
+function ztGroupDelete(id) {
+  const g = (state.zeroThinking.groups || []).find((x) => x.id === id);
+  if (!g) return;
+  const count = (state.zeroThinking.themes || []).filter((t) => t.groupId === id).length;
+  const msg = count > 0
+    ? `大テーマ「${g.title}」を削除しますか?(配下の${count}件のテーマは未分類に戻ります)`
+    : `大テーマ「${g.title}」を削除しますか?`;
+  if (!window.confirm(msg)) return;
+  state.zeroThinking.themes = state.zeroThinking.themes.map((t) =>
+    t.groupId === id ? { ...t, groupId: null } : t);
+  state.zeroThinking.groups = state.zeroThinking.groups.filter((x) => x.id !== id);
+  saveAndRender(`大テーマ「${g.title}」を削除しました`);
+}
+
+// v90: テーマのグループ移動(select常時同居によるタップ代替。change イベント経由)
+function ztThemeSetGroup(themeId, groupId) {
+  state.zeroThinking.themes = state.zeroThinking.themes.map((t) =>
+    t.id === themeId ? { ...t, groupId: groupId || null } : t);
+  saveState();
+}
+
+// v90: グループの折りたたみ開閉(既定=開いた状態。isHomeFoldOpenのdefaultOpen引数を再利用)
+function ztGroupIsOpen(groupId) {
+  return isHomeFoldOpen(`zt-group-${groupId}`, true);
+}
+function ztGroupToggleOpen(groupId) {
+  setHomeFoldOpen(`zt-group-${groupId}`, !ztGroupIsOpen(groupId));
+  render();
 }
 
 function openZtWrite(id) {

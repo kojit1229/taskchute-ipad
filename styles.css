@@ -2451,6 +2451,20 @@ h3 {
 .zt-empty { font-size: 13px; color: var(--muted); padding: 18px 4px; font-weight: 500; text-align: center; line-height: 1.7; }
 .zt-empty-sub { font-size: 11.5px; color: var(--faint); margin-top: 3px; display: block; }
 
+/* v90: テーマ一覧の大テーマ(グループ)階層。グループを1つも作っていない間はこのブロックは
+   出現しない(.zt-theme-list 直下にフラットな .zt-theme-item が並ぶ従来どおりの見た目)。 */
+.zt-group { margin-bottom: 10px; }
+.zt-group:last-child { margin-bottom: 0; }
+.zt-group-head { display: flex; align-items: center; gap: 8px; padding: 6px 4px; }
+.zt-group-head.static { padding-left: 27px; }
+.zt-group-caret { border: none; background: transparent; cursor: pointer; color: var(--muted); font-size: 11px; line-height: 1; padding: 3px 4px; border-radius: 4px; flex: none; min-width: 22px; min-height: 22px; }
+.zt-group-caret:hover { background: var(--panel-soft); color: var(--text); }
+.zt-group-title { font-size: 13.5px; font-weight: 800; color: var(--text); cursor: pointer; }
+.zt-group-unclassified .zt-group-title { color: var(--muted); cursor: default; }
+.zt-group-body { display: flex; flex-direction: column; gap: 4px; padding-left: 22px; }
+/* iOS: input/select/textareaは16px未満だとフォーカス時に自動ズームするため16px以上を維持 */
+.zt-theme-group-select { flex: none; width: auto; max-width: 118px; font-size: 16px; padding: 5px 6px; }
+
 /* 履歴検索 */
 .zt-search-row { position: relative; margin-bottom: 10px; }
 .zt-search-input { width: 100%; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 10px; color: var(--text); font: inherit; font-size: 16px; padding: 11px 13px 11px 36px; }
