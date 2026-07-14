@@ -67,6 +67,9 @@ function check(name, cond, extra = "") {
   }
 
   try {
+    // v90: 実時刻依存フレーク対策 — now0(10:00)に時計を固定(v77と同じ流儀)。
+    // これが無いと「plannedStartAt <= 現在時刻」の判定が実時計に依存し、10時前後以外の実行で3件落ちる。
+    await page.clock.setFixedTime(now0);
     await page.goto(`http://localhost:${PORT}/`);
     await page.waitForTimeout(500);
     await passGithubGate(page);
