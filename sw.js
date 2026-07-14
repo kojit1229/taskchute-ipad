@@ -1,4 +1,7 @@
-const CACHE_NAME = "taskchute-journal-pwa-v91";
+const CACHE_NAME = "taskchute-journal-pwa-v92";
+// v92(SW実番号): AIレポートビューア(その他 > AIレポート)を追加。
+// 注: taskchute-notes/ROADMAP.md の論理番号v92「過集中ブレーカー」はloop側(自宅PC常駐)の
+// 実装であり、本アプリ(taskchute-ipad)のSWバージョン番号とは別カウンタ・別内容。詳細はCHANGES_v92.md。
 // v85: Vision.md / Daily_Affirmation.md / *_vision.pdf は v72の個人データ分離で
 // personal-dataリポジトリ(GitHub Contents API経由)へ移った同一オリジンには存在しないファイル群。
 // ここに残っていても cache.add() が個別に404失敗するだけ(無視される)で実害は無いが、

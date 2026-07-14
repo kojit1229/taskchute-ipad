@@ -33,6 +33,7 @@ const navItems = [
   { id: "journal", label: "ジャーナル", mark: "J" },
   { id: "weekly", label: "週次", mark: "◷" },
   { id: "reports", label: "日報", mark: "R" },
+  { id: "ai-reports", label: "AIレポート", mark: "A" },  // v92: コンテンツ総括・自己分析等の月次/不定期AIレポートビューア
   { id: "stats", label: "計器盤", mark: "◔" },  // v53
   { id: "wish", label: "やりたい", mark: "✦" },
   { id: "avoid", label: "やらない", mark: "✕" },
@@ -90,6 +91,15 @@ let cachedAiWorkResults = null;
 // v74: 読書複利化 — taskchute/reading/highlights.json の books 配列(null=未取得。永続化しない、
 //      他のcached*と同じくアプリ内メモリのみ。ハイライト本体は個人データリポジトリが正)
 let cachedReadingHighlights = null;
+// v92: AIレポートビューア(コンテンツ総括・自己分析・基盤ヘルス・週次レビューをアプリ内で横断閲覧)。
+// taskchute/直下のディレクトリ一覧を1回のContents API呼び出しで取得し、種類ごとにファイル名prefixで
+// ローカルにフィルタする(セッションキャッシュ、手動更新ボタンでのみ再取得。自動ポーリングはしない)。
+let _aiReportDirCache = null;        // Contents APIのレスポンス配列(null=未取得)
+let _aiReportDirError = false;       // 直近の一覧取得が失敗したか(静かなエラー表示 + 再試行ボタン用)
+let _aiReportDirLoadInFlight = false;
+const _aiReportBodyCache = {};       // { 'コンテンツ総括_2026-07-14.md': '...md text...' }(""=取得試行済だが空/失敗)
+const _aiReportBodyLoadInFlight = {};
+const _aiReportSelectedDate = {};    // { content: '2026-07-14', self: '2026-07', ... }(種類ごとの選択中日付)
 // v77: AIフィードバック等の自動再表示(起動時fetchのみだと開きっぱなしのPWAで新着に気づけない)。
 //      visibilitychange復帰時 + 定期(30分毎)にhydrateStaticMarkdownを再実行するためのスロットル状態。
 //      非永続(端末内メモリのみ、再起動すれば起動時fetchからやり直しでよい)。
@@ -343,6 +353,9 @@ document.addEventListener("click", (event) => {
   if (action === "vision-board-tab") setVisionBoardIndex(Number(target.dataset.index));
   if (action === "open-md-in-github") openMdInGithub(target.dataset.path);
   if (action === "reload-md") reloadStaticMarkdown();
+  // v92: AIレポートビューア — 種類タブ切替 / 一覧・本文の手動更新
+  if (action === "ai-report-type") setAiReportType(target.dataset.type);
+  if (action === "ai-report-refresh") refreshAiReports();
   // v67: AI作業ワーカー連携(柱2) — 実績還流カードのワンタップ承認 / 質問への橋渡し
   if (action === "ai-work-approve") approveAiWorkResult(target.dataset.resultId);
   if (action === "ai-work-question") raiseAiWorkQuestion(target.dataset.resultId);
@@ -708,6 +721,11 @@ document.addEventListener("input", (event) => {
 document.addEventListener("change", (event) => {
   const target = event.target;
   if (target.matches("[data-date-picker]")) setSelectedDate(target.value);
+  // v92: AIレポートビューアの履歴セレクタ(種類ごとに選択中の日付をUIキャッシュに保持)
+  if (target.matches("[data-ai-report-date]")) {
+    _aiReportSelectedDate[target.dataset.typeId] = target.value;
+    render();
+  }
   // v55: WBS インライン編集(期限/状態/カテゴリを行内で直接編集)
   if (target.matches("[data-wbs-edit]")) {
     updateTaskField(target.dataset.id, target.dataset.wbsEdit, target.value);
@@ -965,6 +983,8 @@ function normalizeState(value) {
   if (typeof value.settings.visionBoardIndex !== "number") {
     value.settings.visionBoardIndex = 0;
   }
+  // v92: AIレポートビューアで選択中のタブ(コンテンツ総括/自己分析/基盤ヘルス/週次レビュー)
+  value.settings.aiReportType ||= "content";
   // v9: カテゴリーマスタ
   if (!Array.isArray(value.settings.categories) || value.settings.categories.length === 0) {
     value.settings.categories = defaultCategories();
@@ -1767,6 +1787,7 @@ function renderMain() {
   if (view === "zero") main.innerHTML = renderZeroThinking();
   if (view === "vision") main.innerHTML = renderVision();
   if (view === "reports") main.innerHTML = renderReports();
+  if (view === "ai-reports") main.innerHTML = renderAiReports();
   if (view === "weekly") main.innerHTML = renderWeekly();
   if (view === "cycle") main.innerHTML = renderCycle();
   if (view === "stats") main.innerHTML = renderStats();  // v53: 計器盤
@@ -5909,6 +5930,125 @@ function renderJournal() {
   `;
 }
 
+// v92: =========================================================
+//  AIレポートビューア — コンテンツ総括・自己分析・基盤ヘルス・週次レビューを
+//  「その他 > AIレポート」タブから横断閲覧する。生成は自宅PCのloop側バッチが担い、
+//  アプリ側はpersonal-dataリポジトリ(taskchute/直下)のContents API一覧+本文取得のみ。
+//  (アプリ内Claude API呼び出しはv60で全廃済み。ここでも新規に増やさない — SKILL.md参照)
+// =========================================================
+const AI_REPORT_TYPES = [
+  { id: "content", label: "コンテンツ総括", prefix: "コンテンツ総括_",
+    guide: "ジャーナルの「### 依頼」に「今年一年どう?」のように書くと、不定期または四半期ごとに生成されます" },
+  { id: "self", label: "自己分析", prefix: "自己分析_",
+    guide: "毎月1日に前月分が自動生成されます" },
+  { id: "health", label: "基盤ヘルス", prefix: "基盤ヘルス_",
+    guide: "自宅PCの日次バッチが自動生成します。しばらく実行されていない場合は生成されません" },
+  { id: "weekly", label: "週次レビュー", prefix: "週次レビュー_",
+    guide: "毎週末に自動生成されます(「週次」タブの来週のタスク提案と同じファイルです)" }
+];
+
+// _aiReportDirCache(taskchute/直下の一覧)から、種類のprefixに合致する.mdファイルを
+// 日付降順(新しい順)で返す。一覧未取得ならnullを返し、呼び出し側で読み込みをトリガーさせる。
+function aiReportFilesForType(prefix) {
+  if (!Array.isArray(_aiReportDirCache)) return null;
+  return _aiReportDirCache
+    .filter((entry) => entry && entry.type === "file" && entry.name.startsWith(prefix) && entry.name.endsWith(".md"))
+    .map((entry) => ({ name: entry.name, date: entry.name.slice(prefix.length, -3) }))
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
+
+// 一覧の読み込みをトリガーする(多重fetch防止のin-flightガード付き)。完了後、まだ
+// AIレポート画面を見ていれば再描画してセレクタ/本文を反映する。
+async function triggerAiReportDirLoad() {
+  if (_aiReportDirLoadInFlight || _aiReportDirCache) return;
+  _aiReportDirLoadInFlight = true;
+  await fetchPersonalDataDirList();
+  _aiReportDirLoadInFlight = false;
+  if (state.currentView === "ai-reports") render();
+}
+
+// 選択中ファイル本文の読み込みをトリガーする(同上のin-flightガード付き)。
+async function triggerAiReportBodyLoad(fileName) {
+  if (_aiReportBodyLoadInFlight[fileName]) return;
+  _aiReportBodyLoadInFlight[fileName] = true;
+  const text = await fetchGitHubRawText(fileName);
+  _aiReportBodyCache[fileName] = text;
+  delete _aiReportBodyLoadInFlight[fileName];
+  if (state.currentView === "ai-reports") render();
+}
+
+// 手動更新ボタン: 一覧キャッシュを破棄し、現在表示中ファイルの本文キャッシュも破棄して
+// 再取得させる(rate limit配慮のため、他の種類・日付の本文キャッシュはそのまま残す)。
+function refreshAiReports() {
+  _aiReportDirCache = null;
+  _aiReportDirError = false;
+  const type = AI_REPORT_TYPES.find((t) => t.id === (state.settings.aiReportType || "content")) || AI_REPORT_TYPES[0];
+  const sel = _aiReportSelectedDate[type.id];
+  if (sel) delete _aiReportBodyCache[`${type.prefix}${sel}.md`];
+  render();
+  showToast("最新の一覧を取得しています…");
+}
+
+function renderAiReports() {
+  if (!personalDataReady(state.settings.github)) {
+    return `
+      ${renderHeader("AIが書いた振り返りをまとめて読む", "AIレポート")}
+      <div class="panel"><p>設定画面で個人データリポジトリ(Owner/Repository/Token)を接続すると読めます。</p></div>
+    `;
+  }
+  const activeId = state.settings.aiReportType || "content";
+  const activeType = AI_REPORT_TYPES.find((t) => t.id === activeId) || AI_REPORT_TYPES[0];
+  const refreshBtn = `<button class="btn ghost" data-action="ai-report-refresh">🔄 一覧を更新</button>`;
+  return `
+    ${renderHeader("AIが書いた振り返りをまとめて読む", "AIレポート", refreshBtn)}
+    <div class="segmented">
+      ${AI_REPORT_TYPES.map((t) => `
+        <button class="${t.id === activeId ? "active" : ""}" data-action="ai-report-type" data-type="${t.id}">${escapeHTML(t.label)}</button>
+      `).join("")}
+    </div>
+    ${renderAiReportBody(activeType)}
+  `;
+}
+
+function renderAiReportBody(type) {
+  if (_aiReportDirError) {
+    return `
+      <div class="panel">
+        <p>⚠ 一覧の取得に失敗しました。通信状況を確認して再試行してください。</p>
+        <button class="btn" data-action="ai-report-refresh">再試行</button>
+      </div>
+    `;
+  }
+  const files = aiReportFilesForType(type.prefix);
+  if (files === null) {
+    triggerAiReportDirLoad();
+    return `<div class="panel"><p class="muted">読み込み中...</p></div>`;
+  }
+  if (files.length === 0) {
+    return `
+      <div class="panel">
+        <p>まだ生成されていません。</p>
+        <p class="muted" style="font-size:12px">${escapeHTML(type.guide)}</p>
+      </div>
+    `;
+  }
+  const selectedDate = (_aiReportSelectedDate[type.id] && files.some((f) => f.date === _aiReportSelectedDate[type.id]))
+    ? _aiReportSelectedDate[type.id] : files[0].date;
+  const file = files.find((f) => f.date === selectedDate) || files[0];
+  const body = _aiReportBodyCache[file.name];
+  if (body === undefined) triggerAiReportBodyLoad(file.name);
+  return `
+    <div class="row" style="margin:10px 0">
+      <select data-ai-report-date data-type-id="${type.id}" style="font-size:16px">
+        ${files.map((f) => `<option value="${escapeHTML(f.date)}" ${f.date === selectedDate ? "selected" : ""}>${escapeHTML(f.date)}</option>`).join("")}
+      </select>
+    </div>
+    <div class="panel">
+      <div class="md-render readonly-md">${body === undefined ? "読み込み中..." : renderMarkdown(body || "（本文を取得できませんでした）")}</div>
+    </div>
+  `;
+}
+
 function renderVision() {
   const section = state.settings.visionSection || "vision";
   return `
@@ -9572,6 +9712,34 @@ async function fetchGitHubRawBlob(name) {
   return result.ok ? result.blob : null;
 }
 
+// v92: AIレポートビューア専用 — personal-data リポジトリの taskchute/ 直下のディレクトリ一覧
+// (GitHub Contents API、pathをファイルでなくディレクトリのままGETすると配列が返る)。
+// fetchGitHubRawResult と同じくAccept: raw+json は使わない(一覧はJSON配列そのものが欲しいため既定Acceptのまま)。
+// 401/404/ネットワーク例外いずれも _aiReportDirError=true にして呼び出し側の静かなエラー表示に委ねる。
+async function fetchPersonalDataDirList() {
+  const cfg = state.settings.github || {};
+  if (!personalDataReady(cfg)) { _aiReportDirError = true; return null; }
+  const conn = personalDataConn(cfg);
+  try {
+    const url = `https://api.github.com/repos/${encodeURIComponent(conn.owner)}/${encodeURIComponent(conn.repo)}/contents/${encodeURIComponent(PERSONAL_DATA_DIR)}?ref=${encodeURIComponent(conn.branch)}`;
+    const response = await fetch(url, { headers: githubHeaders(conn.token) });
+    if (response.status === 401) {
+      setPersonalDataAuthError("トークンに personal-data リポジトリの権限が必要です(Fine-grained tokenのRepository access / Contents権限を確認してください)");
+      _aiReportDirError = true;
+      return null;
+    }
+    if (!response.ok) { _aiReportDirError = true; return null; }
+    clearPersonalDataAuthError();
+    const list = await response.json();
+    _aiReportDirCache = Array.isArray(list) ? list : [];
+    _aiReportDirError = false;
+    return _aiReportDirCache;
+  } catch {
+    _aiReportDirError = true;
+    return null;
+  }
+}
+
 // v72: 401時のみ表示する具体的な案内バナー(非永続)。renderSyncBanner と同じ「モーダルで
 // 作業を止めない」思想で、#main先頭に静かに差し込む。
 let _personalDataAuthError = "";
@@ -11047,6 +11215,14 @@ function setVisionSection(section) {
 function setVisionBoardIndex(index) {
   state.settings.visionBoardIndex = index;
   persistLocalNoSchedule();  // v37: 同上
+  render();
+}
+
+// v92: AIレポートビューアの種類タブ切替(UI選択のみ、dataModifiedAtは汚さない)
+function setAiReportType(typeId) {
+  if (!AI_REPORT_TYPES.some((t) => t.id === typeId)) return;
+  state.settings.aiReportType = typeId;
+  persistLocalNoSchedule();
   render();
 }
 
