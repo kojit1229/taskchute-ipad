@@ -2465,6 +2465,15 @@ h3 {
 /* iOS: input/select/textareaは16px未満だとフォーカス時に自動ズームするため16px以上を維持 */
 .zt-theme-group-select { flex: none; width: auto; max-width: 118px; font-size: 16px; padding: 5px 6px; }
 
+/* v93: iPhone等の狭幅では「☆ + 本文 + 大テーマselect + 書く→ + ×」の5要素が1行に収まらず、
+   本文(.zt-theme-text、flex:1 min-width:0)だけが極端に潰れて1文字ずつ縦積みになり、
+   1テーマの行が数百pxの高さになる崩れが起きていた(294件規模の実データで発覚、K報告2026-07-14)。
+   本文を独立した全幅の行にし、☆/select/書く→/×は次の行へ折り返して確保する。 */
+@media (max-width: 480px) {
+  .zt-theme-item { flex-wrap: wrap; }
+  .zt-theme-text { order: -1; flex-basis: 100%; }
+}
+
 /* 履歴検索 */
 .zt-search-row { position: relative; margin-bottom: 10px; }
 .zt-search-input { width: 100%; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 10px; color: var(--text); font: inherit; font-size: 16px; padding: 11px 13px 11px 36px; }
