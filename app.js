@@ -1,5 +1,19 @@
 const STORAGE_KEY = "taskchute-journal-pwa-state-v1";
 
+// v91: 「### 依頼」節(機械可読契約: loop/scripts/journal-requests-extract.py が検出する)。
+//      ガイド文は丸括弧で囲み、抽出スクリプト側で「丸括弧だけの行は例示であり実際の依頼では
+//      ない」と判定できるようにする(空欄のまま運用してもバッチが誤検出しない設計)。
+//      定義位置に注意: defaultJournal() の直前ではなくファイル先頭に置く必要がある。
+//      理由 = 下の `let state = loadState();`(旧く言えば起動処理)が起動直後の同期実行で
+//      normalizeState() を呼び、そこがこの定数を参照するため。normalizeState() 経由の初回呼び出し
+//      はファイル末尾の起動処理(v38コメント参照)より前に走るので、const をその位置に置くと
+//      TDZ(Temporal Dead Zone)で "Cannot access before initialization" となり起動不能になる
+//      (JOURNAL_PROMPTS 未初期化事故の再発、v38コメント・12671行目付近参照)。
+const JOURNAL_REQUEST_SECTION = [
+  `### 依頼`,
+  `(AIへの依頼はこの見出しの下に1行1件で書いてください。例:「相場帳のバグを直して」)`
+].join("\n");
+
 // v23: 繰り返し Block を実体化する期間(今日を基準)
 const RECURRENCE_KEEP_PAST_DAYS = 7;    // 過去はこの日数だけ実体を保持
 const RECURRENCE_FUTURE_DAYS = 31;      // 未来はこの日数先まで実体化
@@ -1220,6 +1234,13 @@ function normalizeState(value) {
     resultNote: d.resultNote || "",
     ...d
   }));
+  // v91: 「### 依頼」節を日報テンプレの機械可読契約として追加(K指示: 依頼はこの見出し配下に
+  //      書く運用へ)。既存のjournalTemplateを上書きせず、まだ持っていない端末にだけ追記する
+  //      (ユーザーが自由記述欄等をカスタマイズしていても壊さない)。
+  if (typeof value.settings.journalTemplate === "string" && value.settings.journalTemplate &&
+      !value.settings.journalTemplate.includes("### 依頼")) {
+    value.settings.journalTemplate = `${value.settings.journalTemplate.replace(/\s+$/, "")}\n\n${JOURNAL_REQUEST_SECTION}`;
+  }
   value.modal = null;  // 起動時はモーダル閉じた状態
   return value;
 }
@@ -11069,6 +11090,8 @@ function defaultJournal(date) {
     ``,
     `## 📝 自由記述`,
     ``,
+    ``,
+    JOURNAL_REQUEST_SECTION,
     ``
   ].join("\n");
 }
@@ -11079,7 +11102,9 @@ const JOURNAL_PROMPTS = {
   "🙏 感謝(3 つ)": "当たり前すぎて忘れがちな何か。誰・何に対して?(例:朝のコーヒー、子の笑顔)",
   "✨ 今日のハイライト": "今日いちばん心が動いた瞬間は? 嬉しい・面白い・誇らしい、どれでも。",
   "💡 気付き・学び": "うまくいった/いかなかった理由は? 自分・他人・状況について、次に活かせること。",
-  "📝 自由記述": "・いまなに考えてる?\n・言葉にならない違和感を、まず雑に書き出す。コントロールできないことは手放してOK。\n・夢・思いつき・心配ごと・読書メモ・なんでも。"
+  "📝 自由記述": "・いまなに考えてる?\n・言葉にならない違和感を、まず雑に書き出す。コントロールできないことは手放してOK。\n・夢・思いつき・心配ごと・読書メモ・なんでも。",
+  // v91: 「### 依頼」見出し配下のヒント(JOURNAL_REQUEST_SECTIONの見出しテキストと対応させる)
+  "依頼": "AIにやってほしいことがあれば、1行1件でここに書く(例:「相場帳のバグを直して」)。翌朝のバッチが読み取り、タスク登録・0秒思考テーマ登録・Wish追加などをホワイトリスト操作として試みます。"
 };
 
 function upsertMorningLine(markdown, line) {
