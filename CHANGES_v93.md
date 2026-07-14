@@ -32,7 +32,7 @@ SW `CACHE_NAME` を v92 → v93 に更新。
 
 ---
 
-## 修正内容(styles.css、+8行)
+## 修正内容(styles.css、+9行)
 
 ```css
 @media (max-width: 480px) {
