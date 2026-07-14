@@ -939,6 +939,18 @@ function normalizeState(value) {
   value.settings.github.repo ||= "taskchute-ipad";
   value.settings.github.branch ||= "main";
   value.settings.github.path ||= "app-state.json";
+  // v94: 保存先パス(settings.github.path)に taskchute/ プレフィックスが混入していた場合の
+  // 自己修復。personalDataPath() が taskchute/ を常に自動付与するため、path 自体に
+  // taskchute/ を含んでいると実リクエストが taskchute/taskchute/... の二重プレフィックスに
+  // なりデータが読めなくなる(K報告 2026-07-14)。混入経路は主に loadFromGitHub() が
+  // requireGitHubConfig() の変換済みconfig(pathに既に taskchute/ 付与済み)をそのまま
+  // state.settings.github へ書き戻していたバグ(本コミットで修正)。同期でリモートへ伝播した
+  // 汚染済みstateもここで読込のたびに直る。大文字小文字・taskchute/taskchute/の多重付与も剥がす。
+  {
+    let p = value.settings.github.path;
+    while (/^taskchute\/+/i.test(p)) p = p.replace(/^taskchute\/+/i, "");
+    value.settings.github.path = p || "app-state.json";
+  }
   value.settings.github.token ||= "";
   if (typeof value.settings.github.autoSave !== "boolean") {
     value.settings.github.autoSave = false;
@@ -6303,10 +6315,10 @@ function renderSettings() {
           <label>Branch
             <input class="input" data-github-field="branch" value="${escapeHTML(github.branch)}" autocomplete="off">
           </label>
-          <label>保存先ファイル名(taskchute/配下)
-            <input class="input" data-github-field="path" value="${escapeHTML(github.path)}" autocomplete="off" placeholder="app-state.json">
+          <label>保存先ファイル名(taskchute/配下。taskchute/は自動付与されるため入力不要)
+            <input class="input" data-github-field="path" value="${escapeHTML(github.path)}" autocomplete="off" placeholder="app-state.json(taskchute/は付けない)">
           </label>
-          <div class="muted" style="font-size:11px">推奨: <code>app-state.json</code>(実際の保存先は <code>taskchute/app-state.json</code>)</div>
+          <div class="muted" style="font-size:11px">推奨: <code>app-state.json</code>(taskchute/ は自動で付くので<b>ここには含めないでください</b>。実際の保存先は <code>taskchute/app-state.json</code>)</div>
           <label>Fine-grained token
             <input class="input" type="password" data-github-field="token" value="${escapeHTML(github.token)}"
               id="gh-token" name="gh-token" autocomplete="current-password"
@@ -9565,9 +9577,16 @@ async function loadFromGitHub() {
     const loaded = JSON.parse(text);
     // v37: 読込前の編集で予約された自動保存を取り消す(読込直後の無意味なpush防止)
     clearTimeout(autoSaveTimer);
-    const token = state.settings.github.token;
+    // v94: state.settings.github の復元には requireGitHubConfig() の変換済み形状(config。
+    // owner/repo キー・personalDataPath()でtaskchute/付与済みのpath)ではなく、この端末の
+    // 生の設定(rawSettings。dataOwner/dataRepo・taskchute/無しのpath)を使う。
+    // 変換済みconfigをそのまま流し込むと dataOwner/dataRepo が失われ、path が
+    // taskchute/taskchute/... の二重プレフィックスになる不具合があった(K報告 2026-07-14)。
+    // syncFromGitHubOnStartup()/runAutoSyncPull()/restoreBackup() は元から生の設定を
+    // 使っており対象外(state上書き前に cfg/currentGithubSettings として退避済み)。
+    const rawSettings = state.settings.github;
     state = normalizeState(loaded);
-    state.settings.github = { ...config, token };
+    state.settings.github = { ...rawSettings };
     maintainRecurrences({ purge: true });
     persistLocalNoSchedule();  // 採用のため dataModifiedAt は更新しない
     setLastSyncedSha(sha);     // v37: この端末はこのリモート状態と同期済み
@@ -9829,7 +9848,7 @@ async function gitHubErrorMessage(response) {
   const hints = {
     401: "トークンが無効か期限切れです。設定画面で貼り直してください",
     403: "トークンにこのリポジトリへの権限がありません(Fine-grained tokenの Repository access / Contents 権限を確認)",
-    404: "ファイルが見つからないか、トークンがこのリポジトリにアクセスできません。Owner / Repository / Branch / 保存先パスの綴り、またはFine-grained tokenの Repository access(対象repoが選択されているか)・Contents: Read and write 権限を確認してください"
+    404: "ファイルが見つからないか、トークンがこのリポジトリにアクセスできません。Owner / Repository / Branch / 保存先パスの綴り(保存先パスに taskchute/ を含めないでください。自動で付与されます)、またはFine-grained tokenの Repository access(対象repoが選択されているか)・Contents: Read and write 権限を確認してください"
   };
   const hint = hints[response.status];
   if ([401, 403, 404].includes(response.status)) {

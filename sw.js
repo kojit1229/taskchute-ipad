@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v93";
+const CACHE_NAME = "taskchute-journal-pwa-v94";
 // v93: 0秒思考タブがiPhone表示(狭幅)で崩れる不具合を修正(styles.css)。CHANGES_v93.md参照。
 // v92(SW実番号): AIレポートビューア(その他 > AIレポート)を追加。
 // 注: taskchute-notes/ROADMAP.md の論理番号v92「過集中ブレーカー」はloop側(自宅PC常駐)の
