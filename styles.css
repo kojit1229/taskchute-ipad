@@ -502,6 +502,30 @@ h3 {
   color: white;
 }
 
+/* v99: WBS行の「翌朝AI設定を依頼」トグル。既存の完了チェック(丸/緑)と形・色で明確に区別する */
+.wbs-criteria-btn {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  cursor: pointer;
+  display: inline-grid;
+  place-items: center;
+  font-size: 15px;
+  flex: 0 0 auto;
+  opacity: .5;
+}
+
+.wbs-criteria-btn.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  opacity: 1;
+}
+
+.wbs-criteria-badge { margin-left: 2px; }
+
 .datebar {
   display: flex;
   align-items: center;

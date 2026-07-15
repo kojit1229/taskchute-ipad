@@ -191,6 +191,7 @@ document.addEventListener("click", (event) => {
   if (action === "delete-project") deleteProject(id);
   if (action === "add-task") addTask();
   if (action === "toggle-task") toggleTask(id);
+  if (action === "toggle-criteria-request") toggleCriteriaRequest(id);  // v99: 翌朝AI設定依頼トグル
   if (action === "task-today") createBlockFromTask(id);
   if (action === "home-add-today") addTaskToToday(id);
   // v33: ホームのスコアボード → 対応ゾーンへスクロール
@@ -1054,6 +1055,8 @@ function normalizeState(value) {
       progressDen: 10,    // v95: WBS進捗(分母)。既定10
       doneCriteria: "",   // v96: 完了条件(終わったら残る物を1文で。既定は空欄=未設定)
       firstStep: "",       // v96: スモールステップ(5〜15分で終わる最初の行動。既定は空欄=未設定)
+      criteriaRequest: false,  // v99: 翌朝バッチへdoneCriteria/firstStep自動設定orサブタスク生成を依頼するフラグ。
+                                // trueで翌朝loop/task-criteria.shが処理し、処理後は自動でfalseに戻る(アプリ側での解除処理は不要)
       ...rest
     };
   });
@@ -4572,6 +4575,16 @@ function updateTaskProgress(id, field, rawValue) {
   saveState();
 }
 
+// v99: WBS行の「翌朝AI設定を依頼」トグル。ONにすると翌朝の日次バッチ(loop/task-criteria.sh)が
+//      doneCriteria/firstStepの自動設定またはサブタスク自動生成を行い、処理後はバッチ側がfalseへ
+//      書き戻す(アプリ側で自動解除する必要はない。同期で受け取った結果を表示するだけ)。
+function toggleCriteriaRequest(id) {
+  const task = state.tasks.find((t) => t.id === id);
+  if (!task) return;
+  updateTaskField(id, "criteriaRequest", !task.criteriaRequest);
+  render();
+}
+
 // =============================================================
 // v17: Avoid List(やらないこと)タブ
 // =============================================================
@@ -4900,6 +4913,10 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false) 
         ${depth > 0 ? `<span class="muted" style="font-size:11px">${"└".padStart(depth, "　")}</span>` : ""}
         ${caret}
         <button class="checkbox-button ${task.status === "completed" ? "done" : ""}" data-action="toggle-task" data-id="${task.id}">✓</button>
+        <button class="wbs-criteria-btn${task.criteriaRequest ? " on" : ""}" data-action="toggle-criteria-request" data-id="${task.id}"
+          aria-pressed="${task.criteriaRequest ? "true" : "false"}"
+          aria-label="${task.criteriaRequest ? "AI設定依頼中(タップで取消)" : "翌朝のAI設定を依頼"}"
+          title="チェックすると翌朝の日次バッチが完了条件/スモールステップを自動設定(またはサブタスク生成)します。処理後は自動でOFFに戻ります">🤖</button>
         <span data-action="edit-task" data-id="${task.id}" style="cursor:pointer">${escapeHTML(task.title)}</span>
         ${editMode ? inlineEdit : `
         <span class="badge ${suspended ? "gray" : ""}">${taskStatusLabel(task.status)}</span>
@@ -4908,6 +4925,7 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false) 
         ${task.category ? `<span class="cat-chip" style="background:${getCategoryColor(task.category)}1f; color:${getCategoryColor(task.category)}; border:1px solid ${getCategoryColor(task.category)}66">${escapeHTML(task.category)}</span>` : ""}
         ${leverageTypeMarkHTML(task.leverageType)}
         ${task.aiWork ? `<span class="ai-work-flag" title="AIに作業依頼中${task.aiWorkBrief ? ": " + escapeHTML(task.aiWorkBrief) : ""}">🤝</span>` : ""}
+        ${task.criteriaRequest ? `<span class="badge blue wbs-criteria-badge">🤖 AI設定待ち</span>` : ""}
         ${dueHTML}
         ${stats.count ? `<span class="muted" style="font-size:11px">⏱ ${stats.count}回${stats.minutes ? `・${fmtMinShort(stats.minutes)}` : ""}</span>` : ""}`}
       </div>
@@ -8642,6 +8660,7 @@ function makeTask({ projectId = "", parentTaskId = "", title = "", category = ""
     progressDen: 10,    // v95: WBS進捗(分母)。既定10
     doneCriteria: "",   // v96: 完了条件(終わったら残る物を1文で。既定は空欄=未設定)
     firstStep: "",       // v96: スモールステップ(5〜15分で終わる最初の行動。既定は空欄=未設定)
+    criteriaRequest: false,  // v99: 翌朝バッチへのAI設定依頼フラグ(既定OFF)
     // v16: やりたいことリスト用フィールド
     targetYear,         // いつまでに(数字の年、null なら「いつか」)
     targetMonth,        // v79: 月間プランニングボード用(1-12、null なら「未定」。targetYearとは独立)
