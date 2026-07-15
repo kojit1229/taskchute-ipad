@@ -728,8 +728,21 @@ document.addEventListener("change", (event) => {
   }
   // v55: WBS インライン編集(期限/状態/カテゴリを行内で直接編集)
   if (target.matches("[data-wbs-edit]")) {
-    updateTaskField(target.dataset.id, target.dataset.wbsEdit, target.value);
+    const field = target.dataset.wbsEdit;
+    const id = target.dataset.id;
+    // v95: ステータスを手動で「完了」にした時も、分子を分母へ揃える(チェックボックス完了と挙動を揃える)
+    if (field === "status" && target.value === "completed") {
+      const t = state.tasks.find((x) => x.id === id);
+      if (t) updateTaskField(id, "progressNum", fillProgressOnComplete(t));
+    }
+    updateTaskField(id, field, target.value);
     render();  // 状態変更での並び替え・完了非表示などを即反映(change なので入力を妨げない)
+  }
+  // v95: WBS進捗(分子/分母)のインライン編集。ステータス連動込みで updateTaskProgress が処理する
+  if (target.matches("[data-wbs-progress]")) {
+    const field = target.dataset.wbsProgress === "num" ? "progressNum" : "progressDen";
+    updateTaskProgress(target.dataset.id, field, target.value);
+    render();
   }
   if (target.matches("[data-block-field]")) {
     updateBlockField(target.dataset.id, target.dataset.blockField, target.value);
@@ -4512,6 +4525,38 @@ function deleteWish(id) {
 function updateTaskField(id, field, value) {
   state.tasks = state.tasks.map((t) => t.id === id
     ? { ...t, [field]: value, updatedAt: nowDateTime() }
+    : t);
+  saveState();
+}
+
+// v95: 進捗(分子/分母)からステータスを導出する。
+//   分子<=0 → todo(未着手) / 0<分子<分母 → doing(着手中) / 分子>=分母 → completed。
+//   suspended/cancelled は進捗編集では触らない(意図的な中断を上書きしない)。
+//   分母<=0 は判定不能として現在のステータスを維持する。
+function deriveStatusFromProgress(currentStatus, num, den) {
+  if (currentStatus === "suspended" || currentStatus === "cancelled") return currentStatus;
+  if (!(den > 0)) return currentStatus;
+  if (num <= 0) return "todo";
+  if (num >= den) return "completed";
+  return "doing";
+}
+// v95: Task完了時、分子を分母に合わせる(分母<=0なら分子はそのまま)
+function fillProgressOnComplete(task) {
+  const den = Number(task.progressDen) || 0;
+  return den > 0 ? den : (Number(task.progressNum) || 0);
+}
+// v95: WBS進捗の分子/分母インライン編集。値のクランプ + ステータス連動をまとめて行う
+function updateTaskProgress(id, field, rawValue) {
+  const task = state.tasks.find((t) => t.id === id);
+  if (!task) return;
+  const n = Number(rawValue);
+  const parsed = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+  let num = field === "progressNum" ? parsed : (Number(task.progressNum) || 0);
+  let den = field === "progressDen" ? parsed : (Number(task.progressDen) || 0);
+  if (den > 0 && num > den) num = den;  // 分子>分母は分母に丸める
+  const status = deriveStatusFromProgress(task.status, num, den);
+  state.tasks = state.tasks.map((t) => t.id === id
+    ? { ...t, progressNum: num, progressDen: den, status, updatedAt: nowDateTime() }
     : t);
   saveState();
 }
@@ -8618,7 +8663,7 @@ function toggleTask(id) {
     return;
   }
   state.tasks = state.tasks.map((t) => t.id === id
-    ? { ...t, status: "completed", updatedAt: nowDateTime() } : t);
+    ? { ...t, status: "completed", progressNum: fillProgressOnComplete(t), updatedAt: nowDateTime() } : t);
   // v48: 完了した Task の今日以降の「未着手」予定 Block(ゾンビ予定)を確認つきで整理。
   //      完了済みはもちろん、着手済み(actualStartAt あり)も実績なので対象外。
   const stale = state.blocks.filter((b) => !b.deleted && b.taskId === id && !b.completed && !b.actualStartAt && b.date >= todayISO());
