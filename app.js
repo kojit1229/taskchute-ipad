@@ -10197,6 +10197,88 @@ function mergeBlockLists(localBlocks, remoteBlocks) {
   return mergeById(localBlocks, addable);
 }
 
+// マージ結果一式を計算する(stateはまだ書き換えない)。remoteNormはnormalizedRemoteCopy()の戻り値。
+// 失敗時はnullを返し、呼び出し側はv103相当(0秒思考のみ)へフォールバックする。
+function computeSyncMerge(remoteNorm) {
+  try {
+    const jt = (side, d) => side === "L"
+      ? ((state.journalMeta[d] || {}).textUpdatedAt || "")
+      : (((remoteNorm.journalMeta || {})[d] || {}).textUpdatedAt || "");
+    const journals = mergeDateStringMap(state.journals, remoteNorm.journals, jt);
+    const journalMeta = mergeJournalMetaByWinners(state.journalMeta, remoteNorm.journalMeta, journals.winners);
+    const feedback = mergeDateStringMap(state.feedback, remoteNorm.feedback, () => "");
+    const conditionLogs = mergeConditionLogMaps(state.condition.logs, (remoteNorm.condition || {}).logs);
+    const sleepLogs = mergeSleepLogMaps(state.sleep.logs, (remoteNorm.sleep || {}).logs);
+    const morningEnergyLog = mergeMorningEnergyLogs(state.settings.morningEnergyLog, (remoteNorm.settings || {}).morningEnergyLog);
+    const blocks = mergeBlockLists(state.blocks, remoteNorm.blocks);
+    const zeroThinking = mergeZeroThinkingLists(state.zeroThinking, remoteNorm.zeroThinking);
+    const jsonChanged = (obj, base) => JSON.stringify(obj) !== JSON.stringify(base || {});
+    const changedVsLocal =
+      journals.changedVsLocal ||
+      jsonChanged(journalMeta, state.journalMeta) ||
+      feedback.changedVsLocal ||
+      jsonChanged(conditionLogs, state.condition.logs) ||
+      jsonChanged(sleepLogs, state.sleep.logs) ||
+      jsonChanged(morningEnergyLog, state.settings.morningEnergyLog) ||
+      !sameArrayByReference(blocks, state.blocks) ||
+      (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, state.zeroThinking) : false);
+    const changedVsRemote =
+      journals.changedVsRemote ||
+      jsonChanged(journalMeta, remoteNorm.journalMeta) ||
+      feedback.changedVsRemote ||
+      jsonChanged(conditionLogs, (remoteNorm.condition || {}).logs) ||
+      jsonChanged(sleepLogs, (remoteNorm.sleep || {}).logs) ||
+      jsonChanged(morningEnergyLog, (remoteNorm.settings || {}).morningEnergyLog) ||
+      !sameArrayByReference(blocks, remoteNorm.blocks || []) ||
+      (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, remoteNorm.zeroThinking) : false);
+    return {
+      values: { journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking },
+      changedVsLocal, changedVsRemote
+    };
+  } catch (error) {
+    console.warn("同期マージをスキップ:", error.message);
+    return null;
+  }
+}
+
+// マージ結果をローカルstateへ適用(「ローカルを基準に残す」経路用)。変化があればtrue。
+function applySyncMergeToLocal(merged) {
+  if (!merged || !merged.changedVsLocal) return false;
+  const v = merged.values;
+  state.journals = v.journals;
+  state.journalMeta = v.journalMeta;
+  state.feedback = v.feedback;
+  state.condition.logs = v.conditionLogs;
+  state.sleep.logs = v.sleepLogs;
+  state.settings.morningEnergyLog = v.morningEnergyLog;
+  state.blocks = v.blocks;
+  if (v.zeroThinking) {
+    state.zeroThinking.entries = v.zeroThinking.entries;
+    state.zeroThinking.suggestedThemes = pruneExpiredSuggestedThemes(v.zeroThinking.suggestedThemes);
+  }
+  return true;
+}
+
+// マージ結果をリモート(採用予定のremoteNorm)へ適用(「リモートを採用する」経路用)。
+// ローカル限定の記録が採用で消えないようにする。remoteNormから乖離があればtrue
+// (呼び出し側はdataModifiedAtを進めて次回pushで和集合を届ける)。
+function applySyncMergeToRemote(merged, remoteNorm) {
+  if (!merged || !merged.changedVsRemote) return false;
+  const v = merged.values;
+  remoteNorm.journals = v.journals;
+  remoteNorm.journalMeta = v.journalMeta;
+  remoteNorm.feedback = v.feedback;
+  remoteNorm.condition.logs = v.conditionLogs;
+  remoteNorm.sleep.logs = v.sleepLogs;
+  remoteNorm.settings.morningEnergyLog = v.morningEnergyLog;
+  remoteNorm.blocks = v.blocks;
+  if (v.zeroThinking) {
+    remoteNorm.zeroThinking.entries = v.zeroThinking.entries;
+    remoteNorm.zeroThinking.suggestedThemes = pruneExpiredSuggestedThemes(v.zeroThinking.suggestedThemes);
+  }
+  return true;
+}
+
 // 自動 pull(起動 + visibilitychange、60秒スロットル)
 async function runAutoSyncPull() {
   if (!autoSyncReady()) return;
