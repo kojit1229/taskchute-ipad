@@ -18,6 +18,13 @@ const JOURNAL_REQUEST_SECTION = [
 const RECURRENCE_KEEP_PAST_DAYS = 7;    // 過去はこの日数だけ実体を保持
 const RECURRENCE_FUTURE_DAYS = 31;      // 未来はこの日数先まで実体化
 
+// v100: AI提案お題キュー(zeroThinking.suggestedThemes)のハウスキーピングTTL。
+//       採用されないまま溜まり続けるのを防ぐため、読み込み時(normalizeState)に物理削除する
+//       (2026-07-15 K指示)。adopted/dismissedは履歴表示しないため7日で消してよい判断
+//       (採否の学習利用が将来必要になれば別ログへ再設計する。CHANGES_v100.md参照)。
+const ZT_SUGGESTION_PENDING_TTL_MS = 3 * 24 * 60 * 60 * 1000;   // pending: 3日(72時間)
+const ZT_SUGGESTION_RESOLVED_TTL_MS = 7 * 24 * 60 * 60 * 1000;  // adopted/dismissed: 7日
+
 // v71: タブ順 — 利用頻度・時間帯順に並び替え(CHANGES_v71.md参照)。
 //   実行系(ホーム/タスクシュート/タイムライン/WBS/ルーティン)を先頭に、
 //   日次1回系(ジャーナル/週次/日報)→参照系(計器盤/やりたい/やらない/ビジョン/0秒思考)→
@@ -456,6 +463,9 @@ document.addEventListener("click", (event) => {
   if (action === "zt-tab") { ztTab = target.dataset.tab || "other"; render(); }
   if (action === "zt-fav-toggle") ztToggleFav(id);
   if (action === "zt-theme-delete") deleteZtTheme(id);  // v86: テーマのワンタップ削除
+  // v100: AI提案お題キュー(採用/却下)
+  if (action === "zt-suggestion-adopt") ztSuggestionAdopt(id);
+  if (action === "zt-suggestion-dismiss") ztSuggestionDismiss(id);
   // v90: テーマ一覧の大テーマ(グループ)階層。追加/リネーム/削除は既存のカテゴリ管理
   //      (addCategory等)と同じ軽量な window.prompt/confirm 方式に揃えた(モーダルを増やさない)。
   if (action === "zt-group-add") ztGroupAdd();
@@ -1236,6 +1246,26 @@ function normalizeState(value) {
     "groupId" in t ? t : { ...t, groupId: null });
   value.zeroThinking.entries = value.zeroThinking.entries.map((e) =>
     "questionId" in e ? e : { ...e, questionId: null });
+  // v100: AI提案お題キュー(週次抽象化/日次コーチングのバッチが suggestedThemes[] へ
+  //       pending候補を追記する契約。生成・削除はバッチ側の責務で、アプリは表示・採用・却下
+  //       [status遷移]のみを担う)。旧端末データは配列自体が欠損しているため[]で補完する。
+  if (!Array.isArray(value.zeroThinking.suggestedThemes)) value.zeroThinking.suggestedThemes = [];
+  value.zeroThinking.suggestedThemes = value.zeroThinking.suggestedThemes.map((s) => ({
+    source: "daily",
+    reason: "",
+    status: "pending",
+    adoptedThemeId: null,
+    createdAt: nowDateTime(),
+    ...s
+  }));
+  // v100: 期限切れ候補の物理削除(pending 3日 / adopted・dismissed 7日)。
+  //       localDateTimeToMs は new Date(文字列) を経由しない(iOS Safari TZ誤解釈回避、既存の
+  //       isWishStagnant と同じパターン)。createdAt欠損・不正値は0扱い=即時削除対象になる。
+  value.zeroThinking.suggestedThemes = value.zeroThinking.suggestedThemes.filter((s) => {
+    const ageMs = Date.now() - localDateTimeToMs(s.createdAt);
+    const ttlMs = s.status === "pending" ? ZT_SUGGESTION_PENDING_TTL_MS : ZT_SUGGESTION_RESOLVED_TTL_MS;
+    return ageMs <= ttlMs;
+  });
   // v39: 週次レビュー(キー = 週開始土曜 'YYYY-MM-DD')。指標は都度計算、メモのみ永続化。
   if (!value.weeklyReviews || typeof value.weeklyReviews !== "object") value.weeklyReviews = {};
   // v45: 12週サイクルレビュー(キー = サイクル開始日)。メモのみ永続化、指標は都度計算。
@@ -1586,7 +1616,7 @@ function seedState() {
   return {
     currentView: "home",
     selectedDate: today,
-    zeroThinking: { themes: [], entries: [], groups: [] },  // v90: groups=大テーマ
+    zeroThinking: { themes: [], entries: [], groups: [], suggestedThemes: [] },  // v90: groups=大テーマ / v100: suggestedThemes=AI提案お題キュー
     settings: {
       birthDate: "",
       twelveWeekStartDate: today,
@@ -8309,6 +8339,33 @@ function ztThemeListHTML(items, groupsSorted) {
   return sections.join("");
 }
 
+// v100: AI提案お題セクション。pending 0件ならセクション自体を出さない。
+function renderZtSuggestions() {
+  const pending = ztPendingSuggestions();
+  if (!pending.length) return "";
+  return `
+    <section class="panel zt-section zt-suggest-section">
+      <div class="zt-plabel blue">
+        AI提案お題
+        <span class="zt-plabel-count">${pending.length} 件</span>
+      </div>
+      <div class="zt-suggest-list">
+        ${pending.map((s) => `
+        <div class="zt-suggest-item">
+          <div class="zt-suggest-body">
+            <div class="zt-suggest-text">${escapeHTML(s.text)}</div>
+            ${s.reason ? `<div class="zt-suggest-reason">${escapeHTML(s.reason)}</div>` : ""}
+          </div>
+          <div class="zt-suggest-actions">
+            <button class="btn primary" data-action="zt-suggestion-adopt" data-id="${s.id}">採用</button>
+            <button class="zt-theme-del" data-action="zt-suggestion-dismiss" data-id="${s.id}" title="却下" aria-label="この提案を却下">×</button>
+          </div>
+        </div>`).join("")}
+      </div>
+    </section>
+  `;
+}
+
 function renderZtThemeTab() {
   const zt = state.zeroThinking || { themes: [], entries: [], groups: [] };
   const favList = zt.themes.filter((t) => t.fav);
@@ -8324,6 +8381,8 @@ function renderZtThemeTab() {
 
   return `
     <div class="zt-lead">1テーマ・<b>1分</b>・手早く書き出す。<b>★お気に入り</b>はずっと残り、それ以外は書いたら消えます。</div>
+
+    ${renderZtSuggestions()}
 
     <section class="panel zt-section">
       <div class="zt-plabel">
@@ -8436,6 +8495,34 @@ function ztAddSubmit() {
   ztAddOpen = false;
   ztTab = "other";  // 追加したテーマはまず「それ以外」に出る
   saveAndRender(`${lines.length}件 追加しました`);
+}
+
+// v100: AI提案お題キュー(週次抽象化/日次コーチングのバッチが zeroThinking.suggestedThemes へ
+//       追記したpending候補)。生成・削除はバッチ側の責務、ここでは表示用の抽出とstatus遷移のみ扱う。
+function ztPendingSuggestions() {
+  return (state.zeroThinking?.suggestedThemes || []).filter((s) => s.status === "pending");
+}
+
+// 採用: 既存の手動テーマ追加(ztAddSubmit)と同じ経路でテーマ化する。初期配置は未分類(groupId:null)。
+// 候補は削除せずstatus="adopted"+adoptedThemeIdへ遷移させる(履歴はstateに残る。掃除はスコープ外)。
+function ztSuggestionAdopt(id) {
+  const s = (state.zeroThinking.suggestedThemes || []).find((x) => x.id === id && x.status === "pending");
+  if (!s) return;
+  const theme = { id: crypto.randomUUID(), text: s.text, fav: false, groupId: null, createdAt: nowDateTime() };
+  state.zeroThinking.themes.push(theme);
+  state.zeroThinking.suggestedThemes = state.zeroThinking.suggestedThemes.map((x) =>
+    x.id === id ? { ...x, status: "adopted", adoptedThemeId: theme.id } : x);
+  ztTab = "other";  // 採用したテーマはまず「それ以外」に出る(手動追加と同じ挙動)
+  saveAndRender(`「${s.text}」を採用しました`);
+}
+
+// 却下: status="dismissed"へ遷移させるのみ(候補データ自体は消さない)。
+function ztSuggestionDismiss(id) {
+  const s = (state.zeroThinking.suggestedThemes || []).find((x) => x.id === id && x.status === "pending");
+  if (!s) return;
+  state.zeroThinking.suggestedThemes = state.zeroThinking.suggestedThemes.map((x) =>
+    x.id === id ? { ...x, status: "dismissed" } : x);
+  saveAndRender("却下しました");
 }
 
 function ztToggleFav(id) {

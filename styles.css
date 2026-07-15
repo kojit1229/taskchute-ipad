@@ -2539,6 +2539,17 @@ h3 {
   .zt-theme-text { order: -1; flex-basis: 100%; }
 }
 
+/* v100: AI提案お題キュー(週次抽象化/日次コーチングのバッチが提案するpending候補の
+   表示・採用・却下)。.zt-theme-item と同じv93教訓を踏まえ、固定幅要素を置かず
+   flex-wrapで狭幅に自然に折り返す(390pxで本文が潰れる崩れを避ける)。 */
+.zt-suggest-section { background: var(--accent-soft, var(--panel-soft)); }
+.zt-suggest-list { display: flex; flex-direction: column; gap: 8px; }
+.zt-suggest-item { display: flex; align-items: center; gap: 11px; padding: 11px 12px; border-radius: 9px; background: var(--panel); border: 1px solid var(--line-soft); flex-wrap: wrap; }
+.zt-suggest-body { flex: 1; min-width: 160px; }
+.zt-suggest-text { font-size: 14.5px; font-weight: 700; line-height: 1.5; }
+.zt-suggest-reason { font-size: 11.5px; color: var(--muted); margin-top: 3px; line-height: 1.5; }
+.zt-suggest-actions { display: flex; gap: 6px; flex: none; margin-left: auto; }
+
 /* 履歴検索 */
 .zt-search-row { position: relative; margin-bottom: 10px; }
 .zt-search-input { width: 100%; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 10px; color: var(--text); font: inherit; font-size: 16px; padding: 11px 13px 11px 36px; }
