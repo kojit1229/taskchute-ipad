@@ -1,4 +1,6 @@
-const CACHE_NAME = "taskchute-journal-pwa-v101";
+const CACHE_NAME = "taskchute-journal-pwa-v102";
+// v102: 0秒思考の「過去のテーマ」から回答済みentryを開いて追記・編集できるようにした。
+//       CHANGES_v102.md参照。
 // v101: ビジョンボードPDFの自動インライン埋め込み(<object>)をやめ、明示クリックでの
 //       fetch+別タブ表示に変更(PCブラウザでのフリーズ対策)。CHANGES_v101.md参照。
 // v100: 0秒思考タブに「AI提案お題」キューUI(候補の表示・採用・却下)を追加。CHANGES_v100.md参照。
