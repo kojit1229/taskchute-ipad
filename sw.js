@@ -1,4 +1,8 @@
-const CACHE_NAME = "taskchute-journal-pwa-v102";
+const CACHE_NAME = "taskchute-journal-pwa-v103";
+// v103: pull時の0秒思考(zeroThinking.entries[]/suggestedThemes[])を「新しい方の全量採用/
+//       スキップ」の二択から、idキーの双方向マージ(和集合)へ変更。iPhoneで書いた0秒思考が
+//       サーバー到達済みでもPC側dataModifiedAtの方が新しいと消えて見える事故の対策。
+//       CHANGES_v103.md参照。
 // v102: 0秒思考の「過去のテーマ」から回答済みentryを開いて追記・編集できるようにした。
 //       CHANGES_v102.md参照。
 // v101: ビジョンボードPDFの自動インライン埋め込み(<object>)をやめ、明示クリックでの
