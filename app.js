@@ -127,6 +127,7 @@ let ztCurrent = null;          // 書く画面の対象 { id, text, fav } / null
 let ztSearch = "";             // 履歴検索ワード
 let ztTimerInterval = null;    // 書く画面のカウントダウン
 let ztTimerLeft = 60;
+let ztEditId = null;           // v102: 回答済みentryの追記編集対象entry id / null=非編集
 
 // v70: Now画面(実行コンベア)— 画面内の一時状態(永続化しない。normalizeStateは不要)
 let nowMode = false;             // trueの間、renderMain()は通常ビューの代わりに全画面コンベアを描く
@@ -476,6 +477,10 @@ document.addEventListener("click", (event) => {
   if (action === "zt-write") openZtWrite(id);
   if (action === "zt-save") saveZtEntry();
   if (action === "zt-discard") discardZtWrite();
+  // v102: 過去entry(回答済み)を開いて追記・編集
+  if (action === "zt-entry-open") openZtEntry(id);
+  if (action === "zt-edit-close") closeZtEdit();
+  if (action === "zt-edit-save") saveZtEdit(id);
   // v39: 0秒思考の上位タブ(テーマ / 問い)
   if (action === "zero-tab") {
     state.settings.zeroTab = target.dataset.tab || "theme";
@@ -1247,6 +1252,9 @@ function normalizeState(value) {
     "groupId" in t ? t : { ...t, groupId: null });
   value.zeroThinking.entries = value.zeroThinking.entries.map((e) =>
     "questionId" in e ? e : { ...e, questionId: null });
+  // v102: entryに updatedAt を補完(既存データはnull=未追記。回答済みentryの追記編集で更新される)。
+  value.zeroThinking.entries = value.zeroThinking.entries.map((e) =>
+    "updatedAt" in e ? e : { ...e, updatedAt: null });
   // v100: AI提案お題キュー(週次抽象化/日次コーチングのバッチが suggestedThemes[] へ
   //       pending候補を追記する契約。生成・削除はバッチ側の責務で、アプリは表示・採用・却下
   //       [status遷移]のみを担う)。旧端末データは配列自体が欠損しているため[]で補完する。
@@ -8288,6 +8296,7 @@ function renderExperimentSection() {
 // =========================================================
 function renderZeroThinking() {
   if (ztCurrent) return renderZtWrite();
+  if (ztEditId) return renderZtEdit();  // v102: 回答済みentryの追記編集画面
 
   const zt = state.zeroThinking || { themes: [], entries: [] };
   const todayCount = zt.entries.filter((e) => e.date === todayISO()).length;
@@ -8479,6 +8488,32 @@ function renderZtWrite() {
   `;
 }
 
+// v102: 回答済みentryの追記編集画面。書く画面(renderZtWrite)の見た目・textareaを流用しつつ、
+//       タイマー無し・既存本文プリフィル・全文編集可(末尾に追記するだけでもよい)にした。
+//       元のdate/createdAtは書き換えず、保存時にupdatedAtだけ更新する(v102仕様の帰属維持)。
+function renderZtEdit() {
+  const zt = state.zeroThinking || { entries: [] };
+  const e = (zt.entries || []).find((x) => x.id === ztEditId);
+  if (!e) { ztEditId = null; return renderZeroThinking(); }  // entryが消えていた場合の保険
+  return `
+    <div class="zt-write-head">
+      <button class="zt-back-btn" data-action="zt-edit-close">← 一覧へ戻る</button>
+      <div class="zt-write-date">${escapeHTML(ztFormatDate(e.date))}</div>
+    </div>
+
+    <div class="zt-write-card">
+      <div class="zt-write-eyebrow">回答済み — 追記・編集</div>
+      <div class="zt-write-theme">${escapeHTML(e.theme || "")}</div>
+      <textarea class="zt-write-input" id="zt-edit-input">${escapeHTML(e.body || "")}</textarea>
+      <div class="zt-write-actions">
+        <button class="btn ghost" data-action="zt-edit-close">閉じる</button>
+        <button class="btn green" data-action="zt-edit-save" data-id="${e.id}">保存</button>
+      </div>
+      <div class="zt-write-tip">本文の続きに書き足すか、全文を書き直すかは自由です。元の日付・回答日時は変わりません。</div>
+    </div>
+  `;
+}
+
 // ---- 履歴(新しい順) ----
 function ztFilteredHistory() {
   const zt = state.zeroThinking || { entries: [] };
@@ -8500,8 +8535,8 @@ function ztHistoryListHTML() {
     return `<div class="zt-empty">${(zt.entries || []).length ? "該当なし" : "履歴はまだありません"}</div>`;
   }
   return list.map((h) => `
-    <div class="zt-hi-item">
-      <div class="zt-hi-meta">${escapeHTML(h.date)}<span class="zt-hi-dot"></span>0秒思考
+    <div class="zt-hi-item" data-action="zt-entry-open" data-id="${h.id}" title="タップして開く・追記">
+      <div class="zt-hi-meta">${escapeHTML(h.date)}<span class="zt-hi-dot"></span>0秒思考${h.updatedAt ? `<span class="zt-hi-dot"></span>追記あり` : ""}
         <span class="zt-hi-spacer"></span>
         <button class="zt-hi-promote" data-action="entry-to-question" data-id="${h.id}" title="この気づきを問いにする">→ 問いにする</button>
       </div>
@@ -8670,7 +8705,8 @@ function saveZtEntry() {
     theme: cur.text,
     body,
     questionId: cur.questionId || null,  // v39: どの問いの下で書いたか
-    createdAt: nowDateTime()
+    createdAt: nowDateTime(),
+    updatedAt: null  // v102: 追記編集した時にだけ埋まる(未編集はnull)
   });
   // v39: 問いに紐づく entry なら、問いの鮮度を更新し open→deepening へ自動遷移
   if (cur.questionId) {
@@ -8685,6 +8721,44 @@ function saveZtEntry() {
   stopZtTimer();
   ztCurrent = null;
   saveAndRender(cur.fav ? "保存しました(★は残ります) — 日報に追加" : "保存しました — 日報に追加");
+}
+
+// v102: 過去のentry(回答済み)を開いて追記・編集する。書く画面(ztCurrent)とは別の
+//       独立した一時状態(ztEditId)にしたのは、「テーマから新規に書く」と「回答済みを開き直す」で
+//       意味が異なる(タイマー無し・questionId連動無し)ため、既存フローに割り込ませず並置した。
+function openZtEntry(id) {
+  const e = (state.zeroThinking?.entries || []).find((x) => x.id === id);
+  if (!e) return;
+  ztEditId = id;
+  render();
+  setTimeout(() => {
+    const ta = document.querySelector("#zt-edit-input");
+    if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }  // カーソルを末尾へ(追記しやすく)
+  }, 60);
+}
+
+// 未保存の変更があるときだけ確認する(discardZtWriteと同じ「変更があれば確認」方針)。
+function closeZtEdit() {
+  const e = (state.zeroThinking?.entries || []).find((x) => x.id === ztEditId);
+  const ta = document.querySelector("#zt-edit-input");
+  if (e && ta && ta.value.trim() !== (e.body || "").trim() && !confirm("編集中の内容を破棄して戻りますか?")) return;
+  ztEditId = null;
+  render();
+}
+
+// 保存: 本文を丸ごと差し替え、updatedAtだけ更新する。date/createdAt(元の帰属日・回答日時)は
+// 変更しない — export先(zero-thinking-export.py)が date でその日のmdへ振り分ける契約のため、
+// 追記編集で日付が変わってしまうと過去の日報側の記録が壊れる。
+function saveZtEdit(id) {
+  const ta = document.querySelector("#zt-edit-input");
+  const body = (ta?.value || "").trim();
+  if (!body) return showToast("空のままでは保存できません");
+  const found = state.zeroThinking.entries.some((e) => e.id === id);
+  if (!found) return;
+  state.zeroThinking.entries = state.zeroThinking.entries.map((e) =>
+    e.id === id ? { ...e, body, updatedAt: nowDateTime() } : e);
+  ztEditId = null;
+  saveAndRender("追記を保存しました");
 }
 
 // ---- タイマー(1分カウントダウン。0で停止のみ、入力は継続可) ----
