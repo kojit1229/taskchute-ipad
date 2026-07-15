@@ -50,16 +50,21 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(400);
     await passGithubGate(page);  // token/dataOwner/dataRepo投入 + reload
 
-    console.log("[1] 1MB超のビジョンPDFがpersonal-data Contents API(raw+json)経由でBlob化して表示される");
+    // v101: 自動fetch+<object>インライン埋め込みを撤去し、「読み込む」ボタンの明示クリックで
+    // のみfetch→取得後は<a href="blob:...">(別タブで開く)に切り替わる形へ変更(CHANGES_v101.md)。
+    console.log("[1] 1MB超のビジョンPDFが「読み込む」クリック後、personal-data Contents API(raw+json)経由でBlob化して表示される");
     await page.click('[data-action="nav"][data-view="vision"]');
     await page.waitForTimeout(200);
     await page.click('[data-action="vision-section"][data-section="board"]');
+    await page.waitForTimeout(200);
+    check("タブを開いただけではまだfetchされない(v101オンデマンド化)", pdfRequests.length === 0, JSON.stringify(pdfRequests));
+    await page.click('[data-action="vision-board-load"]');
     await page.waitForTimeout(800);  // 1.5MBのBlob取得+再renderを待つ
 
     check("personal-data Contents APIへ1.5MB相当のPDFのリクエストが飛んでいる", pdfRequests.length > 0, JSON.stringify(pdfRequests));
-    const frameData = await page.locator(".vision-pdf-frame").getAttribute("data").catch(() => null);
-    check("1.5MB相当のPDFでもBlob URL化されて<object>のsrcに反映される(公開URL './xxx.pdf' ではない)",
-      !!frameData && frameData.startsWith("blob:"), String(frameData));
+    const linkHref = await page.locator('.vision-actions a[href^="blob:"]').getAttribute("href").catch(() => null);
+    check("1.5MB相当のPDFでもBlob URL化されて<a>の別タブで開くリンクに反映される(公開URL './xxx.pdf' ではない)",
+      !!linkHref && linkHref.startsWith("blob:"), String(linkHref));
   } finally {
     await browser.close();
     server.close();

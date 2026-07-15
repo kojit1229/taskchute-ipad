@@ -96,23 +96,32 @@ function check(name, cond, extra = "") {
     // ============================================================
     // [A] ビジョンボード: personal-data API経由でPDFが表示される + 公開URLへのfetchが無い
     // ============================================================
-    console.log("[A1] ビジョンタブ→ビジョンボードで、personal-data Contents API経由でPDFが読み込まれる");
+    // v101: フリーズ対策で自動fetch+<object>インライン埋め込みを撤去し、「読み込む」ボタンの
+    // 明示クリックでのみfetch→取得後は<a href="blob:...">(別タブで開く)に切り替わる形へ変更した
+    // (CHANGES_v101.md参照)。以下はその新UXに合わせて検証する。
+    console.log("[A1] ビジョンタブ→ビジョンボードで、「読み込む」クリック後にpersonal-data Contents API経由でPDFが読み込まれる");
     await page.click('[data-action="nav"][data-view="vision"]');
     await page.waitForTimeout(200);
     await page.click('[data-action="vision-section"][data-section="board"]');
+    await page.waitForTimeout(200);
+    check("ボードタブを開いただけではPDFはまだfetchされない(v101オンデマンド化。Vision.md/Daily_Affirmation.mdは無関係の既存挙動なので対象外)",
+      !visionApiRequests.some((p) => p.endsWith(".pdf")), JSON.stringify(visionApiRequests));
+    await page.click('[data-action="vision-board-load"]');
     await page.waitForTimeout(600);  // Blob取得+再renderを待つ
 
-    const frameData = await page.locator(".vision-pdf-frame").getAttribute("data").catch(() => null);
-    check("ビジョンボードの<object>のsrcがBlob URL化されている(公開URL './xxx.pdf' ではない)",
-      !!frameData && frameData.startsWith("blob:"), String(frameData));
+    const linkHref = await page.locator('.vision-actions a[href^="blob:"]').getAttribute("href").catch(() => null);
+    check("ビジョンボードの「別タブで開く」リンクがBlob URL化されている(公開URL './xxx.pdf' ではない)",
+      !!linkHref && linkHref.startsWith("blob:"), String(linkHref));
     check("personal-data Contents APIへnow_vision.pdfのリクエストが実際に飛んでいる",
       visionApiRequests.some((p) => p.endsWith("/content/now_vision.pdf")), JSON.stringify(visionApiRequests));
 
-    console.log("[A2] 45歳/80歳タブへ切り替えても、それぞれpersonal-data経由でBlob化される");
+    console.log("[A2] 45歳/80歳タブへ切り替えて「読み込む」をクリックすると、それぞれpersonal-data経由でBlob化される");
     await page.click('[data-action="vision-board-tab"][data-index="1"]');
+    await page.waitForTimeout(150);
+    await page.click('[data-action="vision-board-load"]');
     await page.waitForTimeout(600);
-    const frameData45 = await page.locator(".vision-pdf-frame").getAttribute("data").catch(() => null);
-    check("45歳タブもBlob URL化される", !!frameData45 && frameData45.startsWith("blob:"), String(frameData45));
+    const linkHref45 = await page.locator('.vision-actions a[href^="blob:"]').getAttribute("href").catch(() => null);
+    check("45歳タブもBlob URL化される", !!linkHref45 && linkHref45.startsWith("blob:"), String(linkHref45));
     check("personal-data Contents APIへ45_vision.pdfのリクエストが飛んでいる",
       visionApiRequests.some((p) => p.endsWith("/content/45_vision.pdf")), JSON.stringify(visionApiRequests));
 
