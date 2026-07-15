@@ -2812,6 +2812,13 @@ h3 {
   .wbs-inline-input { max-width: 118px; padding: 4px 5px; }
 }
 
+/* v95: WBS進捗(分子/分母)— Task行は常時表示、Project行は「進捗率を表示」ON時のみ */
+.wbs-progress-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.wbs-progress-input { width: 52px; max-width: 52px; text-align: center; padding: 3px 4px; }
+.wbs-progress-bar { flex: 1; min-width: 60px; }
+.wbs-progress-agg { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.wbs-progress-agg .progress { flex: 1; }
+
 /* v61: マイグレーション儀式(繰り越し回数バッジ・確認モーダル) */
 .migration-badge {
   display: inline-block;

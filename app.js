@@ -4687,6 +4687,32 @@ function fmtMinShort(m) {
   return h ? `${h}h${m % 60 ? `${m % 60}m` : ""}` : `${m}m`;
 }
 
+// v95: WBS進捗(分子/分母)関連のユーティリティ
+// 分母<=0は「まだ何もわからない」扱いで0%固定(0除算ガード)
+function taskProgressPct(task) {
+  const den = Number(task.progressDen) || 0;
+  const num = Number(task.progressNum) || 0;
+  if (den <= 0) return 0;
+  return Math.max(0, Math.min(100, Math.round((num / den) * 100)));
+}
+// Project配下タスクのΣ分子/Σ分母(中断・中止は分母/分子ともに集計から除外し taskProgress() と揃える)
+function projectProgressAgg(tasks) {
+  const live = tasks.filter((t) => isTaskCountable(t));
+  let num = 0, den = 0;
+  live.forEach((t) => { num += Number(t.progressNum) || 0; den += Number(t.progressDen) || 0; });
+  return { num, den, pct: den > 0 ? Math.max(0, Math.min(100, Math.round((num / den) * 100))) : 0 };
+}
+// Project行の進捗率集計バー(「進捗率を表示」ONの時のみ呼ばれる)
+function renderProjectProgressAgg(liveTasks) {
+  const { num, den, pct } = projectProgressAgg(liveTasks);
+  return `
+    <div class="wbs-progress-agg">
+      <div class="progress"><span style="width:${pct}%"></span></div>
+      <span class="muted" style="font-size:11px">進捗率 ${num} / ${den}(${pct}%)</span>
+    </div>
+  `;
+}
+
 function renderProjectTree(project) {
   const allTasksOfProject = state.tasks.filter((task) => !task.deleted && task.projectId === project.id);
   const progress = taskProgress(allTasksOfProject);
@@ -4729,6 +4755,7 @@ function renderProjectTree(project) {
       ${project.description ? `<div class="muted" style="font-size:12px">${escapeHTML(project.description)}</div>` : ""}
       <div class="progress"><span style="width:${progress}%"></span></div>
       <div class="muted wbs-proj-meta">${doneCount} / ${liveTasks.length} 完了${projDue}</div>
+      ${project.showProgress ? renderProjectProgressAgg(liveTasks) : ""}
       ${collapsed
         ? `<div class="muted" style="font-size:12px; margin-top:6px">${rootTasks.length ? `${visibleTasks.length}件のタスク(折りたたみ中)` : "Task未登録"}</div>`
         : `<div class="stack">
@@ -4797,6 +4824,20 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false) 
         ${getCategoryNames().map((n) => `<option value="${escapeHTML(n)}" ${task.category === n ? "selected" : ""}>${escapeHTML(n)}</option>`).join("")}
       </select>
     </span>` : "";
+  // v95: WBS進捗(分子/分母)— 編集モードに関わらず常時表示・その場で編集可能
+  const progressNum = Number.isFinite(task.progressNum) ? task.progressNum : 0;
+  const progressDen = Number.isFinite(task.progressDen) ? task.progressDen : 10;
+  const progressPct = taskProgressPct(task);
+  const progressHTML = `
+    <div class="wbs-progress-row">
+      <input class="wbs-inline-input wbs-progress-input" type="number" inputmode="numeric" min="0" step="1"
+        data-wbs-progress="num" data-id="${task.id}" value="${progressNum}" aria-label="進捗 分子">
+      <span class="muted" style="font-size:12px">/</span>
+      <input class="wbs-inline-input wbs-progress-input" type="number" inputmode="numeric" min="0" step="1"
+        data-wbs-progress="den" data-id="${task.id}" value="${progressDen}" aria-label="進捗 分母">
+      <div class="progress wbs-progress-bar"><span style="width:${progressPct}%"></span></div>
+      <span class="muted" style="font-size:11px">${progressPct}%</span>
+    </div>`;
   return `
     <div class="row${suspended ? " is-suspended" : ""}" style="border-top:1px solid var(--line-soft); padding-top:8px">
       <div class="title-line">
@@ -4814,6 +4855,7 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false) 
         ${dueHTML}
         ${stats.count ? `<span class="muted" style="font-size:11px">⏱ ${stats.count}回${stats.minutes ? `・${fmtMinShort(stats.minutes)}` : ""}</span>` : ""}`}
       </div>
+      ${progressHTML}
       <div class="row wbs-actions">
         <button class="btn" data-action="task-today" data-id="${task.id}">${scheduledToday ? "＋もう一度" : "今日へ"}</button>
         ${canAddSub ? `<button class="btn ghost" data-action="add-subtask" data-parent-task="${task.id}">+ サブ</button>` : ""}
