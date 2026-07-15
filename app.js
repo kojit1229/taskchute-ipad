@@ -25,6 +25,19 @@ const RECURRENCE_FUTURE_DAYS = 31;      // 未来はこの日数先まで実体�
 const ZT_SUGGESTION_PENDING_TTL_MS = 3 * 24 * 60 * 60 * 1000;   // pending: 3日(72時間)
 const ZT_SUGGESTION_RESOLVED_TTL_MS = 7 * 24 * 60 * 60 * 1000;  // adopted/dismissed: 7日
 
+// v103: 上記TTLでの物理削除本体。normalizeState() と、リモートpull時の0秒思考マージ後の
+//       再剪定(mergeZeroThinkingIntoLocal、app.js後方の同期関数群を参照)の両方から呼ぶ
+//       共有関数にした(合流で期限切れ候補が復活しても、この関数を再適用すれば即座に消える)。
+//       localDateTimeToMs は new Date(文字列) を経由しない(iOS Safari TZ誤解釈回避、
+//       既存の isWishStagnant と同じパターン)。createdAt欠損・不正値は0扱い=即時削除対象。
+function pruneExpiredSuggestedThemes(list) {
+  return (Array.isArray(list) ? list : []).filter((s) => {
+    const ageMs = Date.now() - localDateTimeToMs(s.createdAt);
+    const ttlMs = s.status === "pending" ? ZT_SUGGESTION_PENDING_TTL_MS : ZT_SUGGESTION_RESOLVED_TTL_MS;
+    return ageMs <= ttlMs;
+  });
+}
+
 // v71: タブ順 — 利用頻度・時間帯順に並び替え(CHANGES_v71.md参照)。
 //   実行系(ホーム/タスクシュート/タイムライン/WBS/ルーティン)を先頭に、
 //   日次1回系(ジャーナル/週次/日報)→参照系(計器盤/やりたい/やらない/ビジョン/0秒思考)→
@@ -1267,14 +1280,8 @@ function normalizeState(value) {
     createdAt: nowDateTime(),
     ...s
   }));
-  // v100: 期限切れ候補の物理削除(pending 3日 / adopted・dismissed 7日)。
-  //       localDateTimeToMs は new Date(文字列) を経由しない(iOS Safari TZ誤解釈回避、既存の
-  //       isWishStagnant と同じパターン)。createdAt欠損・不正値は0扱い=即時削除対象になる。
-  value.zeroThinking.suggestedThemes = value.zeroThinking.suggestedThemes.filter((s) => {
-    const ageMs = Date.now() - localDateTimeToMs(s.createdAt);
-    const ttlMs = s.status === "pending" ? ZT_SUGGESTION_PENDING_TTL_MS : ZT_SUGGESTION_RESOLVED_TTL_MS;
-    return ageMs <= ttlMs;
-  });
+  // v100: 期限切れ候補の物理削除(pending 3日 / adopted・dismissed 7日)。v103で関数化。
+  value.zeroThinking.suggestedThemes = pruneExpiredSuggestedThemes(value.zeroThinking.suggestedThemes);
   // v39: 週次レビュー(キー = 週開始土曜 'YYYY-MM-DD')。指標は都度計算、メモのみ永続化。
   if (!value.weeklyReviews || typeof value.weeklyReviews !== "object") value.weeklyReviews = {};
   // v45: 12週サイクルレビュー(キー = サイクル開始日)。メモのみ永続化、指標は都度計算。
@@ -9828,6 +9835,81 @@ async function runAutoSyncPush() {
   } catch { /* オフライン/APIエラー: 次のデバウンスで再試行(演出なし) */ }
 }
 
+// v103: ===============================================================
+//  0秒思考の双方向マージ(entries[]/suggestedThemes[]のみ。idキーで和集合)。
+//  背景: pullは従来「新しい方の全量を採用/スキップ」の二択で、iPhoneで書いた0秒思考entryが
+//  サーバーへ到達済みでもPC側のdataModifiedAtの方が新しいと「remoteは古い」と判定して
+//  スキップし、iPhoneの記録がPCから見えなくなる事故が起きた(2026-07-15 K報告)。このまま
+//  PCが保存するとサーバー側のiPhone分ごと上書きされ消えるリスクがある。
+//  themesは対象外(ユーザーが削除できるフィールドで、和集合にすると削除済みテーマが復活して
+//  しまう。tombstone設計はスコープ外。K指示2026-07-15)。tasks/projects/journals等の他
+//  コレクションも対象外(review.mdの全体設計課題=TCJ-R01系は別途、本対応の範囲外)。
+// ===============================================================
+
+// idキー配列の和集合マージ。同一idはupdatedAt(無ければcreatedAt)の新しい方を採用する。
+// nowDateTime()の形式("YYYY-MM-DDTHH:mm:ss"、ゼロ埋め固定長)は文字列比較で新旧判定できる
+// (既存のdataModifiedAt比較 remoteT > localT と同じ規約)。片方にしか無いidはそのまま合流する。
+// id欠損の壊れた要素は無視する(マージ不能なものを取りこぼしても安全側に倒す)。
+function mergeById(localList, remoteList) {
+  const merged = new Map();
+  (Array.isArray(localList) ? localList : []).forEach((item) => {
+    if (item && item.id) merged.set(item.id, item);
+  });
+  (Array.isArray(remoteList) ? remoteList : []).forEach((item) => {
+    if (!item || !item.id) return;
+    const cur = merged.get(item.id);
+    if (!cur) { merged.set(item.id, item); return; }
+    const curTs = cur.updatedAt || cur.createdAt || "";
+    const itemTs = item.updatedAt || item.createdAt || "";
+    if (itemTs > curTs) merged.set(item.id, item);
+  });
+  return Array.from(merged.values());
+}
+
+// entries[]/suggestedThemes[]だけをマージした結果を返す。失敗(想定外の型など)はcatchして
+// nullを返し、呼び出し側は従来動作(マージなし)へフォールバックする(データ消失ガード)。
+function mergeZeroThinkingLists(localZt, remoteZt) {
+  try {
+    return {
+      entries: mergeById(localZt?.entries, remoteZt?.entries),
+      suggestedThemes: mergeById(localZt?.suggestedThemes, remoteZt?.suggestedThemes)
+    };
+  } catch (error) {
+    console.warn("zeroThinkingマージをスキップ:", error.message);
+    return null;
+  }
+}
+
+// 配列参照の内容一致判定(同じ要素が同じ順序で並んでいるか)。mergeByIdは変更しなかった項目を
+// 同一参照で返すため、これで「実際に変化したか」を安く判定できる。
+function sameArrayByReference(a, b) {
+  return a.length === b.length && a.every((item, i) => item === b[i]);
+}
+
+// mergedLists(mergeZeroThinkingListsの戻り値)が比較対象baseZtと実質同じ内容かどうか。
+function zeroThinkingListsEqual(mergedLists, baseZt) {
+  return sameArrayByReference(mergedLists.entries, (baseZt && baseZt.entries) || [])
+    && sameArrayByReference(mergedLists.suggestedThemes, (baseZt && baseZt.suggestedThemes) || []);
+}
+
+// (b) リモートを採用しない(ローカルの方が新しい/同じ)場合の合流。リモートにしか無いid の
+// entries/suggestedThemesをローカルへ合流させる(今回のPC症状はこの経路で治る)。合流後に
+// suggestedThemesのTTLを再剪定する(期限切れ候補が合流してもnormalizeStateと同じ基準で
+// 即座に消える)。実際に内容が変化した場合だけtrueを返す(呼び出し側はdataModifiedAtを
+// 更新して保存する=次回pushでサーバーにも和集合が届く)。
+function mergeZeroThinkingIntoLocal(remoteZt) {
+  const merged = mergeZeroThinkingLists(state.zeroThinking, remoteZt);
+  if (!merged) return false;
+  const prunedSuggested = pruneExpiredSuggestedThemes(merged.suggestedThemes);
+  const changed =
+    !sameArrayByReference(merged.entries, state.zeroThinking.entries || []) ||
+    !sameArrayByReference(prunedSuggested, state.zeroThinking.suggestedThemes || []);
+  if (!changed) return false;
+  state.zeroThinking.entries = merged.entries;
+  state.zeroThinking.suggestedThemes = prunedSuggested;
+  return true;
+}
+
 // 自動 pull(起動 + visibilitychange、60秒スロットル)
 async function runAutoSyncPull() {
   if (!autoSyncReady()) return;
@@ -9840,17 +9922,35 @@ async function runAutoSyncPull() {
     const remote = JSON.parse(text);
     const remoteT = remote.dataModifiedAt || "";
     const localT = state.dataModifiedAt || "";
-    if (!remoteT || remoteT <= localT) { if (runDailyOpen()) render(); return; }  // remote 古い/同じ
+    if (!remoteT || remoteT <= localT) {
+      // remote 古い/同じ。v103: それでもリモート限定のentries/suggestedThemesは合流させる
+      // (iPhoneで書いた0秒思考がサーバーへ到達済みでも、PC側のdataModifiedAtの方が新しいと
+      // このパスに来て全量スキップされ、PCから見えなくなる事故の対策)。
+      const zeroThinkingChanged = mergeZeroThinkingIntoLocal(remote.zeroThinking);
+      if (zeroThinkingChanged) saveState();
+      if (zeroThinkingChanged || runDailyOpen()) render();
+      return;
+    }
     const hasUnpushed = localT !== (state.settings.lastPushedAt || "");
     if (hasUnpushed) {
-      // 両方に未反映の変更 → 自動適用しない(どちらを取るかは人間)
+      // 両方に未反映の変更 → 他フィールドは自動適用しない(どちらを取るかは人間)。
+      // v103: 0秒思考のentries/suggestedThemesはidキーの非破壊合流ができるため、
+      // この人間判断待ちとは切り離して合流させる。
+      const zeroThinkingChanged = mergeZeroThinkingIntoLocal(remote.zeroThinking);
+      if (zeroThinkingChanged) saveState();
       setSyncBanner("リモートに新しいデータ。ローカルにも未pushの変更があります。設定から手動で確認してください");
-      if (runDailyOpen()) render();
+      if (zeroThinkingChanged || runDailyOpen()) render();
       return;
     }
     // 自動適用(ローカルに未push変更なし & remote が新しい)
     clearTimeout(autoSaveTimer);
     const token = cfg.token;
+    // v103: リモート採用前に、ローカルにしか無い0秒思考entries/suggestedThemesを合流させる
+    // (採用でローカル限定の記録を消さないため)。
+    const remoteZtBefore = remote.zeroThinking || {};
+    const merged = mergeZeroThinkingLists(state.zeroThinking, remoteZtBefore);
+    const zeroThinkingAddedLocal = merged && !zeroThinkingListsEqual(merged, remoteZtBefore);
+    if (merged) remote.zeroThinking = { ...remoteZtBefore, ...merged };
     state = normalizeState(remote);
     state.settings.github = { ...cfg, token };
     state.settings.lastPushedAt = remoteT;   // 取り込んだ = リモートと一致
@@ -9859,6 +9959,13 @@ async function runAutoSyncPull() {
     maintainRecurrences({ purge: true });
     runDailyOpen();  // §2: pull 後に日次オープン(古いstate展開→pullで消える事故を防ぐ)
     clearSyncBanner();
+    if (zeroThinkingAddedLocal) {
+      // 合流分はリモートの元スナップショットに無かった変更 → 次回pushで届くようにする
+      // (lastPushedAtより新しいdataModifiedAtにして「未push」を成立させる)。
+      state.dataModifiedAt = nowDateTime();
+      scheduleAutoSave();
+      scheduleAutoSync();
+    }
     persistLocalNoSchedule();
     render();
     showToast("最新データを取り込みました");
@@ -9934,10 +10041,24 @@ async function loadFromGitHub() {
     // syncFromGitHubOnStartup()/runAutoSyncPull()/restoreBackup() は元から生の設定を
     // 使っており対象外(state上書き前に cfg/currentGithubSettings として退避済み)。
     const rawSettings = state.settings.github;
+    // v103: リモート採用前に、ローカルにしか無い0秒思考entries/suggestedThemesを合流させる
+    // (採用でローカル限定の記録を消さないため)。
+    const remoteZtBefore = loaded.zeroThinking || {};
+    const merged = mergeZeroThinkingLists(state.zeroThinking, remoteZtBefore);
+    const zeroThinkingAddedLocal = merged && !zeroThinkingListsEqual(merged, remoteZtBefore);
+    if (merged) loaded.zeroThinking = { ...remoteZtBefore, ...merged };
     state = normalizeState(loaded);
     state.settings.github = { ...rawSettings };
     maintainRecurrences({ purge: true });
-    persistLocalNoSchedule();  // 採用のため dataModifiedAt は更新しない
+    if (zeroThinkingAddedLocal) {
+      // 合流で内容がリモートの元スナップショットから乖離した場合だけ例外的にdataModifiedAtを
+      // 進める(通常の手動読込は「採用のためdataModifiedAtは更新しない」が原則。合流分を
+      // 次回pushで届けるための例外)。
+      state.dataModifiedAt = nowDateTime();
+      scheduleAutoSave();
+      scheduleAutoSync();
+    }
+    persistLocalNoSchedule();  // 採用のため dataModifiedAt は更新しない(合流時を除く。上記参照)
     setLastSyncedSha(sha);     // v37: この端末はこのリモート状態と同期済み
     render();
     showToast("GitHubから読み込みました");
@@ -9963,18 +10084,34 @@ async function syncFromGitHubOnStartup() {
     if (remoteT && remoteT > localT) {
       clearTimeout(autoSaveTimer);
       const token = state.settings.github.token;
+      // v103: リモート採用前に、ローカルにしか無い0秒思考entries/suggestedThemesを
+      // リモート側へ合流させてから採用する(採用でローカル限定の記録を消さないため)。
+      const remoteZtBefore = remote.zeroThinking || {};
+      const merged = mergeZeroThinkingLists(state.zeroThinking, remoteZtBefore);
+      const zeroThinkingAddedLocal = merged && !zeroThinkingListsEqual(merged, remoteZtBefore);
+      if (merged) remote.zeroThinking = { ...remoteZtBefore, ...merged };
       state = normalizeState(remote);
       state.settings.github = { ...cfg, token };
       maintainRecurrences({ purge: true });
+      if (zeroThinkingAddedLocal) {
+        // 合流分はリモートの元スナップショットに無かった変更 → 次回pushで届くようにする
+        state.dataModifiedAt = nowDateTime();
+        scheduleAutoSave();
+        scheduleAutoSync();
+      }
       persistLocalNoSchedule();
       setLastSyncedSha(sha);   // v37: この端末はこのリモート状態と同期済み
       render();
       showToast("最新データを取り込みました");
     } else {
-      // ローカルが新しい/同じ → データは変更しない(次回保存で GitHub へ反映される)。
-      // v38: ただしリモートの現状は確認済みなので「同期済みSHA」だけ記録する。
+      // ローカルが新しい/同じ → 他フィールドは変更しない(次回保存で GitHub へ反映される)。
+      // v38: リモートの現状は確認済みなので「同期済みSHA」だけ記録する。
       //      これが無いと、稼働中の既存端末が(SHA未記録のため)一度手動で
       //      「GitHubから読込」するまで自動保存を見送り続けてしまう。
+      // v103: リモートにしか無いidの0秒思考entries/suggestedThemesはローカルへ合流させる
+      // (iPhoneで書いた0秒思考がPC起動pullで見えなくなる事故対策。今回の実害の直接原因)。
+      const zeroThinkingChanged = mergeZeroThinkingIntoLocal(remote.zeroThinking);
+      if (zeroThinkingChanged) { saveState(); render(); }
       setLastSyncedSha(sha);
     }
   } catch (error) {
