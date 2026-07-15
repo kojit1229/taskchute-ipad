@@ -141,6 +141,7 @@ let ztSearch = "";             // 履歴検索ワード
 let ztTimerInterval = null;    // 書く画面のカウントダウン
 let ztTimerLeft = 60;
 let ztEditId = null;           // v102: 回答済みentryの追記編集対象entry id / null=非編集
+let ztWriteStartedAt = null;   // v104: 書く画面を開いた時刻(Date.now())。durationSec計測の起点 / null=非計測中
 
 // v70: Now画面(実行コンベア)— 画面内の一時状態(永続化しない。normalizeStateは不要)
 let nowMode = false;             // trueの間、renderMain()は通常ビューの代わりに全画面コンベアを描く
@@ -1268,6 +1269,9 @@ function normalizeState(value) {
   // v102: entryに updatedAt を補完(既存データはnull=未追記。回答済みentryの追記編集で更新される)。
   value.zeroThinking.entries = value.zeroThinking.entries.map((e) =>
     "updatedAt" in e ? e : { ...e, updatedAt: null });
+  // v104: entryに durationSec を補完(既存データはnull=未計測。書き始め→保存の実経過秒数)。
+  value.zeroThinking.entries = value.zeroThinking.entries.map((e) =>
+    "durationSec" in e ? e : { ...e, durationSec: null });
   // v100: AI提案お題キュー(週次抽象化/日次コーチングのバッチが suggestedThemes[] へ
   //       pending候補を追記する契約。生成・削除はバッチ側の責務で、アプリは表示・採用・却下
   //       [status遷移]のみを担う)。旧端末データは配列自体が欠損しているため[]で補完する。
@@ -8688,6 +8692,7 @@ function openZtWrite(id) {
   const t = state.zeroThinking.themes.find((x) => x.id === id);
   if (!t) return;
   ztCurrent = { id: t.id, text: t.text, fav: t.fav, questionId: t.questionId || null };  // v39: 問い紐づけを保持
+  ztWriteStartedAt = Date.now();  // v104: 実経過時間の計測開始(カウントダウン残数ではなくこちらを保存に使う)
   render();          // 書く画面を描画(DOM 確定)
   startZtTimer();    // その後にタイマー開始
   setTimeout(() => document.querySelector("#zt-write-input")?.focus(), 60);
@@ -8698,6 +8703,7 @@ function discardZtWrite() {
   if (body && !confirm("入力を破棄して一覧へ戻りますか?")) return;
   stopZtTimer();
   ztCurrent = null;
+  ztWriteStartedAt = null;  // v104
   render();
 }
 
@@ -8706,6 +8712,9 @@ function saveZtEntry() {
   const body = (document.querySelector("#zt-write-input")?.value || "").trim();
   if (!body) return showToast("空のままでは保存できません");
   const cur = ztCurrent;
+  // v104: 書き始め→保存の実経過秒数(Date.now()差分、文字列パース無し)。60秒カウントダウンを
+  //       超えて書き続けた場合も実測される。計測開始が無い異常系はnull。
+  const durationSec = ztWriteStartedAt != null ? Math.max(0, Math.round((Date.now() - ztWriteStartedAt) / 1000)) : null;
   state.zeroThinking.entries.push({
     id: crypto.randomUUID(),
     date: todayISO(),
@@ -8713,7 +8722,8 @@ function saveZtEntry() {
     body,
     questionId: cur.questionId || null,  // v39: どの問いの下で書いたか
     createdAt: nowDateTime(),
-    updatedAt: null  // v102: 追記編集した時にだけ埋まる(未編集はnull)
+    updatedAt: null,  // v102: 追記編集した時にだけ埋まる(未編集はnull)
+    durationSec  // v104: 参考情報。追記編集(saveZtEdit)では変更しない
   });
   // v39: 問いに紐づく entry なら、問いの鮮度を更新し open→deepening へ自動遷移
   if (cur.questionId) {
@@ -8727,6 +8737,7 @@ function saveZtEntry() {
   }
   stopZtTimer();
   ztCurrent = null;
+  ztWriteStartedAt = null;  // v104
   saveAndRender(cur.fav ? "保存しました(★は残ります) — 日報に追加" : "保存しました — 日報に追加");
 }
 
@@ -11195,6 +11206,7 @@ function setView(view) {
   if (state.currentView === "zero" && view !== "zero") {
     stopZtTimer();
     ztCurrent = null;
+    ztWriteStartedAt = null;  // v104
   }
   state.currentView = view;
   // v37: 画面切替は「データの変更」ではない。dataModifiedAt を汚すと
