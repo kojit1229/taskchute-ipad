@@ -1,4 +1,6 @@
-const CACHE_NAME = "taskchute-journal-pwa-v96";
+const CACHE_NAME = "taskchute-journal-pwa-v97";
+// v97: タスクシュート画面「未完了タスク」の表示範囲を当日〜7日後+期日超過に絞り、
+//      8日後以降はトグルで折りたたみ(データは消さない)。CHANGES_v97.md参照。
 // v96: Taskに「完了条件」「スモールステップ」欄を新設(doneCriteria/firstStep)。編集モーダル入力
 //      +タスクシュート画面の一覧行に行内サブテキストで表示。CHANGES_v96.md参照。
 // v95: WBSにTask進捗(分子/分母)入力+バー、Project進捗率(Σ分子/Σ分母)集計を追加。CHANGES_v95.md参照。
