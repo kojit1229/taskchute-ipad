@@ -1046,6 +1046,8 @@ function normalizeState(value) {
       aiWorkBrief: "",    // v67: 何をしてほしいか・成果物の置き場希望(1〜2行)
       progressNum: 0,     // v95: WBS進捗(分子)。旧Taskは未着手(0)扱いで補完
       progressDen: 10,    // v95: WBS進捗(分母)。既定10
+      doneCriteria: "",   // v96: 完了条件(終わったら残る物を1文で。既定は空欄=未設定)
+      firstStep: "",       // v96: スモールステップ(5〜15分で終わる最初の行動。既定は空欄=未設定)
       ...rest
     };
   });
@@ -4982,12 +4984,19 @@ function renderOpenTasks() {
     const dueLabel = task.dueDate ? ` / 期限 ${task.dueDate}` : "";
     const isOverdue = task.dueDate && task.dueDate < state.selectedDate;
     const todayCount = blockCountByTaskId[task.id] || 0;
+    // v96: 完了条件・スモールステップは空欄なら何も出さない(行を開かずに見える行内サブテキスト)
+    const doneCriteriaHTML = task.doneCriteria
+      ? `<div class="muted task-done-criteria" style="font-size:11.5px; margin-top:2px">🎯 ${escapeHTML(task.doneCriteria)}</div>` : "";
+    const firstStepHTML = task.firstStep
+      ? `<div class="muted task-first-step" style="font-size:11.5px; margin-top:2px">👣 ${escapeHTML(task.firstStep)}</div>` : "";
     return `
       <div class="item" ${isOverdue ? 'style="background:var(--red-soft)"' : ""}>
         <div class="row">
           <div style="min-width:0; flex:1">
             <strong>${escapeHTML(task.title)}</strong>
             <div class="muted" style="font-size:12px">${escapeHTML(projectName(task.projectId))} / ${escapeHTML(task.category || "カテゴリなし")}${dueLabel}${todayCount > 0 ? ` <span style="color:var(--green); font-weight:600">/ 本日 ${todayCount} 件 Block 追加済み</span>` : ""}</div>
+            ${doneCriteriaHTML}
+            ${firstStepHTML}
           </div>
           <div class="row">
             <button class="btn" data-action="task-today" data-id="${task.id}">今日へ追加</button>
@@ -8596,6 +8605,8 @@ function makeTask({ projectId = "", parentTaskId = "", title = "", category = ""
     aiWorkBrief: "",    // v67: 何をしてほしいか・成果物の置き場希望(1〜2行)
     progressNum: 0,     // v95: WBS進捗(分子)。0=未着手扱い
     progressDen: 10,    // v95: WBS進捗(分母)。既定10
+    doneCriteria: "",   // v96: 完了条件(終わったら残る物を1文で。既定は空欄=未設定)
+    firstStep: "",       // v96: スモールステップ(5〜15分で終わる最初の行動。既定は空欄=未設定)
     // v16: やりたいことリスト用フィールド
     targetYear,         // いつまでに(数字の年、null なら「いつか」)
     targetMonth,        // v79: 月間プランニングボード用(1-12、null なら「未定」。targetYearとは独立)
@@ -12165,6 +12176,14 @@ function buildTaskModal(task) {
           </div>
         </div>
         <div class="field">
+          <label class="field-label">完了条件(任意)</label>
+          <textarea class="textarea" data-modal-field="doneCriteria" style="min-height:48px; font-size:16px" placeholder="行動でなく“終わったら残る物”で書く">${escapeHTML(task.doneCriteria || "")}</textarea>
+        </div>
+        <div class="field">
+          <label class="field-label">スモールステップ(任意)</label>
+          <textarea class="textarea" data-modal-field="firstStep" style="min-height:48px; font-size:16px" placeholder="5〜15分で終わる最初の行動">${escapeHTML(task.firstStep || "")}</textarea>
+        </div>
+        <div class="field">
           <label class="field-label">レバレッジ(10x機構・任意)</label>
           <select class="select" data-modal-field="leverageType">
             ${leverageTypeOptionsHTML(task.leverageType || "")}
@@ -12222,6 +12241,8 @@ function saveTaskFromModal(id, fields) {
     task.description = fields.description || "";
     task.aiWork = Boolean(fields.aiWork);  // v67: AI作業ワーカー連携
     task.aiWorkBrief = (fields.aiWorkBrief || "").trim();
+    task.doneCriteria = (fields.doneCriteria || "").trim();  // v96: 完了条件
+    task.firstStep = (fields.firstStep || "").trim();        // v96: スモールステップ
     state.tasks.push(task);
     closeModal();
     saveAndRender("Taskを追加しました");
@@ -12241,6 +12262,8 @@ function saveTaskFromModal(id, fields) {
       leverageType: fields.leverageType !== undefined ? fields.leverageType : (t.leverageType || ""),  // v65: 10x機構
       aiWork: Boolean(fields.aiWork),  // v67: AI作業ワーカー連携
       aiWorkBrief: (fields.aiWorkBrief || "").trim(),
+      doneCriteria: (fields.doneCriteria || "").trim(),  // v96: 完了条件
+      firstStep: (fields.firstStep || "").trim(),        // v96: スモールステップ
       // v37: モーダルに nextRoutineId の入力欄はないため、undefined なら既存値を保持
       //      (以前は保存のたびに "" で消えていた)
       nextRoutineId: fields.nextRoutineId !== undefined ? fields.nextRoutineId : (t.nextRoutineId || ""),
