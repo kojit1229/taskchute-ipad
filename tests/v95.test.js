@@ -8,8 +8,10 @@
 // (d) Project集計: 配下Taskの Σ分子/Σ分母 で進捗率を算出しバー表示する
 // (e) 「進捗率を表示」チェックボックスOFFならProject行にバー・集計が出ない(Task入力欄は出る)
 // (f) 390px幅でWBSタブに横スクロールが発生しない
-//
-// 進捗↔ステータス双方向連動(K指示 2026-07-15追加)のシナリオ(g)〜(j)は本ファイル後半に続く。
+// (g) 完了チェック → 分子が分母と同じ値になる
+// (h) 完了済みTaskに分子<分母を入力 → 完了解除されdoing(着手中)になる
+// (i) 分子>分母を入力 → 分子が分母にクランプされ completed になる
+// (j) 分子=分母を入力 → completed になる。分子0の未完了Taskはtodo(未着手)のまま
 //
 // 方針: 既存スイート(v55/v67)と同じく、app.jsはtype="module"のため内部関数はwindowに
 // 露出しない。ブラウザ操作 + localStorage状態の直接注入で観測する。
@@ -182,6 +184,50 @@ function check(name, cond, extra = "") {
       metricsMobile.scrollWidth <= metricsMobile.clientWidth + 1,
       `scrollWidth=${metricsMobile.scrollWidth} clientWidth=${metricsMobile.clientWidth}`);
     await ctxMobile.close();
+
+    // ============================================================
+    // (g)〜(j) 進捗↔ステータスの双方向連動(K指示 2026-07-15追加)
+    // ============================================================
+    console.log("[6] チェックボックス完了 → 分子が分母と同じ値になる");
+    await seed(page, { tasks: [wbsTask("task-C", "完了チェックTask", { progressNum: 3, progressDen: 10 })], projects: [testProject()] });
+    await page.click('[data-action="toggle-task"][data-id="task-C"]');
+    await page.waitForTimeout(200);
+    const s6 = await stateNow(page);
+    const t6 = s6.tasks.find((t) => t.id === "task-C");
+    check("完了チェックで分子が分母(10)と同じになる", t6?.progressNum === 10, JSON.stringify(t6));
+    check("ステータスがcompletedになる", t6?.status === "completed", JSON.stringify(t6));
+
+    console.log("[7] 完了済みTaskに分子<分母を入力 → 完了解除されdoing(着手中)になる");
+    await seed(page, { tasks: [wbsTask("task-D", "完了済みTask", { progressNum: 10, progressDen: 10, status: "completed" })], projects: [testProject()] });
+    await page.locator('input[data-wbs-progress="num"][data-id="task-D"]').fill("4");
+    await page.locator('input[data-wbs-progress="num"][data-id="task-D"]').dispatchEvent("change");
+    await page.waitForTimeout(200);
+    const s7 = await stateNow(page);
+    const t7 = s7.tasks.find((t) => t.id === "task-D");
+    check("分子<分母でステータスがdoing(着手中)になる", t7?.status === "doing", JSON.stringify(t7));
+    check("分子は入力値4のまま", t7?.progressNum === 4, JSON.stringify(t7));
+
+    console.log("[8] 分子>分母を入力 → 分子が分母にクランプされ completed になる");
+    await seed(page, { tasks: [wbsTask("task-E", "オーバーTask", { progressNum: 2, progressDen: 10 })], projects: [testProject()] });
+    await page.locator('input[data-wbs-progress="num"][data-id="task-E"]').fill("15");
+    await page.locator('input[data-wbs-progress="num"][data-id="task-E"]').dispatchEvent("change");
+    await page.waitForTimeout(200);
+    const s8 = await stateNow(page);
+    const t8 = s8.tasks.find((t) => t.id === "task-E");
+    check("分子が分母(10)にクランプされる", t8?.progressNum === 10, JSON.stringify(t8));
+    check("ステータスがcompletedになる", t8?.status === "completed", JSON.stringify(t8));
+
+    console.log("[9] 分子=分母を入力 → completed になる");
+    await seed(page, { tasks: [wbsTask("task-F", "ぴったりTask", { progressNum: 3, progressDen: 10 })], projects: [testProject()] });
+    await page.locator('input[data-wbs-progress="num"][data-id="task-F"]').fill("10");
+    await page.locator('input[data-wbs-progress="num"][data-id="task-F"]').dispatchEvent("change");
+    await page.waitForTimeout(200);
+    const s9 = await stateNow(page);
+    check("分子=分母でcompletedになる", s9.tasks.find((t) => t.id === "task-F")?.status === "completed", JSON.stringify(s9.tasks));
+
+    console.log("[10] 分子0の未完了Taskは従来どおり未着手(todo)表示のまま");
+    await seed(page, { tasks: [wbsTask("task-G", "未着手Task", { progressNum: 0, progressDen: 10 })], projects: [testProject()] });
+    check("分子0はtodo(未着手)のまま", (await stateNow(page)).tasks.find((t) => t.id === "task-G")?.status === "todo");
   } finally {
     await browser.close();
     server.close();
