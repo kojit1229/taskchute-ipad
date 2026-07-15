@@ -860,6 +860,11 @@ document.addEventListener("change", (event) => {
     const file = target.files?.[0];
     if (file) uploadFeedbackFile(date, file);
   }
+  // v105: AutoSleep書き出しCSVの取込(ジャーナルタブの睡眠カード)
+  if (target.matches("[data-sleep-csv-upload]")) {
+    const file = target.files?.[0];
+    if (file) importSleepCsv(file);
+  }
   // v9: 編集モーダルのカテゴリselectで「+ 新規カテゴリ追加」を選んだ時
   if (target.matches('[data-modal-field="category"]') && target.value === "__ADD_NEW__") {
     handleAddCategoryFromModal(target);
@@ -1352,6 +1357,15 @@ function normalizeState(value) {
   if (typeof value.settings.journalTemplate === "string" && value.settings.journalTemplate &&
       !value.settings.journalTemplate.includes("### 依頼")) {
     value.settings.journalTemplate = `${value.settings.journalTemplate.replace(/\s+$/, "")}\n\n${JOURNAL_REQUEST_SECTION}`;
+  }
+  // v105: 睡眠実測はAutoSleepのCSV取込(state.sleep.logs、起床日キー)に一本化。
+  //       ジャーナルテンプレの手書き睡眠欄は廃止する。既存テンプレからは「未記入の
+  //       デフォルト形」のみを除去し、ユーザーが値や文言を書き換えたテンプレは触らない。
+  if (!value.sleep || typeof value.sleep !== "object") value.sleep = {};
+  if (!value.sleep.logs || typeof value.sleep.logs !== "object") value.sleep.logs = {};
+  if (typeof value.settings.journalTemplate === "string") {
+    value.settings.journalTemplate = value.settings.journalTemplate
+      .replace(/## 🛏 睡眠\n就寝: __:__ +\/ +起床: __:__\n質: ★+☆*\n*/, "");
   }
   value.modal = null;  // 起動時はモーダル閉じた状態
   return value;
@@ -6066,6 +6080,125 @@ function renderGymLogCard(date) {
 }
 // ========================================================================
 
+// v105: 睡眠CSV(AutoSleep書き出し) =============================================
+// 実測睡眠はAutoSleepアプリの書き出しCSVをジャーナルタブから取り込む(手書き欄は廃止)。
+// キーは「起床日」= その朝のこと。selectedDateのログ=前夜の睡眠。
+// パースはiOSルールに従いDateオブジェクトを経由せず正規表現の文字列抽出のみで行う。
+
+function parseSleepCsv(text) {
+  // AutoSleep書き出し用の最小CSVパーサ(引用符・""エスケープ対応。フィールド内改行は
+  // AutoSleepのメモ未使用運用では発生しないため非対応と割り切る)
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter((l) => l.trim());
+  if (lines.length < 2) return [];
+  const parseLine = (line) => {
+    const out = [];
+    let cur = "", inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQ) {
+        if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+        else if (ch === '"') inQ = false;
+        else cur += ch;
+      } else if (ch === '"') inQ = true;
+      else if (ch === ",") { out.push(cur); cur = ""; }
+      else cur += ch;
+    }
+    out.push(cur);
+    return out;
+  };
+  const header = parseLine(lines[0]).map((h) => h.trim());
+  return lines.slice(1).map((l) => {
+    const cells = parseLine(l);
+    return Object.fromEntries(header.map((h, i) => [h, (cells[i] ?? "").trim()]));
+  });
+}
+
+function hmsToHours(s) {
+  const m = /^(\d+):(\d{2})(?::(\d{2}))?$/.exec((s || "").trim());
+  if (!m) return null;
+  return Number(m[1]) + Number(m[2]) / 60 + Number(m[3] || 0) / 3600;
+}
+
+function sleepNumOrNull(s) {
+  const v = Number((s || "").trim());
+  return (s || "").trim() && Number.isFinite(v) ? v : null;
+}
+
+async function importSleepCsv(file) {
+  let records;
+  try {
+    records = parseSleepCsv(await file.text());
+  } catch (e) {
+    showToast("CSVの読み込みに失敗しました");
+    return;
+  }
+  const imported = {};  // 起床日 → ログ。同日複数行(昼寝セッション)は睡眠が長い方を採用
+  records.forEach((r) => {
+    const wakeM = /^(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2})/.exec(r["起床時間"] || "");
+    if (!wakeM) return;
+    const bedM = /(\d{2}):(\d{2}):\d{2}$/.exec(r["就寝時間"] || "");
+    const rec = {
+      bed: bedM ? `${bedM[1]}:${bedM[2]}` : "",
+      wake: `${wakeM[2]}:${wakeM[3]}`,
+      sleepH: hmsToHours(r["睡眠"]),
+      inBedH: hmsToHours(r["寝床"]),
+      deepH: hmsToHours(r["深さ"]),
+      qualityH: hmsToHours(r["質"]),
+      eff: sleepNumOrNull(r["効率性"]),
+      hrSleep: sleepNumOrNull(r["睡眠心拍数"]),
+      hrvSleep: sleepNumOrNull(r["睡眠心拍変動"]),
+      spo2Avg: sleepNumOrNull(r["平均SpO2"]),
+      importedAt: new Date().toISOString()
+    };
+    const date = wakeM[1];
+    if (!imported[date] || (rec.sleepH || 0) > (imported[date].sleepH || 0)) imported[date] = rec;
+  });
+  const count = Object.keys(imported).length;
+  if (!count) {
+    showToast("睡眠データを読み取れませんでした(AutoSleepの書き出しCSVか確認してください)");
+    return;
+  }
+  Object.assign(state.sleep.logs, imported);
+  saveAndRender(`睡眠ログ ${count}日分を取り込みました`);
+}
+
+function hoursLabel(v) {
+  if (v == null) return "–";
+  return `${Math.floor(v)}h${String(Math.round((v % 1) * 60)).padStart(2, "0")}m`;
+}
+
+function renderSleepCard(date) {
+  const log = state.sleep.logs[date];
+  const uploadBtn = (danger) => `
+    <label class="btn ${danger ? "danger" : "ghost"}" style="font-size:12px; padding:6px 10px; cursor:pointer; white-space:nowrap">
+      📤 睡眠CSV
+      <input type="file" accept=".csv,text/csv" data-sleep-csv-upload hidden>
+    </label>`;
+  if (!log) {
+    // 未アップロード: 今日を開いている時は赤帯で警告(毎朝アップする運用)。過去日は控えめに。
+    const isToday = date === todayISO();
+    return `
+      <div class="row" style="margin-bottom:10px; padding:10px 12px; border-radius:10px; justify-content:space-between; align-items:center; ${isToday ? "background:var(--red-soft); border:1.5px solid var(--red)" : "background:var(--panel-soft)"}">
+        <span style="font-size:13px; font-weight:700; ${isToday ? "color:var(--red)" : "color:var(--muted)"}">${isToday ? "⚠️ 前夜の睡眠CSVが未アップロードです" : "💤 この日の睡眠ログはありません"}</span>
+        ${uploadBtn(isToday)}
+      </div>`;
+  }
+  const chip = (label, val) => `<span style="font-size:12px"><span class="muted">${label}</span> <b>${val}</b></span>`;
+  return `
+    <div class="row" style="margin-bottom:10px; padding:10px 12px; border-radius:10px; background:var(--panel-soft); justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px">
+      <span class="row" style="gap:10px; flex-wrap:wrap; align-items:center">
+        <span style="font-size:13px; font-weight:700">💤 前夜の睡眠</span>
+        ${chip("就寝→起床", `${log.bed || "–"}→${log.wake || "–"}`)}
+        ${chip("睡眠", hoursLabel(log.sleepH))}
+        ${chip("効率", log.eff == null ? "–" : `${Math.round(log.eff)}%`)}
+        ${chip("深さ", hoursLabel(log.deepH))}
+        ${log.hrSleep != null ? chip("HR", Math.round(log.hrSleep)) : ""}
+        ${log.hrvSleep != null ? chip("HRV", Math.round(log.hrvSleep)) : ""}
+      </span>
+      ${uploadBtn(false)}
+    </div>`;
+}
+
 function renderJournal() {
   ensureJournal(state.selectedDate);
   const previous = addDays(state.selectedDate, -1);
@@ -6098,6 +6231,7 @@ function renderJournal() {
             ${personalDataReady(state.settings.github) ? `<button class="btn" data-action="push-report">📤 GitHubに日報push</button>` : ""}
           </div>
         </div>
+        ${renderSleepCard(date)}
         ${renderMorningEnergyPicker(date)}
         ${renderConditionMorningExtra(date)}
         ${renderEveningConditionCard(date)}
@@ -11766,10 +11900,6 @@ function defaultJournal(date) {
   return [
     `# ${date} のジャーナル`,
     ``,
-    `## 🛏 睡眠`,
-    `就寝: __:__  /  起床: __:__`,
-    `質: ★★★☆☆`,
-    ``,
     `## 🙏 感謝(3 つ)`,
     `1. `,
     `2. `,
@@ -11791,7 +11921,7 @@ function defaultJournal(date) {
 
 // v17: 各セクションの思考プロンプト(画面表示用、Markdown 出力時は省く)
 const JOURNAL_PROMPTS = {
-  "🛏 睡眠": "ぐっすり眠れた?夢は覚えてる?",
+  // v105: 「🛏 睡眠」はテンプレ廃止(実測は睡眠CSV取込に一本化)に伴い削除
   "🙏 感謝(3 つ)": "当たり前すぎて忘れがちな何か。誰・何に対して?(例:朝のコーヒー、子の笑顔)",
   "✨ 今日のハイライト": "今日いちばん心が動いた瞬間は? 嬉しい・面白い・誇らしい、どれでも。",
   "💡 気付き・学び": "うまくいった/いかなかった理由は? 自分・他人・状況について、次に活かせること。",
