@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v99";
+const CACHE_NAME = "taskchute-journal-pwa-v100";
+// v100: 0秒思考タブに「AI提案お題」キューUI(候補の表示・採用・却下)を追加。CHANGES_v100.md参照。
 // v99: WBSタブのタスク行に「翌朝のAI処理を依頼する」チェックUI(criteriaRequest)を追加。CHANGES_v99.md参照。
 // v97: タスクシュート画面「未完了タスク」の表示範囲を当日〜7日後+期日超過に絞り、
 //      8日後以降はトグルで折りたたみ(データは消さない)。CHANGES_v97.md参照。
