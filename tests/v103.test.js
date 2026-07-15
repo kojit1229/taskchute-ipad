@@ -175,6 +175,56 @@ function check(name, cond, extra = "") {
     const after3 = await stateNow();
     const themes3 = (after3.zeroThinking && after3.zeroThinking.themes) || [];
     check("リモートにまだ存在するテーマは復活していない(themesはマージ対象外)", themes3.length === 0, JSON.stringify(themes3));
+
+    // ============================================================
+    // (e) 期限切れsuggestedThemesが合流してもTTL剪定で即座に消える
+    // ============================================================
+    console.log("[4] 期限切れ(pending 3日超)のsuggestedThemesがリモートから合流しても、TTL剪定で即座に消える");
+    const LOCAL_T4 = `${TODAY}T16:00:00`;
+    await page.evaluate(({ KEY, LOCAL_T4 }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.dataModifiedAt = LOCAL_T4;
+      s.zeroThinking = { themes: [], entries: [], groups: [], suggestedThemes: [] };
+      s.settings.lastPushedAt = LOCAL_T4;
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, LOCAL_T4 });
+
+    const oldDate = new Date(now0.getTime() - 10 * 24 * 60 * 60 * 1000);  // 10日前(pending TTL=3日を超過)
+    const oldCreatedAt = `${isoDate(oldDate)}T09:00:00`;
+    const EXPIRED_SUGGESTION = { id: "s-expired", text: "期限切れAI提案お題_v103", source: "daily", reason: "", status: "pending", adoptedThemeId: null, createdAt: oldCreatedAt };
+    const FRESH_SUGGESTION = { id: "s-fresh", text: "新しいAI提案お題_v103", source: "daily", reason: "", status: "pending", adoptedThemeId: null, createdAt: `${TODAY}T08:00:00` };
+    const REMOTE_T4 = `${TODAY}T09:00:00`;  // ローカルより古い
+    fixtures.body = contentsBodyFor(remoteState(REMOTE_T4, { suggestedThemes: [EXPIRED_SUGGESTION, FRESH_SUGGESTION] }));
+
+    await page.reload();
+    await page.waitForTimeout(700);
+    const after4 = await stateNow();
+    const suggested4 = (after4.zeroThinking && after4.zeroThinking.suggestedThemes) || [];
+    check("期限切れのsuggestedThemeは合流後すぐに剪定されて残らない", !suggested4.some((s) => s.id === "s-expired"), JSON.stringify(suggested4));
+    check("期限内のsuggestedThemeは合流して残る", suggested4.some((s) => s.id === "s-fresh"), JSON.stringify(suggested4));
+
+    // ============================================================
+    // (f) リモート取得失敗時は既存動作(マージなし・ローカル保持)を維持する
+    // ============================================================
+    console.log("[5] リモート取得が失敗(500)しても、ローカルのentriesは変化せず安全にフォールバックする");
+    const LOCAL_ONLY_5 = { id: "e-local-only-5", date: TODAY, theme: "取得失敗時ローカル", body: "取得失敗でも残るべきentry_v103", questionId: null, createdAt: `${TODAY}T09:00:00`, updatedAt: null };
+    const LOCAL_T5 = `${TODAY}T09:00:00`;
+    await page.evaluate(({ KEY, LOCAL_ONLY_5, LOCAL_T5 }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.dataModifiedAt = LOCAL_T5;
+      s.zeroThinking = { themes: [], entries: [LOCAL_ONLY_5], groups: [], suggestedThemes: [] };
+      s.settings.lastPushedAt = LOCAL_T5;
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, LOCAL_ONLY_5, LOCAL_T5 });
+
+    fixtures.status = 500;
+    await page.reload();
+    await page.waitForTimeout(700);
+    const after5 = await stateNow();
+    const entries5 = (after5.zeroThinking && after5.zeroThinking.entries) || [];
+    check("取得失敗時、ローカルのentriesはそのまま(1件・変化なし)", entries5.length === 1 && entries5[0].id === "e-local-only-5", JSON.stringify(entries5));
+    check("取得失敗時、dataModifiedAtも変化していない(マージ処理自体が走っていない)", after5.dataModifiedAt === LOCAL_T5, `dataModifiedAt=${after5.dataModifiedAt}`);
+    check("pageerrorが発生していない(取得失敗を握りつぶして継続動作)", await page.locator(".nav-button").count() > 0);
   } finally {
     await browser.close();
     server.close();
