@@ -1,4 +1,6 @@
-const CACHE_NAME = "taskchute-journal-pwa-v95";
+const CACHE_NAME = "taskchute-journal-pwa-v96";
+// v96: Taskに「完了条件」「スモールステップ」欄を新設(doneCriteria/firstStep)。編集モーダル入力
+//      +タスクシュート画面の一覧行に行内サブテキストで表示。CHANGES_v96.md参照。
 // v95: WBSにTask進捗(分子/分母)入力+バー、Project進捗率(Σ分子/Σ分母)集計を追加。CHANGES_v95.md参照。
 // v93: 0秒思考タブがiPhone表示(狭幅)で崩れる不具合を修正(styles.css)。CHANGES_v93.md参照。
 // v92(SW実番号): AIレポートビューア(その他 > AIレポート)を追加。
