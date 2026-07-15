@@ -9875,12 +9875,30 @@ async function saveToGitHub(silent = false) {
       } else {
         // 読込以降にリモートが更新されている → 新しい方を優先
         let remoteT = "";
-        try { remoteT = (JSON.parse((await downloadGitHubStateText(config)).text).dataModifiedAt) || ""; } catch { /* 比較不能なら進む */ }
+        let remoteText = "";
+        try {
+          remoteText = (await downloadGitHubStateText(config)).text;
+          remoteT = (JSON.parse(remoteText).dataModifiedAt) || "";
+        } catch { /* 比較不能なら進む */ }
         if (remoteT && remoteT > (state.dataModifiedAt || "")) {
-          const msg = "GitHub側にこの端末より新しいデータがあります。「GitHubから読込」で取り込んでから保存してください";
-          if (silent) { updateAutoSaveStatus(`見送り: ${msg}`); return; }
-          showToast(`保存を中止: ${msg}`);
-          return;
+          // v106: コア(tasks等)が両端末で一致していれば、差分はマージ可能コレクションだけ。
+          // 合流させてこのままpushしてよい(見送りの無限継続でiPhone分が届かない事故対策)。
+          let resolved = false;
+          const remoteNorm = remoteText ? normalizedRemoteCopy(remoteText) : null;
+          if (remoteNorm && syncCoreEqual(remoteNorm)) {
+            const syncMerge = computeSyncMerge(remoteNorm);
+            if (syncMerge) {
+              applySyncMergeToLocal(syncMerge);
+              state.dataModifiedAt = nowDateTime();  // 和集合が最新であることを明示
+              resolved = true;
+            }
+          }
+          if (!resolved) {
+            const msg = "GitHub側にこの端末より新しいデータがあります。「GitHubから読込」で取り込んでから保存してください";
+            if (silent) { updateAutoSaveStatus(`見送り: ${msg}`); return; }
+            showToast(`保存を中止: ${msg}`);
+            return;
+          }
         }
       }
     }
@@ -9968,10 +9986,27 @@ async function runAutoSyncPush() {
   if (!(state.dataModifiedAt && state.dataModifiedAt > (state.settings.lastPushedAt || ""))) return;  // 未変更
   try {
     // push前ガード: remote の dataModifiedAt を確認(別端末が進めていたら中止)
-    const remoteT = (JSON.parse((await downloadGitHubStateText(personalDataFileConfig(cfg))).text).dataModifiedAt) || "";
+    const remoteText = (await downloadGitHubStateText(personalDataFileConfig(cfg))).text;
+    const remoteT = (JSON.parse(remoteText).dataModifiedAt) || "";
     if (remoteT && remoteT > (state.settings.lastPushedAt || "")) {
-      setSyncBanner("リモートに新しいデータがあります。設定から pull を確認してください");
-      return;
+      // v106: コア(tasks等)が両端末で一致していれば、リモートの進み分はマージ可能
+      // コレクションだけ。合流させてそのままpushする(バナー待ちでiPhone分が届かない事故対策)。
+      let resolved = false;
+      const remoteNorm = normalizedRemoteCopy(remoteText);
+      if (remoteNorm && syncCoreEqual(remoteNorm)) {
+        const syncMerge = computeSyncMerge(remoteNorm);
+        if (syncMerge) {
+          applySyncMergeToLocal(syncMerge);
+          state.settings.lastPushedAt = remoteT;   // リモート分は取り込み済み
+          state.dataModifiedAt = nowDateTime();    // 和集合を今回のpushで届ける
+          persistLocalNoSchedule();
+          resolved = true;
+        }
+      }
+      if (!resolved) {
+        setSyncBanner("リモートに新しいデータがあります。設定から pull を確認してください");
+        return;
+      }
     }
     const before = state.settings.github.lastSavedAt;
     const pushed = state.dataModifiedAt;
@@ -10291,36 +10326,58 @@ async function runAutoSyncPull() {
     const remote = JSON.parse(text);
     const remoteT = remote.dataModifiedAt || "";
     const localT = state.dataModifiedAt || "";
+    // v106: マージ計算はnormalize済みの別コピーで行う(remoteは採用フォールバック用に生のまま)
+    const remoteNorm = normalizedRemoteCopy(text);
+    const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm) : null;
     if (!remoteT || remoteT <= localT) {
-      // remote 古い/同じ。v103: それでもリモート限定のentries/suggestedThemesは合流させる
-      // (iPhoneで書いた0秒思考がサーバーへ到達済みでも、PC側のdataModifiedAtの方が新しいと
-      // このパスに来て全量スキップされ、PCから見えなくなる事故の対策)。
-      const zeroThinkingChanged = mergeZeroThinkingIntoLocal(remote.zeroThinking);
-      if (zeroThinkingChanged) saveState();
-      if (zeroThinkingChanged || runDailyOpen()) render();
+      // remote 古い/同じ。それでもリモート限定の記録は合流させる(v103の0秒思考対策を
+      // v106でジャーナル/blocks/体調/睡眠へ一般化。PC側が新しくてもiPhone分が見える)。
+      const changed = syncMerge ? applySyncMergeToLocal(syncMerge) : mergeZeroThinkingIntoLocal(remote.zeroThinking);
+      if (changed) saveState();
+      if (changed || runDailyOpen()) render();
       return;
     }
     const hasUnpushed = localT !== (state.settings.lastPushedAt || "");
     if (hasUnpushed) {
-      // 両方に未反映の変更 → 他フィールドは自動適用しない(どちらを取るかは人間)。
-      // v103: 0秒思考のentries/suggestedThemesはidキーの非破壊合流ができるため、
-      // この人間判断待ちとは切り離して合流させる。
-      const zeroThinkingChanged = mergeZeroThinkingIntoLocal(remote.zeroThinking);
-      if (zeroThinkingChanged) saveState();
+      // 両方に未反映の変更。マージ可能コレクションは合流させたうえで、
+      // v106: コア(tasks等)が両端末で一致していれば差分はマージ済み分だけなので、
+      // 人間判断を待たず「和集合を正」として自動解消する(push見送りも解除)。
+      const changed = syncMerge ? applySyncMergeToLocal(syncMerge) : mergeZeroThinkingIntoLocal(remote.zeroThinking);
+      if (syncMerge && syncCoreEqual(remoteNorm)) {
+        state.settings.lastPushedAt = remoteT;   // リモート分は取り込み済み
+        setLastSyncedSha(sha);
+        state.dataModifiedAt = nowDateTime();    // 和集合を次のpushで届ける
+        persistLocalNoSchedule();
+        scheduleAutoSync();
+        clearSyncBanner();
+        runDailyOpen();
+        render();
+        showToast("他端末の記録を取り込みました");
+        return;
+      }
+      if (changed) saveState();
       setSyncBanner("リモートに新しいデータ。ローカルにも未pushの変更があります。設定から手動で確認してください");
-      if (zeroThinkingChanged || runDailyOpen()) render();
+      if (changed || runDailyOpen()) render();
       return;
     }
     // 自動適用(ローカルに未push変更なし & remote が新しい)
     clearTimeout(autoSaveTimer);
     const token = cfg.token;
-    // v103: リモート採用前に、ローカルにしか無い0秒思考entries/suggestedThemesを合流させる
-    // (採用でローカル限定の記録を消さないため)。
-    const remoteZtBefore = remote.zeroThinking || {};
-    const merged = mergeZeroThinkingLists(state.zeroThinking, remoteZtBefore);
-    const zeroThinkingAddedLocal = merged && !zeroThinkingListsEqual(merged, remoteZtBefore);
-    if (merged) remote.zeroThinking = { ...remoteZtBefore, ...merged };
-    state = normalizeState(remote);
+    // 採用前に、ローカルにしか無い記録を採用予定のリモートへ合流させる(採用で消さないため)。
+    let addedLocal = false;
+    let adopted;
+    if (remoteNorm && syncMerge) {
+      addedLocal = applySyncMergeToRemote(syncMerge, remoteNorm);
+      adopted = remoteNorm;
+    } else {
+      // フォールバック(v103相当: 0秒思考のみ合流)
+      const remoteZtBefore = remote.zeroThinking || {};
+      const merged = mergeZeroThinkingLists(state.zeroThinking, remoteZtBefore);
+      addedLocal = merged && !zeroThinkingListsEqual(merged, remoteZtBefore);
+      if (merged) remote.zeroThinking = { ...remoteZtBefore, ...merged };
+      adopted = normalizeState(remote);
+    }
+    state = adopted;
     state.settings.github = { ...cfg, token };
     state.settings.lastPushedAt = remoteT;   // 取り込んだ = リモートと一致
     state.settings.lastPulledAt = nowDateTime();
@@ -10328,7 +10385,7 @@ async function runAutoSyncPull() {
     maintainRecurrences({ purge: true });
     runDailyOpen();  // §2: pull 後に日次オープン(古いstate展開→pullで消える事故を防ぐ)
     clearSyncBanner();
-    if (zeroThinkingAddedLocal) {
+    if (addedLocal) {
       // 合流分はリモートの元スナップショットに無かった変更 → 次回pushで届くようにする
       // (lastPushedAtより新しいdataModifiedAtにして「未push」を成立させる)。
       state.dataModifiedAt = nowDateTime();
@@ -10410,16 +10467,27 @@ async function loadFromGitHub() {
     // syncFromGitHubOnStartup()/runAutoSyncPull()/restoreBackup() は元から生の設定を
     // 使っており対象外(state上書き前に cfg/currentGithubSettings として退避済み)。
     const rawSettings = state.settings.github;
-    // v103: リモート採用前に、ローカルにしか無い0秒思考entries/suggestedThemesを合流させる
-    // (採用でローカル限定の記録を消さないため)。
-    const remoteZtBefore = loaded.zeroThinking || {};
-    const merged = mergeZeroThinkingLists(state.zeroThinking, remoteZtBefore);
-    const zeroThinkingAddedLocal = merged && !zeroThinkingListsEqual(merged, remoteZtBefore);
-    if (merged) loaded.zeroThinking = { ...remoteZtBefore, ...merged };
-    state = normalizeState(loaded);
+    // v103→v106: リモート採用前に、ローカルにしか無い記録(0秒思考/ジャーナル/blocks/体調/睡眠)を
+    // 合流させる(採用でローカル限定の記録を消さないため)。
+    const remoteNorm = normalizedRemoteCopy(text);
+    const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm) : null;
+    let addedLocal = false;
+    let adopted;
+    if (remoteNorm && syncMerge) {
+      addedLocal = applySyncMergeToRemote(syncMerge, remoteNorm);
+      adopted = remoteNorm;
+    } else {
+      // フォールバック(v103相当: 0秒思考のみ合流)
+      const remoteZtBefore = loaded.zeroThinking || {};
+      const merged = mergeZeroThinkingLists(state.zeroThinking, remoteZtBefore);
+      addedLocal = merged && !zeroThinkingListsEqual(merged, remoteZtBefore);
+      if (merged) loaded.zeroThinking = { ...remoteZtBefore, ...merged };
+      adopted = normalizeState(loaded);
+    }
+    state = adopted;
     state.settings.github = { ...rawSettings };
     maintainRecurrences({ purge: true });
-    if (zeroThinkingAddedLocal) {
+    if (addedLocal) {
       // 合流で内容がリモートの元スナップショットから乖離した場合だけ例外的にdataModifiedAtを
       // 進める(通常の手動読込は「採用のためdataModifiedAtは更新しない」が原則。合流分を
       // 次回pushで届けるための例外)。
@@ -10450,19 +10518,31 @@ async function syncFromGitHubOnStartup() {
     const localT = _startupDataModifiedAt || "";
     const remoteT = remote.dataModifiedAt || "";
     // リモートが新しいときだけ採用(ISO 文字列なので辞書順比較でよい)
+    // v106: どちらの分岐でもマージ可能コレクション(ジャーナル/blocks/体調/睡眠/0秒思考)は
+    // 和集合で合流させる(iPhone分がPC起動pullで見えなくなる事故対策の一般化)。
+    const remoteNorm = normalizedRemoteCopy(text);
+    const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm) : null;
     if (remoteT && remoteT > localT) {
       clearTimeout(autoSaveTimer);
       const token = state.settings.github.token;
-      // v103: リモート採用前に、ローカルにしか無い0秒思考entries/suggestedThemesを
-      // リモート側へ合流させてから採用する(採用でローカル限定の記録を消さないため)。
-      const remoteZtBefore = remote.zeroThinking || {};
-      const merged = mergeZeroThinkingLists(state.zeroThinking, remoteZtBefore);
-      const zeroThinkingAddedLocal = merged && !zeroThinkingListsEqual(merged, remoteZtBefore);
-      if (merged) remote.zeroThinking = { ...remoteZtBefore, ...merged };
-      state = normalizeState(remote);
+      // リモート採用前に、ローカルにしか無い記録を合流させてから採用する(採用で消さないため)。
+      let addedLocal = false;
+      let adopted;
+      if (remoteNorm && syncMerge) {
+        addedLocal = applySyncMergeToRemote(syncMerge, remoteNorm);
+        adopted = remoteNorm;
+      } else {
+        // フォールバック(v103相当: 0秒思考のみ合流)
+        const remoteZtBefore = remote.zeroThinking || {};
+        const merged = mergeZeroThinkingLists(state.zeroThinking, remoteZtBefore);
+        addedLocal = merged && !zeroThinkingListsEqual(merged, remoteZtBefore);
+        if (merged) remote.zeroThinking = { ...remoteZtBefore, ...merged };
+        adopted = normalizeState(remote);
+      }
+      state = adopted;
       state.settings.github = { ...cfg, token };
       maintainRecurrences({ purge: true });
-      if (zeroThinkingAddedLocal) {
+      if (addedLocal) {
         // 合流分はリモートの元スナップショットに無かった変更 → 次回pushで届くようにする
         state.dataModifiedAt = nowDateTime();
         scheduleAutoSave();
@@ -10477,10 +10557,10 @@ async function syncFromGitHubOnStartup() {
       // v38: リモートの現状は確認済みなので「同期済みSHA」だけ記録する。
       //      これが無いと、稼働中の既存端末が(SHA未記録のため)一度手動で
       //      「GitHubから読込」するまで自動保存を見送り続けてしまう。
-      // v103: リモートにしか無いidの0秒思考entries/suggestedThemesはローカルへ合流させる
-      // (iPhoneで書いた0秒思考がPC起動pullで見えなくなる事故対策。今回の実害の直接原因)。
-      const zeroThinkingChanged = mergeZeroThinkingIntoLocal(remote.zeroThinking);
-      if (zeroThinkingChanged) { saveState(); render(); }
+      // v103→v106: リモートにしか無い記録(0秒思考に加えジャーナル/blocks/体調/睡眠)を
+      // ローカルへ合流させる(iPhoneで書いた記録がPC起動pullで見えなくなる事故対策)。
+      const changed = syncMerge ? applySyncMergeToLocal(syncMerge) : mergeZeroThinkingIntoLocal(remote.zeroThinking);
+      if (changed) { saveState(); render(); }
       setLastSyncedSha(sha);
     }
   } catch (error) {
