@@ -1031,6 +1031,8 @@ function normalizeState(value) {
       leverageNote: "",  // v66: 10x機構(2-2レバレッジ台帳)。資産の累計節約・成果の自己申告メモ(任意1行)
       aiWork: false,      // v67: AI作業ワーカー連携(柱2)。trueならバッチ側がこのTaskを拾って作業する
       aiWorkBrief: "",    // v67: 何をしてほしいか・成果物の置き場希望(1〜2行)
+      progressNum: 0,     // v95: WBS進捗(分子)。旧Taskは未着手(0)扱いで補完
+      progressDen: 10,    // v95: WBS進捗(分母)。既定10
       ...rest
     };
   });
@@ -1229,7 +1231,8 @@ function normalizeState(value) {
   migrateRecurrencesIfNeeded(value);
   // v63: WIP上限アラート(提案2)用の優先度フィールド(高/中/低)。既存Projectは「中」で後方互換補完。
   //      wish/other の自動生成Projectもここで拾われる(map は自動生成の push より後に実行するため)。
-  value.projects = value.projects.map((p) => ({ priority: "中", ...p }));
+  // v95: WBS進捗率(Σ分子/Σ分母)の表示トグルを追加。既定OFF(未使用Projectでバーが乱立しないように)
+  value.projects = value.projects.map((p) => ({ priority: "中", showProgress: false, ...p }));
   // v63: 戦略/雑用/休息ゲージ(提案6)用のカテゴリ属性。未設定は空文字("未分類")のまま正直に扱う。
   value.settings.categories = (value.settings.categories || []).map((c) => ({ bucket: "", ...c }));
   // v73: コンディションOS — 睡眠/服薬/余力/夜の記録/運動ログの軽量ログ(日付キー)。
@@ -8504,6 +8507,8 @@ function makeTask({ projectId = "", parentTaskId = "", title = "", category = ""
     leverageType,  // v65: 10x機構(2-1)。"asset"|"eliminate"|"oneoff"|""(未設定)
     aiWork: false,      // v67: AI作業ワーカー連携(柱2)
     aiWorkBrief: "",    // v67: 何をしてほしいか・成果物の置き場希望(1〜2行)
+    progressNum: 0,     // v95: WBS進捗(分子)。0=未着手扱い
+    progressDen: 10,    // v95: WBS進捗(分母)。既定10
     // v16: やりたいことリスト用フィールド
     targetYear,         // いつまでに(数字の年、null なら「いつか」)
     targetMonth,        // v79: 月間プランニングボード用(1-12、null なら「未定」。targetYearとは独立)
@@ -11973,6 +11978,12 @@ function buildProjectModal(project) {
           </label>
         </div>
         <div class="field">
+          <label class="checkbox-line">
+            <input type="checkbox" data-modal-field="showProgress" ${project.showProgress ? "checked" : ""}>
+            進捗率を表示(配下Taskの分子/分母を合計してバー表示)
+          </label>
+        </div>
+        <div class="field">
           <label class="field-label">説明 / メモ</label>
           <textarea class="textarea" data-modal-field="description" style="min-height:120px">${escapeHTML(project.description || "")}</textarea>
         </div>
@@ -12001,6 +12012,7 @@ function saveProjectFromModal(id, fields) {
       dueDate: fields.dueDate || "",
       description: fields.description || "",
       twelveWeekStartDate,
+      showProgress: Boolean(fields.showProgress),  // v95: WBS進捗率(Σ分子/Σ分母)の表示トグル
       updatedAt: nowDateTime()
     };
   });
