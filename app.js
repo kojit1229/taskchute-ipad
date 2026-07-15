@@ -661,7 +661,11 @@ document.addEventListener("toggle", (event) => {
 document.addEventListener("input", (event) => {
   const target = event.target;
   if (target.matches("[data-journal-date]")) {
-    state.journals[target.dataset.journalDate] = target.value;
+    const d = target.dataset.journalDate;
+    state.journals[d] = target.value;
+    // v106: 本文の編集時刻を記録(端末間マージの新旧判定に使用)
+    const meta = (state.journalMeta[d] ||= { aiMitCandidates: [], aiImported: false, ideal: "" });
+    meta.textUpdatedAt = nowDateTime();
     saveState();
   }
   // v61: 今日の理想ワンライナー(入力中も保存。全再描画しないのでフォーカスは維持される)
@@ -1199,6 +1203,7 @@ function normalizeState(value) {
     if (!Array.isArray(j.aiMitCandidates)) j.aiMitCandidates = [];
     if (!("aiImported" in j)) j.aiImported = false;
     if (!("ideal" in j)) j.ideal = "";  // v61: 今日の理想ワンライナー(提案8)
+    if (!("textUpdatedAt" in j)) j.textUpdatedAt = "";  // v106: 本文編集時刻(同期マージの新旧判定)
   });
   // v61: マイグレーション儀式(3回目以降の繰り越し確認)の選択ログ。将来のバッチ分析用に軽量記録。
   if (!Array.isArray(value.migrationRitualLog)) value.migrationRitualLog = [];
@@ -10053,6 +10058,143 @@ function mergeZeroThinkingIntoLocal(remoteZt) {
   state.zeroThinking.entries = merged.entries;
   state.zeroThinking.suggestedThemes = prunedSuggested;
   return true;
+}
+
+// v106: ===============================================================
+//  同期の双方向マージ(K報告 2026-07-15: iPhoneで入力したジャーナル/ルーティン実績が
+//  PC側で見えない)。v103の0秒思考マージを、非破壊に合流できるコレクション全体へ一般化する。
+//  「全量の新旧二択」の枠組みは維持しつつ、採用/スキップのどちらの経路でも以下を和集合マージする:
+//   - journals / feedback       … 日付キー文字列。journalMeta[date].textUpdatedAt(本版で追加。
+//                                 ジャーナル本文の編集時に更新)の新しい方。無ければ長い方
+//                                 (自動生成テンプレより書かれた本文が勝つ)
+//   - journalMeta               … 本文で勝った側を採用(片側にしか無ければ合流)
+//   - condition.logs            … 日付キー。朝グループ/夜グループを各recordedAtで独立採択、
+//                                 gym[]はid和集合(idは端末別UUIDで衝突しない)
+//   - sleep.logs                … 日付キー。importedAtの新しい方
+//   - settings.morningEnergyLog … 日付キー数値。片側にしか無い日付だけ合流
+//   - blocks                    … idキー和集合(updatedAtの新しい方)。繰り返し実体のidは
+//                                 rec_<ruleId>_<date> で端末間決定論なので重複しない。
+//                                 リモートにしか無い「期間外・未編集の繰り返し実体」は
+//                                 パージ済みの蘇生になるため合流させない
+//   - zeroThinking              … v103の既存マージ(mergeById)をそのまま使用
+//  さらにマージ対象「以外」のコア(SYNC_CORE_COMPARE_KEYS)が両端末で一致していれば、
+//  「両方に未反映の変更」の競合を人間判断を待たず和集合で自動解消し、pushの見送りも解除する
+//  (ジャーナル・ルーティン・体調・睡眠の日常記録だけなら同期が全自動で収束する)。
+//  tasks等のコア自体が両側で動いていた場合は従来どおりバナー/見送りで人間判断に落とす。
+//  マージ計算はnormalizeState済みのリモートコピーに対して行うこと(生JSONはフィールド欠損があり、
+//  そのままstateへ合流させると既定値補完を素通りするため)。
+// ===============================================================
+
+const SYNC_CORE_COMPARE_KEYS = ["tasks", "projects", "recurrences", "declarations", "questions", "experiments"];
+
+// リモート生テキストからマージ・比較用のnormalize済みコピーを作る(失敗はnullで従来動作へ)
+function normalizedRemoteCopy(text) {
+  try { return normalizeState(JSON.parse(text)); } catch { return null; }
+}
+
+function syncCoreEqual(remoteNorm) {
+  if (!remoteNorm) return false;
+  try {
+    return SYNC_CORE_COMPARE_KEYS.every((k) =>
+      JSON.stringify(remoteNorm[k] ?? null) === JSON.stringify(state[k] ?? null));
+  } catch { return false; }
+}
+
+// 日付キー文字列マップの和集合。tsOf(side, date)で新旧判定し、同時刻(またはメタ無し)は
+// 長い方を採用する(自動生成テンプレは書かれた本文より短いのが通例)。
+function mergeDateStringMap(localMap, remoteMap, tsOf) {
+  const out = {};
+  const winners = {};
+  let changedVsLocal = false, changedVsRemote = false;
+  const dates = new Set([...Object.keys(localMap || {}), ...Object.keys(remoteMap || {})]);
+  for (const d of dates) {
+    const l = (localMap || {})[d];
+    const r = (remoteMap || {})[d];
+    let win;
+    if (r == null) { win = "L"; changedVsRemote = true; }
+    else if (l == null) { win = "R"; changedVsLocal = true; }
+    else if (l === r) { win = "L"; }
+    else {
+      const lt = tsOf("L", d), rt = tsOf("R", d);
+      win = lt !== rt ? (lt > rt ? "L" : "R") : (String(r).length > String(l).length ? "R" : "L");
+      if (win === "R") changedVsLocal = true; else changedVsRemote = true;
+    }
+    winners[d] = win;
+    out[d] = win === "L" ? l : r;
+  }
+  return { map: out, winners, changedVsLocal, changedVsRemote };
+}
+
+// journalMeta: 本文マージの勝者側のメタを採用(片側にしか無ければそのまま合流)
+function mergeJournalMetaByWinners(localMeta, remoteMeta, winners) {
+  const out = {};
+  const dates = new Set([
+    ...Object.keys(localMeta || {}), ...Object.keys(remoteMeta || {}), ...Object.keys(winners || {})
+  ]);
+  for (const d of dates) {
+    const l = (localMeta || {})[d];
+    const r = (remoteMeta || {})[d];
+    const v = winners[d] === "R" ? (r || l) : (l || r);
+    if (v != null) out[d] = v;
+  }
+  return out;
+}
+
+const CONDITION_MORNING_FIELDS = ["sleepHours", "meds", "capacity", "morningRecordedAt"];
+const CONDITION_EVENING_FIELDS = ["eveningMood", "eveningNote", "eveningRecordedAt"];
+
+function mergeConditionLogMaps(localLogs, remoteLogs) {
+  const out = {};
+  const dates = new Set([...Object.keys(localLogs || {}), ...Object.keys(remoteLogs || {})]);
+  for (const d of dates) {
+    const l = (localLogs || {})[d];
+    const r = (remoteLogs || {})[d];
+    if (!r) { out[d] = l; continue; }
+    if (!l) { out[d] = r; continue; }
+    const merged = { ...l };
+    if ((r.morningRecordedAt || "") > (l.morningRecordedAt || "")) {
+      CONDITION_MORNING_FIELDS.forEach((k) => { merged[k] = r[k]; });
+    }
+    if ((r.eveningRecordedAt || "") > (l.eveningRecordedAt || "")) {
+      CONDITION_EVENING_FIELDS.forEach((k) => { merged[k] = r[k]; });
+    }
+    merged.gym = mergeById(l.gym, r.gym);
+    out[d] = merged;
+  }
+  return out;
+}
+
+function mergeSleepLogMaps(localLogs, remoteLogs) {
+  const out = {};
+  const dates = new Set([...Object.keys(localLogs || {}), ...Object.keys(remoteLogs || {})]);
+  for (const d of dates) {
+    const l = (localLogs || {})[d];
+    const r = (remoteLogs || {})[d];
+    if (!l) { out[d] = r; continue; }
+    if (!r) { out[d] = l; continue; }
+    out[d] = (r.importedAt || "") > (l.importedAt || "") ? r : l;
+  }
+  return out;
+}
+
+// 片側にしか無い日付だけ合流(両方にあればローカル優先。朝の体調は1日1回タップの運用)
+function mergeMorningEnergyLogs(localLog, remoteLog) {
+  return { ...(remoteLog || {}), ...(localLog || {}) };
+}
+
+function mergeBlockLists(localBlocks, remoteBlocks) {
+  const localIds = new Set((localBlocks || []).map((b) => b && b.id).filter(Boolean));
+  const today = todayISO();
+  const from = addDays(today, -RECURRENCE_KEEP_PAST_DAYS);
+  const to = addDays(today, RECURRENCE_FUTURE_DAYS);
+  const addable = (remoteBlocks || []).filter((b) => {
+    if (!b || !b.id || localIds.has(b.id)) return true;  // 既知idは mergeById の新旧判定に任せる
+    // リモートにしか無いblockのうち、maintainRecurrencesのパージ対象(期間外・未編集の
+    // 繰り返し実体)は合流させない(パージ→合流→パージの往復と蘇生を防ぐ)
+    if (b.recurrenceGroupId && (b.date < from || b.date > to) && !isTouchedBlock(b)) return false;
+    return true;
+  });
+  return mergeById(localBlocks, addable);
 }
 
 // 自動 pull(起動 + visibilitychange、60秒スロットル)
