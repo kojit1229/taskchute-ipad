@@ -10135,9 +10135,10 @@ function syncCoreEqual(remoteNorm) {
   } catch { return false; }
 }
 
-// 日付キー文字列マップの和集合。tsOf(side, date)で新旧判定し、同時刻(またはメタ無し)は
-// 長い方を採用する(自動生成テンプレは書かれた本文より短いのが通例)。
-function mergeDateStringMap(localMap, remoteMap, tsOf) {
+// 日付キー文字列マップの和集合。競合時の優先順: ①未記入テンプレでない方(pristineOf指定時。
+// ensureJournalが当日分のテンプレを自動生成するため、「テンプレ vs 書かれた本文」の競合は
+// 日常的に発生する) → ②tsOf(side, date)の新しい方 → ③長い方。
+function mergeDateStringMap(localMap, remoteMap, tsOf, pristineOf) {
   const out = {};
   const winners = {};
   let changedVsLocal = false, changedVsRemote = false;
@@ -10150,14 +10151,26 @@ function mergeDateStringMap(localMap, remoteMap, tsOf) {
     else if (l == null) { win = "R"; changedVsLocal = true; }
     else if (l === r) { win = "L"; }
     else {
-      const lt = tsOf("L", d), rt = tsOf("R", d);
-      win = lt !== rt ? (lt > rt ? "L" : "R") : (String(r).length > String(l).length ? "R" : "L");
+      const lp = pristineOf ? pristineOf(l, d) : false;
+      const rp = pristineOf ? pristineOf(r, d) : false;
+      if (lp !== rp) {
+        win = lp ? "R" : "L";
+      } else {
+        const lt = tsOf("L", d), rt = tsOf("R", d);
+        win = lt !== rt ? (lt > rt ? "L" : "R") : (String(r).length > String(l).length ? "R" : "L");
+      }
       if (win === "R") changedVsLocal = true; else changedVsRemote = true;
     }
     winners[d] = win;
     out[d] = win === "L" ? l : r;
   }
   return { map: out, winners, changedVsLocal, changedVsRemote };
+}
+
+// ジャーナルテンプレの日付ヘッダをその日の日付へ置換した「未記入本文」(ensureJournalと同じ変換)
+function journalTemplateTextFor(tplSetting, date) {
+  if (!tplSetting) return "";
+  return tplSetting.replace(/^# \d{4}-\d{2}-\d{2} のジャーナル/m, `# ${date} のジャーナル`).trim();
 }
 
 // journalMeta: 本文マージの勝者側のメタを採用(片側にしか無ければそのまま合流)
@@ -10239,7 +10252,14 @@ function computeSyncMerge(remoteNorm) {
     const jt = (side, d) => side === "L"
       ? ((state.journalMeta[d] || {}).textUpdatedAt || "")
       : (((remoteNorm.journalMeta || {})[d] || {}).textUpdatedAt || "");
-    const journals = mergeDateStringMap(state.journals, remoteNorm.journals, jt);
+    // どちらの端末のテンプレとも一致する本文は「未記入」= 書かれた本文が常に勝つ
+    const tplL = state.settings.journalTemplate || "";
+    const tplR = (remoteNorm.settings || {}).journalTemplate || "";
+    const journalPristine = (text, d) => {
+      const t = String(text || "").trim();
+      return t === "" || t === journalTemplateTextFor(tplL, d) || t === journalTemplateTextFor(tplR, d);
+    };
+    const journals = mergeDateStringMap(state.journals, remoteNorm.journals, jt, journalPristine);
     const journalMeta = mergeJournalMetaByWinners(state.journalMeta, remoteNorm.journalMeta, journals.winners);
     const feedback = mergeDateStringMap(state.feedback, remoteNorm.feedback, () => "");
     const conditionLogs = mergeConditionLogMaps(state.condition.logs, (remoteNorm.condition || {}).logs);
