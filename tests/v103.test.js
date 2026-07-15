@@ -125,6 +125,56 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(200);
     const zeroText1 = await page.locator("main").textContent();
     check("画面にもリモート限定entryのテーマが表示される", zeroText1.includes("リモート限定テーマ"), zeroText1.slice(0, 300));
+
+    // ============================================================
+    // (b) リモート採用時にローカル限定entriesが失われない
+    // ============================================================
+    console.log("[2] リモートが新しい状態での起動pull(リモート採用)でも、ローカル限定entriesが失われない");
+    const LOCAL_ONLY_2 = { id: "e-local-only-2", date: TODAY, theme: "採用時ローカル限定", body: "採用されても残るべきentry_v103", questionId: null, createdAt: `${TODAY}T09:30:00`, updatedAt: null };
+    const LOCAL_T2 = `${TODAY}T10:00:00`;
+    await page.evaluate(({ KEY, LOCAL_ONLY_2, LOCAL_T2 }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.dataModifiedAt = LOCAL_T2;
+      s.zeroThinking = { themes: [], entries: [LOCAL_ONLY_2], groups: [], suggestedThemes: [] };
+      s.settings.lastPushedAt = LOCAL_T2;
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, LOCAL_ONLY_2, LOCAL_T2 });
+
+    const REMOTE_ONLY_2 = { id: "e-remote-only-2", date: TODAY, theme: "採用時リモート限定", body: "リモート採用で入るentry_v103", questionId: null, createdAt: `${TODAY}T13:00:00`, updatedAt: null };
+    const REMOTE_T2 = `${TODAY}T14:00:00`;  // ローカルより新しい(=(a)採用パス)
+    fixtures.body = contentsBodyFor(remoteState(REMOTE_T2, { entries: [REMOTE_ONLY_2] }));
+
+    await page.reload();
+    await page.waitForTimeout(700);
+    const after2 = await stateNow();
+    const entries2 = (after2.zeroThinking && after2.zeroThinking.entries) || [];
+    check("リモート採用後もローカル限定entryが失われていない", entries2.some((e) => e.id === "e-local-only-2"), JSON.stringify(entries2.map((e) => e.id)));
+    check("リモートのentryも取り込まれている", entries2.some((e) => e.id === "e-remote-only-2"), JSON.stringify(entries2.map((e) => e.id)));
+    check("採用+合流でdataModifiedAtがリモート時刻より新しく進んでいる(合流分を次回pushで届けるため)",
+      after2.dataModifiedAt > REMOTE_T2, `dataModifiedAt=${after2.dataModifiedAt} REMOTE_T2=${REMOTE_T2}`);
+
+    // ============================================================
+    // (d) themesはマージされない(ローカルで削除したテーマがリモートから復活しない)
+    // ============================================================
+    console.log("[3] themesはマージ対象外: ローカルで削除済みのテーマは、リモートにまだ存在してもローカルへ復活しない");
+    const LOCAL_T3 = `${TODAY}T15:00:00`;
+    await page.evaluate(({ KEY, LOCAL_T3 }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.dataModifiedAt = LOCAL_T3;
+      s.zeroThinking = { themes: [], entries: [], groups: [], suggestedThemes: [] };  // テーマは削除済み(空)
+      s.settings.lastPushedAt = LOCAL_T3;
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, LOCAL_T3 });
+
+    const DELETED_THEME = { id: "t-deleted", text: "削除済みだがリモートにはまだ残るテーマ_v103", fav: false, questionId: null, groupId: null, source: null, createdAt: `${TODAY}T06:00:00` };
+    const REMOTE_T3 = `${TODAY}T09:00:00`;  // ローカルより古い((b)スキップ判定パス。entriesマージのみ発生)
+    fixtures.body = contentsBodyFor(remoteState(REMOTE_T3, { themes: [DELETED_THEME] }));
+
+    await page.reload();
+    await page.waitForTimeout(700);
+    const after3 = await stateNow();
+    const themes3 = (after3.zeroThinking && after3.zeroThinking.themes) || [];
+    check("リモートにまだ存在するテーマは復活していない(themesはマージ対象外)", themes3.length === 0, JSON.stringify(themes3));
   } finally {
     await browser.close();
     server.close();
