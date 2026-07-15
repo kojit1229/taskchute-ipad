@@ -225,6 +225,54 @@ function check(name, cond, extra = "") {
     check("取得失敗時、ローカルのentriesはそのまま(1件・変化なし)", entries5.length === 1 && entries5[0].id === "e-local-only-5", JSON.stringify(entries5));
     check("取得失敗時、dataModifiedAtも変化していない(マージ処理自体が走っていない)", after5.dataModifiedAt === LOCAL_T5, `dataModifiedAt=${after5.dataModifiedAt}`);
     check("pageerrorが発生していない(取得失敗を握りつぶして継続動作)", await page.locator(".nav-button").count() > 0);
+
+    // ============================================================
+    // 補足1: runAutoSyncPull(自動同期ON)でも同じ合流が働く
+    // ============================================================
+    console.log("[6] 自動同期ON時のrunAutoSyncPull(remoteが古い)でも、リモート限定entriesが合流する");
+    const LOCAL_T6 = `${TODAY}T17:00:00`;
+    await page.evaluate(({ KEY, LOCAL_T6 }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.dataModifiedAt = LOCAL_T6;
+      s.zeroThinking = { themes: [], entries: [], groups: [], suggestedThemes: [] };
+      s.settings.autoSync = true;
+      s.settings.lastPushedAt = LOCAL_T6;
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, LOCAL_T6 });
+
+    const REMOTE_ONLY_6 = { id: "e-remote-only-6", date: TODAY, theme: "自動同期経由リモート限定", body: "runAutoSyncPullで合流するentry_v103", questionId: null, createdAt: `${TODAY}T07:00:00`, updatedAt: null };
+    fixtures.status = 200;
+    fixtures.body = contentsBodyFor(remoteState(`${TODAY}T09:00:00`, { entries: [REMOTE_ONLY_6] }));
+    await page.reload();
+    await page.waitForTimeout(1200);  // runAutoSyncPullの起動を待つ
+    const after6 = await stateNow();
+    const entries6 = (after6.zeroThinking && after6.zeroThinking.entries) || [];
+    check("自動同期ON時のrunAutoSyncPullでもリモート限定entryが合流する", entries6.some((e) => e.id === "e-remote-only-6"), JSON.stringify(entries6.map((e) => e.id)));
+    await page.evaluate((KEY) => { const s = JSON.parse(localStorage.getItem(KEY)); s.settings.autoSync = false; localStorage.setItem(KEY, JSON.stringify(s)); }, KEY);
+
+    // ============================================================
+    // 補足2: 手動「GitHubから読込」(loadFromGitHub)でもローカル限定entriesが失われない
+    // ============================================================
+    console.log("[7] 手動「GitHubから読込」でも、ローカル限定entriesが失われずリモートと合流する");
+    const LOCAL_ONLY_7 = { id: "e-local-only-7", date: TODAY, theme: "手動読込時ローカル限定", body: "手動読込後も残るべきentry_v103", questionId: null, createdAt: `${TODAY}T09:00:00`, updatedAt: null };
+    await page.evaluate(({ KEY, LOCAL_ONLY_7 }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.zeroThinking = { themes: [], entries: [LOCAL_ONLY_7], groups: [], suggestedThemes: [] };
+      s.currentView = "settings";
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, LOCAL_ONLY_7 });
+    const REMOTE_ONLY_7 = { id: "e-remote-only-7", date: TODAY, theme: "手動読込時リモート限定", body: "手動読込で合流するentry_v103", questionId: null, createdAt: `${TODAY}T07:00:00`, updatedAt: null };
+    fixtures.body = contentsBodyFor(remoteState(`${TODAY}T20:00:00`, { entries: [REMOTE_ONLY_7] }));
+    await page.reload();
+    await page.waitForTimeout(700);
+    await page.click('[data-action="nav"][data-view="settings"]');
+    await page.waitForTimeout(200);
+    await page.click('[data-action="load-github"]');
+    await page.waitForTimeout(500);
+    const after7 = await stateNow();
+    const entries7 = (after7.zeroThinking && after7.zeroThinking.entries) || [];
+    check("手動読込後もローカル限定entryが失われていない", entries7.some((e) => e.id === "e-local-only-7"), JSON.stringify(entries7.map((e) => e.id)));
+    check("手動読込でリモートのentryも取り込まれている", entries7.some((e) => e.id === "e-remote-only-7"), JSON.stringify(entries7.map((e) => e.id)));
   } finally {
     await browser.close();
     server.close();
