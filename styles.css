@@ -946,6 +946,47 @@ h3 {
   }
 }
 
+/* ============================================================
+   v98: iPad・デスクトップ(min-width:760px)の縦方向コンパクト化。
+   K依頼(2026-07-15依頼書R4)。iPhone(max-width:720px)側のスタイルは
+   1pxも変更しない — 既存の max-width:720px / max-width:420px の宣言は
+   一切触らず、共通(未スコープ)クラスの値を min-width:760px 側でのみ
+   上書きするだけに留める。.timeline-card の絶対配置・40px/時スケールは
+   対象外(変更禁止事項のため触れていない)。
+   ============================================================ */
+@media (min-width: 760px) {
+  .main-pane {
+    padding: max(16px, env(safe-area-inset-top)) 22px 20px;
+  }
+  .view-header {
+    margin-bottom: 12px;
+  }
+  h2 {
+    margin: 0 0 8px;
+  }
+  .grid {
+    gap: 8px;
+  }
+  .panel {
+    padding: 10px;
+  }
+  .section {
+    margin-top: 12px;
+  }
+  .item {
+    padding: 9px;
+    gap: 6px;
+  }
+  .form-strip {
+    padding: 8px;
+    gap: 6px;
+  }
+  .btn {
+    min-height: 33px;
+    padding: 7px 11px;
+  }
+}
+
 /* ===== モーダル(編集ダイアログ) ===== */
 
 .modal-root {
