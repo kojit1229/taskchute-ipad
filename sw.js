@@ -1,4 +1,6 @@
-const CACHE_NAME = "taskchute-journal-pwa-v97";
+const CACHE_NAME = "taskchute-journal-pwa-v98";
+// v98: iPad・デスクトップ(min-width:760px)の縦方向コンパクト化。iPhone(max-width:720px)側の
+//      スタイルは無変更(diff上も既存行は1行も変えず新規min-width:760pxブロックのみ追加)。CHANGES_v98.md参照。
 // v97: タスクシュート画面「未完了タスク」の表示範囲を当日〜7日後+期日超過に絞り、
 //      8日後以降はトグルで折りたたみ(データは消さない)。CHANGES_v97.md参照。
 // v96: Taskに「完了条件」「スモールステップ」欄を新設(doneCriteria/firstStep)。編集モーダル入力
