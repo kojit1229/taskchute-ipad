@@ -222,6 +222,12 @@ document.addEventListener("click", (event) => {
     persistLocalNoSchedule();
     render();
   }
+  // v97: タスクシュート画面「未完了タスク」の8日後以降の折りたたみトグル(UI状態)
+  if (action === "toggle-tasks-show-future") {
+    state.settings.tasksShowFuture = !state.settings.tasksShowFuture;
+    persistLocalNoSchedule();
+    render();
+  }
   // v55: WBS インライン編集モードの切替(UI状態)
   if (action === "toggle-wbs-edit") {
     state.settings.wbsEditMode = !state.settings.wbsEditMode;
@@ -1239,6 +1245,9 @@ function normalizeState(value) {
   value.settings.lastOpenedDate ||= "";
   // v47: WBS の完了タスク非表示(UI状態、既定は表示)
   if (typeof value.settings.wbsHideCompleted !== "boolean") value.settings.wbsHideCompleted = false;
+  // v97: タスクシュート画面「未完了タスク」の表示範囲(当日〜7日後+期日超過が既定。
+  //      8日後以降は折りたたみ。UI状態、既定OFF=畳んだまま)
+  if (typeof value.settings.tasksShowFuture !== "boolean") value.settings.tasksShowFuture = false;
   // v55: WBS のインライン編集モード(UI状態、既定OFF)
   if (typeof value.settings.wbsEditMode !== "boolean") value.settings.wbsEditMode = false;
   // v23: 繰り返しをルール方式へ(旧データは初回のみ自動移行)
@@ -4956,9 +4965,7 @@ function renderTasks() {
 
     <section class="section">
       <h2>未完了タスク</h2>
-      <div class="grid">
-        ${renderOpenTasks()}
-      </div>
+      ${renderOpenTasks()}
     </section>
   `;
 }
@@ -4980,7 +4987,17 @@ function renderOpenTasks() {
     .forEach((b) => {
       if (b.taskId) blockCountByTaskId[b.taskId] = (blockCountByTaskId[b.taskId] || 0) + 1;
     });
-  return open.map((task) => {
+  // v97: 既定表示は「当日(=選択中の日付)〜7日後 + 期日超過」まで。期日未設定は常に表示。
+  //      それより先(8日後以降)は畳み、トグルで表示する(データは消さない)。
+  //      アンカーは既存の isOverdue と同じ state.selectedDate に揃える(選択日を進めれば
+  //      窓もスライドする一貫した挙動にする)。
+  const futureLimit = addDays(state.selectedDate, 7);
+  const isFarFuture = (task) => Boolean(task.dueDate) && task.dueDate > futureLimit;
+  const visible = open.filter((task) => !isFarFuture(task));
+  const folded = open.filter(isFarFuture);
+  const showFuture = Boolean(state.settings.tasksShowFuture);
+
+  const renderItem = (task) => {
     const dueLabel = task.dueDate ? ` / 期限 ${task.dueDate}` : "";
     const isOverdue = task.dueDate && task.dueDate < state.selectedDate;
     const todayCount = blockCountByTaskId[task.id] || 0;
@@ -5006,7 +5023,25 @@ function renderOpenTasks() {
         </div>
       </div>
     `;
-  }).join("");
+  };
+
+  const toggleHTML = folded.length
+    ? `<div class="row" style="margin-bottom:8px">
+        <button class="btn ${showFuture ? "primary" : "ghost"}" data-action="toggle-tasks-show-future">${showFuture ? "8日後以降を隠す" : `8日後以降を表示 (${folded.length}件)`}</button>
+      </div>`
+    : "";
+  const emptyVisibleHTML = (!visible.length && !(showFuture && folded.length))
+    ? emptyPanel("表示範囲(当日〜7日後・期日超過)に未完了のTaskはありません")
+    : "";
+
+  return `
+    ${toggleHTML}
+    <div class="grid">
+      ${visible.map(renderItem).join("")}
+      ${showFuture ? folded.map(renderItem).join("") : ""}
+      ${emptyVisibleHTML}
+    </div>
+  `;
 }
 
 function renderBlockItem(block) {
