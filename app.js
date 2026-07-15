@@ -365,6 +365,7 @@ document.addEventListener("click", (event) => {
   // === v2: ビジョン画面のセグメント切替 ===
   if (action === "vision-section") setVisionSection(target.dataset.section);
   if (action === "vision-board-tab") setVisionBoardIndex(Number(target.dataset.index));
+  if (action === "vision-board-load") loadVisionBoardPdf(target.dataset.file);  // v101
   if (action === "open-md-in-github") openMdInGithub(target.dataset.path);
   if (action === "reload-md") reloadStaticMarkdown();
   // v92: AIレポートビューア — 種類タブ切替 / 一覧・本文の手動更新
@@ -6282,6 +6283,24 @@ function renderVisionMd(kind) {
 // 同一オリジン相対パスをそのまま<object>のsrcに使っており、v72後は404で見れなくなっていた
 // (Vision.md/Daily_Affirmation.mdはfetchGitHubRawText経由に既に直っていたが、PDF側だけ
 // 取り残されていた)。fetchGitHubRawBlob→Blob URL化で埋め込む(personalDataReadyゲート下)。
+//
+// v101: K報告「PCブラウザでビジョンタブを開くと毎回固まる」の修正。
+// 原因(現物調査): タブ切替のたびにv85実装の `ensureVisionPdfLoaded()` が自動fetchし、
+// 取得完了後は無条件で `<object data="blob:...">` にインライン埋め込んでいた。実データの
+// 80_vision.pdfは約18MB(45_vision.pdf=3.4MB / now_vision.pdf=3.6MBに対し突出)。
+// Playwright+実Chromiumで18MB相当のPDF(1ページ・高解像度画像埋め込み)を使い、ビジョンタブを
+// 開いた瞬間からのメインスレッド応答性をハートビート計測(15ms間隔tick)で調べたところ、
+// 本体アプリのJSメインスレッド自体の目立った長時間ブロックは確認できなかった(最大tick間隔
+// 145.6ms、タブ切替クリック→UI反映239ms)。つまりブロッキングはこのタブ内のJS実行ではなく、
+// `<object>` が起動するブラウザ内蔵PDFビューア(別プロセス/別レンダラ)側の大容量ページ描画に
+// あり、それがSPA自身のタブの描画・入力キューと競合して「固まる」体感を生んでいると判断した
+// (JS heapは正常なのに画面全体が無応答に見える症状と整合)。
+// 対策: 自動fetch・自動インライン埋め込みをやめ、「読み込む」ボタンの明示クリックでのみfetchし、
+// 取得後も<object>では埋め込まず実アンカー(<a target="_blank">、v85から既存の「別タブで開く」
+// と同じ仕組み)経由でブラウザ本来の独立したPDFビューア(別タブ)に描画を完全に委ねる形に変えた。
+// これによりSPA本体のタブは重いPDF描画と一切競合しなくなる。UX変更点: 従来は自動でPDFが
+// インライン表示されていたが、v101からは「① 読み込む→② 別タブで開く」の2クリックが必要になる
+// (詳細はCHANGES_v101.md)。
 function renderVisionBoard() {
   const boards = [
     { name: "今(33歳)", file: "now_vision.pdf" },
@@ -6303,13 +6322,18 @@ function renderVisionBoard() {
       <div class="panel"><p>設定画面で個人データリポジトリ(Owner/Repository/Token)を接続すると、ビジョンボードのPDFを読み込めます。</p></div>
     `;
   }
-  ensureVisionPdfLoaded(current.file);
   const src = cachedVisionPdfUrls[current.file] || "";
+  const loading = !!_visionPdfLoadInFlight[current.file];
   if (!src) {
     return `
       ${tabs}
       <div class="vision-actions" style="margin-bottom:8px"><span class="vision-source">📄 <code>${current.file}</code></span></div>
-      <div class="panel"><p>読み込み中...</p></div>
+      <div class="panel" style="padding:24px; text-align:center">
+        ${loading
+          ? `<p>読み込み中...</p>`
+          : `<p class="muted" style="margin-bottom:12px">サイズの大きいPDFのため、タブを開いただけでは読み込みません。</p>
+             <button class="btn primary" data-action="vision-board-load" data-file="${escapeHTML(current.file)}">📥 このPDFを読み込む</button>`}
+      </div>
     `;
   }
   return `
@@ -6318,31 +6342,38 @@ function renderVisionBoard() {
       <span class="vision-source">📄 <code>${current.file}</code></span>
       <a class="btn primary" href="${src}" target="_blank" rel="noopener">📂 別タブで開く</a>
     </div>
-    <object data="${src}#view=FitH" type="application/pdf" class="vision-pdf-frame" aria-label="${escapeHTML(current.name)}">
-      <div class="pdf-fallback">
-        <p>このブラウザではPDFをインライン表示できません。</p>
-        <p>上の <strong>「📂 別タブで開く」</strong> ボタンから表示してください。</p>
-        <p style="margin-top:12px"><a class="btn primary" href="${src}" target="_blank" rel="noopener">${escapeHTML(current.name)} を開く</a></p>
-      </div>
-    </object>
+    <div class="panel" style="padding:24px; text-align:center">
+      <p>読み込み済みです。上の <strong>「📂 別タブで開く」</strong> から表示してください
+      (別タブのブラウザ内蔵ビューアに描画を任せることで、このアプリ自体が固まるのを防いでいます)。</p>
+    </div>
   `;
 }
 
-// v85: personal-data から取得したPDFをBlob URL化してキャッシュする(1ファイル1回だけfetch)。
-// 取得後、ビジョンボードを開いたままなら再描画して表示する(未取得中の再renderは何もしない)。
-function ensureVisionPdfLoaded(file) {
-  if (cachedVisionPdfUrls[file] || _visionPdfLoadInFlight[file]) return;
+// v101: personal-data から取得したPDFをBlob URL化してキャッシュする(1ファイル1回だけfetch)。
+// v85と異なりタブを開いただけでは呼ばれず、「読み込む」ボタンの明示クリック
+// (data-action="vision-board-load")からのみ呼ばれる。取得後、ビジョンボードを
+// 開いたままなら再描画して「別タブで開く」ボタンへ切り替える(未取得中の再renderは何もしない)。
+function loadVisionBoardPdf(file) {
+  if (!file || cachedVisionPdfUrls[file] || _visionPdfLoadInFlight[file]) return;
   if (!personalDataReady(state.settings.github)) return;
   _visionPdfLoadInFlight[file] = true;
+  render();  // 「読み込み中...」表示への切替
   fetchGitHubRawBlob(`content/${file}`)
     .then((blob) => {
       if (blob) {
         cachedVisionPdfUrls[file] = URL.createObjectURL(blob);
-        if (state.currentView === "vision" && (state.settings.visionSection || "vision") === "board") render();
+      } else {
+        showToast("PDFの取得に失敗しました");
       }
     })
-    .catch((error) => console.warn("ビジョンボードPDFの取得に失敗:", error?.message || error))
-    .finally(() => { _visionPdfLoadInFlight[file] = false; });
+    .catch((error) => {
+      console.warn("ビジョンボードPDFの取得に失敗:", error?.message || error);
+      showToast("PDFの取得に失敗しました");
+    })
+    .finally(() => {
+      _visionPdfLoadInFlight[file] = false;
+      if (state.currentView === "vision" && (state.settings.visionSection || "vision") === "board") render();
+    });
 }
 
 // v37: marked の出力から危険な要素・属性を取り除く。
