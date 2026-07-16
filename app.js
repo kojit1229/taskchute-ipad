@@ -870,6 +870,22 @@ document.addEventListener("change", (event) => {
     state.settings.pomoGuidedAccessHint = target.checked;
     saveState();
   }
+  // v116: 1日バッファ(分)の手入力。空欄・不正入力は0(=未設定のフェイルソフト表示)に倒す。
+  //       自動計算はしない設計のため、ここでの値クランプ以外の補正は行わない。
+  if (target.matches("[data-setting-dailybuffermin]")) {
+    const n = parseInt(target.value, 10);
+    state.settings.dailyBufferMin = Number.isFinite(n) ? n : 0;
+    saveState();
+    render();
+  }
+  // v116(K追加要件): 1日の締め時刻(時)。計画過積載ガードの可処分枠の終端にのみ使う。
+  //       空欄・不正入力・0以下は既定24へ倒す(バッファ分数と異なり「未設定」概念を持たない)。
+  if (target.matches("[data-setting-dayclosehours]")) {
+    const n = parseFloat(target.value);
+    state.settings.dayCloseHours = (Number.isFinite(n) && n > 0) ? n : 24;
+    saveState();
+    render();
+  }
   // v84: Study With Me の動画ID・開始秒(直接編集)
   if (target.matches("[data-swm-field]")) {
     const field = target.dataset.swmField;
@@ -2042,6 +2058,7 @@ function renderHeader(eyebrow, title, action = "") {
       </div>
       ${action}
     </div>
+    ${bufferMeterHTML()}
   `;
 }
 
@@ -7083,6 +7100,27 @@ function renderSettings() {
         <label>12WY開始日
           <input class="input" type="date" data-setting-field="twelveWeekStartDate" value="${state.settings.twelveWeekStartDate || todayISO()}">
         </label>
+      </div>
+      <div class="panel stack">
+        <h2>⏳ 1日バッファ(v116)</h2>
+        <div class="muted" style="font-size:12px; line-height:1.6">
+          個々のBlockの見積もりに余裕を足さず、1日の終わりに置く「バッファ」1つに余裕を
+          集約します(クリティカルチェーン法)。ヘッダーの「バッファ残量」は今日を表示中の
+          ときだけ出ます。0以下にすると未設定扱いになり、メーターは表示されません。
+        </div>
+        <label>バッファサイズ(分)
+          <input class="input" type="number" min="0" step="5" data-setting-dailybuffermin
+            value="${Number.isFinite(state.settings.dailyBufferMin) ? state.settings.dailyBufferMin : ""}">
+        </label>
+        <label>1日の締め時刻(0時から何時間後。既定24=24:00/翌0時)
+          <input class="input" type="number" min="1" step="0.5" data-setting-dayclosehours
+            value="${Number.isFinite(state.settings.dayCloseHours) ? state.settings.dayCloseHours : ""}">
+        </label>
+        <div class="muted" style="font-size:11px; line-height:1.6">
+          締め時刻は「計画過積載ガード」(その日最初の予定Blockの開始時刻〜締め時刻の枠に
+          見積合計+バッファが収まらない場合の警告)にのみ使います。タスクの自動削除・
+          移動・並べ替えはしません(気づきの提示のみ)。
+        </div>
       </div>
       <div class="panel stack">
         <h2>データ</h2>
