@@ -2800,19 +2800,27 @@ function homeBacklog() {
     .filter((t) => !t.deleted && !isTaskDead(t) && !excluded.includes(t.projectId)
       && t.dueDate && t.dueDate <= limit)
     .sort((a, b) => (a.dueDate || "99").localeCompare(b.dueDate || "99"));
-  const todayTaskIds = new Set(blocksForDate(state.selectedDate).map((b) => b.taskId).filter(Boolean));
+  // v112: 当日Block登録済みでも未完了なら再追加できるようにする(K依頼2026-07-15。1日に
+  //       複数ブロックを登録したいという要望に対し、以前はscheduled済みタスクの追加ボタンを
+  //       disabledにしていたため矛盾していた)。タスクシュート画面のrenderOpenTasksと同じ思想
+  //       (件数はブロックせず「本日N件」バッジで示すだけ)に揃え、blockCountByTaskIdの流儀を
+  //       ここでも再利用する。
+  const todayCountByTaskId = {};
+  blocksForDate(state.selectedDate).forEach((b) => {
+    if (b.taskId) todayCountByTaskId[b.taskId] = (todayCountByTaskId[b.taskId] || 0) + 1;
+  });
   const renderRow = (t) => {
-    const scheduled = todayTaskIds.has(t.id);
+    const todayCount = todayCountByTaskId[t.id] || 0;
     const overdue = t.dueDate < state.selectedDate;
     const due = `締切 ${t.dueDate.slice(5).replace("-", "/")}`;
+    const todayBadgeHTML = todayCount > 0
+      ? ` <span style="color:var(--green); font-weight:600">/ 本日 ${todayCount} 件追加済み</span>` : "";
     return `<div class="home-due${overdue ? " overdue" : ""}">
       <div class="home-due-main" data-action="edit-task" data-id="${t.id}">
         <div class="home-due-name">${escapeHTML(t.title)}</div>
-        <div class="home-due-sub">${escapeHTML(projectName(t.projectId))} ・ ${due}${overdue ? "(期限切れ)" : ""}</div>
+        <div class="home-due-sub">${escapeHTML(projectName(t.projectId))} ・ ${due}${overdue ? "(期限切れ)" : ""}${todayBadgeHTML}</div>
       </div>
-      ${scheduled
-        ? `<button class="btn ghost" disabled style="font-size:11px;padding:7px 10px">追加済み</button>`
-        : `<button class="btn ghost home-add" data-action="home-add-today" data-id="${t.id}" style="font-size:11px;padding:7px 10px">＋今日に追加</button>`}
+      <button class="btn ghost home-add" data-action="home-add-today" data-id="${t.id}" style="font-size:11px;padding:7px 10px">＋今日に追加</button>
     </div>`;
   };
   const nearTasks = tasks.filter((t) => t.dueDate <= nearLimit);
