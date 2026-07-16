@@ -360,6 +360,15 @@ document.addEventListener("click", (event) => {
     finishReport(target.dataset.outcome || "", note);
   }
   if (action === "report-skip") finishReport("", "");
+  // v111: ポモドーロ開始時のガイド付きアクセス案内(閉じる/×どちらも同じ扱い)。
+  //       「今後表示しない」がチェックされていれば設定へ永続化してから閉じる。
+  if (action === "guided-access-dismiss") {
+    if (modalRoot.querySelector("[data-guided-access-suppress]")?.checked) {
+      state.settings.pomoGuidedAccessHint = false;
+      saveState();
+    }
+    closeModal();
+  }
   if (action === "go-break") goBreakPomodoro();
   if (action === "end-break") endBreakPomodoro();
   // v19: 休憩中の3択
@@ -843,6 +852,11 @@ document.addEventListener("change", (event) => {
     state.settings.focusTimerAuto = target.checked;
     saveState();
   }
+  // v111: ポモドーロ開始時のiOSガイド付きアクセス案内のトグル(モーダル内「今後表示しない」と同じ設定)
+  if (target.matches("[data-setting-pomoguidedaccesshint]")) {
+    state.settings.pomoGuidedAccessHint = target.checked;
+    saveState();
+  }
   // v84: Study With Me の動画ID・開始秒(直接編集)
   if (target.matches("[data-swm-field]")) {
     const field = target.dataset.swmField;
@@ -1066,6 +1080,9 @@ function normalizeState(value) {
   if (typeof value.settings.autoSync !== "boolean") value.settings.autoSync = false;
   // v70: Block開始でフォーカスタイマー(ポモドーロ)を自動起動するか(既定ON)。
   if (typeof value.settings.focusTimerAuto !== "boolean") value.settings.focusTimerAuto = true;
+  // v111: ポモドーロ開始時、iOS系端末にガイド付きアクセスのリマインドを出すか(既定ON)。
+  //       「今後表示しない」チェックでfalseに倒す。設定画面のトグルで再度ONにできる。
+  if (typeof value.settings.pomoGuidedAccessHint !== "boolean") value.settings.pomoGuidedAccessHint = true;
   if (!("lastPushedAt" in value.settings)) value.settings.lastPushedAt = null;
   if (!("lastPulledAt" in value.settings)) value.settings.lastPulledAt = null;
   // v25: データ最終更新時刻(端末間で「新しい方が勝つ」判定に使用)
@@ -6820,6 +6837,18 @@ function renderSettings() {
         </label>
       </div>
       <div class="panel stack">
+        <h2>🔒 ガイド付きアクセス案内(v111)</h2>
+        <div class="muted" style="font-size:12px; line-height:1.6">
+          iPad/iPhoneでポモドーロタイマーを開始すると、ガイド付きアクセス(画面ロック)の
+          操作方法を案内するポップアップを出します。PWAから自動でロックすることはiOSの制約上
+          できないため、手動操作の案内のみです。ポップアップの「今後表示しない」でもOFFにできます。
+        </div>
+        <label class="checkbox-line">
+          <input type="checkbox" data-setting-pomoguidedaccesshint ${state.settings.pomoGuidedAccessHint ? "checked" : ""}>
+          🔒 ポモドーロ開始時にガイド付きアクセスを案内(iPad/iPhoneのみ)
+        </label>
+      </div>
+      <div class="panel stack">
         <h2>🎥 Study With Me(v84)</h2>
         <div class="muted" style="font-size:12px; line-height:1.6">
           ポモドーロタブの「Study With Me」トグルで表示するYouTube動画です。ONの間だけ埋め込み、
@@ -11263,6 +11292,54 @@ function resetDemoData() {
   saveAndRender("デモデータに戻しました");
 }
 
+// v111: ポモドーロ開始時のiOSガイド付きアクセス案内の対象端末判定。
+// iPhone/iPodはUAに"iPhone"/"iPod"を含む。iPadOS(v13以降)は既定でデスクトップ版Safari同様
+// "Macintosh"を名乗るため、"Macintosh"+タッチ対応(maxTouchPoints>1)で判定する
+// (通常のデスクトップMacはmaxTouchPoints=0のため誤検知しない)。
+function isIOSDevice() {
+  const ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
+  if (/iPhone|iPad|iPod/.test(ua)) return true;
+  return /Macintosh/.test(ua) && (navigator.maxTouchPoints || 0) > 1;
+}
+
+// v111: ポモドーロ開始時、iOS系端末(iPad/iPhone)のみガイド付きアクセスのリマインドを出す。
+// PWAからガイド付きアクセスを自動設定することはiOSの制約上不可能と調査済みのため、手動操作
+// (サイドボタン/ホームボタン トリプルクリック)を案内するだけの軽いポップアップに留める。
+// 呼び出し元(startPomodoro)で既にタイマーが開始済みのため、このポップアップは開始自体を
+// ブロックしない(表示中も裏でタイマーは進行する)。設定 pomoGuidedAccessHint(既定true)を
+// falseにすると恒久的に抑制できる(モーダルの「今後表示しない」または設定画面のトグル)。
+function maybeShowGuidedAccessHint() {
+  if (!isIOSDevice()) return;
+  if (state.settings.pomoGuidedAccessHint === false) return;
+  state.modal = { type: "guidedAccessHint" };
+  renderModal(buildGuidedAccessHintModal());
+}
+
+function buildGuidedAccessHintModal() {
+  return `
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">🔒 ガイド付きアクセスで画面をロックしますか?</h3>
+        <button class="modal-close" data-action="guided-access-dismiss" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size:14px; line-height:1.7">
+          サイドボタン(ホームボタン搭載機種はホームボタン)をすばやく3回押すと、ガイド付き
+          アクセスで画面をロックできます。事前に「設定 > アクセシビリティ > ガイド付きアクセス」
+          をONにしておいてください。タイマーはこのまま動いています。
+        </div>
+        <label class="checkbox-line" style="margin-top:12px; font-size:13px">
+          <input type="checkbox" data-guided-access-suppress>
+          今後表示しない
+        </label>
+      </div>
+      <div class="modal-footer">
+        <button class="btn primary" data-action="guided-access-dismiss">閉じる</button>
+      </div>
+    </div>
+  `;
+}
+
 function startPomodoro(blockId) {
   if (!blockId) return showToast("Blockを選んでください");
   // v14: state.pomodoro を完全再構築(spread を使わず、必要なフィールドだけ明示的に作成)
@@ -11286,6 +11363,10 @@ function startPomodoro(blockId) {
   // v13: ポモドーロ開始時、Blockの実績開始時間を自動記録(既存値があれば維持)
   updateBlockField(blockId, "actualStartAt", blockById(blockId)?.actualStartAt || nowDateTime());
   saveAndRender("ポモドーロを開始しました(50:00 から)");
+  // v111: タイマー開始後(非ブロッキング)にiOSガイド付きアクセスのリマインドを出す。
+  //       modalRootはrender()と独立したDOMルートのため、直前のsaveAndRenderの再描画で
+  //       消えることはない。
+  maybeShowGuidedAccessHint();
 }
 
 // v14: ポモドーロセッションを強制完全リセット(他フィールド保持)
