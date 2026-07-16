@@ -7,7 +7,11 @@
 //     ポップアップ表示中もタイマーは既に走っている(開始をブロックしない)。
 // (b) 「今後表示しない」にチェックして閉じる → settings.pomoGuidedAccessHintがfalseになり、
 //     次回の開始では出ない。
-// 非iOS非表示・iPadOS判定・設定OFF時の回帰確認・チェック無し閉じは次コミット以降で追加する。
+// (c) 非iOS(デスクトップUA・タッチ無し)では一切出ない。
+// (d) iPadOS(Macintosh UAを名乗るがタッチ対応)でも出る(iPad判定の代替ロジック)。
+// (e) pomoGuidedAccessHint:falseで開始してもポモドーロ動作自体(running/blockId/endsAt)は
+//     通常どおりで回帰が無い。
+// (f) チェックせず「閉じる」だけなら設定はtrueのまま(次回も出る)。
 //
 // 起動経路はstartPomodoro()という単一の合流点(通常のBlock開始時のfocusTimerAuto自動起動、
 // 宣言モーダル経由のポモドーロ開始、休憩中「同じBlockで続ける」のいずれも最終的にここを通る)
@@ -171,6 +175,94 @@ function check(name, cond, extra = "") {
       const s2b = await stateNow(page);
       check("2回目のポモドーロは正常に開始する(running:true)", s2b.pomodoro?.running === true, JSON.stringify(s2b.pomodoro));
       check("2回目は案内モーダルが出ない", await page.locator(".modal-root.open").count() === 0);
+
+      await ctx.close();
+    }
+
+    // ============================================================
+    // (c) 非iOS(デスクトップUA・タッチ無し)では一切出ない
+    // ============================================================
+    console.log("[3] デスクトップUA(タッチ無し)ではポモドーロ開始時に案内が出ない");
+    {
+      const { ctx, page } = await newPage({ userAgent: DESKTOP_UA });
+      await page.clock.setFixedTime(now0);
+      await page.goto(`http://localhost:${PORT}/`);
+      await page.waitForTimeout(500);
+      await passGithubGate(page);
+      await seed(page, { blocks: [planBlock({ id: "b3", title: "デスクトップ検証Block", startMin: 9 * 60 })] });
+
+      await startBlockSkippingDeclare(page, "b3");
+      await page.waitForTimeout(300);
+
+      const s3 = await stateNow(page);
+      check("ポモドーロは通常どおり開始する(running:true)", s3.pomodoro?.running === true);
+      check("非iOSでは案内モーダルが出ない", await page.locator(".modal-root.open").count() === 0);
+
+      await ctx.close();
+    }
+
+    // ============================================================
+    // (d) iPadOS(Macintosh UA + タッチ対応)でも出る
+    // ============================================================
+    console.log("[4] iPadOS(Macintosh UAだがタッチ対応)でもポモドーロ開始時に案内が出る");
+    {
+      const { ctx, page } = await newPage({ userAgent: IPADOS_UA, touch: true });
+      await page.clock.setFixedTime(now0);
+      await page.goto(`http://localhost:${PORT}/`);
+      await page.waitForTimeout(500);
+      await passGithubGate(page);
+      await seed(page, { blocks: [planBlock({ id: "b4", title: "iPadOS検証Block", startMin: 9 * 60 })] });
+
+      await startBlockSkippingDeclare(page, "b4");
+      await page.waitForTimeout(300);
+      check("iPadOS(タッチ対応Macintosh UA)では案内が出る", await page.locator(".modal-root.open").count() === 1);
+
+      await ctx.close();
+    }
+
+    // ============================================================
+    // (e)(f) pomoGuidedAccessHint:falseで開始 → ポモドーロ動作自体は回帰なし。
+    //        設定を変えずに「閉じる」だけなら次回も出る。
+    // ============================================================
+    console.log("[5] pomoGuidedAccessHint:falseで開始してもポモドーロ動作自体(running/blockId/endsAt)は通常どおり");
+    {
+      const { ctx, page } = await newPage({ userAgent: IPHONE_UA });
+      await page.clock.setFixedTime(now0);
+      await page.goto(`http://localhost:${PORT}/`);
+      await page.waitForTimeout(500);
+      await passGithubGate(page);
+      await seed(page, {
+        blocks: [planBlock({ id: "b5", title: "抑制設定検証Block", startMin: 9 * 60 })],
+        pomoGuidedAccessHint: false
+      });
+
+      await startBlockSkippingDeclare(page, "b5");
+      await page.waitForTimeout(300);
+      const s5 = await stateNow(page);
+      check("running:trueで開始する", s5.pomodoro?.running === true);
+      check("blockIdが正しく紐づく", s5.pomodoro?.blockId === "b5");
+      check("endsAtが25分後に設定される(既存挙動どおり)", !!s5.pomodoro?.endsAt && s5.pomodoro.endsAt.includes("10:25"), JSON.stringify(s5.pomodoro));
+      check("設定OFF時は案内モーダルが出ない", await page.locator(".modal-root.open").count() === 0);
+
+      await ctx.close();
+    }
+
+    console.log("[6] チェックせず「閉じる」→ 設定はtrueのまま(次回も出る)");
+    {
+      const { ctx, page } = await newPage({ userAgent: IPHONE_UA });
+      await page.clock.setFixedTime(now0);
+      await page.goto(`http://localhost:${PORT}/`);
+      await page.waitForTimeout(500);
+      await passGithubGate(page);
+      await seed(page, { blocks: [planBlock({ id: "b6", title: "チェック無し検証Block", startMin: 9 * 60 })] });
+
+      await startBlockSkippingDeclare(page, "b6");
+      await page.waitForTimeout(300);
+      check("案内モーダルが出る", await page.locator(".modal-root.open").count() === 1);
+      await page.click('[data-action="guided-access-dismiss"]:has-text("閉じる")');
+      await page.waitForTimeout(200);
+      const s6 = await stateNow(page);
+      check("チェックせず閉じた場合は設定がtrueのまま", s6.settings.pomoGuidedAccessHint === true, JSON.stringify(s6.settings.pomoGuidedAccessHint));
 
       await ctx.close();
     }
