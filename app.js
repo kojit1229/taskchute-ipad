@@ -784,6 +784,12 @@ document.addEventListener("change", (event) => {
     _aiReportSelectedDate[target.dataset.typeId] = target.value;
     render();
   }
+  // v109: WBS 画面上部のカテゴリ絞り込みプルダウン(UI状態、選択カテゴリのProjectのみ表示)
+  if (target.matches('[data-action="wbs-category-filter"]')) {
+    state.settings.wbsCategoryFilter = target.value || "";
+    persistLocalNoSchedule();
+    render();
+  }
   // v55: WBS インライン編集(期限/状態/カテゴリを行内で直接編集)
   if (target.matches("[data-wbs-edit]")) {
     const field = target.dataset.wbsEdit;
@@ -1330,6 +1336,8 @@ function normalizeState(value) {
   if (typeof value.settings.tasksShowFuture !== "boolean") value.settings.tasksShowFuture = false;
   // v55: WBS のインライン編集モード(UI状態、既定OFF)
   if (typeof value.settings.wbsEditMode !== "boolean") value.settings.wbsEditMode = false;
+  // v109: WBS のカテゴリ絞り込み(UI状態、既定は空文字="すべて")
+  if (typeof value.settings.wbsCategoryFilter !== "string") value.settings.wbsCategoryFilter = "";
   // v23: 繰り返しをルール方式へ(旧データは初回のみ自動移行)
   value.recurrences ||= [];
   migrateRecurrencesIfNeeded(value);
@@ -4766,6 +4774,20 @@ function renderWipBanner() {
   `;
 }
 
+// v109: WBS カテゴリ絞り込みプルダウンの選択肢。実在する Project の category から動的生成する
+// (マスタ登録だけで未使用のカテゴリは含めない)。category未設定のProjectが1件でもあれば「未分類」を追加する。
+function wbsCategoryOptions(projects) {
+  const names = new Set();
+  let hasUncategorized = false;
+  projects.forEach((p) => {
+    if (p.category) names.add(p.category);
+    else hasUncategorized = true;
+  });
+  const sorted = [...names].sort((a, b) => a.localeCompare(b, "ja"));
+  if (hasUncategorized) sorted.push("未分類");
+  return sorted;
+}
+
 function renderWBS() {
   // v16: Wish Project は WBS から除外(専用「やりたい」タブで表示)
   const activeProjects = state.projects.filter((project) => !project.deleted && project.kind !== "wish");
@@ -4785,13 +4807,27 @@ function renderWBS() {
   const allCollapsed = visibleProjects.length > 0 && visibleProjects.every((p) => p.collapsed);
   // v55: インライン編集モード
   const editMode = Boolean(state.settings.wbsEditMode);
+  // v109: カテゴリ絞り込み(既定「すべて」)。未分類は category未設定のProjectを指す。
+  const categoryFilter = state.settings.wbsCategoryFilter || "";
+  const categoryNames = wbsCategoryOptions(activeProjects);
+  const categorySelect = `
+    <select class="select" data-action="wbs-category-filter" aria-label="カテゴリで絞り込み" style="width:auto; min-width:140px; font-size:16px">
+      <option value="" ${!categoryFilter ? "selected" : ""}>すべて</option>
+      ${categoryNames.map((n) => `<option value="${escapeHTML(n)}" ${categoryFilter === n ? "selected" : ""}>${escapeHTML(n)}</option>`).join("")}
+    </select>`;
   const wbsTools = `
-    <div class="row" style="gap:8px; flex-wrap:wrap">
+    <div class="row" style="gap:8px; flex-wrap:wrap; align-items:center">
+      ${categorySelect}
       <button class="btn ${editMode ? "primary" : "ghost"}" data-action="toggle-wbs-edit">${editMode ? "✏️ 編集モード中" : "✏️ 編集モード"}</button>
       <button class="btn ${hideDone ? "primary" : "ghost"}" data-action="toggle-wbs-hide-done">${hideDone ? "完了を表示" : "完了を隠す"}</button>
       <button class="btn ghost" data-action="wbs-collapse-all">${allCollapsed ? "すべて展開" : "すべて折りたたむ"}</button>
       ${toggleBtn}
     </div>`;
+
+  // v109: カテゴリ絞り込みの適用(未分類はcategory未設定のProjectを指す)
+  const filteredProjects = categoryFilter
+    ? visibleProjects.filter((p) => (p.category || "未分類") === categoryFilter)
+    : visibleProjects;
 
   return `
     ${renderHeader("ビジョンを実行へ落とす", "WBS", wbsTools)}
@@ -4811,7 +4847,8 @@ function renderWBS() {
     </section>
 
     <section class="section grid">
-      ${visibleProjects.map(renderProjectTree).join("")}
+      ${filteredProjects.length > 0 ? filteredProjects.map(renderProjectTree).join("")
+        : `<div class="muted" style="padding:12px; text-align:center">このカテゴリのProjectはありません</div>`}
     </section>
   `;
 }
