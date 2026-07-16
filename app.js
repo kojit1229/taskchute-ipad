@@ -9573,6 +9573,11 @@ function toggleBlock(id) {
     }
     return { ...block, completed, actualEndAt: completed && !block.actualEndAt ? nowDateTime() : block.actualEndAt, updatedAt: nowDateTime() };
   });
+  // v115: アンカー配置(提案G③)。完了したBlockが繰り返しルーティンに属していれば、
+  // それをアンカーにする後続のルーティン/チェーンを直後の時刻に自動配置する。
+  if (justCompleted && completedBlock && completedBlock.recurrenceGroupId) {
+    triggerAnchorPlacements(completedBlock.recurrenceGroupId, nowDateTime());
+  }
   saveAndRender("Blockを更新しました");
   // v17/v18: 完了時の演出(常にランダム祝福)
   if (justCompleted && completedBlock) {
@@ -12924,6 +12929,7 @@ function createRecurrenceRule(block, kind) {
     protection: false,  // v114: 保護系ルーティン(提案F)。既定false、編集モーダルでON可能
     fallbackTitle: "",  // v115: 縮退版(提案G①)。既定未設定
     fallbackMinutes: null,
+    anchor: "",  // v115: アンカー(提案G③)。既定未設定
     createdAt: nowDateTime(),
     updatedAt: nowDateTime(),
     deleted: false
@@ -12931,6 +12937,37 @@ function createRecurrenceRule(block, kind) {
   state.recurrences ||= [];
   state.recurrences.push(rule);
   return rule;
+}
+
+// v115: アンカー配置(習慣スタッキング、提案G③)。anchorIdが「今日完了」したタイミングで、
+// anchorがそれと一致する後続のルーティン/チェーンを直後の時刻に自動配置する。
+// ルーティン側(state.recurrences)は既存の繰り返し実体化(makeRecurrenceInstance)を再利用し、
+// 時刻だけ「アンカー完了時刻の1分後」に差し替える。チェーン側(state.routineChains)は
+// Blockという概念を持たないため、当日分のrunにscheduledStartAtを記録するだけに留める
+// (Routineタブのチェーンカードに開始目安として表示する。詳細はdecisions.md参照)。
+function triggerAnchorPlacements(anchorId, completedAtDateTime) {
+  if (!anchorId || !completedAtDateTime) return;
+  const today = todayISO();
+  const afterMin = Math.min(23 * 60 + 59, minutesOf(completedAtDateTime) + 1);
+  const startTime = `${pad2(Math.floor(afterMin / 60))}:${pad2(afterMin % 60)}`;
+  (state.recurrences || []).forEach((r) => {
+    if (r.deleted || r.anchor !== anchorId) return;
+    const already = state.blocks.some((b) => !b.deleted && b.recurrenceGroupId === r.id && b.date === today);
+    if (already) return;
+    const inst = makeRecurrenceInstance(r, today);
+    const durMin = (r.startTime && r.endTime)
+      ? Math.max(1, minutesOf(`${today}T${r.endTime}`) - minutesOf(`${today}T${r.startTime}`))
+      : 10;
+    const endMin = Math.min(23 * 60 + 59, afterMin + durMin);
+    inst.plannedStartAt = `${today}T${startTime}`;
+    inst.plannedEndAt = `${today}T${pad2(Math.floor(endMin / 60))}:${pad2(endMin % 60)}`;
+    state.blocks.push(inst);
+  });
+  (state.routineChains || []).forEach((c) => {
+    if (c.deleted || c.anchor !== anchorId) return;
+    const run = ensureChainRun(c.id);
+    if (!run.completedAt) run.scheduledStartAt = `${today}T${startTime}`;
+  });
 }
 
 // 指定期間に繰り返し Block を実体化(既存があれば温存)。
@@ -12949,6 +12986,10 @@ function maintainRecurrences({ purge = false } = {}) {
   }
   // 期間内の発生日を実体化
   for (const rule of rules) {
+    // v115: アンカー(提案G③)を持つルールは、通常のスケジュール実体化から除外する。
+    //       このルールのBlockは「アンカーが完了した直後」にtriggerAnchorPlacementsだけが
+    //       生成する(=事前に毎日分が生成されてしまうと「完了直後に配置」の意味が無くなるため)。
+    if (rule.anchor) continue;
     let cur = from;
     let guard = 0;
     while (cur <= to && guard < 800) {
