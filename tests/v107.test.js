@@ -17,8 +17,13 @@
 // (b) タスク完了チェック(🏁)→そのBlockも完了になり、Task側もv95連動込みで完了する。
 //     同じTaskの他の未完了Blockには触れない
 // (c) タスク完了チェックを外す→Taskの完了だけ解除される(Block側は完了のまま維持)
-// (d)〜(j): tests/v107.test.js の後続コミットで追加(2チェックの視覚的区別・390px幅・
-//     Task編集モーダル/WBSチェックボックス経由の完了回帰・期日未設定除外・期日昇順ソート)
+// (d) Block完了チェックとタスク完了チェックはクラス名・アイコンで視覚的に区別できる
+// (e) 390px幅で横スクロールが発生せず、両チェックが表示される
+// (f) Task編集モーダルで「完了」に保存→v95連動+WBSで完了表示+未完了一覧から消える
+// (g) WBSタブのチェックボックス(既存のtoggleTask)で完了→未完了一覧から消える(回帰)
+// (h) 期日未設定Taskは未完了一覧に表示されない(K指示、v97からの仕様変更)
+// (i) 未完了一覧は期日昇順(期日超過が最上位)で表示される
+// (j) 8日後以降の折りたたみ(v97)と期日昇順ソートが共存する
 //
 // 方針: v95.test.js/v97.test.jsと同じくブラウザ操作 + localStorage状態注入で観測する。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
@@ -150,6 +155,146 @@ function check(name, cond, extra = "") {
     check("Taskはdoingに戻る(Blockに実績があるためtodoではない)", t3?.status === "doing", JSON.stringify(t3));
     check("Block(B1)は完了のまま(解除しない)", b3?.completed === true, JSON.stringify(b3));
     check("未完了タスク一覧へ戻る", await page.locator('.item [data-action="task-today"][data-id="task-B"]').count() === 1);
+
+    // ============================================================
+    // (d) 2つのチェックがクラス名・アイコンで視覚的に区別できる
+    // ============================================================
+    console.log("[4] Block完了チェックとタスク完了チェックがクラス名・アイコンで区別できる");
+    const blockCheck = page.locator('[data-action="toggle-block"][data-id="block-B1"]');
+    const taskCheck = page.locator('[data-action="toggle-task-complete"][data-id="block-B1"]');
+    check("Block完了チェックは.checkbox-buttonクラス", await blockCheck.evaluate((el) => el.classList.contains("checkbox-button")));
+    check("タスク完了チェックは.task-complete-toggleクラス(別クラス)", await taskCheck.evaluate((el) => el.classList.contains("task-complete-toggle")));
+    check("Block完了チェックのアイコンは✓", (await blockCheck.textContent())?.trim() === "✓");
+    check("タスク完了チェックのアイコンは🏁(別アイコン)", (await taskCheck.textContent())?.trim() === "🏁");
+
+    // ============================================================
+    // (e) 390px幅で横スクロールが発生せず、両チェックが表示される
+    // ============================================================
+    console.log("[5] 390px幅で横スクロールが発生せず、Block完了/タスク完了の両チェックが表示される");
+    const ctxMobile = await browser.newContext({ serviceWorkers: "block", viewport: { width: 390, height: 844 } });
+    const pageMobile = await ctxMobile.newPage();
+    pageMobile.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror(mobile):", e.message); });
+    await blockGithubApiByDefault(pageMobile);
+    await pageMobile.goto(`http://localhost:${PORT}/`);
+    await pageMobile.waitForTimeout(500);
+    await passGithubGate(pageMobile);
+    await pageMobile.evaluate(({ KEY, TODAY }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.tasks = [{
+        id: "task-M", projectId: "test-proj", parentTaskId: "", title: "390px幅確認Task", category: "",
+        status: "todo", dueDate: TODAY, description: "", createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`,
+        deleted: false, progressNum: 0, progressDen: 10, doneCriteria: "", firstStep: ""
+      }];
+      s.blocks = [{
+        id: "block-M", taskId: "task-M", date: TODAY, title: "390px幅確認Task", category: "学習",
+        plannedStartAt: `${TODAY}T09:00`, plannedEndAt: `${TODAY}T09:45`, actualStartAt: "", actualEndAt: "",
+        completed: false, charge: 0, discharge: 0, comment: "", recurrenceGroupId: "", pomodoroCount: 0,
+        migratedTo: "", orderIndex: 0, carryCount: 0, isMIT: false, source: "", estimateMin: null,
+        leverageType: "", createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false
+      }];
+      s.projects = [{
+        id: "test-proj", kind: "normal", title: "テスト案件", category: "", status: "active",
+        description: "", dueDate: "", twelveWeekStartDate: "", createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`,
+        deleted: false, collapsed: false
+      }];
+      s.selectedDate = TODAY;
+      s.currentView = "tasks";
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, TODAY });
+    await pageMobile.reload();
+    await pageMobile.waitForTimeout(500);
+    check("390px幅でBlock完了チェックが見える", await pageMobile.locator('[data-action="toggle-block"][data-id="block-M"]').count() === 1);
+    check("390px幅でタスク完了チェックが見える", await pageMobile.locator('[data-action="toggle-task-complete"][data-id="block-M"]').count() === 1);
+    const metricsMobile = await pageMobile.evaluate(() => {
+      const doc = document.scrollingElement || document.documentElement;
+      return { scrollWidth: doc.scrollWidth, clientWidth: doc.clientWidth };
+    });
+    check("390px幅で横スクロールが発生しない(scrollWidth <= clientWidth)",
+      metricsMobile.scrollWidth <= metricsMobile.clientWidth + 1,
+      `scrollWidth=${metricsMobile.scrollWidth} clientWidth=${metricsMobile.clientWidth}`);
+    await ctxMobile.close();
+
+    // ============================================================
+    // (f) Task編集モーダルで「完了」に保存→v95連動+WBS完了表示+未完了一覧から消える
+    // ============================================================
+    console.log("[6] Task編集モーダルでステータスを「完了」にして保存 → 分子=分母、WBSで完了表示、未完了一覧から消える");
+    await seed({
+      tasks: [wbsTask("task-C", "編集モーダル完了検証Task", { progressNum: 3, progressDen: 10 })],
+      blocks: [],
+      projects: [testProject()],
+      view: "tasks"
+    });
+    check("保存前は未完了タスク一覧に出る", await page.locator('.item [data-action="task-today"][data-id="task-C"]').count() === 1);
+    await page.click('[data-action="edit-task"][data-id="task-C"]');
+    await page.waitForTimeout(200);
+    await page.selectOption('[data-modal-field="status"]', "completed");
+    await page.click('[data-action="modal-save"]');
+    await page.waitForTimeout(300);
+    const s6 = await stateNow();
+    const t6 = s6.tasks.find((t) => t.id === "task-C");
+    check("保存後、分子が分母(10)と同じになる(v95連動)", t6?.progressNum === 10, JSON.stringify(t6));
+    check("保存後、statusがcompletedになる", t6?.status === "completed", JSON.stringify(t6));
+    check("保存後、未完了タスク一覧から消える", await page.locator('.item [data-action="task-today"][data-id="task-C"]').count() === 0);
+    await page.click('[data-action="nav"][data-view="wbs"]');
+    await page.waitForTimeout(200);
+    check("WBSタブのバッジが「完了」になる", (await wbsBadge("task-C").textContent())?.includes("完了"), await wbsBadge("task-C").textContent());
+
+    // ============================================================
+    // (g) WBSチェックボックス(既存toggleTask)で完了→未完了一覧から消える(回帰)
+    // ============================================================
+    console.log("[7] WBSタブのチェックボックス(toggleTask)で完了→タスクシュートの未完了一覧から消える(既存経路の回帰確認)");
+    await seed({
+      tasks: [wbsTask("task-D", "WBSチェック完了検証Task", { progressNum: 4, progressDen: 10 })],
+      blocks: [],
+      projects: [testProject()],
+      view: "tasks"
+    });
+    check("WBS操作前は未完了タスク一覧(tasks画面)に出る", await page.locator('.item [data-action="task-today"][data-id="task-D"]').count() === 1);
+    await page.click('[data-action="nav"][data-view="wbs"]');
+    await page.waitForTimeout(200);
+    await page.click('[data-action="toggle-task"][data-id="task-D"]');
+    await page.waitForTimeout(300);
+    const s7 = await stateNow();
+    const t7 = s7.tasks.find((t) => t.id === "task-D");
+    check("WBSチェックで分子が分母に揃う(既存v95連動)", t7?.progressNum === 10, JSON.stringify(t7));
+    await page.click('[data-action="nav"][data-view="tasks"]');
+    await page.waitForTimeout(200);
+    check("WBS完了後、タスクシュートの未完了一覧から消える", await page.locator('.item [data-action="task-today"][data-id="task-D"]').count() === 0);
+
+    // ============================================================
+    // (h) 期日未設定Taskは未完了一覧に表示されない(K指示、v97仕様変更)
+    // ============================================================
+    console.log("[8] 期日未設定Taskは未完了タスク一覧に表示されない(v97の「常に表示」をK指示で廃止)");
+    await seed({
+      tasks: [wbsTask("task-nodue", "期日未設定Task", { dueDate: "" })],
+      blocks: [],
+      projects: [testProject()],
+      view: "tasks"
+    });
+    check("期日未設定Taskは表示されない", await page.locator('.item [data-action="task-today"][data-id="task-nodue"]').count() === 0);
+
+    // ============================================================
+    // (i)(j) 未完了一覧は期日昇順(超過が最上位)。8日後以降の折りたたみと共存する
+    // ============================================================
+    console.log("[9][10] 未完了一覧は期日昇順で表示され、8日後以降の折りたたみ(v97)と共存する");
+    const SORT_TASKS = [
+      wbsTask("task-in3days", "3日後Task", { dueDate: "2026-07-19" }),
+      wbsTask("task-overdue", "期日超過Task", { dueDate: "2026-07-10" }),
+      wbsTask("task-today2", "当日Task", { dueDate: TODAY }),
+      wbsTask("task-tomorrow", "翌日Task", { dueDate: "2026-07-17" }),
+      wbsTask("task-8days", "8日後Task(折りたたみ対象)", { dueDate: "2026-07-25" })
+    ];
+    await seed({ tasks: SORT_TASKS, blocks: [], projects: [testProject()], view: "tasks" });
+    const idsInOrder = await page.locator('.item [data-action="task-today"]').evaluateAll((els) => els.map((el) => el.dataset.id));
+    check("既定表示(8日後以降は畳む)は期日昇順: 超過→当日→翌日→3日後",
+      JSON.stringify(idsInOrder) === JSON.stringify(["task-overdue", "task-today2", "task-tomorrow", "task-in3days"]),
+      JSON.stringify(idsInOrder));
+    await page.click('[data-action="toggle-tasks-show-future"]');
+    await page.waitForTimeout(200);
+    const idsInOrderExpanded = await page.locator('.item [data-action="task-today"]').evaluateAll((els) => els.map((el) => el.dataset.id));
+    check("8日後以降を展開しても期日昇順のまま末尾に追加される",
+      JSON.stringify(idsInOrderExpanded) === JSON.stringify(["task-overdue", "task-today2", "task-tomorrow", "task-in3days", "task-8days"]),
+      JSON.stringify(idsInOrderExpanded));
   } finally {
     await browser.close();
     server.close();
