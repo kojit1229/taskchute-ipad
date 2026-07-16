@@ -12,7 +12,8 @@
 // (a) プルダウンでカテゴリを選択→そのカテゴリのProjectのみ表示される
 // (b) 「すべて」を選択→全Projectが表示される
 // (c) category未設定のProjectは「未分類」として選択肢に出て、選択すると該当Projectのみ表示される
-// (d)(e)は次コミットで追加(タスク操作の共存確認・390px幅確認)。
+// (d) 絞り込み中もタスク操作(完了チェック・進捗の分子/分母入力)が正常に動作する
+// (e) 390px幅でプルダウンが表示され、横スクロールが発生しない
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
@@ -145,6 +146,66 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(200);
     const titlesNone = await projectTitleLocator(page).allTextContents();
     check("「未分類」選択時はcategory未設定の2件のみ表示", JSON.stringify(titlesNone) === JSON.stringify(["その他", "未分類プロジェクト"]), JSON.stringify(titlesNone));
+
+    // ============================================================
+    // (d) 絞り込み中もタスク操作(完了チェック・進捗入力)が正常に動く
+    // ============================================================
+    console.log("[4] 絞り込み中(未分類)でもタスクの完了チェック・進捗の分子/分母入力が正常に動作する");
+    await page.click('[data-action="toggle-task"][data-id="task-none"]');
+    await page.waitForTimeout(300);
+    let s4 = await stateNow();
+    check("絞り込み中でもタスク完了チェックが反映される", s4.tasks.find((t) => t.id === "task-none")?.status === "completed", JSON.stringify(s4.tasks));
+    check("完了操作後も絞り込み状態(未分類)は維持される", s4.settings.wbsCategoryFilter === "未分類");
+    check("完了操作後も未分類の2件のみ表示のまま", await projectTitleLocator(page).count() === 2);
+
+    // 完了を隠すトグルで一覧から消えるため、進捗入力の検証は別カテゴリの未完了タスクで行う
+    await filterSelect.selectOption("仕事");
+    await page.waitForTimeout(200);
+    const numInput = page.locator('input[data-wbs-progress="num"][data-id="task-work"]');
+    await numInput.fill("7");
+    await numInput.dispatchEvent("change");
+    await page.waitForTimeout(300);
+    const s5 = await stateNow();
+    check("絞り込み中(仕事)でも進捗の分子入力が反映される", s5.tasks.find((t) => t.id === "task-work")?.progressNum === 7, JSON.stringify(s5.tasks));
+    check("進捗入力後も絞り込み状態(仕事)は維持される", s5.settings.wbsCategoryFilter === "仕事");
+
+    // ============================================================
+    // (e) 390px幅でプルダウンが表示され、横スクロールが発生しない
+    // ============================================================
+    console.log("[5] 390px幅でプルダウンが表示され、横スクロールが発生しない");
+    const ctxMobile = await browser.newContext({ serviceWorkers: "block", viewport: { width: 390, height: 844 } });
+    const pageMobile = await ctxMobile.newPage();
+    pageMobile.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror(mobile):", e.message); });
+    await blockGithubApiByDefault(pageMobile);
+    await pageMobile.clock.setFixedTime(now0);
+    await pageMobile.goto(`http://localhost:${PORT}/`);
+    await pageMobile.waitForTimeout(500);
+    await passGithubGate(pageMobile);
+    await pageMobile.evaluate(({ KEY, projects, tasks, TODAY }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.projects = projects;
+      s.tasks = tasks;
+      s.blocks = [];
+      s.selectedDate = TODAY;
+      s.currentView = "wbs";
+      s.settings.wbsCategoryFilter = "学び";
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, projects: PROJECTS, tasks: TASKS, TODAY });
+    await pageMobile.reload();
+    await pageMobile.waitForTimeout(500);
+    const filterSelectMobile = pageMobile.locator('select[data-action="wbs-category-filter"]');
+    check("390px幅でプルダウンが表示される", await filterSelectMobile.count() === 1);
+    check("390px幅でも絞り込みが効いている(学びプロジェクトのみ)", await projectTitleLocator(pageMobile).count() === 1);
+    const fontSize = await filterSelectMobile.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    check("プルダウンのfont-sizeは16px以上(iOSズーム防止)", fontSize >= 16, `fontSize=${fontSize}`);
+    const metricsMobile = await pageMobile.evaluate(() => {
+      const doc = document.scrollingElement || document.documentElement;
+      return { scrollWidth: doc.scrollWidth, clientWidth: doc.clientWidth };
+    });
+    check("390px幅で横スクロールが発生しない(scrollWidth <= clientWidth)",
+      metricsMobile.scrollWidth <= metricsMobile.clientWidth + 1,
+      `scrollWidth=${metricsMobile.scrollWidth} clientWidth=${metricsMobile.clientWidth}`);
+    await ctxMobile.close();
   } finally {
     await browser.close();
     server.close();
