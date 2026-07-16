@@ -34,7 +34,14 @@ function check(name, cond, extra = "") {
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
   await blockGithubApiByDefault(page);
 
-  const TODAY = "2026-07-15";
+  const pad2 = (n) => String(n).padStart(2, "0");
+  // v108: 実時刻依存フレーク対策 — TODAYをハードコードせず実行時の「今日」10:00に固定する
+  //       (v89/v90/v97/v98と同じ流儀)。app.js起動時にstate.selectedDate=todayISO()(実時計)へ
+  //       強制されるため、TODAYがハードコード日付のままだと実行日によって選択日とフィクスチャが
+  //       ズレる可能性がある(2026-07-16のCI赤=v97/v98で顕在化した既知のクラス)。
+  const now0 = new Date();
+  now0.setHours(10, 0, 0, 0);
+  const TODAY = `${now0.getFullYear()}-${pad2(now0.getMonth() + 1)}-${pad2(now0.getDate())}`;
   function wbsTask(id, title, extra = {}) {
     return {
       id, projectId: "test-proj", parentTaskId: "", title, category: "", status: "todo", dueDate: "",
@@ -67,6 +74,7 @@ function check(name, cond, extra = "") {
   }
 
   try {
+    await page.clock.setFixedTime(now0);
     await page.goto(`http://localhost:${PORT}/`);
     await page.waitForTimeout(500);
     await passGithubGate(page);
@@ -169,6 +177,7 @@ function check(name, cond, extra = "") {
     const pageMobile = await ctxMobile.newPage();
     pageMobile.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror(mobile):", e.message); });
     await blockGithubApiByDefault(pageMobile);
+    await pageMobile.clock.setFixedTime(now0);
     await pageMobile.goto(`http://localhost:${PORT}/`);
     await pageMobile.waitForTimeout(500);
     await passGithubGate(pageMobile);

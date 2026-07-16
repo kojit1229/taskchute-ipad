@@ -45,7 +45,20 @@ function check(name, cond, extra = "") {
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
   await blockGithubApiByDefault(page);
 
-  const TODAY = "2026-07-16";
+  const pad2 = (n) => String(n).padStart(2, "0");
+  // v108: 実時刻依存フレーク対策 — TODAYをハードコードせず実行時の「今日」10:00に固定する
+  //       (v89/v90/v97/v98と同じ流儀)。app.js起動時にstate.selectedDate=todayISO()(実時計)へ
+  //       強制されるため、TODAYがハードコード日付のままだと実行日によって選択日とフィクスチャが
+  //       ズレる可能性がある(2026-07-16のCI赤=v97/v98で顕在化した既知のクラス)。
+  const now0 = new Date();
+  now0.setHours(10, 0, 0, 0);
+  const TODAY = `${now0.getFullYear()}-${pad2(now0.getMonth() + 1)}-${pad2(now0.getDate())}`;
+  // TODAY相対の期日をnow0からのDateオブジェクト演算で求める(文字列固定日ではズレる、v97と同じ)
+  const addDaysStr = (n) => {
+    const d = new Date(now0);
+    d.setDate(d.getDate() + n);
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  };
   function wbsTask(id, title, extra = {}) {
     return {
       id, projectId: "test-proj", parentTaskId: "", title, category: "", status: "todo", dueDate: TODAY,
@@ -92,6 +105,7 @@ function check(name, cond, extra = "") {
   }
 
   try {
+    await page.clock.setFixedTime(now0);
     await page.goto(`http://localhost:${PORT}/`);
     await page.waitForTimeout(500);
     await passGithubGate(page);
@@ -175,6 +189,7 @@ function check(name, cond, extra = "") {
     const pageMobile = await ctxMobile.newPage();
     pageMobile.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror(mobile):", e.message); });
     await blockGithubApiByDefault(pageMobile);
+    await pageMobile.clock.setFixedTime(now0);
     await pageMobile.goto(`http://localhost:${PORT}/`);
     await pageMobile.waitForTimeout(500);
     await passGithubGate(pageMobile);
@@ -278,11 +293,11 @@ function check(name, cond, extra = "") {
     // ============================================================
     console.log("[9][10] 未完了一覧は期日昇順で表示され、8日後以降の折りたたみ(v97)と共存する");
     const SORT_TASKS = [
-      wbsTask("task-in3days", "3日後Task", { dueDate: "2026-07-19" }),
-      wbsTask("task-overdue", "期日超過Task", { dueDate: "2026-07-10" }),
+      wbsTask("task-in3days", "3日後Task", { dueDate: addDaysStr(3) }),
+      wbsTask("task-overdue", "期日超過Task", { dueDate: addDaysStr(-6) }),
       wbsTask("task-today2", "当日Task", { dueDate: TODAY }),
-      wbsTask("task-tomorrow", "翌日Task", { dueDate: "2026-07-17" }),
-      wbsTask("task-8days", "8日後Task(折りたたみ対象)", { dueDate: "2026-07-25" })
+      wbsTask("task-tomorrow", "翌日Task", { dueDate: addDaysStr(1) }),
+      wbsTask("task-8days", "8日後Task(折りたたみ対象)", { dueDate: addDaysStr(9) })
     ];
     await seed({ tasks: SORT_TASKS, blocks: [], projects: [testProject()], view: "tasks" });
     const idsInOrder = await page.locator('.item [data-action="task-today"]').evaluateAll((els) => els.map((el) => el.dataset.id));
