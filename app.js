@@ -2588,13 +2588,43 @@ function overdueUncheckedRoutines(blocks) {
 // MAX_LOOKBACK_DAYSは canary-check.py の既定14日と揃える(無限ループ防止)。
 const PROTECTION_MAX_LOOKBACK_DAYS = 14;
 
+// v115追補(独立レビュー指摘 severity:high対応、2026-07-16): anchor付きルールは
+// maintainRecurrences()で通常の日次実体化から除外されるため(アンカー元完了直後にしか
+// Blockが生成されない)、「対象日にBlockが1件も無い」だけを見て即座に打ち切ると、
+// アンカー元が崩れて未完了なだけの日を「データ欠落」と誤判定し、streakを過小カウントする
+// (アンカー元が今日崩れているとstreak=0で警告自体が消えるHIGH指摘)。
+// アンカー元(ruleの指すルーティンまたはチェーン)にその日の「活動」(ルールなら
+// recurrenceGroupId一致のBlock、チェーンならchainRunsのその日のrun)が存在するかどうかで、
+// 「本当のデータ欠落(アンカー元自体も動いていない日)」と「アンカー元は存在するが
+// まだ完了していないだけの日」を切り分ける。完了有無ではなく存在有無で判定するのは、
+// アンカー元が完了済みの日でもアンカー対象Blockが後から(RECURRENCE_KEEP_PAST_DAYS超過の
+// purge等で)失われているケースを「データ欠落」と誤判定しないため(decisions.md参照)。
+function anchorActivityExistsOn(anchorId, date) {
+  if (!anchorId) return false;
+  const hasRuleBlock = state.blocks.some((b) =>
+    !b.deleted && b.recurrenceGroupId === anchorId && b.date === date);
+  if (hasRuleBlock) return true;
+  return Boolean(findChainRun(anchorId, date));
+}
+
 function computeProtectionMissedStreak(ruleId, targetDateISO) {
+  const rule = (state.recurrences || []).find((r) => r.id === ruleId && !r.deleted);
   let date = targetDateISO;
   let missed = 0;
   for (let i = 0; i < PROTECTION_MAX_LOOKBACK_DAYS; i++) {
     const dayBlocks = state.blocks.filter((b) =>
       !b.deleted && b.recurrenceGroupId === ruleId && b.date === date);
-    if (!dayBlocks.length || dayBlocks.some((b) => b.completed)) break;
+    if (dayBlocks.some((b) => b.completed)) break;
+    if (!dayBlocks.length) {
+      // v115追補: anchor付きルールのみ、アンカー元の当日の活動有無で継続/打ち切りを判定する。
+      // anchor無しルールは従来どおり「Blockが1件も無ければ即打ち切り」のまま(回帰なし)。
+      if (rule && rule.anchor && anchorActivityExistsOn(rule.anchor, date)) {
+        missed += 1;
+        date = addDays(date, -1);
+        continue;
+      }
+      break;
+    }
     missed += 1;
     date = addDays(date, -1);
   }
