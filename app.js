@@ -11991,8 +11991,9 @@ function approveAiWorkResult(resultId) {
   });
   state.blocks.push(block);
   if (r.taskId) {
+    // v107: ここも「statusをcompletedにする経路」の一つ。saveTaskFromModalと同じくv95連動漏れがあったため統一
     state.tasks = state.tasks.map((t) => (t.id === r.taskId && !t.deleted)
-      ? { ...t, status: "completed", updatedAt: nowDateTime() }
+      ? { ...t, status: "completed", progressNum: fillProgressOnComplete(t), updatedAt: nowDateTime() }
       : t);
   }
   saveAndRender("AIの作業実績を登録しました");
@@ -13087,6 +13088,8 @@ function saveTaskFromModal(id, fields) {
       leverageType: fields.leverageType || ""  // v65: 10x機構
     });
     task.status = fields.status || "todo";
+    // v107: 新規作成時点で「完了」を選んだ場合もWBSインライン編集(v95)と同じくv95連動を発火
+    if (task.status === "completed") task.progressNum = fillProgressOnComplete(task);
     task.description = fields.description || "";
     task.aiWork = Boolean(fields.aiWork);  // v67: AI作業ワーカー連携
     task.aiWorkBrief = (fields.aiWorkBrief || "").trim();
@@ -13099,12 +13102,18 @@ function saveTaskFromModal(id, fields) {
   }
   state.tasks = state.tasks.map((t) => {
     if (t.id !== id) return t;
+    const status = fields.status || t.status || "todo";
+    // v107: タスク編集モーダルの保存経路がv95連動(分子=分母)を素通りしていたバグ修正。
+    //       WBSインライン編集(data-wbs-edit)のfillProgressOnComplete呼び出しと同じ方針で、
+    //       「完了」を選んで保存した瞬間に分子を分母へ揃える(完了以外への変更では触らない)。
+    const progressNum = status === "completed" ? fillProgressOnComplete(t) : t.progressNum;
     return {
       ...t,
       title: (fields.title || "").trim() || t.title,
       projectId: fields.projectId || "",
       parentTaskId: fields.parentTaskId || "",
-      status: fields.status || t.status || "todo",
+      status,
+      progressNum,
       category: fields.category || "",
       dueDate: fields.dueDate || "",
       description: fields.description || "",
