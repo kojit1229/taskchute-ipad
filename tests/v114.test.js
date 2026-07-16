@@ -44,21 +44,30 @@ function check(name, cond, extra = "") {
   const D2 = isoOffset(-2);
   const D3 = isoOffset(-3);
 
-  function makeBlock({ id, date, title, recurrenceGroupId, completed, time }) {
+  // v114境界値レビュー対応: comment(既定"")は「7日より前の日付でも
+  // maintainRecurrences({purge:true})のisTouchedBlock判定でパージされないようにする」ための
+  // 引数。起動時(runDailyOpen({force:true}))は毎回purge:trueが走り、RECURRENCE_KEEP_PAST_DAYS
+  // (7日)より前かつ「未編集」の繰り返し実体は削除される。14日キャップの境界値テストは
+  // 8日以上前のBlockを生存させる必要があるため、非空commentで「編集済み」扱いにする。
+  function makeBlock({ id, date, title, recurrenceGroupId, completed, time, comment = "" }) {
     return {
       id, taskId: "", date, title, category: "ルーティン",
       plannedStartAt: `${date}T${time}`, plannedEndAt: `${date}T${time.slice(0, 2)}:${String(Number(time.slice(3, 5)) + 10).padStart(2, "0")}`,
       actualStartAt: "", actualEndAt: "", completed,
-      charge: 0, discharge: 0, expectedCharge: "", expectedDischarge: "", comment: "",
+      charge: 0, discharge: 0, expectedCharge: "", expectedDischarge: "", comment,
       recurrenceGroupId, pomodoroCount: 0, migratedTo: "", carryCount: 0, orderIndex: 0, isMIT: false,
       source: "", createdAt: `${date}T00:00`, updatedAt: `${date}T00:00`, deleted: false
     };
   }
 
-  function makeRule({ id, title, time, protection }) {
+  // v114境界値レビュー対応: anchorDate(既定D3)は「該当日より前は繰り返しにマッチしない」
+  // (recurrenceMatchesDate)ため、maintainRecurrences()の自動実体化で意図しない日付の
+  // Blockが増殖しないようにするガード。「今日分のBlockデータが1件も無い」ケース(ruleH)では
+  // anchorDateを未来日にして、今日分の自動生成そのものを止める。
+  function makeRule({ id, title, time, protection, anchorDate = D3 }) {
     const rule = {
       id, title, category: "ルーティン", taskId: "", kind: "daily", startTime: time, endTime: "",
-      anchorDate: D3, expectedCharge: "", expectedDischarge: "", source: "", exceptionDates: [],
+      anchorDate, expectedCharge: "", expectedDischarge: "", source: "", exceptionDates: [],
       createdAt: `${D3}T00:00`, updatedAt: `${D3}T00:00`, deleted: false
     };
     // protection未指定=マイグレーションテスト用(旧データはフィールド自体が無い)
@@ -212,6 +221,111 @@ function check(name, cond, extra = "") {
     const badgesAfter2 = await badgesIn(".routine-card", ".routine-card-title");
     const cardDAfter2 = badgesAfter2.find((b) => b.title === "家族時間");
     check("OFFに戻すとバッジも消える", cardDAfter2 && cardDAfter2.hasBadge === false, JSON.stringify(cardDAfter2));
+
+    // ============================================================
+    // (6) 境界値: ちょうど2日連続欠落(閾値オンポイント)/0日欠落(即警告なし)/
+    //     14日超過(PROTECTION_MAX_LOOKBACK_DAYSでキャップ)
+    //     ※既存(1)〜(5)のセクションとは独立させるため、ここで状態を全置換する
+    //     (home実行率%等、既存アサーションに影響を与えないため)。
+    // ============================================================
+    console.log("[5] 境界値: streak=2(閾値ちょうど)/streak=0(当日完了)/14日キャップ");
+    // ruleE(瞑想): D2完了→D1,今日 未完了 = 連続欠落ちょうど2日(streak>=2の閾値オンポイント。
+    // 既存テストのstreak=3(ruleA)・streak=1(ruleB)はどちらも閾値を跨いだ側のみで、
+    // 「ちょうど2」自体はオフバイワン検出のため未検証だった)
+    const ruleE = makeRule({ id: "rule-e-meditation", title: "瞑想", time: "05:00", protection: true });
+    const blocksE = [
+      makeBlock({ id: "blk-e-d2", date: D2, title: "瞑想", recurrenceGroupId: ruleE.id, completed: true, time: "05:00" }),
+      makeBlock({ id: "blk-e-d1", date: D1, title: "瞑想", recurrenceGroupId: ruleE.id, completed: false, time: "05:00" }),
+      makeBlock({ id: "blk-e-today", date: TODAY, title: "瞑想", recurrenceGroupId: ruleE.id, completed: false, time: "05:00" })
+    ];
+    // ruleF(腹式呼吸): 今日完了のみ = 連続欠落0日(missed=0が「completed=trueで即打ち切り」経路を通る)
+    const ruleF = makeRule({ id: "rule-f-breathing", title: "腹式呼吸", time: "05:30", protection: true });
+    const blocksF = [
+      makeBlock({ id: "blk-f-today", date: TODAY, title: "腹式呼吸", recurrenceGroupId: ruleF.id, completed: true, time: "05:30" })
+    ];
+    // ruleI(ストレッチ強化): 今日〜14日前まで15日分すべて未完了(8日以上前はcommentを付けて
+    // maintainRecurrencesのパージ(RECURRENCE_KEEP_PAST_DAYS=7日)を回避)。
+    // PROTECTION_MAX_LOOKBACK_DAYS=14のため、実際は15日連続欠落でもバッジは14でキャップされる
+    // はず(15日目のデータが存在すること自体が「キャップが効いていなければ15になる」ことの
+    // 反証材料になる)。
+    const ruleI = makeRule({ id: "rule-i-cap", title: "ストレッチ強化", time: "05:45", protection: true });
+    const blocksI = [];
+    for (let i = 0; i <= 14; i++) {
+      blocksI.push(makeBlock({
+        id: `blk-i-d${i}`, date: isoOffset(-i), title: "ストレッチ強化",
+        recurrenceGroupId: ruleI.id, completed: false, time: "05:45",
+        comment: i >= 8 ? "seed-anchor(パージ回避用)" : ""
+      }));
+    }
+
+    await page.evaluate(({ KEY, TODAY, recurrences, blocks }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.tasks = [];
+      s.projects = [];
+      s.blocks = blocks;
+      s.recurrences = recurrences;
+      s.selectedDate = TODAY;
+      s.currentView = "routine";
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, TODAY, recurrences: [ruleE, ruleF, ruleI], blocks: [...blocksE, ...blocksF, ...blocksI] });
+    await page.reload();
+    await page.waitForTimeout(500);
+
+    const boundaryBadges = await badgesIn(".routine-card", ".routine-card-title");
+    const cardE = boundaryBadges.find((b) => b.title === "瞑想");
+    const cardF = boundaryBadges.find((b) => b.title === "腹式呼吸");
+    const cardI = boundaryBadges.find((b) => b.title === "ストレッチ強化");
+    check("ちょうど2日連続欠落で警告バッジが出る(streak>=2の閾値オンポイント)", cardE && cardE.hasBadge, JSON.stringify(cardE));
+    check("ちょうど2日連続欠落の日数は2", cardE && cardE.streak === "2", JSON.stringify(cardE));
+    check("ちょうど2日連続欠落は警告色(warn)が付く", cardE && cardE.warn === true, JSON.stringify(cardE));
+    check("0日欠落(当日完了)にもバッジは出る(0日と分かるように)", cardF && cardF.hasBadge, JSON.stringify(cardF));
+    check("0日欠落の連続日数は0", cardF && cardF.streak === "0", JSON.stringify(cardF));
+    check("0日欠落は警告色が付かない", cardF && cardF.warn === false, JSON.stringify(cardF));
+    check("15日分の欠落データがあってもPROTECTION_MAX_LOOKBACK_DAYS(14)でキャップされる", cardI && cardI.streak === "14", JSON.stringify(cardI));
+    check("14日キャップでも警告色(warn)は付く", cardI && cardI.warn === true, JSON.stringify(cardI));
+
+    // ============================================================
+    // (7) 境界値: 該当日(今日)にBlockデータが1件も無い→即座にstreak=0・警告なし
+    //     computeProtectionMissedStreakは常にtodayISO()基準で過去へ遡るため、今日分の
+    //     データが無ければ最初の判定で即打ち切りになるはず(canary-check.pyのコメント
+    //     「対象日にBlockが1件も無い→そこで打ち切り」の1日目バージョン)。
+    //     selectedDateを未来日にして、そこにだけBlockを置く(=実際の「今日」には
+    //     このルールのBlockが1件も存在しない状態を作る)。anchorDateを未来日にして、
+    //     maintainRecurrences()が「今日」分を自動実体化してしまわないようガードする。
+    //     注意: v85仕様により起動時(reload)は必ずstate.selectedDateがtodayISO()へ
+    //     強制されるため(「翌日」ボタンで日付移動した場合はセッション中のみ尊重される)、
+    //     localStorageへselectedDate=未来日を仕込んでも次のreloadで無視される。そのため
+    //     reload後にUI操作(「翌日」ボタン)でセッション内移動する。
+    // ============================================================
+    console.log("[6] 境界値: 今日分のBlockデータが1件も無いルーティンは即座にstreak=0・警告なし");
+    const FUTURE_OFFSET = 5;
+    const FUTURE = isoOffset(FUTURE_OFFSET);
+    const ruleH = makeRule({ id: "rule-h-nodata", title: "ヨガ", time: "05:15", protection: true, anchorDate: FUTURE });
+    const blocksH = [
+      makeBlock({ id: "blk-h-future", date: FUTURE, title: "ヨガ", recurrenceGroupId: ruleH.id, completed: false, time: "05:15" })
+    ];
+    await page.evaluate(({ KEY, recurrences, blocks }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.tasks = [];
+      s.projects = [];
+      s.blocks = blocks;
+      s.recurrences = recurrences;
+      s.currentView = "routine";
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, recurrences: [ruleH], blocks: blocksH });
+    await page.reload();
+    await page.waitForTimeout(500);
+    // v85: reload直後はselectedDateがtodayISO()に強制されるため、「翌日」ボタンをFUTURE_OFFSET回
+    // クリックしてセッション内で未来日へ移動する(shiftSelectedDateはrender()のみでreloadしない)
+    for (let i = 0; i < FUTURE_OFFSET; i++) {
+      await page.click('[data-action="date-next"]');
+      await page.waitForTimeout(100);
+    }
+    const noDataBadges = await badgesIn(".routine-card", ".routine-card-title");
+    const cardH = noDataBadges.find((b) => b.title === "ヨガ");
+    check("今日分のBlockデータが1件も無いルーティンにもバッジは出る(0日と分かるように)", cardH && cardH.hasBadge, JSON.stringify(cardH));
+    check("今日分のデータが無ければstreak=0で即打ち切り", cardH && cardH.streak === "0", JSON.stringify(cardH));
+    check("データ無しのstreak=0は警告色が付かない", cardH && cardH.warn === false, JSON.stringify(cardH));
   } finally {
     await browser.close();
     server.close();
