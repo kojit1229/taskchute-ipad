@@ -117,6 +117,27 @@ function check(name, cond, extra = "") {
     anchor: "rule-anchor-source", createdAt: `${D3}T00:00`, updatedAt: `${D3}T00:00`, deleted: false
   };
 
+  // ---- (3b) アンカー元が崩れている場合の連続欠落日数(独立レビュー指摘 severity:high対応) ----
+  // ruleAnchorSourceBroken(アンカー元、anchor無し): D3のみ完了、D2/D1/今日は未完了=崩れている。
+  const ruleAnchorSourceBroken = makeRule({ id: "rule-anchor-source-broken", title: "白湯", time: "06:30", anchorDate: D3 });
+  const blocksAnchorSourceBroken = [
+    makeBlock({ id: "blk-anchor-source-broken-d3", date: D3, title: "白湯", recurrenceGroupId: ruleAnchorSourceBroken.id, completed: true, time: "06:30" }),
+    makeBlock({ id: "blk-anchor-source-broken-d2", date: D2, title: "白湯", recurrenceGroupId: ruleAnchorSourceBroken.id, completed: false, time: "06:30" }),
+    makeBlock({ id: "blk-anchor-source-broken-d1", date: D1, title: "白湯", recurrenceGroupId: ruleAnchorSourceBroken.id, completed: false, time: "06:30" }),
+    makeBlock({ id: "blk-anchor-source-broken-today", date: TODAY, title: "白湯", recurrenceGroupId: ruleAnchorSourceBroken.id, completed: false, time: "06:30" })
+  ];
+  // ruleAnchoredBroken(anchor=ruleAnchorSourceBroken.id、protection:true): アンカー元が崩れているため
+  // maintainRecurrencesからも除外され、過去日(D1/D2/D3)のBlockは一切実体化されない(=修正前は
+  // computeProtectionMissedStreakが「対象日にBlockが1件も無い」で即打ち切りとなりstreak過小
+  // カウントのバグがあった)。今日分のBlockだけは(バッジを画面上で観測できるように)未完了で
+  // 1件seedする——これは「アンカーが過去に一度発火して今日のBlockだけは存在するが、
+  // まだ実行していない」状態を模した最小限のDOM可視化であり、D1/D2/D3のギャップ橋渡し判定
+  // (このテストが検証したい本題)には影響しない。
+  const ruleAnchoredBroken = makeRule({ id: "rule-anchored-broken", title: "アンカー対象(壊れているアンカー元)", time: "23:30", protection: true, anchor: "rule-anchor-source-broken", anchorDate: TODAY });
+  const blocksAnchoredBroken = [
+    makeBlock({ id: "blk-anchored-broken-today", date: TODAY, title: "アンカー対象(壊れているアンカー元)", recurrenceGroupId: ruleAnchoredBroken.id, completed: false, time: "23:30" })
+  ];
+
   async function seed() {
     await page.evaluate(({ KEY, TODAY, recurrences, blocks, chains }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
@@ -131,8 +152,8 @@ function check(name, cond, extra = "") {
       localStorage.setItem(KEY, JSON.stringify(s));
     }, {
       KEY, TODAY,
-      recurrences: [ruleGym, ruleReading, ruleMeditation, ruleAnchorSource, ruleAnchored],
-      blocks: [...blocksGym, ...blocksReading, ...blocksMeditation, ...blocksAnchorSource],
+      recurrences: [ruleGym, ruleReading, ruleMeditation, ruleAnchorSource, ruleAnchored, ruleAnchorSourceBroken, ruleAnchoredBroken],
+      blocks: [...blocksGym, ...blocksReading, ...blocksMeditation, ...blocksAnchorSource, ...blocksAnchorSourceBroken, ...blocksAnchoredBroken],
       chains: [chainMorning, chainAnchored]
     });
     await page.reload();
@@ -151,6 +172,7 @@ function check(name, cond, extra = "") {
           title: (el.querySelector(titleSelector)?.textContent || "").trim(),
           hasBadge: !!badge,
           streak: badge ? badge.getAttribute("data-protection-streak") : null,
+          warn: badge ? badge.classList.contains("warn") : null,
           hasFallbackBtn: !!el.querySelector(".fallback-btn")
         };
       }), { containerSelector, titleSelector });
@@ -242,6 +264,22 @@ function check(name, cond, extra = "") {
     const anchoredChainRun = (sAfterAnchor.chainRuns || []).find((r) => r.chainId === "chain-anchored" && r.date === TODAY);
     check("アンカー対象チェーンにscheduledStartAtが記録される", anchoredChainRun && !!anchoredChainRun.scheduledStartAt, JSON.stringify(anchoredChainRun));
     check("アンカー対象チェーンはまだ完了していない(スケジュールされただけ)", anchoredChainRun && !anchoredChainRun.completedAt, JSON.stringify(anchoredChainRun));
+
+    // ============================================================
+    // (3b) アンカー元が崩れている場合の連続欠落日数(独立レビュー指摘 severity:high対応、2026-07-16)
+    // ruleAnchoredBroken(protection:true, anchor=ruleAnchorSourceBroken)は、アンカー元(白湯)が
+    // D2/D1/今日と未完了続きのため、maintainRecurrencesの除外によりD1/D2/D3のBlockが
+    // 実体化されていない。修正前は「対象日にBlockが1件も無い」で即打ち切りとなりstreakが
+    // 過小カウント(アンカー元が今日崩れているとstreak=0で警告自体が消える)されていた。
+    // ============================================================
+    console.log("[3b] アンカー元が崩れている場合も連続欠落日数を正しくカウントする");
+    const brokenBadges = await badgesIn(".routine-card", ".routine-card-title");
+    const brokenCard = brokenBadges.find((b) => b.title === "アンカー対象(壊れているアンカー元)");
+    check("アンカー元がD1/D2/D3で未完了でも、その日数分(4日=今日+D1+D2+D3)が正しく加算される",
+      brokenCard && brokenCard.streak === "4", JSON.stringify(brokenCard));
+    check("アンカー元が当日も未完了なので、当日を含めてstreakが継続する(0にならない)",
+      brokenCard && brokenCard.streak !== "0", JSON.stringify(brokenCard));
+    check("2日以上の連続欠落なので警告バッジ(warn)が付く", brokenCard && brokenCard.hasBadge && brokenCard.warn === true, JSON.stringify(brokenCard));
 
     // ============================================================
     // (4) Block編集モーダル: 「制約保護系」ONで縮退版・アンカー入力欄が現れ、保存でルールへ反映される
