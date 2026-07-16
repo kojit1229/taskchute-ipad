@@ -2622,6 +2622,160 @@ function protectionStreakBadgeHTML(block) {
   return `<span class="protection-badge" data-protection-streak="${streak}">🛡 連続欠落 ${streak}日</span>`;
 }
 
+// v115: 縮退版(提案G①)。指定ruleIdの「今日のBlock」を完了扱いにする共通ヘルパー
+// (無ければ繰り返し実体化と同じ makeRecurrenceInstance で作ってから完了させる)。
+// 縮退実行(executeRoutineFallback)・連続ルーティン(チェーン)のステップ完了の両方から呼ぶ。
+// v114の連続欠落判定は「その日にcompleted:trueのBlockが1件でもあれば打ち切り」なので、
+// 経路によらずこの1関数を通せば連続欠落日数がリセットされる。呼び出し後にアンカー配置
+// (③、triggerAnchorPlacements)も一括で行う。
+function completeRoutineForToday(ruleId, { titleSuffix = "", note = "" } = {}) {
+  const rule = (state.recurrences || []).find((r) => r.id === ruleId && !r.deleted);
+  if (!rule) return null;
+  const today = todayISO();
+  let block = state.blocks.find((b) => !b.deleted && b.recurrenceGroupId === ruleId && b.date === today);
+  if (!block) {
+    block = makeRecurrenceInstance(rule, today);
+    state.blocks.push(block);
+  }
+  const blockId = block.id;
+  const completionTime = nowDateTime();
+  state.blocks = state.blocks.map((b) => {
+    if (b.id !== blockId) return b;
+    const title = titleSuffix && !b.title.includes(titleSuffix) ? `${b.title}${titleSuffix}` : b.title;
+    const comment = note ? [b.comment, note].filter(Boolean).join(" / ") : b.comment;
+    return { ...b, completed: true, actualEndAt: b.actualEndAt || completionTime, title, comment, updatedAt: completionTime };
+  });
+  triggerAnchorPlacements(ruleId, completionTime);  // v115③: このルーティンをアンカーにする後続の自動配置
+  return blockId;
+}
+
+// ブロックが「縮退版が設定された繰り返しルール」に属していればそのルールを返す(無ければnull)。
+function fallbackRuleFor(block) {
+  if (!block || !block.recurrenceGroupId) return null;
+  const rule = (state.recurrences || []).find((r) => r.id === block.recurrenceGroupId && !r.deleted);
+  return (rule && rule.fallbackTitle) ? rule : null;
+}
+
+// 縮退版でルーティンを実行する。通常のBlock完了(toggleBlock)とは別経路として、タイトルに
+// "(縮退版)" を付記し、コメントに縮退版の詳細(タイトル・所要分)を残す(責めない・簡潔な記録)。
+function executeRoutineFallback(ruleId) {
+  const rule = (state.recurrences || []).find((r) => r.id === ruleId && !r.deleted);
+  if (!rule || !rule.fallbackTitle) return;
+  const note = `縮退版で実行: ${rule.fallbackTitle}${rule.fallbackMinutes ? `(${rule.fallbackMinutes}分)` : ""}`;
+  completeRoutineForToday(ruleId, { titleSuffix: "(縮退版)", note });
+  saveAndRender(`縮退版「${rule.fallbackTitle}」で実行しました(連続記録は継続)`);
+}
+
+// 「縮退版で実行」ボタン(fallbackTitleが設定されたルールに属し、当日・未完了の時だけ表示)。
+function fallbackButtonHTML(block, isToday) {
+  if (!isToday || block.completed) return "";
+  const rule = fallbackRuleFor(block);
+  if (!rule) return "";
+  const label = `${rule.fallbackTitle}${rule.fallbackMinutes ? `・${rule.fallbackMinutes}分` : ""}`;
+  return `<button class="btn ghost fallback-btn" data-action="routine-fallback" data-id="${rule.id}" title="${escapeHTML(label)}">縮退版で実行</button>`;
+}
+
+// =============================================================
+// v115: 連続ルーティン(チェーン、提案G②)。複数の小ルーティンを順序付きで1つにまとめ、
+// 開始→ステップを1つずつ表示→完了で構成要素すべてに記録を落とす(例:「朝の整えチェーン10分」
+// = 目薬30秒→深呼吸2分→瞑想7分)。steps=[{id,title,estimatedMinutes}]は「タイトル文字列」で
+// 既存の繰り返しルールと突合する(idでの厳密リンクではなくタイトル一致方式。
+// canary-check.pyの突合方式と同じ考え方で、ステップ入力を平文テキストのままにできる。
+// 判断根拠はtaskchute-notes/decisions.md参照)。
+// =============================================================
+
+function chainRunKey(chainId, date) {
+  return `${chainId}_${date}`;
+}
+
+function findChainRun(chainId, date) {
+  return (state.chainRuns || []).find((r) => r.id === chainRunKey(chainId, date));
+}
+
+// 今日分のrunを取得、無ければ作る(currentIndex=0から)。
+function ensureChainRun(chainId) {
+  state.chainRuns ||= [];
+  const today = todayISO();
+  let run = findChainRun(chainId, today);
+  if (!run) {
+    run = {
+      id: chainRunKey(chainId, today), chainId, date: today, currentIndex: 0,
+      scheduledStartAt: "", startedAt: "", completedAt: "", stepLog: [],
+      createdAt: nowDateTime(), updatedAt: nowDateTime()
+    };
+    state.chainRuns.push(run);
+  }
+  return run;
+}
+
+// チェーンの進行(フルスクリーン、Now画面の実行コンベアと同じ「今の1件だけ」パターン)を開始/再開する。
+function openChainRun(chainId) {
+  const chain = (state.routineChains || []).find((c) => c.id === chainId && !c.deleted);
+  if (!chain) return;
+  const run = ensureChainRun(chainId);
+  run.startedAt ||= nowDateTime();
+  _activeChainId = chainId;
+  saveAndRender();
+}
+
+function closeChainRun() {
+  _activeChainId = "";
+  render();
+}
+
+// 現在のステップを完了し、次のステップへ進む。全ステップ完了ならチェーン自体を完了させ、
+// アンカー配置(③)もトリガーする。
+function chainStepComplete() {
+  if (!_activeChainId) return;
+  const chain = (state.routineChains || []).find((c) => c.id === _activeChainId && !c.deleted);
+  if (!chain) { _activeChainId = ""; return; }
+  const run = ensureChainRun(_activeChainId);
+  const step = chain.steps[run.currentIndex];
+  if (!step) return;
+  // タイトルが一致する既存の繰り返しルーティンがあれば、そのルールの今日のBlockも完了化する
+  // (=v114の連続欠落日数がリセットされる)。一致するルールが無いステップは記録のみで良い。
+  const linkedRule = (state.recurrences || []).find(
+    (r) => !r.deleted && (r.title || "").trim() === (step.title || "").trim());
+  if (linkedRule) completeRoutineForToday(linkedRule.id);
+  run.stepLog = [...(run.stepLog || []), { stepId: step.id, completedAt: nowDateTime() }];
+  run.currentIndex += 1;
+  run.updatedAt = nowDateTime();
+  if (run.currentIndex >= chain.steps.length) {
+    run.completedAt = nowDateTime();
+    _activeChainId = "";
+    triggerAnchorPlacements(chain.id, run.completedAt);  // v115③: このチェーンをアンカーにする後続の自動配置
+    saveAndRender(`「${chain.title}」を完了しました`);
+    return;
+  }
+  saveAndRender();
+}
+
+function renderChainRun() {
+  if (!_activeChainId) return "";
+  const chain = (state.routineChains || []).find((c) => c.id === _activeChainId && !c.deleted);
+  if (!chain) { _activeChainId = ""; return ""; }
+  const run = ensureChainRun(_activeChainId);
+  const step = chain.steps[run.currentIndex];
+  const closeBtn = `<button class="now-fullscreen-close" data-action="chain-run-close" aria-label="閉じる" title="閉じる">✕</button>`;
+  if (!step) {
+    return `<div class="now-fullscreen" id="chainRunFullscreen">${closeBtn}
+      <div class="now-fullscreen-content">
+        <div class="now-eyebrow">🔗 ${escapeHTML(chain.title)}</div>
+        <div class="now-empty">すべてのステップが完了しました。</div>
+      </div></div>`;
+  }
+  return `<div class="now-fullscreen" id="chainRunFullscreen">${closeBtn}
+    <div class="now-fullscreen-content">
+      <div class="now-eyebrow">🔗 ${escapeHTML(chain.title)}(${run.currentIndex + 1}/${chain.steps.length})</div>
+      <div class="now-title">${escapeHTML(step.title)}</div>
+      ${step.estimatedMinutes ? `<div class="now-meta">目安 ${step.estimatedMinutes}分</div>` : ""}
+      <div class="now-actions">
+        <button class="btn green now-btn" data-action="chain-step-complete">✓ 完了して次へ</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 // --- ひと目スコアボード(4つの達成率)── v33 ---
 function homeScoreboard(blocks) {
   const tc = taskchuteStartRate(blocks);
