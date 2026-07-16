@@ -1096,6 +1096,20 @@ function normalizeState(value) {
   // v111: ポモドーロ開始時、iOS系端末にガイド付きアクセスのリマインドを出すか(既定ON)。
   //       「今後表示しない」チェックでfalseに倒す。設定画面のトグルで再度ONにできる。
   if (typeof value.settings.pomoGuidedAccessHint !== "boolean") value.settings.pomoGuidedAccessHint = true;
+  // v116: 1日バッファ(分)。ROADMAP「TOC由来の提案E: 1日バッファ+消化率メーター」
+  //       (クリティカルチェーン法の個人適用。学生症候群・パーキンソンの法則対策で、
+  //       各Blockの見積もりに個別の余裕を足さず、余裕は1日末尾のバッファ1つに集約する)。
+  //       自動計算はしない(Kが手で設定、既定60分)。未設定/文字列混入等の不正値のみ
+  //       既定値を補う。明示的な0以下の値はそのまま尊重し、「バッファ未設定」の
+  //       フェイルソフト表示(bufferMeterHTML参照)に使う。
+  if (!Number.isFinite(value.settings.dailyBufferMin)) value.settings.dailyBufferMin = 60;
+  // v116(K追加要件・計画過積載ガード): 1日の締め時刻(0時からの経過時間、単位=時)。
+  //       既定24(=24:00/翌0時)。Kのビジョン「23:30以降のPC使用は24時で仕切る」(ROADMAP
+  //       Atomic Habits由来 提案K)に合わせた既定値。0以下や非数はここで常に24へ補正する
+  //       (バッファ分数と違い「未設定」を表現する必要が無いため||=相当の強制補正でよい)。
+  if (!Number.isFinite(value.settings.dayCloseHours) || value.settings.dayCloseHours <= 0) {
+    value.settings.dayCloseHours = 24;
+  }
   if (!("lastPushedAt" in value.settings)) value.settings.lastPushedAt = null;
   if (!("lastPulledAt" in value.settings)) value.settings.lastPulledAt = null;
   // v25: データ最終更新時刻(端末間で「新しい方が勝つ」判定に使用)
