@@ -2819,13 +2819,16 @@ function homeChargeSelects(b) {
 
 // v114: 第4引数extraBadgeは保護系ルーティンの連続欠落バッジ用(任意、既存呼び出しは
 // 渡さないため常に空文字扱いで従来どおり)。
-function homeCheckRow(b, star, showCD, extraBadge) {
+// v115: 第5引数extraButtonは縮退版実行ボタン用(任意、既存呼び出しは渡さないため常に
+// 空文字扱いで従来どおり)。
+function homeCheckRow(b, star, showCD, extraBadge, extraButton) {
   const act = b.completed ? "toggle-block" : "complete-block-with-actual";
   return `<div class="home-ck ${b.completed ? "done" : ""}">
     <span class="home-box" data-action="${act}" data-id="${b.id}">${b.completed ? "✓" : ""}</span>
     <span class="home-ck-name" data-action="edit-block" data-id="${b.id}">${escapeHTML(b.title)}</span>
     ${star ? `<span class="home-star">${star}</span>` : ""}
     ${extraBadge || ""}
+    ${extraButton || ""}
     ${showCD ? homeChargeSelects(b) : ""}
   </div>`;
 }
@@ -2920,7 +2923,7 @@ function homeRoutine(blocks, isToday) {
   const rows = r.length
     // v114: 保護系ルーティン(protection:true)は実行率でなく連続欠落バッジを追加表示する
     // (protectionRuleForがnullを返す=protection:falseの既存ルーティンはバッジ無しで従来どおり)。
-    ? r.map((b) => homeCheckRow(b, "", true, protectionStreakBadgeHTML(b))).join("")
+    ? r.map((b) => homeCheckRow(b, "", true, protectionStreakBadgeHTML(b), fallbackButtonHTML(b, isToday))).join("")
     : `<div class="muted" style="font-size:13px">カテゴリ「ルーティン」のBlockがここに表示されます。</div>`;
   const overdue = isToday ? overdueUncheckedRoutines(r) : [];
   return `<section class="panel"><div class="home-plabel green">今日のルーティン</div>
@@ -5594,7 +5597,7 @@ function renderRoutine() {
     } else {
       phase = "past";
     }
-    return { ...b, startMin, endMin, phase };
+    return { ...b, startMin, endMin, phase, isTodayCard: isToday };  // v115: 縮退版ボタンの表示判定用
   });
 
   // 現在時刻の挿入位置を決定(まだ来てないBlockの直前)
@@ -5687,6 +5690,7 @@ function renderRoutineCard(block) {
           ${protectionStreakBadgeHTML(block)}
           <span class="muted" style="font-size:11px">${phaseLabel}</span>
         </div>
+        ${fallbackButtonHTML(block, block.isTodayCard)}
       </div>
       <button class="checkbox-button ${block.completed ? "done" : ""}" data-action="toggle-block" data-id="${block.id}">✓</button>
     </div>
@@ -12872,6 +12876,8 @@ function createRecurrenceRule(block, kind) {
     source: block.source || "",
     exceptionDates: [],
     protection: false,  // v114: 保護系ルーティン(提案F)。既定false、編集モーダルでON可能
+    fallbackTitle: "",  // v115: 縮退版(提案G①)。既定未設定
+    fallbackMinutes: null,
     createdAt: nowDateTime(),
     updatedAt: nowDateTime(),
     deleted: false
