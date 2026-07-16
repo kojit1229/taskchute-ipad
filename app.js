@@ -1095,7 +1095,7 @@ function normalizeState(value) {
   if (typeof value.settings.visionBoardIndex !== "number") {
     value.settings.visionBoardIndex = 0;
   }
-  // v92: AIレポートビューアで選択中のタブ(コンテンツ総括/自己分析/基盤ヘルス/週次レビュー/バッチ実行サマリ)
+  // v92: AIレポートビューアで選択中のタブ(コンテンツ総括/自己分析/基盤ヘルス/週次レビュー/バッチ実行サマリ/英語表現集)
   value.settings.aiReportType ||= "content";
   // v9: カテゴリーマスタ
   if (!Array.isArray(value.settings.categories) || value.settings.categories.length === 0) {
@@ -6372,8 +6372,8 @@ function renderJournal() {
 }
 
 // v92: =========================================================
-//  AIレポートビューア — コンテンツ総括・自己分析・基盤ヘルス・週次レビュー・バッチ実行サマリを
-//  「その他 > AIレポート」タブから横断閲覧する。生成は自宅PCのloop側バッチが担い、
+//  AIレポートビューア — コンテンツ総括・自己分析・基盤ヘルス・週次レビュー・バッチ実行サマリ・
+//  英語表現集を「その他 > AIレポート」タブから横断閲覧する。生成は自宅PCのloop側バッチが担い、
 //  アプリ側はpersonal-dataリポジトリ(taskchute/直下)のContents API一覧+本文取得のみ。
 //  (アプリ内Claude API呼び出しはv60で全廃済み。ここでも新規に増やさない — SKILL.md参照)
 // =========================================================
@@ -6389,7 +6389,11 @@ const AI_REPORT_TYPES = [
   // v110: 自宅PCのloop各バッチ(日報依頼検知・お題提案・コーチング等)の毎朝の実行結果サマリ。
   //       loop/batch-summary.sh が personal-data/taskchute/ へ生成する(K依頼2026-07-16)。
   { id: "batch", label: "バッチ実行サマリ", prefix: "バッチ実行サマリ_",
-    guide: "自宅PCの日次バッチ群の実行結果を毎朝自動生成します。しばらく実行されていない場合は生成されません" }
+    guide: "自宅PCの日次バッチ群の実行結果を毎朝自動生成します。しばらく実行されていない場合は生成されません" },
+  // v113: 英語ジャーナルのAIフィードバック「💬 使える表現」から loop/english-phrases.sh が
+  //       日次で自動統合する表現集。personal-data/taskchute/ へ生成する(K依頼2026-07-16)。
+  { id: "english", label: "英語表現集", prefix: "英語表現集_",
+    guide: "英語ジャーナルのAIフィードバックから使える表現を毎日自動でまとめます。しばらく実行されていない場合は生成されません" }
 ];
 
 // _aiReportDirCache(taskchute/直下の一覧)から、種類のprefixに合致する.mdファイルを
