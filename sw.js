@@ -1,4 +1,6 @@
-const CACHE_NAME = "taskchute-journal-pwa-v113";
+const CACHE_NAME = "taskchute-journal-pwa-v114";
+// v114: 保護系ルーティンの連続欠落表示(繰り返しルールにprotection属性・
+//       連続欠落日数バッジ・block編集モーダルのチェックボックス)。CHANGES_v114.md参照。
 // v104: 0秒思考「書く画面」の入力時間(書き始め→保存の実経過秒数)を計測し、
 //       entries[].durationSecとして保存(参考情報、既存データはnull)。
 //       CHANGES_v104.md参照。

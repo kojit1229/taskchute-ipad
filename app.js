@@ -1359,6 +1359,10 @@ function normalizeState(value) {
   // v23: 繰り返しをルール方式へ(旧データは初回のみ自動移行)
   value.recurrences ||= [];
   migrateRecurrencesIfNeeded(value);
+  // v114: 保護系ルーティン(提案F、2026-07-16 K採用)。運動・睡眠・内省・家族時間など「制約
+  // (集中力・体力)を保護するメンテナンス工程」は実行率で裁かず、連続欠落日数で見せるための
+  // ルール属性。既定false(後方互換。既存ルールは従来どおりの表示・挙動のまま)。
+  value.recurrences = value.recurrences.map((r) => ({ protection: false, ...r }));
   // v63: WIP上限アラート(提案2)用の優先度フィールド(高/中/低)。既存Projectは「中」で後方互換補完。
   //      wish/other の自動生成Projectもここで拾われる(map は自動生成の push より後に実行するため)。
   // v95: WBS進捗率(Σ分子/Σ分母)の表示トグルを追加。既定OFF(未使用Projectでバーが乱立しないように)
@@ -2529,6 +2533,52 @@ function overdueUncheckedRoutines(blocks) {
   return blocks
     .filter((b) => !b.deleted && b.category === "ルーティン" && !b.completed && b.plannedStartAt && b.plannedStartAt <= now)
     .sort((a, b) => a.plannedStartAt.localeCompare(b.plannedStartAt));
+}
+
+// v114: 保護系ルーティン(提案F、2026-07-16)。運動・睡眠・内省・家族時間など「制約
+// (集中力・体力)を保護するメンテナンス工程」は実行率で裁かず、Atomic HabitsのNever miss
+// twice原則(1回のミスは事故、2回目が習慣を殺す)に基づく連続欠落日数で見せる。
+// 判定は loop/scripts/canary-check.py の compute_missed_streak と同じロジックのJS版
+// (決定論・AI呼び出し無し)。recurrenceGroupIdでBlock群と突合する点のみ、タイトル突合の
+// Python版と異なる(アプリ内はルールIDで一意に紐づくため)。
+//   対象日にBlockが1件も無い → そこで打ち切り(データ欠落。それ以前は数えない)
+//   1件でもcompleted=trueがある → そこで打ち切り
+//   全件completed=falseなら → 連続加算して前日へ
+// MAX_LOOKBACK_DAYSは canary-check.py の既定14日と揃える(無限ループ防止)。
+const PROTECTION_MAX_LOOKBACK_DAYS = 14;
+
+function computeProtectionMissedStreak(ruleId, targetDateISO) {
+  let date = targetDateISO;
+  let missed = 0;
+  for (let i = 0; i < PROTECTION_MAX_LOOKBACK_DAYS; i++) {
+    const dayBlocks = state.blocks.filter((b) =>
+      !b.deleted && b.recurrenceGroupId === ruleId && b.date === date);
+    if (!dayBlocks.length || dayBlocks.some((b) => b.completed)) break;
+    missed += 1;
+    date = addDays(date, -1);
+  }
+  return missed;
+}
+
+// block(実体化されたBlock)が保護系(protection:true)の繰り返しルールに属していれば
+// そのルールを返す。属していない/ルールが見つからない/削除済み/protection:falseなら null。
+function protectionRuleFor(block) {
+  if (!block || !block.recurrenceGroupId) return null;
+  const rule = (state.recurrences || []).find((r) => r.id === block.recurrenceGroupId && !r.deleted);
+  return (rule && rule.protection) ? rule : null;
+}
+
+// 保護系ルーティンの表示バッジ: 実行率%の代わりに「今日から見た連続欠落日数」を出す。
+// 0〜1日は通常表示(警告なし。「1回のミスは事故」を許容)、2日以上は軽い警告色+
+// 責めないトーンの復帰喚起(v93 homeRoutineCheckBannerと同じ文体を踏襲。煽り表現は使わない)。
+function protectionStreakBadgeHTML(block) {
+  const rule = protectionRuleFor(block);
+  if (!rule) return "";
+  const streak = computeProtectionMissedStreak(rule.id, todayISO());
+  if (streak >= 2) {
+    return `<span class="protection-badge warn" data-protection-streak="${streak}">🛡 連続${streak}日欠落・今日やれば止められます</span>`;
+  }
+  return `<span class="protection-badge" data-protection-streak="${streak}">🛡 連続欠落 ${streak}日</span>`;
 }
 
 // --- ひと目スコアボード(4つの達成率)── v33 ---
@@ -12620,6 +12670,7 @@ function createRecurrenceRule(block, kind) {
     expectedDischarge: block.expectedDischarge ?? "",
     source: block.source || "",
     exceptionDates: [],
+    protection: false,  // v114: 保護系ルーティン(提案F)。既定false、編集モーダルでON可能
     createdAt: nowDateTime(),
     updatedAt: nowDateTime(),
     deleted: false
@@ -13591,6 +13642,9 @@ function saveBlockFromModal(id, fields) {
                 endTime: updated.plannedEndAt ? (updated.plannedEndAt.split("T")[1] || "") : "",
                 expectedCharge: updated.expectedCharge,
                 expectedDischarge: updated.expectedDischarge,
+                // v114: 保護系ルーティン。チェックボックス自体はliveRule前提の表示なので
+                // fields.protectionが来ていればそれを使い、来ていなければ既存値を維持する。
+                protection: fields.protection !== undefined ? Boolean(fields.protection) : (r.protection || false),
                 updatedAt: nowDateTime()
               }
             : r);
@@ -13630,6 +13684,17 @@ function saveBlockFromModal(id, fields) {
             ? { ...b, charge: updated.expectedCharge, discharge: updated.expectedDischarge,
                 expectedCharge: updated.expectedCharge, expectedDischarge: updated.expectedDischarge }
             : b);
+      }
+    }
+    // v114: 保護系ルーティン(protection)の変更をルールへ反映(kind変更を伴わない編集のみ。
+    //      kind変更時は上のrewriteで既に反映済みのためここには来ない=return済み)
+    if (existing.recurrenceGroupId && fields.protection !== undefined) {
+      const rule = (state.recurrences || []).find(
+        (r) => r.id === existing.recurrenceGroupId && !r.deleted);
+      if (rule && Boolean(rule.protection) !== Boolean(fields.protection)) {
+        state.recurrences = state.recurrences.map((r) => r.id === rule.id
+          ? { ...r, protection: Boolean(fields.protection), updatedAt: nowDateTime() }
+          : r);
       }
     }
     closeModal();
