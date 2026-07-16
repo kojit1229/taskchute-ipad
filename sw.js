@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v115";
+const CACHE_NAME = "taskchute-journal-pwa-v116";
 // v115: 縮退版+連続ルーティン(ハビットスタック、ROADMAP提案G)。①保護系ルーティンの
 //       縮退版(fallbackTitle/fallbackMinutes)ワンタップ実行、②連続ルーティン(チェーン、
 //       state.routineChains[])の順次進行UI、③アンカー(習慣スタッキングの自動配置)。
