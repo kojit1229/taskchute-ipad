@@ -30,7 +30,14 @@ function check(name, cond, extra = "") {
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
   await blockGithubApiByDefault(page);
 
-  const TODAY = "2026-07-15";
+  const pad2 = (n) => String(n).padStart(2, "0");
+  // v108: 実時刻依存フレーク対策 — TODAYをハードコードせず実行時の「今日」10:00に固定する
+  //       (v89/v90と同じ流儀)。app.js起動時にstate.selectedDate=todayISO()(実時計)へ強制される
+  //       ため、TODAYがハードコード日付のままだと実行日によって選択日とフィクスチャの期日計算が
+  //       ズレて「8日後」等の境界判定が壊れる(2026-07-16のCI赤で顕在化)。
+  const now0 = new Date();
+  now0.setHours(10, 0, 0, 0);
+  const TODAY = `${now0.getFullYear()}-${pad2(now0.getMonth() + 1)}-${pad2(now0.getDate())}`;
   function task(id, title, dueDate, extra = {}) {
     return {
       id, projectId: "test-proj", parentTaskId: "", title, category: "", status: "todo", dueDate,
@@ -38,6 +45,12 @@ function check(name, cond, extra = "") {
       doneCriteria: "", firstStep: "", ...extra
     };
   }
+  // v108: TODAY相対の期日をnow0からのDateオブジェクト演算で求める(文字列固定日ではズレる)
+  const addDaysStr = (n) => {
+    const d = new Date(now0);
+    d.setDate(d.getDate() + n);
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  };
   const testProject = () => ({
     id: "test-proj", kind: "normal", title: "テスト案件", category: "", status: "active",
     description: "", dueDate: "", twelveWeekStartDate: "", createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`,
@@ -46,9 +59,9 @@ function check(name, cond, extra = "") {
 
   const TASKS = [
     task("task-today", "当日期日Task", TODAY),
-    task("task-7days", "境界(7日後)Task", "2026-07-22"),
-    task("task-8days", "8日後Task(折りたたみ対象)", "2026-07-23"),
-    task("task-overdue", "期日超過Task", "2026-07-10"),
+    task("task-7days", "境界(7日後)Task", addDaysStr(7)),
+    task("task-8days", "8日後Task(折りたたみ対象)", addDaysStr(8)),
+    task("task-overdue", "期日超過Task", addDaysStr(-5)),
     task("task-nodue", "期日未設定Task", "")
   ];
 
@@ -76,6 +89,7 @@ function check(name, cond, extra = "") {
   }
 
   try {
+    await page.clock.setFixedTime(now0);
     await page.goto(`http://localhost:${PORT}/`);
     await page.waitForTimeout(500);
     await passGithubGate(page);
@@ -125,7 +139,7 @@ function check(name, cond, extra = "") {
     check("トグル後もseedした5件がすべて存在する",
       seededIds.every((id) => (afterToggleState.tasks || []).some((t) => t.id === id)));
     check("トグル後もtask-8daysのdueDateは変わらず残っている",
-      (afterToggleState.tasks || []).find((t) => t.id === "task-8days")?.dueDate === "2026-07-23");
+      (afterToggleState.tasks || []).find((t) => t.id === "task-8days")?.dueDate === addDaysStr(8));
 
     // ============================================================
     // (d) トグル状態はpersistLocalNoScheduleで永続化され、リロード後も保持される
@@ -162,6 +176,7 @@ function check(name, cond, extra = "") {
     const pageMobile = await ctxMobile.newPage();
     pageMobile.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror(mobile):", e.message); });
     await blockGithubApiByDefault(pageMobile);
+    await pageMobile.clock.setFixedTime(now0);
     await pageMobile.goto(`http://localhost:${PORT}/`);
     await pageMobile.waitForTimeout(500);
     await passGithubGate(pageMobile);

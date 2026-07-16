@@ -14,7 +14,14 @@ const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithu
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
-const TODAY = "2026-07-15";
+const pad2 = (n) => String(n).padStart(2, "0");
+// v108: 実時刻依存フレーク対策 — TODAYをハードコードせず実行時の「今日」10:00に固定する
+//       (v89/v90と同じ流儀)。app.js起動時にstate.selectedDate=todayISO()(実時計)へ強制される
+//       ため、TODAYがハードコード日付のままだと実行日によって選択日とBlockのdateがズレて
+//       .timeline-cardが描画されなくなる(2026-07-16のCI赤で顕在化)。
+const now0 = new Date();
+now0.setHours(10, 0, 0, 0);
+const TODAY = `${now0.getFullYear()}-${pad2(now0.getMonth() + 1)}-${pad2(now0.getDate())}`;
 
 let failures = 0;
 function check(name, cond, extra = "") {
@@ -83,6 +90,7 @@ async function readStructuralStyles(page) {
     const pageIpad = await ctxIpad.newPage();
     pageIpad.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror(ipad):", e.message); });
     await blockGithubApiByDefault(pageIpad);
+    await pageIpad.clock.setFixedTime(now0);
     await pageIpad.goto(`http://localhost:${PORT}/`);
     await pageIpad.waitForTimeout(500);
     await passGithubGate(pageIpad);
@@ -106,6 +114,7 @@ async function readStructuralStyles(page) {
     const pagePhone = await ctxPhone.newPage();
     pagePhone.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror(phone):", e.message); });
     await blockGithubApiByDefault(pagePhone);
+    await pagePhone.clock.setFixedTime(now0);
     await pagePhone.goto(`http://localhost:${PORT}/`);
     await pagePhone.waitForTimeout(500);
     await passGithubGate(pagePhone);
