@@ -5661,6 +5661,52 @@ function renderRoutine() {
         ${nowInsertedAt === enriched.length ? renderRoutineNowMarker(now) : ""}
       </div>
     `}
+
+    ${chainSectionHTML()}
+  `;
+}
+
+// v115: 連続ルーティン(チェーン、提案G②)の一覧セクション。ルーティンタブの末尾に表示する。
+function chainSectionHTML() {
+  const chains = (state.routineChains || []).filter((c) => !c.deleted);
+  return `
+    <section class="panel" style="margin-top:14px">
+      <div class="home-plabel">🔗 連続ルーティン(チェーン)</div>
+      ${chains.length
+        ? chains.map((c) => chainCardHTML(c)).join("")
+        : `<div class="muted" style="font-size:13px">複数の小ルーティンを1つにまとめて、開始→順送り表示→完了を一括化できます。</div>`}
+      <button class="btn ghost" data-action="chain-new" style="width:100%; margin-top:8px">+ 新規チェーン</button>
+    </section>
+  `;
+}
+
+// アンカーid(ruleId/chainId)からラベル(タイトル)を解決する。見つからなければ空文字。
+function anchorLabelFor(anchorId) {
+  if (!anchorId) return "";
+  const rule = (state.recurrences || []).find((r) => r.id === anchorId && !r.deleted);
+  if (rule) return rule.title;
+  const chain = (state.routineChains || []).find((c) => c.id === anchorId && !c.deleted);
+  return chain ? chain.title : "";
+}
+
+function chainCardHTML(chain) {
+  const run = findChainRun(chain.id, todayISO());
+  const total = chain.steps.length;
+  const done = run?.completedAt ? total : (run?.currentIndex || 0);
+  const isDone = Boolean(run?.completedAt);
+  const statusLabel = isDone ? "✓ 完了(今日)" : (done > 0 ? `進行中 ${done}/${total}` : "未実施(今日)");
+  const btnLabel = isDone ? "" : (done > 0 ? "▶ 続きから" : "▶ 開始");
+  const anchorTitle = anchorLabelFor(chain.anchor);
+  return `
+    <div class="chain-card" data-action="chain-edit" data-id="${chain.id}">
+      <div class="chain-card-title">🔗 ${escapeHTML(chain.title)}</div>
+      <div class="chain-card-steps muted" style="font-size:12px">${chain.steps.map((s) => escapeHTML(s.title)).join(" → ")}</div>
+      ${anchorTitle ? `<div class="muted" style="font-size:11px">起点: ${escapeHTML(anchorTitle)}の直後</div>` : ""}
+      <div class="chain-card-foot">
+        <span class="chain-card-status ${isDone ? "done" : ""}">${statusLabel}</span>
+        ${btnLabel ? `<button class="btn primary" data-action="chain-run-open" data-id="${chain.id}">${btnLabel}</button>` : ""}
+      </div>
+    </div>
   `;
 }
 
@@ -13255,6 +13301,16 @@ function openBlockEditor(id) {
   renderModal(buildBlockModal(block));
 }
 
+// v115: 連続ルーティン(チェーン、提案G②)の新規作成/編集モーダル。idが空文字なら新規。
+function openChainEditor(id) {
+  const chain = id
+    ? (state.routineChains || []).find((c) => c.id === id && !c.deleted)
+    : { id: "", title: "", steps: [], anchor: "" };
+  if (!chain) return;
+  state.modal = { type: "chain", id: id || "" };
+  renderModal(buildChainModal(chain));
+}
+
 function renderModal(innerHTML) {
   modalRoot.innerHTML = innerHTML;
   modalRoot.classList.add("open");
@@ -13305,6 +13361,8 @@ function submitModal() {
     saveQuestionFromModal(state.modal.id, fields);  // v39
   } else if (state.modal.type === "experiment") {
     saveExperimentFromModal(state.modal.id, fields);  // v68
+  } else if (state.modal.type === "chain") {
+    saveChainFromModal(state.modal.id, fields);  // v115: 連続ルーティン(提案G②)
   }
 }
 
@@ -13322,8 +13380,102 @@ function deleteFromModal() {
     deleteQuestion(state.modal.id);  // v39
   } else if (state.modal.type === "experiment") {
     deleteExperiment(state.modal.id);  // v68
+  } else if (state.modal.type === "chain") {
+    deleteChain(state.modal.id);  // v115: 連続ルーティン(提案G②)
   }
   closeModal();
+}
+
+// ---------- Chain(連続ルーティン)モーダル ---------- v115: 提案G②③
+
+// アンカー候補(既存の繰り返しルール+他の連続ルーティン)。excludeIdで自分自身を除外する
+// (idはルール・チェーンで衝突しないUUIDのため、両方まとめて1つの除外引数でよい)。
+function anchorCandidateOptions(excludeId) {
+  const ruleOpts = (state.recurrences || [])
+    .filter((r) => !r.deleted && r.id !== excludeId)
+    .map((r) => ({ id: r.id, label: `↻ ${r.title}` }));
+  const chainOpts = (state.routineChains || [])
+    .filter((c) => !c.deleted && c.id !== excludeId)
+    .map((c) => ({ id: c.id, label: `🔗 ${c.title}` }));
+  return [...ruleOpts, ...chainOpts];
+}
+
+// ステップ入力(1行1ステップ「タイトル, 見積分」)⇄ steps配列の変換。
+// ダイアログでの動的な行追加UIを避け、平文テキストで簡潔に入力できるようにするための往復変換。
+function parseChainStepsText(text) {
+  return (text || "").split("\n").map((line) => line.trim()).filter(Boolean).map((line) => {
+    const [titlePart, minPart] = line.split(",");
+    const title = (titlePart || "").trim() || "ステップ";
+    const minutes = minPart !== undefined && minPart.trim() !== "" ? Number(minPart.trim()) : null;
+    return { id: crypto.randomUUID(), title, estimatedMinutes: Number.isFinite(minutes) ? minutes : null };
+  });
+}
+
+function chainStepsToText(steps) {
+  return (steps || []).map((s) => `${s.title}${s.estimatedMinutes != null ? `, ${s.estimatedMinutes}` : ""}`).join("\n");
+}
+
+function buildChainModal(chain) {
+  const isNew = !chain.id;
+  const anchorOptions = anchorCandidateOptions(chain.id);
+  return `
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">${isNew ? "新規チェーン" : "チェーンを編集"}</div>
+      <div class="modal-body">
+        <div class="field">
+          <label class="field-label">タイトル</label>
+          <input class="input" data-modal-field="title" value="${escapeHTML(chain.title || "")}" placeholder="例: 朝の整えチェーン10分">
+        </div>
+        <div class="field">
+          <label class="field-label">ステップ(1行1ステップ。「タイトル, 見積分」)</label>
+          <textarea class="textarea" data-modal-field="stepsText" style="min-height:100px">${escapeHTML(chainStepsToText(chain.steps))}</textarea>
+          <div class="muted" style="font-size:11px; margin-top:4px">例: 目薬, 0.5 / 深呼吸, 2 / 瞑想, 7(1行ずつ)。同じタイトルの繰り返しルーティンが既にあれば、完了時にそのルーティンの連続欠落日数もリセットされます。</div>
+        </div>
+        <div class="field">
+          <label class="field-label">アンカー(このチェーンを始める目安)</label>
+          <select class="select" data-modal-field="anchor">
+            <option value="" ${!chain.anchor ? "selected" : ""}>(アンカーなし。手動で開始)</option>
+            ${anchorOptions.map((o) => `<option value="${o.id}" ${chain.anchor === o.id ? "selected" : ""}>${escapeHTML(o.label)}</option>`).join("")}
+          </select>
+          <div class="muted" style="font-size:11px; margin-top:4px">選んだルーティン/チェーンが完了した直後の時刻を、このチェーンの開始目安として自動設定します。</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        ${isNew ? "" : `<button class="btn danger" data-action="modal-delete">削除</button>`}
+        <button class="btn" data-action="modal-close">キャンセル</button>
+        <button class="btn primary" data-action="modal-save">保存</button>
+      </div>
+    </div>
+  `;
+}
+
+function saveChainFromModal(id, fields) {
+  const steps = parseChainStepsText(fields.stepsText);
+  if (!steps.length) { showToast("ステップを1つ以上入力してください"); return; }
+  const existing = id ? (state.routineChains || []).find((c) => c.id === id) : null;
+  const chain = {
+    id: existing ? existing.id : crypto.randomUUID(),
+    title: (fields.title || "").trim() || "新規チェーン",
+    steps,
+    anchor: fields.anchor || "",
+    createdAt: existing?.createdAt || nowDateTime(),
+    updatedAt: nowDateTime(),
+    deleted: false
+  };
+  state.routineChains ||= [];
+  if (existing) {
+    state.routineChains = state.routineChains.map((c) => c.id === chain.id ? chain : c);
+  } else {
+    state.routineChains.push(chain);
+  }
+  closeModal();
+  saveAndRender(existing ? "チェーンを更新しました" : "チェーンを作成しました");
+}
+
+function deleteChain(id) {
+  state.routineChains = (state.routineChains || []).map((c) => c.id === id
+    ? { ...c, deleted: true, updatedAt: nowDateTime() } : c);
+  saveAndRender("チェーンを削除しました");
 }
 
 // ---------- Project モーダル ----------
