@@ -526,6 +526,40 @@ h3 {
 
 .wbs-criteria-badge { margin-left: 2px; }
 
+/* v107: タスクシュートBlock行の「タスク完了」チェック。既存の丸(✓/緑)Block完了・
+   四角(🤖)AI設定依頼トグルと、形(角丸四角)・色(青)・アイコン(🏁)で明確に区別する
+   (K指示 2026-07-15。v99の.wbs-criteria-btnと同じ手法で意図的に差別化) */
+.task-complete-toggle {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  background: var(--panel);
+  cursor: pointer;
+  display: inline-grid;
+  place-items: center;
+  font-size: 15px;
+  flex: 0 0 auto;
+}
+
+.task-complete-toggle.done {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+/* v107: Block完了/タスク完了の2チェックを縦積みし、block-rowのグリッド列構成(3列)を
+   崩さないようにする(1列目=このwrapper全体で従来のcheckbox-button単体と同じ扱い) */
+.block-checks {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
 .datebar {
   display: flex;
   align-items: center;

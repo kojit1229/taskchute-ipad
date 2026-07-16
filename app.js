@@ -266,6 +266,8 @@ document.addEventListener("click", (event) => {
   }
   if (action === "add-block") addBlock();
   if (action === "toggle-block") toggleBlock(id);
+  // v107: Block行の「タスク完了」チェック(Block完了とは別枠、K指示 2026-07-15)
+  if (action === "toggle-task-complete") toggleTaskCompleteFromBlock(id);
   // v87: 開始/終了に「宣言→終了報告ループ」を軽量に挿入(ROADMAP v91)。
   //      宣言・報告はいずれもスキップ可能で、スキップ時は従来どおり即座に実行される。
   if (action === "now-start") openDeclareModal(id, "block");
@@ -5155,7 +5157,10 @@ function renderBlockItem(block) {
         : ""));
   return `
     <div class="item block-row ${isMIT ? "is-mit" : ""}${doing ? " is-doing" : ""}${justStarted}" ${leftBorder ? `style="${leftBorder}"` : ""}>
-      <button class="checkbox-button ${block.completed ? "done" : ""}" data-action="toggle-block" data-id="${block.id}">✓</button>
+      <div class="block-checks">
+        <button class="checkbox-button ${block.completed ? "done" : ""}" data-action="toggle-block" data-id="${block.id}" title="Block完了" aria-label="Block完了">✓</button>
+        ${task ? `<button class="task-complete-toggle ${task.status === "completed" ? "done" : ""}" data-action="toggle-task-complete" data-id="${block.id}" title="タスク完了(Task本体を完了にします)" aria-label="タスク完了">🏁</button>` : ""}
+      </div>
       <div class="stack">
         <div class="title-line">
           ${isMIT ? `<span class="mit-star" title="今日の主役" style="color:#F5A623; font-weight:700">★</span>` : ""}
@@ -9170,6 +9175,35 @@ function toggleBlock(id) {
     const celebrateMsg = getRandomCelebrate();
     triggerCompletionEffect(celebrateMsg, completedBlock.isMIT);
   }
+}
+
+// v107: タスクシュートのBlock行「タスク完了」チェック(K指示 2026-07-15)。
+//   Block完了チェック(toggleBlock)とは意味が別: こちらは「Task本体」を完了にする。
+//   ON: Task を completed 化(v95連動=分子を分母に揃える)+ この行のBlockのみ completed 化
+//       (同じTaskに紐づく他のBlockには触れない。監督者推奨の仕様どおり)。
+//   OFF: Task の完了だけ解除する(toggleTask の完了解除と同じ方針でdoing/todoを判定)。
+//        Block側は解除しない(実績を消さないため。逆方向=Block解除だけではTaskは変えない、
+//        という既存方針と対称)。
+function toggleTaskCompleteFromBlock(blockId) {
+  const block = state.blocks.find((b) => b.id === blockId);
+  if (!block || !block.taskId) return;
+  const task = state.tasks.find((t) => t.id === block.taskId);
+  if (!task) return;
+  const completing = task.status !== "completed";
+  if (completing) {
+    state.tasks = state.tasks.map((t) => t.id === task.id
+      ? { ...t, status: "completed", progressNum: fillProgressOnComplete(t), updatedAt: nowDateTime() }
+      : t);
+    state.blocks = state.blocks.map((b) => b.id === blockId
+      ? { ...b, completed: true, actualEndAt: b.actualEndAt || nowDateTime(), updatedAt: nowDateTime() }
+      : b);
+  } else {
+    const hasProgress = state.blocks.some((b) => !b.deleted && b.taskId === task.id && (b.completed || b.actualStartAt));
+    state.tasks = state.tasks.map((t) => t.id === task.id
+      ? { ...t, status: hasProgress ? "doing" : "todo", updatedAt: nowDateTime() }
+      : t);
+  }
+  saveAndRender(completing ? "Taskを完了しました" : "Taskを未完了に戻しました");
 }
 
 // v89: ゼロ摩擦ルーティンチェック — 「ここまで全部やった」一括確定(ROADMAP v93)。
