@@ -155,6 +155,10 @@ let _pendingLifecycleCtx = null;
 // v108: Block保存モーダルの二重送信ガード(iOS Safariでの保存ボタン二重発火対策)。非永続。
 //       saveBlockFromModal の実行中だけ true になり、完了/失敗いずれも finally で必ず解除する。
 let _blockSaveInFlight = false;
+// v115: 連続ルーティン(チェーン、提案G②)— 現在フルスクリーンで進行中のチェーンid。非永続
+// (nowModeと同じ方針。アプリ再読込で閉じても、各ステップの完了自体はstate.chainRunsに
+// 残っているため「続きから」で再開できる)。空文字=非表示。
+let _activeChainId = "";
 // v79: 月間プランニングボードのカードドラッグ(Pointer Events。既存の下書きBlockドラッグ
 //      (_draftDrag)と同じ「pointerdown/move/upで見た目だけ動かしupで正規化」方式を流用)。
 //      { id, el, startX, startY, moved } 非永続。moved=trueになって初めてドラッグ確定(タップの
@@ -324,6 +328,15 @@ document.addEventListener("click", (event) => {
   }
   // v89: ゼロ摩擦ルーティンチェック — 「ここまで全部やった」一括確定
   if (action === "routine-bulk-check") bulkCheckRoutinesUpToNow();
+  // v115: 縮退版で実行(提案G①)。idはBlockではなく繰り返しルールのid。
+  if (action === "routine-fallback") executeRoutineFallback(id);
+  // v115: 連続ルーティン(チェーン、提案G②)— 開始/続きから・進行中の完了・閉じる
+  if (action === "chain-run-open") openChainRun(id);
+  if (action === "chain-step-complete") chainStepComplete();
+  if (action === "chain-run-close") closeChainRun();
+  // v115: チェーンのCRUD(新規作成・編集・削除は編集モーダル経由)
+  if (action === "chain-new") openChainEditor("");
+  if (action === "chain-edit") openChainEditor(id);
   // v14: 開始前に既存セッションを強制リセット(中断/完了/休憩後の再開でも確実に50:00から)
   // v87: ポモドーロ開始も宣言ループの対象(スキップ可能)。実際の強制リセット+開始は
   //      resumeLifecycleStart() 内で行う(宣言確定/スキップいずれの経路からも通る)。
@@ -1363,6 +1376,29 @@ function normalizeState(value) {
   // (集中力・体力)を保護するメンテナンス工程」は実行率で裁かず、連続欠落日数で見せるための
   // ルール属性。既定false(後方互換。既存ルールは従来どおりの表示・挙動のまま)。
   value.recurrences = value.recurrences.map((r) => ({ protection: false, ...r }));
+  // v115: 縮退版(ROADMAP提案G①、2026-07-16 K採用)。保護系ルーティンが崩れた日でも
+  // ワンタップで最小構成実行できるよう、繰り返しルールに縮退版のタイトル/所要分を持たせる。
+  // 既定は未設定("" / null。ボタンは表示されない=後方互換)。
+  value.recurrences = value.recurrences.map((r) => ({ fallbackTitle: "", fallbackMinutes: null, ...r }));
+  // v115: アンカー(ROADMAP提案G③、習慣スタッキング)。既存の別ルーティン(繰り返しルールid)
+  // または連続ルーティン(チェーンid)を指定すると、それが当日完了した直後の時刻にこの
+  // ルーティンのBlockを自動生成する。既定は未設定("")。
+  value.recurrences = value.recurrences.map((r) => ({ anchor: "", ...r }));
+  // v115: 連続ルーティン(チェーン、ROADMAP提案G②)。複数の小ルーティンを順序付きでまとめ、
+  // 開始→順送り表示→完了で構成要素すべてに記録を落とす。既存端末には配列自体が無いため
+  // []で補完する(anchorは提案G③、既定は未設定)。
+  if (!Array.isArray(value.routineChains)) value.routineChains = [];
+  value.routineChains = value.routineChains.map((c) => ({
+    title: "新規チェーン", steps: [], anchor: "", deleted: false,
+    createdAt: nowDateTime(), updatedAt: nowDateTime(), ...c
+  }));
+  // v115: チェーンの当日進行状態(id=`${chainId}_${date}`)。既存端末には配列自体が無いため
+  // []で補完する。currentIndexは次に完了すべきステップの添字、completedAtが付けば全ステップ完了。
+  if (!Array.isArray(value.chainRuns)) value.chainRuns = [];
+  value.chainRuns = value.chainRuns.map((r) => ({
+    currentIndex: 0, scheduledStartAt: "", startedAt: "", completedAt: "", stepLog: [],
+    createdAt: nowDateTime(), updatedAt: nowDateTime(), ...r
+  }));
   // v63: WIP上限アラート(提案2)用の優先度フィールド(高/中/低)。既存Projectは「中」で後方互換補完。
   //      wish/other の自動生成Projectもここで拾われる(map は自動生成の push より後に実行するため)。
   // v95: WBS進捗率(Σ分子/Σ分母)の表示トグルを追加。既定OFF(未使用Projectでバーが乱立しないように)
@@ -1924,6 +1960,11 @@ function renderMain() {
   // v70: Now画面(実行コンベア)は全ビューに優先する全画面オーバーレイ(閉じるまで通常UIへ戻らない)
   if (nowMode) {
     main.innerHTML = renderNowConveyor();
+    return;
+  }
+  // v115: 連続ルーティン(チェーン)の進行中も同様に全画面優先で表示する
+  if (_activeChainId) {
+    main.innerHTML = renderChainRun();
     return;
   }
   const view = state.currentView;
