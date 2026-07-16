@@ -2959,6 +2959,23 @@ h3 {
 }
 .lev-mark.lev-asset { background: var(--green-soft); color: var(--green); }
 .lev-mark.lev-eliminate { background: var(--purple-soft); color: var(--purple); }
+
+/* v114: 保護系ルーティン(提案F)の連続欠落バッジ。実行率%の代わりに表示する。
+   0〜1日は落ち着いた緑系(警告なし)、2日以上だけ軽いオレンジ系に切り替える
+   (cond-degraded-banner/routine-check-bannerと同じ「責めない・煽らない」トーン)。 */
+.protection-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--green-soft);
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.protection-badge.warn { background: var(--orange-soft); color: var(--orange); }
 .lev-helper { margin-top: 8px; }
 .lev-helper summary {
   list-style: none;

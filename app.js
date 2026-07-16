@@ -2622,12 +2622,15 @@ function homeChargeSelects(b) {
   </span>`;
 }
 
-function homeCheckRow(b, star, showCD) {
+// v114: 第4引数extraBadgeは保護系ルーティンの連続欠落バッジ用(任意、既存呼び出しは
+// 渡さないため常に空文字扱いで従来どおり)。
+function homeCheckRow(b, star, showCD, extraBadge) {
   const act = b.completed ? "toggle-block" : "complete-block-with-actual";
   return `<div class="home-ck ${b.completed ? "done" : ""}">
     <span class="home-box" data-action="${act}" data-id="${b.id}">${b.completed ? "✓" : ""}</span>
     <span class="home-ck-name" data-action="edit-block" data-id="${b.id}">${escapeHTML(b.title)}</span>
     ${star ? `<span class="home-star">${star}</span>` : ""}
+    ${extraBadge || ""}
     ${showCD ? homeChargeSelects(b) : ""}
   </div>`;
 }
@@ -2720,7 +2723,9 @@ function homeRoutine(blocks, isToday) {
   const done = r.filter((b) => b.completed).length;
   const pct = r.length ? Math.round((done / r.length) * 100) : 0;
   const rows = r.length
-    ? r.map((b) => homeCheckRow(b, "", true)).join("")
+    // v114: 保護系ルーティン(protection:true)は実行率でなく連続欠落バッジを追加表示する
+    // (protectionRuleForがnullを返す=protection:falseの既存ルーティンはバッジ無しで従来どおり)。
+    ? r.map((b) => homeCheckRow(b, "", true, protectionStreakBadgeHTML(b))).join("")
     : `<div class="muted" style="font-size:13px">カテゴリ「ルーティン」のBlockがここに表示されます。</div>`;
   const overdue = isToday ? overdueUncheckedRoutines(r) : [];
   return `<section class="panel"><div class="home-plabel green">今日のルーティン</div>
@@ -5484,6 +5489,7 @@ function renderRoutineCard(block) {
         <div class="routine-card-title">${escapeHTML(block.title)}</div>
         <div class="routine-card-meta">
           ${block.category ? `<span class="cat-chip" style="background:${catColor}1f; color:${catColor}; border:1px solid ${catColor}66">${escapeHTML(block.category)}</span>` : ""}
+          ${protectionStreakBadgeHTML(block)}
           <span class="muted" style="font-size:11px">${phaseLabel}</span>
         </div>
       </div>
@@ -13510,6 +13516,13 @@ function buildBlockModal(block) {
                   </div>
                 </div>
                 <div class="muted" style="font-size:11px; margin-top:4px">既定値を変更すると、未完了のすべての繰り返しに充電/放電が一括適用されます(個別の日の値はホーム画面で変更できます)。</div>
+                <div class="field" style="margin-top:10px">
+                  <label class="checkbox-line">
+                    <input type="checkbox" data-modal-field="protection" ${liveRule.protection ? "checked" : ""}>
+                    制約保護系(運動・睡眠・内省・家族時間など)
+                  </label>
+                  <div class="muted" style="font-size:11px; margin-top:4px">ONにすると実行率(%)の代わりに「連続欠落日数」で表示します(実行率で裁かない。2日連続から責めないトーンで案内)。</div>
+                </div>
                 ` : ""}
               `;
             }
