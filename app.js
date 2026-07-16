@@ -14642,6 +14642,90 @@ function updateProjectedEndTick() {
   if (el) el.textContent = projectedEndText();
 }
 
+// §3b 1日バッファ+消化率メーター(v116) ------------------------------
+// ROADMAP「TOC由来の提案E」。クリティカルチェーン法の個人適用: 各Blockの見積もりに
+// 個別の安全余裕を足すと学生症候群・パーキンソンの法則で消えるため、余裕は1日末尾の
+// バッファ1つに集約し、個々の遅れではなく「バッファ残量」という1つの数字だけを見る。
+// 残量 = バッファサイズ − Σ(当日の完了Blockの 実績時間 − 見積時間)。
+// 集計対象は通常のタイムラインBlockのみ(ルーティン・保護系は対象外。v114のprotection
+// 集計除外と同じ思想: 保護系は実行率/バッファ消化で裁く対象ではない)。
+// 見積(estimateMin、resolveEstimateMinのフォールバック値は使わない生の手入力値)か
+// 実績(actualStartAt/actualEndAt)のどちらか一方でも欠けているBlockは集計から除外する。
+function computeBufferRemaining(dateISO) {
+  const bufferMinRaw = state.settings.dailyBufferMin;
+  const hasBuffer = Number.isFinite(bufferMinRaw) && bufferMinRaw > 0;
+  const usedMin = blocksForDate(dateISO)
+    .filter((b) => !b.deleted && b.completed && b.category !== "ルーティン")
+    .reduce((sum, b) => {
+      const est = b.estimateMin;
+      if (!Number.isFinite(est) || est <= 0) return sum;  // 見積無しは除外
+      const actual = _actualDurationMin(b);
+      if (actual == null) return sum;  // 実績無しは除外
+      return sum + (actual - est);
+    }, 0);
+  if (!hasBuffer) {
+    return { hasBuffer: false, bufferMin: 0, usedMin, remainingMin: null, percent: null };
+  }
+  const remainingMin = bufferMinRaw - usedMin;
+  const percent = Math.round((remainingMin / bufferMinRaw) * 100);
+  return { hasBuffer: true, bufferMin: bufferMinRaw, usedMin, remainingMin, percent };
+}
+// 3段階の色分け(残40%以上=緑/40%未満=黄/0以下=赤)。バッファ未設定はunset。
+function bufferMeterLevel(percent) {
+  if (percent === null || percent === undefined) return "unset";
+  if (percent <= 0) return "red";
+  if (percent < 40) return "yellow";
+  return "green";
+}
+// ヘッダーの1行常時表示。「今日」を表示中の時だけ出す(過去日・未来日を振り返る文脈には
+// 出さない。当日の残量が「今やばいか」を判断する材料であるという性質上、v114の連続欠落
+// バッジ〈常に今日基準〉と同じく「今日固定」の情報として扱う)。
+// v116(K追加要件、2026-07-16・計画過積載ガード): 「積む余裕なくタスクを詰め込んだら
+// バッファの意味がない」ため、バッファメーター(実行中の消化率の見える化)とは別に、
+// 計画段階で1日を見積もりで埋め尽くしていないかを検出する。自動でタスクの削除・移動・
+// 並べ替えは一切しない(検出して知らせるだけ。既存の朝プラン・下書き機構の挙動も変えない)。
+// 可処分枠 = 「1日の締め時刻」(state.settings.dayCloseHours、既定24=24:00) −
+// 「その日最初に予定時刻を持つBlockの開始時刻」(予定時刻を持つBlockが無ければ0時=
+// 丸1日を可処分枠として扱う)。見積合計はresolveEstimateMin(手入力優先、無ければ過去
+// 実績中央値→30分既定)を使い、完了/未完了を問わず当日の通常Block(ルーティン除く)
+// 全件を対象にする(「計画時点の総荷重」を見るため、実行済みかどうかは関係ない)。
+// バッファ自体が未設定(hasBuffer=false)の日は判定しない(何と比べて過積載かが決まらない)。
+function computeDailyOverload(dateISO) {
+  const bufferInfo = computeBufferRemaining(dateISO);
+  if (!bufferInfo.hasBuffer) return { overloaded: false, shortfallMin: 0 };
+  const blocks = blocksForDate(dateISO).filter((b) => !b.deleted && b.category !== "ルーティン");
+  if (!blocks.length) return { overloaded: false, shortfallMin: 0 };
+  const estimateTotal = blocks.reduce((sum, b) => sum + resolveEstimateMin(b), 0);
+  const starts = blocks
+    .map((b) => (b.plannedStartAt ? minutesOf(b.plannedStartAt) : null))
+    .filter((v) => Number.isFinite(v));
+  const earliestStartMin = starts.length ? Math.min(...starts) : 0;
+  const closeMin = Number.isFinite(state.settings.dayCloseHours) && state.settings.dayCloseHours > 0
+    ? state.settings.dayCloseHours * 60 : 24 * 60;
+  const availableMin = Math.max(0, closeMin - earliestStartMin);
+  const shortfall = Math.round((estimateTotal + bufferInfo.bufferMin) - availableMin);
+  return { overloaded: shortfall > 0, shortfallMin: Math.max(0, shortfall) };
+}
+
+function bufferMeterHTML() {
+  if (state.selectedDate !== todayISO()) return "";
+  const info = computeBufferRemaining(state.selectedDate);
+  if (!info.hasBuffer) {
+    return `<div class="buffer-meter unset" data-buffer-level="unset">バッファ残量: 未設定(設定 &gt; 1日バッファ で分数を設定してください)</div>`;
+  }
+  const overload = computeDailyOverload(state.selectedDate);
+  if (overload.overloaded) {
+    // 第4状態(灰色): 通常の緑/黄/赤の代わりに「計画時点でバッファ未確保」を表示する。
+    // 責めないトーン(v93 homeRoutineCheckBannerと同じ文体)で提案するだけに留める。
+    return `
+      <div class="buffer-meter overload" data-buffer-level="overload" data-overload-shortfall="${overload.shortfallMin}">計画時点でバッファ未確保(${overload.shortfallMin}分不足)</div>
+      <div class="buffer-overload-hint">見積もりが1日の枠を超えています。タスクを減らすか、見積もりを見直しませんか</div>
+    `;
+  }
+  const level = bufferMeterLevel(info.percent);
+  return `<div class="buffer-meter ${level}" data-buffer-level="${level}" data-buffer-percent="${info.percent}" data-buffer-remaining="${info.remainingMin}">バッファ残量 ${info.percent}%(${info.remainingMin}分)</div>`;
+}
+
 // §4 充電/放電プリフィル -------------------------------------------
 // 過去実績(直近8週・3件以上)の中央値を初期値に。満たなければ null(既定値のまま)。
 function prefillEnergy(block) {
