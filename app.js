@@ -112,6 +112,7 @@ let cachedAiWorkResults = null;
 //      他のcached*と同じくアプリ内メモリのみ。ハイライト本体は個人データリポジトリが正)
 let cachedReadingHighlights = null;
 // v92: AIレポートビューア(コンテンツ総括・自己分析・基盤ヘルス・週次レビューをアプリ内で横断閲覧)。
+// v110: バッチ実行サマリを追加。
 // taskchute/直下のディレクトリ一覧を1回のContents API呼び出しで取得し、種類ごとにファイル名prefixで
 // ローカルにフィルタする(セッションキャッシュ、手動更新ボタンでのみ再取得。自動ポーリングはしない)。
 let _aiReportDirCache = null;        // Contents APIのレスポンス配列(null=未取得)
@@ -1077,7 +1078,7 @@ function normalizeState(value) {
   if (typeof value.settings.visionBoardIndex !== "number") {
     value.settings.visionBoardIndex = 0;
   }
-  // v92: AIレポートビューアで選択中のタブ(コンテンツ総括/自己分析/基盤ヘルス/週次レビュー)
+  // v92: AIレポートビューアで選択中のタブ(コンテンツ総括/自己分析/基盤ヘルス/週次レビュー/バッチ実行サマリ)
   value.settings.aiReportType ||= "content";
   // v9: カテゴリーマスタ
   if (!Array.isArray(value.settings.categories) || value.settings.categories.length === 0) {
@@ -6346,7 +6347,7 @@ function renderJournal() {
 }
 
 // v92: =========================================================
-//  AIレポートビューア — コンテンツ総括・自己分析・基盤ヘルス・週次レビューを
+//  AIレポートビューア — コンテンツ総括・自己分析・基盤ヘルス・週次レビュー・バッチ実行サマリを
 //  「その他 > AIレポート」タブから横断閲覧する。生成は自宅PCのloop側バッチが担い、
 //  アプリ側はpersonal-dataリポジトリ(taskchute/直下)のContents API一覧+本文取得のみ。
 //  (アプリ内Claude API呼び出しはv60で全廃済み。ここでも新規に増やさない — SKILL.md参照)
@@ -6359,7 +6360,11 @@ const AI_REPORT_TYPES = [
   { id: "health", label: "基盤ヘルス", prefix: "基盤ヘルス_",
     guide: "自宅PCの日次バッチが自動生成します。しばらく実行されていない場合は生成されません" },
   { id: "weekly", label: "週次レビュー", prefix: "週次レビュー_",
-    guide: "毎週末に自動生成されます(「週次」タブの来週のタスク提案と同じファイルです)" }
+    guide: "毎週末に自動生成されます(「週次」タブの来週のタスク提案と同じファイルです)" },
+  // v110: 自宅PCのloop各バッチ(日報依頼検知・お題提案・コーチング等)の毎朝の実行結果サマリ。
+  //       loop/batch-summary.sh が personal-data/taskchute/ へ生成する(K依頼2026-07-16)。
+  { id: "batch", label: "バッチ実行サマリ", prefix: "バッチ実行サマリ_",
+    guide: "自宅PCの日次バッチ群の実行結果を毎朝自動生成します。しばらく実行されていない場合は生成されません" }
 ];
 
 // _aiReportDirCache(taskchute/直下の一覧)から、種類のprefixに合致する.mdファイルを
