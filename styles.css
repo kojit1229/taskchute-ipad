@@ -2977,6 +2977,33 @@ h3 {
 }
 .protection-badge.warn { background: var(--orange-soft); color: var(--orange); }
 
+/* v116: 1日バッファ+消化率メーター(ROADMAP提案E)。ヘッダーに1行常時表示(今日を
+   表示中のときのみ)。緑(残40%以上)/黄(40%未満)/赤(0以下)の3段階に加え、
+   バッファ未設定(unset)と計画過積載(overload、K追加要件)の中立トーンを持つ。 */
+.buffer-meter {
+  margin: -8px 0 14px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  display: inline-block;
+}
+.buffer-meter.green { background: var(--green-soft); color: var(--green); }
+.buffer-meter.yellow { background: var(--orange-soft); color: var(--orange); }
+.buffer-meter.red { background: var(--red-soft); color: var(--red); }
+.buffer-meter.unset,
+.buffer-meter.overload {
+  background: var(--panel-soft);
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+/* v116(K追加要件): 過積載時の責めないトーンの提案文(自動でタスクを動かさない旨とセット) */
+.buffer-overload-hint {
+  margin: -10px 0 14px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
 /* v115: 縮退版で実行ボタン(fallbackTitle設定済みルーティンにのみ表示)。
    ルーティン行に埋め込むため通常の.btnより小さくする。 */
 .fallback-btn {
