@@ -13917,6 +13917,22 @@ function buildBlockModal(block) {
                   </label>
                   <div class="muted" style="font-size:11px; margin-top:4px">ONにすると実行率(%)の代わりに「連続欠落日数」で表示します(実行率で裁かない。2日連続から責めないトーンで案内)。</div>
                 </div>
+                ${liveRule.protection ? `
+                <div class="field" style="margin-top:10px">
+                  <label class="field-label">縮退版(崩れた日の最小構成)</label>
+                  <input class="input" type="text" data-modal-field="fallbackTitle" value="${escapeHTML(liveRule.fallbackTitle || "")}" placeholder="例: 自宅スクワット5分">
+                  <input class="input" type="number" min="0" step="1" data-modal-field="fallbackMinutes" data-modal-kind="number" value="${liveRule.fallbackMinutes ?? ""}" placeholder="分(任意)" style="margin-top:6px; max-width:120px">
+                  <div class="muted" style="font-size:11px; margin-top:4px">設定すると、ルーティンタブ・ホームに「縮退版で実行」ボタンが出ます。フルで出来ない日もワンタップで実行でき、連続欠落日数がリセットされます。</div>
+                </div>
+                <div class="field" style="margin-top:10px">
+                  <label class="field-label">アンカー(既存の別ルーティン/チェーンの直後に自動配置)</label>
+                  <select class="select" data-modal-field="anchor">
+                    <option value="" ${!liveRule.anchor ? "selected" : ""}>(アンカーなし)</option>
+                    ${anchorCandidateOptions(liveRule.id).map((o) => `<option value="${o.id}" ${liveRule.anchor === o.id ? "selected" : ""}>${escapeHTML(o.label)}</option>`).join("")}
+                  </select>
+                  <div class="muted" style="font-size:11px; margin-top:4px">選んだルーティン/チェーンが完了した直後の時刻に、このルーティンのBlockを自動生成します。</div>
+                </div>
+                ` : ""}
                 ` : ""}
               `;
             }
@@ -14052,6 +14068,13 @@ function saveBlockFromModal(id, fields) {
                 // v114: 保護系ルーティン。チェックボックス自体はliveRule前提の表示なので
                 // fields.protectionが来ていればそれを使い、来ていなければ既存値を維持する。
                 protection: fields.protection !== undefined ? Boolean(fields.protection) : (r.protection || false),
+                // v115: 縮退版(提案G①)。protection欄と同じくフィールドがliveRule.protection前提の
+                // 表示なので、来ていなければ既存値を維持する。
+                fallbackTitle: fields.fallbackTitle !== undefined ? (fields.fallbackTitle || "").trim() : (r.fallbackTitle || ""),
+                fallbackMinutes: fields.fallbackMinutes !== undefined ? fields.fallbackMinutes : (r.fallbackMinutes ?? null),
+                // v115: アンカー(提案G③)。同じくliveRule.protection前提の表示なので、
+                // 来ていなければ既存値を維持する。
+                anchor: fields.anchor !== undefined ? (fields.anchor || "") : (r.anchor || ""),
                 updatedAt: nowDateTime()
               }
             : r);
@@ -14101,6 +14124,32 @@ function saveBlockFromModal(id, fields) {
       if (rule && Boolean(rule.protection) !== Boolean(fields.protection)) {
         state.recurrences = state.recurrences.map((r) => r.id === rule.id
           ? { ...r, protection: Boolean(fields.protection), updatedAt: nowDateTime() }
+          : r);
+      }
+    }
+    // v115: 縮退版(fallbackTitle/fallbackMinutes)の変更をルールへ反映(kind変更を伴わない編集のみ。
+    //      kind変更時は上のrewriteで既に反映済みのためここには来ない=return済み)
+    if (existing.recurrenceGroupId && (fields.fallbackTitle !== undefined || fields.fallbackMinutes !== undefined)) {
+      const rule = (state.recurrences || []).find(
+        (r) => r.id === existing.recurrenceGroupId && !r.deleted);
+      if (rule) {
+        const nextTitle = fields.fallbackTitle !== undefined ? (fields.fallbackTitle || "").trim() : (rule.fallbackTitle || "");
+        const nextMinutes = fields.fallbackMinutes !== undefined ? fields.fallbackMinutes : (rule.fallbackMinutes ?? null);
+        if ((rule.fallbackTitle || "") !== nextTitle || (rule.fallbackMinutes ?? null) !== nextMinutes) {
+          state.recurrences = state.recurrences.map((r) => r.id === rule.id
+            ? { ...r, fallbackTitle: nextTitle, fallbackMinutes: nextMinutes, updatedAt: nowDateTime() }
+            : r);
+        }
+      }
+    }
+    // v115: アンカー(anchor)の変更をルールへ反映(kind変更を伴わない編集のみ。
+    //      kind変更時は上のrewriteで既に反映済みのためここには来ない=return済み)
+    if (existing.recurrenceGroupId && fields.anchor !== undefined) {
+      const rule = (state.recurrences || []).find(
+        (r) => r.id === existing.recurrenceGroupId && !r.deleted);
+      if (rule && (rule.anchor || "") !== (fields.anchor || "")) {
+        state.recurrences = state.recurrences.map((r) => r.id === rule.id
+          ? { ...r, anchor: fields.anchor || "", updatedAt: nowDateTime() }
           : r);
       }
     }
