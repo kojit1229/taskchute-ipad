@@ -7,9 +7,13 @@
 // 「本日N件 Block 追加済み」バッジ(blockCountByTaskId)も既存。v107.test.jsの(a)(b)でも
 // 同等の挙動(Block完了チェックのみでは一覧に残る/タスク完了で消える)を別経路(事前seedした
 // Blockのtoggle)で検証済みだった。
-// 本スイートは、K依頼の文言どおり「今日へ追加」ボタン(task-today)をUIから**実際にクリック**して
-// 同一タスクに複数Blockを追加できることを明示的に検証する回帰テストとして新設する
-// (app.js自体への機能変更は無し。既存挙動の保護が目的のためSW CACHE_NAMEは据え置き)。
+//
+// 一方、ホームタブの「未完了タスク」パネル(homeBacklog())には、当日Block登録済みタスクの
+// 再追加ボタンをdisabledにして「追加済み」表示に固定する実装が別途存在した。Kの体感上の
+// 「一覧から消える/追加できない」という不満はこちらが原因だった可能性が高いとの指摘を受け、
+// homeBacklog()のdisabled化を撤去し、renderOpenTasksと同じ思想(未完了である限り再追加可能、
+// 当日登録済みは軽いバッジで示すだけ)に揃えた。app.js/sw.jsに変更が入るためSW CACHE_NAMEを
+// v112へ+1した。
 //
 // (a) 当日ブロック未登録のタスクは一覧に出る/「今日へ追加」クリックでBlockが1件作られ、
 //     タスクは一覧に残ったまま「本日 1 件 Block 追加済み」バッジが出る
@@ -17,6 +21,10 @@
 //     別Block id)、バッジが「本日 2 件」に更新される
 // (c) そのタスクを完了にすると一覧から消える(v107回帰の維持確認)
 // (d) 期日なしTaskは表示されない/表示は期日昇順(v97/v107回帰の維持確認)
+// (e) 当日Block登録済みタスクが混在しても期日昇順の並びは崩れない
+// (f) ホームタブ「未完了タスク」パネル: 当日登録済み・未完了のタスクでも「＋今日に追加」ボタンが
+//     disabledにならず押せる状態を維持する(v112でdisabled解除)
+// (g) 同じくホームタブで、もう一度クリックすると2件目のBlockが作られ、バッジが更新される
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
@@ -172,6 +180,58 @@ function check(name, cond, extra = "") {
       JSON.stringify(idsInOrder2) === JSON.stringify(["task-overdue", "task-today2", "task-tomorrow"]),
       JSON.stringify(idsInOrder2));
     check("Block登録したタスクは一覧に残ったまま", await openItem("task-today2").count() === 1);
+
+    // ============================================================
+    // (f)(g) ホームタブの「未完了タスク」パネル(homeBacklog): v112でdisabled解除。
+    //        当日登録済み・未完了でも再追加ボタンが押せ、2件目のBlockが作られる
+    //        (K指摘: Kの体感の原因はここのdisabledだった可能性が高い)
+    // ============================================================
+    console.log("[6][7] ホームタブ: 当日登録済み・未完了タスクでも「＋今日に追加」が押せ、2件目のBlockが作られる");
+    await seed({
+      tasks: [wbsTask("task-home", "ホーム複数回追加検証Task")],
+      blocks: [],
+      projects: [testProject()],
+      view: "home"
+    });
+    // homeBacklog()は既定で閉じているゾーン(data-fold-id="zone3"、「長い弧をたしかめる」)の
+    // 中にあるため、クリック可能にするにはまず開く必要がある(実際のK操作と同じ手順)
+    await page.click('[data-fold-id="zone3"] summary');
+    await page.waitForTimeout(200);
+    function homeRow(taskId) {
+      return page.locator(`.home-due:has([data-action="home-add-today"][data-id="${taskId}"])`);
+    }
+    check("ホームの未完了タスクパネルに出る", await homeRow("task-home").count() === 1);
+    check("初期状態ではバッジは出ない", !(await homeRow("task-home").textContent())?.includes("追加済み"));
+    await page.click('[data-action="home-add-today"][data-id="task-home"]');
+    await page.waitForTimeout(300);
+    // addTaskToToday()はBlock作成直後に編集モーダルを開くが、closeModal()は背景の再描画を
+    // 伴わない(modalRootのみ操作)ため、背景側の最新状態(バッジ・ボタン)を見るには
+    // モーダルを閉じたあとページをreloadして正規のrender()経路を通す必要がある
+    // (state自体はaddTaskToToday内のsaveState()で既に永続化済み)
+    await page.click('[data-action="modal-close"]');
+    await page.waitForTimeout(200);
+    const sf1 = await stateNow();
+    const blocksHome1 = sf1.blocks.filter((b) => b.taskId === "task-home" && !b.deleted);
+    check("1回目クリックでBlockが1件作られる", blocksHome1.length === 1, JSON.stringify(blocksHome1));
+    await page.reload();
+    await page.waitForTimeout(400);
+    check("(f) 1回目クリック後も再追加ボタンはdisabledにならず押せる状態で残る(再描画後)",
+      await page.locator('[data-action="home-add-today"][data-id="task-home"][disabled]').count() === 0
+      && await page.locator('[data-action="home-add-today"][data-id="task-home"]').count() === 1);
+    check("「本日 1 件追加済み」バッジが出る(再描画後)", (await homeRow("task-home").textContent())?.includes("本日 1 件追加済み"),
+      await homeRow("task-home").textContent());
+    await page.click('[data-action="home-add-today"][data-id="task-home"]');
+    await page.waitForTimeout(300);
+    await page.click('[data-action="modal-close"]');
+    await page.waitForTimeout(200);
+    const sf2 = await stateNow();
+    const blocksHome2 = sf2.blocks.filter((b) => b.taskId === "task-home" && !b.deleted);
+    check("(g) 2回目クリックで2件目のBlockが作られる(同一taskId、別id)", blocksHome2.length === 2, JSON.stringify(blocksHome2));
+    check("2件のBlock idは別々", blocksHome2[0]?.id !== blocksHome2[1]?.id, JSON.stringify(blocksHome2));
+    await page.reload();
+    await page.waitForTimeout(400);
+    check("「本日 2 件追加済み」バッジに更新される(再描画後)", (await homeRow("task-home").textContent())?.includes("本日 2 件追加済み"),
+      await homeRow("task-home").textContent());
   } finally {
     await browser.close();
     server.close();
