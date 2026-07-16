@@ -5066,9 +5066,14 @@ function renderOpenTasks() {
   // v37: Wish Project 配下のタスクは専用「やりたい」タブで扱うため、ここには出さない
   //      (WBS・ホームの未完了リストと同じ除外基準に揃える)
   const wishProjectIds = state.projects.filter((p) => p.kind === "wish").map((p) => p.id);
+  // v107: K指示により期日未設定Taskは一覧から除外する(v97時点は「期日未設定は常に表示」
+  //       だったが、期日昇順ソートの導入とあわせて廃止。データは消さない=期日を設定すれば表示される)。
   const open = state.tasks.filter((task) => !task.deleted && !isTaskDead(task) && task.kind !== "other"
-    && !wishProjectIds.includes(task.projectId));
+    && !wishProjectIds.includes(task.projectId) && Boolean(task.dueDate));
   if (!open.length) return emptyPanel("未完了のTaskはありません");
+  // v107: 期日昇順(期日超過が最上位)。同一期日はタイトルのja比較で安定ソート(renderWBSの
+  //       Project一覧ソートと同じ流儀)
+  open.sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.title.localeCompare(b.title, "ja"));
   // 今日 Block 化済みのカウント(参考表示用)
   const blockCountByTaskId = {};
   state.blocks
@@ -5076,7 +5081,7 @@ function renderOpenTasks() {
     .forEach((b) => {
       if (b.taskId) blockCountByTaskId[b.taskId] = (blockCountByTaskId[b.taskId] || 0) + 1;
     });
-  // v97: 既定表示は「当日(=選択中の日付)〜7日後 + 期日超過」まで。期日未設定は常に表示。
+  // v97: 既定表示は「当日(=選択中の日付)〜7日後 + 期日超過」まで。
   //      それより先(8日後以降)は畳み、トグルで表示する(データは消さない)。
   //      アンカーは既存の isOverdue と同じ state.selectedDate に揃える(選択日を進めれば
   //      窓もスライドする一貫した挙動にする)。

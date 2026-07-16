@@ -88,7 +88,9 @@ function check(name, cond, extra = "") {
     check("当日期日Taskが表示される", await taskTodayBtn("task-today").count() === 1);
     check("境界(7日後)Taskが表示される", await taskTodayBtn("task-7days").count() === 1);
     check("期日超過Taskが表示される", await taskTodayBtn("task-overdue").count() === 1);
-    check("期日未設定Taskが表示される", await taskTodayBtn("task-nodue").count() === 1);
+    // v107: K指示(2026-07-15)によりv97の「期日未設定は常に表示」を廃止。期日未設定Taskは
+    //       一覧から除外される(tests/v107.test.jsで新仕様の主検証、ここは回帰確認のみ更新)
+    check("期日未設定Taskは表示されない(v107でK指示により廃止)", await taskTodayBtn("task-nodue").count() === 0);
     check("8日後Taskは既定では表示されない", await taskTodayBtn("task-8days").count() === 0);
 
     // ============================================================
