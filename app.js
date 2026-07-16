@@ -151,6 +151,9 @@ let _pendingInterruptBlockId = null;
 // v87: 宣言/終了報告モーダルが解決するまでの一時コンテキスト。非永続。
 // { blockId, phase: "declare"|"report", kind: "pomodoro"|"block" }
 let _pendingLifecycleCtx = null;
+// v108: Block保存モーダルの二重送信ガード(iOS Safariでの保存ボタン二重発火対策)。非永続。
+//       saveBlockFromModal の実行中だけ true になり、完了/失敗いずれも finally で必ず解除する。
+let _blockSaveInFlight = false;
 // v79: 月間プランニングボードのカードドラッグ(Pointer Events。既存の下書きBlockドラッグ
 //      (_draftDrag)と同じ「pointerdown/move/upで見た目だけ動かしupで正規化」方式を流用)。
 //      { id, el, startX, startY, moved } 非永続。moved=trueになって初めてドラッグ確定(タップの
@@ -366,7 +369,19 @@ document.addEventListener("click", (event) => {
   if (action === "edit-task") openTaskEditor(id);
   if (action === "edit-block") openBlockEditor(id);
   if (action === "modal-close") closeModal();
-  if (action === "modal-save") submitModal();
+  if (action === "modal-save") {
+    // v108: Block編集モーダルの保存ボタンのみ、連打・二重発火防止でdisableする
+    //       (他モーダルの保存ボタンはスコープ外)。バリデーション失敗等でモーダルが
+    //       開いたまま戻った場合は再度押せるよう再有効化する。
+    if (state.modal?.type === "block") {
+      if (target.disabled) return;
+      target.disabled = true;
+      submitModal();
+      if (state.modal) target.disabled = false;
+    } else {
+      submitModal();
+    }
+  }
   if (action === "modal-delete") deleteFromModal();
   // v65: 10x機構 — 10秒判定3問(任意ヘルプ)のチェック数をその場で数え、
   //      leverageType セレクトへ反映するだけ(state未変更・保存は「保存」ボタン時のみ)
@@ -12440,14 +12455,30 @@ function makeRecurrenceInstance(rule, isoDate) {
 }
 
 // Block(テンプレート)から新しい繰り返しルールを作成
+// v108: 同タイトル・同開始時刻のアクティブな(deletedでない)繰り返しルールが既にあれば
+//       新規作成しない(保存の二重発火等で同一内容のルールが重複生成される事故の再発防止、
+//       2026-05-22実害・2026-07-15調査で確定)。削除済みルールは対象外(誤ブロックしない)。
+function findActiveDuplicateRecurrenceRule(title, startTime) {
+  const t = (title || "").trim();
+  return (state.recurrences || []).find(
+    (r) => !r.deleted && (r.title || "").trim() === t && (r.startTime || "") === (startTime || ""));
+}
+
+// 戻り値: 作成したルール。重複検知時は作成せず null(呼び出し側はトースト表示済みとして扱う)。
 function createRecurrenceRule(block, kind) {
+  const title = block.title || "繰り返しBlock";
+  const startTime = block.plannedStartAt ? (block.plannedStartAt.split("T")[1] || "") : "";
+  if (findActiveDuplicateRecurrenceRule(title, startTime)) {
+    showToast(`「${title}」の繰り返しルールは既にあるため作成しませんでした`);
+    return null;
+  }
   const rule = {
     id: crypto.randomUUID(),
-    title: block.title || "繰り返しBlock",
+    title,
     category: block.category || "",
     taskId: block.taskId || "",
     kind,
-    startTime: block.plannedStartAt ? (block.plannedStartAt.split("T")[1] || "") : "",
+    startTime,
     endTime: block.plannedEndAt ? (block.plannedEndAt.split("T")[1] || "") : "",
     anchorDate: block.date || todayISO(),
     expectedCharge: block.expectedCharge ?? "",
@@ -13319,6 +13350,12 @@ function buildBlockModal(block) {
 }
 
 function saveBlockFromModal(id, fields) {
+  // v108: 保存の二重送信ガード(iOS Safari 保存ボタン二重発火対策、2026-05-22実害の再発防止)。
+  //       実行中の多重呼び出しはブロックし、完了/失敗いずれも finally で必ず解除する。
+  //       (以下、本体のインデントは変更なし=差分最小化のため)
+  if (_blockSaveInFlight) return;
+  _blockSaveInFlight = true;
+  try {
   const existing = state.blocks.find((b) => b.id === id);
   const isNew = !existing;
   const updated = {
@@ -13361,6 +13398,9 @@ function saveBlockFromModal(id, fields) {
     if (rk && rk !== "__keep__" && rk !== "__end__") {
       // v23: 新規 Block を繰り返しシリーズ化(ルールを作り、期間分だけ実体化)
       const rule = createRecurrenceRule(updated, rk);
+      // v108: 重複ルール検知時(トーストはcreateRecurrenceRule内で表示済み)は
+      //       Block自体も作成せずモーダルを開いたままにする(黙って握りつぶさない)。
+      if (!rule) return;
       updated.recurrenceGroupId = rule.id;
       state.blocks.push(updated);
       maintainRecurrences();
@@ -13424,6 +13464,14 @@ function saveBlockFromModal(id, fields) {
         removeUntouchedInstances(liveRule.id, { fromDate: todayISO(), excludeId: id });
       } else {
         const rule = createRecurrenceRule(updated, rk);
+        if (!rule) {
+          // v108: 重複ルール検知(トーストはcreateRecurrenceRule内で表示済み)。
+          //      シリーズ化はスキップし、直前(state.blocks.map)で確定済みのBlock本体の
+          //      編集だけ保存する(黙って握りつぶさない)。
+          closeModal();
+          saveAndRender("Blockを更新しました");
+          return;
+        }
         updated.recurrenceGroupId = rule.id;
         state.blocks = state.blocks.map((b) => b.id === id ? updated : b);
       }
@@ -13451,6 +13499,9 @@ function saveBlockFromModal(id, fields) {
     }
     closeModal();
     saveAndRender("Blockを更新しました");
+  }
+  } finally {
+    _blockSaveInFlight = false;
   }
 }
 
