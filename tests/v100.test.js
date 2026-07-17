@@ -21,9 +21,6 @@ function check(name, cond, extra = "") {
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
   await blockGithubApiByDefault(page);
 
-  function suggestion(id, text, extra = {}) {
-    return { id, text, source: "weekly", reason: "先週の疲弊した日を振り返る", createdAt: "2026-07-14T05:00", status: "pending", adoptedThemeId: null, ...extra };
-  }
   // v100b: ハウスキーピングTTLテスト用。localDateTimeToMs(new Date文字列を経由しない実装)に
   // 合わせ、テスト側もnew Date().toISOString()(UTC・Z付き)ではなくローカル素朴文字列で生成する。
   const DAY = 24 * 60 * 60 * 1000;
@@ -31,6 +28,15 @@ function check(name, cond, extra = "") {
     const d = new Date(Date.now() - offsetMs);
     const p2 = (n) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
+  }
+  // v118 CI障害調査で判明: createdAtが暦上の固定文字列("2026-07-14T05:00")だと、
+  // pending候補のTTL(ZT_SUGGESTION_PENDING_TTL_MS=3日、pruneExpiredSuggestedThemes)を
+  // 実行日時によって超過し、候補が黙って期限切れpruneされてセクション自体が非表示になる
+  // (「翌日期限は候補から除外」テストと違い、これはv117/v118のプロダクトコード変更とは無関係な
+  // 既存のテスト側の時限バグ。実際に2026-07-17実行分のCIで発生し、ローカルでも再現確認済み)。
+  // 実行時刻からの相対オフセット(1時間前=TTL内で常に安全)に変更する。
+  function suggestion(id, text, extra = {}) {
+    return { id, text, source: "weekly", reason: "先週の疲弊した日を振り返る", createdAt: localTimeStr(60 * 60 * 1000), status: "pending", adoptedThemeId: null, ...extra };
   }
 
   async function seed({ suggestedThemes = [], themes = [] } = {}) {
@@ -135,15 +141,16 @@ function check(name, cond, extra = "") {
     await pageMobile.goto(`http://localhost:${PORT}/`);
     await pageMobile.waitForTimeout(500);
     await passGithubGate(pageMobile);
-    await pageMobile.evaluate(({ KEY }) => {
+    // v118 CI障害調査での修正と同じ理由(TTL超過によるprune回避)で相対時刻を渡す
+    await pageMobile.evaluate(({ KEY, createdAt }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.zeroThinking = { themes: [], entries: [], groups: [], suggestedThemes: [
-        { id: "sug-m", text: "モバイル幅確認用のかなり長いお題文で折返しを確認するためのテキストです", source: "daily", reason: "これも長めの提案理由文で折返しの崩れが起きないかを確認する", createdAt: "2026-07-14T05:00", status: "pending", adoptedThemeId: null }
+        { id: "sug-m", text: "モバイル幅確認用のかなり長いお題文で折返しを確認するためのテキストです", source: "daily", reason: "これも長めの提案理由文で折返しの崩れが起きないかを確認する", createdAt, status: "pending", adoptedThemeId: null }
       ] };
       s.currentView = "zero";
       s.settings.zeroTab = "theme";
       localStorage.setItem(KEY, JSON.stringify(s));
-    }, { KEY });
+    }, { KEY, createdAt: localTimeStr(60 * 60 * 1000) });
     await pageMobile.reload();
     await pageMobile.waitForTimeout(500);
     check("モバイル幅でも候補が表示される", await pageMobile.locator(".zt-suggest-item").count() === 1);
