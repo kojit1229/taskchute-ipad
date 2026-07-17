@@ -330,6 +330,10 @@ document.addEventListener("click", (event) => {
   if (action === "routine-bulk-check") bulkCheckRoutinesUpToNow();
   // v115: 縮退版で実行(提案G①)。idはBlockではなく繰り返しルールのid。
   if (action === "routine-fallback") executeRoutineFallback(id);
+  // v117(C): 過集中ブレーカーのゲートモーダル(idは繰り返しルールのid)
+  if (action === "hyperfocus-gate-fallback") hyperfocusGateFallback(id);
+  if (action === "hyperfocus-gate-make-block") hyperfocusGateMakeBlock(id);
+  if (action === "hyperfocus-gate-later") closeModal();
   // v115: 連続ルーティン(チェーン、提案G②)— 開始/続きから・進行中の完了・閉じる
   if (action === "chain-run-open") openChainRun(id);
   if (action === "chain-step-complete") chainStepComplete();
@@ -2763,6 +2767,76 @@ function fallbackButtonHTML(block, isToday) {
   if (!rule) return "";
   const label = `${rule.fallbackTitle}${rule.fallbackMinutes ? `・${rule.fallbackMinutes}分` : ""}`;
   return `<button class="btn ghost fallback-btn" data-action="routine-fallback" data-id="${rule.id}" title="${escapeHTML(label)}">縮退版で実行</button>`;
+}
+
+// =============================================================
+// v117(C): 過集中ブレーカーのゲート化。PC側のWeb Push通知(loop/hyperfocus-breaker.sh)は
+// 見られず行動につながらなかった(2026-07-16 K記録)ため、アプリ内の「手が止まる瞬間」
+// (Block完了操作の直後)に軽量モーダルで気づかせる方式に変える。
+// 頻度ガード(90分)はモジュール変数のみで永続化しない(K指示。表示した時点を起点にする=
+// 「あとで」を押さず何もしなかった場合も同じ90分抑止でよい)。
+// =============================================================
+let _hyperfocusGateSuppressedUntil = 0;
+const HYPERFOCUS_GATE_SUPPRESS_MS = 90 * 60 * 1000;
+
+// 当日まだ実行されていない保護系ルーティン。computeProtectionMissedStreak内の
+// 「dayBlocks.some(completed)で打ち切り」と同じ条件(当日・完了記録の有無)をそのまま
+// 1日分だけ再利用する(ストリーク計算自体は不要なので呼ばない)。
+function pendingProtectionRoutines() {
+  const today = todayISO();
+  return (state.recurrences || []).filter((r) => !r.deleted && r.protection).filter((r) =>
+    !state.blocks.some((b) => !b.deleted && b.recurrenceGroupId === r.id && b.date === today && b.completed));
+}
+
+// Block完了操作の直後に呼ぶ。90分の頻度ガード内、または対象ルーティンが無ければ何もしない。
+function maybeOpenHyperfocusGate() {
+  if (Date.now() < _hyperfocusGateSuppressedUntil) return;
+  const pending = pendingProtectionRoutines();
+  if (!pending.length) return;
+  _hyperfocusGateSuppressedUntil = Date.now() + HYPERFOCUS_GATE_SUPPRESS_MS;  // 表示した時点で90分抑止
+  state.modal = { type: "hyperfocusGate" };
+  renderModal(buildHyperfocusGateModal(pending));
+}
+
+function buildHyperfocusGateModal(rules) {
+  return `
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">🛡 保護ルーティンが残っています</h3>
+        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        ${rules.map((r) => `
+          <div class="row" style="justify-content:space-between; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--line)">
+            <span>${escapeHTML(r.title)}</span>
+            ${r.fallbackTitle
+              ? `<button class="btn ghost" data-action="hyperfocus-gate-fallback" data-id="${r.id}">${escapeHTML(r.fallbackTitle)}${r.fallbackMinutes ? `・${r.fallbackMinutes}分` : ""}で実行</button>`
+              : `<button class="btn ghost" data-action="hyperfocus-gate-make-block" data-id="${r.id}">Block作成</button>`}
+          </div>`).join("")}
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-action="hyperfocus-gate-later">あとで</button>
+      </div>
+    </div>
+  `;
+}
+
+// 縮退版ワンタップ実行(既存のexecuteRoutineFallbackを再利用。保存・トーストも既存側で完結)
+function hyperfocusGateFallback(ruleId) {
+  executeRoutineFallback(ruleId);
+  closeModal();
+}
+
+// 未実行ルーティンのBlockを作成するだけ(完了の偽装をしないため完了はさせない。既存の
+// makeRecurrenceInstanceを再利用し、Timelineで通常どおり開始/完了できる状態にする)。
+function hyperfocusGateMakeBlock(ruleId) {
+  const rule = (state.recurrences || []).find((r) => r.id === ruleId && !r.deleted);
+  closeModal();
+  if (!rule) return;
+  const today = todayISO();
+  const already = state.blocks.some((b) => !b.deleted && b.recurrenceGroupId === ruleId && b.date === today);
+  if (!already) state.blocks.push(makeRecurrenceInstance(rule, today));
+  saveAndRender(`「${rule.title}」のBlockを作成しました`);
 }
 
 // =============================================================
@@ -9710,6 +9784,8 @@ function toggleBlock(id) {
     const celebrateMsg = getRandomCelebrate();
     triggerCompletionEffect(celebrateMsg, completedBlock.isMIT);
   }
+  // v117(C): 過集中ブレーカーのゲート化。○タップでの直接完了(「完了への状態変更」)の直後。
+  if (justCompleted) maybeOpenHyperfocusGate();
 }
 
 // v107: タスクシュートのBlock行「タスク完了」チェック(K指示 2026-07-15)。
@@ -11933,6 +12009,9 @@ function completePomodoro() {
     mode: "focus"
   };
   saveAndRender("ポモドーロを完了しました(Blockに完了チェック)");
+  // v117(C)追補: ポモドーロ完了もBlockのcompletedをtrueにする「完了への状態変更」の一種。
+  // 独立レビュー指摘により、主要な完了導線であるポモドーロ完了もゲートのトリガーに含める。
+  if (blockId) maybeOpenHyperfocusGate();
 }
 
 // ============================================================
@@ -12149,6 +12228,8 @@ function finishReport(outcome, note) {
     const feedback = buildDeclareFeedback(entry);
     if (feedback) showToast(feedback);
   }
+  // v117(C): 過集中ブレーカーのゲート化。「■いま終了」(v70)が終了報告モーダルを解決した直後。
+  if (ctx.kind === "block") maybeOpenHyperfocusGate();
 }
 
 // v9: 「☕ 休憩へ」: focus → break に遷移(現在のセッションを完了扱いに + 5分休憩開始)
