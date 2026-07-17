@@ -802,6 +802,13 @@ document.addEventListener("input", (event) => {
 document.addEventListener("change", (event) => {
   const target = event.target;
   if (target.matches("[data-date-picker]")) setSelectedDate(target.value);
+  // v117(A): 今日の宣言(change時に保存。blur後の確定入力なので全再描画してよい=赤警告の
+  // 表示/消灯を即座に反映する)
+  if (target.matches("[data-declaration-date]")) {
+    const d = target.dataset.declarationDate;
+    state.dailyDeclarations[d] = { text: target.value.trim(), updatedAt: nowDateTime() };
+    saveAndRender();
+  }
   // v92: AIレポートビューアの履歴セレクタ(種類ごとに選択中の日付をUIキャッシュに保持)
   if (target.matches("[data-ai-report-date]")) {
     _aiReportSelectedDate[target.dataset.typeId] = target.value;
@@ -2091,6 +2098,7 @@ function renderHome() {
     ${homeFoldSection("creed", true, "home-creed", "home-creed-head", "三 つ の 信 条", homeCreedBody())}
     ${homeFoldSection("lifespan", true, "", "", "寿命カウントダウン(残り時間)", homeLifespanBody(metrics))}
     ${homeIdeal(isToday)}
+    ${homeDeclarationCard()}
     ${degraded ? "" : homeReadingCard()}
     ${degraded ? homeDegradedBanner() : homeRoutineCheckBanner(blocks, isToday)}
     ${homeHero(blocks, isToday)}
@@ -2253,6 +2261,23 @@ function homeIdeal(isToday) {
           <button class="btn ghost" data-action="ideal-retry" data-choice="release">手放す</button>
         </span>
       </div>` : ""}
+  </section>`;
+}
+
+// v117(A): 今日の宣言。dailyDeclarations[date] = {text, updatedAt}。selectedDateごとに編集できる
+// (過去日を振り返る時も同じ入力欄で確認・修正できる、他のjournal系日付キー入力と同じ思想)。
+// homeIdealと異なりisTodayに関わらず常時表示する(過去日の宣言も見返せるようにするため)。
+// 赤警告は「今日」を見ていて未入力の時だけ(過去日を振り返っているときに警告するのは筋違い)。
+function homeDeclarationCard() {
+  const date = state.selectedDate;
+  const isToday = date === todayISO();
+  const entry = state.dailyDeclarations[date] || { text: "", updatedAt: "" };
+  const showAlert = isToday && !(entry.text || "").trim();
+  return `<section class="panel home-declaration-card" style="padding:12px 14px">
+    <div class="muted" style="font-size:12px; font-weight:700; margin-bottom:6px">📣 今日の宣言</div>
+    <input type="text" class="input" style="font-size:16px" maxlength="80"
+      data-declaration-date="${date}" placeholder="今日◯◯に着手する" value="${escapeHTML(entry.text || "")}">
+    ${showAlert ? `<div class="home-declaration-alert" style="color:var(--red); font-size:12px; font-weight:700; margin-top:6px">⚠️ 今日の宣言が未入力です</div>` : ""}
   </section>`;
 }
 
@@ -10122,11 +10147,19 @@ function generateReport(dateArg, { quiet = false } = {}) {
   // v17: Block コメント抽出(comment があるもの)
   const commentedBlocks = blocks.filter((b) => b.comment && b.comment.trim());
 
+  // v117(A): 今日の宣言。未入力日も節自体は常に出す(バッチが未記載を検知するための契約。
+  //          FORMAT_CONTRACT.md参照)。理想ワンライナーとは違い省略しない。
+  const declarationText = (state.dailyDeclarations[date]?.text || "").trim();
+
   const lines = [
     `# 日報 ${date} (${weekdayLabel(date)})`,
     "",
     // v61: 今日の理想ワンライナー(未入力日は行ごと出さない)
     ...(idealText ? [`> 🌱 今日の理想: ${idealText}`, ""] : []),
+    "## 📣 今日の宣言",
+    "",
+    declarationText || "(未入力)",
+    "",
     "## 1. サマリ",
     "| 指標 | 値 |",
     "|---|---|",
