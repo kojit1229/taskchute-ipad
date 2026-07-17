@@ -1281,6 +1281,9 @@ function normalizeState(value) {
     block.taskId = otherTask.id;
   }
   value.journals ||= {};
+  // v117(A): 今日の宣言。日付キー{text, updatedAt}。state.declarations(v87の作業単位宣言ログ)
+  // とは別物(名前衝突を避けるため dailyDeclarations という別名にした)。
+  if (!value.dailyDeclarations || typeof value.dailyDeclarations !== "object") value.dailyDeclarations = {};
   // v42: 日ごとのメタ(AIフィードバック取り込み由来。journals は文字列なので別ストア)
   value.journalMeta ||= {};
   Object.values(value.journalMeta).forEach((j) => {
@@ -10755,6 +10758,21 @@ function mergeMorningEnergyLogs(localLog, remoteLog) {
   return { ...(remoteLog || {}), ...(localLog || {}) };
 }
 
+// v117(A): 今日の宣言(dailyDeclarations)。日付キー{text,updatedAt}。v106のsleep.logsマージ
+// (タイムスタンプ比較)と同じパターンをそのまま踏襲する。
+function mergeDailyDeclarationMaps(localMap, remoteMap) {
+  const out = {};
+  const dates = new Set([...Object.keys(localMap || {}), ...Object.keys(remoteMap || {})]);
+  for (const d of dates) {
+    const l = (localMap || {})[d];
+    const r = (remoteMap || {})[d];
+    if (!l) { out[d] = r; continue; }
+    if (!r) { out[d] = l; continue; }
+    out[d] = (r.updatedAt || "") > (l.updatedAt || "") ? r : l;
+  }
+  return out;
+}
+
 function mergeBlockLists(localBlocks, remoteBlocks) {
   const localIds = new Set((localBlocks || []).map((b) => b && b.id).filter(Boolean));
   const today = todayISO();
@@ -10792,6 +10810,8 @@ function computeSyncMerge(remoteNorm) {
     const morningEnergyLog = mergeMorningEnergyLogs(state.settings.morningEnergyLog, (remoteNorm.settings || {}).morningEnergyLog);
     const blocks = mergeBlockLists(state.blocks, remoteNorm.blocks);
     const zeroThinking = mergeZeroThinkingLists(state.zeroThinking, remoteNorm.zeroThinking);
+    // v117(A): 今日の宣言もマージ可能コレクションへ追加
+    const dailyDeclarations = mergeDailyDeclarationMaps(state.dailyDeclarations, remoteNorm.dailyDeclarations);
     const jsonChanged = (obj, base) => JSON.stringify(obj) !== JSON.stringify(base || {});
     const changedVsLocal =
       journals.changedVsLocal ||
@@ -10800,6 +10820,7 @@ function computeSyncMerge(remoteNorm) {
       jsonChanged(conditionLogs, state.condition.logs) ||
       jsonChanged(sleepLogs, state.sleep.logs) ||
       jsonChanged(morningEnergyLog, state.settings.morningEnergyLog) ||
+      jsonChanged(dailyDeclarations, state.dailyDeclarations) ||
       !sameArrayByReference(blocks, state.blocks) ||
       (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, state.zeroThinking) : false);
     const changedVsRemote =
@@ -10809,10 +10830,11 @@ function computeSyncMerge(remoteNorm) {
       jsonChanged(conditionLogs, (remoteNorm.condition || {}).logs) ||
       jsonChanged(sleepLogs, (remoteNorm.sleep || {}).logs) ||
       jsonChanged(morningEnergyLog, (remoteNorm.settings || {}).morningEnergyLog) ||
+      jsonChanged(dailyDeclarations, remoteNorm.dailyDeclarations) ||
       !sameArrayByReference(blocks, remoteNorm.blocks || []) ||
       (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, remoteNorm.zeroThinking) : false);
     return {
-      values: { journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking },
+      values: { journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations },
       changedVsLocal, changedVsRemote
     };
   } catch (error) {
@@ -10832,6 +10854,7 @@ function applySyncMergeToLocal(merged) {
   state.sleep.logs = v.sleepLogs;
   state.settings.morningEnergyLog = v.morningEnergyLog;
   state.blocks = v.blocks;
+  state.dailyDeclarations = v.dailyDeclarations;  // v117(A)
   if (v.zeroThinking) {
     state.zeroThinking.entries = v.zeroThinking.entries;
     state.zeroThinking.suggestedThemes = pruneExpiredSuggestedThemes(v.zeroThinking.suggestedThemes);
@@ -10852,6 +10875,7 @@ function applySyncMergeToRemote(merged, remoteNorm) {
   remoteNorm.sleep.logs = v.sleepLogs;
   remoteNorm.settings.morningEnergyLog = v.morningEnergyLog;
   remoteNorm.blocks = v.blocks;
+  remoteNorm.dailyDeclarations = v.dailyDeclarations;  // v117(A)
   if (v.zeroThinking) {
     remoteNorm.zeroThinking.entries = v.zeroThinking.entries;
     remoteNorm.zeroThinking.suggestedThemes = pruneExpiredSuggestedThemes(v.zeroThinking.suggestedThemes);
