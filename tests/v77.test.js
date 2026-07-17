@@ -86,10 +86,10 @@ function check(name, cond, extra = "") {
       createdAt: `${date}T00:00`, updatedAt: `${date}T00:00`, deleted: false
     };
   }
-  function wbsTask(id, title, { dueDate = "", estimateMin = null, createdAt = `${TODAY}T00:00` } = {}) {
+  function wbsTask(id, title, { dueDate = "", estimateMin = null, createdAt = `${TODAY}T00:00`, selfDueOff = false } = {}) {
     return {
       id, projectId: "test-proj", parentTaskId: "", title, category: "", status: "todo", dueDate,
-      estimateMin, description: "", createdAt, updatedAt: createdAt, deleted: false
+      estimateMin, description: "", selfDueOff, createdAt, updatedAt: createdAt, deleted: false
     };
   }
   const testProject = () => ({
@@ -145,20 +145,29 @@ function check(name, cond, extra = "") {
     // ============================================================
     // [1] 未来期限タスクが下書きに入らない
     // ============================================================
-    console.log("[1] dueDateが翌日以降のタスクは朝プラン下書きの候補から除外される");
+    console.log("[1] dueDateが翌日以降のタスクは朝プラン下書きの候補から除外される(selfDueOff=trueの時)");
+    // v118: 自己締切の自動前倒し(effectiveDueDate、既定selfDueOff=false)の追加により、
+    // 「翌日期限」タスクはdueDateの2日前を有効締切とみなすため、今日時点で既に有効締切を
+    // 過ぎている扱いになり、朝プラン候補に含まれるのが新仕様(前倒しの狙いどおり)。
+    // 旧仕様(翌日期限は候補から除外)はselfDueOff=trueのタスクでのみ維持されるため、
+    // 別タスクとしてカバレッジを保存する。
     await seed({
       tasks: [
         wbsTask("task-tomorrow", "翌日期限タスク_v77", { dueDate: TOMORROW, createdAt: `${TODAY}T01:00` }),
         wbsTask("task-today", "当日期限タスク_v77", { dueDate: TODAY, createdAt: `${TODAY}T02:00` }),
-        wbsTask("task-nodue", "期限なしタスク_v77", { dueDate: "", createdAt: `${TODAY}T03:00` })
+        wbsTask("task-nodue", "期限なしタスク_v77", { dueDate: "", createdAt: `${TODAY}T03:00` }),
+        wbsTask("task-tomorrow-selfdueoff", "翌日期限タスク(自己締切OFF)_v77", { dueDate: TOMORROW, createdAt: `${TODAY}T04:00`, selfDueOff: true })
       ]
     });
     await runMorningPlan();
     const drafts1 = await draftBlocks();
     const titles1 = drafts1.map((d) => d.title);
-    check("翌日期限タスクは下書きに含まれない", !titles1.some((t) => t.includes("翌日期限タスク_v77")), JSON.stringify(titles1));
+    check("v118新仕様: 翌日期限タスクは自己締切前倒しにより下書き候補に含まれる",
+      titles1.some((t) => t.includes("翌日期限タスク_v77")), JSON.stringify(titles1));
     check("当日期限タスクは下書きに含まれる", titles1.some((t) => t.includes("当日期限タスク_v77")), JSON.stringify(titles1));
     check("期限なしタスクも下書きに含まれる(除外しない)", titles1.some((t) => t.includes("期限なしタスク_v77")), JSON.stringify(titles1));
+    check("旧仕様維持: selfDueOff=trueの翌日期限タスクは下書き候補から除外される",
+      !titles1.some((t) => t.includes("自己締切OFF")), JSON.stringify(titles1));
 
     // ============================================================
     // [2] 空き全部を埋めない(安全枠=空き時間合計の65%上限)+ ブロック間バッファ

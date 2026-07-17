@@ -159,6 +159,11 @@ function check(name, cond, extra = "") {
     const plus4Task = testTask("t-plus4", "4日後締切タスク(境界)", addDaysISO(TODAY, 4));
     const plus6Task = testTask("t-plus6", "6日後締切タスク", addDaysISO(TODAY, 6));
     const plus8Task = testTask("t-plus8", "8日後締切タスク(既存7日上限の外)", addDaysISO(TODAY, 8));
+    // v118: 自己締切の自動前倒し(effectiveDueDate、既定selfDueOff=false)により、この絞り込みは
+    // 「実dueDate」ではなく「有効締切(dueDateの2日前)」基準に変わった。selfDueOff=trueのタスクは
+    // 前倒しが効かず旧仕様(実dueDate基準)のままなので、境界のカバレッジを別タスクとして残す。
+    const plus4TaskOff = { ...testTask("t-plus4-off", "4日後締切タスク(自己締切OFF・境界)", addDaysISO(TODAY, 4)), selfDueOff: true };
+    const plus8TaskOff = { ...testTask("t-plus8-off", "8日後締切タスク(自己締切OFF・既存7日上限の外)", addDaysISO(TODAY, 8)), selfDueOff: true };
 
     await page.evaluate(({ KEY, HOME_FOLD_KEY, tasks }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
@@ -167,7 +172,7 @@ function check(name, cond, extra = "") {
       localStorage.setItem(KEY, JSON.stringify(s));
       // zone3(未完了タスクパネルの親フォールド)を開いた状態にして可視化する
       localStorage.setItem(HOME_FOLD_KEY, JSON.stringify({ zone3: true }));
-    }, { KEY, HOME_FOLD_KEY, tasks: [overdueTask, todayTask, plus1Task, plus3Task, plus4Task, plus6Task, plus8Task] });
+    }, { KEY, HOME_FOLD_KEY, tasks: [overdueTask, todayTask, plus1Task, plus3Task, plus4Task, plus6Task, plus8Task, plus4TaskOff, plus8TaskOff] });
     await page.reload();
     await page.waitForTimeout(400);
 
@@ -196,15 +201,26 @@ function check(name, cond, extra = "") {
     check("[⑥] 自動取込タスク(dueDate=当日)は既定表示範囲内", backlog.nearNames.includes("v86ライク自動取込タスク"));
     check("[④] あす締切タスクは既定表示される", backlog.nearNames.includes("あす締切タスク"));
     check("[④] 3日後(境界)は既定表示される", backlog.nearNames.includes("3日後締切タスク(境界)"));
-    check("[⑤] 4日後(境界)は既定表示(near)には出ない", !backlog.nearNames.includes("4日後締切タスク(境界)"));
+    // v118: 自己締切前倒し(既定selfDueOff=false)により、実期日4日後は有効締切+2日後になり
+    // 既定表示(near)に含まれるのが新仕様(旧仕様は「④日後は出ない」だった)
+    check("[④][v118新仕様] 実期日4日後(既定selfDueOff=false)は自己締切前倒しにより既定表示される",
+      backlog.nearNames.includes("4日後締切タスク(境界)"));
     check("[⑤] 6日後は既定表示(near)には出ない", !backlog.nearNames.includes("6日後締切タスク"));
-    check("[既存仕様維持] 8日後(旧7日上限の外)はnear/far どちらにも出ない(取得対象外)",
-      !backlog.nearNames.includes("8日後締切タスク(既存7日上限の外)") && !backlog.farNames.includes("8日後締切タスク(既存7日上限の外)"));
+    // v118: 実期日8日後も有効締切+6日後になり、7日上限の取得対象に入る(旧仕様は取得対象外だった)
+    check("[④⑤][v118新仕様] 実期日8日後(既定selfDueOff=false)は自己締切前倒しにより取得対象に入り折りたたみに入る",
+      !backlog.nearNames.includes("8日後締切タスク(既存7日上限の外)") && backlog.farNames.includes("8日後締切タスク(既存7日上限の外)"),
+      JSON.stringify(backlog));
+    // v118: selfDueOff=trueは前倒しが効かないため、旧仕様(実dueDate基準)の境界がそのまま維持される
+    check("[旧仕様維持][v118] selfDueOff=trueの4日後は折りたたみ(far)に入る(前倒しされない)",
+      backlog.farNames.includes("4日後締切タスク(自己締切OFF・境界)"), JSON.stringify(backlog.farNames));
+    check("[旧仕様維持][v118] selfDueOff=trueの8日後はnear/farどちらにも出ない(旧7日上限の外のまま)",
+      !backlog.nearNames.includes("8日後締切タスク(自己締切OFF・既存7日上限の外)") &&
+      !backlog.farNames.includes("8日後締切タスク(自己締切OFF・既存7日上限の外)"));
 
     check("[⑤] +4日以降の折りたたみ(details)が存在する", backlog.hasFold);
     check("[⑤] 折りたたみは既定closed(open属性なし)", backlog.farOpen === false);
-    check("[⑤] 折りたたみの中に4日後・6日後タスクが両方入っている(完全非表示ではない)",
-      backlog.farNames.includes("4日後締切タスク(境界)") && backlog.farNames.includes("6日後締切タスク"),
+    check("[⑤] 折りたたみの中に6日後・8日後(既定)タスクが入っている(完全非表示ではない)",
+      backlog.farNames.includes("6日後締切タスク") && backlog.farNames.includes("8日後締切タスク(既存7日上限の外)"),
       JSON.stringify(backlog.farNames));
     check("[⑤] 折りたたみの見出し件数が中身の件数と一致する",
       new RegExp(`＋4日以降\\s*${backlog.farNames.length}件`).test(backlog.farSummary || ""), backlog.farSummary);
