@@ -266,7 +266,15 @@ function check(name, cond, extra = "") {
 
     console.log("[10] 二重登録防止: リロード後(同じ結果ファイルを再fetch)も承認/質問済みの2件は再表示されない");
     await page.reload();
-    await page.waitForTimeout(600);
+    // v117レビュー時に判明: 固定600ms待ちは、リロード直後の1回目render(cachedAiWorkResults未取得)
+    // →hydrateAiWorkResults()のfetch完了後の2回目render、という非同期の2段階レンダーが環境負荷で
+    // 600ms内に収まらないことがあり、まれに1回目のrender直後の状態を観測してしまう
+    // (queued行だけでなく処理済み分も含めて見える誤検出。アサーション自体は変更していない)。
+    // 2回目renderの完了を示す「行数が安定するまで」ポーリング待機して環境依存のflakeを解消する。
+    await page.waitForFunction(
+      () => document.querySelectorAll(".ai-work-row").length === 1,
+      null, { timeout: 5000 }
+    ).catch(() => {});
     check("リロード後もqueued行のみ表示される(3件中2件は処理済みで非表示)", await page.locator(".ai-work-row").count() === 1);
     check("リロード後もqueued行の内容は「本番環境への反映」", (await page.locator(".ai-work-row").textContent()).includes("本番環境への反映"));
     const s10 = await stateNow();

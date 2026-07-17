@@ -250,6 +250,14 @@ function check(name, cond, extra = "") {
 
     await page.click('[data-action="toggle-block"][data-id="blk-anchor-source-today"]');
     await page.waitForTimeout(300);
+    // v117(C)で追加された過集中ブレーカーのゲート: このシナリオではprotection:trueの「読書」
+    // (fallbackTitle未設定)がまだ未実行のため、Block完了(歯磨き)直後にゲートモーダルが出るのが
+    // 仕様どおりの挙動(トリガー条件は「完了への状態変更」全般で、アンカー元の完了も対象)。
+    // このスイートの主題(アンカー配置)ではないため、出ていれば「あとで」で閉じてから続行する。
+    if (await page.locator(".modal-title", { hasText: "保護ルーティンが残っています" }).count() > 0) {
+      await page.click('[data-action="hyperfocus-gate-later"]');
+      await page.waitForTimeout(200);
+    }
     const sAfterAnchor = await stateNow();
     const sourceBlock = (sAfterAnchor.blocks || []).find((b) => b.id === "blk-anchor-source-today");
     check("アンカー元(歯磨き)Blockが完了する", sourceBlock && sourceBlock.completed === true, JSON.stringify(sourceBlock));
