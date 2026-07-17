@@ -11203,6 +11203,12 @@ async function loadFromGitHub() {
 async function syncFromGitHubOnStartup() {
   const cfg = state.settings.github || {};
   if (!personalDataReady(cfg)) return;  // 未設定なら何もしない
+  // v118: 下のGET(await)を待つ間にユーザーが編集すると、_startupDataModifiedAt(起動時点の
+  // 古い比較用スナップショット、v37)は動かないため「remoteが新しい」という古い比較結果のまま
+  // remote全量採用(state = adopted)へ進み、待ち中の編集を消してしまう競合があった
+  // (taskchute-notes/review.md severity: high)。fetch開始直前の値を別途控えておき、
+  // 採用直前に現在値と比較して「待ち中に編集されていないか」を再確認する。
+  const preFetchDataModifiedAt = state.dataModifiedAt || "";
   try {
     const { text, sha } = await downloadGitHubStateText(personalDataFileConfig(cfg));
     const remote = JSON.parse(text);
@@ -11217,6 +11223,27 @@ async function syncFromGitHubOnStartup() {
     const remoteNorm = normalizedRemoteCopy(text);
     const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm) : null;
     if (remoteT && remoteT > localT) {
+      // v118: 採用直前の不変確認。GET待ち中に編集されていたら、remote全量採用は中止し
+      // runAutoSyncPull()のhasUnpushed分岐(既存の競合バナー/自動和集合解消フロー)と
+      // 同じ考え方で処理する — マージ可能コレクションだけ先に合流させ、コア(tasks等)まで
+      // 一致していれば人間判断なしで解消、そうでなければ既存の競合バナーへ送る
+      // (新しいUIは作らない・ローカルの編集を破棄しない)。
+      if ((state.dataModifiedAt || "") !== preFetchDataModifiedAt) {
+        const changed = syncMerge ? applySyncMergeToLocal(syncMerge) : mergeZeroThinkingIntoLocal(remote.zeroThinking);
+        if (syncMerge && syncCoreEqual(remoteNorm)) {
+          state.settings.lastPushedAt = remoteT;
+          setLastSyncedSha(sha);
+          state.dataModifiedAt = nowDateTime();
+          persistLocalNoSchedule();
+          clearSyncBanner();
+          render();
+          showToast("他端末の記録を取り込みました");
+          return;
+        }
+        if (changed) { saveState(); render(); }
+        setSyncBanner("リモートに新しいデータがあります。編集中に取得したため自動取込を中止しました。設定から手動で確認してください");
+        return;
+      }
       clearTimeout(autoSaveTimer);
       const token = state.settings.github.token;
       // リモート採用前に、ローカルにしか無い記録を合流させてから採用する(採用で消さないため)。

@@ -1,4 +1,7 @@
-const CACHE_NAME = "taskchute-journal-pwa-v116";
+const CACHE_NAME = "taskchute-journal-pwa-v118";
+// v118: 起動時pull(autoSync=false旧経路)のGET待ち中編集ロスト競合を修正。CHANGES_v118.md参照。
+// v117: 今日の宣言(A)+自己締切の自動前倒し(B)+過集中ブレーカーのゲート化(C)。
+//       CHANGES_v117.md参照。
 // v115: 縮退版+連続ルーティン(ハビットスタック、ROADMAP提案G)。①保護系ルーティンの
 //       縮退版(fallbackTitle/fallbackMinutes)ワンタップ実行、②連続ルーティン(チェーン、
 //       state.routineChains[])の順次進行UI、③アンカー(習慣スタッキングの自動配置)。
