@@ -40,6 +40,23 @@ git -C ../taskchute-notes commit -m "docs: <要約>"
 git -C ../taskchute-notes push
 ```
 
+## コミットサイズゲート(v92〜、CI: commit-size-gate.yml)
+
+workspace CLAUDE.md NEVER 1「1コミット(1変更単位)で追加+削除合計200行を超えない」を
+CIで機械強制する。`.github/workflows/commit-size-gate.yml`(判定本体は
+`.github/workflows/scripts/check-commit-size.sh`)が push / pull_request のたびに
+対象範囲内の各コミットの `git show --numstat` 合計行数(バイナリは0行扱い)を調べ、
+**マージコミットを除いて**200行を超えるコミットが1つでもあれば CI を fail させる。
+
+- 実装前に、仕様/test/実装/記録を依存順の小さいコミットへ分割してからpushすること。
+- 生成物・分割不能な移行など正当な理由で超過がやむを得ない場合のみ、コミットメッセージ本文に
+  以下のトレーラーを付けて例外扱いにできる(乱用はレビューで検知する運用。安易な多用は禁止):
+  ```
+  Size-Exempt: <なぜ分割できないかの理由>
+  ```
+- ローカルで先に確認したい場合は `bash .github/workflows/scripts/check-commit-size.sh <base> <head>` を
+  直接実行できる(第3引数にデフォルトブランチ名を渡すとフォールバックの挙動もCIと同一になる)。
+
 ## 補足
 
 - taskchute-ipad 本体の変更手順・規約は `設計書.md` の「9. 規約」を参照
