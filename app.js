@@ -1187,6 +1187,7 @@ function normalizeState(value) {
       firstStep: "",       // v96: スモールステップ(5〜15分で終わる最初の行動。既定は空欄=未設定)
       criteriaRequest: false,  // v99: 翌朝バッチへdoneCriteria/firstStep自動設定orサブタスク生成を依頼するフラグ。
                                 // trueで翌朝loop/task-criteria.shが処理し、処理後は自動でfalseに戻る(アプリ側での解除処理は不要)
+      selfDueOff: false,  // v117(B): 自己締切の自動前倒し。既定false=前倒しON(dueDateの2日前を有効締切にする)
       ...rest
     };
   });
@@ -3138,10 +3139,12 @@ function homeBacklog() {
   // v88: この7日という全体の取得上限は維持し、その中を「当日+3日」で表示/折りたたみに分ける。
   const limit = addDays(state.selectedDate, 7);
   const nearLimit = addDays(state.selectedDate, 3);
+  // v117(B): 表示範囲・並び順は effectiveDueDate()(自己締切の自動前倒し)を基準にする。
+  //          存在チェック(t.dueDate)自体は実期日のまま(前倒しで空文字にはならないため影響なし)。
   const tasks = state.tasks
     .filter((t) => !t.deleted && !isTaskDead(t) && !excluded.includes(t.projectId)
-      && t.dueDate && t.dueDate <= limit)
-    .sort((a, b) => (a.dueDate || "99").localeCompare(b.dueDate || "99"));
+      && t.dueDate && effectiveDueDate(t) <= limit)
+    .sort((a, b) => (effectiveDueDate(a) || "99").localeCompare(effectiveDueDate(b) || "99"));
   // v112: 当日Block登録済みでも未完了なら再追加できるようにする(K依頼2026-07-15。1日に
   //       複数ブロックを登録したいという要望に対し、以前はscheduled済みタスクの追加ボタンを
   //       disabledにしていたため矛盾していた)。タスクシュート画面のrenderOpenTasksと同じ思想
@@ -3153,8 +3156,12 @@ function homeBacklog() {
   });
   const renderRow = (t) => {
     const todayCount = todayCountByTaskId[t.id] || 0;
-    const overdue = t.dueDate < state.selectedDate;
-    const due = `締切 ${t.dueDate.slice(5).replace("-", "/")}`;
+    const eff = effectiveDueDate(t);
+    const overdue = eff < state.selectedDate;
+    // v117(B): 前倒しが効いているタスクは「締切 M/D(実 M/D)」で自己締切・実期日を併記する
+    const due = eff !== t.dueDate
+      ? `締切 ${eff.slice(5).replace("-", "/")}(実 ${t.dueDate.slice(5).replace("-", "/")})`
+      : `締切 ${t.dueDate.slice(5).replace("-", "/")}`;
     const todayBadgeHTML = todayCount > 0
       ? ` <span style="color:var(--green); font-weight:600">/ 本日 ${todayCount} 件追加済み</span>` : "";
     return `<div class="home-due${overdue ? " overdue" : ""}">
@@ -3165,8 +3172,8 @@ function homeBacklog() {
       <button class="btn ghost home-add" data-action="home-add-today" data-id="${t.id}" style="font-size:11px;padding:7px 10px">＋今日に追加</button>
     </div>`;
   };
-  const nearTasks = tasks.filter((t) => t.dueDate <= nearLimit);
-  const farTasks = tasks.filter((t) => t.dueDate > nearLimit);
+  const nearTasks = tasks.filter((t) => effectiveDueDate(t) <= nearLimit);
+  const farTasks = tasks.filter((t) => effectiveDueDate(t) > nearLimit);
   const nearRows = nearTasks.slice(0, 8).map(renderRow).join("");
   const farRows = farTasks.map(renderRow).join("");
   // v88: homeBacklog()自体が既に<section class="panel">なので、homeFoldSection()の
@@ -3424,7 +3431,8 @@ function aiScheduleCandidates(date) {
   state.tasks
     .filter((t) => !t.deleted && (t.status === "todo" || t.status === "doing") && t.projectId && !wishIds.has(t.projectId))
     .filter((t) => !isTaskSuspended(t))
-    .filter((t) => !t.dueDate || t.dueDate <= date)  // v77: 翌日以降が期限のタスクは今日の下書きに詰め込まない
+    // v77: 翌日以降が期限のタスクは今日の下書きに詰め込まない。v117(B): 自己締切前倒しを反映
+    .filter((t) => !t.dueDate || effectiveDueDate(t) <= date)
     .filter((t) => !state.blocks.some((b) => !b.deleted && b.taskId === t.id && b.date === date))
     .sort(wbsTaskCompare)
     .slice(0, 15)
@@ -5225,7 +5233,8 @@ function renderWBS() {
 function wbsTaskCompare(a, b) {
   const ac = a.status === "completed", bc = b.status === "completed";
   if (ac !== bc) return ac ? 1 : -1;
-  const ad = a.dueDate || "9999", bd = b.dueDate || "9999";
+  // v117(B): 自己締切の自動前倒し(effectiveDueDate)を並び順にも反映
+  const ad = effectiveDueDate(a) || "9999", bd = effectiveDueDate(b) || "9999";
   if (ad !== bd) return ad < bd ? -1 : 1;
   return (a.createdAt || "").localeCompare(b.createdAt || "");
 }
@@ -5361,9 +5370,15 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false) 
     : `<span class="wbs-caret-spacer"></span>`;
   const suspended = isTaskSuspended(task);  // v35
   // v47: 期限切れは赤く、今日 Block 化済みならチップで示す(押した結果が見える)
-  const overdue = task.dueDate && task.dueDate < todayISO() && task.status !== "completed";
+  // v117(B): 自己締切の自動前倒し(effectiveDueDate)を期限切れ判定・表示に反映。
+  //          前倒しが効いている時は「期限 M/D(実 M/D)」で自己締切・実期日を併記する。
+  const effDue = effectiveDueDate(task);
+  const overdue = task.dueDate && effDue < todayISO() && task.status !== "completed";
+  const dueLabel = effDue && effDue !== task.dueDate
+    ? `${effDue.slice(5).replace("-", "/")}(実 ${task.dueDate.slice(5).replace("-", "/")})`
+    : (task.dueDate ? task.dueDate.slice(5).replace("-", "/") : "");
   const dueHTML = task.dueDate
-    ? `<span class="${overdue ? "wbs-overdue" : "muted"}" style="font-size:11px">期限 ${task.dueDate.slice(5).replace("-", "/")}${overdue ? "!" : ""}</span>`
+    ? `<span class="${overdue ? "wbs-overdue" : "muted"}" style="font-size:11px">期限 ${dueLabel}${overdue ? "!" : ""}</span>`
     : "";
   const scheduledToday = state.blocks.some((b) => !b.deleted && b.taskId === task.id && b.date === todayISO());
   // v48: 子タスクの進捗(2/5)と、この Task に費やした実績(回数・累計時間)
@@ -9529,6 +9544,7 @@ function makeTask({ projectId = "", parentTaskId = "", title = "", category = ""
     doneCriteria: "",   // v96: 完了条件(終わったら残る物を1文で。既定は空欄=未設定)
     firstStep: "",       // v96: スモールステップ(5〜15分で終わる最初の行動。既定は空欄=未設定)
     criteriaRequest: false,  // v99: 翌朝バッチへのAI設定依頼フラグ(既定OFF)
+    selfDueOff: false,  // v117(B): 自己締切の自動前倒し。既定false=前倒しON
     // v16: やりたいことリスト用フィールド
     targetYear,         // いつまでに(数字の年、null なら「いつか」)
     targetMonth,        // v79: 月間プランニングボード用(1-12、null なら「未定」。targetYearとは独立)
@@ -13346,6 +13362,17 @@ function addDays(date, delta) {
   return dateToISO(d);
 }
 
+// v117(B): 自己締切の自動前倒し。dueDate未設定なら""(呼び出し側は既存の t.dueDate 真偽判定を
+// 維持する)。selfDueOff=trueは実期日をそのまま尊重、既定(false)はdueDateの2日前を「有効締切」
+// として表示・期限切れ判定・ソートに使う(app-state.json自体のdueDateは書き換えない)。
+// Wish(state.projects kind:"wish" 配下のTask)・Project自体のdueDate(projDue)はこの関数の対象外
+// (呼び出し箇所側で対象を絞る。Wishタブの描画コードからは呼ばない)。
+function effectiveDueDate(task) {
+  if (!task || !task.dueDate) return "";
+  if (task.selfDueOff) return task.dueDate;
+  return addDays(task.dueDate, -2);
+}
+
 function addYears(date, years) {
   const d = parseDate(date);
   d.setFullYear(d.getFullYear() + years);
@@ -13821,6 +13848,12 @@ function buildTaskModal(task) {
           </div>
         </div>
         <div class="field">
+          <label class="checkbox-line">
+            <input type="checkbox" data-modal-field="selfDueEnabled" ${task.selfDueOff ? "" : "checked"}>
+            ⏪ 自己締切(期日−2日)
+          </label>
+        </div>
+        <div class="field">
           <label class="field-label">完了条件(任意)</label>
           <textarea class="textarea" data-modal-field="doneCriteria" style="min-height:48px; font-size:16px" placeholder="行動でなく“終わったら残る物”で書く">${escapeHTML(task.doneCriteria || "")}</textarea>
         </div>
@@ -13890,6 +13923,10 @@ function saveTaskFromModal(id, fields) {
     task.aiWorkBrief = (fields.aiWorkBrief || "").trim();
     task.doneCriteria = (fields.doneCriteria || "").trim();  // v96: 完了条件
     task.firstStep = (fields.firstStep || "").trim();        // v96: スモールステップ
+    // v117(B): チェックボックスは「自己締切ON」の意味で表示しているため、保存時に反転する
+    // (selfDueOffは既定false=ON。data-modal-field自体を反転名にはしていない=readModalFields
+    // は素直にchecked値を渡すだけの共通関数のため、ここで意味を戻す)。
+    task.selfDueOff = fields.selfDueEnabled !== undefined ? !fields.selfDueEnabled : false;
     state.tasks.push(task);
     closeModal();
     saveAndRender("Taskを追加しました");
@@ -13917,6 +13954,8 @@ function saveTaskFromModal(id, fields) {
       aiWorkBrief: (fields.aiWorkBrief || "").trim(),
       doneCriteria: (fields.doneCriteria || "").trim(),  // v96: 完了条件
       firstStep: (fields.firstStep || "").trim(),        // v96: スモールステップ
+      // v117(B): チェックボックス表示は反転(「自己締切ON」)なので保存時に戻す
+      selfDueOff: fields.selfDueEnabled !== undefined ? !fields.selfDueEnabled : Boolean(t.selfDueOff),
       // v37: モーダルに nextRoutineId の入力欄はないため、undefined なら既存値を保持
       //      (以前は保存のたびに "" で消えていた)
       nextRoutineId: fields.nextRoutineId !== undefined ? fields.nextRoutineId : (t.nextRoutineId || ""),
