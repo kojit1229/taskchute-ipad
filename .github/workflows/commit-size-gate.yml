@@ -1,0 +1,42 @@
+name: commit-size-gate
+
+# workspace CLAUDE.md NEVER 1: 1コミット(1変更単位)で追加+削除合計200行を超えない。
+# 判定ロジック本体は .github/workflows/scripts/check-commit-size.sh
+# (ローカルでも同じスクリプトを直接実行して検証できる)。
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # 全コミット履歴を辿って numstat を取るため必須
+          fetch-depth: 0
+
+      - name: Resolve commit range
+        id: range
+        shell: bash
+        run: |
+          set -eu
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+            HEAD="${{ github.sha }}"
+          fi
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          echo "head=$HEAD" >> "$GITHUB_OUTPUT"
+
+      - name: Check commit sizes (<=200 lines/commit)
+        shell: bash
+        run: |
+          bash .github/workflows/scripts/check-commit-size.sh \
+            "${{ steps.range.outputs.base }}" \
+            "${{ steps.range.outputs.head }}" \
+            "${{ github.event.repository.default_branch }}"
