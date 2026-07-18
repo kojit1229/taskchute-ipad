@@ -522,6 +522,7 @@ document.addEventListener("click", (event) => {
   if (action === "zt-add-submit") ztAddSubmit();
   if (action === "zt-tab") { ztTab = target.dataset.tab || "other"; render(); }
   if (action === "zt-fav-toggle") ztToggleFav(id);
+  if (action === "zt-importance-toggle") ztToggleImportance(id);  // v119: 重要度「高」トグル
   if (action === "zt-theme-delete") deleteZtTheme(id);  // v86: テーマのワンタップ削除
   // v100: AI提案お題キュー(採用/却下)
   if (action === "zt-suggestion-adopt") ztSuggestionAdopt(id);
@@ -1373,6 +1374,9 @@ function normalizeState(value) {
   // v90: theme に groupId を補完(既存テーマは全て未分類=null。既存値優先で上書きしない)。
   value.zeroThinking.themes = value.zeroThinking.themes.map((t) =>
     "groupId" in t ? t : { ...t, groupId: null });
+  // v119: theme に importance を補完("" | "高" の2値運用。既存テーマは全て""=既存値優先)。
+  value.zeroThinking.themes = value.zeroThinking.themes.map((t) =>
+    "importance" in t ? t : { ...t, importance: "" });
   value.zeroThinking.entries = value.zeroThinking.entries.map((e) =>
     "questionId" in e ? e : { ...e, questionId: null });
   // v102: entryに updatedAt を補完(既存データはnull=未追記。回答済みentryの追記編集で更新される)。
@@ -9084,10 +9088,12 @@ function renderZeroThinking() {
 // v90: テーマ1件分の行(グループ表示・未分類表示・グループ無しのフラット表示すべてで共用)。
 //      groupsSorted は <select> の選択肢生成に使う(グループ移動のタップ代替)。
 function ztRenderThemeItem(t, groupsSorted) {
+  const important = t.importance === "高";
   return `
         <div class="zt-theme-item ${t.fav ? "is-fav" : ""}">
           <button class="zt-star ${t.fav ? "on" : ""}" data-action="zt-fav-toggle" data-id="${t.id}" title="お気に入り">${t.fav ? "★" : "☆"}</button>
-          <div class="zt-theme-text" data-action="zt-write" data-id="${t.id}">${escapeHTML(t.text)}${t.questionId ? `<span class="zt-theme-qtag">問い</span>` : ""}${t.source === "ai-feedback" ? `<span class="zt-theme-qtag" style="background:#eef; color:#448">🤖 AI提案</span>` : ""}</div>
+          <button class="zt-important-toggle ${important ? "on" : ""}" data-action="zt-importance-toggle" data-id="${t.id}" title="重要度: 高⇔なし" aria-label="重要度を切り替え">${important ? "❗" : "❕"}</button>
+          <div class="zt-theme-text" data-action="zt-write" data-id="${t.id}">${important ? `<span class="zt-theme-important">高</span>` : ""}${escapeHTML(t.text)}${t.questionId ? `<span class="zt-theme-qtag">問い</span>` : ""}${t.source === "ai-feedback" ? `<span class="zt-theme-qtag" style="background:#eef; color:#448">🤖 AI提案</span>` : ""}</div>
           ${groupsSorted.length ? `
           <select class="select zt-theme-group-select" data-action="zt-theme-set-group" data-id="${t.id}" aria-label="大テーマを選ぶ" title="大テーマへ割り当て">
             <option value="">未分類</option>
@@ -9114,16 +9120,21 @@ function ztRenderGroupSection(group, themesInGroup, groupsSorted) {
       </div>`;
 }
 
+// v119: 重要度「高」のテーマを同一グループ内で先頭へ(安定ソートで既存の並び順を壊さず前置)。
+function ztSortByImportance(list) {
+  return list.slice().sort((a, b) => (b.importance === "高" ? 1 : 0) - (a.importance === "高" ? 1 : 0));
+}
+
 // v90: グループが1件も無ければ従来どおりのフラット表示(既存ユーザーの見た目を変えない)。
 //      グループを作った時点で初めて、グループ見出し + 末尾「未分類」ゾーンの階層表示に切り替わる。
 function ztThemeListHTML(items, groupsSorted) {
-  if (!groupsSorted.length) return items.map((t) => ztRenderThemeItem(t, groupsSorted)).join("");
+  if (!groupsSorted.length) return ztSortByImportance(items).map((t) => ztRenderThemeItem(t, groupsSorted)).join("");
   const sections = groupsSorted.map((g) => {
-    const inGroup = items.filter((t) => t.groupId === g.id);
+    const inGroup = ztSortByImportance(items.filter((t) => t.groupId === g.id));
     return inGroup.length ? ztRenderGroupSection(g, inGroup, groupsSorted) : "";
   }).filter(Boolean);
   const groupIds = new Set(groupsSorted.map((g) => g.id));
-  const ungrouped = items.filter((t) => !t.groupId || !groupIds.has(t.groupId));
+  const ungrouped = ztSortByImportance(items.filter((t) => !t.groupId || !groupIds.has(t.groupId)));
   if (ungrouped.length) {
     sections.push(`
       <div class="zt-group zt-group-unclassified">
@@ -9353,6 +9364,14 @@ function ztToggleFav(id) {
   const t = state.zeroThinking.themes.find((x) => x.id === id);
   if (!t) return;
   t.fav = !t.fav;
+  saveAndRender();
+}
+
+// v119: 重要度トグル(""⇔"高")。fav同様の直接トグルに揃える(モーダルを増やさない)。
+function ztToggleImportance(id) {
+  const t = state.zeroThinking.themes.find((x) => x.id === id);
+  if (!t) return;
+  t.importance = t.importance === "高" ? "" : "高";
   saveAndRender();
 }
 
