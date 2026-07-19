@@ -104,6 +104,14 @@ let cachedAffirmationMd = "";
 // フォールバックはしない。壊れたsrcを一瞬でも出さないため)。
 const cachedVisionPdfUrls = {};      // { 'now_vision.pdf': 'blob:...' }(取得成功後のみキーが増える)
 const _visionPdfLoadInFlight = {};   // { 'now_vision.pdf': true }(多重fetch防止)
+// v125: ビジョンボードは事前にページ画像(JPEG)化したものを content/vision-pages/ 配下に置き、
+// manifest.json({ 'now_vision.pdf': { pages, files, w, h }, ... })でファイル一覧を持つ。
+// PDFの<object>/<iframe>埋め込み(v85→v101で撤去)には戻さない。
+let _visionManifest = null;          // manifest.json をパースした{ pdfファイル名: {pages,files,w,h} }。未取得はnull
+let _visionManifestFailed = false;   // manifest.json 取得/パース失敗(→従来のPDF別タブ方式へフォールバック)
+let _visionManifestLoadInFlight = false;
+const cachedVisionPageUrls = {};     // { 'now_vision-p01.jpg': 'blob:...' }(ページ画像単位、取得成功後のみキーが増える)
+const _visionPageLoadInFlight = {};  // { 'now_vision.pdf': true }(ボード単位の多重fetch防止)
 const cachedFeedback = {};  // { 'YYYY-MM-DD': '...md text...' }
 const cachedWeeklyReviewMd = {};  // v62: { '週開始土曜YYYY-MM-DD': '...md text...' }(自宅PCバッチ生成)
 // v67: AI作業結果_<today>.json のパース済み配列(非永続、当日分のみ)。二重登録防止のIDは state.aiWorkProcessedIds 側で永続化する。
@@ -424,7 +432,8 @@ document.addEventListener("click", (event) => {
   // === v2: ビジョン画面のセグメント切替 ===
   if (action === "vision-section") setVisionSection(target.dataset.section);
   if (action === "vision-board-tab") setVisionBoardIndex(Number(target.dataset.index));
-  if (action === "vision-board-load") loadVisionBoardPdf(target.dataset.file);  // v101
+  if (action === "vision-board-load") loadVisionBoardPdf(target.dataset.file);  // v101(原本PDF、v125からは補助扱い)
+  if (action === "vision-board-load-images") loadVisionBoardImages(target.dataset.file);  // v125
   if (action === "open-md-in-github") openMdInGithub(target.dataset.path);
   if (action === "reload-md") reloadStaticMarkdown();
   // v92: AIレポートビューア — 種類タブ切替 / 一覧・本文の手動更新
@@ -7222,6 +7231,15 @@ function renderVisionMd(kind) {
 // これによりSPA本体のタブは重いPDF描画と一切競合しなくなる。UX変更点: 従来は自動でPDFが
 // インライン表示されていたが、v101からは「① 読み込む→② 別タブで開く」の2クリックが必要になる
 // (詳細はCHANGES_v101.md)。
+//
+// v125: 「別タブに飛ばさず同一画面内で見たい」というK要望への対応。ただしv85/v101の教訓上、
+// PDFそのものの<object>/<iframe>インライン埋め込みには戻さない(重いPDF描画とSPA本体タブの
+// 描画・入力キューが競合してブラウザが固まる問題が再発するため)。かわりに各PDFを事前にページ
+// 画像(JPEG)へ変換したものを personal-data リポジトリ taskchute/content/vision-pages/ に配置し
+// (manifest.jsonでファイル一覧を管理)、アプリ側は軽量な画像を<img>として同一画面に並べる。
+// 画像なら<object>のような専用ビューアプロセスを起動せずブラウザの通常の画像デコード/描画
+// パイプラインで表示できるため、v101が回避した「固まる」問題を作らずに同一画面内表示が実現できる。
+// 原本PDFの「別タブで開く」導線(v101方式)は補助として残す(画像化ミス等の保険、UI上は控えめに)。
 function renderVisionBoard() {
   const boards = [
     { name: "今(33歳)", file: "now_vision.pdf" },
@@ -7240,14 +7258,79 @@ function renderVisionBoard() {
   if (!personalDataReady(state.settings.github)) {
     return `
       ${tabs}
-      <div class="panel"><p>設定画面で個人データリポジトリ(Owner/Repository/Token)を接続すると、ビジョンボードのPDFを読み込めます。</p></div>
+      <div class="panel"><p>設定画面で個人データリポジトリ(Owner/Repository/Token)を接続すると、ビジョンボードを読み込めます。</p></div>
     `;
   }
+  // v125: 初回はページ画像一覧(manifest.json)だけを軽量fetchする。失敗時は従来のPDF別タブ方式へ。
+  if (_visionManifest === null && !_visionManifestFailed) loadVisionManifest();
+  if (_visionManifestFailed) return `${tabs}${renderVisionBoardPdfFallback(current)}`;
+  if (_visionManifest === null) {
+    return `${tabs}<div class="panel" style="padding:24px; text-align:center"><p>確認中...</p></div>`;
+  }
+  return `${tabs}${renderVisionBoardImages(current)}`;
+}
+
+// v125: manifest.jsonに載っているページ画像を<img>で同一画面に並べる(縦スクロール)。
+// 「読み込む」明示クリックまでは何もfetchしない(v101の「多重fetch・自動fetch防止」方針を踏襲)。
+function renderVisionBoardImages(current) {
+  const entry = _visionManifest[current.file];
+  if (!entry || !Array.isArray(entry.files) || !entry.files.length) {
+    // manifestにこのボードのエントリが無い(想定外データ) → PDF別タブ方式へフォールバック
+    return renderVisionBoardPdfFallback(current);
+  }
+  const files = entry.files;
+  const anyCached = files.some((f) => cachedVisionPageUrls[f]);
+  const loading = !!_visionPageLoadInFlight[current.file];
+  const pdfSrc = cachedVisionPdfUrls[current.file] || "";
+  const pdfLoading = !!_visionPdfLoadInFlight[current.file];
+  const pdfLink = pdfSrc
+    ? `<a class="vision-pdf-fallback-link" href="${pdfSrc}" target="_blank" rel="noopener">📂 原本PDFを別タブで開く</a>`
+    : `<button class="vision-pdf-fallback-link" data-action="vision-board-load" data-file="${escapeHTML(current.file)}">📂 ${pdfLoading ? "原本PDFを読み込み中..." : "原本PDFを別タブで開く"}</button>`;
+
+  if (!anyCached && !loading) {
+    return `
+      <div class="vision-actions" style="margin-bottom:8px"><span class="vision-source">📄 <code>${current.file}</code>${files.length > 1 ? `(${files.length}ページ)` : ""}</span></div>
+      <div class="panel" style="padding:24px; text-align:center">
+        <p class="muted" style="margin-bottom:12px">画像として読み込みます。</p>
+        <button class="btn primary" data-action="vision-board-load-images" data-file="${escapeHTML(current.file)}">📥 読み込む</button>
+      </div>
+      <p style="text-align:center; margin-top:12px">${pdfLink}</p>
+    `;
+  }
+
+  const pages = files.map((f, i) => {
+    const src = cachedVisionPageUrls[f];
+    const label = files.length > 1 ? `<div class="vision-page-label">${i + 1} / ${files.length}</div>` : "";
+    if (src) {
+      return `
+        <div class="vision-page">
+          <img src="${src}" alt="${escapeHTML(current.name)} ${i + 1}ページ目" loading="lazy" />
+          ${label}
+        </div>
+      `;
+    }
+    return `
+      <div class="vision-page vision-page-placeholder">
+        <p class="muted">読み込み中...</p>
+        ${label}
+      </div>
+    `;
+  }).join("");
+
+  return `
+    <div class="vision-actions" style="margin-bottom:8px"><span class="vision-source">📄 <code>${current.file}</code></span></div>
+    <div class="vision-pages">${pages}</div>
+    <p style="text-align:center; margin-top:16px">${pdfLink}</p>
+  `;
+}
+
+// v101方式(PDFを丸ごとBlob化して別タブで開く)。v125からは (a) manifest.json自体の取得/パース失敗時、
+// (b) manifestに該当ボードのエントリが無い想定外データ時、の2ケースでのみ使うフォールバック表示。
+function renderVisionBoardPdfFallback(current) {
   const src = cachedVisionPdfUrls[current.file] || "";
   const loading = !!_visionPdfLoadInFlight[current.file];
   if (!src) {
     return `
-      ${tabs}
       <div class="vision-actions" style="margin-bottom:8px"><span class="vision-source">📄 <code>${current.file}</code></span></div>
       <div class="panel" style="padding:24px; text-align:center">
         ${loading
@@ -7258,7 +7341,6 @@ function renderVisionBoard() {
     `;
   }
   return `
-    ${tabs}
     <div class="vision-actions" style="margin-bottom:8px">
       <span class="vision-source">📄 <code>${current.file}</code></span>
       <a class="btn primary" href="${src}" target="_blank" rel="noopener">📂 別タブで開く</a>
@@ -7295,6 +7377,74 @@ function loadVisionBoardPdf(file) {
       _visionPdfLoadInFlight[file] = false;
       if (state.currentView === "vision" && (state.settings.visionSection || "vision") === "board") render();
     });
+}
+
+// v125: ビジョンボードのページ画像一覧(manifest.json)を軽量fetchする。テキストなので
+// fetchGitHubRawText経由(PDF本体のfetchGitHubRawBlobとは別経路)。取得失敗/パース失敗時は
+// _visionManifestFailed=true にして、以降は従来のPDF別タブ方式(renderVisionBoardPdfFallback)
+// へ恒久的にフォールバックする(再訪問のたびに再試行はしない。personalDataReadyな限り
+// manifest.jsonは配置済み前提のファイルのため、失敗は「今回だけ読めなかった」ではなく
+// 「画像化されていない/経路が壊れている」と見なす)。
+function loadVisionManifest() {
+  if (_visionManifest !== null || _visionManifestFailed || _visionManifestLoadInFlight) return;
+  if (!personalDataReady(state.settings.github)) return;
+  _visionManifestLoadInFlight = true;
+  fetchGitHubRawText("content/vision-pages/manifest.json")
+    .then((text) => {
+      if (!text) { _visionManifestFailed = true; return; }
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed && typeof parsed === "object") {
+          _visionManifest = parsed;
+        } else {
+          _visionManifestFailed = true;
+        }
+      } catch (error) {
+        console.warn("ビジョンボードmanifest.jsonのパースに失敗:", error?.message || error);
+        _visionManifestFailed = true;
+      }
+    })
+    .catch((error) => {
+      console.warn("ビジョンボードmanifest.jsonの取得に失敗:", error?.message || error);
+      _visionManifestFailed = true;
+    })
+    .finally(() => {
+      _visionManifestLoadInFlight = false;
+      if (state.currentView === "vision" && (state.settings.visionSection || "vision") === "board") render();
+    });
+}
+
+// v125: 選択中ボードのページ画像を「読み込む」明示クリックから順次fetchする(1ファイル1回だけ)。
+// 80歳版のように複数ページある場合も Promise.all で一斉取得せず、1枚ずつ await して取得完了の
+// たびに再描画する — 1ページ目から順に表示が始まり、全ページ完了を待たせない(要件どおり)。
+function loadVisionBoardImages(file) {
+  const entry = file && _visionManifest && _visionManifest[file];
+  if (!entry || !Array.isArray(entry.files) || !entry.files.length) return;
+  if (_visionPageLoadInFlight[file]) return;
+  if (!personalDataReady(state.settings.github)) return;
+  const files = entry.files;
+  if (files.every((f) => cachedVisionPageUrls[f])) return;  // 全ページ取得済み
+  _visionPageLoadInFlight[file] = true;
+  render();  // 「読み込み中...」プレースホルダへの切替
+  (async () => {
+    for (const pageFile of files) {
+      if (cachedVisionPageUrls[pageFile]) continue;  // 既にキャッシュ済み(タブ往復後の再訪問等)
+      try {
+        const blob = await fetchGitHubRawBlob(`content/vision-pages/${pageFile}`);
+        if (blob) {
+          cachedVisionPageUrls[pageFile] = URL.createObjectURL(blob);
+        } else {
+          showToast(`ビジョンボード画像の取得に失敗しました(${pageFile})`);
+        }
+      } catch (error) {
+        console.warn("ビジョンボード画像の取得に失敗:", error?.message || error);
+        showToast(`ビジョンボード画像の取得に失敗しました(${pageFile})`);
+      }
+      // 取得完了ごとに差し込み表示(全ページ完了を待たせない)
+      if (state.currentView === "vision" && (state.settings.visionSection || "vision") === "board") render();
+    }
+    _visionPageLoadInFlight[file] = false;
+  })();
 }
 
 // v37: marked の出力から危険な要素・属性を取り除く。
