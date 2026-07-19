@@ -20,19 +20,27 @@
   --purple-soft: #efebff;
   --teal: #13b5a6;
   --teal-soft: #d6f4f1;
-  --radius: 8px;
-  --shadow: 0 1px 2px rgba(20, 20, 30, 0.08);
+  /* v127: 角丸を8→12pxへ。カード類(.panel/.item/.segmented等、var(--radius)参照箇所)が
+     一目でモダンな印象になるよう底上げ(apple-design全体ポリッシュ、K指示2026-07-19)。 */
+  --radius: 12px;
+  /* v127: 近接シャドウ+拡散シャドウの2層構成にして浮遊感の階層を付ける
+     (ライトテーマのみ。ダークは面の明度差で階層を出すため--shadowはnoneのまま、下記参照)。 */
+  --shadow: 0 1px 2px rgba(20, 20, 30, 0.05), 0 10px 24px -14px rgba(20, 20, 30, 0.22);
   /* v123: 固定チローム(ボトムナビ等)のマテリアル層。既存--panelから導出した半透明値 */
   --chrome-bg: rgba(255, 255, 255, 0.72);
   --chrome-edge: 0 -1px 0 rgba(20, 20, 30, 0.05), 0 -14px 22px -16px rgba(20, 20, 30, 0.22);
+  /* v127: --chrome-edgeの下向き版(ヘッダは上端ではなく下端に境目があるため) */
+  --chrome-edge-down: 0 1px 0 rgba(20, 20, 30, 0.05), 0 14px 22px -16px rgba(20, 20, 30, 0.22);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Hiragino Sans", "Noto Sans JP", sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #111216;
-    --panel: #1c1d22;
-    --panel-soft: #252730;
+    /* v127: --panel/--panel-softをbgに対してわずかに持ち上げ、シャドウの代わりに
+       面の明度差で階層を表現する(ダークテーマはシャドウが視認しづらいため)。 */
+    --panel: #202129;
+    --panel-soft: #2a2c35;
     --line: #3a3c44;
     --line-soft: #2c2e36;
     --text: #f4f4f6;
@@ -48,6 +56,7 @@
     /* v123: ダークテーマの固定チローム用マテリアル値 */
     --chrome-bg: rgba(28, 29, 34, 0.72);
     --chrome-edge: 0 -1px 0 rgba(255, 255, 255, 0.05), 0 -14px 22px -16px rgba(0, 0, 0, 0.55);
+    --chrome-edge-down: 0 1px 0 rgba(255, 255, 255, 0.05), 0 14px 22px -16px rgba(0, 0, 0, 0.55);
   }
 }
 
@@ -226,12 +235,29 @@ button {
   overflow: auto;
 }
 
+/* v127: ヘッダのマテリアル化(apple-design §12)。ボトムナビ(v123)と対のチロームにする。
+   当初はposition:stickyで「スクロールすると内容がヘッダ下に透けて流れる」チロームを
+   狙ったが、実機検証(ブラウザのcomputed style確認)で無効化されることが判明したため
+   採用していない: .app-shell は min-height:100dvh のCSS Gridで、行高さが常に内容ぴったり
+   (auto)に伸びる構造のため、#main(.main-pane、overflow:autoを宣言)自体は実際には
+   スクロールせず、ページ(document/html)側がスクロールする。position:stickyは
+   「最も近いスクロールコンテナ」である#mainを基準に計算されるため、#mainが実際には
+   動かない今の構造では見た目上まったく効かない(検証: #mainへスクロールしてもヘッダは
+   コンテンツと一緒に流れ去った)。これを直すには.app-shellをheight固定+overflow:hidden化
+   して各カラムを本当に内部スクロールさせる必要があるが、それは既存のレイアウト構造への
+   踏み込んだ変更になり依頼の制約(レイアウト構造は変えない)に反するため見送り、
+   「崩さない範囲の表現(背景マテリアル化のみ)」に留めた(詳細はCHANGES_v127.md)。 */
 .view-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 18px;
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  background: var(--chrome-bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: var(--chrome-edge-down);
 }
 
 .eyebrow {
@@ -298,11 +324,13 @@ h3 {
 }
 
 .panel {
-  padding: 14px;
+  /* v127: 余白のリズム(4/8ptグリッド)を一段ゆったりへ。iPad幅(min-width:760px)は
+     v98(2026-07-15、縦圧縮方針)の値をそのまま維持し、ここでは触れていない。 */
+  padding: 18px;
 }
 
 .section {
-  margin-top: 18px;
+  margin-top: 22px;
 }
 
 .metric {
@@ -367,7 +395,7 @@ h3 {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 150px auto;
   gap: 8px;
-  padding: 10px;
+  padding: 12px; /* v127: 余白のリズム(base値のみ。min-width:760pxのv98圧縮値は不変) */
   align-items: center;
 }
 
@@ -376,7 +404,7 @@ h3 {
 .textarea {
   width: 100%;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: 10px; /* v127: ボタン・カード類と角丸を整合(font-sizeは無変更) */
   padding: 9px 10px;
   background: var(--panel);
   color: var(--text);
@@ -390,8 +418,9 @@ h3 {
 
 .btn {
   min-height: 36px;
-  padding: 8px 12px;
-  border-radius: 7px;
+  padding: 8px 14px;
+  /* v127: 角丸をカード類(--radius:12px)と同系統に(ボタンはカードより一段小さく) */
+  border-radius: 10px;
   background: var(--panel-soft);
   color: var(--text);
   font-weight: 700;
@@ -405,9 +434,13 @@ h3 {
   transform: scale(0.97);
 }
 
+/* v127: primaryはfilled+わずかに大きめにして視覚階層を強調する(ボタンの階層明確化) */
 .btn.primary {
+  min-height: 40px;
+  padding: 10px 18px;
   background: var(--accent);
   color: white;
+  font-weight: 800;
 }
 
 .btn.green {
@@ -425,13 +458,15 @@ h3 {
   color: var(--red);
 }
 
+/* v127: ghostは背景・シャドウを持たない最も軽い階層(borderless)として明示する */
 .btn.ghost {
   background: transparent;
+  box-shadow: none;
   color: var(--accent);
 }
 
 .item {
-  padding: 12px;
+  padding: 16px; /* v127: 余白のリズム(base値のみ。min-width:760pxのv98圧縮値は不変) */
   display: grid;
   gap: 8px;
 }
@@ -1004,14 +1039,23 @@ h3 {
 }
 
 /* v123: マテリアルのフォールバック(apple-design §12/§14)。.bottom-navはdisplay:noneが
-   既定(max-width:720pxでのみgridに切り替わる)ため、ここは常時定義しておいてよい。 */
+   既定(max-width:720pxでのみgridに切り替わる)ため、ここは常時定義しておいてよい。
+   v127: 同じフォールバック方針を.view-header(ヘッダのマテリアル化)にも適用する。 */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .bottom-nav {
+    background: var(--panel);
+  }
+  .view-header {
     background: var(--panel);
   }
 }
 @media (prefers-reduced-transparency: reduce) {
   .bottom-nav {
+    background: var(--panel);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .view-header {
     background: var(--panel);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
@@ -1024,6 +1068,13 @@ h3 {
     -webkit-backdrop-filter: none;
     box-shadow: none;
     border-top: 1px solid var(--text);
+  }
+  .view-header {
+    background: var(--panel);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: none;
+    border-bottom: 1px solid var(--text);
   }
 }
 
@@ -2353,8 +2404,9 @@ h3 {
 .home-hero-btn { width: 100%; margin-top: 13px; font-size: 15px; padding: 12px 0; }
 
 .home-plabel {
-  display: flex; align-items: center; gap: 9px; font-size: 21px;
-  font-weight: 800; letter-spacing: 0.02em; color: var(--muted); margin-bottom: 13px;
+  /* v127: 「章立て」感の強化(帯デザイン自体は維持、字間・上マージンのみ調整) */
+  display: flex; align-items: center; gap: 9px; font-size: 21px; margin-top: 8px;
+  font-weight: 800; letter-spacing: 0.03em; color: var(--muted); margin-bottom: 15px;
 }
 .home-plabel::before {
   content: ""; width: 16px; height: 4px; border-radius: 2px;
@@ -2515,9 +2567,11 @@ h3 {
 .home-score.blue .home-score-bar > span { background: var(--accent); }
 
 /* ゾーン見出し */
+/* v127: 「章立て」感の強化。帯デザイン(色付きマーク+罫線)は維持し、上マージンを広げて
+   ゾーン間の区切りを明確化、字間をわずかに強める(v123の設計判断どおりラベル的性格は維持)。 */
 .home-zone {
-  display: flex; align-items: center; gap: 10px; margin: 10px 2px 0;
-  font-size: 21px; font-weight: 800; letter-spacing: 0.04em; color: var(--muted);
+  display: flex; align-items: center; gap: 10px; margin: 20px 2px 0;
+  font-size: 21px; font-weight: 800; letter-spacing: 0.06em; color: var(--muted);
 }
 .home-zone::before {
   content: ""; width: 10px; height: 10px; border-radius: 2px;
