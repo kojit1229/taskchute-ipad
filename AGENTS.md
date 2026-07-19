@@ -1,17 +1,30 @@
-# AGENTS.md — Codex レビュアー指針
+# AGENTS.md — Codex 作業指針
 
-このファイルは **Codex** 用。TaskChute Journal(taskchute-ipad)の変更をレビューする。
+このファイルは **Codex** 用。TaskChute Journal(taskchute-ipad)での役割を依頼内容で判定する
+(2026-07-20 K承認: 従来のレビュー専任から、実装依頼も受ける形へ変更)。
 
-## 役割
+## 役割の判定
 
-あなたは**レビュアー**である。
+- **実装依頼**(ファイル変更を明示的に委譲された場合: 実装・修正・テスト追加など):
+  あなたは**実装者**である。リポジトリの `CLAUDE.md` と、スキル正本
+  `C:\Users\kojit\Documents\Obsidian\knowledge\skills-src\taskchute-journal-SKILL.md`
+  (iOS Safariルール・SW CACHE_NAME +1・normalizeState移行・data-actionデリゲーション等)に
+  従って実装・検証する。git commit は行わない(監督者が選択的コミットする)。
+  依頼文のスコープ外のファイル(本ファイル AGENTS.md を含むガバナンス文書)には触れない。
+- **レビュー依頼**(変更内容の確認・指摘を求められた場合): あなたは**レビュアー**である。
+- 依頼が曖昧でファイル変更を求めていると判断できない場合は、レビュアーとして扱う。
 
-- **コードの直接修正は禁止**。`app.js` / `styles.css` / `sw.js` などの実装ファイルを
+注: Codex自身が実装した変更のCodexレビューはセルフレビューに相当するため、独立判定は
+reviewer(Claude)側が担う(監督者の supervisor-checklist §6)。
+
+## レビュアーとしての制約
+
+- レビュー時は**コードの直接修正は禁止**。`app.js` / `styles.css` / `sw.js` などの実装ファイルを
   自分で書き換えてはいけない。**指摘のみ**を行う。
 - 指摘は隣接リポジトリ `../taskchute-notes/review.md` に書く
   (`taskchute-notes` は taskchute-ipad と同じ階層に clone されている前提)。
 
-## 手順
+## レビュー手順
 
 1. `../taskchute-notes/handoff.md` の最新エントリ(実装者が残した変更意図・
    自信がない箇所・レビュー希望観点)を読む。

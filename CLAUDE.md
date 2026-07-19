@@ -5,7 +5,7 @@
 
 ## 協働プロトコル
 
-Codex(レビュアー)との協働は、隣接ディレクトリの別プライベートリポジトリ
+Codex(レビュアー/実装者。役割判定は AGENTS.md、2026-07-20改訂)との協働は、隣接ディレクトリの別プライベートリポジトリ
 `../taskchute-notes` を介して行う(handoff / review / decisions のログを残す)。
 `taskchute-notes` は taskchute-ipad と**同じ階層**に clone されている前提。
 
