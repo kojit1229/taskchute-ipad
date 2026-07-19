@@ -3431,6 +3431,53 @@ h3 {
   }
 }
 
+/* =========================================================
+   v124追補(Codexレビュー P2指摘対応): 上のブロックは「v124で新規に
+   追加した」transform系のみを止めており、v124以前から存在する
+   transform系のtransition/animationが動き続けていた(指摘: .toast の
+   translateY(20px)系スライド、.routine-card:hover の水平シフト、
+   開閉シェブロンのrotate)。styles.css全体を
+   `transform\s*:` / `transition:` / `animation:` / `@keyframes` で
+   洗い出し、対象を網羅した(洗い出し結果はCHANGES_v124.md追補段落を参照)。
+   除外したのは (a)opacity/colorのみの遷移 (b)位置決め用の静的transform
+   (transitionが無く、値も変化しない。translate(-50%)系センタリング等)
+   (c).timeline-card/.draft-*(不可侵領域、そもそもtransform自体が無い)
+   の3種のみ。「消すのはtransition/animationであってtransformプロパティ
+   自体ではない」の原則どおり、状態を表すtransformの値(rotate(90deg)等)
+   自体は残し、アニメーションだけを止めている。
+   ========================================================= */
+@media (prefers-reduced-motion: reduce) {
+  /* .toast: 横方向のtranslateX(-50%)は位置決め用の静的transformなので
+     残す(消すと中央揃えが崩れる)。動いているのは縦方向のスライド
+     (translateY 20px→0)なので、そこだけ止める。transitionからtransform分を
+     外してopacityのみにすれば、transform自体は(.showクラス切替時に)瞬時に
+     目標値へ変わるだけになり、アニメーションとしては残らない
+     (transformプロパティの値自体はどちらのルールも変更していない) */
+  .toast {
+    transition: opacity 0.2s ease;
+  }
+
+  /* .routine-card:hover の水平シフト(translateX(2px))を止める。
+     base側の `transition: all` はborder-colorのフェードも兼ねているため
+     transitionごと消さず、hover側のtransform値だけを打ち消す */
+  .routine-card:hover {
+    transform: none;
+  }
+
+  /* 開閉シェブロン3種: 状態を表すrotate(90deg)自体は([open]側のルールに)
+     残したまま、そこへ至る回転アニメーションだけを止める */
+  .journal-prompts summary::before,
+  .home-fold-chevron,
+  .lev-helper summary::before {
+    transition: none;
+  }
+
+  /* zt-drain(0秒思考の60秒カウントダウンバー)は意図的に停止しない:
+     3px・60秒・1回きりの残り時間表現で前庭刺激性がなく、止めると
+     機能情報(残り時間)が失われるため(apple-design §14:
+     reduced motionはフィードバック除去ではない) */
+}
+
 @keyframes modal-materialize-reduced {
   from { opacity: 0; }
   to { opacity: 1; }
