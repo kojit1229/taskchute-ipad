@@ -6,6 +6,9 @@
 // (c) ホームカード「今日へ」で今日のBlockが作られ、二重登録は弾かれる
 // (d) 選定していないWishは従来どおり候補に入らない
 // (e) 対象日にBlock化済みのWishは候補から除外される
+// (追補・Codexレビュー指摘) AIプラン採用ブランチでも「今週のやりたいこと」が合流する
+//   (f) AIプランに無い選定Wishは残り空き時間へ追記合流される
+//   (g) AIプランに既に同taskIdの項目がある選定Wishは二重追加されない
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
@@ -46,6 +49,10 @@ function check(name, cond, extra = "") {
     return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
   }
   const WEEK_KEY = weekStartOf(TODAY);
+
+  // v122追補: AIプラン_<TODAY>.json のfetchをモックする変数(v62系のpage.routeパターン)。
+  // nullなら404、文字列ならその内容で200を返す。
+  let aiPlanFixture = null;
 
   const wishProject = () => ({
     id: "wish-1", kind: "wish", title: "Wish", category: "回復", status: "active",
@@ -108,6 +115,15 @@ function check(name, cond, extra = "") {
   }
 
   try {
+    // v122追補: AIプラン_<TODAY>.jsonのfetchをモックする(v62.test.jsと同じパターン)。
+    // goto前、blockGithubApiByDefaultより後に登録する(Playwrightは後発ハンドラを優先)。
+    await page.route((url) =>
+      url.hostname === "api.github.com" && decodeURIComponent(url.pathname).endsWith(`/taskchute/AIプラン_${TODAY}.json`),
+    (route) => {
+      if (aiPlanFixture === null) return route.fulfill({ status: 404, body: "not found (test-fixture)" });
+      route.fulfill({ status: 200, contentType: "application/json", body: aiPlanFixture });
+    });
+
     await page.clock.setFixedTime(now0);
     await page.goto(`http://localhost:${PORT}/`);
     await page.waitForTimeout(500);
@@ -209,6 +225,61 @@ function check(name, cond, extra = "") {
     const s2 = await stateNow();
     const dupBlocks = (s2.blocks || []).filter((b) => !b.deleted && b.taskId === "w-5" && b.date === TODAY);
     check("二重登録によるBlockは増えない(1件のまま)", dupBlocks.length === 1, JSON.stringify(dupBlocks));
+
+    // ============================================================
+    // (追補・Codexレビュー指摘) AIプラン採用時にも「今週のやりたいこと」が合流する。
+    // バッチ生成のAIプランはstate.weeklyWishesを知らないため、runAiMorningPlanのaiPlan採用
+    // ブランチ側で別途合流していることを検証する(aiMorningPlanCandidates経由の通常経路は
+    // このブランチを通らないため、ここを別枠で確認する必要がある)。
+    // ============================================================
+    console.log("[3] AIプラン採用時、AIプランに無い今週のやりたいことは残り空き時間へ追記合流される");
+    const AI_PLAN_TITLE = "AIプラン本体タスク";
+    const WISH3_TITLE = "料理教室に通う";
+    aiPlanFixture = JSON.stringify({
+      date: TODAY,
+      generatedAt: `${TODAY}T05:00`,
+      plan: [{ title: AI_PLAN_TITLE, taskId: null, blockId: null, start: "10:00", minutes: 30, category: "", reason: "", carryFromId: null }],
+      skipped: []
+    });
+    await seed({
+      tasks: [makeWish({ id: "w-6", title: WISH3_TITLE })],
+      projects: [wishProject()],
+      weeklyWishes: { [WEEK_KEY]: { taskIds: ["w-6"], updatedAt: `${TODAY}T09:00` } },
+      view: "tasks"
+    });
+    await page.click('[data-action="nav"][data-view="tasks"]');
+    await page.waitForTimeout(150);
+    await page.click('[data-action="ai-morning-plan"]');
+    await page.waitForTimeout(700);
+    const titles3 = await draftTitles();
+    check("AIプラン本体の項目が採用される", titles3.some((t) => t.includes(AI_PLAN_TITLE)), JSON.stringify(titles3));
+    check("AIプランに無い今週のやりたいことが残り空き時間へ追記される", titles3.some((t) => t.includes(WISH3_TITLE)), JSON.stringify(titles3));
+    const bar3 = await page.locator(".draft-bar").first().textContent().catch(() => "");
+    check("sourceはai-planのまま(全体フォールバックしない)", (bar3 || "").includes("🤖 AIプラン由来"), bar3);
+
+    console.log("[4] AIプランに同taskIdの項目が既にある今週のやりたいことは二重追加されない");
+    const COVERED_TITLE = "AIプランがカバー済みのやりたいこと";
+    aiPlanFixture = JSON.stringify({
+      date: TODAY,
+      generatedAt: `${TODAY}T05:00`,
+      plan: [{ title: COVERED_TITLE, taskId: "w-6", blockId: null, start: "10:00", minutes: 30, category: "", reason: "", carryFromId: null }],
+      skipped: []
+    });
+    await seed({
+      tasks: [makeWish({ id: "w-6", title: WISH3_TITLE })],
+      projects: [wishProject()],
+      weeklyWishes: { [WEEK_KEY]: { taskIds: ["w-6"], updatedAt: `${TODAY}T09:00` } },
+      view: "tasks"
+    });
+    await page.click('[data-action="nav"][data-view="tasks"]');
+    await page.waitForTimeout(150);
+    await page.click('[data-action="ai-morning-plan"]');
+    await page.waitForTimeout(700);
+    const titles4 = await draftTitles();
+    check("AIプラン側の項目(同taskId)は採用される", titles4.some((t) => t.includes(COVERED_TITLE)), JSON.stringify(titles4));
+    check("同taskIdのWishは二重追加されない(Wish自身のタイトルでは追加されない)", !titles4.some((t) => t.includes(WISH3_TITLE)), JSON.stringify(titles4));
+    check("下書き件数は1件のまま(重複なし)", titles4.length === 1, JSON.stringify(titles4));
+    aiPlanFixture = null;
   } finally {
     await browser.close();
     server.close();

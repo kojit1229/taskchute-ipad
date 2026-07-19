@@ -42,6 +42,21 @@ v121で選んだ「今週のやりたいこと」を、タスクシュートの�
   Wishタブの既存ボタンと完全に同じ挙動(expectedCharge:4、status doing化、二重登録
   ガード)になり、動線が2つあっても実装・テストの重複を避けられる。
 
+## 追補(Codexレビュー指摘対応)
+
+`runAiMorningPlan()` は自宅PCバッチ生成の `AIプラン_<date>.json` が有効な場合、`aiPlan` を
+採用した時点で早期returnしており、この経路は `aiMorningPlanCandidates`/`aiScheduleCandidates`
+を通らないため、当初実装では手動・自動どちらの朝プランでもAIプラン採用時に「今週のやりたい
+こと」候補が無視されていた(バッチ生成のAIプランは`state.weeklyWishes`を知らない)。対処として、
+aiPlan採用ブランチ内(aiSkippedログ処理後・早期returnの前)で `aiScheduleCandidates(date)` から
+`note === "今週のやりたいこと"` の候補を取り出し、`aiPlan.items` に既に同じ`taskId`を持つ項目が
+あるものは二重配置防止のため除外したうえで、AIプランが占める時間帯を差し引いた残りの空き時間
+(新設した`subtractBusyFromGaps`ユーティリティで算出、15分未満の残り枠は捨てる)に対し既存の
+`fallbackMorningPlan`で前詰め配置し、`_scheduleDraft.items`/`.skipped`へ追記するようにした。
+`_scheduleDraft.source`は`"ai-plan"`のまま変えていない。`tests/v122.test.js`に、AIプランに無い
+選定Wishが残り空き時間へ追記合流されるケースと、AIプランに既に同taskIdの項目がある選定Wishが
+二重追加されないケースの2本(`page.route`によるAIプランJSONのfetchモック)を追加した。
+
 ## 検証手順
 
 1. `node --check app.js` / `node --check sw.js`
