@@ -1,14 +1,15 @@
-// v122 検証: v121で選んだ「今週のやりたいこと」を、朝の一括プランニング候補への合流と
-// ホームカードからのワンタップ登録で、タスクシュートのスケジュールに実際に載せられるようにする。
+// v122 検証(v126で反転): v122は「今週選定したWish(state.weeklyWishes)」を朝の一括プランニング
+// 候補へ特別ルートで合流させる仕組みだったが、v126でK指示によりこの週次選定ベースの特別
+// スケジュールルートは撤去し、期日駆動のWBSフロー(v126.test.js参照)へ作り直した。
+// 本ファイルは撤去そのものを検証する内容へ更新した(CHANGES_v126.md参照。仕様変更に伴う
+// 正当なテスト更新であり、弱体化ではない)。
 //
-// (a) 今週選定したWishが朝の一括プランニング候補に「今週のやりたいこと」として含まれる
-// (b) 配置順が MIT→繰越→やりたいこと→WBS の優先を守る
-// (c) ホームカード「今日へ」で今日のBlockが作られ、二重登録は弾かれる
-// (d) 選定していないWishは従来どおり候補に入らない
-// (e) 対象日にBlock化済みのWishは候補から除外される
-// (追補・Codexレビュー指摘) AIプラン採用ブランチでも「今週のやりたいこと」が合流する
-//   (f) AIプランに無い選定Wishは残り空き時間へ追記合流される
-//   (g) AIプランに既に同taskIdの項目がある選定Wishは二重追加されない
+// (a) 今週選定しただけ(期日なし)のWishは、朝の一括プランニング候補に自動では合流しない
+//     (v122当時はweeklyWishes選定だけで期日の有無に関わらず候補に入っていたが、その特別ルートを
+//      撤去したことを、期日なしWishが依然として除外されることで確認する)
+// (b) AIプラン採用ブランチでも同様に、週次選定Wishは自動では合流しない
+//     (v122追補で足していたaiPlan採用時の残り空き時間への追記合流ブロックを撤去したことの確認)
+// (c) ホームカード「今日へ」で今日のBlockが作られ、二重登録は弾かれる(v121/v122のUIは無変更で存続)
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
@@ -38,7 +39,6 @@ function check(name, cond, extra = "") {
     return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
   }
   const TODAY = isoOffset(0);
-  const YEST = isoOffset(-1);
 
   // app.js の weekRange() (土曜起点)をテスト側でも再現する(v121テストと同じ)
   function weekStartOf(dateISO) {
@@ -50,7 +50,7 @@ function check(name, cond, extra = "") {
   }
   const WEEK_KEY = weekStartOf(TODAY);
 
-  // v122追補: AIプラン_<TODAY>.json のfetchをモックする変数(v62系のpage.routeパターン)。
+  // AIプラン_<TODAY>.json のfetchをモックする変数(v62系のpage.routeパターン)。
   // nullなら404、文字列ならその内容で200を返す。
   let aiPlanFixture = null;
 
@@ -58,9 +58,9 @@ function check(name, cond, extra = "") {
     id: "wish-1", kind: "wish", title: "Wish", category: "回復", status: "active",
     twelveWeekStartDate: "", createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false
   });
-  function makeWish({ id, title, realized = false, deleted = false }) {
+  function makeWish({ id, title, dueDate = "", realized = false, deleted = false }) {
     return {
-      id, projectId: "wish-1", parentTaskId: "", title, category: "", status: "todo", dueDate: "",
+      id, projectId: "wish-1", parentTaskId: "", title, category: "", status: "todo", dueDate,
       description: "", selfDueOff: false, targetYear: null, targetMonth: null, lifeArea: "", motivation: "",
       realized, realizedDate: "", nextRoutineId: "", leverageType: "", leverageNote: "",
       aiWork: false, aiWorkBrief: "", progressNum: 0, progressDen: 10, doneCriteria: "", firstStep: "",
@@ -72,23 +72,10 @@ function check(name, cond, extra = "") {
     description: "", dueDate: "", twelveWeekStartDate: "", createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`,
     deleted: false, collapsed: false
   });
-  function wbsTask(id, title) {
+  function wbsTask(id, title, dueDate = "") {
     return {
-      id, projectId: "test-proj", parentTaskId: "", title, category: "", status: "todo", dueDate: "",
+      id, projectId: "test-proj", parentTaskId: "", title, category: "", status: "todo", dueDate,
       description: "", createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false
-    };
-  }
-  function planBlock({ id, date, title, startMin, endMin, taskId = "", category = "" }) {
-    return {
-      id, taskId, date, title, category,
-      plannedStartAt: `${date}T${hhmm(startMin)}`,
-      plannedEndAt: `${date}T${hhmm(endMin)}`,
-      actualStartAt: "", actualEndAt: "",
-      completed: false, charge: 0, discharge: 0,
-      comment: "", recurrenceGroupId: "", pomodoroCount: 0,
-      migratedTo: "", orderIndex: 0,
-      createdAt: `${date}T00:00`, updatedAt: `${date}T00:00`,
-      deleted: false
     };
   }
 
@@ -115,7 +102,7 @@ function check(name, cond, extra = "") {
   }
 
   try {
-    // v122追補: AIプラン_<TODAY>.jsonのfetchをモックする(v62.test.jsと同じパターン)。
+    // AIプラン_<TODAY>.jsonのfetchをモックする(v62.test.jsと同じパターン)。
     // goto前、blockGithubApiByDefaultより後に登録する(Playwrightは後発ハンドラを優先)。
     await page.route((url) =>
       url.hostname === "api.github.com" && decodeURIComponent(url.pathname).endsWith(`/taskchute/AIプラン_${TODAY}.json`),
@@ -130,31 +117,18 @@ function check(name, cond, extra = "") {
     await passGithubGate(page);
 
     // ============================================================
-    // (a)(b)(d)(e) 朝の一括プランニング候補: MIT→繰越→今週のやりたいこと→WBS の順、
-    //              未選定Wishは含まれず、当日Block化済みの選定Wishは除外される
+    // (a) 週次選定しただけ(期日なし)のWishは、決定論配置の朝プラン候補に自動では合流しない
     // ============================================================
-    console.log("[1] 朝の一括プランニング候補の合流順・除外条件");
-    const MIT_TITLE = "MIT候補: 資料レビュー";
-    const CARRY_TITLE = "昨日やり残したレポート作成";
+    console.log("[1] 決定論配置: 週次選定Wish(期日なし)は候補に自動合流しない");
     const WISH_TITLE = "京都へ旅行する";
-    const WBS_TITLE = "WBS未完了: 議事録作成";
-    const UNSELECTED_WISH_TITLE = "書籍を出版する";       // (d) 選定していない
-    const BLOCKED_WISH_TITLE = "実家をリフォーム";        // (e) 選定済みだが当日Block化済み
-
+    const WBS_TITLE = "議事録作成";
     await seed({
       tasks: [
-        makeWish({ id: "w-1", title: WISH_TITLE }),
-        makeWish({ id: "w-3", title: UNSELECTED_WISH_TITLE }),
-        makeWish({ id: "w-4", title: BLOCKED_WISH_TITLE }),
-        wbsTask("wbs-1", WBS_TITLE)
+        makeWish({ id: "w-1", title: WISH_TITLE }),  // 期日なし。v122当時はこれでも合流していた
+        wbsTask("wbs-1", WBS_TITLE, TODAY)
       ],
       projects: [wishProject(), testProject()],
-      blocks: [
-        planBlock({ id: "carry-1", date: YEST, title: CARRY_TITLE, startMin: 14 * 60, endMin: 14 * 60 + 30 }),
-        planBlock({ id: "blk-w4", date: TODAY, title: BLOCKED_WISH_TITLE, taskId: "w-4", startMin: 6 * 60, endMin: 6 * 60 + 30 })
-      ],
-      weeklyWishes: { [WEEK_KEY]: { taskIds: ["w-1", "w-4"], updatedAt: `${TODAY}T09:00` } },  // w-3は選定していない
-      journalMeta: { [YEST]: { aiMitCandidates: [MIT_TITLE], aiImported: false, ideal: "" } },
+      weeklyWishes: { [WEEK_KEY]: { taskIds: ["w-1"], updatedAt: `${TODAY}T09:00` } },  // 今週選定済み
       view: "tasks"
     });
 
@@ -163,25 +137,51 @@ function check(name, cond, extra = "") {
     await page.click('[data-action="ai-morning-plan"]');
     await page.waitForTimeout(600);
 
-    const titles = await draftTitles();
-    check("下書きに4件配置される(MIT/繰越/やりたいこと/WBSの4件)", titles.length === 4, JSON.stringify(titles));
-    if (titles.length === 4) {
-      check("1番目はMIT候補", titles[0].includes(MIT_TITLE), titles[0]);
-      check("2番目は繰越", titles[1].includes(CARRY_TITLE), titles[1]);
-      check("3番目は今週のやりたいこと(WBSより先)", titles[2].includes(WISH_TITLE), titles[2]);
-      check("4番目はWBS", titles[3].includes(WBS_TITLE), titles[3]);
-    }
-    const titlesJoined = titles.join(" / ");
-    check("(d) 選定していないWishは候補に入らない", !titlesJoined.includes(UNSELECTED_WISH_TITLE), titlesJoined);
-    check("(e) 当日Block化済みの選定Wishは候補から除外される", !titlesJoined.includes(BLOCKED_WISH_TITLE), titlesJoined);
+    const titles1 = await draftTitles();
+    const titles1Joined = titles1.join(" / ");
+    check("通常のWBS候補は下書きに配置される", titles1Joined.includes(WBS_TITLE), titles1Joined);
+    check("週次選定しただけ(期日なし)のWishは下書きに合流しない", !titles1Joined.includes(WISH_TITLE), titles1Joined);
 
     await page.click('[data-action="draft-discard"]');
     await page.waitForTimeout(200);
 
     // ============================================================
-    // (c) ホームカード「今日へ」で今日のBlockが作られ、二重登録は弾かれる
+    // (b) AIプラン採用ブランチでも、週次選定Wishは残り空き時間へ自動合流しない
+    //     (v122追補で足していたsubtractBusyFromGaps経由の合流ブロックはv126で撤去した)
     // ============================================================
-    console.log("[2] ホームカードの「今日へ」ボタン");
+    console.log("[2] AIプラン採用時も、週次選定Wishは残り空き時間へ自動合流しない");
+    const AI_PLAN_TITLE = "AIプラン本体タスク";
+    const WISH2_TITLE = "料理教室に通う";
+    aiPlanFixture = JSON.stringify({
+      date: TODAY,
+      generatedAt: `${TODAY}T05:00`,
+      plan: [{ title: AI_PLAN_TITLE, taskId: null, blockId: null, start: "10:00", minutes: 30, category: "", reason: "", carryFromId: null }],
+      skipped: []
+    });
+    await seed({
+      tasks: [makeWish({ id: "w-6", title: WISH2_TITLE })],  // 期日なし・今週選定済み
+      projects: [wishProject()],
+      weeklyWishes: { [WEEK_KEY]: { taskIds: ["w-6"], updatedAt: `${TODAY}T09:00` } },
+      view: "tasks"
+    });
+    await page.click('[data-action="nav"][data-view="tasks"]');
+    await page.waitForTimeout(150);
+    await page.click('[data-action="ai-morning-plan"]');
+    await page.waitForTimeout(700);
+    const titles2 = await draftTitles();
+    const titles2Joined = titles2.join(" / ");
+    check("AIプラン本体の項目は採用される", titles2Joined.includes(AI_PLAN_TITLE), titles2Joined);
+    check("週次選定Wishは残り空き時間へ追記されない(自動合流ブロックは撤去済み)",
+      !titles2Joined.includes(WISH2_TITLE), titles2Joined);
+    check("下書き件数はAIプラン本体の1件のみ", titles2.length === 1, titles2Joined);
+    const bar2 = await page.locator(".draft-bar").first().textContent().catch(() => "");
+    check("sourceはai-planのまま(全体フォールバックしない)", (bar2 || "").includes("🤖 AIプラン由来"), bar2);
+    aiPlanFixture = null;
+
+    // ============================================================
+    // (c) ホームカード「今日へ」で今日のBlockが作られ、二重登録は弾かれる(v121/v122のUIは無変更)
+    // ============================================================
+    console.log("[3] ホームカードの「今日へ」ボタン");
     const HOME_WISH_TITLE = "フルマラソン完走";
     await seed({
       tasks: [makeWish({ id: "w-5", title: HOME_WISH_TITLE })],
@@ -225,61 +225,6 @@ function check(name, cond, extra = "") {
     const s2 = await stateNow();
     const dupBlocks = (s2.blocks || []).filter((b) => !b.deleted && b.taskId === "w-5" && b.date === TODAY);
     check("二重登録によるBlockは増えない(1件のまま)", dupBlocks.length === 1, JSON.stringify(dupBlocks));
-
-    // ============================================================
-    // (追補・Codexレビュー指摘) AIプラン採用時にも「今週のやりたいこと」が合流する。
-    // バッチ生成のAIプランはstate.weeklyWishesを知らないため、runAiMorningPlanのaiPlan採用
-    // ブランチ側で別途合流していることを検証する(aiMorningPlanCandidates経由の通常経路は
-    // このブランチを通らないため、ここを別枠で確認する必要がある)。
-    // ============================================================
-    console.log("[3] AIプラン採用時、AIプランに無い今週のやりたいことは残り空き時間へ追記合流される");
-    const AI_PLAN_TITLE = "AIプラン本体タスク";
-    const WISH3_TITLE = "料理教室に通う";
-    aiPlanFixture = JSON.stringify({
-      date: TODAY,
-      generatedAt: `${TODAY}T05:00`,
-      plan: [{ title: AI_PLAN_TITLE, taskId: null, blockId: null, start: "10:00", minutes: 30, category: "", reason: "", carryFromId: null }],
-      skipped: []
-    });
-    await seed({
-      tasks: [makeWish({ id: "w-6", title: WISH3_TITLE })],
-      projects: [wishProject()],
-      weeklyWishes: { [WEEK_KEY]: { taskIds: ["w-6"], updatedAt: `${TODAY}T09:00` } },
-      view: "tasks"
-    });
-    await page.click('[data-action="nav"][data-view="tasks"]');
-    await page.waitForTimeout(150);
-    await page.click('[data-action="ai-morning-plan"]');
-    await page.waitForTimeout(700);
-    const titles3 = await draftTitles();
-    check("AIプラン本体の項目が採用される", titles3.some((t) => t.includes(AI_PLAN_TITLE)), JSON.stringify(titles3));
-    check("AIプランに無い今週のやりたいことが残り空き時間へ追記される", titles3.some((t) => t.includes(WISH3_TITLE)), JSON.stringify(titles3));
-    const bar3 = await page.locator(".draft-bar").first().textContent().catch(() => "");
-    check("sourceはai-planのまま(全体フォールバックしない)", (bar3 || "").includes("🤖 AIプラン由来"), bar3);
-
-    console.log("[4] AIプランに同taskIdの項目が既にある今週のやりたいことは二重追加されない");
-    const COVERED_TITLE = "AIプランがカバー済みのやりたいこと";
-    aiPlanFixture = JSON.stringify({
-      date: TODAY,
-      generatedAt: `${TODAY}T05:00`,
-      plan: [{ title: COVERED_TITLE, taskId: "w-6", blockId: null, start: "10:00", minutes: 30, category: "", reason: "", carryFromId: null }],
-      skipped: []
-    });
-    await seed({
-      tasks: [makeWish({ id: "w-6", title: WISH3_TITLE })],
-      projects: [wishProject()],
-      weeklyWishes: { [WEEK_KEY]: { taskIds: ["w-6"], updatedAt: `${TODAY}T09:00` } },
-      view: "tasks"
-    });
-    await page.click('[data-action="nav"][data-view="tasks"]');
-    await page.waitForTimeout(150);
-    await page.click('[data-action="ai-morning-plan"]');
-    await page.waitForTimeout(700);
-    const titles4 = await draftTitles();
-    check("AIプラン側の項目(同taskId)は採用される", titles4.some((t) => t.includes(COVERED_TITLE)), JSON.stringify(titles4));
-    check("同taskIdのWishは二重追加されない(Wish自身のタイトルでは追加されない)", !titles4.some((t) => t.includes(WISH3_TITLE)), JSON.stringify(titles4));
-    check("下書き件数は1件のまま(重複なし)", titles4.length === 1, JSON.stringify(titles4));
-    aiPlanFixture = null;
   } finally {
     await browser.close();
     server.close();
