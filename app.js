@@ -2330,6 +2330,18 @@ function homeWeeklyWishCard() {
   const wishes = taskIds
     .map((wid) => state.tasks.find((t) => t.id === wid))
     .filter((t) => t && !t.deleted && !t.realized);
+  // v122: 各Wishに「今日へ」ボタンを追加(wishSubtaskToTasksを再利用)。既に今日Block化済みなら
+  // ボタンの代わりに控えめな「済」表示にする(二重登録は既存関数側のトーストガードでも弾かれる)。
+  const wishRowHTML = (w) => {
+    const blockedToday = state.blocks.some((b) => !b.deleted && b.taskId === w.id && b.date === date);
+    return `
+      <li class="row" style="justify-content:space-between; align-items:center; gap:8px; padding:3px 0">
+        <span>${escapeHTML(w.title)}</span>
+        ${blockedToday
+          ? `<span class="muted" style="font-size:11px">済</span>`
+          : `<button class="btn ghost" style="font-size:13px; padding:4px 9px" data-action="wish-subtask-to-tasks" data-id="${w.id}">今日へ</button>`}
+      </li>`;
+  };
   return `
     <section class="panel home-weekly-wish-card" style="padding:12px 14px; margin-bottom:10px">
       <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:6px">
@@ -2337,7 +2349,7 @@ function homeWeeklyWishCard() {
         <button class="btn ghost" style="font-size:16px; padding:6px 10px" data-action="weekly-wish-open">変更</button>
       </div>
       ${wishes.length
-        ? `<ul style="margin:0; padding-left:18px; font-size:14px">${wishes.map((w) => `<li>${escapeHTML(w.title)}</li>`).join("")}</ul>`
+        ? `<ul style="margin:0; padding-left:0; list-style:none; font-size:14px">${wishes.map(wishRowHTML).join("")}</ul>`
         : `<div class="muted" style="font-size:12px">選択したやりたいことは表示できなくなりました</div>`}
     </section>`;
 }
@@ -3612,12 +3624,25 @@ function aiScheduleCandidates(date) {
       note: t.dueDate ? `期限 ${t.dueDate}` : "",
       estimateMin: t.estimateMin || null  // v60: 決定論配置の見積分数(未設定なら fallbackMorningPlan が既定30分を使う)
     }));
+  // v122: 今週選定した「やりたいこと」(state.weeklyWishes)を候補へ合流する。
+  //       通常のWish除外フィルタ(wishIds)は今週選定分だけの例外とし、他のWishには従来どおり適用する。
+  //       note="今週のやりたいこと"がfallbackMorningPlanのrank判定にも使う唯一の目印(id接頭辞の増設はしない)。
+  const weeklyEntry = state.weeklyWishes[weekRange(date).weekStart];
+  ((weeklyEntry && weeklyEntry.taskIds) || []).forEach((wid) => {
+    const t = state.tasks.find((x) => x.id === wid);
+    if (!t || t.deleted || t.realized) return;  // 削除済み・実現済みは対象外
+    if (state.blocks.some((b) => !b.deleted && b.taskId === t.id && b.date === date)) return;  // 対象日にBlock化済みは除外
+    out.push({
+      id: t.id, title: t.title, taskId: t.id, category: t.category || "回復",
+      note: "今週のやりたいこと", estimateMin: t.estimateMin || null
+    });
+  });
   return out;
 }
 
 // v60: 空き時間に候補を機械的に前詰め配置する(Claude API 呼び出しは全廃したため決定論配置のみ)。
 //      配置ロジックは runAiMorningPlan と共通の fallbackMorningPlan を再利用する
-//      (この画面には繰越候補が無いため実質「MIT候補→WBS」の優先順)。
+//      (この画面には繰越候補が無いため実質「MIT候補→今週のやりたいこと→WBS」の優先順)。
 function runAiSchedule() {
   const date = state.selectedDate;
   const candidates = aiScheduleCandidates(date);
@@ -3875,7 +3900,7 @@ function aiMorningPlanCandidates(date) {
   return [...carryList, ...rest];
 }
 
-// v60: 決定論配置(唯一の配置経路。旧称フォールバックのまま維持): MIT候補 → 繰越 → WBS の順に、
+// v60: 決定論配置(唯一の配置経路。旧称フォールバックのまま維持): MIT候補 → 繰越 → 今週のやりたいこと → WBS の順に、
 // 各候補の見積分数(estimateMin、無ければ30分)で空き枠へ前詰め配置する。
 // 空き枠に入り切らない候補は skipped(理由: 空き枠なし)に回す。
 // v77: 詰め込み防止の第二段 — (a) ブロック長は見積分数(estimateMin)にそのまま一致させる
@@ -3891,7 +3916,9 @@ const MORNING_PLAN_CAPACITY_RATIO = 0.65;
 const MORNING_PLAN_CAPACITY_MIN_FLOOR = 60;
 const MORNING_PLAN_BUFFER_MIN = 10;
 function fallbackMorningPlan(candidates, freeGaps) {
-  const rank = (c) => (c.carryFromId ? 1 : (String(c.id).startsWith("mit-") ? 0 : 2));  // MIT=0 → 繰越=1 → WBS=2
+  // v122: 「今週のやりたいこと」をWBSより先に置く(MIT=0 → 繰越=1 → やりたいこと=2 → WBS=3)。
+  //       判定はaiScheduleCandidatesが付与する note="今週のやりたいこと" を見る(id接頭辞の増設はしない)。
+  const rank = (c) => (c.carryFromId ? 1 : (String(c.id).startsWith("mit-") ? 0 : (c.note === "今週のやりたいこと" ? 2 : 3)));
   const ordered = [...candidates].sort((a, b) => rank(a) - rank(b));
   const gaps = freeGaps.map(([s, e]) => [s, e]);  // 前詰めで消費するのでコピーして破壊的に使う
   const totalFreeMin = gaps.reduce((sum, [s, e]) => sum + (e - s), 0);
