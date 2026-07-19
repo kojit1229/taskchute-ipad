@@ -274,10 +274,11 @@ document.addEventListener("click", (event) => {
     render();
   }
   if (action === "wbs-collapse-all") {
-    const targets = state.projects.filter((p) => !p.deleted && p.kind !== "wish");
+    // v126: WishもWBS一覧に表示されるため、一括開閉の対象からWishだけ除く理由がなくなった
+    const targets = state.projects.filter((p) => !p.deleted);
     const collapse = !targets.every((p) => p.collapsed);  // 全閉なら開く、そうでなければ閉じる
     state.projects = state.projects.map((p) =>
-      (!p.deleted && p.kind !== "wish") ? { ...p, collapsed: collapse } : p);
+      !p.deleted ? { ...p, collapsed: collapse } : p);
     saveAndRender();
   }
   if (action === "add-block") addBlock();
@@ -3325,9 +3326,11 @@ function homeWeeklyLink() {
 // (details、開閉記憶あり)に格納する(完全非表示にはしない=見えなくなる事故防止)。
 // 期限切れ(dueDate < 当日)は従来どおり最優先で常時表示(当日+3日の枠に自然に含まれる)。
 // 期限なしタスクは従来から除外(t.dueDate の真偽チェック)で、この扱いは変更していない。
+// v126: Wish除外を撤去。「期日付きWishはタスクと同じ」の原則により、このリストは元々
+//       dueDate必須(下のfilterでt.dueDateを見る)なので、期日を持つWishだけが自然に混ざる。
 function homeBacklog() {
   const excluded = state.projects
-    .filter((p) => p.kind === "wish" || p.kind === "other")
+    .filter((p) => p.kind === "other")
     .map((p) => p.id);
   // v33: 期限切れ + 当日から1週間以内のタスクのみ(期限なしは除外)。量が多すぎる対策。
   // v88: この7日という全体の取得上限は維持し、その中を「当日+3日」で表示/折りたたみに分ける。
@@ -3611,11 +3614,16 @@ function computeFreeGaps(date, dayStartMin = 5 * 60, dayEndMin = 23 * 60) {
   return gaps;
 }
 
-// 配置候補: 昨日のMIT候補 + WBSの未完了タスク(Wish/中断/今日Block化済みを除く、期限順)
+// 配置候補: 昨日のMIT候補 + WBSの未完了タスク(中断/今日Block化済みを除く、期限順)
 // v77: 詰め込み防止の第一段 — dueDateが対象日より後(翌日以降)のタスクは候補から除外する。
 //      期限なし(dueDate未設定)のタスクは対象に残す(wbsTaskCompareが "9999" 扱いで
 //      最後尾ソートするため、期限付きタスクを圧迫せず、空いた枠があれば埋める filler として働く)。
 //      期限が対象日以前(=期日超過・当日締切)のタスクは当然対象。
+// v126: 「やりたいこと」もWBSのTaskとして扱い、期日を持つWishは通常タスクと全く同じ条件
+//      (effectiveDueDate/wbsTaskCompare/15件cap)に乗せる。特別なrank・noteは付けない。
+//      ただし「期日なし=filler」という通常WBSタスクのルールはWishには適用しない
+//      (60件超のWishが未着手のまま溜まる運用のため、期日なしWishまでfillerとして
+//      朝プランに溢れさせると収拾がつかなくなる。期日なしWishは候補から除外する)。
 function aiScheduleCandidates(date) {
   const out = [];
   const prev = addDays(date, -1);
@@ -3623,7 +3631,9 @@ function aiScheduleCandidates(date) {
     out.push({ id: `mit-${i}`, title: t, taskId: "", category: "", note: "MIT候補" }));
   const wishIds = new Set(state.projects.filter((p) => p.kind === "wish").map((p) => p.id));
   state.tasks
-    .filter((t) => !t.deleted && (t.status === "todo" || t.status === "doing") && t.projectId && !wishIds.has(t.projectId))
+    .filter((t) => !t.deleted && (t.status === "todo" || t.status === "doing") && t.projectId)
+    // v126: 期日なしWishのみ除外(期日付きWishは以降の通常フィルタへそのまま乗る)
+    .filter((t) => !wishIds.has(t.projectId) || Boolean(t.dueDate))
     .filter((t) => !isTaskSuspended(t))
     // v77: 翌日以降が期限のタスクは今日の下書きに詰め込まない。v117(B): 自己締切前倒しを反映
     .filter((t) => !t.dueDate || effectiveDueDate(t) <= date)
@@ -3635,19 +3645,6 @@ function aiScheduleCandidates(date) {
       note: t.dueDate ? `期限 ${t.dueDate}` : "",
       estimateMin: t.estimateMin || null  // v60: 決定論配置の見積分数(未設定なら fallbackMorningPlan が既定30分を使う)
     }));
-  // v122: 今週選定した「やりたいこと」(state.weeklyWishes)を候補へ合流する。
-  //       通常のWish除外フィルタ(wishIds)は今週選定分だけの例外とし、他のWishには従来どおり適用する。
-  //       note="今週のやりたいこと"がfallbackMorningPlanのrank判定にも使う唯一の目印(id接頭辞の増設はしない)。
-  const weeklyEntry = state.weeklyWishes[weekRange(date).weekStart];
-  ((weeklyEntry && weeklyEntry.taskIds) || []).forEach((wid) => {
-    const t = state.tasks.find((x) => x.id === wid);
-    if (!t || t.deleted || t.realized) return;  // 削除済み・実現済みは対象外
-    if (state.blocks.some((b) => !b.deleted && b.taskId === t.id && b.date === date)) return;  // 対象日にBlock化済みは除外
-    out.push({
-      id: t.id, title: t.title, taskId: t.id, category: t.category || "回復",
-      note: "今週のやりたいこと", estimateMin: t.estimateMin || null
-    });
-  });
   return out;
 }
 
@@ -3927,9 +3924,10 @@ const MORNING_PLAN_CAPACITY_RATIO = 0.65;
 const MORNING_PLAN_CAPACITY_MIN_FLOOR = 60;
 const MORNING_PLAN_BUFFER_MIN = 10;
 function fallbackMorningPlan(candidates, freeGaps) {
-  // v122: 「今週のやりたいこと」をWBSより先に置く(MIT=0 → 繰越=1 → やりたいこと=2 → WBS=3)。
-  //       判定はaiScheduleCandidatesが付与する note="今週のやりたいこと" を見る(id接頭辞の増設はしない)。
-  const rank = (c) => (c.carryFromId ? 1 : (String(c.id).startsWith("mit-") ? 0 : (c.note === "今週のやりたいこと" ? 2 : 3)));
+  // v126: v122で追加した「今週のやりたいこと」専用rank(2段目)は撤去。期日付きWishは
+  //       aiScheduleCandidates側で通常WBSタスクと同列に扱われるため、優先度は
+  //       MIT=0 → 繰越=1 → WBS(Wish含む)=2 の3段階に戻す。
+  const rank = (c) => (c.carryFromId ? 1 : (String(c.id).startsWith("mit-") ? 0 : 2));
   const ordered = [...candidates].sort((a, b) => rank(a) - rank(b));
   const gaps = freeGaps.map(([s, e]) => [s, e]);  // 前詰めで消費するのでコピーして破壊的に使う
   const totalFreeMin = gaps.reduce((sum, [s, e]) => sum + (e - s), 0);
@@ -4099,24 +4097,6 @@ function showZeroSecThemesOnlyIfAny(date, auto) {
   return true;
 }
 
-// v122追補: 区間リストgapsから、busy(占有区間のリスト)と重なる部分を差し引く。
-// AIプラン採用時(runAiMorningPlan)に「今週のやりたいこと」を残り空き時間へ追加配置する
-// ためだけに使う小さなユーティリティ(computeFreeGapsはstate.blocksからしか占有区間を
-// 作れず、まだBlock化されていないaiPlan.itemsの占有はここで別途差し引く必要がある)。
-function subtractBusyFromGaps(gaps, busy) {
-  let result = gaps.map(([s, e]) => [s, e]);
-  busy.forEach(([bs, be]) => {
-    const next = [];
-    result.forEach(([s, e]) => {
-      if (be <= s || bs >= e) { next.push([s, e]); return; }  // 重ならない
-      if (bs > s) next.push([s, bs]);
-      if (be < e) next.push([be, e]);
-    });
-    result = next;
-  });
-  return result;
-}
-
 // v60: 決定論配置(fallbackMorningPlan)を正規経路に昇格。Claude API 呼び出しは全廃。
 // v62: 自宅PCバッチ生成のAIプランJSONを優先採用し、取得/検証に失敗した場合のみ決定論配置へ
 //      フォールバックする(v60の経路は無傷で維持)。
@@ -4166,24 +4146,8 @@ async function runAiMorningPlan({ auto = false } = {}) {
       }
       saveState();
     }
-    // v122追補: バッチ生成のAIプランはstate.weeklyWishesを知らないため、ここで別途
-    // 「今週のやりたいこと」候補を合流する(aiMorningPlanCandidates/aiScheduleCandidatesの
-    // 通常経路はこのaiPlan採用ブランチを通らず早期returnするため、v122のWish候補が
-    // 手動・自動どちらの朝プランでも無視されていた)。aiPlan.itemsに既に同taskIdがある
-    // 項目は二重配置防止のため除外し、AIプランが占める時間帯をfreeGapsから差し引いた
-    // 残りの空き時間にのみ既存のfallbackMorningPlanで前詰め配置する。
-    const planTaskIds = new Set(aiPlan.items.filter((it) => it.taskId).map((it) => it.taskId));
-    const wishCandidates = aiScheduleCandidates(date)
-      .filter((c) => c.note === "今週のやりたいこと" && !planTaskIds.has(c.taskId));
-    if (wishCandidates.length) {
-      const busy = aiPlan.items.map((it) => [it.start, it.start + it.minutes]);
-      const remainGaps = subtractBusyFromGaps(freeGaps, busy).filter(([s, e]) => e - s >= 15);
-      if (remainGaps.length) {
-        const { items: wishItems, skipped: wishSkipped } = fallbackMorningPlan(wishCandidates, remainGaps);
-        _scheduleDraft.items = [..._scheduleDraft.items, ...wishItems];
-        _scheduleDraft.skipped = [..._scheduleDraft.skipped, ...wishSkipped];
-      }
-    }
+    // v126: v122追補で足していた「今週のやりたいこと」のAIプラン合流ブロックは撤去した
+    //       (state.weeklyWishesの週次選定ルートそのものを廃止。CHANGES_v126.md参照)。
     if (!auto) { state.timelineMode = "planned"; setView("timeline"); }
     showToast(auto
       ? "🌅 AIプランの下書きを置きました。タイムラインで調整→確定してください"
@@ -5410,15 +5374,17 @@ function wbsCategoryOptions(projects) {
 }
 
 function renderWBS() {
-  // v16: Wish Project は WBS から除外(専用「やりたい」タブで表示)
-  const activeProjects = state.projects.filter((project) => !project.deleted && project.kind !== "wish");
+  // v126: 「やりたいこと」もWBSのProject+Taskとして扱う(v16のWish除外を撤去。
+  //       期日設定→WBS期日駆動フローでタスクシュート候補に載せられるようにする)。
+  //       Wishタブ自体は専用ビュー(実現/未実現の絞り込み等)として存続する。
+  const activeProjects = state.projects.filter((project) => !project.deleted);
   const sorted = [...activeProjects].sort((a, b) => a.title.localeCompare(b.title, "ja"));
 
   // v35: 中断中の項目は既定で非表示。トグルで再表示して再開できる。
   const showSusp = Boolean(state.settings.showSuspended);
+  // v126: Wish配下タスクも一覧に表示されるようになったため、中断カウントも他Projectと同様に含める
   const suspCount = activeProjects.filter(isProjectSuspended).length
-    + state.tasks.filter((t) => !t.deleted && t.kind !== "other" && isTaskSuspended(t)
-        && !(state.projects.find((p) => p.id === t.projectId)?.kind === "wish")).length;
+    + state.tasks.filter((t) => !t.deleted && t.kind !== "other" && isTaskSuspended(t)).length;
   const visibleProjects = sorted.filter((p) => showSusp || !isProjectSuspended(p));
   const toggleBtn = (suspCount > 0 || showSusp)
     ? `<button class="btn ${showSusp ? "primary" : "ghost"}" data-action="toggle-show-suspended">${showSusp ? "中断を隠す" : `中断を表示 (${suspCount})`}</button>`
@@ -5743,13 +5709,13 @@ function renderOpenTasks() {
   // v19: 今日に既に Block 化されていても表示し続ける(1日に複数回追加することもあるため)
   // v28: 「その他」受け皿 Task は実体のあるタスクではないので未完了リストから除外
   // v35: 中断・中止したタスクは未完了リストから外す(途中でやめたものを残さない)
-  // v37: Wish Project 配下のタスクは専用「やりたい」タブで扱うため、ここには出さない
-  //      (WBS・ホームの未完了リストと同じ除外基準に揃える)
-  const wishProjectIds = state.projects.filter((p) => p.kind === "wish").map((p) => p.id);
+  // v126: v37で入れたWish Project除外を撤去。「期日付きWishはタスクと同じ」の原則により、
+  //       このリストは元々dueDate必須(下のBoolean(task.dueDate))なので、期日を持つWishだけが
+  //       通常タスクと同列に表示される(期日なしWishは従来どおり出てこない)。
   // v107: K指示により期日未設定Taskは一覧から除外する(v97時点は「期日未設定は常に表示」
   //       だったが、期日昇順ソートの導入とあわせて廃止。データは消さない=期日を設定すれば表示される)。
   const open = state.tasks.filter((task) => !task.deleted && !isTaskDead(task) && task.kind !== "other"
-    && !wishProjectIds.includes(task.projectId) && Boolean(task.dueDate));
+    && Boolean(task.dueDate));
   if (!open.length) return emptyPanel("未完了のTaskはありません");
   // v107: 期日昇順(期日超過が最上位)。同一期日はタイトルのja比較で安定ソート(renderWBSの
   //       Project一覧ソートと同じ流儀)
