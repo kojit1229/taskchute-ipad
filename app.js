@@ -4088,6 +4088,24 @@ function showZeroSecThemesOnlyIfAny(date, auto) {
   return true;
 }
 
+// v122追補: 区間リストgapsから、busy(占有区間のリスト)と重なる部分を差し引く。
+// AIプラン採用時(runAiMorningPlan)に「今週のやりたいこと」を残り空き時間へ追加配置する
+// ためだけに使う小さなユーティリティ(computeFreeGapsはstate.blocksからしか占有区間を
+// 作れず、まだBlock化されていないaiPlan.itemsの占有はここで別途差し引く必要がある)。
+function subtractBusyFromGaps(gaps, busy) {
+  let result = gaps.map(([s, e]) => [s, e]);
+  busy.forEach(([bs, be]) => {
+    const next = [];
+    result.forEach(([s, e]) => {
+      if (be <= s || bs >= e) { next.push([s, e]); return; }  // 重ならない
+      if (bs > s) next.push([s, bs]);
+      if (be < e) next.push([be, e]);
+    });
+    result = next;
+  });
+  return result;
+}
+
 // v60: 決定論配置(fallbackMorningPlan)を正規経路に昇格。Claude API 呼び出しは全廃。
 // v62: 自宅PCバッチ生成のAIプランJSONを優先採用し、取得/検証に失敗した場合のみ決定論配置へ
 //      フォールバックする(v60の経路は無傷で維持)。
@@ -4136,6 +4154,24 @@ async function runAiMorningPlan({ auto = false } = {}) {
         state.aiPlanSkippedLog = state.aiPlanSkippedLog.slice(-AI_PLAN_SKIPPED_LOG_MAX);
       }
       saveState();
+    }
+    // v122追補: バッチ生成のAIプランはstate.weeklyWishesを知らないため、ここで別途
+    // 「今週のやりたいこと」候補を合流する(aiMorningPlanCandidates/aiScheduleCandidatesの
+    // 通常経路はこのaiPlan採用ブランチを通らず早期returnするため、v122のWish候補が
+    // 手動・自動どちらの朝プランでも無視されていた)。aiPlan.itemsに既に同taskIdがある
+    // 項目は二重配置防止のため除外し、AIプランが占める時間帯をfreeGapsから差し引いた
+    // 残りの空き時間にのみ既存のfallbackMorningPlanで前詰め配置する。
+    const planTaskIds = new Set(aiPlan.items.filter((it) => it.taskId).map((it) => it.taskId));
+    const wishCandidates = aiScheduleCandidates(date)
+      .filter((c) => c.note === "今週のやりたいこと" && !planTaskIds.has(c.taskId));
+    if (wishCandidates.length) {
+      const busy = aiPlan.items.map((it) => [it.start, it.start + it.minutes]);
+      const remainGaps = subtractBusyFromGaps(freeGaps, busy).filter(([s, e]) => e - s >= 15);
+      if (remainGaps.length) {
+        const { items: wishItems, skipped: wishSkipped } = fallbackMorningPlan(wishCandidates, remainGaps);
+        _scheduleDraft.items = [..._scheduleDraft.items, ...wishItems];
+        _scheduleDraft.skipped = [..._scheduleDraft.skipped, ...wishSkipped];
+      }
     }
     if (!auto) { state.timelineMode = "planned"; setView("timeline"); }
     showToast(auto
