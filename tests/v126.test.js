@@ -6,6 +6,10 @@
 //     (通常のWBSタスクと同列で扱われ、特別なnote/rankは付かない)
 // (c) 期日なしWishは候補に入らない(通常WBSタスクの「期日なし=filler」ルールはWishに適用しない)
 // (d) ホームカードの「今日へ」ボタン(v121/v122のUI・state.weeklyWishes)は引き続き動く
+// (e追補・v127レビュー対応) WBS上のWish Project(シングルトン)には削除ボタンが出ず、
+//     data-action="delete-project"を直接発火させても関数側のガードで拒否される
+// (f追補・v127レビュー対応) WBSのWish Project配下で新規タスクを作成すると期日が空のまま
+//     (addWish/addWishSubtaskと同じ挙動。ユーザーが明示入力しない限り当日日付を補完しない)
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
@@ -127,6 +131,54 @@ function check(name, cond, extra = "") {
     const sAfterEdit = await stateNow();
     const wishAfterEdit = (sAfterEdit.tasks || []).find((t) => t.id === "w-1");
     check("Wishタスクの期限がモーダルなしで保存される", wishAfterEdit && wishAfterEdit.dueDate === TODAY, JSON.stringify(wishAfterEdit));
+
+    // ============================================================
+    // (e追補) WBS上のWish Projectは削除ボタンが出ない/削除アクションが拒否される
+    // ============================================================
+    console.log("[1b] Wish Projectの削除ボタン非表示 + 削除ガード + 種別ロック");
+    await page.click('button[data-action="edit-project"][data-id="wish-1"]');
+    await page.waitForTimeout(200);
+    check("Wish Projectの編集モーダルに削除ボタンが出ない", await page.locator('[data-action="modal-delete"]').count() === 0);
+    check("種別プルダウンがdisabledになっている(kindを変更できない)",
+      await page.locator('select[data-modal-field="kind"]').isDisabled());
+    await page.click('[data-action="modal-close"]');
+    await page.waitForTimeout(200);
+
+    // UIのボタン自体は消えているため、v122の二重登録ガード検証と同じ「同じdata-actionの
+    // 要素を直接注入してクリック」パターンで、deleteProject関数側のガードも直接確認する
+    await page.evaluate((wid) => {
+      const btn = document.createElement("button");
+      btn.id = "test-delete-wish-btn";
+      btn.dataset.action = "delete-project";
+      btn.dataset.id = wid;
+      document.body.appendChild(btn);
+    }, "wish-1");
+    await page.click("#test-delete-wish-btn");
+    await page.waitForTimeout(300);
+    check("直接delete-projectアクションを発火してもトーストで拒否される",
+      (await page.locator("#toast").innerText()).includes("削除できません"));
+    const sAfterDeleteAttempt = await stateNow();
+    const wishProjAfter = (sAfterDeleteAttempt.projects || []).find((p) => p.id === "wish-1");
+    check("Wish Projectは削除されない(deletedフラグが立たない)",
+      wishProjAfter && wishProjAfter.deleted === false, JSON.stringify(wishProjAfter));
+
+    // ============================================================
+    // (f追補) WBSのWish Project配下の新規タスク作成は期日が既定で空になる
+    // ============================================================
+    console.log("[1c] Wish Project配下の新規タスク作成では期日が既定で空になる");
+    await page.click('button[data-action="add-task-to-project"][data-id="wish-1"]');
+    await page.waitForTimeout(200);
+    const newTaskDueInput = page.locator('input[data-modal-field="dueDate"]');
+    check("新規タスク作成モーダルの期限が空で開く(Wish Project配下)", (await newTaskDueInput.inputValue()) === "");
+    const NEW_WISH_TASK_TITLE = "マラソン練習計画を立てる";
+    await page.locator('input[data-modal-field="title"]').fill(NEW_WISH_TASK_TITLE);
+    await page.click('[data-action="modal-save"]');
+    await page.waitForTimeout(300);
+    const sAfterTaskCreate = await stateNow();
+    const newWishTask = (sAfterTaskCreate.tasks || []).find((t) => t.title === NEW_WISH_TASK_TITLE);
+    check("作成されたWish配下タスクの期日は空のまま(addWishと同じ挙動)",
+      newWishTask && newWishTask.dueDate === "", JSON.stringify(newWishTask));
+    check("作成されたタスクのprojectIdはWish Project", newWishTask && newWishTask.projectId === "wish-1", JSON.stringify(newWishTask));
 
     // ============================================================
     // (b)(c) 朝の一括プランニング候補: 期日付きWishは通常WBSタスクと同列で候補に入り配置される。

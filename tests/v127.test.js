@@ -199,9 +199,12 @@ function extractBlockBody(css, headerRe) {
       const s = JSON.parse(localStorage.getItem(KEY));
       const today = s.selectedDate;
       s.blocks = s.blocks || [];
+      // renderTimelineはplannedStartAtでフィルタするため、正しいスキーマでseedする
+      // (reviewer指摘: 旧seedのstart/minutesは描画されずデモblock頼みの空振りだった)
       s.blocks.push({
         id: "v127-tl-check", date: today, title: "v127配置チェック用Block",
-        start: 600, minutes: 30, completed: false, category: "", note: "",
+        plannedStartAt: `${today}T10:00`, plannedEndAt: `${today}T10:30`,
+        completed: false, category: "", note: "",
         createdAt: `${today}T00:00`, updatedAt: `${today}T00:00`, deleted: false
       });
       s.currentView = "timeline";
