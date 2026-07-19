@@ -178,3 +178,42 @@ function check(name, cond, extra = "") {
     check("未Block時は「今日へ」ボタンが出る", await wishRow.locator('[data-action="wish-subtask-to-tasks"]').count() === 1);
     check("未Block時は「済」が出ない", !(await wishRow.innerText()).includes("済"));
 
+    await wishRow.locator('[data-action="wish-subtask-to-tasks"]').click();
+    await page.waitForTimeout(300);
+    check("登録トーストが出る", (await page.locator("#toast").innerText()).includes("今日のタスクシュートに登録しました"));
+
+    const s1 = await stateNow();
+    const newBlock = (s1.blocks || []).find((b) => !b.deleted && b.taskId === "w-5" && b.date === TODAY);
+    check("今日のBlockが作られる", !!newBlock, JSON.stringify(s1.blocks));
+    const wishTaskAfter = (s1.tasks || []).find((t) => t.id === "w-5");
+    check("Wishタスクのstatusがdoingになる", wishTaskAfter && wishTaskAfter.status === "doing", JSON.stringify(wishTaskAfter));
+
+    const wishRowAfter = page.locator(".home-weekly-wish-card li", { hasText: HOME_WISH_TITLE });
+    check("Block化後はボタンが消え「済」表示になる",
+      await wishRowAfter.locator('[data-action="wish-subtask-to-tasks"]').count() === 0
+      && (await wishRowAfter.innerText()).includes("済"));
+
+    // 既存のwishSubtaskToTasksガードをこのボタン(同じdata-action)経由でも確認する:
+    // UI上のボタンは既にBlock化済みで消えているため、同じdata-action/data-idの要素を
+    // 直接クリックして二重登録が弾かれることを検証する(デリゲーションはdocument.clickのみ見る)。
+    await page.evaluate((wid) => {
+      const btn = document.createElement("button");
+      btn.id = "test-dup-wish-btn";
+      btn.dataset.action = "wish-subtask-to-tasks";
+      btn.dataset.id = wid;
+      document.body.appendChild(btn);
+    }, "w-5");
+    await page.click("#test-dup-wish-btn");
+    await page.waitForTimeout(300);
+    check("二重登録は既存のトーストで弾かれる", (await page.locator("#toast").innerText()).includes("既に今日のタスクシュートにあります"));
+    const s2 = await stateNow();
+    const dupBlocks = (s2.blocks || []).filter((b) => !b.deleted && b.taskId === "w-5" && b.date === TODAY);
+    check("二重登録によるBlockは増えない(1件のまま)", dupBlocks.length === 1, JSON.stringify(dupBlocks));
+  } finally {
+    await browser.close();
+    server.close();
+  }
+
+  console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURES`);
+  process.exit(failures === 0 ? 0 : 1);
+})().catch((e) => { console.error(e); process.exit(1); });
