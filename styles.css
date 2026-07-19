@@ -171,6 +171,13 @@ button {
   background: transparent;
   border-radius: var(--radius);
   cursor: pointer;
+  /* v124: 押下フィードバック(apple-design §1)。hoverではなくactiveで即応答する */
+  transition: transform 100ms ease-out;
+}
+
+.nav-button:active,
+.bottom-nav button:active {
+  transform: scale(0.97);
 }
 
 .nav-button {
@@ -390,6 +397,12 @@ h3 {
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
+  /* v124: 押下フィードバック(apple-design §1)。hoverではなくactiveで即応答する */
+  transition: transform 100ms ease-out;
+}
+
+.btn:active {
+  transform: scale(0.97);
 }
 
 .btn.primary {
@@ -1121,6 +1134,13 @@ h3 {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* v124: マテリアライズ(apple-design §12)。opacity+わずかなscaleで実体として現れる */
+  animation: modal-materialize 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes modal-materialize {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 .modal-header {
@@ -1390,7 +1410,8 @@ h3 {
   fill: none;
   stroke-width: 10;
   stroke-linecap: round;
-  transition: stroke-dashoffset 0.4s ease-out;
+  /* v124: 減衰スプリング近似(apple-design §4)+短縮。0.4s ease-out から調整 */
+  transition: stroke-dashoffset 300ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .pomo-time-overlay {
   position: absolute;
@@ -2760,7 +2781,8 @@ h3 {
   35%  { transform: scale(1.015); box-shadow: 0 0 0 4px rgba(255,149,0,.28); }
   100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(255,149,0,0); }
 }
-.just-started { animation: just-started-juice 0.3s ease-out; }
+/* v124: 減衰スプリング近似(apple-design §4)に調整。ease-out 0.3s から変更 */
+.just-started { animation: just-started-juice 280ms cubic-bezier(0.22, 1, 0.36, 1); }
 @media (prefers-reduced-motion: reduce) { .just-started { animation: none; } }
 
 /* 実行スコア 4週スパークライン(目標線・達成色なし=鏡) */
@@ -3360,6 +3382,66 @@ h3 {
 
 /* 週次レビュー: 体調×実行率のミニ相関表(軽い一覧。分析はしない) */
 .cond-corr-table { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
+
+/* =========================================================
+   v124: prefers-reduced-motion(apple-design §14)
+   方針: 「無効化」ではなく「穏やかな等価表現」。
+   - transform系のtransition/animationは止める(opacity/colorのフェードは残す)
+   - 完了演出(きらめき粒子)は短いフェードに縮退(移動・拡大縮小はしない)
+   - モーダルのマテリアライズはscaleを外しopacityフェードのみにする
+   .timeline-card / .draft-* にはそもそもtransformを付けていないため対象外。
+   ========================================================= */
+@media (prefers-reduced-motion: reduce) {
+  /* (a) v124で追加した押下フィードバック・イージング調整のtransform系を無効化 */
+  .btn,
+  .nav-button,
+  .bottom-nav button {
+    transition: none;
+  }
+  .btn:active,
+  .nav-button:active,
+  .bottom-nav button:active {
+    transform: none;
+  }
+  .pomo-progress-circle {
+    transition: none;
+  }
+  .just-started {
+    animation: none;
+  }
+
+  /* (c) モーダルのマテリアライズ: scaleを外しopacityフェードのみ */
+  .modal-card {
+    animation: modal-materialize-reduced 150ms ease;
+  }
+
+  /* (b) 完了演出(きらめき粒子)を短いフェードへ縮退。transformプロパティを
+     一切指定しないことで、各要素の基本ルールが持つ静的な transform
+     (位置決め用の translate)がそのまま保たれ、位置ズレを起こさない */
+  .ce-particle {
+    animation: ce-fade-reduced 400ms ease forwards;
+    animation-delay: var(--delay, 0ms);
+  }
+  .ce-message {
+    animation: ce-fade-reduced 400ms ease forwards;
+  }
+  .ce-next {
+    animation: ce-fade-reduced 400ms ease forwards;
+    animation-delay: 0.15s;
+  }
+}
+
+@keyframes modal-materialize-reduced {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes ce-fade-reduced {
+  0% { opacity: 0; }
+  25% { opacity: 1; }
+  75% { opacity: 1; }
+  100% { opacity: 0; }
+}
 .cond-corr-row {
   display: grid;
   grid-template-columns: 0.8fr 1fr 1fr 1.3fr 1.1fr;
