@@ -2388,7 +2388,7 @@ function buildWeeklyWishModal() {
     </div>`;
 }
 function submitWeeklyWish() {
-  // v123: UI層(preventDefault)に加え保存側でも3件ハードキャップ(reviewer指摘: 支援技術等で
+  // v124: UI層(preventDefault)に加え保存側でも3件ハードキャップ(reviewer指摘: 支援技術等で
   // 4件checkedになった場合の防波堤。先頭3件を採用)
   const ids = Array.from(modalRoot.querySelectorAll("input[data-wish-id]:checked")).map((el) => el.dataset.wishId).slice(0, 3);
   const weekKey = weekRange(todayISO()).weekStart;

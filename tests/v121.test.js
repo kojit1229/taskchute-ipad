@@ -180,6 +180,23 @@ function check(name, cond, extra = "") {
     check("過去日では赤帯が出ない", await page.locator(".home-weekly-wish-alert").count() === 0);
     check("過去日ではカードも出ない", await page.locator(".home-weekly-wish-card").count() === 0);
     check("過去日では設定するボタンも出ない", await page.locator('[data-action="weekly-wish-open"]').count() === 0);
+
+    // ============================================================
+    // (f) 保存側の3件ハードキャップ(UI層のpreventDefaultを迂回して4件checkedにしても3件しか保存されない)
+    // ============================================================
+    console.log("[6] プログラム的に4件checkedにして保存しても3件しか保存されない(slice(0,3)の防波堤)");
+    await seed({ tasks: wishes, projects: [wishProject()], weeklyWishes: {}, view: "home" });
+    await page.click('[data-action="weekly-wish-open"]');
+    await page.waitForTimeout(200);
+    // clickイベント(pre-activationガード)を通さず、DOMプロパティ直接代入で4件checkedにする
+    await page.evaluate(() => {
+      document.querySelectorAll("input[data-wish-id]").forEach((el, i) => { if (i < 4) el.checked = true; });
+    });
+    await page.click('[data-action="weekly-wish-submit"]');
+    await page.waitForTimeout(300);
+    const s6 = await stateNow();
+    const savedIds = ((s6.weeklyWishes[WEEK_KEY] || {}).taskIds) || [];
+    check("保存されたtaskIdsが3件にキャップされる", savedIds.length === 3, `actual=${savedIds.length}`);
   } finally {
     await browser.close();
     server.close();
