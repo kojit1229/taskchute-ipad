@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v124";
+const CACHE_NAME = "taskchute-journal-pwa-v125";
+// v125: ビジョンボードPDFをページ画像(JPEG)化して同一画面内に表示。別タブに飛ばさず閲覧可能に。CHANGES_v125.md参照。
 // v124: apple-design(HIG)反映②押下フィードバック+モーション磨き+reduced-motion対応。CHANGES_v124.md参照。
 // v123: apple-design(HIG)のタイポグラフィ+マテリアル(半透明チローム)をUIへ反映。CHANGES_v123.md参照。
 // v122: 「今週のやりたいこと」を朝の一括プランニング候補+ホームカード「今日へ」から登録可能に。CHANGES_v122.md参照。

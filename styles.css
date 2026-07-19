@@ -1365,6 +1365,57 @@ h3 {
   color: var(--faint);
 }
 
+/* v125: ビジョンボードのページ画像(縦スクロール表示) */
+.vision-pages {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.vision-page {
+  position: relative;
+}
+
+.vision-page img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+}
+
+.vision-page-placeholder {
+  padding: 40px 16px;
+  text-align: center;
+  background: var(--panel-soft);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+}
+
+.vision-page-label {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 2px 6px;
+  font-size: 11px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 4px;
+}
+
+/* v125: 原本PDF「別タブで開く」は補助導線のため控えめなテキストリンク見た目に留める */
+.vision-pdf-fallback-link {
+  display: inline-block;
+  padding: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  text-decoration: underline;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
 /* タイムラインの空き時間行をタップしやすく(ホバーで強調) */
 .time-row[data-action="timeline-new-block"] {
   transition: background-color 0.15s;
