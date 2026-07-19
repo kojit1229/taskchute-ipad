@@ -127,3 +127,67 @@ manifest.json自体が取得できない/該当ボードのエントリが無い
   別途相談。
 - ページ画像のBlob URLはセッション(ページロード)ごとにリセットされる(v101の`cachedVisionPdfUrls`
   と同じ設計方針を踏襲)。
+
+## 追補: Codex P2指摘対応(HEAD dcc0569以降の作業ツリー差分。SW `CACHE_NAME` はv127のまま無変更)
+
+Codexレビュー指摘: 「ビジョンページ画像の取得が一部失敗した場合、失敗ページは『読み込み中...』
+表示のまま再試行手段がない(`anyCached`により『読み込む』ボタンも戻らない)。全ページ失敗時は
+最終renderがin-flightフラグのクリア前に走り、ビュー全体が固まった表示のままになる」への対応。
+
+### 原因
+
+`loadVisionBoardImages()`の取得ループは、各ページのfetch完了ごとに`render()`していたが、
+ループを抜けた**後**に初めて`_visionPageLoadInFlight[file] = false`をセットしており、
+ループ最後の(=最後のページの)`render()`は常に`loading=true`のまま描画されていた。全ページの
+最後の1枚が失敗で終わった場合、その後`_visionPageLoadInFlight`をfalseにしてもrenderを
+呼び直していなかったため、画面は「読み込み中...」のまま更新されず固まって見えていた。
+加えて、失敗ページ自体に取得失敗を示す状態が無く(成功キャッシュ`cachedVisionPageUrls`にしか
+状態を持っていなかった)、失敗後にユーザーが取れる手段が無かった。
+
+### 修正内容(app.js)
+
+1. **失敗追跡の追加**: 新しいモジュール変数 `_visionPageFailed`(`{ 'now_vision-p01.jpg': true }`
+   形式)を追加。`loadVisionBoardImages()`は各ページの再挑戦直前に該当キーを`delete`してから
+   fetchし、失敗した場合(`blob`が`null`、または例外)は`_visionPageFailed[pageFile] = true`を
+   立てる。成功時は(事前delete済みのため)自然にキーが残らない。
+2. **表示の分岐**: `renderVisionBoardImages()`のページ描画で、`cachedVisionPageUrls[f]`が無く
+   `_visionPageFailed[f]`が立っているページは「読み込み中...」ではなく「🔄 再読み込み」ボタン
+   (`data-action="vision-board-retry-images"`、`.vision-page-failed`クラスでスタイルも区別
+   — styles.cssに実線+警告色の枠を追加)を表示する。未着手(失敗も成功もまだ)のページのみ
+   引き続き「読み込み中...」を表示する。
+3. **再試行の実装**: `vision-board-retry-images`アクションは`loadVisionBoardImages(file)`を
+   そのまま呼ぶだけでよい設計にした。ループは`cachedVisionPageUrls`に無いページ(未着手 or
+   前回失敗)だけを対象にするため、成功済みページは再fetchされず、失敗したページ(または
+   ボード内の残り全ページ)だけが再試行される。新しいfetch関数は追加していない。
+4. **render順序のバグ修正(本丸)**: ループの外、`_visionPageLoadInFlight[file] = false`の
+   **後**に無条件の最終`render()`を追加した。これにより、全ページ失敗で終わった場合も
+   `loading=false`の状態で必ず1回再描画され、「読み込み中...」に固定されたまま止まることが
+   無くなる。
+5. **表示ゲートの修正(付随バグ)**: 上記4.の修正で「全滅時もloading=falseへ戻る」ようになった
+   結果、`renderVisionBoardImages()`冒頭の「まだ何も試していないか」の判定を旧来の`anyCached`
+   (成功キャッシュの有無)のままにしていると、全ページ失敗直後に`anyCached=false`かつ
+   `loading=false`となり「📥 読み込む」の初期画面に逆戻りしてしまい、再読み込みボタンへ
+   一生辿り着けない新しいバグを生むことが実装中の自己レビューで判明した。`anyCached`を
+   `anyAttempted`(`cachedVisionPageUrls[f] || _visionPageFailed[f]`のいずれかを満たすページが
+   1枚でもあるか)に置き換えて解消した。
+
+### 変更ファイル(このコミット時点、コミット未実施)
+
+- `app.js`: `_visionPageFailed`追加、`renderVisionBoardImages()`のゲート判定・失敗ページ表示、
+  `loadVisionBoardImages()`の失敗追跡・final render順序修正、クリックデリゲーションに
+  `vision-board-retry-images`を追加
+- `styles.css`: `.vision-page-placeholder.vision-page-failed`(枠線の視覚区別)を追加
+- `tests/v125.test.js`: 新規 `[D]` ブロックを追加(既存 `[A]`/`[B]`/`[C]` のチェックは無改変)。
+  1ページ構成の今(33歳)ボードで1回目のfetchを500失敗させ、再読み込みボタンの出現・
+  「読み込み中...」に固定されないこと・再試行(モックを成功に切替)後に`<img>`が表示され
+  再読み込みボタンが消えることを確認する
+- `sw.js`: 変更していない(現HEAD時点で既に`v127`。指示どおりバージョン更新なし)
+
+### 検証(追補分)
+
+- `node --check app.js`: exit 0
+- `node tests/run-all.js v125`: **ALL PASS**(新規`[D]`7件含む全27件の静的/動作検証。
+  既存`[A]`/`[B]`/`[C]`ブロックは無改変のままPASS)
+- 回帰確認: `node tests/v85.test.js` / `node tests/v101.test.js` /
+  `node tests/github-vision-pdf-fallback.test.js`: いずれも無改変のまま **ALL PASS**
+- `git diff --stat sw.js AGENTS.md`: 出力なし(両ファイルとも無変更を確認)

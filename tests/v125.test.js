@@ -186,6 +186,68 @@ const FAKE_PDF = Buffer.from("%PDF-1.4\n%v125 fallback pdf stand-in\n");
     }
   }
 
+  // ============================================================
+  // [D] v125追補(Codex P2対応): 一部ページのfetch失敗 → 「再読み込み」ボタンが出る →
+  //     再試行(モックを成功に切替済み)で画像が表示される。全滅時もビューが固まらないことも確認する。
+  // ============================================================
+  {
+    const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
+    const page = await ctx.newPage();
+    page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
+
+    let nowPageAttempts = 0;  // now_vision-p01.jpg への試行回数(1回目は失敗させ、2回目以降は成功させる)
+
+    await blockGithubApiByDefault(page);
+    await page.route((url) => url.hostname === API_HOST, (route) => {
+      const p = decodeURIComponent(new URL(route.request().url()).pathname);
+      if (p.endsWith("/contents/taskchute/content/vision-pages/manifest.json")) {
+        return route.fulfill({ status: 200, contentType: "application/vnd.github.raw+json", body: JSON.stringify(MANIFEST) });
+      }
+      if (p.endsWith("/contents/taskchute/content/vision-pages/now_vision-p01.jpg")) {
+        nowPageAttempts++;
+        if (nowPageAttempts === 1) return route.fulfill({ status: 500, contentType: "application/json", body: "{}" });
+        return route.fulfill({ status: 200, contentType: "image/jpeg", body: FAKE_JPEG });
+      }
+      return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
+    });
+
+    try {
+      await page.goto(`http://localhost:${PORT}/`);
+      await page.waitForTimeout(400);
+      await passGithubGate(page);
+
+      console.log("[D] ページ画像fetch失敗 → 「再読み込み」ボタン表示 → 再試行で画像が表示される");
+      await page.click('[data-action="nav"][data-view="vision"]');
+      await page.click('[data-action="vision-section"][data-section="board"]');
+      await page.waitForSelector('[data-action="vision-board-load-images"]', { timeout: 5000 });
+      await page.click('[data-action="vision-board-load-images"][data-file="now_vision.pdf"]');
+
+      // 今(33歳)ボードは1ページのみ=全ページ失敗のケースを兼ねる。
+      // 「読み込み中...」に固定表示されず、再読み込みボタンへ切り替わることを確認する
+      // (Codex P2指摘: in-flightフラグのクリア前に最終renderが走り固まっていた問題)。
+      await page.waitForSelector('[data-action="vision-board-retry-images"]', { timeout: 5000 });
+      check("1回目のfetchが失敗し、1回だけリクエストされた", nowPageAttempts === 1, String(nowPageAttempts));
+      check("失敗ページは<img>ではなく再読み込みボタンで表示される",
+        await page.locator('[data-action="vision-board-retry-images"][data-file="now_vision.pdf"]').count() === 1);
+      check("失敗後は「読み込み中...」表示のまま固まっていない(全ページ失敗でもビューが更新される)",
+        await page.locator(".vision-page-placeholder:not(.vision-page-failed)").count() === 0);
+      check("失敗した画像の<img>はまだ存在しない", await page.locator(".vision-page img").count() === 0);
+
+      await page.click('[data-action="vision-board-retry-images"][data-file="now_vision.pdf"]');
+      await page.waitForFunction(
+        () => document.querySelectorAll(".vision-page img").length === 1,
+        { timeout: 5000 }
+      );
+      check("再試行でfetchが再度発生し(計2回)、成功する", nowPageAttempts === 2, String(nowPageAttempts));
+      check("再試行成功後は<img>が表示される", await page.locator(".vision-page img").count() === 1);
+      check("再試行成功後は再読み込みボタンが消える",
+        await page.locator('[data-action="vision-board-retry-images"]').count() === 0);
+    } finally {
+      await page.close();
+      await ctx.close();
+    }
+  }
+
   await browser.close();
   server.close();
 
