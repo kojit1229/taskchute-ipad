@@ -188,3 +188,46 @@ function extractBlockBody(css, headerRe) {
     await page.reload();
     await page.waitForTimeout(400);
     const journalTextareaFont = await page.locator("textarea[data-journal-date]").first()
+      .evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    check("ジャーナルtextareaのfont-sizeは16px以上", journalTextareaFont >= 16, `fontSize=${journalTextareaFont}`);
+
+    // ============================================================
+    // (d) .timeline-cardの配置プロパティ(computed style、不可侵領域の回帰確認)
+    // ============================================================
+    console.log("[4] .timeline-cardの配置プロパティ(computed style)");
+    await page.evaluate((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      const today = s.selectedDate;
+      s.blocks = s.blocks || [];
+      s.blocks.push({
+        id: "v127-tl-check", date: today, title: "v127配置チェック用Block",
+        start: 600, minutes: 30, completed: false, category: "", note: "",
+        createdAt: `${today}T00:00`, updatedAt: `${today}T00:00`, deleted: false
+      });
+      s.currentView = "timeline";
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, KEY);
+    await page.reload();
+    await page.waitForTimeout(400);
+    const cardStyle = await page.evaluate(() => {
+      const el = document.querySelector(".timeline-card");
+      if (!el) return null;
+      const cs = getComputedStyle(el);
+      return { position: cs.position, transform: cs.transform, margin: cs.margin, borderRadius: cs.borderRadius };
+    });
+    check(".timeline-cardが存在する", cardStyle !== null, JSON.stringify(cardStyle));
+    if (cardStyle) {
+      check(".timeline-cardのposition: absolute(computed、不可侵領域)", cardStyle.position === "absolute", JSON.stringify(cardStyle));
+      check(".timeline-cardにtransformが付いていない(computed、不可侵領域)",
+        cardStyle.transform === "none", JSON.stringify(cardStyle));
+      check(".timeline-cardのmarginが0(computed、不可侵領域)",
+        /^0px( 0px){0,3}$/.test(cardStyle.margin), JSON.stringify(cardStyle));
+    }
+  } finally {
+    await browser.close();
+    server.close();
+  }
+
+  console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURES`);
+  process.exit(failures === 0 ? 0 : 1);
+})().catch((e) => { console.error(e); process.exit(1); });
