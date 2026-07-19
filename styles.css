@@ -22,7 +22,10 @@
   --teal-soft: #d6f4f1;
   --radius: 8px;
   --shadow: 0 1px 2px rgba(20, 20, 30, 0.08);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Hiragino Sans", "Noto Sans JP", sans-serif;
+  /* v123: 固定チローム(ボトムナビ等)のマテリアル層。既存--panelから導出した半透明値 */
+  --chrome-bg: rgba(255, 255, 255, 0.72);
+  --chrome-edge: 0 -1px 0 rgba(20, 20, 30, 0.05), 0 -14px 22px -16px rgba(20, 20, 30, 0.22);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Hiragino Sans", "Noto Sans JP", sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -42,6 +45,9 @@
     --purple-soft: #2b244e;
     --teal-soft: #0c3733;
     --shadow: none;
+    /* v123: ダークテーマの固定チローム用マテリアル値 */
+    --chrome-bg: rgba(28, 29, 34, 0.72);
+    --chrome-edge: 0 -1px 0 rgba(255, 255, 255, 0.05), 0 -14px 22px -16px rgba(0, 0, 0, 0.55);
   }
 }
 
@@ -144,7 +150,8 @@ button {
 .brand-title {
   font-size: 18px;
   font-weight: 750;
-  letter-spacing: 0;
+  letter-spacing: -0.01em; /* v123: アプリタイトルの見出しトラッキング */
+  line-height: 1.15;
 }
 
 .brand-sub {
@@ -233,20 +240,28 @@ h3 {
   letter-spacing: 0;
 }
 
+/* v123: タイポグラフィ(apple-design §15) — 大きい見出しほど負のトラッキング+タイトな
+   leading、階層はサイズだけでなくweightでも付ける。本文(段落・muted等)は無変更。 */
 h1 {
   margin: 4px 0 0;
   font-size: clamp(24px, 3vw, 34px);
   line-height: 1.15;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
 h2 {
   margin: 0 0 12px;
   font-size: 18px;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 h3 {
   margin: 0;
   font-size: 15px;
+  font-weight: 600;
 }
 
 .muted {
@@ -298,6 +313,7 @@ h3 {
 .metric-value {
   font-size: 28px;
   font-weight: 800;
+  font-variant-numeric: tabular-nums; /* v123: 計器盤の数字は桁がガタつかないよう等幅数字 */
 }
 
 .progress {
@@ -773,9 +789,12 @@ h3 {
     right: 0;
     bottom: 0;
     padding: 6px 6px max(8px, env(safe-area-inset-bottom));
-    background: color-mix(in srgb, var(--panel) 94%, transparent);
-    border-top: 1px solid var(--line);
-    backdrop-filter: blur(18px);
+    /* v123: マテリアル(apple-design §12) — 半透明+blurの浮遊層。境目は1px罫線でなく
+       控えめなシャドウのスクロールエッジ表現(--chrome-edge)にする */
+    background: var(--chrome-bg);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    box-shadow: var(--chrome-edge);
     z-index: 30;
   }
 
@@ -971,6 +990,30 @@ h3 {
   }
 }
 
+/* v123: マテリアルのフォールバック(apple-design §12/§14)。.bottom-navはdisplay:noneが
+   既定(max-width:720pxでのみgridに切り替わる)ため、ここは常時定義しておいてよい。 */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .bottom-nav {
+    background: var(--panel);
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .bottom-nav {
+    background: var(--panel);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+@media (prefers-contrast: more) {
+  .bottom-nav {
+    background: var(--panel);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: none;
+    border-top: 1px solid var(--text);
+  }
+}
+
 /* iPhone 縦持ち(<=420px)の追加調整 */
 @media (max-width: 420px) {
   .main-pane {
@@ -1092,6 +1135,8 @@ h3 {
   font-size: 16px;
   font-weight: 800;
   margin: 0;
+  line-height: 1.2;
+  letter-spacing: -0.01em; /* v123: モーダルタイトルの見出しトラッキング */
 }
 
 .modal-close {
@@ -2229,7 +2274,7 @@ h3 {
 .home-life-top { display: flex; justify-content: space-between; align-items: baseline; }
 .home-life-label { font-size: 12.5px; font-weight: 700; color: var(--muted); }
 .home-life-pct { font-size: 11.5px; font-weight: 700; color: var(--accent); }
-.home-life-num { font-size: 27px; font-weight: 300; margin: 3px 0 8px; }
+.home-life-num { font-size: 27px; font-weight: 300; margin: 3px 0 8px; font-variant-numeric: tabular-nums; } /* v123: 寿命カウントダウンの数字 */
 
 .home-hero { border-color: var(--orange); }
 .home-hero-title { font-size: 20px; font-weight: 800; line-height: 1.4; cursor: pointer; }
@@ -2302,7 +2347,7 @@ h3 {
 
 .home-rate { display: flex; align-items: baseline; gap: 8px; margin-bottom: 7px; }
 .home-rate-cap { font-size: 12px; font-weight: 700; color: var(--muted); }
-.home-rate-pct { font-size: 21px; font-weight: 800; color: var(--orange); }
+.home-rate-pct { font-size: 21px; font-weight: 800; color: var(--orange); font-variant-numeric: tabular-nums; }
 .home-rate-pct.green { color: var(--green); }
 .home-rate-frac { font-size: 11.5px; color: var(--muted); margin-left: auto; }
 
@@ -2312,12 +2357,13 @@ h3 {
 .home-stat-pct {
   font-size: 13px; font-weight: 800; color: var(--accent);
   width: 40px; text-align: right; flex: none;
+  font-variant-numeric: tabular-nums;
 }
 .home-wk {
   display: flex; justify-content: space-between; align-items: baseline;
   margin-bottom: 11px; font-size: 15px; font-weight: 700;
 }
-.home-wk strong { color: var(--accent); font-size: 21px; }
+.home-wk strong { color: var(--accent); font-size: 21px; font-variant-numeric: tabular-nums; }
 .home-divider { height: 1px; background: var(--line-soft); margin: 12px 0; }
 .home-goal { margin-top: 11px; }
 .home-goal:first-of-type { margin-top: 0; }
@@ -2332,6 +2378,7 @@ h3 {
 .home-ring-txt {
   position: absolute; inset: 0; display: flex; align-items: center;
   justify-content: center; font-size: 17px; font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 .home-energy {
   margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line-soft);
