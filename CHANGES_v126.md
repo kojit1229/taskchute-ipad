@@ -133,3 +133,79 @@ UI(ホームの赤帯アラート、選定モーダル、ホームカード、`w
   CI(GitHub Actions)での全量成功確認が必要。
 - v122.test.jsは「機能の反転検証」という性質上、旧テストと同じくAIプランJSONのfetchモック
   (`page.route`)を再利用しているが、モックする対象JSON自体の構造は変えていない。
+
+## 追補(v127レビュー対応、Codex/reviewer指摘)
+
+v126のレビューで、要件1(WBS一覧でのWish Project露出)に伴う副作用の指摘が2件(Codex P1/P2)、
+撤去済み機能に対する説明コメントの残存が1件(reviewer low)出たため、以下を追加修正した。
+HEADは`a98f737`(v127コミット済み)。sw.jsの`CACHE_NAME`はv127のままバンプしていない
+(v126実装への追補修正のため、新規デプロイ単位を増やさない判断)。
+
+### 指摘1(Codex P1): Wish Projectの削除・種別変更に対する保護が無かった
+
+要件1でWish Project(kind:"wish"、常に1つだけ存在するシングルトン)がWBS一覧に通常Projectと
+同列で表示されるようになった結果、`renderProjectTree`/`buildProjectModal`という汎用UIを
+経由して、このシングルトンを削除したり種別を"wish"から変更したりできてしまっていた。
+`getWishProject()`は`state.projects.find((p) => p.kind === "wish" && !p.deleted)`で
+1件だけを前提に参照するため、削除・種別変更されると参照が見つからなくなり、
+`normalizeState`が新しい空のWish Projectを再生成してしまう。既存のWishタスクは
+旧`projectId`のまま残り、Wishタブから見えなくなる(データ消失ではないが実質的に迷子になる)。
+
+対処として二重防御を入れた:
+
+- **UI層**: `buildProjectModal(project)`で`project.kind === "wish"`の場合、
+  (a) フッターの「削除」ボタン(`data-action="modal-delete"`)自体を出さない、
+  (b) 種別プルダウン(`data-modal-field="kind"`)に`disabled`属性を付け、固定である旨の
+  補助テキストを添える。
+- **関数層**: `deleteProject(id)`の先頭で対象が`kind === "wish"`ならトースト
+  (「「Wish」はやりたいことの保存先のため削除できません」)を出して処理を中断する。
+  `saveProjectFromModal(id, fields)`でも、保存直前の元projectが`kind === "wish"`なら
+  `fields.kind`の値に関わらず`kind`を`"wish"`に固定する(disabled selectのDOM改変等を
+  経由した変更への最終防波堤)。UIを迂回して`data-action="delete-project"`を直接発火させても
+  拒否されることをテストで確認済み。
+
+### 指摘2(Codex P2): Wish Project配下の新規タスクに当日期日が既定で付いていた
+
+`addWish()`/`addWishSubtask()`は元々(v79)、`makeTask()`の既定期日(未指定時は
+`state.selectedDate`=当日)をWishには持ち込まないよう、作成直後に`task.dueDate = ""`へ
+明示的に戻していた。しかし要件4でWBS経由の汎用タスク作成経路(`addTask()`・
+`addTaskToProject()`→`openTaskCreator()`、いずれも`makeTask()`を共有)がこのガードを
+素通りしていたため、WBS上でWish Project配下に「+ タスク」で新規作成すると当日期日が
+即座に付いてしまい、`addWish`系との挙動不一致に加え、要件2で追加した「期日付きWishは
+候補に入る」フローに意図せず載ってバックログ・朝プラン候補へ混入する問題があった。
+
+対処として`makeTask()`自体を修正: `projectId`が指す先が`kind === "wish"`のProjectで、
+かつ呼び出し元から明示的な`dueDate`引数が渡されていない場合は、期日を`state.selectedDate`へ
+既定せず空のままにする(`dueDate: dueDate || (isWishProject ? "" : state.selectedDate)`)。
+これにより`addTask()`の即時作成、`openTaskCreator()`が組み立てるモーダル用stub(編集
+モーダルの期限入力欄も空で開く)、`saveTaskFromModal()`経由の保存のいずれもWish配下では
+期日が空になる。ユーザーが編集モーダルで明示的に期日を入力した場合はその値がそのまま
+採用される(`fields.dueDate || ""`が優先されるため、既定側のロジックには落ちない)。
+`addWish()`/`addWishSubtask()`側の明示的な`dueDate = ""`上書きは冗長になったが、
+意図を明示するコメントとして残し、削除はしていない。
+
+### 指摘3(reviewer low): 撤去済み「今週のやりたいこと」段の残存コメント
+
+`runAiSchedule()`直前(旧: 3653行付近)と`fallbackMorningPlan()`直前(旧: 3911行付近)の
+優先順コメントが、v126で撤去したv122の4段階rank(`MIT→繰越→今週のやりたいこと→WBS`)の
+ままになっており、実コード(3段階: `MIT→繰越→WBS`、Wishは期日付きならWBS段に含まれる)と
+食い違っていた。両コメントを実コードに合わせて更新した(「WBS(期日付きWish含む)」という
+表現に統一し、v126で専用段を撤去した旨を明記)。
+
+## 変更ファイル(追補分)
+
+- `app.js`
+  - `deleteProject()`: Wish Project(kind:"wish")の削除を拒否するガードを追加
+  - `buildProjectModal()`: Wish Projectでは削除ボタンを出さず、種別プルダウンをdisabled化
+  - `saveProjectFromModal()`: 元projectがkind:"wish"ならkindを保存時にも固定
+  - `makeTask()`: Wish Project配下では期日の既定補完(当日日付)をしない
+  - `runAiSchedule()`直前・`fallbackMorningPlan()`直前のコメントを実コードに合わせて更新
+- `tests/v126.test.js`: 既存チェックは無改変のまま、[1b](削除ボタン非表示+削除ガード+
+  種別ロック)・[1c](Wish Project配下の新規タスク作成で期日が空になる)を追加
+- `sw.js`: 変更なし(`CACHE_NAME`はv127のまま)
+
+## 追補分の検証結果
+
+- `node --check app.js`: exit 0
+- `node tests/run-all.js v126 v122 v121`: **ALL PASS**(v126: [1][1b][1c][2][3]すべて✅、
+  既存の[1][2][3]チェックは無改変のまま通過)
