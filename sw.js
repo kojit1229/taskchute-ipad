@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v119";
+const CACHE_NAME = "taskchute-journal-pwa-v120";
+// v120: AutoSleep CSVのロケール差・同一ファイル再選択・部分取込警告を修正。CHANGES_v120.md参照。
 // v119: 0秒思考テーマに重要度「高」ラベルを追加(バッジ表示・トグル・グループ内先頭ソート)。CHANGES_v119.md参照。
 // v118: 起動時pull(autoSync=false旧経路)のGET待ち中編集ロスト競合を修正。CHANGES_v118.md参照。
 // v117: 今日の宣言(A)+自己締切の自動前倒し(B)+過集中ブレーカーのゲート化(C)。

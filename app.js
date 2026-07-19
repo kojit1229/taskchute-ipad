@@ -943,10 +943,13 @@ document.addEventListener("change", (event) => {
     const file = target.files?.[0];
     if (file) uploadFeedbackFile(date, file);
   }
-  // v105: AutoSleep書き出しCSVの取込(ジャーナルタブの睡眠カード)
+  // v120: AutoSleep書き出しCSVの取込。値を先に消し、同じファイルも再選択可能にする。
   if (target.matches("[data-sleep-csv-upload]")) {
     const file = target.files?.[0];
-    if (file) importSleepCsv(file);
+    if (file) {
+      target.value = "";
+      importSleepCsv(file);
+    }
   }
   // v9: 編集モーダルのカテゴリselectで「+ 新規カテゴリ追加」を選んだ時
   if (target.matches('[data-modal-field="category"]') && target.value === "__ADD_NEW__") {
@@ -6700,6 +6703,25 @@ function sleepNumOrNull(s) {
   return (s || "").trim() && Number.isFinite(v) ? v : null;
 }
 
+// v120: AutoSleepのロケール差(1桁月日/時、-/./区切り、秒省略)を文字列だけで吸収する。
+function parseSleepDateTime(s) {
+  const m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})[ T](\d{1,2}):(\d{2})(?::\d{2})?/.exec((s || "").trim());
+  if (!m) return null;
+  const [, y, mo, d, h, mi] = m;
+  if (+mo < 1 || +mo > 12 || +d < 1 || +d > 31 || +h > 23 || +mi > 59) return null;
+  return { date: `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`, time: `${h.padStart(2, "0")}:${mi}` };
+}
+
+function parseSleepTime(s) {
+  const m = /(?:^|[ T])(\d{1,2}):(\d{2})(?::\d{2})?\s*$/.exec((s || "").trim());
+  return m && +m[1] <= 23 && +m[2] <= 59 ? `${m[1].padStart(2, "0")}:${m[2]}` : "";
+}
+
+function shortSleepDate(s) {
+  const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(s);
+  return m ? `${+m[1]}/${+m[2]}` : s;
+}
+
 async function importSleepCsv(file) {
   let records;
   try {
@@ -6709,13 +6731,14 @@ async function importSleepCsv(file) {
     return;
   }
   const imported = {};  // 起床日 → ログ。同日複数行(昼寝セッション)は睡眠が長い方を採用
+  const skippedWakeValues = [];
   records.forEach((r) => {
-    const wakeM = /^(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2})/.exec(r["起床時間"] || "");
-    if (!wakeM) return;
-    const bedM = /(\d{2}):(\d{2}):\d{2}$/.exec(r["就寝時間"] || "");
+    const wakeRaw = r["起床時間"] || "";
+    const wake = parseSleepDateTime(wakeRaw);
+    if (!wake) { skippedWakeValues.push(wakeRaw); return; }
     const rec = {
-      bed: bedM ? `${bedM[1]}:${bedM[2]}` : "",
-      wake: `${wakeM[2]}:${wakeM[3]}`,
+      bed: parseSleepTime(r["就寝時間"]),
+      wake: wake.time,
       sleepH: hmsToHours(r["睡眠"]),
       inBedH: hmsToHours(r["寝床"]),
       deepH: hmsToHours(r["深さ"]),
@@ -6726,16 +6749,22 @@ async function importSleepCsv(file) {
       spo2Avg: sleepNumOrNull(r["平均SpO2"]),
       importedAt: new Date().toISOString()
     };
-    const date = wakeM[1];
+    const date = wake.date;
     if (!imported[date] || (rec.sleepH || 0) > (imported[date].sleepH || 0)) imported[date] = rec;
   });
-  const count = Object.keys(imported).length;
+  if (skippedWakeValues.length) console.warn("睡眠CSV: 起床時間を読めずスキップ", skippedWakeValues);
+  const dates = Object.keys(imported).sort();
+  const count = dates.length;
   if (!count) {
-    showToast("睡眠データを読み取れませんでした(AutoSleepの書き出しCSVか確認してください)");
+    showToast(`睡眠データを読み取れませんでした${skippedWakeValues.length ? `(${skippedWakeValues.length}行をスキップ)` : ""}`);
     return;
   }
   Object.assign(state.sleep.logs, imported);
-  saveAndRender(`睡眠ログ ${count}日分を取り込みました`);
+  const latest = dates[dates.length - 1];
+  const range = dates.length === 1 ? shortSleepDate(dates[0]) : `${shortSleepDate(dates[0])}〜${shortSleepDate(latest)}`;
+  const skipped = skippedWakeValues.length ? ` / ${skippedWakeValues.length}行をスキップ` : "";
+  const missingToday = latest < todayISO() ? " / ⚠️ 今朝の分はCSVにありませんでした" : "";
+  saveAndRender(`睡眠ログ ${count}日分(${range})を取り込みました${skipped}${missingToday}`);
 }
 
 function hoursLabel(v) {
