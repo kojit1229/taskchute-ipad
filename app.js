@@ -3650,7 +3650,8 @@ function aiScheduleCandidates(date) {
 
 // v60: 空き時間に候補を機械的に前詰め配置する(Claude API 呼び出しは全廃したため決定論配置のみ)。
 //      配置ロジックは runAiMorningPlan と共通の fallbackMorningPlan を再利用する
-//      (この画面には繰越候補が無いため実質「MIT候補→今週のやりたいこと→WBS」の優先順)。
+//      (この画面には繰越候補が無いため実質「MIT候補→WBS(期日付きWish含む)」の優先順。v126で
+//      「今週のやりたいこと」専用段は撤去した)。
 function runAiSchedule() {
   const date = state.selectedDate;
   const candidates = aiScheduleCandidates(date);
@@ -3908,7 +3909,8 @@ function aiMorningPlanCandidates(date) {
   return [...carryList, ...rest];
 }
 
-// v60: 決定論配置(唯一の配置経路。旧称フォールバックのまま維持): MIT候補 → 繰越 → 今週のやりたいこと → WBS の順に、
+// v60: 決定論配置(唯一の配置経路。旧称フォールバックのまま維持): MIT候補 → 繰越 → WBS(期日付き
+// Wishも同列で含む。v126で「今週のやりたいこと」専用段は撤去した)の順に、
 // 各候補の見積分数(estimateMin、無ければ30分)で空き枠へ前詰め配置する。
 // 空き枠に入り切らない候補は skipped(理由: 空き枠なし)に回す。
 // v77: 詰め込み防止の第二段 — (a) ブロック長は見積分数(estimateMin)にそのまま一致させる
@@ -9907,6 +9909,14 @@ function addProject() {
 }
 
 function deleteProject(id) {
+  // v127追補(Codex P1): やりたいことの唯一のコンテナ(kind:"wish")は削除させない。
+  // 削除するとgetWishProject()が見つからなくなり、normalizeStateが新しい空のWish Projectを
+  // 再生成してしまい、既存のWishタスクは旧projectIdのままWishタブから見えなくなる。
+  // buildProjectModal側でも削除ボタン自体を出していない(UI/関数の二重ガード)。
+  const target = state.projects.find((p) => p.id === id);
+  if (target && target.kind === "wish") {
+    return showToast("「Wish」はやりたいことの保存先のため削除できません");
+  }
   state.projects = state.projects.map((project) => project.id === id ? { ...project, deleted: true, updatedAt: nowDateTime() } : project);
   saveAndRender("Projectを削除しました");
 }
@@ -9920,6 +9930,14 @@ function addTask() {
 }
 
 function makeTask({ projectId = "", parentTaskId = "", title = "", category = "", dueDate = "", targetYear = null, targetMonth = null, lifeArea = "", motivation = "", leverageType = "" }) {
+  // v127追補(Codex P2): Wish Project配下のTaskは「今日」の既定期日を付けない。
+  //      addWish/addWishSubtaskは従来から作成後にdueDateを明示的に空へ戻していたが(v79)、
+  //      WBS経由の汎用作成経路(addTask/openTaskCreator、いずれもこのmakeTaskを共有)は
+  //      素通りしていたため、Wish Project配下に作った瞬間に当日期日が付き、addWish系との
+  //      挙動不一致・バックログ/朝プラン候補への意図しない混入が起きていた。
+  //      ユーザーが明示的に期日(dueDate引数、または編集モーダルでの入力)を指定した場合は
+  //      そのまま採用する。
+  const isWishProject = state.projects.some((p) => p.id === projectId && p.kind === "wish");
   return {
     id: crypto.randomUUID(),
     projectId,
@@ -9927,7 +9945,7 @@ function makeTask({ projectId = "", parentTaskId = "", title = "", category = ""
     title,
     category,
     status: "todo",
-    dueDate: dueDate || state.selectedDate,
+    dueDate: dueDate || (isWishProject ? "" : state.selectedDate),
     description: "",
     leverageType,  // v65: 10x機構(2-1)。"asset"|"eliminate"|"oneoff"|""(未設定)
     aiWork: false,      // v67: AI作業ワーカー連携(柱2)
@@ -14139,6 +14157,11 @@ function buildProjectModal(project) {
   const status = project.status || "active";
   const kind = project.kind || "normal";
   const is12WY = Boolean(project.twelveWeekStartDate);
+  // v127追補(Codex P1): やりたいことの唯一のコンテナ(kind:"wish")は種別変更・削除ができると
+  // getWishProject()の前提が壊れる(既存Wishタスクが迷子になる)ため、編集モーダル側でも
+  // 種別プルダウンをdisabledにして固定表示にし、削除ボタン自体を出さない(deleteProject側の
+  // ガードと二重防御)。
+  const isWishSingleton = kind === "wish";
   return `
     <div class="modal-card" role="dialog" aria-modal="true">
       <div class="modal-header">
@@ -14153,10 +14176,11 @@ function buildProjectModal(project) {
         <div class="field-row">
           <div class="field">
             <label class="field-label">種別</label>
-            <select class="select" data-modal-field="kind">
+            <select class="select" data-modal-field="kind" ${isWishSingleton ? "disabled" : ""}>
               <option value="normal" ${kind === "normal" ? "selected" : ""}>Project</option>
               <option value="wish" ${kind === "wish" ? "selected" : ""}>Wish</option>
             </select>
+            ${isWishSingleton ? `<span class="muted" style="font-size:11px">やりたいことの保存先のため種別は変更できません</span>` : ""}
           </div>
           <div class="field">
             <label class="field-label">ステータス</label>
@@ -14207,7 +14231,7 @@ function buildProjectModal(project) {
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn danger" data-action="modal-delete">削除</button>
+        ${isWishSingleton ? "" : `<button class="btn danger" data-action="modal-delete">削除</button>`}
         <button class="btn" data-action="modal-close">キャンセル</button>
         <button class="btn primary" data-action="modal-save">保存</button>
       </div>
@@ -14222,7 +14246,9 @@ function saveProjectFromModal(id, fields) {
     return {
       ...p,
       title: (fields.title || "").trim() || p.title,
-      kind: fields.kind || p.kind || "normal",
+      // v127追補(Codex P1): やりたいことの唯一のコンテナ(kind:"wish")はUIをdisabledにしているが、
+      // 保存関数側でも二重に固定する(disabled selectのDOM改変等を経由した変更を防ぐ最終防波堤)。
+      kind: p.kind === "wish" ? "wish" : (fields.kind || p.kind || "normal"),
       status: fields.status || p.status || "active",
       priority: fields.priority || p.priority || "中",  // v63: WIP上限アラート(提案2)
       category: fields.category || "",
