@@ -1444,6 +1444,12 @@ h3 {
   border-radius: var(--radius);
 }
 
+/* v125追補(Codex P2): 失敗ページは点線を実線+警告色寄りにして「読み込み中」と視覚的に区別する */
+.vision-page-placeholder.vision-page-failed {
+  border-style: solid;
+  border-color: var(--danger, #d9534f);
+}
+
 .vision-page-label {
   position: absolute;
   right: 8px;

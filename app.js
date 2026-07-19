@@ -112,6 +112,9 @@ let _visionManifestFailed = false;   // manifest.json 取得/パース失敗(→
 let _visionManifestLoadInFlight = false;
 const cachedVisionPageUrls = {};     // { 'now_vision-p01.jpg': 'blob:...' }(ページ画像単位、取得成功後のみキーが増える)
 const _visionPageLoadInFlight = {};  // { 'now_vision.pdf': true }(ボード単位の多重fetch防止)
+// v125追補(Codex P2): ページ画像の取得失敗を追跡する。取得成功 or 再試行開始でキーを消す
+// (=キーが残っている間だけ「再読み込み」ボタンを出す対象)。
+const _visionPageFailed = {};        // { 'now_vision-p01.jpg': true }
 const cachedFeedback = {};  // { 'YYYY-MM-DD': '...md text...' }
 const cachedWeeklyReviewMd = {};  // v62: { '週開始土曜YYYY-MM-DD': '...md text...' }(自宅PCバッチ生成)
 // v67: AI作業結果_<today>.json のパース済み配列(非永続、当日分のみ)。二重登録防止のIDは state.aiWorkProcessedIds 側で永続化する。
@@ -435,6 +438,7 @@ document.addEventListener("click", (event) => {
   if (action === "vision-board-tab") setVisionBoardIndex(Number(target.dataset.index));
   if (action === "vision-board-load") loadVisionBoardPdf(target.dataset.file);  // v101(原本PDF、v125からは補助扱い)
   if (action === "vision-board-load-images") loadVisionBoardImages(target.dataset.file);  // v125
+  if (action === "vision-board-retry-images") loadVisionBoardImages(target.dataset.file);  // v125追補(Codex P2): 失敗ページの再試行
   if (action === "open-md-in-github") openMdInGithub(target.dataset.path);
   if (action === "reload-md") reloadStaticMarkdown();
   // v92: AIレポートビューア — 種類タブ切替 / 一覧・本文の手動更新
@@ -7247,7 +7251,11 @@ function renderVisionBoardImages(current) {
     return renderVisionBoardPdfFallback(current);
   }
   const files = entry.files;
-  const anyCached = files.some((f) => cachedVisionPageUrls[f]);
+  // v125追補(Codex P2): 「まだ何も試していない」かどうかの判定は成功キャッシュだけでなく
+  // 失敗フラグも含める必要がある。失敗のみ(成功0件)の場合、修正後はloadVisionBoardImages完了時に
+  // loading=falseへ戻るため、anyCachedだけで判定すると「未着手」の初期読み込みボタン画面に
+  // 逆戻りしてしまい、再読み込みボタンへ辿り着けなくなる(全滅ケースで固まって見える問題の一部)。
+  const anyAttempted = files.some((f) => cachedVisionPageUrls[f] || _visionPageFailed[f]);
   const loading = !!_visionPageLoadInFlight[current.file];
   const pdfSrc = cachedVisionPdfUrls[current.file] || "";
   const pdfLoading = !!_visionPdfLoadInFlight[current.file];
@@ -7255,7 +7263,7 @@ function renderVisionBoardImages(current) {
     ? `<a class="vision-pdf-fallback-link" href="${pdfSrc}" target="_blank" rel="noopener">📂 原本PDFを別タブで開く</a>`
     : `<button class="vision-pdf-fallback-link" data-action="vision-board-load" data-file="${escapeHTML(current.file)}">📂 ${pdfLoading ? "原本PDFを読み込み中..." : "原本PDFを別タブで開く"}</button>`;
 
-  if (!anyCached && !loading) {
+  if (!anyAttempted && !loading) {
     return `
       <div class="vision-actions" style="margin-bottom:8px"><span class="vision-source">📄 <code>${current.file}</code>${files.length > 1 ? `(${files.length}ページ)` : ""}</span></div>
       <div class="panel" style="padding:24px; text-align:center">
@@ -7273,6 +7281,18 @@ function renderVisionBoardImages(current) {
       return `
         <div class="vision-page">
           <img src="${src}" alt="${escapeHTML(current.name)} ${i + 1}ページ目" loading="lazy" />
+          ${label}
+        </div>
+      `;
+    }
+    // v125追補(Codex P2): このページの取得が既に失敗している場合は「読み込み中...」のまま
+    // 固定表示せず、再試行できる「再読み込み」ボタンを出す(ボード単位の再fetchで残り全ページを
+    // 対象にする。成功済みページはキャッシュ済みなので再fetchされない)。
+    if (_visionPageFailed[f]) {
+      return `
+        <div class="vision-page vision-page-placeholder vision-page-failed">
+          <p class="muted" style="margin-bottom:8px">この画像の読み込みに失敗しました</p>
+          <button class="btn" data-action="vision-board-retry-images" data-file="${escapeHTML(current.file)}">🔄 再読み込み</button>
           ${label}
         </div>
       `;
@@ -7385,6 +7405,13 @@ function loadVisionManifest() {
 // v125: 選択中ボードのページ画像を「読み込む」明示クリックから順次fetchする(1ファイル1回だけ)。
 // 80歳版のように複数ページある場合も Promise.all で一斉取得せず、1枚ずつ await して取得完了の
 // たびに再描画する — 1ページ目から順に表示が始まり、全ページ完了を待たせない(要件どおり)。
+// v125追補(Codex P2対応): (1) 一部ページのfetch失敗を_visionPageFailedで追跡し、失敗ページは
+// 「読み込み中...」に固定せず再読み込みボタンへ切り替える。(2) 「読み込む」ボタン初回クリックと
+// 「再読み込み」ボタンのretryは同じこの関数を呼ぶだけでよい — cachedVisionPageUrlsに無いページ
+// (=未取得 or 前回失敗)だけをループが再fetch対象にするため、成功済みページは再fetchされない。
+// (3) 全ページ失敗時にビューが「読み込み中...」のまま固まらないよう、in-flightフラグを
+// クリアした**後**に最終renderを必ず1回追加した(従来はループ最後の差し込みrenderがフラグ
+// クリア前に走っており、loading=trueのまま再描画が起きず固まって見えていた)。
 function loadVisionBoardImages(file) {
   const entry = file && _visionManifest && _visionManifest[file];
   if (!entry || !Array.isArray(entry.files) || !entry.files.length) return;
@@ -7397,21 +7424,29 @@ function loadVisionBoardImages(file) {
   (async () => {
     for (const pageFile of files) {
       if (cachedVisionPageUrls[pageFile]) continue;  // 既にキャッシュ済み(タブ往復後の再訪問等)
+      delete _visionPageFailed[pageFile];  // 再試行(1回目の挑戦含む)のたびに前回の失敗表示をクリア
       try {
         const blob = await fetchGitHubRawBlob(`content/vision-pages/${pageFile}`);
         if (blob) {
           cachedVisionPageUrls[pageFile] = URL.createObjectURL(blob);
         } else {
+          _visionPageFailed[pageFile] = true;
           showToast(`ビジョンボード画像の取得に失敗しました(${pageFile})`);
         }
       } catch (error) {
+        _visionPageFailed[pageFile] = true;
         console.warn("ビジョンボード画像の取得に失敗:", error?.message || error);
         showToast(`ビジョンボード画像の取得に失敗しました(${pageFile})`);
       }
-      // 取得完了ごとに差し込み表示(全ページ完了を待たせない)
+      // 取得完了ごとに差し込み表示(全ページ完了を待たせない)。この時点ではまだ
+      // _visionPageLoadInFlight[file]はtrueのまま(ループ途中の一時render)。
       if (state.currentView === "vision" && (state.settings.visionSection || "vision") === "board") render();
     }
     _visionPageLoadInFlight[file] = false;
+    // ループ完了後、in-flightフラグをクリアしてから最終renderを必ず行う。
+    // これが無いと、最後のページが失敗で終わった場合に直前のrender()がloading=trueのまま
+    // 描画してしまい、以降renderが呼ばれず「読み込み中...」のまま固まって見える(Codex P2指摘)。
+    if (state.currentView === "vision" && (state.settings.visionSection || "vision") === "board") render();
   })();
 }
 
