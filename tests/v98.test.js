@@ -120,13 +120,16 @@ async function readStructuralStyles(page) {
     await passGithubGate(pagePhone);
     await seedTasksView(pagePhone);
     const phoneStyles = await readStructuralStyles(pagePhone);
+    // v127: apple-design全体適用(K指示)でbase値の余白リズムを一段ゆったりへ更新。
+    //       iPhone幅はbase値が効くため4項目が変化(CHANGES_v127.md)。iPad幅(>=760px)の
+    //       R4圧縮値は不変のまま(上の[1]が引き続きロックしている)。
     const phoneExpected = {
-      mainPanePaddingTop: "14px", viewHeaderMarginBottom: "18px", h2MarginBottom: "12px",
-      gridGap: "12px", panelPaddingTop: "10px", sectionMarginTop: "18px",
-      itemPaddingTop: "12px", itemGap: "8px", formStripPaddingTop: "10px", btnMinHeight: "36px"
+      mainPanePaddingTop: "14px", viewHeaderMarginBottom: "20px", h2MarginBottom: "12px",
+      gridGap: "12px", panelPaddingTop: "10px", sectionMarginTop: "22px",
+      itemPaddingTop: "16px", itemGap: "8px", formStripPaddingTop: "12px", btnMinHeight: "36px"
     };
     Object.keys(phoneExpected).forEach((k) => {
-      check(`iPhone: ${k} = ${phoneExpected[k]}(従来値、R4で変更されていない)`,
+      check(`iPhone: ${k} = ${phoneExpected[k]}(R4圧縮は未適用。base値はv127余白更新後)`,
         phoneStyles[k] === phoneExpected[k], `actual=${phoneStyles[k]}`);
     });
 

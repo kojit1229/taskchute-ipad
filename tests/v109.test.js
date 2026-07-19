@@ -105,13 +105,14 @@ function check(name, cond, extra = "") {
     const filterSelect = page.locator('select[data-action="wbs-category-filter"]');
     check("プルダウンが画面上部に表示される", await filterSelect.count() === 1);
     const optionTexts = await filterSelect.locator("option").allTextContents();
-    check("選択肢は「すべて/学び/仕事/未分類」の4件(順不同判定)",
-      optionTexts.length === 4 && ["すべて", "学び", "仕事", "未分類"].every((t) => optionTexts.includes(t)),
+    // v126: Wish Project(category「回復」)もWBSに表示されるようになったため選択肢+1(CHANGES_v126.md)
+    check("選択肢は「すべて/回復/学び/仕事/未分類」の5件(順不同判定)",
+      optionTexts.length === 5 && ["すべて", "回復", "学び", "仕事", "未分類"].every((t) => optionTexts.includes(t)),
       JSON.stringify(optionTexts));
     check("既定の選択値は「すべて」", await filterSelect.inputValue() === "");
     // v28: normalizeStateがcategory未設定の「その他」Projectを常に1件保証するため、
     // 種分けした3件+「その他」=4件になる(既存仕様、絞り込み機能の対象外にはしない)
-    check("既定表示では全4件のProjectが表示される(自動生成の「その他」含む)", await projectTitleLocator(page).count() === 4);
+    check("既定表示では全5件のProjectが表示される(自動生成の「その他」とWish Project含む。v126)", await projectTitleLocator(page).count() === 5);
 
     // ============================================================
     // (a) カテゴリ選択→該当Projectのみ表示
@@ -135,7 +136,7 @@ function check(name, cond, extra = "") {
     console.log("[2] 「すべて」を選択→全Projectが表示される");
     await filterSelect.selectOption("");
     await page.waitForTimeout(200);
-    check("「すべて」選択時は全4件表示", await projectTitleLocator(page).count() === 4);
+    check("「すべて」選択時は全5件表示(v126でWish Project追加)", await projectTitleLocator(page).count() === 5);
     check("wbsCategoryFilterは空文字に戻る", (await stateNow()).settings.wbsCategoryFilter === "");
 
     // ============================================================
