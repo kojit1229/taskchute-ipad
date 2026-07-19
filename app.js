@@ -581,6 +581,18 @@ document.addEventListener("click", (event) => {
   }
   if (action === "ai-import-submit") submitAiImport();
   if (action === "ai-mit-adopt") adoptAiMit(Number(target.dataset.index));
+  // v121: 今週のやりたいこと(Wishからの週次選定)
+  if (action === "weekly-wish-open") openWeeklyWishModal();
+  if (action === "weekly-wish-submit") submitWeeklyWish();
+  if (action === "weekly-wish-toggle") {
+    // checkboxのchecked切替はclickイベントのpre-activationでリスナー実行前に反映済みのため、
+    // target.checkedは既に新しい値(チェック後)。4件目でpreventDefaultすると
+    // canceled-activation-stepsによりブラウザ側が自動でchecked=falseへ戻す。
+    if (target.checked && modalRoot.querySelectorAll("input[data-wish-id]:checked").length > 3) {
+      event.preventDefault();
+      showToast("今週は3つまでに絞りましょう");
+    }
+  }
   // v60: 下書きスケジュール(空き時間への決定論配置 → D&D調整 → 確定)
   if (action === "ai-schedule") runAiSchedule();
   // v59: 朝の一括プランニング(繰越+WBS+MIT候補 → 空き時間へ仮配置)
@@ -1300,6 +1312,9 @@ function normalizeState(value) {
   // v117(A): 今日の宣言。日付キー{text, updatedAt}。state.declarations(v87の作業単位宣言ログ)
   // とは別物(名前衝突を避けるため dailyDeclarations という別名にした)。
   if (!value.dailyDeclarations || typeof value.dailyDeclarations !== "object") value.dailyDeclarations = {};
+  // v121: 今週のやりたいこと(Wishからの週次選定)。週キー=weekRange().weekStart、
+  // {taskIds: string[], updatedAt} の週次マップ。dailyDeclarationsと同じ後方互換パターン。
+  if (!value.weeklyWishes || typeof value.weeklyWishes !== "object") value.weeklyWishes = {};
   // v42: 日ごとのメタ(AIフィードバック取り込み由来。journals は文字列なので別ストア)
   value.journalMeta ||= {};
   Object.values(value.journalMeta).forEach((j) => {
@@ -2111,6 +2126,7 @@ function renderHome() {
     ${homeFoldSection("lifespan", true, "", "", "寿命カウントダウン(残り時間)", homeLifespanBody(metrics))}
     ${homeIdeal(isToday)}
     ${homeDeclarationCard()}
+    ${homeWeeklyWishCard()}
     ${degraded ? "" : homeReadingCard()}
     ${degraded ? homeDegradedBanner() : homeRoutineCheckBanner(blocks, isToday)}
     ${homeHero(blocks, isToday)}
@@ -2291,6 +2307,80 @@ function homeDeclarationCard() {
       data-declaration-date="${date}" placeholder="今日◯◯に着手する" value="${escapeHTML(entry.text || "")}">
     ${showAlert ? `<div class="home-declaration-alert" style="color:var(--red); font-size:12px; font-weight:700; margin-top:6px">⚠️ 今日の宣言が未入力です</div>` : ""}
   </section>`;
+}
+
+// v121: 今週のやりたいこと(Wishからの週次選定)。homeDeclarationCardと同じ思想で、
+// 今日を見ている時だけ判定・表示する(過去日を振り返っている時に警告するのは筋違い)。
+// 週キーはweekRange().weekStart(土曜起点、12週サイクルの週定義と統一)をそのまま使う
+// ため、週替わり時のリセット処理は不要(参照するキーが自然に変わるだけ)。
+function homeWeeklyWishCard() {
+  const date = state.selectedDate;
+  if (date !== todayISO()) return "";
+  const weekKey = weekRange(date).weekStart;
+  const entry = state.weeklyWishes[weekKey];
+  const taskIds = (entry && entry.taskIds) || [];
+  if (taskIds.length === 0) {
+    return `
+      <div class="row home-weekly-wish-alert" style="margin-bottom:10px; padding:10px 12px; border-radius:10px; justify-content:space-between; align-items:center; background:var(--red-soft); border:1.5px solid var(--red)">
+        <span style="font-size:13px; font-weight:700; color:var(--red)">⚠️ 今週のやりたいことが未設定です</span>
+        <button class="btn danger" style="font-size:16px; padding:6px 10px" data-action="weekly-wish-open">設定する</button>
+      </div>`;
+  }
+  // 削除済み・実現済みになったWishはtaskIdsを書き換えず、表示からだけ自然に外す
+  const wishes = taskIds
+    .map((wid) => state.tasks.find((t) => t.id === wid))
+    .filter((t) => t && !t.deleted && !t.realized);
+  return `
+    <section class="panel home-weekly-wish-card" style="padding:12px 14px; margin-bottom:10px">
+      <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:6px">
+        <span class="muted" style="font-size:12px; font-weight:700">🌟 今週のやりたいこと</span>
+        <button class="btn ghost" style="font-size:16px; padding:6px 10px" data-action="weekly-wish-open">変更</button>
+      </div>
+      ${wishes.length
+        ? `<ul style="margin:0; padding-left:18px; font-size:14px">${wishes.map((w) => `<li>${escapeHTML(w.title)}</li>`).join("")}</ul>`
+        : `<div class="muted" style="font-size:12px">選択したやりたいことは表示できなくなりました</div>`}
+    </section>`;
+}
+
+// 選択モーダルを開く(設定する/変更どちらも同じモーダル。既存選択はチェック済みで開く)
+function openWeeklyWishModal() {
+  state.modal = { type: "weeklyWish" };
+  renderModal(buildWeeklyWishModal());
+}
+function buildWeeklyWishModal() {
+  const wishProject = getWishProject();
+  const weekKey = weekRange(todayISO()).weekStart;
+  const selected = new Set(((state.weeklyWishes[weekKey] || {}).taskIds) || []);
+  // 未実現・未削除のトップレベルWishのみ選択対象
+  const candidates = wishProject
+    ? state.tasks.filter((t) => !t.deleted && t.projectId === wishProject.id && !t.parentTaskId && !t.realized)
+    : [];
+  return `
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">🌟 今週のやりたいこと(最大3つ)</h3>
+        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        ${candidates.length ? candidates.map((w) => `
+          <label class="row" style="gap:8px; align-items:center; padding:6px 0; font-size:16px">
+            <input type="checkbox" style="width:20px; height:20px" data-action="weekly-wish-toggle" data-wish-id="${w.id}" ${selected.has(w.id) ? "checked" : ""}>
+            <span>${escapeHTML(w.title)}</span>
+          </label>`).join("")
+          : `<div class="muted">Wishリストが空です。先にWishタブで追加してください</div>`}
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-action="modal-close">キャンセル</button>
+        <button class="btn primary" data-action="weekly-wish-submit">保存</button>
+      </div>
+    </div>`;
+}
+function submitWeeklyWish() {
+  const ids = Array.from(modalRoot.querySelectorAll("input[data-wish-id]:checked")).map((el) => el.dataset.wishId);
+  const weekKey = weekRange(todayISO()).weekStart;
+  state.weeklyWishes[weekKey] = { taskIds: ids, updatedAt: nowDateTime() };
+  closeModal();
+  saveAndRender(ids.length ? "今週のやりたいことを設定しました" : "今週のやりたいことをクリアしました");
 }
 
 // 3日目の「続ける/手放す」選択を解決する
@@ -10946,6 +11036,21 @@ function mergeDailyDeclarationMaps(localMap, remoteMap) {
   return out;
 }
 
+// v121: 今週のやりたいこと(weeklyWishes)。週キー{taskIds,updatedAt}。
+// mergeDailyDeclarationMapsと同じupdatedAt比較パターンをそのまま踏襲する。
+function mergeWeeklyWishMaps(localMap, remoteMap) {
+  const out = {};
+  const weeks = new Set([...Object.keys(localMap || {}), ...Object.keys(remoteMap || {})]);
+  for (const w of weeks) {
+    const l = (localMap || {})[w];
+    const r = (remoteMap || {})[w];
+    if (!l) { out[w] = r; continue; }
+    if (!r) { out[w] = l; continue; }
+    out[w] = (r.updatedAt || "") > (l.updatedAt || "") ? r : l;
+  }
+  return out;
+}
+
 function mergeBlockLists(localBlocks, remoteBlocks) {
   const localIds = new Set((localBlocks || []).map((b) => b && b.id).filter(Boolean));
   const today = todayISO();
@@ -10985,6 +11090,8 @@ function computeSyncMerge(remoteNorm) {
     const zeroThinking = mergeZeroThinkingLists(state.zeroThinking, remoteNorm.zeroThinking);
     // v117(A): 今日の宣言もマージ可能コレクションへ追加
     const dailyDeclarations = mergeDailyDeclarationMaps(state.dailyDeclarations, remoteNorm.dailyDeclarations);
+    // v121: 今週のやりたいことも同じくマージ可能コレクションへ追加
+    const weeklyWishes = mergeWeeklyWishMaps(state.weeklyWishes, remoteNorm.weeklyWishes);
     const jsonChanged = (obj, base) => JSON.stringify(obj) !== JSON.stringify(base || {});
     const changedVsLocal =
       journals.changedVsLocal ||
@@ -10994,6 +11101,7 @@ function computeSyncMerge(remoteNorm) {
       jsonChanged(sleepLogs, state.sleep.logs) ||
       jsonChanged(morningEnergyLog, state.settings.morningEnergyLog) ||
       jsonChanged(dailyDeclarations, state.dailyDeclarations) ||
+      jsonChanged(weeklyWishes, state.weeklyWishes) ||
       !sameArrayByReference(blocks, state.blocks) ||
       (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, state.zeroThinking) : false);
     const changedVsRemote =
@@ -11004,10 +11112,11 @@ function computeSyncMerge(remoteNorm) {
       jsonChanged(sleepLogs, (remoteNorm.sleep || {}).logs) ||
       jsonChanged(morningEnergyLog, (remoteNorm.settings || {}).morningEnergyLog) ||
       jsonChanged(dailyDeclarations, remoteNorm.dailyDeclarations) ||
+      jsonChanged(weeklyWishes, remoteNorm.weeklyWishes) ||
       !sameArrayByReference(blocks, remoteNorm.blocks || []) ||
       (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, remoteNorm.zeroThinking) : false);
     return {
-      values: { journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations },
+      values: { journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes },
       changedVsLocal, changedVsRemote
     };
   } catch (error) {
@@ -11028,6 +11137,7 @@ function applySyncMergeToLocal(merged) {
   state.settings.morningEnergyLog = v.morningEnergyLog;
   state.blocks = v.blocks;
   state.dailyDeclarations = v.dailyDeclarations;  // v117(A)
+  state.weeklyWishes = v.weeklyWishes;  // v121
   if (v.zeroThinking) {
     state.zeroThinking.entries = v.zeroThinking.entries;
     state.zeroThinking.suggestedThemes = pruneExpiredSuggestedThemes(v.zeroThinking.suggestedThemes);
@@ -11049,6 +11159,7 @@ function applySyncMergeToRemote(merged, remoteNorm) {
   remoteNorm.settings.morningEnergyLog = v.morningEnergyLog;
   remoteNorm.blocks = v.blocks;
   remoteNorm.dailyDeclarations = v.dailyDeclarations;  // v117(A)
+  remoteNorm.weeklyWishes = v.weeklyWishes;  // v121
   if (v.zeroThinking) {
     remoteNorm.zeroThinking.entries = v.zeroThinking.entries;
     remoteNorm.zeroThinking.suggestedThemes = pruneExpiredSuggestedThemes(v.zeroThinking.suggestedThemes);
