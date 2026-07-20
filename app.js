@@ -346,6 +346,10 @@ document.addEventListener("click", (event) => {
   if (action === "hyperfocus-gate-fallback") hyperfocusGateFallback(id);
   if (action === "hyperfocus-gate-make-block") hyperfocusGateMakeBlock(id);
   if (action === "hyperfocus-gate-later") closeModal();
+  // v129: ポモドーロ身体スキャン(1タップ目=疲労、2タップ目=部位、いつでも記録せず閉じる)
+  if (action === "body-scan-fatigue") bodyScanRecordFatigue(Number(target.dataset.value));
+  if (action === "body-scan-part") bodyScanRecordPart(target.dataset.part || "");
+  if (action === "body-scan-discard") bodyScanDiscard();
   // v115: 連続ルーティン(チェーン、提案G②)— 開始/続きから・進行中の完了・閉じる
   if (action === "chain-run-open") openChainRun(id);
   if (action === "chain-step-complete") chainStepComplete();
@@ -1519,6 +1523,19 @@ function normalizeState(value) {
     outcome: d.outcome || "",
     resultNote: d.resultNote || "",
     ...d
+  }));
+  // v129: ポモドーロ身体スキャン(50分ごとのポモドーロ完了時に疲労1-5+任意部位を強制サンプリング)。
+  // v106系のマージ可能コレクションとしてmergeById(idキー和集合)で扱う(0秒思考entriesと
+  // 同じパターン。computeSyncMerge/applySyncMergeToLocal/applySyncMergeToRemote参照)。上限は
+  // 設けない(zeroThinking.entriesと同じ思想)。
+  if (!Array.isArray(value.bodyScans)) value.bodyScans = [];
+  value.bodyScans = value.bodyScans.map((s) => ({
+    id: s.id || crypto.randomUUID(),
+    dateTime: s.dateTime || "",
+    fatigue: s.fatigue || null,
+    part: s.part || "",
+    pomodoroBlockId: s.pomodoroBlockId || "",
+    ...s
   }));
   // v91: 「### 依頼」節を日報テンプレの機械可読契約として追加(K指示: 依頼はこの見出し配下に
   //      書く運用へ)。既存のjournalTemplateを上書きせず、まだ持っていない端末にだけ追記する
@@ -10822,6 +10839,21 @@ function generateReport(dateArg, { quiet = false } = {}) {
   });
   lines.push("");
 
+  // v129: 当日分の身体スキャン(ポモドーロ完了時の疲労1-5+任意部位)。時刻順。1件も無い日は節ごと省略。
+  const bodyScansToday = (state.bodyScans || [])
+    .filter((s) => (s.dateTime || "").startsWith(date))
+    .sort((a, b) => (a.dateTime || "").localeCompare(b.dateTime || ""));
+  if (bodyScansToday.length > 0) {
+    lines.push("### 身体スキャン");
+    lines.push("| 時刻 | 疲労 | 部位 |");
+    lines.push("|---|---|---|");
+    bodyScansToday.forEach((s) => {
+      const time = s.dateTime ? timeFromDateTime(s.dateTime) : "—";
+      lines.push(`| ${time} | ${s.fatigue ?? "—"} | ${s.part || "—"} |`);
+    });
+    lines.push("");
+  }
+
   // やり残し
   if (incomplete.length > 0) {
     lines.push("## 6. やり残し");
@@ -11415,6 +11447,8 @@ function computeSyncMerge(remoteNorm) {
     const dailyDeclarations = mergeDailyDeclarationMaps(state.dailyDeclarations, remoteNorm.dailyDeclarations);
     // v121: 今週のやりたいことも同じくマージ可能コレクションへ追加
     const weeklyWishes = mergeWeeklyWishMaps(state.weeklyWishes, remoteNorm.weeklyWishes);
+    // v129: ポモドーロ身体スキャンもidキー和集合マージ(blocks/zeroThinking entriesと同じ扱い)
+    const bodyScans = mergeById(state.bodyScans, remoteNorm.bodyScans);
     const jsonChanged = (obj, base) => JSON.stringify(obj) !== JSON.stringify(base || {});
     const changedVsLocal =
       journals.changedVsLocal ||
@@ -11426,6 +11460,7 @@ function computeSyncMerge(remoteNorm) {
       jsonChanged(dailyDeclarations, state.dailyDeclarations) ||
       jsonChanged(weeklyWishes, state.weeklyWishes) ||
       !sameArrayByReference(blocks, state.blocks) ||
+      !sameArrayByReference(bodyScans, state.bodyScans) ||
       (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, state.zeroThinking) : false);
     const changedVsRemote =
       journals.changedVsRemote ||
@@ -11437,9 +11472,10 @@ function computeSyncMerge(remoteNorm) {
       jsonChanged(dailyDeclarations, remoteNorm.dailyDeclarations) ||
       jsonChanged(weeklyWishes, remoteNorm.weeklyWishes) ||
       !sameArrayByReference(blocks, remoteNorm.blocks || []) ||
+      !sameArrayByReference(bodyScans, remoteNorm.bodyScans || []) ||
       (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, remoteNorm.zeroThinking) : false);
     return {
-      values: { journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes },
+      values: { journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans },
       changedVsLocal, changedVsRemote
     };
   } catch (error) {
@@ -11461,6 +11497,7 @@ function applySyncMergeToLocal(merged) {
   state.blocks = v.blocks;
   state.dailyDeclarations = v.dailyDeclarations;  // v117(A)
   state.weeklyWishes = v.weeklyWishes;  // v121
+  state.bodyScans = v.bodyScans;  // v129
   if (v.zeroThinking) {
     state.zeroThinking.entries = v.zeroThinking.entries;
     state.zeroThinking.suggestedThemes = pruneExpiredSuggestedThemes(v.zeroThinking.suggestedThemes);
@@ -11483,6 +11520,7 @@ function applySyncMergeToRemote(merged, remoteNorm) {
   remoteNorm.blocks = v.blocks;
   remoteNorm.dailyDeclarations = v.dailyDeclarations;  // v117(A)
   remoteNorm.weeklyWishes = v.weeklyWishes;  // v121
+  remoteNorm.bodyScans = v.bodyScans;  // v129
   if (v.zeroThinking) {
     remoteNorm.zeroThinking.entries = v.zeroThinking.entries;
     remoteNorm.zeroThinking.suggestedThemes = pruneExpiredSuggestedThemes(v.zeroThinking.suggestedThemes);
@@ -12518,9 +12556,97 @@ function completePomodoro() {
     mode: "focus"
   };
   saveAndRender("ポモドーロを完了しました(Blockに完了チェック)");
-  // v117(C)追補: ポモドーロ完了もBlockのcompletedをtrueにする「完了への状態変更」の一種。
-  // 独立レビュー指摘により、主要な完了導線であるポモドーロ完了もゲートのトリガーに含める。
-  if (blockId) maybeOpenHyperfocusGate();
+  // v129: 身体スキャン(強制サンプリング)を先に見せ、閉じた後に過集中ゲート判定を行う
+  // (モーダルは1枚ずつしか出せないため。ゲート自体はv117(C)のまま、blockId必須の条件も維持)。
+  openBodyScanModal(blockId);
+}
+
+// v129: ポモドーロ身体スキャン ====================================================
+// 没入中に身体信号が届かない特性への対策。50分ごとに必ず手が止まるポモドーロ完了時を
+// 強制サンプリングポイントにし、疲労1-5→任意で部位、の2タップで記録する。摩擦最小のため
+// どのステップでも「記録せず閉じる」で抜けられる(スキップを強制しない)。
+// 順序: 身体スキャン→閉じた後にv117(C)過集中ゲート判定(既存の90分ガードはそのまま)。
+// =============================================================
+let _pendingBodyScanCtx = null;
+const BODY_SCAN_PARTS = ["目", "肩", "胃", "頭"];
+
+function openBodyScanModal(pomodoroBlockId) {
+  _pendingBodyScanCtx = { pomodoroBlockId: pomodoroBlockId || "", fatigue: null };
+  state.modal = { type: "bodyScan" };
+  renderModal(buildBodyScanStep1Modal());
+}
+
+function buildBodyScanStep1Modal() {
+  return `
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">🧘 いまの疲労感は?</h3>
+        <button class="modal-close" data-action="body-scan-discard" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="row" style="gap:8px; justify-content:center; flex-wrap:wrap">
+          ${[1, 2, 3, 4, 5].map((n) => `<button class="btn" style="font-size:20px; min-width:52px; min-height:52px" data-action="body-scan-fatigue" data-value="${n}">${n}</button>`).join("")}
+        </div>
+        <div class="muted" style="font-size:11px; text-align:center; margin-top:8px">1=元気 〜 5=かなり疲れた</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn ghost" data-action="body-scan-discard">記録せず閉じる</button>
+      </div>
+    </div>`;
+}
+
+function buildBodyScanStep2Modal() {
+  return `
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">どこが疲れていますか?(任意)</h3>
+        <button class="modal-close" data-action="body-scan-discard" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="row" style="gap:8px; flex-wrap:wrap; justify-content:center">
+          ${BODY_SCAN_PARTS.map((p) => `<button class="btn" style="font-size:16px; padding:10px 16px" data-action="body-scan-part" data-part="${p}">${p}</button>`).join("")}
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn ghost" data-action="body-scan-part" data-part="">スキップして記録</button>
+      </div>
+    </div>`;
+}
+
+// 1タップ目: 疲労1-5を選び、2タップ目(部位)へ進む
+function bodyScanRecordFatigue(value) {
+  if (!_pendingBodyScanCtx) return;
+  _pendingBodyScanCtx.fatigue = value;
+  renderModal(buildBodyScanStep2Modal());
+}
+
+// 2タップ目: 部位を選ぶ(""ならスキップして記録)。エントリを保存して閉じる。
+function bodyScanRecordPart(part) {
+  if (!_pendingBodyScanCtx || !_pendingBodyScanCtx.fatigue) return;
+  const entry = {
+    id: crypto.randomUUID(),
+    dateTime: nowDateTime(),
+    fatigue: _pendingBodyScanCtx.fatigue,
+    part: part || "",
+    pomodoroBlockId: _pendingBodyScanCtx.pomodoroBlockId || ""
+  };
+  state.bodyScans = [...state.bodyScans, entry];
+  closeBodyScanFlow(true);
+}
+
+// 「記録せず閉じる」: どのステップからでも呼べる(強制しない)
+function bodyScanDiscard() {
+  closeBodyScanFlow(false);
+}
+
+function closeBodyScanFlow(saved) {
+  const ctx = _pendingBodyScanCtx;
+  _pendingBodyScanCtx = null;
+  closeModal();
+  if (saved) saveAndRender("身体スキャンを記録しました");
+  else render();
+  // v117(C)と同じ条件(blockId必須)でゲート判定。身体スキャンを閉じた後に行う(順序契約)。
+  if (ctx && ctx.pomodoroBlockId) maybeOpenHyperfocusGate();
 }
 
 // ============================================================
@@ -14126,6 +14252,9 @@ function closeModal() {
   modalRoot.onclick = null;
   _migrationRitualCtx = null;  // v61: 選択せずに閉じた場合も一時状態を残さない
   _pendingLifecycleCtx = null;  // v87: 宣言/報告モーダルを×で閉じた場合は開始/終了自体も取り消す
+  // v129: 背景タップ等の暗黙クローズは記録せず破棄する(_pendingLifecycleCtxと同じ扱い)。
+  // 明示的な保存/discard経路(closeBodyScanFlow)は既にnull化済みのため、ここは冪等。
+  _pendingBodyScanCtx = null;
 }
 
 function readModalFields() {
