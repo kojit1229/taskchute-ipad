@@ -2140,6 +2140,7 @@ function renderHome() {
     ${homeFoldSection("lifespan", true, "", "", "寿命カウントダウン(残り時間)", homeLifespanBody(metrics))}
     ${homeIdeal(isToday)}
     ${homeDeclarationCard()}
+    ${homeConditionBudgetChip()}
     ${homeWeeklyWishCard()}
     ${degraded ? "" : homeReadingCard()}
     ${degraded ? homeDegradedBanner() : homeRoutineCheckBanner(blocks, isToday)}
@@ -2321,6 +2322,24 @@ function homeDeclarationCard() {
       data-declaration-date="${date}" placeholder="今日◯◯に着手する" value="${escapeHTML(entry.text || "")}">
     ${showAlert ? `<div class="home-declaration-alert" style="color:var(--red); font-size:12px; font-weight:700; margin-top:6px">⚠️ 今日の宣言が未入力です</div>` : ""}
   </section>`;
+}
+
+// v128: 体力予算チップ。conditionBudget()の判定を宣言カード付近に表示する。
+// 過去日を見ている時も(睡眠ログがあれば)その日の判定をそのまま出す(睡眠カードと同じ流儀)。
+function homeConditionBudgetChip() {
+  const budget = conditionBudget(state.selectedDate);
+  const style = {
+    deficit: { bg: "var(--red-soft)", fg: "var(--red)" },
+    low: { bg: "var(--orange-soft)", fg: "var(--orange)" },
+    normal: { bg: "var(--green-soft)", fg: "var(--green)" },
+    none: { bg: "var(--panel-soft)", fg: "var(--muted)" }
+  }[budget.level];
+  const label = budget.level === "none" ? "データなし" : CONDITION_BUDGET_LABELS[budget.level];
+  return `
+    <div class="row home-condition-budget-chip" style="margin-bottom:10px; padding:8px 12px; border-radius:10px; background:${style.bg}; align-items:center; gap:8px; flex-wrap:wrap">
+      <span style="font-size:13px; font-weight:700; color:${style.fg}">🔋 体力予算: ${label}</span>
+      ${budget.reason ? `<span class="muted" style="font-size:12px">${escapeHTML(budget.reason)}</span>` : ""}
+    </div>`;
 }
 
 // v121: 今週のやりたいこと(Wishからの週次選定)。homeDeclarationCardと同じ思想で、
@@ -6858,6 +6877,70 @@ function shortSleepDate(s) {
   return m ? `${+m[1]}/${+m[2]}` : s;
 }
 
+// v128: 体力予算 ==================================================================
+// 疲労を主観で気づく前に、朝の睡眠心拍データ(state.sleep.logs、AutoSleep CSV取込)で
+// 先取りする。ベースラインは当日を含まない過去28日分のhrSleep/hrvSleepの中央値
+// (7日分未満なら心拍系の判定はスキップし、sleepHのみで判定する)。
+// 閾値は初期値であり、CONDITION_BUDGET_* 定数を調整すればよい(daily-report-fallback.pyの
+// condition_budget()と同じ式・同じ定数値に必ず揃えること。突合はFORMAT_CONTRACT.md参照)。
+const CONDITION_BUDGET_BASELINE_LOOKBACK_DAYS = 28;
+const CONDITION_BUDGET_BASELINE_MIN_SAMPLES = 7;
+const CONDITION_BUDGET_HRV_DEFICIT_PCT = -15;  // ベースライン比。これ以下(より低い)で赤字
+const CONDITION_BUDGET_HRV_LOW_PCT = -5;       // これ以下(より低い)で低予算
+const CONDITION_BUDGET_HR_DEFICIT_BPM = 5;     // ベースライン比+この値以上で赤字
+const CONDITION_BUDGET_HR_LOW_BPM = 2;         // これ以上で低予算
+const CONDITION_BUDGET_SLEEP_DEFICIT_H = 5.5;  // これ未満で赤字
+const CONDITION_BUDGET_SLEEP_LOW_H = 6.5;      // これ未満で低予算
+const CONDITION_BUDGET_LABELS = { deficit: "赤字", low: "低予算", normal: "通常" };
+
+function median(nums) {
+  const sorted = [...nums].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+// dateを含まない過去CONDITION_BUDGET_BASELINE_LOOKBACK_DAYS日分から、hr/hrvそれぞれの
+// 中央値ベースラインを求める。サンプル不足(7日未満)ならそのベースラインはnull。
+function conditionBudgetBaseline(date) {
+  const from = addDays(date, -CONDITION_BUDGET_BASELINE_LOOKBACK_DAYS);
+  const to = addDays(date, -1);
+  const hrVals = [], hrvVals = [];
+  Object.entries(state.sleep.logs).forEach(([d, log]) => {
+    if (d < from || d > to) return;
+    if (log.hrSleep != null) hrVals.push(log.hrSleep);
+    if (log.hrvSleep != null) hrvVals.push(log.hrvSleep);
+  });
+  return {
+    hrBaseline: hrVals.length >= CONDITION_BUDGET_BASELINE_MIN_SAMPLES ? median(hrVals) : null,
+    hrvBaseline: hrvVals.length >= CONDITION_BUDGET_BASELINE_MIN_SAMPLES ? median(hrvVals) : null
+  };
+}
+
+// 当日の睡眠ログ(state.sleep.logs[date])から体力予算を3段階(deficit/low/normal)判定する。
+// ログ自体が無い日は level:"none"(データなし)。reasonは判定に使った根拠の短文(例「HRV -12%・睡眠5.2h」)。
+function conditionBudget(date) {
+  const log = state.sleep.logs[date];
+  if (!log) return { level: "none", reason: "" };
+  const baseline = conditionBudgetBaseline(date);
+  const factors = [];
+  if (baseline.hrvBaseline != null && log.hrvSleep != null) {
+    const pct = ((log.hrvSleep - baseline.hrvBaseline) / baseline.hrvBaseline) * 100;
+    if (pct <= CONDITION_BUDGET_HRV_DEFICIT_PCT) factors.push({ severity: "deficit", text: `HRV ${pct >= 0 ? "+" : ""}${Math.round(pct)}%` });
+    else if (pct <= CONDITION_BUDGET_HRV_LOW_PCT) factors.push({ severity: "low", text: `HRV ${pct >= 0 ? "+" : ""}${Math.round(pct)}%` });
+  }
+  if (baseline.hrBaseline != null && log.hrSleep != null) {
+    const diff = log.hrSleep - baseline.hrBaseline;
+    if (diff >= CONDITION_BUDGET_HR_DEFICIT_BPM) factors.push({ severity: "deficit", text: `HR +${Math.round(diff)}bpm` });
+    else if (diff >= CONDITION_BUDGET_HR_LOW_BPM) factors.push({ severity: "low", text: `HR +${Math.round(diff)}bpm` });
+  }
+  if (log.sleepH != null) {
+    if (log.sleepH < CONDITION_BUDGET_SLEEP_DEFICIT_H) factors.push({ severity: "deficit", text: `睡眠${log.sleepH.toFixed(1)}h` });
+    else if (log.sleepH < CONDITION_BUDGET_SLEEP_LOW_H) factors.push({ severity: "low", text: `睡眠${log.sleepH.toFixed(1)}h` });
+  }
+  const level = factors.some((f) => f.severity === "deficit") ? "deficit" : factors.length ? "low" : "normal";
+  return { level, reason: factors.map((f) => f.text).join("・") };
+}
+
 async function importSleepCsv(file) {
   let records;
   try {
@@ -10615,6 +10698,9 @@ function generateReport(dateArg, { quiet = false } = {}) {
   //          FORMAT_CONTRACT.md参照)。理想ワンライナーとは違い省略しない。
   const declarationText = (state.dailyDeclarations[date]?.text || "").trim();
 
+  // v128: 体力予算。当日ログがある日のみ達成率表の後に1行出力する(データなし日は省略)。
+  const conditionBudgetToday = conditionBudget(date);
+
   const lines = [
     `# 日報 ${date} (${weekdayLabel(date)})`,
     "",
@@ -10642,6 +10728,9 @@ function generateReport(dateArg, { quiet = false } = {}) {
     `| ルーティン実行率 | ${rateRoutine.done} / ${rateRoutine.total} | ${rateRoutine.pct}% |`,
     `| 12週 今週の進捗 | ${rateCycleWeek.done} / ${rateCycleWeek.total} | ${rateCycleWeek.pct}% |`,
     "",
+    ...(conditionBudgetToday.level !== "none"
+      ? [`体力予算: ${CONDITION_BUDGET_LABELS[conditionBudgetToday.level]}${conditionBudgetToday.reason ? `(${conditionBudgetToday.reason})` : ""}`, ""]
+      : []),
   ];
 
   // v68: 非同期AI対話 — 日報タブの「今日AIに聞きたいこと」(origin:"user")のうち未解決のものを

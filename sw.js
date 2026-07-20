@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v127";
+const CACHE_NAME = "taskchute-journal-pwa-v128";
+// v128: 体力予算(朝の睡眠心拍データから疲労を先取り判定)。CHANGES_v128.md参照。
 // v127: apple-design全体ポリッシュ(角丸+2層シャドウ/ヘッダのマテリアル化/余白のリズム/
 //   ボタン階層/見出しの磨き)。styles.cssのみ、app.js無変更。CHANGES_v127.md参照。
 // v126: 「やりたいこと」をWBSのProject+Taskとして扱い、期日駆動で朝プラン候補に載せられるように。v122の週次選定ルートは撤去。CHANGES_v126.md参照。
