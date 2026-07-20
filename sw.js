@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v129";
+const CACHE_NAME = "taskchute-journal-pwa-v130";
+// v130: 睡眠CSV取込の失敗メッセージを空CSV/全件パース失敗で区別。CHANGES_v130.md参照。
 // v129: ポモドーロ身体スキャン(完了時に疲労1-5+任意部位を2タップで記録)。CHANGES_v129.md参照。
 // v128: 体力予算(朝の睡眠心拍データから疲労を先取り判定)。CHANGES_v128.md参照。
 // v127: apple-design全体ポリッシュ(角丸+2層シャドウ/ヘッダのマテリアル化/余白のリズム/

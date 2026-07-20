@@ -6966,6 +6966,13 @@ async function importSleepCsv(file) {
     showToast("CSVの読み込みに失敗しました");
     return;
   }
+  // v130: CSVにデータ行が無い(空ファイル・ヘッダー行のみ)場合は、下の「起床時間を読み取れず
+  // 全件スキップ」(行はあるがパース失敗)と区別して明確なメッセージを出す。従来は両方とも
+  // 「睡眠データを読み取れませんでした」で、原因(ファイルが空/表記が読めない)が分からなかった。
+  if (records.length === 0) {
+    showToast("睡眠CSVにデータ行がありませんでした(空のファイル、またはヘッダー行のみの可能性があります)");
+    return;
+  }
   const imported = {};  // 起床日 → ログ。同日複数行(昼寝セッション)は睡眠が長い方を採用
   const skippedWakeValues = [];
   records.forEach((r) => {
@@ -6992,7 +6999,9 @@ async function importSleepCsv(file) {
   const dates = Object.keys(imported).sort();
   const count = dates.length;
   if (!count) {
-    showToast(`睡眠データを読み取れませんでした${skippedWakeValues.length ? `(${skippedWakeValues.length}行をスキップ)` : ""}`);
+    // v130: ここに到達する時点でrecords.length > 0(空CSVは上で分岐済み)のため、
+    // 全行が起床時間パース失敗だったと確定できる。原因を特定できる文言にする。
+    showToast(`起床時間を読み取れず全${skippedWakeValues.length}行をスキップしました(表記形式をご確認ください)`);
     return;
   }
   Object.assign(state.sleep.logs, imported);
