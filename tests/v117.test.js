@@ -289,7 +289,13 @@ function check(name, cond, extra = "") {
     }
     check("ポモドーロ完了でBlockがcompletedになる",
       (await stateNow()).blocks.find((b) => b.id === "blk-pomo-target")?.completed === true);
-    check("ポモドーロ完了直後に過集中ブレーカーのゲートモーダルが開く(独立レビュー指摘対応)",
+    // v129: ポモドーロ完了直後は先に身体スキャンモーダルが開く(順序契約: 身体スキャン→ゲート)。
+    // 「記録せず閉じる」で抜けても、閉じた後にゲートが開くことを確認する。
+    check("ポモドーロ完了直後は先に身体スキャンモーダルが開く",
+      await page.locator(".modal-title", { hasText: "いまの疲労感は?" }).count() === 1);
+    await page.click('[data-action="body-scan-discard"]');
+    await page.waitForTimeout(200);
+    check("身体スキャンを記録せず閉じた後に過集中ブレーカーのゲートモーダルが開く(独立レビュー指摘対応)",
       await page.locator(".modal-title", { hasText: "保護ルーティンが残っています" }).count() === 1);
     check("未実行の保護系ルーティン名(白湯を飲む)が一覧に出る",
       (await page.locator(".modal-body").innerText()).includes("白湯を飲む"));
