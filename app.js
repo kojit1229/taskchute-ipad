@@ -6894,6 +6894,19 @@ function shortSleepDate(s) {
   return m ? `${+m[1]}/${+m[2]}` : s;
 }
 
+// v131: AutoSleepは各日レコードを夜21:00に確定するため、朝の時点では前夜分がまだCSVに
+// 含まれない(構造的な制約。実データ解析で確認済み)。当日キーが無ければ直近2日以内を
+// 遡ってフォールバックし、どの日のデータかを呼び出し側が明示できるようにする。
+// 見つかった場合 {log, logDate, ageDays}(ageDays=0なら当日、1なら前日…)、無ければnull。
+function latestSleepLogWithin(date, maxAgeDays = 2) {
+  for (let age = 0; age <= maxAgeDays; age++) {
+    const d = addDays(date, -age);
+    const log = state.sleep.logs[d];
+    if (log) return { log, logDate: d, ageDays: age };
+  }
+  return null;
+}
+
 // v128: 体力予算 ==================================================================
 // 疲労を主観で気づく前に、朝の睡眠心拍データ(state.sleep.logs、AutoSleep CSV取込)で
 // 先取りする。ベースラインは当日を含まない過去28日分のhrSleep/hrvSleepの中央値
@@ -6934,10 +6947,15 @@ function conditionBudgetBaseline(date) {
 }
 
 // 当日の睡眠ログ(state.sleep.logs[date])から体力予算を3段階(deficit/low/normal)判定する。
-// ログ自体が無い日は level:"none"(データなし)。reasonは判定に使った根拠の短文(例「HRV -12%・睡眠5.2h」)。
+// v131: 当日キーが無ければlatestSleepLogWithin()で直近2日以内にフォールバックする(AutoSleepが
+// 前夜分を21:00にしか確定しないため、朝の時点では当日キーが存在しないのが通常運転)。
+// フォールバックした日はreason先頭に「M/D朝」を明示し、黙って当日扱いしない。
+// 2日以内に1件も無い日は level:"none"(データなし)。ベースライン計算は従来どおりdate基準
+// (フォールバック元のlogDateではない)で過去28日を見る(仕様どおり変更していない)。
 function conditionBudget(date) {
-  const log = state.sleep.logs[date];
-  if (!log) return { level: "none", reason: "" };
+  const found = latestSleepLogWithin(date);
+  if (!found) return { level: "none", reason: "" };
+  const { log, logDate, ageDays } = found;
   const baseline = conditionBudgetBaseline(date);
   const factors = [];
   if (baseline.hrvBaseline != null && log.hrvSleep != null) {
@@ -6955,7 +6973,12 @@ function conditionBudget(date) {
     else if (log.sleepH < CONDITION_BUDGET_SLEEP_LOW_H) factors.push({ severity: "low", text: `睡眠${log.sleepH.toFixed(1)}h` });
   }
   const level = factors.some((f) => f.severity === "deficit") ? "deficit" : factors.length ? "low" : "normal";
-  return { level, reason: factors.map((f) => f.text).join("・") };
+  const factorsText = factors.map((f) => f.text).join("・");
+  // v131: フォールバック(ageDays>0)の場合、根拠が0件(通常判定)でも日付ラベルだけは必ず出す
+  // (「今日は通常」と黙って誤読されないようにする)。
+  const ageLabel = ageDays > 0 ? `${shortSleepDate(logDate)}朝` : "";
+  const reason = ageLabel && factorsText ? `${ageLabel}: ${factorsText}` : (ageLabel || factorsText);
+  return { level, reason };
 }
 
 async function importSleepCsv(file) {
@@ -7017,15 +7040,19 @@ function hoursLabel(v) {
   return `${Math.floor(v)}h${String(Math.round((v % 1) * 60)).padStart(2, "0")}m`;
 }
 
+// v131: AutoSleepは前夜分を21:00にしか確定しないため、朝の時点ではdateキーの当日分が
+// まだ無いのが通常運転(実データ解析で確認済み)。latestSleepLogWithin()で直近2日以内に
+// フォールバックし、フォールバックした日はヘッダに「M/D朝のデータ」と明示する
+// (黙って当日扱いしない)。赤警告は2日以内に1件も無い場合のみ出す。
 function renderSleepCard(date) {
-  const log = state.sleep.logs[date];
+  const found = latestSleepLogWithin(date);
   const uploadBtn = (danger) => `
     <label class="btn ${danger ? "danger" : "ghost"}" style="font-size:12px; padding:6px 10px; cursor:pointer; white-space:nowrap">
       📤 睡眠CSV
       <input type="file" accept=".csv,text/csv" data-sleep-csv-upload hidden>
     </label>`;
-  if (!log) {
-    // 未アップロード: 今日を開いている時は赤帯で警告(毎朝アップする運用)。過去日は控えめに。
+  if (!found) {
+    // 2日以内に1件もログが無い: 今日を開いている時は赤帯で警告(毎朝アップする運用)。過去日は控えめに。
     const isToday = date === todayISO();
     return `
       <div class="row" style="margin-bottom:10px; padding:10px 12px; border-radius:10px; justify-content:space-between; align-items:center; ${isToday ? "background:var(--red-soft); border:1.5px solid var(--red)" : "background:var(--panel-soft)"}">
@@ -7033,11 +7060,15 @@ function renderSleepCard(date) {
         ${uploadBtn(isToday)}
       </div>`;
   }
+  const { log, logDate, ageDays } = found;
   const chip = (label, val) => `<span style="font-size:12px"><span class="muted">${label}</span> <b>${val}</b></span>`;
+  const headerLabel = ageDays > 0
+    ? `💤 ${shortSleepDate(logDate)}朝のデータ(前夜分はAutoSleep未確定)`
+    : "💤 前夜の睡眠";
   return `
     <div class="row" style="margin-bottom:10px; padding:10px 12px; border-radius:10px; background:var(--panel-soft); justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px">
       <span class="row" style="gap:10px; flex-wrap:wrap; align-items:center">
-        <span style="font-size:13px; font-weight:700">💤 前夜の睡眠</span>
+        <span style="font-size:13px; font-weight:700">${headerLabel}</span>
         ${chip("就寝→起床", `${log.bed || "–"}→${log.wake || "–"}`)}
         ${chip("睡眠", hoursLabel(log.sleepH))}
         ${chip("効率", log.eff == null ? "–" : `${Math.round(log.eff)}%`)}
