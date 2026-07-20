@@ -14280,7 +14280,12 @@ function renderModal(innerHTML) {
   modalRoot.setAttribute("aria-hidden", "false");
   // 背景クリックで閉じる
   modalRoot.onclick = (event) => {
-    if (event.target === modalRoot) closeModal();
+    if (event.target !== modalRoot) return;
+    // v132(Codexレビュー[med]対応): 身体スキャン表示中の背景タップはcloseModal()を直接
+    // 呼ぶと_pendingBodyScanCtxが破棄されるだけでcloseBodyScanFlow()(ゲート判定を呼ぶ)を
+    // 経由しない。明示ボタン(body-scan-discard等)と同じ「記録せず閉じる」経路へ揃える。
+    if (state.modal && state.modal.type === "bodyScan") { bodyScanDiscard(); return; }
+    closeModal();
   };
 }
 
