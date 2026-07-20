@@ -6,7 +6,8 @@
 // (c) 「スキップして記録」ではpart=""で記録される
 // (d) 「記録せず閉じる」ではどのステップからでもbodyScansに何も追加されない
 // (e) 身体スキャンを閉じた後(保存/スキップ/discardいずれも)に過集中ゲートが判定される(順序契約)
-// (f)(g) 日報出力・normalizeStateの後方互換は別コミットで追加
+// (f) 日報生成: 当日分のbodyScansがあれば`### 身体スキャン`表が出る/0件の日は節ごと省略
+// (g) normalizeStateの後方互換: bodyScansフィールドが無い旧stateでも起動できる
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
@@ -184,6 +185,48 @@ function check(name, cond, extra = "") {
       await page.locator(".modal-title", { hasText: "保護ルーティンが残っています" }).count() === 1);
     await page.click('[data-action="hyperfocus-gate-later"]');
     await page.waitForTimeout(200);
+
+    // ============================================================
+    // (f) 日報生成
+    // ============================================================
+    console.log("[7] 日報生成: 当日分のbodyScansがあれば`### 身体スキャン`表が出る");
+    const scans = [
+      { id: "bs-a", dateTime: `${TODAY}T10:30:00`, fatigue: 4, part: "肩", pomodoroBlockId: "blk-x" },
+      { id: "bs-b", dateTime: `${TODAY}T09:15:00`, fatigue: 2, part: "", pomodoroBlockId: "blk-y" },
+      { id: "bs-other-day", dateTime: `${YEST}T10:00:00`, fatigue: 5, part: "頭", pomodoroBlockId: "blk-z" }
+    ];
+    await seed({ blocks: [], bodyScans: scans, view: "reports" });
+    await page.click('[data-action="generate-report"]');
+    await page.waitForTimeout(400);
+    const reportText1 = await page.locator(".report-output").inputValue().catch(() => "");
+    check("`### 身体スキャン`見出しが出る", reportText1.includes("### 身体スキャン"), reportText1.slice(0, 600));
+    check("時刻昇順で出る(09:15が10:30より前)", reportText1.indexOf("09:15") < reportText1.indexOf("10:30"), reportText1);
+    check("他日分は含まれない(該当エントリのpart「頭」が出ない)", !reportText1.includes("頭"), reportText1);
+    check("部位が空の行は「—」になる", /09:15 \| 2 \| —/.test(reportText1), reportText1);
+
+    console.log("[8] 日報生成: 当日分のbodyScansが0件なら`### 身体スキャン`節は省略される");
+    await seed({ blocks: [], bodyScans: [], view: "reports" });
+    await page.click('[data-action="generate-report"]');
+    await page.waitForTimeout(400);
+    const reportText2 = await page.locator(".report-output").inputValue().catch(() => "");
+    check("`### 身体スキャン`見出しが出ない", !reportText2.includes("### 身体スキャン"), reportText2.slice(0, 400));
+
+    // ============================================================
+    // (g) normalizeStateの後方互換
+    // ============================================================
+    console.log("[9] bodyScansフィールドが無い旧stateでも例外なく起動できる");
+    const failuresBefore = failures;
+    await page.evaluate((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      delete s.bodyScans;
+      s.currentView = "home";
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, KEY);
+    await page.reload();
+    await page.waitForTimeout(400);
+    check("旧stateでも例外なく起動できる(pageerrorなし)", failures === failuresBefore);
+    const s9 = await stateNow();
+    check("normalizeStateがbodyScansを[]で補完する", Array.isArray(s9.bodyScans) && s9.bodyScans.length === 0, JSON.stringify(s9.bodyScans));
   } finally {
     await browser.close();
     server.close();
