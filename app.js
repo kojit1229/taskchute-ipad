@@ -599,6 +599,9 @@ document.addEventListener("click", (event) => {
   }
   if (action === "ai-import-submit") submitAiImport();
   if (action === "ai-mit-adopt") adoptAiMit(Number(target.dataset.index));
+  // v133: タスク候補チップ(採用/却下)
+  if (action === "ai-task-adopt") adoptAiTaskCandidate(Number(target.dataset.index));
+  if (action === "ai-task-dismiss") dismissAiTaskCandidate(Number(target.dataset.index));
   // v121: 今週のやりたいこと(Wishからの週次選定)
   if (action === "weekly-wish-open") openWeeklyWishModal();
   if (action === "weekly-wish-submit") submitWeeklyWish();
@@ -739,14 +742,14 @@ document.addEventListener("input", (event) => {
     const d = target.dataset.journalDate;
     state.journals[d] = target.value;
     // v106: 本文の編集時刻を記録(端末間マージの新旧判定に使用)
-    const meta = (state.journalMeta[d] ||= { aiMitCandidates: [], aiImported: false, ideal: "" });
+    const meta = (state.journalMeta[d] ||= { aiMitCandidates: [], aiImported: false, ideal: "", aiTaskCandidates: [] });
     meta.textUpdatedAt = nowDateTime();
     saveState();
   }
   // v61: 今日の理想ワンライナー(入力中も保存。全再描画しないのでフォーカスは維持される)
   if (target.matches("[data-ideal-date]")) {
     const d = target.dataset.idealDate;
-    const meta = (state.journalMeta[d] ||= { aiMitCandidates: [], aiImported: false, ideal: "" });
+    const meta = (state.journalMeta[d] ||= { aiMitCandidates: [], aiImported: false, ideal: "", aiTaskCandidates: [] });
     meta.ideal = target.value;
     saveState();
   }
@@ -1340,6 +1343,9 @@ function normalizeState(value) {
     if (!("aiImported" in j)) j.aiImported = false;
     if (!("ideal" in j)) j.ideal = "";  // v61: 今日の理想ワンライナー(提案8)
     if (!("textUpdatedAt" in j)) j.textUpdatedAt = "";  // v106: 本文編集時刻(同期マージの新旧判定)
+    // v133: AIフィードバックから抽出したタスク候補(aiMitCandidatesと同じ「溜めて＋で採用」方式へ回帰。
+    //       詳細はautoIngestFeedbackのコメント参照)
+    if (!Array.isArray(j.aiTaskCandidates)) j.aiTaskCandidates = [];
   });
   // v61: マイグレーション儀式(3回目以降の繰り越し確認)の選択ログ。将来のバッチ分析用に軽量記録。
   if (!Array.isArray(value.migrationRitualLog)) value.migrationRitualLog = [];
@@ -2454,7 +2460,7 @@ function resolveIdealRetry(choice) {
   if (!active || active.dayNum < IDEAL_RETRY_WINDOW_DAYS) return;
   if (choice === "continue") {
     // 今日を起点に新しい3日間サイクルを始める(同じ理想のまま継続)
-    const meta = (state.journalMeta[today] ||= { aiMitCandidates: [], aiImported: false, ideal: "" });
+    const meta = (state.journalMeta[today] ||= { aiMitCandidates: [], aiImported: false, ideal: "", aiTaskCandidates: [] });
     meta.ideal = active.text;
     saveAndRender("理想を続けます");
   } else {
@@ -3596,6 +3602,42 @@ function adoptAiMit(index) {
   state.blocks.push(block);
   meta.aiMitCandidates.splice(index, 1);  // 採用したら候補から外す
   saveAndRender("✦ 今日の主役に追加しました");
+}
+
+// v133: タスクシュート上部の AIタスク候補チップ(前日フィードバックの取り込み分、当日限り)。
+//       aiMitChips/adoptAiMitと全く同じ「溜めて＋で採用」設計。採用せず消す×(却下)だけは
+//       候補が溜まり続けないよう追加した(aiMitChipsには無い機能)。
+function aiTaskChips() {
+  const today = todayISO();
+  if (state.selectedDate !== today) return "";
+  const prev = addDays(today, -1);
+  const cands = state.journalMeta[prev]?.aiTaskCandidates || [];
+  if (!cands.length) return "";
+  return `<div class="ai-mit-chips">
+    <span class="ai-mit-cap">タスク候補(昨日のAIより):</span>
+    ${cands.map((t, i) => `
+      <span class="ai-mit-chip" style="display:inline-flex; align-items:center; gap:4px">
+        <button data-action="ai-task-adopt" data-index="${i}" style="border:none; background:none; padding:0; font:inherit; color:inherit">＋ ${escapeHTML(t)}</button>
+        <button data-action="ai-task-dismiss" data-index="${i}" aria-label="候補を却下" style="border:none; background:none; padding:0 2px; font:inherit; color:inherit; opacity:0.6">×</button>
+      </span>`).join("")}
+  </div>`;
+}
+function adoptAiTaskCandidate(index) {
+  const prev = addDays(todayISO(), -1);
+  const meta = state.journalMeta[prev];
+  const title = meta?.aiTaskCandidates?.[index];
+  if (!title) return;
+  const task = makeTask({ title, dueDate: todayISO() });
+  state.tasks.push(task);
+  meta.aiTaskCandidates.splice(index, 1);  // 採用したら候補から外す
+  saveAndRender("✚ タスクに追加しました");
+}
+function dismissAiTaskCandidate(index) {
+  const prev = addDays(todayISO(), -1);
+  const meta = state.journalMeta[prev];
+  if (!meta?.aiTaskCandidates?.[index]) return;
+  meta.aiTaskCandidates.splice(index, 1);  // 採用せず候補から外す
+  saveAndRender("");
 }
 
 // v60: =========================================================
@@ -5706,6 +5748,7 @@ function renderTasks() {
     ${renderHeader("今日の実行リスト", "タスクシュート", projectedEndBadge())}
     ${renderDateBar()}
     ${aiMitChips()}
+    ${aiTaskChips()}
     ${carryOverPanel()}
     <div class="row" style="margin-bottom:10px; flex-wrap:wrap; gap:8px">
       <button class="btn" data-action="ai-schedule">📋 下書きスケジュール</button>
@@ -13116,29 +13159,36 @@ function saveAndRender(message) {
 //      (前日以前から残っている繰越タスクとの重複も防ぐ)。テーマは zeroThinking.themes の
 //      既存テキストと同名ならスキップする(themesは日付を持たず永続なので、前日から残っている
 //      ものも自然に対象になる)。
-//      登録形状: タスクは既存の makeTask() 慣習をそのまま使う。projectId="" は WBS「単発Task」
-//      (renderWBSのtaskProjectセレクトに存在する既存の一級パターン)を流用しており、ホームの
-//      「未完了タスク」パネル(homeBacklog、wish/other種別のProjectだけを除外表示)には自然に
-//      出る。dueDateは当日(K指示どおり——フィードバック自身の日付ではなく「Kが読む日」に
-//      見えることが目的)。
 //      テーマには source:"ai-feedback" を付け、手動追加(source:null)と区別する。ワンタップ削除
 //      (deleteZtTheme)がAI由来かどうかを判定し、AI由来ならzeroSecThemeLogへ不採用記録する。
+// v133: タスク側のみ方針転換(K指示)。v86で「確認なしで直接state.tasksへpush」に自動化した
+//      挙動を撤回し、aiMitChips/adoptAiMit(journalMeta[date].aiMitCandidates)と全く同じ
+//      「候補として溜めておき、チップの＋タップで初めて実体化」方式に戻す。テーマ側(0秒思考)の
+//      自動追加は今回のスコープ外で変更しない(上のコメント・下のthemeCandidates節は従来どおり)。
+//      候補はjournalMeta[date].aiTaskCandidatesへ格納し、aiTaskChips()/adoptAiTaskCandidate()/
+//      dismissAiTaskCandidate()で表示・採用・却下する(表示は常にjournalMeta[前日].aiTaskCandidates
+//      のみ、aiMitChipsと同じ表示条件)。addedTasksの意味は「タスクとして直接追加した件数」から
+//      「候補として追加した件数」に変わった(変数名はそのまま流用)。
 function autoIngestFeedback(date, text) {
   if (!text) return null;
   if (!Array.isArray(state.feedbackIngestedDates)) state.feedbackIngestedDates = [];
   if (state.feedbackIngestedDates.includes(date)) return null;  // 冪等: 同じ日付は1回のみ
 
-  const todayDate = todayISO();
   let addedTasks = 0, addedThemes = 0;
 
   const mitCandidates = extractMITCandidatesFromReport(text);
   if (mitCandidates.length) {
+    const meta = (state.journalMeta[date] ||= { aiMitCandidates: [], aiImported: false, ideal: "", aiTaskCandidates: [] });
+    if (!Array.isArray(meta.aiTaskCandidates)) meta.aiTaskCandidates = [];
+    // v133: 重複排除対象は「現在生きている(todo/doing)タスクのtitle」に加え、
+    //       「既にaiTaskCandidatesに入っているtitle」も含める(日をまたいだ重複チップ防止)。
     const liveTitles = new Set(state.tasks
       .filter((t) => !t.deleted && (t.status === "todo" || t.status === "doing"))
       .map((t) => t.title));
+    meta.aiTaskCandidates.forEach((t) => liveTitles.add(t));
     mitCandidates.forEach((title) => {
-      if (liveTitles.has(title)) return;  // 重複排除(繰越含む)
-      state.tasks.push(makeTask({ title, dueDate: todayDate }));
+      if (liveTitles.has(title)) return;  // 重複排除(繰越・既存候補含む)
+      meta.aiTaskCandidates.push(title);
       liveTitles.add(title);
       addedTasks++;
     });
@@ -13236,8 +13286,10 @@ async function hydrateStaticMarkdown() {
   //      実際の登録は日付ごとに1回だけ発生する)。
   // v86 should-fix: today枠は state.selectedDate 連動のfetchのため、過去日を閲覧中にその日の
   //      FBがまだキャッシュされていないと todayFb に過去日のフィードバックが入ることがある。
-  //      それをそのまま自動登録すると「過去日を見ているだけ」で過去FBの提案が実今日のタスクとして
-  //      注入されてしまう(dueDateはautoIngestFeedback内部でtodayISO()固定のため)。
+  //      それをそのまま自動登録すると「過去日を見ているだけ」で過去FBの提案候補が
+  //      journalMeta[過去日]へ紐付いてしまう(v133でタスクは候補化したため実タスクの誤注入は
+  //      なくなったが、候補チップはjournalMeta[実今日の前日]しか見ないため、実今日以外への
+  //      登録はどのみち二度と表示されず宙に浮く。取り込み自体をtoday===realTodayに限定して防ぐ)。
   //      today === realToday(実際の今日を閲覧中)のときだけ取り込む。prev枠は selectedDateに
   //      依らず常に実際の昨日固定のフェッチなので、この制限は不要(現状のままでよい)。
   let ingestedTasksTotal = 0, ingestedThemesTotal = 0;
@@ -13252,7 +13304,11 @@ async function hydrateStaticMarkdown() {
   if (ingestedTasksTotal || ingestedThemesTotal) {
     changed = true;
     saveState();
-    showToast(`🤖 AIの提案からタスク${ingestedTasksTotal}件・テーマ${ingestedThemesTotal}件を追加しました`);
+    // v133: タスクは直接追加ではなく候補チップ化したため、テーマのみの文言と分けて案内する
+    const parts = [];
+    if (ingestedTasksTotal) parts.push(`🤖 AIの提案でタスク候補${ingestedTasksTotal}件が届きました(タスクシュート上部から追加できます)`);
+    if (ingestedThemesTotal) parts.push(`テーマ${ingestedThemesTotal}件を追加しました`);
+    showToast(parts.join("・"));
   }
   // v62: AI週次レビュー(自宅PCバッチ生成)。直近土曜1件のみ、無ければ404を静かに無視する
   //      (fetchTextの仕様どおり)。週次レビュータブを開くたび同じ週の再fetchはしない。
@@ -13287,7 +13343,10 @@ async function hydrateStaticMarkdown() {
   //      このタイポのせいで、ビジョン画面を開いたまま読み込みが終わっても再描画されなかった。
   // v86 should-fix: "zero"(0秒思考タブ)を追加。autoIngestFeedbackがテーマを自動追加しても、
   //      このタブを開いたまま待っていると一覧がライブ更新されなかったため。
-  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly" || state.currentView === "home" || state.currentView === "zero")) {
+  // v133: "tasks"(タスクシュート)を追加。修正1でAI提案タスクがaiTaskChips経由の候補チップに
+  //      なったため、このタブを開いたまま待っていてもチップがライブ表示されない同種の不具合が
+  //      新たに生じていた(tests/v133.test.jsで検出)。
+  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly" || state.currentView === "home" || state.currentView === "zero" || state.currentView === "tasks")) {
     render();
   }
 }
