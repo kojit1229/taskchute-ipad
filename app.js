@@ -1229,6 +1229,7 @@ function normalizeState(value) {
       criteriaRequest: false,  // v99: 翌朝バッチへdoneCriteria/firstStep自動設定orサブタスク生成を依頼するフラグ。
                                 // trueで翌朝loop/task-criteria.shが処理し、処理後は自動でfalseに戻る(アプリ側での解除処理は不要)
       selfDueOff: false,  // v117(B): 自己締切の自動前倒し。既定false=前倒しON(dueDateの2日前を有効締切にする)
+      updatedAt: "",  // v135: 同期マージ用。既存値優先で補完(空="不明"のまま扱う。回復不能なので推測しない)
       ...rest
     };
   });
@@ -1493,7 +1494,7 @@ function normalizeState(value) {
   // v63: WIP上限アラート(提案2)用の優先度フィールド(高/中/低)。既存Projectは「中」で後方互換補完。
   //      wish/other の自動生成Projectもここで拾われる(map は自動生成の push より後に実行するため)。
   // v95: WBS進捗率(Σ分子/Σ分母)の表示トグルを追加。既定OFF(未使用Projectでバーが乱立しないように)
-  value.projects = value.projects.map((p) => ({ priority: "中", showProgress: false, ...p }));
+  value.projects = value.projects.map((p) => ({ priority: "中", showProgress: false, updatedAt: "", ...p }));
   // v63: 戦略/雑用/休息ゲージ(提案6)用のカテゴリ属性。未設定は空文字("未分類")のまま正直に扱う。
   value.settings.categories = (value.settings.categories || []).map((c) => ({ bucket: "", ...c }));
   // v73: コンディションOS — 睡眠/服薬/余力/夜の記録/運動ログの軽量ログ(日付キー)。
@@ -1675,9 +1676,11 @@ function updateCategoryField(catId, field, value) {
   const newCat = { ...oldCat, [field]: value };
   // 名前変更時は、既存の Project/Task/Block の category 値も追従させる
   if (field === "name" && value && value !== oldCat.name) {
-    state.projects = state.projects.map((p) => p.category === oldCat.name ? { ...p, category: value } : p);
-    state.tasks = state.tasks.map((t) => t.category === oldCat.name ? { ...t, category: value } : t);
-    state.blocks = state.blocks.map((b) => b.category === oldCat.name ? { ...b, category: value } : b);
+    // v135: カテゴリ改名は実質的な内容変更のため、追従させるProject/Task/BlockのupdatedAtも
+    // 更新する(更新しないと、同期マージ時に「新しい方が勝つ」判定を素通りして改名が消える)。
+    state.projects = state.projects.map((p) => p.category === oldCat.name ? { ...p, category: value, updatedAt: nowDateTime() } : p);
+    state.tasks = state.tasks.map((t) => t.category === oldCat.name ? { ...t, category: value, updatedAt: nowDateTime() } : t);
+    state.blocks = state.blocks.map((b) => b.category === oldCat.name ? { ...b, category: value, updatedAt: nowDateTime() } : b);
     // v37: 繰り返しルールにも追従(これを忘れると、明日以降に実体化されるブロックが旧名のまま生成され、
     //      「ルーティン」カテゴリの改名ではルーティン画面から消える)
     state.recurrences = (state.recurrences || []).map((r) => r.category === oldCat.name ? { ...r, category: value } : r);
@@ -11163,31 +11166,32 @@ async function saveToGitHub(silent = false) {
         );
         if (!ok) { showToast("保存を中止しました"); return; }
       } else {
-        // 読込以降にリモートが更新されている → 新しい方を優先
-        let remoteT = "";
+        // v135: 読込以降にリモートが更新されている(sha!==lastSynced)。全体のdataModifiedAtの
+        // 大小に関係なく、必ず一度マージを試みてから判断する。
+        // 事故(2026-07-20〜21): 旧コードは「remoteの方が全体として新しい時だけ」合流しており、
+        // 端末側で他の編集をして dataModifiedAt が先に進んでいると、リモートの外部修正
+        // (dataModifiedAtの更新漏れがあれば尚更 — 2026-07-10実障害と同種)が合流されずに
+        // ローカルの丸ごとpushで消えた。gitのblob SHAは内容が変われば必ず変わるため、
+        // sha!==lastSynced を唯一の信頼できる「リモートが動いた」判定として使う。
         let remoteText = "";
         try {
           remoteText = (await downloadGitHubStateText(config)).text;
-          remoteT = (JSON.parse(remoteText).dataModifiedAt) || "";
-        } catch { /* 比較不能なら進む */ }
-        if (remoteT && remoteT > (state.dataModifiedAt || "")) {
-          // v106: コア(tasks等)が両端末で一致していれば、差分はマージ可能コレクションだけ。
-          // 合流させてこのままpushしてよい(見送りの無限継続でiPhone分が届かない事故対策)。
-          let resolved = false;
-          const remoteNorm = remoteText ? normalizedRemoteCopy(remoteText) : null;
-          if (remoteNorm && syncCoreEqual(remoteNorm)) {
-            const syncMerge = computeSyncMerge(remoteNorm);
-            if (syncMerge) {
+        } catch { /* 取得できなければ従来どおり素通り(手元のstateのままpush) */ }
+        if (remoteText) {
+          const remoteNorm = normalizedRemoteCopy(remoteText);
+          const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm) : null;
+          if (remoteNorm && syncMerge) {
+            if (syncCoreEqual(remoteNorm)) {
+              // マージ未対応のコア(recurrences等)は一致 → tasks/projects等の差分は
+              // マージ可能コレクションとして合流させ、そのままpushしてよい。
               applySyncMergeToLocal(syncMerge);
               state.dataModifiedAt = nowDateTime();  // 和集合が最新であることを明示
-              resolved = true;
+            } else {
+              const msg = "GitHub側にこの端末とは別の変更があります。「GitHubから読込」で取り込んでから保存してください";
+              if (silent) { updateAutoSaveStatus(`見送り: ${msg}`); return; }
+              showToast(`保存を中止: ${msg}`);
+              return;
             }
-          }
-          if (!resolved) {
-            const msg = "GitHub側にこの端末より新しいデータがあります。「GitHubから読込」で取り込んでから保存してください";
-            if (silent) { updateAutoSaveStatus(`見送り: ${msg}`); return; }
-            showToast(`保存を中止: ${msg}`);
-            return;
           }
         }
       }
@@ -11300,10 +11304,12 @@ async function runAutoSyncPush() {
       }
     }
     const before = state.settings.github.lastSavedAt;
-    const pushed = state.dataModifiedAt;
     await saveToGitHub(true);  // 既存の手動push経路(SHAガード付き)を共用
     if (state.settings.github.lastSavedAt !== before) {  // 成功
-      state.settings.lastPushedAt = pushed;
+      // v135: pushedはsaveToGitHub呼び出し後のdataModifiedAtを見る(呼び出し前の値をここで
+      // 変数に控えておく旧実装だと、saveToGitHub内部のv135マージでdataModifiedAtが
+      // さらに進んだ場合に古い値をlastPushedAtへ記録してしまい、未push判定が消えなくなる)。
+      state.settings.lastPushedAt = state.dataModifiedAt;
       clearSyncBanner();
       persistLocalNoSchedule();
     }
@@ -11403,15 +11409,20 @@ function mergeZeroThinkingIntoLocal(remoteZt) {
 //                                 リモートにしか無い「期間外・未編集の繰り返し実体」は
 //                                 パージ済みの蘇生になるため合流させない
 //   - zeroThinking              … v103の既存マージ(mergeById)をそのまま使用
+//   - tasks / projects          … v135。idキー和集合(updatedAtの新しい方)。事故対策の本体
+//                                 (下のv135セクション参照)。wishシングルトンの重複はマージ後に
+//                                 reconcileWishProjectDuplicatesでガードする
 //  さらにマージ対象「以外」のコア(SYNC_CORE_COMPARE_KEYS)が両端末で一致していれば、
 //  「両方に未反映の変更」の競合を人間判断を待たず和集合で自動解消し、pushの見送りも解除する
 //  (ジャーナル・ルーティン・体調・睡眠の日常記録だけなら同期が全自動で収束する)。
-//  tasks等のコア自体が両側で動いていた場合は従来どおりバナー/見送りで人間判断に落とす。
+//  recurrences/declarations/questions/experiments等、マージ未対応のコアが両側で動いていた
+//  場合は従来どおりバナー/見送りで人間判断に落とす(tasks/projectsはv135でマージ対応した
+//  ため、v134まではこの一覧に含まれていたが除外した)。
 //  マージ計算はnormalizeState済みのリモートコピーに対して行うこと(生JSONはフィールド欠損があり、
 //  そのままstateへ合流させると既定値補完を素通りするため)。
 // ===============================================================
 
-const SYNC_CORE_COMPARE_KEYS = ["tasks", "projects", "recurrences", "declarations", "questions", "experiments"];
+const SYNC_CORE_COMPARE_KEYS = ["recurrences", "declarations", "questions", "experiments"];
 
 // リモート生テキストからマージ・比較用のnormalize済みコピーを作る(失敗はnullで従来動作へ)
 function normalizedRemoteCopy(text) {
@@ -11566,6 +11577,58 @@ function mergeBlockLists(localBlocks, remoteBlocks) {
   return mergeById(localBlocks, addable);
 }
 
+// v135: ===============================================================
+//  tasks/projectsのマージ保護。事故(2026-07-20〜21): リモート側でtaskを外部修正した直後に
+//  端末が古いローカルの丸ごとpushで上書きし、修正が消えた(2回発生)。tasks/projectsは
+//  v106のマージ可能コレクションに含まれず、同期は常に「どちらかの丸ごと採用」だったため。
+//  全ミューテーション経路(normalizeState含む)がupdatedAtを保守している前提で、
+//  idキー和集合+updatedAt比較のマージへ切り替える。
+// ===============================================================
+
+// idキー和集合マージ(updatedAtのみで比較。createdAtへはフォールバックしない — tasks/projectsは
+// 全ミューテーション経路でupdatedAtを更新する運用のため、mergeById[v103]のフォールバックは不要)。
+// 同値(両方空を含む)は第2引数(remote)を採用する。文字列比較の性質上("" は常に非空文字列より
+// 小さい)、この1つの比較規則で以下の3条件をすべて満たす:
+//   - 両方に値がある → 新しい方(updatedAtが大きい方)が勝つ
+//   - 片方だけ空 → 値がある方が勝つ
+//   - 両方空(レガシーデータ) → remote(第2引数)が勝つ。呼び出し側は既存の(local, remote)引数順を
+//     踏襲するため、これは「remote採用ブランチで最終的にstateに入る値」という従来挙動と一致する
+function mergeByIdPreferNewer(localList, remoteList) {
+  const merged = new Map();
+  (Array.isArray(localList) ? localList : []).forEach((item) => {
+    if (item && item.id) merged.set(item.id, item);
+  });
+  (Array.isArray(remoteList) ? remoteList : []).forEach((item) => {
+    if (!item || !item.id) return;
+    const cur = merged.get(item.id);
+    if (!cur || (item.updatedAt || "") >= (cur.updatedAt || "")) merged.set(item.id, item);
+  });
+  return Array.from(merged.values());
+}
+
+function mergeTaskArrays(localTasks, remoteTasks) {
+  return mergeByIdPreferNewer(localTasks, remoteTasks);
+}
+function mergeProjectArrays(localProjects, remoteProjects) {
+  return mergeByIdPreferNewer(localProjects, remoteProjects);
+}
+
+// wishシングルトン(kind:"wish")の重複防止。両端末が同期前に別々のWish Projectを作っていた場合、
+// id和集合だけでは2つ並存してしまう(normalizeStateの「1つも無ければ作る」保証は「複数ある」を
+// 検知しないため、マージ後にここで踏み込んでガードする)。最も古いcreatedAtの1つを正本として残し、
+// 他は論理削除(tombstone、updatedAt更新)。子Task(projectId参照)は正本へ付け替える
+// (単純delete だとWishタブから子Taskが消えるため)。
+function reconcileWishProjectDuplicates(mergedTasks, mergedProjects) {
+  const liveWishes = mergedProjects.filter((p) => p.kind === "wish" && !p.deleted);
+  if (liveWishes.length <= 1) return { tasks: mergedTasks, projects: mergedProjects };
+  const canonical = liveWishes.slice().sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""))[0];
+  const duplicateIds = new Set(liveWishes.filter((p) => p.id !== canonical.id).map((p) => p.id));
+  const now = nowDateTime();
+  const projects = mergedProjects.map((p) => duplicateIds.has(p.id) ? { ...p, deleted: true, updatedAt: now } : p);
+  const tasks = mergedTasks.map((t) => duplicateIds.has(t.projectId) ? { ...t, projectId: canonical.id, updatedAt: now } : t);
+  return { tasks, projects };
+}
+
 // マージ結果一式を計算する(stateはまだ書き換えない)。remoteNormはnormalizedRemoteCopy()の戻り値。
 // 失敗時はnullを返し、呼び出し側はv103相当(0秒思考のみ)へフォールバックする。
 function computeSyncMerge(remoteNorm) {
@@ -11594,6 +11657,11 @@ function computeSyncMerge(remoteNorm) {
     const weeklyWishes = mergeWeeklyWishMaps(state.weeklyWishes, remoteNorm.weeklyWishes);
     // v129: ポモドーロ身体スキャンもidキー和集合マージ(blocks/zeroThinking entriesと同じ扱い)
     const bodyScans = mergeById(state.bodyScans, remoteNorm.bodyScans);
+    // v135: tasks/projectsもidキー和集合マージ(updatedAtの新しい方)。wishシングルトンの
+    // 重複はここでガードする(reconcileWishProjectDuplicates)。
+    const tasksRaw = mergeTaskArrays(state.tasks, remoteNorm.tasks);
+    const projectsRaw = mergeProjectArrays(state.projects, remoteNorm.projects);
+    const { tasks, projects } = reconcileWishProjectDuplicates(tasksRaw, projectsRaw);
     const jsonChanged = (obj, base) => JSON.stringify(obj) !== JSON.stringify(base || {});
     const changedVsLocal =
       journals.changedVsLocal ||
@@ -11606,6 +11674,8 @@ function computeSyncMerge(remoteNorm) {
       jsonChanged(weeklyWishes, state.weeklyWishes) ||
       !sameArrayByReference(blocks, state.blocks) ||
       !sameArrayByReference(bodyScans, state.bodyScans) ||
+      !sameArrayByReference(tasks, state.tasks) ||
+      !sameArrayByReference(projects, state.projects) ||
       (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, state.zeroThinking) : false);
     const changedVsRemote =
       journals.changedVsRemote ||
@@ -11618,9 +11688,11 @@ function computeSyncMerge(remoteNorm) {
       jsonChanged(weeklyWishes, remoteNorm.weeklyWishes) ||
       !sameArrayByReference(blocks, remoteNorm.blocks || []) ||
       !sameArrayByReference(bodyScans, remoteNorm.bodyScans || []) ||
+      !sameArrayByReference(tasks, remoteNorm.tasks || []) ||
+      !sameArrayByReference(projects, remoteNorm.projects || []) ||
       (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, remoteNorm.zeroThinking) : false);
     return {
-      values: { journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans },
+      values: { journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans, tasks, projects },
       changedVsLocal, changedVsRemote
     };
   } catch (error) {
@@ -11643,6 +11715,8 @@ function applySyncMergeToLocal(merged) {
   state.dailyDeclarations = v.dailyDeclarations;  // v117(A)
   state.weeklyWishes = v.weeklyWishes;  // v121
   state.bodyScans = v.bodyScans;  // v129
+  state.tasks = v.tasks;  // v135
+  state.projects = v.projects;  // v135
   if (v.zeroThinking) {
     state.zeroThinking.entries = v.zeroThinking.entries;
     state.zeroThinking.suggestedThemes = pruneExpiredSuggestedThemes(v.zeroThinking.suggestedThemes);
@@ -11666,6 +11740,8 @@ function applySyncMergeToRemote(merged, remoteNorm) {
   remoteNorm.dailyDeclarations = v.dailyDeclarations;  // v117(A)
   remoteNorm.weeklyWishes = v.weeklyWishes;  // v121
   remoteNorm.bodyScans = v.bodyScans;  // v129
+  remoteNorm.tasks = v.tasks;  // v135
+  remoteNorm.projects = v.projects;  // v135
   if (v.zeroThinking) {
     remoteNorm.zeroThinking.entries = v.zeroThinking.entries;
     remoteNorm.zeroThinking.suggestedThemes = pruneExpiredSuggestedThemes(v.zeroThinking.suggestedThemes);
