@@ -276,8 +276,12 @@ function check(name, cond, extra = "") {
       (s6a.zeroThinking?.themes || []).some((t) => t.text === "テーマFB1_v77" && t.source === "ai-feedback") &&
       (s6a.zeroThinking?.themes || []).some((t) => t.text === "テーマFB2_v77" && t.source === "ai-feedback"),
       JSON.stringify(s6a.zeroThinking));
-    check("FB由来の「明日への提案」も当日dueDateの未完了タスクとして自動登録される",
-      (s6a.tasks || []).some((t) => t.title === "提案1_v77" && t.dueDate === TODAY), JSON.stringify(s6a.tasks));
+    // v133: 「明日への提案」の自動登録は撤回され、journalMeta[前日].aiTaskCandidatesへの
+    // 候補チップ化に変わった(state.tasksへ直接pushされなくなった。詳細はtests/v133.test.js)。
+    check("FB由来の「明日への提案」はstate.tasksへ直接登録されない(v133)",
+      !(s6a.tasks || []).some((t) => t.title === "提案1_v77"), JSON.stringify(s6a.tasks));
+    check("FB由来の「明日への提案」はjournalMeta[前日].aiTaskCandidatesへ候補として登録される(v133)",
+      (s6a.journalMeta?.[YEST]?.aiTaskCandidates || []).includes("提案1_v77"), JSON.stringify(s6a.journalMeta?.[YEST]));
     check("取り込み済みマーカー(feedbackIngestedDates)に前日日付が記録される(冪等ゲート)",
       (s6a.feedbackIngestedDates || []).includes(YEST), JSON.stringify(s6a.feedbackIngestedDates));
 
