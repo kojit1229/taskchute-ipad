@@ -9,7 +9,8 @@
 //     updatedAtが古い)を持ったままpush系フローに入る→修正が生き残る
 // (b) 端末ローカルで編集したtask(updatedAt新)がリモート採用時に消えない
 // (c) 削除(deleted=true、updatedAt新)が復活しない
-// (d)(e)は本ファイル後半(node tests/v135.test.js で通しで実行される)。
+// (d) updatedAt両方空の従来データ同士で従来挙動(リモート採用)と一致する後方互換
+// (e) wishシングルトンProject(kind:"wish")の重複が発生しない(両端末が同期前に別々に作った場合)
 // 方式: v106/v118と同じくpage.routeでapi.github.comを偽装し、localStorageを直接注入して観測する。
 const { chromium, launchOptions, startServer, randomPort } = require("./helpers");
 
@@ -175,6 +176,78 @@ const project = (id, title, extra = {}) => ({
     check("[c] 新しい削除(tombstone)が古い生存コピーに復活させられない",
       sC.tasks.find((t) => t.id === "t-c")?.deleted === true,
       JSON.stringify(sC.tasks.find((t) => t.id === "t-c")));
+
+    // ============================================================
+    // (d) 後方互換: updatedAt両方空の従来データ同士は remote 採用(従来挙動)と一致する
+    // ============================================================
+    console.log("[d] updatedAt両方空(レガシーデータ)の同一idは、従来どおりremote側の値を採用する");
+    await page.evaluate(({ KEY, t }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.tasks = [...s.tasks, t];
+      s.dataModifiedAt = "2026-04-01T00:00:00";
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, t: task("t-d", "ローカルのレガシータスク", { updatedAt: "" }) });
+    {
+      const base = await stateNow();
+      const remote = JSON.parse(JSON.stringify(base));
+      remote.dataModifiedAt = "2026-04-02T00:00:00";
+      remote.tasks = remote.tasks.map((t) => t.id === "t-d"
+        ? { ...t, title: "リモートのレガシータスク", updatedAt: "" }  // 両方空
+        : t);
+      fixtures.remoteJson = JSON.stringify(remote);
+      fixtures.remoteSha = "sha-d";
+    }
+    await page.reload();
+    await page.waitForTimeout(1000);
+    const sD = await stateNow();
+    check("[d] updatedAt両方空はremote側の値が採用される(従来のremote全量採用と一致)",
+      sD.tasks.find((t) => t.id === "t-d")?.title === "リモートのレガシータスク",
+      JSON.stringify(sD.tasks.find((t) => t.id === "t-d")));
+
+    // ============================================================
+    // (e) wishシングルトンの重複防止: 両端末が別々にWish Projectを作っていた場合、
+    //     マージ後も1つに保たれ、子Taskは正本へ付け替えられる
+    // ============================================================
+    console.log("[e] 両端末が別々に作ったWish Project(kind:wish)がマージ後も重複しない");
+    await page.evaluate(({ KEY, wishLocal, taskUnderLocal }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      // 既存のWish Project(normalizeStateが保証する分)を、より古いcreatedAtの専用Wishへ差し替える
+      s.projects = s.projects.map((p) => p.kind === "wish"
+        ? { ...wishLocal, id: p.id }  // 既存の唯一のwish idはそのまま(正本として残ってほしい)
+        : p);
+      s.tasks = [...s.tasks, { ...taskUnderLocal, projectId: s.projects.find((p) => p.kind === "wish").id }];
+      s.dataModifiedAt = "2026-05-01T00:00:00";
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, {
+      KEY,
+      wishLocal: project("wish-local-placeholder", "Wish", { kind: "wish", createdAt: "2026-01-01T00:00:00", updatedAt: "2026-01-01T00:00:00" }),
+      taskUnderLocal: task("t-wish-local", "ローカルWishの子タスク", { updatedAt: "2026-01-01T00:00:00" })
+    });
+    {
+      const base = await stateNow();
+      const remote = JSON.parse(JSON.stringify(base));
+      remote.dataModifiedAt = "2026-05-02T00:00:00";
+      const localWishId = base.projects.find((p) => p.kind === "wish").id;
+      // remoteは同期前に別々に自分のWish Projectを作っていた体(別id、createdAtが新しい=非正本)
+      remote.projects = [
+        ...remote.projects.filter((p) => p.id !== localWishId),  // remote視点ではローカルのwish idは知らない
+        project("wish-remote-dup", "Wish", { kind: "wish", createdAt: "2026-04-01T00:00:00", updatedAt: "2026-04-01T00:00:00" })
+      ];
+      remote.tasks = [...remote.tasks, task("t-wish-remote", "リモートWishの子タスク", { projectId: "wish-remote-dup", updatedAt: "2026-04-01T00:00:00" })];
+      fixtures.remoteJson = JSON.stringify(remote);
+      fixtures.remoteSha = "sha-e";
+    }
+    await page.reload();
+    await page.waitForTimeout(1000);
+    const sE = await stateNow();
+    const liveWishes = sE.projects.filter((p) => p.kind === "wish" && !p.deleted);
+    check("[e] マージ後もWish Projectは1つだけ(重複しない)", liveWishes.length === 1, JSON.stringify(liveWishes.map((p) => ({ id: p.id, createdAt: p.createdAt }))));
+    check("[e] 正本は最も古いcreatedAtの方(ローカル側)", liveWishes[0]?.createdAt === "2026-01-01T00:00:00", JSON.stringify(liveWishes[0]));
+    const canonicalId = liveWishes[0]?.id;
+    const localChild = sE.tasks.find((t) => t.id === "t-wish-local");
+    const remoteChild = sE.tasks.find((t) => t.id === "t-wish-remote");
+    check("[e] ローカルWishの子タスクは正本projectIdのまま", localChild?.projectId === canonicalId, JSON.stringify(localChild));
+    check("[e] リモートWishの子タスクは正本へ付け替えられる(消えない)", remoteChild?.projectId === canonicalId, JSON.stringify(remoteChild));
   } catch (e) {
     failures++;
     console.log("  ❌ 実行エラー:", e.message);
