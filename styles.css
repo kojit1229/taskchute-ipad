@@ -2103,7 +2103,9 @@ h3 {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 8px 10px;
-  font-size: 13px;
+  font-size: 16px;  /* v137: iOS Safariズーム防止(review.md:30)。以前の13pxがモバイル側の
+                        .input,.select,.textarea{font-size:16px}(@media max-width:720px)を
+                        specificityで上書きしていた */
   background: var(--bg);
   color: var(--text);
   font-family: inherit;
