@@ -11154,7 +11154,13 @@ async function saveToGitHub(silent = false) {
 
     // v37: リモートが「この端末が最後に同期した状態」から進んでいる場合の保護。
     //      別端末の新しいデータを、この端末の古い全量で黙って上書きしない。
-    if (sha && sha !== lastSynced) {
+    // v136(Med-7、Codexレビュー指摘): 旧実装は `sha && sha !== lastSynced` で、sha が空
+    // (リモートファイルが消失/404)だとガード自体が丸ごとスキップされていた。この端末が
+    // 既に同期済み(lastSynced有り)なのにリモートが空になっているのは異常系(ファイル消失・
+    // 権限喪失等)であり、初回セットアップ(lastSynced自体が空)と同列の「暗黙のSHAなしPUT
+    // (=新規作成扱い)」で片付けてはいけないため、shaの真偽に関係なく`sha !== lastSynced`
+    // で判定する(lastSynced/shaとも空の真の初回は従来どおり素通り)。
+    if (sha !== lastSynced) {
       if (!lastSynced) {
         // この端末はまだ一度も読込/保存していない(初期設定直後・localStorage消去後など)
         if (silent) {
@@ -11173,26 +11179,36 @@ async function saveToGitHub(silent = false) {
         // (dataModifiedAtの更新漏れがあれば尚更 — 2026-07-10実障害と同種)が合流されずに
         // ローカルの丸ごとpushで消えた。gitのblob SHAは内容が変われば必ず変わるため、
         // sha!==lastSynced を唯一の信頼できる「リモートが動いた」判定として使う。
+        // v136(High-1、fail-closed、Codexレビュー指摘): 取得・マージのいずれかが失敗した場合、
+        // 旧実装は何もせず素通りしてそのままpushしていた(読めなかったリモート変更を
+        // ローカル全量で上書きできてしまうfail-open)。取得・マージが完了できなければ
+        // 保存を中止し(fail-closed)、次回の保存で再試行される形にする。
         let remoteText = "";
+        let fetchFailed = false;
         try {
           remoteText = (await downloadGitHubStateText(config)).text;
-        } catch { /* 取得できなければ従来どおり素通り(手元のstateのままpush) */ }
-        if (remoteText) {
-          const remoteNorm = normalizedRemoteCopy(remoteText);
-          const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm) : null;
-          if (remoteNorm && syncMerge) {
-            if (syncCoreEqual(remoteNorm)) {
-              // マージ未対応のコア(recurrences等)は一致 → tasks/projects等の差分は
-              // マージ可能コレクションとして合流させ、そのままpushしてよい。
-              applySyncMergeToLocal(syncMerge);
-              state.dataModifiedAt = nowDateTime();  // 和集合が最新であることを明示
-            } else {
-              const msg = "GitHub側にこの端末とは別の変更があります。「GitHubから読込」で取り込んでから保存してください";
-              if (silent) { updateAutoSaveStatus(`見送り: ${msg}`); return; }
-              showToast(`保存を中止: ${msg}`);
-              return;
-            }
-          }
+        } catch { fetchFailed = true; }
+        const remoteNorm = (!fetchFailed && remoteText) ? normalizedRemoteCopy(remoteText) : null;
+        // tieWinner="local": この経路は「ローカルを基準に残してpushする」経路のため、
+        // updatedAt同値の場合はローカル優先(Codexレビュー High-2対応)。
+        const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm, "local") : null;
+        if (fetchFailed || !remoteText || !remoteNorm || !syncMerge) {
+          const msg = "リモートの変更を取得できなかったため保存を保留しました。次回保存で再試行します";
+          setSyncBanner(msg);
+          if (silent) { updateAutoSaveStatus(`見送り: ${msg}`); return; }
+          showToast(msg);
+          return;
+        }
+        if (syncCoreEqual(remoteNorm)) {
+          // マージ未対応のコア(recurrences等)は一致 → tasks/projects等の差分は
+          // マージ可能コレクションとして合流させ、そのままpushしてよい。
+          applySyncMergeToLocal(syncMerge);
+          state.dataModifiedAt = nowDateTime();  // 和集合が最新であることを明示
+        } else {
+          const msg = "GitHub側にこの端末とは別の変更があります。「GitHubから読込」で取り込んでから保存してください";
+          if (silent) { updateAutoSaveStatus(`見送り: ${msg}`); return; }
+          showToast(`保存を中止: ${msg}`);
+          return;
         }
       }
     }
@@ -11220,7 +11236,15 @@ async function saveToGitHub(silent = false) {
     } catch { /* SHAが取れなくても次回の保存前チェックで補正される */ }
 
     recordSyncPushSuccess();  // v134: この端末の最終push成功時刻(localStorage、state非経由)
+    // v136(Med-6、Codexレビュー指摘): 手動保存・legacy 30秒自動保存(autoSync=false)経路では
+    // 従来lastPushedAtを更新していなかった。v134の同期停止アラート判定
+    // (dataModifiedAt!==lastPushedAt)がこれを見ているため、変更が無くても
+    // 「6時間後に赤帯」の偽陽性を招いていた。push経路を問わず、成功時は必ずlastPushedAtを
+    // dataModifiedAtへ揃える(runAutoSyncPushもこの関数を経由するため、呼び出し元の
+    // 個別更新と重複するが害はない)。
+    state.settings.lastPushedAt = state.dataModifiedAt;
     state.settings.github.lastSavedAt = nowDateTime();
+    clearSyncBanner();  // v136: fail-closed等で出したバナーが残っていれば、成功したので消す
     persistLocalNoSchedule();  // v25: 自動保存タイマーを再セットしない(無限保存ループ防止)
     if (!silent) showToast("GitHubへ保存しました");
     if (silent) updateAutoSaveStatus();
@@ -11289,7 +11313,8 @@ async function runAutoSyncPush() {
       let resolved = false;
       const remoteNorm = normalizedRemoteCopy(remoteText);
       if (remoteNorm && syncCoreEqual(remoteNorm)) {
-        const syncMerge = computeSyncMerge(remoteNorm);
+        // tieWinner="local": ここもapplySyncMergeToLocal(ローカルを基準に残す)経路。
+        const syncMerge = computeSyncMerge(remoteNorm, "local");
         if (syncMerge) {
           applySyncMergeToLocal(syncMerge);
           state.settings.lastPushedAt = remoteT;   // リモート分は取り込み済み
