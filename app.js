@@ -129,8 +129,14 @@ let cachedReadingHighlights = null;
 let _aiReportDirCache = null;        // Contents APIのレスポンス配列(null=未取得)
 let _aiReportDirError = false;       // 直近の一覧取得が失敗したか(静かなエラー表示 + 再試行ボタン用)
 let _aiReportDirLoadInFlight = false;
-const _aiReportBodyCache = {};       // { 'コンテンツ総括_2026-07-14.md': '...md text...' }(""=取得試行済だが空/失敗)
+const _aiReportBodyCache = {};       // { 'コンテンツ総括_2026-07-14.md': '...md text...' }(取得成功分のみ。失敗はここに入れない)
 const _aiReportBodyLoadInFlight = {};
+// v137(review.md:29): 失敗を成功キャッシュしなくなった分、render()のたびに再fetchが走ると
+// 一過性の失敗が続く間API呼び出しを連打してしまう(renderAiReportBody→body===undefined→
+// triggerAiReportBodyLoad→失敗→render()→…の無限ループになりうる)。feedbackHydrateと同じ
+// 「直近失敗からの最短間隔」ガードで連打だけを防ぐ(手動更新ボタンはこのガードを明示的に無視する)。
+const _aiReportBodyFailedAt = {};    // { fileName: Date.now() }
+const AI_REPORT_BODY_RETRY_COOLDOWN_MS = 15 * 1000;
 const _aiReportSelectedDate = {};    // { content: '2026-07-14', self: '2026-07', ... }(種類ごとの選択中日付)
 // v77: AIフィードバック等の自動再表示(起動時fetchのみだと開きっぱなしのPWAで新着に気づけない)。
 //      visibilitychange復帰時 + 定期(30分毎)にhydrateStaticMarkdownを再実行するためのスロットル状態。
@@ -7302,23 +7308,47 @@ async function triggerAiReportDirLoad() {
 }
 
 // 選択中ファイル本文の読み込みをトリガーする(同上のin-flightガード付き)。
+// v137: fetchGitHubRawText(成功/失敗を区別せず空文字を返す)ではなく fetchGitHubRawResult を使う。
+//       一過性の取得失敗(401/5xx/ネットワーク例外)を空文字として_aiReportBodyCacheへ書き込むと、
+//       renderAiReportBody側の`body === undefined`判定に引っかからなくなり、二度と再取得されない
+//       (=空文字の「本文」が表示され続ける)バグがあった。失敗時はキャッシュへ書かず、次回描画で
+//       再度triggerAiReportBodyLoadが呼ばれてリトライできるようにする。
 async function triggerAiReportBodyLoad(fileName) {
   if (_aiReportBodyLoadInFlight[fileName]) return;
+  const failedAt = _aiReportBodyFailedAt[fileName];
+  if (failedAt && Date.now() - failedAt < AI_REPORT_BODY_RETRY_COOLDOWN_MS) return;  // 連打防止
   _aiReportBodyLoadInFlight[fileName] = true;
-  const text = await fetchGitHubRawText(fileName);
-  _aiReportBodyCache[fileName] = text;
+  const result = await fetchGitHubRawResult(fileName);
+  if (result.ok) {
+    _aiReportBodyCache[fileName] = result.text;
+    delete _aiReportBodyFailedAt[fileName];
+  } else {
+    _aiReportBodyFailedAt[fileName] = Date.now();
+  }
   delete _aiReportBodyLoadInFlight[fileName];
   if (state.currentView === "ai-reports") render();
 }
 
 // 手動更新ボタン: 一覧キャッシュを破棄し、現在表示中ファイルの本文キャッシュも破棄して
 // 再取得させる(rate limit配慮のため、他の種類・日付の本文キャッシュはそのまま残す)。
+// v137: 「表示中ファイル」は renderAiReportBody と同じフォールバック(明示選択が無ければ files[0])
+//       で決める。以前は _aiReportSelectedDate に明示選択が入っている場合しかinvalidateせず、
+//       未選択のまま(=files[0]がそのまま表示されている)状態で更新ボタンを押しても本文キャッシュが
+//       残り、内容が更新されていても古い本文が表示され続けるバグがあった。失敗クールダウン
+//       (_aiReportBodyFailedAt)も明示的にクリアし、直近失敗直後でも手動更新は即座に再試行する。
 function refreshAiReports() {
+  const type = AI_REPORT_TYPES.find((t) => t.id === (state.settings.aiReportType || "content")) || AI_REPORT_TYPES[0];
+  const filesBefore = aiReportFilesForType(type.prefix);
+  const sel = (_aiReportSelectedDate[type.id] && filesBefore && filesBefore.some((f) => f.date === _aiReportSelectedDate[type.id]))
+    ? _aiReportSelectedDate[type.id]
+    : (filesBefore && filesBefore[0] ? filesBefore[0].date : null);
+  if (sel) {
+    const fileName = `${type.prefix}${sel}.md`;
+    delete _aiReportBodyCache[fileName];
+    delete _aiReportBodyFailedAt[fileName];
+  }
   _aiReportDirCache = null;
   _aiReportDirError = false;
-  const type = AI_REPORT_TYPES.find((t) => t.id === (state.settings.aiReportType || "content")) || AI_REPORT_TYPES[0];
-  const sel = _aiReportSelectedDate[type.id];
-  if (sel) delete _aiReportBodyCache[`${type.prefix}${sel}.md`];
   render();
   showToast("最新の一覧を取得しています…");
 }
