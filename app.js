@@ -11435,8 +11435,9 @@ function mergeZeroThinkingIntoLocal(remoteZt) {
 //                                 パージ済みの蘇生になるため合流させない
 //   - zeroThinking              … v103の既存マージ(mergeById)をそのまま使用
 //   - tasks / projects          … v135。idキー和集合(updatedAtの新しい方)。事故対策の本体
-//                                 (下のv135セクション参照)。wishシングルトンの重複はマージ後に
-//                                 reconcileWishProjectDuplicatesでガードする
+//                                 (下のv135セクション参照)。シングルトン(wish/other Project、
+//                                 other Task)の重複はマージ後にreconcileSingletonDuplicates
+//                                 でガードする(v136で汎用化)
 //  さらにマージ対象「以外」のコア(SYNC_CORE_COMPARE_KEYS)が両端末で一致していれば、
 //  「両方に未反映の変更」の競合を人間判断を待たず和集合で自動解消し、pushの見送りも解除する
 //  (ジャーナル・ルーティン・体調・睡眠の日常記録だけなら同期が全自動で収束する)。
@@ -11612,13 +11613,15 @@ function mergeBlockLists(localBlocks, remoteBlocks) {
 
 // idキー和集合マージ(updatedAtのみで比較。createdAtへはフォールバックしない — tasks/projectsは
 // 全ミューテーション経路でupdatedAtを更新する運用のため、mergeById[v103]のフォールバックは不要)。
-// 同値(両方空を含む)は第2引数(remote)を採用する。文字列比較の性質上("" は常に非空文字列より
-// 小さい)、この1つの比較規則で以下の3条件をすべて満たす:
-//   - 両方に値がある → 新しい方(updatedAtが大きい方)が勝つ
-//   - 片方だけ空 → 値がある方が勝つ
-//   - 両方空(レガシーデータ) → remote(第2引数)が勝つ。呼び出し側は既存の(local, remote)引数順を
-//     踏襲するため、これは「remote採用ブランチで最終的にstateに入る値」という従来挙動と一致する
-function mergeByIdPreferNewer(localList, remoteList) {
+// v136(Codexレビュー High-2/High-3対応): 優先順位を明確化した。
+//   1. updatedAtが新しい方が勝つ
+//   2. 同値(両方空を含む)なら、削除側(deleted:true、トゥームストーン)が勝つ
+//      (同じ秒にlocal削除・remote編集が起きた場合に削除が復活しないようにする)
+//   3. 同値・同じdeletedフラグなら、呼び出し側が指定したtieWinner("local"|"remote")が勝つ
+// tieWinnerは呼び出し分岐の文脈(ローカルを基準に残す経路か、リモートを採用する経路か)で
+// 呼び出し元が指定する。v135時点は常にremote固定だったため、「ローカルが全体としては
+// 新しいのに同一idの内容だけ古いremoteへ巻き戻る」誤りがあった(Codexレビュー指摘)。
+function mergeByIdPreferNewer(localList, remoteList, tieWinner) {
   const merged = new Map();
   (Array.isArray(localList) ? localList : []).forEach((item) => {
     if (item && item.id) merged.set(item.id, item);
@@ -11626,37 +11629,79 @@ function mergeByIdPreferNewer(localList, remoteList) {
   (Array.isArray(remoteList) ? remoteList : []).forEach((item) => {
     if (!item || !item.id) return;
     const cur = merged.get(item.id);
-    if (!cur || (item.updatedAt || "") >= (cur.updatedAt || "")) merged.set(item.id, item);
+    if (!cur) { merged.set(item.id, item); return; }
+    const curTs = cur.updatedAt || "";
+    const itemTs = item.updatedAt || "";
+    if (itemTs > curTs) { merged.set(item.id, item); return; }  // remote(item)が新しい
+    if (itemTs < curTs) return;  // local(cur)が新しい → 何もしない
+    // 同値(両方空を含む)
+    const curDeleted = !!cur.deleted;
+    const itemDeleted = !!item.deleted;
+    if (curDeleted !== itemDeleted) {
+      if (itemDeleted) merged.set(item.id, item);  // remote側が削除 → トゥームストーン優先
+      return;  // local側が削除ならcurのまま(何もしない)
+    }
+    if (tieWinner === "remote") merged.set(item.id, item);
+    // tieWinner === "local"(既定扱い)ならcurのまま(何もしない)
   });
   return Array.from(merged.values());
 }
 
-function mergeTaskArrays(localTasks, remoteTasks) {
-  return mergeByIdPreferNewer(localTasks, remoteTasks);
+function mergeTaskArrays(localTasks, remoteTasks, tieWinner) {
+  return mergeByIdPreferNewer(localTasks, remoteTasks, tieWinner);
 }
-function mergeProjectArrays(localProjects, remoteProjects) {
-  return mergeByIdPreferNewer(localProjects, remoteProjects);
+function mergeProjectArrays(localProjects, remoteProjects, tieWinner) {
+  return mergeByIdPreferNewer(localProjects, remoteProjects, tieWinner);
 }
 
-// wishシングルトン(kind:"wish")の重複防止。両端末が同期前に別々のWish Projectを作っていた場合、
-// id和集合だけでは2つ並存してしまう(normalizeStateの「1つも無ければ作る」保証は「複数ある」を
-// 検知しないため、マージ後にここで踏み込んでガードする)。最も古いcreatedAtの1つを正本として残し、
-// 他は論理削除(tombstone、updatedAt更新)。子Task(projectId参照)は正本へ付け替える
-// (単純delete だとWishタブから子Taskが消えるため)。
-function reconcileWishProjectDuplicates(mergedTasks, mergedProjects) {
-  const liveWishes = mergedProjects.filter((p) => p.kind === "wish" && !p.deleted);
-  if (liveWishes.length <= 1) return { tasks: mergedTasks, projects: mergedProjects };
-  const canonical = liveWishes.slice().sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""))[0];
-  const duplicateIds = new Set(liveWishes.filter((p) => p.id !== canonical.id).map((p) => p.id));
+// シングルトン群(kind:"wish"のProject、kind:"other"のProject、kind:"other"のTask)の重複防止。
+// 両端末が同期前に別々にシングルトンを作っていた場合、id和集合だけでは複数並存してしまう
+// (normalizeStateの「1つも無ければ作る」保証は「複数ある」を検知しないため、マージ後に
+// ここで踏み込んでガードする)。対象はWish Project(getWishProject)だけでなく、その他Project
+// (タスクシュート直接追加Blockの受け皿)・その他Task(getOtherTask、Blockのtaskid受け皿)も
+// 同じ`.find()`先勝ち方式で参照されており、同じ重複リスクを持つ(Codexレビュー指摘)。
+// 正本の選定は最も古いcreatedAtの1つ。createdAtも同値・欠損の場合はid辞書順で決定する
+// (v136: 端末非依存の決定性を保証。Codexレビュー指摘)。他は論理削除(tombstone、updatedAt更新)。
+// 参照側(Task.projectId、Block.taskId)は正本へ付け替える(単純deleteだと子が迷子になるため)。
+function pickCanonicalSingleton(candidates) {
+  return candidates.slice().sort((a, b) => {
+    const ac = a.createdAt || "", bc = b.createdAt || "";
+    if (ac !== bc) return ac < bc ? -1 : 1;
+    const ai = a.id || "", bi = b.id || "";
+    return ai < bi ? -1 : (ai > bi ? 1 : 0);
+  })[0];
+}
+function reconcileSingletonDuplicates(mergedTasks, mergedProjects, mergedBlocks) {
+  let tasks = mergedTasks, projects = mergedProjects;
   const now = nowDateTime();
-  const projects = mergedProjects.map((p) => duplicateIds.has(p.id) ? { ...p, deleted: true, updatedAt: now } : p);
-  const tasks = mergedTasks.map((t) => duplicateIds.has(t.projectId) ? { ...t, projectId: canonical.id, updatedAt: now } : t);
-  return { tasks, projects };
+  // Project側シングルトン(wish, other)。子Task(projectId参照)を正本へ付け替える。
+  for (const kind of ["wish", "other"]) {
+    const live = projects.filter((p) => p.kind === kind && !p.deleted);
+    if (live.length <= 1) continue;
+    const canonical = pickCanonicalSingleton(live);
+    const dupIds = new Set(live.filter((p) => p.id !== canonical.id).map((p) => p.id));
+    projects = projects.map((p) => dupIds.has(p.id) ? { ...p, deleted: true, updatedAt: now } : p);
+    tasks = tasks.map((t) => dupIds.has(t.projectId) ? { ...t, projectId: canonical.id, updatedAt: now } : t);
+  }
+  // Task側シングルトン(その他Task、getOtherTask)。Block.taskid参照を正本へ付け替える。
+  let blocks = mergedBlocks;
+  const liveOtherTasks = tasks.filter((t) => t.kind === "other" && !t.deleted);
+  if (liveOtherTasks.length > 1) {
+    const canonical = pickCanonicalSingleton(liveOtherTasks);
+    const dupIds = new Set(liveOtherTasks.filter((t) => t.id !== canonical.id).map((t) => t.id));
+    tasks = tasks.map((t) => dupIds.has(t.id) ? { ...t, deleted: true, updatedAt: now } : t);
+    blocks = blocks.map((b) => dupIds.has(b.taskId) ? { ...b, taskId: canonical.id, updatedAt: now } : b);
+  }
+  return { tasks, projects, blocks };
 }
 
 // マージ結果一式を計算する(stateはまだ書き換えない)。remoteNormはnormalizedRemoteCopy()の戻り値。
 // 失敗時はnullを返し、呼び出し側はv103相当(0秒思考のみ)へフォールバックする。
-function computeSyncMerge(remoteNorm) {
+// tieWinner("local"|"remote"、v136): tasks/projectsのupdatedAt同値時の優先側。呼び出し元が
+// 「ローカルを基準に残す経路(applySyncMergeToLocal)」か「リモートを採用する経路
+// (applySyncMergeToRemote)」かに応じて明示する(Codexレビュー指摘。誤った側を指定すると、
+// 同値のレガシーデータで採用ブランチと逆側の内容が紛れ込む)。
+function computeSyncMerge(remoteNorm, tieWinner) {
   try {
     const jt = (side, d) => side === "L"
       ? ((state.journalMeta[d] || {}).textUpdatedAt || "")
@@ -11674,7 +11719,7 @@ function computeSyncMerge(remoteNorm) {
     const conditionLogs = mergeConditionLogMaps(state.condition.logs, (remoteNorm.condition || {}).logs);
     const sleepLogs = mergeSleepLogMaps(state.sleep.logs, (remoteNorm.sleep || {}).logs);
     const morningEnergyLog = mergeMorningEnergyLogs(state.settings.morningEnergyLog, (remoteNorm.settings || {}).morningEnergyLog);
-    const blocks = mergeBlockLists(state.blocks, remoteNorm.blocks);
+    const blocksRaw = mergeBlockLists(state.blocks, remoteNorm.blocks);
     const zeroThinking = mergeZeroThinkingLists(state.zeroThinking, remoteNorm.zeroThinking);
     // v117(A): 今日の宣言もマージ可能コレクションへ追加
     const dailyDeclarations = mergeDailyDeclarationMaps(state.dailyDeclarations, remoteNorm.dailyDeclarations);
@@ -11682,11 +11727,13 @@ function computeSyncMerge(remoteNorm) {
     const weeklyWishes = mergeWeeklyWishMaps(state.weeklyWishes, remoteNorm.weeklyWishes);
     // v129: ポモドーロ身体スキャンもidキー和集合マージ(blocks/zeroThinking entriesと同じ扱い)
     const bodyScans = mergeById(state.bodyScans, remoteNorm.bodyScans);
-    // v135: tasks/projectsもidキー和集合マージ(updatedAtの新しい方)。wishシングルトンの
-    // 重複はここでガードする(reconcileWishProjectDuplicates)。
-    const tasksRaw = mergeTaskArrays(state.tasks, remoteNorm.tasks);
-    const projectsRaw = mergeProjectArrays(state.projects, remoteNorm.projects);
-    const { tasks, projects } = reconcileWishProjectDuplicates(tasksRaw, projectsRaw);
+    // v135: tasks/projectsもidキー和集合マージ(updatedAtの新しい方)。
+    // v136: シングルトン(wish/other Project、other Task)の重複はここでガードする
+    // (reconcileSingletonDuplicates)。other Task統合に伴うBlock.taskid付け替えもあるため
+    // blocksもここで最終化する。
+    const tasksRaw = mergeTaskArrays(state.tasks, remoteNorm.tasks, tieWinner);
+    const projectsRaw = mergeProjectArrays(state.projects, remoteNorm.projects, tieWinner);
+    const { tasks, projects, blocks } = reconcileSingletonDuplicates(tasksRaw, projectsRaw, blocksRaw);
     const jsonChanged = (obj, base) => JSON.stringify(obj) !== JSON.stringify(base || {});
     const changedVsLocal =
       journals.changedVsLocal ||
@@ -11788,11 +11835,14 @@ async function runAutoSyncPull() {
     const remoteT = remote.dataModifiedAt || "";
     const localT = state.dataModifiedAt || "";
     // v106: マージ計算はnormalize済みの別コピーで行う(remoteは採用フォールバック用に生のまま)
+    // v136(High-2): computeSyncMergeは分岐ごとに(適用先に応じたtieWinnerで)個別に呼ぶ
+    // (以前は1回だけ計算した結果を全分岐で使い回しており、tieWinnerを分岐ごとに変えられなかった)。
     const remoteNorm = normalizedRemoteCopy(text);
-    const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm) : null;
     if (!remoteT || remoteT <= localT) {
       // remote 古い/同じ。それでもリモート限定の記録は合流させる(v103の0秒思考対策を
       // v106でジャーナル/blocks/体調/睡眠へ一般化。PC側が新しくてもiPhone分が見える)。
+      // tieWinner="local": ローカルを基準に残す経路。
+      const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm, "local") : null;
       const changed = syncMerge ? applySyncMergeToLocal(syncMerge) : mergeZeroThinkingIntoLocal(remote.zeroThinking);
       if (changed) saveState();
       if (changed || runDailyOpen()) render();
@@ -11803,6 +11853,8 @@ async function runAutoSyncPull() {
       // 両方に未反映の変更。マージ可能コレクションは合流させたうえで、
       // v106: コア(tasks等)が両端末で一致していれば差分はマージ済み分だけなので、
       // 人間判断を待たず「和集合を正」として自動解消する(push見送りも解除)。
+      // tieWinner="local": ここもapplySyncMergeToLocal(ローカルを基準に残す)経路。
+      const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm, "local") : null;
       const changed = syncMerge ? applySyncMergeToLocal(syncMerge) : mergeZeroThinkingIntoLocal(remote.zeroThinking);
       if (syncMerge && syncCoreEqual(remoteNorm)) {
         state.settings.lastPushedAt = remoteT;   // リモート分は取り込み済み
@@ -11821,7 +11873,9 @@ async function runAutoSyncPull() {
       if (changed || runDailyOpen()) render();
       return;
     }
-    // 自動適用(ローカルに未push変更なし & remote が新しい)
+    // 自動適用(ローカルに未push変更なし & remote が新しい)。tieWinner="remote": リモートを
+    // 基準に採用する経路(applySyncMergeToRemote)。
+    const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm, "remote") : null;
     clearTimeout(autoSaveTimer);
     const token = cfg.token;
     // 採用前に、ローカルにしか無い記録を採用予定のリモートへ合流させる(採用で消さないため)。
@@ -11931,8 +11985,9 @@ async function loadFromGitHub() {
     const rawSettings = state.settings.github;
     // v103→v106: リモート採用前に、ローカルにしか無い記録(0秒思考/ジャーナル/blocks/体調/睡眠)を
     // 合流させる(採用でローカル限定の記録を消さないため)。
+    // tieWinner="remote": この関数は常にremoteを採用する経路(applySyncMergeToRemote)。
     const remoteNorm = normalizedRemoteCopy(text);
-    const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm) : null;
+    const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm, "remote") : null;
     let addedLocal = false;
     let adopted;
     if (remoteNorm && syncMerge) {
@@ -11989,8 +12044,9 @@ async function syncFromGitHubOnStartup() {
     // リモートが新しいときだけ採用(ISO 文字列なので辞書順比較でよい)
     // v106: どちらの分岐でもマージ可能コレクション(ジャーナル/blocks/体調/睡眠/0秒思考)は
     // 和集合で合流させる(iPhone分がPC起動pullで見えなくなる事故対策の一般化)。
+    // v136(High-2): computeSyncMergeは分岐ごとに(適用先に応じたtieWinnerで)個別に呼ぶ
+    // (以前は1回だけ計算した結果を全分岐で使い回しており、tieWinnerを分岐ごとに変えられなかった)。
     const remoteNorm = normalizedRemoteCopy(text);
-    const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm) : null;
     if (remoteT && remoteT > localT) {
       // v118: 採用直前の不変確認。GET待ち中に編集されていたら、remote全量採用は中止し
       // runAutoSyncPull()のhasUnpushed分岐(既存の競合バナー/自動和集合解消フロー)と
@@ -11998,6 +12054,8 @@ async function syncFromGitHubOnStartup() {
       // 一致していれば人間判断なしで解消、そうでなければ既存の競合バナーへ送る
       // (新しいUIは作らない・ローカルの編集を破棄しない)。
       if ((state.dataModifiedAt || "") !== preFetchDataModifiedAt) {
+        // tieWinner="local": ここはapplySyncMergeToLocal(ローカルを基準に残す)経路。
+        const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm, "local") : null;
         const changed = syncMerge ? applySyncMergeToLocal(syncMerge) : mergeZeroThinkingIntoLocal(remote.zeroThinking);
         if (syncMerge && syncCoreEqual(remoteNorm)) {
           state.settings.lastPushedAt = remoteT;
@@ -12015,6 +12073,8 @@ async function syncFromGitHubOnStartup() {
       }
       clearTimeout(autoSaveTimer);
       const token = state.settings.github.token;
+      // tieWinner="remote": ここはapplySyncMergeToRemote(リモートを基準に採用する)経路。
+      const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm, "remote") : null;
       // リモート採用前に、ローカルにしか無い記録を合流させてから採用する(採用で消さないため)。
       let addedLocal = false;
       let adopted;
@@ -12049,6 +12109,8 @@ async function syncFromGitHubOnStartup() {
       //      「GitHubから読込」するまで自動保存を見送り続けてしまう。
       // v103→v106: リモートにしか無い記録(0秒思考に加えジャーナル/blocks/体調/睡眠)を
       // ローカルへ合流させる(iPhoneで書いた記録がPC起動pullで見えなくなる事故対策)。
+      // tieWinner="local": ここもapplySyncMergeToLocal(ローカルを基準に残す)経路。
+      const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm, "local") : null;
       const changed = syncMerge ? applySyncMergeToLocal(syncMerge) : mergeZeroThinkingIntoLocal(remote.zeroThinking);
       if (changed) { saveState(); render(); }
       setLastSyncedSha(sha);
