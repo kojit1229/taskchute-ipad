@@ -46,7 +46,13 @@ function check(name, cond, extra = "") {
   const TODAY = isoDate(now0);
 
   const requestLog = [];  // { method, path }
-  const fixtures = { getResponder: null };  // 特定GETに対する応答を差し込む関数(scenario 4用)
+  // v136追補: saveToGitHub()がfail-closed化され、sha!==lastSyncedの時は必ずGETでリモート本文を
+  // 取得・マージしてから初めてPUTする(取得できなければ保存を中止する)。このテストは元々
+  // 「保存先パス正規化」だけを見るためGETを常に404にしていたが、1回目の保存でlastSyncedSha
+  // (この端末が最後に同期したSHA)が確定した後、404を返し続けると「リモートが読めない」
+  // 扱いでfail-closed発動しPUTされなくなり、以降のシナリオの前提が崩れる。実際のGitHubと
+  // 同じく「pushした内容が次のGETで読める」状態を模して、直近のPUT/GET応答を憶えておく。
+  const fixtures = { getResponder: null, remoteSha: null, remoteContent: null };
 
   await blockGithubApiByDefault(page);
   await page.route((url) => url.hostname === API_HOST, (route) => {
@@ -55,11 +61,29 @@ function check(name, cond, extra = "") {
     const p = decodeURIComponent(new URL(req.url()).pathname);
     requestLog.push({ method, path: p });
     if (method === "PUT") {
+      try {
+        const body = JSON.parse(req.postData());
+        fixtures.remoteContent = body.content;  // 既にbase64
+        fixtures.remoteSha = "sha-put-ok";
+      } catch { /* noop */ }
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ content: { sha: "sha-put-ok" } }) });
     }
     if (method === "GET" && fixtures.getResponder) {
       const r = fixtures.getResponder(p);
-      if (r) return route.fulfill(r);
+      if (r) {
+        // この応答を「現在のリモート状態」として以降のGETにも一貫させる
+        try {
+          const body = JSON.parse(r.body);
+          if (body.sha) { fixtures.remoteSha = body.sha; fixtures.remoteContent = body.content; }
+        } catch { /* noop */ }
+        return route.fulfill(r);
+      }
+    }
+    if (method === "GET" && fixtures.remoteContent) {
+      return route.fulfill({
+        status: 200, contentType: "application/json",
+        body: JSON.stringify({ sha: fixtures.remoteSha, content: fixtures.remoteContent, encoding: "base64" })
+      });
     }
     return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });  // 既存ファイル無し扱い
   });
