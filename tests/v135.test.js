@@ -99,6 +99,13 @@ const project = (id, title, extra = {}) => ({
       localStorage.setItem(KEY, JSON.stringify(s));
       localStorage.setItem(LAST_SYNCED_SHA_KEY, "sha-before-a");  // 既に一度同期済みという体
     }, { KEY, LAST_SYNCED_SHA_KEY, t: task("t-a", "外部修正されるタスク", { dueDate: "2026-01-10", updatedAt: "2026-01-01T00:00:00" }) });
+    // v136追補: localStorageへの直接注入は、reloadしないと実行中ページのメモリ上state(loadState()は
+    // 起動時1回しか走らない)に反映されない。reloadせずクリックだけすると、pushされる内容は
+    // 「ローカルにt-aが無く、remoteのt-aだけ和集合で追加された」偽陽性になり、本来検証したい
+    // 「同一idで新旧が競合し、新しい方が勝つ」ケースを検証できていなかった(この時点ではremote
+    // フィクスチャ未設定=GET 404のため、このreloadはstateのハイドレートのみが目的で無害)。
+    await page.reload();
+    await page.waitForTimeout(600);
     {
       const base = await stateNow();
       const remote = JSON.parse(JSON.stringify(base));
