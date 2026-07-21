@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v136";
+const CACHE_NAME = "taskchute-journal-pwa-v137";
 // v132: Codexレビュー指摘対応(身体スキャン背景タップのゲート飛ばし/丸め不一致等)。CHANGES_v132.md参照。
 // v131: 体力予算・睡眠カードに鮮度フォールバック(AutoSleep 21:00確定対策)。CHANGES_v131.md参照。
 // v130: 睡眠CSV取込の失敗メッセージを空CSV/全件パース失敗で区別。CHANGES_v130.md参照。
