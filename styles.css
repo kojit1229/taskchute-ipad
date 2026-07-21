@@ -2938,6 +2938,11 @@ h3 {
 .sync-dot.pending { background: var(--orange); opacity: 1; }
 .sync-banner { background: rgba(255,149,0,.12); border: 1px solid rgba(255,149,0,.35); color: var(--text); font-size: 12.5px; font-weight: 700; padding: 10px 14px; border-radius: 10px; margin-bottom: 14px; cursor: pointer; }
 
+/* v134: 同期停止アラート。sync-bannerが「競合、判断を仰ぐ」橙トーンなのに対し、こちらは
+   「push/pullが無警告で長時間止まっている」という見落とし厳禁の異常系のため、意図的に赤で
+   ホーム最上部に出す。 */
+.sync-alert-banner { background: var(--red-soft); border: 1px solid var(--red); color: var(--red); font-size: 12.5px; font-weight: 700; padding: 10px 14px; border-radius: 10px; margin-bottom: 14px; cursor: pointer; }
+
 /* v67: AI連携の鮮度インジケータ(柱1b)。sync-dot/sync-banner と同じ見た目の思想を、
    別のクラス名(ai-freshness-*)で複製する(git同期とAI連携は別の鮮度シグナルのため)。 */
 .ai-freshness-line { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); margin: 6px 2px 0; }

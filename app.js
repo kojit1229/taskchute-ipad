@@ -2158,6 +2158,7 @@ function renderHome() {
       <button class="btn orange" data-action="now-mode-open">▶ Now</button>
       <button class="btn primary" data-action="today">今日へ</button>
     </div>`)}
+    ${homeSyncAlertBanner()}
     ${renderDateBar()}
     ${homeFoldSection("creed", true, "home-creed", "home-creed-head", "三 つ の 信 条", homeCreedBody())}
     ${homeFoldSection("lifespan", true, "", "", "寿命カウントダウン(残り時間)", homeLifespanBody(metrics))}
@@ -7838,6 +7839,10 @@ function renderSettings() {
           ${state.settings.lastPulledAt ? ` ・ 最終pull: ${state.settings.lastPulledAt.replace("T", " ")}` : ""}
           <br>競合(両方に未反映の変更)時は自動適用せず、手動判断に委ねます。
         </div>
+        <div class="muted" style="font-size:11px; line-height:1.7">
+          この端末: ${getLastSyncPushAt() ? `push成功 ${getLastSyncPushAt().replace("T", " ").slice(0, 16)}` : "push成功 記録なし"}
+          ・ ${getLastSyncPullAt() ? `pull成功 ${getLastSyncPullAt().replace("T", " ").slice(0, 16)}` : "pull成功 記録なし"}
+        </div>
         <div class="row">
           <button class="btn primary" data-action="save-github">今すぐGitHubへ保存</button>
           <button class="btn" data-action="load-github">GitHubから読込</button>
@@ -11074,6 +11079,60 @@ function setLastSyncedSha(sha) {
   try { localStorage.setItem(LAST_SYNCED_SHA_KEY, sha || ""); } catch { /* 保存できなくても致命的ではない */ }
 }
 
+// v134: 同期停止アラート。push/pull成功時刻は LAST_SYNCED_SHA_KEY と同じ理由で端末ローカルの
+// localStorageに独立キーとして持つ(state.settings.lastPushedAt/lastPulledAtはstate本体の
+// 一部として同期対象になり、他端末のpull/adoptで書き換わるため「この端末が最後にいつ成功したか」
+// を表せない。事故2026-07-20〜21: 自動pushが約24時間無警告で停止した)。
+const LAST_SYNC_PUSH_KEY = "taskchute-journal-last-sync-push-at";
+const LAST_SYNC_PULL_KEY = "taskchute-journal-last-sync-pull-at";
+function getLastSyncPushAt() {
+  try { return localStorage.getItem(LAST_SYNC_PUSH_KEY) || ""; } catch { return ""; }
+}
+function recordSyncPushSuccess() {
+  try { localStorage.setItem(LAST_SYNC_PUSH_KEY, nowDateTime()); } catch { /* 致命的ではない */ }
+}
+function getLastSyncPullAt() {
+  try { return localStorage.getItem(LAST_SYNC_PULL_KEY) || ""; } catch { return ""; }
+}
+function recordSyncPullSuccess() {
+  try { localStorage.setItem(LAST_SYNC_PULL_KEY, nowDateTime()); } catch { /* 致命的ではない */ }
+}
+
+const SYNC_PUSH_ALERT_HOURS = 6;
+const SYNC_PULL_ALERT_HOURS = 24;
+
+// 現在時刻(nowDateTime()形式の文字列)からの経過時間(時)。localDateTimeToMs(v56)を再利用し、
+// new Date(文字列)のiOS Safari TZ解釈バグを避ける。
+function hoursSinceLocalDateTime(dateTime) {
+  if (!dateTime) return 0;
+  return (localDateTimeToMs(nowDateTime()) - localDateTimeToMs(dateTime)) / 3600000;
+}
+
+// push停止/pull停止の警告文言を返す(無ければnull)。記録が無い初回状態(localStorage未記録)
+// では警告を出さない(後方互換)。push側は「未push変更が実際にある」ときだけ発火する
+// (syncDotClass()と同じ dataModifiedAt !== lastPushedAt の判定を流用)。
+function syncAlertMessage() {
+  if (!personalDataReady(state.settings.github)) return null;  // 同期未設定なら判定しない
+  const pushAt = getLastSyncPushAt();
+  const hasUnpushed = (state.dataModifiedAt || "") !== (state.settings.lastPushedAt || "");
+  if (pushAt && hasUnpushed && hoursSinceLocalDateTime(pushAt) >= SYNC_PUSH_ALERT_HOURS) {
+    const h = Math.floor(hoursSinceLocalDateTime(pushAt));
+    return `GitHubへの保存が${h}時間止まっています(最終: ${pushAt.replace("T", " ").slice(0, 16)})。設定から手動保存を試してください`;
+  }
+  const pullAt = getLastSyncPullAt();
+  if (pullAt && hoursSinceLocalDateTime(pullAt) >= SYNC_PULL_ALERT_HOURS) {
+    const h = Math.floor(hoursSinceLocalDateTime(pullAt));
+    return `GitHubからの取得が${h}時間止まっています(最終: ${pullAt.replace("T", " ").slice(0, 16)})。設定から手動読込を試してください`;
+  }
+  return null;
+}
+
+function homeSyncAlertBanner() {
+  const msg = syncAlertMessage();
+  if (!msg) return "";
+  return `<div class="sync-alert-banner" data-action="nav" data-view="settings">⚠️ ${escapeHTML(msg)}</div>`;
+}
+
 // v37: 保存の同時実行ガード(自動保存と手動保存が同じSHAでPUTして409になるのを防ぐ)
 let _githubSaveInFlight = false;
 
@@ -11156,6 +11215,7 @@ async function saveToGitHub(silent = false) {
       if (result.content?.sha) setLastSyncedSha(result.content.sha);
     } catch { /* SHAが取れなくても次回の保存前チェックで補正される */ }
 
+    recordSyncPushSuccess();  // v134: この端末の最終push成功時刻(localStorage、state非経由)
     state.settings.github.lastSavedAt = nowDateTime();
     persistLocalNoSchedule();  // v25: 自動保存タイマーを再セットしない(無限保存ループ防止)
     if (!silent) showToast("GitHubへ保存しました");
@@ -11622,6 +11682,7 @@ async function runAutoSyncPull() {
   const cfg = state.settings.github;
   try {
     const { text, sha } = await downloadGitHubStateText(personalDataFileConfig(cfg));
+    recordSyncPullSuccess();  // v134: この端末の最終pull成功時刻(localStorage、state非経由)
     const remote = JSON.parse(text);
     const remoteT = remote.dataModifiedAt || "";
     const localT = state.dataModifiedAt || "";
@@ -11755,6 +11816,7 @@ async function loadFromGitHub() {
   try {
     const config = requireGitHubConfig();
     const { text, sha } = await downloadGitHubStateText(config);
+    recordSyncPullSuccess();  // v134: この端末の最終pull成功時刻(localStorage、state非経由)
     const loaded = JSON.parse(text);
     // v37: 読込前の編集で予約された自動保存を取り消す(読込直後の無意味なpush防止)
     clearTimeout(autoSaveTimer);
@@ -11816,6 +11878,7 @@ async function syncFromGitHubOnStartup() {
   const preFetchDataModifiedAt = state.dataModifiedAt || "";
   try {
     const { text, sha } = await downloadGitHubStateText(personalDataFileConfig(cfg));
+    recordSyncPullSuccess();  // v134: この端末の最終pull成功時刻(localStorage、state非経由)
     const remote = JSON.parse(text);
     // v37: 比較は「起動時点のローカル更新時刻」と行う。
     //      fetch中にユーザーがタブを触るなどして saveState が走ると localT が進み、
