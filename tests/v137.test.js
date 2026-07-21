@@ -12,8 +12,6 @@
 // [3] review.md:30 — Wish詳細textarea(.wish-detail .textarea)のcomputed font-sizeが16px以上。
 // [5] review.md:39 — conditionBudgetがsleepHに数値文字列(非正規state)を渡されてもTypeErrorに
 //     ならず、Number()経由で正しく判定する(hr/hrvの暗黙変換との非対称を解消)。
-//
-// シナリオ[3]・[4]は後続コミットで同ファイルへ追記する。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
@@ -185,6 +183,51 @@ function check(name, cond, extra = "") {
     check("「一覧を更新」で本文が再取得される(2回目の試行が飛ぶ)", aiBodyAttempts === 2, `(実際: ${aiBodyAttempts})`);
     mainText2 = await page.locator("main").textContent();
     check("再取得後は正しい本文が表示される", mainText2.includes("総括本文_v137"), mainText2.slice(0, 200));
+
+    // ============================================================
+    // [3] review.md:30 — Wish詳細textareaのcomputed font-sizeが16px以上
+    // ============================================================
+    console.log("[3] Wish詳細のtextarea(なぜやりたい)のcomputed font-sizeが16px以上");
+    const wishProjectId = await page.evaluate((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      const wp = (s.projects || []).find((p) => p.kind === "wish" && !p.deleted);
+      return wp ? wp.id : null;
+    }, KEY);
+    check("Wish Projectが既定で存在する(normalizeState)", !!wishProjectId);
+    await seed({
+      view: "wish",
+      tasks: [{
+        id: "wish-font-v137", projectId: wishProjectId, parentTaskId: "", title: "フォントサイズ確認用Wish",
+        category: "", status: "todo", dueDate: "", description: "", lifeArea: "", motivation: "",
+        targetYear: null, targetMonth: null, realized: false, realizedDate: "",
+        createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false
+      }]
+    });
+    await page.click('[data-action="open-wish"][data-id="wish-font-v137"]');
+    await page.waitForTimeout(300);
+    const motivationTextarea = page.locator('[data-action="wish-set-motivation"][data-id="wish-font-v137"]');
+    check("Wish詳細のtextareaが表示されている", await motivationTextarea.count() === 1);
+    const fontSizePx = await motivationTextarea.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    check("computed font-sizeが16px以上(iOS自動ズーム防止)", fontSizePx >= 16, `(実際: ${fontSizePx}px)`);
+
+    // ============================================================
+    // [4](review.md:39) — conditionBudgetがsleepHの数値文字列でTypeErrorにならない
+    // ============================================================
+    console.log("[4] sleepHが数値文字列の非正規stateでもconditionBudgetがTypeErrorを起こさず正しく判定する");
+    const pageErrorsBefore4 = pageErrorCount;
+    await seed({ view: "home", sleepLogs: { [TODAY]: { sleepH: "4.5" } } });  // 文字列(非正規state)。5.5h未満=赤字想定
+    await page.waitForTimeout(300);
+    const chipText = await page.locator(".home-condition-budget-chip").textContent().catch(() => null);
+    check("pageerror(TypeError)が発生していない", pageErrorCount === pageErrorsBefore4, `(発生件数: ${pageErrorCount - pageErrorsBefore4})`);
+    check("体力予算チップが表示される", !!chipText, chipText);
+    check("睡眠4.5hが赤字判定として表示される(toFixed(1)がNumber経由で成功している)",
+      !!chipText && chipText.includes("赤字") && chipText.includes("睡眠4.5h"), chipText);
+
+    console.log("[4-回帰] sleepHが数値(通常state)でも従来どおり動く");
+    await seed({ view: "home", sleepLogs: { [TODAY]: { sleepH: 7.2 } } });  // 7.2h → 通常
+    await page.waitForTimeout(300);
+    const chipText2 = await page.locator(".home-condition-budget-chip").textContent().catch(() => null);
+    check("数値型のsleepHでも従来どおり通常判定される", !!chipText2 && chipText2.includes("通常"), chipText2);
   } finally {
     await browser.close();
     server.close();
