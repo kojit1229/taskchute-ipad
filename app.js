@@ -10110,8 +10110,10 @@ function makeTask({ projectId = "", parentTaskId = "", title = "", category = ""
   //      WBS経由の汎用作成経路(addTask/openTaskCreator、いずれもこのmakeTaskを共有)は
   //      素通りしていたため、Wish Project配下に作った瞬間に当日期日が付き、addWish系との
   //      挙動不一致・バックログ/朝プラン候補への意図しない混入が起きていた。
-  //      ユーザーが明示的に期日(dueDate引数、または編集モーダルでの入力)を指定した場合は
-  //      そのまま採用する。
+  //      v133追補(K指示): 呼び出し元が明示的にdueDate引数を渡した場合はそれを尊重してしまう
+  //      抜け道が残っていた(dueDate || (isWishProject ? "" : ...) は渡された値が真なら素通り)。
+  //      Wish Project配下は明示的なdueDate引数も無視し、常に空にする(意図的な期日はWishタブの
+  //      期限入力[wish-set-duedate、v79]から作成後に設定する運用のまま変えない)。
   const isWishProject = state.projects.some((p) => p.id === projectId && p.kind === "wish");
   return {
     id: crypto.randomUUID(),
@@ -10120,7 +10122,7 @@ function makeTask({ projectId = "", parentTaskId = "", title = "", category = ""
     title,
     category,
     status: "todo",
-    dueDate: dueDate || (isWishProject ? "" : state.selectedDate),
+    dueDate: isWishProject ? "" : (dueDate || state.selectedDate),
     description: "",
     leverageType,  // v65: 10x機構(2-1)。"asset"|"eliminate"|"oneoff"|""(未設定)
     aiWork: false,      // v67: AI作業ワーカー連携(柱2)
