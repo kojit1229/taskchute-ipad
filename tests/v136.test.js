@@ -169,6 +169,120 @@ function hoursAgoIso(h) { return isoLocal(new Date(Date.now() - h * 3600000)); }
     await page.reload();
     await page.waitForTimeout(600);
     check("[6] 変更なしで6時間以上経過しても赤帯は出ない(偽陽性の解消)", await page.locator(".sync-alert-banner").count() === 0);
+
+    // ============================================================
+    // [2] High-2: tieWinner="local"の文脈(ローカルを基準に残す経路)では、updatedAt同値
+    //     (両方空を含む)の同一idはローカル側の内容が勝つ(v135時点は常にremote固定だった)
+    // ============================================================
+    console.log("[2] ローカルを基準に残す経路では、updatedAt同値(両方空)の同一idはローカル優先");
+    fixtures.getMode = "404";  // 直前の状態をリセット(この後の注入をreloadで安全にハイドレートする)
+    await page.reload();
+    await page.waitForTimeout(600);
+    await page.evaluate(({ KEY, t }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.tasks = [...s.tasks, t];
+      s.dataModifiedAt = "2026-07-01T00:00:00";
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, t: task("t-2", "LOCAL_CONTENT_v136", { updatedAt: "" }) });
+    {
+      const base = await stateNow();
+      const remote = JSON.parse(JSON.stringify(base));
+      remote.dataModifiedAt = "2026-06-30T00:00:00";  // ローカルより古い/同じ → 「ローカルを基準に残す」経路
+      remote.tasks = remote.tasks.map((t) => t.id === "t-2"
+        ? { ...t, title: "REMOTE_CONTENT_SHOULD_NOT_WIN_v136", updatedAt: "" }  // 両方空
+        : t);
+      fixtures.remoteJson = JSON.stringify(remote);
+      fixtures.remoteSha = "sha-2";
+      fixtures.getMode = "normal";
+    }
+    await page.reload();
+    await page.waitForTimeout(1000);
+    const s2 = await stateNow();
+    check("[2] ローカルの内容が勝つ(remoteへ巻き戻らない)",
+      s2.tasks.find((t) => t.id === "t-2")?.title === "LOCAL_CONTENT_v136",
+      JSON.stringify(s2.tasks.find((t) => t.id === "t-2")));
+
+    // ============================================================
+    // [3] High-3: 同秒タイでは削除(トゥームストーン)側が勝つ。tieWinner="remote"の文脈
+    //     (最もremoteへ傾きやすい経路)でも、削除は復活しないことを確認する
+    // ============================================================
+    console.log("[3] 同秒タイではトゥームストーン優先。remote採用経路(tieWinner=remote)でも削除は復活しない");
+    await page.evaluate(({ KEY, t }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.tasks = [...s.tasks, t];
+      s.dataModifiedAt = "2026-08-01T00:00:00";
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, t: task("t-3", "削除されるタスク", { deleted: true, updatedAt: "2026-06-01T00:00:00" }) });
+    {
+      const base = await stateNow();
+      const remote = JSON.parse(JSON.stringify(base));
+      remote.dataModifiedAt = "2026-08-02T00:00:00";  // ローカルより新しい → remote採用(tieWinner=remote)経路
+      remote.tasks = remote.tasks.map((t) => t.id === "t-3"
+        ? { ...t, deleted: false, title: "REVIVED_SHOULD_NOT_HAPPEN", updatedAt: "2026-06-01T00:00:00" }  // 同秒の生存コピー
+        : t);
+      fixtures.remoteJson = JSON.stringify(remote);
+      fixtures.remoteSha = "sha-3";
+    }
+    await page.reload();
+    await page.waitForTimeout(1000);
+    const s3 = await stateNow();
+    check("[3] 同秒タイでも削除(トゥームストーン)が復活しない",
+      s3.tasks.find((t) => t.id === "t-3")?.deleted === true,
+      JSON.stringify(s3.tasks.find((t) => t.id === "t-3")));
+
+    // ============================================================
+    // [5] Med-5: kind:"other"シングルトン(Project/Task)の重複防止。両端末が別々に作った場合も
+    //     マージ後は1つに集約され、参照側(Block.taskid)は正本へ付け替えられる
+    // ============================================================
+    console.log("[5] 両端末が別々に作ったその他Project/Taskがマージ後も重複しない(参照Blockは正本へ付け替え)");
+    {
+      const base = await stateNow();
+      const localOtherProject = base.projects.find((p) => p.kind === "other" && !p.deleted);
+      const localOtherTask = base.tasks.find((t) => t.kind === "other" && !t.deleted);
+      await page.evaluate(({ KEY, localOtherProject, localOtherTask }) => {
+        const s = JSON.parse(localStorage.getItem(KEY));
+        s.projects = s.projects.map((p) => p.id === localOtherProject.id ? { ...p, createdAt: "2026-01-01T00:00:00", updatedAt: "2026-01-01T00:00:00" } : p);
+        s.tasks = s.tasks.map((t) => t.id === localOtherTask.id ? { ...t, createdAt: "2026-01-01T00:00:00", updatedAt: "2026-01-01T00:00:00" } : t);
+        s.dataModifiedAt = "2026-09-01T00:00:00";
+        localStorage.setItem(KEY, JSON.stringify(s));
+      }, { KEY, localOtherProject, localOtherTask });
+    }
+    {
+      const base = await stateNow();
+      const remote = JSON.parse(JSON.stringify(base));
+      remote.dataModifiedAt = "2026-09-02T00:00:00";
+      const localOtherProjectId = base.projects.find((p) => p.kind === "other" && !p.deleted).id;
+      const localOtherTaskId = base.tasks.find((t) => t.kind === "other" && !t.deleted).id;
+      // remoteは同期前に別々に自分の「その他」Project/Taskを作っていた体(別id、createdAtが新しい=非正本)
+      remote.projects = [
+        ...remote.projects.filter((p) => p.id !== localOtherProjectId),
+        project("other-remote-dup", "その他", { kind: "other", createdAt: "2026-08-01T00:00:00", updatedAt: "2026-08-01T00:00:00" })
+      ];
+      remote.tasks = [
+        ...remote.tasks.filter((t) => t.id !== localOtherTaskId),
+        task("other-task-remote-dup", "その他", { kind: "other", projectId: "other-remote-dup", createdAt: "2026-08-01T00:00:00", updatedAt: "2026-08-01T00:00:00" })
+      ];
+      // remote限定のBlockがremote側の重複その他Taskを参照している(付け替え対象)
+      remote.blocks = [...remote.blocks, {
+        id: "blk-other-remote", taskId: "other-task-remote-dup", date: "2026-08-01", title: "remote単発Block", category: "",
+        plannedStartAt: "", plannedEndAt: "", actualStartAt: "", actualEndAt: "", completed: false, charge: 0, discharge: 0,
+        expectedCharge: "", expectedDischarge: "", comment: "", recurrenceGroupId: "", pomodoroCount: 0, migratedTo: "",
+        carryCount: 0, orderIndex: 0, isMIT: false, source: "", createdAt: "2026-08-01T00:00:00", updatedAt: "2026-08-01T00:00:00", deleted: false
+      }];
+      fixtures.remoteJson = JSON.stringify(remote);
+      fixtures.remoteSha = "sha-5";
+    }
+    await page.reload();
+    await page.waitForTimeout(1000);
+    const s5 = await stateNow();
+    const liveOtherProjects = s5.projects.filter((p) => p.kind === "other" && !p.deleted);
+    const liveOtherTasks = s5.tasks.filter((t) => t.kind === "other" && !t.deleted);
+    check("[5] その他Projectは1つだけ(重複しない)", liveOtherProjects.length === 1, JSON.stringify(liveOtherProjects.map((p) => p.id)));
+    check("[5] その他Taskは1つだけ(重複しない)", liveOtherTasks.length === 1, JSON.stringify(liveOtherTasks.map((t) => t.id)));
+    const canonicalOtherTaskId = liveOtherTasks[0]?.id;
+    const repointedBlock = s5.blocks.find((b) => b.id === "blk-other-remote");
+    check("[5] remote限定BlockのtaskidがcanonicalのTaskへ付け替えられる(消えない)",
+      repointedBlock?.taskId === canonicalOtherTaskId, JSON.stringify(repointedBlock));
   } catch (e) {
     failures++;
     console.log("  ❌ 実行エラー:", e.message);
