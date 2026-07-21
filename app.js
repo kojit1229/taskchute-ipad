@@ -139,6 +139,44 @@ let _lastFeedbackHydrateAt = Date.now();  // 起動時に一度hydrateStaticMark
 let _feedbackHydrateInFlight = false;     // 多重発火防止(同時に複数fetchを走らせない)
 const FEEDBACK_REFRESH_INTERVAL_MS = 30 * 60 * 1000;  // 定期再fetchの間隔(30分)
 const FEEDBACK_REFRESH_MIN_GAP_MS = 60 * 1000;        // visibilitychange連打等の多重発火防止(60秒)
+// v137: hydrateStaticMarkdownの新着render延期(review.md:28)。journal等の入力中に全render()が
+//       走るとfocus/選択範囲/IME未確定文字が飛ぶため、(a)入力系要素にフォーカス中、または
+//       (b)IME変換中(compositionstart〜compositionend)は render() を即実行せず「保留」フラグを
+//       立てるだけにし、フォーカスが外れた瞬間(focusout)またはIME確定した瞬間(compositionend)に
+//       1回だけ実行する。非永続(端末内メモリのみ)。
+let _imeComposing = false;
+let _deferredRenderPending = false;
+function isFocusInEditableElement() {
+  const el = document.activeElement;
+  if (!el) return false;
+  const tag = el.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable === true;
+}
+// hydrateStaticMarkdown等の「新着があれば再描画」用の入口。入力中/IME変換中なら即renderせず
+// 保留し、focusout/compositionendで自動的に1回だけ実行させる。
+function renderDeferringForFocus() {
+  if (_imeComposing || isFocusInEditableElement()) {
+    _deferredRenderPending = true;
+    return;
+  }
+  render();
+}
+// focusout用: フォーカスが別の入力欄へそのまま移った(タブ移動等)だけなら、まだ延期を続ける。
+// setTimeout(0)経由で呼ばれ、その時点のdocument.activeElementが新しいフォーカス先になっている前提。
+function flushDeferredRenderIfFocusLeft() {
+  if (!_deferredRenderPending) return;
+  if (_imeComposing || isFocusInEditableElement()) return;  // まだ別の入力欄にフォーカス移動しただけ等
+  _deferredRenderPending = false;
+  render();
+}
+// compositionend用: IME変換が確定した時点で、フォーカスが同じ入力欄に残っていても実行する
+// (未確定文字が消える具体的なリスクは確定と同時に解消しており、以降はfocus中の延期対象外にした
+// 場合と同じ「たまに再描画が挟まる」程度の話になるため)。
+function flushDeferredRenderAfterComposition() {
+  if (!_deferredRenderPending) return;
+  _deferredRenderPending = false;
+  render();
+}
 // v74: 自分が保存した言語化の当日分エコー表示用({ 'YYYY-MM-DD': '入力文字列' }、非永続)。
 //      保存済み内容の真実は reflections.json 側。リロード時は hydrateReadingData() が再取得する
 const cachedReadingReflections = {};
@@ -734,6 +772,18 @@ document.addEventListener("toggle", (event) => {
   const el = event.target;
   if (!el?.dataset?.foldId) return;
   setHomeFoldOpen(el.dataset.foldId, el.open);
+}, true);
+
+// v137: hydrateStaticMarkdownの新着render延期(review.md:28)。IME変換中フラグの追跡と、
+// 変換確定/フォーカス離脱のタイミングでの保留render実行。
+document.addEventListener("compositionstart", () => { _imeComposing = true; });
+document.addEventListener("compositionend", () => {
+  _imeComposing = false;
+  flushDeferredRenderAfterComposition();
+});
+document.addEventListener("focusout", () => {
+  // focusout発火時点ではactiveElementがまだ旧要素のことがあるため、次のタスクへずらして判定する
+  setTimeout(flushDeferredRenderIfFocusLeft, 0);
 }, true);
 
 document.addEventListener("input", (event) => {
@@ -13572,8 +13622,9 @@ async function hydrateStaticMarkdown() {
   // v133: "tasks"(タスクシュート)を追加。修正1でAI提案タスクがaiTaskChips経由の候補チップに
   //      なったため、このタブを開いたまま待っていてもチップがライブ表示されない同種の不具合が
   //      新たに生じていた(tests/v133.test.jsで検出)。
+  // v137: 入力中/IME変換中は即renderせず保留する(review.md:28。renderDeferringForFocus参照)。
   if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly" || state.currentView === "home" || state.currentView === "zero" || state.currentView === "tasks")) {
-    render();
+    renderDeferringForFocus();
   }
 }
 
