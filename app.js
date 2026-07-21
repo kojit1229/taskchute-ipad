@@ -7032,6 +7032,17 @@ function median(nums) {
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
+// v137(review.md:39): conditionBudgetがsleepHにだけ.toFixed(1)を直接呼んでおり、sleepHが
+// 数値文字列の非正規stateだとTypeErrorになる(hr/hrvは算術式内で暗黙変換されるため安全、
+// という非対称があった)。loop/scripts/daily-report-fallback.py の to_number() と同じ変換
+// ルールに揃え、hr/hrv/sleepHすべてこの関数を経由させる(null/undefined/boolはnull、
+// 数値・数値文字列はNumber化、NaNになるものはnullを返す)。
+function toNumber(v) {
+  if (v === null || v === undefined || typeof v === "boolean") return null;
+  const n = Number(v);
+  return Number.isNaN(n) ? null : n;
+}
+
 // dateを含まない過去CONDITION_BUDGET_BASELINE_LOOKBACK_DAYS日分から、hr/hrvそれぞれの
 // 中央値ベースラインを求める。サンプル不足(7日未満)ならそのベースラインはnull。
 function conditionBudgetBaseline(date) {
@@ -7040,8 +7051,10 @@ function conditionBudgetBaseline(date) {
   const hrVals = [], hrvVals = [];
   Object.entries(state.sleep.logs).forEach(([d, log]) => {
     if (d < from || d > to) return;
-    if (log.hrSleep != null) hrVals.push(log.hrSleep);
-    if (log.hrvSleep != null) hrvVals.push(log.hrvSleep);
+    const hrV = toNumber(log.hrSleep);
+    if (hrV !== null) hrVals.push(hrV);
+    const hrvV = toNumber(log.hrvSleep);
+    if (hrvV !== null) hrvVals.push(hrvV);
   });
   return {
     hrBaseline: hrVals.length >= CONDITION_BUDGET_BASELINE_MIN_SAMPLES ? median(hrVals) : null,
@@ -7061,19 +7074,22 @@ function conditionBudget(date) {
   const { log, logDate, ageDays } = found;
   const baseline = conditionBudgetBaseline(date);
   const factors = [];
-  if (baseline.hrvBaseline != null && log.hrvSleep != null) {
-    const pct = ((log.hrvSleep - baseline.hrvBaseline) / baseline.hrvBaseline) * 100;
+  const hrvSleep = toNumber(log.hrvSleep);
+  if (baseline.hrvBaseline != null && hrvSleep !== null) {
+    const pct = ((hrvSleep - baseline.hrvBaseline) / baseline.hrvBaseline) * 100;
     if (pct <= CONDITION_BUDGET_HRV_DEFICIT_PCT) factors.push({ severity: "deficit", text: `HRV ${pct >= 0 ? "+" : ""}${Math.round(pct)}%` });
     else if (pct <= CONDITION_BUDGET_HRV_LOW_PCT) factors.push({ severity: "low", text: `HRV ${pct >= 0 ? "+" : ""}${Math.round(pct)}%` });
   }
-  if (baseline.hrBaseline != null && log.hrSleep != null) {
-    const diff = log.hrSleep - baseline.hrBaseline;
+  const hrSleep = toNumber(log.hrSleep);
+  if (baseline.hrBaseline != null && hrSleep !== null) {
+    const diff = hrSleep - baseline.hrBaseline;
     if (diff >= CONDITION_BUDGET_HR_DEFICIT_BPM) factors.push({ severity: "deficit", text: `HR +${Math.round(diff)}bpm` });
     else if (diff >= CONDITION_BUDGET_HR_LOW_BPM) factors.push({ severity: "low", text: `HR +${Math.round(diff)}bpm` });
   }
-  if (log.sleepH != null) {
-    if (log.sleepH < CONDITION_BUDGET_SLEEP_DEFICIT_H) factors.push({ severity: "deficit", text: `睡眠${log.sleepH.toFixed(1)}h` });
-    else if (log.sleepH < CONDITION_BUDGET_SLEEP_LOW_H) factors.push({ severity: "low", text: `睡眠${log.sleepH.toFixed(1)}h` });
+  const sleepH = toNumber(log.sleepH);
+  if (sleepH !== null) {
+    if (sleepH < CONDITION_BUDGET_SLEEP_DEFICIT_H) factors.push({ severity: "deficit", text: `睡眠${sleepH.toFixed(1)}h` });
+    else if (sleepH < CONDITION_BUDGET_SLEEP_LOW_H) factors.push({ severity: "low", text: `睡眠${sleepH.toFixed(1)}h` });
   }
   const level = factors.some((f) => f.severity === "deficit") ? "deficit" : factors.length ? "low" : "normal";
   const factorsText = factors.map((f) => f.text).join("・");
