@@ -16,9 +16,25 @@
 // ではない。原因を問わず「単一run内で異なるスイートが同じport番号を引く」ケースを数学的に
 // ゼロにするため、各スイートへ環境変数TEST_PORT_INDEXで一意な連番を渡す
 // (tests/helpers.jsのrandomPort()がこれを見てスイートごとの専用帯から採番する)。
+//
+// v140(Codexレビュー Med-4): 上記TEST_PORT_INDEXの帯(1スイートあたり10番)は、この
+// run-all.js自身の起動ごとに常に同じ基底(20000)から割り当てていたため、v93が本来防ぎたかった
+// シナリオ(2ターミナルでの同時実行、CIとローカルpush前ゲートが重なる等)に対しては退行していた
+// (並行run同士は依然として同じport帯を使い衝突しうる)。run-all.js起動ごとにランダムな基底
+// (20000〜38000の1000刻み、19通り)を選び、環境変数TEST_PORT_BASEとしてスイートへ渡す
+// (tests/helpers.jsのrandomPort()がbase+index×10で採番する)。並行run間の衝突確率は
+// 1/19以下(基底が偶然一致した場合のみ)に下がり、それでも衝突すればstartServer()の
+// EADDRINUSEリトライ(v137で追加済み)で自己回復する。単一run内の衝突は従来どおり
+// (同じbaseを共有する限り)数学的にゼロのまま。
 const { spawn, spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
+
+const TEST_PORT_BASE_MIN = 20000;
+const TEST_PORT_BASE_MAX = 38000;
+const TEST_PORT_BASE_STEP = 1000;
+const _basePickCount = (TEST_PORT_BASE_MAX - TEST_PORT_BASE_MIN) / TEST_PORT_BASE_STEP + 1;  // 19通り
+const runPortBase = TEST_PORT_BASE_MIN + Math.floor(Math.random() * _basePickCount) * TEST_PORT_BASE_STEP;
 
 const all = fs.readdirSync(__dirname).filter((f) => f.endsWith(".test.js")).sort();
 const filters = process.argv.slice(2);
@@ -67,7 +83,7 @@ function runSuite(file, index) {
     const child = spawn("node", [path.join(__dirname, file)], {
       stdio: "inherit",
       detached: process.platform !== "win32",
-      env: { ...process.env, TEST_PORT_INDEX: String(index) }
+      env: { ...process.env, TEST_PORT_INDEX: String(index), TEST_PORT_BASE: String(runPortBase) }
     });
     currentChild = child;
     let timedOut = false;
@@ -85,6 +101,8 @@ function runSuite(file, index) {
     child.on("error", () => finish(1));
   });
 }
+
+console.log(`ポート帯基底(TEST_PORT_BASE): ${runPortBase}(並行run間の衝突回避、v140)`);
 
 (async () => {
   let failed = 0;

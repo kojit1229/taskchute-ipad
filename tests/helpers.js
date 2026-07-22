@@ -120,11 +120,24 @@ async function passGithubGate(page, keyName = STATE_KEY) {
 // それがあればスイートごとに専用の帯(1スイートあたり10番)から決定論的に採番する
 // (帯を跨がないため他スイートと絶対に重複しない)。TEST_PORT_INDEXが無い場合
 // (`node tests/vNN.test.js` の単独実行等)は従来どおり完全ランダムに採番する。
+//
+// v140(Codexレビュー Med-4): 上記の帯は常に基底20000固定だったため、run-all.js自体を
+// 複数プロセスで並行実行する(v93が本来想定していた「2ターミナルでの同時実行」シナリオ)と、
+// 双方とも同じport帯を使ってしまい退行していた。run-all.js側が起動ごとにランダムな基底
+// (20000〜38000の1000刻み、19通り)を選び、環境変数TEST_PORT_BASEとして渡すようにしたため、
+// ここではTEST_PORT_BASEがあればそれを基底に使う(無ければ従来どおりmin=20000を基底にする)。
+// 並行run同士がたまたま同じ基底を引く確率は1/19以下で、それでも衝突すればstartServer()の
+// EADDRINUSEリトライで自己回復する。
 function randomPort(min = 20000, max = 40000) {
   const idx = process.env.TEST_PORT_INDEX;
   if (idx !== undefined && idx !== "") {
     const i = parseInt(idx, 10);
-    if (Number.isFinite(i) && i >= 0) return min + i * 10;
+    if (Number.isFinite(i) && i >= 0) {
+      const rawBase = process.env.TEST_PORT_BASE;
+      const parsedBase = rawBase !== undefined && rawBase !== "" ? parseInt(rawBase, 10) : NaN;
+      const base = Number.isFinite(parsedBase) ? parsedBase : min;
+      return base + i * 10;
+    }
   }
   return min + Math.floor(Math.random() * (max - min));
 }
