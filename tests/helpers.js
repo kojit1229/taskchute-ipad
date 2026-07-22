@@ -36,8 +36,17 @@ function launchOptions() {
 }
 
 // リポジトリルートを配信する使い捨て静的サーバ
+// v137追加調査(2026-07-22、review.md:34と同時期にK指示で判明): CI(ubuntu-latest)で
+// 全量npm test実行中にEADDRINUSEでスイートが1件クラッシュする事象を観測した(run-all.jsは
+// 逐次実行かつタイムアウト/killも発生していないことをログで確認済みのため、原因はrun-all.js
+// 自体の並行実行バグではない)。根本原因(OS側のTIME_WAIT相当の一過性状態が有力な仮説だが
+// 断定はできていない)を問わず効く保険として、EADDRINUSE発生時に同じportへ軽くリトライする。
+// PORTの採番自体はrandomPort()側(下記)でスイートごとに専用の帯へ分離しており、「単一run内で
+// 異なるスイートが同じportを引く」ケースは別途ゼロ化した。ここは残りうる別要因(外部プロセス・
+// カーネル側の一過性状態等)への保険であり、リトライを使い果たしたら従来どおり例外を投げて
+// クラッシュする(検証の弱体化ではない。フェイルラウドの原則は維持)。
 function startServer(port) {
-  return http.createServer((req, res) => {
+  const server = http.createServer((req, res) => {
     let p = decodeURIComponent(req.url.split("?")[0]);
     if (p === "/") p = "/index.html";
     const file = path.join(ROOT, p);
@@ -48,7 +57,18 @@ function startServer(port) {
     }
     res.writeHead(200, { "content-type": MIME[path.extname(file)] || "application/octet-stream" });
     res.end(fs.readFileSync(file));
-  }).listen(port);
+  });
+  let retries = 0;
+  server.on("error", (err) => {
+    if (err.code === "EADDRINUSE" && retries < 5) {
+      retries++;
+      setTimeout(() => server.listen(port), 300 * retries);
+    } else {
+      throw err;
+    }
+  });
+  server.listen(port);
+  return server;
 }
 
 // v72: 個人データはGitHub Contents API(private リポジトリ)経由になり、token+個人データ
@@ -87,7 +107,25 @@ async function passGithubGate(page, keyName = STATE_KEY) {
 // EADDRINUSEによる偽失敗が起きるため、実行のたびにランダムなポートを払い出す。
 // 個々のtests/vNN.test.jsは `const PORT = randomPort();` を呼ぶだけで、
 // PORTの使い方(startServer/page.goto/page.route等)は一切変えなくてよい。
+//
+// v137追加調査(2026-07-22): 上記のランダム採番だけでは、全量run(88スイート前後)を
+// 1回のnpm testで連続実行する際、異なるスイートが独立に同じ乱数を引く確率が誕生日の
+// パラドックスにより無視できない大きさになる(約17%/run)。run-all.jsは逐次実行(前の
+// スイートが完全終了するまで次を起動しない)のため、理論上は「先発が完全終了していれば
+// 同じport番号を後発が引いても衝突しない」はずだが、CIで実際にEADDRINUSEが観測された
+// (詳細はstartServer参照)。run-all.js自体のタイムアウト/kill処理は発生していないことを
+// CIログで確認済みで、根本原因は完全には特定できていない。原因を問わず「単一run内で
+// 異なるスイートが同じport番号を引く」こと自体を数学的にゼロにするため、run-all.jsが
+// 各スイートへ環境変数TEST_PORT_INDEXで一意な連番(実行リスト内のindex)を渡すようにし、
+// それがあればスイートごとに専用の帯(1スイートあたり10番)から決定論的に採番する
+// (帯を跨がないため他スイートと絶対に重複しない)。TEST_PORT_INDEXが無い場合
+// (`node tests/vNN.test.js` の単独実行等)は従来どおり完全ランダムに採番する。
 function randomPort(min = 20000, max = 40000) {
+  const idx = process.env.TEST_PORT_INDEX;
+  if (idx !== undefined && idx !== "") {
+    const i = parseInt(idx, 10);
+    if (Number.isFinite(i) && i >= 0) return min + i * 10;
+  }
   return min + Math.floor(Math.random() * (max - min));
 }
 

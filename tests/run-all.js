@@ -9,6 +9,13 @@
 // spawnSyncの直接killだけでは各スイートが起動したChromiumの孫プロセスが残留していた。
 // spawn(非同期)+スイートごとのtimeout+プロセスツリー単位のkillに変更する
 // (テストランナーのみの変更。各tests/vNN.test.js自体の検証内容は一切変えていない)。
+//
+// v137追加調査(2026-07-22、K指示): CIで全量実行中にEADDRINUSEでスイートが1件クラッシュする
+// 事象を観測した。本ファイルは逐次実行(1スイート完全終了後に次を起動)であり、タイムアウト/
+// kill(上記)も発生していなかったことをCIログで確認済みのため、本ファイル自体の並行実行バグ
+// ではない。原因を問わず「単一run内で異なるスイートが同じport番号を引く」ケースを数学的に
+// ゼロにするため、各スイートへ環境変数TEST_PORT_INDEXで一意な連番を渡す
+// (tests/helpers.jsのrandomPort()がこれを見てスイートごとの専用帯から採番する)。
 const { spawn, spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -55,11 +62,12 @@ let currentChild = null;
   });
 });
 
-function runSuite(file) {
+function runSuite(file, index) {
   return new Promise((resolve) => {
     const child = spawn("node", [path.join(__dirname, file)], {
       stdio: "inherit",
-      detached: process.platform !== "win32"
+      detached: process.platform !== "win32",
+      env: { ...process.env, TEST_PORT_INDEX: String(index) }
     });
     currentChild = child;
     let timedOut = false;
@@ -80,9 +88,10 @@ function runSuite(file) {
 
 (async () => {
   let failed = 0;
-  for (const f of suites) {
+  for (let i = 0; i < suites.length; i++) {
+    const f = suites[i];
     console.log(`\n===== ${f} =====`);
-    const status = await runSuite(f);
+    const status = await runSuite(f, i);
     if (status !== 0) failed++;
   }
   console.log(failed ? `\n❌ ${failed} suite(s) failed` : "\n✅ All suites passed");
