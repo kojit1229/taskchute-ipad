@@ -21,6 +21,15 @@ function check(name, cond, extra = "") {
   else { failures++; console.log(`  ❌ ${name} ${extra}`); }
 }
 
+// v140(Codexレビュー High-1 (ii)): report-index.jsonのgeneratedAtが現在から48時間を超えて
+// 古い場合は不採用にする検証をfetchReportIndexへ追加した。本ファイルは元々generatedAtを
+// 固定の日付文字列("2026-07-22T00:00:00Z"等)でハードコードしていたが、実行時の実時刻から
+// 48時間以上離れると本テスト自体が(意図せず)鮮度切れで失敗するようになるため、実行時刻を
+// 基準に動的に生成する(Node.js側のテストコードなのでtoISOString()の利用はapp.js側の
+// 「new Date(string)禁止」ルール=iOS Safari対策の対象外)。
+const toUtcIso = (d) => d.toISOString().replace(/\.\d{3}Z$/, "Z");
+const freshGeneratedAt = () => toUtcIso(new Date());
+
 (async () => {
   const server = startServer(PORT);
   const browser = await chromium.launch(launchOptions());
@@ -87,7 +96,7 @@ function check(name, cond, extra = "") {
     // ============================================================
     console.log("[1] report-index.jsonが存在する場合、それだけで履歴一覧が構築され、ディレクトリ一覧APIは飛ばない");
     reportIndexFixture = {
-      generatedAt: "2026-07-22T00:00:00Z",
+      generatedAt: freshGeneratedAt(),
       files: [
         { name: "コンテンツ総括_2026-07-14.md", date: "2026-07-14", kind: "content" },
         { name: "コンテンツ総括_2026-04-01.md", date: "2026-04-01", kind: "content" },
@@ -134,11 +143,14 @@ function check(name, cond, extra = "") {
     check("フォールバック経路の本文取得はContents API経由(通常のGET)", bodyRequests.includes("コンテンツ総括_2026-07-14.md"), `(実際: ${JSON.stringify(bodyRequests)})`);
 
     // ============================================================
-    // [3] 「一覧を更新」ボタンでも2段フォールバックが毎回正しく機能する(index復活を検知)
+    // [3] 「一覧を更新」ボタンでも2段フォールバックが毎回正しく機能する(index復活を検知)。
+    //     v140(Codexレビュー High-1 (iii)): 手動更新は必ずContents API listingも取得し
+    //     indexとname単位でunionするようになったため、期待値を更新した(仕様変更に伴う
+    //     テスト追随。挙動が実際に変わったことの反映であり弱体化ではない)。
     // ============================================================
-    console.log("[3] 「一覧を更新」後にindexが復活していれば、次はindex経由に切り替わる");
+    console.log("[3] 「一覧を更新」後にindexが復活していれば再度indexが試みられ、Contents APIとunionされる");
     reportIndexFixture = {
-      generatedAt: "2026-07-22T01:00:00Z",
+      generatedAt: freshGeneratedAt(),
       files: [{ name: "コンテンツ総括_2026-07-14.md", date: "2026-07-14", kind: "content" }]
     };
     reportIndexRequests = 0;
@@ -146,9 +158,10 @@ function check(name, cond, extra = "") {
     await page.click('[data-action="ai-report-refresh"]');
     await page.waitForTimeout(600);
     check("更新後、indexが復活していれば再度indexが試みられる", reportIndexRequests === 1, `(実際: ${reportIndexRequests})`);
-    check("indexが取得できたのでディレクトリ一覧APIへは今回フォールバックしない", dirListRequests === 0, `(実際: ${dirListRequests})`);
+    check("v140: 手動更新は必ずContents APIも取得する(union対象)", dirListRequests === 1, `(実際: ${dirListRequests})`);
     options = await page.$$eval("[data-ai-report-date] option", (els) => els.map((e) => e.value));
-    check("復活後のindex内容(1件のみ)が反映される", JSON.stringify(options) === JSON.stringify(["2026-07-14"]), `(実際: ${JSON.stringify(options)})`);
+    check("v140: indexの1件とContents APIの2件がname単位でunionされる(重複する2026-07-14は1件のまま)",
+      JSON.stringify(options) === JSON.stringify(["2026-07-14", "2026-04-01"]), `(実際: ${JSON.stringify(options)})`);
   } catch (e) {
     failures++;
     console.log("  ❌ 例外:", e.message);
