@@ -12,6 +12,15 @@
 // javascript:を実行しない)ため実XSSではないが、サニタイザの文字列レベルの契約としては穴だった。
 // app.jsのsanitizeHTML()を修正済み(BLOCKED_TAGSの大文字化比較・javascript:検知の対象属性拡大)。
 // 本テストはその修正の回帰テストを兼ねる。DOMPurifyの同梱は見送り(review.md参照、要K判断)。
+//
+// v140(Codexレビュー Low-5/Low-6、v137の対応を精緻化):
+//   Low-5: v137で「javascript:検知の対象属性を全属性へ拡大」したが、これはtitle等の正当な
+//     テキスト属性(例: title="Java Script: overview")まで属性ごと消してしまう過剰検知
+//     だった。URL系属性(href/src/xlink:href/action/formaction)+style属性へ走査対象を
+//     戻した。本テストに肯定チェック(titleが保持される)を追加。
+//   Low-6: data:スキームの扱いを属性ごとに分けた。href/xlink:hrefはdata:を全面拒否、
+//     srcはdata:image/(png|jpeg|gif|webp)のみ許可(data:image/svg+xml等は拒否。SVG内に
+//     <script>を埋め込めるため)。本テストにdata:関連のケースを追加。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
@@ -67,6 +76,14 @@ function check(name, cond, extra = "") {
 <div style="background:url(javascript:window.__xss6=true)">スタイル経由</div>
 
 <iframe src="javascript:window.__xss7=true"></iframe>
+
+<span title="Java Script: overview">正当なtitle属性(v140 Low-5の回帰確認)</span>
+
+<a href="data:text/html,malicious">data:href(v140 Low-6、全面拒否対象)</a>
+
+<img src="data:image/png;base64,AAAA" alt="safe-data-image">
+
+<img src="data:image/svg+xml;base64,AAAA" alt="unsafe-data-image">
 `;
 
   async function seedJournal(text) {
@@ -118,11 +135,18 @@ function check(name, cond, extra = "") {
     check("onload= が残っていない", !lower.includes("onload"), renderedHTML.slice(0, 400));
     check("javascript: が残っていない(href/style等いずれの属性経由でも)", !lower.includes("javascript:"), renderedHTML.slice(0, 400));
     check("<iframe が残っていない", !lower.includes("<iframe"), renderedHTML.slice(0, 400));
+    check("v140 Low-6: href経由のdata:は全面拒否される", !lower.includes("data:text/html"), renderedHTML.slice(0, 400));
+    check("v140 Low-6: src経由のdata:image/svg+xmlは拒否される", !lower.includes("data:image/svg+xml"), renderedHTML.slice(0, 400));
 
     console.log("[3] 正常なMarkdownは引き続き問題なく描画される(サニタイザ強化の過剰検知が無いことの回帰確認)");
     check("見出しが描画される", renderedHTML.includes("見出し"));
     check("太字が<strong>等で描画される", /<(strong|b)>/.test(lower));
     check("通常のhttpsリンクは残る(hrefが除去されていない)", renderedHTML.includes('href="https://example.com/"') || renderedHTML.includes("href='https://example.com/'"));
+
+    console.log("[4] v140: 過剰検知していないことの肯定チェック(title保持)+安全なdata:image srcは許可される");
+    check("v140 Low-5: title=\"Java Script: overview\"は除去されず保持される(過剰検知しない)",
+      lower.includes('title="java script: overview"'), renderedHTML.slice(0, 600));
+    check("v140 Low-6: src経由の安全なdata:image/pngは保持される", lower.includes("data:image/png;base64,aaaa"), renderedHTML.slice(0, 600));
   } catch (e) {
     failures++;
     console.log("  ❌ 例外:", e.message);
