@@ -7770,19 +7770,28 @@ function loadVisionBoardImages(file) {
 //      ジャーナルやAIフィードバック(貼り付け/アップロード/GitHub同期)経由の
 //      HTMLがそのまま実行されると、localStorage のトークン窃取まで可能になるため。
 //      見出し・リスト・強調などの安全なHTMLはそのまま残す。
+// v137(review.md:35): XSS否定テスト追加時に発見した2件の穴を塞いだ(いずれも本アプリの
+// 実際の挿入経路=ライブ要素へのinnerHTML代入では実行はされない=実XSSではないと確認済みだが、
+// サニタイザ自体の契約(危険な要素・属性を取り除く)としては穴だったため、安全側に倒して修正):
+//   (1) el.tagName はSVG名前空間の要素だと大文字正規化されない(例: <svg><script>...</script></svg>
+//       のtagNameは"script"であって"SCRIPT"ではない)ため、BLOCKED_TAGSの大文字比較をすり抜けて
+//       いた。tagNameを大文字化してから比較するよう修正。
+//   (2) javascript: スキームの検知が href/src/xlink:href の3属性限定だったため、
+//       style="background:url(javascript:...)" のような他属性経由の混入を見逃していた
+//       (現代ブラウザはCSS url()内のjavascript:を実行しないため実害は無いが、対象属性を
+//       全属性へ広げ、startsWithではなくincludesにして url() 等のラップも拾うようにした)。
 function sanitizeHTML(html) {
   const template = document.createElement("template");
   template.innerHTML = html;
   const BLOCKED_TAGS = ["SCRIPT", "IFRAME", "OBJECT", "EMBED", "STYLE", "LINK", "META", "FORM", "BASE"];
   const walk = (node) => {
     for (const el of [...node.querySelectorAll("*")]) {
-      if (BLOCKED_TAGS.includes(el.tagName)) { el.remove(); continue; }
+      if (BLOCKED_TAGS.includes(el.tagName.toUpperCase())) { el.remove(); continue; }
       for (const attr of [...el.attributes]) {
         const name = attr.name.toLowerCase();
         const val = String(attr.value || "").replace(/\s+/g, "").toLowerCase();
         if (name.startsWith("on")) el.removeAttribute(attr.name);                       // onerror= 等
-        else if ((name === "href" || name === "src" || name === "xlink:href")
-          && (val.startsWith("javascript:") || val.startsWith("data:text/html"))) {
+        else if (val.includes("javascript:") || val.includes("data:text/html")) {
           el.removeAttribute(attr.name);
         }
       }
