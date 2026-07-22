@@ -4,8 +4,9 @@
 // 巻き込み終了を単体確認済み)。
 //
 // [1] review.md:28 — hydrateStaticMarkdownの新着renderは、フォーカスが入力系要素にある間・
-//     IME変換中は延期し、フォーカス離脱/変換確定のタイミングで1回だけ実行する
-//     (renderDeferringForFocus/flushDeferredRenderIfFocusLeft/flushDeferredRenderAfterComposition)。
+//     IME変換中は延期し、フォーカス離脱時に実行する(renderDeferringForFocus/
+//     attemptFlushDeferredRender)。v140(Codexレビュー Med-2): compositionend時点でも
+//     フォーカスがまだ入力欄に残っていれば延期を継続し、focusoutまで待つ(仕様精緻化)。
 // [2] review.md:29 — AIレポート本文の取得失敗を空文字で成功キャッシュしない(リトライ可能)。
 //     連打防止のクールダウンはあるが、「一覧を更新」ボタンは常にクールダウンを無視して
 //     表示中ファイルの本文キャッシュをinvalidateし再取得する。
@@ -139,7 +140,7 @@ function check(name, cond, extra = "") {
     const afterBlurText = await page.locator("main").textContent();
     check("フォーカス離脱後は新着フィードバックが反映される", afterBlurText.includes("新着フィードバック本文_v137"), afterBlurText.slice(0, 200));
 
-    console.log("[1-c] IME変換中も同様にrenderを延期し、変換確定(compositionend)で反映される");
+    console.log("[1-c] IME変換中も同様にrenderを延期し、compositionend後もフォーカスが残っていれば延期を継続、focusoutで反映される(v140仕様精緻化)");
     await journalTextarea.click();
     await journalTextarea.pressSequentially("追記");
     await page.evaluate(() => {
@@ -161,9 +162,19 @@ function check(name, cond, extra = "") {
 
     await page.evaluate(() => document.activeElement.dispatchEvent(new Event("compositionend", { bubbles: true })));
     await page.waitForTimeout(400);
+    // v140(Codexレビュー Med-2、仕様精緻化): compositionend時にフォーカスがまだ入力欄に
+    // 残っている場合は、IME確定直後に続けて入力するのが通例のため、v137時点の「即render」から
+    // 「延期を継続してfocusoutを待つ」へ変更した(未確定文字消失というv137の核心的リスクは
+    // compositionendの時点で既に解消しているため、フォーカス/カーソル位置の保持を優先する)。
+    const markerStillThereAfterCompositionEnd = await page.evaluate(() =>
+      document.activeElement && document.activeElement.getAttribute("data-test-marker") === "still-composing-v137");
+    check("v140: compositionend直後もフォーカスが入力欄に残っていれば延期を継続する", markerStillThereAfterCompositionEnd);
+
+    await page.evaluate(() => document.activeElement && document.activeElement.blur());
+    await page.waitForTimeout(400);
     const markerGoneAfterComposition = await page.evaluate(() =>
       !document.activeElement || document.activeElement.getAttribute("data-test-marker") !== "still-composing-v137");
-    check("compositionend後は保留していたrenderが実行される(DOMが再構築される)", markerGoneAfterComposition);
+    check("v140: その後フォーカスが外れる(focusout)と保留していたrenderが実行される(DOMが再構築される)", markerGoneAfterComposition);
 
     // ============================================================
     // [2] review.md:29 — AIレポート本文の取得失敗は成功キャッシュしない(リトライ可能)。
