@@ -132,6 +132,10 @@ let cachedReadingHighlights = null;
 let _aiReportDirCache = null;        // 一覧(index or Contents API)のレスポンス配列(null=未取得)
 let _aiReportDirError = false;       // 直近の一覧取得が失敗したか(静かなエラー表示 + 再試行ボタン用)
 let _aiReportDirLoadInFlight = false;
+// v140(Codexレビュー High-1): 手動「一覧を更新」時だけtrueにするフラグ。次のtriggerAiReportDirLoad
+// 呼び出しでreport-index.jsonとContents APIディレクトリ一覧の両方を取得し、name単位でunionする
+// (index側が1000件超過等で一部欠落していても、手動更新時だけは即座に補完できるようにする設計)。
+let _aiReportForceUnionRefresh = false;
 const _aiReportBodyCache = {};       // { 'コンテンツ総括_2026-07-14.md': '...md text...' }(取得成功分のみ。失敗はここに入れない)
 const _aiReportBodyLoadInFlight = {};
 // v137(review.md:29): 失敗を成功キャッシュしなくなった分、render()のたびに再fetchが走ると
@@ -7316,42 +7320,92 @@ function aiReportFilesForType(prefix) {
     .sort((a, b) => b.date.localeCompare(a.date));
 }
 
+// v140: report-index.jsonのgeneratedAt("YYYY-MM-DDTHH:mm:ssZ"、UTC)をmsへ変換する。
+// localDateTimeToMs(ローカル時刻文字列専用、Zサフィックス無し)とは別に用意する理由:
+// あちらはUTC文字列にそのまま使うとローカルタイムゾーン分(日本なら9時間)ズレる。
+// new Date(string)は経由せずDate.UTC()の数値コンストラクタで組み立てる
+// (iOS Safariのnew Date(string)誤解釈対策と同じ方針。Date.UTCは文字列パースの曖昧さが無い)。
+function parseUtcIsoToMs(s) {
+  if (!s || typeof s !== "string") return 0;
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})Z$/.exec(s);
+  if (!m) return 0;
+  return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6]));
+}
+
 // v138(review.md:31): AIレポート履歴一覧の第1段。loop側 report-index-build.py が生成する
 // taskchute/report-index.json(スキーマは{generatedAt, files:[{name,date,kind}]}。契約の詳細は
-// FORMAT_CONTRACT.md参照)をfetchし、あれば_aiReportDirCacheへ変換して格納する。
-// _aiReportDirCacheの内部形状はContents API由来の配列([{name,type:"file"},...])と揃えることで、
-// aiReportFilesForType()側は一切変更せずに済む(名前からのprefix/日付抽出はentry.nameベースで
-// ソースに依存しないため)。
-// 404(未生成環境。personal-data側にreport-index.jsonがまだ無い)やスキーマ不正の場合はfalseを
-// 返し、呼び出し側が従来のContents APIディレクトリ一覧取得(fetchPersonalDataDirList)へ
-// フォールバックする(後方互換。index無し環境でも壊れない)。401等の認証エラーは
-// fetchGitHubRawResult内部で既にバナー表示されるため、ここで追加のエラー処理はしない。
+// FORMAT_CONTRACT.md参照)をfetchする。
+// v140(Codexレビュー High-1、3点の堅牢性強化):
+//   (i) files配列の各要素はstring型nameを持つものだけ採用し、有効な要素が0件ならindex自体を
+//       不採用にする(壊れたindexで履歴が全消えするのを防ぐ)。
+//   (ii) generatedAtが現在時刻からREPORT_INDEX_MAX_AGE_MSを超えて古い(≒バッチが長期間止まって
+//       いる)場合もindexを不採用にする(古いindexが新着ファイルを覆い隠し続ける事故を防ぐ)。
+//       generatedAtが無い/パース不能な場合も同様に不採用とする(鮮度を確認できないため)。
+//   (iii) この関数自体はもう_aiReportDirCache/_aiReportDirErrorへ直接触れない(副作用フリー)。
+//       手動更新(refreshAiReports)からはfetchPersonalDataDirListと同時に呼ばれ、呼び出し元
+//       (triggerAiReportDirLoad)がname単位でunionする。indexが1000件超のディレクトリで
+//       一部欠落していても、手動更新時だけはContents APIで即座に補完できる設計。
+// 戻り値: 採用可能な{name,type:"file"}配列、または不採用(404/スキーマ不正/0件/古すぎ)ならnull。
+const REPORT_INDEX_MAX_AGE_MS = 48 * 60 * 60 * 1000;
 async function fetchReportIndex() {
   const result = await fetchGitHubRawResult("report-index.json");
-  if (!result.ok) return false;
+  if (!result.ok) return null;
   let parsed;
   try {
     parsed = JSON.parse(result.text);
   } catch {
-    return false;  // 壊れたJSON(生成中の書き込み競合等) → フォールバックへ
+    return null;  // 壊れたJSON(生成中の書き込み競合等)
   }
-  if (!parsed || !Array.isArray(parsed.files)) return false;
-  _aiReportDirCache = parsed.files
-    .filter((f) => f && typeof f.name === "string")
+  if (!parsed || !Array.isArray(parsed.files)) return null;
+  const generatedAtMs = parseUtcIsoToMs(parsed.generatedAt);
+  if (!generatedAtMs || Date.now() - generatedAtMs > REPORT_INDEX_MAX_AGE_MS) return null;
+  const files = parsed.files
+    .filter((f) => f && typeof f.name === "string" && f.name)
     .map((f) => ({ name: f.name, type: "file" }));
-  _aiReportDirError = false;
-  return true;
+  return files.length > 0 ? files : null;
+}
+
+// v140: indexFiles([{name,type:"file"}]、report-index.json由来)とdirList
+// ([{name,type,path}]、Contents API由来)をname単位でunionする。dirList側を正(type/path等の
+// 完全な情報を持つ)とし、dirListに無い名前だけindexFiles側から補う。いずれかがnull/配列以外の
+// 場合は無視する(両方失敗の場合は呼び出し元で_aiReportDirCacheへ代入しない=再試行対象に残す)。
+function unionAiReportEntries(indexFiles, dirList) {
+  const merged = new Map();
+  (Array.isArray(dirList) ? dirList : []).forEach((e) => { if (e && e.name) merged.set(e.name, e); });
+  (Array.isArray(indexFiles) ? indexFiles : []).forEach((e) => { if (e && e.name && !merged.has(e.name)) merged.set(e.name, e); });
+  return [...merged.values()];
 }
 
 // 一覧の読み込みをトリガーする(多重fetch防止のin-flightガード付き)。完了後、まだ
 // AIレポート画面を見ていれば再描画してセレクタ/本文を反映する。
 // v138: まずreport-index.json(fetchReportIndex)を試し、無ければ従来のContents API
 // ディレクトリ一覧取得(fetchPersonalDataDirList)へフォールバックする2段構成にした。
+// v140: 手動更新(_aiReportForceUnionRefresh)時は両方を並行取得しname単位でunionする。
 async function triggerAiReportDirLoad() {
   if (_aiReportDirLoadInFlight || _aiReportDirCache) return;
   _aiReportDirLoadInFlight = true;
-  const gotIndex = await fetchReportIndex();
-  if (!gotIndex) await fetchPersonalDataDirList();
+  const forceUnion = _aiReportForceUnionRefresh;
+  _aiReportForceUnionRefresh = false;
+  if (forceUnion) {
+    const [indexFiles, dirList] = await Promise.all([fetchReportIndex(), fetchPersonalDataDirList()]);
+    // dirList取得(fetchPersonalDataDirList)は失敗時に_aiReportDirErrorを自ら立てる。
+    // indexFiles/dirListのいずれかが得られていれば、その旨を反映して使える結果として採用する
+    // (indexのみ成功・dirListのみ失敗、というケースでエラーバナーが誤って残らないようにする)。
+    if (indexFiles || dirList) {
+      _aiReportDirCache = unionAiReportEntries(indexFiles, dirList);
+      _aiReportDirError = false;
+    }
+    // 両方nullなら_aiReportDirCacheはnullのままにし、_aiReportDirErrorはfetchPersonalDataDirList
+    // 側の失敗パスで既にtrueになっている想定(再試行UIへ委ねる)。
+  } else {
+    const indexFiles = await fetchReportIndex();
+    if (indexFiles) {
+      _aiReportDirCache = indexFiles;
+      _aiReportDirError = false;
+    } else {
+      await fetchPersonalDataDirList();  // 内部で_aiReportDirCache/_aiReportDirErrorを設定する(従来どおり)
+    }
+  }
   _aiReportDirLoadInFlight = false;
   if (state.currentView === "ai-reports") render();
 }
@@ -7398,6 +7452,9 @@ function refreshAiReports() {
   }
   _aiReportDirCache = null;
   _aiReportDirError = false;
+  // v140(Codexレビュー High-1 (iii)): 手動更新は必ずContents API listingも取得し、
+  // report-index.jsonとname単位でunionする(triggerAiReportDirLoad参照)。
+  _aiReportForceUnionRefresh = true;
   render();
   showToast("最新の一覧を取得しています…");
 }
