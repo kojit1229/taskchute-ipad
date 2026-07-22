@@ -10,8 +10,8 @@
 // [1] 破損index(files配列の要素が全てstring型nameを持たない)→ Contents APIへフォールバック
 // [2] 古いindex(generatedAtが48時間超過)→ Contents APIへフォールバック
 // [3] 手動「一覧を更新」時はindexとContents API listingの両方を取得し、name単位でunionする
-//
-// Med-3(compositionend欠落時のフェイルセーフ)は後続コミットで同ファイルへ追記する。
+// [4] Med-3: compositionendイベントが発火しなくても、focusoutで_imeComposingが無条件クリア
+//     されてflushされる(フェイルセーフ)。60秒の強制flushタイムアウトも確認する。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
@@ -129,6 +129,83 @@ function check(name, cond, extra = "") {
     options = await page.$$eval("[data-ai-report-date] option", (els) => els.map((e) => e.value));
     check("index(07-20)とContents API(07-19)がunionされ新しい順に2件並ぶ",
       JSON.stringify(options) === JSON.stringify(["2026-07-20", "2026-07-19"]), JSON.stringify(options));
+
+    // ============================================================
+    // [4] Med-3: compositionend欠落時のfocusoutフェイルセーフ + 60秒タイムアウトフェイルセーフ
+    // ============================================================
+    console.log("[4-a] compositionendイベントを取りこぼしても、focusoutで_imeComposingが無条件クリアされflushされる");
+    await page.evaluate((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.currentView = "journal";
+      s.feedback = {};
+      s.feedbackFiles = [];
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, KEY);
+    await page.reload();
+    await page.waitForTimeout(500);
+
+    const journalTextarea = page.locator(`[data-journal-date="${TODAY}"]`);
+    await journalTextarea.click();
+    await page.evaluate(() => {
+      document.activeElement.setAttribute("data-test-marker", "v140-lost-compositionend");
+      // compositionstartのみ発火させ、compositionendは意図的に発火させない(取りこぼしを模擬)
+      document.activeElement.dispatchEvent(new Event("compositionstart", { bubbles: true }));
+    });
+
+    // 新着を発生させてrenderDeferringForFocus経由の保留を作る(Vision.mdの変更をトリガーに使う)
+    await page.route((url) => url.hostname === "api.github.com" && /\/contents\/taskchute\/content\/Vision\.md$/.test(decodeURIComponent(url.pathname)), (route) =>
+      route.fulfill({ status: 200, contentType: "text/markdown", body: "# Vision_v140\n\nフェイルセーフ検証用トリガー。" }));
+    await page.clock.setFixedTime(new Date(now0.getTime() + 5 * 60 * 1000));  // maybeRefreshFeedbackの60秒ガードを超えさせる
+    await page.evaluate(() => {
+      Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await page.waitForTimeout(600);
+    const markerStillThereComposing = await page.evaluate(() =>
+      document.activeElement && document.activeElement.getAttribute("data-test-marker") === "v140-lost-compositionend");
+    check("IME変換中(compositionstartのみ)は延期される", markerStillThereComposing);
+
+    // compositionendを発火させずにフォーカスだけ外す(取りこぼしの模擬)
+    await page.evaluate(() => document.activeElement && document.activeElement.blur());
+    await page.waitForTimeout(400);
+    const markerGoneAfterBlurWithoutCompositionEnd = await page.evaluate(() =>
+      !document.activeElement || document.activeElement.getAttribute("data-test-marker") !== "v140-lost-compositionend");
+    check("compositionend無しでもfocusoutだけで保留が解除されrenderが実行される(フェイルセーフ)", markerGoneAfterBlurWithoutCompositionEnd);
+
+    console.log("[4-b] 60秒経過すると、focusout/compositionendを待たずに強制flushされる(周期チェックのフェイルセーフ)");
+    await page.evaluate((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.currentView = "journal";
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, KEY);
+    await page.reload();
+    await page.waitForTimeout(500);
+    const journalTextarea2 = page.locator(`[data-journal-date="${TODAY}"]`);
+    await journalTextarea2.click();
+    await page.evaluate(() => {
+      document.activeElement.setAttribute("data-test-marker", "v140-timeout-failsafe");
+    });
+    // フォーカスしたままcompositionstart無しで新着トリガーを送る(通常の「入力中」延期と同じ経路)
+    await page.route((url) => url.hostname === "api.github.com" && /\/contents\/taskchute\/content\/Daily_Affirmation\.md$/.test(decodeURIComponent(url.pathname)), (route) =>
+      route.fulfill({ status: 200, contentType: "text/markdown", body: "# Affirmation_v140\n\nタイムアウトフェイルセーフ検証用。" }));
+    await page.clock.setFixedTime(new Date(now0.getTime() + 12 * 60 * 1000));
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await page.waitForTimeout(600);
+    const markerStillThereFocused = await page.evaluate(() =>
+      document.activeElement && document.activeElement.getAttribute("data-test-marker") === "v140-timeout-failsafe");
+    check("フォーカス中は延期される(まだ60秒経過していない)", markerStillThereFocused);
+
+    // フォーカスは外さずに、仮想時刻だけ61秒進める(DEFERRED_RENDER_FAILSAFE_MS=60秒を超過させる)。
+    // 500ms周期のtimerTickerは実時間で動くため、少し実時間を待てば次のtickでフェイルセーフが働く。
+    await page.clock.setFixedTime(new Date(now0.getTime() + 12 * 60 * 1000 + 61 * 1000));
+    await page.waitForTimeout(1200);
+    const markerGoneAfterTimeout = await page.evaluate(() =>
+      !document.activeElement || document.activeElement.getAttribute("data-test-marker") !== "v140-timeout-failsafe");
+    // 注: 60秒フェイルセーフが働きrender()が実行されると、DOMが丸ごと再構築されfocusは
+    // どの要素も持たない状態(document.activeElement===body)に戻る。これはblur操作を
+    // 一度もしていないシナリオでの結果であり、「フォーカス喪失イベントを一切経ないまま
+    // 強制的にrenderが実行された」ことの副次的な証拠でもある。
+    check("60秒経過でフォーカスが外れていなくても強制flushされる(フェイルセーフ)", markerGoneAfterTimeout);
   } catch (e) {
     failures++;
     console.log("  ❌ 例外:", e.message);
