@@ -157,8 +157,22 @@ const FEEDBACK_REFRESH_MIN_GAP_MS = 60 * 1000;        // visibilitychange連打�
 //       (b)IME変換中(compositionstart〜compositionend)は render() を即実行せず「保留」フラグを
 //       立てるだけにし、フォーカスが外れた瞬間(focusout)またはIME確定した瞬間(compositionend)に
 //       1回だけ実行する。非永続(端末内メモリのみ)。
+// v140(Codexレビュー Med-2/Med-3、仕様精緻化。CHANGES_v140.md参照):
+//   Med-2: v137時点はcompositionend時に「フォーカスが同じ入力欄に残っていても即render」して
+//     いたが、IME確定直後は続けて入力するのが通例(変換→次の単語入力、を繰り返す)ため、
+//     まだフォーカスが入力欄にあるならフォーカスが外れるまで延期を継続するよう変更した
+//     (未確定文字消失というv137の核心的リスクは解消したままだが、フォーカス/カーソル位置は
+//     compositionendのたびに失われないほうが実際の入力体験としてより安全と判断)。
+//   Med-3: compositionendイベントが何らかの理由(ブラウザ実装差・IME実装差)で発火しなかった
+//     場合、_imeComposing=trueのまま固着し新着が永久に反映されなくなるリスクがあった。
+//     (a) focusoutハンドラで_imeComposingを無条件クリアしてから判定する(フォーカス喪失を
+//     跨いでIME変換が継続することは無いため安全)。(b) さらに保険として、延期発生から
+//     DEFERRED_RENDER_FAILSAFE_MS(60秒)経過してもまだ保留中なら、500ms周期のtimerTicker
+//     (startTimerTicker)からフォーカス/IME状態に関わらず強制flushする。
 let _imeComposing = false;
 let _deferredRenderPending = false;
+let _deferredRenderPendingSince = 0;  // _deferredRenderPendingがtrueになった時刻(Date.now()、フェイルセーフ用)
+const DEFERRED_RENDER_FAILSAFE_MS = 60 * 1000;
 function isFocusInEditableElement() {
   const el = document.activeElement;
   if (!el) return false;
@@ -166,28 +180,24 @@ function isFocusInEditableElement() {
   return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable === true;
 }
 // hydrateStaticMarkdown等の「新着があれば再描画」用の入口。入力中/IME変換中なら即renderせず
-// 保留し、focusout/compositionendで自動的に1回だけ実行させる。
+// 保留し、focusout/compositionend(またはフェイルセーフのタイムアウト)で自動的に1回だけ実行させる。
 function renderDeferringForFocus() {
   if (_imeComposing || isFocusInEditableElement()) {
+    if (!_deferredRenderPending) _deferredRenderPendingSince = Date.now();
     _deferredRenderPending = true;
     return;
   }
   render();
 }
-// focusout用: フォーカスが別の入力欄へそのまま移った(タブ移動等)だけなら、まだ延期を続ける。
-// setTimeout(0)経由で呼ばれ、その時点のdocument.activeElementが新しいフォーカス先になっている前提。
-function flushDeferredRenderIfFocusLeft() {
+// compositionend/focusoutの両方から呼ばれる共通の実行判定。
+// 60秒以上延期され続けている場合は、取りこぼしイベントへの保険としてフォーカス/IME状態に
+// 関わらず強制的に実行する(それ以外は「まだフォーカス中/IME変換中なら延期を継続」)。
+function attemptFlushDeferredRender() {
   if (!_deferredRenderPending) return;
-  if (_imeComposing || isFocusInEditableElement()) return;  // まだ別の入力欄にフォーカス移動しただけ等
+  const overdue = _deferredRenderPendingSince > 0 && (Date.now() - _deferredRenderPendingSince > DEFERRED_RENDER_FAILSAFE_MS);
+  if (!overdue && (_imeComposing || isFocusInEditableElement())) return;  // まだ延期を継続
   _deferredRenderPending = false;
-  render();
-}
-// compositionend用: IME変換が確定した時点で、フォーカスが同じ入力欄に残っていても実行する
-// (未確定文字が消える具体的なリスクは確定と同時に解消しており、以降はfocus中の延期対象外にした
-// 場合と同じ「たまに再描画が挟まる」程度の話になるため)。
-function flushDeferredRenderAfterComposition() {
-  if (!_deferredRenderPending) return;
-  _deferredRenderPending = false;
+  _deferredRenderPendingSince = 0;
   render();
 }
 // v74: 自分が保存した言語化の当日分エコー表示用({ 'YYYY-MM-DD': '入力文字列' }、非永続)。
@@ -789,14 +799,22 @@ document.addEventListener("toggle", (event) => {
 
 // v137: hydrateStaticMarkdownの新着render延期(review.md:28)。IME変換中フラグの追跡と、
 // 変換確定/フォーカス離脱のタイミングでの保留render実行。
+// v140(Med-2): compositionendはフォーカスがまだ入力欄に残っていれば延期を継続する
+// (attemptFlushDeferredRenderが両条件を見て判定する)。
 document.addEventListener("compositionstart", () => { _imeComposing = true; });
 document.addEventListener("compositionend", () => {
   _imeComposing = false;
-  flushDeferredRenderAfterComposition();
+  attemptFlushDeferredRender();
 });
 document.addEventListener("focusout", () => {
-  // focusout発火時点ではactiveElementがまだ旧要素のことがあるため、次のタスクへずらして判定する
-  setTimeout(flushDeferredRenderIfFocusLeft, 0);
+  // v140(Med-3): compositionendイベントを取りこぼした場合のフェイルセーフとして、
+  // _imeComposingをここで無条件クリアしてから判定する(フォーカス喪失を跨いでIME変換が
+  // 継続することは無いため安全)。次のタスクへずらすのは、focusout発火時点ではactiveElement
+  // がまだ旧要素のことがあるため。
+  setTimeout(() => {
+    _imeComposing = false;
+    attemptFlushDeferredRender();
+  }, 0);
 }, true);
 
 document.addEventListener("input", (event) => {
@@ -13528,6 +13546,10 @@ function startTimerTicker() {
     updateProjectedEndTick();
     // v77: AIフィードバック等の定期再fetch(30分毎)。visibilitychange側と同じ入口・スロットルを共有する。
     if (Date.now() - _lastFeedbackHydrateAt >= FEEDBACK_REFRESH_INTERVAL_MS) maybeRefreshFeedback();
+    // v140(Med-3): 延期中のrenderがcompositionend/focusoutを取りこぼして固着した場合の
+    // フェイルセーフ。attemptFlushDeferredRender内部で60秒経過判定を行う(500ms周期でチェックする
+    // だけなので、ここでは無条件に呼ぶだけでよい。60秒未満なら何もしない)。
+    attemptFlushDeferredRender();
   }, 500);
 }
 
