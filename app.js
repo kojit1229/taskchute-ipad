@@ -7852,9 +7852,18 @@ function loadVisionBoardImages(file) {
 //       のtagNameは"script"であって"SCRIPT"ではない)ため、BLOCKED_TAGSの大文字比較をすり抜けて
 //       いた。tagNameを大文字化してから比較するよう修正。
 //   (2) javascript: スキームの検知が href/src/xlink:href の3属性限定だったため、
-//       style="background:url(javascript:...)" のような他属性経由の混入を見逃していた
-//       (現代ブラウザはCSS url()内のjavascript:を実行しないため実害は無いが、対象属性を
-//       全属性へ広げ、startsWithではなくincludesにして url() 等のラップも拾うようにした)。
+//       style="background:url(javascript:...)" のような他属性経由の混入を見逃していた。
+// v140(Codexレビュー Low-5/Low-6、v137の(2)を精緻化):
+//   Low-5: v137で(2)への対応として全属性を走査対象にしたが、これはtitle等の正当なテキスト
+//     属性(例: title="Java Script: overview")まで「javascript:を含む」として属性ごと
+//     消してしまう過剰検知だった。URL系属性(href/src/xlink:href/action/formaction)と
+//     style属性だけに走査対象を戻した(on*属性の検知は従来どおり全属性が対象のまま)。
+//   Low-6: data: スキームの扱いを属性ごとに分ける。href/xlink:hrefはdata:を全面拒否
+//     (data:text/htmlのようなナビゲーション用途はここにしか出てこない)。srcはdata:image/
+//     (png|jpeg|gif|webp)のみ許可し、それ以外(data:image/svg+xml等。SVG内に<script>を
+//     埋め込めるため個別に拒否)は拒否する。
+const SANITIZE_URL_ATTRS = new Set(["href", "src", "xlink:href", "action", "formaction"]);
+const SANITIZE_SAFE_DATA_IMAGE_RE = /^data:image\/(png|jpeg|gif|webp)[;,]/;
 function sanitizeHTML(html) {
   const template = document.createElement("template");
   template.innerHTML = html;
@@ -7865,9 +7874,16 @@ function sanitizeHTML(html) {
       for (const attr of [...el.attributes]) {
         const name = attr.name.toLowerCase();
         const val = String(attr.value || "").replace(/\s+/g, "").toLowerCase();
-        if (name.startsWith("on")) el.removeAttribute(attr.name);                       // onerror= 等
-        else if (val.includes("javascript:") || val.includes("data:text/html")) {
-          el.removeAttribute(attr.name);
+        if (name.startsWith("on")) { el.removeAttribute(attr.name); continue; }        // onerror= 等
+        if (name === "style") {
+          if (val.includes("javascript:")) el.removeAttribute(attr.name);
+          continue;
+        }
+        if (!SANITIZE_URL_ATTRS.has(name)) continue;  // URL系属性以外はjavascript:/data:検知の対象外
+        if (val.includes("javascript:")) { el.removeAttribute(attr.name); continue; }
+        if (val.startsWith("data:")) {
+          const allowed = name === "src" && SANITIZE_SAFE_DATA_IMAGE_RE.test(val);
+          if (!allowed) el.removeAttribute(attr.name);
         }
       }
     }
