@@ -124,9 +124,12 @@ let cachedAiWorkResults = null;
 let cachedReadingHighlights = null;
 // v92: AIレポートビューア(コンテンツ総括・自己分析・基盤ヘルス・週次レビューをアプリ内で横断閲覧)。
 // v110: バッチ実行サマリを追加。
-// taskchute/直下のディレクトリ一覧を1回のContents API呼び出しで取得し、種類ごとにファイル名prefixで
-// ローカルにフィルタする(セッションキャッシュ、手動更新ボタンでのみ再取得。自動ポーリングはしない)。
-let _aiReportDirCache = null;        // Contents APIのレスポンス配列(null=未取得)
+// taskchute/直下の一覧を取得し、種類ごとにファイル名prefixでローカルにフィルタする
+// (セッションキャッシュ、手動更新ボタンでのみ再取得。自動ポーリングはしない)。
+// v138: 一覧の取得元は2段(report-index.json優先→無ければContents APIディレクトリ一覧に
+// フォールバック。fetchReportIndex/triggerAiReportDirLoad参照)。_aiReportDirCacheの形状は
+// どちらの取得元でも{name,type:"file"}配列に揃えている。
+let _aiReportDirCache = null;        // 一覧(index or Contents API)のレスポンス配列(null=未取得)
 let _aiReportDirError = false;       // 直近の一覧取得が失敗したか(静かなエラー表示 + 再試行ボタン用)
 let _aiReportDirLoadInFlight = false;
 const _aiReportBodyCache = {};       // { 'コンテンツ総括_2026-07-14.md': '...md text...' }(取得成功分のみ。失敗はここに入れない)
@@ -7313,12 +7316,42 @@ function aiReportFilesForType(prefix) {
     .sort((a, b) => b.date.localeCompare(a.date));
 }
 
+// v138(review.md:31): AIレポート履歴一覧の第1段。loop側 report-index-build.py が生成する
+// taskchute/report-index.json(スキーマは{generatedAt, files:[{name,date,kind}]}。契約の詳細は
+// FORMAT_CONTRACT.md参照)をfetchし、あれば_aiReportDirCacheへ変換して格納する。
+// _aiReportDirCacheの内部形状はContents API由来の配列([{name,type:"file"},...])と揃えることで、
+// aiReportFilesForType()側は一切変更せずに済む(名前からのprefix/日付抽出はentry.nameベースで
+// ソースに依存しないため)。
+// 404(未生成環境。personal-data側にreport-index.jsonがまだ無い)やスキーマ不正の場合はfalseを
+// 返し、呼び出し側が従来のContents APIディレクトリ一覧取得(fetchPersonalDataDirList)へ
+// フォールバックする(後方互換。index無し環境でも壊れない)。401等の認証エラーは
+// fetchGitHubRawResult内部で既にバナー表示されるため、ここで追加のエラー処理はしない。
+async function fetchReportIndex() {
+  const result = await fetchGitHubRawResult("report-index.json");
+  if (!result.ok) return false;
+  let parsed;
+  try {
+    parsed = JSON.parse(result.text);
+  } catch {
+    return false;  // 壊れたJSON(生成中の書き込み競合等) → フォールバックへ
+  }
+  if (!parsed || !Array.isArray(parsed.files)) return false;
+  _aiReportDirCache = parsed.files
+    .filter((f) => f && typeof f.name === "string")
+    .map((f) => ({ name: f.name, type: "file" }));
+  _aiReportDirError = false;
+  return true;
+}
+
 // 一覧の読み込みをトリガーする(多重fetch防止のin-flightガード付き)。完了後、まだ
 // AIレポート画面を見ていれば再描画してセレクタ/本文を反映する。
+// v138: まずreport-index.json(fetchReportIndex)を試し、無ければ従来のContents API
+// ディレクトリ一覧取得(fetchPersonalDataDirList)へフォールバックする2段構成にした。
 async function triggerAiReportDirLoad() {
   if (_aiReportDirLoadInFlight || _aiReportDirCache) return;
   _aiReportDirLoadInFlight = true;
-  await fetchPersonalDataDirList();
+  const gotIndex = await fetchReportIndex();
+  if (!gotIndex) await fetchPersonalDataDirList();
   _aiReportDirLoadInFlight = false;
   if (state.currentView === "ai-reports") render();
 }
