@@ -659,11 +659,9 @@ document.addEventListener("click", (event) => {
   // v42: AIループ搬送
   if (action === "report-copy-ai") copyReportToClipboard();
   if (action === "report-share-ai") shareReport();
-  if (action === "journal-import-ai") {
-    const d = target.dataset.date;
-    openAiImportModal(d, parseAiFeedback(state.feedback[d] || cachedFeedback[d] || ""));
-  }
-  if (action === "ai-import-submit") submitAiImport();
+  // v143: journal-import-ai(手動貼り付け取込ボタン)はv141でジャーナルのAIフィードバック列
+  // 自体を撤去した際に到達不能になっていたため、ハンドラごと削除した(openAiImportModal一式・
+  // ai-import-submitも同様。CHANGES_v143.md参照)。
   if (action === "ai-mit-adopt") adoptAiMit(Number(target.dataset.index));
   // v133: タスク候補チップ(採用/却下)
   if (action === "ai-task-adopt") adoptAiTaskCandidate(Number(target.dataset.index));
@@ -839,10 +837,8 @@ document.addEventListener("input", (event) => {
     meta.ideal = target.value;
     saveState();
   }
-  if (target.matches("[data-feedback-date]")) {
-    state.feedback[target.dataset.feedbackDate] = target.value;
-    saveState();
-  }
+  // v143: data-feedback-date(ジャーナルAIフィードバック欄の入力ハンドラ)はv141で該当欄自体を
+  // 撤去した際に到達不能になっていたため削除した(paste用の別ハンドラも同様。CHANGES_v143.md参照)。
   // v73: コンディションOS — 夜のひとこと(入力中も保存。全再描画しないのでフォーカスは維持される)
   if (target.matches("[data-condition-note-date]")) {
     const d = target.dataset.conditionNoteDate;
@@ -1057,11 +1053,8 @@ document.addEventListener("change", (event) => {
     render();
   }
   if (target.matches("#importData")) importData(target.files?.[0]);
-  if (target.matches("[data-feedback-upload]")) {
-    const date = target.dataset.feedbackUpload;
-    const file = target.files?.[0];
-    if (file) uploadFeedbackFile(date, file);
-  }
+  // v143: data-feedback-upload(.mdアップロード欄)はv141で該当欄自体を撤去した際に到達不能に
+  // なっていたため、ハンドラとuploadFeedbackFile()本体を削除した(CHANGES_v143.md参照)。
   // v120: AutoSleep書き出しCSVの取込。値を先に消し、同じファイルも再選択可能にする。
   if (target.matches("[data-sleep-csv-upload]")) {
     const file = target.files?.[0];
@@ -3614,73 +3607,14 @@ async function shareReport() {
   try { await navigator.share({ text: report }); } catch { /* キャンセル等は無視 */ }
 }
 
-// 入力: 貼り付けテキストをセクション抽出(^## 見出しで分割し「- 」行を候補化)
-function parseAiFeedback(text) {
-  const out = { themes: [], mits: [], questions: [] };
-  const map = [["0秒思考テーマ", "themes"], ["MIT候補", "mits"], ["問い候補", "questions"]];
-  let cur = null;
-  (text || "").split("\n").forEach((line) => {
-    const h = line.match(/^#{1,6}\s*(.+?)\s*$/);
-    if (h) { const hit = map.find(([kw]) => h[1].includes(kw)); cur = hit ? hit[1] : null; return; }
-    if (cur) { const m = line.match(/^\s*[-・•*]\s*(.+?)\s*$/); if (m && m[1]) out[cur].push(m[1].trim()); }
-  });
-  return out;
-}
-
-let _aiImportCtx = null;  // { date, parsed } — 非永続
-function openAiImportModal(date, parsed) {
-  const total = parsed.themes.length + parsed.mits.length + parsed.questions.length;
-  if (!total) return showToast("取り込める候補が見つかりませんでした(見出し構成をご確認ください)");
-  _aiImportCtx = { date, parsed };
-  state.modal = { type: "aiImport", id: date };
-  renderModal(buildAiImportModal(parsed));
-}
-function buildAiImportModal(parsed) {
-  const sec = (title, key, items) => items.length ? `
-    <div class="ai-import-sec">
-      <div class="ai-import-h">${title}</div>
-      ${items.map((t, i) => `<label class="ai-import-row"><input type="checkbox" data-ai-type="${key}" data-ai-index="${i}" checked><span>${escapeHTML(t)}</span></label>`).join("")}
-    </div>` : "";
-  return `
-    <div class="modal-card" role="dialog" aria-modal="true">
-      <div class="modal-header">
-        <h3 class="modal-title">🤖 AIフィードバックから取り込み</h3>
-        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
-      </div>
-      <div class="modal-body">
-        ${sec("💭 0秒思考テーマ", "themes", parsed.themes)}
-        ${sec("★ MIT候補", "mits", parsed.mits)}
-        ${sec("❓ 問い候補", "questions", parsed.questions)}
-        <div class="muted" style="font-size:11.5px; line-height:1.6; margin-top:6px">チェックした項目だけ登録します。MIT候補は Block 化せず、翌日のタスクシュート上部に候補として並び、タップで採用します(採用判断は人間)。</div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn" data-action="modal-close">キャンセル</button>
-        <button class="btn primary" data-action="ai-import-submit">取り込む</button>
-      </div>
-    </div>`;
-}
-function submitAiImport() {
-  if (!_aiImportCtx) return closeModal();
-  const { date, parsed } = _aiImportCtx;
-  const picked = { themes: [], mits: [], questions: [] };
-  modalRoot.querySelectorAll("input[data-ai-type]:checked").forEach((el) => {
-    picked[el.dataset.aiType].push(parsed[el.dataset.aiType][Number(el.dataset.aiIndex)]);
-  });
-  // テーマ: 完全一致は skip(二重防止)
-  const existing = new Set(state.zeroThinking.themes.map((t) => t.text));
-  picked.themes.forEach((text) => {
-    if (!existing.has(text)) state.zeroThinking.themes.push({ id: crypto.randomUUID(), text, fav: false, questionId: null, createdAt: nowDateTime() });
-  });
-  // MIT候補: Block化せず journalMeta へ(翌日チップ表示、当日限り)
-  const meta = (state.journalMeta[date] ||= { aiMitCandidates: [], aiImported: false });
-  picked.mits.forEach((t) => { if (!meta.aiMitCandidates.includes(t)) meta.aiMitCandidates.push(t); });
-  // 問い候補: origin:'ai' で追加
-  picked.questions.forEach((text) => state.questions.push(makeQuestion({ text, origin: "ai" })));
-  meta.aiImported = true;
-  _aiImportCtx = null;
-  closeModal();
-  saveAndRender(`取り込みました(テーマ${picked.themes.length}・MIT${picked.mits.length}・問い${picked.questions.length})`);
-}
+// v143: 貼り付け取込モーダル一式(parseAiFeedback/openAiImportModal/buildAiImportModal/
+// submitAiImport/_aiImportCtx)を削除した。v141でジャーナルのAIフィードバック欄自体を撤去して
+// 以来、これらを呼び出す唯一の経路(data-feedback-date paste・journal-import-aiボタン)が
+// 到達不能になっており、事実上の死コードだったため(CHANGES_v143.md参照)。
+// AIフィードバックからの提案取込は現在 autoIngestFeedback()(hydrateStaticMarkdown内、
+// 確認なしで候補チップへ自動登録)に一本化されている — このコメントの直後にある
+// aiMitChips/adoptAiMitはそちらとは別系統(state.journalMeta.aiMitCandidates)のため削除して
+// いない。
 
 // タスクシュート上部の MIT候補チップ(前日フィードバックの取り込み分、当日限り)
 function aiMitChips() {
@@ -16364,25 +16298,9 @@ function recordFeedbackFile(date) {
   }
 }
 
-function uploadFeedbackFile(date, file) {
-  const reader = new FileReader();
-  reader.onload = () => {
-    const text = reader.result || "";
-    // localStorage の state.feedback と cachedFeedback 両方に保存
-    state.feedback[date] = text;
-    cachedFeedback[date] = text;
-    saveState();
-    showToast(`AIフィードバック ${date} を保存しました`);
-    render();
-    // GitHub(個人データリポジトリ)に設定があれば自動 push
-    if (personalDataReady(state.settings.github)) {
-      recordFeedbackFile(date); // v56: 起動時 fetch を存在既知の日付に限定(404ノイズ回避)
-      pushFileToGitHub(`AIフィードバック_${date}.md`, text, "アップロードAIフィードバック");
-    }
-  };
-  reader.onerror = () => showToast("ファイル読込に失敗しました");
-  reader.readAsText(file, "utf-8");
-}
+// v143: uploadFeedbackFile()(.mdアップロード欄の処理本体)は削除した。唯一の呼び出し元
+// だったdata-feedback-uploadハンドラがv141以来到達不能だったため(CHANGES_v143.md参照)。
+// recordFeedbackFile()はhydrateStaticMarkdown側からも呼ばれているため残す。
 
 async function pushReportToGitHub() {
   const date = state.selectedDate;
@@ -16798,17 +16716,6 @@ document.addEventListener("visibilitychange", () => {
   maybeRefreshFeedback();                    // v77: フォアグラウンド復帰時にAIフィードバック等を再fetch
 });
 
-// v42: AIフィードバック欄への貼り付けで、構造化取り込みモーダルを開く
-//      (抽出ゼロなら何もしない = 従来の自由貼り付けも壊さない)
-document.addEventListener("paste", (event) => {
-  const t = event.target;
-  if (!t || !t.matches || !t.matches("[data-feedback-date]")) return;
-  const date = t.dataset.feedbackDate;
-  setTimeout(() => {
-    const text = t.value || "";
-    state.feedback[date] = text;
-    saveState();
-    const parsed = parseAiFeedback(text);
-    if (parsed.themes.length + parsed.mits.length + parsed.questions.length > 0) openAiImportModal(date, parsed);
-  }, 0);
-});
+// v143: data-feedback-date欄への貼り付けで取込モーダルを開くpasteリスナー(v42)は削除した。
+// v141で該当欄自体を撤去して以来、イベントが発火しようがない到達不能コードだったため
+// (CHANGES_v143.md参照)。

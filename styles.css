@@ -2924,11 +2924,9 @@ h3 {
 .projected-end:empty { display: none; }
 .home-zone .projected-end { margin-left: auto; font-size: 12px; }
 
-/* v42: AIループ搬送 — 取り込みモーダル / MIT候補チップ */
-.ai-import-sec { margin-bottom: 14px; }
-.ai-import-h { font-size: 13px; font-weight: 800; margin-bottom: 8px; }
-.ai-import-row { display: flex; align-items: flex-start; gap: 9px; padding: 7px 0; font-size: 14px; line-height: 1.5; cursor: pointer; }
-.ai-import-row input { margin-top: 3px; flex: none; }
+/* v42: AIループ搬送 — MIT候補チップ */
+/* v143: .ai-import-sec/.ai-import-h/.ai-import-row(取り込みモーダル専用)はbuildAiImportModal
+   削除に伴い到達不能になったため削除した(CHANGES_v143.md参照)。 */
 .ai-mit-chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; padding: 10px 12px; background: rgba(255,149,0,.08); border: 1px solid rgba(255,149,0,.22); border-radius: 10px; }
 .ai-mit-cap { font-size: 12px; font-weight: 800; color: var(--muted); }
 .ai-mit-chip { font-size: 12.5px; font-weight: 700; color: var(--orange); background: var(--panel); border: 1px solid rgba(255,149,0,.4); border-radius: 20px; padding: 5px 12px; cursor: pointer; }
