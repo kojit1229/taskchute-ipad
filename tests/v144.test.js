@@ -358,3 +358,55 @@ function check(name, cond, extra = "") {
     check("start.deficit=30が補完される", b1.start.deficit === 30, String(b1.start.deficit));
     check("start.low=40が補完される", b1.start.low === 40, String(b1.start.low));
     check("start.normal=50が補完される", b1.start.normal === 50, String(b1.start.normal));
+    check("decayPerHour=3が補完される", b1.decayPerHour === 3, String(b1.decayPerHour));
+    check("decayStartMinutes=420(07:00)が補完される", b1.decayStartMinutes === 420, String(b1.decayStartMinutes));
+    check("max=50が補完される", b1.max === 50, String(b1.max));
+    check("旧decayStartHourキーは残らない", !("decayStartHour" in b1));
+
+    console.log("[12b] 旧decayStartHour(時単位)からdecayStartMinutes(分単位)への移行");
+    await page.evaluate((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.settings.battery = { decayStartHour: 9 };  // 旧形式(分単位フィールドが無い)
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, KEY);
+    await page.reload();
+    await page.waitForTimeout(500);
+    await page.click('[data-action="nav"][data-view="home"]');
+    await page.waitForTimeout(200);
+    stMig = await stateNow();
+    const b2 = stMig.settings.battery;
+    check("decayStartHour:9 → decayStartMinutes:540(9*60)に移行される", b2.decayStartMinutes === 540, String(b2.decayStartMinutes));
+    check("移行後はdecayStartHourキーを持たない", !("decayStartHour" in b2));
+
+    console.log("[12c] 既存値の再クランプ(同期データ等で異常値が混入していても補正される)");
+    await page.evaluate((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.settings.battery = {
+        start: { deficit: 999, low: -20, normal: 9999 },
+        decayPerHour: -5,
+        decayStartMinutes: 99999,
+        max: -3
+      };
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, KEY);
+    await page.reload();
+    await page.waitForTimeout(500);
+    await page.click('[data-action="nav"][data-view="home"]');
+    await page.waitForTimeout(200);
+    stMig = await stateNow();
+    const b3 = stMig.settings.battery;
+    check("start.deficit=999は200にクランプされる", b3.start.deficit === 200, String(b3.start.deficit));
+    check("start.low=-20は0にクランプされる", b3.start.low === 0, String(b3.start.low));
+    check("start.normal=9999は200にクランプされる", b3.start.normal === 200, String(b3.start.normal));
+    check("decayPerHour=-5は0にクランプされる", b3.decayPerHour === 0, String(b3.decayPerHour));
+    check("decayStartMinutes=99999は範囲外なので既定420に戻る", b3.decayStartMinutes === 420, String(b3.decayStartMinutes));
+    check("max=-3は1にクランプされる", b3.max === 1, String(b3.max));
+
+    console.log(failures === 0 ? "\n✅ v144 ALL PASS" : `\n❌ v144: ${failures} 件失敗`);
+  } finally {
+    await browser.close();
+    server.close();
+  }
+
+  process.exit(failures === 0 ? 0 : 1);
+})().catch((e) => { console.error(e); process.exit(1); });
