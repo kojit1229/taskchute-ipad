@@ -3105,6 +3105,23 @@ h3 {
 .stats-hist-fill { width: 100%; background: var(--accent); opacity: .7; border-radius: 3px 3px 0 0; }
 .stats-hist-lab { font-size: 9px; color: var(--muted); height: 12px; line-height: 12px; }
 
+/* v142: 計器盤「睡眠」セクション */
+.stats-sleep-sub { margin-bottom: 16px; }
+.stats-sleep-sub:last-child { margin-bottom: 0; }
+.stats-sleep-subhead { font-size: 13px; font-weight: 800; margin: 0 0 8px; }
+.stats-sleep-band { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow-y: auto; }
+.stats-sleep-band-row { display: flex; align-items: center; gap: 8px; height: 9px; }
+.stats-sleep-band-date { width: 34px; flex: none; font-size: 9.5px; color: var(--muted); text-align: right; }
+.stats-sleep-band-track { position: relative; flex: 1; height: 100%; background: var(--panel-soft); border-radius: 3px; overflow: hidden; }
+.stats-sleep-band-bar { position: absolute; top: 0; bottom: 0; background: var(--accent); opacity: .7; border-radius: 3px; }
+.stats-sleep-bucket-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 5px 0; border-bottom: 1px solid var(--line-soft, var(--line)); font-size: 12px; }
+.stats-sleep-bucket-row:last-of-type { border-bottom: none; }
+.stats-sleep-bucket-label { min-width: 96px; font-weight: 700; }
+.stats-sleep-bucket-metric { display: flex; align-items: center; gap: 6px; font-size: 11.5px; }
+.stats-sleep-bucket-bar { width: 60px; flex: none; }
+.stats-sleep-bucket-metric b.pos { color: var(--green); }
+.stats-sleep-bucket-metric b.neg { color: var(--red); }
+
 /* v55: WBS インライン編集(編集モード時の行内フォーム) */
 .wbs-inline { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .wbs-inline-input { font-size: 16px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); max-width: 150px; }

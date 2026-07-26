@@ -1,4 +1,8 @@
-const CACHE_NAME = "taskchute-journal-pwa-v140";
+const CACHE_NAME = "taskchute-journal-pwa-v142";
+// v142: 日次結合ヘルパー computeDailyMetrics を新設し、計器盤(統計)に「睡眠」セクション
+//   (就寝起床の帯グラフ/中央値ベースライントレンド/睡眠帯別の実績比較)を追加。CHANGES_v142.md参照。
+// v141: ジャーナルタブのAIフィードバック列(未使用)を撤去し残り2列を拡幅+「今日行ったお店」
+//   ログ(店名/URL/感想、年間一覧付き)を追加。CHANGES_v141.md参照。
 // v132: Codexレビュー指摘対応(身体スキャン背景タップのゲート飛ばし/丸め不一致等)。CHANGES_v132.md参照。
 // v131: 体力予算・睡眠カードに鮮度フォールバック(AutoSleep 21:00確定対策)。CHANGES_v131.md参照。
 // v130: 睡眠CSV取込の失敗メッセージを空CSV/全件パース失敗で区別。CHANGES_v130.md参照。
