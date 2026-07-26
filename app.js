@@ -7415,6 +7415,58 @@ function renderSleepCard(date) {
     </div>`;
 }
 
+// v142: 日次結合ヘルパー ============================================================
+// sleep.logs(実測)/condition.logs(主観)/blocksの実績(着手率・完了数・充放電)を
+// dateKeyで突き合わせて1つのオブジェクトに結合する純関数。保存はしない(renderStatsと同じ
+// 都度計算思想)。実測と主観は統合しない(現状維持) — 分析側では実測(sleepH)を主とし、
+// 欠損時のみ主観(condition.logs.sleepHours、プリセット値)をsleepHFinalへフォールバックする
+// (sleepHIsSubjectiveで注釈できるようにする)。
+// sleep.logsは起床日をキーに持つため、dateKeyのblocks実績とそのまま組み合わせれば
+// 「前夜の睡眠→その日の実績」の対応になる(日付シフト不要)。
+// opts.blocksByDate: buildBlocksByDateMap()で事前構築したMapを渡すと、1日ごとの
+// state.blocks全走査(O(日数×全Block数))を避けられる(v142、全期間レンジでの一括集計向け)。
+// 単発呼び出し(opts省略)は従来どおりstate.blocksをその場でfilterする。
+function computeDailyMetrics(dateKey, opts = {}) {
+  const sleepLog = state.sleep.logs[dateKey] || null;
+  const condLog = state.condition.logs[dateKey] || null;
+  const sleepH = sleepLog ? toNumber(sleepLog.sleepH) : null;
+  const sleepHoursSubjective = condLog ? toNumber(condLog.sleepHours) : null;
+
+  const dayBlocks = opts.blocksByDate
+    ? (opts.blocksByDate.get(dateKey) || [])
+    : state.blocks.filter((b) => !b.deleted && b.date === dateKey);
+  const plannedBlocks = dayBlocks.filter((b) => b.plannedStartAt);
+  const startedCount = plannedBlocks.filter((b) => b.actualStartAt).length;
+  const completed = dayBlocks.filter((b) => b.completed);
+  const chargeSum = completed.reduce((s, b) => s + Number(b.charge || 0), 0);
+  const dischargeSum = completed.reduce((s, b) => s + Number(b.discharge || 0), 0);
+
+  return {
+    date: dateKey,
+    // 実測(state.sleep.logs)
+    bed: sleepLog ? sleepLog.bed || null : null,
+    wake: sleepLog ? sleepLog.wake || null : null,
+    sleepH,
+    eff: sleepLog ? toNumber(sleepLog.eff) : null,
+    deepH: sleepLog ? toNumber(sleepLog.deepH) : null,
+    hrSleep: sleepLog ? toNumber(sleepLog.hrSleep) : null,
+    hrvSleep: sleepLog ? toNumber(sleepLog.hrvSleep) : null,
+    // 主観(state.condition.logs)
+    sleepHours: sleepHoursSubjective,
+    capacity: condLog ? (condLog.capacity ?? null) : null,
+    gym: condLog ? (condLog.gym ?? null) : null,
+    meds: condLog ? (condLog.meds ?? null) : null,
+    // 実測を主・主観をフォールバックとした結合値(欠損時のみ主観を使う。注釈用フラグ付き)
+    sleepHFinal: sleepH != null ? sleepH : sleepHoursSubjective,
+    sleepHIsSubjective: sleepH == null && sleepHoursSubjective != null,
+    // 実績(state.blocks)
+    startPct: plannedBlocks.length ? Math.round((startedCount / plannedBlocks.length) * 100) : null,
+    startTotal: plannedBlocks.length,
+    completedCount: completed.length,
+    chargeSum, dischargeSum, net: chargeSum - dischargeSum
+  };
+}
+
 function renderJournal() {
   ensureJournal(state.selectedDate);
   const previous = addDays(state.selectedDate, -1);
