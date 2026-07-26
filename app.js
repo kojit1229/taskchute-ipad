@@ -8792,6 +8792,185 @@ function statsRangeWeeks() {
   return clamp(Math.ceil((daysBetween(oldest, todayISO()) + 1) / 7) + 1, 4, 104);
 }
 
+// v142: 計器盤「睡眠」セクション ==================================================
+// renderStatsの肥大化を避けるため別関数に切り出し、renderStatsからは呼ぶだけにする。
+// 3部品(帯グラフ/トレンド/帯別比較)はいずれも自前のデータ有無ガードを持ち、
+// 何も描けない部品は空文字を返す(静かな計器)。3部品すべて空ならセクション自体を隠す。
+function sleepValuesForRange(from, to) {
+  const vals = [];
+  for (let d = from; d <= to; d = addDays(d, 1)) {
+    const log = state.sleep.logs[d];
+    const v = log ? toNumber(log.sleepH) : null;
+    if (v != null) vals.push({ date: d, v });
+  }
+  return vals;
+}
+
+// state.sleep.logsのうち最古の日付キー(1件も無ければnull)。
+// 「全期間」レンジの起点をBlockだけでなく睡眠ログの最古日も考慮して決めるために使う。
+function oldestSleepLogDate() {
+  const dates = Object.keys(state.sleep.logs);
+  return dates.length ? dates.reduce((a, b) => (a < b ? a : b)) : null;
+}
+
+// dateごとのBlock配列を1回だけ構築するMap。renderSleepBucketCardのような「日ごとに
+// computeDailyMetricsを繰り返し呼ぶ」用途でstate.blocks全走査(O(日数×全Block数))を
+// 避けるために使う(v142、Codexレビュー指摘)。
+function buildBlocksByDateMap() {
+  const map = new Map();
+  state.blocks.forEach((b) => {
+    if (b.deleted) return;
+    if (!map.has(b.date)) map.set(b.date, []);
+    map.get(b.date).push(b);
+  });
+  return map;
+}
+
+// 就寝・起床の帯グラフ(直近4週固定。stats-rangeには追従しない)
+function renderSleepBandCard(today) {
+  const AXIS_START = 20 * 60;  // 20:00起点
+  const AXIS_SPAN = 14 * 60;   // 20:00〜翌10:00の14時間窓
+  const axisMinutes = (t) => {
+    const raw = minutesOf(t);
+    return raw < AXIS_START ? raw + 1440 : raw;
+  };
+  const pctOf = (m) => clamp(((m - AXIS_START) / AXIS_SPAN) * 100, 0, 100);
+
+  const days = [];
+  for (let d = addDays(today, -27); d <= today; d = addDays(d, 1)) days.push(d);
+  const rows = days.map((d) => {
+    const log = state.sleep.logs[d];
+    if (!log || !log.bed || !log.wake) return { date: d, bar: null };
+    const left = pctOf(axisMinutes(log.bed));
+    const right = pctOf(axisMinutes(log.wake));
+    if (right <= left) return { date: d, bar: null };  // 軸窓外の異常値は描画しない(裁かず黙って省く)
+    return { date: d, bar: { left, width: right - left, bed: log.bed, wake: log.wake } };
+  });
+  if (!rows.some((r) => r.bar)) return "";
+  return `
+    <div class="stats-sleep-sub">
+      <h3 class="stats-sleep-subhead">就寝・起床(直近4週)</h3>
+      <div class="stats-sleep-band">
+        ${rows.map((r) => `
+          <div class="stats-sleep-band-row">
+            <span class="stats-sleep-band-date">${shortSleepDate(r.date)}</span>
+            <span class="stats-sleep-band-track">
+              ${r.bar ? `<span class="stats-sleep-band-bar" style="left:${r.bar.left.toFixed(1)}%; width:${r.bar.width.toFixed(1)}%" title="${escapeHTML(r.date)}: ${escapeHTML(r.bar.bed)}→${escapeHTML(r.bar.wake)}"></span>` : ""}
+            </span>
+          </div>`).join("")}
+      </div>
+      <div class="muted stats-axis">バーの左端=就寝、右端=起床(軸: 20時〜翌10時)。日付は起床日(就寝バーは前夜分)。ログが無い日は空欄</div>
+    </div>`;
+}
+
+// 睡眠時間トレンド+直近28日中央値ベースライン(閾値5.5h/6.5hの帯は控えめに表示)
+function renderSleepTrendCard(since, today) {
+  const trendVals = sleepValuesForRange(since, today);
+  if (trendVals.length < 2) return "";
+  const baselineVals = sleepValuesForRange(addDays(today, -27), today).map((x) => x.v);
+  const baseline = baselineVals.length >= CONDITION_BUDGET_BASELINE_MIN_SAMPLES ? median(baselineVals) : null;
+
+  const yMax = Math.max(9, ...trendVals.map((x) => x.v));
+  const yMin = Math.min(3, ...trendVals.map((x) => x.v));
+  const W = 100, H = 44, padY = 4;
+  const span = Math.max(1, daysBetween(since, today));
+  const xOf = (d) => (daysBetween(since, d) / span) * W;
+  const yOf = (v) => padY + (1 - (v - yMin) / (yMax - yMin)) * (H - padY * 2);
+  const poly = trendVals.map((p) => `${xOf(p.date).toFixed(1)},${yOf(p.v).toFixed(1)}`).join(" ");
+  const dots = trendVals.map((p) => `<circle cx="${xOf(p.date).toFixed(1)}" cy="${yOf(p.v).toFixed(1)}" r="1" fill="var(--accent)"/>`).join("");
+  const bandLine = (h) => (h >= yMin && h <= yMax)
+    ? `<line x1="0" y1="${yOf(h).toFixed(1)}" x2="${W}" y2="${yOf(h).toFixed(1)}" stroke="var(--red)" stroke-width="0.4" stroke-dasharray="2,2" opacity=".35"/>`
+    : "";
+  const baselineLine = baseline != null
+    ? `<line x1="0" y1="${yOf(baseline).toFixed(1)}" x2="${W}" y2="${yOf(baseline).toFixed(1)}" stroke="var(--accent)" stroke-width="0.5" stroke-dasharray="1,1.5" opacity=".55"/>`
+    : "";
+  return `
+    <div class="stats-sleep-sub">
+      <h3 class="stats-sleep-subhead">睡眠時間トレンド</h3>
+      <svg class="stats-line-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="睡眠時間の推移">
+        ${bandLine(CONDITION_BUDGET_SLEEP_DEFICIT_H)}
+        ${bandLine(CONDITION_BUDGET_SLEEP_LOW_H)}
+        ${baselineLine}
+        <polyline points="${poly}" fill="none" stroke="var(--accent)" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>
+        ${dots}
+      </svg>
+      <div class="muted stats-axis">点線(赤)=5.5h/6.5hの目安 ${baseline != null ? `・点線(青)=直近28日の中央値(${baseline.toFixed(1)}h)` : ""} ・${trendVals.length}日分</div>
+    </div>`;
+}
+
+// 睡眠時間帯別(<5.5 / 5.5-6.5 / 6.5-7.5 / >7.5h)の当日着手率・エネルギーnet中央値比較
+const SLEEP_BUCKETS = [
+  { key: "lt55", label: "5.5h未満", test: (h) => h < 5.5 },
+  { key: "55to65", label: "5.5〜6.5h", test: (h) => h >= 5.5 && h < 6.5 },
+  { key: "65to75", label: "6.5〜7.5h", test: (h) => h >= 6.5 && h < 7.5 },
+  { key: "gt75", label: "7.5h以上", test: (h) => h >= 7.5 }
+];
+const SLEEP_BUCKET_MIN_SAMPLES = 3;  // 帯そのものだけでなく着手率/net個別の対サンプルにも適用する
+function renderSleepBucketCard(since, today) {
+  const days = [];
+  for (let d = since; d <= today; d = addDays(d, 1)) days.push(d);
+  const blocksByDate = buildBlocksByDateMap();  // v142: 日数×全Block数の都度filterを避ける(1回だけ構築)
+  const metrics = days.map((d) => computeDailyMetrics(d, { blocksByDate })).filter((m) => m.sleepH != null);
+  const rows = SLEEP_BUCKETS
+    .map((b) => {
+      const inBucket = metrics.filter((m) => b.test(m.sleepH));
+      return {
+        ...b,
+        n: inBucket.length,
+        startVals: inBucket.filter((m) => m.startTotal > 0).map((m) => m.startPct),
+        netVals: inBucket.filter((m) => m.completedCount > 0).map((m) => m.net)
+      };
+    })
+    .filter((r) => r.n >= SLEEP_BUCKET_MIN_SAMPLES);  // 3件未満の帯は非表示(renderStats既存ガードを踏襲)
+  if (!rows.length) return "";
+  // startVals/netValsはそれぞれr.n(帯の睡眠件数)以下になりうる(Blockが無い/未完了の日がある
+  // ため)。帯自体がn>=3でも、実際に使う対サンプルが3件未満なら中央値を出さず「—」にする
+  // (着手率側の欠損表示と揃える。Codexレビュー指摘: netが空でも0=「+0」と表示されていた問題も解消)。
+  const netMedians = rows.map((r) => (r.netVals.length >= SLEEP_BUCKET_MIN_SAMPLES ? median(r.netVals) : null));
+  const maxAbsNet = Math.max(1, ...netMedians.filter((v) => v != null).map(Math.abs));
+  return `
+    <div class="stats-sleep-sub">
+      <h3 class="stats-sleep-subhead">睡眠帯別 当日実績(中央値)</h3>
+      ${rows.map((r, i) => {
+        const startMed = r.startVals.length >= SLEEP_BUCKET_MIN_SAMPLES ? Math.round(median(r.startVals)) : null;
+        const netMed = netMedians[i];
+        const w = netMed != null ? Math.round((Math.abs(netMed) / maxAbsNet) * 50) : 0;
+        const pos = netMed != null && netMed > 0, neg = netMed != null && netMed < 0;
+        return `
+        <div class="stats-sleep-bucket-row">
+          <span class="stats-sleep-bucket-label">${r.label} <span class="muted">(${r.n}日)</span></span>
+          <span class="stats-sleep-bucket-metric">
+            <span class="muted">着手率</span>
+            <span class="progress stats-sleep-bucket-bar"><span style="width:${startMed ?? 0}%"></span></span>
+            <b>${startMed != null ? `${startMed}%` : "—"}</b>
+          </span>
+          <span class="stats-sleep-bucket-metric">
+            <span class="muted">net</span>
+            <span class="stats-div-track stats-sleep-bucket-bar">
+              <span class="stats-div-neg">${neg ? `<span style="width:${w}%"></span>` : ""}</span>
+              <span class="stats-div-axis"></span>
+              <span class="stats-div-pos">${pos ? `<span style="width:${w}%"></span>` : ""}</span>
+            </span>
+            <b class="${neg ? "neg" : pos ? "pos" : ""}">${netMed != null ? signed(Math.round(netMed * 10) / 10) : "—"}</b>
+          </span>
+        </div>`;
+      }).join("")}
+      <div class="muted stats-axis">3件未満の帯は表示しません。着手率=計画Blockのうち実際に着手した割合、net=Σ(充電−放電)</div>
+    </div>`;
+}
+
+function renderSleepStats(since, today) {
+  const bandCard = renderSleepBandCard(today);
+  const trendCard = renderSleepTrendCard(since, today);
+  const bucketCard = renderSleepBucketCard(since, today);
+  if (!bandCard && !trendCard && !bucketCard) return "";  // 睡眠データが1件も無ければセクションごと非表示
+  return `
+    <div class="panel stack stats-wide stats-sleep-panel">
+      <h2>睡眠</h2>
+      ${bandCard}${trendCard}${bucketCard}
+    </div>`;
+}
+
 function renderStats() {
   const range = state.settings.statsRange || "4w";
   const weeks = statsRangeWeeks();
@@ -9093,7 +9272,14 @@ function renderStats() {
       </div>`;
   }
 
-  const body = rateChart + energyChart + donutCard + catEnergyCard + trendCard + heatmap + histCard + estimateCard + calendarCard;
+  // v142(Codexレビュー指摘): sinceはstatsRangeWeeks()経由でBlockの最古日から決まるため、
+  // 「全期間」でもBlockより古い睡眠ログが集計から漏れうる。全期間選択時だけ、睡眠ログの最古日
+  // (oldestSleepLogDate)がsinceより前ならそちらを起点にする(他チャートの共有sinceは変えない
+  // よう、睡眠セクション専用のローカル変数に限定する)。
+  const oldestSleep = range === "all" ? oldestSleepLogDate() : null;
+  const sleepSince = oldestSleep && oldestSleep < since ? oldestSleep : since;
+  const sleepStatsCard = renderSleepStats(sleepSince, today);  // v142: 睡眠セクション(別関数に切り出し済み)
+  const body = rateChart + energyChart + donutCard + catEnergyCard + trendCard + heatmap + histCard + estimateCard + calendarCard + sleepStatsCard;
   return `
     ${renderHeader("数字で見る実行の実態", "計器盤")}
     <div class="segmented" style="margin-bottom:10px">
