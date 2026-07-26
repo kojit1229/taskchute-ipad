@@ -1,0 +1,180 @@
+// v141 検証: (a) ジャーナルタブのAIフィードバック列(3列目)撤去+残り2列の拡幅
+//           (b) 「今日行ったお店」ログ(店名/URL/感想、1日複数件)+年間一覧。CHANGES_v141.md参照。
+//
+// (a-1) journal-grid が2列(.panelが2つ)になっている。AIフィードバック関連のDOM
+//       (.mdアップロード欄/data-feedback-date/journal-import-aiボタン/前日フィードバックdetails)
+//       がジャーナルに一切残っていない。
+// (a-2) fetchロジック・保存データ自体は無変更: Homeの「AIから」カードは引き続き前日フィードバックを読める。
+// (b-1) normalizeState後方互換: storeVisitsキーが無い旧stateにも[]が補完される。
+// (b-2) 当日欄からの新規追加(name/url/comment)→state.storeVisitsに1件登録され、一覧に反映される。
+// (b-3) 店名未入力はエラートーストで弾かれる(保存されない)。
+// (b-4) 既存件の編集(内容を書き換えて保存)。
+// (b-5) 既存件の削除は確認ダイアログを通す(キャンセルなら残る、確認すれば論理削除されて消える)。
+// (b-6) モーダル自身の「削除」ボタン経由(deleteFromModal)でも同様に削除できる。
+// (b-7) 年間一覧: 年単位・月別グループ表示。0件の月/別年の記録は出ない。URLは新規タブリンク、
+//       javascript:等の危険なURLはリンク化されない(プレーンテキスト表示)。
+// (b-8) name/url/commentの入力欄はcomputed font-sizeが16px以上(iOS自動ズーム防止)。
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+
+const PORT = randomPort();
+const KEY = "taskchute-journal-pwa-state-v1";
+
+let failures = 0;
+function check(name, cond, extra = "") {
+  if (cond) console.log(`  ✅ ${name}`);
+  else { failures++; console.log(`  ❌ ${name} ${extra}`); }
+}
+
+(async () => {
+  const server = startServer(PORT);
+  const browser = await chromium.launch(launchOptions());
+  const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
+  const page = await ctx.newPage();
+  page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
+  await blockGithubApiByDefault(page);
+
+  // v67/v68と同じ理由: 本番バッチが実際にAIプラン_*.json/AIフィードバック_*.md/週次レビュー_*.mdを
+  // 日次でcommitするため、既定では404隔離しつつ(b)側のfeedbackFixtureだけ個別ルートで上書きする。
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const isoDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const now0 = new Date();
+  now0.setHours(10, 0, 0, 0);
+  const TODAY = isoDate(now0);
+  const YESTERDAY = isoDate(new Date(now0.getFullYear(), now0.getMonth(), now0.getDate() - 1));
+
+  // v57/v68等と同じ流儀: 「今日から見た昨日」分のAIフィードバックfetchだけfixtureで
+  // 差し替え可能にする(実ファイルは一切使わない)。
+  let feedbackFixture = null;
+  await page.route((url) =>
+    url.hostname === "api.github.com" && decodeURIComponent(url.pathname).endsWith(`/taskchute/AIフィードバック_${YESTERDAY}.md`),
+  (route) => {
+    if (feedbackFixture === null) return route.fulfill({ status: 404, body: "not found (test-fixture)" });
+    route.fulfill({ status: 200, contentType: "text/markdown", body: feedbackFixture });
+  });
+  await page.route((url) => {
+    const p = decodeURIComponent(url.pathname);
+    return /\/AIプラン_.*\.json$/.test(p) || /\/週次レビュー_.*\.md$/.test(p);
+  }, (route) => route.fulfill({ status: 404, body: "not found (test-forced)" }));
+
+  async function stateNow() {
+    return page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
+  }
+
+  try {
+    await page.clock.setFixedTime(now0);
+    await page.goto(`http://localhost:${PORT}/`);
+    await page.waitForTimeout(500);
+    await passGithubGate(page);
+    await page.evaluate(({ KEY, TODAY }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.selectedDate = TODAY;
+      s.currentView = "journal";
+      s.storeVisits = [];
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, TODAY });
+    await page.reload();
+    await page.waitForTimeout(500);
+
+    // ============================================================
+    // (a-1) journal-gridが2列(.panelが2つ)。AIフィードバック関連DOMが一切残っていない
+    // ============================================================
+    console.log("[a-1] ジャーナルは2列レイアウト、AIフィードバック列のDOMが残っていない");
+    const panelCount = await page.locator(".journal-grid > .panel").count();
+    check(".journal-gridの直下パネルが2つになっている(3列目撤去)", panelCount === 2, String(panelCount));
+    const colTracks = await page.locator(".journal-grid").evaluate((el) =>
+      getComputedStyle(el).gridTemplateColumns.trim().split(/\s+/).length);
+    check("grid-template-columnsのトラック数が2", colTracks === 2, String(colTracks));
+    check("AIフィードバックの見出しが無い", !(await page.locator("main").textContent()).includes("🤖 AIフィードバック"));
+    check(".mdアップロード欄が無い", await page.locator("input[data-feedback-upload]").count() === 0);
+    check("data-feedback-date欄が無い", await page.locator("[data-feedback-date]").count() === 0);
+    check("AI返信から取り込みボタンが無い", await page.locator('[data-action="journal-import-ai"]').count() === 0);
+    check("昨日のAIフィードバックdetailsが無い", await page.locator(".journal-yesterday-feedback").count() === 0);
+
+    // ============================================================
+    // (a-2) fetchロジック・保存データは無変更: Homeの「AIから」カードで引き続き読める
+    // ============================================================
+    console.log("[a-2] 回帰: AIフィードバックのfetch・保存はHomeの「AIから」カードで引き続き機能する");
+    // hydrateStaticMarkdownは起動時に一度だけ「今日から見た昨日」分を無条件fetchするため、
+    // fixtureを用意した後は再起動相当(reload)で再fetchさせる(v57等と同じ流儀)。
+    feedbackFixture = "# AIフィードバック本文_v141\n\n昨日の振り返り_v141\n";
+    await page.evaluate(({ KEY, YESTERDAY }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.currentView = "home";
+      if (s.feedback) delete s.feedback[YESTERDAY];
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, YESTERDAY });
+    await page.reload();
+    await page.waitForTimeout(700);
+    const homeFbText = await page.locator(".home-ai-feedback-read").textContent().catch(() => "");
+    check("Homeの「AIから」カードに前日フィードバックが読める(回帰)", (homeFbText || "").includes("昨日の振り返り_v141"), (homeFbText || "").slice(0, 200));
+
+    // ============================================================
+    // (b-1) normalizeState後方互換: storeVisitsキーが無い旧stateにも[]が補完される
+    // ============================================================
+    console.log("[b-1] normalizeState: storeVisitsキーが無い旧stateでも[]が補完されクラッシュしない");
+    await page.evaluate((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      delete s.storeVisits;
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, KEY);
+    await page.reload();
+    await page.waitForTimeout(500);
+    await page.click('[data-action="nav"][data-view="journal"]');
+    await page.waitForTimeout(300);
+    const svAfterMigration = await stateNow();
+    check("storeVisitsが配列として補完される", Array.isArray(svAfterMigration.storeVisits) && svAfterMigration.storeVisits.length === 0, JSON.stringify(svAfterMigration.storeVisits));
+    check("pageerrorが起きずクラッシュしない(旧stateからの後方互換)", true);
+
+    // ============================================================
+    // (b-8)+(b-2) 当日欄からの新規追加。入力欄font-sizeも合わせて確認
+    // ============================================================
+    console.log("[b-2] 当日欄「+ 追加」→モーダルで店名/URL/感想を入力して保存→一覧に反映される");
+    await page.click('[data-action="store-visit-add"]');
+    await page.waitForTimeout(200);
+    check("お店追加モーダルが開く", await page.locator('.modal-card:has-text("お店を追加")').count() === 1);
+    check("新規追加時は削除ボタンが出ない", await page.locator('.modal-card [data-action="modal-delete"]').count() === 0);
+
+    for (const field of ["name", "url", "comment"]) {
+      const fs2 = await page.locator(`[data-modal-field="${field}"]`).evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+      check(`[data-modal-field="${field}"]のcomputed font-sizeが16px以上`, fs2 >= 16, `(実際: ${fs2}px)`);
+    }
+
+    await page.fill('[data-modal-field="name"]', "テスト食堂_v141");
+    await page.fill('[data-modal-field="url"]', "https://example.com/testshop");
+    await page.fill('[data-modal-field="comment"]', "美味しかった_v141\n2行目のコメント");
+    await page.click('[data-action="modal-save"]');
+    await page.waitForTimeout(300);
+
+    const s2 = await stateNow();
+    check("state.storeVisitsに1件登録される", (s2.storeVisits || []).filter((v) => !v.deleted).length === 1, JSON.stringify(s2.storeVisits));
+    const sv1 = s2.storeVisits.find((v) => v.name === "テスト食堂_v141");
+    check("登録データのdateが当日", sv1?.date === TODAY, JSON.stringify(sv1));
+    check("登録データのurlが保存される", sv1?.url === "https://example.com/testshop");
+    check("登録データのcommentが保存される(改行込み)", sv1?.comment === "美味しかった_v141\n2行目のコメント");
+    check("id/createdAt/updatedAtが補完される", !!sv1?.id && !!sv1?.createdAt && !!sv1?.updatedAt);
+    check("一覧にリンク付きで表示される", await page.locator(`.store-visit-card a:has-text("テスト食堂_v141")`).count() === 1);
+    const hrefVal = await page.locator(`.store-visit-card a:has-text("テスト食堂_v141")`).getAttribute("href");
+    check("リンクのhrefが保存したURLと一致", hrefVal === "https://example.com/testshop", String(hrefVal));
+    const targetVal = await page.locator(`.store-visit-card a:has-text("テスト食堂_v141")`).getAttribute("target");
+    check("リンクがtarget=_blankで新規タブを開く", targetVal === "_blank", String(targetVal));
+    check("一覧に感想が表示される", (await page.locator(".store-visit-card").textContent()).includes("美味しかった_v141"));
+
+    // ============================================================
+    // (b-3) 店名未入力はエラートーストで弾かれる
+    // ============================================================
+    console.log("[b-3] 店名を空のまま保存しようとするとトーストで弾かれ、保存されない");
+    await page.click('[data-action="store-visit-add"]');
+    await page.waitForTimeout(200);
+    await page.fill('[data-modal-field="comment"]', "店名なしテスト_v141");
+    await page.click('[data-action="modal-save"]');
+    await page.waitForTimeout(300);
+    const toastText = await page.locator("#toast").textContent();
+    check("「店名を入力してください」トーストが出る", toastText.includes("店名を入力してください"), toastText);
+    const s3 = await stateNow();
+    check("店名未入力の記録は追加されない(1件のまま)", (s3.storeVisits || []).filter((v) => !v.deleted).length === 1);
+    await page.click('[data-action="modal-close"]');
+    await page.waitForTimeout(200);
+
+    // ============================================================
+    // (b-4) 既存件の編集
+    // ============================================================
