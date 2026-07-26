@@ -358,3 +358,73 @@ function plannedBlock(id, title, hStart, hEnd, category = "") {
     // (11) 候補選定の優先順位: net中央値が高い方(散歩)が、競合する空き時間を優先的に得る。
     //      当日の空きを35分だけ残す(散歩30分は入るがストレッチ20分+バッファ10分の30分は
     //      入らない)ことで、順序が結果に反映されることを直接検証する。
+    // ============================================================
+    console.log("[11] 中央値が高い候補(散歩)が競合する空き枠を優先的に得る");
+    await seed({
+      battery: { recoveryDraft: true },
+      blocks: [
+        ...candidateBlocks(),
+        plannedBlock("today-a", "予定A", "18:00", "21:00"),   // 1080-1260
+        plannedBlock("today-b", "予定B", "21:35", "23:00")    // 1295-1380 (空きは21:00-21:35の35分のみ)
+      ]
+    });
+    await goTimeline();
+    items = await draftItems();
+    check("空き35分には中央値が高い「散歩」だけが配置される(ストレッチは入り切らず除外)",
+      items.length === 1 && items[0].title.includes("散歩"), JSON.stringify(items));
+    check("配置開始は21:00(空き枠の先頭)", items[0] && items[0].start === 21 * 60, JSON.stringify(items));
+
+    // ============================================================
+    // (12) 朝プラン(runAiMorningPlan)処理中は回復提案がスキップされ、冪等マーカーも焼かれない
+    // ============================================================
+    console.log("[12] 朝プラン処理中は回復提案がスキップされ(マーカー保存)、完了後に改めて発火する");
+    // AIプラン_<TODAY>.jsonのfetchだけを狙って遅延させる(他のGitHub API呼び出しは
+    // blockGithubApiByDefaultの即時404のまま。後発のpage.routeが優先されるPlaywrightの
+    // 挙動を利用し、この1本だけ意図的に遅くして「朝プラン処理中」の窓を作る)。
+    const FETCH_DELAY_MS = 1200;
+    await page.route((url) => url.hostname === "api.github.com" && url.pathname.endsWith(`_${TODAY}.json`), async (route) => {
+      await new Promise((r) => setTimeout(r, FETCH_DELAY_MS));
+      // cache-control:no-storeが無いと、同一URLへの2回目のfetch(tryFetchAiPlan側)が
+      // ブラウザのメモリキャッシュから即座に解決されてしまい、意図した遅延が効かなかった
+      // (デバッグで確認済み)。2回とも確実に遅延させるため明示する。
+      await route.fulfill({ status: 404, contentType: "application/json", body: "{}", headers: { "cache-control": "no-store" } });
+    });
+    // レビュー対応: recoveryDraftはOFFで起動する(ONのまま起動すると、朝プランを押す前の
+    // 最初のティッカーtickで回復提案が先に発火してしまい、in-flightの検証にならないため)。
+    // 朝プランを押して非同期処理をin-flightにしてから、(6)と同じ手順でrecoveryDraftをONに
+    // 切り替える(reload無し)。
+    await seed({ battery: { recoveryDraft: false }, blocks: candidateBlocks() });  // 残量17(<20、直前のfixedTimeのまま18:00)
+    await goTasks();
+    await page.click('[data-action="ai-morning-plan"]');
+    await page.waitForTimeout(150);  // runAiMorningPlanが起動しfetchが飛んだ直後(まだ未解決)を狙う
+    await goSettings();
+    await page.click('[data-setting-battery-recoverydraft]');  // reload無しでrecoveryDraftをON
+    await page.waitForTimeout(150);
+    st = await stateNow();
+    check("設定操作でrecoveryDraftがONになる(朝プラン処理中に切替、前提確認)", st.settings.battery.recoveryDraft === true);
+
+    await page.clock.setFixedTime(new Date(2026, 6, 27, 18, 1, 5, 0));  // +65秒(スロットル超)
+    await page.waitForTimeout(800);
+    await goTimeline();
+    check("朝プラン処理中はまだ下書きが出ない(スキップ)", await page.locator(".draft-block").count() === 0);
+    st = await stateNow();
+    check("スキップ時は冪等マーカーを焼かない(まだ記録されていない)",
+      !(st.batteryRecoveryDraftDates || []).includes(TODAY), JSON.stringify(st.batteryRecoveryDraftDates));
+
+    await page.waitForTimeout(FETCH_DELAY_MS * 2 + 1000);  // 朝プランの2回のfetch(zeroSecThemes+aiPlan)が解決するのを待つ
+    await page.clock.setFixedTime(new Date(2026, 6, 27, 18, 2, 10, 0));  // さらに+65秒
+    await page.waitForTimeout(800);
+    await goTimeline();
+    items = await draftItems();
+    check("朝プラン完了後は改めて回復提案が発火する(2件)", items.length === 2, JSON.stringify(items));
+    st = await stateNow();
+    check("発火時に冪等マーカーが記録される", (st.batteryRecoveryDraftDates || []).includes(TODAY), JSON.stringify(st.batteryRecoveryDraftDates));
+
+    console.log(failures === 0 ? "\n✅ v145 ALL PASS" : `\n❌ v145: ${failures} 件失敗`);
+  } finally {
+    await browser.close();
+    server.close();
+  }
+
+  process.exit(failures === 0 ? 0 : 1);
+})().catch((e) => { console.error(e); process.exit(1); });
