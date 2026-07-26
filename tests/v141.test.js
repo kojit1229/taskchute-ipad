@@ -178,3 +178,109 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (b-4) 既存件の編集
     // ============================================================
+    console.log("[b-4] 既存件を「編集」から書き換えて保存できる");
+    await page.click(`[data-action="store-visit-edit"][data-id="${sv1.id}"]`);
+    await page.waitForTimeout(200);
+    check("編集モーダルが開き既存の店名が入っている", await page.locator('[data-modal-field="name"]').inputValue() === "テスト食堂_v141");
+    check("編集時は削除ボタンが出る", await page.locator('.modal-card [data-action="modal-delete"]').count() === 1);
+    await page.fill('[data-modal-field="name"]', "テスト食堂_v141_改名");
+    await page.click('[data-action="modal-save"]');
+    await page.waitForTimeout(300);
+    const s4 = await stateNow();
+    const sv1After = s4.storeVisits.find((v) => v.id === sv1.id);
+    check("編集内容が保存される(店名変更)", sv1After?.name === "テスト食堂_v141_改名", JSON.stringify(sv1After));
+    check("idは変わらない", sv1After?.id === sv1.id);
+    check("updatedAtが更新される", sv1After?.updatedAt >= sv1.updatedAt);
+    check("一覧表示も更新される", await page.locator(`.store-visit-card:has-text("テスト食堂_v141_改名")`).count() === 1);
+
+    // ============================================================
+    // (b-5) 既存件の削除は確認つき(キャンセル/確認の両方を確認)
+    // ============================================================
+    console.log("[b-5] 削除は確認ダイアログを通す(キャンセルなら残り、確認すれば消える)");
+    await page.evaluate(() => { window.confirm = () => false; });
+    await page.click(`[data-action="store-visit-delete"][data-id="${sv1.id}"]`);
+    await page.waitForTimeout(200);
+    const s5a = await stateNow();
+    check("キャンセル時は削除されない", !(s5a.storeVisits.find((v) => v.id === sv1.id)?.deleted));
+    check("キャンセル時は一覧にまだ表示される", await page.locator(`.store-visit-card:has-text("テスト食堂_v141_改名")`).count() === 1);
+
+    await page.evaluate(() => { window.confirm = () => true; });
+    await page.click(`[data-action="store-visit-delete"][data-id="${sv1.id}"]`);
+    await page.waitForTimeout(300);
+    const s5b = await stateNow();
+    check("確認後は論理削除(deleted:true)される", s5b.storeVisits.find((v) => v.id === sv1.id)?.deleted === true);
+    check("削除後は一覧から消える", await page.locator(`.store-visit-card:has-text("テスト食堂_v141_改名")`).count() === 0);
+
+    // ============================================================
+    // (b-6) モーダル自身の「削除」ボタン(deleteFromModal経由)でも削除できる
+    // ============================================================
+    console.log("[b-6] モーダル内「削除」ボタン(deleteFromModal経由)でも削除できる");
+    await page.click('[data-action="store-visit-add"]');
+    await page.waitForTimeout(200);
+    await page.fill('[data-modal-field="name"]', "モーダル削除用_v141");
+    await page.click('[data-action="modal-save"]');
+    await page.waitForTimeout(300);
+    const s6a = await stateNow();
+    const sv2 = s6a.storeVisits.find((v) => v.name === "モーダル削除用_v141");
+    check("モーダル削除用の1件が登録される", !!sv2);
+    await page.click(`[data-action="store-visit-edit"][data-id="${sv2.id}"]`);
+    await page.waitForTimeout(200);
+    await page.evaluate(() => { window.confirm = () => true; });
+    await page.click('.modal-card [data-action="modal-delete"]');
+    await page.waitForTimeout(300);
+    const s6b = await stateNow();
+    check("モーダルの削除ボタン経由でも論理削除される", s6b.storeVisits.find((v) => v.id === sv2.id)?.deleted === true);
+    check("モーダルが閉じる", await page.locator(".modal-card").count() === 0);
+
+    // ============================================================
+    // (b-7) 年間一覧: 年単位・月別グループ、URLリンク、危険URLの非リンク化
+    // ============================================================
+    console.log("[b-7] 年間一覧: 月別グループ表示、0件の月/別年は出ない、危険URLはリンク化しない");
+    const [ty, tm] = TODAY.split("-");
+    const otherMonth = tm === "01" ? "06" : "01";
+    const otherMonthDate = `${ty}-${otherMonth}-10`;
+    const otherYear = String(Number(ty) - 1);
+    const otherYearDate = `${otherYear}-05-05`;
+    await page.evaluate(({ KEY, TODAY, otherMonthDate, otherYearDate }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.storeVisits = (s.storeVisits || []).filter((v) => !v.deleted).concat([
+        {
+          id: "sv-othermonth-v141", date: otherMonthDate, name: "月違いの店_v141",
+          url: "javascript:alert(1)", comment: "危険URLテスト",
+          createdAt: `${otherMonthDate}T10:00`, updatedAt: `${otherMonthDate}T10:00`, deleted: false
+        },
+        {
+          id: "sv-otheryear-v141", date: otherYearDate, name: "去年の店_v141",
+          url: "", comment: "",
+          createdAt: `${otherYearDate}T10:00`, updatedAt: `${otherYearDate}T10:00`, deleted: false
+        }
+      ]);
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, TODAY, otherMonthDate, otherYearDate });
+    await page.reload();
+    await page.waitForTimeout(500);
+    await page.click('[data-action="nav"][data-view="journal"]');
+    await page.waitForTimeout(300);
+
+    await page.click('[data-action="store-visit-year"]');
+    await page.waitForTimeout(200);
+    check("年間一覧モーダルが開く", await page.locator('.modal-card:has-text("年間一覧")').count() === 1);
+    const yearModalText = await page.locator(".modal-card").textContent();
+    check("当年の記録(月違い)が表示される", yearModalText.includes("月違いの店_v141"));
+    check("去年の記録は表示されない(年フィルタ)", !yearModalText.includes("去年の店_v141"));
+    const dangerLinkCount = await page.locator('.modal-card a:has-text("月違いの店_v141")').count();
+    check("javascript:等の危険URLはリンク化されず店名がプレーンテキストで出る", dangerLinkCount === 0, String(dangerLinkCount));
+    check("危険URLの店名自体は引き続き読める(フェイルセーフ)", yearModalText.includes("月違いの店_v141"));
+
+    await page.click('[data-action="modal-close"]');
+    await page.waitForTimeout(200);
+    check("閉じるボタンでモーダルが閉じる", await page.locator(".modal-card").count() === 0);
+
+    console.log(failures === 0 ? "\n✅ v141 ALL PASS" : `\n❌ v141: ${failures} 件失敗`);
+  } finally {
+    await browser.close();
+    server.close();
+  }
+
+  process.exit(failures === 0 ? 0 : 1);
+})().catch((e) => { console.error(e); process.exit(1); });
