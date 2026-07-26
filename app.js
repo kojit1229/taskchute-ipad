@@ -289,6 +289,11 @@ document.addEventListener("click", (event) => {
   if (action === "set-evening-mood") setEveningMood(state.selectedDate, Number(target.dataset.value));
   if (action === "add-gym-entry") addGymEntry(target.dataset.date || state.selectedDate);
   if (action === "delete-gym-entry") deleteGymEntry(target.dataset.date || state.selectedDate, id);
+  // v141: 今日行ったお店ログ
+  if (action === "store-visit-add") openStoreVisitEditor("", target.dataset.date || state.selectedDate);
+  if (action === "store-visit-edit") openStoreVisitEditor(id);
+  if (action === "store-visit-delete") deleteStoreVisitWithConfirm(id);
+  if (action === "store-visit-year") openStoreVisitsYearModal();
   if (action === "add-project") addProject();
   if (action === "delete-project") deleteProject(id);
   if (action === "add-task") addTask();
@@ -1624,6 +1629,21 @@ function normalizeState(value) {
     part: s.part || "",
     pomodoroBlockId: s.pomodoroBlockId || "",
     ...s
+  }));
+  // v141: 「今日行ったお店」ログ(ジャーナルタブから店名/URL/感想を記録、年間一覧で振り返る)。
+  // 1日に複数件登録・編集・削除(tombstone)できるため、tasks/projectsと同じ
+  // mergeByIdPreferNewer(updatedAt優先マージ)で多端末同期する(computeSyncMerge参照)。
+  if (!Array.isArray(value.storeVisits)) value.storeVisits = [];
+  value.storeVisits = value.storeVisits.map((sv) => ({
+    id: sv.id || crypto.randomUUID(),
+    date: sv.date || "",
+    name: sv.name || "",
+    url: sv.url || "",
+    comment: sv.comment || "",
+    createdAt: sv.createdAt || nowDateTime(),
+    updatedAt: sv.updatedAt || "",
+    deleted: false,
+    ...sv
   }));
   // v91: 「### 依頼」節を日報テンプレの機械可読契約として追加(K指示: 依頼はこの見出し配下に
   //      書く運用へ)。既存のjournalTemplateを上書きせず、まだ持っていない端末にだけ追記する
@@ -6959,6 +6979,177 @@ function renderGymLogCard(date) {
 }
 // ========================================================================
 
+// v141: 今日行ったお店ログ =========================================================
+// ジャーナルタブから店名/URL(任意)/感想を記録する。1日に複数件登録可。年間一覧はモーダルで
+// 月別グループ表示する(state.storeVisitsはtasks/projectsと同じmergeByIdPreferNewerで
+// 多端末マージ・tombstone削除。normalizeState参照)。
+
+// href属性へそのまま埋め込んでよいURLかどうかを検証する(escapeHTMLは文字のエスケープのみで
+// javascript:等の危険なスキームは防げないため)。http(s)以外(javascript:/data:等)は
+// リンク化せず、店名をプレーンテキストとして表示するフェイルセーフにする。
+function safeExternalUrl(url) {
+  const s = String(url || "").trim();
+  return /^https?:\/\//i.test(s) ? s : "";
+}
+
+function storeVisitsForDate(date) {
+  return (state.storeVisits || [])
+    .filter((v) => v.date === date && !v.deleted)
+    .sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
+}
+
+function renderStoreVisitsCard(date) {
+  const visits = storeVisitsForDate(date);
+  return `
+    <div class="store-visit-card" style="margin-bottom:10px; padding:10px 12px; background:var(--panel-soft); border-radius:8px">
+      <div class="row" style="margin-bottom:6px">
+        <span class="muted" style="font-size:12.5px; font-weight:700">🏪 今日行ったお店</span>
+        <div class="row" style="gap:6px">
+          <button class="btn ghost" style="font-size:12px; padding:5px 10px" data-action="store-visit-year">📅 年間一覧</button>
+          <button class="btn primary" style="font-size:12px; padding:5px 10px" data-action="store-visit-add" data-date="${date}">+ 追加</button>
+        </div>
+      </div>
+      ${visits.length ? visits.map((v) => {
+        const safeUrl = safeExternalUrl(v.url);
+        return `
+        <div class="home-ck" style="align-items:flex-start; flex-wrap:wrap">
+          <div style="flex:1; min-width:0">
+            <div class="home-ck-name" style="font-weight:600">
+              ${safeUrl ? `<a href="${escapeHTML(safeUrl)}" target="_blank" rel="noopener noreferrer">${escapeHTML(v.name)}</a>` : escapeHTML(v.name)}
+            </div>
+            ${v.comment ? `<div class="muted" style="font-size:12px; white-space:pre-wrap; margin-top:2px">${escapeHTML(v.comment)}</div>` : ""}
+          </div>
+          <div class="row" style="gap:4px">
+            <button class="btn ghost" style="font-size:11px; padding:4px 8px" data-action="store-visit-edit" data-id="${v.id}">編集</button>
+            <button class="btn ghost" style="font-size:11px; padding:4px 8px" data-action="store-visit-delete" data-id="${v.id}">×</button>
+          </div>
+        </div>`;
+      }).join("") : `<div class="muted" style="font-size:11px">まだ記録がありません</div>`}
+    </div>
+  `;
+}
+
+function openStoreVisitEditor(id, date) {
+  const sv = id ? (state.storeVisits || []).find((v) => v.id === id && !v.deleted) : null;
+  state.modal = { type: "storeVisit", id: id || "", date: sv?.date || date || state.selectedDate };
+  renderModal(buildStoreVisitModal(sv, state.modal.date));
+}
+
+function buildStoreVisitModal(sv, date) {
+  const isNew = !sv;
+  return `
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">${isNew ? "お店を追加" : "お店を編集"}</h3>
+        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="muted" style="font-size:11.5px; margin-bottom:4px">${escapeHTML(date)} に行ったお店の記録</div>
+        <div class="field">
+          <label class="field-label">店名</label>
+          <input class="input" data-modal-field="name" style="font-size:16px" placeholder="例: 〇〇食堂" value="${escapeHTML(sv?.name || "")}">
+        </div>
+        <div class="field">
+          <label class="field-label">URL(任意)</label>
+          <input class="input" type="url" data-modal-field="url" style="font-size:16px" placeholder="https://..." value="${escapeHTML(sv?.url || "")}">
+        </div>
+        <div class="field">
+          <label class="field-label">感想</label>
+          <textarea class="textarea" data-modal-field="comment" style="min-height:90px; font-size:16px" placeholder="感想メモ">${escapeHTML(sv?.comment || "")}</textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        ${isNew ? "" : `<button class="btn danger" data-action="modal-delete">削除</button>`}
+        <button class="btn" data-action="modal-close">キャンセル</button>
+        <button class="btn primary" data-action="modal-save">${isNew ? "追加" : "保存"}</button>
+      </div>
+    </div>`;
+}
+
+function saveStoreVisitFromModal(id, fields) {
+  const name = (fields.name || "").trim();
+  if (!name) return showToast("店名を入力してください");
+  const url = (fields.url || "").trim();
+  const comment = (fields.comment || "").trim();
+  const date = (state.modal && state.modal.date) || state.selectedDate;
+  if (id) {
+    state.storeVisits = state.storeVisits.map((v) => v.id === id
+      ? { ...v, name, url, comment, updatedAt: nowDateTime() }
+      : v);
+    closeModal();
+    saveAndRender("お店の記録を更新しました");
+    return;
+  }
+  state.storeVisits.push({
+    id: crypto.randomUUID(), date, name, url, comment,
+    createdAt: nowDateTime(), updatedAt: nowDateTime(), deleted: false
+  });
+  closeModal();
+  saveAndRender("お店を記録しました");
+}
+
+// deleteFromModal()側(モーダル内「削除」ボタン経由)・カード上の×(即時)の両方から呼ばれる。
+// どちらの経路も呼び出し前に確認ダイアログを通す(仕様: 既存件の削除は確認つき)。
+function deleteStoreVisit(id) {
+  state.storeVisits = state.storeVisits.map((v) => v.id === id
+    ? { ...v, deleted: true, updatedAt: nowDateTime() } : v);
+  saveAndRender("お店の記録を削除しました");
+}
+
+function deleteStoreVisitWithConfirm(id) {
+  if (!window.confirm("このお店の記録を削除しますか?(この操作は取り消せます)")) return;
+  deleteStoreVisit(id);
+}
+
+// 年間一覧: state.selectedDateの年を対象に、月別グループで一覧表示する(読み取り専用。
+// 編集/削除は当日欄=state.selectedDateの日付ピッカーで対象日へ移動して行う)。
+function openStoreVisitsYearModal() {
+  const year = state.selectedDate.slice(0, 4);
+  state.modal = { type: "storeVisitsYear", year };
+  renderModal(buildStoreVisitsYearModal(year));
+}
+
+function buildStoreVisitsYearModal(year) {
+  const visits = (state.storeVisits || [])
+    .filter((v) => !v.deleted && v.date.slice(0, 4) === year)
+    .sort((a, b) => a.date.localeCompare(b.date) || (a.createdAt || "").localeCompare(b.createdAt || ""));
+  const byMonth = new Map();
+  visits.forEach((v) => {
+    const m = v.date.slice(5, 7);
+    if (!byMonth.has(m)) byMonth.set(m, []);
+    byMonth.get(m).push(v);
+  });
+  const months = [...byMonth.keys()].sort();
+  const body = months.length ? months.map((m) => `
+    <div class="store-visit-year-month">
+      <div class="muted" style="font-size:12px; font-weight:700; margin:10px 0 6px">${Number(m)}月</div>
+      ${byMonth.get(m).map((v) => {
+        const safeUrl = safeExternalUrl(v.url);
+        return `
+        <div class="home-ck" style="align-items:flex-start; flex-wrap:wrap">
+          <div style="flex:1; min-width:0">
+            <div class="muted" style="font-size:11.5px">${escapeHTML(v.date)}</div>
+            <div style="font-weight:600">${safeUrl ? `<a href="${escapeHTML(safeUrl)}" target="_blank" rel="noopener noreferrer">${escapeHTML(v.name)}</a>` : escapeHTML(v.name)}</div>
+            ${v.comment ? `<div class="muted" style="font-size:12px; white-space:pre-wrap; margin-top:2px">${escapeHTML(v.comment)}</div>` : ""}
+          </div>
+        </div>`;
+      }).join("")}
+    </div>
+  `).join("") : `<div class="muted" style="font-size:12px">${escapeHTML(year)}年の記録はまだありません</div>`;
+  return `
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">🏪 お店 年間一覧(${escapeHTML(year)}年)</h3>
+        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">${body}</div>
+      <div class="modal-footer">
+        <button class="btn" data-action="modal-close">閉じる</button>
+      </div>
+    </div>`;
+}
+// ========================================================================
+
 // v105: 睡眠CSV(AutoSleep書き出し) =============================================
 // 実測睡眠はAutoSleepアプリの書き出しCSVをジャーナルタブから取り込む(手書き欄は廃止)。
 // キーは「起床日」= その朝のこと。selectedDateのログ=前夜の睡眠。
@@ -7254,6 +7445,7 @@ function renderJournal() {
         ${renderConditionMorningExtra(date)}
         ${renderEveningConditionCard(date)}
         ${renderGymLogCard(date)}
+        ${renderStoreVisitsCard(date)}
         <details class="journal-prompts" style="margin-bottom:10px; padding:8px 12px; background:var(--panel-soft); border-radius:8px">
           <summary style="cursor:pointer; font-size:13px; color:var(--muted); font-weight:600">💡 思考のヒント(クリックで開閉)</summary>
           <div style="margin-top:10px; display:grid; gap:10px; font-size:12px">
@@ -11631,6 +11823,8 @@ function mergeZeroThinkingIntoLocal(remoteZt) {
 //                                 リモートにしか無い「期間外・未編集の繰り返し実体」は
 //                                 パージ済みの蘇生になるため合流させない
 //   - zeroThinking              … v103の既存マージ(mergeById)をそのまま使用
+//   - storeVisits               … v141。idキー和集合(updatedAtの新しい方、同値時tombstone優先)。
+//                                 削除操作があるためtasks/projectsと同じmergeByIdPreferNewerを使用
 //   - tasks / projects          … v135。idキー和集合(updatedAtの新しい方)。事故対策の本体
 //                                 (下のv135セクション参照)。シングルトン(wish/other Project、
 //                                 other Task)の重複はマージ後にreconcileSingletonDuplicates
@@ -11931,6 +12125,9 @@ function computeSyncMerge(remoteNorm, tieWinner) {
     const tasksRaw = mergeTaskArrays(state.tasks, remoteNorm.tasks, tieWinner);
     const projectsRaw = mergeProjectArrays(state.projects, remoteNorm.projects, tieWinner);
     const { tasks, projects, blocks } = reconcileSingletonDuplicates(tasksRaw, projectsRaw, blocksRaw);
+    // v141: 「今日行ったお店」ログ。ユーザーが削除できる(tombstone)ため、mergeByIdと違い
+    // tasks/projectsと同じupdatedAt優先+同値時tombstone優先のmergeByIdPreferNewerを使う。
+    const storeVisits = mergeByIdPreferNewer(state.storeVisits, remoteNorm.storeVisits, tieWinner);
     const jsonChanged = (obj, base) => JSON.stringify(obj) !== JSON.stringify(base || {});
     const changedVsLocal =
       journals.changedVsLocal ||
@@ -11945,6 +12142,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(bodyScans, state.bodyScans) ||
       !sameArrayByReference(tasks, state.tasks) ||
       !sameArrayByReference(projects, state.projects) ||
+      !sameArrayByReference(storeVisits, state.storeVisits) ||
       (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, state.zeroThinking) : false);
     const changedVsRemote =
       journals.changedVsRemote ||
@@ -11959,9 +12157,10 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(bodyScans, remoteNorm.bodyScans || []) ||
       !sameArrayByReference(tasks, remoteNorm.tasks || []) ||
       !sameArrayByReference(projects, remoteNorm.projects || []) ||
+      !sameArrayByReference(storeVisits, remoteNorm.storeVisits || []) ||
       (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, remoteNorm.zeroThinking) : false);
     return {
-      values: { journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans, tasks, projects },
+      values: { journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans, tasks, projects, storeVisits },
       changedVsLocal, changedVsRemote
     };
   } catch (error) {
@@ -11986,6 +12185,7 @@ function applySyncMergeToLocal(merged) {
   state.bodyScans = v.bodyScans;  // v129
   state.tasks = v.tasks;  // v135
   state.projects = v.projects;  // v135
+  state.storeVisits = v.storeVisits;  // v141
   if (v.zeroThinking) {
     state.zeroThinking.entries = v.zeroThinking.entries;
     state.zeroThinking.suggestedThemes = pruneExpiredSuggestedThemes(v.zeroThinking.suggestedThemes);
@@ -12011,6 +12211,7 @@ function applySyncMergeToRemote(merged, remoteNorm) {
   remoteNorm.bodyScans = v.bodyScans;  // v129
   remoteNorm.tasks = v.tasks;  // v135
   remoteNorm.projects = v.projects;  // v135
+  remoteNorm.storeVisits = v.storeVisits;  // v141
   if (v.zeroThinking) {
     remoteNorm.zeroThinking.entries = v.zeroThinking.entries;
     remoteNorm.zeroThinking.suggestedThemes = pruneExpiredSuggestedThemes(v.zeroThinking.suggestedThemes);
@@ -14823,6 +15024,8 @@ function submitModal() {
     saveExperimentFromModal(state.modal.id, fields);  // v68
   } else if (state.modal.type === "chain") {
     saveChainFromModal(state.modal.id, fields);  // v115: 連続ルーティン(提案G②)
+  } else if (state.modal.type === "storeVisit") {
+    saveStoreVisitFromModal(state.modal.id, fields);  // v141: 今日行ったお店ログ
   }
 }
 
@@ -14842,6 +15045,8 @@ function deleteFromModal() {
     deleteExperiment(state.modal.id);  // v68
   } else if (state.modal.type === "chain") {
     deleteChain(state.modal.id);  // v115: 連続ルーティン(提案G②)
+  } else if (state.modal.type === "storeVisit") {
+    deleteStoreVisit(state.modal.id);  // v141: 今日行ったお店ログ
   }
   closeModal();
 }
