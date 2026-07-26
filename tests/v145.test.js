@@ -178,3 +178,183 @@ function plannedBlock(id, title, hStart, hEnd, category = "") {
     check("batteryRecoveryDraftDatesにも今日が記録されない(判定自体が走っていない)",
       !(st.batteryRecoveryDraftDates || []).includes(TODAY));
 
+    // ============================================================
+    // (2) recoveryDraft ONでも、残量が閾値以上なら何も起きない
+    // ============================================================
+    console.log("[2] recoveryDraft ONでも残量が閾値以上なら何も起きない");
+    await page.clock.setFixedTime(new Date(2026, 6, 27, 10, 0, 0, 0));  // decay9→残量41(閾値20以上)
+    await seed({ battery: { recoveryDraft: true }, blocks: candidateBlocks() });
+    await goTimeline();
+    check("残量が閾値以上なので下書きが出ない", await page.locator(".draft-block").count() === 0);
+
+    // ============================================================
+    // (3) recoveryDraft ON + 残量が閾値未満 → 下書きが現れる。候補選定(中央値ロジック)を検証
+    // ============================================================
+    console.log("[3] 閾値未満で下書きが現れる(候補選定: n>=3かつnet中央値>0のみ、最大2件)");
+    await page.clock.setFixedTime(new Date(2026, 6, 27, 18, 0, 0, 0));  // 残量17(<20)
+    await seed({ battery: { recoveryDraft: true }, blocks: candidateBlocks() });
+    await goTimeline();
+    let titles = await draftBlockTitles();
+    check("下書きBlockが2件現れる(ストレッチ・散歩)", titles.length === 2, JSON.stringify(titles));
+    check("「ストレッチ」が候補に含まれる(n=3・net中央値+4)", titles.some((t) => t.includes("ストレッチ")), JSON.stringify(titles));
+    check("「散歩」が候補に含まれる(n=3・net中央値+6)", titles.some((t) => t.includes("散歩")), JSON.stringify(titles));
+    check("「昼寝」は候補から除外される(n=2で3件未満)", !titles.some((t) => t.includes("昼寝")), JSON.stringify(titles));
+    check("「逆効果ブロック」は候補から除外される(net中央値が負)", !titles.some((t) => t.includes("逆効果ブロック")), JSON.stringify(titles));
+    check("下書きバーに「下書き 2件」と表示される", (await page.locator(".draft-bar").textContent()).includes("下書き 2件"));
+    st = await stateNow();
+    check("batteryRecoveryDraftDatesに今日の日付が記録される(冪等マーカー)",
+      (st.batteryRecoveryDraftDates || []).includes(TODAY), JSON.stringify(st.batteryRecoveryDraftDates));
+
+    // ============================================================
+    // (4) 1日1回の冪等: 下書きを破棄した後、時間を進めてティッカーを再度回しても再発火しない
+    // ============================================================
+    console.log("[4] 1日1回の冪等(破棄後に時間を進めても再発火しない)");
+    await page.click('[data-action="draft-discard"]');
+    await page.waitForTimeout(200);
+    check("破棄直後は下書きバーが消える", await page.locator(".draft-bar").count() === 0);
+    await page.clock.setFixedTime(new Date(2026, 6, 27, 18, 5, 0, 0));  // +5分(スロットル60秒超)
+    await page.waitForTimeout(800);  // 500ms周期のティッカーが新しい固定時刻を検知するのを待つ
+    check("時間を進めても下書きは再発生しない(同日は1回のみ)", await page.locator(".draft-block").count() === 0);
+
+    // ============================================================
+    // (5) 既存のdraft操作(個別却下 draft-remove・確定 draft-confirm)がそのまま使える
+    // ============================================================
+    console.log("[5] 既存のdraft操作(個別却下・確定)がそのまま使える");
+    // 冪等マーカーを明示的にリセットして「新しい日」相当の再発火条件を作る(同じTODAYのまま
+    // 判定ロジックだけを再度走らせるためのテスト専用リセット。仕様上の冪等挙動そのものは
+    // 上の(4)で別途検証済み)。
+    await seed({ battery: { recoveryDraft: true }, blocks: candidateBlocks(), batteryRecoveryDraftDates: [] });
+    await goTimeline();
+    titles = await draftBlockTitles();
+    check("再トリガーで再び2件現れる(前提確認)", titles.length === 2, JSON.stringify(titles));
+
+    const walkBlock = page.locator(".draft-block", { hasText: "散歩" });
+    await walkBlock.locator('[data-action="draft-remove"]').click();
+    await page.waitForTimeout(200);
+    titles = await draftBlockTitles();
+    check("draft-removeで「散歩」だけを個別に却下できる", titles.length === 1 && titles.some((t) => t.includes("ストレッチ")), JSON.stringify(titles));
+    check("下書きバーの件数表示も1件に更新される", (await page.locator(".draft-bar").textContent()).includes("下書き 1件"));
+
+    await page.click('[data-action="draft-confirm"]');
+    await page.waitForTimeout(300);
+    check("draft-confirmで下書きバーが消える(確定済み)", await page.locator(".draft-bar").count() === 0);
+    st = await stateNow();
+    const confirmed = st.blocks.find((b) => b.title === "ストレッチ" && b.date === TODAY && !b.deleted);
+    check("確定した「ストレッチ」がタイムラインの実Blockとして登録される", Boolean(confirmed), JSON.stringify(st.blocks.map((b) => b.title)));
+    check("確定Blockは当日18:00以降の空き時間へ配置される(下書き配置ロジックの委譲先を変えていないことの確認)",
+      Boolean(confirmed) && /^\d{2}:\d{2}$/.test((confirmed.plannedStartAt || "").slice(11)) && confirmed.plannedStartAt.slice(11) >= "18:00",
+      confirmed && confirmed.plannedStartAt);
+
+    // ============================================================
+    // (6) 既存の_scheduleDraft(朝プラン等相当)への追記経路: 重ならない配置になる
+    //     レビュー対応: 手動の「📋 下書きスケジュール」で先に下書きを作り、その後に
+    //     recoveryDraftをUI操作でONにしてティッカーで回復提案を合流させる(reloadなし=
+    //     _scheduleDraftを保持したまま検証する)。
+    // ============================================================
+    console.log("[6] 既存の下書きへの追記(重ならない配置になること)");
+    await page.clock.setFixedTime(new Date(2026, 6, 27, 18, 0, 0, 0));  // 残量17(<20)
+    await seed({
+      battery: { recoveryDraft: false },  // まずOFFで作る(先に手動下書きを作ってから合流させたいため)
+      blocks: candidateBlocks(),
+      tasks: [wbsTask("wbs-1", "重要タスク")],
+      projects: [testProject()]
+    });
+    await goTasks();
+    await page.click('[data-action="ai-schedule"]');
+    await page.waitForTimeout(400);
+    let items = await draftItems();
+    check("手動下書き(重要タスク)が1件だけ存在する(前提確認)",
+      items.length === 1 && items[0].title.includes("重要タスク"), JSON.stringify(items));
+
+    await goSettings();
+    await page.click('[data-setting-battery-recoverydraft]');  // reload無しでrecoveryDraftをON
+    await page.waitForTimeout(150);
+    st = await stateNow();
+    check("設定操作でrecoveryDraftがONになる(reload無し)", st.settings.battery.recoveryDraft === true);
+
+    await page.clock.setFixedTime(new Date(2026, 6, 27, 18, 2, 0, 0));  // +2分(スロットル60秒超)
+    await page.waitForTimeout(800);
+    await goTimeline();
+    items = await draftItems();
+    check("合流後は3件になる(手動下書き1件+回復提案2件)", items.length === 3, JSON.stringify(items));
+    check("「重要タスク」が引き続き残っている(上書きでなく合流)", items.some((it) => it.title.includes("重要タスク")), JSON.stringify(items));
+    check("「散歩」「ストレッチ」も合流している", items.some((it) => it.title.includes("散歩")) && items.some((it) => it.title.includes("ストレッチ")), JSON.stringify(items));
+    check("どの2件も時間帯が重ならない(既存下書きとの衝突防止)", !hasOverlap(items), JSON.stringify(items));
+
+    // ============================================================
+    // (7) 当日に予定Blockがある状態での衝突回避
+    // ============================================================
+    console.log("[7] 当日の予定Blockと重ならない配置になる");
+    await seed({
+      battery: { recoveryDraft: true },
+      blocks: [...candidateBlocks(), plannedBlock("today-busy", "既存の予定", "18:00", "19:00")]
+    });
+    await goTimeline();
+    items = await draftItems();
+    check("回復提案2件が現れる(前提確認)", items.length === 2, JSON.stringify(items));
+    check("既存の予定Block(18:00〜19:00)より後(19:00以降)に配置される",
+      items.every((it) => it.start >= 19 * 60), JSON.stringify(items));
+
+    // ============================================================
+    // (8) 空き無し時のno-op(冪等マーカーは立つが下書きは0件のまま)
+    // ============================================================
+    console.log("[8] 当日の空き時間が0のときは何も配置されない(ただしマーカーは立つ)");
+    await seed({
+      battery: { recoveryDraft: true },
+      blocks: [...candidateBlocks(), plannedBlock("today-full", "終日埋まっている", "05:00", "23:00")]
+    });
+    await goTimeline();
+    check("空き時間が無いので下書きは0件", await page.locator(".draft-block").count() === 0);
+    st = await stateNow();
+    check("それでも冪等マーカーは立つ(発火条件自体は成立したため、空振りでも再試行しない)",
+      (st.batteryRecoveryDraftDates || []).includes(TODAY), JSON.stringify(st.batteryRecoveryDraftDates));
+
+    // ============================================================
+    // (9) recoveryThresholdPctのクランプ(1〜100外は既定40)
+    // ============================================================
+    console.log("[9] recoveryThresholdPctの境界検証");
+    await seed({ battery: { recoveryDraft: false } });
+    await goSettings();
+    await page.fill('[data-setting-battery-field="recoveryThresholdPct"]', "150");
+    await page.locator('[data-setting-battery-field="recoveryThresholdPct"]').dispatchEvent("change");
+    await page.waitForTimeout(150);
+    st = await stateNow();
+    check("150(範囲外)は既定40に倒れる", st.settings.battery.recoveryThresholdPct === 40, String(st.settings.battery.recoveryThresholdPct));
+
+    await page.fill('[data-setting-battery-field="recoveryThresholdPct"]', "0");
+    await page.locator('[data-setting-battery-field="recoveryThresholdPct"]').dispatchEvent("change");
+    await page.waitForTimeout(150);
+    st = await stateNow();
+    check("0(範囲外)は既定40に倒れる", st.settings.battery.recoveryThresholdPct === 40, String(st.settings.battery.recoveryThresholdPct));
+
+    await page.fill('[data-setting-battery-field="recoveryThresholdPct"]', "55");
+    await page.locator('[data-setting-battery-field="recoveryThresholdPct"]').dispatchEvent("change");
+    await page.waitForTimeout(150);
+    st = await stateNow();
+    check("55(範囲内)はそのまま保存される", st.settings.battery.recoveryThresholdPct === 55, String(st.settings.battery.recoveryThresholdPct));
+
+    // ============================================================
+    // (10) batteryフィールド欠落state(v144時点の旧state)のnormalizeState後方互換
+    // ============================================================
+    console.log("[10] v144時点の旧battery設定(recoveryDraft/recoveryThresholdPct無し)に既定値が補完される");
+    await page.evaluate((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      // v144時点のbattery設定の形そのもの(recoveryDraft/recoveryThresholdPctが無い)
+      s.settings.battery = { start: { deficit: 30, low: 40, normal: 50 }, decayPerHour: 3, decayStartMinutes: 420, max: 50 };
+      delete s.batteryRecoveryDraftDates;
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, KEY);
+    await page.reload();
+    await page.waitForTimeout(500);
+    await page.click('[data-action="nav"][data-view="home"]');
+    await page.waitForTimeout(200);
+    st = await stateNow();
+    check("recoveryDraft:falseが補完される", st.settings.battery.recoveryDraft === false, JSON.stringify(st.settings.battery));
+    check("recoveryThresholdPct:40が補完される", st.settings.battery.recoveryThresholdPct === 40, JSON.stringify(st.settings.battery));
+    check("既存フィールド(start/decayPerHour等)は既存値のまま保持される", st.settings.battery.max === 50 && st.settings.battery.decayPerHour === 3);
+    check("batteryRecoveryDraftDatesが配列として補完される", Array.isArray(st.batteryRecoveryDraftDates), JSON.stringify(st.batteryRecoveryDraftDates));
+
+    // ============================================================
+    // (11) 候補選定の優先順位: net中央値が高い方(散歩)が、競合する空き時間を優先的に得る。
+    //      当日の空きを35分だけ残す(散歩30分は入るがストレッチ20分+バッファ10分の30分は
+    //      入らない)ことで、順序が結果に反映されることを直接検証する。
