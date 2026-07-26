@@ -178,3 +178,183 @@ function check(name, cond, extra = "") {
     // ============================================================
     console.log("[7] 過去日ではチップが非表示、今日へ戻すと再表示");
     check("当日は電池チップが表示される(前提確認)", (await batteryChipText()) !== null);
+    await page.click('[data-action="date-prev"]');
+    await page.waitForTimeout(300);
+    check("過去日では電池チップが非表示になる", await page.locator(".home-battery-chip").count() === 0);
+    await page.click('[data-action="today"]');
+    await page.waitForTimeout(300);
+    check("今日へ戻すと電池チップが再表示される", await page.locator(".home-battery-chip").count() === 1);
+    check("再表示後の値は変わらない(残量50)", (await batteryChipText())?.includes("残量 50"), await batteryChipText());
+
+    // ============================================================
+    // (8) Block完了導線(toggle-block)での即時再描画(reload無し)。
+    //     「今日の主役」(homeMIT、既定で折りたたまれていない)の完了チェックを使う。
+    // ============================================================
+    console.log("[8] toggle-blockで電池チップが即座に再描画される(reload無し)");
+    await page.clock.setFixedTime(new Date(2026, 6, 27, 10, 0, 0, 0));  // 07:00から3h、減衰9
+    await seed({
+      sleepLog: null,  // normal(50)
+      blocks: [{
+        id: "b-mit", date: TODAY, title: "今日の主役ブロック", category: "作業", isMIT: true,
+        plannedStartAt: `${TODAY}T08:00`, plannedEndAt: `${TODAY}T08:30`,
+        actualStartAt: `${TODAY}T08:00`, actualEndAt: `${TODAY}T08:30`,
+        completed: true, charge: 5, discharge: 1, estimateMin: 0, deleted: false
+      }]
+    });
+    check("編集前: 電池チップに残量45(50-9+net4)", (await batteryChipText())?.includes("残量 45"), await batteryChipText());
+    await page.click('.home-box[data-action="toggle-block"][data-id="b-mit"]');
+    await page.waitForTimeout(200);
+    check("toggle-block後: reload無しで電池チップが残量41(50-9、completed解除でnet分が抜ける)に再描画される",
+      (await batteryChipText())?.includes("残量 41"), await batteryChipText());
+
+    // ============================================================
+    // (9) タイムライン重ね描き: 当日のみ・日またぎイベントの[0,1440]クランプ・垂直段差
+    // ============================================================
+    console.log("[9a] タイムライン重ね描き(当日のみ)");
+    await seed({
+      sleepLog: null,
+      blocks: [{
+        id: "b-mit", date: TODAY, title: "今日の主役ブロック", category: "作業", isMIT: true,
+        plannedStartAt: `${TODAY}T08:00`, plannedEndAt: `${TODAY}T08:30`,
+        actualStartAt: `${TODAY}T08:00`, actualEndAt: `${TODAY}T08:30`,
+        completed: true, charge: 5, discharge: 1, estimateMin: 0, deleted: false
+      }]
+    });
+    await page.click('[data-action="nav"][data-view="timeline"]');
+    await page.waitForTimeout(400);
+    check("当日はbattery-curveのpolylineが1本出る", await page.locator(".battery-curve").count() === 1);
+
+    await page.click('[data-action="nav"][data-view="home"]');
+    await page.waitForTimeout(300);
+    await page.click('[data-action="date-prev"]');
+    await page.waitForTimeout(300);
+    await page.click('[data-action="nav"][data-view="timeline"]');
+    await page.waitForTimeout(400);
+    check("当日以外の日付ではbattery-curveが出ない", await page.locator(".battery-curve").count() === 0);
+    await page.click('[data-action="nav"][data-view="home"]');
+    await page.waitForTimeout(200);
+    await page.click('[data-action="today"]');
+    await page.waitForTimeout(300);
+
+    console.log("[9b] 日またぎイベントの[0,1440]クランプ+充放電イベントの垂直段差");
+    await page.clock.setFixedTime(new Date(2026, 6, 27, 12, 0, 0, 0));  // 12:00
+    await seed({
+      sleepLog: null,
+      blocks: [
+        {
+          id: "b-today", date: TODAY, title: "当日中に完了", category: "作業",
+          plannedStartAt: `${TODAY}T09:30`, plannedEndAt: `${TODAY}T10:00`,
+          actualStartAt: `${TODAY}T09:30`, actualEndAt: `${TODAY}T10:00`,
+          completed: true, charge: 5, discharge: 1, estimateMin: 0, deleted: false
+        },
+        {
+          id: "b-overnight", date: TODAY, title: "日またぎ実績(前日深夜に完了登録)", category: "作業",
+          plannedStartAt: `${TODAY}T00:00`, plannedEndAt: `${TODAY}T00:30`,
+          actualStartAt: `${YDAY}T23:30`, actualEndAt: `${YDAY}T23:50`,  // dateKey(TODAY)より前の日付
+          completed: true, charge: 0, discharge: 3, estimateMin: 0, deleted: false
+        }
+      ]
+    });
+    // チップでは時刻フィルタなしで両方合算される: 50-15(decay 3h)+4-3=36
+    check("チップ: 日またぎBlockも時刻フィルタなしで合算される(残量36)",
+      (await batteryChipText())?.includes("残量 36"), await batteryChipText());
+
+    await page.click('[data-action="nav"][data-view="timeline"]');
+    await page.waitForTimeout(400);
+    const pointsAttr = await page.locator(".battery-curve").getAttribute("points");
+    const pts = parsePoints(pointsAttr);
+    check("battery-curveに2件以上の垂直段差(同時刻で異なる残量の点)が存在する"
+      + "(当日中の充放電イベント+日またぎイベントの[0,1440]クランプ分)",
+      countJumpGroups(pts) >= 2, JSON.stringify(pts));
+    check("battery-curve-labelの最終値がチップと同じ残量36になる",
+      (await page.locator(".battery-curve-label").textContent()).includes("36"));
+
+    // ============================================================
+    // (10) ティッカー(startTimerTicker経由)による自動更新。reload・クリック無しで、
+    //      固定時刻を進めるだけで電池チップの表示が変わることを確認する。
+    // ============================================================
+    console.log("[10] ティッカーによる自動更新(reload無し)");
+    await page.click('[data-action="nav"][data-view="home"]');
+    await page.waitForTimeout(200);
+    await page.clock.setFixedTime(new Date(2026, 6, 27, 10, 0, 0, 0));  // 10:00固定
+    await seed({ sleepLog: null, blocks: [] });
+    await page.waitForTimeout(700);  // 500ms周期のティッカーを最低1回は通す(_lastBatteryTickAtの基準を作る)
+    check("ティッカー開始時点: 電池チップに残量41(50-9)", (await batteryChipText())?.includes("残量 41"), await batteryChipText());
+    await page.clock.setFixedTime(new Date(2026, 6, 27, 11, 0, 0, 0));  // 60分進める(reload・クリックなし)
+    await page.waitForTimeout(800);  // 500ms周期のティッカーが新しい固定時刻を検知するのを待つ
+    check("60分経過後: reload・クリック無しでも電池チップが残量38(50-12)に自動更新される",
+      (await batteryChipText())?.includes("残量 38"), await batteryChipText());
+
+    // ============================================================
+    // (11) 設定画面: start.*ドット分岐の境界クランプ(0〜200)・decayPerHour(0以上)・
+    //      max(1以上)・decayStartMinutesのtype="time"入力
+    // ============================================================
+    console.log("[11] 設定画面の境界検証(M3/M4)とdecayStartMinutesのtime入力");
+    await page.click('[data-action="nav"][data-view="settings"]');
+    await page.waitForTimeout(300);
+
+    check("減衰開始時刻の入力欄がtype=\"time\"になっている(iOS規約)",
+      await page.locator('[data-setting-battery-field="decayStartMinutes"]').getAttribute("type") === "time");
+
+    await page.fill('[data-setting-battery-field="start.deficit"]', "500");
+    await page.locator('[data-setting-battery-field="start.deficit"]').dispatchEvent("change");
+    await page.waitForTimeout(150);
+    let st = await stateNow();
+    check("start.deficit=500は0〜200にクランプされ200になる", st.settings.battery.start.deficit === 200, String(st.settings.battery.start.deficit));
+
+    await page.fill('[data-setting-battery-field="start.low"]', "-50");
+    await page.locator('[data-setting-battery-field="start.low"]').dispatchEvent("change");
+    await page.waitForTimeout(150);
+    st = await stateNow();
+    check("start.low=-50は0〜200にクランプされ0になる", st.settings.battery.start.low === 0, String(st.settings.battery.start.low));
+
+    await page.fill('[data-setting-battery-field="start.normal"]', "45");
+    await page.locator('[data-setting-battery-field="start.normal"]').dispatchEvent("change");
+    await page.waitForTimeout(150);
+    st = await stateNow();
+    check("start.normal=45は範囲内なのでそのまま45になる", st.settings.battery.start.normal === 45, String(st.settings.battery.start.normal));
+
+    await page.fill('[data-setting-battery-field="decayPerHour"]', "-2");
+    await page.locator('[data-setting-battery-field="decayPerHour"]').dispatchEvent("change");
+    await page.waitForTimeout(150);
+    st = await stateNow();
+    check("decayPerHour=-2は0以上にクランプされ0になる", st.settings.battery.decayPerHour === 0, String(st.settings.battery.decayPerHour));
+
+    await page.fill('[data-setting-battery-field="max"]', "0");
+    await page.locator('[data-setting-battery-field="max"]').dispatchEvent("change");
+    await page.waitForTimeout(150);
+    st = await stateNow();
+    check("max=0は1以上にクランプされ1になる", st.settings.battery.max === 1, String(st.settings.battery.max));
+
+    await page.fill('[data-setting-battery-field="max"]', "50");
+    await page.locator('[data-setting-battery-field="max"]').dispatchEvent("change");
+    await page.waitForTimeout(150);
+    st = await stateNow();
+    check("max=50は範囲内なのでそのまま50になる(正常系も回帰なし)", st.settings.battery.max === 50, String(st.settings.battery.max));
+
+    await page.fill('[data-setting-battery-field="decayStartMinutes"]', "09:15");
+    await page.locator('[data-setting-battery-field="decayStartMinutes"]').dispatchEvent("change");
+    await page.waitForTimeout(150);
+    st = await stateNow();
+    check("decayStartMinutesがtime入力09:15から555分に変換されて保存される",
+      st.settings.battery.decayStartMinutes === 555, String(st.settings.battery.decayStartMinutes));
+
+    // ============================================================
+    // (12) normalizeStateマイグレーション(個別プロパティ比較。JSON.stringifyのキー順依存を廃止)
+    // ============================================================
+    console.log("[12a] battery設定を持たない旧stateに既定値が補完される");
+    await page.evaluate((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      delete s.settings.battery;
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, KEY);
+    await page.reload();
+    await page.waitForTimeout(500);
+    // v67テストと同じ手法: navをクリックし、normalizeStateが補完した値をlocalStorageへ永続化させる
+    await page.click('[data-action="nav"][data-view="home"]');
+    await page.waitForTimeout(200);
+    let stMig = await stateNow();
+    const b1 = stMig.settings.battery;
+    check("start.deficit=30が補完される", b1.start.deficit === 30, String(b1.start.deficit));
+    check("start.low=40が補完される", b1.start.low === 40, String(b1.start.low));
+    check("start.normal=50が補完される", b1.start.normal === 50, String(b1.start.normal));
