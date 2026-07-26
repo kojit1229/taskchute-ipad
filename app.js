@@ -96,6 +96,9 @@ let state = loadState();
 const _startupDataModifiedAt = state.dataModifiedAt || "";
 let toastTimer = null;
 let timerTicker = null;
+// v144: エネルギーバッテリーの差分更新(updateBatteryTick)のスロットル用。
+let _lastBatteryTickAt = 0;
+const BATTERY_TICK_INTERVAL_MS = 60000;
 let cachedVisionMd = "";
 let cachedAffirmationMd = "";
 // v85: ビジョンボード(45/80/nowの各PDF)はpersonal-dataリポジトリのtaskchute/content/配下にあり、
@@ -1013,6 +1016,26 @@ document.addEventListener("change", (event) => {
     saveState();
     render();
   }
+  // v144: エネルギーバッテリーのパラメタ手入力(開始値3種・減衰率・減衰開始時刻・上限)。
+  //       "start.deficit"のようにドット区切りでstart配下のキーを指定できる汎用ハンドラ。
+  //       レビュー対応(M3/M4): 境界検証はclampBatteryFieldValue()に一本化し、
+  //       normalizeStateと同じ基準でここでも強制する(手入力の異常値をその場で弾く)。
+  if (target.matches("[data-setting-battery-field]")) {
+    const field = target.dataset.settingBatteryField;
+    state.settings.battery ||= defaultBatterySettings();
+    if (field === "decayStartMinutes") {
+      // v144レビュー対応: iOS規約によりtype="time"に変更(分単位で保存)
+      state.settings.battery.decayStartMinutes = clampBatteryFieldValue(field, parseTimeInputToMinutes(target.value));
+    } else if (field.startsWith("start.")) {
+      const key = field.split(".")[1];
+      const val = clampBatteryFieldValue(field, target.value);
+      state.settings.battery.start = { ...state.settings.battery.start, [key]: val };
+    } else {
+      state.settings.battery[field] = clampBatteryFieldValue(field, target.value);
+    }
+    saveState();
+    render();
+  }
   // v84: Study With Me の動画ID・開始秒(直接編集)
   if (target.matches("[data-swm-field]")) {
     const field = target.dataset.swmField;
@@ -1252,6 +1275,32 @@ function normalizeState(value) {
   //       (バッファ分数と違い「未設定」を表現する必要が無いため||=相当の強制補正でよい)。
   if (!Number.isFinite(value.settings.dayCloseHours) || value.settings.dayCloseHours <= 0) {
     value.settings.dayCloseHours = 24;
+  }
+  // v144: エネルギーバッテリーモデルのパラメタ(設計提案書§3、2026-07-26 K確定値)。
+  //       開始値(体力予算連動)3種・減衰率・減衰開始時刻・上限を設定画面から変更できる。
+  //       既存値優先で補完しつつ、レビュー対応(M3/M4)でclampBatteryFieldValue()により
+  //       フィールド別の境界を毎回強制する(手入力だけでなく同期データ経由の異常値も弾く)。
+  value.settings.battery ||= {};
+  {
+    const def = defaultBatterySettings();
+    const b = value.settings.battery;
+    // v144レビュー対応(M4): 旧decayStartHour(時単位)からdecayStartMinutes(分単位、
+    // type="time"入力に対応)への移行。既存のdecayStartHourがあればそれを分に換算して
+    // 引き継ぐ(K確定の「07:00固定」という意味自体は不変)。移行後はdecayStartHourを持たない
+    // (二重管理を避ける)。
+    if (!Number.isFinite(b.decayStartMinutes)) {
+      b.decayStartMinutes = Number.isFinite(b.decayStartHour) ? b.decayStartHour * 60 : def.decayStartMinutes;
+    }
+    delete b.decayStartHour;
+    const rawStart = b.start || {};
+    b.start = {
+      deficit: clampBatteryFieldValue("start.deficit", Number.isFinite(rawStart.deficit) ? rawStart.deficit : def.start.deficit),
+      low: clampBatteryFieldValue("start.low", Number.isFinite(rawStart.low) ? rawStart.low : def.start.low),
+      normal: clampBatteryFieldValue("start.normal", Number.isFinite(rawStart.normal) ? rawStart.normal : def.start.normal)
+    };
+    b.decayPerHour = clampBatteryFieldValue("decayPerHour", Number.isFinite(b.decayPerHour) ? b.decayPerHour : def.decayPerHour);
+    b.decayStartMinutes = clampBatteryFieldValue("decayStartMinutes", b.decayStartMinutes);
+    b.max = clampBatteryFieldValue("max", Number.isFinite(b.max) ? b.max : def.max);
   }
   if (!("lastPushedAt" in value.settings)) value.settings.lastPushedAt = null;
   if (!("lastPulledAt" in value.settings)) value.settings.lastPulledAt = null;
@@ -7248,6 +7297,153 @@ function conditionBudget(date) {
   const ageLabel = ageDays > 0 ? `${shortSleepDate(logDate)}朝` : "";
   const reason = ageLabel && factorsText ? `${ageLabel}: ${factorsText}` : (ageLabel || factorsText);
   return { level, reason };
+}
+
+// =========================================================
+// v144: エネルギーバッテリーモデル(設計提案書§3、2026-07-26 K確定パラメタ)
+// 「朝30あったエネルギーがデフォルトで徐々に減る。適宜回復させないと!という意識になるように
+// したい」というK指示に基づく、通知・アラート無しの決定論・都度計算モデル(保存はしない)。
+// 静かな計器の最低線(催促・裁かない)を守るため、表示は数値+バーのみで完結させる。
+// =========================================================
+
+// 設定未保存(旧state・テストのopts省略時)のフォールバック既定値。normalizeStateの
+// マイグレーションと computeBatteryLevel の両方から参照する単一の正本。
+// v144レビュー対応(M4): 減衰開始時刻はtype="time"入力に対応するため分単位
+// (decayStartMinutes)で保持する(420=07:00固定。K確定の意味自体は不変)。
+function defaultBatterySettings() {
+  return {
+    start: { deficit: 30, low: 40, normal: 50 },
+    decayPerHour: 3,
+    decayStartMinutes: 420,
+    max: 50
+  };
+}
+
+// v144レビュー対応(M3/M4): エネルギーバッテリー設定のフィールド別の境界値をここ1箇所に
+// まとめ、保存ハンドラ(change委譲)・normalizeStateの両方から呼ぶ(手入力・同期データ経由の
+// 異常値をどちらの経路からも同じ基準で弾く)。
+// - start.*(体力予算連動の開始値): 有限かつ0〜200にクランプ
+// - decayPerHour: 0以上(上限なし)
+// - decayStartMinutes: 0〜1439の有限値のみ許可、それ以外は既定420(07:00)へ
+// - max: 1以上(空欄・0・負値は静かな計器の趣旨に反する=常時赤ゲージになるため、
+//   Math.max(1, …)側へ倒す)
+function clampBatteryFieldValue(field, raw) {
+  const n = Number(raw);
+  const finite = Number.isFinite(n) ? n : null;
+  if (field.startsWith("start.")) return clamp(finite ?? 0, 0, 200);
+  if (field === "decayPerHour") return Math.max(0, finite ?? 0);
+  if (field === "max") return Math.max(1, finite ?? 1);
+  if (field === "decayStartMinutes") return (finite !== null && finite >= 0 && finite <= 1439) ? finite : 420;
+  return finite ?? 0;
+}
+
+// type="time"の入力値("HH:mm")を0時からの経過分に変換する。不正な形式はNaNを返し、
+// 呼び出し側のclampBatteryFieldValueが既定420(07:00)へ倒す。
+function parseTimeInputToMinutes(value) {
+  const m = /^(\d{1,2}):(\d{2})/.exec(String(value ?? ""));
+  if (!m) return NaN;
+  return Number(m[1]) * 60 + Number(m[2]);
+}
+
+// 0時からの経過分をtype="time"のvalue属性用文字列("HH:mm")に変換する。
+function minutesToTimeInputValue(minutes) {
+  const m = Number.isFinite(minutes) ? clamp(minutes, 0, 1439) : 420;
+  return `${pad2(Math.floor(m / 60))}:${pad2(Math.floor(m % 60))}`;
+}
+
+// 残量 = 開始値 − 減衰率×(減衰開始時刻からの経過時間h) + Σ(当日完了Blockのcharge−discharge)
+// を 0〜上限でクランプして返す純関数。
+// - dateKey: 対象日(YYYY-MM-DD)
+// - nowMinutes: 評価時点の「0時からの経過分」(呼び出し側が new Date() 等から算出して渡す。
+//   テスト容易性のため必ず引数で受け取り、関数内部では現在時刻を取得しない)
+// - opts.budgetLevel: conditionBudget(dateKey).level を上書きしたい場合に指定(未指定なら算出する)
+// - opts.blocks: 集計対象のBlock配列を上書きしたい場合に指定(未指定なら blocksForDate(dateKey))
+// レビュー対応(監督者裁定): 電池チップ(現在残量)は既存のエネルギー実線
+// (renderEnergyGraphの実績カーブ)と同じ「当日ぶん丸ごと」思想に揃え、完了Blockの
+// actualEndAt時刻によるフィルタは行わない(実績終了が未来時刻・翌日時刻でも当日合計に入れる)。
+// 減衰は分単位で連続計算する(1時間ごとの階段状にはしない。理由: 電池チップとタイムライン
+// 重ね描きの両方で同じ考え方を使い回すため、階段だと重ね描きの折れ線が不自然にカクつく)。
+function computeBatteryLevel(dateKey, nowMinutes, opts = {}) {
+  const def = defaultBatterySettings();
+  const cfg = state.settings.battery || def;
+  const startCfg = { ...def.start, ...(cfg.start || {}) };
+  const budgetLevel = opts.budgetLevel || conditionBudget(dateKey).level;
+  // level:"none"(睡眠データなし)は normal 扱い(設計提案書§3の明記どおり)
+  const startKey = budgetLevel === "deficit" ? "deficit" : budgetLevel === "low" ? "low" : "normal";
+  const start = Number(startCfg[startKey]);
+
+  const decayStartMin = Number.isFinite(cfg.decayStartMinutes) ? cfg.decayStartMinutes : def.decayStartMinutes;
+  const decayPerHour = Number.isFinite(cfg.decayPerHour) ? cfg.decayPerHour : def.decayPerHour;
+  const elapsedH = Math.max(0, nowMinutes - decayStartMin) / 60;
+  const decay = decayPerHour * elapsedH;
+
+  const blocks = opts.blocks || blocksForDate(dateKey);
+  const netSum = blocks
+    .filter((b) => b.completed)
+    .reduce((sum, b) => sum + (Number(b.charge) || 0) - (Number(b.discharge) || 0), 0);
+
+  const max = Number.isFinite(cfg.max) ? cfg.max : def.max;
+  return clamp(start - decay + netSum, 0, max);
+}
+
+// actualEndAtの日付部分がdateKeyと同日ならその日の分(minutesOf)、日付が異なる(日またぎ、
+// 例えば深夜作業でBlockの所属日=dateKeyだが実績終了が翌日になった等)場合は[0,1440]に
+// クランプした位置を返す(dateKeyより後の日付なら当日末尾=1440、前の日付なら当日先頭=0)。
+// actualEndAt自体が無ければnull。
+function batteryEventMinuteForDate(dateKey, actualEndAt) {
+  if (!actualEndAt) return null;
+  const datePart = actualEndAt.slice(0, 10);
+  if (datePart === dateKey) return minutesOf(actualEndAt);
+  return datePart > dateKey ? 1440 : 0;
+}
+
+// タイムラインの既存エネルギーグラフへ重ね描きする、当日のバッテリー実カーブの点列。
+// 減衰は区間ごとに傾き一定の直線、完了Block時点でのみ値が変わるため、イベント時刻
+// (0時・減衰開始時刻・各完了Blockの位置・現在時刻)だけをサンプリングすれば数学的に正確な
+// 折れ線になる。レビュー対応: 充放電のある完了イベントは「直前値」「直後値」の2点を同じ分に
+// 置き、斜めの補間でなく垂直な段差として描く(実際に値が瞬時に変わることを正しく表現する)。
+// opts.budgetLevel/opts.blocksを渡せば呼び出し側で1回だけ計算した結果を使い回せる
+// (conditionBudget()/blocksForDate()をイベント点の数だけ繰り返し呼ばないためのレビュー対応)。
+function batteryCurvePoints(dateKey, nowMinutes, opts = {}) {
+  const def = defaultBatterySettings();
+  const cfg = state.settings.battery || def;
+  const startCfg = { ...def.start, ...(cfg.start || {}) };
+  const budgetLevel = opts.budgetLevel || conditionBudget(dateKey).level;
+  const startKey = budgetLevel === "deficit" ? "deficit" : budgetLevel === "low" ? "low" : "normal";
+  const start = Number(startCfg[startKey]);
+  const decayStartMin = Number.isFinite(cfg.decayStartMinutes) ? cfg.decayStartMinutes : def.decayStartMinutes;
+  const decayPerHour = Number.isFinite(cfg.decayPerHour) ? cfg.decayPerHour : def.decayPerHour;
+  const max = Number.isFinite(cfg.max) ? cfg.max : def.max;
+
+  const blocks = opts.blocks || blocksForDate(dateKey);
+  const events = blocks
+    .filter((b) => b.completed && b.actualEndAt)
+    .map((b) => ({ minute: batteryEventMinuteForDate(dateKey, b.actualEndAt), net: (Number(b.charge) || 0) - (Number(b.discharge) || 0) }))
+    .filter((e) => e.minute !== null && e.minute <= nowMinutes);
+
+  const rawAt = (m, cumNet) => start - (decayPerHour * Math.max(0, m - decayStartMin) / 60) + cumNet;
+
+  // 0時・減衰開始時刻(傾きが変わる「折れ」の点。ジャンプは無い)・各充放電イベント(直前/直後の
+  // 2点でジャンプを表現)・現在時刻を、時刻昇順に1本の累積計算で処理する。
+  const breakpoints = [
+    { minute: 0, kind: "plain" },
+    ...(decayStartMin > 0 && decayStartMin <= nowMinutes ? [{ minute: decayStartMin, kind: "plain" }] : []),
+    ...events.map((e) => ({ minute: e.minute, kind: "event", net: e.net })),
+    { minute: nowMinutes, kind: "plain" }
+  ].sort((a, b) => a.minute - b.minute);
+
+  const points = [];
+  let cum = 0;
+  for (const bp of breakpoints) {
+    if (bp.kind === "event") {
+      points.push({ minute: bp.minute, value: clamp(rawAt(bp.minute, cum), 0, max) });  // 直前値
+      cum += bp.net;
+      points.push({ minute: bp.minute, value: clamp(rawAt(bp.minute, cum), 0, max) });  // 直後値(垂直段差)
+    } else {
+      points.push({ minute: bp.minute, value: clamp(rawAt(bp.minute, cum), 0, max) });
+    }
+  }
+  return points;
 }
 
 async function importSleepCsv(file) {
