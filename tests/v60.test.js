@@ -216,10 +216,12 @@ function check(name, cond, extra = "") {
   console.log("[6] 回帰: 前日フィードバックのfetch経路(ファイル連携)は削除していない");
   const fbFetched = await page.evaluate(() => (window.__anthropicCalls || []).length === 0);  // 既に確認済みの再掲(意図の明示)
   check("AIフィードバック fetch はAPIではなくファイル取得のみ(api.anthropic.com不使用)", fbFetched);
-  check(".mdアップロード欄が引き続きジャーナルに存在する", await (async () => {
+  // v141: AIフィードバック列(.mdアップロード欄含む)はジャーナルタブのUIから撤去した。
+  // fetch経路自体は[6]で確認済みなので、ここではUIが実際に無くなっていることを確認する。
+  check("ジャーナルタブに.mdアップロード欄がもう無い(v141でUI撤去)", await (async () => {
     await page.click('[data-action="nav"][data-view="journal"]');
     await page.waitForTimeout(300);
-    return (await page.locator('input[data-feedback-upload]').count()) === 1;
+    return (await page.locator('input[data-feedback-upload]').count()) === 0;
   })());
 
   await browser.close();

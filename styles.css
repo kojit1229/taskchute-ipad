@@ -751,8 +751,9 @@ h3 {
 }
 
 .journal-grid {
+  /* v141: AIフィードバック列(3列目)を撤去し、残り2列を広げた(3列 0.8fr 1.4fr 0.8fr → 2列) */
   display: grid;
-  grid-template-columns: 0.8fr 1.4fr 0.8fr;
+  grid-template-columns: 0.8fr 1.4fr;
   gap: 12px;
 }
 

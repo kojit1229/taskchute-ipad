@@ -145,12 +145,13 @@ function check(name, cond, extra = "") {
     check("直push検知した前日分が feedbackFiles に登録される(以後は正規ルート)",
       Array.isArray(ffAfter) && ffAfter.includes(YESTERDAY), JSON.stringify(ffAfter));
 
-    // ジャーナル(今日選択中)の「前日(昨日)のフィードバックも見る」欄に、直pushした本文が反映される
-    await page.click('[data-action="nav"][data-view="journal"]');
+    // v141: AIフィードバック列はジャーナルタブのUIから撤去したため、反映確認はHomeの
+    // 「AIから」カード(homeAiFeedbackReadHTML)で行う(fetchロジック・保存データ自体は無変更)
+    await page.click('[data-action="nav"][data-view="home"]');
     await page.waitForTimeout(400);
-    const journalText = await page.locator(".journal-grid").textContent();
-    check("取得した前日フィードバックの本文がジャーナルに反映される(マーカー一致)",
-      journalText.includes(FEEDBACK_MARKER), journalText.slice(0, 200));
+    const homeText = await page.locator(".home-ai-feedback-read").textContent();
+    check("取得した前日フィードバックの本文がHomeの「AIから」カードに反映される(マーカー一致)",
+      (homeText || "").includes(FEEDBACK_MARKER), (homeText || "").slice(0, 200));
   } finally {
     await browser.close();
     server.close();

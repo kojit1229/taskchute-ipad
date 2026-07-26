@@ -5,10 +5,12 @@
 // homeAiFeedbackReadHTML() 追加により既に修正済みで、本スイートでは
 // (1) 実際の personal-data/taskchute/AIフィードバック_*.md と同じ見出し構造(「## 明日への提案」)
 //     を使った回帰確認、(4) fetch失敗を「以後ずっと再fetchしない」形でキャッシュしていないことの検証
-// を行う。(2) ジャーナルタブに今日基準の前日フィードバックを常に読める details を追加した回帰、
-// (3) フィードバックファイルが404でもクラッシュしない(フェイルソフト)ことを検証する。
+// を行う。(3) フィードバックファイルが404でもクラッシュしない(フェイルソフト)ことを検証する。
 // (5) pushFileToGitHub(日報push等)のURL組み立てをpushGitHubPathと同じセグメント単位encodeに
 //     統一したことの回帰(PUT先パスに%2Fが混入しないこと)。
+// v141メモ: (2)のジャーナルタブ側details(.journal-yesterday-feedback)はAIフィードバック列の
+//     UI撤去に伴い削除された。今日基準の前日フィードバックを読む機能自体は(1)/(1b)のHome
+//     「AIから」カードで引き続き回帰確認している(詳細は当該箇所のコメント参照)。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
@@ -126,44 +128,21 @@ function check(name, cond, extra = "") {
     await seed({ view: "home" });  // 以降の検証のため selectedDate を今日へ戻す
 
     // ============================================================
-    // (2) ジャーナルタブ: 今日基準の前日フィードバックが読める(選択中日付に依存しない)
+    // (2) v141メモ: ジャーナルタブの「昨日のAIフィードバックを見る」折りたたみ
+    //     (.journal-yesterday-feedback)は、AIフィードバック列そのもののUI撤去に伴い
+    //     v141で削除された(CHANGES_v141.md参照)。今日基準の前日フィードバックを読む機能自体は
+    //     Homeの「AIから」カード(.home-ai-feedback-read)に一本化されており、(1)/(1b)で
+    //     引き続き回帰確認済み(selectedDateに依存しない挙動も含む)。
     // ============================================================
-    console.log("[2] ジャーナルタブに『昨日のAIフィードバック』の折りたたみ(既定closed)が出る");
-    await page.click('[data-action="nav"][data-view="journal"]');
-    await page.waitForTimeout(300);
-    const journalDetailsCount = await page.locator(".journal-yesterday-feedback").count();
-    check("ジャーナルタブに前日フィードバックのdetailsが1つ出る", journalDetailsCount === 1);
-    const journalOpenAttr = await page.locator(".journal-yesterday-feedback").getAttribute("open").catch(() => null);
-    check("ジャーナルタブのdetailsも既定closed", journalOpenAttr === null, String(journalOpenAttr));
-    const journalText = await page.locator("main").textContent();
-    check("ジャーナルタブでも前日フィードバック本文が読める", journalText.includes("提案1_v76") && journalText.includes("提案2_v76"), journalText.slice(0, 300));
-
-    console.log("[2b] ジャーナルで過去日(2日前)を開いても、対象は選択中日付の前日ではなく『今日基準の前日』のまま");
-    await seed({ view: "journal" });
-    // v85: 起動時は必ず今日から始まるため、2日前へはセッション中に日付ピッカーで移動する
-    await page.evaluate((d) => {
-      const el = document.querySelector("[data-date-picker]");
-      el.value = d;
-      el.dispatchEvent(new Event("change", { bubbles: true }));
-    }, PREV2);
-    await page.waitForTimeout(300);
-    const journalPastText = await page.locator("main").textContent();
-    const journalPastDetailsCount = await page.locator(".journal-yesterday-feedback").count();
-    check("2日前の journal を開いても、今日基準の前日フィードバックが(選択日と無関係に)引き続き表示される",
-      journalPastDetailsCount === 1 && journalPastText.includes("提案1_v76"), journalPastText.slice(0, 300));
 
     // ============================================================
     // (3) フィードバックファイルが無い(404)日でも壊れない(フェイルソフト)
     // ============================================================
-    console.log("[3] 前日分のAIフィードバックファイルが存在しない(404)日は、home/journalどちらもクラッシュせずdetails自体が出ない");
+    console.log("[3] 前日分のAIフィードバックファイルが存在しない(404)日は、Homeがクラッシュせずdetails自体が出ない");
     feedbackFixture = {};  // 全部404
     await seed({ view: "home" });
     const detailsCount404 = await page.locator(".home-ai-feedback-read").count();
     check("ホーム: 前日分が無ければdetails自体が出ない(フェイルソフト)", detailsCount404 === 0);
-    await page.click('[data-action="nav"][data-view="journal"]');
-    await page.waitForTimeout(300);
-    const journalDetailsCount404 = await page.locator(".journal-yesterday-feedback").count();
-    check("ジャーナル: 前日分が無ければdetails自体が出ない(フェイルソフト)", journalDetailsCount404 === 0);
     check("404が続いてもクラッシュしていない(pageerror無し。ここまで到達していれば正常)", true);
 
     // ============================================================

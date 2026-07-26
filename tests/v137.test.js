@@ -107,10 +107,13 @@ function check(name, cond, extra = "") {
     // ============================================================
     // [1] review.md:28 — 入力中/IME変換中はhydrateStaticMarkdownの新着renderを延期する
     // ============================================================
-    console.log("[1-a] journalの入力中にhydrateStaticMarkdownの新着(前日AIフィードバック)が来ても、フォーカス中はrenderを延期する");
+    console.log("[1-a] journalの入力中にhydrateStaticMarkdownの新着(前日AIフィードバック取得)が来ても、フォーカス中はrenderを延期する");
+    // v141: ジャーナルのAIフィードバック列(.journal-yesterday-feedback含む)はUI撤去済みのため、
+    // ここでの前日フィードバックfixtureは「hydrateStaticMarkdown完了時にrenderDeferringForFocus()が
+    // 呼ばれる」トリガーとしてのみ使う(表示内容自体はもう検証対象にできない。[1-b]のmarker
+    // ベース検証を参照)。
     feedbackFixture = {};  // 起動時点ではまだ前日分なし
     await seed({ view: "journal" });
-    check("起動直後は前日フィードバックのdetailsが出ていない", await page.locator(".journal-yesterday-feedback").count() === 0);
 
     const journalTextarea = page.locator(`[data-journal-date="${TODAY}"]`);
     await journalTextarea.click();
@@ -131,14 +134,25 @@ function check(name, cond, extra = "") {
     check("フォーカス中はDOMが再構築されず、フォーカスもテキストも維持される(render延期)", markerStillThereWhileFocused);
     const inputValueAfterDefer = await journalTextarea.inputValue();
     check("入力中の文字は消えない", inputValueAfterDefer.includes("編集中の下書き_v137"), `(実際: ${JSON.stringify(inputValueAfterDefer)})`);
-    check("フォーカス中はまだ新着フィードバックが画面に反映されていない(保留中)",
-      await page.locator(".journal-yesterday-feedback").count() === 0);
 
-    console.log("[1-b] フォーカスが外れると、保留していたrenderが1回だけ実行され新着が反映される");
+    console.log("[1-b] フォーカスが外れると、保留していたrenderが1回だけ実行される");
+    // v141: ジャーナルのAIフィードバック列(前日分の表示欄含む)はUI撤去済みのため、
+    // 「新着反映」の直接目視はできない。render延期→flushの実行自体は、フォーカス中に
+    // evaluateで付与したテスト用marker(data-test-marker)がflush後のDOM再構築で
+    // 消えることで検証する(render()はrenderJournal()の文字列を丸ごと差し替えるため、
+    // 手動付与した属性は再構築後には残らない)。入力済みテキストはstate経由(input時にリアルタイム保存)
+    // で保持されるため、再構築後も消えないことも合わせて確認する。
     await page.evaluate(() => document.activeElement && document.activeElement.blur());
     await page.waitForTimeout(400);
-    const afterBlurText = await page.locator("main").textContent();
-    check("フォーカス離脱後は新着フィードバックが反映される", afterBlurText.includes("新着フィードバック本文_v137"), afterBlurText.slice(0, 200));
+    const markerAfterBlur = await page.evaluate(() => {
+      const el = document.querySelector(`[data-journal-date]`);
+      return el ? el.getAttribute("data-test-marker") : "no-element";
+    });
+    check("フォーカス離脱後は保留していたrenderが実行され、DOMが再構築される(テスト用markerが消える)",
+      markerAfterBlur === null, String(markerAfterBlur));
+    const journalValueAfterBlur = await journalTextarea.inputValue();
+    check("再構築後も入力済みのテキストはstate経由で保持される(データロス無し)",
+      journalValueAfterBlur.includes("編集中の下書き_v137"), JSON.stringify(journalValueAfterBlur));
 
     console.log("[1-c] IME変換中も同様にrenderを延期し、compositionend後もフォーカスが残っていれば延期を継続、focusoutで反映される(v140仕様精緻化)");
     await journalTextarea.click();

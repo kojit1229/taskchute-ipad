@@ -340,6 +340,8 @@ function check(name, cond, extra = "") {
     // [B8-2] 新着FB(cachedFeedback更新)時に表示が正しく更新される(明示的invalidation不要の設計)
     // ============================================================
     console.log("[B8-2] cachedFeedback更新(新着fetch)時、renderMarkdownのキャッシュに邪魔されず表示が更新される");
+    // v141: AIフィードバック列はジャーナルタブのUIから撤去したため、表示確認はHomeの
+    // 「AIから」カード(homeAiFeedbackReadHTML、cachedFeedbackをrenderMarkdownする点は同じ)で行う。
     const OLD_MARKER = "v83旧フィードバックマーカー_" + Date.now();
     const NEW_MARKER = "v83新フィードバックマーカー_" + Date.now();
 
@@ -347,20 +349,20 @@ function check(name, cond, extra = "") {
     await page.evaluate(({ KEY, YESTERDAY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.selectedDate = YESTERDAY;
-      s.currentView = "journal";
+      s.currentView = "home";
       if (s.feedback) delete s.feedback[YESTERDAY];
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, YESTERDAY });
     await page.reload();
     await page.waitForTimeout(700);
-    const fbTextOld = await page.locator(".journal-grid").textContent();
+    const fbTextOld = await page.locator(".home-ai-feedback-read").textContent();
     check("旧フィードバック内容が表示される(cachedFeedback経由のrenderMarkdown)", (fbTextOld || "").includes(OLD_MARKER), (fbTextOld || "").slice(0, 300));
 
     // バッチが新しい内容で上書きした状況を再現(fixtureを差し替えて再取得=アプリ再起動相当)
     feedbackFixture = `# AIフィードバック\n\n${NEW_MARKER}\n`;
     await page.reload();
     await page.waitForTimeout(700);
-    const fbTextNew = await page.locator(".journal-grid").textContent();
+    const fbTextNew = await page.locator(".home-ai-feedback-read").textContent();
     check("新着フィードバックの内容が表示される(古い内容のまま固まっていない)", (fbTextNew || "").includes(NEW_MARKER), (fbTextNew || "").slice(0, 300));
     check("旧フィードバック内容が残留していない(regression: キャッシュの取り違えが無い)", !(fbTextNew || "").includes(OLD_MARKER));
 

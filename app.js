@@ -7228,17 +7228,10 @@ function renderJournal() {
   ensureJournal(state.selectedDate);
   const previous = addDays(state.selectedDate, -1);
   const date = state.selectedDate;
-  // AIフィードバックは git ファイル(優先)→ なければ localStorage の textarea
-  const feedbackFromFile = cachedFeedback[date];
-  const feedbackFromState = state.feedback[date] || "";
-  const feedbackText = feedbackFromFile || feedbackFromState;
-  // v76: 「前日のフィードバックも見る」は選択中日付(previous = selectedDateの前日)基準ではなく、
-  // 今日基準の前日(hydrateStaticMarkdownが無条件fetchする唯一の前日ファイル)に固定する。
-  // 旧実装は selectedDate をジャーナルで過去日にめくると previous が実際に fetch 済みの
-  // 日付と一致しなくなり、黙って非表示になっていた(ホーム「AIから」で読めない不具合の報告と
-  // 同根の「選択日依存」問題)。新規fetchは追加せず cachedFeedback/state.feedback をそのまま流用する。
-  const yesterdayReal = addDays(todayISO(), -1);
-  const feedbackFromFilePrev = cachedFeedback[yesterdayReal] || state.feedback[yesterdayReal] || "";
+  // v141: AIフィードバック列(3列目)はジャーナルタブの表示から撤去した(未使用のため。
+  // CHANGES_v141.md参照)。fetchロジック(hydrateStaticMarkdown)・保存データ(state.feedback/
+  // cachedFeedback)自体は削除しておらず、Homeの「AIから」カード(homeAiFeedbackReadHTML)で
+  // 引き続き読める。
   return `
     ${renderHeader("過去の自分・今の自分・外部視点", "ジャーナル")}
     ${renderDateBar()}
@@ -7273,31 +7266,6 @@ function renderJournal() {
           </div>
         </details>
         <textarea class="textarea" data-journal-date="${date}">${escapeHTML(state.journals[date])}</textarea>
-      </div>
-      <div class="panel">
-        <div class="row" style="margin-bottom:10px">
-          <h2>🤖 AIフィードバック</h2>
-          <label class="btn ghost" style="font-size:12px; padding:6px 10px; cursor:pointer">
-            📤 .mdアップロード
-            <input type="file" accept=".md,text/markdown,text/plain" data-feedback-upload="${date}" hidden>
-          </label>
-        </div>
-        ${feedbackFromFile ? `
-          <div class="vision-source" style="margin-bottom:6px">📄 <code>AIフィードバック_${date}.md</code> から読込</div>
-          <div class="md-render readonly-md">${renderMarkdown(feedbackFromFile)}</div>
-        ` : `
-          <textarea class="textarea" data-feedback-date="${date}" placeholder="外部AIの返答をここに貼り付け、または上のボタンで .md ファイルをアップロード">${escapeHTML(feedbackFromState)}</textarea>
-        `}
-        <div class="row" style="margin-top:8px; flex-wrap:wrap; gap:6px">
-          <button class="btn ghost" data-action="journal-import-ai" data-date="${date}" style="font-size:12px">🤖 AI返信から取り込み(テーマ/MIT/問い)</button>
-          <button class="btn ghost" data-action="experiment-add" style="font-size:12px">🧪 実験にする</button>
-        </div>
-        ${feedbackFromFilePrev && yesterdayReal !== date ? `
-          <details class="journal-yesterday-feedback" style="margin-top:14px">
-            <summary class="muted" style="cursor:pointer; font-size:12px">🤖 昨日(${escapeHTML(yesterdayReal)})のAIフィードバックを見る</summary>
-            <div class="md-render readonly-md" style="margin-top:6px; opacity:0.85">${renderMarkdown(feedbackFromFilePrev)}</div>
-          </details>
-        ` : ""}
       </div>
     </section>
   `;
