@@ -173,3 +173,104 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(500);
     await page.click('[data-action="nav"][data-view="stats"]');
     await page.waitForTimeout(400);
+    const bucketRowsGuard = await page.locator(".stats-sleep-bucket-row").allTextContents();
+    const mid2Guard = bucketRowsGuard.find((t) => t.includes("6.5〜7.5h"));
+    check("6.5〜7.5h帯は日数(6日)のまま(sleepHログ自体は6日分残っている)", hasDayCount(mid2Guard, 6), mid2Guard);
+    const guardDashCount = ((mid2Guard || "").match(/—/g) || []).length;
+    check("着手率・netとも対サンプルが2件(<3)のため「—」表示になる(2箇所とも)", guardDashCount === 2, mid2Guard);
+
+    // ============================================================
+    // (2) stats-rangeを12wに変えても帯グラフは4週固定のまま
+    // ============================================================
+    console.log("[2] stats-range=12wでも帯グラフは4週固定");
+    await page.click('[data-action="stats-range"][data-range="12w"]');
+    await page.waitForTimeout(300);
+    const bandRows12w = await page.locator(".stats-sleep-band-row").count();
+    check("12wでも帯グラフの行数は28のまま", bandRows12w === 28, String(bandRows12w));
+    await page.click('[data-action="stats-range"][data-range="4w"]');
+    await page.waitForTimeout(300);
+
+    // ============================================================
+    // (3) 3件未満の帯は非表示(5.5h未満を2日まで減らす)
+    // ============================================================
+    console.log("[3] 3件未満の帯は非表示になる(5.5h未満を6日→2日に減らす)");
+    await page.evaluate(({ KEY, removeDates }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      removeDates.forEach((d) => { delete s.sleep.logs[d]; });
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, removeDates: [daysAgo(23), daysAgo(19), daysAgo(15), daysAgo(11)] });  // i=0,4,8,12 → cfg index0(lt55)の4日分を削除、残り2日
+    await page.reload();
+    await page.waitForTimeout(500);
+    await page.click('[data-action="nav"][data-view="stats"]');
+    await page.waitForTimeout(400);
+    const sleepPanelText2 = await page.locator(".stats-sleep-panel").textContent();
+    check("5.5h未満(n=2)の帯が非表示になる", !sleepPanelText2.includes("5.5h未満"));
+    check("他の3帯は引き続き表示される", sleepPanelText2.includes("5.5〜6.5h") && sleepPanelText2.includes("6.5〜7.5h") && sleepPanelText2.includes("7.5h以上"));
+
+    // ============================================================
+    // (4) 全期間(all)レンジでBlockより古い睡眠ログも取り込まれる(必須修正1の回帰確認)
+    // ============================================================
+    // 現在の最古BlockはdaysAgo(24)(文字列sleepH日のsb-str)。修正前は「全期間」のsinceが
+    // このBlock最古日だけから決まり、daysAgo(34)相当までしか遡らなかった(daysBetween=24→
+    // weeks=5→since=thisWeek-28=today-34)。daysAgo(40)にBlockを伴わない睡眠ログだけを
+    // 追加し、修正後は睡眠ログの最古日(daysAgo(40))まで起点が延びて6.5〜7.5h帯(daysAgo(40)の
+    // sleepH=7.0が該当)の件数が6→7に増えること、かつ4w/12wなど他レンジは影響を受けない
+    // ことを確認する。
+    console.log("[4] 全期間(all)レンジはBlockが無い古い睡眠ログも取り込む(sinceをsleep.logs最古日で延長)");
+    await page.click('[data-action="stats-range"][data-range="all"]');
+    await page.waitForTimeout(300);
+    const bucketRowsAllBefore = await page.locator(".stats-sleep-bucket-row").allTextContents();
+    const mid2AllBefore = bucketRowsAllBefore.find((t) => t.includes("6.5〜7.5h"));
+    check("全期間(追加前): 6.5〜7.5h帯は6日", (mid2AllBefore || "").includes("(6日)"), mid2AllBefore);
+
+    const veryOldDay = daysAgo(40);
+    await page.evaluate(({ KEY, veryOldDay }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.sleep.logs[veryOldDay] = { bed: "23:00", wake: "06:00", sleepH: 7.0 };  // Blockは意図的に無し
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, veryOldDay });
+    await page.reload();
+    await page.waitForTimeout(500);
+    await page.click('[data-action="nav"][data-view="stats"]');
+    await page.waitForTimeout(400);
+
+    await page.click('[data-action="stats-range"][data-range="4w"]');
+    await page.waitForTimeout(300);
+    const bucketRows4wAfter = await page.locator(".stats-sleep-bucket-row").allTextContents();
+    const mid2_4wAfter = bucketRows4wAfter.find((t) => t.includes("6.5〜7.5h"));
+    check("4wは影響を受けない(古い睡眠ログを追加しても6日のまま)", (mid2_4wAfter || "").includes("(6日)"), mid2_4wAfter);
+
+    await page.click('[data-action="stats-range"][data-range="all"]');
+    await page.waitForTimeout(300);
+    const bucketRowsAllAfter = await page.locator(".stats-sleep-bucket-row").allTextContents();
+    const mid2AllAfter = bucketRowsAllAfter.find((t) => t.includes("6.5〜7.5h"));
+    check("全期間(追加後): 6.5〜7.5h帯が7日に増える(Blockの無い古い睡眠ログも取り込まれた)", (mid2AllAfter || "").includes("(7日)"), mid2AllAfter);
+
+    await page.click('[data-action="stats-range"][data-range="4w"]');
+    await page.waitForTimeout(300);
+
+    // ============================================================
+    // (5) 睡眠データが1件も無ければセクション自体が非表示
+    // ============================================================
+    console.log("[5] 睡眠データが1件も無ければ「睡眠」セクションごと非表示");
+    await page.evaluate((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.sleep.logs = {};
+      s.condition.logs = {};
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, KEY);
+    await page.reload();
+    await page.waitForTimeout(500);
+    await page.click('[data-action="nav"][data-view="stats"]');
+    await page.waitForTimeout(400);
+    check("睡眠データ皆無で睡眠セクションが非表示", await page.locator(".stats-sleep-panel").count() === 0);
+    check("他の計器盤セクションは引き続き表示される(回帰なし)", (await page.locator("main").textContent()).includes("エネルギー収支の週次推移"));
+
+    console.log(failures === 0 ? "\n✅ v142 ALL PASS" : `\n❌ v142: ${failures} 件失敗`);
+  } finally {
+    await browser.close();
+    server.close();
+  }
+
+  process.exit(failures === 0 ? 0 : 1);
+})().catch((e) => { console.error(e); process.exit(1); });
