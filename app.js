@@ -691,7 +691,9 @@ document.addEventListener("click", (event) => {
   if (action === "draft-confirm") confirmScheduleDraft();
   if (action === "draft-discard" && _scheduleDraft) {
     // v52: 破棄も「この提案は不要だった」という学習シグナルとして記録(v62: source区別も記録)
-    _scheduleDraft.items.forEach((it) => recordScheduleHistory(it, "discarded", _scheduleDraft.date, _scheduleDraft.source || "deterministic"));
+    // v145レビュー対応: 複数sourceの項目が合流した下書き(例: 朝プラン+回復提案)でも、
+    // 学習ログには項目ごとの出どころ(it.source)を優先して残す(無ければ従来どおり下書き全体のsource)。
+    _scheduleDraft.items.forEach((it) => recordScheduleHistory(it, "discarded", _scheduleDraft.date, it.source || _scheduleDraft.source || "deterministic"));
     _scheduleDraft = null;
     _draftUndo = null;  // v62: 破棄はUndo対象外(下書き自体が消える)
     _draftUndoHistoryEntry = null;
@@ -702,7 +704,8 @@ document.addEventListener("click", (event) => {
   if (action === "draft-remove" && _scheduleDraft) {
     const removed = _scheduleDraft.items.find((x) => x.id === id);
     let removedHistoryEntry = null;
-    if (removed) removedHistoryEntry = recordScheduleHistory(removed, "removed", _scheduleDraft.date, _scheduleDraft.source || "deterministic");  // v52: 却下シグナル
+    // v145レビュー対応: item.source優先(合流下書きでの出どころ誤ラベル防止。draft-discardと同じ方針)
+    if (removed) removedHistoryEntry = recordScheduleHistory(removed, "removed", _scheduleDraft.date, removed.source || _scheduleDraft.source || "deterministic");  // v52: 却下シグナル
     // v62(m2): 削除直前の下書き状態を1段Undoとして退避。このremovedエントリも一緒に退避し、
     //          Undoで取り消せるようにする(Undo→再確定でremoved/confirmedが二重計上されないため)。
     snapshotDraftForUndo(removedHistoryEntry);
@@ -1036,6 +1039,12 @@ document.addEventListener("change", (event) => {
     saveState();
     render();
   }
+  // v145: 行動接続(残量低下時の回復Block下書き提案)のopt-inトグル。既定OFF。
+  if (target.matches("[data-setting-battery-recoverydraft]")) {
+    state.settings.battery ||= defaultBatterySettings();
+    state.settings.battery.recoveryDraft = target.checked;
+    saveState();
+  }
   // v84: Study With Me の動画ID・開始秒(直接編集)
   if (target.matches("[data-swm-field]")) {
     const field = target.dataset.swmField;
@@ -1301,7 +1310,12 @@ function normalizeState(value) {
     b.decayPerHour = clampBatteryFieldValue("decayPerHour", Number.isFinite(b.decayPerHour) ? b.decayPerHour : def.decayPerHour);
     b.decayStartMinutes = clampBatteryFieldValue("decayStartMinutes", b.decayStartMinutes);
     b.max = clampBatteryFieldValue("max", Number.isFinite(b.max) ? b.max : def.max);
+    // v145: 行動接続(残量低下時の回復Block下書き提案)。既定OFF・しきい値40%(既存値優先で補完)。
+    if (typeof b.recoveryDraft !== "boolean") b.recoveryDraft = def.recoveryDraft;
+    b.recoveryThresholdPct = clampBatteryFieldValue("recoveryThresholdPct", Number.isFinite(b.recoveryThresholdPct) ? b.recoveryThresholdPct : def.recoveryThresholdPct);
   }
+  // v145: 回復Block下書き提案の1日1回冪等マーカー(feedbackIngestedDatesと同じ軽量配列の思想)。
+  if (!Array.isArray(value.batteryRecoveryDraftDates)) value.batteryRecoveryDraftDates = [];
   if (!("lastPushedAt" in value.settings)) value.settings.lastPushedAt = null;
   if (!("lastPulledAt" in value.settings)) value.settings.lastPulledAt = null;
   // v25: データ最終更新時刻(端末間で「新しい方が勝つ」判定に使用)
@@ -3772,6 +3786,12 @@ let _draftDrag = null;      // ドラッグ中の一時情報 非永続
 let _draftUndo = null;      // v62: 下書きレイヤ操作(×削除・ドラッグ)の直前スナップショット(1段Undo)非永続
 let _draftUndoHistoryEntry = null;  // v62(m2): _draftUndoが削除操作由来なら、その時記録したaiScheduleHistoryエントリの参照(Undoで取り消す)
 let _pendingRejectReason = null;  // v62: ×直後の却下理由ワンタップ選択(任意・非ブロッキング)非永続 { title, entry }
+// v145レビュー対応: runAiMorningPlanの非同期処理(AIプランJSONのfetch等)が完了するまでtrue。
+// この間は他の非同期処理(残量低下時の回復Block下書き提案)が_scheduleDraftを取り合わないよう、
+// ティッカー経路(updateBatteryTick)は本フラグが立っていれば静かにスキップする(冪等マーカーは
+// 焼かない=次tickで再評価される)。起動時経路はrunAiMorningPlanのPromiseそのものに連鎖させる
+// (maybeAutoMorningPlan参照)ため本フラグを直接は見ない。
+let _morningPlanInFlight = false;
 let _zeroSecThemeDraft = null;  // v75: AIプラン_*.jsonのzeroSecThemes提案(0秒思考テーマ)。{ date, items:[{theme,reason}] } 非永続(_scheduleDraftと同じ思想)
 
 function minToHHMM(min) {
@@ -4069,7 +4089,8 @@ function confirmScheduleDraft() {
       block.carryCount = (src?.carryCount || 0) + 1;  // v61: 繰り越し回数を1つ積み上げる
     }
     state.blocks.push(block);
-    recordScheduleHistory(it, "confirmed", date, draftSource);
+    // v145レビュー対応: item.source優先(合流下書きでの出どころ誤ラベル防止。draft-discard/removeと同じ方針)
+    recordScheduleHistory(it, "confirmed", date, it.source || draftSource);
     // v59: 繰り越し由来の下書きは元Blockに migratedTo を設定(carryOverBlockと同じ二重繰越防止セマンティクス)
     if (it.carryFromId) {
       state.blocks = state.blocks.map((b) => b.id === it.carryFromId ? { ...b, migratedTo: block.id, updatedAt: nowDateTime() } : b);
@@ -4300,6 +4321,10 @@ function showZeroSecThemesOnlyIfAny(date, auto) {
 // v62: 自宅PCバッチ生成のAIプランJSONを優先採用し、取得/検証に失敗した場合のみ決定論配置へ
 //      フォールバックする(v60の経路は無傷で維持)。
 async function runAiMorningPlan({ auto = false } = {}) {
+  // v145レビュー対応: 完了(どの早期returnでもfinallyで確実に)までフラグを立て、回復Block
+  // 下書き提案(ティッカー経路)がこの間に割り込んで_scheduleDraftを取り合わないようにする。
+  _morningPlanInFlight = true;
+  try {
   const date = todayISO();
   const DAY_START = 5 * 60, DAY_END = 23 * 60;
   const now = new Date();
@@ -4382,6 +4407,9 @@ async function runAiMorningPlan({ auto = false } = {}) {
     ? "🌅 今日の下書きプランを置きました。タイムラインで調整→確定してください"
     : "🌅 空き時間へ自動配置しました — 確認して「確定」してください");
   render();
+  } finally {
+    _morningPlanInFlight = false;
+  }
 }
 
 // v59: 朝の一括プランニングの自動起動(opt-in・既定OFF)。maybeAutoMorningReview と同じパターン。
@@ -4389,26 +4417,32 @@ async function runAiMorningPlan({ auto = false } = {}) {
 //      1日1回ガード(localStorage)。ガードは実行を決めた時点で立てるため、破棄しても再自動起動しない。
 const AUTO_MORNING_PLAN_KEY = "taskchute-auto-morning-plan-date";  // 端末ローカル
 
+// v145レビュー対応: 戻り値をvoidからPromise|nullへ変更した(実際にrunAiMorningPlanを起動した
+// ときだけそのPromiseを返す。起動条件を満たさなかった場合はnull)。起動時経路(state.selectedDate
+// ===todayISO()の起動シーケンス)が「朝プランの完了後に回復Block下書き提案を連鎖評価する」ために
+// 参照する。既存の呼び出し箇所(setTimeout(maybeAutoMorningPlan, ...)、戻り値を使わない)は
+// 戻り値の型変更による影響を受けない。
 function maybeAutoMorningPlan() {
-  if (!state.settings.ai?.autoMorningPlan) return;
+  if (!state.settings.ai?.autoMorningPlan) return null;
   const today = todayISO();
   try {
-    if (localStorage.getItem(AUTO_MORNING_PLAN_KEY) === today) return;  // 1日1回(失敗・破棄後も再試行しない)
+    if (localStorage.getItem(AUTO_MORNING_PLAN_KEY) === today) return null;  // 1日1回(失敗・破棄後も再試行しない)
   } catch { /* 読めなければ続行 */ }
   const now = new Date();
-  if (now.getHours() * 60 + now.getMinutes() > 10 * 60) return;  // 10:00より後の初回起動は対象外
+  if (now.getHours() * 60 + now.getMinutes() > 10 * 60) return null;  // 10:00より後の初回起動は対象外
   const hasNonRoutineToday = state.blocks.some((b) =>
     !b.deleted && b.date === today && b.category !== "ルーティン" && !b.recurrenceGroupId);
-  if (hasNonRoutineToday) return;  // 既に当日のBlockがあれば白紙提案の出番ではない
+  if (hasNonRoutineToday) return null;  // 既に当日のBlockがあれば白紙提案の出番ではない
   try { localStorage.setItem(AUTO_MORNING_PLAN_KEY, today); } catch { /* 記録できなくても続行 */ }
   // v62: runAiMorningPlan は AIプランJSONのfetchを含むため async 化した。同期 throw は
   //      try/catch で、非同期 reject は .catch() で拾い、どちらも静かに握りつぶす(手動実行は常に可能)。
   try {
-    runAiMorningPlan({ auto: true }).catch((error) => {
+    return runAiMorningPlan({ auto: true }).catch((error) => {
       console.warn("朝プラン自動下書きをスキップ:", error.message);
     });
   } catch (error) {
     console.warn("朝プラン自動下書きをスキップ:", error.message);
+    return null;
   }
 }
 
@@ -7366,12 +7400,16 @@ function conditionBudget(date) {
 // マイグレーションと computeBatteryLevel の両方から参照する単一の正本。
 // v144レビュー対応(M4): 減衰開始時刻はtype="time"入力に対応するため分単位
 // (decayStartMinutes)で保持する(420=07:00固定。K確定の意味自体は不変)。
+// v145: 行動接続(残量低下時の回復Block下書き提案)のパラメタを追加。既定は全面OFF/40%
+// (opt-in。既存の3パラメタと同じくnormalizeStateのマイグレーション対象)。
 function defaultBatterySettings() {
   return {
     start: { deficit: 30, low: 40, normal: 50 },
     decayPerHour: 3,
     decayStartMinutes: 420,
-    max: 50
+    max: 50,
+    recoveryDraft: false,
+    recoveryThresholdPct: 40
   };
 }
 
@@ -7390,6 +7428,8 @@ function clampBatteryFieldValue(field, raw) {
   if (field === "decayPerHour") return Math.max(0, finite ?? 0);
   if (field === "max") return Math.max(1, finite ?? 1);
   if (field === "decayStartMinutes") return (finite !== null && finite >= 0 && finite <= 1439) ? finite : 420;
+  // v145: 回復提案の発火しきい値(開始値に対する%)。1〜100の範囲外・非数は既定40へ倒す。
+  if (field === "recoveryThresholdPct") return (finite !== null && finite >= 1 && finite <= 100) ? finite : 40;
   return finite ?? 0;
 }
 
@@ -8575,6 +8615,20 @@ function renderSettings() {
           <input class="input" type="number" min="1" step="1" data-setting-battery-field="max"
             value="${state.settings.battery.max}">
         </label>
+        <label class="checkbox-line">
+          <input type="checkbox" data-setting-battery-recoverydraft ${state.settings.battery.recoveryDraft ? "checked" : ""}>
+          🔋 残量低下時に回復Blockを下書き提案する(v145、既定OFF)
+        </label>
+        <label>提案する残量のしきい値(開始値に対する%、既定40)
+          <input class="input" type="number" min="1" max="100" step="1" data-setting-battery-field="recoveryThresholdPct"
+            value="${state.settings.battery.recoveryThresholdPct}">
+        </label>
+        <div class="muted" style="font-size:11px; line-height:1.6">
+          ONの場合、当日の残量がこのしきい値を下回った時点で1日1回、直近4週の実績で充電効果
+          (充電−放電の中央値)が高いBlockを1〜2件、タイムラインの下書きへ静かに配置します
+          (通知・アラートは出しません)。承認/個別却下/ドラッグ調整/一括確定は既存の下書き
+          バーの操作(📋 下書きスケジュールと同じ)をそのまま使います。
+        </div>
       </div>
       <div class="panel stack">
         <h2>データ</h2>
@@ -17026,6 +17080,16 @@ function updateBatteryTick() {
   if (Date.now() - _lastBatteryTickAt < BATTERY_TICK_INTERVAL_MS) return;
   _lastBatteryTickAt = Date.now();
   if (state.selectedDate !== todayISO()) return;
+  // v145: 残量が閾値を下回った時点で回復Block下書きを1回だけ静かに提案する(opt-in・冪等)。
+  // 冪等ガードは関数内部(state.batteryRecoveryDraftDates)にあり、新規追加時のみtrueが返る。
+  // 新規下書き追加(1日高々1回)は draft-layer/draft-bar という新しいDOMを出す必要があるため、
+  // このtickに限り再描画するが、検索入力・IME変換中を壊さないよう既存の
+  // renderDeferringForFocus()(v137/v140、focusout/compositionendまで延期+60秒フェイルセーフ)
+  // を使う(v145レビュー対応: render()直呼びをやめた)。
+  {
+    const now = new Date();
+    if (maybeSuggestRecoveryDraft(now.getHours() * 60 + now.getMinutes())) { renderDeferringForFocus(); return; }
+  }
   if (state.currentView === "home") {
     const chip = document.querySelector(".home-battery-chip");
     if (chip) chip.outerHTML = homeBatteryChip();
@@ -17164,7 +17228,29 @@ startTimerTicker();
 if (state.settings.autoSync) runAutoSyncPull();
 else syncFromGitHubOnStartup();
 // v59: 朝の一括プランニングの自動下書き(opt-in・既定OFF)。起動直後は同期(pull)に少し譲ってから実行する。
-setTimeout(maybeAutoMorningPlan, 4500);
+// v145レビュー対応: 回復Block下書き提案(下記)は朝プランの非同期処理(AIプランJSONのfetch等)と
+// _scheduleDraftを取り合うため、同時に走らせず「朝プランの完了を待ってから」評価するよう
+// 1本のsetTimeoutへ連鎖させた(以前は独立した2本のsetTimeout(4500ms/5000ms)で、朝プランの
+// fetchがわずかに長引くと回復提案が先に走り、後から朝プランが_scheduleDraftを上書きして
+// 提案だけ消える一方、冪等マーカーは焼けたままになる事故があった)。
+setTimeout(() => {
+  const morningPlanPromise = maybeAutoMorningPlan();
+  // v145: 残量低下時の回復Block下書き提案(opt-in・既定OFF)。起動直後にも1回チェックする
+  // (アプリを開いたまま日をまたいだ後の初回起動や、当日最初の起動時点で既に残量が閾値を
+  // 下回っているケースに対応。以後はupdateBatteryTick経由のティッカーが1分間隔で見る)。
+  const checkRecoveryDraft = () => {
+    if (state.selectedDate !== todayISO()) return;  // v145レビュー対応: ティッカー側と対称のガード
+    const now = new Date();
+    if (maybeSuggestRecoveryDraft(now.getHours() * 60 + now.getMinutes())) renderDeferringForFocus();
+  };
+  // maybeAutoMorningPlanが実際に起動した場合のみPromiseが返る(起動条件を満たさなければnull)。
+  // その場合は朝プランの完了(_scheduleDraft確定 or 何もせず終了)を待ってから評価する。
+  if (morningPlanPromise && typeof morningPlanPromise.then === "function") {
+    morningPlanPromise.then(checkRecoveryDraft);
+  } else {
+    checkRecoveryDraft();
+  }
+}, 4500);
 // v53: 自動アーカイブ(既定ON・1日1回)。同期・自動レビューの後に静かに実行。
 setTimeout(maybeAutoArchive, 8000);
 // v41/v43: 復帰時。自動同期 ON なら pull(内部で日次オープン)、OFF なら日次オープンのみ。

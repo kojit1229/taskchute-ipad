@@ -1,4 +1,7 @@
-const CACHE_NAME = "taskchute-journal-pwa-v144";
+const CACHE_NAME = "taskchute-journal-pwa-v145";
+// v145: エネルギーバッテリー「行動接続」— 残量が閾値を下回った朝に、実績で回復効果(充電−放電)の
+//   高いBlockを1〜2件、既存の下書きスケジュール(_scheduleDraft)へ静かに提案するopt-in機能(既定OFF)。
+//   新規UI・通知は追加せず既存の下書きバー操作をそのまま使う。CHANGES_v145.md参照。
 // v144: エネルギーバッテリーモデル(computeBatteryLevel+ホーム電池チップ+タイムライン実カーブの
 //   重ね描き)を追加。通知・アラートは出さず表示のみ(静かな計器)。CHANGES_v144.md参照。
 // v143: 計器盤の最上部に「今週のヒント」(computeInsights、決定論ルールエンジン+該当Block一覧への
