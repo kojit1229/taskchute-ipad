@@ -7502,6 +7502,156 @@ function batteryCurvePoints(dateKey, nowMinutes, opts = {}) {
   return points;
 }
 
+// =========================================================
+// v145: エネルギーバッテリー「行動接続」— 残量低下時の回復Block下書き提案(opt-in・既定OFF)。
+// 設計提案書§3「行動接続(後続フェーズ・任意)」の実装。新しいUIは作らず、既存の
+// _scheduleDraft+draftレイヤ(runAiMorningPlanと同じ機構)へ1〜2件の下書きBlockとして
+// 静かに流し込むだけ(通知・アラート・トーストは出さない)。
+// =========================================================
+
+const BATTERY_RECOVERY_LOOKBACK_DAYS = 28;          // 「直近4週」固定(判定用途のため。P2 rule1と同じ考え方)
+const BATTERY_RECOVERY_MIN_SAMPLES = 3;             // n>=3件揃わないタイトルは候補にしない(過剰解釈防止)
+const BATTERY_RECOVERY_MAX_ITEMS = 2;               // 提案は最大2件
+const BATTERY_RECOVERY_DURATION_FALLBACK_MIN = 20;  // 実績時間が1件も無いタイトル用の既定所要時間
+const BATTERY_RECOVERY_DATES_MAX = 180;             // feedbackIngestedDates等と同じ軽量配列の上限思想
+
+// 完了Blockのタイトル別net(charge−discharge)中央値(回復提案の候補選定専用)。
+// computeChargeTopCategories(カテゴリ単位、v143。計器盤「今週のヒント」用)と同じ思想だが、
+// K指示は「ルーティン/タイトル単位」のため別実装にした(カテゴリだと粒度が粗く、個々の
+// 充電系ルーティン・タスクを名指しできないため)。n>=3・net中央値>0のみ、中央値降順。
+// durationMinは同タイトルの実績所要時間(_actualDurationMin)の中央値。1件も無ければ
+// BATTERY_RECOVERY_DURATION_FALLBACK_MINへフォールバックする(下書き配置の長さに使う)。
+function computeChargeTopTitles(since, today) {
+  const doneInRange = state.blocks.filter((b) => !b.deleted && b.completed && b.title && b.date >= since && b.date <= today);
+  const byTitle = {};
+  doneInRange.forEach((b) => {
+    const entry = (byTitle[b.title] ||= { nets: [], durations: [], category: "" });
+    entry.nets.push(Number(b.charge || 0) - Number(b.discharge || 0));
+    const d = _actualDurationMin(b);
+    if (d != null) entry.durations.push(d);
+    if (b.category) entry.category = b.category;  // 表示・下書き配置用に直近の完了分のカテゴリを採用
+  });
+  return Object.entries(byTitle)
+    .filter(([, v]) => v.nets.length >= BATTERY_RECOVERY_MIN_SAMPLES)
+    .map(([title, v]) => ({
+      title,
+      med: median(v.nets),
+      n: v.nets.length,
+      category: v.category,
+      durationMin: v.durations.length ? Math.round(median(v.durations)) : BATTERY_RECOVERY_DURATION_FALLBACK_MIN
+    }))
+    .filter((r) => r.med > 0)
+    .sort((a, b) => b.med - a.med);
+}
+
+// [start,end)区間の配列(occupied)を、gaps(同じく[start,end)の配列)から差し引く。
+// computeFreeGapsは実Block(plannedStartAt/plannedEndAt)しか占有として見ないため、
+// 「_scheduleDraftの既存下書き項目」のような非永続の占有区間を追加で差し引くための汎用ヘルパー
+// (v145レビュー対応: 朝プラン下書きの真上に回復提案が重なる事故の根絶)。
+function subtractOccupiedIntervals(gaps, occupied) {
+  if (!occupied.length) return gaps.map(([s, e]) => [s, e]);
+  return occupied.reduce((acc, [os, oe]) => {
+    const next = [];
+    acc.forEach(([s, e]) => {
+      if (oe <= s || os >= e) { next.push([s, e]); return; }  // 重ならない
+      if (os > s) next.push([s, os]);
+      if (oe < e) next.push([oe, e]);
+    });
+    return next;
+  }, gaps.map(([s, e]) => [s, e]));
+}
+
+// 判定(決定論・1日1回冪等)+配置。opt-in設定がONで、当日の残量が閾値
+// (開始値×settings.battery.recoveryThresholdPct%)を下回っていれば、直近4週の
+// computeChargeTopTitles上位1〜2件を空き時間(computeFreeGaps)へ下書きBlockとして配置する。
+// 冪等ガード(state.batteryRecoveryDraftDates)は「発火条件が成立した時点」で立てる
+// (maybeAutoMorningPlanと同じ思想: 候補0件・空き時間0件で何も置けなかった日も再試行しない)。
+// 戻り値は「新規に下書きを追加したか」(呼び出し側のrender()要否判定に使う)。
+function maybeSuggestRecoveryDraft(nowMinutes) {
+  if (!state.settings.battery?.recoveryDraft) return false;  // 既定OFF・opt-in
+  const today = todayISO();
+  // v145レビュー対応: 朝プラン(runAiMorningPlan)の非同期処理と_scheduleDraftを取り合わないよう、
+  // 処理中はこのtickをスキップする(冪等マーカーは焼かない=次tickで再評価される)。
+  if (_morningPlanInFlight) return false;
+  if (!Array.isArray(state.batteryRecoveryDraftDates)) state.batteryRecoveryDraftDates = [];
+  if (state.batteryRecoveryDraftDates.includes(today)) return false;  // 冪等: 1日1回
+
+  const def = defaultBatterySettings();
+  const cfg = state.settings.battery || def;
+  const startCfg = { ...def.start, ...(cfg.start || {}) };
+  const budgetLevel = conditionBudget(today).level;
+  const startKey = budgetLevel === "deficit" ? "deficit" : budgetLevel === "low" ? "low" : "normal";
+  const startValue = Number(startCfg[startKey]);
+  const thresholdPct = Number.isFinite(cfg.recoveryThresholdPct) ? cfg.recoveryThresholdPct : def.recoveryThresholdPct;
+  const threshold = startValue * (thresholdPct / 100);
+  const level = computeBatteryLevel(today, nowMinutes, { budgetLevel });
+  if (level >= threshold) return false;  // 閾値以上なら対象外
+
+  // ここから先は「発火条件が成立した」とみなし、結果(候補0件・空き枠0件含む)に関わらず
+  // 1日1回のガードを立てる(空振りのたびに毎分再試行しないため)。
+  state.batteryRecoveryDraftDates.push(today);
+  if (state.batteryRecoveryDraftDates.length > BATTERY_RECOVERY_DATES_MAX) {
+    state.batteryRecoveryDraftDates = state.batteryRecoveryDraftDates.slice(-BATTERY_RECOVERY_DATES_MAX);
+  }
+
+  // v145レビュー対応(当日重複候補の除外): aiScheduleCandidates(app.js:3848近辺)の規約に
+  // 合わせ、「当日すでに同名Blockが存在する」「当日の_scheduleDraftに同名項目がある」タイトルは
+  // 候補から除外する(夕方発火時に今日もうやった「散歩」を再提案しない)。MAX_ITEMSへ絞る前に
+  // 除外することで、除外後も上位2件をきちんと拾えるようにする。
+  const existingDraftForToday = (_scheduleDraft && _scheduleDraft.date === today) ? _scheduleDraft : null;
+  const todaysBlockTitles = new Set(state.blocks.filter((b) => !b.deleted && b.date === today).map((b) => b.title));
+  const todaysDraftTitles = new Set((existingDraftForToday?.items || []).map((it) => it.title));
+  const since = addDays(today, -(BATTERY_RECOVERY_LOOKBACK_DAYS - 1));
+  const candidates = computeChargeTopTitles(since, today)
+    .filter((c) => !todaysBlockTitles.has(c.title) && !todaysDraftTitles.has(c.title))
+    .slice(0, BATTERY_RECOVERY_MAX_ITEMS);
+  if (!candidates.length) { saveState(); return false; }
+
+  const DAY_START = 5 * 60, DAY_END = 23 * 60;
+  const nowFloor = Math.min(DAY_END, Math.ceil(nowMinutes / 15) * 15);
+  const rawGaps = computeFreeGaps(today, DAY_START, DAY_END)
+    .map(([s, e]) => [Math.max(s, nowFloor), e])
+    .filter(([s, e]) => e - s >= 15);
+  // v145レビュー対応(既存下書きとの重なり防止): computeFreeGapsは実Blockしか見ないため、
+  // 当日の既存_scheduleDraft項目(朝プラン等)の占有区間を追加で差し引く。
+  const draftOccupied = (existingDraftForToday?.items || []).map((it) => [it.start, it.start + it.minutes]);
+  const gaps = subtractOccupiedIntervals(rawGaps, draftOccupied).filter(([s, e]) => e - s >= 15);
+
+  const placed = [];
+  candidates.forEach((c) => {
+    const minutes = clamp(c.durationMin, 15, 120);
+    const gapIdx = gaps.findIndex((g) => g[1] - g[0] >= minutes);
+    if (gapIdx === -1) return;  // 入り切らなければ配置しない(詰め込まない、既存方針と同じ)
+    const start = gaps[gapIdx][0];
+    placed.push({
+      id: crypto.randomUUID(), title: c.title, taskId: "", category: c.category || "",
+      start, minutes, aiStart: start, aiMinutes: minutes,
+      source: "battery-recovery",  // v145レビュー対応: 合流時も学習ログでitem単位の出どころを残す
+      reason: `回復提案: 直近4週の充電効果(net中央値${signed(Math.round(c.med))})が高いBlock`
+    });
+    // v145レビュー対応: 既存のfallbackMorningPlanと同じブロック間バッファを空ける
+    gaps[gapIdx][0] += minutes + MORNING_PLAN_BUFFER_MIN;
+    if (gaps[gapIdx][1] - gaps[gapIdx][0] < 15) gaps.splice(gapIdx, 1);
+  });
+
+  saveState();
+  if (!placed.length) return false;
+
+  // 既存の下書き(朝プラン等)があれば末尾に合流させ、無ければ新規に作る。
+  // source:"battery-recovery" はdraftBarHTMLの表示分岐(ai-plan以外は「⚙ 決定論配置」表示)に
+  // そのまま乗る — 新規ラベル・新規UIは作らない。
+  if (existingDraftForToday) {
+    _scheduleDraft.items = [..._scheduleDraft.items, ...placed];
+    // v145レビュー対応: 新規追加分がある以上、前セッションのUndoは意味を持たないため
+    // 新規作成時と対称にリセットする(mergeでも同じ扱いに揃える)。
+    _draftUndo = null; _draftUndoHistoryEntry = null;
+  } else {
+    _scheduleDraft = { date: today, items: placed, skipped: [], source: "battery-recovery" };
+    _draftUndo = null; _draftUndoHistoryEntry = null;
+  }
+  return true;
+}
+
 async function importSleepCsv(file) {
   let records;
   try {
