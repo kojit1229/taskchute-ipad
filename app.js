@@ -8971,6 +8971,156 @@ function renderSleepStats(since, today) {
     </div>`;
 }
 
+// v143: 計器盤「今週のヒント」========================================================
+// 既存の集計(エネルギー構造/ヒートマップ/見積精度/睡眠帯)を専用の純関数へ集約し、
+// renderStats()内の各チャートとcomputeInsights()の両方から呼べるようにする(二重実装回避)。
+// 決定論のみ・保存しない・観察文のみ(「〜すべき」を出さない)。0件なら節ごと非表示(静かな計器)。
+
+// 時間帯(SCHED_BANDS)×曜日の着手率グリッド。renderStatsのヒートマップと同一ロジックを共有する。
+// n<3のセルはrate=nullで返す(ノイズ抑制。既存のヒートマップ表示仕様を踏襲)。
+function computeHeatmapCells(since, today) {
+  const past = state.blocks.filter((b) => !b.deleted && b.date >= since && b.date <= today && b.plannedStartAt);
+  const wdOrder = [6, 0, 1, 2, 3, 4, 5];  // 週定義に合わせて 土曜始まり
+  const wdLabels = ["土", "日", "月", "火", "水", "木", "金"];
+  const cells = [];
+  SCHED_BANDS.forEach(([s, e, bandLabel], bandIdx) => {
+    wdOrder.forEach((wd, i) => {
+      const cellBlocks = past.filter((b) => {
+        if (parseDate(b.date).getDay() !== wd) return false;
+        const m = minutesOf(b.plannedStartAt);
+        return m >= s * 60 && m < e * 60;
+      });
+      const n = cellBlocks.length;
+      const rate = n >= 3 ? cellBlocks.filter((b) => b.actualStartAt).length / n : null;  // n不足はノイズなので出さない
+      cells.push({ bandIdx, bandLabel, dayIndex: wd, wdLabel: wdLabels[i], n, rate });
+    });
+  });
+  return cells;
+}
+
+// 見積 vs 実績(見積・実績時刻が両方あるBlock)。renderStatsの見積カードと同一ロジックを共有する。
+// 5件未満は非対象(既存の見積カード仕様を踏襲)。
+function computeEstimateStats(since, today) {
+  const past = state.blocks.filter((b) => !b.deleted && b.date >= since && b.date <= today && b.plannedStartAt);
+  const est = past
+    .filter((b) => b.completed && Number(b.estimateMin) > 0)
+    .map((b) => ({ b, actual: _actualDurationMin(b) }))
+    .filter((x) => x.actual && x.actual > 0);
+  if (est.length < 5) return { eligible: false, est: [], catRows: [] };
+  const ratios = est.map((x) => x.actual / Number(x.b.estimateMin));
+  const medRatio = Math.round(median(ratios) * 100);
+  const meanAbsErr = Math.round(est.reduce((s, x) => s + Math.abs(x.actual - Number(x.b.estimateMin)), 0) / est.length);
+  const byCat = {};
+  est.forEach((x) => { (byCat[x.b.category || "未分類"] ||= []).push(x.actual / Number(x.b.estimateMin)); });
+  const catRows = Object.entries(byCat)
+    .filter(([, arr]) => arr.length >= 3)
+    .map(([cat, arr]) => ({ cat, med: median(arr), n: arr.length }))
+    .sort((a, b) => Math.abs(b.med - 1) - Math.abs(a.med - 1))
+    .slice(0, 5);
+  return { eligible: true, est, medRatio, meanAbsErr, catRows };
+}
+
+// 睡眠帯別(SLEEP_BUCKETS)の当日着手率/net。renderSleepBucketCard・computeInsightsのヒント4が
+// 共に本関数を呼ぶ単一実装(v143レビュー対応: renderSleepBucketCard側の重複コピーを廃止)。
+// blocksByDateは呼び出し元(renderStats)で1回だけ構築したMapを受け取る(全期間=最大728日の
+// 描画でbuildBlocksByDateMapのO(全Block数)走査が二重に走らないようにするため)。
+// n/datesは「その帯にsleepHが該当する日」全体(Blockが無い日も含む)を数える一方、
+// startVals/netValsはそれぞれ実際に値がある日だけを積む非対称があったため(v143レビュー指摘)、
+// startDates/netDatesをstartVals/netValsと同じ絞り込みで返し、ドリルダウン先や件数表示が
+// 実際に使った日とズレないようにする。
+function computeSleepBucketStats(since, today, blocksByDate) {
+  const days = [];
+  for (let d = since; d <= today; d = addDays(d, 1)) days.push(d);
+  const metrics = days.map((d) => computeDailyMetrics(d, { blocksByDate })).filter((m) => m.sleepH != null);
+  return SLEEP_BUCKETS
+    .map((b) => {
+      const inBucket = metrics.filter((m) => b.test(m.sleepH));
+      const startRows = inBucket.filter((m) => m.startTotal > 0);
+      const netRows = inBucket.filter((m) => m.completedCount > 0);
+      return {
+        ...b,
+        n: inBucket.length,
+        startVals: startRows.map((m) => m.startPct),
+        startDates: startRows.map((m) => m.date),  // v143: startValsと同じ絞り込みの日付(ドリルダウン用)
+        netVals: netRows.map((m) => m.net),
+        netDates: netRows.map((m) => m.date)
+      };
+    })
+    .filter((r) => r.n >= SLEEP_BUCKET_MIN_SAMPLES);
+}
+
+// 完了Blockのカテゴリ別net中央値(充電効果上位の抽出専用。n>=3・net中央値が正のもののみ)。
+function computeChargeTopCategories(since, today) {
+  const doneInRange = state.blocks.filter((b) => !b.deleted && b.date >= since && b.date <= today && b.completed);
+  const byCat = {};
+  doneInRange.forEach((b) => {
+    const c = b.category || "未分類";
+    (byCat[c] ||= []).push(Number(b.charge || 0) - Number(b.discharge || 0));
+  });
+  return Object.entries(byCat)
+    .filter(([, arr]) => arr.length >= 3)
+    .map(([cat, arr]) => ({ cat, med: median(arr), n: arr.length }))
+    .filter((r) => r.med > 0)
+    .sort((a, b) => b.med - a.med);
+}
+
+// computeInsights: 5ルールを評価し、該当したものだけ最大5件(ルールにつき最大1件)を返す
+// 決定論関数。文体は観察文のみ(「〜すべき」を出さない、催促・評価語を使わない)。
+// 各findingにドリルダウン導線(既存 energy-open-routine/energy-open-category/search-jump の
+// data-actionパターンを流用)を持たせる。
+function computeInsights(since, today, blocksByDate) {
+  const findings = [];
+
+  // 1) 放電超過カテゴリ/曜日(既存computeEnergyStructureの結果を統合表示。二重実装しない)
+  // v143レビュー対応(監督者裁定): computeEnergyStructureは足切り条件を含め本体は変更せず、
+  // 従来どおり直近4週固定で評価する(他の4ルールはstats-rangeに追従するため、その旨を
+  // ヒント文中に明記して混同を防ぐ)。
+  const weekStart = weekStartFor(today);
+  const struct = computeEnergyStructure(weekStart);
+  if (struct.eligible && struct.findings.length) {
+    const top = struct.findings[0];
+    findings.push({
+      id: "discharge",
+      text: top.type === "weekday"
+        ? `${top.label}が構造的にマイナス(平均 ${top.value.toFixed(1)}、直近4週で評価)`
+        : `${top.label}が放電超過(${signed(top.value)}、直近4週で評価)`,
+      actions: top.type === "weekday"
+        ? [{ action: "energy-open-routine", data: { day: top.dayIndex }, label: `${top.label}のルーティンを見る` }]
+        : [{ action: "energy-open-category", data: { cat: top.key }, label: "ブロックを見る" }]
+    });
+  }
+
+  // 2) 時間帯×曜日の着手率(予定ベース)の上位・下位セルを言語化
+  const hmCells = computeHeatmapCells(since, today).filter((c) => c.rate != null);
+  if (hmCells.length >= 2) {
+    const best = hmCells.reduce((a, b) => (b.rate > a.rate ? b : a));
+    const worst = hmCells.reduce((a, b) => (b.rate < a.rate ? b : a));
+    if (best !== worst) {
+      const bandName = (label) => label.replace(/\(.+\)/, "");
+      findings.push({
+        id: "heatmap",
+        text: `${best.wdLabel}曜${bandName(best.bandLabel)}は着手率${Math.round(best.rate * 100)}%、${worst.wdLabel}曜${bandName(worst.bandLabel)}は${Math.round(worst.rate * 100)}%`,
+        actions: [
+          { action: "energy-open-routine", data: { day: best.dayIndex }, label: `${best.wdLabel}曜のルーティンを見る` },
+          { action: "energy-open-routine", data: { day: worst.dayIndex }, label: `${worst.wdLabel}曜のルーティンを見る` }
+        ]
+      });
+    }
+  }
+
+  // 3) 見積誤差が大きいカテゴリ(既存の見積vs実績集計を流用、5件未満ガード踏襲)
+  // v143レビュー対応: 丸め後pctではなく生のmedで「意味のある誤差か(±5%以上)」を判定し、
+  // 長引きがち/早く終わりがちの方向もmed基準にする(丸め誤差で「100%(早く終わりがち)」の
+  // ような自己矛盾文が出ないようにする)。
+  const estStats = computeEstimateStats(since, today);
+  if (estStats.eligible && estStats.catRows.length) {
+    const c = estStats.catRows[0];
+    if (Math.abs(c.med - 1) >= 0.05) {  // ±5%未満のズレは観察するほどの意味を持たないため出さない
+      const pct = Math.round(c.med * 100);
+      findings.push({
+        id: "estimate",
+        text: `〈${c.cat}〉は実績が見積の${pct}%(${c.med > 1 ? "長引きがち" : "早く終わりがち"}、${c.n}件)`,
+        actions: [{ action: "energy-open-category", data: { cat: c.cat }, label: "ブロックを見る" }]
 function renderStats() {
   const range = state.settings.statsRange || "4w";
   const weeks = statsRangeWeeks();
