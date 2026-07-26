@@ -8906,22 +8906,10 @@ const SLEEP_BUCKETS = [
   { key: "gt75", label: "7.5h以上", test: (h) => h >= 7.5 }
 ];
 const SLEEP_BUCKET_MIN_SAMPLES = 3;  // 帯そのものだけでなく着手率/net個別の対サンプルにも適用する
-function renderSleepBucketCard(since, today) {
-  const days = [];
-  for (let d = since; d <= today; d = addDays(d, 1)) days.push(d);
-  const blocksByDate = buildBlocksByDateMap();  // v142: 日数×全Block数の都度filterを避ける(1回だけ構築)
-  const metrics = days.map((d) => computeDailyMetrics(d, { blocksByDate })).filter((m) => m.sleepH != null);
-  const rows = SLEEP_BUCKETS
-    .map((b) => {
-      const inBucket = metrics.filter((m) => b.test(m.sleepH));
-      return {
-        ...b,
-        n: inBucket.length,
-        startVals: inBucket.filter((m) => m.startTotal > 0).map((m) => m.startPct),
-        netVals: inBucket.filter((m) => m.completedCount > 0).map((m) => m.net)
-      };
-    })
-    .filter((r) => r.n >= SLEEP_BUCKET_MIN_SAMPLES);  // 3件未満の帯は非表示(renderStats既存ガードを踏襲)
+function renderSleepBucketCard(since, today, blocksByDate) {
+  // v143レビュー対応: 集計ロジックはcomputeSleepBucketStats()に一本化(重複コピーを廃止)。
+  // 3件未満の帯は非表示(renderStats既存ガードを踏襲、computeSleepBucketStats内で適用済み)。
+  const rows = computeSleepBucketStats(since, today, blocksByDate);
   if (!rows.length) return "";
   // startVals/netValsはそれぞれr.n(帯の睡眠件数)以下になりうる(Blockが無い/未完了の日がある
   // ため)。帯自体がn>=3でも、実際に使う対サンプルが3件未満なら中央値を出さず「—」にする
@@ -8959,10 +8947,10 @@ function renderSleepBucketCard(since, today) {
     </div>`;
 }
 
-function renderSleepStats(since, today) {
+function renderSleepStats(since, today, blocksByDate) {
   const bandCard = renderSleepBandCard(today);
   const trendCard = renderSleepTrendCard(since, today);
-  const bucketCard = renderSleepBucketCard(since, today);
+  const bucketCard = renderSleepBucketCard(since, today, blocksByDate);
   if (!bandCard && !trendCard && !bucketCard) return "";  // 睡眠データが1件も無ければセクションごと非表示
   return `
     <div class="panel stack stats-wide stats-sleep-panel">
@@ -9121,16 +9109,70 @@ function computeInsights(since, today, blocksByDate) {
         id: "estimate",
         text: `〈${c.cat}〉は実績が見積の${pct}%(${c.med > 1 ? "長引きがち" : "早く終わりがち"}、${c.n}件)`,
         actions: [{ action: "energy-open-category", data: { cat: c.cat }, label: "ブロックを見る" }]
+      });
+    }
+  }
+
+  // 4) 睡眠帯×実績の観察(全体中央値比でもっとも差が大きい帯。3件未満の帯・対サンプルは対象外)
+  const bucketRows = computeSleepBucketStats(since, today, blocksByDate)
+    .map((r) => ({ ...r, startMed: r.startVals.length >= SLEEP_BUCKET_MIN_SAMPLES ? median(r.startVals) : null }))
+    .filter((r) => r.startMed != null);
+  if (bucketRows.length >= 2) {
+    const overallMed = median(bucketRows.flatMap((r) => r.startVals));
+    const worst = bucketRows.reduce((a, b) => (b.startMed - overallMed < a.startMed - overallMed ? b : a));
+    const diff = Math.round(worst.startMed - overallMed);
+    if (diff <= -5) {  // 全体比-5pt以上の落ち込みだけを観察対象にする(恣意的な閾値。過剰検出を避ける目的)
+      // v143レビュー対応: 件数・ドリルダウン先はworst.n(帯の睡眠件数、Blockが無い日も含む)ではなく
+      // worst.startVals/startDates(実際に着手率計算に使った日)で揃える。
+      const recentDate = worst.startDates.length ? worst.startDates[worst.startDates.length - 1] : null;
+      findings.push({
+        id: "sleep",
+        text: `睡眠${worst.label}の日は着手率が${signed(diff)}pt(全体比、${worst.startVals.length}日)`,
+        actions: recentDate ? [{ action: "search-jump", data: { view: "journal", date: recentDate }, label: "直近の該当日を見る" }] : []
+      });
+    }
+  }
+
+  // 5) 充電効果の高いカテゴリ上位(完了Blockのnet中央値、n>=3・正のみ)
+  const chargeTop = computeChargeTopCategories(since, today);
+  if (chargeTop.length) {
+    const c = chargeTop[0];
+    findings.push({
+      id: "charge",
+      text: `〈${c.cat}〉は充電効果が高い(net中央値 ${signed(Math.round(c.med * 10) / 10)}、${c.n}件)`,
+      actions: [{ action: "energy-open-category", data: { cat: c.cat }, label: "ブロックを見る" }]
+    });
+  }
+
+  return findings.slice(0, 5);
+}
+
+// 「今週のヒント」節(計器盤の最上部に表示)。0件なら節ごと非表示(静かな計器)。
+function renderInsights(since, today, blocksByDate) {
+  const findings = computeInsights(since, today, blocksByDate);
+  if (!findings.length) return "";
+  return `
+    <div class="panel stack stats-wide stats-insights-panel">
+      <h2>今週のヒント</h2>
+      ${findings.map((f) => `
+        <div class="stats-insight-row">
+          <span class="stats-insight-text">${escapeHTML(f.text)}</span>
+          ${f.actions.map((a) => `<button class="btn ghost" data-action="${a.action}"${
+            Object.entries(a.data || {}).map(([k, v]) => ` data-${k}="${escapeHTML(String(v))}"`).join("")
+          }>${escapeHTML(a.label)}</button>`).join("")}
+        </div>`).join("")}
+      <div class="muted stats-axis">着手率(予定ベース)=計画Blockのうち実際に着手した割合(ヒートマップ・睡眠帯別と同じ定義。taskchute-notes/decisions.md 2026-07-26参照)。観察のみで判断は含みません</div>
+    </div>`;
+}
+
 function renderStats() {
   const range = state.settings.statsRange || "4w";
   const weeks = statsRangeWeeks();
   const thisWeek = weekStartFor(todayISO());
   const today = todayISO();
   const since = addDays(thisWeek, -7 * (weeks - 1));
-  const median = (arr) => {
-    const s = [...arr].sort((a, b) => a - b);
-    return s.length ? (s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2) : 0;
-  };
+  // v143: 見積カードの集計をcomputeEstimateStats()へ切り出したため、ここでのローカルmedian()は
+  // 不要になった(グローバルなmedian()を各所が使う)。
 
   // 1) 着手率の週次推移
   const hist = startRateHistory(thisWeek, weeks);
@@ -9170,24 +9212,18 @@ function renderStats() {
     </div>` : "";
 
   // 3) 時間帯 × 曜日の着手ヒートマップ(計画Blockのうち実際に着手した率)
-  const past = state.blocks.filter((b) => !b.deleted && b.date >= since && b.date <= today && b.plannedStartAt);
-  const wdOrder = [6, 0, 1, 2, 3, 4, 5];  // 週定義に合わせて 土曜始まり
-  const wdLabels = ["土", "日", "月", "火", "水", "木", "金"];
-  let hmHasData = false;
-  const hmRows = SCHED_BANDS.map(([s, e, label]) => {
-    const cells = wdOrder.map((wd, i) => {
-      const cellBlocks = past.filter((b) => {
-        if (parseDate(b.date).getDay() !== wd) return false;
-        const m = minutesOf(b.plannedStartAt);
-        return m >= s * 60 && m < e * 60;
-      });
-      if (cellBlocks.length < 3) return `<td class="stats-hm-cell empty"></td>`;  // n不足はノイズなので出さない
-      hmHasData = true;
-      const rate = cellBlocks.filter((b) => b.actualStartAt).length / cellBlocks.length;
-      return `<td class="stats-hm-cell" style="background:rgba(47,185,109,${(0.08 + rate * 0.5).toFixed(2)})" title="${wdLabels[i]}曜 ${label}: 着手${Math.round(rate * 100)}%(${cellBlocks.length}件)">${Math.round(rate * 100)}</td>`;
-    }).join("");
+  // v143: セル集計はcomputeHeatmapCells()へ切り出し済み(computeInsightsのヒント2と共有。二重実装しない)
+  const hmCells = computeHeatmapCells(since, today);
+  const hmHasData = hmCells.some((c) => c.rate != null);
+  const hmRows = SCHED_BANDS.map(([, , label], bandIdx) => {
+    const rowCells = hmCells.filter((c) => c.bandIdx === bandIdx);
+    const cells = rowCells.map((c) => c.rate == null
+      ? `<td class="stats-hm-cell empty"></td>`  // n不足はノイズなので出さない
+      : `<td class="stats-hm-cell" style="background:rgba(47,185,109,${(0.08 + c.rate * 0.5).toFixed(2)})" title="${c.wdLabel}曜 ${label}: 着手${Math.round(c.rate * 100)}%(${c.n}件)">${Math.round(c.rate * 100)}</td>`
+    ).join("");
     return `<tr><th class="stats-hm-band">${label}</th>${cells}</tr>`;
   }).join("");
+  const wdLabels = ["土", "日", "月", "火", "水", "木", "金"];
   const heatmap = hmHasData ? `
     <div class="panel stack">
       <h2>時間帯 × 曜日の着手率</h2>
@@ -9201,22 +9237,11 @@ function renderStats() {
     </div>` : "";
 
   // 4) 見積 vs 実績(見積と実績時刻が両方あるBlock)
-  const est = past
-    .filter((b) => b.completed && Number(b.estimateMin) > 0)
-    .map((b) => ({ b, actual: _actualDurationMin(b) }))
-    .filter((x) => x.actual && x.actual > 0);
+  // v143: 集計はcomputeEstimateStats()へ切り出し済み(computeInsightsのヒント3と共有。二重実装しない)
+  const estStatsForCard = computeEstimateStats(since, today);
   let estimateCard = "";
-  if (est.length >= 5) {
-    const ratios = est.map((x) => x.actual / Number(x.b.estimateMin));
-    const medRatio = Math.round(median(ratios) * 100);
-    const meanAbsErr = Math.round(est.reduce((s, x) => s + Math.abs(x.actual - Number(x.b.estimateMin)), 0) / est.length);
-    const byCat = {};
-    est.forEach((x) => { (byCat[x.b.category || "未分類"] ||= []).push(x.actual / Number(x.b.estimateMin)); });
-    const catRows = Object.entries(byCat)
-      .filter(([, arr]) => arr.length >= 3)
-      .map(([cat, arr]) => ({ cat, med: median(arr), n: arr.length }))
-      .sort((a, b) => Math.abs(b.med - 1) - Math.abs(a.med - 1))
-      .slice(0, 5);
+  if (estStatsForCard.eligible) {
+    const { est, medRatio, meanAbsErr, catRows } = estStatsForCard;
     estimateCard = `
       <div class="panel stack">
         <h2>見積 vs 実績</h2>
@@ -9428,8 +9453,13 @@ function renderStats() {
   // よう、睡眠セクション専用のローカル変数に限定する)。
   const oldestSleep = range === "all" ? oldestSleepLogDate() : null;
   const sleepSince = oldestSleep && oldestSleep < since ? oldestSleep : since;
-  const sleepStatsCard = renderSleepStats(sleepSince, today);  // v142: 睡眠セクション(別関数に切り出し済み)
-  const body = rateChart + energyChart + donutCard + catEnergyCard + trendCard + heatmap + histCard + estimateCard + calendarCard + sleepStatsCard;
+  // v143レビュー対応: buildBlocksByDateMap()(state.blocks全走査)は睡眠帯集計の2箇所
+  // (renderSleepStats経由とrenderInsights経由)から呼ばれるため、renderStatsでここで1回だけ
+  // 構築して両方へ渡す(全期間=最大728日の描画でO(全Block数)走査が二重に走らないようにする)。
+  const blocksByDate = buildBlocksByDateMap();
+  const sleepStatsCard = renderSleepStats(sleepSince, today, blocksByDate);  // v142: 睡眠セクション(別関数に切り出し済み)
+  const insightsCard = renderInsights(since, today, blocksByDate);  // v143: 「今週のヒント」(計器盤の最上部・別関数に切り出し済み)
+  const body = insightsCard + rateChart + energyChart + donutCard + catEnergyCard + trendCard + heatmap + histCard + estimateCard + calendarCard + sleepStatsCard;
   return `
     ${renderHeader("数字で見る実行の実態", "計器盤")}
     <div class="segmented" style="margin-bottom:10px">

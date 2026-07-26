@@ -1,4 +1,7 @@
-const CACHE_NAME = "taskchute-journal-pwa-v142";
+const CACHE_NAME = "taskchute-journal-pwa-v143";
+// v143: 計器盤の最上部に「今週のヒント」(computeInsights、決定論ルールエンジン+該当Block一覧への
+//   ドリルダウン)を追加。あわせてv141で到達不能になっていたAIフィードバック手動取込系の死コード
+//   を削除。CHANGES_v143.md参照。
 // v142: 日次結合ヘルパー computeDailyMetrics を新設し、計器盤(統計)に「睡眠」セクション
 //   (就寝起床の帯グラフ/中央値ベースライントレンド/睡眠帯別の実績比較)を追加。CHANGES_v142.md参照。
 // v141: ジャーナルタブのAIフィードバック列(未使用)を撤去し残り2列を拡幅+「今日行ったお店」
