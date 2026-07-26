@@ -358,3 +358,90 @@ function check(name, cond, extra = "") {
     console.log("[8] カテゴリ名に<や\"を含む場合のXSS対策(充電効果上位ヒントで検証)");
     const XSS_CAT = `<img src=x onerror=window.__xssFired=1 alt="a">`;
     await page.evaluate(({ KEY, XSS_CAT }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.sleep.logs = {};
+      s.condition.logs = {};
+      s.blocks = [];
+      for (let i = 0; i < 28; i++) {
+        const d = new Date(2026, 6, 4 + i);
+        const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        s.blocks.push({
+          id: `xss-${i}`, date, title: `X${i}`, category: XSS_CAT,
+          plannedStartAt: `${date}T10:00`, plannedEndAt: `${date}T10:30`,
+          actualStartAt: `${date}T10:05`, actualEndAt: `${date}T10:30`,
+          completed: true, charge: 5, discharge: 1, estimateMin: 0, deleted: false
+        });
+      }
+      s.selectedDate = "2026-07-31";
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, XSS_CAT });
+    await page.reload();
+    await page.waitForTimeout(500);
+    await page.evaluate(() => { window.__xssFired = 0; });  // reload後に監視用フラグを再設置
+    await page.click('[data-action="nav"][data-view="stats"]');
+    await page.waitForTimeout(400);
+    const xssFired = await page.evaluate(() => window.__xssFired || 0);
+    check("onerrorスクリプトは実行されない(escapeHTMLで無害化されている)", xssFired === 0, String(xssFired));
+    check("悪意あるカテゴリ名が実際の<img>要素として描画されていない",
+      await page.locator(".stats-insights-panel img").count() === 0);
+    const panelText8 = await page.locator(".stats-insights-panel").textContent();
+    check("充電効果上位ヒントにカテゴリ名(タグ文字含む)がテキストとして出る",
+      panelText8.includes("は充電効果が高い"));
+    await page.click('.stats-insights-panel button:has-text("ブロックを見る")');
+    await page.waitForTimeout(300);
+    const st8 = await stateNow();
+    check("クリックすると生のカテゴリ名(タグ含む)がそのままtimelineCategoryFilterへ渡る(属性破壊なし)",
+      st8.currentView === "timeline" && st8.settings.timelineCategoryFilter === XSS_CAT,
+      `view=${st8.currentView} catFilter=${st8.settings.timelineCategoryFilter}`);
+
+    // ============================================================
+    // (9) レビュー対応: 見積誤差ヒントは丸め前のmedで±5%未満(意味を持たない差)なら出さない
+    // ============================================================
+    console.log("[9] 見積誤差が±5%未満(med=1.02)なら見積ヒント自体を出さない(自己矛盾文の根絶)");
+    await page.evaluate(({ KEY }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.sleep.logs = {};
+      s.condition.logs = {};
+      s.blocks = [];
+      // 〈会議〉: 見積100分・実績102分(比率1.02、±5%未満なので出ないはず)。カテゴリ内で最大の乖離。
+      ["2026-07-05", "2026-07-06", "2026-07-07", "2026-07-08"].forEach((date, i) => {
+        s.blocks.push({
+          id: `mtg-${i}`, date, title: `M${i}`, category: "会議",
+          plannedStartAt: `${date}T09:00`, plannedEndAt: `${date}T10:40`,
+          actualStartAt: `${date}T09:00`, actualEndAt: `${date}T10:42`,
+          completed: true, charge: 1, discharge: 1, estimateMin: 100, deleted: false
+        });
+      });
+      // 〈作業〉: 見積50分・実績50分(比率1.0ぴったり)。est.length>=5(合計8件)を満たすための補助。
+      ["2026-07-12", "2026-07-13", "2026-07-14", "2026-07-15"].forEach((date, i) => {
+        s.blocks.push({
+          id: `wk-${i}`, date, title: `W${i}`, category: "作業",
+          plannedStartAt: `${date}T09:00`, plannedEndAt: `${date}T09:50`,
+          actualStartAt: `${date}T09:00`, actualEndAt: `${date}T09:50`,
+          completed: true, charge: 1, discharge: 1, estimateMin: 50, deleted: false
+        });
+      });
+      s.selectedDate = "2026-07-31";
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY });
+    await page.reload();
+    await page.waitForTimeout(500);
+    await page.click('[data-action="nav"][data-view="stats"]');
+    await page.waitForTimeout(400);
+    const mainText9 = await page.locator("main").textContent();
+    check("見積誤差ヒント(「は実績が見積の」)は±5%未満のため一切出ない",
+      !mainText9.includes("は実績が見積の"), mainText9.slice(0, 400));
+    // このデータセットは他4ルールも成立条件を満たさない(rule1は28件未満、rule2/5は各セルの
+    // n<3、rule4は睡眠ログ無し)ため、見積の±5%ガードが無ければ出るはずの「今週のヒント」節
+    // 自体が非表示になっているはず(ガードが機能していることの追加確認)。
+    check("見積±5%ガードにより「今週のヒント」節自体が非表示になる(他ルールも不成立の構成)",
+      await page.locator(".stats-insights-panel").count() === 0);
+
+    console.log(failures === 0 ? "\n✅ v143 ALL PASS" : `\n❌ v143: ${failures} 件失敗`);
+  } finally {
+    await browser.close();
+    server.close();
+  }
+
+  process.exit(failures === 0 ? 0 : 1);
+})().catch((e) => { console.error(e); process.exit(1); });
