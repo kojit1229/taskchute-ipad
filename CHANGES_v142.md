@@ -88,3 +88,48 @@ push前に指摘された9件すべてに対応した(commit/pushはまだして
    (Blockの無い古い睡眠ログが「全期間」でのみ取り込まれることを確認)。
 2. 帯別比較のガードが対サンプル数(startVals/netVals)を見ておらず、r.n(帯の睡眠件数)
    >=3でも実際の着手率/net計算に使うサンプルが1〜2件の可能性があった件: `startVals.length`/
+   `netVals.length`それぞれに`SLEEP_BUCKET_MIN_SAMPLES`(=3)の閾値を適用し、満たない側は
+   「—」表示にした。あわせてnetValsが空のとき`netMed`が`0`(「+0」表示)になっていた問題も
+   `null`→「—」に統一(着手率側と同じ扱い)。
+
+**推奨修正(品質)**
+3. 帯グラフの説明文に「日付は起床日(就寝バーは前夜分)」を追記。
+4. 帯グラフのtitle属性(`${r.date}`/`${r.bar.bed}`/`${r.bar.wake}`)に`escapeHTML()`を適用。
+5. 本文2節・「自信がない箇所」の「conditionBudgetBaselineと同じ」という記述を訂正
+   (新実装は当日を含む28日窓、既存baselineは当日を除く28日窓。共通なのは最小サンプル数
+   の定数のみ)。
+6. 全期間時の計算量 O(日数×全Block数) を解消: `buildBlocksByDateMap()`で日付→Block配列の
+   Mapを1回だけ構築し、`computeDailyMetrics(dateKey, { blocksByDate })`の第2引数として渡す
+   形にした。`renderSleepBucketCard`の一括集計だけがこれを使う。`opts`省略時(単発呼び出し)
+   は従来どおり`state.blocks`をその場でfilterする後方互換を維持。
+7. `computeDailyMetrics`の主観系に`meds`(condition.logsに実在。設計書§0のgym/meds注釈に
+   対応)を追加。
+8. `tests/v142.test.js`を強化: (a) `lt55.includes("0%")`が"100%"にもマッチしてしまう問題を
+   `(?<!\d)N%(?!\d)`の否定先読み正規表現に差し替えて厳密化(net側の数値も同様に厳密化)。
+   (b) 帯別の日数チェックを、パネル全体テキストへのincludes判定からbucketRows由来の
+   行スコープ変数(lt55/mid1/mid2/gt75)へ統合し、ラベルと件数が同じ行由来であることを
+   保証。(c) 恒真だった`check("pageerrorが起きていない...", true)`を削除(pageerrorは
+   `page.on("pageerror")`で既に自動検知・failuresへ計上されるため、この行は検証として
+   意味を持っていなかった)。(d) 「ログ無し3日+異常1日」というコメント誤り(実際は
+   ログ無し2日+異常1日=計3日除外)を修正。
+9. 着手率の定義が計器盤先頭チャート(`taskchuteStartRate`。Task紐づけ済みBlockが分母)と
+   睡眠帯別(`computeDailyMetrics`のplannedBlocks、Task紐づけ不問)で異なる件を
+   `taskchute-notes/decisions.md`へ1エントリ追記した(commitはしていない)。
+
+**レビュー対応後のテスト**: `tests/v142.test.js`に(1e)対サンプル不足時の「—」表示ガードと
+(4)全期間レンジの古い睡眠ログ取り込み(4w/12wは影響を受けないことも確認)の2ケースを追加。
+`node tests/v142.test.js` 単体PASS(全30チェック超)。`node tests/run-all.js v142` ALL PASS。
+`npm run test:core` ALL PASS(159.7s、v142含む直近5本+固定コア5本、回帰なし)。
+`npm test`(全量)はpush前に別途実行して確認する。
+
+## 自信がない箇所・未対応
+
+- 睡眠時間トレンドのベースライン(直近28日中央値)は常に「today基準の固定28日窓
+  (todayを含む)」で計算しており、stats-rangeを過去に遡って見ても(仕様上そのような画面は
+  無いが)ベースライン自体は動かない。既存の`conditionBudgetBaseline`は当日を含まない
+  過去28日窓なので、今回の実装とは窓の取り方が異なる(共通なのは最小サンプル数7件の定数
+  のみ。CHANGES本文2節で訂正済み)。要件文の「28日中央値をそのまま可視化」の解釈が
+  これで合っているかは要確認。
+- 帯グラフの軸窓(20時〜翌10時固定)は一般的な就寝パターンを想定した固定値。深夜勤務等で
+  常時軸窓外の生活パターンの場合、バーが縮んで見えにくくなる可能性があるが、今回のK自身の
+  実データ(31件、AutoSleep由来)には該当しないため対応を保留した。
