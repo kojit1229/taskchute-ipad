@@ -2311,6 +2311,7 @@ function renderHome() {
     ${homeIdeal(isToday)}
     ${homeDeclarationCard()}
     ${homeConditionBudgetChip()}
+    ${homeBatteryChip()}
     ${homeWeeklyWishCard()}
     ${degraded ? "" : homeReadingCard()}
     ${degraded ? homeDegradedBanner() : homeRoutineCheckBanner(blocks, isToday)}
@@ -2509,6 +2510,32 @@ function homeConditionBudgetChip() {
     <div class="row home-condition-budget-chip" style="margin-bottom:10px; padding:8px 12px; border-radius:10px; background:${style.bg}; align-items:center; gap:8px; flex-wrap:wrap">
       <span style="font-size:13px; font-weight:700; color:${style.fg}">🔋 体力予算: ${label}</span>
       ${budget.reason ? `<span class="muted" style="font-size:12px">${escapeHTML(budget.reason)}</span>` : ""}
+    </div>`;
+}
+
+// v144: エネルギーバッテリーチップ。computeBatteryLevel()の現在残量を数値+簡易バーで表示する
+// だけの受け身の表示(点滅・バッジ・通知は一切なし=静かな計器の最低線を守る)。当日の完了Block
+// 変更(充放電編集・完了登録)は他のdata-actionハンドラが呼ぶrender()で自然に再描画され、
+// 時間経過(減衰)はupdateBatteryTick()(startTimerTicker経由、約1分間隔)が差分更新する。
+// レビュー対応(監督者裁定): 既定パラメタでは過去日は構造的に残量0(≒毎回赤ゲージ)になり
+// 「裁かない」思想に反するため、当日限定で表示する(homeDeclarationCardと同じ型)。
+function homeBatteryChip() {
+  const date = state.selectedDate;
+  if (date !== todayISO()) return "";
+  const def = defaultBatterySettings();
+  const cfg = state.settings.battery || def;
+  const max = Number.isFinite(cfg.max) ? cfg.max : def.max;
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const level = computeBatteryLevel(date, nowMinutes);
+  const pct = max > 0 ? clamp((level / max) * 100, 0, 100) : 0;
+  const color = pct < 30 ? "var(--red)" : pct < 60 ? "var(--orange)" : "var(--green)";
+  return `
+    <div class="row home-battery-chip" style="margin-bottom:10px; padding:8px 12px; border-radius:10px; background:var(--panel-soft); align-items:center; gap:8px; flex-wrap:wrap">
+      <span style="font-size:13px; font-weight:700; color:${color}">🔋 残量 ${Math.round(level)}</span>
+      <span class="home-battery-bar" style="flex:1; min-width:60px; height:8px; border-radius:4px; background:var(--line); overflow:hidden">
+        <span style="display:block; height:100%; width:${pct}%; background:${color}; border-radius:4px"></span>
+      </span>
     </div>`;
 }
 
@@ -6492,17 +6519,46 @@ function renderEnergyGraph(allBlocks, rowHeight, startHour, endHour) {
 
   const endValue = realPoints[realPoints.length - 1]?.value ?? morning;
 
+  // v144: バッテリー実カーブの重ね描き(当日のみ。既存グラフは置き換えず追加するだけ)。
+  // 既存グラフのx軸(-maxAbs〜+maxAbs、朝の主観エネルギーが起点)とはスケールの意味が違うため、
+  // 独立した0〜上限のスケール(中央線=0・右端=上限)で描く。既存の起点/終点ラベルは無変更。
+  // レビュー対応: conditionBudget()/blocksForDate()の再計算をbatteryCurvePoints側で
+  // 繰り返さないよう、ここで1回だけ求めてopts経由で渡す(allBlocksは呼び出し元から既に
+  // blocksForDate(state.selectedDate)として渡されている値をそのまま使い回す)。
+  const battDef = defaultBatterySettings();
+  const batteryCfg = state.settings.battery || battDef;
+  const batteryMax = Number.isFinite(batteryCfg.max) ? batteryCfg.max : battDef.max;
+  const nowMinuteForBattery = (() => { const n = new Date(); return n.getHours() * 60 + n.getMinutes(); })();
+  const batteryPts = isToday
+    ? batteryCurvePoints(state.selectedDate, nowMinuteForBattery, {
+        budgetLevel: conditionBudget(state.selectedDate).level,
+        blocks: allBlocks
+      })
+    : [];
+  const battXOf = (value) => 50 + (clamp(value, 0, batteryMax) / (batteryMax || 1)) * 45;
+  const batteryPolyline = batteryPts.length >= 2
+    ? `<polyline class="battery-curve" points="${batteryPts.map((p) => `${battXOf(p.value)},${yOf(p.minute)}`).join(" ")}" stroke="#ff9500" stroke-width="1.5" fill="none" stroke-linejoin="round"/>`
+    : "";
+  const batteryLast = batteryPts.length ? Math.round(batteryPts[batteryPts.length - 1].value) : null;
+
+  // レビュー対応: ティッカー(updateBatteryTick)が全体を差し替えられるよう、単一の
+  // コンテナ要素にまとめて返す(既存の.timelineは position:relative のままなので、
+  // 子要素個々のposition:absoluteの基準は変わらない=見た目は無変更)。
   return `
-    <svg class="energy-svg" viewBox="0 0 100 ${totalHeight}" preserveAspectRatio="none"
-         style="position:absolute; top:0; right:0; width:90px; height:${totalHeight}px; pointer-events:none;">
-      <line x1="50" y1="0" x2="50" y2="${totalHeight}" stroke="#D1D1D6" stroke-width="0.4" stroke-dasharray="2,2"/>
-      ${polyline(realPoints, false)}
-      ${polyline(predictPoints, true)}
-      ${circles(realPoints, "#2fb96d")}
-    </svg>
-    <div style="position:absolute; top:2px; right:2px; font-size:9px; color:var(--faint); pointer-events:none;">エネルギー</div>
-    <div style="position:absolute; top:16px; right:2px; font-size:9px; color:var(--faint); pointer-events:none;">起点 ${morning}</div>
-    <div style="position:absolute; bottom:2px; right:2px; font-size:9px; color:var(--green); pointer-events:none;">終値 ${endValue >= 0 ? '+' : ''}${endValue}</div>
+    <div class="energy-graph-overlay">
+      <svg class="energy-svg" viewBox="0 0 100 ${totalHeight}" preserveAspectRatio="none"
+           style="position:absolute; top:0; right:0; width:90px; height:${totalHeight}px; pointer-events:none;">
+        <line x1="50" y1="0" x2="50" y2="${totalHeight}" stroke="#D1D1D6" stroke-width="0.4" stroke-dasharray="2,2"/>
+        ${polyline(realPoints, false)}
+        ${polyline(predictPoints, true)}
+        ${circles(realPoints, "#2fb96d")}
+        ${batteryPolyline}
+      </svg>
+      <div style="position:absolute; top:2px; right:2px; font-size:9px; color:var(--faint); pointer-events:none;">エネルギー</div>
+      <div style="position:absolute; top:16px; right:2px; font-size:9px; color:var(--faint); pointer-events:none;">起点 ${morning}</div>
+      <div style="position:absolute; bottom:2px; right:2px; font-size:9px; color:var(--green); pointer-events:none;">終値 ${endValue >= 0 ? '+' : ''}${endValue}</div>
+      ${batteryLast !== null ? `<div class="battery-curve-label" style="position:absolute; top:30px; right:2px; font-size:9px; color:#ff9500; pointer-events:none;">🔋残量 ${batteryLast}</div>` : ""}
+    </div>
   `;
 }
 
@@ -8337,6 +8393,38 @@ function renderSettings() {
           見積合計+バッファが収まらない場合の警告)にのみ使います。タスクの自動削除・
           移動・並べ替えはしません(気づきの提示のみ)。
         </div>
+      </div>
+      <div class="panel stack">
+        <h2>🔋 エネルギーバッテリー(v144)</h2>
+        <div class="muted" style="font-size:12px; line-height:1.6">
+          朝の残量が時間とともに自動で減り、完了Blockの充電/放電で増減します(通知・アラートは
+          出しません。表示だけで「回復させないと」に気づくための計器です)。開始値は体力予算
+          (🔋体力予算チップ)の判定に連動します。
+        </div>
+        <label>開始値・体力予算「赤字」の日(0〜200)
+          <input class="input" type="number" min="0" max="200" step="1" data-setting-battery-field="start.deficit"
+            value="${state.settings.battery.start.deficit}">
+        </label>
+        <label>開始値・体力予算「低予算」の日(0〜200)
+          <input class="input" type="number" min="0" max="200" step="1" data-setting-battery-field="start.low"
+            value="${state.settings.battery.start.low}">
+        </label>
+        <label>開始値・体力予算「通常」の日(睡眠データ無しの日もこれ、0〜200)
+          <input class="input" type="number" min="0" max="200" step="1" data-setting-battery-field="start.normal"
+            value="${state.settings.battery.start.normal}">
+        </label>
+        <label>減衰率(1時間あたり、0以上)
+          <input class="input" type="number" min="0" step="0.5" data-setting-battery-field="decayPerHour"
+            value="${state.settings.battery.decayPerHour}">
+        </label>
+        <label>減衰開始時刻(既定07:00)
+          <input class="input" type="time" step="300" data-setting-battery-field="decayStartMinutes"
+            value="${minutesToTimeInputValue(state.settings.battery.decayStartMinutes)}">
+        </label>
+        <label>残量の上限(1以上)
+          <input class="input" type="number" min="1" step="1" data-setting-battery-field="max"
+            value="${state.settings.battery.max}">
+        </label>
       </div>
       <div class="panel stack">
         <h2>データ</h2>
@@ -14277,6 +14365,10 @@ function startTimerTicker() {
     }
     // v41: 見込み終了時刻は該当 span のみ差し替え(全再描画しない)
     updateProjectedEndTick();
+    // v144レビュー対応: 電池チップ・タイムラインのバッテリー実カーブは時間経過(減衰)で
+    // 値が変わるが、render()を呼ぶきっかけ(Block操作等)が無い限り表示が凍ったままになる。
+    // 全再描画はせず該当要素だけを差分更新する(内部で1分間隔にスロットル)。
+    updateBatteryTick();
     // v77: AIフィードバック等の定期再fetch(30分毎)。visibilitychange側と同じ入口・スロットルを共有する。
     if (Date.now() - _lastFeedbackHydrateAt >= FEEDBACK_REFRESH_INTERVAL_MS) maybeRefreshFeedback();
     // v140(Med-3): 延期中のrenderがcompositionend/focusoutを取りこぼして固着した場合の
@@ -16772,6 +16864,29 @@ function projectedEndBadge() {
 function updateProjectedEndTick() {
   const el = document.getElementById("projected-end");
   if (el) el.textContent = projectedEndText();
+}
+
+// v144レビュー対応: エネルギーバッテリーは時間経過(減衰)だけで値が変わるため、render()の
+// きっかけ(Block操作等)が無いまま時間が過ぎると電池チップ・タイムライン実カーブの表示が
+// 凍ったままになる。startTimerTicker(500ms周期)に載せて軽量な差分更新をするが、減衰は
+// 1時間3程度の緩やかな変化のためBATTERY_TICK_INTERVAL_MS(既定1分)でスロットルする。
+// 全再描画(render())はしない — 検索入力のフォーカス・IME入力中の状態を飛ばさないため、
+// 該当要素(.home-battery-chip / .energy-graph-overlay)だけをouterHTMLで差し替える。
+function updateBatteryTick() {
+  if (Date.now() - _lastBatteryTickAt < BATTERY_TICK_INTERVAL_MS) return;
+  _lastBatteryTickAt = Date.now();
+  if (state.selectedDate !== todayISO()) return;
+  if (state.currentView === "home") {
+    const chip = document.querySelector(".home-battery-chip");
+    if (chip) chip.outerHTML = homeBatteryChip();
+  } else if (state.currentView === "timeline") {
+    const layer = document.querySelector(".energy-graph-overlay");
+    if (layer) {
+      const allBlocks = blocksForDate(state.selectedDate);
+      const rowHeight = 60 * (state.timelineZoom || 1);
+      layer.outerHTML = renderEnergyGraph(allBlocks, rowHeight, 5, 24);
+    }
+  }
 }
 
 // §3b 1日バッファ+消化率メーター(v116) ------------------------------

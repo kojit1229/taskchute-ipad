@@ -1,4 +1,6 @@
-const CACHE_NAME = "taskchute-journal-pwa-v143";
+const CACHE_NAME = "taskchute-journal-pwa-v144";
+// v144: エネルギーバッテリーモデル(computeBatteryLevel+ホーム電池チップ+タイムライン実カーブの
+//   重ね描き)を追加。通知・アラートは出さず表示のみ(静かな計器)。CHANGES_v144.md参照。
 // v143: 計器盤の最上部に「今週のヒント」(computeInsights、決定論ルールエンジン+該当Block一覧への
 //   ドリルダウン)を追加。あわせてv141で到達不能になっていたAIフィードバック手動取込系の死コード
 //   を削除。CHANGES_v143.md参照。
