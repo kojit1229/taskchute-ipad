@@ -18,6 +18,12 @@ const JOURNAL_REQUEST_SECTION = [
 const RECURRENCE_KEEP_PAST_DAYS = 7;    // 過去はこの日数だけ実体を保持
 const RECURRENCE_FUTURE_DAYS = 31;      // 未来はこの日数先まで実体化
 
+// v153: 今日の庭(ADHD支援、罰なしゲーミフィケーション。設計書§③④)。gardenLogの保持上限
+// (13ヶ月=月間ピクセルの参照レンジを安全に超える幅)と、段階(土/芽/若木/開花)を分ける
+// 閾値を1箇所に集約する(罰なしルール③「閾値は定数1箇所に」)。
+const GARDEN_LOG_KEEP_DAYS = 400;
+const GARDEN_STAGE_YOUNG_PCT = 50;  // これ未満=芽(薄緑)、これ以上=若木(緑)。全完了のみ開花(濃緑)
+
 // v100: AI提案お題キュー(zeroThinking.suggestedThemes)のハウスキーピングTTL。
 //       採用されないまま溜まり続けるのを防ぐため、読み込み時(normalizeState)に物理削除する
 //       (2026-07-15 K指示)。adopted/dismissedは履歴表示しないため7日で消してよい判断
@@ -1245,7 +1251,8 @@ let _lastSaveError = null;
 // 保存ルーチン内部からの保存に使い、自動保存の無限ループを防ぐ。
 function persistLocalNoSchedule() {
   // v40: _justStartedBlockId は非永続(modal と同様、シリアライズ時に落とす)
-  const persisted = { ...state, modal: null, _justStartedBlockId: null };
+  // v153: _gardenJustGrewDate も同様に非永続(今日の芽のフェード演出フラグ)
+  const persisted = { ...state, modal: null, _justStartedBlockId: null, _gardenJustGrewDate: null };
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
     _lastSaveError = null;
@@ -1261,6 +1268,11 @@ function saveState() {
   // v25: 実データの変更時刻を記録(端末間の「新しい方が勝つ」判定に使用)。
   //      persistLocalNoSchedule(リモート採用・GitHub保存)では更新しない。
   state.dataModifiedAt = nowDateTime();
+  // v153: 今日の庭。saveState()を通るすべての操作でupsert(配線漏れ防止、設計書§③)。
+  //       当日 + 選択日(異なる場合のみ)の2キーをスナップショットしてからprune。
+  updateGardenLog(todayISO());
+  if (state.selectedDate && state.selectedDate !== todayISO()) updateGardenLog(state.selectedDate);
+  pruneGardenLog();
   // v23: localStorage 書き込み失敗で例外を投げない(画面が固まるのを防ぐ)
   persistLocalNoSchedule();
   // v37: 容量超過などで保存できていない場合、黙って入力を失わせず一度は知らせる
@@ -1837,6 +1849,14 @@ function normalizeState(value) {
     value.settings.journalTemplate = value.settings.journalTemplate
       .replace(/## 🛏 睡眠\n就寝: __:__ +\/ +起床: __:__\n質: ★+☆*\n*/, "");
   }
+  // v153: 今日の庭(ADHD支援、罰なしゲーミフィケーション)。日別のルーティン完了スナップショット
+  // (date ISO → {done, total})。繰り返し実体はRECURRENCE_KEEP_PAST_DAYS超過で物理削除され
+  // 過去日の分母(total)が失われるため、saveState()経路のフック(updateGardenLog)で
+  // 当日・選択日を都度スナップショットして保持する(設計書§③)。既存stateには存在しない
+  // だけなので後方互換は自明(空オブジェクト補完のみ、過去分の遡及生成はしない)。
+  if (!value.gardenLog || typeof value.gardenLog !== "object" || Array.isArray(value.gardenLog)) {
+    value.gardenLog = {};
+  }
   value.modal = null;  // 起動時はモーダル閉じた状態
   return value;
 }
@@ -2270,6 +2290,8 @@ function render() {
   renderPersonalDataAuthBanner();  // v72: 401時の案内(全再描画で消えるため再注入)
   // v40: 着手ジュースは1回の描画で消費する(次の描画では付かない)。CSS アニメは挿入時に1回再生。
   state._justStartedBlockId = null;
+  // v153: 今日の芽のフェードインも同様に1回の描画で消費する。
+  state._gardenJustGrewDate = null;
 }
 
 // v72: 起動時セットアップ画面(トークンゲート)。sidebar/bottomNav/timelineRailは空にし、
@@ -3277,6 +3299,51 @@ function routineRate(blocks) {
   return { done, total: list.length, pct: list.length ? Math.round((done / list.length) * 100) : 0 };
 }
 
+// v153: 今日の庭。routineRate()の戻り値({done,total,pct})から段階ランクを導く
+// (新しい完了率計算は書かない、既存routineRate()の再利用。設計書§③)。
+//   -1 = 非表示(その日のルーティンが0件) / 0 = 土(達成0件、罰なし=中立表示)
+//    1 = 芽(薄緑、1件以上かつpct<GARDEN_STAGE_YOUNG_PCT) / 2 = 若木(緑、pct以上かつ未全完了)
+//    3 = 開花(濃緑、全完了。※decisions.md 2026-07-27 K確定の段階配色(薄緑/緑/濃緑)をS1にも適用)
+function gardenStageRank(rate) {
+  if (!rate.total) return -1;
+  if (!rate.done) return 0;
+  if (rate.pct < GARDEN_STAGE_YOUNG_PCT) return 1;
+  return rate.done < rate.total ? 2 : 3;
+}
+
+// v153: saveState()の唯一のフックから呼ばれ、指定日のルーティン完了スナップショットを
+// state.gardenLogへupsertする。悪化上書き禁止(罰なしルール①のデータ層版、2系統レビュー対応
+// 2026-07-28): 繰り返し実体がRECURRENCE_KEEP_PAST_DAYS超過でpurgeされて分母(total)が縮む、
+// または当日中に完了を取り消してdoneが減る、いずれの場合もgardenLog(データ層)は下げない。
+// 初版は「done/totalとも既存値未満なら据え置き」という一括ガードだったが、done同値・total縮小
+// (例: 既存{done:4,total:5}に対し実体purgeで再計算{done:4,total:4})だとガードを素通りして
+// 4/5(80%)が4/4(100%=全完了)へ改竄される穴があった(両レビュー一致で指摘)。
+// フィールド別max(設計書§③「doneの大きい方を採用」と同じ加点式マージ思想をtotalにも適用)へ
+// 修正し、done/totalそれぞれ独立に「今まで見た最大値」を保持するようにした。
+function updateGardenLog(dateISO) {
+  if (!state.gardenLog || typeof state.gardenLog !== "object") state.gardenLog = {};
+  const r = routineRate(blocksForDate(dateISO));
+  const existing = state.gardenLog[dateISO];
+  // レビュー対応: ルーティン0件の日にまで空エントリ{0,0}を書き込むと、選択日移動のたびに
+  // GARDEN_LOG_KEEP_DAYS分の無駄なキーが積み上がる。何も記録すべきものが無い(total===0)かつ
+  // 既存エントリも無いなら、何もせず抜ける(既存エントリがある場合はmaxマージへ進み、
+  // 既存の非ゼロ値を保持する)。
+  if (!r.total && !existing) return;
+  state.gardenLog[dateISO] = {
+    done: Math.max(r.done, existing?.done ?? 0),
+    total: Math.max(r.total, existing?.total ?? 0)
+  };
+}
+
+// v153: gardenLogの保持上限(GARDEN_LOG_KEEP_DAYS)超過分をprune(既存KEEP_DAYS系の慣例)。
+function pruneGardenLog() {
+  if (!state.gardenLog) return;
+  const cutoff = addDays(todayISO(), -GARDEN_LOG_KEEP_DAYS);
+  for (const key of Object.keys(state.gardenLog)) {
+    if (key < cutoff) delete state.gardenLog[key];
+  }
+}
+
 // v89: ゼロ摩擦ルーティンチェック(ROADMAP v93)。「予定時刻を過ぎているのに未チェック」の
 // ルーティンBlockを返す(一括確定ボタン・提案バナー共通のソース。決定論・副作用なし)。
 // plannedStartAt/nowDateTimeはどちらも"YYYY-MM-DDTHH:mm"形式のローカル文字列のため、
@@ -3732,6 +3799,46 @@ function homeFlow(blocks, isToday) {
   return `<section class="panel"><div class="home-plabel">今日のながれ</div>${rows}</section>`;
 }
 
+// v153: 今日の芽(zone2ルーティンカード内)。4状態(土/芽/若木/開花)を静的パスの出し分けだけで
+// 表現する(成長トゥイーンは作らない。homeSteps()と同じテンプレートリテラルSVG方式、
+// createElementNS不使用)。色は3段階の緑濃淡のみ(decisions.md 2026-07-27 K確定:
+// 完了1件=薄緑/50%以上=緑/全完了=濃緑。オレンジの花は使わない)。
+// justGrewはtoggleBlock()が完了操作直後にだけ立てる非永続フラグ由来(state._justStartedBlockIdと
+// 同じ「1回の描画で消費」パターン)。文言は罰なしルール⑥(加点表現のみ)に従い、
+// done===0(土)のときは何も言わず沈黙する(「まだ」「未達」等は出さない)。
+function gardenSproutHTML(rank, done, justGrew) {
+  if (rank < 0) return "";  // その日ルーティン0件 → 非表示(設計書§④)
+  const pot = `<path d="M9 39 L37 39 L33 45 L13 45 Z" fill="none" stroke="var(--line)" stroke-width="2"/>
+    <ellipse cx="23" cy="39" rx="13" ry="3" fill="var(--line-soft)"/>`;
+  // v153レビュー対応(2026-07-28): 塗り色は<g class="g-stageN">側のCSS color(--garden-pale/
+  // mid/deep)に一本化し、パス側はcurrentColorだけを参照する(段階配色をCSSトークン化した
+  // ことで、opacity半透明合成のテーマ依存問題を避ける。stylesheet参照)。
+  let plant = "", stageCls = "", emoji = "";
+  if (rank === 1) {  // 芽: 双葉
+    stageCls = "g-stage1"; emoji = "🌱";
+    plant = `<path d="M23 39 L23 30" stroke="currentColor" stroke-width="2" fill="none"/>
+      <path d="M23 32 Q17 28 15 32 Q19 36 23 32" fill="currentColor"/>
+      <path d="M23 32 Q29 28 31 32 Q27 36 23 32" fill="currentColor"/>`;
+  } else if (rank === 2) {  // 若木: 茎+葉
+    stageCls = "g-stage2"; emoji = "🌿";
+    plant = `<path d="M23 39 L23 18" stroke="currentColor" stroke-width="2.5" fill="none"/>
+      <path d="M23 26 Q15 22 14 28 Q19 32 23 26" fill="currentColor"/>
+      <path d="M23 22 Q31 18 32 24 Q27 28 23 22" fill="currentColor"/>`;
+  } else if (rank === 3) {  // 開花: 茎+葉+花
+    stageCls = "g-stage3"; emoji = "🌸";
+    plant = `<path d="M23 39 L23 16" stroke="currentColor" stroke-width="2.5" fill="none"/>
+      <path d="M23 26 Q15 22 14 28 Q19 32 23 26" fill="currentColor"/>
+      <circle cx="23" cy="12" r="5" fill="currentColor"/>
+      <circle cx="17" cy="14" r="3.5" fill="currentColor"/>
+      <circle cx="29" cy="14" r="3.5" fill="currentColor"/>
+      <circle cx="23" cy="8" r="3.5" fill="currentColor"/>`;
+  }
+  const svg = `<svg class="home-garden-svg${justGrew ? " garden-grew" : ""}" width="46" height="46"
+    viewBox="0 0 46 46" aria-hidden="true">${pot}<g class="${stageCls}">${plant}</g></svg>`;
+  const caption = done ? `<div class="home-garden-caption">今日は${done}件できた ${emoji}</div>` : "";
+  return `<div class="home-garden">${svg}${caption}</div>`;
+}
+
 // --- 今日のルーティン(実行率)---
 // v89: isToday引数を追加(ゼロ摩擦ルーティンチェックの一括確定ボタンは今日のみ表示するため)。
 function homeRoutine(blocks, isToday) {
@@ -3744,7 +3851,11 @@ function homeRoutine(blocks, isToday) {
     ? r.map((b) => homeCheckRow(b, "", true, protectionStreakBadgeHTML(b), fallbackButtonHTML(b, isToday))).join("")
     : `<div class="muted" style="font-size:13px">カテゴリ「ルーティン」のBlockがここに表示されます。</div>`;
   const overdue = isToday ? overdueUncheckedRoutines(r) : [];
+  // v153: 今日の芽。カードの日付は呼び出し元(renderHomeTodayTab)でstate.selectedDateに固定。
+  const gardenRank = gardenStageRank({ done, total: r.length, pct });
+  const gardenJustGrew = gardenRank >= 0 && state._gardenJustGrewDate === state.selectedDate;
   return `<section class="panel"><div class="home-plabel green">今日のルーティン</div>
+    ${gardenSproutHTML(gardenRank, done, gardenJustGrew)}
     ${r.length ? `<div class="home-rate"><span class="home-rate-cap">実行率</span>
       <span class="home-rate-pct green">${pct}%</span>
       <span class="home-rate-frac">${done} / ${r.length}</span></div>
@@ -12495,6 +12606,12 @@ let _quickCompleteSnapshots = {};
 function toggleBlock(id) {
   let justCompleted = false;
   let completedBlock = null;
+  // v153: 今日の芽。段階が上がった直後だけ控えめなフェードインを掛けるため、トグル前後の
+  // ルーティン実行率から段階ランクを比較する(v150の統一完了経路=このtoggleBlockのみが対象。
+  // routine-bulk-check等の他経路は再描画で段階自体は即時反映されるが、フェード演出は付けない)。
+  const toggledBlock = blockById(id);
+  const gardenDate = toggledBlock && toggledBlock.category === "ルーティン" && !toggledBlock.deleted ? toggledBlock.date : null;
+  const prevGardenRank = gardenDate ? gardenStageRank(routineRate(blocksForDate(gardenDate))) : -1;
   state.blocks = state.blocks.map((block) => {
     if (block.id !== id) return block;
     const completed = !block.completed;
@@ -12546,6 +12663,12 @@ function toggleBlock(id) {
   // それをアンカーにする後続のルーティン/チェーンを直後の時刻に自動配置する。
   if (justCompleted && completedBlock && completedBlock.recurrenceGroupId) {
     triggerAnchorPlacements(completedBlock.recurrenceGroupId, nowDateTime());
+  }
+  // v153: 今日の芽。段階が上がっていれば非永続フラグを立てる(render()直後にクリア、
+  // state._justStartedBlockIdと同じ「1回の描画で消費」パターン)。
+  if (gardenDate) {
+    const nextRank = gardenStageRank(routineRate(blocksForDate(gardenDate)));
+    if (nextRank > prevGardenRank) state._gardenJustGrewDate = gardenDate;
   }
   if (justCompleted && completedBlock) {
     // v150: 完了直後だけ「実績を編集」ボタン付きトースト(既存の実績モーダルを編集導線として再利用)。
@@ -13824,6 +13947,26 @@ function mergeWeeklyWishMaps(localMap, remoteMap) {
   return out;
 }
 
+// v153レビュー対応(2026-07-28、両レビュー一致・データ消失クラス指摘): 今日の庭(gardenLog)。
+// 日付キー{done,total}にはupdatedAtが無いため、他の日付マップ(dailyDeclarations等)と同じ
+// タイムスタンプ比較ではなく、updateGardenLog()と同じ「フィールド別max」で端末間もマージする
+// (設計書§③「競合時はキーごとにdoneの大きい方を採用(加点式マージ)」をtotalにも適用)。
+// 片方にしか無い日付キーもそのまま合流するため、端末Aだけが記録したエントリがリモート採用後も
+// 消えない。
+function mergeGardenLogMaps(localMap, remoteMap) {
+  const out = {};
+  const dates = new Set([...Object.keys(localMap || {}), ...Object.keys(remoteMap || {})]);
+  for (const d of dates) {
+    const l = (localMap || {})[d];
+    const r = (remoteMap || {})[d];
+    out[d] = {
+      done: Math.max(l?.done || 0, r?.done || 0),
+      total: Math.max(l?.total || 0, r?.total || 0)
+    };
+  }
+  return out;
+}
+
 function mergeBlockLists(localBlocks, remoteBlocks) {
   const localIds = new Set((localBlocks || []).map((b) => b && b.id).filter(Boolean));
   const today = todayISO();
@@ -13977,6 +14120,9 @@ function computeSyncMerge(remoteNorm, tieWinner) {
     // 上限は他の軽量ログと同じ思想(SWIPE_TRIAGE_LOG_MAX、末尾優先で切り詰め)。
     const swipeTriageLog = mergeAppendOnlyLogByKey(state.swipeTriageLog, remoteNorm.swipeTriageLog, swipeTriageLogKey)
       .slice(-SWIPE_TRIAGE_LOG_MAX);
+    // v153レビュー対応(2026-07-28): gardenLogも同期対象に追加(このヘルパーが無いと
+    // ローカル限定のスナップショットがリモート採用で消えるデータ消失クラスの不具合になる)。
+    const gardenLog = mergeGardenLogMaps(state.gardenLog, remoteNorm.gardenLog);
     const jsonChanged = (obj, base) => JSON.stringify(obj) !== JSON.stringify(base || {});
     const changedVsLocal =
       journals.changedVsLocal ||
@@ -13993,6 +14139,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(projects, state.projects) ||
       !sameArrayByReference(storeVisits, state.storeVisits) ||
       !sameArrayByReference(swipeTriageLog, state.swipeTriageLog) ||
+      jsonChanged(gardenLog, state.gardenLog) ||
       (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, state.zeroThinking) : false);
     const changedVsRemote =
       journals.changedVsRemote ||
@@ -14009,9 +14156,10 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(projects, remoteNorm.projects || []) ||
       !sameArrayByReference(storeVisits, remoteNorm.storeVisits || []) ||
       !sameArrayByReference(swipeTriageLog, remoteNorm.swipeTriageLog || []) ||
+      jsonChanged(gardenLog, remoteNorm.gardenLog) ||
       (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, remoteNorm.zeroThinking) : false);
     return {
-      values: { journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans, tasks, projects, storeVisits, swipeTriageLog },
+      values: { journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans, tasks, projects, storeVisits, swipeTriageLog, gardenLog },
       changedVsLocal, changedVsRemote
     };
   } catch (error) {
@@ -14038,6 +14186,7 @@ function applySyncMergeToLocal(merged) {
   state.projects = v.projects;  // v135
   state.storeVisits = v.storeVisits;  // v141
   state.swipeTriageLog = v.swipeTriageLog;  // v152
+  state.gardenLog = v.gardenLog;  // v153
   if (v.zeroThinking) {
     state.zeroThinking.entries = v.zeroThinking.entries;
     state.zeroThinking.suggestedThemes = pruneExpiredSuggestedThemes(v.zeroThinking.suggestedThemes);
@@ -14065,6 +14214,7 @@ function applySyncMergeToRemote(merged, remoteNorm) {
   remoteNorm.projects = v.projects;  // v135
   remoteNorm.storeVisits = v.storeVisits;  // v141
   remoteNorm.swipeTriageLog = v.swipeTriageLog;  // v152
+  remoteNorm.gardenLog = v.gardenLog;  // v153
   if (v.zeroThinking) {
     remoteNorm.zeroThinking.entries = v.zeroThinking.entries;
     remoteNorm.zeroThinking.suggestedThemes = pruneExpiredSuggestedThemes(v.zeroThinking.suggestedThemes);
@@ -14600,6 +14750,7 @@ function sanitizedStateForGitHub() {
   if (copy.settings?.github) copy.settings.github.token = "";
   copy.modal = null;  // v37: ローカル保存(persistLocalNoSchedule)と同様、モーダル状態は共有しない
   delete copy._justStartedBlockId;  // v40: 非永続の着手ジュースフラグは同期しない
+  delete copy._gardenJustGrewDate;  // v153: 今日の芽のフェード演出フラグも同様に非永続
   return copy;
 }
 
