@@ -1951,9 +1951,14 @@ function handleAddCategoryFromModal(selectEl) {
 }
 
 // v9: 現在開いているモーダルを再描画(state.modal の type を見て該当 editor を再オープン)
-function rerenderActiveModal() {
+// v146レビュー対応: 第1引数で「復元しない(=再オープン後の新しい値をそのまま見せる)フィールド」を
+// 追加指定できるようにした(既定は従来どおりcategoryのみ除外)。呼び出し側の操作そのものが
+// 意図的に変えた値(例: 🏁トグルによるcompleted)まで、キャッシュした古い値で巻き戻さないための
+// 汎用化(既存のcategory除外ロジックと同じ仕組みを共用する)。
+function rerenderActiveModal(extraExcludeFields = []) {
   if (!state.modal) return;
-  // モーダル再描画前に現在のフォーム入力値を退避(category 以外の編集中の値を失わない)
+  const excludeFields = new Set(["category", ...extraExcludeFields]);
+  // モーダル再描画前に現在のフォーム入力値を退避(除外フィールド以外の編集中の値を失わない)
   const cached = {};
   modalRoot.querySelectorAll("[data-modal-field]").forEach((el) => {
     const key = el.dataset.modalField;
@@ -1965,10 +1970,10 @@ function rerenderActiveModal() {
   else if (type === "task") openTaskEditor(id);
   else if (type === "block") openBlockEditor(id);
   else return;
-  // 入力中の値を復元(category 以外)
+  // 入力中の値を復元(除外フィールド以外)
   modalRoot.querySelectorAll("[data-modal-field]").forEach((el) => {
     const key = el.dataset.modalField;
-    if (key in cached && key !== "category") {
+    if (key in cached && !excludeFields.has(key)) {
       if (el.type === "checkbox") el.checked = cached[key];
       else el.value = cached[key];
     }
@@ -2220,6 +2225,43 @@ function renderBottomNav() {
   `).join("");
 }
 
+// v146(UI改善計画Phase1-2): タスクシュートの「着手中(無ければ次の未着手)Block」を求める。
+// homeHero/nowConveyorTargetと同じ抽出ロジック(現在時刻に該当する未完了Block、無ければ
+// 次の未着手)を使うが、対象はrenderTasks()が実際に描画するBlock集合に限定する
+// (renderTasks()は単発Block・ルーティン・timeline由来・Project未紐づけTaskのBlock等を
+// 描画しないため、それらを選ぶと自動スクロールが無言で不発になる。レビュー指摘対応)。
+function tasksViewRenderedBlocks(dateISO) {
+  return blocksForDate(dateISO).filter((b) => {
+    if (b.source === "timeline") return false;
+    if (b.category === "ルーティン") return false;
+    if (b.recurrenceGroupId) return false;
+    if (!b.taskId) return false;
+    if (isStaleBlock(b)) return false;
+    const task = state.tasks.find((t) => t.id === b.taskId);
+    if (!task || !task.projectId) return false;
+    return true;
+  });
+}
+function currentOrNextTaskchuteBlockId(dateISO) {
+  const isToday = dateISO === todayISO();
+  const tl = tasksViewRenderedBlocks(dateISO)
+    .filter((b) => b.plannedStartAt)
+    .sort((a, b) => minutesOf(a.plannedStartAt) - minutesOf(b.plannedStartAt));
+  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  const current = isToday ? tl.find((b) => !b.completed
+    && minutesOf(b.plannedStartAt) <= nowMin
+    && nowMin < minutesOf(b.plannedEndAt || b.plannedStartAt)) : null;
+  const target = current || tl.find((b) => !b.completed && !b.actualStartAt);
+  return target ? target.id : null;
+}
+
+// v146レビュー対応: 自動スクロールは「ビュー切替・日付切替・初回描画」のときだけ発火させる
+// (直前のview/dateをここに記憶して比較する)。同一view+dateのままの再描画(チェック操作等
+// によるsaveAndRender()経由のrender())では毎回スクロール位置を巻き戻さない
+// (レビュー実測: ホーム1440px・タスクシュート1310pxの巻き戻りが起きていた)。
+let _lastScrollView = null;
+let _lastScrollDate = null;
+
 function renderMain() {
   // v70: Now画面(実行コンベア)は全ビューに優先する全画面オーバーレイ(閉じるまで通常UIへ戻らない)
   if (nowMode) {
@@ -2232,11 +2274,35 @@ function renderMain() {
     return;
   }
   const view = state.currentView;
-  if (view === "home") main.innerHTML = renderHome();
+  // v146レビュー対応: フォーカスガードはmain.innerHTMLを差し替える「前」に評価する(差し替え後は
+  // 旧main内のフォーカス要素がDOMごと消えてbodyへ戻ってしまい、判定が構造的に効かなくなるため)。
+  // 自作ガードではなく既存のisFocusInEditableElement(input/textarea/contenteditable判定)を使う。
+  const isNewViewOrDate = view !== _lastScrollView || state.selectedDate !== _lastScrollDate;
+  const shouldAutoScroll = isNewViewOrDate && state.selectedDate === todayISO() && !isFocusInEditableElement();
+  _lastScrollView = view;
+  _lastScrollDate = state.selectedDate;
+
+  if (view === "home") {
+    main.innerHTML = renderHome();
+    // v146: 今日を表示中なら「いま、これ」(=着手中/次の未着手Blockそのもの)へ自動スクロール
+    // (タイムラインの.now-line自動スクロールと同じ「探す手間をなくす」目的)
+    if (shouldAutoScroll) {
+      setTimeout(() => document.querySelector(".home-hero")?.scrollIntoView({ block: "start" }), 50);
+    }
+  }
   if (view === "wbs") main.innerHTML = renderWBS();
   if (view === "wish") main.innerHTML = renderWish();
   if (view === "avoid") main.innerHTML = renderAvoid();
-  if (view === "tasks") main.innerHTML = renderTasks();
+  if (view === "tasks") {
+    main.innerHTML = renderTasks();
+    // v146: タスクシュートも着手中(無ければ次の未着手)Blockへ自動スクロール
+    if (shouldAutoScroll) {
+      const targetId = currentOrNextTaskchuteBlockId(state.selectedDate);
+      if (targetId) {
+        setTimeout(() => document.querySelector(`strong[data-action="edit-block"][data-id="${targetId}"]`)?.scrollIntoView({ block: "center" }), 50);
+      }
+    }
+  }
   if (view === "routine") main.innerHTML = renderRoutine();
   if (view === "timeline") {
     main.innerHTML = renderTimelineView();
@@ -2300,11 +2366,13 @@ function renderHeader(eyebrow, title, action = "") {
 // v31: ホーム(コックピット)— 信条 / 残り時間 / 行動パネル群
 // =============================================================
 // v71: 情報過多だったコックピットを整理。
-//   最上部(常時表示・折りたたみ無し): Now(いま、これ)→ MIT(今日の主役)→ 「AIから」
-//     (鮮度/AI作業結果/AIフィードバック候補の集約カード)→ スコアボード → 今日、すすめる/今日のリズム
-//     (実行系ゾーンは従来どおり展開のまま)。
-//   参照系(信条・寿命カウントダウン・長い弧・足あと)は折りたたみ既定closedにして下段へ。
-//   開閉状態はlocalStorage記憶(homeFoldSection / isHomeFoldOpen+setHomeFoldOpen)。詳細はCHANGES_v71.md。
+// v146(UI改善計画Phase1-1): 行動優先の縦順序へ再編。
+//   最上部(常時表示・折りたたみ無し): いま、これ(hero)→ 今日の主役(MIT)→ 今日、すすめる
+//     (タスクシュート)→ 今日のリズム(既定open)→ 状態チップ類(理想/宣言/体力/バッテリー/週Wish/
+//     読書/ルーティン確認バナー)。
+//   参照系(信条・寿命カウントダウン・AIから・スコアボード・長い弧・足あと)は折りたたみ既定closedに
+//   して下段へ(信条・寿命・AIからは今回既定closedへ変更。長い弧/足あとは従来どおり既定closed)。
+//   開閉状態はlocalStorage記憶(homeFoldSection / isHomeFoldOpen+setHomeFoldOpen)。詳細はCHANGES_v146.md。
 function renderHome() {
   const today = state.selectedDate;
   const isToday = today === todayISO();
@@ -2320,21 +2388,8 @@ function renderHome() {
     </div>`)}
     ${homeSyncAlertBanner()}
     ${renderDateBar()}
-    ${homeFoldSection("creed", true, "home-creed", "home-creed-head", "三 つ の 信 条", homeCreedBody())}
-    ${homeFoldSection("lifespan", true, "", "", "寿命カウントダウン(残り時間)", homeLifespanBody(metrics))}
-    ${homeIdeal(isToday)}
-    ${homeDeclarationCard()}
-    ${homeConditionBudgetChip()}
-    ${homeBatteryChip()}
-    ${homeWeeklyWishCard()}
-    ${degraded ? "" : homeReadingCard()}
-    ${degraded ? homeDegradedBanner() : homeRoutineCheckBanner(blocks, isToday)}
     ${homeHero(blocks, isToday)}
     <div id="home-mit-anchor">${homeMIT(blocks)}</div>
-    ${degraded
-      ? homeFoldSection("ai-hub-degraded", false, "home-ai-hub", "", "AIから(たたんでいます)", homeAiHubBody(blocks, isToday))
-      : homeAiHub(blocks, isToday)}
-    ${homeScoreboard(blocks)}
     <div class="home-zone-block z-amber" id="homezone-1">
       <div class="home-zone amber">今日、すすめる${projectedEndBadge()}</div>
       <div class="home-grid single">
@@ -2353,7 +2408,7 @@ function renderHome() {
           </div>
         </details>
       ` : `
-        <details class="home-fold" data-fold-id="zone2" ${isHomeFoldOpen("zone2", false) ? "open" : ""}>
+        <details class="home-fold" data-fold-id="zone2" ${isHomeFoldOpen("zone2", true) ? "open" : ""}>
           <summary class="home-zone teal home-fold-summary"><span class="home-fold-chevron">▶</span>今日のリズム・${homeZone2Summary(blocks)}</summary>
           <div class="home-fold-body">
             <div class="home-grid">
@@ -2364,6 +2419,21 @@ function renderHome() {
         </details>
       `}
     </div>
+    ${homeIdeal(isToday)}
+    ${homeDeclarationCard()}
+    <div class="home-chip-2col">
+      ${homeConditionBudgetChip()}
+      ${homeBatteryChip()}
+    </div>
+    ${homeWeeklyWishCard()}
+    ${degraded ? "" : homeReadingCard()}
+    ${degraded ? homeDegradedBanner() : homeRoutineCheckBanner(blocks, isToday)}
+    ${homeFoldSection("creed", false, "home-creed", "home-creed-head", "三 つ の 信 条", homeCreedBody())}
+    ${homeFoldSection("lifespan", false, "", "", "寿命カウントダウン(残り時間)", homeLifespanBody(metrics))}
+    ${degraded
+      ? homeFoldSection("ai-hub-degraded", false, "home-ai-hub", "", "AIから(たたんでいます)", homeAiHubBody(blocks, isToday))
+      : homeFoldSection("ai-hub", false, "home-ai-hub", "", "AIから", homeAiHubBody(blocks, isToday))}
+    ${homeScoreboard(blocks)}
     <div class="home-zone-block z-blue" id="homezone-3">
       <details class="home-fold" data-fold-id="zone3" ${isHomeFoldOpen("zone3", false) ? "open" : ""}>
         <summary class="home-zone blue home-fold-summary"><span class="home-fold-chevron">▶</span>長い弧をたしかめる</summary>
@@ -3923,7 +3993,11 @@ function draftBarHTML() {
   if (!_scheduleDraft || _scheduleDraft.date !== state.selectedDate) return "";
   const skipped = _scheduleDraft.skipped || [];  // v59: 朝プランで「配置しない」と判断した候補
   // v62: AI由来(自宅PCバッチ生成のAIプラン)か決定論配置由来かを小さく区別表示する
-  const sourceLabel = _scheduleDraft.source === "ai-plan" ? "🤖 AIプラン由来" : "⚙ 決定論配置";
+  // v146(UI改善計画Phase1-6): battery-recovery(v145)由来は出どころ不明な「⚙ 決定論配置」
+  // ではなく「🔋 回復候補」と表示し、機能名から来ていることが分かるようにする
+  const sourceLabel = _scheduleDraft.source === "ai-plan" ? "🤖 AIプラン由来"
+    : _scheduleDraft.source === "battery-recovery" ? "🔋 回復候補"
+    : "⚙ 決定論配置";
   return `
     <div class="draft-bar">
       <span>📋 下書き ${_scheduleDraft.items.length}件(${sourceLabel}) — ドラッグで移動 / 下端をドラッグで長さ調整 / ×で外す</span>
@@ -6044,7 +6118,6 @@ function renderBlockItem(block) {
     <div class="item block-row ${isMIT ? "is-mit" : ""}${doing ? " is-doing" : ""}${justStarted}" ${leftBorder ? `style="${leftBorder}"` : ""}>
       <div class="block-checks">
         <button class="checkbox-button ${block.completed ? "done" : ""}" data-action="toggle-block" data-id="${block.id}" title="Block完了" aria-label="Block完了">✓</button>
-        ${task ? `<button class="task-complete-toggle ${task.status === "completed" ? "done" : ""}" data-action="toggle-task-complete" data-id="${block.id}" title="タスク完了(Task本体を完了にします)" aria-label="タスク完了">🏁</button>` : ""}
       </div>
       <div class="stack">
         <div class="title-line">
@@ -7856,11 +7929,11 @@ function renderJournal() {
     ${renderDateBar()}
     ${renderExperimentSection()}
     <section class="journal-grid">
-      <div class="panel">
-        <h2>📓 前日 (${previous})</h2>
-        <div class="md-render readonly-md">${renderMarkdown(state.journals[previous] || "記載なし")}</div>
-      </div>
-      <div class="panel">
+      <details class="panel home-fold journal-panel-prev">
+        <summary class="home-fold-summary"><span class="home-fold-chevron">▶</span>📓 前日 (${previous})</summary>
+        <div class="home-fold-body"><div class="md-render readonly-md">${renderMarkdown(state.journals[previous] || "記載なし")}</div></div>
+      </details>
+      <div class="panel journal-panel-today">
         <div class="row" style="margin-bottom:10px">
           <h2>📝 当日編集</h2>
           <div class="row">
@@ -8564,7 +8637,7 @@ function renderSettings() {
         </label>
       </div>
       <div class="panel stack">
-        <h2>⏳ 1日バッファ(v116)</h2>
+        <h2>⏳ 1日バッファ</h2>
         <div class="muted" style="font-size:12px; line-height:1.6">
           個々のBlockの見積もりに余裕を足さず、1日の終わりに置く「バッファ」1つに余裕を
           集約します(クリティカルチェーン法)。ヘッダーの「バッファ残量」は今日を表示中の
