@@ -442,6 +442,17 @@ document.addEventListener("click", (event) => {
     persistLocalNoSchedule();  // v37: UI 操作(dataModifiedAt を汚さない)
     render();
   }
+  // v155: 今日の庭 S2(月間ピクセル)の月送り。データではなく表示状態だけの変更のため
+  // (_gardenPixelMonthは非永続モジュール変数)、persistLocalNoSchedule()は呼ばずrenderのみ。
+  // 未来月は表示しても常に空グリッド(gardenLogが無い)になるだけなので、当月より先へは進ませない。
+  if (action === "garden-pixel-month") {
+    const delta = Number(target.dataset.delta || 0);
+    if (!_gardenPixelMonth) _gardenPixelMonth = todayISO().slice(0, 7);
+    const next = addMonthsKey(_gardenPixelMonth, delta);
+    if (next <= todayISO().slice(0, 7)) _gardenPixelMonth = next;
+    _gardenPixelMonthNavigated = true;  // v155レビュー対応: 以後は当月への自動巻き戻しを止める
+    render();
+  }
   // v89: ゼロ摩擦ルーティンチェック — 「ここまで全部やった」一括確定
   if (action === "routine-bulk-check") bulkCheckRoutinesUpToNow();
   // v115: 縮退版で実行(提案G①)。idはBlockではなく繰り返しルールのid。
@@ -3342,6 +3353,111 @@ function pruneGardenLog() {
   for (const key of Object.keys(state.gardenLog)) {
     if (key < cutoff) delete state.gardenLog[key];
   }
+}
+
+// v155: 今日の庭 S2(月間ピクセル、ルーティンタブ先頭)。表示中の月("YYYY-MM")。
+// _triageCurrentCardId等と同じ「純粋なUI状態は非永続」の扱い(stateに乗せるとpersist/sync
+// 対象が無駄に増えるため意図的にモジュール変数)。実際の巻き戻し挙動はgardenPixelCalendarHTML()
+// 側のロジック(下記_gardenPixelMonthNavigatedとの組み合わせ)を参照——「タブ再訪・リロードで
+// 常に当月へ戻る」わけではなく、「ユーザーが月送り操作をしていない間は、保持月が当月より
+// 過去になった時点(=PWAを開きっぱなしのまま月をまたいだ場合を含む)で当月へ同期し直す」。
+let _gardenPixelMonth = null;
+// v155レビュー対応(2026-07-28、Codex指摘): 月送り操作をしたかどうかのフラグ。falseの間は
+// gardenPixelCalendarHTML()が保持月を都度当月へ同期し直す(月跨ぎバグの修正)。一度でも
+// 月送り操作をした後はtrueのままにし、ユーザーが選んだ過去月表示を自動では戻さない
+// (通常のカレンダーアプリの慣習どおり、明示操作後の位置は尊重する)。
+let _gardenPixelMonthNavigated = false;
+
+// v155: 今日の庭 S2。指定日のgardenLogスナップショットから段階ランクを返す(新しい完了率
+// 計算はせず、既存gardenStageRank()を再利用)。エントリなし/total===0/done===0はいずれも
+// -1にまとめ、呼び出し側で「空白セル」として何も描画しない(decisions.md 2026-07-27 K確定
+// 「0件の日は空白のまま」=罰なしルール②のピクセル版。S1の「土」表示とは異なり、S2は
+// 沈黙そのものが未達日の表現)。
+function gardenPixelRank(dateISO) {
+  const entry = state.gardenLog && state.gardenLog[dateISO];
+  if (!entry || !entry.total || !entry.done) return -1;
+  const pct = Math.round((entry.done / entry.total) * 100);
+  return gardenStageRank({ done: entry.done, total: entry.total, pct });
+}
+
+// v155: "YYYY-MM"同士の月加減算。addDays/parseDateと同じ思想で、文字列パース
+// (new Date("文字列")、iOS Safari UTC誤解釈の原因)を経由せず数値コンストラクタのみを使う。
+function addMonthsKey(monthKey, delta) {
+  const [y, m] = monthKey.split("-").map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+}
+
+// v155レビュー対応(2026-07-28): VoiceOver向けの日別aria-label。加点表現のみ(罰なしルール⑥を
+// aria文言にも適用)。0件・記録なしの日は日付だけを読み上げ、否定語(「未達」「できなかった」等)
+// は一切含めない。
+function gardenPixelDayAriaLabel(month, day, rank) {
+  const base = `${month}月${day}日`;
+  if (rank === 3) return `${base} 全部できた`;
+  if (rank === 2) return `${base} 半分以上できた`;
+  if (rank === 1) return `${base} 少しできた`;
+  return base;
+}
+
+// v155: 今日の庭 S2(月間ピクセル)。ルーティンタブ(renderRoutine())先頭に置く月間カレンダー
+// (設計書§②配置指定)。設計書§④は「達成順の累積方式」(モチーフ絵に穴を見せない方式)を
+// 本命としていたが、decisions.md 2026-07-27でK確定した点灯仕様は「完了1件=薄緑/50%以上=緑/
+// 全完了=濃緑、0件の日は空白」という**段階表示**で、これは実カレンダー(日付位置固定)前提の
+// 仕様(累積方式には「50%以上」等の段階概念がそもそも無い)。今回はK確定のこの仕様をそのまま
+// 実装し、累積方式・モチーフ絵は不採用にした(詳細は完了報告の「設計書S2との差分」に記載)。
+// 未達日(rank<=0、gardenLogが無い日も含む)は色を塗らない=罰なしルール②の空白のまま。
+function gardenPixelCalendarHTML() {
+  const curMonthKey = todayISO().slice(0, 7);
+  if (!_gardenPixelMonth) _gardenPixelMonth = curMonthKey;
+  // v155レビュー対応(2026-07-28、Codex指摘・月跨ぎバグ): PWAを開きっぱなしのまま月をまたぐと
+  // renderRoutine()は都度呼ばれるだけで_gardenPixelMonthは前回値のまま固定され、月初に
+  // 再訪しても前月表示が残り続けていた。月送り操作をしていない初期状態でだけ、保持月が
+  // 当月より過去なら当月へ同期し直す。
+  if (!_gardenPixelMonthNavigated && _gardenPixelMonth < curMonthKey) _gardenPixelMonth = curMonthKey;
+  const monthKey = _gardenPixelMonth;
+  const [y, m] = monthKey.split("-").map(Number);
+  const firstDow = new Date(y, m - 1, 1).getDay();  // 0=日曜(数値コンストラクタのみ使用)
+  const numDays = new Date(y, m, 0).getDate();       // 当月の末日(「翌月0日目」の標準テクニック)
+  const isCurrentMonth = monthKey === curMonthKey;
+
+  const weekdayRow = WEEKDAY_LABELS.map((w) => `<span class="garden-pixel-weekday">${w}</span>`).join("");
+
+  const cells = [];
+  // v155レビュー対応: paddingセル(前月分の空き)はグリッド整列のためだけの装飾要素なので
+  // aria-hidden="true"でVoiceOverの読み上げ対象から外す(role="list"の子として不要なitemに
+  // ならないようにする)。
+  for (let i = 0; i < firstDow; i++) cells.push(`<span class="garden-pixel-cell" aria-hidden="true"></span>`);
+  let litCount = 0;
+  for (let day = 1; day <= numDays; day++) {
+    const dateISO = `${monthKey}-${pad2(day)}`;
+    const rank = gardenPixelRank(dateISO);
+    const cls = rank >= 1 ? ` lv${rank}` : "";
+    if (rank >= 1) litCount++;
+    const ariaLabel = gardenPixelDayAriaLabel(m, day, rank);
+    cells.push(`<span class="garden-pixel-cell in-month${cls}" data-date="${dateISO}" role="listitem" aria-label="${ariaLabel}"></span>`);
+  }
+
+  // v155: 罰なしルール④(比較しない)。「全日点灯」という自己完結の事実だけを言う一言
+  // (設計書§④「月間完成時は絵の下に1行出すのみ」のトーン踏襲。先月比較・平均比較はしない)。
+  const complete = litCount > 0 && litCount === numDays
+    ? `<div class="garden-pixel-complete">${m}月の庭が咲きそろった 🌸</div>` : "";
+
+  return `<section class="panel garden-pixel-card">
+    <div class="home-plabel green">庭の記録</div>
+    <div class="garden-pixel-nav">
+      <button class="btn ghost" data-action="garden-pixel-month" data-delta="-1" aria-label="前の月">◀</button>
+      <span class="garden-pixel-month-label">${y}年${m}月</span>
+      <button class="btn ghost" data-action="garden-pixel-month" data-delta="1" aria-label="次の月"${isCurrentMonth ? " disabled" : ""}>▶</button>
+    </div>
+    <div class="garden-pixel-weekdays" aria-hidden="true">${weekdayRow}</div>
+    <div class="garden-pixel-grid" role="list" aria-label="${y}年${m}月の庭の記録">${cells.join("")}</div>
+    <div class="garden-pixel-legend muted">
+      <span class="garden-pixel-cell in-month lv1 swatch"></span>薄
+      <span class="garden-pixel-cell in-month lv2 swatch"></span>中
+      <span class="garden-pixel-cell in-month lv3 swatch"></span>濃
+    </div>
+    ${complete}
+  </section>`;
 }
 
 // v89: ゼロ摩擦ルーティンチェック(ROADMAP v93)。「予定時刻を過ぎているのに未チェック」の
@@ -7013,6 +7129,7 @@ function renderRoutine() {
   return `
     ${renderHeader("今やること、次にやること", "ルーティン")}
     ${renderDateBar()}
+    ${gardenPixelCalendarHTML()}
     ${dayChip}
 
     <div class="segmented" style="margin-bottom:14px">
