@@ -2421,10 +2421,7 @@ function renderHome() {
     </div>
     ${homeIdeal(isToday)}
     ${homeDeclarationCard()}
-    <div class="home-chip-2col">
-      ${homeConditionBudgetChip()}
-      ${homeBatteryChip()}
-    </div>
+    ${homeTodayStatusCard()}
     ${homeWeeklyWishCard()}
     ${degraded ? "" : homeReadingCard()}
     ${degraded ? homeDegradedBanner() : homeRoutineCheckBanner(blocks, isToday)}
@@ -2565,17 +2562,15 @@ function homeIdeal(isToday) {
 // v117(A): 今日の宣言。dailyDeclarations[date] = {text, updatedAt}。selectedDateごとに編集できる
 // (過去日を振り返る時も同じ入力欄で確認・修正できる、他のjournal系日付キー入力と同じ思想)。
 // homeIdealと異なりisTodayに関わらず常時表示する(過去日の宣言も見返せるようにするため)。
-// 赤警告は「今日」を見ていて未入力の時だけ(過去日を振り返っているときに警告するのは筋違い)。
+// v147: 未入力時の赤警告はここから撤去し、homeTodayStatusCard(「今日の状態」1枚化)へ統合した
+// (UI改善計画Phase2 2-2。警告チップ4種の重複表示を避けるため)。
 function homeDeclarationCard() {
   const date = state.selectedDate;
-  const isToday = date === todayISO();
   const entry = state.dailyDeclarations[date] || { text: "", updatedAt: "" };
-  const showAlert = isToday && !(entry.text || "").trim();
   return `<section class="panel home-declaration-card" style="padding:12px 14px">
     <div class="muted" style="font-size:12px; font-weight:700; margin-bottom:6px">📣 今日の宣言</div>
     <input type="text" class="input" style="font-size:16px" maxlength="80"
       data-declaration-date="${date}" placeholder="今日◯◯に着手する" value="${escapeHTML(entry.text || "")}">
-    ${showAlert ? `<div class="home-declaration-alert" style="color:var(--red); font-size:12px; font-weight:700; margin-top:6px">⚠️ 今日の宣言が未入力です</div>` : ""}
   </section>`;
 }
 
@@ -2583,10 +2578,13 @@ function homeDeclarationCard() {
 // 過去日を見ている時も(睡眠ログがあれば)その日の判定をそのまま出す(睡眠カードと同じ流儀)。
 function homeConditionBudgetChip() {
   const budget = conditionBudget(state.selectedDate);
+  // v147(UI改善計画Phase2 2-2 色ルール): 赤は同期異常等データ保全系の異常だけに使う。
+  // 体力予算「赤字」はデータ破損ではないため、他の低調状態(low)と同じオレンジへ統一する
+  // (taskchute-notes/decisions.md 2026-07-27参照)。
   const style = {
-    deficit: { bg: "var(--red-soft)", fg: "var(--red)" },
-    low: { bg: "var(--orange-soft)", fg: "var(--orange)" },
-    normal: { bg: "var(--green-soft)", fg: "var(--green)" },
+    deficit: { bg: "var(--orange-soft)", fg: "var(--orange-text)" },
+    low: { bg: "var(--orange-soft)", fg: "var(--orange-text)" },
+    normal: { bg: "var(--green-soft)", fg: "var(--green-text)" },
     none: { bg: "var(--panel-soft)", fg: "var(--muted)" }
   }[budget.level];
   const label = budget.level === "none" ? "データなし" : CONDITION_BUDGET_LABELS[budget.level];
@@ -2595,6 +2593,24 @@ function homeConditionBudgetChip() {
       <span style="font-size:13px; font-weight:700; color:${style.fg}">🔋 体力予算: ${label}</span>
       ${budget.reason ? `<span class="muted" style="font-size:12px">${escapeHTML(budget.reason)}</span>` : ""}
     </div>`;
+}
+
+// v147レビュー対応: 電池残量の「良好/要注意」を判定する単一の閾値。旧実装はチップの警告色
+// (旧: pct<60でオレンジ)と今日の状態カードの非表示条件(旧: pct>=30で良好)が別の値で
+// 不整合だった。既存のrecoveryThresholdPct既定値(40)と揃え、以後はこの1箇所だけを見る。
+const BATTERY_OK_PCT = 40;
+
+// v144/v147: 電池残量の計算(homeBatteryChip・homeTodayStatusCardの両方が必要とするため
+// 共通ヘルパーへ統一。旧実装は同じ計算を2箇所に重複していた)。当日限定(呼び出し側でtoday判定)。
+function computeHomeBatteryInfo(date) {
+  const def = defaultBatterySettings();
+  const cfg = state.settings.battery || def;
+  const max = Number.isFinite(cfg.max) ? cfg.max : def.max;
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const level = computeBatteryLevel(date, nowMinutes);
+  const pct = max > 0 ? clamp((level / max) * 100, 0, 100) : 0;
+  return { level, max, pct, ok: pct >= BATTERY_OK_PCT };
 }
 
 // v144: エネルギーバッテリーチップ。computeBatteryLevel()の現在残量を数値+簡易バーで表示する
@@ -2606,19 +2622,18 @@ function homeConditionBudgetChip() {
 function homeBatteryChip() {
   const date = state.selectedDate;
   if (date !== todayISO()) return "";
-  const def = defaultBatterySettings();
-  const cfg = state.settings.battery || def;
-  const max = Number.isFinite(cfg.max) ? cfg.max : def.max;
-  const now = new Date();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const level = computeBatteryLevel(date, nowMinutes);
-  const pct = max > 0 ? clamp((level / max) * 100, 0, 100) : 0;
-  const color = pct < 30 ? "var(--red)" : pct < 60 ? "var(--orange)" : "var(--green)";
+  const { level, pct, ok } = computeHomeBatteryInfo(date);
+  // v147(UI改善計画Phase2 2-2 色ルール): 赤は同期異常等データ保全系の異常だけに使う。
+  // 電池残量の低下はデータ破損ではないため赤を使わず、低残量=オレンジ/健全=緑の2段にする。
+  // レビュー対応: 文字色(AA対応の-textトークン)とバー塗り色(装飾、素の彩色トークン)を分ける
+  // — バーはAA対応の対象外(装飾要素)なので暗くする必要が無く、視認性の良い元の彩度に戻す。
+  const textColor = ok ? "var(--green-text)" : "var(--orange-text)";
+  const barColor = ok ? "var(--green)" : "var(--orange)";
   return `
     <div class="row home-battery-chip" style="margin-bottom:10px; padding:8px 12px; border-radius:10px; background:var(--panel-soft); align-items:center; gap:8px; flex-wrap:wrap">
-      <span style="font-size:13px; font-weight:700; color:${color}">🔋 残量 ${Math.round(level)}</span>
+      <span style="font-size:13px; font-weight:700; color:${textColor}">🔋 残量 ${Math.round(level)}</span>
       <span class="home-battery-bar" style="flex:1; min-width:60px; height:8px; border-radius:4px; background:var(--line); overflow:hidden">
-        <span style="display:block; height:100%; width:${pct}%; background:${color}; border-radius:4px"></span>
+        <span style="display:block; height:100%; width:${pct}%; background:${barColor}; border-radius:4px"></span>
       </span>
     </div>`;
 }
@@ -2627,19 +2642,15 @@ function homeBatteryChip() {
 // 今日を見ている時だけ判定・表示する(過去日を振り返っている時に警告するのは筋違い)。
 // 週キーはweekRange().weekStart(土曜起点、12週サイクルの週定義と統一)をそのまま使う
 // ため、週替わり時のリセット処理は不要(参照するキーが自然に変わるだけ)。
+// v147: 未設定時の赤警告バナーはここから撤去し、homeTodayStatusCard(「今日の状態」1枚化)へ
+// 統合した(UI改善計画Phase2 2-2)。設定済みの一覧表示(以下)は無変更。
 function homeWeeklyWishCard() {
   const date = state.selectedDate;
   if (date !== todayISO()) return "";
   const weekKey = weekRange(date).weekStart;
   const entry = state.weeklyWishes[weekKey];
   const taskIds = (entry && entry.taskIds) || [];
-  if (taskIds.length === 0) {
-    return `
-      <div class="row home-weekly-wish-alert" style="margin-bottom:10px; padding:10px 12px; border-radius:10px; justify-content:space-between; align-items:center; background:var(--red-soft); border:1.5px solid var(--red)">
-        <span style="font-size:13px; font-weight:700; color:var(--red)">⚠️ 今週のやりたいことが未設定です</span>
-        <button class="btn danger" style="font-size:16px; padding:6px 10px" data-action="weekly-wish-open">設定する</button>
-      </div>`;
-  }
+  if (taskIds.length === 0) return "";
   // 削除済み・実現済みになったWishはtaskIdsを書き換えず、表示からだけ自然に外す
   const wishes = taskIds
     .map((wid) => state.tasks.find((t) => t.id === wid))
@@ -2666,6 +2677,37 @@ function homeWeeklyWishCard() {
         ? `<ul style="margin:0; padding-left:0; list-style:none; font-size:14px">${wishes.map(wishRowHTML).join("")}</ul>`
         : `<div class="muted" style="font-size:12px">選択したやりたいことは表示できなくなりました</div>`}
     </section>`;
+}
+
+// v147:「今日の状態」1枚化(UI改善計画Phase2 2-2)。宣言未入力・体力予算・電池残量・週Wish
+// 未設定の4種を1つの折りたたみカードへ統合する。<summary>行(常時表示)に1〜2行の要約を出し、
+// 個別チップ・個別アラートの本体はdetails内(既定closed、home-foldの共通パターンを流用)。
+// 4つとも良好(宣言済み・週Wish設定済み・体力予算が正常/データなし・電池残量BATTERY_OK_PCT
+// (=40)以上)なら何も返さずカードごと非表示にする(「未対応0件+状態正常なら非表示」)。
+// バッテリーの良好判定はhomeBatteryChip()の警告色閾値と同じcomputeHomeBatteryInfo()を使う
+// (レビュー対応: 旧実装はpct>=30(非表示)とpct<60(チップの警告色)が別値で不整合だった)。
+// 過去日を見ている時は電池/宣言未入力/週Wishの警告がそもそも対象外(homeBatteryChip等と同じ
+// 「今日限定」の思想)なので、体力予算チップだけを単独表示する従来の見え方を維持する。
+function homeTodayStatusCard() {
+  const date = state.selectedDate;
+  if (date !== todayISO()) {
+    return `<div class="home-chip-2col">${homeConditionBudgetChip()}</div>`;
+  }
+  const declEntry = state.dailyDeclarations[date] || { text: "" };
+  const declFilled = !!(declEntry.text || "").trim();
+  const budget = conditionBudget(date);
+  const budgetOK = budget.level === "normal" || budget.level === "none";
+  const { level, ok: batteryOK } = computeHomeBatteryInfo(date);
+  const weekKey = weekRange(date).weekStart;
+  const wishEntry = state.weeklyWishes[weekKey];
+  const wishSet = !!(wishEntry && wishEntry.taskIds && wishEntry.taskIds.length);
+  if (declFilled && wishSet && budgetOK && batteryOK) return "";  // 未対応0件+状態正常
+  const budgetLabel = budget.level === "none" ? "データなし" : CONDITION_BUDGET_LABELS[budget.level];
+  const summary = `エネルギー: ${budgetLabel}・残量${Math.round(level)} / 準備: ${declFilled ? "宣言済み" : "宣言未入力"}・${wishSet ? "週Wish設定済み" : "週Wish未設定"}`;
+  const body = `<div class="home-chip-2col">${homeConditionBudgetChip()}${homeBatteryChip()}</div>
+    ${!declFilled ? `<div class="home-today-status-item muted" style="font-size:12px; margin-top:6px">📣 今日の宣言が未入力です</div>` : ""}
+    ${!wishSet ? `<div class="home-today-status-item muted" style="font-size:12px; margin-top:6px; display:flex; align-items:center; gap:8px; flex-wrap:wrap">🌟 今週のやりたいことが未設定です<button class="btn ghost" style="font-size:13px; padding:3px 9px" data-action="weekly-wish-open">設定する</button></div>` : ""}`;
+  return homeFoldSection("today-status", false, "home-today-status", "", summary, body);
 }
 
 // 選択モーダルを開く(設定する/変更どちらも同じモーダル。既存選択はチェック済みで開く)
@@ -2951,8 +2993,8 @@ function homeHero(blocks, isToday) {
   const target = current || tl.find((b) => !b.completed && !b.actualStartAt);
   if (!target) {
     return `<section class="panel home-hero">
-      <div class="eyebrow" style="color:var(--orange)">いま、これ</div>
-      <div style="font-size:15px;font-weight:700;color:var(--green);padding:8px 0">
+      <div class="eyebrow" style="color:var(--orange-text)">いま、これ</div>
+      <div style="font-size:15px;font-weight:700;color:var(--green-text);padding:8px 0">
         ${tl.length ? "いまの時間のブロックはありません。" : "今日のブロックはまだありません。"}</div>
     </section>`;
   }
@@ -2967,7 +3009,7 @@ function homeHero(blocks, isToday) {
       <div style="font-size:13.5px">${started ? "取り組み中" : "いまの時間です"} — 残り <strong>${left}分</strong></div>`;
   } else {
     mid = `<div style="font-size:13.5px;margin-top:12px">まだ着手していません。</div>
-      <div style="font-size:12.5px;color:var(--orange);font-weight:600;margin-top:3px">まず5分でいい。やれば乗ってくる。</div>`;
+      <div style="font-size:12.5px;color:var(--orange-text);font-weight:600;margin-top:3px">まず5分でいい。やれば乗ってくる。</div>`;
   }
   const btn = started
     ? `<button class="btn green home-hero-btn" data-action="complete-block-with-actual" data-id="${target.id}">✓ 完了にする</button>`
@@ -2983,7 +3025,7 @@ function homeHero(blocks, isToday) {
     : "";
   const heroJuice = target.id === state._justStartedBlockId ? " just-started" : "";  // v40: 着手ジュース
   return `<section class="panel home-hero${heroJuice}">
-    <div class="eyebrow" style="color:var(--orange)">いま、これ</div>
+    <div class="eyebrow" style="color:var(--orange-text)">いま、これ</div>
     <div class="home-hero-grid">
       <div class="home-hero-main">
         <div class="home-hero-title" data-action="edit-block" data-id="${target.id}">${escapeHTML(target.title)}</div>
@@ -3452,11 +3494,16 @@ function addMITCandidate(title) {
 }
 
 // --- 今日のタスクシュート(着手率)---
+// v147(UI改善計画Phase2 2-1a): 分母をヒートマップ等と同じ「当日の全Block」へ統一すると、
+// この関数自体が一覧表示する対象(Project紐づきBlockのみ)と分母がズレて「X/Yブロック」の
+// 表記がY≠一覧件数になり別の混乱を生む(母数統一が意味を壊すケース)。そのため分母は
+// 従来どおりProject紐づきBlockのままとし、見出しへ「(Project紐づき)」を明示する代替案を採る
+// (taskchute-notes/decisions.md 2026-07-27参照)。
 function homeTaskchute(blocks) {
   // v33: Project に紐づく Block のみ(単発ブロックは taskchuteBlocks で除外)
   const list = taskchuteBlocks(blocks);
   if (!list.length) {
-    return `<section class="panel"><div class="home-plabel orange">今日のタスクシュート</div>
+    return `<section class="panel"><div class="home-plabel orange">今日のタスクシュート(Project紐づき)</div>
       <div class="muted" style="font-size:13px">Projectに紐づくBlockがありません。</div></section>`;
   }
   const started = list.filter((b) => b.completed || b.actualStartAt).length;
@@ -3471,7 +3518,7 @@ function homeTaskchute(blocks) {
       <span class="home-tc-name" data-action="edit-block" data-id="${b.id}">${escapeHTML(b.title)}</span>${badge}
       ${homeChargeSelects(b)}</div>`;
   }).join("");
-  return `<section class="panel"><div class="home-plabel orange">今日のタスクシュート</div>
+  return `<section class="panel"><div class="home-plabel orange">今日のタスクシュート(Project紐づき)</div>
     <div class="home-rate"><span class="home-rate-cap">着手率</span>
       <span class="home-rate-pct">${pct}%</span>
       <span class="home-rate-frac">${started} / ${list.length} ブロック</span></div>
@@ -3549,7 +3596,9 @@ function weekRange(dateISO) {
 function homeCycle(metrics) {
   const m12 = metrics.find((m) => m.label === "12WY");
   const start = state.settings.twelveWeekStartDate || todayISO();
-  const wk = clamp(Math.floor(daysBetween(start, state.selectedDate) / 7) + 1, 1, 12);
+  // v147レビュー対応: 週番号(Week N)も残り日数と同じtodayISO()基準に統一する(選択中の日付を
+  // 動かすとWeek Nだけ変わり、同じウィジェット内の「残り○日」と矛盾する状態を避けるため)。
+  const wk = clamp(Math.floor(daysBetween(start, todayISO()) / 7) + 1, 1, 12);
   // v33: 12WY にチェック(twelveWeekStartDate あり)の Project のみをサイクル目標とする
   const goals = state.projects.filter((p) =>
     !p.deleted && p.kind === "normal" && p.status === "active" && p.twelveWeekStartDate);
@@ -3574,9 +3623,10 @@ function homeCycle(metrics) {
       </div>`).join("") : `<div class="muted" style="font-size:12px;padding-left:2px">未完了のタスクなし</div>`}
     </div>`;
   }).join("") : `<div class="muted" style="font-size:13px">WBSでProjectの「12WY期間に登録する」にチェックすると、ここにサイクル目標として表示されます。</div>`;
+  // v147: 残り日数の基準日をtodayISO()に統一(週次側と食い違っていた。taskchute-notes/decisions.md参照)
   return `<section class="panel"><div class="home-plabel blue">12週サイクル</div>
     <div class="home-wk"><span>Week <strong>${wk}</strong> / 12</span>
-      <span class="home-wk-days">残り ${Math.max(0, daysBetween(state.selectedDate, addDays(start, 84)))}日</span></div>
+      <span class="home-wk-days">残り ${Math.max(0, daysBetween(todayISO(), addDays(start, 84)))}日</span></div>
     <div class="home-stat"><span class="home-stat-cap">全体の進捗</span>
       <div class="progress"><span style="width:${overall}%"></span></div>
       <span class="home-stat-pct">${overall}%</span></div>
@@ -3664,7 +3714,7 @@ function homeBacklog() {
       ? `締切 ${eff.slice(5).replace("-", "/")}(実 ${t.dueDate.slice(5).replace("-", "/")})`
       : `締切 ${t.dueDate.slice(5).replace("-", "/")}`;
     const todayBadgeHTML = todayCount > 0
-      ? ` <span style="color:var(--green); font-weight:600">/ 本日 ${todayCount} 件追加済み</span>` : "";
+      ? ` <span style="color:var(--green-text); font-weight:600">/ 本日 ${todayCount} 件追加済み</span>` : "";
     return `<div class="home-due${overdue ? " overdue" : ""}">
       <div class="home-due-main" data-action="edit-task" data-id="${t.id}">
         <div class="home-due-name">${escapeHTML(t.title)}</div>
@@ -3716,8 +3766,8 @@ function homeSteps(blocks) {
           ? done.map((b) => `<div class="muted" style="font-size:12.5px">✓ ${escapeHTML(b.title)}</div>`).join("")
           : `<div class="muted" style="font-size:12.5px">まだ完了したブロックがありません。</div>`}
         <div class="home-energy">
-          <span class="home-energy-item">充電 <strong style="color:var(--green)">+${charge}</strong></span>
-          <span class="home-energy-item">放電 <strong style="color:var(--orange)">−${discharge}</strong></span>
+          <span class="home-energy-item">充電 <strong style="color:var(--green-text)">+${charge}</strong></span>
+          <span class="home-energy-item">放電 <strong style="color:var(--orange-text)">−${discharge}</strong></span>
           <span class="home-energy-item">エネルギー <strong style="color:${net >= 0 ? "var(--green)" : "var(--orange)"}">${net >= 0 ? "+" : ""}${net}</strong></span>
         </div>
       </div>
@@ -4769,10 +4819,15 @@ function leverageTypeOptionsHTML(current) {
 // 設計書§1「10秒判定の3問」を、任意で開ける折りたたみヘルプとして編集モーダルに埋め込む。
 // AI呼び出しはせず(v60方針)、チェック数をその場でカウントして leverageType セレクトへ反映するだけ。
 // 保存(モーダルの「保存」ボタン)を押すまでは state に一切書き込まない。
-function leverageJudgeHelperHTML() {
+// v147(UI改善計画Phase2 2-4a): 既定closedの<details>自体は既存どおり(v65から変更なし)。
+// 判定済み(leverageType設定済み)なら、summary行に「未判定への招待文」ではなく判定結果を出す
+// (currentType引数、任意。呼び出し元がTask/BlockそれぞれのleverageTypeを渡す)。
+function leverageJudgeHelperHTML(currentType) {
+  const judgedLabel = leverageTypeLabel(currentType || "");
+  const summaryText = judgedLabel ? `10秒判定: 「${judgedLabel}」と判定済み(変更する)` : "10秒で判定する(任意)";
   return `
     <details class="lev-helper">
-      <summary>10秒で判定する(任意)</summary>
+      <summary>${escapeHTML(summaryText)}</summary>
       <div class="lev-helper-body">
         <label class="checkbox-line"><input type="checkbox" data-lev-q="1"> 今日で終わらず、明日以降も自分の代わりに働き続けるか</label>
         <label class="checkbox-line"><input type="checkbox" data-lev-q="2"> やった後、同じ問題が来たとき自分の時間はもう要らなくなっているか</label>
@@ -5325,7 +5380,7 @@ function renderWishCard(wish) {
         <div class="progress" style="flex:1"><span style="width:${progress.percent}%"></span></div>
         ${nextStep
           ? `<div class="muted" style="font-size:11px; max-width:40%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" title="${escapeHTML(nextStep.title)}">次: ${escapeHTML(nextStep.title)}</div>`
-          : (wish.realized ? "" : "<div class=\"muted\" style=\"font-size:11px; color:var(--orange)\">↳ サブタスクを書く</div>")}
+          : (wish.realized ? "" : "<div class=\"muted\" style=\"font-size:11px; color:var(--orange-text)\">↳ サブタスクを書く</div>")}
       </div>
 
       ${state.wishOpenId === wish.id ? renderWishDetail(wish) : ""}
@@ -6059,7 +6114,7 @@ function renderOpenTasks() {
         <div class="row">
           <div style="min-width:0; flex:1">
             <strong>${escapeHTML(task.title)}</strong>
-            <div class="muted" style="font-size:12px">${escapeHTML(projectName(task.projectId))} / ${escapeHTML(task.category || "カテゴリなし")}${dueLabel}${todayCount > 0 ? ` <span style="color:var(--green); font-weight:600">/ 本日 ${todayCount} 件 Block 追加済み</span>` : ""}</div>
+            <div class="muted" style="font-size:12px">${escapeHTML(projectName(task.projectId))} / ${escapeHTML(task.category || "カテゴリなし")}${dueLabel}${todayCount > 0 ? ` <span style="color:var(--green-text); font-weight:600">/ 本日 ${todayCount} 件 Block 追加済み</span>` : ""}</div>
             ${doneCriteriaHTML}
             ${firstStepHTML}
           </div>
@@ -6663,7 +6718,7 @@ function renderEnergyGraph(allBlocks, rowHeight, startHour, endHour) {
       </svg>
       <div style="position:absolute; top:2px; right:2px; font-size:9px; color:var(--faint); pointer-events:none;">エネルギー</div>
       <div style="position:absolute; top:16px; right:2px; font-size:9px; color:var(--faint); pointer-events:none;">起点 ${morning}</div>
-      <div style="position:absolute; bottom:2px; right:2px; font-size:9px; color:var(--green); pointer-events:none;">終値 ${endValue >= 0 ? '+' : ''}${endValue}</div>
+      <div style="position:absolute; bottom:2px; right:2px; font-size:9px; color:var(--green-text); pointer-events:none;">終値 ${endValue >= 0 ? '+' : ''}${endValue}</div>
       ${batteryLast !== null ? `<div class="battery-curve-label" style="position:absolute; top:30px; right:2px; font-size:9px; color:#ff9500; pointer-events:none;">🔋残量 ${batteryLast}</div>` : ""}
     </div>
   `;
@@ -6850,7 +6905,7 @@ function renderManualPomodoro(running, remaining, blockOptions) {
         <section class="panel" style="display:grid; place-items:center; min-height:380px; padding:24px">
           ${renderCircularProgress(progress, breakDisplay, "var(--orange)")}
           <div style="text-align:center; margin-top:14px">
-            <div style="font-size:13px; font-weight:700; color:var(--orange)">☕️ 休憩中</div>
+            <div style="font-size:13px; font-weight:700; color:var(--orange-text)">☕️ 休憩中</div>
             <div class="muted" style="font-size:11px; margin-top:4px">5:00 → 0:00(実時間)</div>
             ${message ? `<div style="margin-top:10px; font-size:14px; font-weight:600; color:var(--text)">${escapeHTML(message)}</div>` : ""}
           </div>
@@ -9163,8 +9218,10 @@ function computeWeeklyMetrics(weekStart) {
     };
   });
   const start12 = state.settings.twelveWeekStartDate;
-  const wkNum = start12 ? clamp(Math.floor(daysBetween(start12, weekStart) / 7) + 1, 1, 12) : null;
-  const daysLeft12 = start12 ? Math.max(0, daysBetween(weekStart, addDays(start12, 84))) : null;
+  // v147: 週番号・残り日数とも基準日をtodayISO()に統一(ホーム側と食い違っていた+同一ウィジェット内で
+  // Week Nと残り日数の基準がズレる新たな不整合を避けるため。taskchute-notes/decisions.md参照)
+  const wkNum = start12 ? clamp(Math.floor(daysBetween(start12, todayISO()) / 7) + 1, 1, 12) : null;
+  const daysLeft12 = start12 ? Math.max(0, daysBetween(todayISO(), addDays(start12, 84))) : null;
   return {
     days, tc, rt,
     mit: { done: mitDone, total: mit.length, pct: mit.length ? Math.round((mitDone / mit.length) * 100) : 0 },
@@ -16259,7 +16316,7 @@ function buildTaskModal(task) {
           <select class="select" data-modal-field="leverageType">
             ${leverageTypeOptionsHTML(task.leverageType || "")}
           </select>
-          ${leverageJudgeHelperHTML()}
+          ${leverageJudgeHelperHTML(task.leverageType)}
         </div>
         <div class="field">
           <label class="field-label">🤝 AI作業ワーカー連携(任意)</label>
@@ -16408,7 +16465,7 @@ function buildBlockModal(block) {
           <select class="select" data-modal-field="leverageType">
             ${leverageTypeOptionsHTML(block.leverageType || "")}
           </select>
-          ${leverageJudgeHelperHTML()}
+          ${leverageJudgeHelperHTML(block.leverageType)}
         </div>
         <div class="field-row">
           <div class="field">
@@ -16532,7 +16589,7 @@ function buildBlockModal(block) {
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn danger" data-action="modal-delete">削除</button>
+        <button class="btn danger" data-action="modal-delete" style="margin-right:auto">削除</button>
         <button class="btn" data-action="modal-close">キャンセル</button>
         <button class="btn primary" data-action="modal-save">保存</button>
       </div>
@@ -17169,7 +17226,13 @@ function updateProjectedEndTick() {
 // 凍ったままになる。startTimerTicker(500ms周期)に載せて軽量な差分更新をするが、減衰は
 // 1時間3程度の緩やかな変化のためBATTERY_TICK_INTERVAL_MS(既定1分)でスロットルする。
 // 全再描画(render())はしない — 検索入力のフォーカス・IME入力中の状態を飛ばさないため、
-// 該当要素(.home-battery-chip / .energy-graph-overlay)だけをouterHTMLで差し替える。
+// 該当要素(.home-today-status / .energy-graph-overlay)だけをouterHTMLで差し替える。
+// v147レビュー対応: 旧実装は`.home-battery-chip`だけを差し替えており、それを包む
+// `.home-today-status`(homeFoldSectionの<summary>、常時表示の「残量N」要約)は初回描画時の
+// まま凍っていた。カード全体をouterHTMLで差し替える(homeFoldSectionはlocalStorageの
+// fold開閉状態(isHomeFoldOpen)を再読込するため、開閉状態は自然に保持される)。さらに、
+// 全て良好でカード自体が非表示だった場合でも、電池残量が減衰でBATTERY_OK_PCTを割った
+// 可能性があるため、その場合だけ全再描画(renderDeferringForFocus)で初めてカードを出す。
 function updateBatteryTick() {
   if (Date.now() - _lastBatteryTickAt < BATTERY_TICK_INTERVAL_MS) return;
   _lastBatteryTickAt = Date.now();
@@ -17185,8 +17248,14 @@ function updateBatteryTick() {
     if (maybeSuggestRecoveryDraft(now.getHours() * 60 + now.getMinutes())) { renderDeferringForFocus(); return; }
   }
   if (state.currentView === "home") {
-    const chip = document.querySelector(".home-battery-chip");
-    if (chip) chip.outerHTML = homeBatteryChip();
+    const statusCard = document.querySelector(".home-today-status");
+    if (statusCard) {
+      statusCard.outerHTML = homeTodayStatusCard();
+    } else if (!computeHomeBatteryInfo(state.selectedDate).ok) {
+      // 「今日の状態」カードが非存在(=前回描画時は全て良好で非表示だった)のに、
+      // 電池残量が閾値を割った → カードを新たに出す必要があるため全再描画する。
+      renderDeferringForFocus();
+    }
   } else if (state.currentView === "timeline") {
     const layer = document.querySelector(".energy-graph-overlay");
     if (layer) {
