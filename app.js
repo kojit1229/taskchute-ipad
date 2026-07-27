@@ -141,6 +141,11 @@ const _visionPageLoadInFlight = {};  // { 'now_vision.pdf': true }(ボード単�
 const _visionPageFailed = {};        // { 'now_vision-p01.jpg': true }
 const cachedFeedback = {};  // { 'YYYY-MM-DD': '...md text...' }
 const cachedWeeklyReviewMd = {};  // v62: { '週開始土曜YYYY-MM-DD': '...md text...' }(自宅PCバッチ生成)
+// v157: AI機能1「今日の敵」。loop/scripts/today-enemy.sh が personal-data/taskchute/ へ
+// 今日の敵_<date>.md(ラスボス風ナレーション1段落のプレーンテキスト)をpushする(契約は
+// loop/FORMAT_CONTRACT.md「今日の敵_YYYY-MM-DD.mdの契約」)。実際の今日分のみを扱う
+// (AIフィードバックのような前日1日分の無条件fetchは行わない。過去日を読み返す機能ではないため)。
+const cachedTodayEnemyMd = {};  // { 'YYYY-MM-DD': '...1段落プレーンテキスト...' }
 // v67: AI作業結果_<today>.json のパース済み配列(非永続、当日分のみ)。二重登録防止のIDは state.aiWorkProcessedIds 側で永続化する。
 let cachedAiWorkResults = null;
 // v74: 読書複利化 — taskchute/reading/highlights.json の books 配列(null=未取得。永続化しない、
@@ -2579,6 +2584,7 @@ function renderHome() {
 function renderHomeTodayTab(blocks, isToday, degraded, metrics) {
   return `
     ${homeHero(blocks, isToday)}
+    ${homeTodayEnemyCard(isToday)}
     <div id="home-mit-anchor">${homeMIT(blocks)}</div>
     <div class="home-zone-block z-amber" id="homezone-1">
       <div class="home-zone amber">今日、すすめる${projectedEndBadge()}</div>
@@ -3255,6 +3261,31 @@ function homeHero(blocks, isToday) {
       </div>
     </div>
   </section>`;
+}
+
+// v157: AI機能1「今日の敵」。自宅PCバッチ(loop/scripts/today-enemy.sh)が生成した
+// 今日の敵_<today>.md(ラスボス風ナレーション1段落)を、hero直後に既定openの折りたたみカードで
+// 表示する。ファイルが無い日(cachedTodayEnemyMdに当日分が無い)は、下記の
+// `if (!raw) return "";` で早期returnし何も出さない(homeFoldSection自体の
+// 「bodyHTMLが空ならカードごと出さない」仕様には到達しない。2026-07-28レビュー対応・項目7:
+// 実際のガード箇所を指す記述に修正)。
+// 過去日を閲覧中(isToday===false)は出さない(当日の演出であり、過去日を読み返す機能ではないため)。
+const TODAY_ENEMY_MAX_CHARS = 4000;  // today-enemy-validate.pyのバッチ側上限と揃える(表示側の二重防御)
+function homeTodayEnemyCard(isToday) {
+  if (!isToday) return "";
+  const raw = (cachedTodayEnemyMd[todayISO()] || "").trim();
+  if (!raw) return "";
+  const clipped = raw.length > TODAY_ENEMY_MAX_CHARS
+    ? `${raw.slice(0, TODAY_ENEMY_MAX_CHARS)}…`
+    : raw;
+  // v157: バッチ生成物はMarkdownではなくプレーンテキスト契約(FORMAT_CONTRACT.md)のため
+  // renderMarkdownは使わず、escapeHTML済みテキストをそのまま表示する(内部のMarkdown/HTML記法を
+  // 誤って実行させないための防御。改行はwhite-space:pre-wrapで見た目だけ保持する)。
+  const bodyHTML = `
+    <div style="white-space:pre-wrap; line-height:1.6">${escapeHTML(clipped)}</div>
+    <div class="muted" style="font-size:11px; margin-top:8px">※AI演出(自動生成のジョーク文章です)</div>
+  `;
+  return homeFoldSection("today-enemy", true, "home-today-enemy", "", "👹 今日の敵", bodyHTML);
 }
 
 // v33: 12週サイクル「今週の進捗」(homeCycle と同一ロジック)
@@ -16414,6 +16445,15 @@ async function hydrateStaticMarkdown() {
     const weeklyReviewMd = await fetchGitHubRawText(`週次レビュー_${weeklyReviewWeek}.md`);
     if (weeklyReviewMd && weeklyReviewMd !== cachedWeeklyReviewMd[weeklyReviewWeek]) {
       cachedWeeklyReviewMd[weeklyReviewWeek] = weeklyReviewMd;
+      changed = true;
+    }
+  }
+  // v157: AI機能1「今日の敵」。実際の今日分のみ、未取得なら1回だけfetchする(前日分の
+  //      無条件fetchは行わない。ファイルが無い日は404を静かに無視し、カード自体を出さない)。
+  if (!cachedTodayEnemyMd[realToday]) {
+    const todayEnemyMd = await fetchGitHubRawText(`今日の敵_${realToday}.md`);
+    if (todayEnemyMd && todayEnemyMd !== cachedTodayEnemyMd[realToday]) {
+      cachedTodayEnemyMd[realToday] = todayEnemyMd;
       changed = true;
     }
   }

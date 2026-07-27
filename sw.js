@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v156";
+const CACHE_NAME = "taskchute-journal-pwa-v157";
 // v156: ADHD支援「①仕分けモード S3(Undo)」— 三択(今日やる/手放す/延期)実行後に5秒間の
 //   Undoトーストを出し、押すと直前の1操作だけを完全に巻き戻す(スタック無し。次の操作で
 //   自動失効)。新しいトースト機構は作らずv150の完了トースト機構(showToastのアクション
