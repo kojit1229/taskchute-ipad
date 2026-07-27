@@ -5770,6 +5770,191 @@ function deleteWish(id) {
   saveAndRender("削除しました");
 }
 
+// v152: 仕分けモード(designs/03-task-swipe.md S1「ボタン版」)==============================
+// 決断疲れによる仕分けの先送りに対処するADHD支援機能。先送りBlock+Wishバックログを1枚ずつ
+// 「今日やる/手放す/延期(来月)」の三択で処理する。データモデルへの新フィールド追加はゼロ
+// (既存の migratedTo/carryCount/deleted/updatedAt/targetMonth/targetYear/status のみで表現)。
+// 三択の意味は儀式(resolveMigrationRitual)の5択の部分集合に対応させ、新しい状態語彙は作らない。
+
+// v152 2系統レビュー対応: セッション内(非永続・ページリロードで消える)の処理済みidセット。
+// 「今日やる/延期」は元データを削除しない(Wish自体は残る)ため、これが無いとキューが
+// updatedAt昇順で並び替わるだけで同じセッション内に何度も先頭へ再浮上し、終端しなかった。
+let _triageSessionDone = new Set();
+// 直近の描画で先頭に出したカードのid(二重タップガード。renderWishTriageで毎回更新)。非永続。
+let _triageCurrentCardId = "";
+// 直近のtriageAction実行時刻(ms)。二重タップガード用。非永続。
+let _triageLastActionAt = 0;
+const TRIAGE_ACTION_COOLDOWN_MS = 350;
+
+// 指定Wish(本体または子孫サブタスク)を対象にした「今日の」Blockが既に存在するか。
+// セッションをまたいでも(リロード後も)再ループしないための永続データ側の判定
+// (_triageSessionDoneはページリロードで消えるため、こちらが本当の歯止め)。
+function wishHasTodayBlock(wishId) {
+  const today = todayISO();
+  const ids = new Set([wishId, ...getSubtasksOf(wishId).map((t) => t.id)]);
+  return state.blocks.some((b) => !b.deleted && b.date === today && ids.has(b.taskId));
+}
+
+// キュー = 先送りBlock(carryableBlocks、既存順)→ Wishバックログ(未実現・updatedAt昇順)の順。
+// wishes は呼び出し元(renderWish)が area/実現済みフィルタ済みのものをそのまま渡す
+// (仕分けも今見ているフィルタ範囲に揃える。フィルタ無しなら全件)。
+// v152レビュー対応(必須1): セッション内処理済み(_triageSessionDone)と、既に当日Block化済み
+// (status=doing かつ wishHasTodayBlock)のWishをキューから除外し、全カード処理で必ず
+// 「仕分け完了」(0件)へ到達するようにする。
+function triageQueue(wishes) {
+  const blocks = carryableBlocks().filter((b) => !_triageSessionDone.has(b.id));
+  const wishQueue = (wishes || [])
+    .filter((w) => !w.realized)
+    .filter((w) => !_triageSessionDone.has(w.id))
+    .filter((w) => !(w.status === "doing" && wishHasTodayBlock(w.id)))
+    .slice()
+    .sort((a, b) => (a.updatedAt || "").localeCompare(b.updatedAt || ""));
+  return [
+    ...blocks.map((b) => ({ kind: "block", id: b.id, item: b })),
+    ...wishQueue.map((w) => ({ kind: "wish", id: w.id, item: w }))
+  ];
+}
+
+// カードの出所バッジ(「昨日の先送り ↻N」/「Wish」)
+function triageBadgeHTML(entry) {
+  if (entry.kind === "block") {
+    const n = Number(entry.item.carryCount || 0);
+    return `<span class="triage-badge">昨日の先送り${n >= 1 ? ` ↻${n}` : ""}</span>`;
+  }
+  return `<span class="triage-badge">Wish</span>`;
+}
+
+// カードの補足1行(見積・カテゴリ or 動機・領域)
+function triageSubtitleText(entry) {
+  if (entry.kind === "block") {
+    const b = entry.item;
+    const parts = [];
+    if (b.category) parts.push(b.category);
+    if (b.estimateMin) parts.push(`見積${b.estimateMin}分`);
+    return parts.join(" · ") || "先送りされたタスクです";
+  }
+  const w = entry.item;
+  return w.motivation || (w.lifeArea ? `領域: ${w.lifeArea}` : "やりたいこと");
+}
+
+// 選択結果を軽量ログに記録(migrationRitualLogと同じ思想。集計・分析はバッチ側)
+function logSwipeTriage(kind, targetId, action, carryCount) {
+  state.swipeTriageLog.push({
+    at: nowDateTime(),
+    targetId,
+    kind,          // 'block' | 'wish'
+    action,        // 'today' | 'drop' | 'defer'
+    via: "button",  // v152 S1はボタンのみ。S2でスワイプ('swipe')追加
+    carryCount: Number(carryCount || 0)
+  });
+  if (state.swipeTriageLog.length > SWIPE_TRIAGE_LOG_MAX) {
+    state.swipeTriageLog = state.swipeTriageLog.slice(-SWIPE_TRIAGE_LOG_MAX);
+  }
+}
+
+// 三択ボタンの実行(kind: 'block'|'wish', action: 'today'|'drop'|'defer')。
+// v152 2系統レビュー対応:
+//  (a) 二重タップガード: 直前の実行からTRIAGE_ACTION_COOLDOWN_MS未満の呼び出し、または
+//      現在描画中のカードid(_triageCurrentCardId)と一致しない呼び出しは無視する
+//      (連打・再描画後の新カードへの誤爆を防ぐ)。
+//  (b) logSwipeTriageは行動が実際に成立した箇所の直前(saveAndRender/委譲呼び出しの直前)に
+//      移した。早期return(該当id無し等)ではログを一切積まない。
+//  (c) 処理成立時は必ず_triageSessionDoneへidを積み、以後このセッションのキューから除外する。
+function triageAction(kind, id, action) {
+  const now = Date.now();
+  if (now - _triageLastActionAt < TRIAGE_ACTION_COOLDOWN_MS) return;
+  if (_triageCurrentCardId && id !== _triageCurrentCardId) return;
+
+  if (kind === "block") {
+    const block = blockById(id);
+    if (!block || block.deleted) return;
+    if (action === "today") {
+      _triageLastActionAt = now;
+      _triageSessionDone.add(id);
+      logSwipeTriage("block", id, action, block.carryCount);
+      carryOverBlock(id);
+      return;
+    }
+    if (action === "drop") {
+      // 儀式のavoid相当(designs/03-task-swipe.md §③表): deleted化+migrationRitualLogにも記録
+      // (集計源を分裂させない。avoidListへの追記まではしない=表に明記された2アクションのみ)
+      _triageLastActionAt = now;
+      _triageSessionDone.add(id);
+      logMigrationRitual(block, "avoid");
+      state.blocks = state.blocks.map((b) => b.id === id ? { ...b, deleted: true, updatedAt: nowDateTime() } : b);
+      logSwipeTriage("block", id, action, block.carryCount);
+      saveAndRender("手放しました");
+      return;
+    }
+    if (action === "defer") {
+      // 儀式のrelease相当: Wishへ移動してから元Blockをdeleted化(moveBlockToWish自体は削除しない)。
+      // v152レビュー対応(設計書§④明文の記録漏れ): logMigrationRitual(release)を追加し、
+      // 集計源(migrationRitualLogが正)を分裂させない。
+      _triageLastActionAt = now;
+      _triageSessionDone.add(id);
+      const moved = moveBlockToWish(id);
+      // v152レビュー対応(必須1・終端性): moveBlockToWishが新規に作るWishは、この場で今まさに
+      // 「延期する」と判断した対象そのものなので、同じセッションのキューへ即座に再浮上させない
+      // (次回セッション=リロード後には通常のWishバックログとして自然に現れる)。
+      if (moved) _triageSessionDone.add(moved.id);
+      logMigrationRitual(block, "release");
+      state.blocks = state.blocks.map((b) => b.id === id ? { ...b, deleted: true, updatedAt: nowDateTime() } : b);
+      logSwipeTriage("block", id, action, block.carryCount);
+      saveAndRender(moved ? "Wishへ移動しました" : "Blockを削除しました(Wishプロジェクトなし)");
+      return;
+    }
+    return;
+  }
+
+  if (kind === "wish") {
+    const wish = state.tasks.find((t) => t.id === id && !t.deleted);
+    if (!wish) return;
+    if (action === "today") {
+      // ⑥未解決論点1の仮案(設計書に明記): 本体をカードにし、未完了サブタスクがあれば
+      // 先頭(nextStepOf)をBlock化。サブタスクが無ければ本体自身をBlock化する。
+      _triageLastActionAt = now;
+      _triageSessionDone.add(id);
+      const next = nextStepOf(id);
+      if (next) {
+        // 対象がサブタスクの場合、wishSubtaskToTasksが更新するのはサブタスク側のupdatedAtのみ
+        // (本体は変わらない)。本体(カード)のupdatedAtも合わせて進めておく(再出現防止の本体は
+        // _triageSessionDone+wishHasTodayBlockだが、こちらもデータの一貫性として揃える)。
+        state.tasks = state.tasks.map((t) => t.id === id ? { ...t, updatedAt: nowDateTime() } : t);
+      }
+      logSwipeTriage("wish", id, action, 0);
+      wishSubtaskToTasks(next ? next.id : id);
+      return;
+    }
+    if (action === "drop") {
+      // 裁定(2026-07-28、2系統レビュー): 既存deleteWish()のセマンティクスに統一し、
+      // 子孫サブタスクもカスケードでsoft-delete(deleted:true+updatedAt bump)する
+      // (設計書§③表は「本体のみ」だが、本体だけ消して子孫が孤児のまま残る方が不整合なため
+      // 統一を優先。理由はCHANGES_v152.md参照)。
+      _triageLastActionAt = now;
+      _triageSessionDone.add(id);
+      const allIds = new Set([id]);
+      const collect = (parentId) => {
+        state.tasks.forEach((t) => {
+          if (!t.deleted && t.parentTaskId === parentId) {
+            allIds.add(t.id);
+            collect(t.id);
+          }
+        });
+      };
+      collect(id);
+      state.tasks = state.tasks.map((t) => allIds.has(t.id) ? { ...t, deleted: true, updatedAt: nowDateTime() } : t);
+      logSwipeTriage("wish", id, action, 0);
+      saveAndRender("手放しました");
+      return;
+    }
+    if (action === "defer") {
+      // targetMonthがあれば+1(12月→翌年1月)。targetYearが設定済みならそれも+1、未設定なら
+      // 翌年(todayISO()年+1)を設定する(v152レビュー対応: 月間ボードはtargetMonthだけで
+      // 並ぶため、年を進めないと1月枠=先頭へ見かけ上戻ってしまう=逆行して見えるため)。
+      // targetMonth未設定は据え置き=updatedAtのみbumpしてキュー末尾へ(design §③表)。
+      _triageLastActionAt = now;
+}
+
 // 汎用: Task のフィールド更新(saveState のみ、再描画なし)
 function updateTaskField(id, field, value) {
   state.tasks = state.tasks.map((t) => t.id === id
