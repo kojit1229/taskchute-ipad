@@ -1,4 +1,9 @@
 :root {
+  /* v151: 既定はライト値のフォールバック(data-theme未設定時、または旧キャッシュ等で
+     index.htmlの同期スクリプトが走る前の一瞬)。実際の適用はdata-theme属性(下記)経由。
+     color-schemeはlight dark(OS判定に委ねる)のままにし、data-theme="dark"|"light"の
+     各ブロックで明示上書きすることで、ネイティブ入力(type=time/date等)の見た目も
+     アプリの選択テーマと一致させる。 */
   color-scheme: light dark;
   --bg: #f7f7fa;
   --panel: #ffffff;
@@ -30,6 +35,13 @@
   --orange-text: #8a5100;
   --green-text: #1b6b3f;
   --teal-text: #0a6a61;
+  /* v151レビュー対応(必須1由来): .zt-theme-qtag(「問い」「AI提案」タグ)がvar(--accent)を
+     文字色に直接使っており、ダーク既定への切替でapp.jsをroute.abort()して単体検証した際に
+     panel(#202129)上で3.99:1・panel-soft上で3.46:1とAA未達なことが判明した(ライトも
+     panel-soft上3.56:1で同様に未達)。orange/green/tealと同じ「-textトークン」方式で追加。
+     この値(ライト用)のnode script実測: panel 6.51:1 / panel-soft 5.77:1 / bg 6.09:1 /
+     accent-soft 5.69:1(ダーク側の値は下記:root[data-theme=dark]のコメント参照)。 */
+  --accent-text: #0050e0;
   /* v127: 角丸を8→12pxへ。カード類(.panel/.item/.segmented等、var(--radius)参照箇所)が
      一目でモダンな印象になるよう底上げ(apple-design全体ポリッシュ、K指示2026-07-19)。 */
   --radius: 12px;
@@ -58,36 +70,55 @@
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Hiragino Sans", "Noto Sans JP", sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #111216;
-    /* v127: --panel/--panel-softをbgに対してわずかに持ち上げ、シャドウの代わりに
-       面の明度差で階層を表現する(ダークテーマはシャドウが視認しづらいため)。 */
-    --panel: #202129;
-    --panel-soft: #2a2c35;
-    --line: #3a3c44;
-    --line-soft: #2c2e36;
-    --text: #f4f4f6;
-    --muted: #b0b3bc;
-    --faint: #838792;
-    --accent-soft: #0d2a48;
-    --green-soft: #123b25;
-    --red-soft: #451917;
-    --orange-soft: #432b0b;
-    --purple-soft: #2b244e;
-    --teal-soft: #0c3733;
-    /* v147: ダーク背景では元の--orange/--green/--tealが実測4.88〜8.51:1(--bg/--panel/各--*-soft
-       との組み合わせすべてでAA以上、node script実測。最も厳しいのはteal×--green-softの4.88:1)の
-       コントラストを持つため、-textトークンは無彩色化せず素の色へ戻す(レビュー対応で数値を実測に訂正)。 */
-    --orange-text: var(--orange);
-    --green-text: var(--green);
-    --teal-text: var(--teal);
-    --shadow: none;
-    /* v123: ダークテーマの固定チローム用マテリアル値 */
-    --chrome-bg: rgba(28, 29, 34, 0.72);
-    --chrome-edge: 0 -1px 0 rgba(255, 255, 255, 0.05), 0 -14px 22px -16px rgba(0, 0, 0, 0.55);
-    --chrome-edge-down: 0 1px 0 rgba(255, 255, 255, 0.05), 0 14px 22px -16px rgba(0, 0, 0, 0.55);
-  }
+/* v151(ダークモード既定化、K指示2026-07-27): 従来はOS設定(prefers-color-scheme)だけを見る
+   メディアクエリでダーク値を定義していたが、アプリ内で「ダーク/ライト/OS追従」を選べるように
+   したため、色トークンの定義箇所を1つに一本化する。具体的には:
+   - 色値そのものはここ(:root[data-theme="dark"])にだけ書く(メディアクエリでの重複定義はしない)
+   - 「OS追従」を選んだ場合の実際の判定(matchMediaでOSのダーク/ライトを読む)はapp.js側の
+     resolveTheme()/applyTheme()が行い、結果をdata-theme="dark"|"light"としてhtml要素へ
+     反映する(起動直後のチラつき防止用に index.html の同期スクリプトでも同じ解決をしている)。
+   これによりCSS側は常にdata-theme属性だけを見ればよく、値の重複によるズレの余地が無くなる。 */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111216;
+  /* v127: --panel/--panel-softをbgに対してわずかに持ち上げ、シャドウの代わりに
+     面の明度差で階層を表現する(ダークテーマはシャドウが視認しづらいため)。 */
+  --panel: #202129;
+  --panel-soft: #2a2c35;
+  --line: #3a3c44;
+  --line-soft: #2c2e36;
+  --text: #f4f4f6;
+  --muted: #b0b3bc;
+  --faint: #838792;
+  --accent-soft: #0d2a48;
+  --green-soft: #123b25;
+  --red-soft: #451917;
+  --orange-soft: #432b0b;
+  --purple-soft: #2b244e;
+  --teal-soft: #0c3733;
+  /* v147: ダーク背景では元の--orange/--green/--tealが実測4.88〜8.51:1(--bg/--panel/各--*-soft
+     との組み合わせすべてでAA以上、node script実測。最も厳しいのはteal×--green-softの4.88:1)の
+     コントラストを持つため、-textトークンは無彩色化せず素の色へ戻す(レビュー対応で数値を実測に訂正)。 */
+  --orange-text: var(--orange);
+  --green-text: var(--green);
+  --teal-text: var(--teal);
+  /* v151レビュー対応: 素の--accent(#007aff)はダークpanel/panel-soft上でAA未達(3.99:1/3.46:1)
+     のため、orange/green/tealとは逆にダーク側でも専用の明るい値へ上書きする。node script実測:
+     panel 5.81:1 / panel-soft 5.04:1 / bg 6.78:1 / accent-soft 5.28:1(いずれも--accent-textの値、
+     .zt-theme-qtagのcolorに使用。ライト側の値は上記:rootのコメント参照)。 */
+  --accent-text: #00a2ff;
+  --shadow: none;
+  /* v123: ダークテーマの固定チローム用マテリアル値 */
+  --chrome-bg: rgba(28, 29, 34, 0.72);
+  --chrome-edge: 0 -1px 0 rgba(255, 255, 255, 0.05), 0 -14px 22px -16px rgba(0, 0, 0, 0.55);
+  --chrome-edge-down: 0 1px 0 rgba(255, 255, 255, 0.05), 0 14px 22px -16px rgba(0, 0, 0, 0.55);
+}
+
+/* v151: 「ライト」を明示選択した場合(OS側がダークでも)ネイティブ入力の見た目をライトへ固定。
+   色トークン自体は:rootの既定値がそのままライト値のため、ここではcolor-schemeのみ上書きする
+   (値の再定義はしない=重複を作らない)。 */
+:root[data-theme="light"] {
+  color-scheme: light;
 }
 
 * {
@@ -3001,7 +3032,9 @@ h3 {
 .zt-toptab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 .zt-toptab .zt-tab-count { background: rgba(255,255,255,.25); border-radius: 20px; padding: 1px 8px; font-size: 12px; }
 .zt-toptab:not(.active) .zt-tab-count { background: rgba(0,0,0,.06); }
-.zt-theme-qtag { font-size: 10.5px; font-weight: 700; color: var(--accent); border: 1px solid var(--accent); border-radius: 5px; padding: 0 5px; margin-left: 8px; vertical-align: middle; }
+/* v151レビュー対応: 文字色はAA適合の--accent-text(枠線は装飾のためvar(--accent)のまま、
+   非text要素の3:1要件は素のaccentで両テーマとも満たす、styles.css:root冒頭のコメント参照)。 */
+.zt-theme-qtag { font-size: 10.5px; font-weight: 700; color: var(--accent-text); border: 1px solid var(--accent); border-radius: 5px; padding: 0 5px; margin-left: 8px; vertical-align: middle; }
 .zt-hi-spacer { flex: 1; }
 .zt-hi-promote { background: none; border: none; color: var(--accent); font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; padding: 0; }
 
@@ -3176,7 +3209,10 @@ h3 {
 .search-kind { font-size: 10.5px; font-weight: 800; padding: 2px 7px; border-radius: 8px; white-space: nowrap; background: rgba(0,122,255,.1); color: var(--accent); }
 .search-kind-zero { background: rgba(47,185,109,.12); color: var(--green-text); }
 .search-kind-question { background: rgba(255,149,0,.12); color: var(--orange-text); }
-.search-kind-feedback { background: rgba(175,82,222,.12); color: #af52de; }
+/* v151レビュー対応(推奨6): 生値#af52deはダーク実測2.96:1でAA未達だったため、
+   このアプリに専用のpurple-textトークンは無く新設もオーバースペックなので、
+   常にAA適合が保証されている本文色トークンvar(--text)へ切り替えた(背景の淡い紫タグ自体は維持)。 */
+.search-kind-feedback { background: rgba(175,82,222,.12); color: var(--text); }
 .search-kind-report { background: rgba(124,178,228,.16); color: var(--accent); }
 .search-date { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
 .search-snippet { font-size: 12.5px; line-height: 1.5; overflow-wrap: anywhere; }
