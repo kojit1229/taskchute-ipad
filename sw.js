@@ -1,4 +1,10 @@
-const CACHE_NAME = "taskchute-journal-pwa-v152";
+const CACHE_NAME = "taskchute-journal-pwa-v153";
+// v153: ADHD支援「②今日の庭 S1」— gardenLog(日別ルーティン完了スナップショット)+
+//   「今日の芽」表示。今日タブのルーティンカード内に、当日のルーティン完了状況に応じた
+//   4段階(土/芽/若木/開花)の静的SVGを表示する。段階の配色は薄緑/緑/濃緑
+//   (decisions.md 2026-07-27 K確定)。完全決定論(既存routineRate()の再利用のみ、
+//   AI呼び出しなし)。0件の日は中立表示(文言なし)・段階は下がらない(罰なし6ルール)。
+//   詳細はCHANGES_v153.md参照。
 // v152: ADHD支援「①仕分けモード S1(ボタン版)」— Wishタブに第3の表示モード「🃏 仕分け」を追加。
 //   対象は前日先送りBlock(carryableBlocks)+未実現Wish(updatedAt昇順)。1枚ずつ大きく表示し
 //   「今日やる/手放す/延期(来月)」の三択ボタンで処理する(スワイプ操作はS2で追加予定)。

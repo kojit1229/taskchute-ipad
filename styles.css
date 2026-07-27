@@ -35,6 +35,15 @@
   --orange-text: #8a5100;
   --green-text: #1b6b3f;
   --teal-text: #0a6a61;
+  /* v153レビュー対応(2026-07-28): 今日の庭(今日の芽)の3段階配色。decisions.md
+     2026-07-27 K確定「完了1件=薄緑/50%以上=緑/全完了=濃緑」の直訳。
+     opacity(半透明合成)ではなく専用の実色トークンにした(ダークで薄緑が暗く沈んだ緑に
+     化ける問題を避けるため、ライト/ダークそれぞれで別の実測値を持つ)。--garden-midは
+     既存--greenと同値(装飾アイコン用途としての既存precedentを踏襲、白背景2.54:1は
+     v147コメント同様に許容範囲。node script実測: パネル上pale 2.26:1/deep 6.52:1)。 */
+  --garden-pale: #6bbd8d;
+  --garden-mid: #2fb96d;
+  --garden-deep: #1b6b3f;
   /* v151レビュー対応(必須1由来): .zt-theme-qtag(「問い」「AI提案」タグ)がvar(--accent)を
      文字色に直接使っており、ダーク既定への切替でapp.jsをroute.abort()して単体検証した際に
      panel(#202129)上で3.99:1・panel-soft上で3.46:1とAA未達なことが判明した(ライトも
@@ -102,6 +111,13 @@
   --orange-text: var(--orange);
   --green-text: var(--green);
   --teal-text: var(--teal);
+  /* v153レビュー対応(2026-07-28): 今日の庭のダーク値。--garden-deepをライトと同じ
+     #1b6b3f(暗緑)にすると黒に近いダーク背景(--panel #202129)にほぼ溶けて見えなくなるため、
+     ダークでは逆に「濃い=明るく鮮やか」で強さを表現する(GitHub草表示のダークモード配色と同じ
+     考え方)。node script実測(--panel上): pale 4.13:1 / mid 6.32:1 / deep 9.29:1。 */
+  --garden-pale: #4a8f66;
+  --garden-mid: #2fb96d;
+  --garden-deep: #33e08c;
   /* v151レビュー対応: 素の--accent(#007aff)はダークpanel/panel-soft上でAA未達(3.99:1/3.46:1)
      のため、orange/green/tealとは逆にダーク側でも専用の明るい値へ上書きする。node script実測:
      panel 5.81:1 / panel-soft 5.04:1 / bg 6.78:1 / accent-soft 5.28:1(いずれも--accent-textの値、
@@ -2706,6 +2722,27 @@ h3 {
   margin-top: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--line-soft);
   font-size: var(--text-xs); color: var(--muted);
 }
+
+/* v153: 今日の庭(今日の芽)。罰なし6ルール⑤=静かな計器。フェードは完了トグル直後の
+   1回のみ(garden-grewクラス、app.js toggleBlock()が非永続フラグで1描画だけ付与)。
+   2系統レビュー対応(2026-07-28):
+   - 段階の濃淡はopacity(背景との半透明合成)をやめ、--garden-pale/mid/deep(:root冒頭で
+     ライト/ダーク別に定義)を使う。opacityだと同じ値でもテーマの背景色によって見え方が
+     変わってしまい(ダークで「薄緑」が暗く沈んだ緑になる)、K確定の3色文言と食い違っていた。
+   - フェードは設計書どおり不透明度のみ(拡大縮小のscaleは削除、静かな計器の趣旨に合わせた)。
+   - .home-garden-svg自体へのtransition: opacityは、DOM差し替え型の再描画では実際には
+     発火しない死コードだったため削除した(フェードは.garden-grewのanimationのみが担う)。 */
+.home-garden { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
+.home-garden-svg { flex: none; }
+.home-garden-svg.garden-grew { animation: garden-grow-in .3s ease; }
+@keyframes garden-grow-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .home-garden-svg.garden-grew { animation: none; }
+}
+.home-garden-svg .g-stage1 { color: var(--garden-pale); }  /* 芽: 薄緑(K確定2026-07-27) */
+.home-garden-svg .g-stage2 { color: var(--garden-mid); }   /* 若木: 緑 */
+.home-garden-svg .g-stage3 { color: var(--garden-deep); }  /* 開花: 濃緑 */
+.home-garden-caption { font-size: 12.5px; color: var(--muted); }
 
 /* ============================================================
    v33: ホーム — フル幅ヒーロー / スコアボード / ゾーン別テーマ色
