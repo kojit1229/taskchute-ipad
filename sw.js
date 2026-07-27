@@ -1,4 +1,11 @@
-const CACHE_NAME = "taskchute-journal-pwa-v151";
+const CACHE_NAME = "taskchute-journal-pwa-v152";
+// v152: ADHD支援「①仕分けモード S1(ボタン版)」— Wishタブに第3の表示モード「🃏 仕分け」を追加。
+//   対象は前日先送りBlock(carryableBlocks)+未実現Wish(updatedAt昇順)。1枚ずつ大きく表示し
+//   「今日やる/手放す/延期(来月)」の三択ボタンで処理する(スワイプ操作はS2で追加予定)。
+//   既存関数(carryOverBlock/moveBlockToWish/wishSubtaskToTasks/logMigrationRitual/
+//   nextStepOf/getSubtasksOf)を再利用し、tasks/blocks/projectsへの新フィールド追加はゼロ。
+//   追加はUI状態(wishViewMode新値"triage")とログ(swipeTriageLog、上限200件)のみ。
+//   詳細: CHANGES_v152.md、設計書 workbench/out/2026-07-27-appidea-designs/03-task-swipe.md §⑤S1。
 // v150: UI改善計画Phase4b(残る構造課題・K指定2026-07-27)— (1)完了作法の統一: すべての
 //   完了導線(ホーム今日タブのドット/タスクシュートの✓/タイムラインの○/ながれのチェック)を
 //   toggle-block(即完了。実績開始/終了時刻を未設定なら現在時刻で自動記録、充放電は

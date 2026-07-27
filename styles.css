@@ -3371,6 +3371,32 @@ h3 {
 .migration-ritual-choices { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
 .migration-ritual-choices .btn { width: 100%; text-align: left; padding: 11px 14px; }
 
+/* v152: 仕分けモード(designs/03-task-swipe.md S1)。1件ずつ大きく表示+三択ボタン。
+   タップターゲットは44px以上(.triage-btn min-height 48px)。「手放す」は罰なしトーンの規約に
+   従い赤色・危険表現は使わない(.btn.ghostのニュートラル配色のまま)。 */
+.triage-panel { display: flex; flex-direction: column; gap: 14px; }
+.triage-card {
+  padding: 28px 20px;
+  border-radius: var(--radius);
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  text-align: center;
+}
+.triage-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+.triage-card-title { font-size: 21px; font-weight: 800; line-height: 1.45; }
+.triage-card-sub { margin-top: 10px; font-size: 13px; }
+.triage-actions { display: flex; flex-direction: column; gap: 10px; }
+.triage-btn { min-height: 48px; width: 100%; font-size: 15px; }
+
 /* v65: 10x機構 — leverageType の控えめマーク + 10秒判定ヘルプの折りたたみ */
 .lev-mark {
   display: inline-block;

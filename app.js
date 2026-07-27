@@ -656,6 +656,8 @@ document.addEventListener("click", (event) => {
   }
   // v80: 「今月へ」ジャンプボタン(縦積みリストの一覧性補助)
   if (action === "wish-board-jump-current") scrollWishBoardToCurrentMonth();
+  // v152: 仕分けモード(先送りBlock+Wishバックログの三択トリアージ、ボタン版=S1)
+  if (action === "triage-choice") triageAction(target.dataset.kind, id, target.dataset.choice);
   // === v17: Avoid List(v34: input リスナーから click へ移設) ===
   if (action === "add-avoid") addAvoid();
   if (action === "delete-avoid") deleteAvoid(id);
@@ -1607,6 +1609,9 @@ function normalizeState(value) {
   });
   // v61: マイグレーション儀式(3回目以降の繰り越し確認)の選択ログ。将来のバッチ分析用に軽量記録。
   if (!Array.isArray(value.migrationRitualLog)) value.migrationRitualLog = [];
+  // v152: 仕分けモード(先送りBlock+Wishバックログの三択トリアージ)の選択ログ。
+  //      migrationRitualLogと同じ軽量append-only配列の思想(上限はSWIPE_TRIAGE_LOG_MAX)。
+  if (!Array.isArray(value.swipeTriageLog)) value.swipeTriageLog = [];
   // v65(v64設計§3残余): AIプラン自身が「配置しない」と判断した候補のログ({date,title,reason,at}、上限300件)。
   //      migrationRitualLog/aiScheduleHistoryと同じ軽量配列の思想。v62でAIプラン取り込みは実装済みだったが
   //      skippedのkind:"ai"分は永続化されておらず、v64設計§3の「AIプランのskipped理由」学習シグナルが
@@ -5036,6 +5041,9 @@ const MIGRATION_RITUAL_THRESHOLD = 3;
 const MIGRATION_RITUAL_LOG_MAX = 300;
 let _migrationRitualCtx = null;  // { srcId, nextCount, origin: 'panel'|'draft', draftItemId } 非永続
 
+// v152: 仕分けモード(designs/03-task-swipe.md §④)のログ上限。migrationRitualLogと同じ思想。
+const SWIPE_TRIAGE_LOG_MAX = 200;
+
 // 2回目以降の繰り越しBlockに付ける小さなバッジ(派手にしない)
 function migrationBadgeHTML(carryCount) {
   const n = Number(carryCount || 0);
@@ -5084,8 +5092,11 @@ function carryOverBlock(id, { forceMIT = false } = {}) {
 }
 
 // 手放す選択時の「Wishへ移動」実行(Block削除は呼び出し側で行う)。
-// 戻り値: Wishタスクを実際に作成できたか。normalizeStateがWish Projectの存在を必ず保証する
-// ため通常は false にならないが、念のための防御(v61レビュー対応: トースト文言の実態合わせ)。
+// 戻り値: 作成できたWishタスク本体(失敗時はfalse)。normalizeStateがWish Projectの存在を
+// 必ず保証するため通常falseにはならないが、念のための防御(v61レビュー対応: トースト文言の
+// 実態合わせ)。v152レビュー対応: 呼び出し元(仕分けモード)が作成後の新Wishのidを
+// 参照できるよう、真偽値ではなくタスク本体を返す(既存の呼び出し元は真偽判定にしか
+// 使っていないため後方互換)。
 function moveBlockToWish(id) {
   const src = blockById(id);
   if (!src) return false;
@@ -5095,7 +5106,7 @@ function moveBlockToWish(id) {
   // v79: addWish()と同じ理由でdueDateの「今日」既定を持ち込まない(Wishは期限任意)。
   task.dueDate = "";
   state.tasks.push(task);
-  return true;
+  return task;
 }
 
 // 選択結果を軽量ログに記録(将来のバッチ分析用。aiScheduleHistoryと同じ思想)
@@ -5426,9 +5437,10 @@ function renderWish() {
     <div class="segmented" style="margin-top:8px">
       <button class="${viewMode === "list" ? "active" : ""}" data-action="wish-view-mode" data-mode="list">☰ リスト</button>
       <button class="${viewMode === "board" ? "active" : ""}" data-action="wish-view-mode" data-mode="board">🗓 月間ボード</button>
+      <button class="${viewMode === "triage" ? "active" : ""}" data-action="wish-view-mode" data-mode="triage">🃏 仕分け</button>
     </div>
 
-    ${viewMode === "board" ? renderWishBoard(wishes) : (groupOrder.length === 0
+    ${viewMode === "board" ? renderWishBoard(wishes) : viewMode === "triage" ? renderWishTriage(wishes) : (groupOrder.length === 0
       ? `<section class="panel" style="margin-top:12px; text-align:center; padding:32px"><div class="muted">${filter.area ? `「${escapeHTML(filter.area)}」のやりたいことはまだありません` : "やりたいことを追加してみましょう(壮大なものでもOK)"}</div></section>`
       : groupOrder.map((key) => `
         <section class="section" style="margin-top:14px">
@@ -5693,14 +5705,19 @@ function toggleWishSubtask(id) {
 function wishSubtaskToTasks(taskId) {
   const task = state.tasks.find((t) => t.id === taskId);
   if (!task) return showToast("タスクが見つかりません");
+  // v152レビュー対応(両系統一致): 「今日のタスクシュートに登録」は文言どおり常に実時計の今日
+  // (todayISO())基準であるべきで、閲覧中の日付(state.selectedDate)に依存させない
+  // (carryOverBlockと同じ基準に統一。過去日を閲覧した直後にこの経路を使うと過去日にBlockが
+  // 作られてしまう既存の潜在バグだった)。
+  const today = todayISO();
   // 既に今日の Block 化されていないか
-  const exists = state.blocks.find((b) => !b.deleted && b.taskId === taskId && b.date === state.selectedDate);
+  const exists = state.blocks.find((b) => !b.deleted && b.taskId === taskId && b.date === today);
   if (exists) return showToast("既に今日のタスクシュートにあります");
   // 新規 Block を作成。expectedCharge: 4(やりたいこと=充電源)を推奨値として
-  // v29: 予定の開始/終了日時をデフォルトで入れる
-  const { plannedStartAt, plannedEndAt } = defaultPlannedTimes();
+  // v29: 予定の開始/終了日時をデフォルトで入れる(v152: 日付部分もtoday基準に統一)
+  const { plannedStartAt, plannedEndAt } = defaultPlannedTimes(today);
   const block = makeBlock({
-    date: state.selectedDate,
+    date: today,
     title: task.title,
     category: task.category || "回復",
     taskId: task.id,
@@ -12160,15 +12177,19 @@ function getOtherTask() {
 
 // v29: Block 作成時のデフォルト予定時刻。
 // 現在時刻を 15 分単位に切り捨てた時刻を開始、その 1 時間後を終了とする。
-// 当日 23:59 を上限にクランプ。日付は選択中の日付。
-function defaultPlannedTimes() {
+// 当日 23:59 を上限にクランプ。日付は既定で選択中の日付だが、
+// v152レビュー対応: 呼び出し元が明示的に基準日(dateOverride)を渡せば
+// それを使う(wishSubtaskToTasksのように「常に実時計の今日」が要件の経路向け。
+// 他の既存呼び出し元は引数無しのまま=挙動不変)。
+function defaultPlannedTimes(dateOverride) {
   const now = new Date();
   const maxMin = 24 * 60 - 1;  // 23:59
   let startMin = now.getHours() * 60 + Math.floor(now.getMinutes() / 15) * 15;
   if (startMin > maxMin) startMin = maxMin;
   let endMin = startMin + 60;
   if (endMin > maxMin) endMin = maxMin;
-  const fmt = (mins) => `${state.selectedDate}T${pad2(Math.floor(mins / 60))}:${pad2(mins % 60)}:00`;
+  const d = dateOverride || state.selectedDate;
+  const fmt = (mins) => `${d}T${pad2(Math.floor(mins / 60))}:${pad2(mins % 60)}:00`;
   return { plannedStartAt: fmt(startMin), plannedEndAt: fmt(endMin) };
 }
 
@@ -13323,6 +13344,21 @@ async function runAutoSyncPush() {
 // nowDateTime()の形式("YYYY-MM-DDTHH:mm:ss"、ゼロ埋め固定長)は文字列比較で新旧判定できる
 // (既存のdataModifiedAt比較 remoteT > localT と同じ規約)。片方にしか無いidはそのまま合流する。
 // id欠損の壊れた要素は無視する(マージ不能なものを取りこぼしても安全側に倒す)。
+// v152レビュー対応(Codex指摘): swipeTriageLogのような「追記オンリー・上書き不要」の軽量ログ
+// 配列を端末間でマージする汎用ヘルパー。updatedAt比較(mergeById)ではなく、複合キー
+// (呼び出し側が指定。swipeTriageLogは at+targetId+action)で重複だけを排除した和集合を返す
+// (新フィールド追加なし。既存スキーマそのまま)。at昇順に整列し、trimは呼び出し側の責務。
+function mergeAppendOnlyLogByKey(localList, remoteList, keyFn) {
+  const seen = new Map();
+  for (const item of [...(Array.isArray(localList) ? localList : []), ...(Array.isArray(remoteList) ? remoteList : [])]) {
+    if (!item) continue;
+    const key = keyFn(item);
+    if (!seen.has(key)) seen.set(key, item);
+  }
+  return Array.from(seen.values()).sort((a, b) => (a.at || "").localeCompare(b.at || ""));
+}
+const swipeTriageLogKey = (l) => `${l.at || ""}|${l.targetId || ""}|${l.action || ""}`;
+
 function mergeById(localList, remoteList) {
   const merged = new Map();
   (Array.isArray(localList) ? localList : []).forEach((item) => {
@@ -13705,6 +13741,10 @@ function computeSyncMerge(remoteNorm, tieWinner) {
     // v141: 「今日行ったお店」ログ。ユーザーが削除できる(tombstone)ため、mergeByIdと違い
     // tasks/projectsと同じupdatedAt優先+同値時tombstone優先のmergeByIdPreferNewerを使う。
     const storeVisits = mergeByIdPreferNewer(state.storeVisits, remoteNorm.storeVisits, tieWinner);
+    // v152レビュー対応(Codex指摘): swipeTriageLogも端末間で和集合マージする(複合キー重複排除)。
+    // 上限は他の軽量ログと同じ思想(SWIPE_TRIAGE_LOG_MAX、末尾優先で切り詰め)。
+    const swipeTriageLog = mergeAppendOnlyLogByKey(state.swipeTriageLog, remoteNorm.swipeTriageLog, swipeTriageLogKey)
+      .slice(-SWIPE_TRIAGE_LOG_MAX);
     const jsonChanged = (obj, base) => JSON.stringify(obj) !== JSON.stringify(base || {});
     const changedVsLocal =
       journals.changedVsLocal ||
@@ -13720,6 +13760,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(tasks, state.tasks) ||
       !sameArrayByReference(projects, state.projects) ||
       !sameArrayByReference(storeVisits, state.storeVisits) ||
+      !sameArrayByReference(swipeTriageLog, state.swipeTriageLog) ||
       (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, state.zeroThinking) : false);
     const changedVsRemote =
       journals.changedVsRemote ||
@@ -13735,9 +13776,10 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(tasks, remoteNorm.tasks || []) ||
       !sameArrayByReference(projects, remoteNorm.projects || []) ||
       !sameArrayByReference(storeVisits, remoteNorm.storeVisits || []) ||
+      !sameArrayByReference(swipeTriageLog, remoteNorm.swipeTriageLog || []) ||
       (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, remoteNorm.zeroThinking) : false);
     return {
-      values: { journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans, tasks, projects, storeVisits },
+      values: { journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans, tasks, projects, storeVisits, swipeTriageLog },
       changedVsLocal, changedVsRemote
     };
   } catch (error) {
@@ -13763,6 +13805,7 @@ function applySyncMergeToLocal(merged) {
   state.tasks = v.tasks;  // v135
   state.projects = v.projects;  // v135
   state.storeVisits = v.storeVisits;  // v141
+  state.swipeTriageLog = v.swipeTriageLog;  // v152
   if (v.zeroThinking) {
     state.zeroThinking.entries = v.zeroThinking.entries;
     state.zeroThinking.suggestedThemes = pruneExpiredSuggestedThemes(v.zeroThinking.suggestedThemes);
@@ -13789,6 +13832,7 @@ function applySyncMergeToRemote(merged, remoteNorm) {
   remoteNorm.tasks = v.tasks;  // v135
   remoteNorm.projects = v.projects;  // v135
   remoteNorm.storeVisits = v.storeVisits;  // v141
+  remoteNorm.swipeTriageLog = v.swipeTriageLog;  // v152
   if (v.zeroThinking) {
     remoteNorm.zeroThinking.entries = v.zeroThinking.entries;
     remoteNorm.zeroThinking.suggestedThemes = pruneExpiredSuggestedThemes(v.zeroThinking.suggestedThemes);
