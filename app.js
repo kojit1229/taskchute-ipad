@@ -5893,8 +5893,24 @@ function deleteWish(id) {
 let _triageSessionDone = new Set();
 // 直近の描画で先頭に出したカードのid(二重タップガード。renderWishTriageで毎回更新)。非永続。
 let _triageCurrentCardId = "";
-// 直近のtriageAction実行時刻(ms)。二重タップガード用。非永続。
+// 直近に成立したtriageAction呼び出しの対象idと実行時刻(ms)。二重タップガード用。非永続。
+let _triageLastActionId = "";
 let _triageLastActionAt = 0;
+// v154レビュー対応(FAIL修正、時間ベースの閾値だけでは解決不能と判明した経緯は下記):
+//  - 「同一カードid」への短時間の二重発火は常にTRIAGE_ACTION_COOLDOWN_MS(350ms)ブロックする
+//    (via問わず)。
+//  - 「別カードへの操作」のブロックは**via==="button"の場合のみ**に限定する(スワイプは対象外)。
+//    タップは指が触れた瞬間に完了する動作のため、新しく表示されたカードへ指の勢いで
+//    そのまま反射的に触れてしまう事故(v152の「二重タップガード」テストが検出していた事故)が
+//    起こりうるが、スワイプは閾値超のドラッグという物理的コストを伴う別ジェスチャのため、
+//    直前の確定直後でも別カードへの正当な連続スワイプが起こりうる(=210ms間隔の連続スワイプの
+//    2件目まで飲み込んでいたのが本バグ)。
+//  検討過程の記録: 当初「直前の成功からの経過時間が短ければvia不問で一律ブロックする」
+//  (quick guard)を試したが、Playwrightの`locator.click()`は要素の安定性待機のため
+//  実測で二重クリックの間隔が41〜362msまで大きくばらつくことが分かり(page.evaluate内で
+//  click()を直接呼ぶ場合はこの限りではない)、210ms間隔の意図的な連続スワイプと安全に
+//  分離できる閾値が存在しなかった(どんな閾値でも一方を誤検知する)。via(呼び出し経路が
+//  ボタンかスワイプか)という時間に依存しない構造的な条件に切り替えることで解決した。
 const TRIAGE_ACTION_COOLDOWN_MS = 350;
 
 // 指定Wish(本体または子孫サブタスク)を対象にした「今日の」Blockが既に存在するか。
@@ -5978,13 +5994,14 @@ function triageAction(kind, id, action) {
 
   if (kind === "block") {
     const block = blockById(id);
-    if (!block || block.deleted) return;
+    if (!block || block.deleted) return false;
     if (action === "today") {
       _triageLastActionAt = now;
+      _triageLastActionId = id;
       _triageSessionDone.add(id);
-      logSwipeTriage("block", id, action, block.carryCount);
+      logSwipeTriage("block", id, action, block.carryCount, via);
       carryOverBlock(id);
-      return;
+      return true;
     }
     if (action === "drop") {
       // 儀式のavoid相当(designs/03-task-swipe.md §③表): deleted化+migrationRitualLogにも記録
@@ -5993,9 +6010,9 @@ function triageAction(kind, id, action) {
       _triageSessionDone.add(id);
       logMigrationRitual(block, "avoid");
       state.blocks = state.blocks.map((b) => b.id === id ? { ...b, deleted: true, updatedAt: nowDateTime() } : b);
-      logSwipeTriage("block", id, action, block.carryCount);
+      logSwipeTriage("block", id, action, block.carryCount, via);
       saveAndRender("手放しました");
-      return;
+      return true;
     }
     if (action === "defer") {
       // 儀式のrelease相当: Wishへ移動してから元Blockをdeleted化(moveBlockToWish自体は削除しない)。
@@ -6019,7 +6036,7 @@ function triageAction(kind, id, action) {
 
   if (kind === "wish") {
     const wish = state.tasks.find((t) => t.id === id && !t.deleted);
-    if (!wish) return;
+    if (!wish) return false;
     if (action === "today") {
       // ⑥未解決論点1の仮案(設計書に明記): 本体をカードにし、未完了サブタスクがあれば
       // 先頭(nextStepOf)をBlock化。サブタスクが無ければ本体自身をBlock化する。
@@ -6032,9 +6049,9 @@ function triageAction(kind, id, action) {
         // _triageSessionDone+wishHasTodayBlockだが、こちらもデータの一貫性として揃える)。
         state.tasks = state.tasks.map((t) => t.id === id ? { ...t, updatedAt: nowDateTime() } : t);
       }
-      logSwipeTriage("wish", id, action, 0);
+      logSwipeTriage("wish", id, action, 0, via);
       wishSubtaskToTasks(next ? next.id : id);
-      return;
+      return true;
     }
     if (action === "drop") {
       // 裁定(2026-07-28、2系統レビュー): 既存deleteWish()のセマンティクスに統一し、
@@ -6042,6 +6059,7 @@ function triageAction(kind, id, action) {
       // (設計書§③表は「本体のみ」だが、本体だけ消して子孫が孤児のまま残る方が不整合なため
       // 統一を優先。理由はCHANGES_v152.md参照)。
       _triageLastActionAt = now;
+      _triageLastActionId = id;
       _triageSessionDone.add(id);
       const allIds = new Set([id]);
       const collect = (parentId) => {
@@ -6063,7 +6081,9 @@ function triageAction(kind, id, action) {
       // 翌年(todayISO()年+1)を設定する(v152レビュー対応: 月間ボードはtargetMonthだけで
       // 並ぶため、年を進めないと1月枠=先頭へ見かけ上戻ってしまう=逆行して見えるため)。
       // targetMonth未設定は据え置き=updatedAtのみbumpしてキュー末尾へ(design §③表)。
+      // v154: 延期はボタン専用(スワイプの方向割当から廃止。CHANGES_v154.md参照)。
       _triageLastActionAt = now;
+      _triageLastActionId = id;
       _triageSessionDone.add(id);
       if (wish.targetMonth) {
         let month = wish.targetMonth + 1;
@@ -6076,11 +6096,13 @@ function triageAction(kind, id, action) {
       } else {
         state.tasks = state.tasks.map((t) => t.id === id ? { ...t, updatedAt: nowDateTime() } : t);
       }
-      logSwipeTriage("wish", id, action, 0);
+      logSwipeTriage("wish", id, action, 0, via);
       saveAndRender("延期しました");
-      return;
+      return true;
     }
+    return false;
   }
+  return false;
 }
 
 // メインレンダリング(1枚ずつ表示+三択ボタン+残枚数。0件時は「仕分け完了」)
