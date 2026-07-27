@@ -36,6 +36,20 @@
   /* v127: 近接シャドウ+拡散シャドウの2層構成にして浮遊感の階層を付ける
      (ライトテーマのみ。ダークは面の明度差で階層を出すため--shadowはnoneのまま、下記参照)。 */
   --shadow: 0 1px 2px rgba(20, 20, 30, 0.05), 0 10px 24px -14px rgba(20, 20, 30, 0.22);
+  /* v150(UI改善計画Phase4b・S4): タイポ・余白トークンの第1弾。全17,000行の一括置換はせず、
+     まずこのコミットで触る範囲+ホーム/今日タブ+ジャーナルのCSSだけを参照に切り替えた
+     (段階移行、CHANGES_v150.md参照)。9〜11.5pxのSVG軸ラベル等の装飾値、および既存の21px/35px等
+     この4段に当てはまらない値はそのまま残している(数値自体は変えず、一致するリテラルだけ
+     var()参照へ置き換える方針)。 */
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-md: 16px;
+  --text-lg: 20px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
   /* v123: 固定チローム(ボトムナビ等)のマテリアル層。既存--panelから導出した半透明値 */
   --chrome-bg: rgba(255, 255, 255, 0.72);
   --chrome-edge: 0 -1px 0 rgba(20, 20, 30, 0.05), 0 -14px 22px -16px rgba(20, 20, 30, 0.22);
@@ -691,8 +705,8 @@ h3 {
      切り詰めた(.home-header-wrapはrenderHome()専用のラッパーで他ビューには存在しないため、
      ここから下は影響範囲がホームのみに限定される)。 */
   .home-header-wrap .view-header {
-    margin-bottom: 4px;
-    gap: 4px;
+    margin-bottom: var(--space-1);
+    gap: var(--space-1);
   }
   .home-header-wrap .buffer-meter {
     margin: -8px 0 2px;
@@ -825,7 +839,7 @@ h3 {
   /* v141: AIフィードバック列(3列目)を撤去し、残り2列を広げた(3列 0.8fr 1.4fr 0.8fr → 2列) */
   display: grid;
   grid-template-columns: 0.8fr 1.4fr;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .readonly-md {
@@ -871,6 +885,60 @@ h3 {
 .toast.show {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+
+/* v150レビュー対応(項目1、両レビュー一致・最重要): 非表示中(.showが外れた後)は、
+   has-actionが付いたままでもpointer-eventsを強制的に無効化する保険。
+   showToast()側でタイマー満了時に"show"と"has-action"を両方外すよう修正済みだが、
+   万一(将来の変更・タイマー競合等で)has-actionだけが残るケースが起きても、
+   透明な当たり判定がボトムナビ中央3ボタンの上に居座り続ける事故(実測でモーダルが
+   誤って開くことを確認済み)を二重に防ぐ。 */
+.toast:not(.show) {
+  pointer-events: none !important;
+}
+
+/* v150(UI改善計画Phase4b・R3): 完了直後の「実績を編集」ボタン付きトースト。
+   通常(has-action無し)は従来どおりpointer-events:noneのまま(下の要素へのタップを邪魔しない)。
+   このバリアントの時だけ、ボタンを押せるようpointer-eventsを有効化する。 */
+.toast.has-action {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  pointer-events: auto;
+  max-width: calc(100vw - 32px);
+}
+
+.toast-msg {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toast-action {
+  position: relative;
+  flex: none;
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 7px var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* v150レビュー対応(項目7): 見た目のサイズは変えず、::beforeの透明拡張で当たり判定だけ
+   44px相当に広げる(.home-box::before等、既存の当たり判定拡張パターンと同じ手法)。 */
+.toast-action::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+}
+
+.toast-action:active {
+  background: rgba(255, 255, 255, 0.32);
 }
 
 @media (max-width: 1020px) {
@@ -979,7 +1047,7 @@ h3 {
   .journal-panel-today { order: 1; }
   .journal-panel-prev { order: 2; }
   .journal-grid .panel {
-    padding: 12px;
+    padding: var(--space-3);
   }
   .journal-grid .textarea {
     min-height: 180px;
@@ -990,8 +1058,8 @@ h3 {
     overflow-y: auto;
   }
   .journal-grid h2 {
-    font-size: 14px;
-    margin-bottom: 8px;
+    font-size: var(--text-sm);
+    margin-bottom: var(--space-2);
   }
   .journal-grid .row {
     gap: 6px;
@@ -2285,7 +2353,7 @@ h3 {
   display: inline-block;
   transition: transform 0.15s ease;
   font-size: 10px;
-  margin-right: 4px;
+  margin-right: var(--space-1);
 }
 .journal-prompts[open] summary::before {
   transform: rotate(90deg);
@@ -2455,11 +2523,11 @@ h3 {
 /* ============================================================
    v31: ホーム(コックピット)
    ============================================================ */
-.home-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 12px; }
+.home-grid { display: grid; grid-template-columns: 1fr; gap: var(--space-3); margin-top: var(--space-3); }
 @media (min-width: 760px) { .home-grid { grid-template-columns: 1fr 1fr; } }
 
 .home-creed {
-  margin-top: 12px; border-color: var(--orange);
+  margin-top: var(--space-3); border-color: var(--orange);
   background: linear-gradient(180deg, var(--orange-soft), transparent);
 }
 .home-creed-head {
@@ -2490,15 +2558,20 @@ h3 {
 .home-life-top { display: flex; justify-content: space-between; align-items: baseline; }
 .home-life-label { font-size: 12.5px; font-weight: 700; color: var(--muted); }
 .home-life-pct { font-size: 11.5px; font-weight: 700; color: var(--accent); }
-.home-life-num { font-size: 27px; font-weight: 300; margin: 3px 0 8px; font-variant-numeric: tabular-nums; } /* v123: 寿命カウントダウンの数字 */
+.home-life-num { font-size: 27px; font-weight: 300; margin: 3px 0 var(--space-2); font-variant-numeric: tabular-nums; } /* v123: 寿命カウントダウンの数字 */
 
 .home-hero { border-color: var(--orange); }
-.home-hero-title { font-size: 20px; font-weight: 800; line-height: 1.4; cursor: pointer; }
-.home-hero-btn { width: 100%; margin-top: 13px; font-size: 15px; padding: 12px 0; }
+/* v150レビュー対応(項目10): font-sizeはこの後方(v33節)の`.home-hero-title { font-size: 24px; }`
+   (同specificity・後勝ち)で常に上書きされるため死んだ宣言だった(v150のトークン置換時に
+   気づかず`var(--text-lg)`へ書き換えてしまい、実質無意味な変更になっていた)。実際の表示値
+   (24px)を変えない範囲で、ここではfont-size自体を持たせない形に整理した。
+   font-weight/line-height/cursorはこのルールだけが持つ有効な宣言なので残す。 */
+.home-hero-title { font-weight: 800; line-height: 1.4; cursor: pointer; }
+.home-hero-btn { width: 100%; margin-top: 13px; font-size: 15px; padding: var(--space-3) 0; }
 
 .home-plabel {
   /* v127: 「章立て」感の強化(帯デザイン自体は維持、字間・上マージンのみ調整) */
-  display: flex; align-items: center; gap: 9px; font-size: 21px; margin-top: 8px;
+  display: flex; align-items: center; gap: 9px; font-size: 21px; margin-top: var(--space-2);
   font-weight: 800; letter-spacing: 0.03em; color: var(--muted); margin-bottom: 15px;
 }
 .home-plabel::before {
@@ -2551,7 +2624,7 @@ h3 {
 .home-ck.done .home-ck-name, .home-tc.done .home-tc-name, .home-flow.done .home-flow-name {
   color: var(--faint); text-decoration: line-through;
 }
-.home-star { color: var(--orange-text); font-size: 12px; }
+.home-star { color: var(--orange-text); font-size: var(--text-xs); }
 .home-flow-time { font-size: 12.5px; color: var(--muted); width: 44px; flex: none; }
 .home-flow.now {
   background: var(--orange-soft); border-radius: 7px; border-bottom-color: transparent;
@@ -2563,14 +2636,14 @@ h3 {
 .home-badge.doing { color: var(--orange-text); background: var(--orange-soft); }
 .home-badge.todo { color: var(--faint); background: var(--panel-soft); }
 
-.home-rate { display: flex; align-items: baseline; gap: 8px; margin-bottom: 7px; }
-.home-rate-cap { font-size: 12px; font-weight: 700; color: var(--muted); }
+.home-rate { display: flex; align-items: baseline; gap: var(--space-2); margin-bottom: 7px; }
+.home-rate-cap { font-size: var(--text-xs); font-weight: 700; color: var(--muted); }
 .home-rate-pct { font-size: 21px; font-weight: 800; color: var(--orange-text); font-variant-numeric: tabular-nums; }
 .home-rate-pct.green { color: var(--green-text); }
 .home-rate-frac { font-size: 11.5px; color: var(--muted); margin-left: auto; }
 
-.home-stat { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
-.home-stat-cap { font-size: 12px; font-weight: 700; color: var(--muted); width: 70px; flex: none; }
+.home-stat { display: flex; align-items: center; gap: 9px; margin-bottom: var(--space-2); }
+.home-stat-cap { font-size: var(--text-xs); font-weight: 700; color: var(--muted); width: 70px; flex: none; }
 .home-stat .progress { flex: 1; }
 .home-stat-pct {
   font-size: 13px; font-weight: 800; color: var(--accent);
@@ -2582,16 +2655,16 @@ h3 {
   margin-bottom: 11px; font-size: 15px; font-weight: 700;
 }
 .home-wk strong { color: var(--accent); font-size: 21px; font-variant-numeric: tabular-nums; }
-.home-divider { height: 1px; background: var(--line-soft); margin: 12px 0; }
+.home-divider { height: 1px; background: var(--line-soft); margin: var(--space-3) 0; }
 .home-goal { margin-top: 11px; }
 .home-goal:first-of-type { margin-top: 0; }
 .home-goal-title { font-size: 14.5px; font-weight: 700; margin-bottom: 5px; }
 
-.home-due-name { font-size: 14px; }
+.home-due-name { font-size: var(--text-sm); }
 .home-due-sub { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
 .home-add { white-space: nowrap; }
 
-.home-steps { display: flex; align-items: center; gap: 16px; }
+.home-steps { display: flex; align-items: center; gap: var(--space-4); }
 .home-ring { position: relative; width: 78px; height: 78px; flex: none; }
 .home-ring-txt {
   position: absolute; inset: 0; display: flex; align-items: center;
@@ -2599,8 +2672,8 @@ h3 {
   font-variant-numeric: tabular-nums;
 }
 .home-energy {
-  margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line-soft);
-  font-size: 12px; color: var(--muted);
+  margin-top: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--line-soft);
+  font-size: var(--text-xs); color: var(--muted);
 }
 
 /* ============================================================
@@ -2608,10 +2681,10 @@ h3 {
    ============================================================ */
 
 /* いま、これ(フル幅・2カラム) */
-.home-hero { margin-top: 12px; }
+.home-hero { margin-top: var(--space-3); }
 .home-hero-grid {
   display: grid; grid-template-columns: 1fr; gap: 14px;
-  align-items: center; margin-top: 4px;
+  align-items: center; margin-top: var(--space-1);
 }
 @media (min-width: 760px) {
   .home-hero-grid { grid-template-columns: 1fr 240px; gap: 22px; }
@@ -2619,13 +2692,13 @@ h3 {
 .home-hero-main { min-width: 0; }
 .home-hero-title { font-size: 24px; }
 .home-hero-cat {
-  display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 6px;
+  display: inline-block; margin-left: var(--space-2); padding: 2px var(--space-2); border-radius: 6px;
   font-size: 11px; font-weight: 700; color: var(--orange-text); background: var(--orange-soft);
 }
 .home-hero-side { display: flex; flex-direction: column; gap: 9px; }
 .home-hero-btn { margin-top: 0; }
 .home-hero-next {
-  font-size: 12px; color: var(--muted); padding: 9px 11px;
+  font-size: var(--text-xs); color: var(--muted); padding: 9px 11px;
   border: 1px solid var(--line-soft); border-radius: 8px;
 }
 .home-hero-next-lab { color: var(--orange-text); font-weight: 700; margin-right: 6px; }
@@ -2633,7 +2706,7 @@ h3 {
 
 /* ひと目スコアボード(4つの達成率) */
 .home-scoreboard {
-  margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  margin-top: var(--space-3); display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
 }
 @media (min-width: 760px) {
   .home-scoreboard { grid-template-columns: repeat(4, 1fr); }
@@ -2644,8 +2717,8 @@ h3 {
   cursor: pointer; box-shadow: var(--shadow);
 }
 .home-score:active { transform: scale(0.985); }
-.home-score-lab { font-size: 12px; font-weight: 800; color: var(--muted); letter-spacing: 0.03em; }
-.home-score-val { display: flex; align-items: baseline; gap: 4px; margin: 8px 0 10px; }
+.home-score-lab { font-size: var(--text-xs); font-weight: 800; color: var(--muted); letter-spacing: 0.03em; }
+.home-score-val { display: flex; align-items: baseline; gap: var(--space-1); margin: var(--space-2) 0 10px; }
 .home-score-num { font-size: 21px; font-weight: 800; line-height: 1; }
 .home-score-unit { font-size: 13px; font-weight: 800; }
 .home-score-frac {
@@ -2680,9 +2753,9 @@ h3 {
 /* ゾーン・バンド(背景をテーマ色へ少し寄せる) */
 .home-zone-block {
   margin-top: 14px; border: 1px solid var(--zl); border-radius: 14px;
-  padding: 4px 11px 13px; background: var(--zb);
+  padding: var(--space-1) 11px 13px; background: var(--zb);
 }
-.home-zone-block .home-grid { margin-top: 8px; }
+.home-zone-block .home-grid { margin-top: var(--space-2); }
 .home-grid.single { grid-template-columns: 1fr; }
 
 /* v146(UI改善計画Phase1-1・K承認): 縦の長さを縮めるため、タップ対象を持たない受け身の
@@ -2695,7 +2768,7 @@ h3 {
 .home-chip-2col {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 8px;
+  gap: var(--space-2);
   align-items: start;
 }
 .z-amber { --zb: rgba(255, 149, 0, 0.075); --zl: rgba(255, 149, 0, 0.24); }
@@ -2712,7 +2785,7 @@ h3 {
 /* ============================================================
    v71: ホームの折りたたみカード(参照系セクションを既定closedに)
    ============================================================ */
-.home-fold { margin-top: 12px; }
+.home-fold { margin-top: var(--space-3); }
 .home-zone-block .home-fold { margin-top: 0; }  /* ゾーン内(zone3/zone4)は帯自体が既に間隔を持つ */
 /* v146: journal-grid/settings-gridはCSS gridのgapで間隔を持つため、.home-foldの
    margin-topを流用するとgapと二重に空いてしまう。ここでも既存の.home-zone-block同様に0へ戻す */
@@ -2762,8 +2835,8 @@ h3 {
 .home-cd-lab.c { color: var(--green-text); }
 .home-cd-lab.d { color: var(--orange-text); }
 .home-cd {
-  font-family: inherit; font-size: 16px; font-weight: 700;
-  padding: 3px 2px 3px 4px; border: 1px solid var(--line);
+  font-family: inherit; font-size: var(--text-md); font-weight: 700;
+  padding: 3px 2px 3px var(--space-1); border: 1px solid var(--line);
   border-radius: 6px; background: var(--panel-soft); color: var(--text);
 }
 .home-tc, .home-flow, .home-ck { flex-wrap: wrap; }
@@ -2773,7 +2846,7 @@ h3 {
 
 /* v33: 今日の足あと — エネルギー集計表示 */
 .home-energy {
-  display: flex; flex-wrap: wrap; gap: 3px 16px;
+  display: flex; flex-wrap: wrap; gap: 3px var(--space-4);
 }
 .home-energy-item strong { font-size: 15px; }
 
@@ -2949,11 +3022,11 @@ h3 {
 .q-card-actions { display: flex; gap: 7px; margin-top: 11px; flex-wrap: wrap; }
 
 /* --- ホーム: 開いている問い --- */
-.home-q { display: flex; gap: 8px; align-items: flex-start; padding: 7px 0; cursor: pointer; }
+.home-q { display: flex; gap: var(--space-2); align-items: flex-start; padding: 7px 0; cursor: pointer; }
 .home-q-badge { flex: none; font-size: 10.5px; font-weight: 800; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 6px; background: rgba(0,0,0,.06); color: var(--muted); }
 .home-q-badge.deepening { background: rgba(0,122,255,.16); color: var(--accent); }
 .home-q-text { font-size: 13.5px; line-height: 1.45; }
-.home-weekly-link { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding: 11px 14px; background: rgba(0,122,255,.07); border: 1px solid rgba(0,122,255,.2); border-radius: 10px; cursor: pointer; font-size: 13.5px; font-weight: 700; }
+.home-weekly-link { display: flex; justify-content: space-between; align-items: center; margin-top: var(--space-3); padding: 11px 14px; background: rgba(0,122,255,.07); border: 1px solid rgba(0,122,255,.2); border-radius: 10px; cursor: pointer; font-size: 13.5px; font-weight: 700; }
 .home-weekly-arrow { color: var(--accent); }
 
 /* --- 週次レビュー --- */
@@ -3026,7 +3099,7 @@ h3 {
 /* v41: 見込み終了時刻(色分け・警告なし。有限性を時刻で見せるだけ) */
 .projected-end { font-size: 12.5px; font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; }
 .projected-end:empty { display: none; }
-.home-zone .projected-end { margin-left: auto; font-size: 12px; }
+.home-zone .projected-end { margin-left: auto; font-size: var(--text-xs); }
 
 /* v42: AIループ搬送 — MIT候補チップ */
 /* v143: .ai-import-sec/.ai-import-h/.ai-import-row(取り込みモーダル専用)はbuildAiImportModal
@@ -3367,16 +3440,16 @@ h3 {
 .lev-helper-body { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
 
 /* v61: 今日の理想ワンライナー + 3日リトライ */
-.home-ideal { margin-top: 12px; padding: 10px 14px; }
+.home-ideal { margin-top: var(--space-3); padding: 10px 14px; }
 .home-ideal-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .home-ideal-eyebrow { color: var(--accent); font-size: 11.5px; font-weight: 800; white-space: nowrap; }
-.home-ideal-text { font-size: 14px; font-weight: 600; }
-.home-ideal-retry { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line-soft); }
-.home-ideal-empty { padding: 8px 14px; }
+.home-ideal-text { font-size: var(--text-sm); font-weight: 600; }
+.home-ideal-retry { margin-top: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--line-soft); }
+.home-ideal-empty { padding: var(--space-2) 14px; }
 .home-ideal-input {
   width: 100%;
-  font-size: 16px;
-  padding: 8px 10px;
+  font-size: var(--text-md);
+  padding: var(--space-2) 10px;
   border: 1px solid var(--line);
   border-radius: 7px;
   background: var(--panel);
@@ -3404,13 +3477,13 @@ h3 {
 /* v74: 読書複利化 — 今日の1冊カード */
 .home-reading-book { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
 .home-reading-highlight {
-  font-size: 14px; line-height: 1.7; font-style: italic; color: var(--text);
-  padding: 10px 12px; margin-bottom: 10px;
+  font-size: var(--text-sm); line-height: 1.7; font-style: italic; color: var(--text);
+  padding: 10px var(--space-3); margin-bottom: 10px;
   border-left: 3px solid var(--accent); background: var(--panel-soft); border-radius: 0 8px 8px 0;
 }
 .home-reading-input {
   width: 100%;
-  font-size: 16px;  /* iOS Safari のズーム防止: 16px 以上で zoom しない */
+  font-size: var(--text-md);  /* iOS Safari のズーム防止: 16px 以上で zoom しない */
   line-height: 1.5;
   padding: 9px 10px;
   border: 1px solid var(--line);
