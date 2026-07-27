@@ -358,3 +358,64 @@ function check(name, cond, extra = "") {
     await page.click('[data-action="home-tab"][data-tab="home"]');
     await page.waitForTimeout(200);
     await page.evaluate(() => {
+      window.__scrollTargets = [];
+      window.__origSIV9 = Element.prototype.scrollIntoView;
+      Element.prototype.scrollIntoView = function (...args) {
+        window.__scrollTargets.push(this.className || this.id || this.tagName);
+        return window.__origSIV9.apply(this, args);
+      };
+    });
+    await page.click('[data-action="nav"][data-view="wbs"]');
+    await page.waitForTimeout(200);
+    await page.click('[data-action="nav"][data-view="home"]');
+    await page.waitForTimeout(200);
+    const scrollTargets9 = await page.evaluate(() => window.__scrollTargets || []);
+    await page.evaluate(() => { if (window.__origSIV9) Element.prototype.scrollIntoView = window.__origSIV9; });
+    check("ホームタブ滞在中の復帰では.home-tabbarへフォールバックスクロールする(.home-heroは無いため)",
+      scrollTargets9.some((c) => String(c).includes("home-tabbar")), JSON.stringify(scrollTargets9));
+    check("存在しない.home-heroへは(見つからないため)スクロールしていない",
+      !scrollTargets9.some((c) => String(c).includes("home-hero")), JSON.stringify(scrollTargets9));
+
+    // ============================================================
+    // (10) 宣言入力→直接タブをタップ(1回のクリック)でタブが切り替わる(必須5)
+    // ============================================================
+    console.log("[10] 宣言入力の直後にタブを直接タップ(1回のクリック)しても確実に切り替わる");
+    await seed({ blocks: seedBlocks, view: "home" });
+    await page.click('[data-action="home-tab"][data-tab="home"]');
+    await page.waitForTimeout(150);
+    await page.fill('[data-declaration-date]', "v149宣言直タップ確認");
+    await page.click('[data-action="home-tab"][data-tab="today"]');
+    await page.waitForTimeout(250);
+    check("宣言入力の直後、タブを1回タップしただけで今日タブへ切り替わる(2回目クリック不要)",
+      await page.locator('.home-tabbar [data-action="home-tab"][data-tab="today"]').evaluate((el) => el.classList.contains("active")));
+    const s10 = await stateNow();
+    check("宣言内容も保存されている(全再描画をやめても保存自体は失われない)",
+      s10.dailyDeclarations?.[TODAY]?.text === "v149宣言直タップ確認", JSON.stringify(s10.dailyDeclarations));
+
+    // ============================================================
+    // (11) 「宣言未入力」警告にホームタブへのワンタップ導線がある(推奨7)
+    // ============================================================
+    console.log("[11] 今日タブの「今日の状態」カードの宣言未入力警告に、ホームタブへ切り替えるボタンがある");
+    await seed({ blocks: seedBlocks, view: "home", dailyDeclarations: {} });
+    const declWarnRow = page.locator(".home-today-status-item", { hasText: "今日の宣言が未入力です" });
+    check("宣言未入力の警告行が表示される", await declWarnRow.count() === 1);
+    // 「今日の状態」カード自体が既定closedの折りたたみ(homeTodayStatusCard)のため、
+    // ボタンをクリックするにはまず開く。
+    const statusFold = page.locator('details[data-fold-id="today-status"]');
+    if (await statusFold.count() && !(await statusFold.evaluate((el) => el.open))) {
+      await statusFold.locator("summary").click();
+      await page.waitForTimeout(150);
+    }
+    const jumpBtn = declWarnRow.locator('[data-action="home-tab"][data-tab="home"]');
+    check("警告行にホームタブへ切り替えるボタンがある", await jumpBtn.count() === 1);
+    await jumpBtn.click();
+    await page.waitForTimeout(200);
+    check("クリックでホームタブへ切り替わる(宣言入力欄が見える)", await page.locator('[data-declaration-date]').count() === 1);
+  } finally {
+    await browser.close();
+    server.close();
+  }
+
+  console.log(failures === 0 ? "\n✅ v149 ALL PASS" : `\n❌ v149: ${failures} 件失敗`);
+  process.exit(failures === 0 ? 0 : 1);
+})().catch((e) => { console.error(e); process.exit(1); });
