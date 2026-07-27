@@ -44,11 +44,19 @@ function check(name, cond, extra = "") {
     return out;
   }
 
+  // v147レビュー対応: 体力予算チップは「今日の状態」カード(homeTodayStatusCard)のdetails内に
+  // 移動しており、そのカードは宣言済み+週Wish設定済み+体力予算正常+電池残量健全の4つが
+  // 揃うと非表示になる。このテストは体力予算の判定ロジックだけを見たいため、宣言・週Wishを
+  // 明示的に毎回未設定へリセットし(dailyDeclarations/weeklyWishes={})、カードが電池残量の
+  // 状態に関わらず常に表示される(=以前の「一度開けば済む」という暗黙の前提に依存しない)
+  // ことを保証する。
   async function seed({ sleepLogs = {}, view = "home" } = {}) {
     await page.evaluate(({ KEY, sleepLogs, TODAY, view }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.sleep = s.sleep || {};
       s.sleep.logs = sleepLogs;
+      s.dailyDeclarations = {};
+      s.weeklyWishes = {};
       s.selectedDate = TODAY;
       s.currentView = view;
       localStorage.setItem(KEY, JSON.stringify(s));
@@ -69,6 +77,10 @@ function check(name, cond, extra = "") {
     // ============================================================
     console.log("[1] 当日のsleep.logsが無い日はホームで「データなし」");
     await seed({ sleepLogs: {}, view: "home" });
+    // v147: 体力予算チップは「今日の状態」カード(homeTodayStatusCard)のdetails内(既定closed)
+    // へ移動した。一度開けばlocalStorageのfold状態が保持され、以降のreloadでも開いたままになる。
+    const statusFold = page.locator('details[data-fold-id="today-status"]');
+    if (await statusFold.count()) await statusFold.locator("summary").click();
     check("チップが1個出る", await page.locator(".home-condition-budget-chip").count() === 1);
     check("「データなし」と出る", (await chipText()).includes("データなし"), await chipText());
 

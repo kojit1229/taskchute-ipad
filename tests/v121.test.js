@@ -94,11 +94,18 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (a) 未設定週のホームに赤帯が出る
     // ============================================================
-    console.log("[1] 未設定週: ホームに赤帯アラートが出る(カードは出ない)");
+    // v147: 未設定時の赤帯アラート(.home-weekly-wish-alert)はhomeTodayStatusCard(「今日の状態」
+    // 1枚化)へ統合された。専用の赤帯クラスは廃止し、統合カード内の文言+設定するボタンで代替する。
+    console.log("[1] 未設定週: 「今日の状態」カードに表示される(専用カードは出ない)");
     await seed({ tasks: wishes, projects: [wishProject()], weeklyWishes: {}, view: "home" });
-    check("赤帯アラートが出る", await page.locator(".home-weekly-wish-alert").count() === 1);
+    const todayStatusText = () => page.locator(".home-today-status").textContent().catch(() => "");
+    check("「今日の状態」カードに週Wish未設定の表示が出る", (await todayStatusText()).includes("週Wish未設定"), await todayStatusText());
     check("設定するボタンが出る", await page.locator('[data-action="weekly-wish-open"]').count() === 1);
-    check("カードは出ない", await page.locator(".home-weekly-wish-card").count() === 0);
+    check("専用カードは出ない", await page.locator(".home-weekly-wish-card").count() === 0);
+    // v147: 設定するボタンは「今日の状態」カードのdetails内(既定closed)にある。クリックする
+    // には開く必要がある(以降はlocalStorageのfold状態が保持され、reloadしても開いたまま)。
+    const statusFold = page.locator('details[data-fold-id="today-status"]');
+    if (await statusFold.count()) await statusFold.locator("summary").click();
 
     // ============================================================
     // (b) モーダルで2件選択→保存でカード表示になり赤帯が消える
@@ -112,7 +119,7 @@ function check(name, cond, extra = "") {
     await page.check('input[data-wish-id="w-2"]');
     await page.click('[data-action="weekly-wish-submit"]');
     await page.waitForTimeout(300);
-    check("赤帯が消える", await page.locator(".home-weekly-wish-alert").count() === 0);
+    check("「今日の状態」カードから週Wish未設定の表示が消える", !(await todayStatusText()).includes("週Wish未設定"), await todayStatusText());
     check("カードが表示される", await page.locator(".home-weekly-wish-card").count() === 1);
     const cardText = await page.locator(".home-weekly-wish-card").innerText();
     check("選んだ2件のタイトルが出る", cardText.includes("京都へ旅行する") && cardText.includes("書籍を出版する"), cardText);
@@ -173,12 +180,12 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (e) 過去日表示では赤帯を出さない
     // ============================================================
-    console.log("[5] 過去日(昨日)を見ている時は未設定でも赤帯・カードとも出ない");
+    console.log("[5] 過去日(昨日)を見ている時は未設定でも「今日の状態」カード・専用カードとも出ない");
     await seed({ tasks: wishes, projects: [wishProject()], weeklyWishes: {}, view: "home" });
     await page.click('[data-action="date-prev"]');
     await page.waitForTimeout(200);
-    check("過去日では赤帯が出ない", await page.locator(".home-weekly-wish-alert").count() === 0);
-    check("過去日ではカードも出ない", await page.locator(".home-weekly-wish-card").count() === 0);
+    check("過去日では「今日の状態」カードが出ない(体力予算チップの単独表示のみ)", await page.locator(".home-today-status").count() === 0);
+    check("過去日では専用カードも出ない", await page.locator(".home-weekly-wish-card").count() === 0);
     check("過去日では設定するボタンも出ない", await page.locator('[data-action="weekly-wish-open"]').count() === 0);
 
     // ============================================================

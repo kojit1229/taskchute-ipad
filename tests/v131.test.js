@@ -43,11 +43,18 @@ function check(name, cond, extra = "") {
       eff: null, hrSleep: null, hrvSleep: null, spo2Avg: null, importedAt: `${YEST}T06:00:00` };
   }
 
+  // v147レビュー対応: 体力予算チップは「今日の状態」カード(homeTodayStatusCard)のdetails内に
+  // 移動しており、そのカードは宣言済み+週Wish設定済み+体力予算正常+電池残量健全の4つが
+  // 揃うと非表示になる。このテストは体力予算のフォールバック判定ロジックだけを見たいため、
+  // 宣言・週Wishを明示的に毎回未設定へリセットし(dailyDeclarations/weeklyWishes={})、カードが
+  // 常に表示されることを保証する(「一度開けば済む」という暗黙の前提に依存しない)。
   async function seed({ sleepLogs = {}, view = "home" } = {}) {
     await page.evaluate(({ KEY, sleepLogs, TODAY, view }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.sleep = s.sleep || {};
       s.sleep.logs = sleepLogs;
+      s.dailyDeclarations = {};
+      s.weeklyWishes = {};
       s.selectedDate = TODAY;
       s.currentView = view;
       localStorage.setItem(KEY, JSON.stringify(s));
@@ -69,6 +76,10 @@ function check(name, cond, extra = "") {
     // ============================================================
     console.log("[1] 当日分のログがあればラベル無しで通常表示");
     await seed({ sleepLogs: { [TODAY]: sleepLog({ sleepH: 6.0 }) }, view: "home" });
+    // v147: 体力予算チップは「今日の状態」カード(homeTodayStatusCard)のdetails内(既定closed)
+    // へ移動した。一度開けばlocalStorageのfold状態が保持され、以降のreloadでも開いたままになる。
+    const statusFold = page.locator('details[data-fold-id="today-status"]');
+    if (await statusFold.count()) await statusFold.locator("summary").click();
     check("チップに「低予算」が出る", (await chipText()).includes("低予算"), await chipText());
     check("日付ラベル(M/D朝)は出ない", !(await chipText()).includes("朝"), await chipText());
 
