@@ -358,3 +358,90 @@ function makeRoutineBlock(id, date, title, completed) {
 
   await pageD.clock.setFixedTime(now0);
   await pageD.goto(`http://localhost:${PORT}/`);
+  await pageD.waitForTimeout(400);
+  await passGithubGate(pageD);  // token/dataOwner/dataRepo投入 + reload(この時点のsyncは404で何もしない)
+
+  const LOCAL_ONLY_DATE = "2026-01-10";
+  const REMOTE_ONLY_DATE = "2026-01-11";
+  const SHARED_DATE = "2026-01-12";
+  const LOCAL_T = `${D_TODAY}T10:00:00`;
+
+  await pageD.evaluate(({ KEY, LOCAL_T, LOCAL_ONLY_DATE, SHARED_DATE }) => {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    s.dataModifiedAt = LOCAL_T;
+    s.gardenLog = { [LOCAL_ONLY_DATE]: { done: 2, total: 5 }, [SHARED_DATE]: { done: 3, total: 3 } };
+    s.settings.lastPushedAt = LOCAL_T;
+    localStorage.setItem(KEY, JSON.stringify(s));
+  }, { KEY, LOCAL_T, LOCAL_ONLY_DATE, SHARED_DATE });
+
+  const REMOTE_T = `${D_TODAY}T14:00:00`;  // ローカルより新しい(=リモート採用パス。それでもローカル限定分は合流するはず)
+  fixtures.status = 200;
+  fixtures.body = contentsBodyFor(remoteState(REMOTE_T, {
+    [REMOTE_ONLY_DATE]: { done: 1, total: 2 },
+    [SHARED_DATE]: { done: 1, total: 5 }  // ローカルよりdoneは小さいがtotalは大きい → フィールド別maxでdone:3,total:5になるはず
+  }));
+
+  await pageD.reload();
+  await pageD.waitForTimeout(700);
+  const afterD = await pageD.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
+  check("リモート採用後もローカル限定エントリが残る", afterD.gardenLog[LOCAL_ONLY_DATE] && afterD.gardenLog[LOCAL_ONLY_DATE].done === 2 && afterD.gardenLog[LOCAL_ONLY_DATE].total === 5, JSON.stringify(afterD.gardenLog[LOCAL_ONLY_DATE]));
+  check("リモート限定エントリも合流する", afterD.gardenLog[REMOTE_ONLY_DATE] && afterD.gardenLog[REMOTE_ONLY_DATE].done === 1 && afterD.gardenLog[REMOTE_ONLY_DATE].total === 2, JSON.stringify(afterD.gardenLog[REMOTE_ONLY_DATE]));
+  check("共有日付はフィールド別maxで統合される(done=max(3,1)=3, total=max(3,5)=5)",
+    afterD.gardenLog[SHARED_DATE] && afterD.gardenLog[SHARED_DATE].done === 3 && afterD.gardenLog[SHARED_DATE].total === 5,
+    JSON.stringify(afterD.gardenLog[SHARED_DATE]));
+
+  await ctxD.close();
+
+  // ============================================================
+  // Part E: pruneGardenLog(保持上限400日)
+  // ============================================================
+  console.log("[E] gardenLogの保持上限(GARDEN_LOG_KEEP_DAYS=400日、app.js参照)を超えたキーはsaveState経由で剪定される");
+  const ctxE = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
+  const pageE = await ctxE.newPage();
+  pageE.on("pageerror", (e) => { failures++; console.log("  ❌ [E] pageerror:", e.message); });
+  await blockGithubApiByDefault(pageE);
+  await pageE.goto(`http://localhost:${PORT}/`);
+  await pageE.waitForTimeout(500);
+  await passGithubGate(pageE);
+
+  function addDaysISO(dateISO, delta) {
+    const [y, m, d] = dateISO.split("-").map(Number);
+    const dt = new Date(y, m - 1, d);
+    dt.setDate(dt.getDate() + delta);
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+  }
+  const OLD_DATE = addDaysISO(TODAY, -450);   // 保持上限(400日)より古い → 剪定対象
+  const RECENT_OLD_DATE = addDaysISO(TODAY, -200);  // 保持上限内 → 残るべき
+
+  const taskIdForToggleE = await pageE.evaluate((KEY) => {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    const t = s.tasks.find((t) => !t.deleted && t.status === "todo" && t.projectId && s.projects.find((p) => p.id === t.projectId && p.kind === "normal" && p.twelveWeekStartDate));
+    return t ? t.id : null;
+  }, KEY);
+  check("(準備)12週サイクルの日付非依存タスクが既定シードに存在する", !!taskIdForToggleE);
+
+  await pageE.evaluate(({ KEY, OLD_DATE, RECENT_OLD_DATE }) => {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    s.gardenLog = {
+      [OLD_DATE]: { done: 1, total: 1 },
+      [RECENT_OLD_DATE]: { done: 2, total: 2 }
+    };
+    localStorage.setItem(KEY, JSON.stringify(s));
+  }, { KEY, OLD_DATE, RECENT_OLD_DATE });
+  await pageE.reload();
+  await pageE.waitForTimeout(400);
+  // saveState()を1回発火させる(日付非依存のtoggle-task)
+  await pageE.click(`[data-action="toggle-task"][data-id="${taskIdForToggleE}"]`);
+  await pageE.waitForTimeout(300);
+  const sE = await pageE.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
+  check("保持上限(400日)を超えた古いエントリは剪定される", sE.gardenLog[OLD_DATE] === undefined, JSON.stringify(Object.keys(sE.gardenLog)));
+  check("保持上限内(200日前)のエントリは残る", sE.gardenLog[RECENT_OLD_DATE] && sE.gardenLog[RECENT_OLD_DATE].done === 2, JSON.stringify(sE.gardenLog[RECENT_OLD_DATE]));
+
+  await ctxE.close();
+
+  await browser.close();
+  server.close();
+
+  console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURES`);
+  process.exit(failures === 0 ? 0 : 1);
+})().catch((e) => { console.error(e); process.exit(1); });
