@@ -568,6 +568,27 @@ document.addEventListener("click", (event) => {
     persistLocalNoSchedule();
     render();
   }
+  // v148(UI改善計画Phase3-5): エネルギーグラフの表示モード切替(UI状態、dataModifiedAtは汚さない)
+  if (action === "tl-energy-mode") {
+    state.settings.timelineEnergyGraphMode = target.dataset.mode === "battery" ? "battery" : "energy";
+    persistLocalNoSchedule();
+    render();
+  }
+  // v148: ジャーナル朝/夜detailsの手動開閉(_journalSegmentOverride参照)。ブラウザの
+  // ネイティブ<summary>クリックが既にdetails.openを見た目どおり切り替えてくれるため、
+  // ここではセッション内オーバーライドの記録だけ行い、render()は呼ばない
+  // (無用な全体再描画・スクロール位置巻き戻りを避ける)。
+  if (action === "toggle-journal-segment") {
+    const seg = target.dataset.segment;
+    const parent = target.closest("details");
+    if (seg && parent) _journalSegmentOverride[seg] = !parent.open;  // クリック時点ではまだ未反映のため反転
+  }
+  // v148レビュー対応: 設定「データと同期」群の手動開閉(_settingsSyncOpenOverride参照)。
+  // renderSettingsSyncGroup()と同じ理由でtoggleイベントには頼らない。
+  if (action === "toggle-settings-sync") {
+    const parent = target.closest("details");
+    if (parent) _settingsSyncOpenOverride = !parent.open;  // クリック時点ではまだ未反映のため反転
+  }
   // v11: サイドバー折りたたみ(v37: 同上)
   if (action === "toggle-sidebar") {
     state.settings.sidebarCollapsed = !state.settings.sidebarCollapsed;
@@ -2285,6 +2306,7 @@ function currentOrNextTaskchuteBlockId(dateISO) {
 let _lastScrollView = null;
 let _lastScrollDate = null;
 
+
 function renderMain() {
   // v70: Now画面(実行コンベア)は全ビューに優先する全画面オーバーレイ(閉じるまで通常UIへ戻らない)
   if (nowMode) {
@@ -2373,6 +2395,11 @@ function renderTimelineRail() {
 }
 
 function renderHeader(eyebrow, title, action = "") {
+  // v148(UI改善計画Phase3-1): 「その他」配下のビューを開いているとき、bottom-navは
+  // 常に「その他」がactiveになり現在地が分からない(codex-ui-review N1)。ヘッダに
+  // 「その他 › 群名」を1行添えるだけの軽い方式で現在地を示す(moreGroups参照)。
+  const groupLabel = moreGroupLabelFor(state.currentView);
+  const breadcrumb = groupLabel ? `<div class="view-breadcrumb">その他 › ${groupLabel}</div>` : "";
   return `
     <div class="view-header">
       <div>
@@ -6492,8 +6519,12 @@ function renderTimeline({ compact, mode = "planned" }) {
   const laneAssignments = assignBlocksToLanes(blocksToRender, mode, maxLanes);
   // v10: 同レーン内で物理位置が重ならないよう top を調整
   const positioned = adjustLaneTopPositions(laneAssignments, rowHeight, startHour);
-  // v10: ズームコントロール(コンパクトモードでは出さない)
-  const zoomControls = compact ? "" : `
+  // v10: ズームコントロール(コンパクトモードでは出さない)。
+  // v148レビュー対応(項目9): エネルギー/バッテリー切替(v144→v148で追加)を別行の
+  // .tl-zoom-controlsとして2段にしていたが、縦圧縮方針(v98以降の一貫方針)に合わせて
+  // 1行(.tl-controls-divider区切り)へ統合する。
+  const energyGraphMode = state.settings.timelineEnergyGraphMode === "battery" ? "battery" : "energy";
+  const timelineControls = compact ? "" : `
     <div class="tl-zoom-controls">
       <button class="btn ghost ${zoom === 1 ? "active" : ""}" data-action="tl-zoom" data-zoom="1">1x</button>
       <button class="btn ghost ${zoom === 2 ? "active" : ""}" data-action="tl-zoom" data-zoom="2">2x</button>
@@ -6646,7 +6677,7 @@ function renderTimelineCard(positioned, mode = "planned", maxLanes = 5) {
   `;
 }
 
-function renderEnergyGraph(allBlocks, rowHeight, startHour, endHour) {
+function renderEnergyGraph(allBlocks, rowHeight, startHour, endHour, compact = false) {
   const morning = state.settings.morningEnergyLog[state.selectedDate] ?? 5;
   const totalHeight = rowHeight * (endHour - startHour + 1);
   const startMinute = startHour * 60;
@@ -6756,15 +6787,22 @@ function renderEnergyGraph(allBlocks, rowHeight, startHour, endHour) {
       <svg class="energy-svg" viewBox="0 0 100 ${totalHeight}" preserveAspectRatio="none"
            style="position:absolute; top:0; right:0; width:90px; height:${totalHeight}px; pointer-events:none;">
         <line x1="50" y1="0" x2="50" y2="${totalHeight}" stroke="#D1D1D6" stroke-width="0.4" stroke-dasharray="2,2"/>
-        ${polyline(realPoints, false)}
-        ${polyline(predictPoints, true)}
-        ${circles(realPoints, "#2fb96d")}
-        ${batteryPolyline}
+        ${showEnergy ? polyline(realPoints, false) : ""}
+        ${showEnergy ? polyline(predictPoints, true) : ""}
+        ${showEnergy ? circles(realPoints, "#2fb96d") : ""}
+        ${showBattery ? batteryPolyline : ""}
       </svg>
+      ${showEnergy ? `
       <div style="position:absolute; top:2px; right:2px; font-size:9px; color:var(--faint); pointer-events:none;">エネルギー</div>
       <div style="position:absolute; top:16px; right:2px; font-size:9px; color:var(--faint); pointer-events:none;">起点 ${morning}</div>
       <div style="position:absolute; bottom:2px; right:2px; font-size:9px; color:var(--green-text); pointer-events:none;">終値 ${endValue >= 0 ? '+' : ''}${endValue}</div>
-      ${batteryLast !== null ? `<div class="battery-curve-label" style="position:absolute; top:30px; right:2px; font-size:9px; color:#ff9500; pointer-events:none;">🔋残量 ${batteryLast}</div>` : ""}
+      ` : ""}
+      ${showBattery ? `
+      <div style="position:absolute; top:2px; right:2px; font-size:9px; color:var(--faint); pointer-events:none;">バッテリー</div>
+      ${batteryLast !== null
+        ? `<div class="battery-curve-label" style="position:absolute; top:16px; right:2px; font-size:9px; color:#ff9500; pointer-events:none;">🔋残量 ${batteryLast}</div>`
+        : `<div style="position:absolute; top:16px; right:2px; font-size:9px; color:var(--faint); pointer-events:none;">データなし</div>`}
+      ` : ""}
     </div>
   `;
 }
@@ -8051,24 +8089,39 @@ function renderJournal() {
             ${personalDataReady(state.settings.github) ? `<button class="btn" data-action="push-report">📤 GitHubに日報push</button>` : ""}
           </div>
         </div>
-        ${renderSleepCard(date)}
-        ${renderMorningEnergyPicker(date)}
-        ${renderConditionMorningExtra(date)}
-        ${renderEveningConditionCard(date)}
-        ${renderGymLogCard(date)}
-        ${renderStoreVisitsCard(date)}
-        <details class="journal-prompts" style="margin-bottom:10px; padding:8px 12px; background:var(--panel-soft); border-radius:8px">
-          <summary style="cursor:pointer; font-size:13px; color:var(--muted); font-weight:600">💡 思考のヒント(クリックで開閉)</summary>
-          <div style="margin-top:10px; display:grid; gap:10px; font-size:12px">
-            ${Object.entries(JOURNAL_PROMPTS).map(([section, prompt]) => `
-              <div>
-                <div style="font-weight:600; color:var(--text); margin-bottom:2px">${section}</div>
-                <div class="muted" style="white-space:pre-line; line-height:1.5">${escapeHTML(prompt)}</div>
-              </div>
-            `).join("")}
+        <details class="home-fold journal-segment journal-segment-morning" ${morningOpen ? "open" : ""}>
+          <summary class="home-fold-summary" data-action="toggle-journal-segment" data-segment="morning"><span class="home-fold-chevron">▶</span>🌅 朝(前夜の睡眠・体調・睡眠時間・服薬・余力)</summary>
+          <div class="home-fold-body">
+            ${renderSleepCard(date)}
+            ${renderMorningEnergyPicker(date)}
+            ${renderConditionMorningExtra(date)}
           </div>
         </details>
-        <textarea class="textarea" data-journal-date="${date}">${escapeHTML(state.journals[date])}</textarea>
+        <details class="home-fold journal-segment journal-segment-evening" ${eveningOpen ? "open" : ""}>
+          <summary class="home-fold-summary" data-action="toggle-journal-segment" data-segment="evening"><span class="home-fold-chevron">▶</span>🌙 夜(体調・メモ・運動・お店ログ)</summary>
+          <div class="home-fold-body">
+            ${renderEveningConditionCard(date)}
+            ${renderGymLogCard(date)}
+            ${renderStoreVisitsCard(date)}
+          </div>
+        </details>
+        <details class="home-fold journal-segment journal-segment-body" ${bodyOpen ? "open" : ""}>
+          <summary class="home-fold-summary" data-action="toggle-journal-segment" data-segment="body"><span class="home-fold-chevron">▶</span>📝 本文</summary>
+          <div class="home-fold-body">
+            <details class="journal-prompts" style="margin-bottom:10px; padding:8px 12px; background:var(--panel-soft); border-radius:8px">
+              <summary style="cursor:pointer; font-size:13px; color:var(--muted); font-weight:600">💡 思考のヒント(クリックで開閉)</summary>
+              <div style="margin-top:10px; display:grid; gap:10px; font-size:12px">
+                ${Object.entries(JOURNAL_PROMPTS).map(([section, prompt]) => `
+                  <div>
+                    <div style="font-weight:600; color:var(--text); margin-bottom:2px">${section}</div>
+                    <div class="muted" style="white-space:pre-line; line-height:1.5">${escapeHTML(prompt)}</div>
+                  </div>
+                `).join("")}
+              </div>
+            </details>
+            <textarea class="textarea" data-journal-date="${date}">${escapeHTML(state.journals[date])}</textarea>
+          </div>
+        </details>
       </div>
     </section>
   `;
@@ -9021,6 +9074,24 @@ function renderSettings() {
   `;
 }
 
+// v148レビュー対応(2系統レビューFAIL項目2): 「データと同期」群だけ、他3群と違って
+// homeFoldSection(localStorage記憶)を使わない専用実装にする(_settingsSyncOpenOverrideの
+// 宣言・経緯コメントはファイル冒頭のモジュール変数群を参照)。
+function renderSettingsSyncGroup(github) {
+  // v148レビュー対応(項目5): 認証エラーバナー(pd-auth-banner、personalDataAuthError)からの
+  // 設定遷移でもこの群を自動openにし、トークン再入力欄に直行できるようにする
+  // (syncAlertMessage()と同じ「異常」の意味合いで扱う)。
+  const dynamicOpen = Boolean(syncAlertMessage()) || Boolean(_personalDataAuthError);
+  const open = dynamicOpen || Boolean(_settingsSyncOpenOverride);
+  const body = [renderSettingsDataPanel(), renderSettingsCloudPanel(github), renderSettingsPagesPanel()].join("");
+  return `
+    <details class="home-fold panel settings-group" data-settings-sync ${open ? "open" : ""}>
+      <summary class="home-fold-summary settings-group-summary" data-action="toggle-settings-sync"><span class="home-fold-chevron">▶</span>データと同期(データ管理・クラウド保存・GitHub Pages)</summary>
+      <div class="home-fold-body"><div class="stack" style="gap:16px">${body}</div></div>
+    </details>
+  `;
+}
+
 // v9: カテゴリ管理 UI(設定画面用)
 function renderCategoriesSettings() {
   const cats = state.settings.categories || [];
@@ -9070,20 +9141,58 @@ function renderBreakMessagesSettings() {
   `;
 }
 
+// v148(UI改善計画Phase3-1): 「その他」の目的別4群。navItemsとは別の配列にする理由 —
+//   navItems.markはサイドバー(デスクトップ)でも使う頭文字1字(W/R/A等)で、日本語ラベルと
+//   対応しないという指摘(codex-ui-review N4)はこの「その他」グリッド固有の問題のため、
+//   サイドバー側(navItems)は変更せずここだけ既存絵文字(アプリ内の他画面で既に使っている
+//   もの)へ差し替える。ルーティンは実行系(タスクシュート)の上部リンクへ昇格したため、
+//   この4群からは除外する(renderTasks参照)。
+const moreGroups = [
+  { id: "plan", label: "計画", items: [
+    { id: "wbs", label: "WBS", mark: "🧩" },
+    { id: "wish", label: "やりたい", mark: "✦" },
+    { id: "avoid", label: "やらない", mark: "✕" },
+    { id: "vision", label: "ビジョン", mark: "🧭" }
+  ] },
+  { id: "think", label: "思考", items: [
+    { id: "zero", label: "0秒思考", mark: "💡" }
+  ] },
+  { id: "review", label: "振り返り", items: [
+    { id: "weekly", label: "週次", mark: "🗓" },
+    { id: "stats", label: "計器盤", mark: "📊" },
+    { id: "ai-reports", label: "AIレポート", mark: "🤖" },
+    { id: "reports", label: "日報", mark: "📤" }
+  ] },
+  { id: "tools", label: "ツール", items: [
+    { id: "pomodoro", label: "ポモドーロ", mark: "🍅" },
+    { id: "settings", label: "設定", mark: "⚙️" }
+  ] }
+];
+
+// v148: renderHeader()から呼び、現在のビューがmoreGroupsのどれかに属していれば
+// 「その他 › 群名」を返す(その他配下での現在地表示。codex-ui-review N1対応)。
+// 属さない(home/journal/tasks/timeline/routine等)場合は空文字。
+function moreGroupLabelFor(viewId) {
+  const group = moreGroups.find((g) => g.items.some((item) => item.id === viewId));
+  return group ? group.label : "";
+}
+
 function renderMore() {
-  // v82: bottom-navの構成変更(B1)に追従。WBSはbottom-navから外れたためここに出す側へ、
-  //      ジャーナルはbottom-navへ移ったため除外側へ入れ替えた。
-  const moreItems = navItems.filter((item) => !["home", "journal", "tasks", "timeline"].includes(item.id));
   return `
     ${renderHeader("追加画面", "その他")}
-    <section class="grid">
-      ${moreItems.map((item) => `
-        <button class="item row" data-action="nav" data-view="${item.id}">
-          <strong>${item.label}</strong>
-          <span class="badge">${item.mark}</span>
-        </button>
-      `).join("")}
-    </section>
+    ${moreGroups.map((group) => `
+      <div class="more-group">
+        <h2 class="more-group-title">${group.label}</h2>
+        <section class="grid">
+          ${group.items.map((item) => `
+            <button class="item row" data-action="nav" data-view="${item.id}">
+              <strong>${item.label}</strong>
+              <span class="badge">${item.mark}</span>
+            </button>
+          `).join("")}
+        </section>
+      </div>
+    `).join("")}
   `;
 }
 
