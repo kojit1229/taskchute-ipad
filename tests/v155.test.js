@@ -178,3 +178,111 @@ function dISO(day) { return `${MONTH_KEY}-${pad2(day)}`; }
   await pageF.evaluate(() => {
     // disabled属性を無視して強制的にクリック相当のイベントを発火させ、アプリ側ガード
     // (addMonthsKey結果がtodayISO().slice(0,7)より先なら無視する分岐)自体を検証する。
+    const btn = document.querySelector('[data-action="garden-pixel-month"][data-delta="1"]');
+    btn.removeAttribute("disabled");
+    btn.click();
+  });
+  await pageF.waitForTimeout(200);
+  const labelAfterForce = await pageF.locator(".garden-pixel-month-label").textContent();
+  check("disabledを外して強制クリックしても表示月は当月のまま(アプリ側ガードが効く)", labelAfterForce.trim() === `${Y}年${M}月`, labelAfterForce);
+
+  await ctxF.close();
+
+  // ============================================================
+  // Part G: 月境界の実式検証(うるう年2月/平年2月/30日の月)
+  // ============================================================
+  // 実装の内部変数(_gardenPixelMonth等)を直接注入する方式はいったん試したが、app.jsは
+  // モジュールではない通常scriptのため、page.evaluate内のトップレベルlet/function宣言は
+  // 別スコープになり読み書きできない(ReferenceError)ことを確認した。かわりに
+  // page.clock.setFixedTime()でブラウザの「現在時刻」自体を固定する(v153.test.js Part Dで
+  // 既に確立済みのテクニック)。_gardenPixelMonthはnullな限り`todayISO().slice(0,7)`で
+  // 初期化されるだけなので、時計を固定してから初回描画させれば、実装の内部変数に触れずに
+  // 「その月の初期表示」を外部から検証できる(実装式のトートロジーにもならない)。
+  console.log("[G] 月境界: 時計をうるう年2月/平年2月/30日の月へ固定し、in-monthセル数が実際の日数と一致することを確認する");
+  async function inMonthCountForFrozenDate(y, m, d) {
+    const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 430, height: 1200 } });
+    const p = await ctx.newPage();
+    p.on("pageerror", (e) => { failures++; console.log("  ❌ [G/H] pageerror:", e.message); });
+    await blockGithubApiByDefault(p);
+    await p.clock.setFixedTime(new Date(y, m - 1, d, 12, 0, 0));
+    await p.goto(`http://localhost:${PORT}/`);
+    await p.waitForTimeout(500);
+    await passGithubGate(p);
+    await p.evaluate((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.currentView = "routine";
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, KEY);
+    await p.reload();
+    await p.waitForTimeout(400);
+    const count = await p.locator(".garden-pixel-grid .garden-pixel-cell.in-month").count();
+    const label = (await p.locator(".garden-pixel-month-label").textContent()).trim();
+    return { ctx, p, count, label };
+  }
+
+  const g1 = await inMonthCountForFrozenDate(2028, 2, 15);
+  check("うるう年2028年2月の初期表示ラベル", g1.label === "2028年2月", g1.label);
+  check("うるう年2028年2月のin-monthセル数=29", g1.count === 29, g1.count);
+  await g1.ctx.close();
+
+  const g2 = await inMonthCountForFrozenDate(2026, 2, 15);
+  check("平年2026年2月の初期表示ラベル", g2.label === "2026年2月", g2.label);
+  check("平年2026年2月のin-monthセル数=28", g2.count === 28, g2.count);
+  await g2.ctx.close();
+
+  const g3 = await inMonthCountForFrozenDate(2026, 4, 15);
+  check("30日の月(2026年4月)の初期表示ラベル", g3.label === "2026年4月", g3.label);
+  check("30日の月(2026年4月)のin-monthセル数=30", g3.count === 30, g3.count);
+  await g3.ctx.close();
+
+  // ============================================================
+  // Part H: 年跨ぎ(1月表示で◀ → 前年12月)+ 月跨ぎでの当月自動同期
+  // ============================================================
+  console.log("[H] 年跨ぎ: 1月表示から◀(前月)クリックで前年12月(31日)へ遷移する");
+  const h = await inMonthCountForFrozenDate(2027, 1, 10);
+  check("時計固定2027年1月10日の初期表示ラベルは2027年1月", h.label === "2027年1月", h.label);
+  check("当月(2027年1月)表示では▶がdisabled", await h.p.locator('[data-action="garden-pixel-month"][data-delta="1"]').isDisabled());
+
+  await h.p.click('[data-action="garden-pixel-month"][data-delta="-1"]');
+  await h.p.waitForTimeout(200);
+  const labelDec = (await h.p.locator(".garden-pixel-month-label").textContent()).trim();
+  check("◀クリックで前年12月表示になる(年を跨いで戻る)", labelDec === "2026年12月", labelDec);
+  const decCount = await h.p.locator(".garden-pixel-grid .garden-pixel-cell.in-month").count();
+  check("前年12月のin-monthセル数=31", decCount === 31, decCount);
+  await h.ctx.close();
+
+  console.log("[H2] 月跨ぎ: PWAを閉じずに(reloadせず)月をまたいでも、月送り未操作なら再訪時に当月へ自動同期される(Codex指摘の回帰確認)");
+  // reloadは常にJSの状態(_gardenPixelMonth含む)を作り直してしまい、「開きっぱなしのPWAが
+  // 月をまたぐ」というバグの再現にならない。reloadせずに時計だけ進め、タブを切り替えて
+  // 戻る(=renderRoutine()の再実行、実際のタブ再訪と同じ経路)ことで、_gardenPixelMonthが
+  // モジュール変数として前回値を保持したまま次のrenderが走る状況を再現する。
+  // v155レビュー対応(サイドバーnav-buttonをクリックするため、モバイル幅(bottom-nav・5項目の
+  // overflow対象になりうる)ではなくデスクトップ幅を使う。v153.test.js Part B以降と同じ配慮)。
+  const h2ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
+  const h2p = await h2ctx.newPage();
+  h2p.on("pageerror", (e) => { failures++; console.log("  ❌ [H2] pageerror:", e.message); });
+  await blockGithubApiByDefault(h2p);
+  await h2p.clock.setFixedTime(new Date(2026, 6, 31, 23, 0, 0));  // 2026-07-31(月末)23時
+  await h2p.goto(`http://localhost:${PORT}/`);
+  await h2p.waitForTimeout(500);
+  await passGithubGate(h2p);
+  await h2p.click('[data-action="nav"][data-view="routine"]');
+  await h2p.waitForTimeout(300);
+  const labelJul = (await h2p.locator(".garden-pixel-month-label").textContent()).trim();
+  check("7月31日時点でルーティンタブを開くと7月が表示される", labelJul === "2026年7月", labelJul);
+
+  await h2p.clock.setFixedTime(new Date(2026, 7, 1, 0, 30, 0));  // reloadせず時計だけ8月1日0:30へ進める
+  await h2p.click('[data-action="nav"][data-view="home"]');  // 一旦ホームへ(タブ切替)
+  await h2p.waitForTimeout(200);
+  await h2p.click('[data-action="nav"][data-view="routine"]');  // ルーティンタブへ再訪(reloadなし)
+  await h2p.waitForTimeout(300);
+  const labelAug = (await h2p.locator(".garden-pixel-month-label").textContent()).trim();
+  check("reloadせず月をまたいだ後の再訪では8月(当月)へ自動で同期される(月送り未操作のため)", labelAug === "2026年8月", labelAug);
+  await h2ctx.close();
+
+  await browser.close();
+  server.close();
+
+  console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURES`);
+  process.exit(failures === 0 ? 0 : 1);
+})().catch((e) => { console.error(e); process.exit(1); });
