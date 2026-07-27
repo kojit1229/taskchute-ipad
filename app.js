@@ -6154,6 +6154,128 @@ function renderWishTriage(wishes) {
   `;
 }
 
+// v154: 仕分けモードのスワイプジェスチャ(designs/03-task-swipe.md S2)。=====================
+// Pointer Events統一(pointerdown/move/up/cancel。touchstart等は使わない)。既存の
+// _draftDrag(4880行〜)/ _wishDrag(4915行〜)と同じ「documentレベル委譲+移動量が閾値を
+// 超えるまでドラッグ扱いにしない」流儀を踏襲する。確定ロジックはtriageActionへ完全委譲し
+// (ロジックの二重化はしない)、三択ボタンは変更せず併存させる(設計書§③「必ずボタンでも
+// 実行可能」)。
+//
+// v154 2系統レビュー対応(FAIL修正、監督者裁定2026-07-28):
+//  - **スワイプは左右のみ**(右=今日やる/左=手放す)。上スワイプ=延期は廃止し延期はボタン専用に
+//    した(仕分けビューは実測で縦スクロールが発生しており、touch-action:noneのカード上では
+//    上フリック=通常のスクロール操作が取り消せない延期として誤確定する事故があったため)。
+//    touch-actionも`none`→`pan-y`へ変更し、縦方向はブラウザのネイティブスクロールに譲る。
+//  - **多指の誤確定防止**: pointerdownはevent.isPrimaryのみ受け付け、_triageSwipe.pointerIdを
+//    保持してmove/up/cancelはpointerId一致のイベントだけを処理する(2本目の指のupで
+//    誤って確定しない)。
+//  - **setPointerCaptureをtry/catchで保護**(NotFoundError観測あり。ポインタが既に
+//    リリース済み等の状況でも例外で処理全体を止めない)。
+
+// ドラッグ中の一時情報(非永続)。{ id, kind, el, pointerId, startX, startY, moved }
+let _triageSwipe = null;
+const TRIAGE_SWIPE_MOVE_THRESHOLD = 8;   // px。これ未満はタップ扱い(_wishDrag踏襲。transform未適用)
+const TRIAGE_SWIPE_CONFIRM_PX = 70;      // px。設計書「横60〜80px」の中間値
+const TRIAGE_SWIPE_EXIT_MS = 180;        // 退場アニメの時間。styles.cssの.triage-cardのtransitionと一致させる
+
+// 設計書§③の方向割当(v154改訂): 右=今日やる/左=手放す。縦方向(上下どちらも)は候補なし
+// (=ネイティブの縦スクロールに譲る。touch-action:pan-yと対になる判定)。
+function triageSwipeCandidate(dx, dy) {
+  const absX = Math.abs(dx), absY = Math.abs(dy);
+  if (absX < 4 || absX < absY) return null;  // ほぼ静止 or 縦優位はスクロール意図とみなし候補なし
+  return dx > 0 ? "today" : "drop";
+}
+
+const TRIAGE_SWIPE_HINT_LABEL = { today: "✅ 今日やる", drop: "🕊 手放す" };
+
+// スワイプ中の視覚フィードバック(方向ヒント表示)。進捗はTRIAGE_SWIPE_CONFIRM_PXに対する割合
+function updateTriageSwipeHint(el, dx, dy) {
+  const hint = el.querySelector(".triage-swipe-hint");
+  if (!hint) return;
+  const action = triageSwipeCandidate(dx, dy);
+  hint.textContent = action ? TRIAGE_SWIPE_HINT_LABEL[action] : "";
+  hint.className = "triage-swipe-hint" + (action ? ` hint-${action}` : "");
+  hint.style.opacity = action ? String(Math.min(1, Math.abs(dx) / TRIAGE_SWIPE_CONFIRM_PX)) : "0";
+}
+
+// 確定時の退場方向(カードが画面外へ抜ける向き。左右のみ)
+function triageExitTransform(action, dx, dy) {
+  const vw = window.innerWidth || 800;
+  return action === "today"
+    ? `translate(${vw}px, ${dy}px) rotate(20deg)`
+    : `translate(${-vw}px, ${dy}px) rotate(-20deg)`;
+}
+
+function triagePrefersReducedMotion() {
+  return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+}
+
+// カードの見た目を未操作状態へ完全に戻す(スナップバック/pointercancel/triageAction失敗時の
+// 原状復帰で共通利用)。stateには一切触れない。
+function resetTriageCardVisual(el) {
+  el.style.transform = "translate(0,0) rotate(0deg)";
+  el.style.opacity = "";
+  el.style.pointerEvents = "";
+  const hint = el.querySelector(".triage-swipe-hint");
+  if (hint) hint.style.opacity = "0";
+}
+
+document.addEventListener("pointerdown", (event) => {
+  const card = event.target.closest(".triage-card");
+  if (!card) return;
+  if (!event.isPrimary) return;  // 2本目以降の指は無視(多指操作の誤確定防止)
+  if (_triageSwipe) return;  // 既にドラッグ中なら新規に開始しない(念のための二重防御)
+  if (event.target.closest("[data-action]")) return;  // カード内に将来ボタンが増えても通常タップに譲る
+  try { card.setPointerCapture(event.pointerId); } catch (e) { /* NotFoundError等は無害化して継続 */ }
+  _triageSwipe = { id: card.dataset.triageId, kind: card.dataset.triageKind, el: card, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, moved: false };
+});
+document.addEventListener("pointermove", (event) => {
+  if (!_triageSwipe || event.pointerId !== _triageSwipe.pointerId) return;
+  const dx = event.clientX - _triageSwipe.startX;
+  const dy = event.clientY - _triageSwipe.startY;
+  if (!_triageSwipe.moved && Math.hypot(dx, dy) < TRIAGE_SWIPE_MOVE_THRESHOLD) return;
+  _triageSwipe.moved = true;
+  _triageSwipe.el.classList.add("is-dragging");  // transitionを止め、指に1:1追従させる
+  _triageSwipe.el.style.transform = `translate(${dx}px, ${dy}px) rotate(${dx * 0.05}deg)`;
+  updateTriageSwipeHint(_triageSwipe.el, dx, dy);
+  event.preventDefault();  // 横方向ジェスチャ中のみ働く(touch-action:pan-yにより縦はブラウザに譲る)
+});
+// 確定は指を離した時のみ(スワイプ中に発火しない)。閾値未満・縦方向優位はスナップバックして何もしない
+const endTriageSwipe = (event) => {
+  if (!_triageSwipe || (event && event.pointerId !== _triageSwipe.pointerId)) return;
+  const { id, kind, el, moved, startX, startY } = _triageSwipe;
+  const dx = event ? event.clientX - startX : 0;
+  const dy = event ? event.clientY - startY : 0;
+  _triageSwipe = null;
+  if (!moved) return;  // 誤爆防止: 閾値未満の指の震え等はドラッグ扱いにすらしていない
+  el.classList.remove("is-dragging");
+  const candidate = triageSwipeCandidate(dx, dy);
+  if (!candidate || Math.abs(dx) < TRIAGE_SWIPE_CONFIRM_PX) {
+    resetTriageCardVisual(el);  // 元位置へスナップバック(誤爆防止。縦スクロール意図もここに含む)
+    return;
+  }
+  if (triagePrefersReducedMotion()) {
+    // reduced-motion時はアニメ無効・即時確定(設計書§③)
+    const ok = triageAction(kind, id, candidate, "swipe");
+    if (!ok) resetTriageCardVisual(el);  // クールダウン等でブロックされた場合は原状復帰
+    return;
+  }
+  el.style.pointerEvents = "none";  // 退場アニメ中の再操作を防ぐ
+  el.style.transform = triageExitTransform(candidate, dx, dy);
+  el.style.opacity = "0";
+  setTimeout(() => {
+    const ok = triageAction(kind, id, candidate, "swipe");
+    if (!ok) resetTriageCardVisual(el);  // 退場アニメ後にブロックされていたら見た目だけ戻す
+  }, TRIAGE_SWIPE_EXIT_MS);
+};
+document.addEventListener("pointerup", endTriageSwipe);
+// pointercancel時は必ずリセット(通話着信・システムジェスチャ等での中断。状態変更は一切しない)
+document.addEventListener("pointercancel", (event) => {
+  if (!_triageSwipe || (event && event.pointerId !== _triageSwipe.pointerId)) return;
+  resetTriageCardVisual(_triageSwipe.el);
+  _triageSwipe = null;
+});
+
 // 汎用: Task のフィールド更新(saveState のみ、再描画なし)
 function updateTaskField(id, field, value) {
   state.tasks = state.tasks.map((t) => t.id === id
