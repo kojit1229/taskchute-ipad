@@ -110,6 +110,10 @@ const BATTERY_TICK_INTERVAL_MS = 60000;
 // 動的条件 || このオーバーライド、の優先順で使う(動的open自体は永続化しない)。
 let _journalSegmentOverride = {};  // { morning: bool, evening: bool }
 let _settingsSyncOpenOverride = null;  // null=未操作、true/false=ユーザーが実際にクリックした最新状態
+// v149レビュー対応(必須6): ホームタブの信条/寿命は「タブを開くたび既定で展開、手動で閉じたら
+// そのセッション中(reloadまで)だけ閉じる」。localStorage永続のisHomeFoldOpenは使わず、
+// 上記_journalSegmentOverrideと同じ非永続セッションオーバーライド方式にする。
+let _homeReflectFoldOverride = {};  // { creed: bool, lifespan: bool }
 let cachedVisionMd = "";
 let cachedAffirmationMd = "";
 // v85: ビジョンボード(45/80/nowの各PDF)はpersonal-dataリポジトリのtaskchute/content/配下にあり、
@@ -245,6 +249,9 @@ let _blockSaveInFlight = false;
 // (nowModeと同じ方針。アプリ再読込で閉じても、各ステップの完了自体はstate.chainRunsに
 // 残っているため「続きから」で再開できる)。空文字=非表示。
 let _activeChainId = "";
+// v149(UI改善計画Phase4a): ホームの2タブ(今日/ホーム)切替。非永続(state外)—
+// K指定「起動時は常に今日」を満たすため、リロード/再起動のたびに既定へ戻る。
+let homeTab = "today";  // "today" | "home"
 // v79: 月間プランニングボードのカードドラッグ(Pointer Events。既存の下書きBlockドラッグ
 //      (_draftDrag)と同じ「pointerdown/move/upで見た目だけ動かしupで正規化」方式を流用)。
 //      { id, el, startX, startY, moved } 非永続。moved=trueになって初めてドラッグ確定(タップの
@@ -276,6 +283,17 @@ function homeFoldSection(id, defaultOpen, wrapperClass, summaryClass, summaryTex
   const open = isHomeFoldOpen(id, defaultOpen);
   return `<details class="home-fold panel ${wrapperClass || ""}" data-fold-id="${id}" ${open ? "open" : ""}>
     <summary class="home-fold-summary ${summaryClass || ""}"><span class="home-fold-chevron">▶</span>${escapeHTML(summaryText)}</summary>
+    <div class="home-fold-body">${bodyHTML}</div>
+  </details>`;
+}
+// v149レビュー対応(必須6): homeFoldSectionのlocalStorage永続版とは別に、非永続セッション
+// オーバーライド版(_homeReflectFoldOverride参照)。data-fold-idを持たない(=グローバルの
+// "toggle"イベント委譲によるlocalStorage永続化を意図的に受けない)。既定は常にopen。
+function homeReflectFoldSection(id, wrapperClass, summaryClass, summaryText, bodyHTML) {
+  if (!bodyHTML) return "";
+  const open = id in _homeReflectFoldOverride ? _homeReflectFoldOverride[id] : true;
+  return `<details class="home-fold panel ${wrapperClass || ""}" ${open ? "open" : ""}>
+    <summary class="home-fold-summary ${summaryClass || ""}" data-action="toggle-home-reflect-fold" data-segment="${id}"><span class="home-fold-chevron">▶</span>${escapeHTML(summaryText)}</summary>
     <div class="home-fold-body">${bodyHTML}</div>
   </details>`;
 }
@@ -519,6 +537,8 @@ document.addEventListener("click", (event) => {
   }
   // === v2: ビジョン画面のセグメント切替 ===
   if (action === "vision-section") setVisionSection(target.dataset.section);
+  // v149レビュー対応(必須3): ホーム「80歳ビジョン」カードからビジョンボードの該当ページへ
+  if (action === "open-vision-board") openVisionBoard(Number(target.dataset.index) || 0);
   if (action === "vision-board-tab") setVisionBoardIndex(Number(target.dataset.index));
   if (action === "vision-board-load") loadVisionBoardPdf(target.dataset.file);  // v101(原本PDF、v125からは補助扱い)
   if (action === "vision-board-load-images") loadVisionBoardImages(target.dataset.file);  // v125
@@ -583,6 +603,14 @@ document.addEventListener("click", (event) => {
     const parent = target.closest("details");
     if (seg && parent) _journalSegmentOverride[seg] = !parent.open;  // クリック時点ではまだ未反映のため反転
   }
+  // v149レビュー対応(必須6): ホーム「信条/寿命」の手動開閉(_homeReflectFoldOverride参照)。
+  // 上のtoggle-journal-segmentと同じ方式(ネイティブ<summary>クリックの見た目トグルに任せ、
+  // ここではセッション内オーバーライドの記録だけ行う)。
+  if (action === "toggle-home-reflect-fold") {
+    const seg = target.dataset.segment;
+    const parent = target.closest("details");
+    if (seg && parent) _homeReflectFoldOverride[seg] = !parent.open;  // クリック時点ではまだ未反映のため反転
+  }
   // v148レビュー対応: 設定「データと同期」群の手動開閉(_settingsSyncOpenOverride参照)。
   // renderSettingsSyncGroup()と同じ理由でtoggleイベントには頼らない。
   if (action === "toggle-settings-sync") {
@@ -640,6 +668,8 @@ document.addEventListener("click", (event) => {
   if (action === "zt-add-cancel") { ztAddOpen = false; render(); }
   if (action === "zt-add-submit") ztAddSubmit();
   if (action === "zt-tab") { ztTab = target.dataset.tab || "other"; render(); }
+  // v149: ホームの2タブ(今日/ホーム)。非永続・view/dateは変えないため自動スクロールは発火しない。
+  if (action === "home-tab") { homeTab = target.dataset.tab === "home" ? "home" : "today"; render(); }
   if (action === "zt-fav-toggle") ztToggleFav(id);
   if (action === "zt-importance-toggle") ztToggleImportance(id);  // v119: 重要度「高」トグル
   if (action === "zt-theme-delete") deleteZtTheme(id);  // v86: テーマのワンタップ削除
@@ -960,12 +990,19 @@ document.addEventListener("input", (event) => {
 document.addEventListener("change", (event) => {
   const target = event.target;
   if (target.matches("[data-date-picker]")) setSelectedDate(target.value);
-  // v117(A): 今日の宣言(change時に保存。blur後の確定入力なので全再描画してよい=赤警告の
-  // 表示/消灯を即座に反映する)
+  // v117(A): 今日の宣言(change時に保存)。
+  // v149レビュー対応(必須5、Codexレビュー指摘): 旧実装はsaveAndRender()で全再描画していたが、
+  // 宣言入力欄はホームタブ専用・警告表示先の.home-today-statusは今日タブ専用で、blur時点の
+  // 現在DOMには互いに存在しない(タブが排他のため)。にもかかわらず全再描画すると、宣言を
+  // blurした直後にタブボタンへ直接タップした1回目のクリックがDOM入れ替えに巻き込まれて
+  // 消費されてしまう(2回目でようやく切り替わる)。この保存は実際には即時再描画を必要としない
+  // (タブ切替自体が別途render()するため、状態は次の描画で自然に反映される)ため、保存のみに
+  // 留める。
   if (target.matches("[data-declaration-date]")) {
     const d = target.dataset.declarationDate;
     state.dailyDeclarations[d] = { text: target.value.trim(), updatedAt: nowDateTime() };
-    saveAndRender();
+    saveState();
+    if (_lastSaveError) showToast("⚠️ 端末内保存に失敗(容量超過の可能性)。設定からGitHubへ保存してください");
   }
   // v92: AIレポートビューアの履歴セレクタ(種類ごとに選択中の日付をUIキャッシュに保持)
   if (target.matches("[data-ai-report-date]")) {
@@ -2331,8 +2368,14 @@ function renderMain() {
     main.innerHTML = renderHome();
     // v146: 今日を表示中なら「いま、これ」(=着手中/次の未着手Blockそのもの)へ自動スクロール
     // (タイムラインの.now-line自動スクロールと同じ「探す手間をなくす」目的)
+    // v149レビュー対応(必須4、Codex指摘): ホームタブ滞在中は.home-heroが存在しないため、
+    // 他ビューから戻ってきた際にscrollIntoViewが不発になり前のスクロール位置に取り残される。
+    // .home-heroが無ければ.home-tabbar(常に両タブ共通で先頭にある)へフォールバックする。
     if (shouldAutoScroll) {
-      setTimeout(() => document.querySelector(".home-hero")?.scrollIntoView({ block: "start" }), 50);
+      setTimeout(() => {
+        const target = document.querySelector(".home-hero") || document.querySelector(".home-tabbar");
+        target?.scrollIntoView({ block: "start" });
+      }, 50);
     }
   }
   if (view === "wbs") main.innerHTML = renderWBS();
@@ -2418,12 +2461,10 @@ function renderHeader(eyebrow, title, action = "") {
 // =============================================================
 // v71: 情報過多だったコックピットを整理。
 // v146(UI改善計画Phase1-1): 行動優先の縦順序へ再編。
-//   最上部(常時表示・折りたたみ無し): いま、これ(hero)→ 今日の主役(MIT)→ 今日、すすめる
-//     (タスクシュート)→ 今日のリズム(既定open)→ 状態チップ類(理想/宣言/体力/バッテリー/週Wish/
-//     読書/ルーティン確認バナー)。
-//   参照系(信条・寿命カウントダウン・AIから・スコアボード・長い弧・足あと)は折りたたみ既定closedに
-//   して下段へ(信条・寿命・AIからは今回既定closedへ変更。長い弧/足あとは従来どおり既定closed)。
-//   開閉状態はlocalStorage記憶(homeFoldSection / isHomeFoldOpen+setHomeFoldOpen)。詳細はCHANGES_v146.md。
+// v149(UI改善計画Phase4a、K指定2026-07-27): ホームを「今日」(行動系。既定タブ)/「ホーム」
+//   (内省・参照系)の2タブへ分割。タブ選択はhomeTab(非永続・モジュール変数、起動時は常に
+//   「今日」)。日付ナビ(前日/日付/翌日/今日へ/検索)はヘッダー領域(renderHeaderのaction欄)へ
+//   統合し独立行を廃止(縦幅圧縮)。詳細な振り分け対応表はCHANGES_v149.md参照。
 function renderHome() {
   const today = state.selectedDate;
   const isToday = today === todayISO();
@@ -2433,12 +2474,26 @@ function renderHome() {
   //      「最低限だけ」と出すのは意味が違うため)。
   const degraded = isToday && isConditionDegraded(today);
   return `
-    ${renderHeader("今日の入口", "ホーム", `<div class="row" style="gap:8px">
-      <button class="btn orange" data-action="now-mode-open">▶ Now</button>
-      <button class="btn primary" data-action="today">今日へ</button>
-    </div>`)}
+    <div class="home-header-wrap">
+      ${renderHeader("今日の入口", "ホーム", `<div class="row" style="gap:8px; flex-wrap:wrap">
+        <button class="btn orange" data-action="now-mode-open">▶ Now</button>
+        ${renderDateBar()}
+      </div>`)}
+    </div>
     ${homeSyncAlertBanner()}
-    ${renderDateBar()}
+    <div class="segmented home-tabbar" style="margin-bottom:4px">
+      <button class="${homeTab === "today" ? "active" : ""}" data-action="home-tab" data-tab="today">今日</button>
+      <button class="${homeTab === "home" ? "active" : ""}" data-action="home-tab" data-tab="home">ホーム</button>
+    </div>
+    ${homeTab === "home"
+      ? renderHomeReflectTab(metrics, blocks, isToday, degraded)
+      : renderHomeTodayTab(blocks, isToday, degraded, metrics)}
+  `;
+}
+
+// v149: 「今日」タブ本体 — 旧renderHomeの行動系すべて(hero〜足あと)。K指定の起動時既定タブ。
+function renderHomeTodayTab(blocks, isToday, degraded, metrics) {
+  return `
     ${homeHero(blocks, isToday)}
     <div id="home-mit-anchor">${homeMIT(blocks)}</div>
     <div class="home-zone-block z-amber" id="homezone-1">
@@ -2470,31 +2525,13 @@ function renderHome() {
         </details>
       `}
     </div>
-    ${homeIdeal(isToday)}
-    ${homeDeclarationCard()}
     ${homeTodayStatusCard()}
     ${homeWeeklyWishCard()}
     ${degraded ? "" : homeReadingCard()}
     ${degraded ? homeDegradedBanner() : homeRoutineCheckBanner(blocks, isToday)}
-    ${homeFoldSection("creed", false, "home-creed", "home-creed-head", "三 つ の 信 条", homeCreedBody())}
-    ${homeFoldSection("lifespan", false, "", "", "寿命カウントダウン(残り時間)", homeLifespanBody(metrics))}
-    ${degraded
-      ? homeFoldSection("ai-hub-degraded", false, "home-ai-hub", "", "AIから(たたんでいます)", homeAiHubBody(blocks, isToday))
-      : homeFoldSection("ai-hub", false, "home-ai-hub", "", "AIから", homeAiHubBody(blocks, isToday))}
     ${homeScoreboard(blocks)}
-    <div class="home-zone-block z-blue" id="homezone-3">
-      <details class="home-fold" data-fold-id="zone3" ${isHomeFoldOpen("zone3", false) ? "open" : ""}>
-        <summary class="home-zone blue home-fold-summary"><span class="home-fold-chevron">▶</span>長い弧をたしかめる</summary>
-        <div class="home-fold-body">
-          <div class="home-grid">
-            ${homeCycle(metrics)}
-            ${homeBacklog()}
-            ${homeQuestions()}
-          </div>
-          ${homeWeeklyLink()}
-        </div>
-      </details>
-    </div>
+    <div id="homezone-3">${homeCycle(metrics)}</div>
+    ${homeBacklog()}
     <div class="home-zone-block z-green" id="homezone-4">
       <details class="home-fold" data-fold-id="zone4" ${isHomeFoldOpen("zone4", false) ? "open" : ""}>
         <summary class="home-zone green home-fold-summary"><span class="home-fold-chevron">▶</span>今日の足あと</summary>
@@ -2502,6 +2539,35 @@ function renderHome() {
           <div class="home-grid single">
             ${homeSteps(blocks)}
           </div>
+        </div>
+      </details>
+    </div>
+  `;
+}
+
+// v149: 「ホーム」タブ本体 — 内省・参照系(三つの信条/寿命/アファメーション=今日の理想・宣言/
+// AIから/長い弧)。K指定「信条・寿命はこのタブでは既定展開(折りたたまない)」により、旧来
+// defaultOpen=falseだったcreed/lifespanをtrueへ変更(ローカル記憶が無い初回のみ有効。
+// 折りたたみ機構自体は残す)。「アファメーション」はK指示で「今日の理想/宣言まわりの該当カード」
+// (homeIdeal/homeDeclarationCard)と対応付け(CHANGES_v149.md参照)。
+function renderHomeReflectTab(metrics, blocks, isToday, degraded) {
+  return `
+    ${homeReflectFoldSection("creed", "home-creed", "home-creed-head", "三 つ の 信 条", homeCreedBody())}
+    ${homeReflectFoldSection("lifespan", "home-lifespan", "", "寿命カウントダウン(残り時間)", homeLifespanBody(metrics))}
+    ${homeIdeal(isToday)}
+    ${homeDeclarationCard()}
+    ${homeVisionCard()}
+    ${degraded
+      ? homeFoldSection("ai-hub-degraded", false, "home-ai-hub", "", "AIから(たたんでいます)", homeAiHubBody(blocks, isToday))
+      : homeFoldSection("ai-hub", false, "home-ai-hub", "", "AIから", homeAiHubBody(blocks, isToday))}
+    <div class="home-zone-block z-blue" id="home-arc-zone">
+      <details class="home-fold" data-fold-id="zone3" ${isHomeFoldOpen("zone3", false) ? "open" : ""}>
+        <summary class="home-zone blue home-fold-summary"><span class="home-fold-chevron">▶</span>長い弧をたしかめる</summary>
+        <div class="home-fold-body">
+          <div class="home-grid">
+            ${homeQuestions()}
+          </div>
+          ${homeWeeklyLink()}
         </div>
       </details>
     </div>
@@ -2622,6 +2688,19 @@ function homeDeclarationCard() {
     <div class="muted" style="font-size:12px; font-weight:700; margin-bottom:6px">📣 今日の宣言</div>
     <input type="text" class="input" style="font-size:16px" maxlength="80"
       data-declaration-date="${date}" placeholder="今日◯◯に着手する" value="${escapeHTML(entry.text || "")}">
+  </section>`;
+}
+
+// v149レビュー対応(必須3): K指定リスト「80歳ビジョン」の導線カード。ホームには専用の
+// 80歳ビジョンカードそのもの(PDF/画像表示)は無い(既存実装は「ビジョン」タブのビジョン
+// ボード内サブページとしてのみ存在)ため、新規カードを追加せず既存のビジョンボードへの
+// ワンタップ導線として実装した(機能そのものを複製しない)。
+function homeVisionCard() {
+  return `<section class="panel home-vision-card" style="padding:12px 14px; cursor:pointer" data-action="open-vision-board" data-index="2">
+    <div class="row" style="justify-content:space-between; align-items:center">
+      <span class="muted" style="font-size:12px; font-weight:700">🌅 80歳ビジョン</span>
+      <span class="muted" style="font-size:12px">見る →</span>
+    </div>
   </section>`;
 }
 
@@ -2756,7 +2835,7 @@ function homeTodayStatusCard() {
   const budgetLabel = budget.level === "none" ? "データなし" : CONDITION_BUDGET_LABELS[budget.level];
   const summary = `エネルギー: ${budgetLabel}・残量${Math.round(level)} / 準備: ${declFilled ? "宣言済み" : "宣言未入力"}・${wishSet ? "週Wish設定済み" : "週Wish未設定"}`;
   const body = `<div class="home-chip-2col">${homeConditionBudgetChip()}${homeBatteryChip()}</div>
-    ${!declFilled ? `<div class="home-today-status-item muted" style="font-size:12px; margin-top:6px">📣 今日の宣言が未入力です</div>` : ""}
+    ${!declFilled ? `<div class="home-today-status-item muted" style="font-size:12px; margin-top:6px; display:flex; align-items:center; gap:8px; flex-wrap:wrap">📣 今日の宣言が未入力です<button class="btn ghost" style="font-size:13px; padding:3px 9px" data-action="home-tab" data-tab="home">ホームタブへ →</button></div>` : ""}
     ${!wishSet ? `<div class="home-today-status-item muted" style="font-size:12px; margin-top:6px; display:flex; align-items:center; gap:8px; flex-wrap:wrap">🌟 今週のやりたいことが未設定です<button class="btn ghost" style="font-size:13px; padding:3px 9px" data-action="weekly-wish-open">設定する</button></div>` : ""}`;
   return homeFoldSection("today-status", false, "home-today-status", "", summary, body);
 }
@@ -14998,6 +15077,15 @@ function setView(view) {
   render();
 }
 
+// v149レビュー対応(必須3): ホーム「80歳ビジョン」カードから、ビジョン画面のビジョンボード
+// (該当ページ)へ直接遷移する。setVisionSection/setVisionBoardIndexと同じフィールドを
+// 使い回すため、状態の実体は1つだけ(ビジョンタブ側の選択状態を上書きするだけで複製しない)。
+function openVisionBoard(index) {
+  state.settings.visionSection = "board";
+  state.settings.visionBoardIndex = index;
+  setView("vision");
+}
+
 function setSelectedDate(date) {
   if (!date) return;
   state.selectedDate = date;
@@ -17506,7 +17594,11 @@ function updateBatteryTick() {
     const now = new Date();
     if (maybeSuggestRecoveryDraft(now.getHours() * 60 + now.getMinutes())) { renderDeferringForFocus(); return; }
   }
-  if (state.currentView === "home") {
+  // v149レビュー対応(必須1): 「今日の状態」カード(.home-today-status)は今日タブにしか
+  // 存在しないため、ホームタブ滞在中はstatusCardが常にnullになり、残量40%未満の間
+  // else if分岐(renderDeferringForFocus)が毎分発火し続けてしまう(宣言入力等を脅かす)。
+  // 今日タブ滞在中だけに絞る。
+  if (state.currentView === "home" && homeTab === "today") {
     const statusCard = document.querySelector(".home-today-status");
     if (statusCard) {
       statusCard.outerHTML = homeTodayStatusCard();
