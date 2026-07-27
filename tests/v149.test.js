@@ -178,3 +178,183 @@ function check(name, cond, extra = "") {
     check("日付ナビは.view-header内(ヘッダー統合済み)にある", await page.locator('.view-header [data-date-picker]').count() === 1);
     check(".datebar自体もページ中に1つだけ(独立行の重複が無い)", await page.locator('.datebar').count() === 1);
 
+    console.log("[4b] 「前日」で移動すると独立の「今日へ」ボタンが1個だけ出る(重複しない)");
+    await page.click('[data-action="date-prev"]');
+    await page.waitForTimeout(200);
+    check("非当日では「今日へ」ボタンが1個だけ", await page.locator('[data-action="today"]').count() === 1);
+    await page.click('[data-action="today"]');
+    await page.waitForTimeout(200);
+    check("当日に戻ると「今日へ」ボタンは0個(非表示)", await page.locator('[data-action="today"]').count() === 0);
+
+    // ============================================================
+    // (5) 375px幅で横スクロールが発生しない・ヘッダー要素が重ならない・縦幅を実測する
+    // ============================================================
+    console.log("[5] 375px幅でホームのヘッダー(▶Now/日付ナビ/タブバー)が折り返し、横スクロールが発生しない");
+    const ctxMobile = await browser.newContext({ serviceWorkers: "block", viewport: { width: 375, height: 812 } });
+    const pageMobile = await ctxMobile.newPage();
+    pageMobile.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror(mobile):", e.message); });
+    await blockGithubApiByDefault(pageMobile);
+    // v149レビュー対応: 同期異常バナー(.pd-auth-banner)はGitHub APIモックが常に401/404の
+    // このテスト環境特有のアーティファクトで、実運用の縦幅とは無関係に約86px上乗せしてしまう。
+    // app-state.jsonの起動時GETを成功応答でモックし、実運用(同期正常時)と同条件で計測する。
+    await pageMobile.route((url) => url.hostname === "api.github.com" && url.pathname.includes("/contents/taskchute/app-state.json"),
+      (route) => {
+        const body = JSON.stringify({ dataModifiedAt: "2000-01-01T00:00:00", currentView: "home", selectedDate: "2000-01-01", blocks: [], projects: [], tasks: [], settings: {} });
+        const content = Buffer.from(body, "utf-8").toString("base64");
+        route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ sha: "sha-mock", content, encoding: "base64" }) });
+      });
+    await pageMobile.clock.setFixedTime(now0);
+    await pageMobile.goto(`http://localhost:${PORT}/`);
+    await pageMobile.waitForTimeout(500);
+    await passGithubGate(pageMobile);
+    await pageMobile.evaluate(({ KEY, blocks, TODAY }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.blocks = blocks;
+      s.selectedDate = TODAY;
+      s.currentView = "home";
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, blocks: seedBlocks, TODAY });
+    await pageMobile.reload();
+    await pageMobile.waitForTimeout(500);
+    const metricsMobile = await pageMobile.evaluate(() => {
+      const doc = document.scrollingElement || document.documentElement;
+      return { scrollWidth: doc.scrollWidth, clientWidth: doc.clientWidth };
+    });
+    check("375px幅(今日タブ)で横スクロールが発生しない(scrollWidth <= clientWidth)",
+      metricsMobile.scrollWidth <= metricsMobile.clientWidth + 1,
+      `scrollWidth=${metricsMobile.scrollWidth} clientWidth=${metricsMobile.clientWidth}`);
+    // ヘッダー内の要素(▶Now・日付ナビ・検索)が互いに重ならないことをbounding boxで確認する
+    const overlapCheck = await pageMobile.evaluate(() => {
+      const els = Array.from(document.querySelectorAll(
+        '.view-header [data-action="now-mode-open"], .view-header [data-action="date-prev"], .view-header [data-date-picker], .view-header [data-action="date-next"], .view-header [data-action="open-search"]'
+      ));
+      const rects = els.map((el) => el.getBoundingClientRect());
+      const overlaps = (a, b) => a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1;
+      for (let i = 0; i < rects.length; i++) {
+        for (let j = i + 1; j < rects.length; j++) {
+          if (overlaps(rects[i], rects[j])) return { overlap: true, i, j };
+        }
+      }
+      return { overlap: false, count: rects.length };
+    });
+    check("375px幅でヘッダー内の▶Now・日付ナビ要素どうしが重ならない(折り返しで回避)",
+      overlapCheck.overlap === false && overlapCheck.count >= 4, JSON.stringify(overlapCheck));
+
+    console.log("[5b] 375px幅: ヘッダー〜「いま、これ」までの縦幅を実測する(2系統レビュー対応、必須2)");
+    await pageMobile.evaluate(() => window.scrollTo(0, 0));
+    const vMetrics = await pageMobile.evaluate(() => {
+      const datebar = document.querySelector(".datebar");
+      const hero = document.querySelector(".home-hero");
+      return {
+        datebarHeight: datebar ? Math.round(datebar.getBoundingClientRect().height) : null,
+        heroOffsetTop: hero ? hero.offsetTop : null
+      };
+    });
+    check("375px幅で.datebarが1行に収まる(高さ<=45px。修正前の実測は87px)",
+      vMetrics.datebarHeight !== null && vMetrics.datebarHeight <= 45, JSON.stringify(vMetrics));
+    check("375px幅で.home-heroのoffsetTopが200px以下(修正前の実測は328px、v148は224px)",
+      vMetrics.heroOffsetTop !== null && vMetrics.heroOffsetTop <= 200, JSON.stringify(vMetrics));
+
+    await pageMobile.click('[data-action="home-tab"][data-tab="home"]');
+    await pageMobile.waitForTimeout(300);
+    const metricsMobileHomeTab = await pageMobile.evaluate(() => {
+      const doc = document.scrollingElement || document.documentElement;
+      return { scrollWidth: doc.scrollWidth, clientWidth: doc.clientWidth };
+    });
+    check("375px幅(ホームタブ)でも横スクロールが発生しない",
+      metricsMobileHomeTab.scrollWidth <= metricsMobileHomeTab.clientWidth + 1,
+      `scrollWidth=${metricsMobileHomeTab.scrollWidth} clientWidth=${metricsMobileHomeTab.clientWidth}`);
+
+    console.log("[5c] 375px幅・非当日(「今日へ」ボタンが加わる)でも1行に収まり横スクロールしない");
+    await pageMobile.click('[data-action="home-tab"][data-tab="today"]');
+    await pageMobile.waitForTimeout(150);
+    await pageMobile.click('[data-action="date-prev"]');
+    await pageMobile.waitForTimeout(200);
+    const metricsNonToday = await pageMobile.evaluate(() => {
+      const doc = document.scrollingElement || document.documentElement;
+      const datebar = document.querySelector(".datebar");
+      return { scrollWidth: doc.scrollWidth, clientWidth: doc.clientWidth, datebarHeight: datebar ? Math.round(datebar.getBoundingClientRect().height) : null };
+    });
+    check("非当日でも横スクロールが発生しない", metricsNonToday.scrollWidth <= metricsNonToday.clientWidth + 1, JSON.stringify(metricsNonToday));
+    check("非当日(今日へボタン込み5個)でも.datebarが1行に収まる", metricsNonToday.datebarHeight !== null && metricsNonToday.datebarHeight <= 45, JSON.stringify(metricsNonToday));
+    await ctxMobile.close();
+
+    // ============================================================
+    // (6) タブ選択は非永続(リロードで「今日」に戻る)
+    // ============================================================
+    console.log("[6] ホームタブを選んだ状態でリロードすると、常に「今日」タブに戻る(非永続)");
+    await page.click('[data-action="home-tab"][data-tab="home"]');
+    await page.waitForTimeout(200);
+    check("(前提)ホームタブがactiveになっている", await page.locator('.home-tabbar [data-action="home-tab"][data-tab="home"]').evaluate((el) => el.classList.contains("active")));
+    await page.reload();
+    await page.waitForTimeout(400);
+    check("リロード後は「今日」タブに戻る(state保存されていない)",
+      await page.locator('.home-tabbar [data-action="home-tab"][data-tab="today"]').evaluate((el) => el.classList.contains("active")));
+    check("リロード後、localStorageのstateにはhomeTab相当のキーが保存されていない",
+      !JSON.stringify(await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY)).includes("homeTab"));
+    const htmlAfterReload = await mainHTML();
+    check("リロード後のDOMも今日タブの内容(いま、これ)になっている", htmlAfterReload.includes("いま、これ"));
+
+    // ============================================================
+    // (7) 80歳ビジョン導線カード(必須3)
+    // ============================================================
+    console.log("[7] ホームタブの「80歳ビジョン」カードをタップするとビジョンボード(80歳ページ)へ遷移する");
+    await page.click('[data-action="home-tab"][data-tab="home"]');
+    await page.waitForTimeout(200);
+    check("「80歳ビジョン」カードが表示される", await page.locator(".home-vision-card").count() === 1);
+    await page.click(".home-vision-card");
+    await page.waitForTimeout(300);
+    const s7 = await stateNow();
+    check("タップでcurrentViewがvisionへ遷移する", s7.currentView === "vision", s7.currentView);
+    check("visionSectionがboard(ビジョンボード)になる", s7.settings.visionSection === "board", s7.settings.visionSection);
+    check("visionBoardIndexが2(80歳)になる", s7.settings.visionBoardIndex === 2, s7.settings.visionBoardIndex);
+    const visionTabsText = await page.locator(".vision-pdf-tabs").textContent().catch(() => "");
+    check("ビジョンボード画面に実際に80歳タブがactiveで表示される", (visionTabsText || "").includes("80歳"), visionTabsText);
+
+    // ============================================================
+    // (8) ホームタブ滞在中は電池残量低下でも毎分の全再描画が起きない(必須1)
+    // ============================================================
+    console.log("[8] ホームタブ滞在中は電池残量が低くても毎分の全再描画(renderDeferringForFocus)が起きない");
+    await seed({
+      blocks: [],
+      view: "home",
+      battery: { start: { deficit: 30, low: 40, normal: 5 }, decayPerHour: 0, decayStartMinutes: 420, max: 50, recoveryDraft: false, recoveryThresholdPct: 40 }
+    });
+    // sleepLogなし→budgetLevel="none"→normal扱いのstart(5)が採用され、pct=5/50=10%<40%(not ok)
+    await page.evaluate((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.sleepLog = {};
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, KEY);
+    await page.reload();
+    await page.waitForTimeout(700);  // 500ms周期のティッカーを最低1回通し、_lastBatteryTickAtの基準を作る
+    await page.click('[data-action="home-tab"][data-tab="home"]');
+    await page.waitForTimeout(200);
+    // 「今日の理想」入力欄(ホームタブに存在)へフォーカスし、全再描画が起きればDOM入れ替えで
+    // フォーカスが失われることを検知の手がかりにする。未入力日は既定closedの折りたたみ
+    // (v81仕様)のため、まず開く。
+    const idealFoldSummary = page.locator('details[data-fold-id="home-ideal-empty"] summary');
+    if (await idealFoldSummary.count()) {
+      await idealFoldSummary.click();
+      await page.waitForTimeout(150);
+    }
+    await page.click('[data-ideal-date]');
+    const focusedBefore = await page.evaluate(() => document.activeElement?.tagName + ":" + (document.activeElement?.getAttribute("data-ideal-date") || ""));
+    check("(前提)理想入力欄にフォーカスできている", focusedBefore.startsWith("INPUT:"), focusedBefore);
+    await page.clock.setFixedTime(new Date(now0.getTime() + 70 * 1000));  // 70秒進める(60秒スロットルを超えさせる)
+    await page.waitForTimeout(800);  // 実時間で500ms周期のティッカーが新しい固定時刻を検知するのを待つ
+    const focusedAfter = await page.evaluate(() => document.activeElement?.tagName + ":" + (document.activeElement?.getAttribute("data-ideal-date") || ""));
+    check("70秒後もホームタブ滞在中は全再描画が起きず、入力欄のフォーカスが保たれる(必須1の修正確認)",
+      focusedAfter === focusedBefore, `before=${focusedBefore} after=${focusedAfter}`);
+    await page.clock.setFixedTime(now0);
+
+    // ============================================================
+    // (9) ホームタブ滞在中に別ビューへ行き来してもスクロールが取り残されない(必須4、Codex指摘)
+    // ============================================================
+    console.log("[9] ホームタブ滞在中に別ビューへ移動して戻ると、.home-heroが無いため.home-tabbarへフォールバックスクロールする");
+    await seed({ blocks: seedBlocks, view: "wbs" });
+    await page.click('[data-action="nav"][data-view="home"]');
+    await page.waitForTimeout(200);
+    await page.click('[data-action="home-tab"][data-tab="home"]');
+    await page.waitForTimeout(200);
+    await page.evaluate(() => {
