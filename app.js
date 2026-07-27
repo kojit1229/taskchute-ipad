@@ -8943,6 +8943,112 @@ function renderSettingsCloudPanel(github) {
       ${github.lastSavedAt ? `最終保存: ${github.lastSavedAt.replace("T", " ")}` : (github.autoSave ? "自動保存: 有効(まだ保存していません)" : "自動保存: 無効")}
     </div>
     <label class="checkbox-line">
+      <input type="checkbox" data-setting-autosync ${state.settings.autoSync ? "checked" : ""}>
+      🔄 自動同期(push 3分デバウンス + 起動/復帰時に pull)
+    </label>
+    <div class="muted" style="font-size:11px; line-height:1.7">
+      ${state.settings.autoSync ? `<span class="sync-dot ${syncDotClass()}"></span> 有効` : "無効(既定)"}
+      ${state.settings.github.lastSavedAt ? ` ・ 最終push: ${state.settings.github.lastSavedAt.replace("T", " ")}` : ""}
+      ${state.settings.lastPulledAt ? ` ・ 最終pull: ${state.settings.lastPulledAt.replace("T", " ")}` : ""}
+      <br>競合(両方に未反映の変更)時は自動適用せず、手動判断に委ねます。
+    </div>
+    <div class="muted" style="font-size:11px; line-height:1.7">
+      この端末: ${getLastSyncPushAt() ? `push成功 ${getLastSyncPushAt().replace("T", " ").slice(0, 16)}` : "push成功 記録なし"}
+      ・ ${getLastSyncPullAt() ? `pull成功 ${getLastSyncPullAt().replace("T", " ").slice(0, 16)}` : "pull成功 記録なし"}
+    </div>
+    <div class="row">
+      <button class="btn primary" data-action="save-github">今すぐGitHubへ保存</button>
+      <button class="btn" data-action="load-github">GitHubから読込</button>
+    </div>
+    <div class="muted" style="font-size:11px">TokenはGitHubへ保存しません。この端末のブラウザ内(＋任意でiOSキーチェーン)だけに保持します。</div>
+    <button class="btn" data-action="open-backup-list">📦 バックアップ世代から復元</button>
+    <div class="muted" style="font-size:11px; line-height:1.6">
+      GitHub保存時に1日1回、<code>backups/app-state-日付.json</code> の日次スナップショットを自動で残します(直近14日分)。
+      誤った同期で上書きしてしまった時は、ここから任意の日の状態に戻せます。
+    </div>
+  `;
+}
+
+function renderSettingsMorningPlanPanel() {
+  return `
+    <h3>朝の一括プランニング</h3>
+    <div class="muted" style="font-size:12px; line-height:1.6">
+      v60でアプリ内からのClaude API直接呼び出しは廃止しました(コスト理由)。「📋 下書きスケジュール」
+      「🌅 朝プラン」は、繰越・WBS・MIT候補を空き時間へ機械的に前詰め配置する決定論ロジックで動作します
+      (APIキーは不要)。AI活用は自宅PCのバッチ処理からのファイル連携(下記AIフィードバック欄)に限定しています。
+    </div>
+    <label class="checkbox-line">
+      <input type="checkbox" data-ai-automorningplan ${state.settings.ai?.autoMorningPlan ? "checked" : ""}>
+      🌅 朝の一括プランニングを自動実行(10:00までの初回起動で当日の予定が空なら、繰越+WBS+MITの下書きを自動配置)
+    </label>
+  `;
+}
+
+function renderSettingsExecPanel() {
+  return `
+    <h3>実行</h3>
+    <div class="muted" style="font-size:12px; line-height:1.6">
+      Blockを開始する(▶いま開始/いま着手する/Now画面の開始)と、既存のポモドーロUIを流用した
+      フォーカスタイマー(25分)を自動で起動します。既に別のタイマーが動いている場合は乗っ取りません。
+    </div>
+    <label class="checkbox-line">
+      <input type="checkbox" data-setting-focustimerauto ${state.settings.focusTimerAuto ? "checked" : ""}>
+      ⏱ Block開始でフォーカスタイマーを自動起動
+    </label>
+  `;
+}
+
+function renderSettingsGuidedAccessPanel() {
+  return `
+    <h3>🔒 ガイド付きアクセス案内</h3>
+    <div class="muted" style="font-size:12px; line-height:1.6">
+      iPad/iPhoneでポモドーロタイマーを開始すると、ガイド付きアクセス(画面ロック)の
+      操作方法を案内するポップアップを出します。PWAから自動でロックすることはiOSの制約上
+      できないため、手動操作の案内のみです。ポップアップの「今後表示しない」でもOFFにできます。
+    </div>
+    <label class="checkbox-line">
+      <input type="checkbox" data-setting-pomoguidedaccesshint ${state.settings.pomoGuidedAccessHint ? "checked" : ""}>
+      🔒 ポモドーロ開始時にガイド付きアクセスを案内(iPad/iPhoneのみ)
+    </label>
+  `;
+}
+
+function renderSettingsStudyWithMePanel() {
+  return `
+    <h3>🎥 Study With Me</h3>
+    <div class="muted" style="font-size:12px; line-height:1.6">
+      ポモドーロタブの「Study With Me」トグルで表示するYouTube動画です。ONの間だけ埋め込み、
+      OFF・タブ離脱で破棄します(常時ロードしません)。再生はタップで開始してください(自動再生なし)。
+    </div>
+    <label>YouTube URLを貼り付け(動画ID・開始秒を自動抽出)
+      <input class="input" type="text" id="study-with-me-url-input" placeholder="https://www.youtube.com/watch?v=...&t=...s" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+    </label>
+    <label>動画ID
+      <input class="input" type="text" data-swm-field="videoId" value="${escapeHTML(state.settings.studyWithMe.videoId)}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+    </label>
+    <label>開始秒
+      <input class="input" type="number" min="0" step="1" data-swm-field="startSec" value="${state.settings.studyWithMe.startSec}">
+    </label>
+  `;
+}
+
+function renderSettingsBreakMessagesPanel() {
+  return `
+    <h3>休憩メッセージ</h3>
+    <div class="muted" style="font-size:12px; line-height:1.6">
+      休憩中(任意・常時タイマー)に、残り秒数の範囲に応じて表示されるメッセージです。
+    </div>
+    ${renderBreakMessagesSettings()}
+    <button class="btn primary" data-action="add-break-message">+ メッセージを追加</button>
+  `;
+}
+
+function renderSettingsFileStructurePanel() {
+  return `
+    <details class="panel home-fold settings-file-structure">
+      <summary class="home-fold-summary"><span class="home-fold-chevron">▶</span>現在のファイル構成</summary>
+      <div class="home-fold-body">
+        <pre style="background:var(--panel-soft); padding:10px; border-radius:6px; font-size:11px; overflow-x:auto; margin:0">リポジトリ直下:
 ├── app-state.json          ← メインデータ(自動保存先)
 ├── Vision.md
 ├── Daily_Affirmation.md
