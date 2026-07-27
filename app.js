@@ -146,6 +146,12 @@ const cachedWeeklyReviewMd = {};  // v62: { '週開始土曜YYYY-MM-DD': '...md 
 // loop/FORMAT_CONTRACT.md「今日の敵_YYYY-MM-DD.mdの契約」)。実際の今日分のみを扱う
 // (AIフィードバックのような前日1日分の無条件fetchは行わない。過去日を読み返す機能ではないため)。
 const cachedTodayEnemyMd = {};  // { 'YYYY-MM-DD': '...1段落プレーンテキスト...' }
+// v158: AI機能2「勝手に格言」。loop/scripts/quote-forge.sh が personal-data/taskchute/ へ
+// 勝手に格言_<date>.json({"quote","author","note","date"})をpushする(契約は
+// loop/FORMAT_CONTRACT.md「勝手に格言_YYYY-MM-DD.jsonの契約」)。今日の敵と同じく実際の
+// 今日分のみを扱う(前日1日分の無条件fetchは行わない)。値は{quote,author}のパース済みJSON、
+// またはfetch未完了/該当ファイル無し/JSONパース失敗/quote・author欠損ならundefined。
+const cachedQuoteJson = {};  // { 'YYYY-MM-DD': {quote, author} | undefined }
 // v67: AI作業結果_<today>.json のパース済み配列(非永続、当日分のみ)。二重登録防止のIDは state.aiWorkProcessedIds 側で永続化する。
 let cachedAiWorkResults = null;
 // v74: 読書複利化 — taskchute/reading/highlights.json の books 配列(null=未取得。永続化しない、
@@ -2632,6 +2638,7 @@ function renderHomeTodayTab(blocks, isToday, degraded, metrics) {
         </div>
       </details>
     </div>
+    ${homeQuoteCard(isToday)}
   `;
 }
 
@@ -3286,6 +3293,38 @@ function homeTodayEnemyCard(isToday) {
     <div class="muted" style="font-size:11px; margin-top:8px">※AI演出(自動生成のジョーク文章です)</div>
   `;
   return homeFoldSection("today-enemy", true, "home-today-enemy", "", "👹 今日の敵", bodyHTML);
+}
+
+// v158: AI機能2「勝手に格言」。自宅PCバッチ(loop/scripts/quote-forge.sh)が生成した
+// 勝手に格言_<today>.json(前日の行動にちなんだ偉人風の捏造格言)を、今日タブ最下部
+// (「今日の足あと」の下)に小さな1行カードで表示する。ファイルが無い日/JSONパース失敗/
+// quote・author欠損(cachedQuoteJsonに当日分が無い、hydrateStaticMarkdown側でフェイルソフト
+// 済み)は何も出さない。過去日を閲覧中(isToday===false)も出さない(今日の敵と同じ「当日限定」
+// 演出の思想)。表示側でもバッチ側の上限(quote200字/author80字)と揃えた二重防御クリップを行う。
+const QUOTE_CARD_QUOTE_MAX_CHARS = 200;   // quote-forge-validate.pyのQUOTE_MAX_CHARSと揃える
+const QUOTE_CARD_AUTHOR_MAX_CHARS = 80;   // quote-forge-validate.pyのAUTHOR_MAX_CHARSと揃える
+function homeQuoteCard(isToday) {
+  if (!isToday) return "";
+  const q = cachedQuoteJson[todayISO()];
+  if (!q || !q.quote || !q.author) return "";
+  // 2026-07-28レビュー対応・項目1(Codex指摘): 絵文字等はJSの.length/.sliceだとUTF-16
+  // コード単位(サロゲートペアは2単位)で数えるため、境界がサロゲートの途中に落ちると
+  // 文字化け(孤立サロゲート「�」)を起こす。Array.fromでコードポイント単位に分割してから
+  // クリップし、バッチ側(quote-forge-validate.py、Pythonのlen()=コードポイント単位)と
+  // 数え方を一致させる。
+  const clip = (s, max) => {
+    const codePoints = Array.from(s);
+    return codePoints.length > max ? `${codePoints.slice(0, max).join("")}…` : s;
+  };
+  const quote = clip(q.quote, QUOTE_CARD_QUOTE_MAX_CHARS);
+  const author = clip(q.author, QUOTE_CARD_AUTHOR_MAX_CHARS);
+  // v158: "※AIによる捏造です" はJSONの"note"フィールドを読まず、固定文言としてここで
+  // 常時付ける(quote-forge-validate.py側の信頼境界と対称。バッチが将来壊れても注記自体は
+  // 必ず出る)。
+  return `<div class="panel home-quote-card" style="font-size:12px; padding:8px 12px; display:flex; align-items:baseline; gap:6px; flex-wrap:wrap">
+    <span>📜 ${escapeHTML(quote)} — ${escapeHTML(author)}</span>
+    <span class="muted">※AIによる捏造です</span>
+  </div>`;
 }
 
 // v33: 12週サイクル「今週の進捗」(homeCycle と同一ロジック)
@@ -16448,14 +16487,47 @@ async function hydrateStaticMarkdown() {
       changed = true;
     }
   }
-  // v157: AI機能1「今日の敵」。実際の今日分のみ、未取得なら1回だけfetchする(前日分の
-  //      無条件fetchは行わない。ファイルが無い日は404を静かに無視し、カード自体を出さない)。
-  if (!cachedTodayEnemyMd[realToday]) {
-    const todayEnemyMd = await fetchGitHubRawText(`今日の敵_${realToday}.md`);
-    if (todayEnemyMd && todayEnemyMd !== cachedTodayEnemyMd[realToday]) {
-      cachedTodayEnemyMd[realToday] = todayEnemyMd;
-      changed = true;
+  // v157: AI機能1「今日の敵」/ v158: AI機能2「勝手に格言」。どちらも実際の今日分のみ、
+  //      未取得なら1回だけfetchする(前日分の無条件fetchは行わない。ファイルが無い日は
+  //      404を静かに無視し、カード自体を出さない)。
+  //      2026-07-28レビュー対応・項目3(取得試行済みの明示化): `!cachedXxx[realToday]`という
+  //      falsy判定だけだと、fetch失敗/該当ファイル無しの日は値がundefinedのままキャッシュに
+  //      「登録されない」ため、日付をまたがず同一セッション内で再度hydrateStaticMarkdownが
+  //      走るたび(タブ切替・visibilitychange復帰等)に404を毎回再発行してしまっていた。
+  //      `realToday in cachedXxx`(キーの有無)で判定し、取得を試みたら成否に関わらず
+  //      `cachedXxx[realToday] = 値 || undefined`を明示代入することで、「1セッション1回だけ
+  //      試す」をコメントどおりの実挙動にする。
+  //      2026-07-28レビュー対応・項目4(並列化): 今日の敵と勝手に格言は別ファイル・別キャッシュで
+  //      互いに独立しているため、逐次awaitではなくPromise.allで並列fetchしレイテンシを縮める。
+  const wantTodayEnemyFetch = !(realToday in cachedTodayEnemyMd);
+  const wantQuoteFetch = !(realToday in cachedQuoteJson);
+  const [todayEnemyMd, quoteRaw] = await Promise.all([
+    wantTodayEnemyFetch ? fetchGitHubRawText(`今日の敵_${realToday}.md`) : Promise.resolve(undefined),
+    wantQuoteFetch ? fetchGitHubRawText(`勝手に格言_${realToday}.json`) : Promise.resolve(undefined),
+  ]);
+  if (wantTodayEnemyFetch) {
+    cachedTodayEnemyMd[realToday] = todayEnemyMd || undefined;
+    if (todayEnemyMd) changed = true;
+  }
+  if (wantQuoteFetch) {
+    // 生成物はJSON契約(FORMAT_CONTRACT.md)だが、バッチ側の壊れ・仕様変更でもアプリが落ちない
+    // よう、JSON.parse失敗・オブジェクトでない・quote/author欠損はすべてフェイルソフトで
+    // 「取得できなかった扱い」(undefined)にする。"note"フィールドは信用しない(UI側で固定
+    // 文言を出す。quote-forge-validate.py冒頭コメントと対称の信頼境界)。
+    let parsedQuote;
+    if (quoteRaw) {
+      try {
+        const parsed = JSON.parse(quoteRaw);
+        if (parsed && typeof parsed.quote === "string" && parsed.quote.trim()
+          && typeof parsed.author === "string" && parsed.author.trim()) {
+          parsedQuote = { quote: parsed.quote.trim(), author: parsed.author.trim() };
+        }
+      } catch (e) {
+        // 壊れたJSON。フェイルソフト(parsedQuoteはundefinedのまま=カード非表示)。
+      }
     }
+    cachedQuoteJson[realToday] = parsedQuote;
+    if (parsedQuote) changed = true;
   }
   // v67: AIプラン_<今日>.json の存在確認(下書きへの適用はrunAiMorningPlan側の専管で、
   //      ここでは鮮度シグナル専用の軽量fetch)。既に今日分を確認済みなら再fetchしない。
