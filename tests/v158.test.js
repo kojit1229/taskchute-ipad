@@ -118,3 +118,89 @@ function check(name, cond, extra = "") {
 
     // ============================================================
     // (3) 壊れたJSON: カード自体が出ない
+    // ============================================================
+    console.log("[3] 勝手に格言_TODAY.jsonがJSONとしてパースできない場合はカード自体が表示されない");
+    quoteFixture = "{ this is not valid json ,,,";
+    await seed({ selectedDate: TODAY, view: "home" });
+    const cardCount3 = await page.locator(".home-quote-card").count();
+    check("壊れたJSONならカードが0件", cardCount3 === 0);
+
+    // ============================================================
+    // (4) quote/author欠損: カード自体が出ない
+    // ============================================================
+    console.log("[4] quote/authorのいずれかが欠損しているJSONの日はカード自体が表示されない");
+    quoteFixture = JSON.stringify({ author: "著者だけあってquoteが無いケース", note: "※AIによる捏造です", date: TODAY });
+    await seed({ selectedDate: TODAY, view: "home" });
+    const cardCount4 = await page.locator(".home-quote-card").count();
+    check("quote欠損ならカードが0件", cardCount4 === 0);
+
+    // ============================================================
+    // (6) HTML/Markdown的な文字列はエスケープされ、タグとして実行されない
+    // ============================================================
+    console.log("[6] quote/author中のHTMLタグ的な文字列はエスケープされ、要素として実行されない");
+    quoteFixture = JSON.stringify({
+      quote: "<img src=x onerror=alert(1)>捏造格言_v158XSSテスト",
+      author: "<b>強調著者</b>",
+      note: "※AIによる捏造です",
+      date: TODAY,
+    });
+    await seed({ selectedDate: TODAY, view: "home" });
+    const injectedImgCount = await page.locator(".home-quote-card img[onerror]").count();
+    check("onerror付きimgタグが実行可能な要素として存在しない(エスケープ済み)", injectedImgCount === 0);
+    const cardText6 = await page.locator(".home-quote-card").textContent();
+    check("エスケープされたタグ文字列自体はテキストとして読める", cardText6.includes("捏造格言_v158XSSテスト") && cardText6.includes("強調著者"), cardText6);
+
+    // ============================================================
+    // (7) 過去日を閲覧中はカードが出ない
+    // ============================================================
+    // v157.test.jsと同じ理由(起動時仕様でstate.selectedDateが今日へ強制されるため)、
+    // 実際のユーザー操作(「前日」ボタン=date-prevアクション)でセッション内移動させて検証する。
+    console.log("[7] ホームで『前日』ボタンを押して今日以外の日付を閲覧している間はカードが出ない");
+    quoteFixture = JSON.stringify({
+      quote: "過去日閲覧テスト用の格言_v158",
+      author: "過去日テスト著者",
+      note: "※AIによる捏造です",
+      date: TODAY,
+    });
+    await seed({ selectedDate: TODAY, view: "home" });
+    const cardCount7before = await page.locator(".home-quote-card").count();
+    check("前提: 今日を見ている間はカードが出ている", cardCount7before === 1);
+    await page.click('[data-action="date-prev"]');
+    await page.waitForTimeout(200);
+    const cardCount7 = await page.locator(".home-quote-card").count();
+    check("『前日』を押した後(過去日閲覧中)はカードが0件(当日データはfetch済みでも非表示)", cardCount7 === 0);
+
+    // ============================================================
+    // (8) 公開Pages側(同一オリジン)への勝手に格言_*.jsonのfetchは一切発生しない
+    // ============================================================
+    console.log("[8] 公開Pages側(同一オリジン)への勝手に格言_*.jsonのfetchは一度も発生しない");
+    check("同一オリジンでの勝手に格言_*.jsonへのリクエストが0件(すべてapi.github.com経由)",
+      sameOriginRequests.length === 0, JSON.stringify(sameOriginRequests));
+
+    // ============================================================
+    // (9) quote200字境界に絵文字(サロゲートペア)が掛かる場合でも文字化けせずクリップされる
+    // ============================================================
+    console.log("[9] quote200字境界に絵文字が掛かってもコードポイント単位で正しくクリップされる(2026-07-28レビュー対応・項目1)");
+    const EMOJI = "😀";  // U+1F600、UTF-16ではサロゲートペア(2コード単位)・コードポイントは1
+    const TAIL_MARKER_9 = "TAIL_MARKER_SHOULD_BE_CLIPPED_v158";
+    // コードポイント199個の「あ」+ 絵文字1個 = ちょうど200コードポイント目が絵文字になる境界。
+    // 旧実装(s.length/s.sliceでUTF-16コード単位カウント)だと、199文字目までのUTF-16長は199、
+    // そこに絵文字の高位サロゲートだけが200文字目として切り出され、孤立サロゲート(文字化け)を生む。
+    const quoteBody9 = "あ".repeat(199) + EMOJI + TAIL_MARKER_9;
+    quoteFixture = JSON.stringify({ quote: quoteBody9, author: "境界テスト著者_v158", note: "※AIによる捏造です", date: TODAY });
+    await seed({ selectedDate: TODAY, view: "home" });
+    const cardCount9 = await page.locator(".home-quote-card").count();
+    check("200字境界のquoteでもカードは表示される", cardCount9 === 1);
+    const cardText9 = await page.locator(".home-quote-card").textContent();
+    check("境界の絵文字が欠けずそのまま表示される(サロゲート分断による文字化けなし)", cardText9.includes(EMOJI), cardText9.slice(0, 250));
+    check("孤立サロゲートによる置換文字(U+FFFD)が含まれない", !cardText9.includes("�"), cardText9.slice(0, 250));
+    check("200字を超えた末尾のマーカーは表示されない(クリップされている)", !cardText9.includes(TAIL_MARKER_9), cardText9.slice(-80));
+    check("クリップされたことを示す省略記号(…)が絵文字の直後(quote末尾)に付く", cardText9.includes(`${EMOJI}…`), cardText9);
+  } finally {
+    await browser.close();
+    server.close();
+  }
+
+  console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURES`);
+  process.exit(failures === 0 ? 0 : 1);
+})().catch((e) => { console.error(e); process.exit(1); });
