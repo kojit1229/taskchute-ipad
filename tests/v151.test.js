@@ -178,3 +178,88 @@ function check(name, cond, extra = "") {
       s.zeroThinking = s.zeroThinking || { themes: [], entries: [], groups: [], suggestedThemes: [] };
       s.zeroThinking.themes = [
         { id: "v151-zt-ai", text: "AI提案タグのAAテスト", fav: false, questionId: null, createdAt: "2026-07-27T09:00", source: "ai-feedback" },
+        { id: "v151-zt-q", text: "問いタグのAAテスト", fav: false, questionId: "v151-q1", createdAt: "2026-07-27T09:00", source: null }
+      ];
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY });
+    await page.reload();
+    await page.waitForTimeout(500);
+
+    const aiTagLocator = page.locator(".zt-theme-item").filter({ hasText: "AI提案タグのAAテスト" }).locator(".zt-theme-qtag");
+    check("AI提案タグが描画されている", await aiTagLocator.count() === 1);
+    const aiTagOuterHTML = await aiTagLocator.evaluate((el) => el.outerHTML);
+    check("AI提案タグは独自style属性を持たない(背景paint廃止)", !/style\s*=/.test(aiTagOuterHTML), aiTagOuterHTML);
+    const aiTagClass = await aiTagLocator.evaluate((el) => el.className);
+    check("AI提案タグのclassNameが'zt-theme-qtag'ちょうど", aiTagClass === "zt-theme-qtag", aiTagClass);
+
+    const qTagLocator = page.locator(".zt-theme-item").filter({ hasText: "問いタグのAAテスト" }).locator(".zt-theme-qtag");
+    check("比較対象の「問い」タグも描画されている", await qTagLocator.count() === 1);
+
+    async function effectiveContrastRatio(locator) {
+      return locator.evaluate((el) => {
+        function relLuminanceFromRgb(r, g, b) {
+          const lin = (v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+          return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+        }
+        function parseRgb(str) {
+          const m = /rgba?\(([^)]+)\)/.exec(str || "");
+          if (!m) return null;
+          const parts = m[1].split(",").map((s) => parseFloat(s));
+          return { r: parts[0], g: parts[1], b: parts[2], a: parts.length === 4 ? parts[3] : 1 };
+        }
+        const fg = parseRgb(getComputedStyle(el).color);
+        let node = el, bg = null;
+        while (node) {
+          const c = parseRgb(getComputedStyle(node).backgroundColor);
+          if (c && c.a > 0.98) { bg = c; break; }
+          node = node.parentElement;
+        }
+        if (!bg) bg = { r: 255, g: 255, b: 255 };  // 最終フォールバック(通常到達しない)
+        const L1 = relLuminanceFromRgb(fg.r, fg.g, fg.b);
+        const L2 = relLuminanceFromRgb(bg.r, bg.g, bg.b);
+        const lighter = Math.max(L1, L2), darker = Math.min(L1, L2);
+        return (lighter + 0.05) / (darker + 0.05);
+      });
+    }
+    const aiTagContrast = await effectiveContrastRatio(aiTagLocator);
+    check(`AI提案タグの実効コントラストが4.5:1以上(実測${aiTagContrast.toFixed(2)}:1、ダーク既定)`,
+      aiTagContrast >= 4.5, `${aiTagContrast.toFixed(2)}:1`);
+    const qTagContrast = await effectiveContrastRatio(qTagLocator);
+    check("AI提案タグと「問い」タグのコントラストが一致する(同一スタイルであることの裏付け)",
+      Math.abs(aiTagContrast - qTagContrast) < 0.01, `AI提案=${aiTagContrast.toFixed(2)} 問い=${qTagContrast.toFixed(2)}`);
+
+    // ============================================================
+    // (F) 2系統レビュー対応(必須4/8): app.js非依存のフラッシュ防止経路
+    // ============================================================
+    console.log("[F] app.jsをroute.abort()で遮断しても、index.htmlの同期スクリプト単独でdata-theme='dark'+meta更新が効く");
+    const ctx2 = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 1400 } });
+    const page2 = await ctx2.newPage();
+    const appJsRequests = [];
+    await page2.route((url) => url.pathname.endsWith("/app.js"), (route) => {
+      appJsRequests.push(route.request().url());
+      route.abort();
+    });
+    await page2.goto(`http://localhost:${PORT}/`);
+    await page2.waitForTimeout(400);
+    const info2 = await page2.evaluate(() => ({
+      dataTheme: document.documentElement.getAttribute("data-theme"),
+      metaThemeColor: document.querySelector('meta[name="theme-color"]')?.getAttribute("content") || "",
+      appJsExecuted: typeof window.state !== "undefined"  // app.jsが実行されていればグローバルstateが存在する
+    }));
+    check("app.jsへのリクエストが実際に遮断された(前提確認)", appJsRequests.length >= 1, JSON.stringify(appJsRequests));
+    check("app.js遮断下でもdata-theme='dark'(初回・localStorage空の既定)", info2.dataTheme === "dark", JSON.stringify(info2));
+    check("app.js遮断下でもmeta[theme-color]がダーク値'#111216'に更新される", info2.metaThemeColor === "#111216", JSON.stringify(info2));
+    check("app.js自体は本当に実行されていない(前提確認、windowにstateが無い)", info2.appJsExecuted === false, JSON.stringify(info2));
+    await ctx2.close();
+
+  } catch (e) {
+    failures++;
+    console.log("  ❌ 例外:", e.message);
+  } finally {
+    await browser.close();
+    server.close();
+  }
+
+  if (failures === 0) console.log("\n✅ v151 ALL PASS");
+  else { console.log(`\n❌ v151 FAILED (${failures})`); process.exit(1); }
+})();
