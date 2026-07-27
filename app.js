@@ -6256,10 +6256,25 @@ function triageAction(kind, id, action, via = "button") {
       // 「延期する」と判断した対象そのものなので、同じセッションのキューへ即座に再浮上させない
       // (次回セッション=リロード後には通常のWishバックログとして自然に現れる)。
       if (moved) _triageSessionDone.add(moved.id);
-      logMigrationRitual(block, "release");
+      const migResult = logMigrationRitual(block, "release");
       state.blocks = state.blocks.map((b) => b.id === id ? { ...b, deleted: true, updatedAt: nowDateTime() } : b);
-      logSwipeTriage("block", id, action, block.carryCount, via);
-      saveAndRender(moved ? "Wishへ移動しました" : "Blockを削除しました(Wishプロジェクトなし)");
+      const logResult = logSwipeTriage("block", id, action, block.carryCount, via);
+      // v156: 生成物(moveBlockToWishが作ったWish)を丸ごと取り消し、元Blockのdeleted:trueを解除する。
+      // ログは参照一致するエントリだけを取り消す(必須1)。
+      _triageUndo = {
+        guardId: id,
+        revert: () => {
+          if (moved) {
+            state.tasks = state.tasks.filter((t) => t.id !== moved.id);
+            _triageSessionDone.delete(moved.id);
+          }
+          state.blocks = state.blocks.map((b) => b.id === id ? { ...blockSnapshot, updatedAt: nowDateTime() } : b);
+          state.migrationRitualLog = triageUndoLogArray(state.migrationRitualLog, migResult.entry, migResult.evicted);
+          state.swipeTriageLog = triageUndoLogArray(state.swipeTriageLog, logResult.entry, logResult.evicted);
+          _triageSessionDone.delete(id);
+        }
+      };
+      saveAndRender(moved ? "Wishへ移動しました" : "Blockを削除しました(Wishプロジェクトなし)", triageUndoToastOpts(id));
       return true;
     }
     return false;
@@ -6290,8 +6305,31 @@ function triageAction(kind, id, action, via = "button") {
         // _triageSessionDone+wishHasTodayBlockだが、こちらもデータの一貫性として揃える)。
         state.tasks = state.tasks.map((t) => t.id === id ? { ...t, updatedAt: nowDateTime() } : t);
       }
-      logSwipeTriage("wish", id, action, 0, via);
+      const logResult = logSwipeTriage("wish", id, action, 0, via);
       wishSubtaskToTasks(next ? next.id : id);
+      const newBlock = state.blocks.find((b) => !blockIdsBefore.has(b.id));
+      // 新規Blockが作られなかった場合(既に今日Block済み等のガードに当たった)は、
+      // wishSubtaskToTasks自身が別の(Undo対象ではない)トーストを既に出しているため、
+      // Undoは登録せず何も上書きしない。
+      if (newBlock) {
+        _triageUndo = {
+          guardId: id,
+          revert: () => {
+            state.blocks = state.blocks.filter((b) => b.id !== newBlock.id);  // 作成したBlockを取り消し
+            if (targetSnapshot) {
+              state.tasks = state.tasks.map((t) => t.id === targetId ? { ...targetSnapshot, updatedAt: nowDateTime() } : t);  // 元(Wish)へ復元
+            }
+            if (bodySnapshot) {
+              state.tasks = state.tasks.map((t) => t.id === id ? { ...bodySnapshot, updatedAt: nowDateTime() } : t);
+            }
+            state.swipeTriageLog = triageUndoLogArray(state.swipeTriageLog, logResult.entry, logResult.evicted);
+            _triageSessionDone.delete(id);
+          }
+        };
+        // v156 2系統レビュー対応(推奨4): wishSubtaskToTasks内のsaveAndRenderが既に容量超過
+        // 警告を出している場合は上書きしない(block/todayと同じ理由)。
+        if (!_lastSaveError) showToast("今日のタスクシュートに登録しました", triageUndoToastOpts(id));
+      }
       return true;
     }
     if (action === "drop") {
@@ -6309,9 +6347,29 @@ function triageAction(kind, id, action, via = "button") {
         });
       };
       collect(id);
+      // v156: Undo用に本体+全子孫のスナップショットをカスケード範囲と同じ集合で取る
+      // (子孫だけ復元漏れ・取り違えが起きないよう、削除に使うallIdsをそのまま流用する)。
+      const snapshots = [...allIds]
+        .map((tid) => state.tasks.find((t) => t.id === tid))
+        .filter(Boolean)
+        .map((t) => ({ ...t }));
+      _triageLastActionAt = now;
+      _triageLastActionId = id;
+      _triageSessionDone.add(id);
       state.tasks = state.tasks.map((t) => allIds.has(t.id) ? { ...t, deleted: true, updatedAt: nowDateTime() } : t);
-      logSwipeTriage("wish", id, action, 0, via);
-      saveAndRender("手放しました");
+      const logResult = logSwipeTriage("wish", id, action, 0, via);
+      _triageUndo = {
+        guardId: id,
+        revert: () => {
+          state.tasks = state.tasks.map((t) => {
+            const snap = snapshots.find((s) => s.id === t.id);
+            return snap ? { ...snap, updatedAt: nowDateTime() } : t;
+          });
+          state.swipeTriageLog = triageUndoLogArray(state.swipeTriageLog, logResult.entry, logResult.evicted);
+          _triageSessionDone.delete(id);
+        }
+      };
+      saveAndRender("手放しました", triageUndoToastOpts(id));
       return true;
     }
     if (action === "defer") {
@@ -6320,6 +6378,7 @@ function triageAction(kind, id, action, via = "button") {
       // 並ぶため、年を進めないと1月枠=先頭へ見かけ上戻ってしまう=逆行して見えるため)。
       // targetMonth未設定は据え置き=updatedAtのみbumpしてキュー末尾へ(design §③表)。
       // v154: 延期はボタン専用(スワイプの方向割当から廃止。CHANGES_v154.md参照)。
+      const wishSnapshot = { ...wish };  // v156: Undo用(targetMonth/targetYearとも変更前を保持)
       _triageLastActionAt = now;
       _triageLastActionId = id;
       _triageSessionDone.add(id);
@@ -6334,8 +6393,16 @@ function triageAction(kind, id, action, via = "button") {
       } else {
         state.tasks = state.tasks.map((t) => t.id === id ? { ...t, updatedAt: nowDateTime() } : t);
       }
-      logSwipeTriage("wish", id, action, 0, via);
-      saveAndRender("延期しました");
+      const logResult = logSwipeTriage("wish", id, action, 0, via);
+      _triageUndo = {
+        guardId: id,
+        revert: () => {
+          state.tasks = state.tasks.map((t) => t.id === id ? { ...wishSnapshot, updatedAt: nowDateTime() } : t);
+          state.swipeTriageLog = triageUndoLogArray(state.swipeTriageLog, logResult.entry, logResult.evicted);
+          _triageSessionDone.delete(id);
+        }
+      };
+      saveAndRender("延期しました", triageUndoToastOpts(id));
       return true;
     }
     return false;
@@ -16701,26 +16768,50 @@ function setAiReportType(typeId) {
 // v150(UI改善計画Phase4b・R3): 第2引数は完了直後の「実績を編集」導線用(任意)。
 // { blockId, actionLabel } を渡すと、既存の実績登録モーダル(complete-block-with-actual)を
 // 開くボタンをトースト内に添える。既存の呼び出し(第2引数なし)は完全に従来どおりの見た目・挙動。
+// v156レビュー対応(仕分けモードUndo、S3): actionOptsを汎用化した。{ action, id, label,
+// durationMs, onExpire } を渡せば任意のdata-action/data-idボタンを同じ機構(pointer-events
+// 対策・タイマー管理込み)で出せる。blockId指定は従来どおり action="complete-block-with-actual"の
+// ショートハンドとして後方互換を維持する(新しいトースト機構は作らず、この1つを再利用する)。
+// v156 2系統レビュー対応:
+//  (項目5) 汎用経路(action/id指定)はlabelを必須にした(既定値「実績を編集」を出さない)。
+//    blockId経路(旧来の呼び出し)だけが従来どおりactionLabel省略時「実績を編集」にフォールバック
+//    する(後方互換のためこちらだけ残す)。
+//  (項目2) onExpireはタイマー満了(視覚的な非表示化)と同時に呼ばれるコールバック。CSSの
+//    pointer-events:noneは「マウス/タッチでの押下」しか防げず、キーボードでボタンへ既に
+//    フォーカスしていた場合はEnter/Spaceでの活性化がpointer-eventsを無視して素通りする
+//    (Codex指摘)。呼び出し側(triageUndoToastOpts)はここで自身の状態(_triageUndo)を
+//    明示的に無効化し、期限切れ後にEnterで発動しても何も起きないようにする。
 function showToast(message, actionOpts) {
   clearTimeout(toastTimer);
-  const hasAction = Boolean(actionOpts && actionOpts.blockId);
+  const hasGenericAction = Boolean(actionOpts && actionOpts.action && actionOpts.id && actionOpts.label);
+  const hasBlockAction = !hasGenericAction && Boolean(actionOpts && actionOpts.blockId);
+  const hasAction = hasGenericAction || hasBlockAction;
   if (hasAction) {
-    // v150レビュー対応(項目9): blockIdはBlock自身のidをそのままdata-idへ埋め込むだけだが、
+    const actionName = hasGenericAction ? actionOpts.action : "complete-block-with-actual";
+    const dataId = hasGenericAction ? actionOpts.id : actionOpts.blockId;
+    const label = hasGenericAction ? actionOpts.label : (actionOpts.actionLabel || "実績を編集");
+    // v150レビュー対応(項目9): dataIdはBlock/Task自身のidをそのままdata-idへ埋め込むだけだが、
     // 念のためescapeHTMLを通す(他のdata-id埋め込み箇所と同じ防御の一貫性のため)。
-    toastEl.innerHTML = `<span class="toast-msg"></span><button type="button" class="toast-action" data-action="complete-block-with-actual" data-id="${escapeHTML(actionOpts.blockId)}">${escapeHTML(actionOpts.actionLabel || "実績を編集")}</button>`;
+    toastEl.innerHTML = `<span class="toast-msg"></span><button type="button" class="toast-action" data-action="${escapeHTML(actionName)}" data-id="${escapeHTML(dataId)}">${escapeHTML(label)}</button>`;
     toastEl.querySelector(".toast-msg").textContent = message;
   } else {
     toastEl.textContent = message;
   }
   toastEl.classList.toggle("has-action", hasAction);
   toastEl.classList.add("show");
-  // アクション付きは操作の猶予を長めに(既存2.2秒→4.5秒)。
+  // アクション付きは操作の猶予を長めに(既定4.5秒。durationMsで個別に上書き可能——
+  // v156の仕分けUndoは設計書どおり5秒にする)。
   // v150レビュー対応(項目1、両レビュー一致・最重要): "show"だけでなく"has-action"も外す。
   // has-actionが残ると、非表示化後もopacity:0のままpointer-events:autoの透明領域が
   // ボトムナビ中央3ボタンの上に居座り続け、タップがトーストのボタンへ吸われてしまっていた
   // (実測でモーダルが開くことを確認済み)。CSS側にも`.toast:not(.show)`の保険を追加している
   // (styles.css参照)。
-  toastTimer = setTimeout(() => toastEl.classList.remove("show", "has-action"), hasAction ? 4500 : 2200);
+  const durationMs = hasAction ? (actionOpts.durationMs || 4500) : 2200;
+  const onExpire = hasGenericAction && typeof actionOpts.onExpire === "function" ? actionOpts.onExpire : null;
+  toastTimer = setTimeout(() => {
+    toastEl.classList.remove("show", "has-action");
+    if (onExpire) onExpire();
+  }, durationMs);
 }
 
 function ensureJournal(date) {

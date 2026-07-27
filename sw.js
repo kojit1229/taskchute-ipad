@@ -1,4 +1,12 @@
-const CACHE_NAME = "taskchute-journal-pwa-v155";
+const CACHE_NAME = "taskchute-journal-pwa-v156";
+// v156: ADHD支援「①仕分けモード S3(Undo)」— 三択(今日やる/手放す/延期)実行後に5秒間の
+//   Undoトーストを出し、押すと直前の1操作だけを完全に巻き戻す(スタック無し。次の操作で
+//   自動失効)。新しいトースト機構は作らずv150の完了トースト機構(showToastのアクション
+//   ボタン+pointer-events対策)を汎用化して再利用した。復元はフィールド単位の丸ごとスナップ
+//   ショット差し戻し(carryOverBlock等が新規作成したBlock/Wishはid集合の差分検出で特定して
+//   削除)。updatedAtのみ復元時に現在時刻へ(同期で負けないため、decisions.md 2026-07-27
+//   K確定どおり)。swipeTriageLog/migrationRitualLogは直前に積んだ末尾1件を取り消す。
+//   詳細はCHANGES_v156.md参照。
 // v155: ADHD支援「②今日の庭 S2(月間ピクセル)」— v153のgardenLogを、ルーティンタブ先頭の
 //   月間カレンダーとして可視化する。設計書§④本命の「達成順の累積方式」ではなく、
 //   decisions.md 2026-07-27 K確定の段階表示(完了1件=薄緑/50%以上=緑/全完了=濃緑、0件の日は
