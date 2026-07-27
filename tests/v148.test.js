@@ -358,3 +358,92 @@ function check(name, cond, extra = "") {
     const tlBlock = {
       id: "v148-tl-1", taskId: "", date: TODAY, title: "タイムライン確認Block", category: "作業",
       plannedStartAt: `${TODAY}T08:00`, plannedEndAt: `${TODAY}T08:30`,
+      actualStartAt: `${TODAY}T08:00`, actualEndAt: `${TODAY}T08:30`,
+      completed: true, charge: 5, discharge: 1, comment: "", recurrenceGroupId: "", pomodoroCount: 0,
+      migratedTo: "", orderIndex: 0, carryCount: 0, isMIT: false, source: "", estimateMin: null,
+      leverageType: "", createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false
+    };
+    await page.evaluate(({ KEY, block, TODAY }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.blocks = [block];
+      s.tasks = []; s.projects = [];
+      s.selectedDate = TODAY;
+      s.currentView = "timeline";
+      delete s.settings.timelineEnergyGraphMode;  // 既定値の検証のため明示的に未設定へ
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, block: tlBlock, TODAY });
+    await page.reload();
+    await page.waitForTimeout(500);
+    check("既定はエネルギーモード(トグルの「エネルギー」がactive)",
+      await page.locator('[data-action="tl-energy-mode"][data-mode="energy"].active').count() === 1);
+    check("既定表示ではエネルギー系のpolylineが描画される(実線)",
+      await page.locator(".energy-svg polyline").count() >= 1);
+    check("既定表示ではbattery-curveは出ない(1グラフ1スケール)",
+      await page.locator(".battery-curve").count() === 0);
+    const stateBeforeToggle = await stateNow();
+    check("normalizeStateで既定'energy'が補完される", stateBeforeToggle.settings.timelineEnergyGraphMode === "energy",
+      stateBeforeToggle.settings.timelineEnergyGraphMode);
+
+    await page.click('[data-action="tl-energy-mode"][data-mode="battery"]');
+    await page.waitForTimeout(300);
+    check("切替後はバッテリーモードがactiveになる",
+      await page.locator('[data-action="tl-energy-mode"][data-mode="battery"].active').count() === 1);
+    check("切替後はbattery-curveが描画される", await page.locator(".battery-curve").count() === 1);
+    check("切替後はエネルギー系polylineが消える(重ね描きしない)",
+      await page.locator(".energy-svg polyline:not(.battery-curve)").count() === 0);
+    const stateAfterToggle = await stateNow();
+    check("選択状態がstate.settings.timelineEnergyGraphModeに保存される",
+      stateAfterToggle.settings.timelineEnergyGraphMode === "battery", stateAfterToggle.settings.timelineEnergyGraphMode);
+
+    console.log("[6b] reload後も選択状態(バッテリー)が維持される");
+    await page.reload();
+    await page.waitForTimeout(500);
+    check("reload後もバッテリーモードのまま", await page.locator('[data-action="tl-energy-mode"][data-mode="battery"].active').count() === 1);
+    check("reload後もbattery-curveが描画される", await page.locator(".battery-curve").count() === 1);
+
+    console.log("[6c] 過去日ではバッテリーモードのままでもエネルギー系列へ強制フォールバックする"
+      + "(Codex指摘: batteryPtsが常に空になる過去日で選択がbatteryのままだと空グラフになり、"
+      + "復帰手段が無くなる)");
+    // v85仕様: 起動時は必ずselectedDateがtodayISO()へ強制される(セッション内のdate-prev/next操作
+    // だけは尊重される)ため、localStorage直接書き換え+reloadでは過去日を再現できない。
+    // date-prevボタンで実際に移動する。
+    await page.click('[data-action="date-prev"]');
+    await page.waitForTimeout(300);
+    check("(前提)date-prevで過去日へ移動している", (await stateNow()).selectedDate !== TODAY);
+    check("過去日ではトグル選択はバッテリーのままである(設定自体は変更しない)",
+      (await stateNow()).settings.timelineEnergyGraphMode === "battery");
+    check("過去日ではbattery-curveを描画しない(フォールバック)", await page.locator(".battery-curve").count() === 0);
+    check("過去日ではエネルギー系のpolylineが描画される(空グラフにならない)",
+      await page.locator(".energy-svg polyline").count() >= 1);
+    // 当日へ戻すと選択済みのバッテリーモードの表示に復帰する(設定を書き換えていないことの確認)
+    await page.click('[data-action="today"]');
+    await page.waitForTimeout(300);
+    check("当日へ戻すとbattery-curveの表示に復帰する(設定を書き換えていない証拠)",
+      await page.locator(".battery-curve").count() === 1);
+
+    console.log("[6d] compact表示(タスクシュート画面の右レール)ではバッテリーモード選択中でも"
+      + "エネルギー系列へ強制フォールバックする(切替UIが無い場所で復帰手段の無い空グラフを防ぐ)");
+    await page.evaluate(({ KEY }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.currentView = "tasks";
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY });
+    await page.reload();
+    await page.waitForTimeout(500);
+    check("(前提)選択はバッテリーのまま", (await stateNow()).settings.timelineEnergyGraphMode === "battery");
+    const railEnergyOverlay = page.locator("#timelineRail .energy-graph-overlay");
+    check("タスクシュート右レールにエネルギーグラフが表示される(compact)", await railEnergyOverlay.count() === 1);
+    check("compact表示では切替トグルを出さない(復帰手段が無いのでフォールバックが必要な理由)",
+      await page.locator("#timelineRail [data-action=\"tl-energy-mode\"]").count() === 0);
+    check("compact表示ではbattery-curveを描画しない(フォールバック)",
+      await railEnergyOverlay.locator(".battery-curve").count() === 0);
+    check("compact表示ではエネルギー系のpolylineが描画される(空グラフにならない)",
+      await railEnergyOverlay.locator("polyline").count() >= 1);
+
+    console.log(failures === 0 ? "\n✅ v148 ALL PASS" : `\n❌ v148: ${failures} 件失敗`);
+  } finally {
+    await browser.close();
+    server.close();
+  }
+  process.exit(failures === 0 ? 0 : 1);
+})().catch((e) => { console.error(e); process.exit(1); });
