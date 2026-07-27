@@ -8785,40 +8785,154 @@ function renderReports() {
   `;
 }
 
-function renderSettings() {
-  const github = state.settings.github || defaultGitHubSettings();
+// v148(UI改善計画Phase3-2): 設定13パネルを目的別4群のdetails(既定閉、homeFoldSection流用)へ。
+// 既定open判定は群ごとに1つだけ持つ(現在「異常」を検出できるのはデータと同期のsyncAlertMessage()
+// のみ。他3群は判定材料が無いため既定false=閉。将来異常検出を増やす場合はここへ足す)。
+function renderSettingsProfilePanel() {
   return `
-    ${renderHeader("Web版の保存と公開", "設定")}
-    <section class="settings-grid">
-      <div class="panel stack">
-        <h2>プロフィール</h2>
-        <label>生年月日
-          <input class="input" type="date" data-setting-field="birthDate" value="${escapeHTML(state.settings.birthDate || "")}">
-        </label>
-        <label>12WY開始日
-          <input class="input" type="date" data-setting-field="twelveWeekStartDate" value="${state.settings.twelveWeekStartDate || todayISO()}">
-        </label>
+    <h3>プロフィール</h3>
+    <label>生年月日
+      <input class="input" type="date" data-setting-field="birthDate" value="${escapeHTML(state.settings.birthDate || "")}">
+    </label>
+    <label>12WY開始日
+      <input class="input" type="date" data-setting-field="twelveWeekStartDate" value="${state.settings.twelveWeekStartDate || todayISO()}">
+    </label>
+  `;
+}
+
+function renderSettingsBufferPanel() {
+  return `
+    <h3>⏳ 1日バッファ</h3>
+    <div class="muted" style="font-size:12px; line-height:1.6">
+      個々のBlockの見積もりに余裕を足さず、1日の終わりに置く「バッファ」1つに余裕を
+      集約します(クリティカルチェーン法)。ヘッダーの「バッファ残量」は今日を表示中の
+      ときだけ出ます。0以下にすると未設定扱いになり、メーターは表示されません。
+    </div>
+    <label>バッファサイズ(分)
+      <input class="input" type="number" min="0" step="5" data-setting-dailybuffermin
+        value="${Number.isFinite(state.settings.dailyBufferMin) ? state.settings.dailyBufferMin : ""}">
+    </label>
+    <label>1日の締め時刻(0時から何時間後。既定24=24:00/翌0時)
+      <input class="input" type="number" min="1" step="0.5" data-setting-dayclosehours
+        value="${Number.isFinite(state.settings.dayCloseHours) ? state.settings.dayCloseHours : ""}">
+    </label>
+    <div class="muted" style="font-size:11px; line-height:1.6">
+      締め時刻は「計画過積載ガード」(その日最初の予定Blockの開始時刻〜締め時刻の枠に
+      見積合計+バッファが収まらない場合の警告)にのみ使います。タスクの自動削除・
+      移動・並べ替えはしません(気づきの提示のみ)。
+    </div>
+  `;
+}
+
+function renderSettingsBatteryPanel() {
+  return `
+    <h3>🔋 エネルギーバッテリー</h3>
+    <div class="muted" style="font-size:12px; line-height:1.6">
+      朝の残量が時間とともに自動で減り、完了Blockの充電/放電で増減します(通知・アラートは
+      出しません。表示だけで「回復させないと」に気づくための計器です)。開始値は体力予算
+      (🔋体力予算チップ)の判定に連動します。
+    </div>
+    <label>開始値・体力予算「赤字」の日(0〜200)
+      <input class="input" type="number" min="0" max="200" step="1" data-setting-battery-field="start.deficit"
+        value="${state.settings.battery.start.deficit}">
+    </label>
+    <label>開始値・体力予算「低予算」の日(0〜200)
+      <input class="input" type="number" min="0" max="200" step="1" data-setting-battery-field="start.low"
+        value="${state.settings.battery.start.low}">
+    </label>
+    <label>開始値・体力予算「通常」の日(睡眠データ無しの日もこれ、0〜200)
+      <input class="input" type="number" min="0" max="200" step="1" data-setting-battery-field="start.normal"
+        value="${state.settings.battery.start.normal}">
+    </label>
+    <label>減衰率(1時間あたり、0以上)
+      <input class="input" type="number" min="0" step="0.5" data-setting-battery-field="decayPerHour"
+        value="${state.settings.battery.decayPerHour}">
+    </label>
+    <label>減衰開始時刻(既定07:00)
+      <input class="input" type="time" step="300" data-setting-battery-field="decayStartMinutes"
+        value="${minutesToTimeInputValue(state.settings.battery.decayStartMinutes)}">
+    </label>
+    <label>残量の上限(1以上)
+      <input class="input" type="number" min="1" step="1" data-setting-battery-field="max"
+        value="${state.settings.battery.max}">
+    </label>
+    <label class="checkbox-line">
+      <input type="checkbox" data-setting-battery-recoverydraft ${state.settings.battery.recoveryDraft ? "checked" : ""}>
+      🔋 残量低下時に回復Blockを下書き提案する(既定OFF)
+    </label>
+    <label>提案する残量のしきい値(開始値に対する%、既定40)
+      <input class="input" type="number" min="1" max="100" step="1" data-setting-battery-field="recoveryThresholdPct"
+        value="${state.settings.battery.recoveryThresholdPct}">
+    </label>
+    <div class="muted" style="font-size:11px; line-height:1.6">
+      ONの場合、当日の残量がこのしきい値を下回った時点で1日1回、直近4週の実績で充電効果
+      (充電−放電の中央値)が高いBlockを1〜2件、タイムラインの下書きへ静かに配置します
+      (通知・アラートは出しません)。承認/個別却下/ドラッグ調整/一括確定は既存の下書き
+      バーの操作(📋 下書きスケジュールと同じ)をそのまま使います。
+    </div>
+  `;
+}
+
+function renderSettingsDataPanel() {
+  return `
+    <h3>データ</h3>
+    <button class="btn primary" data-action="download-data">JSONエクスポート</button>
+    <label class="btn" style="text-align:center">
+      JSONインポート
+      <input id="importData" type="file" accept="application/json" hidden>
+    </label>
+    <button class="btn danger" data-action="reset-demo">デモデータに戻す</button>
+    <div style="border-top:1px solid var(--line); padding-top:10px">
+      <div style="font-weight:700; font-size:13.5px; margin-bottom:6px">📦 アーカイブ(容量対策)</div>
+      <div class="muted" style="font-size:11.5px; line-height:1.7">
+        端末内データ: <b>${stateSizeLabel()}</b>(localStorage の目安上限 約5MB)<br>
+        ${ARCHIVE_TEXT_KEEP_DAYS}日より古い日報・AIフィードバック・ジャーナルと、${ARCHIVE_BLOCK_KEEP_DAYS}日より古いBlockを
+        <code>archive/archive-年.json</code> へ退避して本体を軽く保ちます。退避分は横断検索の「アーカイブも検索」から読めます。
+        ${state.settings.lastArchivedAt ? `<br>最終アーカイブ: ${state.settings.lastArchivedAt.replace("T", " ")}` : ""}
       </div>
-      <div class="panel stack">
-        <h2>⏳ 1日バッファ</h2>
-        <div class="muted" style="font-size:12px; line-height:1.6">
-          個々のBlockの見積もりに余裕を足さず、1日の終わりに置く「バッファ」1つに余裕を
-          集約します(クリティカルチェーン法)。ヘッダーの「バッファ残量」は今日を表示中の
-          ときだけ出ます。0以下にすると未設定扱いになり、メーターは表示されません。
-        </div>
-        <label>バッファサイズ(分)
-          <input class="input" type="number" min="0" step="5" data-setting-dailybuffermin
-            value="${Number.isFinite(state.settings.dailyBufferMin) ? state.settings.dailyBufferMin : ""}">
-        </label>
-        <label>1日の締め時刻(0時から何時間後。既定24=24:00/翌0時)
-          <input class="input" type="number" min="1" step="0.5" data-setting-dayclosehours
-            value="${Number.isFinite(state.settings.dayCloseHours) ? state.settings.dayCloseHours : ""}">
-        </label>
-        <div class="muted" style="font-size:11px; line-height:1.6">
-          締め時刻は「計画過積載ガード」(その日最初の予定Blockの開始時刻〜締め時刻の枠に
-          見積合計+バッファが収まらない場合の警告)にのみ使います。タスクの自動削除・
-          移動・並べ替えはしません(気づきの提示のみ)。
-        </div>
+      <label class="checkbox-line">
+        <input type="checkbox" data-setting-autoarchive ${state.settings.autoArchive ? "checked" : ""}>
+        自動アーカイブ(1日1回、GitHub保存の書き込み成功後にのみ削除)
+      </label>
+      <button class="btn" data-action="run-archive" style="margin-top:6px">今すぐアーカイブ</button>
+    </div>
+  `;
+}
+
+function renderSettingsCloudPanel(github) {
+  return `
+    <h3>クラウド保存(個人データリポジトリ)</h3>
+    <div class="muted" style="font-size:12px; line-height:1.6">
+      個人データ(app-state.json・日報・AIフィードバック・AIプラン・週次レビュー・AI作業結果・
+      Vision/Affirmation)は、あなた専用の <b>private</b> GitHubリポジトリの <code>taskchute/</code> 配下に
+      Contents API 経由で保存します(v72。旧・同一オリジンfetchへのフォールバックはありません)。<br>
+      自動保存を ON にすると変更後 30 秒で push。起動時に GitHub 側が新しければ自動で取り込みます(新しい方を採用)。
+    </div>
+    <form class="stack" autocomplete="on" onsubmit="return false">
+      <label>Owner
+        <input class="input" data-github-field="dataOwner" value="${escapeHTML(github.dataOwner || "")}"
+          id="gh-owner" name="gh-username" autocomplete="username"
+          autocapitalize="off" autocorrect="off" spellcheck="false">
+      </label>
+      <label>Repository
+        <input class="input" data-github-field="dataRepo" value="${escapeHTML(github.dataRepo || "")}" autocomplete="off" placeholder="personal-data">
+      </label>
+      <label>Branch
+        <input class="input" data-github-field="branch" value="${escapeHTML(github.branch)}" autocomplete="off">
+      </label>
+      <label>保存先ファイル名(taskchute/配下。taskchute/は自動付与されるため入力不要)
+        <input class="input" data-github-field="path" value="${escapeHTML(github.path)}" autocomplete="off" placeholder="app-state.json(taskchute/は付けない)">
+      </label>
+      <div class="muted" style="font-size:11px">推奨: <code>app-state.json</code>(taskchute/ は自動で付くので<b>ここには含めないでください</b>。実際の保存先は <code>taskchute/app-state.json</code>)</div>
+      <label>Fine-grained token
+        <input class="input" type="password" data-github-field="token" value="${escapeHTML(github.token)}"
+          id="gh-token" name="gh-token" autocomplete="current-password"
+          autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="GitHub token">
+      </label>
+      <div class="muted" style="font-size:11px; line-height:1.6">
+        🔑 Owner と Token を入力すると、iOS が「パスワードを保存」を提案します。保存すると次回から
+        <b>タップで自動入力</b>でき、iCloud キーチェーン経由で他の Apple 端末にも同期されます
+        (トークンは端末内の安全な保管庫にのみ保存され、GitHub には送られません)。
       </div>
       <div class="panel stack">
         <h2>🔋 エネルギーバッテリー</h2>
