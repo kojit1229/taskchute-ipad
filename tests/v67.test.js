@@ -238,6 +238,12 @@ function check(name, cond, extra = "") {
     check("queued行には承認/質問ボタンが無い",
       await page.locator(`.ai-work-row:has-text("本番環境への反映") button`).count() === 0);
 
+    // v146(UI改善計画Phase1-1): 「AIから」は参照系として既定closedの折りたたみになった。
+    // 上のcount()ベースの検証はDOMに常在するため無影響だが、ここからのクリック操作には
+    // 表示(open)が要るため開く。
+    await page.locator("details.home-ai-hub summary").first().click();
+    await page.waitForTimeout(150);
+
     console.log("[8] completed: 「実績として登録」ワンタップで実績Blockが作成され、Taskも完了化される");
     await page.click(`[data-action="ai-work-approve"][data-result-id="${resultIdCompleted}"]`);
     await page.waitForTimeout(300);

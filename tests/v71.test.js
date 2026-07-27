@@ -128,14 +128,15 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (b) ホームの折りたたみ
     // ============================================================
-    // v72(K指示・追加要件): 信条/寿命はホーム最上部(Now/MITより上)へ移動し、既定openに変更。
-    // 長い弧/今日の足あとは既存どおり下部・既定closedのまま(CHANGES_v72.md参照)。
-    console.log("[2] ホームの折りたたみ: 信条/寿命は既定open(v72でトップ移動)、長い弧/足あとは既定closed");
+    // v146(UI改善計画Phase1-1、K承認): 信条/寿命は参照系セクションとして下段へ移動し、
+    // 既定closedに変更した(v72時点の既定openから反転。CHANGES_v146.md参照)。
+    // 長い弧/今日の足あとは既存どおり下部・既定closedのまま。
+    console.log("[2] ホームの折りたたみ: 信条/寿命は既定closed(v146)、長い弧/足あとも既定closed");
     await page.evaluate((FOLD_KEY) => localStorage.removeItem(FOLD_KEY), FOLD_KEY);
     await seed({ blocks: [], view: "home" });
     for (const id of ["creed", "lifespan"]) {
       const isOpen = await page.locator(`details[data-fold-id="${id}"]`).evaluate((el) => el.open);
-      check(`${id} は既定open(v72)`, isOpen === true, String(isOpen));
+      check(`${id} は既定closed(v146)`, isOpen === false, String(isOpen));
     }
     for (const id of ["zone3", "zone4"]) {
       const isOpen = await page.locator(`details[data-fold-id="${id}"]`).evaluate((el) => el.open);
@@ -174,6 +175,16 @@ function check(name, cond, extra = "") {
     check("候補タスクXが表示される", hubText.includes("テスト候補タスクX"), hubText);
     check("候補タスクYが表示される", hubText.includes("テスト候補タスクY"), hubText);
     check("鮮度インジケータはページ全体で1箇所(AIからカード内)のみ(集約済み・重複表示なし)", await page.locator(".ai-freshness-line").count() === 1);
+
+    // v146(UI改善計画Phase1-1): 「AIから」は参照系として既定closedの折りたたみになった。
+    // 中の候補ボタンを操作するにはまず開く必要がある(textContent自体はDOMに常在するため
+    // 上のtextベース検証には影響しない)。
+    console.log("[4b] 「AIから」は既定closed(v146)。開くと候補ボタンが操作できる");
+    const aiHubFold = page.locator("details.home-ai-hub");
+    check("AIからは既定closed(v146)", await aiHubFold.evaluate((el) => el.open) === false);
+    await aiHubFold.locator("summary").first().click();
+    await page.waitForTimeout(150);
+    check("開くとopen属性が付く", await aiHubFold.evaluate((el) => el.open));
 
     console.log("[5] 候補の「＋ 主役に」は移動後も動作し、今日の主役(MIT)に追加される");
     await page.click('.home-ai-hub [data-action="mit-candidate-add"][data-title="テスト候補タスクX"]');

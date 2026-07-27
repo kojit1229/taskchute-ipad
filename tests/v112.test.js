@@ -141,8 +141,14 @@ function check(name, cond, extra = "") {
     // (c) タスクを完了にすると一覧から消える(v107回帰の維持確認)
     // ============================================================
     console.log("[3] タスクを完了にすると一覧から消える(v107回帰の維持確認)");
-    await page.click(`[data-action="toggle-task-complete"][data-id="${blocksForA2[0].id}"]`);
+    // v146でBlockシュート行から🏁(toggle-task-complete)がBlock編集モーダルへ移設されたため、
+    // 行内の直接クリックではなくモーダルを開いてから操作する(tests/v107.test.jsと同じパターン)。
+    await page.click(`[data-action="edit-block"][data-id="${blocksForA2[0].id}"]`);
+    await page.waitForTimeout(200);
+    await page.click(`.modal-card [data-action="toggle-task-complete"][data-id="${blocksForA2[0].id}"]`);
     await page.waitForTimeout(300);
+    await page.click('[data-action="modal-close"]');
+    await page.waitForTimeout(150);
     const s3 = await stateNow();
     const tA3 = s3.tasks.find((t) => t.id === "task-A");
     check("Taskがcompletedになる", tA3?.status === "completed", JSON.stringify(tA3));

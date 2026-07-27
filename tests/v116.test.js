@@ -195,15 +195,16 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (4) バッファ未設定日の表示(フェイルソフト)
     // ============================================================
-    console.log("[4] dailyBufferMinが0以下の日は「未設定」のフェイルソフト表示になる(クラッシュしない)");
+    console.log("[4] dailyBufferMinが0以下の日は帯自体が非表示になる(v146レビュー対応。クラッシュしない)");
+    // v146レビュー対応(計画1-4の明記事項): 未設定時は「設定してください」帯を出さず完全に
+    // 非表示にする(設定への導線は設定画面内の「⏳ 1日バッファ」パネルで維持)。
     await seed({ settings: { dailyBufferMin: 0 }, blocks: [] });
     const m4a = await meterInfo();
-    check("0のときは未設定表示になる", m4a && m4a.level === "unset", JSON.stringify(m4a));
-    check("未設定表示にも案内文がある", m4a && m4a.text.includes("未設定"), JSON.stringify(m4a));
+    check("0のときは帯自体が出ない(非表示)", m4a === null, JSON.stringify(m4a));
 
     await seed({ settings: { dailyBufferMin: -30 }, blocks: [] });
     const m4b = await meterInfo();
-    check("負の値(壊れたデータ)でも未設定表示にフェイルソフトする", m4b && m4b.level === "unset", JSON.stringify(m4b));
+    check("負の値(壊れたデータ)でも帯は出ない(クラッシュせずフェイルソフト)", m4b === null, JSON.stringify(m4b));
 
     // ============================================================
     // (5) K追加要件: 計画過積載ガード

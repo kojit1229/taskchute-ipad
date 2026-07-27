@@ -17,8 +17,10 @@
 // (b) タスク完了チェック(🏁)→そのBlockも完了になり、Task側もv95連動込みで完了する。
 //     同じTaskの他の未完了Blockには触れない
 // (c) タスク完了チェックを外す→Taskの完了だけ解除される(Block側は完了のまま維持)
-// (d) Block完了チェックとタスク完了チェックはクラス名・アイコンで視覚的に区別できる
-// (e) 390px幅で横スクロールが発生せず、両チェックが表示される
+// (d) Block完了チェック(✓)は行に残り、タスク完了チェック(🏁)はクラス名・アイコンで
+//     視覚的に区別できる(v146でBlock編集モーダルへ移設。誤タップ対策)
+// (e) 390px幅で横スクロールが発生しない。Block完了チェックは行に、タスク完了チェックは
+//     モーダルにある(v146: 🏁はタスクシュート行から誤タップ対策で撤去し、Block編集モーダルへ移設)
 // (f) Task編集モーダルで「完了」に保存→v95連動+WBSで完了表示+未完了一覧から消える
 // (g) WBSタブのチェックボックス(既存のtoggleTask)で完了→未完了一覧から消える(回帰)
 // (h) 期日未設定Taskは未完了一覧に表示されない(K指示、v97からの仕様変更)
@@ -133,8 +135,11 @@ function check(name, cond, extra = "") {
 
     // ============================================================
     // (b) タスク完了チェック(🏁)→Blockも完了+Task側もv95連動込みで完了。他Blockは不変
+    // v146(UI改善計画Phase1-3、誤タップ対策): 🏁はタスクシュート行から撤去され、
+    // Block編集モーダル内のボタンへ移設された。挙動(toggleTaskCompleteFromBlock)自体は無変更
+    // のため、モーダルを開いてから操作する形に追随した。
     // ============================================================
-    console.log("[2] タスク完了チェック(🏁)→そのBlockも完了、Taskはv95連動込みで完了、同Taskの他Blockは不変");
+    console.log("[2] タスク完了チェック(🏁、Block編集モーダル内)→Blockも完了、Taskはv95連動込みで完了、同Taskの他Blockは不変");
     await seed({
       tasks: [wbsTask("task-B", "複数Block検証Task", { progressNum: 2, progressDen: 10 })],
       blocks: [
@@ -144,8 +149,13 @@ function check(name, cond, extra = "") {
       projects: [testProject()],
       view: "tasks"
     });
-    check("タスク完了トグルが表示される(Task紐づきBlockのみ)", await page.locator('[data-action="toggle-task-complete"][data-id="block-B1"]').count() === 1);
-    await page.click('[data-action="toggle-task-complete"][data-id="block-B1"]');
+    check("タスク完了トグルは行内には無い(v146で誤タップ対策のため撤去)",
+      await page.locator('[data-action="toggle-task-complete"][data-id="block-B1"]').count() === 0);
+    await page.click('[data-action="edit-block"][data-id="block-B1"]');
+    await page.waitForTimeout(200);
+    const modalTaskCheck1 = page.locator('.modal-card [data-action="toggle-task-complete"][data-id="block-B1"]');
+    check("Block編集モーダル内にタスク完了トグルが表示される(Task紐づきBlockのみ)", await modalTaskCheck1.count() === 1);
+    await modalTaskCheck1.click();
     await page.waitForTimeout(300);
     const s2 = await stateNow();
     const t2 = s2.tasks.find((t) => t.id === "task-B");
@@ -155,36 +165,73 @@ function check(name, cond, extra = "") {
     check("Taskの分子が分母(10)に揃う(v95連動)", t2?.progressNum === 10, JSON.stringify(t2));
     check("チェックしたBlock(B1)はcompletedになる", bB1?.completed === true, JSON.stringify(bB1));
     check("同じTaskの他のBlock(B2)は完了にならない", bB2?.completed === false, JSON.stringify(bB2));
+    await page.click('[data-action="modal-close"]');
+    await page.waitForTimeout(150);
     check("未完了タスク一覧から消える", await page.locator('.item [data-action="task-today"][data-id="task-B"]').count() === 0);
 
     // ============================================================
     // (c) タスク完了チェックを外す→Taskの完了だけ解除、Blockは完了のまま
     // ============================================================
-    console.log("[3] タスク完了チェックを外す→Taskの完了だけ解除される(Block側は完了のまま維持)");
-    await page.click('[data-action="toggle-task-complete"][data-id="block-B1"]');
+    console.log("[3] タスク完了チェックを外す(モーダル内)→Taskの完了だけ解除される(Block側は完了のまま維持)");
+    await page.click('[data-action="edit-block"][data-id="block-B1"]');
+    await page.waitForTimeout(200);
+    await page.click('.modal-card [data-action="toggle-task-complete"][data-id="block-B1"]');
     await page.waitForTimeout(300);
     const s3 = await stateNow();
     const t3 = s3.tasks.find((t) => t.id === "task-B");
     const b3 = s3.blocks.find((b) => b.id === "block-B1");
     check("Taskはdoingに戻る(Blockに実績があるためtodoではない)", t3?.status === "doing", JSON.stringify(t3));
     check("Block(B1)は完了のまま(解除しない)", b3?.completed === true, JSON.stringify(b3));
+    // v146: toggleTaskCompleteFromBlockは対象のBlock編集モーダルが開いたままなら再描画する
+    // (renderModal(buildBlockModal(...))で更新するため、closeModalを呼ばずとも状態を反映できる)。
+    check("モーダルは閉じずに再描画され、ボタンが「紐づくTaskも完了にする」表示に戻る",
+      (await page.locator('.modal-card [data-action="toggle-task-complete"][data-id="block-B1"]').textContent())?.includes("紐づくTaskも完了にする"));
+    await page.click('[data-action="modal-close"]');
+    await page.waitForTimeout(150);
     check("未完了タスク一覧へ戻る", await page.locator('.item [data-action="task-today"][data-id="task-B"]').count() === 1);
 
     // ============================================================
-    // (d) 2つのチェックがクラス名・アイコンで視覚的に区別できる
+    // (d) 🏁はBlock行から編集モーダルへ移設されている(v146 誤タップ対策)
     // ============================================================
-    console.log("[4] Block完了チェックとタスク完了チェックがクラス名・アイコンで区別できる");
+    console.log("[4] Block完了チェック(✓)は行に残り、タスク完了チェック(🏁)は編集モーダルへ移設されている");
     const blockCheck = page.locator('[data-action="toggle-block"][data-id="block-B1"]');
-    const taskCheck = page.locator('[data-action="toggle-task-complete"][data-id="block-B1"]');
     check("Block完了チェックは.checkbox-buttonクラス", await blockCheck.evaluate((el) => el.classList.contains("checkbox-button")));
-    check("タスク完了チェックは.task-complete-toggleクラス(別クラス)", await taskCheck.evaluate((el) => el.classList.contains("task-complete-toggle")));
     check("Block完了チェックのアイコンは✓", (await blockCheck.textContent())?.trim() === "✓");
-    check("タスク完了チェックのアイコンは🏁(別アイコン)", (await taskCheck.textContent())?.trim() === "🏁");
+    await page.click('[data-action="edit-block"][data-id="block-B1"]');
+    await page.waitForTimeout(200);
+    const modalTaskCheck2 = page.locator('.modal-card [data-action="toggle-task-complete"][data-id="block-B1"]');
+    check("モーダル内のタスク完了ボタンは🏁アイコンを含む", (await modalTaskCheck2.textContent())?.includes("🏁"));
+    await page.click('[data-action="modal-close"]');
+    await page.waitForTimeout(150);
 
     // ============================================================
-    // (e) 390px幅で横スクロールが発生せず、両チェックが表示される
+    // (d2) v146レビュー対応: 🏁押下時の再描画は編集中の他フィールドを破棄しない
+    //      (renderModal(buildBlockModal(...))直呼びからrerenderActiveModal(["completed"])へ変更)
     // ============================================================
-    console.log("[5] 390px幅で横スクロールが発生せず、Block完了/タスク完了の両チェックが表示される");
+    console.log("[4b] Block編集モーダルでタイトルを書きかけの状態で🏁を押しても、書きかけの内容が残る");
+    await page.click('[data-action="edit-block"][data-id="block-B1"]');
+    await page.waitForTimeout(200);
+    const titleField = page.locator('.modal-card [data-modal-field="title"]');
+    await titleField.fill("書きかけタイトルXYZ");
+    await page.click('.modal-card [data-action="toggle-task-complete"][data-id="block-B1"]');
+    await page.waitForTimeout(300);
+    check("🏁押下後もモーダルは開いたまま", await page.locator(".modal-card").count() === 1);
+    check("書きかけのタイトルが保持されている(古い保存値へ巻き戻らない)",
+      await titleField.inputValue() === "書きかけタイトルXYZ", await titleField.inputValue());
+    const s4b = await stateNow();
+    check("🏁の効果自体は反映される(taskBが再度completedになる)",
+      s4b.tasks.find((t) => t.id === "task-B")?.status === "completed", JSON.stringify(s4b.tasks.find((t) => t.id === "task-B")));
+    check("🏁ボタンのラベルも最新状態(完了済み)を反映する(古いキャッシュ値へ巻き戻らない)",
+      (await page.locator('.modal-card [data-action="toggle-task-complete"][data-id="block-B1"]').textContent())?.includes("完了済み"));
+    check("完了済み(Block)チェックボックスも最新値を反映する(completedを復元対象から除外済み)",
+      await page.locator('.modal-card [data-modal-field="completed"]').isChecked());
+    await page.click('[data-action="modal-close"]');
+    await page.waitForTimeout(150);
+
+    // ============================================================
+    // (e) 390px幅で横スクロールが発生せず、Block完了チェック(行)が表示される
+    // ============================================================
+    console.log("[5] 390px幅で横スクロールが発生しない。Block完了チェックは行に、タスク完了チェックはモーダルにある");
     const ctxMobile = await browser.newContext({ serviceWorkers: "block", viewport: { width: 390, height: 844 } });
     const pageMobile = await ctxMobile.newPage();
     pageMobile.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror(mobile):", e.message); });
@@ -219,7 +266,8 @@ function check(name, cond, extra = "") {
     await pageMobile.reload();
     await pageMobile.waitForTimeout(500);
     check("390px幅でBlock完了チェックが見える", await pageMobile.locator('[data-action="toggle-block"][data-id="block-M"]').count() === 1);
-    check("390px幅でタスク完了チェックが見える", await pageMobile.locator('[data-action="toggle-task-complete"][data-id="block-M"]').count() === 1);
+    check("390px幅では行内にタスク完了チェックが無い(モーダルへ移設済み)",
+      await pageMobile.locator('[data-action="toggle-task-complete"][data-id="block-M"]').count() === 0);
     const metricsMobile = await pageMobile.evaluate(() => {
       const doc = document.scrollingElement || document.documentElement;
       return { scrollWidth: doc.scrollWidth, clientWidth: doc.clientWidth };
@@ -227,6 +275,14 @@ function check(name, cond, extra = "") {
     check("390px幅で横スクロールが発生しない(scrollWidth <= clientWidth)",
       metricsMobile.scrollWidth <= metricsMobile.clientWidth + 1,
       `scrollWidth=${metricsMobile.scrollWidth} clientWidth=${metricsMobile.clientWidth}`);
+    // v146レビュー対応(item9): モーダルへ移設した🏁が390px幅でも実際に到達可能(可視)であることを
+    // 明示的に確認する(行から消えたことの確認だけでは、モーダル側で見えなくなっていないかは分からない)。
+    await pageMobile.click('[data-action="edit-block"][data-id="block-M"]');
+    await pageMobile.waitForTimeout(200);
+    const modalTaskCheckMobile = pageMobile.locator('.modal-card [data-action="toggle-task-complete"][data-id="block-M"]');
+    check("390px幅でBlock編集モーダルを開くと🏁ボタンが可視状態である", await modalTaskCheckMobile.isVisible());
+    await pageMobile.click('[data-action="modal-close"]');
+    await pageMobile.waitForTimeout(150);
     await ctxMobile.close();
 
     // ============================================================

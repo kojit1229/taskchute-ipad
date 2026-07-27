@@ -225,9 +225,12 @@ function check(name, cond, extra = "") {
     check("縮退バナーは出ない", await page.locator(".cond-degraded-banner").count() === 0);
     check("「今日のリズム」ゾーンは折りたたみ化されない(通常表示)",
       await page.locator('details[data-fold-id="zone2-degraded"]').count() === 0);
-    check("「AIから」カードも通常表示(非折りたたみ)のまま",
+    // v146(UI改善計画Phase1-1): 「AIから」は常時表示のsectionから既定closedのdetailsへ変更された。
+    // ここで検証したいのは「縮退専用の ai-hub-degraded ではなく通常の ai-hub 側が使われる」ことなので、
+    // タグをdetailsに追随させる(常時表示自体はH3の折りたたみ既定値検証の担当)。
+    check("「AIから」カードは通常のai-hub(縮退用ではない)側が使われる",
       await page.locator('details[data-fold-id="ai-hub-degraded"]').count() === 0
-      && await page.locator("section.home-ai-hub").count() === 1);
+      && await page.locator('details[data-fold-id="ai-hub"].home-ai-hub').count() === 1);
 
     // ============================================================
     // (f) 週次レビューのミニ相関表
