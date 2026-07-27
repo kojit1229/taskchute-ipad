@@ -178,3 +178,176 @@ const COOLDOWN_WAIT = 500;
   // [6] Wish「手放す」: 本体+子孫サブタスクをカスケードでsoft-delete(裁定事項)
   // ============================================================
   console.log("[6] Wishの「手放す」: 本体だけでなく子孫サブタスク(完了済み含む)もカスケードでdeleted化される");
+  check("次のカードはカスケード削除対象Wish", (await cardTitle()) === "カスケード削除対象Wish", await cardTitle());
+  await clickChoice("drop");
+  await pageA.waitForTimeout(150);
+  snap = await stateNow();
+  const cascadeParent = snap.tasks.find((t) => t.id === "wish-v152-cascade");
+  const cascadeSubA = snap.tasks.find((t) => t.id === "wish-v152-cascade-sub-a");
+  const cascadeSubB = snap.tasks.find((t) => t.id === "wish-v152-cascade-sub-b");
+  check("本体がdeleted化される", cascadeParent.deleted === true);
+  check("完了済みサブタスクもdeleted化される(カスケード)", cascadeSubA.deleted === true, JSON.stringify(cascadeSubA));
+  check("未完了サブタスクもdeleted化される(カスケード)", cascadeSubB.deleted === true, JSON.stringify(cascadeSubB));
+  check("残枚数が4枚に減る", await remainCount() === 4, String(await remainCount()));
+
+  await pageA.waitForTimeout(COOLDOWN_WAIT);
+
+  // ============================================================
+  // [7] Wish「今日やる」(サブタスクあり): 先頭サブタスクがBlock化(todayISO基準)。
+  //     本体は削除されずキューに残るが、同セッション中は即再出現しない
+  // ============================================================
+  console.log("[7] サブタスク持ちWishの「今日やる」: 先頭サブタスクがtodayISO基準でBlock化され、本体は同セッション中は再浮上しない");
+  check("次のカードはサブタスク持ちWish", (await cardTitle()) === "サブタスク持ちWish", await cardTitle());
+  await clickChoice("today");
+  await pageA.waitForTimeout(150);
+  snap = await stateNow();
+  const subBlock = snap.blocks.find((b) => b.title === "先頭サブタスク");
+  const sub = snap.tasks.find((t) => t.id === "wish-v152-sub");
+  const parentWish = snap.tasks.find((t) => t.id === "wish-v152-withsub");
+  check("サブタスクのタイトルでBlockが作られる(本体ではなくサブタスクをBlock化)", !!subBlock, JSON.stringify(snap.blocks.map((b) => b.title)));
+  check("複製Blockの日付は実時計の今日(TODAY)", !!subBlock && subBlock.date === TODAY, JSON.stringify(subBlock));
+  check("サブタスクのstatusがdoingになる", sub.status === "doing", JSON.stringify(sub));
+  check("Wish本体は削除されずに残る", parentWish.deleted === false);
+  check("残枚数が3枚のまま(削除ではないが即再出現しない=終端性)", await remainCount() === 3, String(await remainCount()));
+  check("次のカードは「サブタスク持ちWish」ではない(即再出現しない)", (await cardTitle()) !== "サブタスク持ちWish", await cardTitle());
+  check("次のカードは延期(年あり)対象Wish", (await cardTitle()) === "延期(年あり)対象Wish", await cardTitle());
+
+  await pageA.waitForTimeout(COOLDOWN_WAIT);
+
+  // ============================================================
+  // [8] Wish「延期」: targetYearありは+1(12月→翌年1月)
+  // ============================================================
+  console.log("[8] targetYearありのWishを延期: targetMonth=1・targetYearは2026→2027");
+  await clickChoice("defer");
+  await pageA.waitForTimeout(150);
+  snap = await stateNow();
+  const deferYear = snap.tasks.find((t) => t.id === "wish-v152-defer-year");
+  check("targetMonthが12→1になる", deferYear.targetMonth === 1, String(deferYear.targetMonth));
+  check("targetYearが2026→2027になる(既存値+1)", deferYear.targetYear === 2027, String(deferYear.targetYear));
+  check("残枚数が2枚に減る", await remainCount() === 2, String(await remainCount()));
+  check("次のカードは延期(年なし)対象Wish", (await cardTitle()) === "延期(年なし)対象Wish", await cardTitle());
+
+  await pageA.waitForTimeout(COOLDOWN_WAIT);
+
+  // ============================================================
+  // [9] Wish「延期」: targetYearがnullのときは todayISO()年+1 を設定(月間ボードの逆行防止)
+  // ============================================================
+  console.log("[9] targetYearがnullのWishを延期: targetMonth=1・targetYearは(実行年+1)が新規設定される");
+  await clickChoice("defer");
+  await pageA.waitForTimeout(150);
+  snap = await stateNow();
+  const deferNoYear = snap.tasks.find((t) => t.id === "wish-v152-defer-noyear");
+  check("targetMonthが12→1になる", deferNoYear.targetMonth === 1, String(deferNoYear.targetMonth));
+  check(`targetYearがnullから${REAL_YEAR + 1}に設定される`, deferNoYear.targetYear === REAL_YEAR + 1, String(deferNoYear.targetYear));
+  check("残枚数が1枚に減る", await remainCount() === 1, String(await remainCount()));
+  check("次のカードは延期(未定)対象Wish", (await cardTitle()) === "延期(未定)対象Wish", await cardTitle());
+
+  await pageA.waitForTimeout(COOLDOWN_WAIT);
+
+  // ============================================================
+  // [10] Wish「延期」: targetMonth未設定は据え置き(updatedAtのみbump) → 全件処理完了
+  // ============================================================
+  console.log("[10] targetMonth未設定のWishを延期: targetMonthは変わらずupdatedAtだけ進み、最後の1枚が処理されて仕分け完了になる");
+  await clickChoice("defer");
+  await pageA.waitForTimeout(150);
+  snap = await stateNow();
+  const deferNone = snap.tasks.find((t) => t.id === "wish-v152-defer-none");
+  check("targetMonthはnullのまま", deferNone.targetMonth === null, String(deferNone.targetMonth));
+  check("updatedAtは進む(2026-01-05から更新される)", deferNone.updatedAt !== "2026-01-05T09:00:00", deferNone.updatedAt);
+  check("残枚数が0枚になる(全8件処理完了=キューが終端する)", await pageA.locator(".triage-actions").count() === 0);
+  check("「仕分け完了 🎉」が表示される", (await pageA.locator(".triage-panel").textContent() || "").includes("仕分け完了"));
+
+  await ctxA.close();
+
+  // ============================================================
+  // Part B: 過去日を閲覧中でも「今日やる」は実時計の今日基準でBlockを作る(必須2)。
+  //         かつ「status=doingかつ当日Block済み」のWishは新規ページでも最初から対象外(必須1後段)
+  // ============================================================
+  console.log("[Part B] 過去日閲覧中の「今日やる」は実時計の今日基準/ status=doing+当日Block済みWishは最初から対象外");
+  // v152レビュー対応注記: サイドバーnav(data-action="nav")はモバイル幅では非表示になり
+  // ボトムナビ側の限定メニューに切り替わるため、ここではデスクトップ幅を使いサイドバーの
+  // data-action="nav"ボタンをそのままクリックできるようにする(モバイル幅の検証はPart Aで実施済み)。
+  const ctxB = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 1000 } });
+  const pageB = await ctxB.newPage();
+  pageB.on("pageerror", (e) => { failures++; console.log("  ❌ [B] pageerror:", e.message); });
+  pageB.on("dialog", async (d) => { failures++; console.log("  ❌ [B] 予期しないネイティブダイアログ:", d.message()); await d.dismiss(); });
+  await blockGithubApiByDefault(pageB);
+  await pageB.goto(`http://localhost:${PORT}/`);
+  await pageB.waitForTimeout(600);
+  await passGithubGate(pageB);
+
+  const wishProjectIdB = await pageB.evaluate((KEY) => {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    const wp = s.projects.find((p) => p.kind === "wish" && !p.deleted);
+    return wp ? wp.id : null;
+  }, KEY);
+
+  await pageB.evaluate(({ KEY, wishProjectId, TODAY }) => {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    s.tasks = s.tasks.filter((t) => t.projectId !== wishProjectId);
+    const wish = (id, title, extra) => ({
+      id, projectId: wishProjectId, parentTaskId: "", title, category: "", status: "todo",
+      dueDate: "", description: "", lifeArea: "", motivation: "",
+      targetYear: null, targetMonth: null, realized: false, realizedDate: "",
+      createdAt: "2026-01-01T09:00:00", updatedAt: "2026-01-01T09:00:00", deleted: false, ...extra
+    });
+    // 対象1: 過去日基準テスト用(サブタスク無し=本体そのものがBlock化対象)
+    s.tasks.push(wish("wish-v152-pastdate", "過去日確認用Wish"));
+    // 対象2: 「既に当日Block済み」を模したWish(status:doing+当日日付のBlockが既存)。
+    //         セッション内除外(_triageSessionDone)はページリロードで空になるため、これが
+    //         無いと新規ページ・新規セッションでも毎回再出現してしまう(必須1の後段要件)。
+    s.tasks.push(wish("wish-v152-already-done", "既に当日Block済みのWish", { status: "doing" }));
+    s.blocks.push({
+      id: "block-v152-already-done", taskId: "wish-v152-already-done", date: TODAY,
+      title: "既に当日Block済みのWish", category: "回復", estimateMin: 20, carryCount: 0,
+      migratedTo: "", completed: false, recurrenceGroupId: "", deleted: false,
+      createdAt: `${TODAY}T09:00:00`, updatedAt: `${TODAY}T09:00:00`
+    });
+    s.currentView = "home";
+    s.wishViewMode = "triage";
+    localStorage.setItem(KEY, JSON.stringify(s));
+  }, { KEY, wishProjectId: wishProjectIdB, TODAY });
+  await pageB.reload();
+  await pageB.waitForTimeout(500);
+
+  console.log("[B1] 「既に当日Block済み」のWishは新規セッションでも最初からキューに出ない");
+  await pageB.click('[data-action="nav"][data-view="wish"]');
+  await pageB.waitForTimeout(300);
+  await pageB.click('[data-action="wish-view-mode"][data-mode="triage"]');
+  await pageB.waitForTimeout(300);
+  const remainCountB = async () => {
+    const txt = await pageB.locator(".triage-panel > .muted").first().textContent();
+    return Number((txt || "").match(/\d+/)?.[0]);
+  };
+  check("残枚数は1枚のみ(既に当日Block済みのWishは除外される)", await remainCountB() === 1, String(await remainCountB()));
+  check("表示される唯一のカードは過去日確認用Wish", (await pageB.locator(".triage-card-title").textContent()) === "過去日確認用Wish");
+
+  console.log("[B2] 過去日(3日前)を閲覧した直後でも、「今日やる」で作られるBlockは実時計の今日日付になる");
+  await pageB.click('[data-action="nav"][data-view="home"]');
+  await pageB.waitForTimeout(300);
+  await pageB.click('[data-action="date-prev"]');
+  await pageB.click('[data-action="date-prev"]');
+  await pageB.click('[data-action="date-prev"]');
+  await pageB.waitForTimeout(200);
+  const selectedDateAfterNav = await pageB.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).selectedDate, KEY);
+  check("selectedDateが実時計の今日より過去になっている(前提確認)", selectedDateAfterNav < TODAY, selectedDateAfterNav);
+
+  await pageB.click('[data-action="nav"][data-view="wish"]');
+  await pageB.waitForTimeout(300);
+  check("過去日閲覧中でもtriage-panelが表示される(selectedDateに関わらずWishタブは独立)", await pageB.locator(".triage-panel").count() === 1);
+  await pageB.locator('.triage-actions [data-choice="today"]').click();
+  await pageB.waitForTimeout(300);
+  const snapB = await pageB.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
+  const pastDateBlock = snapB.blocks.find((b) => b.title === "過去日確認用Wish");
+  check("過去日を閲覧中でも作られたBlockの日付は実時計の今日(TODAY)になる(選択中の過去日ではない)",
+    !!pastDateBlock && pastDateBlock.date === TODAY, JSON.stringify(pastDateBlock));
+  check("selectedDate(過去日)はそのまま残っている(この修正がナビゲーション自体を変えていない確認)",
+    snapB.selectedDate === selectedDateAfterNav, snapB.selectedDate);
+
+  await ctxB.close();
+
+  console.log(failures === 0 ? "\n✅ v152 ALL PASS" : `\n❌ v152: ${failures} 件失敗`);
+  await browser.close();
+  server.close();
+  process.exit(failures === 0 ? 0 : 1);
+})();
