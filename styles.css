@@ -20,6 +20,16 @@
   --purple-soft: #efebff;
   --teal: #13b5a6;
   --teal-soft: #d6f4f1;
+  /* v147(UI改善計画Phase2 2-3): 文字色として使うorange/green/tealはそのままだと白背景で
+     AA(4.5:1)未達(orange 2.20:1 / green 2.54:1 / teal 2.56:1)。バー・背景・アイコン装飾用の
+     --orange/--green/--tealはそのまま残し、実際に文字色として使う箇所だけこの-textトークンへ
+     切り替える。レビュー対応(2026-07-27): 白背景だけでなく実際に組み合わせて使われる
+     --orange-soft/--green-soft/--teal-soft/--panel-softの上でも4.5:1を満たす濃度まで
+     一段濃くした(最も厳しい--teal-soft(#d6f4f1)上でもorange 5.55:1 / green 5.61:1 /
+     teal 5.56:1、node script実測。tests/v147.test.jsのcontrast検証もトークン×実背景ペアへ拡張済み)。 */
+  --orange-text: #8a5100;
+  --green-text: #1b6b3f;
+  --teal-text: #0a6a61;
   /* v127: 角丸を8→12pxへ。カード類(.panel/.item/.segmented等、var(--radius)参照箇所)が
      一目でモダンな印象になるよう底上げ(apple-design全体ポリッシュ、K指示2026-07-19)。 */
   --radius: 12px;
@@ -52,6 +62,12 @@
     --orange-soft: #432b0b;
     --purple-soft: #2b244e;
     --teal-soft: #0c3733;
+    /* v147: ダーク背景では元の--orange/--green/--tealが実測4.88〜8.51:1(--bg/--panel/各--*-soft
+       との組み合わせすべてでAA以上、node script実測。最も厳しいのはteal×--green-softの4.88:1)の
+       コントラストを持つため、-textトークンは無彩色化せず素の色へ戻す(レビュー対応で数値を実測に訂正)。 */
+    --orange-text: var(--orange);
+    --green-text: var(--green);
+    --teal-text: var(--teal);
     --shadow: none;
     /* v123: ダークテーマの固定チローム用マテリアル値 */
     --chrome-bg: rgba(28, 29, 34, 0.72);
@@ -513,12 +529,12 @@ h3 {
 
 .badge.green {
   background: var(--green-soft);
-  color: var(--green);
+  color: var(--green-text);
 }
 
 .badge.orange {
   background: var(--orange-soft);
-  color: var(--orange);
+  color: var(--orange-text);
 }
 
 .badge.purple {
@@ -726,7 +742,7 @@ h3 {
 
 .timeline-card.completed {
   background: var(--green-soft);
-  color: var(--green);
+  color: var(--green-text);
   border-left-color: var(--green);
 }
 
@@ -1092,8 +1108,10 @@ h3 {
   .modal-card .textarea {
     min-height: 100px;
   }
+  /* v147(UI改善計画Phase2 2-3レビュー対応): 10px→11.5px(AA対応の一環、モバイル主ナビの
+     可読性の最低線)。375px幅で5列gridのままレイアウト崩れが無いことを実機同等幅で確認済み。 */
   .bottom-nav button {
-    font-size: 10px;
+    font-size: 11.5px;
   }
   .nav-mark {
     display: none;
@@ -1630,7 +1648,7 @@ h3 {
 /* 実績モードのカードは緑系 */
 .timeline-card.is-actual {
   background: var(--green-soft);
-  color: var(--green);
+  color: var(--green-text);
   border-left-color: var(--green);
 }
 
@@ -2374,12 +2392,12 @@ h3 {
   background: linear-gradient(180deg, var(--orange-soft), transparent);
 }
 .home-creed-head {
-  font-size: 21px; letter-spacing: 0.12em; color: var(--orange);
+  font-size: 21px; letter-spacing: 0.12em; color: var(--orange-text);
   font-weight: 700; text-align: center; margin-bottom: 14px;
 }
 .home-creed-row { display: flex; align-items: center; gap: 14px; padding: 6px 2px; }
 .home-creed-num {
-  font-size: 35px; font-weight: 700; color: var(--orange);
+  font-size: 35px; font-weight: 700; color: var(--orange-text);
   width: 35px; text-align: center; flex: none; line-height: 1;
 }
 .home-creed-text { font-size: 24px; font-weight: 600; line-height: 1.5; }
@@ -2416,11 +2434,11 @@ h3 {
   content: ""; width: 16px; height: 4px; border-radius: 2px;
   background: var(--muted); flex: none;
 }
-.home-plabel.orange { color: var(--orange); }
+.home-plabel.orange { color: var(--orange-text); }
 .home-plabel.orange::before { background: var(--orange); }
 .home-plabel.blue { color: var(--accent); }
 .home-plabel.blue::before { background: var(--accent); }
-.home-plabel.green { color: var(--green); }
+.home-plabel.green { color: var(--green-text); }
 .home-plabel.green::before { background: var(--green); }
 .home-count { margin-left: auto; font-weight: 700; }
 .home-foot {
@@ -2462,21 +2480,22 @@ h3 {
 .home-ck.done .home-ck-name, .home-tc.done .home-tc-name, .home-flow.done .home-flow-name {
   color: var(--faint); text-decoration: line-through;
 }
-.home-star { color: var(--orange); font-size: 12px; }
+.home-star { color: var(--orange-text); font-size: 12px; }
 .home-flow-time { font-size: 12.5px; color: var(--muted); width: 44px; flex: none; }
 .home-flow.now {
   background: var(--orange-soft); border-radius: 7px; border-bottom-color: transparent;
 }
 .home-badge {
-  font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 5px; flex: none;
+  /* v147(UI改善計画Phase2 2-3): 10px→11.5px(AA対応の一環、可読性の最低線) */
+  font-size: 11.5px; font-weight: 700; padding: 2px 7px; border-radius: 5px; flex: none;
 }
-.home-badge.doing { color: var(--orange); background: var(--orange-soft); }
+.home-badge.doing { color: var(--orange-text); background: var(--orange-soft); }
 .home-badge.todo { color: var(--faint); background: var(--panel-soft); }
 
 .home-rate { display: flex; align-items: baseline; gap: 8px; margin-bottom: 7px; }
 .home-rate-cap { font-size: 12px; font-weight: 700; color: var(--muted); }
-.home-rate-pct { font-size: 21px; font-weight: 800; color: var(--orange); font-variant-numeric: tabular-nums; }
-.home-rate-pct.green { color: var(--green); }
+.home-rate-pct { font-size: 21px; font-weight: 800; color: var(--orange-text); font-variant-numeric: tabular-nums; }
+.home-rate-pct.green { color: var(--green-text); }
 .home-rate-frac { font-size: 11.5px; color: var(--muted); margin-left: auto; }
 
 .home-stat { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
@@ -2530,7 +2549,7 @@ h3 {
 .home-hero-title { font-size: 24px; }
 .home-hero-cat {
   display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 6px;
-  font-size: 11px; font-weight: 700; color: var(--orange); background: var(--orange-soft);
+  font-size: 11px; font-weight: 700; color: var(--orange-text); background: var(--orange-soft);
 }
 .home-hero-side { display: flex; flex-direction: column; gap: 9px; }
 .home-hero-btn { margin-top: 0; }
@@ -2538,7 +2557,7 @@ h3 {
   font-size: 12px; color: var(--muted); padding: 9px 11px;
   border: 1px solid var(--line-soft); border-radius: 8px;
 }
-.home-hero-next-lab { color: var(--orange); font-weight: 700; margin-right: 6px; }
+.home-hero-next-lab { color: var(--orange-text); font-weight: 700; margin-right: 6px; }
 .home-hero-next strong { color: var(--text); }
 
 /* ひと目スコアボード(4つの達成率) */
@@ -2563,9 +2582,9 @@ h3 {
   font-weight: 700; align-self: flex-end;
 }
 .home-score-bar { height: 6px; }
-.home-score.orange .home-score-num, .home-score.orange .home-score-unit { color: var(--orange); }
+.home-score.orange .home-score-num, .home-score.orange .home-score-unit { color: var(--orange-text); }
 .home-score.orange .home-score-bar > span { background: var(--orange); }
-.home-score.green .home-score-num, .home-score.green .home-score-unit { color: var(--green); }
+.home-score.green .home-score-num, .home-score.green .home-score-unit { color: var(--green-text); }
 .home-score.green .home-score-bar > span { background: var(--green); }
 .home-score.blue .home-score-num, .home-score.blue .home-score-unit { color: var(--accent); }
 .home-score.blue .home-score-bar > span { background: var(--accent); }
@@ -2582,10 +2601,10 @@ h3 {
   background: var(--muted); flex: none;
 }
 .home-zone::after { content: ""; flex: 1; height: 1px; background: var(--line-soft); }
-.home-zone.amber { color: var(--orange); } .home-zone.amber::before { background: var(--orange); }
-.home-zone.teal  { color: var(--teal); }   .home-zone.teal::before  { background: var(--teal); }
+.home-zone.amber { color: var(--orange-text); } .home-zone.amber::before { background: var(--orange); }
+.home-zone.teal  { color: var(--teal-text); }   .home-zone.teal::before  { background: var(--teal); }
 .home-zone.blue  { color: var(--accent); } .home-zone.blue::before  { background: var(--accent); }
-.home-zone.green { color: var(--green); }  .home-zone.green::before { background: var(--green); }
+.home-zone.green { color: var(--green-text); }  .home-zone.green::before { background: var(--green); }
 
 /* ゾーン・バンド(背景をテーマ色へ少し寄せる) */
 .home-zone-block {
@@ -2667,9 +2686,10 @@ h3 {
   display: inline-flex; align-items: center; gap: 3px;
   margin-left: auto; flex: none; padding-left: 6px;
 }
-.home-cd-lab { font-size: 10px; font-weight: 800; }
-.home-cd-lab.c { color: var(--green); }
-.home-cd-lab.d { color: var(--orange); }
+/* v147(UI改善計画Phase2 2-3): 10px→11.5px(AA対応の一環、可読性の最低線) */
+.home-cd-lab { font-size: 11.5px; font-weight: 800; }
+.home-cd-lab.c { color: var(--green-text); }
+.home-cd-lab.d { color: var(--orange-text); }
 .home-cd {
   font-family: inherit; font-size: 16px; font-weight: 700;
   padding: 3px 2px 3px 4px; border: 1px solid var(--line);
@@ -2695,11 +2715,11 @@ h3 {
 
 .zt-day-count { text-align: right; flex: none; }
 .zt-day-count-v { font-size: 13px; color: var(--muted); font-weight: 700; }
-.zt-day-count-v b { color: var(--orange); font-weight: 900; font-size: 17px; margin: 0 3px; }
+.zt-day-count-v b { color: var(--orange-text); font-weight: 900; font-size: 17px; margin: 0 3px; }
 .zt-day-count-sub { font-size: 11px; color: var(--muted); font-weight: 700; margin-top: 2px; }
 
 .zt-lead { font-size: 13.5px; color: var(--muted); margin: 0 0 16px; font-weight: 500; line-height: 1.6; }
-.zt-lead b { color: var(--orange); font-weight: 800; }
+.zt-lead b { color: var(--orange-text); font-weight: 800; }
 
 /* パネル見出し(色付きバー付き) */
 .zt-plabel { display: flex; align-items: center; gap: 9px; font-size: 13.5px; font-weight: 800; color: var(--text); margin-bottom: 13px; }
@@ -2710,7 +2730,7 @@ h3 {
 
 /* + テーマを追加 トグルボタン */
 .zt-mini-btn { font: inherit; font-size: 12.5px; font-weight: 800; background: var(--panel-soft); color: var(--text); border: 1px solid var(--line); padding: 6px 11px; border-radius: 8px; cursor: pointer; }
-.zt-mini-btn.is-on { background: var(--orange-soft); color: var(--orange); border-color: var(--orange); }
+.zt-mini-btn.is-on { background: var(--orange-soft); color: var(--orange-text); border-color: var(--orange); }
 
 /* テーマ追加パネル */
 .zt-add-wrap { display: none; margin: 0 0 14px; }
@@ -2726,7 +2746,7 @@ h3 {
 .zt-tab:hover { color: var(--text); }
 .zt-tab.active { background: var(--panel); color: var(--text); box-shadow: var(--shadow); }
 .zt-tab-count { font-size: 11px; color: var(--muted); font-weight: 700; background: rgba(127, 127, 127, 0.14); padding: 2px 7px; border-radius: 6px; min-width: 22px; text-align: center; }
-.zt-tab.active[data-tab="fav"] .zt-tab-count { background: var(--orange-soft); color: var(--orange); }
+.zt-tab.active[data-tab="fav"] .zt-tab-count { background: var(--orange-soft); color: var(--orange-text); }
 .zt-tab.active[data-tab="other"] .zt-tab-count { background: var(--accent-soft); color: var(--accent); }
 
 /* テーマ行 */
@@ -2735,13 +2755,13 @@ h3 {
 .zt-theme-item:hover { background: var(--panel-soft); }
 .zt-theme-item.is-fav { background: var(--orange-soft); }
 .zt-star { background: none; border: none; cursor: pointer; font-size: 18px; color: var(--faint); padding: 0; line-height: 1; flex: none; }
-.zt-star.on { color: var(--orange); }
+.zt-star.on { color: var(--orange-text); }
 /* v119: 重要度「高」トグル(fav=starと同じ直接トグル方式)。 */
 .zt-important-toggle { background: none; border: none; cursor: pointer; font-size: 16px; opacity: 0.45; padding: 0; line-height: 1; flex: none; }
 .zt-important-toggle.on { opacity: 1; }
 .zt-theme-important { font-size: 10.5px; font-weight: 800; color: var(--red); border: 1px solid var(--red); background: var(--red-soft); border-radius: 5px; padding: 0 5px; margin-right: 6px; vertical-align: middle; }
 .zt-theme-text { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; line-height: 1.5; cursor: pointer; }
-.zt-theme-go { font: inherit; font-size: 12.5px; font-weight: 900; color: var(--orange); background: var(--orange-soft); border: 1px solid var(--orange-soft); padding: 7px 12px; border-radius: 8px; cursor: pointer; flex: none; white-space: nowrap; }
+.zt-theme-go { font: inherit; font-size: 12.5px; font-weight: 900; color: var(--orange-text); background: var(--orange-soft); border: 1px solid var(--orange-soft); padding: 7px 12px; border-radius: 8px; cursor: pointer; flex: none; white-space: nowrap; }
 .zt-theme-go:hover { filter: brightness(0.97); }
 /* v86: 0秒思考テーマのワンタップ削除。44px当たり判定を確保しつつ視覚的には控えめに。 */
 .zt-theme-del { font: inherit; font-size: 18px; line-height: 1; color: var(--faint); background: none; border: none; cursor: pointer; flex: none; min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 8px; }
@@ -2809,17 +2829,17 @@ h3 {
 .zt-write-card.run::before { animation: zt-drain 60s linear forwards; }
 @keyframes zt-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 
-.zt-write-eyebrow { font-size: 11px; letter-spacing: 0.2em; color: var(--orange); font-weight: 800; margin-bottom: 8px; display: flex; align-items: center; gap: 9px; }
+.zt-write-eyebrow { font-size: 11px; letter-spacing: 0.2em; color: var(--orange-text); font-weight: 800; margin-bottom: 8px; display: flex; align-items: center; gap: 9px; }
 .zt-write-sq { width: 7px; height: 7px; background: var(--orange); animation: zt-pulse 1.7s ease-in-out infinite; }
 @keyframes zt-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
 .zt-write-theme { font-family: "Hiragino Mincho ProN", "Yu Mincho", YuMincho, "Noto Serif JP", "Shippori Mincho", serif; font-size: 23px; font-weight: 700; line-height: 1.45; color: var(--text); margin-bottom: 18px; }
 
 .zt-timer-bar { display: flex; justify-content: space-between; align-items: center; background: var(--panel-soft); border: 1px solid var(--line-soft); border-radius: 10px; padding: 11px 15px; margin-bottom: 14px; }
-.zt-timer-time { font-size: 30px; font-weight: 900; font-variant-numeric: tabular-nums; color: var(--orange); line-height: 1; }
+.zt-timer-time { font-size: 30px; font-weight: 900; font-variant-numeric: tabular-nums; color: var(--orange-text); line-height: 1; }
 .zt-timer-time.done { color: var(--red); }
 .zt-timer-state { font-size: 12px; color: var(--muted); font-weight: 700; }
-.zt-timer-state.running { color: var(--orange); }
+.zt-timer-state.running { color: var(--orange-text); }
 .zt-timer-state.done { color: var(--red); }
 
 .zt-write-input { width: 100%; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 11px; color: var(--text); font: inherit; font-size: 16px; line-height: 1.8; padding: 14px 16px; min-height: 240px; resize: vertical; }
@@ -2851,7 +2871,7 @@ h3 {
 .q-badge { flex: none; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 20px; margin-top: 1px; }
 .q-badge.open { background: rgba(0,0,0,.06); color: var(--muted); }
 .q-badge.deepening { background: rgba(0,122,255,.16); color: var(--accent); }
-.q-badge.settled { background: rgba(47,185,109,.16); color: var(--green); }
+.q-badge.settled { background: rgba(47,185,109,.16); color: var(--green-text); }
 .q-card-meta { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--muted); margin-top: 8px; }
 .q-card-meta .q-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--muted); opacity: .5; }
 .q-settled-note { font-size: 13px; color: var(--muted); margin-top: 8px; padding: 8px 10px; background: rgba(47,185,109,.08); border-radius: 8px; white-space: pre-line; }
@@ -2883,17 +2903,17 @@ h3 {
 .wk-bar-fill { width: 100%; background: var(--accent); border-radius: 6px 6px 0 0; min-height: 2px; }
 .wk-bar-lab { font-size: 11px; color: var(--muted); font-weight: 700; }
 .wk-net { font-size: 13px; font-weight: 800; }
-.wk-net.pos { color: var(--green); }
+.wk-net.pos { color: var(--green-text); }
 .wk-net.neg { color: var(--red); }
 .weekly-energy-tot { font-size: 14px; margin-bottom: 12px; }
-.weekly-energy-tot .pos { color: var(--green); }
+.weekly-energy-tot .pos { color: var(--green-text); }
 .weekly-energy-tot .neg { color: var(--red); }
 .weekly-12wy { font-size: 15px; margin-bottom: 10px; }
 .weekly-tasklist { display: flex; flex-direction: column; gap: 4px; }
 .weekly-struct-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
 .weekly-struct-desc { font-size: 13.5px; font-weight: 600; flex: 1; min-width: 200px; }
 .weekly-q-row { font-size: 13.5px; padding: 6px 0; line-height: 1.5; }
-.weekly-q-move { font-size: 11px; font-weight: 800; color: var(--green); background: rgba(47,185,109,.14); border-radius: 6px; padding: 1px 7px; margin-right: 8px; }
+.weekly-q-move { font-size: 11px; font-weight: 800; color: var(--green-text); background: rgba(47,185,109,.14); border-radius: 6px; padding: 1px 7px; margin-right: 8px; }
 .weekly-q-stall { font-size: 11px; font-weight: 800; color: var(--muted); background: rgba(0,0,0,.06); border-radius: 6px; padding: 1px 7px; margin-right: 8px; }
 .weekly-close .weekly-change-btn { width: 100%; }
 .weekly-close .weekly-change-btn:disabled { opacity: .55; }
@@ -2929,7 +2949,7 @@ h3 {
 .wk-net-neg span { width: 100%; background: var(--red); border-radius: 0 0 4px 4px; }
 .wk-net-zero { height: 1px; background: var(--line); }
 .wk-net-val { font-size: 11.5px; font-weight: 800; text-align: center; margin-top: 3px; color: var(--muted); }
-.wk-net-val.pos { color: var(--green); }
+.wk-net-val.pos { color: var(--green-text); }
 .wk-net-val.neg { color: var(--red); }
 
 /* v41: 見込み終了時刻(色分け・警告なし。有限性を時刻で見せるだけ) */
@@ -2942,7 +2962,7 @@ h3 {
    削除に伴い到達不能になったため削除した(CHANGES_v143.md参照)。 */
 .ai-mit-chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; padding: 10px 12px; background: rgba(255,149,0,.08); border: 1px solid rgba(255,149,0,.22); border-radius: 10px; }
 .ai-mit-cap { font-size: 12px; font-weight: 800; color: var(--muted); }
-.ai-mit-chip { font-size: 12.5px; font-weight: 700; color: var(--orange); background: var(--panel); border: 1px solid rgba(255,149,0,.4); border-radius: 20px; padding: 5px 12px; cursor: pointer; }
+.ai-mit-chip { font-size: 12.5px; font-weight: 700; color: var(--orange-text); background: var(--panel); border: 1px solid rgba(255,149,0,.4); border-radius: 20px; padding: 5px 12px; cursor: pointer; }
 .ai-mit-chip:hover { background: rgba(255,149,0,.14); }
 
 /* v43: 自動同期 — 状態ドット / 競合バナー(催促でなく計器) */
@@ -3010,8 +3030,8 @@ h3 {
 .search-hit { display: grid; grid-template-columns: auto auto 1fr; align-items: baseline; gap: 8px; width: 100%; text-align: left; padding: 8px 10px; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; color: var(--text); font: inherit; }
 .search-hit:hover { border-color: var(--accent); }
 .search-kind { font-size: 10.5px; font-weight: 800; padding: 2px 7px; border-radius: 8px; white-space: nowrap; background: rgba(0,122,255,.1); color: var(--accent); }
-.search-kind-zero { background: rgba(47,185,109,.12); color: var(--green); }
-.search-kind-question { background: rgba(255,149,0,.12); color: var(--orange); }
+.search-kind-zero { background: rgba(47,185,109,.12); color: var(--green-text); }
+.search-kind-question { background: rgba(255,149,0,.12); color: var(--orange-text); }
 .search-kind-feedback { background: rgba(175,82,222,.12); color: #af52de; }
 .search-kind-report { background: rgba(124,178,228,.16); color: var(--accent); }
 .search-date { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
@@ -3090,7 +3110,7 @@ h3 {
 .stats-div-pos > span { height: 100%; background: var(--green); border-radius: 0 3px 3px 0; }
 .stats-div-axis { width: 1px; height: 16px; background: var(--line); flex: none; }
 .stats-div-val { font-size: 11.5px; font-weight: 700; text-align: right; color: var(--muted); }
-.stats-div-val.pos { color: var(--green); }
+.stats-div-val.pos { color: var(--green-text); }
 .stats-div-val.neg { color: var(--red); }
 
 /* 複数折れ線 */
@@ -3130,7 +3150,7 @@ h3 {
 .stats-sleep-bucket-label { min-width: 96px; font-weight: 700; }
 .stats-sleep-bucket-metric { display: flex; align-items: center; gap: 6px; font-size: 11.5px; }
 .stats-sleep-bucket-bar { width: 60px; flex: none; }
-.stats-sleep-bucket-metric b.pos { color: var(--green); }
+.stats-sleep-bucket-metric b.pos { color: var(--green-text); }
 .stats-sleep-bucket-metric b.neg { color: var(--red); }
 
 /* v143: 計器盤「今週のヒント」(観察文+ドリルダウンボタン。weekly-struct-rowと同じ行パターン) */
@@ -3161,7 +3181,7 @@ h3 {
   padding: 1px 7px;
   border-radius: 999px;
   background: var(--orange-soft);
-  color: var(--orange);
+  color: var(--orange-text);
   font-size: 11px;
   font-weight: 700;
   vertical-align: middle;
@@ -3182,7 +3202,7 @@ h3 {
   vertical-align: middle;
   white-space: nowrap;
 }
-.lev-mark.lev-asset { background: var(--green-soft); color: var(--green); }
+.lev-mark.lev-asset { background: var(--green-soft); color: var(--green-text); }
 .lev-mark.lev-eliminate { background: var(--purple-soft); color: var(--purple); }
 
 /* v114: 保護系ルーティン(提案F)の連続欠落バッジ。実行率%の代わりに表示する。
@@ -3194,13 +3214,13 @@ h3 {
   padding: 1px 7px;
   border-radius: 999px;
   background: var(--green-soft);
-  color: var(--green);
+  color: var(--green-text);
   font-size: 11px;
   font-weight: 700;
   vertical-align: middle;
   white-space: nowrap;
 }
-.protection-badge.warn { background: var(--orange-soft); color: var(--orange); }
+.protection-badge.warn { background: var(--orange-soft); color: var(--orange-text); }
 
 /* v116: 1日バッファ+消化率メーター(ROADMAP提案E)。ヘッダーに1行常時表示(今日を
    表示中のときのみ)。緑(残40%以上)/黄(40%未満)/赤(0以下)の3段階に加え、
@@ -3213,8 +3233,8 @@ h3 {
   font-weight: 700;
   display: inline-block;
 }
-.buffer-meter.green { background: var(--green-soft); color: var(--green); }
-.buffer-meter.yellow { background: var(--orange-soft); color: var(--orange); }
+.buffer-meter.green { background: var(--green-soft); color: var(--green-text); }
+.buffer-meter.yellow { background: var(--orange-soft); color: var(--orange-text); }
 .buffer-meter.red { background: var(--red-soft); color: var(--red); }
 .buffer-meter.unset,
 .buffer-meter.overload {
@@ -3256,7 +3276,7 @@ h3 {
   gap: 8px;
 }
 .chain-card-status { font-size: 12px; color: var(--muted); }
-.chain-card-status.done { color: var(--green); font-weight: 700; }
+.chain-card-status.done { color: var(--green-text); font-weight: 700; }
 .lev-helper { margin-top: 8px; }
 .lev-helper summary {
   list-style: none;
@@ -3376,7 +3396,7 @@ h3 {
    leverageType=asset で完了したTask/Blockそのものを都度集計する派生ビュー。 */
 .lev-ledger { display: flex; flex-direction: column; gap: 10px; }
 .lev-ledger-prompt { font-size: 13px; font-weight: 700; }
-.lev-ledger-prompt-yes { color: var(--green); }
+.lev-ledger-prompt-yes { color: var(--green-text); }
 .lev-ledger-list { display: flex; flex-direction: column; gap: 6px; }
 .lev-ledger-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) 1fr; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line-soft); }
 .lev-ledger-row:last-child { border-bottom: none; }
@@ -3388,7 +3408,7 @@ h3 {
    実験中は結論記入までカードのまま留まる(リスト化しない)。 */
 .exp-card .exp-hypothesis { font-size: 15px; font-weight: 700; line-height: 1.5; }
 .exp-card .exp-judge { padding: 10px 12px; background: rgba(255,149,0,.08); border: 1px solid rgba(255,149,0,.25); border-radius: 10px; }
-.exp-card .exp-promote .exp-hypothesis { color: var(--green); }
+.exp-card .exp-promote .exp-hypothesis { color: var(--green-text); }
 .bucket-gauge-val { color: var(--muted); }
 
 /* v70: タイムラインカードのワンタップ実績ボタン(▶いま開始/■いま終了)。
@@ -3415,7 +3435,7 @@ h3 {
 }
 .tl-start-btn.tl-end-btn {
   border-color: var(--green);
-  color: var(--green);
+  color: var(--green-text);
 }
 /* v146(UI改善計画Phase1-3): 見た目は22pxのまま、::afterで当たり判定だけ拡張
    (.tl-complete-btnの既存::afterパターン=styles.css:1627-1633を流用)。
@@ -3478,12 +3498,12 @@ h3 {
   line-height: 1;
   z-index: 3;
 }
-.now-eyebrow { color: var(--orange); font-size: 13px; font-weight: 700; letter-spacing: 0.02em; }
+.now-eyebrow { color: var(--orange-text); font-size: 13px; font-weight: 700; letter-spacing: 0.02em; }
 .now-title { font-size: 26px; font-weight: 800; margin-top: 10px; line-height: 1.35; color: var(--text); }
 .now-meta { color: var(--muted); font-size: 13px; margin-top: 10px; }
 .now-cat { margin-left: 8px; padding: 2px 8px; border-radius: 10px; background: var(--panel-soft); font-size: 11.5px; }
-.now-status { margin-top: 8px; font-size: 13px; font-weight: 700; color: var(--orange); }
-.now-empty { font-size: 16px; font-weight: 700; color: var(--green); margin-top: 8px; }
+.now-status { margin-top: 8px; font-size: 13px; font-weight: 700; color: var(--orange-text); }
+.now-empty { font-size: 16px; font-weight: 700; color: var(--green-text); margin-top: 8px; }
 .now-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 26px; width: 100%; }
 .now-btn { flex: 1 1 120px; min-height: 48px; font-size: 16px; }
 .now-btn:disabled { opacity: 0.35; cursor: default; }
