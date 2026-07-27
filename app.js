@@ -3155,8 +3155,10 @@ function homeHero(blocks, isToday) {
     mid = `<div style="font-size:13.5px;margin-top:12px">まだ着手していません。</div>
       <div style="font-size:12.5px;color:var(--orange-text);font-weight:600;margin-top:3px">まず5分でいい。やれば乗ってくる。</div>`;
   }
+  // v150(UI改善計画Phase4b・R3): 完了作法統一。即完了(toggle-block)へ変更、実績は
+  // 完了直後のトースト「実績を編集」から直す(下記toggleBlock参照)。
   const btn = started
-    ? `<button class="btn green home-hero-btn" data-action="complete-block-with-actual" data-id="${target.id}">✓ 完了にする</button>`
+    ? `<button class="btn green home-hero-btn" data-action="toggle-block" data-id="${target.id}">✓ 完了にする</button>`
     : `<button class="btn orange home-hero-btn" data-action="now-start" data-id="${target.id}">▶ いま着手する</button>`;
   // このあとのブロック
   // v37: 「target の次」は target 自身を除いた最初の未来ブロック。
@@ -3597,9 +3599,10 @@ function homeChargeSelects(b) {
 // v115: 第5引数extraButtonは縮退版実行ボタン用(任意、既存呼び出しは渡さないため常に
 // 空文字扱いで従来どおり)。
 function homeCheckRow(b, star, showCD, extraBadge, extraButton) {
-  const act = b.completed ? "toggle-block" : "complete-block-with-actual";
+  // v150(UI改善計画Phase4b・R3): 完了作法統一により、完了/未完了どちらもtoggle-blockに一本化
+  // (旧: 未完了→complete-block-with-actualで実績モーダルが割り込んでいた)。
   return `<div class="home-ck ${b.completed ? "done" : ""}">
-    <span class="home-box" data-action="${act}" data-id="${b.id}">${b.completed ? "✓" : ""}</span>
+    <span class="home-box" data-action="toggle-block" data-id="${b.id}">${b.completed ? "✓" : ""}</span>
     <span class="home-ck-name" data-action="edit-block" data-id="${b.id}">${escapeHTML(b.title)}</span>
     ${star ? `<span class="home-star">${star}</span>` : ""}
     ${extraBadge || ""}
@@ -3656,9 +3659,9 @@ function homeTaskchute(blocks) {
     const st = b.completed ? "done" : (b.actualStartAt ? "doing" : "todo");
     const badge = st === "doing" ? `<span class="home-badge doing">着手中</span>`
       : (st === "todo" ? `<span class="home-badge todo">未着手</span>` : "");
-    const act = b.completed ? "toggle-block" : "complete-block-with-actual";
+    // v150(UI改善計画Phase4b・R3): 完了作法統一。toggle-blockに一本化(homeCheckRow同様)。
     return `<div class="home-tc ${st}">
-      <span class="home-dot ${st}" data-action="${act}" data-id="${b.id}">${b.completed ? "✓" : ""}</span>
+      <span class="home-dot ${st}" data-action="toggle-block" data-id="${b.id}">${b.completed ? "✓" : ""}</span>
       <span class="home-tc-name" data-action="edit-block" data-id="${b.id}">${escapeHTML(b.title)}</span>${badge}
       ${homeChargeSelects(b)}</div>`;
   }).join("");
@@ -3686,7 +3689,7 @@ function homeFlow(blocks, isToday) {
     const cls = b.completed ? "done" : (isNow ? "now" : "");
     return `<div class="home-flow ${cls}">
       <span class="home-flow-time">${b.plannedStartAt ? timeFromDateTime(b.plannedStartAt) : "—"}</span>
-      <span class="home-dot ${b.completed ? "done" : ""}" data-action="${b.completed ? "toggle-block" : "complete-block-with-actual"}" data-id="${b.id}">${b.completed ? "✓" : ""}</span>
+      <span class="home-dot ${b.completed ? "done" : ""}" data-action="toggle-block" data-id="${b.id}">${b.completed ? "✓" : ""}</span>
       <span class="home-flow-name" data-action="edit-block" data-id="${b.id}">${escapeHTML(b.title)}</span>
       ${isNow ? `<span class="home-badge doing">NOW</span>` : ""}
       ${homeChargeSelects(b)}</div>`;
@@ -6661,7 +6664,14 @@ function renderTimeline({ compact, mode = "planned" }) {
 // v26: Block をレーンに割り当てる。重なり合うブロック群(クラスタ)ごとに
 // 使用レーン数 laneCount を求め、横幅 = 100/laneCount で配置できるようにする。
 // (重なりが無ければ laneCount=1 で全幅、2つ重なれば 2 で 50:50)
-function assignBlocksToLanes(blocks, mode, maxLanes) {
+// v150(UI改善計画Phase4b・R9): 第4引数rowHeightを追加。adjustLaneTopPositions が描画時に
+// 適用する min-height(38px、5分未満は14px)ぶんの見た目の高さ膨張を、クラスタ判定(=重なり
+// 検出)の側にも分単位で織り込む(「実効終了時刻」clusterEnd)。これにより、実時間では
+// 連続していて重ならない短時間Block同士(例: 15分刻みのルーティンが連続)でも、描画上の
+// 高さが次のBlockのtopへ食い込む場合は既存の横レーン分割(段差配置)の対象になり、物理的な
+// 重なりが解消される。top(開始時刻の絶対位置)自体は adjustLaneTopPositions 側で従来どおり
+// 一切補正しない(タイムライン絶対配置の正典ルールに抵触しない)。
+function assignBlocksToLanes(blocks, mode, maxLanes, rowHeight) {
   // 開始時刻でソート(同じ時刻なら短いもの優先)
   const sorted = [...blocks]
     .map((b) => {
@@ -6690,8 +6700,8 @@ function assignBlocksToLanes(blocks, mode, maxLanes) {
 
   const result = [];
   let cluster = [];          // 現在のクラスタの項目(lane 付与済み)
-  let clusterLaneEnds = [];  // クラスタ内・各レーンの終了時刻(分)
-  let clusterMaxEnd = -1;    // クラスタ内の最遅終了時刻
+  let clusterLaneEnds = [];  // クラスタ内・各レーンの終了時刻(分、見た目の高さ込み=clusterEnd基準)
+  let clusterMaxEnd = -1;    // クラスタ内の最遅終了時刻(同上)
 
   const flushCluster = () => {
     const laneCount = Math.max(1, clusterLaneEnds.length);
@@ -6721,8 +6731,8 @@ function assignBlocksToLanes(blocks, mode, maxLanes) {
         isOverflow = true;
       }
     }
-    clusterLaneEnds[lane] = Math.max(clusterLaneEnds[lane], item.end);
-    clusterMaxEnd = Math.max(clusterMaxEnd, item.end);
+    clusterLaneEnds[lane] = Math.max(clusterLaneEnds[lane], item.clusterEnd);
+    clusterMaxEnd = Math.max(clusterMaxEnd, item.clusterEnd);
     cluster.push({ ...item, lane, isOverflow });
   }
   flushCluster();
@@ -6785,7 +6795,7 @@ function renderTimelineCard(positioned, mode = "planned", maxLanes = 5) {
          ${overflowAttr}
          style="top:${top}px; height:${height}px; left:${leftPercent}%; width:calc(${widthPercent}% - 4px); ${catStyle}"
          data-action="edit-block" data-id="${block.id}">
-      ${!isActual && !isShort ? `<button class="tl-complete-btn" data-action="complete-block-with-actual" data-id="${block.id}" aria-label="完了登録">○</button>` : ""}
+      ${completeBtnHTML}
       ${startEndBtn}
       <div class="tl-card-body">
         <strong>${escapeHTML(block.title)}${migrationBadgeHTML(block.carryCount)}${leverageTypeMarkHTML(block.leverageType)}</strong>
@@ -7942,7 +7952,8 @@ function maybeSuggestRecoveryDraft(nowMinutes) {
   // 処理中はこのtickをスキップする(冪等マーカーは焼かない=次tickで再評価される)。
   if (_morningPlanInFlight) return false;
   if (!Array.isArray(state.batteryRecoveryDraftDates)) state.batteryRecoveryDraftDates = [];
-  if (state.batteryRecoveryDraftDates.includes(today)) return false;  // 冪等: 1日1回
+  // v150レビュー対応(項目5、Codex指摘): マーカーは{date, titles}のオブジェクト配列(下記参照)。
+  if (state.batteryRecoveryDraftDates.some((e) => e && e.date === today)) return false;  // 冪等: 1日1回
 
   const def = defaultBatterySettings();
   const cfg = state.settings.battery || def;
@@ -7956,8 +7967,10 @@ function maybeSuggestRecoveryDraft(nowMinutes) {
   if (level >= threshold) return false;  // 閾値以上なら対象外
 
   // ここから先は「発火条件が成立した」とみなし、結果(候補0件・空き枠0件含む)に関わらず
-  // 1日1回のガードを立てる(空振りのたびに毎分再試行しないため)。
-  state.batteryRecoveryDraftDates.push(today);
+  // 1日1回のガードを立てる(空振りのたびに毎分再試行しないため)。titlesは実際に配置できた
+  // ぶんをplaceRecoveryDraftCandidates側で後から書き込む(まずは空配列で冪等マーカーだけ立てる)。
+  const marker = { date: today, titles: [] };
+  state.batteryRecoveryDraftDates.push(marker);
   if (state.batteryRecoveryDraftDates.length > BATTERY_RECOVERY_DATES_MAX) {
     state.batteryRecoveryDraftDates = state.batteryRecoveryDraftDates.slice(-BATTERY_RECOVERY_DATES_MAX);
   }
@@ -7983,9 +7996,21 @@ function placeRecoveryDraftCandidates(today, nowMinutes, opts = {}) {
   const todaysBlockTitles = new Set(state.blocks.filter((b) => !b.deleted && b.date === today).map((b) => b.title));
   const todaysDraftTitles = new Set((existingDraftForToday?.items || []).map((it) => it.title));
   const since = addDays(today, -(BATTERY_RECOVERY_LOOKBACK_DAYS - 1));
-  const candidates = computeChargeTopTitles(since, today)
-    .filter((c) => !todaysBlockTitles.has(c.title) && !todaysDraftTitles.has(c.title))
-    .slice(0, BATTERY_RECOVERY_MAX_ITEMS);
+  let candidates;
+  if (restoreTitles) {
+    // 再構築モード: 元々提案したタイトルのうち未確定のものだけを、統計(所要時間・カテゴリ・
+    // net中央値)と突き合わせて復元する。computeChargeTopTitles側で該当タイトルが見つからない
+    // (直近4週データの入れ替わり等)場合は静かにスキップする(クラッシュしない)。
+    const pool = new Map(computeChargeTopTitles(since, today).map((c) => [c.title, c]));
+    candidates = restoreTitles
+      .filter((t) => !todaysBlockTitles.has(t) && !todaysDraftTitles.has(t))
+      .map((t) => pool.get(t))
+      .filter(Boolean);
+  } else {
+    candidates = computeChargeTopTitles(since, today)
+      .filter((c) => !todaysBlockTitles.has(c.title) && !todaysDraftTitles.has(c.title))
+      .slice(0, BATTERY_RECOVERY_MAX_ITEMS);
+  }
   if (!candidates.length) { saveState(); return false; }
 
   const DAY_START = 5 * 60, DAY_END = 23 * 60;
@@ -8040,6 +8065,39 @@ function placeRecoveryDraftCandidates(today, nowMinutes, opts = {}) {
     _draftUndo = null; _draftUndoHistoryEntry = null;
   }
   return true;
+}
+
+// v150(UI改善計画Phase4b・S7): 回復候補ドラフトの再構築(PWA破棄対策)。
+// _scheduleDraft はセッション限りの非永続変数のため、iOSがプロセスを破棄した後の再起動では
+// 「冪等マーカー(state.batteryRecoveryDraftDates)は当日分が立ったまま、_scheduleDraftの
+// battery-recovery項目だけが消えている」状態になりうる(提案が出た事実だけが残り、Homeの
+// 「回復候補」→Timelineの導線が失われる、決定10の指摘)。新規stateフィールドは追加せず、
+// 「当日の冪等マーカーあり(=発火条件は成立済み)+現在のdraftにbattery-recovery項目が無い
+// +その候補がまだ実Blockとして確定していない(=未確定)」を起動時に検知したときだけ、
+// 候補計算(placeRecoveryDraftCandidates、閾値判定は再実行しない)をもう一度走らせて
+// 再構築する。呼び出しは起動シーケンス内で1回のみ(下記起動処理を参照)。
+// updateBatteryTickの毎分ループには載せない — 同一セッション内でユーザーが確定/却下した
+// 直後にも「マーカーあり+draft無し」の条件は一致してしまうため、そこで再度呼ぶと
+// 確定・却下済みの提案を蒸し返してしまう(このtradeoffは「新規フィールドを増やさない」方針を
+// 優先した結果。詳細はCHANGES_v150.md参照)。
+// v150レビュー対応(項目5、Codex指摘): マーカーには「その日実際に提案したタイトル一覧」も
+// 記録している(placeRecoveryDraftCandidates参照)。再構築はこの記録済みタイトルのうち
+// 未解決(=当日まだ同名の実Blockが無い)ものだけを復元対象にし、
+// computeChargeTopTitlesを素で再実行した「次点候補」を新規に繰り上げ提案することはない。
+// 旧形式(titles不明、文字列だった頃のマーカー)はtitlesが空配列のまま補完される
+// (normalizeState参照)ため、再構築の対象から自然に外れる(「旧形式の日は再構築スキップ」)。
+function maybeRebuildRecoveryDraft(nowMinutes) {
+  if (!state.settings.battery?.recoveryDraft) return false;
+  const today = todayISO();
+  const marker = Array.isArray(state.batteryRecoveryDraftDates)
+    ? state.batteryRecoveryDraftDates.find((e) => e && e.date === today)
+    : null;
+  if (!marker || !Array.isArray(marker.titles) || !marker.titles.length) return false;
+  const alreadyLive = _scheduleDraft && _scheduleDraft.date === today
+    && _scheduleDraft.items.some((it) => it.source === "battery-recovery");
+  if (alreadyLive) return false;  // このブート内では何も失っていない
+  if (_morningPlanInFlight) return false;  // 朝プランと競合しないよう待つ(既存方針と同じ)
+  return placeRecoveryDraftCandidates(today, nowMinutes, { restoreTitles: marker.titles });
 }
 
 async function importSleepCsv(file) {
@@ -12135,14 +12193,49 @@ function toggleBlock(id) {
   state.blocks = state.blocks.map((block) => {
     if (block.id !== id) return block;
     const completed = !block.completed;
-    if (completed) {
-      justCompleted = true;
-      completedBlock = block;
-    }
     if (completed && block.taskId) {
       state.tasks = state.tasks.map((task) => task.id === block.taskId && task.status === "todo" ? { ...task, status: "doing", updatedAt: nowDateTime() } : task);
     }
-    return { ...block, completed, actualEndAt: completed && !block.actualEndAt ? nowDateTime() : block.actualEndAt, updatedAt: nowDateTime() };
+    let next = { ...block, completed, updatedAt: nowDateTime() };
+    if (completed) {
+      justCompleted = true;
+      const snapshot = {};
+      if (!next.actualEndAt) {
+        next.actualEndAt = nowDateTime();
+        snapshot.actualEndAt = { before: block.actualEndAt, after: next.actualEndAt };
+      }
+      if (!next.actualStartAt) {
+        // v150レビュー対応(項目2): plannedStartAt優先+開始>終了の丸め込み(上記関数参照)。
+        next.actualStartAt = quickCompleteActualStart(block, next.actualEndAt);
+        snapshot.actualStartAt = { before: block.actualStartAt, after: next.actualStartAt };
+      }
+      // v150レビュー対応(項目3、両レビュー一致): 充放電は実績モーダル(buildActualEntryModal)と
+      // 同じprefillEnergyを使うが、既に手入力の値(charge/dischargeのどちらかが非0)がある場合は
+      // 上書きしない(過去実績が3件未満ならprefillEnergy自体がnullを返し従来どおり無補完)。
+      if (!block.charge && !block.discharge) {
+        const pf = prefillEnergy(next);
+        if (pf) {
+          next.charge = pf.charge;
+          next.discharge = pf.discharge;
+          snapshot.charge = { before: block.charge, after: next.charge };
+          snapshot.discharge = { before: block.discharge, after: next.discharge };
+        }
+      }
+      if (Object.keys(snapshot).length) _quickCompleteSnapshots[id] = snapshot;
+      else delete _quickCompleteSnapshots[id];
+      completedBlock = next;
+    } else {
+      // v150レビュー対応(項目4): 完了解除。このセッション内でこのBlockを即完了したときの
+      // 自動補完スナップショットがあれば、「補完後に手で変更されていない」フィールドだけ元へ戻す。
+      const snap = _quickCompleteSnapshots[id];
+      if (snap) {
+        for (const field of ["actualStartAt", "actualEndAt", "charge", "discharge"]) {
+          if (snap[field] && next[field] === snap[field].after) next[field] = snap[field].before;
+        }
+        delete _quickCompleteSnapshots[id];
+      }
+    }
+    return next;
   });
   // v115: アンカー配置(提案G③)。完了したBlockが繰り返しルーティンに属していれば、
   // それをアンカーにする後続のルーティン/チェーンを直後の時刻に自動配置する。
@@ -17891,7 +17984,12 @@ setTimeout(() => {
   const checkRecoveryDraft = () => {
     if (state.selectedDate !== todayISO()) return;  // v145レビュー対応: ティッカー側と対称のガード
     const now = new Date();
-    if (maybeSuggestRecoveryDraft(now.getHours() * 60 + now.getMinutes())) renderDeferringForFocus();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    if (maybeSuggestRecoveryDraft(nowMinutes)) { renderDeferringForFocus(); return; }
+    // v150(UI改善計画Phase4b・S7): 今回の起動で新規に発火しなかった場合だけ、
+    // 「前回セッションで発火済み(マーカーあり)なのにPWA破棄でdraftが消えた」パターンを
+    // 起動時に1回だけ検知して再構築する(maybeRebuildRecoveryDraft参照)。
+    if (maybeRebuildRecoveryDraft(nowMinutes)) renderDeferringForFocus();
   };
   // maybeAutoMorningPlanが実際に起動した場合のみPromiseが返る(起動条件を満たさなければnull)。
   // その場合は朝プランの完了(_scheduleDraft確定 or 何もせず終了)を待ってから評価する。
