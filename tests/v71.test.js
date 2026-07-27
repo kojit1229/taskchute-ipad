@@ -128,34 +128,41 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (b) ホームの折りたたみ
     // ============================================================
-    // v146(UI改善計画Phase1-1、K承認): 信条/寿命は参照系セクションとして下段へ移動し、
-    // 既定closedに変更した(v72時点の既定openから反転。CHANGES_v146.md参照)。
-    // 長い弧/今日の足あとは既存どおり下部・既定closedのまま。
-    console.log("[2] ホームの折りたたみ: 信条/寿命は既定closed(v146)、長い弧/足あとも既定closed");
+    // v149(UI改善計画Phase4a)追補: ホームが「今日」/「ホーム」の2タブに分割され、信条/寿命/
+    // 長い弧(zone3)は「ホーム」タブ、足あと(zone4)は「今日」タブ(既定)に移動した。加えて
+    // K指定により信条・寿命はホームタブでの既定値がclosed→openへ変更された(CHANGES_v149.md参照)。
+    const gotoHomeTab = async () => { await page.click('[data-action="home-tab"][data-tab="home"]'); await page.waitForTimeout(150); };
+    const gotoTodayTab = async () => { await page.click('[data-action="home-tab"][data-tab="today"]'); await page.waitForTimeout(150); };
+    console.log("[2] ホームの折りたたみ: 信条/寿命はホームタブで既定open(v149)、長い弧(ホームタブ)/足あと(今日タブ)は既定closed");
     await page.evaluate((FOLD_KEY) => localStorage.removeItem(FOLD_KEY), FOLD_KEY);
     await seed({ blocks: [], view: "home" });
-    for (const id of ["creed", "lifespan"]) {
-      const isOpen = await page.locator(`details[data-fold-id="${id}"]`).evaluate((el) => el.open);
-      check(`${id} は既定closed(v146)`, isOpen === false, String(isOpen));
+    const isOpenZone4 = await page.locator('details[data-fold-id="zone4"]').evaluate((el) => el.open);
+    check("zone4(今日タブ)は既定closed", isOpenZone4 === false, String(isOpenZone4));
+    await gotoHomeTab();
+    // v149レビュー対応(必須6): creed/lifespanはdata-fold-idを持たない非永続セッション
+    // オーバーライド方式(homeReflectFoldSection)に変わったため、クラスセレクタで判定する。
+    for (const [id, cls] of [["creed", ".home-creed"], ["lifespan", ".home-lifespan"]]) {
+      const isOpen = await page.locator(`details${cls}`).evaluate((el) => el.open);
+      check(`${id} はホームタブで既定open(v149)`, isOpen === true, String(isOpen));
     }
-    for (const id of ["zone3", "zone4"]) {
-      const isOpen = await page.locator(`details[data-fold-id="${id}"]`).evaluate((el) => el.open);
-      check(`${id} は既定closed`, isOpen === false, String(isOpen));
-    }
+    const isOpenZone3 = await page.locator('details[data-fold-id="zone3"]').evaluate((el) => el.open);
+    check("zone3(ホームタブ)は既定closed", isOpenZone3 === false, String(isOpenZone3));
 
     console.log("[3] 折りたたみを閉じる/開くとlocalStorage(state本体とは別キー)に記憶され、リロード後も維持される");
-    // v72: creedは既定openになったため、ここではまだ未操作のzone4(既定closed)で
-    // 「操作→記憶→リロード後も維持」の仕組み自体を検証する(v71時点の趣旨を維持)。
-    await page.click('details[data-fold-id="zone4"] > summary');
+    // v149: zone3(ホームタブ側)で「操作→記憶→リロード後も維持」の仕組み自体を検証する
+    // (v71時点の趣旨を維持。creed/lifespanは既定openになったためzone3で代替)。
+    await page.click('details[data-fold-id="zone3"] > summary');
     await page.waitForTimeout(200);
-    check("zone4を開くとopen属性が付く", await page.locator('details[data-fold-id="zone4"]').evaluate((el) => el.open));
+    check("zone3を開くとopen属性が付く", await page.locator('details[data-fold-id="zone3"]').evaluate((el) => el.open));
     const fm1 = await foldMap();
-    check("localStorageにzone4:trueが記録される", fm1.zone4 === true, JSON.stringify(fm1));
-    check("他の折りたたみ(zone3)は記録を汚さずfalseのまま", fm1.zone3 !== true, JSON.stringify(fm1));
+    check("localStorageにzone3:trueが記録される", fm1.zone3 === true, JSON.stringify(fm1));
+    check("他の折りたたみ(zone4)は記録を汚さずfalseのまま", fm1.zone4 !== true, JSON.stringify(fm1));
     await page.reload();
     await page.waitForTimeout(400);
-    check("リロード後もzone4はopenのまま", await page.locator('details[data-fold-id="zone4"]').evaluate((el) => el.open));
-    check("リロード後もzone3はclosedのまま", await page.locator('details[data-fold-id="zone3"]').evaluate((el) => el.open) === false);
+    await gotoHomeTab();
+    check("リロード後もzone3はopenのまま", await page.locator('details[data-fold-id="zone3"]').evaluate((el) => el.open));
+    await gotoTodayTab();
+    check("リロード後もzone4はclosedのまま", await page.locator('details[data-fold-id="zone4"]').evaluate((el) => el.open) === false);
 
     // ============================================================
     // (c) 「AIから」集約カード
@@ -167,6 +174,8 @@ function check(name, cond, extra = "") {
       feedback: { [YESTERDAY]: "## 明日のMIT候補\n- テスト候補タスクX\n- テスト候補タスクY\n" },
       aiLinkFreshness: { feedbackAt: YESTERDAY, planAt: null }
     });
+    // v149: 「AIから」(home-ai-hub)はホームタブへ移動した(既定は今日タブ)。
+    await gotoHomeTab();
     check("「AIから」カードが1つだけ表示される", await page.locator(".home-ai-hub").count() === 1);
     const hubText = await page.locator(".home-ai-hub").textContent();
     check("鮮度インジケータがAIから内にある", (await page.locator(".home-ai-hub .ai-freshness-line").count()) === 1);
@@ -209,6 +218,7 @@ function check(name, cond, extra = "") {
       view: "home",
       feedback: { [YESTERDAY]: "## 明日のMIT候補\n- 埋まっているはずの候補\n" }
     });
+    await gotoHomeTab();
     // v75: 上と同じ理由で、raw本文を読めるdetailsのぶん .home-ai-hub のtextContentには
     // フィードバック本文がそのまま出るため、「候補セクション自体が無い」ことは候補見出しの不在で判定する。
     const hubTextFull = await page.locator(".home-ai-hub").textContent();
@@ -220,20 +230,43 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (d) スコアボードのジャンプ先
     // ============================================================
-    console.log("[7] スコアボード「今日の主役」は#home-mit-anchorへ、「長い弧」は閉じていても自動で開く");
+    // v149(UI改善計画Phase4a)追補: 「12週 今週」セルのジャンプ先(#homezone-3)は今日タブの
+    // 12週サイクルカード(homeCycle、常時表示・非折りたたみ)になった。旧仕様(「長い弧」の
+    // 折りたたみを自動で開く)は、12週サイクルが「長い弧をたしかめる」から分離されホームタブへ
+    // 移った(K指定)ことで意味を失ったため、新しい対応関係を検証する(CHANGES_v149.md参照)。
+    console.log("[7] スコアボード「今日の主役」は#home-mit-anchorへ、「12週 今週」は#homezone-3(今日タブの12週サイクルカード)へジャンプする");
     await page.evaluate((FOLD_KEY) => localStorage.removeItem(FOLD_KEY), FOLD_KEY);
     await seed({ blocks: [planBlock({ id: "mit-jump", title: "ジャンプ確認MIT", startMin: 9 * 60, isMIT: true })], view: "home" });
     check("#home-mit-anchorが存在し今日の主役を含む", (await page.locator("#home-mit-anchor").textContent()).includes("ジャンプ確認MIT"));
-    check("zone3は開始時点でclosed", await page.locator('details[data-fold-id="zone3"]').evaluate((el) => el.open) === false);
+    check("#homezone-3(今日タブ)は12週サイクルカードで、折りたたみを持たない(常時表示)",
+      await page.locator("#homezone-3 details[data-fold-id]").count() === 0
+      && (await page.locator("#homezone-3").textContent()).includes("12週サイクル"));
     // v82: スコアボード自体も既定closedの折りたたみになった(CHANGES_v82.md)ため、
     // 中の「今日の主役」セルをクリックするには先にスコアボードを開く必要がある。
     await page.locator('details[data-fold-id="home-scoreboard"] summary').click();
     await page.waitForTimeout(150);
+    await page.evaluate(() => {
+      window.__homeJumpScrollTargets = [];
+      window.__origScrollIntoView = Element.prototype.scrollIntoView;
+      Element.prototype.scrollIntoView = function (...args) {
+        window.__homeJumpScrollTargets.push(this.id || this.className || this.tagName);
+        return window.__origScrollIntoView.apply(this, args);
+      };
+    });
     await page.click('.home-score[data-id="homezone-3"]');
     await page.waitForTimeout(300);
-    check("「長い弧」ジャンプでzone3が自動的に開く", await page.locator('details[data-fold-id="zone3"]').evaluate((el) => el.open));
+    const jumpTargets = await page.evaluate(() => window.__homeJumpScrollTargets || []);
+    // v149レビュー対応(推奨9): モンキーパッチしたscrollIntoViewを元に戻す(以降の操作
+    // (gotoHomeTab等)に影響を残さない)。
+    await page.evaluate(() => {
+      if (window.__origScrollIntoView) Element.prototype.scrollIntoView = window.__origScrollIntoView;
+    });
+    check("「12週 今週」ジャンプで#homezone-3へscrollIntoViewが呼ばれる", jumpTargets.includes("homezone-3"), JSON.stringify(jumpTargets));
+    await gotoHomeTab();
+    check("ホームタブの「長い弧をたしかめる」(zone3)は、12週ジャンプでは自動的に開かない(分離済み)",
+      await page.locator('details[data-fold-id="zone3"]').evaluate((el) => el.open) === false);
     const fm2 = await foldMap();
-    check("自動オープンもlocalStorageに記憶される", fm2.zone3 === true, JSON.stringify(fm2));
+    check("zone3はlocalStorageにも記録されない(ジャンプと無関係)", fm2.zone3 !== true, JSON.stringify(fm2));
   } finally {
     await browser.close();
     server.close();

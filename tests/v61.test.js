@@ -297,8 +297,14 @@ function check(name, cond, extra = "") {
   // ============================================================
   // (c) 今日の理想ワンライナー: 保存・3日表示・3日目リトライ・日報反映
   // ============================================================
+  // v149(UI改善計画Phase4a): 今日の理想(homeIdeal)はホームの2タブ分割で「アファメーション」
+  // としてホームタブへ移動した(既定は今日タブ)。reload/seedのたびにタブは既定へ戻るため、
+  // ホーム画面を見る箇所ごとに切り替える。
+  const gotoHomeTab = async () => { await page.click('[data-action="home-tab"][data-tab="home"]'); await page.waitForTimeout(150); };
+
   console.log("[11] 今日の理想: 未入力日は入力欄のみ(邪魔しない)");
   await seed({ journalMeta: {}, view: "home" });
+  await gotoHomeTab();
   check("入力欄が表示される", await page.locator('[data-ideal-date]').count() === 1);
   check("表示テキスト(.home-ideal-text)は出ない(未入力)", await page.locator(".home-ideal-text").count() === 0);
   const idealInput = page.locator('[data-ideal-date]');
@@ -316,6 +322,7 @@ function check(name, cond, extra = "") {
   check("journalMeta[today].idealに保存される", s12.journalMeta?.[TODAY]?.ideal === "家族と穏やかに過ごす", JSON.stringify(s12.journalMeta?.[TODAY]));
   await page.reload();
   await page.waitForTimeout(400);
+  await gotoHomeTab();
   const idealText1 = await page.locator(".home-ideal-text").textContent().catch(() => "");
   check("1日目はホームに表示される", idealText1 === "家族と穏やかに過ごす", idealText1);
   const eyebrow1 = await page.locator(".home-ideal-eyebrow").textContent().catch(() => "");
@@ -324,6 +331,7 @@ function check(name, cond, extra = "") {
 
   console.log("[13] 今日の理想: 3日目(2日前に書いた理想が今日も残り、続ける/手放すを問う)");
   await seed({ journalMeta: { [YEST2]: { aiMitCandidates: [], aiImported: false, ideal: "継続的な理想" } }, view: "home" });
+  await gotoHomeTab();
   const eyebrow3 = await page.locator(".home-ideal-eyebrow").textContent().catch(() => "");
   check("3日目のラベルになっている", (eyebrow3 || "").includes("3日目"), eyebrow3);
   check("3日目はリトライ選択肢(続ける/手放す)が出る", await page.locator('[data-action="ideal-retry"]').count() === 2);
@@ -335,17 +343,20 @@ function check(name, cond, extra = "") {
   check("今日のjournalMetaに同じ理想がコピーされる", s14.journalMeta?.[TODAY]?.ideal === "継続的な理想", JSON.stringify(s14.journalMeta?.[TODAY]));
   await page.reload();
   await page.waitForTimeout(400);
+  await gotoHomeTab();
   const eyebrow14 = await page.locator(".home-ideal-eyebrow").textContent().catch(() => "");
   check("続けた直後は1日目に戻る", (eyebrow14 || "").includes("1日目"), eyebrow14);
 
   console.log("[15] 今日の理想: 3日目「手放す」→ 表示窓が閉じ、入力欄に戻る");
   await seed({ journalMeta: { [YEST2]: { aiMitCandidates: [], aiImported: false, ideal: "手放す理想" } }, view: "home" });
+  await gotoHomeTab();
   await page.click('[data-action="ideal-retry"][data-choice="release"]');
   await page.waitForTimeout(300);
   const s15 = await stateNow();
   check("元の理想(2日前)が空になる", s15.journalMeta?.[YEST2]?.ideal === "", JSON.stringify(s15.journalMeta?.[YEST2]));
   await page.reload();
   await page.waitForTimeout(400);
+  await gotoHomeTab();
   check("表示は消え、入力欄に戻る", await page.locator(".home-ideal-text").count() === 0 && await page.locator('[data-ideal-date]').count() === 1);
 
   console.log("[16] 今日の理想: 日報生成(generateReport)への反映");

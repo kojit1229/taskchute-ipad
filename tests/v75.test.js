@@ -138,6 +138,10 @@ function check(name, cond, extra = "") {
     // ============================================================
     console.log("[1] ホーム『AIから』カードに、personal-data API経由のAIフィードバック本文を読むdetailsが既定closedで出る");
     await seed({ feedbackFiles: [TODAY], view: "home" });
+    // v149(UI改善計画Phase4a): 「AIから」(home-ai-hub、その中の.home-ai-feedback-read)は
+    // ホームの2タブ分割でホームタブへ移動した(既定は今日タブ)。
+    await page.click('[data-action="home-tab"][data-tab="home"]');
+    await page.waitForTimeout(150);
     check("api.github.comのAIフィードバック_TODAY.mdへリクエストが実際に飛んでいる(personal-data API経由の裏取り)",
       feedbackApiRequests.some((p) => p.endsWith(`AIフィードバック_${TODAY}.md`)), JSON.stringify(feedbackApiRequests));
     check("api.github.comのAIフィードバック_PREV.mdへリクエストが実際に飛んでいる(前日1日分の無条件fetch仕様)",
@@ -290,6 +294,8 @@ function check(name, cond, extra = "") {
     console.log("[7] 「タスク名: 理由」形式のMIT候補行はタスク名のみを候補にする。コロン無しの行は従来どおり全文(should-fix2)");
     FEEDBACK_FIXTURE[PREV] = "## 明日への提案\n\n- タスクA_v75: 理由A_v75の説明文\n- タスクB_v75\n";
     await seed({ blocks: [], feedbackFiles: [], view: "home" });
+    await page.click('[data-action="home-tab"][data-tab="home"]');
+    await page.waitForTimeout(150);
     // v75: 「AIから」カードには、生の本文をそのまま読めるdetails(homeAiFeedbackReadHTML、意図した
     // 仕様)と、抽出済みの候補リスト(aiFeedbackCandidatesHTML)が両方入っている。ここで検証したいのは
     // 「候補として抽出された文言」からコロン以降が除かれていることなので、判定は候補行(候補見出し

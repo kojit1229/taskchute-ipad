@@ -214,6 +214,10 @@ function check(name, cond, extra = "") {
     console.log("[4] visibilitychange(フォアグラウンド復帰)で前日フィードバックの新着が自動再fetch・再表示される");
     delete feedbackFixture[YEST];  // 起動時点ではまだバッチ未生成(404)
     await seed({ tasks: [], view: "home" });
+    // v149(UI改善計画Phase4a): 「AIから」(home-ai-feedback-read)はホームタブへ移動した
+    // (既定は今日タブ)。visibilitychangeはreloadを伴わないため、以降の再描画でもタブ選択は維持される。
+    await page.click('[data-action="home-tab"][data-tab="home"]');
+    await page.waitForTimeout(150);
     const beforeCount4 = await page.locator(".home-ai-feedback-read").count();
     check("起動直後は前日フィードバックがまだ無い(フェイルソフトでdetails非表示)", beforeCount4 === 0);
 

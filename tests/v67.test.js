@@ -174,8 +174,14 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (c) AI連携鮮度: 経過日数の表示 + 3日閾値の注意バナー
     // ============================================================
+    // v149(UI改善計画Phase4a): 「AIから」(home-ai-hub、鮮度ライン・AI作業結果を含む)は
+    // ホームの2タブ分割でホームタブへ移動した(既定は今日タブ)。reload/seedのたびにタブは
+    // 既定へ戻るため、ホームを見る箇所ごとに切り替える。
+    const gotoHomeTab = async () => { await page.click('[data-action="home-tab"][data-tab="home"]'); await page.waitForTimeout(150); };
+
     console.log("[3] AI連携鮮度: 両方とも新しければ注意バナー無し、テキストに経過日数が出る");
     await seed({ view: "home", aiLinkFreshness: { feedbackAt: TODAY, planAt: TODAY } });
+    await gotoHomeTab();
     check("鮮度ラインが表示される", await page.locator(".ai-freshness-line").count() === 1);
     const freshText = await page.locator(".ai-freshness-line").textContent();
     check("フィードバック「今日届いた」が出る", freshText.includes("フィードバック 今日届いた"), freshText);
@@ -185,6 +191,7 @@ function check(name, cond, extra = "") {
 
     console.log("[4] AI連携鮮度: フィードバックが3日途絶えると注意バナーが出る(責めない文言)");
     await seed({ view: "home", aiLinkFreshness: { feedbackAt: D3AGO, planAt: TODAY } });
+    await gotoHomeTab();
     const freshText2 = await page.locator(".ai-freshness-line").textContent();
     check("フィードバック「3日前」が出る", freshText2.includes("フィードバック 3日前"), freshText2);
     check("ドットはwarn(注意あり)", await page.locator(".ai-freshness-dot.warn").count() === 1);
@@ -194,10 +201,12 @@ function check(name, cond, extra = "") {
 
     console.log("[5] AI連携鮮度: 2日前は閾値未満なので注意バナーは出ない");
     await seed({ view: "home", aiLinkFreshness: { feedbackAt: D1AGO, planAt: D1AGO } });
+    await gotoHomeTab();
     check("1日前は注意バナー無し", await page.locator(".ai-freshness-banner").count() === 0);
 
     console.log("[6] AI連携鮮度: 一度も届いていない(null)場合も「まだ届いていません」+ 注意バナー");
     await seed({ view: "home", aiLinkFreshness: { feedbackAt: null, planAt: null } });
+    await gotoHomeTab();
     const freshText3 = await page.locator(".ai-freshness-line").textContent();
     check("未取得は「まだ届いていません」表示", freshText3.includes("まだ届いていません"), freshText3);
     check("未取得も注意バナーが出る", await page.locator(".ai-freshness-banner").count() === 1);
@@ -219,6 +228,7 @@ function check(name, cond, extra = "") {
       projects: [testProject()],
       view: "home"
     });
+    await gotoHomeTab();
     await page.waitForTimeout(400);  // hydrateStaticMarkdown() の非同期fetch完了を待つ
     const resultIdCompleted = `${TODAY}__ai-task-1`;
     const resultIdBlocked = `${TODAY}__ai-task-2`;
@@ -277,6 +287,7 @@ function check(name, cond, extra = "") {
     // 600ms内に収まらないことがあり、まれに1回目のrender直後の状態を観測してしまう
     // (queued行だけでなく処理済み分も含めて見える誤検出。アサーション自体は変更していない)。
     // 2回目renderの完了を示す「行数が安定するまで」ポーリング待機して環境依存のflakeを解消する。
+    await gotoHomeTab();
     await page.waitForFunction(
       () => document.querySelectorAll(".ai-work-row").length === 1,
       null, { timeout: 5000 }

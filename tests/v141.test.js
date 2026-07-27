@@ -119,6 +119,10 @@ function check(name, cond, extra = "") {
     }, { KEY, YESTERDAY });
     await page.reload();
     await page.waitForTimeout(700);
+    // v149(UI改善計画Phase4a): 「AIから」(home-ai-feedback-read)はホームの2タブ分割で
+    // ホームタブへ移動した(既定は今日タブ)。
+    await page.click('[data-action="home-tab"][data-tab="home"]');
+    await page.waitForTimeout(150);
     const homeFbText = await page.locator(".home-ai-feedback-read").textContent().catch(() => "");
     check("Homeの「AIから」カードに前日フィードバックが読める(回帰)", (homeFbText || "").includes("昨日の振り返り_v141"), (homeFbText || "").slice(0, 200));
 

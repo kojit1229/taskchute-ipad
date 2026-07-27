@@ -199,10 +199,9 @@ function check(name, cond, extra = "") {
       projects: [testProject()],
       view: "home"
     });
-    // homeBacklog()は既定で閉じているゾーン(data-fold-id="zone3"、「長い弧をたしかめる」)の
-    // 中にあるため、クリック可能にするにはまず開く必要がある(実際のK操作と同じ手順)
-    await page.click('[data-fold-id="zone3"] summary');
-    await page.waitForTimeout(200);
+    // v149(UI改善計画Phase4a): homeBacklog()はホームの2タブ分割で「今日」タブ(既定タブ)
+    // 直下の常時表示カードになった(旧: 「長い弧をたしかめる」の折りたたみの中)。
+    // seed()のview:"home"は既定で「今日」タブが選ばれるため、開く操作は不要。
     function homeRow(taskId) {
       return page.locator(`.home-due:has([data-action="home-add-today"][data-id="${taskId}"])`);
     }

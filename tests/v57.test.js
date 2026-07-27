@@ -149,6 +149,10 @@ function check(name, cond, extra = "") {
     // 「AIから」カード(homeAiFeedbackReadHTML)で行う(fetchロジック・保存データ自体は無変更)
     await page.click('[data-action="nav"][data-view="home"]');
     await page.waitForTimeout(400);
+    // v149(UI改善計画Phase4a): 「AIから」(home-ai-feedback-read)はホームの2タブ分割で
+    // ホームタブへ移動した(既定は今日タブ)。
+    await page.click('[data-action="home-tab"][data-tab="home"]');
+    await page.waitForTimeout(150);
     const homeText = await page.locator(".home-ai-feedback-read").textContent();
     check("取得した前日フィードバックの本文がHomeの「AIから」カードに反映される(マーカー一致)",
       (homeText || "").includes(FEEDBACK_MARKER), (homeText || "").slice(0, 200));

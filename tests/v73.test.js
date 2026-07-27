@@ -229,10 +229,15 @@ function check(name, cond, extra = "") {
     check("縮退モードの案内バナーが出る", await page.locator(".cond-degraded-banner").count() === 1);
     check("「今日のリズム」ゾーンが既定closedの折りたたみになる",
       await page.locator('details[data-fold-id="zone2-degraded"]').evaluate((el) => el.open) === false);
-    check("「AIから」カードも既定closedの折りたたみになる",
-      await page.locator('details[data-fold-id="ai-hub-degraded"]').evaluate((el) => el.open) === false);
     check("MIT(今日の主役)は縮退時も表示される",
       (await page.locator("#home-mit-anchor").textContent()).includes("縮退モード確認MIT"));
+    // v149(UI改善計画Phase4a): 「AIから」(home-ai-hub)はホームタブへ移動した(既定は今日タブ)。
+    await page.click('[data-action="home-tab"][data-tab="home"]');
+    await page.waitForTimeout(150);
+    check("「AIから」カードも既定closedの折りたたみになる",
+      await page.locator('details[data-fold-id="ai-hub-degraded"]').evaluate((el) => el.open) === false);
+    await page.click('[data-action="home-tab"][data-tab="today"]');
+    await page.waitForTimeout(150);
 
     console.log("[5b] 体調が普通(7)なら縮退モードは発火せず通常表示のまま");
     await seed({
@@ -246,6 +251,9 @@ function check(name, cond, extra = "") {
     // v146(UI改善計画Phase1-1): 「AIから」は常時表示のsectionから既定closedのdetailsへ変更された。
     // ここで検証したいのは「縮退専用の ai-hub-degraded ではなく通常の ai-hub 側が使われる」ことなので、
     // タグをdetailsに追随させる(常時表示自体はH3の折りたたみ既定値検証の担当)。
+    // v149: 「AIから」はホームタブへ移動した(既定は今日タブ)。
+    await page.click('[data-action="home-tab"][data-tab="home"]');
+    await page.waitForTimeout(150);
     check("「AIから」カードは通常のai-hub(縮退用ではない)側が使われる",
       await page.locator('details[data-fold-id="ai-hub-degraded"]').count() === 0
       && await page.locator('details[data-fold-id="ai-hub"].home-ai-hub').count() === 1);

@@ -100,9 +100,15 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (1) 回帰: ホーム「AIから」で、実データと同じ見出し構造の前日フィードバック本文が読める
     // ============================================================
+    // v149(UI改善計画Phase4a): 「AIから」(home-ai-feedback-readを含む)はホームの2タブ分割で
+    // ホームタブへ移動した(既定は今日タブ)。reload/seedのたびにタブは既定へ戻るため、
+    // ホームを見る箇所ごとに切り替える。
+    const gotoHomeTab = async () => { await page.click('[data-action="home-tab"][data-tab="home"]'); await page.waitForTimeout(150); };
+
     console.log("[1] ホーム『AIから』で、実際のAIフィードバック_*.mdと同じ見出し構造の前日本文が読める(回帰)");
     await seed({ view: "home" });
     check("api.github.comへ前日分のfetchが実際に飛んでいる", feedbackApiRequests.some((p) => p.endsWith(`AIフィードバック_${PREV}.md`)), JSON.stringify(feedbackApiRequests));
+    await gotoHomeTab();
     const detailsCount = await page.locator(".home-ai-feedback-read").count();
     check("「AIフィードバックを読む」detailsが1つ表示される", detailsCount === 1);
     const openAttr = await page.locator(".home-ai-feedback-read").getAttribute("open").catch(() => null);
@@ -121,6 +127,7 @@ function check(name, cond, extra = "") {
       el.dispatchEvent(new Event("change", { bubbles: true }));
     }, PREV2);
     await page.waitForTimeout(300);
+    await gotoHomeTab();
     const homeDetailsCountPastDay = await page.locator(".home-ai-feedback-read").count();
     const homeTextPastDay = await page.locator("main").textContent();
     check("selectedDateが2日前でも、実際の今日から見た前日フィードバックが読める(selectedDate依存バグの回帰)",
@@ -141,6 +148,7 @@ function check(name, cond, extra = "") {
     console.log("[3] 前日分のAIフィードバックファイルが存在しない(404)日は、Homeがクラッシュせずdetails自体が出ない");
     feedbackFixture = {};  // 全部404
     await seed({ view: "home" });
+    await gotoHomeTab();
     const detailsCount404 = await page.locator(".home-ai-feedback-read").count();
     check("ホーム: 前日分が無ければdetails自体が出ない(フェイルソフト)", detailsCount404 === 0);
     check("404が続いてもクラッシュしていない(pageerror無し。ここまで到達していれば正常)", true);
@@ -152,6 +160,7 @@ function check(name, cond, extra = "") {
     console.log("[4] 404直後に前日分が用意されても、次回起動時には再fetchされて読める(失敗を永続キャッシュしていない)");
     feedbackFixture = { [PREV]: REAL_SHAPED_FEEDBACK };  // ここで初めて用意する
     await seed({ view: "home" });
+    await gotoHomeTab();
     const homeTextAfterRecover = await page.locator("main").textContent();
     const detailsCountRecover = await page.locator(".home-ai-feedback-read").count();
     check("直前は404だったが、ファイルが用意された後の再起動では正しく取得・表示される(失敗の永続キャッシュなし)",

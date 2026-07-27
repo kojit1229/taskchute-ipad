@@ -111,6 +111,10 @@ function check(name, cond, extra = "") {
   }, { KEY });
   await page.reload();
   await page.waitForTimeout(500);
+  // v149(UI改善計画Phase4a): 週次レビュー導線(homeWeeklyLink)は「長い弧をたしかめる」の
+  // 一部としてホームの2タブ分割でホームタブへ移動した(既定は今日タブ)。
+  await page.click('[data-action="home-tab"][data-tab="home"]');
+  await page.waitForTimeout(150);
   await page.evaluate((satISO) => {
     const el = document.querySelector("[data-date-picker]");
     el.value = satISO;

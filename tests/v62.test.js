@@ -456,6 +456,10 @@ function check(name, cond, extra = "") {
     // ============================================================
     console.log("[10] ホーム信条がKの実データ裏付け型の文言になっている");
     await seed({ view: "home" });
+    // v149(UI改善計画Phase4a): 三つの信条(homeCreed)はホームの2タブ分割で「ホーム」タブへ
+    // 移動した(既定は今日タブ)。
+    await page.click('[data-action="home-tab"][data-tab="home"]');
+    await page.waitForTimeout(150);
     const creedText = await page.locator(".home-creed").textContent();
     check("「決めた一つは、必ずやり切れる(MIT達成率100%)」が含まれる", creedText.includes("決めた一つは、") && creedText.includes("必ずやり切れる(MIT達成率100%)"), creedText);
     check("「進んだ量で測る。実行率で自分を裁かない」が含まれる", creedText.includes("進んだ量で測る。") && creedText.includes("実行率で自分を裁かない"), creedText);

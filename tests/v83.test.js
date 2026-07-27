@@ -355,6 +355,10 @@ function check(name, cond, extra = "") {
     }, { KEY, YESTERDAY });
     await page.reload();
     await page.waitForTimeout(700);
+    // v149(UI改善計画Phase4a): 「AIから」(home-ai-feedback-read)はホームの2タブ分割で
+    // ホームタブへ移動した(既定は今日タブ)。
+    await page.click('[data-action="home-tab"][data-tab="home"]');
+    await page.waitForTimeout(150);
     const fbTextOld = await page.locator(".home-ai-feedback-read").textContent();
     check("旧フィードバック内容が表示される(cachedFeedback経由のrenderMarkdown)", (fbTextOld || "").includes(OLD_MARKER), (fbTextOld || "").slice(0, 300));
 
@@ -362,6 +366,8 @@ function check(name, cond, extra = "") {
     feedbackFixture = `# AIフィードバック\n\n${NEW_MARKER}\n`;
     await page.reload();
     await page.waitForTimeout(700);
+    await page.click('[data-action="home-tab"][data-tab="home"]');
+    await page.waitForTimeout(150);
     const fbTextNew = await page.locator(".home-ai-feedback-read").textContent();
     check("新着フィードバックの内容が表示される(古い内容のまま固まっていない)", (fbTextNew || "").includes(NEW_MARKER), (fbTextNew || "").slice(0, 300));
     check("旧フィードバック内容が残留していない(regression: キャッシュの取り違えが無い)", !(fbTextNew || "").includes(OLD_MARKER));

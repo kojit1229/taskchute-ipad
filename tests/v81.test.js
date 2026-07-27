@@ -301,6 +301,10 @@ function check(name, cond, extra = "") {
     }, { KEY });
     await page.reload();
     await page.waitForTimeout(400);
+    // v149: 「今日の理想」はホームの2タブ分割でアファメーション扱いとなり「ホーム」タブへ移動した
+    // (今日タブが既定のため、まずタブを切り替える)。
+    await page.click('[data-action="home-tab"][data-tab="home"]');
+    await page.waitForTimeout(150);
 
     const idealFold = page.locator('details[data-fold-id="home-ideal-empty"]');
     check("「今日の理想」空欄カードがdetailsとして描画されている", await idealFold.count() === 1);
