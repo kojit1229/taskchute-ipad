@@ -675,6 +675,8 @@ document.addEventListener("click", (event) => {
   if (action === "wish-board-jump-current") scrollWishBoardToCurrentMonth();
   // v152: 仕分けモード(先送りBlock+Wishバックログの三択トリアージ、ボタン版=S1)
   if (action === "triage-choice") triageAction(target.dataset.kind, id, target.dataset.choice);
+  // v156: 仕分けモードUndo(S3)。トースト内「元に戻す」ボタン(v150の機構を再利用)
+  if (action === "triage-undo") triageUndo(id);
   // === v17: Avoid List(v34: input リスナーから click へ移設) ===
   if (action === "add-avoid") addAvoid();
   if (action === "delete-avoid") deleteAvoid(id);
@@ -5337,17 +5339,23 @@ function moveBlockToWish(id) {
 }
 
 // 選択結果を軽量ログに記録(将来のバッチ分析用。aiScheduleHistoryと同じ思想)
+// v156 2系統レビュー対応(必須1): logSwipeTriageと同じ理由で戻り値を { entry, evicted } にした。
+// 既存の呼び出し元(戻り値未使用、下記5389行目)は影響なし。
 function logMigrationRitual(block, choice) {
-  state.migrationRitualLog.push({
+  const entry = {
     blockId: block?.id || "",
     title: block?.title || "",
     carryCount: (block?.carryCount || 0) + 1,
     choice,  // 'today' | 'decompose' | 'release' | 'avoid' | 'carry'
     at: nowDateTime()
-  });
+  };
+  state.migrationRitualLog.push(entry);
+  let evicted = null;
   if (state.migrationRitualLog.length > MIGRATION_RITUAL_LOG_MAX) {
+    evicted = state.migrationRitualLog.slice(0, state.migrationRitualLog.length - MIGRATION_RITUAL_LOG_MAX);
     state.migrationRitualLog = state.migrationRitualLog.slice(-MIGRATION_RITUAL_LOG_MAX);
   }
+  return { entry, evicted };
 }
 
 function openMigrationRitual(srcId, nextCount, ctx) {
@@ -6082,18 +6090,72 @@ function triageSubtitleText(entry) {
 
 // 選択結果を軽量ログに記録(migrationRitualLogと同じ思想。集計・分析はバッチ側)
 // v154: viaはtriageAction呼び出し元から渡される('button'|'swipe')。既定は後方互換のため'button'。
+// v156 2系統レビュー対応(必須1): 戻り値を { entry, evicted } にした。呼び出し元(triageAction)が
+// Undo用に「積んだエントリそのものへの参照」と「上限超過で押し出された最古エントリ」を保持できる
+// ようにするため(詳細は_triageUndo付近のコメント参照)。既存の呼び出し元(戻り値未使用)は影響なし。
 function logSwipeTriage(kind, targetId, action, carryCount, via = "button") {
-  state.swipeTriageLog.push({
+  const entry = {
     at: nowDateTime(),
     targetId,
     kind,          // 'block' | 'wish'
     action,        // 'today' | 'drop' | 'defer'
     via,           // 'button' | 'swipe'(v154)
     carryCount: Number(carryCount || 0)
-  });
+  };
+  state.swipeTriageLog.push(entry);
+  let evicted = null;
   if (state.swipeTriageLog.length > SWIPE_TRIAGE_LOG_MAX) {
+    evicted = state.swipeTriageLog.slice(0, state.swipeTriageLog.length - SWIPE_TRIAGE_LOG_MAX);
     state.swipeTriageLog = state.swipeTriageLog.slice(-SWIPE_TRIAGE_LOG_MAX);
   }
+  return { entry, evicted };
+}
+
+// v156: 仕分けモードUndo(designs/03-task-swipe.md S3、K確定2026-07-27「手放すの復元は
+// Undoトースト(直後のみ)で足りる。復元一覧画面は作らない」)。直前1操作のみが対象で
+// スタックは持たない——次のtriageAction成立(新しい三択操作)が_triageUndoを上書きするだけで
+// 自動的に前のUndoは失効する(明示クリア不要)。
+// v156 2系統レビュー対応(必須2、Codex指摘): 5秒の視覚的な非表示化(showToastの既存タイマー+
+// `.toast:not(.show)`のpointer-events:noneガード)だけでは、ボタンに既にキーボードフォーカスが
+// 当たっていた場合Enter/Spaceでの活性化がpointer-eventsを無視して素通りしてしまう。
+// triageUndoToastOpts()のonExpireで、タイマー満了と同時に_triageUndoそのものを明示的にnull化
+// することで、期限切れ後にEnterで発動しても実質的に無害(triageUndo側のguardId不一致で無視)に
+// なるよう二重に防いだ。
+// revertクロージャは「巻き戻し先の値」だけを持つデータで、state操作以外は一切行わない
+// (呼び出し側のtriageUndo()がsaveAndRenderをまとめて行う)。
+let _triageUndo = null; // { guardId, revert() } | null
+
+// Undoトースト用のtoastOpts(v150のアクション付きトースト機構を再利用。5秒固定は設計書§③)。
+function triageUndoToastOpts(guardId) {
+  return {
+    action: "triage-undo", id: guardId, label: "元に戻す", durationMs: 5000,
+    // guardId一致を確認してからnull化する(念のための防御。showToastは新規呼び出しのたびに
+    // clearTimeoutで前のタイマーを破棄するため、実際にはこのonExpireが「既に上書きされた
+    // 古いUndo」に対して発火することは無いはずだが、二重の安全策として残す)。
+    onExpire: () => { if (_triageUndo && _triageUndo.guardId === guardId) _triageUndo = null; }
+  };
+}
+
+// v156 2系統レビュー対応(必須1): swipeTriageLog/migrationRitualLogから「参照が一致する
+// エントリ」だけを取り除き、上限超過(200/300件)で押し出されていた最古エントリ(あれば)を
+// 先頭へ戻す。配列中の位置(末尾/添字)に一切依存しないため、上限トリムが絡んでも・将来ログへの
+// 追記コードが増えても構造的に正しく動く(このtriageActionが呼ばれてからUndoされるまでの間に
+// 他のtriageActionは起こらない=_triageUndoは次の成功で上書きされ古いrevertはもう呼ばれない、
+// という不変条件はあるが、それに依存しない実装にした)。
+function triageUndoLogArray(arr, entry, evicted) {
+  const kept = arr.filter((e) => e !== entry);
+  return evicted && evicted.length ? [...evicted, ...kept] : kept;
+}
+
+// トースト「元に戻す」ボタンの実行。guardIdが直近の_triageUndoと一致しない場合は無視する
+// (v150二重タップガードと同じ「idが一致しなければ無視」パターン。古いトーストの残骸や
+// 次の操作で既に失効したUndoへの誤発火を防ぐ)。
+function triageUndo(id) {
+  if (!_triageUndo || _triageUndo.guardId !== id) return;
+  const revert = _triageUndo.revert;
+  _triageUndo = null;
+  revert();
+  saveAndRender("元に戻しました");
 }
 
 // 三択ボタンの実行(kind: 'block'|'wish', action: 'today'|'drop'|'defer')。
@@ -6126,23 +6188,58 @@ function triageAction(kind, id, action, via = "button") {
     const block = blockById(id);
     if (!block || block.deleted) return false;
     if (action === "today") {
+      // v156: Undo用に変更前のBlockを丸ごとスナップショットし、carryOverBlockが新規に
+      // 作るBlockをid集合の差分で特定する(carryOverBlock自体は他の呼び出し元
+      // 〈requestCarryOver〉とも共有する既存関数のため、戻り値を変えて対応するより
+      // 差分検出のほうが安全=既存の挙動に一切触れない)。
+      const blockSnapshot = { ...block };
+      const blockIdsBefore = new Set(state.blocks.map((b) => b.id));
       _triageLastActionAt = now;
       _triageLastActionId = id;
       _triageSessionDone.add(id);
-      logSwipeTriage("block", id, action, block.carryCount, via);
-      carryOverBlock(id);
+      const logResult = logSwipeTriage("block", id, action, block.carryCount, via);
+      carryOverBlock(id);  // 内部でsaveAndRender済み(既定トースト「今日へ繰り越しました」)
+      const newBlock = state.blocks.find((b) => !blockIdsBefore.has(b.id));
+      if (newBlock) {
+        _triageUndo = {
+          guardId: id,
+          revert: () => {
+            state.blocks = state.blocks.filter((b) => b.id !== newBlock.id);  // 作成したBlockを取り消し
+            state.blocks = state.blocks.map((b) => b.id === id ? { ...blockSnapshot, updatedAt: nowDateTime() } : b);  // 元(carryable)へ復元
+            state.swipeTriageLog = triageUndoLogArray(state.swipeTriageLog, logResult.entry, logResult.evicted);
+            _triageSessionDone.delete(id);
+          }
+        };
+        // carryOverBlockの既定トーストをUndoボタン付きへ上書きする(#toastは#appの外にあり
+        // carryOverBlock内のrender()では触れられないため、二重呼び出しでも問題ない)。
+        // v156 2系統レビュー対応(推奨4): carryOverBlock内のsaveAndRenderが既に容量超過警告
+        // (_lastSaveError)を出している場合は上書きしない(警告の握り潰し防止)。
+        if (!_lastSaveError) showToast("今日へ繰り越しました", triageUndoToastOpts(id));
+      }
       return true;
     }
     if (action === "drop") {
       // 儀式のavoid相当(designs/03-task-swipe.md §③表): deleted化+migrationRitualLogにも記録
       // (集計源を分裂させない。avoidListへの追記まではしない=表に明記された2アクションのみ)
+      const blockSnapshot = { ...block };  // v156: Undo用
       _triageLastActionAt = now;
       _triageLastActionId = id;
       _triageSessionDone.add(id);
-      logMigrationRitual(block, "avoid");
+      const migResult = logMigrationRitual(block, "avoid");
       state.blocks = state.blocks.map((b) => b.id === id ? { ...b, deleted: true, updatedAt: nowDateTime() } : b);
-      logSwipeTriage("block", id, action, block.carryCount, via);
-      saveAndRender("手放しました");
+      const logResult = logSwipeTriage("block", id, action, block.carryCount, via);
+      // v156: deleted:trueを解除するだけで完全復元できる(新規レコード生成が無いため単純)。
+      // migrationRitualLog/swipeTriageLogとも参照一致するエントリだけを取り消す(必須1)。
+      _triageUndo = {
+        guardId: id,
+        revert: () => {
+          state.blocks = state.blocks.map((b) => b.id === id ? { ...blockSnapshot, updatedAt: nowDateTime() } : b);
+          state.migrationRitualLog = triageUndoLogArray(state.migrationRitualLog, migResult.entry, migResult.evicted);
+          state.swipeTriageLog = triageUndoLogArray(state.swipeTriageLog, logResult.entry, logResult.evicted);
+          _triageSessionDone.delete(id);
+        }
+      };
+      saveAndRender("手放しました", triageUndoToastOpts(id));
       return true;
     }
     if (action === "defer") {
@@ -6150,6 +6247,7 @@ function triageAction(kind, id, action, via = "button") {
       // v152レビュー対応(設計書§④明文の記録漏れ): logMigrationRitual(release)を追加し、
       // 集計源(migrationRitualLogが正)を分裂させない。
       // v154: 延期はボタン専用(スワイプの方向割当から廃止。CHANGES_v154.md参照)。
+      const blockSnapshot = { ...block };  // v156: Undo用
       _triageLastActionAt = now;
       _triageLastActionId = id;
       _triageSessionDone.add(id);
@@ -6173,10 +6271,19 @@ function triageAction(kind, id, action, via = "button") {
     if (action === "today") {
       // ⑥未解決論点1の仮案(設計書に明記): 本体をカードにし、未完了サブタスクがあれば
       // 先頭(nextStepOf)をBlock化。サブタスクが無ければ本体自身をBlock化する。
+      const next = nextStepOf(id);
+      const targetId = next ? next.id : id;
+      // v156: Undo用スナップショット。対象(サブタスク or 本体自身)のstatus/updatedAtと、
+      // サブタスク経由の場合のみ更新される本体のupdatedAtも別途保持する(両者は別レコード)。
+      const targetSnapshot = (() => {
+        const t = state.tasks.find((x) => x.id === targetId);
+        return t ? { ...t } : null;
+      })();
+      const bodySnapshot = next ? { ...wish } : null;
+      const blockIdsBefore = new Set(state.blocks.map((b) => b.id));
       _triageLastActionAt = now;
       _triageLastActionId = id;
       _triageSessionDone.add(id);
-      const next = nextStepOf(id);
       if (next) {
         // 対象がサブタスクの場合、wishSubtaskToTasksが更新するのはサブタスク側のupdatedAtのみ
         // (本体は変わらない)。本体(カード)のupdatedAtも合わせて進めておく(再出現防止の本体は
@@ -6192,9 +6299,6 @@ function triageAction(kind, id, action, via = "button") {
       // 子孫サブタスクもカスケードでsoft-delete(deleted:true+updatedAt bump)する
       // (設計書§③表は「本体のみ」だが、本体だけ消して子孫が孤児のまま残る方が不整合なため
       // 統一を優先。理由はCHANGES_v152.md参照)。
-      _triageLastActionAt = now;
-      _triageLastActionId = id;
-      _triageSessionDone.add(id);
       const allIds = new Set([id]);
       const collect = (parentId) => {
         state.tasks.forEach((t) => {
