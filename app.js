@@ -1273,6 +1273,27 @@ function saveState() {
   scheduleAutoSync();  // v43: 自動同期 ON のとき 3分デバウンスで push
 }
 
+// v151: テーマ解決・適用。index.htmlの起動時同期スクリプト(フラッシュ防止用、
+// 同じ判定ロジックを重複実装)と役割分担している——ここは「状態が変わった後」
+// (設定変更・render毎・OS設定変化)の反映を担当する。
+// data-theme="dark"のCSSトークンはstyles.cssの:root[data-theme="dark"]に一本化してあるため
+// (メディアクエリは使わない、CHANGES_v151.md参照)、"auto"の実体解決は常にここで行う。
+// v151レビュー対応(必須5): 分岐の「形」をindex.htmlの同期スクリプトと完全一致させる
+// (mode!=="auto"ならlight/darkを直接判定、autoのときだけmatchMediaを見る)。
+// どちらかだけ書き換えるとドリフトするため、変更時は両方を見比べること。
+const THEME_COLOR_BY_MODE = { light: "#f7f7fa", dark: "#111216" };
+function resolveTheme(mode) {
+  if (mode !== "auto") return mode === "light" ? "light" : "dark";
+  return (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+}
+function applyTheme() {
+  const resolved = resolveTheme(state.settings.theme);
+  document.documentElement.setAttribute("data-theme", resolved);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", THEME_COLOR_BY_MODE[resolved]);
+  return resolved;
+}
+
 function normalizeState(value) {
   value.settings ||= {};
   // v31: 残り時間表示用の生年月日(未設定なら補完)
@@ -1335,6 +1356,12 @@ function normalizeState(value) {
   // 既定"energy"(従来どおりエネルギー実績/予測線)。"battery"でバッテリー残量線のみ表示。
   if (value.settings.timelineEnergyGraphMode !== "energy" && value.settings.timelineEnergyGraphMode !== "battery") {
     value.settings.timelineEnergyGraphMode = "energy";
+  }
+  // v151(ダークモード既定化、K指示2026-07-27): "light"|"dark"|"auto"(OS追従)の3択。
+  // 既定"dark"。既存端末も次回起動からdarkになる(autoを選べば従来どおりOS追従に戻せる)。
+  // 実際のhtml要素への反映(data-theme属性・meta theme-color)はapplyTheme()が行う。
+  if (value.settings.theme !== "light" && value.settings.theme !== "dark" && value.settings.theme !== "auto") {
+    value.settings.theme = "dark";
   }
   if (typeof value.settings.autoArchive !== "boolean") value.settings.autoArchive = true;
   value.settings.lastArchivedAt ||= "";
@@ -2218,6 +2245,9 @@ function makeBlock(input) {
 }
 
 function render() {
+  // v151: 毎回の再描画でテーマを再適用(冪等)。設定変更経路を問わず常に最新のstate.settings.themeへ
+  // html[data-theme]/meta[theme-color]を同期させ、適用漏れを作らない。
+  applyTheme();
   // v72: トークン+個人データリポジトリ未設定の端末は、セットアップ画面だけを表示して
   // タイムライン等の中身を一切出さない(実質ログインゲート)。localStorageの設定有無判定のみで
   // 判定し、有効性はここでは検証しない(検証は初回API呼び出しの成否=401バナーに委ねる)。
@@ -2278,7 +2308,7 @@ function renderGate() {
           </label>
         </form>
         <button class="btn primary" data-action="gate-continue">設定してはじめる</button>
-        ${_personalDataAuthError ? `<div class="muted" style="color:#c0392b; font-size:12px; margin-top:6px">⚠ ${escapeHTML(_personalDataAuthError)}</div>` : ""}
+        ${_personalDataAuthError ? `<div class="muted" style="color:var(--red); font-size:12px; margin-top:6px">⚠ ${escapeHTML(_personalDataAuthError)}</div>` : ""}
       </div>
     </div>
   `;
@@ -6913,7 +6943,7 @@ function renderEnergyGraph(allBlocks, rowHeight, startHour, endHour, compact = f
     <div class="energy-graph-overlay">
       <svg class="energy-svg" viewBox="0 0 100 ${totalHeight}" preserveAspectRatio="none"
            style="position:absolute; top:0; right:0; width:90px; height:${totalHeight}px; pointer-events:none;">
-        <line x1="50" y1="0" x2="50" y2="${totalHeight}" stroke="#D1D1D6" stroke-width="0.4" stroke-dasharray="2,2"/>
+        <line x1="50" y1="0" x2="50" y2="${totalHeight}" stroke="var(--line)" stroke-width="0.4" stroke-dasharray="2,2"/>
         ${showEnergy ? polyline(realPoints, false) : ""}
         ${showEnergy ? polyline(predictPoints, true) : ""}
         ${showEnergy ? circles(realPoints, "#2fb96d") : ""}
@@ -9210,6 +9240,28 @@ function renderSettingsGuidedAccessPanel() {
   `;
 }
 
+// v151(ダークモード既定化): テーマ選択。select要素はfont-size 16px以上のiOS規約に従い
+// .selectクラス(body既定16px継承)をそのまま使う。変更はdata-setting-field汎用ハンドラ
+// (change イベント、state.settings[field]=value; saveState(); render();)に乗せるため、
+// 専用のイベントハンドラを新設しない。render()内でapplyTheme()を毎回呼ぶ設計のため、
+// 保存直後のrender()でhtml[data-theme]/meta[theme-color]も自動的に追従する。
+function renderSettingsThemePanel() {
+  const theme = (state.settings.theme === "light" || state.settings.theme === "auto") ? state.settings.theme : "dark";
+  return `
+    <h3>🌗 テーマ</h3>
+    <div class="muted" style="font-size:12px; line-height:1.6">
+      画面配色です。既定はダーク。「OS追従」を選ぶと端末の外観設定(ライト/ダーク)に自動で合わせます。
+    </div>
+    <label>テーマ
+      <select class="select" data-setting-field="theme">
+        <option value="dark" ${theme === "dark" ? "selected" : ""}>ダーク</option>
+        <option value="light" ${theme === "light" ? "selected" : ""}>ライト</option>
+        <option value="auto" ${theme === "auto" ? "selected" : ""}>OS追従</option>
+      </select>
+    </label>
+  `;
+}
+
 function renderSettingsStudyWithMePanel() {
   return `
     <h3>🎥 Study With Me</h3>
@@ -9287,8 +9339,8 @@ function renderSettings() {
       body: [renderSettingsBufferPanel(), renderSettingsBatteryPanel(), renderSettingsMorningPlanPanel(), renderSettingsExecPanel()]
     },
     {
-      id: "settings-display", label: "表示・タイマー(Study With Me・ガイド付きアクセス・休憩)",
-      body: [renderSettingsStudyWithMePanel(), renderSettingsGuidedAccessPanel(), renderSettingsBreakMessagesPanel()]
+      id: "settings-display", label: "表示・タイマー(テーマ・Study With Me・ガイド付きアクセス・休憩)",
+      body: [renderSettingsThemePanel(), renderSettingsStudyWithMePanel(), renderSettingsGuidedAccessPanel(), renderSettingsBreakMessagesPanel()]
     },
     {
       id: "settings-master", label: "マスタ・詳細(プロフィール・カテゴリ管理・ファイル構成)",
@@ -11438,7 +11490,7 @@ function ztRenderThemeItem(t, groupsSorted) {
         <div class="zt-theme-item ${t.fav ? "is-fav" : ""}">
           <button class="zt-star ${t.fav ? "on" : ""}" data-action="zt-fav-toggle" data-id="${t.id}" title="お気に入り">${t.fav ? "★" : "☆"}</button>
           <button class="zt-important-toggle ${important ? "on" : ""}" data-action="zt-importance-toggle" data-id="${t.id}" title="重要度: 高⇔なし" aria-label="重要度を切り替え">${important ? "❗" : "❕"}</button>
-          <div class="zt-theme-text" data-action="zt-write" data-id="${t.id}">${important ? `<span class="zt-theme-important">高</span>` : ""}${escapeHTML(t.text)}${t.questionId ? `<span class="zt-theme-qtag">問い</span>` : ""}${t.source === "ai-feedback" ? `<span class="zt-theme-qtag" style="background:#eef; color:#448">🤖 AI提案</span>` : ""}</div>
+          <div class="zt-theme-text" data-action="zt-write" data-id="${t.id}">${important ? `<span class="zt-theme-important">高</span>` : ""}${escapeHTML(t.text)}${t.questionId ? `<span class="zt-theme-qtag">問い</span>` : ""}${t.source === "ai-feedback" ? `<span class="zt-theme-qtag">🤖 AI提案</span>` : ""}</div>
           ${groupsSorted.length ? `
           <select class="select zt-theme-group-select" data-action="zt-theme-set-group" data-id="${t.id}" aria-label="大テーマを選ぶ" title="大テーマへ割り当て">
             <option value="">未分類</option>
@@ -17961,6 +18013,15 @@ ensureJournal(state.selectedDate);
 persistLocalNoSchedule();
 
 ensurePassivePomodoro();
+// v151: テーマ設定が"auto"のとき、アプリを開いたままOSの外観(ライト/ダーク)が切り替わったら
+// 追従する(iOS設定アプリからの変更・日没での自動切替など)。addEventListenerが無い古いWebKitへの
+// フォールバックとしてaddListenerも試す(iOS Safariの実機バリエーション対策)。
+if (window.matchMedia) {
+  const _themeMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+  const _onOsThemeChange = () => { if (state.settings.theme === "auto") applyTheme(); };
+  if (_themeMediaQuery.addEventListener) _themeMediaQuery.addEventListener("change", _onOsThemeChange);
+  else if (_themeMediaQuery.addListener) _themeMediaQuery.addListener(_onOsThemeChange);
+}
 // v23/v41: 起動時に繰り返し Block を実体化(期間外・未編集は破棄)+ 日次オープン記録
 runDailyOpen({ force: true });
 render();

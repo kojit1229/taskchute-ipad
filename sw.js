@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v150";
+const CACHE_NAME = "taskchute-journal-pwa-v151";
 // v150: UI改善計画Phase4b(残る構造課題・K指定2026-07-27)— (1)完了作法の統一: すべての
 //   完了導線(ホーム今日タブのドット/タスクシュートの✓/タイムラインの○/ながれのチェック)を
 //   toggle-block(即完了。実績開始/終了時刻を未設定なら現在時刻で自動記録、充放電は

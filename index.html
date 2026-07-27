@@ -3,14 +3,55 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#f7f7fa" />
+    <!-- v151: 既定は"#111216"(ダーク既定、K指示2026-07-27)。実際の色は下の同期スクリプトが
+         起動直後に解決結果へ上書きする(以後はapp.jsのapplyTheme()が設定変更・OS追従の
+         都度更新する)。 -->
+    <meta name="theme-color" content="#111216" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <!-- v151レビュー対応(必須2): theme-colorメタはiOS standalone起動時のステータスバーには
+         効かない(Safari/ホームブラウザだけが見る)。ステータスバーの色は
+         apple-mobile-web-app-status-bar-styleだけが制御するため"black"に固定する。
+         "black-translucent"はコンテンツがステータスバー領域まで潜り込みsafe-area-inset対応が
+         別途必要になるため、既存レイアウトへの副作用を避けて不採用。 -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="apple-mobile-web-app-title" content="TaskChute Journal" />
     <title>TaskChute Journal</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./assets/icon.svg" />
+    <!-- v151: ダークモード既定化のフラッシュ防止。app.js(type="module"は非同期・遅延実行のため
+         初回ペイントに間に合わない)より前に、html要素へdata-theme属性を同期的に付与する。
+         判定ロジックはapp.jsのresolveTheme()/applyTheme()と**構造まで完全一致**させて複製している
+         (state.settings.theme: "light"|"dark"|"auto"、既定"dark"。"auto"はOSのprefers-color-scheme
+         に従う)。STORAGE_KEYの文字列・THEME_COLOR_BY_MODEの値・分岐の形(mode!=="auto"ならlight/dark
+         を直接判定、autoのときだけmatchMediaを見る)は、app.jsのresolveTheme()/applyTheme()/
+         THEME_COLOR_BY_MODEと手動で同期を保つこと(ここはモジュール読込前の素のscriptのため
+         importできない。どちらかだけ改修すると2箇所がドリフトするため、変更時は両方を見比べること)。
+         v151レビュー対応(必須4): meta[theme-color]もこの時点で解決済みテーマの値へ更新する
+         (従来はdata-theme属性しか更新しておらず、light解決時にステータスバー相当の色が
+         一瞬ダークのまま=theme-colorメタの既定値#111216が残る問題があった)。 -->
+    <script>
+      (function () {
+        var THEME_COLOR_BY_MODE = { light: "#f7f7fa", dark: "#111216" };
+        try {
+          var raw = localStorage.getItem("taskchute-journal-pwa-state-v1");
+          var theme = "dark";
+          if (raw) {
+            var parsed = JSON.parse(raw);
+            var t = parsed && parsed.settings && parsed.settings.theme;
+            if (t === "light" || t === "dark" || t === "auto") theme = t;
+          }
+          var resolved = theme !== "auto"
+            ? (theme === "light" ? "light" : "dark")
+            : ((window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light");
+          document.documentElement.setAttribute("data-theme", resolved);
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", THEME_COLOR_BY_MODE[resolved]);
+        } catch (e) {
+          document.documentElement.setAttribute("data-theme", "dark");
+        }
+      })();
+    </script>
     <link rel="stylesheet" href="./styles.css" />
     <!-- v38: marked はリポジトリ同梱に変更(CDN依存・改ざんリスクを排除、オフラインでも確実に動作) -->
     <script src="./marked.min.js"></script>
