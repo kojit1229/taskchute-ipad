@@ -40,8 +40,16 @@
      opacity(半透明合成)ではなく専用の実色トークンにした(ダークで薄緑が暗く沈んだ緑に
      化ける問題を避けるため、ライト/ダークそれぞれで別の実測値を持つ)。--garden-midは
      既存--greenと同値(装飾アイコン用途としての既存precedentを踏襲、白背景2.54:1は
-     v147コメント同様に許容範囲。node script実測: パネル上pale 2.26:1/deep 6.52:1)。 */
-  --garden-pale: #6bbd8d;
+     v147コメント同様に許容範囲。node script実測: パネル上pale 2.26:1/deep 6.52:1)。
+     v155レビュー対応(2026-07-28、Claude実測): 旧--garden-pale(#6bbd8d)は--garden-mid
+     (#2fb96d)とのL*(CIE明度)差がわずか3.7しかなく、月間ピクセルのような小面積(18px角)
+     セルでは薄緑/緑がライトテーマで判別困難だった。単調に明度が下がるランプへ調整
+     (node script実測、L*: pale 86.9 / mid 66.8 / deep 39.8。pale-mid間ΔL*=20.0、
+     mid-deep間ΔL*=27.1)。芽アイコン(.home-garden-svg .g-stage1、S1)も同トークンを使うため
+     見え方を確認: パネル(白)上のコントラストはpale 1.41:1(装飾アイコン用途、テキストではない
+     ため4.5:1は要求しない。薄い緑という印象は保たれ、mid/deepとの区別が付くようになった分
+     むしろS1の3段階識別性も改善)。CHANGES_v155.md参照。 */
+  --garden-pale: #b7e4c8;
   --garden-mid: #2fb96d;
   --garden-deep: #1b6b3f;
   /* v151レビュー対応(必須1由来): .zt-theme-qtag(「問い」「AI提案」タグ)がvar(--accent)を
@@ -2743,6 +2751,40 @@ h3 {
 .home-garden-svg .g-stage2 { color: var(--garden-mid); }   /* 若木: 緑 */
 .home-garden-svg .g-stage3 { color: var(--garden-deep); }  /* 開花: 濃緑 */
 .home-garden-caption { font-size: 12.5px; color: var(--muted); }
+
+/* v155: 今日の庭 S2(月間ピクセル、ルーティンタブ先頭)。設計書§④の「達成順の累積方式」
+   ではなく、decisions.md 2026-07-27 K確定の段階表示(完了1件=薄緑/50%以上=緑/全完了=濃緑)を
+   実カレンダー(日付位置固定)へ適用する(CHANGES_v155.md参照)。未達日(rank<=0)は罰なし
+   ルール②に従い色を塗らない=in-monthの薄い罫線のみで区画する(空白セルだけを強調する
+   バツ・警告色は使わない。当月の全セルに同じ罫線を付けることで「未達日を名指しで囲わない」)。
+   罫線は実機のライト側コントラスト対策も兼ねる(--garden-paleの単独面積コントラストが
+   3:1未達な既知制約への補助。v153コメント・decisions.md参照)。
+   v155レビュー対応(2026-07-28、Codex指摘): 当初`grid-template-columns: repeat(7, 1fr)`+
+   `aspect-ratio: 1/1`の組合せは、パネル幅が広い実機(iPad縦横、760〜1020px)で1セルが
+   70〜105pxまで膨張し、ルーティン一覧を画面外へ押し下げていた。列を`1fr`ではなく固定px
+   (`--garden-pixel-cell-size`)にしてセルサイズの上限をキャップし、グリッド自体は
+   `justify-content: center`で中央寄せにする(パネル幅が余ってもセルは伸びず、グリッドの
+   位置だけが動く)。 */
+.garden-pixel-card { --garden-pixel-cell-size: 18px; }  /* 16〜22pxの目安内で固定(v155レビュー対応) */
+.garden-pixel-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-2); }
+.garden-pixel-nav button:disabled { opacity: .35; }
+.garden-pixel-month-label { font-size: var(--text-sm); font-weight: 700; }
+.garden-pixel-weekdays, .garden-pixel-grid {
+  display: grid; grid-template-columns: repeat(7, var(--garden-pixel-cell-size));
+  justify-content: center; gap: 3px;
+}
+.garden-pixel-weekday { text-align: center; font-size: 10px; color: var(--faint); }
+.garden-pixel-cell {
+  width: var(--garden-pixel-cell-size); height: var(--garden-pixel-cell-size);
+  border-radius: 3px; background: transparent;
+}
+.garden-pixel-cell.in-month { border: 1px solid var(--line); }
+.garden-pixel-cell.lv1 { background: var(--garden-pale); }
+.garden-pixel-cell.lv2 { background: var(--garden-mid); }
+.garden-pixel-cell.lv3 { background: var(--garden-deep); }
+.garden-pixel-cell.swatch { display: inline-block; width: 11px; height: 11px; vertical-align: middle; margin-right: 2px; }
+.garden-pixel-legend { display: flex; align-items: center; gap: 4px; font-size: 11px; margin-top: var(--space-2); }
+.garden-pixel-complete { font-size: 12.5px; color: var(--muted); margin-top: var(--space-2); }
 
 /* ============================================================
    v33: ホーム — フル幅ヒーロー / スコアボード / ゾーン別テーマ色

@@ -1,4 +1,12 @@
-const CACHE_NAME = "taskchute-journal-pwa-v154";
+const CACHE_NAME = "taskchute-journal-pwa-v155";
+// v155: ADHD支援「②今日の庭 S2(月間ピクセル)」— v153のgardenLogを、ルーティンタブ先頭の
+//   月間カレンダーとして可視化する。設計書§④本命の「達成順の累積方式」ではなく、
+//   decisions.md 2026-07-27 K確定の段階表示(完了1件=薄緑/50%以上=緑/全完了=濃緑、0件の日は
+//   空白)を実カレンダー(日付位置固定)へ適用した(累積方式・モチーフ絵は不採用。詳細は
+//   CHANGES_v155.md §1参照)。2系統レビュー対応: セルサイズを18px固定+中央寄せへ変更
+//   (iPad幅での巨大化を修正)、月跨ぎで表示月が当月へ同期し直るよう修正、VoiceOver向け
+//   aria-label(加点表現のみ)、ライト側--garden-paleの明度ランプ調整(L*単調減少)。
+//   完全決定論(既存gardenStageRank()の再利用のみ、AI呼び出しなし)。詳細はCHANGES_v155.md参照。
 // v154: ADHD支援「①仕分けモード S2(スワイプ)」— v152の三択ボタンにPointer Events統一の
 //   スワイプ操作を追加(ボタンは併存)。方向割当は右=今日やる/左=手放す/上=延期(来月)。
 //   pointerdown/move/up/cancelをdocumentレベルで委譲し、既存の_draftDrag/_wishDragと同じ
