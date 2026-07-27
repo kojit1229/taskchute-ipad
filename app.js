@@ -5965,13 +5965,14 @@ function triageSubtitleText(entry) {
 }
 
 // 選択結果を軽量ログに記録(migrationRitualLogと同じ思想。集計・分析はバッチ側)
-function logSwipeTriage(kind, targetId, action, carryCount) {
+// v154: viaはtriageAction呼び出し元から渡される('button'|'swipe')。既定は後方互換のため'button'。
+function logSwipeTriage(kind, targetId, action, carryCount, via = "button") {
   state.swipeTriageLog.push({
     at: nowDateTime(),
     targetId,
     kind,          // 'block' | 'wish'
     action,        // 'today' | 'drop' | 'defer'
-    via: "button",  // v152 S1はボタンのみ。S2でスワイプ('swipe')追加
+    via,           // 'button' | 'swipe'(v154)
     carryCount: Number(carryCount || 0)
   });
   if (state.swipeTriageLog.length > SWIPE_TRIAGE_LOG_MAX) {
@@ -5987,10 +5988,23 @@ function logSwipeTriage(kind, targetId, action, carryCount) {
 //  (b) logSwipeTriageは行動が実際に成立した箇所の直前(saveAndRender/委譲呼び出しの直前)に
 //      移した。早期return(該当id無し等)ではログを一切積まない。
 //  (c) 処理成立時は必ず_triageSessionDoneへidを積み、以後このセッションのキューから除外する。
-function triageAction(kind, id, action) {
+//  (d) v154: 第4引数viaは呼び出し元('button'クリック or スワイプ確定)を示す。
+//      logSwipeTriageへそのまま渡すほか、下記(e)のクールダウン判定にも使う(状態遷移の
+//      分岐そのものには一切使わない=どの三択がどう作用するかはvia非依存のまま)。
+// v154 2系統レビュー対応(FAIL修正):
+//  (e) クールダウンの「別カードへの操作」ブロックをvia==="button"の場合に限定した
+//      (詳細はTRIAGE_ACTION_COOLDOWN_MSの定義コメント参照)。旧実装は別カードへの操作も
+//      viaを問わず一律350msブロックしていたため、退場アニメ180ms+短い間隔での連続スワイプが
+//      2件目を飲み込んでいた(修正のテストはtests/v154.test.js「連続スワイプ」、既存の
+//      二重タップガードの回帰確認はtests/v152.test.js参照)。
+//  (f) 戻り値をboolean化(成立=true/不成立=false)。呼び出し元(スワイプの退場アニメ確定処理)は
+//      falseの場合にカードを視覚的に原状復帰させる(state変更なしで見た目だけ消えるのを防ぐ)。
+function triageAction(kind, id, action, via = "button") {
   const now = Date.now();
-  if (now - _triageLastActionAt < TRIAGE_ACTION_COOLDOWN_MS) return;
-  if (_triageCurrentCardId && id !== _triageCurrentCardId) return;
+  const withinCooldown = now - _triageLastActionAt < TRIAGE_ACTION_COOLDOWN_MS;
+  if (withinCooldown && id === _triageLastActionId) return false;  // 同一idの二重発火(via問わず)
+  if (withinCooldown && via === "button") return false;  // 別カードへの操作はボタン限定でブロック
+  if (_triageCurrentCardId && id !== _triageCurrentCardId) return false;
 
   if (kind === "block") {
     const block = blockById(id);
@@ -6007,6 +6021,7 @@ function triageAction(kind, id, action) {
       // 儀式のavoid相当(designs/03-task-swipe.md §③表): deleted化+migrationRitualLogにも記録
       // (集計源を分裂させない。avoidListへの追記まではしない=表に明記された2アクションのみ)
       _triageLastActionAt = now;
+      _triageLastActionId = id;
       _triageSessionDone.add(id);
       logMigrationRitual(block, "avoid");
       state.blocks = state.blocks.map((b) => b.id === id ? { ...b, deleted: true, updatedAt: nowDateTime() } : b);
@@ -6018,7 +6033,9 @@ function triageAction(kind, id, action) {
       // 儀式のrelease相当: Wishへ移動してから元Blockをdeleted化(moveBlockToWish自体は削除しない)。
       // v152レビュー対応(設計書§④明文の記録漏れ): logMigrationRitual(release)を追加し、
       // 集計源(migrationRitualLogが正)を分裂させない。
+      // v154: 延期はボタン専用(スワイプの方向割当から廃止。CHANGES_v154.md参照)。
       _triageLastActionAt = now;
+      _triageLastActionId = id;
       _triageSessionDone.add(id);
       const moved = moveBlockToWish(id);
       // v152レビュー対応(必須1・終端性): moveBlockToWishが新規に作るWishは、この場で今まさに
@@ -6027,11 +6044,11 @@ function triageAction(kind, id, action) {
       if (moved) _triageSessionDone.add(moved.id);
       logMigrationRitual(block, "release");
       state.blocks = state.blocks.map((b) => b.id === id ? { ...b, deleted: true, updatedAt: nowDateTime() } : b);
-      logSwipeTriage("block", id, action, block.carryCount);
+      logSwipeTriage("block", id, action, block.carryCount, via);
       saveAndRender(moved ? "Wishへ移動しました" : "Blockを削除しました(Wishプロジェクトなし)");
-      return;
+      return true;
     }
-    return;
+    return false;
   }
 
   if (kind === "wish") {
@@ -6041,6 +6058,7 @@ function triageAction(kind, id, action) {
       // ⑥未解決論点1の仮案(設計書に明記): 本体をカードにし、未完了サブタスクがあれば
       // 先頭(nextStepOf)をBlock化。サブタスクが無ければ本体自身をBlock化する。
       _triageLastActionAt = now;
+      _triageLastActionId = id;
       _triageSessionDone.add(id);
       const next = nextStepOf(id);
       if (next) {
@@ -6072,9 +6090,9 @@ function triageAction(kind, id, action) {
       };
       collect(id);
       state.tasks = state.tasks.map((t) => allIds.has(t.id) ? { ...t, deleted: true, updatedAt: nowDateTime() } : t);
-      logSwipeTriage("wish", id, action, 0);
+      logSwipeTriage("wish", id, action, 0, via);
       saveAndRender("手放しました");
-      return;
+      return true;
     }
     if (action === "defer") {
       // targetMonthがあれば+1(12月→翌年1月)。targetYearが設定済みならそれも+1、未設定なら
@@ -6121,7 +6139,8 @@ function renderWishTriage(wishes) {
   return `
     <section class="panel triage-panel" style="margin-top:14px">
       <div class="muted" style="text-align:right; font-size:11px">あと ${queue.length} 枚</div>
-      <div class="triage-card">
+      <div class="triage-card" data-triage-id="${current.id}" data-triage-kind="${current.kind}">
+        <div class="triage-swipe-hint" aria-hidden="true"></div>
         ${triageBadgeHTML(current)}
         <div class="triage-card-title">${escapeHTML(current.item.title)}</div>
         <div class="triage-card-sub muted">${escapeHTML(triageSubtitleText(current))}</div>

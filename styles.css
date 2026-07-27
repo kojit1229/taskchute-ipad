@@ -3413,12 +3413,37 @@ h3 {
    従い赤色・危険表現は使わない(.btn.ghostのニュートラル配色のまま)。 */
 .triage-panel { display: flex; flex-direction: column; gap: 14px; }
 .triage-card {
+  position: relative;
   padding: 28px 20px;
   border-radius: var(--radius);
   background: var(--panel-soft);
   border: 1px solid var(--line);
   text-align: center;
+  /* v154(2026-07-28改訂、2系統レビュー対応): スワイプは左右のみ(今日やる/手放す)。
+     仕分けビューは実測で縦スクロールが発生するため、touch-action: pan-y にして縦方向は
+     ブラウザのネイティブスクロールへ譲る(当初案のtouch-action:noneは、上フリック=延期を
+     廃止したことに伴い撤回した)。preventDefault()は横方向ジェスチャ確定時のみJS側で呼ぶ。
+     transitionはスナップバック/退場アニメ用(pointermove中はis-draggingで無効化し1:1追従)。 */
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+  transition: transform .18s cubic-bezier(.22, 1, .36, 1), opacity .18s ease;
 }
+.triage-card.is-dragging { transition: none; cursor: grabbing; }
+.triage-swipe-hint {
+  position: absolute;
+  top: 8px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 800;
+  opacity: 0;
+  pointer-events: none;
+}
+.triage-swipe-hint.hint-today { color: var(--green-text); }
+.triage-swipe-hint.hint-drop { color: var(--orange-text); }
 .triage-badge {
   display: inline-block;
   padding: 4px 10px;
@@ -3902,6 +3927,20 @@ h3 {
      3px・60秒・1回きりの残り時間表現で前庭刺激性がなく、止めると
      機能情報(残り時間)が失われるため(apple-design §14:
      reduced motionはフィードバック除去ではない) */
+}
+
+/* =========================================================
+   v154: 仕分けモードのスワイプ(designs/03-task-swipe.md §③)。
+   スナップバック/退場のtransformアニメーション(.triage-cardのtransition)を止める。
+   JS側(triagePrefersReducedMotion)も同じmatchMediaを見て退場アニメの待機
+   (TRIAGE_SWIPE_EXIT_MS)自体をスキップし、離した瞬間に即時確定する
+   (「無効化」ではなくCSS/JS両側で揃えて即時反映にする方針)。三択ボタンの操作性・
+   見た目はこのブロックの対象外(元々アニメーションを伴わない)。
+   ========================================================= */
+@media (prefers-reduced-motion: reduce) {
+  .triage-card {
+    transition: none;
+  }
 }
 
 @keyframes modal-materialize-reduced {
