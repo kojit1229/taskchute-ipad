@@ -90,57 +90,86 @@ function check(name, cond, extra = "") {
 
     // ============================================================
     // (1) ホーム折りたたみ既定値
+    // v149(UI改善計画Phase4a)追補: ホームが「今日」/「ホーム」の2タブに分割され、信条/寿命/
+    // AIから/長い弧は「ホーム」タブ、今日のリズム/スコアボード/足あとは「今日」タブ(既定)に
+    // 移動した。加えて信条・寿命はK指定によりホームタブでの既定値がopenへ変更された
+    // (CHANGES_v149.md参照)。タブをまたいで検証する。
     // ============================================================
-    console.log("[1] ホーム折りたたみ既定値: 信条/寿命/AIからは既定closed、今日のリズムは既定open");
+    console.log("[1] ホーム折りたたみ既定値: 今日タブ(リズムopen/スコアボード・足あとclosed)+ホームタブ(信条・寿命はopen、AIから・長い弧はclosed)");
     await page.evaluate((FOLD_KEY) => localStorage.removeItem(FOLD_KEY), FOLD_KEY);
     await seed({
       blocks: [planBlock({ id: "b-fold-1", title: "既定値確認Block", startMin: 9 * 60 })],
       view: "home"
     });
-    check("信条(creed)は既定closed", await page.locator('details[data-fold-id="creed"]').evaluate((el) => el.open) === false);
-    check("寿命(lifespan)は既定closed", await page.locator('details[data-fold-id="lifespan"]').evaluate((el) => el.open) === false);
-    check("AIから(ai-hub)は既定closed", await page.locator('details[data-fold-id="ai-hub"]').evaluate((el) => el.open) === false);
     check("今日のリズム(zone2)は既定open", await page.locator('details[data-fold-id="zone2"]').evaluate((el) => el.open) === true);
-    check("長い弧(zone3)は既定closedのまま(既存仕様維持)", await page.locator('details[data-fold-id="zone3"]').evaluate((el) => el.open) === false);
     check("今日の足あと(zone4)は既定closedのまま(既存仕様維持)", await page.locator('details[data-fold-id="zone4"]').evaluate((el) => el.open) === false);
     check("スコアボードは既定closedのまま(既存仕様維持)", await page.locator('details[data-fold-id="home-scoreboard"]').evaluate((el) => el.open) === false);
+    await page.click('[data-action="home-tab"][data-tab="home"]');
+    await page.waitForTimeout(150);
+    check("信条(creed)はホームタブで既定open(v149、折りたたまない指定)", await page.locator('details.home-creed').evaluate((el) => el.open) === true);
+    check("寿命(lifespan)はホームタブで既定open(v149、折りたたまない指定)", await page.locator('details.home-lifespan').evaluate((el) => el.open) === true);
+    check("AIから(ai-hub)は既定closed", await page.locator('details[data-fold-id="ai-hub"]').evaluate((el) => el.open) === false);
+    check("長い弧(zone3)は既定closedのまま(既存仕様維持)", await page.locator('details[data-fold-id="zone3"]').evaluate((el) => el.open) === false);
 
     // ============================================================
     // (2) ホームの並び順
+    // v149追補: 参照系(信条/寿命/AIから/長い弧)は別タブへ移ったため、今日タブ内の並びと
+    // ホームタブ内の並びを別々に検証する(タブ間の順序比較はそもそも意味を持たない)。
     // ============================================================
-    console.log("[2] ホームの並び順: いま、これ→今日の主役→今日、すすめる→今日のリズム→参照系→長い弧→足あと");
-    const html = await mainHTML();
-    const idx = (marker) => html.indexOf(marker);
-    const order = {
-      hero: idx('class="panel home-hero'),
-      mit: idx('id="home-mit-anchor"'),
-      zone1: idx('id="homezone-1"'),
-      zone2: idx('id="homezone-2"'),
-      creed: idx('data-fold-id="creed"'),
-      lifespan: idx('data-fold-id="lifespan"'),
-      aiHub: idx('data-fold-id="ai-hub"'),
-      scoreboard: idx('data-fold-id="home-scoreboard"'),
-      zone3: idx('id="homezone-3"'),
-      zone4: idx('id="homezone-4"')
+    console.log("[2] 今日タブの並び順: いま、これ→今日の主役→今日、すすめる→今日のリズム→スコアボード→12週サイクル→足あと");
+    await page.click('[data-action="home-tab"][data-tab="today"]');
+    await page.waitForTimeout(150);
+    const htmlToday = await mainHTML();
+    const idxToday = (marker) => htmlToday.indexOf(marker);
+    const zoneOrderToday = {
+      hero: idxToday('class="panel home-hero'),
+      mit: idxToday('id="home-mit-anchor"'),
+      zone1: idxToday('id="homezone-1"'),
+      zone2: idxToday('id="homezone-2"'),
+      scoreboard: idxToday('data-fold-id="home-scoreboard"'),
+      zone3: idxToday('id="homezone-3"'),
+      zone4: idxToday('id="homezone-4"')
     };
-    check("すべてのマーカーが見つかる(-1が無い)", Object.values(order).every((v) => v >= 0), JSON.stringify(order));
-    check("hero < mit", order.hero < order.mit, JSON.stringify(order));
-    check("mit < zone1(今日、すすめる)", order.mit < order.zone1, JSON.stringify(order));
-    check("zone1 < zone2(今日のリズム)", order.zone1 < order.zone2, JSON.stringify(order));
-    check("zone2 < creed(参照系の先頭)", order.zone2 < order.creed, JSON.stringify(order));
-    check("creed < lifespan < aiHub < scoreboard(参照系の並び)",
-      order.creed < order.lifespan && order.lifespan < order.aiHub && order.aiHub < order.scoreboard, JSON.stringify(order));
-    check("scoreboard < zone3 < zone4(参照系のあとに長い弧・足あと)",
-      order.scoreboard < order.zone3 && order.zone3 < order.zone4, JSON.stringify(order));
+    check("すべてのマーカーが見つかる(-1が無い、今日タブ)", Object.values(zoneOrderToday).every((v) => v >= 0), JSON.stringify(zoneOrderToday));
+    check("hero < mit", zoneOrderToday.hero < zoneOrderToday.mit, JSON.stringify(zoneOrderToday));
+    check("mit < zone1(今日、すすめる)", zoneOrderToday.mit < zoneOrderToday.zone1, JSON.stringify(zoneOrderToday));
+    check("zone1 < zone2(今日のリズム)", zoneOrderToday.zone1 < zoneOrderToday.zone2, JSON.stringify(zoneOrderToday));
+    check("zone2 < scoreboard", zoneOrderToday.zone2 < zoneOrderToday.scoreboard, JSON.stringify(zoneOrderToday));
+    check("scoreboard < zone3(12週サイクル) < zone4(足あと)",
+      zoneOrderToday.scoreboard < zoneOrderToday.zone3 && zoneOrderToday.zone3 < zoneOrderToday.zone4, JSON.stringify(zoneOrderToday));
+
+    console.log("[2b] ホームタブの並び順: 信条→寿命→AIから→長い弧");
+    await page.click('[data-action="home-tab"][data-tab="home"]');
+    await page.waitForTimeout(150);
+    const htmlHome = await mainHTML();
+    const idxHome = (marker) => htmlHome.indexOf(marker);
+    const zoneOrderHome = {
+      creed: idxHome('class="home-fold panel home-creed'),
+      lifespan: idxHome('class="home-fold panel home-lifespan'),
+      aiHub: idxHome('data-fold-id="ai-hub"'),
+      zone3: idxHome('data-fold-id="zone3"')
+    };
+    check("すべてのマーカーが見つかる(-1が無い、ホームタブ)", Object.values(zoneOrderHome).every((v) => v >= 0), JSON.stringify(zoneOrderHome));
+    check("creed < lifespan < aiHub < zone3(長い弧)の並び",
+      zoneOrderHome.creed < zoneOrderHome.lifespan && zoneOrderHome.lifespan < zoneOrderHome.aiHub && zoneOrderHome.aiHub < zoneOrderHome.zone3,
+      JSON.stringify(zoneOrderHome));
+    await page.click('[data-action="home-tab"][data-tab="today"]');
+    await page.waitForTimeout(150);
 
     // ============================================================
     // (3) ホームの自動スクロール + 検索入力フォーカス中は非発火 + 同一view/dateでは再発火しない
     // ============================================================
     console.log("[3] ホームへのビュー切替(view変化)時に.home-heroへ自動スクロールする");
+    // v149追補: 信条/寿命/AIから等の参照系カードがホームタブへ移動し、今日タブの縦幅が
+    // 縮んだため(意図した変更)、[3c]のスクロール前提(ページが十分にスクロール可能なこと)を
+    // 満たすためデコイBlockを増やす(検証対象のロジック自体は無変更)。
+    const scrollDecoyBlocks = Array.from({ length: 14 }, (_, i) =>
+      planBlock({ id: `b-scroll-decoy-${i}`, title: `スクロール高さ確保デコイBlock${i}`, startMin: (7 + i) * 60 + 5 }));
     await seed({
       blocks: [
         planBlock({ id: "b-scroll-home", title: "自動スクロール確認Block", startMin: 14 * 60 }),
-        planBlock({ id: "b-scroll-home-2", title: "スクロール位置確認用デコイBlock", startMin: 16 * 60, completed: true })
+        planBlock({ id: "b-scroll-home-2", title: "スクロール位置確認用デコイBlock", startMin: 16 * 60, completed: true }),
+        ...scrollDecoyBlocks
       ],
       view: "wbs"
     });

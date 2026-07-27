@@ -656,6 +656,49 @@ h3 {
   max-width: 170px;
 }
 
+/* v149(UI改善計画Phase4a): ホームのヘッダー統合時のみ、独立行だった頃の下マージンを消す
+   (renderHeaderのaction欄=.view-header内に埋め込むため)。他ビューは.datebarがview-headerの
+   外(兄弟要素)にあり続けるため影響しない。 */
+.view-header .datebar {
+  margin-bottom: 0;
+}
+
+/* v149レビュー対応(必須2): 720px以下で.view-headerがgrid化しaction欄の横幅が縮むため、
+   .datebarが2行に折り返して逆に縦幅が増えていた(実測87px)。ヘッダー内の.datebarに限定して
+   1行(nowrap)に収める。日付input自体はfont-size 16px(iOSズーム防止、既存の
+   @media(max-width:720px)ルールで確保済み)を維持したままmax-widthだけを狭める。
+   他ビューの独立行.datebarはこの規則の対象外(.view-header配下ではないため無影響)。 */
+@media (max-width: 720px) {
+  .view-header .datebar {
+    flex-wrap: nowrap;
+    gap: 4px;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .view-header .datebar .btn {
+    padding: 6px 7px;
+    min-height: 32px;
+    font-size: 12px;
+    flex: 0 0 auto;
+  }
+  .view-header .datebar input[type="date"] {
+    max-width: 104px;
+    min-width: 0;
+    padding: 6px 2px;
+    flex: 0 1 auto;
+  }
+  /* v149レビュー対応(必須2続き): ヘッダー〜「いま、これ」までの縦幅を375pxで実測しながら
+     切り詰めた(.home-header-wrapはrenderHome()専用のラッパーで他ビューには存在しないため、
+     ここから下は影響範囲がホームのみに限定される)。 */
+  .home-header-wrap .view-header {
+    margin-bottom: 4px;
+    gap: 4px;
+  }
+  .home-header-wrap .buffer-meter {
+    margin: -8px 0 2px;
+  }
+}
+
 .block-row {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;

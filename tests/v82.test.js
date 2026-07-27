@@ -184,19 +184,26 @@ function check(name, cond, extra = "") {
       extraProjects: [V82_PROJECT],
       extraTasks: [V82_TASK]
     });
-    // v146(UI改善計画Phase1-1): 信条/寿命/AIからは行動優先の並び替えで参照系(既定closed)へ
-    // 移動した(v82時点は常時表示だった)。
-    check("信条(creed)は既定closed(v146)", await page.locator('details[data-fold-id="creed"]').evaluate((el) => el.open) === false);
-    check("寿命(lifespan)は既定closed(v146)", await page.locator('details[data-fold-id="lifespan"]').evaluate((el) => el.open) === false);
+    // v149(UI改善計画Phase4a)追補: 信条/寿命/AIから/長い弧(zone3)はホームの2タブ分割で
+    // 「ホーム」タブへ移動した(既定は今日タブ)。さらにK指定で信条・寿命はホームタブでの
+    // 既定値がclosed→openへ変更された(CHANGES_v149.md参照)。
     const heroText = await page.locator("main").textContent();
     check("「いま、これ」(hero)は折りたたみ無しで常時表示", heroText.includes("いま、これ"));
     check("MITは常時表示(#home-mit-anchor)", (await page.locator("#home-mit-anchor").textContent()).includes("スリム化確認MIT"));
-    check("AIから(home-ai-hub)は既定closedの折りたたみ(v146)",
-      await page.locator("details.home-ai-hub").count() === 1
-      && await page.locator("details.home-ai-hub").evaluate((el) => el.open) === false);
     check("タスクシュート(homezone-1)は折りたたみ無しで常時表示",
       (await page.locator("#homezone-1").textContent()).includes("スリム化確認タスクシュート")
       && await page.locator("#homezone-1 details").count() === 0);
+    await page.click('[data-action="home-tab"][data-tab="home"]');
+    await page.waitForTimeout(150);
+    check("信条(creed)はホームタブで既定open(v149)", await page.locator('details.home-creed').evaluate((el) => el.open) === true);
+    check("寿命(lifespan)はホームタブで既定open(v149)", await page.locator('details.home-lifespan').evaluate((el) => el.open) === true);
+    check("AIから(home-ai-hub)は既定closedの折りたたみ(v146)",
+      await page.locator("details.home-ai-hub").count() === 1
+      && await page.locator("details.home-ai-hub").evaluate((el) => el.open) === false);
+    check("長い弧(zone3、ホームタブ)は既定closedのまま(既存仕様を維持)",
+      await page.locator('details[data-fold-id="zone3"]').evaluate((el) => el.open) === false);
+    await page.click('[data-action="home-tab"][data-tab="today"]');
+    await page.waitForTimeout(150);
 
     console.log("[5] B3: スコアボード・読書カードは既定closedの折りたたみ(常時表示から除外)");
     const scoreboardFold = page.locator('details[data-fold-id="home-scoreboard"]');
@@ -204,9 +211,8 @@ function check(name, cond, extra = "") {
     check("スコアボードは既定closed", await scoreboardFold.evaluate((el) => el.open) === false);
     const scoreboardSummary = await scoreboardFold.locator("summary").textContent();
     check("スコアボードのsummaryに集計値が出る(着手/主役/ルーティン/12週)", /着手\d+%/.test(scoreboardSummary) && scoreboardSummary.includes("主役"), scoreboardSummary);
-    check("既存の長い弧(zone3)・足あと(zone4)は既定closedのまま(既存仕様を維持)",
-      await page.locator('details[data-fold-id="zone3"]').evaluate((el) => el.open) === false
-      && await page.locator('details[data-fold-id="zone4"]').evaluate((el) => el.open) === false);
+    check("足あと(zone4、今日タブ)は既定closedのまま(既存仕様を維持)",
+      await page.locator('details[data-fold-id="zone4"]').evaluate((el) => el.open) === false);
 
     console.log("[6] B3: スコアボードからのジャンプは、閉じているzone2(今日のリズム)も自動的に開く");
     // v146: zone2は既定openになったため(この時点でFOLD_KEYはクリア済みで新規なので開いている)、

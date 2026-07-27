@@ -127,22 +127,30 @@ function check(name, cond, extra = "") {
     // v147: 未入力時の赤警告(.home-declaration-alert)はhomeTodayStatusCard(「今日の状態」1枚化)
     // へ統合され、色もグレーに変わった(赤は同期異常等データ保全系のみに限定)。
     const declAlertShown = async () => (await page.locator(".home-today-status").textContent().catch(() => "")).includes("今日の宣言が未入力です");
+    // v149(UI改善計画Phase4a): 今日の宣言入力欄(homeDeclarationCard)はホームの2タブ分割で
+    // 「アファメーション」としてホームタブへ移動した(既定は今日タブ)。「今日の状態」警告
+    // (homeTodayStatusCard)は今日タブに残るため、タブを行き来して両方を検証する。
+    const gotoHomeTab = async () => { await page.click('[data-action="home-tab"][data-tab="home"]'); await page.waitForTimeout(150); };
+    const gotoTodayTab = async () => { await page.click('[data-action="home-tab"][data-tab="today"]'); await page.waitForTimeout(150); };
     console.log("[1] 今日の宣言: 未入力の今日は「今日の状態」に警告が出る。入力し保存すると消える");
     await seed({ view: "home" });
-    check("宣言入力欄が表示される", await page.locator("[data-declaration-date]").count() === 1);
     check("未入力の今日は「今日の状態」に警告が出る", await declAlertShown());
+    await gotoHomeTab();
+    check("宣言入力欄が表示される", await page.locator("[data-declaration-date]").count() === 1);
     await page.fill("[data-declaration-date]", "決算ナビのバグ修正に着手する");
     await page.locator("[data-declaration-date]").evaluate((el) => el.blur());
+    await page.waitForTimeout(200);
+    const s1 = await stateNow();
+    check("change時にdailyDeclarationsへ保存される",
+      s1.dailyDeclarations?.[TODAY]?.text === "決算ナビのバグ修正に着手する", JSON.stringify(s1.dailyDeclarations));
+    check("updatedAtも記録される", !!s1.dailyDeclarations?.[TODAY]?.updatedAt, JSON.stringify(s1.dailyDeclarations));
+    await gotoTodayTab();
     // 環境負荷でrender()完了がwaitForTimeout固定値より遅れることがあったため、
     // 警告文言の消滅をポーリング待機する(タイムアウトしても後続checkで通常どおり❌になるだけ)
     await page.waitForFunction(
       () => !(document.querySelector(".home-today-status")?.textContent || "").includes("今日の宣言が未入力です"),
       null, { timeout: 3000 }
     ).catch(() => {});
-    const s1 = await stateNow();
-    check("change時にdailyDeclarationsへ保存される",
-      s1.dailyDeclarations?.[TODAY]?.text === "決算ナビのバグ修正に着手する", JSON.stringify(s1.dailyDeclarations));
-    check("updatedAtも記録される", !!s1.dailyDeclarations?.[TODAY]?.updatedAt, JSON.stringify(s1.dailyDeclarations));
     check("入力後は警告が消える", !(await declAlertShown()));
 
     console.log("[2] 今日の宣言: 過去日を見ている時は未入力でも警告が出ない");
@@ -150,6 +158,7 @@ function check(name, cond, extra = "") {
     await page.click('[data-action="date-prev"]');
     await page.waitForTimeout(200);
     check("過去日(昨日)を見ている時は未入力でも警告が出ない", !(await declAlertShown()));
+    await gotoHomeTab();
     check("それでも入力欄自体は出る(過去日も編集可能)", await page.locator("[data-declaration-date]").count() === 1);
 
     // ============================================================
