@@ -358,3 +358,178 @@ function check(name, cond, extra = "") {
     // 390px幅ではサイドバーのnavボタンが非表示になり、bottom-navと合わせて同一selectorが
     // 2件ヒットして曖昧になる(片方は非表示でクリック不可)ため、他のseed()呼び出しと同じく
     // state.currentView直接指定+reloadでジャーナル画面へ遷移する(nav操作の検証はこのテストの
+    // 主眼ではないため)。
+    await seed({ view: "journal", blocks: [] });
+    const journalH2Font = await page.evaluate(() => {
+      const el = document.querySelector(".journal-grid h2");
+      return el ? getComputedStyle(el).fontSize : null;
+    });
+    check(".journal-grid h2(390px幅)のfont-sizeは--text-sm(14px)を参照", journalH2Font === "14px", String(journalH2Font));
+    await page.setViewportSize({ width: 1100, height: 1400 });
+
+    // ============================================================
+    // (C) 回復候補ドラフトの再構築(S7、v150レビュー対応・項目5で「日付+提案タイトル一覧」へ拡張)
+    // ============================================================
+    const titleA = "v150回復A";  // net中央値6(最有力)
+    const titleB = "v150回復B";  // net中央値4(2番手。当初の提案2件目)
+    const titleC = "v150回復C";  // net中央値2(3番手。「次点の繰り上げ」が起きていないかの検出役)
+    const mkPastCompleted = (idPrefix, title, charge, discharge) => [3, 6, 9].map((d, i) => planBlock({
+      id: `${idPrefix}-${i}`, date: addDaysISO(TODAY, -d), title, startMin: 12 * 60, minutes: 20,
+      completed: true, actualStartAt: `${addDaysISO(TODAY, -d)}T12:00`, actualEndAt: `${addDaysISO(TODAY, -d)}T12:20`,
+      charge, discharge
+    }));
+    const recoveryPool = [
+      ...mkPastCompleted("recA", titleA, 7, 1),
+      ...mkPastCompleted("recB", titleB, 5, 1),
+      ...mkPastCompleted("recC", titleC, 3, 1)
+    ];
+    // 「元々提案したタイトル一覧」= 新規発火時に実際に採用される上位2件(A・B)と同じにする
+    // (現実のシナリオ=前セッションでmaybeSuggestRecoveryDraftが立てたマーカーを模す)。
+    const markerAB = [{ date: TODAY, titles: [titleA, titleB] }];
+
+    console.log("[C1] PWA破棄相当(reloadで_scheduleDraftはリセット、マーカーは残る)からの起動時に、記録済みタイトルどおりに回復候補が再構築される");
+    // batteryRecoveryDraftDatesに当日+提案タイトルを先に立てておく=「前セッションで既に
+    // 発火済み(A・Bを提案済み)」を模す。実際に発火条件(残量閾値)を満たしたかどうかは
+    // maybeRebuildRecoveryDraftの再構築判定に関係しない(呼び出し側=起動シーケンスが
+    // 「マーカーあり」を根拠に再構築を試みる設計のため)。
+    await seed({
+      view: "timeline",
+      blocks: recoveryPool,
+      settings: { battery: { recoveryDraft: true } },
+      batteryRecoveryDraftDates: markerAB
+    });
+    // seed()内のreloadが「モジュール再読込(=_scheduleDraft初期化)」そのものにあたる。
+    await page.waitForTimeout(600);  // 起動シーケンスのsetTimeout(4500ms)より前でも、起動直後の
+    // checkRecoveryDraftはmaybeAutoMorningPlanが無効(既定OFF)なら即時実行されるため十分待てば見える。
+    await page.waitForTimeout(4200);
+    const draftTitlesAfterRestart = await page.locator(".draft-block-title").allTextContents();
+    check("マーカーありなのに消えていたbattery-recovery下書きが起動時に再構築される(A)",
+      draftTitlesAfterRestart.some((t) => t.includes(titleA)), JSON.stringify(draftTitlesAfterRestart));
+    check("記録済みのB も一緒に復元される", draftTitlesAfterRestart.some((t) => t.includes(titleB)), JSON.stringify(draftTitlesAfterRestart));
+    st = await stateNow();
+    const markerToday1 = (st.batteryRecoveryDraftDates || []).filter((e) => e && e.date === TODAY);
+    check("再構築してもbatteryRecoveryDraftDatesは当日1件のまま(重複しない)", markerToday1.length === 1, JSON.stringify(st.batteryRecoveryDraftDates));
+    check("マーカーは{date,titles}のオブジェクト形式で保持される", markerToday1[0] && Array.isArray(markerToday1[0].titles), JSON.stringify(markerToday1));
+
+    console.log("[C2] 一部未解決(Aは実Block化済み・Bは未確定): Bだけが復元され、次点C(記録に無いタイトル)は繰り上げ提案されない");
+    await seed({
+      view: "timeline",
+      blocks: [...recoveryPool, planBlock({ id: "already-confirmed-a", title: titleA, startMin: 14 * 60, minutes: 20 })],
+      settings: { battery: { recoveryDraft: true } },
+      batteryRecoveryDraftDates: markerAB
+    });
+    await page.waitForTimeout(4800);
+    const draftTitlesPartial = await page.locator(".draft-block-title").allTextContents();
+    check("確定済みのAは再提案されない(未解決のみ復元)", !draftTitlesPartial.some((t) => t.includes(titleA)), JSON.stringify(draftTitlesPartial));
+    check("未確定のBは復元される", draftTitlesPartial.some((t) => t.includes(titleB)), JSON.stringify(draftTitlesPartial));
+    check("記録に無いCは次点として繰り上げ提案されない(旧バグの再発防止)", !draftTitlesPartial.some((t) => t.includes(titleC)), JSON.stringify(draftTitlesPartial));
+    check("復元されるのはB1件だけ", draftTitlesPartial.length === 1, JSON.stringify(draftTitlesPartial));
+
+    console.log("[C3] 採用済み(A・Bとも実Block化済み)なら再構築で何も出さない");
+    await seed({
+      view: "timeline",
+      blocks: [
+        ...recoveryPool,
+        planBlock({ id: "already-confirmed-a2", title: titleA, startMin: 14 * 60, minutes: 20 }),
+        planBlock({ id: "already-confirmed-b2", title: titleB, startMin: 15 * 60, minutes: 20 })
+      ],
+      settings: { battery: { recoveryDraft: true } },
+      batteryRecoveryDraftDates: markerAB
+    });
+    await page.waitForTimeout(4800);
+    check("A・Bとも採用済みなら再構築は何も追加しない", await page.locator(".draft-block").count() === 0);
+
+    console.log("[C4] 旧形式マーカー(文字列のみ、titles不明)はnormalizeStateで{date,titles:[]}へ移行され、再構築の対象外になる(スキップ)");
+    await seed({
+      view: "timeline",
+      blocks: recoveryPool,
+      settings: { battery: { recoveryDraft: true } },
+      batteryRecoveryDraftDates: [TODAY]  // 旧形式(文字列)のまま注入
+    });
+    await page.waitForTimeout(4800);
+    check("旧形式の日は再構築されない(titles不明のためスキップ)", await page.locator(".draft-block").count() === 0);
+    st = await stateNow();
+    const migrated = (st.batteryRecoveryDraftDates || []).find((e) => e && e.date === TODAY);
+    check("旧形式は{date,titles:[]}へ後方互換マイグレーションされる", migrated && Array.isArray(migrated.titles) && migrated.titles.length === 0, JSON.stringify(migrated));
+
+    console.log("[C5] マーカーが無ければ再構築は起きない(通常の閾値未達フローのまま、regression)");
+    await seed({
+      view: "timeline",
+      blocks: recoveryPool,
+      settings: { battery: { recoveryDraft: false } },  // opt-in OFF、かつマーカー無し
+      batteryRecoveryDraftDates: []
+    });
+    await page.waitForTimeout(4800);
+    check("recoveryDraft OFF・マーカー無しでは下書きが出ない(regression)", await page.locator(".draft-block").count() === 0);
+
+    // ============================================================
+    // (D) タイムライン短時間Blockの重なり解消(R9)
+    // ============================================================
+    console.log("[D1] 実績モード・1xズーム: 連続する15分Blockが横レーン分割で重ならなくなる");
+    await seed({
+      view: "timeline",
+      blocks: [
+        planBlock({ id: "short-1", title: "短時間1", startMin: 9 * 60, minutes: 15, actualStartAt: `${TODAY}T09:00`, actualEndAt: `${TODAY}T09:15` }),
+        planBlock({ id: "short-2", title: "短時間2", startMin: 9 * 60 + 15, minutes: 15, actualStartAt: `${TODAY}T09:15`, actualEndAt: `${TODAY}T09:30` })
+      ]
+    });
+    await page.click('[data-action="timeline-mode"][data-mode="actual"]');
+    await page.waitForTimeout(300);
+    const shortCardStyles = await page.evaluate(() => {
+      return ["short-1", "short-2"].map((id) => {
+        const el = document.querySelector(`.timeline-card[data-id="${id}"]`);
+        return el ? { left: el.style.left, top: el.style.top } : null;
+      });
+    });
+    check(".timeline-cardが2件描画される", shortCardStyles.every(Boolean), JSON.stringify(shortCardStyles));
+    check("連続する短時間Blockは横レーン分割され、leftが異なる(物理的な重なりが解消される)",
+      shortCardStyles[0] && shortCardStyles[1] && shortCardStyles[0].left !== shortCardStyles[1].left,
+      JSON.stringify(shortCardStyles));
+
+    console.log("[D2] 離れた時刻のBlockはレーン分割されない(regression、min-height補正の過剰適用防止)");
+    await seed({
+      view: "timeline",
+      blocks: [
+        planBlock({ id: "far-1", title: "離れた1", startMin: 9 * 60, minutes: 15, actualStartAt: `${TODAY}T09:00`, actualEndAt: `${TODAY}T09:15` }),
+        planBlock({ id: "far-2", title: "離れた2", startMin: 11 * 60, minutes: 15, actualStartAt: `${TODAY}T11:00`, actualEndAt: `${TODAY}T11:15` })
+      ]
+    });
+    await page.click('[data-action="timeline-mode"][data-mode="actual"]');
+    await page.waitForTimeout(300);
+    const farCardStyles = await page.evaluate(() => {
+      return ["far-1", "far-2"].map((id) => {
+        const el = document.querySelector(`.timeline-card[data-id="${id}"]`);
+        return el ? el.style.left : null;
+      });
+    });
+    check("離れたBlock同士は従来どおりどちらも全幅(left:0%)のまま", farCardStyles[0] === "0%" && farCardStyles[1] === "0%", JSON.stringify(farCardStyles));
+
+    console.log("[D3] 連続する30分Blockはレーン分割されず全幅のまま(v150レビュー対応・項目6、監督者裁定: 実所要20分未満だけを分割対象にする)");
+    await seed({
+      view: "timeline",
+      blocks: [
+        planBlock({ id: "mid-1", title: "30分1", startMin: 9 * 60, minutes: 30, actualStartAt: `${TODAY}T09:00`, actualEndAt: `${TODAY}T09:30` }),
+        planBlock({ id: "mid-2", title: "30分2", startMin: 9 * 60 + 30, minutes: 30, actualStartAt: `${TODAY}T09:30`, actualEndAt: `${TODAY}T10:00` })
+      ]
+    });
+    await page.click('[data-action="timeline-mode"][data-mode="actual"]');
+    await page.waitForTimeout(300);
+    const midCardStyles = await page.evaluate(() => {
+      return ["mid-1", "mid-2"].map((id) => {
+        const el = document.querySelector(`.timeline-card[data-id="${id}"]`);
+        return el ? { left: el.style.left, width: el.style.width } : null;
+      });
+    });
+    check(".timeline-cardが2件描画される(30分連続)", midCardStyles.every(Boolean), JSON.stringify(midCardStyles));
+    check("連続する30分Block同士はレーン分割されず、どちらも全幅(left:0%)のまま(50%幅にならない)",
+      midCardStyles[0] && midCardStyles[1] && midCardStyles[0].left === "0%" && midCardStyles[1].left === "0%",
+      JSON.stringify(midCardStyles));
+
+    console.log(failures === 0 ? "\n✅ v150 ALL PASS" : `\n❌ v150: ${failures} 件失敗`);
+  } finally {
+    await browser.close();
+    server.close();
+  }
+
+  process.exit(failures === 0 ? 0 : 1);
+})().catch((e) => { console.error(e); process.exit(1); });
