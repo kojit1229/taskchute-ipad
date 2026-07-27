@@ -85,6 +85,13 @@ function plannedBlock(id, title, hStart, hEnd, category = "") {
     return page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
   }
 
+  // v150レビュー対応(項目5、Codex指摘): batteryRecoveryDraftDatesは{date, titles}の
+  // オブジェクト配列へ拡張された(旧: 日付文字列の配列)。このファイルは日付だけあれば
+  // 十分な検証(冪等マーカーの有無)しかしていないため、date一致だけを見るヘルパーで吸収する。
+  function hasRecoveryMarker(dates, date) {
+    return (dates || []).some((e) => (typeof e === "string" ? e : e && e.date) === date);
+  }
+
   // localStorageのbattery設定/blocks/tasks/projects/冪等マーカーを丸ごと差し替えてreloadする
   // 共通ヘルパー。timelineModeは明示的に"planned"にする(下書きレイヤはplannedモードでのみ
   // 描画されるため、前セッションの状態を持ち越さない)。tasks/projectsも既定で空配列に揃え、
@@ -179,7 +186,7 @@ function plannedBlock(id, title, hStart, hEnd, category = "") {
     check("下書きBlockも出ない(draft-block count 0)", await page.locator(".draft-block").count() === 0);
     let st = await stateNow();
     check("batteryRecoveryDraftDatesにも今日が記録されない(判定自体が走っていない)",
-      !(st.batteryRecoveryDraftDates || []).includes(TODAY));
+      !hasRecoveryMarker(st.batteryRecoveryDraftDates, TODAY));
 
     // ============================================================
     // (2) recoveryDraft ONでも、残量が閾値以上なら何も起きない
@@ -206,7 +213,7 @@ function plannedBlock(id, title, hStart, hEnd, category = "") {
     check("下書きバーに「下書き 2件」と表示される", (await page.locator(".draft-bar").textContent()).includes("下書き 2件"));
     st = await stateNow();
     check("batteryRecoveryDraftDatesに今日の日付が記録される(冪等マーカー)",
-      (st.batteryRecoveryDraftDates || []).includes(TODAY), JSON.stringify(st.batteryRecoveryDraftDates));
+      hasRecoveryMarker(st.batteryRecoveryDraftDates, TODAY), JSON.stringify(st.batteryRecoveryDraftDates));
 
     // ============================================================
     // (4) 1日1回の冪等: 下書きを破棄した後、時間を進めてティッカーを再度回しても再発火しない
@@ -310,7 +317,7 @@ function plannedBlock(id, title, hStart, hEnd, category = "") {
     check("空き時間が無いので下書きは0件", await page.locator(".draft-block").count() === 0);
     st = await stateNow();
     check("それでも冪等マーカーは立つ(発火条件自体は成立したため、空振りでも再試行しない)",
-      (st.batteryRecoveryDraftDates || []).includes(TODAY), JSON.stringify(st.batteryRecoveryDraftDates));
+      hasRecoveryMarker(st.batteryRecoveryDraftDates, TODAY), JSON.stringify(st.batteryRecoveryDraftDates));
 
     // ============================================================
     // (9) recoveryThresholdPctのクランプ(1〜100外は既定40)
@@ -412,7 +419,7 @@ function plannedBlock(id, title, hStart, hEnd, category = "") {
     check("朝プラン処理中はまだ下書きが出ない(スキップ)", await page.locator(".draft-block").count() === 0);
     st = await stateNow();
     check("スキップ時は冪等マーカーを焼かない(まだ記録されていない)",
-      !(st.batteryRecoveryDraftDates || []).includes(TODAY), JSON.stringify(st.batteryRecoveryDraftDates));
+      !hasRecoveryMarker(st.batteryRecoveryDraftDates, TODAY), JSON.stringify(st.batteryRecoveryDraftDates));
 
     await page.waitForTimeout(FETCH_DELAY_MS * 2 + 1000);  // 朝プランの2回のfetch(zeroSecThemes+aiPlan)が解決するのを待つ
     await page.clock.setFixedTime(new Date(2026, 6, 27, 18, 2, 10, 0));  // さらに+65秒
@@ -421,7 +428,7 @@ function plannedBlock(id, title, hStart, hEnd, category = "") {
     items = await draftItems();
     check("朝プラン完了後は改めて回復提案が発火する(2件)", items.length === 2, JSON.stringify(items));
     st = await stateNow();
-    check("発火時に冪等マーカーが記録される", (st.batteryRecoveryDraftDates || []).includes(TODAY), JSON.stringify(st.batteryRecoveryDraftDates));
+    check("発火時に冪等マーカーが記録される", hasRecoveryMarker(st.batteryRecoveryDraftDates, TODAY), JSON.stringify(st.batteryRecoveryDraftDates));
 
     console.log(failures === 0 ? "\n✅ v145 ALL PASS" : `\n❌ v145: ${failures} 件失敗`);
   } finally {

@@ -265,7 +265,12 @@ function check(name, cond, extra = "") {
     }, { KEY, TODAY });
     await pageMobile.reload();
     await pageMobile.waitForTimeout(500);
-    check("390px幅でBlock完了チェックが見える", await pageMobile.locator('[data-action="toggle-block"][data-id="block-M"]').count() === 1);
+    // v150(UI改善計画Phase4b・R3、完了作法統一): タイムラインの○ボタンもtoggle-blockへ一本化した
+    // ため、data-action単独ではタスクシュート行の✓とタイムラインrail(#timelineRail、390px幅では
+    // CSSでdisplay:noneだがDOM上には存在)の○が同じセレクタに一致するようになった。行の✓自体は
+    // .checkbox-buttonクラスで一意に絞れるため、そちらで見分ける(検証意図=「行のBlock完了チェックが
+    // 見える」は変えていない)。
+    check("390px幅でBlock完了チェックが見える", await pageMobile.locator('.checkbox-button[data-action="toggle-block"][data-id="block-M"]').count() === 1);
     check("390px幅では行内にタスク完了チェックが無い(モーダルへ移設済み)",
       await pageMobile.locator('[data-action="toggle-task-complete"][data-id="block-M"]').count() === 0);
     const metricsMobile = await pageMobile.evaluate(() => {

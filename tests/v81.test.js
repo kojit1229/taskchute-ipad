@@ -120,17 +120,23 @@ function check(name, cond, extra = "") {
 
     // regression: ::beforeは.home-box自身の生成コンテンツなのでクリックのtargetは.home-box自身になり、
     // 実クリックを妨げない(擬似要素を別要素でラップしたwish-checkと違い、同一要素内では問題ない)ことを確認
-    // (complete-block-with-actualは「実績を登録」モーダルを開くアクションなので、保存まで行う)
+    // v150(UI改善計画Phase4b・R3、完了作法統一): .home-boxはtoggle-block(即完了)に一本化された
+    // ため、直接クリックはモーダルを開かず即座に完了する。実績の編集は完了直後のトースト
+    // 「実績を編集」ボタンから、従来の実績登録モーダル(complete-block-with-actual)を開く形になった。
     await page.locator('.home-box[data-id="v81-mit-block"]').click();
-    await page.waitForTimeout(150);
-    check("直接クリックで「実績を登録」モーダルが開く(::beforeに邪魔されていない)", await page.locator('[data-action="modal-save"]').count() === 1);
-    await page.click('[data-action="modal-save"]');
     await page.waitForTimeout(150);
     const mitBlockAfterClick = await page.evaluate((KEY) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       return s.blocks.find((b) => b.id === "v81-mit-block")?.completed;
     }, KEY);
-    check("(regression) .home-boxへの直接クリックで完了トグルが機能する", mitBlockAfterClick === true, String(mitBlockAfterClick));
+    check("(regression) .home-boxへの直接クリックで完了トグルが機能する(::beforeに邪魔されていない)", mitBlockAfterClick === true, String(mitBlockAfterClick));
+    check("完了直後のトーストに「実績を編集」ボタンが出る",
+      await page.locator('.toast-action[data-action="complete-block-with-actual"][data-id="v81-mit-block"]').count() === 1);
+    await page.click('.toast-action[data-action="complete-block-with-actual"][data-id="v81-mit-block"]');
+    await page.waitForTimeout(150);
+    check("トーストの「実績を編集」から実績登録モーダルが開く", await page.locator('[data-action="modal-save"]').count() === 1);
+    await page.click('[data-action="modal-save"]');
+    await page.waitForTimeout(150);
 
     // ============================================================
     // [A2] コンディション記録ボタン群(ジャーナルタブ)
@@ -201,16 +207,17 @@ function check(name, cond, extra = "") {
       JSON.stringify(tlHoverBefore)
     );
     // regression: ::afterも.tl-complete-btn自身の生成コンテンツなので直接クリックを妨げない
+    // v150(UI改善計画Phase4b・R3、完了作法統一): .tl-complete-btnはtoggle-block(即完了)に
+    // 一本化されたため、直接クリックはモーダルを開かず即座に完了する(v81-mit-blockと同じ形)。
     await page.locator(tlSel).click();
-    await page.waitForTimeout(150);
-    check("直接クリックで「実績を登録」モーダルが開く(::afterに邪魔されていない)", await page.locator('[data-action="modal-save"]').count() === 1);
-    await page.click('[data-action="modal-save"]');
     await page.waitForTimeout(150);
     const tcBlockAfterClick = await page.evaluate((KEY) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       return s.blocks.find((b) => b.id === "v81-tc-block")?.completed;
     }, KEY);
-    check("(regression) .tl-complete-btnへの直接クリックで完了トグルが機能する", tcBlockAfterClick === true, String(tcBlockAfterClick));
+    check("(regression) .tl-complete-btnへの直接クリックで完了トグルが機能する(::afterに邪魔されていない)", tcBlockAfterClick === true, String(tcBlockAfterClick));
+    check("完了直後のトーストに「実績を編集」ボタンが出る",
+      await page.locator('.toast-action[data-action="complete-block-with-actual"][data-id="v81-tc-block"]').count() === 1);
 
     // ============================================================
     // [A3-2] Wish完了チェック(.wish-check)
