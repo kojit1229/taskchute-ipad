@@ -4,7 +4,7 @@
 // も検証していたが、v60でアプリ内からのClaude API直接呼び出しを全廃したため、AIレビュー実行・
 // APIキー入力・モデル選択に関する検証は削除した(機能自体が削除されたため。詳細は
 // CHANGES_v60.md 参照)。世代バックアップ・横断検索は無関係の機能なのでそのまま残す。
-const { chromium, ROOT, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, ROOT, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, openSettingsGroup } = require("./helpers");
 
 const PORT = randomPort();
 
@@ -134,6 +134,9 @@ function check(name, cond, extra = "") {
   });
   await page.click('[data-action="nav"][data-view="settings"]');
   await page.waitForTimeout(300);
+  // v148(UI改善計画Phase3-2)以降、save-github/open-backup-listは「データと同期」群のdetails内に
+  // あり既定closed。<summary>を実クリックして開く(以降このページセッション内は開いたまま)。
+  await openSettingsGroup(page, "settings-sync");
   await page.click('[data-action="save-github"]');
   await page.waitForTimeout(1200);
   const ghCalls = await page.evaluate(() => window.__ghCalls);

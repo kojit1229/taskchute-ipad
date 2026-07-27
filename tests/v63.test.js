@@ -11,7 +11,7 @@
 //
 // 方針: 既存スイート(v61/v62)と同じく、app.js は type="module" のため内部関数は window に
 // 露出しない。ブラウザ操作 + localStorage 状態の直接注入で観測する。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, openSettingsGroup } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -232,6 +232,11 @@ function check(name, cond, extra = "") {
     // ============================================================
     console.log("[7] カテゴリ管理: バケットselectで戦略/雑用/休息を選択→保存できる");
     await seed({ categories: testCategories().map((c) => ({ ...c, bucket: "" })), view: "settings" });
+    // v148(UI改善計画Phase3-2)以降、カテゴリ管理欄は「マスタ・詳細」群のdetails内にあり
+    // 既定closed。selectOptionを可視化するため、<summary>を実クリックして開く
+    // (.open=trueの直接代入はブラウザの'toggle'イベント自動発火でlocalStorageへ永続化
+    // されうるため使わない。openSettingsGroupヘルパー参照)。
+    await openSettingsGroup(page, "settings-master");
     await page.selectOption('select[data-cat-id="cat-strategy"][data-cat-field="bucket"]', "strategy");
     await page.waitForTimeout(200);
     const s7 = await stateNow();

@@ -60,6 +60,20 @@ function check(name, cond, extra = "") {
     return page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
   }
 
+  // v148(UI改善計画Phase3-4)以降、お店ログ(renderStoreVisitsCard)はジャーナル当日パネルの
+  // 「夜」detailsの中にある。now0(このスイートは10:00固定)では朝だけが既定openになるため、
+  // お店ログを操作する前に夜detailsを強制的に開く(state/localStorageは汚さない純粋なDOM操作。
+  // reloadを挟むたびに開閉状態は既定に戻るので、reload後は毎回呼び直す)。
+  async function openJournalEvening() {
+    // 開閉状態はJSのモジュール変数(_journalSegmentOverride、非永続)で管理され、<summary>への
+    // 本物のクリックだけを見るため、.openプロパティの直接書き換えでは次の再描画で巻き戻る。
+    const el = page.locator(".journal-segment-evening");
+    if ((await el.count()) === 0) return;
+    const isOpen = await el.evaluate((e) => e.open);
+    if (!isOpen) await el.locator("summary").click();
+    await page.waitForTimeout(150);
+  }
+
   try {
     await page.clock.setFixedTime(now0);
     await page.goto(`http://localhost:${PORT}/`);
@@ -129,6 +143,7 @@ function check(name, cond, extra = "") {
     // (b-8)+(b-2) 当日欄からの新規追加。入力欄font-sizeも合わせて確認
     // ============================================================
     console.log("[b-2] 当日欄「+ 追加」→モーダルで店名/URL/感想を入力して保存→一覧に反映される");
+    await openJournalEvening();
     await page.click('[data-action="store-visit-add"]');
     await page.waitForTimeout(200);
     check("お店追加モーダルが開く", await page.locator('.modal-card:has-text("お店を追加")').count() === 1);
@@ -261,6 +276,7 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(500);
     await page.click('[data-action="nav"][data-view="journal"]');
     await page.waitForTimeout(300);
+    await openJournalEvening();
 
     await page.click('[data-action="store-visit-year"]');
     await page.waitForTimeout(200);

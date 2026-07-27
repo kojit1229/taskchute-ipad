@@ -128,6 +128,22 @@ async function passGithubGate(page, keyName = STATE_KEY) {
 // ここではTEST_PORT_BASEがあればそれを基底に使う(無ければ従来どおりmin=20000を基底にする)。
 // 並行run同士がたまたま同じ基底を引く確率は1/19以下で、それでも衝突すればstartServer()の
 // EADDRINUSEリトライで自己回復する。
+// v148(UI改善計画Phase3-2、レビュー対応): 設定4群は既定closedのdetailsに格納されている
+// ため、中の要素(save-github等)をclick/fillするテストは先にこのヘルパーで群を開く必要がある。
+// 「データと同期」群だけ他3群と違うマーカー属性(data-settings-sync、通常のhomeFoldSection=
+// data-fold-idを意図的に使わない設計。app.js側のrenderSettingsSyncGroupコメント参照)を持つため
+// groupIdで分岐する。<summary>への本物のクリックで開く(.open=trueの直接代入は、ブラウザが
+// 'toggle'イベントを自動発火しlocalStorageへ永続化してしまう場合があり、「stateを汚さない
+// 純粋なDOM操作」という説明が事実と異なっていたため、実クリックへ統一した)。
+async function openSettingsGroup(page, groupId) {
+  const sel = groupId === "settings-sync" ? "[data-settings-sync]" : `[data-fold-id="${groupId}"]`;
+  const el = page.locator(sel);
+  if ((await el.count()) === 0) return;
+  const isOpen = await el.evaluate((e) => e.open);
+  if (!isOpen) await el.locator("summary").first().click();
+  await page.waitForTimeout(150);
+}
+
 function randomPort(min = 20000, max = 40000) {
   const idx = process.env.TEST_PORT_INDEX;
   if (idx !== undefined && idx !== "") {
@@ -144,5 +160,6 @@ function randomPort(min = 20000, max = 40000) {
 
 module.exports = {
   chromium, ROOT, launchOptions, startServer,
-  blockGithubApiByDefault, passGithubGate, GITHUB_API_HOST, STATE_KEY, randomPort
+  blockGithubApiByDefault, passGithubGate, GITHUB_API_HOST, STATE_KEY, randomPort,
+  openSettingsGroup
 };

@@ -143,6 +143,17 @@ function check(name, cond, extra = "") {
     }, { KEY });
     await page.reload();
     await page.waitForTimeout(400);
+    // v148(UI改善計画Phase3-4)以降、当日パネルは朝/夜の2detailsに分かれ、現在時刻(実行時の
+    // 実時計)でどちらか一方だけが既定openになる。開閉状態はJSのモジュール変数
+    // (_journalSegmentOverride、非永続)で管理され、<summary>への本物のクリックだけを見るため、
+    // .openプロパティの直接書き換えでは次の再描画で巻き戻る。両方のボタンの実測サイズを
+    // 時刻に関係なく見たいので、閉じている方のsummaryを実際にクリックして開く。
+    for (const cls of ["journal-segment-morning", "journal-segment-evening"]) {
+      const el = page.locator(`.${cls}`);
+      const isOpen = await el.evaluate((e) => e.open);
+      if (!isOpen) await el.locator("summary").click();
+    }
+    await page.waitForTimeout(150);
 
     const condButtons = [
       ["朝の体調", '[data-action="set-morning"]'],

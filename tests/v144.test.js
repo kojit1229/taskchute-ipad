@@ -24,7 +24,7 @@
 //      decayStartMinutesのtype="time"入力
 // (12) normalizeStateマイグレーション: 個別プロパティ比較(新規補完/旧decayStartHourからの
 //      分単位移行/既存値の再クランプ)
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, openSettingsGroup } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -222,6 +222,12 @@ function check(name, cond, extra = "") {
     });
     await page.click('[data-action="nav"][data-view="timeline"]');
     await page.waitForTimeout(400);
+    // v148(UI改善計画Phase3-5)以降、エネルギー/バッテリーは同じSVGへの重ね描きをやめ切替式に
+    // なった(既定"energy")。battery-curveを見るテストなので「バッテリー」へ切り替える
+    // (state.settings.timelineEnergyGraphModeとしてlocalStorageへ保存されるため、以降の
+    // seed()/reloadでも維持され、本ファイル内で再度切り替える必要はない)。
+    await page.click('[data-action="tl-energy-mode"][data-mode="battery"]');
+    await page.waitForTimeout(200);
     check("当日はbattery-curveのpolylineが1本出る", await page.locator(".battery-curve").count() === 1);
 
     await page.click('[data-action="nav"][data-view="home"]');
@@ -292,6 +298,9 @@ function check(name, cond, extra = "") {
     console.log("[11] 設定画面の境界検証(M3/M4)とdecayStartMinutesのtime入力");
     await page.click('[data-action="nav"][data-view="settings"]');
     await page.waitForTimeout(300);
+    // v148(UI改善計画Phase3-2)以降、エネルギーバッテリー欄は「日々の使い方」群のdetails内にあり
+    // 既定closed。fill対象を可視化するため<summary>を実クリックして開く。
+    await openSettingsGroup(page, "settings-daily");
 
     check("減衰開始時刻の入力欄がtype=\"time\"になっている(iOS規約)",
       await page.locator('[data-setting-battery-field="decayStartMinutes"]').getAttribute("type") === "time");

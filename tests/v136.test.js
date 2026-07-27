@@ -10,7 +10,7 @@
 // (5) Med: kind:"other"シングルトン(Project/Task)の重複防止をwishと同様にガードする。
 // シナリオ(2)(3)(5)は本ファイル後続コミットで追記する(node tests/v136.test.js で通しで実行される)。
 // 方式: v106/v118/v135と同じくpage.routeでapi.github.comを偽装し、localStorageを直接注入して観測する。
-const { chromium, launchOptions, startServer, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, randomPort, openSettingsGroup } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -122,6 +122,10 @@ function hoursAgoIso(h) { return isoLocal(new Date(Date.now() - h * 3600000)); }
     fixtures.puts.length = 0;
     await page.click('[data-action="nav"][data-view="settings"]');
     await page.waitForTimeout(200);
+    // v148(UI改善計画Phase3-2)以降、save-githubは「データと同期」群のdetails内にあり既定closed。
+    // <summary>を実クリックして開く(以降このページセッション内は開いたままなので[7][6]の
+    // save-github再クリックは追加操作不要)。
+    await openSettingsGroup(page, "settings-sync");
     await page.click('[data-action="save-github"]');
     await page.waitForTimeout(500);
     check("[1] PUTは送られない(fail-closed)", fixtures.puts.length === 0, `puts=${fixtures.puts.length}`);

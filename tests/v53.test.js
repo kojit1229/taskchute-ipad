@@ -5,7 +5,7 @@
 // Claude API直接呼び出しを全廃したのに伴い、そのプロンプト注入経路(および呼び出し元を失った
 // buildScheduleLearningDigest/morningEnergyCorrelation自体)を削除したため、該当セクションは
 // 削除した(詳細はCHANGES_v60.md)。計器盤・自動アーカイブはAI呼び出しと無関係なのでそのまま残す。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, openSettingsGroup } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -128,6 +128,9 @@ const b64ToObj = (b64) => JSON.parse(Buffer.from(b64, "base64").toString("utf8")
   await page.waitForTimeout(300);
   const settingsText = await page.locator("main").textContent();
   check("設定にアーカイブ節(サイズ表示)", settingsText.includes("アーカイブ(容量対策)") && /端末内データ: \d/.test(settingsText));
+  // v148(UI改善計画Phase3-2)以降、run-archiveは「データと同期」群のdetails内にあり既定closed。
+  // <summary>を実クリックして開く。
+  await openSettingsGroup(page, "settings-sync");
   await page.click('[data-action="run-archive"]');
   await page.waitForTimeout(900);
   const puts = await page.evaluate(() => window.__gh.puts);
@@ -197,6 +200,7 @@ const b64ToObj = (b64) => JSON.parse(Buffer.from(b64, "base64").toString("utf8")
   });
   await page.click('[data-action="nav"][data-view="settings"]');
   await page.waitForTimeout(300);
+  await openSettingsGroup(page, "settings-sync");
   await page.click('[data-action="run-archive"]');
   await page.waitForTimeout(900);
   const mergePut = await page.evaluate(() => window.__gh.puts[0] || null);

@@ -20,7 +20,7 @@
 //     %2F・taskchute二重・root直下を明示的に否定)と、
 // (2) 実際にGitHubがトークン権限不足で404を返すケースを模擬し、案内文言とバナー表示が
 //     「パスの綴り」だけでなく「トークンの権限」も指し示すことを検証する。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, openSettingsGroup } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -111,6 +111,9 @@ function check(name, cond, extra = "") {
     pushApiRequests.length = 0;
     await page.click('[data-action="nav"][data-view="settings"]');
     await page.waitForTimeout(300);
+    // v148(UI改善計画Phase3-2)以降、save-githubは「データと同期」群のdetails内にあり既定closed。
+    // <summary>を実クリックして開く。
+    await openSettingsGroup(page, "settings-sync");
     await page.click('[data-action="save-github"]');
     await page.waitForTimeout(500);
     const statePush = pushApiRequests.find((r) => r.decodedPath.includes("app-state.json"));

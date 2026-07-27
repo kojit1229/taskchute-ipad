@@ -12,7 +12,7 @@
 // (d) updatedAt両方空の従来データ同士で従来挙動(リモート採用)と一致する後方互換
 // (e) wishシングルトンProject(kind:"wish")の重複が発生しない(両端末が同期前に別々に作った場合)
 // 方式: v106/v118と同じくpage.routeでapi.github.comを偽装し、localStorageを直接注入して観測する。
-const { chromium, launchOptions, startServer, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, randomPort, openSettingsGroup } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -119,6 +119,9 @@ const project = (id, title, extra = {}) => ({
     fixtures.puts.length = 0;
     await page.click('[data-action="nav"][data-view="settings"]');
     await page.waitForTimeout(200);
+    // v148(UI改善計画Phase3-2)以降、save-githubは「データと同期」群のdetails内にあり既定closed。
+    // <summary>を実クリックして開く。
+    await openSettingsGroup(page, "settings-sync");
     await page.click('[data-action="save-github"]');
     await page.waitForTimeout(500);
 

@@ -6,7 +6,7 @@
 //   ⑤normalizeStateの後方互換マイグレーション(既存値優先)
 //   +プライバシー: iframe src はトークン等を含まない静的URLのみ
 //   +tick安定性: 500ms tickの再描画(常時タイマー)でiframeのDOMノードが壊れない
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, openSettingsGroup } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -197,6 +197,9 @@ function check(name, cond, extra = "") {
     }, KEY);
     await page.reload();
     await page.waitForTimeout(400);
+    // v148(UI改善計画Phase3-2)以降、Study With Me欄は「表示・タイマー」群のdetails内にあり
+    // 既定closed。fill操作を可視化するため<summary>を実クリックして開く。
+    await openSettingsGroup(page, "settings-display");
 
     check("設定画面に動画ID欄が表示されている", await page.locator('[data-swm-field="videoId"]').count() === 1);
     check("設定画面に開始秒欄が表示されている", await page.locator('[data-swm-field="startSec"]').count() === 1);

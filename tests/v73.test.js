@@ -108,6 +108,22 @@ function check(name, cond, extra = "") {
     return page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
   }
 
+  // v148(UI改善計画Phase3-4)以降、ジャーナル当日パネルは朝/夜の2detailsに分かれ、
+  // now0(このスイートは10:00固定)では朝だけが既定openになる。夜/運動記録のフィールドを
+  // 操作する前に、両方を開く。アプリ側は開閉状態をJSのモジュール変数
+  // (_journalSegmentOverride、非永続)で持ち、<summary>への本物のクリック(data-action=
+  // "toggle-journal-segment")だけを見るため、要素の.open プロパティを直接書き換えるだけでは
+  // 次のrender()で時刻基準に巻き戻ってしまう。summaryを実際にクリックする(閉じている場合のみ)。
+  async function openBothJournalSegments() {
+    for (const cls of ["journal-segment-morning", "journal-segment-evening"]) {
+      const el = page.locator(`.${cls}`);
+      if ((await el.count()) === 0) continue;
+      const isOpen = await el.evaluate((e) => e.open);
+      if (!isOpen) await el.locator("summary").click();
+    }
+    await page.waitForTimeout(150);
+  }
+
   try {
     await page.clock.setFixedTime(now0);
     await page.goto(`http://localhost:${PORT}/`);
@@ -144,6 +160,7 @@ function check(name, cond, extra = "") {
     // (b) 夜の記録
     // ============================================================
     console.log("[2] 夜の記録: 体調ボタン + ひとことが保存される");
+    await openBothJournalSegments();
     await page.click('[data-action="set-evening-mood"][data-value="7"]');
     await page.waitForTimeout(200);
     await page.fill(".cond-evening-note", "今日は早めに休む");
@@ -166,6 +183,7 @@ function check(name, cond, extra = "") {
         gym: [{ id: "g-prev", exercise: "ベンチプレス", weight: 75, reps: 5, at: `${YESTERDAY}T20:00` }]
       } } }
     });
+    await openBothJournalSegments();
     await page.fill("#gym-exercise-input", "ベンチプレス");
     await page.fill("#gym-weight-input", "80");
     await page.fill("#gym-reps-input", "5");

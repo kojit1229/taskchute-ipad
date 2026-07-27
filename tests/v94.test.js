@@ -20,7 +20,7 @@
 // [3] 正常値 path="app-state.json" は不変(回帰なし)
 // [4] 混入経路の再現: 「GitHubから読込」を押しても dataOwner/dataRepo が失われず、
 //     path も taskchute/ 付きに汚染されない(loadFromGitHub修正の直接検証)
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, openSettingsGroup } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -105,6 +105,9 @@ function check(name, cond, extra = "") {
   async function clickSaveGithub() {
     await page.click('[data-action="nav"][data-view="settings"]');
     await page.waitForTimeout(200);
+    // v148(UI改善計画Phase3-2)以降、save-githubは「データと同期」群のdetails内にあり既定closed。
+    // 直前にpage.reload()を挟むことが多いファイルのため、毎回<summary>を実クリックして開く。
+    await openSettingsGroup(page, "settings-sync");
     requestLog.length = 0;
     await page.click('[data-action="save-github"]');
     await page.waitForTimeout(400);
@@ -185,6 +188,7 @@ function check(name, cond, extra = "") {
     };
     await page.click('[data-action="nav"][data-view="settings"]');
     await page.waitForTimeout(200);
+    await openSettingsGroup(page, "settings-sync");
     requestLog.length = 0;
     await page.click('[data-action="load-github"]');
     await page.waitForTimeout(500);
@@ -202,6 +206,7 @@ function check(name, cond, extra = "") {
     fixtures.getResponder = null;  // 以降のGET(SHAチェック)は404扱いに戻す
     await page.click('[data-action="nav"][data-view="settings"]');
     await page.waitForTimeout(200);
+    await openSettingsGroup(page, "settings-sync");
     requestLog.length = 0;
     await page.click('[data-action="save-github"]');
     await page.waitForTimeout(400);

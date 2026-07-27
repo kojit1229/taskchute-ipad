@@ -22,7 +22,7 @@
 // (11) 候補選定の優先順位: net中央値が高い方が、競合する空き時間を優先的に得る
 // (12) 朝プラン(runAiMorningPlan)処理中は回復提案がスキップされ、冪等マーカーも焼かれない
 //      (完了後に改めて評価されて発火する)
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, openSettingsGroup } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -122,6 +122,9 @@ function plannedBlock(id, title, hStart, hEnd, category = "") {
   async function goSettings() {
     await page.click('[data-action="nav"][data-view="settings"]');
     await page.waitForTimeout(200);
+    // v148(UI改善計画Phase3-2)以降、エネルギーバッテリー欄は「日々の使い方」群のdetails内にあり
+    // 既定closed。本ファイルはrecoveryThresholdPct等をfillするため<summary>を実クリックして開く。
+    await openSettingsGroup(page, "settings-daily");
   }
 
   async function draftBlockTitles() {

@@ -283,6 +283,26 @@ button {
   letter-spacing: 0.02em;
 }
 
+/* v148(UI改善計画Phase3-1): 「その他」配下ビューの現在地表示(その他 › 群名)。
+   eyebrowより控えめな1行として上に添える(codex-ui-review N1対応)。 */
+.view-breadcrumb {
+  color: var(--faint, var(--muted));
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+/* v148: 「その他」の目的別4群見出し */
+.more-group { margin-top: 18px; }
+.more-group:first-of-type { margin-top: 0; }
+.more-group-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--muted);
+  margin: 0 2px 8px;
+  letter-spacing: 0.02em;
+}
+
 h1,
 h2,
 h3 {
@@ -738,6 +758,14 @@ h3 {
 .tl-zoom-controls .btn.active {
   background: var(--accent);
   color: white;
+}
+/* v148レビュー対応: ズーム(1x/2x/4x)とエネルギー/バッテリー切替を1行に統合した際の
+   グループ間の軽い区切り(縦圧縮方針)。 */
+.tl-controls-divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--line-soft);
+  margin: 2px 2px;
 }
 
 .timeline-card.completed {

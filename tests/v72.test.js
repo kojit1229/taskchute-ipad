@@ -19,7 +19,7 @@
 // ブラウザ操作 + localStorage 状態の直接注入 + page.route(api.github.com の偽装)で観測する。
 // このスイートは意図的に tests/helpers.js の passGithubGate/blockGithubApiByDefault を
 // (ゲート自体を検証するため)使わず、個々のシナリオで必要な分だけ page.route を組む。
-const { chromium, launchOptions, startServer, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, randomPort, openSettingsGroup } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -156,6 +156,9 @@ function check(name, cond, extra = "") {
     fixtures.puts.length = 0;
     await page.click('[data-action="nav"][data-view="settings"]');
     await page.waitForTimeout(300);
+    // v148(UI改善計画Phase3-2)以降、クラウド保存欄は「データと同期」群のdetails内にあり
+    // 既定closed(同期異常が無い限り)。ボタンを可視化するため<summary>を実クリックして開く。
+    await openSettingsGroup(page, "settings-sync");
     await page.click('[data-action="save-github"]');
     await page.waitForTimeout(500);
     const statePut = fixtures.puts.find((p) => p.url.includes("/contents/taskchute/app-state.json") && p.method === "PUT");

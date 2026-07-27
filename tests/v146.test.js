@@ -341,8 +341,12 @@ function check(name, cond, extra = "") {
     console.log("[9] 設定画面から内部バージョン表記(vNNN)が消え、「現在のファイル構成」はdetails既定closed");
     await seed({ blocks: [], view: "settings" });
     // 「見出しから削除」が対象であり、本文の技術的な移行経緯の説明(例: 「Contents API 経由で
-    // 保存します(v72。...)」)まで削るのはスコープ外(過剰対応)。パネル見出し(h2)だけを検査する。
-    const panelHeadings = await page.locator("#main .settings-grid > .panel h2, #main .settings-grid > details > summary").allTextContents();
+    // 保存します(v72。...)」)まで削るのはスコープ外(過剰対応)。パネル見出し(h2/h3)+
+    // 群summaryを検査する。v148で13パネルが4群のdetails内(h3、2階層ネスト)へ移動したため、
+    // 「.settings-grid > .panel h2」(直下のみ)だと個々のパネル見出しに届かなくなっていた
+    // (2系統レビュー指摘・回帰保護の空洞化)。h2/h3/summaryをスコープ全体から広く拾う形に
+    // 直し、13パネル分の見出しへ回帰保護を回復する(closed details内でもtextContentは読める)。
+    const panelHeadings = await page.locator("#main .settings-grid h2, #main .settings-grid h3, #main .settings-grid summary").allTextContents();
     check("パネル見出しに(vNNN)を含まない", panelHeadings.every((h) => !/\(v\d+/.test(h)), JSON.stringify(panelHeadings));
     const fileStructFold = page.locator("details:has-text('現在のファイル構成')").first();
     check("「現在のファイル構成」はdetails要素で既定closed",

@@ -15,7 +15,7 @@
 // (f) リモート取得失敗時に既存動作(マージなし・ローカル保持)を維持する
 // 補足: runAutoSyncPull(自動同期ON)/手動loadFromGitHub(GitHubから読込ボタン)でも
 //       同じ合流が働くことを1ケースずつ追加確認する。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, openSettingsGroup } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -267,6 +267,9 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(700);
     await page.click('[data-action="nav"][data-view="settings"]');
     await page.waitForTimeout(200);
+    // v148(UI改善計画Phase3-2)以降、load-githubは「データと同期」群のdetails内にあり既定closed。
+    // <summary>を実クリックして開く。
+    await openSettingsGroup(page, "settings-sync");
     await page.click('[data-action="load-github"]');
     await page.waitForTimeout(500);
     const after7 = await stateNow();
