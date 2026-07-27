@@ -358,3 +358,35 @@ function check(name, cond, extra = "") {
       actualStartAt: `${date}T${hStart}`, actualEndAt: `${date}T${hEnd}`,
       completed: true, charge, discharge, estimateMin: 0, deleted: false
     });
+    const recoveryBlocks = [
+      mk("v146-str-1", "2026-07-20", "ストレッチ", "09:00", "09:20", 5, 1),
+      mk("v146-str-2", "2026-07-21", "ストレッチ", "09:00", "09:20", 5, 1),
+      mk("v146-str-3", "2026-07-22", "ストレッチ", "09:00", "09:20", 5, 1)
+    ];
+    await page.clock.setFixedTime(new Date(2026, 6, 27, 18, 0, 0, 0));  // 07:00起点decay想定で残量が閾値を下回る時刻
+    await page.evaluate(({ KEY, blocks }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.sleep = s.sleep || { logs: {} }; s.sleep.logs = {};
+      s.condition = s.condition || { logs: {} }; s.condition.logs = {};
+      s.blocks = blocks; s.tasks = []; s.projects = [];
+      s.selectedDate = "2026-07-27";
+      s.currentView = "timeline";
+      s.timelineMode = "planned";
+      s.settings.battery = { ...(s.settings.battery || {}), recoveryDraft: true };
+      s.batteryRecoveryDraftDates = [];
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, blocks: recoveryBlocks });
+    await page.reload();
+    await page.waitForTimeout(900);
+    const draftBarText = await page.locator(".draft-bar").first().textContent().catch(() => "");
+    check("下書きバーに「🔋 回復候補」ラベルが出る(旧「⚙ 決定論配置」ではない)",
+      (draftBarText || "").includes("🔋 回復候補") && !(draftBarText || "").includes("⚙ 決定論配置"),
+      draftBarText);
+
+    console.log(failures === 0 ? "\n✅ v146 ALL PASS" : `\n❌ v146: ${failures} 件失敗`);
+  } finally {
+    await browser.close();
+    server.close();
+  }
+  process.exit(failures === 0 ? 0 : 1);
+})().catch((e) => { console.error(e); process.exit(1); });
