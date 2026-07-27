@@ -178,3 +178,183 @@ function check(name, cond, extra = "") {
     const scrollCallsFocused = await page.evaluate(() => window.__scrollCalls || []);
     check("検索入力へのフォーカスは維持される(プログラム的clickのため)", activeAfter === "cross-search-input", activeAfter);
     check("検索入力フォーカス中は、tasks→home(ビュー変化)でも.home-heroへのスクロールが発火しない",
+      !scrollCallsFocused.some((c) => String(c.cls).includes("home-hero")), JSON.stringify(scrollCallsFocused));
+    await page.evaluate(() => document.querySelector('[data-action="modal-close"]')?.click());
+    await page.waitForTimeout(150);
+
+    console.log("[3c] 同一view+dateのままの再描画(チェック操作等)ではスクロール位置が保たれる(巻き戻らない)");
+    // ここまでの[3b]で既にhomeビューにいる(_lastScrollView==="home"のはず)。
+    // 手動で下部までスクロールしてから、同一画面内の操作(toggle-block)を行い、位置が動かないことを見る。
+    await page.evaluate(() => window.scrollTo(0, 99999));
+    await page.waitForTimeout(100);
+    const scrollBefore3c = await page.evaluate(() => (document.scrollingElement || document.documentElement).scrollTop);
+    check("スクロール位置がそれなりに下がっている(前提条件)", scrollBefore3c > 50, String(scrollBefore3c));
+    await page.evaluate(() => { window.__scrollCalls = []; });
+    await page.click('[data-action="toggle-block"][data-id="b-scroll-home-2"]');
+    await page.waitForTimeout(200);
+    const scrollAfter3c = await page.evaluate(() => (document.scrollingElement || document.documentElement).scrollTop);
+    const scrollCalls3c = await page.evaluate(() => window.__scrollCalls || []);
+    check("同一view+dateの再描画では.home-heroへの自動スクロールが再発火しない",
+      !scrollCalls3c.some((c) => String(c.cls).includes("home-hero")), JSON.stringify(scrollCalls3c));
+    check("スクロール位置が保たれる(巻き戻らない、許容誤差50px)",
+      Math.abs(scrollAfter3c - scrollBefore3c) < 50, `before=${scrollBefore3c} after=${scrollAfter3c}`);
+
+    // ============================================================
+    // (4) タスクシュートの自動スクロール(renderTasks()が実際に描画するBlockに限定)
+    // ============================================================
+    console.log("[4] タスクシュートも着手中(無ければ次の未着手)Blockへ自動スクロールする(ビュー変化時)");
+    await seed({
+      blocks: [
+        // v146レビュー対応: taskId無しの単発Blockはnormalize時に「その他」受け皿Task/Projectへ
+        // 自動的に紐づけられる(実装確認済み)ため、実際にrenderTasks()から除外される確実な条件
+        // (カテゴリ「ルーティン」)を使ってデコイを作る。選ばれてはいけない
+        planBlock({ id: "b-scroll-tasks-decoy", title: "ルーティンBlock(描画されないはず)", startMin: 8 * 60, category: "ルーティン" }),
+        planBlock({ id: "b-scroll-tasks", title: "タスクシュート自動スクロール確認", startMin: 15 * 60, taskId: "v146-task" })
+      ],
+      tasks: [testTask("v146-task", "v146テストタスク")],
+      projects: [testProject()],
+      view: "wbs"
+    });
+    await page.evaluate(() => {
+      window.__scrollCalls = [];
+      const proto = Element.prototype;
+      const orig = proto.scrollIntoView;
+      proto.scrollIntoView = function (...args) {
+        window.__scrollCalls.push({ tag: this.tagName, id: this.dataset ? this.dataset.id : null, action: this.dataset ? this.dataset.action : null });
+        return orig.apply(this, args);
+      };
+    });
+    await page.click('[data-action="nav"][data-view="tasks"]');
+    await page.waitForTimeout(200);
+    const scrollCallsTasks = await page.evaluate(() => window.__scrollCalls || []);
+    check("タスクシュート表示で対象Block行(strong[data-action=edit-block])へscrollIntoViewが呼ばれる",
+      scrollCallsTasks.some((c) => c.action === "edit-block" && c.id === "b-scroll-tasks"), JSON.stringify(scrollCallsTasks));
+    check("renderTasks()に描画されないルーティンBlockは選ばれない",
+      !scrollCallsTasks.some((c) => c.id === "b-scroll-tasks-decoy"), JSON.stringify(scrollCallsTasks));
+
+    // ============================================================
+    // (5) 🏁はタスクシュート行から編集モーダルへ移設されている(詳細な状態遷移はv107.test.js)
+    // ============================================================
+    console.log("[5] 🏁(タスク完了)は行に無く、Block編集モーダルにある");
+    check("行内に🏁ボタンは無い", await page.locator('[data-action="toggle-task-complete"][data-id="b-scroll-tasks"]').count() === 0);
+    await page.click('[data-action="edit-block"][data-id="b-scroll-tasks"]');
+    await page.waitForTimeout(200);
+    check("Block編集モーダル内に🏁ボタンがある",
+      await page.locator('.modal-card [data-action="toggle-task-complete"][data-id="b-scroll-tasks"]').count() === 1);
+    await page.click('[data-action="modal-close"]');
+    await page.waitForTimeout(150);
+
+    // ============================================================
+    // (6) 44px当たり判定(::before/::after のinset)
+    // ============================================================
+    console.log("[6] 誤タップ対策の44px当たり判定: .checkbox-button / .tl-start-btn / .modal-close");
+    async function getPseudoInset(selector, pseudo) {
+      return page.locator(selector).first().evaluate((el, pseudo) => {
+        const cs = getComputedStyle(el, pseudo);
+        return { top: cs.top, right: cs.right, bottom: cs.bottom, left: cs.left };
+      }, pseudo);
+    }
+    const cbBefore = await getPseudoInset('[data-action="toggle-block"][data-id="b-scroll-tasks"]', "::before");
+    check(".checkbox-buttonの::beforeが44px相当のinset(-7px)を持つ(見た目30pxのまま)",
+      cbBefore.top === "-7px" && cbBefore.left === "-7px" && cbBefore.right === "-7px" && cbBefore.bottom === "-7px",
+      JSON.stringify(cbBefore));
+
+    await page.click('[data-action="nav"][data-view="timeline"]');
+    await page.waitForTimeout(300);
+    const tlStartCount = await page.locator(".tl-start-btn").count();
+    if (tlStartCount > 0) {
+      // v146レビュー対応: タイムラインは短時間Blockが物理的に隣接・重なるため、縦方向まで
+      // -11pxで広げると隣接Blockの当たり判定を奪う(実測)。横方向(左右)は-11px(44px相当)
+      // のまま、縦方向(上下)は-3pxに抑えている。
+      const tlAfter = await getPseudoInset(".tl-start-btn", "::after");
+      check(".tl-start-btnの::afterは横-11px/縦-3pxのinset(隣接Blockへの越境を抑制)",
+        tlAfter.left === "-11px" && tlAfter.right === "-11px" && tlAfter.top === "-3px" && tlAfter.bottom === "-3px",
+        JSON.stringify(tlAfter));
+    } else {
+      console.log("  (skip: .tl-start-btnが今回のfixtureでは描画されなかった)");
+    }
+
+    await page.click('[data-action="nav"][data-view="tasks"]');
+    await page.waitForTimeout(200);
+    await page.click('[data-action="edit-block"][data-id="b-scroll-tasks"]');
+    await page.waitForTimeout(200);
+    const modalCloseBefore = await getPseudoInset(".modal-close", "::before");
+    check(".modal-closeの::beforeが44px相当のinset(-6px)を持つ(見た目32pxのまま)",
+      modalCloseBefore.top === "-6px" && modalCloseBefore.left === "-6px" && modalCloseBefore.right === "-6px" && modalCloseBefore.bottom === "-6px",
+      JSON.stringify(modalCloseBefore));
+    await page.click('[data-action="modal-close"]');
+    await page.waitForTimeout(150);
+
+    // ============================================================
+    // (7) バッファ残量帯の画面限定
+    // ============================================================
+    console.log("[7] バッファ残量帯は今日を扱う画面(home/tasks/timeline/journal/reports)だけに出る");
+    await seed({ blocks: [], view: "home", settings: { dailyBufferMin: 100 } });
+    check("homeでは出る", await page.locator(".buffer-meter").count() === 1);
+    await page.click('[data-action="nav"][data-view="tasks"]');
+    await page.waitForTimeout(200);
+    check("tasksでは出る", await page.locator(".buffer-meter").count() === 1);
+    await page.click('[data-action="nav"][data-view="timeline"]');
+    await page.waitForTimeout(200);
+    check("timelineでは出る", await page.locator(".buffer-meter").count() === 1);
+    await page.click('[data-action="nav"][data-view="journal"]');
+    await page.waitForTimeout(200);
+    check("journalでは出る", await page.locator(".buffer-meter").count() === 1);
+    await page.click('[data-action="nav"][data-view="reports"]');
+    await page.waitForTimeout(200);
+    check("reportsでは出る", await page.locator(".buffer-meter").count() === 1);
+    await page.click('[data-action="nav"][data-view="settings"]');
+    await page.waitForTimeout(200);
+    check("settingsでは出ない", await page.locator(".buffer-meter").count() === 0);
+    await page.click('[data-action="nav"][data-view="stats"]');
+    await page.waitForTimeout(200);
+    check("stats(計器盤)では出ない", await page.locator(".buffer-meter").count() === 0);
+    // 「その他」(more)はモバイル下部ナビ専用のIDでデスクトップ幅のサイドバーには無いため、
+    // state.currentViewを直接注入して確認する(既存スイートと同じ手法)。
+    await seed({ blocks: [], view: "more", settings: { dailyBufferMin: 100 } });
+    check("more(その他)では出ない", await page.locator(".buffer-meter").count() === 0);
+
+    console.log("[7b] バッファ未設定(dailyBufferMin<=0)の日は、対象画面であっても帯自体が出ない(v146レビュー対応・計画1-4)");
+    await seed({ blocks: [], view: "home", settings: { dailyBufferMin: 0 } });
+    check("未設定時はhomeでも帯が出ない(空文字)", await page.locator(".buffer-meter").count() === 0);
+
+    // ============================================================
+    // (8) ジャーナルの当日優先表示
+    // ============================================================
+    console.log("[8] ジャーナル: 720px以下で当日編集パネルが先頭(CSS order)。前日パネルは既定closedのdetails");
+    await seed({ blocks: [], view: "journal" });
+    const prevPanel = page.locator("details.journal-panel-prev");
+    check("前日パネルはdetailsで既定closed", await prevPanel.evaluate((el) => el.open) === false);
+    check("当日編集パネルはdiv(details化していない)", await page.locator("div.journal-panel-today").count() === 1);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(200);
+    const orderToday = await page.locator(".journal-panel-today").evaluate((el) => getComputedStyle(el).order);
+    const orderPrev = await page.locator(".journal-panel-prev").evaluate((el) => getComputedStyle(el).order);
+    check("モバイル幅で当日編集パネルのorderが前日パネルより小さい(先頭)",
+      Number(orderToday) < Number(orderPrev), `today=${orderToday} prev=${orderPrev}`);
+    await page.setViewportSize({ width: 1100, height: 1400 });
+    await page.waitForTimeout(200);
+
+    // ============================================================
+    // (9) 設定画面のvNNN非表示 + 現在のファイル構成のdetails化
+    // ============================================================
+    console.log("[9] 設定画面から内部バージョン表記(vNNN)が消え、「現在のファイル構成」はdetails既定closed");
+    await seed({ blocks: [], view: "settings" });
+    // 「見出しから削除」が対象であり、本文の技術的な移行経緯の説明(例: 「Contents API 経由で
+    // 保存します(v72。...)」)まで削るのはスコープ外(過剰対応)。パネル見出し(h2)だけを検査する。
+    const panelHeadings = await page.locator("#main .settings-grid > .panel h2, #main .settings-grid > details > summary").allTextContents();
+    check("パネル見出しに(vNNN)を含まない", panelHeadings.every((h) => !/\(v\d+/.test(h)), JSON.stringify(panelHeadings));
+    const fileStructFold = page.locator("details:has-text('現在のファイル構成')").first();
+    check("「現在のファイル構成」はdetails要素で既定closed",
+      await fileStructFold.count() === 1 && await fileStructFold.evaluate((el) => el.open) === false);
+
+    // ============================================================
+    // (10) バッテリー回復下書きのラベルが「🔋 回復候補」になる
+    // ============================================================
+    console.log("[10] バッテリー回復下書き(source:battery-recovery)の下書きバーラベルが「🔋 回復候補」になる");
+    const mk = (id, date, title, hStart, hEnd, charge, discharge) => ({
+      id, date, title, category: "休息",
+      plannedStartAt: `${date}T${hStart}`, plannedEndAt: `${date}T${hEnd}`,
+      actualStartAt: `${date}T${hStart}`, actualEndAt: `${date}T${hEnd}`,
+      completed: true, charge, discharge, estimateMin: 0, deleted: false
+    });
