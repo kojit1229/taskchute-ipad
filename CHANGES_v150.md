@@ -158,3 +158,82 @@ CSS側にも保険として`.toast:not(.show) { pointer-events: none !important;
 
 **必須2(0分実績で日報の時間集計が壊れる、項目2)**: 即完了時にactualStartAt/actualEndAtを
 両方「現在時刻」で埋めると、着手前に先取り完了したBlockが実績0分になり、日報「時間実行」の
+集計(実績が両方揃っているBlockだけ分加算する分岐)から実質的に抜け落ちる問題があった。
+`quickCompleteActualStart(block, endDateTime)`を新設し、実績開始時刻は
+`block.actualStartAt || block.plannedStartAt || endDateTime`の優先順位で決める
+(plannedStartAtが分かればそちらを使う=より実態に近い)。plannedStartAtが終了時刻より未来
+(未着手のまま先取り完了した等)で開始>終了になってしまう場合は、`estimateMin`
+(無ければplannedStartAt/plannedEndAtの差)ぶん終了時刻から巻き戻す(`subtractMinutesFromDateTime`、
+それも無ければ開始=終了0分実績を許容)。日時文字列はゼロ埋めされた"YYYY-MM-DDTHH:mm"形式のため、
+文字列としての大小比較がそのまま時系列の前後判定になる(既存の`localDateTimeToMs`節と同じ前提)。
+tests/v150.test.js [A1]で「実績開始時刻がplannedStartAtになる」「開始≠終了」を、[A8]で
+「未来のplannedStartAtは終了−予定所要へ丸め込まれる」ことを検証した。
+
+**必須3(prefillEnergyが手入力の充放電を上書き、両レビュー一致、項目3)**: 即完了のたびに
+`prefillEnergy()`を無条件適用していたため、既に手入力済みの充放電(例: 別経路で先に充/放電
+セレクトを操作していた場合)が完了操作だけで中央値へ上書きされてしまっていた。
+`if (!block.charge && !block.discharge)`のガードを追加し、どちらかが非0(=手入力済み)なら
+prefillEnergyを呼ばない。tests/v150.test.js [A9]で、手入力値(charge:2/discharge:3)が
+過去実績の中央値(4/1)で上書きされないことを反例テストとして確認した。
+
+**必須4(完了解除で自動書き込みが残留、項目4)**: 即完了で自動補完した実績時刻・充放電は、
+その場でチェックを外して完了解除しても元に戻らず「解除したのに実績だけ残る」状態になっていた。
+`_quickCompleteSnapshots`(blockId→フィールドごとの`{before, after}`、セッション限りの
+非永続モジュール変数)を新設し、自動補完した瞬間に退避しておく。完了解除時は、各フィールドが
+「まだ自動補完時点の値のまま(=補完後に実績編集モーダル等で手を加えていない)」場合だけ
+`before`へ戻す(手で直した値を巻き戻さないための安全策)。**セッションを跨いだ解除
+(リロード後)は現状維持で許容する**(スナップショットが非永続のため。新規stateフィールドは
+追加していない)。tests/v150.test.js [A10]で、即完了→同セッション内で解除→実績時刻・充放電が
+すべて元(空/0)へ戻ることを確認した。
+
+**必須5(再起動で次点候補が追加提案される、Codex指摘、項目5)**: `maybeRebuildRecoveryDraft`は
+初回実装では単に`placeRecoveryDraftCandidates`(候補をcomputeChargeTopTitlesで毎回計算し
+直すロジック)を再実行していたため、「元は2件提案し、片方は確定・もう片方は未確定のまま
+PWAが破棄された」場合に、確定済み分を除外した空き枠へ**3番手の候補が新規に繰り上げ提案されて
+しまう**バグがあった(ユーザーが見ていない・却下したかもしれない候補が後から出てくる)。
+`state.batteryRecoveryDraftDates`の各要素を`{date, titles}`へ拡張し(旧: 日付文字列のみ)、
+新規発火時に実際に配置できたタイトル一覧を記録するようにした。旧形式(文字列)は
+`normalizeState`で`{date, titles:[]}`へ後方互換マイグレーションする(titles不明のため、
+その日は再構築の対象外=自動的にスキップされる)。`placeRecoveryDraftCandidates`に
+`opts.restoreTitles`を追加し、再構築時は「記録済みタイトルのうち当日まだ実Block化されていない
+(=未確定な)ものだけ」を対象にする——`computeChargeTopTitles`を素で再実行した場合の3番手を
+拾うことは無い。tests/v150.test.js [C1]〜[C4]で、(a)記録済み2件がそのまま復元される、
+(b)片方確定・片方未確定なら未確定分だけが復元され記録に無い3番手は繰り上がらない、
+(c)両方確定なら何も出さない、(d)旧形式マーカーは再構築スキップかつ後方互換で移行される、
+の4パターンを検証した。
+
+**必須6(レーン分割の適用範囲を限定、監督者裁定、項目6)**: 初回実装(clusterEndの延長を
+実所要5分以上すべてに適用)は、実測で連続する30分Block同士まで一日中50%幅に分割してしまう
+過剰適用だった(min-height 38pxとの差が大きい20分未満のBlockだけを想定していたが、
+条件で絞っていなかった)。分割対象を**実所要20分未満のBlockに限定**するよう監督者裁定を
+反映した(20分以上の数px〜十数px程度の食い込みはv149以前からの既存挙動として許容する)。
+tests/v150.test.js [D3]で、連続する30分Block同士が引き続き全幅(left:0%)のままであることを
+確認した([D1]の15分Block分割・[D2]の離れたBlock非分割は既存どおり)。
+
+**推奨7(トースト「実績を編集」ボタンの当たり判定44px化)**: 見た目のサイズは変えず、
+`.toast-action::before`の透明拡張(`inset:-8px`)で当たり判定だけ広げた
+(`.home-box::before`等、既存の当たり判定拡張パターンと同じ手法)。
+
+**推奨8(タイムラインの完了済みカードの○を解除とわかる表現に)**: `renderTimelineCard`で
+`block.completed`に応じてグリフ(○→↺)・aria-label/title("完了登録"→"完了を解除")を
+切り替えるようにした。現状の予定モードフィルタ(`!b.completed`)では完了済みBlockはこの位置に
+描画されないため実際には到達しない分岐だが、将来の表示条件変更に備えた防御的対応として実装した。
+
+**推奨9(showToastのblockId挿入にescapeHTML)**: `data-id="${actionOpts.blockId}"`を
+`data-id="${escapeHTML(actionOpts.blockId)}"`に変更した(他のdata-id埋め込み箇所と同じ
+防御の一貫性のため)。
+
+**推奨10(styles.css:2547の死んだ--text-lg宣言を整理)**: `.home-hero-title`が2箇所で
+定義されており、後方(v33節)の`font-size: 24px`が常に先勝ちのfont-size宣言を上書きしていた
+(v150のトークン置換時に気づかず`20px`→`var(--text-lg)`へ書き換えてしまい、実質無意味な
+変更になっていた)。前方の宣言からfont-sizeを削除し(font-weight/line-height/cursorは
+このルールだけが持つ有効な宣言なので残す)、実際の表示値(24px)は変えずに整理した。
+
+### 検証(2系統レビュー対応後)
+
+`node tests/run-all.js v150 v81 v107 v83 v89 v115 v117 v144 v146 v145` — 全ファイルPASS
+(v145は完了統一の影響テスト洗い出しには含まれないが、`batteryRecoveryDraftDates`の形式変更
+[必須5]の影響を受けるため追加で実走・修正した。`hasRecoveryMarker()`ヘルパーで
+新旧両形式を吸収する`.includes(TODAY)`→date一致判定へ更新)。
+`npm run test:core`(直近5バージョン+固定横断コア5本)全PASS(277.6s)。
+tests/v150.test.js自体は27→55チェックへ拡張し全PASS。
