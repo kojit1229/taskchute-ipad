@@ -99,6 +99,17 @@ let timerTicker = null;
 // v144: エネルギーバッテリーの差分更新(updateBatteryTick)のスロットル用。
 let _lastBatteryTickAt = 0;
 const BATTERY_TICK_INTERVAL_MS = 60000;
+// v148: 「動的にopen既定が変わるdetails」(ジャーナル朝/夜・設定「データと同期」)の手動開閉
+// オーバーライド(セッション内のみ、非永続 = リロードで消える)。これらのdetailsは現在時刻や
+// 同期異常の有無から既定open/closedを毎回計算するため、通常のhomeFoldSection(localStorage
+// 記憶)をそのまま使うと「動的にopenのまま描画されただけで、ブラウザがdetailsの'toggle'
+// イベントを自動発火する仕様(実測確認済み)」により、ユーザーが触ってもいないのに
+// 『手動で開いた』扱いでlocalStorageへ永続化されてしまう(条件が変わっても二度と元に
+// 戻らなくなる)。'toggle'イベントは信用せず、<summary>への本物のクリック(data-action=
+// "toggle-journal-segment"/"toggle-settings-sync")だけをここへ記録し、render()時は
+// 動的条件 || このオーバーライド、の優先順で使う(動的open自体は永続化しない)。
+let _journalSegmentOverride = {};  // { morning: bool, evening: bool }
+let _settingsSyncOpenOverride = null;  // null=未操作、true/false=ユーザーが実際にクリックした最新状態
 let cachedVisionMd = "";
 let cachedAffirmationMd = "";
 // v85: ビジョンボード(45/80/nowの各PDF)はpersonal-dataリポジトリのtaskchute/content/配下にあり、
@@ -1262,6 +1273,11 @@ function normalizeState(value) {
   value.aiScheduleHistory = value.aiScheduleHistory.map((h) => ({ source: "unknown", reason: "", ...h }));
   // v53: 計器盤の期間カーソル(UI状態)と自動アーカイブ設定
   value.settings.statsRange ||= "4w";
+  // v148(UI改善計画Phase3-5): タイムラインのエネルギーグラフ表示モード(UI状態)。
+  // 既定"energy"(従来どおりエネルギー実績/予測線)。"battery"でバッテリー残量線のみ表示。
+  if (value.settings.timelineEnergyGraphMode !== "energy" && value.settings.timelineEnergyGraphMode !== "battery") {
+    value.settings.timelineEnergyGraphMode = "energy";
+  }
   if (typeof value.settings.autoArchive !== "boolean") value.settings.autoArchive = true;
   value.settings.lastArchivedAt ||= "";
   // v43: 自動同期(既定OFF・保守的)。lastPushedAt = 最後に push した時の dataModifiedAt。
@@ -2218,8 +2234,15 @@ function renderSidebar() {
   `;
 }
 
+// v148レビュー対応(Codex指摘・項目3): ルーティンは「その他」から実行系(タスクシュート)
+// 上部リンクへ昇格した(moreGroupsから除外済み)ため、bottom-navの現在地表示も「その他」
+// ではなく「実行」(mobileNavのid "tasks")をactiveにする。
+function bottomNavEffectiveView(view) {
+  return view === "routine" ? "tasks" : view;
+}
 function renderBottomNav() {
-  const active = mobileNav.some((item) => item.id === state.currentView) ? state.currentView : "more";
+  const effectiveView = bottomNavEffectiveView(state.currentView);
+  const active = mobileNav.some((item) => item.id === effectiveView) ? effectiveView : "more";
   bottomNav.innerHTML = mobileNav.map((item) => `
     <button class="${active === item.id ? "active" : ""}" data-action="nav" data-view="${item.id}">${item.label}</button>
   `).join("");
@@ -2353,6 +2376,7 @@ function renderHeader(eyebrow, title, action = "") {
   return `
     <div class="view-header">
       <div>
+        ${breadcrumb}
         <div class="eyebrow">${eyebrow}</div>
         <h1>${title}</h1>
       </div>
@@ -6025,6 +6049,9 @@ function renderTasks() {
   return `
     ${renderHeader("今日の実行リスト", "タスクシュート", projectedEndBadge())}
     ${renderDateBar()}
+    <div class="row" style="margin-bottom:10px">
+      <button class="btn ghost" data-action="nav" data-view="routine">↻ 今日使うルーティンを見る →</button>
+    </div>
     ${aiMitChips()}
     ${aiTaskChips()}
     ${carryOverPanel()}
@@ -6471,6 +6498,9 @@ function renderTimeline({ compact, mode = "planned" }) {
       <button class="btn ghost ${zoom === 1 ? "active" : ""}" data-action="tl-zoom" data-zoom="1">1x</button>
       <button class="btn ghost ${zoom === 2 ? "active" : ""}" data-action="tl-zoom" data-zoom="2">2x</button>
       <button class="btn ghost ${zoom === 4 ? "active" : ""}" data-action="tl-zoom" data-zoom="4">4x</button>
+      <span class="tl-controls-divider"></span>
+      <button class="btn ghost ${energyGraphMode === "energy" ? "active" : ""}" data-action="tl-energy-mode" data-mode="energy">エネルギー</button>
+      <button class="btn ghost ${energyGraphMode === "battery" ? "active" : ""}" data-action="tl-energy-mode" data-mode="battery">バッテリー</button>
     </div>
   `;
 
@@ -6488,7 +6518,7 @@ function renderTimeline({ compact, mode = "planned" }) {
   ` : "";
 
   return `
-    ${zoomControls}
+    ${timelineControls}
     <div class="timeline" style="position:relative; min-height:${rowHeight * (endHour - startHour + 1)}px">
       ${rows.map((hour) => `
         <div class="time-row" data-action="timeline-new-block" data-minute="${hour * 60}"
@@ -6499,7 +6529,7 @@ function renderTimeline({ compact, mode = "planned" }) {
       </div>
       ${nowLine}
       ${!compact && mode === "planned" ? renderDraftLayer(rowHeight, startHour) : ""}
-      ${renderEnergyGraph(allBlocks, rowHeight, startHour, endHour)}
+      ${renderEnergyGraph(allBlocks, rowHeight, startHour, endHour, compact)}
     </div>
   `;
 }
@@ -6702,6 +6732,21 @@ function renderEnergyGraph(allBlocks, rowHeight, startHour, endHour) {
     ? `<polyline class="battery-curve" points="${batteryPts.map((p) => `${battXOf(p.value)},${yOf(p.minute)}`).join(" ")}" stroke="#ff9500" stroke-width="1.5" fill="none" stroke-linejoin="round"/>`
     : "";
   const batteryLast = batteryPts.length ? Math.round(batteryPts[batteryPts.length - 1].value) : null;
+
+  // v148(UI改善計画Phase3-5): 「エネルギー/バッテリー」表示モード切替(state.settings.
+  // timelineEnergyGraphMode、既定"energy")。v144までは-maxAbs〜+maxAbsのエネルギー軸と
+  // 0〜batteryMaxのバッテリー軸という別スケールの2線を同じSVGへ重ねて描いていたが
+  // (claude-ux-review v144詳細「読み分けるのは難しい」)、常に片方だけ描く1グラフ1スケールへ
+  // 変える。データ算出(realPoints/predictPoints/batteryPts)自体は両モードで変えず、
+  // 表示するpolyline/ラベルだけを切り替える(既存チャートは削除しない)。
+  // v148レビュー対応(Codex指摘・項目4): 選択状態はグローバル設定(state.settings)なので、
+  // 切替トグルの無い場所(compact=タスクシュート右レール)や、batteryPtsが常に空になる
+  // 過去日(!isToday)でモードが"battery"のままだと、復帰手段の無い空グラフになってしまう。
+  // その2条件では強制的にエネルギー系列へフォールバックする(設定自体は変更しない。
+  // 通常のタイムライン画面へ戻れば選択済みのモードのまま表示される)。
+  const graphMode = (state.settings.timelineEnergyGraphMode === "battery" && isToday && !compact) ? "battery" : "energy";
+  const showEnergy = graphMode === "energy";
+  const showBattery = graphMode === "battery";
 
   // レビュー対応: ティッカー(updateBatteryTick)が全体を差し替えられるよう、単一の
   // コンテナ要素にまとめて返す(既存の.timelineは position:relative のままなので、
@@ -7979,6 +8024,16 @@ function renderJournal() {
   // CHANGES_v141.md参照)。fetchロジック(hydrateStaticMarkdown)・保存データ(state.feedback/
   // cachedFeedback)自体は削除しておらず、Homeの「AIから」カード(homeAiFeedbackReadHTML)で
   // 引き続き読める。
+  // v148(UI改善計画Phase3-4): 当日パネルを朝/夜/本文の3detailsへ再編する。既定openは現在時刻
+  // (〜14時=朝、14時〜=夜)/常時(本文)から計算するが、_journalSegmentOverride(ファイル冒頭の
+  // モジュール変数群を参照)に記録があればそちらを優先する。本文も朝/夜と同じ挙動にする
+  // (レビュー対応: 手動で閉じても再render毎にopenへ戻らないように)。
+  const _now = new Date();
+  const nowMin = _now.getHours() * 60 + _now.getMinutes();
+  const isMorning = nowMin < 14 * 60;
+  const morningOpen = "morning" in _journalSegmentOverride ? _journalSegmentOverride.morning : isMorning;
+  const eveningOpen = "evening" in _journalSegmentOverride ? _journalSegmentOverride.evening : !isMorning;
+  const bodyOpen = "body" in _journalSegmentOverride ? _journalSegmentOverride.body : true;
   return `
     ${renderHeader("過去の自分・今の自分・外部視点", "ジャーナル")}
     ${renderDateBar()}
@@ -8909,32 +8964,59 @@ function renderSettings() {
 ├── now_vision.pdf
 ├── 45_vision.pdf
 └── 80_vision.pdf</pre>
-          <div class="muted" style="font-size:11px; margin-top:8px">
-            現状はすべてリポジトリのルート直下に配置。git の commit 履歴がデータ履歴になるので、復元可能。<br>
-            整理したい場合は <code>data/</code> サブフォルダに移動して、上の「保存先パス」と app.js のパスも合わせて変更してください。
-          </div>
+        <div class="muted" style="font-size:11px; margin-top:8px">
+          現状はすべてリポジトリのルート直下に配置。git の commit 履歴がデータ履歴になるので、復元可能。<br>
+          整理したい場合は <code>data/</code> サブフォルダに移動して、上の「保存先パス」と app.js のパスも合わせて変更してください。
         </div>
-      </details>
-      <div class="panel stack">
-        <h2>カテゴリ管理</h2>
-        <div class="muted" style="font-size:12px; line-height:1.6">
-          Project / Task / Block で選択できるカテゴリと色を管理します。タイムラインのブロック色などに反映されます。
-        </div>
-        ${renderCategoriesSettings()}
-        <button class="btn primary" data-action="add-category">+ カテゴリを追加</button>
       </div>
-      <div class="panel stack">
-        <h2>休憩メッセージ</h2>
-        <div class="muted" style="font-size:12px; line-height:1.6">
-          休憩中(任意・常時タイマー)に、残り秒数の範囲に応じて表示されるメッセージです。
-        </div>
-        ${renderBreakMessagesSettings()}
-        <button class="btn primary" data-action="add-break-message">+ メッセージを追加</button>
-      </div>
-      <div class="panel stack">
-        <h2>GitHub Pages</h2>
-        <div class="muted">このフォルダをGitHubリポジトリへpushし、Pagesの公開元をルートにすると公開できます。</div>
-      </div>
+    </details>
+  `;
+}
+
+function renderSettingsCategoryPanel() {
+  return `
+    <h3>カテゴリ管理</h3>
+    <div class="muted" style="font-size:12px; line-height:1.6">
+      Project / Task / Block で選択できるカテゴリと色を管理します。タイムラインのブロック色などに反映されます。
+    </div>
+    ${renderCategoriesSettings()}
+    <button class="btn primary" data-action="add-category">+ カテゴリを追加</button>
+  `;
+}
+
+function renderSettingsPagesPanel() {
+  return `
+    <h3>GitHub Pages</h3>
+    <div class="muted">このフォルダをGitHubリポジトリへpushし、Pagesの公開元をルートにすると公開できます。</div>
+  `;
+}
+
+function renderSettings() {
+  const github = state.settings.github || defaultGitHubSettings();
+  const groups = [
+    {
+      id: "settings-daily", label: "日々の使い方(バッファ・電池・朝プラン・実行)",
+      body: [renderSettingsBufferPanel(), renderSettingsBatteryPanel(), renderSettingsMorningPlanPanel(), renderSettingsExecPanel()]
+    },
+    {
+      id: "settings-display", label: "表示・タイマー(Study With Me・ガイド付きアクセス・休憩)",
+      body: [renderSettingsStudyWithMePanel(), renderSettingsGuidedAccessPanel(), renderSettingsBreakMessagesPanel()]
+    },
+    {
+      id: "settings-master", label: "マスタ・詳細(プロフィール・カテゴリ管理・ファイル構成)",
+      body: [renderSettingsProfilePanel(), renderSettingsCategoryPanel(), renderSettingsFileStructurePanel()]
+    }
+  ];
+  return `
+    ${renderHeader("Web版の保存と公開", "設定")}
+    <section class="settings-grid">
+      ${homeFoldSection(groups[0].id, false, "settings-group", "settings-group-summary", groups[0].label,
+        `<div class="stack" style="gap:16px">${groups[0].body.join("")}</div>`)}
+      ${homeFoldSection(groups[1].id, false, "settings-group", "settings-group-summary", groups[1].label,
+        `<div class="stack" style="gap:16px">${groups[1].body.join("")}</div>`)}
+      ${renderSettingsSyncGroup(github)}
+      ${homeFoldSection(groups[2].id, false, "settings-group", "settings-group-summary", groups[2].label,
+        `<div class="stack" style="gap:16px">${groups[2].body.join("")}</div>`)}
     </section>
   `;
 }
@@ -9513,6 +9595,23 @@ function renderSleepStats(since, today, blocksByDate) {
     </div>`;
 }
 
+// v148(UI改善計画Phase3-3): 計器盤の常時表示に置く「睡眠1行要約」。renderSleepStats(詳細、
+// details格納)を開かなくても直近の睡眠状況が一目で分かるよう、中央値だけを1行で示す。
+// データが1件も無ければ非表示(既存の静かな計器の方針を踏襲)。
+function renderSleepSummaryLine(since, today) {
+  const vals = sleepValuesForRange(since, today).map((x) => x.v);
+  if (!vals.length) return "";
+  const med = median(vals);
+  // v148レビュー対応: 「直近」は期間セレクタ(4週/12週/全期間、最大104週)によっては
+  // 誤解を招く(全期間選択時は最大2年分の中央値になりうる)ため、選択中の期間全体を指す
+  // 「期間中央値」に統一する。
+  return `
+    <div class="panel stats-wide stats-sleep-summary">
+      <span class="muted">💤 睡眠</span> 期間中央値 <b>${med.toFixed(1)}h</b>
+      <span class="muted">(${vals.length}日分。詳細は下の「詳細を見る」)</span>
+    </div>`;
+}
+
 // v143: 計器盤「今週のヒント」========================================================
 // 既存の集計(エネルギー構造/ヒートマップ/見積精度/睡眠帯)を専用の純関数へ集約し、
 // renderStats()内の各チャートとcomputeInsights()の両方から呼べるようにする(二重実装回避)。
@@ -10013,7 +10112,17 @@ function renderStats() {
   const blocksByDate = buildBlocksByDateMap();
   const sleepStatsCard = renderSleepStats(sleepSince, today, blocksByDate);  // v142: 睡眠セクション(別関数に切り出し済み)
   const insightsCard = renderInsights(since, today, blocksByDate);  // v143: 「今週のヒント」(計器盤の最上部・別関数に切り出し済み)
-  const body = insightsCard + rateChart + energyChart + donutCard + catEnergyCard + trendCard + heatmap + histCard + estimateCard + calendarCard + sleepStatsCard;
+  // v148(UI改善計画Phase3-3): 計器盤を「常時表示(要約)→詳細(details、既定閉)」の2層にする。
+  // 節の配置ルール(固定・新しい節を足すときもこの順を守る):
+  //   常時表示 = ヒント(insightsCard)→ 主要指標(rateChart=着手率週次)→ 睡眠1行要約
+  //   詳細     = エネルギー収支(energyChart)→ カテゴリ配分(donutCard)→
+  //              カテゴリ収支(catEnergyCard)→ 週次推移(trendCard)→ 時間帯×曜日(heatmap)→
+  //              時間帯別(histCard)→ 見積(estimateCard)→ 記録の継続(calendarCard)→
+  //              睡眠詳細(sleepStatsCard)
+  // 既存チャートは1つも削除せず、詳細detailsへ格納するだけ(claude-ux-review S2/S3対応)。
+  const sleepSummaryCard = renderSleepSummaryLine(sleepSince, today);
+  const summaryBody = insightsCard + rateChart + sleepSummaryCard;
+  const detailBody = energyChart + donutCard + catEnergyCard + trendCard + heatmap + histCard + estimateCard + calendarCard + sleepStatsCard;
   return `
     ${renderHeader("数字で見る実行の実態", "計器盤")}
     <div class="segmented" style="margin-bottom:10px">
@@ -10021,7 +10130,9 @@ function renderStats() {
         `<button class="${range === k ? "active" : ""}" data-action="stats-range" data-range="${k}">${l}</button>`).join("")}
     </div>
     ${range === "all" ? `<div class="muted" style="font-size:11px; margin-bottom:10px">全期間 = この端末に残っているデータの範囲(アーカイブ済みの期間は含みません)</div>` : ""}
-    ${body ? `<section class="stats-grid">${body}</section>` : emptyPanel("まだ十分なデータがありません。実績が数週間分たまると表示されます。")}
+    ${summaryBody ? `<section class="stats-grid">${summaryBody}</section>` : ""}
+    ${detailBody ? homeFoldSection("stats-details", false, "stats-details", "", `詳細を見る(時間・エネルギー・見積・継続・睡眠詳細)`, `<section class="stats-grid">${detailBody}</section>`) : ""}
+    ${(!summaryBody && !detailBody) ? emptyPanel("まだ十分なデータがありません。実績が数週間分たまると表示されます。") : ""}
   `;
 }
 
@@ -10957,6 +11068,7 @@ function renderZeroThinking() {
   return `
     <div class="view-header">
       <div>
+        <div class="view-breadcrumb">その他 › ${moreGroupLabelFor("zero")}</div>
         <div class="eyebrow">0 SECOND THINKING</div>
         <h1>0秒思考</h1>
       </div>
