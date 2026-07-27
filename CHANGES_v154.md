@@ -158,3 +158,92 @@ Wish月間ボードD&DがすべてPointer Events)。スワイプも同じ「docu
 v152で既に`via`を持っていたが、S1時点ではボタンのみのため実質固定値だった。判定ロジック自体は
 `via`に依存させていない=ボタン/スワイプで挙動を分岐しない)。
 
+## 7. 視覚フィードバックと退場アニメーション(styles.css、CSS transformのみ)
+
+- カード内に`.triage-swipe-hint`(空のdiv、`aria-hidden="true"`)を追加した。横方向ドラッグ中は
+  候補アクションのラベル(「✅ 今日やる」/「🕊 手放す」)を表示し、`opacity`を`min(1, |dx|/
+  TRIAGE_SWIPE_CONFIRM_PX)`で連続的に変化させる(閾値に近づくほど濃くなる)。色分けは罰なし
+  トーンの規約に従い「手放す」にも赤は使わない(`--orange-text`)。延期のヒント表示は廃止
+  (スワイプ候補から外れたため)。
+- `.triage-card`にbase transition(`transform .18s cubic-bezier(.22,1,.36,1), opacity .18s
+  ease`)を付与し、`.is-dragging`(ドラッグ中)ではこれを`transition:none`で無効化して指に
+  1:1追従させる(スナップバック/退場アニメはドラッグ終了後にこのtransitionを使う)。
+- 確定時(`endTriageSwipe`)は`el.style.pointerEvents = "none"`で退場中の再操作を防ぎ、
+  `triageExitTransform(action, dx, dy)`が返す画面外への`translate`+`rotate`(左右いずれか)を
+  適用し、`opacity:0`にする。`TRIAGE_SWIPE_EXIT_MS`(180ms、CSSのtransition時間と一致)後に
+  `setTimeout`で`triageAction`を呼び、成否に応じて4.の原状復帰またはstate変更+次カードの描画
+  (`saveAndRender`)を行う。
+- `prefers-reduced-motion: reduce`時は、styles.cssの新規`@media`ブロックで`.triage-card`の
+  `transition`を`none`にし、JS側(`triagePrefersReducedMotion()`、同じmatchMediaクエリ)も
+  退場アニメの待機自体をスキップして`triageAction`を即座に呼ぶ(「無効化」ではなくCSS/JS
+  両側を揃えて即時反映にする方針。apple-design §14に準拠)。
+
+## 8. 既存テストへの影響
+
+`triageAction`のシグネチャに第4引数(既定値あり)を追加し戻り値をboolean化したが、ボタン経由の
+呼び出し(`data-action="triage-choice"`のクリックハンドラ)は無変更・戻り値も見ないため`via`は
+既定の`"button"`のままで挙動は変わらない。クールダウンの`via`分岐は`tests/v152.test.js`の
+二重タップガードテストで直接検証されている(3.参照。`via==="button"`のケースは元の一律
+クールダウンとロジック上完全に同一)。`tests/v152.test.js`(全54チェック)を8回連続実行し、
+回帰がない(元のコードと同じ潜在的な不安定性の範囲に収まる)ことを確認した(下記「検証」参照)。
+
+## 検証
+
+`tests/v154.test.js`を新規追加(全39チェック)。
+
+- **連続スワイプの飲み込み修正**: 210ms間隔で異なる2枚を連続スワイプしても両方確定すること
+  (クールダウンの`via`分岐。3.参照)
+- **スワイプ確定2方向**: 右(今日やる)/左(手放す)のそれぞれで、`page.mouse`(Chromiumは
+  マウス入力もPointer Eventsとして配送するため、既存`tests/v50.test.js`と同じ手法で
+  Pointer Events経路を検証できる)で`pointerdown`→`TRIAGE_SWIPE_CONFIRM_PX`超の`pointermove`→
+  `pointerup`を行い、`triageAction`と同じ結果(migratedTo付与/deleted化)になること、
+  `swipeTriageLog`に`via:"swipe"`で記録されること。退場アニメの時間差(60ms時点ではまだ
+  未確定、400ms時点で確定)も確認
+- **touch-actionとスクロール両立**: `.triage-card`の`touch-action`が`pan-y`であること、
+  上フリックは確定しないこと(deleted/migratedTo/Wish化のいずれも起きない)、その後も
+  `page.mouse.wheel`でページが実際に縦スクロールできること
+- **閾値未満で戻る**: 30px程度の横移動で離した場合、state・swipeTriageLogが一切変化せず、
+  カードのtransformが原状復帰すること
+- **pointercancel復帰**: 閾値超のドラッグ中に`pointercancel`を発火させると、state・
+  swipeTriageLogが一切変化しないこと(未確定のドラッグは何も残さない)
+- **多指の誤確定防止**: 1本目の指でドラッグ中に2本目の指が閾値を大きく超える位置で離れても
+  確定しないこと(2.参照)
+- **triageActionの成否と原状復帰**: 退場アニメ待機中に別経路(ボタン)で同じカードが先に
+  処理されると、保留中のスワイプはfalseで拒否され二重処理が起きず、カードのtransform/opacityが
+  原状復帰すること(4.参照)
+- **ボタン併存**: 延期はボタン専用として引き続き動作し(`via:"button"`)、全6件処理で
+  仕分け完了になること
+- **reduced-motion**: `browser.newContext({ reducedMotion: "reduce" })`のコンテキストで
+  スワイプ確定すると、退場アニメの待機(180ms)を待たずに60ms以内に確定していること
+
+`node tests/v154.test.js`単体実行で全PASS(39/39、連続4回実行してフレーキーでないことを確認)。
+既存`tests/v152.test.js`(ボタン経路・二重タップガードの回帰確認、全54チェック)を8回連続単体
+実行し全PASS(3.節に記載した経緯調査の一環で、元のコードでの潜在的な不安定性=8回中1回失敗も
+実測している。今回の`via`分岐実装で悪化していないことを回数を増やして確認した)。関連する
+D&D/Wish/繰越系スイート(`node tests/run-all.js v154 v152 v79 v80 v81 v83`)を3回連続実行し
+全PASS。`npm run test:core`(直近5バージョン+固定横断コア5本、計10ファイル)を実行し全PASS
+(224.0s)。
+
+push前・CIでの全量実行(`npm test`)は別途必要。
+
+## 既知の潜在リスク(v154起因ではないが判明した事項)
+
+`tests/v152.test.js`の二重タップガードテスト([3]、待機なしの連続クリック)は、**v154以前の
+元のコードの時点で既に**低確率(実測8回中1回)でフレーキーになりうることが3.節の調査過程で
+判明した。原因はPlaywrightの`locator.click()`が要素の安定性待機のため実行間隔にばらつきを
+持つこと(41〜362ms)で、アプリ側のロジックとは無関係。今回の`via`分岐実装は`via==="button"`の
+ケースについて元のロジックと完全に同一の判定(350ms一律ブロック)を保っているため、この
+潜在リスクを悪化させても改善してもいない。CI等でこのテストが低確率で落ちた場合は再実行で
+通ることが多いはずだが、根本対応(`locator.click()`依存をやめる等)は本タスクのスコープ外
+のため対応していない。
+
+## 対応できなかった項目
+
+- **reduced-motion経路での`triageAction`失敗時の原状復帰**: コードは4.の`resetTriageCardVisual`
+  呼び出しを非reduced-motion経路と対称に実装したが、reduced-motion経路は確定が完全に同期的
+  (退場アニメの待機が無くスワイプの`pointerup`ハンドラ内で即座に`triageAction`が呼ばれ
+  `saveAndRender`まで完了する)であるため、実操作の組み合わせだけで`false`を返す競合状態
+  (別経路が先に同じidを処理する状況)を作れず、独立した統合テストを追加できていない。
+- **多指テストは合成PointerEventによる検証**: `page.mouse`は単一ポインタしか表現できないため、
+  2本目の指のシナリオは`document`への合成`PointerEvent`dispatchで検証した。実機(iPad)の
+  真の複数タッチでの`setPointerCapture`挙動は未確認(前バージョンからの既知の懸念を引き継ぐ)。
