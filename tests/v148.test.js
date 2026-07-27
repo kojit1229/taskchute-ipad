@@ -178,3 +178,183 @@ function check(name, cond, extra = "") {
       localStorage.setItem("taskchute-journal-last-sync-pull-at", staleAt);
     }, { staleAt });
     await page.click('[data-action="nav"][data-view="settings"]');
+    await page.waitForTimeout(200);
+    check("「データと同期」群だけ既定openになる(同期停止アラート発生時)",
+      await syncGroupLoc.evaluate((el) => el.open) === true);
+    check("他の3群は既定closedのまま",
+      (await foldGroups.evaluateAll((els) => els.map((el) => el.open))).every((o) => o === false));
+
+    console.log("[3c] 異常解消後は「データと同期」群が再び閉じる(2系統レビュー指摘・動的openは永続化されない)");
+    // ジャーナル朝/夜と同じ理由(<details open>の描画だけでtoggleイベントが自動発火する)により、
+    // 旧実装ではここで異常解消後も開きっぱなしになる不具合があった。pull成功時刻を新しく更新
+    // (異常解消)し、reloadせずに同一ページセッション内でnav再クリックにより再renderだけ発火させる
+    // (setView()は同一viewへのnavでも必ずrender()する。reloadすると_settingsSyncOpenOverrideが
+    // リセットされ「永続化されていないこと」の確認にならないため、あえてreloadしない)。
+    await page.evaluate(() => {
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, "0");
+      const fresh = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:00`;
+      localStorage.setItem("taskchute-journal-last-sync-pull-at", fresh);
+    });
+    await page.click('[data-action="nav"][data-view="settings"]');  // 同一viewへのnavでも再renderされる
+    await page.waitForTimeout(200);
+    check("異常解消後は「データと同期」群が再びclosedになる(自動openが永続化されていない証拠)",
+      await syncGroupLoc.evaluate((el) => el.open) === false);
+
+    console.log("[3d] 手動closed履歴があっても、異常時は開く(動的openはstored値より優先)");
+    // 異常状態(直前の[3b]/[3c]操作で作った状態は解消済みなので再度staleにする)で自動openされた
+    // 群を、ユーザーが本物のクリックで一度手動closeする → その直後に再度異常化しても開くことを確認する。
+    await page.evaluate(({ staleAt }) => {
+      localStorage.setItem("taskchute-journal-last-sync-pull-at", staleAt);
+    }, { staleAt });
+    await page.click('[data-action="nav"][data-view="settings"]');
+    await page.waitForTimeout(200);
+    check("(前提)異常状態でまず自動openになっている", await syncGroupLoc.evaluate((el) => el.open) === true);
+    await syncGroupLoc.locator("summary").click();  // ユーザーが手動でclose
+    await page.waitForTimeout(150);
+    check("手動クリックでclosedになる(見た目上の即時反映)", await syncGroupLoc.evaluate((el) => el.open) === false);
+    // 異常状態は継続したまま(staleなpull-atは変更していない)、再renderだけ発火させる
+    await page.click('[data-action="nav"][data-view="settings"]');
+    await page.waitForTimeout(200);
+    check("手動closed履歴があっても、異常が続いていれば次の再描画で再びopenになる(動的open優先)",
+      await syncGroupLoc.evaluate((el) => el.open) === true);
+
+    // ============================================================
+    // (3e) 認証エラーバナー(pd-auth-banner)からの設定遷移でも「データと同期」群を自動openにする
+    // ============================================================
+    console.log("[3e] 認証エラーバナーからの設定遷移でも「データと同期」群が自動openになる(トークン再入力欄に直行できる)");
+    // 同期停止アラート(pull停止)は解消しておき、認証エラー単独の効果を見る。
+    await page.evaluate(({ freshAt }) => {
+      localStorage.setItem("taskchute-journal-last-sync-pull-at", freshAt);
+    }, { freshAt: fmtLocalDt(new Date()) });
+    // 401を返すことでsetPersonalDataAuthError()(app.js gitHubErrorMessage経由)を実際に発火させる。
+    await page.route((url) => url.hostname === "api.github.com" && url.pathname.includes("/contents/taskchute/app-state.json"),
+      (route) => route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ message: "Bad credentials" }) }));
+    await page.click('[data-action="nav"][data-view="settings"]');
+    await page.waitForTimeout(200);
+    await openSettingsGroup(page, "settings-sync");
+    await page.click('[data-action="save-github"]');  // 401 → pd-auth-bannerが立つ
+    await page.waitForTimeout(500);
+    const bannerText = await page.locator(".pd-auth-banner").textContent().catch(() => "");
+    check("認証エラーバナーが表示される(前提)", bannerText.includes("設定へ"), bannerText);
+    // ここまでで「データと同期」群は手動クリックで開いた状態。バナー経由の自動openを独立して
+    // 確認するため、一度手動でcloseしてからバナーをクリックし直す。
+    await syncGroupLoc.locator("summary").click();
+    await page.waitForTimeout(150);
+    check("(前提)いったん手動でcloseできる", await syncGroupLoc.evaluate((el) => el.open) === false);
+    await page.click('[data-action="nav"][data-view="home"]');
+    await page.waitForTimeout(200);
+    await page.click(".pd-auth-banner");
+    await page.waitForTimeout(300);
+    check("認証エラーバナーからの遷移で「データと同期」群が自動openになる",
+      await syncGroupLoc.evaluate((el) => el.open) === true);
+
+    // ============================================================
+    // (4) 計器盤: 常時表示(ヒント+着手率+睡眠1行要約) + 詳細details(既定閉、チャートは全部残る)
+    // ============================================================
+    console.log("[4] 計器盤は常時表示+詳細detailsの2層。詳細は既定closedで、格納後もチャートは全部存在する");
+    const TODAY = isoDate(now0);
+    // 着手率の週次推移(rateChart)はtaskchuteBlocks()(taskId+Project紐づきTaskを持つBlockのみ)
+    // を母数にするため、Task/Projectも合わせて用意する。
+    const statsProject = {
+      id: "v148-stats-proj", kind: "normal", title: "統計用案件", category: "", status: "active",
+      description: "", dueDate: "", twelveWeekStartDate: "", createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`,
+      deleted: false, collapsed: false
+    };
+    const statsTask = {
+      id: "v148-stats-task", projectId: "v148-stats-proj", parentTaskId: "", title: "統計用タスク",
+      category: "", status: "todo", dueDate: "", description: "", createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`,
+      deleted: false
+    };
+    const blocksForStats = Array.from({ length: 8 }, (_, i) => {
+      const d = new Date(now0);
+      d.setDate(d.getDate() - i * 7);  // 8週分、週1件ずつ
+      const dateStr = isoDate(d);
+      return {
+        id: `v148-stats-${i}`, taskId: "v148-stats-task", date: dateStr, title: `統計用Block${i}`, category: "作業",
+        plannedStartAt: `${dateStr}T09:00`, plannedEndAt: `${dateStr}T09:30`,
+        actualStartAt: `${dateStr}T09:00`, actualEndAt: `${dateStr}T09:30`,
+        completed: true, charge: 3, discharge: 1, comment: "", recurrenceGroupId: "", pomodoroCount: 0,
+        migratedTo: "", orderIndex: 0, carryCount: 0, isMIT: false, source: "", estimateMin: 20,
+        leverageType: "", createdAt: `${dateStr}T00:00`, updatedAt: `${dateStr}T00:00`, deleted: false
+      };
+    });
+    await page.evaluate(({ KEY, blocks, task, project, view }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.blocks = blocks;
+      s.tasks = [task]; s.projects = [project];
+      s.currentView = view;
+      s.settings.statsRange = "12w";
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, blocks: blocksForStats, task: statsTask, project: statsProject, view: "stats" });
+    await page.reload();
+    await page.waitForTimeout(500);
+    check("常時表示に「今週のヒント」または「着手率の週次推移」が出る(要約が空でない)",
+      await page.locator(".stats-grid").first().count() >= 1);
+    const detailsFold = page.locator('details[data-fold-id="stats-details"]');
+    check("詳細detailsが存在し既定closed", await detailsFold.count() === 1 && await detailsFold.evaluate((el) => el.open) === false);
+    const chartClassesInDetails = [
+      ".stats-donut-wrap", ".stats-bars", ".stats-hm-band", ".stats-hist", ".stats-cal-row"
+    ];
+    for (const sel of chartClassesInDetails) {
+      const cnt = await page.locator(`details[data-fold-id="stats-details"] ${sel}`).count();
+      check(`既存チャート(${sel})が詳細details内に存在する(削除されていない)`, cnt >= 1, String(cnt));
+    }
+    // rateChart(着手率の週次推移=主要指標)は常時表示側にあり、詳細detailsの外にある
+    const rateChartInDetails = await page.evaluate(() => {
+      const h2 = [...document.querySelectorAll("#main h2")].find((el) => el.textContent === "着手率の週次推移");
+      if (!h2) return null;  // 見つからない場合はnull(件数不足で非表示の可能性。下のcheckで区別する)
+      return !!h2.closest('details[data-fold-id="stats-details"]');
+    });
+    check("着手率の週次推移(主要指標)の見出しが存在する", rateChartInDetails !== null, String(rateChartInDetails));
+    check("着手率の週次推移(主要指標)は常時表示側にある(詳細detailsの外)", rateChartInDetails === false, String(rateChartInDetails));
+
+    // ============================================================
+    // (5) ジャーナル当日パネル: 朝/夜/本文の3details。現在時刻で自動open。本文は常時open
+    // ============================================================
+    console.log("[5] ジャーナル当日パネル: 10:00(朝)では朝detailsがopen、夜はclosed。本文は常時open");
+    await seed({ view: "journal", fixedTime: now0 });
+    const morningOpenAt10 = await page.locator(".journal-segment-morning").evaluate((el) => el.open);
+    const eveningOpenAt10 = await page.locator(".journal-segment-evening").evaluate((el) => el.open);
+    const bodyOpenAt10 = await page.locator(".journal-segment-body").evaluate((el) => el.open);
+    check("10:00: 朝detailsはopen", morningOpenAt10 === true, String(morningOpenAt10));
+    check("10:00: 夜detailsはclosed", eveningOpenAt10 === false, String(eveningOpenAt10));
+    check("10:00: 本文detailsは常時open", bodyOpenAt10 === true, String(bodyOpenAt10));
+
+    console.log("[5b] 20:00(夜)では夜detailsがopen、朝はclosed");
+    const evening0 = new Date(now0);
+    evening0.setHours(20, 0, 0, 0);
+    await seed({ view: "journal", fixedTime: evening0 });
+    const morningOpenAt20 = await page.locator(".journal-segment-morning").evaluate((el) => el.open);
+    const eveningOpenAt20 = await page.locator(".journal-segment-evening").evaluate((el) => el.open);
+    check("20:00: 朝detailsはclosed", morningOpenAt20 === false, String(morningOpenAt20));
+    check("20:00: 夜detailsはopen", eveningOpenAt20 === true, String(eveningOpenAt20));
+    // 格納するだけで機能自体は削除していないことの確認(朝の入力欄がDOM上に存在する)
+    check("朝の欄(睡眠プリセット)はDOM上に存在する(closedでも削除されていない)",
+      await page.locator('[data-action="set-sleep"]').count() === 5);
+
+    console.log("[5c] 20:00でも朝detailsを手動展開して操作すれば、その後の再描画でも閉じ直らない"
+      + "(時刻ベースの再計算だけに頼ると、閉じている側の欄を開いて入力するたびに再render毎に"
+      + "巻き戻ってしまう実害があったための回帰確認)");
+    const morningSummary = page.locator(".journal-segment-morning summary");
+    await morningSummary.click();  // 20:00時点でclosedな朝detailsを手動展開
+    await page.waitForTimeout(150);
+    check("手動展開直後は朝detailsがopenになる",
+      await page.locator(".journal-segment-morning").evaluate((el) => el.open) === true);
+    // 朝欄内のボタン(set-sleep)をクリックしてsaveAndRender()経由の全体再描画を誘発する
+    await page.click('[data-action="set-sleep"][data-value="7"]');
+    await page.waitForTimeout(200);
+    check("再描画後も朝detailsはopenのまま(時刻基準に巻き戻らない)",
+      await page.locator(".journal-segment-morning").evaluate((el) => el.open) === true);
+    const stateAfter5c = await stateNow();
+    check("再描画後もset-sleepの入力は保存されている(操作自体は機能する)",
+      stateAfter5c.condition.logs[stateAfter5c.selectedDate]?.sleepHours === 7,
+      JSON.stringify(stateAfter5c.condition.logs[stateAfter5c.selectedDate]));
+
+    // ============================================================
+    // (6) タイムラインのエネルギー/バッテリー切替。選択状態はstate.settingsに保存されreload後も維持
+    // ============================================================
+    console.log("[6] タイムラインのエネルギー/バッテリー切替。既定はエネルギー、切替はstate.settingsに保存される");
+    const tlBlock = {
+      id: "v148-tl-1", taskId: "", date: TODAY, title: "タイムライン確認Block", category: "作業",
+      plannedStartAt: `${TODAY}T08:00`, plannedEndAt: `${TODAY}T08:30`,
