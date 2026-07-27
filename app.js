@@ -5965,14 +5965,13 @@ function triageSubtitleText(entry) {
 }
 
 // 選択結果を軽量ログに記録(migrationRitualLogと同じ思想。集計・分析はバッチ側)
-// v154: viaはtriageAction呼び出し元から渡される('button'|'swipe')。既定は後方互換のため'button'。
-function logSwipeTriage(kind, targetId, action, carryCount, via = "button") {
+function logSwipeTriage(kind, targetId, action, carryCount) {
   state.swipeTriageLog.push({
     at: nowDateTime(),
     targetId,
     kind,          // 'block' | 'wish'
     action,        // 'today' | 'drop' | 'defer'
-    via,           // 'button' | 'swipe'(v154)
+    via: "button",  // v152 S1はボタンのみ。S2でスワイプ('swipe')追加
     carryCount: Number(carryCount || 0)
   });
   if (state.swipeTriageLog.length > SWIPE_TRIAGE_LOG_MAX) {
@@ -5988,23 +5987,10 @@ function logSwipeTriage(kind, targetId, action, carryCount, via = "button") {
 //  (b) logSwipeTriageは行動が実際に成立した箇所の直前(saveAndRender/委譲呼び出しの直前)に
 //      移した。早期return(該当id無し等)ではログを一切積まない。
 //  (c) 処理成立時は必ず_triageSessionDoneへidを積み、以後このセッションのキューから除外する。
-//  (d) v154: 第4引数viaは呼び出し元('button'クリック or スワイプ確定)を示す。
-//      logSwipeTriageへそのまま渡すほか、下記(e)のクールダウン判定にも使う(状態遷移の
-//      分岐そのものには一切使わない=どの三択がどう作用するかはvia非依存のまま)。
-// v154 2系統レビュー対応(FAIL修正):
-//  (e) クールダウンの「別カードへの操作」ブロックをvia==="button"の場合に限定した
-//      (詳細はTRIAGE_ACTION_COOLDOWN_MSの定義コメント参照)。旧実装は別カードへの操作も
-//      viaを問わず一律350msブロックしていたため、退場アニメ180ms+短い間隔での連続スワイプが
-//      2件目を飲み込んでいた(修正のテストはtests/v154.test.js「連続スワイプ」、既存の
-//      二重タップガードの回帰確認はtests/v152.test.js参照)。
-//  (f) 戻り値をboolean化(成立=true/不成立=false)。呼び出し元(スワイプの退場アニメ確定処理)は
-//      falseの場合にカードを視覚的に原状復帰させる(state変更なしで見た目だけ消えるのを防ぐ)。
-function triageAction(kind, id, action, via = "button") {
+function triageAction(kind, id, action) {
   const now = Date.now();
-  const withinCooldown = now - _triageLastActionAt < TRIAGE_ACTION_COOLDOWN_MS;
-  if (withinCooldown && id === _triageLastActionId) return false;  // 同一idの二重発火(via問わず)
-  if (withinCooldown && via === "button") return false;  // 別カードへの操作はボタン限定でブロック
-  if (_triageCurrentCardId && id !== _triageCurrentCardId) return false;
+  if (now - _triageLastActionAt < TRIAGE_ACTION_COOLDOWN_MS) return;
+  if (_triageCurrentCardId && id !== _triageCurrentCardId) return;
 
   if (kind === "block") {
     const block = blockById(id);
@@ -6021,7 +6007,6 @@ function triageAction(kind, id, action, via = "button") {
       // 儀式のavoid相当(designs/03-task-swipe.md §③表): deleted化+migrationRitualLogにも記録
       // (集計源を分裂させない。avoidListへの追記まではしない=表に明記された2アクションのみ)
       _triageLastActionAt = now;
-      _triageLastActionId = id;
       _triageSessionDone.add(id);
       logMigrationRitual(block, "avoid");
       state.blocks = state.blocks.map((b) => b.id === id ? { ...b, deleted: true, updatedAt: nowDateTime() } : b);
@@ -6033,9 +6018,7 @@ function triageAction(kind, id, action, via = "button") {
       // 儀式のrelease相当: Wishへ移動してから元Blockをdeleted化(moveBlockToWish自体は削除しない)。
       // v152レビュー対応(設計書§④明文の記録漏れ): logMigrationRitual(release)を追加し、
       // 集計源(migrationRitualLogが正)を分裂させない。
-      // v154: 延期はボタン専用(スワイプの方向割当から廃止。CHANGES_v154.md参照)。
       _triageLastActionAt = now;
-      _triageLastActionId = id;
       _triageSessionDone.add(id);
       const moved = moveBlockToWish(id);
       // v152レビュー対応(必須1・終端性): moveBlockToWishが新規に作るWishは、この場で今まさに
@@ -6044,11 +6027,11 @@ function triageAction(kind, id, action, via = "button") {
       if (moved) _triageSessionDone.add(moved.id);
       logMigrationRitual(block, "release");
       state.blocks = state.blocks.map((b) => b.id === id ? { ...b, deleted: true, updatedAt: nowDateTime() } : b);
-      logSwipeTriage("block", id, action, block.carryCount, via);
+      logSwipeTriage("block", id, action, block.carryCount);
       saveAndRender(moved ? "Wishへ移動しました" : "Blockを削除しました(Wishプロジェクトなし)");
-      return true;
+      return;
     }
-    return false;
+    return;
   }
 
   if (kind === "wish") {
@@ -6058,7 +6041,6 @@ function triageAction(kind, id, action, via = "button") {
       // ⑥未解決論点1の仮案(設計書に明記): 本体をカードにし、未完了サブタスクがあれば
       // 先頭(nextStepOf)をBlock化。サブタスクが無ければ本体自身をBlock化する。
       _triageLastActionAt = now;
-      _triageLastActionId = id;
       _triageSessionDone.add(id);
       const next = nextStepOf(id);
       if (next) {
@@ -6090,9 +6072,9 @@ function triageAction(kind, id, action, via = "button") {
       };
       collect(id);
       state.tasks = state.tasks.map((t) => allIds.has(t.id) ? { ...t, deleted: true, updatedAt: nowDateTime() } : t);
-      logSwipeTriage("wish", id, action, 0, via);
+      logSwipeTriage("wish", id, action, 0);
       saveAndRender("手放しました");
-      return true;
+      return;
     }
     if (action === "defer") {
       // targetMonthがあれば+1(12月→翌年1月)。targetYearが設定済みならそれも+1、未設定なら
@@ -6139,8 +6121,7 @@ function renderWishTriage(wishes) {
   return `
     <section class="panel triage-panel" style="margin-top:14px">
       <div class="muted" style="text-align:right; font-size:11px">あと ${queue.length} 枚</div>
-      <div class="triage-card" data-triage-id="${current.id}" data-triage-kind="${current.kind}">
-        <div class="triage-swipe-hint" aria-hidden="true"></div>
+      <div class="triage-card">
         ${triageBadgeHTML(current)}
         <div class="triage-card-title">${escapeHTML(current.item.title)}</div>
         <div class="triage-card-sub muted">${escapeHTML(triageSubtitleText(current))}</div>
@@ -6153,128 +6134,6 @@ function renderWishTriage(wishes) {
     </section>
   `;
 }
-
-// v154: 仕分けモードのスワイプジェスチャ(designs/03-task-swipe.md S2)。=====================
-// Pointer Events統一(pointerdown/move/up/cancel。touchstart等は使わない)。既存の
-// _draftDrag(4880行〜)/ _wishDrag(4915行〜)と同じ「documentレベル委譲+移動量が閾値を
-// 超えるまでドラッグ扱いにしない」流儀を踏襲する。確定ロジックはtriageActionへ完全委譲し
-// (ロジックの二重化はしない)、三択ボタンは変更せず併存させる(設計書§③「必ずボタンでも
-// 実行可能」)。
-//
-// v154 2系統レビュー対応(FAIL修正、監督者裁定2026-07-28):
-//  - **スワイプは左右のみ**(右=今日やる/左=手放す)。上スワイプ=延期は廃止し延期はボタン専用に
-//    した(仕分けビューは実測で縦スクロールが発生しており、touch-action:noneのカード上では
-//    上フリック=通常のスクロール操作が取り消せない延期として誤確定する事故があったため)。
-//    touch-actionも`none`→`pan-y`へ変更し、縦方向はブラウザのネイティブスクロールに譲る。
-//  - **多指の誤確定防止**: pointerdownはevent.isPrimaryのみ受け付け、_triageSwipe.pointerIdを
-//    保持してmove/up/cancelはpointerId一致のイベントだけを処理する(2本目の指のupで
-//    誤って確定しない)。
-//  - **setPointerCaptureをtry/catchで保護**(NotFoundError観測あり。ポインタが既に
-//    リリース済み等の状況でも例外で処理全体を止めない)。
-
-// ドラッグ中の一時情報(非永続)。{ id, kind, el, pointerId, startX, startY, moved }
-let _triageSwipe = null;
-const TRIAGE_SWIPE_MOVE_THRESHOLD = 8;   // px。これ未満はタップ扱い(_wishDrag踏襲。transform未適用)
-const TRIAGE_SWIPE_CONFIRM_PX = 70;      // px。設計書「横60〜80px」の中間値
-const TRIAGE_SWIPE_EXIT_MS = 180;        // 退場アニメの時間。styles.cssの.triage-cardのtransitionと一致させる
-
-// 設計書§③の方向割当(v154改訂): 右=今日やる/左=手放す。縦方向(上下どちらも)は候補なし
-// (=ネイティブの縦スクロールに譲る。touch-action:pan-yと対になる判定)。
-function triageSwipeCandidate(dx, dy) {
-  const absX = Math.abs(dx), absY = Math.abs(dy);
-  if (absX < 4 || absX < absY) return null;  // ほぼ静止 or 縦優位はスクロール意図とみなし候補なし
-  return dx > 0 ? "today" : "drop";
-}
-
-const TRIAGE_SWIPE_HINT_LABEL = { today: "✅ 今日やる", drop: "🕊 手放す" };
-
-// スワイプ中の視覚フィードバック(方向ヒント表示)。進捗はTRIAGE_SWIPE_CONFIRM_PXに対する割合
-function updateTriageSwipeHint(el, dx, dy) {
-  const hint = el.querySelector(".triage-swipe-hint");
-  if (!hint) return;
-  const action = triageSwipeCandidate(dx, dy);
-  hint.textContent = action ? TRIAGE_SWIPE_HINT_LABEL[action] : "";
-  hint.className = "triage-swipe-hint" + (action ? ` hint-${action}` : "");
-  hint.style.opacity = action ? String(Math.min(1, Math.abs(dx) / TRIAGE_SWIPE_CONFIRM_PX)) : "0";
-}
-
-// 確定時の退場方向(カードが画面外へ抜ける向き。左右のみ)
-function triageExitTransform(action, dx, dy) {
-  const vw = window.innerWidth || 800;
-  return action === "today"
-    ? `translate(${vw}px, ${dy}px) rotate(20deg)`
-    : `translate(${-vw}px, ${dy}px) rotate(-20deg)`;
-}
-
-function triagePrefersReducedMotion() {
-  return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-}
-
-// カードの見た目を未操作状態へ完全に戻す(スナップバック/pointercancel/triageAction失敗時の
-// 原状復帰で共通利用)。stateには一切触れない。
-function resetTriageCardVisual(el) {
-  el.style.transform = "translate(0,0) rotate(0deg)";
-  el.style.opacity = "";
-  el.style.pointerEvents = "";
-  const hint = el.querySelector(".triage-swipe-hint");
-  if (hint) hint.style.opacity = "0";
-}
-
-document.addEventListener("pointerdown", (event) => {
-  const card = event.target.closest(".triage-card");
-  if (!card) return;
-  if (!event.isPrimary) return;  // 2本目以降の指は無視(多指操作の誤確定防止)
-  if (_triageSwipe) return;  // 既にドラッグ中なら新規に開始しない(念のための二重防御)
-  if (event.target.closest("[data-action]")) return;  // カード内に将来ボタンが増えても通常タップに譲る
-  try { card.setPointerCapture(event.pointerId); } catch (e) { /* NotFoundError等は無害化して継続 */ }
-  _triageSwipe = { id: card.dataset.triageId, kind: card.dataset.triageKind, el: card, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, moved: false };
-});
-document.addEventListener("pointermove", (event) => {
-  if (!_triageSwipe || event.pointerId !== _triageSwipe.pointerId) return;
-  const dx = event.clientX - _triageSwipe.startX;
-  const dy = event.clientY - _triageSwipe.startY;
-  if (!_triageSwipe.moved && Math.hypot(dx, dy) < TRIAGE_SWIPE_MOVE_THRESHOLD) return;
-  _triageSwipe.moved = true;
-  _triageSwipe.el.classList.add("is-dragging");  // transitionを止め、指に1:1追従させる
-  _triageSwipe.el.style.transform = `translate(${dx}px, ${dy}px) rotate(${dx * 0.05}deg)`;
-  updateTriageSwipeHint(_triageSwipe.el, dx, dy);
-  event.preventDefault();  // 横方向ジェスチャ中のみ働く(touch-action:pan-yにより縦はブラウザに譲る)
-});
-// 確定は指を離した時のみ(スワイプ中に発火しない)。閾値未満・縦方向優位はスナップバックして何もしない
-const endTriageSwipe = (event) => {
-  if (!_triageSwipe || (event && event.pointerId !== _triageSwipe.pointerId)) return;
-  const { id, kind, el, moved, startX, startY } = _triageSwipe;
-  const dx = event ? event.clientX - startX : 0;
-  const dy = event ? event.clientY - startY : 0;
-  _triageSwipe = null;
-  if (!moved) return;  // 誤爆防止: 閾値未満の指の震え等はドラッグ扱いにすらしていない
-  el.classList.remove("is-dragging");
-  const candidate = triageSwipeCandidate(dx, dy);
-  if (!candidate || Math.abs(dx) < TRIAGE_SWIPE_CONFIRM_PX) {
-    resetTriageCardVisual(el);  // 元位置へスナップバック(誤爆防止。縦スクロール意図もここに含む)
-    return;
-  }
-  if (triagePrefersReducedMotion()) {
-    // reduced-motion時はアニメ無効・即時確定(設計書§③)
-    const ok = triageAction(kind, id, candidate, "swipe");
-    if (!ok) resetTriageCardVisual(el);  // クールダウン等でブロックされた場合は原状復帰
-    return;
-  }
-  el.style.pointerEvents = "none";  // 退場アニメ中の再操作を防ぐ
-  el.style.transform = triageExitTransform(candidate, dx, dy);
-  el.style.opacity = "0";
-  setTimeout(() => {
-    const ok = triageAction(kind, id, candidate, "swipe");
-    if (!ok) resetTriageCardVisual(el);  // 退場アニメ後にブロックされていたら見た目だけ戻す
-  }, TRIAGE_SWIPE_EXIT_MS);
-};
-document.addEventListener("pointerup", endTriageSwipe);
-// pointercancel時は必ずリセット(通話着信・システムジェスチャ等での中断。状態変更は一切しない)
-document.addEventListener("pointercancel", (event) => {
-  if (!_triageSwipe || (event && event.pointerId !== _triageSwipe.pointerId)) return;
-  resetTriageCardVisual(_triageSwipe.el);
-  _triageSwipe = null;
-});
 
 // 汎用: Task のフィールド更新(saveState のみ、再描画なし)
 function updateTaskField(id, field, value) {

@@ -1,11 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v154";
-// v154: ADHD支援「①仕分けモード S2(スワイプ)」— v152の三択ボタンにPointer Events統一の
-//   スワイプ操作を追加(ボタンは併存)。方向割当は右=今日やる/左=手放す/上=延期(来月)。
-//   pointerdown/move/up/cancelをdocumentレベルで委譲し、既存の_draftDrag/_wishDragと同じ
-//   「閾値未満はドラッグ扱いにしない」流儀を踏襲。カード追従・スナップバック・退場はCSS
-//   transformのみ(prefers-reduced-motion:reduce時はアニメ無効・即時確定)。確定ロジックは
-//   既存triageActionへ完全委譲(ロジックの二重化なし)。詳細: CHANGES_v154.md、設計書
-//   workbench/out/2026-07-27-appidea-designs/03-task-swipe.md §⑤S2。
+const CACHE_NAME = "taskchute-journal-pwa-v153";
 // v153: ADHD支援「②今日の庭 S1」— gardenLog(日別ルーティン完了スナップショット)+
 //   「今日の芽」表示。今日タブのルーティンカード内に、当日のルーティン完了状況に応じた
 //   4段階(土/芽/若木/開花)の静的SVGを表示する。段階の配色は薄緑/緑/濃緑
