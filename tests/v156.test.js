@@ -178,3 +178,183 @@ const planBlock = ({ id, title, startMin, minutes = 30 }) => {
   // ============================================================
   console.log("[2] Block「手放す」のUndo: deleted:trueが解除され、migrationRitualLog/swipeTriageLogとも取り消される");
   await seed({ blocks: [mkBlock("blk-drop", "Block手放すUndo対象", { carryCount: 2 })] });
+  const before2 = (await stateNow()).blocks.find((b) => b.id === "blk-drop");
+  await clickChoice("drop");
+  await page.waitForTimeout(200);
+  snap = await stateNow();
+  check("(準備)手放す実行直後はdeleted:trueになる", snap.blocks.find((b) => b.id === "blk-drop").deleted === true);
+  check("(準備)migrationRitualLogにavoidとして1件記録される",
+    (snap.migrationRitualLog || []).filter((l) => l.blockId === "blk-drop" && l.choice === "avoid").length === 1);
+  await clickUndo();
+  await page.waitForTimeout(200);
+  snap = await stateNow();
+  const after2 = snap.blocks.find((b) => b.id === "blk-drop");
+  check("元Blockが完全復元する(deleted:false・carryCount等すべて一致)", sameExceptUpdatedAt(before2, after2), JSON.stringify({ before: before2, after: after2 }));
+  check("migrationRitualLogが0件に戻る", (snap.migrationRitualLog || []).length === 0, JSON.stringify(snap.migrationRitualLog));
+  check("swipeTriageLogが0件に戻る", (snap.swipeTriageLog || []).length === 0);
+  check("Undo後、カードがキューへ戻る", await remainCount() === 1 && (await cardTitle()) === "Block手放すUndo対象", await cardTitle());
+
+  // ============================================================
+  // [3] Block: 延期 → Undo → 完全復元(moveBlockToWishが作った新規Wishも消える)
+  // ============================================================
+  console.log("[3] Block「延期」のUndo: moveBlockToWishが作った新規Wishが消え、元Blockが完全復元する");
+  await seed({ blocks: [mkBlock("blk-defer", "Block延期Undo対象")] });
+  const before3 = (await stateNow()).blocks.find((b) => b.id === "blk-defer");
+  const taskCountBefore3 = (await stateNow()).tasks.length;
+  await clickChoice("defer");
+  await page.waitForTimeout(200);
+  snap = await stateNow();
+  check("(準備)延期実行直後はdeleted:trueになり新規Wishが1件増える",
+    snap.blocks.find((b) => b.id === "blk-defer").deleted === true && snap.tasks.length === taskCountBefore3 + 1);
+  const movedWish = snap.tasks.find((t) => t.title === "Block延期Undo対象" && t.projectId === wishProjectId);
+  check("(準備)新規Wishが見つかる", !!movedWish, JSON.stringify(snap.tasks.map((t) => t.title)));
+  await clickUndo();
+  await page.waitForTimeout(200);
+  snap = await stateNow();
+  const after3 = snap.blocks.find((b) => b.id === "blk-defer");
+  check("元Blockが完全復元する", sameExceptUpdatedAt(before3, after3), JSON.stringify({ before: before3, after: after3 }));
+  check("moveBlockToWishが作った新規Wishが消える(tasks件数が元に戻る)", snap.tasks.length === taskCountBefore3, JSON.stringify(snap.tasks.map((t) => t.title)));
+  check("migrationRitualLogが0件に戻る", (snap.migrationRitualLog || []).length === 0);
+  check("swipeTriageLogが0件に戻る", (snap.swipeTriageLog || []).length === 0);
+  check("Undo後、カードがキューへ戻る", await remainCount() === 1 && (await cardTitle()) === "Block延期Undo対象", await cardTitle());
+
+  // ============================================================
+  // [4] Wish(サブタスク無し): 今日やる → Undo → 完全復元
+  // ============================================================
+  console.log("[4] Wish「今日やる」(サブタスク無し)のUndo: 作られたBlockが消え、Wish本体のstatus等が完全復元する");
+  await seed({ tasks: [mkWish("wish-today", wishProjectId, "Wish今日Undo対象", "2026-01-01T09:00:00")] });
+  const before4 = (await stateNow()).tasks.find((t) => t.id === "wish-today");
+  const blockCountBefore4 = (await stateNow()).blocks.length;
+  await clickChoice("today");
+  await page.waitForTimeout(200);
+  snap = await stateNow();
+  check("(準備)今日やる実行直後はstatus:doingになりBlockが1件増える",
+    snap.tasks.find((t) => t.id === "wish-today").status === "doing" && snap.blocks.length === blockCountBefore4 + 1);
+  await clickUndo();
+  await page.waitForTimeout(200);
+  snap = await stateNow();
+  const after4 = snap.tasks.find((t) => t.id === "wish-today");
+  check("Wish本体が完全復元する(status:todoへ戻る等)", sameExceptUpdatedAt(before4, after4), JSON.stringify({ before: before4, after: after4 }));
+  check("作られたBlockが消える(blocks件数が元に戻る)", snap.blocks.length === blockCountBefore4, JSON.stringify(snap.blocks.map((b) => b.title)));
+  check("swipeTriageLogが0件に戻る", (snap.swipeTriageLog || []).length === 0);
+  check("Undo後、カードがキューへ戻る", await remainCount() === 1 && (await cardTitle()) === "Wish今日Undo対象", await cardTitle());
+
+  // ============================================================
+  // [5] Wish(サブタスク有り): 今日やる → Undo → 対象(サブタスク)+本体とも完全復元
+  // ============================================================
+  console.log("[5] Wish「今日やる」(サブタスク有り)のUndo: nextStepOfが指すサブタスクと、本体updatedAtの両方が復元する");
+  await seed({
+    tasks: [
+      mkWish("wish-parent", wishProjectId, "Wish今日Undo親", "2026-01-02T09:00:00"),
+      mkWish("wish-child", wishProjectId, "Wish今日Undo子", "2026-01-02T09:00:00", { parentTaskId: "wish-parent" })
+    ]
+  });
+  check("先頭カードは親Wish(サブタスク有りでも本体をカードにする)", (await cardTitle()) === "Wish今日Undo親", await cardTitle());
+  let s5 = await stateNow();
+  const beforeParent5 = s5.tasks.find((t) => t.id === "wish-parent");
+  const beforeChild5 = s5.tasks.find((t) => t.id === "wish-child");
+  const blockCountBefore5 = s5.blocks.length;
+  await clickChoice("today");
+  await page.waitForTimeout(200);
+  snap = await stateNow();
+  check("(準備)サブタスク側がstatus:doingになりBlockが1件増える",
+    snap.tasks.find((t) => t.id === "wish-child").status === "doing" && snap.blocks.length === blockCountBefore5 + 1);
+  check("(準備)本体のupdatedAtも進む(データ整合のための同時更新)",
+    snap.tasks.find((t) => t.id === "wish-parent").updatedAt !== beforeParent5.updatedAt);
+  await clickUndo();
+  await page.waitForTimeout(200);
+  snap = await stateNow();
+  const afterParent5 = snap.tasks.find((t) => t.id === "wish-parent");
+  const afterChild5 = snap.tasks.find((t) => t.id === "wish-child");
+  check("サブタスクが完全復元する(status:todoへ戻る等)", sameExceptUpdatedAt(beforeChild5, afterChild5), JSON.stringify({ before: beforeChild5, after: afterChild5 }));
+  check("本体も完全復元する", sameExceptUpdatedAt(beforeParent5, afterParent5), JSON.stringify({ before: beforeParent5, after: afterParent5 }));
+  check("作られたBlockが消える", snap.blocks.length === blockCountBefore5, JSON.stringify(snap.blocks.map((b) => b.title)));
+
+  // ============================================================
+  // [6] Wish: 手放す(カスケード削除) → Undo → 本体+子孫すべて完全復元
+  // ============================================================
+  console.log("[6] Wish「手放す」のUndo: 本体+カスケード削除された子孫すべてがdeleted:falseへ戻る");
+  await seed({
+    tasks: [
+      mkWish("wish-drop-parent", wishProjectId, "Wish手放すUndo対象", "2026-01-03T09:00:00"),
+      mkWish("wish-drop-childA", wishProjectId, "手放すUndo子A", "2026-01-03T09:00:00", { parentTaskId: "wish-drop-parent", status: "completed" }),
+      mkWish("wish-drop-childB", wishProjectId, "手放すUndo子B", "2026-01-03T09:00:00", { parentTaskId: "wish-drop-childA" })
+    ]
+  });
+  let s6 = await stateNow();
+  const beforeSnaps6 = ["wish-drop-parent", "wish-drop-childA", "wish-drop-childB"].map((id) => s6.tasks.find((t) => t.id === id));
+  await clickChoice("drop");
+  await page.waitForTimeout(200);
+  snap = await stateNow();
+  check("(準備)本体+子孫3件ともdeleted:trueになる",
+    ["wish-drop-parent", "wish-drop-childA", "wish-drop-childB"].every((id) => snap.tasks.find((t) => t.id === id).deleted === true));
+  await clickUndo();
+  await page.waitForTimeout(200);
+  snap = await stateNow();
+  const afterSnaps6 = ["wish-drop-parent", "wish-drop-childA", "wish-drop-childB"].map((id) => snap.tasks.find((t) => t.id === id));
+  check("本体+子孫3件すべてがフィールド単位で完全復元する(取り違えなし)",
+    beforeSnaps6.every((b, i) => sameExceptUpdatedAt(b, afterSnaps6[i])), JSON.stringify({ before: beforeSnaps6, after: afterSnaps6 }));
+  check("swipeTriageLogが0件に戻る", (snap.swipeTriageLog || []).length === 0);
+
+  // ============================================================
+  // [7] Wish: 延期(月またぎ・年ロールオーバー) → Undo → targetMonth/targetYearとも完全復元
+  // ============================================================
+  console.log("[7] Wish「延期」のUndo(12月→翌年1月のロールオーバー込み): targetMonth/targetYearとも元の値へ戻る");
+  await seed({ tasks: [mkWish("wish-defer", wishProjectId, "Wish延期Undo対象", "2026-01-04T09:00:00", { targetMonth: 12, targetYear: 2026 })] });
+  const before7 = (await stateNow()).tasks.find((t) => t.id === "wish-defer");
+  await clickChoice("defer");
+  await page.waitForTimeout(200);
+  snap = await stateNow();
+  const deferred7 = snap.tasks.find((t) => t.id === "wish-defer");
+  check("(準備)12月→翌年1月へロールオーバーする", deferred7.targetMonth === 1 && deferred7.targetYear === 2027, JSON.stringify(deferred7));
+  await clickUndo();
+  await page.waitForTimeout(200);
+  snap = await stateNow();
+  const after7 = snap.tasks.find((t) => t.id === "wish-defer");
+  check("targetMonth/targetYearとも元の値(12月/2026年)へ完全復元する", sameExceptUpdatedAt(before7, after7), JSON.stringify({ before: before7, after: after7 }));
+
+  // ============================================================
+  // [8] 5秒失効: 5秒経過後は#toastからhas-actionが外れ、実クリックでもUndoが発火しない
+  // ============================================================
+  console.log("[8] 5秒失効: 5秒経過後はhas-actionが外れ、その位置への実クリックでもUndoは発火しない(v150 A11と同じ検証方式)");
+  await seed({ blocks: [mkBlock("blk-expire", "Block失効確認")] });
+  await clickChoice("today");
+  await page.waitForTimeout(200);
+  check("(準備)has-actionが付く", await page.locator("#toast.has-action").count() === 1);
+  const undoBtnBox = await page.locator('.toast-action[data-action="triage-undo"]').boundingBox();
+  await page.waitForTimeout(UNDO_EXPIRE_WAIT);
+  check("5秒経過後はhas-actionが外れる", await page.locator("#toast.has-action").count() === 0);
+  // 実際のポインタ位置でクリックする(pointer-events:noneのため下の要素へ吸われ、Undoは発火しないはず)
+  await page.mouse.click(undoBtnBox.x + undoBtnBox.width / 2, undoBtnBox.y + undoBtnBox.height / 2);
+  await page.waitForTimeout(200);
+  snap = await stateNow();
+  check("5秒経過後の実クリックではUndoが発火しない(migratedToが付いたまま=巻き戻っていない)",
+    !!snap.blocks.find((b) => b.id === "blk-expire").migratedTo, JSON.stringify(snap.blocks.find((b) => b.id === "blk-expire")));
+
+  // ============================================================
+  // [9] 次の操作での失効 / 連続操作時の対象取り違えなし
+  // ============================================================
+  console.log("[9] 次の操作での失効・対象取り違えなし: 対象A(今日やる)→対象B(手放す)の順で処理後、表示中のUndo(B用)はBだけを復元しAには一切影響しない");
+  await seed({ blocks: [mkBlock("blk-seq-a", "対象A"), mkBlock("blk-seq-b", "対象B")] });
+  check("先頭カードは対象A", (await cardTitle()) === "対象A", await cardTitle());
+  await clickChoice("today");  // 対象A: 今日やる
+  await page.waitForTimeout(COOLDOWN_WAIT);  // 別カードへのボタン操作クールダウンを跨ぐ(v154由来の仕様)
+  check("次のカードは対象B", (await cardTitle()) === "対象B", await cardTitle());
+  const aAfterFirstAction = (await stateNow()).blocks.find((b) => b.id === "blk-seq-a");
+  check("(準備)対象Aはmigratedto付与済み", !!aAfterFirstAction.migratedTo);
+  await clickChoice("drop");  // 対象B: 手放す(この時点で対象Aへの前回Undoは_triageUndoの上書きで自動的に失効している)
+  await page.waitForTimeout(200);
+  check("表示中のUndoボタンの対象は対象B(data-id=blk-seq-b)", await page.locator('.toast-action[data-action="triage-undo"][data-id="blk-seq-b"]').count() === 1);
+  await clickUndo();
+  await page.waitForTimeout(200);
+  snap = await stateNow();
+  const aFinal = snap.blocks.find((b) => b.id === "blk-seq-a");
+  const bFinal = snap.blocks.find((b) => b.id === "blk-seq-b");
+  check("対象Aは一切影響を受けない(migratedToが付いたまま=今日やるは有効なまま)", !!aFinal.migratedTo, JSON.stringify(aFinal));
+  check("対象Bだけが復元される(deleted:falseへ戻る)", bFinal.deleted === false, JSON.stringify(bFinal));
+  check("swipeTriageLogは対象Aの1件だけが残る(対象Bの分は取り消された)",
+    (snap.swipeTriageLog || []).length === 1 && snap.swipeTriageLog[0].targetId === "blk-seq-a", JSON.stringify(snap.swipeTriageLog));
+
+  // ============================================================
+  // [10] 上限到達時のUndo: swipeTriageLogが200件(上限)で満たされた状態でアクション→Undoすると、
+  //      押し出された最古エントリが復元され200件のまま元の内容に完全一致する(2系統レビュー必須3)
