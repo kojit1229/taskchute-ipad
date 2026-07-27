@@ -158,3 +158,32 @@ claude-ux-review.md + codex-ui-review.mdの2系統レビューの統合)。K承�
    ようにした。「タイトル書きかけ→🏁→書きかけ保持+🏁の効果自体は反映」のテストを追加
 6. 死にCSS `.task-complete-toggle` / `.task-complete-toggle.done`(app.js側は既に`.task-complete-toggle-btn`
    に置換済みで未参照だった)を削除
+7. 新設2つの`<summary>`(ジャーナル前日パネル・設定「現在のファイル構成」)を既存foldパターン
+   (`.home-fold` + `.home-fold-summary`(`::-webkit-details-marker`非表示込み)+ `.home-fold-chevron`
+   + `.home-fold-body`)に統一。`.home-fold`の`margin-top:12px`がgrid(journal-grid/settings-grid)の
+   `gap`と二重に空かないよう、既存の`.home-zone-block .home-fold`と同じ手法で0へ戻すルールを追加
+8. `.home-chip-2col`を固定`1fr 1fr`から`repeat(auto-fit, minmax(140px, 1fr))`へ変更。子が1個
+   (過去日でバッテリー残量チップが空になるケース)なら1列いっぱいに広がり、2個あるときだけ
+   2列に分かれる(狭い幅では自然に1列へ畳まれるため個別`@media`指定も不要になった)
+9. `tests/v107.test.js`に「390px幅でBlock編集モーダルを開くと🏁ボタンが可視状態である」を追加
+10. 本節を追記(このセクション自体が対応)
+
+## 検証(レビュー対応後、最終)
+
+- `node tests/run-all.js v146 v73 v67 v71 v82 v107`(フォアグラウンド、timeout 600000明示): **✅ All suites passed**
+- `npm run test:core`(フォアグラウンド、timeout 600000明示): **✅ All suites passed**(356.5s)
+- 追加の目視回帰(`v116`/`v75`/`v83`。バッファ帯・AIから折りたたみ・チェックの丸形状/44px当たり判定に
+  関連するため個別に再実行): `node tests/run-all.js v116 v75 v83` **ALL PASS**
+- `npm test`(全量)は監督者側でpush前に実行するため本ラウンドでは未実行(指示どおり)
+
+## 追加修正(2026-07-27、監督者側の全量npm test実行で発覚した追随漏れ2本目)
+
+`tests/v112.test.js` [3]「タスクを完了にすると一覧から消える」が、行内の`[data-action="toggle-task-complete"]`
+を直接クリックしようとして失敗していた(v107.test.jsと同じ、🏁のBlock編集モーダル移設への
+追随漏れ)。`grep -r "toggle-task-complete" tests/`で全テストファイルを洗い出し、参照していたのは
+`v107.test.js`(対応済み)・`v146.test.js`(新規時点から対応済み)・`v112.test.js`(未対応)の3本のみと
+確認。`v112.test.js`をv107と同じパターン(edit-blockでモーダルを開く→モーダル内の
+toggle-task-completeをクリック→modal-close)へ追随修正した。既存assert(Taskがcompletedになる/
+一覧から消える等)は削除・緩和していない。
+
+検証: `node tests/v112.test.js`単体PASS。`node tests/run-all.js v112 v107 v146` ALL PASS。
