@@ -358,3 +358,100 @@ const planBlock = ({ id, title, startMin, minutes = 30 }) => {
   // ============================================================
   // [10] 上限到達時のUndo: swipeTriageLogが200件(上限)で満たされた状態でアクション→Undoすると、
   //      押し出された最古エントリが復元され200件のまま元の内容に完全一致する(2系統レビュー必須3)
+  // ============================================================
+  console.log("[10] 上限到達時のUndo: swipeTriageLogを200件で満たした状態でアクション→Undo→200件のまま元の内容に一致する(欠損なし)");
+  const filledLog = Array.from({ length: 200 }, (_, i) => ({
+    at: `2026-01-01T00:${String(i % 60).padStart(2, "0")}:00`,
+    targetId: `old-${i}`, kind: "block", action: "today", via: "button", carryCount: 0
+  }));
+  await seed({ blocks: [mkBlock("blk-cap", "Block上限確認")], swipeTriageLog: filledLog });
+  const before10 = (await stateNow()).swipeTriageLog;
+  check("(準備)seed直後は200件", before10.length === 200, String(before10.length));
+  await clickChoice("today");
+  await page.waitForTimeout(200);
+  snap = await stateNow();
+  check("(準備)アクション後も200件のまま(上限トリムで最古が押し出された)", (snap.swipeTriageLog || []).length === 200, String((snap.swipeTriageLog || []).length));
+  check("(準備)最古のold-0が押し出されている", !(snap.swipeTriageLog || []).some((l) => l.targetId === "old-0"));
+  check("(準備)新しいエントリ(blk-cap)が末尾に積まれている", (snap.swipeTriageLog || []).slice(-1)[0].targetId === "blk-cap");
+  await clickUndo();
+  await page.waitForTimeout(200);
+  snap = await stateNow();
+  check("Undo後は200件のまま(199件への欠損が解消されている)", (snap.swipeTriageLog || []).length === 200, String((snap.swipeTriageLog || []).length));
+  check("Undo後は押し出されていたold-0が先頭へ復元され、元の200件と完全一致する",
+    JSON.stringify(snap.swipeTriageLog) === JSON.stringify(before10),
+    JSON.stringify({ beforeHead: before10.slice(0, 2), afterHead: (snap.swipeTriageLog || []).slice(0, 2) }));
+
+  // ============================================================
+  // [11] 5秒失効の完全化: タイマー満了後にキーボードEnterで発動しないこと(必須2)
+  // ============================================================
+  console.log("[11] 5秒失効の完全化: タイマー満了後にUndoボタンへキーボードEnterを送っても発動しない(pointer-eventsを経由しない経路でも_triageUndoがnull化されていることの確認)");
+  await seed({ blocks: [mkBlock("blk-kbd", "Block失効Enter確認")] });
+  await clickChoice("today");
+  await page.waitForTimeout(200);
+  check("(準備)Undoボタンが存在する", await page.locator('.toast-action[data-action="triage-undo"]').count() === 1);
+  await page.evaluate(() => document.querySelector('.toast-action[data-action="triage-undo"]').focus());
+  check("(準備)Undoボタンがフォーカスされている",
+    await page.evaluate(() => document.activeElement === document.querySelector('.toast-action[data-action="triage-undo"]')));
+  await page.waitForTimeout(UNDO_EXPIRE_WAIT);
+  check("(準備)5秒経過後はhas-actionが外れる", await page.locator("#toast.has-action").count() === 0);
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(200);
+  snap = await stateNow();
+  check("期限切れ後のEnterキーではUndoが発動しない(migratedToが付いたまま=巻き戻っていない)",
+    !!snap.blocks.find((b) => b.id === "blk-kbd").migratedTo, JSON.stringify(snap.blocks.find((b) => b.id === "blk-kbd")));
+
+  // ============================================================
+  // [12] スワイプ経由(via:"swipe")のUndo(推奨7)
+  // ============================================================
+  console.log("[12] スワイプ経由(via:swipe)のUndo: ボタンだけでなくスワイプ確定分もUndoで完全復元する");
+  await seed({ blocks: [mkBlock("blk-swipe", "Block今日Undo(スワイプ)")] });
+  const before12 = (await stateNow()).blocks.find((b) => b.id === "blk-swipe");
+  await swipe(140, 0);  // 右スワイプ=今日やる(TRIAGE_SWIPE_CONFIRM_PX=70pxを超える)
+  await page.waitForTimeout(400);  // TRIAGE_SWIPE_EXIT_MS(180ms)より確実に長い待機
+  snap = await stateNow();
+  const migrated12 = snap.blocks.find((b) => b.id === "blk-swipe");
+  check("(準備)スワイプで今日やるが確定する(via:swipeで記録される)",
+    !!migrated12.migratedTo && (snap.swipeTriageLog || []).some((l) => l.targetId === "blk-swipe" && l.via === "swipe"),
+    JSON.stringify({ migrated12, log: snap.swipeTriageLog }));
+  check("(準備)Undoボタンが表示される", await page.locator('.toast-action[data-action="triage-undo"][data-id="blk-swipe"]').count() === 1);
+  await clickUndo();
+  await page.waitForTimeout(200);
+  snap = await stateNow();
+  const after12 = snap.blocks.find((b) => b.id === "blk-swipe");
+  check("スワイプ確定分もUndoで完全復元する", sameExceptUpdatedAt(before12, after12), JSON.stringify({ before: before12, after: after12 }));
+  check("swipeTriageLogが0件に戻る", (snap.swipeTriageLog || []).length === 0);
+
+  // ============================================================
+  // [13] v150完了トーストとの混在(推奨7)
+  // ============================================================
+  console.log("[13] v150完了トーストとの混在: 仕分けのUndoトースト表示中に別Blockをホームで完了すると、v150の「実績を編集」ボタンへ正しく置き換わり古いUndoボタンは残らない");
+  await seed({
+    blocks: [
+      mkBlock("blk-mix-triage", "Block仕分けUndo混在確認"),
+      planBlock({ id: "blk-mix-home", title: "ホーム完了混在確認Block", startMin: 9 * 60, minutes: 30 })
+    ]
+  });
+  await clickChoice("today");  // 仕分け側: 今日やる → Undoトースト(data-id=blk-mix-triage)表示
+  await page.waitForTimeout(200);
+  check("(準備)仕分けのUndoボタンが表示される", await page.locator('.toast-action[data-action="triage-undo"][data-id="blk-mix-triage"]').count() === 1);
+  // モバイル幅ではサイドバー(CSSで非表示)とボトムナビの2箇所に同じdata-action/data-viewの
+  // 要素が描画される。strict mode違反(2件ヒット)を避けつつ、実際に画面上でタップ可能な
+  // (visible)ボトムナビ側を明示的に狙う。
+  await page.locator('#bottomNav [data-action="nav"][data-view="home"]').click();
+  await page.waitForTimeout(200);
+  await page.locator('.home-flow .home-dot[data-action="toggle-block"][data-id="blk-mix-home"]').click();
+  await page.waitForTimeout(200);
+  check("仕分けの古いUndoボタンは残らない(新しいトーストへ置き換わっている)",
+    await page.locator('.toast-action[data-action="triage-undo"]').count() === 0);
+  check("v150の「実績を編集」ボタンへ正しく置き換わる",
+    await page.locator('.toast-action[data-action="complete-block-with-actual"][data-id="blk-mix-home"]').count() === 1);
+  snap = await stateNow();
+  check("仕分け側(blk-mix-triage)はUndoされておらず今日やるが有効なまま(混在で誤って巻き戻っていない)",
+    !!snap.blocks.find((b) => b.id === "blk-mix-triage").migratedTo, JSON.stringify(snap.blocks.find((b) => b.id === "blk-mix-triage")));
+  check("ホーム側(blk-mix-home)は完了している", snap.blocks.find((b) => b.id === "blk-mix-home").completed === true);
+
+  console.log(failures === 0 ? "\n✅ v156 ALL PASS" : `\n❌ v156: ${failures} 件失敗`);
+  await browser.close();
+  server.close();
+  process.exit(failures === 0 ? 0 : 1);
+})();
