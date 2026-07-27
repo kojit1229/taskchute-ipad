@@ -5953,6 +5953,53 @@ function triageAction(kind, id, action) {
       // 並ぶため、年を進めないと1月枠=先頭へ見かけ上戻ってしまう=逆行して見えるため)。
       // targetMonth未設定は据え置き=updatedAtのみbumpしてキュー末尾へ(design §③表)。
       _triageLastActionAt = now;
+      _triageSessionDone.add(id);
+      if (wish.targetMonth) {
+        let month = wish.targetMonth + 1;
+        let year = wish.targetYear;
+        if (month > 12) {
+          month = 1;
+          year = year ? year + 1 : Number(todayISO().slice(0, 4)) + 1;
+        }
+        state.tasks = state.tasks.map((t) => t.id === id ? { ...t, targetMonth: month, targetYear: year, updatedAt: nowDateTime() } : t);
+      } else {
+        state.tasks = state.tasks.map((t) => t.id === id ? { ...t, updatedAt: nowDateTime() } : t);
+      }
+      logSwipeTriage("wish", id, action, 0);
+      saveAndRender("延期しました");
+      return;
+    }
+  }
+}
+
+// メインレンダリング(1枚ずつ表示+三択ボタン+残枚数。0件時は「仕分け完了」)
+function renderWishTriage(wishes) {
+  const queue = triageQueue(wishes);
+  _triageCurrentCardId = queue.length ? queue[0].id : "";  // 二重タップガード用(毎描画で更新)
+  if (!queue.length) {
+    return `
+      <section class="panel triage-panel" style="margin-top:14px; text-align:center; padding:40px 20px">
+        <div style="font-size:16px">仕分け完了 🎉</div>
+        <div class="muted" style="margin-top:6px; font-size:12px">先送り・Wishの未仕分けはありません</div>
+      </section>
+    `;
+  }
+  const current = queue[0];
+  return `
+    <section class="panel triage-panel" style="margin-top:14px">
+      <div class="muted" style="text-align:right; font-size:11px">あと ${queue.length} 枚</div>
+      <div class="triage-card">
+        ${triageBadgeHTML(current)}
+        <div class="triage-card-title">${escapeHTML(current.item.title)}</div>
+        <div class="triage-card-sub muted">${escapeHTML(triageSubtitleText(current))}</div>
+      </div>
+      <div class="triage-actions">
+        <button class="btn primary triage-btn" data-action="triage-choice" data-kind="${current.kind}" data-id="${current.id}" data-choice="today">✅ 今日やる</button>
+        <button class="btn ghost triage-btn" data-action="triage-choice" data-kind="${current.kind}" data-id="${current.id}" data-choice="drop">🕊 手放す</button>
+        <button class="btn ghost triage-btn" data-action="triage-choice" data-kind="${current.kind}" data-id="${current.id}" data-choice="defer">🌙 延期(来月)</button>
+      </div>
+    </section>
+  `;
 }
 
 // 汎用: Task のフィールド更新(saveState のみ、再描画なし)
