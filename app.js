@@ -8658,7 +8658,7 @@ function renderSettings() {
         </div>
       </div>
       <div class="panel stack">
-        <h2>🔋 エネルギーバッテリー(v144)</h2>
+        <h2>🔋 エネルギーバッテリー</h2>
         <div class="muted" style="font-size:12px; line-height:1.6">
           朝の残量が時間とともに自動で減り、完了Blockの充電/放電で増減します(通知・アラートは
           出しません。表示だけで「回復させないと」に気づくための計器です)。開始値は体力予算
@@ -8690,7 +8690,7 @@ function renderSettings() {
         </label>
         <label class="checkbox-line">
           <input type="checkbox" data-setting-battery-recoverydraft ${state.settings.battery.recoveryDraft ? "checked" : ""}>
-          🔋 残量低下時に回復Blockを下書き提案する(v145、既定OFF)
+          🔋 残量低下時に回復Blockを下書き提案する(既定OFF)
         </label>
         <label>提案する残量のしきい値(開始値に対する%、既定40)
           <input class="input" type="number" min="1" max="100" step="1" data-setting-battery-field="recoveryThresholdPct"
@@ -8806,7 +8806,7 @@ function renderSettings() {
         </label>
       </div>
       <div class="panel stack">
-        <h2>実行(v70)</h2>
+        <h2>実行</h2>
         <div class="muted" style="font-size:12px; line-height:1.6">
           Blockを開始する(▶いま開始/いま着手する/Now画面の開始)と、既存のポモドーロUIを流用した
           フォーカスタイマー(25分)を自動で起動します。既に別のタイマーが動いている場合は乗っ取りません。
@@ -8817,7 +8817,7 @@ function renderSettings() {
         </label>
       </div>
       <div class="panel stack">
-        <h2>🔒 ガイド付きアクセス案内(v111)</h2>
+        <h2>🔒 ガイド付きアクセス案内</h2>
         <div class="muted" style="font-size:12px; line-height:1.6">
           iPad/iPhoneでポモドーロタイマーを開始すると、ガイド付きアクセス(画面ロック)の
           操作方法を案内するポップアップを出します。PWAから自動でロックすることはiOSの制約上
@@ -8829,7 +8829,7 @@ function renderSettings() {
         </label>
       </div>
       <div class="panel stack">
-        <h2>🎥 Study With Me(v84)</h2>
+        <h2>🎥 Study With Me</h2>
         <div class="muted" style="font-size:12px; line-height:1.6">
           ポモドーロタブの「Study With Me」トグルで表示するYouTube動画です。ONの間だけ埋め込み、
           OFF・タブ離脱で破棄します(常時ロードしません)。再生はタップで開始してください(自動再生なし)。
@@ -8844,20 +8844,22 @@ function renderSettings() {
           <input class="input" type="number" min="0" step="1" data-swm-field="startSec" value="${state.settings.studyWithMe.startSec}">
         </label>
       </div>
-      <div class="panel stack">
-        <h2>現在のファイル構成</h2>
-        <pre style="background:var(--panel-soft); padding:10px; border-radius:6px; font-size:11px; overflow-x:auto; margin:0">リポジトリ直下:
+      <details class="panel home-fold settings-file-structure">
+        <summary class="home-fold-summary"><span class="home-fold-chevron">▶</span>現在のファイル構成</summary>
+        <div class="home-fold-body">
+          <pre style="background:var(--panel-soft); padding:10px; border-radius:6px; font-size:11px; overflow-x:auto; margin:0">リポジトリ直下:
 ├── app-state.json          ← メインデータ(自動保存先)
 ├── Vision.md
 ├── Daily_Affirmation.md
 ├── now_vision.pdf
 ├── 45_vision.pdf
 └── 80_vision.pdf</pre>
-        <div class="muted" style="font-size:11px">
-          現状はすべてリポジトリのルート直下に配置。git の commit 履歴がデータ履歴になるので、復元可能。<br>
-          整理したい場合は <code>data/</code> サブフォルダに移動して、上の「保存先パス」と app.js のパスも合わせて変更してください。
+          <div class="muted" style="font-size:11px; margin-top:8px">
+            現状はすべてリポジトリのルート直下に配置。git の commit 履歴がデータ履歴になるので、復元可能。<br>
+            整理したい場合は <code>data/</code> サブフォルダに移動して、上の「保存先パス」と app.js のパスも合わせて変更してください。
+          </div>
         </div>
-      </div>
+      </details>
       <div class="panel stack">
         <h2>カテゴリ管理</h2>
         <div class="muted" style="font-size:12px; line-height:1.6">
@@ -11682,6 +11684,16 @@ function toggleTaskCompleteFromBlock(blockId) {
       : t);
   }
   saveAndRender(completing ? "Taskを完了しました" : "Taskを未完了に戻しました");
+  // v146: 🏁はBlock編集モーダルへ移設した。render()はmodalRootを触らないため、モーダルを
+  // 開いたままこのボタンを押した場合はここで明示的に再描画して状態(ラベル/色)を反映する。
+  // v146レビュー対応: renderModal(buildBlockModal(...))の直呼びは編集中の他フィールド
+  // (タイトル書きかけ等)を丸ごと破棄してしまうため、既存のrerenderActiveModal()(値の
+  // 退避・復元パターン)を使う。ただし"completed"はこの操作自体で変わり得る値なので、
+  // 古いキャッシュ値へ巻き戻さないよう復元対象から除外する(rerenderActiveModal側で
+  // 再オープンされた時点の最新値=このトグル後の値がそのまま残る)。
+  if (state.modal && state.modal.type === "block" && state.modal.id === blockId) {
+    rerenderActiveModal(["completed"]);
+  }
 }
 
 // v89: ゼロ摩擦ルーティンチェック — 「ここまで全部やった」一括確定(ROADMAP v93)。
@@ -15056,12 +15068,10 @@ function aiWorkResultRowHTML(r) {
 //      「AIから」1カードに集約した(旧homeAiWork+旧aiFreshnessLine単独表示+旧homeMIT内候補を統合)。
 //      個々の中身(pendingAiWorkResults/aiWorkResultRowHTML/aiFreshnessLine/
 //      extractMITCandidatesFromReport)自体は変更せず、置き場所だけをまとめている。
-function homeAiHub(blocks, isToday) {
-  return `<section class="panel home-ai-hub">${homeAiHubBody(blocks, isToday)}</section>`;
-}
-
 // v73: 縮退モードでhomeFoldSection(details)に相乗りできるよう、外側の<section>無しの
-//      中身だけを返す形に分離した(homeAiHub自身の見た目・挙動は無変更)。
+//      中身だけを返す形に分離した(中身自体は無変更)。
+// v146: 通常時も既定closedの折りたたみへ変更したため(UI改善計画Phase1-1)、外側<section>で
+//      包むhomeAiHub()は両呼び出し元がhomeFoldSection+本関数の直接呼び出しに統一され不要になり削除した。
 function homeAiHubBody(blocks, isToday) {
   const workItems = isToday ? pendingAiWorkResults() : [];
   const workHTML = workItems.length ? `
@@ -16358,6 +16368,16 @@ function buildBlockModal(block) {
       .filter((t) => !t.deleted)
       .map((t) => `<option value="${t.id}" ${block.taskId === t.id ? "selected" : ""}>${escapeHTML(t.title)}</option>`)
   ].join("");
+  // v146(UI改善計画Phase1-3): 🏁(タスク完了)はタスクシュート行から誤タップ対策で撤去し、
+  // ここ(Block編集モーダル)へ移設した。挙動(toggleTaskCompleteFromBlock)自体は無変更。
+  const linkedTask = block.taskId ? state.tasks.find((t) => t.id === block.taskId) : null;
+  const taskCompleteHTML = linkedTask ? `
+        <div class="field">
+          <button class="btn task-complete-toggle-btn ${linkedTask.status === "completed" ? "green" : "orange"}"
+            data-action="toggle-task-complete" data-id="${block.id}" style="min-height:44px; width:100%">
+            🏁 ${linkedTask.status === "completed" ? "タスク完了済み(タップで戻す)" : "紐づくTaskも完了にする"}
+          </button>
+        </div>` : "";
   return `
     <div class="modal-card" role="dialog" aria-modal="true">
       <div class="modal-header">
@@ -16431,9 +16451,10 @@ function buildBlockModal(block) {
         <div class="field">
           <label class="checkbox-line">
             <input type="checkbox" data-modal-field="completed" ${block.completed ? "checked" : ""}>
-            完了済み
+            完了済み(Block)
           </label>
         </div>
+        ${taskCompleteHTML}
         <div class="field">
           <label class="field-label">コメント</label>
           <textarea class="textarea" data-modal-field="comment" style="min-height:100px">${escapeHTML(block.comment || "")}</textarea>
@@ -17241,12 +17262,17 @@ function computeDailyOverload(dateISO) {
   return { overloaded: shortfall > 0, shortfallMin: Math.max(0, shortfall) };
 }
 
+// v146(UI改善計画Phase1-4): バッファ残量帯は「今日を扱う」画面だけに限定する(UX監査N3。
+// 設定・計器盤・その他等の無関係画面から常時26px帯を消す)。
+const BUFFER_METER_VIEWS = ["home", "tasks", "timeline", "journal", "reports"];
 function bufferMeterHTML() {
+  if (!BUFFER_METER_VIEWS.includes(state.currentView)) return "";
   if (state.selectedDate !== todayISO()) return "";
   const info = computeBufferRemaining(state.selectedDate);
-  if (!info.hasBuffer) {
-    return `<div class="buffer-meter unset" data-buffer-level="unset">バッファ残量: 未設定(設定 &gt; 1日バッファ で分数を設定してください)</div>`;
-  }
+  // v146レビュー対応(計画1-4の明記事項): 未設定時は帯自体を出さない(空文字を返す)。
+  // 設定への導線は設定画面内の「⏳ 1日バッファ」パネルの説明文で維持しているため、
+  // 全画面ヘッダーへ「設定してください」の常時帯を出す必要はない。
+  if (!info.hasBuffer) return "";
   const overload = computeDailyOverload(state.selectedDate);
   if (overload.overloaded) {
     // 第4状態(灰色): 通常の緑/黄/赤の代わりに「計画時点でバッファ未確保」を表示する。

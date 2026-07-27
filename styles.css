@@ -558,6 +558,14 @@ h3 {
   place-items: center;
   font-weight: 800;
   flex: 0 0 auto;
+  position: relative;
+}
+/* v146(UI改善計画Phase1-3): 見た目は30pxのまま、::beforeで当たり判定だけ44px相当に拡張
+   (.home-box/.home-dotの既存パターン=styles.css:2442-2463を流用)。誤タップ対策。 */
+.checkbox-button::before {
+  content: "";
+  position: absolute;
+  inset: -7px;
 }
 
 .checkbox-button.done {
@@ -590,32 +598,8 @@ h3 {
 
 .wbs-criteria-badge { margin-left: 2px; }
 
-/* v107: タスクシュートBlock行の「タスク完了」チェック。既存の丸(✓/緑)Block完了・
-   四角(🤖)AI設定依頼トグルと、形(角丸四角)・色(青)・アイコン(🏁)で明確に区別する
-   (K指示 2026-07-15。v99の.wbs-criteria-btnと同じ手法で意図的に差別化) */
-.task-complete-toggle {
-  width: 30px;
-  height: 30px;
-  min-width: 30px;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  color: var(--muted);
-  background: var(--panel);
-  cursor: pointer;
-  display: inline-grid;
-  place-items: center;
-  font-size: 15px;
-  flex: 0 0 auto;
-}
-
-.task-complete-toggle.done {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: white;
-}
-
-/* v107: Block完了/タスク完了の2チェックを縦積みし、block-rowのグリッド列構成(3列)を
-   崩さないようにする(1列目=このwrapper全体で従来のcheckbox-button単体と同じ扱い) */
+/* v107: block-rowのグリッド列構成(3列)を崩さないための1列目wrapper(従来のcheckbox-button
+   単体と同じ扱い)。v146: 🏁(タスク完了)はBlock編集モーダルへ移設したため、現在は✓のみ内包する。 */
 .block-checks {
   display: flex;
   flex-direction: column;
@@ -903,6 +887,10 @@ h3 {
     grid-template-columns: 1fr;
     gap: 10px;
   }
+  /* v146(UI改善計画Phase1-5): モバイルは当日編集パネルを先頭に(CSS orderのみ、DOM順は
+     デスクトップの左右比較のため無変更)。前日パネルは既定closedのdetailsへ(app.js側)。 */
+  .journal-panel-today { order: 1; }
+  .journal-panel-prev { order: 2; }
   .journal-grid .panel {
     padding: 12px;
   }
@@ -1221,6 +1209,13 @@ h3 {
   display: inline-grid;
   place-items: center;
   font-size: 18px;
+  position: relative;
+}
+/* v146(UI改善計画Phase1-3): 見た目は32pxのまま、::beforeで当たり判定だけ44px相当に拡張。 */
+.modal-close::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
 }
 
 .modal-body {
@@ -2599,6 +2594,20 @@ h3 {
 }
 .home-zone-block .home-grid { margin-top: 8px; }
 .home-grid.single { grid-template-columns: 1fr; }
+
+/* v146(UI改善計画Phase1-1・K承認): 縦の長さを縮めるため、タップ対象を持たない受け身の
+   小さいチップ(体力予算・バッテリー残量)だけを2列表示にする。375px幅でも読める分量に
+   留め、子要素自身のflex-wrapで文言はそのまま折り返す(見た目の縮小はしない)。 */
+/* v146レビュー対応: 過去日はバッテリー残量チップが空文字になり片方だけが半分幅で残るため、
+   固定2列(1fr 1fr)ではなくauto-fit+minmaxにする。子が1個ならその1個が1列いっぱいに広がり、
+   2個ある(=375px幅相当の余地がある)ときだけ2列に分かれる。狭い幅では自然に1列へ畳まれるため
+   360px用の個別@media指定は不要になった。 */
+.home-chip-2col {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  align-items: start;
+}
 .z-amber { --zb: rgba(255, 149, 0, 0.075); --zl: rgba(255, 149, 0, 0.24); }
 .z-teal  { --zb: rgba(19, 181, 166, 0.085); --zl: rgba(19, 181, 166, 0.26); }
 .z-blue  { --zb: rgba(0, 122, 255, 0.065); --zl: rgba(0, 122, 255, 0.22); }
@@ -2615,6 +2624,10 @@ h3 {
    ============================================================ */
 .home-fold { margin-top: 12px; }
 .home-zone-block .home-fold { margin-top: 0; }  /* ゾーン内(zone3/zone4)は帯自体が既に間隔を持つ */
+/* v146: journal-grid/settings-gridはCSS gridのgapで間隔を持つため、.home-foldの
+   margin-topを流用するとgapと二重に空いてしまう。ここでも既存の.home-zone-block同様に0へ戻す */
+.journal-grid .home-fold,
+.settings-grid .home-fold { margin-top: 0; }
 .home-fold-summary {
   cursor: pointer; list-style: none; -webkit-tap-highlight-color: transparent;
 }
@@ -3403,6 +3416,17 @@ h3 {
 .tl-start-btn.tl-end-btn {
   border-color: var(--green);
   color: var(--green);
+}
+/* v146(UI改善計画Phase1-3): 見た目は22pxのまま、::afterで当たり判定だけ拡張
+   (.tl-complete-btnの既存::afterパターン=styles.css:1627-1633を流用)。
+   v146レビュー対応: タイムラインは短時間Blockが物理的に隣接・重なることがあり(Phase4で対応予定)、
+   縦方向を横方向と同じ-11pxにすると隣接Blockの開始点付近の当たり判定を奪ってしまう
+   (実測で8px左/8px下が別Blockにヒット)。横方向(左右)は-11px(合計44px相当)のまま、
+   縦方向(上下)だけ-3pxに抑えて隣接Blockへの越境を最小化する。 */
+.tl-start-btn::after {
+  content: "";
+  position: absolute;
+  inset: -3px -11px;
 }
 
 /* v70: フォーカスタイマー「中断」直後の理由ワンタップピッカー(チョコ停記録)。
