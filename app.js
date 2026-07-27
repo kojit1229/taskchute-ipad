@@ -1389,7 +1389,21 @@ function normalizeState(value) {
     b.recoveryThresholdPct = clampBatteryFieldValue("recoveryThresholdPct", Number.isFinite(b.recoveryThresholdPct) ? b.recoveryThresholdPct : def.recoveryThresholdPct);
   }
   // v145: 回復Block下書き提案の1日1回冪等マーカー(feedbackIngestedDatesと同じ軽量配列の思想)。
+  // v150レビュー対応(項目5、Codex指摘): 旧形式は日付文字列の配列だった。PWA破棄後の再構築
+  // (maybeRebuildRecoveryDraft)で「元々どのタイトルを提案したか」を復元できるよう、
+  // 各要素を{date, titles}へ拡張する。旧形式(文字列)は{date, titles:[]}へ移行する
+  // (titles不明のため、その日は再構築の対象外=スキップになる。既存の冪等性=「その日はもう
+  // 新規発火しない」という意味自体は維持)。
   if (!Array.isArray(value.batteryRecoveryDraftDates)) value.batteryRecoveryDraftDates = [];
+  value.batteryRecoveryDraftDates = value.batteryRecoveryDraftDates
+    .map((entry) => {
+      if (typeof entry === "string") return { date: entry, titles: [] };
+      if (entry && typeof entry === "object" && typeof entry.date === "string") {
+        return { date: entry.date, titles: Array.isArray(entry.titles) ? entry.titles.filter((t) => typeof t === "string") : [] };
+      }
+      return null;
+    })
+    .filter(Boolean);
   if (!("lastPushedAt" in value.settings)) value.settings.lastPushedAt = null;
   if (!("lastPulledAt" in value.settings)) value.settings.lastPulledAt = null;
   // v25: データ最終更新時刻(端末間で「新しい方が勝つ」判定に使用)
@@ -6595,7 +6609,7 @@ function renderTimeline({ compact, mode = "planned" }) {
   const rows = Array.from({ length: endHour - startHour + 1 }, (_, index) => startHour + index);
   // v10: レーン分割(PC 5、iPhone 3)
   const maxLanes = (typeof window !== "undefined" && window.innerWidth <= 720) ? 3 : 5;
-  const laneAssignments = assignBlocksToLanes(blocksToRender, mode, maxLanes);
+  const laneAssignments = assignBlocksToLanes(blocksToRender, mode, maxLanes, rowHeight);
   // v10: 同レーン内で物理位置が重ならないよう top を調整
   const positioned = adjustLaneTopPositions(laneAssignments, rowHeight, startHour);
   // v10: ズームコントロール(コンパクトモードでは出さない)。
@@ -6656,7 +6670,20 @@ function assignBlocksToLanes(blocks, mode, maxLanes) {
       if (!startStr) return null;
       const start = minutesOf(startStr);
       const end = endStr ? minutesOf(endStr) : start + 1;  // 終了未定なら最低1分
-      return { block: b, start, end: Math.max(end, start + 1), startStr, endStr };
+      const realEnd = Math.max(end, start + 1);
+      // v150レビュー対応(項目6、監督者裁定): min-height換算の実効終了時刻による横レーン分割は
+      // 実所要20分未満のBlockだけに限定する。20分以上まで延長すると、min-height(38px)との
+      // 差が大きい30分Block同士が一日中50%幅に分割されてしまう(実測)。実所要20分以上の
+      // Blockどうしの数px〜十数px程度の食い込み(v149以前からの既存挙動)はこの変更では
+      // 対応しない(許容、CHANGES_v150.md参照)。
+      const durationMin = realEnd - start;
+      let clusterEnd = realEnd;
+      if (durationMin < 20) {
+        const minHeightPx = durationMin < 5 ? 14 : 38;
+        const minDurationMin = rowHeight > 0 ? (minHeightPx / rowHeight) * 60 : 0;
+        clusterEnd = Math.max(realEnd, start + minDurationMin);
+      }
+      return { block: b, start, end: realEnd, clusterEnd, startStr, endStr };
     })
     .filter(Boolean)
     .sort((a, b) => a.start - b.start || (a.end - a.start) - (b.end - b.start));
@@ -6742,6 +6769,17 @@ function renderTimelineCard(positioned, mode = "planned", maxLanes = 5) {
       : (inProgress ? `<button class="tl-start-btn tl-end-btn" data-action="now-end" data-id="${block.id}" aria-label="いま終了">■</button>` : ""))
     : "";
 
+  // v150(UI改善計画Phase4b・R3): 完了作法統一。○ボタンをtoggle-blockに一本化(実績は
+  // 完了直後のトースト「実績を編集」から直す。旧: complete-block-with-actualで実績モーダルへ直行)。
+  // v150レビュー対応(項目8): toggle-blockは双方向トグルのため、万一この位置に完了済みカードが
+  // 描画される場合(現状の予定モードフィルタでは完了Blockは表示対象から外れるため到達しないが、
+  // 将来の表示条件変更に備えた防御的対応)、グリフとaria-label/titleを「解除」とわかる表現へ
+  // 切り替える。
+  const completeBtnHTML = (!isActual && !isShort)
+    ? (block.completed
+      ? `<button class="tl-complete-btn done" data-action="toggle-block" data-id="${block.id}" aria-label="完了を解除" title="完了を解除">↺</button>`
+      : `<button class="tl-complete-btn" data-action="toggle-block" data-id="${block.id}" aria-label="完了登録" title="完了登録">○</button>`)
+    : "";
   return `
     <div class="timeline-card ${block.completed ? "completed" : ""} ${isActual ? "is-actual" : ""} ${isShort ? "is-short" : ""}"
          ${overflowAttr}
@@ -7924,6 +7962,19 @@ function maybeSuggestRecoveryDraft(nowMinutes) {
     state.batteryRecoveryDraftDates = state.batteryRecoveryDraftDates.slice(-BATTERY_RECOVERY_DATES_MAX);
   }
 
+  return placeRecoveryDraftCandidates(today, nowMinutes);
+}
+
+// v150(UI改善計画Phase4b・S7): 候補計算+配置+_scheduleDraftへのマージ本体。
+// maybeSuggestRecoveryDraft(新規発火時)と maybeRebuildRecoveryDraft(下記、PWA破棄後の
+// 再構築時)の両方から呼ぶ共有部分に切り出した。冪等マーカー・閾値判定は呼び出し側の
+// 責務(ここでは行わない)。
+// v150レビュー対応(項目5、Codex指摘): 第3引数opts.restoreTitlesを指定すると「再構築モード」
+// になる。新規発火(上位N件を毎回計算し直す)とは違い、渡されたタイトル一覧のうち当日まだ
+// 実Block化されていない(=未確定)ものだけを対象にする——次点候補が繰り上がって新規提案
+// されることはない。
+function placeRecoveryDraftCandidates(today, nowMinutes, opts = {}) {
+  const restoreTitles = Array.isArray(opts.restoreTitles) ? opts.restoreTitles : null;
   // v145レビュー対応(当日重複候補の除外): aiScheduleCandidates(app.js:3848近辺)の規約に
   // 合わせ、「当日すでに同名Blockが存在する」「当日の_scheduleDraftに同名項目がある」タイトルは
   // 候補から除外する(夕方発火時に今日もうやった「散歩」を再提案しない)。MAX_ITEMSへ絞る前に
@@ -7963,6 +8014,15 @@ function maybeSuggestRecoveryDraft(nowMinutes) {
     gaps[gapIdx][0] += minutes + MORNING_PLAN_BUFFER_MIN;
     if (gaps[gapIdx][1] - gaps[gapIdx][0] < 15) gaps.splice(gapIdx, 1);
   });
+
+  // v150レビュー対応(項目5): 新規発火時(restoreTitles無し)だけ、実際に配置できたタイトルを
+  // マーカーへ書き戻す(将来のmaybeRebuildRecoveryDraftが参照する「元々提案した候補」)。
+  // 再構築モード(restoreTitles指定時)はマーカーを書き換えない——「元の提案どおり」を保つ。
+  // saveState()より前に反映することで、この後の1回のsaveStateでまとめて永続化する。
+  if (placed.length && !restoreTitles) {
+    const marker = state.batteryRecoveryDraftDates.find((e) => e && e.date === today);
+    if (marker) marker.titles = placed.map((p) => p.title);
+  }
 
   saveState();
   if (!placed.length) return false;
@@ -12022,6 +12082,53 @@ function addBlock() {
   saveAndRender("Blockを追加しました");
 }
 
+// v150レビュー対応(項目2): 実績開始時刻を「終了−予定所要」で巻き戻す際に使う。
+// new Date(文字列)のTZ誤解釈(iOS Safari)を避けるため、localDateTimeToMsと同じ数値
+// コンストラクタ経由で計算する(秒は切り捨て。用途がactualStartAtの丸め値のため秒精度は不要)。
+function subtractMinutesFromDateTime(dateTimeStr, minutes) {
+  const d = new Date(localDateTimeToMs(dateTimeStr) - minutes * 60000);
+  return `${dateToISO(d)}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+// v150レビュー対応(項目2、両レビュー一致): 即完了で実績開始時刻を自動記録する際、
+// 単純に「現在時刻」を入れると、未着手のまま先取り完了した場合にactualStartAt=actualEndAtの
+// 0分実績になり、日報「時間実行」の集計(実績両方ありのBlockだけ分加算する分岐)が抜け落ちる。
+// plannedStartAtがあればそれを使い(実態に近い)、無ければ終了時刻をそのまま使う。
+// さらに、plannedStartAtが終了時刻より後(未来のBlockを先取り完了した等)で開始>終了に
+// なってしまう場合は、終了−予定所要(estimateMinか、plannedStart/End差)ぶん巻き戻す
+// (それも無ければ開始=終了、従来どおり0分実績を許容)。
+// 日時文字列は "YYYY-MM-DDTHH:mm" 形式でゼロ埋めされているため、文字列としての大小比較が
+// そのまま時系列の前後判定になる(既存のlocalDateTimeToMs節と同じ前提)。
+function quickCompleteActualStart(block, endDateTime) {
+  let start = block.actualStartAt || block.plannedStartAt || endDateTime;
+  if (start > endDateTime) {
+    let estimateMin = Number.isFinite(block.estimateMin) && block.estimateMin > 0 ? block.estimateMin : null;
+    if (!estimateMin && block.plannedStartAt && block.plannedEndAt) {
+      const d = minutesOf(block.plannedEndAt) - minutesOf(block.plannedStartAt);
+      if (d > 0) estimateMin = d;
+    }
+    start = estimateMin ? subtractMinutesFromDateTime(endDateTime, estimateMin) : endDateTime;
+  }
+  return start;
+}
+
+// v150レビュー対応(項目4): 即完了(quick complete)で自動補完した値(実績時刻・充放電)を
+// blockId単位で退避しておき、同セッション内で完了解除(トグルOFF)されたときに元へ戻す。
+// セッション限りの非永続モジュール変数(セッションを跨いだ解除は現状維持=許容、CHANGES参照)。
+// 各フィールドは { before, after } を持ち、「復元時点でも値がafterのまま(=自動補完後に
+// 手で編集されていない)」ときだけbeforeへ戻す(実績編集モーダル等で意図的に直した値を
+// 完了解除のたびに巻き戻してしまわないための安全策)。
+let _quickCompleteSnapshots = {};
+
+// v150(UI改善計画Phase4b・R3): 「完了」作法の統一。ホーム今日タブのドット/タスクシュートの✓/
+// タイムラインの○/ながれのチェックなど、完了へ向かうすべての導線をこの関数(即完了)に一本化した
+// (従来はtoggle-block=即完了 / complete-block-with-actual=実績モーダル、の2系統が混在し
+// 入口によって挙動が変わっていた=T4/H4)。完了へ切り替わる瞬間に実績開始/終了時刻を
+// (未設定なら)現在時刻ベースで補完し、充放電はprefillEnergy(過去実績の中央値)で自動記録する
+// (v150レビュー対応: 手入力済みの充放電は上書きしない、項目3)。
+// 従来どおり実績入力モーダル自体は削除せず、完了直後のトーストの「実績を編集」ボタンから
+// 開けるようにした(saveAndRenderのtoastOpts、下記参照)。ポモドーロ完了経路(completePomodoro)
+// は対象外(現行維持、K指示)。
 function toggleBlock(id) {
   let justCompleted = false;
   let completedBlock = null;
@@ -12042,7 +12149,12 @@ function toggleBlock(id) {
   if (justCompleted && completedBlock && completedBlock.recurrenceGroupId) {
     triggerAnchorPlacements(completedBlock.recurrenceGroupId, nowDateTime());
   }
-  saveAndRender("Blockを更新しました");
+  if (justCompleted && completedBlock) {
+    // v150: 完了直後だけ「実績を編集」ボタン付きトースト(既存の実績モーダルを編集導線として再利用)。
+    saveAndRender("Blockを完了しました", { blockId: id, actionLabel: "実績を編集" });
+  } else {
+    saveAndRender("Blockを更新しました");
+  }
   // v17/v18: 完了時の演出(常にランダム祝福)
   if (justCompleted && completedBlock) {
     const celebrateMsg = getRandomCelebrate();
@@ -15098,14 +15210,15 @@ function shiftSelectedDate(delta) {
   setSelectedDate(addDays(state.selectedDate, delta));
 }
 
-function saveAndRender(message) {
+// v150: 第2引数toastOptsはshowToastへそのまま渡す(「実績を編集」トースト用、任意)。
+function saveAndRender(message, toastOpts) {
   saveState();
   render();
   // v23: 端末内保存に失敗したら、その旨を優先して伝える(操作自体は反映済み)
   if (_lastSaveError) {
     showToast("⚠️ 端末内保存に失敗(容量超過の可能性)。設定からGitHubへ保存してください");
   } else if (message) {
-    showToast(message);
+    showToast(message, toastOpts);
   }
 }
 
@@ -15629,11 +15742,29 @@ function setAiReportType(typeId) {
   render();
 }
 
-function showToast(message) {
-  toastEl.textContent = message;
-  toastEl.classList.add("show");
+// v150(UI改善計画Phase4b・R3): 第2引数は完了直後の「実績を編集」導線用(任意)。
+// { blockId, actionLabel } を渡すと、既存の実績登録モーダル(complete-block-with-actual)を
+// 開くボタンをトースト内に添える。既存の呼び出し(第2引数なし)は完全に従来どおりの見た目・挙動。
+function showToast(message, actionOpts) {
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toastEl.classList.remove("show"), 2200);
+  const hasAction = Boolean(actionOpts && actionOpts.blockId);
+  if (hasAction) {
+    // v150レビュー対応(項目9): blockIdはBlock自身のidをそのままdata-idへ埋め込むだけだが、
+    // 念のためescapeHTMLを通す(他のdata-id埋め込み箇所と同じ防御の一貫性のため)。
+    toastEl.innerHTML = `<span class="toast-msg"></span><button type="button" class="toast-action" data-action="complete-block-with-actual" data-id="${escapeHTML(actionOpts.blockId)}">${escapeHTML(actionOpts.actionLabel || "実績を編集")}</button>`;
+    toastEl.querySelector(".toast-msg").textContent = message;
+  } else {
+    toastEl.textContent = message;
+  }
+  toastEl.classList.toggle("has-action", hasAction);
+  toastEl.classList.add("show");
+  // アクション付きは操作の猶予を長めに(既存2.2秒→4.5秒)。
+  // v150レビュー対応(項目1、両レビュー一致・最重要): "show"だけでなく"has-action"も外す。
+  // has-actionが残ると、非表示化後もopacity:0のままpointer-events:autoの透明領域が
+  // ボトムナビ中央3ボタンの上に居座り続け、タップがトーストのボタンへ吸われてしまっていた
+  // (実測でモーダルが開くことを確認済み)。CSS側にも`.toast:not(.show)`の保険を追加している
+  // (styles.css参照)。
+  toastTimer = setTimeout(() => toastEl.classList.remove("show", "has-action"), hasAction ? 4500 : 2200);
 }
 
 function ensureJournal(date) {
