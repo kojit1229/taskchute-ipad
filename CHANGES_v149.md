@@ -128,3 +128,97 @@ data-action自体は変えないため多くは無風だが、DOM構造・タイ
 
 ## 4a-3. 2系統レビュー対応(Claude+Codex、初回実装後)
 
+初回実装のレビューで6件の必須修正+3件の推奨修正を受け、すべて対応した。
+
+**必須1(毎分全再描画のリスク)**: `updateBatteryTick()`(500msティッカー内、1分間隔スロットル)
+の`else if (!computeHomeBatteryInfo(...).ok) renderDeferringForFocus()`分岐は、`.home-today-status`
+が今日タブ専用DOMのため、ホームタブ滞在中は`statusCard`が常にnullになり、電池残量が
+`BATTERY_OK_PCT`(40%)未満の間、毎分`renderDeferringForFocus()`(全再描画)が発火し続けていた
+(ホームタブで宣言・理想を書いている最中に割り込む恐れ)。`state.currentView === "home" && homeTab === "today"`
+のガードを追加し、ホームタブ滞在中はこの分岐自体を評価しないようにした。
+
+**必須2(375pxで縦幅+84px悪化)**: 720px以下で`.view-header`がgrid1列化しaction欄の横幅が縮み、
+`.datebar`(前日/日付/翌日/🔍)が2行に折り返して87px(実測)に膨らんでいた。`.view-header .datebar`
+限定で`flex-wrap:nowrap`+ボタンpadding圧縮+日付inputのmax-width(170px→104px、font-size 16pxは
+iOSズーム防止のため維持)を適用し1行(37px)に収めた。加えて`.home-header-wrap`
+(`renderHome()`専用のラッパー、他ビュー無関係)で`.view-header`のmargin-bottom・`.buffer-meter`の
+margin・`.home-tabbar`のmargin-bottomを圧縮。**実測(375px幅、Chromium、同期異常バナー等の
+アーティファクトを除いた条件)**:
+
+| 指標 | 修正前(レビュー時点) | 修正後 | 目標 |
+|---|---|---|---|
+| `.datebar`の高さ(2行→1行) | 87px | 37px | — |
+| `.view-header`の高さ | 199px | 101px | — |
+| `.home-hero`のoffsetTop | 422px(banner artifact込み。除いた場合328px) | **196px** | ≤200px、v148(224px)未満 |
+
+日付未変更ボタン(前日/日付/翌日/🔍、非当日では+「今日へ」)は全パターンでoverlapなし・
+横スクロールなし(`scrollWidth === clientWidth === 375`)を実測確認。
+
+**必須3(80歳ビジョン導線)**: `homeVisionCard()`を新設(ホームタブ、アファメーションと
+AIからの間)。タップで`openVisionBoard(2)`(`data-action="open-vision-board" data-index="2"`)を
+呼び、`state.settings.visionSection="board"`+`visionBoardIndex=2`をセットして`setView("vision")`。
+既存のビジョンボード表示ロジックをそのまま再利用し、複製実装は避けた。
+
+**必須4(ホームタブ復帰時のスクロール取り残し)**: `renderMain()`のホーム自動スクロールは
+`.home-hero`固定だったため、ホームタブ滞在中に別ビューへ移動して戻ってくると(view切替=
+`shouldAutoScroll`成立)、`.home-hero`が存在せず(今日タブ専用)スクロールが不発になり前の
+スクロール位置に取り残されていた(Codex指摘)。`.home-hero`が無ければ`.home-tabbar`
+(両タブ共通で常に先頭にある)へフォールバックするよう変更した。
+
+**必須5(宣言→タブ直タップの1回目が食われる)**: 宣言入力(`[data-declaration-date]`)の
+`change`ハンドラは`saveAndRender()`(全再描画)を呼んでいたが、宣言入力欄はホームタブ専用・
+影響先の`.home-today-status`は今日タブ専用で、blur時点の現在DOMには互いに存在しない
+(タブが排他のため、この保存は実際には即時再描画を必要としない。タブ切替自体が別途render()
+するため次の描画で自然に反映される)。`saveState()`のみに変更し、blur直後の全DOM入れ替えで
+直後のタブタップ1回目が消費される問題(Codex指摘)を解消した(保存失敗時のトースト表示は維持)。
+
+**必須6(信条・寿命の既定展開が確実でない)**: 旧実装は`homeFoldSection`(localStorage永続の
+`isHomeFoldOpen`)を使っており、過去にKが一度でも閉じていれば以後ずっと閉じたままになる
+(「タブを開くたび既定で展開」というK指定を満たさない)。ジャーナルセグメント
+(`_journalSegmentOverride`)と同じ非永続セッションオーバーライド方式(`_homeReflectFoldOverride`、
+新設の`homeReflectFoldSection()`、summaryへ`data-action="toggle-home-reflect-fold"`)に変更した。
+`data-fold-id`は持たない(グローバルのtoggleイベント委譲によるlocalStorage永続化を意図的に
+受けない)。挙動: ホームタブを開くたび既定open。手動で閉じたらそのセッション中(=ページ
+reloadまで、_journalSegmentOverrideと同じ寿命)だけ閉じたままになり、reloadすれば既定openに
+戻る。テストのセレクタは`data-fold-id="creed"/"lifespan"`から`.home-creed`/`.home-lifespan`
+(クラス)へ変更した。
+
+**推奨7(宣言未入力警告への導線)**: 今日タブの「今日の状態」カード内「📣 今日の宣言が未入力です」
+行に「ホームタブへ →」ボタン(既存の`data-action="home-tab" data-tab="home"`をそのまま再利用)を
+追加した。
+
+**推奨8**: 本ファイル(CHANGES_v149.md)のファイル数誤記(13→18)・信条/寿命の展開仕様を
+本セクションで修正・明記。
+
+**推奨9**: `tests/v71.test.js`のスコアボードジャンプ検証で`Element.prototype.scrollIntoView`を
+モンキーパッチしたまま復元していなかった箇所を、パッチ前の関数を`window.__origScrollIntoView`に
+退避し使用後に復元するよう修正した。
+
+## 既存テストへの影響
+
+ホームの各カードを参照する既存テストを全数grepし、以下**18ファイル**を修正した(振り分け先タブへの
+`[data-action="home-tab"][data-tab="home"]` クリックの追加、および defaultOpen 反転
+(creed/lifespan)・スコアボードジャンプ仕様変更に伴うアサーション更新)。機能や検証内容を
+弱める変更は行っていない(削除・スキップは無し。すべて「新しい正しい振る舞い」を検証する形へ
+更新):
+
+- `tests/v57.test.js`(直push検知フィードバックのホーム反映)
+- `tests/v58.test.js`(週次レビュー導線の曜日境界)
+- `tests/v61.test.js`(今日の理想の保存/3日リトライ/日報反映)
+- `tests/v62.test.js`(ホーム信条の文言確認)
+- `tests/v67.test.js`(AI連携鮮度・AI作業結果の取り込み)
+- `tests/v71.test.js`(ホームの折りたたみ既定値・並び順・AIから集約・スコアボードジャンプ)
+- `tests/v73.test.js`(縮退モードのAIから折りたたみ)
+- `tests/v75.test.js`(AIフィードバック本文の閲覧)
+- `tests/v76.test.js`(AIフィードバックselectedDate非依存の回帰)
+- `tests/v77.test.js`(visibilitychange再fetchの自動表示)
+- `tests/v81.test.js`(今日の理想の空欄カード折りたたみ)
+- `tests/v82.test.js`(ホームのスリム化・スコアボード・折りたたみ既定値)
+- `tests/v83.test.js`(AIフィードバックキャッシュ更新の回帰)
+- `tests/v112.test.js`(未完了タスクパネルの複数回追加)
+- `tests/v117.test.js`(今日の宣言の警告表示・保存)
+- `tests/v141.test.js`(AIフィードバック閲覧の回帰、ジャーナル3列目撤去に伴う代替確認)
+- `tests/v143.test.js`(死コード削除後のAIフィードバック閲覧回帰)
+- `tests/v146.test.js`(ホーム折りたたみ既定値・並び順、v149でタブ別に再構成)
+
+実走結果は完了報告(コミットメッセージ/引き継ぎ)に記載する。
