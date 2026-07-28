@@ -13,7 +13,7 @@
       ],
       "assertionSignals": 13,
       "assertionHash": "99a2e024b65d4ebe",
-      "sourceHash": "473d6646c230416d",
+      "sourceHash": "500e3f049a496a64",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -200,6 +200,31 @@
       "assertionSignals": 13,
       "assertionHash": "885d139aa27c8bba",
       "sourceHash": "d96fa56d2fefc678",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "store-core.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution",
+        "content-ai"
+      ],
+      "assertionSignals": 15,
+      "assertionHash": "0eaae7bd1f44e1cc",
+      "sourceHash": "f979681a7e7f9bb7",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

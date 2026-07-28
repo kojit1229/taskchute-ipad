@@ -1,4 +1,8 @@
-const CACHE_NAME = "taskchute-journal-pwa-v165";
+const CACHE_NAME = "taskchute-journal-pwa-v166";
+// v166: app.js分割の段階3(state store + storage/sync gateway抽出)。src/state/store.js
+//   (setState契約)/src/storage/local.js(loadState/persistLocalNoSchedule)/
+//   src/sync/github.js(computeSyncMerge/syncCoreEqual/5フロー等)をAPP_SHELLへ追加した
+//   (独立レビューBlocker-2、/src/配下のcache-first戦略はv164のまま)。
 // v165: app.js分割の段階2(Avoid Listの読み取り専用render抽出)。src/features/avoid.js
 //   (renderAvoid)をAPP_SHELLへ追加した。addAvoid/deleteAvoid/updateAvoidTextは操作系のため
 //   app.jsに残す(監督者裁定、CHANGES_v165.md参照)。/src/配下のcache-first戦略はv164のまま。
@@ -178,7 +182,10 @@ const APP_SHELL = [
   "./manifest.webmanifest",
   "./assets/icon.svg",
   "./src/core/merge.js",
-  "./src/features/avoid.js"
+  "./src/features/avoid.js",
+  "./src/state/store.js",
+  "./src/storage/local.js",
+  "./src/sync/github.js"
 ];
 
 self.addEventListener("install", (event) => {

@@ -1,0 +1,54 @@
+{
+  "version": 166,
+  "date": "2026-07-28",
+  "title": "app.js分割 段階3(state store + storage/sync gateway抽出)",
+  "summary": "app.js分割の段階3として、独立レビュー(claude-review-result.md §2 Blocker-1/§7)の抽出順どおりstate本体の所有をsrc/state/store.jsへ移してsetState()契約を確立し、localStorage層(src/storage/local.js)とGitHub同期gateway(src/sync/github.js)を抽出した。state再代入6箇所(importData/runAutoSyncPull/loadFromGitHub/syncFromGitHubOnStartup/restoreBackup/resetDemoData)をすべてsetState()経由へ置換した。ロジック・判定順序・保存タイミング・エラーハンドリングは一切変更していない(移動+setState置換+依存注入のみ)。",
+  "changedFiles": [
+    "app.js",
+    "sw.js",
+    "src/state/store.js",
+    "src/storage/local.js",
+    "src/sync/github.js",
+    "tests/store-core.test.js"
+  ],
+  "intent": [
+    "claude-review-result.md §2 Blocker-1の契約(stateの再代入はsetState()経由のみ、他モジュールはimport { state }で読み取り・プロパティ変更のみ)を実装する。",
+    "prep-stage3-gateway.md §6の設計(store.js/storage/local.js/sync/github.jsの3モジュール構成)に従い、循環import(src/配下からapp.jsをimportしない契約)を回避しながらstorage層・sync gatewayを抽出する。",
+    "同期・保存領域はデータ消失に直結する最重要区間であるため、ロジックは一切変更せず、純粋な移動+setState置換+依存注入のみを行う(挙動の変更はfail-close化等を含め今回は一切行わない)。"
+  ],
+  "changes": [
+    "src/state/store.js(新規): let stateの唯一の所有者。export { state, setState }。何もimportしない真の葉。stateの初期化(旧`let state = loadState();`)はapp.js側が明示的に`setState(loadState(normalizeState, seedState))`を呼ぶ形にした(store.js自身の先頭でloadStateを呼ぶとTDZ相当のリスクを生むため)。",
+    "src/storage/local.js(新規): loadState(normalizeState, seedState)(依存注入でapp.jsのnormalizeState/seedStateを引数として受け取り、循環importを回避)、persistLocalNoSchedule()、_lastSaveError(読み取り専用export)を移動。saveState()自体はscheduleAutoSave/scheduleAutoSync等アプリ全体の多数の関数に依存するため、設計書の「3関数」案から逸脱してapp.js側に残した(理由はファイル冒頭コメントと本releaseのuncertaintiesを参照)。",
+    "src/sync/github.js(新規、Size-Exempt対象): computeSyncMerge/syncCoreEqual/normalizedRemoteCopy、5フロー(saveToGitHub/runAutoSyncPush/runAutoSyncPull/loadFromGitHub/syncFromGitHubOnStartup)、applySyncMergeToLocal/applySyncMergeToRemote、0秒思考マージヘルパー群、同期の双方向マージヘルパー群(mergeDateStringMap等)、setSyncBanner/clearSyncBanner、downloadGitHubStateText、sync専用localStorageキー(LAST_SYNCED_SHA_KEY/LAST_SYNC_PUSH_KEY/LAST_SYNC_PULL_KEY)とその読み書き関数を移動。src/配下からapp.jsをimportしない契約を守るため、normalizeState/nowDateTime/showToast等app.js側の関数・定数はconfigureGithubSync(deps)による依存注入(setter注入)で受け取る(app.js起動時に1回だけ呼ぶ)。ロジックは一切変更していない(移動+依存注入化のみ)。",
+    "app.js: 冒頭にsrc/state/store.js・src/storage/local.js・src/sync/github.jsのimportを追加。state再代入6箇所を`setState(X)`へ置換。SWIPE_TRIAGE_LOG_MAX定数をconfigureGithubSync呼び出しより前(ファイル冒頭)へ移動した(constのTDZ回避、値・用途は変更なし)。移動した関数群は元の位置に「src/xxx.jsへ抽出済み」のコメントマーカーのみを残した。",
+    "sw.js: CACHE_NAMEをv166へ更新し、APP_SHELLへ./src/state/store.js・./src/storage/local.js・./src/sync/github.jsを追加した。",
+    "tests/store-core.test.js(新規): [A]setState契約(6箇所すべてに共通する「setState後の追記が同一stateから見える」という同値性)と、[B]Must-1(claude-review-result.md §3)の一次データ4キー(routineChains/chainRuns/weeklyReviews/cycleReviews)が自動解決の経路によって保全されるか消えるかを実測して固定した。"
+  ],
+  "uncertainties": [
+    "設計書(prep-stage3-gateway.md §8)は2コミット分割(store/storage=通常+sync=Size-Exempt)を推奨していたが、app.jsの差分が両単位で混在し無人でのgit add -p分割はミスリスクが高いため、監督者判断で1コミット+Size-Exemptとした(二系統独立レビュー通過を根拠とするNEVER 1例外手続き)。実行コード差分の実測はapp.js +61/-1028、sw.js +9/-2、新規src 3ファイル計1173行(設計書見積り400〜450行は移動対象の実態1050行に対し過少だった)。",
+    "設計書(prep-stage3-gateway.md)は「3関数(loadState/persistLocalNoSchedule/saveState)をstorage/local.jsへ削除」としていたが、saveState()はscheduleAutoSave/scheduleAutoSync(sync/github.js側)・showToast/updateGardenLog/pruneGardenLog/todayISO等アプリ全体の多数の関数に依存しており、これらをすべて依存注入すると設計書のloadState(normalize, seed)パターンをはるかに超える注入面になり、呼び出し元(数百箇所)を書き換える必要が出て「小さい変更」の方針に反する。そのためsaveState()はapp.js側に残した(persistLocalNoScheduleだけをimportして呼ぶ)。",
+    "設計書の変数分類表は_archiveCache/_archiveLoadState/_personalDataAuthErrorを「src/sync/github.jsが所有」としていたが、実コードを確認したところ、これらを実際に再代入する関数(runArchive/loadArchiveForSearch/fetchGitHubRawResult等)はいずれもcomputeSyncMerge+5フローの外側にあるapp.js側の別機能(GitHubアーカイブ・個人データ認証バナー)だったため、app.js側に残した(移動すると本来無関係な機能まで巻き込むため)。",
+    "src/配下からapp.jsをimportしない契約を、sync/github.jsが必要とする約26個のapp.js側関数・定数(normalizeState/nowDateTime/showToast/requireGitHubConfig等)に対しても厳密に適用するため、configureGithubSync(deps)というsetter注入パターンを新設した(設計書はstorage/local.jsのloadState(normalize, seed)という引数注入は明示していたが、sync/github.js側の同種の注入方式までは明示していなかった)。"
+  ],
+  "reviewFocus": [
+    "state再代入6箇所すべてがsetState()経由に置換され、他の1,455箇所のstate参照が無改修であること。",
+    "src/storage/local.js・src/sync/github.jsが循環import(state/store.js⇄storage/local.js⇄sync/github.js、および src/配下からapp.jsへの直接import)を作っていないこと。",
+    "configureGithubSync呼び出しの直前でSWIPE_TRIAGE_LOG_MAXが既に初期化済みであること(TDZ回避)。",
+    "sync/github.jsへ移動した各関数の本文がapp.js(v165時点)から一切変更されていないこと(git diffで移動前後を突合)。",
+    "tests/store-core.test.js [B-3]で実測した「リモート採用経路でroutineChains等が消える」既知のリスクが、今回の抽出で新たに生まれたものではなく、抽出前から存在した挙動であること(fail-close化は本releaseのスコープ外)。"
+  ],
+  "verification": [
+    "node --check app.js / sw.js / src/state/store.js / src/storage/local.js / src/sync/github.js / tests/store-core.test.js → 全てexit 0",
+    "node tests/store-core.test.js → 全件成功(setState契約6シナリオ+Must-1実測8件)",
+    "node tests/run-all.js merge-core avoid-core sw-integration v135 v136 v141 v72 → 全件PASS",
+    "npm run code:index:write / npm run test:manifest:write",
+    "node scripts/release-gate.js releases/v166.json --suite=store-core,sw-integration,v135,v136,v141,v72",
+    "npm run test:core",
+    "git diff --numstat で変更単位①(store.js+storage/local.js+setState置換)と変更単位②(sync/github.js移動)の実行コード行数を分けて監督者へ報告する"
+  ],
+  "knownLimitations": [
+    "Must-1(claude-review-result.md §3): computeSyncMerge/syncCoreEqualのマージ・比較対象に入っていないキー(routineChains/chainRuns/weeklyReviews/cycleReviews等)は、リモートを採用する経路(applySyncMergeToRemote + setState(adopted))で消える既知のリスクが実測で確認されている(tests/store-core.test.js [B-3])。これは抽出前から存在した挙動でありstage3では修正しない(fail-close化は次タスクとしてK承認を得た上で別途対応する)。",
+    "saveState()はapp.js側に残っているため、次段階(機能別render/dispatcher整理)でstorage層を完全に切り離す場合は改めて設計判断が必要になる。",
+    "src/配下にpackage.json(type:module)を置いていないため、Node実行時にMODULE_TYPELESS_PACKAGE_JSON警告が出る(v164から継続、動作には影響しない)。"
+  ]
+}
