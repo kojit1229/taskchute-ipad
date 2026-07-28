@@ -1,0 +1,2896 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "scripts/test-manifest.js",
+  "suites": [
+    {
+      "file": "code-index.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "legacy-crosscutting"
+      ],
+      "assertionSignals": 23,
+      "assertionHash": "5f1c45d19533471e",
+      "sourceHash": "ca71fbf13de434d0",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "commit-size-gate.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "legacy-crosscutting"
+      ],
+      "assertionSignals": 9,
+      "assertionHash": "106237c250c4355d",
+      "sourceHash": "becb21c2bc18d4b0",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": true,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "github-state-blob-fallback.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution"
+      ],
+      "assertionSignals": 12,
+      "assertionHash": "327e2bfd76069044",
+      "sourceHash": "302cd71a987f6fea",
+      "waits": {
+        "fixedCount": 5,
+        "numericMilliseconds": 2200,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "github-vision-pdf-fallback.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "content-ai"
+      ],
+      "assertionSignals": 6,
+      "assertionHash": "3045a64904dedfd6",
+      "sourceHash": "5217b9a4966bb43b",
+      "waits": {
+        "fixedCount": 4,
+        "numericMilliseconds": 1600,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": false
+      }
+    },
+    {
+      "file": "merge-core.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "sync-storage"
+      ],
+      "assertionSignals": 23,
+      "assertionHash": "4e386cd8aae351f8",
+      "sourceHash": "800bfe4ac265e804",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "release-gate.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "legacy-crosscutting"
+      ],
+      "assertionSignals": 3,
+      "assertionHash": "c0eb62a51af05958",
+      "sourceHash": "03194d364a56dc46",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "release-record.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "legacy-crosscutting"
+      ],
+      "assertionSignals": 11,
+      "assertionHash": "7486071e644b3ed2",
+      "sourceHash": "75b33ab013fd01b9",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": true,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "run-all-options.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "legacy-crosscutting"
+      ],
+      "assertionSignals": 13,
+      "assertionHash": "885d139aa27c8bba",
+      "sourceHash": "d96fa56d2fefc678",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "suite-manifest.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "legacy-crosscutting"
+      ],
+      "assertionSignals": 9,
+      "assertionHash": "e42dde4af2fe6afb",
+      "sourceHash": "2b761ecea56b4781",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "sw-integration.test.js",
+      "kind": "e2e",
+      "tier": "smoke",
+      "domains": [
+        "planning-execution",
+        "security-offline"
+      ],
+      "assertionSignals": 14,
+      "assertionHash": "4993df2c7ae48bad",
+      "sourceHash": "e7d7cf625c8f8e90",
+      "waits": {
+        "fixedCount": 2,
+        "numericMilliseconds": 3500,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v100.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 31,
+      "assertionHash": "cadb52c8afbe0060",
+      "sourceHash": "0088d8ec6f599a56",
+      "waits": {
+        "fixedCount": 9,
+        "numericMilliseconds": 3300,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v101.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 21,
+      "assertionHash": "728449f11699bd5b",
+      "sourceHash": "23b36ed638ac2699",
+      "waits": {
+        "fixedCount": 6,
+        "numericMilliseconds": 1400,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": false
+      }
+    },
+    {
+      "file": "v102.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "content-ai"
+      ],
+      "assertionSignals": 26,
+      "assertionHash": "ea0c5570dbfb7ac5",
+      "sourceHash": "da7decc069e7e001",
+      "waits": {
+        "fixedCount": 14,
+        "numericMilliseconds": 4300,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v103.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "content-ai"
+      ],
+      "assertionSignals": 21,
+      "assertionHash": "b6f1931e3fef47ee",
+      "sourceHash": "be975f172d3c6b65",
+      "waits": {
+        "fixedCount": 11,
+        "numericMilliseconds": 6700,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v104.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "ui-responsive"
+      ],
+      "assertionSignals": 19,
+      "assertionHash": "7a3c09113ef65cd4",
+      "sourceHash": "882b071f7ee8424f",
+      "waits": {
+        "fixedCount": 14,
+        "numericMilliseconds": 5550,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v105.test.js",
+      "kind": "e2e",
+      "tier": "smoke",
+      "domains": [
+        "sync-storage",
+        "journal-health",
+        "ui-responsive"
+      ],
+      "assertionSignals": 20,
+      "assertionHash": "494b99de712b3e96",
+      "sourceHash": "c53aafc489556514",
+      "waits": {
+        "fixedCount": 5,
+        "numericMilliseconds": 2900,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v106.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution",
+        "journal-health"
+      ],
+      "assertionSignals": 18,
+      "assertionHash": "b0386c54c73aebc5",
+      "sourceHash": "3441f85b35cee814",
+      "waits": {
+        "fixedCount": 5,
+        "numericMilliseconds": 5600,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": false
+      }
+    },
+    {
+      "file": "v107.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 43,
+      "assertionHash": "710811c9b96afb4c",
+      "sourceHash": "3693099b79e3d958",
+      "waits": {
+        "fixedCount": 25,
+        "numericMilliseconds": 6450,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v108.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution"
+      ],
+      "assertionSignals": 18,
+      "assertionHash": "c0fc48c79f78f24f",
+      "sourceHash": "21bf0a9c0f15df22",
+      "waits": {
+        "fixedCount": 5,
+        "numericMilliseconds": 1600,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v109.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "ui-responsive"
+      ],
+      "assertionSignals": 24,
+      "assertionHash": "e1d81d8367383f8c",
+      "sourceHash": "f559bc1602be344f",
+      "waits": {
+        "fixedCount": 12,
+        "numericMilliseconds": 3900,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v110.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution",
+        "journal-health",
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 15,
+      "assertionHash": "94e1b7f9c742d1e5",
+      "sourceHash": "328c9c7722fb68c6",
+      "waits": {
+        "fixedCount": 8,
+        "numericMilliseconds": 3200,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": false
+      }
+    },
+    {
+      "file": "v111.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "ui-responsive"
+      ],
+      "assertionSignals": 24,
+      "assertionHash": "44c18baa04ab3ced",
+      "sourceHash": "17d6dc339aa1b717",
+      "waits": {
+        "fixedCount": 18,
+        "numericMilliseconds": 6550,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v112.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "ui-responsive"
+      ],
+      "assertionSignals": 27,
+      "assertionHash": "130012ba919fab7b",
+      "sourceHash": "7c051bcbec0f2d99",
+      "waits": {
+        "fixedCount": 14,
+        "numericMilliseconds": 4250,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v113.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution",
+        "journal-health",
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 15,
+      "assertionHash": "0fa4a2c45c411485",
+      "sourceHash": "dffb852e965a92b1",
+      "waits": {
+        "fixedCount": 8,
+        "numericMilliseconds": 3200,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": false
+      }
+    },
+    {
+      "file": "v114.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "journal-health",
+        "ui-responsive"
+      ],
+      "assertionSignals": 32,
+      "assertionHash": "0edc373d648a4e48",
+      "sourceHash": "8a52c6cbc9f715bd",
+      "waits": {
+        "fixedCount": 11,
+        "numericMilliseconds": 4100,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v115.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "ui-responsive"
+      ],
+      "assertionSignals": 34,
+      "assertionHash": "57de260d0d3b1c17",
+      "sourceHash": "ab0e0dc977add925",
+      "waits": {
+        "fixedCount": 11,
+        "numericMilliseconds": 3200,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v116.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 24,
+      "assertionHash": "013af01961999b0d",
+      "sourceHash": "6c0e3e2d038cb36f",
+      "waits": {
+        "fixedCount": 5,
+        "numericMilliseconds": 1500,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v117.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 36,
+      "assertionHash": "b1da9fab0f86c05a",
+      "sourceHash": "458630b258559371",
+      "waits": {
+        "fixedCount": 19,
+        "numericMilliseconds": 5300,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v118.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution",
+        "content-ai"
+      ],
+      "assertionSignals": 14,
+      "assertionHash": "2fd8ffa425b4eb85",
+      "sourceHash": "e0912b1459d08629",
+      "waits": {
+        "fixedCount": 9,
+        "numericMilliseconds": 6600,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": false
+      }
+    },
+    {
+      "file": "v119.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "content-ai"
+      ],
+      "assertionSignals": 19,
+      "assertionHash": "758e0bf82a47ad0f",
+      "sourceHash": "f385666c5dd34859",
+      "waits": {
+        "fixedCount": 5,
+        "numericMilliseconds": 1800,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v120.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "journal-health"
+      ],
+      "assertionSignals": 13,
+      "assertionHash": "8e4a25c2f68cf368",
+      "sourceHash": "cf2c0d79f3363dec",
+      "waits": {
+        "fixedCount": 6,
+        "numericMilliseconds": 2100,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v121.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "journal-health",
+        "content-ai"
+      ],
+      "assertionSignals": 30,
+      "assertionHash": "646dd7b5b8480553",
+      "sourceHash": "8ebba962333ce651",
+      "waits": {
+        "fixedCount": 13,
+        "numericMilliseconds": 3450,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v122.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "journal-health",
+        "content-ai"
+      ],
+      "assertionSignals": 17,
+      "assertionHash": "7acc7038bbc0ac02",
+      "sourceHash": "57861a09d592eec2",
+      "waits": {
+        "fixedCount": 9,
+        "numericMilliseconds": 3300,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v123.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "ui-responsive"
+      ],
+      "assertionSignals": 20,
+      "assertionHash": "7fa55ef68f7f8b2e",
+      "sourceHash": "ed2ae5b009973ee7",
+      "waits": {
+        "fixedCount": 4,
+        "numericMilliseconds": 1700,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v124.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 26,
+      "assertionHash": "8fcf0f6af5e70554",
+      "sourceHash": "7bb303657b0eadd3",
+      "waits": {
+        "fixedCount": 5,
+        "numericMilliseconds": 1520,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v125.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 30,
+      "assertionHash": "f9474c7433545a76",
+      "sourceHash": "977fa3acd5757196",
+      "waits": {
+        "fixedCount": 5,
+        "numericMilliseconds": 1500,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": false
+      }
+    },
+    {
+      "file": "v126.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "journal-health"
+      ],
+      "assertionSignals": 22,
+      "assertionHash": "6dbd6aa07b3b1cc4",
+      "sourceHash": "a21ee13ef0e289cf",
+      "waits": {
+        "fixedCount": 13,
+        "numericMilliseconds": 3950,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v127.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "ui-responsive"
+      ],
+      "assertionSignals": 25,
+      "assertionHash": "d7cf8352d267716e",
+      "sourceHash": "2f7abdb164c5bc1b",
+      "waits": {
+        "fixedCount": 6,
+        "numericMilliseconds": 2500,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v128.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "journal-health"
+      ],
+      "assertionSignals": 18,
+      "assertionHash": "978e41d46b947a40",
+      "sourceHash": "f2a403d9e6c9819f",
+      "waits": {
+        "fixedCount": 5,
+        "numericMilliseconds": 2100,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v129.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "journal-health"
+      ],
+      "assertionSignals": 25,
+      "assertionHash": "db47a7af98a7f85e",
+      "sourceHash": "801b2b6ef6810a59",
+      "waits": {
+        "fixedCount": 17,
+        "numericMilliseconds": 4900,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v130.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "journal-health"
+      ],
+      "assertionSignals": 12,
+      "assertionHash": "93f5787b26327d2e",
+      "sourceHash": "6e0793f1d57d3904",
+      "waits": {
+        "fixedCount": 6,
+        "numericMilliseconds": 2100,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v131.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "journal-health"
+      ],
+      "assertionSignals": 14,
+      "assertionHash": "68cdd219a35e2952",
+      "sourceHash": "290c39774c6502a3",
+      "waits": {
+        "fixedCount": 3,
+        "numericMilliseconds": 1300,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v132.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "ui-responsive"
+      ],
+      "assertionSignals": 13,
+      "assertionHash": "2a7f1dfebe138dc6",
+      "sourceHash": "d43c2c93ca8dcd65",
+      "waits": {
+        "fixedCount": 11,
+        "numericMilliseconds": 3000,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v133.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "content-ai"
+      ],
+      "assertionSignals": 19,
+      "assertionHash": "6152b70c30452985",
+      "sourceHash": "fb3f4a9de4f94821",
+      "waits": {
+        "fixedCount": 10,
+        "numericMilliseconds": 3300,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v134.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "journal-health",
+        "ui-responsive"
+      ],
+      "assertionSignals": 19,
+      "assertionHash": "7166f8e4d857bd4a",
+      "sourceHash": "0b9f282e3a6d4f06",
+      "waits": {
+        "fixedCount": 12,
+        "numericMilliseconds": 5700,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": false
+      }
+    },
+    {
+      "file": "v135.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution",
+        "content-ai"
+      ],
+      "assertionSignals": 13,
+      "assertionHash": "99836c86cfa9e292",
+      "sourceHash": "194ecd3023da7ab1",
+      "waits": {
+        "fixedCount": 9,
+        "numericMilliseconds": 6400,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": false
+      }
+    },
+    {
+      "file": "v136.test.js",
+      "kind": "e2e",
+      "tier": "smoke",
+      "domains": [
+        "sync-storage",
+        "planning-execution",
+        "content-ai"
+      ],
+      "assertionSignals": 16,
+      "assertionHash": "d5999bc33e324901",
+      "sourceHash": "fc5eed49ad8d003c",
+      "waits": {
+        "fixedCount": 12,
+        "numericMilliseconds": 7600,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": false
+      }
+    },
+    {
+      "file": "v137.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 21,
+      "assertionHash": "97e6e85128000848",
+      "sourceHash": "9742b983ad3b3c40",
+      "waits": {
+        "fixedCount": 12,
+        "numericMilliseconds": 5300,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v138.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 17,
+      "assertionHash": "29d903c1340c05e2",
+      "sourceHash": "040fd53a7fac5b03",
+      "waits": {
+        "fixedCount": 4,
+        "numericMilliseconds": 2000,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": false
+      }
+    },
+    {
+      "file": "v140.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "journal-health",
+        "content-ai",
+        "security-offline"
+      ],
+      "assertionSignals": 19,
+      "assertionHash": "085e204715d74638",
+      "sourceHash": "7c57d1ba707f7e55",
+      "waits": {
+        "fixedCount": 9,
+        "numericMilliseconds": 5600,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v141.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "journal-health",
+        "content-ai"
+      ],
+      "assertionSignals": 46,
+      "assertionHash": "dfbc34acf907f05a",
+      "sourceHash": "55025c425de794ae",
+      "waits": {
+        "fixedCount": 24,
+        "numericMilliseconds": 7200,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v142.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "journal-health",
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 29,
+      "assertionHash": "d8d847ba0ce3b7ac",
+      "sourceHash": "645fee71bd7e8d6e",
+      "waits": {
+        "fixedCount": 17,
+        "numericMilliseconds": 6800,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v143.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "content-ai"
+      ],
+      "assertionSignals": 38,
+      "assertionHash": "0f9a2efeaf995630",
+      "sourceHash": "e7202b5611c161ea",
+      "waits": {
+        "fixedCount": 27,
+        "numericMilliseconds": 10850,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v144.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "journal-health"
+      ],
+      "assertionSignals": 48,
+      "assertionHash": "c9676df5426585ae",
+      "sourceHash": "547993fefbecb55e",
+      "waits": {
+        "fixedCount": 30,
+        "numericMilliseconds": 9450,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v145.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 46,
+      "assertionHash": "43d92c1efd29ff29",
+      "sourceHash": "70d25b85692d7ff6",
+      "waits": {
+        "fixedCount": 22,
+        "numericMilliseconds": 8000,
+        "unresolvedCount": 1
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v146.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 47,
+      "assertionHash": "ec5040faa66faca6",
+      "sourceHash": "56cbc7edfae69743",
+      "waits": {
+        "fixedCount": 29,
+        "numericMilliseconds": 6600,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v147.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 44,
+      "assertionHash": "468c69ec2cbfd587",
+      "sourceHash": "acb8a403d15fa4d3",
+      "waits": {
+        "fixedCount": 17,
+        "numericMilliseconds": 5850,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v148.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 61,
+      "assertionHash": "8075eee2316fee88",
+      "sourceHash": "05893f4377e8883d",
+      "waits": {
+        "fixedCount": 23,
+        "numericMilliseconds": 7150,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v149.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 62,
+      "assertionHash": "35cffa12a16703a0",
+      "sourceHash": "8cf47e4236fe3bc1",
+      "waits": {
+        "fixedCount": 34,
+        "numericMilliseconds": 9250,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v150.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 69,
+      "assertionHash": "da6fae88e4eead69",
+      "sourceHash": "ec2ef4773c0fdb63",
+      "waits": {
+        "fixedCount": 25,
+        "numericMilliseconds": 33150,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v151.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "ui-responsive"
+      ],
+      "assertionSignals": 35,
+      "assertionHash": "92c5b363b5b7941f",
+      "sourceHash": "c275f41af681c91d",
+      "waits": {
+        "fixedCount": 13,
+        "numericMilliseconds": 5100,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": false
+      }
+    },
+    {
+      "file": "v152.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 59,
+      "assertionHash": "c54a9aeb8078a236",
+      "sourceHash": "dd0f0975d3fe140e",
+      "waits": {
+        "fixedCount": 24,
+        "numericMilliseconds": 4950,
+        "unresolvedCount": 7
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v153.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 49,
+      "assertionHash": "c3363e9f913914d2",
+      "sourceHash": "0e0809ab8c954df8",
+      "waits": {
+        "fixedCount": 21,
+        "numericMilliseconds": 8250,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v154.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "ui-responsive"
+      ],
+      "assertionSignals": 52,
+      "assertionHash": "fca1ad5e7b5d2ed8",
+      "sourceHash": "dc2df9bb9c46dbdb",
+      "waits": {
+        "fixedCount": 23,
+        "numericMilliseconds": 2980,
+        "unresolvedCount": 13
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v155.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "ui-responsive"
+      ],
+      "assertionSignals": 43,
+      "assertionHash": "d979ac62823aa57d",
+      "sourceHash": "0b7cd1d0221c8fb6",
+      "waits": {
+        "fixedCount": 14,
+        "numericMilliseconds": 4800,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v156.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 72,
+      "assertionHash": "02426ba69bb1a815",
+      "sourceHash": "110ae67933bc9132",
+      "waits": {
+        "fixedCount": 32,
+        "numericMilliseconds": 6700,
+        "unresolvedCount": 3
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v157.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "content-ai"
+      ],
+      "assertionSignals": 19,
+      "assertionHash": "73262b1b743c90af",
+      "sourceHash": "5d2fb7cb72a1a860",
+      "waits": {
+        "fixedCount": 3,
+        "numericMilliseconds": 1400,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v158.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "content-ai"
+      ],
+      "assertionSignals": 21,
+      "assertionHash": "b8caf64d6907bff5",
+      "sourceHash": "ee428c4242ef265a",
+      "waits": {
+        "fixedCount": 3,
+        "numericMilliseconds": 1400,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v159.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "content-ai"
+      ],
+      "assertionSignals": 20,
+      "assertionHash": "f47f17327216bc3c",
+      "sourceHash": "d454228046269daa",
+      "waits": {
+        "fixedCount": 8,
+        "numericMilliseconds": 3900,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v160.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "content-ai"
+      ],
+      "assertionSignals": 11,
+      "assertionHash": "6beda6a2250e9237",
+      "sourceHash": "42dda3f4faf3ee93",
+      "waits": {
+        "fixedCount": 6,
+        "numericMilliseconds": 2700,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v161.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "content-ai"
+      ],
+      "assertionSignals": 21,
+      "assertionHash": "4b3ca77dd412da23",
+      "sourceHash": "eeb9770d0e6c0db9",
+      "waits": {
+        "fixedCount": 3,
+        "numericMilliseconds": 1900,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v162.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "journal-health"
+      ],
+      "assertionSignals": 53,
+      "assertionHash": "cdbea187120818f4",
+      "sourceHash": "fae28c91ac8c1d9d",
+      "waits": {
+        "fixedCount": 32,
+        "numericMilliseconds": 9100,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v163.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "journal-health",
+        "ui-responsive"
+      ],
+      "assertionSignals": 33,
+      "assertionHash": "1748e594b5aeb3bd",
+      "sourceHash": "636d51b08acf7b6f",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v49.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "content-ai"
+      ],
+      "assertionSignals": 19,
+      "assertionHash": "ac295e1ba7405313",
+      "sourceHash": "e9f73411d8406774",
+      "waits": {
+        "fixedCount": 16,
+        "numericMilliseconds": 7900,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v50.test.js",
+      "kind": "e2e",
+      "tier": "smoke",
+      "domains": [
+        "planning-execution",
+        "ui-responsive"
+      ],
+      "assertionSignals": 15,
+      "assertionHash": "af3fe62601581ce1",
+      "sourceHash": "a8841570830c21be",
+      "waits": {
+        "fixedCount": 12,
+        "numericMilliseconds": 4200,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v53.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "journal-health"
+      ],
+      "assertionSignals": 23,
+      "assertionHash": "bb7e9265df690127",
+      "sourceHash": "747823654cd39893",
+      "waits": {
+        "fixedCount": 16,
+        "numericMilliseconds": 8200,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v54.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "journal-health",
+        "ui-responsive"
+      ],
+      "assertionSignals": 22,
+      "assertionHash": "e29ec245745e54af",
+      "sourceHash": "b90ee038b7028d21",
+      "waits": {
+        "fixedCount": 6,
+        "numericMilliseconds": 2700,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v55.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 13,
+      "assertionHash": "f9ec3f71f8e9b008",
+      "sourceHash": "602698ff265f370e",
+      "waits": {
+        "fixedCount": 9,
+        "numericMilliseconds": 3200,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v56.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 18,
+      "assertionHash": "bfb01a74b9cd2eda",
+      "sourceHash": "c0a5ae7dc3321369",
+      "waits": {
+        "fixedCount": 8,
+        "numericMilliseconds": 3320,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v57.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "content-ai"
+      ],
+      "assertionSignals": 8,
+      "assertionHash": "05d1ca9d6063e960",
+      "sourceHash": "d8eb3a8422694bd0",
+      "waits": {
+        "fixedCount": 6,
+        "numericMilliseconds": 3250,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v58.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 15,
+      "assertionHash": "6796a025bedaf1c4",
+      "sourceHash": "db2f90a28b6895a0",
+      "waits": {
+        "fixedCount": 11,
+        "numericMilliseconds": 4250,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v59.test.js",
+      "kind": "e2e",
+      "tier": "smoke",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 19,
+      "assertionHash": "aaf43c84e9a434c7",
+      "sourceHash": "2e758c9e79471c8a",
+      "waits": {
+        "fixedCount": 6,
+        "numericMilliseconds": 2450,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v60.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "content-ai",
+        "security-offline"
+      ],
+      "assertionSignals": 29,
+      "assertionHash": "43df0647bebd72e8",
+      "sourceHash": "dc505435a8202018",
+      "waits": {
+        "fixedCount": 20,
+        "numericMilliseconds": 7600,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v61.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 54,
+      "assertionHash": "26773473a76a54da",
+      "sourceHash": "d676f11c3074bc7b",
+      "waits": {
+        "fixedCount": 32,
+        "numericMilliseconds": 9850,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v62.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "journal-health",
+        "content-ai"
+      ],
+      "assertionSignals": 58,
+      "assertionHash": "ab3ac58762364ac0",
+      "sourceHash": "d30f0286fb757746",
+      "waits": {
+        "fixedCount": 25,
+        "numericMilliseconds": 9800,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v63.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "journal-health"
+      ],
+      "assertionSignals": 29,
+      "assertionHash": "208c45165f1d7d6e",
+      "sourceHash": "ae82e267e2fea89d",
+      "waits": {
+        "fixedCount": 11,
+        "numericMilliseconds": 3400,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v65.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 37,
+      "assertionHash": "4e6963baf4c8a48e",
+      "sourceHash": "5ba16d3e704c8a26",
+      "waits": {
+        "fixedCount": 19,
+        "numericMilliseconds": 5650,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v66.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "ui-responsive"
+      ],
+      "assertionSignals": 32,
+      "assertionHash": "9ef54714f8040c0d",
+      "sourceHash": "016084bc72ccc4ec",
+      "waits": {
+        "fixedCount": 14,
+        "numericMilliseconds": 4400,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v67.test.js",
+      "kind": "e2e",
+      "tier": "smoke",
+      "domains": [
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 51,
+      "assertionHash": "1e07f229e08e01f0",
+      "sourceHash": "6e9b639d153b2be6",
+      "waits": {
+        "fixedCount": 11,
+        "numericMilliseconds": 3400,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v68.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "journal-health",
+        "content-ai"
+      ],
+      "assertionSignals": 55,
+      "assertionHash": "ef888e4897559079",
+      "sourceHash": "ccfe97ef5e2891d3",
+      "waits": {
+        "fixedCount": 20,
+        "numericMilliseconds": 6100,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v70.test.js",
+      "kind": "e2e",
+      "tier": "smoke",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 53,
+      "assertionHash": "edbd9e1e5a793e1c",
+      "sourceHash": "751eaf59bb7c326b",
+      "waits": {
+        "fixedCount": 21,
+        "numericMilliseconds": 6350,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v71.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 30,
+      "assertionHash": "a08db4b01840a1b5",
+      "sourceHash": "ef4f7684c7831d30",
+      "waits": {
+        "fixedCount": 10,
+        "numericMilliseconds": 2800,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v72.test.js",
+      "kind": "e2e",
+      "tier": "smoke",
+      "domains": [
+        "sync-storage"
+      ],
+      "assertionSignals": 19,
+      "assertionHash": "715e65f0211750b8",
+      "sourceHash": "85dcabc5beaf9a65",
+      "waits": {
+        "fixedCount": 10,
+        "numericMilliseconds": 4500,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": false
+      }
+    },
+    {
+      "file": "v73.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "journal-health"
+      ],
+      "assertionSignals": 33,
+      "assertionHash": "455ccbc380b0a35a",
+      "sourceHash": "ea959a0da352386f",
+      "waits": {
+        "fixedCount": 16,
+        "numericMilliseconds": 4300,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v74.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 31,
+      "assertionHash": "346b5ba1765a8eed",
+      "sourceHash": "8125fc90ceff52a9",
+      "waits": {
+        "fixedCount": 12,
+        "numericMilliseconds": 6850,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v75.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 35,
+      "assertionHash": "c01ec1239a0d42c8",
+      "sourceHash": "5dc9270bf89b2e65",
+      "waits": {
+        "fixedCount": 12,
+        "numericMilliseconds": 5350,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v76.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "journal-health",
+        "content-ai"
+      ],
+      "assertionSignals": 15,
+      "assertionHash": "c4d320929696381f",
+      "sourceHash": "dce0e4a57eefb6f6",
+      "waits": {
+        "fixedCount": 6,
+        "numericMilliseconds": 3050,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v77.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 33,
+      "assertionHash": "4532a154e417ca29",
+      "sourceHash": "1c7cc7dba32b6361",
+      "waits": {
+        "fixedCount": 7,
+        "numericMilliseconds": 3000,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v78.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "journal-health"
+      ],
+      "assertionSignals": 15,
+      "assertionHash": "5b67a0fafb269ad1",
+      "sourceHash": "ddf077434f6a3d34",
+      "waits": {
+        "fixedCount": 7,
+        "numericMilliseconds": 3300,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v79.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution",
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 23,
+      "assertionHash": "4d79c74ed533ff4c",
+      "sourceHash": "106442d1be2ad493",
+      "waits": {
+        "fixedCount": 18,
+        "numericMilliseconds": 6000,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v80.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "ui-responsive"
+      ],
+      "assertionSignals": 22,
+      "assertionHash": "4bb746d4841578e5",
+      "sourceHash": "7bfdb39194484f83",
+      "waits": {
+        "fixedCount": 5,
+        "numericMilliseconds": 2000,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v81.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "journal-health",
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 36,
+      "assertionHash": "34a5bd17ba24540c",
+      "sourceHash": "4145a35a9e3c5f34",
+      "waits": {
+        "fixedCount": 17,
+        "numericMilliseconds": 4550,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v82.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "journal-health",
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 39,
+      "assertionHash": "60a107499d897090",
+      "sourceHash": "2dfec4923513d549",
+      "waits": {
+        "fixedCount": 10,
+        "numericMilliseconds": 2750,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v83.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "content-ai",
+        "ui-responsive",
+        "security-offline"
+      ],
+      "assertionSignals": 33,
+      "assertionHash": "98b8003788173c2d",
+      "sourceHash": "353cfa5546eb1fd0",
+      "waits": {
+        "fixedCount": 17,
+        "numericMilliseconds": 5950,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v84.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "ui-responsive"
+      ],
+      "assertionSignals": 40,
+      "assertionHash": "22c6ad95e9b3531e",
+      "sourceHash": "208a04c0ff2ae467",
+      "waits": {
+        "fixedCount": 22,
+        "numericMilliseconds": 6800,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v85.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "journal-health",
+        "content-ai"
+      ],
+      "assertionSignals": 16,
+      "assertionHash": "21269c269e3f593e",
+      "sourceHash": "1f92a9e6dd760057",
+      "waits": {
+        "fixedCount": 14,
+        "numericMilliseconds": 4200,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v86.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "content-ai"
+      ],
+      "assertionSignals": 29,
+      "assertionHash": "56dd2e0d3a418ed7",
+      "sourceHash": "b0e5ce4a135a6564",
+      "waits": {
+        "fixedCount": 10,
+        "numericMilliseconds": 4200,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v87.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 50,
+      "assertionHash": "255590ee700f47bf",
+      "sourceHash": "e6db63f84705157e",
+      "waits": {
+        "fixedCount": 31,
+        "numericMilliseconds": 8100,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v88.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 39,
+      "assertionHash": "fb26eeaf61926229",
+      "sourceHash": "db5937f62ae457c1",
+      "waits": {
+        "fixedCount": 9,
+        "numericMilliseconds": 3750,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v89.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "ui-responsive"
+      ],
+      "assertionSignals": 25,
+      "assertionHash": "c19e63b28c30d6fb",
+      "sourceHash": "4e4883c4dd8355fd",
+      "waits": {
+        "fixedCount": 8,
+        "numericMilliseconds": 3400,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v90.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 35,
+      "assertionHash": "9c73cf4f3fc32eb6",
+      "sourceHash": "91cca7bfdfbe537a",
+      "waits": {
+        "fixedCount": 16,
+        "numericMilliseconds": 5100,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v91.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "journal-health"
+      ],
+      "assertionSignals": 12,
+      "assertionHash": "b8c690903918b4db",
+      "sourceHash": "532bf63ac553f2fd",
+      "waits": {
+        "fixedCount": 6,
+        "numericMilliseconds": 2800,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v92.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "journal-health",
+        "content-ai"
+      ],
+      "assertionSignals": 16,
+      "assertionHash": "98bba7002b8e6ce6",
+      "sourceHash": "afcbf6d92fed6e71",
+      "waits": {
+        "fixedCount": 6,
+        "numericMilliseconds": 2100,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": false
+      }
+    },
+    {
+      "file": "v93.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "ui-responsive"
+      ],
+      "assertionSignals": 10,
+      "assertionHash": "a4492854f81184aa",
+      "sourceHash": "f4b3c3f4b4c9ce6d",
+      "waits": {
+        "fixedCount": 3,
+        "numericMilliseconds": 1500,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v94.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution"
+      ],
+      "assertionSignals": 15,
+      "assertionHash": "c85171f4fe03c651",
+      "sourceHash": "7113613fba088664",
+      "waits": {
+        "fixedCount": 8,
+        "numericMilliseconds": 2800,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": false
+      }
+    },
+    {
+      "file": "v95.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 29,
+      "assertionHash": "e9d018fb0a4f4e7f",
+      "sourceHash": "b43b3febe91afc23",
+      "waits": {
+        "fixedCount": 11,
+        "numericMilliseconds": 3200,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v96.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 22,
+      "assertionHash": "fb67e15502513a74",
+      "sourceHash": "d34a804e3f15253c",
+      "waits": {
+        "fixedCount": 9,
+        "numericMilliseconds": 3500,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v97.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "ui-responsive"
+      ],
+      "assertionSignals": 22,
+      "assertionHash": "e0b2345938c92c99",
+      "sourceHash": "fef9731583840070",
+      "waits": {
+        "fixedCount": 7,
+        "numericMilliseconds": 2800,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": true,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v98.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "ui-responsive"
+      ],
+      "assertionSignals": 9,
+      "assertionHash": "ad4e667620d4ba0e",
+      "sourceHash": "e23420a829fea1e6",
+      "waits": {
+        "fixedCount": 7,
+        "numericMilliseconds": 3100,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v99.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution",
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 21,
+      "assertionHash": "2ea62d90b8b2c388",
+      "sourceHash": "fbe24559e4a6431c",
+      "waits": {
+        "fixedCount": 12,
+        "numericMilliseconds": 4100,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "xss-sanitizer.test.js",
+      "kind": "e2e",
+      "tier": "smoke",
+      "domains": [
+        "content-ai",
+        "security-offline"
+      ],
+      "assertionSignals": 24,
+      "assertionHash": "7c71f40b8497b82f",
+      "sourceHash": "e0afa3bb0b35cd15",
+      "waits": {
+        "fixedCount": 2,
+        "numericMilliseconds": 1000,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    }
+  ]
+}
