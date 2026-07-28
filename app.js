@@ -1,6 +1,9 @@
 // v164: app.js分割・段階1(最初の抽出)。純粋関数はsrc/core/**へ抽出し、依存グラフの葉として
 //   importする(src/core/**はstateを一切参照しない。claude-review-result.md §7の契約)。
 import { mergeById, mergeByIdPreferNewer } from "./src/core/merge.js";
+// v165: app.js分割・段階2(Avoid Listの読み取り専用render抽出)。src/features/avoid.jsは
+//   stateもapp.js自身もimportしない(呼び出し側が引数で渡す。src/features/avoid.js冒頭コメント参照)。
+import { renderAvoid } from "./src/features/avoid.js";
 
 const STORAGE_KEY = "taskchute-journal-pwa-state-v1";
 
@@ -2542,7 +2545,7 @@ function renderMain() {
   }
   if (view === "wbs") main.innerHTML = renderWBS();
   if (view === "wish") main.innerHTML = renderWish();
-  if (view === "avoid") main.innerHTML = renderAvoid();
+  if (view === "avoid") main.innerHTML = renderAvoid(state, escapeHTML, renderHeader);
   if (view === "tasks") {
     main.innerHTML = renderTasks();
     // v146: タスクシュートも着手中(無ければ次の未着手)Blockへ自動スクロール
@@ -6800,48 +6803,10 @@ function toggleCriteriaRequest(id) {
 
 // =============================================================
 // v17: Avoid List(やらないこと)タブ
+// v165: renderAvoidはsrc/features/avoid.jsへ抽出済み(冒頭のimport参照)。
+//   addAvoid/deleteAvoid/updateAvoidTextは操作系(state書き込み+保存ヘルパー依存)のため、
+//   dispatcher整理の段階まで意図的にここへ残す(監督者裁定)。
 // =============================================================
-
-function renderAvoid() {
-  const items = state.settings.avoidList || [];
-  return `
-    ${renderHeader("時間とエネルギーを守る", "やらないこと")}
-    <section class="panel" style="margin-bottom:12px">
-      <div class="muted" style="font-size:13px; line-height:1.6">
-        やりたいことを増やす前に、<strong>やらないこと</strong>を決めるほうが効きます。<br>
-        ここに書いたものは「自分との約束」。SNSのだらだら閲覧、夜の暴飲暴食、断れない誘いなど。
-      </div>
-    </section>
-
-    <section class="form-strip">
-      <input id="avoidTitle" class="input" placeholder="やらないことを 1 行で(例: 夜のスマホ、断れない誘い)">
-      <button class="btn primary" data-action="add-avoid">追加</button>
-    </section>
-
-    <section class="section grid" style="margin-top:14px">
-      ${items.length === 0
-        ? `<div class="panel muted" style="padding:24px; text-align:center; font-size:13px">
-            まだ何も書かれていません。<br>
-            「これに時間を使うのを今日からやめる」を 1〜3 個書いてみましょう。
-          </div>`
-        : items.map((item, idx) => `
-          <div class="panel" style="display:flex; align-items:center; gap:12px; padding:10px 14px">
-            <span style="color:var(--coral, #FF3B30); font-size:18px; font-weight:700">✕</span>
-            <input type="text" class="input" value="${escapeHTML(item.text)}" data-avoid-id="${item.id}" data-avoid-field="text" style="flex:1; border:none; background:transparent">
-            <span class="muted" style="font-size:11px; white-space:nowrap">${item.createdAt ? item.createdAt.slice(0, 10) : ""}</span>
-            <button class="btn danger ghost" data-action="delete-avoid" data-id="${item.id}" title="削除">✕</button>
-          </div>
-        `).join("")}
-    </section>
-
-    ${items.length > 0 ? `
-      <section class="panel muted" style="margin-top:14px; font-size:11px; line-height:1.6; padding:12px">
-        💡 ヒント:週に1回見直して、自分との約束を守れているか確認しましょう。<br>
-        破ったら自分を責めるのではなく「なぜ破ったか」を観察するのが続けるコツ。
-      </section>
-    ` : ""}
-  `;
-}
 
 function addAvoid() {
   const input = document.querySelector("#avoidTitle");

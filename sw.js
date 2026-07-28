@@ -1,4 +1,7 @@
-const CACHE_NAME = "taskchute-journal-pwa-v164";
+const CACHE_NAME = "taskchute-journal-pwa-v165";
+// v165: app.js分割の段階2(Avoid Listの読み取り専用render抽出)。src/features/avoid.js
+//   (renderAvoid)をAPP_SHELLへ追加した。addAvoid/deleteAvoid/updateAvoidTextは操作系のため
+//   app.jsに残す(監督者裁定、CHANGES_v165.md参照)。/src/配下のcache-first戦略はv164のまま。
 // v164: app.js分割の段階0(SW戦略)+段階1(純粋関数抽出)。src/core/merge.js
 //   (mergeById/mergeByIdPreferNewer)を最初の抽出対象としてAPP_SHELLへ追加。
 //   分割後は app.js + src/**/*.js の複数ファイルが個別にnetwork-first解決されるため、
@@ -174,7 +177,8 @@ const APP_SHELL = [
   "./marked.min.js",
   "./manifest.webmanifest",
   "./assets/icon.svg",
-  "./src/core/merge.js"
+  "./src/core/merge.js",
+  "./src/features/avoid.js"
 ];
 
 self.addEventListener("install", (event) => {
