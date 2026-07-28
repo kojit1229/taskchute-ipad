@@ -94,6 +94,16 @@ import {
   autoSaveTimer, _autoSyncTimer,
   getLastSyncPushAt, getLastSyncPullAt
 } from "./src/sync/github.js";
+// v172: app.js分割・段階5-1(event dispatcherのレジストリ基盤導入)。src/ui/actions.jsは
+//   click dispatcher/submitModal/deleteFromModalへ「登録済みactionはレジストリ経由・未登録は
+//   既存if連鎖へフォールバック」という器だけを追加する(prep-stage5-dispatcher.md案A)。
+//   stateもapp.js自身もimportしない純粋なMapベースのレジストリ。v172時点ではどのfeatureも
+//   まだ何も登録しないため、dispatchAction/dispatchModalSave/dispatchModalDeleteは常にfalseを
+//   返し、既存if連鎖が今までどおり全件実行される(挙動は完全に無変更。action分岐の移行自体は
+//   段階5-2以降)。
+import {
+  dispatchAction, dispatchModalSave, dispatchModalDelete
+} from "./src/ui/actions.js";
 
 // v91: 「### 依頼」節(機械可読契約: loop/scripts/journal-requests-extract.py が検出する)。
 //      ガイド文は丸括弧で囲み、抽出スクリプト側で「丸括弧だけの行は例示であり実際の依頼では
@@ -495,6 +505,11 @@ document.addEventListener("click", (event) => {
 
   const action = target.dataset.action;
   const id = target.dataset.id;
+
+  // v172: レジストリ経由のactionが登録されていればそちらを優先する(段階5-1時点では
+  // どのfeatureもまだ何も登録していないため常にfalseで、既存if連鎖が今までどおり
+  // 全件実行される。フォールバック分岐は1行も変更していない)。
+  if (dispatchAction(action, { event, target, id })) return;
 
   if (action === "nav") setView(target.dataset.view);
   if (action === "date-prev") shiftSelectedDate(-1);
@@ -15151,6 +15166,9 @@ function readModalFields() {
 function submitModal() {
   if (!state.modal) return;
   const fields = readModalFields();
+  // v172: レジストリ経由のmodal handlerが登録されていればそちらを優先する(段階5-1時点では
+  // どのtypeもまだ何も登録していないため常にfalseで、既存if-else連鎖が今までどおり実行される)。
+  if (dispatchModalSave(state.modal.type, state.modal.id, fields)) return;
   if (state.modal.type === "project") {
     saveProjectFromModal(state.modal.id, fields);
   } else if (state.modal.type === "task") {
@@ -15174,6 +15192,11 @@ function deleteFromModal() {
   if (!state.modal) return;
   const ok = window.confirm("削除しますか? この操作は取り消せます(deleted フラグ)。");
   if (!ok) return;
+  // v172: 同上(submitModal参照)。登録済みhandlerが処理した場合もcloseModal()は必ず呼ぶ。
+  if (dispatchModalDelete(state.modal.type, state.modal.id)) {
+    closeModal();
+    return;
+  }
   if (state.modal.type === "project") {
     deleteProject(state.modal.id);
   } else if (state.modal.type === "task") {

@@ -1,4 +1,10 @@
-const CACHE_NAME = "taskchute-journal-pwa-v171";
+const CACHE_NAME = "taskchute-journal-pwa-v172";
+// v172: app.js分割の段階5-1(event dispatcherのレジストリ基盤導入)。src/ui/actions.js
+//   (registerActions/dispatchAction/registerModalHandler/dispatchModalSave/dispatchModalDelete)
+//   をAPP_SHELLへ追加した。click dispatcher/submitModal/deleteFromModalの先頭に
+//   「レジストリ経由で処理されればreturn、未登録なら既存if連鎖へフォールバック」という
+//   フックを追加したが、段階5-1時点ではどのfeatureも何も登録していないため、
+//   既存if連鎖の挙動は完全に無変更(器の追加のみ)。
 // v171: app.js分割の段階4-5(タイムライン抽出・段階A: 純粋レーン割付計算のみ)。
 //   src/features/timeline-layout.js(assignBlocksToLanes/adjustLaneTopPositions、
 //   configureTimelineLayout(deps)注入)をAPP_SHELLへ追加した。挙動は抽出前と完全に同一
@@ -214,7 +220,8 @@ const APP_SHELL = [
   "./src/state/journal-fold.js",
   "./src/state/store.js",
   "./src/storage/local.js",
-  "./src/sync/github.js"
+  "./src/sync/github.js",
+  "./src/ui/actions.js"
 ];
 
 self.addEventListener("install", (event) => {

@@ -3,6 +3,30 @@
   "generatedBy": "scripts/test-manifest.js",
   "suites": [
     {
+      "file": "action-registry-core.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "ui-responsive"
+      ],
+      "assertionSignals": 19,
+      "assertionHash": "5fc045ceec790741",
+      "sourceHash": "1270f58b18e23c07",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
       "file": "avoid-core.test.js",
       "kind": "node",
       "tier": "full",
