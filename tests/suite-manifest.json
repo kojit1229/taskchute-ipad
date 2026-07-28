@@ -413,6 +413,55 @@
       }
     },
     {
+      "file": "timeline-render-core.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "ui-responsive"
+      ],
+      "assertionSignals": 41,
+      "assertionHash": "47415f0e134d1198",
+      "sourceHash": "2900808ed369f628",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "timeline-tick-wiring.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution",
+        "ui-responsive"
+      ],
+      "assertionSignals": 16,
+      "assertionHash": "b0539ec4881485e0",
+      "sourceHash": "ee85621bb1f0d92f",
+      "waits": {
+        "fixedCount": 8,
+        "numericMilliseconds": 4500,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
       "file": "v100.test.js",
       "kind": "e2e",
       "tier": "full",

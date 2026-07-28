@@ -1,4 +1,8 @@
-const CACHE_NAME = "taskchute-journal-pwa-v174";
+const CACHE_NAME = "taskchute-journal-pwa-v175";
+// v175: app.js分割の段階4-6(タイムライン抽出・段階B: 描画系)。src/features/timeline.js
+//   (renderTimelineRail/renderTimelineView/setTimelineMode/renderTimeline/renderTimelineCard/
+//   renderEnergyGraph、configureTimeline(deps)注入)をAPP_SHELLへ追加した。挙動は抽出前と
+//   完全に同一(移動+依存注入化のみ)。
 // v172: app.js分割の段階5-1(event dispatcherのレジストリ基盤導入)。src/ui/actions.js
 //   (registerActions/dispatchAction/registerModalHandler/dispatchModalSave/dispatchModalDelete)
 //   をAPP_SHELLへ追加した。click dispatcher/submitModal/deleteFromModalの先頭に
@@ -215,6 +219,7 @@ const APP_SHELL = [
   "./src/features/journal.js",
   "./src/features/routine.js",
   "./src/features/timeline-layout.js",
+  "./src/features/timeline.js",
   "./src/features/wish.js",
   "./src/state/feedback-cache.js",
   "./src/state/journal-fold.js",

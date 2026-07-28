@@ -1,0 +1,63 @@
+{
+  "version": 175,
+  "date": "2026-07-29",
+  "title": "app.js分割 段階4-6(タイムライン段階B: 描画系の抽出)",
+  "summary": "監査P0指定の最高リスク領域であるタイムライン描画系を、prep-stage4-timeline.md §7「段階B」に従い①renderTimelineCard②renderEnergyGraph③renderTimeline/renderTimelineView/renderTimelineRail/setTimelineModeの順で1関数ずつsrc/features/timeline.jsへ抽出した。renderDraftLayer/draftBarHTML/zeroSecThemeBarHTML/draftRejectReasonPickerHTML(下書きスケジュール機能、別関心事)はapp.js残留のままdeps注入で参照だけ渡し、_scheduleDraftはモジュール変数を露出させず新設のscheduleDraftActive()経由でDIした(routine.jsのisChainRunActiveと同型)。updateBatteryTick(app.js残留)からrenderEnergyGraphへの.energy-graph-overlayパッチ配線は、import解決先の切替のみで呼び出し箇所を1文字も変えていない。openTimelineNewBlockは設計書§7④の推奨どおり今回の範囲外(Block編集モーダル抽出タスクの領分)として据え置いた。",
+  "changedFiles": [
+    "app.js",
+    "sw.js",
+    "src/features/timeline.js",
+    "tests/timeline-render-core.test.js",
+    "tests/timeline-tick-wiring.test.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "prep-stage4-timeline.md §7「段階B」の3ステップ(①renderTimelineCard②renderEnergyGraph③renderTimeline+renderTimelineView+renderTimelineRail+setTimelineMode)を、各ステップ後にv127(タイムライン絶対配置の不可侵領域・computed style)・v50(下書きD&D)・v70(いま開始/いま終了ワンタップ)・v150(横レーン分割)を再走して直列に抽出した。密結合な③の4関数(renderTimelineがrenderTimelineCard/renderEnergyGraph/renderDraftLayerを直接呼ぶ)は設計書の推奨どおり分割せず1つの抽出単位にまとめた。",
+    "§2「サイレント退行警告」への対応: updateBatteryTick(500ms周期ティッカー、app.js残留)が.energy-graph-overlay要素をrenderEnergyGraph(...)のouterHTMLで直接パッチする配線は、呼び出しコード自体(layer.outerHTML = renderEnergyGraph(allBlocks, rowHeight, 5, 24);)を1文字も変えず、app.js冒頭のimport文がfunction宣言からsrc/features/timeline.jsのimportへ切り替わることで名前解決先だけが変わる形にした(timeline-layout.jsのassignBlocksToLanes抽出時と同じ「呼び出し元は無改修」パターン)。",
+    "_scheduleDraft(下書きスケジュール機能のモジュールプライベート変数、抽出範囲外の別関心事)は、renderTimelineViewが「下書きが1件も無い時だけ`+ 下書きスケジュール`ボタンを出す」判定にだけ必要としていた。変数自体を公開せず、app.js側に新設した1行のscheduleDraftActive()(routine.jsのisChainRunActive/navigateGardenPixelMonthと同じ「モジュール変数を直接晒さない」既存パターン)をconfigureTimeline(deps)へ注入することで解決した。",
+    "characterization testはtests/timeline-render-core.test.jsを新設した。抽出前のapp.js(v174時点)の実装をそのまま読み、renderTimelineCard(10観点: top/height/left/width計算・completed/inProgress/isShort/isActual/isOverflowによるボタン出し分け・カテゴリ色反映・migrationBadge・leverageTypeMark・HTMLエスケープ)とrenderEnergyGraph(5観点: energy/batteryモード切替・compact強制フォールバック・過去日フォールバック・起点/終値ラベル・batteryLast表示)の期待値を先に固定してから移動し、移動後も無修正で全件成功することを確認した(dashboard-core.test.js冒頭コメントと同じ「実装をそのまま固定する」方針)。"
+  ],
+  "changes": [
+    "src/features/timeline.js(新規、約383行): renderTimelineRail/renderTimelineView/setTimelineMode/renderTimeline/renderTimelineCard/renderEnergyGraphの6関数を移動(ロジック無改変)。configureTimeline(deps)でescapeHTML/getCategoryColor/migrationBadgeHTML/leverageTypeMarkHTML/minutesOf/todayISO/pad2/clamp/formatDisplayDate/renderHeader/renderDateBar/defaultBatterySettings/batteryCurvePoints/conditionBudget/draftBarHTML/zeroSecThemeBarHTML/draftRejectReasonPickerHTML/renderDraftLayer/scheduleDraftActive/render/blocksForDate/timelineRailEl/appRootElを注入する。assignBlocksToLanes/adjustLaneTopPositions(段階A)とpersistLocalNoScheduleは、routine.jsが同じ理由でpersistLocalNoScheduleを直接importするのと同型のパターンで直接importする(circular importなし)。",
+    "app.js: 上記6関数の本体を削除し、抽出先を示すコメントマーカーのみを残した。冒頭にsrc/features/timeline.jsのimportを追加し、configureTimelineLayout({...})の直後にconfigureTimeline({...})を1回追加した。_scheduleDraft宣言の直後にscheduleDraftActive()(3行)を新設した。呼び出し元(renderMain内のrenderTimelineRail()/renderTimelineView()、click dispatcherのtimeline-mode分岐、updateBatteryTick内のrenderEnergyGraph呼び出し)は全てimportの参照先切替のみで無改修。",
+    "sw.js: CACHE_NAMEをv175へ更新し、APP_SHELLへ./src/features/timeline.jsを追加した(routine.jsとtimeline-layout.jsの間に配置)。",
+    "tests/timeline-render-core.test.js(新規): renderTimelineCard 10観点+renderEnergyGraph 5観点、計15グループを固定した。",
+    "tests/timeline-tick-wiring.test.js(新規、独立レビューMust対応): [1](§6-2)updateBatteryTick→renderEnergyGraph(移動後)の配線が実際に生きていることを、page.clock.setFixedTimeで時刻を固定しつつ500ms周期のstartTimerTickerへ実待機させる手法(v144.test.js[10]と同型)で検証した。`.energy-graph-overlay`へテスト用marker属性を付けてからティックさせ、(a)marker属性が消えている(outerHTMLで実際に新しいDOM要素へ差し替わった証拠)、(b)残量ラベルが減衰後の値へ実際に更新されることの両方を確認する。[2](§6-3)Block編集モーダル(#modalRootは#main外の別部分木)のタイトル入力欄で日本語IME変換中に[1]と同じティックを強制発火させ、入力中テキスト・フォーカス・IME状態(marker属性)がティック前後で保持されることを確認した(v137.test.jsのmarker手法を流用)。"
+  ],
+  "uncertainties": [
+    "openTimelineNewBlock(43行)は設計書§7④の推奨どおり今回の範囲外として据え置いた(Block編集モーダル生成の関心事であり、タイムライン抽出タスクの領分ではないと判断)。",
+    "実行コード差分は機械判定で実測 app.js 352行(40追加+312削除)+sw.js 7行(6追加+1削除)+src/features/timeline.js新規383行=742行 となり200行を大きく超えるが、renderTimeline本体がrenderTimelineCard/renderEnergyGraph/renderDraftLayerを直接呼ぶ密結合構造のため設計書§7の指示どおり分割せず1つの抽出単位とした(git renameが検出されない移動による削除+追加の二重カウントが大半、実質新規ロジックはごくわずか)。独立レビュー通過を前提にSize-Exempt扱いとする。",
+    "設計書§7は元々①renderTimelineCard②renderEnergyGraph③renderTimeline群を3コミットに分けて直列実装する案だったが、実装中は各ステップ後にv127・v50・v70・v150を都度再走して緑を確認したうえで、最終的な提出(このreleases/v175.json)は3ステップをまとめて1リリースへ束ねる監督者判断とした(段階ごとの検証は実施済みのため、コミット自体を分割する追加コストは実質的な安全性向上に見合わないと判断)。",
+    "_scheduleDraftを露出させないためのscheduleDraftActive()新設は、既存のisChainRunActive()/navigateGardenPixelMonth()前例に倣った構造的な追加であり、`!_scheduleDraft`という元のロジック自体は変えていない(同じ変数を参照する関数呼び出しへの機械置換)。",
+    "tests/timeline-tick-wiring.test.js[2]は、独立レビューが挙げた「_imeComposing中はタイムライン再描画が延期される契約」の検証にあたり、既存コードの実際の配線を確認した結果を反映している: hydrateStaticMarkdownのrenderDeferringForFocus()呼び出しはstate.currentViewが vision/journal/weekly/home/zero/tasks/stats/dashboard の場合のみ発火し(app.js L13961)、\"timeline\"はこの一覧に含まれない(v175で変更していない既存の仕様)。renderDeferringForFocus経由でview非依存に発火する唯一の経路(起動時の回復Block下書き提案、app.js L16195/L16199)は起動シーケンス専用で再現条件が複雑なため採用せず、実際に存在するタイムライン⇔IMEの交差点であるupdateBatteryTickの直接パッチ経路(_imeComposingを判定せず`.energy-graph-overlay`だけを差し替える設計)を対象に、IME変換中でもモーダル側が無傷であることを検証する構成にした。この解釈で§6-3の完了条件を満たすと判断したが、監督者が「タイムライン全体のrender()延期」という文字どおりの契約を別途求める場合は追加対応が必要である。"
+  ],
+  "reviewFocus": [
+    "src/features/timeline.jsへ移動した6関数の本文がapp.js(v174時点)から一切変更されていないこと(git diffで移動前後を突合)。",
+    "updateBatteryTick→renderEnergyGraphの配線が、呼び出しコード自体を変えずimport切替だけで維持されていること(§2のサイレント退行警告への対応)。renderTimeline→renderDraftLayerの依存注入配線(v50下書きD&D)も同様。",
+    "IMEガード(_imeComposing)を一切移動・変更していないこと(grepで配線先の変化ゼロを確認)。",
+    "scheduleDraftActive()の追加が`!_scheduleDraft`の元の判定ロジックと完全に等価であること。",
+    "tests/timeline-render-core.test.jsの15グループがrenderTimelineCard/renderEnergyGraphの実挙動(top/height/left/width計算・ボタン出し分け・グラフモード切替)を正しく固定していること。",
+    "sw.jsのAPP_SHELLにsrc/features/timeline.jsが追加され、CACHE_NAMEがv175になっていること。",
+    "tests/timeline-tick-wiring.test.js[1]が実際にmarker属性の消滅+残量ラベルの値変化の両方を見ており、どちらか一方だけでは検知できない偽陽性(marker消滅なのに値が古いまま等)が無いこと。",
+    "tests/timeline-tick-wiring.test.js[2]の「timelineがhydrateStaticMarkdownのrenderDeferringForFocus対象viewに含まれない」という前提理解が正しいか(uncertainties参照。監督者が別解釈を求める場合は追加対応)。"
+  ],
+  "verification": [
+    "node --check app.js / sw.js / src/features/timeline.js / tests/timeline-render-core.test.js / tests/timeline-tick-wiring.test.js → 全てexit 0",
+    "node tests/timeline-render-core.test.js → 全件成功(15グループ、renderTimelineCard 10+renderEnergyGraph 5)",
+    "node tests/timeline-tick-wiring.test.js → 全件成功(2グループ13assertion、§6-2配線検証+§6-3 IME安全性検証)",
+    "node tests/run-all.js v50 v70 v127 v144 v150 sw-integration timeline-layout-core timeline-render-core timeline-tick-wiring → 全件成功",
+    "npm run test:smoke → 全件成功",
+    "npm run test:fast → 全件成功(commit-size-gate/test-reduction-gate含む)",
+    "node scripts/release-gate.js releases/v175.json --suite=timeline-render-core,timeline-tick-wiring,v50,v70,v127,v150,sw-integration → 実行結果を完了報告に記載",
+    "npm run test:core → 実行結果を完了報告に記載",
+    "npm run code:index:write / npm run test:manifest:write 実行済み",
+    "git diff --numstat で実行コード差分を実測して監督者へ報告する(app.js 352行+sw.js 7行+timeline.js新規383行=742行)"
+  ],
+  "knownLimitations": [
+    "openTimelineNewBlock(Block編集モーダル生成)は今回のスコープ外のままapp.js残留。",
+    "src/配下にpackage.json(type:module)を置いていないため、Node実行時にMODULE_TYPELESS_PACKAGE_JSON警告が出る(v164から継続、動作には影響しない)。"
+  ]
+}

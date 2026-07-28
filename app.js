@@ -85,6 +85,21 @@ import {
   configureTimelineLayout,
   assignBlocksToLanes, adjustLaneTopPositions
 } from "./src/features/timeline-layout.js";
+// v175: app.js分割・段階4-6(タイムライン抽出・段階B: 描画系)。prep-stage4-timeline.md §7
+//   「段階B」①renderTimelineCard②renderEnergyGraph③renderTimeline/renderTimelineView/
+//   renderTimelineRail/setTimelineMode。src/features/timeline.jsはstateをimportするが
+//   app.js自身はimportしない(循環import回避)。draftBarHTML/zeroSecThemeBarHTML/
+//   draftRejectReasonPickerHTML/renderDraftLayer(下書きスケジュール機能、別関心事のため
+//   app.js残留)・render・blocksForDate・formatDisplayDate等はconfigureTimeline(deps)で注入する
+//   (src/features/timeline.js冒頭コメントの契約参照)。_scheduleDraftはモジュールプライベート
+//   変数を露出させず新設のscheduleDraftActive()経由でDIする(routine.jsのisChainRunActiveと
+//   同じ方式)。updateBatteryTick(app.js残留)からのrenderEnergyGraph呼び出しは、この
+//   importでの名前解決先切替のみで配線を維持する(呼び出し箇所は無改修)。
+import {
+  configureTimeline,
+  renderTimelineRail, renderTimelineView, setTimelineMode, renderTimeline,
+  renderTimelineCard, renderEnergyGraph
+} from "./src/features/timeline.js";
 // computeSyncMerge/syncCoreEqual/5フロー(saveToGitHub/runAutoSyncPush/runAutoSyncPull/
 // loadFromGitHub/syncFromGitHubOnStartup)等はsrc/sync/github.jsへ抽出済み。src/sync/github.js
 // 冒頭コメントの契約(configureGithubSyncによる依存注入)を参照。
@@ -268,6 +283,17 @@ configureRoutine({
 });
 // v171: src/features/timeline-layout.jsも同じ理由(循環import回避)で依存注入する。
 configureTimelineLayout({ minutesOf, nowDateTime });
+// v175: src/features/timeline.jsも同じ理由(循環import回避)で依存注入する。timelineRail/app
+// (起動時に1回だけdocument.querySelectorした固定DOM参照)はtimelineRailEl/appRootElとして渡す。
+configureTimeline({
+  escapeHTML, getCategoryColor, migrationBadgeHTML, leverageTypeMarkHTML,
+  minutesOf, todayISO, pad2, clamp, formatDisplayDate,
+  renderHeader, renderDateBar,
+  defaultBatterySettings, batteryCurvePoints, conditionBudget,
+  draftBarHTML, zeroSecThemeBarHTML, draftRejectReasonPickerHTML, renderDraftLayer,
+  scheduleDraftActive, render, blocksForDate,
+  timelineRailEl: timelineRail, appRootEl: app
+});
 // v173: src/features/avoid.jsのdispatcher登録(段階5-2)。addAvoid/deleteAvoidはapp.js残留の
 // ままなので関数参照を渡すだけ(dashboard.js等のconfigureXxxと同じ「呼ぶだけ」の注入パターン)。
 configureAvoid({ addAvoid, deleteAvoid });
@@ -2644,30 +2670,8 @@ function renderMain() {
   if (view === "more") main.innerHTML = renderMore();
 }
 
-function renderTimelineRail() {
-  // v11: サイドバーの幅(折りたたみ時 56px、通常 216px)
-  const sbWidth = state.settings?.sidebarCollapsed ? "56px" : "216px";
-  // v10: タスクシュート(tasks)時のみ右タイムライン rail を表示
-  if (state.currentView !== "tasks") {
-    timelineRail.style.display = "none";
-    app.style.gridTemplateColumns = `${sbWidth} minmax(0, 1fr)`;
-    return;
-  }
-  timelineRail.style.display = "";
-  app.style.gridTemplateColumns = `${sbWidth} minmax(0, 1fr) 360px`;
-  const mode = state.timelineMode || "planned";
-  timelineRail.innerHTML = `
-    <div class="row" style="margin-bottom:10px">
-      <h3>${formatDisplayDate(state.selectedDate)}</h3>
-      <button class="btn ghost" data-action="nav" data-view="timeline">開く</button>
-    </div>
-    <div class="segmented" style="margin-bottom:10px">
-      <button class="${mode === "planned" ? "active" : ""}" data-action="timeline-mode" data-mode="planned">予定</button>
-      <button class="${mode === "actual" ? "active" : ""}" data-action="timeline-mode" data-mode="actual">実績</button>
-    </div>
-    ${renderTimeline({ compact: true, mode })}
-  `;
-}
+// v175: renderTimelineRailはsrc/features/timeline.jsへ移動した(app.js分割・段階4-6・段階B③)。
+//   呼び出しはファイル冒頭のimportを参照する。
 
 function renderHeader(eyebrow, title, action = "") {
   // v148(UI改善計画Phase3-1): 「その他」配下のビューを開いているとき、bottom-navは
@@ -4069,6 +4073,14 @@ let _pendingRejectReason = null;  // v62: ×直後の却下理由ワンタップ
 // (maybeAutoMorningPlan参照)ため本フラグを直接は見ない。
 let _morningPlanInFlight = false;
 let _zeroSecThemeDraft = null;  // v75: AIプラン_*.jsonのzeroSecThemes提案(0秒思考テーマ)。{ date, items:[{theme,reason}] } 非永続(_scheduleDraftと同じ思想)
+
+// v175: renderTimelineView(src/features/timeline.js側)は「下書きが1件も無い時だけ
+// "下書きスケジュール"ボタンを出す」判定に_scheduleDraftの有無だけを見る。変数自体を
+// 露出させず、この1関数越しにconfigureTimeline(deps)へ注入する(routine.jsの
+// isChainRunActive()と同じ「モジュールプライベート変数を直接晒さない」方式)。
+function scheduleDraftActive() {
+  return Boolean(_scheduleDraft);
+}
 
 function minToHHMM(min) {
   const m = clamp(Math.round(min), 0, 24 * 60 - 1);
@@ -6417,301 +6429,17 @@ function renderBlockItem(block) {
   `;
 }
 
-function renderTimelineView() {
-  const nowMinute = (new Date().getHours() + 1) * 60;
-  const mode = state.timelineMode || "planned";
-  return `
-    ${renderHeader("時間軸とエネルギー", "タイムライン")}
-    ${renderDateBar()}
-    <div class="segmented" style="margin-bottom:10px">
-      <button class="${mode === "planned" ? "active" : ""}" data-action="timeline-mode" data-mode="planned">📅 予定</button>
-      <button class="${mode === "actual" ? "active" : ""}" data-action="timeline-mode" data-mode="actual">✅ 実績</button>
-    </div>
-    <div class="row" style="margin-bottom:10px; gap:8px; flex-wrap:wrap">
-      <button class="btn primary" data-action="timeline-new-block" data-minute="${nowMinute}">+ 新規Block</button>
-      ${!_scheduleDraft ? `<button class="btn" data-action="ai-schedule">📋 下書きスケジュール</button>` : ""}
-      ${mode === "planned" && state.selectedDate === todayISO()
-        ? `<button class="btn" data-action="bulk-approve-planned">✅ 予定通りだった(一括承認)</button>` : ""}
-      <span class="muted" style="font-size:12px">空き時間タップで追加 / ○タップで完了登録 / ▶いま開始・■いま終了でワンタップ実績 / カードタップで編集 / 赤線は現在時刻</span>
-    </div>
-    ${draftBarHTML()}
-    ${zeroSecThemeBarHTML()}
-    ${draftRejectReasonPickerHTML()}
-    ${state.settings.timelineCategoryFilter ? `<div class="row" style="margin-bottom:10px; gap:8px; align-items:center">
-      <span class="cat-chip" style="background:${getCategoryColor(state.settings.timelineCategoryFilter)}1f; color:${getCategoryColor(state.settings.timelineCategoryFilter)}; border:1px solid ${getCategoryColor(state.settings.timelineCategoryFilter)}66">カテゴリ: ${escapeHTML(state.settings.timelineCategoryFilter)}</span>
-      <button class="btn ghost" data-action="timeline-clear-cat" style="font-size:12px">フィルタ解除 ✕</button>
-    </div>` : ""}
-    ${renderTimeline({ compact: false, mode })}
-  `;
-}
+// v175: renderTimelineView/setTimelineMode/renderTimeline/renderTimelineCard/renderEnergyGraphは
+//   src/features/timeline.jsへ移動した(app.js分割・段階4-6・段階B①②③)。呼び出しはファイル
+//   冒頭のimportを参照する。updateBatteryTick(このファイル後方)からのrenderEnergyGraph呼び出しも
+//   同じimport経由(呼び出し箇所は無改修)。
 
 // v170: renderRoutine〜renderRoutineNowMarker(ルーティンタブ本体、計196行)は
 // src/features/routine.jsへ移動した(app.js分割・段階4-4)。renderMainからのimport参照に
 // 切り替えた(冒頭import文参照)。
 
-
-
-function setTimelineMode(mode) {
-  state.timelineMode = mode;
-  persistLocalNoSchedule();  // v37: 表示モード切替は UI 操作(dataModifiedAt を汚さない)
-  render();
-}
-
-function renderTimeline({ compact, mode = "planned" }) {
-  const allBlocks = blocksForDate(state.selectedDate);
-  // モードに応じてフィルタリングと表示位置決定
-  let blocksToRender;
-  if (mode === "actual") {
-    blocksToRender = allBlocks.filter((b) => b.actualStartAt);
-  } else {
-    // 予定モード: 未完了 + plannedStartAt あり(完了済みは予定から消す)
-    blocksToRender = allBlocks.filter((b) => b.plannedStartAt && !b.completed);
-  }
-  // v19: カテゴリ「ルーティン」は専用ルーティンタブで表示するためタイムラインから除外
-  blocksToRender = blocksToRender.filter((b) => b.category !== "ルーティン");
-  // v39: エネルギー構造分析からのカテゴリフィルタ(UI状態)
-  const catFilter = state.settings.timelineCategoryFilter || "";
-  if (catFilter) blocksToRender = blocksToRender.filter((b) => (b.category || "未分類") === catFilter);
-  // v10: ズームレベル(state.timelineZoom: 1.0 / 2.0 / 4.0 のいずれか)
-  const zoom = compact ? 1 : (state.timelineZoom || 1);
-  const rowHeight = (compact ? 48 : 60) * zoom;
-  const startHour = 5;
-  const endHour = 24;
-  const rows = Array.from({ length: endHour - startHour + 1 }, (_, index) => startHour + index);
-  // v10: レーン分割(PC 5、iPhone 3)
-  const maxLanes = (typeof window !== "undefined" && window.innerWidth <= 720) ? 3 : 5;
-  const laneAssignments = assignBlocksToLanes(blocksToRender, mode, maxLanes, rowHeight);
-  // v10: 同レーン内で物理位置が重ならないよう top を調整
-  const positioned = adjustLaneTopPositions(laneAssignments, rowHeight, startHour);
-  // v10: ズームコントロール(コンパクトモードでは出さない)。
-  // v148レビュー対応(項目9): エネルギー/バッテリー切替(v144→v148で追加)を別行の
-  // .tl-zoom-controlsとして2段にしていたが、縦圧縮方針(v98以降の一貫方針)に合わせて
-  // 1行(.tl-controls-divider区切り)へ統合する。
-  const energyGraphMode = state.settings.timelineEnergyGraphMode === "battery" ? "battery" : "energy";
-  const timelineControls = compact ? "" : `
-    <div class="tl-zoom-controls">
-      <button class="btn ghost ${zoom === 1 ? "active" : ""}" data-action="tl-zoom" data-zoom="1">1x</button>
-      <button class="btn ghost ${zoom === 2 ? "active" : ""}" data-action="tl-zoom" data-zoom="2">2x</button>
-      <button class="btn ghost ${zoom === 4 ? "active" : ""}" data-action="tl-zoom" data-zoom="4">4x</button>
-      <span class="tl-controls-divider"></span>
-      <button class="btn ghost ${energyGraphMode === "energy" ? "active" : ""}" data-action="tl-energy-mode" data-mode="energy">エネルギー</button>
-      <button class="btn ghost ${energyGraphMode === "battery" ? "active" : ""}" data-action="tl-energy-mode" data-mode="battery">バッテリー</button>
-    </div>
-  `;
-
-  // v19: 現在時刻ライン(本日表示時のみ)
-  const now = new Date();
-  const isToday = state.selectedDate === todayISO();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const nowTop = isToday && nowMinutes >= startHour * 60 && nowMinutes < endHour * 60
-    ? ((nowMinutes - startHour * 60) / 60) * rowHeight
-    : null;
-  const nowLine = nowTop !== null ? `
-    <div class="now-line" style="position:absolute; top:${nowTop}px; left:0; right:0; height:0; border-top:2px solid #FF3B30; z-index:5; pointer-events:none">
-      <span style="position:absolute; left:0; top:-10px; background:#FF3B30; color:#fff; font-size:10px; padding:1px 6px; border-radius:8px; font-weight:700">${pad2(now.getHours())}:${pad2(now.getMinutes())}</span>
-    </div>
-  ` : "";
-
-  return `
-    ${timelineControls}
-    <div class="timeline" style="position:relative; min-height:${rowHeight * (endHour - startHour + 1)}px">
-      ${rows.map((hour) => `
-        <div class="time-row" data-action="timeline-new-block" data-minute="${hour * 60}"
-             style="top:${(hour - startHour) * rowHeight}px;height:${rowHeight}px; cursor:pointer;">${String(hour).padStart(2, "0")}:00</div>
-      `).join("")}
-      <div class="timeline-cards-area" style="position:absolute; top:0; left:60px; right:100px; height:100%;">
-        ${positioned.map((a) => renderTimelineCard(a, mode, maxLanes)).join("")}
-      </div>
-      ${nowLine}
-      ${!compact && mode === "planned" ? renderDraftLayer(rowHeight, startHour) : ""}
-      ${renderEnergyGraph(allBlocks, rowHeight, startHour, endHour, compact)}
-    </div>
-  `;
-}
-
 // v171: assignBlocksToLanes/adjustLaneTopPositionsはsrc/features/timeline-layout.jsへ
 //   移動した(app.js分割・段階4-5・段階A)。呼び出しはファイル冒頭のimportを参照する。
-
-function renderTimelineCard(positioned, mode = "planned", maxLanes = 5) {
-  const { block, startStr, endStr, lane, isOverflow, top, height, isShort, laneCount } = positioned;
-
-  // v26: 横幅は「同時に重なっているブロック数(クラスタのレーン数)」で決まる。
-  // 重なり無し → laneCount 1 → 全幅 / 2つ重なり → 2 → 50:50
-  const lanes = Math.max(1, laneCount || 1);
-  const widthPercent = 100 / lanes;
-  const leftPercent = lane * widthPercent;
-
-  const isActual = mode === "actual";
-  // カテゴリ色を反映
-  const catColor = block.category ? getCategoryColor(block.category) : null;
-  const catStyle = catColor
-    ? `background:${catColor}29; border-left:4px solid ${catColor}; color:${catColor};`
-    : "";
-  const overflowAttr = isOverflow ? `data-overflow="true"` : "";
-  // v70: ワンタップ実績(▶いま開始 / ■いま終了)。既存○ボタン(完了登録モーダル)とは別の軽量アクション。
-  //      実績モード・極小カード・完了済みは既存○ボタンと同じ理由で対象外。
-  const started = Boolean(block.actualStartAt);
-  const inProgress = started && !block.completed && !block.actualEndAt;
-  const startEndBtn = (!isActual && !isShort && !block.completed)
-    ? (!started
-      ? `<button class="tl-start-btn" data-action="now-start" data-id="${block.id}" aria-label="いま開始">▶</button>`
-      : (inProgress ? `<button class="tl-start-btn tl-end-btn" data-action="now-end" data-id="${block.id}" aria-label="いま終了">■</button>` : ""))
-    : "";
-
-  // v150(UI改善計画Phase4b・R3): 完了作法統一。○ボタンをtoggle-blockに一本化(実績は
-  // 完了直後のトースト「実績を編集」から直す。旧: complete-block-with-actualで実績モーダルへ直行)。
-  // v150レビュー対応(項目8): toggle-blockは双方向トグルのため、万一この位置に完了済みカードが
-  // 描画される場合(現状の予定モードフィルタでは完了Blockは表示対象から外れるため到達しないが、
-  // 将来の表示条件変更に備えた防御的対応)、グリフとaria-label/titleを「解除」とわかる表現へ
-  // 切り替える。
-  const completeBtnHTML = (!isActual && !isShort)
-    ? (block.completed
-      ? `<button class="tl-complete-btn done" data-action="toggle-block" data-id="${block.id}" aria-label="完了を解除" title="完了を解除">↺</button>`
-      : `<button class="tl-complete-btn" data-action="toggle-block" data-id="${block.id}" aria-label="完了登録" title="完了登録">○</button>`)
-    : "";
-  return `
-    <div class="timeline-card ${block.completed ? "completed" : ""} ${isActual ? "is-actual" : ""} ${isShort ? "is-short" : ""}"
-         ${overflowAttr}
-         style="top:${top}px; height:${height}px; left:${leftPercent}%; width:calc(${widthPercent}% - 4px); ${catStyle}"
-         data-action="edit-block" data-id="${block.id}">
-      ${completeBtnHTML}
-      ${startEndBtn}
-      <div class="tl-card-body">
-        <strong>${escapeHTML(block.title)}${migrationBadgeHTML(block.carryCount)}${leverageTypeMarkHTML(block.leverageType)}</strong>
-      </div>
-    </div>
-  `;
-}
-
-function renderEnergyGraph(allBlocks, rowHeight, startHour, endHour, compact = false) {
-  const morning = state.settings.morningEnergyLog[state.selectedDate] ?? 5;
-  const totalHeight = rowHeight * (endHour - startHour + 1);
-  const startMinute = startHour * 60;
-  const endMinute = endHour * 60;
-
-  // 完了 Block を actualEndAt 順にソート(実線=実績)
-  const completed = allBlocks
-    .filter((b) => b.completed && b.actualEndAt)
-    .sort((a, b) => a.actualEndAt.localeCompare(b.actualEndAt));
-
-  // 累積実績点列
-  const realPoints = [{ minute: 0, value: morning }];
-  let cumulative = morning;
-  for (const b of completed) {
-    cumulative += Number(b.charge || 0) - Number(b.discharge || 0);
-    realPoints.push({ minute: minutesOf(b.actualEndAt), value: cumulative });
-  }
-  // 現在時刻まで延伸
-  const today = todayISO();
-  if (state.selectedDate === today) {
-    const now = new Date();
-    const nowMinute = now.getHours() * 60 + now.getMinutes();
-    realPoints.push({ minute: nowMinute, value: cumulative });
-  } else {
-    // 過去日付なら 24:00 まで延伸
-    realPoints.push({ minute: endMinute, value: cumulative });
-  }
-
-  // 予測点列(未完了 Block の planned ベース、expected_charge/discharge 使うが無ければ通常の charge/discharge を予測値として使う)
-  const isToday = state.selectedDate === today;
-  const futureBlocks = allBlocks
-    .filter((b) => !b.completed && b.plannedEndAt)
-    .sort((a, b) => a.plannedEndAt.localeCompare(b.plannedEndAt));
-  const predictPoints = [];
-  if (isToday && futureBlocks.length > 0) {
-    let predict = cumulative;
-    const now = new Date();
-    const nowMinute = now.getHours() * 60 + now.getMinutes();
-    predictPoints.push({ minute: nowMinute, value: predict });
-    for (const b of futureBlocks) {
-      const ec = Number(b.expectedCharge ?? b.charge ?? 0);
-      const ed = Number(b.expectedDischarge ?? b.discharge ?? 0);
-      predict += ec - ed;
-      predictPoints.push({ minute: minutesOf(b.plannedEndAt), value: predict });
-    }
-  }
-
-  // X 軸スケール: 値を -maxAbs 〜 +maxAbs にマップ
-  const allValues = [...realPoints, ...predictPoints].map((p) => Math.abs(p.value));
-  const maxAbs = Math.max(20, ...allValues);
-  // SVG viewBox 100x{totalHeight}、中央 x=50
-  const yOf = (minute) => Math.min(totalHeight, Math.max(0, ((minute - startMinute) / (endMinute - startMinute)) * totalHeight));
-  const xOf = (value) => 50 + (value / maxAbs) * 45;
-
-  const polyline = (pts, dashed) => {
-    if (pts.length < 2) return "";
-    const points = pts.map((p) => `${xOf(p.value)},${yOf(p.minute)}`).join(" ");
-    return `<polyline points="${points}" stroke="${dashed ? '#7b61ff' : '#2fb96d'}" stroke-width="1.5" fill="none" stroke-linejoin="round" ${dashed ? 'stroke-dasharray="3,2"' : ""}/>`;
-  };
-  const circles = (pts, color) =>
-    pts.map((p) => `<circle cx="${xOf(p.value)}" cy="${yOf(p.minute)}" r="1.8" fill="${color}"/>`).join("");
-
-  const endValue = realPoints[realPoints.length - 1]?.value ?? morning;
-
-  // v144: バッテリー実カーブの重ね描き(当日のみ。既存グラフは置き換えず追加するだけ)。
-  // 既存グラフのx軸(-maxAbs〜+maxAbs、朝の主観エネルギーが起点)とはスケールの意味が違うため、
-  // 独立した0〜上限のスケール(中央線=0・右端=上限)で描く。既存の起点/終点ラベルは無変更。
-  // レビュー対応: conditionBudget()/blocksForDate()の再計算をbatteryCurvePoints側で
-  // 繰り返さないよう、ここで1回だけ求めてopts経由で渡す(allBlocksは呼び出し元から既に
-  // blocksForDate(state.selectedDate)として渡されている値をそのまま使い回す)。
-  const battDef = defaultBatterySettings();
-  const batteryCfg = state.settings.battery || battDef;
-  const batteryMax = Number.isFinite(batteryCfg.max) ? batteryCfg.max : battDef.max;
-  const nowMinuteForBattery = (() => { const n = new Date(); return n.getHours() * 60 + n.getMinutes(); })();
-  const batteryPts = isToday
-    ? batteryCurvePoints(state.selectedDate, nowMinuteForBattery, {
-        budgetLevel: conditionBudget(state.selectedDate).level,
-        blocks: allBlocks
-      })
-    : [];
-  const battXOf = (value) => 50 + (clamp(value, 0, batteryMax) / (batteryMax || 1)) * 45;
-  const batteryPolyline = batteryPts.length >= 2
-    ? `<polyline class="battery-curve" points="${batteryPts.map((p) => `${battXOf(p.value)},${yOf(p.minute)}`).join(" ")}" stroke="#ff9500" stroke-width="1.5" fill="none" stroke-linejoin="round"/>`
-    : "";
-  const batteryLast = batteryPts.length ? Math.round(batteryPts[batteryPts.length - 1].value) : null;
-
-  // v148(UI改善計画Phase3-5): 「エネルギー/バッテリー」表示モード切替(state.settings.
-  // timelineEnergyGraphMode、既定"energy")。v144までは-maxAbs〜+maxAbsのエネルギー軸と
-  // 0〜batteryMaxのバッテリー軸という別スケールの2線を同じSVGへ重ねて描いていたが
-  // (claude-ux-review v144詳細「読み分けるのは難しい」)、常に片方だけ描く1グラフ1スケールへ
-  // 変える。データ算出(realPoints/predictPoints/batteryPts)自体は両モードで変えず、
-  // 表示するpolyline/ラベルだけを切り替える(既存チャートは削除しない)。
-  // v148レビュー対応(Codex指摘・項目4): 選択状態はグローバル設定(state.settings)なので、
-  // 切替トグルの無い場所(compact=タスクシュート右レール)や、batteryPtsが常に空になる
-  // 過去日(!isToday)でモードが"battery"のままだと、復帰手段の無い空グラフになってしまう。
-  // その2条件では強制的にエネルギー系列へフォールバックする(設定自体は変更しない。
-  // 通常のタイムライン画面へ戻れば選択済みのモードのまま表示される)。
-  const graphMode = (state.settings.timelineEnergyGraphMode === "battery" && isToday && !compact) ? "battery" : "energy";
-  const showEnergy = graphMode === "energy";
-  const showBattery = graphMode === "battery";
-
-  // レビュー対応: ティッカー(updateBatteryTick)が全体を差し替えられるよう、単一の
-  // コンテナ要素にまとめて返す(既存の.timelineは position:relative のままなので、
-  // 子要素個々のposition:absoluteの基準は変わらない=見た目は無変更)。
-  return `
-    <div class="energy-graph-overlay">
-      <svg class="energy-svg" viewBox="0 0 100 ${totalHeight}" preserveAspectRatio="none"
-           style="position:absolute; top:0; right:0; width:90px; height:${totalHeight}px; pointer-events:none;">
-        <line x1="50" y1="0" x2="50" y2="${totalHeight}" stroke="var(--line)" stroke-width="0.4" stroke-dasharray="2,2"/>
-        ${showEnergy ? polyline(realPoints, false) : ""}
-        ${showEnergy ? polyline(predictPoints, true) : ""}
-        ${showEnergy ? circles(realPoints, "#2fb96d") : ""}
-        ${showBattery ? batteryPolyline : ""}
-      </svg>
-      ${showEnergy ? `
-      <div style="position:absolute; top:2px; right:2px; font-size:9px; color:var(--faint); pointer-events:none;">エネルギー</div>
-      <div style="position:absolute; top:16px; right:2px; font-size:9px; color:var(--faint); pointer-events:none;">起点 ${morning}</div>
-      <div style="position:absolute; bottom:2px; right:2px; font-size:9px; color:var(--green-text); pointer-events:none;">終値 ${endValue >= 0 ? '+' : ''}${endValue}</div>
-      ` : ""}
-      ${showBattery ? `
-      <div style="position:absolute; top:2px; right:2px; font-size:9px; color:var(--faint); pointer-events:none;">バッテリー</div>
-      ${batteryLast !== null
-        ? `<div class="battery-curve-label" style="position:absolute; top:16px; right:2px; font-size:9px; color:#ff9500; pointer-events:none;">🔋残量 ${batteryLast}</div>`
-        : `<div style="position:absolute; top:16px; right:2px; font-size:9px; color:var(--faint); pointer-events:none;">データなし</div>`}
-      ` : ""}
-    </div>
-  `;
-}
 
 function renderPomodoro() {
   const running = state.pomodoro.running;
