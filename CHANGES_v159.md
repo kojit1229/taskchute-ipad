@@ -65,7 +65,7 @@ private生成物の文面を置かない」原則)。
 
 ## バッチ側の実証(参考、ClaudeCodeワークスペース側)
 
-`loop/scripts/future-letter.sh` を単体実行で検証済み:
+`loop/scripts/future-letter.sh` を単体実行で検証済み(初回実装時点、参照元=`goals/`当時):
 - dry-run: goals/読み込み・claude呼び出し・personal-dataへの書き込みを行わず、ダミーデータで
   抽出→検証の配線のみ確認(検証OK・pushなしを確認)
 - 1回目(実行): `goals/*.md`(7件)+`personal-data/taskchute/日報_2026-07-2{1..7}.md`
@@ -74,21 +74,28 @@ private生成物の文面を置かない」原則)。
 - 2回目(実行): 当月分が既に存在するため「既に今月の『未来からの手紙』が存在するためスキップ
   (冪等)」で即exit 0(抽出・生成を一切行わない)
 
+**2026-07-28、参照元切替後に再実証済み**(下記「懸念点」節参照): 新ソース(12週サイクル+
+Vision/Daily_Affirmation)で1回目=生成push+index更新、2回目=冪等スキップを再確認。
+抽出結果は`cycleGoals=3 vision=yes journalDays=7`(実データ: アクティブな12週プロジェクト
+「感想をまとめる」「ウイスキー検定2級 合格」等3件+Vision.md/Daily_Affirmation.md+日報7日分)。
+
 ## 未対応(K承認待ち)
 
 - `loop/scripts/future-letter.sh` のタスクスケジューラ登録・coach-dailyチェーンへの組み込みは
   実施していない(spec通り単体実行検証まで)。
 
-## 懸念点(監督者へ共有)
+## 懸念点(監督者へ共有・2026-07-28に解消済み)
 
-- 発注仕様どおり `goals/` 配下(`workbench/out/2026-07-27-taskchute-ai5/spec.md` 指定の絶対パス)
-  を目標ファイルとして読んでいるが、実体はKの個人的な人生目標ではなく本ワークスペースの
-  インフラ・ヘルスチェック用goal宣言(`pipeline-*-fresh`等、`loop/verify-goals.sh`が検証する
-  監視項目)だった。プロンプト側で「技術的な記述をそのまま引用せず、Kにとって意味のある営みへ
-  意訳して言及すること」という指示を加えて対応し、実際の生成物(1回目実行分)でも違和感なく
-  意訳できていることを確認したが、**参照元データがK自身の12週サイクル目標やビジョンではない**
-  という前提のズレは監督者判断で解消していない(仕様どおり実装したが、将来的にKの実際の目標
-  〈state.projectsの12週サイクル目標等〉を参照させたい場合は別途指示が必要)。
+- ~~発注仕様どおり `goals/` 配下を目標ファイルとして読んでいたが、実体はKの個人的な人生目標では
+  なく本ワークスペースのインフラ・ヘルスチェック用goal宣言だった~~ → **K承認(2026-07-28)により
+  解消**: 参照元を `goals/`(インフラのヘルスチェック用goal宣言)から、アプリの実際の**12週
+  サイクル目標(`personal-data/taskchute/app-state.json`)+ Vision.md/Daily_Affirmation.md
+  (`personal-data/taskchute/content/`)** へ切替済み。バッチ側の変更詳細は
+  `loop/scripts/future-letter-extract.py`冒頭コメント・`loop/FORMAT_CONTRACT.md`
+  「未来からの手紙_YYYY-MM.mdの契約」参照(アプリ側=本リポジトリの変更は無し。参照元切替は
+  バッチ側〈ClaudeCodeワークスペース側〉のみで完結する)。今月分(`未来からの手紙_2026-07.md`)は
+  旧ソース由来の内容を削除し、新ソースで作り直し済み(personal-dataリポジトリのcommit履歴:
+  `fe3f415`削除→`92c8069`新ソースで再生成・push→`637dd27`report-index.json再生成・push)。
 
 ## 2026-07-28レビュー対応(2系統、Claude reviewer + Codex)
 
