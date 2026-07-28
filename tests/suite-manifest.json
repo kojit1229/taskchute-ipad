@@ -148,6 +148,31 @@
       }
     },
     {
+      "file": "journal-core.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "journal-health",
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 38,
+      "assertionHash": "546e5dfa8ec09e9d",
+      "sourceHash": "f6baf6cf3e97f007",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
       "file": "merge-core.test.js",
       "kind": "node",
       "tier": "full",

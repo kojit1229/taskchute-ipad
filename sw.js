@@ -1,4 +1,8 @@
-const CACHE_NAME = "taskchute-journal-pwa-v168";
+const CACHE_NAME = "taskchute-journal-pwa-v169";
+// v169: app.js分割の段階4-3(ジャーナルタブ本体+コンディションOS・運動記録・今日行ったお店ログ抽出)。
+//   src/features/journal.js(renderJournal〜deleteGymEntry等、configureJournal(deps)注入)/
+//   src/state/journal-fold.js(click dispatcherとrenderJournalの共有_journalSegmentOverride)を
+//   APP_SHELLへ追加した。挙動は抽出前と完全に同一(移動+依存注入化のみ)。
 // v168: app.js分割の段階4-2(WishタブTier1のCRUD・描画・月間ボードD&D抽出)。src/features/wish.js
 //   (getWishProject〜deleteWishのTier1・16関数+wishHasTodayBlock(Tier2)+_wishDrag/月間ボードD&D、
 //   configureWish(deps)注入)をAPP_SHELLへ追加した。仕分けモード・儀式連携・Home週次カード
@@ -193,8 +197,10 @@ const APP_SHELL = [
   "./src/core/merge.js",
   "./src/features/avoid.js",
   "./src/features/dashboard.js",
+  "./src/features/journal.js",
   "./src/features/wish.js",
   "./src/state/feedback-cache.js",
+  "./src/state/journal-fold.js",
   "./src/state/store.js",
   "./src/storage/local.js",
   "./src/sync/github.js"

@@ -1,0 +1,57 @@
+{
+  "version": 169,
+  "date": "2026-07-29",
+  "title": "app.js分割 段階4-3(ジャーナル抽出)",
+  "summary": "app.js分割の段階4-3として、prep-stage4-journal.mdの推奨に従い、ジャーナルタブ本体(renderJournal/ensureJournal/defaultJournal)とそこから排他的に呼ばれるコンディションOS(朝/夜の体調・睡眠・服薬・余力)・運動記録・今日行ったお店ログの一式をsrc/features/journal.jsへ抽出した。renderExperimentSection(週次レビューと共有)は設計書の推奨どおり実体をapp.jsに残しdeps注入で「呼ぶだけ」にし、_journalSegmentOverride(click dispatcherとrenderJournalの共有変数)はcachedFeedbackと同じ理由でsrc/state/journal-fold.jsへ切り出した。あわせて設計書§9 Must級指摘のとおり、safeExternalUrl(お店URLのXSS対策)のNode特性テストをtests/journal-core.test.jsとして新設した(これまでブラウザE2E経由でしか検証されていなかったテスト空白を埋める)。",
+  "changedFiles": [
+    "app.js",
+    "sw.js",
+    "src/features/journal.js",
+    "src/state/journal-fold.js",
+    "tests/journal-core.test.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "prep-stage4-journal.md §7の推奨(ジャーナル本体+排他的サブウィジェット一式をsrc/features/journal.jsへ、renderExperimentSectionは共有のためdeps注入で呼ぶだけにする)にそのまま従う。",
+    "_journalSegmentOverride(click dispatcherの'toggle-journal-segment'分岐とrenderJournalの両方が読み書きする非永続オブジェクト)は、v167のcachedFeedback(src/state/feedback-cache.js)と全く同じ形の共有状態のため、同じパターンでsrc/state/journal-fold.jsへ切り出した(設計書は「移動先候補」としてのみ言及していたが、click dispatcher自体は分割しないという制約の下では独立モジュール化が最小改変の解になると監督者裁定)。",
+    "ensureConditionLog(コンディションログの遅延初期化)は、journal.js側の各setXxx関数に加えてapp.js側のinputイベントdispatcher(data-condition-note-date分岐、夜のひとこと)からも呼ばれるため、wishHasTodayBlock(v168・wish.js)と同じ「journal.js側へ移しexportし、app.js側はここからimportして参照を切り替えるだけ」の扱いにした。同様にensureJournal/defaultJournalもapp.js側のseedState/generateReport/daily-open等の複数箇所から呼ばれるため同じ扱いにした。"
+  ],
+  "changes": [
+    "src/features/journal.js(新規): renderMorningEnergyPicker/renderConditionMorningExtra/renderEveningConditionCard/lastGymRecord/renderGymLogCard/safeExternalUrl/storeVisitsForDate/renderStoreVisitsCard/openStoreVisitEditor/buildStoreVisitModal/saveStoreVisitFromModal/deleteStoreVisit/deleteStoreVisitWithConfirm/openStoreVisitsYearModal/buildStoreVisitsYearModal/hoursLabel/renderSleepCard/ensureJournal/defaultJournal/renderJournal/setMorningEnergy/ensureConditionLog/conditionRecordedDates/conditionRecordedCountThisWeek/setConditionSleep/toggleConditionMeds/setConditionCapacity/setEveningMood/addGymEntry/deleteGymEntry(28関数)+energyLevels/CONDITION_SLEEP_PRESETS/CONDITION_CAPACITY_OPTIONS/CONDITION_GYM_PRESETS/JOURNAL_PROMPTS(モジュール定数)を移動。stateはsrc/state/store.jsからlive binding importする。escapeHTML/renderHeader/renderDateBar/renderMarkdown/renderModal/closeModal/addDays/todayISO/weekRange/weekDays/showToast/nowDateTime/saveAndRender/personalDataReady/latestSleepLogWithin/shortSleepDate/upsertMorningLine/renderExperimentSection/JOURNAL_REQUEST_SECTIONはconfigureJournal(deps)による依存注入で受け取る(dashboard.js/wish.js方式と同一)。",
+    "src/state/journal-fold.js(新規): _journalSegmentOverride(朝/夜/本文detailsの手動開閉オーバーライド)。src/state/feedback-cache.jsと同じ理由・同じ形で切り出した共有モジュール。",
+    "app.js: 冒頭にsrc/state/journal-fold.js(_journalSegmentOverride)とsrc/features/journal.js(configureJournal/ensureConditionLog/renderJournal/ensureJournal/defaultJournal/setMorningEnergy/setConditionSleep/toggleConditionMeds/setConditionCapacity/setEveningMood/addGymEntry/deleteGymEntry/openStoreVisitEditor/openStoreVisitsYearModal/deleteStoreVisitWithConfirm/saveStoreVisitFromModal/deleteStoreVisit)のimportを追加。configureWish呼び出しの直後にconfigureJournal({...})を1回追加。旧energyLevels/_journalSegmentOverride宣言・Tier1-B/1-Cの関数本体・store visit一式・renderJournal・ensureJournal/defaultJournal/JOURNAL_PROMPTSを削除し、抽出先を示すコメントマーカーのみを残した。click dispatcher('toggle-journal-segment'分岐)・inputイベントdispatcher('data-condition-note-date'分岐)・modal dispatcher(submitModal/deleteFromModalのstoreVisit分岐)は、参照先を移動後のimportへ切り替えただけでロジック・構造は一切変更していない(ロジック無改変・巨大if連鎖の分割はしない、という制約どおり)。isConditionDegraded/CONDITION_DEGRADED_THRESHOLD(Home縮退モード表示が参照)はジャーナル専用ではないためapp.js残留。",
+    "sw.js: CACHE_NAMEをv169へ更新し、APP_SHELLへ./src/features/journal.jsと./src/state/journal-fold.jsを追加した。",
+    "tests/journal-core.test.js(新規): dynamic import方式でsafeExternalUrl(最優先・https/http許可、javascript:/data:拒否、大文字HTTPSも許可、trim、null/undefined安全)/ensureJournal・defaultJournal(日付ヘッダの正規表現置換が1箇所のみ・複数行本文保持・既存ジャーナルは上書きしない)/storeVisitsForDate(削除済み除外・createdAt昇順)/lastGymRecord(excludeDate除外・同種目のみ・日付降順)/ensureConditionLog(遅延初期化・2回目呼び出しで上書きしない)/setConditionSleep等4関数(値保存+morningRecordedAtスタンプ+トグル)/conditionRecordedCountThisWeek(週内カウント)/renderJournal(_journalSegmentOverrideの優先順位、時刻ベース既定との切替)の8グループ36assertionを固定した。"
+  ],
+  "uncertainties": [
+    "prep-stage4-journal.md §7/§9が名指ししていたmergeJournalMetaByWinners/journalTemplateTextFor(sync層依存が懸念されていた2関数)は、v168時点のapp.jsをgrepしても存在しない(設計書調査時点より前に整理されたか、実装されなかったと推測される)。該当なしのため今回の抽出には含めていない。",
+    "設計書§4はenergyLevels(5段階ラベル定数)についてHome側computeHomeBatteryInfoとの共有可能性を示唆していたが、grep実測では朝/夜の体調カード+setMorningEnergyの3箇所以外に参照が無く(Home側はstate.settings.morningEnergyLog経由でstateのlive bindingを読むのみ)、journal.jsへ全面移動した。hoursLabel(睡眠時間表示整形)もrenderSleepCard内のみの参照だったため全面移動した。",
+    "_journalSegmentOverrideは設計書がジャーナル専用の移動候補として挙げていたが、click dispatcher自体(巨大if連鎖)は分割しない制約があるため、cachedFeedback(v167)と同じ独立モジュール切り出し(src/state/journal-fold.js)で両ファイルから共有する形にした(監督者裁定)。",
+    "inputイベントdispatcher('data-journal-date'/'data-condition-note-date'分岐)は、いずれもstate直接操作+ensureConditionLog(import経由で参照が切り替わる)のみで、moveした関数以外への新規参照が無かったため、分岐自体には一切手を入れていない。設計書§9が挙げていた「input dispatcherの分割方針が計画に無い」という懸念は、今回は分割不要という形で解消された。",
+    "実行コード差分は実測(app.js: +53/-533、sw.js: +7/-1、src/features/journal.js: 新規628行、src/state/journal-fold.js: 新規17行)で200行を超える。ジャーナルタブ本体+コンディションOS+運動記録+お店ログが相互に呼び合う密結合な一塊(renderJournalが全サブウィジェットを直接呼ぶ)であり機械分割すると動かない途中状態になるため、監督者判断でSize-Exempt 1コミットとする(v166〜v168と同様の前例)。"
+  ],
+  "reviewFocus": [
+    "src/features/journal.jsへ移動した28関数+5定数の本文がapp.js(v168時点)から一切変更されていないこと(git diffで移動前後を突合)。",
+    "configureJournal呼び出しの19個の依存(JOURNAL_REQUEST_SECTIONを含む)がすべてapp.js側の同名hoisted関数/定数を指しており、TDZ等の初期化順序問題が無いこと。",
+    "click dispatcher('toggle-journal-segment')・inputイベントdispatcher('data-journal-date'/'data-condition-note-date')・modal dispatcher(storeVisit分岐)が、いずれも巨大if連鎖の構造を変えずimport参照の切替のみで動作すること。",
+    "_journalSegmentOverride(src/state/journal-fold.js)がclick dispatcher側の書き込みとrenderJournal側の読み取りの両方で同一オブジェクト参照を保っていること(v148のセッション内オーバーライド挙動が退行していないこと、tests/journal-core.test.js[8]で固定済み)。",
+    "safeExternalUrl(お店URLのXSS対策)のNode特性テスト(tests/journal-core.test.js[1])が、既存のブラウザE2E(v141)と矛盾せず同じ実装を固定していること。"
+  ],
+  "verification": [
+    "node --check app.js / sw.js / src/features/journal.js / src/state/journal-fold.js / tests/journal-core.test.js → 全てexit 0",
+    "node tests/journal-core.test.js → 全件成功(8グループ36assertion)",
+    "node tests/run-all.js v73 v141 v148 sw-integration → 全件成功(prep-stage4-journal.md §6指定のジャーナル系回帰スイート3本+sw-integration)",
+    "npm run test:fast → 全件成功(journal-core.test.js含む全Node系スイート)",
+    "npm run code:index:write / npm run test:manifest:write",
+    "node scripts/release-gate.js releases/v169.json --suite=journal-core,sw-integration,v73,v141,v148 → PASS",
+    "git diff --numstat で実行コード差分を実測して監督者へ報告する"
+  ],
+  "knownLimitations": [
+    "「日報生成」(generateReport、state.reports操作)はジャーナルタブの「📊 日報を生成」ボタンから起動される導線があるが、コード本体は別関数・別state操作のため設計書どおり今回のスコープに含めていない(app.js残留)。",
+    "renderExperimentSection(週次レビューと共有)は実体をapp.jsに残したまま。週次レビュー自体の抽出は別枠(段階4の対象外)。",
+    "src/配下にpackage.json(type:module)を置いていないため、Node実行時にMODULE_TYPELESS_PACKAGE_JSON警告が出る(v164から継続、動作には影響しない)。"
+  ]
+}
