@@ -86,8 +86,8 @@ function check(name, cond, extra = "") {
     const moreNavButtons = await page.locator('.more-group [data-action="nav"]').evaluateAll(
       (els) => els.map((el) => el.dataset.view)
     );
-    check("その他グリッドは11項目(ルーティンを除く12項目中)",
-      moreNavButtons.length === 11, JSON.stringify(moreNavButtons));
+    check("その他グリッドは12項目(ルーティンを除く13項目中。v163でダッシュボードが振り返り群に追加)",
+      moreNavButtons.length === 12, JSON.stringify(moreNavButtons));
     check("ルーティンはその他グリッドに含まれない", !moreNavButtons.includes("routine"), JSON.stringify(moreNavButtons));
     check("計画群の直後に思考群が続く(グループ単位でまとまっている)",
       moreNavButtons.slice(0, 4).join(",") === "wbs,wish,avoid,vision", JSON.stringify(moreNavButtons));
