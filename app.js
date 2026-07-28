@@ -159,6 +159,21 @@ const cachedQuoteJson = {};  // { 'YYYY-MM-DD': {quote, author} | undefined }
 // セッション内で1回だけ確認する(前月以前の無条件fetchは行わない。過去の手紙自体はAIレポート
 // 画面の一覧〈AI_REPORT_TYPES〉から読む導線に任せる)。
 const cachedFutureLetterMd = {};  // { 'YYYY-MM': '...手紙本文...' | undefined }
+// v161: AI機能第5弾(最終)「エネルギーカーブ」。loop/scripts/energy-curve.sh が
+// personal-data/taskchute/ へ energy-curve.json({generatedAt,days,hourly:[{hour,count,netAvg,
+// startRate}...24件]}、直近28日の完了Block実績から決定論集計した時間帯別の実行量/充放電net/
+// 着手率)を**単一の上書きファイル**として日次でpushする(契約は
+// loop/FORMAT_CONTRACT.md「energy-curve.jsonの契約」)。集計はバッチ側のみ(K発注仕様
+// 「アプリに分析ロジックを足さない」)、アプリは描画のみ。
+// 2026-07-28レビュー対応(Codex P1): today-enemy/勝手に格言のような日付キー方式(「今日分は
+// 1回だけ確認」)にすると、バッチが同日中に再生成しても新しい内容が翌日まで反映されない
+// (単一の上書きファイルという性質上、同じ「今日」のキーの中身が日中に変わりうるため)。
+// そのため日付キーではなく**取得時刻ベースのTTLキャッシュ**にし、既存のAIフィードバック等の
+// 定期再fetch機構(FEEDBACK_REFRESH_INTERVAL_MS=30分、visibilitychange復帰時 or 定期tick経由の
+// maybeRefreshFeedback→hydrateStaticMarkdown)にそのまま乗せる。fetchedAt=0(初回)、または
+// 前回取得から30分以上経過していれば再fetchする(成功・失敗を問わずfetchedAtは更新し、
+// 失敗が続いても30分に1回だけリトライする=連打しない)。
+let cachedEnergyCurveJson = { fetchedAt: 0, data: undefined };  // data: {generatedAt,days,hourly:[...]} | undefined
 // v67: AI作業結果_<today>.json のパース済み配列(非永続、当日分のみ)。二重登録防止のIDは state.aiWorkProcessedIds 側で永続化する。
 let cachedAiWorkResults = null;
 // v74: 読書複利化 — taskchute/reading/highlights.json の books 配列(null=未取得。永続化しない、
@@ -10923,6 +10938,49 @@ function renderSleepStats(since, today, blocksByDate) {
     </div>`;
 }
 
+// v161: AI機能第5弾(最終)「エネルギーカーブ」。計器盤の詳細層に置く時間帯別(24枠)の
+// 棒グラフ。K発注仕様「タスクの中身ではなく『いつやるか』の最適化に振り切る」「集計は
+// バッチ側、アプリに分析ロジックを足さない」に基づき、本関数はcachedEnergyCurveJson.dataの
+// 値をそのまま描画するだけで、アプリ側での再集計・フィルタは一切行わない。
+// 2026-07-28レビュー対応:
+//   - 必須修正3: hourly全件が実行数0(=表示すべき実データが無い)ならセクションごと非表示にする
+//     (既存の「n不足のセルは出さない」ガード思想を、節全体の空表示防止にも適用)。
+//   - 必須修正5: startRateはtitle属性(ツールチップ)頼みだとiOS実機で読めないため、
+//     既存ヒートマップ(stats-hm-cell、数値をセル自身の可視テキストとして出す)と同じ方式で
+//     バー下に小さく数値表示する(%記号は軸注記側にまとめ、セル内は数字のみで幅を節約)。
+//   - 推奨修正9: 既存.stats-histとは別クラス(.energy-curve-*)にして、将来.stats-hist系の
+//     件数を数える既存/新規テストとの意図しない衝突を避ける(専用CSSも新設)。
+// null時間帯(バッチ側で3件未満と判定)は数値・色付けを出さず空表示にする。
+function renderEnergyCurveCard() {
+  const data = cachedEnergyCurveJson.data;
+  if (!data || !Array.isArray(data.hourly) || data.hourly.length !== 24) return "";
+  const hasAnyData = data.hourly.some((r) => (Number(r.count) || 0) > 0);
+  if (!hasAnyData) return "";  // 2026-07-28レビュー対応・必須修正3: 全時間帯0件なら節ごと非表示
+  const maxCount = Math.max(1, ...data.hourly.map((r) => Number(r.count) || 0));
+  const bars = data.hourly.map((r) => {
+    const hour = Number(r.hour) || 0;
+    const count = Number(r.count) || 0;
+    const netAvg = typeof r.netAvg === "number" && Number.isFinite(r.netAvg) ? r.netAvg : null;
+    const startRate = typeof r.startRate === "number" && Number.isFinite(r.startRate) ? r.startRate : null;
+    const heightPct = count > 0 ? Math.round((count / maxCount) * 100) : 0;
+    const netClass = netAvg == null ? "" : netAvg > 0 ? "pos" : netAvg < 0 ? "neg" : "";
+    const titleParts = [`${hour}時台: 実行${count}件`];
+    if (netAvg != null) titleParts.push(`net ${signed(netAvg)}`);
+    if (startRate != null) titleParts.push(`着手率${startRate}%`);
+    return `<div class="energy-curve-cell" data-hour="${hour}" data-net-class="${netClass}" title="${escapeHTML(titleParts.join(" / "))}">
+      <div class="energy-curve-bar">${count ? `<div class="energy-curve-fill ${netClass}" style="height:${heightPct}%"></div>` : ""}</div>
+      <div class="energy-curve-rate">${startRate != null ? startRate : ""}</div>
+      <div class="energy-curve-lab">${hour % 3 === 0 ? hour : ""}</div>
+    </div>`;
+  }).join("");
+  return `
+    <div class="panel stack stats-wide">
+      <h2>エネルギーカーブ(時間帯別)</h2>
+      <div class="energy-curve-grid">${bars}</div>
+      <div class="muted stats-axis">棒の高さ=実行数、色=充放電net(緑=充電傾向・赤=放電傾向、0または3件未満は無色)。バー下の数値=着手率%(3件未満は空欄)。直近${data.days || 28}日集計</div>
+    </div>`;
+}
+
 // v148(UI改善計画Phase3-3): 計器盤の常時表示に置く「睡眠1行要約」。renderSleepStats(詳細、
 // details格納)を開かなくても直近の睡眠状況が一目で分かるよう、中央値だけを1行で示す。
 // データが1件も無ければ非表示(既存の静かな計器の方針を踏襲)。
@@ -11446,11 +11504,12 @@ function renderStats() {
   //   詳細     = エネルギー収支(energyChart)→ カテゴリ配分(donutCard)→
   //              カテゴリ収支(catEnergyCard)→ 週次推移(trendCard)→ 時間帯×曜日(heatmap)→
   //              時間帯別(histCard)→ 見積(estimateCard)→ 記録の継続(calendarCard)→
-  //              睡眠詳細(sleepStatsCard)
+  //              睡眠詳細(sleepStatsCard)→ エネルギーカーブ時間帯別(energyCurveCard、v161)
   // 既存チャートは1つも削除せず、詳細detailsへ格納するだけ(claude-ux-review S2/S3対応)。
   const sleepSummaryCard = renderSleepSummaryLine(sleepSince, today);
+  const energyCurveCard = renderEnergyCurveCard();  // v161: バッチ生成物が無ければ空文字(節ごと非表示)
   const summaryBody = insightsCard + rateChart + sleepSummaryCard;
-  const detailBody = energyChart + donutCard + catEnergyCard + trendCard + heatmap + histCard + estimateCard + calendarCard + sleepStatsCard;
+  const detailBody = energyChart + donutCard + catEnergyCard + trendCard + heatmap + histCard + estimateCard + calendarCard + sleepStatsCard + energyCurveCard;
   return `
     ${renderHeader("数字で見る実行の実態", "計器盤")}
     <div class="segmented" style="margin-bottom:10px">
@@ -11459,7 +11518,7 @@ function renderStats() {
     </div>
     ${range === "all" ? `<div class="muted" style="font-size:11px; margin-bottom:10px">全期間 = この端末に残っているデータの範囲(アーカイブ済みの期間は含みません)</div>` : ""}
     ${summaryBody ? `<section class="stats-grid">${summaryBody}</section>` : ""}
-    ${detailBody ? homeFoldSection("stats-details", false, "stats-details", "", `詳細を見る(時間・エネルギー・見積・継続・睡眠詳細)`, `<section class="stats-grid">${detailBody}</section>`) : ""}
+    ${detailBody ? homeFoldSection("stats-details", false, "stats-details", "", `詳細を見る(時間・エネルギー・見積・継続・睡眠詳細・エネルギーカーブ)`, `<section class="stats-grid">${detailBody}</section>`) : ""}
     ${(!summaryBody && !detailBody) ? emptyPanel("まだ十分なデータがありません。実績が数週間分たまると表示されます。") : ""}
   `;
 }
@@ -16566,10 +16625,14 @@ async function hydrateStaticMarkdown() {
   const wantTodayEnemyFetch = ghReady && !(realToday in cachedTodayEnemyMd);
   const wantQuoteFetch = ghReady && !(realToday in cachedQuoteJson);
   const wantFutureLetterFetch = ghReady && !(realCurrentMonth in cachedFutureLetterMd);
-  const [todayEnemyMd, quoteRaw, futureLetterMd] = await Promise.all([
+  // v161(2026-07-28レビュー対応・必須修正4): 日付キーではなくTTL(FEEDBACK_REFRESH_INTERVAL_MS
+  // =30分)で判定する(単一の上書きファイルのため、同日中の再pushを拾えるようにする)。
+  const wantEnergyCurveFetch = ghReady && (Date.now() - cachedEnergyCurveJson.fetchedAt >= FEEDBACK_REFRESH_INTERVAL_MS);
+  const [todayEnemyMd, quoteRaw, futureLetterMd, energyCurveRaw] = await Promise.all([
     wantTodayEnemyFetch ? fetchGitHubRawText(`今日の敵_${realToday}.md`) : Promise.resolve(undefined),
     wantQuoteFetch ? fetchGitHubRawText(`勝手に格言_${realToday}.json`) : Promise.resolve(undefined),
     wantFutureLetterFetch ? fetchGitHubRawText(`未来からの手紙_${realCurrentMonth}.md`) : Promise.resolve(undefined),
+    wantEnergyCurveFetch ? fetchGitHubRawText("energy-curve.json") : Promise.resolve(undefined),
   ]);
   if (wantTodayEnemyFetch) {
     cachedTodayEnemyMd[realToday] = todayEnemyMd || undefined;
@@ -16614,6 +16677,45 @@ async function hydrateStaticMarkdown() {
     cachedQuoteJson[realToday] = parsedQuote;
     if (parsedQuote) changed = true;
   }
+  if (wantEnergyCurveFetch) {
+    // v161: energy-curve.json はファイル名が日付を含まない単一の上書きファイルのため、
+    // 判定はJSONパース+スキーマ検証の成否のみで行う(勝手に格言と同じフェイルソフト方針。
+    // バッチが壊れて配信していても、アプリは静かにセクション非表示へ倒す。hourlyは必ず24件・
+    // hour昇順を要求し、要素数が違えば丸ごと不採用にする)。
+    let parsedEnergyCurve;
+    if (energyCurveRaw) {
+      try {
+        const parsed = JSON.parse(energyCurveRaw);
+        if (parsed && typeof parsed === "object" && Array.isArray(parsed.hourly) && parsed.hourly.length === 24
+          && parsed.hourly.every((row, i) => row && typeof row === "object" && Number(row.hour) === i
+            && Number.isFinite(Number(row.count))
+            && (row.netAvg === null || Number.isFinite(Number(row.netAvg)))
+            && (row.startRate === null || Number.isFinite(Number(row.startRate))))) {
+          parsedEnergyCurve = {
+            generatedAt: typeof parsed.generatedAt === "string" ? parsed.generatedAt : "",
+            days: Number.isFinite(Number(parsed.days)) ? Number(parsed.days) : 28,
+            hourly: parsed.hourly.map((row) => ({
+              hour: Number(row.hour),
+              count: Number(row.count) || 0,
+              netAvg: row.netAvg === null ? null : Number(row.netAvg),
+              startRate: row.startRate === null ? null : Number(row.startRate),
+            })),
+          };
+        }
+      } catch (e) {
+        // 壊れたJSON。フェイルソフト(parsedEnergyCurveはundefinedのまま=セクション非表示)。
+      }
+    }
+    // 2026-07-28レビュー対応・必須修正4: 日付キーではなくfetchedAtで更新する(TTLキャッシュ)。
+    // 成否に関わらずfetchedAtは進める(失敗が続いても30分に1回だけリトライ=連打しない)。
+    // changedは「前回と内容が変わった場合」だけ立てる(30分ごとに同じ内容を再取得しても
+    // 無駄な再描画をしない。JSON.stringify比較で十分。オブジェクトが小さいため許容)。
+    const prevEnergyCurveData = cachedEnergyCurveJson.data;
+    cachedEnergyCurveJson = { fetchedAt: Date.now(), data: parsedEnergyCurve };
+    if (parsedEnergyCurve && JSON.stringify(parsedEnergyCurve) !== JSON.stringify(prevEnergyCurveData)) {
+      changed = true;
+    }
+  }
   // v67: AIプラン_<今日>.json の存在確認(下書きへの適用はrunAiMorningPlan側の専管で、
   //      ここでは鮮度シグナル専用の軽量fetch)。既に今日分を確認済みなら再fetchしない。
   if (!state.aiLinkFreshness.planAt || state.aiLinkFreshness.planAt < realToday) {
@@ -16641,7 +16743,9 @@ async function hydrateStaticMarkdown() {
   //      なったため、このタブを開いたまま待っていてもチップがライブ表示されない同種の不具合が
   //      新たに生じていた(tests/v133.test.jsで検出)。
   // v137: 入力中/IME変換中は即renderせず保留する(review.md:28。renderDeferringForFocus参照)。
-  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly" || state.currentView === "home" || state.currentView === "zero" || state.currentView === "tasks")) {
+  // v161: "stats"(計器盤)を追加。エネルギーカーブの新着fetchが完了してもこの画面を開いた
+  //       ままだと再描画されず節が出ないままになる不具合を防ぐ(他view追加時と同じ理由)。
+  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly" || state.currentView === "home" || state.currentView === "zero" || state.currentView === "tasks" || state.currentView === "stats")) {
     renderDeferringForFocus();
   }
 }

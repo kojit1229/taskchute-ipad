@@ -3395,6 +3395,20 @@ h3 {
 .stats-hist-fill { width: 100%; background: var(--accent); opacity: .7; border-radius: 3px 3px 0 0; }
 .stats-hist-lab { font-size: 9px; color: var(--muted); height: 12px; line-height: 12px; }
 
+/* v161: エネルギーカーブ(時間帯別)。.stats-histとDOM構造は似せつつ、将来の.stats-hist系
+   件数カウントとの衝突を避けるため専用クラスにする(2026-07-28レビュー対応・推奨修正9)。
+   バー下に着手率の数値を出す行(.energy-curve-rate)を追加した点が.stats-histとの主な違い。 */
+.energy-curve-grid { display: flex; align-items: flex-end; gap: 3px; height: 96px; }
+.energy-curve-cell { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 6px; height: 100%; }
+.energy-curve-bar { flex: 1; width: 100%; display: flex; align-items: flex-end; background: var(--panel-soft); border-radius: 3px; overflow: hidden; }
+.energy-curve-fill { width: 100%; background: var(--accent); opacity: .7; border-radius: 3px 3px 0 0; }
+/* v147トークン規約: 背景色としての塗りは--green-text(テキスト専用の高コントラスト版)ではなく
+   --green(装飾・背景用途の既存トークン)を使う(2026-07-28レビュー対応・推奨修正6)。 */
+.energy-curve-fill.pos { background: var(--green); }
+.energy-curve-fill.neg { background: var(--red); }
+.energy-curve-rate { font-size: 8px; color: var(--muted); height: 10px; line-height: 10px; }
+.energy-curve-lab { font-size: 9px; color: var(--muted); height: 12px; line-height: 12px; }
+
 /* v142: 計器盤「睡眠」セクション */
 .stats-sleep-sub { margin-bottom: 16px; }
 .stats-sleep-sub:last-child { margin-bottom: 0; }

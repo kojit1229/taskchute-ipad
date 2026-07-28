@@ -1,4 +1,12 @@
-const CACHE_NAME = "taskchute-journal-pwa-v160";
+const CACHE_NAME = "taskchute-journal-pwa-v161";
+// v161: AI機能第5弾(最終)「エネルギーカーブ」— 自宅PCバッチ(loop/scripts/energy-curve.sh、
+//   決定論・claude不使用)が直近28日の完了Block実績から時間帯(1時間刻み24枠)別の
+//   {実行数,充放電net,着手率}を集計し、personal-data/taskchute/energy-curve.json(単一の
+//   上書きファイル)へ日次でpushする。計器盤(統計)の詳細層に「エネルギーカーブ(時間帯別)」
+//   節として棒グラフ表示するのみ(集計はバッチ側、アプリは描画のみ)。ファイルが無い/壊れて
+//   いれば節ごと非表示。AIによる「この時間帯にこのタスクを置くとよい」提案はloop/plan-daily.sh
+//   (既存AIプラン経路)のプロンプト入力に載せる形で接続し、AIプラン_*.jsonの出力契約自体は
+//   変更していない。詳細はCHANGES_v161.md参照。
 // v160: AI機能第4弾「言い訳ハンター」— 自宅PCバッチが2段階で動く。日次(loop/scripts/
 //   excuse-ledger.sh、決定論)が日報の未完了理由・言い訳に相当する箇所(「やり残し」に
 //   コメントが付いたBlock)をpersonal-dataの台帳(excuse-ledger.json)へ蓄積し、週次
