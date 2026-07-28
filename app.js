@@ -9274,7 +9274,14 @@ const AI_REPORT_TYPES = [
   // v159: AI機能3「未来の自分からの手紙」。loop/scripts/future-letter.sh が
   //       personal-data/taskchute/ へ月次で生成する(K依頼2026-07-27)。
   { id: "letter", label: "未来からの手紙", prefix: "未来からの手紙_",
-    guide: "毎月「1年後の自分」視点の手紙を自動生成します。しばらく実行されていない場合は生成されません" }
+    guide: "毎月「1年後の自分」視点の手紙を自動生成します。しばらく実行されていない場合は生成されません" },
+  // v160: AI機能4「言い訳ハンター」。loop/scripts/excuse-ledger.sh(日次・決定論)が
+  //       日報の未完了理由・言い訳に相当する箇所を台帳へ蓄積し、loop/scripts/excuse-report.sh
+  //       (週次・AI)が personal-data/taskchute/ へパターンのランキングレポートを生成する
+  //       (K依頼2026-07-27)。この機能はホーム導線を作らず、既存のAIレポートタブに
+  //       相乗りするのみ(K発注仕様「淡々と」)。
+  { id: "excuse", label: "言い訳レポート", prefix: "言い訳レポート_",
+    guide: "毎週、未完了だったタスクのコメントからパターンを淡々とまとめます。しばらく実行されていない場合は生成されません" }
 ];
 
 // _aiReportDirCache(taskchute/直下の一覧)から、種類のprefixに合致する.mdファイルを

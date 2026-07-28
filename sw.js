@@ -1,4 +1,11 @@
-const CACHE_NAME = "taskchute-journal-pwa-v159";
+const CACHE_NAME = "taskchute-journal-pwa-v160";
+// v160: AI機能第4弾「言い訳ハンター」— 自宅PCバッチが2段階で動く。日次(loop/scripts/
+//   excuse-ledger.sh、決定論)が日報の未完了理由・言い訳に相当する箇所(「やり残し」に
+//   コメントが付いたBlock)をpersonal-dataの台帳(excuse-ledger.json)へ蓄積し、週次
+//   (loop/scripts/excuse-report.sh、AI)が直近4週分から淡々としたパターンのランキング
+//   レポート「言い訳レポート_YYYY-MM-DD.md」を生成する(説教・改善命令なし)。アプリ側は
+//   AIレポート画面の種類タブに「言い訳レポート」を追加するのみ(report-index相乗り。ホーム
+//   導線は作らない=淡々と)。詳細はCHANGES_v160.md参照。
 // v159: AI機能第3弾「未来の自分からの手紙」— 自宅PCバッチ(loop/scripts/future-letter.sh)が
 //   目標ファイル(goals/配下)+直近7日分の日報から月次で「1年後の自分」視点の手紙を生成する。
 //   AIレポート画面の種類タブに「未来からの手紙」を追加し、当月分が存在する間はホーム(内省側)
