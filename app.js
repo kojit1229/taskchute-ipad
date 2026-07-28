@@ -152,6 +152,13 @@ const cachedTodayEnemyMd = {};  // { 'YYYY-MM-DD': '...1段落プレーンテキ
 // 今日分のみを扱う(前日1日分の無条件fetchは行わない)。値は{quote,author}のパース済みJSON、
 // またはfetch未完了/該当ファイル無し/JSONパース失敗/quote・author欠損ならundefined。
 const cachedQuoteJson = {};  // { 'YYYY-MM-DD': {quote, author} | undefined }
+// v159: AI機能3「未来の自分からの手紙」。loop/scripts/future-letter.sh が personal-data/taskchute/
+// へ 未来からの手紙_<YYYY-MM>.md(1年後の自分視点の手紙本文プレーンテキスト)を月次でpushする
+// (契約は loop/FORMAT_CONTRACT.md「未来からの手紙_YYYY-MM.mdの契約」)。ホームの導線表示は
+// 「当月分の存在有無」だけを知ればよいため、今日の敵/勝手に格言と同じく実際の当月キーのみを
+// セッション内で1回だけ確認する(前月以前の無条件fetchは行わない。過去の手紙自体はAIレポート
+// 画面の一覧〈AI_REPORT_TYPES〉から読む導線に任せる)。
+const cachedFutureLetterMd = {};  // { 'YYYY-MM': '...手紙本文...' | undefined }
 // v67: AI作業結果_<today>.json のパース済み配列(非永続、当日分のみ)。二重登録防止のIDは state.aiWorkProcessedIds 側で永続化する。
 let cachedAiWorkResults = null;
 // v74: 読書複利化 — taskchute/reading/highlights.json の books 配列(null=未取得。永続化しない、
@@ -576,6 +583,11 @@ document.addEventListener("click", (event) => {
   // v92: AIレポートビューア — 種類タブ切替 / 一覧・本文の手動更新
   if (action === "ai-report-type") setAiReportType(target.dataset.type);
   if (action === "ai-report-refresh") refreshAiReports();
+  // v159: ホームの「✉️ 未来からの手紙が届いています」導線 — AIレポート画面の「未来からの手紙」
+  //       タブへ直接遷移する。2026-07-28レビュー対応・推奨修正6: setAiReportType()経由だと
+  //       それ自体のrender()+setView()のrender()で2回描画してしまうため、open-questions等と
+  //       同じ「設定を直接書き換え→persistLocalNoSchedule→setView」の型(render()は1回のみ)に揃える。
+  if (action === "open-future-letter") { state.settings.aiReportType = "letter"; persistLocalNoSchedule(); setView("ai-reports"); }
   // v67: AI作業ワーカー連携(柱2) — 実績還流カードのワンタップ承認 / 質問への橋渡し
   if (action === "ai-work-approve") approveAiWorkResult(target.dataset.resultId);
   if (action === "ai-work-question") raiseAiWorkQuestion(target.dataset.resultId);
@@ -2654,6 +2666,7 @@ function renderHomeReflectTab(metrics, blocks, isToday, degraded) {
     ${homeIdeal(isToday)}
     ${homeDeclarationCard()}
     ${homeVisionCard()}
+    ${homeFutureLetterLink()}
     ${degraded
       ? homeFoldSection("ai-hub-degraded", false, "home-ai-hub", "", "AIから(たたんでいます)", homeAiHubBody(blocks, isToday))
       : homeFoldSection("ai-hub", false, "home-ai-hub", "", "AIから", homeAiHubBody(blocks, isToday))}
@@ -9257,7 +9270,11 @@ const AI_REPORT_TYPES = [
   // v113: 英語ジャーナルのAIフィードバック「💬 使える表現」から loop/english-phrases.sh が
   //       日次で自動統合する表現集。personal-data/taskchute/ へ生成する(K依頼2026-07-16)。
   { id: "english", label: "英語表現集", prefix: "英語表現集_",
-    guide: "英語ジャーナルのAIフィードバックから使える表現を毎日自動でまとめます。しばらく実行されていない場合は生成されません" }
+    guide: "英語ジャーナルのAIフィードバックから使える表現を毎日自動でまとめます。しばらく実行されていない場合は生成されません" },
+  // v159: AI機能3「未来の自分からの手紙」。loop/scripts/future-letter.sh が
+  //       personal-data/taskchute/ へ月次で生成する(K依頼2026-07-27)。
+  { id: "letter", label: "未来からの手紙", prefix: "未来からの手紙_",
+    guide: "毎月「1年後の自分」視点の手紙を自動生成します。しばらく実行されていない場合は生成されません" }
 ];
 
 // _aiReportDirCache(taskchute/直下の一覧)から、種類のprefixに合致する.mdファイルを
@@ -9326,6 +9343,26 @@ function unionAiReportEntries(indexFiles, dirList) {
   return [...merged.values()];
 }
 
+// v159 2026-07-28レビュー対応・必須修正2: report-index.jsonは日次バッチ(coach-daily.sh)が
+// 再生成する索引であり、月次の未来からの手紙_*.mdの新着が同日中に反映されない期間が起こりうる
+// (鮮度チェック自体は48時間以内なので通ってしまう=「indexにはまだ載っていないが実際には
+// 存在する」状態)。hydrateStaticMarkdown()が直接fetchGitHubRawTextで実在を確認できた月は
+// cachedFutureLetterMdに記録済みのため、それをindex/Contents API由来の一覧へunionすることで、
+// index側の反映遅延に関わらずAIレポート画面の「未来からの手紙」タブが空にならないようにする
+// (今日の敵/勝手に格言は当日限定のホームカード表示のみでAIレポート一覧タブの対象外のため、
+// 本unionは未来からの手紙のみを対象とする)。
+function knownFutureLetterEntries() {
+  return Object.keys(cachedFutureLetterMd)
+    .filter((month) => cachedFutureLetterMd[month])
+    .map((month) => ({ name: `未来からの手紙_${month}.md`, type: "file" }));
+}
+function unionKnownFutureLetters(entries) {
+  const merged = new Map();
+  (Array.isArray(entries) ? entries : []).forEach((e) => { if (e && e.name) merged.set(e.name, e); });
+  knownFutureLetterEntries().forEach((e) => { if (!merged.has(e.name)) merged.set(e.name, e); });
+  return [...merged.values()];
+}
+
 // 一覧の読み込みをトリガーする(多重fetch防止のin-flightガード付き)。完了後、まだ
 // AIレポート画面を見ていれば再描画してセレクタ/本文を反映する。
 // v138: まずreport-index.json(fetchReportIndex)を試し、無ければ従来のContents API
@@ -9355,6 +9392,13 @@ async function triggerAiReportDirLoad() {
     } else {
       await fetchPersonalDataDirList();  // 内部で_aiReportDirCache/_aiReportDirErrorを設定する(従来どおり)
     }
+  }
+  // v159 2026-07-28レビュー対応・必須修正2: 一覧を確定させた直後、hydrateStaticMarkdown()の
+  // 直接fetchで既に実在を確認済みの未来からの手紙(cachedFutureLetterMd)を必ずunionする
+  // (report-index.json由来の一覧が新着分をまだ反映していなくても、タブが空にならないように
+  // する自衛策。knownFutureLetterEntries()/unionKnownFutureLetters()参照)。
+  if (Array.isArray(_aiReportDirCache)) {
+    _aiReportDirCache = unionKnownFutureLetters(_aiReportDirCache);
   }
   _aiReportDirLoadInFlight = false;
   if (state.currentView === "ai-reports") render();
@@ -16499,15 +16543,49 @@ async function hydrateStaticMarkdown() {
   //      試す」をコメントどおりの実挙動にする。
   //      2026-07-28レビュー対応・項目4(並列化): 今日の敵と勝手に格言は別ファイル・別キャッシュで
   //      互いに独立しているため、逐次awaitではなくPromise.allで並列fetchしレイテンシを縮める。
-  const wantTodayEnemyFetch = !(realToday in cachedTodayEnemyMd);
-  const wantQuoteFetch = !(realToday in cachedQuoteJson);
-  const [todayEnemyMd, quoteRaw] = await Promise.all([
+  // v159: 「未来からの手紙」は月次ファイルのため、判定キーは日付ではなく当月(YYYY-MM)。
+  //      今日の敵/勝手に格言と同じ「1セッション1回だけ試す」設計をそのまま月キーに適用する。
+  //      2026-07-28レビュー対応・必須修正3: GitHub(personal-data)連携が未設定
+  //      (personalDataReady()===false)の間はどの`want*Fetch`も立てない。fetchGitHubRawText
+  //      自体は未設定時に静かに空文字を返す(=フェッチ「済み」に見えてしまう)ため、これを
+  //      ゲートせずに`cachedXxx[key] = 値 || undefined`していると、セットアップ画面通過前に
+  //      1回でもhydrateStaticMarkdownが走った時点で「取得試行済み(undefined)」がキャッシュに
+  //      固定されてしまい、直後の`gate-continue`(セットアップ完了、449行目
+  //      `syncFromGitHubOnStartup().then(() => hydrateStaticMarkdown())`)で再度呼ばれても
+  //      `realToday/realCurrentMonth in cachedXxx`が既にtrueのため二度とフェッチされなくなる
+  //      (今日の敵/勝手に格言/未来からの手紙が永久に出ない実害バグだった)。
+  const ghReady = personalDataReady(state.settings.github);
+  const realCurrentMonth = realToday.slice(0, 7);
+  const wantTodayEnemyFetch = ghReady && !(realToday in cachedTodayEnemyMd);
+  const wantQuoteFetch = ghReady && !(realToday in cachedQuoteJson);
+  const wantFutureLetterFetch = ghReady && !(realCurrentMonth in cachedFutureLetterMd);
+  const [todayEnemyMd, quoteRaw, futureLetterMd] = await Promise.all([
     wantTodayEnemyFetch ? fetchGitHubRawText(`今日の敵_${realToday}.md`) : Promise.resolve(undefined),
     wantQuoteFetch ? fetchGitHubRawText(`勝手に格言_${realToday}.json`) : Promise.resolve(undefined),
+    wantFutureLetterFetch ? fetchGitHubRawText(`未来からの手紙_${realCurrentMonth}.md`) : Promise.resolve(undefined),
   ]);
   if (wantTodayEnemyFetch) {
     cachedTodayEnemyMd[realToday] = todayEnemyMd || undefined;
     if (todayEnemyMd) changed = true;
+  }
+  if (wantFutureLetterFetch) {
+    cachedFutureLetterMd[realCurrentMonth] = futureLetterMd || undefined;
+    if (futureLetterMd) {
+      changed = true;
+      // 2026-07-28レビュー対応・必須修正2: AIレポート一覧が既にキャッシュ済み(=ユーザーが
+      // 既にAIレポート画面を開いたことがある)場合、triggerAiReportDirLoad()は一覧を1度
+      // 取得すると再fetchしない(_aiReportDirCacheが truthy な間は早期return)ため、ここで
+      // 直接unionしないと index側の反映を待つまでタブが空のまま残ってしまう。
+      if (Array.isArray(_aiReportDirCache)) {
+        _aiReportDirCache = unionKnownFutureLetters(_aiReportDirCache);
+        // 本関数末尾の`if (changed && (state.currentView === "vision" || ...))`のview一覧に
+        // "ai-reports"は含まれない(このunion専用の分岐なので、その一般ルールに相乗りせず
+        // triggerAiReportDirLoad()/triggerAiReportBodyLoad()と同じ「ai-reports表示中のみ
+        // 即render」を個別に行う。これが無いと、AIレポート画面を開いたまま新着の手紙fetchが
+        // 完了しても一覧・本文が更新されないまま=タブが古い表示に固着する)。
+        if (state.currentView === "ai-reports") render();
+      }
+    }
   }
   if (wantQuoteFetch) {
     // 生成物はJSON契約(FORMAT_CONTRACT.md)だが、バッチ側の壊れ・仕様変更でもアプリが落ちない
@@ -16724,6 +16802,19 @@ function aiWorkResultRowHTML(r) {
 //      中身だけを返す形に分離した(中身自体は無変更)。
 // v146: 通常時も既定closedの折りたたみへ変更したため(UI改善計画Phase1-1)、外側<section>で
 //      包むhomeAiHub()は両呼び出し元がhomeFoldSection+本関数の直接呼び出しに統一され不要になり削除した。
+// v159: AI機能3「未来の自分からの手紙」。自宅PCバッチ(loop/scripts/future-letter.sh)が
+// 月次で生成した 未来からの手紙_<当月>.md が存在する間だけ、「AIから」カードの近くに小さな
+// 導線を1行出す(タップでAIレポート画面の「未来からの手紙」タブへ)。無い月は何も出さない
+// (cachedFutureLetterMdに当月分が無い=フェイルソフト)。本文そのものはここでは表示せず、
+// 既存のAIレポート一覧・本文表示機構(AI_REPORT_TYPES/renderAiReportBody)に相乗りする。
+function homeFutureLetterLink() {
+  const month = todayISO().slice(0, 7);
+  if (!(cachedFutureLetterMd[month] || "").trim()) return "";
+  return `<div class="panel home-future-letter-link" data-action="open-future-letter" style="font-size:13px; padding:8px 12px; cursor:pointer">
+    ✉️ 未来からの手紙が届いています
+  </div>`;
+}
+
 function homeAiHubBody(blocks, isToday) {
   const workItems = isToday ? pendingAiWorkResults() : [];
   const workHTML = workItems.length ? `
