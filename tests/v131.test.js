@@ -55,6 +55,9 @@ function check(name, cond, extra = "") {
       s.sleep.logs = sleepLogs;
       s.dailyDeclarations = {};
       s.weeklyWishes = {};
+      // v162: seedState()の当日デモBlock(未完了)が残っていると「日報を生成」クリックが
+      // 未完了理由モーダルに横取りされてしまう(日報生成テストが本題ではないため)。
+      s.blocks = [];
       s.selectedDate = TODAY;
       s.currentView = view;
       localStorage.setItem(KEY, JSON.stringify(s));

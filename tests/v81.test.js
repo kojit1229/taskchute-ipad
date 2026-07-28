@@ -281,6 +281,10 @@ function check(name, cond, extra = "") {
     await page.evaluate(({ KEY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.currentView = "journal";
+      // v162: A1〜で積んだ未完了Block(v81-mit-block等)が残っていると「日報を生成」クリックが
+      // 未完了理由モーダルに横取りされ、直接の日報生成トーストを検証できなくなる
+      // (本テストの主題はトースト文言であり、未完了理由フローとは無関係のため明示的に外す)。
+      s.blocks = [];
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY });
     await page.reload();

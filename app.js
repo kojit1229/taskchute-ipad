@@ -16093,6 +16093,131 @@ function closeBodyScanFlow(saved) {
 }
 
 // ============================================================
+// v162: 未完了理由クイック入力(K裁定2026-07-28「言い訳ハンターの入力源」b案)
+// 2つの入口がある:
+//  (a) 仕分けモードの「手放す/延期」実行直後 — triageAction()が_pendingInlineReasonを立て、
+//      renderWishTriage()(上記triageInlineReasonHTML参照)がカードの下にインラインで
+//      理由チップ欄を出す。全画面モーダルにしないのは、Undoトースト(5秒間)を覆って
+//      タップ不能にしないため(recordTriageInlineReason/skipTriageInlineReasonが処理)。
+//  (b) 日次締め(「日報を生成」ボタン押下時に当日の未完了Blockが理由未記録のまま残っている
+//      場合) — こちらはUndoトーストと同時に出る心配が無いため、通常のモーダル
+//      (openIncompleteReasonModal以下)で複数件を1件ずつキューで尋ねる。
+// どちらもv129身体スキャンと同じ「強制しない」設計(いつでもスキップ/×で抜けられる)。
+// ============================================================
+const INCOMPLETE_REASON_CHIPS = ["疲労", "時間切れ", "気分が乗らない", "割り込み", "見積り過大", "その他"];
+let _pendingIncompleteReasonCtx = null; // { queue: string[](残りのblock id), mode: 'dailyClose' } | null
+// v162 2系統レビュー対応(推奨4): 日次締めモーダルで「スキップ」したBlock idを積む
+// (_triageSessionDoneと同じ「セッション内・非永続」の流儀)。同じセッション内で「日報を生成」を
+// 再度押しても、既にスキップ済みのBlockは再質問しない(ページリロードで自然にリセットされる)。
+let _dailyCloseReasonSkipped = new Set();
+
+function hasIncompleteReason(block) {
+  return Boolean(block && block.incompleteReason && block.incompleteReason.chip);
+}
+
+// (a) 仕分けモードのインライン理由チップ欄(triageInlineReasonHTML)の確定/スキップ。
+// modalRootではなく#app本体に描画されるため、noteの取得は素直にdocument.querySelectorで行う。
+function recordTriageInlineReason(chip) {
+  if (!_pendingInlineReason || !chip) { skipTriageInlineReason(); return; }
+  const blockId = _pendingInlineReason.blockId;
+  const note = (document.querySelector("[data-triage-reason-note]")?.value || "").trim();
+  state.blocks = state.blocks.map((b) => b.id === blockId
+    ? { ...b, incompleteReason: { chip, note, at: nowDateTime() }, updatedAt: nowDateTime() }
+    : b);
+  _pendingInlineReason = null;
+  // v162: saveAndRender()で新しいトーストを出すと、直前の手放す/延期のUndoトースト
+  // (triageUndoToastOpts、5秒間有効)を上書きして「元に戻す」ボタンごと消してしまう。
+  // 理由記録自体はUndo対象の一部(_triageUndoのrevertが完全に元へ戻す)であり続けたいので、
+  // ここではトーストを出さずsaveState()+render()だけに留める(Undoの生存期間に触れない)。
+  saveState();
+  render();
+}
+
+function skipTriageInlineReason() {
+  _pendingInlineReason = null;
+  render();
+}
+
+// (b) 日次締めモーダル: blockIds を1件ずつ順に尋ねる。存在しないidは無視。空(または全件無効)なら
+// mode==='dailyClose'の時だけそのままgenerateReport()へ進む(triageモードは何もしない)。
+function openIncompleteReasonModal(blockIds, mode) {
+  const queue = (blockIds || []).filter((bid) => blockById(bid));
+  if (!queue.length) {
+    if (mode === "dailyClose") generateReport();
+    return;
+  }
+  _pendingIncompleteReasonCtx = { queue, mode };
+  const first = blockById(queue[0]);
+  state.modal = { type: "incompleteReason", id: queue[0] };
+  renderModal(buildIncompleteReasonModal(first, queue.length));
+}
+
+function buildIncompleteReasonModal(block, remaining) {
+  const counter = remaining > 1 ? `<div class="muted" style="font-size:11px; margin-bottom:6px">残り${remaining}件</div>` : "";
+  return `
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">📝 未完了の理由(任意)</h3>
+        <button class="modal-close" data-action="incomplete-reason-skip" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        ${counter}
+        <div style="font-size:14px">「${escapeHTML(block.title)}」</div>
+        <div class="field" style="margin-top:10px">
+          <label class="field-label">一言(任意)</label>
+          <input class="input" style="font-size:16px" data-incomplete-reason-note placeholder="状況など">
+        </div>
+        <div class="row" style="gap:8px; margin-top:10px; flex-wrap:wrap; justify-content:center">
+          ${INCOMPLETE_REASON_CHIPS.map((c) => `<button class="btn ghost" data-action="incomplete-reason-chip" data-chip="${escapeHTML(c)}">${escapeHTML(c)}</button>`).join("")}
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn ghost" data-action="incomplete-reason-skip">スキップ</button>
+      </div>
+    </div>`;
+}
+
+// チップ1タップで確定(ノートは任意入力済みのものをそのまま使う)→ 次のキューへ
+function recordIncompleteReasonChip(chip) {
+  if (!_pendingIncompleteReasonCtx || !chip) { skipIncompleteReasonModal(); return; }
+  const blockId = _pendingIncompleteReasonCtx.queue[0];
+  const note = (modalRoot.querySelector("[data-incomplete-reason-note]")?.value || "").trim();
+  state.blocks = state.blocks.map((b) => b.id === blockId
+    ? { ...b, incompleteReason: { chip, note, at: nowDateTime() }, updatedAt: nowDateTime() }
+    : b);
+  saveState();
+  advanceIncompleteReasonQueue();
+}
+
+// 「スキップ」/× / 背景タップ共通: 記録せず次のキューへ(罰なしトーンで軽く抜けられる)。
+// v162 2系統レビュー対応(推奨4): スキップしたBlock idを_dailyCloseReasonSkippedへ積み、
+// 同じセッション内で「日報を生成」を再度押しても再質問しないようにする。
+function skipIncompleteReasonModal() {
+  const blockId = _pendingIncompleteReasonCtx?.queue?.[0];
+  if (blockId) _dailyCloseReasonSkipped.add(blockId);
+  advanceIncompleteReasonQueue();
+}
+
+function advanceIncompleteReasonQueue() {
+  if (!_pendingIncompleteReasonCtx) { closeModal(); return; }
+  _pendingIncompleteReasonCtx.queue.shift();
+  while (_pendingIncompleteReasonCtx.queue.length && !blockById(_pendingIncompleteReasonCtx.queue[0])) {
+    _pendingIncompleteReasonCtx.queue.shift();  // 念のため(削除等で消えたidを読み飛ばす)
+  }
+  if (_pendingIncompleteReasonCtx.queue.length) {
+    const next = blockById(_pendingIncompleteReasonCtx.queue[0]);
+    state.modal = { type: "incompleteReason", id: next.id };
+    renderModal(buildIncompleteReasonModal(next, _pendingIncompleteReasonCtx.queue.length));
+    return;
+  }
+  const mode = _pendingIncompleteReasonCtx.mode;
+  _pendingIncompleteReasonCtx = null;
+  closeModal();
+  if (mode === "dailyClose") generateReport();
+  else render();
+}
+
+// ============================================================
 // v87: 宣言→終了報告ループ(ROADMAP v91・実番号v87)
 // Focusmateの効果成分のうち「目標の宣言」と「終了報告」だけを取り出す。摩擦最小のため
 // どちらもワンタップで確定でき、スキップすれば従来どおりの動作(宣言/報告なし)になる。
