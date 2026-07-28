@@ -16956,6 +16956,38 @@ function autoIngestFeedback(date, text) {
 }
 const FEEDBACK_INGESTED_DATES_MAX = 300;  // aiPlanSkippedLog/zeroSecThemeLogと同じ軽量上限の思想
 
+// v163: ダッシュボードで選んだ任意日のAIフィードバックを1セッション1回だけ確認する。
+// 404・空ファイル・通信失敗はいずれもmissingへ倒し、本文領域は静かな空表示にする。
+async function hydrateDashboardFeedback(date) {
+  if (!isDashboardDate(date)) return false;
+  if (!personalDataReady(state.settings.github)) return false;
+  if ((state.feedback?.[date] || "").trim() || (cachedFeedback[date] || "").trim()) {
+    _dashboardFeedbackFetchState[date] = "ready";
+    return false;
+  }
+  if (_dashboardFeedbackFetchState[date]) return false;
+  _dashboardFeedbackFetchState[date] = "loading";
+  const result = await fetchGitHubRawResult(`AIフィードバック_${date}.md`);
+  if (result.ok && result.text.trim()) {
+    const changed = result.text !== cachedFeedback[date];
+    cachedFeedback[date] = result.text;
+    _dashboardFeedbackFetchState[date] = "ready";
+    return changed;
+  }
+  _dashboardFeedbackFetchState[date] = "missing";
+  return false;
+}
+
+function requestDashboardFeedback(date) {
+  hydrateDashboardFeedback(date)
+    .then((changed) => {
+      if (changed && state.currentView === "dashboard" && currentDashboardDate() === date) {
+        renderDeferringForFocus();
+      }
+    })
+    .catch(() => { _dashboardFeedbackFetchState[date] = "missing"; });
+}
+
 async function hydrateStaticMarkdown() {
   // v72: 個人データリポジトリ(taskchute/content/配下)からのGitHub API取得に切替(同一オリジンfetch廃止)
   const visionPromise = fetchGitHubRawText("content/Vision.md");
@@ -17001,6 +17033,9 @@ async function hydrateStaticMarkdown() {
     changed = true;
     // v57: 直push検知した前日分は、以後の起動時fetchが正規ルートに乗るよう記録する
     if (!files.includes(prev)) recordFeedbackFile(prev);
+  }
+  if (state.currentView === "dashboard" && await hydrateDashboardFeedback(currentDashboardDate())) {
+    changed = true;
   }
   // v67: AI連携の鮮度インジケータ(柱1b)。todayFbは selectedDate 連動の fetch なので「今日」を
   //      見ているときの結果のみ鮮度シグナルに採用する(過去日ブラウズ中のfetchはその日の閲覧目的
@@ -17208,7 +17243,8 @@ async function hydrateStaticMarkdown() {
   // v137: 入力中/IME変換中は即renderせず保留する(review.md:28。renderDeferringForFocus参照)。
   // v161: "stats"(計器盤)を追加。エネルギーカーブの新着fetchが完了してもこの画面を開いた
   //       ままだと再描画されず節が出ないままになる不具合を防ぐ(他view追加時と同じ理由)。
-  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly" || state.currentView === "home" || state.currentView === "zero" || state.currentView === "tasks" || state.currentView === "stats")) {
+  // v163: "dashboard"も任意日AIフィードバック取得完了後に同じライブ再描画が必要。
+  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly" || state.currentView === "home" || state.currentView === "zero" || state.currentView === "tasks" || state.currentView === "stats" || state.currentView === "dashboard")) {
     renderDeferringForFocus();
   }
 }
