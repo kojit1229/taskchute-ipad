@@ -2945,6 +2945,30 @@
       }
     },
     {
+      "file": "wish-core.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 37,
+      "assertionHash": "72d895dedb871022",
+      "sourceHash": "9c051246a41f3e9d",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
       "file": "xss-sanitizer.test.js",
       "kind": "e2e",
       "tier": "smoke",

@@ -1,4 +1,9 @@
-const CACHE_NAME = "taskchute-journal-pwa-v167";
+const CACHE_NAME = "taskchute-journal-pwa-v168";
+// v168: app.js分割の段階4-2(WishタブTier1のCRUD・描画・月間ボードD&D抽出)。src/features/wish.js
+//   (getWishProject〜deleteWishのTier1・16関数+wishHasTodayBlock(Tier2)+_wishDrag/月間ボードD&D、
+//   configureWish(deps)注入)をAPP_SHELLへ追加した。仕分けモード・儀式連携・Home週次カード
+//   (Tier3)はapp.jsに残したまま(prep-stage4-wish.md推奨)。挙動は抽出前と完全に同一
+//   (移動+依存注入化のみ)。
 // v167: app.js分割の段階4-1(ダッシュボードの閲覧専用render抽出)。src/features/dashboard.js
 //   (isDashboardDate〜requestDashboardFeedbackの12関数、configureDashboard(deps)注入)/
 //   src/state/feedback-cache.js(Home「AIから」カードとダッシュボードの共有cachedFeedback)を
@@ -188,6 +193,7 @@ const APP_SHELL = [
   "./src/core/merge.js",
   "./src/features/avoid.js",
   "./src/features/dashboard.js",
+  "./src/features/wish.js",
   "./src/state/feedback-cache.js",
   "./src/state/store.js",
   "./src/storage/local.js",

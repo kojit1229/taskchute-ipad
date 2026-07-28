@@ -22,6 +22,19 @@ import {
   renderDashboard, setDashboardDate, shiftDashboardDate,
   currentDashboardDate, hydrateDashboardFeedback
 } from "./src/features/dashboard.js";
+// v168: app.js分割・段階4-2(WishタブTier1のCRUD・描画・月間ボードD&D抽出)。src/features/wish.js
+//   はstateをimportするがapp.js自身はimportしない(循環import回避)。renderWishTriage(仕分けモード、
+//   Tier3=非移動)を含む残りの汎用ヘルパーはconfigureWish(deps)で注入する
+//   (src/features/wish.js冒頭コメントの契約参照)。getWishProject/nextStepOf/wishSubtaskToTasks/
+//   wishHasTodayBlockはTier3側(moveBlockToWish/buildWeeklyWishModal/triageAction/triageQueue、
+//   いずれもapp.js残留)からも共有importする。
+import {
+  configureWish,
+  getWishProject, nextStepOf, wishSubtaskToTasks, wishHasTodayBlock,
+  renderWish, scrollWishBoardToCurrentMonth,
+  addWish, toggleWishOpen, addWishSubtask, toggleWishSubtask,
+  realizeWish, unrealizeWish, deleteWish
+} from "./src/features/wish.js";
 // computeSyncMerge/syncCoreEqual/5フロー(saveToGitHub/runAutoSyncPush/runAutoSyncPull/
 // loadFromGitHub/syncFromGitHubOnStartup)等はsrc/sync/github.jsへ抽出済み。src/sync/github.js
 // 冒頭コメントの契約(configureGithubSyncによる依存注入)を参照。
@@ -161,6 +174,14 @@ configureDashboard({
   renderHeader, escapeHTML, clamp, parseDate, addDays, dateToISO, localDateTimeToMs,
   todayISO, fmtMinShort, renderMarkdown, getCategoryColor, personalDataReady,
   fetchGitHubRawResult, renderDeferringForFocus, render
+});
+// v168: src/features/wish.jsも同じ理由(循環import回避)で依存注入する。renderWishTriage
+// (仕分けモード、Tier3)はapp.js側に残るためここで注入する(prep-stage4-wish.md §7の(a)案、
+// 循環importはconfigureXxx(deps)注入のため発生しない)。
+configureWish({
+  escapeHTML, renderHeader, todayISO, localDateTimeToMs, makeTask, makeBlock,
+  defaultPlannedTimes, showToast, nowDateTime, saveAndRender, render, updateTaskField,
+  renderWishTriage
 });
 let toastTimer = null;
 let timerTicker = null;
@@ -354,11 +375,8 @@ let _activeChainId = "";
 // v149(UI改善計画Phase4a): ホームの2タブ(今日/ホーム)切替。非永続(state外)—
 // K指定「起動時は常に今日」を満たすため、リロード/再起動のたびに既定へ戻る。
 let homeTab = "today";  // "today" | "home"
-// v79: 月間プランニングボードのカードドラッグ(Pointer Events。既存の下書きBlockドラッグ
-//      (_draftDrag)と同じ「pointerdown/move/upで見た目だけ動かしupで正規化」方式を流用)。
-//      { id, el, startX, startY, moved } 非永続。moved=trueになって初めてドラッグ確定(タップの
-//      月選択セレクト操作を邪魔しないための閾値判定)。
-let _wishDrag = null;
+// v168: 月間プランニングボードのドラッグ状態(_wishDrag)はsrc/features/wish.jsへ移動した
+// (app.js分割・段階4-2。wish.js冒頭コメント参照)。
 
 // v71: ホームの折りたたみカード(details)の開閉状態。端末ローカルのUI状態であり、
 //      GitHub同期やエクスポートの対象になる state オブジェクトとは意図的に分離するため、
@@ -5186,55 +5204,8 @@ const endDraftDrag = () => {
 document.addEventListener("pointerup", endDraftDrag);
 document.addEventListener("pointercancel", endDraftDrag);
 
-// v79: 月間プランニングボードのカードD&D(Pointer Events。iPadタッチ対応)。
-// 上の下書きBlockドラッグと同じ「pointerdown/move/upで見た目だけ動かし、upでstateに反映して
-// render()で正規化」方式を流用しつつ、こちらは連続位置ではなく「どの月枠の上で離したか」を
-// document.elementFromPoint で判定する離散ドロップ。移動量が閾値未満はタップ(カード上の月選択
-// セレクト操作)とみなし何もしない。
-const WISH_DRAG_THRESHOLD = 8; // px
-document.addEventListener("pointerdown", (event) => {
-  const card = event.target.closest(".wish-board-card");
-  if (!card) return;
-  if (event.target.closest("[data-action]")) return;  // 月選択セレクトは通常のタップ操作に譲る
-  _wishDrag = { id: card.dataset.wishDragId, el: card, startX: event.clientX, startY: event.clientY, moved: false };
-});
-document.addEventListener("pointermove", (event) => {
-  if (!_wishDrag) return;
-  const dx = event.clientX - _wishDrag.startX;
-  const dy = event.clientY - _wishDrag.startY;
-  if (!_wishDrag.moved && Math.hypot(dx, dy) < WISH_DRAG_THRESHOLD) return;
-  _wishDrag.moved = true;
-  _wishDrag.el.classList.add("is-dragging");
-  _wishDrag.el.style.transform = `translate(${dx}px, ${dy}px)`;
-  document.querySelectorAll(".month-zone.drag-over").forEach((z) => z.classList.remove("drag-over"));
-  const zone = document.elementFromPoint(event.clientX, event.clientY)?.closest(".month-zone");
-  if (zone) zone.classList.add("drag-over");
-  event.preventDefault();
-});
-const endWishDrag = (event) => {
-  if (!_wishDrag) return;
-  const { id, el, moved } = _wishDrag;
-  el.classList.remove("is-dragging");
-  el.style.transform = "";
-  document.querySelectorAll(".month-zone.drag-over").forEach((z) => z.classList.remove("drag-over"));
-  if (moved && event) {
-    const zone = document.elementFromPoint(event.clientX, event.clientY)?.closest(".month-zone");
-    if (zone) {
-      const monthStr = zone.dataset.month || "";
-      updateTaskField(id, "targetMonth", monthStr ? Number(monthStr) : null);
-    }
-  }
-  _wishDrag = null;
-  if (moved) render();  // カード位置をstateどおりに正規化(ドロップ先が無ければ元の位置に戻る)
-};
-document.addEventListener("pointerup", endWishDrag);
-document.addEventListener("pointercancel", () => {
-  if (!_wishDrag) return;
-  _wishDrag.el.classList.remove("is-dragging");
-  _wishDrag.el.style.transform = "";
-  document.querySelectorAll(".month-zone.drag-over").forEach((z) => z.classList.remove("drag-over"));
-  _wishDrag = null;
-});
+// v168: 月間プランニングボードのカードD&D(pointerdown/move/up/cancelリスナー3件+
+// WISH_DRAG_THRESHOLD)はsrc/features/wish.jsへ移動した(app.js分割・段階4-2)。
 
 // v60: 週次/12週サイクルのAI壁打ち(runAiWeekly/runAiCycle)・0秒思考のまとめ所感
 //      (runAiZeroComment)・今日のタスク提案(runAiTodaySuggest。朝の一括プランニングが
@@ -5677,494 +5648,14 @@ function extractMITCandidatesFromReport(reportText) {
   return candidates.filter(Boolean).slice(0, 3);
 }
 
-// =============================================================
-// v16: やりたいことリスト(Wish)タブ
-// =============================================================
-
-// Wish Project を取得(必ず1つ存在することは normalizeState で保証済み)
-function getWishProject() {
-  return state.projects.find((p) => p.kind === "wish" && !p.deleted);
-}
-
-// ある Wish (Task) のサブタスク(全階層)を再帰的に取得
-function getSubtasksOf(taskId) {
-  const direct = state.tasks.filter((t) => !t.deleted && t.parentTaskId === taskId);
-  let all = [...direct];
-  for (const child of direct) {
-    all = all.concat(getSubtasksOf(child.id));
-  }
-  return all;
-}
-
-// Wish の進捗(完了サブタスク数 / 総サブタスク数)
-function wishProgress(wishTaskId) {
-  const subs = getSubtasksOf(wishTaskId);
-  if (subs.length === 0) return { done: 0, total: 0, percent: 0 };
-  const done = subs.filter((t) => t.status === "completed").length;
-  return { done, total: subs.length, percent: Math.round((done / subs.length) * 100) };
-}
-
-// Wish の「次の一歩」= 未完了の最初のサブタスク
-function nextStepOf(wishTaskId) {
-  const subs = getSubtasksOf(wishTaskId).filter((t) => t.status !== "completed");
-  if (subs.length === 0) return null;
-  // dueDate がある順 → createdAt 順
-  subs.sort((a, b) => {
-    if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
-    if (a.dueDate) return -1;
-    if (b.dueDate) return 1;
-    return (a.createdAt || "").localeCompare(b.createdAt || "");
-  });
-  return subs[0];
-}
-
-// Wish の最終更新日(本体 or サブタスクの最も新しい updatedAt)
-function wishLastActivity(wishTaskId) {
-  const wish = state.tasks.find((t) => t.id === wishTaskId);
-  if (!wish) return "";
-  const subs = getSubtasksOf(wishTaskId);
-  const times = [wish.updatedAt || "", ...subs.map((t) => t.updatedAt || "")].filter(Boolean);
-  return times.sort().pop() || "";
-}
-
-// 60 日以上動いていないか
-function isWishStagnant(wishTaskId) {
-  const last = wishLastActivity(wishTaskId);
-  if (!last) return false;
-  const lastMs = localDateTimeToMs(last); // v56: updatedAt はローカル日時文字列。iOS TZ 誤解釈回避
-  return Date.now() - lastMs > 60 * 24 * 60 * 60 * 1000;
-}
-
-// 時期グループ判定: targetYear と現在年から「~Nまで(あと M 年)」のラベル
-function wishGroupKey(wish) {
-  if (wish.realized) return "realized";
-  if (!wish.targetYear) return "someday";
-  return `by-${wish.targetYear}`;
-}
-
-function wishGroupLabel(key) {
-  if (key === "realized") return "✓ 実現済み";
-  if (key === "someday") return "いつか";
-  const year = Number(key.replace("by-", ""));
-  const now = new Date().getFullYear();
-  const diff = year - now;
-  if (diff <= 0) return `~${year} (今年・期限到来)`;
-  return `~${year} (あと ${diff} 年)`;
-}
-
-// 領域の色を取得
-function lifeAreaColor(name) {
-  const area = (state.settings.lifeAreas || []).find((a) => a.name === name);
-  return area?.color || "#8E8E93";
-}
-
-// メインレンダリング
-function renderWish() {
-  const wishProject = getWishProject();
-  if (!wishProject) {
-    return `
-      ${renderHeader("やりたいことリスト", "Wish")}
-      <section class="panel">Wish Project が存在しません。リロードしてください。</section>
-    `;
-  }
-
-  // フィルタ状態
-  const filter = state.wishFilter || { area: "", showRealized: false };
-  const wishes = state.tasks
-    .filter((t) => !t.deleted && t.projectId === wishProject.id && !t.parentTaskId)
-    .filter((t) => filter.area ? t.lifeArea === filter.area : true)
-    .filter((t) => filter.showRealized ? true : !t.realized);
-
-  // 実現率(全 Wish 中)
-  const allWishes = state.tasks.filter((t) => !t.deleted && t.projectId === wishProject.id && !t.parentTaskId);
-  const realizedCount = allWishes.filter((t) => t.realized).length;
-  const overallRate = allWishes.length === 0 ? 0 : Math.round((realizedCount / allWishes.length) * 100);
-
-  // 領域フィルタオプション
-  const lifeAreas = state.settings.lifeAreas || [];
-
-  // v79: 表示切替(リスト⇔ボード)。UI状態のみ・dataModifiedAtは汚さない(routineViewModeと同じ扱い)。
-  const viewMode = state.wishViewMode || "list";
-
-  // 時期グループでまとめる
-  const groups = {};
-  for (const w of wishes) {
-    const key = wishGroupKey(w);
-    groups[key] ||= [];
-    groups[key].push(w);
-  }
-  // グループ順: 今年→未来→いつか→実現済み
-  const groupOrder = Object.keys(groups).sort((a, b) => {
-    const order = (k) => {
-      if (k === "realized") return 9999;
-      if (k === "someday") return 9998;
-      return Number(k.replace("by-", "")) || 0;
-    };
-    return order(a) - order(b);
-  });
-
-  return `
-    ${renderHeader("やりたいことリスト", "Wish")}
-    <section class="panel" style="margin-bottom:12px">
-      <div class="row" style="align-items:center; gap:8px; flex-wrap:wrap">
-        <strong>実現率</strong>
-        <div style="font-size:20px; font-weight:700; color:var(--accent)">${realizedCount} / ${allWishes.length}</div>
-        <div class="muted">(${overallRate}%)</div>
-        <div class="progress" style="flex:1; min-width:120px"><span style="width:${overallRate}%; background:var(--accent)"></span></div>
-      </div>
-    </section>
-
-    <section class="form-strip">
-      <input id="wishTitle" class="input" placeholder="やりたいこと(壮大でOK)">
-      <button class="btn primary" data-action="add-wish">追加</button>
-    </section>
-
-    <section class="form-strip" style="margin-top:8px">
-      <select id="wishFilterArea" class="select" data-action="wish-filter-area">
-        <option value="">全領域</option>
-        ${lifeAreas.map((a) => `<option value="${escapeHTML(a.name)}" ${filter.area === a.name ? "selected" : ""}>${escapeHTML(a.name)}</option>`).join("")}
-      </select>
-      <label class="row" style="gap:6px; align-items:center; padding:0 8px">
-        <input type="checkbox" data-action="wish-toggle-realized" ${filter.showRealized ? "checked" : ""}>
-        <span class="muted" style="font-size:12px">実現済みも表示</span>
-      </label>
-    </section>
-
-    <div class="segmented" style="margin-top:8px">
-      <button class="${viewMode === "list" ? "active" : ""}" data-action="wish-view-mode" data-mode="list">☰ リスト</button>
-      <button class="${viewMode === "board" ? "active" : ""}" data-action="wish-view-mode" data-mode="board">🗓 月間ボード</button>
-      <button class="${viewMode === "triage" ? "active" : ""}" data-action="wish-view-mode" data-mode="triage">🃏 仕分け</button>
-    </div>
-
-    ${viewMode === "board" ? renderWishBoard(wishes) : viewMode === "triage" ? renderWishTriage(wishes) : (groupOrder.length === 0
-      ? `<section class="panel" style="margin-top:12px; text-align:center; padding:32px"><div class="muted">${filter.area ? `「${escapeHTML(filter.area)}」のやりたいことはまだありません` : "やりたいことを追加してみましょう(壮大なものでもOK)"}</div></section>`
-      : groupOrder.map((key) => `
-        <section class="section" style="margin-top:14px">
-          <div class="row" style="margin-bottom:8px">
-            <h3>${wishGroupLabel(key)}</h3>
-            <div class="muted">${groups[key].length} 件</div>
-          </div>
-          <div class="grid">
-            ${groups[key].map(renderWishCard).join("")}
-          </div>
-        </section>
-      `).join(""))}
-  `;
-}
-
-// v79: 月間プランニングボード ==============================
-// 「未定」プール + 1〜12月の枠。ドラッグ&ドロップ(iPadタッチ対応: pointer events)+
-// タップ代替(カード上の月選択セレクト)の両方で targetMonth を割り当てる。
-// wishes は renderWish() で既にarea/showRealizedフィルタ済みのものをそのまま使う。
-//
-// v80: レイアウトを「小さい固定グリッド」から縦積みリスト型に変更。
-// 理由(Kフィードバック: 「月カードが小さくて、入れるとやりたいことが見切れてしまう」):
-// 旧実装は auto-fill grid(minmax(150px,1fr))で、主端末のiPhone(縦持ち・幅約390px)では
-// 実質2列にしかならず、カード幅が狭すぎてタイトルが省略記号(ellipsis)で切れていた。
-// 1〜12月を縦一列に並べれば、カード幅は画面幅いっぱいまで使えるためタイトルを折り返せる。
-// 空月まで毎回フルサイズの枠を描くと12ヶ月分でスクロールが長大になるため、
-// 中身が無い月はヘッダ行だけの薄い行に縮小する(=ドロップ先としても残す。month-zoneは
-// 行全体に付けているので、空月でも「ヘッダだけの行」自体がドロップターゲットになる)。
-function renderWishBoard(wishes) {
-  const unassigned = wishes.filter((w) => !w.targetMonth);
-  const currentMonth = Number(todayISO().slice(5, 7));  // "YYYY-MM-DD" の月部分(文字列抽出。new Date(string)は使わない)
-  const monthGroups = Array.from({ length: 12 }, (_, i) => i + 1)
-    .map((m) => ({ month: m, items: wishes.filter((w) => w.targetMonth === m) }));
-
-  return `
-    <section class="section wish-board" style="margin-top:14px">
-      <div class="wish-board-pool">
-        <div class="row" style="margin-bottom:6px; align-items:center">
-          <h3>未定</h3>
-          <div class="muted">${unassigned.length} 件</div>
-        </div>
-        <div class="wish-board-pool-body month-zone" data-month="">
-          ${unassigned.length === 0
-            ? `<div class="muted" style="font-size:12px; padding:8px">すべて月に割り当て済みです</div>`
-            : unassigned.map(renderWishBoardCard).join("")}
-        </div>
-      </div>
-
-      <div class="row wish-board-toolbar">
-        <div class="muted" style="font-size:11px">1月〜12月を縦に並べています。空の月はヘッダのみ表示です。</div>
-        <button class="btn ghost" data-action="wish-board-jump-current">📍 ${currentMonth}月(今月)へ</button>
-      </div>
-
-      <div class="wish-board-list">
-        ${monthGroups.map(({ month, items }) => `
-          <div class="wish-board-month-row month-zone ${items.length === 0 ? "is-empty" : ""} ${month === currentMonth ? "is-current" : ""}"
-               data-month="${month}" data-month-row="${month}">
-            <div class="wish-board-month-head">
-              <strong>${month}月</strong>
-              ${month === currentMonth ? `<span class="wish-board-current-badge">今月</span>` : ""}
-              <span class="muted" style="font-size:11px">${items.length > 0 ? `${items.length}件` : "空き"}</span>
-            </div>
-            ${items.length > 0
-              ? `<div class="wish-board-month-body">${items.map(renderWishBoardCard).join("")}</div>`
-              : ""}
-          </div>
-        `).join("")}
-      </div>
-    </section>
-  `;
-}
-
-// v80: 月間ボードを現在月の行までスクロール(自動起動時・「今月へ」ボタン共用)
-function scrollWishBoardToCurrentMonth() {
-  const currentMonth = Number(todayISO().slice(5, 7));
-  setTimeout(() => {
-    document.querySelector(`[data-month-row="${currentMonth}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, 60);
-}
-
-// 月間ボードのカード1個(ドラッグ対象 + タップ代替の月選択セレクト同居)。
-// v80: タイトルを単一行ellipsisから2行までのline-clampへ変更(見切れ対策の本丸)。
-function renderWishBoardCard(wish) {
-  const areaColor = lifeAreaColor(wish.lifeArea);
-  const monthOptions = [
-    `<option value="">未定</option>`,
-    ...Array.from({ length: 12 }, (_, i) => i + 1)
-      .map((m) => `<option value="${m}" ${wish.targetMonth === m ? "selected" : ""}>${m}月</option>`)
-  ].join("");
-  return `
-    <div class="wish-board-card" draggable="true" data-wish-drag-id="${wish.id}" style="border-left:3px solid ${areaColor}">
-      <div class="wish-board-card-main">
-        <span class="wish-board-card-title" title="${escapeHTML(wish.title)}">${escapeHTML(wish.title)}</span>
-        ${wish.lifeArea ? `<span class="wish-board-card-area" style="color:${areaColor}">${escapeHTML(wish.lifeArea)}</span>` : ""}
-      </div>
-      <select class="select wish-board-card-month" data-action="wish-set-month" data-id="${wish.id}" aria-label="月を選ぶ">${monthOptions}</select>
-    </div>
-  `;
-}
-
-// Wish カード(1個)
-function renderWishCard(wish) {
-  const progress = wishProgress(wish.id);
-  const nextStep = nextStepOf(wish.id);
-  const stagnant = isWishStagnant(wish.id);
-  const areaColor = lifeAreaColor(wish.lifeArea);
-  return `
-    <div class="panel wish-card ${wish.realized ? "is-realized" : ""}" style="border-left:4px solid ${areaColor}">
-      <div class="row" style="align-items:center; gap:8px">
-        <label class="wish-check-wrap">
-          <input type="checkbox" class="wish-check" data-action="${wish.realized ? "wish-unrealize" : "wish-realize"}" data-id="${wish.id}" ${wish.realized ? "checked" : ""} title="実現済みにする" aria-label="実現済みにする">
-        </label>
-        <div style="flex:1; min-width:0">
-          <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap">
-            ${stagnant ? "<span title=\"60日以上動いていません\">🐢</span>" : ""}
-            <strong style="${wish.realized ? "text-decoration:line-through; opacity:0.6" : ""}">${escapeHTML(wish.title)}</strong>
-            ${wish.lifeArea ? `<span class="chip" style="background:${areaColor}22; color:${areaColor}; border:1px solid ${areaColor}55">${escapeHTML(wish.lifeArea)}</span>` : ""}
-          </div>
-          ${wish.motivation ? `<div class="muted" style="font-size:11px; margin-top:4px; font-style:italic">"${escapeHTML(wish.motivation)}"</div>` : ""}
-        </div>
-        <button class="btn ghost" data-action="open-wish" data-id="${wish.id}">${state.wishOpenId === wish.id ? "閉じる" : "開く"}</button>
-      </div>
-
-      <div class="row" style="align-items:center; gap:8px; margin-top:8px">
-        <div class="muted" style="font-size:12px; white-space:nowrap">${progress.done} / ${progress.total}</div>
-        <div class="progress" style="flex:1"><span style="width:${progress.percent}%"></span></div>
-        ${nextStep
-          ? `<div class="muted" style="font-size:11px; max-width:40%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" title="${escapeHTML(nextStep.title)}">次: ${escapeHTML(nextStep.title)}</div>`
-          : (wish.realized ? "" : "<div class=\"muted\" style=\"font-size:11px; color:var(--orange-text)\">↳ サブタスクを書く</div>")}
-      </div>
-
-      ${state.wishOpenId === wish.id ? renderWishDetail(wish) : ""}
-    </div>
-  `;
-}
-
-// Wish 詳細展開(サブタスク・編集)
-function renderWishDetail(wish) {
-  const subtasks = state.tasks.filter((t) => !t.deleted && t.parentTaskId === wish.id);
-  // dueDate あれば優先、なければ createdAt 順
-  subtasks.sort((a, b) => {
-    if (a.status === "completed" && b.status !== "completed") return 1;
-    if (a.status !== "completed" && b.status === "completed") return -1;
-    if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
-    return (a.createdAt || "").localeCompare(b.createdAt || "");
-  });
-  const lifeAreas = state.settings.lifeAreas || [];
-  const currentYear = new Date().getFullYear();
-  const yearOptions = [
-    `<option value="" ${!wish.targetYear ? "selected" : ""}>いつか</option>`,
-    ...[0, 1, 2, 3, 5, 7, 10, 13, 20, 30].map((d) => {
-      const y = currentYear + d;
-      return `<option value="${y}" ${wish.targetYear === y ? "selected" : ""}>~${y} (${d === 0 ? "今年" : `あと${d}年`})</option>`;
-    })
-  ].join("");
-
-  return `
-    <div class="wish-detail" style="margin-top:12px; padding-top:12px; border-top:1px solid var(--line)">
-      <div class="form-strip" style="margin-bottom:10px">
-        <select class="select" data-action="wish-set-year" data-id="${wish.id}" style="flex:1">${yearOptions}</select>
-        <select class="select" data-action="wish-set-area" data-id="${wish.id}" style="flex:1">
-          <option value="">領域未設定</option>
-          ${lifeAreas.map((a) => `<option value="${escapeHTML(a.name)}" ${wish.lifeArea === a.name ? "selected" : ""}>${escapeHTML(a.name)}</option>`).join("")}
-        </select>
-      </div>
-
-      <div style="margin-bottom:10px">
-        <div class="muted" style="font-size:11px; margin-bottom:4px">期限(任意。週次レビューで参照)</div>
-        <input class="input" type="date" data-action="wish-set-duedate" data-id="${wish.id}" value="${wish.dueDate || ""}">
-      </div>
-
-      <div style="margin-bottom:10px">
-        <div class="muted" style="font-size:11px; margin-bottom:4px">なぜやりたい(モチベーションの源)</div>
-        <textarea class="textarea" data-action="wish-set-motivation" data-id="${wish.id}" rows="2" placeholder="子が小さいうちに3世代で旅したい…">${escapeHTML(wish.motivation || "")}</textarea>
-      </div>
-
-      <div class="row" style="margin-bottom:8px; align-items:center">
-        <strong>サブタスク</strong>
-        <button class="btn ghost" data-action="add-wish-subtask" data-id="${wish.id}">+ 追加</button>
-      </div>
-      <div class="grid">
-        ${subtasks.length === 0
-          ? `<div class="muted" style="padding:8px; font-size:12px">最初の一歩を1〜3個書いてみましょう。完璧でなくて大丈夫。</div>`
-          : subtasks.map((sub) => renderWishSubtask(sub)).join("")}
-      </div>
-
-      <div class="row" style="margin-top:12px; gap:8px; flex-wrap:wrap">
-        ${wish.realized
-          ? `<button class="btn ghost" data-action="wish-unrealize" data-id="${wish.id}">↩ 未実現に戻す</button>`
-          : `<button class="btn primary" data-action="wish-realize" data-id="${wish.id}">🎉 実現済みにする</button>`}
-        <button class="btn danger ghost" data-action="delete-wish" data-id="${wish.id}">削除</button>
-      </div>
-    </div>
-  `;
-}
-
-// サブタスク1行
-function renderWishSubtask(sub) {
-  const done = sub.status === "completed";
-  return `
-    <div class="row" style="gap:8px; align-items:center; padding:6px 8px; border-radius:8px; background:var(--panel-soft)">
-      <input type="checkbox" data-action="toggle-wish-subtask" data-id="${sub.id}" ${done ? "checked" : ""}>
-      <input type="text" class="input" value="${escapeHTML(sub.title)}" data-action="wish-subtask-title" data-id="${sub.id}" style="flex:1; ${done ? "text-decoration:line-through; opacity:0.6" : ""}">
-      ${done
-        ? ""
-        : `<button class="btn ghost" data-action="wish-subtask-to-tasks" data-id="${sub.id}" title="今日のタスクシュートに登録">📋 今日やる</button>`}
-      <button class="btn danger ghost" data-action="delete-task" data-id="${sub.id}" title="削除">✕</button>
-    </div>
-  `;
-}
-
-// =============================================================
-// v16: Wish アクション
-// =============================================================
-
-function addWish() {
-  const titleEl = document.querySelector("#wishTitle");
-  const title = titleEl?.value.trim();
-  if (!title) return showToast("やりたいことを入力してください");
-  const wishProject = getWishProject();
-  if (!wishProject) return showToast("Wish Project が見つかりません");
-  const task = makeTask({ projectId: wishProject.id, title });
-  // v79: makeTask の dueDate 既定(未指定時="今日")はタスクシュート実行前提の値で、
-  //      長期的な「やりたいこと」には合わないため、Wish作成時だけ空に戻す(期限は任意)。
-  task.dueDate = "";
-  state.tasks.push(task);
-  state.wishOpenId = task.id;  // 追加後すぐに開く
-  if (titleEl) titleEl.value = "";
-  saveAndRender("やりたいことを追加しました(サブタスクを書いて一歩を)");
-}
-
-function toggleWishOpen(id) {
-  state.wishOpenId = (state.wishOpenId === id) ? "" : id;
-  render();
-}
-
-function addWishSubtask(parentTaskId) {
-  const title = window.prompt("サブタスク(次の一歩)を入力してください") || "";
-  if (!title.trim()) return;
-  const parent = state.tasks.find((t) => t.id === parentTaskId);
-  if (!parent) return;
-  const sub = makeTask({ projectId: parent.projectId, parentTaskId, title: title.trim() });
-  // v79: addWish()と同じ理由でdueDateの「今日」既定を持ち込まない(Wishサブタスクも期限は任意)。
-  //      Kフォローアップ指示: Wish関連の全作成経路でdueDateが既定で埋まらないようにする。
-  sub.dueDate = "";
-  state.tasks.push(sub);
-  saveAndRender("サブタスクを追加しました");
-}
-
-function toggleWishSubtask(id) {
-  state.tasks = state.tasks.map((t) => t.id === id
-    ? {
-        ...t,
-        status: t.status === "completed" ? "todo" : "completed",
-        updatedAt: nowDateTime()
-      }
-    : t);
-  saveAndRender("");
-}
-
-// Wish のサブタスクを今日のタスクシュート(Block)に登録
-function wishSubtaskToTasks(taskId) {
-  const task = state.tasks.find((t) => t.id === taskId);
-  if (!task) return showToast("タスクが見つかりません");
-  // v152レビュー対応(両系統一致): 「今日のタスクシュートに登録」は文言どおり常に実時計の今日
-  // (todayISO())基準であるべきで、閲覧中の日付(state.selectedDate)に依存させない
-  // (carryOverBlockと同じ基準に統一。過去日を閲覧した直後にこの経路を使うと過去日にBlockが
-  // 作られてしまう既存の潜在バグだった)。
-  const today = todayISO();
-  // 既に今日の Block 化されていないか
-  const exists = state.blocks.find((b) => !b.deleted && b.taskId === taskId && b.date === today);
-  if (exists) return showToast("既に今日のタスクシュートにあります");
-  // 新規 Block を作成。expectedCharge: 4(やりたいこと=充電源)を推奨値として
-  // v29: 予定の開始/終了日時をデフォルトで入れる(v152: 日付部分もtoday基準に統一)
-  const { plannedStartAt, plannedEndAt } = defaultPlannedTimes(today);
-  const block = makeBlock({
-    date: today,
-    title: task.title,
-    category: task.category || "回復",
-    taskId: task.id,
-    expectedCharge: 4,
-    expectedDischarge: 1,
-    plannedStartAt,
-    plannedEndAt
-  });
-  state.blocks.push(block);
-  // Task の status を "doing" に
-  state.tasks = state.tasks.map((t) => t.id === taskId ? { ...t, status: "doing", updatedAt: nowDateTime() } : t);
-  saveAndRender("今日のタスクシュートに登録しました");
-}
-
-function realizeWish(id) {
-  // v79: ネイティブcheckboxはクリック時点でchecked属性が先に反転済みのため、confirmを
-  // キャンセルしてここでreturnするだけだとチェックが見た目だけONに残ってしまう(state.realized
-  // は変わっていないのに)。render()でDOMをstateに合わせて戻す。
-  if (!window.confirm("このやりたいことを「実現済み」にしますか?")) { render(); return; }
-  const today = todayISO();
-  state.tasks = state.tasks.map((t) => t.id === id
-    ? { ...t, realized: true, realizedDate: today, status: "completed", updatedAt: nowDateTime() }
-    : t);
-  saveAndRender("🎉 おめでとうございます!実現済みにしました");
-}
-
-function unrealizeWish(id) {
-  state.tasks = state.tasks.map((t) => t.id === id
-    ? { ...t, realized: false, realizedDate: "", status: "todo", updatedAt: nowDateTime() }
-    : t);
-  saveAndRender("未実現に戻しました");
-}
-
-function deleteWish(id) {
-  if (!window.confirm("このやりたいこと(およびサブタスク)を削除しますか?")) return;
-  // 本体 + 子孫サブタスクをすべて deleted フラグ
-  const allIds = new Set([id]);
-  // 子孫を再帰的に集める
-  const collect = (parentId) => {
-    state.tasks.forEach((t) => {
-      if (!t.deleted && t.parentTaskId === parentId) {
-        allIds.add(t.id);
-        collect(t.id);
-      }
-    });
-  };
-  collect(id);
-  state.tasks = state.tasks.map((t) => allIds.has(t.id) ? { ...t, deleted: true, updatedAt: nowDateTime() } : t);
-  if (state.wishOpenId === id) state.wishOpenId = "";
-  saveAndRender("削除しました");
-}
+// v168: WishタブTier1(CRUD・描画・月間ボードD&D)はsrc/features/wish.jsへ移動した
+// (getWishProject/getSubtasksOf/wishProgress/nextStepOf/wishLastActivity/isWishStagnant/
+// wishGroupKey/wishGroupLabel/lifeAreaColor/renderWish/renderWishBoard/
+// scrollWishBoardToCurrentMonth/renderWishBoardCard/renderWishCard/renderWishDetail/
+// renderWishSubtask/addWish/toggleWishOpen/addWishSubtask/toggleWishSubtask/
+// wishSubtaskToTasks/realizeWish/unrealizeWish/deleteWish。app.js分割・段階4-2、
+// wish.js冒頭コメント参照)。getWishProject/nextStepOf/wishSubtaskToTasksは
+// 冒頭のimportで共有する。
 
 // v152: 仕分けモード(designs/03-task-swipe.md S1「ボタン版」)==============================
 // 決断疲れによる仕分けの先送りに対処するADHD支援機能。先送りBlock+Wishバックログを1枚ずつ
@@ -6202,14 +5693,8 @@ const TRIAGE_ACTION_COOLDOWN_MS = 350;
 // 仕分けカードの下に出す控えめなインライン欄にする(下記_pendingInlineReason参照。
 // 遅延setTimeoutは使わない=Undoトーストと同時に見えていて構わない設計にした)。
 
-// 指定Wish(本体または子孫サブタスク)を対象にした「今日の」Blockが既に存在するか。
-// セッションをまたいでも(リロード後も)再ループしないための永続データ側の判定
-// (_triageSessionDoneはページリロードで消えるため、こちらが本当の歯止め)。
-function wishHasTodayBlock(wishId) {
-  const today = todayISO();
-  const ids = new Set([wishId, ...getSubtasksOf(wishId).map((t) => t.id)]);
-  return state.blocks.some((b) => !b.deleted && b.date === today && ids.has(b.taskId));
-}
+// v168: wishHasTodayBlock(Tier2)はsrc/features/wish.jsへ移動した(冒頭のimportで共有する。
+// app.js分割・段階4-2、wish.js冒頭コメント参照)。
 
 // キュー = 先送りBlock(carryableBlocks、既存順)→ Wishバックログ(未実現・updatedAt昇順)の順。
 // wishes は呼び出し元(renderWish)が area/実現済みフィルタ済みのものをそのまま渡す
