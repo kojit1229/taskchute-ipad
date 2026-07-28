@@ -300,6 +300,10 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(300);
     // v148(UI改善計画Phase3-2)以降、エネルギーバッテリー欄は「日々の使い方」群のdetails内にあり
     // 既定closed。fill対象を可視化するため<summary>を実クリックして開く。
+    // v169追記: 各fillのchangeイベントが保存→再描画を誘発し、遅い環境(CI)では次のfillまでに
+    // detailsが既定closedへ戻って対象欄が不可視になりTimeoutする(CI run 30369862292/30373680847で
+    // v144が同一箇所=start.lowのfillで2回失敗、ローカルでは再描画完了前にfillが通るため再現せず)。
+    // openSettingsGroupは冪等(開いていれば何もしない)なので、各fill前に開き直す。検証内容は無変更。
     await openSettingsGroup(page, "settings-daily");
 
     check("減衰開始時刻の入力欄がtype=\"time\"になっている(iOS規約)",
@@ -311,36 +315,42 @@ function check(name, cond, extra = "") {
     let st = await stateNow();
     check("start.deficit=500は0〜200にクランプされ200になる", st.settings.battery.start.deficit === 200, String(st.settings.battery.start.deficit));
 
+    await openSettingsGroup(page, "settings-daily");
     await page.fill('[data-setting-battery-field="start.low"]', "-50");
     await page.locator('[data-setting-battery-field="start.low"]').dispatchEvent("change");
     await page.waitForTimeout(150);
     st = await stateNow();
     check("start.low=-50は0〜200にクランプされ0になる", st.settings.battery.start.low === 0, String(st.settings.battery.start.low));
 
+    await openSettingsGroup(page, "settings-daily");
     await page.fill('[data-setting-battery-field="start.normal"]', "45");
     await page.locator('[data-setting-battery-field="start.normal"]').dispatchEvent("change");
     await page.waitForTimeout(150);
     st = await stateNow();
     check("start.normal=45は範囲内なのでそのまま45になる", st.settings.battery.start.normal === 45, String(st.settings.battery.start.normal));
 
+    await openSettingsGroup(page, "settings-daily");
     await page.fill('[data-setting-battery-field="decayPerHour"]', "-2");
     await page.locator('[data-setting-battery-field="decayPerHour"]').dispatchEvent("change");
     await page.waitForTimeout(150);
     st = await stateNow();
     check("decayPerHour=-2は0以上にクランプされ0になる", st.settings.battery.decayPerHour === 0, String(st.settings.battery.decayPerHour));
 
+    await openSettingsGroup(page, "settings-daily");
     await page.fill('[data-setting-battery-field="max"]', "0");
     await page.locator('[data-setting-battery-field="max"]').dispatchEvent("change");
     await page.waitForTimeout(150);
     st = await stateNow();
     check("max=0は1以上にクランプされ1になる", st.settings.battery.max === 1, String(st.settings.battery.max));
 
+    await openSettingsGroup(page, "settings-daily");
     await page.fill('[data-setting-battery-field="max"]', "50");
     await page.locator('[data-setting-battery-field="max"]').dispatchEvent("change");
     await page.waitForTimeout(150);
     st = await stateNow();
     check("max=50は範囲内なのでそのまま50になる(正常系も回帰なし)", st.settings.battery.max === 50, String(st.settings.battery.max));
 
+    await openSettingsGroup(page, "settings-daily");
     await page.fill('[data-setting-battery-field="decayStartMinutes"]', "09:15");
     await page.locator('[data-setting-battery-field="decayStartMinutes"]').dispatchEvent("change");
     await page.waitForTimeout(150);
