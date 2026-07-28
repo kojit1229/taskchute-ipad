@@ -1,0 +1,51 @@
+{
+  "version": 177,
+  "date": "2026-07-29",
+  "title": "app.js分割 段階5-6b(journal系残ドメインの相乗り移行・後半)",
+  "summary": "prep-stage5-dispatcher.md §4の相乗り方式(v174/v176方式)を、journal系の残ドメイン後半へ適用した。v176(段階5-6a、0秒思考+週次/12週サイクルの36分岐)に続き、今回は問い(question-*/open-questions/entry-to-question、10分岐)+その他(日報生成・AIレポートビューア・AI連携・読書複利化・マイグレーション儀式・朝夜detailsトグル、19分岐)の計29分岐を、app.js自身がregisterActions({...})を直接呼ぶ形でレジストリへ移行した。ハンドラ実体はいずれもsrc/features/journal.jsへ未抽出(app.js残留)のため、feature側ではなくapp.js相乗りブロック(v176の直後に新設)へ追記した(journal.js側は0件)。これでjournal系残ドメイン(0秒思考+週次/サイクル+問い+その他)の計65分岐すべての移行が完了し、click dispatcherの残りは102分岐(timeline/modal/wish Tier3/routine未抽出分等)のみとなった。",
+  "changedFiles": [
+    "app.js",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "prep-stage5-dispatcher.md §4「dispatcher配線はUI配線であり機能ロジックではない」を根拠に、journal.js未抽出のままjournal系ドメインをレジストリへ移行した(v174/v176と同型の相乗り方式)。",
+    "対象29件は全件、event.preventDefault/stopPropagation/returnに意味を持たない・else-ifの順序に依存しない・dispatcher内の共有ローカル変数(target/id/event以外)に依存しない、という既存の移行安全条件(v174裁定)を1件ずつ確認して選定した(v176で一度if連鎖へ復元してから、本リリースで再度移行した29件と同一)。",
+    "独立レビュー対応: v176はjournal系65分岐(実測272行、200行上限超)を機械的に分割可能なドメイン境界(0秒思考+週次/サイクル vs 問い+その他)で2コミットへ分割する監督者判断のもと前半36件のみを移行した。本リリースはその後半(問い+その他)を仕上げ、prep doc §2-Cのjournal系見積り71件(実測65件)の移行を完了させる。"
+  ],
+  "changes": [
+    "app.js: v176のregisterActions({...})ブロックの直後に新しいregisterActions({...})呼び出しを追加し、問い10件+その他19件=計29件を登録した(ハンドラ本体はif連鎖の中身をロジック無改変でそのまま移した。target/idはctx destructuringで受け取る)。",
+    "app.js: click dispatcherのif連鎖から上記29分岐を削除し、各削除箇所に移行先を示す1行コメント(「v177: ...はapp.js内のregisterActionsへ移行した。」)を残した。",
+    "sw.js: CACHE_NAMEをv177へ更新した(新規src/**ファイルは追加していないためAPP_SHELLの変更は無し)。",
+    "tests/action-registry-core.test.js: APP_JS_REGISTERED_ACTIONSへv177移行分29件を追記し(v174の20件+v176の36件と合わせて計85件)、コメントでv176/v177の2コミット構成を明記した。EXPECTED_REMAINING_IF_CHAINは既存のfilter計算式のまま自動的に更新される(手編集なし、if連鎖側102件=最終値)。"
+  ],
+  "uncertainties": [
+    "所属ドメインに確信が持てなかった6件(toggle-mit・mit-candidate-add・home-tab・open-md-in-github・reload-md・stats-range)は引き続き見送り、if連鎖に残した。",
+    "weekly-wish-open/weekly-wish-submit/weekly-wish-toggleは、wishバケツ(週次選定機能、triage-*と合わせて別段階の対象)に帰属するため今回のjournal移行からは除外した。weekly-wish-toggleは特にevent.preventDefault()を含み移行安全条件を満たさない。",
+    "report-copy-ai/report-share-ai/ai-mit-adopt/ai-task-adopt/ai-task-dismissは物理的にはweekly/cycleセクションの近傍にあったが、機能的な性質(AI連携、どの画面からも呼べる汎用機能)により本リリース(その他側)で移行した。"
+  ],
+  "reviewFocus": [
+    "移行した29分岐のハンドラ本体が、移行前のif連鎖の中身と1文字も変わっていないこと(ロジック無改変、target→ctx destructuringのみの機械置換)。generate-reportのように複数文からなる分岐も含め、git diffで確認すること。",
+    "toggle-journal-segment/toggle-home-reflect-foldが、src/state/journal-fold.js(_journalSegmentOverride)およびapp.js module変数(_homeReflectFoldOverride)への参照を、移行後も同一オブジェクト参照のまま保っていること(v148のセッション内オーバーライド挙動が退行していないこと)。",
+    "v176(前半36件)とv177(後半29件)が異なるregisterActions({...})呼び出しとして共存しており、重複登録エラーを起こしていないこと(action-registry-coreの重複登録ガードで機械検証済み)。",
+    "tests/action-registry-core.test.jsの保存則(if連鎖側102件+5feature側38件+app.js直接側85件=225件、重複ゼロ)が機械的に成立していること(v176時点の中間値131+38+56=225から、v177で最終値へ正しく遷移していること)。",
+    "0秒思考・週次/サイクル・問いの各E2Eスイート(v100/v133/v62/v121等)がレジストリ経由でも同じ挙動を示すこと(dispatch呼び出し前のevent.target.closest(\"[data-action]\")によるイベント委譲を変更していないこと)。"
+  ],
+  "verification": [
+    "node --check app.js / sw.js / tests/action-registry-core.test.js → 全てexit 0",
+    "node tests/action-registry-core.test.js → 全件成功(保存則: if連鎖102+5feature38+app.js直接85=225)",
+    "node tests/journal-core.test.js → 全件成功(8グループ)",
+    "npm run test:fast → 実行結果を完了報告に記載",
+    "node scripts/release-gate.js releases/v177.json --suite=action-registry-core,journal-core,v73,v141,v148 → 実行結果を完了報告に記載",
+    "npm run code:index:write / npm run test:manifest:write 実行済み",
+    "git diff --numstat で実行コード差分を実測して監督者へ報告する(app.js/sw.jsのみ、200行以下であることを確認)"
+  ],
+  "knownLimitations": [
+    "click dispatcherの残り102分岐(timeline43・modal44の大半、toggle-mit/mit-candidate-add/home-tab/open-md-in-github/reload-md/stats-rangeの6件、triage-*/weekly-wish-*/body-scan-*)は次リリース以降で扱う。submitModal/deleteFromModalのmodalHandlerRegistry(prep-stage5-dispatcher.md §5、8 type)も未着手。",
+    "src/配下にpackage.json(type:module)を置いていないため、Node実行時にMODULE_TYPELESS_PACKAGE_JSON警告が出る(v164から継続、動作には影響しない)。"
+  ]
+}

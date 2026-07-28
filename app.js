@@ -419,6 +419,81 @@ registerActions({
   "cycle-push": ({ target }) => pushCycleToGitHub(target.dataset.cycle),
   "weekly-suggest-add": ({ target }) => addWeeklySuggestedTask(target.dataset.week, Number(target.dataset.index))
 });
+// v177: app.js分割・段階5-6b(journal系dispatcher分岐の移行・後半)。段階5-6a(v176、0秒思考+
+// 週次/12週サイクルの36分岐)に続き、問い(10)+その他(19、日報生成・AIレポートビューア・
+// AI連携・読書複利化・マイグレーション儀式・朝夜detailsトグル)の計29分岐を、click dispatcher
+// のif連鎖からregisterActions経由のレジストリへ移行した(prep-stage5-dispatcher.md §4の
+// 相乗り方式)。この29件もいずれもsrc/features/journal.jsへ未抽出(ハンドラ実体がapp.js残留)
+// のため、v176と同じくapp.js自身がregisterActionsを直接呼ぶ形をとる。ロジック自体はif連鎖
+// からの機械的な移動のみで無改変。これでjournal系残ドメイン(0秒思考+週次/サイクル+問い+
+// その他)の計65分岐すべての移行が完了した。
+registerActions({
+  // --- 問い(10) ---
+  "question-add": () => openQuestionEditor(""),
+  "question-edit": ({ id }) => openQuestionEditor(id),
+  "question-to-theme": ({ id }) => questionToTheme(id),
+  "question-settle": ({ id }) => settleQuestion(id),
+  "question-reopen": ({ id }) => reopenQuestion(id),
+  "question-bridge": ({ id }) => openQuestionBridge(id),
+  "question-bridge-submit": () => submitQuestionBridge(),
+  "question-delete": ({ id }) => deleteQuestion(id),
+  "entry-to-question": ({ id }) => entryToQuestion(id),
+  "open-questions": () => { state.settings.zeroTab = "question"; persistLocalNoSchedule(); setView("zero"); },
+  // --- その他(19): 日報/AIレポート/AI連携/読書/マイグレーション儀式/朝夜detailsトグル ---
+  "reading-save": () => saveReadingReflection(),
+  "ai-report-type": ({ target }) => setAiReportType(target.dataset.type),
+  "ai-report-refresh": () => refreshAiReports(),
+  "open-future-letter": () => {
+    state.settings.aiReportType = "letter";
+    persistLocalNoSchedule();
+    setView("ai-reports");
+  },
+  "ai-work-approve": ({ target }) => approveAiWorkResult(target.dataset.resultId),
+  "ai-work-question": ({ target }) => raiseAiWorkQuestion(target.dataset.resultId),
+  "ai-mit-adopt": ({ target }) => adoptAiMit(Number(target.dataset.index)),
+  "ai-task-adopt": ({ target }) => adoptAiTaskCandidate(Number(target.dataset.index)),
+  "ai-task-dismiss": ({ target }) => dismissAiTaskCandidate(Number(target.dataset.index)),
+  "report-copy-ai": () => copyReportToClipboard(),
+  "report-share-ai": () => shareReport(),
+  "generate-report": () => {
+    const askInput = document.querySelector("#reportAskInput");
+    const askText = (askInput?.value || "").trim();
+    if (askText) {
+      state.questions.push(makeQuestion({ text: askText, origin: "user" }));
+      askInput.value = "";
+      // v162 2系統レビュー対応(必須3): モーダルキュー(理由チップ)が続けて開き、その間に
+      // PWAがkillされる/リモート側の状態が先に同期採用される等が起きると、ここで積んだ
+      // 問いが保存されないまま消える窓があった。即座にsaveState()して閉じる。
+      saveState();
+    }
+    // v162: 日次締め導線。今日を見ている時、理由未記録かつ未スキップの未完了Blockが残っていれば
+    // 先に理由チップ(スキップ可)を1件ずつ挟んでから日報を生成する(既に理由が付いたBlock・
+    // 同セッション内で既にスキップ済みのBlockは再質問しない — 2系統レビュー対応・推奨4)。
+    const pendingReasonIds = state.selectedDate === todayISO()
+      ? blocksForDate(state.selectedDate).filter((b) => !b.completed && !hasIncompleteReason(b) && !_dailyCloseReasonSkipped.has(b.id)).map((b) => b.id)
+      : [];
+    if (pendingReasonIds.length) {
+      openIncompleteReasonModal(pendingReasonIds, "dailyClose");
+    } else {
+      generateReport();
+    }
+  },
+  "download-report": () => downloadReport(),
+  "download-data": () => downloadData(),
+  "carry-over": ({ id }) => requestCarryOver(id),
+  "migration-ritual-choice": ({ target }) => resolveMigrationRitual(target.dataset.choice),
+  "ideal-retry": ({ target }) => resolveIdealRetry(target.dataset.choice),
+  "toggle-journal-segment": ({ target }) => {
+    const seg = target.dataset.segment;
+    const parent = target.closest("details");
+    if (seg && parent) _journalSegmentOverride[seg] = !parent.open;  // クリック時点ではまだ未反映のため反転
+  },
+  "toggle-home-reflect-fold": ({ target }) => {
+    const seg = target.dataset.segment;
+    const parent = target.closest("details");
+    if (seg && parent) _homeReflectFoldOverride[seg] = !parent.open;  // クリック時点ではまだ未反映のため反転
+  }
+});
 let toastTimer = null;
 let timerTicker = null;
 // v144: エネルギーバッテリーの差分更新(updateBatteryTick)のスロットル用。
@@ -718,33 +793,7 @@ document.addEventListener("click", (event) => {
   if (action === "now-mode-close") closeNowMode();
   if (action === "now-conveyor-complete") nowConveyorComplete(id);
   if (action === "now-conveyor-skip") { _nowSkippedIds.add(id); render(); }
-  // v68: 日報生成前に「今日AIに聞きたいこと」欄(#reportAskInput、日報タブのみ存在)があれば
-  //      origin:"user" の問いとして1件積む(空なら何もしない=節ごと省略される)
-  if (action === "generate-report") {
-    const askInput = document.querySelector("#reportAskInput");
-    const askText = (askInput?.value || "").trim();
-    if (askText) {
-      state.questions.push(makeQuestion({ text: askText, origin: "user" }));
-      askInput.value = "";
-      // v162 2系統レビュー対応(必須3): モーダルキュー(理由チップ)が続けて開き、その間に
-      // PWAがkillされる/リモート側の状態が先に同期採用される等が起きると、ここで積んだ
-      // 問いが保存されないまま消える窓があった。即座にsaveState()して閉じる。
-      saveState();
-    }
-    // v162: 日次締め導線。今日を見ている時、理由未記録かつ未スキップの未完了Blockが残っていれば
-    // 先に理由チップ(スキップ可)を1件ずつ挟んでから日報を生成する(既に理由が付いたBlock・
-    // 同セッション内で既にスキップ済みのBlockは再質問しない — 2系統レビュー対応・推奨4)。
-    const pendingReasonIds = state.selectedDate === todayISO()
-      ? blocksForDate(state.selectedDate).filter((b) => !b.completed && !hasIncompleteReason(b) && !_dailyCloseReasonSkipped.has(b.id)).map((b) => b.id)
-      : [];
-    if (pendingReasonIds.length) {
-      openIncompleteReasonModal(pendingReasonIds, "dailyClose");
-    } else {
-      generateReport();
-    }
-  }
-  if (action === "download-report") downloadReport();
-  if (action === "download-data") downloadData();
+  // v177: generate-report/download-report/download-dataはapp.js内のregisterActionsへ移行した。
   // v174: save-github/load-github/gate-continue/reset-demoはapp.js内のregisterActionsへ移行した。
   // v17: MIT(今日の主役)の切替(最大3個)
   if (action === "toggle-mit") toggleMIT(id);
@@ -849,19 +898,8 @@ document.addEventListener("click", (event) => {
   if (action === "vision-board-retry-images") loadVisionBoardImages(target.dataset.file);  // v125追補(Codex P2): 失敗ページの再試行
   if (action === "open-md-in-github") openMdInGithub(target.dataset.path);
   if (action === "reload-md") reloadStaticMarkdown();
-  // v92: AIレポートビューア — 種類タブ切替 / 一覧・本文の手動更新
-  if (action === "ai-report-type") setAiReportType(target.dataset.type);
-  if (action === "ai-report-refresh") refreshAiReports();
-  // v159: ホームの「✉️ 未来からの手紙が届いています」導線 — AIレポート画面の「未来からの手紙」
-  //       タブへ直接遷移する。2026-07-28レビュー対応・推奨修正6: setAiReportType()経由だと
-  //       それ自体のrender()+setView()のrender()で2回描画してしまうため、open-questions等と
-  //       同じ「設定を直接書き換え→persistLocalNoSchedule→setView」の型(render()は1回のみ)に揃える。
-  if (action === "open-future-letter") { state.settings.aiReportType = "letter"; persistLocalNoSchedule(); setView("ai-reports"); }
-  // v67: AI作業ワーカー連携(柱2) — 実績還流カードのワンタップ承認 / 質問への橋渡し
-  if (action === "ai-work-approve") approveAiWorkResult(target.dataset.resultId);
-  if (action === "ai-work-question") raiseAiWorkQuestion(target.dataset.resultId);
-  // v74: 読書複利化 — 今日の1冊カードの言語化を保存
-  if (action === "reading-save") saveReadingReflection();
+  // v177: ai-report-type/ai-report-refresh/open-future-letter/ai-work-approve/ai-work-question/
+  //        reading-saveはapp.js内のregisterActionsへ移行した。
   // v68: 人生実験機構(実験中カードのCRUD + 昇格候補コピー)
   if (action === "experiment-add") addExperimentOrGuard();
   if (action === "edit-experiment") openExperimentEditor(id);
@@ -898,23 +936,7 @@ document.addEventListener("click", (event) => {
     persistLocalNoSchedule();
     render();
   }
-  // v148: ジャーナル朝/夜detailsの手動開閉(_journalSegmentOverride参照)。ブラウザの
-  // ネイティブ<summary>クリックが既にdetails.openを見た目どおり切り替えてくれるため、
-  // ここではセッション内オーバーライドの記録だけ行い、render()は呼ばない
-  // (無用な全体再描画・スクロール位置巻き戻りを避ける)。
-  if (action === "toggle-journal-segment") {
-    const seg = target.dataset.segment;
-    const parent = target.closest("details");
-    if (seg && parent) _journalSegmentOverride[seg] = !parent.open;  // クリック時点ではまだ未反映のため反転
-  }
-  // v149レビュー対応(必須6): ホーム「信条/寿命」の手動開閉(_homeReflectFoldOverride参照)。
-  // 上のtoggle-journal-segmentと同じ方式(ネイティブ<summary>クリックの見た目トグルに任せ、
-  // ここではセッション内オーバーライドの記録だけ行う)。
-  if (action === "toggle-home-reflect-fold") {
-    const seg = target.dataset.segment;
-    const parent = target.closest("details");
-    if (seg && parent) _homeReflectFoldOverride[seg] = !parent.open;  // クリック時点ではまだ未反映のため反転
-  }
+  // v177: toggle-journal-segment/toggle-home-reflect-foldはapp.js内のregisterActionsへ移行した。
   // v174: toggle-settings-sync/toggle-sidebarはapp.js内のregisterActionsへ移行した。
   // v12: ポモドーロ全画面切替(v37: 同上)
   if (action === "toggle-pomo-fullscreen") {
@@ -942,27 +964,12 @@ document.addEventListener("click", (event) => {
   if (action === "home-tab") { homeTab = target.dataset.tab === "home" ? "home" : "today"; render(); }
   // v176: zt-*/zero-tab/zerosec-theme-*(0秒思考)・weekly-*/cycle-*/weekly-suggest-add
   // (週次/12週サイクル)はapp.js内のregisterActionsへ移行した(段階5-6a)。
-  // v39: 問い
-  if (action === "question-add") openQuestionEditor("");
-  if (action === "question-edit") openQuestionEditor(id);
-  if (action === "question-to-theme") questionToTheme(id);
-  if (action === "question-settle") settleQuestion(id);
-  if (action === "question-reopen") reopenQuestion(id);
-  if (action === "question-bridge") openQuestionBridge(id);          // v44
-  if (action === "question-bridge-submit") submitQuestionBridge();   // v44
-  if (action === "question-delete") deleteQuestion(id);
-  if (action === "entry-to-question") entryToQuestion(id);
-  if (action === "open-questions") { state.settings.zeroTab = "question"; persistLocalNoSchedule(); setView("zero"); }
-  // v42: AIループ搬送
-  if (action === "report-copy-ai") copyReportToClipboard();
-  if (action === "report-share-ai") shareReport();
+  // v177: question-*/open-questions/entry-to-question(問い)・report-copy-ai/report-share-ai/
+  // ai-mit-adopt/ai-task-adopt/ai-task-dismiss(AI連携)はapp.js内のregisterActionsへ移行した
+  // (段階5-6b)。
   // v143: journal-import-ai(手動貼り付け取込ボタン)はv141でジャーナルのAIフィードバック列
   // 自体を撤去した際に到達不能になっていたため、ハンドラごと削除した(openAiImportModal一式・
   // ai-import-submitも同様。CHANGES_v143.md参照)。
-  if (action === "ai-mit-adopt") adoptAiMit(Number(target.dataset.index));
-  // v133: タスク候補チップ(採用/却下)
-  if (action === "ai-task-adopt") adoptAiTaskCandidate(Number(target.dataset.index));
-  if (action === "ai-task-dismiss") dismissAiTaskCandidate(Number(target.dataset.index));
   // v121: 今週のやりたいこと(Wishからの週次選定)
   if (action === "weekly-wish-open") openWeeklyWishModal();
   if (action === "weekly-wish-submit") submitWeeklyWish();
@@ -1060,9 +1067,7 @@ document.addEventListener("click", (event) => {
     persistLocalNoSchedule();  // 画面移動は UI 操作(dataModifiedAt を汚さない)
     render();
   }
-  if (action === "carry-over") requestCarryOver(id);  // v46: 未完了ブロックを今日へ繰り越し(v61: 3回目以降は儀式モーダルを挟む)
-  if (action === "migration-ritual-choice") resolveMigrationRitual(target.dataset.choice);  // v61: マイグレーション儀式の選択
-  if (action === "ideal-retry") resolveIdealRetry(target.dataset.choice);  // v61: 今日の理想の3日リトライ(続ける/手放す)
+  // v177: carry-over/migration-ritual-choice/ideal-retryはapp.js内のregisterActionsへ移行した。
   // v39/v40: エネルギー構造からの行動導線
   if (action === "energy-open-routine") openRoutineForWeekday(Number(target.dataset.day));
   if (action === "energy-open-category") {
