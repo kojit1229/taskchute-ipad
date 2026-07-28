@@ -14,6 +14,14 @@
 // configureXxxのようにdeps注入で呼び出す関数がない)。app.jsはDOM初期化を伴い素朴にはNode環境
 // でimportできないため、この85件はダミー実行ではなく静的正規表現抽出(extractAppRegisteredActions、
 // §2のextractClickActionsと同じ方式)で検証する。
+// v178: 段階5-7a(modal系dispatcher分岐の移行・前半=WBS/Project/Task CRUD 18+モーダル起動系
+// modal-close/modal-delete/lev-judge 3、計21分岐)で[3]をさらに拡張した。modal-saveは
+// 過去判定どおりreturn意味論がありif連鎖に残置。ビジョンボード/実験ログ/AIスケジュール下書き/
+// 検索(計21分岐)は200行予算のため次バージョンへ継続する。
+// v178はさらに、submitModal/deleteFromModalのstate.modal.typeによるif-else連鎖(project/task/
+// block/actualEntry/question/experiment/chain/storeVisitの8 type)をregisterModalHandlerへ
+// 全件移行した(段階5-8、prep-stage5-dispatcher.md §5のMust級指摘の解消)。[5]でこの8 typeの
+// golden list exhaustiveness(if連鎖残存type+レジストリ登録type=全typeの完全一致)を検証する。
 // prep-stage5-dispatcher.md §6-1の方式どおり構成:
 //   [1] src/ui/actions.jsの単体挙動(registerActions/dispatchAction、
 //       registerModalHandler/dispatchModalSave/dispatchModalDelete、重複登録ガード、
@@ -200,7 +208,15 @@ const APP_JS_REGISTERED_ACTIONS = [
   "report-copy-ai", "report-share-ai",
   "generate-report", "download-report", "download-data",
   "carry-over", "migration-ritual-choice", "ideal-retry",
-  "toggle-journal-segment", "toggle-home-reflect-fold"
+  "toggle-journal-segment", "toggle-home-reflect-fold",
+  // --- v178: WBS/Project/Task CRUD(18) ---
+  "add-project", "delete-project", "add-task", "toggle-task", "delete-task",
+  "toggle-project-collapse", "toggle-task-collapse",
+  "suspend-project", "resume-project", "suspend-task", "resume-task",
+  "add-task-to-project", "add-subtask", "add-block", "delete-block",
+  "edit-project", "edit-task", "edit-block",
+  // --- v178: モーダル起動系(3、modal-saveはreturn意味論のためif連鎖に残置) ---
+  "modal-close", "modal-delete", "lev-judge"
 ];
 
 const EXPECTED_REMAINING_IF_CHAIN = GOLDEN_CLICK_ACTIONS.filter(
@@ -236,6 +252,42 @@ function extractAppRegisteredActions() {
   }
   const body = appSource.slice(start, end);
   return [...body.matchAll(/^\s*"([^"]+)":/gm)].map((m) => m[1]);
+}
+
+// v178: 段階5-8。submitModal/deleteFromModalのstate.modal.typeによるif-else連鎖(8 type)を
+// registerModalHandlerへ全件移行した。§6-1で持ち越されていた「modalHandlers 8 typeのgolden
+// list exhaustiveness検証」をここで行う(click側と同じ保存則方式: if連鎖残存type+レジストリ
+// 登録type=全typeの完全一致)。
+const GOLDEN_MODAL_TYPES = [
+  "project", "task", "block", "actualEntry", "question", "experiment", "chain", "storeVisit"
+];
+// v178時点で8 typeすべてをregisterModalHandlerへ移行済みのため、if連鎖側の残存は0件になる
+// (将来型が増えてif連鎖に残った場合の退行を検知できるよう、ハードコードせずGOLDENからの
+// filterで期待値を出す)。
+const MIGRATED_TO_MODAL_REGISTRY = [
+  "project", "task", "block", "actualEntry", "question", "experiment", "chain", "storeVisit"
+];
+const EXPECTED_REMAINING_MODAL_IF_CHAIN = GOLDEN_MODAL_TYPES.filter(
+  (t) => !MIGRATED_TO_MODAL_REGISTRY.includes(t)
+);
+
+// submitModal/deleteFromModal本体(次のfunction buildProjectModalの手前まで)から
+// `state.modal.type === "..."`の残存if-else分岐を静的抽出する。
+function extractModalIfChainTypes() {
+  const startMarker = "function submitModal() {";
+  const endMarker = "function buildProjectModal(project) {";
+  const start = appSource.indexOf(startMarker);
+  const end = appSource.indexOf(endMarker, start);
+  if (start < 0 || end < 0) {
+    throw new Error("submitModal/deleteFromModalの境界マーカーが見つからない(app.js構造が変わった可能性)");
+  }
+  const body = appSource.slice(start, end);
+  return [...body.matchAll(/state\.modal\.type === "([^"]+)"/g)].map((m) => m[1]);
+}
+
+// registerModalHandler("type", {...})呼び出しからtype文字列を静的抽出する。
+function extractModalHandlerTypes() {
+  return [...appSource.matchAll(/registerModalHandler\("([^"]+)"/g)].map((m) => m[1]);
 }
 
 (async () => {
@@ -364,10 +416,38 @@ function extractAppRegisteredActions() {
   console.log("[4] 段階5-1のフック配線がapp.js内に存在すること(dispatch呼び出し箇所の接続契約)");
   check("click dispatcherの先頭にdispatchAction(action, { event, target, id })呼び出しがある",
     /if \(dispatchAction\(action, \{ event, target, id \}\)\) return;/.test(appSource));
-  check("submitModalの先頭にdispatchModalSave呼び出しがある",
-    /if \(dispatchModalSave\(state\.modal\.type, state\.modal\.id, fields\)\) return;/.test(appSource));
+  check("submitModal内にdispatchModalSave呼び出しがある(v178: 8 type全移行によりif-else連鎖を"
+    + "撤去したため、もはや`if (...) return;`でラップされない単独呼び出しになった)",
+    /dispatchModalSave\(state\.modal\.type, state\.modal\.id, fields\);/.test(appSource));
   check("deleteFromModalの先頭にdispatchModalDelete呼び出しがある",
     /if \(dispatchModalDelete\(state\.modal\.type, state\.modal\.id\)\) \{/.test(appSource));
+
+  console.log("[5] submitModal/deleteFromModalのmodal typeレジストリ移行(段階5-8): "
+    + "8 typeのgolden list exhaustiveness検証(if連鎖残存type+レジストリ登録type=全typeの完全一致)");
+  const modalIfChainTypes = extractModalIfChainTypes();
+  check(`if連鎖側に残るtypeは期待どおり${EXPECTED_REMAINING_MODAL_IF_CHAIN.length}件`,
+    modalIfChainTypes.length === EXPECTED_REMAINING_MODAL_IF_CHAIN.length,
+    `実際: ${modalIfChainTypes.length}件 (${JSON.stringify(modalIfChainTypes)})`);
+
+  const modalHandlerTypes = extractModalHandlerTypes();
+  check(`registerModalHandler登録typeの件数は期待どおり${MIGRATED_TO_MODAL_REGISTRY.length}件`,
+    modalHandlerTypes.length === MIGRATED_TO_MODAL_REGISTRY.length,
+    `実際: ${modalHandlerTypes.length}件 (${JSON.stringify(modalHandlerTypes)})`);
+  check("registerModalHandler登録type一覧に重複がない",
+    new Set(modalHandlerTypes).size === modalHandlerTypes.length);
+
+  const modalUnion = [...modalIfChainTypes, ...modalHandlerTypes];
+  check("if連鎖側・registerModalHandler側の間で重複が無い",
+    new Set(modalUnion).size === modalIfChainTypes.length + modalHandlerTypes.length,
+    `重複: ${JSON.stringify(modalUnion.filter((t, i) => modalUnion.indexOf(t) !== i))}`);
+  check(`和集合の件数はgolden listと同じ${GOLDEN_MODAL_TYPES.length}件`,
+    modalUnion.length === GOLDEN_MODAL_TYPES.length,
+    `実際: ${modalUnion.length}件`);
+  check("和集合はgolden listと集合として完全一致(8 typeのexhaustiveness)",
+    new Set(modalUnion).size === GOLDEN_MODAL_TYPES.length
+    && GOLDEN_MODAL_TYPES.every((t) => modalUnion.includes(t)),
+    `差分: 追加=${JSON.stringify(modalUnion.filter((t) => !GOLDEN_MODAL_TYPES.includes(t)))} `
+    + `消失=${JSON.stringify(GOLDEN_MODAL_TYPES.filter((t) => !modalUnion.includes(t)))}`);
 
   console.log(failures === 0 ? "\n✅ action-registry-core ALL PASS" : `\n❌ action-registry-core: ${failures} 件失敗`);
   process.exit(failures === 0 ? 0 : 1);

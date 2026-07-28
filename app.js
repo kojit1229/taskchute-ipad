@@ -123,8 +123,12 @@ import {
 //   registerActions自体をapp.jsが直接importしてこのファイル内で呼ぶ(prep-stage5-dispatcher.md
 //   §4の「相乗り方式」。ハンドラ実体はapp.js内の既存関数のまま、将来featureが抽出される時に
 //   登録ブロックごと一緒に移せる形にしてある)。
+// v178: 段階5-8。submitModal/deleteFromModalのstate.modal.typeによるif-else連鎖(project/task/
+//   block/actualEntry/question/experiment/chain/storeVisitの8 type)をregisterModalHandlerへ
+//   全件移行するため、registerModalHandlerをimportに追加する(prep-stage5-dispatcher.md §5)。
 import {
-  registerActions, dispatchAction, dispatchModalSave, dispatchModalDelete
+  registerActions, dispatchAction,
+  registerModalHandler, dispatchModalSave, dispatchModalDelete
 } from "./src/ui/actions.js";
 
 // v91: 「### 依頼」節(機械可読契約: loop/scripts/journal-requests-extract.py が検出する)。
@@ -494,6 +498,84 @@ registerActions({
     if (seg && parent) _homeReflectFoldOverride[seg] = !parent.open;  // クリック時点ではまだ未反映のため反転
   }
 });
+// v178: app.js分割・段階5-7a(modal系dispatcher分岐の移行・前半)。prep-stage5-dispatcher.md
+// §2-Cの「WBS/Project/Task CRUD(18)」+モーダル起動系(modal-close/modal-delete/lev-judge、3)の
+// 計21分岐を、click dispatcherのif連鎖からregisterActions経由のレジストリへ移行した
+// (相乗り方式。project/task/blockはsrc/features/へ未抽出のためapp.js関数をそのまま参照する)。
+// modal-saveは過去判定どおりreturn意味論(disable連動のearly return)がありif連鎖に残置する。
+// 後半(ビジョンボード6+実験ログ5+AIスケジュール下書き8+検索2、計21)はv179以降で継続する。
+registerActions({
+  // --- WBS/Project/Task CRUD(18) ---
+  "add-project": () => addProject(),
+  "delete-project": ({ id }) => deleteProject(id),
+  "add-task": () => addTask(),
+  "toggle-task": ({ id }) => toggleTask(id),
+  "delete-task": ({ id }) => deleteTask(id),
+  "toggle-project-collapse": ({ id }) => toggleProjectCollapse(id),
+  "toggle-task-collapse": ({ id }) => toggleTaskCollapse(id),
+  "suspend-project": ({ id }) => suspendProject(id),
+  "resume-project": ({ id }) => resumeProject(id),
+  "suspend-task": ({ id }) => suspendTask(id),
+  "resume-task": ({ id }) => resumeTask(id),
+  "add-task-to-project": ({ id }) => addTaskToProject(id),
+  "add-subtask": ({ target }) => addSubtask(target.dataset.parentTask),
+  "add-block": () => addBlock(),
+  "delete-block": ({ id }) => deleteBlock(id),
+  "edit-project": ({ id }) => openProjectEditor(id),
+  "edit-task": ({ id }) => openTaskEditor(id),
+  "edit-block": ({ id }) => openBlockEditor(id),
+  // --- モーダル起動系(3、modal-saveは残置) ---
+  "modal-close": () => closeModal(),
+  "modal-delete": () => deleteFromModal(),
+  "lev-judge": ({ target }) => {
+    const card = target.closest(".modal-card");
+    const checkedCount = card ? card.querySelectorAll("[data-lev-q]:checked").length : 0;
+    const select = card?.querySelector('[data-modal-field="leverageType"]');
+    if (select) {
+      select.value = checkedCount >= 2 ? "asset" : "";
+      showToast(checkedCount >= 2 ? "⚙ 「資産」を提案しました(保存で反映)" : "迷うなら未設定のままでOK");
+    }
+  }
+});
+// v178: app.js分割・段階5-8。submitModal/deleteFromModalのstate.modal.typeによるif-else連鎖
+// (project/task/block/actualEntry/question/experiment/chain/storeVisitの8 type)を
+// registerModalHandlerへ全件移行した(prep-stage5-dispatcher.md §5、Must級指摘の解消)。
+// project/task/blockはsrc/features/へ未抽出のためapp.js内関数をそのまま参照する。chainは
+// routine.js、storeVisitはjournal.jsからimport済みの関数をそのまま参照する。actualEntryは
+// 従来からdeleteFromModal側に対応する型が無い(saveのみ)ためdelete keyを持たせない
+// (dispatchModalDeleteがfalseを返し、deleteFromModal側の共通closeModal()へ素通りする——
+// 移行前の「どの型にもマッチせずcloseModal()だけ実行される」挙動と完全に一致)。
+registerModalHandler("project", {
+  save: (id, fields) => saveProjectFromModal(id, fields),
+  delete: (id) => deleteProject(id)
+});
+registerModalHandler("task", {
+  save: (id, fields) => saveTaskFromModal(id, fields),
+  delete: (id) => deleteTask(id)
+});
+registerModalHandler("block", {
+  save: (id, fields) => saveBlockFromModal(id, fields),
+  delete: (id) => deleteBlock(id)
+});
+registerModalHandler("actualEntry", {
+  save: (id, fields) => saveActualEntryFromModal(id, fields)
+});
+registerModalHandler("question", {
+  save: (id, fields) => saveQuestionFromModal(id, fields),  // v39
+  delete: (id) => deleteQuestion(id)  // v39
+});
+registerModalHandler("experiment", {
+  save: (id, fields) => saveExperimentFromModal(id, fields),  // v68
+  delete: (id) => deleteExperiment(id)  // v68
+});
+registerModalHandler("chain", {
+  save: (id, fields) => saveChainFromModal(id, fields),  // v115: 連続ルーティン(提案G②)
+  delete: (id) => deleteChain(id)  // v115
+});
+registerModalHandler("storeVisit", {
+  save: (id, fields) => saveStoreVisitFromModal(id, fields),  // v141: 今日行ったお店ログ
+  delete: (id) => deleteStoreVisit(id)  // v141
+});
 let toastTimer = null;
 let timerTicker = null;
 // v144: エネルギーバッテリーの差分更新(updateBatteryTick)のスロットル用。
@@ -750,10 +832,7 @@ document.addEventListener("click", (event) => {
   // v173: dashboard-date-prev/nextはsrc/features/dashboard.jsのregisterActionsへ移行した。
   if (action === "today") setSelectedDate(todayISO());
   // v173: set-morning〜store-visit-yearはsrc/features/journal.jsのregisterActionsへ移行した。
-  if (action === "add-project") addProject();
-  if (action === "delete-project") deleteProject(id);
-  if (action === "add-task") addTask();
-  if (action === "toggle-task") toggleTask(id);
+  // v178: add-project/delete-project/add-task/toggle-taskはapp.js内のregisterActionsへ移行した。
   if (action === "toggle-criteria-request") toggleCriteriaRequest(id);  // v99: 翌朝AI設定依頼トグル
   if (action === "task-today") createBlockFromTask(id);
   if (action === "home-add-today") addTaskToToday(id);
@@ -767,17 +846,9 @@ document.addEventListener("click", (event) => {
       el.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }
-  if (action === "delete-task") deleteTask(id);
-  // v33: WBS の折りたたみ
-  if (action === "toggle-project-collapse") toggleProjectCollapse(id);
-  if (action === "toggle-task-collapse") toggleTaskCollapse(id);
-  // v35: 中断 / 再開
-  if (action === "suspend-project") suspendProject(id);
-  if (action === "resume-project") resumeProject(id);
-  if (action === "suspend-task") suspendTask(id);
-  if (action === "resume-task") resumeTask(id);
+  // v178: delete-task/toggle-project-collapse/toggle-task-collapse/suspend-project/resume-project/
+  // suspend-task/resume-task/add-blockはapp.js内のregisterActionsへ移行した。
   // v174: toggle-show-suspended〜wbs-collapse-allはapp.js内のregisterActionsへ移行した。
-  if (action === "add-block") addBlock();
   if (action === "toggle-block") toggleBlock(id);
   // v107: Block行の「タスク完了」チェック(Block完了とは別枠、K指示 2026-07-15)
   if (action === "toggle-task-complete") toggleTaskCompleteFromBlock(id);
@@ -785,7 +856,7 @@ document.addEventListener("click", (event) => {
   //      宣言・報告はいずれもスキップ可能で、スキップ時は従来どおり即座に実行される。
   if (action === "now-start") openDeclareModal(id, "block");
   if (action === "now-end") openReportModal(id, "block");
-  if (action === "delete-block") deleteBlock(id);
+  // v178: delete-blockはapp.js内のregisterActionsへ移行した。
   // v70: 「予定通りだった」一括承認(当日の未記録Blockに計画時刻を実績としてコピー+completed化)
   if (action === "bulk-approve-planned") bulkApproveAsPlanned();
   // v70: Now画面(実行コンベア)の開閉 + 3ボタン(開始はnow-startを再利用)
@@ -859,10 +930,9 @@ document.addEventListener("click", (event) => {
   if (action === "continue-focus") continueFocusPomodoro();
   if (action === "finish-block") finishBlockFromBreak();
   // === v2: 編集モーダル ===
-  if (action === "edit-project") openProjectEditor(id);
-  if (action === "edit-task") openTaskEditor(id);
-  if (action === "edit-block") openBlockEditor(id);
-  if (action === "modal-close") closeModal();
+  // v178: edit-project/edit-task/edit-block/modal-close/modal-delete/lev-judgeはapp.js内の
+  // registerActionsへ移行した。modal-saveは過去判定どおりreturn意味論(disable連動のearly
+  // return)がありif連鎖に残置する。
   if (action === "modal-save") {
     // v108: Block編集モーダルの保存ボタンのみ、連打・二重発火防止でdisableする
     //       (他モーダルの保存ボタンはスコープ外)。バリデーション失敗等でモーダルが
@@ -874,18 +944,6 @@ document.addEventListener("click", (event) => {
       if (state.modal) target.disabled = false;
     } else {
       submitModal();
-    }
-  }
-  if (action === "modal-delete") deleteFromModal();
-  // v65: 10x機構 — 10秒判定3問(任意ヘルプ)のチェック数をその場で数え、
-  //      leverageType セレクトへ反映するだけ(state未変更・保存は「保存」ボタン時のみ)
-  if (action === "lev-judge") {
-    const card = target.closest(".modal-card");
-    const checkedCount = card ? card.querySelectorAll("[data-lev-q]:checked").length : 0;
-    const select = card?.querySelector('[data-modal-field="leverageType"]');
-    if (select) {
-      select.value = checkedCount >= 2 ? "asset" : "";
-      showToast(checkedCount >= 2 ? "⚙ 「資産」を提案しました(保存で反映)" : "迷うなら未設定のままでOK");
     }
   }
   // === v2: ビジョン画面のセグメント切替 ===
@@ -909,9 +967,7 @@ document.addEventListener("click", (event) => {
   // === v3: ポモドーロ常時起動 ===
   if (action === "pomo-tab") setPomodoroTab(target.dataset.tab);
   // v174: push-reportはapp.js内のregisterActionsへ移行した。
-  // === v6: サブタスク追加 / Project直下にTask追加 ===
-  if (action === "add-task-to-project") addTaskToProject(id);
-  if (action === "add-subtask") addSubtask(target.dataset.parentTask);
+  // v178: add-task-to-project/add-subtaskはapp.js内のregisterActionsへ移行した。
   // === v6: タイムラインから新規Block追加 ===
   if (action === "timeline-new-block") {
     const minute = Number(target.dataset.minute || 0);
@@ -14850,51 +14906,24 @@ function readModalFields() {
 function submitModal() {
   if (!state.modal) return;
   const fields = readModalFields();
-  // v172: レジストリ経由のmodal handlerが登録されていればそちらを優先する(段階5-1時点では
-  // どのtypeもまだ何も登録していないため常にfalseで、既存if-else連鎖が今までどおり実行される)。
-  if (dispatchModalSave(state.modal.type, state.modal.id, fields)) return;
-  if (state.modal.type === "project") {
-    saveProjectFromModal(state.modal.id, fields);
-  } else if (state.modal.type === "task") {
-    saveTaskFromModal(state.modal.id, fields);
-  } else if (state.modal.type === "block") {
-    saveBlockFromModal(state.modal.id, fields);
-  } else if (state.modal.type === "actualEntry") {
-    saveActualEntryFromModal(state.modal.id, fields);
-  } else if (state.modal.type === "question") {
-    saveQuestionFromModal(state.modal.id, fields);  // v39
-  } else if (state.modal.type === "experiment") {
-    saveExperimentFromModal(state.modal.id, fields);  // v68
-  } else if (state.modal.type === "chain") {
-    saveChainFromModal(state.modal.id, fields);  // v115: 連続ルーティン(提案G②)
-  } else if (state.modal.type === "storeVisit") {
-    saveStoreVisitFromModal(state.modal.id, fields);  // v141: 今日行ったお店ログ
-  }
+  // v178: 8 type(project/task/block/actualEntry/question/experiment/chain/storeVisit)すべてを
+  // registerModalHandlerへ移行済みのため、if-else連鎖は撤去した(dispatchModalSaveが必ずtrueを
+  // 返す。未登録typeが将来増えた場合はfalseで素通りし、何もしない=移行前の「どのtypeにも
+  // マッチしない」場合と同じ挙動)。
+  dispatchModalSave(state.modal.type, state.modal.id, fields);
 }
 
 function deleteFromModal() {
   if (!state.modal) return;
   const ok = window.confirm("削除しますか? この操作は取り消せます(deleted フラグ)。");
   if (!ok) return;
-  // v172: 同上(submitModal参照)。登録済みhandlerが処理した場合もcloseModal()は必ず呼ぶ。
+  // v178: 同上(submitModal参照)。7 type(project/task/block/question/experiment/chain/
+  // storeVisit)はdispatchModalDelete経由でcloseModal()まで実行する。actualEntryはdelete未登録
+  // (従来からdeleteFromModal側に対応する型が無い)ため、dispatchModalDeleteがfalseを返し
+  // 下のcloseModal()だけが実行される(移行前と同じ挙動)。
   if (dispatchModalDelete(state.modal.type, state.modal.id)) {
     closeModal();
     return;
-  }
-  if (state.modal.type === "project") {
-    deleteProject(state.modal.id);
-  } else if (state.modal.type === "task") {
-    deleteTask(state.modal.id);
-  } else if (state.modal.type === "block") {
-    deleteBlock(state.modal.id);
-  } else if (state.modal.type === "question") {
-    deleteQuestion(state.modal.id);  // v39
-  } else if (state.modal.type === "experiment") {
-    deleteExperiment(state.modal.id);  // v68
-  } else if (state.modal.type === "chain") {
-    deleteChain(state.modal.id);  // v115: 連続ルーティン(提案G②)
-  } else if (state.modal.type === "storeVisit") {
-    deleteStoreVisit(state.modal.id);  // v141: 今日行ったお店ログ
   }
   closeModal();
 }

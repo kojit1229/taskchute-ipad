@@ -1,0 +1,55 @@
+{
+  "version": 178,
+  "date": "2026-07-29",
+  "title": "app.js分割 段階5-7a+5-8(modal系dispatcher分岐の相乗り移行・前半+modal typeレジストリ化)",
+  "summary": "prep-stage5-dispatcher.md §2-C「modal(44分岐)」の前半として、click dispatcherのWBS/Project/Task CRUD(add/delete/edit/toggle/collapse/suspend/resume系、18分岐)+モーダル起動系(modal-close/modal-delete/lev-judge、3分岐)の計21分岐を、app.js自身がregisterActions({...})を直接呼ぶ形でレジストリへ移行した(v174/v176/v177と同型の相乗り方式)。modal-saveは過去判定どおりreturn意味論(Block編集モーダル保存ボタンのdisable連動early return)がありif連鎖に残置した。加えて、prep doc §5でMust級指摘されていたsubmitModal/deleteFromModalのstate.modal.typeによるif-else連鎖(project/task/block/actualEntry/question/experiment/chain/storeVisitの8 type)を、registerModalHandler(type, {save, delete})へ全件移行した(段階5-8)。これによりui/modal.js相当の循環依存懸念(routine.js/journal.jsを将来抽出する際の一極集中import問題)が解消された。ビジョンボード(6)+実験ログ(5)+AIスケジュール下書き(8)+検索(2)の計21分岐は200行予算のため次バージョン(v179以降)へ継続する。",
+  "changedFiles": [
+    "app.js",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "prep-stage5-dispatcher.md §4「dispatcher配線はUI配線であり機能ロジックではない」を根拠に、project/task/block(いずれも未抽出)を含むWBS/Project/Task CRUD 18分岐をapp.js相乗りレジストリへ移行した(v174/v176/v177と同型)。",
+    "モーダル起動系3分岐(modal-close/modal-delete/lev-judge)も同じ安全条件(preventDefault/stopPropagation/return意味論なし・順序非依存・target/id/event以外の共有ローカル変数に非依存)を満たすため同時に移行した。modal-saveのみ、Block編集モーダル保存ボタンのdisable連動early returnという既存の判定どおりif連鎖に残置する。",
+    "prep-stage5-dispatcher.md §5・§6-1で持ち越されていたsubmitModal/deleteFromModalのmodal typeレジストリ化(8 typeのgolden list exhaustiveness検証込み)を、click側の移行と独立に完了させた(project/task/blockはapp.js内関数、chainはroutine.js、storeVisitはjournal.jsからのimportをそのまま参照する形で登録)。"
+  ],
+  "changes": [
+    "app.js: click dispatcherのif連鎖からWBS/Project/Task CRUD 18分岐+modal-close/modal-delete/lev-judgeの計21分岐を削除し、v177のregisterActions({...})ブロックの直後に新しいregisterActions({...})呼び出しを追加して登録した(ハンドラ本体はロジック無改変、target/idはctx destructuringで受け取る)。削除箇所には移行先を示す1行コメントを残した。",
+    "app.js: src/ui/actions.jsのimportにregisterModalHandlerを追加した。",
+    "app.js: registerActions({...})群の直後にregisterModalHandler呼び出しを8件(project/task/block/actualEntry/question/experiment/chain/storeVisit)追加した。actualEntryはdeleteFromModal側に対応する型が元々無いため、save keyのみ登録した。",
+    "app.js: submitModal()のif-else連鎖(8 type)を撤去し、dispatchModalSave(...)の単独呼び出しへ縮めた。deleteFromModal()のif-else連鎖(7 type)も撤去し、dispatchModalDelete(...)が真ならcloseModal()して返す、偽なら(=actualEntry)そのままcloseModal()する形に縮めた(挙動は移行前と完全一致)。",
+    "sw.js: CACHE_NAMEをv178へ更新した(新規src/**ファイルは追加していないためAPP_SHELLの変更は無し)。",
+    "tests/action-registry-core.test.js: APP_JS_REGISTERED_ACTIONSへv178移行分21件を追記した(v174の20件+v176の36件+v177の29件+v178の21件=計106件)。submitModal内のdispatch呼び出し検証regexを、if-else撤去後の単独呼び出し形に合わせて更新した。GOLDEN_MODAL_TYPES(8 type)・MIGRATED_TO_MODAL_REGISTRY・extractModalIfChainTypes()/extractModalHandlerTypes()を新設し、[5]セクションで「if連鎖残存type(0件)+レジストリ登録type(8件)=golden list完全一致」のexhaustiveness検証を追加した(§6-1で持ち越されていた要求)。"
+  ],
+  "uncertainties": [
+    "ビジョンボード(6)+実験ログ(5)+AIスケジュール下書き(8)+検索(2)の計21分岐は、200行予算内に収めるため本バージョンでは移行せず、if連鎖に残した(次バージョンで継続予定)。",
+    "所属ドメインに確信が持てなかった6件(toggle-mit・mit-candidate-add・home-tab・open-md-in-github・reload-md・stats-range)は引き続き見送り、if連鎖に残した(v177から継続)。",
+    "toggle-criteria-request/task-today/home-add-today/home-jumpはWBS/Project/Task CRUD群と物理的に隣接しているが、機能的にはホーム/タイムライン寄りのため今回のmodal移行からは除外した(所属ドメインの確信度がWBS CRUD各項目ほど高くない)。"
+  ],
+  "reviewFocus": [
+    "移行した21分岐のハンドラ本体が、移行前のif連鎖の中身と1文字も変わっていないこと(ロジック無改変、target/id→ctx destructuringのみの機械置換)。lev-judgeのようにevent.target.closestを使う分岐も含め、git diffで確認すること。",
+    "modal-saveがif連鎖に残置されたままであること(移行漏れではなく意図した残置であることをコメントで確認)。",
+    "submitModal/deleteFromModalのif-else連鎖撤去後も、8 type(project/task/block/actualEntry/question/experiment/chain/storeVisit)すべてで保存/削除の実際の呼び出し先関数が移行前と1対1で一致していること。actualEntryのdeleteFromModal未対応(save専用)という既存仕様が、delete key省略という形で正しく再現されていること。",
+    "tests/action-registry-core.test.jsの保存則(if連鎖側81件+5feature側38件+app.js直接側106件=225件、重複ゼロ)と、modal type側の保存則(if連鎖側0件+レジストリ側8件=8件、重複ゼロ)が両方機械的に成立していること。",
+    "WBS/Project/Task CRUD・Block編集・10x機構(lev-judge)・実験ログ・連続ルーティン(chain)・お店ログ(storeVisit)の各E2Eスイート(v65/v68/v115/v118/v141等)がレジストリ経由でも同じ挙動を示すこと(dispatch呼び出し前のevent.target.closest(\"[data-action]\")によるイベント委譲を変更していないこと)。"
+  ],
+  "verification": [
+    "node --check app.js / sw.js / tests/action-registry-core.test.js → 全てexit 0",
+    "node tests/action-registry-core.test.js → 全件成功(click保存則: if連鎖81+5feature38+app.js直接106=225。modal type保存則: if連鎖0+レジストリ8=8)",
+    "npm run test:fast → 全件成功",
+    "npm run test:smoke → 全件成功",
+    "node tests/run-all.js v65 v68 v115 v141 v118 → 全件成功(modal CRUD系E2E5本: lev-judge/experiment/chain/storeVisit/project-task)",
+    "node scripts/release-gate.js releases/v178.json --suite=action-registry-core,v65,v68,v115,v141,v118 → 実行結果を完了報告に記載",
+    "npm run test:core → 実行結果を完了報告に記載",
+    "npm run code:index:write / npm run test:manifest:write 実行済み",
+    "git diff --numstat で実行コード差分を実測(app.js 100+71=171行、sw.js 1+1=2行、計173行、200行以下)"
+  ],
+  "knownLimitations": [
+    "click dispatcherの残り81分岐のうち、modalバケツの後半(ビジョンボード6+実験ログ5+AIスケジュール下書き8+検索2、計21件)は次バージョン(v179以降)で継続する。timeline(43)・wish Tier3(triage-*)・body-scan-*・weekly-wish-*・所属ドメイン未確定6件は未着手のまま。",
+    "src/配下にpackage.json(type:module)を置いていないため、Node実行時にMODULE_TYPELESS_PACKAGE_JSON警告が出る(v164から継続、動作には影響しない)。"
+  ]
+}
