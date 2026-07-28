@@ -180,13 +180,22 @@ const activeChildren = new Set();
   });
 });
 
-function runSuite(file, index) {
+function runSuite(file, index, portBase) {
   return new Promise((resolve) => {
     const child = spawn("node", [path.join(__dirname, file)], {
-      stdio: "inherit",
+      // v169: inheritからpipeへ変更(出力は下でそのまま親へ流すので表示は不変)。
+      // インフラ起因クラッシュ(ERR_CONNECTION_REFUSED等)のシグネチャ検出に出力が必要なため。
+      stdio: ["ignore", "pipe", "pipe"],
       detached: process.platform !== "win32",
-      env: { ...process.env, TEST_PORT_INDEX: String(index), TEST_PORT_BASE: String(runPortBase) }
+      env: { ...process.env, TEST_PORT_INDEX: String(index), TEST_PORT_BASE: String(portBase) }
     });
+    let outputTail = "";
+    const capture = (chunk, stream) => {
+      stream.write(chunk);
+      outputTail = (outputTail + chunk.toString()).slice(-8192);
+    };
+    child.stdout.on("data", (chunk) => capture(chunk, process.stdout));
+    child.stderr.on("data", (chunk) => capture(chunk, process.stderr));
     activeChildren.add(child);
     let timedOut = false;
     const timer = setTimeout(() => {
@@ -197,11 +206,29 @@ function runSuite(file, index) {
     const finish = (status) => {
       clearTimeout(timer);
       activeChildren.delete(child);
-      resolve(timedOut ? 1 : status);
+      resolve({ status: timedOut ? 1 : status, output: outputTail });
     };
     child.on("exit", (code) => finish(code === 0 ? 0 : 1));
     child.on("error", () => finish(1));
   });
+}
+
+// v169: CI 4シャード化後、テスト用HTTPサーバへの接続失敗(ERR_CONNECTION_REFUSED /
+// EADDRINUSE)による「毎回別スイートが1件即死する」flakeを2026-07-28夜に6回以上観測
+// (run 30358012248 / 30369862292。ローカル・隔離worktreeでは同スイートが安定して緑)。
+// assertion失敗(検証内容の失敗)は従来どおり一切再試行しない。この2つの接続系シグネチャに
+// 合致するインフラ起因クラッシュに限り、ポート帯を引き直して1回だけ再実行し、
+// FLAKY-INFRAとして目立つ警告を残す(検証の弱体化ではなく実行基盤の自己回復。
+// 恒久対策= startServerのlistening待ち等は別タスクで実施予定)。
+const INFRA_CRASH_SIGNATURE = /ERR_CONNECTION_REFUSED|EADDRINUSE/;
+const flakyInfraRetries = [];
+
+function freshPortBase(exclude) {
+  let base = exclude;
+  while (base === exclude) {
+    base = TEST_PORT_BASE_MIN + Math.floor(Math.random() * _basePickCount) * TEST_PORT_BASE_STEP;
+  }
+  return base;
 }
 
 console.log(`ポート帯基底(TEST_PORT_BASE): ${runPortBase}(並行run間の衝突回避、v140)`);
@@ -215,14 +242,26 @@ console.log(`並列数: ${Math.min(workers, Math.max(suites.length, 1))}`);
       const index = nextIndex++;
       const file = suites[index];
       console.log(`\n===== ${file} =====`);
-      const status = await runSuite(file, index);
-      if (status !== 0) failed++;
+      let result = await runSuite(file, index, runPortBase);
+      if (result.status !== 0 && INFRA_CRASH_SIGNATURE.test(result.output)) {
+        const retryBase = freshPortBase(runPortBase);
+        console.error(`\n⚠ FLAKY-INFRA: ${file} が接続系クラッシュ(ERR_CONNECTION_REFUSED/EADDRINUSE)で失敗。` +
+          `ポート帯を${runPortBase}→${retryBase}へ引き直して1回だけ再実行します(assertion失敗は再試行しない)`);
+        flakyInfraRetries.push(file);
+        console.log(`\n===== ${file}(FLAKY-INFRA retry) =====`);
+        result = await runSuite(file, index, retryBase);
+      }
+      if (result.status !== 0) failed++;
     }
   }
   await Promise.all(Array.from(
     { length: Math.min(workers, suites.length) },
     () => runWorker()
   ));
+  if (flakyInfraRetries.length) {
+    console.error(`\n⚠ FLAKY-INFRA再実行が発生したsuite(${flakyInfraRetries.length}件): ${flakyInfraRetries.join(", ")}`);
+    console.error("  接続系クラッシュのみ対象。恒久対策(startServerのlistening待ち等)の実施状況を確認すること。");
+  }
   console.log(failed ? `\n❌ ${failed} suite(s) failed` : "\n✅ All suites passed");
   process.exit(failed ? 1 : 0);
 })();
