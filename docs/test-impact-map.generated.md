@@ -3,7 +3,7 @@
 
 | Suite | Kind | Tier | Domains | Assertion signals | Fixed waits | Numeric wait ms |
 |---|---|---|---|---:|---:|---:|
-| action-registry-core.test.js | node | full | sync-storage, planning-execution, journal-health, content-ai, ui-responsive | 24 | 0 | 0 |
+| action-registry-core.test.js | node | full | sync-storage, planning-execution, journal-health, content-ai, ui-responsive | 27 | 0 | 0 |
 | avoid-core.test.js | node | full | sync-storage, content-ai, ui-responsive | 13 | 0 | 0 |
 | code-index.test.js | node | full | legacy-crosscutting | 19 | 0 | 0 |
 | commit-size-gate.test.js | node | full | legacy-crosscutting | 9 | 0 | 0 |

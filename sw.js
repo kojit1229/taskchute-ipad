@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v173";
+const CACHE_NAME = "taskchute-journal-pwa-v174";
 // v172: app.js分割の段階5-1(event dispatcherのレジストリ基盤導入)。src/ui/actions.js
 //   (registerActions/dispatchAction/registerModalHandler/dispatchModalSave/dispatchModalDelete)
 //   をAPP_SHELLへ追加した。click dispatcher/submitModal/deleteFromModalの先頭に

@@ -39,8 +39,11 @@ assert(index.functions.some((fn) => fn.area.includes("ui") && fn.effects.include
   "描画境界を識別");
 const clickDispatcher = index.functions.find((fn) => fn.name.startsWith("event:click@"));
 const changeDispatcher = index.functions.find((fn) => fn.name.startsWith("event:change@"));
-assert(clickDispatcher?.lines > 500, "巨大click dispatcherを索引化");
-assert(changeDispatcher?.lines > 150, "巨大change dispatcherを索引化");
+// v174: dispatcher分解(段階5)でclick dispatcherは設計どおり段階的に縮小する
+// (v173: 534行 → v174: 472行)。閾値は「listenerが索引に載っている+空になっていない」を
+// 検知する下限に留め、if連鎖の全撤去(最終cleanup)時にこの検証自体を再設計する。
+assert(clickDispatcher?.lines > 100, "click dispatcherを索引化(縮小中、下限は空振り検知)");
+assert(changeDispatcher?.lines > 100, "change dispatcherを索引化(同上)");
 
 // --- 固定点(独立レビュー Must-2 対応): area分類の負検証 ---
 // 旧実装は「関数名+本文全文」に正規表現を当てており、`.push(`(Array.prototype.push)や

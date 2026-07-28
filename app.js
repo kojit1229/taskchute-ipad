@@ -103,8 +103,13 @@ import {
 //   まだ何も登録しないため、dispatchAction/dispatchModalSave/dispatchModalDeleteは常にfalseを
 //   返し、既存if連鎖が今までどおり全件実行される(挙動は完全に無変更。action分岐の移行自体は
 //   段階5-2以降)。
+// v174: 段階5-3(残ドメインのaction相乗り移行)。settings/sync/core(nav)の20分岐は
+//   src/features/へ未抽出のため、既存extractファイルのconfigureXxxパターンとは異なり、
+//   registerActions自体をapp.jsが直接importしてこのファイル内で呼ぶ(prep-stage5-dispatcher.md
+//   §4の「相乗り方式」。ハンドラ実体はapp.js内の既存関数のまま、将来featureが抽出される時に
+//   登録ブロックごと一緒に移せる形にしてある)。
 import {
-  dispatchAction, dispatchModalSave, dispatchModalDelete
+  registerActions, dispatchAction, dispatchModalSave, dispatchModalDelete
 } from "./src/ui/actions.js";
 
 // v91: 「### 依頼」節(機械可読契約: loop/scripts/journal-requests-extract.py が検出する)。
@@ -266,6 +271,72 @@ configureTimelineLayout({ minutesOf, nowDateTime });
 // v173: src/features/avoid.jsのdispatcher登録(段階5-2)。addAvoid/deleteAvoidはapp.js残留の
 // ままなので関数参照を渡すだけ(dashboard.js等のconfigureXxxと同じ「呼ぶだけ」の注入パターン)。
 configureAvoid({ addAvoid, deleteAvoid });
+// v174: app.js分割・段階5-3(残ドメインのaction相乗り移行)。settings(11)+sync(8)+core/nav(1)の
+// 計20分岐を、click dispatcherのif連鎖からregisterActions経由のレジストリへ移行した
+// (prep-stage5-dispatcher.md §4の相乗り方式。この20件はまだsrc/features/へ抽出されていない
+// ため、ハンドラは既存のapp.js関数・module変数をそのまま参照する形で登録する。ロジック自体は
+// if連鎖からの機械的な移動のみで無改変)。
+registerActions({
+  "nav": ({ target }) => setView(target.dataset.view),
+  // --- settings(11): サイドバー/WBS表示設定/カテゴリ・休憩メッセージ管理 ---
+  "toggle-show-suspended": () => {
+    state.settings.showSuspended = !state.settings.showSuspended;
+    saveAndRender();
+  },
+  "toggle-wbs-hide-done": () => {
+    state.settings.wbsHideCompleted = !state.settings.wbsHideCompleted;
+    persistLocalNoSchedule();
+    render();
+  },
+  "toggle-tasks-show-future": () => {
+    state.settings.tasksShowFuture = !state.settings.tasksShowFuture;
+    persistLocalNoSchedule();
+    render();
+  },
+  "toggle-wbs-edit": () => {
+    state.settings.wbsEditMode = !state.settings.wbsEditMode;
+    persistLocalNoSchedule();
+    render();
+  },
+  "wbs-collapse-all": () => {
+    // v126: WishもWBS一覧に表示されるため、一括開閉の対象からWishだけ除く理由がなくなった
+    const targets = state.projects.filter((p) => !p.deleted);
+    const collapse = !targets.every((p) => p.collapsed);  // 全閉なら開く、そうでなければ閉じる
+    state.projects = state.projects.map((p) =>
+      !p.deleted ? { ...p, collapsed: collapse } : p);
+    saveAndRender();
+  },
+  "add-category": () => addCategory(),
+  "delete-category": ({ target }) => deleteCategory(target.dataset.catId),
+  "add-break-message": () => addBreakMessage(),
+  "delete-break-message": ({ target }) => deleteBreakMessage(target.dataset.msgId),
+  "toggle-sidebar": () => {
+    state.settings.sidebarCollapsed = !state.settings.sidebarCollapsed;
+    persistLocalNoSchedule();
+    render();
+  },
+  "toggle-settings-sync": ({ target }) => {
+    const parent = target.closest("details");
+    if (parent) _settingsSyncOpenOverride = !parent.open;  // クリック時点ではまだ未反映のため反転
+  },
+  // --- sync(8): GitHub保存/読込/バックアップ/アーカイブ/デモリセット ---
+  "save-github": () => saveToGitHub(),
+  "load-github": () => loadFromGitHub(),
+  "gate-continue": () => {
+    syncGitHubFieldsFromDOM();
+    if (!personalDataReady(state.settings.github)) {
+      showToast("Owner・Repository・トークンをすべて入力してください");
+    } else {
+      render();
+      syncFromGitHubOnStartup().then(() => hydrateStaticMarkdown());
+    }
+  },
+  "reset-demo": () => resetDemoData(),
+  "push-report": () => pushReportToGitHub(),
+  "open-backup-list": () => openBackupListModal(),
+  "restore-backup": ({ target }) => restoreBackup(target.dataset.date),
+  "run-archive": () => runArchive({ manual: true })
+});
 let toastTimer = null;
 let timerTicker = null;
 // v144: エネルギーバッテリーの差分更新(updateBatteryTick)のスロットル用。
@@ -516,7 +587,7 @@ document.addEventListener("click", (event) => {
   // 全件実行される。フォールバック分岐は1行も変更していない)。
   if (dispatchAction(action, { event, target, id })) return;
 
-  if (action === "nav") setView(target.dataset.view);
+  // v174: navはapp.js内のregisterActionsへ移行した。
   if (action === "date-prev") shiftSelectedDate(-1);
   if (action === "date-next") shiftSelectedDate(1);
   // v173: dashboard-date-prev/nextはsrc/features/dashboard.jsのregisterActionsへ移行した。
@@ -548,36 +619,7 @@ document.addEventListener("click", (event) => {
   if (action === "resume-project") resumeProject(id);
   if (action === "suspend-task") suspendTask(id);
   if (action === "resume-task") resumeTask(id);
-  if (action === "toggle-show-suspended") {
-    state.settings.showSuspended = !state.settings.showSuspended;
-    saveAndRender();
-  }
-  // v47: WBS の完了非表示トグル(UI状態)と一括開閉
-  if (action === "toggle-wbs-hide-done") {
-    state.settings.wbsHideCompleted = !state.settings.wbsHideCompleted;
-    persistLocalNoSchedule();
-    render();
-  }
-  // v97: タスクシュート画面「未完了タスク」の8日後以降の折りたたみトグル(UI状態)
-  if (action === "toggle-tasks-show-future") {
-    state.settings.tasksShowFuture = !state.settings.tasksShowFuture;
-    persistLocalNoSchedule();
-    render();
-  }
-  // v55: WBS インライン編集モードの切替(UI状態)
-  if (action === "toggle-wbs-edit") {
-    state.settings.wbsEditMode = !state.settings.wbsEditMode;
-    persistLocalNoSchedule();
-    render();
-  }
-  if (action === "wbs-collapse-all") {
-    // v126: WishもWBS一覧に表示されるため、一括開閉の対象からWishだけ除く理由がなくなった
-    const targets = state.projects.filter((p) => !p.deleted);
-    const collapse = !targets.every((p) => p.collapsed);  // 全閉なら開く、そうでなければ閉じる
-    state.projects = state.projects.map((p) =>
-      !p.deleted ? { ...p, collapsed: collapse } : p);
-    saveAndRender();
-  }
+  // v174: toggle-show-suspended〜wbs-collapse-allはapp.js内のregisterActionsへ移行した。
   if (action === "add-block") addBlock();
   if (action === "toggle-block") toggleBlock(id);
   // v107: Block行の「タスク完了」チェック(Block完了とは別枠、K指示 2026-07-15)
@@ -621,21 +663,7 @@ document.addEventListener("click", (event) => {
   }
   if (action === "download-report") downloadReport();
   if (action === "download-data") downloadData();
-  if (action === "save-github") saveToGitHub();
-  if (action === "load-github") loadFromGitHub();
-  // v72: セットアップ画面(トークンゲート)の「設定してはじめる」。dataOwner/dataRepo/token
-  // 自体は data-github-field の input ハンドラで既に state.settings.github へ保存済みなので、
-  // ここでは再判定して render() するだけ(未入力ならトーストで案内)。
-  if (action === "gate-continue") {
-    syncGitHubFieldsFromDOM();
-    if (!personalDataReady(state.settings.github)) {
-      showToast("Owner・Repository・トークンをすべて入力してください");
-    } else {
-      render();
-      syncFromGitHubOnStartup().then(() => hydrateStaticMarkdown());
-    }
-  }
-  if (action === "reset-demo") resetDemoData();
+  // v174: save-github/load-github/gate-continue/reset-demoはapp.js内のregisterActionsへ移行した。
   // v17: MIT(今日の主役)の切替(最大3個)
   if (action === "toggle-mit") toggleMIT(id);
   // v38: AIフィードバックのMIT候補 → 今日の主役ブロック化
@@ -760,8 +788,7 @@ document.addEventListener("click", (event) => {
   if (action === "experiment-copy-conclusion") copyExperimentConclusion(id);
   // === v3: ポモドーロ常時起動 ===
   if (action === "pomo-tab") setPomodoroTab(target.dataset.tab);
-  // === v3: 日報のGitHub push ===
-  if (action === "push-report") pushReportToGitHub();
+  // v174: push-reportはapp.js内のregisterActionsへ移行した。
   // === v6: サブタスク追加 / Project直下にTask追加 ===
   if (action === "add-task-to-project") addTaskToProject(id);
   if (action === "add-subtask") addSubtask(target.dataset.parentTask);
@@ -776,11 +803,7 @@ document.addEventListener("click", (event) => {
     event.stopPropagation();
     completeBlockWithActual(id);
   }
-  // === v9: カテゴリ管理 / 休憩メッセージ管理 ===
-  if (action === "add-category") addCategory();
-  if (action === "delete-category") deleteCategory(target.dataset.catId);
-  if (action === "add-break-message") addBreakMessage();
-  if (action === "delete-break-message") deleteBreakMessage(target.dataset.msgId);
+  // v174: add-category〜delete-break-messageはapp.js内のregisterActionsへ移行した。
   // v10: タイムラインズーム(v37: UI 操作なので dataModifiedAt を汚さない)
   if (action === "tl-zoom") {
     state.timelineZoom = Number(target.dataset.zoom) || 1;
@@ -810,18 +833,7 @@ document.addEventListener("click", (event) => {
     const parent = target.closest("details");
     if (seg && parent) _homeReflectFoldOverride[seg] = !parent.open;  // クリック時点ではまだ未反映のため反転
   }
-  // v148レビュー対応: 設定「データと同期」群の手動開閉(_settingsSyncOpenOverride参照)。
-  // renderSettingsSyncGroup()と同じ理由でtoggleイベントには頼らない。
-  if (action === "toggle-settings-sync") {
-    const parent = target.closest("details");
-    if (parent) _settingsSyncOpenOverride = !parent.open;  // クリック時点ではまだ未反映のため反転
-  }
-  // v11: サイドバー折りたたみ(v37: 同上)
-  if (action === "toggle-sidebar") {
-    state.settings.sidebarCollapsed = !state.settings.sidebarCollapsed;
-    persistLocalNoSchedule();
-    render();
-  }
+  // v174: toggle-settings-sync/toggle-sidebarはapp.js内のregisterActionsへ移行した。
   // v12: ポモドーロ全画面切替(v37: 同上)
   if (action === "toggle-pomo-fullscreen") {
     state.pomodoro.fullscreen = !state.pomodoro.fullscreen;
@@ -996,16 +1008,13 @@ document.addEventListener("click", (event) => {
   if (action === "weekly-suggest-add") {
     addWeeklySuggestedTask(target.dataset.week, Number(target.dataset.index));
   }
-  // v49: 世代バックアップ
-  if (action === "open-backup-list") openBackupListModal();
-  if (action === "restore-backup") restoreBackup(target.dataset.date);
-  // v53: 計器盤の期間切替(UI状態)と手動アーカイブ
+  // v174: open-backup-list/restore-backup/run-archiveはapp.js内のregisterActionsへ移行した。
+  // v53: 計器盤の期間切替(UI状態)
   if (action === "stats-range") {
     state.settings.statsRange = target.dataset.range || "4w";
     persistLocalNoSchedule();
     render();
   }
-  if (action === "run-archive") runArchive({ manual: true });
   // v49: 横断検索
   if (action === "open-search") openSearchModal();
   if (action === "search-jump") {

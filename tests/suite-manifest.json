@@ -13,9 +13,9 @@
         "content-ai",
         "ui-responsive"
       ],
-      "assertionSignals": 24,
-      "assertionHash": "811d2140edb6553e",
-      "sourceHash": "4408b6e65830d86f",
+      "assertionSignals": 27,
+      "assertionHash": "d880fce73711ded5",
+      "sourceHash": "f92cf4bdbfc16361",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -62,8 +62,8 @@
         "legacy-crosscutting"
       ],
       "assertionSignals": 19,
-      "assertionHash": "abc0abbb6a2a2ef7",
-      "sourceHash": "95b595e36206e3a8",
+      "assertionHash": "33148c1dc2549f50",
+      "sourceHash": "1ee7beb3382db938",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
