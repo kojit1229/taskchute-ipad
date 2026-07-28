@@ -1,0 +1,29 @@
+{
+  "version": 164,
+  "date": "YYYY-MM-DD",
+  "title": "短いリリース名",
+  "summary": "利用者から見た変更の要約。",
+  "changedFiles": [
+    "app.js",
+    "sw.js",
+    "tests/v164.test.js"
+  ],
+  "intent": [
+    "なぜこの変更を行うか。"
+  ],
+  "changes": [
+    "具体的な変更内容。"
+  ],
+  "uncertainties": [
+    "レビューで確認したい不確実性。無ければ「なし」。"
+  ],
+  "reviewFocus": [
+    "重点的に確認してほしい観点。"
+  ],
+  "verification": [
+    "実行したコマンドと結果。"
+  ],
+  "knownLimitations": [
+    "残る制約。無ければ「なし」。"
+  ]
+}
