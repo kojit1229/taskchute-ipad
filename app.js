@@ -74,6 +74,15 @@ import {
   renderRoutine, openRoutineForWeekday, bulkCheckRoutinesUpToNow,
   openChainEditor, saveChainFromModal, deleteChain, executeRoutineFallback
 } from "./src/features/routine.js";
+// v171: app.js分割・段階4-5(タイムライン抽出・段階A: 純粋レーン割付計算のみ)。
+//   src/features/timeline-layout.jsはstateもDOMも参照しない引数のみの純粋関数だが、
+//   minutesOf/nowDateTime(いずれもapp.js側の汎用ヘルパー)を呼ぶためconfigureTimelineLayout(deps)
+//   による依存注入で受け取る(routine.js等と同型のパターン。src/features/timeline-layout.js
+//   冒頭コメントの契約参照)。呼び出し元のrenderTimeline(app.js残留)は無改修。
+import {
+  configureTimelineLayout,
+  assignBlocksToLanes, adjustLaneTopPositions
+} from "./src/features/timeline-layout.js";
 // computeSyncMerge/syncCoreEqual/5フロー(saveToGitHub/runAutoSyncPush/runAutoSyncPull/
 // loadFromGitHub/syncFromGitHubOnStartup)等はsrc/sync/github.jsへ抽出済み。src/sync/github.js
 // 冒頭コメントの契約(configureGithubSyncによる依存注入)を参照。
@@ -240,6 +249,8 @@ configureRoutine({
   blocksForDate, isTouchedBlock, WEEKDAY_LABELS,
   RECURRENCE_KEEP_PAST_DAYS, RECURRENCE_FUTURE_DAYS
 });
+// v171: src/features/timeline-layout.jsも同じ理由(循環import回避)で依存注入する。
+configureTimelineLayout({ minutesOf, nowDateTime });
 let toastTimer = null;
 let timerTicker = null;
 // v144: エネルギーバッテリーの差分更新(updateBatteryTick)のスロットル用。
@@ -6556,97 +6567,8 @@ function renderTimeline({ compact, mode = "planned" }) {
   `;
 }
 
-// v26: Block をレーンに割り当てる。重なり合うブロック群(クラスタ)ごとに
-// 使用レーン数 laneCount を求め、横幅 = 100/laneCount で配置できるようにする。
-// (重なりが無ければ laneCount=1 で全幅、2つ重なれば 2 で 50:50)
-// v150(UI改善計画Phase4b・R9): 第4引数rowHeightを追加。adjustLaneTopPositions が描画時に
-// 適用する min-height(38px、5分未満は14px)ぶんの見た目の高さ膨張を、クラスタ判定(=重なり
-// 検出)の側にも分単位で織り込む(「実効終了時刻」clusterEnd)。これにより、実時間では
-// 連続していて重ならない短時間Block同士(例: 15分刻みのルーティンが連続)でも、描画上の
-// 高さが次のBlockのtopへ食い込む場合は既存の横レーン分割(段差配置)の対象になり、物理的な
-// 重なりが解消される。top(開始時刻の絶対位置)自体は adjustLaneTopPositions 側で従来どおり
-// 一切補正しない(タイムライン絶対配置の正典ルールに抵触しない)。
-function assignBlocksToLanes(blocks, mode, maxLanes, rowHeight) {
-  // 開始時刻でソート(同じ時刻なら短いもの優先)
-  const sorted = [...blocks]
-    .map((b) => {
-      const startStr = mode === "actual" ? b.actualStartAt : b.plannedStartAt;
-      const endStr = mode === "actual" ? (b.actualEndAt || nowDateTime()) : (b.plannedEndAt || null);
-      if (!startStr) return null;
-      const start = minutesOf(startStr);
-      const end = endStr ? minutesOf(endStr) : start + 1;  // 終了未定なら最低1分
-      const realEnd = Math.max(end, start + 1);
-      // v150レビュー対応(項目6、監督者裁定): min-height換算の実効終了時刻による横レーン分割は
-      // 実所要20分未満のBlockだけに限定する。20分以上まで延長すると、min-height(38px)との
-      // 差が大きい30分Block同士が一日中50%幅に分割されてしまう(実測)。実所要20分以上の
-      // Blockどうしの数px〜十数px程度の食い込み(v149以前からの既存挙動)はこの変更では
-      // 対応しない(許容、CHANGES_v150.md参照)。
-      const durationMin = realEnd - start;
-      let clusterEnd = realEnd;
-      if (durationMin < 20) {
-        const minHeightPx = durationMin < 5 ? 14 : 38;
-        const minDurationMin = rowHeight > 0 ? (minHeightPx / rowHeight) * 60 : 0;
-        clusterEnd = Math.max(realEnd, start + minDurationMin);
-      }
-      return { block: b, start, end: realEnd, clusterEnd, startStr, endStr };
-    })
-    .filter(Boolean)
-    .sort((a, b) => a.start - b.start || (a.end - a.start) - (b.end - b.start));
-
-  const result = [];
-  let cluster = [];          // 現在のクラスタの項目(lane 付与済み)
-  let clusterLaneEnds = [];  // クラスタ内・各レーンの終了時刻(分、見た目の高さ込み=clusterEnd基準)
-  let clusterMaxEnd = -1;    // クラスタ内の最遅終了時刻(同上)
-
-  const flushCluster = () => {
-    const laneCount = Math.max(1, clusterLaneEnds.length);
-    for (const it of cluster) result.push({ ...it, laneCount });
-    cluster = [];
-    clusterLaneEnds = [];
-    clusterMaxEnd = -1;
-  };
-
-  for (const item of sorted) {
-    // 現クラスタのどのブロックとも重ならない(全て終了済み)なら、クラスタを確定
-    if (clusterMaxEnd >= 0 && item.start >= clusterMaxEnd) {
-      flushCluster();
-    }
-    // クラスタ内で空いているレーン(終了 ≤ 自分の開始)を探す
-    let lane = -1;
-    for (let i = 0; i < clusterLaneEnds.length; i++) {
-      if (clusterLaneEnds[i] <= item.start) { lane = i; break; }
-    }
-    let isOverflow = false;
-    if (lane === -1) {
-      if (clusterLaneEnds.length < maxLanes) {
-        lane = clusterLaneEnds.length;     // 新しいレーンを追加
-        clusterLaneEnds.push(-1);
-      } else {
-        lane = maxLanes - 1;               // 上限超過: 最後のレーンに重ねる
-        isOverflow = true;
-      }
-    }
-    clusterLaneEnds[lane] = Math.max(clusterLaneEnds[lane], item.clusterEnd);
-    clusterMaxEnd = Math.max(clusterMaxEnd, item.clusterEnd);
-    cluster.push({ ...item, lane, isOverflow });
-  }
-  flushCluster();
-  return result;
-}
-
-// v15: 開始時刻 = top を厳守(レーンによる補正・連続重なりの縦ずらしを撤廃)
-// 同じ開始時刻なら必ず同じ高さに表示される
-// 異なる開始時刻なら、その時刻通りの top に配置される(階段表示=時刻違いの可視化)
-function adjustLaneTopPositions(assignments, rowHeight, startHour) {
-  return assignments.map((a) => {
-    const top = ((a.start - startHour * 60) / 60) * rowHeight;
-    const durationMin = a.end - a.start;
-    const isShort = durationMin < 5;
-    const minHeight = isShort ? 14 : 38;
-    const height = Math.max(minHeight, (durationMin / 60) * rowHeight);
-    return { ...a, top, height, isShort };
-  });
-}
+// v171: assignBlocksToLanes/adjustLaneTopPositionsはsrc/features/timeline-layout.jsへ
+//   移動した(app.js分割・段階4-5・段階A)。呼び出しはファイル冒頭のimportを参照する。
 
 function renderTimelineCard(positioned, mode = "planned", maxLanes = 5) {
   const { block, startStr, endStr, lane, isOverflow, top, height, isShort, laneCount } = positioned;

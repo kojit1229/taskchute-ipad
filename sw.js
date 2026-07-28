@@ -1,4 +1,8 @@
-const CACHE_NAME = "taskchute-journal-pwa-v170";
+const CACHE_NAME = "taskchute-journal-pwa-v171";
+// v171: app.js分割の段階4-5(タイムライン抽出・段階A: 純粋レーン割付計算のみ)。
+//   src/features/timeline-layout.js(assignBlocksToLanes/adjustLaneTopPositions、
+//   configureTimelineLayout(deps)注入)をAPP_SHELLへ追加した。挙動は抽出前と完全に同一
+//   (移動+依存注入化のみ)。
 // v170: app.js分割の段階4-4(ルーティンタブのドメインロジック+UI+連続ルーティン(チェーン)+
 //   今日の庭+保護系ルーティン+過集中ブレーカー+繰り返し実体化エンジン抽出)。
 //   src/features/routine.js(routineRate〜deleteChainの48関数+2新設ラッパー(isChainRunActive/
@@ -204,6 +208,7 @@ const APP_SHELL = [
   "./src/features/dashboard.js",
   "./src/features/journal.js",
   "./src/features/routine.js",
+  "./src/features/timeline-layout.js",
   "./src/features/wish.js",
   "./src/state/feedback-cache.js",
   "./src/state/journal-fold.js",

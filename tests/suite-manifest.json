@@ -363,6 +363,29 @@
       }
     },
     {
+      "file": "timeline-layout-core.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 25,
+      "assertionHash": "40c2a2e187895022",
+      "sourceHash": "f598465028985f57",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
       "file": "v100.test.js",
       "kind": "e2e",
       "tier": "full",

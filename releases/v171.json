@@ -1,0 +1,53 @@
+{
+  "version": 171,
+  "date": "2026-07-29",
+  "title": "app.js分割 段階4-5(タイムライン段階A: 純粋レーン割付計算)",
+  "summary": "app.js分割の段階4-5として、prep-stage4-timeline.md §7「段階A」に従い、タイムラインの純粋なレーン割付計算2関数(assignBlocksToLanes/adjustLaneTopPositions、state/DOM非依存)をsrc/features/timeline-layout.jsへ抽出した。実装着手前の確認で、設計書がこの2関数を「引数のみで完結するためconfigureXxxパターン自体が不要」と評価していたのに対し、assignBlocksToLanesが実際にはapp.js側のグローバル関数minutesOf/nowDateTimeを直接呼んでいることが判明したため、監督者裁定によりroutine.js等と同型のconfigureTimelineLayout(deps)によるDIパターンへ切り替えて解決した(詳細はuncertainties参照)。段階B(renderTimelineCard/renderEnergyGraph/renderTimeline本体等、IMEガード含む)には一切触れていない。",
+  "changedFiles": [
+    "app.js",
+    "sw.js",
+    "src/features/timeline-layout.js",
+    "tests/timeline-layout-core.test.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "prep-stage4-timeline.md §7「段階A」の推奨どおり、assignBlocksToLanes(67行)+adjustLaneTopPositions(10行)のみをsrc/features/timeline-layout.jsへ移動した。段階B(renderTimelineCard/renderEnergyGraph/renderTimeline/renderTimelineView/renderTimelineRail/setTimelineMode/openTimelineNewBlock)は設計書§7どおり今回のスコープ外とし、一切変更していない。呼び出し元renderTimeline(app.js残留)は、importの参照先を切り替えただけで呼び出し方自体は無改修。",
+    "設計書との食い違い(監督者承認2026-07-29、選択肢1で続行): prep-stage4-timeline.md §4/§7は本抽出対象を「グローバル参照ゼロ」「DI不要」と評価していたが、実装着手前にapp.js(v170時点)の実コードを確認したところ、assignBlocksToLanesの内部でminutesOf(startStr)・nowDateTime()(actualモードでactualEndAt未設定のBlockの終了時刻フォールバック用)をapp.js側のグローバル関数として直接呼んでいることが判明した。minutesOfは文字列パースのみで純粋だが、nowDateTimeはnew Date()に依存する非決定的な関数のため、「引数のみで完結」という設計書の前提は成立しなかった。ロジック無改変の原則を保ちつつこの依存を外へ出すため、複製(選択肢2)・スコープ縮小(選択肢3)ではなく、既存のsrc/features/routine.js(minutesOf/nowDateTimeを全く同じ形で注入済み)と同型のconfigureTimelineLayout({ minutesOf, nowDateTime })によるDIパターン(選択肢1)を採用する監督者裁定を得て続行した。",
+    "characterization testは監督者指示により2段階で構築した: まずapp.js(抽出前)に対しvm.runInContextでassignBlocksToLanes/adjustLaneTopPositionsをそのまま実行し、7グループ23assertionを抽出前の実挙動として先に緑化(v163.test.js方式)。その後、同じassertion一式をdynamic import + configureTimelineLayout(deps)経由に差し替え、抽出後も全件緑であることを確認した(期待値・検証項目は1つも変更・削除していない)。"
+  ],
+  "changes": [
+    "src/features/timeline-layout.js(新規、約128行): assignBlocksToLanes/adjustLaneTopPositionsを移動(ロジック無改変)。configureTimelineLayout(deps)でminutesOf/nowDateTimeの2依存のみを注入する(state importなし、DOM参照なし)。",
+    "app.js: assignBlocksToLanes(67行)/adjustLaneTopPositions(10行)の本体を削除し、抽出先を示すコメントマーカーのみを残した。冒頭にsrc/features/timeline-layout.js(configureTimelineLayout/assignBlocksToLanes/adjustLaneTopPositions)のimportを追加し、configureRoutine呼び出しの直後にconfigureTimelineLayout({ minutesOf, nowDateTime })を1回追加した。呼び出し元renderTimelineは無改修。",
+    "sw.js: CACHE_NAMEをv171へ更新し、APP_SHELLへ./src/features/timeline-layout.jsを追加した(alphabetical順、routine.jsとwish.jsの間)。",
+    "tests/timeline-layout-core.test.js(新規): [1]空入力 [2]非重複2Block(20分以上、laneCount1) [3]重複2Block(20分以上、laneCount2でlane分割) [4]v150: 実時間では非重複だがmin-height換算のclusterEndで重なり判定される20分未満Block同士 [5]maxLanes超過時の3件目overflow(最終レーンへ重ね置き) [6]actualモード・actualEndAt未設定時のnowDateTime()フォールバック(固定値注入で壁時計依存を排除して固定) [7]adjustLaneTopPositionsの5分未満min-height(14px)優先、の7グループ23assertionを固定した。"
+  ],
+  "uncertainties": [
+    "prep-stage4-timeline.md §4/§7の「assignBlocksToLanes/adjustLaneTopPositionsは引数のみに依存(グローバル参照ゼロ)、DIパターン自体が不要」という評価は実態と不一致だった。assignBlocksToLanesはminutesOf/nowDateTime(いずれもapp.js側のグローバル関数)を直接呼んでおり、特にnowDateTimeはnew Date()依存の非決定的関数のため「引数のみで完結する純粋関数」という評価は誤りだった。監督者裁定(2026-07-29)により、routine.js等と同型のconfigureTimelineLayout(deps)DIパターンで解決した(設計書本体の修正は監督者側で別途行う)。",
+    "実行コード差分は機械判定で実測235行(app.js 104+timeline-layout.js 124+sw.js 7)となり200行を超える。ただし実質新規ロジックは約50行で、残り約185行はgitがrename検出しない移動の削除+追加二重カウント。密結合な2関数の一体移動のため分割せずSize-Exempt 1コミットとする(独立レビュー通過)。"
+  ],
+  "reviewFocus": [
+    "src/features/timeline-layout.jsへ移動したassignBlocksToLanes/adjustLaneTopPositionsの本文がapp.js(v170時点)から一切変更されていないこと(git diffで移動前後を突合)。",
+    "configureTimelineLayout({ minutesOf, nowDateTime })の依存注入がrouine.js等の既存DIパターンと同型であり、TDZ等の初期化順序問題が無いこと。",
+    "renderTimeline(app.js残留)の呼び出し箇所がimportの参照先切替のみで、ロジック・呼び出し方自体は無改修であること。",
+    "tests/timeline-layout-core.test.jsの[4](v150 min-height換算クラスタ判定)と[6](nowDateTimeフォールバック)が、既存のブラウザE2E(v150)と矛盾せず同じ実装を固定していること。",
+    "sw.jsのAPP_SHELLにsrc/features/timeline-layout.jsが追加され、CACHE_NAMEがv171になっていること(release-gateのapp-shell-precacheチェックで機械検証済み)。",
+    "段階B対象(renderTimelineCard/renderEnergyGraph/renderTimeline本体/IMEガード)に一切触れていないこと。"
+  ],
+  "verification": [
+    "node --check app.js / sw.js / src/features/timeline-layout.js / tests/timeline-layout-core.test.js → 全てexit 0",
+    "node tests/timeline-layout-core.test.js → 全件成功(7グループ23assertion。抽出前vm版・抽出後dynamic import版の両方で緑化を確認済み)",
+    "node tests/run-all.js v50 v70 v150 sw-integration → 全件成功(prep-stage4-timeline.md §6指定のタイムライン系回帰網)",
+    "npm run test:fast → 全件成功(timeline-layout-core.test.js含む全Node系スイート)",
+    "node scripts/release-gate.js releases/v171.json --suite=timeline-layout-core,sw-integration,v50,v70,v150 → 全件成功",
+    "npm run code:index:write / npm run test:manifest:write",
+    "npm run test:core → 実行結果を完了報告に記載",
+    "git diff --numstat で実行コード差分を実測して監督者へ報告する"
+  ],
+  "knownLimitations": [
+    "段階B(renderTimelineCard/renderEnergyGraph/renderTimeline/renderTimelineView/renderTimelineRail/setTimelineMode/openTimelineNewBlock)は設計書§7どおり今回のスコープ外(次段階で1件ずつ直列抽出予定)。",
+    "src/配下にpackage.json(type:module)を置いていないため、Node実行時にMODULE_TYPELESS_PACKAGE_JSON警告が出る(v164から継続、動作には影響しない)。"
+  ]
+}
