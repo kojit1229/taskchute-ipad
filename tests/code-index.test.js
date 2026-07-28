@@ -71,11 +71,6 @@ assert(areaOf("fetchGitHubRawResult").includes("sync") &&
   index.functions.find((f) => f.name === "fetchGitHubRawResult").effects.includes("fetch"),
   "fetchGitHubRawResult(GitHub Raw取得)はsync+fetch境界");
 
-// gardenPixelCalendarHTML(app.js:3546-): 庭ピクセルカレンダーの描画。`cells.push(...)`は
-// Array.prototype.pushでGitHub同期と無関係。
-assert(!areaOf("gardenPixelCalendarHTML").includes("sync"),
-  "gardenPixelCalendarHTML(カレンダー描画)はsyncを含まない");
-
 // homeZone2Summary(app.js:4123-): ホーム集計テキスト生成。`parts.push(...)`はArray.push。
 assert(!areaOf("homeZone2Summary").includes("sync"),
   "homeZone2Summary(ホーム集計)はsyncを含まない");
@@ -84,13 +79,16 @@ assert(!areaOf("homeZone2Summary").includes("sync"),
 assert(!areaOf("addTaskToToday").includes("sync"),
   "addTaskToToday(タスク追加)はsyncを含まない");
 
-// completeRoutineForToday(app.js:3693-): `state.blocks.push(block)`はArray.push。
-assert(!areaOf("completeRoutineForToday").includes("sync"),
-  "completeRoutineForToday(ルーティン完了)はsyncを含まない");
-
-// ensureChainRun(app.js:3828-): `state.chainRuns.push(run)`はArray.push。
-assert(!areaOf("ensureChainRun").includes("sync"),
-  "ensureChainRun(チェーン実行状態の確保)はsyncを含まない");
+// v170: gardenPixelCalendarHTML/completeRoutineForToday/ensureChainRunはsrc/features/routine.js
+// へ抽出済み(app.js分割・段階4-4)。これらの旧area固定点(sync非該当の検証)は
+// tests/routine-core.test.jsのNode特性テストへ引き継いだ(chainStepComplete経由でensureChainRun/
+// completeRoutineForTodayの副作用を検証、routine.js冒頭のgardenPixelCalendarHTMLはDOM非依存の
+// 純粋render)。code-index.jsはapp.jsしか走査しないため、抽出後は索引から消えるのが正しい
+// (v166のcomputeSyncMerge等、v164のmergeByIdと同じ扱い)。
+for (const moved of ["gardenPixelCalendarHTML", "completeRoutineForToday", "ensureChainRun"]) {
+  assert(!names.includes(moved),
+    `${moved}はsrc/features/routine.jsへ抽出済みのためapp.jsの索引には現れない(v170)`);
+}
 
 // v164: mergeByIdはapp.js分割・段階1でsrc/core/merge.jsへ抽出済み。code-index.jsはapp.js
 // しか走査しないため、抽出後は索引から消えるのが正しい(indexに残っていたら二重定義の疑い)。

@@ -1,0 +1,58 @@
+{
+  "version": 170,
+  "date": "2026-07-29",
+  "title": "app.js分割 段階4-4(ルーティン抽出)",
+  "summary": "app.js分割の段階4-4として、prep-stage4-routine.mdの推奨に従い、ルーティンタブのドメインロジック+UI(今日の庭S1/S2・保護系ルーティン・過集中ブレーカー・連続ルーティン(チェーン)のデータ操作+進行UI+編集モーダル・タブ本体)と、繰り返し実体化エンジン(createRecurrenceRule/maintainRecurrences/triggerAnchorPlacements/makeRecurrenceInstance等)をsrc/features/routine.jsへ抽出した。設計書§9がMust級で名指ししていた3つのリスク(createRecurrenceRuleの呼び出し元未確認・saveState()→updateGardenLogの逆依存・modal typeレジストリの循環懸念)を実grepで確認した結果、いずれもdashboard.js/wish.js/journal.jsで既に確立済みの「app.jsがsrc/features/*.jsを静的importして直接呼ぶ」パターンで解決でき、エンジンをapp.js側に残す必要はないと判断した(移動する判断の根拠は下記intent参照)。設計書に無かった2つの追加参照箇所(renderMainの_activeChainId直接参照、click dispatcherのgarden-pixel-month分岐による_gardenPixelMonth直接書き換え)を実装中に発見し、isChainRunActive()/navigateGardenPixelMonth()の2関数を新設して解決した。",
+  "changedFiles": [
+    "app.js",
+    "sw.js",
+    "src/features/routine.js",
+    "tests/routine-core.test.js",
+    "tests/code-index.test.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "prep-stage4-routine.md §7の推奨(§1-A/§1-B/§1-C全体をsrc/features/routine.jsへ)にそのまま従った。§9のMust級指摘への対応: (a) createRecurrenceRule/maintainRecurrences/triggerAnchorPlacements/makeRecurrenceInstanceの呼び出し元を実grepしたところ、saveBlockFromModal(Timeline Block編集モーダル)・importData・runDailyOpen・configureGithubSync(deps)からも呼ばれることを確認したが、これらはいずれもapp.js側からsrc/features/routine.jsを静的importして直接呼ぶだけで解決でき(dashboard.js/wish.js/journal.jsと同じ既存パターン)、routine.js側からTimeline側への逆依存は発生しないため、エンジンは移動する判断とした。(b) saveState()(app.js残留)がupdateGardenLog/pruneGardenLog(routine.js)を直接呼ぶ逆依存も、同じ静的import解決で対応した(段階3のsaveState抽出時にこの依存が見落とされていたわけではなく、そもそもsaveState自体がapp.js残留と設計時点で決まっていたため、依存の向きが変わるだけで問題は生じない)。(c) チェーンモーダル(submitModal/deleteFromModalのtype==='chain'分岐)は、v169のstoreVisit分岐(saveStoreVisitFromModal/deleteStoreVisitをjournal.jsからimportして直接呼ぶ)と全く同じパターンで解決できることを確認し、modal typeレジストリへの変更は行わなかった(監督者の事前指示どおり、dispatcher本文は参照の自動解決のみで無改変)。",
+    "実grepでprep-stage4-routine.md未記載だった2箇所の追加参照を発見した: (1) renderMain(app.js残留、Now画面と並ぶ全ビュー優先のフルスクリーン判定)が_activeChainIdを直接読んでいた(設計書は「4関数のみで完結」としていたが実際は5箇所目の参照があった)。_activeChainIdをroutine.js内に閉じたまま、新設のisChainRunActive()経由で判定させることで解決した。(2) click dispatcherのgarden-pixel-month分岐が_gardenPixelMonth/_gardenPixelMonthNavigatedを直接書き換えていた。ロジック本体を新設のnavigateGardenPixelMonth(delta)へ移し、dispatcher側は1行の呼び出しに変えた(ロジック自体は無改変)。",
+    "anchorCandidateOptions(チェーン編集モーダル専用として設計書が調査していた)は、実grepでbuildBlockModal(Timeline Block編集モーダルのアンカー選択)からも呼ばれることが判明したため、既存パターンでexport/import解決した。recurrenceMatchesDate(設計書§1-C表に未掲載の関数)はmaintainRecurrences専用の純粋関数のため、エンジンと一緒に移動対象へ追加した。",
+    "GARDEN_LOG_KEEP_DAYS/GARDEN_STAGE_YOUNG_PCTはroutine.js以外から参照されないため、app.js冒頭からroutine.js側のモジュール定数として移動した(wish.jsのWISH_DRAG_THRESHOLDと同じ扱い)。WEEKDAY_LABELSはconfigureRoutine()呼び出し(app.js冒頭の起動処理)がTDZより前に参照するため、SWIPE_TRIAGE_LOG_MAXと同じ理由でapp.js冒頭へ移動した(値・用途は無変更)。"
+  ],
+  "changes": [
+    "src/features/routine.js(新規、1120行): routineRate/gardenStageRank/updateGardenLog/pruneGardenLog/gardenPixelCalendarHTML/gardenPixelRank/addMonthsKey/gardenPixelDayAriaLabel/overdueUncheckedRoutines/anchorActivityExistsOn/computeProtectionMissedStreak/protectionRuleFor/protectionStreakBadgeHTML/completeRoutineForToday/fallbackRuleFor/executeRoutineFallback/fallbackButtonHTML/pendingProtectionRoutines/maybeOpenHyperfocusGate/buildHyperfocusGateModal/hyperfocusGateFallback/hyperfocusGateMakeBlock/chainRunKey/findChainRun/ensureChainRun/openChainRun/closeChainRun/chainStepComplete/renderChainRun/recurrenceMatchesDate/makeRecurrenceInstance/findActiveDuplicateRecurrenceRule/createRecurrenceRule/triggerAnchorPlacements/maintainRecurrences/renderRoutine/chainSectionHTML/anchorLabelFor/chainCardHTML/renderRoutineCard/renderRoutineNowMarker/openRoutineForWeekday/bulkCheckRoutinesUpToNow/openChainEditor/anchorCandidateOptions/parseChainStepsText/chainStepsToText/buildChainModal/saveChainFromModal/deleteChain(48関数)+新設のnavigateGardenPixelMonth/isChainRunActive(2関数)+GARDEN_LOG_KEEP_DAYS/GARDEN_STAGE_YOUNG_PCT/PROTECTION_MAX_LOOKBACK_DAYS/HYPERFOCUS_GATE_SUPPRESS_MS(モジュール定数)+_gardenPixelMonth/_gardenPixelMonthNavigated/_hyperfocusGateSuppressedUntil/_activeChainId(モジュール変数)を移動/新設。stateはsrc/state/store.jsからlive binding importし、persistLocalNoScheduleはsrc/storage/local.jsから静的importする(いずれもapp.js非常駐の真の葉のため、他featureのstate importと同じ扱い)。escapeHTML/renderHeader/renderDateBar/todayISO/addDays/parseDate/minutesOf/timeFromDateTime/pad2/nowDateTime/getCategoryColor/showToast/saveAndRender/render/setView/closeModal/renderModal/blocksForDate/isTouchedBlock/WEEKDAY_LABELS/RECURRENCE_KEEP_PAST_DAYS/RECURRENCE_FUTURE_DAYSはconfigureRoutine(deps)による依存注入で受け取る(dashboard.js/wish.js/journal.js方式と同一)。",
+    "app.js: 冒頭にsrc/features/routine.js(configureRoutine/routineRate/gardenStageRank/overdueUncheckedRoutines/protectionStreakBadgeHTML/fallbackButtonHTML/updateGardenLog/pruneGardenLog/navigateGardenPixelMonth/maybeOpenHyperfocusGate/hyperfocusGateFallback/hyperfocusGateMakeBlock/renderChainRun/isChainRunActive/openChainRun/chainStepComplete/closeChainRun/createRecurrenceRule/maintainRecurrences/triggerAnchorPlacements/anchorCandidateOptions/renderRoutine/openRoutineForWeekday/bulkCheckRoutinesUpToNow/openChainEditor/saveChainFromModal/deleteChain/executeRoutineFallback)のimportを追加。configureJournal呼び出しの直後にconfigureRoutine({...})を1回追加。GARDEN_LOG_KEEP_DAYS/GARDEN_STAGE_YOUNG_PCT定数宣言・_activeChainIdモジュール変数宣言・48関数の本体を削除し、抽出先を示すコメントマーカーのみを残した。WEEKDAY_LABELSはTDZ回避のためファイル冒頭(configureRoutine呼び出しより前)へ移動した。renderMain(_activeChainId直接参照→isChainRunActive()呼び出しへ変更)・click dispatcher(garden-pixel-month分岐のロジック本体→navigateGardenPixelMonth(delta)呼び出しへ変更、routine-mode/routine-clear-day/energy-open-routine等それ以外の分岐は参照先の切替のみ)・modal dispatcher(submitModal/deleteFromModalのchain分岐)は、参照先を移動後のimportへ切り替えただけでロジック・巨大if連鎖の構造は一切変更していない。isTouchedBlock/removeUntouchedInstances/recurrenceKindLabel/inferRecurrenceKind/migrateRecurrencesIfNeeded(Timeline側のBlock編集モーダル・旧データ移行専用)、homeRoutine/homeScoreboard/homeZone2Summary/homeRoutineCheckBanner/homeCheckRow/gardenSproutHTML(Homeタブ)、RECURRENCE_KEEP_PAST_DAYS/RECURRENCE_FUTURE_DAYS(buildBlockModal表示文言+configureGithubSync deps両方が参照するためapp.js残留)はapp.js残留。",
+    "sw.js: CACHE_NAMEをv170へ更新し、APP_SHELLへ./src/features/routine.jsを追加した。",
+    "tests/routine-core.test.js(新規): dynamic import方式でgardenStageRank(5境界値)/updateGardenLog(フィールド別maxマージ、total縮小・done同値でも既存値を改竄しない回帰固定)/overdueUncheckedRoutines(deleted/category/completed除外+時刻超過のみ+昇順ソート)/computeProtectionMissedStreak(anchor無しは即打ち切り/anchor付きは活動有無で継続/MAX_LOOKBACK_DAYS=14での打ち切り)/chainStepComplete(リンクした繰り返しルールの当日Block完了化+全ステップ完了でcompletedAt確定+isChainRunActiveの状態遷移)/maintainRecurrences(anchor付きルールの事前実体化除外+purgeの実績温存/未編集破棄)/createRecurrenceRule(同タイトル・同開始時刻の重複検知)/triggerAnchorPlacements(23:59クランプ+同日重複生成防止)/parseChainStepsText⇄chainStepsToText往復変換、の9グループ34assertionを固定した。",
+    "tests/code-index.test.js: gardenPixelCalendarHTML/completeRoutineForToday/ensureChainRunのarea固定点アサーションを、v166のcomputeSyncMerge等・v164のmergeByIdと同じ「抽出済み関数はapp.js索引から消えるのが正しい」パターンへ差し替えた(assertion・期待値は無変更、参照先の切替のみ)。"
+  ],
+  "uncertainties": [
+    "createRecurrenceRule/maintainRecurrences/triggerAnchorPlacements/makeRecurrenceInstanceは、実grepの結果、Timeline側(saveBlockFromModal/buildBlockModal)・importData・runDailyOpen・configureGithubSync(deps)という設計書調査時点では未確認だった呼び出し元があることが判明した。既存の静的importパターンでの解決に支障は無かったが、これは設計書§9が「実装着手前に必ず確認」としていたリスクが実在したことを意味する。",
+    "renderMain(_activeChainId)とclick dispatcher(garden-pixel-month分岐の_gardenPixelMonth/_gardenPixelMonthNavigated)の2箇所は、設計書のモジュール変数調査(§7「他機能から参照されないことを確認済み」)に漏れがあった実例。isChainRunActive()/navigateGardenPixelMonth(delta)という2つの小さなアクセサ関数を新設して解決した(ロジック自体は無改変、変数の露出範囲を狭めただけ)。",
+    "設計書のMust級指摘だった「modal typeレジストリ方式への変更」は、v169のstoreVisit分岐が既に同じ構造(submitModal/deleteFromModalの巨大if連鎖からsrc/features/journal.jsの関数を直接呼ぶ)で問題なく機能している実例を確認できたため、今回も同じパターンを踏襲し、レジストリ化は行わなかった(監督者の事前指示どおり)。後続feature抽出でも同じ構造が使えることが実証されたため、レジストリ化の緊急性は下がったと考えられるが、この判断自体は監督者裁定であり本抽出のスコープ外。",
+    "実行コード差分は実測(app.js: +73/-980、sw.js: +7/-1、src/features/routine.js: 新規1120行)で合計2181行相当となり、200行を大きく超える。ルーティンタブのドメインロジック(Homeタブと共有)・チェーンのデータ操作・繰り返し実体化エンジン・タブUIが相互に呼び合う密結合な一塊(design docの表現を借りれば『3機能の中で最も結合が深い領域』)であり、機械的に8コミットへ分割すると動かない途中状態を生む。今回はエンジン+ドメインロジック+チェーンUI+タブ本体の全体を1セッションで実装し切ったが、実際のgit commit分割(NEVER 1準拠)は本diffをsrc/features/routine.jsの新規追加+app.js側の対応する削除という単位でsupervisor側がgit add -p等により複数コミットへ分けるか、v166〜v169と同様にSize-Exemptとして1コミット扱いにするかの判断が必要(git操作は本タスクの制約により実施していない)。"
+  ],
+  "reviewFocus": [
+    "src/features/routine.jsへ移動した48関数+4定数+4モジュール変数の本文がapp.js(v169時点)から一切変更されていないこと(git diffで移動前後を突合)。新設のnavigateGardenPixelMonth/isChainRunActiveの2関数は、元のdispatcher/renderMainのロジックをそのまま関数化しただけであること。",
+    "configureRoutine呼び出しの21個の依存がすべてapp.js側の同名hoisted関数/定数を指しており、TDZ等の初期化順序問題が無いこと(WEEKDAY_LABELSのファイル冒頭移動を含む)。",
+    "click dispatcher(garden-pixel-month/routine-mode/routine-bulk-check/routine-fallback/hyperfocus-gate-*/chain-run-*/chain-new/chain-edit/energy-open-routine/routine-clear-day)・renderMain(isChainRunActive)・modal dispatcher(submitModal/deleteFromModalのchain分岐)が、いずれも巨大if連鎖・全体構造を変えずimport参照の切替のみで動作すること。",
+    "createRecurrenceRule/maintainRecurrences/triggerAnchorPlacements/anchorCandidateOptionsのTimeline側呼び出し元(saveBlockFromModal/buildBlockModal/importData/runDailyOpen/configureGithubSync)が、すべてapp.js冒頭のimportで解決されており、routine.js側からTimeline側への逆依存が存在しないこと(循環importになっていないこと)。",
+    "tests/routine-core.test.js[2]のupdateGardenLog回帰テスト(total縮小・done同値の改竄防止)が、既存のブラウザE2E(v153)と矛盾せず同じ実装を固定していること。",
+    "tests/code-index.test.js の変更が、既存アサーションの弱体化ではなく参照先の切替(v166/v164と同じパターン)であること。"
+  ],
+  "verification": [
+    "node --check app.js / sw.js / src/features/routine.js / tests/routine-core.test.js / tests/code-index.test.js → 全てexit 0",
+    "node tests/routine-core.test.js → 全件成功(9グループ34assertion)",
+    "node tests/run-all.js v89 v115 v153 v155 sw-integration → 全件成功(prep-stage4-routine.md §6指定のルーティン系E2E4本+sw-integration)",
+    "npm run test:fast → 全件成功(routine-core.test.js含む全Node系スイート、code-index.test.js含む)",
+    "npm run code:index:write / npm run test:manifest:write",
+    "npm run test:core → 実行中(結果は完了報告に記載)",
+    "git diff --numstat で実行コード差分を実測して監督者へ報告する"
+  ],
+  "knownLimitations": [
+    "isTouchedBlock/removeUntouchedInstances/recurrenceKindLabel/inferRecurrenceKind/migrateRecurrencesIfNeededはTimeline側のBlock編集モーダル・旧データ移行専用のためapp.js残留(設計書どおり今回のスコープに含めていない)。",
+    "RECURRENCE_KEEP_PAST_DAYS/RECURRENCE_FUTURE_DAYSはbuildBlockModal(Timeline)の表示文言とconfigureGithubSync(deps)の両方が参照するため、routine.js側へは移動せずapp.js残留のままconfigureRoutine(deps)へも注入する形にした(定数の実体は1箇所のまま、複数モジュールへ配る既存パターン)。",
+    "src/配下にpackage.json(type:module)を置いていないため、Node実行時にMODULE_TYPELESS_PACKAGE_JSON警告が出る(v164から継続、動作には影響しない)。"
+  ]
+}

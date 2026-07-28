@@ -1,4 +1,9 @@
-const CACHE_NAME = "taskchute-journal-pwa-v169";
+const CACHE_NAME = "taskchute-journal-pwa-v170";
+// v170: app.js分割の段階4-4(ルーティンタブのドメインロジック+UI+連続ルーティン(チェーン)+
+//   今日の庭+保護系ルーティン+過集中ブレーカー+繰り返し実体化エンジン抽出)。
+//   src/features/routine.js(routineRate〜deleteChainの48関数+2新設ラッパー(isChainRunActive/
+//   navigateGardenPixelMonth)、configureRoutine(deps)注入)をAPP_SHELLへ追加した。挙動は
+//   抽出前と完全に同一(移動+依存注入化のみ)。
 // v169: app.js分割の段階4-3(ジャーナルタブ本体+コンディションOS・運動記録・今日行ったお店ログ抽出)。
 //   src/features/journal.js(renderJournal〜deleteGymEntry等、configureJournal(deps)注入)/
 //   src/state/journal-fold.js(click dispatcherとrenderJournalの共有_journalSegmentOverride)を
@@ -198,6 +203,7 @@ const APP_SHELL = [
   "./src/features/avoid.js",
   "./src/features/dashboard.js",
   "./src/features/journal.js",
+  "./src/features/routine.js",
   "./src/features/wish.js",
   "./src/state/feedback-cache.js",
   "./src/state/journal-fold.js",

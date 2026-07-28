@@ -34,9 +34,9 @@
       "domains": [
         "legacy-crosscutting"
       ],
-      "assertionSignals": 21,
-      "assertionHash": "56a47f28d457ab45",
-      "sourceHash": "a31daa25f392e048",
+      "assertionSignals": 19,
+      "assertionHash": "abc0abbb6a2a2ef7",
+      "sourceHash": "95b595e36206e3a8",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -237,6 +237,32 @@
         "browser": false,
         "server": false,
         "fileWrite": true,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "routine-core.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "journal-health",
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 35,
+      "assertionHash": "bc8475eb65247c00",
+      "sourceHash": "d8a75245782f1a76",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
         "networkMock": false,
         "clock": false
       }
@@ -1383,7 +1409,7 @@
       ],
       "assertionSignals": 48,
       "assertionHash": "c9676df5426585ae",
-      "sourceHash": "547993fefbecb55e",
+      "sourceHash": "b7d3d3dc6fabc26d",
       "waits": {
         "fixedCount": 30,
         "numericMilliseconds": 9450,
