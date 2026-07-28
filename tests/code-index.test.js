@@ -1,0 +1,98 @@
+"use strict";
+
+const assert = require("assert");
+
+// 独立レビュー Must-3 対応: 旧実装は `scripts/code-index.js --check`(生成物のバイト完全一致)を
+// このテスト自体が実行しており、app.js に1行足すだけで全関数の行番号がずれて生成物が不一致になり
+// CIが必ず落ちる構成になっていた。`--check` は release-gate.js の push前ゲートに既に組み込まれて
+// いるため(二重に持つ必要がない)、ここでは索引の**不変条件**(関数数・一意性・必須関数・
+// area分類の固定点)だけを検証する。生成物自体は `node scripts/code-index.js --write` で
+// 事前に最新化しておくこと。
+const index = require("../docs/code-index.generated.json");
+const names = index.functions.map((fn) => fn.name);
+
+assert(index.sourceLines > 19000, "app.js全体を索引化");
+assert(index.functions.length > 700, "top-level関数を広く索引化");
+assert.strictEqual(new Set(names).size, names.length, "top-level関数名は一意");
+
+const nameLineKeys = index.functions.map((fn) => `${fn.name}@${fn.startLine}`);
+assert.strictEqual(new Set(nameLineKeys).size, nameLineKeys.length, "関数名+開始行の組は一意");
+
+for (const required of ["normalizeState", "saveState", "render", "syncFromGitHubOnStartup"]) {
+  assert(names.includes(required), `${required}を索引に含める`);
+}
+
+assert(
+  index.functions.every((fn) => Array.isArray(fn.area) && fn.area.length > 0),
+  "areaは非空の配列(独立レビュー Must-2: 単一値から配列へ変更)"
+);
+
+assert(index.functions.some((fn) => fn.area.includes("sync") && fn.effects.includes("fetch")),
+  "同期I/O境界を識別");
+assert(index.functions.some((fn) => fn.area.includes("ui") && fn.effects.includes("render")),
+  "描画境界を識別");
+const clickDispatcher = index.functions.find((fn) => fn.name.startsWith("event:click@"));
+const changeDispatcher = index.functions.find((fn) => fn.name.startsWith("event:change@"));
+assert(clickDispatcher?.lines > 500, "巨大click dispatcherを索引化");
+assert(changeDispatcher?.lines > 150, "巨大change dispatcherを索引化");
+
+// --- 固定点(独立レビュー Must-2 対応): area分類の負検証 ---
+// 旧実装は「関数名+本文全文」に正規表現を当てており、`.push(`(Array.prototype.push)や
+// コメント中の語をsyncと誤判定していた(area="sync"の228関数中100関数、43.9%が誤判定)。
+// 以下は実際に app.js を確認して選んだ固定点(該当行は claude-review-result.md Must-2 参照)。
+function areaOf(name) {
+  const fn = index.functions.find((f) => f.name === name);
+  assert(fn, `固定点検証対象の関数が索引に見つからない: ${name}`);
+  return fn.area;
+}
+
+// computeFreeGaps(app.js:4471-4498): blocksForDate/clamp/minutesOfを呼ぶ純粋な空き時間計算。
+// `merged.push(...)`/`gaps.push(...)` はArray.prototype.pushでGitHub同期と無関係。
+assert(!areaOf("computeFreeGaps").includes("sync"),
+  "computeFreeGaps(空き時間計算)はsyncを含まない");
+assert(areaOf("computeFreeGaps").includes("execution"),
+  "computeFreeGaps はblocksForDate呼び出しによりexecutionを含む");
+
+// computeSyncMerge(app.js:15052-): GitHub同期の双方向マージ本体。関数名自体にsyncを含む。
+assert(areaOf("computeSyncMerge").includes("sync"),
+  "computeSyncMerge(GitHub同期マージ本体)はsyncを含む");
+
+// gardenPixelCalendarHTML(app.js:3546-): 庭ピクセルカレンダーの描画。`cells.push(...)`は
+// Array.prototype.pushでGitHub同期と無関係。
+assert(!areaOf("gardenPixelCalendarHTML").includes("sync"),
+  "gardenPixelCalendarHTML(カレンダー描画)はsyncを含まない");
+
+// homeZone2Summary(app.js:4123-): ホーム集計テキスト生成。`parts.push(...)`はArray.push。
+assert(!areaOf("homeZone2Summary").includes("sync"),
+  "homeZone2Summary(ホーム集計)はsyncを含まない");
+
+// addTaskToToday(app.js:4324-): `state.blocks.push(block)`はArray.pushでGitHub同期と無関係。
+assert(!areaOf("addTaskToToday").includes("sync"),
+  "addTaskToToday(タスク追加)はsyncを含まない");
+
+// completeRoutineForToday(app.js:3693-): `state.blocks.push(block)`はArray.push。
+assert(!areaOf("completeRoutineForToday").includes("sync"),
+  "completeRoutineForToday(ルーティン完了)はsyncを含まない");
+
+// ensureChainRun(app.js:3828-): `state.chainRuns.push(run)`はArray.push。
+assert(!areaOf("ensureChainRun").includes("sync"),
+  "ensureChainRun(チェーン実行状態の確保)はsyncを含まない");
+
+// v164: mergeByIdはapp.js分割・段階1でsrc/core/merge.jsへ抽出済み。code-index.jsはapp.js
+// しか走査しないため、抽出後は索引から消えるのが正しい(indexに残っていたら二重定義の疑い)。
+assert(!names.includes("mergeById"),
+  "mergeByIdはsrc/core/merge.jsへ抽出済みのためapp.jsの索引には現れない(v164)");
+
+// mergeZeroThinkingLists(app.js): mergeById[v103]をそのまま使うentries/suggestedThemesの
+// マージ。merge系は同期の道具だがそれ自体はI/Oを持たないため、独立レビュー Must-2 修正案1の
+// とおりsyncから外しcore側とする(mergeById抽出後の代替固定点)。
+assert(!areaOf("mergeZeroThinkingLists").includes("sync"),
+  "mergeZeroThinkingLists(純粋マージ関数)はsyncを含まない(merge系は別扱い)");
+assert(areaOf("mergeZeroThinkingLists").includes("core"),
+  "mergeZeroThinkingListsはcoreに分類される");
+
+// runAutoSyncPull(app.js:15195-): GitHub自動pullの本体。関数名自体にsyncを含む。
+assert(areaOf("runAutoSyncPull").includes("sync"),
+  "runAutoSyncPull(GitHub自動pull)はsyncを含む");
+
+console.log(`PASS: code index invariants (${index.functions.length} functions)`);
