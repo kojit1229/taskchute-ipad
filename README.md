@@ -36,7 +36,7 @@ npm run dev
 E2Eテスト(headless Chromium + fetchモック)を同梱しています。push / PR 時に GitHub Actions でも自動実行されます。
 
 ```bash
-npm install                                  # devDependencies(playwright-core)のみ
+npm install                                  # devDependencies(テスト・索引用)のみ
 npx playwright-core install chromium         # ブラウザ取得(初回のみ)
 npm test
 ```

@@ -12,9 +12,13 @@
 //
 // 方針: v96.test.jsと同じくブラウザ操作 + localStorage状態注入で観測する。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
+let screenshotDir = "";
 
 let failures = 0;
 function check(name, cond, extra = "") {
@@ -196,17 +200,18 @@ function check(name, cond, extra = "") {
     }, { KEY, TASKS, TODAY });
     await pageMobile.reload();
     await pageMobile.waitForTimeout(500);
-    const fs = require("fs");
-    const outDir = "C:\\Users\\kojit\\AppData\\Local\\Temp\\claude\\C--Users-kojit-Documents-ClaudeCode\\ac3cec4e-418b-4f65-ade2-106241939040\\scratchpad";
-    if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
-    await pageMobile.screenshot({ path: `${outDir}\\v97-taskchute-390px-collapsed.png`, fullPage: true });
+    screenshotDir = fs.mkdtempSync(path.join(os.tmpdir(), "taskchute-v97-"));
+    const collapsedPath = path.join(screenshotDir, "v97-taskchute-390px-collapsed.png");
+    const expandedPath = path.join(screenshotDir, "v97-taskchute-390px-expanded.png");
+    await pageMobile.screenshot({ path: collapsedPath, fullPage: true });
     await pageMobile.click('[data-action="toggle-tasks-show-future"]');
     await pageMobile.waitForTimeout(200);
-    await pageMobile.screenshot({ path: `${outDir}\\v97-taskchute-390px-expanded.png`, fullPage: true });
+    await pageMobile.screenshot({ path: expandedPath, fullPage: true });
     check("スクショ2枚が生成された",
-      fs.existsSync(`${outDir}\\v97-taskchute-390px-collapsed.png`) && fs.existsSync(`${outDir}\\v97-taskchute-390px-expanded.png`));
+      fs.existsSync(collapsedPath) && fs.existsSync(expandedPath));
     await ctxMobile.close();
   } finally {
+    if (screenshotDir) fs.rmSync(screenshotDir, { recursive: true, force: true });
     await browser.close();
     server.close();
   }

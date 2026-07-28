@@ -16,23 +16,24 @@ Codex(レビュアー/実装者。役割判定は AGENTS.md、2026-07-20改訂)�
    例: `- [x] 指摘内容(severity: high)(対象: app.js) → 正規表現パースに修正 (v55)`
 
 ### 実装完了後
-`../taskchute-notes/handoff.md` の「# Handoff Log」に、以下のフォーマットで追記する:
+v164以降は `releases/vNNN.json` を唯一の手書き記録とし、次を実行して
+`CHANGES_vNNN.md` と `../taskchute-notes/handoff.md` を生成する:
 
+```bash
+node scripts/release-record.js releases/vNNN.json --write
+node scripts/release-record.js releases/vNNN.json --check
 ```
-## <日付 YYYY-MM-DD> / v<バージョン>
-- 変更ファイル: <ファイル名(カンマ区切り)>
-- 変更意図: <なぜこの変更をしたか>
-- 自信がない箇所: <レビューで特に見てほしい不安な点>
-- レビュー希望観点: <重点的に確認してほしい観点>
-```
+
+生成物を手で直さない。内容を変える場合はJSONを直して再生成する。v163以前の既存記録は
+従来形式のまま保持し、移行・再生成しない。
 
 ### 設計判断
 設計上の合意(方針・トレードオフの結論)は `../taskchute-notes/decisions.md` の
 「# Design Decisions」に日付付きで追記する。
 
 ### notes リポジトリへの反映(重要)
-`../taskchute-notes` 配下のファイルを書いたら、**必ず** notes リポジトリ側で
-コミット & プッシュまで行う(協働の履歴を残すため):
+`../taskchute-notes` 配下のファイルを書いたら、Kの明示承認後にnotesリポジトリ側で
+コミット & プッシュまで行う(協働の履歴を残すため)。承認前は未コミットで残す:
 
 ```bash
 git -C ../taskchute-notes add -A
@@ -40,16 +41,14 @@ git -C ../taskchute-notes commit -m "docs: <要約>"
 git -C ../taskchute-notes push
 ```
 
-## コミットサイズゲート(v92〜、CI: commit-size-gate.yml)
+## コミットサイズゲート(CI: commit-size-gate.yml)
 
-workspace CLAUDE.md NEVER 1「1コミット(1変更単位)で追加+削除合計200行を超えない」を
-CIで機械強制する。`.github/workflows/commit-size-gate.yml`(判定本体は
-`.github/workflows/scripts/check-commit-size.sh`)が push / pull_request のたびに
-対象範囲内の各コミットの `git show --numstat` 合計行数(バイナリは0行扱い)を調べ、
-**マージコミットを除いて**200行を超えるコミットが1つでもあれば CI を fail させる。
+workspace CLAUDE.md NEVER 1に従い、1コミットの**実行コード差分**を原則200行以下にする。
+`.github/workflows/scripts/check-commit-size.sh` はテスト・Markdown・release記録・生成物を
+数値対象から除外し、実行コードだけを判定する。対象外ファイルもレビューと検証は省略しない。
 
-- 実装前に、仕様/test/実装/記録を依存順の小さいコミットへ分割してからpushすること。
-- 生成物・分割不能な移行など正当な理由で超過がやむを得ない場合のみ、コミットメッセージ本文に
+- 関心事が独立する実装は依存順の小さいコミットへ分ける。
+- 密結合な変更を動かない途中状態へ機械分割しない。分割不能な実行コード変更のみ、本文に
   以下のトレーラーを付けて例外扱いにできる(乱用はレビューで検知する運用。安易な多用は禁止):
   ```
   Size-Exempt: <なぜ分割できないかの理由>
@@ -63,15 +62,38 @@ CIで機械強制する。`.github/workflows/commit-size-gate.yml`(判定本体�
   (`// vNN:` コメント、保存3系統の使い分け、`parseDate()` 必須、SW `CACHE_NAME` の +1 等)。
 - テストは `tests/` の E2E スイート(`tests/vNN.test.js`)。push/PR で GitHub Actions が全量実行する。
 
+### 並列開発
+- 主担当は仕様・依存関係・統合を保持し、独立領域を最大3サブエージェントへ並列委譲してよい。
+- 着手前に担当ファイルと完了条件を固定する。書き込み担当はworktreeを分離し、同一ファイルへの
+  書き込みは1エージェントだけにする。共有worktreeでは実装者を1人に限定する。
+- `app.js`を複数実装者が同時編集してはならない。他の並列枠は影響調査、テスト作成、
+  固定wait調査、読み取り専用レビューへ割り当てる。
+- 同期・保存・日付・migration・iOS固有処理は直列実装し、別エージェントが独立レビューする。
+- 各担当はcommit/pushせず、主担当が`git status --short`と`git diff`で実体を確認して統合する。
+
 ### テスト実行方針(v60〜、コアセットはv93〜)
+- `app.js`を変更したら`npm run code:index:write`、テストを追加/変更したら
+  `npm run test:manifest:write`を実行してからコミットする(生成物のsourceHash/行番号を
+  最新化する。実行し忘れても`npm test`は警告に留めて続行するが、pushするなら最新化しておくこと)。
 - **開発中**: 改修に関連するスイート + 最新スイートだけ実行してよい。
   `node tests/run-all.js v59 v60`(スイート名の一部一致でも可)、または
   `node tests/vNN.test.js` で個別実行。速く回すことを優先する。
-- **push前ローカルは `npm run test:core`**(コアセット、目標3分以内)。
-- **CI(GitHub Actions)では必ず全量**(`npm test` = `node tests/run-all.js` 引数なし)。
+- **レビュー修正がすべて終わった後**: push前ローカルの最終ゲートとして
+  `npm run test:core`を1回だけ実行する。最終core後に実行コード・共有helperを直した場合だけ、
+  関連スイート→coreを再実行する。文書・release記録だけの修正ではcoreを繰り返さない。
+- v164以降は開発中に
+  開発中は`node scripts/release-gate.js releases/vNNN.json --suite=vNNN`、
+  最終時は`node scripts/release-gate.js releases/vNNN.json --final`として検証順を一本化する。
+- **CI(GitHub Actions)では4シャードの和集合で必ず全量**(`npm test -- --shard=N/4`)。
   これが唯一の完全な安全網。push後は必ずGitHub ActionsのCI成功を確認すること
   (test:coreは範囲を絞ったローカル既定であり、全量の代替ではない)。
 - `npm run test:quick -- vNN` でも同じ絞り込みができる(`--` の後にスイート名を渡す)。
+- `npm run test:fast`はブラウザ不要の高速Nodeテスト、`npm run test:smoke`は重要導線、
+  `npm run test:e2e`は全ブラウザE2Eを実行する。fast-nodeとdomain-e2eの和集合は
+  `npm test`全量と一致し、smokeはdomain-e2eの部分集合であることを
+  `tests/run-all-options.test.js`で検証する。
+- `--workers=N`は独立スイートのrunner内並列化。既定は1、最大8。まずfast-nodeだけ2並列で使い、
+  ブラウザE2Eは計測と副作用監査が済むまでCI 4シャードによる並列化だけを使う。
 
 #### コアセット(`npm run test:core` = `tests/run-core.js`)
 push前にローカルで毎回全量(現在40本)を回すと時間がかかるため、「実質的にカバー範囲が広い」

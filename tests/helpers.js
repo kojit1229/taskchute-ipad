@@ -99,7 +99,7 @@ async function passGithubGate(page, keyName = STATE_KEY) {
     localStorage.setItem(KEY, JSON.stringify(s));
   }, keyName);
   await page.reload();
-  await page.waitForTimeout(500);
+  await page.waitForSelector('[data-action="nav"]', { state: "attached" });
 }
 
 // v93: 各スイートのPORTは従来固定値だった(同じ値を使い回すスイートも複数あり)。
@@ -124,9 +124,10 @@ async function passGithubGate(page, keyName = STATE_KEY) {
 // v140(Codexレビュー Med-4): 上記の帯は常に基底20000固定だったため、run-all.js自体を
 // 複数プロセスで並行実行する(v93が本来想定していた「2ターミナルでの同時実行」シナリオ)と、
 // 双方とも同じport帯を使ってしまい退行していた。run-all.js側が起動ごとにランダムな基底
-// (20000〜38000の1000刻み、19通り)を選び、環境変数TEST_PORT_BASEとして渡すようにしたため、
+// 現在は全量が100スイートを超えたため、20000〜62000の2000刻み(22通り)を選び、
+// 最大200スイートまで別基底の帯が重ならない幅でTEST_PORT_BASEとして渡す。
 // ここではTEST_PORT_BASEがあればそれを基底に使う(無ければ従来どおりmin=20000を基底にする)。
-// 並行run同士がたまたま同じ基底を引く確率は1/19以下で、それでも衝突すればstartServer()の
+// 並行run同士がたまたま同じ基底を引く確率は1/22以下で、それでも衝突すればstartServer()の
 // EADDRINUSEリトライで自己回復する。
 // v148(UI改善計画Phase3-2、レビュー対応): 設定4群は既定closedのdetailsに格納されている
 // ため、中の要素(save-github等)をclick/fillするテストは先にこのヘルパーで群を開く必要がある。
@@ -141,7 +142,7 @@ async function openSettingsGroup(page, groupId) {
   if ((await el.count()) === 0) return;
   const isOpen = await el.evaluate((e) => e.open);
   if (!isOpen) await el.locator("summary").first().click();
-  await page.waitForTimeout(150);
+  await page.waitForFunction((selector) => document.querySelector(selector)?.open === true, sel);
 }
 
 function randomPort(min = 20000, max = 40000) {

@@ -35,7 +35,10 @@ reviewer(Claude)側が担う(監督者の supervisor-checklist §6)。
    - [ ] 指摘内容(severity: high/med/low)(対象: ファイル名)
    ```
 
-4. レビューを書き終えたら、notes リポジトリを commit & push する:
+4. レビューを書き終えたら、Kの明示承認後にnotesリポジトリを commit & push する。
+   承認前は未コミットで残す。ただし並列開発の
+   サブエージェントとして呼ばれた場合はファイルを変更せず、指摘を主担当へ返す。
+   主担当が review.md への反映と commit & push を行う:
 
    ```bash
    git -C ../taskchute-notes add -A

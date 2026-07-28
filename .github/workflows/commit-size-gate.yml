@@ -1,6 +1,7 @@
 name: commit-size-gate
 
-# workspace CLAUDE.md NEVER 1: 1コミット(1変更単位)で追加+削除合計200行を超えない。
+# workspace CLAUDE.md NEVER 1: 1変更単位の実行コード差分は原則200行以下。
+# テスト・仕様/運用文書・release記録・生成物は数値対象外。
 # 判定ロジック本体は .github/workflows/scripts/check-commit-size.sh
 # (ローカルでも同じスクリプトを直接実行して検証できる)。
 
@@ -33,7 +34,7 @@ jobs:
           echo "base=$BASE" >> "$GITHUB_OUTPUT"
           echo "head=$HEAD" >> "$GITHUB_OUTPUT"
 
-      - name: Check commit sizes (<=200 lines/commit)
+      - name: Check executable-code sizes (<=200 lines/commit)
         shell: bash
         run: |
           bash .github/workflows/scripts/check-commit-size.sh \
