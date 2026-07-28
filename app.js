@@ -3,7 +3,9 @@
 import { mergeById, mergeByIdPreferNewer } from "./src/core/merge.js";
 // v165: app.js分割・段階2(Avoid Listの読み取り専用render抽出)。src/features/avoid.jsは
 //   stateもapp.js自身もimportしない(呼び出し側が引数で渡す。src/features/avoid.js冒頭コメント参照)。
-import { renderAvoid } from "./src/features/avoid.js";
+// v173: 段階5-2(dispatcher分岐のレジストリ移行)でconfigureAvoid(deps)を追加。addAvoid/deleteAvoid
+//   本体は段階2の監督者裁定どおりapp.js残留のまま、dispatcher登録だけをavoid.js側へ委譲する。
+import { configureAvoid, renderAvoid } from "./src/features/avoid.js";
 // v166: app.js分割・段階3(state store + storage/sync gateway)。stateの再代入はsetState()
 //   経由のみ(claude-review-result.md §2 Blocker-1)。store.jsは何もimportしない真の葉。
 import { state, setState } from "./src/state/store.js";
@@ -261,6 +263,9 @@ configureRoutine({
 });
 // v171: src/features/timeline-layout.jsも同じ理由(循環import回避)で依存注入する。
 configureTimelineLayout({ minutesOf, nowDateTime });
+// v173: src/features/avoid.jsのdispatcher登録(段階5-2)。addAvoid/deleteAvoidはapp.js残留の
+// ままなので関数参照を渡すだけ(dashboard.js等のconfigureXxxと同じ「呼ぶだけ」の注入パターン)。
+configureAvoid({ addAvoid, deleteAvoid });
 let toastTimer = null;
 let timerTicker = null;
 // v144: エネルギーバッテリーの差分更新(updateBatteryTick)のスロットル用。
@@ -514,22 +519,9 @@ document.addEventListener("click", (event) => {
   if (action === "nav") setView(target.dataset.view);
   if (action === "date-prev") shiftSelectedDate(-1);
   if (action === "date-next") shiftSelectedDate(1);
-  if (action === "dashboard-date-prev") shiftDashboardDate(-1);
-  if (action === "dashboard-date-next") shiftDashboardDate(1);
+  // v173: dashboard-date-prev/nextはsrc/features/dashboard.jsのregisterActionsへ移行した。
   if (action === "today") setSelectedDate(todayISO());
-  if (action === "set-morning") setMorningEnergy(Number(target.dataset.value));
-  // v73: コンディションOS(睡眠/服薬/余力/夜の記録/運動ログ)
-  if (action === "set-sleep") setConditionSleep(state.selectedDate, Number(target.dataset.value));
-  if (action === "toggle-meds") toggleConditionMeds(state.selectedDate);
-  if (action === "set-capacity") setConditionCapacity(state.selectedDate, target.dataset.value);
-  if (action === "set-evening-mood") setEveningMood(state.selectedDate, Number(target.dataset.value));
-  if (action === "add-gym-entry") addGymEntry(target.dataset.date || state.selectedDate);
-  if (action === "delete-gym-entry") deleteGymEntry(target.dataset.date || state.selectedDate, id);
-  // v141: 今日行ったお店ログ
-  if (action === "store-visit-add") openStoreVisitEditor("", target.dataset.date || state.selectedDate);
-  if (action === "store-visit-edit") openStoreVisitEditor(id);
-  if (action === "store-visit-delete") deleteStoreVisitWithConfirm(id);
-  if (action === "store-visit-year") openStoreVisitsYearModal();
+  // v173: set-morning〜store-visit-yearはsrc/features/journal.jsのregisterActionsへ移行した。
   if (action === "add-project") addProject();
   if (action === "delete-project") deleteProject(id);
   if (action === "add-task") addTask();
@@ -648,40 +640,12 @@ document.addEventListener("click", (event) => {
   if (action === "toggle-mit") toggleMIT(id);
   // v38: AIフィードバックのMIT候補 → 今日の主役ブロック化
   if (action === "mit-candidate-add") addMITCandidate(target.dataset.title);
-  // v19: ルーティンタブの表示モード切替
-  if (action === "routine-mode") {
-    state.routineViewMode = target.dataset.mode || "routine";
-    persistLocalNoSchedule();  // v37: UI 操作(dataModifiedAt を汚さない)
-    render();
-  }
-  // v155: 今日の庭 S2(月間ピクセル)の月送り。データではなく表示状態だけの変更のため
-  // (_gardenPixelMonthは非永続モジュール変数)、persistLocalNoSchedule()は呼ばずrenderのみ。
-  // 未来月は表示しても常に空グリッド(gardenLogが無い)になるだけなので、当月より先へは進ませない。
-  // v170: _gardenPixelMonth/_gardenPixelMonthNavigatedはsrc/features/routine.jsのモジュール
-  // プライベート変数になったため、ロジック本体はnavigateGardenPixelMonth()へ移した(無改変)。
-  if (action === "garden-pixel-month") {
-    navigateGardenPixelMonth(Number(target.dataset.delta || 0));
-    render();
-  }
-  // v89: ゼロ摩擦ルーティンチェック — 「ここまで全部やった」一括確定
-  if (action === "routine-bulk-check") bulkCheckRoutinesUpToNow();
-  // v115: 縮退版で実行(提案G①)。idはBlockではなく繰り返しルールのid。
-  if (action === "routine-fallback") executeRoutineFallback(id);
-  // v117(C): 過集中ブレーカーのゲートモーダル(idは繰り返しルールのid)
-  if (action === "hyperfocus-gate-fallback") hyperfocusGateFallback(id);
-  if (action === "hyperfocus-gate-make-block") hyperfocusGateMakeBlock(id);
-  if (action === "hyperfocus-gate-later") closeModal();
-  // v129: ポモドーロ身体スキャン(1タップ目=疲労、2タップ目=部位、いつでも記録せず閉じる)
+  // v173: routine-mode/garden-pixel-month/routine-bulk-check/routine-fallback/
+  // hyperfocus-gate-*/chain-*はsrc/features/routine.jsのregisterActionsへ移行した。
+  // body-scan-*(ポモドーロ身体スキャン)はroutine.jsに未抽出のためここに残す。
   if (action === "body-scan-fatigue") bodyScanRecordFatigue(Number(target.dataset.value));
   if (action === "body-scan-part") bodyScanRecordPart(target.dataset.part || "");
   if (action === "body-scan-discard") bodyScanDiscard();
-  // v115: 連続ルーティン(チェーン、提案G②)— 開始/続きから・進行中の完了・閉じる
-  if (action === "chain-run-open") openChainRun(id);
-  if (action === "chain-step-complete") chainStepComplete();
-  if (action === "chain-run-close") closeChainRun();
-  // v115: チェーンのCRUD(新規作成・編集・削除は編集モーダル経由)
-  if (action === "chain-new") openChainEditor("");
-  if (action === "chain-edit") openChainEditor(id);
   // v14: 開始前に既存セッションを強制リセット(中断/完了/休憩後の再開でも確実に50:00から)
   // v87: ポモドーロ開始も宣言ループの対象(スキップ可能)。実際の強制リセット+開始は
   //      resumeLifecycleStart() 内で行う(宣言確定/スキップいずれの経路からも通る)。
@@ -870,27 +834,8 @@ document.addEventListener("click", (event) => {
     persistLocalNoSchedule();
     render();
   }
-  // === v16: やりたいことリスト(v34: input リスナーから click へ移設) ===
-  if (action === "add-wish") addWish();
-  if (action === "open-wish") toggleWishOpen(id);
-  if (action === "add-wish-subtask") addWishSubtask(id);
-  if (action === "toggle-wish-subtask") toggleWishSubtask(id);
-  if (action === "wish-subtask-to-tasks") wishSubtaskToTasks(id);
-  if (action === "wish-realize") realizeWish(id);
-  if (action === "wish-unrealize") unrealizeWish(id);
-  if (action === "delete-wish") deleteWish(id);
-  // v79: 月間プランニングボードの表示切替(リスト⇔ボード。UI状態のみ)
-  if (action === "wish-view-mode") {
-    state.wishViewMode = target.dataset.mode || "list";
-    persistLocalNoSchedule();
-    render();
-    // v80: ボードに切り替えた瞬間だけ現在月へ自動スクロール(縦積みリストで1月から
-    // 探す手間を省く小さな補助。以後の再描画では毎回スクロール位置を戻さない=
-    // ドラッグ中などにユーザーのスクロール位置を奪わないため、ここでの一度きりに限定)
-    if (state.wishViewMode === "board") scrollWishBoardToCurrentMonth();
-  }
-  // v80: 「今月へ」ジャンプボタン(縦積みリストの一覧性補助)
-  if (action === "wish-board-jump-current") scrollWishBoardToCurrentMonth();
+  // v173: add-wish〜wish-board-jump-currentはsrc/features/wish.jsのregisterActionsへ移行した。
+  // triage-*(仕分けモード、Tier3=wish.js未抽出)はapp.js残留のためここに残す。
   // v152: 仕分けモード(先送りBlock+Wishバックログの三択トリアージ、ボタン版=S1)
   if (action === "triage-choice") triageAction(target.dataset.kind, id, target.dataset.choice);
   // v156: 仕分けモードUndo(S3)。トースト内「元に戻す」ボタン(v150の機構を再利用)
@@ -898,9 +843,7 @@ document.addEventListener("click", (event) => {
   // v162: 仕分けの「手放す/延期」直後に出るインライン理由チップ欄
   if (action === "triage-reason-chip") recordTriageInlineReason(target.dataset.chip || "");
   if (action === "triage-reason-skip") skipTriageInlineReason();
-  // === v17: Avoid List(v34: input リスナーから click へ移設) ===
-  if (action === "add-avoid") addAvoid();
-  if (action === "delete-avoid") deleteAvoid(id);
+  // v173: add-avoid/delete-avoidはsrc/features/avoid.jsのregisterActionsへ移行した。
   // v34: 0秒思考
   if (action === "zt-add-toggle") {
     ztAddOpen = !ztAddOpen;
@@ -1093,12 +1036,7 @@ document.addEventListener("click", (event) => {
     persistLocalNoSchedule();
     render();
   }
-  // v40: ルーティンの曜日フィルタ解除
-  if (action === "routine-clear-day") {
-    state.settings.routineDayFilter = null;
-    persistLocalNoSchedule();
-    render();
-  }
+  // v173: routine-clear-dayはsrc/features/routine.jsのregisterActionsへ移行した。
 });
 
 // v71: ホームの折りたたみカード(details)の開閉をlocalStorageへ即時記憶する。

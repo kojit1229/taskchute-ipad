@@ -1,14 +1,17 @@
 // tests/action-registry-core.test.js
 // v172: app.js分割・段階5-1(event dispatcherのレジストリ基盤導入)のcharacterization test。
-// prep-stage5-dispatcher.md §6-1の方式どおり2部構成:
+// v173: 段階5-2(抽出済み5feature=avoid/wish/dashboard/journal/routineのaction移行)で
+// [3]を拡張した。prep-stage5-dispatcher.md §6-1の方式どおり構成:
 //   [1] src/ui/actions.jsの単体挙動(registerActions/dispatchAction、
 //       registerModalHandler/dispatchModalSave/dispatchModalDelete、重複登録ガード、
 //       未登録時のfalseフォールバック)。
 //   [2] app.jsのclick dispatcher("event:click"、data-action分岐)から`action === "..."`を
-//       静的抽出し、v171時点で確定させた225件のゴールデンリストと完全一致するかを検証する。
-//       段階5-2以降でactionをレジストリへ移行する際は、この分岐がif連鎖から消えて
-//       レジストリ側に現れることを機械的に確認する土台になる(分岐の総数・名前一覧が
-//       意図せず変わったら赤になる)。
+//       静的抽出する(v171時点で確定させた225件のゴールデンリストは維持したまま、
+//       段階5-2で移行済みの分だけif連鎖から消えている前提)。
+//   [3] 「if連鎖側の残存分岐リスト」(§2で静的抽出)と「レジストリ側の登録済みリスト」
+//       (5featureのconfigureXxxを空depsで呼び、__debugActionNames()から実測)の
+//       **和集合が225件のゴールデンリストと完全一致・重複ゼロ**であることを検証する
+//       (総数と名前一覧の保存則。段階5-2以降でさらに分岐を移行する際もこの形式を維持する)。
 const fs = require("fs");
 const path = require("path");
 const { pathToFileURL } = require("url");
@@ -16,6 +19,19 @@ const { pathToFileURL } = require("url");
 const ROOT = path.join(__dirname, "..");
 const appSource = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
 const ACTIONS_MODULE_PATH = path.join(ROOT, "src", "ui", "actions.js");
+const FEATURE_MODULE_PATHS = [
+  path.join(ROOT, "src", "features", "avoid.js"),
+  path.join(ROOT, "src", "features", "dashboard.js"),
+  path.join(ROOT, "src", "features", "wish.js"),
+  path.join(ROOT, "src", "features", "journal.js"),
+  path.join(ROOT, "src", "features", "routine.js")
+];
+
+// wish.jsはモジュール読み込み時にdocument.addEventListener(pointerdown/move/up/cancel、月間ボード
+// D&D)をトップレベルで呼ぶ(tests/wish-core.test.jsと同じ既知の事情)。Node環境にはdocumentが
+// 無いため、5featureをimportする前に最小限のスタブを用意する(ドラッグ確定の検証はしない=
+// ブラウザE2E側の責務のまま。actions.js自身はstateもDOMも参照しないため[1][2]には影響しない)。
+global.document = { addEventListener: () => {} };
 
 let failures = 0;
 function check(name, cond, extra = "") {
@@ -98,6 +114,35 @@ const GOLDEN_CLICK_ACTIONS = [
   "timeline-clear-cat", "routine-clear-day"
 ];
 
+// v173: 段階5-2で以下の5feature(avoid/wish/dashboard/journal/routine)の分岐を
+// registerActions経由のレジストリへ移行した(GOLDEN_CLICK_ACTIONSの部分集合、38件)。
+// ハンドラ本体はif連鎖からロジック無改変で移しただけで、追加・削除・リネームはしていない。
+// triage-*(wish Tier3・未抽出)とbody-scan-*(routineとは別ドメイン・未抽出)は
+// 確信が持てないため今回は移行せず、if連鎖に残した(下のEXPECTED_REMAINING_IF_CHAINに含まれる)。
+const MIGRATED_TO_REGISTRY_ACTIONS = [
+  // src/features/avoid.js(configureAvoid)
+  "add-avoid", "delete-avoid",
+  // src/features/dashboard.js(configureDashboard)
+  "dashboard-date-prev", "dashboard-date-next",
+  // src/features/wish.js(configureWish、Tier1のみ)
+  "add-wish", "open-wish", "add-wish-subtask", "toggle-wish-subtask",
+  "wish-subtask-to-tasks", "wish-realize", "wish-unrealize", "delete-wish",
+  "wish-view-mode", "wish-board-jump-current",
+  // src/features/journal.js(configureJournal、コンディションOS+運動記録+お店ログ)
+  "set-morning", "set-sleep", "toggle-meds", "set-capacity", "set-evening-mood",
+  "add-gym-entry", "delete-gym-entry",
+  "store-visit-add", "store-visit-edit", "store-visit-delete", "store-visit-year",
+  // src/features/routine.js(configureRoutine)
+  "routine-mode", "garden-pixel-month", "routine-bulk-check", "routine-fallback",
+  "hyperfocus-gate-fallback", "hyperfocus-gate-make-block", "hyperfocus-gate-later",
+  "chain-run-open", "chain-step-complete", "chain-run-close", "chain-new", "chain-edit",
+  "routine-clear-day"
+];
+
+const EXPECTED_REMAINING_IF_CHAIN = GOLDEN_CLICK_ACTIONS.filter(
+  (a) => !MIGRATED_TO_REGISTRY_ACTIONS.includes(a)
+);
+
 function extractClickActions() {
   const startMarker = 'document.addEventListener("click", (event) => {';
   const endMarker = "// v71: ホームの折りたたみカード";
@@ -167,17 +212,57 @@ function extractClickActions() {
   check("__debugModalTypes()に登録済みtypeが現れる",
     actionsMod.__debugModalTypes().includes("__test-type"));
 
-  console.log("[3] click dispatcherの全data-action分岐名を静的抽出し、v171時点のゴールデンリストと完全一致するか");
+  console.log("[3-a] click dispatcherのif連鎖側に残る分岐名を静的抽出し、移行済み38件を除いた期待値と一致するか");
   const extracted = extractClickActions();
-  check(`抽出件数はゴールデンリストと同じ${GOLDEN_CLICK_ACTIONS.length}件`,
-    extracted.length === GOLDEN_CLICK_ACTIONS.length,
+  check(`if連鎖側の残存件数は期待どおり${EXPECTED_REMAINING_IF_CHAIN.length}件`,
+    extracted.length === EXPECTED_REMAINING_IF_CHAIN.length,
     `実際: ${extracted.length}件`);
-  check("抽出したaction名一覧はゴールデンリストと完全一致(順序含む)",
-    JSON.stringify(extracted) === JSON.stringify(GOLDEN_CLICK_ACTIONS),
-    `差分: 追加=${JSON.stringify(extracted.filter((a) => !GOLDEN_CLICK_ACTIONS.includes(a)))} `
-    + `消失=${JSON.stringify(GOLDEN_CLICK_ACTIONS.filter((a) => !extracted.includes(a)))}`);
-  check("抽出したaction名に重複がない(現状のif連鎖はunique重複0という設計書の前提の再確認)",
+  check("if連鎖側の残存action名一覧はEXPECTED_REMAINING_IF_CHAINと完全一致(順序含む)",
+    JSON.stringify(extracted) === JSON.stringify(EXPECTED_REMAINING_IF_CHAIN),
+    `差分: 追加=${JSON.stringify(extracted.filter((a) => !EXPECTED_REMAINING_IF_CHAIN.includes(a)))} `
+    + `消失=${JSON.stringify(EXPECTED_REMAINING_IF_CHAIN.filter((a) => !extracted.includes(a)))}`);
+  check("if連鎖側の残存action名に重複がない",
     new Set(extracted).size === extracted.length);
+
+  console.log("[3-b] 5feature(avoid/wish/dashboard/journal/routine)のconfigureXxxを空depsで呼び、"
+    + "registerActionsが実際に登録するaction名がMIGRATED_TO_REGISTRY_ACTIONSと一致するか");
+  // configureXxx本体はdestructuring代入+registerActions呼び出しのみで、渡されたdepsの中身は
+  // ハンドラのクロージャ内で遅延参照されるだけ(登録時には呼ばれない)ため、空depsで安全に呼べる
+  // (src/features/*.js側のconfigureXxx実装を参照。design doc §6-1の重複登録ガード確認も兼ねる)。
+  const featureMods = await Promise.all(
+    FEATURE_MODULE_PATHS.map((p) => import(pathToFileURL(p).href))
+  );
+  const [avoidMod, dashboardMod, wishMod, journalMod, routineMod] = featureMods;
+  avoidMod.configureAvoid({});
+  dashboardMod.configureDashboard({});
+  wishMod.configureWish({});
+  journalMod.configureJournal({});
+  routineMod.configureRoutine({});
+  const registered = actionsMod.__debugActionNames().filter((name) => !name.startsWith("__test"));
+  check(`レジストリ側の登録件数は期待どおり${MIGRATED_TO_REGISTRY_ACTIONS.length}件`,
+    registered.length === MIGRATED_TO_REGISTRY_ACTIONS.length,
+    `実際: ${registered.length}件 (${JSON.stringify(registered)})`);
+  check("レジストリ側の登録action名一覧はMIGRATED_TO_REGISTRY_ACTIONSと集合として完全一致",
+    new Set(registered).size === registered.length
+    && registered.length === MIGRATED_TO_REGISTRY_ACTIONS.length
+    && MIGRATED_TO_REGISTRY_ACTIONS.every((a) => registered.includes(a)),
+    `差分: 追加=${JSON.stringify(registered.filter((a) => !MIGRATED_TO_REGISTRY_ACTIONS.includes(a)))} `
+    + `消失=${JSON.stringify(MIGRATED_TO_REGISTRY_ACTIONS.filter((a) => !registered.includes(a)))}`);
+
+  console.log("[3-c] 「if連鎖側の残存分岐」+「レジストリ側の登録済み」の和集合が225件のゴールデンリストと"
+    + "完全一致・重複ゼロであること(保存則)");
+  const union = [...extracted, ...registered];
+  check("if連鎖側とレジストリ側の間で重複が無い",
+    new Set([...extracted, ...registered]).size === extracted.length + registered.length,
+    `重複: ${JSON.stringify(extracted.filter((a) => registered.includes(a)))}`);
+  check(`和集合の件数はゴールデンリストと同じ${GOLDEN_CLICK_ACTIONS.length}件`,
+    union.length === GOLDEN_CLICK_ACTIONS.length,
+    `実際: ${union.length}件`);
+  check("和集合はゴールデンリストと集合として完全一致",
+    new Set(union).size === GOLDEN_CLICK_ACTIONS.length
+    && GOLDEN_CLICK_ACTIONS.every((a) => union.includes(a)),
+    `差分: 追加=${JSON.stringify(union.filter((a) => !GOLDEN_CLICK_ACTIONS.includes(a)))} `
+    + `消失=${JSON.stringify(GOLDEN_CLICK_ACTIONS.filter((a) => !union.includes(a)))}`);
 
   console.log("[4] 段階5-1のフック配線がapp.js内に存在すること(dispatch呼び出し箇所の接続契約)");
   check("click dispatcherの先頭にdispatchAction(action, { event, target, id })呼び出しがある",

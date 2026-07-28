@@ -49,6 +49,7 @@
 
 import { state } from "../state/store.js";
 import { _journalSegmentOverride } from "../state/journal-fold.js";
+import { registerActions } from "../ui/actions.js";
 
 // ---- 依存注入(configureJournal) ----
 let escapeHTML, renderHeader, renderDateBar, renderMarkdown, renderModal, closeModal;
@@ -63,6 +64,23 @@ function configureJournal(deps) {
     personalDataReady, latestSleepLogWithin, shortSleepDate, upsertMorningLine,
     renderExperimentSection, JOURNAL_REQUEST_SECTION
   } = deps);
+  // v173: app.js分割・段階5-2(prep-stage5-dispatcher.md案A)。click dispatcherのコンディションOS
+  // (朝/夜の体調・睡眠・服薬・余力)+運動記録+お店ログの分岐をレジストリへ移行する
+  // (ロジック無改変)。0秒思考/週次/サイクル/問い等の他journalドメインはこのファイル未抽出のため
+  // 対象外(app.js残留)。
+  registerActions({
+    "set-morning": (ctx) => setMorningEnergy(Number(ctx.target.dataset.value)),
+    "set-sleep": (ctx) => setConditionSleep(state.selectedDate, Number(ctx.target.dataset.value)),
+    "toggle-meds": () => toggleConditionMeds(state.selectedDate),
+    "set-capacity": (ctx) => setConditionCapacity(state.selectedDate, ctx.target.dataset.value),
+    "set-evening-mood": (ctx) => setEveningMood(state.selectedDate, Number(ctx.target.dataset.value)),
+    "add-gym-entry": (ctx) => addGymEntry(ctx.target.dataset.date || state.selectedDate),
+    "delete-gym-entry": (ctx) => deleteGymEntry(ctx.target.dataset.date || state.selectedDate, ctx.id),
+    "store-visit-add": (ctx) => openStoreVisitEditor("", ctx.target.dataset.date || state.selectedDate),
+    "store-visit-edit": (ctx) => openStoreVisitEditor(ctx.id),
+    "store-visit-delete": (ctx) => deleteStoreVisitWithConfirm(ctx.id),
+    "store-visit-year": () => openStoreVisitsYearModal()
+  });
 }
 
 // ---- ここから抽出したコード本体(app.js:v168時点から移動。ロジック無改変) ----

@@ -25,6 +25,7 @@
 
 import { state } from "../state/store.js";
 import { cachedFeedback } from "../state/feedback-cache.js";
+import { registerActions } from "../ui/actions.js";
 
 // ---- 依存注入(configureDashboard) ----
 let renderHeader, escapeHTML, clamp, parseDate, addDays, dateToISO, localDateTimeToMs;
@@ -37,6 +38,13 @@ function configureDashboard(deps) {
     todayISO, fmtMinShort, renderMarkdown, getCategoryColor, personalDataReady,
     fetchGitHubRawResult, renderDeferringForFocus, render
   } = deps);
+  // v173: app.js分割・段階5-2(prep-stage5-dispatcher.md案A)。click dispatcherの
+  // "dashboard-date-prev"/"dashboard-date-next"分岐をレジストリへ移行する
+  // (呼び出し先はこのファイル自身のshiftDashboardDateのため追加のdeps注入は不要。ロジック無改変)。
+  registerActions({
+    "dashboard-date-prev": () => shiftDashboardDate(-1),
+    "dashboard-date-next": () => shiftDashboardDate(1)
+  });
 }
 
 // ---- ここから抽出したコード本体(app.js:v166時点から移動。ロジック無改変) ----

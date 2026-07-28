@@ -37,6 +37,8 @@
 // characterization test: tests/wish-core.test.js。
 
 import { state } from "../state/store.js";
+import { persistLocalNoSchedule } from "../storage/local.js";
+import { registerActions } from "../ui/actions.js";
 
 // ---- 依存注入(configureWish) ----
 let escapeHTML, renderHeader, todayISO, localDateTimeToMs, makeTask, makeBlock;
@@ -49,6 +51,26 @@ function configureWish(deps) {
     defaultPlannedTimes, showToast, nowDateTime, saveAndRender, render, updateTaskField,
     renderWishTriage
   } = deps);
+  // v173: app.js分割・段階5-2(prep-stage5-dispatcher.md案A)。click dispatcherのWish Tier1
+  // CRUD分岐+表示モード切替をレジストリへ移行する(ロジック無改変)。triage-*(仕分けモード、
+  // Tier3=このファイル未抽出)はapp.js残留のためここでは登録しない。
+  registerActions({
+    "add-wish": () => addWish(),
+    "open-wish": (ctx) => toggleWishOpen(ctx.id),
+    "add-wish-subtask": (ctx) => addWishSubtask(ctx.id),
+    "toggle-wish-subtask": (ctx) => toggleWishSubtask(ctx.id),
+    "wish-subtask-to-tasks": (ctx) => wishSubtaskToTasks(ctx.id),
+    "wish-realize": (ctx) => realizeWish(ctx.id),
+    "wish-unrealize": (ctx) => unrealizeWish(ctx.id),
+    "delete-wish": (ctx) => deleteWish(ctx.id),
+    "wish-view-mode": (ctx) => {
+      state.wishViewMode = ctx.target.dataset.mode || "list";
+      persistLocalNoSchedule();
+      render();
+      if (state.wishViewMode === "board") scrollWishBoardToCurrentMonth();
+    },
+    "wish-board-jump-current": () => scrollWishBoardToCurrentMonth()
+  });
 }
 
 // ---- ここから抽出したコード本体(app.js:v167時点から移動。ロジック無改変) ----

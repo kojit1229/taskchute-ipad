@@ -17,6 +17,23 @@
 //
 // 抽出元: app.js:6805-6844 (renderAvoid)。ロジックは一切変更していない(移動+引数化のみ)。
 // characterization test: tests/avoid-core.test.js。
+//
+// v173: app.js分割・段階5-2(prep-stage5-dispatcher.md案A)。click dispatcherの
+// "add-avoid"/"delete-avoid"分岐をレジストリへ移行する。addAvoid/deleteAvoid本体は上記の
+// 監督者裁定どおりapp.js残留のままのため、configureAvoid(deps)で関数参照だけを受け取り、
+// dispatcher登録(registerActions)だけをここで行う(ロジック無改変、呼び出し先の切替のみ)。
+
+import { registerActions } from "../ui/actions.js";
+
+let addAvoid, deleteAvoid;
+
+function configureAvoid(deps) {
+  ({ addAvoid, deleteAvoid } = deps);
+  registerActions({
+    "add-avoid": () => addAvoid(),
+    "delete-avoid": (ctx) => deleteAvoid(ctx.id)
+  });
+}
 
 function renderAvoid(state, escapeHTML, renderHeader) {
   const items = state.settings.avoidList || [];
@@ -59,4 +76,4 @@ function renderAvoid(state, escapeHTML, renderHeader) {
   `;
 }
 
-export { renderAvoid };
+export { configureAvoid, renderAvoid };

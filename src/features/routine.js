@@ -59,6 +59,7 @@
 
 import { state } from "../state/store.js";
 import { persistLocalNoSchedule } from "../storage/local.js";
+import { registerActions } from "../ui/actions.js";
 
 // ---- 依存注入(configureRoutine) ----
 let escapeHTML, renderHeader, renderDateBar, todayISO, addDays, parseDate;
@@ -75,6 +76,35 @@ function configureRoutine(deps) {
     blocksForDate, isTouchedBlock, WEEKDAY_LABELS,
     RECURRENCE_KEEP_PAST_DAYS, RECURRENCE_FUTURE_DAYS
   } = deps);
+  // v173: app.js分割・段階5-2(prep-stage5-dispatcher.md案A)。click dispatcherのルーティンタブ+
+  // 今日の庭+過集中ゲート+連続ルーティン(チェーン)分岐をレジストリへ移行する(ロジック無改変)。
+  // body-scan-*(ポモドーロ身体スキャン、別ドメイン・未抽出)は対象外(app.js残留)。
+  registerActions({
+    "routine-mode": (ctx) => {
+      state.routineViewMode = ctx.target.dataset.mode || "routine";
+      persistLocalNoSchedule();
+      render();
+    },
+    "garden-pixel-month": (ctx) => {
+      navigateGardenPixelMonth(Number(ctx.target.dataset.delta || 0));
+      render();
+    },
+    "routine-bulk-check": () => bulkCheckRoutinesUpToNow(),
+    "routine-fallback": (ctx) => executeRoutineFallback(ctx.id),
+    "hyperfocus-gate-fallback": (ctx) => hyperfocusGateFallback(ctx.id),
+    "hyperfocus-gate-make-block": (ctx) => hyperfocusGateMakeBlock(ctx.id),
+    "hyperfocus-gate-later": () => closeModal(),
+    "chain-run-open": (ctx) => openChainRun(ctx.id),
+    "chain-step-complete": () => chainStepComplete(),
+    "chain-run-close": () => closeChainRun(),
+    "chain-new": () => openChainEditor(""),
+    "chain-edit": (ctx) => openChainEditor(ctx.id),
+    "routine-clear-day": () => {
+      state.settings.routineDayFilter = null;
+      persistLocalNoSchedule();
+      render();
+    }
+  });
 }
 
 // v115: 連続ルーティン(チェーン、提案G②)進行中フラグ。他機能から参照されないモジュール

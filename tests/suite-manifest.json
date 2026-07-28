@@ -8,11 +8,14 @@
       "tier": "full",
       "domains": [
         "sync-storage",
+        "planning-execution",
+        "journal-health",
+        "content-ai",
         "ui-responsive"
       ],
-      "assertionSignals": 19,
-      "assertionHash": "5fc045ceec790741",
-      "sourceHash": "1270f58b18e23c07",
+      "assertionSignals": 24,
+      "assertionHash": "811d2140edb6553e",
+      "sourceHash": "4408b6e65830d86f",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
