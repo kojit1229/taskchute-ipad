@@ -576,6 +576,104 @@ registerModalHandler("storeVisit", {
   save: (id, fields) => saveStoreVisitFromModal(id, fields),  // v141: 今日行ったお店ログ
   delete: (id) => deleteStoreVisit(id)  // v141
 });
+// v179: 段階5-7b(モーダル系dispatcher移行・後半)。ビジョンボード6+実験ログ5+AIスケジュール
+// 下書き8+検索2、計21分岐を相乗りregisterActionsへ移行(prep-stage5-dispatcher.md §4)。
+// 下書き系4件の`&&<guard>`条件はハンドラ内early returnへ機械的に変換(guard偽時は何もしない
+// fallthroughと等価)。ロジック無改変。
+registerActions({
+  // --- ビジョンボード(6) ---
+  "vision-section": ({ target }) => setVisionSection(target.dataset.section),
+  "open-vision-board": ({ target }) => openVisionBoard(Number(target.dataset.index) || 0),
+  "vision-board-tab": ({ target }) => setVisionBoardIndex(Number(target.dataset.index)),
+  "vision-board-load": ({ target }) => loadVisionBoardPdf(target.dataset.file),
+  "vision-board-load-images": ({ target }) => loadVisionBoardImages(target.dataset.file),
+  "vision-board-retry-images": ({ target }) => loadVisionBoardImages(target.dataset.file),
+  // --- 実験ログ(5) ---
+  "experiment-add": () => addExperimentOrGuard(),
+  "edit-experiment": ({ id }) => openExperimentEditor(id),
+  "experiment-keep": ({ id }) => keepExperiment(id),
+  "experiment-drop": ({ id }) => dropExperiment(id),
+  "experiment-copy-conclusion": ({ id }) => copyExperimentConclusion(id),
+  // --- AIスケジュール下書き(8) ---
+  "ai-schedule": () => runAiSchedule(),
+  "ai-morning-plan": () => runAiMorningPlan(),
+  "draft-confirm": () => confirmScheduleDraft(),
+  "draft-discard": () => {
+    if (!_scheduleDraft) return;
+    // v52: 破棄も「この提案は不要だった」という学習シグナルとして記録(v62: source区別も記録)
+    // v145レビュー対応: 複数sourceの項目が合流した下書き(例: 朝プラン+回復提案)でも、
+    // 学習ログには項目ごとの出どころ(it.source)を優先して残す(無ければ従来どおり下書き全体のsource)。
+    _scheduleDraft.items.forEach((it) => recordScheduleHistory(it, "discarded", _scheduleDraft.date, it.source || _scheduleDraft.source || "deterministic"));
+    _scheduleDraft = null;
+    _draftUndo = null;  // v62: 破棄はUndo対象外(下書き自体が消える)
+    _draftUndoHistoryEntry = null;
+    saveState();
+    render();
+    showToast("下書きを破棄しました");
+  },
+  "draft-remove": ({ id }) => {
+    if (!_scheduleDraft) return;
+    const removed = _scheduleDraft.items.find((x) => x.id === id);
+    let removedHistoryEntry = null;
+    // v145レビュー対応: item.source優先(合流下書きでの出どころ誤ラベル防止。draft-discardと同じ方針)
+    if (removed) removedHistoryEntry = recordScheduleHistory(removed, "removed", _scheduleDraft.date, removed.source || _scheduleDraft.source || "deterministic");  // v52: 却下シグナル
+    // v62(m2): 削除直前の下書き状態を1段Undoとして退避。このremovedエントリも一緒に退避し、
+    //          Undoで取り消せるようにする(Undo→再確定でremoved/confirmedが二重計上されないため)。
+    snapshotDraftForUndo(removedHistoryEntry);
+    _scheduleDraft.items = _scheduleDraft.items.filter((x) => x.id !== id);
+    if (!_scheduleDraft.items.length) _scheduleDraft = null;
+    // v62: 却下理由をワンタップで選べる軽量ピッカーを出す(任意・非ブロッキング。選ばなくても削除は既に完了している)
+    if (removed && removedHistoryEntry) _pendingRejectReason = { title: removed.title, entry: removedHistoryEntry };
+    saveState();
+    render();
+  },
+  "draft-undo": () => {
+    if (!_draftUndo) return;
+    // v62: 下書きレイヤ操作(×削除・ドラッグ移動/リサイズ)の直前状態へ1段だけ戻す
+    _scheduleDraft = _draftUndo;
+    _draftUndo = null;
+    // v62(m2): 削除操作のUndoなら、その削除で積んだremovedエントリも取り消す(aiScheduleHistoryの
+    //          二重計上防止。ドラッグ操作由来のUndoでは_draftUndoHistoryEntryがnullなので何もしない)
+    if (_draftUndoHistoryEntry) {
+      const idx = state.aiScheduleHistory.indexOf(_draftUndoHistoryEntry);
+      if (idx !== -1) state.aiScheduleHistory.splice(idx, 1);
+      if (_pendingRejectReason && _pendingRejectReason.entry === _draftUndoHistoryEntry) {
+        _pendingRejectReason = null;  // 取り消したentryを参照していた却下理由ピッカーも畳む
+      }
+      _draftUndoHistoryEntry = null;
+    }
+    saveState();
+    render();
+    showToast("元に戻しました");
+  },
+  "draft-remove-reason": ({ target }) => {
+    if (!_pendingRejectReason) return;
+    // v62: 却下理由のワンタップ選択(今日は無理/価値が薄い/時間帯が合わない/その他)。aiScheduleHistoryへ追記する
+    _pendingRejectReason.entry.reason = target.dataset.reason || "";
+    _pendingRejectReason = null;
+    saveState();
+    render();
+  },
+  "draft-remove-reason-dismiss": () => {
+    _pendingRejectReason = null;
+    render();
+  },
+  // --- 検索(2) ---
+  "open-search": () => openSearchModal(),
+  "search-jump": ({ target }) => {
+    const view = target.dataset.view || "home";
+    const date = target.dataset.date || "";
+    const zeroTab = target.dataset.zeroTab || "";
+    const ztQuery = target.dataset.ztSearch;
+    closeModal();
+    if (zeroTab) state.settings.zeroTab = zeroTab;
+    if (ztQuery !== undefined) ztSearch = ztQuery;  // 0秒思考の履歴検索に引き継ぐ
+    if (date) { state.selectedDate = date; ensureJournal(date); }
+    state.currentView = view;
+    persistLocalNoSchedule();  // 画面移動は UI 操作(dataModifiedAt を汚さない)
+    render();
+  }
+});
 let toastTimer = null;
 let timerTicker = null;
 // v144: エネルギーバッテリーの差分更新(updateBatteryTick)のスロットル用。
@@ -946,24 +1044,14 @@ document.addEventListener("click", (event) => {
       submitModal();
     }
   }
-  // === v2: ビジョン画面のセグメント切替 ===
-  if (action === "vision-section") setVisionSection(target.dataset.section);
-  // v149レビュー対応(必須3): ホーム「80歳ビジョン」カードからビジョンボードの該当ページへ
-  if (action === "open-vision-board") openVisionBoard(Number(target.dataset.index) || 0);
-  if (action === "vision-board-tab") setVisionBoardIndex(Number(target.dataset.index));
-  if (action === "vision-board-load") loadVisionBoardPdf(target.dataset.file);  // v101(原本PDF、v125からは補助扱い)
-  if (action === "vision-board-load-images") loadVisionBoardImages(target.dataset.file);  // v125
-  if (action === "vision-board-retry-images") loadVisionBoardImages(target.dataset.file);  // v125追補(Codex P2): 失敗ページの再試行
+  // v179: vision-section〜vision-board-retry-images(ビジョンボード6)はapp.js内の
+  // registerActionsへ移行した。
   if (action === "open-md-in-github") openMdInGithub(target.dataset.path);
   if (action === "reload-md") reloadStaticMarkdown();
   // v177: ai-report-type/ai-report-refresh/open-future-letter/ai-work-approve/ai-work-question/
   //        reading-saveはapp.js内のregisterActionsへ移行した。
-  // v68: 人生実験機構(実験中カードのCRUD + 昇格候補コピー)
-  if (action === "experiment-add") addExperimentOrGuard();
-  if (action === "edit-experiment") openExperimentEditor(id);
-  if (action === "experiment-keep") keepExperiment(id);
-  if (action === "experiment-drop") dropExperiment(id);
-  if (action === "experiment-copy-conclusion") copyExperimentConclusion(id);
+  // v179: experiment-add〜experiment-copy-conclusion(実験ログ5)はapp.js内の
+  // registerActionsへ移行した。
   // === v3: ポモドーロ常時起動 ===
   if (action === "pomo-tab") setPomodoroTab(target.dataset.tab);
   // v174: push-reportはapp.js内のregisterActionsへ移行した。
@@ -1038,68 +1126,10 @@ document.addEventListener("click", (event) => {
       showToast("今週は3つまでに絞りましょう");
     }
   }
-  // v60: 下書きスケジュール(空き時間への決定論配置 → D&D調整 → 確定)
-  if (action === "ai-schedule") runAiSchedule();
-  // v59: 朝の一括プランニング(繰越+WBS+MIT候補 → 空き時間へ仮配置)
-  if (action === "ai-morning-plan") runAiMorningPlan();
+  // v179: ai-schedule/ai-morning-plan/draft-confirm/draft-discard/draft-remove/draft-undo/
+  // draft-remove-reason/draft-remove-reason-dismiss(AIスケジュール下書き8)はapp.js内の
+  // registerActionsへ移行した。
   // v176: zerosec-theme-add/zerosec-theme-skipはapp.js内のregisterActionsへ移行した。
-  if (action === "draft-confirm") confirmScheduleDraft();
-  if (action === "draft-discard" && _scheduleDraft) {
-    // v52: 破棄も「この提案は不要だった」という学習シグナルとして記録(v62: source区別も記録)
-    // v145レビュー対応: 複数sourceの項目が合流した下書き(例: 朝プラン+回復提案)でも、
-    // 学習ログには項目ごとの出どころ(it.source)を優先して残す(無ければ従来どおり下書き全体のsource)。
-    _scheduleDraft.items.forEach((it) => recordScheduleHistory(it, "discarded", _scheduleDraft.date, it.source || _scheduleDraft.source || "deterministic"));
-    _scheduleDraft = null;
-    _draftUndo = null;  // v62: 破棄はUndo対象外(下書き自体が消える)
-    _draftUndoHistoryEntry = null;
-    saveState();
-    render();
-    showToast("下書きを破棄しました");
-  }
-  if (action === "draft-remove" && _scheduleDraft) {
-    const removed = _scheduleDraft.items.find((x) => x.id === id);
-    let removedHistoryEntry = null;
-    // v145レビュー対応: item.source優先(合流下書きでの出どころ誤ラベル防止。draft-discardと同じ方針)
-    if (removed) removedHistoryEntry = recordScheduleHistory(removed, "removed", _scheduleDraft.date, removed.source || _scheduleDraft.source || "deterministic");  // v52: 却下シグナル
-    // v62(m2): 削除直前の下書き状態を1段Undoとして退避。このremovedエントリも一緒に退避し、
-    //          Undoで取り消せるようにする(Undo→再確定でremoved/confirmedが二重計上されないため)。
-    snapshotDraftForUndo(removedHistoryEntry);
-    _scheduleDraft.items = _scheduleDraft.items.filter((x) => x.id !== id);
-    if (!_scheduleDraft.items.length) _scheduleDraft = null;
-    // v62: 却下理由をワンタップで選べる軽量ピッカーを出す(任意・非ブロッキング。選ばなくても削除は既に完了している)
-    if (removed && removedHistoryEntry) _pendingRejectReason = { title: removed.title, entry: removedHistoryEntry };
-    saveState();
-    render();
-  }
-  if (action === "draft-undo" && _draftUndo) {
-    // v62: 下書きレイヤ操作(×削除・ドラッグ移動/リサイズ)の直前状態へ1段だけ戻す
-    _scheduleDraft = _draftUndo;
-    _draftUndo = null;
-    // v62(m2): 削除操作のUndoなら、その削除で積んだremovedエントリも取り消す(aiScheduleHistoryの
-    //          二重計上防止。ドラッグ操作由来のUndoでは_draftUndoHistoryEntryがnullなので何もしない)
-    if (_draftUndoHistoryEntry) {
-      const idx = state.aiScheduleHistory.indexOf(_draftUndoHistoryEntry);
-      if (idx !== -1) state.aiScheduleHistory.splice(idx, 1);
-      if (_pendingRejectReason && _pendingRejectReason.entry === _draftUndoHistoryEntry) {
-        _pendingRejectReason = null;  // 取り消したentryを参照していた却下理由ピッカーも畳む
-      }
-      _draftUndoHistoryEntry = null;
-    }
-    saveState();
-    render();
-    showToast("元に戻しました");
-  }
-  if (action === "draft-remove-reason" && _pendingRejectReason) {
-    // v62: 却下理由のワンタップ選択(今日は無理/価値が薄い/時間帯が合わない/その他)。aiScheduleHistoryへ追記する
-    _pendingRejectReason.entry.reason = target.dataset.reason || "";
-    _pendingRejectReason = null;
-    saveState();
-    render();
-  }
-  if (action === "draft-remove-reason-dismiss") {
-    _pendingRejectReason = null;
-    render();
-  }
   // v176: weekly-suggest-addはapp.js内のregisterActionsへ移行した。
   // v174: open-backup-list/restore-backup/run-archiveはapp.js内のregisterActionsへ移行した。
   // v53: 計器盤の期間切替(UI状態)
@@ -1108,21 +1138,7 @@ document.addEventListener("click", (event) => {
     persistLocalNoSchedule();
     render();
   }
-  // v49: 横断検索
-  if (action === "open-search") openSearchModal();
-  if (action === "search-jump") {
-    const view = target.dataset.view || "home";
-    const date = target.dataset.date || "";
-    const zeroTab = target.dataset.zeroTab || "";
-    const ztQuery = target.dataset.ztSearch;
-    closeModal();
-    if (zeroTab) state.settings.zeroTab = zeroTab;
-    if (ztQuery !== undefined) ztSearch = ztQuery;  // 0秒思考の履歴検索に引き継ぐ
-    if (date) { state.selectedDate = date; ensureJournal(date); }
-    state.currentView = view;
-    persistLocalNoSchedule();  // 画面移動は UI 操作(dataModifiedAt を汚さない)
-    render();
-  }
+  // v179: open-search/search-jump(検索2)はapp.js内のregisterActionsへ移行した。
   // v177: carry-over/migration-ritual-choice/ideal-retryはapp.js内のregisterActionsへ移行した。
   // v39/v40: エネルギー構造からの行動導線
   if (action === "energy-open-routine") openRoutineForWeekday(Number(target.dataset.day));

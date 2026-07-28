@@ -22,6 +22,9 @@
 // block/actualEntry/question/experiment/chain/storeVisitの8 type)をregisterModalHandlerへ
 // 全件移行した(段階5-8、prep-stage5-dispatcher.md §5のMust級指摘の解消)。[5]でこの8 typeの
 // golden list exhaustiveness(if連鎖残存type+レジストリ登録type=全typeの完全一致)を検証する。
+// v179: 段階5-7b(modal系dispatcher分岐の移行・後半=ビジョンボード6+実験ログ5+AIスケジュール
+// 下書き8+検索2、計21分岐)で[3]をさらに拡張した。これでprep-stage5-dispatcher.md §2-Cの
+// modalバケツ(44件)がすべて移行済みになった。
 // prep-stage5-dispatcher.md §6-1の方式どおり構成:
 //   [1] src/ui/actions.jsの単体挙動(registerActions/dispatchAction、
 //       registerModalHandler/dispatchModalSave/dispatchModalDelete、重複登録ガード、
@@ -216,7 +219,18 @@ const APP_JS_REGISTERED_ACTIONS = [
   "add-task-to-project", "add-subtask", "add-block", "delete-block",
   "edit-project", "edit-task", "edit-block",
   // --- v178: モーダル起動系(3、modal-saveはreturn意味論のためif連鎖に残置) ---
-  "modal-close", "modal-delete", "lev-judge"
+  "modal-close", "modal-delete", "lev-judge",
+  // --- v179: ビジョンボード(6) ---
+  "vision-section", "open-vision-board", "vision-board-tab", "vision-board-load",
+  "vision-board-load-images", "vision-board-retry-images",
+  // --- v179: 実験ログ(5) ---
+  "experiment-add", "edit-experiment", "experiment-keep", "experiment-drop",
+  "experiment-copy-conclusion",
+  // --- v179: AIスケジュール下書き(8) ---
+  "ai-schedule", "ai-morning-plan", "draft-confirm", "draft-discard", "draft-remove",
+  "draft-undo", "draft-remove-reason", "draft-remove-reason-dismiss",
+  // --- v179: 検索(2) ---
+  "open-search", "search-jump"
 ];
 
 const EXPECTED_REMAINING_IF_CHAIN = GOLDEN_CLICK_ACTIONS.filter(

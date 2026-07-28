@@ -1,0 +1,48 @@
+{
+  "version": 179,
+  "date": "2026-07-29",
+  "title": "app.js分割 段階5-7b(modal系dispatcher分岐の相乗り移行・後半)",
+  "summary": "prep-stage5-dispatcher.md §2-C「modal(44分岐)」の後半として、click dispatcherのビジョンボード(vision-section/open-vision-board/vision-board-tab/vision-board-load/vision-board-load-images/vision-board-retry-images、6分岐)+実験ログ(experiment-add/edit-experiment/experiment-keep/experiment-drop/experiment-copy-conclusion、5分岐)+AIスケジュール下書き(ai-schedule/ai-morning-plan/draft-confirm/draft-discard/draft-remove/draft-undo/draft-remove-reason/draft-remove-reason-dismiss、8分岐)+検索(open-search/search-jump、2分岐)の計21分岐を、app.js自身がregisterActions({...})を直接呼ぶ形でレジストリへ移行した(v174/v176/v177/v178と同型の相乗り方式)。これでv178までのWBS/Project/Task CRUD等と合わせ、prep doc §2-Cのmodalバケツ(44件)がすべて移行済みになった。下書き系4件は元々`action === \"...\" && <guard変数>`という条件付きif文だったため、ハンドラ内のearly returnへ機械的に変換した(guardが偽の間は他のどの分岐もこのaction名を処理せず何もしないfallthroughだったため、観測可能な挙動は完全に等価)。",
+  "changedFiles": [
+    "app.js",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "prep-stage5-dispatcher.md §4「dispatcher配線はUI配線であり機能ロジックではない」を根拠に、ビジョンボード6+実験ログ5+検索2の計13分岐(いずれもevent/target経由の単純な参照渡しのみでpreventDefault/stopPropagation/return意味論を持たない)をapp.js相乗りレジストリへ移行した。",
+    "AIスケジュール下書き8分岐は、pointerdown/pointermove/pointerup(下書きスケジュールD&D)という別系統の非data-actionリスナー(prep doc §1で棚卸し済み)とは独立したclick data-action分岐であり、ドラッグ操作そのものではないため移行対象として安全と判定した。guard付き4件(draft-discard/draft-remove/draft-undo/draft-remove-reason)はハンドラ内early returnへ変換し、guard偽時のno-op挙動を保存した。",
+    "これによりprep-stage5-dispatcher.md §2-Cで確認されたmodalバケツ44件(WBS/Project/Task CRUD18+モーダル起動系3+modal type8+ビジョンボード6+実験ログ5+AIスケジュール下書き8+検索2+modal-save1(if連鎖残置))すべての移行方針が完了した。"
+  ],
+  "changes": [
+    "app.js: click dispatcherのif連鎖からビジョンボード6+実験ログ5+AIスケジュール下書き8+検索2の計21分岐を削除し、v178のregisterModalHandler群の直後に新しいregisterActions({...})呼び出しを追加して登録した(ハンドラ本体はロジック無改変、target/idはctx destructuringで受け取る)。削除箇所には移行先を示す1行コメントを残した。",
+    "app.js: draft-discard/draft-remove/draft-undo/draft-remove-reasonの4件は、元の`if (action === \"...\" && <guard>) { ... }`という条件付きif文を、ハンドラ先頭の`if (!<guard>) return;`へ機械変換した(ロジック自体は無改変、条件式の位置のみ変更)。"
+  ],
+  "uncertainties": [
+    "所属ドメインに確信が持てなかった6件(toggle-mit・mit-candidate-add・home-tab・open-md-in-github・reload-md・stats-range)は引き続き見送り、if連鎖に残した(v177から継続)。",
+    "timeline(43)・wish Tier3(triage-*)・body-scan-*・weekly-wish-*は未着手のまま(段階5-8=状態Bで扱う予定)。",
+    "modal-saveはBlock編集モーダル保存ボタンのdisable連動early returnがあるため、引き続きif連鎖に残置した(v178からの継続判断、変更なし)。"
+  ],
+  "reviewFocus": [
+    "移行した21分岐のハンドラ本体が、移行前のif連鎖の中身と1文字も変わっていないこと(ロジック無改変、target/id→ctx destructuringのみの機械置換)。",
+    "guard付き4件(draft-discard/draft-remove/draft-undo/draft-remove-reason)のearly return変換が、guard偽時のno-op挙動を完全に保存していること。",
+    "tests/action-registry-core.test.jsの保存則(if連鎖側60件+5feature側38件+app.js直接側127件=225件、重複ゼロ)が機械的に成立していること。",
+    "ビジョンボード(v125)・実験ログ(v68)・下書きスケジュール(v59)・横断検索(v49)の各E2Eスイートがレジストリ経由でも同じ挙動を示すこと(dispatch呼び出し前のevent.target.closest(\"[data-action]\")によるイベント委譲を変更していないこと)。"
+  ],
+  "verification": [
+    "node --check app.js / sw.js / tests/action-registry-core.test.js → 全てexit 0",
+    "node tests/action-registry-core.test.js → 全件成功(click保存則: if連鎖60+5feature38+app.js直接127=225。modal type保存則: if連鎖0+レジストリ8=8)",
+    "npm run test:fast → 全件成功",
+    "npm run test:smoke → 全件成功",
+    "node tests/run-all.js v125 v68 v59 v49 → 全件成功(ビジョンボード/実験ログ/下書きスケジュール/横断検索)",
+    "npm run code:index:write / npm run test:manifest:write 実行済み",
+    "git diff --numstat で実行コード差分を実測(app.js 106+90=196行、sw.js 1+1=2行、計198行、200行以下)"
+  ],
+  "knownLimitations": [
+    "click dispatcherの残り分岐(timeline43・wish Tier3・body-scan-*・weekly-wish-*・所属ドメイン未確定6件)は段階5-8(状態B)で扱う。",
+    "src/配下にpackage.json(type:module)を置いていないため、Node実行時にMODULE_TYPELESS_PACKAGE_JSON警告が出る(v164から継続、動作には影響しない)。"
+  ]
+}
