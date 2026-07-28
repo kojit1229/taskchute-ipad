@@ -148,3 +148,119 @@ const freshGeneratedAt = () => toUtcIso(new Date());
     check("種類タブに『未来からの手紙』が存在する", tabLabels.includes("未来からの手紙"), JSON.stringify(tabLabels));
 
     let options = await page.$$eval("[data-ai-report-date] option", (els) => els.map((e) => e.value));
+    check("未来からの手紙タブの履歴がindex由来で月次(YYYY-MM)2件・新しい順に並ぶ(コンテンツ総括は混ざらない)",
+      JSON.stringify(options) === JSON.stringify([MONTH, "2026-01"]), `(実際: ${JSON.stringify(options)})`);
+
+    const mdText = await page.textContent("#main .md-render");
+    check("既定選択(最新=当月)の本文が表示される", mdText.includes(LETTER_BODY), `(実際: ${mdText.slice(0, 120)})`);
+
+    // ============================================================
+    // [1b] report-index.jsonに当月分がまだ載っていない(coach-dailyの日次再生成がまだ新着を
+    //      反映していない状態を再現)場合でも、hydrateStaticMarkdown()の直接fetch成功分が
+    //      _aiReportDirCacheへunionされ、タブが空にならない(2026-07-28レビュー対応・必須修正2)
+    // ============================================================
+    console.log("[1b] report-index.jsonに未来からの手紙_当月.mdが載っていなくても、直接fetch成功分がunionされタブに表示される");
+    reportIndexFixture = {
+      generatedAt: freshGeneratedAt(),
+      files: [
+        // 意図的に 未来からの手紙_<当月>.md を含めない(index側の新着未反映を再現)
+        { name: "コンテンツ総括_2026-07-14.md", date: "2026-07-14", kind: "content" }
+      ]
+    };
+    letterFixture = LETTER_BODY;
+    await seedAiReports("letter");
+
+    const options1b = await page.$$eval("[data-ai-report-date] option", (els) => els.map((e) => e.value));
+    check("indexに未来からの手紙が1件も載っていなくても、直接fetch成功分が選択肢に出る(union)",
+      JSON.stringify(options1b) === JSON.stringify([MONTH]), `(実際: ${JSON.stringify(options1b)})`);
+    const mdText1b = await page.textContent("#main .md-render");
+    check("indexに載っていなくても本文が表示される(タブが空にならない)",
+      mdText1b.includes(LETTER_BODY), mdText1b.slice(0, 120));
+
+    // ============================================================
+    // [2] 当月分が存在する日は、ホーム(内省側)タブで導線が表示される
+    // ============================================================
+    console.log("[2] 未来からの手紙_当月.mdがある日は、ホーム(内省側)タブに『届いています』導線が出る");
+    reportIndexFixture = null;  // ホーム側の導線判定はhydrateStaticMarkdownの直接fetchのみで完結する
+    await seedHome({ selectedDate: TODAY });
+    check("api.github.comの未来からの手紙_当月.mdへリクエストが実際に飛んでいる(personal-data API経由の裏取り)",
+      letterApiRequests.some((p) => p.endsWith(`未来からの手紙_${MONTH}.md`)), JSON.stringify(letterApiRequests));
+    const linkCount2 = await page.locator('[data-action="open-future-letter"]').count();
+    check("導線が1つ表示される", linkCount2 === 1);
+    const linkText2 = await page.locator('[data-action="open-future-letter"]').textContent();
+    check("導線の文言が『✉️ 未来からの手紙が届いています』を含む", linkText2.includes("✉️ 未来からの手紙が届いています"), linkText2);
+
+    // ============================================================
+    // [3] 当月分が存在しない日(404)は導線が表示されない
+    // ============================================================
+    console.log("[3] 未来からの手紙_当月.mdが無い月(404)は導線が表示されない");
+    letterFixture = null;
+    await seedHome({ selectedDate: TODAY });
+    const linkCount3 = await page.locator('[data-action="open-future-letter"]').count();
+    check("ファイルが無ければ導線が0件", linkCount3 === 0);
+
+    // ============================================================
+    // [4] 導線をタップするとAIレポート画面の『未来からの手紙』タブへ遷移する
+    // ============================================================
+    console.log("[4] 導線タップでAIレポート画面へ遷移し『未来からの手紙』タブが選択される");
+    letterFixture = LETTER_BODY;
+    reportIndexFixture = {
+      generatedAt: freshGeneratedAt(),
+      files: [{ name: `未来からの手紙_${MONTH}.md`, date: MONTH, kind: "letter" }]
+    };
+    await seedHome({ selectedDate: TODAY });
+    const linkCount4before = await page.locator('[data-action="open-future-letter"]').count();
+    check("前提: 導線が出ている", linkCount4before === 1);
+    await page.click('[data-action="open-future-letter"]');
+    await page.waitForTimeout(300);
+    const activeTabAfterClick = await page.$eval(".segmented button.active", (e) => e.textContent.trim());
+    check("遷移後、AIレポート画面の『未来からの手紙』タブがactiveになっている", activeTabAfterClick === "未来からの手紙", activeTabAfterClick);
+    const mdText4 = await page.textContent("#main .md-render");
+    check("遷移後の本文も未来からの手紙のものが表示される", mdText4.includes(LETTER_BODY), mdText4.slice(0, 120));
+
+    // ============================================================
+    // [5] 公開Pages側(同一オリジン)への未来からの手紙_*.mdのfetchは一切発生しない
+    // ============================================================
+    console.log("[5] 公開Pages側(同一オリジン)への未来からの手紙_*.mdへのfetchは一度も発生しない");
+    check("同一オリジンでの未来からの手紙_*.mdへのリクエストが0件(すべてapi.github.com経由)",
+      sameOriginRequests.length === 0, JSON.stringify(sameOriginRequests));
+
+    // ============================================================
+    // [6] GitHub(personal-data)未設定→セットアップ完了(gate-continue)の流れで、設定完了後の
+    //     hydrateStaticMarkdown()再実行で未来からの手紙が正しくfetchされる(2026-07-28レビュー
+    //     対応・必須修正3。「未設定時にcachedFutureLetterMdへundefinedを書き込まない」の直接検証)
+    // ============================================================
+    console.log("[6] GitHub未設定→gate-continueの流れで、設定完了後に未来からの手紙が正しくfetchされる(失敗キャッシュの固着防止)");
+    letterFixture = LETTER_BODY;
+    reportIndexFixture = null;
+    letterApiRequests.length = 0;
+    // トークンだけを空にしてゲート(トークン未設定画面)を再表示させる(v72.test.jsと同じ手法。
+    // Owner/Repositoryは既定値のままでよい)。
+    await page.evaluate((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.settings.github.token = "";
+      s.currentView = "home";
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, KEY);
+    await page.reload();
+    await page.waitForTimeout(700);
+    check("前提: ゲート画面(トークン未設定)が表示されている", await page.locator('[data-action="gate-continue"]').count() === 1);
+    check("ゲート中は(GitHub未設定のため)未来からの手紙_当月.mdへの実fetchはまだ発生しない",
+      letterApiRequests.length === 0, JSON.stringify(letterApiRequests));
+    await page.fill('[data-github-field="token"]', "test-token-v159");
+    await page.click('[data-action="gate-continue"]');
+    await page.waitForTimeout(700);
+    check("設定完了後、未来からの手紙_当月.mdへの実fetchが行われる(修正前は失敗キャッシュが固着し二度とfetchされなかった)",
+      letterApiRequests.some((p) => p.endsWith(`未来からの手紙_${MONTH}.md`)), JSON.stringify(letterApiRequests));
+    await page.click('[data-action="home-tab"][data-tab="home"]');
+    await page.waitForTimeout(200);
+    const linkCount6 = await page.locator('[data-action="open-future-letter"]').count();
+    check("設定完了後は導線も正しく表示される", linkCount6 === 1);
+  } finally {
+    await browser.close();
+    server.close();
+  }
+
+  console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURES`);
+  process.exit(failures === 0 ? 0 : 1);
+})().catch((e) => { console.error(e); process.exit(1); });
