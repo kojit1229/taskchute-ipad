@@ -445,8 +445,22 @@ document.addEventListener("click", (event) => {
     if (askText) {
       state.questions.push(makeQuestion({ text: askText, origin: "user" }));
       askInput.value = "";
+      // v162 2系統レビュー対応(必須3): モーダルキュー(理由チップ)が続けて開き、その間に
+      // PWAがkillされる/リモート側の状態が先に同期採用される等が起きると、ここで積んだ
+      // 問いが保存されないまま消える窓があった。即座にsaveState()して閉じる。
+      saveState();
     }
-    generateReport();
+    // v162: 日次締め導線。今日を見ている時、理由未記録かつ未スキップの未完了Blockが残っていれば
+    // 先に理由チップ(スキップ可)を1件ずつ挟んでから日報を生成する(既に理由が付いたBlock・
+    // 同セッション内で既にスキップ済みのBlockは再質問しない — 2系統レビュー対応・推奨4)。
+    const pendingReasonIds = state.selectedDate === todayISO()
+      ? blocksForDate(state.selectedDate).filter((b) => !b.completed && !hasIncompleteReason(b) && !_dailyCloseReasonSkipped.has(b.id)).map((b) => b.id)
+      : [];
+    if (pendingReasonIds.length) {
+      openIncompleteReasonModal(pendingReasonIds, "dailyClose");
+    } else {
+      generateReport();
+    }
   }
   if (action === "download-report") downloadReport();
   if (action === "download-data") downloadData();
@@ -541,6 +555,9 @@ document.addEventListener("click", (event) => {
     finishReport(target.dataset.outcome || "", note);
   }
   if (action === "report-skip") finishReport("", "");
+  // v162: 未完了理由クイック入力モーダル(チップ1タップで確定/スキップ両方可)
+  if (action === "incomplete-reason-chip") recordIncompleteReasonChip(target.dataset.chip || "");
+  if (action === "incomplete-reason-skip") skipIncompleteReasonModal();
   // v111: ポモドーロ開始時のガイド付きアクセス案内(閉じる/×どちらも同じ扱い)。
   //       「今後表示しない」がチェックされていれば設定へ永続化してから閉じる。
   if (action === "guided-access-dismiss") {
@@ -715,6 +732,9 @@ document.addEventListener("click", (event) => {
   if (action === "triage-choice") triageAction(target.dataset.kind, id, target.dataset.choice);
   // v156: 仕分けモードUndo(S3)。トースト内「元に戻す」ボタン(v150の機構を再利用)
   if (action === "triage-undo") triageUndo(id);
+  // v162: 仕分けの「手放す/延期」直後に出るインライン理由チップ欄
+  if (action === "triage-reason-chip") recordTriageInlineReason(target.dataset.chip || "");
+  if (action === "triage-reason-skip") skipTriageInlineReason();
   // === v17: Avoid List(v34: input リスナーから click へ移設) ===
   if (action === "add-avoid") addAvoid();
   if (action === "delete-avoid") deleteAvoid(id);
@@ -1576,12 +1596,17 @@ function normalizeState(value) {
     leverageType: "",     // v65: 10x機構(2-1)。"asset"|"eliminate"|"oneoff"|""(未設定)
     leverageNote: "",     // v66: 10x機構(2-2レバレッジ台帳)。資産の累計節約・成果の自己申告メモ(任意1行)
     interruptions: [],    // v70: フォーカスタイマー中断(チョコ停)記録 [{at, reason}]
+    incompleteReason: null,  // v162: 未完了理由クイック入力 {chip, note, at} | null
     ...block,
     plannedStartAt: fixDateTime(block.plannedStartAt),
     plannedEndAt: fixDateTime(block.plannedEndAt),
     actualStartAt: fixDateTime(block.actualStartAt),
     actualEndAt: fixDateTime(block.actualEndAt),
-    interruptions: Array.isArray(block.interruptions) ? block.interruptions : []  // 壊れた形状は初期化
+    interruptions: Array.isArray(block.interruptions) ? block.interruptions : [],  // 壊れた形状は初期化
+    // v162: 壊れた形状(chip欠落等)はnullへ落とす。日報生成・トリアージ双方がchip truthyを前提にするため
+    incompleteReason: (block.incompleteReason && typeof block.incompleteReason === "object" && block.incompleteReason.chip)
+      ? { chip: String(block.incompleteReason.chip), note: String(block.incompleteReason.note || ""), at: String(block.incompleteReason.at || "") }
+      : null
   }));
   // v16: Wish Project が削除/未作成なら自動作成(必ず1つ存在を保証)
   if (!value.projects.some((p) => p.kind === "wish" && !p.deleted)) {
@@ -2313,6 +2338,7 @@ function makeBlock(input) {
     carryCount: Number(input.carryCount || 0),  // v61: マイグレーション儀式(繰り越し回数)
     leverageType: input.leverageType || "",  // v65: 10x機構(2-1)
     interruptions: [],  // v70: フォーカスタイマー中断(チョコ停)記録
+    incompleteReason: null,  // v162: 未完了理由クイック入力 {chip, note, at} | null
     orderIndex: 0,
     createdAt: nowDateTime(),
     updatedAt: nowDateTime(),
@@ -6134,6 +6160,10 @@ let _triageLastActionAt = 0;
 //  分離できる閾値が存在しなかった(どんな閾値でも一方を誤検知する)。via(呼び出し経路が
 //  ボタンかスワイプか)という時間に依存しない構造的な条件に切り替えることで解決した。
 const TRIAGE_ACTION_COOLDOWN_MS = 350;
+// v162: 手放す/延期の直後に理由チップを尋ねる。全画面モーダルにするとUndoトースト
+// (triageUndoToastOpts、5秒間)を覆ってタップ不能にしてしまうため、モーダルではなく
+// 仕分けカードの下に出す控えめなインライン欄にする(下記_pendingInlineReason参照。
+// 遅延setTimeoutは使わない=Undoトーストと同時に見えていて構わない設計にした)。
 
 // 指定Wish(本体または子孫サブタスク)を対象にした「今日の」Blockが既に存在するか。
 // セッションをまたいでも(リロード後も)再ループしないための永続データ側の判定
@@ -6222,6 +6252,13 @@ function logSwipeTriage(kind, targetId, action, carryCount, via = "button") {
 // revertクロージャは「巻き戻し先の値」だけを持つデータで、state操作以外は一切行わない
 // (呼び出し側のtriageUndo()がsaveAndRenderをまとめて行う)。
 let _triageUndo = null; // { guardId, revert() } | null
+// v162: 「手放す/延期」の直後、renderWishTriage()がカードの下にインラインで理由チップ欄を
+// 出すためのフラグ(_triageUndoと同じ「単一スロット・非永続」の型)。triageAction()の冒頭で
+// 三択が成立するたびに必ずnullへリセットしてから(2系統レビュー対応・推奨5)、
+// block/drop・block/deferの分岐だけが自分のid向けへ改めてセットする。そのため
+// 「今日やる」やWish系操作の後には出ない(前カード分が次カードの下に居座らない)。
+// Undo(triageUndo)のrevertクロージャでも対象idが一致すればnull化する。
+let _pendingInlineReason = null; // { blockId } | null
 
 // Undoトースト用のtoastOpts(v150のアクション付きトースト機構を再利用。5秒固定は設計書§③)。
 function triageUndoToastOpts(guardId) {
@@ -6281,6 +6318,11 @@ function triageAction(kind, id, action, via = "button") {
   if (withinCooldown && id === _triageLastActionId) return false;  // 同一idの二重発火(via問わず)
   if (withinCooldown && via === "button") return false;  // 別カードへの操作はボタン限定でブロック
   if (_triageCurrentCardId && id !== _triageCurrentCardId) return false;
+  // v162 2系統レビュー対応(推奨5): ここから先は必ず何らかの三択が成立するため、まず
+  // 前カード分の_pendingInlineReasonを引っ込める(「今日やる」やWish系操作では再設定しない
+  // ため、そのままだと次カードの下に前Blockの理由欄が居座り続けてしまう)。block/drop・
+  // block/deferの分岐は、この直後に自分のid向けへ再セットする。
+  _pendingInlineReason = null;
 
   if (kind === "block") {
     const block = blockById(id);
@@ -6335,8 +6377,13 @@ function triageAction(kind, id, action, via = "button") {
           state.migrationRitualLog = triageUndoLogArray(state.migrationRitualLog, migResult.entry, migResult.evicted);
           state.swipeTriageLog = triageUndoLogArray(state.swipeTriageLog, logResult.entry, logResult.evicted);
           _triageSessionDone.delete(id);
+          // v162: Undoされたので理由チップ欄も引っ込める(このidが対象のままなら)
+          if (_pendingInlineReason && _pendingInlineReason.blockId === id) _pendingInlineReason = null;
         }
       };
+      // v162: インラインの理由チップ欄はrenderWishTriage()がこのフラグを見て描画するため、
+      // saveAndRender()より前に立てておけば同じ render() で一緒に出る(Undoトーストと同時表示)。
+      _pendingInlineReason = { blockId: id };
       saveAndRender("手放しました", triageUndoToastOpts(id));
       return true;
     }
@@ -6370,8 +6417,10 @@ function triageAction(kind, id, action, via = "button") {
           state.migrationRitualLog = triageUndoLogArray(state.migrationRitualLog, migResult.entry, migResult.evicted);
           state.swipeTriageLog = triageUndoLogArray(state.swipeTriageLog, logResult.entry, logResult.evicted);
           _triageSessionDone.delete(id);
+          if (_pendingInlineReason && _pendingInlineReason.blockId === id) _pendingInlineReason = null;
         }
       };
+      _pendingInlineReason = { blockId: id };
       saveAndRender(moved ? "Wishへ移動しました" : "Blockを削除しました(Wishプロジェクトなし)", triageUndoToastOpts(id));
       return true;
     }
@@ -6508,6 +6557,27 @@ function triageAction(kind, id, action, via = "button") {
   return false;
 }
 
+// v162: 「手放す/延期」直後、_pendingInlineReasonが指す(まだUndoされていない)Blockについて、
+// カードの下に控えめな理由チップ欄を出す(モーダルではない=Undoトーストと同時に見える設計。
+// 上記TRIAGE_ACTION_COOLDOWN_MS付近のコメント参照)。対象Blockが無い/既に理由記録済みなら
+// 何も出さない(壊れたctxを黙って無視するフェイルソフト)。
+function triageInlineReasonHTML() {
+  if (!_pendingInlineReason) return "";
+  const block = blockById(_pendingInlineReason.blockId);
+  if (!block || hasIncompleteReason(block)) return "";
+  return `
+    <section class="panel triage-inline-reason" style="margin-top:10px; padding:14px">
+      <div class="muted" style="font-size:11px; margin-bottom:6px">よければ、未完了の理由をメモ(任意)</div>
+      <div style="font-size:13px; margin-bottom:8px">「${escapeHTML(block.title)}」</div>
+      <input class="input" style="font-size:16px; margin-bottom:8px; width:100%; box-sizing:border-box" data-triage-reason-note placeholder="状況など">
+      <div class="row" style="gap:6px; flex-wrap:wrap">
+        ${INCOMPLETE_REASON_CHIPS.map((c) => `<button class="btn ghost" data-action="triage-reason-chip" data-chip="${escapeHTML(c)}">${escapeHTML(c)}</button>`).join("")}
+        <button class="btn ghost" data-action="triage-reason-skip">スキップ</button>
+      </div>
+    </section>
+  `;
+}
+
 // メインレンダリング(1枚ずつ表示+三択ボタン+残枚数。0件時は「仕分け完了」)
 function renderWishTriage(wishes) {
   const queue = triageQueue(wishes);
@@ -6518,6 +6588,7 @@ function renderWishTriage(wishes) {
         <div style="font-size:16px">仕分け完了 🎉</div>
         <div class="muted" style="margin-top:6px; font-size:12px">先送り・Wishの未仕分けはありません</div>
       </section>
+      ${triageInlineReasonHTML()}
     `;
   }
   const current = queue[0];
@@ -6536,6 +6607,7 @@ function renderWishTriage(wishes) {
         <button class="btn ghost triage-btn" data-action="triage-choice" data-kind="${current.kind}" data-id="${current.id}" data-choice="defer">🌙 延期(来月)</button>
       </div>
     </section>
+    ${triageInlineReasonHTML()}
   `;
 }
 
@@ -13777,6 +13849,21 @@ function generateReport(dateArg, { quiet = false } = {}) {
   // v17: Block コメント抽出(comment があるもの)
   const commentedBlocks = blocks.filter((b) => b.comment && b.comment.trim());
 
+  // v162 2系統レビュー対応(必須1・必須2): 未完了理由(state.blocksを直接見る。仕分けの
+  // 手放す/延期はBlockをdeleted:true化するため、!deleted限定のblocksForDate=blocksからは
+  // 既に外れている。それでも「その日なぜ完了しなかったか」の記録は残すため、deleted済みも
+  // 含めて拾う)。対象日の条件は2つのORで判定する:
+  //  (a) b.date === date — その日の予定だったBlock(日次締めで当日に理由記録した通常ケース)
+  //  (b) incompleteReason.at がdate — 仕分け対象(carryableBlocks、前日Block)は b.date が
+  //      前日のままなので(a)だけでは当日の日報に一切載らない(=台帳に永久に届かない)。
+  //      記録した「その日」の日報に載せるため、記録時刻(at)の日付でも拾う。
+  // (必須2): !b.completed も条件に加える。記録後にBlockが完了へ転じた場合、偽の「言い訳」を
+  // 台帳へ流さないよう欄から除外する(incompleteReason自体は削除しない。履歴として残すが
+  // 表示条件から外すだけ)。
+  const incompleteReasonAtDate = (b) => String(b.incompleteReason?.at || "").slice(0, 10);
+  const incompleteReasons = state.blocks.filter((b) =>
+    hasIncompleteReason(b) && !b.completed && (b.date === date || incompleteReasonAtDate(b) === date));
+
   // v117(A): 今日の宣言。未入力日も節自体は常に出す(バッチが未記載を検知するための契約。
   //          FORMAT_CONTRACT.md参照)。理想ワンライナーとは違い省略しない。
   const declarationText = (state.dailyDeclarations[date]?.text || "").trim();
@@ -13937,6 +14024,18 @@ function generateReport(dateArg, { quiet = false } = {}) {
       lines.push(b.comment.trim());
       lines.push("");
     });
+  }
+
+  // v162: 未完了理由(理由が1件以上ある日のみ節を出す。excuse-ledger-extract.pyが
+  // この節のみを機械パースする=FORMAT_CONTRACT.md参照。あえて番号を振らず既存の
+  // 「## 6.」「## 7.」等の連番を崩さない=「## AIへの質問」等と同じ非番号見出しの型)
+  if (incompleteReasons.length > 0) {
+    lines.push("## 未完了理由");
+    incompleteReasons.forEach((b) => {
+      const note = (b.incompleteReason.note || "").replace(/\n/g, " ").trim();
+      lines.push(`- [${b.title}] ${b.incompleteReason.chip}${note ? `: ${note}` : ""}`);
+    });
+    lines.push("");
   }
 
   // ジャーナル
@@ -17798,6 +17897,9 @@ function renderModal(innerHTML) {
     // 呼ぶと_pendingBodyScanCtxが破棄されるだけでcloseBodyScanFlow()(ゲート判定を呼ぶ)を
     // 経由しない。明示ボタン(body-scan-discard等)と同じ「記録せず閉じる」経路へ揃える。
     if (state.modal && state.modal.type === "bodyScan") { bodyScanDiscard(); return; }
+    // v162: 未完了理由モーダルも同じ理由(_pendingIncompleteReasonCtxが残ったまま
+    // dailyCloseモードのgenerateReport()が呼ばれなくなる事故を防ぐ)でskip経路へ揃える。
+    if (state.modal && state.modal.type === "incompleteReason") { skipIncompleteReasonModal(); return; }
     closeModal();
   };
 }
