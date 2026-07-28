@@ -70,6 +70,31 @@ function check(name, cond, extra = "") {
     check("app.jsがキャッシュされている", shellCached.some((p) => p.endsWith("app.js")), JSON.stringify(shellCached));
     check("styles.cssがキャッシュされている", shellCached.some((p) => p.endsWith("styles.css")), JSON.stringify(shellCached));
 
+    // v164: app.js分割の段階0(SW戦略)。独立レビューBlocker-2 —
+    // src/**/*.jsをAPP_SHELLへ列挙し忘れると、新app.js×旧src/*.jsのモジュールグラフ版ズレで
+    // iOS PWAが起動不能になる新しい障害クラスが生まれる。sw.jsが宣言するAPP_SHELL上の
+    // src/**/*.js が実際にprecache済みであることを機械検知する(静的なAPP_SHELL列挙漏れ検知は
+    // scripts/release-gate.jsのapp-shell-precacheが別途担う)。
+    console.log("[3b] APP_SHELL上のsrc/**/*.jsが全てprecacheされている(モジュールグラフ版ズレ対策)");
+    const appShellMatch = swSource.match(/APP_SHELL\s*=\s*\[([\s\S]*?)\]/);
+    const appShellEntries = appShellMatch
+      ? [...appShellMatch[1].matchAll(/["']([^"']+)["']/g)].map((m) => m[1])
+      : [];
+    const srcShellEntries = appShellEntries.filter((entry) => entry.replace(/^\.\//, "").startsWith("src/"));
+    if (srcShellEntries.length) {
+      const missingSrc = srcShellEntries.filter((entry) => {
+        const suffix = entry.replace(/^\.\//, "");
+        return !shellCached.some((p) => p.endsWith(suffix));
+      });
+      check(
+        "src/**/*.jsが全てprecacheされている",
+        missingSrc.length === 0,
+        JSON.stringify({ srcShellEntries, missingSrc, shellCached })
+      );
+    } else {
+      check("src/**/*.jsが全てprecacheされている(src未使用のため自明にpass)", true);
+    }
+
     console.log("[4] オフライン相当でのキャッシュ配信: setOffline(true)でreloadしてもページが表示される");
     await ctx.setOffline(true);
     let offlineOk = true;

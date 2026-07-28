@@ -1,3 +1,7 @@
+// v164: app.js分割・段階1(最初の抽出)。純粋関数はsrc/core/**へ抽出し、依存グラフの葉として
+//   importする(src/core/**はstateを一切参照しない。claude-review-result.md §7の契約)。
+import { mergeById, mergeByIdPreferNewer } from "./src/core/merge.js";
+
 const STORAGE_KEY = "taskchute-journal-pwa-state-v1";
 
 // v91: 「### 依頼」節(機械可読契約: loop/scripts/journal-requests-extract.py が検出する)。
@@ -14683,21 +14687,7 @@ function mergeAppendOnlyLogByKey(localList, remoteList, keyFn) {
 }
 const swipeTriageLogKey = (l) => `${l.at || ""}|${l.targetId || ""}|${l.action || ""}`;
 
-function mergeById(localList, remoteList) {
-  const merged = new Map();
-  (Array.isArray(localList) ? localList : []).forEach((item) => {
-    if (item && item.id) merged.set(item.id, item);
-  });
-  (Array.isArray(remoteList) ? remoteList : []).forEach((item) => {
-    if (!item || !item.id) return;
-    const cur = merged.get(item.id);
-    if (!cur) { merged.set(item.id, item); return; }
-    const curTs = cur.updatedAt || cur.createdAt || "";
-    const itemTs = item.updatedAt || item.createdAt || "";
-    if (itemTs > curTs) merged.set(item.id, item);
-  });
-  return Array.from(merged.values());
-}
+// mergeById: src/core/merge.js へ抽出済み(v164)。冒頭のimportを参照。
 
 // entries[]/suggestedThemes[]だけをマージした結果を返す。失敗(想定外の型など)はcatchして
 // nullを返し、呼び出し側は従来動作(マージなし)へフォールバックする(データ消失ガード)。
@@ -14951,49 +14941,8 @@ function mergeBlockLists(localBlocks, remoteBlocks) {
   return mergeById(localBlocks, addable);
 }
 
-// v135: ===============================================================
-//  tasks/projectsのマージ保護。事故(2026-07-20〜21): リモート側でtaskを外部修正した直後に
-//  端末が古いローカルの丸ごとpushで上書きし、修正が消えた(2回発生)。tasks/projectsは
-//  v106のマージ可能コレクションに含まれず、同期は常に「どちらかの丸ごと採用」だったため。
-//  全ミューテーション経路(normalizeState含む)がupdatedAtを保守している前提で、
-//  idキー和集合+updatedAt比較のマージへ切り替える。
-// ===============================================================
-
-// idキー和集合マージ(updatedAtのみで比較。createdAtへはフォールバックしない — tasks/projectsは
-// 全ミューテーション経路でupdatedAtを更新する運用のため、mergeById[v103]のフォールバックは不要)。
-// v136(Codexレビュー High-2/High-3対応): 優先順位を明確化した。
-//   1. updatedAtが新しい方が勝つ
-//   2. 同値(両方空を含む)なら、削除側(deleted:true、トゥームストーン)が勝つ
-//      (同じ秒にlocal削除・remote編集が起きた場合に削除が復活しないようにする)
-//   3. 同値・同じdeletedフラグなら、呼び出し側が指定したtieWinner("local"|"remote")が勝つ
-// tieWinnerは呼び出し分岐の文脈(ローカルを基準に残す経路か、リモートを採用する経路か)で
-// 呼び出し元が指定する。v135時点は常にremote固定だったため、「ローカルが全体としては
-// 新しいのに同一idの内容だけ古いremoteへ巻き戻る」誤りがあった(Codexレビュー指摘)。
-function mergeByIdPreferNewer(localList, remoteList, tieWinner) {
-  const merged = new Map();
-  (Array.isArray(localList) ? localList : []).forEach((item) => {
-    if (item && item.id) merged.set(item.id, item);
-  });
-  (Array.isArray(remoteList) ? remoteList : []).forEach((item) => {
-    if (!item || !item.id) return;
-    const cur = merged.get(item.id);
-    if (!cur) { merged.set(item.id, item); return; }
-    const curTs = cur.updatedAt || "";
-    const itemTs = item.updatedAt || "";
-    if (itemTs > curTs) { merged.set(item.id, item); return; }  // remote(item)が新しい
-    if (itemTs < curTs) return;  // local(cur)が新しい → 何もしない
-    // 同値(両方空を含む)
-    const curDeleted = !!cur.deleted;
-    const itemDeleted = !!item.deleted;
-    if (curDeleted !== itemDeleted) {
-      if (itemDeleted) merged.set(item.id, item);  // remote側が削除 → トゥームストーン優先
-      return;  // local側が削除ならcurのまま(何もしない)
-    }
-    if (tieWinner === "remote") merged.set(item.id, item);
-    // tieWinner === "local"(既定扱い)ならcurのまま(何もしない)
-  });
-  return Array.from(merged.values());
-}
+// mergeByIdPreferNewer: src/core/merge.js へ抽出済み(v164。tasks/projectsマージ保護の
+// 契約コメント・v135/v136の経緯も同ファイルへ移動した)。冒頭のimportを参照。
 
 function mergeTaskArrays(localTasks, remoteTasks, tieWinner) {
   return mergeByIdPreferNewer(localTasks, remoteTasks, tieWinner);

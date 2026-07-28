@@ -1,4 +1,13 @@
-const CACHE_NAME = "taskchute-journal-pwa-v163";
+const CACHE_NAME = "taskchute-journal-pwa-v164";
+// v164: app.js分割の段階0(SW戦略)+段階1(純粋関数抽出)。src/core/merge.js
+//   (mergeById/mergeByIdPreferNewer)を最初の抽出対象としてAPP_SHELLへ追加。
+//   分割後は app.js + src/**/*.js の複数ファイルが個別にnetwork-first解決されるため、
+//   オフライン/低速回線下で「新app.js × 旧src/*.js」のモジュールグラフ版ズレにより
+//   ESM importが解決できず画面が真っ白のまま無反応になる新しい障害クラスが生まれる
+//   (独立レビューBlocker-2)。対策として /src/ 配下の.jsだけはcache-first(CACHE_NAMEが
+//   版なので更新時は必ず取り直される)にし、それ以外の.js/.html/.css等は従来どおり
+//   network-firstのまま維持する。src/**/*.jsのAPP_SHELL列挙漏れはscripts/release-gate.js
+//   のapp-shell-precacheチェックで機械検知する。詳細はCHANGES_v164.md参照。
 // v161: AI機能第5弾(最終)「エネルギーカーブ」— 自宅PCバッチ(loop/scripts/energy-curve.sh、
 //   決定論・claude不使用)が直近28日の完了Block実績から時間帯(1時間刻み24枠)別の
 //   {実行数,充放電net,着手率}を集計し、personal-data/taskchute/energy-curve.json(単一の
@@ -164,7 +173,8 @@ const APP_SHELL = [
   "./app.js",
   "./marked.min.js",
   "./manifest.webmanifest",
-  "./assets/icon.svg"
+  "./assets/icon.svg",
+  "./src/core/merge.js"
 ];
 
 self.addEventListener("install", (event) => {
@@ -228,6 +238,28 @@ self.addEventListener("fetch", (event) => {
           return response;
         })
         .catch(() => caches.match(event.request, { ignoreSearch: true }))
+    );
+    return;
+  }
+  // v164: /src/ 配下の.jsはcache-first(CACHE_NAMEが版なので更新時は必ず取り直される)。
+  // app.js分割後は app.js + src/**/*.js が個別にnetwork-first解決されるため、
+  // オフライン/低速回線下で「新app.js × 旧src/*.js」のモジュールグラフ版ズレが起きうる
+  // (独立レビューBlocker-2)。/src/ 配下だけAPP_SHELLのprecacheを正として優先し、
+  // 版ズレの発生源そのものを断つ(release-gate.jsのapp-shell-precacheが列挙漏れを検知)。
+  if (url.pathname.endsWith(".js") && /(^|\/)src\//.test(url.pathname)) {
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        if (cached) return cached;
+        return fetch(event.request).then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
+          return response;
+        // precache漏れ+オフラインの複合時もunhandled rejectionにせず最後にキャッシュを再探索する
+        // (ignoreSearchでクエリ付きimportも拾う)。ここでmissなら起動不能なのでフェイルラウドのまま。
+        }).catch(() => caches.match(event.request, { ignoreSearch: true }));
+      })
     );
     return;
   }

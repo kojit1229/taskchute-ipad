@@ -183,7 +183,7 @@ const dashboardCssRules = cssBetween(".dashboard-grid { grid-template-columns: m
 check("1024px以上(iPad横以上)は2列。iPad縦(760-1023px)は入れ子stats-gridの340pxはみ出しを避け縦積みのまま",
   /@media \(min-width: 1024px\)\s*\{\s*\.dashboard-grid\s*\{\s*grid-template-columns:\s*repeat\(2,/m.test(dashboardCssRules) &&
   !dashboardCssRules.includes("760px"));
-check("SW CACHE_NAMEはv163", /^const CACHE_NAME = "taskchute-journal-pwa-v163";/m.test(swSource));
+check("SW CACHE_NAMEはv163以降(後続リリースのバンプで更新。v163時点の検証意図はバンプ実施の確認)", /^const CACHE_NAME = "taskchute-journal-pwa-v(\d+)";/m.test(swSource) && Number(swSource.match(/^const CACHE_NAME = "taskchute-journal-pwa-v(\d+)";/m)[1]) >= 163);
 check("8週ミニバー(記録率・完了率・ルーティン遵守)が計器盤と同じ.stats-bars/.stats-bar-fillで3箇所描画",
   (dashboardSource.match(/dashboardTrendBarsHTML\(metrics\.weeklyTrend,\s*"(recordRate|completionRate|routineRate)"\)/g) || []).length === 3);
 check("狭いiPhone(320px幅など)でも入れ子.stats-gridが340px固定下限で横あふれしないよう、min(340px,100%)でクランプ(Codex P2)",
