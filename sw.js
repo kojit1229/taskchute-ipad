@@ -1,4 +1,8 @@
-const CACHE_NAME = "taskchute-journal-pwa-v166";
+const CACHE_NAME = "taskchute-journal-pwa-v167";
+// v167: app.js分割の段階4-1(ダッシュボードの閲覧専用render抽出)。src/features/dashboard.js
+//   (isDashboardDate〜requestDashboardFeedbackの12関数、configureDashboard(deps)注入)/
+//   src/state/feedback-cache.js(Home「AIから」カードとダッシュボードの共有cachedFeedback)を
+//   APP_SHELLへ追加した。挙動は抽出前と完全に同一(移動+依存注入化のみ)。
 // v166: app.js分割の段階3(state store + storage/sync gateway抽出)。src/state/store.js
 //   (setState契約)/src/storage/local.js(loadState/persistLocalNoSchedule)/
 //   src/sync/github.js(computeSyncMerge/syncCoreEqual/5フロー等)をAPP_SHELLへ追加した
@@ -183,6 +187,8 @@ const APP_SHELL = [
   "./assets/icon.svg",
   "./src/core/merge.js",
   "./src/features/avoid.js",
+  "./src/features/dashboard.js",
+  "./src/state/feedback-cache.js",
   "./src/state/store.js",
   "./src/storage/local.js",
   "./src/sync/github.js"

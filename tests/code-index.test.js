@@ -11,14 +11,20 @@ const assert = require("assert");
 const index = require("../docs/code-index.generated.json");
 const names = index.functions.map((fn) => fn.name);
 
-assert(index.sourceLines > 19000, "app.js全体を索引化");
-assert(index.functions.length > 700, "top-level関数を広く索引化");
+// v167: app.js分割プロジェクト(v164〜)でapp.jsは段階的に縮小するため、下限は
+// 「パーサが黙って空振りしていないこと」を検知できる水準に留める(分割完了後に
+// 索引がsrc/**を覆う設計へ変わる際に見直す)。
+assert(index.sourceLines > 5000, "app.js全体を索引化");
+assert(index.functions.length > 300, "top-level関数を広く索引化");
 assert.strictEqual(new Set(names).size, names.length, "top-level関数名は一意");
 
 const nameLineKeys = index.functions.map((fn) => `${fn.name}@${fn.startLine}`);
 assert.strictEqual(new Set(nameLineKeys).size, nameLineKeys.length, "関数名+開始行の組は一意");
 
-for (const required of ["normalizeState", "saveState", "render", "syncFromGitHubOnStartup"]) {
+// v166: syncFromGitHubOnStartup等の同期フローはsrc/sync/github.jsへ抽出済みのため、
+// app.js残留が確定している関数だけを必須として要求する(fetchGitHubRawResultはapp.js側の
+// sync+fetch境界の代表として残留)。
+for (const required of ["normalizeState", "saveState", "render", "fetchGitHubRawResult"]) {
   assert(names.includes(required), `${required}を索引に含める`);
 }
 
@@ -53,9 +59,17 @@ assert(!areaOf("computeFreeGaps").includes("sync"),
 assert(areaOf("computeFreeGaps").includes("execution"),
   "computeFreeGaps はblocksForDate呼び出しによりexecutionを含む");
 
-// computeSyncMerge(app.js:15052-): GitHub同期の双方向マージ本体。関数名自体にsyncを含む。
-assert(areaOf("computeSyncMerge").includes("sync"),
-  "computeSyncMerge(GitHub同期マージ本体)はsyncを含む");
+// v166: computeSyncMerge/runAutoSyncPull/syncFromGitHubOnStartup/mergeZeroThinkingListsは
+// src/sync/github.jsへ抽出済み。app.jsの索引に残っていたら二重定義の疑い(mergeByIdと同じ扱い)。
+for (const moved of ["computeSyncMerge", "runAutoSyncPull", "syncFromGitHubOnStartup", "mergeZeroThinkingLists"]) {
+  assert(!names.includes(moved),
+    `${moved}はsrc/sync/github.jsへ抽出済みのためapp.jsの索引には現れない(v166)`);
+}
+
+// fetchGitHubRawResult: app.js残留のGitHub Raw取得ヘルパー。sync+fetch境界の代表固定点。
+assert(areaOf("fetchGitHubRawResult").includes("sync") &&
+  index.functions.find((f) => f.name === "fetchGitHubRawResult").effects.includes("fetch"),
+  "fetchGitHubRawResult(GitHub Raw取得)はsync+fetch境界");
 
 // gardenPixelCalendarHTML(app.js:3546-): 庭ピクセルカレンダーの描画。`cells.push(...)`は
 // Array.prototype.pushでGitHub同期と無関係。
@@ -82,17 +96,5 @@ assert(!areaOf("ensureChainRun").includes("sync"),
 // しか走査しないため、抽出後は索引から消えるのが正しい(indexに残っていたら二重定義の疑い)。
 assert(!names.includes("mergeById"),
   "mergeByIdはsrc/core/merge.jsへ抽出済みのためapp.jsの索引には現れない(v164)");
-
-// mergeZeroThinkingLists(app.js): mergeById[v103]をそのまま使うentries/suggestedThemesの
-// マージ。merge系は同期の道具だがそれ自体はI/Oを持たないため、独立レビュー Must-2 修正案1の
-// とおりsyncから外しcore側とする(mergeById抽出後の代替固定点)。
-assert(!areaOf("mergeZeroThinkingLists").includes("sync"),
-  "mergeZeroThinkingLists(純粋マージ関数)はsyncを含まない(merge系は別扱い)");
-assert(areaOf("mergeZeroThinkingLists").includes("core"),
-  "mergeZeroThinkingListsはcoreに分類される");
-
-// runAutoSyncPull(app.js:15195-): GitHub自動pullの本体。関数名自体にsyncを含む。
-assert(areaOf("runAutoSyncPull").includes("sync"),
-  "runAutoSyncPull(GitHub自動pull)はsyncを含む");
 
 console.log(`PASS: code index invariants (${index.functions.length} functions)`);

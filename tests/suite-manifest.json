@@ -34,9 +34,9 @@
       "domains": [
         "legacy-crosscutting"
       ],
-      "assertionSignals": 23,
-      "assertionHash": "5f1c45d19533471e",
-      "sourceHash": "ca71fbf13de434d0",
+      "assertionSignals": 21,
+      "assertionHash": "56a47f28d457ab45",
+      "sourceHash": "a31daa25f392e048",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -69,6 +69,32 @@
         "browser": false,
         "server": false,
         "fileWrite": true,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "dashboard-core.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "content-ai",
+        "ui-responsive",
+        "security-offline"
+      ],
+      "assertionSignals": 22,
+      "assertionHash": "257743da7cc1781f",
+      "sourceHash": "55b9419a6a572970",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
         "networkMock": false,
         "clock": false
       }
@@ -1778,8 +1804,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 33,
-      "assertionHash": "1748e594b5aeb3bd",
-      "sourceHash": "636d51b08acf7b6f",
+      "assertionHash": "03adb4db47929ddf",
+      "sourceHash": "ba57d093ec376da4",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

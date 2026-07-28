@@ -1,0 +1,51 @@
+{
+  "version": 167,
+  "date": "2026-07-28",
+  "title": "app.js分割 段階4-1(ダッシュボードの閲覧専用render抽出)",
+  "summary": "app.js分割の段階4-1として、prep-stage4-dashboard.mdの推奨どおり最も自己完結度が高いダッシュボードタブ(v163新設)の閲覧専用12関数をsrc/features/dashboard.jsへ抽出した。escapeHTML/parseDate/personalDataReady等の汎用ヘルパーはまだsrc/**へ抽出されていないため、v166のstate live binding importに加え、src/sync/github.jsで確立済みのconfigureXxx(deps)依存注入パターンを踏襲した。Home「AIから」カードと共有するcachedFeedbackはsrc/state/feedback-cache.jsへ独立モジュール化した。ロジックは一切変更していない(移動+依存注入化のみ)。",
+  "changedFiles": [
+    "app.js",
+    "sw.js",
+    "src/features/dashboard.js",
+    "src/state/feedback-cache.js",
+    "tests/dashboard-core.test.js",
+    "tests/v163.test.js",
+    "tests/code-index.test.js"
+  ],
+  "intent": [
+    "prep-stage4-dashboard.md §9の推奨順(依存が薄く書き込みが無い機能を最初に着手)に従い、3機能(ダッシュボード/Wish/Avoid残り操作系等)のうちダッシュボードを段階4-1として抽出する。",
+    "escapeHTML/clamp/parseDate/addDays/dateToISO/localDateTimeToMs/todayISO/fmtMinShort/renderMarkdown/getCategoryColor/personalDataReady/fetchGitHubRawResult/renderDeferringForFocus/renderがいずれもまだapp.js側の汎用ヘルパーであるため(設計書はsrc/core配下への抽出済みを前提としていたが実際は未抽出)、循環importを避けつつ挙動を変えずに抽出する。",
+    "cachedFeedbackはHomeタブ「AIから」カードとダッシュボードの共有オブジェクトであるため、独立モジュールに切り出しどちらからも同じ参照を読み書きできるようにする(設計書§9 Must級)。"
+  ],
+  "changes": [
+    "src/features/dashboard.js(新規): isDashboardDate/dashboardWeekStart/computeDashboardMetrics/defaultDashboardDate/currentDashboardDate/setDashboardDate/shiftDashboardDate/dashboardRateHTML/dashboardTrendBarsHTML/renderDashboard/hydrateDashboardFeedback/requestDashboardFeedbackの12関数と、モジュール専用のdashboardSelectedDate/dashboardDateTouched/_dashboardFeedbackFetchStateを移動。stateはsrc/state/store.jsからlive binding importする(v166パターン)。renderHeader/escapeHTML/clamp/parseDate/addDays/dateToISO/localDateTimeToMs/todayISO/fmtMinShort/renderMarkdown/getCategoryColor/personalDataReady/fetchGitHubRawResult/renderDeferringForFocus/renderの15個はまだapp.js側に残る汎用ヘルパーのため、configureDashboard(deps)による依存注入で受け取る(src/sync/github.jsのconfigureGithubSync(deps)と同一パターン)。",
+    "src/state/feedback-cache.js(新規): cachedFeedback(const object)のみをexportする独立モジュール。Home「AIから」カード(app.js残留)とsrc/features/dashboard.jsの両方がここからimportし、再代入せずプロパティ変更のみで共有する(store.jsのstateと同じ思想)。",
+    "app.js: 冒頭にsrc/features/dashboard.js(configureDashboard/renderDashboard/setDashboardDate/shiftDashboardDate/currentDashboardDate/hydrateDashboardFeedback)とsrc/state/feedback-cache.js(cachedFeedback)のimportを追加。configureGithubSync呼び出しの直後にconfigureDashboard({...})を1回追加。旧cachedFeedback/dashboardSelectedDate/dashboardDateTouched/_dashboardFeedbackFetchStateのモジュール変数宣言と12関数本体を削除し、抽出先を示すコメントマーカーのみを残した。",
+    "sw.js: CACHE_NAMEをv167へ更新し、APP_SHELLへ./src/features/dashboard.js・./src/state/feedback-cache.jsを追加した。",
+    "tests/dashboard-core.test.js(新規): dynamic import方式でisDashboardDate/dashboardWeekStart/computeDashboardMetrics(state.settings.categoriesのデフォルト引数経路)/defaultDashboardDate/dashboardRateHTML/dashboardTrendBarsHTML/renderDashboard(スモーク)/hydrateDashboardFeedback(1セッション1回のfetch契約・キャッシュヒット・404/成功)の8グループ26assertionを固定した。v163.test.jsで既に固定済みの期待値とは異なる観点(isDashboardDate/dashboardWeekStartの単体挙動、state live binding経路等)に絞り、重複するassertionは作っていない。"
+  ],
+  "uncertainties": [
+    "設計書(prep-stage4-dashboard.md §7)は「src/core/dashboard-metrics.js(state非依存の純粋層)」への分離を提案していたが、実際にはescapeHTML/clamp/parseDate/addDays/dateToISO/localDateTimeToMs/todayISO等の汎用ヘルパーがまだsrc/core配下へ抽出されておらず(v164〜v166で抽出されたのはmergeById/state store/storage/sync gatewayのみ)、これらに依存する限り「app.js非依存の純粋層」を切り出す前提が成立しなかった。監督者裁定として、avoid.js(引数渡し)ではなくsrc/sync/github.jsのconfigureXxx(deps)パターンを踏襲し、src/features/dashboard.js 1ファイルに集約した(逸脱として報告指定のとおり)。",
+    "state自体はv166で確立したlive binding import(import { state } from \"../state/store.js\")を使い、avoid.jsの引数渡しパターンからは変更した(設計書§7がstate/render/personalDataReadyをdashboard.jsの想定importとして明記していたことと整合、逸脱として報告指定のとおり)。",
+    "tests/v163.test.jsはsourceBetween+vmでapp.js内の移動済み関数を参照していたためクラッシュした(design doc §6/§9で事前指摘のリスク)。監督者承認(2026-07-28)のもと参照先をsrc/features/dashboard.jsのdynamic import+configureDashboard経由へ移行した。check()のassertion・期待値・検証項目は旧29件と1:1で完全一致(独立レビューがNodeスクリプトで突合済み)、非ダッシュボード検証は無変更。",
+    "tests/code-index.test.jsのsourceLines>19000下限はapp.js縮小(v166時点で18743)により恒常的に割れるため、パーサ空振り検知の水準(>5000/関数>300)へ引き下げた(独立レビューS1指摘。分割完了後の索引再設計時に見直す)。",
+    "実行コード差分は実測626行で200行を超える。renderDashboardが集計・描画ヘルパーを直接呼ぶ密結合な一塊であり機械分割すると動かない途中状態になるため、監督者判断でSize-Exempt 1コミットとした(独立レビュー通過を根拠とするNEVER 1例外手続き。v166と同様)。"
+  ],
+  "reviewFocus": [
+    "src/features/dashboard.jsへ移動した12関数の本文がapp.js(v166時点)から一切変更されていないこと(git diffで移動前後を突合)。",
+    "configureDashboard呼び出しの15個の依存がすべてapp.js側の同名hoisted関数を指しており、TDZ等の初期化順序問題が無いこと。",
+    "cachedFeedbackの参照が app.js(Home「AIから」カード・hydrateStaticMarkdown)とsrc/features/dashboard.jsの両方で同一オブジェクトを指し続けていること(section [8]のcachedFeedback書き込みテストで実測)。",
+    "tests/v163.test.jsがクラッシュする既知の問題(uncertainties参照)について、監督者が移行の実施可否を判断すること。"
+  ],
+  "verification": [
+    "node --check app.js / sw.js / src/features/dashboard.js / src/state/feedback-cache.js / tests/dashboard-core.test.js → 全てexit 0",
+    "node tests/dashboard-core.test.js → 全件成功(8グループ26assertion)",
+    "npm run code:index:write / npm run test:manifest:write",
+    "node scripts/release-gate.js releases/v167.json --suite=dashboard-core,sw-integration,v148 → PASS(v163はuncertainties記載のとおり別途対応保留)",
+    "git diff --numstat で実行コード差分を実測して監督者へ報告する"
+  ],
+  "knownLimitations": [
+    "src/配下にpackage.json(type:module)を置いていないため、Node実行時にMODULE_TYPELESS_PACKAGE_JSON警告が出る(v164から継続、動作には影響しない)。",
+    "残る2機能(renderStats=計器盤、renderWeekly/renderCycle等)の抽出は段階4-2以降で別途対応する。"
+  ]
+}
