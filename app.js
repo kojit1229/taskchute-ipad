@@ -363,6 +363,62 @@ registerActions({
   "restore-backup": ({ target }) => restoreBackup(target.dataset.date),
   "run-archive": () => runArchive({ manual: true })
 });
+// v176: app.js分割・段階5-6a(journal系dispatcher分岐の移行・前半)。設計書§7どおり、
+// journal系残ドメイン71件(見積り)のうち機械的に分割可能な単位として、0秒思考(22)+
+// 週次レビュー/12週サイクル(14)の計36分岐だけを、click dispatcherのif連鎖からregisterActions
+// 経由のレジストリへ移行した(prep-stage5-dispatcher.md §4の相乗り方式)。この36件はいずれも
+// src/features/journal.jsへ未抽出(ハンドラ実体がapp.js残留)のため、v174(settings/sync/core)
+// と同じくapp.js自身がregisterActionsを直接呼ぶ形をとる。ロジック自体はif連鎖からの
+// 機械的な移動のみで無改変。問い(10)+その他(19)の計29分岐は、実行コード差分を200行以下に
+// 収めるため次リリース(段階5-6b)へ分割し、今回はif連鎖に残したまま。
+registerActions({
+  // --- 0秒思考(22): zt-*/zero-tab/zerosec-theme-* ---
+  "zt-add-toggle": () => {
+    ztAddOpen = !ztAddOpen;
+    render();
+    if (ztAddOpen) setTimeout(() => document.querySelector("#zt-add-text")?.focus(), 60);
+  },
+  "zt-add-cancel": () => { ztAddOpen = false; render(); },
+  "zt-add-submit": () => ztAddSubmit(),
+  "zt-tab": ({ target }) => { ztTab = target.dataset.tab || "other"; render(); },
+  "zt-fav-toggle": ({ id }) => ztToggleFav(id),
+  "zt-importance-toggle": ({ id }) => ztToggleImportance(id),
+  "zt-theme-delete": ({ id }) => deleteZtTheme(id),
+  "zt-suggestion-adopt": ({ id }) => ztSuggestionAdopt(id),
+  "zt-suggestion-dismiss": ({ id }) => ztSuggestionDismiss(id),
+  "zt-group-add": () => ztGroupAdd(),
+  "zt-group-rename": ({ id }) => ztGroupRename(id),
+  "zt-group-delete": ({ id }) => ztGroupDelete(id),
+  "zt-group-toggle": ({ id }) => ztGroupToggleOpen(id),
+  "zt-write": ({ id }) => openZtWrite(id),
+  "zt-save": () => saveZtEntry(),
+  "zt-discard": () => discardZtWrite(),
+  "zt-entry-open": ({ id }) => openZtEntry(id),
+  "zt-edit-close": () => closeZtEdit(),
+  "zt-edit-save": ({ id }) => saveZtEdit(id),
+  "zero-tab": ({ target }) => {
+    state.settings.zeroTab = target.dataset.tab || "theme";
+    persistLocalNoSchedule();
+    render();
+  },
+  "zerosec-theme-add": ({ target }) => decideZeroSecTheme(Number(target.dataset.idx), "added"),
+  "zerosec-theme-skip": ({ target }) => decideZeroSecTheme(Number(target.dataset.idx), "skipped"),
+  // --- 週次レビュー/12週サイクル(14) ---
+  "open-weekly": () => setView("weekly"),
+  "weekly-prev": () => shiftWeeklyWeek(-1),
+  "weekly-next": () => shiftWeeklyWeek(1),
+  "weekly-change-theme": ({ target }) => weeklyChangeTheme(target.dataset.week),
+  "weekly-download": ({ target }) => downloadWeekly(target.dataset.week),
+  "weekly-push": ({ target }) => pushWeeklyToGitHub(target.dataset.week),
+  "weekly-open-question": () => { state.settings.zeroTab = "question"; persistLocalNoSchedule(); setView("zero"); },
+  "open-cycle": () => setView("cycle"),
+  "cycle-prev": () => shiftCycle(-1),
+  "cycle-next": () => shiftCycle(1),
+  "cycle-start-new": () => cycleStartNew(),
+  "cycle-download": ({ target }) => downloadCycle(target.dataset.cycle),
+  "cycle-push": ({ target }) => pushCycleToGitHub(target.dataset.cycle),
+  "weekly-suggest-add": ({ target }) => addWeeklySuggestedTask(target.dataset.week, Number(target.dataset.index))
+});
 let toastTimer = null;
 let timerTicker = null;
 // v144: エネルギーバッテリーの差分更新(updateBatteryTick)のスロットル用。
@@ -882,42 +938,10 @@ document.addEventListener("click", (event) => {
   if (action === "triage-reason-chip") recordTriageInlineReason(target.dataset.chip || "");
   if (action === "triage-reason-skip") skipTriageInlineReason();
   // v173: add-avoid/delete-avoidはsrc/features/avoid.jsのregisterActionsへ移行した。
-  // v34: 0秒思考
-  if (action === "zt-add-toggle") {
-    ztAddOpen = !ztAddOpen;
-    render();
-    if (ztAddOpen) setTimeout(() => document.querySelector("#zt-add-text")?.focus(), 60);
-  }
-  if (action === "zt-add-cancel") { ztAddOpen = false; render(); }
-  if (action === "zt-add-submit") ztAddSubmit();
-  if (action === "zt-tab") { ztTab = target.dataset.tab || "other"; render(); }
   // v149: ホームの2タブ(今日/ホーム)。非永続・view/dateは変えないため自動スクロールは発火しない。
   if (action === "home-tab") { homeTab = target.dataset.tab === "home" ? "home" : "today"; render(); }
-  if (action === "zt-fav-toggle") ztToggleFav(id);
-  if (action === "zt-importance-toggle") ztToggleImportance(id);  // v119: 重要度「高」トグル
-  if (action === "zt-theme-delete") deleteZtTheme(id);  // v86: テーマのワンタップ削除
-  // v100: AI提案お題キュー(採用/却下)
-  if (action === "zt-suggestion-adopt") ztSuggestionAdopt(id);
-  if (action === "zt-suggestion-dismiss") ztSuggestionDismiss(id);
-  // v90: テーマ一覧の大テーマ(グループ)階層。追加/リネーム/削除は既存のカテゴリ管理
-  //      (addCategory等)と同じ軽量な window.prompt/confirm 方式に揃えた(モーダルを増やさない)。
-  if (action === "zt-group-add") ztGroupAdd();
-  if (action === "zt-group-rename") ztGroupRename(id);
-  if (action === "zt-group-delete") ztGroupDelete(id);
-  if (action === "zt-group-toggle") ztGroupToggleOpen(id);
-  if (action === "zt-write") openZtWrite(id);
-  if (action === "zt-save") saveZtEntry();
-  if (action === "zt-discard") discardZtWrite();
-  // v102: 過去entry(回答済み)を開いて追記・編集
-  if (action === "zt-entry-open") openZtEntry(id);
-  if (action === "zt-edit-close") closeZtEdit();
-  if (action === "zt-edit-save") saveZtEdit(id);
-  // v39: 0秒思考の上位タブ(テーマ / 問い)
-  if (action === "zero-tab") {
-    state.settings.zeroTab = target.dataset.tab || "theme";
-    persistLocalNoSchedule();  // UI状態(dataModifiedAt を汚さない)
-    render();
-  }
+  // v176: zt-*/zero-tab/zerosec-theme-*(0秒思考)・weekly-*/cycle-*/weekly-suggest-add
+  // (週次/12週サイクル)はapp.js内のregisterActionsへ移行した(段階5-6a)。
   // v39: 問い
   if (action === "question-add") openQuestionEditor("");
   if (action === "question-edit") openQuestionEditor(id);
@@ -929,21 +953,6 @@ document.addEventListener("click", (event) => {
   if (action === "question-delete") deleteQuestion(id);
   if (action === "entry-to-question") entryToQuestion(id);
   if (action === "open-questions") { state.settings.zeroTab = "question"; persistLocalNoSchedule(); setView("zero"); }
-  // v39/v40: 週次レビュー
-  if (action === "open-weekly") setView("weekly");
-  if (action === "weekly-prev") shiftWeeklyWeek(-1);
-  if (action === "weekly-next") shiftWeeklyWeek(1);
-  if (action === "weekly-change-theme") weeklyChangeTheme(target.dataset.week);
-  if (action === "weekly-download") downloadWeekly(target.dataset.week);
-  if (action === "weekly-push") pushWeeklyToGitHub(target.dataset.week);
-  if (action === "weekly-open-question") { state.settings.zeroTab = "question"; persistLocalNoSchedule(); setView("zero"); }
-  // v45: 12週サイクルレビュー
-  if (action === "open-cycle") setView("cycle");
-  if (action === "cycle-prev") shiftCycle(-1);
-  if (action === "cycle-next") shiftCycle(1);
-  if (action === "cycle-start-new") cycleStartNew();
-  if (action === "cycle-download") downloadCycle(target.dataset.cycle);
-  if (action === "cycle-push") pushCycleToGitHub(target.dataset.cycle);
   // v42: AIループ搬送
   if (action === "report-copy-ai") copyReportToClipboard();
   if (action === "report-share-ai") shareReport();
@@ -970,9 +979,7 @@ document.addEventListener("click", (event) => {
   if (action === "ai-schedule") runAiSchedule();
   // v59: 朝の一括プランニング(繰越+WBS+MIT候補 → 空き時間へ仮配置)
   if (action === "ai-morning-plan") runAiMorningPlan();
-  // v75: 0秒思考テーマ提案(zeroSecThemes)のワンタップ選定
-  if (action === "zerosec-theme-add") decideZeroSecTheme(Number(target.dataset.idx), "added");
-  if (action === "zerosec-theme-skip") decideZeroSecTheme(Number(target.dataset.idx), "skipped");
+  // v176: zerosec-theme-add/zerosec-theme-skipはapp.js内のregisterActionsへ移行した。
   if (action === "draft-confirm") confirmScheduleDraft();
   if (action === "draft-discard" && _scheduleDraft) {
     // v52: 破棄も「この提案は不要だった」という学習シグナルとして記録(v62: source区別も記録)
@@ -1030,10 +1037,7 @@ document.addEventListener("click", (event) => {
     _pendingRejectReason = null;
     render();
   }
-  // v62: 週次レビュー_*.md の「来週のタスク提案」から1件ずつWBSへ登録(一括登録はしない)
-  if (action === "weekly-suggest-add") {
-    addWeeklySuggestedTask(target.dataset.week, Number(target.dataset.index));
-  }
+  // v176: weekly-suggest-addはapp.js内のregisterActionsへ移行した。
   // v174: open-backup-list/restore-backup/run-archiveはapp.js内のregisterActionsへ移行した。
   // v53: 計器盤の期間切替(UI状態)
   if (action === "stats-range") {

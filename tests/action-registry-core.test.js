@@ -3,9 +3,14 @@
 // v173: 段階5-2(抽出済み5feature=avoid/wish/dashboard/journal/routineのaction移行)で
 // [3]を拡張した。
 // v174: 段階5-3(残ドメイン=settings/sync/core(nav)、20分岐の相乗り移行)で[3]をさらに拡張した。
-// この20件はsrc/features/へ未抽出のため、app.js自身がregisterActionsを直接呼ぶ(5featureの
-// configureXxxのようにdeps注入で呼び出す関数がない)。app.jsはDOM初期化を伴い素朴にはNode環境で
-// importできないため、この20件はダミー実行ではなく静的正規表現抽出(extractAppRegisteredActions、
+// v176: 段階5-6a(journal系残ドメインの前半=0秒思考/週次/12週サイクル、36分岐の相乗り移行)で
+// [3]をさらに拡張した(独立レビュー対応: journal系71件見積りの一括移行は実行コード差分が
+// 200行を超えるため、設計書§7どおり2コミットへ分割し、今回は前半36件のみ)。問い(10)+
+// その他(19)の計29分岐は次リリース(段階5-6b、v177)で扱う。
+// v174分(20件)+v176分(36件)=計56件は、いずれもsrc/features/journal.js等へ未抽出(ハンドラ実体が
+// app.js残留)のため、app.js自身がregisterActionsを直接呼ぶ(5featureのconfigureXxxのように
+// deps注入で呼び出す関数がない)。app.jsはDOM初期化を伴い素朴にはNode環境でimportできないため、
+// この56件はダミー実行ではなく静的正規表現抽出(extractAppRegisteredActions、
 // §2のextractClickActionsと同じ方式)で検証する。
 // prep-stage5-dispatcher.md §6-1の方式どおり構成:
 //   [1] src/ui/actions.jsの単体挙動(registerActions/dispatchAction、
@@ -148,10 +153,18 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
 // v174: 段階5-3で以下20件(settings 11 + sync 8 + core/nav 1)を、app.js自身が呼ぶ
 // registerActions({...})(app.js内、src/features/への抽出はまだ行っていない)へ移行した。
 // ハンドラ本体はif連鎖からロジック無改変で移しただけで、追加・削除・リネームはしていない。
-// timeline/journal内の残りドメイン(0秒思考・週次・サイクル・問い・WBS/Project/Task CRUD・
-// AIスケジュール下書き・ビジョンボード・実験ログ・検索・世代バックアップの一部・triage-*・
-// body-scan-*等)は確信が持てる範囲に絞ったため今回は移行せず、if連鎖に残した
-// (下のEXPECTED_REMAINING_IF_CHAINに含まれる。残りは次リリースで扱う)。
+//
+// v176: 段階5-6aで以下36件(journal系残ドメインの前半: 0秒思考22+週次/12週サイクル14)を
+// 同じくapp.js自身が呼ぶregisterActions({...})へ移行した(独立レビュー対応: journal系71件
+// (見積り)の一括移行は実行コード差分が200行を超えるため、設計書§7どおり機械的に分割可能な
+// 単位で2コミットへ分けた。前半=0秒思考+週次/サイクル、後半=問い+その他は次リリース(v177)。
+// ハンドラ本体はif連鎖からロジック無改変で移しただけで、追加・削除・リネームはしていない)。
+// 問い(10)+その他(19、日報/AIレポート/AI連携/読書/マイグレーション儀式/朝夜detailsトグル)の
+// 計29分岐は今回は移行せず、if連鎖に残した(下のEXPECTED_REMAINING_IF_CHAINに含まれる。
+// v177で扱う)。timeline/modal内の残りドメイン、所属ドメインに確信が持てなかった6件
+// (toggle-mit・mit-candidate-add・home-tab・open-md-in-github・reload-md・stats-range)、
+// triage-*(wish Tier3)・weekly-wish-*(wish週次選定、weekly-wish-toggleはpreventDefault依存)・
+// body-scan-*(routine未抽出)も従来どおり移行せず、if連鎖に残した。
 const APP_JS_REGISTERED_ACTIONS = [
   "nav",
   "toggle-show-suspended", "toggle-wbs-hide-done", "toggle-tasks-show-future",
@@ -159,7 +172,19 @@ const APP_JS_REGISTERED_ACTIONS = [
   "add-category", "delete-category", "add-break-message", "delete-break-message",
   "toggle-sidebar", "toggle-settings-sync",
   "save-github", "load-github", "gate-continue", "reset-demo", "push-report",
-  "open-backup-list", "restore-backup", "run-archive"
+  "open-backup-list", "restore-backup", "run-archive",
+  // --- v176: 0秒思考(22) ---
+  "zt-add-toggle", "zt-add-cancel", "zt-add-submit", "zt-tab",
+  "zt-fav-toggle", "zt-importance-toggle", "zt-theme-delete",
+  "zt-suggestion-adopt", "zt-suggestion-dismiss",
+  "zt-group-add", "zt-group-rename", "zt-group-delete", "zt-group-toggle",
+  "zt-write", "zt-save", "zt-discard", "zt-entry-open", "zt-edit-close", "zt-edit-save",
+  "zero-tab", "zerosec-theme-add", "zerosec-theme-skip",
+  // --- v176: 週次レビュー/12週サイクル(14) ---
+  "open-weekly", "weekly-prev", "weekly-next", "weekly-change-theme",
+  "weekly-download", "weekly-push", "weekly-open-question",
+  "open-cycle", "cycle-prev", "cycle-next", "cycle-start-new", "cycle-download", "cycle-push",
+  "weekly-suggest-add"
 ];
 
 const EXPECTED_REMAINING_IF_CHAIN = GOLDEN_CLICK_ACTIONS.filter(
