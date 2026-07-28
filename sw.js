@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v162";
+const CACHE_NAME = "taskchute-journal-pwa-v163";
 // v161: AI機能第5弾(最終)「エネルギーカーブ」— 自宅PCバッチ(loop/scripts/energy-curve.sh、
 //   決定論・claude不使用)が直近28日の完了Block実績から時間帯(1時間刻み24枠)別の
 //   {実行数,充放電net,着手率}を集計し、personal-data/taskchute/energy-curve.json(単一の

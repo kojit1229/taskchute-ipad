@@ -60,6 +60,7 @@ const navItems = [
   { id: "weekly", label: "週次", mark: "◷" },
   { id: "reports", label: "日報", mark: "R" },
   { id: "ai-reports", label: "AIレポート", mark: "A" },  // v92: コンテンツ総括・自己分析等の月次/不定期AIレポートビューア
+  { id: "dashboard", label: "ダッシュボード", mark: "D" },  // v163: 実績値ダッシュボード+AIフィードバック横並び
   { id: "stats", label: "計器盤", mark: "◔" },  // v53
   { id: "wish", label: "やりたい", mark: "✦" },
   { id: "avoid", label: "やらない", mark: "✕" },
@@ -140,6 +141,12 @@ const _visionPageLoadInFlight = {};  // { 'now_vision.pdf': true }(ボード単�
 // (=キーが残っている間だけ「再読み込み」ボタンを出す対象)。
 const _visionPageFailed = {};        // { 'now_vision-p01.jpg': true }
 const cachedFeedback = {};  // { 'YYYY-MM-DD': '...md text...' }
+// v163: ダッシュボード固有の日付カーソルと任意日フィードバック取得状態。いずれも非永続。
+let dashboardSelectedDate = "";
+// v163 batch2(レビュー是正、Codex P2): ユーザーが未操作の間は起動時hydration完了後の
+// 最新フィードバック日を追随させたいので、「一度でも手で日付を変えたか」を別フラグで持つ。
+let dashboardDateTouched = false;
+const _dashboardFeedbackFetchState = {};  // { 'YYYY-MM-DD': 'loading'|'ready'|'missing' }
 const cachedWeeklyReviewMd = {};  // v62: { '週開始土曜YYYY-MM-DD': '...md text...' }(自宅PCバッチ生成)
 // v157: AI機能1「今日の敵」。loop/scripts/today-enemy.sh が personal-data/taskchute/ へ
 // 今日の敵_<date>.md(ラスボス風ナレーション1段落のプレーンテキスト)をpushする(契約は
@@ -351,6 +358,8 @@ document.addEventListener("click", (event) => {
   if (action === "nav") setView(target.dataset.view);
   if (action === "date-prev") shiftSelectedDate(-1);
   if (action === "date-next") shiftSelectedDate(1);
+  if (action === "dashboard-date-prev") shiftDashboardDate(-1);
+  if (action === "dashboard-date-next") shiftDashboardDate(1);
   if (action === "today") setSelectedDate(todayISO());
   if (action === "set-morning") setMorningEnergy(Number(target.dataset.value));
   // v73: コンディションOS(睡眠/服薬/余力/夜の記録/運動ログ)
@@ -1069,6 +1078,7 @@ document.addEventListener("input", (event) => {
 document.addEventListener("change", (event) => {
   const target = event.target;
   if (target.matches("[data-date-picker]")) setSelectedDate(target.value);
+  if (target.matches("[data-dashboard-date]")) setDashboardDate(target.value);
   // v117(A): 今日の宣言(change時に保存)。
   // v149レビュー対応(必須5、Codexレビュー指摘): 旧実装はsaveAndRender()で全再描画していたが、
   // 宣言入力欄はホームタブ専用・警告表示先の.home-today-statusは今日タブ専用で、blur時点の
@@ -2555,6 +2565,7 @@ function renderMain() {
   if (view === "ai-reports") main.innerHTML = renderAiReports();
   if (view === "weekly") main.innerHTML = renderWeekly();
   if (view === "cycle") main.innerHTML = renderCycle();
+  if (view === "dashboard") main.innerHTML = renderDashboard();
   if (view === "stats") main.innerHTML = renderStats();  // v53: 計器盤
   if (view === "settings") main.innerHTML = renderSettings();
   if (view === "more") main.innerHTML = renderMore();
@@ -10465,6 +10476,7 @@ const moreGroups = [
   ] },
   { id: "review", label: "振り返り", items: [
     { id: "weekly", label: "週次", mark: "🗓" },
+    { id: "dashboard", label: "ダッシュボード", mark: "📈" },  // v163: 実績値ダッシュボード+AIフィードバック横並び
     { id: "stats", label: "計器盤", mark: "📊" },
     { id: "ai-reports", label: "AIレポート", mark: "🤖" },
     { id: "reports", label: "日報", mark: "📤" }
