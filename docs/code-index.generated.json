@@ -3,7 +3,7 @@
   "generatedBy": "scripts/code-index.js",
   "parser": "acorn@8.18.0",
   "source": "app.js",
-  "sourceLines": 16599,
+  "sourceLines": 16600,
   "functions": [
     {
       "name": "pruneExpiredSuggestedThemes",
@@ -9231,8 +9231,8 @@
       "name": "saveBlockFromModal",
       "kind": "function",
       "startLine": 15724,
-      "endLine": 15933,
-      "lines": 210,
+      "endLine": 15934,
+      "lines": 211,
       "area": [
         "state",
         "execution",
@@ -9249,8 +9249,8 @@
     {
       "name": "openTimelineNewBlock",
       "kind": "function",
-      "startLine": 15936,
-      "endLine": 15978,
+      "startLine": 15937,
+      "endLine": 15979,
       "lines": 43,
       "area": [
         "execution",
@@ -9269,8 +9269,8 @@
     {
       "name": "toLocalInput",
       "kind": "function",
-      "startLine": 15982,
-      "endLine": 15990,
+      "startLine": 15983,
+      "endLine": 15991,
       "lines": 9,
       "area": [
         "core"
@@ -9281,8 +9281,8 @@
     {
       "name": "fromLocalInput",
       "kind": "function",
-      "startLine": 15992,
-      "endLine": 16017,
+      "startLine": 15993,
+      "endLine": 16018,
       "lines": 26,
       "area": [
         "core"
@@ -9291,10 +9291,10 @@
       "effects": []
     },
     {
-      "name": "event:keydown@16020",
+      "name": "event:keydown@16021",
       "kind": "event-listener",
-      "startLine": 16020,
-      "endLine": 16030,
+      "startLine": 16021,
+      "endLine": 16031,
       "lines": 11,
       "area": [
         "execution",
@@ -9308,8 +9308,8 @@
     {
       "name": "defaultPassivePomodoro",
       "kind": "function",
-      "startLine": 16036,
-      "endLine": 16044,
+      "startLine": 16037,
+      "endLine": 16045,
       "lines": 9,
       "area": [
         "execution"
@@ -9320,8 +9320,8 @@
     {
       "name": "setPomodoroTab",
       "kind": "function",
-      "startLine": 16049,
-      "endLine": 16053,
+      "startLine": 16050,
+      "endLine": 16054,
       "lines": 5,
       "area": [
         "state",
@@ -9339,8 +9339,8 @@
     {
       "name": "ensurePassivePomodoro",
       "kind": "function",
-      "startLine": 16058,
-      "endLine": 16065,
+      "startLine": 16059,
+      "endLine": 16066,
       "lines": 8,
       "area": [
         "execution"
@@ -9353,8 +9353,8 @@
     {
       "name": "recordFeedbackFile",
       "kind": "function",
-      "startLine": 16074,
-      "endLine": 16080,
+      "startLine": 16075,
+      "endLine": 16081,
       "lines": 7,
       "area": [
         "state",
@@ -9370,8 +9370,8 @@
     {
       "name": "pushReportToGitHub",
       "kind": "function",
-      "startLine": 16086,
-      "endLine": 16098,
+      "startLine": 16087,
+      "endLine": 16099,
       "lines": 13,
       "area": [
         "sync",
@@ -9388,8 +9388,8 @@
     {
       "name": "pushFileToGitHub",
       "kind": "function",
-      "startLine": 16108,
-      "endLine": 16148,
+      "startLine": 16109,
+      "endLine": 16149,
       "lines": 41,
       "area": [
         "sync",
@@ -9406,8 +9406,8 @@
     {
       "name": "completeBlockWithActual",
       "kind": "function",
-      "startLine": 16179,
-      "endLine": 16187,
+      "startLine": 16180,
+      "endLine": 16188,
       "lines": 9,
       "area": [
         "execution",
@@ -9422,8 +9422,8 @@
     {
       "name": "buildActualEntryModal",
       "kind": "function",
-      "startLine": 16189,
-      "endLine": 16242,
+      "startLine": 16190,
+      "endLine": 16243,
       "lines": 54,
       "area": [
         "journal-health",
@@ -9435,8 +9435,8 @@
     {
       "name": "saveActualEntryFromModal",
       "kind": "function",
-      "startLine": 16244,
-      "endLine": 16271,
+      "startLine": 16245,
+      "endLine": 16272,
       "lines": 28,
       "area": [
         "state",
@@ -9454,8 +9454,8 @@
     {
       "name": "runDailyOpen",
       "kind": "function",
-      "startLine": 16281,
-      "endLine": 16301,
+      "startLine": 16282,
+      "endLine": 16302,
       "lines": 21,
       "area": [
         "state",
@@ -9472,8 +9472,8 @@
     {
       "name": "_energyMedian",
       "kind": "function",
-      "startLine": 16304,
-      "endLine": 16309,
+      "startLine": 16305,
+      "endLine": 16310,
       "lines": 6,
       "area": [
         "journal-health"
@@ -9484,8 +9484,8 @@
     {
       "name": "_actualDurationMin",
       "kind": "function",
-      "startLine": 16310,
-      "endLine": 16314,
+      "startLine": 16311,
+      "endLine": 16315,
       "lines": 5,
       "area": [
         "core"
@@ -9496,8 +9496,8 @@
     {
       "name": "resolveEstimateMin",
       "kind": "function",
-      "startLine": 16316,
-      "endLine": 16326,
+      "startLine": 16317,
+      "endLine": 16327,
       "lines": 11,
       "area": [
         "journal-health"
@@ -9510,8 +9510,8 @@
     {
       "name": "computeProjectedEnd",
       "kind": "function",
-      "startLine": 16328,
-      "endLine": 16343,
+      "startLine": 16329,
+      "endLine": 16344,
       "lines": 16,
       "area": [
         "execution"
@@ -9522,8 +9522,8 @@
     {
       "name": "projectedEndText",
       "kind": "function",
-      "startLine": 16345,
-      "endLine": 16356,
+      "startLine": 16346,
+      "endLine": 16357,
       "lines": 12,
       "area": [
         "execution"
@@ -9538,8 +9538,8 @@
     {
       "name": "projectedEndBadge",
       "kind": "function",
-      "startLine": 16358,
-      "endLine": 16361,
+      "startLine": 16359,
+      "endLine": 16362,
       "lines": 4,
       "area": [
         "core"
@@ -9550,8 +9550,8 @@
     {
       "name": "updateProjectedEndTick",
       "kind": "function",
-      "startLine": 16363,
-      "endLine": 16366,
+      "startLine": 16364,
+      "endLine": 16367,
       "lines": 4,
       "area": [
         "core"
@@ -9564,8 +9564,8 @@
     {
       "name": "updateBatteryTick",
       "kind": "function",
-      "startLine": 16380,
-      "endLine": 16415,
+      "startLine": 16381,
+      "endLine": 16416,
       "lines": 36,
       "area": [
         "execution",
@@ -9587,8 +9587,8 @@
     {
       "name": "computeBufferRemaining",
       "kind": "function",
-      "startLine": 16426,
-      "endLine": 16444,
+      "startLine": 16427,
+      "endLine": 16445,
       "lines": 19,
       "area": [
         "execution"
@@ -9601,8 +9601,8 @@
     {
       "name": "bufferMeterLevel",
       "kind": "function",
-      "startLine": 16446,
-      "endLine": 16451,
+      "startLine": 16447,
+      "endLine": 16452,
       "lines": 6,
       "area": [
         "core"
@@ -9613,8 +9613,8 @@
     {
       "name": "computeDailyOverload",
       "kind": "function",
-      "startLine": 16465,
-      "endLine": 16480,
+      "startLine": 16466,
+      "endLine": 16481,
       "lines": 16,
       "area": [
         "state",
@@ -9628,8 +9628,8 @@
     {
       "name": "bufferMeterHTML",
       "kind": "function",
-      "startLine": 16485,
-      "endLine": 16504,
+      "startLine": 16486,
+      "endLine": 16505,
       "lines": 20,
       "area": [
         "state"
@@ -9643,8 +9643,8 @@
     {
       "name": "prefillEnergy",
       "kind": "function",
-      "startLine": 16508,
-      "endLine": 16520,
+      "startLine": 16509,
+      "endLine": 16521,
       "lines": 13,
       "area": [
         "journal-health"
@@ -9655,10 +9655,10 @@
       "effects": []
     },
     {
-      "name": "event:visibilitychange@16587",
+      "name": "event:visibilitychange@16588",
       "kind": "event-listener",
-      "startLine": 16587,
-      "endLine": 16594,
+      "startLine": 16588,
+      "endLine": 16595,
       "lines": 8,
       "area": [
         "sync",
