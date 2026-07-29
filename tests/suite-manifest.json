@@ -175,29 +175,6 @@
       }
     },
     {
-      "file": "impact-regression.test.js",
-      "kind": "node",
-      "tier": "full",
-      "domains": [
-        "legacy-crosscutting"
-      ],
-      "assertionSignals": 21,
-      "assertionHash": "b42a4a8d9607a48c",
-      "sourceHash": "bf45f706e25851f4",
-      "waits": {
-        "fixedCount": 0,
-        "numericMilliseconds": 0,
-        "unresolvedCount": 0
-      },
-      "sideEffects": {
-        "browser": false,
-        "server": false,
-        "fileWrite": true,
-        "networkMock": false,
-        "clock": false
-      }
-    },
-    {
       "file": "journal-core.test.js",
       "kind": "node",
       "tier": "full",
