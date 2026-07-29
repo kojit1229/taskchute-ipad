@@ -111,8 +111,9 @@ function check(name, cond, extra = "") {
     console.log("[1] タブ順: サイドバー(=「その他」メニューの順序基盤)が実行系優先の新順序になっている");
     await seed({ blocks: [], view: "home" });
     const navLabels = await page.locator(".nav-list .nav-button .nav-label").allTextContents();
+    // v182 D2: mobileNav先頭差替え/moreGroups計画群へhome追加
     const expectedOrder = [
-      "ホーム", "タスクシュート", "タイムライン", "WBS", "ルーティン",
+      "今日", "ホーム", "タスクシュート", "タイムライン", "WBS", "ルーティン",
       "ジャーナル", "週次", "日報", "AIレポート", "ダッシュボード", "計器盤", "やりたい", "やらない",
       "ビジョン", "0秒思考", "ポモドーロ", "設定"
     ];
@@ -121,9 +122,10 @@ function check(name, cond, extra = "") {
     // v82(UX監査B1・K承認): 日課動線(朝: ホーム→ジャーナルで体調記録)を1タップにするため、
     // 不定期にしか触らないWBSを「その他」へ降ろし、ジャーナルをbottom-navへ昇格した。
     // WBSが「その他」の受け皿に出ることはv82.test.jsで別途検証する。
-    console.log("[1b] 下部タブ(mobileNav)は home/ジャーナル/実行/時間/その他(v82でWBS→ジャーナルに入替)");
+    console.log("[1b] 下部タブ(mobileNav)は 今日/ジャーナル/実行/時間/その他(v182でhome→todayに入替)");
     const bottomLabels = await page.locator("#bottomNav button").allTextContents();
-    check("mobileNavはv82の新構成", JSON.stringify(bottomLabels) === JSON.stringify(["ホーム", "ジャーナル", "実行", "時間", "その他"]), JSON.stringify(bottomLabels));
+    // v182 D2: mobileNav先頭差替え/moreGroups計画群へhome追加
+    check("mobileNavはv182の新構成", JSON.stringify(bottomLabels) === JSON.stringify(["今日", "ジャーナル", "実行", "時間", "その他"]), JSON.stringify(bottomLabels));
 
     // ============================================================
     // (b) ホームの折りたたみ

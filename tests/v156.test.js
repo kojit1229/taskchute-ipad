@@ -434,10 +434,10 @@ const planBlock = ({ id, title, startMin, minutes = 30 }) => {
   await clickChoice("today");  // 仕分け側: 今日やる → Undoトースト(data-id=blk-mix-triage)表示
   await page.waitForTimeout(200);
   check("(準備)仕分けのUndoボタンが表示される", await page.locator('.toast-action[data-action="triage-undo"][data-id="blk-mix-triage"]').count() === 1);
-  // モバイル幅ではサイドバー(CSSで非表示)とボトムナビの2箇所に同じdata-action/data-viewの
-  // 要素が描画される。strict mode違反(2件ヒット)を避けつつ、実際に画面上でタップ可能な
-  // (visible)ボトムナビ側を明示的に狙う。
-  await page.locator('#bottomNav [data-action="nav"][data-view="home"]').click();
+  // v182 D2: mobileNav先頭差替え/moreGroups計画群へhome追加
+  // homeはbottom-navから消えたため、デスクトップ幅へ戻してサイドバーの導線を実クリックする。
+  await page.setViewportSize({ width: 1100, height: 844 });
+  await page.locator('#sidebar .nav-button[data-action="nav"][data-view="home"]').click();
   await page.waitForTimeout(200);
   await page.locator('.home-flow .home-dot[data-action="toggle-block"][data-id="blk-mix-home"]').click();
   await page.waitForTimeout(200);

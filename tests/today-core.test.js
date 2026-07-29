@@ -14,14 +14,18 @@
 //   [3] normalizeState が未知の currentView を "home" へ補完する(D3・§8-4)
 //   [4] サイドバーから today へ遷移できる
 //   [5] bottom-nav(モバイル幅)から today へ遷移できる(D2)
+//   [5b] home滞在時はbottom-navの「その他」がactiveになる(D2)
 //   [6] #todayClock が毎秒tickし、固定時刻の前進へ追随する(§4ライブ更新原則)
 //   [7] ビューを離れると ticker が停止する(離脱後に #todayClock 相当のDOM更新が起きない)+ 再入場で再開
 //   [8] NOW FOCUS: 実行中Block(actualStartAt && !actualEndAt)のタイトル表示・複数あれば最新開始・経過が進む
 //   [9] NOW FOCUS: 完了ボタン → 既存実績登録モーダル保存で block に actualEndAt が付き completed になる
+//   [9b] modal-saveの全再描画後もtickerが時計・経過表示を更新し続ける(C1)
 //   [10] NEXT QUEUE: 未着手Blockが plannedStartAt→orderIndex 順に最大5件(着手済み・完了は出ない)
 //   [11] DAY GAUGE: 完了n/総数が state からの期待値と一致(deleted除外)
 //   [12] ROUTINE: 時間帯別 done/total の合計が routineRate 相当(カテゴリ"ルーティン"のcompleted集計)と一致(D5・A7)
 //   [13] FLIGHT PLAN: 当日Block 0件でもエラーなく5パネルが描画される
+//   [13b] 深夜跨ぎBlockが当日24:00までの幅で描画される
+//   [13c] 同時刻開始Blockが別レーンに配置され、両方の編集モーダルを開ける
 //   [14] cockpit CSS変数(P1先行定義)が light/dark テーマの見た目に影響しない(D10・§6)
 //
 // 作法: v161.test.js / v150.test.js / timeline-tick-wiring.test.js と同じ
@@ -57,6 +61,8 @@ function check(name, cond, extra = "") {
   const now0 = new Date();
   now0.setHours(12, 0, 0, 0);
   const TODAY = `${now0.getFullYear()}-${pad2(now0.getMonth() + 1)}-${pad2(now0.getDate())}`;
+  const tomorrow0 = new Date(now0.getFullYear(), now0.getMonth(), now0.getDate() + 1);
+  const TOMORROW = `${tomorrow0.getFullYear()}-${pad2(tomorrow0.getMonth() + 1)}-${pad2(tomorrow0.getDate())}`;
   const at = (hhmm) => `${TODAY}T${hhmm}:00`;  // "09:00" → "YYYY-MM-DDT09:00:00"
   const fixedTime = (h, m, s = 0) => new Date(now0.getFullYear(), now0.getMonth(), now0.getDate(), h, m, s, 0);
 
@@ -163,6 +169,10 @@ function check(name, cond, extra = "") {
     check("bottom-nav から today ビューへ遷移できる", (await currentDataView()) === "today");
     check("bottom-nav の today ボタンが active になる",
       await page.locator('#bottomNav button[data-view="today"].active').count() === 1);
+    console.log("[5b] home画面滞在時はbottom-navの「その他」がactiveになる(D2)");
+    await seed({ view: "home" });
+    check("home滞在時はbottom-navの「その他」がactiveになる",
+      await page.locator('#bottomNav button[data-view="more"].active').count() === 1);
     await page.setViewportSize({ width: 1100, height: 1400 });
 
     // ============================================================
@@ -256,6 +266,18 @@ function check(name, cond, extra = "") {
     const nfLate = stAfterComplete.blocks.find((b) => b.id === "nf-late");
     check("保存後 block に actualEndAt が付く", !!nfLate.actualEndAt, JSON.stringify(nfLate));
     check("保存後 block が completed になる(既存 saveActualEntryFromModal と同結果)", nfLate.completed === true);
+    console.log("[9b] modal-saveの全再描画後もtickerが新DOMの時計・経過表示を更新し続ける(C1)");
+    await page.waitForSelector("#todayNowElapsed", { state: "attached" });
+    const elapsedAfterSave = await page.locator("#todayNowElapsed").textContent();
+    await page.clock.setFixedTime(fixedTime(12, 2, 10));
+    await page.waitForFunction((previousElapsed) => {
+      const clock = document.getElementById("todayClock");
+      const elapsed = document.getElementById("todayNowElapsed");
+      return (clock?.textContent || "").includes("12:02") && elapsed?.textContent !== previousElapsed;
+    }, elapsedAfterSave);
+    check("modal-save後も時計が固定時刻12:02へ進む(tickerが新DOMを毎tick再取得)", true);
+    check("modal-save後もNOW FOCUSの経過表示が再び進む",
+      (await page.locator("#todayNowElapsed").textContent()) !== elapsedAfterSave);
 
     // ============================================================
     // [10] NEXT QUEUE: plannedStartAt→orderIndex 順に最大5件
@@ -353,6 +375,52 @@ function check(name, cond, extra = "") {
       check(`0件日でも ${sel} が描画される`, await page.locator(sel).count() === 1);
     }
     check("0件日の描画で pageerror が発生しない", failures === failuresBeforeEmpty);
+
+    // ============================================================
+    // [13b] FLIGHT PLAN: 深夜跨ぎBlockを当日24:00でクリップする
+    // ============================================================
+    console.log("[13b] 深夜跨ぎBlock(23:30→翌00:30)は当日24:00までの幅で描画される");
+    await seed({
+      view: "today",
+      blocks: [
+        block("flight-overnight", {
+          title: "FLIGHT-OVERNIGHT",
+          plannedStartAt: at("23:30"),
+          plannedEndAt: `${TOMORROW}T00:30:00`
+        })
+      ]
+    });
+    const overnight = page.locator('.today-flight-block[data-id="flight-overnight"]');
+    await overnight.waitFor({ state: "attached" });
+    const overnightWidth = await overnight.evaluate((el) => parseFloat(el.style.width));
+    const expectedOvernightWidth = 30 / (18 * 60) * 100;
+    check("23:30→翌00:30の帯幅が23:30→24:00の30分相当になる",
+      Math.abs(overnightWidth - expectedOvernightWidth) < 0.05,
+      `width=${overnightWidth} expected=${expectedOvernightWidth}`);
+
+    // ============================================================
+    // [13c] FLIGHT PLAN: 同時刻開始Blockを別レーンへ配置する
+    // ============================================================
+    console.log("[13c] 同時刻開始の2Blockは別レーンに配置され、両方ともタップで編集できる");
+    await seed({
+      view: "today",
+      blocks: [
+        block("flight-lane-a", { title: "FLIGHT-LANE-A", plannedStartAt: at("10:00"), plannedEndAt: at("11:00") }),
+        block("flight-lane-b", { title: "FLIGHT-LANE-B", plannedStartAt: at("10:00"), plannedEndAt: at("11:00") })
+      ]
+    });
+    const laneBlocks = page.locator('.today-flight-block[data-id^="flight-lane-"]');
+    await laneBlocks.first().waitFor({ state: "attached" });
+    const laneTops = await laneBlocks.evaluateAll((els) => els.map((el) => el.style.top));
+    check("同時刻開始の2Blockが異なるtop(別レーン)に配置される",
+      laneTops.length === 2 && new Set(laneTops).size === 2, JSON.stringify(laneTops));
+    for (const id of ["flight-lane-a", "flight-lane-b"]) {
+      await page.locator(`.today-flight-block[data-id="${id}"]`).click();
+      await page.waitForSelector(".modal-card", { state: "attached" });
+      check(`${id}をタップすると既存Block編集モーダルが開く`, await page.locator(".modal-card").count() === 1);
+      await page.locator('.modal-card [data-action="modal-close"]').first().click();
+      await page.waitForSelector(".modal-card", { state: "detached" });
+    }
 
     // ============================================================
     // [14] cockpit CSS変数の先行定義が light/dark の見た目に影響しない(D10・§6)

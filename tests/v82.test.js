@@ -95,10 +95,11 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (a) B1: bottom-navの入替
     // ============================================================
-    console.log("[1] B1: bottom-navが ホーム/ジャーナル/実行/時間/その他 の並びになっている");
+    console.log("[1] B1: bottom-navが 今日/ジャーナル/実行/時間/その他 の並びになっている");
     await seed({ blocks: [], view: "home" });
     const bottomLabels = await page.locator("#bottomNav button").allTextContents();
-    check("bottom-navの並びがv82仕様", JSON.stringify(bottomLabels) === JSON.stringify(["ホーム", "ジャーナル", "実行", "時間", "その他"]), JSON.stringify(bottomLabels));
+    // v182 D2: mobileNav先頭差替え/moreGroups計画群へhome追加
+    check("bottom-navの並びがv182仕様", JSON.stringify(bottomLabels) === JSON.stringify(["今日", "ジャーナル", "実行", "時間", "その他"]), JSON.stringify(bottomLabels));
 
     console.log("[1b] ホームからジャーナルへ1タップで遷移できる(朝の体調記録の日課動線)");
     await page.click('#bottomNav button[data-view="journal"]');
@@ -106,15 +107,16 @@ function check(name, cond, extra = "") {
     const viewAfterTap = await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).currentView, KEY);
     check("1タップでcurrentViewがjournalになる", viewAfterTap === "journal", viewAfterTap);
 
-    console.log("[1c] 「その他」画面にWBSが受け皿として出る。ホーム/ジャーナル/実行/時間は「その他」に出ない");
+    console.log("[1c] 「その他」画面にhome/WBSが受け皿として出る。ジャーナル/実行/時間は「その他」に出ない");
     await seed({ blocks: [], view: "more" });
     const moreLabels = await page.locator("main section.grid button strong").allTextContents();
     check("WBSが「その他」に出る", moreLabels.includes("WBS"), JSON.stringify(moreLabels));
     check("ジャーナルは「その他」に出ない(bottom-navへ移動済み)", !moreLabels.includes("ジャーナル"), JSON.stringify(moreLabels));
     const moreDataViews = await page.locator('main [data-action="nav"]').evaluateAll((els) => els.map((el) => el.dataset.view));
     check("「その他」の受け皿にwbsが含まれる", moreDataViews.includes("wbs"), JSON.stringify(moreDataViews));
-    check("「その他」の受け皿にhome/journal/tasks/timelineは含まれない",
-      !moreDataViews.includes("home") && !moreDataViews.includes("journal") && !moreDataViews.includes("tasks") && !moreDataViews.includes("timeline"),
+    // v182 D2: mobileNav先頭差替え/moreGroups計画群へhome追加
+    check("「その他」の受け皿にhomeが含まれ、journal/tasks/timelineは含まれない",
+      moreDataViews.includes("home") && !moreDataViews.includes("journal") && !moreDataViews.includes("tasks") && !moreDataViews.includes("timeline"),
       JSON.stringify(moreDataViews));
 
     // ============================================================

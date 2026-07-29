@@ -86,11 +86,13 @@ function check(name, cond, extra = "") {
     const moreNavButtons = await page.locator('.more-group [data-action="nav"]').evaluateAll(
       (els) => els.map((el) => el.dataset.view)
     );
-    check("その他グリッドは12項目(ルーティンを除く13項目中。v163でダッシュボードが振り返り群に追加)",
-      moreNavButtons.length === 12, JSON.stringify(moreNavButtons));
+    // v182 D2: mobileNav先頭差替え/moreGroups計画群へhome追加
+    check("その他グリッドは13項目(home追加・ルーティン除外。v163でダッシュボードが振り返り群に追加)",
+      moreNavButtons.length === 13, JSON.stringify(moreNavButtons));
     check("ルーティンはその他グリッドに含まれない", !moreNavButtons.includes("routine"), JSON.stringify(moreNavButtons));
+    // v182 D2: mobileNav先頭差替え/moreGroups計画群へhome追加
     check("計画群の直後に思考群が続く(グループ単位でまとまっている)",
-      moreNavButtons.slice(0, 4).join(",") === "wbs,wish,avoid,vision", JSON.stringify(moreNavButtons));
+      moreNavButtons.slice(0, 5).join(",") === "home,wbs,wish,avoid,vision", JSON.stringify(moreNavButtons));
     // 頭文字1字アイコン(W/R/A等)ではなく絵文字になっていることを確認(codex-ui-review N4対応)
     const badgeTexts = await page.locator('.more-group [data-action="nav"] .badge').allTextContents();
     check("バッジが1文字のアルファベットではない(絵文字化)",
