@@ -304,11 +304,12 @@ configureTimelineLayout({ minutesOf, nowDateTime });
 // (起動時に1回だけdocument.querySelectorした固定DOM参照)はtimelineRailEl/appRootElとして渡す。
 configureTimeline({
   escapeHTML, getCategoryColor, migrationBadgeHTML, leverageTypeMarkHTML,
-  minutesOf, todayISO, pad2, clamp, formatDisplayDate,
+  minutesOf, todayISO, pad2, clamp, formatDisplayDate, computeProjectedEnd, resolveEstimateMin,
   renderHeader, renderDateBar,
   defaultBatterySettings, batteryCurvePoints, conditionBudget,
   draftBarHTML, zeroSecThemeBarHTML, draftRejectReasonPickerHTML, renderDraftLayer,
-  scheduleDraftActive, render, blocksForDate,
+  scheduleDraftActive, render, blocksForDate, postponeBlockToNextDay,
+  makeBlock, getOtherTask, openBlockEditor, saveState,
   timelineRailEl: timelineRail, appRootEl: app
 });
 // v173: src/features/avoid.jsのdispatcher登録(段階5-2)。addAvoid/deleteAvoidはapp.js残留の
@@ -5128,13 +5129,12 @@ function requestCarryOver(id) {
   carryOverBlock(id);
 }
 
-function carryOverBlock(id, { forceMIT = false } = {}) {
+function carryOverBlock(id, { forceMIT = false, toDate = todayISO(), toastMessage = "今日へ繰り越しました" } = {}) {
   const src = blockById(id);
   if (!src || src.migratedTo) return;
-  const today = todayISO();
-  const shift = (dt) => dt ? `${today}${dt.slice(10)}` : "";  // 予定時刻は同 HH:mm のまま今日へ
+  const shift = (dt) => dt ? `${toDate}${dt.slice(10)}` : "";  // 予定時刻は同 HH:mm のまま送付先へ
   const block = makeBlock({
-    taskId: src.taskId, date: today, title: src.title, category: src.category,
+    taskId: src.taskId, date: toDate, title: src.title, category: src.category,
     plannedStartAt: shift(src.plannedStartAt), plannedEndAt: shift(src.plannedEndAt),
     estimateMin: src.estimateMin
   });
@@ -5142,13 +5142,21 @@ function carryOverBlock(id, { forceMIT = false } = {}) {
   block.carryCount = (src.carryCount || 0) + 1;  // v61: 繰り越し回数を1つ積み上げる
   if (forceMIT) {
     // v61: 儀式で「今日やる」を選んだ場合はMIT化(既存の最大3個ルールは尊重する)
-    const sameDayMITs = state.blocks.filter((b) => !b.deleted && b.date === today && b.isMIT);
+    const sameDayMITs = state.blocks.filter((b) => !b.deleted && b.date === toDate && b.isMIT);
     if (sameDayMITs.length < 3) block.isMIT = true;
   }
   state.blocks.push(block);
   // 旧ブロックを「繰り越し済み」に(未完了リストから外れ、再提案されない)
   state.blocks = state.blocks.map((b) => b.id === src.id ? { ...b, migratedTo: block.id, updatedAt: nowDateTime() } : b);
-  saveAndRender("今日へ繰り越しました");
+  saveAndRender(toastMessage);
+}
+
+// v186 F2: DRIFTの提案は確認儀式を挟まず、既存の繰り越し意味論で今日から明日へ送る。
+function postponeBlockToNextDay(id) {
+  carryOverBlock(id, {
+    toDate: addDays(todayISO(), 1),
+    toastMessage: "明日へ送りました"
+  });
 }
 
 // 手放す選択時の「Wishへ移動」実行(Block削除は呼び出し側で行う)。
@@ -11665,21 +11673,24 @@ function defaultPlannedTimes(dateOverride) {
 
 function addBlock() {
   const title = document.querySelector("#blockTitle")?.value.trim();
-  const category = document.querySelector("#blockCategory")?.value || "";
+  const categorySelect = document.querySelector("#blockCategory");
+  const category = categorySelect ? categorySelect.value : (getCategoryNames()[0] || "");
   if (!title) return showToast("Block名を入力してください");
+  const today = todayISO();
   // v28: タスクシュート画面から追加した Block は「その他」Project に自動で紐づける
   //      (Task 紐づけが無いとタスクシュート画面に表示されないため)
   const otherTask = getOtherTask();
   // v29: 予定の開始/終了日時をデフォルトで入れる
-  const { plannedStartAt, plannedEndAt } = defaultPlannedTimes();
+  const { plannedStartAt, plannedEndAt } = defaultPlannedTimes(today);
   state.blocks.push(makeBlock({
-    date: state.selectedDate,
+    date: today,
     title,
     category,
     taskId: otherTask ? otherTask.id : "",
     plannedStartAt,
     plannedEndAt
   }));
+  state.selectedDate = today;
   saveAndRender("Blockを追加しました");
 }
 
@@ -15962,6 +15973,12 @@ function fromLocalInput(value) {
 
 // ESC キーでモーダルを閉じる
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && event.target?.id === "blockTitle") {
+    if (_imeComposing || event.isComposing) return;
+    event.preventDefault();
+    addBlock();
+    return;
+  }
   if (event.key === "Escape" && state.modal) {
     closeModal();
   }
@@ -16262,7 +16279,7 @@ function resolveEstimateMin(block) {
 // 見込み終了(分)= 今 + Σ(残りブロックの残見積)
 function computeProjectedEnd(dateISO, nowMin) {
   let sum = 0;
-  blocksForDate(dateISO).filter((b) => !b.completed).forEach((b) => {
+  blocksForDate(dateISO).filter((b) => !b.completed && !b.migratedTo).forEach((b) => {
     const est = resolveEstimateMin(b);
     if (b.actualStartAt) {
       const elapsed = Math.max(0, nowMin - minutesOf(b.actualStartAt));  // 着手中は残りのみ
@@ -16277,7 +16294,7 @@ function computeProjectedEnd(dateISO, nowMin) {
 function projectedEndText() {
   const today = todayISO();
   if (state.selectedDate !== today) return "";
-  const remaining = blocksForDate(today).filter((b) => !b.completed);
+  const remaining = blocksForDate(today).filter((b) => !b.completed && !b.migratedTo);
   if (!remaining.length) return "";
   const now = new Date();
   const end = computeProjectedEnd(today, now.getHours() * 60 + now.getMinutes());

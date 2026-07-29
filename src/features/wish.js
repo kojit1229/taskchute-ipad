@@ -135,6 +135,29 @@ function isWishStagnant(wishTaskId) {
   return Date.now() - lastMs > 60 * 24 * 60 * 60 * 1000;
 }
 
+// v186 F5: 作成からの時間だけを表示する。最終活動から測る停滞判定とは別軸。
+function wishRipeness(wish) {
+  const createdMs = localDateTimeToMs(wish.createdAt || "");
+  if (!createdMs) return null;
+  const days = Math.max(0, Math.floor((Date.now() - createdMs) / (24 * 60 * 60 * 1000)));
+  const percent = days <= 30
+    ? Math.round(days / 30 * 50)
+    : Math.min(100, Math.round(50 + (days - 30) / 60 * 50));
+  return { days, percent };
+}
+
+function wishRipenessHTML(wish) {
+  const ripeness = wishRipeness(wish);
+  return `<div class="wish-ripeness">
+    <div class="wish-ripeness-head">
+      <span>熟成 = 作成からの時間</span>
+      <strong>${ripeness ? `${ripeness.days}日・${ripeness.percent}%` : "作成日不明"}</strong>
+    </div>
+    <div class="wish-ripeness-track"><span class="wish-ripeness-bar" style="width:${ripeness?.percent || 0}%"></span></div>
+    <div class="muted wish-ripeness-note">30日で50%・90日で100%。停滞表示は触っていない時間です。</div>
+  </div>`;
+}
+
 // 時期グループ判定: targetYear と現在年から「~Nまで(あと M 年)」のラベル
 function wishGroupKey(wish) {
   if (wish.realized) return "realized";
@@ -367,6 +390,7 @@ function renderWishCard(wish) {
           ? `<div class="muted" style="font-size:11px; max-width:40%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" title="${escapeHTML(nextStep.title)}">次: ${escapeHTML(nextStep.title)}</div>`
           : (wish.realized ? "" : "<div class=\"muted\" style=\"font-size:11px; color:var(--orange-text)\">↳ サブタスクを書く</div>")}
       </div>
+      ${wishRipenessHTML(wish)}
 
       ${state.wishOpenId === wish.id ? renderWishDetail(wish) : ""}
     </div>

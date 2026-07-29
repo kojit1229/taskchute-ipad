@@ -278,6 +278,35 @@ function gardenPixelCalendarHTML() {
   </section>`;
 }
 
+// v186 F3: gardenLogは疎な履歴として扱い、記録のない日は値を作らず空欄にする。
+function routineRecentSummaryHTML() {
+  const today = todayISO();
+  const currentRate = routineRate(blocksForDate(today));
+  const recentSeven = Array.from({ length: 7 }, (_, index) => addDays(today, index - 6));
+  const daysDone = recentSeven.filter((date) => {
+    const entry = date === today ? currentRate : state.gardenLog?.[date];
+    return Number(entry?.done || 0) > 0;
+  }).length;
+  const recentThirty = Array.from({ length: 30 }, (_, index) => addDays(today, index - 29));
+  const trend = recentThirty.map((date) => {
+    const stored = state.gardenLog?.[date];
+    if (!stored) return { date, pct: null };
+    const entry = date === today ? currentRate : stored;
+    const total = Number(entry.total || 0);
+    return { date, pct: total ? Math.round(Number(entry.done || 0) / total * 100) : 0 };
+  });
+  return `<section class="panel routine-summary">
+    <div class="home-plabel green">できた日の記録</div>
+    <div class="routine-week-days">直近7日で実施できた日数 <strong>${daysDone}/7</strong></div>
+    <div class="routine-trend" role="img" aria-label="記録のある日の30日実施率">
+      ${trend.map((item) => item.pct == null
+        ? `<span class="routine-trend-day is-missing" aria-hidden="true"></span>`
+        : `<span class="routine-trend-day is-recorded" data-date="${item.date}" title="${item.date} ${item.pct}%" style="--routine-rate:${item.pct}%"><i></i></span>`).join("")}
+    </div>
+    <div class="muted routine-trend-note">30日実施率トレンド・記録のある日のみ</div>
+  </section>`;
+}
+
 // v155: click dispatcher("garden-pixel-month"分岐、app.js残留)から呼ばれる月送りロジック本体。
 // 元は dispatcher 内に直書きされていたが、_gardenPixelMonth/_gardenPixelMonthNavigated が
 // このモジュールのプライベート変数になったため、書き換えをこの1関数へ集約した(ロジック自体は
@@ -860,6 +889,7 @@ function renderRoutine() {
     ${renderHeader("今やること、次にやること", "ルーティン")}
     ${renderDateBar()}
     ${gardenPixelCalendarHTML()}
+    ${routineRecentSummaryHTML()}
     ${dayChip}
 
     <div class="segmented" style="margin-bottom:14px">

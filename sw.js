@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v185";
+const CACHE_NAME = "taskchute-journal-pwa-v186";
 // v185: cockpitテーマの6点セットを完成し、cockpit限定の共通chromeを全ビューへ適用した。
 // v184: 計器盤の常時表示層先頭にTIME LOG(当日実績・実行中は表示のみ毎秒加算)と
 //   12WY TRACKER(project.weeklyTargetMin migration・週間目標バー)を追加した。

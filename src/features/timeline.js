@@ -44,21 +44,23 @@ import { registerActions } from "../ui/actions.js";
 
 // ---- 依存注入(configureTimeline) ----
 let escapeHTML, getCategoryColor, migrationBadgeHTML, leverageTypeMarkHTML;
-let minutesOf, todayISO, pad2, clamp, formatDisplayDate;
+let minutesOf, todayISO, pad2, clamp, formatDisplayDate, computeProjectedEnd, resolveEstimateMin;
 let renderHeader, renderDateBar;
 let defaultBatterySettings, batteryCurvePoints, conditionBudget;
 let draftBarHTML, zeroSecThemeBarHTML, draftRejectReasonPickerHTML, renderDraftLayer;
-let scheduleDraftActive, render, blocksForDate;
+let scheduleDraftActive, render, blocksForDate, postponeBlockToNextDay;
+let makeBlock, getOtherTask, openBlockEditor, saveState;
 let timelineRailEl, appRootEl;
 
 function configureTimeline(deps) {
   ({
     escapeHTML, getCategoryColor, migrationBadgeHTML, leverageTypeMarkHTML,
-    minutesOf, todayISO, pad2, clamp, formatDisplayDate,
+    minutesOf, todayISO, pad2, clamp, formatDisplayDate, computeProjectedEnd, resolveEstimateMin,
     renderHeader, renderDateBar,
     defaultBatterySettings, batteryCurvePoints, conditionBudget,
     draftBarHTML, zeroSecThemeBarHTML, draftRejectReasonPickerHTML, renderDraftLayer,
-    scheduleDraftActive, render, blocksForDate,
+    scheduleDraftActive, render, blocksForDate, postponeBlockToNextDay,
+    makeBlock, getOtherTask, openBlockEditor, saveState,
     timelineRailEl, appRootEl
   } = deps);
   // v181: app.js分割・段階5-8(timeline系dispatcher分岐の移行・後半)。timeline-modeのハンドラ
@@ -66,7 +68,9 @@ function configureTimeline(deps) {
   // registerActionsを呼ぶ)で登録する。他のtimeline系39分岐はハンドラ実体がapp.js残留のため、
   // app.js自身が呼ぶregisterActions({...})(v174方式、v180/v181で分割移行)へ移行した。
   registerActions({
-    "timeline-mode": ({ target }) => setTimelineMode(target.dataset.mode)
+    "timeline-mode": ({ target }) => setTimelineMode(target.dataset.mode),
+    "drift-postpone": ({ id }) => postponeBlockToNextDay(id),
+    "time-comb-fill": ({ target }) => createBlockForActualGap(target)
   });
 }
 
@@ -117,12 +121,97 @@ function renderTimelineView() {
     ${draftBarHTML()}
     ${zeroSecThemeBarHTML()}
     ${draftRejectReasonPickerHTML()}
+    ${driftPanelHTML()}
+    ${timeCombHTML()}
     ${state.settings.timelineCategoryFilter ? `<div class="row" style="margin-bottom:10px; gap:8px; align-items:center">
       <span class="cat-chip" style="background:${getCategoryColor(state.settings.timelineCategoryFilter)}1f; color:${getCategoryColor(state.settings.timelineCategoryFilter)}; border:1px solid ${getCategoryColor(state.settings.timelineCategoryFilter)}66">カテゴリ: ${escapeHTML(state.settings.timelineCategoryFilter)}</span>
       <button class="btn ghost" data-action="timeline-clear-cat" style="font-size:12px">フィルタ解除 ✕</button>
     </div>` : ""}
     ${renderTimeline({ compact: false, mode })}
   `;
+}
+
+function activeEstimateMinutes(block, nowMinute) {
+  const estimate = resolveEstimateMin(block);
+  if (!block.actualStartAt) return estimate;
+  return Math.max(0, estimate - Math.max(0, nowMinute - minutesOf(block.actualStartAt)));
+}
+
+function driftPanelHTML() {
+  const today = todayISO();
+  if (state.selectedDate !== today) return "";
+  const allBlocks = blocksForDate(today);
+  const remaining = allBlocks.filter((b) => !b.completed && !b.migratedTo);
+  if (!remaining.length) return "";
+  const plannedEnd = Math.max(0, ...allBlocks.filter((b) => b.plannedEndAt).map((b) => minutesOf(b.plannedEndAt)));
+  const now = new Date();
+  const nowMinute = now.getHours() * 60 + now.getMinutes();
+  const projectedEnd = computeProjectedEnd(today, nowMinute);
+  const drift = projectedEnd - plannedEnd;
+  const candidate = drift > 0
+    ? remaining.map((block) => ({ block, minutes: activeEstimateMinutes(block, nowMinute) }))
+        .filter((item) => item.minutes >= drift)
+        .sort((a, b) => a.minutes - b.minutes
+          || (a.block.plannedStartAt || "").localeCompare(b.block.plannedStartAt || "")
+          || a.block.id.localeCompare(b.block.id))[0]
+    : null;
+  const driftLabel = `${drift > 0 ? "+" : ""}${drift}分`;
+  return `<section class="panel drift-panel">
+    <div class="home-plabel">DRIFT</div>
+    <div class="drift-value">${driftLabel}</div>
+    <div class="muted drift-note">今日の全Block(ルーティン・タイムライン由来を含む)で、着地予定と計画上の最終終了を比較。</div>
+    ${candidate ? `<div class="drift-suggestion">
+      <span>取り戻す案: ${escapeHTML(candidate.block.title)} (${candidate.minutes}分)</span>
+      <button class="btn ghost" data-action="drift-postpone" data-id="${candidate.block.id}">明日へ送る</button>
+    </div>` : `<div class="muted drift-suggestion">${drift > 0 ? "1件送るだけで収まる案はありません。" : "計画の範囲に収まっています。"}</div>`}
+  </section>`;
+}
+
+function actualGaps(blocks) {
+  const intervals = blocks.filter((b) => b.actualStartAt && b.actualEndAt)
+    .map((b) => [minutesOf(b.actualStartAt), minutesOf(b.actualEndAt)])
+    .filter(([start, end]) => end > start)
+    .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const merged = [];
+  intervals.forEach(([start, end]) => {
+    const last = merged[merged.length - 1];
+    if (last && start <= last[1]) last[1] = Math.max(last[1], end);
+    else merged.push([start, end]);
+  });
+  return merged.slice(1).map((item, index) => [merged[index][1], item[0]])
+    .filter(([start, end]) => end - start >= 15);
+}
+
+function timeCombHTML() {
+  const gaps = actualGaps(blocksForDate(state.selectedDate));
+  return `<section class="panel time-comb">
+    <div class="home-plabel">TIME COMB</div>
+    <div class="muted time-comb-note">実績記録どうしの15分以上の隙間を表示します。</div>
+    <div class="time-comb-list">${gaps.length ? gaps.map(([start, end]) => `
+      <button type="button" class="time-comb-gap" data-action="time-comb-fill" data-start="${start}" data-end="${end}">
+        <span>${pad2(Math.floor(start / 60))}:${pad2(start % 60)}–${pad2(Math.floor(end / 60))}:${pad2(end % 60)}</span>
+        <strong>${end - start}分を補う</strong>
+      </button>`).join("") : `<span class="muted">補う隙間はありません。</span>`}</div>
+  </section>`;
+}
+
+function createBlockForActualGap(target) {
+  const start = Number(target.dataset.start);
+  const end = Number(target.dataset.end);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return;
+  const date = state.selectedDate;
+  const toDateTime = (minute) => `${date}T${pad2(Math.floor(minute / 60))}:${pad2(minute % 60)}:00`;
+  const block = makeBlock({
+    date,
+    plannedStartAt: toDateTime(start),
+    plannedEndAt: toDateTime(end),
+    taskId: getOtherTask()?.id
+  });
+  state.blocks.push(block);
+  // v186レビュー: 生成した時点で永続化する(addBlockと同じ契約。保存しないと
+  // モーダルを保存せず閉じた場合や再読込でBlockが消える)
+  saveState();
+  openBlockEditor(block.id);
 }
 
 function setTimelineMode(mode) {
