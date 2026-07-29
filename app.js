@@ -14539,13 +14539,12 @@ async function hydrateStaticMarkdown() {
   }
   if (wantAiInsightsFetch) {
     const parsedAiInsights = parseAiInsights(aiInsightsRaw);
-    // v187 schedule-inboxと同じく、404/通信失敗/JSON構文破損では正常キャッシュも
-    // fetchedAtも更新しない。JSONとして有効なら、フィールドが全て不一致でも空データへ更新する。
-    if (parsedAiInsights) {
-      const previous = cachedAiInsightsJson.data;
-      cachedAiInsightsJson = { fetchedAt: Date.now(), data: parsedAiInsights };
-      if (JSON.stringify(previous) !== JSON.stringify(parsedAiInsights)) changed = true;
-    }
+    // v190レビュー反映: energy-curve型(設計§12の名指しパターン)に統一 —
+    // 成否を問わずfetchedAtを進めて30分に1回だけリトライ(日付移動のたびの連打を防ぐ。
+    // バッチ未結線期間は404が常態のため特に重要)。失敗時は前回の正常データを保持する。
+    const previous = cachedAiInsightsJson.data;
+    cachedAiInsightsJson = { fetchedAt: Date.now(), data: parsedAiInsights || previous };
+    if (parsedAiInsights && JSON.stringify(previous) !== JSON.stringify(parsedAiInsights)) changed = true;
   }
   // v67: AIプラン_<今日>.json の存在確認(下書きへの適用はrunAiMorningPlan側の専管で、
   //      ここでは鮮度シグナル専用の軽量fetch)。既に今日分を確認済みなら再fetchしない。
