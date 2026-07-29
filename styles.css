@@ -138,6 +138,47 @@
   --chrome-edge-down: 0 1px 0 rgba(255, 255, 255, 0.05), 0 14px 22px -16px rgba(0, 0, 0, 0.55);
 }
 
+/* v182 P1: cockpitテーマの先行トークン定義。切替UI・保存許可はB4で追加する。
+   このスコープ外では一切上書きしないため、既存light/darkの見た目には影響しない。 */
+:root[data-theme="cockpit"] {
+  color-scheme: dark;
+  --bg: #050a14;
+  --panel: #0a1120;
+  --panel-soft: #0d1526;
+  --line: #17233a;
+  --line-soft: #121d30;
+  --text: #cfdcf0;
+  --muted: #7e92b0;
+  --faint: #465874;
+  --accent: #3fd0ff;
+  --accent-text: #3fd0ff;
+  --accent-soft: rgba(63, 208, 255, 0.1);
+  --green: #4ade9a;
+  --green-text: #4ade9a;
+  --green-soft: rgba(74, 222, 154, 0.1);
+  --red: #ff6d7f;
+  --red-soft: rgba(255, 109, 127, 0.1);
+  --orange: #ffb648;
+  --orange-text: #ffb648;
+  --orange-soft: rgba(255, 182, 72, 0.1);
+  --purple: #b48cff;
+  --purple-soft: rgba(180, 140, 255, 0.08);
+  --teal: #4ade9a;
+  --teal-text: #4ade9a;
+  --teal-soft: rgba(74, 222, 154, 0.1);
+  --radius: 4px;
+  --shadow: none;
+  --chrome-bg: rgba(5, 10, 20, 0.86);
+  --chrome-edge: 0 -1px 0 #17233a;
+  --chrome-edge-down: 0 1px 0 #17233a;
+  --cockpit-panel-2: #0d1526;
+  --cockpit-grid-line: rgba(70, 110, 170, 0.06);
+  --cockpit-go: #3fd0ff;
+  --cockpit-go-glow: rgba(63, 208, 255, 0.45);
+  --cockpit-track: #131e34;
+  --cockpit-mono: "Cascadia Mono", "Consolas", "SF Mono", monospace;
+}
+
 /* v151: 「ライト」を明示選択した場合(OS側がダークでも)ネイティブ入力の見た目をライトへ固定。
    色トークン自体は:rootの既定値がそのままライト値のため、ここではcolor-schemeのみ上書きする
    (値の再定義はしない=重複を作らない)。 */
