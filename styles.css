@@ -4088,3 +4088,330 @@ h3 {
 }
 .cond-corr-row:last-child { border-bottom: none; }
 .cond-corr-head { font-weight: 700; color: var(--muted); font-size: 11px; }
+
+/* v182: 「今日」コックピット(P1〜P4)。today名前空間に閉じ、既存home等へ波及させない。 */
+.today-cockpit {
+  min-height: 100%;
+  color: var(--text);
+  font-family: var(--cockpit-mono, inherit);
+  background-image:
+    linear-gradient(var(--cockpit-grid-line, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, var(--cockpit-grid-line, transparent) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
+.today-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 0 0 10px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.today-eyebrow { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: 2px; }
+.today-header h1 { margin: 2px 0 0; font-size: 22px; letter-spacing: 2px; }
+.today-header h1 span { color: var(--faint); font-size: 11px; font-weight: 500; letter-spacing: 1px; }
+.today-head-stats { color: var(--muted); font-size: 11px; letter-spacing: 0.04em; }
+.today-head-stats b { color: var(--cockpit-go, var(--accent)); }
+.today-clock { display: grid; gap: 2px; margin-left: auto; text-align: right; }
+.today-clock strong {
+  color: var(--text);
+  font-size: 23px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 2px;
+}
+.today-clock span { color: var(--muted); font-size: 10px; }
+.today-deck { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.today-span-2 { grid-column: span 2; }
+.today-panel {
+  position: relative;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--cockpit-panel-2, var(--panel)), var(--panel));
+  box-shadow: var(--shadow);
+}
+.today-panel::before,
+.today-panel::after {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  content: "";
+  pointer-events: none;
+}
+.today-panel::before {
+  top: -1px;
+  left: -1px;
+  border-top: 2px solid var(--faint);
+  border-left: 2px solid var(--faint);
+}
+.today-panel::after {
+  right: -1px;
+  bottom: -1px;
+  border-right: 2px solid var(--faint);
+  border-bottom: 2px solid var(--faint);
+}
+.today-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 11px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+.today-panel-title span { color: var(--faint); font-size: 10px; font-weight: 500; letter-spacing: 0; }
+.today-panel-title b {
+  margin-left: auto;
+  padding: 2px 6px;
+  border: 1px solid var(--cockpit-go, var(--accent));
+  border-radius: 2px;
+  color: var(--cockpit-go, var(--accent));
+  background: var(--accent-soft);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+.today-now-focus { border-color: var(--cockpit-go, var(--accent)); }
+.today-now-focus::before { border-color: var(--cockpit-go, var(--accent)); }
+.today-now-label { color: var(--cockpit-go, var(--accent)); font-size: 10px; letter-spacing: 1px; }
+.today-now-label i {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--cockpit-go, var(--accent));
+  animation: today-blink 1.4s infinite;
+}
+.today-now-task {
+  margin-top: 7px;
+  overflow-wrap: anywhere;
+  font-size: clamp(19px, 3vw, 27px);
+  font-weight: 750;
+  line-height: 1.3;
+  cursor: pointer;
+}
+.today-now-meta,
+.today-now-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.today-chip {
+  padding: 2px 8px;
+  border: 1px solid var(--today-category, var(--line));
+  border-radius: 3px;
+  color: var(--today-category, var(--muted));
+  background: var(--panel-soft);
+  font-size: 11px;
+}
+.today-now-elapsed { display: flex; align-items: baseline; gap: 12px; margin-top: 16px; }
+.today-now-elapsed strong {
+  color: var(--cockpit-go, var(--accent));
+  font-size: 31px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 2px;
+  text-shadow: 0 0 12px var(--cockpit-go-glow, transparent);
+}
+.today-now-elapsed strong.is-warn,
+.today-now-focus.is-warn .today-now-elapsed strong { color: var(--orange); }
+.today-now-elapsed strong.is-late,
+.today-now-focus.is-late .today-now-elapsed strong { color: var(--red); }
+.today-now-elapsed span,
+.today-now-next { color: var(--muted); font-size: 11px; }
+.today-progress {
+  height: 7px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--cockpit-track, var(--panel-soft));
+}
+.today-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--purple), var(--cockpit-go, var(--accent)));
+}
+.today-now-focus.is-warn .today-progress i,
+#todayNowProgress.is-warn { background: var(--orange); }
+.today-now-focus.is-late .today-progress i,
+#todayNowProgress.is-late { background: var(--red); }
+.today-now-next { margin-top: 12px; padding-top: 9px; border-top: 1px dashed var(--line); }
+.today-now-next em { color: var(--text); font-style: normal; }
+.today-now-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 92px;
+}
+.today-now-empty div { display: grid; gap: 6px; }
+.today-now-empty strong { font-size: 20px; }
+.today-now-empty span,
+.today-empty { color: var(--muted); font-size: 12px; }
+.today-queue { display: grid; gap: 6px; }
+.today-queue-row {
+  display: grid;
+  grid-template-columns: 28px 48px minmax(0, 1fr) 44px auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 38px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--panel-soft);
+  font-size: 11px;
+}
+.today-queue-row.is-first { border-color: var(--cockpit-go, var(--accent)); }
+.today-queue-row.is-dim { opacity: 0.55; }
+.today-queue-row > span,
+.today-queue-row time,
+.today-queue-row small { color: var(--muted); }
+.today-queue-row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.today-queue-row button {
+  padding: 4px 8px;
+  border: 1px solid var(--cockpit-go, var(--accent));
+  border-radius: 3px;
+  color: var(--cockpit-go, var(--accent));
+  background: var(--accent-soft);
+  cursor: pointer;
+}
+.today-gauge-count { display: flex; align-items: baseline; gap: 7px; }
+.today-gauge-count strong { font-size: 28px; font-variant-numeric: tabular-nums; }
+.today-gauge-count span,
+.today-progress-cap { color: var(--muted); font-size: 11px; }
+.today-progress-cap { display: flex; justify-content: space-between; margin-top: 4px; }
+.today-progress-cap b { color: var(--text); }
+.today-kv {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.today-kv > div {
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--panel-soft);
+}
+.today-kv span,
+.today-kv small { color: var(--muted); font-size: 10px; }
+.today-kv strong { font-size: 16px; font-variant-numeric: tabular-nums; }
+.today-routine-list { display: grid; gap: 8px; }
+.today-routine-row {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) 48px;
+  gap: 8px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 11px;
+}
+.today-routine-row > div {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--cockpit-track, var(--panel-soft));
+}
+.today-routine-row i { display: block; height: 100%; border-radius: inherit; background: var(--green); }
+.today-routine-row b { text-align: right; font-variant-numeric: tabular-nums; }
+.today-routine-total {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+  color: var(--muted);
+  font-size: 11px;
+  text-align: right;
+}
+.today-flight-track {
+  position: relative;
+  height: 72px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--panel-soft);
+}
+.today-flight-hour {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--line);
+}
+.today-flight-hour span {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  color: var(--faint);
+  font-size: 8px;
+  font-style: normal;
+}
+.today-flight-block {
+  position: absolute;
+  top: 24px;
+  height: 29px;
+  min-width: 4px;
+  overflow: hidden;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  color: var(--muted);
+  background: var(--panel);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.today-flight-block.is-done { border-color: var(--green); color: var(--green-text); background: var(--green-soft); }
+.today-flight-block.is-now {
+  border-color: var(--cockpit-go, var(--accent));
+  color: var(--cockpit-go, var(--accent));
+  background: var(--accent-soft);
+  box-shadow: 0 0 10px var(--cockpit-go-glow, transparent);
+}
+.today-flight-now {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--cockpit-go, var(--accent));
+  box-shadow: 0 0 8px var(--cockpit-go-glow, transparent);
+}
+.today-flight-now::after {
+  position: absolute;
+  top: -2px;
+  left: -5px;
+  color: var(--cockpit-go, var(--accent));
+  font-size: 9px;
+  font-style: normal;
+  content: "▼";
+}
+.today-flight-empty {
+  position: absolute;
+  top: 30px;
+  left: 12px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.today-flight-cap {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  color: var(--faint);
+  font-size: 9px;
+}
+@keyframes today-blink { 50% { opacity: 0.3; } }
+@media (max-width: 720px) {
+  .today-deck { grid-template-columns: minmax(0, 1fr); }
+  .today-span-2 { grid-column: span 1; }
+  .today-clock { width: 100%; margin-left: 0; text-align: left; }
+  .today-queue-row { grid-template-columns: 24px 42px minmax(0, 1fr) 40px; }
+  .today-queue-row button { grid-column: 3 / -1; justify-self: start; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .today-now-label i { animation: none; }
+}
