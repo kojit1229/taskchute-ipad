@@ -1780,6 +1780,10 @@ function normalizeState(value) {
   if (!Array.isArray(value.settings.categories) || value.settings.categories.length === 0) {
     value.settings.categories = defaultCategories();
   }
+  // v189 F7 migration: ビジョン直結カテゴリ名の複数選択。既存の配列はそのまま保持する。
+  if (!Array.isArray(value.settings.visionDirectCategories)) {
+    value.settings.visionDirectCategories = [];
+  }
   // v9: 休憩メッセージマスタ
   if (!Array.isArray(value.settings.breakMessages) || value.settings.breakMessages.length === 0) {
     value.settings.breakMessages = defaultBreakMessages();
@@ -1792,6 +1796,16 @@ function normalizeState(value) {
   if (!Array.isArray(value.settings.avoidList)) {
     value.settings.avoidList = [];
   }
+  // v189 F6 migration: 既存の各項目を保ったまま、当日単位の抵触記録を補完する。
+  // 非オブジェクト要素はv145(batteryRecoveryDraftDates)と同じ流儀で除去する
+  // (通すとnormalizeStateがthrowし全state初期化に至るため。migration独立レビュー指摘)
+  value.settings.avoidList = value.settings.avoidList
+    .filter((it) => it && typeof it === "object")
+    .map((it) => ({
+      violations: [],
+      ...it,
+      violations: Array.isArray(it.violations) ? it.violations : []
+    }));
   value.projects ||= [];
   value.tasks ||= [];
   // v16/v18: 既存 Task にWish + ルーティン連携 用フィールドのデフォルト値を補完(後方互換)
