@@ -470,19 +470,19 @@
         "content-ai",
         "ui-responsive"
       ],
-      "assertionSignals": 51,
-      "assertionHash": "f21474b2adf7ac10",
-      "sourceHash": "cb93f17f8d356fc0",
+      "assertionSignals": 90,
+      "assertionHash": "d268524be19ce098",
+      "sourceHash": "66727cfea843a05b",
       "waits": {
-        "fixedCount": 2,
-        "numericMilliseconds": 3600,
+        "fixedCount": 4,
+        "numericMilliseconds": 7200,
         "unresolvedCount": 0
       },
       "sideEffects": {
         "browser": true,
         "server": true,
         "fileWrite": false,
-        "networkMock": false,
+        "networkMock": true,
         "clock": true
       }
     },
@@ -1742,10 +1742,10 @@
       ],
       "assertionSignals": 49,
       "assertionHash": "c3363e9f913914d2",
-      "sourceHash": "0e0809ab8c954df8",
+      "sourceHash": "3bdd3922270412aa",
       "waits": {
-        "fixedCount": 21,
-        "numericMilliseconds": 8250,
+        "fixedCount": 23,
+        "numericMilliseconds": 8650,
         "unresolvedCount": 0
       },
       "sideEffects": {
