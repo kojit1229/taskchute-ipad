@@ -2618,6 +2618,211 @@ function check(name, cond, extra = "") {
     scheduleInboxFx.staleHours = 0;
 
     // ============================================================
+    // ==== ここから W3(TT帯=外部予定帯 v188)追記セクション [46]〜[48] ====
+    // 設計の正: workbench/out/2026-07-29-today-cockpit-ideas/design-onetap-timetree.md
+    //   §3.4(帯の仕様・ファイル契約・重複解決・取込済表示)/ §3.6(block.label)/
+    //   §5裁定表 #10(帯=こーじのみ。予定/翠/デートは非表示)#12(終日は帯に表示しない)
+    //   #13(帯は今日FLIGHT PLAN+時間ビューの両方・読み取り専用・重複はレーン分離)
+    //   #14(Block化はeditor経由でカテゴリ選択=帯タップ→Block生成(label/externalRef自動・
+    //   category空)→既存Block編集モーダル。即開始はしない=計時タブとの役割分担)
+    // DOM契約(実装側と共有):
+    //   今日ビューFLIGHT PLAN内の帯 .today-flight-tt[data-external-id](既存Blockレーンと別レーン)/
+    //   時間ビューの帯 .timeline-tt[data-external-id](同じ意味論)/ 取込済の帯 .is-imported
+    // 実装(未着手)より先に仕様から書いた。前提が食い違ったらテストを弱めず実装と突合して直す:
+    //   前提W3-1: schedule-inbox.json の取得経路は W1 と同じ Contents API
+    //            (パス末尾 /contents/taskchute/schedule-inbox.json。前提W1-11)。Playwrightの
+    //            後発 page.route 優先仕様で、この区間からは終日予定入りの W3 フィクスチャに差し替える
+    //   前提W3-2: 帯タップ(未取込)の Block 生成はタップ(イベント)時点で saveState され、
+    //            続けて既存 Block 編集モーダル(.modal-card。既存カテゴリ select を含む)が開く。
+    //            実行開始はしない(actualStartAt を打たない。裁定#14)
+    //   前提W3-3: 取込済(.is-imported)の判定は block.externalRef === externalId の存在(§3.4
+    //            重複解決)。取込済帯の再タップの詳細挙動(既存Blockの編集を開く/無視する)は
+    //            契約にしない(「Blockが増えない」ことだけを検証する。前提W1-12と同思想)
+    //   前提W3-4: 帯からのBlockの planned時刻・estimateMin・oneTapフラグの値は契約にしない。
+    //            検証は externalRef / label / category空 / title / date と「実行開始されない」に絞る
+    //   前提W3-5: 「別レーン」の検証はDOM構造(帯が .today-flight-block 要素を兼ねない・内包され
+    //            ない)で行う(見た目のレーン座標は契約にしない)
+    // ============================================================
+
+    // W3フィクスチャ: こーじ当日(時間帯)・翠当日・こーじ終日allDay・こーじ明日(観点1の4種)。
+    // W1のscheduleInboxFxルートより後に登録するのでこちらが優先される(前提W3-1)。
+    const w3InboxFx = { status: 200 };
+    const W3_SCHEDULE_INBOX = {
+      generatedAt: `${TODAY}T07:00:00`,  // 当日朝生成=鮮度内(T区切り秒あり。FORMAT_CONTRACT整合)
+      events: [
+        { externalId: "tt3-koji-day", title: "TT3-こーじ-通院", date: TODAY, startAt: "16:00", endAt: "17:00", allDay: false, label: "こーじ", calendarName: "家族" },
+        { externalId: "tt3-midori-day", title: "TT3-翠-習い事", date: TODAY, startAt: "15:00", endAt: "16:00", allDay: false, label: "翠", calendarName: "家族" },
+        { externalId: "tt3-koji-allday", title: "TT3-こーじ-終日", date: TODAY, startAt: "00:00", endAt: "00:00", allDay: true, label: "こーじ", calendarName: "家族" },
+        { externalId: "tt3-koji-tomorrow", title: "TT3-こーじ-明日", date: TOMORROW, startAt: "10:00", endAt: "11:00", allDay: false, label: "こーじ", calendarName: "家族" }
+      ]
+    };
+    await page.route((url) => url.hostname === "api.github.com", (route) => {
+      const p = decodeURIComponent(new URL(route.request().url()).pathname);
+      if (p.endsWith("/contents/taskchute/schedule-inbox.json")) {
+        if (w3InboxFx.status !== 200) return route.fulfill({ status: w3InboxFx.status, body: "not found" });
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(W3_SCHEDULE_INBOX) });
+      }
+      return route.fallback();
+    });
+    const w3TodayTtSel = (externalId) => `.today-flight-tt[data-external-id="${externalId}"]`;
+    const w3TimelineTtSel = (externalId) => `.timeline-tt[data-external-id="${externalId}"]`;
+
+    // ============================================================
+    // [46] W3: 今日ビューFLIGHT PLANのTT帯 — こーじ当日の時間帯予定のみ帯表示
+    //   (翠×=裁定#10・終日×=裁定#12・明日×。既存Blockレーンとの共存とレーン分離=裁定#13)
+    // ============================================================
+    console.log("[46] W3: FLIGHT PLANにTT帯が出る(こーじ当日の時間帯予定のみ)。既存Blockレーンと別レーンで共存する");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedW1({
+      view: "today",
+      blocks: [
+        block("w3-plan", { title: "W3-通常予定Block", plannedStartAt: at("10:00"), plannedEndAt: at("11:00"), estimateMin: 60 })
+      ]
+    });
+    await page.waitForSelector(w3TodayTtSel("tt3-koji-day"), { state: "attached" });
+    check("こーじ当日(時間帯あり)の予定が .today-flight-tt[data-external-id] として帯表示される(DOM契約・裁定#13)", true);
+    check("TT帯はFLIGHT PLANパネル内に描画される(帯の置き場=今日FLIGHT PLAN。裁定#13)",
+      await page.locator(`.today-flight-plan ${w3TodayTtSel("tt3-koji-day")}`).count() === 1);
+    check("翠ラベルの当日予定は帯に出ない(タイムライン系はこーじのみ。裁定#10)",
+      await page.locator(w3TodayTtSel("tt3-midori-day")).count() === 0);
+    check("こーじの終日予定(allDay)は帯に出ない(カレンダービューでのみ見える。裁定#12)",
+      await page.locator(w3TodayTtSel("tt3-koji-allday")).count() === 0);
+    check("こーじの明日の予定は今日の帯に出ない",
+      await page.locator(w3TodayTtSel("tt3-koji-tomorrow")).count() === 0);
+    check("TT帯の総数が1本(こーじ当日の時間帯予定のみが母集合)",
+      await page.locator(".today-flight-tt").count() === 1);
+    check("未取込の帯に .is-imported が付いていない(取込前の初期表示)",
+      await page.locator(".today-flight-tt.is-imported").count() === 0);
+    check("既存BlockレーンのBlock帯(.today-flight-block)と共存して描画される",
+      await page.locator('.today-flight-block[data-id="w3-plan"]').count() === 1);
+    check("TT帯は既存Blockレーンの要素と別物(=別レーン。.today-flight-block を兼ねず内包もされない。前提W3-5)",
+      await page.evaluate(() => {
+        const el = document.querySelector('.today-flight-tt[data-external-id="tt3-koji-day"]');
+        return !!el && !el.classList.contains("today-flight-block") && !el.closest(".today-flight-block");
+      }));
+
+    // ============================================================
+    // [46b] W3: 帯タップ(未取込)= Block生成(externalRef/label自動・category空)+編集モーダル。
+    //   実行開始はしない。再タップで二重生成なし+.is-imported 表示(裁定#14・§3.4)
+    // ============================================================
+    console.log("[46b] W3: 帯タップでBlock生成+編集モーダルが開く(即開始なし)。再タップは二重生成せず取込済表示になる");
+    const w3BlocksBeforeTap = (await stateNow()).blocks.length;
+    await page.locator(w3TodayTtSel("tt3-koji-day")).first().click();
+    // タップ(イベント)時点の saveState を localStorage の変化で待つ(前提W3-2)
+    await page.waitForFunction((KEY) =>
+      JSON.parse(localStorage.getItem(KEY)).blocks.some((b) => b.externalRef === "tt3-koji-day"), KEY);
+    await page.waitForSelector(".modal-card", { state: "attached" });
+    check("タップで既存Block編集モーダルが開く(裁定#14: F2 TIME COMBと同パターン・新規UIなし)", true);
+    check("編集モーダル内に既存カテゴリselectがある(カテゴリはモーダルのselectで選ぶ。裁定#14)",
+      await page.locator(".modal-card select").count() >= 1);
+    const st46 = await stateNow();
+    const w3Ev = st46.blocks.find((b) => b.externalRef === "tt3-koji-day");
+    check("externalRef=externalId が自動記録される(§3.4重複解決の鍵)",
+      !!w3Ev, JSON.stringify(st46.blocks.map((b) => b.id)));
+    check("label='こーじ' が自動セットされる(§3.6・裁定#9)", w3Ev?.label === "こーじ", w3Ev?.label);
+    check("category は空のまま(裁定#14)", w3Ev?.category === "", w3Ev?.category);
+    check("title=予定タイトル・date=当日でBlock化される",
+      w3Ev?.title === "TT3-こーじ-通院" && w3Ev?.date === TODAY,
+      JSON.stringify({ title: w3Ev?.title, date: w3Ev?.date }));
+    check("実行開始はされない(actualStartAt無し・runningゼロ=計時タブとの役割分担。前提W3-2)",
+      !w3Ev?.actualStartAt && w3Ev?.completed === false && w1Running(st46).length === 0,
+      JSON.stringify({ actualStartAt: w3Ev?.actualStartAt, running: w1Running(st46).map((b) => b.id) }));
+    await page.locator('.modal-card [data-action="modal-close"]').first().click();
+    await page.waitForSelector(".modal-card", { state: "detached" });
+    await page.waitForSelector(`${w3TodayTtSel("tt3-koji-day")}.is-imported`, { state: "attached" });
+    check("取込済の帯に .is-imported が付く(§3.4取込済表示)", true);
+    const w3BlocksAfterImport = (await stateNow()).blocks.length;
+    check("取込でBlockが1件だけ増える(通常Block1+取込1=2件)",
+      w3BlocksAfterImport === w3BlocksBeforeTap + 1, `${w3BlocksBeforeTap}→${w3BlocksAfterImport}`);
+    // 再タップ: Block再生成しない(取込済帯の詳細挙動は契約にしない。モーダルが開いたら閉じるだけ。前提W3-3)
+    await page.locator(w3TodayTtSel("tt3-koji-day")).first().click();
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 0)));
+    if (await page.locator(".modal-card").count()) {
+      await page.locator('.modal-card [data-action="modal-close"]').first().click();
+      await page.waitForSelector(".modal-card", { state: "detached" });
+    }
+    const st46b = await stateNow();
+    check("同一externalIdの再タップで二重生成が起きない(externalRef=tt3-koji-day のBlockは1件のまま。§3.4)",
+      st46b.blocks.filter((b) => b.externalRef === "tt3-koji-day").length === 1,
+      JSON.stringify(st46b.blocks.map((b) => ({ id: b.id, externalRef: b.externalRef }))));
+    check("Block総数も増えない(再タップでの再生成なし)",
+      st46b.blocks.length === w3BlocksAfterImport, `${w3BlocksAfterImport}→${st46b.blocks.length}`);
+
+    // ============================================================
+    // [47] W3: 時間ビューのTT帯 — .timeline-tt がこーじ当日のみ出て、既存の絶対配置Blockカードと
+    //   共存する(pageerrorなし)。タップの意味論は今日ビューの帯と同じ(裁定#13)
+    // ============================================================
+    console.log("[47] W3: 時間ビューに .timeline-tt が出る(こーじのみ)。既存タイムラインBlockカードと共存し、タップの意味論も同じ");
+    const failuresBefore47 = failures;  // この区間のpageerror検出用([13]と同じ方式)
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedW1({
+      view: "timeline",
+      blocks: [
+        block("w3-tl", { title: "W3-TL-通常Block", plannedStartAt: at("09:00"), plannedEndAt: at("10:00"), estimateMin: 60 })
+      ]
+    });
+    // timelineModeは前セクションから持ち越される(seedW1は触らない)ため、
+    // 帯が出る「予定」モードへ明示的に切り替える(帯はplannedモード限定=§3.4のplanned重畳)
+    await page.waitForSelector('[data-action="timeline-mode"][data-mode="planned"]', { state: "attached" });
+    await page.locator('[data-action="timeline-mode"][data-mode="planned"]').first().click();
+    await page.waitForSelector(w3TimelineTtSel("tt3-koji-day"), { state: "attached" });
+    check("時間ビューにこーじ当日のTT帯 .timeline-tt[data-external-id] が出る(DOM契約・裁定#13)", true);
+    check("時間ビューのTT帯も1本のみ(翠・終日・明日は出ない。裁定#10/#12)",
+      await page.locator(".timeline-tt").count() === 1
+      && await page.locator(w3TimelineTtSel("tt3-midori-day")).count() === 0
+      && await page.locator(w3TimelineTtSel("tt3-koji-allday")).count() === 0
+      && await page.locator(w3TimelineTtSel("tt3-koji-tomorrow")).count() === 0);
+    check("既存タイムラインの絶対配置Blockカード(.timeline-card)と共存して描画される",
+      await page.locator('.timeline-card[data-id="w3-tl"]').count() === 1);
+    // 同じ意味論: タップ→Block生成(externalRef/label自動・category空)+編集モーダル(即開始なし)→取込済表示
+    await page.locator(w3TimelineTtSel("tt3-koji-day")).first().click();
+    await page.waitForFunction((KEY) =>
+      JSON.parse(localStorage.getItem(KEY)).blocks.some((b) => b.externalRef === "tt3-koji-day"), KEY);
+    await page.waitForSelector(".modal-card", { state: "attached" });
+    const st47 = await stateNow();
+    const w3TlEv = st47.blocks.find((b) => b.externalRef === "tt3-koji-day");
+    check("時間ビューの帯タップでも externalRef/label自動・category空でBlock化される(同じ意味論)",
+      !!w3TlEv && w3TlEv.label === "こーじ" && w3TlEv.category === "", JSON.stringify(w3TlEv));
+    check("時間ビューの帯タップでも実行開始はされない(actualStartAt無し・runningゼロ)",
+      !w3TlEv?.actualStartAt && w1Running(st47).length === 0,
+      JSON.stringify(w1Running(st47).map((b) => b.id)));
+    await page.locator('.modal-card [data-action="modal-close"]').first().click();
+    await page.waitForSelector(".modal-card", { state: "detached" });
+    await page.waitForSelector(`${w3TimelineTtSel("tt3-koji-day")}.is-imported`, { state: "attached" });
+    check("時間ビューの帯にも取込済 .is-imported が付く(同じ意味論)", true);
+    check("[47]区間の描画・操作で pageerror が発生しない", failures === failuresBefore47);
+
+    // ============================================================
+    // [48] W3: schedule-inbox.json 404 でも帯は今日ビュー・時間ビューとも出ず、
+    //   既存描画は無傷(ファイル不在で一切エラーなし=F8式フェイルソフト。§3.4)
+    // ============================================================
+    console.log("[48] W3: schedule-inbox 404 ではTT帯が出ず、FLIGHT PLAN・時間ビューの既存描画は無傷(pageerrorゼロ)");
+    const failuresBefore48 = failures;  // この区間のpageerror検出用
+    w3InboxFx.status = 404;
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    const w3Resp404 = page.waitForResponse((r) => r.url().includes("schedule-inbox.json"));
+    await seedW1({
+      view: "today",
+      blocks: [
+        block("w3-404", { title: "W3-404-通常Block", plannedStartAt: at("10:00"), plannedEndAt: at("11:00"), estimateMin: 60 })
+      ]
+    });
+    await w3Resp404;
+    await page.waitForSelector(".today-flight-plan", { state: "attached" });
+    // 404応答後の描画反映猶予にマクロタスクを回してから不在を断定する([30c]/[45b]と同手法)
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 0)));
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 0)));
+    check("404では今日ビューにTT帯が1本も出ない(§3.4: ファイル不在で一切エラーなし)",
+      await page.locator(".today-flight-tt").count() === 0);
+    check("404でもFLIGHT PLANの既存Blockレーンは通常描画される(フェイルソフト)",
+      await page.locator('.today-flight-block[data-id="w3-404"]').count() === 1);
+    await w1GoView("timeline");
+    await page.waitForSelector('.timeline-card[data-id="w3-404"]', { state: "attached" });
+    check("404では時間ビューにもTT帯が出ず、既存Blockカードは通常描画される",
+      await page.locator(".timeline-tt").count() === 0
+      && await page.locator('.timeline-card[data-id="w3-404"]').count() === 1);
+    check("[48]区間の描画で pageerror が発生しない", failures === failuresBefore48);
+    w3InboxFx.status = 200;
   } finally {
     await browser.close();
     server.close();

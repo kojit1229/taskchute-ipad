@@ -55,6 +55,30 @@
       }
     },
     {
+      "file": "calendar-core.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "ui-responsive"
+      ],
+      "assertionSignals": 33,
+      "assertionHash": "1d3c4951537eca7b",
+      "sourceHash": "b5be8ed9d6783504",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
       "file": "code-index.test.js",
       "kind": "node",
       "tier": "full",
@@ -470,9 +494,9 @@
         "content-ai",
         "ui-responsive"
       ],
-      "assertionSignals": 320,
-      "assertionHash": "1794dbc87071f6b5",
-      "sourceHash": "5e5a135980ef3775",
+      "assertionSignals": 351,
+      "assertionHash": "4d26fc25615b95c3",
+      "sourceHash": "63fdd7d1d97fe085",
       "waits": {
         "fixedCount": 8,
         "numericMilliseconds": 14400,
