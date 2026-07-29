@@ -1,0 +1,59 @@
+{
+  "version": 183,
+  "date": "2026-07-29",
+  "title": "今日コックピット B2(P5〜P7)+v182 CI退行修正",
+  "summary": "今日ビューに既存state.pomodoroと同期するポモドーロリング、決定論順と45秒自動送りを備えたKINDLE INSIGHT、既存0秒思考保存経路を共用するZERO-SEC LAUNCHを追加してコックピットビューを完成させた。あわせてv182 CIで検出した起動ビュー変更由来の退行(同期停止バナーがtodayで見えない)と、2系統レビュー指摘3件(実績上書き・auto-OFF無反応・下書き消失)を修正した。",
+  "changedFiles": [
+    "src/features/today.js",
+    "app.js",
+    "styles.css",
+    "sw.js",
+    "releases/v183.json",
+    "tests/today-core.test.js",
+    "tests/v153.test.js",
+    "tests/v57.test.js"
+  ],
+  "intent": [
+    "P5: Today側のポモ開始はforceResetPomodoroSession+startPomodoro直行とし、v13の実績開始時刻「既存値維持」契約とfocusTimerAuto非依存の手動開始を守る(レビューH1/M2反映。当初のsetBlockTime案は実行中Blockの実績を上書きするため破棄)。",
+    "P6: reading/highlights.jsonの全ハイライトをbookId+refで正規化し、日付seedの純関数で同日同順のカードデッキにする。",
+    "P7: ztCurrent/ztWriteStartedAt/saveZtEntryを単体ビューとTodayで共用し、entryスキーマ・durationSec・提案採用規則を一系統に保つ。書きかけ本文はモジュール変数へ退避し、他パネル操作の全再描画でも消えないようにする(レビューM3反映)。",
+    "v182退行修正: 同期停止赤帯バナー(home専用だった)をtodayヘッダにも表示する(起動ビュー変更で警告が見えなくなっていた。CI v134で検出)。"
+  ],
+  "changes": [
+    "P5: .today-pomodoroを追加し、renderCircularProgressとstate.pomodoroからリング・残り時間・対象Blockを描画した。開始はforceResetPomodoroSession+startPomodoro(実績既存値維持・設定非依存)、中断は既存stop-pomodoroを使い、理由ピッカーの条件描画だけrenderPomodoroInterruptControlsへ共通化した。",
+    "P6: .today-kindleと.today-kindle-cardを追加した。未取得/空は非表示、前後/ランダム操作と45秒自動送りはカードDOMだけを差分更新し、手動操作でintervalをリセットする。",
+    "P7: .today-zeroと#todayZeroTextを追加した。pending提案、重要度高、通常の順でテーマを提示し、提案はztSuggestionAdopt経由で採用してから書き始め、saveZtEntryの共通経路で保存する。書きかけ本文はtodayZeroDraftへ退避し再描画時にtextareaへ復元する。",
+    "ticker: 既存todayTickerIdへポモドーロ表示、KINDLEの45秒期限判定、ZERO-SEC経過表示を相乗りし、日跨ぎ再描画はrenderDeferringForFocus経由へ変更した。Today離脱時はKINDLEの次回送り期限もclearする。",
+    "renderToday冒頭にhomeSyncAlertBanner()を追加(v182退行修正)。",
+    "styles.css: B2各パネルのtodayスコープCSSと、iOS自動ズームを防ぐ16pxのZERO-SEC textareaを追加した。",
+    "sw.js: CACHE_NAMEをtaskchute-journal-pwa-v183へ更新した。",
+    "tests: today-coreへB2セクション13本+レビュー反映3本(15e/17f/H1回帰assert)を追加。v153/v57は起動ビュー変更(D3)へ追随(home明示遷移の追加のみ、assertion不変)。"
+  ],
+  "uncertainties": [
+    "ポモドーロ未起動時のToday開始対象は、実行中Blockを優先し、無ければNEXT QUEUE先頭とした。開始はstartPomodoro直行のため実行中Blockの実績開始時刻は維持される(v13契約)。",
+    "KINDLEのランダム操作だけは意図どおり非決定論で、当日初期順・前後送り・自動送りの順序は決定論である。",
+    "今日ビューに開始導線が2系統ある(NOW FOCUS=now-start宣言モーダル経由/POMODORO=宣言なし即開始)。ポモ側は「宣言よりまず回す」用途として意図的に軽くした(レビューL9。違和感が出たら宣言モーダルへ統一を検討)。",
+    "≤v182端末が同期でcurrentView:\"today\"を受けた場合の白画面回避はv182のnormalizeState補完で対応済み。全端末のPWA更新(sw.js?nocache=確認)を推奨。"
+  ],
+  "reviewFocus": [
+    "today-pomodoro開始がforceResetPomodoroSession+startPomodoroを呼び、実行中Blockの actualStartAt を上書きしないこと(テスト[15]で回帰assert)。",
+    "focusTimerAuto=OFFでも今日ビューの開始でセッションが始まること(テスト[15e])。",
+    "renderManualPomodoroの通常ボタンと2倍速50:00表示が共通関数化前と同一であること。",
+    "deterministicReadingDeckが同日同順を返し、highlights未取得/空では.today-kindleを生成しないこと。",
+    "Today ZERO-SEC保存がzeroThinking.entriesへdurationSec付きで追記され、0秒思考単体ビューの既存保存・提案採用・テーマ消費規則を変えていないこと。全再描画後もtextareaの下書きが残ること(テスト[17f])。",
+    "同期停止バナーがtoday/home両ビューで表示され、重複表示・スコープ漏れがないこと。"
+  ],
+  "verification": [
+    "node --check app.js / src/features/today.js / tests/today-core.test.js / tests/v153.test.js / tests/v57.test.js → 全てexit 0。",
+    "node tests/today-core.test.js → 31セクション ALL PASS(監督者環境。B2の13本+レビュー反映3本を含む)。",
+    "CI失敗5スイートの再現と解消: v134(バナー修正で解消)/ v153・v57(D3追随で解消)/ v75・v140(修正後ツリーでPASS、CI失敗は環境負荷起因の可能性があり本リリースのCIで再観察)。",
+    "2系統レビュー実施済み: reviewer(Claude)=修正後リリース可(H1/M2/M3/M4を本版で反映)、Codexレビュー=P1×3件(同内容)を本版で反映。",
+    "push前最終ゲート: node scripts/release-gate.js releases/v183.json --final(test:core)を実行しPASS(実行ログは本記録のコミット時点)。"
+  ],
+  "knownLimitations": [
+    "ポモドーロ単体ビューの実時間25分・50:00からの2倍速表示はK裁定どおり維持した。",
+    "KINDLEデッキは毎render再構築(ハイライト数千件でiPad性能に効く可能性。レビューL10)。dateISOキーのキャッシュ化は後続候補。",
+    "beginTodayZeroWriteは書き始め時点で提案テーマをadopted化する(直後に破棄しても採用済みが残る。レビューL12)。保存時採用への変更は後続判断。",
+    "feat: c65fd82はP5〜P7+バナー修正を1コミットに同梱(レビューM6指摘。バナー修正の分離が理想だったが、push前rebaseのリスクを避けて記録で補う)。"
+  ]
+}
