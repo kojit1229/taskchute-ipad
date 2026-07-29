@@ -32,18 +32,20 @@
          一瞬ダークのまま=theme-colorメタの既定値#111216が残る問題があった)。 -->
     <script>
       (function () {
-        var THEME_COLOR_BY_MODE = { light: "#f7f7fa", dark: "#111216" };
+        var THEME_COLOR_BY_MODE = { light: "#f7f7fa", dark: "#111216", cockpit: "#050a14" };
+        function resolveTheme(mode) {
+          if (mode !== "auto") return ["light", "dark", "cockpit"].includes(mode) ? mode : "dark";
+          return (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+        }
         try {
           var raw = localStorage.getItem("taskchute-journal-pwa-state-v1");
           var theme = "dark";
           if (raw) {
             var parsed = JSON.parse(raw);
             var t = parsed && parsed.settings && parsed.settings.theme;
-            if (t === "light" || t === "dark" || t === "auto") theme = t;
+            if (["light", "dark", "cockpit", "auto"].includes(t)) theme = t;
           }
-          var resolved = theme !== "auto"
-            ? (theme === "light" ? "light" : "dark")
-            : ((window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light");
+          var resolved = resolveTheme(theme);
           document.documentElement.setAttribute("data-theme", resolved);
           var meta = document.querySelector('meta[name="theme-color"]');
           if (meta) meta.setAttribute("content", THEME_COLOR_BY_MODE[resolved]);

@@ -1584,9 +1584,9 @@ function saveState() {
 // v151レビュー対応(必須5): 分岐の「形」をindex.htmlの同期スクリプトと完全一致させる
 // (mode!=="auto"ならlight/darkを直接判定、autoのときだけmatchMediaを見る)。
 // どちらかだけ書き換えるとドリフトするため、変更時は両方を見比べること。
-const THEME_COLOR_BY_MODE = { light: "#f7f7fa", dark: "#111216" };
+const THEME_COLOR_BY_MODE = { light: "#f7f7fa", dark: "#111216", cockpit: "#050a14" };
 function resolveTheme(mode) {
-  if (mode !== "auto") return mode === "light" ? "light" : "dark";
+  if (mode !== "auto") return ["light", "dark", "cockpit"].includes(mode) ? mode : "dark";
   return (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
 }
 function applyTheme() {
@@ -1667,10 +1667,10 @@ function normalizeState(value) {
   if (value.settings.timelineEnergyGraphMode !== "energy" && value.settings.timelineEnergyGraphMode !== "battery") {
     value.settings.timelineEnergyGraphMode = "energy";
   }
-  // v151(ダークモード既定化、K指示2026-07-27): "light"|"dark"|"auto"(OS追従)の3択。
+  // v185: "light"|"dark"|"cockpit"|"auto"(OS追従)の4択。既定"dark"は維持する。
   // 既定"dark"。既存端末も次回起動からdarkになる(autoを選べば従来どおりOS追従に戻せる)。
   // 実際のhtml要素への反映(data-theme属性・meta theme-color)はapplyTheme()が行う。
-  if (value.settings.theme !== "light" && value.settings.theme !== "dark" && value.settings.theme !== "auto") {
+  if (!["light", "dark", "cockpit", "auto"].includes(value.settings.theme)) {
     value.settings.theme = "dark";
   }
   if (typeof value.settings.autoArchive !== "boolean") value.settings.autoArchive = true;
@@ -8498,16 +8498,17 @@ function renderSettingsGuidedAccessPanel() {
 // 専用のイベントハンドラを新設しない。render()内でapplyTheme()を毎回呼ぶ設計のため、
 // 保存直後のrender()でhtml[data-theme]/meta[theme-color]も自動的に追従する。
 function renderSettingsThemePanel() {
-  const theme = (state.settings.theme === "light" || state.settings.theme === "auto") ? state.settings.theme : "dark";
+  const theme = ["light", "dark", "cockpit", "auto"].includes(state.settings.theme) ? state.settings.theme : "dark";
   return `
     <h3>🌗 テーマ</h3>
     <div class="muted" style="font-size:12px; line-height:1.6">
-      画面配色です。既定はダーク。「OS追従」を選ぶと端末の外観設定(ライト/ダーク)に自動で合わせます。
+      画面配色です。既定はダーク。コックピットは全画面を管制室調にします。「OS追従」は端末の外観設定に合わせます。
     </div>
     <label>テーマ
       <select class="select" data-setting-field="theme">
         <option value="dark" ${theme === "dark" ? "selected" : ""}>ダーク</option>
         <option value="light" ${theme === "light" ? "selected" : ""}>ライト</option>
+        <option value="cockpit" ${theme === "cockpit" ? "selected" : ""}>コックピット</option>
         <option value="auto" ${theme === "auto" ? "selected" : ""}>OS追従</option>
       </select>
     </label>
@@ -9976,7 +9977,10 @@ function renderStats() {
   // 既存チャートは1つも削除せず、詳細detailsへ格納するだけ(claude-ux-review S2/S3対応)。
   const sleepSummaryCard = renderSleepSummaryLine(sleepSince, today);
   const energyCurveCard = renderEnergyCurveCard();  // v161: バッチ生成物が無ければ空文字(節ごと非表示)
-  const summaryBody = timeLogCard + twelveWeekCard + insightsCard + rateChart + sleepSummaryCard;
+  // v184: TIME LOG/12WYは常設のため、空データ案内の判定は従来パネル群だけで行う
+  //       (常設2枚を含めると案内が永久に出なくなる。tests/v54・v143が案内表示を回帰検証)
+  const legacyBody = insightsCard + rateChart + sleepSummaryCard;
+  const summaryBody = timeLogCard + twelveWeekCard + legacyBody;
   const detailBody = energyChart + donutCard + catEnergyCard + trendCard + heatmap + histCard + estimateCard + calendarCard + sleepStatsCard + energyCurveCard;
   return `
     ${renderHeader("数字で見る実行の実態", "計器盤")}
@@ -9987,7 +9991,7 @@ function renderStats() {
     ${range === "all" ? `<div class="muted" style="font-size:11px; margin-bottom:10px">全期間 = この端末に残っているデータの範囲(アーカイブ済みの期間は含みません)</div>` : ""}
     ${summaryBody ? `<section class="stats-grid">${summaryBody}</section>` : ""}
     ${detailBody ? homeFoldSection("stats-details", false, "stats-details", "", `詳細を見る(時間・エネルギー・見積・継続・睡眠詳細・エネルギーカーブ)`, `<section class="stats-grid">${detailBody}</section>`) : ""}
-    ${(!summaryBody && !detailBody) ? emptyPanel("まだ十分なデータがありません。実績が数週間分たまると表示されます。") : ""}
+    ${(!legacyBody && !detailBody) ? emptyPanel("まだ十分なデータがありません。実績が数週間分たまると表示されます。") : ""}
   `;
 }
 

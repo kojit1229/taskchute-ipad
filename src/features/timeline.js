@@ -181,8 +181,8 @@ function renderTimeline({ compact, mode = "planned" }) {
     ? ((nowMinutes - startHour * 60) / 60) * rowHeight
     : null;
   const nowLine = nowTop !== null ? `
-    <div class="now-line" style="position:absolute; top:${nowTop}px; left:0; right:0; height:0; border-top:2px solid #FF3B30; z-index:5; pointer-events:none">
-      <span style="position:absolute; left:0; top:-10px; background:#FF3B30; color:#fff; font-size:10px; padding:1px 6px; border-radius:8px; font-weight:700">${pad2(now.getHours())}:${pad2(now.getMinutes())}</span>
+    <div class="now-line" style="position:absolute; top:${nowTop}px; left:0; right:0; height:0; border-top:2px solid var(--timeline-now-line, #FF3B30); z-index:5; pointer-events:none">
+      <span style="position:absolute; left:0; top:-10px; background:var(--timeline-now-line, #FF3B30); color:#fff; font-size:10px; padding:1px 6px; border-radius:8px; font-weight:700">${pad2(now.getHours())}:${pad2(now.getMinutes())}</span>
     </div>
   ` : "";
 
