@@ -841,6 +841,311 @@ function check(name, cond, extra = "") {
     check("離脱後は自動送りtimerが停止している(おとりカードが45秒相当の前進+2周期でも書き換えられない)",
       (await page.evaluate(() => document.querySelector("#kindleDecoyRoot .today-kindle-card")?.textContent)) === "DECOY-KINDLE-CARD");
     await page.evaluate(() => document.getElementById("kindleDecoyRoot")?.remove());
+
+    // ============================================================
+    // ==== ここから B3(P8計器盤TIME LOG / P9 12WY TRACKER+migration)追記セクション [19]〜[23] ====
+    // 設計の正: ../taskchute-notes/designs/v169-today-cockpit.md
+    //   §5(計器盤への追加)・§3 D8(weeklyTargetMin migration)/D9(カテゴリ計時・表示のみ毎秒加算)・
+    //   §7のP8/P9行(完了条件)。
+    // 現物調査: workbench/out/2026-07-29-today-cockpit-impl/b3-survey.md(§5テストフィクスチャ設計)。
+    // DOM契約(実装側と共有済み):
+    //   .stats-time-log / .stats-time-log-row[data-category] /
+    //   .stats-twelve-week / .stats-twelve-week-row[data-project-id]
+    //   2パネルは計器盤(stats)ビューの常時表示層(stats-detailsフォールドの外)の先頭
+    // 実装(別担当が並行作業中)と食い違った場合はテストを弱めるのではなく、
+    // 前提の側を実装と突合して直すこと:
+    //   前提B3-1: 分数nの表示形式は「n分」「H:MM(H:MM:SS含む)」「H時間M分」「NhMm」「nm」
+    //            または裸の数字のどれか(textHasMin()が許容形式を列挙。別形式ならそこへ1つ足す)
+    //   前提B3-2: 12WY TRACKERの実績/目標バーはインラインstyleのwidth指定要素で描く
+    //            (progress系・stats-bar-fill系の既存バーと同じ流儀)。目標未設定(0)行にはwidth指定要素が無い
+    //   前提B3-3: 目標未設定(weeklyTargetMin=0)行の誘導文言は「目標」を含む(§5-2「目標時間を設定」)
+    //   前提B3-4: 計器盤tickerは§4のtoday tickerと同原則(毎tick再取得・stats離脱でclear・
+    //            id "statsTimeLogTotal" の合計表示を毎tick更新)。停止の負検証は[7]/[18]と同じおとり方式
+    // ============================================================
+
+    // B3用seed: 既存seed()/seedB2()と同じ流儀に projects / tasks の直接seedを足した拡張
+    // (既存関数は変更禁止のため別名で追加)
+    async function seedB3({ blocks = [], view = "stats", settings = {}, projects = null, tasks = null } = {}) {
+      await page.evaluate(({ KEY, blocks, view, settings, projects, tasks, TODAY }) => {
+        const s = JSON.parse(localStorage.getItem(KEY));
+        s.blocks = blocks;
+        s.currentView = view;
+        s.selectedDate = TODAY;
+        s.sleep = s.sleep || { logs: {} };
+        s.sleep.logs = {};
+        s.condition = s.condition || { logs: {} };
+        s.condition.logs = {};
+        if (projects) s.projects = projects;
+        if (tasks) s.tasks = tasks;
+        Object.assign(s.settings, settings);
+        localStorage.setItem(KEY, JSON.stringify(s));
+      }, { KEY, blocks, view, settings, projects, tasks, TODAY });
+      await page.reload();
+      await page.waitForSelector('[data-action="nav"]', { state: "attached" });
+    }
+
+    // 日付部品(すべてISO文字列リテラルの組み立て。new Date("文字列")は使わない)
+    const dateISOof = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    const daysAgoISO = (n) => dateISOof(new Date(now0.getFullYear(), now0.getMonth(), now0.getDate() - n));
+    const atOn = (dateISO, hhmm) => `${dateISO}T${hhmm}:00`;
+    const YESTERDAY = daysAgoISO(1);
+    // 12週サイクル開始 = 23日前 → homeCycleと同算式 floor(daysBetween/7)+1 = floor(23/7)+1 = WEEK 4
+    // (テスト実行日の曜日に依存せず決定論。残り日数も同式で 84-23=61日)
+    const CYCLE_START = daysAgoISO(23);
+    const EXPECTED_WK = Math.floor(23 / 7) + 1;  // = 4(期待値もhomeCycleと同一算式から導出して突合する)
+    // 今週の土曜起点(weekRangeと同式: (getDay()+1)%7 → Sat=0)。その前日 = 先週(週境界テスト用)
+    const PREV_WEEK_DAY = daysAgoISO(((now0.getDay() + 1) % 7) + 1);
+
+    // 前提B3-1: 分数nの表示として許容する形式群。どれか1つでも含めば「nが表示されている」とみなす
+    function textHasMin(text, min) {
+      if (text == null) return false;
+      const h = Math.floor(min / 60), m = min % 60;
+      const fixed = [`${min}分`, `${h}:${String(m).padStart(2, "0")}`];
+      if (h > 0) {
+        fixed.push(`${h}時間${m}分`, `${h}時間${String(m).padStart(2, "0")}分`, `${h}h${m ? `${m}m` : ""}`);
+        if (m === 0) fixed.push(`${h}時間`);
+      } else {
+        fixed.push(`${m}m`);
+      }
+      if (fixed.some((r) => text.includes(r))) return true;
+      return new RegExp(`(^|[^0-9])${min}([^0-9]|$)`).test(text);
+    }
+    async function timeLogRowText(category) {
+      return page.evaluate((c) => document.querySelector(`.stats-time-log-row[data-category="${c}"]`)?.textContent ?? null, category);
+    }
+    async function twelveWeekRowText(projectId) {
+      return page.evaluate((p) => document.querySelector(`.stats-twelve-week-row[data-project-id="${p}"]`)?.textContent ?? null, projectId);
+    }
+    // Projectフィクスチャ: homeCycleの12WY目標の条件(kind:"normal"/status:"active"/
+    // twelveWeekStartDateあり/未削除)を満たす形。weeklyTargetMinは既定で「キー自体を持たせない」
+    // (migrationテスト[21]の前提。必要なテストだけextraで与える)
+    const projectFx = (id, title, extra = {}) => ({
+      id, kind: "normal", title, status: "active", memo: "",
+      twelveWeekStartDate: CYCLE_START, priority: "中", showProgress: false, updatedAt: "",
+      deleted: false, ...extra
+    });
+    const taskFx = (id, projectId, extra = {}) => ({
+      id, projectId, title: id, status: "todo", dueDate: "", deleted: false,
+      createdAt: at("00:00"), updatedAt: at("00:00"), ...extra
+    });
+
+    // ============================================================
+    // [19] P8 TIME LOG: 当日・実績のみ・完了問わずのカテゴリ集計が期待値と一致
+    // ============================================================
+    console.log("[19] P8 TIME LOG: 固定フィクスチャで当日・実績のみ・完了問わずのカテゴリ集計が期待値と一致する");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB3({
+      view: "stats",
+      blocks: [
+        // 仕事 = 実績あり完了45分 + 実績あり未完了20分 = 65分(「完了問わず」の検証。混入があると65にならない)
+        block("tl-done", { title: "TL-実績あり完了", category: "仕事", completed: true, actualStartAt: at("09:00"), actualEndAt: at("09:45") }),
+        block("tl-undone", { title: "TL-実績あり未完了", category: "仕事", completed: false, actualStartAt: at("10:00"), actualEndAt: at("10:20") }),
+        // 実績なし完了(計画60分)→ 計画時間で代替しない = 集計0
+        // (既存「カテゴリ別 時間配分」=完了のみ・実績なしは予定時間代替、との定義差の検証点。
+        //  §5-1: 画面間の数字一致は完了条件にしない=既存パネルとの突合はしない)
+        block("tl-noact", { title: "TL-実績なし完了", category: "学習", completed: true, plannedStartAt: at("13:00"), plannedEndAt: at("14:00") }),
+        // 他日Block(昨日の実績60分)→ 当日境界の外
+        block("tl-other-day", { title: "TL-他日", category: "他日", date: YESTERDAY, completed: true, actualStartAt: atOn(YESTERDAY, "09:00"), actualEndAt: atOn(YESTERDAY, "10:00") }),
+        // deleted(実績30分)→ 集計外
+        block("tl-deleted", { title: "TL-削除済", category: "削除済", deleted: true, completed: true, actualStartAt: at("08:00"), actualEndAt: at("08:30") }),
+        // 早朝の実績(04:30-05:30)→ 当日全体(00:00〜)の集計に入る(v184レビューM1: チャート軸06-24とは独立)
+        block("tl-early", { title: "TL-早朝", category: "早朝", completed: true, actualStartAt: at("04:30"), actualEndAt: at("05:30") })
+      ]
+    });
+    await page.waitForSelector(".stats-time-log", { state: "attached" });
+    check("計器盤に .stats-time-log パネルが描画される(DOM契約)", await page.locator(".stats-time-log").count() === 1);
+    const tlWork = await timeLogRowText("仕事");
+    check("カテゴリ行 .stats-time-log-row[data-category='仕事'] が存在する(DOM契約)", tlWork !== null);
+    check("仕事 = 65分(実績あり完了45 + 実績あり未完了20。完了問わず・実績のみで集計)", textHasMin(tlWork, 65), tlWork);
+    const tlNoact = await timeLogRowText("学習");
+    check("実績なし完了(計画60分)は計画時間で代替しない(行が無いか、60分が出ない=既存パネルとの定義差)",
+      !textHasMin(tlNoact, 60), tlNoact);
+    const tlOther = await timeLogRowText("他日");
+    check("他日(昨日)の実績60分は当日集計に入らない", !textHasMin(tlOther, 60), tlOther);
+    const tlDeleted = await timeLogRowText("削除済");
+    check("deleted Blockの実績30分は集計に入らない", !textHasMin(tlDeleted, 30), tlDeleted);
+    const tlEarly = await timeLogRowText("早朝");
+    check("早朝(04:30-05:30)の実績60分が当日集計に入る(集計窓は00:00〜24:00。v184レビューM1)", textHasMin(tlEarly, 60), tlEarly);
+    check("記録済み合計の表示がある(§5-1)", /合計/.test((await panelText(".stats-time-log")) || ""));
+
+    // ============================================================
+    // [20] P8 TIME LOG: 実行中カテゴリの毎秒加算 + statsビュー離脱でticker停止
+    // ============================================================
+    console.log("[20] P8 TIME LOG: 実行中Blockのカテゴリが毎秒加算され、statsビュー離脱でtickerが停止する");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB3({
+      view: "stats",
+      blocks: [
+        block("tl-run", { title: "TL-実行中", category: "回復", actualStartAt: at("11:00"), plannedStartAt: at("11:00"), plannedEndAt: at("12:30"), estimateMin: 90 }),
+        block("tl-fixed", { title: "TL-完了固定", category: "仕事", completed: true, actualStartAt: at("09:00"), actualEndAt: at("09:45") })
+      ]
+    });
+    await page.waitForSelector('.stats-time-log-row[data-category="回復"]', { state: "attached" });
+    const runRow0 = await timeLogRowText("回復");
+    check("実行中カテゴリ(回復)に経過60分(11:00開始→固定12:00)が表示される", textHasMin(runRow0, 60), runRow0);
+    // 固定時刻を+2分10秒前進 → reload・クリック無しで表示値が増える(D9: 表示上のみ毎秒加算)
+    await page.clock.setFixedTime(fixedTime(12, 2, 10));
+    await page.waitForFunction((prev) => {
+      const el = document.querySelector('.stats-time-log-row[data-category="回復"]');
+      return el && el.textContent !== prev;
+    }, runRow0);
+    const runRow1 = await timeLogRowText("回復");
+    check("固定時刻+2分で実行中カテゴリの表示値が reload なしで62分へ増える(毎秒加算)", textHasMin(runRow1, 62), runRow1);
+    const fixedRow = await timeLogRowText("仕事");
+    check("実行中でない完了カテゴリ(仕事45分)は加算されない", textHasMin(fixedRow, 45) && !textHasMin(fixedRow, 47), fixedRow);
+    // D9後段: 毎秒加算は表示上のみ。実行中Blockのstateに終了実績を書き込まない
+    check("毎秒加算してもstateへは書かない(tl-run.actualEndAt が空のまま。D9)",
+      !((await stateNow()).blocks.find((b) => b.id === "tl-run") || {}).actualEndAt);
+    // statsビュー離脱でticker停止(前提B3-4: [7]/[18]と同じおとり方式)
+    await page.locator('#sidebar .nav-button[data-action="nav"][data-view="tasks"]').click();
+    await waitView("tasks");
+    check("ビュー離脱で .stats-time-log がDOMから消える", await page.locator(".stats-time-log").count() === 0);
+    // 離脱直後のtickが自分でclearIntervalする猶予として、まずticker 1周期分を実時間で待つ
+    // (固定wait例外: ticker周期1秒そのものが仕様(§4)。既存[7]/[18]と同根拠)
+    await page.waitForTimeout(1300);
+    // おとり: tickerが毎tick再取得するid(statsTimeLogTotal)を持つ要素を注入する(前提B3-4)。
+    // tickerが生きていれば合計表示が毎秒書き換えられてしまうはず。
+    await page.evaluate(() => {
+      const decoy = document.createElement("div");
+      decoy.className = "stats-time-log";
+      decoy.id = "statsTimeLogDecoy";
+      decoy.innerHTML = '<div class="stats-time-log-row" data-category="回復">DECOY-STATS-ROW</div>'
+        + '<strong id="statsTimeLogTotal">DECOY-STATS-TOTAL</strong>';
+      document.getElementById("main").appendChild(decoy);
+    });
+    await page.clock.setFixedTime(fixedTime(12, 5, 0));
+    await page.waitForTimeout(2300);  // 固定wait例外([7]と同根拠): 負の検証はticker 2周期分の実時間経過が必要
+    check("stats離脱後はtickerが停止している(おとり合計が2周期経っても書き換えられない)",
+      (await page.evaluate(() => document.getElementById("statsTimeLogTotal")?.textContent)) === "DECOY-STATS-TOTAL");
+    await page.evaluate(() => document.getElementById("statsTimeLogDecoy")?.remove());
+
+    // ============================================================
+    // [21] P9 migration: weeklyTargetMin無しの旧projectが0補完・既存値は上書きされない
+    // ============================================================
+    console.log("[21] P9 migration: weeklyTargetMinキー無しの旧projectが0補完され、既存値(120)は上書きされない");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB3({
+      view: "stats",
+      settings: { twelveWeekStartDate: CYCLE_START },
+      projects: [
+        projectFx("p-old", "12WY旧形状(キー無し)"),
+        projectFx("p-keep", "12WY既存値あり", { weeklyTargetMin: 120 })
+      ],
+      tasks: []
+    });
+    // 読込時のnormalizeState結果はメモリ上にあるだけなので、保存契機(setView→persistLocalNoSchedule)を
+    // 明示的に踏んでlocalStorageへ書き戻させてから突合する(毎秒処理では保存しない設計 §8-7 のため)
+    await page.locator('#sidebar .nav-button[data-action="nav"][data-view="tasks"]').click();
+    await waitView("tasks");
+    await page.waitForFunction((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      const p = (s.projects || []).find((x) => x.id === "p-old");
+      return !!p && p.weeklyTargetMin === 0;
+    }, KEY);
+    const migProjects = (await stateNow()).projects;
+    check("weeklyTargetMinキー無しの旧projectに 0 が補完される(D8 migration)",
+      migProjects.find((p) => p.id === "p-old")?.weeklyTargetMin === 0,
+      JSON.stringify(migProjects.find((p) => p.id === "p-old")));
+    check("既存値 weeklyTargetMin=120 は上書きされない(既定値を先に置き既存値優先の流儀)",
+      migProjects.find((p) => p.id === "p-keep")?.weeklyTargetMin === 120,
+      JSON.stringify(migProjects.find((p) => p.id === "p-keep")));
+
+    // ============================================================
+    // [22] P9 12WY TRACKER: 週番号=homeCycle同算式・目標未設定は誘導・目標設定済みは今週実績/目標バー
+    // ============================================================
+    console.log("[22] P9 12WY TRACKER: WEEK n/12がhomeCycle同算式、目標未設定(0)は誘導、目標設定済みは今週実績/目標が期待値一致");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB3({
+      view: "stats",
+      settings: { twelveWeekStartDate: CYCLE_START },
+      projects: [
+        projectFx("p-goal", "12WY目標あり", { weeklyTargetMin: 300 }),
+        projectFx("p-nogoal", "12WY目標未設定", { weeklyTargetMin: 0 })
+      ],
+      tasks: [
+        taskFx("t-goal", "p-goal"),
+        taskFx("t-free", "")  // どのprojectにも属さないTask(集計対象外の検証用)
+      ],
+      blocks: [
+        // 今週(当日)の12WY実績 = 120分(blocks→taskId→task.projectId 経由。D8)
+        block("tw-this", { title: "TW-今週実績", taskId: "t-goal", category: "仕事", completed: true, actualStartAt: at("09:00"), actualEndAt: at("11:00") }),
+        // 先週(今週の土曜起点の前日)の実績60分 → 今週集計に入らない(週境界=weekRange土曜起点。D4)
+        block("tw-prev", { title: "TW-先週実績", taskId: "t-goal", category: "仕事", date: PREV_WEEK_DAY, completed: true, actualStartAt: atOn(PREV_WEEK_DAY, "10:00"), actualEndAt: atOn(PREV_WEEK_DAY, "11:00") }),
+        // 12WYプロジェクトに属さないTaskの実績 → 集計外
+        block("tw-other", { title: "TW-対象外task", taskId: "t-free", category: "仕事", completed: true, actualStartAt: at("13:00"), actualEndAt: at("14:00") }),
+        // 実績なし(計画45分のみ)→ 実績集計に入らない
+        block("tw-plan", { title: "TW-計画のみ", taskId: "t-goal", category: "仕事", plannedStartAt: at("15:00"), plannedEndAt: at("15:45") })
+      ]
+    });
+    await page.waitForSelector(".stats-twelve-week", { state: "attached" });
+    check("計器盤に .stats-twelve-week パネルが描画される(DOM契約)", await page.locator(".stats-twelve-week").count() === 1);
+    const twText = await panelText(".stats-twelve-week");
+    // 週番号の期待値はhomeCycleと同一算式(floor(daysBetween(start,today)/7)+1)から独立に導出して突合する
+    check(`週番号が WEEK ${EXPECTED_WK}(homeCycleと同算式・開始=23日前)と一致する`,
+      new RegExp(`week\\s*0?${EXPECTED_WK}([^0-9]|$)`, "i").test(twText || "") ||
+      new RegExp(`(^|[^0-9])${EXPECTED_WK}\\s*/\\s*12([^0-9]|$)`).test(twText || ""),
+      twText);
+    check("残り日数 61日(84-23。homeCycleの残り日数と同算式)が表示される", /残り\s*61\s*日/.test(twText || ""), twText);
+    const goalRow = await twelveWeekRowText("p-goal");
+    check("目標設定済みprojectの行 .stats-twelve-week-row[data-project-id='p-goal'] が存在する(DOM契約)", goalRow !== null);
+    // 期待値120は「先週分(+60)・対象外task(+60)・計画のみ(+45)のどれが混入しても120でなくなる」判別値
+    check("今週の投資時間 = 120分(当日実績のみ。先週分・対象外task・計画のみは入らない)", textHasMin(goalRow, 120), goalRow);
+    check("週目標 300分(weeklyTargetMin)が表示される", textHasMin(goalRow, 300), goalRow);
+    const goalBarWidths = await page.evaluate(() =>
+      [...document.querySelectorAll('.stats-twelve-week-row[data-project-id="p-goal"] [style*="width"]')].map((el) => el.style.width));
+    check("今週実績/目標バーの幅が 40%(120/300)を表す(前提B3-2)",
+      goalBarWidths.some((w) => Math.abs(parseFloat(w) - 40) < 0.5), JSON.stringify(goalBarWidths));
+    check("実績が 2h ちょうど(2h45m等の端数付き表示が無い=textHasMinの包含判定の弱さ対策。v184レビューM4)",
+      !/2h\d/.test(goalRow || ""), goalRow);
+    const nogoalRow = await twelveWeekRowText("p-nogoal");
+    check("目標未設定(0)の行も存在する(誘導のため行ごと消さない)", nogoalRow !== null);
+    check("目標未設定(0)の行はバー非表示(width指定要素が無い。前提B3-2)",
+      await page.evaluate(() => !document.querySelector('.stats-twelve-week-row[data-project-id="p-nogoal"] [style*="width"]')));
+    check("目標未設定(0)の行に目標設定への誘導文言(「目標」を含む)が出る(§5-2・前提B3-3)",
+      /目標/.test(nogoalRow || ""), nogoalRow);
+
+    // ============================================================
+    // [23] 既存パネルの回帰: 新2パネルは常時表示層の先頭、既存パネル群は引き続き描画される
+    // ============================================================
+    console.log("[23] 既存パネルが引き続き描画される(新2パネル=常時表示層の先頭・既存9パネル無変更 §5)");
+    const failuresBeforeB3Reg = failures;  // [23]区間のpageerror検出用([13]と同じ方式)
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB3({
+      view: "stats",
+      settings: { twelveWeekStartDate: CYCLE_START },
+      projects: [projectFx("p-goal", "12WY目標あり", { weeklyTargetMin: 300 })],
+      tasks: [taskFx("t-goal", "p-goal")],
+      blocks: [
+        // 完了+実績ありBlockを置き、既存詳細パネル(カテゴリ別 時間配分など)が生成される状態にする
+        block("reg-1", { title: "REG-完了1", category: "仕事", completed: true, actualStartAt: at("09:00"), actualEndAt: at("09:45") }),
+        block("reg-2", { title: "REG-完了2", category: "学習", completed: true, actualStartAt: at("10:00"), actualEndAt: at("10:30") })
+      ]
+    });
+    await page.waitForSelector(".stats-time-log", { state: "attached" });
+    check("新2パネル(.stats-time-log / .stats-twelve-week)が両方描画される",
+      await page.locator(".stats-time-log").count() === 1 && await page.locator(".stats-twelve-week").count() === 1);
+    check("計器盤ヘッダが引き続き表示される",
+      ((await page.evaluate(() => document.getElementById("main").textContent)) || "").includes("計器盤"));
+    check("レンジセグメント(4週/12週/全期間)が3つ残っている(既存UI無変更)",
+      await page.locator('[data-action="stats-range"]').count() === 3);
+    check("既存の詳細フォールド(stats-details)が残っている",
+      await page.locator('details[data-fold-id="stats-details"]').count() === 1);
+    // 注意: 新TIME LOGパネルの注記にも「カテゴリ別 時間配分」の語が含まれるため、
+    // 既存パネルの実在確認はフォールド内textContentへスコープして判定する
+    check("既存パネル代表「カテゴリ別 時間配分」がフォールド内に引き続き存在する",
+      await page.evaluate(() =>
+        (document.querySelector('details[data-fold-id="stats-details"]')?.textContent || "").includes("カテゴリ別 時間配分")));
+    check(".stats-time-log がフォールドの中に入っていない(常時表示層。DOM契約)",
+      await page.evaluate(() => !document.querySelector('details[data-fold-id="stats-details"] .stats-time-log')));
+    check(".stats-twelve-week がフォールドの中に入っていない(常時表示層。DOM契約)",
+      await page.evaluate(() => !document.querySelector('details[data-fold-id="stats-details"] .stats-twelve-week')));
+    check(".stats-time-log が既存詳細フォールドよりDOM順で前にある(常時表示層の先頭)",
+      await page.evaluate(() => {
+        const tl = document.querySelector(".stats-time-log");
+        const fold = document.querySelector('details[data-fold-id="stats-details"]');
+        return !!tl && !!fold && !!(tl.compareDocumentPosition(fold) & Node.DOCUMENT_POSITION_FOLLOWING);
+      }));
+    check("[23]区間の描画でpageerrorが発生しない", failures === failuresBeforeB3Reg);
   } finally {
     await browser.close();
     server.close();
