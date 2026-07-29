@@ -1,0 +1,51 @@
+{
+  "version": 187,
+  "date": "2026-07-29",
+  "title": "ATracker風ワンタップ計時タブ",
+  "summary": "iPhoneでカテゴリ・当日タスク・当日予定をワンタップ計時できる独立ビュー「計時」を追加し、実績をblocksへ一本化した。",
+  "changedFiles": [
+    "app.js",
+    "releases/v187.json",
+    "src/features/timeswitch.js",
+    "styles.css",
+    "sw.js"
+  ],
+  "intent": [
+    "bottom-navを変えず、サイドバーとその他の実行グループから計時タブへ到達できるようにする。",
+    "カテゴリ計時・タスク実行・予定取込をrunning最大1の同じBlock実績へ統合する。",
+    "タスク実行中の切替だけcockpit調オーバーレイで確認し、その他の切替はワンタップで完結させる。",
+    "personal-dataのschedule-inbox.jsonを既存Contents API経路と30分TTLで安全に読み込む。"
+  ],
+  "changes": [
+    "configureTimeswitch(deps)注入型のsrc/features/timeswitch.jsを追加し、3群タイル・状態遷移・専用tickerを実装した。",
+    "oneTap Blockの開始・切替・停止、前日以前のrunningを23:59で閉じる孤児処理、既存タスク開始時の自動終了フックを追加した。",
+    "タスクタイルの宣言なし開始、再タップ完了、完了済みBlockからの実績専用Block再生成、focusTimerAuto連動を実装した。",
+    "label=こーじの当日予定だけを表示し、externalRef/label付きBlock化、同一externalIdの重複防止、ポモ非連動開始を実装した。",
+    "タスク実行中の他タイル操作へ#cc-overlayとtimeswitch-confirm-ok/cancelを追加した。",
+    "light/dark/cockpit共通変数を使った44px以上のタイルUIを追加し、sw.jsをv187へ更新した。"
+  ],
+  "uncertainties": [
+    "取込予定は終日ならplanned時刻を空、時刻指定ならschedule-inboxのstartAt/endAtをplanned時刻として保持する。",
+    "取込済み予定は実行中の再タップで停止できるが、終了後の再タップではexternalRef重複防止を優先して新Blockを作らない。"
+  ],
+  "reviewFocus": [
+    "正典§2.3の全遷移でrunning Blockが最大1になり、タスク中断時にcompletedが付かないこと。",
+    "完了済みタスクタイルの再タップが同taskId/title/categoryの新しい実績専用Blockを作ること。",
+    "focusTimerAutoがタスク開始だけに作用し、カテゴリ・予定ではポモドーロを開始しないこと。",
+    "schedule-inbox.jsonの欠損・不正JSON・26時間超過で既存ビューが壊れず、こーじ以外を表示しないこと。",
+    "計時ビュー離脱で専用tickerが停止し、tick中にsaveStateを呼ばないこと。"
+  ],
+  "verification": [
+    "node --check app.js / src/features/timeswitch.js / sw.js → exit 0。",
+    "レジストリ直接駆動smokeでカテゴリ開始/停止、タスク優先、再タップ完了、複数回記録、確認後の未完了終了、予定開始/停止/重複防止を確認。",
+    "孤児oneTapの23:59補完、focusTimerAutoのタスク限定連動、正常/壊れJSON/26時間超過schedule-inboxのsmokeを確認。",
+    "releases/v187.jsonのJSON.parseとstyles.cssの波括弧整合を確認。",
+    "normalizeStateの変更はcurrentView許可リストへのtimeswitch追加だけ。",
+    "new Date(文字列)・個別addEventListener・毎秒saveStateの追加が無いことを静的確認。",
+    "Playwright実走と改訂済みv187テストは監督者工程に残す。"
+  ],
+  "knownLimitations": [
+    "依頼によりtests、index.html、scripts、package.json、impact-regression系、生成CHANGES/handoffは変更しない。",
+    "schedule-inboxが未取得・不正・鮮度超過の間は予定群を空表示にし、次の30分TTL更新へ任せる。"
+  ]
+}

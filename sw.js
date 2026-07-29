@@ -1,4 +1,6 @@
-const CACHE_NAME = "taskchute-journal-pwa-v186";
+const CACHE_NAME = "taskchute-journal-pwa-v187";
+// v187: 独立タブ「計時」(カテゴリ/当日タスク/当日予定のワンタップ実行記録)を追加。
+//   src/features/timeswitch.jsをAPP_SHELLへ追加し、blocks一本化・専用ticker・予定TTL取得を担う。
 // v186: DRIFT/TIME COMBの2系統レビュー是正(候補選出の3条件化・日跨ぎ正規化・実行ビューの
 //   migratedTo可視化・ルーティン当日サマリの退行防止など計8件、B5レビュー対応)。
 // v185: cockpitテーマの6点セットを完成し、cockpit限定の共通chromeを全ビューへ適用した。
@@ -225,6 +227,7 @@ const APP_SHELL = [
   "./src/features/routine.js",
   "./src/features/timeline-layout.js",
   "./src/features/timeline.js",
+  "./src/features/timeswitch.js",
   "./src/features/today.js",
   "./src/features/wish.js",
   "./src/state/feedback-cache.js",
