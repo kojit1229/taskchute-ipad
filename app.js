@@ -24,6 +24,8 @@ import {
   renderDashboard, setDashboardDate, shiftDashboardDate,
   currentDashboardDate, hydrateDashboardFeedback
 } from "./src/features/dashboard.js";
+// v182: 新トップレベル「今日」コックピット。dashboard.jsと同じ依存注入型で循環importを避ける。
+import { configureToday, renderToday } from "./src/features/today.js";
 // v168: app.js分割・段階4-2(WishタブTier1のCRUD・描画・月間ボードD&D抽出)。src/features/wish.js
 //   はstateをimportするがapp.js自身はimportしない(循環import回避)。renderWishTriage(仕分けモード、
 //   Tier3=非移動)を含む残りの汎用ヘルパーはconfigureWish(deps)で注入する
@@ -193,6 +195,7 @@ function pruneExpiredSuggestedThemes(list) {
 //   v33の順序: ホーム/ジャーナル/0秒思考/ビジョン/タスクシュート/WBS/タイムライン/
 //              ルーティン/ポモドーロ/やりたい/やらない/日報/週次/計器盤/設定
 const navItems = [
+  { id: "today", label: "今日", mark: "▶" },
   { id: "home", label: "ホーム", mark: "H" },
   { id: "tasks", label: "タスクシュート", mark: "T" },
   { id: "timeline", label: "タイムライン", mark: "L" },
@@ -216,7 +219,7 @@ const navItems = [
 //      不定期にしか触らないWBSを「その他」へ降ろし、ジャーナルをbottom-navへ昇格した。
 //      WBSはrenderMore(その他グリッド)の受け皿に含まれる(除外リストから外すだけで自動的に出る)。
 const mobileNav = [
-  { id: "home", label: "ホーム" },
+  { id: "today", label: "今日" },
   { id: "journal", label: "ジャーナル" },
   { id: "tasks", label: "実行" },
   { id: "timeline", label: "時間" },
@@ -256,6 +259,11 @@ configureDashboard({
   renderHeader, escapeHTML, clamp, parseDate, addDays, dateToISO, localDateTimeToMs,
   todayISO, fmtMinShort, renderMarkdown, getCategoryColor, personalDataReady,
   fetchGitHubRawResult, renderDeferringForFocus, render
+});
+configureToday({
+  escapeHTML, todayISO, blocksForDate, minutesOf, timeFromDateTime,
+  localDateTimeToMs, resolveEstimateMin, computeProjectedEnd,
+  routineRate, getCategoryColor, clamp
 });
 // v168: src/features/wish.jsも同じ理由(循環import回避)で依存注入する。renderWishTriage
 // (仕分けモード、Tier3)はapp.js側に残るためここで注入する(prep-stage4-wish.md §7の(a)案、
@@ -1574,6 +1582,13 @@ function applyTheme() {
 
 function normalizeState(value) {
   value.settings ||= {};
+  // v182: 未知viewでrenderMainの前画面が残る事故を防ぐ。todayは新規許可、旧版由来の不明値はhomeへ。
+  const allowedViews = new Set([
+    "today", "home", "wbs", "wish", "avoid", "tasks", "routine", "timeline",
+    "pomodoro", "journal", "zero", "vision", "reports", "ai-reports", "weekly",
+    "cycle", "dashboard", "stats", "settings", "more"
+  ]);
+  if (!allowedViews.has(value.currentView)) value.currentView = "home";
   // v31: 残り時間表示用の生年月日(未設定なら補完)
   if (!value.settings.birthDate) value.settings.birthDate = "1992-12-29";
   value.settings.staticFilesLoaded ||= { vision: false, affirmation: false };
@@ -2414,7 +2429,7 @@ function seedState() {
   const taskC = crypto.randomUUID();
 
   return {
-    currentView: "home",
+    currentView: "today",
     selectedDate: today,
     zeroThinking: { themes: [], entries: [], groups: [], suggestedThemes: [] },  // v90: groups=大テーマ / v100: suggestedThemes=AI提案お題キュー
     settings: {
@@ -2637,7 +2652,9 @@ function renderSidebar() {
 // 上部リンクへ昇格した(moreGroupsから除外済み)ため、bottom-navの現在地表示も「その他」
 // ではなく「実行」(mobileNavのid "tasks")をactiveにする。
 function bottomNavEffectiveView(view) {
-  return view === "routine" ? "tasks" : view;
+  if (view === "routine") return "tasks";
+  if (view === "home") return "more";
+  return view;
 }
 function renderBottomNav() {
   const effectiveView = bottomNavEffectiveView(state.currentView);
@@ -2707,6 +2724,7 @@ function renderMain() {
   _lastScrollView = view;
   _lastScrollDate = state.selectedDate;
 
+  if (view === "today") main.innerHTML = renderToday();
   if (view === "home") {
     main.innerHTML = renderHome();
     // v146: 今日を表示中なら「いま、これ」(=着手中/次の未着手Blockそのもの)へ自動スクロール
@@ -8653,6 +8671,7 @@ function renderBreakMessagesSettings() {
 //   この4群からは除外する(renderTasks参照)。
 const moreGroups = [
   { id: "plan", label: "計画", items: [
+    { id: "home", label: "ホーム", mark: "H" },
     { id: "wbs", label: "WBS", mark: "🧩" },
     { id: "wish", label: "やりたい", mark: "✦" },
     { id: "avoid", label: "やらない", mark: "✕" },
@@ -8678,6 +8697,8 @@ const moreGroups = [
 // 「その他 › 群名」を返す(その他配下での現在地表示。codex-ui-review N1対応)。
 // 属さない(home/journal/tasks/timeline/routine等)場合は空文字。
 function moreGroupLabelFor(viewId) {
+  // v182: homeは「その他」からの到達口だけを追加し、既存homeヘッダにはbreadcrumbを足さない。
+  if (viewId === "home") return "";
   const group = moreGroups.find((g) => g.items.some((item) => item.id === viewId));
   return group ? group.label : "";
 }
@@ -14044,7 +14065,7 @@ async function hydrateStaticMarkdown() {
   // v161: "stats"(計器盤)を追加。エネルギーカーブの新着fetchが完了してもこの画面を開いた
   //       ままだと再描画されず節が出ないままになる不具合を防ぐ(他view追加時と同じ理由)。
   // v163: "dashboard"も任意日AIフィードバック取得完了後に同じライブ再描画が必要。
-  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly" || state.currentView === "home" || state.currentView === "zero" || state.currentView === "tasks" || state.currentView === "stats" || state.currentView === "dashboard")) {
+  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly" || state.currentView === "home" || state.currentView === "today" || state.currentView === "zero" || state.currentView === "tasks" || state.currentView === "stats" || state.currentView === "dashboard")) {
     renderDeferringForFocus();
   }
 }

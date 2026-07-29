@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v181";
+const CACHE_NAME = "taskchute-journal-pwa-v182";
 // v175: app.js分割の段階4-6(タイムライン抽出・段階B: 描画系)。src/features/timeline.js
 //   (renderTimelineRail/renderTimelineView/setTimelineMode/renderTimeline/renderTimelineCard/
 //   renderEnergyGraph、configureTimeline(deps)注入)をAPP_SHELLへ追加した。挙動は抽出前と
@@ -220,6 +220,7 @@ const APP_SHELL = [
   "./src/features/routine.js",
   "./src/features/timeline-layout.js",
   "./src/features/timeline.js",
+  "./src/features/today.js",
   "./src/features/wish.js",
   "./src/state/feedback-cache.js",
   "./src/state/journal-fold.js",
