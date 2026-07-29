@@ -175,6 +175,29 @@
       }
     },
     {
+      "file": "impact-regression.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "legacy-crosscutting"
+      ],
+      "assertionSignals": 21,
+      "assertionHash": "b42a4a8d9607a48c",
+      "sourceHash": "bf45f706e25851f4",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": true,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
       "file": "journal-core.test.js",
       "kind": "node",
       "tier": "full",
@@ -470,9 +493,9 @@
         "content-ai",
         "ui-responsive"
       ],
-      "assertionSignals": 154,
-      "assertionHash": "cc2efb50be61a854",
-      "sourceHash": "12ed3ff7cc4cdafd",
+      "assertionSignals": 211,
+      "assertionHash": "f143b0de1fba081e",
+      "sourceHash": "61e5db57bd614067",
       "waits": {
         "fixedCount": 6,
         "numericMilliseconds": 10800,
@@ -2548,7 +2571,7 @@
       ],
       "assertionSignals": 15,
       "assertionHash": "c4d320929696381f",
-      "sourceHash": "dce0e4a57eefb6f6",
+      "sourceHash": "27ab55f8e35fdf6a",
       "waits": {
         "fixedCount": 6,
         "numericMilliseconds": 3050,

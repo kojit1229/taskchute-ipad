@@ -76,6 +76,10 @@ function check(name, cond, extra = "") {
   }
 
   async function seed({ feedbackFiles = [], view = "home", selectedDate = TODAY } = {}) {
+    // v185フレーク修正(v75/v140と同根): アプリJSが動いていない静的ページ上でseedを書き、
+    // 起動時hydrateStaticMarkdownの非同期saveStateがseedを上書きする競合を構造的に排除する
+    // (詳細: workbench/out/2026-07-29-today-cockpit-impl/ci-flaky-diagnosis.md)
+    await page.goto(`http://localhost:${PORT}/styles.css`);
     await page.evaluate(({ KEY, feedbackFiles, selectedDate, view }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.blocks = [];
@@ -85,7 +89,7 @@ function check(name, cond, extra = "") {
       s.currentView = view;
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, feedbackFiles, selectedDate, view });
-    await page.reload();
+    await page.goto(`http://localhost:${PORT}/`);
     // v85: 起動処理に selectedDate強制リセット等が加わりわずかに重くなったぶん、
     // 起動時hydrateStaticMarkdown完了までの待ち時間を少し余裕を持たせる(700→900ms)。
     await page.waitForTimeout(900);
