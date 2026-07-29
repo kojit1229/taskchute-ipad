@@ -263,7 +263,12 @@ configureDashboard({
 configureToday({
   escapeHTML, todayISO, blocksForDate, minutesOf, timeFromDateTime,
   localDateTimeToMs, resolveEstimateMin, computeProjectedEnd,
-  routineRate, getCategoryColor, clamp, isStaleBlock, render
+  routineRate, getCategoryColor, clamp, isStaleBlock, render, renderDeferringForFocus,
+  renderCircularProgress, remainingText, remainingTextNormal,
+  renderPomodoroInterruptControls,
+  getCachedReadingHighlights: () => cachedReadingHighlights,
+  beginTodayZeroWrite, saveTodayZeroEntry, discardTodayZeroWrite, getTodayZeroWriteState,
+  homeSyncAlertBanner
 });
 // v168: src/features/wish.jsも同じ理由(循環import回避)で依存注入する。renderWishTriage
 // (仕分けモード、Tier3)はapp.js側に残るためここで注入する(prep-stage4-wish.md §7の(a)案、
@@ -703,7 +708,11 @@ registerActions({
   "now-conveyor-skip": ({ id }) => { _nowSkippedIds.add(id); render(); },
   // --- ポモドーロ(16) ---
   "start-pomodoro": ({ target }) => {
-    openDeclareModal(target.dataset.blockId || "", "pomodoro");
+    const blockId = target.dataset.blockId || "";
+    // v183: 今日コックピットの開始だけはBlock着手の正規入口へ流し、
+    // focusTimerAuto連動を維持する。単体/タイムライン側は従来どおり宣言モーダル。
+    if (target.closest(".today-pomodoro")) setBlockTime(blockId, "actualStartAt");
+    else openDeclareModal(blockId, "pomodoro");
   },
   "stop-pomodoro": () => {
     if (state.pomodoro.blockId) {
@@ -6767,12 +6776,12 @@ function renderManualPomodoro(running, remaining, blockOptions) {
           <div class="muted" style="font-size:12px">作業中(50:00 → 00:00 を 2 倍速で進行)</div>
           ${currentBlock ? `<div style="margin-top:4px; font-weight:700">${escapeHTML(currentBlock.title)}</div>` : ""}
         </div>
-        ${_pendingInterruptBlockId === state.pomodoro.blockId ? interruptReasonPickerHTML() : `
+        ${renderPomodoroInterruptControls(`
         <div style="margin-top:18px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap">
           <button class="btn green" data-action="complete-pomodoro">✓ 完了</button>
           <button class="btn orange" data-action="go-break">☕ 休憩へ</button>
           <button class="btn danger" data-action="stop-pomodoro">中断</button>
-        </div>`}
+        </div>`)}
       </section>
     `;
   }
@@ -11014,15 +11023,21 @@ function ztPendingSuggestions() {
 
 // 採用: 既存の手動テーマ追加(ztAddSubmit)と同じ経路でテーマ化する。初期配置は未分類(groupId:null)。
 // 候補は削除せずstatus="adopted"+adoptedThemeIdへ遷移させる(履歴はstateに残る。掃除はスコープ外)。
-function ztSuggestionAdopt(id) {
+function ztSuggestionAdopt(id, options = {}) {
   const s = (state.zeroThinking.suggestedThemes || []).find((x) => x.id === id && x.status === "pending");
-  if (!s) return;
+  if (!s) return null;
   const theme = { id: crypto.randomUUID(), text: s.text, fav: false, groupId: null, createdAt: nowDateTime() };
   state.zeroThinking.themes.push(theme);
   state.zeroThinking.suggestedThemes = state.zeroThinking.suggestedThemes.map((x) =>
     x.id === id ? { ...x, status: "adopted", adoptedThemeId: theme.id } : x);
   ztTab = "other";  // 採用したテーマはまず「それ以外」に出る(手動追加と同じ挙動)
-  saveAndRender(`「${s.text}」を採用しました`);
+  if (options.deferRender) {
+    saveState();
+    showToast(`「${s.text}」を採用しました`);
+  } else {
+    saveAndRender(`「${s.text}」を採用しました`);
+  }
+  return theme.id;
 }
 
 // 却下: status="dismissed"へ遷移させるのみ(候補データ自体は消さない)。
@@ -11128,18 +11143,23 @@ function ztGroupToggleOpen(groupId) {
   render();
 }
 
-function openZtWrite(id) {
+function beginZtWrite(id) {
   const t = state.zeroThinking.themes.find((x) => x.id === id);
-  if (!t) return;
+  if (!t) return false;
   ztCurrent = { id: t.id, text: t.text, fav: t.fav, questionId: t.questionId || null };  // v39: 問い紐づけを保持
   ztWriteStartedAt = Date.now();  // v104: 実経過時間の計測開始(カウントダウン残数ではなくこちらを保存に使う)
+  return true;
+}
+
+function openZtWrite(id) {
+  if (!beginZtWrite(id)) return;
   render();          // 書く画面を描画(DOM 確定)
   startZtTimer();    // その後にタイマー開始
   setTimeout(() => document.querySelector("#zt-write-input")?.focus(), 60);
 }
 
-function discardZtWrite() {
-  const body = (document.querySelector("#zt-write-input")?.value || "").trim();
+function discardZtWrite(inputSelector = "#zt-write-input") {
+  const body = (document.querySelector(inputSelector)?.value || "").trim();
   if (body && !confirm("入力を破棄して一覧へ戻りますか?")) return;
   stopZtTimer();
   ztCurrent = null;
@@ -11147,9 +11167,9 @@ function discardZtWrite() {
   render();
 }
 
-function saveZtEntry() {
+function saveZtEntry(inputSelector = "#zt-write-input") {
   if (!ztCurrent) return;
-  const body = (document.querySelector("#zt-write-input")?.value || "").trim();
+  const body = (document.querySelector(inputSelector)?.value || "").trim();
   if (!body) return showToast("空のままでは保存できません");
   const cur = ztCurrent;
   // v104: 書き始め→保存の実経過秒数(Date.now()差分、文字列パース無し)。60秒カウントダウンを
@@ -11179,6 +11199,30 @@ function saveZtEntry() {
   ztCurrent = null;
   ztWriteStartedAt = null;  // v104
   saveAndRender(cur.fav ? "保存しました(★は残ります) — 日報に追加" : "保存しました — 日報に追加");
+}
+
+// v183: 今日ビューのインライン0秒思考も、単体ビューと同じztCurrent/
+// ztWriteStartedAt/saveZtEntry経路を使う。入力要素だけ#todayZeroTextへ差し替え、
+// entryスキーマ・durationSec・非お気に入りテーマの消費規則は一切分岐させない。
+function beginTodayZeroWrite(id, isSuggestion) {
+  const themeId = isSuggestion ? ztSuggestionAdopt(id, { deferRender: true }) : id;
+  if (!themeId || !beginZtWrite(themeId)) return;
+  render();
+  setTimeout(() => document.querySelector("#todayZeroText")?.focus(), 60);
+}
+
+function saveTodayZeroEntry() {
+  saveZtEntry("#todayZeroText");
+}
+
+function discardTodayZeroWrite() {
+  discardZtWrite("#todayZeroText");
+}
+
+function getTodayZeroWriteState() {
+  return ztCurrent && ztWriteStartedAt != null
+    ? { ...ztCurrent, startedAtMs: ztWriteStartedAt }
+    : null;
 }
 
 // v102: 過去のentry(回答済み)を開いて追記・編集する。書く画面(ztCurrent)とは別の
@@ -13038,6 +13082,15 @@ function interruptReasonPickerHTML() {
     </div>`;
 }
 
+// v183: 中断理由ピッカーの表示条件をポモドーロ単体/今日ビューで共有する。
+// stop-pomodoroがセットする_pendingInterruptBlockIdを唯一の前提にし、通常時の操作HTMLは
+// 呼び出し側から受け取るため、単体ビューのボタン構成と挙動は変えない。
+function renderPomodoroInterruptControls(defaultHTML) {
+  return _pendingInterruptBlockId === state.pomodoro.blockId
+    ? interruptReasonPickerHTML()
+    : defaultHTML;
+}
+
 function stopPomodoro() {
   // v13: 中断時、紐づくBlockの actualStartAt を消す(再開で改めて記録するため)
   const blockId = state.pomodoro.blockId;
@@ -13690,8 +13743,10 @@ function startTimerTicker() {
 }
 
 function setView(view) {
-  // v34: 0秒思考の書く画面から離脱するときはタイマー停止 + 一時状態リセット
-  if (state.currentView === "zero" && view !== "zero") {
+  // v34/v183: 0秒思考の書く画面(単体/今日インライン)から離脱するときは
+  // タイマー停止 + 共通一時状態をリセットする。
+  if ((state.currentView === "zero" && view !== "zero")
+      || (state.currentView === "today" && view !== "today")) {
     stopZtTimer();
     ztCurrent = null;
     ztWriteStartedAt = null;  // v104

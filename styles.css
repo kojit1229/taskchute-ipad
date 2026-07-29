@@ -4408,6 +4408,113 @@ h3 {
   color: var(--faint);
   font-size: 9px;
 }
+/* v183: 今日コックピット B2(P5〜P7)。today名前空間内だけでポモ/カードデッキを統合。 */
+.today-pomodoro-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  min-height: 176px;
+}
+.today-pomodoro .pomo-circle-wrap {
+  width: 154px;
+  height: 154px;
+  margin: 0;
+  flex: 0 0 auto;
+}
+.today-pomodoro .pomo-time-overlay { font-size: 27px; }
+.today-pomodoro-info {
+  display: grid;
+  gap: 8px;
+  min-width: min(100%, 280px);
+}
+.today-pomodoro-info > strong { color: var(--cockpit-go, var(--accent)); letter-spacing: 1px; }
+.today-pomodoro-info > span { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.today-pomodoro-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.today-pomodoro .interrupt-reason-picker { margin-top: 4px; }
+.today-deck-card {
+  position: relative;
+  display: flex;
+  min-height: 150px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel-soft);
+  flex-direction: column;
+}
+.today-deck-card::before,
+.today-deck-card::after {
+  position: absolute;
+  inset: 4px -5px -5px 4px;
+  z-index: -1;
+  border: 1px solid var(--line);
+  border-radius: inherit;
+  background: var(--panel);
+  content: "";
+}
+.today-deck-card::after { inset: 8px -9px -9px 8px; opacity: 0.55; }
+.today-deck-card > div {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.85;
+  overflow-wrap: anywhere;
+}
+.today-deck-card > small { margin-top: 10px; color: var(--muted); font-size: 10px; }
+.today-kindle-card { border-left: 3px solid var(--yellow, var(--orange)); }
+.today-kindle-card > div::before { margin-right: 5px; color: var(--yellow, var(--orange)); content: "❝"; }
+.today-kindle-card > small { color: var(--yellow-text, var(--orange-text)); }
+.today-zero-card { border-left: 3px solid var(--purple); }
+.today-zero-card > small { color: var(--purple); }
+.today-deck-nav {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.today-deck-nav > span { margin-left: auto; color: var(--muted); font-size: 10px; }
+.today-zero-theme {
+  padding: 10px 12px;
+  border-left: 3px solid var(--purple);
+  background: var(--panel-soft);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.today-zero-text {
+  width: 100%;
+  min-height: 112px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--purple);
+  border-radius: 4px;
+  outline: none;
+  background: var(--panel-soft);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.7;
+  resize: vertical;
+}
+.today-zero-text:focus { box-shadow: 0 0 10px var(--cockpit-go-glow, transparent); }
+.today-zero-writebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.today-zero-writebar time {
+  color: var(--purple);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 1px;
+}
+.today-zero-writebar time.is-over { color: var(--orange); }
+.today-zero-writebar button:first-of-type { margin-left: auto; }
 @keyframes today-blink { 50% { opacity: 0.3; } }
 @media (max-width: 720px) {
   .today-deck { grid-template-columns: minmax(0, 1fr); }
@@ -4415,6 +4522,8 @@ h3 {
   .today-clock { width: 100%; margin-left: 0; text-align: left; }
   .today-queue-row { grid-template-columns: 24px 42px minmax(0, 1fr) 40px; }
   .today-queue-row button { grid-column: 3 / -1; justify-self: start; }
+  .today-pomodoro-stage { align-items: stretch; gap: 14px; flex-direction: column; }
+  .today-pomodoro .pomo-circle-wrap { margin: 0 auto; }
 }
 @media (prefers-reduced-motion: reduce) {
   .today-now-label i { animation: none; }
