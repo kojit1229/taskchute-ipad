@@ -3,7 +3,7 @@
 // 3 storage/sync gateway → 4 残りのrender → 5 dispatcher)のうち段階2にあたる。
 //
 // 監督者裁定(prep-stage2-avoid.mdの案からの変更点): 移すのはrender系関数のみ。
-// addAvoid/deleteAvoid/updateAvoidTextはstate書き込み+保存系ヘルパー(saveAndRender/
+// addAvoid/deleteAvoid/updateAvoidText/toggleAvoidViolationはstate書き込み+保存系ヘルパー(saveAndRender/
 // saveState/showToast)への依存が濃い操作系のため、dispatcher整理を行う段階(§7の段階5)まで
 // app.js側に残す。今回はrenderAvoidの1関数のみを抽出する。
 //
@@ -25,18 +25,73 @@
 
 import { registerActions } from "../ui/actions.js";
 
-let addAvoid, deleteAvoid;
+let addAvoid, deleteAvoid, toggleAvoidViolation;
+
+function formatLocalDate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function localDateFromISO(dateISO) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateISO || "");
+  if (!match) return new Date();
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+function fallbackTodayISO() {
+  return formatLocalDate(new Date());
+}
+
+function fallbackAddDays(dateISO, delta) {
+  const date = localDateFromISO(dateISO);
+  date.setDate(date.getDate() + delta);
+  return formatLocalDate(date);
+}
+
+function fallbackWeekRange(dateISO) {
+  const date = localDateFromISO(dateISO);
+  const offsetFromSaturday = (date.getDay() + 1) % 7;
+  const weekStart = fallbackAddDays(dateISO, -offsetFromSaturday);
+  return { weekStart, weekEnd: fallbackAddDays(weekStart, 6) };
+}
+
+let todayISO = fallbackTodayISO;
+let addDays = fallbackAddDays;
+let weekRange = fallbackWeekRange;
 
 function configureAvoid(deps) {
-  ({ addAvoid, deleteAvoid } = deps);
+  addAvoid = deps.addAvoid;
+  deleteAvoid = deps.deleteAvoid;
+  toggleAvoidViolation = deps.toggleAvoidViolation;
+  todayISO = deps.todayISO || fallbackTodayISO;
+  addDays = deps.addDays || fallbackAddDays;
+  weekRange = deps.weekRange || fallbackWeekRange;
   registerActions({
     "add-avoid": () => addAvoid(),
-    "delete-avoid": (ctx) => deleteAvoid(ctx.id)
+    "delete-avoid": (ctx) => deleteAvoid(ctx.id),
+    "toggle-avoid-violation": (ctx) => toggleAvoidViolation(ctx.id)
   });
+}
+
+function avoidCompliance(item, today) {
+  const violations = Array.isArray(item.violations) ? item.violations : [];
+  const recentStart = addDays(today, -6);
+  const recentViolationDays = new Set(
+    violations.filter((date) => date >= recentStart && date <= today)
+  );
+  const { weekStart, weekEnd } = weekRange(today);
+  return {
+    keptDays: Math.max(0, 7 - recentViolationDays.size),
+    weeklyCount: violations.filter((date) => date >= weekStart && date <= weekEnd).length,
+    recordedToday: violations.includes(today)
+  };
 }
 
 function renderAvoid(state, escapeHTML, renderHeader) {
   const items = state.settings.avoidList || [];
+  const today = todayISO();
   return `
     ${renderHeader("時間とエネルギーを守る", "やらないこと")}
     <section class="panel" style="margin-bottom:12px">
@@ -57,14 +112,26 @@ function renderAvoid(state, escapeHTML, renderHeader) {
             まだ何も書かれていません。<br>
             「これに時間を使うのを今日からやめる」を 1〜3 個書いてみましょう。
           </div>`
-        : items.map((item, idx) => `
-          <div class="panel" style="display:flex; align-items:center; gap:12px; padding:10px 14px">
-            <span style="color:var(--coral, #FF3B30); font-size:18px; font-weight:700">✕</span>
-            <input type="text" class="input" value="${escapeHTML(item.text)}" data-avoid-id="${item.id}" data-avoid-field="text" style="flex:1; border:none; background:transparent">
-            <span class="muted" style="font-size:11px; white-space:nowrap">${item.createdAt ? item.createdAt.slice(0, 10) : ""}</span>
+        : items.map((item) => {
+          const compliance = avoidCompliance(item, today);
+          return `
+          <div class="panel avoid-item">
+            <span class="avoid-item-mark">✕</span>
+            <div class="avoid-item-main">
+              <input type="text" class="input" value="${escapeHTML(item.text)}" data-avoid-id="${escapeHTML(item.id)}" data-avoid-field="text">
+              <div class="avoid-item-meta">
+                <span class="muted" style="font-size:11px; white-space:nowrap">${item.createdAt ? item.createdAt.slice(0, 10) : ""}</span>
+                <span class="avoid-compliance">直近7日で守れた日数 <strong>${compliance.keptDays}/7</strong></span>
+                <span class="avoid-compliance">今週の抵触 <strong>${compliance.weeklyCount}件</strong></span>
+              </div>
+            </div>
+            <button class="btn avoid-violation-btn ${compliance.recordedToday ? "is-recorded" : ""}"
+              data-action="toggle-avoid-violation" data-id="${escapeHTML(item.id)}"
+              aria-pressed="${compliance.recordedToday}" title="${compliance.recordedToday ? "当日分を取り消す" : "当日分を記録する"}">破った</button>
             <button class="btn danger ghost" data-action="delete-avoid" data-id="${item.id}" title="削除">✕</button>
           </div>
-        `).join("")}
+        `;
+        }).join("")}
     </section>
 
     ${items.length > 0 ? `

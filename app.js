@@ -322,9 +322,12 @@ configureTimeline({
   getScheduleData: getTimeswitchSchedule,
   timelineRailEl: timelineRail, appRootEl: app
 });
-// v173: src/features/avoid.jsのdispatcher登録(段階5-2)。addAvoid/deleteAvoidはapp.js残留の
-// ままなので関数参照を渡すだけ(dashboard.js等のconfigureXxxと同じ「呼ぶだけ」の注入パターン)。
-configureAvoid({ addAvoid, deleteAvoid });
+// v173/v189: src/features/avoid.jsのdispatcher登録。Avoidの書き込み操作はapp.js残留の
+// まま関数参照を渡し、日付集計も既存ユーティリティを注入する。
+configureAvoid({
+  addAvoid, deleteAvoid, toggleAvoidViolation,
+  todayISO, addDays, weekRange
+});
 configureTimeswitch({
   escapeHTML, todayISO, nowDateTime, dateToLocalDateTime, localDateTimeToMs,
   blocksForDate, getCategoryColor, getOtherTask, makeBlock,
@@ -5299,7 +5302,8 @@ function resolveMigrationRitual(choice) {
       state.settings.avoidList = [...(state.settings.avoidList || []), {
         id: crypto.randomUUID(),
         text,
-        createdAt: nowDateTime()
+        createdAt: nowDateTime(),
+        violations: []
       }];
     }
     state.blocks = state.blocks.map((b) => b.id === srcId ? { ...b, deleted: true, updatedAt: nowDateTime() } : b);
@@ -6052,7 +6056,7 @@ function toggleCriteriaRequest(id) {
 // =============================================================
 // v17: Avoid List(やらないこと)タブ
 // v165: renderAvoidはsrc/features/avoid.jsへ抽出済み(冒頭のimport参照)。
-//   addAvoid/deleteAvoid/updateAvoidTextは操作系(state書き込み+保存ヘルパー依存)のため、
+//   addAvoid/deleteAvoid/updateAvoidText/toggleAvoidViolationは操作系(state書き込み+保存ヘルパー依存)のため、
 //   dispatcher整理の段階まで意図的にここへ残す(監督者裁定)。
 // =============================================================
 
@@ -6063,7 +6067,8 @@ function addAvoid() {
   const item = {
     id: crypto.randomUUID(),
     text,
-    createdAt: nowDateTime()
+    createdAt: nowDateTime(),
+    violations: []
   };
   state.settings.avoidList = [...(state.settings.avoidList || []), item];
   if (input) input.value = "";
@@ -6073,6 +6078,24 @@ function addAvoid() {
 function deleteAvoid(id) {
   state.settings.avoidList = (state.settings.avoidList || []).filter((it) => it.id !== id);
   saveAndRender("削除しました");
+}
+
+function toggleAvoidViolation(id) {
+  const today = todayISO();
+  let removed = false;
+  state.settings.avoidList = (state.settings.avoidList || []).map((it) => {
+    if (it.id !== id) return it;
+    const violations = Array.isArray(it.violations) ? it.violations : [];
+    removed = violations.includes(today);
+    return {
+      ...it,
+      violations: removed
+        ? violations.filter((date) => date !== today)
+        : [...violations, today],
+      updatedAt: nowDateTime()
+    };
+  });
+  saveAndRender(removed ? "当日の抵触記録を取り消しました" : "当日の抵触記録を追加しました");
 }
 
 function updateAvoidText(id, text) {

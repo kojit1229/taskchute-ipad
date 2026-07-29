@@ -2468,6 +2468,78 @@ h3 {
 
 /* === v17: Avoid List(やらないこと)タブ === */
 
+.avoid-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 10px 14px;
+}
+
+.avoid-item-mark {
+  /* v189レビューL3: 従来の実効色(#FF3B30)を維持する(黙った見た目変更をしない) */
+  color: var(--coral, #FF3B30);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.avoid-item-main {
+  min-width: 0;
+}
+
+.avoid-item-main > .input {
+  border: none;
+  background: transparent;
+}
+
+.avoid-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  margin-top: var(--space-1);
+}
+
+.avoid-compliance {
+  color: var(--green-text);
+  font-size: var(--text-xs);
+}
+
+.avoid-compliance strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.avoid-violation-btn {
+  border: 1px solid var(--line);
+  background: var(--panel-soft);
+  color: var(--text);
+}
+
+.avoid-violation-btn.is-recorded {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+@media (max-width: 720px) {
+  .category-setting-row {
+    flex-wrap: wrap;
+  }
+
+  .category-setting-row > input[data-cat-field="name"] {
+    min-width: 160px;
+  }
+
+  .avoid-item {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .avoid-item > .avoid-violation-btn {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
 /* === v17: ジャーナルの思考プロンプト折りたたみ === */
 .journal-prompts summary {
   list-style: none;
