@@ -462,6 +462,31 @@
       }
     },
     {
+      "file": "today-core.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 45,
+      "assertionHash": "7b7cbc608b7fd5b3",
+      "sourceHash": "3a780585403b5815",
+      "waits": {
+        "fixedCount": 2,
+        "numericMilliseconds": 3600,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
       "file": "v100.test.js",
       "kind": "e2e",
       "tier": "full",
