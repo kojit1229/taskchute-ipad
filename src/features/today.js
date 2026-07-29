@@ -19,6 +19,9 @@ let todayKindleIndex = 0;
 let todayKindleAdvanceAtMs = 0;
 let todayKindleDeckKey = "";
 let todayZeroIndex = 0;
+// v183レビュー反映: 書きかけ本文はDOMだけに置かず退避する。今日ビューは書きながら
+// 他パネルの操作(完了・ポモ遷移等)で直接render()が走るため、DOMのみだと下書きが消える。
+let todayZeroDraft = "";
 
 function configureToday(deps) {
   ({
@@ -36,9 +39,9 @@ function configureToday(deps) {
     "today-kindle-random": () => randomTodayKindle(),
     "today-zero-prev": () => moveTodayZero(-1),
     "today-zero-next": () => moveTodayZero(1),
-    "today-zero-write": ({ id, target }) => beginTodayZeroWrite(id, target.dataset.kind === "suggestion"),
-    "today-zero-save": () => saveTodayZeroEntry(),
-    "today-zero-cancel": () => discardTodayZeroWrite()
+    "today-zero-write": ({ id, target }) => { todayZeroDraft = ""; beginTodayZeroWrite(id, target.dataset.kind === "suggestion"); },
+    "today-zero-save": () => { saveTodayZeroEntry(); todayZeroDraft = ""; },
+    "today-zero-cancel": () => { discardTodayZeroWrite(); todayZeroDraft = ""; }
   });
 }
 
@@ -425,11 +428,14 @@ function moveTodayZero(delta) {
 function renderTodayZero() {
   const write = typeof getTodayZeroWriteState === "function" ? getTodayZeroWriteState() : null;
   if (write) {
+    // 再描画の直前ならこの時点で旧DOMがまだ生きている。値を退避してから作り直す
+    const prevTextarea = document.getElementById("todayZeroText");
+    if (prevTextarea) todayZeroDraft = prevTextarea.value;
     const elapsedSec = Math.max(0, Math.floor((Date.now() - write.startedAtMs) / 1000));
     return `<section class="today-panel today-zero">
       ${panelHeading("ZERO-SEC LAUNCH", "0秒思考 — 1テーマ1分", "WRITING")}
       <div class="today-zero-theme">${escapeHTML(write.text)}</div>
-      <textarea id="todayZeroText" class="today-zero-text" placeholder="頭に浮かんだままを書く。整えない。1分で。"></textarea>
+      <textarea id="todayZeroText" class="today-zero-text" placeholder="頭に浮かんだままを書く。整えない。1分で。">${escapeHTML(todayZeroDraft)}</textarea>
       <div class="today-zero-writebar">
         <time id="todayZeroElapsed" class="${elapsedSec >= 60 ? "is-over" : ""}">${formatElapsed(elapsedSec)}</time>
         <span>経過</span>

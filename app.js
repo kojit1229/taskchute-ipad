@@ -709,10 +709,16 @@ registerActions({
   // --- ポモドーロ(16) ---
   "start-pomodoro": ({ target }) => {
     const blockId = target.dataset.blockId || "";
-    // v183: 今日コックピットの開始だけはBlock着手の正規入口へ流し、
-    // focusTimerAuto連動を維持する。単体/タイムライン側は従来どおり宣言モーダル。
-    if (target.closest(".today-pomodoro")) setBlockTime(blockId, "actualStartAt");
-    else openDeclareModal(blockId, "pomodoro");
+    // v183レビュー反映: 今日コックピットの開始は startPomodoro 直行にする。
+    // setBlockTime経由は (a)実行中Blockの actualStartAt を無条件上書きし実績を壊す
+    // (b)focusTimerAuto=OFF だとポモが始まらない。startPomodoro は既存値維持(v13契約)
+    // かつ設定に依らず開始する。単体/タイムライン側は従来どおり宣言モーダル。
+    if (target.closest(".today-pomodoro")) {
+      forceResetPomodoroSession();
+      startPomodoro(blockId);
+    } else {
+      openDeclareModal(blockId, "pomodoro");
+    }
   },
   "stop-pomodoro": () => {
     if (state.pomodoro.blockId) {
