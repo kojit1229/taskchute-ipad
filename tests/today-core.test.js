@@ -2825,6 +2825,417 @@ function check(name, cond, extra = "") {
       && await page.locator('.timeline-card[data-id="w3-404"]').count() === 1);
     check("[48]区間の描画で pageerror が発生しない", failures === failuresBefore48);
     w3InboxFx.status = 200;
+
+    // ============================================================
+    // ==== ここから B6(F6 avoid破り記録 / F7 vision ALIGNMENT)追記セクション [49]〜[52] ====
+    // 設計の正: ../taskchute-notes/designs/v169-today-cockpit.md §12 の F6/F7 行
+    //   (K裁定②=加点表現。ストリーク・連続日数は出さない)+
+    //   workbench/out/2026-07-29-today-cockpit-ideas/design-onetap-timetree.md §5裁定#20
+    //   (「破った」の当日分は再タップでトグル取消。Undo UI新設なし)。
+    // 現物調査: workbench/out/2026-07-29-today-cockpit-impl/b6-survey.md(§0/§2/§3・§5-3/5-4)。
+    // DOM契約(実装側と共有):
+    //   F6: avoidビューの「破った」ボタン [data-action="toggle-avoid-violation"][data-id] /
+    //       .avoid-compliance(直近7日で守れた日数 n/7)/ .avoid-compliance(今週の抵触 n件)
+    //   F7: visionビューのsegmented上の .vision-alignment(比率表示 or 未設定誘導)/
+    //       設定ビューのカテゴリマスタ節の .vision-direct-option(チェックボックス、data-category属性=実装実名へ突合済み)
+    // 実装(別担当が並行作業中)より先に仕様から書いた。前提が実装と食い違った場合は
+    // テストを弱めるのではなく、前提の側を実装と突合して直すこと:
+    //   前提B6-1: 「破った」タップは addAvoid 等と同じ保存系(saveAndRender相当)で、
+    //            settings.avoidList[].violations へ当日ISO日付(YYYY-MM-DD)を追記し、
+    //            即時にlocalStorageへ永続化+再描画する。当日分の再タップは取消(裁定#20)で、
+    //            当日以外の既存violationsには触れない
+    //   前提B6-2: 「直近7日で守れた日数」= 当日を含む7日窓(F3の前提B5-7と同じ窓の取り方)で、
+    //            violationsが1件も無い日を「守れた日」と数える。パネル集計(全項目の和集合)でも
+    //            項目単位表示でも成立する読み方(全 .avoid-compliance 要素の走査)で検証する
+    //   前提B6-3: 「今週」= weekRange と同じ土曜起点([22]のPREV_WEEK_DAYと同式)。
+    //            週開始日(土曜)当日のviolationは「今週」に含まれる(境界は両端含む)
+    //   前提B6-4: .avoid-compliance の件数は「n件」を含む表示(別形式なら下の抽出regexへ1つ足す)
+    //   前提B6-5: F6/F7のmigrationは normalizeState 時にメモリ上で補完され、次の保存契機
+    //            (setView)でlocalStorageへ書き戻される([21]と同じ踏み方)。
+    //            violations: 既存配列は非上書き・キー無しは[]補完・非配列の壊れ値は[]へ矯正
+    //            (b6-survey §0の map + Array.isArray 流儀)。
+    //            visionDirectCategories: キー無しは[]補完・既存配列は非上書き
+    //   前提B6-6: .vision-direct-option のチェックは data-category=カテゴリ名(マスタのname)の
+    //            checkbox(要素自身がinputか内包かは両対応で読む)。チェックの変更が
+    //            settings.visionDirectCategories(カテゴリ名配列)へ反映される
+    //   前提B6-7: ALIGNMENTの分子/分母は「当日Blockの実績時間」(actualStartAt/actualEndAt両方
+    //            あるもののみ。計画のみのBlockは入らない)。実行中Blockを含めるかは未裁定のため
+    //            契約にしない(b6-survey §3-4。フィクスチャに実行中Blockを含めない)
+    //   前提B6-8: 比率は%表示(66〜67.5%を 60/90=66.7% の一致とみなす。丸め形式は固定しない)。
+    //            未設定時は%を出さず、「設定」または「直結」を含む誘導文言のみ
+    // ============================================================
+
+    // B6用seed: seedB5/seedW1と同じ流儀に settings.avoidList / visionDirectCategories の直接seedを
+    // 足した拡張(既存関数は変更禁止のため別名で追加。pomodoro/zeroThinking/gardenLogは毎回リセット)。
+    // avoidList はそのまま代入する(violationsキー無しの旧形式・壊れ値もそのまま渡せる)。
+    // visionDirectCats は null=キー自体を削除(migration検証用)/ 配列=その値でseed。
+    async function seedB6({ blocks = [], view = "avoid", settings = {}, avoidList = [], visionDirectCats = null } = {}) {
+      await page.evaluate(({ KEY, blocks, view, settings, avoidList, visionDirectCats, TODAY }) => {
+        const s = JSON.parse(localStorage.getItem(KEY));
+        s.blocks = blocks;
+        s.currentView = view;
+        s.selectedDate = TODAY;
+        s.sleep = s.sleep || { logs: {} };
+        s.sleep.logs = {};
+        s.condition = s.condition || { logs: {} };
+        s.condition.logs = {};
+        s.gardenLog = {};
+        s.zeroThinking = { themes: [], entries: [], groups: [], suggestedThemes: [] };
+        s.pomodoro = { ...s.pomodoro, running: false, blockId: "", startedAt: "", endsAt: "", mode: "focus" };
+        s.settings.avoidList = avoidList;
+        if (visionDirectCats === null) delete s.settings.visionDirectCategories;
+        else s.settings.visionDirectCategories = visionDirectCats;
+        Object.assign(s.settings, settings);
+        localStorage.setItem(KEY, JSON.stringify(s));
+      }, { KEY, blocks, view, settings, avoidList, visionDirectCats, TODAY });
+      await page.reload();
+      await page.waitForSelector('[data-action="nav"]', { state: "attached" });
+    }
+
+    // F6表示の読み方(パネル集計でも項目単位でも成立するよう、該当クラス全要素を走査する。前提B6-2/B6-4)
+    const avoidWeekDaysTexts = () => page.evaluate(() =>
+      [...document.querySelectorAll(".avoid-compliance")].map((el) => el.textContent || ""));
+    const avoidWeekHitsCounts = () => page.evaluate(() =>
+      [...document.querySelectorAll(".avoid-compliance")].map((el) => {
+        const m = /([0-9]+)\s*件/.exec(el.textContent || "");
+        return m ? Number(m[1]) : null;
+      }));
+    // 「n/7」等の包含判定(前後に数字が続かないことまで見る。[22]の週番号判定と同じ流儀)
+    const hasRatio = (text, n, d) => new RegExp(`(^|[^0-9])${n}\\s*/\\s*${d}([^0-9]|$)`).test(text || "");
+    // 今週の土曜起点([22]のPREV_WEEK_DAYと同式: (getDay()+1)%7 → Sat=0。テスト実行日の曜日に依らず決定論)
+    const WEEK_START = daysAgoISO((now0.getDay() + 1) % 7);
+    const b6AvoidItem = (id, text, extra = {}) => ({ id, text, createdAt: atOn(daysAgoISO(30), "09:00"), ...extra });
+
+    // ============================================================
+    // [49] F6 migration: violationsキー無し→[]補完・既存値非上書き・非配列の壊れ値は[]へ矯正
+    // ============================================================
+    console.log("[49] F6 migration: violationsキー無しの旧avoidListが[]補完され、既存値は上書きされず、壊れ値は[]へ矯正される");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    const B6_KEEP_V = [daysAgoISO(10), daysAgoISO(20)];
+    await seedB6({
+      view: "avoid",
+      avoidList: [
+        b6AvoidItem("av-old", "B6-旧形式(キー無し)"),
+        b6AvoidItem("av-keep", "B6-既存値あり", { violations: B6_KEEP_V }),
+        b6AvoidItem("av-broken", "B6-壊れ値", { violations: "not-an-array" })
+      ]
+    });
+    await waitView("avoid");
+    // 読込時のnormalizeState結果はメモリ上にあるだけなので、保存契機(setView)を明示的に踏んで
+    // localStorageへ書き戻させてから突合する([21]と同じ踏み方。前提B6-5)
+    await w1GoView("tasks");
+    await page.waitForFunction((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      const it = (s.settings.avoidList || []).find((x) => x.id === "av-old");
+      return s.currentView === "tasks" && !!it && Array.isArray(it.violations);
+    }, KEY);
+    const migAvoid = (await stateNow()).settings.avoidList;
+    const migById = (id) => migAvoid.find((x) => x.id === id);
+    check("violationsキー無しの旧項目に [] が補完される(§12 F6 migration)",
+      Array.isArray(migById("av-old")?.violations) && migById("av-old").violations.length === 0,
+      JSON.stringify(migById("av-old")));
+    check("既存の violations 配列は上書きされない(既定→既存優先のmap流儀)",
+      JSON.stringify(migById("av-keep")?.violations) === JSON.stringify(B6_KEEP_V),
+      JSON.stringify(migById("av-keep")));
+    check("非配列の壊れ値('not-an-array')は [] へ矯正される(自己修復。前提B6-5)",
+      Array.isArray(migById("av-broken")?.violations) && migById("av-broken").violations.length === 0,
+      JSON.stringify(migById("av-broken")));
+    check("migrationで項目数・id/text/createdAt が変化しない(要素の他フィールド非破壊)",
+      migAvoid.length === 3 && migById("av-old")?.text === "B6-旧形式(キー無し)" &&
+      (migById("av-keep")?.createdAt || "").startsWith(daysAgoISO(30)),
+      JSON.stringify(migAvoid.map((x) => x.id)));
+
+    // ============================================================
+    // [49b] F6: 「破った」タップ→当日ISO追加・表示即時反映・再読込後も保持。当日分の再タップ=トグル取消(裁定#20)
+    // ============================================================
+    console.log("[49b] F6: 「破った」タップで当日ISOが追加・表示即時反映・再読込後も保持され、当日分の再タップはトグル取消(裁定#20)");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB6({
+      view: "avoid",
+      avoidList: [b6AvoidItem("av-t", "B6-夜のスマホ", { violations: [daysAgoISO(2)] })]
+    });
+    await page.waitForSelector('[data-action="toggle-avoid-violation"][data-id="av-t"]', { state: "attached" });
+    check("「破った」ボタンが項目に描画される(DOM契約)", true);
+    await page.waitForSelector(".avoid-compliance", { state: "attached" });
+    const wd0 = (await avoidWeekDaysTexts()).join("\n");
+    check("タップ前: 守れた日数 6/7(violation=-2日の1日ぶんだけ減る)", hasRatio(wd0, 6, 7), wd0);
+    await page.locator('[data-action="toggle-avoid-violation"][data-id="av-t"]').first().click();
+    await page.waitForFunction((KEY) => {
+      const it = JSON.parse(localStorage.getItem(KEY)).settings.avoidList.find((x) => x.id === "av-t");
+      return !!it && Array.isArray(it.violations) && it.violations.length === 2;
+    }, KEY);
+    const vAfterTap = (await stateNow()).settings.avoidList.find((x) => x.id === "av-t").violations;
+    check("violationsへ当日ISO日付(YYYY-MM-DD)が追加され、即時にlocalStorageへ永続化される(前提B6-1)",
+      vAfterTap.includes(TODAY), JSON.stringify(vAfterTap));
+    check("既存の過去分violation(-2日)は保持される", vAfterTap.includes(daysAgoISO(2)), JSON.stringify(vAfterTap));
+    const wd1 = (await avoidWeekDaysTexts()).join("\n");
+    check("表示が即時反映される(守れた 6/7 → 5/7。reloadなし)", hasRatio(wd1, 5, 7) && !hasRatio(wd1, 6, 7), wd1);
+    // 再読込後も保持
+    await page.reload();
+    await page.waitForSelector('[data-action="nav"]', { state: "attached" });
+    await waitView("avoid");
+    await page.waitForSelector(".avoid-compliance", { state: "attached" });
+    const vAfterReload = (await stateNow()).settings.avoidList.find((x) => x.id === "av-t").violations;
+    check("再読込後もviolationsが保持される(当日ISO+過去分の2件)",
+      vAfterReload.includes(TODAY) && vAfterReload.length === 2, JSON.stringify(vAfterReload));
+    check("再読込後の表示も 5/7 のまま", hasRatio((await avoidWeekDaysTexts()).join("\n"), 5, 7));
+    // 当日分の再タップ = トグル取消(裁定#20。Undo UI新設なし)
+    await page.locator('[data-action="toggle-avoid-violation"][data-id="av-t"]').first().click();
+    await page.waitForFunction((KEY) => {
+      const it = JSON.parse(localStorage.getItem(KEY)).settings.avoidList.find((x) => x.id === "av-t");
+      return !!it && Array.isArray(it.violations) && it.violations.length === 1;
+    }, KEY);
+    const vAfterUndo = (await stateNow()).settings.avoidList.find((x) => x.id === "av-t").violations;
+    check("当日分の再タップで当日ISOだけが取り消される(トグル取消。過去分-2日は残る。裁定#20)",
+      !vAfterUndo.includes(TODAY) && vAfterUndo.includes(daysAgoISO(2)), JSON.stringify(vAfterUndo));
+    check("取消後の表示が 6/7 へ戻る(即時反映)", hasRatio((await avoidWeekDaysTexts()).join("\n"), 6, 7));
+
+    // ============================================================
+    // [49c] F6: 「直近7日で守れた日数」の手計算一致 + K裁定②の語彙回帰ガード
+    // ============================================================
+    console.log("[49c] F6: 守れた日数がフィクスチャの手計算 5/7 と一致し、新パネルに「ストリーク」「連続」が出ない(K裁定②)");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    // 手計算: 7日窓 = 今日〜-6日。violations は -1・-3 の2日が窓内 → 守れた 5日。-7日は窓外。
+    //   窓の取り方が -1〜-7 の読みなら3件すべて窓内 = 4/7 になり、下の負の検証で落ちる(前提B6-2)
+    await seedB6({
+      view: "avoid",
+      avoidList: [
+        b6AvoidItem("av-main", "B6-手計算対象", { violations: [daysAgoISO(1), daysAgoISO(3), daysAgoISO(7)] }),
+        b6AvoidItem("av-clean", "B6-違反なし", { violations: [] })
+      ]
+    });
+    await page.waitForSelector(".avoid-compliance", { state: "attached" });
+    const wdAll = await avoidWeekDaysTexts();
+    check("守れた日数 5/7 が表示される(violationsフィクスチャの手計算と一致)",
+      wdAll.some((t) => hasRatio(t, 5, 7)), JSON.stringify(wdAll));
+    check("4/7 ではない(当日を含む7日窓。-1〜-7窓だと4/7になる。前提B6-2)",
+      !wdAll.some((t) => hasRatio(t, 4, 7)), JSON.stringify(wdAll));
+    check("6/7 ではない(窓内2日ぶんのviolationを1日に数え潰さない)",
+      !wdAll.some((t) => hasRatio(t, 6, 7)), JSON.stringify(wdAll));
+    // K裁定②の回帰ガード: 判定は新パネル2クラスにスコープする([33c]と同じ方式。
+    // avoidビュー既存文言の検査ではなく、F6の新規指標表現だけを対象にする)
+    const f6PanelText = await page.evaluate(() =>
+      [...document.querySelectorAll(".avoid-compliance")].map((el) => el.textContent || "").join("\n"));
+    check("F6新パネルに「ストリーク」が出ない(K裁定②回帰ガード)", !f6PanelText.includes("ストリーク"), f6PanelText);
+    check("F6新パネルに「連続」が出ない(加点表現のみ)", !f6PanelText.includes("連続"), f6PanelText);
+    check("F6新パネルに streak 表記も出ない", !/streak/i.test(f6PanelText), f6PanelText);
+
+    // ============================================================
+    // [49d] F6: 「今週の抵触」が土曜起点週の件数と一致する(週境界オフバイワン検証)
+    // ============================================================
+    console.log("[49d] F6: 今週の抵触が土曜起点週(weekRange同式)の手計算 1件 と一致する(週開始日含む・前日含まず)");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    // フィクスチャ: 週開始日(土曜)当日=今週(境界・含む)/ その前日(PREV_WEEK_DAY)=先週(含まない)/
+    //   さらに3日前=先週内(含まない)→ 期待値 1件。境界の数え間違いなら 0件 or 2件以上になる
+    await seedB6({
+      view: "avoid",
+      avoidList: [b6AvoidItem("av-week", "B6-週境界", {
+        createdAt: atOn(daysAgoISO(40), "09:00"),
+        violations: [WEEK_START, PREV_WEEK_DAY, daysAgoISO(((now0.getDay() + 1) % 7) + 3)]
+      })]
+    });
+    await page.waitForSelector(".avoid-compliance", { state: "attached" });
+    const hitsAll = await avoidWeekHitsCounts();
+    check("今週の抵触 = 1件(週開始日(土曜)当日のviolationは今週に含まれる。前提B6-3/B6-4)",
+      hitsAll.some((n) => n === 1), JSON.stringify(hitsAll));
+    check("2件・3件ではない(週開始前日・前週内のviolationをカウントしない=週境界のオフバイワン検証)",
+      !hitsAll.some((n) => n === 2 || n === 3), JSON.stringify(hitsAll));
+
+    // ============================================================
+    // [50] F7 migration: visionDirectCategoriesキー無し→[]補完・既存値は非上書き
+    // ============================================================
+    console.log("[50] F7 migration: visionDirectCategoriesキー無し→[]補完、既存値(['仕事'])は上書きされない");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB6({ view: "avoid", visionDirectCats: null });  // null = キー自体を削除してseed(旧state再現)
+    await waitView("avoid");
+    await w1GoView("tasks");  // 保存契機(setView)で書き戻し([21]・前提B6-5)
+    await page.waitForFunction((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      return s.currentView === "tasks" && Array.isArray(s.settings.visionDirectCategories);
+    }, KEY);
+    const vdcMigrated = (await stateNow()).settings.visionDirectCategories;
+    check("キー無しの旧stateに [] が補完される(§12 F7 migration)",
+      Array.isArray(vdcMigrated) && vdcMigrated.length === 0, JSON.stringify(vdcMigrated));
+    await seedB6({ view: "avoid", visionDirectCats: ["仕事"] });  // マスタ外の名前でも値はそのまま保持される想定
+    await waitView("avoid");
+    await w1GoView("tasks");
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).currentView === "tasks", KEY);
+    const vdcKept = (await stateNow()).settings.visionDirectCategories;
+    check("既存値 ['仕事'] は上書きされない(既存優先)",
+      JSON.stringify(vdcKept) === JSON.stringify(["仕事"]), JSON.stringify(vdcKept));
+
+    // ============================================================
+    // [51] F7: 未設定([])では .vision-alignment が誘導のみ(比率なし)で、segmentedの上に置かれる
+    // ============================================================
+    console.log("[51] F7: 未設定では .vision-alignment に誘導文言のみ(%なし)。パネルは3タブsegmentedの上(共通領域)");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB6({
+      view: "vision", visionDirectCats: [],
+      // 実績があっても未設定なら比率を出さない、の判別用に実績Blockを1件同居させる
+      blocks: [block("va-any", { title: "VA-実績あり", category: "開発", completed: true, actualStartAt: at("09:00"), actualEndAt: at("10:00"), plannedStartAt: at("09:00"), plannedEndAt: at("10:00"), estimateMin: 60 })]
+    });
+    await waitView("vision");
+    await page.waitForSelector(".vision-alignment", { state: "attached" });
+    check(".vision-alignment がvisionビューに描画される(DOM契約)", await page.locator(".vision-alignment").count() === 1);
+    const vaUnset = await panelText(".vision-alignment");
+    check("未設定では比率(%)を表示しない(実績Blockがあっても誘導のみ。前提B6-8)",
+      !/[0-9]\s*%/.test(vaUnset || ""), vaUnset);
+    check("未設定では設定への誘導文言(「設定」または「直結」を含む)が出る(§12 F7: vision側は導線のみ)",
+      /設定|直結/.test(vaUnset || ""), vaUnset);
+    check("パネルは3タブsegmentedの上(共通領域)に置かれる(§12 F7・DOM順で先行する)",
+      await page.evaluate(() => {
+        const a = document.querySelector(".vision-alignment");
+        const s = document.querySelector("#main .segmented");
+        return !!a && !!s && !!(a.compareDocumentPosition(s) & Node.DOCUMENT_POSITION_FOLLOWING);
+      }));
+
+    // ============================================================
+    // [51b] F7: 設定ビューのカテゴリマスタ節でチェック→保存契機→visionビューの当日実績比率が手計算と一致
+    // ============================================================
+    console.log("[51b] F7: 設定ビューで直結カテゴリ(開発)をチェック→保存→visionビューで当日実績比率 60/90=67% が一致する");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    // 手計算: 当日実績 = 開発60分(09:00-10:00) + 回復30分(10:30-11:00)。直結=開発 → 60/90 = 66.7%。
+    //   計画のみ45分(実績なし)は分子にも分母にも入らない(混入すると (60+45)/135=78% 等になり
+    //   下の範囲判定 66〜67.5% で落ちる判別フィクスチャ。前提B6-7)
+    const b6VisionBlocks = [
+      block("va-dev", { title: "VA-開発60分", category: "開発", completed: true, actualStartAt: at("09:00"), actualEndAt: at("10:00"), plannedStartAt: at("09:00"), plannedEndAt: at("10:00"), estimateMin: 60 }),
+      block("va-rec", { title: "VA-回復30分", category: "回復", completed: true, actualStartAt: at("10:30"), actualEndAt: at("11:00"), plannedStartAt: at("10:30"), plannedEndAt: at("11:00"), estimateMin: 30 }),
+      block("va-plan", { title: "VA-計画のみ45分", category: "開発", plannedStartAt: at("13:00"), plannedEndAt: at("13:45"), estimateMin: 45 })
+    ];
+    await seedB6({ view: "settings", visionDirectCats: [], blocks: b6VisionBlocks });
+    await waitView("settings");
+    await page.waitForSelector(".vision-direct-option", { state: "attached" });
+    const vdcCatNames = await page.evaluate(() =>
+      [...document.querySelectorAll('.vision-direct-option [data-category]')].map((el) => el.dataset.category));
+    check("カテゴリマスタ節に .vision-direct-option のチェック列が出る(既定マスタ6件ぶん・data-category=カテゴリ名)",
+      vdcCatNames.length === 6 && vdcCatNames.includes("開発") && vdcCatNames.includes("回復"), JSON.stringify(vdcCatNames));
+    // 「開発」をチェック(要素自身がcheckboxでも内包でも成立する読み方。設定foldが閉じていても
+    // 動くようevaluateでclickする。checkboxのclickはchange発火を伴う。前提B6-6)
+    await page.evaluate(() => {
+      const el = document.querySelector('.vision-direct-option [data-category="開発"]');
+      const input = el?.matches?.('input[type="checkbox"]') ? el : (el?.querySelector?.('input[type="checkbox"]') || el);
+      input.click();
+    });
+    await w1GoView("tasks");  // 保存契機(setView)。チェック時点で即保存する実装でもこの後の突合は同じ
+    await page.waitForFunction((KEY) =>
+      (JSON.parse(localStorage.getItem(KEY)).settings.visionDirectCategories || []).includes("開発"), KEY);
+    check("チェックで settings.visionDirectCategories に '開発' が入り永続化される(前提B6-6)", true);
+    await w1GoView("vision");
+    await page.waitForSelector(".vision-alignment", { state: "attached" });
+    const vaSet = await panelText(".vision-alignment");
+    const vaPctM = /([0-9]+(?:\.[0-9]+)?)\s*%/.exec(vaSet || "");
+    const vaPct = vaPctM ? parseFloat(vaPctM[1]) : null;
+    check("当日実績比率が手計算と一致(60/90 = 66.7% → 66〜67.5%の表示を一致とみなす。前提B6-8)",
+      vaPct !== null && vaPct >= 66 && vaPct <= 67.5, JSON.stringify({ pct: vaPct, text: vaSet }));
+
+    // ============================================================
+    // [51c] F7: 実績ゼロ日(計画のみ)でも崩れない(NaN非表示・pageerrorゼロ)
+    // ============================================================
+    console.log("[51c] F7: 実績ゼロ日(計画のみ)でも .vision-alignment が崩れない(0除算ガード・NaN非表示)");
+    const failuresBefore51c = failures;  // この区間のpageerror検出用([13]と同じ方式)
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB6({
+      view: "vision", visionDirectCats: ["開発"],
+      blocks: [block("va-plan-only", { title: "VA-計画のみ", category: "開発", plannedStartAt: at("13:00"), plannedEndAt: at("14:00"), estimateMin: 60 })]
+    });
+    await waitView("vision");
+    await page.waitForSelector(".vision-alignment", { state: "attached" });
+    const vaZero = await panelText(".vision-alignment");
+    check("実績ゼロ日に NaN/undefined/Infinity が出ない(分母0のガード)", !/NaN|undefined|Infinity/.test(vaZero || ""), vaZero);
+    check("[51c]区間の描画で pageerror が発生しない", failures === failuresBefore51c);
+
+    // ============================================================
+    // [52] 既存avoidビューの無退行: リスト・追加フォームが従来どおり描画され、追加操作も機能する
+    // ============================================================
+    console.log("[52] 既存avoidビュー無退行: リスト・追加フォーム(#avoidTitle/add-avoid/delete-avoid)が従来どおり描画・機能する");
+    const failuresBefore52 = failures;  // この区間のpageerror検出用
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB6({
+      view: "avoid",
+      avoidList: [
+        b6AvoidItem("av-r1", "B6-回帰-既存1", { violations: [daysAgoISO(1)] }),
+        b6AvoidItem("av-r2", "B6-回帰-旧形式")  // violationsキー無しの旧形式も同居させる
+      ]
+    });
+    await waitView("avoid");
+    check("追加フォーム(#avoidTitle + add-avoidボタン)が従来どおり描画される",
+      await page.locator("#avoidTitle").count() === 1 &&
+      await page.locator('[data-action="add-avoid"]').count() === 1);
+    const avoidRowVals = await page.evaluate(() =>
+      [...document.querySelectorAll('input[data-avoid-field="text"]')].map((el) => ({ id: el.dataset.avoidId, value: el.value })));
+    check("既存項目2件のテキスト入力が値付きで描画される(violations有無に関わらず)",
+      avoidRowVals.length === 2 &&
+      avoidRowVals.some((r) => r.id === "av-r1" && r.value === "B6-回帰-既存1") &&
+      avoidRowVals.some((r) => r.id === "av-r2" && r.value === "B6-回帰-旧形式"),
+      JSON.stringify(avoidRowVals));
+    check("既存の削除ボタン(delete-avoid)が項目ごとに残る",
+      await page.locator('[data-action="delete-avoid"][data-id="av-r1"]').count() === 1 &&
+      await page.locator('[data-action="delete-avoid"][data-id="av-r2"]').count() === 1);
+    check("旧形式項目(violationsキー無し)にも「破った」ボタンが出る(migration後の一様描画)",
+      await page.locator('[data-action="toggle-avoid-violation"][data-id="av-r2"]').count() === 1);
+    // 追加操作の無退行(configureAvoid/dispatcher経由の add-avoid が引き続き機能する)
+    await page.locator("#avoidTitle").click();
+    await page.keyboard.type("B6-回帰-新規追加");
+    await page.locator('[data-action="add-avoid"]').click();
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).settings.avoidList.length === 3, KEY);
+    const avoidAfterAdd = (await stateNow()).settings.avoidList;
+    check("追加フォームから項目を追加できる(既存addAvoid導線の無退行)",
+      avoidAfterAdd.some((x) => x.text === "B6-回帰-新規追加"), JSON.stringify(avoidAfterAdd.map((x) => x.text)));
+    check("追加した項目の行が描画される",
+      await page.evaluate(() => [...document.querySelectorAll('input[data-avoid-field="text"]')].some((el) => el.value === "B6-回帰-新規追加")));
+    check("[52]区間の描画・操作で pageerror が発生しない", failures === failuresBefore52);
+
+    // ============================================================
+    // [53] v189レビュー反映: カテゴリ改名/削除のvisionDirectCategoriesカスケード(M1/M2)+
+    //      avoidList非オブジェクト要素の除去ガード(migration独立レビュー指摘)
+    // ============================================================
+    console.log("[53] v189: カテゴリ改名/削除がvisionDirectCategoriesへカスケードし、avoidListの非オブジェクト要素は起動時に除去される");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB6({
+      view: "settings",
+      avoidList: [null, "壊れ文字列", { id: "av-ok", text: "生き残る項目", createdAt: at("08:00") }],
+      visionDirectCats: ["開発", "回復"]
+    });
+    // 非オブジェクト要素の除去(throw→全state初期化に至らない)
+    const av53 = (await stateNow()).settings.avoidList;
+    check("avoidListの非オブジェクト要素(null/文字列)は起動時に除去され、正常項目は残る",
+      av53.length === 1 && av53[0].id === "av-ok" && Array.isArray(av53[0].violations), JSON.stringify(av53));
+    check("非オブジェクト混入でも全state初期化(個人データゲート再表示)に至っていない",
+      await page.evaluate(() => !document.body.textContent.includes("初期状態で起動")));
+    // カテゴリ改名カスケード(M1): 「開発」→「開発X」
+    await page.evaluate(() => {
+      const cat = JSON.parse(localStorage.getItem("taskchute-journal-pwa-state-v1")).settings.categories.find((c) => c.name === "開発");
+      window.__catId53 = cat && cat.id;
+    });
+    const catId53 = await page.evaluate(() => window.__catId53);
+    check("(準備)カテゴリマスタに「開発」が存在する", !!catId53);
+    await page.evaluate((id) => {
+      const el = document.querySelector(`input[data-cat-field="name"][data-cat-id="${id}"]`);
+      if (!el) { window.__renameFailed = true; return; }
+      el.value = "開発X";
+      el.dispatchEvent(new Event("input", { bubbles: true }));  // カテゴリ編集はinputイベント委譲(app.js:1336)
+    }, catId53);
+    await page.waitForFunction((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      return (s.settings.visionDirectCategories || []).includes("開発X");
+    }, KEY);
+    const vdc53 = (await stateNow()).settings.visionDirectCategories;
+    check("カテゴリ改名がvisionDirectCategoriesへカスケードする(開発→開発X。レビューM1)",
+      vdc53.includes("開発X") && !vdc53.includes("開発"), JSON.stringify(vdc53));
+    // カテゴリ削除カスケード(M2): 「回復」を削除→直結からも除去
+    page.once("dialog", (d) => d.accept());
+    await page.evaluate((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      const cat = s.settings.categories.find((c) => c.name === "回復");
+      const btn = document.querySelector(`[data-action="delete-category"][data-cat-id="${cat.id}"]`);
+      if (btn) btn.click();
+    }, KEY);
+    await page.waitForFunction((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      return !(s.settings.visionDirectCategories || []).includes("回復");
+    }, KEY);
+    check("カテゴリ削除でvisionDirectCategoriesからも除去される(レビューM2)",
+      !((await stateNow()).settings.visionDirectCategories || []).includes("回復"));
   } finally {
     await browser.close();
     server.close();

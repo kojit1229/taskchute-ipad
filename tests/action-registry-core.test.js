@@ -119,6 +119,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "calendar-prev-month", "calendar-next-month", "calendar-open-day", "calendar-close-popover",  // v188: カレンダービュー
 
   "add-category", "delete-category", "add-break-message", "delete-break-message",
+  "toggle-vision-direct-category", "vision-open-direct-settings",  // v189: F7 直結カテゴリ選択+誘導(設定ビュー)
   "tl-zoom", "tl-energy-mode",
   "toggle-journal-segment", "toggle-home-reflect-fold", "toggle-settings-sync",
   "toggle-sidebar", "toggle-pomo-fullscreen", "toggle-study-with-me",
@@ -127,6 +128,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "wish-view-mode", "wish-board-jump-current",
   "triage-choice", "triage-undo", "triage-reason-chip", "triage-reason-skip",
   "add-avoid", "delete-avoid",
+  "toggle-avoid-violation",  // v189: F6 破った記録(トグル)
   "zt-add-toggle", "zt-add-cancel", "zt-add-submit", "zt-tab", "home-tab",
   "zt-fav-toggle", "zt-importance-toggle", "zt-theme-delete",
   "zt-suggestion-adopt", "zt-suggestion-dismiss",
@@ -163,6 +165,7 @@ const GOLDEN_CLICK_ACTIONS = [
 const MIGRATED_TO_REGISTRY_ACTIONS = [
   // src/features/avoid.js(configureAvoid)
   "add-avoid", "delete-avoid",
+  "toggle-avoid-violation",  // v189: F6 破った記録(トグル)
   // src/features/dashboard.js(configureDashboard)
   "dashboard-date-prev", "dashboard-date-next",
   // src/features/wish.js(configureWish、Tier1のみ)
@@ -218,6 +221,7 @@ const APP_JS_REGISTERED_ACTIONS = [
   "toggle-show-suspended", "toggle-wbs-hide-done", "toggle-tasks-show-future",
   "toggle-wbs-edit", "wbs-collapse-all",
   "add-category", "delete-category", "add-break-message", "delete-break-message",
+  "toggle-vision-direct-category", "vision-open-direct-settings",  // v189: F7 直結カテゴリ選択+誘導(設定ビュー)
   "toggle-sidebar", "toggle-settings-sync",
   "save-github", "load-github", "gate-continue", "reset-demo", "push-report",
   "open-backup-list", "restore-backup", "run-archive",
