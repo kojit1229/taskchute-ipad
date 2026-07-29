@@ -3281,8 +3281,8 @@ function check(name, cond, extra = "") {
     const B7_WISH_TASK_ID = "w-b7-ripe";
     const B7_AI_OK = {
       generatedAt: `${TODAY}T07:00:00`,  // 当日朝生成=鮮度内(T区切り秒あり。FORMAT_CONTRACT整合)
-      routineSuggestions: [{ routineTitle: "AI-ROUTINE-朝の散歩", suggestion: "AI-ROUTINE-7時台へ前倒し", reason: "直近2週の起床後実績が7時台に集中" }],
-      wishRipe: [{ taskId: B7_WISH_TASK_ID, title: "AI-WISH-熟成やりたい", reason: "AI-WISH-作成から90日経過" }],
+      routineSuggestions: [{ routineTitle: "AIRT-TITLE-朝の散歩", suggestion: "AIRT-SUG-7時台へ前倒し", reason: "AIRT-REASON-起床後実績が7時台に集中" }],
+      wishRipe: [{ taskId: B7_WISH_TASK_ID, title: "AIWS-TITLE-熟成やりたい", reason: "AIWS-REASON-作成から90日経過" }],
       avoidInsight: { body: "AI-AVOID-夜のスマホは週後半に破りやすい" },
       zeroPattern: { body: "AI-ZERO-仕事テーマへの偏りが続いている" }
     };
@@ -3366,15 +3366,15 @@ function check(name, cond, extra = "") {
     await page.waitForSelector(aiPanelSel("routine"), { state: "attached" });
     check("routineビューに .ai-insights[data-insight='routine'] が1つ描画される(DOM契約)",
       await page.locator(aiPanelSel("routine")).count() === 1);
-    check("routineパネルに routineSuggestions の本文が表示される(前提B7-6)",
-      ((await panelText(aiPanelSel("routine"))) || "").includes("AI-ROUTINE"),
-      await panelText(aiPanelSel("routine")));
+    const rtText54 = (await panelText(aiPanelSel("routine"))) || "";
+    check("routineパネルに suggestion と reason がそれぞれ表示される(フィールド別マーカーで弁別。レビューM2)",
+      rtText54.includes("AIRT-SUG") && rtText54.includes("AIRT-REASON"), rtText54);
     await w1GoView("wish");
     await page.waitForSelector(aiPanelSel("wish"), { state: "attached" });
     check("wishビューに .ai-insights[data-insight='wish'] が1つ描画される",
       await page.locator(aiPanelSel("wish")).count() === 1);
-    check("wishパネルに wishRipe の本文(title/reason)が表示される(taskId=既存wishタスクのフィクスチャ)",
-      ((await panelText(aiPanelSel("wish"))) || "").includes("AI-WISH"),
+    check("wishパネルに wishRipe の reason が表示される(titleは既存Wishカードが担うため非表示=実装仕様。レビューM2)",
+      ((await panelText(aiPanelSel("wish"))) || "").includes("AIWS-REASON"),
       await panelText(aiPanelSel("wish")));
     await w1GoView("avoid");
     await page.waitForSelector(aiPanelSel("avoid"), { state: "attached" });
@@ -3499,7 +3499,7 @@ function check(name, cond, extra = "") {
     await page.waitForSelector(aiPanelSel("routine"), { state: "attached" });
     check("鮮度超過でもパネル自体は表示される(データは見える。[45c]の鮮度方針と同じ)",
       await page.locator(aiPanelSel("routine")).count() === 1
-      && ((await panelText(aiPanelSel("routine"))) || "").includes("AI-ROUTINE"));
+      && ((await panelText(aiPanelSel("routine"))) || "").includes("AIRT-SUG"));
     await page.waitForSelector(".ai-insights-freshness.is-stale", { state: "attached" });
     const b7StaleTexts = await page.evaluate(() =>
       [...document.querySelectorAll(".ai-insights-freshness.is-stale")].map((el) => el.textContent || ""));
