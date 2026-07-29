@@ -3616,6 +3616,24 @@ h3 {
   vertical-align: middle;
   white-space: nowrap;
 }
+/* v186レビュー(M-1): migratedTo付きBlock(翌日へ送済)の控えめなバッジ。一覧からは消さず
+   減光(.timeline-card.is-migrated / .block-row.is-migrated)と併用する。 */
+.migrated-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.timeline-card.is-migrated,
+.block-row.is-migrated {
+  opacity: 0.55;
+}
 .migration-ritual-title { font-size: 15px; font-weight: 700; margin: 0 0 4px; }
 .migration-ritual-choices { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
 .migration-ritual-choices .btn { width: 100%; text-align: left; padding: 11px 14px; }

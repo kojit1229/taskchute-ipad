@@ -49,7 +49,7 @@ let renderHeader, renderDateBar;
 let defaultBatterySettings, batteryCurvePoints, conditionBudget;
 let draftBarHTML, zeroSecThemeBarHTML, draftRejectReasonPickerHTML, renderDraftLayer;
 let scheduleDraftActive, render, blocksForDate, postponeBlockToNextDay;
-let makeBlock, getOtherTask, openBlockEditor, saveState;
+let makeBlock, getOtherTask, openBlockEditor, saveState, isStaleBlock;
 let timelineRailEl, appRootEl;
 
 function configureTimeline(deps) {
@@ -60,7 +60,7 @@ function configureTimeline(deps) {
     defaultBatterySettings, batteryCurvePoints, conditionBudget,
     draftBarHTML, zeroSecThemeBarHTML, draftRejectReasonPickerHTML, renderDraftLayer,
     scheduleDraftActive, render, blocksForDate, postponeBlockToNextDay,
-    makeBlock, getOtherTask, openBlockEditor, saveState,
+    makeBlock, getOtherTask, openBlockEditor, saveState, isStaleBlock,
     timelineRailEl, appRootEl
   } = deps);
   // v181: app.js分割・段階5-8(timeline系dispatcher分岐の移行・後半)。timeline-modeのハンドラ
@@ -141,15 +141,30 @@ function driftPanelHTML() {
   const today = todayISO();
   if (state.selectedDate !== today) return "";
   const allBlocks = blocksForDate(today);
+  // v186レビュー(M-3): 当日Blockに終了予定(plannedEndAt)を持つものが1件も無ければ、
+  // 「計画上の最終終了」自体が存在しないためDRIFTパネル自体を出さない。
+  if (!allBlocks.some((b) => b.plannedEndAt)) return "";
   const remaining = allBlocks.filter((b) => !b.completed && !b.migratedTo);
   if (!remaining.length) return "";
-  const plannedEnd = Math.max(0, ...allBlocks.filter((b) => b.plannedEndAt).map((b) => minutesOf(b.plannedEndAt)));
+  // v186レビュー(H-1): 「明日へ送る」候補選出の母集合だけを、既存carryableBlocks(app.js)と
+  // 同じ3条件(ルーティン除外・繰り返し系列除外・中断/中止/削除タスクのBlock除外)へ絞る。
+  // ズレ計算(下のplannedEnd/projectedEnd/drift)の母集合(allBlocks)自体は変えない。
+  const candidatePool = remaining.filter((b) =>
+    b.category !== "ルーティン" && !b.recurrenceGroupId && !isStaleBlock(b));
+  // v186レビュー(P2-1): 日跨ぎBlock(plannedEndAtのminutesOfが開始より小=翌日)は
+  // 選択日基準へ+1440正規化してからmaxを取る(正規化しないと日跨ぎBlockの終了が
+  // 早朝扱いになり、計画上の最終終了を過小評価してしまう)。
+  const plannedEnd = Math.max(0, ...allBlocks.filter((b) => b.plannedEndAt).map((b) => {
+    const endMin = minutesOf(b.plannedEndAt);
+    const startMin = b.plannedStartAt ? minutesOf(b.plannedStartAt) : null;
+    return (startMin !== null && endMin < startMin) ? endMin + 1440 : endMin;
+  }));
   const now = new Date();
   const nowMinute = now.getHours() * 60 + now.getMinutes();
   const projectedEnd = computeProjectedEnd(today, nowMinute);
   const drift = projectedEnd - plannedEnd;
   const candidate = drift > 0
-    ? remaining.map((block) => ({ block, minutes: activeEstimateMinutes(block, nowMinute) }))
+    ? candidatePool.map((block) => ({ block, minutes: activeEstimateMinutes(block, nowMinute) }))
         .filter((item) => item.minutes >= drift)
         .sort((a, b) => a.minutes - b.minutes
           || (a.block.plannedStartAt || "").localeCompare(b.block.plannedStartAt || "")
@@ -169,7 +184,14 @@ function driftPanelHTML() {
 
 function actualGaps(blocks) {
   const intervals = blocks.filter((b) => b.actualStartAt && b.actualEndAt)
-    .map((b) => [minutesOf(b.actualStartAt), minutesOf(b.actualEndAt)])
+    .map((b) => {
+      const start = minutesOf(b.actualStartAt);
+      let end = minutesOf(b.actualEndAt);
+      // v186レビュー(P2-2): 日跨ぎ実績(終了<開始=翌日)は+1440正規化して区間として保持する
+      // (正規化しないと終了が翌日早朝扱いになり、end<=startでフィルタされ実績区間が消える)。
+      if (end < start) end += 1440;
+      return [start, end];
+    })
     .filter(([start, end]) => end > start)
     .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   const merged = [];
@@ -178,8 +200,12 @@ function actualGaps(blocks) {
     if (last && start <= last[1]) last[1] = Math.max(last[1], end);
     else merged.push([start, end]);
   });
+  // v186レビュー(P2-2): 隙間列挙自体は当日24:00(=1440分)までにクリップする(日跨ぎ実績で
+  // 伸びた終了時刻をそのまま隙間の開始に使わない。1440分以降に完全に入る隙間は翌日側の
+  // TIME COMBが扱う対象のためここでは出さない)。
   return merged.slice(1).map((item, index) => [merged[index][1], item[0]])
-    .filter(([start, end]) => end - start >= 15);
+    .map(([start, end]) => [start, Math.min(end, 1440)])
+    .filter(([start, end]) => start < 1440 && end - start >= 15);
 }
 
 function timeCombHTML() {
@@ -201,16 +227,30 @@ function createBlockForActualGap(target) {
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return;
   const date = state.selectedDate;
   const toDateTime = (minute) => `${date}T${pad2(Math.floor(minute / 60))}:${pad2(minute % 60)}:00`;
+  const plannedStartAt = toDateTime(start);
+  const plannedEndAt = toDateTime(end);
+  // v186レビュー(M-2): 同じ隙間時間帯にplanned一致の既存Blockが既にあれば新規作成せず、
+  // それをそのまま開く(連打・二重タップでの重複Block生成を防ぐ冪等化)。
+  const existing = state.blocks.find((b) =>
+    !b.deleted && b.date === date && b.plannedStartAt === plannedStartAt && b.plannedEndAt === plannedEndAt);
+  if (existing) {
+    render();
+    openBlockEditor(existing.id);
+    return;
+  }
   const block = makeBlock({
     date,
-    plannedStartAt: toDateTime(start),
-    plannedEndAt: toDateTime(end),
+    plannedStartAt,
+    plannedEndAt,
     taskId: getOtherTask()?.id
   });
   state.blocks.push(block);
   // v186レビュー: 生成した時点で永続化する(addBlockと同じ契約。保存しないと
   // モーダルを保存せず閉じた場合や再読込でBlockが消える)
   saveState();
+  // v186レビュー(M-2): 保存直後にrender()を呼び、モーダル背後のTIME COMB/タイムラインを
+  // 新Block反映済みの状態にしてからエディタを開く。
+  render();
   openBlockEditor(block.id);
 }
 
@@ -329,15 +369,20 @@ function renderTimelineCard(positioned, mode = "planned", maxLanes = 5) {
       ? `<button class="tl-complete-btn done" data-action="toggle-block" data-id="${block.id}" aria-label="完了を解除" title="完了を解除">↺</button>`
       : `<button class="tl-complete-btn" data-action="toggle-block" data-id="${block.id}" aria-label="完了登録" title="完了登録">○</button>`)
     : "";
+  // v186レビュー(M-1): migratedTo付きBlock(翌日へ送済)は一覧から消さず、控えめなバッジ+
+  // 減光で「送済」と分かるようにする(最小実装)。
+  const isMigrated = Boolean(block.migratedTo);
+  const migratedBadgeHTML = isMigrated
+    ? `<span class="migrated-badge" title="明日へ送りました">→送済</span>` : "";
   return `
-    <div class="timeline-card ${block.completed ? "completed" : ""} ${isActual ? "is-actual" : ""} ${isShort ? "is-short" : ""}"
+    <div class="timeline-card ${block.completed ? "completed" : ""} ${isActual ? "is-actual" : ""} ${isShort ? "is-short" : ""} ${isMigrated ? "is-migrated" : ""}"
          ${overflowAttr}
          style="top:${top}px; height:${height}px; left:${leftPercent}%; width:calc(${widthPercent}% - 4px); ${catStyle}"
          data-action="edit-block" data-id="${block.id}">
       ${completeBtnHTML}
       ${startEndBtn}
       <div class="tl-card-body">
-        <strong>${escapeHTML(block.title)}${migrationBadgeHTML(block.carryCount)}${leverageTypeMarkHTML(block.leverageType)}</strong>
+        <strong>${escapeHTML(block.title)}${migrationBadgeHTML(block.carryCount)}${leverageTypeMarkHTML(block.leverageType)}${migratedBadgeHTML}</strong>
       </div>
     </div>
   `;

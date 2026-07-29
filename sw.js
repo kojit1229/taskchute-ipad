@@ -1,4 +1,6 @@
 const CACHE_NAME = "taskchute-journal-pwa-v186";
+// v186: DRIFT/TIME COMBの2系統レビュー是正(候補選出の3条件化・日跨ぎ正規化・実行ビューの
+//   migratedTo可視化・ルーティン当日サマリの退行防止など計8件、B5レビュー対応)。
 // v185: cockpitテーマの6点セットを完成し、cockpit限定の共通chromeを全ビューへ適用した。
 // v184: 計器盤の常時表示層先頭にTIME LOG(当日実績・実行中は表示のみ毎秒加算)と
 //   12WY TRACKER(project.weeklyTargetMin migration・週間目標バー)を追加した。

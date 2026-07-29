@@ -281,7 +281,16 @@ function gardenPixelCalendarHTML() {
 // v186 F3: gardenLogは疎な履歴として扱い、記録のない日は値を作らず空欄にする。
 function routineRecentSummaryHTML() {
   const today = todayISO();
-  const currentRate = routineRate(blocksForDate(today));
+  const liveRate = routineRate(blocksForDate(today));
+  // v186レビュー(P2-3): 当日gardenLogのstoredスナップショットとlive routineRateを
+  // フィールド別max(updateGardenLogと同じマージ思想)で合成する。live側だけを直接使うと、
+  // 完了→解除(チェック取り消し)でliveのdone/totalが一時的に下がった瞬間、既にgardenLogへ
+  // 記録済みの当日実績より低い値で「7日で実施できた日数」やトレンド点が退行してしまう。
+  const storedToday = state.gardenLog?.[today];
+  const currentRate = {
+    done: Math.max(liveRate.done, Number(storedToday?.done || 0)),
+    total: Math.max(liveRate.total, Number(storedToday?.total || 0))
+  };
   const recentSeven = Array.from({ length: 7 }, (_, index) => addDays(today, index - 6));
   const daysDone = recentSeven.filter((date) => {
     const entry = date === today ? currentRate : state.gardenLog?.[date];

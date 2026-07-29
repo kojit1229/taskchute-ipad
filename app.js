@@ -309,7 +309,7 @@ configureTimeline({
   defaultBatterySettings, batteryCurvePoints, conditionBudget,
   draftBarHTML, zeroSecThemeBarHTML, draftRejectReasonPickerHTML, renderDraftLayer,
   scheduleDraftActive, render, blocksForDate, postponeBlockToNextDay,
-  makeBlock, getOtherTask, openBlockEditor, saveState,
+  makeBlock, getOtherTask, openBlockEditor, saveState, isStaleBlock,
   timelineRailEl: timelineRail, appRootEl: app
 });
 // v173: src/features/avoid.jsのdispatcher登録(段階5-2)。addAvoid/deleteAvoidはapp.js残留の
@@ -6520,8 +6520,13 @@ function renderBlockItem(block) {
       : (doing
         ? `<button class="btn green" data-action="now-end" data-id="${block.id}">■ 終了</button>`
         : ""));
+  // v186レビュー(M-1): migratedTo付きBlock(翌日へ送済)は実行ビューからも消さず、控えめな
+  // バッジ+減光で「送済」と分かるようにする(最小実装。タイムラインカードと同じ意匠)。
+  const isMigrated = Boolean(block.migratedTo);
+  const migratedBadgeHTML = isMigrated
+    ? `<span class="migrated-badge" title="明日へ送りました">→送済</span>` : "";
   return `
-    <div class="item block-row ${isMIT ? "is-mit" : ""}${doing ? " is-doing" : ""}${justStarted}" ${leftBorder ? `style="${leftBorder}"` : ""}>
+    <div class="item block-row ${isMIT ? "is-mit" : ""}${doing ? " is-doing" : ""}${justStarted}${isMigrated ? " is-migrated" : ""}" ${leftBorder ? `style="${leftBorder}"` : ""}>
       <div class="block-checks">
         <button class="checkbox-button ${block.completed ? "done" : ""}" data-action="toggle-block" data-id="${block.id}" title="Block完了" aria-label="Block完了">✓</button>
       </div>
@@ -6534,6 +6539,7 @@ function renderBlockItem(block) {
           ${task ? `<span class="badge">${escapeHTML(projectName(task.projectId))}</span>` : `<span class="badge orange">単発</span>`}
           ${block.category ? `<span class="cat-chip" style="background:${catColor}1f; color:${catColor}; border:1px solid ${catColor}66">${escapeHTML(block.category)}</span>` : ""}
           ${leverageTypeMarkHTML(block.leverageType)}
+          ${migratedBadgeHTML}
         </div>
         <div class="block-meta">
           <label>充電
