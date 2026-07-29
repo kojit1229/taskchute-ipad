@@ -396,8 +396,8 @@ function renderTimeline({ compact, mode = "planned" }) {
              style="top:${(hour - startHour) * rowHeight}px;height:${rowHeight}px; cursor:pointer;">${String(hour).padStart(2, "0")}:00</div>
       `).join("")}
       <div class="timeline-cards-area" style="position:absolute; top:0; left:60px; right:100px; height:100%;">
+        ${mode === "planned" && !compact ? renderTimelineExternalBands(rowHeight, startHour, endHour) : ""}
         ${positioned.map((a) => renderTimelineCard(a, mode, maxLanes)).join("")}
-        ${mode === "planned" ? renderTimelineExternalBands(rowHeight, startHour, endHour) : ""}
       </div>
       ${nowLine}
       ${!compact && mode === "planned" ? renderDraftLayer(rowHeight, startHour) : ""}

@@ -50,7 +50,10 @@ function runningBlock() {
 }
 
 function isTimeswitchRunning(block) {
-  return Boolean(block?.oneTap || block?.externalRef);
+  // v188レビューM-1: externalRefだけでは判定しない。v188で帯(FLIGHT PLAN/時間ビュー)からも
+  // externalRef付きBlockが作られるようになったため、「計時タブが開始した」印(timeswitchStart)
+  // を持つものだけを計時タブ由来として扱う(帯取込Blockを勝手に完了扱いしない)
+  return Boolean(block?.oneTap || (block?.externalRef && block?.timeswitchStart));
 }
 
 function finishBlock(block, { completed = true, at = nowDateTime() } = {}) {
@@ -165,9 +168,20 @@ function eventPlannedDateTime(date, time) {
 }
 
 function startEvent(event) {
-  if (!event || importedEventBlock(event.externalId)) return;
+  if (!event) return;
+  const existing = importedEventBlock(event.externalId);
+  // v188レビューM-2: 帯(FLIGHT PLAN/時間ビュー)から取込済み・未実行のBlockは、
+  // 計時タブから開始できる(裁定17整合。二重生成はせず既存Blockを開始する)
+  if (existing && (existing.completed || existing.actualStartAt)) return;
   finishAllRunning({ taskCompleted: false });
   const at = nowDateTime();
+  if (existing) {
+    existing.actualStartAt = at;
+    existing.timeswitchStart = true;  // v188レビューM-1: 計時タブが開始した印
+    existing.updatedAt = at;
+    saveAndRender(`${existing.title}の計時を開始しました`);
+    return;
+  }
   const block = makeBlock({
     date: todayISO(),
     title: event.title,
@@ -178,6 +192,7 @@ function startEvent(event) {
   });
   block.externalRef = event.externalId;
   block.label = event.label;
+  block.timeswitchStart = true;  // v188レビューM-1
   state.blocks.push(block);
   saveAndRender(`${event.title}の計時を開始しました`);
 }
@@ -252,7 +267,8 @@ function handleEventTap(externalId) {
     saveAndRender("予定の計時を停止しました");
     return;
   }
-  if (existing) return;
+  // v188レビューM-2: 取込済みでも「完了/実行中」でなければ開始対象(下のstartEventが既存を開始)。
+  if (existing && (existing.completed || existing.actualStartAt)) return;
   const event = scheduleEventById(externalId);
   if (!event) return;
   if (running && !isTimeswitchRunning(running)) {

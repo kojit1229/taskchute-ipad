@@ -15761,6 +15761,7 @@ function saveBlockFromModal(id, fields) {
     oneTap: existing?.oneTap || false,
     externalRef: existing?.externalRef || "",
     label: existing?.label || "",
+    timeswitchStart: existing?.timeswitchStart || false,
     createdAt: existing?.createdAt || nowDateTime(),
     updatedAt: nowDateTime(),
     deleted: false

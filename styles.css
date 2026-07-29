@@ -4559,7 +4559,9 @@ h3 {
 /* v188: 時間ビューのTT帯。既存.timeline-cardの位置計算・!importantガードとは独立。 */
 .timeline-tt {
   position: absolute !important;
-  z-index: 4;
+  /* v188レビューH-1: 帯はBlockカードの下に敷く(カード側z-index:autoでもDOM後勝ちで上に来る
+     ようにz-indexを持たせない)。同時間帯のカードの編集タップを奪わない */
+  z-index: auto;
   min-height: 16px;
   overflow: hidden;
   padding: 2px 5px;
@@ -4579,6 +4581,9 @@ h3 {
   border-style: solid;
   opacity: 0.72;
   cursor: default;
+  /* v188レビュー: 取込済帯は視覚のみにする。同時間帯の生成Blockカード(z-index下)を
+     覆って編集タップを奪わないようにする */
+  pointer-events: none;
 }
 .timeline-tt.is-imported::after { content: " ✓"; }
 /* v183: 今日コックピット B2(P5〜P7)。today名前空間内だけでポモ/カードデッキを統合。 */
