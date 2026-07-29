@@ -674,6 +674,68 @@ registerActions({
     render();
   }
 });
+// v180: app.js分割・段階5-8(timeline系dispatcher分岐の移行・前半)。prep-stage5-dispatcher.md
+// §7の見積りどおり、timeline系40分岐は200行予算に収まらないため2分割する(前半=Block作成2+
+// Block/Now9+ポモドーロ16、計27分岐)。後半(日付ナビ3+タイムライン設定/カテゴリフィルタ9+
+// timeline-mode)はv181で継続する。ハンドラ実体はいずれもapp.js残留のため相乗りregisterActions
+// (v174方式)へ移行した。ロジック無改変。
+registerActions({
+  // --- Block作成(2、WBS/ホームからの「今日へ追加」) ---
+  "task-today": ({ id }) => createBlockFromTask(id),
+  "home-add-today": ({ id }) => addTaskToToday(id),
+  // --- Block/Now(9) ---
+  "toggle-block": ({ id }) => toggleBlock(id),
+  "toggle-task-complete": ({ id }) => toggleTaskCompleteFromBlock(id),
+  "now-start": ({ id }) => openDeclareModal(id, "block"),
+  "now-end": ({ id }) => openReportModal(id, "block"),
+  "bulk-approve-planned": () => bulkApproveAsPlanned(),
+  "now-mode-open": () => openNowMode(),
+  "now-mode-close": () => closeNowMode(),
+  "now-conveyor-complete": ({ id }) => nowConveyorComplete(id),
+  "now-conveyor-skip": ({ id }) => { _nowSkippedIds.add(id); render(); },
+  // --- ポモドーロ(16) ---
+  "start-pomodoro": ({ target }) => {
+    openDeclareModal(target.dataset.blockId || "", "pomodoro");
+  },
+  "stop-pomodoro": () => {
+    if (state.pomodoro.blockId) {
+      _pendingInterruptBlockId = state.pomodoro.blockId;
+      render();
+    } else {
+      stopPomodoro();
+    }
+  },
+  "interrupt-reason": ({ target }) => {
+    if (_pendingInterruptBlockId) recordBlockInterruption(_pendingInterruptBlockId, target.dataset.reason || "その他");
+    _pendingInterruptBlockId = null;
+    stopPomodoro();
+  },
+  "interrupt-reason-cancel": () => {
+    _pendingInterruptBlockId = null;
+    render();
+  },
+  "complete-pomodoro": () => openReportModal(state.pomodoro.blockId, "pomodoro"),
+  "declare-confirm": () => confirmDeclare(),
+  "declare-skip": () => skipDeclare(),
+  "report-outcome": ({ target }) => {
+    const note = modalRoot.querySelector("[data-report-note]")?.value || "";
+    finishReport(target.dataset.outcome || "", note);
+  },
+  "report-skip": () => finishReport("", ""),
+  "incomplete-reason-chip": ({ target }) => recordIncompleteReasonChip(target.dataset.chip || ""),
+  "incomplete-reason-skip": () => skipIncompleteReasonModal(),
+  "guided-access-dismiss": () => {
+    if (modalRoot.querySelector("[data-guided-access-suppress]")?.checked) {
+      state.settings.pomoGuidedAccessHint = false;
+      saveState();
+    }
+    closeModal();
+  },
+  "go-break": () => goBreakPomodoro(),
+  "end-break": () => endBreakPomodoro(),
+  "continue-focus": () => continueFocusPomodoro(),
+  "finish-block": () => finishBlockFromBreak()
+});
 let toastTimer = null;
 let timerTicker = null;
 // v144: エネルギーバッテリーの差分更新(updateBatteryTick)のスロットル用。
@@ -932,8 +994,7 @@ document.addEventListener("click", (event) => {
   // v173: set-morning〜store-visit-yearはsrc/features/journal.jsのregisterActionsへ移行した。
   // v178: add-project/delete-project/add-task/toggle-taskはapp.js内のregisterActionsへ移行した。
   if (action === "toggle-criteria-request") toggleCriteriaRequest(id);  // v99: 翌朝AI設定依頼トグル
-  if (action === "task-today") createBlockFromTask(id);
-  if (action === "home-add-today") addTaskToToday(id);
+  // v180: task-today/home-add-todayはapp.js内のregisterActionsへ移行した。
   // v33: ホームのスコアボード → 対応ゾーンへスクロール
   // v71: ジャンプ先が折りたたみ(details)の中にある場合は、閉じたままだと中身が見えないので開く
   if (action === "home-jump") {
@@ -947,21 +1008,8 @@ document.addEventListener("click", (event) => {
   // v178: delete-task/toggle-project-collapse/toggle-task-collapse/suspend-project/resume-project/
   // suspend-task/resume-task/add-blockはapp.js内のregisterActionsへ移行した。
   // v174: toggle-show-suspended〜wbs-collapse-allはapp.js内のregisterActionsへ移行した。
-  if (action === "toggle-block") toggleBlock(id);
-  // v107: Block行の「タスク完了」チェック(Block完了とは別枠、K指示 2026-07-15)
-  if (action === "toggle-task-complete") toggleTaskCompleteFromBlock(id);
-  // v87: 開始/終了に「宣言→終了報告ループ」を軽量に挿入(ROADMAP v91)。
-  //      宣言・報告はいずれもスキップ可能で、スキップ時は従来どおり即座に実行される。
-  if (action === "now-start") openDeclareModal(id, "block");
-  if (action === "now-end") openReportModal(id, "block");
-  // v178: delete-blockはapp.js内のregisterActionsへ移行した。
-  // v70: 「予定通りだった」一括承認(当日の未記録Blockに計画時刻を実績としてコピー+completed化)
-  if (action === "bulk-approve-planned") bulkApproveAsPlanned();
-  // v70: Now画面(実行コンベア)の開閉 + 3ボタン(開始はnow-startを再利用)
-  if (action === "now-mode-open") openNowMode();
-  if (action === "now-mode-close") closeNowMode();
-  if (action === "now-conveyor-complete") nowConveyorComplete(id);
-  if (action === "now-conveyor-skip") { _nowSkippedIds.add(id); render(); }
+  // v180: toggle-block/toggle-task-complete/now-start/now-end/bulk-approve-planned/now-mode-open/
+  // now-mode-close/now-conveyor-complete/now-conveyor-skipはapp.js内のregisterActionsへ移行した。
   // v177: generate-report/download-report/download-dataはapp.js内のregisterActionsへ移行した。
   // v174: save-github/load-github/gate-continue/reset-demoはapp.js内のregisterActionsへ移行した。
   // v17: MIT(今日の主役)の切替(最大3個)
@@ -974,59 +1022,10 @@ document.addEventListener("click", (event) => {
   if (action === "body-scan-fatigue") bodyScanRecordFatigue(Number(target.dataset.value));
   if (action === "body-scan-part") bodyScanRecordPart(target.dataset.part || "");
   if (action === "body-scan-discard") bodyScanDiscard();
-  // v14: 開始前に既存セッションを強制リセット(中断/完了/休憩後の再開でも確実に50:00から)
-  // v87: ポモドーロ開始も宣言ループの対象(スキップ可能)。実際の強制リセット+開始は
-  //      resumeLifecycleStart() 内で行う(宣言確定/スキップいずれの経路からも通る)。
-  if (action === "start-pomodoro") {
-    openDeclareModal(target.dataset.blockId || "", "pomodoro");
-  }
-  // v70: 「中断」は理由ワンタップピッカーを経由する(チョコ停記録)。実際の停止(stopPomodoro)は
-  //      理由選択後に行う。紐づくBlockが無いセッションは記録の意味が無いので従来通り即中断する。
-  if (action === "stop-pomodoro") {
-    if (state.pomodoro.blockId) {
-      _pendingInterruptBlockId = state.pomodoro.blockId;
-      render();
-    } else {
-      stopPomodoro();
-    }
-  }
-  if (action === "interrupt-reason") {
-    if (_pendingInterruptBlockId) recordBlockInterruption(_pendingInterruptBlockId, target.dataset.reason || "その他");
-    _pendingInterruptBlockId = null;
-    stopPomodoro();
-  }
-  if (action === "interrupt-reason-cancel") {
-    _pendingInterruptBlockId = null;
-    render();
-  }
-  // v87: ポモドーロ完了も終了報告ループの対象(スキップ可能)。実際の完了処理は
-  //      resumeLifecycleFinish() 内で行う(報告確定/スキップいずれの経路からも通る)。
-  if (action === "complete-pomodoro") openReportModal(state.pomodoro.blockId, "pomodoro");
-  // v87: 宣言/報告モーダルの操作
-  if (action === "declare-confirm") confirmDeclare();
-  if (action === "declare-skip") skipDeclare();
-  if (action === "report-outcome") {
-    const note = modalRoot.querySelector("[data-report-note]")?.value || "";
-    finishReport(target.dataset.outcome || "", note);
-  }
-  if (action === "report-skip") finishReport("", "");
-  // v162: 未完了理由クイック入力モーダル(チップ1タップで確定/スキップ両方可)
-  if (action === "incomplete-reason-chip") recordIncompleteReasonChip(target.dataset.chip || "");
-  if (action === "incomplete-reason-skip") skipIncompleteReasonModal();
-  // v111: ポモドーロ開始時のガイド付きアクセス案内(閉じる/×どちらも同じ扱い)。
-  //       「今後表示しない」がチェックされていれば設定へ永続化してから閉じる。
-  if (action === "guided-access-dismiss") {
-    if (modalRoot.querySelector("[data-guided-access-suppress]")?.checked) {
-      state.settings.pomoGuidedAccessHint = false;
-      saveState();
-    }
-    closeModal();
-  }
-  if (action === "go-break") goBreakPomodoro();
-  if (action === "end-break") endBreakPomodoro();
-  // v19: 休憩中の3択
-  if (action === "continue-focus") continueFocusPomodoro();
-  if (action === "finish-block") finishBlockFromBreak();
+  // v180: start-pomodoro/stop-pomodoro/interrupt-reason/interrupt-reason-cancel/complete-pomodoro/
+  // declare-confirm/declare-skip/report-outcome/report-skip/incomplete-reason-chip/
+  // incomplete-reason-skip/guided-access-dismiss/go-break/end-break/continue-focus/finish-block
+  // はapp.js内のregisterActionsへ移行した。
   // === v2: 編集モーダル ===
   // v178: edit-project/edit-task/edit-block/modal-close/modal-delete/lev-judgeはapp.js内の
   // registerActionsへ移行した。modal-saveは過去判定どおりreturn意味論(disable連動のearly

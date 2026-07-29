@@ -25,6 +25,9 @@
 // v179: 段階5-7b(modal系dispatcher分岐の移行・後半=ビジョンボード6+実験ログ5+AIスケジュール
 // 下書き8+検索2、計21分岐)で[3]をさらに拡張した。これでprep-stage5-dispatcher.md §2-Cの
 // modalバケツ(44件)がすべて移行済みになった。
+// v180: 段階5-8(timeline系dispatcher分岐の移行・前半=Block作成2+Block/Now9+ポモドーロ16、
+// 計27分岐)で[3]をさらに拡張した。timeline系40分岐は200行予算に収まらないため2分割し、
+// 後半(日付ナビ3+タイムライン設定/カテゴリフィルタ9+timeline-mode)はv181で継続する。
 // prep-stage5-dispatcher.md §6-1の方式どおり構成:
 //   [1] src/ui/actions.jsの単体挙動(registerActions/dispatchAction、
 //       registerModalHandler/dispatchModalSave/dispatchModalDelete、重複登録ガード、
@@ -175,11 +178,16 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
 // app.js自身が呼ぶ別のregisterActions({...})呼び出しへ移行した。ハンドラ本体はいずれも
 // if連鎖からロジック無改変で移しただけで、追加・削除・リネームはしていない。
 // これでjournal系残ドメイン(0秒思考+週次/サイクル+問い+その他)の計65分岐すべての移行が
-// 完了した。timeline/modal内の残りドメイン、所属ドメインに確信が持てなかった6件
-// (toggle-mit・mit-candidate-add・home-tab・open-md-in-github・reload-md・stats-range)、
-// triage-*(wish Tier3)・weekly-wish-*(wish週次選定、weekly-wish-toggleはpreventDefault依存)・
-// body-scan-*(routine未抽出)は従来どおり移行せず、if連鎖に残した
-// (下のEXPECTED_REMAINING_IF_CHAINに含まれる)。
+// 完了した。
+// v180: 段階5-8(前半)で以下27件(timeline系のBlock作成2+Block/Now9+ポモドーロ16)を、
+// 同じくapp.js自身が呼ぶregisterActions({...})へ移行した。timeline系の残り13件(日付ナビ3+
+// タイムライン設定/カテゴリフィルタ9+timeline-mode)はv181で継続する。所属ドメインに確信が
+// 持てなかった6件(toggle-mit・mit-candidate-add・home-tab・open-md-in-github・reload-md・
+// stats-range)、toggle-criteria-request/home-jump(WBS/ホーム寄りで確信が持てない)、
+// body-scan-*(ポモドーロ完了時トリガーだがroutine.js未抽出の既存判断を維持)、
+// energy-open-routine(ルーティンタブへの導線でtimeline状態を触らない)、
+// triage-*(wish Tier3)・weekly-wish-*(wish週次選定、weekly-wish-toggleはpreventDefault依存)は
+// 従来どおり移行せず、if連鎖に残した(下のEXPECTED_REMAINING_IF_CHAINに含まれる)。
 const APP_JS_REGISTERED_ACTIONS = [
   "nav",
   "toggle-show-suspended", "toggle-wbs-hide-done", "toggle-tasks-show-future",
@@ -230,7 +238,17 @@ const APP_JS_REGISTERED_ACTIONS = [
   "ai-schedule", "ai-morning-plan", "draft-confirm", "draft-discard", "draft-remove",
   "draft-undo", "draft-remove-reason", "draft-remove-reason-dismiss",
   // --- v179: 検索(2) ---
-  "open-search", "search-jump"
+  "open-search", "search-jump",
+  // --- v180: Block作成(2、WBS/ホームからの「今日へ追加」) ---
+  "task-today", "home-add-today",
+  // --- v180: Block/Now(9) ---
+  "toggle-block", "toggle-task-complete", "now-start", "now-end", "bulk-approve-planned",
+  "now-mode-open", "now-mode-close", "now-conveyor-complete", "now-conveyor-skip",
+  // --- v180: ポモドーロ(16) ---
+  "start-pomodoro", "stop-pomodoro", "interrupt-reason", "interrupt-reason-cancel",
+  "complete-pomodoro", "declare-confirm", "declare-skip", "report-outcome", "report-skip",
+  "incomplete-reason-chip", "incomplete-reason-skip", "guided-access-dismiss",
+  "go-break", "end-break", "continue-focus", "finish-block"
 ];
 
 const EXPECTED_REMAINING_IF_CHAIN = GOLDEN_CLICK_ACTIONS.filter(

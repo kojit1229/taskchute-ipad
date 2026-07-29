@@ -1,0 +1,52 @@
+{
+  "version": 180,
+  "date": "2026-07-29",
+  "title": "app.js分割 段階5-8(timeline系dispatcher分岐の相乗り移行・前半)",
+  "summary": "prep-stage5-dispatcher.md §2-Cのtimeline系(残ドメイン)のうち、Block作成(task-today/home-add-today、2分岐)+Block/Now(toggle-block/toggle-task-complete/now-start/now-end/bulk-approve-planned/now-mode-open/now-mode-close/now-conveyor-complete/now-conveyor-skip、9分岐)+ポモドーロ(start-pomodoro/stop-pomodoro/interrupt-reason/interrupt-reason-cancel/complete-pomodoro/declare-confirm/declare-skip/report-outcome/report-skip/incomplete-reason-chip/incomplete-reason-skip/guided-access-dismiss/go-break/end-break/continue-focus/finish-block、16分岐)の計27分岐を、app.js自身がregisterActions({...})を直接呼ぶ形でレジストリへ移行した(v174/v176/v177/v179と同型の相乗り方式)。timeline系の実際の分岐数はドメイン精査の結果40件と確定した(初期見積り41件との差1件は、home-jump/toggle-criteria-request/energy-open-routineをタイムライン以外のドメインと再判定したため。詳細はreviewFocus参照)。40件のうち27件を本バージョンで移行し、残り13件(日付ナビ3+タイムライン設定/カテゴリフィルタ9+timeline-mode)は実行コード差分を200行以下に収めるためv181へ分割した(設計書§7が事前に予告していた「Block/Now/ポモドーロ vs 日付・カテゴリフィルタ」の2分割方針どおり)。",
+  "changedFiles": [
+    "app.js",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "prep-stage5-dispatcher.md §4「dispatcher配線はUI配線であり機能ロジックではない」を根拠に、Block/Now/ポモドーロ系27分岐(いずれもevent/target/idの単純な参照渡しのみで、preventDefault/stopPropagation/return意味論/順序依存を持たない)をapp.js相乗りレジストリへ移行した。",
+    "task-today/home-add-todayはWBS/ホーム画面のボタンから呼ばれるが、実体はstate.blocksへのBlock作成(makeBlock)であり、prep doc timelineバケツの構成要素であるBlock CRUDに該当するため、今回の移行対象に含めた。",
+    "toggle-criteria-request/home-jump(v178レビューで「WBS/ホーム寄りで確信が持てない」と明記済み)、toggle-mit/mit-candidate-add/home-tab/open-md-in-github/reload-md/stats-range(所属ドメイン未確定6件、v177から継続)、body-scan-*(ポモドーロ完了時にトリガーされるがroutine.js未抽出という既存判断を維持)、energy-open-routine(ルーティンタブへの導線でtimeline状態を触らない)は、timelineドメインとしての確信が持てないため今回は対象外とし、if連鎖に残した。"
+  ],
+  "changes": [
+    "app.js: click dispatcherのif連鎖からBlock作成2+Block/Now9+ポモドーロ16の計27分岐を削除し、v179のregisterActions({...})ブロックの直後に新しいregisterActions({...})呼び出しを追加して登録した(ハンドラ本体はロジック無改変、target/id/eventはctx destructuringで受け取る)。削除箇所には移行先を示す1行コメントを残した。",
+    "sw.js: CACHE_NAMEをv180へ更新した(新規src/**ファイルは追加していないためAPP_SHELLの変更は無し)。",
+    "tests/action-registry-core.test.js: APP_JS_REGISTERED_ACTIONSへv180(前半)移行分27件を追記した。EXPECTED_REMAINING_IF_CHAINが自動で33件に縮小される。"
+  ],
+  "uncertainties": [
+    "timeline系の残り13件(日付ナビ3+タイムライン設定/カテゴリフィルタ9+timeline-mode)は、実行コード差分を200行以下に収めるためv181へ分割した(次バージョンで継続予定)。",
+    "所属ドメインに確信が持てなかった6件(toggle-mit・mit-candidate-add・home-tab・open-md-in-github・reload-md・stats-range)は引き続き見送り、if連鎖に残した(v177から継続)。",
+    "toggle-criteria-request/home-jumpはWBS/Project/Task CRUD群・ホームダッシュボードと物理的に隣接しているが、timelineドメインとしての確信度が低いため今回の移行からは除外した。",
+    "body-scan-*(3件)はポモドーロ完了時にopenBodyScanModal経由でトリガーされる点でPomodoroライフサイクルに近いが、v173時点の既存判断(routine.js未抽出のためそちら側ドメイン)を覆す確証が無いため、今回は現状維持(if連鎖残置)とした。",
+    "energy-open-routineはenergy-open-categoryと同じUI導線対から呼ばれるが、実体はopenRoutineForWeekday(ルーティンタブへの遷移)でありtimeline側の状態を一切変更しないため、対になるenergy-open-category/timeline-clear-catとは切り離してif連鎖に残した(v181で再検討する材料として明記)。"
+  ],
+  "reviewFocus": [
+    "移行した27分岐のハンドラ本体が、移行前のif連鎖の中身と1文字も変わっていないこと(ロジック無改変、target/id/event→ctx destructuringのみの機械置換)。",
+    "guard付き分岐(stop-pomodoro/interrupt-reasonのstate.pomodoro.blockId参照等)が、移行前と同じ条件分岐をハンドラ内にそのまま保持していること。",
+    "tests/action-registry-core.test.jsの保存則(if連鎖側33件+5feature側38件+app.js直接側154件=225件、重複ゼロ)が機械的に成立していること。",
+    "「timeline系41分岐」という当初見積りに対し実際の確定件数が40件になったこと、およびその内訳(27+13分割)の妥当性。",
+    "タイムラインカードの実行接点(v70)・UI磨き(v127)・完了作法の統一(v150)・下書きD&D(v50)の各E2Eスイートがレジストリ経由でも同じ挙動を示すこと。"
+  ],
+  "verification": [
+    "node --check app.js / sw.js / tests/action-registry-core.test.js → 全てexit 0",
+    "node tests/action-registry-core.test.js → 全件成功(click保存則: if連鎖33+5feature38+app.js直接154=225)",
+    "node tests/run-all.js action-registry-core v50 v70 v127 v150 → 全件成功",
+    "npm run code:index:write / npm run test:manifest:write 実行済み",
+    "git diff --numstat で実行コード差分を実測(app.js 69+70=139行、sw.js 1+1=2行、計141行、200行以下)",
+    "npm run test:fast / npm run test:smoke / release-gate / test:core はv181と合わせて最終まとめて実行し、完了報告に記載する"
+  ],
+  "knownLimitations": [
+    "timeline系の残り13件(日付ナビ3+タイムライン設定/カテゴリフィルタ9+timeline-mode)はv181で継続する。",
+    "所属ドメイン未確定6件・toggle-criteria-request/home-jump・body-scan-*・energy-open-routine・wish Tier3(triage-*)・weekly-wish-*は未着手のまま(将来cleanupで個別判定)。",
+    "src/配下にpackage.json(type:module)を置いていないため、Node実行時にMODULE_TYPELESS_PACKAGE_JSON警告が出る(v164から継続、動作には影響しない)。"
+  ]
+}
