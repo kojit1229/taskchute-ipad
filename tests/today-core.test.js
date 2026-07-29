@@ -2351,7 +2351,9 @@ function check(name, cond, extra = "") {
     await seedW1({
       view: "timeswitch",
       blocks: [
-        { ...block("w1-orphan-event", { title: "昨日の予定計時", category: "", date: YESTERDAY, actualStartAt: atOn(YESTERDAY, "20:00"), plannedStartAt: atOn(YESTERDAY, "20:00"), plannedEndAt: atOn(YESTERDAY, "20:30") }), externalRef: "tt-orphan-1", label: "こーじ" }
+        // v188: timeswitchStart=計時タブが開始した印。帯取込(未開始/タイムライン開始)の
+        //       externalRef Blockは孤児補完の対象外になったため、印付きで「予定タイル開始の止め忘れ」を表す
+        { ...block("w1-orphan-event", { title: "昨日の予定計時", category: "", date: YESTERDAY, actualStartAt: atOn(YESTERDAY, "20:00"), plannedStartAt: atOn(YESTERDAY, "20:00"), plannedEndAt: atOn(YESTERDAY, "20:30") }), externalRef: "tt-orphan-1", label: "こーじ", timeswitchStart: true }
       ]
     });
     await page.waitForFunction((KEY) => {

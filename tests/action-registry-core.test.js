@@ -59,7 +59,9 @@ const FEATURE_MODULE_PATHS = [
   path.join(ROOT, "src", "features", "routine.js"),
   // v181: timeline-modeのハンドラ実体がこのファイルにあるため追加(configureTimeline({})を
   // 空depsで呼んでも、registerActions呼び出し自体はdepsを参照しないため安全に実測できる)。
-  path.join(ROOT, "src", "features", "timeline.js")
+  path.join(ROOT, "src", "features", "timeline.js"),
+  // v188: カレンダービュー(configureCalendar({})も同じく空depsで安全に実測できる)
+  path.join(ROOT, "src", "features", "calendar.js")
 ];
 
 // wish.jsはモジュール読み込み時にdocument.addEventListener(pointerdown/move/up/cancel、月間ボード
@@ -113,6 +115,8 @@ const GOLDEN_CLICK_ACTIONS = [
   "pomo-tab", "push-report", "add-task-to-project", "add-subtask",
   "timeline-new-block", "timeline-mode", "complete-block-with-actual",
   "drift-postpone", "time-comb-fill",  // v186: F2 DRIFT(明日へ送る)+TIME COMB(隙間補完)の意図的追加
+  "timeline-import-external",  // v188: 時間ビューTT帯のBlock化
+  "calendar-prev-month", "calendar-next-month", "calendar-open-day", "calendar-close-popover",  // v188: カレンダービュー
 
   "add-category", "delete-category", "add-break-message", "delete-break-message",
   "tl-zoom", "tl-energy-mode",
@@ -178,7 +182,11 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
   // このファイルに既に存在するため、timeline系の中で唯一この動的実測方式で検証する。
   "timeline-mode",
   // v186: F2でtimeline.jsのregisterActionsへ意図的に追加(DRIFT送り+TIME COMB隙間補完)
-  "drift-postpone", "time-comb-fill"
+  "drift-postpone", "time-comb-fill",
+  // v188: 時間ビューTT帯のBlock化(timeline.js registerActions)
+  "timeline-import-external",
+  // v188: カレンダービュー(calendar.js registerActions)
+  "calendar-prev-month", "calendar-next-month", "calendar-open-day", "calendar-close-popover"
 ];
 
 // v174: 段階5-3で以下20件(settings 11 + sync 8 + core/nav 1)を、app.js自身が呼ぶ
@@ -422,13 +430,14 @@ function extractModalHandlerTypes() {
   const featureMods = await Promise.all(
     FEATURE_MODULE_PATHS.map((p) => import(pathToFileURL(p).href))
   );
-  const [avoidMod, dashboardMod, wishMod, journalMod, routineMod, timelineMod] = featureMods;
+  const [avoidMod, dashboardMod, wishMod, journalMod, routineMod, timelineMod, calendarMod] = featureMods;
   avoidMod.configureAvoid({});
   dashboardMod.configureDashboard({});
   wishMod.configureWish({});
   journalMod.configureJournal({});
   routineMod.configureRoutine({});
   timelineMod.configureTimeline({});
+  calendarMod.configureCalendar({});
   const registered = actionsMod.__debugActionNames().filter((name) => !name.startsWith("__test"));
   check(`レジストリ側の登録件数は期待どおり${MIGRATED_TO_REGISTRY_ACTIONS.length}件`,
     registered.length === MIGRATED_TO_REGISTRY_ACTIONS.length,
