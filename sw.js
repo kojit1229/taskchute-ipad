@@ -1,4 +1,6 @@
-const CACHE_NAME = "taskchute-journal-pwa-v187";
+const CACHE_NAME = "taskchute-journal-pwa-v188";
+// v188: TimeTree予定帯を今日/時間へ重畳し、家族4ラベルの閲覧専用カレンダーを追加。
+//   src/features/calendar.jsをAPP_SHELLへ追加し、v187の予定キャッシュを共有する。
 // v187: 独立タブ「計時」(カテゴリ/当日タスク/当日予定のワンタップ実行記録)を追加。
 //   src/features/timeswitch.jsをAPP_SHELLへ追加し、blocks一本化・専用ticker・予定TTL取得を担う。
 // v186: DRIFT/TIME COMBの2系統レビュー是正(候補選出の3条件化・日跨ぎ正規化・実行ビューの
@@ -222,6 +224,7 @@ const APP_SHELL = [
   "./assets/icon.svg",
   "./src/core/merge.js",
   "./src/features/avoid.js",
+  "./src/features/calendar.js",
   "./src/features/dashboard.js",
   "./src/features/journal.js",
   "./src/features/routine.js",

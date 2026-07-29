@@ -28,8 +28,10 @@ import {
 import { configureToday, renderToday } from "./src/features/today.js";
 import {
   configureTimeswitch, renderTimeswitch, stopTimeswitchTicker,
-  hydrateTimeswitchSchedule, closeOrphanedOneTap, prepareTimeswitchForTaskStart
+  hydrateTimeswitchSchedule, getTimeswitchSchedule,
+  closeOrphanedOneTap, prepareTimeswitchForTaskStart
 } from "./src/features/timeswitch.js";
+import { configureCalendar, renderCalendar } from "./src/features/calendar.js";
 // v168: app.js分割・段階4-2(WishタブTier1のCRUD・描画・月間ボードD&D抽出)。src/features/wish.js
 //   はstateをimportするがapp.js自身はimportしない(循環import回避)。renderWishTriage(仕分けモード、
 //   Tier3=非移動)を含む残りの汎用ヘルパーはconfigureWish(deps)で注入する
@@ -201,6 +203,7 @@ function pruneExpiredSuggestedThemes(list) {
 const navItems = [
   { id: "today", label: "今日", mark: "▶" },
   { id: "timeswitch", label: "計時", mark: "◉" },
+  { id: "calendar", label: "カレンダー", mark: "C" },
   { id: "home", label: "ホーム", mark: "H" },
   { id: "tasks", label: "タスクシュート", mark: "T" },
   { id: "timeline", label: "タイムライン", mark: "L" },
@@ -273,7 +276,8 @@ configureToday({
   renderPomodoroInterruptControls,
   getCachedReadingHighlights: () => cachedReadingHighlights,
   beginTodayZeroWrite, saveTodayZeroEntry, discardTodayZeroWrite, getTodayZeroWriteState,
-  homeSyncAlertBanner
+  homeSyncAlertBanner,
+  getScheduleData: getTimeswitchSchedule, makeBlock, saveState, openBlockEditor
 });
 // v168: src/features/wish.jsも同じ理由(循環import回避)で依存注入する。renderWishTriage
 // (仕分けモード、Tier3)はapp.js側に残るためここで注入する(prep-stage4-wish.md §7の(a)案、
@@ -315,6 +319,7 @@ configureTimeline({
   draftBarHTML, zeroSecThemeBarHTML, draftRejectReasonPickerHTML, renderDraftLayer,
   scheduleDraftActive, render, blocksForDate, postponeBlockToNextDay,
   makeBlock, getOtherTask, openBlockEditor, saveState, isStaleBlock,
+  getScheduleData: getTimeswitchSchedule,
   timelineRailEl: timelineRail, appRootEl: app
 });
 // v173: src/features/avoid.jsのdispatcher登録(段階5-2)。addAvoid/deleteAvoidはapp.js残留の
@@ -325,6 +330,10 @@ configureTimeswitch({
   blocksForDate, getCategoryColor, getOtherTask, makeBlock,
   fetchGitHubRawText, personalDataReady, saveState, saveAndRender, render,
   forceResetPomodoroSession, startPomodoro
+});
+configureCalendar({
+  escapeHTML, todayISO, parseDate, addDays, dateToISO, renderHeader, render,
+  getScheduleData: getTimeswitchSchedule
 });
 // v174: app.js分割・段階5-3(残ドメインのaction相乗り移行)。settings(11)+sync(8)+core/nav(1)の
 // 計20分岐を、click dispatcherのif連鎖からregisterActions経由のレジストリへ移行した
@@ -1613,7 +1622,7 @@ function normalizeState(value) {
   value.settings ||= {};
   // v182: 未知viewでrenderMainの前画面が残る事故を防ぐ。todayは新規許可、旧版由来の不明値はhomeへ。
   const allowedViews = new Set([
-    "today", "timeswitch", "home", "wbs", "wish", "avoid", "tasks", "routine", "timeline",
+    "today", "timeswitch", "calendar", "home", "wbs", "wish", "avoid", "tasks", "routine", "timeline",
     "pomodoro", "journal", "zero", "vision", "reports", "ai-reports", "weekly",
     "cycle", "dashboard", "stats", "settings", "more"
   ]);
@@ -2756,6 +2765,7 @@ function renderMain() {
 
   if (view === "today") main.innerHTML = renderToday();
   if (view === "timeswitch") main.innerHTML = renderTimeswitch();
+  if (view === "calendar") main.innerHTML = renderCalendar();
   if (view === "home") {
     main.innerHTML = renderHome();
     // v146: 今日を表示中なら「いま、これ」(=着手中/次の未着手Blockそのもの)へ自動スクロール
@@ -8719,6 +8729,7 @@ const moreGroups = [
     { id: "timeswitch", label: "計時", mark: "⏱" }
   ] },
   { id: "plan", label: "計画", items: [
+    { id: "calendar", label: "カレンダー", mark: "🗓" },
     { id: "home", label: "ホーム", mark: "🏠" },
     { id: "wbs", label: "WBS", mark: "🧩" },
     { id: "wish", label: "やりたい", mark: "✦" },
@@ -14323,7 +14334,7 @@ async function hydrateStaticMarkdown() {
   // v161: "stats"(計器盤)を追加。エネルギーカーブの新着fetchが完了してもこの画面を開いた
   //       ままだと再描画されず節が出ないままになる不具合を防ぐ(他view追加時と同じ理由)。
   // v163: "dashboard"も任意日AIフィードバック取得完了後に同じライブ再描画が必要。
-  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly" || state.currentView === "home" || state.currentView === "today" || state.currentView === "timeswitch" || state.currentView === "zero" || state.currentView === "tasks" || state.currentView === "stats" || state.currentView === "dashboard")) {
+  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly" || state.currentView === "home" || state.currentView === "today" || state.currentView === "timeswitch" || state.currentView === "calendar" || state.currentView === "timeline" || state.currentView === "zero" || state.currentView === "tasks" || state.currentView === "stats" || state.currentView === "dashboard")) {
     renderDeferringForFocus();
   }
 }

@@ -355,6 +355,12 @@ function isScheduleStale() {
   return Boolean(generatedAtMs && Date.now() - generatedAtMs > SCHEDULE_FRESH_MS);
 }
 
+// v188: today/timeline/calendarは取得処理を複製せず、この読み取り専用アクセサから
+// v187のscheduleCacheを共有する。返却値を書き換える呼び出しは想定しない。
+function getTimeswitchSchedule() {
+  return scheduleCache.data;
+}
+
 function safeColor(color) {
   return /^#[0-9a-f]{3,8}$/i.test(color || "") ? color : "var(--accent)";
 }
@@ -520,6 +526,7 @@ export {
   updateTimeswitchTick,
   hydrateTimeswitchSchedule,
   parseScheduleInbox,
+  getTimeswitchSchedule,
   closeOrphanedOneTap,
   prepareTimeswitchForTaskStart
 };

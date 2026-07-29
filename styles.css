@@ -25,6 +25,12 @@
   --purple-soft: #efebff;
   --teal: #13b5a6;
   --teal-soft: #d6f4f1;
+  /* v188: TimeTreeの4ラベル専用色。カテゴリ既定色とは別の色相・明度に固定する。 */
+  --tt-koji: #b32663;
+  --tt-koji-soft: #f9e3ec;
+  --tt-plan: #65428f;
+  --tt-midori: #087783;
+  --tt-date: #9b4f2f;
   /* v147(UI改善計画Phase2 2-3): 文字色として使うorange/green/tealはそのままだと白背景で
      AA(4.5:1)未達(orange 2.20:1 / green 2.54:1 / teal 2.56:1)。バー・背景・アイコン装飾用の
      --orange/--green/--tealはそのまま残し、実際に文字色として使う箇所だけこの-textトークンへ
@@ -113,6 +119,11 @@
   --orange-soft: #432b0b;
   --purple-soft: #2b244e;
   --teal-soft: #0c3733;
+  --tt-koji: #ff8fb3;
+  --tt-koji-soft: #452335;
+  --tt-plan: #c9a3ff;
+  --tt-midori: #58d5c1;
+  --tt-date: #ffad7a;
   /* v147: ダーク背景では元の--orange/--green/--tealが実測4.88〜8.51:1(--bg/--panel/各--*-soft
      との組み合わせすべてでAA以上、node script実測。最も厳しいのはteal×--green-softの4.88:1)の
      コントラストを持つため、-textトークンは無彩色化せず素の色へ戻す(レビュー対応で数値を実測に訂正)。 */
@@ -166,6 +177,11 @@
   --teal: #4ade9a;
   --teal-text: #4ade9a;
   --teal-soft: rgba(74, 222, 154, 0.1);
+  --tt-koji: #ff8fb3;
+  --tt-koji-soft: rgba(255, 143, 179, 0.14);
+  --tt-plan: #c9a3ff;
+  --tt-midori: #58d5c1;
+  --tt-date: #ffad7a;
   --radius: 4px;
   --shadow: none;
   --chrome-bg: rgba(5, 10, 20, 0.86);
@@ -4484,6 +4500,30 @@ h3 {
   background: var(--accent-soft);
   box-shadow: 0 0 10px var(--cockpit-go-glow, transparent);
 }
+.today-flight-tt {
+  position: absolute;
+  height: 14px;
+  min-width: 4px;
+  overflow: hidden;
+  padding: 0 4px;
+  border: 1px dashed var(--tt-koji);
+  border-radius: 2px;
+  color: var(--tt-koji);
+  background: var(--tt-koji-soft);
+  font-family: var(--cockpit-mono, inherit);
+  font-size: 8px;
+  line-height: 12px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.today-flight-tt.is-imported {
+  border-style: solid;
+  opacity: 0.72;
+  cursor: default;
+}
+.today-flight-tt.is-imported::after { content: " ✓"; }
 .today-flight-now {
   position: absolute;
   top: 0;
@@ -4515,6 +4555,32 @@ h3 {
   color: var(--faint);
   font-size: 9px;
 }
+
+/* v188: 時間ビューのTT帯。既存.timeline-cardの位置計算・!importantガードとは独立。 */
+.timeline-tt {
+  position: absolute !important;
+  z-index: 4;
+  min-height: 16px;
+  overflow: hidden;
+  padding: 2px 5px;
+  border: 1px dashed var(--tt-koji);
+  border-radius: 3px;
+  color: var(--tt-koji);
+  background: var(--tt-koji-soft);
+  font-family: var(--cockpit-mono, inherit);
+  font-size: 10px;
+  line-height: 1.25;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.timeline-tt.is-imported {
+  border-style: solid;
+  opacity: 0.72;
+  cursor: default;
+}
+.timeline-tt.is-imported::after { content: " ✓"; }
 /* v183: 今日コックピット B2(P5〜P7)。today名前空間内だけでポモ/カードデッキを統合。 */
 .today-pomodoro-stage {
   display: flex;
@@ -5268,5 +5334,240 @@ h3 {
   .timeswitch-event.is-active::after,
   #cc-overlay .cc-scanline {
     animation: none;
+  }
+}
+
+/* v188: 家族4ラベルの閲覧専用カレンダー。色はTT専用トークンだけを参照する。 */
+.calendar-view {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.calendar-panel {
+  position: relative;
+  padding: var(--space-4);
+}
+
+.calendar-toolbar {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  gap: var(--space-2);
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
+.calendar-toolbar h2 {
+  margin: 0;
+  color: var(--text);
+  font-family: var(--cockpit-mono, inherit);
+  font-size: var(--text-lg);
+  text-align: center;
+}
+
+.calendar-toolbar .btn {
+  min-width: 44px;
+  min-height: 44px;
+  padding: var(--space-2);
+}
+
+.calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-3);
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.calendar-legend > span {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.calendar-legend i {
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--calendar-label-color);
+  border-radius: 50%;
+  background: var(--calendar-label-color);
+}
+
+.calendar-weekdays,
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.calendar-weekdays {
+  color: var(--muted);
+  font-family: var(--cockpit-mono, inherit);
+  font-size: 11px;
+  text-align: center;
+}
+
+.calendar-weekdays span {
+  padding: var(--space-2);
+  border: 1px solid var(--line-soft);
+  background: var(--panel-soft);
+}
+
+.calendar-day {
+  min-width: 0;
+  min-height: 104px;
+  padding: var(--space-2);
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: 0;
+  color: var(--text);
+  background: var(--panel);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.calendar-day > time {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-family: var(--cockpit-mono, inherit);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.calendar-day-chips {
+  display: grid;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.calendar-chip {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  padding: 3px 5px;
+  border-left: 3px solid var(--calendar-label-color);
+  border-radius: 2px;
+  color: var(--calendar-label-color);
+  background: var(--panel-soft);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-day.is-outside-month {
+  background: var(--panel-soft);
+}
+
+.calendar-day.is-out-of-range {
+  opacity: 0.38;
+  filter: brightness(0.78);
+}
+
+.calendar-popover {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 40;
+  width: min(420px, calc(100vw - 32px));
+  max-height: min(70vh, 560px);
+  overflow: auto;
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  transform: translate(-50%, -50%);
+}
+
+.calendar-popover-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  align-items: center;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.calendar-popover-head strong {
+  font-family: var(--cockpit-mono, inherit);
+}
+
+.calendar-popover-head button {
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text);
+  background: var(--panel-soft);
+  font-size: var(--text-md);
+  cursor: pointer;
+}
+
+.calendar-popover-list {
+  display: grid;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+}
+
+.calendar-popover-list > p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.calendar-popover-item {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-2);
+  border-left: 3px solid var(--calendar-label-color);
+  background: var(--panel-soft);
+}
+
+.calendar-popover-item > span,
+.calendar-popover-item > time {
+  color: var(--calendar-label-color);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.calendar-popover-item > strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .calendar-panel {
+    padding: var(--space-2);
+  }
+
+  .calendar-legend {
+    gap: var(--space-2);
+  }
+
+  .calendar-day {
+    min-height: 78px;
+    padding: 5px 3px;
+  }
+
+  .calendar-day > time {
+    margin-bottom: 3px;
+  }
+
+  .calendar-chip {
+    padding: 2px 3px;
+    font-size: 9px;
+  }
+
+  .calendar-popover-item {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .calendar-popover-item > strong {
+    grid-column: 1 / -1;
   }
 }

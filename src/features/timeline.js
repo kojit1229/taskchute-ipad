@@ -50,6 +50,7 @@ let defaultBatterySettings, batteryCurvePoints, conditionBudget;
 let draftBarHTML, zeroSecThemeBarHTML, draftRejectReasonPickerHTML, renderDraftLayer;
 let scheduleDraftActive, render, blocksForDate, postponeBlockToNextDay;
 let makeBlock, getOtherTask, openBlockEditor, saveState, isStaleBlock;
+let getScheduleData;
 let timelineRailEl, appRootEl;
 
 function configureTimeline(deps) {
@@ -61,7 +62,7 @@ function configureTimeline(deps) {
     draftBarHTML, zeroSecThemeBarHTML, draftRejectReasonPickerHTML, renderDraftLayer,
     scheduleDraftActive, render, blocksForDate, postponeBlockToNextDay,
     makeBlock, getOtherTask, openBlockEditor, saveState, isStaleBlock,
-    timelineRailEl, appRootEl
+    getScheduleData, timelineRailEl, appRootEl
   } = deps);
   // v181: app.js分割・段階5-8(timeline系dispatcher分岐の移行・後半)。timeline-modeのハンドラ
   // 実体(setTimelineMode)はこのファイルに既に存在するため、v173方式(feature本体側で
@@ -70,7 +71,8 @@ function configureTimeline(deps) {
   registerActions({
     "timeline-mode": ({ target }) => setTimelineMode(target.dataset.mode),
     "drift-postpone": ({ id }) => postponeBlockToNextDay(id),
-    "time-comb-fill": ({ target }) => createBlockForActualGap(target)
+    "time-comb-fill": ({ target }) => createBlockForActualGap(target),
+    "timeline-import-external": ({ target }) => importTimelineExternal(target.dataset.externalId || "")
   });
 }
 
@@ -260,6 +262,77 @@ function setTimelineMode(mode) {
   render();
 }
 
+function timelineExternalEvents(date) {
+  const data = typeof getScheduleData === "function" ? getScheduleData() : undefined;
+  return (data?.events || []).filter((event) =>
+    event.date === date && event.label === "こーじ" && !event.allDay
+    && event.startAt && event.endAt);
+}
+
+function importedExternalBlock(externalId) {
+  return (state.blocks || []).find((block) =>
+    !block.deleted && block.externalRef === externalId) || null;
+}
+
+function externalDateTime(date, time) {
+  return date && time ? `${date}T${time}:00` : "";
+}
+
+function importTimelineExternal(externalId) {
+  if (!externalId || importedExternalBlock(externalId)) return;
+  const event = timelineExternalEvents(state.selectedDate)
+    .find((item) => item.externalId === externalId);
+  if (!event) return;
+  const block = makeBlock({
+    date: event.date,
+    title: event.title,
+    category: "",
+    externalRef: event.externalId,
+    label: event.label,
+    plannedStartAt: externalDateTime(event.date, event.startAt),
+    plannedEndAt: externalDateTime(event.date, event.endAt)
+  });
+  block.externalRef = event.externalId;
+  block.label = event.label;
+  state.blocks.push(block);
+  saveState();
+  render();
+  openBlockEditor(block.id);
+}
+
+function renderTimelineExternalBands(rowHeight, startHour, endHour) {
+  const laneEnds = [];
+  const candidates = timelineExternalEvents(state.selectedDate).map((event, index) => {
+    const start = minutesOf(event.startAt);
+    const rawEnd = minutesOf(event.endAt);
+    const end = rawEnd <= start ? endHour * 60 : rawEnd;
+    if (end <= startHour * 60 || start >= endHour * 60) return null;
+    return {
+      event,
+      index,
+      start: Math.max(startHour * 60, start),
+      end: Math.min(endHour * 60, Math.max(start + 1, end))
+    };
+  }).filter(Boolean).sort((a, b) => a.start - b.start || a.index - b.index);
+  const assigned = candidates.map((item) => {
+    let lane = laneEnds.findIndex((laneEnd) => laneEnd <= item.start);
+    if (lane === -1) lane = laneEnds.length;
+    laneEnds[lane] = item.end;
+    return { ...item, lane };
+  });
+  const laneCount = Math.max(1, laneEnds.length);
+  return assigned.map(({ event, start, end, lane }) => {
+    const top = ((start - startHour * 60) / 60) * rowHeight;
+    const height = Math.max(16, ((end - start) / 60) * rowHeight);
+    const width = 100 / laneCount;
+    const imported = Boolean(importedExternalBlock(event.externalId));
+    return `<button type="button" class="timeline-tt${imported ? " is-imported" : ""}"
+      style="top:${top}px;height:${height}px;left:${lane * width}%;width:calc(${width}% - 4px)"
+      data-action="timeline-import-external" data-external-id="${escapeHTML(event.externalId)}"
+      title="${escapeHTML(event.title)}">TT ${escapeHTML(event.title)}</button>`;
+  }).join("");
+}
+
 function renderTimeline({ compact, mode = "planned" }) {
   const allBlocks = blocksForDate(state.selectedDate);
   // モードに応じてフィルタリングと表示位置決定
@@ -324,6 +397,7 @@ function renderTimeline({ compact, mode = "planned" }) {
       `).join("")}
       <div class="timeline-cards-area" style="position:absolute; top:0; left:60px; right:100px; height:100%;">
         ${positioned.map((a) => renderTimelineCard(a, mode, maxLanes)).join("")}
+        ${mode === "planned" ? renderTimelineExternalBands(rowHeight, startHour, endHour) : ""}
       </div>
       ${nowLine}
       ${!compact && mode === "planned" ? renderDraftLayer(rowHeight, startHour) : ""}
