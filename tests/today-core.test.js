@@ -1948,6 +1948,15 @@ function check(name, cond, extra = "") {
       const p = decodeURIComponent(new URL(route.request().url()).pathname);
       if (p.endsWith("/contents/taskchute/schedule-inbox.json")) {
         if (scheduleInboxFx.status !== 200) return route.fulfill({ status: scheduleInboxFx.status, body: "not found" });
+        // [45c]用: 生bodyの差し替え(壊れJSON)と鮮度超過(generatedAtを過去へずらす)
+        if (scheduleInboxFx.body != null) return route.fulfill({ status: 200, contentType: "application/json", body: scheduleInboxFx.body });
+        if (scheduleInboxFx.staleHours) {
+          const h = 7 - scheduleInboxFx.staleHours;  // 固定時刻12:00基準で27h前=前日09:00
+          const d = h < 0 ? YESTERDAY : TODAY;
+          const hh = String(((h % 24) + 24) % 24).padStart(2, "0");
+          const staled = { ...W1_SCHEDULE_INBOX, generatedAt: `${d}T${hh}:00:00` };
+          return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(staled) });
+        }
         return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(W1_SCHEDULE_INBOX) });
       }
       return route.fallback();
@@ -2311,6 +2320,49 @@ function check(name, cond, extra = "") {
       JSON.stringify(w1Running(st41).map((b) => b.id)));
 
     // ============================================================
+    // [41b] v187レビューH1回帰: 前日の「通常」runningが残った状態でタイルをタップしても、
+    //       前日Blockに当日時刻のactualEndAtが書かれない(過去実績の捏造防止)
+    // ============================================================
+    console.log("[41b] W1: 前日の通常runningはタイルタップで閉じられない(H1回帰・過去実績の捏造防止)");
+    // [41]の続きの状態: w1-orphan-normal(前日・通常・running)が残っている。
+    // [41]は保存契機のためtasksビューに居るので、計時タブへ戻ってから操作する
+    await w1GoView("timeswitch");
+    await page.waitForSelector(".timeswitch", { state: "attached" });
+    await w1Tap("開発");
+    await page.waitForFunction((KEY) =>
+      JSON.parse(localStorage.getItem(KEY)).blocks.some((b) => b.oneTap === true && b.actualStartAt && !b.actualEndAt), KEY);
+    const st41b = await stateNow();
+    const orphanNormalAfter = st41b.blocks.find((b) => b.id === "w1-orphan-normal");
+    check("前日の通常runningに actualEndAt が付かない(当日時刻で閉じない=H1)",
+      !orphanNormalAfter?.actualEndAt, JSON.stringify(orphanNormalAfter?.actualEndAt));
+    const todayRunning41b = w1Running(st41b).filter((b) => b.date === TODAY);
+    check("当日の running は開始した oneTap の1件のみ", todayRunning41b.length === 1 && todayRunning41b[0].oneTap === true,
+      JSON.stringify(todayRunning41b.map((b) => b.id)));
+    // 後続セクションへの持ち越し防止: 開始したoneTapを停止
+    await w1Tap("開発");
+    await page.waitForFunction((KEY) =>
+      !JSON.parse(localStorage.getItem(KEY)).blocks.some((b) => b.oneTap === true && b.actualStartAt && !b.actualEndAt), KEY);
+
+    // ============================================================
+    // [41c] v187レビューM2: 前日の予定タイル由来(externalRef)runningも23:59補完される
+    // ============================================================
+    console.log("[41c] W1: 前日のexternalRef runningも前日23:59で孤児補完される(計時タブ由来の同一扱い)");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedW1({
+      view: "timeswitch",
+      blocks: [
+        { ...block("w1-orphan-event", { title: "昨日の予定計時", category: "", date: YESTERDAY, actualStartAt: atOn(YESTERDAY, "20:00"), plannedStartAt: atOn(YESTERDAY, "20:00"), plannedEndAt: atOn(YESTERDAY, "20:30") }), externalRef: "tt-orphan-1", label: "こーじ" }
+      ]
+    });
+    await page.waitForFunction((KEY) => {
+      const b = JSON.parse(localStorage.getItem(KEY)).blocks.find((x) => x.id === "w1-orphan-event");
+      return !!b && !!b.actualEndAt;
+    }, KEY);
+    const orphanEvent = (await stateNow()).blocks.find((b) => b.id === "w1-orphan-event");
+    check("前日のexternalRef runningに前日23:59のactualEndAtが補完される(M2)",
+      (orphanEvent?.actualEndAt || "").startsWith(`${YESTERDAY}T23:59`), orphanEvent?.actualEndAt);
+
+    // ============================================================
     // [42] W1: ビュー離脱で経過表示のtickerが停止する(おとり方式=[7]/[18]/[20]と同手法)
     // ============================================================
     console.log("[42] W1: 計時タブを離れると経過tickerが停止する(おとり.timeswitch-elapsedが書き換えられない)");
@@ -2540,6 +2592,32 @@ function check(name, cond, extra = "") {
       await page.locator(".timeswitch button.timeswitch-tile").count() >= 1);
     check("[45b]区間の描画で pageerror が発生しない", failures === failuresBefore45b);
     scheduleInboxFx.status = 200;
+
+    // ============================================================
+    // [45c] v187レビューM1/L7: 壊れJSONは無傷スキップ・鮮度26時間超は「古い」警告付きでタイル表示
+    // ============================================================
+    console.log("[45c] W1: 壊れJSONでpageerrorゼロ、鮮度26時間超は .timeswitch-stale 警告付きでタイルは出る");
+    const failuresBefore45c = failures;
+    scheduleInboxFx.body = "{broken json";
+    await seedW1({ view: "timeswitch" });
+    await page.waitForSelector(".timeswitch", { state: "attached" });
+    check("壊れJSONでは予定タイルが出ない(例外を投げず無傷スキップ)",
+      await page.locator(".timeswitch button.timeswitch-event").count() === 0);
+    check("壊れJSON区間で pageerror が発生しない", failures === failuresBefore45c);
+    // 鮮度超過(27時間前のgeneratedAt)
+    scheduleInboxFx.body = null;
+    scheduleInboxFx.staleHours = 27;
+    await seedW1({ view: "timeswitch" });
+    await page.waitForSelector(".timeswitch", { state: "attached" });
+    await page.waitForSelector(".timeswitch .timeswitch-stale", { state: "attached" });
+    check("鮮度26時間超では .timeswitch-stale の警告行が出る(『予定なし』と区別できる。§3.5)",
+      /古い|バッチ/.test((await page.locator(".timeswitch .timeswitch-stale").textContent()) || ""));
+    check("鮮度超過でも予定タイル自体は表示される(データは見える)",
+      await page.locator(".timeswitch button.timeswitch-event").count() >= 1);
+    scheduleInboxFx.body = null;
+    scheduleInboxFx.staleHours = 0;
+
+    // ============================================================
   } finally {
     await browser.close();
     server.close();
