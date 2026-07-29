@@ -263,7 +263,7 @@ configureDashboard({
 configureToday({
   escapeHTML, todayISO, blocksForDate, minutesOf, timeFromDateTime,
   localDateTimeToMs, resolveEstimateMin, computeProjectedEnd,
-  routineRate, getCategoryColor, clamp
+  routineRate, getCategoryColor, clamp, isStaleBlock, render
 });
 // v168: src/features/wish.jsも同じ理由(循環import回避)で依存注入する。renderWishTriage
 // (仕分けモード、Tier3)はapp.js側に残るためここで注入する(prep-stage4-wish.md §7の(a)案、
@@ -8671,7 +8671,7 @@ function renderBreakMessagesSettings() {
 //   この4群からは除外する(renderTasks参照)。
 const moreGroups = [
   { id: "plan", label: "計画", items: [
-    { id: "home", label: "ホーム", mark: "H" },
+    { id: "home", label: "ホーム", mark: "🏠" },
     { id: "wbs", label: "WBS", mark: "🧩" },
     { id: "wish", label: "やりたい", mark: "✦" },
     { id: "avoid", label: "やらない", mark: "✕" },

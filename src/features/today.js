@@ -1,19 +1,21 @@
 // src/features/today.js — v182「今日」コックピット(P1〜P4)。
 // stateはlive bindingで読み取り、app.js側の汎用ヘルパーはconfigureToday(deps)で注入する。
-// tickerは表示だけを差分更新し、state変更・saveState・renderを一切行わない。
+// tickerは表示だけを差分更新し、日跨ぎ時だけ全再描画する。state変更・saveStateは行わない。
 
 import { state } from "../state/store.js";
 
 let escapeHTML, todayISO, blocksForDate, minutesOf, timeFromDateTime;
 let localDateTimeToMs, resolveEstimateMin, computeProjectedEnd;
-let routineRate, getCategoryColor, clamp;
+let routineRate, getCategoryColor, clamp, isStaleBlock, render;
 let todayTickerId = null;
+let todayHeavyTickCount = 0;
+let todayRenderedDateISO = null;
 
 function configureToday(deps) {
   ({
     escapeHTML, todayISO, blocksForDate, minutesOf, timeFromDateTime,
     localDateTimeToMs, resolveEstimateMin, computeProjectedEnd,
-    routineRate, getCategoryColor, clamp
+    routineRate, getCategoryColor, clamp, isStaleBlock, render
   } = deps);
 }
 
@@ -25,7 +27,7 @@ function runningBlockOf(blocks) {
 
 function queueBlocksOf(blocks) {
   return (blocks || [])
-    .filter((b) => !b.completed && !b.actualStartAt)
+    .filter((b) => !b.completed && !b.actualStartAt && !isStaleBlock(b))
     .sort((a, b) => {
       const aMin = a.plannedStartAt ? minutesOf(a.plannedStartAt) : Number.POSITIVE_INFINITY;
       const bMin = b.plannedStartAt ? minutesOf(b.plannedStartAt) : Number.POSITIVE_INFINITY;
@@ -117,7 +119,7 @@ function sectionInfo(now = new Date()) {
 function categoryChip(block) {
   if (!block?.category) return "";
   const color = getCategoryColor(block.category);
-  return `<span class="today-chip" style="--today-category:${color}">${escapeHTML(block.category)}</span>`;
+  return `<span class="today-chip" style="--today-category:${escapeHTML(color)}">${escapeHTML(block.category)}</span>`;
 }
 
 function panelHeading(en, ja, source) {
@@ -212,23 +214,32 @@ function flightPosition(minute) {
 }
 
 function renderFlightPlan(blocks) {
-  const planned = blocks.filter((b) => b.plannedStartAt).map((block) => {
+  const candidates = blocks.filter((b) => b.plannedStartAt).map((block, index) => {
     const start = minutesOf(block.plannedStartAt);
-    const end = block.plannedEndAt ? minutesOf(block.plannedEndAt) : start + resolveEstimateMin(block);
-    if (end <= 6 * 60 || start >= 24 * 60) return "";
+    const rawEnd = block.plannedEndAt ? minutesOf(block.plannedEndAt) : start + resolveEstimateMin(block);
+    const end = rawEnd < start ? 24 * 60 : rawEnd;
+    if (end <= 6 * 60 || start >= 24 * 60) return null;
+    return { block, index, start: Math.max(6 * 60, start), end: Math.min(24 * 60, Math.max(start + 1, end)) };
+  }).filter(Boolean).sort((a, b) => a.start - b.start || a.index - b.index);
+  const laneEnds = [];
+  const planned = candidates.map(({ block, start, end }) => {
+    let lane = laneEnds.findIndex((laneEnd) => laneEnd <= start);
+    if (lane === -1) lane = laneEnds.length;
+    laneEnds[lane] = end;
     const left = flightPosition(start);
-    const right = flightPosition(Math.max(start + 1, end));
+    const right = flightPosition(end);
     const status = block.completed ? "is-done" : block.actualStartAt && !block.actualEndAt ? "is-now" : "is-todo";
-    return `<button class="today-flight-block ${status}" style="left:${left}%;width:${Math.max(0.8, right - left)}%"
+    return `<button class="today-flight-block ${status}" style="left:${left}%;width:${Math.max(0.8, right - left)}%;top:${24 + lane * 33}px"
       data-action="edit-block" data-id="${escapeHTML(block.id)}" title="${escapeHTML(block.title)}">${escapeHTML(block.title)}</button>`;
-  }).filter(Boolean);
+  });
   const now = new Date();
   const nowPos = flightPosition(now.getHours() * 60 + now.getMinutes());
   const grid = [6, 9, 12, 15, 18, 21, 24].map((hour) =>
-    `<i class="today-flight-hour" style="left:${flightPosition(hour * 60)}%"><span>${String(hour).padStart(2, "0")}</span></i>`).join("");
+    `<i class="today-flight-hour ${hour === 24 ? "is-end" : ""}" style="left:${flightPosition(hour * 60)}%"><span>${String(hour).padStart(2, "0")}</span></i>`).join("");
+  const trackHeight = 72 + Math.max(0, laneEnds.length - 1) * 33;
   return `<section class="today-panel today-flight-plan today-span-2">
     ${panelHeading("FLIGHT PLAN", "今日の航路 — 緑=完了 / 青=実行中 / 灰=これから", "PLAN")}
-    <div class="today-flight-track">${grid}${planned.join("")}
+    <div class="today-flight-track" style="--today-flight-track-height:${trackHeight}px">${grid}${planned.join("")}
       <i class="today-flight-now" id="todayFlightNow" style="left:${nowPos}%"></i>
       ${planned.length ? "" : `<span class="today-flight-empty">予定Blockはありません</span>`}
     </div>
@@ -237,7 +248,9 @@ function renderFlightPlan(blocks) {
 }
 
 function renderToday() {
-  const blocks = blocksForDate(todayISO());
+  const dateISO = todayISO();
+  todayRenderedDateISO = dateISO;
+  const blocks = blocksForDate(dateISO);
   const queue = queueBlocksOf(blocks);
   const done = blocks.filter((b) => b.completed).length;
   const progress = blocks.length ? Math.round(done / blocks.length * 100) : 0;
@@ -252,7 +265,7 @@ function renderToday() {
         着地 <b id="todayHeaderLanding">${projected.text}</b> /
         <span id="todayHeaderSection">${section.label} 残り ${section.remaining}分</span></div>
       <div class="today-clock"><strong id="todayClock">${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}</strong>
-        <span id="todayDate">${todayISO()} (${["日", "月", "火", "水", "木", "金", "土"][now.getDay()]})</span></div>
+        <span id="todayDate">${dateISO} (${["日", "月", "火", "水", "木", "金", "土"][now.getDay()]})</span></div>
     </header>
     <div class="today-deck">
       ${renderNowFocus(blocks, queue)}
@@ -269,11 +282,19 @@ function updateTodayTick() {
     stopTodayTicker();
     return;
   }
-  if (typeof document === "undefined" || document.hidden) return;
-  const now = new Date();
+  if (typeof document === "undefined") return;
   const clock = document.getElementById("todayClock");
-  if (clock) clock.textContent = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
-  const blocks = blocksForDate(todayISO());
+  if (!clock) return;
+  if (document.hidden) return;
+  const dateISO = todayISO();
+  if (todayRenderedDateISO !== null && dateISO !== todayRenderedDateISO) {
+    todayRenderedDateISO = dateISO;
+    render();
+    return;
+  }
+  const now = new Date();
+  clock.textContent = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
+  const blocks = blocksForDate(dateISO);
   const running = runningBlockOf(blocks);
   const elapsed = document.getElementById("todayNowElapsed");
   const bar = document.getElementById("todayNowProgress");
@@ -288,17 +309,21 @@ function updateTodayTick() {
       bar.className = ratio >= 1 ? "is-late" : ratio >= 0.8 ? "is-warn" : "";
     }
   }
-  const projected = projectedInfo(blocks, now);
-  const landing = document.getElementById("todayProjectedLanding");
-  const comparison = document.getElementById("todayProjectedComparison");
-  const remaining = document.getElementById("todayRemainingEstimate");
-  const headerLanding = document.getElementById("todayHeaderLanding");
-  if (landing) landing.textContent = projected.text;
-  if (comparison) comparison.textContent = projected.comparison;
-  if (remaining) remaining.textContent = formatDuration(projected.remainingMin);
-  if (headerLanding) headerLanding.textContent = projected.text;
-  const twelveWeek = document.getElementById("todayTwelveWeek");
-  if (twelveWeek) twelveWeek.textContent = formatDuration(twelveWeekMinutes(blocks));
+  const runHeavyUpdates = todayHeavyTickCount === 0;
+  todayHeavyTickCount = (todayHeavyTickCount + 1) % 30;
+  if (runHeavyUpdates) {
+    const projected = projectedInfo(blocks, now);
+    const landing = document.getElementById("todayProjectedLanding");
+    const comparison = document.getElementById("todayProjectedComparison");
+    const remaining = document.getElementById("todayRemainingEstimate");
+    const headerLanding = document.getElementById("todayHeaderLanding");
+    if (landing) landing.textContent = projected.text;
+    if (comparison) comparison.textContent = projected.comparison;
+    if (remaining) remaining.textContent = formatDuration(projected.remainingMin);
+    if (headerLanding) headerLanding.textContent = projected.text;
+    const twelveWeek = document.getElementById("todayTwelveWeek");
+    if (twelveWeek) twelveWeek.textContent = formatDuration(twelveWeekMinutes(blocks));
+  }
   const section = document.getElementById("todayHeaderSection");
   const sectionValue = sectionInfo(now);
   if (section) section.textContent = `${sectionValue.label} 残り ${sectionValue.remaining}分`;
@@ -308,6 +333,7 @@ function updateTodayTick() {
 
 function startTodayTicker() {
   if (todayTickerId !== null || typeof document === "undefined") return;
+  todayHeavyTickCount = 0;
   todayTickerId = setInterval(updateTodayTick, 1000);
 }
 

@@ -4330,8 +4330,8 @@ h3 {
 }
 .today-flight-track {
   position: relative;
-  height: 72px;
-  overflow: hidden;
+  height: var(--today-flight-track-height, 72px);
+  overflow: visible;
   border: 1px solid var(--line);
   border-radius: 3px;
   background: var(--panel-soft);
@@ -4349,6 +4349,10 @@ h3 {
   color: var(--faint);
   font-size: 8px;
   font-style: normal;
+}
+.today-flight-hour.is-end span {
+  right: 3px;
+  left: auto;
 }
 .today-flight-block {
   position: absolute;
