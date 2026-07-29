@@ -1,0 +1,54 @@
+{
+  "version": 190,
+  "date": "2026-07-30",
+  "title": "AIインサイトビューア",
+  "summary": "バッチ生成のai-insights.jsonを安全に取得し、ルーティン・Wish・Avoid・0秒思考へ閲覧専用のAI所見と鮮度を表示する。",
+  "changedFiles": [
+    "app.js",
+    "releases/v190.json",
+    "src/features/avoid.js",
+    "src/features/routine.js",
+    "src/features/wish.js",
+    "styles.css",
+    "sw.js",
+    "tests/today-core.test.js"
+  ],
+  "intent": [
+    "taskchute/ai-insights.jsonを30分TTLで取得し、AI APIをアプリから呼ばずにバッチ結果だけを閲覧する。",
+    "4つの所見フィールドを個別検証し、欠落・破損・スキーマ不一致でも既存ビューを止めない。",
+    "generatedAtをローカル日時として解釈し、26時間超の生成物を表示したまま古いと明示する。"
+  ],
+  "changes": [
+    "hydrateStaticMarkdownへai-insights.jsonの取得・30分TTLキャッシュ・前回正常キャッシュ保持を追加した。",
+    "routineSuggestions、wishRipe、avoidInsight、zeroPatternを個別に正規化するフェイルソフト境界を追加した。",
+    "ルーティン・Wishカード(taskId対応)・Avoid・0秒思考へDOM契約準拠の閲覧専用パネルを追加した。",
+    "hydrateStaticMarkdown完了時の再描画対象へroutine、wish、avoidを追加した。",
+    "全テーマ共通の紫アクセントと、鮮度不明・26時間超の古い表示を追加した。",
+    "Service WorkerのCACHE_NAMEをv190へ更新した。",
+    "レビュー反映: 失敗時リトライをenergy-curve型(30分スロットル+前回データ保持)へ統一(M1=Codex P2同一指摘)/ テストのフィールド別マーカー弁別(M2)。"
+  ],
+  "uncertainties": [
+    "wishRipeはリスト表示の既存Wishカードへ紐づけ、月間ボードと仕分け表示には重複表示しない。"
+  ],
+  "reviewFocus": [
+    "generatedAtの解釈がlocalDateTimeToMsのみで行われ、文字列Dateパースが混入していないこと。",
+    "取得失敗・不正JSONでは前回正常キャッシュを保持し、型不一致フィールドだけが非表示になること。",
+    "renderAvoid(state, escapeHTML, renderHeader)の引数契約が維持されていること。",
+    "4パネルのdata-insight、鮮度クラス、紫アクセントがDOM/CSS契約に一致すること。"
+  ],
+  "verification": [
+    "node --check(app.js/avoid.js/routine.js/wish.js/sw.js)→全てexit 0。",
+    "node tests/today-core.test.js → ALL PASS(441 check。[54]〜[59]のF8検証込み)。avoid-core/action-registry-core ALL PASS。",
+    "2系統レビュー: reviewer(Claude)=条件付き合格(M1/M2/L6を本版で反映。L1〜L5は次バッチ候補として記録)/ Codexレビュー=P2×1(M1と同一指摘)を反映。",
+    "push前最終ゲート: release-gate --final(test:core)PASS(本記録コミット時点)。"
+  ],
+  "knownLimitations": [
+    "AIバッチ側(loop/)のai-insights.json生成は本リリースのスコープ外で、別途発注が必要。",
+    "第1弾は閲覧専用で、提案の自動適用と既読管理は実装しない。",
+    "依頼によりtests配下とrelease生成スクリプト由来の生成物は変更しない。",
+    "Chromium起動は実行環境のspawn EPERMで未検証。DOM契約・鮮度・graceful absenceは同じ実装関数をNodeで直接抽出して検証した。",
+    "バッチ側(loop/のai-insights.json生成)は別発注が必要(発注文起草済み: workbench/out/2026-07-29-today-cockpit-impl/f8-loop-order-draft.md。標準フローの白名単追記=K承認要)。ファイル不在でも全機能正常動作。",
+    "レビューL1/L2: generatedAt禁止形式(半角スペース)と要素レベル型不一致のテスト網は未追加(実装は対応済み)。",
+    "レビューL3: 削除済みtaskIdを指す所見は沈黙する(表示なし)。"
+  ]
+}
