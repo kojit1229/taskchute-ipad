@@ -1806,6 +1806,740 @@ function check(name, cond, extra = "") {
       wishSnapA === wishSnapB);
 
     // ============================================================
+    // ==== ここから W1(計時タブ=TIME SWITCH独立ビュー)追記セクション [35]〜[45b] ====
+    // 設計の正: workbench/out/2026-07-29-today-cockpit-ideas/design-onetap-timetree.md
+    //   §2全体(§2.3遷移表=全セルが検証対象・§2.4データモデル)+§5裁定表 #2/#3/#4 に加え
+    //   **#15〜#19(2026-07-29 K指示。本改訂の主因)**:
+    //     #15 独立タブ(view id "timeswitch"・ラベル「計時」・サイドバー+「その他」・bottom-nav不変・記録専用)
+    //     #16 3群表示 (a)カテゴリタイル (b)当日タスクBlockタイル(未着手・実行中) (c)当日予定タイル(こーじのみ)
+    //     #17 タスクタイル=宣言なし即開始 / 予定タイル=Block化+即開始 / タスク実行中の他タイル=確認1回
+    //     #18 タスクタイル再タップ=完了。完了済みタイルは残り、再タップで同taskId/title/categoryの新Block生成+開始
+    //     #19 タスクタイル開始のみ focusTimerAuto 連動維持。カテゴリ・予定タイルはポモ非連動
+    // 予定データの契約: 同設計書 §3.4 schedule-inbox.json スキーマ(generatedAtはT区切り秒あり)。
+    // DOM契約(実装側と共有):
+    //   パネルroot .timeswitch(計時ビュー内のみ。今日ビューには置かない=[35]/[35c]の一本化回帰ガード)/
+    //   カテゴリタイル button.timeswitch-tile[data-category="カテゴリ名"] /
+    //   タスクタイル button.timeswitch-task[data-block-id] /
+    //   予定タイル button.timeswitch-event[data-external-id] /
+    //   計時中タイル .is-active(+経過表示要素 .timeswitch-elapsed)/
+    //   タスク由来アクティブのカテゴリタイル .is-task(▶TASKラベル)/
+    //   確認オーバーレイ #cc-overlay(OK=data-action="timeswitch-confirm-ok"、
+    //   キャンセル=data-action="timeswitch-confirm-cancel")
+    // 実装(未着手)より先に仕様から書いた。前提が実装と食い違った場合はテストを弱めるのではなく、
+    // 前提の側を実装と突合して直すこと:
+    //   前提W1-1: カテゴリタイル一覧はカテゴリマスタ全件(§2.4第1弾)。タイル数=マスタ件数で、
+    //            data-category はマスタの name(新規state既定 = 開発/内省/営業/学習/休息/回復)
+    //   前提W1-2: ワンタップBlockの「完了」= actualEndAt付与+completed:true(同一タイル停止・
+    //            別タイル切替・タスク開始時の自動完了すべて同じ)
+    //   前提W1-3: 今日ビューのタスク開始(now-start)は従来どおり既存宣言モーダル(v87)経由
+    //            (裁定#17が宣言を省くのは計時タブのタスクタイルだけ)。ワンタップ自動完了の検証は
+    //            宣言スキップ後の最終状態で行う。裁定#2の「無確認」= #cc-overlay を出さないこと
+    //   前提W1-4: 確認オーバーレイのOKで実行中タスクへ打つ実績終了時刻は現在時刻。タスクの
+    //            interruptions への理由記録はしない(「理由ピッカーを開かない」だけを契約とする)
+    //   前提W1-5: 経過表示は§4の単一1秒tickerに相乗りし、毎tickクラスセレクタで再取得して更新する
+    //            (停止の負検証は[7]/[18]/[20]と同じおとり方式が成立する前提)
+    //   前提W1-6: DAY GAUGE 残り見積の oneTap 除外は「表示値が変わらない」outcome基準で検証する
+    //            (oneTap Blockの estimateMin 実装値を契約にしない)。加えて合成フィクスチャ
+    //            (未開始oneTap Block)で NEXT QUEUE / 残り見積のフィルタを直接判別する
+    //   前提W1-7: 孤児補完の永続化は次の保存契機(setView)で行われる([21]と同じ踏み方)。
+    //            補完値は前日T23:59。補完時の completed フラグ付与の有無は契約にしない
+    //   前提W1-8: タスクタイル群は当日Blockを data-block-id で表す。oneTap:true Blockはタスクタイル群に
+    //            出ない(カテゴリタイルが担う)。完了済みタスクBlockのタイルは残る(裁定#18)。
+    //            タイル総数・並び順は契約にしない(存在確認は data-block-id 指名で行う)
+    //   前提W1-9: 実行中のタスク/予定タイルのアクティブ表示も .is-active。タスク実行中は
+    //            そのカテゴリのカテゴリタイルが .is-task(§2.2の読み替え。裁定#15)
+    //   前提W1-10: タイル再タップの完了は実績登録モーダルを開かず actualEndAt=now+completed:true を
+    //            直接打つ(さくさく特化。裁定#17)。ポモ実行中に完了した際のポモ側の扱いは契約にしない
+    //   前提W1-11: schedule-inbox.json は kindle highlights.json と同じ Contents API 経路
+    //            (パス末尾 /contents/taskchute/schedule-inbox.json)で取得される。
+    //            タイル化は date=当日 かつ label="こーじ" のみ(裁定#16)
+    //   前提W1-12: 予定タイルからのBlockは title=予定title・date=当日・category空・
+    //            externalRef=externalId・label自動。planned時刻・taskId・oneTapフラグは契約にしない。
+    //            取込済みexternalIdのBlock再生成はしない(§3.4重複解決)。再タップの停止/無視の別も
+    //            契約にしない(「増えない」ことだけを検証する)
+    //   前提W1-13: 完了済みタスクタイル再タップの新Blockは「実績のみ」(裁定#18)。planned時刻の値と
+    //            新Block開始時のポモ連動は契約にしない([43c]は台帳の形だけを検証する)
+    // ============================================================
+
+    // W1用seed: seedB5と同じ流儀(pomodoro/zeroThinking/gardenLogを毎回リセットし持ち越しを防ぐ。
+    // 既存関数は変更禁止のため別名で追加。カテゴリマスタは初期seedStateの既定6件を維持する。
+    // extraTasks は既存tasks(「その他」受け皿等)を保ったまま同idだけ差し替えて追記する)
+    async function seedW1({ blocks = [], view = "timeswitch", settings = {}, selectedDate = TODAY, extraTasks = [] } = {}) {
+      await page.evaluate(({ KEY, blocks, view, settings, selectedDate, extraTasks }) => {
+        const s = JSON.parse(localStorage.getItem(KEY));
+        s.blocks = blocks;
+        s.currentView = view;
+        s.selectedDate = selectedDate;
+        s.sleep = s.sleep || { logs: {} };
+        s.sleep.logs = {};
+        s.condition = s.condition || { logs: {} };
+        s.condition.logs = {};
+        s.gardenLog = {};
+        s.zeroThinking = { themes: [], entries: [], groups: [], suggestedThemes: [] };
+        s.pomodoro = { ...s.pomodoro, running: false, blockId: "", startedAt: "", endsAt: "", mode: "focus" };
+        if (extraTasks.length) {
+          s.tasks = (s.tasks || []).filter((t) => !extraTasks.some((x) => x.id === t.id)).concat(extraTasks);
+        }
+        Object.assign(s.settings, settings);
+        localStorage.setItem(KEY, JSON.stringify(s));
+      }, { KEY, blocks, view, settings, selectedDate, extraTasks });
+      await page.reload();
+      await page.waitForSelector('[data-action="nav"]', { state: "attached" });
+    }
+
+    // タスクタイル用のTaskフィクスチャ(seedB3のtaskFxと同形。既存tasksへ追記して使う)
+    const w1TaskFx = (id) => ({
+      id, projectId: "", title: id, status: "todo", dueDate: "", deleted: false,
+      createdAt: at("00:00"), updatedAt: at("00:00")
+    });
+
+    // W1小物: running走査(§2.3不変条件「StartありEndなし・未削除は常に最大1」の判定はこの1関数に集約)
+    const w1Running = (s) => (s.blocks || []).filter((b) => !b.deleted && b.actualStartAt && !b.actualEndAt);
+    const w1TileSel = (cat) => `.timeswitch button.timeswitch-tile[data-category="${cat}"]`;
+    const w1TaskTileSel = (blockId) => `.timeswitch button.timeswitch-task[data-block-id="${blockId}"]`;
+    const w1EventTileSel = (externalId) => `.timeswitch button.timeswitch-event[data-external-id="${externalId}"]`;
+    async function w1Tap(cat) { await page.locator(w1TileSel(cat)).first().click(); }
+    async function w1GoView(view) {
+      await page.locator(`#sidebar .nav-button[data-action="nav"][data-view="${view}"]`).click();
+      await waitView(view);
+    }
+    async function w1BlocksJSON() {
+      return page.evaluate((KEY) => JSON.stringify(JSON.parse(localStorage.getItem(KEY)).blocks), KEY);
+    }
+    // #cc-overlay の可視判定(DOM常設display切替でも動的生成でも成立する読み方。
+    // オーバーレイはposition:fixed想定のためoffsetParentは使わない)
+    async function w1OverlayVisible() {
+      return page.evaluate(() => {
+        const el = document.getElementById("cc-overlay");
+        if (!el) return false;
+        const cs = getComputedStyle(el);
+        return cs.display !== "none" && cs.visibility !== "hidden";
+      });
+    }
+    async function w1WaitOverlayShown() {
+      await page.waitForFunction(() => {
+        const el = document.getElementById("cc-overlay");
+        if (!el) return false;
+        const cs = getComputedStyle(el);
+        return cs.display !== "none" && cs.visibility !== "hidden";
+      });
+    }
+    async function w1WaitOverlayHidden() {
+      await page.waitForFunction(() => {
+        const el = document.getElementById("cc-overlay");
+        if (!el) return true;
+        const cs = getComputedStyle(el);
+        return cs.display === "none" || cs.visibility === "hidden";
+      });
+    }
+
+    // 予定タイル用フィクスチャ+ルート(B2のkindle highlightsと同じContents API偽装。前提W1-11。
+    // schedule-inbox.json 以外は route.fallback() で既存モック/既定404ブロッカーへ委ねる)
+    const scheduleInboxFx = { status: 200 };
+    const W1_SCHEDULE_INBOX = {
+      generatedAt: `${TODAY}T07:00:00`,  // 当日朝生成=鮮度内(T区切り秒あり。FORMAT_CONTRACT整合)
+      events: [
+        { externalId: "tt-koji-1", title: "TT-こーじ-歯医者", date: TODAY, startAt: "16:00", endAt: "17:00", allDay: false, label: "こーじ", calendarName: "家族" },
+        { externalId: "tt-midori-1", title: "TT-翠-習い事", date: TODAY, startAt: "15:00", endAt: "16:00", allDay: false, label: "翠", calendarName: "家族" },
+        { externalId: "tt-koji-tomorrow", title: "TT-こーじ-明日の予定", date: TOMORROW, startAt: "10:00", endAt: "11:00", allDay: false, label: "こーじ", calendarName: "家族" }
+      ]
+    };
+    await page.route((url) => url.hostname === "api.github.com", (route) => {
+      const p = decodeURIComponent(new URL(route.request().url()).pathname);
+      if (p.endsWith("/contents/taskchute/schedule-inbox.json")) {
+        if (scheduleInboxFx.status !== 200) return route.fulfill({ status: scheduleInboxFx.status, body: "not found" });
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(W1_SCHEDULE_INBOX) });
+      }
+      return route.fallback();
+    });
+
+    // ============================================================
+    // [35] W1: 計時タブの遷移とDOM契約 — 無計時→カテゴリタイルタップで oneTap Block 生成・実行開始
+    //   (§2.3表1行目・裁定#4・裁定#15。今日ビュー側に .timeswitch 系を置かない一本化回帰ガード込み)
+    // ============================================================
+    console.log("[35] W1: サイドバー「計時」→ timeswitch ビュー。無計時→タイルタップで oneTap Block が生成・開始・保存される");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedW1({
+      view: "today",
+      blocks: [
+        // 残り見積の対照用: 未着手の通常Block 2件(見積合計105分)。[35c]で表示値の不変を突合する
+        block("w1-q1", { title: "W1-未着手A", plannedStartAt: at("13:00"), plannedEndAt: at("14:00"), estimateMin: 60 }),
+        block("w1-q2", { title: "W1-未着手B", plannedStartAt: at("14:00"), plannedEndAt: at("14:45"), estimateMin: 45 })
+      ]
+    });
+    await page.waitForSelector(".today-next-queue", { state: "attached" });
+    check("今日ビューに .timeswitch 系パネルが存在しない(裁定#15: 今日ビュー内パネルは作らない一本化)",
+      await page.evaluate(() => !document.querySelector(".timeswitch, .timeswitch-tile, .timeswitch-task, .timeswitch-event")));
+    const w1RemBefore = await page.locator("#todayRemainingEstimate").textContent();
+    check("サイドバーに計時タブのナビボタン(data-view='timeswitch')がある(裁定#15)",
+      await page.locator('#sidebar .nav-button[data-action="nav"][data-view="timeswitch"]').count() === 1);
+    check("ナビボタンのラベルが「計時」を含む(裁定#15)",
+      ((await page.locator('#sidebar .nav-button[data-view="timeswitch"]').textContent()) || "").includes("計時"));
+    check("bottom-nav に timeswitch ボタンが無い(裁定#15: bottom-nav 5枠は当面不変)",
+      await page.locator('#bottomNav button[data-view="timeswitch"]').count() === 0);
+    await w1GoView("timeswitch");
+    await page.waitForSelector(".timeswitch", { state: "attached" });
+    check("計時ビューにパネルroot .timeswitch が描画される(DOM契約)",
+      await page.locator(".timeswitch").count() === 1);
+    const w1MasterNames = await page.evaluate((KEY) =>
+      (JSON.parse(localStorage.getItem(KEY)).settings.categories || []).map((c) => c.name), KEY);
+    const w1TileInfo = await page.evaluate(() => {
+      const all = [...document.querySelectorAll(".timeswitch button.timeswitch-tile")];
+      return { total: all.length, cats: all.map((el) => el.dataset.category) };
+    });
+    check("カテゴリタイルは button.timeswitch-tile[data-category](DOM契約)",
+      w1TileInfo.total >= 1 && w1TileInfo.cats.every((c) => !!c), JSON.stringify(w1TileInfo));
+    check("カテゴリタイルがカテゴリマスタ全件と一致する(§2.4第1弾: 出典=既存カテゴリマスタ全件。前提W1-1)",
+      w1MasterNames.length >= 1 && w1TileInfo.total === w1MasterNames.length
+      && w1MasterNames.every((n) => w1TileInfo.cats.includes(n)),
+      JSON.stringify({ master: w1MasterNames, tiles: w1TileInfo.cats }));
+    check("無計時では .is-active タイルが1つも無い(アクティブ表示は常に最大1つ)",
+      await page.locator(".timeswitch .is-active").count() === 0);
+    await w1Tap("学習");
+    // タップ(イベント)時点で saveState されることを localStorage の変化で待つ(§2.4の保存側)
+    await page.waitForFunction((KEY) =>
+      JSON.parse(localStorage.getItem(KEY)).blocks.some((b) => b.oneTap === true), KEY);
+    check("タイルタップ(イベント)で即 saveState される(localStorageにoneTap Blockが現れる。§2.4)", true);
+    const st35 = await stateNow();
+    const ot35 = st35.blocks.find((b) => b.oneTap === true);
+    check("oneTap:true・title=カテゴリ名('学習')のBlockが生成される(裁定#4: 台帳はblocks一本)",
+      !!ot35 && ot35.title === "学習", JSON.stringify(ot35));
+    check("block.category にもカテゴリ名が入る(TIME LOG集計・配色のキー。§2.4)",
+      ot35?.category === "学習", ot35?.category);
+    check("date=今日・actualStartAt=12:00 で実行開始される",
+      ot35?.date === TODAY && (ot35?.actualStartAt || "").includes("T12:00"),
+      JSON.stringify({ date: ot35?.date, actualStartAt: ot35?.actualStartAt }));
+    check("plannedStartAt が actualStartAt と同値(§2.4: planned時刻は開始時点のactualと同値)",
+      !!ot35?.plannedStartAt && ot35.plannedStartAt === ot35.actualStartAt,
+      JSON.stringify({ planned: ot35?.plannedStartAt, actual: ot35?.actualStartAt }));
+    const w1OtherTask = st35.tasks.find((t) => t.kind === "other" && !t.deleted);
+    check("taskId が「その他」受け皿Taskに紐づく(taskId無しBlockは実行ビューに出ない罠の回避。§2.1)",
+      !!ot35?.taskId && !!w1OtherTask && ot35.taskId === w1OtherTask.id,
+      JSON.stringify({ taskId: ot35?.taskId, otherTaskId: w1OtherTask?.id }));
+    check("running(StartありEndなし)が全stateで1件のみ(§2.3不変条件)",
+      w1Running(st35).length === 1, JSON.stringify(w1Running(st35).map((b) => b.id)));
+    check("タップしたカテゴリタイルだけが .is-active になる",
+      await page.locator(".timeswitch .timeswitch-tile.is-active").count() === 1
+      && await page.locator(`${w1TileSel("学習")}.is-active`).count() === 1);
+    await page.waitForSelector(".timeswitch .timeswitch-elapsed", { state: "attached" });
+    check("計時中タイルに経過表示要素 .timeswitch-elapsed がある(DOM契約)", true);
+
+    // ============================================================
+    // [35b] W1: 経過表示が毎秒進み(既存ticker相乗り。[8]と同手法)、tickではstateが変わらない(D9)
+    // ============================================================
+    console.log("[35b] W1: 経過表示が固定時刻+65秒で進み、経過tickでは state(blocks)が変わらない(D9)");
+    const w1Elapsed0 = await page.locator(".timeswitch .timeswitch-elapsed").first().textContent();
+    const w1BlocksSnap0 = await w1BlocksJSON();
+    await page.clock.setFixedTime(fixedTime(12, 1, 5));
+    await page.waitForFunction((prev) => {
+      const el = document.querySelector(".timeswitch .timeswitch-elapsed");
+      return el && el.textContent !== prev;
+    }, w1Elapsed0);
+    check("固定時刻+65秒で経過表示が reload なしで更新される(§4単一tickerへの相乗り。前提W1-5)", true);
+    check("経過tickでは state(blocks)が一切変わらない(保存はイベント時のみ。§2.4・D9)",
+      (await w1BlocksJSON()) === w1BlocksSnap0);
+
+    // ============================================================
+    // [35c] W1: 計時中に今日ビューへ戻っても DAY GAUGE 残り見積が変わらない(oneTapフィルタ・§2.2)
+    // ============================================================
+    console.log("[35c] W1: 計時中に今日ビューへ戻っても残り見積(通常Block分105分)が変わらず、.timeswitch系パネルも出ない");
+    await w1GoView("today");
+    await page.waitForSelector(".today-day-gauge", { state: "attached" });
+    check("残り見積 #todayRemainingEstimate が計時開始前と同じ表示のまま(oneTap Blockが母集合に入らない。前提W1-6)",
+      (await page.locator("#todayRemainingEstimate").textContent()) === w1RemBefore,
+      `before=${w1RemBefore} after=${await page.locator("#todayRemainingEstimate").textContent()}`);
+    check("ワンタップ計時中でも今日ビューに .timeswitch 系パネルが出ない(一本化の回帰ガード)",
+      await page.evaluate(() => !document.querySelector(".timeswitch, .timeswitch-tile, .timeswitch-task, .timeswitch-event")));
+
+    // ============================================================
+    // [36] W1: 同一タイル再タップで actualEndAt が打たれ完了・無計時へ。実績が TIME LOG 集計に乗る
+    // ============================================================
+    console.log("[36] W1: 同一タイル再タップで完了・無計時へ戻り、実績47分が計器盤 TIME LOG に乗る(§2.1/§2.3表2行目)");
+    await page.clock.setFixedTime(fixedTime(12, 47, 0));
+    await w1GoView("timeswitch");
+    await page.waitForSelector(".timeswitch", { state: "attached" });
+    await w1Tap("学習");
+    await page.waitForFunction((KEY) =>
+      JSON.parse(localStorage.getItem(KEY)).blocks.some((b) => b.oneTap === true && !!b.actualEndAt), KEY);
+    const st36 = await stateNow();
+    const ot36 = st36.blocks.find((b) => b.oneTap === true);
+    check("再タップで actualEndAt=12:47 が打たれる", (ot36?.actualEndAt || "").includes("T12:47"), ot36?.actualEndAt);
+    check("完了になる(completed=true。前提W1-2)", ot36?.completed === true, JSON.stringify(ot36));
+    check("無計時へ戻る(runningが0件・.is-activeタイルが無い)",
+      w1Running(st36).length === 0 && await page.locator(".timeswitch .is-active").count() === 0);
+    // TIME LOG(計器盤・当日実績集計)にワンタップ実績が無改修で乗る(§2.1・裁定#4の本丸)
+    await w1GoView("stats");
+    await page.waitForSelector('.stats-time-log-row[data-category="学習"]', { state: "attached" });
+    const w1TimeLogRow = await timeLogRowText("学習");
+    check("ワンタップ実績47分(12:00→12:47)が TIME LOG のカテゴリ集計に乗る(blocks一本化で無改修集計)",
+      textHasMin(w1TimeLogRow, 47), w1TimeLogRow);
+
+    // ============================================================
+    // [37] W1: 別タイルへの切替 — Xが完了しYが開始。runningは常に最大1(§2.3表3行目・不変条件)
+    // ============================================================
+    console.log("[37] W1: 計時中(開発)→別タイル(回復)で切替。開発が完了し回復が開始、runningは常に1件");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedW1({ view: "timeswitch" });
+    await page.waitForSelector(".timeswitch", { state: "attached" });
+    await w1Tap("開発");
+    await page.waitForFunction((KEY) =>
+      JSON.parse(localStorage.getItem(KEY)).blocks.some((b) => b.oneTap === true && !b.actualEndAt), KEY);
+    const st37a = await stateNow();
+    check("切替前: running=1(開発のみ)",
+      w1Running(st37a).length === 1 && w1Running(st37a)[0].title === "開発",
+      JSON.stringify(w1Running(st37a).map((b) => b.title)));
+    await page.clock.setFixedTime(fixedTime(12, 10, 0));
+    await w1Tap("回復");
+    await page.waitForFunction((KEY) =>
+      JSON.parse(localStorage.getItem(KEY)).blocks.some((b) => b.oneTap === true && b.title === "回復" && !b.actualEndAt), KEY);
+    const st37 = await stateNow();
+    const w1Dev = st37.blocks.find((b) => b.oneTap === true && b.title === "開発");
+    const w1Rec = st37.blocks.find((b) => b.oneTap === true && b.title === "回復");
+    check("旧カテゴリ(開発)が actualEndAt=12:10 で完了する(前提W1-2)",
+      (w1Dev?.actualEndAt || "").includes("T12:10") && w1Dev?.completed === true, JSON.stringify(w1Dev));
+    check("新カテゴリ(回復)が actualStartAt=12:10 で開始される",
+      (w1Rec?.actualStartAt || "").includes("T12:10") && !w1Rec?.actualEndAt, JSON.stringify(w1Rec));
+    check("state走査: running(StartありEndなし・未削除)が最大1(§2.3不変条件「最後の操作が勝つ」)",
+      w1Running(st37).length === 1 && w1Running(st37)[0].id === w1Rec?.id,
+      JSON.stringify(w1Running(st37).map((b) => b.id)));
+    check(".is-active が回復タイルだけに付く(切替でアクティブ表示も移る)",
+      await page.locator(".timeswitch .timeswitch-tile.is-active").count() === 1
+      && await page.locator(`${w1TileSel("回復")}.is-active`).count() === 1);
+
+    // ============================================================
+    // [37b] W1: oneTap Block は NEXT QUEUE・DAY GAUGE残り見積の母集合に出ない(oneTapフィルタ・§2.2)
+    // ============================================================
+    console.log("[37b] W1: 未開始のoneTap Block(合成フィクスチャ)が NEXT QUEUE・残り見積に混入しない");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedW1({
+      view: "today",
+      blocks: [
+        block("w1-normal-q", { title: "W1-QUEUE-通常未着手", plannedStartAt: at("13:00"), plannedEndAt: at("13:45"), estimateMin: 45 }),
+        // 合成フィクスチャ: 未開始のoneTap Block。通常フローでは生じない形だが、
+        // 「started除外」ではなく「oneTapフィルタ」で除外されていることを直接判別する(前提W1-6)
+        block("w1-onetap-q", { title: "W1-ONETAP-未開始", oneTap: true, plannedStartAt: at("13:00"), plannedEndAt: at("13:30"), estimateMin: 30 })
+      ]
+    });
+    await page.waitForSelector(".today-next-queue", { state: "attached" });
+    const w1QueueText = await panelText(".today-next-queue");
+    check("通常の未着手Blockは NEXT QUEUE に出る(対照)",
+      (w1QueueText || "").includes("W1-QUEUE-通常未着手"), w1QueueText);
+    check("oneTap Block は NEXT QUEUE に出ない(oneTapフィルタ。§2.2)",
+      !(w1QueueText || "").includes("W1-ONETAP-未開始"), w1QueueText);
+    const w1RemFiltered = await page.locator("#todayRemainingEstimate").textContent();
+    check("残り見積=45分のみ(oneTapの30分が混入すると75分になる判別値。§2.2)",
+      textHasMin(w1RemFiltered, 45) && !textHasMin(w1RemFiltered, 75), w1RemFiltered);
+
+    // ============================================================
+    // [38] W1: 計時中のタスク開始(今日ビューnow-start)はワンタップBlockを無確認で自動完了する(裁定#2・§2.3表)
+    // ============================================================
+    console.log("[38] W1: 計時タブで計時開始→今日ビューの now-start でタスク開始 → oneTap Blockが確認なしで自動完了する");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedW1({
+      view: "timeswitch",
+      blocks: [
+        block("w1-task1", { title: "W1-TASK1", category: "回復", plannedStartAt: at("12:30"), plannedEndAt: at("13:00"), estimateMin: 30 })
+      ]
+    });
+    await page.waitForSelector(".timeswitch", { state: "attached" });
+    await w1Tap("学習");
+    await page.waitForFunction((KEY) =>
+      JSON.parse(localStorage.getItem(KEY)).blocks.some((b) => b.oneTap === true && !b.actualEndAt), KEY);
+    await w1GoView("today");
+    // NEXT QUEUE 先頭の「繰上げ開始」(既存 now-start 実名)→ 既存宣言モーダル(v87)を経由(前提W1-3)
+    await page.locator('.today-next-queue [data-action="now-start"][data-id="w1-task1"]').click();
+    await page.waitForSelector('[data-action="declare-skip"]', { state: "attached" });
+    check("宣言モーダル時点で確認オーバーレイ #cc-overlay は出ていない(タスク開始方向は無確認。裁定#2)",
+      !(await w1OverlayVisible()));
+    await page.locator('[data-action="declare-skip"]').click();
+    await page.waitForFunction((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      const t = s.blocks.find((b) => b.id === "w1-task1");
+      return !!t && !!t.actualStartAt;
+    }, KEY);
+    const st38 = await stateNow();
+    const ot38 = st38.blocks.find((b) => b.oneTap === true);
+    check("タスク開始でワンタップBlockが自動完了する(actualEndAt+completed。前提W1-2/W1-3)",
+      !!ot38?.actualEndAt && ot38?.completed === true, JSON.stringify(ot38));
+    check("running はタスク(w1-task1)1件のみ(§2.3不変条件・タスク優先)",
+      w1Running(st38).length === 1 && w1Running(st38)[0].id === "w1-task1",
+      JSON.stringify(w1Running(st38).map((b) => b.id)));
+    check("タスク開始後も #cc-overlay は出ていない(確認ゼロでの遷移)", !(await w1OverlayVisible()));
+
+    // ============================================================
+    // [38b] W1: タスク完了後は無計時になる(直前のワンタップカテゴリを自動再開しない。§2.3表)
+    // ============================================================
+    console.log("[38b] W1: タスク完了(complete系)後は無計時。直前のワンタップカテゴリ(学習)を自動再開しない");
+    await page.waitForSelector('.today-now-focus [data-action="complete-block-with-actual"]', { state: "attached" });
+    await page.locator('.today-now-focus [data-action="complete-block-with-actual"]').first().click();
+    await page.waitForSelector(".modal-card", { state: "attached" });
+    await page.locator('[data-action="modal-save"]').click();
+    await page.waitForFunction((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      const t = s.blocks.find((b) => b.id === "w1-task1");
+      return !!t && t.completed === true && !!t.actualEndAt;
+    }, KEY);
+    const st38b = await stateNow();
+    check("タスク完了後 running が0件(無計時へ)", w1Running(st38b).length === 0,
+      JSON.stringify(w1Running(st38b).map((b) => b.id)));
+    check("直前のワンタップカテゴリを自動再開しない(oneTap Blockが増えない。再開は明示タップのみ)",
+      st38b.blocks.filter((b) => b.oneTap === true).length === 1 && st38b.blocks.length === 2,
+      JSON.stringify(st38b.blocks.map((b) => b.id)));
+    await w1GoView("timeswitch");
+    await page.waitForSelector(".timeswitch", { state: "attached" });
+    check("完了後 計時タブに .is-active タイルが無い",
+      await page.locator(".timeswitch .is-active").count() === 0);
+    check("完了済みタスクのタイルは残る(data-block-id指名。1日複数回記録の入口=裁定#18前段・前提W1-8)",
+      await page.locator(w1TaskTileSel("w1-task1")).count() === 1);
+
+    // ============================================================
+    // [39] W1: タスク実行中のタイルタップは確認を1回挟む — キャンセルでは何も変わらない(裁定#3/#17)
+    // ============================================================
+    console.log("[39] W1: タスク実行中のカテゴリタイルタップで #cc-overlay が出る(即開始しない)。キャンセルで何も変わらない");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedW1({
+      view: "timeswitch",
+      blocks: [
+        block("w1-run", { title: "W1-RUN-実行中タスク", category: "回復", actualStartAt: at("11:00"), plannedStartAt: at("11:00"), plannedEndAt: at("12:30"), estimateMin: 90 })
+      ]
+    });
+    await page.waitForSelector(".timeswitch", { state: "attached" });
+    const w1BlocksBeforeCancel = await w1BlocksJSON();
+    await w1Tap("学習");
+    await w1WaitOverlayShown();
+    check("タイルタップで確認オーバーレイ #cc-overlay が表示される(即開始しない。裁定#3)", true);
+    check("OKボタン(data-action='timeswitch-confirm-ok')がある(DOM契約)",
+      await page.locator('#cc-overlay [data-action="timeswitch-confirm-ok"]').count() >= 1);
+    check("キャンセルボタン(data-action='timeswitch-confirm-cancel')がある(DOM契約)",
+      await page.locator('#cc-overlay [data-action="timeswitch-confirm-cancel"]').count() >= 1);
+    check("オーバーレイ表示中はまだ何も起きていない(oneTap未生成・タスク実行中のまま)",
+      (await w1BlocksJSON()) === w1BlocksBeforeCancel);
+    await page.locator('#cc-overlay [data-action="timeswitch-confirm-cancel"]').first().click();
+    await w1WaitOverlayHidden();
+    // イベント処理は同期(dispatch→saveAndRender)。反映猶予にマクロタスクを1周だけ回す([30c]と同手法)
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 0)));
+    check("キャンセルで何も変わらない(blocks不変。§2.3表)", (await w1BlocksJSON()) === w1BlocksBeforeCancel);
+    const st39 = await stateNow();
+    check("キャンセル後も running はタスク1件のみ",
+      w1Running(st39).length === 1 && w1Running(st39)[0].id === "w1-run",
+      JSON.stringify(w1Running(st39).map((b) => b.id)));
+
+    // ============================================================
+    // [39b] W1: 確認OKで実行中タスクに実績終了(未完了のまま・理由ピッカーなし)+ワンタップ開始(裁定#3)
+    // ============================================================
+    console.log("[39b] W1: OKで実行中タスクが未完了のまま中断(実績終了・理由ピッカーなし)され、ワンタップが開始する");
+    await w1Tap("学習");
+    await w1WaitOverlayShown();
+    await page.locator('#cc-overlay [data-action="timeswitch-confirm-ok"]').first().click();
+    await page.waitForFunction((KEY) =>
+      JSON.parse(localStorage.getItem(KEY)).blocks.some((b) => b.oneTap === true && !b.actualEndAt), KEY);
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 0)));
+    const st39b = await stateNow();
+    const w1RunAfterOk = st39b.blocks.find((b) => b.id === "w1-run");
+    check("OKで実行中タスクに実績終了(actualEndAt=現在時刻12:00)が打たれる(前提W1-4)",
+      (w1RunAfterOk?.actualEndAt || "").includes("T12:00"), w1RunAfterOk?.actualEndAt);
+    check("タスクは未完了のまま中断される(completed=false)",
+      w1RunAfterOk?.completed === false, JSON.stringify(w1RunAfterOk));
+    check("中断理由ピッカーは開かない(理由は後から既存編集で付与可。裁定#3)",
+      await page.locator('[data-action="interrupt-reason"]').count() === 0);
+    check("ワンタップBlock(学習)が開始され running は1件のみ(§2.3不変条件)",
+      w1Running(st39b).length === 1 && w1Running(st39b)[0].oneTap === true && w1Running(st39b)[0].title === "学習",
+      JSON.stringify(w1Running(st39b).map((b) => ({ id: b.id, oneTap: b.oneTap }))));
+    check("学習タイルが .is-active になる", await page.locator(`${w1TileSel("学習")}.is-active`).count() === 1);
+
+    // ============================================================
+    // [40] W1: タスク実行中の▶TASKカテゴリタイル(.is-task)再タップは何もしない(誤爆防止・§2.3表)
+    // ============================================================
+    console.log("[40] W1: 実行中タスクのカテゴリタイルが .is-task(▶TASK)表示になり、再タップしても何も起きない");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedW1({
+      view: "timeswitch",
+      blocks: [
+        block("w1-run2", { title: "W1-RUN2", category: "回復", actualStartAt: at("11:30"), plannedStartAt: at("11:30"), plannedEndAt: at("12:30"), estimateMin: 60 })
+      ]
+    });
+    await page.waitForSelector(".timeswitch", { state: "attached" });
+    check("実行中タスクのカテゴリ(回復)のカテゴリタイルが .is-task になる(DOM契約・前提W1-9)",
+      await page.locator(`${w1TileSel("回復")}.is-task`).count() === 1);
+    check("▶TASKラベルがタイルに出る(ワンタップ由来との視覚区別。§2.2)",
+      /TASK/.test((await page.locator(w1TileSel("回復")).first().textContent()) || ""),
+      await page.locator(w1TileSel("回復")).first().textContent());
+    check("実行中タスクのタスクタイル自体は .is-active になる(前提W1-9)",
+      await page.locator(`${w1TaskTileSel("w1-run2")}.is-active`).count() === 1);
+    const w1BlocksBefore40 = await w1BlocksJSON();
+    await page.locator(`${w1TileSel("回復")}.is-task`).first().click();
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 0)));
+    check("▶TASKタイルの再タップでは確認オーバーレイも出ない", !(await w1OverlayVisible()));
+    check("▶TASKタイルの再タップで state が一切変わらない(タスク終了はタスクタイル/NOW FOCUS側に限定)",
+      (await w1BlocksJSON()) === w1BlocksBefore40);
+    const st40 = await stateNow();
+    check("タスクは実行中のまま(running=1・w1-run2)",
+      w1Running(st40).length === 1 && w1Running(st40)[0].id === "w1-run2",
+      JSON.stringify(w1Running(st40).map((b) => b.id)));
+
+    // ============================================================
+    // [41] W1: 孤児処理 — 前日のoneTap runningは前日23:59のactualEndAtが補完される(§2.4)
+    // ============================================================
+    console.log("[41] W1: 前日のoneTap runningをseed→リロードで前日23:59の実績終了が補完され、通常runningは補完されない(対照)");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedW1({
+      view: "timeswitch",
+      blocks: [
+        block("w1-orphan", { title: "回復", category: "回復", date: YESTERDAY, oneTap: true, actualStartAt: atOn(YESTERDAY, "22:00"), plannedStartAt: atOn(YESTERDAY, "22:00") }),
+        // 対照: 通常タスクの前日runningは既存挙動のまま(補完されない。oneTap限定の決定論処理)
+        block("w1-orphan-normal", { title: "W1-通常running", category: "仕事", date: YESTERDAY, actualStartAt: atOn(YESTERDAY, "21:00"), plannedStartAt: atOn(YESTERDAY, "21:00"), plannedEndAt: atOn(YESTERDAY, "22:00") })
+      ]
+    });
+    await page.waitForSelector(".timeswitch", { state: "attached" });
+    // リロード時のnormalize結果はメモリ上にあるだけなので、保存契機(setView)を踏んで
+    // localStorageへ書き戻させてから突合する([21]と同手法。前提W1-7)
+    await w1GoView("tasks");
+    await page.waitForFunction((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      const b = s.blocks.find((x) => x.id === "w1-orphan");
+      return !!b && !!b.actualEndAt;
+    }, KEY);
+    const st41 = await stateNow();
+    const w1Orphan = st41.blocks.find((b) => b.id === "w1-orphan");
+    check("前日oneTap runningに前日23:59のactualEndAtが補完される(§2.4孤児処理)",
+      (w1Orphan?.actualEndAt || "").startsWith(`${YESTERDAY}T23:59`), w1Orphan?.actualEndAt);
+    check("通常タスクの前日runningは補完されない(oneTap限定。対照)",
+      !st41.blocks.find((b) => b.id === "w1-orphan-normal")?.actualEndAt,
+      JSON.stringify(st41.blocks.find((b) => b.id === "w1-orphan-normal")));
+    check("補完後の running は通常runningの1件だけ(oneTap孤児が解消されている)",
+      w1Running(st41).length === 1 && w1Running(st41)[0].id === "w1-orphan-normal",
+      JSON.stringify(w1Running(st41).map((b) => b.id)));
+
+    // ============================================================
+    // [42] W1: ビュー離脱で経過表示のtickerが停止する(おとり方式=[7]/[18]/[20]と同手法)
+    // ============================================================
+    console.log("[42] W1: 計時タブを離れると経過tickerが停止する(おとり.timeswitch-elapsedが書き換えられない)");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedW1({ view: "timeswitch" });
+    await page.waitForSelector(".timeswitch", { state: "attached" });
+    await w1Tap("開発");
+    await page.waitForFunction((KEY) =>
+      JSON.parse(localStorage.getItem(KEY)).blocks.some((b) => b.oneTap === true), KEY);
+    await page.waitForSelector(".timeswitch .timeswitch-elapsed", { state: "attached" });
+    await w1GoView("tasks");
+    check("ビュー離脱で .timeswitch がDOMから消える", await page.locator(".timeswitch").count() === 0);
+    // 離脱直後のtickが自分でclearIntervalする猶予として1周期分待つ
+    // (固定wait例外: ticker周期1秒そのものが仕様(§4)。既存[7]/[18]/[20]と同根拠)
+    await page.waitForTimeout(1300);
+    await page.evaluate(() => {
+      const decoy = document.createElement("section");
+      decoy.className = "timeswitch";
+      decoy.id = "timeswitchDecoyRoot";
+      decoy.innerHTML = '<button class="timeswitch-tile is-active"><span class="timeswitch-elapsed">DECOY-TIMESWITCH</span></button>';
+      document.getElementById("main").appendChild(decoy);
+    });
+    await page.clock.setFixedTime(fixedTime(12, 3, 0));
+    await page.waitForTimeout(2300);  // 固定wait例外([7]と同根拠): 負の検証はticker 2周期分の実時間経過が必要
+    check("離脱後は経過tickerが停止している(おとり経過表示が2周期経っても書き換えられない。前提W1-5)",
+      (await page.evaluate(() => document.querySelector("#timeswitchDecoyRoot .timeswitch-elapsed")?.textContent)) === "DECOY-TIMESWITCH");
+    await page.evaluate(() => document.getElementById("timeswitchDecoyRoot")?.remove());
+
+    // ============================================================
+    // [43] W1新規: タスクタイル タップ=宣言なし即開始+focusTimerAuto:ONでポモ自動開始(裁定#17/#19)
+    // ============================================================
+    console.log("[43] W1: タスクタイルのタップで宣言モーダルなしに即実行開始し、focusTimerAuto:ONならポモが自動開始する");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedW1({
+      view: "timeswitch",
+      settings: { focusTimerAuto: true },
+      extraTasks: [w1TaskFx("w1-task-tt")],
+      blocks: [
+        block("w1-tt1", { title: "W1-TT1", taskId: "w1-task-tt", category: "回復", plannedStartAt: at("13:00"), plannedEndAt: at("13:30"), estimateMin: 30 })
+      ]
+    });
+    await page.waitForSelector(".timeswitch", { state: "attached" });
+    await page.waitForSelector(w1TaskTileSel("w1-tt1"), { state: "attached" });
+    check("当日の未着手Blockがタスクタイル button.timeswitch-task[data-block-id] として出る(裁定#16・DOM契約)", true);
+    await page.locator(w1TaskTileSel("w1-tt1")).first().click();
+    await page.waitForFunction((KEY) => {
+      const b = JSON.parse(localStorage.getItem(KEY)).blocks.find((x) => x.id === "w1-tt1");
+      return !!b && !!b.actualStartAt;
+    }, KEY);
+    check("宣言モーダルを経由しない(モーダル・declare-skipが出ないまま開始済み。裁定#17の軽量開始)",
+      await page.locator(".modal-card").count() === 0
+      && await page.locator('[data-action="declare-skip"]').count() === 0);
+    check("確認オーバーレイも出ない(無計時→タスク開始は確認ゼロ)", !(await w1OverlayVisible()));
+    const st43 = await stateNow();
+    const tt43 = st43.blocks.find((b) => b.id === "w1-tt1");
+    check("actualStartAt=12:00 で実行開始される(実績開始のみ付与・完了はまだ)",
+      (tt43?.actualStartAt || "").includes("T12:00") && !tt43?.actualEndAt && tt43?.completed === false,
+      JSON.stringify(tt43));
+    check("running が w1-tt1 の1件のみ(§2.3不変条件)",
+      w1Running(st43).length === 1 && w1Running(st43)[0].id === "w1-tt1",
+      JSON.stringify(w1Running(st43).map((b) => b.id)));
+    check("タスクタイルが .is-active になる(前提W1-9)",
+      await page.locator(`${w1TaskTileSel("w1-tt1")}.is-active`).count() === 1);
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).pomodoro.running === true, KEY);
+    const pomo43 = (await stateNow()).pomodoro;
+    check("focusTimerAuto:ON でポモが自動開始し blockId が w1-tt1 に連結される(既存連動の維持。裁定#19)",
+      pomo43.running === true && pomo43.blockId === "w1-tt1", JSON.stringify(pomo43));
+
+    // ============================================================
+    // [43b] W1新規: 実行中タスクタイルの再タップ=完了(モーダルなし・無計時へ。裁定#18前段)
+    // ============================================================
+    console.log("[43b] W1: 実行中タスクタイルの再タップで完了(actualEndAt+completed)し、無計時へ戻る");
+    await page.clock.setFixedTime(fixedTime(12, 30, 0));
+    await page.locator(w1TaskTileSel("w1-tt1")).first().click();
+    await page.waitForFunction((KEY) => {
+      const b = JSON.parse(localStorage.getItem(KEY)).blocks.find((x) => x.id === "w1-tt1");
+      return !!b && b.completed === true && !!b.actualEndAt;
+    }, KEY);
+    const st43b = await stateNow();
+    const tt43b = st43b.blocks.find((b) => b.id === "w1-tt1");
+    check("再タップで actualEndAt=12:30+completed:true が直接打たれる(前提W1-10)",
+      (tt43b?.actualEndAt || "").includes("T12:30") && tt43b?.completed === true, JSON.stringify(tt43b));
+    check("実績登録モーダルは開かない(さくさく特化。前提W1-10)",
+      await page.locator(".modal-card").count() === 0);
+    check("無計時へ戻る(running 0件・.is-active 無し)",
+      w1Running(st43b).length === 0 && await page.locator(".timeswitch .is-active").count() === 0);
+    check("完了でBlock数は増えない(1件のまま)",
+      st43b.blocks.length === 1, JSON.stringify(st43b.blocks.map((b) => b.id)));
+
+    // ============================================================
+    // [43c] W1新規: 完了済みタスクタイルは残り、再タップで同taskId/title/categoryの新Blockが
+    //   生成され開始する(1日複数回記録。裁定#18)
+    // ============================================================
+    console.log("[43c] W1: 完了済みタスクタイルの再タップで新Block(同taskId・実績のみ)が生成され開始する(裁定#18)");
+    check("完了後もタスクタイルが残る(裁定#18)",
+      await page.locator(w1TaskTileSel("w1-tt1")).count() === 1);
+    await page.clock.setFixedTime(fixedTime(13, 0, 0));
+    await page.locator(w1TaskTileSel("w1-tt1")).first().click();
+    await page.waitForFunction((KEY) =>
+      JSON.parse(localStorage.getItem(KEY)).blocks.some((b) => b.id !== "w1-tt1" && b.actualStartAt && !b.actualEndAt), KEY);
+    const st43c = await stateNow();
+    const tt43cOrig = st43c.blocks.find((b) => b.id === "w1-tt1");
+    const tt43cNew = st43c.blocks.find((b) => b.id !== "w1-tt1");
+    check("blocks数が+1(2件)になる(新Block生成)",
+      st43c.blocks.length === 2, JSON.stringify(st43c.blocks.map((b) => b.id)));
+    check("元Blockは完了のまま変わらない(actualEndAt=12:30・completed維持。裁定#18)",
+      tt43cOrig?.completed === true && (tt43cOrig?.actualEndAt || "").includes("T12:30"), JSON.stringify(tt43cOrig));
+    check("新Blockが同taskId/title/categoryを引き継ぐ(裁定#18)",
+      tt43cNew?.taskId === "w1-task-tt" && tt43cNew?.title === "W1-TT1" && tt43cNew?.category === "回復",
+      JSON.stringify(tt43cNew));
+    check("新Blockが actualStartAt=13:00 で開始され running は新Blockの1件のみ",
+      (tt43cNew?.actualStartAt || "").includes("T13:00") && !tt43cNew?.actualEndAt
+      && w1Running(st43c).length === 1 && w1Running(st43c)[0].id === tt43cNew?.id,
+      JSON.stringify(w1Running(st43c).map((b) => b.id)));
+    check("新Blockは当日日付になる", tt43cNew?.date === TODAY, tt43cNew?.date);
+
+    // ============================================================
+    // [43d] W1新規: focusTimerAuto:OFF ではタスクタイル開始でポモが自動開始されない(裁定#19の対照)
+    // ============================================================
+    console.log("[43d] W1: focusTimerAuto:OFF ではタスクタイル開始でポモが始まらない(タスク自体は開始される)");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedW1({
+      view: "timeswitch",
+      settings: { focusTimerAuto: false },
+      extraTasks: [w1TaskFx("w1-task-off")],
+      blocks: [
+        block("w1-off1", { title: "W1-OFF1", taskId: "w1-task-off", category: "学習", plannedStartAt: at("13:00"), plannedEndAt: at("13:30"), estimateMin: 30 })
+      ]
+    });
+    await page.waitForSelector(w1TaskTileSel("w1-off1"), { state: "attached" });
+    await page.locator(w1TaskTileSel("w1-off1")).first().click();
+    await page.waitForFunction((KEY) => {
+      const b = JSON.parse(localStorage.getItem(KEY)).blocks.find((x) => x.id === "w1-off1");
+      return !!b && !!b.actualStartAt;
+    }, KEY);
+    // 開始の保存(イベント同期処理)後にマクロタスクを1周回してから負の判定([30c]と同手法)
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 0)));
+    const st43d = await stateNow();
+    check("focusTimerAuto:OFF ではポモが開始されない(裁定#19)",
+      st43d.pomodoro.running === false, JSON.stringify(st43d.pomodoro));
+    check("タスク自体は開始される(running=w1-off1)",
+      w1Running(st43d).length === 1 && w1Running(st43d)[0].id === "w1-off1",
+      JSON.stringify(w1Running(st43d).map((b) => b.id)));
+
+    // ============================================================
+    // [44] W1新規: カテゴリ計時は focusTimerAuto:ON でもポモ非連動(純粋計時。裁定#19の対照)
+    // ============================================================
+    console.log("[44] W1: カテゴリタイル開始は focusTimerAuto:ON でもポモが自動開始されない(純粋計時)");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedW1({ view: "timeswitch", settings: { focusTimerAuto: true } });
+    await page.waitForSelector(".timeswitch", { state: "attached" });
+    await w1Tap("学習");
+    await page.waitForFunction((KEY) =>
+      JSON.parse(localStorage.getItem(KEY)).blocks.some((b) => b.oneTap === true), KEY);
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 0)));
+    const st44 = await stateNow();
+    check("focusTimerAuto:ON でもカテゴリタイル開始ではポモが開始されない(裁定#19)",
+      st44.pomodoro.running === false, JSON.stringify(st44.pomodoro));
+    check("oneTap計時自体は開始されている(running=1・oneTap)",
+      w1Running(st44).length === 1 && w1Running(st44)[0].oneTap === true,
+      JSON.stringify(w1Running(st44).map((b) => ({ id: b.id, oneTap: b.oneTap }))));
+
+    // ============================================================
+    // [45] W1新規: 予定タイル — schedule-inbox.json の当日こーじ分のみタイル化。
+    //   タップでBlock化(externalRef/label自動・category空)+即開始・二重Block化なし(裁定#16/#17・§3.4)
+    // ============================================================
+    console.log("[45] W1: 予定タイルは当日こーじのみ。タップでBlock化+即開始し、同一externalIdの二重Block化は起きない");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedW1({ view: "timeswitch", settings: { focusTimerAuto: true } });
+    await page.waitForSelector(w1EventTileSel("tt-koji-1"), { state: "attached" });
+    check("当日のこーじ予定が button.timeswitch-event[data-external-id] としてタイル化される(DOM契約・前提W1-11)", true);
+    check("こーじ以外のラベル(翠)はタイル化されない(裁定#16)",
+      await page.locator(w1EventTileSel("tt-midori-1")).count() === 0);
+    check("当日以外(明日のこーじ予定)はタイル化されない(裁定#16: 当日予定タイル)",
+      await page.locator(w1EventTileSel("tt-koji-tomorrow")).count() === 0);
+    await page.locator(w1EventTileSel("tt-koji-1")).first().click();
+    await page.waitForFunction((KEY) =>
+      JSON.parse(localStorage.getItem(KEY)).blocks.some((b) => b.externalRef === "tt-koji-1"), KEY);
+    const st45 = await stateNow();
+    const ev45 = st45.blocks.find((b) => b.externalRef === "tt-koji-1");
+    check("タップでBlock化される(externalRef=externalId 自動。§3.4重複解決の鍵)",
+      !!ev45, JSON.stringify(st45.blocks.map((b) => b.id)));
+    check("label が自動セットされる(裁定#9/#17)", ev45?.label === "こーじ", ev45?.label);
+    check("category は空のまま(カテゴリ付与は後から編集タブ。裁定#17)", ev45?.category === "", ev45?.category);
+    check("title=予定タイトル・date=当日でBlock化される(前提W1-12)",
+      ev45?.title === "TT-こーじ-歯医者" && ev45?.date === TODAY,
+      JSON.stringify({ title: ev45?.title, date: ev45?.date }));
+    check("actualStartAt=12:00 で即実行開始され running は1件のみ(裁定#17)",
+      (ev45?.actualStartAt || "").includes("T12:00") && !ev45?.actualEndAt
+      && w1Running(st45).length === 1 && w1Running(st45)[0].id === ev45?.id,
+      JSON.stringify(w1Running(st45).map((b) => b.id)));
+    check("予定タイルが .is-active になる(前提W1-9)",
+      await page.locator(`${w1EventTileSel("tt-koji-1")}.is-active`).count() === 1);
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 0)));
+    check("予定タイル開始ではポモが自動開始されない(focusTimerAuto:ONでも非連動。裁定#19)",
+      (await stateNow()).pomodoro.running === false);
+    // 二重Block化なし: 同じタイルを再タップしても externalRef=tt-koji-1 のBlockは増えない
+    // (再タップの停止/無視の別は契約にしない。前提W1-12。予定計時はタスク実行中扱いではないので確認も出ない)
+    const w1EvBlocksBefore = st45.blocks.length;
+    await page.locator(w1EventTileSel("tt-koji-1")).first().click();
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 0)));
+    const st45b = await stateNow();
+    check("再タップで確認オーバーレイは出ない(予定計時はタスク実行中扱いではない)", !(await w1OverlayVisible()));
+    check("同一externalIdの二重Block化が起きない(externalRef=tt-koji-1 のBlockは1件のまま)",
+      st45b.blocks.filter((b) => b.externalRef === "tt-koji-1").length === 1,
+      JSON.stringify(st45b.blocks.map((b) => ({ id: b.id, externalRef: b.externalRef }))));
+    check("Block総数も増えない(再タップでの再生成なし。§3.4)",
+      st45b.blocks.length === w1EvBlocksBefore, `${w1EvBlocksBefore}→${st45b.blocks.length}`);
+
+    // ============================================================
+    // [45b] W1新規: schedule-inbox.json 404 でも計時タブは通常描画される(F8式フェイルソフト)
+    // ============================================================
+    console.log("[45b] W1: schedule-inbox 404 では予定タイル群だけが出ず、カテゴリタイル・タブ本体は無傷");
+    const failuresBefore45b = failures;  // この区間のpageerror検出用([13]と同じ方式)
+    scheduleInboxFx.status = 404;
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    const w1Resp404 = page.waitForResponse((r) => r.url().includes("schedule-inbox.json"));
+    await seedW1({ view: "timeswitch" });
+    await w1Resp404;
+    await page.waitForSelector(".timeswitch", { state: "attached" });
+    // 404応答後の描画反映猶予にマクロタスクを回してから不在を断定する([30c]と同手法)
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 0)));
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 0)));
+    check("404では予定タイルが1枚も出ない(ファイル不在で一切エラーなし。§3.4)",
+      await page.locator(".timeswitch button.timeswitch-event").count() === 0);
+    check("404でもカテゴリタイル群は通常描画される(フェイルソフト)",
+      await page.locator(".timeswitch button.timeswitch-tile").count() >= 1);
+    check("[45b]区間の描画で pageerror が発生しない", failures === failuresBefore45b);
+    scheduleInboxFx.status = 200;
   } finally {
     await browser.close();
     server.close();

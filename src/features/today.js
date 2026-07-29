@@ -111,7 +111,7 @@ function runningBlockOf(blocks) {
 
 function queueBlocksOf(blocks) {
   return (blocks || [])
-    .filter((b) => !b.completed && !b.actualStartAt && !isStaleBlock(b))
+    .filter((b) => !b.completed && !b.actualStartAt && !isStaleBlock(b) && !b.oneTap)
     .sort((a, b) => {
       const aMin = a.plannedStartAt ? minutesOf(a.plannedStartAt) : Number.POSITIVE_INFINITY;
       const bMin = b.plannedStartAt ? minutesOf(b.plannedStartAt) : Number.POSITIVE_INFINITY;
