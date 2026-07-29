@@ -81,18 +81,19 @@ function check(name, cond, extra = "") {
     console.log("[1] 「その他」12項目 → 目的別4群。ルーティンは除外され、タスクシュート上部リンクへ昇格");
     await seed({ view: "more" });
     const groupTitles = await page.locator(".more-group-title").allTextContents();
-    check("4群の見出しが揃っている(計画/思考/振り返り/ツール)",
-      JSON.stringify(groupTitles) === JSON.stringify(["計画", "思考", "振り返り", "ツール"]), JSON.stringify(groupTitles));
+    // v187 裁定15: 「実行」群(計時)を先頭に追加=5群
+    check("5群の見出しが揃っている(実行/計画/思考/振り返り/ツール)",
+      JSON.stringify(groupTitles) === JSON.stringify(["実行", "計画", "思考", "振り返り", "ツール"]), JSON.stringify(groupTitles));
     const moreNavButtons = await page.locator('.more-group [data-action="nav"]').evaluateAll(
       (els) => els.map((el) => el.dataset.view)
     );
-    // v182 D2: mobileNav先頭差替え/moreGroups計画群へhome追加
-    check("その他グリッドは13項目(home追加・ルーティン除外。v163でダッシュボードが振り返り群に追加)",
-      moreNavButtons.length === 13, JSON.stringify(moreNavButtons));
+    // v182 D2: mobileNav先頭差替え/moreGroups計画群へhome追加 / v187: 実行群にtimeswitch追加=14項目
+    check("その他グリッドは14項目(home+timeswitch追加・ルーティン除外)",
+      moreNavButtons.length === 14, JSON.stringify(moreNavButtons));
     check("ルーティンはその他グリッドに含まれない", !moreNavButtons.includes("routine"), JSON.stringify(moreNavButtons));
-    // v182 D2: mobileNav先頭差替え/moreGroups計画群へhome追加
-    check("計画群の直後に思考群が続く(グループ単位でまとまっている)",
-      moreNavButtons.slice(0, 5).join(",") === "home,wbs,wish,avoid,vision", JSON.stringify(moreNavButtons));
+    // v182 D2 + v187(先頭に実行群=timeswitch)
+    check("実行群→計画群の順にグループ単位でまとまっている",
+      moreNavButtons.slice(0, 6).join(",") === "timeswitch,home,wbs,wish,avoid,vision", JSON.stringify(moreNavButtons));
     // 頭文字1字アイコン(W/R/A等)ではなく絵文字になっていることを確認(codex-ui-review N4対応)
     const badgeTexts = await page.locator('.more-group [data-action="nav"] .badge').allTextContents();
     check("バッジが1文字のアルファベットではない(絵文字化)",
