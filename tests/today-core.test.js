@@ -563,6 +563,10 @@ function check(name, cond, extra = "") {
     check("startedAt が固定現在時刻 12:00:00 になる", (pomoState.startedAt || "").includes("12:00:00"), pomoState.startedAt);
     check("endsAt が実時間25分後 12:25:00 になる(実タイマー25分の既存仕様を変えていない)",
       (pomoState.endsAt || "").includes("12:25:00"), pomoState.endsAt);
+    // v183レビューH1: 実行中Blockからの開始で実績開始時刻を上書きしない(v13「既存値維持」契約)
+    const runBlockAfterStart = (await stateNow()).blocks.find((b) => b.id === "pomo-run");
+    check("実行中Blockの actualStartAt(11:00)が上書きされない(実績保持・レビューH1)",
+      (runBlockAfterStart.actualStartAt || "").includes("11:00"), runBlockAfterStart.actualStartAt);
 
     // ============================================================
     // [15b] P5: 今日ビューで開始したセッションがポモドーロ単体ビューでも見え、
@@ -616,6 +620,29 @@ function check(name, cond, extra = "") {
       await page.locator('.today-pomodoro [data-action="stop-pomodoro"]').count() >= 1);
     check("実行中表示では開始ボタンが出ない(開始/停止の状態が排他表示)",
       await page.locator('.today-pomodoro [data-action="start-pomodoro"]').count() === 0);
+
+    // ============================================================
+    // [15e] P5: focusTimerAuto=OFF でも今日ビューのポモ開始ボタンでセッションが始まる(レビューM2)
+    // ============================================================
+    console.log("[15e] P5: focusTimerAuto=OFF でも今日ビューの開始でポモが始まり、未着手Blockには着手時刻が付く");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB2({
+      view: "today",
+      blocks: [
+        block("pomo-idle", { title: "POMO-IDLE-未着手", plannedStartAt: at("12:30"), plannedEndAt: at("13:00") })
+      ],
+      settings: { focusTimerAuto: false }
+    });
+    await page.waitForSelector('.today-pomodoro [data-action="start-pomodoro"]', { state: "attached" });
+    await page.locator('.today-pomodoro [data-action="start-pomodoro"]').first().click();
+    await page.waitForFunction((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      return s.pomodoro.running === true && s.pomodoro.blockId === "pomo-idle";
+    }, KEY);
+    const idleAfter = await stateNow();
+    check("focusTimerAuto=OFF でも running=true(手動開始は設定に依存しない)", idleAfter.pomodoro.running === true);
+    check("未着手Blockには actualStartAt=12:00 が記録される",
+      ((idleAfter.blocks.find((b) => b.id === "pomo-idle") || {}).actualStartAt || "").includes("12:00"));
 
     // ============================================================
     // [16] P6: highlights.json あり → .today-kindle にカードデッキが出る
@@ -755,6 +782,31 @@ function check(name, cond, extra = "") {
     const dayCountText = await page.locator(".zt-day-count").textContent();
     check("0秒思考ビューの「今日 1 本」カウントに保存分が反映される(§7 P7: 0秒思考ビューに出る)",
       /今日\s*1\s*本/.test((dayCountText || "").replace(/\s+/g, " ")), dayCountText);
+
+    // ============================================================
+    // [17f] P7: 書きかけ本文が、他パネル操作による全再描画(render())でも消えない(レビューM3/M4)
+    //   毎秒tickの差分更新([17c])ではなく、実際に main.innerHTML を丸ごと差し替える
+    //   経路(ポモ開始の saveAndRender)を発火させて下書きバッファの実効性を検証する
+    // ============================================================
+    console.log("[17f] P7: 入力中に他パネル操作(ポモ開始=全再描画)が起きても下書きが消えない");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB2({
+      view: "today",
+      blocks: [
+        block("draft-pomo", { title: "DRAFT-POMO", plannedStartAt: at("12:30"), plannedEndAt: at("13:00") })
+      ],
+      zeroThinking: { themes: [{ id: "th-draft", text: "下書き保持テーマ", fav: false, groupId: null, createdAt: at("08:00") }], entries: [], groups: [], suggestedThemes: [] }
+    });
+    await page.waitForSelector('.today-zero [data-action="today-zero-write"]', { state: "attached" });
+    await page.locator('.today-zero [data-action="today-zero-write"]').first().click();
+    await page.waitForSelector("#todayZeroText", { state: "attached" });
+    await page.locator("#todayZeroText").fill("消えてはいけない下書き");
+    await page.locator('.today-pomodoro [data-action="start-pomodoro"]').first().click();
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).pomodoro.running === true, KEY);
+    await page.waitForSelector("#todayZeroText", { state: "attached" });
+    check("全再描画後も textarea に下書き本文が残っている(レビューM3の実効検証)",
+      (await page.locator("#todayZeroText").inputValue()) === "消えてはいけない下書き",
+      await page.locator("#todayZeroText").inputValue());
 
     // ============================================================
     // [18] P6: 45秒自動送り — 45秒経過で次カードへ送られ、ビュー離脱でtimerが停止する

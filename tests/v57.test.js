@@ -100,6 +100,10 @@ function check(name, cond, extra = "") {
     }, { KEY });
     await page.reload();
     await page.waitForTimeout(700);
+    // v182 D3: 新規stateの起動ビューがtodayになり、[data-date-picker]はhome側にある。
+    //          homeへ明示遷移してから日付移動する(検証意図は不変)。
+    await page.click('.nav-button[data-view="home"]');
+    await page.waitForTimeout(300);
     await page.evaluate(({ KEY, PAST }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       if (s.feedback) delete s.feedback[PAST];
