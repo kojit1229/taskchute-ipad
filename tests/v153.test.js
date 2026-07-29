@@ -260,6 +260,10 @@ function makeRoutineBlock(id, date, title, completed) {
   }, { KEY, YESTERDAY });
   await pageC.reload();
   await pageC.waitForTimeout(400);
+  // v182 D3: 新規stateの起動ビューがtodayになり、todayビューには日付ナビが無い。
+  //          date-prevを持つhomeへ明示遷移してから操作する(検証意図は不変)。
+  await pageC.click('.nav-button[data-view="home"]');
+  await pageC.waitForTimeout(200);
   // v85: reload直後はselectedDateが実時計の今日へ強制される。前日ボタンでセッション内移動する。
   await pageC.click('[data-action="date-prev"]');
   await pageC.waitForTimeout(200);
@@ -430,6 +434,9 @@ function makeRoutineBlock(id, date, title, completed) {
   }, { KEY, OLD_DATE, RECENT_OLD_DATE });
   await pageE.reload();
   await pageE.waitForTimeout(400);
+  // v182 D3: 起動ビューがtodayのため、toggle-taskがあるhomeへ明示遷移(検証意図は不変)
+  await pageE.click('.nav-button[data-view="home"]');
+  await pageE.waitForTimeout(200);
   // saveState()を1回発火させる(日付非依存のtoggle-task)
   await pageE.click(`[data-action="toggle-task"][data-id="${taskIdForToggleE}"]`);
   await pageE.waitForTimeout(300);
