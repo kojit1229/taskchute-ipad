@@ -983,6 +983,8 @@ let ztTimerInterval = null;    // 書く画面のカウントダウン
 let ztTimerLeft = 60;
 let ztEditId = null;           // v102: 回答済みentryの追記編集対象entry id / null=非編集
 let ztWriteStartedAt = null;   // v104: 書く画面を開いた時刻(Date.now())。durationSec計測の起点 / null=非計測中
+let statsTimeLogTickerId = null;  // v184: 計器盤TIME LOGの実行中実績を表示だけ毎秒更新
+let statsTimeLogRenderedDate = null;  // v184: TIME LOG描画時の日付。跨日検知で1回だけ全再描画
 
 // v70: Now画面(実行コンベア)— 画面内の一時状態(永続化しない。normalizeStateは不要)
 let nowMode = false;             // trueの間、renderMain()は通常ビューの代わりに全画面コンベアを描く
@@ -9516,12 +9518,165 @@ function renderInsights(since, today, blocksByDate) {
 //   dashboardTrendBarsHTML/renderDashboardはsrc/features/dashboard.jsへ移した
 //   (app.js冒頭のimportからrenderDashboard等を参照する)。
 
+function statsTimeLogData(date, nowMs = Date.now()) {
+  // v184レビューM1: カテゴリ集計・合計は当日全体(00:00〜24:00)。早朝の実績を黙って落とさない。
+  //                チャートだけは軸どおり06-24時にクランプする。
+  const catStartMs = localDateTimeToMs(`${date}T00:00:00`);
+  const chartStartMs = localDateTimeToMs(`${date}T06:00:00`);
+  const dayEndMs = localDateTimeToMs(`${addDays(date, 1)}T00:00:00`);
+  const categoryMap = new Map();
+  const hourly = Array.from({ length: 18 }, () => new Map());
+  state.blocks.filter((b) => !b.deleted && b.date === date && b.actualStartAt).forEach((b) => {
+    const rawStartMs = localDateTimeToMs(b.actualStartAt);
+    const rawEndMs = b.actualEndAt ? localDateTimeToMs(b.actualEndAt) : nowMs;
+    const startMs = Math.max(catStartMs, rawStartMs);
+    const endMs = Math.min(dayEndMs, rawEndMs);
+    if (!rawStartMs || endMs <= startMs) return;
+    const category = b.category || "未分類";
+    const seconds = (endMs - startMs) / 1000;
+    const current = categoryMap.get(category) || { category, seconds: 0, live: false };
+    current.seconds += seconds;
+    current.live ||= !b.actualEndAt;
+    categoryMap.set(category, current);
+    hourly.forEach((hourMap, index) => {
+      const hourStartMs = chartStartMs + index * 60 * 60 * 1000;
+      const overlapSec = Math.max(0, Math.min(endMs, hourStartMs + 60 * 60 * 1000) - Math.max(startMs, hourStartMs)) / 1000;
+      if (overlapSec > 0) hourMap.set(category, (hourMap.get(category) || 0) + overlapSec);
+    });
+  });
+  const categories = [...categoryMap.values()].sort((a, b) => a.category.localeCompare(b.category, "ja"));
+  return { categories, hourly, totalSeconds: categories.reduce((sum, item) => sum + item.seconds, 0) };
+}
+
+function statsHMS(seconds) {
+  const value = Math.max(0, Math.floor(seconds || 0));
+  return `${Math.floor(value / 3600)}:${pad2(Math.floor((value % 3600) / 60))}:${pad2(value % 60)}`;
+}
+
+function renderStatsTimeLogCard(today) {
+  statsTimeLogRenderedDate = today;
+  const data = statsTimeLogData(today);
+  const maxSeconds = Math.max(1, ...data.categories.map((item) => item.seconds));
+  const nowHour = new Date().getHours();
+  const chart = data.hourly.map((hourMap, index) => {
+    // v184レビュー: 同一時間帯に実績が重複した場合、合計が60分を超えた分は比例圧縮して
+    //              積み上げ高さ100%を超えない(チャート枠からのはみ出し防止)
+    const hourTotalSec = [...hourMap.values()].reduce((sum, s) => sum + s, 0);
+    const scale = hourTotalSec > 3600 ? 3600 / hourTotalSec : 1;
+    return `
+    <div class="stats-time-log-hour ${today === todayISO() && nowHour === index + 6 ? "is-now" : ""}" title="${index + 6}:00">
+      ${[...hourMap.entries()].map(([category, seconds]) => `<span class="stats-time-log-segment"
+        style="height:${Math.min(100, seconds * scale / 36).toFixed(2)}%;background:${getCategoryColor(category)}"
+        title="${escapeHTML(category)} ${statsHMS(seconds)}"></span>`).join("")}
+    </div>`;
+  }).join("");
+  const rows = data.categories.length ? data.categories.map((item, index) => `
+    <div class="stats-time-log-row ${item.live ? "is-live" : ""}" data-category="${escapeHTML(item.category)}" id="statsTimeLogRow-${index}">
+      <span class="stats-time-log-dot" style="background:${getCategoryColor(item.category)}"></span>
+      <span class="stats-time-log-name">${escapeHTML(item.category)}</span>
+      <span class="stats-time-log-bar"><span id="statsTimeLogBar-${index}" style="width:${Math.min(100, item.seconds / maxSeconds * 100).toFixed(2)}%;background:${getCategoryColor(item.category)}"></span></span>
+      <span class="stats-time-log-value" id="statsTimeLogValue-${index}">${statsHMS(item.seconds)}</span>
+    </div>`).join("") : `<div class="muted">今日の実績記録はまだありません。</div>`;
+  return `<div class="panel stack stats-wide stats-time-log">
+    <h2>TIME LOG <span class="muted">今日のカテゴリ計時</span></h2>
+    <div class="stats-time-log-chart">${chart}</div>
+    <div class="stats-time-log-axis"><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div>
+    <div class="stats-time-log-list">${rows}</div>
+    <div class="stats-time-log-total">記録済み合計 <strong id="statsTimeLogTotal">${statsHMS(data.totalSeconds)}</strong></div>
+    <div class="muted stats-axis">TIME LOG=当日(00:00〜24:00)・実績のみ・完了問わず(チャート表示は06-24時)。既存「カテゴリ別 時間配分」=完了のみ・実績なしは予定時間で代替・選択レンジ(複数週)。</div>
+  </div>`;
+}
+
+function updateStatsTimeLogTick() {
+  if (state.currentView !== "stats") {
+    clearInterval(statsTimeLogTickerId);
+    statsTimeLogTickerId = null;
+    return;
+  }
+  if (document.hidden) return;
+  const total = document.getElementById("statsTimeLogTotal");
+  if (!total) return;
+  // v184レビュー: 跨日で開きっぱなしのとき、行・チャートが前日のまま数値だけ新日になる混在を防ぐ。
+  //              日付が変わったら1回だけ全再描画する(today.jsの日跨ぎ検知と同パターン)
+  if (statsTimeLogRenderedDate && todayISO() !== statsTimeLogRenderedDate) {
+    render();
+    return;
+  }
+  const data = statsTimeLogData(todayISO());
+  const maxSeconds = Math.max(1, ...data.categories.map((item) => item.seconds));
+  data.categories.forEach((item, index) => {
+    const row = document.getElementById(`statsTimeLogRow-${index}`);
+    const value = document.getElementById(`statsTimeLogValue-${index}`);
+    const bar = document.getElementById(`statsTimeLogBar-${index}`);
+    if (!row || row.dataset.category !== item.category) return;
+    if (value) value.textContent = statsHMS(item.seconds);
+    if (bar) bar.style.width = `${Math.min(100, item.seconds / maxSeconds * 100).toFixed(2)}%`;
+  });
+  total.textContent = statsHMS(data.totalSeconds);
+}
+
+function startStatsTimeLogTicker() {
+  if (statsTimeLogTickerId !== null) return;
+  statsTimeLogTickerId = setInterval(updateStatsTimeLogTick, 1000);
+}
+
+function projectActualMinutes(projectId, blocks) {
+  const taskIds = new Set(state.tasks.filter((t) => !t.deleted && t.projectId === projectId).map((t) => t.id));
+  // v184レビュー: _actualDurationMinは分(minute-of-day)の引き算のため日跨ぎ実績(23:30→翌00:30)が
+  //              0扱いになり秒も落ちる。ここはフルタイムスタンプのms差で算出する(完了実績のみ)
+  return blocks.reduce((sum, block) => {
+    if (!taskIds.has(block.taskId) || !block.actualStartAt || !block.actualEndAt) return sum;
+    const startMs = localDateTimeToMs(block.actualStartAt);
+    const endMs = localDateTimeToMs(block.actualEndAt);
+    if (!startMs || !endMs || endMs <= startMs) return sum;
+    return sum + (endMs - startMs) / 60000;
+  }, 0);
+}
+
+function renderStatsTwelveWeekCard(today) {
+  const start = state.settings.twelveWeekStartDate || today;
+  const week = clamp(Math.floor(daysBetween(start, today) / 7) + 1, 1, 12);
+  const remainingDays = Math.max(0, daysBetween(today, addDays(start, 84)));
+  const { weekStart, weekEnd } = weekRange(today);
+  const weekBlocks = blocksForWeek(weekStart);
+  const cycleEnd = addDays(start, 83);
+  const cycleThrough = today < cycleEnd ? today : cycleEnd;
+  const cycleBlocks = state.blocks.filter((b) => !b.deleted && b.date >= start && b.date <= cycleThrough);
+  const goals = state.projects.filter((p) =>
+    !p.deleted && p.kind === "normal" && p.status === "active" && p.twelveWeekStartDate);
+  const pacePct = week / 12 * 100;
+  const rows = goals.length ? goals.map((project) => {
+    const target = Math.max(0, Number(project.weeklyTargetMin) || 0);
+    const weekMin = projectActualMinutes(project.id, weekBlocks);
+    const cycleMin = projectActualMinutes(project.id, cycleBlocks);
+    const cyclePct = target > 0 ? cycleMin / (target * 12) * 100 : 0;
+    const paceDiff = cyclePct - pacePct;
+    return `<div class="stats-twelve-week-row" data-project-id="${escapeHTML(project.id)}">
+      <div class="stats-twelve-week-title"><strong>${escapeHTML(project.title)}</strong>
+        <span>${fmtMinShort(Math.round(weekMin)) || "0m"}${target > 0 ? ` / ${fmtMinShort(target)}` : ""}</span></div>
+      ${target > 0 ? `<div class="stats-twelve-week-bar"><span style="width:${Math.min(100, weekMin / target * 100).toFixed(2)}%"></span></div>
+        <div class="stats-twelve-week-meta"><span>12週累計 ${Math.round(cyclePct)}%</span>
+          <span class="${paceDiff >= 0 ? "is-ahead" : "is-behind"}">ペース基準 ${paceDiff >= 0 ? "+" : ""}${Math.round(paceDiff)}%</span></div>`
+        : `<button class="btn ghost stats-twelve-week-target" data-action="edit-project" data-id="${escapeHTML(project.id)}">目標時間を設定</button>`}
+    </div>`;
+  }).join("") : `<div class="muted">WBSでProjectを「12WY期間に登録する」と、ここに表示されます。</div>`;
+  return `<div class="panel stack stats-wide stats-twelve-week">
+    <h2>12WY TRACKER <span class="muted">12週目標への投資時間</span></h2>
+    <div class="stats-twelve-week-head"><strong>WEEK ${week}<small> / 12</small></strong><span>残り ${remainingDays}日</span></div>
+    <div class="muted stats-axis">今週 ${weekStart}〜${weekEnd} ・ ペース基準=${week}/12経過(${Math.round(pacePct)}%)</div>
+    <div class="stats-twelve-week-list">${rows}</div>
+  </div>`;
+}
+
 function renderStats() {
   const range = state.settings.statsRange || "4w";
   const weeks = statsRangeWeeks();
   const thisWeek = weekStartFor(todayISO());
   const today = todayISO();
   const since = addDays(thisWeek, -7 * (weeks - 1));
+  const timeLogCard = renderStatsTimeLogCard(today);
+  const twelveWeekCard = renderStatsTwelveWeekCard(today);
+  startStatsTimeLogTicker();
   // v143: 見積カードの集計をcomputeEstimateStats()へ切り出したため、ここでのローカルmedian()は
   // 不要になった(グローバルなmedian()を各所が使う)。
 
@@ -9812,7 +9967,8 @@ function renderStats() {
   const insightsCard = renderInsights(since, today, blocksByDate);  // v143: 「今週のヒント」(計器盤の最上部・別関数に切り出し済み)
   // v148(UI改善計画Phase3-3): 計器盤を「常時表示(要約)→詳細(details、既定閉)」の2層にする。
   // 節の配置ルール(固定・新しい節を足すときもこの順を守る):
-  //   常時表示 = ヒント(insightsCard)→ 主要指標(rateChart=着手率週次)→ 睡眠1行要約
+  //   常時表示 = TIME LOG(v184)→ 12WY TRACKER(v184)→ ヒント(insightsCard)→
+  //                主要指標(rateChart=着手率週次)→ 睡眠1行要約
   //   詳細     = エネルギー収支(energyChart)→ カテゴリ配分(donutCard)→
   //              カテゴリ収支(catEnergyCard)→ 週次推移(trendCard)→ 時間帯×曜日(heatmap)→
   //              時間帯別(histCard)→ 見積(estimateCard)→ 記録の継続(calendarCard)→
@@ -9820,7 +9976,7 @@ function renderStats() {
   // 既存チャートは1つも削除せず、詳細detailsへ格納するだけ(claude-ux-review S2/S3対応)。
   const sleepSummaryCard = renderSleepSummaryLine(sleepSince, today);
   const energyCurveCard = renderEnergyCurveCard();  // v161: バッチ生成物が無ければ空文字(節ごと非表示)
-  const summaryBody = insightsCard + rateChart + sleepSummaryCard;
+  const summaryBody = timeLogCard + twelveWeekCard + insightsCard + rateChart + sleepSummaryCard;
   const detailBody = energyChart + donutCard + catEnergyCard + trendCard + heatmap + histCard + estimateCard + calendarCard + sleepStatsCard + energyCurveCard;
   return `
     ${renderHeader("数字で見る実行の実態", "計器盤")}
@@ -15106,6 +15262,11 @@ function buildProjectModal(project) {
           </label>
         </div>
         <div class="field">
+          <label class="field-label">12WY 週間目標時間(分)</label>
+          <input class="input project-weekly-target" type="number" min="0" step="5" inputmode="numeric"
+            data-modal-field="weeklyTargetMin" value="${Math.max(0, Number(project.weeklyTargetMin) || 0)}">
+        </div>
+        <div class="field">
           <label class="checkbox-line">
             <input type="checkbox" data-modal-field="showProgress" ${project.showProgress ? "checked" : ""}>
             進捗率を表示(配下Taskの分子/分母を合計してバー表示)
@@ -15142,6 +15303,7 @@ function saveProjectFromModal(id, fields) {
       dueDate: fields.dueDate || "",
       description: fields.description || "",
       twelveWeekStartDate,
+      weeklyTargetMin: Math.max(0, Number(fields.weeklyTargetMin) || 0),
       showProgress: Boolean(fields.showProgress),  // v95: WBS進捗率(Σ分子/Σ分母)の表示トグル
       updatedAt: nowDateTime()
     };

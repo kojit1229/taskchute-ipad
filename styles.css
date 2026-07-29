@@ -3378,6 +3378,82 @@ h3 {
 .stats-est th { text-align: left; color: var(--muted); font-size: 11px; padding: 4px 8px; border-bottom: 1px solid var(--line); }
 .stats-est td { padding: 5px 8px; border-bottom: 1px solid var(--line-soft, var(--line)); }
 
+/* v184: 計器盤 TIME LOG / 12WY TRACKER */
+.stats-time-log-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 76px;
+  padding: 6px 5px 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+.stats-time-log-hour {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column-reverse;
+  gap: 1px;
+  height: 100%;
+  min-width: 2px;
+}
+.stats-time-log-hour.is-now::after {
+  content: "";
+  position: absolute;
+  inset: -3px -2px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  pointer-events: none;
+}
+.stats-time-log-segment { display: block; flex: none; width: 100%; min-height: 1px; border-radius: 2px; }
+.stats-time-log-axis { display: flex; justify-content: space-between; padding: 4px 2px 0; color: var(--muted); font-size: 10px; }
+.stats-time-log-list, .stats-twelve-week-list { display: grid; gap: 7px; margin-top: 10px; }
+.stats-time-log-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+.stats-time-log-row.is-live { border-color: var(--accent); }
+.stats-time-log-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; }
+.stats-time-log-name { width: 110px; flex: none; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.stats-time-log-row.is-live .stats-time-log-name::after {
+  content: " ●";
+  color: var(--accent-text);
+  animation: today-blink 1.4s infinite;
+}
+.stats-time-log-bar, .stats-twelve-week-bar {
+  height: 7px;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--line-soft);
+}
+.stats-time-log-bar > span, .stats-twelve-week-bar > span { display: block; height: 100%; border-radius: 3px; transition: width 1s linear; }
+.stats-time-log-value { width: 74px; flex: none; text-align: right; font-variant-numeric: tabular-nums; }
+.stats-time-log-row.is-live .stats-time-log-value { color: var(--accent-text); }
+.stats-time-log-total { display: flex; align-items: baseline; gap: 10px; padding-top: 9px; border-top: 1px dashed var(--line); font-size: 12px; color: var(--muted); }
+.stats-time-log-total strong { color: var(--text); font-size: 18px; font-variant-numeric: tabular-nums; }
+
+.stats-twelve-week-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.stats-twelve-week-head strong { color: var(--orange-text); font-size: 25px; letter-spacing: .04em; }
+.stats-twelve-week-head small { color: var(--muted); font-size: 11px; }
+.stats-twelve-week-head > span { color: var(--muted); font-size: 12px; }
+.stats-twelve-week-row { display: grid; gap: 7px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-soft); }
+.stats-twelve-week-title, .stats-twelve-week-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.stats-twelve-week-title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stats-twelve-week-title span { flex: none; font-variant-numeric: tabular-nums; }
+.stats-twelve-week-bar > span { background: linear-gradient(90deg, var(--accent), var(--green)); }
+.stats-twelve-week-meta { color: var(--muted); font-size: 11px; }
+.stats-twelve-week-meta .is-ahead { color: var(--green-text); }
+.stats-twelve-week-meta .is-behind { color: var(--red); }
+.stats-twelve-week-target { justify-self: start; }
+.project-weekly-target { font-size: 16px; }
+
 /* v53: 横断検索のアーカイブヒット(閲覧のみ) */
 .search-hit.is-archive { opacity: .78; cursor: default; }
 .search-hit.is-archive:hover { border-color: var(--line); }

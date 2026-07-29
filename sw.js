@@ -1,4 +1,6 @@
-const CACHE_NAME = "taskchute-journal-pwa-v183";
+const CACHE_NAME = "taskchute-journal-pwa-v184";
+// v184: 計器盤の常時表示層先頭にTIME LOG(当日実績・実行中は表示のみ毎秒加算)と
+//   12WY TRACKER(project.weeklyTargetMin migration・週間目標バー)を追加した。
 // v175: app.js分割の段階4-6(タイムライン抽出・段階B: 描画系)。src/features/timeline.js
 //   (renderTimelineRail/renderTimelineView/setTimelineMode/renderTimeline/renderTimelineCard/
 //   renderEnergyGraph、configureTimeline(deps)注入)をAPP_SHELLへ追加した。挙動は抽出前と
