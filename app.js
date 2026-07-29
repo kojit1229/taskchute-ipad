@@ -15745,10 +15745,18 @@ function saveBlockFromModal(id, fields) {
     source: existing?.source || "",
     // v41: 見積時間(分)。空欄は null(解決順で補完)
     estimateMin: (fields.estimateMin != null && fields.estimateMin !== "") ? Number(fields.estimateMin) : (existing?.estimateMin ?? null),
+    // v187: 計時タブ由来のマーカーは編集モーダルで落とさない(落ちるとQUEUE/着地の除外や
+    //       TT取込済み判定が壊れる)
+    oneTap: existing?.oneTap || false,
+    externalRef: existing?.externalRef || "",
+    label: existing?.label || "",
     createdAt: existing?.createdAt || nowDateTime(),
     updatedAt: nowDateTime(),
     deleted: false
   };
+  // v187レビュー: モーダル保存で実行中(actualStartAtあり・EndAtなし)になる場合は、
+  // 計時タブ由来の実行中Blockを先に終了して running最大1 の不変条件を保つ
+  if (updated.actualStartAt && !updated.actualEndAt) prepareTimeswitchForTaskStart(updated.id);
   // v29: 予定の開始・終了日時は必須。空のままでは登録/保存させない。
   if (!updated.plannedStartAt || !updated.plannedEndAt) {
     showToast("予定の開始・終了日時を入力してください");

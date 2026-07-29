@@ -123,7 +123,8 @@ const GARDEN_STAGE_YOUNG_PCT = 50;  // これ未満=芽(薄緑)、これ以上=�
 
 // v33: ルーティン実行率
 function routineRate(blocks) {
-  const list = blocks.filter((b) => b.category === "ルーティン");
+  // 率計器は計画Blockの消化を測るため、実績記録専用のoneTap Blockは除外する。
+  const list = blocks.filter((b) => b.category === "ルーティン" && !b.oneTap);
   const done = list.filter((b) => b.completed).length;
   return { done, total: list.length, pct: list.length ? Math.round((done / list.length) * 100) : 0 };
 }

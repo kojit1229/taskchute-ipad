@@ -5172,6 +5172,15 @@ h3 {
   text-align: center;
 }
 
+.timeswitch-stale {
+  margin: 0 0 var(--space-3);
+  padding: 8px 10px;
+  border-left: 3px solid var(--orange);
+  background: var(--orange-soft);
+  color: var(--orange-text);
+  font-size: 12px;
+}
+
 #cc-overlay {
   position: fixed;
   inset: 0;

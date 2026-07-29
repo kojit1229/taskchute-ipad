@@ -9,6 +9,7 @@ const SCHEDULE_FRESH_MS = 26 * 60 * 60 * 1000;
 const SCHEDULE_FUTURE_TOLERANCE_MS = 10 * 60 * 1000;
 const SCHEDULE_TIME_RE = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const SCHEDULE_GENERATED_AT_RE = /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/;
+const TIMELINE_LABEL = "こーじ";
 
 let escapeHTML, todayISO, nowDateTime, dateToLocalDateTime, localDateTimeToMs;
 let blocksForDate, getCategoryColor, getOtherTask, makeBlock;
@@ -29,7 +30,7 @@ function configureTimeswitch(deps) {
 
   registerActions({
     "timeswitch-category": ({ target }) => handleCategoryTap(target.dataset.category || ""),
-    "timeswitch-task": ({ id }) => handleTaskTap(id),
+    "timeswitch-task": ({ target }) => handleTaskTap(target.dataset.blockId || ""),
     "timeswitch-event": ({ target }) => handleEventTap(target.dataset.externalId || ""),
     "timeswitch-confirm-ok": () => confirmPendingSwitch(),
     "timeswitch-confirm-cancel": () => cancelPendingSwitch()
@@ -38,8 +39,9 @@ function configureTimeswitch(deps) {
 }
 
 function runningBlocks() {
+  const today = todayISO();
   return state.blocks.filter((block) =>
-    !block.deleted && block.actualStartAt && !block.actualEndAt);
+    !block.deleted && block.date === today && block.actualStartAt && !block.actualEndAt);
 }
 
 function runningBlock() {
@@ -53,9 +55,11 @@ function isTimeswitchRunning(block) {
 
 function finishBlock(block, { completed = true, at = nowDateTime() } = {}) {
   if (!block || block.actualEndAt) return;
-  block.actualEndAt = at;
+  // 過去日のBlockへ当日の終了時刻を書かない。呼び出し側の日付限定に加えた二重防御。
+  const finishedAt = block.date < todayISO() ? `${block.date}T23:59:00` : at;
+  block.actualEndAt = finishedAt;
   block.completed = completed;
-  block.updatedAt = at;
+  block.updatedAt = finishedAt;
 }
 
 function finishAllRunning({ taskCompleted = false, exceptId = "" } = {}) {
@@ -74,7 +78,8 @@ function closeOrphanedOneTap() {
   const today = todayISO();
   let changed = false;
   state.blocks.forEach((block) => {
-    if (!block.deleted && block.oneTap && block.actualStartAt && !block.actualEndAt
+    // 計時タブ由来の範囲をoneTapだけでなく予定タイル(externalRef)にも広げて補完する。
+    if (!block.deleted && isTimeswitchRunning(block) && block.actualStartAt && !block.actualEndAt
         && /^\d{4}-\d{2}-\d{2}$/.test(block.date || "") && block.date < today) {
       finishBlock(block, { completed: true, at: `${block.date}T23:59:00` });
       changed = true;
@@ -148,7 +153,7 @@ function startCategory(category) {
 
 function scheduleEventById(externalId) {
   return (scheduleCache.data?.events || []).find((event) =>
-    event.externalId === externalId && event.date === todayISO() && event.label === "こーじ") || null;
+    event.externalId === externalId && event.date === todayISO() && event.label === TIMELINE_LABEL) || null;
 }
 
 function importedEventBlock(externalId) {
@@ -300,7 +305,7 @@ function parseScheduleInbox(raw) {
         || !Array.isArray(parsed.events)) return undefined;
     const generatedAtMs = localDateTimeToMs(parsed.generatedAt);
     const ageMs = Date.now() - generatedAtMs;
-    if (!generatedAtMs || ageMs > SCHEDULE_FRESH_MS || ageMs < -SCHEDULE_FUTURE_TOLERANCE_MS) {
+    if (!generatedAtMs || ageMs < -SCHEDULE_FUTURE_TOLERANCE_MS) {
       return undefined;
     }
     const seen = new Set();
@@ -332,10 +337,22 @@ async function hydrateTimeswitchSchedule() {
   if (!personalDataReady(state.settings.github)) return false;
   if (Date.now() - scheduleCache.fetchedAt < SCHEDULE_TTL_MS) return false;
   const previous = scheduleCache.data;
-  const raw = await fetchGitHubRawText("schedule-inbox.json");
+  let raw;
+  try {
+    raw = await fetchGitHubRawText("schedule-inbox.json");
+  } catch {
+    return false;
+  }
   const data = parseScheduleInbox(raw);
+  // 取得失敗・壊れたJSONでは正常キャッシュもfetchedAtも進めず、次回すぐ再試行可能にする。
+  if (!data) return false;
   scheduleCache = { fetchedAt: Date.now(), data };
   return JSON.stringify(previous) !== JSON.stringify(data);
+}
+
+function isScheduleStale() {
+  const generatedAtMs = localDateTimeToMs(scheduleCache.data?.generatedAt || "");
+  return Boolean(generatedAtMs && Date.now() - generatedAtMs > SCHEDULE_FRESH_MS);
 }
 
 function safeColor(color) {
@@ -373,7 +390,12 @@ function renderCategoryTiles(active) {
 }
 
 function renderTaskTiles(active) {
-  const blocks = blocksForDate(todayISO()).filter((block) => !block.oneTap && !block.externalRef);
+  const blocks = blocksForDate(todayISO()).filter((block) => {
+    if (block.oneTap || block.externalRef) return false;
+    if (block.category === "ルーティン" || block.completed || !block.taskId) return true;
+    const task = state.tasks.find((candidate) => candidate.id === block.taskId);
+    return !task || (!task.deleted && task.status !== "suspended" && task.status !== "cancelled");
+  });
   if (!blocks.length) return `<p class="timeswitch-empty">今日のタスクはありません。</p>`;
   return blocks.map((block) => {
     const isActive = active?.id === block.id;
@@ -381,7 +403,7 @@ function renderTaskTiles(active) {
     return `
       <button class="timeswitch-task${isActive ? " is-active" : ""}${isDone ? " is-done" : ""}"
         style="--timeswitch-color:${safeColor(getCategoryColor(block.category))}"
-        data-action="timeswitch-task" data-id="${escapeHTML(block.id)}" data-block-id="${escapeHTML(block.id)}">
+        data-action="timeswitch-task" data-block-id="${escapeHTML(block.id)}">
         <span class="timeswitch-tile-name">${escapeHTML(block.title || "名称なし")}</span>
         <span class="timeswitch-tile-meta">${escapeHTML(block.category || "カテゴリなし")}</span>
         ${isActive ? elapsedHTML(block, "task") : `<span class="timeswitch-tile-hint">${isDone ? "もう一度記録" : "タップで開始"}</span>`}
@@ -391,7 +413,7 @@ function renderTaskTiles(active) {
 
 function renderEventTiles(active) {
   const events = (scheduleCache.data?.events || []).filter((event) =>
-    event.date === todayISO() && event.label === "こーじ");
+    event.date === todayISO() && event.label === TIMELINE_LABEL);
   if (!events.length) return `<p class="timeswitch-empty">今日の予定はありません。</p>`;
   return events.map((event) => {
     const imported = importedEventBlock(event.externalId);
@@ -447,7 +469,7 @@ function updateTimeswitchTick() {
 }
 
 function startTimeswitchTicker() {
-  stopTimeswitchTicker();
+  if (timeswitchTickerId !== null) return;
   timeswitchRenderedDate = todayISO();
   timeswitchTickerId = window.setInterval(updateTimeswitchTick, 1000);
 }
@@ -455,10 +477,12 @@ function startTimeswitchTicker() {
 function stopTimeswitchTicker() {
   if (timeswitchTickerId !== null) window.clearInterval(timeswitchTickerId);
   timeswitchTickerId = null;
+  pendingSwitch = null;
 }
 
 function renderTimeswitch() {
-  if (closeOrphanedOneTap()) saveState();
+  const orphanedChanged = closeOrphanedOneTap();
+  if (orphanedChanged) saveState();
   const active = runningBlock();
   startTimeswitchTicker();
   return `
@@ -480,7 +504,8 @@ function renderTimeswitch() {
         <div class="timeswitch-grid">${renderTaskTiles(active)}</div>
       </section>
       <section class="panel timeswitch-section">
-        <div class="timeswitch-section-head"><h2>今日の予定</h2><span>TimeTree・こーじ</span></div>
+        <div class="timeswitch-section-head"><h2>今日の予定</h2><span>TimeTree・${TIMELINE_LABEL}</span></div>
+        ${isScheduleStale() ? `<p class="timeswitch-stale">予定データが古い(バッチ未更新)</p>` : ""}
         <div class="timeswitch-grid">${renderEventTiles(active)}</div>
       </section>
       ${confirmationOverlay()}
