@@ -70,6 +70,37 @@ workspace CLAUDE.md NEVER 1に従い、1コミットの**実行コード差分**
   固定wait調査、読み取り専用レビューへ割り当てる。
 - 同期・保存・日付・migration・iOS固有処理は直列実装し、別エージェントが独立レビューする。
 - 各担当はcommit/pushせず、主担当が`git status --short`と`git diff`で実体を確認して統合する。
+- 各担当へ渡すのは必要なファイル・関数・行範囲だけとし、`app.js`全文の重複読込を避ける。
+  長い調査結果はファイルへ保存し、主担当には結論・根拠行・パスだけを返す。
+
+### 実装前レビューと複数機能の進め方
+- 実装前に10〜15分で、操作導線、日付境界、同期/state、失敗・再試行・オフライン時、
+  390/768/1024px、iOS PWA・日本語IME、関連テスト、非目標を確認する。
+- `docs/code-index.generated.md`と`docs/test-impact-map.generated.md`で変更波及と関連スイートを
+  先に特定し、characterization testが不足する高リスク箇所は実装より先に現挙動を固定する。
+- 複数機能は全体仕様・依存関係・ファイル所有を最初に1回レビューし、各機能の実装直後に
+  軽量レビューしてから次へ進む。全機能の統合後に統合レビュー、最終core、CI全量を各1回行い、
+  まとめて1リリースする。
+- 同期・保存・日付・migration・iOS固有処理は各機能でもClaude/Codexの二系統レビューを通す。
+  表示専用等は各機能で一系統、最終統合時に二系統とする。
+
+### 段階分割の恒久契約
+- `app.js`は起動・依存注入・全体統合へ縮小する。単なる行移動ではなく、各モジュールに
+  明示的な入出力と副作用境界を作る。
+- 分割前に候補をP0〜P2で順位付けし、呼び出し元、state入出力、I/O、関連E2E、
+  必要なcharacterization testをセットで記録する。無関係なスパゲッティ箇所を便乗修正しない。
+- `state`の再代入は`src/state/store.js`の`setState()`経由だけにする。他モジュールは
+  live bindingを読み取り、必要なプロパティ変更だけを行う。
+- `src/core/**`は`state`や`src/state/store.js`をimportしない純粋な依存グラフの葉にする。
+  `src/**`から`app.js`をimportせず、必要な依存は`configureXxx()`等で注入して循環依存を防ぐ。
+- 抽出は原則として、純粋関数 → 読み取り専用feature → storage/sync gateway →
+  残りのfeature render → event dispatcherの順に行う。同期、`normalizeState()`、`saveState()`は
+  現挙動と失敗時契約をテストで固定せず機械的に分割しない。
+- 同期・mergeを変える際は、一次データを含む全state領域が「比較・merge・明示的除外」の
+  どれかに分類されていることを確認する。リモート取得・JSON検証・mergeが曖昧ならfail-closeとし、
+  ローカル全量で上書きしない。
+- ビルド工程なしのESMを維持する。`src/**/*.js`を追加したら`sw.js`の`APP_SHELL`へ追加し、
+  `CACHE_NAME`を+1する。release gate、SW統合テスト、iOS実機PWAの更新・オフライン確認まで行う。
 
 ### テスト実行方針(v60〜、コアセットはv93〜)
 - `app.js`を変更したら`npm run code:index:write`、テストを追加/変更したら
@@ -81,8 +112,9 @@ workspace CLAUDE.md NEVER 1に従い、1コミットの**実行コード差分**
 - **レビュー修正がすべて終わった後**: push前ローカルの最終ゲートとして
   `npm run test:core`を1回だけ実行する。最終core後に実行コード・共有helperを直した場合だけ、
   関連スイート→coreを再実行する。文書・release記録だけの修正ではcoreを繰り返さない。
-- v164以降は開発中に
-  開発中は`node scripts/release-gate.js releases/vNNN.json --suite=vNNN`、
+- v164以降の開発中は
+  `node scripts/release-gate.js releases/vNNN.json --suite=<関連スイート[,回帰対象]>`、
+  仕様変更で`vNNN.test.js`がある場合だけvNNNも含める。
   最終時は`node scripts/release-gate.js releases/vNNN.json --final`として検証順を一本化する。
 - **CI(GitHub Actions)では4シャードの和集合で必ず全量**(`npm test -- --shard=N/4`)。
   これが唯一の完全な安全網。push後は必ずGitHub ActionsのCI成功を確認すること
@@ -94,9 +126,15 @@ workspace CLAUDE.md NEVER 1に従い、1コミットの**実行コード差分**
   `tests/run-all-options.test.js`で検証する。
 - `--workers=N`は独立スイートのrunner内並列化。既定は1、最大8。まずfast-nodeだけ2並列で使い、
   ブラウザE2Eは計測と副作用監査が済むまでCI 4シャードによる並列化だけを使う。
+- 既存スイート・assertionは、移行先との対応と同等以上の検証を確認するまで削除・skip・弱体化
+  しない。意図した削減でも`Test-Reduction: <移行先と同等性の根拠>`をコミット本文へ記載し、
+  独立レビューを通す。速度を理由にした削減は禁止する。
+- 固定時間そのものが仕様でない限り、新しい`waitForTimeout`を追加しない。selector、DOM状態、
+  state、network response、Playwright clock等、検証対象の成立を待つ。既存固定waitは
+  assertionを維持したまま待機時間上位から段階的に置き換える。
 
 #### コアセット(`npm run test:core` = `tests/run-core.js`)
-push前にローカルで毎回全量(現在40本)を回すと時間がかかるため、「実質的にカバー範囲が広い」
+push前にローカルで毎回全量を回すと時間がかかるため、「実質的にカバー範囲が広い」
 サブセットに絞ったもの。**スイートの削除・スキップ・弱体化ではない**——`npm test`(全量)・CIは無改変。
 構成 = 以下を合わせて計10本前後:
 - **直近5バージョン**(動的: `tests/`のvNN.test.jsを番号降順で上位5本。新規スイート追加で自動追従)
@@ -138,8 +176,9 @@ EADDRINUSEでクラッシュ)**: `npm test`(全量、88スイート前後)を1�
 v93が本来防ぎたかったシナリオ(2ターミナルでの同時実行、CIとローカルpush前ゲートが重なる等)
 に対しては未対応のままだった(並行して動く2つの`run-all.js`は同じport帯を使い、依然として
 衝突しうる)。**対策(v140で追加)**: `run-all.js`が起動ごとにランダムな基底
-(20000〜38000の1000刻み、19通り)を選び、環境変数`TEST_PORT_BASE`としてスイートへ渡す。
+(20000〜62000の2000刻み、22通り)を選び、環境変数`TEST_PORT_BASE`としてスイートへ渡す。
 `randomPort()`は`TEST_PORT_BASE + index*10`で採番する(`TEST_PORT_BASE`が無ければ従来どおり
-基底20000)。並行run同士が偶然同じ基底を引く確率は1/19以下に下がり、それでも衝突すれば
+基底20000)。最大200スイートまで隣接基底の帯は重ならない。並行run同士が偶然同じ基底を
+引く確率は1/22以下に下がり、それでも衝突すれば
 `startServer()`のEADDRINUSEリトライ(v137で追加済み)で自己回復する。単一run内の衝突は
 同じ基底を共有する限り従来どおり数学的にゼロのまま。
