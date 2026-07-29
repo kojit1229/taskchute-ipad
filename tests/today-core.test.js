@@ -1333,6 +1333,464 @@ function check(name, cond, extra = "") {
     await page.waitForSelector(".now-line", { state: "attached" });
     check("lightテーマの now-line 色は従来色 #FF3B30 = rgb(255, 59, 48) のまま(P11: light/dark非影響)",
       (await nowLineBorderColor()) === NOW_LINE_LEGACY, await nowLineBorderColor());
+
+    // ============================================================
+    // ==== ここから B5(F1/F2/F3/F5)追記セクション [30]〜[34] ====
+    // 設計の正: ../taskchute-notes/designs/v169-today-cockpit.md §12 の F1/F2/F3/F5 行
+    //   (2026-07-29改訂版。K裁定②=F3は加点表現・ストリーク/連続日数は出さない)。
+    // 現物調査: workbench/out/2026-07-29-today-cockpit-impl/b5-survey.md(部品実名の正)。
+    // DOM契約(実装側と共有済み):
+    //   F1: 既存 #blockTitle(renderTasksのform-strip) / F2: .drift-panel / .time-comb /
+    //   .time-comb-gap[data-start][data-end] / F3: .routine-week-days / .routine-trend /
+    //   F5: .wish-ripeness / .wish-ripeness-bar
+    // 実装(別担当が並行作業中)より先に仕様から書いた。前提が実装と食い違った場合は
+    // テストを弱めるのではなく、前提の側を実装と突合して直すこと:
+    //   前提B5-1: F1のEnter確定は #blockTitle のkeydown(Enter)。IME変換中は既存の
+    //            _imeComposing(document委譲のcompositionstart/end)ガードで無視される
+    //   前提B5-2: F1の確定は既存 addBlock() 相当(getOtherTask()紐づけ+defaultPlannedTimes())。
+    //            「当日固定」= selectedDateが過去日でも date/planned は今日になる(§12 F1)
+    //   前提B5-3: F1の入力保護は既存 renderDeferringForFocus 相乗り(§4・C5。新フラグを作らない)。
+    //            検証はhighlights.json応答の保留→入力中に解放→hydrateStaticMarkdown(v133で
+    //            tasksもライブ再描画対象)が発火するrenderDeferringForFocusの延期で行う
+    //   前提B5-4: DRIFTのズレ分数は textHasMin() の許容形式(「n分」等)で表示される。
+    //            ズレ = computeProjectedEnd(今日, now) − 当日blocksの最大plannedEnd(b5-survey §2-2)
+    //   前提B5-5: 「送る」は既存carryOverBlockのセマンティクス踏襲(翌日に新Block・元Blockに
+    //            migratedTo・carryCount+1)。この経路では儀式モーダルを出さない
+    //            (carryCount=2 → nextCount=3 = MIGRATION_RITUAL_THRESHOLD 到達でも出ない)
+    //   前提B5-6: .time-comb-gap の data-start/data-end は "HH:MM"系文字列か分数値のどちらか
+    //            (両対応で解釈する)。タップは「先にBlockを作ってから」編集モーダルを開く(§12 F2)
+    //   前提B5-7: F3の「直近7日」は当日を含む7日窓。「実施できた日」= done≥1。当日ぶんは
+    //            gardenLog[今日]とroutineRate(当日blocks)を同値にseedし、どちらの実装でも一致させる
+    //   前提B5-8: F3トレンドの点は .routine-trend 内の [data-date] 要素(キー存在日のみ描画・
+    //            30日窓は当日を含む)。欠測日・窓外日には要素を作らない
+    //   前提B5-9: F5の熟成度は .wish-ripeness-bar のインラインstyle width%(30日=50%・90日=100%
+    //            の固定写像・90日以降は100%で頭打ち)。45日は50〜100%の中間
+    //            (30〜90日を線形補間するなら 50 + (45-30)×(50/60) = 62.5%)
+    // ============================================================
+
+    // B5用seed: 既存seed()/seedB2()/seedB3()と同じ流儀に selectedDate / gardenLog を足した拡張
+    // (既存関数は変更禁止のため別名で追加。pomodoro/zeroThinkingは前セクションの持ち越し防止で毎回リセット)
+    async function seedB5({ blocks = [], view = "tasks", settings = {}, selectedDate = TODAY, projects = null, tasks = null, gardenLog = null } = {}) {
+      await page.evaluate(({ KEY, blocks, view, settings, selectedDate, projects, tasks, gardenLog }) => {
+        const s = JSON.parse(localStorage.getItem(KEY));
+        s.blocks = blocks;
+        s.currentView = view;
+        s.selectedDate = selectedDate;
+        s.sleep = s.sleep || { logs: {} };
+        s.sleep.logs = {};
+        s.condition = s.condition || { logs: {} };
+        s.condition.logs = {};
+        s.gardenLog = gardenLog || {};
+        s.zeroThinking = { themes: [], entries: [], groups: [], suggestedThemes: [] };
+        s.pomodoro = { ...s.pomodoro, running: false, blockId: "", startedAt: "", endsAt: "", mode: "focus" };
+        if (projects) s.projects = projects;
+        if (tasks) s.tasks = tasks;
+        Object.assign(s.settings, settings);
+        localStorage.setItem(KEY, JSON.stringify(s));
+      }, { KEY, blocks, view, settings, selectedDate, projects, tasks, gardenLog });
+      await page.reload();
+      await page.waitForSelector('[data-action="nav"]', { state: "attached" });
+    }
+
+    // ============================================================
+    // [30] F1: #blockTitle+Enterで当日Blockが追加され、既存フィルタを通って一覧に出る
+    //   (IME変換中のEnterは確定されない=_imeComposingガードの検証を同居)
+    // ============================================================
+    console.log("[30] F1: #blockTitleでEnter→当日Blockが増え(taskId紐づけで一覧に出る)、IME変換中のEnterは無視される");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB5({ view: "tasks", blocks: [] });
+    await page.waitForSelector("#blockTitle", { state: "attached" });
+    const defaultCategory = await page.locator("#blockCategory").inputValue();  // カテゴリ既定値(先頭option)
+    await page.locator("#blockTitle").click();
+    await page.keyboard.type("QUICKADD-Enter追加");
+    // IME変換中のEnter(無視されるべき): 既存のdocument委譲compositionstartリスナー(app.js)へ
+    // バブリングで届く合成イベントを発火してから押す(前提B5-1)
+    await page.evaluate(() => {
+      document.getElementById("blockTitle").dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+    });
+    await page.keyboard.press("Enter");
+    await page.evaluate(() => {
+      document.getElementById("blockTitle").dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: "" }));
+    });
+    // 確定後(非変換中)のEnter → 追加される。もしIME中Enterも確定されていればblocksは2件になり
+    // 下の「ちょうど1件」判定で落ちる(固定waitなしで負の検証を含める読み方)
+    await page.keyboard.press("Enter");
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).blocks.length >= 1, KEY);
+    const stQuickAdd = await stateNow();
+    check("Enterで state.blocks がちょうど1件増える(IME変換中のEnterは確定されない。前提B5-1)",
+      stQuickAdd.blocks.length === 1, `blocks=${stQuickAdd.blocks.length}`);
+    const added = stQuickAdd.blocks[0];
+    check("追加Blockのtitleが入力値になる", added?.title === "QUICKADD-Enter追加", JSON.stringify(added));
+    check("追加Blockが当日日付になる(§12 F1: 当日固定)", added?.date === TODAY, added?.date);
+    check("追加Blockにカテゴリ既定値(selectの現在値)が入る", added?.category === defaultCategory,
+      `category=${added?.category} 既定値=${defaultCategory}`);
+    check("defaultPlannedTimes()を通る(固定12:00 → plannedStartAt=T12:00)(前提B5-2)",
+      (added?.plannedStartAt || "").includes("T12:00"), added?.plannedStartAt);
+    const addedTask = stQuickAdd.tasks.find((t) => t.id === added?.taskId);
+    check("taskIdが「その他」受け皿Taskに紐づく(taskId無しBlockは一覧に出ないため必須。§12 F1)",
+      !!added?.taskId && !!addedTask && addedTask.kind === "other" && !!addedTask.projectId,
+      JSON.stringify({ taskId: added?.taskId, task: addedTask }));
+    check("追加Blockが実行ビューの一覧(既存フィルタ通過後)に表示される",
+      await page.locator(".block-row", { hasText: "QUICKADD-Enter追加" }).count() === 1);
+    check("追加後は #blockTitle が空に戻る(再描画で入力欄がリセットされる)",
+      (await page.locator("#blockTitle").inputValue()) === "");
+
+    // ============================================================
+    // [30b] F1: 過去日を選択中でも追加先は当日(当日固定)
+    // ============================================================
+    console.log("[30b] F1: selectedDate=昨日の実行ビューからEnter追加しても、Blockは今日の日付で作られる(当日固定)");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB5({ view: "tasks", selectedDate: YESTERDAY, blocks: [] });
+    await page.waitForSelector("#blockTitle", { state: "attached" });
+    await page.locator("#blockTitle").click();
+    await page.keyboard.type("QUICKADD-昨日画面から");
+    await page.keyboard.press("Enter");
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).blocks.length === 1, KEY);
+    const addedFromPast = (await stateNow()).blocks[0];
+    check("過去日表示中でも追加Blockの date は今日になる(§12 F1: 当日固定。前提B5-2)",
+      addedFromPast?.date === TODAY, addedFromPast?.date);
+    check("plannedStartAt も今日の日付で組み立てられる",
+      (addedFromPast?.plannedStartAt || "").startsWith(`${TODAY}T`), addedFromPast?.plannedStartAt);
+
+    // ============================================================
+    // [30c] F1: 入力中の再描画トリガで文字が消えない(renderDeferringForFocus相乗り。[17f]の発展形)
+    //   手順: highlights.json応答を保留したままseed → #blockTitleに入力 → 応答を解放して
+    //   hydrateStaticMarkdown(changed=true・tasksは再描画対象)にrenderDeferringForFocusを
+    //   発火させる → フォーカス中は再描画が延期され入力が残る → blurで延期分がflushされる
+    //   (プローブDOMの消滅で「延期→flush」が実際に起きたことを正の証拠として確認する)
+    // ============================================================
+    console.log("[30c] F1: 入力中にhydrate由来の再描画トリガが発火しても文字が残る(isFocusInEditableElement保護・前提B5-3)");
+    const kindleHold = { active: false, held: [] };
+    await page.route((url) => url.hostname === "api.github.com", (route) => {
+      const p = decodeURIComponent(new URL(route.request().url()).pathname);
+      if (kindleHold.active && p.endsWith("/contents/taskchute/reading/highlights.json")) {
+        kindleHold.held.push(route);  // 応答保留(下で明示的にfulfillする)
+        return;
+      }
+      return route.fallback();  // 保留しない時はB2登録済みのフィクスチャ応答へ
+    });
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    kindleHold.active = true;
+    const heldReq = page.waitForRequest((r) => r.url().includes("reading/highlights.json"));
+    await seedB5({ view: "tasks", blocks: [] });
+    await heldReq;  // リクエスト到達=保留成立(この時点でhydrateは未完了のまま待っている)
+    await page.waitForSelector("#blockTitle", { state: "attached" });
+    await page.locator("#blockTitle").click();
+    await page.keyboard.type("PROTECT-入力保持");
+    // 全再描画で消えるプローブを差しておく(延期中は生存・flushで消える)
+    await page.evaluate(() => {
+      const probe = document.createElement("i");
+      probe.id = "b5RenderProbe";
+      document.getElementById("main").appendChild(probe);
+    });
+    const heldResp = page.waitForResponse((r) => r.url().includes("reading/highlights.json"));
+    kindleHold.active = false;
+    for (const r of kindleHold.held.splice(0)) {
+      await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(KINDLE_HIGHLIGHTS_FIXTURE) });
+    }
+    await heldResp;
+    // hydrate継続(promise連鎖)がrenderDeferringForFocusの判定へ到達するまでイベントループを回す
+    // (固定waitではなくprotocolラウンドトリップでマクロタスクを消化する)
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 0)));
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 0)));
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 0)));
+    check("再描画トリガ発火後も入力値が残る(フォーカス中はrenderDeferringForFocusが延期する)",
+      (await page.locator("#blockTitle").inputValue()) === "PROTECT-入力保持",
+      await page.locator("#blockTitle").inputValue());
+    check("フォーカスも #blockTitle に残る", await page.evaluate(() => document.activeElement?.id === "blockTitle"));
+    check("延期中はプローブDOMが生きている(全再描画がまだ走っていない)",
+      await page.evaluate(() => !!document.getElementById("b5RenderProbe")));
+    // blur(focusout)→ attemptFlushDeferredRender が延期分をflush → プローブ消滅が正の証拠。
+    // ここが消えない場合は「hydrateがchanged=trueにならず再描画自体が無かった」= 前提B5-3の破れ
+    await page.evaluate(() => document.getElementById("blockTitle")?.blur());
+    const probeFlushed = await page.waitForFunction(() => !document.getElementById("b5RenderProbe"), null, { timeout: 15000 })
+      .then(() => true).catch(() => false);
+    check("blurで延期されていた再描画がflushされる(プローブ消滅=延期が実際に起きていた証拠)", probeFlushed);
+
+    // ============================================================
+    // [31] F2 DRIFT: 当日+未完了ありで表示され、ズレ分数が手計算と一致する
+    // ============================================================
+    console.log("[31] F2 DRIFT: 固定フィクスチャでズレ85分(computeProjectedEnd 15:25 − 最終plannedEnd 14:00)が表示される");
+    // 手計算(12:00固定): 残見積 = d-run(est120, 11:00着手→残60) + d-send(90) + d-small(55) = 205分
+    //   → 着地 = 12:00+205分 = 15:25(925)。最終plannedEnd = d-small 14:00(840)。ズレ = +85分。
+    //   85は分表示(00-59)にも時表示(00-24)にも現れない判別値(「13:55」等との包含誤マッチがない)
+    const driftBlocks = [
+      block("d-done", { title: "DRIFT-完了済", category: "仕事", completed: true, plannedStartAt: at("09:00"), plannedEndAt: at("10:00"), actualStartAt: at("09:00"), actualEndAt: at("10:00"), estimateMin: 60 }),
+      block("d-run", { title: "DRIFT-実行中", actualStartAt: at("11:00"), plannedStartAt: at("11:00"), plannedEndAt: at("12:00"), estimateMin: 120 }),
+      // carryCount:2 → nextCount=3 = 儀式閾値。旧requestCarryOver経路なら儀式モーダルが開く値(前提B5-5の検証用)
+      block("d-send", { title: "DRIFT-送る対象", plannedStartAt: at("12:30"), plannedEndAt: at("13:15"), estimateMin: 90, carryCount: 2 }),
+      block("d-small", { title: "DRIFT-小粒", plannedStartAt: at("13:30"), plannedEndAt: at("14:00"), estimateMin: 55 })
+    ];
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB5({ view: "timeline", blocks: driftBlocks });
+    await page.waitForSelector(".drift-panel", { state: "attached" });
+    check("当日+未完了ありで .drift-panel が表示される(DOM契約・§12 F2表示条件)",
+      await page.locator(".drift-panel").count() === 1);
+    const driftText = await panelText(".drift-panel");
+    check("ズレ分数 85分が手計算と一致して表示される(前提B5-4)", textHasMin(driftText, 85), driftText);
+
+    // ============================================================
+    // [31b] F2 DRIFT「送る」: 対象Blockが翌日へ移り(migratedTo記録・儀式モーダルなし)、着地が再計算される
+    // ============================================================
+    console.log("[31b] F2: 「送る」で決定論選出の1件(残90分のd-sendのみがズレ85分を吸収可能)が翌日へ移る");
+    await page.locator(".drift-panel button", { hasText: "送る" }).first().click();
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).blocks.some((b) => b.migratedTo), KEY);
+    const stAfterSend = await stateNow();
+    const movedSrc = stAfterSend.blocks.find((b) => b.migratedTo);
+    check("決定論選出: 送られるのは d-send(残90分。d-run残60/d-small残55ではズレ85分に収まらない)",
+      movedSrc?.id === "d-send", movedSrc?.id);
+    const movedNew = stAfterSend.blocks.find((b) => b.id === movedSrc?.migratedTo);
+    check("翌日に新Blockが作られ元Blockの migratedTo が新Block idを指す(既存セマンティクス踏襲)",
+      !!movedNew && movedNew.date === TOMORROW, JSON.stringify({ migratedTo: movedSrc?.migratedTo, newDate: movedNew?.date }));
+    check("新Blockのタイトルが引き継がれる", movedNew?.title === "DRIFT-送る対象", movedNew?.title);
+    check("carryCount が +1 される(2→3。既存carryOverBlockと同じ積み上げ)", movedNew?.carryCount === 3,
+      String(movedNew?.carryCount));
+    check("儀式モーダルが出ない(nextCount=3=閾値到達でも、この経路では儀式を出さない。前提B5-5)",
+      await page.locator(".modal-card").count() === 0);
+    check("送られていない残Block(d-run/d-small)に migratedTo が付かない",
+      !stAfterSend.blocks.find((b) => b.id === "d-run")?.migratedTo && !stAfterSend.blocks.find((b) => b.id === "d-small")?.migratedTo);
+    // 着地再計算: 送った後の残 = 60+55 = 115分 → 着地13:55 ≦ 計画14:00 → ズレ85分の表示は残らない
+    const driftText2 = await panelText(".drift-panel");
+    check("「送る」後にズレ85分の表示が消える(着地予定が再計算される)",
+      driftText2 === null || !textHasMin(driftText2, 85), driftText2);
+
+    // ============================================================
+    // [31c] F2 DRIFT表示条件: 過去日selectedDate・未完了0件では表示されない
+    // ============================================================
+    console.log("[31c] F2: 過去日表示・未完了0件では .drift-panel が出ない(§12 F2表示条件)");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB5({
+      view: "timeline", selectedDate: YESTERDAY,
+      blocks: [block("y-open", { title: "昨日の未完了", date: YESTERDAY, plannedStartAt: atOn(YESTERDAY, "13:00"), plannedEndAt: atOn(YESTERDAY, "14:00"), estimateMin: 60 })]
+    });
+    await waitView("timeline");
+    check("過去日(selectedDate=昨日)では未完了があっても .drift-panel が出ない",
+      await page.locator(".drift-panel").count() === 0);
+    await seedB5({
+      view: "timeline",
+      blocks: [block("all-done", { title: "全部完了", completed: true, plannedStartAt: at("09:00"), plannedEndAt: at("10:00"), actualStartAt: at("09:00"), actualEndAt: at("10:00") })]
+    });
+    await waitView("timeline");
+    check("当日でも未完了0件なら .drift-panel が出ない", await page.locator(".drift-panel").count() === 0);
+
+    // ============================================================
+    // [32] F2 TIME COMB: 実績間15分以上の隙間が列挙され、タップでBlock作成+編集モーダル
+    // ============================================================
+    console.log("[32] F2 TIME COMB: 実績間の30分の隙間(10:00-10:30)が列挙され、5分の隙間は列挙されない。タップでBlock作成→編集モーダル");
+    // data-start/data-end の解釈("HH:MM"系文字列でも分数値でも成立。前提B5-6)
+    const combMin = (v) => {
+      if (v == null) return NaN;
+      const s = String(v);
+      const t = s.includes("T") ? s.slice(s.indexOf("T") + 1) : s;
+      if (/^\d+$/.test(t)) return Number(t);
+      const m = /^(\d{1,2}):(\d{2})/.exec(t);
+      return m ? Number(m[1]) * 60 + Number(m[2]) : NaN;
+    };
+    const combBlocks = [
+      block("c-1", { title: "COMB-1", completed: true, actualStartAt: at("09:00"), actualEndAt: at("10:00") }),
+      block("c-2", { title: "COMB-2", completed: true, actualStartAt: at("10:30"), actualEndAt: at("11:30") }),
+      // 11:30→11:35 の5分間は15分未満なので隙間として列挙されない
+      block("c-3", { title: "COMB-3", completed: true, actualStartAt: at("11:35"), actualEndAt: at("11:50") }),
+      // 未完了1件(DRIFT/COMBの表示条件「未完了≥1」を満たすため。実績なしなので隙間計算には関与しない)
+      block("c-plan", { title: "COMB-未着手", plannedStartAt: at("14:00"), plannedEndAt: at("14:30"), estimateMin: 30 })
+    ];
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB5({ view: "timeline", blocks: combBlocks });
+    await page.waitForSelector(".time-comb", { state: "attached" });
+    check("当日の時間ビューに .time-comb が表示される(DOM契約)", await page.locator(".time-comb").count() === 1);
+    const combGaps = await page.evaluate(() =>
+      [...document.querySelectorAll(".time-comb-gap")].map((el) => ({ start: el.dataset.start, end: el.dataset.end })));
+    check("実績間の隙間 10:00→10:30(30分)が data-start/data-end 付きで列挙される",
+      combGaps.some((g) => combMin(g.start) === 600 && combMin(g.end) === 630), JSON.stringify(combGaps));
+    check("15分未満の隙間(11:30→11:35)は列挙されない(全gapが15分以上)",
+      combGaps.length >= 1 && combGaps.every((g) => combMin(g.end) - combMin(g.start) >= 15), JSON.stringify(combGaps));
+    // タップ → 「先にBlockを作ってから」編集モーダルが開く(§12 F2・前提B5-6)
+    const gapIdx = combGaps.findIndex((g) => combMin(g.start) === 600 && combMin(g.end) === 630);
+    const combSeededIds = new Set(combBlocks.map((b) => b.id));
+    await page.locator(".time-comb-gap").nth(gapIdx).click();
+    await page.waitForSelector(".modal-card", { state: "attached" });
+    await page.waitForFunction(({ KEY, n }) => JSON.parse(localStorage.getItem(KEY)).blocks.length === n + 1, { KEY, n: combBlocks.length });
+    const stAfterGapTap = await stateNow();
+    const gapBlock = stAfterGapTap.blocks.find((b) => !combSeededIds.has(b.id));
+    check("タップで新規Blockが作成される(seed 4件 → 5件)", !!gapBlock, JSON.stringify(stAfterGapTap.blocks.map((b) => b.id)));
+    check("新規Blockが隙間の時間帯(10:00-10:30)を予定時刻に持つ",
+      (gapBlock?.plannedStartAt || "").includes("T10:00") && (gapBlock?.plannedEndAt || "").includes("T10:30"),
+      JSON.stringify({ start: gapBlock?.plannedStartAt, end: gapBlock?.plannedEndAt }));
+    check("新規Blockは当日日付+「その他」Task紐づけ(makeBlock({taskId: getOtherTask()?.id})の契約)",
+      gapBlock?.date === TODAY && !!gapBlock?.taskId &&
+      stAfterGapTap.tasks.find((t) => t.id === gapBlock?.taskId)?.kind === "other",
+      JSON.stringify({ date: gapBlock?.date, taskId: gapBlock?.taskId }));
+    check("既存のBlock編集モーダルが開いている", await page.locator(".modal-card").count() === 1);
+    await page.locator('.modal-card [data-action="modal-close"]').first().click();
+    await page.waitForSelector(".modal-card", { state: "detached" });
+
+    // ============================================================
+    // [33] F3: 「直近7日で実施できた日数 n/7」が gardenLog フィクスチャの期待値と一致する
+    // ============================================================
+    console.log("[33] F3: gardenLogフィクスチャで「直近7日 4/7」(今日・-1・-3・-6が実施。-2/-5は0件、-4は欠測)が一致する");
+    // 実施できた日(done≥1): 今日(2/3)・-1(2/3)・-3(1/1)・-6(3/3)= 4日。
+    // -2(0/3)・-5(0/2)は記録ありの0件日、-4は欠測(キーなし)、-40は30日トレンド窓外の検証用。
+    // 当日ぶんはgardenLog[今日]={2,3}と実blocks(ルーティン3件中2完了)を同値にし、
+    // 実装が当日をgardenLog/routineRateのどちらで読んでも同じ結果にする(前提B5-7)
+    const gardenFixture = {
+      [TODAY]: { done: 2, total: 3 },
+      [daysAgoISO(1)]: { done: 2, total: 3 },
+      [daysAgoISO(2)]: { done: 0, total: 3 },
+      [daysAgoISO(3)]: { done: 1, total: 1 },
+      [daysAgoISO(5)]: { done: 0, total: 2 },
+      [daysAgoISO(6)]: { done: 3, total: 3 },
+      [daysAgoISO(40)]: { done: 1, total: 1 }
+    };
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB5({
+      view: "routine",
+      gardenLog: gardenFixture,
+      blocks: [
+        block("f3-r1", { title: "F3-ルーティン1", category: "ルーティン", plannedStartAt: at("07:00"), plannedEndAt: at("07:15"), completed: true, actualStartAt: at("07:00"), actualEndAt: at("07:15") }),
+        block("f3-r2", { title: "F3-ルーティン2", category: "ルーティン", plannedStartAt: at("08:00"), plannedEndAt: at("08:15"), completed: true, actualStartAt: at("08:00"), actualEndAt: at("08:15") }),
+        block("f3-r3", { title: "F3-ルーティン3", category: "ルーティン", plannedStartAt: at("21:00"), plannedEndAt: at("21:15") })
+      ]
+    });
+    await page.waitForSelector(".routine-week-days", { state: "attached" });
+    const weekDaysText = await panelText(".routine-week-days");
+    check("「直近7日 4/7」が表示される(gardenLog生データからの期待値と一致)",
+      /4\s*\/\s*7/.test(weekDaysText || ""), weekDaysText);
+    check("3/7ではない(今日を含む7日窓。-1〜-7窓だと3/7になる。前提B5-7)", !/3\s*\/\s*7/.test(weekDaysText || ""), weekDaysText);
+    check("5/7ではない(欠測日-4を実施扱いにしない)", !/5\s*\/\s*7/.test(weekDaysText || ""), weekDaysText);
+
+    // ============================================================
+    // [33b] F3 トレンド: データ点数=キー存在日数。欠測日を0%として描かない
+    // ============================================================
+    console.log("[33b] F3: 30日トレンドの点はキー存在日のみ(6点)。0件日(-2)は点になり、欠測日(-4)・窓外(-40)は点にならない");
+    await page.waitForSelector(".routine-trend", { state: "attached" });
+    const trendDates = await page.evaluate(() =>
+      [...document.querySelectorAll(".routine-trend [data-date]")].map((el) => el.dataset.date));
+    check("トレンドのデータ点数=30日窓内のキー存在日数(6点: 今日・-1・-2・-3・-5・-6)(前提B5-8)",
+      trendDates.length === 6, JSON.stringify(trendDates));
+    check("記録ありの0件日(-2)は点として描かれる(欠測との区別)", trendDates.includes(daysAgoISO(2)), JSON.stringify(trendDates));
+    check("欠測日(-4)は0%として描かれない(点が無い)", !trendDates.includes(daysAgoISO(4)), JSON.stringify(trendDates));
+    check("30日窓の外(-40)は描かれない", !trendDates.includes(daysAgoISO(40)), JSON.stringify(trendDates));
+
+    // ============================================================
+    // [33c] F3 K裁定の回帰ガード: 新パネルに「ストリーク」「連続」の語が出ない
+    // ============================================================
+    console.log("[33c] F3: 新パネル(.routine-week-days / .routine-trend)に「ストリーク」「連続」が出ない(K裁定②の回帰ガード)");
+    // 判定は新パネル2要素にスコープする(ルーティンビュー全体には既存の「連続ルーティン(チェーン)」
+    // 「連続欠落」表示が正当に存在するため。K裁定の対象はF3の新規指標表現)
+    const f3PanelText = `${(await panelText(".routine-week-days")) || ""}\n${(await panelText(".routine-trend")) || ""}`;
+    check("F3パネルに「ストリーク」が出ない", !f3PanelText.includes("ストリーク"), f3PanelText);
+    check("F3パネルに「連続」が出ない(加点表現のみ)", !f3PanelText.includes("連続"), f3PanelText);
+    check("F3パネルに streak 表記も出ない", !/streak/i.test(f3PanelText), f3PanelText);
+
+    // ============================================================
+    // [33d] F3: gardenLog空でも崩れない
+    // ============================================================
+    console.log("[33d] F3: gardenLogが空でもルーティンビューがエラーなく描画される");
+    const failuresBeforeF3Empty = failures;  // この区間のpageerror検出用([13]と同じ方式)
+    await seedB5({ view: "routine", gardenLog: {}, blocks: [] });
+    await waitView("routine");
+    check("gardenLog空でも #main が空にならない",
+      await page.evaluate(() => document.getElementById("main").innerHTML.trim().length > 0));
+    check("gardenLog空のパネルに NaN/undefined が出ない",
+      await page.evaluate(() => {
+        const t = [".routine-week-days", ".routine-trend"].map((sel) => document.querySelector(sel)?.textContent || "").join("");
+        return !/NaN|undefined|Infinity/.test(t);
+      }));
+    check("[33d]区間の描画で pageerror が発生しない", failures === failuresBeforeF3Empty);
+
+    // ============================================================
+    // [34] F5: Wish熟成度ゲージ — 固定写像(30日=50%・90日=100%)との一致
+    // ============================================================
+    console.log("[34] F5: createdAtからの経過日数で熟成度ゲージ(30日=50%・90日=100%・以降頭打ち)が描かれる");
+    const failuresBeforeF5 = failures;  // [34]区間のpageerror検出用
+    const WISH_PID = "wish-b5";
+    const wishProjectB5 = {
+      id: WISH_PID, kind: "wish", title: "Wish", category: "回復", status: "active",
+      twelveWeekStartDate: "", createdAt: atOn(daysAgoISO(200), "00:00"), updatedAt: atOn(daysAgoISO(200), "00:00"), deleted: false
+    };
+    const wishTaskB5 = (id, title, createdAt) => ({
+      id, projectId: WISH_PID, parentTaskId: "", title, status: "todo", dueDate: "", description: "",
+      targetYear: null, targetMonth: null, lifeArea: "", motivation: "", realized: false, realizedDate: "",
+      deleted: false, createdAt, updatedAt: createdAt || atOn(TODAY, "00:00")
+    });
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB5({
+      view: "wish",
+      projects: [wishProjectB5],
+      tasks: [
+        wishTaskB5("w-30", "WRIPE-30日前", atOn(daysAgoISO(30), "00:00")),
+        wishTaskB5("w-45", "WRIPE-45日前", atOn(daysAgoISO(45), "00:00")),
+        wishTaskB5("w-90", "WRIPE-90日前", atOn(daysAgoISO(90), "00:00")),
+        wishTaskB5("w-180", "WRIPE-180日前", atOn(daysAgoISO(180), "00:00")),
+        wishTaskB5("w-none", "WRIPE-作成日不明", "")
+      ]
+    });
+    await page.waitForSelector(".wish-card", { state: "attached" });
+    // カード単位でゲージ幅を読む(タイトル包含でカードを特定 → .wish-ripeness-bar のインラインwidth%。前提B5-9)
+    async function ripeInfo(titlePart) {
+      return page.evaluate((tp) => {
+        const card = [...document.querySelectorAll(".wish-card")].find((c) => c.textContent.includes(tp));
+        if (!card) return { found: false };
+        const root = card.querySelector(".wish-ripeness");
+        const bar = card.querySelector(".wish-ripeness-bar") || (root ? root.querySelector('[style*="width"]') : null);
+        const w = bar && bar.style && bar.style.width ? parseFloat(bar.style.width) : null;
+        return { found: true, hasGauge: !!(root || bar), width: w, cardText: card.textContent };
+      }, titlePart);
+    }
+    check("熟成度ゲージ(.wish-ripeness)がWishカードに描画される(DOM契約)",
+      await page.locator(".wish-ripeness").count() >= 4);
+    const ripe30 = await ripeInfo("WRIPE-30日前");
+    const ripe45 = await ripeInfo("WRIPE-45日前");
+    const ripe90 = await ripeInfo("WRIPE-90日前");
+    const ripe180 = await ripeInfo("WRIPE-180日前");
+    check("30日前作成 → ゲージ約50%(固定写像アンカー)", ripe30.hasGauge && Math.abs(ripe30.width - 50) <= 1.5, JSON.stringify(ripe30.width));
+    check("90日前作成 → ゲージ100%(固定写像アンカー)", ripe90.hasGauge && ripe90.width >= 99 && ripe90.width <= 100.5, JSON.stringify(ripe90.width));
+    check("180日前作成 → 100%で頭打ち(100%を超えない)", ripe180.hasGauge && ripe180.width >= 99 && ripe180.width <= 100.5, JSON.stringify(ripe180.width));
+    check("45日前作成 → 50%と100%の中間になる", ripe45.hasGauge && ripe45.width > 50 && ripe45.width < 100, JSON.stringify(ripe45.width));
+    check("45日前作成の値が線形写像近傍(55〜70%。線形補間なら 50+(45-30)×50/60 = 62.5%)",
+      ripe45.width >= 55 && ripe45.width <= 70, JSON.stringify(ripe45.width));
+    check("経過日数に対して単調増加(30日 < 45日 < 90日)",
+      ripe30.width < ripe45.width && ripe45.width < ripe90.width,
+      JSON.stringify({ d30: ripe30.width, d45: ripe45.width, d90: ripe90.width }));
+
+    // ============================================================
+    // [34b] F5: createdAt無しTaskで崩れない(normalizeStateは補完しないため表示側フォールバック)
+    // ============================================================
+    console.log("[34b] F5: createdAtが空のWish Taskでもカードが崩れず、NaN等が表示されない");
+    const ripeNone = await ripeInfo("WRIPE-作成日不明");
+    check("createdAt無しのWishカードも描画される", ripeNone.found);
+    check("createdAt無しでカードに NaN/undefined/Infinity が出ない",
+      ripeNone.found && !/NaN|undefined|Infinity/.test(ripeNone.cardText || ""), (ripeNone.cardText || "").slice(0, 120));
+    check("createdAt無しのゲージはフォールバック(非表示、または0〜100%の有限値)",
+      !ripeNone.hasGauge || ripeNone.width === null || (Number.isFinite(ripeNone.width) && ripeNone.width >= 0 && ripeNone.width <= 100),
+      JSON.stringify(ripeNone.width));
+    check("[34]〜[34b]区間の描画で pageerror が発生しない", failures === failuresBeforeF5);
+
+    // ============================================================
+    // [34c] F5: 表示のみ(state不変)— 再訪・保存契機を跨いで tasks/projects が変化しない
+    // ============================================================
+    console.log("[34c] F5: wishビューの表示・再訪を跨いでも tasks/projects のJSONが変化しない(表示のみの検証)");
+    // 保存契機(setView)を踏んでlocalStorageへ書き戻させてからスナップショットを取り、
+    // wish再訪→再び保存契機、の前後で突合する(初回ロード時のnormalize補完分を比較から除くための手順)
+    await page.locator('#sidebar .nav-button[data-action="nav"][data-view="tasks"]').click();
+    await waitView("tasks");
+    const wishSnapA = await page.evaluate((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      return JSON.stringify({ tasks: s.tasks, projects: s.projects });
+    }, KEY);
+    await page.locator('#sidebar .nav-button[data-action="nav"][data-view="wish"]').click();
+    await waitView("wish");
+    await page.waitForSelector(".wish-card", { state: "attached" });
+    await page.locator('#sidebar .nav-button[data-action="nav"][data-view="tasks"]').click();
+    await waitView("tasks");
+    const wishSnapB = await page.evaluate((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      return JSON.stringify({ tasks: s.tasks, projects: s.projects });
+    }, KEY);
+    check("熟成度ゲージの描画前後で tasks/projects が不変(§12 F5: 表示のみ・state変更なし)",
+      wishSnapA === wishSnapB);
+
+    // ============================================================
   } finally {
     await browser.close();
     server.close();
