@@ -175,6 +175,29 @@
       }
     },
     {
+      "file": "impact-regression.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "legacy-crosscutting"
+      ],
+      "assertionSignals": 21,
+      "assertionHash": "b42a4a8d9607a48c",
+      "sourceHash": "bf45f706e25851f4",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": true,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
       "file": "journal-core.test.js",
       "kind": "node",
       "tier": "full",
@@ -229,9 +252,9 @@
       "domains": [
         "legacy-crosscutting"
       ],
-      "assertionSignals": 3,
-      "assertionHash": "c0eb62a51af05958",
-      "sourceHash": "03194d364a56dc46",
+      "assertionSignals": 9,
+      "assertionHash": "945c48d6b919e6a4",
+      "sourceHash": "2465f2fd11b5561b",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -470,9 +493,9 @@
         "content-ai",
         "ui-responsive"
       ],
-      "assertionSignals": 130,
-      "assertionHash": "0200332b586904f8",
-      "sourceHash": "ca470154141a7cc2",
+      "assertionSignals": 154,
+      "assertionHash": "cc2efb50be61a854",
+      "sourceHash": "12ed3ff7cc4cdafd",
       "waits": {
         "fixedCount": 6,
         "numericMilliseconds": 10800,
@@ -1436,10 +1459,10 @@
       ],
       "assertionSignals": 19,
       "assertionHash": "085e204715d74638",
-      "sourceHash": "7c57d1ba707f7e55",
+      "sourceHash": "e1d58128564f1d18",
       "waits": {
         "fixedCount": 9,
-        "numericMilliseconds": 5600,
+        "numericMilliseconds": 4700,
         "unresolvedCount": 0
       },
       "sideEffects": {
@@ -2524,7 +2547,7 @@
       ],
       "assertionSignals": 35,
       "assertionHash": "c01ec1239a0d42c8",
-      "sourceHash": "5dc9270bf89b2e65",
+      "sourceHash": "3b2dbef534ce6bae",
       "waits": {
         "fixedCount": 12,
         "numericMilliseconds": 5350,

@@ -106,7 +106,13 @@ function check(name, cond, extra = "") {
     return page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
   }
 
+  // v75フレーク修正(CI失敗2連続の根本原因対応): localStorageへのseedは、アプリJSが動いていない
+  // 同一オリジンの静的ページ(/styles.css)上で行う。アプリページ上でevaluate→reloadすると、
+  // 起動時のhydrateStaticMarkdown(app.js:16315)の非同期継続(recordFeedbackFile→saveState、
+  // 鮮度persist等)がseed書込〜reloadコミットの隙間に着弾し、在メモリstate(currentView="today"、
+  // v182の新既定)でseedを丸ごと上書きする競合があった(低速環境ほど高確率)。
   async function seed({ blocks = [], feedbackFiles = [], view = "home" } = {}) {
+    await page.goto(`http://localhost:${PORT}/styles.css`);  // アプリJSを停止させてから書く
     await page.evaluate(({ KEY, blocks, feedbackFiles, TODAY, view }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.blocks = blocks;
@@ -116,7 +122,7 @@ function check(name, cond, extra = "") {
       s.currentView = view;
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, blocks, feedbackFiles, TODAY, view });
-    await page.reload();
+    await page.goto(`http://localhost:${PORT}/`);
     await page.waitForTimeout(700);
   }
 
@@ -266,6 +272,8 @@ function check(name, cond, extra = "") {
       zeroSecThemes: [{ theme: "テーマ0件テスト_v75", reason: "理由0件テスト_v75" }]
     });
     // 繰越/WBS候補も無いことを保証するため、tasks/projectsも明示的に空にする
+    // (seed()と同じ理由で、アプリJSが動かない静的ページ上で書いてから戻る)
+    await page.goto(`http://localhost:${PORT}/styles.css`);
     await page.evaluate(({ KEY, TODAY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.blocks = [];
@@ -275,7 +283,7 @@ function check(name, cond, extra = "") {
       s.currentView = "tasks";
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, TODAY });
-    await page.reload();
+    await page.goto(`http://localhost:${PORT}/`);
     await page.waitForTimeout(700);
     await page.click('[data-action="ai-morning-plan"]');
     await page.waitForTimeout(700);

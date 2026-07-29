@@ -65,15 +65,26 @@ function check(name, cond, extra = "") {
     route.fulfill({ status: 200, contentType: "application/json", body: `# ${name}\n\n本文(${name})。` });
   });
 
+  // v140フレーク修正(CI失敗2連続の根本原因対応): localStorageへのseedは、アプリJSが動いていない
+  // 同一オリジンの静的ページ(/styles.css)上で行う。アプリページ上でevaluate→reloadすると、
+  // 起動時のhydrateStaticMarkdown(app.js:16315)の非同期継続(このスイートの汎用200ルートが
+  // 前日AIフィードバックにも本文を返すため、recordFeedbackFile→saveStateが必ず走る)が
+  // seed書込〜reloadコミットの隙間に着弾し、在メモリstate(currentView="today"、v182の新既定)で
+  // seedを丸ごと上書きする競合があった(→ ai-reportsが開かず report-index fetchが0回になる)。
   async function gotoAiReports() {
+    await page.goto(`http://localhost:${PORT}/styles.css`);  // アプリJSを停止させてから書く
     await page.evaluate((KEY) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.currentView = "ai-reports";
       s.settings.aiReportType = "content";
       localStorage.setItem(KEY, JSON.stringify(s));
     }, KEY);
-    await page.reload();
-    await page.waitForTimeout(600);
+    await page.goto(`http://localhost:${PORT}/`);
+    // 低速環境(CI)対策: 固定600ms待ちでは fetch→(フォールバック)→render が間に合わない
+    // ことがあるため、日付セレクトにoptionが並ぶまで条件待ちに置換(このスイートの全シナリオで
+    // 最終的にoptionは必ず1件以上になる)。
+    await page.waitForFunction(() => document.querySelectorAll("[data-ai-report-date] option").length >= 1, null, { timeout: 15000 });
+    await page.waitForTimeout(200);
   }
 
   try {
@@ -123,7 +134,9 @@ function check(name, cond, extra = "") {
 
     reportIndexRequests = 0; dirListRequests = 0;
     await page.click('[data-action="ai-report-refresh"]');
-    await page.waitForTimeout(700);
+    // 低速環境(CI)対策: union結果(2件)が並ぶまで条件待ち(固定700ms待ちを置換)
+    await page.waitForFunction(() => document.querySelectorAll("[data-ai-report-date] option").length >= 2, null, { timeout: 15000 });
+    await page.waitForTimeout(200);
     check("「一覧を更新」ではreport-index.jsonも再取得される", reportIndexRequests === 1, `(実際: ${reportIndexRequests})`);
     check("「一覧を更新」ではContents APIも取得される(union対象)", dirListRequests === 1, `(実際: ${dirListRequests})`);
     options = await page.$$eval("[data-ai-report-date] option", (els) => els.map((e) => e.value));
@@ -134,6 +147,7 @@ function check(name, cond, extra = "") {
     // [4] Med-3: compositionend欠落時のfocusoutフェイルセーフ + 60秒タイムアウトフェイルセーフ
     // ============================================================
     console.log("[4-a] compositionendイベントを取りこぼしても、focusoutで_imeComposingが無条件クリアされflushされる");
+    await page.goto(`http://localhost:${PORT}/styles.css`);  // gotoAiReportsと同じ理由(seed上書き競合の遮断)
     await page.evaluate((KEY) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.currentView = "journal";
@@ -141,7 +155,14 @@ function check(name, cond, extra = "") {
       s.feedbackFiles = [];
       localStorage.setItem(KEY, JSON.stringify(s));
     }, KEY);
-    await page.reload();
+    await page.goto(`http://localhost:${PORT}/`);
+    // v140フレーク修正の安定化: 起動時の前日AIフィードバック無条件fetch(汎用200ルートが本文を
+    // 返す→recordFeedbackFile→saveState+render)が非同期で走り終わるのを待ってから
+    // IMEシナリオを始める(待たないと保留・flushのタイミングと交錯し、延期検証が1/3程度で偽失敗する)
+    await page.waitForFunction((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      return s && ((Array.isArray(s.feedbackFiles) && s.feedbackFiles.length >= 1) || (s.feedback && Object.keys(s.feedback).length >= 1));
+    }, KEY, { timeout: 15000 });
     await page.waitForTimeout(500);
 
     const journalTextarea = page.locator(`[data-journal-date="${TODAY}"]`);
@@ -173,12 +194,18 @@ function check(name, cond, extra = "") {
     check("compositionend無しでもfocusoutだけで保留が解除されrenderが実行される(フェイルセーフ)", markerGoneAfterBlurWithoutCompositionEnd);
 
     console.log("[4-b] 60秒経過すると、focusout/compositionendを待たずに強制flushされる(周期チェックのフェイルセーフ)");
+    await page.goto(`http://localhost:${PORT}/styles.css`);  // gotoAiReportsと同じ理由(seed上書き競合の遮断)
     await page.evaluate((KEY) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.currentView = "journal";
       localStorage.setItem(KEY, JSON.stringify(s));
     }, KEY);
-    await page.reload();
+    await page.goto(`http://localhost:${PORT}/`);
+    // [4-a]と同じ安定化(feedbackが既に在る場合は即成立)
+    await page.waitForFunction((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      return s && ((Array.isArray(s.feedbackFiles) && s.feedbackFiles.length >= 1) || (s.feedback && Object.keys(s.feedback).length >= 1));
+    }, KEY, { timeout: 15000 });
     await page.waitForTimeout(500);
     const journalTextarea2 = page.locator(`[data-journal-date="${TODAY}"]`);
     await journalTextarea2.click();

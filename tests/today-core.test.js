@@ -1146,6 +1146,193 @@ function check(name, cond, extra = "") {
         return !!tl && !!fold && !!(tl.compareDocumentPosition(fold) & Node.DOCUMENT_POSITION_FOLLOWING);
       }));
     check("[23]区間の描画でpageerrorが発生しない", failures === failuresBeforeB3Reg);
+
+    // ============================================================
+    // ==== ここから B4(P10 cockpitテーマ6点セット / P11 全画面適用)追記セクション [24]〜[29] ====
+    // 設計の正: ../taskchute-notes/designs/v169-today-cockpit.md §6(6点セット。1つでも漏れるとドリフト)・
+    //   §7のP10/P11行(完了条件。特にP10「cockpit選択が再読込・同期後も維持される(A2再発防止の明示テスト)」)・
+    //   §11(P11対応表。now-line色は「cockpit時のみ変数で上書き」)。
+    // 現物調査: workbench/out/2026-07-29-today-cockpit-impl/b4-css-inventory.md(6点セットの実位置)。
+    // 実装(別担当が並行作業中)より先に仕様から書いた。前提が実装と食い違った場合は
+    // テストを弱めるのではなく、前提の側を実装と突合して直すこと:
+    //   前提B4-1: cockpit適用も既存2テーマと同じ html[data-theme] 属性経路
+    //            (index.html同期スクリプト(§6-6)+ render()内applyTheme()(§6-2/3))で行う
+    //   前提B4-2: 設定画面のテーマ選択肢は既存 select[data-setting-field="theme"] に
+    //            option value="cockpit"(表示名に「コックピット」を含む)を追加する(§6-5。
+    //            変更適用は既存data-setting-field汎用changeハンドラ=selectOptionで発火)
+    //   前提B4-3: 未知テーマ値はnormalizeStateの許可リスト(§6-4)で既定 "dark" へフォールバック
+    //            (既存実装 app.js の normalizeState がテーマ不正値を "dark" に落とす現挙動を維持)
+    //   前提B4-4: cockpitの --bg は #050a14系(サンプル値。b4-css-inventory.md §3-2)。実装が
+    //            近傍色へ調整する余地を残すため、厳密hex一致ではなく
+    //            「既存light/darkのどちらの値でもない」+「暗い青系(全ch<64かつ青>赤)」で判定する
+    //   前提B4-5: timelineのnow-line色(src/features/timeline.js のインライン#FF3B30)は
+    //            cockpit時のみ #FF3B30 以外へ上書きされ、light/darkでは従来色 #FF3B30 のまま
+    //            (§11は「上書き検討(1行)」表記だが、本スイートは委譲指示に従い契約として検証する。
+    //             実装が意図的に上書きを見送る場合はこの前提を実装と突合して直す)
+    // ============================================================
+
+    // 色文字列 "rgb(r, g, b)" / "rgba(...)" のパース(B4専用小物)
+    const parseRgbB4 = (s) => {
+      const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(s || "");
+      return m ? { r: +m[1], g: +m[2], b: +m[3] } : null;
+    };
+    // 現在テーマでの var(--bg) の解決値を、probe要素のcomputed backgroundColorとして読む
+    // (bodyの背景がグラデーション等のshorthandでも --bg 自体の値を直接検証できる)
+    async function resolvedBgVar() {
+      return page.evaluate(() => {
+        const probe = document.createElement("div");
+        probe.style.background = "var(--bg)";
+        document.body.appendChild(probe);
+        const c = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return c;
+      });
+    }
+    const LEGACY_DARK_BG = "rgb(17, 18, 22)";     // #111216
+    const LEGACY_LIGHT_BG = "rgb(247, 247, 250)"; // #f7f7fa
+    const NOW_LINE_LEGACY = "rgb(255, 59, 48)";   // #FF3B30(timeline.jsの従来ハードコード)
+
+    // ============================================================
+    // [24] P10 A2再発防止(最重要): theme="cockpit" がリロード・保存・再リロードを跨いで維持される
+    // ============================================================
+    console.log("[24] P10 A2再発防止: settings.theme='cockpit' をseed→リロードしてもテーマが維持される(§6-4許可リスト)");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seed({ view: "today", settings: { theme: "cockpit" } });
+    // seed()内のreloadで index.html同期スクリプト → normalizeState → render(applyTheme) を通過済み。
+    // 許可リストにcockpitが漏れているとここで data-theme が "dark" になりタイムアウトで落ちる(A2)。
+    await page.waitForSelector('html[data-theme="cockpit"]', { state: "attached" });
+    check("リロード後も html[data-theme='cockpit'] が維持される(§6-3/6-6。漏れるとdarkへ戻る)", true);
+    // 保存契機(setView)を踏んで localStorage へ書き戻させ、normalizeStateが値を
+    // 黙って "dark" に矯正していないことを突合する([21]と同じ保存契機の踏み方)
+    await page.locator('#sidebar .nav-button[data-action="nav"][data-view="tasks"]').click();
+    await waitView("tasks");
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).settings.theme === "cockpit", KEY);
+    check("保存(setView契機)後も localStorage の settings.theme が 'cockpit' のまま(A2の本体=正規化での矯正が無い)", true);
+    // 再リロード(seedし直さない=保存済みstateそのままの起動)でも維持される
+    await page.reload();
+    await page.waitForSelector('[data-action="nav"]', { state: "attached" });
+    await page.waitForSelector('html[data-theme="cockpit"]', { state: "attached" });
+    check("保存済みstateからの再リロードでも data-theme='cockpit' が維持される(P10完了条件の明示テスト)", true);
+    check("再リロード後の settings.theme も 'cockpit' のまま", (await stateNow()).settings.theme === "cockpit");
+
+    // ============================================================
+    // [25] P10: 設定画面のテーマ選択肢に「コックピット」があり、選択でbody配色が変わる
+    // ============================================================
+    console.log("[25] P10: 設定画面のテーマselectに「コックピット」が出て、選択で配色が --bg:#050a14系 へ変わる(§6-5)");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seed({ view: "settings", settings: { theme: "dark" } });
+    await page.waitForSelector('select[data-setting-field="theme"]', { state: "attached" });
+    // テーマselectは折りたたみ群「表示・タイマー」(details[data-fold-id="settings-display"]、既定閉)の
+    // 中にあるため、selectOption(可視要素必須)の前にフォールドを開く
+    await page.evaluate(() => { const d = document.querySelector('details[data-fold-id="settings-display"]'); if (d) d.open = true; });
+    check("テーマselectに option[value='cockpit'] がある(§6-5)",
+      await page.locator('select[data-setting-field="theme"] option[value="cockpit"]').count() === 1);
+    check("cockpit選択肢の表示名に「コックピット」を含む(前提B4-2)",
+      ((await page.evaluate(() =>
+        document.querySelector('select[data-setting-field="theme"] option[value="cockpit"]')?.textContent)) || "")
+        .includes("コックピット"));
+    await page.locator('select[data-setting-field="theme"]').selectOption("cockpit");
+    await page.waitForSelector('html[data-theme="cockpit"]', { state: "attached" });
+    check("選択で html[data-theme='cockpit'] へ切り替わる(data-setting-field汎用ハンドラ→applyTheme)", true);
+    const cockpitBgVar = await resolvedBgVar();
+    const cockpitRgb = parseRgbB4(cockpitBgVar);
+    check("cockpitの --bg が既存light/darkのどちらの値でもない(cockpit専用値が定義されている)",
+      cockpitBgVar !== LEGACY_DARK_BG && cockpitBgVar !== LEGACY_LIGHT_BG, cockpitBgVar);
+    check("cockpitの --bg が #050a14系の暗い青系(全ch<64かつ青>赤。前提B4-4)",
+      !!cockpitRgb && cockpitRgb.r < 64 && cockpitRgb.g < 64 && cockpitRgb.b < 64 && cockpitRgb.b > cockpitRgb.r,
+      cockpitBgVar);
+    const cockpitBodyBg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    check("body の computed background が従来dark/light値から変わる(選択が実際に見た目へ効く)",
+      cockpitBodyBg !== LEGACY_DARK_BG && cockpitBodyBg !== LEGACY_LIGHT_BG, cockpitBodyBg);
+
+    // ============================================================
+    // [26] P10: 未知テーマ値はnormalizeStateで既定へフォールバックし白画面にならない
+    // ============================================================
+    console.log("[26] P10: 未知テーマ値('neon')が既定 'dark' へフォールバックし、白画面にならない(§6-4)");
+    const failuresBeforeNeon = failures;  // この区間のpageerror検出用([13]と同じ方式)
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seed({ view: "today", settings: { theme: "neon" } });
+    await page.waitForSelector('html[data-theme="dark"]', { state: "attached" });
+    check("未知テーマ('neon')は data-theme='dark'(既定)へフォールバックする(前提B4-3)", true);
+    check("フォールバック後も today ビューが白画面にならない(#main非空)",
+      await page.evaluate(() => document.getElementById("main").innerHTML.trim().length > 0));
+    check("フォールバック後もパネル(NOW FOCUS)が描画される", await page.locator(".today-now-focus").count() === 1);
+    // 保存契機を踏むと不正値がstorage上も既定値へ正規化される(不正値の永続化を許さない)
+    await page.locator('#sidebar .nav-button[data-action="nav"][data-view="tasks"]').click();
+    await waitView("tasks");
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).settings.theme === "dark", KEY);
+    check("保存後は settings.theme が既定 'dark' に正規化される('neon'が残らない)", true);
+    check("[26]区間の描画でpageerrorが発生しない", failures === failuresBeforeNeon);
+
+    // ============================================================
+    // [27] P10: light/dark無変更 — cockpit導入後も既存2テーマの背景色が従来値のまま(回帰)
+    // ============================================================
+    console.log("[27] P10: cockpit導入後も light/dark の body 背景が従来値のまま([14]と同手法の回帰確認)");
+    await seed({ view: "today", settings: { theme: "dark" } });
+    await page.waitForSelector('html[data-theme="dark"]', { state: "attached" });
+    const darkBgB4 = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    check("darkテーマの body 背景が従来値 #111216 = rgb(17, 18, 22) のまま(cockpit実装後の回帰)",
+      darkBgB4 === LEGACY_DARK_BG, darkBgB4);
+    await seed({ view: "today", settings: { theme: "light" } });
+    await page.waitForSelector('html[data-theme="light"]', { state: "attached" });
+    const lightBgB4 = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    check("lightテーマの body 背景が従来値 #f7f7fa = rgb(247, 247, 250) のまま(cockpit実装後の回帰)",
+      lightBgB4 === LEGACY_LIGHT_BG, lightBgB4);
+
+    // ============================================================
+    // [28] P11: cockpitテーマで主要ビューを巡回して pageerror ゼロ・#main非空
+    // ============================================================
+    console.log("[28] P11: cockpitテーマで today/home/stats/timeline/settings を巡回し、pageerrorゼロ・#main非空");
+    const failuresBeforeTour = failures;  // 巡回区間のpageerror検出用(page.on('pageerror')が加算する)
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seed({
+      view: "today",
+      settings: { theme: "cockpit" },
+      blocks: [
+        // 各ビューに中身が出る最小フィクスチャ(実行中1+完了1+未着手1)
+        block("b4-run", { title: "B4-実行中", category: "仕事", actualStartAt: at("11:00"), plannedStartAt: at("11:00"), plannedEndAt: at("12:30"), estimateMin: 90 }),
+        block("b4-done", { title: "B4-完了", category: "学習", completed: true, actualStartAt: at("09:00"), actualEndAt: at("09:45") }),
+        block("b4-plan", { title: "B4-未着手", category: "仕事", plannedStartAt: at("14:00"), plannedEndAt: at("14:30") })
+      ]
+    });
+    await page.waitForSelector('html[data-theme="cockpit"]', { state: "attached" });
+    for (const view of ["today", "home", "stats", "timeline", "settings"]) {
+      await page.locator(`#sidebar .nav-button[data-action="nav"][data-view="${view}"]`).click();
+      await waitView(view);
+      check(`cockpitテーマで ${view} ビューの #main が空でない`,
+        await page.evaluate(() => document.getElementById("main").innerHTML.trim().length > 0));
+    }
+    check("巡回後も data-theme='cockpit' が維持されている(各render()のapplyTheme()で剥がれない)",
+      await page.evaluate(() => document.documentElement.getAttribute("data-theme")) === "cockpit");
+    check("[28]巡回区間で pageerror が発生しない(P11完了条件の機械検証部分)", failures === failuresBeforeTour);
+
+    // ============================================================
+    // [29] P11: timelineのnow-line色 — cockpit時は#FF3B30以外、light/dark時は従来色
+    // ============================================================
+    console.log("[29] P11: now-line色がcockpit時のみ変わり(#FF3B30以外)、light/darkでは従来色 #FF3B30 のまま(§11・前提B4-5)");
+    // 固定時刻12:00はtimeline表示レンジ(startHour=5〜)内なのでnow-lineが必ず描画される。
+    // 検証はcomputed borderTopColor(実装がインラインstyleのvar()参照でもCSS上書きでも成立する読み方)。
+    async function nowLineBorderColor() {
+      return page.evaluate(() => {
+        const el = document.querySelector(".now-line");
+        return el ? getComputedStyle(el).borderTopColor : null;
+      });
+    }
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seed({ view: "timeline", settings: { theme: "cockpit" } });
+    await page.waitForSelector(".now-line", { state: "attached" });
+    const cockpitNowLine = await nowLineBorderColor();
+    check("cockpitテーマで now-line が描画される", cockpitNowLine !== null);
+    check("cockpitテーマの now-line 色が従来ハードコード #FF3B30 以外(変数上書きが効いている。前提B4-5)",
+      cockpitNowLine !== null && cockpitNowLine !== NOW_LINE_LEGACY, cockpitNowLine);
+    await seed({ view: "timeline", settings: { theme: "dark" } });
+    await page.waitForSelector(".now-line", { state: "attached" });
+    check("darkテーマの now-line 色は従来色 #FF3B30 = rgb(255, 59, 48) のまま(P11: light/dark非影響)",
+      (await nowLineBorderColor()) === NOW_LINE_LEGACY, await nowLineBorderColor());
+    await seed({ view: "timeline", settings: { theme: "light" } });
+    await page.waitForSelector(".now-line", { state: "attached" });
+    check("lightテーマの now-line 色は従来色 #FF3B30 = rgb(255, 59, 48) のまま(P11: light/dark非影響)",
+      (await nowLineBorderColor()) === NOW_LINE_LEGACY, await nowLineBorderColor());
   } finally {
     await browser.close();
     server.close();
