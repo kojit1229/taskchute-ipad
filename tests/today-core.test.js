@@ -1553,6 +1553,17 @@ function check(name, cond, extra = "") {
     const driftText2 = await panelText(".drift-panel");
     check("「送る」後にズレ85分の表示が消える(着地予定が再計算される)",
       driftText2 === null || !textHasMin(driftText2, 85), driftText2);
+    // v186レビューT-2: 二重送り防止(postponeBlockToNextDayのsrc.migratedToガード)。
+    // 送済みBlockのidで直接actionを再発火してもBlock数が増えない
+    const blocksBeforeResend = stAfterSend.blocks.length;
+    await page.evaluate((id) => {
+      const btn = document.createElement("button");
+      btn.dataset.action = "drift-postpone"; btn.dataset.id = id;
+      document.body.appendChild(btn); btn.click(); btn.remove();
+    }, movedSrc?.id);
+    const stAfterResend = await stateNow();
+    check("送済みBlockへの再送はブロックされる(blocks数不変・二重送り防止)",
+      stAfterResend.blocks.length === blocksBeforeResend, `${blocksBeforeResend}→${stAfterResend.blocks.length}`);
 
     // ============================================================
     // [31c] F2 DRIFT表示条件: 過去日selectedDate・未完了0件では表示されない
@@ -1668,6 +1679,10 @@ function check(name, cond, extra = "") {
     check("トレンドのデータ点数=30日窓内のキー存在日数(6点: 今日・-1・-2・-3・-5・-6)(前提B5-8)",
       trendDates.length === 6, JSON.stringify(trendDates));
     check("記録ありの0件日(-2)は点として描かれる(欠測との区別)", trendDates.includes(daysAgoISO(2)), JSON.stringify(trendDates));
+    // v186レビューT-1: 点の%値が生データと一致することを1点で突合(-1日 = 2/3 = 67%)
+    const trendPct1 = await page.evaluate((d) =>
+      document.querySelector(`.routine-trend [data-date="${d}"]`)?.style.getPropertyValue("--routine-rate"), daysAgoISO(1));
+    check("トレンド点の%値が生データと一致(-1日: 2/3=67%)", (trendPct1 || "").trim() === "67%", trendPct1);
     check("欠測日(-4)は0%として描かれない(点が無い)", !trendDates.includes(daysAgoISO(4)), JSON.stringify(trendDates));
     check("30日窓の外(-40)は描かれない", !trendDates.includes(daysAgoISO(40)), JSON.stringify(trendDates));
 

@@ -112,6 +112,8 @@ const GOLDEN_CLICK_ACTIONS = [
   "experiment-copy-conclusion",
   "pomo-tab", "push-report", "add-task-to-project", "add-subtask",
   "timeline-new-block", "timeline-mode", "complete-block-with-actual",
+  "drift-postpone", "time-comb-fill",  // v186: F2 DRIFT(明日へ送る)+TIME COMB(隙間補完)の意図的追加
+
   "add-category", "delete-category", "add-break-message", "delete-break-message",
   "tl-zoom", "tl-energy-mode",
   "toggle-journal-segment", "toggle-home-reflect-fold", "toggle-settings-sync",
@@ -174,7 +176,9 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
   "routine-clear-day",
   // v181: src/features/timeline.js(configureTimeline)。ハンドラ実体(setTimelineMode)が
   // このファイルに既に存在するため、timeline系の中で唯一この動的実測方式で検証する。
-  "timeline-mode"
+  "timeline-mode",
+  // v186: F2でtimeline.jsのregisterActionsへ意図的に追加(DRIFT送り+TIME COMB隙間補完)
+  "drift-postpone", "time-comb-fill"
 ];
 
 // v174: 段階5-3で以下20件(settings 11 + sync 8 + core/nav 1)を、app.js自身が呼ぶ
