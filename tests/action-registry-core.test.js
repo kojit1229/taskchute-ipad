@@ -28,6 +28,11 @@
 // v180: 段階5-8(timeline系dispatcher分岐の移行・前半=Block作成2+Block/Now9+ポモドーロ16、
 // 計27分岐)で[3]をさらに拡張した。timeline系40分岐は200行予算に収まらないため2分割し、
 // 後半(日付ナビ3+タイムライン設定/カテゴリフィルタ9+timeline-mode)はv181で継続する。
+// v181: 段階5-8(timeline系dispatcher分岐の移行・後半=日付ナビ3+タイムライン設定/
+// カテゴリフィルタ9、計12分岐)で[3]をさらに拡張した。ハンドラ実体がsrc/features/timeline.jsに
+// 既にあるtimeline-mode(1件)は5feature側と同じ動的実測方式([3-b])で検証する
+// (FEATURE_MODULE_PATHSにtimeline.jsを追加)。これでtimeline系40分岐(v180前半27+v181後半12+
+// timeline-mode1)すべての移行が完了した。
 // prep-stage5-dispatcher.md §6-1の方式どおり構成:
 //   [1] src/ui/actions.jsの単体挙動(registerActions/dispatchAction、
 //       registerModalHandler/dispatchModalSave/dispatchModalDelete、重複登録ガード、
@@ -51,7 +56,10 @@ const FEATURE_MODULE_PATHS = [
   path.join(ROOT, "src", "features", "dashboard.js"),
   path.join(ROOT, "src", "features", "wish.js"),
   path.join(ROOT, "src", "features", "journal.js"),
-  path.join(ROOT, "src", "features", "routine.js")
+  path.join(ROOT, "src", "features", "routine.js"),
+  // v181: timeline-modeのハンドラ実体がこのファイルにあるため追加(configureTimeline({})を
+  // 空depsで呼んでも、registerActions呼び出し自体はdepsを参照しないため安全に実測できる)。
+  path.join(ROOT, "src", "features", "timeline.js")
 ];
 
 // wish.jsはモジュール読み込み時にdocument.addEventListener(pointerdown/move/up/cancel、月間ボード
@@ -163,7 +171,10 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
   "routine-mode", "garden-pixel-month", "routine-bulk-check", "routine-fallback",
   "hyperfocus-gate-fallback", "hyperfocus-gate-make-block", "hyperfocus-gate-later",
   "chain-run-open", "chain-step-complete", "chain-run-close", "chain-new", "chain-edit",
-  "routine-clear-day"
+  "routine-clear-day",
+  // v181: src/features/timeline.js(configureTimeline)。ハンドラ実体(setTimelineMode)が
+  // このファイルに既に存在するため、timeline系の中で唯一この動的実測方式で検証する。
+  "timeline-mode"
 ];
 
 // v174: 段階5-3で以下20件(settings 11 + sync 8 + core/nav 1)を、app.js自身が呼ぶ
@@ -180,12 +191,14 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
 // これでjournal系残ドメイン(0秒思考+週次/サイクル+問い+その他)の計65分岐すべての移行が
 // 完了した。
 // v180: 段階5-8(前半)で以下27件(timeline系のBlock作成2+Block/Now9+ポモドーロ16)を、
-// 同じくapp.js自身が呼ぶregisterActions({...})へ移行した。timeline系の残り13件(日付ナビ3+
-// タイムライン設定/カテゴリフィルタ9+timeline-mode)はv181で継続する。所属ドメインに確信が
-// 持てなかった6件(toggle-mit・mit-candidate-add・home-tab・open-md-in-github・reload-md・
-// stats-range)、toggle-criteria-request/home-jump(WBS/ホーム寄りで確信が持てない)、
-// body-scan-*(ポモドーロ完了時トリガーだがroutine.js未抽出の既存判断を維持)、
-// energy-open-routine(ルーティンタブへの導線でtimeline状態を触らない)、
+// 同じくapp.js自身が呼ぶregisterActions({...})へ移行した。
+// v181: 段階5-8(後半)で以下12件(timeline系の日付ナビ3+タイムライン設定/カテゴリフィルタ9)を、
+// 同じくapp.js自身が呼ぶregisterActions({...})へ移行した(timeline-modeのみsrc/features/
+// timeline.js側のMIGRATED_TO_REGISTRY_ACTIONSで検証する)。これでtimeline系40分岐すべての
+// 移行が完了した。所属ドメインに確信が持てなかった6件(toggle-mit・mit-candidate-add・home-tab・
+// open-md-in-github・reload-md・stats-range)、toggle-criteria-request/home-jump(WBS/ホーム寄り
+// で確信が持てない)、body-scan-*(ポモドーロ完了時トリガーだがroutine.js未抽出の既存判断を
+// 維持)、energy-open-routine(ルーティンタブへの導線でtimeline状態を触らない)、
 // triage-*(wish Tier3)・weekly-wish-*(wish週次選定、weekly-wish-toggleはpreventDefault依存)は
 // 従来どおり移行せず、if連鎖に残した(下のEXPECTED_REMAINING_IF_CHAINに含まれる)。
 const APP_JS_REGISTERED_ACTIONS = [
@@ -248,7 +261,12 @@ const APP_JS_REGISTERED_ACTIONS = [
   "start-pomodoro", "stop-pomodoro", "interrupt-reason", "interrupt-reason-cancel",
   "complete-pomodoro", "declare-confirm", "declare-skip", "report-outcome", "report-skip",
   "incomplete-reason-chip", "incomplete-reason-skip", "guided-access-dismiss",
-  "go-break", "end-break", "continue-focus", "finish-block"
+  "go-break", "end-break", "continue-focus", "finish-block",
+  // --- v181: 日付ナビ(3) ---
+  "date-prev", "date-next", "today",
+  // --- v181: タイムライン設定/カテゴリフィルタ(9) ---
+  "pomo-tab", "timeline-new-block", "complete-block-with-actual", "tl-zoom", "tl-energy-mode",
+  "toggle-pomo-fullscreen", "toggle-study-with-me", "energy-open-category", "timeline-clear-cat"
 ];
 
 const EXPECTED_REMAINING_IF_CHAIN = GOLDEN_CLICK_ACTIONS.filter(
@@ -391,20 +409,22 @@ function extractModalHandlerTypes() {
   check("if連鎖側の残存action名に重複がない",
     new Set(extracted).size === extracted.length);
 
-  console.log("[3-b] 5feature(avoid/wish/dashboard/journal/routine)のconfigureXxxを空depsで呼び、"
-    + "registerActionsが実際に登録するaction名がMIGRATED_TO_REGISTRY_ACTIONSと一致するか");
+  console.log("[3-b] 6feature(avoid/wish/dashboard/journal/routine/timeline)のconfigureXxxを"
+    + "空depsで呼び、registerActionsが実際に登録するaction名がMIGRATED_TO_REGISTRY_ACTIONSと"
+    + "一致するか");
   // configureXxx本体はdestructuring代入+registerActions呼び出しのみで、渡されたdepsの中身は
   // ハンドラのクロージャ内で遅延参照されるだけ(登録時には呼ばれない)ため、空depsで安全に呼べる
   // (src/features/*.js側のconfigureXxx実装を参照。design doc §6-1の重複登録ガード確認も兼ねる)。
   const featureMods = await Promise.all(
     FEATURE_MODULE_PATHS.map((p) => import(pathToFileURL(p).href))
   );
-  const [avoidMod, dashboardMod, wishMod, journalMod, routineMod] = featureMods;
+  const [avoidMod, dashboardMod, wishMod, journalMod, routineMod, timelineMod] = featureMods;
   avoidMod.configureAvoid({});
   dashboardMod.configureDashboard({});
   wishMod.configureWish({});
   journalMod.configureJournal({});
   routineMod.configureRoutine({});
+  timelineMod.configureTimeline({});
   const registered = actionsMod.__debugActionNames().filter((name) => !name.startsWith("__test"));
   check(`レジストリ側の登録件数は期待どおり${MIGRATED_TO_REGISTRY_ACTIONS.length}件`,
     registered.length === MIGRATED_TO_REGISTRY_ACTIONS.length,

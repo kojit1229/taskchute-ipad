@@ -736,6 +736,56 @@ registerActions({
   "continue-focus": () => continueFocusPomodoro(),
   "finish-block": () => finishBlockFromBreak()
 });
+// v181: app.js分割・段階5-8(timeline系dispatcher分岐の移行・後半)。日付ナビ3+タイムライン設定/
+// カテゴリフィルタ9の計12分岐を相乗りregisterActionsへ移行した(prep-stage5-dispatcher.md §4)。
+// これでtimeline系40分岐(v180前半27+v181後半12+timeline-mode1)すべての移行が完了した。
+// ハンドラ実体はいずれもapp.js残留のため相乗り(v174方式)。ロジック無改変。
+registerActions({
+  // --- 日付ナビ(3) ---
+  "date-prev": () => shiftSelectedDate(-1),
+  "date-next": () => shiftSelectedDate(1),
+  "today": () => setSelectedDate(todayISO()),
+  // --- タイムライン設定/カテゴリフィルタ(9) ---
+  "pomo-tab": ({ target }) => setPomodoroTab(target.dataset.tab),
+  "timeline-new-block": ({ target }) => {
+    const minute = Number(target.dataset.minute || 0);
+    openTimelineNewBlock(minute);
+  },
+  "complete-block-with-actual": ({ event, id }) => {
+    event.stopPropagation();
+    completeBlockWithActual(id);
+  },
+  "tl-zoom": ({ target }) => {
+    state.timelineZoom = Number(target.dataset.zoom) || 1;
+    persistLocalNoSchedule();
+    render();
+  },
+  "tl-energy-mode": ({ target }) => {
+    state.settings.timelineEnergyGraphMode = target.dataset.mode === "battery" ? "battery" : "energy";
+    persistLocalNoSchedule();
+    render();
+  },
+  "toggle-pomo-fullscreen": () => {
+    state.pomodoro.fullscreen = !state.pomodoro.fullscreen;
+    persistLocalNoSchedule();
+    render();
+  },
+  "toggle-study-with-me": () => {
+    state.pomodoro.studyWithMeOn = !state.pomodoro.studyWithMeOn;
+    persistLocalNoSchedule();
+    render();
+  },
+  "energy-open-category": ({ target }) => {
+    state.settings.timelineCategoryFilter = target.dataset.cat || "";
+    persistLocalNoSchedule();
+    setView("timeline");
+  },
+  "timeline-clear-cat": () => {
+    state.settings.timelineCategoryFilter = "";
+    persistLocalNoSchedule();
+    render();
+  }
+});
 let toastTimer = null;
 let timerTicker = null;
 // v144: エネルギーバッテリーの差分更新(updateBatteryTick)のスロットル用。
@@ -987,10 +1037,8 @@ document.addEventListener("click", (event) => {
   if (dispatchAction(action, { event, target, id })) return;
 
   // v174: navはapp.js内のregisterActionsへ移行した。
-  if (action === "date-prev") shiftSelectedDate(-1);
-  if (action === "date-next") shiftSelectedDate(1);
+  // v181: date-prev/date-next/todayはapp.js内のregisterActionsへ移行した。
   // v173: dashboard-date-prev/nextはsrc/features/dashboard.jsのregisterActionsへ移行した。
-  if (action === "today") setSelectedDate(todayISO());
   // v173: set-morning〜store-visit-yearはsrc/features/journal.jsのregisterActionsへ移行した。
   // v178: add-project/delete-project/add-task/toggle-taskはapp.js内のregisterActionsへ移行した。
   if (action === "toggle-criteria-request") toggleCriteriaRequest(id);  // v99: 翌朝AI設定依頼トグル
@@ -1051,48 +1099,15 @@ document.addEventListener("click", (event) => {
   //        reading-saveはapp.js内のregisterActionsへ移行した。
   // v179: experiment-add〜experiment-copy-conclusion(実験ログ5)はapp.js内の
   // registerActionsへ移行した。
-  // === v3: ポモドーロ常時起動 ===
-  if (action === "pomo-tab") setPomodoroTab(target.dataset.tab);
+  // v181: pomo-tab/timeline-new-block/complete-block-with-actual/tl-zoom/tl-energy-mode/
+  // toggle-pomo-fullscreen/toggle-study-with-meはapp.js内のregisterActionsへ移行した。
+  // timeline-modeのみハンドラ実体がsrc/features/timeline.js側のため、そちらの
+  // registerActions(v173方式)へ移行した。
   // v174: push-reportはapp.js内のregisterActionsへ移行した。
   // v178: add-task-to-project/add-subtaskはapp.js内のregisterActionsへ移行した。
-  // === v6: タイムラインから新規Block追加 ===
-  if (action === "timeline-new-block") {
-    const minute = Number(target.dataset.minute || 0);
-    openTimelineNewBlock(minute);
-  }
-  // === v7: タイムライン予定/実績切替 + 完了マーカー ===
-  if (action === "timeline-mode") setTimelineMode(target.dataset.mode);
-  if (action === "complete-block-with-actual") {
-    event.stopPropagation();
-    completeBlockWithActual(id);
-  }
   // v174: add-category〜delete-break-messageはapp.js内のregisterActionsへ移行した。
-  // v10: タイムラインズーム(v37: UI 操作なので dataModifiedAt を汚さない)
-  if (action === "tl-zoom") {
-    state.timelineZoom = Number(target.dataset.zoom) || 1;
-    persistLocalNoSchedule();
-    render();
-  }
-  // v148(UI改善計画Phase3-5): エネルギーグラフの表示モード切替(UI状態、dataModifiedAtは汚さない)
-  if (action === "tl-energy-mode") {
-    state.settings.timelineEnergyGraphMode = target.dataset.mode === "battery" ? "battery" : "energy";
-    persistLocalNoSchedule();
-    render();
-  }
   // v177: toggle-journal-segment/toggle-home-reflect-foldはapp.js内のregisterActionsへ移行した。
   // v174: toggle-settings-sync/toggle-sidebarはapp.js内のregisterActionsへ移行した。
-  // v12: ポモドーロ全画面切替(v37: 同上)
-  if (action === "toggle-pomo-fullscreen") {
-    state.pomodoro.fullscreen = !state.pomodoro.fullscreen;
-    persistLocalNoSchedule();
-    render();
-  }
-  // v84: Study With Me トグル(UI操作なのでfullscreenと同じくdataModifiedAtは汚さない)
-  if (action === "toggle-study-with-me") {
-    state.pomodoro.studyWithMeOn = !state.pomodoro.studyWithMeOn;
-    persistLocalNoSchedule();
-    render();
-  }
   // v173: add-wish〜wish-board-jump-currentはsrc/features/wish.jsのregisterActionsへ移行した。
   // triage-*(仕分けモード、Tier3=wish.js未抽出)はapp.js残留のためここに残す。
   // v152: 仕分けモード(先送りBlock+Wishバックログの三択トリアージ、ボタン版=S1)
@@ -1141,16 +1156,7 @@ document.addEventListener("click", (event) => {
   // v177: carry-over/migration-ritual-choice/ideal-retryはapp.js内のregisterActionsへ移行した。
   // v39/v40: エネルギー構造からの行動導線
   if (action === "energy-open-routine") openRoutineForWeekday(Number(target.dataset.day));
-  if (action === "energy-open-category") {
-    state.settings.timelineCategoryFilter = target.dataset.cat || "";
-    persistLocalNoSchedule();
-    setView("timeline");
-  }
-  if (action === "timeline-clear-cat") {
-    state.settings.timelineCategoryFilter = "";
-    persistLocalNoSchedule();
-    render();
-  }
+  // v181: energy-open-category/timeline-clear-catはapp.js内のregisterActionsへ移行した。
   // v173: routine-clear-dayはsrc/features/routine.jsのregisterActionsへ移行した。
 });
 

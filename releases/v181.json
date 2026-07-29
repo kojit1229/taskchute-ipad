@@ -1,0 +1,55 @@
+{
+  "version": 181,
+  "date": "2026-07-29",
+  "title": "app.js分割 段階5-8(timeline系dispatcher分岐の相乗り移行・後半+timeline.js側登録)",
+  "summary": "v180に続き、prep-stage5-dispatcher.md §2-Cのtimeline系(残ドメイン)後半として、日付ナビ(date-prev/date-next/today、3分岐)+タイムライン設定/カテゴリフィルタ(pomo-tab/timeline-new-block/complete-block-with-actual/tl-zoom/tl-energy-mode/toggle-pomo-fullscreen/toggle-study-with-me/energy-open-category/timeline-clear-cat、9分岐)の計12分岐をapp.js自身がregisterActions({...})を直接呼ぶ形でレジストリへ移行した(v174/v176/v177/v179/v180と同型の相乗り方式)。加えて、ハンドラ実体(setTimelineMode)がsrc/features/timeline.jsに既に存在するtimeline-mode(1分岐)は、同ファイル側でregisterActionsを呼ぶv173方式で登録した。これでtimeline系40分岐(v180前半27+v181後半12+timeline-mode1)すべての移行が完了した。",
+  "changedFiles": [
+    "app.js",
+    "sw.js",
+    "src/features/timeline.js",
+    "tests/action-registry-core.test.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "prep-stage5-dispatcher.md §4「dispatcher配線はUI配線であり機能ロジックではない」を根拠に、日付ナビ3+タイムライン設定/カテゴリフィルタ9の計12分岐(いずれもevent/target/idの単純な参照渡しのみで、preventDefault/stopPropagation/return意味論/順序依存を持たない)をapp.js相乗りレジストリへ移行した。",
+    "timeline-modeは、既に段階4-6(v175)でsrc/features/timeline.jsへ抽出済みのsetTimelineMode関数を直接呼ぶだけのハンドラのため、v173(wish.js等)と同じ「feature本体がregisterActionsを自分で呼ぶ」方式を採用した。他の39件(ハンドラ実体がapp.js残留)と配線方式を分けることで、将来timeline.jsの本体がさらに拡張された際にも登録ブロックがそのまま該当ファイルへ移行できる粒度を保った。",
+    "これでprep-stage5-dispatcher.md §7で見積もられていたtimeline系(41分岐見積り→精査の結果40分岐で確定)の移行が完了した。"
+  ],
+  "changes": [
+    "app.js: click dispatcherのif連鎖から日付ナビ3+タイムライン設定/カテゴリフィルタ9の計12分岐を削除し、v180のregisterActions({...})ブロックの直後に新しいregisterActions({...})呼び出しを追加して登録した(ハンドラ本体はロジック無改変、target/id/eventはctx destructuringで受け取る)。timeline-modeのif行も削除し、移行先を示すコメントへ差し替えた。削除箇所には移行先を示す1行コメントを残した。",
+    "src/features/timeline.js: registerActionsのimportを追加し、configureTimeline(deps)の末尾でtimeline-modeを登録するregisterActions({...})呼び出しを追加した(ハンドラ本体はif連鎖からロジック無改変で移した、setTimelineMode(target.dataset.mode)の1行)。",
+    "sw.js: CACHE_NAMEをv181へ更新した(src/features/timeline.jsは既存ファイルの変更のためAPP_SHELLの追加は不要)。",
+    "tests/action-registry-core.test.js: FEATURE_MODULE_PATHSにtimeline.jsを追加し、[3-b]で6feature目としてconfigureTimeline({})を空depsで呼ぶ動的実測に切り替えた。MIGRATED_TO_REGISTRY_ACTIONSへtimeline-modeを追記し、APP_JS_REGISTERED_ACTIONSへv181分12件を追記した。"
+  ],
+  "uncertainties": [
+    "所属ドメインに確信が持てなかった6件(toggle-mit・mit-candidate-add・home-tab・open-md-in-github・reload-md・stats-range)は引き続き見送り、if連鎖に残した(v177から継続)。",
+    "toggle-criteria-request/home-jumpはtimelineドメインとしての確信度が低いため今回も対象外とした(v180から継続)。",
+    "body-scan-*(3件)・energy-open-routineもv180と同じ理由で今回は対象外のまま(v180 uncertainties参照)。",
+    "wish Tier3(triage-*)・weekly-wish-*(preventDefault依存)は未着手のまま。"
+  ],
+  "reviewFocus": [
+    "移行した12分岐+timeline-modeのハンドラ本体が、移行前のif連鎖の中身と1文字も変わっていないこと(ロジック無改変、target/id/event→ctx destructuringのみの機械置換)。",
+    "timeline-modeのみsrc/features/timeline.js側でregisterActionsを呼ぶv173方式になっており、他の12件とは配線方式が異なることが意図どおりであること(コメントで明示)。",
+    "tests/action-registry-core.test.jsの保存則(if連鎖側20件+6feature側39件+app.js直接側166件=225件、重複ゼロ)が機械的に成立していること。",
+    "これでtimeline系40分岐(v180の27件+v181の13件)すべての移行が完了し、prep-stage5-dispatcher.md §2-Cのtimelineバケツが完結したこと。",
+    "タイムラインカードの実行接点(v70)・UI磨き(v127)・完了作法の統一(v150)・下書きD&D(v50)の各E2Eスイートがレジストリ経由でも同じ挙動を示すこと。"
+  ],
+  "verification": [
+    "node --check app.js / sw.js / src/features/timeline.js / tests/action-registry-core.test.js → 全てexit 0",
+    "node tests/action-registry-core.test.js → 全件成功(click保存則: if連鎖20+6feature39+app.js直接166=225)",
+    "node tests/run-all.js action-registry-core v50 v70 v127 v150 → 全件成功",
+    "npm run test:fast → 全件成功",
+    "npm run test:smoke → 全件成功",
+    "npm run test:core(timeout=600000で同期実行) → 実行結果を完了報告に記載",
+    "node scripts/release-gate.js releases/v181.json --suite=action-registry-core,v50,v70,v127,v150 → 実行結果を完了報告に記載",
+    "npm run code:index:write / npm run test:manifest:write 実行済み",
+    "git diff --numstat で実行コード差分を実測(app.js 56+50=106行、sw.js 1+1=2行、src/features/timeline.js 8+0=8行、計116行、200行以下)"
+  ],
+  "knownLimitations": [
+    "click dispatcherの残り分岐(所属ドメイン未確定6件+toggle-criteria-request/home-jump+body-scan-*+energy-open-routine+wish Tier3(triage-*)+weekly-wish-*)は未着手のまま、将来cleanupで個別判定する。",
+    "src/配下にpackage.json(type:module)を置いていないため、Node実行時にMODULE_TYPELESS_PACKAGE_JSON警告が出る(v164から継続、動作には影響しない)。"
+  ]
+}

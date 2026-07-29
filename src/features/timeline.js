@@ -40,6 +40,7 @@
 import { state } from "../state/store.js";
 import { persistLocalNoSchedule } from "../storage/local.js";
 import { assignBlocksToLanes, adjustLaneTopPositions } from "./timeline-layout.js";
+import { registerActions } from "../ui/actions.js";
 
 // ---- 依存注入(configureTimeline) ----
 let escapeHTML, getCategoryColor, migrationBadgeHTML, leverageTypeMarkHTML;
@@ -60,6 +61,13 @@ function configureTimeline(deps) {
     scheduleDraftActive, render, blocksForDate,
     timelineRailEl, appRootEl
   } = deps);
+  // v181: app.js分割・段階5-8(timeline系dispatcher分岐の移行・後半)。timeline-modeのハンドラ
+  // 実体(setTimelineMode)はこのファイルに既に存在するため、v173方式(feature本体側で
+  // registerActionsを呼ぶ)で登録する。他のtimeline系39分岐はハンドラ実体がapp.js残留のため、
+  // app.js自身が呼ぶregisterActions({...})(v174方式、v180/v181で分割移行)へ移行した。
+  registerActions({
+    "timeline-mode": ({ target }) => setTimelineMode(target.dataset.mode)
+  });
 }
 
 // ---- ここから抽出したコード本体(app.js:v174時点から移動。ロジック無改変) ----

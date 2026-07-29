@@ -3,7 +3,7 @@
   "generatedBy": "scripts/code-index.js",
   "parser": "acorn@8.18.0",
   "source": "app.js",
-  "sourceLines": 16277,
+  "sourceLines": 16283,
   "functions": [
     {
       "name": "pruneExpiredSuggestedThemes",
@@ -22,8 +22,8 @@
     {
       "name": "isFocusInEditableElement",
       "kind": "function",
-      "startLine": 871,
-      "endLine": 876,
+      "startLine": 921,
+      "endLine": 926,
       "lines": 6,
       "area": [
         "core"
@@ -36,8 +36,8 @@
     {
       "name": "renderDeferringForFocus",
       "kind": "function",
-      "startLine": 879,
-      "endLine": 886,
+      "startLine": 929,
+      "endLine": 936,
       "lines": 8,
       "area": [
         "ui"
@@ -51,8 +51,8 @@
     {
       "name": "attemptFlushDeferredRender",
       "kind": "function",
-      "startLine": 890,
-      "endLine": 897,
+      "startLine": 940,
+      "endLine": 947,
       "lines": 8,
       "area": [
         "ui"
@@ -66,8 +66,8 @@
     {
       "name": "readHomeFoldMap",
       "kind": "function",
-      "startLine": 937,
-      "endLine": 939,
+      "startLine": 987,
+      "endLine": 989,
       "lines": 3,
       "area": [
         "core"
@@ -80,8 +80,8 @@
     {
       "name": "isHomeFoldOpen",
       "kind": "function",
-      "startLine": 940,
-      "endLine": 943,
+      "startLine": 990,
+      "endLine": 993,
       "lines": 4,
       "area": [
         "core"
@@ -92,8 +92,8 @@
     {
       "name": "setHomeFoldOpen",
       "kind": "function",
-      "startLine": 944,
-      "endLine": 950,
+      "startLine": 994,
+      "endLine": 1000,
       "lines": 7,
       "area": [
         "core"
@@ -106,8 +106,8 @@
     {
       "name": "homeFoldSection",
       "kind": "function",
-      "startLine": 953,
-      "endLine": 960,
+      "startLine": 1003,
+      "endLine": 1010,
       "lines": 8,
       "area": [
         "core"
@@ -118,8 +118,8 @@
     {
       "name": "homeReflectFoldSection",
       "kind": "function",
-      "startLine": 964,
-      "endLine": 971,
+      "startLine": 1014,
+      "endLine": 1021,
       "lines": 8,
       "area": [
         "core"
@@ -128,11 +128,11 @@
       "effects": []
     },
     {
-      "name": "event:click@977",
+      "name": "event:click@1027",
       "kind": "event-listener",
-      "startLine": 977,
-      "endLine": 1155,
-      "lines": 179,
+      "startLine": 1027,
+      "endLine": 1161,
+      "lines": 135,
       "area": [
         "sync",
         "state",
@@ -143,9 +143,7 @@
       ],
       "stateKeys": [
         "modal",
-        "pomodoro",
-        "settings",
-        "timelineZoom"
+        "settings"
       ],
       "effects": [
         "save",
@@ -155,10 +153,10 @@
       ]
     },
     {
-      "name": "event:toggle@1160",
+      "name": "event:toggle@1166",
       "kind": "event-listener",
-      "startLine": 1160,
-      "endLine": 1164,
+      "startLine": 1166,
+      "endLine": 1170,
       "lines": 5,
       "area": [
         "core"
@@ -167,10 +165,10 @@
       "effects": []
     },
     {
-      "name": "event:compositionstart@1170",
+      "name": "event:compositionstart@1176",
       "kind": "event-listener",
-      "startLine": 1170,
-      "endLine": 1170,
+      "startLine": 1176,
+      "endLine": 1176,
       "lines": 1,
       "area": [
         "core"
@@ -179,10 +177,10 @@
       "effects": []
     },
     {
-      "name": "event:compositionend@1171",
+      "name": "event:compositionend@1177",
       "kind": "event-listener",
-      "startLine": 1171,
-      "endLine": 1174,
+      "startLine": 1177,
+      "endLine": 1180,
       "lines": 4,
       "area": [
         "ui"
@@ -191,10 +189,10 @@
       "effects": []
     },
     {
-      "name": "event:focusout@1175",
+      "name": "event:focusout@1181",
       "kind": "event-listener",
-      "startLine": 1175,
-      "endLine": 1184,
+      "startLine": 1181,
+      "endLine": 1190,
       "lines": 10,
       "area": [
         "ui"
@@ -205,10 +203,10 @@
       ]
     },
     {
-      "name": "event:input@1186",
+      "name": "event:input@1192",
       "kind": "event-listener",
-      "startLine": 1186,
-      "endLine": 1283,
+      "startLine": 1192,
+      "endLine": 1289,
       "lines": 98,
       "area": [
         "state",
@@ -229,10 +227,10 @@
       ]
     },
     {
-      "name": "event:change@1285",
+      "name": "event:change@1291",
       "kind": "event-listener",
-      "startLine": 1285,
-      "endLine": 1503,
+      "startLine": 1291,
+      "endLine": 1509,
       "lines": 219,
       "area": [
         "sync",
@@ -254,10 +252,10 @@
       ]
     },
     {
-      "name": "event:input@1506",
+      "name": "event:input@1512",
       "kind": "event-listener",
-      "startLine": 1506,
-      "endLine": 1518,
+      "startLine": 1512,
+      "endLine": 1524,
       "lines": 13,
       "area": [
         "content"
@@ -268,8 +266,8 @@
     {
       "name": "saveState",
       "kind": "function",
-      "startLine": 1525,
-      "endLine": 1546,
+      "startLine": 1531,
+      "endLine": 1552,
       "lines": 22,
       "area": [
         "sync",
@@ -288,8 +286,8 @@
     {
       "name": "resolveTheme",
       "kind": "function",
-      "startLine": 1557,
-      "endLine": 1560,
+      "startLine": 1563,
+      "endLine": 1566,
       "lines": 4,
       "area": [
         "content"
@@ -300,8 +298,8 @@
     {
       "name": "applyTheme",
       "kind": "function",
-      "startLine": 1561,
-      "endLine": 1567,
+      "startLine": 1567,
+      "endLine": 1573,
       "lines": 7,
       "area": [
         "content"
@@ -316,8 +314,8 @@
     {
       "name": "normalizeState",
       "kind": "function",
-      "startLine": 1569,
-      "endLine": 2125,
+      "startLine": 1575,
+      "endLine": 2131,
       "lines": 557,
       "area": [
         "sync",
@@ -338,8 +336,8 @@
     {
       "name": "defaultCategories",
       "kind": "function",
-      "startLine": 2128,
-      "endLine": 2137,
+      "startLine": 2134,
+      "endLine": 2143,
       "lines": 10,
       "area": [
         "core"
@@ -350,8 +348,8 @@
     {
       "name": "defaultBreakMessages",
       "kind": "function",
-      "startLine": 2140,
-      "endLine": 2147,
+      "startLine": 2146,
+      "endLine": 2153,
       "lines": 8,
       "area": [
         "core"
@@ -362,8 +360,8 @@
     {
       "name": "defaultLifeAreas",
       "kind": "function",
-      "startLine": 2150,
-      "endLine": 2161,
+      "startLine": 2156,
+      "endLine": 2167,
       "lines": 12,
       "area": [
         "core"
@@ -374,8 +372,8 @@
     {
       "name": "getRandomCelebrate",
       "kind": "function",
-      "startLine": 2178,
-      "endLine": 2180,
+      "startLine": 2184,
+      "endLine": 2186,
       "lines": 3,
       "area": [
         "core"
@@ -386,8 +384,8 @@
     {
       "name": "addCategory",
       "kind": "function",
-      "startLine": 2189,
-      "endLine": 2205,
+      "startLine": 2195,
+      "endLine": 2211,
       "lines": 17,
       "area": [
         "state",
@@ -403,8 +401,8 @@
     {
       "name": "deleteCategory",
       "kind": "function",
-      "startLine": 2208,
-      "endLine": 2219,
+      "startLine": 2214,
+      "endLine": 2225,
       "lines": 12,
       "area": [
         "state",
@@ -420,8 +418,8 @@
     {
       "name": "countCategoryUsage",
       "kind": "function",
-      "startLine": 2222,
-      "endLine": 2228,
+      "startLine": 2228,
+      "endLine": 2234,
       "lines": 7,
       "area": [
         "core"
@@ -436,8 +434,8 @@
     {
       "name": "updateCategoryField",
       "kind": "function",
-      "startLine": 2231,
-      "endLine": 2256,
+      "startLine": 2237,
+      "endLine": 2262,
       "lines": 26,
       "area": [
         "state",
@@ -457,8 +455,8 @@
     {
       "name": "addBreakMessage",
       "kind": "function",
-      "startLine": 2259,
-      "endLine": 2268,
+      "startLine": 2265,
+      "endLine": 2274,
       "lines": 10,
       "area": [
         "state",
@@ -474,8 +472,8 @@
     {
       "name": "deleteBreakMessage",
       "kind": "function",
-      "startLine": 2271,
-      "endLine": 2275,
+      "startLine": 2277,
+      "endLine": 2281,
       "lines": 5,
       "area": [
         "state",
@@ -491,8 +489,8 @@
     {
       "name": "updateBreakMessageField",
       "kind": "function",
-      "startLine": 2278,
-      "endLine": 2286,
+      "startLine": 2284,
+      "endLine": 2292,
       "lines": 9,
       "area": [
         "state",
@@ -508,8 +506,8 @@
     {
       "name": "getCategoryColor",
       "kind": "function",
-      "startLine": 2289,
-      "endLine": 2294,
+      "startLine": 2295,
+      "endLine": 2300,
       "lines": 6,
       "area": [
         "core"
@@ -522,8 +520,8 @@
     {
       "name": "getCategoryNames",
       "kind": "function",
-      "startLine": 2297,
-      "endLine": 2299,
+      "startLine": 2303,
+      "endLine": 2305,
       "lines": 3,
       "area": [
         "core"
@@ -536,8 +534,8 @@
     {
       "name": "getBreakMessage",
       "kind": "function",
-      "startLine": 2302,
-      "endLine": 2307,
+      "startLine": 2308,
+      "endLine": 2313,
       "lines": 6,
       "area": [
         "core"
@@ -550,8 +548,8 @@
     {
       "name": "defaultGitHubSettings",
       "kind": "function",
-      "startLine": 2309,
-      "endLine": 2324,
+      "startLine": 2315,
+      "endLine": 2330,
       "lines": 16,
       "area": [
         "sync"
@@ -564,8 +562,8 @@
     {
       "name": "handleAddCategoryFromModal",
       "kind": "function",
-      "startLine": 2327,
-      "endLine": 2354,
+      "startLine": 2333,
+      "endLine": 2360,
       "lines": 28,
       "area": [
         "state",
@@ -583,8 +581,8 @@
     {
       "name": "rerenderActiveModal",
       "kind": "function",
-      "startLine": 2361,
-      "endLine": 2384,
+      "startLine": 2367,
+      "endLine": 2390,
       "lines": 24,
       "area": [
         "execution",
@@ -600,8 +598,8 @@
     {
       "name": "renderCategorySelect",
       "kind": "function",
-      "startLine": 2385,
-      "endLine": 2400,
+      "startLine": 2391,
+      "endLine": 2406,
       "lines": 16,
       "area": [
         "ui"
@@ -612,8 +610,8 @@
     {
       "name": "seedState",
       "kind": "function",
-      "startLine": 2402,
-      "endLine": 2502,
+      "startLine": 2408,
+      "endLine": 2508,
       "lines": 101,
       "area": [
         "sync",
@@ -627,8 +625,8 @@
     {
       "name": "makeBlock",
       "kind": "function",
-      "startLine": 2504,
-      "endLine": 2534,
+      "startLine": 2510,
+      "endLine": 2540,
       "lines": 31,
       "area": [
         "execution"
@@ -639,8 +637,8 @@
     {
       "name": "render",
       "kind": "function",
-      "startLine": 2536,
-      "endLine": 2559,
+      "startLine": 2542,
+      "endLine": 2565,
       "lines": 24,
       "area": [
         "sync",
@@ -661,8 +659,8 @@
     {
       "name": "renderGate",
       "kind": "function",
-      "startLine": 2564,
-      "endLine": 2606,
+      "startLine": 2570,
+      "endLine": 2612,
       "lines": 43,
       "area": [
         "sync",
@@ -678,8 +676,8 @@
     {
       "name": "renderSidebar",
       "kind": "function",
-      "startLine": 2608,
-      "endLine": 2628,
+      "startLine": 2614,
+      "endLine": 2634,
       "lines": 21,
       "area": [
         "sync",
@@ -696,8 +694,8 @@
     {
       "name": "bottomNavEffectiveView",
       "kind": "function",
-      "startLine": 2633,
-      "endLine": 2635,
+      "startLine": 2639,
+      "endLine": 2641,
       "lines": 3,
       "area": [
         "ui"
@@ -708,8 +706,8 @@
     {
       "name": "renderBottomNav",
       "kind": "function",
-      "startLine": 2636,
-      "endLine": 2642,
+      "startLine": 2642,
+      "endLine": 2648,
       "lines": 7,
       "area": [
         "ui"
@@ -724,8 +722,8 @@
     {
       "name": "tasksViewRenderedBlocks",
       "kind": "function",
-      "startLine": 2649,
-      "endLine": 2660,
+      "startLine": 2655,
+      "endLine": 2666,
       "lines": 12,
       "area": [
         "execution",
@@ -739,8 +737,8 @@
     {
       "name": "currentOrNextTaskchuteBlockId",
       "kind": "function",
-      "startLine": 2661,
-      "endLine": 2672,
+      "startLine": 2667,
+      "endLine": 2678,
       "lines": 12,
       "area": [
         "execution",
@@ -754,8 +752,8 @@
     {
       "name": "renderMain",
       "kind": "function",
-      "startLine": 2682,
-      "endLine": 2751,
+      "startLine": 2688,
+      "endLine": 2757,
       "lines": 70,
       "area": [
         "execution",
@@ -776,8 +774,8 @@
     {
       "name": "renderHeader",
       "kind": "function",
-      "startLine": 2756,
-      "endLine": 2773,
+      "startLine": 2762,
+      "endLine": 2779,
       "lines": 18,
       "area": [
         "ui"
@@ -790,8 +788,8 @@
     {
       "name": "renderHome",
       "kind": "function",
-      "startLine": 2784,
-      "endLine": 2808,
+      "startLine": 2790,
+      "endLine": 2814,
       "lines": 25,
       "area": [
         "sync",
@@ -806,8 +804,8 @@
     {
       "name": "renderHomeTodayTab",
       "kind": "function",
-      "startLine": 2811,
-      "endLine": 2864,
+      "startLine": 2817,
+      "endLine": 2870,
       "lines": 54,
       "area": [
         "execution",
@@ -821,8 +819,8 @@
     {
       "name": "renderHomeReflectTab",
       "kind": "function",
-      "startLine": 2871,
-      "endLine": 2894,
+      "startLine": 2877,
+      "endLine": 2900,
       "lines": 24,
       "area": [
         "journal-health",
@@ -835,8 +833,8 @@
     {
       "name": "homeCreedBody",
       "kind": "function",
-      "startLine": 2901,
-      "endLine": 2913,
+      "startLine": 2907,
+      "endLine": 2919,
       "lines": 13,
       "area": [
         "core"
@@ -847,8 +845,8 @@
     {
       "name": "homeLifespanBody",
       "kind": "function",
-      "startLine": 2918,
-      "endLine": 2933,
+      "startLine": 2924,
+      "endLine": 2939,
       "lines": 16,
       "area": [
         "core"
@@ -859,8 +857,8 @@
     {
       "name": "plannedRange",
       "kind": "function",
-      "startLine": 2936,
-      "endLine": 2940,
+      "startLine": 2942,
+      "endLine": 2946,
       "lines": 5,
       "area": [
         "core"
@@ -871,8 +869,8 @@
     {
       "name": "idealActiveEntry",
       "kind": "function",
-      "startLine": 2952,
-      "endLine": 2959,
+      "startLine": 2958,
+      "endLine": 2965,
       "lines": 8,
       "area": [
         "core"
@@ -885,8 +883,8 @@
     {
       "name": "homeIdeal",
       "kind": "function",
-      "startLine": 2962,
-      "endLine": 2996,
+      "startLine": 2968,
+      "endLine": 3002,
       "lines": 35,
       "area": [
         "core"
@@ -897,8 +895,8 @@
     {
       "name": "homeDeclarationCard",
       "kind": "function",
-      "startLine": 3003,
-      "endLine": 3011,
+      "startLine": 3009,
+      "endLine": 3017,
       "lines": 9,
       "area": [
         "core"
@@ -912,8 +910,8 @@
     {
       "name": "homeVisionCard",
       "kind": "function",
-      "startLine": 3017,
-      "endLine": 3024,
+      "startLine": 3023,
+      "endLine": 3030,
       "lines": 8,
       "area": [
         "content"
@@ -924,8 +922,8 @@
     {
       "name": "homeConditionBudgetChip",
       "kind": "function",
-      "startLine": 3028,
-      "endLine": 3045,
+      "startLine": 3034,
+      "endLine": 3051,
       "lines": 18,
       "area": [
         "core"
@@ -938,8 +936,8 @@
     {
       "name": "computeHomeBatteryInfo",
       "kind": "function",
-      "startLine": 3054,
-      "endLine": 3063,
+      "startLine": 3060,
+      "endLine": 3069,
       "lines": 10,
       "area": [
         "journal-health"
@@ -954,8 +952,8 @@
     {
       "name": "homeBatteryChip",
       "kind": "function",
-      "startLine": 3071,
-      "endLine": 3088,
+      "startLine": 3077,
+      "endLine": 3094,
       "lines": 18,
       "area": [
         "journal-health"
@@ -968,8 +966,8 @@
     {
       "name": "homeWeeklyWishCard",
       "kind": "function",
-      "startLine": 3096,
-      "endLine": 3129,
+      "startLine": 3102,
+      "endLine": 3135,
       "lines": 34,
       "area": [
         "journal-health",
@@ -986,8 +984,8 @@
     {
       "name": "homeTodayStatusCard",
       "kind": "function",
-      "startLine": 3140,
-      "endLine": 3160,
+      "startLine": 3146,
+      "endLine": 3166,
       "lines": 21,
       "area": [
         "journal-health"
@@ -1002,8 +1000,8 @@
     {
       "name": "openWeeklyWishModal",
       "kind": "function",
-      "startLine": 3163,
-      "endLine": 3166,
+      "startLine": 3169,
+      "endLine": 3172,
       "lines": 4,
       "area": [
         "journal-health",
@@ -1018,8 +1016,8 @@
     {
       "name": "buildWeeklyWishModal",
       "kind": "function",
-      "startLine": 3167,
-      "endLine": 3194,
+      "startLine": 3173,
+      "endLine": 3200,
       "lines": 28,
       "area": [
         "journal-health",
@@ -1035,8 +1033,8 @@
     {
       "name": "submitWeeklyWish",
       "kind": "function",
-      "startLine": 3195,
-      "endLine": 3203,
+      "startLine": 3201,
+      "endLine": 3209,
       "lines": 9,
       "area": [
         "state",
@@ -1055,8 +1053,8 @@
     {
       "name": "resolveIdealRetry",
       "kind": "function",
-      "startLine": 3206,
-      "endLine": 3221,
+      "startLine": 3212,
+      "endLine": 3227,
       "lines": 16,
       "area": [
         "state",
@@ -1072,8 +1070,8 @@
     {
       "name": "dateHashSeed",
       "kind": "function",
-      "startLine": 3231,
-      "endLine": 3235,
+      "startLine": 3237,
+      "endLine": 3241,
       "lines": 5,
       "area": [
         "core"
@@ -1084,8 +1082,8 @@
     {
       "name": "todaysReadingPick",
       "kind": "function",
-      "startLine": 3238,
-      "endLine": 3255,
+      "startLine": 3244,
+      "endLine": 3261,
       "lines": 18,
       "area": [
         "core"
@@ -1096,8 +1094,8 @@
     {
       "name": "homeReadingCard",
       "kind": "function",
-      "startLine": 3259,
-      "endLine": 3277,
+      "startLine": 3265,
+      "endLine": 3283,
       "lines": 19,
       "area": [
         "core"
@@ -1108,8 +1106,8 @@
     {
       "name": "pushGitHubPath",
       "kind": "function",
-      "startLine": 3285,
-      "endLine": 3320,
+      "startLine": 3291,
+      "endLine": 3326,
       "lines": 36,
       "area": [
         "sync",
@@ -1126,8 +1124,8 @@
     {
       "name": "parseReadingReflections",
       "kind": "function",
-      "startLine": 3326,
-      "endLine": 3333,
+      "startLine": 3332,
+      "endLine": 3339,
       "lines": 8,
       "area": [
         "core"
@@ -1138,8 +1136,8 @@
     {
       "name": "saveReadingReflection",
       "kind": "function",
-      "startLine": 3338,
-      "endLine": 3383,
+      "startLine": 3344,
+      "endLine": 3389,
       "lines": 46,
       "area": [
         "sync",
@@ -1158,8 +1156,8 @@
     {
       "name": "hydrateReadingData",
       "kind": "function",
-      "startLine": 3389,
-      "endLine": 3417,
+      "startLine": 3395,
+      "endLine": 3423,
       "lines": 29,
       "area": [
         "sync"
@@ -1172,8 +1170,8 @@
     {
       "name": "readingMonthlySummarySectionHTML",
       "kind": "function",
-      "startLine": 3420,
-      "endLine": 3427,
+      "startLine": 3426,
+      "endLine": 3433,
       "lines": 8,
       "area": [
         "ui"
@@ -1184,8 +1182,8 @@
     {
       "name": "homeHero",
       "kind": "function",
-      "startLine": 3430,
-      "endLine": 3493,
+      "startLine": 3436,
+      "endLine": 3499,
       "lines": 64,
       "area": [
         "execution"
@@ -1200,8 +1198,8 @@
     {
       "name": "homeTodayEnemyCard",
       "kind": "function",
-      "startLine": 3503,
-      "endLine": 3518,
+      "startLine": 3509,
+      "endLine": 3524,
       "lines": 16,
       "area": [
         "core"
@@ -1212,8 +1210,8 @@
     {
       "name": "homeQuoteCard",
       "kind": "function",
-      "startLine": 3528,
-      "endLine": 3550,
+      "startLine": 3534,
+      "endLine": 3556,
       "lines": 23,
       "area": [
         "core"
@@ -1224,8 +1222,8 @@
     {
       "name": "cycleWeekProgress",
       "kind": "function",
-      "startLine": 3553,
-      "endLine": 3565,
+      "startLine": 3559,
+      "endLine": 3571,
       "lines": 13,
       "area": [
         "journal-health"
@@ -1240,8 +1238,8 @@
     {
       "name": "isStaleBlock",
       "kind": "function",
-      "startLine": 3572,
-      "endLine": 3577,
+      "startLine": 3578,
+      "endLine": 3583,
       "lines": 6,
       "area": [
         "execution"
@@ -1254,8 +1252,8 @@
     {
       "name": "taskchuteBlocks",
       "kind": "function",
-      "startLine": 3579,
-      "endLine": 3591,
+      "startLine": 3585,
+      "endLine": 3597,
       "lines": 13,
       "area": [
         "execution"
@@ -1268,8 +1266,8 @@
     {
       "name": "taskchuteStartRate",
       "kind": "function",
-      "startLine": 3594,
-      "endLine": 3598,
+      "startLine": 3600,
+      "endLine": 3604,
       "lines": 5,
       "area": [
         "execution"
@@ -1280,8 +1278,8 @@
     {
       "name": "homeScoreboard",
       "kind": "function",
-      "startLine": 3606,
-      "endLine": 3633,
+      "startLine": 3612,
+      "endLine": 3639,
       "lines": 28,
       "area": [
         "execution",
@@ -1293,8 +1291,8 @@
     {
       "name": "homeChargeSelects",
       "kind": "function",
-      "startLine": 3637,
-      "endLine": 3644,
+      "startLine": 3643,
+      "endLine": 3650,
       "lines": 8,
       "area": [
         "core"
@@ -1305,8 +1303,8 @@
     {
       "name": "homeCheckRow",
       "kind": "function",
-      "startLine": 3650,
-      "endLine": 3661,
+      "startLine": 3656,
+      "endLine": 3667,
       "lines": 12,
       "area": [
         "core"
@@ -1317,8 +1315,8 @@
     {
       "name": "homeMIT",
       "kind": "function",
-      "startLine": 3666,
-      "endLine": 3677,
+      "startLine": 3672,
+      "endLine": 3683,
       "lines": 12,
       "area": [
         "core"
@@ -1329,8 +1327,8 @@
     {
       "name": "addMITCandidate",
       "kind": "function",
-      "startLine": 3680,
-      "endLine": 3690,
+      "startLine": 3686,
+      "endLine": 3696,
       "lines": 11,
       "area": [
         "state",
@@ -1347,8 +1345,8 @@
     {
       "name": "homeTaskchute",
       "kind": "function",
-      "startLine": 3698,
-      "endLine": 3723,
+      "startLine": 3704,
+      "endLine": 3729,
       "lines": 26,
       "area": [
         "execution"
@@ -1359,8 +1357,8 @@
     {
       "name": "homeFlow",
       "kind": "function",
-      "startLine": 3726,
-      "endLine": 3747,
+      "startLine": 3732,
+      "endLine": 3753,
       "lines": 22,
       "area": [
         "core"
@@ -1373,8 +1371,8 @@
     {
       "name": "gardenSproutHTML",
       "kind": "function",
-      "startLine": 3756,
-      "endLine": 3787,
+      "startLine": 3762,
+      "endLine": 3793,
       "lines": 32,
       "area": [
         "core"
@@ -1385,8 +1383,8 @@
     {
       "name": "homeRoutine",
       "kind": "function",
-      "startLine": 3791,
-      "endLine": 3812,
+      "startLine": 3797,
+      "endLine": 3818,
       "lines": 22,
       "area": [
         "execution"
@@ -1400,8 +1398,8 @@
     {
       "name": "homeZone2Summary",
       "kind": "function",
-      "startLine": 3817,
-      "endLine": 3825,
+      "startLine": 3823,
+      "endLine": 3831,
       "lines": 9,
       "area": [
         "execution"
@@ -1412,8 +1410,8 @@
     {
       "name": "weekRange",
       "kind": "function",
-      "startLine": 3828,
-      "endLine": 3833,
+      "startLine": 3834,
+      "endLine": 3839,
       "lines": 6,
       "area": [
         "core"
@@ -1426,8 +1424,8 @@
     {
       "name": "homeCycle",
       "kind": "function",
-      "startLine": 3836,
-      "endLine": 3878,
+      "startLine": 3842,
+      "endLine": 3884,
       "lines": 43,
       "area": [
         "journal-health"
@@ -1443,8 +1441,8 @@
     {
       "name": "homeQuestions",
       "kind": "function",
-      "startLine": 3882,
-      "endLine": 3897,
+      "startLine": 3888,
+      "endLine": 3903,
       "lines": 16,
       "area": [
         "content"
@@ -1457,8 +1455,8 @@
     {
       "name": "homeWeeklyLink",
       "kind": "function",
-      "startLine": 3900,
-      "endLine": 3916,
+      "startLine": 3906,
+      "endLine": 3922,
       "lines": 17,
       "area": [
         "journal-health"
@@ -1472,8 +1470,8 @@
     {
       "name": "homeBacklog",
       "kind": "function",
-      "startLine": 3925,
-      "endLine": 3982,
+      "startLine": 3931,
+      "endLine": 3988,
       "lines": 58,
       "area": [
         "execution"
@@ -1488,8 +1486,8 @@
     {
       "name": "homeSteps",
       "kind": "function",
-      "startLine": 3985,
-      "endLine": 4015,
+      "startLine": 3991,
+      "endLine": 4021,
       "lines": 31,
       "area": [
         "core"
@@ -1500,8 +1498,8 @@
     {
       "name": "addTaskToToday",
       "kind": "function",
-      "startLine": 4018,
-      "endLine": 4033,
+      "startLine": 4024,
+      "endLine": 4039,
       "lines": 16,
       "area": [
         "state",
@@ -1519,8 +1517,8 @@
     {
       "name": "copyReportToClipboard",
       "kind": "function",
-      "startLine": 4041,
-      "endLine": 4053,
+      "startLine": 4047,
+      "endLine": 4059,
       "lines": 13,
       "area": [
         "ui",
@@ -1537,8 +1535,8 @@
     {
       "name": "shareReport",
       "kind": "function",
-      "startLine": 4054,
-      "endLine": 4058,
+      "startLine": 4060,
+      "endLine": 4064,
       "lines": 5,
       "area": [
         "ui",
@@ -1553,8 +1551,8 @@
     {
       "name": "aiMitChips",
       "kind": "function",
-      "startLine": 4070,
-      "endLine": 4080,
+      "startLine": 4076,
+      "endLine": 4086,
       "lines": 11,
       "area": [
         "core"
@@ -1568,8 +1566,8 @@
     {
       "name": "adoptAiMit",
       "kind": "function",
-      "startLine": 4081,
-      "endLine": 4094,
+      "startLine": 4087,
+      "endLine": 4100,
       "lines": 14,
       "area": [
         "state",
@@ -1587,8 +1585,8 @@
     {
       "name": "aiTaskChips",
       "kind": "function",
-      "startLine": 4099,
-      "endLine": 4113,
+      "startLine": 4105,
+      "endLine": 4119,
       "lines": 15,
       "area": [
         "core"
@@ -1602,8 +1600,8 @@
     {
       "name": "adoptAiTaskCandidate",
       "kind": "function",
-      "startLine": 4114,
-      "endLine": 4123,
+      "startLine": 4120,
+      "endLine": 4129,
       "lines": 10,
       "area": [
         "state",
@@ -1620,8 +1618,8 @@
     {
       "name": "dismissAiTaskCandidate",
       "kind": "function",
-      "startLine": 4124,
-      "endLine": 4130,
+      "startLine": 4130,
+      "endLine": 4136,
       "lines": 7,
       "area": [
         "state",
@@ -1637,8 +1635,8 @@
     {
       "name": "scheduleDraftActive",
       "kind": "function",
-      "startLine": 4161,
-      "endLine": 4163,
+      "startLine": 4167,
+      "endLine": 4169,
       "lines": 3,
       "area": [
         "execution"
@@ -1649,8 +1647,8 @@
     {
       "name": "minToHHMM",
       "kind": "function",
-      "startLine": 4165,
-      "endLine": 4168,
+      "startLine": 4171,
+      "endLine": 4174,
       "lines": 4,
       "area": [
         "core"
@@ -1661,8 +1659,8 @@
     {
       "name": "computeFreeGaps",
       "kind": "function",
-      "startLine": 4173,
-      "endLine": 4200,
+      "startLine": 4179,
+      "endLine": 4206,
       "lines": 28,
       "area": [
         "execution"
@@ -1673,8 +1671,8 @@
     {
       "name": "aiScheduleCandidates",
       "kind": "function",
-      "startLine": 4212,
-      "endLine": 4234,
+      "startLine": 4218,
+      "endLine": 4240,
       "lines": 23,
       "area": [
         "execution"
@@ -1690,8 +1688,8 @@
     {
       "name": "runAiSchedule",
       "kind": "function",
-      "startLine": 4240,
-      "endLine": 4260,
+      "startLine": 4246,
+      "endLine": 4266,
       "lines": 21,
       "area": [
         "execution",
@@ -1709,8 +1707,8 @@
     {
       "name": "renderDraftLayer",
       "kind": "function",
-      "startLine": 4263,
-      "endLine": 4288,
+      "startLine": 4269,
+      "endLine": 4294,
       "lines": 26,
       "area": [
         "state",
@@ -1724,8 +1722,8 @@
     {
       "name": "draftBarHTML",
       "kind": "function",
-      "startLine": 4290,
-      "endLine": 4316,
+      "startLine": 4296,
+      "endLine": 4322,
       "lines": 27,
       "area": [
         "core"
@@ -1738,8 +1736,8 @@
     {
       "name": "zeroSecThemeBarHTML",
       "kind": "function",
-      "startLine": 4322,
-      "endLine": 4337,
+      "startLine": 4328,
+      "endLine": 4343,
       "lines": 16,
       "area": [
         "content"
@@ -1752,8 +1750,8 @@
     {
       "name": "decideZeroSecTheme",
       "kind": "function",
-      "startLine": 4341,
-      "endLine": 4358,
+      "startLine": 4347,
+      "endLine": 4364,
       "lines": 18,
       "area": [
         "state",
@@ -1771,8 +1769,8 @@
     {
       "name": "snapshotDraftForUndo",
       "kind": "function",
-      "startLine": 4365,
-      "endLine": 4369,
+      "startLine": 4371,
+      "endLine": 4375,
       "lines": 5,
       "area": [
         "core"
@@ -1783,8 +1781,8 @@
     {
       "name": "draftRejectReasonPickerHTML",
       "kind": "function",
-      "startLine": 4376,
-      "endLine": 4386,
+      "startLine": 4382,
+      "endLine": 4392,
       "lines": 11,
       "area": [
         "core"
@@ -1795,8 +1793,8 @@
     {
       "name": "recordScheduleHistory",
       "kind": "function",
-      "startLine": 4406,
-      "endLine": 4425,
+      "startLine": 4412,
+      "endLine": 4431,
       "lines": 20,
       "area": [
         "execution"
@@ -1809,8 +1807,8 @@
     {
       "name": "confirmScheduleDraft",
       "kind": "function",
-      "startLine": 4427,
-      "endLine": 4474,
+      "startLine": 4433,
+      "endLine": 4480,
       "lines": 48,
       "area": [
         "state",
@@ -1827,8 +1825,8 @@
     {
       "name": "aiMorningPlanCandidates",
       "kind": "function",
-      "startLine": 4485,
-      "endLine": 4500,
+      "startLine": 4491,
+      "endLine": 4506,
       "lines": 16,
       "area": [
         "execution"
@@ -1839,8 +1837,8 @@
     {
       "name": "fallbackMorningPlan",
       "kind": "function",
-      "startLine": 4518,
-      "endLine": 4546,
+      "startLine": 4524,
+      "endLine": 4552,
       "lines": 29,
       "area": [
         "core"
@@ -1851,8 +1849,8 @@
     {
       "name": "tryFetchAiPlan",
       "kind": "function",
-      "startLine": 4555,
-      "endLine": 4617,
+      "startLine": 4561,
+      "endLine": 4623,
       "lines": 63,
       "area": [
         "sync",
@@ -1868,8 +1866,8 @@
     {
       "name": "fetchAiPlanFreshnessDate",
       "kind": "function",
-      "startLine": 4621,
-      "endLine": 4630,
+      "startLine": 4627,
+      "endLine": 4636,
       "lines": 10,
       "area": [
         "sync"
@@ -1882,8 +1880,8 @@
     {
       "name": "fetchZeroSecThemes",
       "kind": "function",
-      "startLine": 4636,
-      "endLine": 4647,
+      "startLine": 4642,
+      "endLine": 4653,
       "lines": 12,
       "area": [
         "sync",
@@ -1897,8 +1895,8 @@
     {
       "name": "extractZeroSecThemesFromReport",
       "kind": "function",
-      "startLine": 4657,
-      "endLine": 4678,
+      "startLine": 4663,
+      "endLine": 4684,
       "lines": 22,
       "area": [
         "content"
@@ -1909,8 +1907,8 @@
     {
       "name": "showZeroSecThemesOnlyIfAny",
       "kind": "function",
-      "startLine": 4684,
-      "endLine": 4690,
+      "startLine": 4690,
+      "endLine": 4696,
       "lines": 7,
       "area": [
         "ui",
@@ -1926,8 +1924,8 @@
     {
       "name": "runAiMorningPlan",
       "kind": "function",
-      "startLine": 4695,
-      "endLine": 4785,
+      "startLine": 4701,
+      "endLine": 4791,
       "lines": 91,
       "area": [
         "sync",
@@ -1951,8 +1949,8 @@
     {
       "name": "maybeAutoMorningPlan",
       "kind": "function",
-      "startLine": 4797,
-      "endLine": 4819,
+      "startLine": 4803,
+      "endLine": 4825,
       "lines": 23,
       "area": [
         "core"
@@ -1967,10 +1965,10 @@
       ]
     },
     {
-      "name": "event:pointerdown@4823",
+      "name": "event:pointerdown@4829",
       "kind": "event-listener",
-      "startLine": 4823,
-      "endLine": 4838,
+      "startLine": 4829,
+      "endLine": 4844,
       "lines": 16,
       "area": [
         "core"
@@ -1979,10 +1977,10 @@
       "effects": []
     },
     {
-      "name": "event:pointermove@4839",
+      "name": "event:pointermove@4845",
       "kind": "event-listener",
-      "startLine": 4839,
-      "endLine": 4855,
+      "startLine": 4845,
+      "endLine": 4861,
       "lines": 17,
       "area": [
         "core"
@@ -1995,8 +1993,8 @@
     {
       "name": "endDraftDrag",
       "kind": "function",
-      "startLine": 4856,
-      "endLine": 4861,
+      "startLine": 4862,
+      "endLine": 4867,
       "lines": 6,
       "area": [
         "ui"
@@ -2009,8 +2007,8 @@
     {
       "name": "openSearchModal",
       "kind": "function",
-      "startLine": 4880,
-      "endLine": 4884,
+      "startLine": 4886,
+      "endLine": 4890,
       "lines": 5,
       "area": [
         "ui"
@@ -2026,8 +2024,8 @@
     {
       "name": "buildSearchModal",
       "kind": "function",
-      "startLine": 4886,
-      "endLine": 4905,
+      "startLine": 4892,
+      "endLine": 4911,
       "lines": 20,
       "area": [
         "ui"
@@ -2040,8 +2038,8 @@
     {
       "name": "searchSnippet",
       "kind": "function",
-      "startLine": 4908,
-      "endLine": 4913,
+      "startLine": 4914,
+      "endLine": 4919,
       "lines": 6,
       "area": [
         "core"
@@ -2052,8 +2050,8 @@
     {
       "name": "crossSearchHits",
       "kind": "function",
-      "startLine": 4915,
-      "endLine": 4947,
+      "startLine": 4921,
+      "endLine": 4953,
       "lines": 33,
       "area": [
         "core"
@@ -2072,8 +2070,8 @@
     {
       "name": "crossSearchResultsHTML",
       "kind": "function",
-      "startLine": 4949,
-      "endLine": 4972,
+      "startLine": 4955,
+      "endLine": 4978,
       "lines": 24,
       "area": [
         "core"
@@ -2084,8 +2082,8 @@
     {
       "name": "carryableBlocks",
       "kind": "function",
-      "startLine": 4978,
-      "endLine": 4983,
+      "startLine": 4984,
+      "endLine": 4989,
       "lines": 6,
       "area": [
         "execution"
@@ -2098,8 +2096,8 @@
     {
       "name": "carryOverPanel",
       "kind": "function",
-      "startLine": 4984,
-      "endLine": 4995,
+      "startLine": 4990,
+      "endLine": 5001,
       "lines": 12,
       "area": [
         "state",
@@ -2113,8 +2111,8 @@
     {
       "name": "leverageTypeLabel",
       "kind": "function",
-      "startLine": 5001,
-      "endLine": 5003,
+      "startLine": 5007,
+      "endLine": 5009,
       "lines": 3,
       "area": [
         "core"
@@ -2125,8 +2123,8 @@
     {
       "name": "leverageTypeMarkHTML",
       "kind": "function",
-      "startLine": 5005,
-      "endLine": 5008,
+      "startLine": 5011,
+      "endLine": 5014,
       "lines": 4,
       "area": [
         "core"
@@ -2137,8 +2135,8 @@
     {
       "name": "leverageTypeOptionsHTML",
       "kind": "function",
-      "startLine": 5010,
-      "endLine": 5019,
+      "startLine": 5016,
+      "endLine": 5025,
       "lines": 10,
       "area": [
         "core"
@@ -2149,8 +2147,8 @@
     {
       "name": "leverageJudgeHelperHTML",
       "kind": "function",
-      "startLine": 5026,
-      "endLine": 5043,
+      "startLine": 5032,
+      "endLine": 5049,
       "lines": 18,
       "area": [
         "core"
@@ -2161,8 +2159,8 @@
     {
       "name": "detectLeverageTypeFromTitle",
       "kind": "function",
-      "startLine": 5048,
-      "endLine": 5050,
+      "startLine": 5054,
+      "endLine": 5056,
       "lines": 3,
       "area": [
         "core"
@@ -2173,8 +2171,8 @@
     {
       "name": "migrationBadgeHTML",
       "kind": "function",
-      "startLine": 5067,
-      "endLine": 5070,
+      "startLine": 5073,
+      "endLine": 5076,
       "lines": 4,
       "area": [
         "state"
@@ -2185,8 +2183,8 @@
     {
       "name": "migrationNextCount",
       "kind": "function",
-      "startLine": 5073,
-      "endLine": 5076,
+      "startLine": 5079,
+      "endLine": 5082,
       "lines": 4,
       "area": [
         "state",
@@ -2198,8 +2196,8 @@
     {
       "name": "requestCarryOver",
       "kind": "function",
-      "startLine": 5079,
-      "endLine": 5088,
+      "startLine": 5085,
+      "endLine": 5094,
       "lines": 10,
       "area": [
         "state",
@@ -2211,8 +2209,8 @@
     {
       "name": "carryOverBlock",
       "kind": "function",
-      "startLine": 5090,
-      "endLine": 5111,
+      "startLine": 5096,
+      "endLine": 5117,
       "lines": 22,
       "area": [
         "state",
@@ -2229,8 +2227,8 @@
     {
       "name": "moveBlockToWish",
       "kind": "function",
-      "startLine": 5119,
-      "endLine": 5129,
+      "startLine": 5125,
+      "endLine": 5135,
       "lines": 11,
       "area": [
         "execution",
@@ -2244,8 +2242,8 @@
     {
       "name": "logMigrationRitual",
       "kind": "function",
-      "startLine": 5134,
-      "endLine": 5149,
+      "startLine": 5140,
+      "endLine": 5155,
       "lines": 16,
       "area": [
         "state"
@@ -2258,8 +2256,8 @@
     {
       "name": "openMigrationRitual",
       "kind": "function",
-      "startLine": 5151,
-      "endLine": 5157,
+      "startLine": 5157,
+      "endLine": 5163,
       "lines": 7,
       "area": [
         "state",
@@ -2274,8 +2272,8 @@
     {
       "name": "buildMigrationRitualModal",
       "kind": "function",
-      "startLine": 5159,
-      "endLine": 5179,
+      "startLine": 5165,
+      "endLine": 5185,
       "lines": 21,
       "area": [
         "state",
@@ -2287,8 +2285,8 @@
     {
       "name": "resolveMigrationRitual",
       "kind": "function",
-      "startLine": 5181,
-      "endLine": 5269,
+      "startLine": 5187,
+      "endLine": 5275,
       "lines": 89,
       "area": [
         "state",
@@ -2308,8 +2306,8 @@
     {
       "name": "extractMITCandidatesFromReport",
       "kind": "function",
-      "startLine": 5271,
-      "endLine": 5307,
+      "startLine": 5277,
+      "endLine": 5313,
       "lines": 37,
       "area": [
         "content"
@@ -2320,8 +2318,8 @@
     {
       "name": "triageQueue",
       "kind": "function",
-      "startLine": 5363,
-      "endLine": 5375,
+      "startLine": 5369,
+      "endLine": 5381,
       "lines": 13,
       "area": [
         "execution",
@@ -2333,8 +2331,8 @@
     {
       "name": "triageBadgeHTML",
       "kind": "function",
-      "startLine": 5378,
-      "endLine": 5384,
+      "startLine": 5384,
+      "endLine": 5390,
       "lines": 7,
       "area": [
         "execution"
@@ -2345,8 +2343,8 @@
     {
       "name": "triageSubtitleText",
       "kind": "function",
-      "startLine": 5387,
-      "endLine": 5397,
+      "startLine": 5393,
+      "endLine": 5403,
       "lines": 11,
       "area": [
         "execution"
@@ -2357,8 +2355,8 @@
     {
       "name": "logSwipeTriage",
       "kind": "function",
-      "startLine": 5404,
-      "endLine": 5420,
+      "startLine": 5410,
+      "endLine": 5426,
       "lines": 17,
       "area": [
         "execution"
@@ -2371,8 +2369,8 @@
     {
       "name": "triageUndoToastOpts",
       "kind": "function",
-      "startLine": 5444,
-      "endLine": 5452,
+      "startLine": 5450,
+      "endLine": 5458,
       "lines": 9,
       "area": [
         "execution",
@@ -2384,8 +2382,8 @@
     {
       "name": "triageUndoLogArray",
       "kind": "function",
-      "startLine": 5460,
-      "endLine": 5463,
+      "startLine": 5466,
+      "endLine": 5469,
       "lines": 4,
       "area": [
         "execution"
@@ -2396,8 +2394,8 @@
     {
       "name": "triageUndo",
       "kind": "function",
-      "startLine": 5468,
-      "endLine": 5474,
+      "startLine": 5474,
+      "endLine": 5480,
       "lines": 7,
       "area": [
         "state",
@@ -2412,8 +2410,8 @@
     {
       "name": "triageAction",
       "kind": "function",
-      "startLine": 5495,
-      "endLine": 5738,
+      "startLine": 5501,
+      "endLine": 5744,
       "lines": 244,
       "area": [
         "state",
@@ -2436,8 +2434,8 @@
     {
       "name": "triageInlineReasonHTML",
       "kind": "function",
-      "startLine": 5744,
-      "endLine": 5759,
+      "startLine": 5750,
+      "endLine": 5765,
       "lines": 16,
       "area": [
         "execution"
@@ -2448,8 +2446,8 @@
     {
       "name": "renderWishTriage",
       "kind": "function",
-      "startLine": 5762,
-      "endLine": 5792,
+      "startLine": 5768,
+      "endLine": 5798,
       "lines": 31,
       "area": [
         "execution",
@@ -2462,8 +2460,8 @@
     {
       "name": "triageSwipeCandidate",
       "kind": "function",
-      "startLine": 5820,
-      "endLine": 5824,
+      "startLine": 5826,
+      "endLine": 5830,
       "lines": 5,
       "area": [
         "execution"
@@ -2474,8 +2472,8 @@
     {
       "name": "updateTriageSwipeHint",
       "kind": "function",
-      "startLine": 5829,
-      "endLine": 5836,
+      "startLine": 5835,
+      "endLine": 5842,
       "lines": 8,
       "area": [
         "execution"
@@ -2488,8 +2486,8 @@
     {
       "name": "triageExitTransform",
       "kind": "function",
-      "startLine": 5839,
-      "endLine": 5844,
+      "startLine": 5845,
+      "endLine": 5850,
       "lines": 6,
       "area": [
         "execution"
@@ -2500,8 +2498,8 @@
     {
       "name": "triagePrefersReducedMotion",
       "kind": "function",
-      "startLine": 5846,
-      "endLine": 5848,
+      "startLine": 5852,
+      "endLine": 5854,
       "lines": 3,
       "area": [
         "execution"
@@ -2512,8 +2510,8 @@
     {
       "name": "resetTriageCardVisual",
       "kind": "function",
-      "startLine": 5852,
-      "endLine": 5858,
+      "startLine": 5858,
+      "endLine": 5864,
       "lines": 7,
       "area": [
         "execution"
@@ -2524,10 +2522,10 @@
       ]
     },
     {
-      "name": "event:pointerdown@5860",
+      "name": "event:pointerdown@5866",
       "kind": "event-listener",
-      "startLine": 5860,
-      "endLine": 5868,
+      "startLine": 5866,
+      "endLine": 5874,
       "lines": 9,
       "area": [
         "core"
@@ -2536,10 +2534,10 @@
       "effects": []
     },
     {
-      "name": "event:pointermove@5869",
+      "name": "event:pointermove@5875",
       "kind": "event-listener",
-      "startLine": 5869,
-      "endLine": 5879,
+      "startLine": 5875,
+      "endLine": 5885,
       "lines": 11,
       "area": [
         "execution"
@@ -2550,8 +2548,8 @@
     {
       "name": "endTriageSwipe",
       "kind": "function",
-      "startLine": 5881,
-      "endLine": 5907,
+      "startLine": 5887,
+      "endLine": 5913,
       "lines": 27,
       "area": [
         "execution"
@@ -2562,10 +2560,10 @@
       ]
     },
     {
-      "name": "event:pointercancel@5910",
+      "name": "event:pointercancel@5916",
       "kind": "event-listener",
-      "startLine": 5910,
-      "endLine": 5914,
+      "startLine": 5916,
+      "endLine": 5920,
       "lines": 5,
       "area": [
         "execution"
@@ -2576,8 +2574,8 @@
     {
       "name": "updateTaskField",
       "kind": "function",
-      "startLine": 5917,
-      "endLine": 5922,
+      "startLine": 5923,
+      "endLine": 5928,
       "lines": 6,
       "area": [
         "state"
@@ -2592,8 +2590,8 @@
     {
       "name": "deriveStatusFromProgress",
       "kind": "function",
-      "startLine": 5928,
-      "endLine": 5934,
+      "startLine": 5934,
+      "endLine": 5940,
       "lines": 7,
       "area": [
         "core"
@@ -2604,8 +2602,8 @@
     {
       "name": "fillProgressOnComplete",
       "kind": "function",
-      "startLine": 5936,
-      "endLine": 5939,
+      "startLine": 5942,
+      "endLine": 5945,
       "lines": 4,
       "area": [
         "core"
@@ -2616,8 +2614,8 @@
     {
       "name": "updateTaskProgress",
       "kind": "function",
-      "startLine": 5941,
-      "endLine": 5954,
+      "startLine": 5947,
+      "endLine": 5960,
       "lines": 14,
       "area": [
         "state"
@@ -2632,8 +2630,8 @@
     {
       "name": "toggleCriteriaRequest",
       "kind": "function",
-      "startLine": 5959,
-      "endLine": 5964,
+      "startLine": 5965,
+      "endLine": 5970,
       "lines": 6,
       "area": [
         "ui"
@@ -2648,8 +2646,8 @@
     {
       "name": "addAvoid",
       "kind": "function",
-      "startLine": 5973,
-      "endLine": 5985,
+      "startLine": 5979,
+      "endLine": 5991,
       "lines": 13,
       "area": [
         "state",
@@ -2667,8 +2665,8 @@
     {
       "name": "deleteAvoid",
       "kind": "function",
-      "startLine": 5987,
-      "endLine": 5990,
+      "startLine": 5993,
+      "endLine": 5996,
       "lines": 4,
       "area": [
         "state",
@@ -2685,8 +2683,8 @@
     {
       "name": "updateAvoidText",
       "kind": "function",
-      "startLine": 5992,
-      "endLine": 5997,
+      "startLine": 5998,
+      "endLine": 6003,
       "lines": 6,
       "area": [
         "state",
@@ -2702,8 +2700,8 @@
     {
       "name": "renderWipBanner",
       "kind": "function",
-      "startLine": 6004,
-      "endLine": 6021,
+      "startLine": 6010,
+      "endLine": 6027,
       "lines": 18,
       "area": [
         "ui"
@@ -2716,8 +2714,8 @@
     {
       "name": "wbsCategoryOptions",
       "kind": "function",
-      "startLine": 6025,
-      "endLine": 6035,
+      "startLine": 6031,
+      "endLine": 6041,
       "lines": 11,
       "area": [
         "core"
@@ -2728,8 +2726,8 @@
     {
       "name": "renderWBS",
       "kind": "function",
-      "startLine": 6037,
-      "endLine": 6102,
+      "startLine": 6043,
+      "endLine": 6108,
       "lines": 66,
       "area": [
         "ui"
@@ -2744,8 +2742,8 @@
     {
       "name": "wbsTaskCompare",
       "kind": "function",
-      "startLine": 6105,
-      "endLine": 6112,
+      "startLine": 6111,
+      "endLine": 6118,
       "lines": 8,
       "area": [
         "core"
@@ -2756,8 +2754,8 @@
     {
       "name": "taskBlockStats",
       "kind": "function",
-      "startLine": 6115,
-      "endLine": 6124,
+      "startLine": 6121,
+      "endLine": 6130,
       "lines": 10,
       "area": [
         "execution"
@@ -2770,8 +2768,8 @@
     {
       "name": "fmtMinShort",
       "kind": "function",
-      "startLine": 6125,
-      "endLine": 6129,
+      "startLine": 6131,
+      "endLine": 6135,
       "lines": 5,
       "area": [
         "core"
@@ -2782,8 +2780,8 @@
     {
       "name": "taskProgressPct",
       "kind": "function",
-      "startLine": 6133,
-      "endLine": 6138,
+      "startLine": 6139,
+      "endLine": 6144,
       "lines": 6,
       "area": [
         "core"
@@ -2794,8 +2792,8 @@
     {
       "name": "projectProgressAgg",
       "kind": "function",
-      "startLine": 6140,
-      "endLine": 6145,
+      "startLine": 6146,
+      "endLine": 6151,
       "lines": 6,
       "area": [
         "core"
@@ -2806,8 +2804,8 @@
     {
       "name": "renderProjectProgressAgg",
       "kind": "function",
-      "startLine": 6147,
-      "endLine": 6155,
+      "startLine": 6153,
+      "endLine": 6161,
       "lines": 9,
       "area": [
         "ui"
@@ -2818,8 +2816,8 @@
     {
       "name": "renderProjectTree",
       "kind": "function",
-      "startLine": 6157,
-      "endLine": 6209,
+      "startLine": 6163,
+      "endLine": 6215,
       "lines": 53,
       "area": [
         "ui"
@@ -2833,8 +2831,8 @@
     {
       "name": "toggleProjectCollapse",
       "kind": "function",
-      "startLine": 6212,
-      "endLine": 6216,
+      "startLine": 6218,
+      "endLine": 6222,
       "lines": 5,
       "area": [
         "state",
@@ -2850,8 +2848,8 @@
     {
       "name": "toggleTaskCollapse",
       "kind": "function",
-      "startLine": 6217,
-      "endLine": 6221,
+      "startLine": 6223,
+      "endLine": 6227,
       "lines": 5,
       "area": [
         "state",
@@ -2867,8 +2865,8 @@
     {
       "name": "renderTaskTree",
       "kind": "function",
-      "startLine": 6223,
-      "endLine": 6235,
+      "startLine": 6229,
+      "endLine": 6241,
       "lines": 13,
       "area": [
         "ui"
@@ -2879,8 +2877,8 @@
     {
       "name": "renderTaskRow",
       "kind": "function",
-      "startLine": 6237,
-      "endLine": 6321,
+      "startLine": 6243,
+      "endLine": 6327,
       "lines": 85,
       "area": [
         "execution",
@@ -2896,8 +2894,8 @@
     {
       "name": "renderTasks",
       "kind": "function",
-      "startLine": 6323,
-      "endLine": 6371,
+      "startLine": 6329,
+      "endLine": 6377,
       "lines": 49,
       "area": [
         "execution",
@@ -2912,8 +2910,8 @@
     {
       "name": "renderOpenTasks",
       "kind": "function",
-      "startLine": 6373,
-      "endLine": 6450,
+      "startLine": 6379,
+      "endLine": 6456,
       "lines": 78,
       "area": [
         "ui"
@@ -2929,8 +2927,8 @@
     {
       "name": "renderBlockItem",
       "kind": "function",
-      "startLine": 6452,
-      "endLine": 6510,
+      "startLine": 6458,
+      "endLine": 6516,
       "lines": 59,
       "area": [
         "execution",
@@ -2945,8 +2943,8 @@
     {
       "name": "renderPomodoro",
       "kind": "function",
-      "startLine": 6524,
-      "endLine": 6554,
+      "startLine": 6530,
+      "endLine": 6560,
       "lines": 31,
       "area": [
         "execution",
@@ -2961,8 +2959,8 @@
     {
       "name": "studyWithMeSrc",
       "kind": "function",
-      "startLine": 6564,
-      "endLine": 6570,
+      "startLine": 6570,
+      "endLine": 6576,
       "lines": 7,
       "area": [
         "core"
@@ -2975,8 +2973,8 @@
     {
       "name": "renderStudyWithMeFrame",
       "kind": "function",
-      "startLine": 6572,
-      "endLine": 6583,
+      "startLine": 6578,
+      "endLine": 6589,
       "lines": 12,
       "area": [
         "ui"
@@ -2987,8 +2985,8 @@
     {
       "name": "renderStudyWithMeFullscreenBg",
       "kind": "function",
-      "startLine": 6591,
-      "endLine": 6600,
+      "startLine": 6597,
+      "endLine": 6606,
       "lines": 10,
       "area": [
         "ui"
@@ -2999,8 +2997,8 @@
     {
       "name": "parseYouTubeUrl",
       "kind": "function",
-      "startLine": 6604,
-      "endLine": 6622,
+      "startLine": 6610,
+      "endLine": 6628,
       "lines": 19,
       "area": [
         "core"
@@ -3011,8 +3009,8 @@
     {
       "name": "renderPomodoroFullscreen",
       "kind": "function",
-      "startLine": 6626,
-      "endLine": 6650,
+      "startLine": 6632,
+      "endLine": 6656,
       "lines": 25,
       "area": [
         "execution",
@@ -3026,8 +3024,8 @@
     {
       "name": "renderManualPomodoro",
       "kind": "function",
-      "startLine": 6652,
-      "endLine": 6768,
+      "startLine": 6658,
+      "endLine": 6774,
       "lines": 117,
       "area": [
         "state",
@@ -3046,8 +3044,8 @@
     {
       "name": "renderCircularProgress",
       "kind": "function",
-      "startLine": 6771,
-      "endLine": 6786,
+      "startLine": 6777,
+      "endLine": 6792,
       "lines": 16,
       "area": [
         "ui"
@@ -3058,8 +3056,8 @@
     {
       "name": "renderPassivePomodoro",
       "kind": "function",
-      "startLine": 6788,
-      "endLine": 6819,
+      "startLine": 6794,
+      "endLine": 6825,
       "lines": 32,
       "area": [
         "execution",
@@ -3073,8 +3071,8 @@
     {
       "name": "getPassiveSessionStatus",
       "kind": "function",
-      "startLine": 6824,
-      "endLine": 6849,
+      "startLine": 6830,
+      "endLine": 6855,
       "lines": 26,
       "area": [
         "core"
@@ -3087,8 +3085,8 @@
     {
       "name": "remainingText2x",
       "kind": "function",
-      "startLine": 6851,
-      "endLine": 6855,
+      "startLine": 6857,
+      "endLine": 6861,
       "lines": 5,
       "area": [
         "core"
@@ -3099,8 +3097,8 @@
     {
       "name": "remainingTextNormal",
       "kind": "function",
-      "startLine": 6857,
-      "endLine": 6860,
+      "startLine": 6863,
+      "endLine": 6866,
       "lines": 4,
       "area": [
         "core"
@@ -3111,8 +3109,8 @@
     {
       "name": "parseSleepCsv",
       "kind": "function",
-      "startLine": 6885,
-      "endLine": 6911,
+      "startLine": 6891,
+      "endLine": 6917,
       "lines": 27,
       "area": [
         "journal-health"
@@ -3123,8 +3121,8 @@
     {
       "name": "hmsToHours",
       "kind": "function",
-      "startLine": 6913,
-      "endLine": 6917,
+      "startLine": 6919,
+      "endLine": 6923,
       "lines": 5,
       "area": [
         "core"
@@ -3135,8 +3133,8 @@
     {
       "name": "sleepNumOrNull",
       "kind": "function",
-      "startLine": 6919,
-      "endLine": 6922,
+      "startLine": 6925,
+      "endLine": 6928,
       "lines": 4,
       "area": [
         "journal-health"
@@ -3147,8 +3145,8 @@
     {
       "name": "parseSleepDateTime",
       "kind": "function",
-      "startLine": 6925,
-      "endLine": 6931,
+      "startLine": 6931,
+      "endLine": 6937,
       "lines": 7,
       "area": [
         "journal-health"
@@ -3159,8 +3157,8 @@
     {
       "name": "parseSleepTime",
       "kind": "function",
-      "startLine": 6933,
-      "endLine": 6936,
+      "startLine": 6939,
+      "endLine": 6942,
       "lines": 4,
       "area": [
         "journal-health"
@@ -3171,8 +3169,8 @@
     {
       "name": "shortSleepDate",
       "kind": "function",
-      "startLine": 6938,
-      "endLine": 6941,
+      "startLine": 6944,
+      "endLine": 6947,
       "lines": 4,
       "area": [
         "journal-health"
@@ -3183,8 +3181,8 @@
     {
       "name": "latestSleepLogWithin",
       "kind": "function",
-      "startLine": 6947,
-      "endLine": 6954,
+      "startLine": 6953,
+      "endLine": 6960,
       "lines": 8,
       "area": [
         "journal-health"
@@ -3197,8 +3195,8 @@
     {
       "name": "median",
       "kind": "function",
-      "startLine": 6972,
-      "endLine": 6976,
+      "startLine": 6978,
+      "endLine": 6982,
       "lines": 5,
       "area": [
         "core"
@@ -3209,8 +3207,8 @@
     {
       "name": "toNumber",
       "kind": "function",
-      "startLine": 6983,
-      "endLine": 6987,
+      "startLine": 6989,
+      "endLine": 6993,
       "lines": 5,
       "area": [
         "core"
@@ -3221,8 +3219,8 @@
     {
       "name": "conditionBudgetBaseline",
       "kind": "function",
-      "startLine": 6991,
-      "endLine": 7006,
+      "startLine": 6997,
+      "endLine": 7012,
       "lines": 16,
       "area": [
         "core"
@@ -3235,8 +3233,8 @@
     {
       "name": "conditionBudget",
       "kind": "function",
-      "startLine": 7014,
-      "endLine": 7044,
+      "startLine": 7020,
+      "endLine": 7050,
       "lines": 31,
       "area": [
         "journal-health"
@@ -3247,8 +3245,8 @@
     {
       "name": "defaultBatterySettings",
       "kind": "function",
-      "startLine": 7059,
-      "endLine": 7068,
+      "startLine": 7065,
+      "endLine": 7074,
       "lines": 10,
       "area": [
         "journal-health"
@@ -3259,8 +3257,8 @@
     {
       "name": "clampBatteryFieldValue",
       "kind": "function",
-      "startLine": 7078,
-      "endLine": 7088,
+      "startLine": 7084,
+      "endLine": 7094,
       "lines": 11,
       "area": [
         "journal-health"
@@ -3271,8 +3269,8 @@
     {
       "name": "parseTimeInputToMinutes",
       "kind": "function",
-      "startLine": 7092,
-      "endLine": 7096,
+      "startLine": 7098,
+      "endLine": 7102,
       "lines": 5,
       "area": [
         "core"
@@ -3283,8 +3281,8 @@
     {
       "name": "minutesToTimeInputValue",
       "kind": "function",
-      "startLine": 7099,
-      "endLine": 7102,
+      "startLine": 7105,
+      "endLine": 7108,
       "lines": 4,
       "area": [
         "core"
@@ -3295,8 +3293,8 @@
     {
       "name": "computeBatteryLevel",
       "kind": "function",
-      "startLine": 7116,
-      "endLine": 7137,
+      "startLine": 7122,
+      "endLine": 7143,
       "lines": 22,
       "area": [
         "execution",
@@ -3310,8 +3308,8 @@
     {
       "name": "batteryEventMinuteForDate",
       "kind": "function",
-      "startLine": 7143,
-      "endLine": 7148,
+      "startLine": 7149,
+      "endLine": 7154,
       "lines": 6,
       "area": [
         "journal-health"
@@ -3322,8 +3320,8 @@
     {
       "name": "batteryCurvePoints",
       "kind": "function",
-      "startLine": 7157,
-      "endLine": 7197,
+      "startLine": 7163,
+      "endLine": 7203,
       "lines": 41,
       "area": [
         "execution",
@@ -3337,8 +3335,8 @@
     {
       "name": "computeChargeTopTitles",
       "kind": "function",
-      "startLine": 7218,
-      "endLine": 7239,
+      "startLine": 7224,
+      "endLine": 7245,
       "lines": 22,
       "area": [
         "core"
@@ -3351,8 +3349,8 @@
     {
       "name": "subtractOccupiedIntervals",
       "kind": "function",
-      "startLine": 7245,
-      "endLine": 7256,
+      "startLine": 7251,
+      "endLine": 7262,
       "lines": 12,
       "area": [
         "core"
@@ -3363,8 +3361,8 @@
     {
       "name": "maybeSuggestRecoveryDraft",
       "kind": "function",
-      "startLine": 7264,
-      "endLine": 7295,
+      "startLine": 7270,
+      "endLine": 7301,
       "lines": 32,
       "area": [
         "journal-health"
@@ -3378,8 +3376,8 @@
     {
       "name": "placeRecoveryDraftCandidates",
       "kind": "function",
-      "startLine": 7305,
-      "endLine": 7384,
+      "startLine": 7311,
+      "endLine": 7390,
       "lines": 80,
       "area": [
         "state"
@@ -3395,8 +3393,8 @@
     {
       "name": "maybeRebuildRecoveryDraft",
       "kind": "function",
-      "startLine": 7405,
-      "endLine": 7417,
+      "startLine": 7411,
+      "endLine": 7423,
       "lines": 13,
       "area": [
         "ui"
@@ -3410,8 +3408,8 @@
     {
       "name": "importSleepCsv",
       "kind": "function",
-      "startLine": 7419,
-      "endLine": 7471,
+      "startLine": 7425,
+      "endLine": 7477,
       "lines": 53,
       "area": [
         "state",
@@ -3429,8 +3427,8 @@
     {
       "name": "computeDailyMetrics",
       "kind": "function",
-      "startLine": 7486,
-      "endLine": 7525,
+      "startLine": 7492,
+      "endLine": 7531,
       "lines": 40,
       "area": [
         "core"
@@ -3445,8 +3443,8 @@
     {
       "name": "aiReportFilesForType",
       "kind": "function",
-      "startLine": 7568,
-      "endLine": 7574,
+      "startLine": 7574,
+      "endLine": 7580,
       "lines": 7,
       "area": [
         "content"
@@ -3457,8 +3455,8 @@
     {
       "name": "parseUtcIsoToMs",
       "kind": "function",
-      "startLine": 7581,
-      "endLine": 7586,
+      "startLine": 7587,
+      "endLine": 7592,
       "lines": 6,
       "area": [
         "core"
@@ -3469,8 +3467,8 @@
     {
       "name": "fetchReportIndex",
       "kind": "function",
-      "startLine": 7603,
-      "endLine": 7619,
+      "startLine": 7609,
+      "endLine": 7625,
       "lines": 17,
       "area": [
         "sync",
@@ -3485,8 +3483,8 @@
     {
       "name": "unionAiReportEntries",
       "kind": "function",
-      "startLine": 7625,
-      "endLine": 7630,
+      "startLine": 7631,
+      "endLine": 7636,
       "lines": 6,
       "area": [
         "content"
@@ -3497,8 +3495,8 @@
     {
       "name": "knownFutureLetterEntries",
       "kind": "function",
-      "startLine": 7640,
-      "endLine": 7644,
+      "startLine": 7646,
+      "endLine": 7650,
       "lines": 5,
       "area": [
         "core"
@@ -3509,8 +3507,8 @@
     {
       "name": "unionKnownFutureLetters",
       "kind": "function",
-      "startLine": 7645,
-      "endLine": 7650,
+      "startLine": 7651,
+      "endLine": 7656,
       "lines": 6,
       "area": [
         "core"
@@ -3521,8 +3519,8 @@
     {
       "name": "triggerAiReportDirLoad",
       "kind": "function",
-      "startLine": 7657,
-      "endLine": 7691,
+      "startLine": 7663,
+      "endLine": 7697,
       "lines": 35,
       "area": [
         "sync",
@@ -3541,8 +3539,8 @@
     {
       "name": "triggerAiReportBodyLoad",
       "kind": "function",
-      "startLine": 7699,
-      "endLine": 7713,
+      "startLine": 7705,
+      "endLine": 7719,
       "lines": 15,
       "area": [
         "sync",
@@ -3562,8 +3560,8 @@
     {
       "name": "refreshAiReports",
       "kind": "function",
-      "startLine": 7722,
-      "endLine": 7740,
+      "startLine": 7728,
+      "endLine": 7746,
       "lines": 19,
       "area": [
         "ui",
@@ -3579,8 +3577,8 @@
     {
       "name": "renderAiReports",
       "kind": "function",
-      "startLine": 7742,
-      "endLine": 7761,
+      "startLine": 7748,
+      "endLine": 7767,
       "lines": 20,
       "area": [
         "ui",
@@ -3594,8 +3592,8 @@
     {
       "name": "renderAiReportBody",
       "kind": "function",
-      "startLine": 7763,
-      "endLine": 7800,
+      "startLine": 7769,
+      "endLine": 7806,
       "lines": 38,
       "area": [
         "state",
@@ -3608,8 +3606,8 @@
     {
       "name": "renderVision",
       "kind": "function",
-      "startLine": 7802,
-      "endLine": 7817,
+      "startLine": 7808,
+      "endLine": 7823,
       "lines": 16,
       "area": [
         "ui",
@@ -3623,8 +3621,8 @@
     {
       "name": "renderVisionMd",
       "kind": "function",
-      "startLine": 7819,
-      "endLine": 7833,
+      "startLine": 7825,
+      "endLine": 7839,
       "lines": 15,
       "area": [
         "ui",
@@ -3636,8 +3634,8 @@
     {
       "name": "renderVisionBoard",
       "kind": "function",
-      "startLine": 7868,
-      "endLine": 7896,
+      "startLine": 7874,
+      "endLine": 7902,
       "lines": 29,
       "area": [
         "state",
@@ -3652,8 +3650,8 @@
     {
       "name": "renderVisionBoardImages",
       "kind": "function",
-      "startLine": 7900,
-      "endLine": 7966,
+      "startLine": 7906,
+      "endLine": 7972,
       "lines": 67,
       "area": [
         "ui",
@@ -3665,8 +3663,8 @@
     {
       "name": "renderVisionBoardPdfFallback",
       "kind": "function",
-      "startLine": 7970,
-      "endLine": 7994,
+      "startLine": 7976,
+      "endLine": 8000,
       "lines": 25,
       "area": [
         "ui",
@@ -3678,8 +3676,8 @@
     {
       "name": "loadVisionBoardPdf",
       "kind": "function",
-      "startLine": 8000,
-      "endLine": 8021,
+      "startLine": 8006,
+      "endLine": 8027,
       "lines": 22,
       "area": [
         "sync",
@@ -3700,8 +3698,8 @@
     {
       "name": "loadVisionManifest",
       "kind": "function",
-      "startLine": 8029,
-      "endLine": 8056,
+      "startLine": 8035,
+      "endLine": 8062,
       "lines": 28,
       "area": [
         "sync",
@@ -3721,8 +3719,8 @@
     {
       "name": "loadVisionBoardImages",
       "kind": "function",
-      "startLine": 8068,
-      "endLine": 8104,
+      "startLine": 8074,
+      "endLine": 8110,
       "lines": 37,
       "area": [
         "sync",
@@ -3743,8 +3741,8 @@
     {
       "name": "sanitizeHTML",
       "kind": "function",
-      "startLine": 8129,
-      "endLine": 8155,
+      "startLine": 8135,
+      "endLine": 8161,
       "lines": 27,
       "area": [
         "core"
@@ -3758,8 +3756,8 @@
     {
       "name": "renderMarkdown",
       "kind": "function",
-      "startLine": 8166,
-      "endLine": 8182,
+      "startLine": 8172,
+      "endLine": 8188,
       "lines": 17,
       "area": [
         "ui"
@@ -3770,8 +3768,8 @@
     {
       "name": "renderMarkdownUncached",
       "kind": "function",
-      "startLine": 8184,
-      "endLine": 8193,
+      "startLine": 8190,
+      "endLine": 8199,
       "lines": 10,
       "area": [
         "ui"
@@ -3782,8 +3780,8 @@
     {
       "name": "renderReports",
       "kind": "function",
-      "startLine": 8195,
-      "endLine": 8224,
+      "startLine": 8201,
+      "endLine": 8230,
       "lines": 30,
       "area": [
         "ui",
@@ -3801,8 +3799,8 @@
     {
       "name": "renderSettingsProfilePanel",
       "kind": "function",
-      "startLine": 8229,
-      "endLine": 8239,
+      "startLine": 8235,
+      "endLine": 8245,
       "lines": 11,
       "area": [
         "ui"
@@ -3815,8 +3813,8 @@
     {
       "name": "renderSettingsBufferPanel",
       "kind": "function",
-      "startLine": 8241,
-      "endLine": 8263,
+      "startLine": 8247,
+      "endLine": 8269,
       "lines": 23,
       "area": [
         "ui"
@@ -3829,8 +3827,8 @@
     {
       "name": "renderSettingsBatteryPanel",
       "kind": "function",
-      "startLine": 8265,
-      "endLine": 8312,
+      "startLine": 8271,
+      "endLine": 8318,
       "lines": 48,
       "area": [
         "journal-health",
@@ -3844,8 +3842,8 @@
     {
       "name": "renderSettingsDataPanel",
       "kind": "function",
-      "startLine": 8314,
-      "endLine": 8338,
+      "startLine": 8320,
+      "endLine": 8344,
       "lines": 25,
       "area": [
         "state",
@@ -3861,8 +3859,8 @@
     {
       "name": "renderSettingsCloudPanel",
       "kind": "function",
-      "startLine": 8340,
-      "endLine": 8408,
+      "startLine": 8346,
+      "endLine": 8414,
       "lines": 69,
       "area": [
         "sync",
@@ -3877,8 +3875,8 @@
     {
       "name": "renderSettingsMorningPlanPanel",
       "kind": "function",
-      "startLine": 8410,
-      "endLine": 8423,
+      "startLine": 8416,
+      "endLine": 8429,
       "lines": 14,
       "area": [
         "ui"
@@ -3891,8 +3889,8 @@
     {
       "name": "renderSettingsExecPanel",
       "kind": "function",
-      "startLine": 8425,
-      "endLine": 8437,
+      "startLine": 8431,
+      "endLine": 8443,
       "lines": 13,
       "area": [
         "ui"
@@ -3905,8 +3903,8 @@
     {
       "name": "renderSettingsGuidedAccessPanel",
       "kind": "function",
-      "startLine": 8439,
-      "endLine": 8452,
+      "startLine": 8445,
+      "endLine": 8458,
       "lines": 14,
       "area": [
         "ui"
@@ -3919,8 +3917,8 @@
     {
       "name": "renderSettingsThemePanel",
       "kind": "function",
-      "startLine": 8459,
-      "endLine": 8474,
+      "startLine": 8465,
+      "endLine": 8480,
       "lines": 16,
       "area": [
         "ui",
@@ -3934,8 +3932,8 @@
     {
       "name": "renderSettingsStudyWithMePanel",
       "kind": "function",
-      "startLine": 8476,
-      "endLine": 8493,
+      "startLine": 8482,
+      "endLine": 8499,
       "lines": 18,
       "area": [
         "ui"
@@ -3948,8 +3946,8 @@
     {
       "name": "renderSettingsBreakMessagesPanel",
       "kind": "function",
-      "startLine": 8495,
-      "endLine": 8504,
+      "startLine": 8501,
+      "endLine": 8510,
       "lines": 10,
       "area": [
         "ui"
@@ -3960,8 +3958,8 @@
     {
       "name": "renderSettingsFileStructurePanel",
       "kind": "function",
-      "startLine": 8506,
-      "endLine": 8525,
+      "startLine": 8512,
+      "endLine": 8531,
       "lines": 20,
       "area": [
         "ui"
@@ -3974,8 +3972,8 @@
     {
       "name": "renderSettingsCategoryPanel",
       "kind": "function",
-      "startLine": 8527,
-      "endLine": 8536,
+      "startLine": 8533,
+      "endLine": 8542,
       "lines": 10,
       "area": [
         "ui"
@@ -3986,8 +3984,8 @@
     {
       "name": "renderSettingsPagesPanel",
       "kind": "function",
-      "startLine": 8538,
-      "endLine": 8543,
+      "startLine": 8544,
+      "endLine": 8549,
       "lines": 6,
       "area": [
         "ui"
@@ -3998,8 +3996,8 @@
     {
       "name": "renderSettings",
       "kind": "function",
-      "startLine": 8545,
-      "endLine": 8573,
+      "startLine": 8551,
+      "endLine": 8579,
       "lines": 29,
       "area": [
         "sync",
@@ -4015,8 +4013,8 @@
     {
       "name": "renderSettingsSyncGroup",
       "kind": "function",
-      "startLine": 8578,
-      "endLine": 8591,
+      "startLine": 8584,
+      "endLine": 8597,
       "lines": 14,
       "area": [
         "sync",
@@ -4028,8 +4026,8 @@
     {
       "name": "renderCategoriesSettings",
       "kind": "function",
-      "startLine": 8594,
-      "endLine": 8612,
+      "startLine": 8600,
+      "endLine": 8618,
       "lines": 19,
       "area": [
         "ui"
@@ -4042,8 +4040,8 @@
     {
       "name": "bucketLabel",
       "kind": "function",
-      "startLine": 8615,
-      "endLine": 8617,
+      "startLine": 8621,
+      "endLine": 8623,
       "lines": 3,
       "area": [
         "core"
@@ -4054,8 +4052,8 @@
     {
       "name": "renderBreakMessagesSettings",
       "kind": "function",
-      "startLine": 8620,
-      "endLine": 8640,
+      "startLine": 8626,
+      "endLine": 8646,
       "lines": 21,
       "area": [
         "ui"
@@ -4068,8 +4066,8 @@
     {
       "name": "moreGroupLabelFor",
       "kind": "function",
-      "startLine": 8674,
-      "endLine": 8677,
+      "startLine": 8680,
+      "endLine": 8683,
       "lines": 4,
       "area": [
         "core"
@@ -4080,8 +4078,8 @@
     {
       "name": "renderMore",
       "kind": "function",
-      "startLine": 8679,
-      "endLine": 8696,
+      "startLine": 8685,
+      "endLine": 8702,
       "lines": 18,
       "area": [
         "ui"
@@ -4092,8 +4090,8 @@
     {
       "name": "weekStartFor",
       "kind": "function",
-      "startLine": 8705,
-      "endLine": 8705,
+      "startLine": 8711,
+      "endLine": 8711,
       "lines": 1,
       "area": [
         "core"
@@ -4104,8 +4102,8 @@
     {
       "name": "weekDays",
       "kind": "function",
-      "startLine": 8706,
-      "endLine": 8706,
+      "startLine": 8712,
+      "endLine": 8712,
       "lines": 1,
       "area": [
         "core"
@@ -4116,8 +4114,8 @@
     {
       "name": "weekLabelShort",
       "kind": "function",
-      "startLine": 8707,
-      "endLine": 8710,
+      "startLine": 8713,
+      "endLine": 8716,
       "lines": 4,
       "area": [
         "core"
@@ -4128,8 +4126,8 @@
     {
       "name": "getCategoryBucket",
       "kind": "function",
-      "startLine": 8714,
-      "endLine": 8718,
+      "startLine": 8720,
+      "endLine": 8724,
       "lines": 5,
       "area": [
         "core"
@@ -4142,8 +4140,8 @@
     {
       "name": "weeklyBucketMinutes",
       "kind": "function",
-      "startLine": 8722,
-      "endLine": 8732,
+      "startLine": 8728,
+      "endLine": 8738,
       "lines": 11,
       "area": [
         "journal-health"
@@ -4154,8 +4152,8 @@
     {
       "name": "renderBucketGauge",
       "kind": "function",
-      "startLine": 8735,
-      "endLine": 8760,
+      "startLine": 8741,
+      "endLine": 8766,
       "lines": 26,
       "area": [
         "journal-health",
@@ -4167,8 +4165,8 @@
     {
       "name": "weeklyLeverageMinutes",
       "kind": "function",
-      "startLine": 8764,
-      "endLine": 8774,
+      "startLine": 8770,
+      "endLine": 8780,
       "lines": 11,
       "area": [
         "journal-health"
@@ -4179,8 +4177,8 @@
     {
       "name": "renderLeverageSummaryLine",
       "kind": "function",
-      "startLine": 8776,
-      "endLine": 8784,
+      "startLine": 8782,
+      "endLine": 8790,
       "lines": 9,
       "area": [
         "journal-health",
@@ -4192,8 +4190,8 @@
     {
       "name": "leverageRatioHistory",
       "kind": "function",
-      "startLine": 8789,
-      "endLine": 8800,
+      "startLine": 8795,
+      "endLine": 8806,
       "lines": 12,
       "area": [
         "execution",
@@ -4205,8 +4203,8 @@
     {
       "name": "renderLeverageTrend",
       "kind": "function",
-      "startLine": 8803,
-      "endLine": 8826,
+      "startLine": 8809,
+      "endLine": 8832,
       "lines": 24,
       "area": [
         "ui"
@@ -4217,8 +4215,8 @@
     {
       "name": "assetLedgerItems",
       "kind": "function",
-      "startLine": 8831,
-      "endLine": 8849,
+      "startLine": 8837,
+      "endLine": 8855,
       "lines": 19,
       "area": [
         "core"
@@ -4232,8 +4230,8 @@
     {
       "name": "assetLedgerCountForWeek",
       "kind": "function",
-      "startLine": 8852,
-      "endLine": 8855,
+      "startLine": 8858,
+      "endLine": 8861,
       "lines": 4,
       "area": [
         "core"
@@ -4244,8 +4242,8 @@
     {
       "name": "renderLeverageLedger",
       "kind": "function",
-      "startLine": 8860,
-      "endLine": 8879,
+      "startLine": 8866,
+      "endLine": 8885,
       "lines": 20,
       "area": [
         "ui"
@@ -4256,8 +4254,8 @@
     {
       "name": "blocksForWeek",
       "kind": "function",
-      "startLine": 8881,
-      "endLine": 8884,
+      "startLine": 8887,
+      "endLine": 8890,
       "lines": 4,
       "area": [
         "execution"
@@ -4270,8 +4268,8 @@
     {
       "name": "computeWeeklyMetrics",
       "kind": "function",
-      "startLine": 8887,
-      "endLine": 8920,
+      "startLine": 8893,
+      "endLine": 8926,
       "lines": 34,
       "area": [
         "execution",
@@ -4285,8 +4283,8 @@
     {
       "name": "computeEnergyStructure",
       "kind": "function",
-      "startLine": 8926,
-      "endLine": 8958,
+      "startLine": 8932,
+      "endLine": 8964,
       "lines": 33,
       "area": [
         "journal-health"
@@ -4299,8 +4297,8 @@
     {
       "name": "renderConditionCorrelation",
       "kind": "function",
-      "startLine": 8962,
-      "endLine": 8990,
+      "startLine": 8968,
+      "endLine": 8996,
       "lines": 29,
       "area": [
         "ui"
@@ -4314,8 +4312,8 @@
     {
       "name": "renderEnergyStructure",
       "kind": "function",
-      "startLine": 8992,
-      "endLine": 9010,
+      "startLine": 8998,
+      "endLine": 9016,
       "lines": 19,
       "area": [
         "journal-health",
@@ -4327,8 +4325,8 @@
     {
       "name": "startRateHistory",
       "kind": "function",
-      "startLine": 9013,
-      "endLine": 9021,
+      "startLine": 9019,
+      "endLine": 9027,
       "lines": 9,
       "area": [
         "execution"
@@ -4339,8 +4337,8 @@
     {
       "name": "statsRangeWeeks",
       "kind": "function",
-      "startLine": 9028,
-      "endLine": 9037,
+      "startLine": 9034,
+      "endLine": 9043,
       "lines": 10,
       "area": [
         "core"
@@ -4354,8 +4352,8 @@
     {
       "name": "sleepValuesForRange",
       "kind": "function",
-      "startLine": 9043,
-      "endLine": 9051,
+      "startLine": 9049,
+      "endLine": 9057,
       "lines": 9,
       "area": [
         "journal-health"
@@ -4368,8 +4366,8 @@
     {
       "name": "oldestSleepLogDate",
       "kind": "function",
-      "startLine": 9055,
-      "endLine": 9058,
+      "startLine": 9061,
+      "endLine": 9064,
       "lines": 4,
       "area": [
         "journal-health"
@@ -4382,8 +4380,8 @@
     {
       "name": "buildBlocksByDateMap",
       "kind": "function",
-      "startLine": 9063,
-      "endLine": 9071,
+      "startLine": 9069,
+      "endLine": 9077,
       "lines": 9,
       "area": [
         "execution",
@@ -4397,8 +4395,8 @@
     {
       "name": "renderSleepBandCard",
       "kind": "function",
-      "startLine": 9074,
-      "endLine": 9108,
+      "startLine": 9080,
+      "endLine": 9114,
       "lines": 35,
       "area": [
         "journal-health",
@@ -4412,8 +4410,8 @@
     {
       "name": "renderSleepTrendCard",
       "kind": "function",
-      "startLine": 9111,
-      "endLine": 9143,
+      "startLine": 9117,
+      "endLine": 9149,
       "lines": 33,
       "area": [
         "journal-health",
@@ -4425,8 +4423,8 @@
     {
       "name": "renderSleepBucketCard",
       "kind": "function",
-      "startLine": 9153,
-      "endLine": 9192,
+      "startLine": 9159,
+      "endLine": 9198,
       "lines": 40,
       "area": [
         "journal-health",
@@ -4438,8 +4436,8 @@
     {
       "name": "renderSleepStats",
       "kind": "function",
-      "startLine": 9194,
-      "endLine": 9204,
+      "startLine": 9200,
+      "endLine": 9210,
       "lines": 11,
       "area": [
         "journal-health",
@@ -4451,8 +4449,8 @@
     {
       "name": "renderEnergyCurveCard",
       "kind": "function",
-      "startLine": 9219,
-      "endLine": 9247,
+      "startLine": 9225,
+      "endLine": 9253,
       "lines": 29,
       "area": [
         "journal-health",
@@ -4464,8 +4462,8 @@
     {
       "name": "renderSleepSummaryLine",
       "kind": "function",
-      "startLine": 9252,
-      "endLine": 9264,
+      "startLine": 9258,
+      "endLine": 9270,
       "lines": 13,
       "area": [
         "journal-health",
@@ -4477,8 +4475,8 @@
     {
       "name": "computeHeatmapCells",
       "kind": "function",
-      "startLine": 9273,
-      "endLine": 9291,
+      "startLine": 9279,
+      "endLine": 9297,
       "lines": 19,
       "area": [
         "core"
@@ -4491,8 +4489,8 @@
     {
       "name": "computeEstimateStats",
       "kind": "function",
-      "startLine": 9295,
-      "endLine": 9313,
+      "startLine": 9301,
+      "endLine": 9319,
       "lines": 19,
       "area": [
         "core"
@@ -4505,8 +4503,8 @@
     {
       "name": "computeSleepBucketStats",
       "kind": "function",
-      "startLine": 9323,
-      "endLine": 9342,
+      "startLine": 9329,
+      "endLine": 9348,
       "lines": 20,
       "area": [
         "journal-health"
@@ -4517,8 +4515,8 @@
     {
       "name": "computeChargeTopCategories",
       "kind": "function",
-      "startLine": 9345,
-      "endLine": 9357,
+      "startLine": 9351,
+      "endLine": 9363,
       "lines": 13,
       "area": [
         "core"
@@ -4531,8 +4529,8 @@
     {
       "name": "computeInsights",
       "kind": "function",
-      "startLine": 9363,
-      "endLine": 9452,
+      "startLine": 9369,
+      "endLine": 9458,
       "lines": 90,
       "area": [
         "journal-health"
@@ -4543,8 +4541,8 @@
     {
       "name": "renderInsights",
       "kind": "function",
-      "startLine": 9455,
-      "endLine": 9470,
+      "startLine": 9461,
+      "endLine": 9476,
       "lines": 16,
       "area": [
         "ui"
@@ -4555,8 +4553,8 @@
     {
       "name": "renderStats",
       "kind": "function",
-      "startLine": 9477,
-      "endLine": 9794,
+      "startLine": 9483,
+      "endLine": 9800,
       "lines": 318,
       "area": [
         "execution",
@@ -4575,8 +4573,8 @@
     {
       "name": "currentWeeklyWeek",
       "kind": "function",
-      "startLine": 9799,
-      "endLine": 9804,
+      "startLine": 9805,
+      "endLine": 9810,
       "lines": 6,
       "area": [
         "journal-health"
@@ -4589,8 +4587,8 @@
     {
       "name": "shiftWeeklyWeek",
       "kind": "function",
-      "startLine": 9806,
-      "endLine": 9812,
+      "startLine": 9812,
+      "endLine": 9818,
       "lines": 7,
       "area": [
         "state",
@@ -4609,8 +4607,8 @@
     {
       "name": "splitWeeklyReviewMd",
       "kind": "function",
-      "startLine": 9816,
-      "endLine": 9834,
+      "startLine": 9822,
+      "endLine": 9840,
       "lines": 19,
       "area": [
         "journal-health",
@@ -4622,8 +4620,8 @@
     {
       "name": "aiWeeklyReviewSectionHTML",
       "kind": "function",
-      "startLine": 9841,
-      "endLine": 9867,
+      "startLine": 9847,
+      "endLine": 9873,
       "lines": 27,
       "area": [
         "journal-health",
@@ -4635,8 +4633,8 @@
     {
       "name": "parseSuggestedTaskTitle",
       "kind": "function",
-      "startLine": 9872,
-      "endLine": 9876,
+      "startLine": 9878,
+      "endLine": 9882,
       "lines": 5,
       "area": [
         "core"
@@ -4647,8 +4645,8 @@
     {
       "name": "addWeeklySuggestedTask",
       "kind": "function",
-      "startLine": 9880,
-      "endLine": 9897,
+      "startLine": 9886,
+      "endLine": 9903,
       "lines": 18,
       "area": [
         "state",
@@ -4666,8 +4664,8 @@
     {
       "name": "renderWeekly",
       "kind": "function",
-      "startLine": 9899,
-      "endLine": 10045,
+      "startLine": 9905,
+      "endLine": 10051,
       "lines": 147,
       "area": [
         "execution",
@@ -4689,8 +4687,8 @@
     {
       "name": "weeklyChangeTheme",
       "kind": "function",
-      "startLine": 10047,
-      "endLine": 10061,
+      "startLine": 10053,
+      "endLine": 10067,
       "lines": 15,
       "area": [
         "state",
@@ -4710,8 +4708,8 @@
     {
       "name": "buildWeeklyMarkdown",
       "kind": "function",
-      "startLine": 10063,
-      "endLine": 10081,
+      "startLine": 10069,
+      "endLine": 10087,
       "lines": 19,
       "area": [
         "journal-health",
@@ -4725,8 +4723,8 @@
     {
       "name": "downloadWeekly",
       "kind": "function",
-      "startLine": 10083,
-      "endLine": 10086,
+      "startLine": 10089,
+      "endLine": 10092,
       "lines": 4,
       "area": [
         "state",
@@ -4741,8 +4739,8 @@
     {
       "name": "pushWeeklyToGitHub",
       "kind": "function",
-      "startLine": 10088,
-      "endLine": 10092,
+      "startLine": 10094,
+      "endLine": 10098,
       "lines": 5,
       "area": [
         "sync",
@@ -4757,8 +4755,8 @@
     {
       "name": "cycleDays",
       "kind": "function",
-      "startLine": 10099,
-      "endLine": 10099,
+      "startLine": 10105,
+      "endLine": 10105,
       "lines": 1,
       "area": [
         "journal-health"
@@ -4769,8 +4767,8 @@
     {
       "name": "cycleLabelShort",
       "kind": "function",
-      "startLine": 10100,
-      "endLine": 10102,
+      "startLine": 10106,
+      "endLine": 10108,
       "lines": 3,
       "area": [
         "journal-health"
@@ -4781,8 +4779,8 @@
     {
       "name": "currentCycleStart",
       "kind": "function",
-      "startLine": 10103,
-      "endLine": 10105,
+      "startLine": 10109,
+      "endLine": 10111,
       "lines": 3,
       "area": [
         "journal-health"
@@ -4795,8 +4793,8 @@
     {
       "name": "shiftCycle",
       "kind": "function",
-      "startLine": 10106,
-      "endLine": 10113,
+      "startLine": 10112,
+      "endLine": 10119,
       "lines": 8,
       "area": [
         "state",
@@ -4815,8 +4813,8 @@
     {
       "name": "computeCycleMetrics",
       "kind": "function",
-      "startLine": 10114,
-      "endLine": 10139,
+      "startLine": 10120,
+      "endLine": 10145,
       "lines": 26,
       "area": [
         "execution",
@@ -4835,8 +4833,8 @@
     {
       "name": "renderCycle",
       "kind": "function",
-      "startLine": 10141,
-      "endLine": 10201,
+      "startLine": 10147,
+      "endLine": 10207,
       "lines": 61,
       "area": [
         "journal-health",
@@ -4853,8 +4851,8 @@
     {
       "name": "cycleStartNew",
       "kind": "function",
-      "startLine": 10203,
-      "endLine": 10209,
+      "startLine": 10209,
+      "endLine": 10215,
       "lines": 7,
       "area": [
         "state",
@@ -4871,8 +4869,8 @@
     {
       "name": "buildCycleMarkdown",
       "kind": "function",
-      "startLine": 10210,
-      "endLine": 10228,
+      "startLine": 10216,
+      "endLine": 10234,
       "lines": 19,
       "area": [
         "journal-health",
@@ -4886,8 +4884,8 @@
     {
       "name": "downloadCycle",
       "kind": "function",
-      "startLine": 10229,
-      "endLine": 10229,
+      "startLine": 10235,
+      "endLine": 10235,
       "lines": 1,
       "area": [
         "state",
@@ -4902,8 +4900,8 @@
     {
       "name": "pushCycleToGitHub",
       "kind": "function",
-      "startLine": 10230,
-      "endLine": 10234,
+      "startLine": 10236,
+      "endLine": 10240,
       "lines": 5,
       "area": [
         "sync",
@@ -4918,8 +4916,8 @@
     {
       "name": "makeQuestion",
       "kind": "function",
-      "startLine": 10241,
-      "endLine": 10256,
+      "startLine": 10247,
+      "endLine": 10262,
       "lines": 16,
       "area": [
         "content"
@@ -4930,8 +4928,8 @@
     {
       "name": "questionEntryCount",
       "kind": "function",
-      "startLine": 10259,
-      "endLine": 10261,
+      "startLine": 10265,
+      "endLine": 10267,
       "lines": 3,
       "area": [
         "content"
@@ -4944,8 +4942,8 @@
     {
       "name": "renderQuestionCard",
       "kind": "function",
-      "startLine": 10265,
-      "endLine": 10292,
+      "startLine": 10271,
+      "endLine": 10298,
       "lines": 28,
       "area": [
         "ui",
@@ -4957,8 +4955,8 @@
     {
       "name": "renderZtQuestionTab",
       "kind": "function",
-      "startLine": 10294,
-      "endLine": 10322,
+      "startLine": 10300,
+      "endLine": 10328,
       "lines": 29,
       "area": [
         "ui",
@@ -4972,8 +4970,8 @@
     {
       "name": "openQuestionEditor",
       "kind": "function",
-      "startLine": 10325,
-      "endLine": 10329,
+      "startLine": 10331,
+      "endLine": 10335,
       "lines": 5,
       "area": [
         "ui",
@@ -4988,8 +4986,8 @@
     {
       "name": "buildQuestionModal",
       "kind": "function",
-      "startLine": 10331,
-      "endLine": 10363,
+      "startLine": 10337,
+      "endLine": 10369,
       "lines": 33,
       "area": [
         "ui",
@@ -5001,8 +4999,8 @@
     {
       "name": "saveQuestionFromModal",
       "kind": "function",
-      "startLine": 10365,
-      "endLine": 10385,
+      "startLine": 10371,
+      "endLine": 10391,
       "lines": 21,
       "area": [
         "state",
@@ -5019,8 +5017,8 @@
     {
       "name": "questionToTheme",
       "kind": "function",
-      "startLine": 10388,
-      "endLine": 10395,
+      "startLine": 10394,
+      "endLine": 10401,
       "lines": 8,
       "area": [
         "state",
@@ -5037,8 +5035,8 @@
     {
       "name": "settleQuestion",
       "kind": "function",
-      "startLine": 10397,
-      "endLine": 10404,
+      "startLine": 10403,
+      "endLine": 10410,
       "lines": 8,
       "area": [
         "state",
@@ -5056,8 +5054,8 @@
     {
       "name": "openQuestionBridge",
       "kind": "function",
-      "startLine": 10407,
-      "endLine": 10412,
+      "startLine": 10413,
+      "endLine": 10418,
       "lines": 6,
       "area": [
         "ui",
@@ -5072,8 +5070,8 @@
     {
       "name": "buildQuestionBridgeModal",
       "kind": "function",
-      "startLine": 10413,
-      "endLine": 10442,
+      "startLine": 10419,
+      "endLine": 10448,
       "lines": 30,
       "area": [
         "ui",
@@ -5087,8 +5085,8 @@
     {
       "name": "submitQuestionBridge",
       "kind": "function",
-      "startLine": 10443,
-      "endLine": 10470,
+      "startLine": 10449,
+      "endLine": 10476,
       "lines": 28,
       "area": [
         "state",
@@ -5110,8 +5108,8 @@
     {
       "name": "reopenQuestion",
       "kind": "function",
-      "startLine": 10472,
-      "endLine": 10477,
+      "startLine": 10478,
+      "endLine": 10483,
       "lines": 6,
       "area": [
         "state",
@@ -5128,8 +5126,8 @@
     {
       "name": "deleteQuestion",
       "kind": "function",
-      "startLine": 10479,
-      "endLine": 10484,
+      "startLine": 10485,
+      "endLine": 10490,
       "lines": 6,
       "area": [
         "state",
@@ -5146,8 +5144,8 @@
     {
       "name": "entryToQuestion",
       "kind": "function",
-      "startLine": 10487,
-      "endLine": 10493,
+      "startLine": 10493,
+      "endLine": 10499,
       "lines": 7,
       "area": [
         "state",
@@ -5166,8 +5164,8 @@
     {
       "name": "makeExperiment",
       "kind": "function",
-      "startLine": 10501,
-      "endLine": 10515,
+      "startLine": 10507,
+      "endLine": 10521,
       "lines": 15,
       "area": [
         "core"
@@ -5178,8 +5176,8 @@
     {
       "name": "activeExperiment",
       "kind": "function",
-      "startLine": 10518,
-      "endLine": 10520,
+      "startLine": 10524,
+      "endLine": 10526,
       "lines": 3,
       "area": [
         "core"
@@ -5192,8 +5190,8 @@
     {
       "name": "latestKeptExperiment",
       "kind": "function",
-      "startLine": 10523,
-      "endLine": 10527,
+      "startLine": 10529,
+      "endLine": 10533,
       "lines": 5,
       "area": [
         "core"
@@ -5206,8 +5204,8 @@
     {
       "name": "addExperimentOrGuard",
       "kind": "function",
-      "startLine": 10530,
-      "endLine": 10536,
+      "startLine": 10536,
+      "endLine": 10542,
       "lines": 7,
       "area": [
         "ui"
@@ -5218,8 +5216,8 @@
     {
       "name": "openExperimentEditor",
       "kind": "function",
-      "startLine": 10538,
-      "endLine": 10542,
+      "startLine": 10544,
+      "endLine": 10548,
       "lines": 5,
       "area": [
         "ui"
@@ -5233,8 +5231,8 @@
     {
       "name": "buildExperimentModal",
       "kind": "function",
-      "startLine": 10544,
-      "endLine": 10581,
+      "startLine": 10550,
+      "endLine": 10587,
       "lines": 38,
       "area": [
         "ui"
@@ -5245,8 +5243,8 @@
     {
       "name": "saveExperimentFromModal",
       "kind": "function",
-      "startLine": 10583,
-      "endLine": 10605,
+      "startLine": 10589,
+      "endLine": 10611,
       "lines": 23,
       "area": [
         "state",
@@ -5262,8 +5260,8 @@
     {
       "name": "deleteExperiment",
       "kind": "function",
-      "startLine": 10609,
-      "endLine": 10613,
+      "startLine": 10615,
+      "endLine": 10619,
       "lines": 5,
       "area": [
         "state",
@@ -5279,8 +5277,8 @@
     {
       "name": "readExperimentConclusionInput",
       "kind": "function",
-      "startLine": 10617,
-      "endLine": 10619,
+      "startLine": 10623,
+      "endLine": 10625,
       "lines": 3,
       "area": [
         "core"
@@ -5293,8 +5291,8 @@
     {
       "name": "keepExperiment",
       "kind": "function",
-      "startLine": 10621,
-      "endLine": 10628,
+      "startLine": 10627,
+      "endLine": 10634,
       "lines": 8,
       "area": [
         "state",
@@ -5310,8 +5308,8 @@
     {
       "name": "dropExperiment",
       "kind": "function",
-      "startLine": 10630,
-      "endLine": 10637,
+      "startLine": 10636,
+      "endLine": 10643,
       "lines": 8,
       "area": [
         "state",
@@ -5327,8 +5325,8 @@
     {
       "name": "copyExperimentConclusion",
       "kind": "function",
-      "startLine": 10640,
-      "endLine": 10656,
+      "startLine": 10646,
+      "endLine": 10662,
       "lines": 17,
       "area": [
         "ui"
@@ -5343,8 +5341,8 @@
     {
       "name": "renderExperimentSection",
       "kind": "function",
-      "startLine": 10659,
-      "endLine": 10696,
+      "startLine": 10665,
+      "endLine": 10702,
       "lines": 38,
       "area": [
         "ui"
@@ -5355,8 +5353,8 @@
     {
       "name": "renderZeroThinking",
       "kind": "function",
-      "startLine": 10705,
-      "endLine": 10732,
+      "startLine": 10711,
+      "endLine": 10738,
       "lines": 28,
       "area": [
         "ui",
@@ -5372,8 +5370,8 @@
     {
       "name": "ztRenderThemeItem",
       "kind": "function",
-      "startLine": 10737,
-      "endLine": 10752,
+      "startLine": 10743,
+      "endLine": 10758,
       "lines": 16,
       "area": [
         "ui",
@@ -5385,8 +5383,8 @@
     {
       "name": "ztRenderGroupSection",
       "kind": "function",
-      "startLine": 10755,
-      "endLine": 10768,
+      "startLine": 10761,
+      "endLine": 10774,
       "lines": 14,
       "area": [
         "ui",
@@ -5398,8 +5396,8 @@
     {
       "name": "ztSortByImportance",
       "kind": "function",
-      "startLine": 10771,
-      "endLine": 10773,
+      "startLine": 10777,
+      "endLine": 10779,
       "lines": 3,
       "area": [
         "core"
@@ -5410,8 +5408,8 @@
     {
       "name": "ztThemeListHTML",
       "kind": "function",
-      "startLine": 10777,
-      "endLine": 10796,
+      "startLine": 10783,
+      "endLine": 10802,
       "lines": 20,
       "area": [
         "ui",
@@ -5423,8 +5421,8 @@
     {
       "name": "renderZtSuggestions",
       "kind": "function",
-      "startLine": 10799,
-      "endLine": 10823,
+      "startLine": 10805,
+      "endLine": 10829,
       "lines": 25,
       "area": [
         "ui"
@@ -5435,8 +5433,8 @@
     {
       "name": "renderZtThemeTab",
       "kind": "function",
-      "startLine": 10825,
-      "endLine": 10880,
+      "startLine": 10831,
+      "endLine": 10886,
       "lines": 56,
       "area": [
         "ui",
@@ -5450,8 +5448,8 @@
     {
       "name": "renderZtWrite",
       "kind": "function",
-      "startLine": 10882,
-      "endLine": 10905,
+      "startLine": 10888,
+      "endLine": 10911,
       "lines": 24,
       "area": [
         "ui"
@@ -5462,8 +5460,8 @@
     {
       "name": "renderZtEdit",
       "kind": "function",
-      "startLine": 10910,
-      "endLine": 10931,
+      "startLine": 10916,
+      "endLine": 10937,
       "lines": 22,
       "area": [
         "ui"
@@ -5476,8 +5474,8 @@
     {
       "name": "ztFilteredHistory",
       "kind": "function",
-      "startLine": 10934,
-      "endLine": 10940,
+      "startLine": 10940,
+      "endLine": 10946,
       "lines": 7,
       "area": [
         "core"
@@ -5490,8 +5488,8 @@
     {
       "name": "ztHistoryCountLabel",
       "kind": "function",
-      "startLine": 10941,
-      "endLine": 10946,
+      "startLine": 10947,
+      "endLine": 10952,
       "lines": 6,
       "area": [
         "core"
@@ -5504,8 +5502,8 @@
     {
       "name": "ztHistoryListHTML",
       "kind": "function",
-      "startLine": 10947,
-      "endLine": 10962,
+      "startLine": 10953,
+      "endLine": 10968,
       "lines": 16,
       "area": [
         "core"
@@ -5518,8 +5516,8 @@
     {
       "name": "ztFormatDate",
       "kind": "function",
-      "startLine": 10964,
-      "endLine": 10967,
+      "startLine": 10970,
+      "endLine": 10973,
       "lines": 4,
       "area": [
         "core"
@@ -5530,8 +5528,8 @@
     {
       "name": "ztAddSubmit",
       "kind": "function",
-      "startLine": 10970,
-      "endLine": 10980,
+      "startLine": 10976,
+      "endLine": 10986,
       "lines": 11,
       "area": [
         "state",
@@ -5548,8 +5546,8 @@
     {
       "name": "ztPendingSuggestions",
       "kind": "function",
-      "startLine": 10984,
-      "endLine": 10986,
+      "startLine": 10990,
+      "endLine": 10992,
       "lines": 3,
       "area": [
         "core"
@@ -5562,8 +5560,8 @@
     {
       "name": "ztSuggestionAdopt",
       "kind": "function",
-      "startLine": 10990,
-      "endLine": 10999,
+      "startLine": 10996,
+      "endLine": 11005,
       "lines": 10,
       "area": [
         "state",
@@ -5579,8 +5577,8 @@
     {
       "name": "ztSuggestionDismiss",
       "kind": "function",
-      "startLine": 11002,
-      "endLine": 11008,
+      "startLine": 11008,
+      "endLine": 11014,
       "lines": 7,
       "area": [
         "state",
@@ -5596,8 +5594,8 @@
     {
       "name": "ztToggleFav",
       "kind": "function",
-      "startLine": 11010,
-      "endLine": 11015,
+      "startLine": 11016,
+      "endLine": 11021,
       "lines": 6,
       "area": [
         "state",
@@ -5613,8 +5611,8 @@
     {
       "name": "ztToggleImportance",
       "kind": "function",
-      "startLine": 11018,
-      "endLine": 11023,
+      "startLine": 11024,
+      "endLine": 11029,
       "lines": 6,
       "area": [
         "state",
@@ -5630,8 +5628,8 @@
     {
       "name": "deleteZtTheme",
       "kind": "function",
-      "startLine": 11031,
-      "endLine": 11043,
+      "startLine": 11037,
+      "endLine": 11049,
       "lines": 13,
       "area": [
         "state",
@@ -5649,8 +5647,8 @@
     {
       "name": "ztGroupAdd",
       "kind": "function",
-      "startLine": 11051,
-      "endLine": 11060,
+      "startLine": 11057,
+      "endLine": 11066,
       "lines": 10,
       "area": [
         "state",
@@ -5666,8 +5664,8 @@
     {
       "name": "ztGroupRename",
       "kind": "function",
-      "startLine": 11062,
-      "endLine": 11069,
+      "startLine": 11068,
+      "endLine": 11075,
       "lines": 8,
       "area": [
         "state",
@@ -5683,8 +5681,8 @@
     {
       "name": "ztGroupDelete",
       "kind": "function",
-      "startLine": 11074,
-      "endLine": 11086,
+      "startLine": 11080,
+      "endLine": 11092,
       "lines": 13,
       "area": [
         "state",
@@ -5700,8 +5698,8 @@
     {
       "name": "ztThemeSetGroup",
       "kind": "function",
-      "startLine": 11089,
-      "endLine": 11093,
+      "startLine": 11095,
+      "endLine": 11099,
       "lines": 5,
       "area": [
         "state",
@@ -5717,8 +5715,8 @@
     {
       "name": "ztGroupIsOpen",
       "kind": "function",
-      "startLine": 11096,
-      "endLine": 11098,
+      "startLine": 11102,
+      "endLine": 11104,
       "lines": 3,
       "area": [
         "core"
@@ -5729,8 +5727,8 @@
     {
       "name": "ztGroupToggleOpen",
       "kind": "function",
-      "startLine": 11099,
-      "endLine": 11102,
+      "startLine": 11105,
+      "endLine": 11108,
       "lines": 4,
       "area": [
         "ui"
@@ -5743,8 +5741,8 @@
     {
       "name": "openZtWrite",
       "kind": "function",
-      "startLine": 11104,
-      "endLine": 11112,
+      "startLine": 11110,
+      "endLine": 11118,
       "lines": 9,
       "area": [
         "ui"
@@ -5762,8 +5760,8 @@
     {
       "name": "discardZtWrite",
       "kind": "function",
-      "startLine": 11114,
-      "endLine": 11121,
+      "startLine": 11120,
+      "endLine": 11127,
       "lines": 8,
       "area": [
         "ui"
@@ -5777,8 +5775,8 @@
     {
       "name": "saveZtEntry",
       "kind": "function",
-      "startLine": 11123,
-      "endLine": 11155,
+      "startLine": 11129,
+      "endLine": 11161,
       "lines": 33,
       "area": [
         "state",
@@ -5797,8 +5795,8 @@
     {
       "name": "openZtEntry",
       "kind": "function",
-      "startLine": 11160,
-      "endLine": 11169,
+      "startLine": 11166,
+      "endLine": 11175,
       "lines": 10,
       "area": [
         "ui"
@@ -5815,8 +5813,8 @@
     {
       "name": "closeZtEdit",
       "kind": "function",
-      "startLine": 11172,
-      "endLine": 11178,
+      "startLine": 11178,
+      "endLine": 11184,
       "lines": 7,
       "area": [
         "ui"
@@ -5832,8 +5830,8 @@
     {
       "name": "saveZtEdit",
       "kind": "function",
-      "startLine": 11183,
-      "endLine": 11193,
+      "startLine": 11189,
+      "endLine": 11199,
       "lines": 11,
       "area": [
         "state",
@@ -5850,8 +5848,8 @@
     {
       "name": "startZtTimer",
       "kind": "function",
-      "startLine": 11196,
-      "endLine": 11212,
+      "startLine": 11202,
+      "endLine": 11218,
       "lines": 17,
       "area": [
         "core"
@@ -5865,8 +5863,8 @@
     {
       "name": "updateZtTimerDisplay",
       "kind": "function",
-      "startLine": 11213,
-      "endLine": 11217,
+      "startLine": 11219,
+      "endLine": 11223,
       "lines": 5,
       "area": [
         "core"
@@ -5879,8 +5877,8 @@
     {
       "name": "stopZtTimer",
       "kind": "function",
-      "startLine": 11218,
-      "endLine": 11221,
+      "startLine": 11224,
+      "endLine": 11227,
       "lines": 4,
       "area": [
         "core"
@@ -5891,8 +5889,8 @@
     {
       "name": "renderDateBar",
       "kind": "function",
-      "startLine": 11223,
-      "endLine": 11235,
+      "startLine": 11229,
+      "endLine": 11241,
       "lines": 13,
       "area": [
         "ui"
@@ -5905,8 +5903,8 @@
     {
       "name": "addProject",
       "kind": "function",
-      "startLine": 11237,
-      "endLine": 11254,
+      "startLine": 11243,
+      "endLine": 11260,
       "lines": 18,
       "area": [
         "state",
@@ -5924,8 +5922,8 @@
     {
       "name": "deleteProject",
       "kind": "function",
-      "startLine": 11256,
-      "endLine": 11267,
+      "startLine": 11262,
+      "endLine": 11273,
       "lines": 12,
       "area": [
         "state",
@@ -5941,8 +5939,8 @@
     {
       "name": "addTask",
       "kind": "function",
-      "startLine": 11269,
-      "endLine": 11275,
+      "startLine": 11275,
+      "endLine": 11281,
       "lines": 7,
       "area": [
         "state",
@@ -5959,8 +5957,8 @@
     {
       "name": "makeTask",
       "kind": "function",
-      "startLine": 11277,
-      "endLine": 11319,
+      "startLine": 11283,
+      "endLine": 11325,
       "lines": 43,
       "area": [
         "core"
@@ -5974,8 +5972,8 @@
     {
       "name": "addTaskToProject",
       "kind": "function",
-      "startLine": 11323,
-      "endLine": 11325,
+      "startLine": 11329,
+      "endLine": 11331,
       "lines": 3,
       "area": [
         "core"
@@ -5986,8 +5984,8 @@
     {
       "name": "addSubtask",
       "kind": "function",
-      "startLine": 11328,
-      "endLine": 11338,
+      "startLine": 11334,
+      "endLine": 11344,
       "lines": 11,
       "area": [
         "ui"
@@ -6000,8 +5998,8 @@
     {
       "name": "openTaskCreator",
       "kind": "function",
-      "startLine": 11341,
-      "endLine": 11348,
+      "startLine": 11347,
+      "endLine": 11354,
       "lines": 8,
       "area": [
         "ui"
@@ -6017,8 +6015,8 @@
     {
       "name": "getTaskDepth",
       "kind": "function",
-      "startLine": 11350,
-      "endLine": 11359,
+      "startLine": 11356,
+      "endLine": 11365,
       "lines": 10,
       "area": [
         "core"
@@ -6031,8 +6029,8 @@
     {
       "name": "toggleTask",
       "kind": "function",
-      "startLine": 11361,
-      "endLine": 11382,
+      "startLine": 11367,
+      "endLine": 11388,
       "lines": 22,
       "area": [
         "state",
@@ -6049,8 +6047,8 @@
     {
       "name": "deleteTask",
       "kind": "function",
-      "startLine": 11384,
-      "endLine": 11388,
+      "startLine": 11390,
+      "endLine": 11394,
       "lines": 5,
       "area": [
         "state",
@@ -6067,8 +6065,8 @@
     {
       "name": "createBlockFromTask",
       "kind": "function",
-      "startLine": 11390,
-      "endLine": 11404,
+      "startLine": 11396,
+      "endLine": 11410,
       "lines": 15,
       "area": [
         "state",
@@ -6087,8 +6085,8 @@
     {
       "name": "getOtherTask",
       "kind": "function",
-      "startLine": 11407,
-      "endLine": 11409,
+      "startLine": 11413,
+      "endLine": 11415,
       "lines": 3,
       "area": [
         "core"
@@ -6101,8 +6099,8 @@
     {
       "name": "defaultPlannedTimes",
       "kind": "function",
-      "startLine": 11417,
-      "endLine": 11427,
+      "startLine": 11423,
+      "endLine": 11433,
       "lines": 11,
       "area": [
         "core"
@@ -6117,8 +6115,8 @@
     {
       "name": "addBlock",
       "kind": "function",
-      "startLine": 11429,
-      "endLine": 11447,
+      "startLine": 11435,
+      "endLine": 11453,
       "lines": 19,
       "area": [
         "state",
@@ -6137,8 +6135,8 @@
     {
       "name": "subtractMinutesFromDateTime",
       "kind": "function",
-      "startLine": 11452,
-      "endLine": 11455,
+      "startLine": 11458,
+      "endLine": 11461,
       "lines": 4,
       "area": [
         "core"
@@ -6151,8 +6149,8 @@
     {
       "name": "quickCompleteActualStart",
       "kind": "function",
-      "startLine": 11466,
-      "endLine": 11477,
+      "startLine": 11472,
+      "endLine": 11483,
       "lines": 12,
       "area": [
         "ui"
@@ -6163,8 +6161,8 @@
     {
       "name": "toggleBlock",
       "kind": "function",
-      "startLine": 11496,
-      "endLine": 11576,
+      "startLine": 11502,
+      "endLine": 11582,
       "lines": 81,
       "area": [
         "state",
@@ -6186,8 +6184,8 @@
     {
       "name": "toggleTaskCompleteFromBlock",
       "kind": "function",
-      "startLine": 11585,
-      "endLine": 11615,
+      "startLine": 11591,
+      "endLine": 11621,
       "lines": 31,
       "area": [
         "state",
@@ -6207,8 +6205,8 @@
     {
       "name": "toggleMIT",
       "kind": "function",
-      "startLine": 11621,
-      "endLine": 11635,
+      "startLine": 11627,
+      "endLine": 11641,
       "lines": 15,
       "area": [
         "state",
@@ -6224,8 +6222,8 @@
     {
       "name": "triggerCompletionEffect",
       "kind": "function",
-      "startLine": 11638,
-      "endLine": 11664,
+      "startLine": 11644,
+      "endLine": 11670,
       "lines": 27,
       "area": [
         "core"
@@ -6239,8 +6237,8 @@
     {
       "name": "setBlockTime",
       "kind": "function",
-      "startLine": 11666,
-      "endLine": 11690,
+      "startLine": 11672,
+      "endLine": 11696,
       "lines": 25,
       "area": [
         "state",
@@ -6261,8 +6259,8 @@
     {
       "name": "bulkApproveAsPlanned",
       "kind": "function",
-      "startLine": 11696,
-      "endLine": 11713,
+      "startLine": 11702,
+      "endLine": 11719,
       "lines": 18,
       "area": [
         "state",
@@ -6280,8 +6278,8 @@
     {
       "name": "openNowMode",
       "kind": "function",
-      "startLine": 11720,
-      "endLine": 11728,
+      "startLine": 11726,
+      "endLine": 11734,
       "lines": 9,
       "area": [
         "ui"
@@ -6296,8 +6294,8 @@
     {
       "name": "closeNowMode",
       "kind": "function",
-      "startLine": 11730,
-      "endLine": 11734,
+      "startLine": 11736,
+      "endLine": 11740,
       "lines": 5,
       "area": [
         "ui"
@@ -6310,8 +6308,8 @@
     {
       "name": "nowConveyorTarget",
       "kind": "function",
-      "startLine": 11738,
-      "endLine": 11749,
+      "startLine": 11744,
+      "endLine": 11755,
       "lines": 12,
       "area": [
         "execution"
@@ -6324,8 +6322,8 @@
     {
       "name": "nowConveyorComplete",
       "kind": "function",
-      "startLine": 11753,
-      "endLine": 11759,
+      "startLine": 11759,
+      "endLine": 11765,
       "lines": 7,
       "area": [
         "execution"
@@ -6338,8 +6336,8 @@
     {
       "name": "renderNowConveyor",
       "kind": "function",
-      "startLine": 11761,
-      "endLine": 11790,
+      "startLine": 11767,
+      "endLine": 11796,
       "lines": 30,
       "area": [
         "ui"
@@ -6350,8 +6348,8 @@
     {
       "name": "updateBlockField",
       "kind": "function",
-      "startLine": 11792,
-      "endLine": 11799,
+      "startLine": 11798,
+      "endLine": 11805,
       "lines": 8,
       "area": [
         "state",
@@ -6367,8 +6365,8 @@
     {
       "name": "deleteBlock",
       "kind": "function",
-      "startLine": 11801,
-      "endLine": 11812,
+      "startLine": 11807,
+      "endLine": 11818,
       "lines": 12,
       "area": [
         "state",
@@ -6386,8 +6384,8 @@
     {
       "name": "isConditionDegraded",
       "kind": "function",
-      "startLine": 11825,
-      "endLine": 11828,
+      "startLine": 11831,
+      "endLine": 11834,
       "lines": 4,
       "area": [
         "core"
@@ -6400,8 +6398,8 @@
     {
       "name": "generateReport",
       "kind": "function",
-      "startLine": 11832,
-      "endLine": 12200,
+      "startLine": 11838,
+      "endLine": 12206,
       "lines": 369,
       "area": [
         "state",
@@ -6433,8 +6431,8 @@
     {
       "name": "downloadReport",
       "kind": "function",
-      "startLine": 12202,
-      "endLine": 12206,
+      "startLine": 12208,
+      "endLine": 12212,
       "lines": 5,
       "area": [
         "state",
@@ -6452,8 +6450,8 @@
     {
       "name": "downloadData",
       "kind": "function",
-      "startLine": 12208,
-      "endLine": 12212,
+      "startLine": 12214,
+      "endLine": 12218,
       "lines": 5,
       "area": [
         "sync",
@@ -6467,8 +6465,8 @@
     {
       "name": "importData",
       "kind": "function",
-      "startLine": 12214,
-      "endLine": 12234,
+      "startLine": 12220,
+      "endLine": 12240,
       "lines": 21,
       "area": [
         "state",
@@ -6485,8 +6483,8 @@
     {
       "name": "hoursSinceLocalDateTime",
       "kind": "function",
-      "startLine": 12246,
-      "endLine": 12249,
+      "startLine": 12252,
+      "endLine": 12255,
       "lines": 4,
       "area": [
         "core"
@@ -6497,8 +6495,8 @@
     {
       "name": "syncAlertMessage",
       "kind": "function",
-      "startLine": 12254,
-      "endLine": 12268,
+      "startLine": 12260,
+      "endLine": 12274,
       "lines": 15,
       "area": [
         "sync"
@@ -6512,8 +6510,8 @@
     {
       "name": "homeSyncAlertBanner",
       "kind": "function",
-      "startLine": 12270,
-      "endLine": 12274,
+      "startLine": 12276,
+      "endLine": 12280,
       "lines": 5,
       "area": [
         "sync"
@@ -6524,8 +6522,8 @@
     {
       "name": "renderSyncBanner",
       "kind": "function",
-      "startLine": 12285,
-      "endLine": 12291,
+      "startLine": 12291,
+      "endLine": 12297,
       "lines": 7,
       "area": [
         "sync",
@@ -6539,8 +6537,8 @@
     {
       "name": "syncDotClass",
       "kind": "function",
-      "startLine": 12292,
-      "endLine": 12295,
+      "startLine": 12298,
+      "endLine": 12301,
       "lines": 4,
       "area": [
         "sync"
@@ -6554,8 +6552,8 @@
     {
       "name": "updateSyncDot",
       "kind": "function",
-      "startLine": 12296,
-      "endLine": 12299,
+      "startLine": 12302,
+      "endLine": 12305,
       "lines": 4,
       "area": [
         "sync"
@@ -6568,8 +6566,8 @@
     {
       "name": "updateAutoSaveStatus",
       "kind": "function",
-      "startLine": 12301,
-      "endLine": 12311,
+      "startLine": 12307,
+      "endLine": 12317,
       "lines": 11,
       "area": [
         "state"
@@ -6584,8 +6582,8 @@
     {
       "name": "syncGitHubFieldsFromDOM",
       "kind": "function",
-      "startLine": 12319,
-      "endLine": 12328,
+      "startLine": 12325,
+      "endLine": 12334,
       "lines": 10,
       "area": [
         "sync"
@@ -6600,8 +6598,8 @@
     {
       "name": "personalDataReady",
       "kind": "function",
-      "startLine": 12339,
-      "endLine": 12342,
+      "startLine": 12345,
+      "endLine": 12348,
       "lines": 4,
       "area": [
         "core"
@@ -6614,8 +6612,8 @@
     {
       "name": "personalDataConn",
       "kind": "function",
-      "startLine": 12345,
-      "endLine": 12354,
+      "startLine": 12351,
+      "endLine": 12360,
       "lines": 10,
       "area": [
         "sync"
@@ -6628,8 +6626,8 @@
     {
       "name": "personalDataPath",
       "kind": "function",
-      "startLine": 12356,
-      "endLine": 12358,
+      "startLine": 12362,
+      "endLine": 12364,
       "lines": 3,
       "area": [
         "core"
@@ -6640,8 +6638,8 @@
     {
       "name": "personalDataFileConfig",
       "kind": "function",
-      "startLine": 12361,
-      "endLine": 12364,
+      "startLine": 12367,
+      "endLine": 12370,
       "lines": 4,
       "area": [
         "core"
@@ -6655,8 +6653,8 @@
     {
       "name": "fetchGitHubRawResult",
       "kind": "function",
-      "startLine": 12379,
-      "endLine": 12400,
+      "startLine": 12385,
+      "endLine": 12406,
       "lines": 22,
       "area": [
         "sync"
@@ -6671,8 +6669,8 @@
     {
       "name": "fetchGitHubRawText",
       "kind": "function",
-      "startLine": 12402,
-      "endLine": 12405,
+      "startLine": 12408,
+      "endLine": 12411,
       "lines": 4,
       "area": [
         "sync"
@@ -6685,8 +6683,8 @@
     {
       "name": "fetchGitHubRawBlob",
       "kind": "function",
-      "startLine": 12408,
-      "endLine": 12411,
+      "startLine": 12414,
+      "endLine": 12417,
       "lines": 4,
       "area": [
         "sync"
@@ -6700,8 +6698,8 @@
     {
       "name": "fetchPersonalDataDirList",
       "kind": "function",
-      "startLine": 12417,
-      "endLine": 12439,
+      "startLine": 12423,
+      "endLine": 12445,
       "lines": 23,
       "area": [
         "sync"
@@ -6716,8 +6714,8 @@
     {
       "name": "setPersonalDataAuthError",
       "kind": "function",
-      "startLine": 12444,
-      "endLine": 12448,
+      "startLine": 12450,
+      "endLine": 12454,
       "lines": 5,
       "area": [
         "ui"
@@ -6728,8 +6726,8 @@
     {
       "name": "clearPersonalDataAuthError",
       "kind": "function",
-      "startLine": 12449,
-      "endLine": 12453,
+      "startLine": 12455,
+      "endLine": 12459,
       "lines": 5,
       "area": [
         "ui"
@@ -6740,8 +6738,8 @@
     {
       "name": "renderPersonalDataAuthBanner",
       "kind": "function",
-      "startLine": 12454,
-      "endLine": 12461,
+      "startLine": 12460,
+      "endLine": 12467,
       "lines": 8,
       "area": [
         "ui"
@@ -6754,8 +6752,8 @@
     {
       "name": "requireGitHubConfig",
       "kind": "function",
-      "startLine": 12463,
-      "endLine": 12471,
+      "startLine": 12469,
+      "endLine": 12477,
       "lines": 9,
       "area": [
         "sync",
@@ -6770,8 +6768,8 @@
     {
       "name": "fetchGitHubFileSHA",
       "kind": "function",
-      "startLine": 12473,
-      "endLine": 12481,
+      "startLine": 12479,
+      "endLine": 12487,
       "lines": 9,
       "area": [
         "sync"
@@ -6784,8 +6782,8 @@
     {
       "name": "gitHubContentsURL",
       "kind": "function",
-      "startLine": 12483,
-      "endLine": 12485,
+      "startLine": 12489,
+      "endLine": 12491,
       "lines": 3,
       "area": [
         "sync"
@@ -6796,8 +6794,8 @@
     {
       "name": "githubHeaders",
       "kind": "function",
-      "startLine": 12487,
-      "endLine": 12499,
+      "startLine": 12493,
+      "endLine": 12505,
       "lines": 13,
       "area": [
         "sync"
@@ -6808,8 +6806,8 @@
     {
       "name": "gitHubErrorMessage",
       "kind": "function",
-      "startLine": 12501,
-      "endLine": 12537,
+      "startLine": 12507,
+      "endLine": 12543,
       "lines": 37,
       "area": [
         "sync"
@@ -6822,8 +6820,8 @@
     {
       "name": "sanitizedStateForGitHub",
       "kind": "function",
-      "startLine": 12539,
-      "endLine": 12546,
+      "startLine": 12545,
+      "endLine": 12552,
       "lines": 8,
       "area": [
         "sync",
@@ -6837,8 +6835,8 @@
     {
       "name": "toBase64",
       "kind": "function",
-      "startLine": 12548,
-      "endLine": 12553,
+      "startLine": 12554,
+      "endLine": 12559,
       "lines": 6,
       "area": [
         "core"
@@ -6849,8 +6847,8 @@
     {
       "name": "fromBase64",
       "kind": "function",
-      "startLine": 12555,
-      "endLine": 12559,
+      "startLine": 12561,
+      "endLine": 12565,
       "lines": 5,
       "area": [
         "core"
@@ -6861,8 +6859,8 @@
     {
       "name": "gitHubBackupURL",
       "kind": "function",
-      "startLine": 12571,
-      "endLine": 12574,
+      "startLine": 12577,
+      "endLine": 12580,
       "lines": 4,
       "area": [
         "sync"
@@ -6873,8 +6871,8 @@
     {
       "name": "maybeWriteBackupSnapshot",
       "kind": "function",
-      "startLine": 12576,
-      "endLine": 12609,
+      "startLine": 12582,
+      "endLine": 12615,
       "lines": 34,
       "area": [
         "sync",
@@ -6891,8 +6889,8 @@
     {
       "name": "listBackups",
       "kind": "function",
-      "startLine": 12611,
-      "endLine": 12625,
+      "startLine": 12617,
+      "endLine": 12631,
       "lines": 15,
       "area": [
         "sync"
@@ -6905,8 +6903,8 @@
     {
       "name": "pruneOldBackups",
       "kind": "function",
-      "startLine": 12627,
-      "endLine": 12642,
+      "startLine": 12633,
+      "endLine": 12648,
       "lines": 16,
       "area": [
         "sync"
@@ -6919,8 +6917,8 @@
     {
       "name": "openBackupListModal",
       "kind": "function",
-      "startLine": 12644,
-      "endLine": 12655,
+      "startLine": 12650,
+      "endLine": 12661,
       "lines": 12,
       "area": [
         "sync",
@@ -6934,8 +6932,8 @@
     {
       "name": "buildBackupListModal",
       "kind": "function",
-      "startLine": 12657,
-      "endLine": 12679,
+      "startLine": 12663,
+      "endLine": 12685,
       "lines": 23,
       "area": [
         "ui"
@@ -6946,8 +6944,8 @@
     {
       "name": "restoreBackup",
       "kind": "function",
-      "startLine": 12681,
-      "endLine": 12712,
+      "startLine": 12687,
+      "endLine": 12718,
       "lines": 32,
       "area": [
         "sync",
@@ -6965,8 +6963,8 @@
     {
       "name": "gitHubFileURL",
       "kind": "function",
-      "startLine": 12724,
-      "endLine": 12726,
+      "startLine": 12730,
+      "endLine": 12732,
       "lines": 3,
       "area": [
         "sync"
@@ -6977,8 +6975,8 @@
     {
       "name": "fetchGitHubJSONFile",
       "kind": "function",
-      "startLine": 12729,
-      "endLine": 12748,
+      "startLine": 12735,
+      "endLine": 12754,
       "lines": 20,
       "area": [
         "sync"
@@ -6991,8 +6989,8 @@
     {
       "name": "collectArchivable",
       "kind": "function",
-      "startLine": 12751,
-      "endLine": 12762,
+      "startLine": 12757,
+      "endLine": 12768,
       "lines": 12,
       "area": [
         "core"
@@ -7008,8 +7006,8 @@
     {
       "name": "runArchive",
       "kind": "function",
-      "startLine": 12764,
-      "endLine": 12821,
+      "startLine": 12770,
+      "endLine": 12827,
       "lines": 58,
       "area": [
         "sync",
@@ -7032,8 +7030,8 @@
     {
       "name": "maybeAutoArchive",
       "kind": "function",
-      "startLine": 12823,
-      "endLine": 12832,
+      "startLine": 12829,
+      "endLine": 12838,
       "lines": 10,
       "area": [
         "core"
@@ -7048,8 +7046,8 @@
     {
       "name": "stateSizeLabel",
       "kind": "function",
-      "startLine": 12835,
-      "endLine": 12842,
+      "startLine": 12841,
+      "endLine": 12848,
       "lines": 8,
       "area": [
         "state"
@@ -7060,8 +7058,8 @@
     {
       "name": "refreshSearchResults",
       "kind": "function",
-      "startLine": 12848,
-      "endLine": 12852,
+      "startLine": 12854,
+      "endLine": 12858,
       "lines": 5,
       "area": [
         "core"
@@ -7075,8 +7073,8 @@
     {
       "name": "loadArchiveForSearch",
       "kind": "function",
-      "startLine": 12854,
-      "endLine": 12888,
+      "startLine": 12860,
+      "endLine": 12894,
       "lines": 35,
       "area": [
         "sync",
@@ -7093,8 +7091,8 @@
     {
       "name": "resetDemoData",
       "kind": "function",
-      "startLine": 12890,
-      "endLine": 12893,
+      "startLine": 12896,
+      "endLine": 12899,
       "lines": 4,
       "area": [
         "state",
@@ -7108,8 +7106,8 @@
     {
       "name": "isIOSDevice",
       "kind": "function",
-      "startLine": 12899,
-      "endLine": 12903,
+      "startLine": 12905,
+      "endLine": 12909,
       "lines": 5,
       "area": [
         "core"
@@ -7120,8 +7118,8 @@
     {
       "name": "maybeShowGuidedAccessHint",
       "kind": "function",
-      "startLine": 12911,
-      "endLine": 12916,
+      "startLine": 12917,
+      "endLine": 12922,
       "lines": 6,
       "area": [
         "ui"
@@ -7135,8 +7133,8 @@
     {
       "name": "buildGuidedAccessHintModal",
       "kind": "function",
-      "startLine": 12918,
-      "endLine": 12941,
+      "startLine": 12924,
+      "endLine": 12947,
       "lines": 24,
       "area": [
         "ui"
@@ -7147,8 +7145,8 @@
     {
       "name": "startPomodoro",
       "kind": "function",
-      "startLine": 12943,
-      "endLine": 12970,
+      "startLine": 12949,
+      "endLine": 12976,
       "lines": 28,
       "area": [
         "state",
@@ -7167,8 +7165,8 @@
     {
       "name": "forceResetPomodoroSession",
       "kind": "function",
-      "startLine": 12974,
-      "endLine": 12986,
+      "startLine": 12980,
+      "endLine": 12992,
       "lines": 13,
       "area": [
         "execution"
@@ -7181,8 +7179,8 @@
     {
       "name": "recordBlockInterruption",
       "kind": "function",
-      "startLine": 12993,
-      "endLine": 12999,
+      "startLine": 12999,
+      "endLine": 13005,
       "lines": 7,
       "area": [
         "state",
@@ -7198,8 +7196,8 @@
     {
       "name": "interruptReasonPickerHTML",
       "kind": "function",
-      "startLine": 13003,
-      "endLine": 13012,
+      "startLine": 13009,
+      "endLine": 13018,
       "lines": 10,
       "area": [
         "core"
@@ -7210,8 +7208,8 @@
     {
       "name": "stopPomodoro",
       "kind": "function",
-      "startLine": 13014,
-      "endLine": 13035,
+      "startLine": 13020,
+      "endLine": 13041,
       "lines": 22,
       "area": [
         "state",
@@ -7229,8 +7227,8 @@
     {
       "name": "completePomodoro",
       "kind": "function",
-      "startLine": 13037,
-      "endLine": 13066,
+      "startLine": 13043,
+      "endLine": 13072,
       "lines": 30,
       "area": [
         "state",
@@ -7248,8 +7246,8 @@
     {
       "name": "openBodyScanModal",
       "kind": "function",
-      "startLine": 13077,
-      "endLine": 13081,
+      "startLine": 13083,
+      "endLine": 13087,
       "lines": 5,
       "area": [
         "ui"
@@ -7262,8 +7260,8 @@
     {
       "name": "buildBodyScanStep1Modal",
       "kind": "function",
-      "startLine": 13083,
-      "endLine": 13100,
+      "startLine": 13089,
+      "endLine": 13106,
       "lines": 18,
       "area": [
         "ui"
@@ -7274,8 +7272,8 @@
     {
       "name": "buildBodyScanStep2Modal",
       "kind": "function",
-      "startLine": 13102,
-      "endLine": 13118,
+      "startLine": 13108,
+      "endLine": 13124,
       "lines": 17,
       "area": [
         "ui"
@@ -7286,8 +7284,8 @@
     {
       "name": "bodyScanRecordFatigue",
       "kind": "function",
-      "startLine": 13121,
-      "endLine": 13125,
+      "startLine": 13127,
+      "endLine": 13131,
       "lines": 5,
       "area": [
         "ui"
@@ -7298,8 +7296,8 @@
     {
       "name": "bodyScanRecordPart",
       "kind": "function",
-      "startLine": 13128,
-      "endLine": 13139,
+      "startLine": 13134,
+      "endLine": 13145,
       "lines": 12,
       "area": [
         "core"
@@ -7312,8 +7310,8 @@
     {
       "name": "bodyScanDiscard",
       "kind": "function",
-      "startLine": 13142,
-      "endLine": 13144,
+      "startLine": 13148,
+      "endLine": 13150,
       "lines": 3,
       "area": [
         "core"
@@ -7324,8 +7322,8 @@
     {
       "name": "closeBodyScanFlow",
       "kind": "function",
-      "startLine": 13146,
-      "endLine": 13154,
+      "startLine": 13152,
+      "endLine": 13160,
       "lines": 9,
       "area": [
         "state",
@@ -7340,8 +7338,8 @@
     {
       "name": "hasIncompleteReason",
       "kind": "function",
-      "startLine": 13175,
-      "endLine": 13177,
+      "startLine": 13181,
+      "endLine": 13183,
       "lines": 3,
       "area": [
         "core"
@@ -7352,8 +7350,8 @@
     {
       "name": "recordTriageInlineReason",
       "kind": "function",
-      "startLine": 13181,
-      "endLine": 13195,
+      "startLine": 13187,
+      "endLine": 13201,
       "lines": 15,
       "area": [
         "state",
@@ -7372,8 +7370,8 @@
     {
       "name": "skipTriageInlineReason",
       "kind": "function",
-      "startLine": 13197,
-      "endLine": 13200,
+      "startLine": 13203,
+      "endLine": 13206,
       "lines": 4,
       "area": [
         "execution",
@@ -7387,8 +7385,8 @@
     {
       "name": "openIncompleteReasonModal",
       "kind": "function",
-      "startLine": 13204,
-      "endLine": 13214,
+      "startLine": 13210,
+      "endLine": 13220,
       "lines": 11,
       "area": [
         "execution",
@@ -7403,8 +7401,8 @@
     {
       "name": "buildIncompleteReasonModal",
       "kind": "function",
-      "startLine": 13216,
-      "endLine": 13239,
+      "startLine": 13222,
+      "endLine": 13245,
       "lines": 24,
       "area": [
         "ui"
@@ -7415,8 +7413,8 @@
     {
       "name": "recordIncompleteReasonChip",
       "kind": "function",
-      "startLine": 13242,
-      "endLine": 13251,
+      "startLine": 13248,
+      "endLine": 13257,
       "lines": 10,
       "area": [
         "state",
@@ -7433,8 +7431,8 @@
     {
       "name": "skipIncompleteReasonModal",
       "kind": "function",
-      "startLine": 13256,
-      "endLine": 13260,
+      "startLine": 13262,
+      "endLine": 13266,
       "lines": 5,
       "area": [
         "ui"
@@ -7445,8 +7443,8 @@
     {
       "name": "advanceIncompleteReasonQueue",
       "kind": "function",
-      "startLine": 13262,
-      "endLine": 13279,
+      "startLine": 13268,
+      "endLine": 13285,
       "lines": 18,
       "area": [
         "execution",
@@ -7463,8 +7461,8 @@
     {
       "name": "estimateMinutesForBlock",
       "kind": "function",
-      "startLine": 13291,
-      "endLine": 13299,
+      "startLine": 13297,
+      "endLine": 13305,
       "lines": 9,
       "area": [
         "execution"
@@ -7475,8 +7473,8 @@
     {
       "name": "logDeclaration",
       "kind": "function",
-      "startLine": 13302,
-      "endLine": 13318,
+      "startLine": 13308,
+      "endLine": 13324,
       "lines": 17,
       "area": [
         "core"
@@ -7490,8 +7488,8 @@
     {
       "name": "reportForBlock",
       "kind": "function",
-      "startLine": 13322,
-      "endLine": 13349,
+      "startLine": 13328,
+      "endLine": 13355,
       "lines": 28,
       "area": [
         "execution",
@@ -7506,8 +7504,8 @@
     {
       "name": "buildDeclareFeedback",
       "kind": "function",
-      "startLine": 13352,
-      "endLine": 13368,
+      "startLine": 13358,
+      "endLine": 13374,
       "lines": 17,
       "area": [
         "ui",
@@ -7521,8 +7519,8 @@
     {
       "name": "openDeclareModal",
       "kind": "function",
-      "startLine": 13372,
-      "endLine": 13382,
+      "startLine": 13378,
+      "endLine": 13388,
       "lines": 11,
       "area": [
         "execution",
@@ -7538,8 +7536,8 @@
     {
       "name": "buildDeclareModal",
       "kind": "function",
-      "startLine": 13384,
-      "endLine": 13405,
+      "startLine": 13390,
+      "endLine": 13411,
       "lines": 22,
       "area": [
         "ui"
@@ -7550,8 +7548,8 @@
     {
       "name": "resumeLifecycleStart",
       "kind": "function",
-      "startLine": 13407,
-      "endLine": 13414,
+      "startLine": 13413,
+      "endLine": 13420,
       "lines": 8,
       "area": [
         "execution",
@@ -7563,8 +7561,8 @@
     {
       "name": "confirmDeclare",
       "kind": "function",
-      "startLine": 13416,
-      "endLine": 13426,
+      "startLine": 13422,
+      "endLine": 13432,
       "lines": 11,
       "area": [
         "execution",
@@ -7581,8 +7579,8 @@
     {
       "name": "skipDeclare",
       "kind": "function",
-      "startLine": 13428,
-      "endLine": 13434,
+      "startLine": 13434,
+      "endLine": 13440,
       "lines": 7,
       "area": [
         "journal-health",
@@ -7594,8 +7592,8 @@
     {
       "name": "openReportModal",
       "kind": "function",
-      "startLine": 13444,
-      "endLine": 13454,
+      "startLine": 13450,
+      "endLine": 13460,
       "lines": 11,
       "area": [
         "journal-health",
@@ -7611,8 +7609,8 @@
     {
       "name": "buildReportModal",
       "kind": "function",
-      "startLine": 13456,
-      "endLine": 13476,
+      "startLine": 13462,
+      "endLine": 13482,
       "lines": 21,
       "area": [
         "ui",
@@ -7624,8 +7622,8 @@
     {
       "name": "resumeLifecycleFinish",
       "kind": "function",
-      "startLine": 13478,
-      "endLine": 13481,
+      "startLine": 13484,
+      "endLine": 13487,
       "lines": 4,
       "area": [
         "execution",
@@ -7637,8 +7635,8 @@
     {
       "name": "finishReport",
       "kind": "function",
-      "startLine": 13484,
-      "endLine": 13497,
+      "startLine": 13490,
+      "endLine": 13503,
       "lines": 14,
       "area": [
         "execution",
@@ -7652,8 +7650,8 @@
     {
       "name": "goBreakPomodoro",
       "kind": "function",
-      "startLine": 13500,
-      "endLine": 13523,
+      "startLine": 13506,
+      "endLine": 13529,
       "lines": 24,
       "area": [
         "state",
@@ -7672,8 +7670,8 @@
     {
       "name": "endBreakPomodoro",
       "kind": "function",
-      "startLine": 13526,
-      "endLine": 13540,
+      "startLine": 13532,
+      "endLine": 13546,
       "lines": 15,
       "area": [
         "state",
@@ -7690,8 +7688,8 @@
     {
       "name": "continueFocusPomodoro",
       "kind": "function",
-      "startLine": 13543,
-      "endLine": 13548,
+      "startLine": 13549,
+      "endLine": 13554,
       "lines": 6,
       "area": [
         "execution",
@@ -7705,8 +7703,8 @@
     {
       "name": "finishBlockFromBreak",
       "kind": "function",
-      "startLine": 13551,
-      "endLine": 13577,
+      "startLine": 13557,
+      "endLine": 13583,
       "lines": 27,
       "area": [
         "state",
@@ -7724,8 +7722,8 @@
     {
       "name": "updatePomodoroTick",
       "kind": "function",
-      "startLine": 13584,
-      "endLine": 13622,
+      "startLine": 13590,
+      "endLine": 13628,
       "lines": 39,
       "area": [
         "execution",
@@ -7744,8 +7742,8 @@
     {
       "name": "startTimerTicker",
       "kind": "function",
-      "startLine": 13624,
-      "endLine": 13663,
+      "startLine": 13630,
+      "endLine": 13669,
       "lines": 40,
       "area": [
         "execution",
@@ -7768,8 +7766,8 @@
     {
       "name": "setView",
       "kind": "function",
-      "startLine": 13665,
-      "endLine": 13678,
+      "startLine": 13671,
+      "endLine": 13684,
       "lines": 14,
       "area": [
         "state",
@@ -7787,8 +7785,8 @@
     {
       "name": "openVisionBoard",
       "kind": "function",
-      "startLine": 13683,
-      "endLine": 13687,
+      "startLine": 13689,
+      "endLine": 13693,
       "lines": 5,
       "area": [
         "ui",
@@ -7802,8 +7800,8 @@
     {
       "name": "setSelectedDate",
       "kind": "function",
-      "startLine": 13689,
-      "endLine": 13695,
+      "startLine": 13695,
+      "endLine": 13701,
       "lines": 7,
       "area": [
         "state",
@@ -7822,8 +7820,8 @@
     {
       "name": "shiftSelectedDate",
       "kind": "function",
-      "startLine": 13697,
-      "endLine": 13699,
+      "startLine": 13703,
+      "endLine": 13705,
       "lines": 3,
       "area": [
         "core"
@@ -7836,8 +7834,8 @@
     {
       "name": "saveAndRender",
       "kind": "function",
-      "startLine": 13702,
-      "endLine": 13711,
+      "startLine": 13708,
+      "endLine": 13717,
       "lines": 10,
       "area": [
         "state",
@@ -7852,8 +7850,8 @@
     {
       "name": "autoIngestFeedback",
       "kind": "function",
-      "startLine": 13734,
-      "endLine": 13778,
+      "startLine": 13740,
+      "endLine": 13784,
       "lines": 45,
       "area": [
         "content"
@@ -7869,8 +7867,8 @@
     {
       "name": "hydrateStaticMarkdown",
       "kind": "function",
-      "startLine": 13785,
-      "endLine": 14044,
+      "startLine": 13791,
+      "endLine": 14050,
       "lines": 260,
       "area": [
         "sync",
@@ -7899,8 +7897,8 @@
     {
       "name": "maybeRefreshFeedback",
       "kind": "function",
-      "startLine": 14050,
-      "endLine": 14060,
+      "startLine": 14056,
+      "endLine": 14066,
       "lines": 11,
       "area": [
         "content"
@@ -7915,8 +7913,8 @@
     {
       "name": "reloadStaticMarkdown",
       "kind": "function",
-      "startLine": 14062,
-      "endLine": 14069,
+      "startLine": 14068,
+      "endLine": 14075,
       "lines": 8,
       "area": [
         "state",
@@ -7930,8 +7928,8 @@
     {
       "name": "hydrateAiWorkResults",
       "kind": "function",
-      "startLine": 14081,
-      "endLine": 14107,
+      "startLine": 14087,
+      "endLine": 14113,
       "lines": 27,
       "area": [
         "sync"
@@ -7944,8 +7942,8 @@
     {
       "name": "pendingAiWorkResults",
       "kind": "function",
-      "startLine": 14110,
-      "endLine": 14114,
+      "startLine": 14116,
+      "endLine": 14120,
       "lines": 5,
       "area": [
         "core"
@@ -7958,8 +7956,8 @@
     {
       "name": "markAiWorkResultProcessed",
       "kind": "function",
-      "startLine": 14116,
-      "endLine": 14119,
+      "startLine": 14122,
+      "endLine": 14125,
       "lines": 4,
       "area": [
         "core"
@@ -7972,8 +7970,8 @@
     {
       "name": "approveAiWorkResult",
       "kind": "function",
-      "startLine": 14124,
-      "endLine": 14159,
+      "startLine": 14130,
+      "endLine": 14165,
       "lines": 36,
       "area": [
         "state",
@@ -7992,8 +7990,8 @@
     {
       "name": "raiseAiWorkQuestion",
       "kind": "function",
-      "startLine": 14162,
-      "endLine": 14169,
+      "startLine": 14168,
+      "endLine": 14175,
       "lines": 8,
       "area": [
         "state",
@@ -8010,8 +8008,8 @@
     {
       "name": "aiWorkResultRowHTML",
       "kind": "function",
-      "startLine": 14171,
-      "endLine": 14199,
+      "startLine": 14177,
+      "endLine": 14205,
       "lines": 29,
       "area": [
         "core"
@@ -8022,8 +8020,8 @@
     {
       "name": "homeFutureLetterLink",
       "kind": "function",
-      "startLine": 14214,
-      "endLine": 14220,
+      "startLine": 14220,
+      "endLine": 14226,
       "lines": 7,
       "area": [
         "core"
@@ -8034,8 +8032,8 @@
     {
       "name": "homeAiHubBody",
       "kind": "function",
-      "startLine": 14222,
-      "endLine": 14244,
+      "startLine": 14228,
+      "endLine": 14250,
       "lines": 23,
       "area": [
         "content"
@@ -8048,8 +8046,8 @@
     {
       "name": "homeAiFeedbackReadHTML",
       "kind": "function",
-      "startLine": 14253,
-      "endLine": 14272,
+      "startLine": 14259,
+      "endLine": 14278,
       "lines": 20,
       "area": [
         "ui",
@@ -8063,8 +8061,8 @@
     {
       "name": "homeDegradedBanner",
       "kind": "function",
-      "startLine": 14276,
-      "endLine": 14280,
+      "startLine": 14282,
+      "endLine": 14286,
       "lines": 5,
       "area": [
         "core"
@@ -8075,8 +8073,8 @@
     {
       "name": "homeRoutineCheckBanner",
       "kind": "function",
-      "startLine": 14287,
-      "endLine": 14294,
+      "startLine": 14293,
+      "endLine": 14300,
       "lines": 8,
       "area": [
         "execution"
@@ -8087,8 +8085,8 @@
     {
       "name": "aiFeedbackCandidatesHTML",
       "kind": "function",
-      "startLine": 14298,
-      "endLine": 14316,
+      "startLine": 14304,
+      "endLine": 14322,
       "lines": 19,
       "area": [
         "content"
@@ -8102,8 +8100,8 @@
     {
       "name": "aiFreshnessLine",
       "kind": "function",
-      "startLine": 14321,
-      "endLine": 14336,
+      "startLine": 14327,
+      "endLine": 14342,
       "lines": 16,
       "area": [
         "core"
@@ -8116,8 +8114,8 @@
     {
       "name": "openMdInGithub",
       "kind": "function",
-      "startLine": 14343,
-      "endLine": 14353,
+      "startLine": 14349,
+      "endLine": 14359,
       "lines": 11,
       "area": [
         "sync",
@@ -8130,26 +8128,6 @@
     },
     {
       "name": "setVisionSection",
-      "kind": "function",
-      "startLine": 14355,
-      "endLine": 14359,
-      "lines": 5,
-      "area": [
-        "state",
-        "execution",
-        "ui",
-        "content"
-      ],
-      "stateKeys": [
-        "settings"
-      ],
-      "effects": [
-        "save",
-        "render"
-      ]
-    },
-    {
-      "name": "setVisionBoardIndex",
       "kind": "function",
       "startLine": 14361,
       "endLine": 14365,
@@ -8169,10 +8147,30 @@
       ]
     },
     {
+      "name": "setVisionBoardIndex",
+      "kind": "function",
+      "startLine": 14367,
+      "endLine": 14371,
+      "lines": 5,
+      "area": [
+        "state",
+        "execution",
+        "ui",
+        "content"
+      ],
+      "stateKeys": [
+        "settings"
+      ],
+      "effects": [
+        "save",
+        "render"
+      ]
+    },
+    {
       "name": "setAiReportType",
       "kind": "function",
-      "startLine": 14368,
-      "endLine": 14373,
+      "startLine": 14374,
+      "endLine": 14379,
       "lines": 6,
       "area": [
         "state",
@@ -8191,8 +8189,8 @@
     {
       "name": "showToast",
       "kind": "function",
-      "startLine": 14391,
-      "endLine": 14422,
+      "startLine": 14397,
+      "endLine": 14428,
       "lines": 32,
       "area": [
         "ui"
@@ -8207,8 +8205,8 @@
     {
       "name": "upsertMorningLine",
       "kind": "function",
-      "startLine": 14429,
-      "endLine": 14443,
+      "startLine": 14435,
+      "endLine": 14449,
       "lines": 15,
       "area": [
         "core"
@@ -8219,8 +8217,8 @@
     {
       "name": "computeMetrics",
       "kind": "function",
-      "startLine": 14445,
-      "endLine": 14460,
+      "startLine": 14451,
+      "endLine": 14466,
       "lines": 16,
       "area": [
         "core"
@@ -8234,8 +8232,8 @@
     {
       "name": "metric",
       "kind": "function",
-      "startLine": 14462,
-      "endLine": 14472,
+      "startLine": 14468,
+      "endLine": 14478,
       "lines": 11,
       "area": [
         "core"
@@ -8246,8 +8244,8 @@
     {
       "name": "ageMetric",
       "kind": "function",
-      "startLine": 14474,
-      "endLine": 14487,
+      "startLine": 14480,
+      "endLine": 14493,
       "lines": 14,
       "area": [
         "core"
@@ -8258,8 +8256,8 @@
     {
       "name": "isTouchedBlock",
       "kind": "function",
-      "startLine": 14496,
-      "endLine": 14509,
+      "startLine": 14502,
+      "endLine": 14515,
       "lines": 14,
       "area": [
         "execution"
@@ -8272,8 +8270,8 @@
     {
       "name": "removeUntouchedInstances",
       "kind": "function",
-      "startLine": 14513,
-      "endLine": 14520,
+      "startLine": 14519,
+      "endLine": 14526,
       "lines": 8,
       "area": [
         "execution"
@@ -8286,8 +8284,8 @@
     {
       "name": "recurrenceKindLabel",
       "kind": "function",
-      "startLine": 14522,
-      "endLine": 14524,
+      "startLine": 14528,
+      "endLine": 14530,
       "lines": 3,
       "area": [
         "core"
@@ -8298,8 +8296,8 @@
     {
       "name": "inferRecurrenceKind",
       "kind": "function",
-      "startLine": 14534,
-      "endLine": 14550,
+      "startLine": 14540,
+      "endLine": 14556,
       "lines": 17,
       "area": [
         "core"
@@ -8310,8 +8308,8 @@
     {
       "name": "migrateRecurrencesIfNeeded",
       "kind": "function",
-      "startLine": 14552,
-      "endLine": 14591,
+      "startLine": 14558,
+      "endLine": 14597,
       "lines": 40,
       "area": [
         "execution"
@@ -8322,8 +8320,8 @@
     {
       "name": "blocksForDate",
       "kind": "function",
-      "startLine": 14593,
-      "endLine": 14597,
+      "startLine": 14599,
+      "endLine": 14603,
       "lines": 5,
       "area": [
         "execution"
@@ -8336,8 +8334,8 @@
     {
       "name": "blockById",
       "kind": "function",
-      "startLine": 14599,
-      "endLine": 14601,
+      "startLine": 14605,
+      "endLine": 14607,
       "lines": 3,
       "area": [
         "execution"
@@ -8350,8 +8348,8 @@
     {
       "name": "projectName",
       "kind": "function",
-      "startLine": 14603,
-      "endLine": 14606,
+      "startLine": 14609,
+      "endLine": 14612,
       "lines": 4,
       "area": [
         "core"
@@ -8364,8 +8362,8 @@
     {
       "name": "taskProgress",
       "kind": "function",
-      "startLine": 14609,
-      "endLine": 14613,
+      "startLine": 14615,
+      "endLine": 14619,
       "lines": 5,
       "area": [
         "core"
@@ -8376,8 +8374,8 @@
     {
       "name": "isProjectSuspended",
       "kind": "function",
-      "startLine": 14621,
-      "endLine": 14621,
+      "startLine": 14627,
+      "endLine": 14627,
       "lines": 1,
       "area": [
         "core"
@@ -8388,8 +8386,8 @@
     {
       "name": "isTaskSuspended",
       "kind": "function",
-      "startLine": 14622,
-      "endLine": 14622,
+      "startLine": 14628,
+      "endLine": 14628,
       "lines": 1,
       "area": [
         "core"
@@ -8400,8 +8398,8 @@
     {
       "name": "isTaskCountable",
       "kind": "function",
-      "startLine": 14624,
-      "endLine": 14627,
+      "startLine": 14630,
+      "endLine": 14633,
       "lines": 4,
       "area": [
         "core"
@@ -8412,8 +8410,8 @@
     {
       "name": "isTaskDead",
       "kind": "function",
-      "startLine": 14629,
-      "endLine": 14632,
+      "startLine": 14635,
+      "endLine": 14638,
       "lines": 4,
       "area": [
         "core"
@@ -8424,8 +8422,8 @@
     {
       "name": "projectStatusLabel",
       "kind": "function",
-      "startLine": 14634,
-      "endLine": 14636,
+      "startLine": 14640,
+      "endLine": 14642,
       "lines": 3,
       "area": [
         "core"
@@ -8436,8 +8434,8 @@
     {
       "name": "taskStatusLabel",
       "kind": "function",
-      "startLine": 14637,
-      "endLine": 14639,
+      "startLine": 14643,
+      "endLine": 14645,
       "lines": 3,
       "area": [
         "core"
@@ -8448,8 +8446,8 @@
     {
       "name": "suspendProject",
       "kind": "function",
-      "startLine": 14641,
-      "endLine": 14644,
+      "startLine": 14647,
+      "endLine": 14650,
       "lines": 4,
       "area": [
         "state",
@@ -8465,8 +8463,8 @@
     {
       "name": "resumeProject",
       "kind": "function",
-      "startLine": 14645,
-      "endLine": 14648,
+      "startLine": 14651,
+      "endLine": 14654,
       "lines": 4,
       "area": [
         "state",
@@ -8482,8 +8480,8 @@
     {
       "name": "suspendTask",
       "kind": "function",
-      "startLine": 14649,
-      "endLine": 14652,
+      "startLine": 14655,
+      "endLine": 14658,
       "lines": 4,
       "area": [
         "state",
@@ -8499,8 +8497,8 @@
     {
       "name": "resumeTask",
       "kind": "function",
-      "startLine": 14653,
-      "endLine": 14656,
+      "startLine": 14659,
+      "endLine": 14662,
       "lines": 4,
       "area": [
         "state",
@@ -8516,8 +8514,8 @@
     {
       "name": "energyPoints",
       "kind": "function",
-      "startLine": 14658,
-      "endLine": 14669,
+      "startLine": 14664,
+      "endLine": 14675,
       "lines": 12,
       "area": [
         "journal-health"
@@ -8531,8 +8529,8 @@
     {
       "name": "rangeOptions",
       "kind": "function",
-      "startLine": 14671,
-      "endLine": 14677,
+      "startLine": 14677,
+      "endLine": 14683,
       "lines": 7,
       "area": [
         "core"
@@ -8543,8 +8541,8 @@
     {
       "name": "emptyPanel",
       "kind": "function",
-      "startLine": 14679,
-      "endLine": 14681,
+      "startLine": 14685,
+      "endLine": 14687,
       "lines": 3,
       "area": [
         "core"
@@ -8555,8 +8553,8 @@
     {
       "name": "todayISO",
       "kind": "function",
-      "startLine": 14683,
-      "endLine": 14685,
+      "startLine": 14689,
+      "endLine": 14691,
       "lines": 3,
       "area": [
         "core"
@@ -8569,8 +8567,8 @@
     {
       "name": "nowDateTime",
       "kind": "function",
-      "startLine": 14687,
-      "endLine": 14689,
+      "startLine": 14693,
+      "endLine": 14695,
       "lines": 3,
       "area": [
         "core"
@@ -8583,8 +8581,8 @@
     {
       "name": "dateToISO",
       "kind": "function",
-      "startLine": 14691,
-      "endLine": 14693,
+      "startLine": 14697,
+      "endLine": 14699,
       "lines": 3,
       "area": [
         "core"
@@ -8595,8 +8593,8 @@
     {
       "name": "dateToLocalDateTime",
       "kind": "function",
-      "startLine": 14695,
-      "endLine": 14699,
+      "startLine": 14701,
+      "endLine": 14705,
       "lines": 5,
       "area": [
         "core"
@@ -8607,8 +8605,8 @@
     {
       "name": "parseDate",
       "kind": "function",
-      "startLine": 14701,
-      "endLine": 14704,
+      "startLine": 14707,
+      "endLine": 14710,
       "lines": 4,
       "area": [
         "core"
@@ -8621,8 +8619,8 @@
     {
       "name": "localDateTimeToMs",
       "kind": "function",
-      "startLine": 14710,
-      "endLine": 14718,
+      "startLine": 14716,
+      "endLine": 14724,
       "lines": 9,
       "area": [
         "core"
@@ -8635,8 +8633,8 @@
     {
       "name": "addDays",
       "kind": "function",
-      "startLine": 14720,
-      "endLine": 14724,
+      "startLine": 14726,
+      "endLine": 14730,
       "lines": 5,
       "area": [
         "core"
@@ -8646,18 +8644,6 @@
     },
     {
       "name": "effectiveDueDate",
-      "kind": "function",
-      "startLine": 14731,
-      "endLine": 14735,
-      "lines": 5,
-      "area": [
-        "core"
-      ],
-      "stateKeys": [],
-      "effects": []
-    },
-    {
-      "name": "addYears",
       "kind": "function",
       "startLine": 14737,
       "endLine": 14741,
@@ -8669,10 +8655,22 @@
       "effects": []
     },
     {
-      "name": "daysBetween",
+      "name": "addYears",
       "kind": "function",
       "startLine": 14743,
-      "endLine": 14746,
+      "endLine": 14747,
+      "lines": 5,
+      "area": [
+        "core"
+      ],
+      "stateKeys": [],
+      "effects": []
+    },
+    {
+      "name": "daysBetween",
+      "kind": "function",
+      "startLine": 14749,
+      "endLine": 14752,
       "lines": 4,
       "area": [
         "core"
@@ -8683,8 +8681,8 @@
     {
       "name": "minutesOf",
       "kind": "function",
-      "startLine": 14748,
-      "endLine": 14758,
+      "startLine": 14754,
+      "endLine": 14764,
       "lines": 11,
       "area": [
         "core"
@@ -8695,8 +8693,8 @@
     {
       "name": "timeFromDateTime",
       "kind": "function",
-      "startLine": 14760,
-      "endLine": 14766,
+      "startLine": 14766,
+      "endLine": 14772,
       "lines": 7,
       "area": [
         "core"
@@ -8707,8 +8705,8 @@
     {
       "name": "formatDisplayDate",
       "kind": "function",
-      "startLine": 14768,
-      "endLine": 14770,
+      "startLine": 14774,
+      "endLine": 14776,
       "lines": 3,
       "area": [
         "core"
@@ -8719,8 +8717,8 @@
     {
       "name": "weekdayLabel",
       "kind": "function",
-      "startLine": 14772,
-      "endLine": 14774,
+      "startLine": 14778,
+      "endLine": 14780,
       "lines": 3,
       "area": [
         "core"
@@ -8731,8 +8729,8 @@
     {
       "name": "remainingText",
       "kind": "function",
-      "startLine": 14776,
-      "endLine": 14783,
+      "startLine": 14782,
+      "endLine": 14789,
       "lines": 8,
       "area": [
         "core"
@@ -8745,8 +8743,8 @@
     {
       "name": "signed",
       "kind": "function",
-      "startLine": 14785,
-      "endLine": 14787,
+      "startLine": 14791,
+      "endLine": 14793,
       "lines": 3,
       "area": [
         "core"
@@ -8757,8 +8755,8 @@
     {
       "name": "pad2",
       "kind": "function",
-      "startLine": 14789,
-      "endLine": 14791,
+      "startLine": 14795,
+      "endLine": 14797,
       "lines": 3,
       "area": [
         "core"
@@ -8769,8 +8767,8 @@
     {
       "name": "clamp",
       "kind": "function",
-      "startLine": 14793,
-      "endLine": 14795,
+      "startLine": 14799,
+      "endLine": 14801,
       "lines": 3,
       "area": [
         "core"
@@ -8781,8 +8779,8 @@
     {
       "name": "escapeHTML",
       "kind": "function",
-      "startLine": 14797,
-      "endLine": 14804,
+      "startLine": 14803,
+      "endLine": 14810,
       "lines": 8,
       "area": [
         "core"
@@ -8793,8 +8791,8 @@
     {
       "name": "downloadText",
       "kind": "function",
-      "startLine": 14806,
-      "endLine": 14814,
+      "startLine": 14812,
+      "endLine": 14820,
       "lines": 9,
       "area": [
         "state"
@@ -8808,8 +8806,8 @@
     {
       "name": "registerServiceWorker",
       "kind": "function",
-      "startLine": 14816,
-      "endLine": 14843,
+      "startLine": 14822,
+      "endLine": 14849,
       "lines": 28,
       "area": [
         "ui"
@@ -8820,8 +8818,8 @@
     {
       "name": "openProjectEditor",
       "kind": "function",
-      "startLine": 14851,
-      "endLine": 14856,
+      "startLine": 14857,
+      "endLine": 14862,
       "lines": 6,
       "area": [
         "ui"
@@ -8835,8 +8833,8 @@
     {
       "name": "openTaskEditor",
       "kind": "function",
-      "startLine": 14858,
-      "endLine": 14863,
+      "startLine": 14864,
+      "endLine": 14869,
       "lines": 6,
       "area": [
         "ui"
@@ -8850,8 +8848,8 @@
     {
       "name": "openBlockEditor",
       "kind": "function",
-      "startLine": 14865,
-      "endLine": 14870,
+      "startLine": 14871,
+      "endLine": 14876,
       "lines": 6,
       "area": [
         "execution",
@@ -8866,8 +8864,8 @@
     {
       "name": "renderModal",
       "kind": "function",
-      "startLine": 14875,
-      "endLine": 14891,
+      "startLine": 14881,
+      "endLine": 14897,
       "lines": 17,
       "area": [
         "ui"
@@ -8882,8 +8880,8 @@
     {
       "name": "closeModal",
       "kind": "function",
-      "startLine": 14893,
-      "endLine": 14904,
+      "startLine": 14899,
+      "endLine": 14910,
       "lines": 12,
       "area": [
         "ui"
@@ -8898,8 +8896,8 @@
     {
       "name": "readModalFields",
       "kind": "function",
-      "startLine": 14906,
-      "endLine": 14919,
+      "startLine": 14912,
+      "endLine": 14925,
       "lines": 14,
       "area": [
         "ui"
@@ -8912,8 +8910,8 @@
     {
       "name": "submitModal",
       "kind": "function",
-      "startLine": 14921,
-      "endLine": 14929,
+      "startLine": 14927,
+      "endLine": 14935,
       "lines": 9,
       "area": [
         "state",
@@ -8927,8 +8925,8 @@
     {
       "name": "deleteFromModal",
       "kind": "function",
-      "startLine": 14931,
-      "endLine": 14944,
+      "startLine": 14937,
+      "endLine": 14950,
       "lines": 14,
       "area": [
         "ui"
@@ -8941,8 +8939,8 @@
     {
       "name": "buildProjectModal",
       "kind": "function",
-      "startLine": 14954,
-      "endLine": 15038,
+      "startLine": 14960,
+      "endLine": 15044,
       "lines": 85,
       "area": [
         "ui"
@@ -8955,8 +8953,8 @@
     {
       "name": "saveProjectFromModal",
       "kind": "function",
-      "startLine": 15040,
-      "endLine": 15063,
+      "startLine": 15046,
+      "endLine": 15069,
       "lines": 24,
       "area": [
         "state",
@@ -8973,8 +8971,8 @@
     {
       "name": "buildTaskModal",
       "kind": "function",
-      "startLine": 15067,
-      "endLine": 15163,
+      "startLine": 15073,
+      "endLine": 15169,
       "lines": 97,
       "area": [
         "ui"
@@ -8988,8 +8986,8 @@
     {
       "name": "isDescendantOf",
       "kind": "function",
-      "startLine": 15166,
-      "endLine": 15175,
+      "startLine": 15172,
+      "endLine": 15181,
       "lines": 10,
       "area": [
         "core"
@@ -9002,8 +9000,8 @@
     {
       "name": "saveTaskFromModal",
       "kind": "function",
-      "startLine": 15177,
-      "endLine": 15239,
+      "startLine": 15183,
+      "endLine": 15245,
       "lines": 63,
       "area": [
         "state",
@@ -9019,8 +9017,8 @@
     {
       "name": "buildBlockModal",
       "kind": "function",
-      "startLine": 15243,
-      "endLine": 15420,
+      "startLine": 15249,
+      "endLine": 15426,
       "lines": 178,
       "area": [
         "execution",
@@ -9035,8 +9033,8 @@
     {
       "name": "saveBlockFromModal",
       "kind": "function",
-      "startLine": 15422,
-      "endLine": 15623,
+      "startLine": 15428,
+      "endLine": 15629,
       "lines": 202,
       "area": [
         "state",
@@ -9054,8 +9052,8 @@
     {
       "name": "openTimelineNewBlock",
       "kind": "function",
-      "startLine": 15626,
-      "endLine": 15668,
+      "startLine": 15632,
+      "endLine": 15674,
       "lines": 43,
       "area": [
         "execution",
@@ -9074,8 +9072,8 @@
     {
       "name": "toLocalInput",
       "kind": "function",
-      "startLine": 15672,
-      "endLine": 15680,
+      "startLine": 15678,
+      "endLine": 15686,
       "lines": 9,
       "area": [
         "core"
@@ -9086,8 +9084,8 @@
     {
       "name": "fromLocalInput",
       "kind": "function",
-      "startLine": 15682,
-      "endLine": 15707,
+      "startLine": 15688,
+      "endLine": 15713,
       "lines": 26,
       "area": [
         "core"
@@ -9096,10 +9094,10 @@
       "effects": []
     },
     {
-      "name": "event:keydown@15710",
+      "name": "event:keydown@15716",
       "kind": "event-listener",
-      "startLine": 15710,
-      "endLine": 15714,
+      "startLine": 15716,
+      "endLine": 15720,
       "lines": 5,
       "area": [
         "ui"
@@ -9112,8 +9110,8 @@
     {
       "name": "defaultPassivePomodoro",
       "kind": "function",
-      "startLine": 15720,
-      "endLine": 15728,
+      "startLine": 15726,
+      "endLine": 15734,
       "lines": 9,
       "area": [
         "execution"
@@ -9124,8 +9122,8 @@
     {
       "name": "setPomodoroTab",
       "kind": "function",
-      "startLine": 15733,
-      "endLine": 15737,
+      "startLine": 15739,
+      "endLine": 15743,
       "lines": 5,
       "area": [
         "state",
@@ -9143,8 +9141,8 @@
     {
       "name": "ensurePassivePomodoro",
       "kind": "function",
-      "startLine": 15742,
-      "endLine": 15749,
+      "startLine": 15748,
+      "endLine": 15755,
       "lines": 8,
       "area": [
         "execution"
@@ -9157,8 +9155,8 @@
     {
       "name": "recordFeedbackFile",
       "kind": "function",
-      "startLine": 15758,
-      "endLine": 15764,
+      "startLine": 15764,
+      "endLine": 15770,
       "lines": 7,
       "area": [
         "state",
@@ -9174,8 +9172,8 @@
     {
       "name": "pushReportToGitHub",
       "kind": "function",
-      "startLine": 15770,
-      "endLine": 15782,
+      "startLine": 15776,
+      "endLine": 15788,
       "lines": 13,
       "area": [
         "sync",
@@ -9192,8 +9190,8 @@
     {
       "name": "pushFileToGitHub",
       "kind": "function",
-      "startLine": 15792,
-      "endLine": 15832,
+      "startLine": 15798,
+      "endLine": 15838,
       "lines": 41,
       "area": [
         "sync",
@@ -9210,8 +9208,8 @@
     {
       "name": "completeBlockWithActual",
       "kind": "function",
-      "startLine": 15863,
-      "endLine": 15871,
+      "startLine": 15869,
+      "endLine": 15877,
       "lines": 9,
       "area": [
         "execution",
@@ -9226,8 +9224,8 @@
     {
       "name": "buildActualEntryModal",
       "kind": "function",
-      "startLine": 15873,
-      "endLine": 15926,
+      "startLine": 15879,
+      "endLine": 15932,
       "lines": 54,
       "area": [
         "journal-health",
@@ -9239,8 +9237,8 @@
     {
       "name": "saveActualEntryFromModal",
       "kind": "function",
-      "startLine": 15928,
-      "endLine": 15955,
+      "startLine": 15934,
+      "endLine": 15961,
       "lines": 28,
       "area": [
         "state",
@@ -9258,8 +9256,8 @@
     {
       "name": "runDailyOpen",
       "kind": "function",
-      "startLine": 15965,
-      "endLine": 15982,
+      "startLine": 15971,
+      "endLine": 15988,
       "lines": 18,
       "area": [
         "state",
@@ -9276,8 +9274,8 @@
     {
       "name": "_energyMedian",
       "kind": "function",
-      "startLine": 15985,
-      "endLine": 15990,
+      "startLine": 15991,
+      "endLine": 15996,
       "lines": 6,
       "area": [
         "journal-health"
@@ -9288,8 +9286,8 @@
     {
       "name": "_actualDurationMin",
       "kind": "function",
-      "startLine": 15991,
-      "endLine": 15995,
+      "startLine": 15997,
+      "endLine": 16001,
       "lines": 5,
       "area": [
         "core"
@@ -9300,8 +9298,8 @@
     {
       "name": "resolveEstimateMin",
       "kind": "function",
-      "startLine": 15997,
-      "endLine": 16007,
+      "startLine": 16003,
+      "endLine": 16013,
       "lines": 11,
       "area": [
         "journal-health"
@@ -9314,8 +9312,8 @@
     {
       "name": "computeProjectedEnd",
       "kind": "function",
-      "startLine": 16009,
-      "endLine": 16021,
+      "startLine": 16015,
+      "endLine": 16027,
       "lines": 13,
       "area": [
         "execution"
@@ -9326,8 +9324,8 @@
     {
       "name": "projectedEndText",
       "kind": "function",
-      "startLine": 16023,
-      "endLine": 16034,
+      "startLine": 16029,
+      "endLine": 16040,
       "lines": 12,
       "area": [
         "execution"
@@ -9342,8 +9340,8 @@
     {
       "name": "projectedEndBadge",
       "kind": "function",
-      "startLine": 16036,
-      "endLine": 16039,
+      "startLine": 16042,
+      "endLine": 16045,
       "lines": 4,
       "area": [
         "core"
@@ -9354,8 +9352,8 @@
     {
       "name": "updateProjectedEndTick",
       "kind": "function",
-      "startLine": 16041,
-      "endLine": 16044,
+      "startLine": 16047,
+      "endLine": 16050,
       "lines": 4,
       "area": [
         "core"
@@ -9368,8 +9366,8 @@
     {
       "name": "updateBatteryTick",
       "kind": "function",
-      "startLine": 16058,
-      "endLine": 16093,
+      "startLine": 16064,
+      "endLine": 16099,
       "lines": 36,
       "area": [
         "execution",
@@ -9391,8 +9389,8 @@
     {
       "name": "computeBufferRemaining",
       "kind": "function",
-      "startLine": 16104,
-      "endLine": 16122,
+      "startLine": 16110,
+      "endLine": 16128,
       "lines": 19,
       "area": [
         "execution"
@@ -9405,8 +9403,8 @@
     {
       "name": "bufferMeterLevel",
       "kind": "function",
-      "startLine": 16124,
-      "endLine": 16129,
+      "startLine": 16130,
+      "endLine": 16135,
       "lines": 6,
       "area": [
         "core"
@@ -9417,8 +9415,8 @@
     {
       "name": "computeDailyOverload",
       "kind": "function",
-      "startLine": 16143,
-      "endLine": 16158,
+      "startLine": 16149,
+      "endLine": 16164,
       "lines": 16,
       "area": [
         "state",
@@ -9432,8 +9430,8 @@
     {
       "name": "bufferMeterHTML",
       "kind": "function",
-      "startLine": 16163,
-      "endLine": 16182,
+      "startLine": 16169,
+      "endLine": 16188,
       "lines": 20,
       "area": [
         "state"
@@ -9447,8 +9445,8 @@
     {
       "name": "prefillEnergy",
       "kind": "function",
-      "startLine": 16186,
-      "endLine": 16198,
+      "startLine": 16192,
+      "endLine": 16204,
       "lines": 13,
       "area": [
         "journal-health"
@@ -9459,10 +9457,10 @@
       "effects": []
     },
     {
-      "name": "event:visibilitychange@16265",
+      "name": "event:visibilitychange@16271",
       "kind": "event-listener",
-      "startLine": 16265,
-      "endLine": 16272,
+      "startLine": 16271,
+      "endLine": 16278,
       "lines": 8,
       "area": [
         "sync",
