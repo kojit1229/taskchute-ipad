@@ -375,6 +375,14 @@ registerActions({
   },
   "add-category": () => addCategory(),
   "delete-category": ({ target }) => deleteCategory(target.dataset.catId),
+  // v189レビューL4: ALIGNMENT誘導→設定のマスタ群(既定閉・localStorage記憶)を開いて着地させる
+  "vision-open-direct-settings": () => {
+    setHomeFoldOpen("settings-master", true);
+    setView("settings");
+  },
+  "toggle-vision-direct-category": ({ target }) => {
+    toggleVisionDirectCategory(target.dataset.category || "", target.checked);
+  },
   "add-break-message": () => addBreakMessage(),
   "delete-break-message": ({ target }) => deleteBreakMessage(target.dataset.msgId),
   "toggle-sidebar": () => {
@@ -2291,6 +2299,10 @@ function deleteCategory(catId) {
     : `カテゴリ「${cat.name}」を削除しますか?`;
   if (!window.confirm(msg)) return;
   state.settings.categories = (state.settings.categories || []).filter((c) => c.id !== catId);
+  // v189: 直結カテゴリからも除去(残すと集計対象として生き続けるのにチェックUIから
+  //       消え、解除手段が無くなる。レビューM2)
+  state.settings.visionDirectCategories = (state.settings.visionDirectCategories || [])
+    .filter((n) => n !== cat.name);
   saveAndRender(`カテゴリ「${cat.name}」を削除しました`);
 }
 
@@ -2320,6 +2332,10 @@ function updateCategoryField(catId, field, value) {
     // v37: 繰り返しルールにも追従(これを忘れると、明日以降に実体化されるブロックが旧名のまま生成され、
     //      「ルーティン」カテゴリの改名ではルーティン画面から消える)
     state.recurrences = (state.recurrences || []).map((r) => r.category === oldCat.name ? { ...r, category: value } : r);
+    // v189: ビジョン直結カテゴリも追従(他は全てカスケードするのにここだけ残すと、
+    //       ALIGNMENTが無警告で0%になり設定チェックも外れて見える。レビューM1)
+    state.settings.visionDirectCategories = (state.settings.visionDirectCategories || [])
+      .map((n) => n === oldCat.name ? value : n);
   }
   state.settings.categories = cats.map((c, i) => i === idx ? newCat : c);
   saveState();
@@ -2329,6 +2345,17 @@ function updateCategoryField(catId, field, value) {
     // 設定画面では再描画しない(カラーピッカーが閉じる) → タイムライン rail などは次回ナビ時に更新される
     // ただし、メインのレンダリングを軽く更新
   }
+}
+
+function toggleVisionDirectCategory(category, checked) {
+  if (!category) return;
+  const selected = Array.isArray(state.settings.visionDirectCategories)
+    ? state.settings.visionDirectCategories
+    : [];
+  state.settings.visionDirectCategories = checked
+    ? [...new Set([...selected, category])]
+    : selected.filter((name) => name !== category);
+  saveState();
 }
 
 // v9: 休憩メッセージ追加
@@ -7914,10 +7941,54 @@ function renderAiReportBody(type) {
   `;
 }
 
+function visionAlignmentData(date, directCategories, nowMs = Date.now()) {
+  const direct = new Set(Array.isArray(directCategories) ? directCategories : []);
+  const timeLog = statsTimeLogData(date, nowMs);
+  const directSeconds = timeLog.categories
+    .filter((item) => direct.has(item.category))
+    .reduce((sum, item) => sum + item.seconds, 0);
+  return {
+    directSeconds,
+    totalSeconds: timeLog.totalSeconds,
+    percent: timeLog.totalSeconds > 0
+      ? Math.round(directSeconds / timeLog.totalSeconds * 100)
+      : 0
+  };
+}
+
+function renderVisionAlignment() {
+  const directCategories = Array.isArray(state.settings.visionDirectCategories)
+    ? state.settings.visionDirectCategories
+    : [];
+  if (directCategories.length === 0) {
+    return `
+      <section class="panel vision-alignment">
+        <h2>ALIGNMENT <span class="muted">今日のビジョン直結率</span></h2>
+        <button class="btn primary" data-action="vision-open-direct-settings">直結カテゴリを設定</button>
+      </section>
+    `;
+  }
+  const alignment = visionAlignmentData(todayISO(), directCategories);
+  return `
+    <section class="panel vision-alignment">
+      <h2>ALIGNMENT <span class="muted">今日のビジョン直結率</span></h2>
+      <div class="vision-alignment-value">${alignment.percent}<small>%</small></div>
+      <div class="vision-alignment-gauge" aria-label="ビジョン直結率 ${alignment.percent}%">
+        <span style="width:${alignment.percent}%"></span>
+      </div>
+      <div class="muted vision-alignment-detail">
+        実績のみ(ワンタップ計時を含む) ${statsHMS(alignment.directSeconds)} / ${statsHMS(alignment.totalSeconds)}
+      </div>
+      <div class="muted vision-alignment-categories">直結: ${directCategories.map(escapeHTML).join("・")}</div>
+    </section>
+  `;
+}
+
 function renderVision() {
   const section = state.settings.visionSection || "vision";
   return `
     ${renderHeader("方向性を見失わないための場所", "ビジョン")}
+    ${renderVisionAlignment()}
     <div class="segmented">
       <button class="${section === "vision" ? "active" : ""}" data-action="vision-section" data-section="vision">ビジョン</button>
       <button class="${section === "affirmation" ? "active" : ""}" data-action="vision-section" data-section="affirmation">アファメーション</button>
@@ -8647,6 +8718,9 @@ function renderSettingsCategoryPanel() {
       Project / Task / Block で選択できるカテゴリと色を管理します。タイムラインのブロック色などに反映されます。
     </div>
     ${renderCategoriesSettings()}
+    <div class="muted vision-direct-note">
+      「直結」はALIGNMENTの集計対象です。カテゴリ改名には追従しません。改名後はここで選び直してください。
+    </div>
     <button class="btn primary" data-action="add-category">+ カテゴリを追加</button>
   `;
 }
@@ -8709,17 +8783,27 @@ function renderSettingsSyncGroup(github) {
 // v9: カテゴリ管理 UI(設定画面用)
 function renderCategoriesSettings() {
   const cats = state.settings.categories || [];
+  const visionDirect = new Set(
+    Array.isArray(state.settings.visionDirectCategories)
+      ? state.settings.visionDirectCategories
+      : []
+  );
   if (!cats.length) return `<div class="muted">カテゴリ未登録</div>`;
   return `
     <div class="stack" style="gap:6px">
       ${cats.map((c) => `
-        <div class="row" style="gap:8px; align-items:center; background:var(--panel-soft); padding:8px; border-radius:6px">
+        <div class="row category-setting-row" style="gap:8px; align-items:center; background:var(--panel-soft); padding:8px; border-radius:6px">
           <input type="color" data-cat-id="${escapeHTML(c.id)}" data-cat-field="color" value="${escapeHTML(c.color)}" style="width:36px; height:36px; padding:0; border:none; background:transparent; cursor:pointer">
           <input class="input" data-cat-id="${c.id}" data-cat-field="name" value="${escapeHTML(c.name)}" style="flex:1">
           <select class="select" data-cat-id="${escapeHTML(c.id)}" data-cat-field="bucket" style="flex:0 0 auto" aria-label="バケット(戦略/雑用/休息)">
             ${["", "strategy", "chore", "rest"].map((b) =>
               `<option value="${b}" ${(c.bucket || "") === b ? "selected" : ""}>${bucketLabel(b)}</option>`).join("")}
           </select>
+          <label class="vision-direct-option">
+            <input type="checkbox" data-action="toggle-vision-direct-category"
+              data-category="${escapeHTML(c.name)}" ${visionDirect.has(c.name) ? "checked" : ""}>
+            <span>直結</span>
+          </label>
           <button class="btn danger" data-action="delete-category" data-cat-id="${c.id}" aria-label="削除">×</button>
         </div>
       `).join("")}

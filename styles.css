@@ -1643,6 +1643,73 @@ h3 {
 
 /* ===== ビジョン画面のセグメント切替 ===== */
 
+.vision-alignment {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.vision-alignment h2 {
+  margin: 0;
+}
+
+.vision-alignment-value {
+  color: var(--green-text);
+  font-size: 36px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.vision-alignment-value small {
+  font-size: var(--text-md);
+  margin-left: var(--space-1);
+}
+
+.vision-alignment-gauge {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--panel-soft);
+}
+
+.vision-alignment-gauge span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--green);
+}
+
+.vision-alignment-detail,
+.vision-alignment-categories,
+.vision-direct-note {
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+
+.vision-direct-note {
+  margin: var(--space-2) 0;
+}
+
+.vision-direct-option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 36px;
+  color: var(--text);
+  font-size: var(--text-md);
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.vision-direct-option input {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--green);
+}
+
 .vision-stage {
   margin-top: 14px;
 }

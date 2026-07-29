@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v188";
+const CACHE_NAME = "taskchute-journal-pwa-v189";
+// v189: Avoid Listの当日抵触トグル・加点型遵守表示と、ビジョンALIGNMENT・直結カテゴリ設定を追加。
 // v188: TimeTree予定帯を今日/時間へ重畳し、家族4ラベルの閲覧専用カレンダーを追加。
 //   src/features/calendar.jsをAPP_SHELLへ追加し、v187の予定キャッシュを共有する。
 // v187: 独立タブ「計時」(カテゴリ/当日タスク/当日予定のワンタップ実行記録)を追加。
