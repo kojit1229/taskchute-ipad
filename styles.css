@@ -5715,3 +5715,97 @@ h3 {
     grid-column: 1 / -1;
   }
 }
+
+/* v190: バッチ生成AI所見の閲覧専用パネル。全テーマで紫をAIアクセントとして共有する。 */
+.ai-insights {
+  margin: 0 0 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--purple);
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, var(--purple-soft), var(--panel) 58%);
+}
+
+.ai-insights-head {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.ai-insights-head > strong {
+  color: var(--purple);
+  font-family: var(--cockpit-mono, inherit);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+
+.ai-insights-freshness {
+  flex: none;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.ai-insights-freshness.is-stale {
+  color: var(--orange-text);
+  font-weight: 800;
+}
+
+.ai-insights-list {
+  display: grid;
+  gap: 8px;
+}
+
+.ai-insights-item {
+  padding: 9px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--panel);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ai-insights-item-title {
+  margin-bottom: 3px;
+  color: var(--purple);
+  font-weight: 800;
+}
+
+.ai-insights-item small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.ai-insights-body {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.wish-card .ai-insights {
+  margin: 10px 0 0;
+  padding: 10px;
+}
+
+:root[data-theme="cockpit"] .ai-insights {
+  border-color: rgba(180, 140, 255, 0.45);
+  border-left-color: var(--purple);
+  border-radius: 3px;
+  box-shadow: inset 0 0 18px rgba(180, 140, 255, 0.04);
+}
+
+:root[data-theme="cockpit"] .ai-insights-item {
+  border-radius: 2px;
+  background: var(--cockpit-panel-2);
+}
+
+@media (max-width: 520px) {
+  .ai-insights-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+}

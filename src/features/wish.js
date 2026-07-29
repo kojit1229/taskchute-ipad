@@ -44,6 +44,7 @@ import { registerActions } from "../ui/actions.js";
 let escapeHTML, renderHeader, todayISO, localDateTimeToMs, makeTask, makeBlock;
 let defaultPlannedTimes, showToast, nowDateTime, saveAndRender, render, updateTaskField;
 let renderWishTriage;
+let aiInsightsPanelHTML = () => "";
 
 function configureWish(deps) {
   ({
@@ -51,6 +52,7 @@ function configureWish(deps) {
     defaultPlannedTimes, showToast, nowDateTime, saveAndRender, render, updateTaskField,
     renderWishTriage
   } = deps);
+  aiInsightsPanelHTML = deps.aiInsightsPanelHTML || (() => "");
   // v173: app.js分割・段階5-2(prep-stage5-dispatcher.md案A)。click dispatcherのWish Tier1
   // CRUD分岐+表示モード切替をレジストリへ移行する(ロジック無改変)。triage-*(仕分けモード、
   // Tier3=このファイル未抽出)はapp.js残留のためここでは登録しない。
@@ -391,6 +393,7 @@ function renderWishCard(wish) {
           : (wish.realized ? "" : "<div class=\"muted\" style=\"font-size:11px; color:var(--orange-text)\">↳ サブタスクを書く</div>")}
       </div>
       ${wishRipenessHTML(wish)}
+      ${aiInsightsPanelHTML("wish", wish.id)}
 
       ${state.wishOpenId === wish.id ? renderWishDetail(wish) : ""}
     </div>

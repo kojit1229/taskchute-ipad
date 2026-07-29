@@ -60,6 +60,7 @@ function fallbackWeekRange(dateISO) {
 let todayISO = fallbackTodayISO;
 let addDays = fallbackAddDays;
 let weekRange = fallbackWeekRange;
+let aiInsightsPanelHTML = () => "";
 
 function configureAvoid(deps) {
   addAvoid = deps.addAvoid;
@@ -68,6 +69,7 @@ function configureAvoid(deps) {
   todayISO = deps.todayISO || fallbackTodayISO;
   addDays = deps.addDays || fallbackAddDays;
   weekRange = deps.weekRange || fallbackWeekRange;
+  aiInsightsPanelHTML = deps.aiInsightsPanelHTML || (() => "");
   registerActions({
     "add-avoid": () => addAvoid(),
     "delete-avoid": (ctx) => deleteAvoid(ctx.id),
@@ -94,6 +96,7 @@ function renderAvoid(state, escapeHTML, renderHeader) {
   const today = todayISO();
   return `
     ${renderHeader("時間とエネルギーを守る", "やらないこと")}
+    ${aiInsightsPanelHTML("avoid")}
     <section class="panel" style="margin-bottom:12px">
       <div class="muted" style="font-size:13px; line-height:1.6">
         やりたいことを増やす前に、<strong>やらないこと</strong>を決めるほうが効きます。<br>

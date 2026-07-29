@@ -285,7 +285,7 @@ configureToday({
 configureWish({
   escapeHTML, renderHeader, todayISO, localDateTimeToMs, makeTask, makeBlock,
   defaultPlannedTimes, showToast, nowDateTime, saveAndRender, render, updateTaskField,
-  renderWishTriage
+  renderWishTriage, aiInsightsPanelHTML
 });
 // v169: src/features/journal.jsも同じ理由(循環import回避)で依存注入する。renderExperimentSection
 // (週次レビューと共有、app.js残留)はここで注入する(prep-stage4-journal.md §0/§4/§9 Must級、
@@ -305,7 +305,8 @@ configureRoutine({
   minutesOf, timeFromDateTime, pad2, nowDateTime, getCategoryColor,
   showToast, saveAndRender, render, setView, closeModal, renderModal,
   blocksForDate, isTouchedBlock, WEEKDAY_LABELS,
-  RECURRENCE_KEEP_PAST_DAYS, RECURRENCE_FUTURE_DAYS
+  RECURRENCE_KEEP_PAST_DAYS, RECURRENCE_FUTURE_DAYS,
+  aiInsightsPanelHTML
 });
 // v171: src/features/timeline-layout.jsも同じ理由(循環import回避)で依存注入する。
 configureTimelineLayout({ minutesOf, nowDateTime });
@@ -326,7 +327,7 @@ configureTimeline({
 // まま関数参照を渡し、日付集計も既存ユーティリティを注入する。
 configureAvoid({
   addAvoid, deleteAvoid, toggleAvoidViolation,
-  todayISO, addDays, weekRange
+  todayISO, addDays, weekRange, aiInsightsPanelHTML
 });
 configureTimeswitch({
   escapeHTML, todayISO, nowDateTime, dateToLocalDateTime, localDateTimeToMs,
@@ -917,6 +918,11 @@ const cachedFutureLetterMd = {};  // { 'YYYY-MM': '...手紙本文...' | undefin
 // 前回取得から30分以上経過していれば再fetchする(成功・失敗を問わずfetchedAtは更新し、
 // 失敗が続いても30分に1回だけリトライする=連打しない)。
 let cachedEnergyCurveJson = { fetchedAt: 0, data: undefined };  // data: {generatedAt,days,hourly:[...]} | undefined
+// v190: coach-daily系バッチが生成する4ビュー共通のAI所見。stateへは保存せず、
+// schedule-inbox(v187)と同じく取得成功時だけTTLキャッシュを更新する。
+let cachedAiInsightsJson = { fetchedAt: 0, data: undefined };
+const AI_INSIGHTS_STALE_MS = 26 * 60 * 60 * 1000;
+const AI_INSIGHTS_GENERATED_AT_RE = /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/;
 // v67: AI作業結果_<today>.json のパース済み配列(非永続、当日分のみ)。二重登録防止のIDは state.aiWorkProcessedIds 側で永続化する。
 let cachedAiWorkResults = null;
 // v74: 読書複利化 — taskchute/reading/highlights.json の books 配列(null=未取得。永続化しない、
@@ -11087,6 +11093,7 @@ function renderZeroThinking() {
         <div class="zt-day-count-sub">→ 日報に含まれます</div>
       </div>
     </div>
+    ${aiInsightsPanelHTML("zero")}
     <div class="zt-toptab-row">
       <button class="zt-toptab ${zeroTab === "theme" ? "active" : ""}" data-action="zero-tab" data-tab="theme">テーマ</button>
       <button class="zt-toptab ${zeroTab === "question" ? "active" : ""}" data-action="zero-tab" data-tab="question">問い <span class="zt-tab-count">${openQ}</span></button>
@@ -14198,6 +14205,109 @@ const FEEDBACK_INGESTED_DATES_MAX = 300;  // aiPlanSkippedLog/zeroSecThemeLogと
 //   (app.js冒頭のimportからhydrateDashboardFeedbackを参照する。requestDashboardFeedbackは
 //   app.js側から直接呼ばれていないためimportしていない)。
 
+// v190: ai-insights.jsonはバッチ出力を信用境界の外として扱う。トップレベルが正しいJSON
+// オブジェクトでも、4フィールドは互いに独立して検証し、壊れたフィールドだけを捨てる。
+function parseAiInsights(raw) {
+  if (typeof raw !== "string" || !raw.trim()) return undefined;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
+    const data = {
+      generatedAt: typeof parsed.generatedAt === "string"
+        && AI_INSIGHTS_GENERATED_AT_RE.test(parsed.generatedAt.trim())
+        ? parsed.generatedAt.trim()
+        : ""
+    };
+    if (Array.isArray(parsed.routineSuggestions)) {
+      const rows = parsed.routineSuggestions
+        .filter((row) => row && typeof row === "object"
+          && typeof row.routineTitle === "string" && row.routineTitle.trim()
+          && typeof row.suggestion === "string" && row.suggestion.trim()
+          && typeof row.reason === "string" && row.reason.trim())
+        .map((row) => ({
+          routineTitle: row.routineTitle.trim(),
+          suggestion: row.suggestion.trim(),
+          reason: row.reason.trim()
+        }));
+      if (rows.length) data.routineSuggestions = rows;
+    }
+    if (Array.isArray(parsed.wishRipe)) {
+      const rows = parsed.wishRipe
+        .filter((row) => row && typeof row === "object"
+          && typeof row.taskId === "string" && row.taskId.trim()
+          && typeof row.title === "string" && row.title.trim()
+          && typeof row.reason === "string" && row.reason.trim())
+        .map((row) => ({
+          taskId: row.taskId.trim(),
+          title: row.title.trim(),
+          reason: row.reason.trim()
+        }));
+      if (rows.length) data.wishRipe = rows;
+    }
+    if (parsed.avoidInsight && typeof parsed.avoidInsight === "object"
+      && typeof parsed.avoidInsight.body === "string" && parsed.avoidInsight.body.trim()) {
+      data.avoidInsight = { body: parsed.avoidInsight.body.trim() };
+    }
+    if (parsed.zeroPattern && typeof parsed.zeroPattern === "object"
+      && typeof parsed.zeroPattern.body === "string" && parsed.zeroPattern.body.trim()) {
+      data.zeroPattern = { body: parsed.zeroPattern.body.trim() };
+    }
+    return data;
+  } catch {
+    return undefined;
+  }
+}
+
+function aiInsightsFreshnessHTML(data) {
+  const generatedAt = data?.generatedAt || "";
+  const generatedAtMs = AI_INSIGHTS_GENERATED_AT_RE.test(generatedAt)
+    ? localDateTimeToMs(generatedAt)
+    : 0;
+  const isStale = Boolean(generatedAtMs && Date.now() - generatedAtMs > AI_INSIGHTS_STALE_MS);
+  const label = !generatedAtMs
+    ? "鮮度不明"
+    : isStale ? `古い・${generatedAt} 生成` : `${generatedAt} 生成`;
+  return `<span class="ai-insights-freshness${isStale ? " is-stale" : ""}">${escapeHTML(label)}</span>`;
+}
+
+function aiInsightsPanelHTML(kind, taskId = "") {
+  const data = cachedAiInsightsJson.data;
+  if (!data) return "";
+  const freshness = aiInsightsFreshnessHTML(data);
+  if (kind === "routine" && Array.isArray(data.routineSuggestions) && data.routineSuggestions.length) {
+    return `<section class="panel ai-insights" data-insight="routine">
+      <div class="ai-insights-head"><strong>AI ルーティン入替提案</strong>${freshness}</div>
+      <div class="ai-insights-list">${data.routineSuggestions.map((row) => `
+        <div class="ai-insights-item">
+          <div class="ai-insights-item-title">${escapeHTML(row.routineTitle)}</div>
+          <div>${escapeHTML(row.suggestion)}</div>
+          <small>${escapeHTML(row.reason)}</small>
+        </div>`).join("")}</div>
+    </section>`;
+  }
+  if (kind === "wish" && Array.isArray(data.wishRipe)) {
+    const row = data.wishRipe.find((item) => item.taskId === taskId);
+    if (!row) return "";
+    return `<section class="ai-insights" data-insight="wish">
+      <div class="ai-insights-head"><strong>AI 熟成判定</strong>${freshness}</div>
+      <div class="ai-insights-body">${escapeHTML(row.reason)}</div>
+    </section>`;
+  }
+  if (kind === "avoid" && data.avoidInsight) {
+    return `<section class="panel ai-insights" data-insight="avoid">
+      <div class="ai-insights-head"><strong>AI 所見</strong>${freshness}</div>
+      <div class="ai-insights-body">${escapeHTML(data.avoidInsight.body).replace(/\n/g, "<br>")}</div>
+    </section>`;
+  }
+  if (kind === "zero" && data.zeroPattern) {
+    return `<section class="panel ai-insights" data-insight="zero">
+      <div class="ai-insights-head"><strong>AI 0秒思考パターン</strong>${freshness}</div>
+      <div class="ai-insights-body">${escapeHTML(data.zeroPattern.body).replace(/\n/g, "<br>")}</div>
+    </section>`;
+  }
+  return "";
+}
+
 async function hydrateStaticMarkdown() {
   // v72: 個人データリポジトリ(taskchute/content/配下)からのGitHub API取得に切替(同一オリジンfetch廃止)
   const visionPromise = fetchGitHubRawText("content/Vision.md");
@@ -14337,11 +14447,13 @@ async function hydrateStaticMarkdown() {
   // v161(2026-07-28レビュー対応・必須修正4): 日付キーではなくTTL(FEEDBACK_REFRESH_INTERVAL_MS
   // =30分)で判定する(単一の上書きファイルのため、同日中の再pushを拾えるようにする)。
   const wantEnergyCurveFetch = ghReady && (Date.now() - cachedEnergyCurveJson.fetchedAt >= FEEDBACK_REFRESH_INTERVAL_MS);
-  const [todayEnemyMd, quoteRaw, futureLetterMd, energyCurveRaw] = await Promise.all([
+  const wantAiInsightsFetch = ghReady && (Date.now() - cachedAiInsightsJson.fetchedAt >= FEEDBACK_REFRESH_INTERVAL_MS);
+  const [todayEnemyMd, quoteRaw, futureLetterMd, energyCurveRaw, aiInsightsRaw] = await Promise.all([
     wantTodayEnemyFetch ? fetchGitHubRawText(`今日の敵_${realToday}.md`) : Promise.resolve(undefined),
     wantQuoteFetch ? fetchGitHubRawText(`勝手に格言_${realToday}.json`) : Promise.resolve(undefined),
     wantFutureLetterFetch ? fetchGitHubRawText(`未来からの手紙_${realCurrentMonth}.md`) : Promise.resolve(undefined),
     wantEnergyCurveFetch ? fetchGitHubRawText("energy-curve.json") : Promise.resolve(undefined),
+    wantAiInsightsFetch ? fetchGitHubRawText("ai-insights.json").catch(() => undefined) : Promise.resolve(undefined),
   ]);
   if (wantTodayEnemyFetch) {
     cachedTodayEnemyMd[realToday] = todayEnemyMd || undefined;
@@ -14425,6 +14537,16 @@ async function hydrateStaticMarkdown() {
       changed = true;
     }
   }
+  if (wantAiInsightsFetch) {
+    const parsedAiInsights = parseAiInsights(aiInsightsRaw);
+    // v187 schedule-inboxと同じく、404/通信失敗/JSON構文破損では正常キャッシュも
+    // fetchedAtも更新しない。JSONとして有効なら、フィールドが全て不一致でも空データへ更新する。
+    if (parsedAiInsights) {
+      const previous = cachedAiInsightsJson.data;
+      cachedAiInsightsJson = { fetchedAt: Date.now(), data: parsedAiInsights };
+      if (JSON.stringify(previous) !== JSON.stringify(parsedAiInsights)) changed = true;
+    }
+  }
   // v67: AIプラン_<今日>.json の存在確認(下書きへの適用はrunAiMorningPlan側の専管で、
   //      ここでは鮮度シグナル専用の軽量fetch)。既に今日分を確認済みなら再fetchしない。
   if (!state.aiLinkFreshness.planAt || state.aiLinkFreshness.planAt < realToday) {
@@ -14455,7 +14577,7 @@ async function hydrateStaticMarkdown() {
   // v161: "stats"(計器盤)を追加。エネルギーカーブの新着fetchが完了してもこの画面を開いた
   //       ままだと再描画されず節が出ないままになる不具合を防ぐ(他view追加時と同じ理由)。
   // v163: "dashboard"も任意日AIフィードバック取得完了後に同じライブ再描画が必要。
-  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly" || state.currentView === "home" || state.currentView === "today" || state.currentView === "timeswitch" || state.currentView === "calendar" || state.currentView === "timeline" || state.currentView === "zero" || state.currentView === "tasks" || state.currentView === "stats" || state.currentView === "dashboard")) {
+  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly" || state.currentView === "home" || state.currentView === "today" || state.currentView === "timeswitch" || state.currentView === "calendar" || state.currentView === "timeline" || state.currentView === "routine" || state.currentView === "wish" || state.currentView === "avoid" || state.currentView === "zero" || state.currentView === "tasks" || state.currentView === "stats" || state.currentView === "dashboard")) {
     renderDeferringForFocus();
   }
 }

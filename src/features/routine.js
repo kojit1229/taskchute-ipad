@@ -67,6 +67,7 @@ let minutesOf, timeFromDateTime, pad2, nowDateTime, getCategoryColor;
 let showToast, saveAndRender, render, setView, closeModal, renderModal;
 let blocksForDate, isTouchedBlock, WEEKDAY_LABELS;
 let RECURRENCE_KEEP_PAST_DAYS, RECURRENCE_FUTURE_DAYS;
+let aiInsightsPanelHTML = () => "";
 
 function configureRoutine(deps) {
   ({
@@ -76,6 +77,7 @@ function configureRoutine(deps) {
     blocksForDate, isTouchedBlock, WEEKDAY_LABELS,
     RECURRENCE_KEEP_PAST_DAYS, RECURRENCE_FUTURE_DAYS
   } = deps);
+  aiInsightsPanelHTML = deps.aiInsightsPanelHTML || (() => "");
   // v173: app.js分割・段階5-2(prep-stage5-dispatcher.md案A)。click dispatcherのルーティンタブ+
   // 今日の庭+過集中ゲート+連続ルーティン(チェーン)分岐をレジストリへ移行する(ロジック無改変)。
   // body-scan-*(ポモドーロ身体スキャン、別ドメイン・未抽出)は対象外(app.js残留)。
@@ -898,6 +900,7 @@ function renderRoutine() {
   return `
     ${renderHeader("今やること、次にやること", "ルーティン")}
     ${renderDateBar()}
+    ${aiInsightsPanelHTML("routine")}
     ${gardenPixelCalendarHTML()}
     ${routineRecentSummaryHTML()}
     ${dayChip}
