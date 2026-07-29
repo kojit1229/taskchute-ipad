@@ -3236,6 +3236,305 @@ function check(name, cond, extra = "") {
     }, KEY);
     check("カテゴリ削除でvisionDirectCategoriesからも除去される(レビューM2)",
       !((await stateNow()).settings.visionDirectCategories || []).includes("回復"));
+
+    // ============================================================
+    // ==== ここから B7(F8 AIパネルビューア v188)追記セクション [54]〜[59] ====
+    // 設計の正: ../taskchute-notes/designs/v169-today-cockpit.md §12 の F8 行+「F8ファイル契約」節。
+    //   完了条件の正: (a)fetchが空文字 (b)不正JSON (c)フィールド型不一致 の3フィクスチャで例外なし /
+    //   generatedAt 26時間超で「古い」/ ファイル無しで一切エラーなし。
+    // ファイル契約(バッチ側=loop/の別発注。アプリはこの形だけを読む):
+    //   { generatedAt: "YYYY-MM-DDTHH:MM:SS"(T区切り秒あり),
+    //     routineSuggestions: [{ routineTitle, suggestion, reason }],
+    //     wishRipe: [{ taskId, title, reason }],   ← 参照は projectId でなく taskId(実体はTask。F5と同じ)
+    //     avoidInsight: { body }, zeroPattern: { body } }
+    // DOM契約(実装側と共有済み):
+    //   パネルroot .ai-insights[data-insight="routine|wish|avoid|zero"] /
+    //   鮮度 .ai-insights-freshness(26時間超で .is-stale +「古い」を含む文言)
+    // 実装(別担当が並行作業中)より先に仕様から書いた。前提が実装と食い違った場合は
+    // テストを弱めるのではなく、前提の側を実装と突合して直すこと:
+    //   前提B7-1: ai-insights.json は kindle highlights / schedule-inbox と同じ Contents API 経路
+    //            (パス末尾 /contents/taskchute/ai-insights.json)で取得され、hydrateStaticMarkdown
+    //            相乗せの energy-curve型TTL30分方式により起動(reload)ごとに毎回fetchされる
+    //            (キャッシュはメモリのみ。同一セッション内のビュー往復では再fetchしない)。
+    //            dashboard用の同名別スキーマ(…/taskchute/dashboard/ai-insights.json)とはパスで
+    //            区別する(§12 F8「同名紛らわしいが別物」。routeのendsWith判定はdashboard側に一致しない)
+    //   前提B7-2: パネルは routine / wish / avoid / zero 各ビューのrender内で描画され、fetch完了時は
+    //            hydrateStaticMarkdown 末尾の再描画で開いたままのビューへも反映される(§12 F8
+    //            「再描画view一覧に routine/wish/avoid を追加」)。検証は fetch応答後のDOM出現
+    //            (waitForSelector)/不在(応答待ち+マクロタスク2周。[45b]と同手法)で行う
+    //   前提B7-3: 鮮度は localDateTimeToMs(generatedAt) 基準で、26時間超のとき .ai-insights-freshness に
+    //            .is-stale が付き「古い」を含む文言になる。鮮度内では .is-stale は付かない。
+    //            鮮度要素の置き場所(パネル毎/共通1箇所)と個数は契約にしない(全該当要素の走査で読む)
+    //   前提B7-4: スキーマ不一致フィールドは個別に無視される(§12 F8ファイル契約「1フィールド壊れて
+    //            全滅させない」)。壊れたフィールドのパネルだけが出ず、正常フィールドのパネルは通常表示
+    //   前提B7-5: F8は表示のみ(提案の適用は手動・アプリ内AI呼び出しなし)。正常表示しても
+    //            state.tasks/blocks/settings は変化しない。突合は保存契機(setView)を踏んで
+    //            localStorageへ書き戻させてから行う([34c]と同じ手順。初回normalize補完分を比較から除く)
+    //   前提B7-6: 各パネルにフィクスチャ本文(routineSuggestions=suggestion/routineTitle・
+    //            wishRipe=title/reason・avoidInsight/zeroPattern=body)が表示される。レイアウト・
+    //            件数・整形は契約にしない(マーカー文字列 AI-ROUTINE/AI-WISH/AI-AVOID/AI-ZERO の包含で読む)
+    //   前提B7-7: 404・壊れJSON・空文字(fetchGitHubRawTextの失敗時空文字と同型)では .ai-insights が
+    //            1枚も出ず、pageerrorゼロ・各ビューの既存要素は無傷(フェイルソフト。[45b]/[48]と同思想)
+    // ============================================================
+
+    // B7正常フィクスチャ(F8ファイル契約どおり。wishRipe.taskId はseedB7が必ず入れる既存wishタスクを指す)
+    const B7_WISH_TASK_ID = "w-b7-ripe";
+    const B7_AI_OK = {
+      generatedAt: `${TODAY}T07:00:00`,  // 当日朝生成=鮮度内(T区切り秒あり。FORMAT_CONTRACT整合)
+      routineSuggestions: [{ routineTitle: "AI-ROUTINE-朝の散歩", suggestion: "AI-ROUTINE-7時台へ前倒し", reason: "直近2週の起床後実績が7時台に集中" }],
+      wishRipe: [{ taskId: B7_WISH_TASK_ID, title: "AI-WISH-熟成やりたい", reason: "AI-WISH-作成から90日経過" }],
+      avoidInsight: { body: "AI-AVOID-夜のスマホは週後半に破りやすい" },
+      zeroPattern: { body: "AI-ZERO-仕事テーマへの偏りが続いている" }
+    };
+    // 可変フィクスチャ+後発route(scheduleInboxFx/w3InboxFxと同方式。後発登録なのでこちらが優先され、
+    // ai-insights.json 以外は route.fallback() で W3→W1→既定404ブロッカーへ委ねる)
+    const aiInsightsFx = { status: 200, body: null };  // body=null なら B7_AI_OK を返す
+    await page.route((url) => url.hostname === "api.github.com", (route) => {
+      const p = decodeURIComponent(new URL(route.request().url()).pathname);
+      if (p.endsWith("/contents/taskchute/ai-insights.json")) {
+        if (aiInsightsFx.status !== 200) return route.fulfill({ status: aiInsightsFx.status, body: "not found" });
+        if (aiInsightsFx.body != null) return route.fulfill({ status: 200, contentType: "application/json", body: aiInsightsFx.body });
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(B7_AI_OK) });
+      }
+      return route.fallback();
+    });
+    const aiPanelSel = (kind) => `.ai-insights[data-insight="${kind}"]`;
+    const b7WaitAiResponse = () =>
+      page.waitForResponse((r) => r.url().includes("/contents/taskchute/ai-insights.json"));
+    // 不在断定の前にfetch応答後の描画反映猶予としてマクロタスクを2周回す([45b]/[30c]と同手法)
+    const b7FlushMacrotasks = async () => {
+      await page.evaluate(() => new Promise((r) => setTimeout(r, 0)));
+      await page.evaluate(() => new Promise((r) => setTimeout(r, 0)));
+    };
+
+    // B7用seed: seedB6と同じ流儀に「wishタスク1件(B7_WISH_TASK_ID)+wishプロジェクト」を必ず同居させる
+    // 拡張(既存関数は変更禁止のため別名で追加)。wishビューの既存要素(.wish-card)の無傷検証と、
+    // wishRipe.taskId=既存wishタスク の契約フィクスチャを兼ねる。avoidListは既存avoidビュー描画用に1件。
+    const b7WishTask = wishTaskB5(B7_WISH_TASK_ID, "B7-熟成やりたい", atOn(daysAgoISO(90), "00:00"));
+    async function seedB7({ blocks = [], view = "routine", settings = {} } = {}) {
+      await page.evaluate(({ KEY, blocks, view, settings, TODAY, wishProject, wishTask, avoidItem }) => {
+        const s = JSON.parse(localStorage.getItem(KEY));
+        s.blocks = blocks;
+        s.currentView = view;
+        s.selectedDate = TODAY;
+        s.sleep = s.sleep || { logs: {} };
+        s.sleep.logs = {};
+        s.condition = s.condition || { logs: {} };
+        s.condition.logs = {};
+        s.gardenLog = {};
+        s.zeroThinking = { themes: [], entries: [], groups: [], suggestedThemes: [] };
+        s.pomodoro = { ...s.pomodoro, running: false, blockId: "", startedAt: "", endsAt: "", mode: "focus" };
+        s.settings.avoidList = [avoidItem];
+        s.projects = (s.projects || []).filter((p) => p.id !== wishProject.id).concat([wishProject]);
+        s.tasks = (s.tasks || []).filter((t) => t.id !== wishTask.id).concat([wishTask]);
+        Object.assign(s.settings, settings);
+        localStorage.setItem(KEY, JSON.stringify(s));
+      }, {
+        KEY, blocks, view, settings, TODAY,
+        wishProject: wishProjectB5, wishTask: b7WishTask,
+        avoidItem: b6AvoidItem("av-b7", "B7-夜のスマホ", { violations: [] })
+      });
+      await page.reload();
+      await page.waitForSelector('[data-action="nav"]', { state: "attached" });
+    }
+    // 各ビューの既存要素の無傷判定(404/壊れJSON区間で使う。[45b]の「タブ本体は無傷」と同思想)
+    async function b7CheckViewIntact(view, label) {
+      if (view === "routine") {
+        check(`${label}: routineビューの既存要素(.segmented表示切替)が無傷`,
+          await page.locator("#main .segmented").count() >= 1);
+      } else if (view === "wish") {
+        check(`${label}: wishビューの既存要素(.wish-card)が無傷`,
+          await page.locator(".wish-card").count() >= 1);
+      } else if (view === "avoid") {
+        check(`${label}: avoidビューの既存要素(#avoidTitle+add-avoid)が無傷`,
+          await page.locator("#avoidTitle").count() === 1 &&
+          await page.locator('[data-action="add-avoid"]').count() === 1);
+      } else if (view === "zero") {
+        check(`${label}: zeroビューの既存要素(.zt-toptab-row)が無傷`,
+          await page.locator(".zt-toptab-row").count() === 1);
+      }
+    }
+
+    // ============================================================
+    // [54] F8: 正常フィクスチャ → routine/wish/avoid/zero 各ビューに .ai-insights が出て本文が表示される
+    // ============================================================
+    console.log("[54] F8: 正常フィクスチャで4ビューすべてに .ai-insights パネルが出て、各フィクスチャ本文が表示される");
+    const failuresBefore54 = failures;
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB7({ view: "routine" });
+    // fetch完了→hydrateStaticMarkdown末尾の再描画で、開いたままのroutineビューにパネルが出る(前提B7-2)
+    await page.waitForSelector(aiPanelSel("routine"), { state: "attached" });
+    check("routineビューに .ai-insights[data-insight='routine'] が1つ描画される(DOM契約)",
+      await page.locator(aiPanelSel("routine")).count() === 1);
+    check("routineパネルに routineSuggestions の本文が表示される(前提B7-6)",
+      ((await panelText(aiPanelSel("routine"))) || "").includes("AI-ROUTINE"),
+      await panelText(aiPanelSel("routine")));
+    await w1GoView("wish");
+    await page.waitForSelector(aiPanelSel("wish"), { state: "attached" });
+    check("wishビューに .ai-insights[data-insight='wish'] が1つ描画される",
+      await page.locator(aiPanelSel("wish")).count() === 1);
+    check("wishパネルに wishRipe の本文(title/reason)が表示される(taskId=既存wishタスクのフィクスチャ)",
+      ((await panelText(aiPanelSel("wish"))) || "").includes("AI-WISH"),
+      await panelText(aiPanelSel("wish")));
+    await w1GoView("avoid");
+    await page.waitForSelector(aiPanelSel("avoid"), { state: "attached" });
+    check("avoidビューに .ai-insights[data-insight='avoid'] が1つ描画される",
+      await page.locator(aiPanelSel("avoid")).count() === 1);
+    check("avoidパネルに avoidInsight.body が表示される",
+      ((await panelText(aiPanelSel("avoid"))) || "").includes("AI-AVOID"),
+      await panelText(aiPanelSel("avoid")));
+    await w1GoView("zero");
+    await page.waitForSelector(aiPanelSel("zero"), { state: "attached" });
+    check("zeroビューに .ai-insights[data-insight='zero'] が1つ描画される",
+      await page.locator(aiPanelSel("zero")).count() === 1);
+    check("zeroパネルに zeroPattern.body が表示される",
+      ((await panelText(aiPanelSel("zero"))) || "").includes("AI-ZERO"),
+      await panelText(aiPanelSel("zero")));
+    check("鮮度内(当日朝07:00生成・5時間前)では .is-stale が付かない(前提B7-3の対照)",
+      await page.locator(".ai-insights-freshness.is-stale").count() === 0);
+    check("[54]区間の描画で pageerror が発生しない", failures === failuresBefore54);
+
+    // ============================================================
+    // [55] F8: ファイル無し(404)→ 全ビューで .ai-insights が存在しない・pageerrorゼロ・既存要素は無傷
+    // ============================================================
+    console.log("[55] F8: ai-insights.json 404 では4ビューとも .ai-insights が出ず、既存要素は無傷(一切エラーなし)");
+    const failuresBefore55 = failures;
+    aiInsightsFx.status = 404;
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    const b7Resp404 = b7WaitAiResponse();
+    await seedB7({ view: "routine" });
+    await b7Resp404;
+    await waitView("routine");
+    await b7FlushMacrotasks();
+    check("404: routineビューに .ai-insights が1枚も出ない(ファイル無しで一切エラーなし)",
+      await page.locator(".ai-insights").count() === 0);
+    await b7CheckViewIntact("routine", "404");
+    // 同一セッション内の残り3ビュー(TTL30分キャッシュにより再fetchなし=失敗結果のまま。前提B7-1)
+    for (const v of ["wish", "avoid", "zero"]) {
+      await w1GoView(v);
+      check(`404: ${v}ビューに .ai-insights が1枚も出ない`,
+        await page.locator(".ai-insights").count() === 0);
+      await b7CheckViewIntact(v, "404");
+    }
+    check("[55]区間の描画で pageerror が発生しない(完了条件「ファイル無しで一切エラーなし」)",
+      failures === failuresBefore55);
+    aiInsightsFx.status = 200;
+
+    // ============================================================
+    // [56] F8: 壊れJSON("{broken")と空文字 → 例外なし・パネルなし・既存要素無傷(完了条件(a)(b))
+    // ============================================================
+    console.log("[56] F8: 壊れJSON・空文字レスポンスでもpageerrorゼロで、パネルは出ず既存要素は無傷");
+    const failuresBefore56 = failures;
+    aiInsightsFx.body = "{broken";
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    const b7RespBroken = b7WaitAiResponse();
+    await seedB7({ view: "routine" });
+    await b7RespBroken;
+    await waitView("routine");
+    await b7FlushMacrotasks();
+    check("壊れJSON('{broken')では .ai-insights が出ない(例外を投げず無傷スキップ。完了条件(b))",
+      await page.locator(".ai-insights").count() === 0);
+    await b7CheckViewIntact("routine", "壊れJSON");
+    await w1GoView("zero");
+    check("壊れJSON: zeroビューにも .ai-insights が出ない",
+      await page.locator(".ai-insights").count() === 0);
+    await b7CheckViewIntact("zero", "壊れJSON");
+    // 空文字(200 + 空body。fetchGitHubRawText失敗時の空文字戻りと同型。完了条件(a))
+    aiInsightsFx.body = "";
+    const b7RespEmpty = b7WaitAiResponse();
+    await seedB7({ view: "wish" });
+    await b7RespEmpty;
+    await waitView("wish");
+    await b7FlushMacrotasks();
+    check("空文字レスポンスでは .ai-insights が出ない(パネル生成関数が例外を投げない。完了条件(a))",
+      await page.locator(".ai-insights").count() === 0);
+    await b7CheckViewIntact("wish", "空文字");
+    check("[56]区間の描画で pageerror が発生しない", failures === failuresBefore56);
+    aiInsightsFx.body = null;
+
+    // ============================================================
+    // [57] F8: フィールド型不一致 → 壊れたフィールドのパネルだけ非表示・正常フィールドは表示(個別無視)
+    // ============================================================
+    console.log("[57] F8: routineSuggestions=文字列・wishRipe=数値の型不一致では routine/wish パネルだけが出ず、avoid/zero は通常表示");
+    const failuresBefore57 = failures;
+    aiInsightsFx.body = JSON.stringify({
+      ...B7_AI_OK,
+      routineSuggestions: "壊れ文字列",  // 配列であるべき所に文字列(完了条件(c))
+      wishRipe: 12345                    // 配列であるべき所に数値
+    });
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB7({ view: "avoid" });
+    // 正常フィールド側のパネル出現をfetch完了の合図にする(その後の不在断定は描画反映後で安全)
+    await page.waitForSelector(aiPanelSel("avoid"), { state: "attached" });
+    check("正常フィールド(avoidInsight)のパネルは通常表示される(前提B7-4)",
+      ((await panelText(aiPanelSel("avoid"))) || "").includes("AI-AVOID"),
+      await panelText(aiPanelSel("avoid")));
+    await w1GoView("zero");
+    await page.waitForSelector(aiPanelSel("zero"), { state: "attached" });
+    check("正常フィールド(zeroPattern)のパネルも通常表示される",
+      ((await panelText(aiPanelSel("zero"))) || "").includes("AI-ZERO"),
+      await panelText(aiPanelSel("zero")));
+    await w1GoView("routine");
+    await b7FlushMacrotasks();
+    check("壊れたフィールド(routineSuggestions=文字列)のパネルだけが出ない(1フィールド壊れて全滅させない)",
+      await page.locator(aiPanelSel("routine")).count() === 0);
+    await b7CheckViewIntact("routine", "型不一致");
+    await w1GoView("wish");
+    await b7FlushMacrotasks();
+    check("壊れたフィールド(wishRipe=数値)のパネルも出ない",
+      await page.locator(aiPanelSel("wish")).count() === 0);
+    await b7CheckViewIntact("wish", "型不一致");
+    check("[57]区間の描画で pageerror が発生しない(完了条件(c): 型不一致フィクスチャで例外なし)",
+      failures === failuresBefore57);
+    aiInsightsFx.body = null;
+
+    // ============================================================
+    // [58] F8: 鮮度27時間超 → パネルは出るが .ai-insights-freshness.is-stale に「古い」を含む文言
+    // ============================================================
+    console.log("[58] F8: generatedAt=前日09:00(27時間前)ではパネル表示のまま .is-stale +「古い」の鮮度表示になる");
+    // 固定時刻12:00基準で27時間前 = 前日09:00(ISO文字列リテラルで組み立て。new Date('文字列')は使わない)
+    aiInsightsFx.body = JSON.stringify({ ...B7_AI_OK, generatedAt: `${YESTERDAY}T09:00:00` });
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB7({ view: "routine" });
+    await page.waitForSelector(aiPanelSel("routine"), { state: "attached" });
+    check("鮮度超過でもパネル自体は表示される(データは見える。[45c]の鮮度方針と同じ)",
+      await page.locator(aiPanelSel("routine")).count() === 1
+      && ((await panelText(aiPanelSel("routine"))) || "").includes("AI-ROUTINE"));
+    await page.waitForSelector(".ai-insights-freshness.is-stale", { state: "attached" });
+    const b7StaleTexts = await page.evaluate(() =>
+      [...document.querySelectorAll(".ai-insights-freshness.is-stale")].map((el) => el.textContent || ""));
+    check("鮮度26時間超で .ai-insights-freshness.is-stale に「古い」を含む文言が出る(DOM契約・前提B7-3)",
+      b7StaleTexts.some((t) => t.includes("古い")), JSON.stringify(b7StaleTexts));
+    aiInsightsFx.body = null;
+
+    // ============================================================
+    // [59] F8: 提案の自動適用が無い(表示のみ)— 正常表示後に state.tasks/blocks/settings のJSONが不変
+    // ============================================================
+    console.log("[59] F8: 正常フィクスチャを4ビューで表示しても tasks/blocks/settings のJSONが変化しない(表示のみ)");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB7({ view: "routine" });
+    await page.waitForSelector(aiPanelSel("routine"), { state: "attached" });
+    // 保存契機(setView)を踏んで初回normalize補完分をlocalStorageへ書き戻させてから基準を取る([34c]と同手順)
+    await w1GoView("tasks");
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).currentView === "tasks", KEY);
+    const b7SnapA = await page.evaluate((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      return JSON.stringify({ tasks: s.tasks, blocks: s.blocks, settings: s.settings });
+    }, KEY);
+    // 4ビューを巡回してパネルを表示させる(wishRipe提案のtask変更・routine提案のblock変更等が
+    // 勝手に走っていればこの間にstateが変わり、下の突合で落ちる)
+    for (const v of ["routine", "wish", "avoid", "zero"]) {
+      await w1GoView(v);
+      await page.waitForSelector(aiPanelSel(v), { state: "attached" });
+    }
+    await w1GoView("tasks");  // 再び保存契機を踏んで書き戻し後に突合
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).currentView === "tasks", KEY);
+    const b7SnapB = await page.evaluate((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      return JSON.stringify({ tasks: s.tasks, blocks: s.blocks, settings: s.settings });
+    }, KEY);
+    check("パネル表示の前後で tasks/blocks/settings のJSONが不変(提案の適用は手動のみ。前提B7-5)",
+      b7SnapA === b7SnapB);
   } finally {
     await browser.close();
     server.close();
