@@ -92,12 +92,23 @@ function closeOrphanedOneTap() {
 }
 
 // 既存のnow-start/ポモ開始から呼ぶフック。計時タブ由来の実行だけを確認なしで終了する。
+// v191レビュー反映(修正1): 通常のcategory==="ルーティン"Blockが実行中のまま新タスクを開始すると
+// 放置される穴があった(NOW FOCUS/ポモがv191でルーティンを除外し「開始候補」に別Blockを
+// 出すため、oneTapクローズだけでは閉じない)。oneTapと同じ自動クローズだが、こちらは
+// タスクの実績記録ではないためcompletedは立てない(actualEndAtのみ確定)。
 function prepareTimeswitchForTaskStart(blockId) {
   closeOrphanedOneTap();
   const at = nowDateTime();
   state.blocks.forEach((block) => {
     if (block.id === blockId || block.deleted || block.actualEndAt || !block.actualStartAt) return;
     if (isTimeswitchRunning(block)) finishBlock(block, { completed: true, at });
+    else if (block.category === "ルーティン") {
+      finishBlock(block, { completed: false, at });
+      // v191レビュー反映(修正8・2周目): 自動クローズしたルーティンがポモドーロの対象
+      // (state.pomodoro.blockId)だった場合、finishAllRunningと同じ後始末(停止・クリア)を
+      // 行う。独自実装はせず既存resetPomodoroForBlockをそのまま再利用する。
+      resetPomodoroForBlock(block.id);
+    }
   });
 }
 

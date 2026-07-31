@@ -106,14 +106,17 @@ function todayZeroDeck(zeroThinking) {
 }
 
 function runningBlockOf(blocks) {
+  // v191(C2): ルーティン系は「未実施チップ」経由の即完了に一本化するため、
+  // NOW FOCUSの対象(=実行中ブロック)からは除外する。
   return (blocks || [])
-    .filter((b) => b.actualStartAt && !b.actualEndAt)
+    .filter((b) => b.actualStartAt && !b.actualEndAt && b.category !== "ルーティン")
     .sort((a, b) => localDateTimeToMs(b.actualStartAt) - localDateTimeToMs(a.actualStartAt))[0] || null;
 }
 
 function queueBlocksOf(blocks) {
+  // v191(C2): ルーティンはNEXT QUEUEに出さず、ROUTINEパネルのチップへ一本化する。
   return (blocks || [])
-    .filter((b) => !b.completed && !b.actualStartAt && !isStaleBlock(b) && !b.oneTap)
+    .filter((b) => !b.completed && !b.actualStartAt && !isStaleBlock(b) && !b.oneTap && b.category !== "ルーティン")
     .sort((a, b) => {
       const aMin = a.plannedStartAt ? minutesOf(a.plannedStartAt) : Number.POSITIVE_INFINITY;
       const bMin = b.plannedStartAt ? minutesOf(b.plannedStartAt) : Number.POSITIVE_INFINITY;
@@ -131,13 +134,22 @@ function routineBandFor(block) {
 }
 
 function routineBandsOf(blocks) {
+  // v191(C2): routineRate()(src/features/routine.js)は実績記録専用のoneTap Blockを
+  // 除外して集計するため、帯合計=routineRate と一致させるためここでも揃える。
   const bands = ["朝", "午前", "午後", "夜"].map((label) => ({ label, done: 0, total: 0 }));
-  (blocks || []).filter((b) => b.category === "ルーティン").forEach((block) => {
+  (blocks || []).filter((b) => b.category === "ルーティン" && !b.oneTap).forEach((block) => {
     const band = bands.find((item) => item.label === routineBandFor(block));
     band.total += 1;
     if (block.completed) band.done += 1;
   });
   return bands;
+}
+
+// v191(C2)、v191レビュー反映(修正2): ROUTINEパネルの「未実施」チップ列の対象(当日の未完了・未削除・
+// 非oneTapルーティンBlock)。oneTap(計時タブのカテゴリタイマー等、実績記録専用Block)は
+// 誤タップで完了させる導線が無いはずのため除外する(routineRate/routineBandsOfと同じ除外)。
+function undoneRoutineBlocksOf(blocks) {
+  return (blocks || []).filter((b) => b.category === "ルーティン" && !b.completed && !b.deleted && !b.oneTap);
 }
 
 function actualMinutes(block, nowMs = Date.now()) {
@@ -282,6 +294,9 @@ function todayPomodoroDisplay(nowMs = Date.now()) {
 function renderTodayPomodoro(blocks, queue) {
   const display = todayPomodoroDisplay();
   const block = (state.blocks || []).find((item) => item.id === state.pomodoro?.blockId);
+  // v191(C2): ルーティンBlockに紐づく実行中ポモは、タスク名を出さず汎用表記にする
+  // (タイマー自体は継続。NOW FOCUS等からルーティンを除外した仕様との整合)。
+  const isRoutinePomodoro = Boolean(block && block.category === "ルーティン");
   const startTarget = runningBlockOf(blocks) || queue[0] || null;
   let controls;
   if (display.running && display.mode === "focus") {
@@ -306,7 +321,7 @@ function renderTodayPomodoro(blocks, queue) {
       ${renderCircularProgress(display.progress, display.text, display.color)}
       <div class="today-pomodoro-info">
         <strong id="todayPomodoroMode">${display.mode === "break" ? "BREAK" : "POMODORO"} — ${display.label}</strong>
-        <span>${block ? escapeHTML(block.title) : startTarget ? `開始候補: ${escapeHTML(startTarget.title)}` : "対象Blockなし"}</span>
+        <span>${block ? (isRoutinePomodoro ? "ルーティン実行中" : escapeHTML(block.title)) : startTarget ? `開始候補: ${escapeHTML(startTarget.title)}` : "対象Blockなし"}</span>
         ${controls}
       </div>
     </div>
@@ -497,6 +512,7 @@ function renderDayGauge(blocks) {
 function renderRoutine(blocks) {
   const summary = routineRate(blocks);
   const bands = routineBandsOf(blocks);
+  const undone = undoneRoutineBlocksOf(blocks);
   return `<section class="today-panel today-routine" data-routine-done="${summary.done}" data-routine-total="${summary.total}">
     ${panelHeading("ROUTINE", "ルーティン消化", "LIVE")}
     <div class="today-routine-list">${bands.map((band) => {
@@ -505,6 +521,17 @@ function renderRoutine(blocks) {
         <div><i style="width:${pct}%"></i></div><b>${band.done} / ${band.total}</b></div>`;
     }).join("")}</div>
     <div class="today-routine-total">合計 完了${summary.done}件・対象${summary.total}件(${summary.pct}%)</div>
+    ${undone.length ? `<div class="today-routine-undone">
+      <div class="today-routine-undone-label">未実施 — タップで完了</div>
+      <div class="today-routine-undone-chips">${undone.map((b) => {
+        // v191レビュー反映(修正3): 実行中(actualStartAtあり・actualEndAtなし)はチップに残しつつ視覚区別する。
+        // v191レビュー反映(修正7・2周目): タップは now-conveyor-complete(app.js既存アクション)を使う。
+        // state.pomodoro.blockId と一致すればcompletePomodoro()(Block完了+ポモ後始末を一括)、
+        // 一致しなければ従来どおりtoggleBlock(id)に委譲される(新規ロジックは追加していない)。
+        const running = Boolean(b.actualStartAt && !b.actualEndAt);
+        return `<button type="button" class="today-chip today-routine-chip${running ? " is-running" : ""}" data-action="now-conveyor-complete" data-id="${escapeHTML(b.id)}">${running ? "▶ " : ""}${escapeHTML(b.title)}</button>`;
+      }).join("")}</div>
+    </div>` : ""}
   </section>`;
 }
 
@@ -550,7 +577,9 @@ function importTodayExternal(externalId) {
 }
 
 function renderFlightPlan(blocks) {
-  const candidates = blocks.filter((b) => b.plannedStartAt).map((block, index) => {
+  // v191(C2): ルーティンはFLIGHT PLANの帯に出さない(ROUTINEパネルへ一本化)。
+  // TimeTree外部予定(todayExternalEvents由来)の扱いは現状維持。
+  const candidates = blocks.filter((b) => b.plannedStartAt && b.category !== "ルーティン").map((block, index) => {
     const start = minutesOf(block.plannedStartAt);
     const rawEnd = block.plannedEndAt ? minutesOf(block.plannedEndAt) : start + resolveEstimateMin(block);
     const end = rawEnd < start ? 24 * 60 : rawEnd;
@@ -750,6 +779,6 @@ function isTodayTickerRunning() {
 export {
   configureToday, renderToday, updateTodayTick, startTodayTicker, stopTodayTicker,
   isTodayTickerRunning, runningBlockOf, queueBlocksOf, routineBandsOf,
-  twelveWeekMinutes, projectedInfo, flightPosition,
+  undoneRoutineBlocksOf, twelveWeekMinutes, projectedInfo, flightPosition,
   deterministicReadingDeck, todayZeroDeck
 };

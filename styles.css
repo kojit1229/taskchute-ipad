@@ -4590,6 +4590,43 @@ h3 {
   font-size: 11px;
   text-align: right;
 }
+.today-routine-undone {
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px dashed var(--line);
+}
+.today-routine-undone-label {
+  color: var(--faint);
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+.today-routine-undone-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+/* v191レビュー反映(修正6・2周目): ::before(inset)方式はgap 6pxを超えて隣接チップと重なり、
+   確認なし即完了と組み合わさると隣を誤完了する穴があった(Codex P1)。疑似要素での当たり判定
+   拡張はやめ、チップ自体の実寸(min-height/padding)を拡大して重なりをゼロにする。 */
+.today-routine-chip {
+  min-height: 40px;
+  padding: 8px 14px;
+  appearance: none;
+  -webkit-appearance: none;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.today-routine-chip:hover {
+  color: var(--cockpit-go, var(--accent));
+  border-color: var(--cockpit-go, var(--accent));
+}
+/* v191レビュー反映(修正3): 実行中ルーティンはチップに残しつつ枠色で視覚区別する(未実施と混同しない)。 */
+.today-routine-chip.is-running {
+  border-color: var(--cockpit-go, var(--accent));
+  color: var(--cockpit-go, var(--accent));
+}
 .today-flight-track {
   position: relative;
   height: var(--today-flight-track-height, 72px);

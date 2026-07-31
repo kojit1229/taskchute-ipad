@@ -3535,6 +3535,393 @@ function check(name, cond, extra = "") {
     }, KEY);
     check("パネル表示の前後で tasks/blocks/settings のJSONが不変(提案の適用は手動のみ。前提B7-5)",
       b7SnapA === b7SnapB);
+
+    // ============================================================
+    // ==== C2: ルーティン分離(v191) [60]〜[65] ====
+    // 委譲仕様1〜7: NOW FOCUS/ポモドーロ/NEXT QUEUE/FLIGHT PLANからルーティン系タスクを除外し、
+    // ROUTINEパネルに「未実施ルーティンのチップ列(タップで完了&消える)」を追加する。
+    // ============================================================
+
+    // ============================================================
+    // [60] C2仕様1: NOW FOCUS はルーティンBlockが実行中でも対象にしない
+    // ============================================================
+    console.log("[60] C2仕様1: NOW FOCUSは実行中ルーティンBlockを対象にせず、フォールバック(次の1手)へ回る");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seed({
+      view: "today",
+      blocks: [
+        block("c2-routine-run", { title: "C2-ROUTINE-RUN-実行中ルーティン", category: "ルーティン", actualStartAt: at("11:00"), plannedStartAt: at("11:00"), plannedEndAt: at("11:15") }),
+        block("c2-next", { title: "C2-NEXT-未着手", plannedStartAt: at("13:00"), plannedEndAt: at("13:30") })
+      ]
+    });
+    await page.waitForSelector(".today-now-focus", { state: "attached" });
+    const nfRoutineText = await panelText(".today-now-focus");
+    check("実行中ルーティンBlockのタイトルはNOW FOCUSに出ない",
+      !(nfRoutineText || "").includes("C2-ROUTINE-RUN-実行中ルーティン"), nfRoutineText);
+    check("実行中ルーティンしかない場合、NOW FOCUSは非実行(READY)表示になり次の未着手Blockを提示する",
+      (nfRoutineText || "").includes("C2-NEXT-未着手"), nfRoutineText);
+
+    // ============================================================
+    // [61] C2仕様2: NEXT QUEUE はルーティンBlockを出さない
+    // ============================================================
+    console.log("[61] C2仕様2: NEXT QUEUEは未着手ルーティンBlockを対象にしない");
+    await seed({
+      view: "today",
+      blocks: [
+        block("c2-q-routine", { title: "C2-Q-ROUTINE-未着手ルーティン", category: "ルーティン", plannedStartAt: at("09:00"), plannedEndAt: at("09:15") }),
+        block("c2-q-normal", { title: "C2-Q-NORMAL-未着手通常", plannedStartAt: at("10:00"), plannedEndAt: at("10:30") })
+      ]
+    });
+    await page.waitForSelector(".today-next-queue", { state: "attached" });
+    const c2QueueText = await panelText(".today-next-queue");
+    check("未着手ルーティンBlockはNEXT QUEUEに出ない",
+      !(c2QueueText || "").includes("C2-Q-ROUTINE-未着手ルーティン"), c2QueueText);
+    check("通常の未着手Blockは引き続きNEXT QUEUEに出る(対照)",
+      (c2QueueText || "").includes("C2-Q-NORMAL-未着手通常"), c2QueueText);
+
+    // ============================================================
+    // [62] C2仕様3: FLIGHT PLAN はルーティンBlockの帯を描画しない
+    // ============================================================
+    console.log("[62] C2仕様3: FLIGHT PLANはルーティンBlockの帯を出さない(TimeTree外部予定帯は対象外・現状維持)");
+    await seed({
+      view: "today",
+      blocks: [
+        block("c2-flight-routine", { title: "C2-FLIGHT-ROUTINE", category: "ルーティン", plannedStartAt: at("08:00"), plannedEndAt: at("08:15") }),
+        block("c2-flight-normal", { title: "C2-FLIGHT-NORMAL", plannedStartAt: at("09:00"), plannedEndAt: at("09:30") })
+      ]
+    });
+    await page.waitForSelector(".today-flight-plan", { state: "attached" });
+    check("ルーティンBlockのFLIGHT PLAN帯(.today-flight-block)が描画されない",
+      await page.locator('.today-flight-block[data-id="c2-flight-routine"]').count() === 0);
+    check("通常BlockのFLIGHT PLAN帯は引き続き描画される(対照)",
+      await page.locator('.today-flight-block[data-id="c2-flight-normal"]').count() === 1);
+
+    // ============================================================
+    // [63] C2仕様4: ポモドーロパネルは実行中ポモがルーティンBlockに紐づく場合タスク名を出さない
+    // ============================================================
+    console.log("[63] C2仕様4: 実行中ポモがルーティンBlockに紐づく場合、タスク名を出さずタイマー自体は継続表示する");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB2({
+      view: "today",
+      blocks: [
+        block("c2-pomo-routine", { title: "C2-POMO-ROUTINE-秘密のルーティン名", category: "ルーティン", actualStartAt: at("11:50"), plannedStartAt: at("11:50"), plannedEndAt: at("12:20") })
+      ],
+      pomodoro: { running: true, blockId: "c2-pomo-routine", startedAt: at("11:50"), endsAt: at("12:15"), mode: "focus" }
+    });
+    await page.waitForSelector(".today-pomodoro", { state: "attached" });
+    const pomoRoutineText = await panelText(".today-pomodoro");
+    check("ルーティンBlockに紐づく実行中ポモは、タスク名(C2-POMO-ROUTINE-秘密のルーティン名)を表示しない",
+      !(pomoRoutineText || "").includes("C2-POMO-ROUTINE-秘密のルーティン名"), pomoRoutineText);
+    check("タイマー自体は継続表示される(停止導線 stop-pomodoro が引き続き出る)",
+      await page.locator('.today-pomodoro [data-action="stop-pomodoro"]').count() >= 1);
+
+    // ============================================================
+    // [64] C2仕様5: ROUTINEパネルに未実施ルーティンのチップ列(タップで完了→消える、確認なし)
+    // ============================================================
+    console.log("[64] C2仕様5: ROUTINEパネルに未実施ルーティンのチップが出て、タップで即完了して消える(確認なし)");
+    await seed({
+      view: "today",
+      blocks: [
+        block("c2-chip-1", { title: "C2-CHIP-未実施1", category: "ルーティン", plannedStartAt: at("07:00"), plannedEndAt: at("07:15") }),
+        block("c2-chip-2", { title: "C2-CHIP-未実施2", category: "ルーティン", plannedStartAt: at("10:00"), plannedEndAt: at("10:15") }),
+        block("c2-chip-done", { title: "C2-CHIP-完了済み", category: "ルーティン", completed: true, plannedStartAt: at("08:00"), plannedEndAt: at("08:15"), actualStartAt: at("08:00"), actualEndAt: at("08:15") })
+      ]
+    });
+    await page.waitForSelector(".today-routine-undone", { state: "attached" });
+    const undoneLabelText = await panelText(".today-routine-undone-label");
+    check("見出し「未実施 — タップで完了」が表示される",
+      (undoneLabelText || "").includes("未実施") && (undoneLabelText || "").includes("タップで完了"), undoneLabelText);
+    check("未完了ルーティンのみチップとして2件出る(完了済みは出ない)",
+      await page.locator(".today-routine-undone-chips .today-routine-chip").count() === 2);
+    const chipsText = await panelText(".today-routine-undone-chips");
+    check("未実施チップに完了済みルーティンのタイトルは含まれない", !(chipsText || "").includes("C2-CHIP-完了済み"), chipsText);
+    // レビュー修正7(2周目)で data-action を toggle-block → now-conveyor-complete(app.js既存)へ
+    // 変更した(ポモ実行中ルーティンをチップ完了させたときstate.pomodoroが残る穴の修正)。
+    // now-conveyor-complete は pomodoro.blockId 不一致なら従来どおり toggleBlock(id) に委譲するため、
+    // このケース(ポモ未連動)の完了結果自体は変わらない。
+    check("チップは既存アクション data-action='now-conveyor-complete' を再利用する(新規ビジネスロジックを作らない)",
+      await page.locator('.today-routine-undone-chips [data-action="now-conveyor-complete"][data-id="c2-chip-1"]').count() === 1);
+    await page.locator('.today-routine-undone-chips [data-action="now-conveyor-complete"][data-id="c2-chip-1"]').click();
+    check("タップ直後に確認ダイアログ(.modal-card)は出ない(確認なし即完了)",
+      await page.locator(".modal-card").count() === 0);
+    await page.waitForFunction((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      const b = s.blocks.find((x) => x.id === "c2-chip-1");
+      return b && b.completed === true;
+    }, KEY);
+    await page.waitForFunction(() =>
+      !document.querySelector('.today-routine-undone-chips [data-id="c2-chip-1"]'));
+    check("完了後は再描画でチップ自体が消える(タップで完了&消える)",
+      await page.locator('.today-routine-undone-chips [data-id="c2-chip-1"]').count() === 0);
+    check("残り1件の未実施チップはまだ表示される",
+      await page.locator(".today-routine-undone-chips .today-routine-chip").count() === 1);
+
+    console.log("[64b] C2仕様5: 未実施ルーティンが0件ならチップ列自体を出さない");
+    await seed({
+      view: "today",
+      blocks: [
+        block("c2-allcomplete", { title: "C2-ALL-完了", category: "ルーティン", completed: true, plannedStartAt: at("07:00"), plannedEndAt: at("07:15"), actualStartAt: at("07:00"), actualEndAt: at("07:15") })
+      ]
+    });
+    await page.waitForSelector(".today-routine", { state: "attached" });
+    check("未実施が0件のとき .today-routine-undone 自体が描画されない(チップ列を出さない)",
+      await page.locator(".today-routine-undone").count() === 0);
+
+    // ============================================================
+    // [64c] レビュー修正2: 未実施チップはoneTapルーティンBlockを対象にしない
+    // ============================================================
+    console.log("[64c] レビュー修正2: 計時タブ由来のoneTapルーティンBlockはチップに出ない(誤完了防止)");
+    await seed({
+      view: "today",
+      blocks: [
+        block("c2-chip-onetap", { title: "C2-CHIP-ONETAP-計時タブ由来", category: "ルーティン", oneTap: true, plannedStartAt: at("06:00"), plannedEndAt: at("06:15") }),
+        block("c2-chip-normal2", { title: "C2-CHIP-通常未実施", category: "ルーティン", plannedStartAt: at("07:30"), plannedEndAt: at("07:45") })
+      ]
+    });
+    await page.waitForSelector(".today-routine-undone", { state: "attached" });
+    check("oneTapルーティンBlockは未実施チップとして出ない",
+      await page.locator('.today-routine-undone-chips [data-id="c2-chip-onetap"]').count() === 0);
+    check("非oneTapの未実施ルーティンは引き続きチップに出る(対照)",
+      await page.locator('.today-routine-undone-chips [data-id="c2-chip-normal2"]').count() === 1);
+    check("未実施チップは1件だけ(oneTap分は混入しない)",
+      await page.locator(".today-routine-undone-chips .today-routine-chip").count() === 1);
+
+    // ============================================================
+    // [64d] レビュー修正3: 実行中ルーティンはチップに残り、is-running(視覚区別)が付く
+    // ============================================================
+    console.log("[64d] レビュー修正3: 実行中ルーティンはチップ列に残り、is-runningクラス+「▶ 」接頭辞で視覚区別される");
+    await seed({
+      view: "today",
+      blocks: [
+        block("c2-chip-running", { title: "C2-CHIP-実行中ルーティン", category: "ルーティン", actualStartAt: at("11:40"), plannedStartAt: at("11:40"), plannedEndAt: at("11:55") }),
+        block("c2-chip-idle", { title: "C2-CHIP-未着手ルーティン", category: "ルーティン", plannedStartAt: at("08:00"), plannedEndAt: at("08:15") })
+      ]
+    });
+    await page.waitForSelector(".today-routine-undone", { state: "attached" });
+    check("実行中ルーティンも未実施チップ列に残る(K仕様: タップで正しい終了時刻のまま完了できる)",
+      await page.locator('.today-routine-undone-chips [data-id="c2-chip-running"]').count() === 1);
+    check("実行中ルーティンのチップに is-running クラスが付く",
+      await page.locator('.today-routine-undone-chips [data-id="c2-chip-running"].is-running').count() === 1);
+    const runningChipText = await page.locator('.today-routine-undone-chips [data-id="c2-chip-running"]').textContent();
+    check("実行中ルーティンのチップタイトルに「▶ 」接頭辞が付く",
+      (runningChipText || "").trim().startsWith("▶"), runningChipText);
+    check("未着手ルーティンのチップには is-running が付かない(対照)",
+      await page.locator('.today-routine-undone-chips [data-id="c2-chip-idle"].is-running').count() === 0);
+    const idleChipText = await page.locator('.today-routine-undone-chips [data-id="c2-chip-idle"]').textContent();
+    check("未着手ルーティンのチップタイトルには「▶ 」が付かない(対照)",
+      !(idleChipText || "").trim().startsWith("▶"), idleChipText);
+    // レビュー修正7(2周目): このケースはポモがc2-chip-runningに連動していないため、
+    // now-conveyor-completeはtoggleBlock(id)に委譲され、確認なしで正しい終了時刻のまま完了する。
+    check("実行中ルーティンチップをタップすると now-conveyor-complete で正しい終了時刻のまま完了する(確認なし)",
+      await page.locator('.today-routine-undone-chips [data-id="c2-chip-running"][data-action="now-conveyor-complete"]').count() === 1);
+    await page.locator('.today-routine-undone-chips [data-id="c2-chip-running"]').click();
+    await page.waitForFunction((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      const b = s.blocks.find((x) => x.id === "c2-chip-running");
+      return !!b && b.completed === true && !!b.actualEndAt;
+    }, KEY);
+    check("タップ後に確認ダイアログは出ない(確認なし即完了)", await page.locator(".modal-card").count() === 0);
+
+    // ============================================================
+    // [66] レビュー修正1(P1・重): 実行中ルーティンを放置したまま次タスク(ポモ)を開始すると自動クローズされる
+    // ============================================================
+    console.log("[66] レビュー修正1: 実行中ルーティンBlockがあるままポモ開始→ルーティンにactualEndAtが付き、実行中が1本になる");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB2({
+      view: "today",
+      blocks: [
+        block("fix1-routine-run", { title: "FIX1-ROUTINE-放置ルーティン", category: "ルーティン", actualStartAt: at("11:00"), plannedStartAt: at("11:00"), plannedEndAt: at("11:15") }),
+        block("fix1-next", { title: "FIX1-NEXT-次タスク", plannedStartAt: at("13:00"), plannedEndAt: at("13:30") })
+      ]
+    });
+    await page.waitForSelector('.today-pomodoro [data-action="start-pomodoro"][data-block-id="fix1-next"]', { state: "attached" });
+    await page.locator('.today-pomodoro [data-action="start-pomodoro"][data-block-id="fix1-next"]').click();
+    await page.waitForFunction((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      return s.pomodoro.running === true && s.pomodoro.blockId === "fix1-next";
+    }, KEY);
+    const st66 = await stateNow();
+    const routine66 = st66.blocks.find((b) => b.id === "fix1-routine-run");
+    check("ポモ開始経路: 放置されていたルーティンBlockにactualEndAtが付く(自動クローズ)",
+      !!routine66.actualEndAt, JSON.stringify(routine66));
+    check("ポモ開始経路: 放置ルーティンはcompletedにはならない(completedは立てない・裁定どおり)",
+      routine66.completed === false, JSON.stringify(routine66));
+    const running66 = st66.blocks.filter((b) => b.actualStartAt && !b.actualEndAt);
+    check("ポモ開始経路: 実行中Blockが新タスク(fix1-next)の1本だけになる(2本走行の穴が塞がれている)",
+      running66.length === 1 && running66[0].id === "fix1-next", JSON.stringify(running66.map((b) => b.id)));
+
+    // ============================================================
+    // [67] レビュー修正1(now-start経路): NEXT QUEUEの繰上げ開始でも実行中ルーティンが自動クローズされる
+    // ============================================================
+    console.log("[67] レビュー修正1: NEXT QUEUEの繰上げ開始(now-start→宣言モーダル)でも実行中ルーティンが自動クローズされる");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seed({
+      view: "today",
+      blocks: [
+        block("fix1b-routine-run", { title: "FIX1B-ROUTINE-放置ルーティン", category: "ルーティン", actualStartAt: at("11:00"), plannedStartAt: at("11:00"), plannedEndAt: at("11:15") }),
+        block("fix1b-next", { title: "FIX1B-NEXT-次タスク", plannedStartAt: at("13:00"), plannedEndAt: at("13:30") })
+      ]
+    });
+    await page.waitForSelector('.today-next-queue [data-action="now-start"][data-id="fix1b-next"]', { state: "attached" });
+    await page.locator('.today-next-queue [data-action="now-start"][data-id="fix1b-next"]').click();
+    await page.waitForSelector('[data-action="declare-skip"]', { state: "attached" });
+    await page.locator('[data-action="declare-skip"]').click();
+    await page.waitForFunction((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      const t = s.blocks.find((b) => b.id === "fix1b-next");
+      return !!t && !!t.actualStartAt;
+    }, KEY);
+    const st67 = await stateNow();
+    const routine67 = st67.blocks.find((b) => b.id === "fix1b-routine-run");
+    check("now-start経路: 放置ルーティンにactualEndAtが付く(自動クローズ)",
+      !!routine67.actualEndAt, JSON.stringify(routine67));
+    check("now-start経路: 放置ルーティンはcompletedにならない",
+      routine67.completed === false, JSON.stringify(routine67));
+    const running67 = st67.blocks.filter((b) => b.actualStartAt && !b.actualEndAt);
+    check("now-start経路: 実行中Blockが新タスク(fix1b-next)の1本だけになる",
+      running67.length === 1 && running67[0].id === "fix1b-next", JSON.stringify(running67.map((b) => b.id)));
+
+    // ============================================================
+    // [68] レビュー修正7(2周目): ポモ実行中ルーティンのチップをタップ→Block完了+ポモ後始末が両方起きる
+    // ============================================================
+    console.log("[68] レビュー修正7: ポモが連動している実行中ルーティンのチップをタップすると、Block完了とポモ後始末(停止・クリア)が両方起きる");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB2({
+      view: "today",
+      blocks: [
+        block("fix7-routine-pomo", { title: "FIX7-ROUTINE-POMO連動", category: "ルーティン", actualStartAt: at("11:50"), plannedStartAt: at("11:50"), plannedEndAt: at("12:05") })
+      ],
+      pomodoro: { running: true, blockId: "fix7-routine-pomo", startedAt: at("11:50"), endsAt: at("12:15"), mode: "focus" }
+    });
+    await page.waitForSelector('.today-routine-undone-chips [data-id="fix7-routine-pomo"]', { state: "attached" });
+    check("ポモ連動チップにも is-running が付く(実行中表示のまま)",
+      await page.locator('.today-routine-undone-chips [data-id="fix7-routine-pomo"].is-running').count() === 1);
+    await page.locator('.today-routine-undone-chips [data-id="fix7-routine-pomo"]').click();
+    await page.waitForFunction((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      const b = s.blocks.find((x) => x.id === "fix7-routine-pomo");
+      return !!b && b.completed === true && !!b.actualEndAt;
+    }, KEY);
+    const st68 = await stateNow();
+    const routine68 = st68.blocks.find((b) => b.id === "fix7-routine-pomo");
+    check("Blockはcompleted:true+actualEndAtが付いて完了する(completePomodoro経由・now-conveyor-complete)",
+      routine68.completed === true && !!routine68.actualEndAt, JSON.stringify(routine68));
+    check("state.pomodoroが後始末される(running:false・blockId空、放置されない)",
+      st68.pomodoro.running === false && st68.pomodoro.blockId === "", JSON.stringify(st68.pomodoro));
+    // completePomodoro()は既存の身体スキャンモーダル(post-completion。完了を止める確認ゲートではない)を
+    // 開く。完了自体は直前のwaitForFunctionで既に成立しているため、閉じるだけで後続テストへ影響を残さない。
+    check("既存の身体スキャンモーダルが開く(completePomodoro経由の既存挙動。完了はすでに成立済み)",
+      await page.locator('.modal-title:has-text("いまの疲労感")').count() === 1);
+    await page.locator('[data-action="body-scan-discard"]').first().click();
+    await page.waitForSelector(".modal-card", { state: "detached" });
+    check("身体スキャンモーダルを閉じてもcompleted状態は変わらない(記録せず閉じるでロールバックされない)",
+      (await stateNow()).blocks.find((b) => b.id === "fix7-routine-pomo")?.completed === true);
+
+    // ============================================================
+    // [69] レビュー修正8(2周目): ポモ連動ルーティンがある状態でnow-start経由の新タスク開始
+    //      → ルーティンクローズ+旧ポモクリア+新Blockの自動ポモが正常起動する
+    // ============================================================
+    console.log("[69] レビュー修正8: ポモ実行中ルーティンがある状態でnow-start(宣言スキップ)→ルーティンにactualEndAt付与+旧ポモクリア+新タスクの自動ポモが正常起動する");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB2({
+      view: "today",
+      blocks: [
+        block("fix8-routine-pomo", { title: "FIX8-ROUTINE-POMO連動", category: "ルーティン", actualStartAt: at("11:45"), plannedStartAt: at("11:45"), plannedEndAt: at("12:00") }),
+        block("fix8-next", { title: "FIX8-NEXT-次タスク", plannedStartAt: at("13:00"), plannedEndAt: at("13:30") })
+      ],
+      // endsAtは固定時刻12:00より未来にする(過去だと自動でbreakへ遷移し、focusTimerAutoの
+      // 「!running」判定に引っかからず新セッションが始まらない=このテストの検証対象外の別挙動を踏む)。
+      pomodoro: { running: true, blockId: "fix8-routine-pomo", startedAt: at("11:45"), endsAt: at("12:10"), mode: "focus" }
+    });
+    await page.waitForSelector('.today-next-queue [data-action="now-start"][data-id="fix8-next"]', { state: "attached" });
+    await page.locator('.today-next-queue [data-action="now-start"][data-id="fix8-next"]').click();
+    await page.waitForSelector('[data-action="declare-skip"]', { state: "attached" });
+    await page.locator('[data-action="declare-skip"]').click();
+    await page.waitForFunction((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      const t = s.blocks.find((b) => b.id === "fix8-next");
+      return !!t && !!t.actualStartAt;
+    }, KEY);
+    const st69 = await stateNow();
+    const routine69 = st69.blocks.find((b) => b.id === "fix8-routine-pomo");
+    check("ルーティンがクローズされる(actualEndAtが付く)", !!routine69.actualEndAt, JSON.stringify(routine69));
+    check("ルーティンはcompletedにならない", routine69.completed === false, JSON.stringify(routine69));
+    check("旧ポモ(ルーティン連動)は放置されず、新Block(fix8-next)へ連動した新セッションに置き換わる(focusTimerAuto既定ON)",
+      st69.pomodoro.blockId === "fix8-next" && st69.pomodoro.running === true, JSON.stringify(st69.pomodoro));
+    const running69 = st69.blocks.filter((b) => b.actualStartAt && !b.actualEndAt);
+    check("実行中Blockが新タスク(fix8-next)の1本だけになる",
+      running69.length === 1 && running69[0].id === "fix8-next", JSON.stringify(running69.map((b) => b.id)));
+
+    // ============================================================
+    // [70] レビュー修正9(3周目): saveBlockFromModal()は検証失敗時にルーティンを閉じたままにしない
+    // ============================================================
+    console.log("[70] レビュー修正9: Block編集モーダルの保存が必須欄不足で失敗しても実行中ルーティンは閉じられたままにならず、正しい保存では従来どおりクローズされる");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seed({
+      view: "today",
+      blocks: [
+        block("fix9-routine-run", { title: "FIX9-ROUTINE-放置ルーティン", category: "ルーティン", actualStartAt: at("11:00"), plannedStartAt: at("11:00"), plannedEndAt: at("11:15") }),
+        block("fix9-target", { title: "FIX9-TARGET-編集対象", plannedStartAt: at("13:00"), plannedEndAt: at("13:30") })
+      ]
+    });
+    await page.waitForSelector('.today-next-queue [data-action="edit-block"][data-id="fix9-target"]', { state: "attached" });
+    await page.locator('.today-next-queue [data-action="edit-block"][data-id="fix9-target"]').click();
+    await page.waitForSelector('.modal-title:has-text("を編集")', { state: "attached" });
+    // actualStartAtを入れて「保存後は実行中になる」状態を作りつつ、plannedEndAtを空にして
+    // 既存の必須欄検証(app.js:16019付近)をわざと失敗させる。
+    await page.locator('[data-modal-field="actualStartAt"]').fill(at("12:00").slice(0, 16));
+    await page.locator('[data-modal-field="plannedEndAt"]').fill("");
+    await page.locator('[data-action="modal-save"]').click();
+    // 検証失敗パスはcloseModal()を呼ばない(app.js該当コード確認済み)ため、モーダルは開いたまま残る。
+    // 固定waitではなくその状態(モーダル残存)自体を待つ。
+    await page.waitForFunction(() => document.querySelectorAll(".modal-card").length === 1);
+    check("必須欄不足の保存はモーダルを閉じない(closeModal()未実行の証拠)",
+      await page.locator(".modal-card").count() === 1);
+    const st70a = await stateNow();
+    const routine70a = st70a.blocks.find((b) => b.id === "fix9-routine-run");
+    check("検証失敗時、実行中ルーティンはactualEndAtが付かず実行継続している(修正9の検証観点)",
+      !routine70a.actualEndAt, JSON.stringify(routine70a));
+    const target70a = st70a.blocks.find((b) => b.id === "fix9-target");
+    check("検証失敗時、編集対象Block自体も保存されていない(actualStartAt未反映。保存が本当に中断されたことの裏付け)",
+      !target70a.actualStartAt, JSON.stringify(target70a));
+    // plannedEndAtを正しく埋めて再保存する(修正9後も「検証成功パスは従来どおり」であることの確認)
+    await page.locator('[data-modal-field="plannedEndAt"]').fill(at("13:30").slice(0, 16));
+    await page.locator('[data-action="modal-save"]').click();
+    await page.waitForFunction((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      const t = s.blocks.find((b) => b.id === "fix9-target");
+      return !!t && !!t.actualStartAt;
+    }, KEY);
+    check("正しい保存後はモーダルが閉じる", await page.locator(".modal-card").count() === 0);
+    const st70b = await stateNow();
+    const routine70b = st70b.blocks.find((b) => b.id === "fix9-routine-run");
+    check("正しい保存では従来どおり実行中ルーティンがクローズされる(actualEndAtが付く)",
+      !!routine70b.actualEndAt, JSON.stringify(routine70b));
+    check("クローズされたルーティンはcompletedにならない(修正1の契約を維持)",
+      routine70b.completed === false, JSON.stringify(routine70b));
+
+    // ============================================================
+    // [65] C2仕様6: ROUTINE時間帯別合計は oneTap Block を除外し routineRate と一致する
+    // ============================================================
+    console.log("[65] C2仕様6: ROUTINEの時間帯別合計はoneTap Blockを除外し、routineRate(D5)と一致する");
+    await seed({
+      view: "today",
+      blocks: [
+        block("c2-band-1", { title: "C2-BAND-1", category: "ルーティン", plannedStartAt: at("07:00"), plannedEndAt: at("07:15"), completed: true, actualStartAt: at("07:00"), actualEndAt: at("07:15") }),
+        block("c2-band-2", { title: "C2-BAND-2", category: "ルーティン", plannedStartAt: at("10:00"), plannedEndAt: at("10:15") }),
+        // oneTap = 実績記録専用Block。routine.js routineRate() と同じ除外ルールを帯集計にも適用する(仕様6)。
+        block("c2-band-onetap", { title: "C2-BAND-ONETAP", category: "ルーティン", oneTap: true, completed: true, plannedStartAt: at("11:00"), plannedEndAt: at("11:15"), actualStartAt: at("11:00"), actualEndAt: at("11:15") })
+      ]
+    });
+    await page.waitForSelector(".today-routine", { state: "attached" });
+    const bandText = await panelText(".today-routine-list");
+    const bandPairs = [...(bandText || "").matchAll(/(\d+)\s*\/\s*(\d+)/g)];
+    const bandDoneSum = bandPairs.reduce((a, m) => a + Number(m[1]), 0);
+    const bandTotalSum = bandPairs.reduce((a, m) => a + Number(m[2]), 0);
+    check("oneTap Blockを含めても時間帯別合計の done は1(oneTap除外、routineRateと一致)",
+      bandDoneSum === 1, `doneSum=${bandDoneSum} text=${bandText}`);
+    check("oneTap Blockを含めても時間帯別合計の total は2(oneTap除外、routineRateと一致)",
+      bandTotalSum === 2, `totalSum=${bandTotalSum} text=${bandText}`);
   } finally {
     await browser.close();
     server.close();

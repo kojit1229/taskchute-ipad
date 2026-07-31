@@ -1,4 +1,6 @@
-const CACHE_NAME = "taskchute-journal-pwa-v190";
+const CACHE_NAME = "taskchute-journal-pwa-v191";
+// v191: 今日ビューのルーティン分離(NOW FOCUS/ポモ/NEXT QUEUE/FLIGHT PLANから除外、
+//       ROUTINEパネルに未実施チップ列を追加)。
 // v190: taskchute/ai-insights.jsonの4ビュー用AI所見パネルと26時間鮮度表示を追加。
 // v189: Avoid Listの当日抵触トグル・加点型遵守表示と、ビジョンALIGNMENT・直結カテゴリ設定を追加。
 // v188: TimeTree予定帯を今日/時間へ重畳し、家族4ラベルの閲覧専用カレンダーを追加。

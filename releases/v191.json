@@ -1,0 +1,63 @@
+{
+  "version": 191,
+  "date": "2026-07-30",
+  "title": "今日ビューのルーティン分離",
+  "summary": "今日コックピットのNOW FOCUS/ポモドーロ/NEXT QUEUE/FLIGHT PLANからルーティン系タスクを除外し、ROUTINEパネルに未実施ルーティンのチップ列(タップで完了&消える)を追加する。",
+  "changedFiles": [
+    "app.js",
+    "releases/v191.json",
+    "src/features/timeswitch.js",
+    "src/features/today.js",
+    "styles.css",
+    "sw.js",
+    "tests/today-core.test.js"
+  ],
+  "intent": [
+    "「今すぐやること」の計器盤からルーティンを退け、ルーティンはROUTINEパネル1箇所へ集約する。",
+    "未実施ルーティンをワンタップで完了できるようにし、確認ダイアログやストリーク・煽り表現は出さない。",
+    "ROUTINEパネルの時間帯別集計をroutineRate()と揃え、oneTap Blockの扱いの不整合を解消する。",
+    "2系統レビュー(reviewer+Codex)反映: 実行中ルーティン放置の穴を塞ぎ、未実施チップの対象・視覚区別・当たり判定を仕様どおりに揃える。"
+  ],
+  "changes": [
+    "runningBlockOf/queueBlocksOf/renderFlightPlanの候補フィルタにcategory!==\"ルーティン\"を追加し、NOW FOCUS・NEXT QUEUE・FLIGHT PLANからルーティンBlockを除外した。",
+    "renderTodayPomodoroで実行中ポモがルーティンBlockに紐づく場合はタスク名を出さず「ルーティン実行中」と表示する(タイマー自体は継続)。",
+    "renderRoutineに当日の未完了・未削除ルーティンBlockのチップ列(見出し「未実施 — タップで完了」)を追加した。チップは既存アクションdata-action=\"toggle-block\"を再利用し、タップで即完了して再描画時に消える。",
+    "routineBandsOfに!b.oneTapを追加し、時間帯別合計をroutineRate()(src/features/routine.js)と一致させた。",
+    "styles.cssへ.today-routine-undone系クラスを追加(cockpit変数はvar(--cockpit-*, var(--accent))形式のフォールバック付き)。",
+    "Service WorkerのCACHE_NAMEをv191へ更新した。",
+    "レビュー修正1(Codex P1・重): prepareTimeswitchForTaskStart(src/features/timeswitch.js)を拡張し、新タスク開始時に実行中の通常ルーティンBlock(oneTapでない)もactualEndAt=nowで自動クローズするようにした(completedは立てない・oneTapクローズ挙動は無変更)。",
+    "レビュー修正2(Codex P2): undoneRoutineBlocksOfに!b.oneTapを追加し、計時タブのカテゴリタイマー(oneTapルーティン)がチップに出て誤完了できる穴を塞いだ。",
+    "レビュー修正3(reviewer中3): 実行中(actualStartAtあり・actualEndAtなし)のルーティンはチップ列に残しつつ、is-runningクラス+「▶ 」接頭辞+cockpit-go系の枠色で視覚区別した。",
+    "レビュー修正4(reviewer中1): .today-routine-chipに.checkbox-buttonと同じ疑似要素方式(::before+inset)を追加し、見た目を変えずに当たり判定を44px相当へ拡張した(2周目のレビュー修正6でこの方式は撤回・置換)。",
+    "レビュー修正5(reviewer低4): 本ファイル内のroutineRate()誤記(routeRate())を修正した。",
+    "レビュー修正6(2周目Codex P1): ::before(inset)方式はgap 6pxを超えて隣接チップと重なり誤タップの穴があったため撤回し、.today-routine-chipの実寸(min-height:40px, padding:8px 14px)+.today-routine-undone-chipsのgap:8pxで当たり判定を拡張する方式へ変更した(重なりゼロ)。",
+    "レビュー修正7(2周目Codex P2): チップのdata-actionをtoggle-blockから既存アクションnow-conveyor-complete(app.js:740)へ変更した。pomodoro.blockId一致ならcompletePomodoro()(Block完了+ポモ後始末)、不一致なら従来どおりtoggleBlock(id)に委譲される(新規ロジックなし)。",
+    "レビュー修正8(2周目reviewer P2相当): prepareTimeswitchForTaskStart(src/features/timeswitch.js)のルーティン自動クローズ分岐に、既存resetPomodoroForBlock(finishAllRunningと同じ後始末パターン)の呼び出しを追加し、自動クローズしたルーティンがポモドーロの対象だった場合にstate.pomodoroが放置されないようにした。",
+    "レビュー修正9(3周目Codex P2): saveBlockFromModal()(app.js)内のprepareTimeswitchForTaskStart()呼び出しを、必須欄(予定開始・終了日時)検証より前から検証成功後(実際に保存する直前)へ移動した。検証エラーで保存が中断されても実行中ルーティン/oneTapが閉じられたまま巻き戻らない穴を塞いだ。関数自体・他の呼び出し元(setBlockTime/startPomodoro)は無変更。"
+  ],
+  "uncertainties": [
+    "ルーティンBlockはNOW FOCUS/ポモ/NEXT QUEUE/FLIGHT PLANのすべての空き候補(フォールバック含む)から一貫して除外される前提。個別画面ごとの例外は設けていない。",
+    "prepareTimeswitchForTaskStartの自動クローズはcategory===\"ルーティン\"の通常Blockのみを対象とし、ルーティン以外の実行中Block(通常タスク)には従来どおり手を入れていない(今回のレビュー指摘の範囲外)。",
+    "now-conveyor-complete経由の完了はcompletePomodoro()の既存挙動(身体スキャンモーダル・過集中ゲート判定)をそのまま継承する。これは完了を止める確認ゲートではなく完了後の記録導線のため、仕様5の「確認なしで完了」とは矛盾しないと判断した。",
+    "saveBlockFromModal()内には、修正9で対応した必須欄検証の他に、新規Block+繰り返し設定時の「重複ルール検知」という別の早期returnがある(isNew分岐のさらに内側)。この分岐でもactualStartAt/actualEndAtの組み合わせ次第では理論上同型の穴が残るが、今回のレビュー指摘は必須欄検証のみを対象としていたため修正はせず、調査結果として報告に留める(スコープ外)。"
+  ],
+  "reviewFocus": [
+    "NOW FOCUS/NEXT QUEUE/FLIGHT PLANの各フィルタがルーティンBlockを漏れなく除外していること。",
+    "ROUTINEパネルの未実施チップがnow-conveyor-complete(pomodoro.blockId不一致時はtoggleBlock(id)委譲)のみを呼び、新規state変更ロジックをtoday.js/timeswitch.jsへ追加していないこと。",
+    "routineBandsOfのoneTap除外後もroutineRate()との合計一致が保たれること。",
+    "既存home・ルーティンタブに変更が及んでいないこと。",
+    "prepareTimeswitchForTaskStartの自動クローズがoneTapクローズ(completed:true)と混同されず、ルーティンはcompleted:falseのままactualEndAtだけ付くこと。",
+    "未実施チップの当たり判定拡張が実寸拡大(min-height/padding+gap)方式になっており、隣接チップとの当たり判定の重なりがゼロであること(::before方式は撤回済み)。",
+    "prepareTimeswitchForTaskStartのルーティン自動クローズがresetPomodoroForBlockを呼び、そのルーティンがポモドーロ対象だった場合にstate.pomodoroが正しく後始末されること。",
+    "saveBlockFromModal()の必須欄検証失敗パスでprepareTimeswitchForTaskStart()が呼ばれず、検証成功パスでは従来どおり「クローズ→保存」の順序が保たれていること。"
+  ],
+  "verification": [
+    "node --check(app.js/src/features/today.js) → exit 0。",
+    "node scripts/release-gate.js releases/v191.json --suite=today-core → exit 0。",
+    "node scripts/release-gate.js releases/v191.json --final --suite=today-core → exit 0。"
+  ],
+  "knownLimitations": [
+    "既存ホームビュー・ルーティンタブは今回変更していない(仕様7のとおり無変更)。",
+    "ストリーク(連続日数)表示・減点/煽り文言は追加していない(仕様7で禁止)。"
+  ]
+}

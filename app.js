@@ -16008,14 +16008,18 @@ function saveBlockFromModal(id, fields) {
     updatedAt: nowDateTime(),
     deleted: false
   };
-  // v187レビュー: モーダル保存で実行中(actualStartAtあり・EndAtなし)になる場合は、
-  // 計時タブ由来の実行中Blockを先に終了して running最大1 の不変条件を保つ
-  if (updated.actualStartAt && !updated.actualEndAt) prepareTimeswitchForTaskStart(updated.id);
   // v29: 予定の開始・終了日時は必須。空のままでは登録/保存させない。
   if (!updated.plannedStartAt || !updated.plannedEndAt) {
     showToast("予定の開始・終了日時を入力してください");
     return;
   }
+  // v187レビュー: モーダル保存で実行中(actualStartAtあり・EndAtなし)になる場合は、
+  // 計時タブ由来の実行中Blockを先に終了して running最大1 の不変条件を保つ。
+  // v191レビュー反映(修正9・3周目): 呼び出し位置を検証(直上の必須欄チェック)より後へ
+  // 移動した。検証前に呼ぶと、検証エラーで保存が中断されても実行中ルーティン/oneTapが
+  // 閉じられたまま巻き戻らない穴があった(Codexレビュー)。検証成功パスでは
+  // 「クローズ→保存」の実行順は従来のまま変わらない。
+  if (updated.actualStartAt && !updated.actualEndAt) prepareTimeswitchForTaskStart(updated.id);
   if (isNew) {
     const rk = fields.recurrenceKind;
     if (rk && rk !== "__keep__" && rk !== "__end__") {
