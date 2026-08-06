@@ -1,0 +1,55 @@
+{
+  "version": 193,
+  "date": "2026-08-06",
+  "title": "残り時間でAI再プラン(B2)",
+  "summary": "今日管制室からpersonal-dataのメールボックスへ再プラン要求を送り、requestId一致の応答を最長15分監視して、既存AIプラン検証を通過した内容だけを承認可能なスケジュール下書きへ接続する。",
+  "changedFiles": [
+    "CHANGES_v193.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v193.json",
+    "src/features/today.js",
+    "styles.css",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/v193.test.js"
+  ],
+  "intent": [
+    "午後に計画が崩れたとき、アプリ内からAI APIを直接呼ばず、既存のpersonal-data GitHub API配管だけで再プランを依頼できるようにする。",
+    "応答はrequestId一致・依頼日が当日・既存AIプラン項目検証をすべて通過し、ほかの下書き生成と競合しない場合だけsource:ai-replanの既存下書きへ流す。",
+    "応答到着時も閲覧中の画面と入力フォーカスを維持し、下書きの確認先だけを同期ドット様式で案内する。"
+  ],
+  "changes": [
+    "app.js: replan-request.jsonへ{requestId,date,requestedAt,fromTime}をpushGitHubPathでPUTし、初回を含め60秒後からreplan-response.jsonを60秒間隔・最長15分でno-store取得する処理を追加した。iOS PWAのバックグラウンドタイマー停止に備え、visibilitychange復帰時も照合する。",
+    "app.js: ポーリング本体をcatch/finallyで囲み、途中の例外でも15分の打切りまでは次回照合を再予約する。budget_exceeded/limit_exceededは「本日の再プラン上限」、errorは短いreason付き生成失敗、15分無応答は「届いていません(PC起動を確認)」へ分岐する。",
+    "app.js: tryFetchAiPlanへ検証対象dataの注入引数を追加し、通常のAIプランファイルと再プランresponseが同一のdate/plan/skipped/項目/空き時間検証を通るようにした。応答時点で依頼日が当日でない場合は破棄する。",
+    "app.js: 朝プラン・再プラン・回復下書きを相互排他にし、依頼開始時と応答採用時の両方で既存_scheduleDraftを保護する。成功時はsource:ai-replanで既存下書きへ接続するが画面遷移はせず、「下書きが届きました。タイムラインで確認してください」と案内する。",
+    "src/features/today.js/styles.css: 今日管制室へREPLANパネルを追加し、data-actionレジストリ経由で押下する。状態表示は既存sync-dotを再利用した。",
+    "app.js: GitHubトークン未設定ゲートには再プランボタンを出さず、設定案内だけを表示する。",
+    "sw.js: CACHE_NAMEをv193へ更新した。",
+    "tests/v193.test.js: 正常往復・画面維持・既存下書き保護と承認、budget_exceeded/limit_exceeded/error理由、初回60秒待機・日付境界破棄・15分無応答、未設定ゲートの案内とボタン非表示をGitHub Contents APIモックで検証するE2Eを追加した。",
+    "索引・テストマニフェストと影響マップを再生成した。"
+  ],
+  "uncertainties": [
+    "レビュー修正後のtests/v193.test.jsを含むブラウザE2Eは、実行環境がChromium起動をspawn EPERMで拒否するため未実走。監督者環境での実走確認が必要。",
+    "ポーリング中のpending情報は設計どおり非永続のセッション状態。PWAプロセス自体が破棄された場合は監視を再開しないが、単なるバックグラウンド停止からの復帰はvisibilitychangeで即照合する。"
+  ],
+  "reviewFocus": [
+    "request/responseのパス・4フィールド・requestId一致がdesign.mdのファイル契約を変えていないこと。",
+    "response.statusがokでも依頼日の当日一致とtryFetchAiPlan相当の検証を迂回せず、不正項目や既存Block衝突をfail-closeしていること。",
+    "朝プラン・再プラン・回復下書きの排他が既存_scheduleDraftを上書きせず、応答到着時に今日ビューや入力フォーカスを強制変更しないこと。",
+    "初回60秒待機・途中例外の再試行・15分打切り・復帰時照合が二重ポーリングや古いrequestId採用を起こさないこと。",
+    "今日ビュー390/768/1024pxでREPLANパネルが既存cockpitグリッドを崩さず、未設定ゲートには設定案内だけが表示され、入力font-size 16px以上が維持されること。"
+  ],
+  "verification": [
+    "node --check app.js / src/features/today.js / tests/v193.test.js → exit 0。",
+    "npm.cmd run code:index:write / npm.cmd run test:manifest:writeで索引・影響マップ・テストマニフェストを再生成。",
+    "レビュー修正後のnode tests/v193.test.js / npm.cmd run test:coreは、既知のChromium spawn EPERM制約に従いこの環境では未実走。"
+  ],
+  "knownLimitations": [
+    "15分の監視中にiOSがPWAプロセスを破棄した場合、pending requestは復元しない。アプリが生存したままバックグラウンド化された場合は復帰時照合で回復する。",
+    "この実行環境ではChromium起動権限が無いため、新規4導線E2Eとtest:coreのブラウザ部分は別のPlaywright実行可能環境で再実行が必要。"
+  ]
+}

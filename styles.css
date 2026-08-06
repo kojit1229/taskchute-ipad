@@ -4602,6 +4602,22 @@ h3 {
   font-size: 11px;
   text-align: right;
 }
+
+/* v193: GitHubメールボックス経由の再プラン受付状態。同期ドットと同じ計器表現を使う。 */
+.today-replan-body {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.today-replan-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.today-replan-status .sync-dot { margin-left: 0; flex: none; }
 .today-routine-undone {
   margin-top: 10px;
   padding-top: 9px;

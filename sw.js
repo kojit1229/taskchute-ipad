@@ -1,4 +1,6 @@
-const CACHE_NAME = "taskchute-journal-pwa-v192";
+const CACHE_NAME = "taskchute-journal-pwa-v193";
+// v193: 今日管制室に「残り時間で再プラン」を追加。personal-dataのrequest/responseメールボックスを
+//   requestId照合で最長15分監視し、検証済み応答だけを既存のAI下書き承認UIへ接続する。
 // v192: NOW FOCUSは完了を押すまで計測継続(C1)。見積超過を警告色(is-warn/is-late)ではなく
 //       中立の縞模様+文言で表示し、ポモドーロのタイマー満了(自動発火のgoBreakPomodoro)で
 //       block.actualEndAtを書かないようにした(タスクの計測は完了操作まで継続する)。

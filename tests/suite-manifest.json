@@ -2019,6 +2019,32 @@
       }
     },
     {
+      "file": "v193.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution",
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 23,
+      "assertionHash": "587e3a7314456186",
+      "sourceHash": "adf80fc87737ed72",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
       "file": "v49.test.js",
       "kind": "e2e",
       "tier": "full",

@@ -11,7 +11,7 @@ let routineRate, getCategoryColor, clamp, isStaleBlock, render, renderDeferringF
 let renderCircularProgress, remainingText, remainingTextNormal;
 let renderPomodoroInterruptControls, getCachedReadingHighlights;
 let beginTodayZeroWrite, saveTodayZeroEntry, discardTodayZeroWrite, getTodayZeroWriteState;
-let homeSyncAlertBanner;
+let homeSyncAlertBanner, renderReplanControlHTML, requestReplan;
 let getScheduleData, makeBlock, saveState, openBlockEditor;
 let todayTickerId = null;
 let todayHeavyTickCount = 0;
@@ -32,7 +32,8 @@ function configureToday(deps) {
     renderCircularProgress, remainingText, remainingTextNormal,
     renderPomodoroInterruptControls, getCachedReadingHighlights,
     beginTodayZeroWrite, saveTodayZeroEntry, discardTodayZeroWrite, getTodayZeroWriteState,
-    homeSyncAlertBanner, getScheduleData, makeBlock, saveState, openBlockEditor
+    homeSyncAlertBanner, renderReplanControlHTML, requestReplan,
+    getScheduleData, makeBlock, saveState, openBlockEditor
   } = deps);
   registerActions({
     "today-kindle-prev": () => moveTodayKindle(-1),
@@ -43,7 +44,8 @@ function configureToday(deps) {
     "today-zero-write": ({ id, target }) => { todayZeroDraft = ""; beginTodayZeroWrite(id, target.dataset.kind === "suggestion"); },
     "today-zero-save": () => { saveTodayZeroEntry(); todayZeroDraft = ""; },
     "today-zero-cancel": () => { discardTodayZeroWrite(); todayZeroDraft = ""; },
-    "today-import-external": ({ target }) => importTodayExternal(target.dataset.externalId || "")
+    "today-import-external": ({ target }) => importTodayExternal(target.dataset.externalId || ""),
+    "today-replan": () => requestReplan()
   });
 }
 
@@ -673,6 +675,7 @@ function renderToday() {
       ${renderNextQueue(queue)}
       ${renderDayGauge(blocks)}
       ${renderRoutine(blocks)}
+      ${renderReplanControlHTML()}
       ${renderFlightPlan(blocks)}
       ${renderTodayKindle()}
       ${renderTodayZero()}

@@ -181,6 +181,15 @@ const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
 const ZT_SUGGESTION_PENDING_TTL_MS = 3 * 24 * 60 * 60 * 1000;   // pending: 3日(72時間)
 const ZT_SUGGESTION_RESOLVED_TTL_MS = 7 * 24 * 60 * 60 * 1000;  // adopted/dismissed: 7日
 
+// v193: オンデマンド再プランはセッション限定のメールボックス監視。永続stateを増やさず、
+// requestId一致の応答だけを最長15分・60秒間隔で受け取る。
+const REPLAN_POLL_MS = 60 * 1000;
+const REPLAN_TIMEOUT_MS = 15 * 60 * 1000;
+let _replanPending = null;
+let _replanPollTimer = null;
+let _replanPollBusy = false;
+let _replanUi = { kind: "idle", message: "残り時間の計画をAIへ依頼できます" };
+
 // v103: 上記TTLでの物理削除本体。normalizeState() と、リモートpull時の0秒思考マージ後の
 //       再剪定(mergeZeroThinkingIntoLocal、app.js後方の同期関数群を参照)の両方から呼ぶ
 //       共有関数にした(合流で期限切れ候補が復活しても、この関数を再適用すれば即座に消える)。
@@ -276,7 +285,7 @@ configureToday({
   renderPomodoroInterruptControls,
   getCachedReadingHighlights: () => cachedReadingHighlights,
   beginTodayZeroWrite, saveTodayZeroEntry, discardTodayZeroWrite, getTodayZeroWriteState,
-  homeSyncAlertBanner,
+  homeSyncAlertBanner, renderReplanControlHTML, requestReplan,
   getScheduleData: getTimeswitchSchedule, makeBlock, saveState, openBlockEditor
 });
 // v168: src/features/wish.jsも同じ理由(循環import回避)で依存注入する。renderWishTriage
@@ -2708,6 +2717,7 @@ function renderGate() {
           </label>
         </form>
         <button class="btn primary" data-action="gate-continue">設定してはじめる</button>
+        <div class="muted" data-replan-guide style="font-size:12px">GitHubトークンを設定すると再プランを依頼できます</div>
         ${_personalDataAuthError ? `<div class="muted" style="color:var(--red); font-size:12px; margin-top:6px">⚠ ${escapeHTML(_personalDataAuthError)}</div>` : ""}
       </div>
     </div>
@@ -4409,6 +4419,7 @@ function draftBarHTML() {
   // v146(UI改善計画Phase1-6): battery-recovery(v145)由来は出どころ不明な「⚙ 決定論配置」
   // ではなく「🔋 回復候補」と表示し、機能名から来ていることが分かるようにする
   const sourceLabel = _scheduleDraft.source === "ai-plan" ? "🤖 AIプラン由来"
+    : _scheduleDraft.source === "ai-replan" ? "🤖 AI再プラン由来"
     : _scheduleDraft.source === "battery-recovery" ? "🔋 回復候補"
     : "⚙ 決定論配置";
   return `
@@ -4667,8 +4678,8 @@ function fallbackMorningPlan(candidates, freeGaps) {
 // フォールバックするが、空き時間との不整合(過去時刻・既存Blockと衝突)は項目単位でドロップし、
 // 採用可能な項目が1件も無い場合のみ null にする(M1レビュー対応: 一部だけ古くても全体を
 // 捨てない)。
-async function tryFetchAiPlan(date, freeGaps) {
-  const raw = await fetchGitHubRawText(`AIプラン_${date}.json`);
+async function tryFetchAiPlan(date, freeGaps, providedData = null) {
+  const raw = providedData ? JSON.stringify(providedData) : await fetchGitHubRawText(`AIプラン_${date}.json`);
   if (!raw) return null;  // 取得失敗(404含む。fetchTextは404で空文字を返す)
   let data;
   try { data = JSON.parse(raw); } catch { return null; }  // 不正JSON
@@ -4729,6 +4740,137 @@ async function tryFetchAiPlan(date, freeGaps) {
   }
   if (!fittingItems.length) return null;  // 採用可能な項目が0件なら決定論へフォールバック
   return { items: fittingItems, skipped };
+}
+
+function setReplanUi(kind, message) {
+  _replanUi = { kind, message };
+  if (app?.dataset.view === "today") renderDeferringForFocus();
+}
+
+function stopReplanPolling() {
+  if (_replanPollTimer !== null) clearTimeout(_replanPollTimer);
+  _replanPollTimer = null;
+}
+
+function finishReplan(kind, message) {
+  stopReplanPolling();
+  _replanPending = null;
+  setReplanUi(kind, message);
+}
+
+function renderReplanControlHTML() {
+  const active = _replanUi.kind === "sending" || _replanUi.kind === "pending";
+  const dot = active ? "pending" : _replanUi.kind === "success" ? "ok" : "off";
+  return `<section class="today-panel today-replan today-span-2">
+    <h2 class="today-panel-title">REPLAN<span>残り時間を組み直す</span><b>AI</b></h2>
+    <div class="today-replan-body">
+      <button class="btn primary" data-action="today-replan" data-replan-button ${active ? "disabled" : ""}>残り時間で再プラン</button>
+      <div class="today-replan-status"><span class="sync-dot ${dot}"></span><span>${escapeHTML(_replanUi.message)}</span></div>
+    </div>
+  </section>`;
+}
+
+async function requestReplan() {
+  if (!personalDataReady(state.settings.github)) {
+    setReplanUi("error", "GitHubトークンを設定すると再プランを依頼できます");
+    return;
+  }
+  if (_morningPlanInFlight || _scheduleDraft) {
+    setReplanUi("error", _morningPlanInFlight
+      ? "朝プランを作成中です。完了後に再度お試しください"
+      : "未確定の下書きがあります。タイムラインで確認してください");
+    return;
+  }
+  stopReplanPolling();
+  const now = new Date();
+  const request = {
+    requestId: `${now.getTime()}-${crypto.randomUUID().slice(0, 8)}`,
+    date: todayISO(),
+    requestedAt: now.toISOString(),
+    fromTime: `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`
+  };
+  _replanPending = { ...request, startedAtMs: now.getTime() };
+  setReplanUi("sending", "再プラン依頼を送信中");
+  try {
+    await pushGitHubPath("requests/replan-request.json", `${JSON.stringify(request, null, 2)}\n`, "");
+    setReplanUi("pending", "依頼受付済み・数分後に反映");
+    scheduleReplanPoll();
+  } catch {
+    finishReplan("error", "依頼の送信に失敗しました");
+  }
+}
+
+function scheduleReplanPoll() {
+  stopReplanPolling();
+  if (!_replanPending) return;
+  _replanPollTimer = setTimeout(pollReplanResponse, REPLAN_POLL_MS);
+}
+
+async function pollReplanResponse() {
+  if (!_replanPending || _replanPollBusy) return;
+  _replanPollBusy = true;
+  try {
+    const result = await fetchGitHubRawResult("requests/replan-response.json", "text", { cache: "no-store" });
+    if (result.ok) {
+      let response;
+      try { response = JSON.parse(result.text); } catch {
+        finishReplan("error", "再プランの取得に失敗しました(応答形式を確認してください)");
+        return;
+      }
+      if (response?.requestId === _replanPending.requestId) {
+        if (_replanPending.date !== todayISO()) {
+          finishReplan("error", "日付が変わったため前日の再プランを破棄しました");
+          return;
+        }
+        if (response.status === "budget_exceeded" || response.status === "limit_exceeded") {
+          finishReplan("limit", "本日の再プラン上限");
+          return;
+        }
+        if (response.status === "error") {
+          const reason = typeof response.reason === "string"
+            ? response.reason.trim().replace(/\s+/g, " ").slice(0, 60) : "";
+          finishReplan("error", `再プランの生成に失敗しました${reason ? `: ${reason}` : ""}`);
+          return;
+        }
+        if (response.status !== "ok") {
+          finishReplan("error", "再プランの取得に失敗しました(応答形式を確認してください)");
+          return;
+        }
+        const now = new Date();
+        const nowFloor = Math.min(23 * 60, Math.ceil((now.getHours() * 60 + now.getMinutes()) / 15) * 15);
+        const freeGaps = computeFreeGaps(_replanPending.date, 5 * 60, 23 * 60)
+          .map(([s, e]) => [Math.max(s, nowFloor), e]).filter(([s, e]) => e - s >= 15);
+        const aiPlan = freeGaps.length ? await tryFetchAiPlan(_replanPending.date, freeGaps, response) : null;
+        if (!aiPlan) {
+          finishReplan("error", "再プランの取得に失敗しました(内容を確認してください)");
+          return;
+        }
+        if (_morningPlanInFlight || _scheduleDraft) {
+          finishReplan("error", "既存の下書きがあります。タイムラインで確認してから再度依頼してください");
+          return;
+        }
+        _scheduleDraft = { date: _replanPending.date, items: aiPlan.items, skipped: aiPlan.skipped, source: "ai-replan" };
+        _draftUndo = null; _draftUndoHistoryEntry = null;
+        finishReplan("success", "下書きが届きました。タイムラインで確認してください");
+        showToast("🤖 下書きが届きました。タイムラインで確認してください");
+        return;
+      }
+    } else if (result.status === 401 || result.status === 403) {
+      finishReplan("error", "再プランの取得に失敗しました(GitHub権限を確認してください)");
+      return;
+    }
+  } catch (error) {
+    console.warn("再プラン応答の取得を次回再試行します:", error?.message || error);
+  } finally {
+    _replanPollBusy = false;
+    if (_replanPending) {
+      if (Date.now() - _replanPending.startedAtMs >= REPLAN_TIMEOUT_MS) {
+        finishReplan("timeout", "届いていません(PC起動を確認)");
+      } else {
+        scheduleReplanPoll();
+      }
+    }
+  }
 }
 
 // v67: AIプラン_<date>.json の存在確認のみ(下書きへの適用はtryFetchAiPlan/runAiMorningPlanの専管)。
@@ -4808,6 +4950,11 @@ function showZeroSecThemesOnlyIfAny(date, auto) {
 // v62: 自宅PCバッチ生成のAIプランJSONを優先採用し、取得/検証に失敗した場合のみ決定論配置へ
 //      フォールバックする(v60の経路は無傷で維持)。
 async function runAiMorningPlan({ auto = false } = {}) {
+  // 再プラン応答も同じ_scheduleDraftへ届くため、依頼中は朝プランを並走させない。
+  if (_replanPending) {
+    if (!auto) showToast("再プラン依頼中です。応答後に朝プランを実行してください");
+    return;
+  }
   // v145レビュー対応: 完了(どの早期returnでもfinallyで確実に)までフラグを立て、回復Block
   // 下書き提案(ティッカー経路)がこの間に割り込んで_scheduleDraftを取り合わないようにする。
   _morningPlanInFlight = true;
@@ -7412,9 +7559,9 @@ function subtractOccupiedIntervals(gaps, occupied) {
 function maybeSuggestRecoveryDraft(nowMinutes) {
   if (!state.settings.battery?.recoveryDraft) return false;  // 既定OFF・opt-in
   const today = todayISO();
-  // v145レビュー対応: 朝プラン(runAiMorningPlan)の非同期処理と_scheduleDraftを取り合わないよう、
-  // 処理中はこのtickをスキップする(冪等マーカーは焼かない=次tickで再評価される)。
-  if (_morningPlanInFlight) return false;
+  // v145/v193レビュー対応: 朝プランまたは再プランの非同期処理と_scheduleDraftを
+  // 取り合わないよう、処理中はこのtickをスキップする(冪等マーカーは焼かない)。
+  if (_morningPlanInFlight || _replanPending) return false;
   if (!Array.isArray(state.batteryRecoveryDraftDates)) state.batteryRecoveryDraftDates = [];
   // v150レビュー対応(項目5、Codex指摘): マーカーは{date, titles}のオブジェクト配列(下記参照)。
   if (state.batteryRecoveryDraftDates.some((e) => e && e.date === today)) return false;  // 冪等: 1日1回
@@ -7560,7 +7707,7 @@ function maybeRebuildRecoveryDraft(nowMinutes) {
   const alreadyLive = _scheduleDraft && _scheduleDraft.date === today
     && _scheduleDraft.items.some((it) => it.source === "battery-recovery");
   if (alreadyLive) return false;  // このブート内では何も失っていない
-  if (_morningPlanInFlight) return false;  // 朝プランと競合しないよう待つ(既存方針と同じ)
+  if (_morningPlanInFlight || _replanPending) return false;  // 朝/再プラン生成と競合しないよう待つ
   return placeRecoveryDraftCandidates(today, nowMinutes, { restoreTitles: marker.titles });
 }
 
@@ -12786,7 +12933,7 @@ function personalDataFileConfig(rawCfg, name) {
 // GitHubのContents APIで1〜100MBのファイルに対してもraw bytesを返す(1MB以下限定ではない)ため、
 // response.text() の代わりに response.blob() を使えばテキストと同じ経路で画像・PDFも読める。
 // 既存呼び出し元(fetchGitHubRawText経由、kind省略=text)の挙動は一切変えていない。
-async function fetchGitHubRawResult(name, kind = "text") {
+async function fetchGitHubRawResult(name, kind = "text", fetchOptions = {}) {
   const cfg = state.settings.github || {};
   if (!personalDataReady(cfg)) return { ok: false, status: 0, text: "", blob: null };
   const conn = personalDataConn(cfg);
@@ -12794,7 +12941,8 @@ async function fetchGitHubRawResult(name, kind = "text") {
     const path = personalDataPath(name).split("/").map(encodeURIComponent).join("/");
     const url = `https://api.github.com/repos/${encodeURIComponent(conn.owner)}/${encodeURIComponent(conn.repo)}/contents/${path}?ref=${encodeURIComponent(conn.branch)}`;
     const response = await fetch(url, {
-      headers: { ...githubHeaders(conn.token), "Accept": "application/vnd.github.raw+json" }
+      headers: { ...githubHeaders(conn.token), "Accept": "application/vnd.github.raw+json" },
+      ...fetchOptions
     });
     if (response.status === 401) {
       setPersonalDataAuthError("トークンに personal-data リポジトリの権限が必要です(Fine-grained tokenのRepository access / Contents権限を確認してください)");
@@ -16837,6 +16985,12 @@ setTimeout(maybeAutoArchive, 8000);
 // v41/v43: 復帰時。自動同期 ON なら pull(内部で日次オープン)、OFF なら日次オープンのみ。
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
+  // PUT直後の復帰でも初回60秒待機は守る。1分経過後はiOSの停止タイマーを復帰時照合で補う。
+  if (_replanPending && !_replanPollBusy
+    && Date.now() - _replanPending.startedAtMs >= REPLAN_POLL_MS) {
+    stopReplanPolling();
+    pollReplanResponse();
+  }
   if (state.settings.autoSync) runAutoSyncPull();
   else if (runDailyOpen()) render();
   setTimeout(maybeAutoMorningPlan, 4500);    // v59: 日をまたいで復帰したケース
