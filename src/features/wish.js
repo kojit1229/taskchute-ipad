@@ -403,13 +403,28 @@ function renderWishCard(wish) {
 // Wish 詳細展開(サブタスク・編集)
 function renderWishDetail(wish) {
   const subtasks = state.tasks.filter((t) => !t.deleted && t.parentTaskId === wish.id);
-  // dueDate あれば優先、なければ createdAt 順
+  if (subtasks.some((task) => Number.isFinite(task.order))) {
+    // v194: 両方に order があるときだけ実行計画の順序を使う。それ以外は従来の並び
+  // (完了下沈み → 両方に期限があれば期限 → createdAt)を**そのまま維持する**
   subtasks.sort((a, b) => {
+    if (Number.isFinite(a.order) && Number.isFinite(b.order) && a.order !== b.order) {
+      return a.order - b.order;
+    }
+    // dueDate あれば優先、なければ createdAt 順
     if (a.status === "completed" && b.status !== "completed") return 1;
     if (a.status !== "completed" && b.status === "completed") return -1;
     if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
     return (a.createdAt || "").localeCompare(b.createdAt || "");
   });
+  } else {
+    // order 導入前のWish詳細は既存の見え方を変えない。
+    subtasks.sort((a, b) => {
+      if (a.status === "completed" && b.status !== "completed") return 1;
+      if (a.status !== "completed" && b.status === "completed") return -1;
+      if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+      return (a.createdAt || "").localeCompare(b.createdAt || "");
+    });
+  }
   const lifeAreas = state.settings.lifeAreas || [];
   const currentYear = new Date().getFullYear();
   const yearOptions = [

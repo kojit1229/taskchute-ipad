@@ -1850,6 +1850,13 @@ function normalizeState(value) {
       leverageNote: "",  // v66: 10x機構(2-2レバレッジ台帳)。資産の累計節約・成果の自己申告メモ(任意1行)
       aiWork: false,      // v67: AI作業ワーカー連携(柱2)。trueならバッチ側がこのTaskを拾って作業する
       aiWorkBrief: "",    // v67: 何をしてほしいか・成果物の置き場希望(1〜2行)
+      planTarget: false,
+      owner: "k",
+      order: null,
+      aiBrief: "",
+      handoffNote: "",
+      aiStatus: "none",
+      aiResultRef: "",
       progressNum: 0,     // v95: WBS進捗(分子)。旧Taskは未着手(0)扱いで補完
       progressDen: 10,    // v95: WBS進捗(分母)。既定10
       doneCriteria: "",   // v96: 完了条件(終わったら残る物を1文で。既定は空欄=未設定)
@@ -6390,6 +6397,28 @@ function renderWBS() {
   `;
 }
 
+function nextSiblingOrder(siblings) {
+  const maxOrder = siblings.reduce((max, task) =>
+    Number.isFinite(task?.order) && (max === null || task.order > max) ? task.order : max, null);
+  return maxOrder === null ? 1000 : maxOrder + 1000;
+}
+
+function midpointOrder(beforeOrder, afterOrder) {
+  if (!Number.isFinite(beforeOrder) || !Number.isFinite(afterOrder)) return null;
+  return (beforeOrder + afterOrder) / 2;
+}
+
+// v194: 実行計画の並び順 — **同一親の兄弟だけを並べる配列専用**の比較。両方に order が
+// 入っているときだけ order 昇順を使い、それ以外は従来の wbsTaskCompare へ完全に委ねる
+// (片方だけ order を持つ混在期に「完了は下に沈む」不変条件を壊さないため)。
+// 親を跨ぐ配列(aiScheduleCandidates 等)へは使わない。推移律が壊れるため。
+function siblingTaskCompare(a, b) {
+  if (Number.isFinite(a.order) && Number.isFinite(b.order) && a.order !== b.order) {
+    return a.order - b.order;
+  }
+  return wbsTaskCompare(a, b);
+}
+
 // v48: WBS のタスク並び順 — 未完了(期限昇順・期限なしは後ろ)→ 完了は下に沈む
 function wbsTaskCompare(a, b) {
   const ac = a.status === "completed", bc = b.status === "completed";
@@ -6458,7 +6487,7 @@ function renderProjectTree(project) {
       t.parentTaskId === task.id && (t.status !== "completed" || hasOpenDescendant(t)));
     visibleTasks = visibleTasks.filter((t) => t.status !== "completed" || hasOpenDescendant(t));
   }
-  const rootTasks = visibleTasks.filter((t) => !t.parentTaskId).sort(wbsTaskCompare);  // v48: 未完了→期限順、完了は下へ
+  const rootTasks = visibleTasks.filter((t) => !t.parentTaskId).sort(siblingTaskCompare);  // v48: 未完了→期限順、完了は下へ / v194: order優先
   // v48: プロジェクトの数値サマリ(進捗バーだけでは規模が見えない)
   const liveTasks = allTasksOfProject.filter(isTaskCountable);
   const doneCount = liveTasks.filter((t) => t.status === "completed").length;
@@ -6510,7 +6539,7 @@ function toggleTaskCollapse(id) {
 }
 
 function renderTaskTree(task, allTasksOfProject, depth) {
-  const children = allTasksOfProject.filter((t) => t.parentTaskId === task.id).sort(wbsTaskCompare);  // v48
+  const children = allTasksOfProject.filter((t) => t.parentTaskId === task.id).sort(siblingTaskCompare);  // v48 / v194: order優先
   const indent = depth * 18;
   const collapsed = Boolean(task.collapsed);  // v33: 折りたたみ
   return `
@@ -11850,6 +11879,13 @@ function makeTask({ projectId = "", parentTaskId = "", title = "", category = ""
     leverageType,  // v65: 10x機構(2-1)。"asset"|"eliminate"|"oneoff"|""(未設定)
     aiWork: false,      // v67: AI作業ワーカー連携(柱2)
     aiWorkBrief: "",    // v67: 何をしてほしいか・成果物の置き場希望(1〜2行)
+    planTarget: false,
+    owner: "k",
+    order: null,
+    aiBrief: "",
+    handoffNote: "",
+    aiStatus: "none",
+    aiResultRef: "",
     progressNum: 0,     // v95: WBS進捗(分子)。0=未着手扱い
     progressDen: 10,    // v95: WBS進捗(分母)。既定10
     doneCriteria: "",   // v96: 完了条件(終わったら残る物を1文で。既定は空欄=未設定)
