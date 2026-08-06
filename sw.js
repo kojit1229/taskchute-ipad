@@ -1,4 +1,7 @@
-const CACHE_NAME = "taskchute-journal-pwa-v191";
+const CACHE_NAME = "taskchute-journal-pwa-v192";
+// v192: NOW FOCUSは完了を押すまで計測継続(C1)。見積超過を警告色(is-warn/is-late)ではなく
+//       中立の縞模様+文言で表示し、ポモドーロのタイマー満了(自動発火のgoBreakPomodoro)で
+//       block.actualEndAtを書かないようにした(タスクの計測は完了操作まで継続する)。
 // v191: 今日ビューのルーティン分離(NOW FOCUS/ポモ/NEXT QUEUE/FLIGHT PLANから除外、
 //       ROUTINEパネルに未実施チップ列を追加)。
 // v190: taskchute/ai-insights.jsonの4ビュー用AI所見パネルと26時間鮮度表示を追加。

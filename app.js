@@ -13916,12 +13916,16 @@ function finishReport(outcome, note) {
   if (ctx.kind === "block") maybeOpenHyperfocusGate();
 }
 
-// v9: 「☕ 休憩へ」: focus → break に遷移(現在のセッションを完了扱いに + 5分休憩開始)
+// v9: 「☕ 休憩へ」: focus → break に遷移(+5分休憩開始)
+// C1(v192): 以前はここで block.actualEndAt を書いて暗黙的に「完了扱い」にしていたが、
+// タイマー満了による自動発火(startTimerTicker)でNOW FOCUSが勝手に空になる副作用があった。
+// 休憩は完了ではなく一時停止のため、actualEndAtは書かない(タスクの計測は完了操作まで継続する)。
+// pomodoroCount加算のみ維持する(手動「☕ 休憩へ」・自動発火どちらの呼び出しも同じ関数のため統一)。
 function goBreakPomodoro() {
   const blockId = state.pomodoro.blockId;
   if (blockId) {
     state.blocks = state.blocks.map((block) => block.id === blockId
-      ? { ...block, pomodoroCount: Number(block.pomodoroCount || 0) + 1, actualEndAt: block.actualEndAt || nowDateTime(), updatedAt: nowDateTime() }
+      ? { ...block, pomodoroCount: Number(block.pomodoroCount || 0) + 1, updatedAt: nowDateTime() }
       : block);
   }
   // v14: 完全再構築 + 5分休憩開始

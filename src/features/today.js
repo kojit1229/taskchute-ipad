@@ -182,6 +182,12 @@ function formatElapsed(seconds) {
   return `${String(minutes).padStart(2, "0")}:${String(safe % 60).padStart(2, "0")}`;
 }
 
+// C1(v192): 見積超過は警告(is-warn/is-late)ではなく中立の継続表示にする。
+// サンプル(cockpit-today-fusion-sample.html JS 889-897)準拠の文言。
+function nowEstimateLabel(over, estimate) {
+  return over ? `見積 ${estimate}分 超過 — 完了まで計測継続` : `経過 / 見積 ${estimate}分`;
+}
+
 function projectedInfo(blocks, now = new Date()) {
   const remaining = (blocks || []).filter((b) => !b.completed);
   if (!remaining.length) return { text: "完了", comparison: "", remainingMin: 0 };
@@ -241,18 +247,18 @@ function renderNowFocus(blocks, queue) {
   const elapsedSec = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
   const estimate = resolveEstimateMin(running);
   const ratio = estimate > 0 ? elapsedSec / (estimate * 60) : 0;
-  const level = ratio >= 1 ? "is-late" : ratio >= 0.8 ? "is-warn" : "";
+  const over = ratio >= 1;
   const after = queue[0];
   const goal = projectForBlock(running);
-  return `<section class="today-panel today-now-focus today-span-2 ${level}">
+  return `<section class="today-panel today-now-focus today-span-2">
     ${panelHeading("NOW FOCUS", "いまの1手", "LIVE")}
     <div class="today-now-label"><i></i>実行中 — これだけをやる</div>
     <div class="today-now-task" data-action="edit-block" data-id="${escapeHTML(running.id)}">${escapeHTML(running.title)}</div>
     <div class="today-now-meta">${categoryChip(running)}
       <span class="today-chip">開始 ${escapeHTML(timeFromDateTime(running.actualStartAt))}</span>
       <span class="today-chip">見積 ${estimate}分</span></div>
-    <div class="today-now-elapsed"><strong id="todayNowElapsed">${formatElapsed(elapsedSec)}</strong><span>経過 / 見積 ${estimate}分</span></div>
-    <div class="today-progress"><i id="todayNowProgress" style="width:${clamp(ratio * 100, 0, 100)}%"></i></div>
+    <div class="today-now-elapsed"><strong id="todayNowElapsed">${formatElapsed(elapsedSec)}</strong><span id="todayNowEstimate">${nowEstimateLabel(over, estimate)}</span></div>
+    <div class="today-progress"><i id="todayNowProgress" class="${over ? "over" : ""}" style="width:${clamp(ratio * 100, 0, 100)}%"></i></div>
     <div class="today-now-actions">
       <button class="btn green" data-action="complete-block-with-actual" data-id="${escapeHTML(running.id)}">■ 完了</button>
       <button class="btn" data-action="now-conveyor-complete" data-id="${escapeHTML(running.id)}">▶ 次へ</button>
@@ -726,12 +732,14 @@ function updateTodayTick() {
     const seconds = Math.max(0, Math.floor((Date.now() - localDateTimeToMs(running.actualStartAt)) / 1000));
     const estimate = resolveEstimateMin(running);
     const ratio = estimate > 0 ? seconds / (estimate * 60) : 0;
+    const over = ratio >= 1;
     elapsed.textContent = formatElapsed(seconds);
-    elapsed.className = ratio >= 1 ? "is-late" : ratio >= 0.8 ? "is-warn" : "";
     if (bar) {
       bar.style.width = `${clamp(ratio * 100, 0, 100)}%`;
-      bar.className = ratio >= 1 ? "is-late" : ratio >= 0.8 ? "is-warn" : "";
+      bar.classList.toggle("over", over);
     }
+    const estimateEl = document.getElementById("todayNowEstimate");
+    if (estimateEl) estimateEl.textContent = nowEstimateLabel(over, estimate);
   }
   const runHeavyUpdates = todayHeavyTickCount === 0;
   todayHeavyTickCount = (todayHeavyTickCount + 1) % 30;

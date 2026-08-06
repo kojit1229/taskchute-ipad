@@ -204,6 +204,7 @@
   --cockpit-grid-line: rgba(70, 110, 170, 0.06);
   --cockpit-go: #3fd0ff;
   --cockpit-go-glow: rgba(63, 208, 255, 0.45);
+  --cockpit-go-dim: rgba(63, 208, 255, 0.1);
   --cockpit-track: #131e34;
   --cockpit-mono: ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", "Consolas", monospace;
 }
@@ -4474,10 +4475,6 @@ h3 {
   letter-spacing: 2px;
   text-shadow: 0 0 12px var(--cockpit-go-glow, transparent);
 }
-.today-now-elapsed strong.is-warn,
-.today-now-focus.is-warn .today-now-elapsed strong { color: var(--orange); }
-.today-now-elapsed strong.is-late,
-.today-now-focus.is-late .today-now-elapsed strong { color: var(--red); }
 .today-now-elapsed span,
 .today-now-next { color: var(--muted); font-size: 11px; }
 .today-progress {
@@ -4489,14 +4486,29 @@ h3 {
 }
 .today-progress i {
   display: block;
+  position: relative;
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, var(--purple), var(--cockpit-go, var(--accent)));
 }
-.today-now-focus.is-warn .today-progress i,
-#todayNowProgress.is-warn { background: var(--orange); }
-.today-now-focus.is-late .today-progress i,
-#todayNowProgress.is-late { background: var(--red); }
+/* C1(v192): 見積超過は警告色(赤/琥珀)ではなく中立の縞模様(青系)で継続表示する
+   (サンプル cockpit-today-fusion-sample.html CSS 141-147行準拠)。 */
+#todayNowProgress.over {
+  background: var(--cockpit-go-dim, var(--accent-soft));
+  box-shadow: none;
+}
+#todayNowProgress.over::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  left: -24px;
+  background: repeating-linear-gradient(45deg, var(--cockpit-go, var(--accent)) 0 8px, transparent 8px 16px);
+  opacity: 0.45;
+  animation: today-over-flow 1.2s linear infinite;
+}
+@keyframes today-over-flow {
+  to { transform: translateX(22.6px); }
+}
 .today-now-next { margin-top: 12px; padding-top: 9px; border-top: 1px dashed var(--line); }
 .today-now-next em { color: var(--text); font-style: normal; }
 .today-now-empty {
@@ -4881,6 +4893,8 @@ h3 {
 }
 @media (prefers-reduced-motion: reduce) {
   .today-now-label i { animation: none; }
+  /* C1(v192): 縞模様の流れるアニメだけ止め、静的な縞+文言で超過状態を伝える(サンプル432-433行準拠) */
+  #todayNowProgress.over::before { animation: none; }
 }
 
 /* v185 B4 P11a: cockpitテーマ時だけ、全ビューの共通chromeを管制室調へ統一する。 */

@@ -3922,6 +3922,162 @@ function check(name, cond, extra = "") {
       bandDoneSum === 1, `doneSum=${bandDoneSum} text=${bandText}`);
     check("oneTap Blockを含めても時間帯別合計の total は2(oneTap除外、routineRateと一致)",
       bandTotalSum === 2, `totalSum=${bandTotalSum} text=${bandText}`);
+
+    // ============================================================
+    // [71]〜[76] C1(v192): NOW FOCUSは完了を押すまで計測継続
+    // ============================================================
+    console.log("[71] C1仕様1/2: 見積超過で is-warn/is-late が付かず、#todayNowProgress に over クラス+中立文言が付く(初期描画時点)");
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seed({
+      view: "today",
+      blocks: [
+        block("c1-over", { title: "C1-OVER-超過タスク", actualStartAt: at("11:00"), plannedStartAt: at("11:00"), plannedEndAt: at("11:10"), estimateMin: 10 })
+      ]
+    });
+    await page.waitForSelector(".today-now-focus", { state: "attached" });
+    const overBar0 = (await page.locator("#todayNowProgress").getAttribute("class")) || "";
+    check("初期描画時点でis-warn/is-lateクラスが付かない",
+      !overBar0.includes("is-warn") && !overBar0.includes("is-late"), overBar0);
+    check("初期描画時点で見積超過(60分経過/見積10分)を検知しoverクラスが付く", overBar0.includes("over"), overBar0);
+    const estText0 = await page.locator("#todayNowEstimate").textContent();
+    check("初期描画時点で超過文言「見積 10分 超過 — 完了まで計測継続」になる",
+      (estText0 || "").includes("見積 10分 超過") && (estText0 || "").includes("完了まで計測継続"), estText0);
+    const elapsedClass0 = (await page.locator("#todayNowElapsed").getAttribute("class")) || "";
+    check("経過表示自体にも警告色クラスが付かない(非懲罰原則: 赤・琥珀を出さない)",
+      !elapsedClass0.includes("is-warn") && !elapsedClass0.includes("is-late"), elapsedClass0);
+    const barWidthOver0 = await page.locator("#todayNowProgress").evaluate((el) => el.style.width);
+    check("超過時もバー幅は100%で張り付く(clamp維持)", barWidthOver0 === "100%", barWidthOver0);
+    // レビュー修正⑤: 通常(非reduced-motion)文脈ではover状態の縞模様アニメが実際に動くことを
+    // animation-name自体で検証する(keyframes名typoや::beforeルール欠落を検知できるように)。
+    const overAnimName0 = await page.locator("#todayNowProgress").evaluate((el) => getComputedStyle(el, "::before").animationName);
+    check("通常文脈ではover状態の縞模様アニメが動く(animation-name: today-over-flow)",
+      overAnimName0 === "today-over-flow", overAnimName0);
+
+    console.log("[72] C1仕様1/2: tickでも同様(80%地点ではoverが付かず、100%到達でoverへ切り替わる)");
+    await seed({
+      view: "today",
+      blocks: [
+        block("c1-tick", { title: "C1-TICK-tick経由", actualStartAt: at("11:51"), plannedStartAt: at("11:51"), plannedEndAt: at("12:01"), estimateMin: 10 })
+      ]
+    });
+    await page.clock.setFixedTime(fixedTime(11, 59, 0));  // 経過8分(80%)
+    await page.waitForFunction(() => (document.getElementById("todayNowElapsed")?.textContent || "").startsWith("08:"));
+    const barAt80 = (await page.locator("#todayNowProgress").getAttribute("class")) || "";
+    check("80%到達時点でもoverクラスが付かない(is-warn相当の中間警告を出さない)", !barAt80.includes("over"), barAt80);
+    await page.clock.setFixedTime(fixedTime(12, 1, 30));  // 経過10分30秒(105%)
+    await page.waitForFunction(() => (document.getElementById("todayNowProgress")?.className || "").includes("over"));
+    // レビュー修正⑥: waitForFunctionの成立を検証済み扱いにする恒真checkではなく、
+    // 実DOMのclassを再取得した値をcheckへ渡す(assertion自体が失敗し得る形にする)。
+    const barAfterOver = (await page.locator("#todayNowProgress").getAttribute("class")) || "";
+    check("100%超過後はtickでoverクラスへ切り替わる(毎tick再取得、C1)", barAfterOver.includes("over"), barAfterOver);
+    const estTextTick = await page.locator("#todayNowEstimate").textContent();
+    check("tick後も超過文言(見積 n分 超過 — 完了まで計測継続)に切り替わる",
+      (estTextTick || "").includes("超過") && (estTextTick || "").includes("完了まで計測継続"), estTextTick);
+
+    console.log("[73] C1仕様5: ポモドーロのタイマー満了(自動発火のgoBreakPomodoro)ではblock.actualEndAtを書かず、NOW FOCUSに残り続ける");
+    await page.clock.setFixedTime(fixedTime(9, 0, 0));
+    await seed({
+      view: "today",
+      blocks: [
+        block("c1-pomo", { title: "C1-POMO-満了タスク", actualStartAt: at("09:00"), plannedStartAt: at("09:00"), plannedEndAt: at("09:25"), estimateMin: 25 })
+      ]
+    });
+    await page.evaluate(({ KEY, startedAt, endsAt }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.pomodoro = { running: true, blockId: "c1-pomo", startedAt, endsAt, mode: "focus" };
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, startedAt: at("09:00"), endsAt: at("09:25") });
+    await page.reload();
+    await page.waitForSelector('[data-action="nav"]', { state: "attached" });
+    // endsAt(09:25)を過ぎた時刻へ固定時刻を進める。常時稼働のtimerTicker(500ms周期)が
+    // 自動でgoBreakPomodoro()を呼ぶのを実時間で待つ(reload・クリックなし)。
+    await page.clock.setFixedTime(fixedTime(9, 25, 1));
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).pomodoro?.mode === "break", KEY, { timeout: 10000 });
+    const stAfterAutoBreak = await stateNow();
+    const pomoBlockAfter = stAfterAutoBreak.blocks.find((b) => b.id === "c1-pomo");
+    check("自動休憩遷移後もblock.actualEndAtは空のまま(C1: 完了を押すまで計測継続)",
+      !pomoBlockAfter.actualEndAt, JSON.stringify(pomoBlockAfter));
+    check("actualStartAtは維持されたまま(計測は継続中)", pomoBlockAfter.actualStartAt === at("09:00"));
+    check("pomodoroCountは従来どおり加算される(タイマー機能自体は維持)",
+      pomoBlockAfter.pomodoroCount === 1, JSON.stringify(pomoBlockAfter));
+    check("state.pomodoro.modeが休憩(break)へ遷移する(休憩自体は維持)", stAfterAutoBreak.pomodoro.mode === "break");
+    const nfTextAfterBreak = await panelText(".today-now-focus");
+    check("自動休憩遷移後もNOW FOCUSに実行中Blockが残り続ける(C1)",
+      (nfTextAfterBreak || "").includes("C1-POMO-満了タスク"), nfTextAfterBreak);
+
+    console.log("[74] 明示的完了経路(休憩中「✅ここで完了する」)は従来どおりactualEndAtが付く(goBreakPomodoroの変更は完了経路に影響しない)");
+    await page.locator('#sidebar .nav-button[data-action="nav"][data-view="pomodoro"]').click();
+    await waitView("pomodoro");
+    check("休憩中の「ここで完了する」ボタンがある(既存アクションの実名再利用)",
+      await page.locator('[data-action="finish-block"]').count() === 1);
+    await page.locator('[data-action="finish-block"]').click();
+    await page.waitForFunction((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      const b = s.blocks.find((x) => x.id === "c1-pomo");
+      return b && b.completed === true && !!b.actualEndAt;
+    }, KEY);
+    const stAfterFinish = await stateNow();
+    const pomoBlockFinished = stAfterFinish.blocks.find((b) => b.id === "c1-pomo");
+    check("明示的完了(ここで完了する)ではactualEndAtが付く(従来どおり)", !!pomoBlockFinished.actualEndAt, JSON.stringify(pomoBlockFinished));
+    check("明示的完了ではcompletedがtrueになる(従来どおり)", pomoBlockFinished.completed === true);
+
+    console.log("[75] 手動「☕ 休憩へ」(go-break)も自動発火と同じgoBreakPomodoroのため、actualEndAtを書かない(C1の統一適用)");
+    await page.clock.setFixedTime(fixedTime(14, 0, 0));
+    await seed({
+      view: "pomodoro",
+      blocks: [
+        block("c1-manual-break", { title: "C1-MANUAL-手動休憩", plannedStartAt: at("14:00"), plannedEndAt: at("14:25"), estimateMin: 25 })
+      ]
+    });
+    await page.locator('[data-action="start-pomodoro"][data-block-id="c1-manual-break"]').click();
+    await page.waitForSelector('[data-action="declare-confirm"]', { state: "attached" });
+    await page.locator('[data-action="declare-confirm"]').click();
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).pomodoro?.running === true, KEY);
+    await page.locator('[data-action="go-break"]').click();
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).pomodoro?.mode === "break", KEY);
+    const stManualBreak = await stateNow();
+    const manualBreakBlock = stManualBreak.blocks.find((b) => b.id === "c1-manual-break");
+    check("手動「☕ 休憩へ」でもactualEndAtが書かれない(C1: 完了を押すまで計測継続)",
+      !manualBreakBlock.actualEndAt, JSON.stringify(manualBreakBlock));
+    check("手動休憩でもactualStartAtは維持される(計測は継続中)", !!manualBreakBlock.actualStartAt, JSON.stringify(manualBreakBlock));
+    check("手動休憩でもpomodoroCountは加算される(従来どおり)",
+      manualBreakBlock.pomodoroCount === 1, JSON.stringify(manualBreakBlock));
+
+    console.log("[76] prefers-reduced-motion時は縞模様アニメが停止する(静的表示+文言のみで状態を伝える)");
+    // レビュー修正⑦: 既存ctx/pageは閉じずに残す(以後の追記が閉じたpageへ触れてしまう事故を防ぐ)。
+    // reduced-motion確認専用の別contextを並行して開き、使い終わったらreducedCtxだけを閉じる。
+    const reducedCtx = await browser.newContext({
+      serviceWorkers: "block", viewport: { width: 1100, height: 1400 }, reducedMotion: "reduce"
+    });
+    const reducedPage = await reducedCtx.newPage();
+    reducedPage.on("pageerror", (e) => { failures++; console.log("  ❌ reducedPage pageerror:", e.message); });
+    await blockGithubApiByDefault(reducedPage);
+    await reducedPage.clock.setFixedTime(fixedTime(12, 0, 0));
+    await reducedPage.goto(`http://localhost:${PORT}/`);
+    await reducedPage.waitForSelector('[data-action="gate-continue"]', { state: "attached" });
+    await passGithubGate(reducedPage);
+    await reducedPage.evaluate(({ KEY, blocks, view, TODAY }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.blocks = blocks;
+      s.currentView = view;
+      s.selectedDate = TODAY;
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, {
+      KEY,
+      blocks: [block("c1-reduced", { title: "C1-REDUCED-超過タスク", actualStartAt: at("11:00"), plannedStartAt: at("11:00"), plannedEndAt: at("11:10"), estimateMin: 10 })],
+      view: "today",
+      TODAY
+    });
+    // seed()と同様、reload後はまずナビ要素の出現を待ってからパネルを待つ(早すぎるDOM参照を避ける)。
+    await reducedPage.reload();
+    await reducedPage.waitForSelector('[data-action="nav"]', { state: "attached" });
+    await reducedPage.waitForSelector(".today-now-focus", { state: "attached" });
+    const reducedAnim = await reducedPage.locator("#todayNowProgress").evaluate((el) =>
+      getComputedStyle(el, "::before").animationName);
+    check("reduced-motion時は縞模様の流れるアニメが止まる(animation-name: none)", reducedAnim === "none", reducedAnim);
+    const reducedOverClass = (await reducedPage.locator("#todayNowProgress").getAttribute("class")) || "";
+    check("reduced-motion時もoverクラス自体(静的な縞表示)は付いたまま", reducedOverClass.includes("over"), reducedOverClass);
+    await reducedCtx.close();
   } finally {
     await browser.close();
     server.close();
