@@ -574,6 +574,9 @@ registerActions({
   "resume-task": ({ id }) => resumeTask(id),
   "add-task-to-project": ({ id }) => addTaskToProject(id),
   "add-subtask": ({ target }) => addSubtask(target.dataset.parentTask),
+  "toggle-plan-owner": ({ id }) => togglePlanStepOwner(id),
+  "move-plan-step": ({ id, target }) => movePlanStep(id, Number(target.dataset.direction)),
+  "add-plan-step-below": ({ id }) => addPlanStepBelow(id),
   "add-block": () => addBlock(),
   "delete-block": ({ id }) => deleteBlock(id),
   "edit-project": ({ id }) => openProjectEditor(id),
@@ -1838,6 +1841,16 @@ function normalizeState(value) {
   value.tasks = value.tasks.map((task) => {
     // v18: 古い trigger/celebrate フィールドは削除(あれば)
     const { trigger, celebrate, ...rest } = task;
+    // v195: ownerを実行主体の正典にし、既存のAIワーカー表示・バッチ用aiWorkを同期する。
+    // **updatedAtは絶対に進めない**(v135): normalizeStateは起動時・同期時に走り、同期マージは
+    // updatedAtの新しい方をオブジェクト丸ごと採択する。読み込んだだけで時刻が進むと、
+    // 手を触れていないローカルの古い内容がリモートの新しい変更に勝って上書きしてしまう。
+    // ここは既定値補完と同じ「読み取り時の純粋な整形」に留める。
+    // owner未設定 + 旧clientが立てた aiWork:true は "ai" として引き取る(片方向導出だと
+    // SW未更新の端末で🤝をONにしたタスクが、v195端末で読んだ瞬間にフラグを失い
+    // ai-work-extract.py の発注対象から黙って消えるため)。
+    const owner = (rest.owner === "ai" || (rest.owner === undefined && rest.aiWork === true)) ? "ai" : "k";
+    const aiWork = owner === "ai";
     return {
       targetYear: null,
       targetMonth: null,  // v79: 月間プランニングボード用(1-12 or null="未定"。targetYearとは独立)
@@ -1848,7 +1861,7 @@ function normalizeState(value) {
       nextRoutineId: "",
       leverageType: "",  // v65: 10x機構(2-1)。"asset"|"eliminate"|"oneoff"|""(未設定)
       leverageNote: "",  // v66: 10x機構(2-2レバレッジ台帳)。資産の累計節約・成果の自己申告メモ(任意1行)
-      aiWork: false,      // v67: AI作業ワーカー連携(柱2)。trueならバッチ側がこのTaskを拾って作業する
+      aiWork: false,      // v67: AI作業ワーカー連携(柱2)。v195以降はownerから導出
       aiWorkBrief: "",    // v67: 何をしてほしいか・成果物の置き場希望(1〜2行)
       planTarget: false,
       owner: "k",
@@ -1865,7 +1878,9 @@ function normalizeState(value) {
                                 // trueで翌朝loop/task-criteria.shが処理し、処理後は自動でfalseに戻る(アプリ側での解除処理は不要)
       selfDueOff: false,  // v117(B): 自己締切の自動前倒し。既定false=前倒しON(dueDateの2日前を有効締切にする)
       updatedAt: "",  // v135: 同期マージ用。既存値優先で補完(空="不明"のまま扱う。回復不能なので推測しない)
-      ...rest
+      ...rest,
+      owner,
+      aiWork
     };
   });
   value.blocks ||= [];
@@ -6419,6 +6434,101 @@ function siblingTaskCompare(a, b) {
   return wbsTaskCompare(a, b);
 }
 
+// v195: 実行計画UI。操作対象はplanTarget親の直下にいる兄弟だけに限定する。
+function planParentFor(task) {
+  if (!task?.parentTaskId) return null;
+  const parent = state.tasks.find((t) => !t.deleted && t.id === task.parentTaskId);
+  return parent?.planTarget ? parent : null;
+}
+
+function planStepSiblings(task) {
+  return state.tasks
+    .filter((t) => !t.deleted && t.parentTaskId === task.parentTaskId)
+    .sort(siblingTaskCompare);
+}
+
+// v195: ↑↓の入れ替え相手と活性判定は「画面に見えている兄弟」で決める。全兄弟で判定すると、
+// 完了を隠す/中断を隠す設定のときに非表示ステップとorderを交換して「押しても何も動かない」
+// (2回押さないと動かない)状態になる。WBSの可視判定(renderProjectTree)と同じ規則。
+function planStepVisibleSiblings(task) {
+  const showSusp = Boolean(state.settings.showSuspended);
+  const siblings = planStepSiblings(task).filter((t) => showSusp || !isTaskSuspended(t));
+  if (!state.settings.wbsHideCompleted) return siblings;
+  const hasOpenDescendant = (t) => state.tasks.some((c) => !c.deleted && c.parentTaskId === t.id
+    && (c.status !== "completed" || hasOpenDescendant(c)));
+  return siblings.filter((t) => t.status !== "completed" || hasOpenDescendant(t));
+}
+
+function ensurePlanSiblingOrders(task, changedAt, force = false) {
+  const sorted = planStepSiblings(task);
+  const needsNumbering = force || sorted.some((t, i) =>
+    !Number.isFinite(t.order) || (i > 0 && t.order <= sorted[i - 1].order));
+  if (!needsNumbering) return { siblings: sorted, changed: false };
+  const orderById = new Map(sorted.map((t, i) => [t.id, (i + 1) * 1000]));
+  state.tasks = state.tasks.map((t) => orderById.has(t.id)
+    ? { ...t, order: orderById.get(t.id), updatedAt: changedAt }
+    : t);
+  const refreshed = new Map(state.tasks.map((t) => [t.id, t]));
+  return { siblings: sorted.map((t) => refreshed.get(t.id)), changed: true };
+}
+
+function togglePlanStepOwner(id) {
+  const task = state.tasks.find((t) => t.id === id && !t.deleted);
+  if (!task || !planParentFor(task)) return;
+  const changedAt = nowDateTime();
+  ensurePlanSiblingOrders(task, changedAt);
+  const owner = task.owner === "ai" ? "k" : "ai";
+  state.tasks = state.tasks.map((t) => t.id === id
+    ? { ...t, owner, aiWork: owner === "ai", updatedAt: changedAt }
+    : t);
+  saveAndRender(`担当を${owner === "ai" ? "AI" : "K"}に変更しました`);
+}
+
+function movePlanStep(id, direction) {
+  if (direction !== -1 && direction !== 1) return;
+  const task = state.tasks.find((t) => t.id === id && !t.deleted);
+  if (!task || !planParentFor(task)) return;
+  const changedAt = nowDateTime();
+  const numbered = ensurePlanSiblingOrders(task, changedAt);
+  // 入れ替え相手は「見えている兄弟」から選ぶ(非表示ステップと交換して無反応になるのを防ぐ)
+  const visible = planStepVisibleSiblings(task);
+  const index = visible.findIndex((t) => t.id === id);
+  const other = index < 0 ? null : visible[index + direction];
+  if (!other) {
+    if (numbered.changed) saveAndRender("実行計画の順序を採番しました");
+    return;
+  }
+  const ownOrder = visible[index].order;
+  state.tasks = state.tasks.map((t) => {
+    if (t.id === id) return { ...t, order: other.order, updatedAt: changedAt };
+    if (t.id === other.id) return { ...t, order: ownOrder, updatedAt: changedAt };
+    return t;
+  });
+  saveAndRender("ステップを移動しました");
+}
+
+function addPlanStepBelow(id) {
+  const task = state.tasks.find((t) => t.id === id && !t.deleted);
+  if (!task || !planParentFor(task)) return;
+  const changedAt = nowDateTime();
+  let numbered = ensurePlanSiblingOrders(task, changedAt);
+  let index = numbered.siblings.findIndex((t) => t.id === id);
+  let after = numbered.siblings[index + 1];
+  let order = after ? midpointOrder(numbered.siblings[index].order, after.order) : nextSiblingOrder(numbered.siblings);
+  if (after && !(order > numbered.siblings[index].order && order < after.order)) {
+    numbered = ensurePlanSiblingOrders(task, changedAt, true);
+    index = numbered.siblings.findIndex((t) => t.id === id);
+    after = numbered.siblings[index + 1];
+    order = midpointOrder(numbered.siblings[index].order, after.order);
+  }
+  if (numbered.changed) saveState();
+  openTaskCreator({ projectId: task.projectId, parentTaskId: task.parentTaskId, category: task.category || "", order });
+}
+
+function aiStepStatusLabel(status) {
+  return ({ queued: "待機中", running: "実行中", done: "完了", blocked: "質問あり", error: "失敗" })[status] || "";
+}
+
 // v48: WBS のタスク並び順 — 未完了(期限昇順・期限なしは後ろ)→ 完了は下に沈む
 function wbsTaskCompare(a, b) {
   const ac = a.status === "completed", bc = b.status === "completed";
@@ -6603,6 +6713,18 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false) 
       <div class="progress wbs-progress-bar"><span style="width:${progressPct}%"></span></div>
       <span class="muted" style="font-size:11px">${progressPct}%</span>
     </div>`;
+  const planParent = planParentFor(task);
+  const planSiblings = planParent ? planStepVisibleSiblings(task) : [];  // v195: 活性判定も可視兄弟基準
+  const planIndex = planSiblings.findIndex((t) => t.id === task.id);
+  const aiStatus = aiStepStatusLabel(task.aiStatus);
+  const planMetaHTML = planParent ? `
+        <button class="plan-owner-badge ${task.owner === "ai" ? "ai" : "k"}" data-action="toggle-plan-owner" data-id="${task.id}"
+          aria-label="担当を${task.owner === "ai" ? "K" : "AI"}に切り替える">${task.owner === "ai" ? "AI" : "K"}</button>
+        ${aiStatus ? `<span class="badge plan-status">${aiStatus}</span>` : ""}` : "";
+  const planActionsHTML = planParent ? `
+        <button class="btn ghost plan-move" data-action="move-plan-step" data-id="${task.id}" data-direction="-1" aria-label="1つ上へ" ${planIndex <= 0 ? "disabled" : ""}>↑</button>
+        <button class="btn ghost plan-move" data-action="move-plan-step" data-id="${task.id}" data-direction="1" aria-label="1つ下へ" ${planIndex < 0 || planIndex >= planSiblings.length - 1 ? "disabled" : ""}>↓</button>
+        <button class="btn ghost" data-action="add-plan-step-below" data-id="${task.id}">＋ 下に追加</button>` : "";
   return `
     <div class="row${suspended ? " is-suspended" : ""}" style="border-top:1px solid var(--line-soft); padding-top:8px">
       <div class="title-line">
@@ -6614,6 +6736,7 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false) 
           aria-label="${task.criteriaRequest ? "AI設定依頼中(タップで取消)" : "翌朝のAI設定を依頼"}"
           title="チェックすると翌朝の日次バッチが完了条件/スモールステップを自動設定(またはサブタスク生成)します。処理後は自動でOFFに戻ります">🤖</button>
         <span data-action="edit-task" data-id="${task.id}" style="cursor:pointer">${escapeHTML(task.title)}</span>
+        ${planMetaHTML}
         ${editMode ? inlineEdit : `
         <span class="badge ${suspended ? "gray" : ""}">${taskStatusLabel(task.status)}</span>
         ${kids.length ? `<span class="badge">子 ${kidsDone}/${kids.length}</span>` : ""}
@@ -6627,6 +6750,7 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false) 
       </div>
       ${progressHTML}
       <div class="row wbs-actions">
+        ${planActionsHTML}
         <button class="btn" data-action="task-today" data-id="${task.id}">${scheduledToday ? "＋もう一度" : "今日へ"}</button>
         ${canAddSub ? `<button class="btn ghost" data-action="add-subtask" data-parent-task="${task.id}">+ サブ</button>` : ""}
         ${suspended
@@ -11927,10 +12051,21 @@ function addSubtask(parentTaskId) {
 }
 
 // v47: 新規タスク作成モーダル(既存のタスクモーダルを新規モードで流用)
-function openTaskCreator({ projectId = "", parentTaskId = "", category = "" } = {}) {
+function openTaskCreator({ projectId = "", parentTaskId = "", category = "", order = null } = {}) {
   const stub = makeTask({ projectId, parentTaskId, category });
   stub.id = "";           // id 空 = 新規(保存時に採番)
   stub.title = "";
+  // v195: order は「実行計画の挿入(呼び出し元が明示指定)」と「planTarget親への末尾追加」だけに付ける。
+  // 通常の「+ タスク」「+ サブ」で無条件に採番すると、兄弟2件が有限orderになった時点で
+  // siblingTaskCompare が従来比較(完了下沈み→期限→createdAt)を迂回してしまうため。
+  const planParent = parentTaskId
+    ? state.tasks.find((t) => !t.deleted && t.id === parentTaskId && t.planTarget)
+    : null;
+  stub.order = Number.isFinite(order)
+    ? order
+    : (planParent
+      ? nextSiblingOrder(state.tasks.filter((t) => !t.deleted && t.parentTaskId === parentTaskId))
+      : null);
   state.modal = { type: "task", id: "" };
   renderModal(buildTaskModal(stub));
   setTimeout(() => modalRoot.querySelector('[data-modal-field="title"]')?.focus(), 60);
@@ -15819,6 +15954,7 @@ function buildTaskModal(task) {
         <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
       </div>
       <div class="modal-body">
+        ${task.id ? "" : `<input type="hidden" data-modal-field="order" data-modal-kind="number" value="${Number.isFinite(task.order) ? task.order : ""}">`}
         <div class="field">
           <label class="field-label">タイトル</label>
           <input class="input" data-modal-field="title" value="${escapeHTML(task.title || "")}">
@@ -15881,6 +16017,17 @@ function buildTaskModal(task) {
           <textarea class="textarea" data-modal-field="aiWorkBrief" style="min-height:48px; font-size:16px" placeholder="何をしてほしいか・成果物の置き場希望(1〜2行)">${escapeHTML(task.aiWorkBrief || "")}</textarea>
         </div>
         <div class="field">
+          <label class="checkbox-line">
+            <input type="checkbox" data-modal-field="planTarget" ${task.planTarget ? "checked" : ""}>
+            📋 実行計画を使う
+          </label>
+          <div class="muted" style="font-size:12px">AI作業 = タスク丸ごと発注 / 実行計画 = ステップに割って往復</div>
+        </div>
+        ${task.owner === "ai" ? `<div class="field">
+          <label class="field-label">AI指示文(実行計画のステップ用)</label>
+          <textarea class="textarea" data-modal-field="aiBrief" style="min-height:72px; font-size:16px" placeholder="このステップでAIにしてほしいこと">${escapeHTML(task.aiBrief || "")}</textarea>
+        </div>` : ""}
+        <div class="field">
           <label class="field-label">説明 / メモ</label>
           <textarea class="textarea" data-modal-field="description" style="min-height:120px">${escapeHTML(task.description || "")}</textarea>
         </div>
@@ -15923,8 +16070,12 @@ function saveTaskFromModal(id, fields) {
     // v107: 新規作成時点で「完了」を選んだ場合もWBSインライン編集(v95)と同じくv95連動を発火
     if (task.status === "completed") task.progressNum = fillProgressOnComplete(task);
     task.description = fields.description || "";
-    task.aiWork = Boolean(fields.aiWork);  // v67: AI作業ワーカー連携
+    task.owner = fields.aiWork ? "ai" : "k";
+    task.aiWork = task.owner === "ai";  // v195: ownerを正典に既存ワーカーへ追随
     task.aiWorkBrief = (fields.aiWorkBrief || "").trim();
+    task.planTarget = Boolean(fields.planTarget);
+    task.aiBrief = (fields.aiBrief || "").trim();
+    task.order = Number.isFinite(fields.order) ? fields.order : task.order;
     task.doneCriteria = (fields.doneCriteria || "").trim();  // v96: 完了条件
     task.firstStep = (fields.firstStep || "").trim();        // v96: スモールステップ
     // v117(B): チェックボックスは「自己締切ON」の意味で表示しているため、保存時に反転する
@@ -15936,6 +16087,9 @@ function saveTaskFromModal(id, fields) {
     saveAndRender("Taskを追加しました");
     return;
   }
+  const changedAt = nowDateTime();
+  const editingTask = state.tasks.find((t) => t.id === id && !t.deleted);
+  if (editingTask && planParentFor(editingTask)) ensurePlanSiblingOrders(editingTask, changedAt);
   state.tasks = state.tasks.map((t) => {
     if (t.id !== id) return t;
     const status = fields.status || t.status || "todo";
@@ -15954,8 +16108,11 @@ function saveTaskFromModal(id, fields) {
       dueDate: fields.dueDate || "",
       description: fields.description || "",
       leverageType: fields.leverageType !== undefined ? fields.leverageType : (t.leverageType || ""),  // v65: 10x機構
-      aiWork: Boolean(fields.aiWork),  // v67: AI作業ワーカー連携
+      owner: fields.aiWork ? "ai" : "k",
+      aiWork: Boolean(fields.aiWork),  // v195: ownerから導出。既存checkboxも同じ正典を書き換える
       aiWorkBrief: (fields.aiWorkBrief || "").trim(),
+      planTarget: Boolean(fields.planTarget),
+      aiBrief: fields.aiBrief !== undefined ? (fields.aiBrief || "").trim() : (t.aiBrief || ""),
       doneCriteria: (fields.doneCriteria || "").trim(),  // v96: 完了条件
       firstStep: (fields.firstStep || "").trim(),        // v96: スモールステップ
       // v117(B): チェックボックス表示は反転(「自己締切ON」)なので保存時に戻す
@@ -15963,7 +16120,7 @@ function saveTaskFromModal(id, fields) {
       // v37: モーダルに nextRoutineId の入力欄はないため、undefined なら既存値を保持
       //      (以前は保存のたびに "" で消えていた)
       nextRoutineId: fields.nextRoutineId !== undefined ? fields.nextRoutineId : (t.nextRoutineId || ""),
-      updatedAt: nowDateTime()
+      updatedAt: changedAt
     };
   });
   closeModal();

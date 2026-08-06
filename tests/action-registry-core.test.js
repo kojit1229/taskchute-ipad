@@ -113,6 +113,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "experiment-add", "edit-experiment", "experiment-keep", "experiment-drop",
   "experiment-copy-conclusion",
   "pomo-tab", "push-report", "add-task-to-project", "add-subtask",
+  "toggle-plan-owner", "move-plan-step", "add-plan-step-below",  // v195: 実行計画UI
   "timeline-new-block", "timeline-mode", "complete-block-with-actual",
   "drift-postpone", "time-comb-fill",  // v186: F2 DRIFT(明日へ送る)+TIME COMB(隙間補完)の意図的追加
   "timeline-import-external",  // v188: 時間ビューTT帯のBlock化
@@ -253,7 +254,9 @@ const APP_JS_REGISTERED_ACTIONS = [
   "add-project", "delete-project", "add-task", "toggle-task", "delete-task",
   "toggle-project-collapse", "toggle-task-collapse",
   "suspend-project", "resume-project", "suspend-task", "resume-task",
-  "add-task-to-project", "add-subtask", "add-block", "delete-block",
+  "add-task-to-project", "add-subtask",
+  "toggle-plan-owner", "move-plan-step", "add-plan-step-below",  // v195: 実行計画UI
+  "add-block", "delete-block",
   "edit-project", "edit-task", "edit-block",
   // --- v178: モーダル起動系(3、modal-saveはreturn意味論のためif連鎖に残置) ---
   "modal-close", "modal-delete", "lev-judge",
@@ -468,7 +471,7 @@ function extractModalHandlerTypes() {
     + `消失=${JSON.stringify(APP_JS_REGISTERED_ACTIONS.filter((a) => !appRegistered.includes(a)))}`);
 
   console.log("[3-c] 「if連鎖側の残存分岐」+「レジストリ側の登録済み(5feature動的 + app.js直接静的)」の"
-    + "和集合が225件のゴールデンリストと完全一致・重複ゼロであること(保存則)");
+    + "和集合がゴールデンリストと完全一致・重複ゼロであること(保存則)");
   const union = [...extracted, ...registered, ...appRegistered];
   check("if連鎖側・5feature側・app.js直接側の間で重複が無い",
     new Set(union).size === extracted.length + registered.length + appRegistered.length,

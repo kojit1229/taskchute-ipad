@@ -3464,6 +3464,14 @@ h3 {
 .ai-work-title { font-size: 14.5px; font-weight: 600; }
 .ai-work-summary { font-size: 12.5px; color: var(--muted); margin-top: 2px; line-height: 1.5; }
 
+/* v195: 実行計画ステップの担当・状態・並べ替え。小画面でもネイティブD&Dを使わずボタン操作に限定。 */
+.plan-owner-badge { min-width: 30px; min-height: 28px; padding: 2px 7px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-soft); color: var(--text); font: 800 11px/1 system-ui, sans-serif; cursor: pointer; }
+.plan-owner-badge.ai { border-color: rgba(175,82,222,.45); background: rgba(175,82,222,.12); color: var(--text); }
+.plan-owner-badge.k { border-color: rgba(0,122,255,.38); background: rgba(0,122,255,.09); color: var(--accent); }
+.plan-status { font-size: 10.5px; }
+.plan-move { min-width: 34px; }
+.plan-move:disabled { opacity: .35; cursor: default; }
+
 /* v44: 問い→プロジェクト橋 — 実行リンク */
 .q-linked { margin-top: 8px; font-size: 12.5px; font-weight: 700; color: var(--accent); cursor: pointer; }
 

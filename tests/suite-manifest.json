@@ -15,7 +15,7 @@
       ],
       "assertionSignals": 34,
       "assertionHash": "f7be898773346f93",
-      "sourceHash": "eecf5177d066ef94",
+      "sourceHash": "bd27f6f8c25c66e6",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2054,6 +2054,31 @@
       "assertionSignals": 8,
       "assertionHash": "70da30f3af1c1897",
       "sourceHash": "1540a4ff4c3e0c1c",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v195.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution",
+        "content-ai"
+      ],
+      "assertionSignals": 30,
+      "assertionHash": "85d59c2792c5afd0",
+      "sourceHash": "8e188c68ac1ebddc",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

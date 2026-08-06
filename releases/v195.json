@@ -1,0 +1,61 @@
+{
+  "version": 195,
+  "date": "2026-08-06",
+  "title": "実行計画のUI(担当・並べ替え・挿入)",
+  "summary": "親タスクの適用フラグを立てた配下でだけ、サブタスクに担当バッジ(K/AI)・AI状態・担当切替・上下移動・任意位置への挿入・AI指示文編集を出す。order未設定の既存データは操作した親の配下だけ遅延採番する。ownerを実行主体の正典とし、既存のAI作業ワーカー連携(aiWork)を追随させる。",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v195.json",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/v195.test.js"
+  ],
+  "intent": [
+    "AIが作った実行計画の叩き台を、Kが画面上で編集(文言変更・担当の切替・順序変更・前後への挿入)して確定できるようにする。",
+    "適用フラグ(planTarget)が立ったタスクだけを対象にし、361件の既存タスクの見た目・挙動は一切変えない。",
+    "並べ替えはドラッグ&ドロップではなく↑↓ボタンと「＋下に追加」で満たし、実装コストを抑える。"
+  ],
+  "changes": [
+    "app.js: タスク編集モーダルへ適用フラグ(planTarget)のチェックボックスと、実行計画用のAI指示文(aiBrief)欄を追加した。新規作成時のorderはhidden fieldで受け渡す。",
+    "app.js: renderTaskRowへ担当バッジ(K/AI)とAI状態表示(待機中/実行中/完了/質問あり/失敗)、↑↓移動・「＋下に追加」ボタンを追加した。planTargetがfalseの配下ではDOMに一切出さない。",
+    "app.js: togglePlanStepOwner / movePlanStep / addPlanStepBelow を追加し、data-actionレジストリへ登録した。3経路すべてplanParentForでガードする。",
+    "app.js: ensurePlanSiblingOrders による遅延採番を追加した。order未設定の既存兄弟は、操作が発生した親の配下だけを現在の表示順のまま1000刻みで採番する(全件を事前に書き換えない)。",
+    "app.js: planStepVisibleSiblings を追加し、↑↓の入れ替え相手と活性判定を「画面に見えている兄弟」で決めるようにした(完了を隠す/中断を隠す設定のときに非表示ステップとorderを交換して無反応になるのを防ぐ)。",
+    "app.js: ownerを実行主体の正典とし、owner=\"ai\"のときaiWorkをtrueに揃える。既存の🤝チェックボックスもownerを書き換える。aiWorkBriefはai-work.shが参照するため変換せず温存する。",
+    "app.js: normalizeStateはowner未設定+aiWork:trueのTaskをowner=\"ai\"として引き取る(版が混在する期間に旧clientの発注フラグが黙って消えるのを防ぐ)。",
+    "app.js: orderの採番は「実行計画への挿入(呼び出し元が明示指定)」と「planTarget親への末尾追加」だけに限定した。通常の「+ タスク」「+ サブ」では採番しない。",
+    "styles.css: 担当バッジ・AI状態バッジ・移動ボタンのスタイルを追加した。",
+    "sw.js: CACHE_NAMEをv195へ更新した。",
+    "tests/v195.test.js: 適用フラグの表示切替・担当切替とaiWork追随・AI指示文保存・遅延採番と上下移動の永続化・中間値挿入に加え、レビュー指摘の回帰3本(planTarget=false親でorderを採番しない/旧aiWork=trueの引き取りとupdatedAt保持/完了非表示時の可視兄弟swap)を追加した。",
+    "tests/action-registry-core.test.js: 新規3アクションをゴールデンリストと登録側の両方へ追加し、保存則を維持した。",
+    "索引・テストマニフェストと影響マップを再生成した。"
+  ],
+  "uncertainties": [
+    "実機(iPhone)でのタップ感の確認は未実施。担当バッジ(min-height 28px)と移動ボタン(min-width 34px)はiOS推奨44pxを下回るため、実機で誤タップが多いようなら拡大する。",
+    "モーダルで親を付け替えると、hidden orderが初回描画時の値のまま移動先の兄弟列の中間に入る(低頻度)。"
+  ],
+  "reviewFocus": [
+    "normalizeStateがupdatedAtを進めないこと。同期マージはupdatedAtの新しい方をオブジェクト丸ごと採択し、リモートJSONにも同じ正規化が掛かるため、読み込みだけで時刻が進むと実編集が打ち負かされる(v135と同クラスの事故)。",
+    "orderの採番がplanTarget親への追加と明示挿入だけに限定され、通常タスク・Wishサブタスクの従来の並び順を変えていないこと。",
+    "遅延採番がplanTargetでない親やWishサブタスクへ波及していないこと。",
+    "↑↓の入れ替え相手と活性判定が可視兄弟基準であること(完了を隠す設定で無反応にならないこと)。",
+    "v194のsiblingTaskCompare / wbsTaskCompareの役割分離が崩れていないこと。"
+  ],
+  "verification": [
+    "node tests/v195.test.js → ALL PASS(既存5シナリオ+回帰3シナリオ)。",
+    "node tests/v194.test.js → ALL PASS(v194の並び順の不変条件を維持)。",
+    "node tests/action-registry-core.test.js → ALL PASS。",
+    "npm run code:index:write / npm run test:manifest:write で索引・影響マップ・テストマニフェストを再生成。",
+    "2系統レビュー実施。Codexレビュー=FAIL(必須2件)、独立レビュー(reviewer)=条件付きPASS(必須1件)。必須3件+推奨1件をすべて反映済み。"
+  ],
+  "knownLimitations": [
+    "ドラッグ&ドロップによる並べ替えは未実装(↑↓ボタンと「＋下に追加」で代替)。",
+    "AIステップの実行そのもの(叩き台の生成・Kの完了フラグを引き金にした即時実行)は未実装。設計書の第2弾・第3弾で扱う。",
+    "addPlanStepBelowの強制再採番後に追加モーダルをキャンセルすると採番だけ残る。表示順は不変だが兄弟のupdatedAtが進むため同期差分になる。"
+  ]
+}
