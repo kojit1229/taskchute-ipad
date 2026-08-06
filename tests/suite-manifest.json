@@ -2093,6 +2093,30 @@
       }
     },
     {
+      "file": "v196.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "content-ai"
+      ],
+      "assertionSignals": 27,
+      "assertionHash": "b1cb0c4d833a0e75",
+      "sourceHash": "1beace5f2a1220ba",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
       "file": "v49.test.js",
       "kind": "e2e",
       "tier": "full",

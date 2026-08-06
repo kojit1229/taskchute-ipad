@@ -190,6 +190,18 @@ let _replanPollTimer = null;
 let _replanPollBusy = false;
 let _replanUi = { kind: "idle", message: "残り時間の計画をAIへ依頼できます" };
 
+// v196: 実行計画の叩き台をAIに作らせる(第2弾b)。ファイル契約はplan-request.json/
+// plan-response.json(personal-data taskchute/requests/配下)。ポーリング機構はv193再プランと
+// 同じ作法(即時1回はしない・60秒間隔・最長15分)をそのまま流用する。承認までapp-state.jsonは
+// 一切書かない(下書きはセッション限定・非永続)。
+const PLAN_STEP_POLL_MS = 60 * 1000;
+const PLAN_STEP_TIMEOUT_MS = 15 * 60 * 1000;
+let _planStepPending = null;   // { requestId, taskId, startedAtMs }
+let _planStepPollTimer = null;
+let _planStepPollBusy = false;
+let _planStepDraft = null;     // { requestId, taskId, steps, generatedAt } 検証済みのみ保持
+let _planStepUi = { kind: "idle", message: "", taskId: "" };
+
 // v103: 上記TTLでの物理削除本体。normalizeState() と、リモートpull時の0秒思考マージ後の
 //       再剪定(mergeZeroThinkingIntoLocal、app.js後方の同期関数群を参照)の両方から呼ぶ
 //       共有関数にした(合流で期限切れ候補が復活しても、この関数を再適用すれば即座に消える)。
@@ -577,6 +589,9 @@ registerActions({
   "toggle-plan-owner": ({ id }) => togglePlanStepOwner(id),
   "move-plan-step": ({ id, target }) => movePlanStep(id, Number(target.dataset.direction)),
   "add-plan-step-below": ({ id }) => addPlanStepBelow(id),
+  "plan-step-request": ({ id }) => requestPlanStep(id),  // v196: 実行計画の叩き台をAIに依頼
+  "plan-step-approve": () => approvePlanStepDraft(),     // v196: 下書き承認→サブタスク作成
+  "plan-step-discard": () => discardPlanStepDraft(),     // v196: 下書き破棄
   "add-block": () => addBlock(),
   "delete-block": ({ id }) => deleteBlock(id),
   "edit-project": ({ id }) => openProjectEditor(id),
@@ -4803,6 +4818,11 @@ async function requestReplan() {
       : "未確定の下書きがあります。タイムラインで確認してください");
     return;
   }
+  // v196: 実行計画の叩き台(plan-step)の下書きと同時に走らせない(既存排他機構に倣う)。
+  if (_planStepPending || _planStepDraft) {
+    setReplanUi("error", "実行計画の依頼を処理中です。完了後に再度お試しください");
+    return;
+  }
   stopReplanPolling();
   const now = new Date();
   const request = {
@@ -6527,6 +6547,253 @@ function addPlanStepBelow(id) {
 
 function aiStepStatusLabel(status) {
   return ({ queued: "待機中", running: "実行中", done: "完了", blocked: "質問あり", error: "失敗" })[status] || "";
+}
+
+// v196: 実行計画の叩き台をAIに作らせる(第2弾b)。plan-request.json契約(existingStepsは
+// 既存サブタスクのtitle/owner/statusのみ同梱)。
+function buildPlanStepRequestTask(task) {
+  const existingSteps = state.tasks
+    .filter((t) => !t.deleted && t.parentTaskId === task.id)
+    .sort(siblingTaskCompare)
+    .map((t) => ({ title: t.title || "", owner: t.owner === "ai" ? "ai" : "k", status: t.status || "todo" }));
+  return {
+    title: task.title || "", description: task.description || "",
+    doneCriteria: task.doneCriteria || "", firstStep: task.firstStep || "",
+    dueDate: task.dueDate || "", existingSteps
+  };
+}
+
+// 応答検証(アプリ側)。requestId/taskId一致は呼び出し側で確認済み。stepsは2〜7件・
+// title非空31字未満・ownerが"k"|"ai"以外は全体不採用(nullを返す。部分採用しない)。
+function validatePlanStepDraftSteps(rawSteps) {
+  if (!Array.isArray(rawSteps) || rawSteps.length < 2 || rawSteps.length > 7) return null;
+  const steps = [];
+  for (const raw of rawSteps) {
+    if (!raw || typeof raw !== "object") return null;
+    const title = raw.title;
+    if (typeof title !== "string" || !title.trim() || title.length > 30) return null;
+    const owner = raw.owner;
+    if (owner !== "k" && owner !== "ai") return null;
+    const aiBrief = raw.aiBrief;
+    if (aiBrief !== undefined && (typeof aiBrief !== "string" || aiBrief.length > 200)) return null;
+    const note = raw.note;
+    if (note !== undefined && (typeof note !== "string" || note.length > 200)) return null;
+    steps.push({
+      title: title.trim(), owner,
+      aiBrief: typeof aiBrief === "string" ? aiBrief.trim() : "",
+      note: typeof note === "string" ? note.trim() : ""
+    });
+  }
+  return steps;
+}
+
+function setPlanStepUi(kind, message, taskId) {
+  _planStepUi = { kind, message, taskId: taskId !== undefined ? taskId : _planStepUi.taskId };
+  refreshPlanStepModalIfOpen();
+}
+
+// 表示中のタスク編集モーダルが対象のとき「だけ」再描画する(他タブ・他モーダルへは波及させない)。
+// **必ず rerenderActiveModal 経由にする**: 直接 renderModal(buildTaskModal(task)) を呼ぶと
+// 未保存の入力(説明・完了条件など)が消える。この関数は依頼ボタン押下直後("sending")にも、
+// 最長15分後の応答到着時にも走るため、「説明を書いてから📋を押す」で必ず踏む。
+function refreshPlanStepModalIfOpen() {
+  if (!state.modal || state.modal.type !== "task" || !state.modal.id) return;
+  const task = state.tasks.find((t) => !t.deleted && t.id === state.modal.id);
+  if (task) rerenderActiveModal();
+}
+
+function stopPlanStepPolling() {
+  if (_planStepPollTimer !== null) clearTimeout(_planStepPollTimer);
+  _planStepPollTimer = null;
+}
+
+function schedulePlanStepPoll() {
+  stopPlanStepPolling();
+  if (!_planStepPending) return;
+  _planStepPollTimer = setTimeout(pollPlanStepResponse, PLAN_STEP_POLL_MS);
+}
+
+function finishPlanStep(kind, message) {
+  const taskId = _planStepPending?.taskId || "";
+  stopPlanStepPolling();
+  _planStepPending = null;
+  setPlanStepUi(kind, message, taskId);
+}
+
+async function requestPlanStep(taskId) {
+  const task = state.tasks.find((t) => !t.deleted && t.id === taskId);
+  if (!task) return;
+  if (!personalDataReady(state.settings.github)) {
+    setPlanStepUi("error", "GitHubトークンを設定すると実行計画をAIに依頼できます", taskId);
+    return;
+  }
+  // v196: 再プラン・朝プランの下書きと同時に走らせない(既存排他機構に倣う)。
+  if (_replanPending || _scheduleDraft || _morningPlanInFlight) {
+    setPlanStepUi("error", "既存の下書き処理が進行中です。完了後に再度お試しください", taskId);
+    return;
+  }
+  if (_planStepPending || _planStepDraft) {
+    setPlanStepUi("error", "既に実行計画の依頼が進行中です", taskId);
+    return;
+  }
+  stopPlanStepPolling();
+  const now = new Date();
+  const request = {
+    requestId: `${now.getTime()}-${crypto.randomUUID().slice(0, 8)}`,
+    taskId, requestedAt: now.toISOString(),
+    task: buildPlanStepRequestTask(task)
+  };
+  _planStepPending = { requestId: request.requestId, taskId, startedAtMs: now.getTime() };
+  setPlanStepUi("sending", "依頼を送信中", taskId);
+  try {
+    await pushGitHubPath("requests/plan-request.json", `${JSON.stringify(request, null, 2)}\n`, "");
+    setPlanStepUi("pending", "依頼受付済み・数分後に反映", taskId);
+    schedulePlanStepPoll();
+  } catch {
+    _planStepPending = null;
+    setPlanStepUi("error", "依頼の送信に失敗しました", taskId);
+  }
+}
+
+async function pollPlanStepResponse() {
+  if (!_planStepPending || _planStepPollBusy) return;
+  _planStepPollBusy = true;
+  try {
+    const result = await fetchGitHubRawResult("requests/plan-response.json", "text", { cache: "no-store" });
+    if (result.ok) {
+      let response;
+      try { response = JSON.parse(result.text); } catch {
+        finishPlanStep("error", "実行計画の取得に失敗しました(応答形式を確認してください)");
+        return;
+      }
+      if (response?.requestId === _planStepPending.requestId && response?.taskId === _planStepPending.taskId) {
+        if (response.status === "budget_exceeded" || response.status === "limit_exceeded") {
+          finishPlanStep("limit", "本日の実行計画作成の上限");
+          return;
+        }
+        if (response.status === "error") {
+          const reason = typeof response.reason === "string"
+            ? response.reason.trim().replace(/\s+/g, " ").slice(0, 60) : "";
+          finishPlanStep("error", `生成に失敗しました${reason ? `: ${reason}` : ""}`);
+          return;
+        }
+        if (response.status !== "ok") {
+          finishPlanStep("error", "取得に失敗しました(応答形式を確認してください)");
+          return;
+        }
+        const steps = validatePlanStepDraftSteps(response.steps);
+        if (!steps) {
+          finishPlanStep("error", "取得に失敗しました(内容を確認してください)");
+          return;
+        }
+        _planStepDraft = { requestId: response.requestId, taskId: response.taskId, steps, generatedAt: response.generatedAt || "" };
+        finishPlanStep("success", `AIが${steps.length}個のステップを提案しています`);
+        showToast("🤖 実行計画の下書きが届きました");
+        return;
+      }
+    } else if (result.status === 401 || result.status === 403) {
+      finishPlanStep("error", "取得に失敗しました(GitHub権限を確認してください)");
+      return;
+    }
+  } catch (error) {
+    console.warn("実行計画応答の取得を次回再試行します:", error?.message || error);
+  } finally {
+    _planStepPollBusy = false;
+    if (_planStepPending) {
+      if (Date.now() - _planStepPending.startedAtMs >= PLAN_STEP_TIMEOUT_MS) {
+        finishPlanStep("timeout", "届いていません(PC起動を確認)");
+      } else {
+        schedulePlanStepPoll();
+      }
+    }
+  }
+}
+
+// 承認: ステップをサブタスクとして作成する(既存サブタスクは触らない・追加のみ)。
+// orderは既存兄弟の後ろへ1000刻み、親のplanTargetを自動ON、owner==="ai"ならaiWorkも揃える(v195の規則)。
+function approvePlanStepDraft() {
+  if (!_planStepDraft) return;
+  const { taskId, steps } = _planStepDraft;
+  const task = state.tasks.find((t) => !t.deleted && t.id === taskId);
+  if (!task) { _planStepDraft = null; _planStepUi = { kind: "idle", message: "", taskId: "" }; return; }
+  const changedAt = nowDateTime();
+  // 既存兄弟(通常はorder未設定)を先に1000刻みで採番してから追加する。v195の
+  // togglePlanStepOwner/movePlanStep/addPlanStepBelow と同じ規律。これを省くと
+  // 「order有り(新規)とorder無し(既存)」の混在で siblingTaskCompare が非一貫になり、
+  // 新しいステップが既存ステップより上に描画される。title/status/owner は変えないので
+  // 「追加のみ」の原則は維持される。
+  const firstChild = state.tasks.find((t) => !t.deleted && t.parentTaskId === taskId);
+  if (firstChild) ensurePlanSiblingOrders(firstChild, changedAt);
+  let order = nextSiblingOrder(state.tasks.filter((t) => !t.deleted && t.parentTaskId === taskId));
+  const newTasks = steps.map((s) => {
+    const t = makeTask({ projectId: task.projectId, parentTaskId: taskId, title: s.title, category: task.category || "" });
+    t.owner = s.owner;
+    t.aiWork = s.owner === "ai";
+    // aiBrief は owner==="ai" のときだけ意味を持つ(モーダルもその条件で表示する)。
+    // kステップに入れると画面から見えない死にデータになるため落とす。
+    t.aiBrief = s.owner === "ai" ? (s.aiBrief || "") : "";
+    // note(Kへの補足)は捨てずに引き継ぎメモへ入れる
+    t.handoffNote = s.note || "";
+    // 実行計画のステップは既定で期日なし。makeTask は未指定だと state.selectedDate を入れるため
+    // 明示的に空へ戻す(期日が付くと朝プラン候補・ホームの期限リストへ最大7件が無言で流入する)。
+    t.dueDate = "";
+    t.order = order;
+    t.updatedAt = changedAt;
+    order += 1000;
+    return t;
+  });
+  state.tasks = state.tasks.map((t) => t.id === taskId ? { ...t, planTarget: true, updatedAt: changedAt } : t);
+  state.tasks.push(...newTasks);
+  const count = newTasks.length;
+  _planStepDraft = null;
+  _planStepUi = { kind: "idle", message: "", taskId: "" };
+  closeModal();
+  saveAndRender(`実行計画から${count}個のサブタスクを作成しました`);
+}
+
+function discardPlanStepDraft() {
+  if (!_planStepDraft) return;
+  _planStepDraft = null;
+  setPlanStepUi("idle", "", "");
+}
+
+// タスク編集モーダル内の依頼ボタン/下書き承認UI。draftがこのtaskに届いていれば承認/破棄、
+// なければ依頼ボタン(他タスクの依頼が進行中/未設定なら無効+案内)。
+function renderPlanStepSectionHTML(task) {
+  // 3階層制限(addSubtask/WBSの canAddSub と同じ規律)。depth2で依頼するとdepth3の子が
+  // 2〜7件でき、「タスク→ステップ列はdepth1」という設計の不変条件が破れる。
+  if (getTaskDepth(task) >= 2) return "";
+  if (_planStepDraft && _planStepDraft.taskId === task.id) {
+    const steps = _planStepDraft.steps;
+    return `<div class="field plan-step-draft">
+      <div class="field-label">📋 AIが${steps.length}個のステップを提案しています</div>
+      <ul class="plan-step-draft-list">${steps.map((s) => `
+        <li><b>${s.owner === "ai" ? "AI" : "K"}</b> ${escapeHTML(s.title)}
+          ${s.aiBrief ? `<div class="muted" style="font-size:12px">${escapeHTML(s.aiBrief)}</div>` : ""}
+          ${s.note ? `<div class="muted" style="font-size:12px">${escapeHTML(s.note)}</div>` : ""}</li>`).join("")}</ul>
+      <div class="row" style="gap:8px">
+        <button class="btn primary" data-action="plan-step-approve">サブタスクとして作成</button>
+        <button class="btn" data-action="plan-step-discard">破棄</button>
+      </div>
+    </div>`;
+  }
+  const notReady = !personalDataReady(state.settings.github);
+  // v196: 再プラン/朝プランの下書き処理中も相互排他でボタンを止める(既存排他機構に倣う)。
+  const otherFlowBusy = !notReady && Boolean(_replanPending || _scheduleDraft || _morningPlanInFlight);
+  const busyOther = !notReady && !otherFlowBusy
+    && ((_planStepPending && _planStepPending.taskId !== task.id) || (_planStepDraft && _planStepDraft.taskId !== task.id));
+  const busySelf = !notReady && !otherFlowBusy && !busyOther && _planStepPending && _planStepPending.taskId === task.id;
+  let hint = "";
+  if (notReady) hint = "GitHubトークンを設定すると実行計画をAIに依頼できます";
+  else if (otherFlowBusy) hint = "再プラン等の下書き処理中です";
+  else if (busyOther) hint = "他タスクの実行計画を処理中です";
+  else if (busySelf) hint = _planStepUi.message || "依頼を処理中です";
+  else if (_planStepUi.taskId === task.id && ["error", "limit", "timeout"].includes(_planStepUi.kind)) hint = _planStepUi.message;
+  const disabled = notReady || otherFlowBusy || busyOther || busySelf;
+  return `<div class="field plan-step-request">
+    <button class="btn" data-action="plan-step-request" data-id="${task.id}" ${disabled ? "disabled" : ""}>📋 実行計画をAIに作らせる</button>
+    ${hint ? `<div class="muted" style="font-size:12px">${escapeHTML(hint)}</div>` : ""}
+  </div>`;
 }
 
 // v48: WBS のタスク並び順 — 未完了(期限昇順・期限なしは後ろ)→ 完了は下に沈む
@@ -16023,6 +16290,7 @@ function buildTaskModal(task) {
           </label>
           <div class="muted" style="font-size:12px">AI作業 = タスク丸ごと発注 / 実行計画 = ステップに割って往復</div>
         </div>
+        ${task.id ? renderPlanStepSectionHTML(task) : ""}
         ${task.owner === "ai" ? `<div class="field">
           <label class="field-label">AI指示文(実行計画のステップ用)</label>
           <textarea class="textarea" data-modal-field="aiBrief" style="min-height:72px; font-size:16px" placeholder="このステップでAIにしてほしいこと">${escapeHTML(task.aiBrief || "")}</textarea>
@@ -17183,6 +17451,12 @@ document.addEventListener("visibilitychange", () => {
     && Date.now() - _replanPending.startedAtMs >= REPLAN_POLL_MS) {
     stopReplanPolling();
     pollReplanResponse();
+  }
+  // v196: 実行計画(plan-step)も再プランと同じ復帰時即照合を行う。
+  if (_planStepPending && !_planStepPollBusy
+    && Date.now() - _planStepPending.startedAtMs >= PLAN_STEP_POLL_MS) {
+    stopPlanStepPolling();
+    pollPlanStepResponse();
   }
   if (state.settings.autoSync) runAutoSyncPull();
   else if (runDailyOpen()) render();

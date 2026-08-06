@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v195";
+const CACHE_NAME = "taskchute-journal-pwa-v196";
+// v196: 実行計画の叩き台をAIに作らせる(依頼ボタン+ポーリング+下書き承認→サブタスク生成)。
 // v195: 実行計画の適用トグル、担当/状態バッジ、上下移動、途中挿入、AI指示文編集を追加。
 // v193: 今日管制室に「残り時間で再プラン」を追加。personal-dataのrequest/responseメールボックスを
 //   requestId照合で最長15分監視し、検証済み応答だけを既存のAI下書き承認UIへ接続する。
