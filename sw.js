@@ -1,4 +1,12 @@
-const CACHE_NAME = "taskchute-journal-pwa-v196";
+const CACHE_NAME = "taskchute-journal-pwa-v198";
+// v198: AI秘書化第3弾3e(完了トリガー+引き継ぎシート)。Kの完了操作6経路を
+//   maybeQueueNextAiStepへ集約し、発火条件6つを満たしたときだけ確認シートを開く。
+//   「AIに渡す」は3f+3gまでは必ず失敗する送信スタブ(putAiStepRequest)を経由してC-3補償に落ちる。
+// v197: AI秘書化第3弾3d(データ層)。makeTaskへaiSummary/aiQuestion/aiStepRequestId/
+//   aiStepRequestedAtを追加、normalizeStateへstate直下3コレクション(aiStepProcessedIds/
+//   aiStepDismissedIds/aiStepPendingRequests)を追加、computeSyncMergeへこの3コレクションの
+//   マージ追随(集合和/requestIdキー和集合)を配線、時刻パーサparseAiStepIsoToMsを新設した。
+//   トリガー・送受信UI・引き継ぎシート等は後続単位(3e/3f+3g)。src/**の新規追加は無い。
 // v196: 実行計画の叩き台をAIに作らせる(依頼ボタン+ポーリング+下書き承認→サブタスク生成)。
 // v195: 実行計画の適用トグル、担当/状態バッジ、上下移動、途中挿入、AI指示文編集を追加。
 // v193: 今日管制室に「残り時間で再プラン」を追加。personal-dataのrequest/responseメールボックスを

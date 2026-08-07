@@ -585,6 +585,38 @@ function mergeGardenLogMaps(localMap, remoteMap) {
   return out;
 }
 
+// v197(第3弾3d, S-3): 文字列配列の単純な集合和マージ(aiStepProcessedIds/aiStepDismissedIds用)。
+// aiWorkProcessedIds自体は同期マージ対象外の既知の欠陥を持つが、それを直すのは本設計の
+// 対象外(3dでは触らない)。順序は決定論になるようソートで固定する(端末間で結果を一致させる)。
+function mergeStringIdSet(localArr, remoteArr) {
+  const set = new Set([...(Array.isArray(localArr) ? localArr : []), ...(Array.isArray(remoteArr) ? remoteArr : [])]);
+  return Array.from(set).sort();
+}
+
+// v197(第3弾3d, C-4): 保留中request台帳(aiStepPendingRequests、要素{requestId,taskId,requestedAt})。
+// requestIdをキーにした和集合マージ。順序はrequestId昇順で固定する(端末間で結果を一致させる)。
+// 剪定(processed/dismissed済みの除去)はcomputeSyncMerge側でも即時に行う(下記参照)。
+function mergeAiStepPendingRequests(localArr, remoteArr) {
+  const byId = new Map();
+  for (const item of [...(Array.isArray(localArr) ? localArr : []), ...(Array.isArray(remoteArr) ? remoteArr : [])]) {
+    if (!item || !item.requestId) continue;
+    const current = byId.get(item.requestId);
+    if (!current || aiStepPendingRequestWins(item, current)) byId.set(item.requestId, item);
+  }
+  return Array.from(byId.values()).sort((a, b) => (a.requestId || "").localeCompare(b.requestId || ""));
+}
+
+// v198(堅牢性レビュー修正1): 同一requestIdのエントリが両端末で内容違いになる異常系(通常は
+// requestId発行後に内容が変わらない前提だが、防御的に決定論を保証する)でも、どちらの端末で
+// マージを計算しても同じ結果になるよう、引数順(local-first)に依存しないタイブレークで
+// 採用エントリを一意に決める: requestedAt昇順(先に発行された方)→同値ならtaskId辞書順。
+function aiStepPendingRequestWins(candidate, current) {
+  const candidateAt = candidate.requestedAt || "";
+  const currentAt = current.requestedAt || "";
+  if (candidateAt !== currentAt) return candidateAt < currentAt;
+  return (candidate.taskId || "") < (current.taskId || "");
+}
+
 function mergeBlockLists(localBlocks, remoteBlocks) {
   const localIds = new Set((localBlocks || []).map((b) => b && b.id).filter(Boolean));
   const today = todayISO();
@@ -700,6 +732,16 @@ function computeSyncMerge(remoteNorm, tieWinner) {
     // v153レビュー対応(2026-07-28): gardenLogも同期対象に追加(このヘルパーが無いと
     // ローカル限定のスナップショットがリモート採用で消えるデータ消失クラスの不具合になる)。
     const gardenLog = mergeGardenLogMaps(state.gardenLog, remoteNorm.gardenLog);
+    // v197(第3弾3d, S-3/C-4): AIステップの処理済み/取消済みrequestId集合+保留台帳もマージ対象へ追加。
+    const aiStepProcessedIds = mergeStringIdSet(state.aiStepProcessedIds, remoteNorm.aiStepProcessedIds);
+    const aiStepDismissedIds = mergeStringIdSet(state.aiStepDismissedIds, remoteNorm.aiStepDismissedIds);
+    // v198(堅牢性レビュー修正2): 剪定をnormalizeStateだけに任せると、マージ適用直後〜次回
+    // normalizeStateまでの間、処理済み/取消済みのrequestIdが台帳に一時復活する。剪定条件は
+    // 従来どおり「processed∪dismissedから再導出」のまま、マージ適用の時点でも同じ規則を通す
+    // (全端末で同じ結果になる決定論は崩さない)。
+    const aiStepSettledIds = new Set([...aiStepProcessedIds, ...aiStepDismissedIds]);
+    const aiStepPendingRequests = mergeAiStepPendingRequests(state.aiStepPendingRequests, remoteNorm.aiStepPendingRequests)
+      .filter((entry) => !aiStepSettledIds.has(entry.requestId));
     const jsonChanged = (obj, base) => JSON.stringify(obj) !== JSON.stringify(base || {});
     const changedVsLocal =
       journals.changedVsLocal ||
@@ -717,6 +759,9 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(storeVisits, state.storeVisits) ||
       !sameArrayByReference(swipeTriageLog, state.swipeTriageLog) ||
       jsonChanged(gardenLog, state.gardenLog) ||
+      !sameArrayByReference(aiStepProcessedIds, state.aiStepProcessedIds) ||
+      !sameArrayByReference(aiStepDismissedIds, state.aiStepDismissedIds) ||
+      !sameArrayByReference(aiStepPendingRequests, state.aiStepPendingRequests) ||
       (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, state.zeroThinking) : false);
     const changedVsRemote =
       journals.changedVsRemote ||
@@ -734,9 +779,12 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(storeVisits, remoteNorm.storeVisits || []) ||
       !sameArrayByReference(swipeTriageLog, remoteNorm.swipeTriageLog || []) ||
       jsonChanged(gardenLog, remoteNorm.gardenLog) ||
+      !sameArrayByReference(aiStepProcessedIds, remoteNorm.aiStepProcessedIds || []) ||
+      !sameArrayByReference(aiStepDismissedIds, remoteNorm.aiStepDismissedIds || []) ||
+      !sameArrayByReference(aiStepPendingRequests, remoteNorm.aiStepPendingRequests || []) ||
       (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, remoteNorm.zeroThinking) : false);
     return {
-      values: { journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans, tasks, projects, storeVisits, swipeTriageLog, gardenLog },
+      values: { journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans, tasks, projects, storeVisits, swipeTriageLog, gardenLog, aiStepProcessedIds, aiStepDismissedIds, aiStepPendingRequests },
       changedVsLocal, changedVsRemote
     };
   } catch (error) {
@@ -764,6 +812,9 @@ function applySyncMergeToLocal(merged) {
   state.storeVisits = v.storeVisits;  // v141
   state.swipeTriageLog = v.swipeTriageLog;  // v152
   state.gardenLog = v.gardenLog;  // v153
+  state.aiStepProcessedIds = v.aiStepProcessedIds;  // v197
+  state.aiStepDismissedIds = v.aiStepDismissedIds;  // v197
+  state.aiStepPendingRequests = v.aiStepPendingRequests;  // v197
   if (v.zeroThinking) {
     state.zeroThinking.entries = v.zeroThinking.entries;
     state.zeroThinking.suggestedThemes = pruneExpiredSuggestedThemes(v.zeroThinking.suggestedThemes);
@@ -792,6 +843,9 @@ function applySyncMergeToRemote(merged, remoteNorm) {
   remoteNorm.storeVisits = v.storeVisits;  // v141
   remoteNorm.swipeTriageLog = v.swipeTriageLog;  // v152
   remoteNorm.gardenLog = v.gardenLog;  // v153
+  remoteNorm.aiStepProcessedIds = v.aiStepProcessedIds;  // v197
+  remoteNorm.aiStepDismissedIds = v.aiStepDismissedIds;  // v197
+  remoteNorm.aiStepPendingRequests = v.aiStepPendingRequests;  // v197
   if (v.zeroThinking) {
     remoteNorm.zeroThinking.entries = v.zeroThinking.entries;
     remoteNorm.zeroThinking.suggestedThemes = pruneExpiredSuggestedThemes(v.zeroThinking.suggestedThemes);

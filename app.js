@@ -202,6 +202,12 @@ let _planStepPollBusy = false;
 let _planStepDraft = null;     // { requestId, taskId, steps, generatedAt } 検証済みのみ保持
 let _planStepUi = { kind: "idle", message: "", taskId: "" };
 
+// v198(第3弾3e): 完了トリガー→引き継ぎシートの一時状態(いずれも非永続)。
+// _aiStepPendingは「確認シート表示中(1件ロック)」の意味に限定する(request送信済みの追跡は
+// aiStepRequestId/aiStepPendingRequests(3d実装済み・永続)が担うため、この変数を重複させない)。
+let _aiStepPending = null;       // { stepTaskId, nextStepTaskId }
+let _aiStepConfirmCtx = null;    // { stepTaskId, nextStepTaskId } 非永続(_migrationRitualCtxと同型)
+
 // v103: 上記TTLでの物理削除本体。normalizeState() と、リモートpull時の0秒思考マージ後の
 //       再剪定(mergeZeroThinkingIntoLocal、app.js後方の同期関数群を参照)の両方から呼ぶ
 //       共有関数にした(合流で期限切れ候補が復活しても、この関数を再適用すれば即座に消える)。
@@ -306,7 +312,8 @@ configureToday({
 configureWish({
   escapeHTML, renderHeader, todayISO, localDateTimeToMs, makeTask, makeBlock,
   defaultPlannedTimes, showToast, nowDateTime, saveAndRender, render, updateTaskField,
-  renderWishTriage, aiInsightsPanelHTML
+  renderWishTriage, aiInsightsPanelHTML,
+  maybeQueueNextAiStep  // v198(第3弾3e): 完了6経路#6(Wish詳細のサブタスクチェックボックス)
 });
 // v169: src/features/journal.jsも同じ理由(循環import回避)で依存注入する。renderExperimentSection
 // (週次レビューと共有、app.js残留)はここで注入する(prep-stage4-journal.md §0/§4/§9 Must級、
@@ -591,6 +598,8 @@ registerActions({
   "add-plan-step-below": ({ id }) => addPlanStepBelow(id),
   "plan-step-request": ({ id }) => requestPlanStep(id),  // v196: 実行計画の叩き台をAIに依頼
   "plan-step-approve": () => approvePlanStepDraft(),     // v196: 下書き承認→サブタスク作成
+  "ai-step-confirm-send": () => resolveAiStepConfirmSend(),  // v198: 引き継ぎシート「AIに渡す」
+  "ai-step-confirm-later": () => closeModal(),                // v198: 引き継ぎシート「あとで」
   "plan-step-discard": () => discardPlanStepDraft(),     // v196: 下書き破棄
   "add-block": () => addBlock(),
   "delete-block": ({ id }) => deleteBlock(id),
@@ -1411,12 +1420,15 @@ document.addEventListener("change", (event) => {
   if (target.matches("[data-wbs-edit]")) {
     const field = target.dataset.wbsEdit;
     const id = target.dataset.id;
+    // v198(第3弾3e): updateTaskFieldは汎用setterのためprevStatusをここで確保する(完了6経路#3)
+    const prevStatus = state.tasks.find((x) => x.id === id)?.status;
     // v95: ステータスを手動で「完了」にした時も、分子を分母へ揃える(チェックボックス完了と挙動を揃える)
     if (field === "status" && target.value === "completed") {
       const t = state.tasks.find((x) => x.id === id);
       if (t) updateTaskField(id, "progressNum", fillProgressOnComplete(t));
     }
     updateTaskField(id, field, target.value);
+    if (field === "status") maybeQueueNextAiStep(id, prevStatus);  // v198(第3弾3e): 完了6経路#3
     render();  // 状態変更での並び替え・完了非表示などを即反映(change なので入力を妨げない)
   }
   // v95: WBS進捗(分子/分母)のインライン編集。ステータス連動込みで updateTaskProgress が処理する
@@ -1885,6 +1897,10 @@ function normalizeState(value) {
       handoffNote: "",
       aiStatus: "none",
       aiResultRef: "",
+      aiSummary: null,          // v197(第3弾3d): AIステップ結果の要旨。旧Taskは未設定(null)扱いで補完
+      aiQuestion: null,         // v197(第3弾3d): 第4弾予約フィールド。旧Taskは未設定(null)扱いで補完
+      aiStepRequestId: null,        // v197(第3弾3d, B-2/B-3): 保留中request永続化。旧Taskは未設定(null)扱いで補完
+      aiStepRequestedAt: null,      // v197(第3弾3d, C-9): 送信時刻。旧Taskは未設定(null)扱いで補完
       progressNum: 0,     // v95: WBS進捗(分子)。旧Taskは未着手(0)扱いで補完
       progressDen: 10,    // v95: WBS進捗(分母)。既定10
       doneCriteria: "",   // v96: 完了条件(終わったら残る物を1文で。既定は空欄=未設定)
@@ -2041,6 +2057,27 @@ function normalizeState(value) {
   if (!("planAt" in value.aiLinkFreshness)) value.aiLinkFreshness.planAt = null;
   // v67: AI作業結果_*.json の処理済みresultId(taskId+dateから合成)。二重登録防止用。
   if (!Array.isArray(value.aiWorkProcessedIds)) value.aiWorkProcessedIds = [];
+  // v197(第3弾3d, S-3): AIステップの処理済み/取消済みrequestId集合(aiWorkProcessedIdsと同型)。
+  // aiWorkProcessedIds自体は同期マージ対象外の既知の欠陥を持つが、それを直すのは本設計の
+  // 対象外(3dでは触らない)。この2集合はcomputeSyncMergeのマージ対象へ新規に登録する(src/sync/github.js)。
+  if (!Array.isArray(value.aiStepProcessedIds)) value.aiStepProcessedIds = [];
+  value.aiStepProcessedIds = value.aiStepProcessedIds.filter((id) => typeof id === "string" && id);
+  if (!Array.isArray(value.aiStepDismissedIds)) value.aiStepDismissedIds = [];
+  value.aiStepDismissedIds = value.aiStepDismissedIds.filter((id) => typeof id === "string" && id);
+  // v197(第3弾3d, C-4): 保留中request台帳(state直下)。{requestId, taskId, requestedAt}の配列。
+  // タスク側のaiStepRequestIdがマージ事故(§1「updatedAtの更新」節のwhole-object競合)で
+  // 消えても、この台帳を経由して復帰時照合が応答を拾えるようにする。requestIdが
+  // aiStepProcessedIds∪aiStepDismissedIdsに入った時点で決定論的に剪定する
+  // (剪定条件が和集合マージされる2集合から再導出されるため、全端末で同じ結果になり、
+  // 和集合マージで削除済みエントリが復活することはない)。
+  if (!Array.isArray(value.aiStepPendingRequests)) value.aiStepPendingRequests = [];
+  const _aiStepSettledIds = new Set([...value.aiStepProcessedIds, ...value.aiStepDismissedIds]);
+  value.aiStepPendingRequests = value.aiStepPendingRequests.filter((entry) =>
+    entry && typeof entry === "object"
+    && typeof entry.requestId === "string" && entry.requestId
+    && typeof entry.taskId === "string" && entry.taskId
+    && typeof entry.requestedAt === "string" && entry.requestedAt
+    && !_aiStepSettledIds.has(entry.requestId));
   value.feedback ||= {};
   value.reports ||= {};
   // v56: GitHub に push 済みの AIフィードバック_*.md の日付を記録する集合。
@@ -6263,6 +6300,7 @@ function updateTaskProgress(id, field, rawValue) {
     ? { ...t, progressNum: num, progressDen: den, status, updatedAt: nowDateTime() }
     : t);
   saveState();
+  maybeQueueNextAiStep(id, task.status);  // v198(第3弾3e): 完了6経路#5。task.statusはmap前のprevStatus
 }
 
 // v99: WBS行の「翌朝AI設定を依頼」トグル。ONにすると翌朝の日次バッチ(loop/task-criteria.sh)が
@@ -6490,6 +6528,135 @@ function ensurePlanSiblingOrders(task, changedAt, force = false) {
     : t);
   const refreshed = new Map(state.tasks.map((t) => [t.id, t]));
   return { siblings: sorted.map((t) => refreshed.get(t.id)), changed: true };
+}
+
+// v198(第3弾3e): Kの完了操作(6経路)を引き金にAIステップを予約するトリガー。
+// phase3-design.md §1の発火条件6つ(全部AND)を判定し、成立時だけ引き継ぎシートを開く。
+// prevStatusは呼び出し元(各完了経路)が遷移前の値を渡す(updateTaskFieldのような汎用setter内には
+// 置かない。実装設計書F節)。
+function maybeQueueNextAiStep(stepTaskId, prevStatus) {
+  if (prevStatus === "completed") return;  // 条件1: 遷移でのみ発火(再保存では発火しない)
+  const step = state.tasks.find((t) => t.id === stepTaskId && !t.deleted);
+  if (!step || step.status !== "completed") return;
+  const parent = planParentFor(step);           // 条件2
+  if (!parent) return;
+  if (step.owner !== "k") return;                // 条件3
+  const siblings = planStepSiblings(step);        // UI設定非依存(planStepVisibleSiblingsは誤用注意)
+  const index = siblings.findIndex((t) => t.id === stepTaskId);
+  if (index < 0) return;
+  const next = siblings.slice(index + 1).find((t) => t.status !== "completed" && t.status !== "cancelled");
+  if (!next || next.owner !== "ai") return;       // 条件4
+  if (next.aiStatus !== "none" && next.aiStatus !== "error") return;  // 条件5
+  if (!personalDataReady()) return;               // 条件6
+  if (_replanPending || _scheduleDraft || _morningPlanInFlight || _planStepPending) return;
+  if (_aiStepPending) {
+    // 誤発火・多重発火の遮断(design§1): 一気に複数完了しても発火は同時に1件だけ
+    showToast("AIステップは1件ずつ実行します");
+    return;
+  }
+  openAiStepConfirm(stepTaskId, next);
+}
+
+// 完了の取り消し(6経路のうち「同じボタンで戻す」toggleTask/toggleTaskCompleteFromBlock)で
+// 確認シートが対象ステップを開いたままなら閉じる(design§1「誤発火・多重発火の遮断」)。
+function closeAiStepConfirmIfUndone(stepTaskId) {
+  if (_aiStepConfirmCtx && _aiStepConfirmCtx.stepTaskId === stepTaskId
+    && state.modal && state.modal.type === "aiStepConfirm") closeModal();
+}
+
+function openAiStepConfirm(stepTaskId, nextStep) {
+  _aiStepPending = { stepTaskId, nextStepTaskId: nextStep.id };
+  _aiStepConfirmCtx = { stepTaskId, nextStepTaskId: nextStep.id };
+  state.modal = { type: "aiStepConfirm", id: nextStep.id };
+  renderModal(buildAiStepConfirmModal(nextStep));
+}
+
+function buildAiStepConfirmModal(nextStep) {
+  return `
+    <div class="modal-card ai-step-confirm-modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">次のAIステップを実行します</h3>
+        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="ai-step-confirm-title">▸ ${escapeHTML(nextStep.title)} <span class="chip">AI</span></p>
+        <div style="margin-top:10px">
+          <div class="muted" style="font-size:11px; margin-bottom:4px">引き継ぎメモ(任意)</div>
+          <textarea class="textarea" data-ai-step-confirm-note rows="3" style="min-height:80px" placeholder="AIに伝えたいこと"></textarea>
+        </div>
+        <div class="row" style="margin-top:12px; gap:8px">
+          <button class="btn primary" data-action="ai-step-confirm-send">AIに渡す</button>
+          <button class="btn ghost" data-action="ai-step-confirm-later">あとで</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+// 「AIに渡す」押下時の状態確定(design§1「保留状態の永続化」)。この順で行う:
+// handoffNote保存 → requestId発行 → aiStatus=queued永続化 → 保留台帳へ追記 → 送信シームを呼ぶ。
+function resolveAiStepConfirmSend() {
+  if (!_aiStepConfirmCtx) return;
+  const { stepTaskId, nextStepTaskId } = _aiStepConfirmCtx;
+  // v198(レビューR2→堅牢性レビュー修正4): シート表示中でも同期pull(visibilitychange→
+  // runAutoSyncPull)で前提が崩れ得るため、送信直前に発火条件6つ全部(maybeQueueNextAiStepと
+  // 同じ判定)を再検証する(シームより手前。3f+3gの実PUTでもそのまま効く)。崩れていたら
+  // 送信せずシートを閉じ、aiStatusは変更しない。
+  const srcStep = state.tasks.find((t) => t.id === stepTaskId && !t.deleted);
+  const parent = srcStep ? planParentFor(srcStep) : null;  // 条件2
+  const siblings = srcStep ? planStepSiblings(srcStep) : [];
+  const srcIndex = siblings.findIndex((t) => t.id === stepTaskId);
+  const recomputedNext = srcIndex < 0 ? null
+    : siblings.slice(srcIndex + 1).find((t) => t.status !== "completed" && t.status !== "cancelled");
+  const stillValid = srcStep && srcStep.status === "completed"  // 条件1
+    && parent  // 条件2
+    && srcStep.owner === "k"  // 条件3
+    && recomputedNext && recomputedNext.id === nextStepTaskId && recomputedNext.owner === "ai"  // 条件4
+    && (recomputedNext.aiStatus === "none" || recomputedNext.aiStatus === "error")  // 条件5
+    && personalDataReady() && !(_replanPending || _scheduleDraft || _morningPlanInFlight || _planStepPending);  // 条件6
+  if (!stillValid) {
+    closeModal();
+    showToast("状況が変わったため送信を取りやめました");
+    return;
+  }
+  const nextStep = recomputedNext;
+  const noteEl = document.querySelector("[data-ai-step-confirm-note]");
+  const handoffNote = (noteEl?.value || "").trim();
+  const now = new Date();
+  const requestId = `${now.getTime()}-${crypto.randomUUID().slice(0, 8)}`;
+  const requestedAt = now.toISOString();  // C-9: ミリ秒付きUTC(parseAiStepIsoToMs専用形式)
+  const changedAt = nowDateTime();
+  state.tasks = state.tasks.map((t) => t.id === nextStepTaskId
+    ? { ...t, handoffNote, aiStatus: "queued", aiStepRequestId: requestId, aiStepRequestedAt: requestedAt, updatedAt: changedAt }
+    : t);
+  state.aiStepPendingRequests = [...state.aiStepPendingRequests, { requestId, taskId: nextStepTaskId, requestedAt }];
+  saveState();
+  closeModal();
+  putAiStepRequest({ requestId, taskId: nextStepTaskId, handoffNote, requestedAt });
+}
+
+// v198(第3弾3e): request PUT・占有チェック(GET-then-PUT)は3f+3gの担当。この単位では
+// 「必ず失敗する」スタブとして実装し、C-3の補償処理をその場で行う(理由: aiStatus="queued"の
+// まま送信手段が無いと「永久にqueuedで動かないステップ」が作れてしまうため。補償に落とすことで
+// どのコミット境界でも詰み状態を作らない)。3f+3gがこの中身を「占有チェック+実PUT(失敗時は
+// 同じ補償)」へ差し替える。
+function putAiStepRequest(payload) {
+  compensateAiStepRequest(payload.requestId, payload.taskId);
+  showToast("送信はまだ有効になっていません(次のリリースで有効化)");
+}
+
+// design§1「PUT失敗・結果不明の補償(C-3)」: requestIdをdismissedへ追加→aiStatus=error→
+// aiStepRequestId/aiStepRequestedAtをnullへ戻す。取消と同じ規律(dismissed追加により、後から
+// 届く応答があっても採用しない)。
+function compensateAiStepRequest(requestId, taskId) {
+  const changedAt = nowDateTime();
+  if (requestId && !state.aiStepDismissedIds.includes(requestId)) {
+    state.aiStepDismissedIds = [...state.aiStepDismissedIds, requestId];
+  }
+  state.tasks = state.tasks.map((t) => t.id === taskId
+    ? { ...t, aiStatus: "error", aiStepRequestId: null, aiStepRequestedAt: null, updatedAt: changedAt }
+    : t);
+  state.aiStepPendingRequests = state.aiStepPendingRequests.filter((e) => e.requestId !== requestId);
+  saveState();
 }
 
 function togglePlanStepOwner(id) {
@@ -8298,6 +8465,34 @@ function parseUtcIsoToMs(s) {
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})Z$/.exec(s);
   if (!m) return 0;
   return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6]));
+}
+
+// v197(第3弾3d, C-9): aiStepRequestedAt等(toISOString()が返すミリ秒付きUTC、
+// "YYYY-MM-DDTHH:mm:ss.sssZ")をmsへ変換する。parseUtcIsoToMs(直上、ミリ秒付きを拒否)・
+// localDateTimeToMs(ローカル時刻専用でZサフィックスを無視し9時間ズレる)のどちらも
+// この用途には使えないため新設する。new Date(文字列)は経由しない(AGENTS.md規約、
+// iOS Safariのnew Date(string)誤解釈対策と同じ方針。Date.UTCの数値コンストラクタなら曖昧さが無い)。
+// パース不能な値はnullを返す(呼び出し側は経過時間判定をスキップし、表示を安全側へ倒す)。
+function parseAiStepIsoToMs(s) {
+  if (!s || typeof s !== "string") return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?Z$/.exec(s);
+  if (!m) return null;
+  const year = Number(m[1]), month = Number(m[2]), day = Number(m[3]);
+  const hour = Number(m[4]), minute = Number(m[5]), second = Number(m[6]);
+  const millis = m[7] ? Number(m[7].padEnd(3, "0")) : 0;
+  const ms = Date.UTC(year, month - 1, day, hour, minute, second, millis);
+  // v198(堅牢性レビュー修正5): Date.UTC()は月13・2月30日等の桁上がりをそのまま採用し、
+  // 別の有効な日時へ正規化してしまう(new Date(文字列)と同種の危険)。作った値(数値msから
+  // 構築するnew Date、文字列パースではないためAGENTS.md規約に抵触しない)から各要素を
+  // 取り出し、入力値と完全一致するときだけ採用する(検証器loop/scripts/ai-step-validate.py
+  // の同種修正と対応させる)。
+  const check = new Date(ms);
+  if (
+    check.getUTCFullYear() !== year || check.getUTCMonth() !== month - 1 || check.getUTCDate() !== day
+    || check.getUTCHours() !== hour || check.getUTCMinutes() !== minute || check.getUTCSeconds() !== second
+    || check.getUTCMilliseconds() !== millis
+  ) return null;
+  return ms;
 }
 
 // v138(review.md:31): AIレポート履歴一覧の第1段。loop側 report-index-build.py が生成する
@@ -12277,6 +12472,10 @@ function makeTask({ projectId = "", parentTaskId = "", title = "", category = ""
     handoffNote: "",
     aiStatus: "none",
     aiResultRef: "",
+    aiSummary: null,          // v197(第3弾3d): AIステップ結果の要旨(§4)。書き込みは後続単位(3f+3g)
+    aiQuestion: null,         // v197(第3弾3d): 第4弾予約。フィールド定義とマージ追随のみ、本弾のアプリは書き込まない
+    aiStepRequestId: null,        // v197(第3弾3d, B-2/B-3): 保留中request永続化。書き込みは後続単位(3e)
+    aiStepRequestedAt: null,      // v197(第3弾3d, C-9): 送信時刻(ISO8601ミリ秒付きUTC)。書き込みは後続単位(3e)
     progressNum: 0,     // v95: WBS進捗(分子)。0=未着手扱い
     progressDen: 10,    // v95: WBS進捗(分母)。既定10
     doneCriteria: "",   // v96: 完了条件(終わったら残る物を1文で。既定は空欄=未設定)
@@ -12357,6 +12556,7 @@ function toggleTask(id) {
     const hasProgress = state.blocks.some((b) => !b.deleted && b.taskId === id && (b.completed || b.actualStartAt));
     state.tasks = state.tasks.map((t) => t.id === id
       ? { ...t, status: hasProgress ? "doing" : "todo", updatedAt: nowDateTime() } : t);
+    closeAiStepConfirmIfUndone(id);  // v198(第3弾3e): 確認シート表示中に完了取消されたら閉じる
     saveAndRender("Taskを未完了に戻しました");
     return;
   }
@@ -12370,6 +12570,7 @@ function toggleTask(id) {
     state.blocks = state.blocks.map((b) => ids.has(b.id) ? { ...b, deleted: true, updatedAt: nowDateTime() } : b);
   }
   saveAndRender("Taskを完了しました");
+  maybeQueueNextAiStep(id, task.status);  // v198(第3弾3e): 完了6経路#1(WBS/一覧のチェックボタン)
 }
 
 function deleteTask(id) {
@@ -12596,6 +12797,10 @@ function toggleTaskCompleteFromBlock(blockId) {
       : t);
   }
   saveAndRender(completing ? "Taskを完了しました" : "Taskを未完了に戻しました");
+  // v198(第3弾3e): 完了6経路#2(タイムラインBlock行の「タスク完了」)。task.statusは
+  // 上のstate.tasks.map前のprevStatus(taskの参照自体は再代入していないため保持される)。
+  if (completing) maybeQueueNextAiStep(task.id, task.status);
+  else closeAiStepConfirmIfUndone(task.id);
   // v146: 🏁はBlock編集モーダルへ移設した。render()はmodalRootを触らないため、モーダルを
   // 開いたままこのボタンを押した場合はここで明示的に再描画して状態(ラベル/色)を反映する。
   // v146レビュー対応: renderModal(buildBlockModal(...))の直呼びは編集中の他フィールド
@@ -15279,6 +15484,8 @@ function approveAiWorkResult(resultId) {
   state.blocks.push(block);
   if (r.taskId) {
     // v107: ここも「statusをcompletedにする経路」の一つ。saveTaskFromModalと同じくv95連動漏れがあったため統一
+    // v198(第3弾3e): maybeQueueNextAiStepは意図的に配線しない。旧・第1弾AI作業ワーカーの承認経路
+    // であり、phase3-design.md §1が「絶対に呼ばない」と名指ししている(実装設計書B節参照)。
     state.tasks = state.tasks.map((t) => (t.id === r.taskId && !t.deleted)
       ? { ...t, status: "completed", progressNum: fillProgressOnComplete(t), updatedAt: nowDateTime() }
       : t);
@@ -16029,6 +16236,8 @@ function closeModal() {
   // v129: 背景タップ等の暗黙クローズは記録せず破棄する(_pendingLifecycleCtxと同じ扱い)。
   // 明示的な保存/discard経路(closeBodyScanFlow)は既にnull化済みのため、ここは冪等。
   _pendingBodyScanCtx = null;
+  _aiStepConfirmCtx = null;  // v198(第3弾3e): ×/背景タップ等の暗黙クローズでも一時状態を残さない
+  _aiStepPending = null;     // v198(第3弾3e): 確認シートを閉じたら多重発火ロックも解放する
 }
 
 function readModalFields() {
@@ -16323,6 +16532,9 @@ function isDescendantOf(candidate, ancestorId) {
 
 function saveTaskFromModal(id, fields) {
   // v47: id 空 = 新規作成モード(WBS の「+ タスク」「+ サブ」から)
+  // v198(第3弾3e): この新規作成分岐はmaybeQueueNextAiStepの対象外(意図的な除外)。作成時点では
+  // taskがまだstate.tasksに存在せず、parentTaskIdがあってもplanParentFor()の判定が成立しないため
+  // (実装設計書A節・phase3-design.md §1「対象外と明示するもの」参照)。
   if (!id) {
     const title = (fields.title || "").trim();
     if (!title) return showToast("タスク名を入力してください");
@@ -16393,6 +16605,7 @@ function saveTaskFromModal(id, fields) {
   });
   closeModal();
   saveAndRender("Taskを更新しました");
+  if (editingTask) maybeQueueNextAiStep(id, editingTask.status);  // v198(第3弾3e): 完了6経路#4
 }
 
 // ---------- Block モーダル ----------

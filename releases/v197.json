@@ -1,0 +1,60 @@
+{
+  "version": 197,
+  "date": "2026-08-07",
+  "title": "AI秘書化第3弾3d: AIステップのデータ層と同期マージ追随",
+  "summary": "K完了トリガーでAIステップを即時実行する第3弾のうち、後続単位(3e/3f+3g)が乗るデータ層だけを先行実装する。タスクへ4新フィールド(aiSummary/aiQuestion/aiStepRequestId/aiStepRequestedAt)、state直下に処理済み/取消済みrequestId集合と保留中request台帳の3コレクションを追加し、computeSyncMergeへこの3コレクションのマージ追随(集合和/requestIdキー和集合)を配線した。ISO8601(ミリ秒付きUTC)専用の時刻パーサparseAiStepIsoToMsも新設した。トリガー・送受信UI・引き継ぎシートは実装しない(3e/3f+3gへ持ち越し)。",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v197.json",
+    "src/sync/github.js",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/v197.test.js"
+  ],
+  "intent": [
+    "phase3-design.md §8 3dの範囲(データ層のみ)を先行して固定し、後続のトリガー・送受信UI(3e/3f+3g)が調査ゼロで着手できる土台にする。",
+    "aiWorkProcessedIdsが同期マージ対象外という既知の欠陥を踏襲せず、aiStepProcessedIds/aiStepDismissedIds/aiStepPendingRequestsは新規にcomputeSyncMergeへ登録する(S-3)。",
+    "保留中requestIdをタスク本体だけでなくstate直下の台帳にも二重化し、2端末の後発編集でタスクがwhole-object競合に負けてもrequestIdを失わないようにする(C-4)。",
+    "aiQuestionは第4弾(blocked往復)の予約フィールドとしてスキーマとマージ追随だけ先に入れ、本弾のアプリからは書き込まない。"
+  ],
+  "changes": [
+    "app.js: makeTask()へaiSummary/aiQuestion/aiStepRequestId/aiStepRequestedAtを追加(既定値はすべてnull)。書き込みは後続単位(3e/3f+3g)の担当で、本リリースでは追加していない。",
+    "app.js: normalizeState()へstate直下の3コレクション(aiStepProcessedIds/aiStepDismissedIds/aiStepPendingRequests)を追加。非配列は空配列へ補完し、要素の形が不正なものは捨てる。aiStepPendingRequestsはrequestIdがaiStepProcessedIds∪aiStepDismissedIdsに含まれる時点で決定論的に剪定し、和集合マージで復活しないようにした。",
+    "app.js: parseAiStepIsoToMs()を新設(C-9)。toISOString()形式(ミリ秒付きUTC、ミリ秒は任意)だけを正規表現で検証しDate.UTC()の数値コンストラクタでmsへ変換する。既存のparseUtcIsoToMs/localDateTimeToMs/new Date(文字列)はいずれも使わない。パース不能はnullを返す。",
+    "src/sync/github.js: mergeStringIdSet(文字列配列の集合和・ソートで順序固定)とmergeAiStepPendingRequests(requestIdキーの和集合)を新設し、computeSyncMergeのvalues列挙・changedVsLocal/changedVsRemoteの差分比較・applySyncMergeToLocal/applySyncMergeToRemoteの両方へ配線した(C-5: changedフラグの計算漏れがあるとcollectionだけの差分ではapplyが即returnしマージ結果が適用されないため、3箇所すべてに手を入れた)。",
+    "loop/scripts/task-criteria-apply.py: サブタスク生成時のフィールド列挙へaiSummary/aiQuestionを追記(owner/order/aiBrief等は既に追随済み)。",
+    "sw.js: CACHE_NAMEをv197へ更新した。新規src/**ファイルは追加していないためAPP_SHELLの変更は無い。",
+    "tests/v197.test.js: parseAiStepIsoToMsの正常/異常系(vm抽出による直接検証)、makeTaskの新フィールド既定値、normalizeStateの型正規化と決定論剪定、computeSyncMergeへの3コレクションのマージ追随(C-5回帰。タスク等を完全一致させ差分を3コレクションだけに限定した入力で検証)、和集合マージ後も剪定済みエントリが復活しないことを追加した。",
+    "索引・テストマニフェストと影響マップを再生成した。",
+    "【堅牢性レビュー修正1】src/sync/github.js: mergeAiStepPendingRequestsのfirst-seen-wins(local-first)を廃止し、同一requestIdのエントリが両端末で内容違いの異常系でも決定論になるタイブレーク(requestedAt昇順→同値ならtaskId辞書順)へ変更した。引数順(local/remoteどちらが先か)に依存せず同じ結果になる。",
+    "【堅牢性レビュー修正2】src/sync/github.js: computeSyncMerge内でaiStepPendingRequestsを算出した直後に、その場でaiStepProcessedIds∪aiStepDismissedIdsによる剪定を適用するようにした。従来は剪定がnormalizeStateだけの責務で、マージ適用直後〜次回normalizeStateまでの間、処理済み/取消済みのrequestIdが台帳に一時的に復活していた。剪定条件(processed∪dismissedから再導出)は変えていないため決定論は崩れない。",
+    "【堅牢性レビュー修正3】app.js: normalizeStateの既存Task migrationブロック(旧Taskへのデフォルト値補完)へaiSummary/aiQuestion/aiStepRequestId/aiStepRequestedAt(既定値null)を追加した。従来はmakeTask()の新規作成時にしか既定値が入らず、v197より前から存在する大量の既存Taskはこれら4フィールドが未定義のままだった。",
+    "【堅牢性レビュー修正5】app.js: parseAiStepIsoToMsに往復検証(round-trip validation)を追加した。Date.UTC()は月13・2月30日等の桁上がりをそのまま採用し「別の有効な日時」へ正規化してしまう欠陥があったため、作った値(数値msから構築するnew Date、文字列パースではないためAGENTS.md規約に抵触しない)から年月日時分秒ミリ秒を取り出し、入力値と完全一致するときだけ採用するよう変更した(検証器loop/scripts/ai-step-validate.pyの同種修正と対応)。"
+  ],
+  "uncertainties": [
+    "この単位単体ではUIからaiStepフィールドを書き込む経路が無く、実機上での観測可能な変化はない(次の完了トリガー実装(3e)で初めて可視化される)。",
+    "aiStepPendingRequestsの決定論剪定は「requestIdがprocessed∪dismissedに入った時点で消える」規則をnormalizeState+computeSyncMerge両方で実装したが、実際のPUT/取消/補償フロー(3f+3g)が無い現時点では単体テストでのみ確認しており、実運用のタイミング(PUT直前書き込み・PUT失敗時補償等)は未検証。",
+    "堅牢性レビューが指摘した必須5(queued永続化後・補償前にPWAが落ちると永久queuedになる窓)は監督者裁定により3f+3gスコープとし、本リリースでは対応していない(設計書§1の復帰時照合が回収する設計のため、3eのスタブ段階で独自対策を足すと二重になる)。"
+  ],
+  "reviewFocus": [
+    "computeSyncMergeのvalues列挙・changedVsLocal/changedVsRemote・applySyncMergeToLocal/ToRemoteの4箇所すべてに3コレクションが漏れなく配線されていること(1箇所でも漏れるとC-5の事故が再発する)。",
+    "normalizeStateの剪定条件(aiStepProcessedIds∪aiStepDismissedIds)が和集合マージ後も両端末で同じ結果になること(削除済みエントリが復活しないこと)。",
+    "aiQuestionが第4弾予約どおり本弾のどの経路からも書き込まれていないこと。",
+    "aiWorkProcessedIdsの既存欠陥(同期マージ対象外)に手を入れていないこと(スコープ外)。",
+    "mergeAiStepPendingRequestsのタイブレークがlocal/remoteどちらの引数順でも同じ結果になること、剪定がcomputeSyncMergeの戻り値時点で既に適用されていること。",
+    "normalizeStateのTask migrationブロックに新4フィールドが漏れなく追加されていること。"
+  ],
+  "verification": [
+    "node tests/v197.test.js → ALL PASS。C-5回帰項目は変更前後で赤(changedVsLocal/changedVsRemoteから3コレクションの比較を外すと6件FAIL)→緑を確認済み。",
+    "npm run test:core → ALL PASS。",
+    "npm run code:index:write / npm run test:manifest:write で索引・影響マップ・テストマニフェストを再生成。"
+  ],
+  "knownLimitations": [
+    "トリガー(完了6経路の集約)・引き継ぎシート・request PUT・ポーリング・復帰時照合・モーダルのAI結果欄・▶実行ボタンは未実装(3e/3f+3gへ持ち越し)。",
+    "aiWorkProcessedIds自体の同期マージ対象外の欠陥は今回のリリースでは修正していない(設計上のスコープ外)。",
+    "queued永続化後・補償前にPWAが落ちる窓(堅牢性レビュー必須5)は3f+3gの復帰時照合が回収する設計のため、本リリースでは意図的に対応していない(監督者裁定)。"
+  ]
+}

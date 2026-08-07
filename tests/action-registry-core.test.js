@@ -115,6 +115,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "pomo-tab", "push-report", "add-task-to-project", "add-subtask",
   "toggle-plan-owner", "move-plan-step", "add-plan-step-below",  // v195: 実行計画UI
   "plan-step-request", "plan-step-approve", "plan-step-discard",  // v196: 実行計画の叩き台をAIに依頼
+  "ai-step-confirm-send", "ai-step-confirm-later",  // v198: 完了トリガー→引き継ぎシート
   "timeline-new-block", "timeline-mode", "complete-block-with-actual",
   "drift-postpone", "time-comb-fill",  // v186: F2 DRIFT(明日へ送る)+TIME COMB(隙間補完)の意図的追加
   "timeline-import-external",  // v188: 時間ビューTT帯のBlock化
@@ -258,6 +259,7 @@ const APP_JS_REGISTERED_ACTIONS = [
   "add-task-to-project", "add-subtask",
   "toggle-plan-owner", "move-plan-step", "add-plan-step-below",  // v195: 実行計画UI
   "plan-step-request", "plan-step-approve", "plan-step-discard",  // v196: 実行計画の叩き台をAIに依頼
+  "ai-step-confirm-send", "ai-step-confirm-later",  // v198: 完了トリガー→引き継ぎシート
   "add-block", "delete-block",
   "edit-project", "edit-task", "edit-block",
   // --- v178: モーダル起動系(3、modal-saveはreturn意味論のためif連鎖に残置) ---

@@ -43,14 +43,14 @@ import { registerActions } from "../ui/actions.js";
 // ---- 依存注入(configureWish) ----
 let escapeHTML, renderHeader, todayISO, localDateTimeToMs, makeTask, makeBlock;
 let defaultPlannedTimes, showToast, nowDateTime, saveAndRender, render, updateTaskField;
-let renderWishTriage;
+let renderWishTriage, maybeQueueNextAiStep;
 let aiInsightsPanelHTML = () => "";
 
 function configureWish(deps) {
   ({
     escapeHTML, renderHeader, todayISO, localDateTimeToMs, makeTask, makeBlock,
     defaultPlannedTimes, showToast, nowDateTime, saveAndRender, render, updateTaskField,
-    renderWishTriage
+    renderWishTriage, maybeQueueNextAiStep
   } = deps);
   aiInsightsPanelHTML = deps.aiInsightsPanelHTML || (() => "");
   // v173: app.js分割・段階5-2(prep-stage5-dispatcher.md案A)。click dispatcherのWish Tier1
@@ -525,6 +525,8 @@ function addWishSubtask(parentTaskId) {
 }
 
 function toggleWishSubtask(id) {
+  // v198(第3弾3e): updateTaskFieldと同じ理由でprevStatusをここで確保する(完了6経路#6)
+  const prevStatus = state.tasks.find((t) => t.id === id)?.status;
   state.tasks = state.tasks.map((t) => t.id === id
     ? {
         ...t,
@@ -533,6 +535,7 @@ function toggleWishSubtask(id) {
       }
     : t);
   saveAndRender("");
+  maybeQueueNextAiStep(id, prevStatus);  // v198(第3弾3e): 完了6経路#6(Wish詳細のサブタスクチェック)
 }
 
 // Wish のサブタスクを今日のタスクシュート(Block)に登録
@@ -567,6 +570,9 @@ function wishSubtaskToTasks(taskId) {
 }
 
 function realizeWish(id) {
+  // v198(第3弾3e): maybeQueueNextAiStepは意図的に配線しない(対象外)。addWish()が作るWishは
+  // 常にトップレベル(parentTaskIdは既定""のまま)でplanParentFor()がnullを返すため、発火条件2が
+  // 構造的に不成立(監督者裁定・実装設計書H節)。前提はtests/v198.test.jsで固定する。
   // v79: ネイティブcheckboxはクリック時点でchecked属性が先に反転済みのため、confirmを
   // キャンセルしてここでreturnするだけだとチェックが見た目だけONに残ってしまう(state.realized
   // は変わっていないのに)。render()でDOMをstateに合わせて戻す。
