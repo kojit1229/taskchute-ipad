@@ -132,6 +132,12 @@ function check(name, cond, extra = "") {
     for (const mode of ["budget_exceeded", "limit_exceeded"]) {
       await resetToday(mode);
       await page.locator(".today-replan [data-replan-button]").click();
+      // レース対策: request-PUT(replan-request.json)の完了を待たずにクロックを進めて
+      // visibilitychangeを発火すると、テストのresponseモックがrequestPayload未設定の
+      // 状態でresponseを組み立ててしまい(requestId不一致でpollが空振り→以後は再照合の
+      // きっかけが無いままタイムアウト)、CI実測で断続的に失敗していた。[1]と同じく
+      // 「依頼受付済み」表示(=push完了)を必ず待ってから進める。
+      await page.waitForFunction(() => (document.querySelector(".today-replan-status")?.textContent || "").includes("依頼受付済み・数分後に反映"));
       await page.clock.setFixedTime(new Date(now.getFullYear(), now.getMonth(), now.getDate(), 13, 1, 0, 0));
       await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
       await page.waitForFunction(() => (document.querySelector(".today-replan-status")?.textContent || "").includes("本日の再プラン上限"));
@@ -139,6 +145,7 @@ function check(name, cond, extra = "") {
     }
     await resetToday("error");
     await page.locator(".today-replan [data-replan-button]").click();
+    await page.waitForFunction(() => (document.querySelector(".today-replan-status")?.textContent || "").includes("依頼受付済み・数分後に反映"));
     await page.clock.setFixedTime(new Date(now.getFullYear(), now.getMonth(), now.getDate(), 13, 1, 0, 0));
     await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
     await page.waitForFunction(() => (document.querySelector(".today-replan-status")?.textContent || "").includes("再プランの生成に失敗しました: worker_failed"));
@@ -146,6 +153,7 @@ function check(name, cond, extra = "") {
 
     await resetToday("ok");
     await page.locator(".today-replan [data-replan-button]").click();
+    await page.waitForFunction(() => (document.querySelector(".today-replan-status")?.textContent || "").includes("依頼受付済み・数分後に反映"));
     await page.clock.setFixedTime(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 13, 1, 0, 0));
     await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
     await page.waitForFunction(() => (document.querySelector(".today-replan-status")?.textContent || "").includes("日付が変わったため前日の再プランを破棄しました"));
@@ -155,6 +163,7 @@ function check(name, cond, extra = "") {
     await resetToday("missing");
     await page.locator(".today-replan [data-replan-button]").click();
     check("無応答経路もpush直後にはresponseを即時取得しない", responseRequestCount === 0, String(responseRequestCount));
+    await page.waitForFunction(() => (document.querySelector(".today-replan-status")?.textContent || "").includes("依頼受付済み・数分後に反映"));
     await page.clock.setFixedTime(new Date(now.getFullYear(), now.getMonth(), now.getDate(), 13, 1, 0, 0));
     await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
     await responseRequested;

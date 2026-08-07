@@ -228,6 +228,11 @@ function check(name, cond, extra = "") {
     await resetState([discardTask], {}, "hold-ok", okSteps);
     await page.locator('span[data-action="edit-task"][data-id="task-discard"]').click();
     await page.locator('[data-action="plan-step-request"]').click();
+    // レース対策: request-PUT(plan-request.json)の完了を待たずにadvanceAndPollすると、
+    // responseモックがrequestPayload未設定のままrequestId/taskId不一致のresponseを
+    // 組み立ててしまい、pollが空振りして以後は再照合されずタイムアウトする(CI実測)。
+    // [1]と同じく「依頼受付済み」表示(=push完了)を必ず待ってから進める。
+    await page.waitForFunction(() => (document.querySelector(".plan-step-request .muted")?.textContent || "").includes("依頼受付済み・数分後に反映"));
     await advanceAndPoll(60);
     await responseRequested;
     releaseHeldResponse();
@@ -250,6 +255,8 @@ function check(name, cond, extra = "") {
       await resetState([task], {}, "hold-invalid", invalidCase.steps);
       await page.locator(`span[data-action="edit-task"][data-id="task-invalid-${i}"]`).click();
       await page.locator('[data-action="plan-step-request"]').click();
+      // レース対策: 上の[2]と同じ理由でpush完了を待ってから進める。
+      await page.waitForFunction(() => (document.querySelector(".plan-step-request .muted")?.textContent || "").includes("依頼受付済み・数分後に反映"));
       await advanceAndPoll(60);
       await responseRequested;
       releaseHeldResponse();
@@ -265,6 +272,8 @@ function check(name, cond, extra = "") {
       await resetState([task], {}, mode);
       await page.locator(`span[data-action="edit-task"][data-id="task-${mode}"]`).click();
       await page.locator('[data-action="plan-step-request"]').click();
+      // レース対策: 上の[2]と同じ理由でpush完了を待ってから進める。
+      await page.waitForFunction(() => (document.querySelector(".plan-step-request .muted")?.textContent || "").includes("依頼受付済み・数分後に反映"));
       await advanceAndPoll(60);
       await page.waitForFunction(() => (document.querySelector(".plan-step-request .muted")?.textContent || "").includes("本日の実行計画作成の上限"));
       check(`${mode}で本日の上限表示`, true);
@@ -273,6 +282,8 @@ function check(name, cond, extra = "") {
     await resetState([errorTask], {}, "error");
     await page.locator('span[data-action="edit-task"][data-id="task-error"]').click();
     await page.locator('[data-action="plan-step-request"]').click();
+    // レース対策: 上の[2]と同じ理由でpush完了を待ってから進める。
+    await page.waitForFunction(() => (document.querySelector(".plan-step-request .muted")?.textContent || "").includes("依頼受付済み・数分後に反映"));
     await advanceAndPoll(60);
     await page.waitForFunction(() => (document.querySelector(".plan-step-request .muted")?.textContent || "").includes("生成に失敗しました: worker_failed"));
     check("errorでreason付き生成失敗表示", true);
@@ -282,6 +293,8 @@ function check(name, cond, extra = "") {
     await resetState([missingTask], {}, "missing");
     await page.locator('span[data-action="edit-task"][data-id="task-missing"]').click();
     await page.locator('[data-action="plan-step-request"]').click();
+    // レース対策: 上の[2]と同じ理由でpush完了を待ってから進める。
+    await page.waitForFunction(() => (document.querySelector(".plan-step-request .muted")?.textContent || "").includes("依頼受付済み・数分後に反映"));
     await advanceAndPoll(60);
     await responseRequested;
     await advanceAndPoll(15 * 60);
