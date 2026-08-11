@@ -310,8 +310,14 @@ function check(name, cond, extra = "") {
     // ============================================================
     console.log("[6] 下書きUndo: ×で削除 → 「元に戻す」で直前状態へ復元");
     aiPlanFixture = null;  // 以降のシナリオはAIプラン非依存(ai-scheduleを使う)
+    // v199: ai-scheduleの候補源が「WBS未Block化タスク」から「当日登録済みの未着手Block」へ
+    //   変更されたため、各taskに対応する当日Block(30分)を合わせて登録する。
     await seed({
       tasks: [wbsTask("task-u1", "Undo検証タスクA", { estimateMin: 30 }), wbsTask("task-u2", "Undo検証タスクB", { estimateMin: 30 })],
+      blocks: [
+        planBlock({ id: "blk-u1", date: TODAY, title: "Undo検証タスクA", taskId: "task-u1", startMin: 9 * 60, endMin: 9 * 60 + 30 }),
+        planBlock({ id: "blk-u2", date: TODAY, title: "Undo検証タスクB", taskId: "task-u2", startMin: 9 * 60, endMin: 9 * 60 + 30 })
+      ],
       projects: [testProject()]
     });
     await page.click('[data-action="ai-schedule"]');
@@ -337,6 +343,10 @@ function check(name, cond, extra = "") {
     console.log("[6b] m2: 削除→Undo→確定 でaiScheduleHistoryにremoved/confirmedが二重計上されない");
     await seed({
       tasks: [wbsTask("task-dd1", "二重計上検証タスクA", { estimateMin: 30 }), wbsTask("task-dd2", "二重計上検証タスクB", { estimateMin: 30 })],
+      blocks: [
+        planBlock({ id: "blk-dd1", date: TODAY, title: "二重計上検証タスクA", taskId: "task-dd1", startMin: 9 * 60, endMin: 9 * 60 + 30 }),
+        planBlock({ id: "blk-dd2", date: TODAY, title: "二重計上検証タスクB", taskId: "task-dd2", startMin: 9 * 60, endMin: 9 * 60 + 30 })
+      ],
       projects: [testProject()]
     });
     await page.click('[data-action="ai-schedule"]');
@@ -365,6 +375,7 @@ function check(name, cond, extra = "") {
     console.log("[7] 却下理由: ワンタップ選択がaiScheduleHistoryのreasonに反映される");
     await seed({
       tasks: [wbsTask("task-reason1", "却下理由ワンタップ検証タスク", { estimateMin: 30 })],
+      blocks: [planBlock({ id: "blk-reason1", date: TODAY, title: "却下理由ワンタップ検証タスク", taskId: "task-reason1", startMin: 9 * 60, endMin: 9 * 60 + 30 })],
       projects: [testProject()]
     });
     await page.click('[data-action="ai-schedule"]');
@@ -383,6 +394,7 @@ function check(name, cond, extra = "") {
     console.log("[7b] 却下理由: 「閉じる」を選ぶと理由なし(空文字)のまま");
     await seed({
       tasks: [wbsTask("task-u3", "却下理由検証タスク", { estimateMin: 30 })],
+      blocks: [planBlock({ id: "blk-u3", date: TODAY, title: "却下理由検証タスク", taskId: "task-u3", startMin: 9 * 60, endMin: 9 * 60 + 30 })],
       projects: [testProject()]
     });
     await page.click('[data-action="ai-schedule"]');

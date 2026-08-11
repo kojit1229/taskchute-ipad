@@ -5,6 +5,11 @@
 // 全廃したため、①③④(いずれもcallClaude前提)は機能ごと削除した。②のスケジュール下書きは
 // 決定論配置(computeFreeGaps→fallbackMorningPlan)に置き換えて存続するため、本スイートは
 // D&D操作(ドラッグ・リサイズ・確定・破棄)の検証として残す。AIのfetchモックは使わない。
+// v199メモ: runAiSchedule(ai-schedule)の候補源が「WBSの未Block化タスク」から「当日登録済みの
+// 未着手Block(taskchuteBlocks条件を満たすもの)」へ変更されたため、fixtureを当日Block(blk-A)
+// 前提に更新した。D&D・確定・破棄の検証意図(この見出しの主目的)は維持し、確定時のassertionだけ
+// 「新規Block化」から「既存Blockの時刻更新(blockIdマッチ・新規Block非生成)」へ更新している
+// (詳細はCHANGES_v199.md参照)。
 const { chromium, ROOT, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
@@ -53,6 +58,10 @@ function check(name, cond, extra = "") {
   await passGithubGate(page);
 
   // ---- seed: プロジェクト/タスク + 既存Block(空き枠の開始を固定するため) ----
+  // v199: runAiScheduleの候補源は「当日登録済みの未着手Block」になったため、task-Aは
+  //   WBS未Block化のままでなく、あらかじめ当日Block(blk-A・7:00-7:30=30分)として登録しておく
+  //   (元の予定長がそのまま可動Blockの長さになる。旧仕様の「既定見積30分」と同じ結果になるよう
+  //   30分幅にしている)。
   await page.evaluate(({ TODAY, KEY, occupiedUntil }) => {
     const s = JSON.parse(localStorage.getItem(KEY));
     s.projects = (s.projects || []).filter((p) => p.kind !== "normal");
@@ -64,6 +73,12 @@ function check(name, cond, extra = "") {
       actualStartAt: "", actualEndAt: "", completed: false, charge: 0, discharge: 0,
       comment: "", recurrenceGroupId: "", pomodoroCount: 0, migratedTo: "", orderIndex: 0,
       createdAt: "2026-01-01T00:00", updatedAt: "2026-01-01T00:00", deleted: false
+    }, {
+      id: "blk-A", taskId: "task-A", date: TODAY, title: "資料作成", category: "",
+      plannedStartAt: `${TODAY}T07:00`, plannedEndAt: `${TODAY}T07:30`,
+      actualStartAt: "", actualEndAt: "", completed: false, charge: 0, discharge: 0,
+      comment: "", recurrenceGroupId: "", pomodoroCount: 0, migratedTo: "", orderIndex: 0,
+      createdAt: "2026-01-02T00:00", updatedAt: "2026-01-02T00:00", deleted: false
     }];
     s.selectedDate = TODAY;
     localStorage.setItem(KEY, JSON.stringify(s));
@@ -82,7 +97,7 @@ function check(name, cond, extra = "") {
   check("下書きブロックが表示される", await page.locator(".draft-block").count() === 1);
   check("下書きバー(確定/破棄)", await page.locator('[data-action="draft-confirm"]').count() === 1);
   let label = await page.locator(".draft-block-time").textContent();
-  check(`既存Blockの直後(${hhmm(expectedStart)})・30分(既定見積)で仮配置`,
+  check(`既存Blockの直後(${hhmm(expectedStart)})・30分(blk-Aの元の予定長)で仮配置`,
     label.includes(hhmm(expectedStart)) && label.includes("30分"), label);
 
   // ドラッグ移動: 60px 下へ(zoom1 = 60px/時 → +60分)
@@ -109,21 +124,23 @@ function check(name, cond, extra = "") {
   label = await page.locator(".draft-block-time").textContent();
   check("下端ドラッグで 60分 に延長", label.includes("60分"), label);
 
-  // 確定
+  // 確定(v199: blockId付き項目なので既存Block=blk-Aの時刻が更新されるだけで、新規Blockは作られない)
   await page.click('[data-action="draft-confirm"]');
   await page.waitForTimeout(400);
   const confirmed = await page.evaluate((KEY) => {
     const s = JSON.parse(localStorage.getItem(KEY));
-    const b = s.blocks.find((x) => x.title === "資料作成");
-    return b ? { start: b.plannedStartAt, end: b.plannedEndAt, est: b.estimateMin, taskId: b.taskId } : null;
+    const b = s.blocks.find((x) => x.id === "blk-A");
+    return b ? { start: b.plannedStartAt, end: b.plannedEndAt, taskId: b.taskId, totalBlocks: s.blocks.length } : null;
   }, KEY);
   const expEnd = expectedStart + 60 + 60;
-  check(`確定で実Block化(${hhmm(expectedStart + 60)}〜${hhmm(expEnd)}・taskId紐づけ)`,
-    confirmed && confirmed.start.endsWith(`T${hhmm(expectedStart + 60)}`) && confirmed.end.endsWith(`T${hhmm(expEnd)}`) && confirmed.est === 60 && confirmed.taskId === "task-A",
+  check(`確定で既存Block(blk-A)の時刻が更新される(${hhmm(expectedStart + 60)}〜${hhmm(expEnd)}・taskId紐づけ維持)`,
+    confirmed && confirmed.start.endsWith(`T${hhmm(expectedStart + 60)}`) && confirmed.end.endsWith(`T${hhmm(expEnd)}`) && confirmed.taskId === "task-A",
     JSON.stringify(confirmed));
+  check("新規Blockは作られない(Block総数=2のまま。既存ミーティング+blk-A)", confirmed && confirmed.totalBlocks === 2, JSON.stringify(confirmed));
   check("確定後は下書きが消える", await page.locator(".draft-block").count() === 0);
 
-  // 破棄フロー(候補が尽きていれば何もしない)
+  // 破棄フロー(v199: blk-Aは確定後も引き続き未着手Blockのため再度候補になりうる。
+  //   候補の有無どちらでも安全に倒れるよう両分岐を維持する)
   await page.click('[data-action="nav"][data-view="tasks"]');
   await page.waitForTimeout(200);
   const cand2 = await page.locator('[data-action="ai-schedule"]').count();

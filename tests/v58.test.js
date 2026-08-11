@@ -145,12 +145,22 @@ function check(name, cond, extra = "") {
   // page.clock対策がこのシナリオだけ未適用だった)。日中時刻に固定して決定論化する。
   await page.clock.setFixedTime(new Date(now.getFullYear(), now.getMonth(), now.getDate(), 10, 0, 0));
   const TODAY = isoDate(now);
+  // v199対応: 「📋 下書きスケジュール」(ai-schedule)の候補源がWBS未Block化タスクから
+  // 当日登録済みBlockへ変わったため、task-shortに紐づく当日Block(9:00-9:15・15分)を
+  // 合わせて登録する(estimateMinは新経路では使われないが、Block自体の長さを15分にすることで
+  // 本テストの検証対象=「短い下書きBlock(高さ26px下限)の削除ボタンがクリック可能」を維持する)。
   await page.evaluate(({ KEY, TODAY }) => {
     const s = JSON.parse(localStorage.getItem(KEY));
     s.projects = (s.projects || []).filter((p) => p.kind !== "normal");
     s.projects.push({ id: "proj-short", kind: "normal", title: "短時間案件", category: "", status: "active", description: "", dueDate: "", twelveWeekStartDate: "", createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false, collapsed: false });
     s.tasks = [{ id: "task-short", projectId: "proj-short", parentTaskId: "", title: "短時間タスク", category: "", status: "todo", dueDate: TODAY, description: "", estimateMin: 15, createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false }];
-    s.blocks = [];
+    s.blocks = [{
+      id: "blk-task-short", taskId: "task-short", date: TODAY, title: "短時間タスク", category: "",
+      plannedStartAt: `${TODAY}T09:00`, plannedEndAt: `${TODAY}T09:15`,
+      actualStartAt: "", actualEndAt: "", completed: false, charge: 0, discharge: 0,
+      comment: "", recurrenceGroupId: "", pomodoroCount: 0, migratedTo: "", orderIndex: 0,
+      createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false
+    }];
     s.selectedDate = TODAY;
     s.currentView = "tasks";
     localStorage.setItem(KEY, JSON.stringify(s));

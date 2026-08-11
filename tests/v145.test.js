@@ -263,9 +263,12 @@ function plannedBlock(id, title, hStart, hEnd, category = "") {
     // ============================================================
     console.log("[6] 既存の下書きへの追記(重ならない配置になること)");
     await page.clock.setFixedTime(new Date(2026, 6, 27, 18, 0, 0, 0));  // 残量17(<20)
+    // v199対応: 「📋 下書きスケジュール」(ai-schedule)の候補源がWBS未Block化タスクから
+    // 当日登録済みBlockへ変わったため、wbs-1タスクに紐づく当日Block(9:00-9:30・30分)を
+    // 合わせて登録する(candidateBlocksは全て過去日付でTODAYの占有には影響しない)。
     await seed({
       battery: { recoveryDraft: false },  // まずOFFで作る(先に手動下書きを作ってから合流させたいため)
-      blocks: candidateBlocks(),
+      blocks: [...candidateBlocks(), { ...plannedBlock("blk-wbs-1", "重要タスク", "09:00", "09:30"), taskId: "wbs-1" }],
       tasks: [wbsTask("wbs-1", "重要タスク")],
       projects: [testProject()]
     });

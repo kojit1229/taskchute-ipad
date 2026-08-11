@@ -74,7 +74,9 @@ function check(name, cond, extra = "") {
     s.projects = (s.projects || []).filter((p) => p.kind !== "normal");
     s.projects.push({ id: "proj-60", kind: "normal", title: "v60案件", category: "", status: "active", description: "", dueDate: "", twelveWeekStartDate: "", createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false, collapsed: false });
     s.tasks = [];
-    // estimateMin=45 の候補(決定論配置が既定30分固定にならないことの確認用)
+    // estimateMin=45 の候補(決定論配置が既定30分固定にならないことの確認用)。
+    // v199対応: [3]の朝プラン(ai-morning-plan)はaiScheduleCandidates経由でWBS未Block化タスクを
+    // 候補にするため、ここではまだBlockを与えない([4]のai-schedule検証直前で別途Block登録する)。
     s.tasks.push({ id: "task-60a", projectId: "proj-60", parentTaskId: "", title: "v60見積付きタスク", category: "", status: "todo", dueDate: "", description: "", estimateMin: 45, createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false });
     s.blocks = [];
     s.journalMeta = s.journalMeta || {};
@@ -120,25 +122,47 @@ function check(name, cond, extra = "") {
   await page.click('[data-action="draft-discard"]');
   await page.waitForTimeout(300);
 
-  // ---- (d) 下書きスケジュールが決定論配置で動く(estimateMinを見積分数として使う) ----
-  console.log("[4] 下書きスケジュール(決定論配置・estimateMin反映)");
+  // ---- (d) 下書きスケジュールが決定論配置で動く(Blockの現予定長を見積分数として使う) ----
+  console.log("[4] 下書きスケジュール(決定論配置・見積反映)");
+  // v199対応: 「📋 下書きスケジュール」(ai-schedule)の候補源がWBS未Block化タスクから
+  // 当日登録済みBlockへ変わったため、task-60aに紐づく当日Block(45分幅)をここで登録する
+  // ([3]の朝プラン検証はWBS未Block化のtask-60aに依存するため、そちらより後で行う)。
+  // estimateMin:45もBlock側に残す(blockId確定パスはestimateMinを更新しないため、確定後もそのまま残る)。
+  await page.evaluate(({ KEY, TODAY }) => {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    s.blocks = [{
+      id: "blk-task-60a", taskId: "task-60a", date: TODAY, title: "v60見積付きタスク", category: "",
+      plannedStartAt: `${TODAY}T09:00`, plannedEndAt: `${TODAY}T09:45`, estimateMin: 45,
+      actualStartAt: "", actualEndAt: "", completed: false, charge: 0, discharge: 0,
+      comment: "", recurrenceGroupId: "", pomodoroCount: 0, migratedTo: "", orderIndex: 0,
+      createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false
+    }];
+    s.selectedDate = TODAY;
+    s.currentView = "tasks";
+    localStorage.setItem(KEY, JSON.stringify(s));
+  }, { KEY, TODAY });
+  await page.reload();
+  await page.waitForTimeout(500);
   await page.click('[data-action="nav"][data-view="tasks"]');
   await page.waitForTimeout(200);
   await page.click('[data-action="ai-schedule"]');
   await page.waitForTimeout(500);
   const scheduleDraft = await page.locator(".draft-block-time").allTextContents();
   check("下書きが1件配置される", scheduleDraft.length === 1, JSON.stringify(scheduleDraft));
-  check("見積(45分)がそのまま反映される(30分固定でない)", scheduleDraft[0] && scheduleDraft[0].includes("45分"), JSON.stringify(scheduleDraft));
+  check("Blockの現予定長(45分)がそのまま反映される(30分固定でない)", scheduleDraft[0] && scheduleDraft[0].includes("45分"), JSON.stringify(scheduleDraft));
   await page.click('[data-action="draft-confirm"]');
   await page.waitForTimeout(400);
   const confirmedBlock = await page.evaluate((KEY) => {
     const s = JSON.parse(localStorage.getItem(KEY));
     return s.blocks.find((b) => b.title === "v60見積付きタスク") || null;
   }, KEY);
-  check("確定でBlock化される(見積45分)", confirmedBlock && confirmedBlock.estimateMin === 45, JSON.stringify(confirmedBlock));
-  check("確定Blockに aiPlan(決定論配置の元値)が残る",
-    !!confirmedBlock && !!confirmedBlock.aiPlan && confirmedBlock.aiPlan.minutes === 45 && /^\d{2}:\d{2}$/.test(confirmedBlock.aiPlan.start),
-    JSON.stringify(confirmedBlock && confirmedBlock.aiPlan));
+  check("確定で既存Blockの時刻が更新される(見積45分は元のまま)", confirmedBlock && confirmedBlock.estimateMin === 45, JSON.stringify(confirmedBlock));
+  // v199対応(design.md仕様6): blockId分岐はplannedStartAt/plannedEndAt/updatedAtだけを更新し、
+  // aiPlanは設定しない(makeBlock非経由のため)。旧assertion「aiPlanに元値が残る」は
+  // blockId確定パスには適用できないためここでは検証しない — 同じ「提案値vs確定値」の監査証跡は
+  // 直後のaiScheduleHistory(aiMin/userStart/userMin)で引き続き検証する(検証意図は維持)。
+  check("blockId確定パスはaiPlanを設定しない(design.md仕様6の明示スコープどおり)",
+    !!confirmedBlock && !confirmedBlock.aiPlan, JSON.stringify(confirmedBlock && confirmedBlock.aiPlan));
   const histConfirmed1 = await page.evaluate((KEY) => {
     const s = JSON.parse(localStorage.getItem(KEY));
     return (s.aiScheduleHistory || []).find((h) => h.title === "v60見積付きタスク" && h.outcome === "confirmed");
@@ -158,7 +182,12 @@ function check(name, cond, extra = "") {
       { id: "task-60r", projectId: "proj-60b", parentTaskId: "", title: "却下用タスク", category: "", status: "todo", dueDate: "", description: "", estimateMin: 30, createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false },
       { id: "task-60k", projectId: "proj-60b", parentTaskId: "", title: "確定用タスク2", category: "", status: "todo", dueDate: "", description: "", estimateMin: 30, createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false }
     ];
-    s.blocks = [];  // 空き枠を広く取り、2件とも配置されるようにする
+    // v199対応: 各タスクに紐づく当日Block(30分)を登録する(空き枠は広く取ってあるので
+    // 2件とも配置される。元の予定時刻は重複していても再配置で前詰めされるため無関係)。
+    s.blocks = [
+      { id: "blk-task-60r", taskId: "task-60r", date: TODAY, title: "却下用タスク", category: "", plannedStartAt: `${TODAY}T09:00`, plannedEndAt: `${TODAY}T09:30`, actualStartAt: "", actualEndAt: "", completed: false, charge: 0, discharge: 0, comment: "", recurrenceGroupId: "", pomodoroCount: 0, migratedTo: "", orderIndex: 0, createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false },
+      { id: "blk-task-60k", taskId: "task-60k", date: TODAY, title: "確定用タスク2", category: "", plannedStartAt: `${TODAY}T09:00`, plannedEndAt: `${TODAY}T09:30`, actualStartAt: "", actualEndAt: "", completed: false, charge: 0, discharge: 0, comment: "", recurrenceGroupId: "", pomodoroCount: 0, migratedTo: "", orderIndex: 0, createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false }
+    ];
     s.aiScheduleHistory = [];
     s.selectedDate = TODAY;
     s.currentView = "tasks";
@@ -187,6 +216,9 @@ function check(name, cond, extra = "") {
   await page.evaluate(({ KEY, TODAY }) => {
     const s = JSON.parse(localStorage.getItem(KEY));
     s.tasks = [{ id: "task-60d", projectId: "proj-60b", parentTaskId: "", title: "破棄用タスク", category: "", status: "todo", dueDate: "", description: "", estimateMin: 30, createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false }];
+    // v199対応: task-60dに紐づく当日Blockを登録する(taskを差し替えたため旧task-60r/60kの
+    // Blockは孤児化しtaskchuteBlocksの候補から自然に外れるが、明示的にリセットしておく)。
+    s.blocks = [{ id: "blk-task-60d", taskId: "task-60d", date: TODAY, title: "破棄用タスク", category: "", plannedStartAt: `${TODAY}T09:00`, plannedEndAt: `${TODAY}T09:30`, actualStartAt: "", actualEndAt: "", completed: false, charge: 0, discharge: 0, comment: "", recurrenceGroupId: "", pomodoroCount: 0, migratedTo: "", orderIndex: 0, createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false }];
     s.aiScheduleHistory = [];
     s.selectedDate = TODAY;
     localStorage.setItem(KEY, JSON.stringify(s));

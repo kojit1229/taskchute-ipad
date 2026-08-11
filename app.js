@@ -4366,19 +4366,38 @@ function minToHHMM(min) {
   return `${pad2(Math.floor(m / 60))}:${pad2(m % 60)}`;
 }
 
-// v59: 空き時間計算(純粋関数)。plannedStartAt/plannedEndAt を持つ当日Block(ルーティンのrec Blockも含む)
+// v199(3c): Blockの占有区間を[start,end](dayStartMin〜dayEndMinへclamp済み・分)で返す。
+//   plannedStartAtが無ければnull(占有計算に使えない)。plannedEndAt欠落は
+//   start+clamp(estimateMin||30,15,240)を占有、日跨ぎ(end<start)はstart→24:00を占有
+//   (完全な空き扱いにしない。レビュー指摘=軽微5/重大2の解消)。computeFreeGapsと
+//   runAiScheduleのskip再占有(重大1)で共用する。
+function blockOccupiedRange(b, dayStartMin, dayEndMin) {
+  if (!b.plannedStartAt) return null;
+  const sRaw = minutesOf(b.plannedStartAt);
+  let eRaw;
+  if (b.plannedEndAt) {
+    const eMin = minutesOf(b.plannedEndAt);
+    eRaw = eMin < sRaw ? 24 * 60 : eMin;  // 日跨ぎはstart→24:00を占有
+  } else {
+    eRaw = sRaw + clamp(b.estimateMin || 30, 15, 240);
+  }
+  const s = clamp(sRaw, dayStartMin, dayEndMin);
+  const e = clamp(eRaw, dayStartMin, dayEndMin);
+  return e > s ? [s, e] : null;
+}
+
+// v59: 空き時間計算(純粋関数)。plannedStartAt を持つ当日Block(ルーティンのrec Blockも含む)
 //      から占有区間を作り、dayStartMin〜dayEndMin の空き枠([start,end] 分・昇順)を返す。
 //      Date を経由せず minutesOf(文字列パース)で分抽出する(iOS Safari の9時間ズレ回避ルール)。
-function computeFreeGaps(date, dayStartMin = 5 * 60, dayEndMin = 23 * 60) {
+// v199: excludeBlockIds(Set|null)を渡すと、そのidのBlockを占有計算から除外する
+//   (再配置対象=可動Blockを一時的に「無いもの」として空き枠を算出するために使う。
+//   省略時(null)は従来どおり全Blockを占有として扱うため既存呼び出し元は無改修)。
+function computeFreeGaps(date, dayStartMin = 5 * 60, dayEndMin = 23 * 60, excludeBlockIds = null) {
   if (dayEndMin <= dayStartMin) return [];
   const occupied = blocksForDate(date)
-    .filter((b) => b.plannedStartAt && b.plannedEndAt)
-    .map((b) => {
-      const s = clamp(minutesOf(b.plannedStartAt), dayStartMin, dayEndMin);
-      const e = clamp(minutesOf(b.plannedEndAt), dayStartMin, dayEndMin);
-      return [Math.min(s, e), Math.max(s, e)];
-    })
-    .filter(([s, e]) => e > s)
+    .filter((b) => !excludeBlockIds || !excludeBlockIds.has(b.id))
+    .map((b) => blockOccupiedRange(b, dayStartMin, dayEndMin))
+    .filter(Boolean)
     .sort((a, b) => a[0] - b[0]);
   // 重複・隣接区間をマージ
   const merged = [];
@@ -4432,29 +4451,116 @@ function aiScheduleCandidates(date) {
   return out;
 }
 
-// v60: 空き時間に候補を機械的に前詰め配置する(Claude API 呼び出しは全廃したため決定論配置のみ)。
-//      配置ロジックは runAiMorningPlan と共通の fallbackMorningPlan を再利用する
-//      (この画面には繰越候補が無いため実質「MIT候補→WBS(期日付きWish含む)」の優先順。v126で
-//      「今週のやりたいこと」専用段は撤去した)。
+// v199: 再配置の配置ウィンドウ(2026-08-10 K指示。空いていても早朝・深夜に詰め込まない)。
+//   仕事Block(category==="仕事")は平日9-18のみ、それ以外(プライベート)は8-21のみ。
+//   ウィンドウは定数で実装する(設定化は非目標)。
+const AI_REARRANGE_WORK_WINDOW = [9 * 60, 18 * 60];
+const AI_REARRANGE_PRIVATE_WINDOW = [8 * 60, 21 * 60];
+const AI_REARRANGE_BUFFER_MIN = 10;  // fallbackMorningPlanのMORNING_PLAN_BUFFER_MINと同じ思想(項目間バッファ)
+// v199: skipped理由の2種。runAiSchedule/draftBarHTML/rearrangeSkipMessageで共用し、
+//   朝プラン/AIプラン由来のskipped理由とは無関係に保つ。
+const AI_REARRANGE_SKIP_REASONS_CAPACITY = "空き時間不足(タスク過多)";
+const AI_REARRANGE_SKIP_REASONS_HOLIDAY_WORK = "仕事タスクは平日9-18のみ";
+
+// v199: dateISO("YYYY-MM-DD")が平日(月〜金)かどうか。parseDate経由でnew Date(string)のiOS TZ誤解釈を回避。
+function isWeekdayDate(date) {
+  const dow = parseDate(date).getDay();  // 0=日..6=土
+  return dow >= 1 && dow <= 5;
+}
+
+// v199: 再配置対象Blockが配置できるウィンドウ。仕事Blockは休日はnull(=配置不可、呼び出し側でskipped行き)。
+function aiRearrangeWindowFor(block, date) {
+  if (block.category === "仕事") return isWeekdayDate(date) ? AI_REARRANGE_WORK_WINDOW : null;
+  return AI_REARRANGE_PRIVATE_WINDOW;
+}
+
+// v199(3): 可動Blockの長さ(分)。plannedStartAt/EndAtの現予定長、日跨ぎ(end<start)は
+//   (24:00−start)+end、いずれも無効ならclamp(estimateMin||30,15,240)。
+//   算出方法によらず最終的に15〜240へクランプする(2026-08-11裁定: 巨大Blockが空き枠を
+//   独占するのを防ぐ。fallbackMorningPlanの既存クランプ運用と揃える)。
+function movableBlockMinutes(b) {
+  let raw = 0;
+  if (b.plannedStartAt && b.plannedEndAt) {
+    const s = minutesOf(b.plannedStartAt), e = minutesOf(b.plannedEndAt);
+    raw = e < s ? (24 * 60 - s) + e : e - s;  // 日跨ぎは翌日分を跨いだ長さとして数える
+  }
+  return clamp(raw > 0 ? raw : (b.estimateMin || 30), 15, 240);
+}
+
+// v199: 「📋 下書きスケジュール」を、当日のタスクシュート登録済みBlock(未着手のみ)を空き時間へ
+//   重複なく再配置する機能へ変更(旧: WBS未Block化タスクの新規配置案。aiScheduleCandidates/
+//   fallbackMorningPlanは朝プラン(runAiMorningPlan)専用として維持し、こちらは呼ばない)。
+//   可動Block = taskchuteBlocks条件を満たす当日Blockのうち !completed && !actualStartAt。
+//   それ以外の当日Block(ルーティン・timeline由来・完了済み・着手済み・単発Task由来)は
+//   computeFreeGapsの占有計算にそのまま残す(可動Blockだけを占有から除外する)。
 function runAiSchedule() {
   const date = state.selectedDate;
-  const candidates = aiScheduleCandidates(date);
-  if (!candidates.length) return showToast("配置できる候補がありません(WBSの未完了タスクが対象です)");
+  const todayBlocks = blocksForDate(date);
+  const movable = taskchuteBlocks(todayBlocks).filter((b) => !b.completed && !b.actualStartAt);
+  if (!movable.length) return showToast("当日のタスクシュート登録タスクがありません");
   const DAY_START = 5 * 60, DAY_END = 23 * 60;
   const isToday = date === todayISO();
   const now = new Date();
   const nowFloor = isToday ? Math.min(DAY_END, Math.ceil((now.getHours() * 60 + now.getMinutes()) / 15) * 15) : DAY_START;
-  const freeGaps = computeFreeGaps(date, DAY_START, DAY_END)
-    .map(([s, e]) => [Math.max(s, nowFloor), e])
-    .filter(([s, e]) => e - s >= 15);
-  if (!freeGaps.length) return showToast("空き時間がありません(予定が埋まっています)");
-  const { items, skipped } = fallbackMorningPlan(candidates, freeGaps);
-  if (!items.length) return showToast("空き時間に配置できる候補がありませんでした");
-  _scheduleDraft = { date, items: items.slice(0, 6), skipped, source: "deterministic" };  // v62: source区別
+
+  // v199(重大1改訂・2026-08-11 r2裁定): 「skip確定Blockの元区間をgapsから差し引くだけ」の
+  //   単純実装は、そのskipより先に(plannedStartAt昇順で)処理された可動Blockが同じ区間を
+  //   先取りする「一手先取り穴」を塞げない(実機プローブ2件で確定後の実Block重複を再現)。
+  //   代わりに「skipが1件でも出たら、そのBlockの元区間を固定占有に加えて可動Block全件の
+  //   配置を最初からやり直す(再スタートループ)」。skipSetは1passにつき高々1件しか増えず
+  //   (最初の新規skipを見つけた時点でpassを打ち切る)単調増加なので、
+  //   最悪でも movable.length+1 回のpassで「新規skipが出ない」状態に収束する(決定論)。
+  const skipSet = new Set();          // これまでのpassで確定したskip対象のBlock id
+  const skipReasonById = new Map();   // blockId -> skipped理由
+  let finalItems = [];
+  for (let pass = 0; pass <= movable.length; pass += 1) {
+    // skipSet済みのBlockはexcludeBlockIdsに含めない=通常の固定Blockと同じにcomputeFreeGapsが
+    // 占有として数える(reoccupySkipの特別扱いを廃し、computeFreeGapsの通常経路に一本化)。
+    const activeMovable = movable.filter((b) => !skipSet.has(b.id));
+    const activeIds = new Set(activeMovable.map((b) => b.id));
+    let gaps = computeFreeGaps(date, DAY_START, DAY_END, activeIds)
+      .map(([s, e]) => [Math.max(s, nowFloor), e])
+      .filter(([s, e]) => e - s >= 15);
+    // plannedStartAt昇順(安定)で前詰め。空き枠プールは全Block共有(仕事/プライベートでウィンドウが
+    // 重なる=9-18は8-21の部分集合のため、ウィンドウ別に空き枠を分けず同じgapsを実消費で共有する)。
+    const ordered = [...activeMovable].sort((a, b) => (a.plannedStartAt || "99").localeCompare(b.plannedStartAt || "99"));
+    const passItems = [];
+    let newSkip = null;
+    for (const b of ordered) {
+      const win = aiRearrangeWindowFor(b, date);
+      if (!win) { newSkip = { id: b.id, reason: AI_REARRANGE_SKIP_REASONS_HOLIDAY_WORK }; break; }
+      const minutes = movableBlockMinutes(b);
+      let start = null;
+      for (const [s, e] of gaps) {
+        const cs = Math.max(s, win[0]), ce = Math.min(e, win[1]);  // 空き枠とウィンドウの交差
+        if (ce - cs >= minutes) { start = cs; break; }
+      }
+      if (start === null) { newSkip = { id: b.id, reason: AI_REARRANGE_SKIP_REASONS_CAPACITY }; break; }
+      passItems.push({
+        id: crypto.randomUUID(), blockId: b.id, title: b.title, taskId: b.taskId || "",
+        category: b.category || "", start, minutes, aiStart: start, aiMinutes: minutes
+      });
+      // +10分バッファを空けてgapsプールから消費(fallbackMorningPlanと同じ思想)
+      gaps = subtractOccupiedIntervals(gaps, [[start, start + minutes + AI_REARRANGE_BUFFER_MIN]])
+        .filter(([s, e]) => e - s >= 15);
+    }
+    if (!newSkip) { finalItems = passItems; break; }  // このpassで新規skipが出なければ収束
+    skipSet.add(newSkip.id);
+    skipReasonById.set(newSkip.id, newSkip.reason);
+    // ループ末尾: 次のpassでnewSkip.idはactiveMovableから外れ、computeFreeGapsが通常の
+    // 固定Blockとして占有計算する(reoccupy済み状態からの再計算)。
+  }
+  const skipped = movable
+    .filter((b) => skipSet.has(b.id))
+    .map((b) => ({ title: b.title, reason: skipReasonById.get(b.id) }));
+  _scheduleDraft = { date, items: finalItems, skipped, source: "deterministic" };  // v62: source区別
   _draftUndo = null; _draftUndoHistoryEntry = null;  // v62: 新規下書きでは前セッションのUndoを持ち越さない
   state.timelineMode = "planned";
   setView("timeline");
-  showToast("空き時間へ自動配置しました — ドラッグで調整して「確定」してください");
+  // v199(4b・中3修正): 入り切らないBlockが1件以上あれば、成功トーストの代わりに理由別の
+  //   通知を出す(draftBarHTML側の警告行と同旨・rearrangeSkipMessageで文言を共通化)。
+  const skipMsg = rearrangeSkipMessage(skipped);
+  showToast(skipMsg || "空き時間へ自動配置しました — ドラッグで調整して「確定」してください");
   render();
 }
 
@@ -4486,6 +4592,19 @@ function renderDraftLayer(rowHeight, startHour) {
     </div>`;
 }
 
+// v199(中3修正・2026-08-11裁定): draft barの警告行とトーストで共用する文言ビルダー。
+//   従来は理由を区別せず常に「タスク過多」と表示していたため、休日の仕事Blockしかskipされて
+//   いない日でも「タスク過多」と誤誘導していた。理由別に件数を分けて文言を組み立てる
+//   (⚠を付けずに返すのはcaller側の責務。skipped無し/対象理由0件なら空文字を返す)。
+function rearrangeSkipMessage(skipped) {
+  const capacityCount = skipped.filter((s) => s.reason === AI_REARRANGE_SKIP_REASONS_CAPACITY).length;
+  const holidayCount = skipped.filter((s) => s.reason === AI_REARRANGE_SKIP_REASONS_HOLIDAY_WORK).length;
+  const parts = [];
+  if (capacityCount) parts.push(`${capacityCount}件が空き時間に入り切りません(タスク過多)`);
+  if (holidayCount) parts.push(`${holidayCount}件が休日のため配置されません(仕事タスクは平日9-18のみ)`);
+  return parts.length ? `⚠ ${parts.join(" / ")}` : "";
+}
+
 function draftBarHTML() {
   if (!_scheduleDraft || _scheduleDraft.date !== state.selectedDate) return "";
   const skipped = _scheduleDraft.skipped || [];  // v59: 朝プランで「配置しない」と判断した候補
@@ -4496,6 +4615,11 @@ function draftBarHTML() {
     : _scheduleDraft.source === "ai-replan" ? "🤖 AI再プラン由来"
     : _scheduleDraft.source === "battery-recovery" ? "🔋 回復候補"
     : "⚙ 決定論配置";
+  // v199(4b・中3修正): 再配置で入り切らなかったBlockが1件以上あれば警告行を出す(トーストと同旨・
+  //   理由別文言はrearrangeSkipMessageで共通化)。中2修正: 色は#c0392bのハードコードをやめ、
+  //   ダーク実測運用済みの既存トークン--red(styles.css)に揃える(旧色は--panel上コントラスト比
+  //   約2.9:1でWCAG AA未達だった)。
+  const rearrangeSkipMsg = rearrangeSkipMessage(skipped);
   return `
     <div class="draft-bar">
       <span>📋 下書き ${_scheduleDraft.items.length}件(${sourceLabel}) — ドラッグで移動 / 下端をドラッグで長さ調整 / ×で外す</span>
@@ -4505,7 +4629,10 @@ function draftBarHTML() {
         <button class="btn ghost" data-action="draft-discard">破棄</button>
       </span>
     </div>
-    ${skipped.length ? `<div class="muted" style="font-size:11.5px; line-height:1.6; margin:-4px 0 8px">
+    ${rearrangeSkipMsg ? `<div class="draft-overload-warning" style="font-size:12px; color:var(--red); margin:-4px 0 4px">
+      ${escapeHTML(rearrangeSkipMsg)}
+    </div>` : ""}
+    ${skipped.length ? `<div class="draft-skipped-list muted" style="font-size:11.5px; line-height:1.6; margin:-4px 0 8px">
       ${skipped.map((s) => {
         // v62(M1レビュー対応): kind="expired" は空き時間との不整合で個別ドロップされた項目
         // (判断の透明化のため「見送り」とは別ラベルで表示する)
@@ -4637,7 +4764,24 @@ function confirmScheduleDraft() {
       { origin: "draft", draftItemId: ritualItem.id });
     return;
   }
+  let updatedCount = 0, createdCount = 0;  // v199(軽微3): 確定トーストを「登録」と「時刻更新」で書き分ける
   items.forEach((it) => {
+    // v199: blockId付き項目(当日タスクシュート再配置)は既存Blockの時刻だけ更新する。
+    //   makeBlockしない=新規Block化しない。migratedTo/carryCount系(繰越専用)も通さない。
+    if (it.blockId) {
+      // v199(軽微4): 下書き作成後に対象Blockが消えていた場合(削除等)は空振りさせない。
+      //   状態変更なし・aiScheduleHistoryへも記録しない(「確定」と偽装しない)。
+      if (!state.blocks.some((b) => b.id === it.blockId)) return;
+      state.blocks = state.blocks.map((b) => b.id === it.blockId ? {
+        ...b,
+        plannedStartAt: `${date}T${minToHHMM(it.start)}`,
+        plannedEndAt: `${date}T${minToHHMM(it.start + it.minutes)}`,
+        updatedAt: nowDateTime()  // v135以降のid+updatedAtマージ対策
+      } : b);
+      recordScheduleHistory(it, "confirmed", date, it.source || draftSource);
+      updatedCount += 1;
+      return;
+    }
     const block = makeBlock({
       date,
       title: it.title,
@@ -4667,10 +4811,16 @@ function confirmScheduleDraft() {
     if (it.carryFromId) {
       state.blocks = state.blocks.map((b) => b.id === it.carryFromId ? { ...b, migratedTo: block.id, updatedAt: nowDateTime() } : b);
     }
+    createdCount += 1;
   });
   _scheduleDraft = null;
   _draftUndo = null; _draftUndoHistoryEntry = null;  // v62: 確定済みの下書きへのUndoは意味を持たない
-  saveAndRender(`📋 ${items.length}件のBlockを登録しました`);
+  // v199(軽微3): blockId分岐は「登録」ではなく「時刻更新」のため、件数に応じて文言を書き分ける
+  //   (旧文言「📋 N件のBlockを登録しました」を再配置フローにそのまま流用していたのは不正確だった)
+  const confirmParts = [];
+  if (updatedCount) confirmParts.push(`${updatedCount}件の時刻を更新`);
+  if (createdCount) confirmParts.push(`${createdCount}件を登録`);
+  saveAndRender(confirmParts.length ? `📋 ${confirmParts.join("・")}しました` : "対象のBlockが見つからず、確定できませんでした");
 }
 
 // v59: =========================================================

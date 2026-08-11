@@ -1,0 +1,73 @@
+{
+  "version": 199,
+  "date": "2026-08-11",
+  "title": "下書きスケジュールの当日Block再配置(第1弾)+ 2系統レビュー修正ラウンド(r2差し戻し対応込み)",
+  "summary": "「📋 下書きスケジュール」(runAiSchedule)を、WBS未Block化タスクの新規配置案から、当日すでに登録済みのタスクシュートBlock(未着手のみ)を配置ウィンドウ内の空き時間へ重複なく再配置する機能へ変更した。可動BlockはtaskchuteBlocks条件を満たす当日Blockのうち!completed && !actualStartAtのもの。それ以外の当日Block(ルーティン・timeline由来・完了済み・着手済み・単発Task由来)は固定占有として空き枠算出に残す。配置ウィンドウ(仕事Block=平日9-18のみ/それ以外=8-21のみ)、入り切らないBlockのskipped+タスク過多警告(draft bar警告行・トースト)を実装した。実装後の2系統レビュー(Claude reviewer、r1・r2の2ラウンド)で検出された指摘を全件解消した。r1(重大1件・中3件・軽微8件): (1)skip確定Blockの元区間を占有に加えて以降の配置が避けるようにする、(2)computeFreeGapsの占有計算をplannedEndAt欠落(start+見積分を占有)・日跨ぎ(start→24:00を占有)にも対応させblockOccupiedRange()へ共通化、(3)可動Blockの予定長を日跨ぎ((24:00−start)+end)にも対応させ算出経路によらず15〜240分へクランプ、(4)休日の仕事Blockのみskipされた日に警告行/トーストが「タスク過多」と誤表示される問題をrearrangeSkipMessage()で解消、(5)警告行の色をハードコード#c0392bから既存トークン--redへ置き換え。confirmScheduleDraftはblockId付き項目で既存Blockの時刻だけ更新し、makeBlock/migratedTo/carryCount系は通らない(確定後にBlockが消えていた場合の空振り防止、時刻更新/新規登録を区別したトースト文言も追加)。r2差し戻し(2026-08-11 r2裁定): r1のskip再占有(gapsから差し引くだけの単純実装)は「skipより先に処理された可動Blockがその区間を先取りする一手先取り穴」を塞げないと実機プローブ2件で指摘され、design.md仕様4が『skipが1件でも出たら元区間を固定占有に加えて配置全体を最初からやり直す再スタートループ』へ改訂された。runAiScheduleを再スタートループへ全面書き換えし(skipSetは単調増加、高々movable.length+1回のpassで収束)、レビュー報告書の実機プローブ2シナリオ(同時刻積み上げ3件+タスク過多/休日仕事Block+私用7時台)をそのままv199テスト(g)のfixtureにして確定後の実Block重複ゼロを直接検証した。あわせて、`ai-schedule`を候補源(WBSタスク)前提で使っていた既存3スイート(v58/v60/v145)がv199の候補源変更で新規に赤くなっていたことが判明し、1件ずつ診断のうえfixtureを当日Block前提へ更新した(実装の回帰は無く、全て候補源変更への期待値追随で解消)。releases/v199.jsonからCHANGES_v199.md/../taskchute-notes/handoff.mdを生成し`--check`をPASSさせた(taskchute-notesはcommit/pushしない=未コミットで残す)。runAiMorningPlan・AIプランfetch経路(aiScheduleCandidates/fallbackMorningPlan/tryFetchAiPlan)は無改修。",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v199.json",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/v145.test.js",
+    "tests/v199.test.js",
+    "tests/v50.test.js",
+    "tests/v58.test.js",
+    "tests/v60.test.js",
+    "tests/v62.test.js",
+    "../taskchute-notes/handoff.md(v199ブロック追記のみ。commit/pushはしない)"
+  ],
+  "intent": [
+    "Kの元依頼「当日のタスクシュート登録タスクのみを空き時間に重複なく配置」を、下書き項目どうしの重複ゼロだけでなく確定後の実タイムラインの重複ゼロまで満たす形で実装する。r1の単純な『skip時にgapsから差し引くだけ』は、skipより前に処理済みのBlockがその区間を先取りする穴を塞げないとr2レビューの実機プローブで確定したため、『skipが出たら元区間を固定占有に追加して配置全体を再実行する』再スタートループへ改訂した。skip集合は単調増加(1passにつき新規skipは高々1件)なので、決定論的に高々movable.length+1回のpassで収束する。",
+    "computeFreeGapsの占有判定の穴(plannedEndAt欠落・日跨ぎを『完全な空き』として扱っていた)を一般関数側で塞ぎ、runAiSchedule以外の既存呼び出し元(朝プラン・回復提案・再プラン等)にも同じ堅牢性を波及させる。既存呼び出し元は挙動としては『より安全側(誤って空き扱いしていた区間を正しく占有扱いする)』にしか変化しないため、既存テストへの悪影響は最小限と判断した。",
+    "可動Blockの予定長を15〜240分へ一律クランプすることで、異常に長いBlock(データ不整合や日跨ぎの誤入力等)が空き時間を独占して他の当日タスクの配置を妨げる事態を防ぐ(fallbackMorningPlanの既存クランプ運用と揃える)。",
+    "警告文言とアクセシビリティの指摘(誤誘導・コントラスト未達)は、Kが週末ごとに目にする可能性が高い経路であるため後回しにせず同一ラウンドで解消する。",
+    "`ai-schedule`の候補源変更(WBSタスク→当日Block)は破壊的変更であり、この経路を叩く既存スイート全部を対象拡大して洗い出し(design.mdのテスト追随裁定を拡大)、実装の回帰と単なる期待値のズレを区別して1件ずつ診断する。"
+  ],
+  "changes": [
+    "app.js: blockOccupiedRange(b, dayStartMin, dayEndMin)を新設(4374-4387)。plannedEndAt欠落はstart+clamp(estimateMin||30,15,240)を占有、日跨ぎ(end<start)はstart→24:00を占有として[start,end]を返す純粋関数。computeFreeGapsとrunAiScheduleの再スタートループで共用する。",
+    "app.js: computeFreeGaps(4395-4418)の占有計算をblockOccupiedRange()経由に統一。従来はplannedStartAt&&plannedEndAt両方必須だったフィルタをplannedStartAtのみ必須に緩め、欠落・日跨ぎのBlockも占有として拾えるようにした(既存呼び出し元5箇所は無改修のまま挙動が安全側に変わる)。",
+    "app.js: movableBlockMinutes(b)を新設(4481-4488)。可動Blockの長さを『現予定長、日跨ぎは(24:00−start)+end、いずれも無効ならestimateMin||30』とし、算出経路によらず最終的にclamp(15,240)する。",
+    "app.js: runAiSchedule(4496-4565)を再スタートループへ全面書き換え(r2差し戻し対応)。skipSet(Set<blockId>)・skipReasonById(Map)を外側で保持し、for(pass=0; pass<=movable.length; pass++)のループ内で: activeMovable=movable.filter(未skip)→computeFreeGaps(excludeBlockIds=activeIds、skip済みは通常の固定Blockとしてblockと同じ占有計算経路に乗る)→plannedStartAt昇順で前詰め→win===null/start===nullの最初の1件をnewSkipとして記録しbreak。1passで新規skipが0件ならそのpassのitemsを確定して終了。新規skipがあればskipSetへ追加して次のpassを再計算(旧reoccupySkip関数とその場限りの差し引きは廃止)。",
+    "app.js: rearrangeSkipMessage(skipped)を新設(4599-4606)。skipped理由をcapacity/holidayで個別集計し、該当するものだけを含む文言(例: 「⚠ 1件が休日のため配置されません(仕事タスクは平日9-18のみ)」)を組み立てる。draft barの警告行とrunAiScheduleのトーストの両方から呼ぶ。",
+    "app.js: draftBarHTML(4608-4643)の警告行の色をインラインハードコード#c0392bからvar(--red)へ変更。警告行の文言をrearrangeSkipMessage()経由に統一。skipped一覧divへ`.draft-skipped-list`クラスを維持(テスト用の安定セレクタ)。",
+    "app.js: confirmScheduleDraft(4754-4824)のblockId分岐へ、対象Blockが下書き作成後に消えていた場合はstate変更・aiScheduleHistory記録の両方をスキップするガードを追加。確定後のトースト文言を『時刻を更新』『登録』の件数で書き分けるよう変更。",
+    "sw.js: CACHE_NAME を v198 → v199 に更新。",
+    "tests/v199.test.js: (a)〜(f)は前ラウンドのまま(軽微7/8のassertion追加を含む)。(g)を全面書き換え: app-side-review-claude-r2.mdの実機プローブ2シナリオをそのままfixtureにした(g1=同時刻積み上げ3件(積み上がりA/B/C、全件10:00-11:00)+12:00以降ルーティン占有によるタスク過多、g2=休日8:00-10:00固定+私用7:00-8:00+仕事10:00-11:00)。g1は新規配置(積み上がりA)がルーティン・skip対象(B/C)のどちらとも重ならないことを直接検証しつつ、B・C間の重複(どちらも動かしていないことに由来する既知の残存)は新規配置由来ではないことを別assertionで明示。g2は重複登録の原因が無いシナリオのため、確定後の全ペア重複ゼロを完全に検証できる。(h)〜(k)は前ラウンドのまま(ラベルのみ維持)。",
+    "tests/v50.test.js: D&D検証の候補源を『当日Block(blk-A)』に更新(前ラウンド実施分)。旧assertion`confirmed.est===60`を落とした根拠を本release記録に明記(下記『v50の置き換えassertion根拠』参照。r2レビュー中4/7で指摘された記載欠落への対応)。",
+    "tests/v62.test.js: Undo/却下理由検証の候補源を『当日Block』に更新(前ラウンド実施分、今ラウンドでの追加変更なし)。",
+    "tests/v58.test.js: [4](短い下書きBlockの削除ボタン)のfixtureへ、task-shortに紐づく当日Block(9:00-9:15・15分)を追加(旧: WBSタスクのみでBlock無し=候補0件で下書きが出ずタイムアウトしていた)。検証意図(短いBlockの削除ボタンが.draft-resizeに横取りされないこと)は完全に維持。",
+    "tests/v60.test.js: [4](下書きスケジュール・見積反映)の直前でtask-60aに紐づく当日Block(9:00-9:45・45分、estimateMin:45)を追加登録(reload挟み)。[3]の朝プラン検証はWBS未Block化のtask-60aに依存するため、Block登録は[3]の後・[4]の直前に移した。[4b][4c](却下/破棄)のfixtureにも各タスクに紐づく当日Blockを追加。『確定Blockにaiplanが残る』assertionはblockId確定パス(makeBlock非経由)には適用できないため、design.md仕様6の明示スコープに基づき『aiPlanを設定しない』ことの確認へ置き換えた(監査証跡としての検証意図は直後のaiScheduleHistory=aiMin/userStart/userMinのassertionで維持)。",
+    "tests/v145.test.js: [6](既存下書きへの追記)のfixtureへ、wbs-1に紐づく当日Block(9:00-9:30・30分)を追加(旧: WBSタスクのみで候補0件、後続の回復提案合流検証3件が連鎖的に失敗していた)。検証意図(手動下書き+回復提案の合流・重複回避)は完全に維持。",
+    "索引・テストマニフェストと影響マップを再生成した。",
+    "node scripts/release-record.js releases/v199.json --write を実行し、CHANGES_v199.mdと../taskchute-notes/handoff.mdへv199ブロックを生成した(--checkがexit 0になることを確認)。taskchute-notesはcommit/pushしていない(未コミットのまま)。"
+  ],
+  "uncertainties": [
+    "computeFreeGapsの占有判定緩和(plannedEndAt必須の撤廃)は本関数の全呼び出し元(朝プラン・battery-recovery・requestReplan等)に波及するが、本ラウンドの検証はv199/v59/v50/v62/v58/v60/v145の7スイートに限定した(コーディネーター指示の完了条件どおり)。それ以外のスイートでの回帰確認はできておらず、push前にnpm run test:coreないしnpm test全量を推奨する。",
+    "再スタートループの計算量はO(movable.length^2)相当(1passごとにcomputeFreeGapsと前詰めを再実行)。当日のタスクシュート登録件数が現実的な規模(数件〜十数件)である限り無視できるが、極端に多い場合(数十件超)は体感遅延の可能性がある(未計測)。",
+    "祝日カレンダーは扱っていない(軽微6は明示的に見送り。理由: 外部の祝日データソースが必要でスコープ外)。"
+  ],
+  "reviewFocus": [
+    "再スタートループが『1passにつき新規skipは高々1件』を守っているか(複数件を同時にskipSetへ追加していないか)。守っていれば単調増加性と収束性(movable.length+1回以内)が保証される。",
+    "skipSet済みのBlockがcomputeFreeGapsのexcludeBlockIdsから正しく外れ(=通常の固定Blockと同じ占有計算経路に乗り)、reoccupySkipのような特別扱いが残っていないか。",
+    "v199テスト(g1)のB・C間の重複が『新規配置由来ではなく、どちらも動かしていないことに由来する』という主張が妥当か(実装の見落としではなく仕様上不可避であることの妥当性)。",
+    "v58/v60/v145の診断が本当に『候補源変更への期待値追随』であって実装の回帰ではないと言い切れるか(特にv60のaiPlan assertion置き換えの妥当性)。",
+    "computeFreeGapsのフィルタ緩和(plannedStartAtのみ必須)が、plannedStartAt/plannedEndAtとも空の『未定Block』を誤って占有計算に含めていないか。"
+  ],
+  "verification": [
+    "node --check app.js → exit 0。",
+    "node tests/run-all.js v199 v59 v50 v62 v58 v60 v145(フォアグラウンド・timeout 600000明示)→ All suites passed(v199=43チェック全PASS、内訳(a)〜(k)、g1/g2でプローブ2シナリオを直接検証。v50/v59/v62/v58/v60/v145も全PASS)。",
+    "node scripts/release-record.js releases/v199.json --check → exit 0(PASS: v199のCHANGES/handoffはrelease記録と一致しています)。",
+    "npm run code:index:write / npm run test:manifest:write で索引・影響マップ・テストマニフェストを再生成。",
+    "git status --short で変更ファイルが許可されたファイル(app.js/sw.js/tests/v199.test.js/v50.test.js/v62.test.js/v58.test.js/v60.test.js/v145.test.js/CHANGES_v199.md/releases/v199.json)+生成物4件のみであることを確認(残置ファイルCLAUDE.md/package.json/scripts/release-gate.js/tests/run-core.js/tests/release-gate.test.js等は無改変)。../taskchute-notes側もCLAUDE.md/handoff.mdの残置差分に加えてv199ブロックが追記されているのみで、それ以外は無改変であることを確認。"
+  ],
+  "knownLimitations": [
+    "第2弾(裏AIエージェントによる`mode:\"rearrange\"`再プラン)は別変更単位のまま未着手。",
+    "renderDraftLayerのレーン分割描画、D&D中の衝突スナップ、確定時の最終衝突検査は非目標のまま(design.md記載どおり)。",
+    "軽微6(祝日が平日扱い)は明示的に見送り(外部の祝日データソースが必要でスコープ外)。",
+    "computeFreeGapsの占有判定緩和による他呼び出し元への影響は、指定7スイート以外では未検証(push前にtest:core以上の実行を推奨)。",
+    "v50の置き換えassertion根拠(r2レビュー中4/7への対応): 旧`tests/v50.test.js`は下端リサイズで60分に伸ばした下書きを確定した際、`confirmed.est===60`(=Blockのestimateminが60になる)を検証していた。新設計(design.md仕様6)のblockId確定パスは`plannedStartAt`/`plannedEndAt`/`updatedAt`のみを更新しestimateMinには触れないため、このassertionは新経路に存在しない挙動を検証しており置き換えが必要だった。置き換え後は『同じidのBlockが残り時刻が下書き値に更新される』『新規Blockは作られない(Block総数不変)』を検証しており、D&D・確定・破棄というスイート本来の検証意図(下端リサイズ操作そのもの)は完全に維持している。『予定長(60分)とestimateMin(元のまま)が乖離する』挙動はdesign.md仕様6の明示スコープどおりの意図した仕様であり、追加のバグ修正は行わない(v60側でも同型のaiPlan assertion置き換えで同じ扱いをしている)。"
+  ]
+}
