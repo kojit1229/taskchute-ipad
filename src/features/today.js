@@ -4,6 +4,7 @@
 
 import { state } from "../state/store.js";
 import { registerActions } from "../ui/actions.js";
+import { configureCoach, renderCoach } from "./coach.js";
 
 let escapeHTML, todayISO, blocksForDate, minutesOf, timeFromDateTime;
 let localDateTimeToMs, resolveEstimateMin, computeProjectedEnd;
@@ -35,6 +36,7 @@ function configureToday(deps) {
     homeSyncAlertBanner, renderReplanControlHTML, requestReplan,
     getScheduleData, makeBlock, saveState, openBlockEditor
   } = deps);
+  configureCoach({ escapeHTML, todayISO, saveState, panelHeading, renderCircularProgress });
   registerActions({
     "today-kindle-prev": () => moveTodayKindle(-1),
     "today-kindle-next": () => moveTodayKindle(1),
@@ -672,6 +674,7 @@ function renderToday() {
     <div class="today-deck">
       ${renderNowFocus(blocks, queue)}
       ${renderTodayPomodoro(blocks, queue)}
+      ${renderCoach()}
       ${renderNextQueue(queue)}
       ${renderDayGauge(blocks)}
       ${renderRoutine(blocks)}

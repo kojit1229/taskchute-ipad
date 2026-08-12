@@ -732,6 +732,19 @@ function computeSyncMerge(remoteNorm, tieWinner) {
     // v153レビュー対応(2026-07-28): gardenLogも同期対象に追加(このヘルパーが無いと
     // ローカル限定のスナップショットがリモート採用で消えるデータ消失クラスの不具合になる)。
     const gardenLog = mergeGardenLogMaps(state.gardenLog, remoteNorm.gardenLog);
+    // v201(AIコーチ1aレビュー対応): 食事ログは取消tombstoneを含むため、updatedAtの新しい
+    // レコードを優先し、同値ならdeletedを優先するmergeByIdPreferNewerで端末間のid和集合にする。
+    // coachLog.settingsは1aでは全端末で固定値2278かつ変更UIが無いため同期対象外とする。
+    // 設定UIを追加するときに端末間競合の意味論を含めて再設計する。
+    const coachMeals = mergeByIdPreferNewer(
+      state.coachLog?.meals, remoteNorm.coachLog?.meals, tieWinner
+    ).sort((a, b) => {
+      // マージ直後は「ローカル全件+リモート残り」の連結順になるため時系列へ整列し直す
+      // (renderの逆順表示と、刈り込みの「末尾=新しい方を残す」前提を守る)
+      const ka = `${a?.date || ""} ${a?.time || ""} ${a?.updatedAt || ""}`;
+      const kb = `${b?.date || ""} ${b?.time || ""} ${b?.updatedAt || ""}`;
+      return ka < kb ? -1 : ka > kb ? 1 : 0;
+    });
     // v197(第3弾3d, S-3/C-4): AIステップの処理済み/取消済みrequestId集合+保留台帳もマージ対象へ追加。
     const aiStepProcessedIds = mergeStringIdSet(state.aiStepProcessedIds, remoteNorm.aiStepProcessedIds);
     const aiStepDismissedIds = mergeStringIdSet(state.aiStepDismissedIds, remoteNorm.aiStepDismissedIds);
@@ -759,6 +772,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(storeVisits, state.storeVisits) ||
       !sameArrayByReference(swipeTriageLog, state.swipeTriageLog) ||
       jsonChanged(gardenLog, state.gardenLog) ||
+      !sameArrayByReference(coachMeals, state.coachLog?.meals || []) ||
       !sameArrayByReference(aiStepProcessedIds, state.aiStepProcessedIds) ||
       !sameArrayByReference(aiStepDismissedIds, state.aiStepDismissedIds) ||
       !sameArrayByReference(aiStepPendingRequests, state.aiStepPendingRequests) ||
@@ -779,12 +793,13 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(storeVisits, remoteNorm.storeVisits || []) ||
       !sameArrayByReference(swipeTriageLog, remoteNorm.swipeTriageLog || []) ||
       jsonChanged(gardenLog, remoteNorm.gardenLog) ||
+      !sameArrayByReference(coachMeals, remoteNorm.coachLog?.meals || []) ||
       !sameArrayByReference(aiStepProcessedIds, remoteNorm.aiStepProcessedIds || []) ||
       !sameArrayByReference(aiStepDismissedIds, remoteNorm.aiStepDismissedIds || []) ||
       !sameArrayByReference(aiStepPendingRequests, remoteNorm.aiStepPendingRequests || []) ||
       (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, remoteNorm.zeroThinking) : false);
     return {
-      values: { journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans, tasks, projects, storeVisits, swipeTriageLog, gardenLog, aiStepProcessedIds, aiStepDismissedIds, aiStepPendingRequests },
+      values: { journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans, tasks, projects, storeVisits, swipeTriageLog, gardenLog, coachMeals, aiStepProcessedIds, aiStepDismissedIds, aiStepPendingRequests },
       changedVsLocal, changedVsRemote
     };
   } catch (error) {
@@ -812,6 +827,9 @@ function applySyncMergeToLocal(merged) {
   state.storeVisits = v.storeVisits;  // v141
   state.swipeTriageLog = v.swipeTriageLog;  // v152
   state.gardenLog = v.gardenLog;  // v153
+  // v201 AIコーチ1a: coachLog未初期化のstate(normalizeState前の経路)でも落ちないよう
+  // オブジェクトごと再構成する(settingsは同期対象外の方針を維持しローカル値を温存)
+  state.coachLog = { ...(state.coachLog || {}), meals: v.coachMeals };
   state.aiStepProcessedIds = v.aiStepProcessedIds;  // v197
   state.aiStepDismissedIds = v.aiStepDismissedIds;  // v197
   state.aiStepPendingRequests = v.aiStepPendingRequests;  // v197
@@ -843,6 +861,8 @@ function applySyncMergeToRemote(merged, remoteNorm) {
   remoteNorm.storeVisits = v.storeVisits;  // v141
   remoteNorm.swipeTriageLog = v.swipeTriageLog;  // v152
   remoteNorm.gardenLog = v.gardenLog;  // v153
+  // v201 AIコーチ1a: 上のapplySyncMergeToLocalと同じ理由でオブジェクトごと再構成
+  remoteNorm.coachLog = { ...(remoteNorm.coachLog || {}), meals: v.coachMeals };
   remoteNorm.aiStepProcessedIds = v.aiStepProcessedIds;  // v197
   remoteNorm.aiStepDismissedIds = v.aiStepDismissedIds;  // v197
   remoteNorm.aiStepPendingRequests = v.aiStepPendingRequests;  // v197

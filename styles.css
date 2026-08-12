@@ -4822,6 +4822,56 @@ h3 {
 .today-pomodoro-info > span { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .today-pomodoro-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .today-pomodoro .interrupt-reason-picker { margin-top: 4px; }
+.today-coach-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  min-height: 170px;
+}
+.today-coach .pomo-circle-wrap { width: 150px; height: 150px; margin: 0; flex: 0 0 auto; }
+.today-coach .pomo-time-overlay { display: grid; gap: 1px; font-size: 11px; line-height: 1.1; }
+.today-coach .pomo-time-overlay strong { font-size: 25px; font-variant-numeric: tabular-nums; }
+.today-coach .pomo-time-overlay small { color: var(--muted); font-size: 9px; }
+.today-coach-numbers { display: grid; gap: 7px; min-width: min(100%, 260px); }
+.today-coach-numbers strong { color: var(--cockpit-go, var(--accent)); font-size: 20px; font-variant-numeric: tabular-nums; }
+.today-coach-numbers span { color: var(--muted); font-size: 12px; }
+.today-coach-numbers small { color: var(--faint); font-size: 10px; line-height: 1.6; }
+.today-coach-quick { padding-top: 10px; border-top: 1px dashed var(--line); }
+.today-coach-quick > span { color: var(--muted); font-size: 10px; letter-spacing: 1px; }
+.today-coach-quick > span small { color: var(--faint); letter-spacing: 0; }
+.today-coach-quick > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin-top: 7px; }
+.today-coach-quick button {
+  min-height: 42px;
+  padding: 7px 6px;
+  border: 1px solid var(--cockpit-go, var(--accent));
+  border-radius: 4px;
+  color: var(--cockpit-go, var(--accent));
+  background: var(--cockpit-go-dim, var(--accent-soft));
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.today-coach-log { display: grid; gap: 6px; margin: 12px 0 0; padding: 0; list-style: none; }
+.today-coach-log li {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--panel-soft);
+  font-size: 11px;
+}
+.today-coach-log time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.today-coach-log b { font-variant-numeric: tabular-nums; }
+.today-coach-log button { padding: 5px 8px; border: 1px solid var(--line); color: var(--muted); background: transparent; font: inherit; cursor: pointer; }
+.today-coach-log .is-empty { display: block; color: var(--muted); text-align: center; }
 .today-deck-card {
   position: relative;
   display: flex;
@@ -4914,6 +4964,11 @@ h3 {
   .today-queue-row button { grid-column: 3 / -1; justify-self: start; }
   .today-pomodoro-stage { align-items: stretch; gap: 14px; flex-direction: column; }
   .today-pomodoro .pomo-circle-wrap { margin: 0 auto; }
+  .today-coach-stage { gap: 12px; flex-direction: column; }
+  .today-coach .pomo-circle-wrap { margin: 0 auto; }
+  .today-coach-numbers { text-align: center; }
+  .today-coach-log li { grid-template-columns: 42px minmax(0, 1fr) auto; }
+  .today-coach-log button { grid-column: 2 / -1; justify-self: end; }
 }
 @media (prefers-reduced-motion: reduce) {
   .today-now-label i { animation: none; }

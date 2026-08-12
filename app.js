@@ -163,6 +163,8 @@ const RECURRENCE_FUTURE_DAYS = 31;      // 未来はこの日数先まで実体�
 // (5416行目付近、computeSyncMerge内で使う箇所の近く)からファイル冒頭へ移動した
 // (constのTDZ回避。値・用途は一切変更していない)。
 const SWIPE_TRIAGE_LOG_MAX = 200;
+// v201: AIコーチ食事ログは90日保持に加え、端末内の最大件数も制限する。
+const COACH_MEALS_MAX = 500;
 
 // v153: 今日の庭(ADHD支援、罰なしゲーミフィケーション。設計書§③④)のGARDEN_LOG_KEEP_DAYS/
 // GARDEN_STAGE_YOUNG_PCTはv170でsrc/features/routine.jsへ移動した(app.js分割・段階4-4。
@@ -2036,6 +2038,17 @@ function normalizeState(value) {
   });
   // v61: マイグレーション儀式(3回目以降の繰り越し確認)の選択ログ。将来のバッチ分析用に軽量記録。
   if (!Array.isArray(value.migrationRitualLog)) value.migrationRitualLog = [];
+  // AI Coach phase 1a: quick meal logs are append-only; deletion is a tombstone.
+  if (!value.coachLog || typeof value.coachLog !== "object") value.coachLog = {};
+  if (!Array.isArray(value.coachLog.meals)) value.coachLog.meals = [];
+  const coachMealCutoff = addDays(todayISO(), -89);
+  value.coachLog.meals = value.coachLog.meals
+    .filter((meal) => meal?.date >= coachMealCutoff)
+    .slice(-COACH_MEALS_MAX);
+  if (!value.coachLog.settings || typeof value.coachLog.settings !== "object") value.coachLog.settings = {};
+  if (!Number.isFinite(value.coachLog.settings.dailyKcal) || value.coachLog.settings.dailyKcal <= 0) {
+    value.coachLog.settings.dailyKcal = 2278;
+  }
   // v152: 仕分けモード(先送りBlock+Wishバックログの三択トリアージ)の選択ログ。
   //      migrationRitualLogと同じ軽量append-only配列の思想(上限はSWIPE_TRIAGE_LOG_MAX)。
   if (!Array.isArray(value.swipeTriageLog)) value.swipeTriageLog = [];

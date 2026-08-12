@@ -40,7 +40,7 @@
       ],
       "assertionSignals": 13,
       "assertionHash": "99a2e024b65d4ebe",
-      "sourceHash": "500e3f049a496a64",
+      "sourceHash": "473d6646c230416d",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -76,6 +76,29 @@
         "fileWrite": false,
         "networkMock": true,
         "clock": true
+      }
+    },
+    {
+      "file": "coach-core.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 12,
+      "assertionHash": "19b9da2b76c56c07",
+      "sourceHash": "f2c242dd3cdf29f9",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
       }
     },
     {
@@ -253,9 +276,9 @@
       "domains": [
         "legacy-crosscutting"
       ],
-      "assertionSignals": 9,
-      "assertionHash": "945c48d6b919e6a4",
-      "sourceHash": "2465f2fd11b5561b",
+      "assertionSignals": 3,
+      "assertionHash": "c0eb62a51af05958",
+      "sourceHash": "03194d364a56dc46",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -863,7 +886,7 @@
       ],
       "assertionSignals": 32,
       "assertionHash": "0edc373d648a4e48",
-      "sourceHash": "8a52c6cbc9f715bd",
+      "sourceHash": "013eff8f1195c546",
       "waits": {
         "fixedCount": 11,
         "numericMilliseconds": 4100,
@@ -1412,7 +1435,7 @@
       ],
       "assertionSignals": 21,
       "assertionHash": "97e6e85128000848",
-      "sourceHash": "9742b983ad3b3c40",
+      "sourceHash": "00b50ac1bc07ea7e",
       "waits": {
         "fixedCount": 12,
         "numericMilliseconds": 5300,
@@ -1435,7 +1458,7 @@
       ],
       "assertionSignals": 17,
       "assertionHash": "29d903c1340c05e2",
-      "sourceHash": "040fd53a7fac5b03",
+      "sourceHash": "1bd8a3352fcf8a58",
       "waits": {
         "fixedCount": 4,
         "numericMilliseconds": 2000,
@@ -2718,7 +2741,7 @@
       ],
       "assertionSignals": 35,
       "assertionHash": "c01ec1239a0d42c8",
-      "sourceHash": "3b2dbef534ce6bae",
+      "sourceHash": "b5b05066cf2639e8",
       "waits": {
         "fixedCount": 12,
         "numericMilliseconds": 5350,
@@ -3250,7 +3273,7 @@
       ],
       "assertionSignals": 22,
       "assertionHash": "e0b2345938c92c99",
-      "sourceHash": "fef9731583840070",
+      "sourceHash": "aaed234a105395ac",
       "waits": {
         "fixedCount": 7,
         "numericMilliseconds": 2800,
@@ -3347,7 +3370,7 @@
       ],
       "assertionSignals": 24,
       "assertionHash": "7c71f40b8497b82f",
-      "sourceHash": "e0afa3bb0b35cd15",
+      "sourceHash": "0265eedd4b8b10f6",
       "waits": {
         "fixedCount": 2,
         "numericMilliseconds": 1000,
