@@ -1,4 +1,7 @@
-const CACHE_NAME = "taskchute-journal-pwa-v200";
+const CACHE_NAME = "taskchute-journal-pwa-v201";
+// v201: AIコーチカード第1弾(1a)。摂取カロリー残量とクイック食事記録を今日タブへ追加し、
+//   coachLog.mealsをupdatedAt+tombstone対応の端末間和集合マージへ配線した。
+// v200: 先送り予備軍カウンタ(B1)。everStartedAtとdeferralStatsを追加(本統合でv201と同時配信)。
 // v199: 「📋 下書きスケジュール」を、当日タスクシュート登録済みBlock(未着手のみ)の空き時間への
 //   決定論再配置に変更(旧: WBS未Block化タスクの新規配置案)。配置ウィンドウ(仕事=平日9-18/
 //   プライベート=8-21)・タスク過多時のskipped+警告行を追加。confirmScheduleDraftはblockId付き
@@ -248,6 +251,7 @@ const APP_SHELL = [
   "./src/core/merge.js",
   "./src/features/avoid.js",
   "./src/features/calendar.js",
+  "./src/features/coach.js",
   "./src/features/dashboard.js",
   "./src/features/journal.js",
   "./src/features/routine.js",

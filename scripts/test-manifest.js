@@ -113,7 +113,7 @@ function countMatches(source, pattern) {
 }
 
 function classify(file) {
-  const source = fs.readFileSync(path.join(testsDir, file), "utf8");
+  const source = fs.readFileSync(path.join(testsDir, file), "utf8").replace(/\r\n/g, "\n");
   const summaryComments = [];
   let startedSummary = false;
   for (const line of source.split(/\r?\n/)) {
