@@ -7,7 +7,7 @@ import { registerActions } from "../ui/actions.js";
 
 let escapeHTML, todayISO, blocksForDate, minutesOf, timeFromDateTime;
 let localDateTimeToMs, resolveEstimateMin, computeProjectedEnd;
-let routineRate, getCategoryColor, clamp, isStaleBlock, render, renderDeferringForFocus;
+let routineRate, getCategoryColor, clamp, isStaleBlock, deferralStats, render, renderDeferringForFocus;
 let renderCircularProgress, remainingText, remainingTextNormal;
 let renderPomodoroInterruptControls, getCachedReadingHighlights;
 let beginTodayZeroWrite, saveTodayZeroEntry, discardTodayZeroWrite, getTodayZeroWriteState;
@@ -28,7 +28,7 @@ function configureToday(deps) {
   ({
     escapeHTML, todayISO, blocksForDate, minutesOf, timeFromDateTime,
     localDateTimeToMs, resolveEstimateMin, computeProjectedEnd,
-    routineRate, getCategoryColor, clamp, isStaleBlock, render, renderDeferringForFocus,
+    routineRate, getCategoryColor, clamp, isStaleBlock, deferralStats, render, renderDeferringForFocus,
     renderCircularProgress, remainingText, remainingTextNormal,
     renderPomodoroInterruptControls, getCachedReadingHighlights,
     beginTodayZeroWrite, saveTodayZeroEntry, discardTodayZeroWrite, getTodayZeroWriteState,
@@ -499,11 +499,20 @@ function renderNextQueue(queue) {
   </section>`;
 }
 
+// v200(B1): 先送り予備軍の表示文言。裁かない・赤くしない(既存の中立表現に合わせる)。
+function deferredHeadText(pending) {
+  return pending === 0 ? "先送り0 🎉" : `先送り予備軍 ${pending}`;
+}
+function deferredGaugeText(pending) {
+  return pending === 0 ? "0件 🎉" : `${pending}件`;
+}
+
 function renderDayGauge(blocks) {
   const done = blocks.filter((b) => b.completed).length;
   const total = blocks.length;
   const pct = total ? Math.round(done / total * 100) : 0;
   const projected = projectedInfo(blocks);
+  const deferred = deferralStats(blocks);
   return `<section class="today-panel today-day-gauge">
     ${panelHeading("DAY GAUGE", "今日の計器", "LIVE")}
     <div class="today-gauge-count"><strong>${done}</strong><span>/ ${total} Block完了</span></div>
@@ -513,6 +522,7 @@ function renderDayGauge(blocks) {
       <div><span>着地予定</span><strong id="todayProjectedLanding">${projected.text}</strong><small id="todayProjectedComparison">${projected.comparison}</small></div>
       <div><span>残り見積</span><strong id="todayRemainingEstimate">${formatDuration(projected.remainingMin)}</strong></div>
       <div><span>12WY 今日</span><strong id="todayTwelveWeek">${formatDuration(twelveWeekMinutes(blocks))}</strong><small>投資済</small></div>
+      <div><span>先送り予備軍</span><strong id="todayDeferredCount">${deferredGaugeText(deferred.pending)}</strong><small>着手済 ${deferred.started} / ${deferred.total}</small></div>
     </div>
   </section>`;
 }
@@ -651,6 +661,7 @@ function renderToday() {
   todayRenderedDateISO = dateISO;
   const blocks = blocksForDate(dateISO);
   const queue = queueBlocksOf(blocks);
+  const deferred = deferralStats(blocks);
   const done = blocks.filter((b) => b.completed).length;
   const progress = blocks.length ? Math.round(done / blocks.length * 100) : 0;
   const projected = projectedInfo(blocks);
@@ -665,7 +676,8 @@ function renderToday() {
       <div><div class="today-eyebrow">TASKCHUTE DECK</div><h1>今日 <span>管制室</span></h1></div>
       <div class="today-head-stats">PROGRESS <b id="todayHeaderProgress">${done}/${blocks.length} (${progress}%)</b> /
         着地 <b id="todayHeaderLanding">${projected.text}</b> /
-        <span id="todayHeaderSection">${section.label} 残り ${section.remaining}分</span></div>
+        <span id="todayHeaderSection">${section.label} 残り ${section.remaining}分</span> /
+        <span id="todayHeaderDeferred">${deferredHeadText(deferred.pending)}</span></div>
       <div class="today-clock"><strong id="todayClock">${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}</strong>
         <span id="todayDate">${dateISO} (${["日", "月", "火", "水", "木", "金", "土"][now.getDay()]})</span></div>
     </header>
@@ -758,6 +770,11 @@ function updateTodayTick() {
     if (headerLanding) headerLanding.textContent = projected.text;
     const twelveWeek = document.getElementById("todayTwelveWeek");
     if (twelveWeek) twelveWeek.textContent = formatDuration(twelveWeekMinutes(blocks));
+    const deferredStats = deferralStats(blocks);
+    const deferredCount = document.getElementById("todayDeferredCount");
+    const headerDeferred = document.getElementById("todayHeaderDeferred");
+    if (deferredCount) deferredCount.textContent = deferredGaugeText(deferredStats.pending);
+    if (headerDeferred) headerDeferred.textContent = deferredHeadText(deferredStats.pending);
   }
   const section = document.getElementById("todayHeaderSection");
   const sectionValue = sectionInfo(now);

@@ -298,7 +298,7 @@ configureDashboard({
 configureToday({
   escapeHTML, todayISO, blocksForDate, minutesOf, timeFromDateTime,
   localDateTimeToMs, resolveEstimateMin, computeProjectedEnd,
-  routineRate, getCategoryColor, clamp, isStaleBlock, render, renderDeferringForFocus,
+  routineRate, getCategoryColor, clamp, isStaleBlock, deferralStats, render, renderDeferringForFocus,
   renderCircularProgress, remainingText, remainingTextNormal,
   renderPomodoroInterruptControls,
   getCachedReadingHighlights: () => cachedReadingHighlights,
@@ -1940,6 +1940,7 @@ function normalizeState(value) {
     plannedStartAt: fixDateTime(block.plannedStartAt),
     plannedEndAt: fixDateTime(block.plannedEndAt),
     actualStartAt: fixDateTime(block.actualStartAt),
+    everStartedAt: fixDateTime(block.everStartedAt) || fixDateTime(block.actualStartAt),
     actualEndAt: fixDateTime(block.actualEndAt),
     interruptions: Array.isArray(block.interruptions) ? block.interruptions : [],  // 壊れた形状は初期化
     // v162: 壊れた形状(chip欠落等)はnullへ落とす。日報生成・トリアージ双方がchip truthyを前提にするため
@@ -2703,6 +2704,7 @@ function makeBlock(input) {
     plannedStartAt: input.plannedStartAt || "",
     plannedEndAt: input.plannedEndAt || "",
     actualStartAt: input.actualStartAt || "",
+    everStartedAt: input.everStartedAt || input.actualStartAt || "",
     actualEndAt: input.actualEndAt || "",
     completed: Boolean(input.completed),
     charge: Number(input.charge || 0),
@@ -3787,6 +3789,42 @@ function taskchuteBlocks(blocks) {
     if (task.kind === "other") return false;  // 単発ブロックは非表示
     return true;
   });
+}
+
+// v200(B1): 「一度でも着手した」事実を保持する。actualStartAtはポモドーロ中断(stopPomodoro)で
+// ""に戻るため、先送り判定にはeverStartedAtを使う。一度付いたら消さない(唯一の例外は
+// quickCompleteの取り消し=下記toggleBlockのsnapshot復元。あれは「そもそも着手していなかった」
+// を巻き戻す経路のため)。
+function stampEverStarted(block) {
+  if (!block || !block.actualStartAt || block.everStartedAt) return block;
+  return { ...block, everStartedAt: block.actualStartAt };
+}
+
+// v200(B1): 先送りの母集合 = 「今日やると決めたこと」。taskchuteBlocksより広く、単発タスク
+// (kind:"other")由来のBlockも含む。除外するのは「そもそも先送りという概念が当たらないもの」だけ:
+// ルーティン(=習慣。ROUTINEパネルで別途集計)/繰り返し実体/タイムライン直接作成(=予定・拘束)/
+// 中断・中止・削除タスク由来(isStaleBlock)。
+function deferrableBlocks(blocks) {
+  return (blocks || []).filter((b) => {
+    if (b.deleted) return false;
+    if (b.category === "ルーティン") return false;
+    if (b.recurrenceGroupId) return false;
+    if (b.source === "timeline") return false;
+    if (isStaleBlock(b)) return false;
+    return true;
+  });
+}
+
+// v200(B1): 1分でも着手したか(完了は当然着手済み扱い)。
+function blockEverStarted(b) {
+  return Boolean(b && (b.completed || b.actualStartAt || b.everStartedAt));
+}
+
+// v200(B1): 先送り集計。pending=先送り予備軍(日中)/先送り確定値(日報生成時点)。
+function deferralStats(blocks) {
+  const list = deferrableBlocks(blocks);
+  const started = list.filter(blockEverStarted).length;
+  return { pending: list.length - started, started, total: list.length };
 }
 
 // v33: タスクシュート着手率(homeTaskchute と同一の抽出)
@@ -12866,6 +12904,8 @@ function toggleBlock(id) {
         next.actualStartAt = quickCompleteActualStart(block, next.actualEndAt);
         snapshot.actualStartAt = { before: block.actualStartAt, after: next.actualStartAt };
       }
+      next.everStartedAt = next.everStartedAt || next.actualStartAt;
+      snapshot.everStartedAt = { before: block.everStartedAt, after: next.everStartedAt };
       // v150レビュー対応(項目3、両レビュー一致): 充放電は実績モーダル(buildActualEntryModal)と
       // 同じprefillEnergyを使うが、既に手入力の値(charge/dischargeのどちらかが非0)がある場合は
       // 上書きしない(過去実績が3件未満ならprefillEnergy自体がnullを返し従来どおり無補完)。
@@ -12886,7 +12926,7 @@ function toggleBlock(id) {
       // 自動補完スナップショットがあれば、「補完後に手で変更されていない」フィールドだけ元へ戻す。
       const snap = _quickCompleteSnapshots[id];
       if (snap) {
-        for (const field of ["actualStartAt", "actualEndAt", "charge", "discharge"]) {
+        for (const field of ["everStartedAt", "actualStartAt", "actualEndAt", "charge", "discharge"]) {
           if (snap[field] && next[field] === snap[field].after) next[field] = snap[field].before;
         }
         delete _quickCompleteSnapshots[id];
@@ -13052,7 +13092,7 @@ function bulkApproveAsPlanned() {
   if (!window.confirm(`${targets.length}件のBlockを「予定通り」実績として記録しますか?\n(計画時刻をそのまま実績にコピーし、完了にします)`)) return;
   const ids = new Set(targets.map((b) => b.id));
   state.blocks = state.blocks.map((b) => ids.has(b.id)
-    ? { ...b, actualStartAt: b.plannedStartAt, actualEndAt: b.plannedEndAt || b.plannedStartAt, completed: true, updatedAt: nowDateTime() }
+    ? { ...b, actualStartAt: b.plannedStartAt, everStartedAt: b.everStartedAt || b.plannedStartAt, actualEndAt: b.plannedEndAt || b.plannedStartAt, completed: true, updatedAt: nowDateTime() }
     : b);
   const taskIds = new Set(targets.map((b) => b.taskId).filter(Boolean));
   if (taskIds.size) {
@@ -13143,7 +13183,8 @@ function updateBlockField(id, field, value) {
   state.blocks = state.blocks.map((block) => {
     if (block.id !== id) return block;
     const normalized = ["charge", "discharge"].includes(field) ? Number(value) : value;
-    return { ...block, [field]: normalized, updatedAt: nowDateTime() };
+    const next = { ...block, [field]: normalized, updatedAt: nowDateTime() };
+    return field === "actualStartAt" ? stampEverStarted(next) : next;
   });
   saveState();
 }
@@ -13208,6 +13249,7 @@ function generateReport(dateArg, { quiet = false } = {}) {
   };
   const rateRoutine = routineRate(blocks);
   const rateCycleWeek = cycleWeekProgress(date);
+  const rateDeferral = deferralStats(blocks);
 
   // v17: 計画 vs 実行
   const plannedMinutes = blocks.reduce((sum, b) => {
@@ -13336,6 +13378,7 @@ function generateReport(dateArg, { quiet = false } = {}) {
     `| 今日の主役 (MIT) | ${rateMIT.done} / ${rateMIT.total} | ${rateMIT.pct}% |`,
     `| ルーティン実行率 | ${rateRoutine.done} / ${rateRoutine.total} | ${rateRoutine.pct}% |`,
     `| 12週 今週の進捗 | ${rateCycleWeek.done} / ${rateCycleWeek.total} | ${rateCycleWeek.pct}% |`,
+    `| 先送り | ${rateDeferral.pending}件 | ${rateDeferral.started} / ${rateDeferral.total} |`,
     "",
     ...(conditionBudgetToday.level !== "none"
       ? [`体力予算: ${CONDITION_BUDGET_LABELS[conditionBudgetToday.level]}${conditionBudgetToday.reason ? `(${conditionBudgetToday.reason})` : ""}`, ""]
@@ -13450,7 +13493,7 @@ function generateReport(dateArg, { quiet = false } = {}) {
   if (incomplete.length > 0) {
     lines.push("## 6. やり残し");
     incomplete.forEach((b) => {
-      lines.push(`- ${b.isMIT ? "★ " : ""}${b.title}${b.category ? ` (${b.category})` : ""}`);
+      lines.push(`- ${b.isMIT ? "★ " : ""}${b.title}${b.category ? ` (${b.category})` : ""}${blockEverStarted(b) ? "" : " (未着手)"}`);
     });
     lines.push("");
   }
@@ -16957,6 +17000,7 @@ function saveBlockFromModal(id, fields) {
     plannedStartAt: fromLocalInput(fields.plannedStartAt),
     plannedEndAt: fromLocalInput(fields.plannedEndAt),
     actualStartAt: fromLocalInput(fields.actualStartAt),
+    everStartedAt: existing?.everStartedAt || fromLocalInput(fields.actualStartAt) || "",
     actualEndAt: fromLocalInput(fields.actualEndAt),
     charge: Number(fields.charge) || 0,
     discharge: Number(fields.discharge) || 0,
@@ -17470,6 +17514,7 @@ function saveActualEntryFromModal(blockId, fields) {
     return {
       ...b,
       actualStartAt: fromLocalInput(fields.actualStartAt),
+      everStartedAt: b.everStartedAt || fromLocalInput(fields.actualStartAt),
       actualEndAt: fromLocalInput(fields.actualEndAt),
       charge: Number(fields.charge) || 0,
       discharge: Number(fields.discharge) || 0,

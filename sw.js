@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v199";
+const CACHE_NAME = "taskchute-journal-pwa-v200";
 // v199: 「📋 下書きスケジュール」を、当日タスクシュート登録済みBlock(未着手のみ)の空き時間への
 //   決定論再配置に変更(旧: WBS未Block化タスクの新規配置案)。配置ウィンドウ(仕事=平日9-18/
 //   プライベート=8-21)・タスク過多時のskipped+警告行を追加。confirmScheduleDraftはblockId付き

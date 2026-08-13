@@ -1,0 +1,43 @@
+{
+  "version": 200,
+  "date": "2026-08-13",
+  "title": "先送り予備軍カウンタ(B1): everStartedAtによる着手事実の保持と今日タブ表示",
+  "summary": "タスクシュート再配置プロジェクトB1(設計: workbench/out/2026-08-10-taskchute-rearrange-draft/b1-impl-spec.md)。「一度でも着手した」事実を保持する新フィールドeverStartedAtをBlockへ追加し、今日タブに先送り予備軍(=今日やると決めたのに未着手のBlock数)を表示する。actualStartAtはポモドーロ中断で空へ戻るため先送り判定に使えず、everStartedAtを一度付いたら消さない刻印として全着手経路(クイック完了・一括承認・実績時刻の手編集・normalizeState移行・makeBlock)へ結線した。唯一の例外はクイック完了の取り消し(snapshot復元=そもそも着手していなかったことへの巻き戻し)。母集合deferrableBlocksは単発タスク由来も含み、ルーティン/繰り返し実体/タイムライン直接作成(予定・拘束)/中断・中止・削除由来だけを除外する。表示はDAY GAUGEの4つ目のKVとヘッダ行で、文言は裁かない中立表現(0件は🎉)。日報生成(generateReport)にも先送り確定値として渡す。実装は再配置ワークストリーム(2026-08-11に検証済み・コミットK承認待ちの状態で休止)で行われ、2026-08-13にKの一括承認(v200引き取り→コミット→v201統合→push)を受けて本セッションがリリース記録を作成しコミットした。",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v200.json",
+    "src/features/today.js",
+    "sw.js"
+  ],
+  "intent": [
+    "先送り(今日やると決めて未着手のまま日を跨ぐ)を、責めずに事実として可視化する。日中は「予備軍」として今日タブに出し、日報生成時点で確定値になる。",
+    "actualStartAtの揮発性(ポモドーロ中断で空に戻る)から着手事実を分離する。everStartedAtは一度付いたら消さないラチェットとし、判定の安定性を作る。",
+    "本変更は別ワークストリーム(タスクシュート再配置B1)の成果物。TOWER化(design-today-tower.md)がtoday.jsを触る前に、同一ファイルの未コミット状態を解消する目的で先行コミットする(K承認2026-08-13)。"
+  ],
+  "changes": [
+    "app.js: Blockにフィールド everStartedAt を追加。normalizeState(既存データはactualStartAtから移行)/makeBlock/クイック完了toggleBlock(snapshot復元対応込み)/bulkApproveAsPlanned/updateBlockField(actualStartAt手編集時のstampEverStarted)へ刻印を結線。",
+    "app.js: deferrableBlocks(母集合)/blockEverStarted/deferralStats(pending・started・total)を新設し、configureTodayへdeferralStatsを注入。generateReportに先送り確定値を追加。",
+    "src/features/today.js: DAY GAUGEに先送り予備軍のKVを追加、ヘッダにも表示。文言は中立(deferredHeadText/deferredGaugeText、0件は🎉)。",
+    "sw.js: CACHE_NAME を v199 → v200 に更新。"
+  ],
+  "uncertainties": [
+    "専用のtests/v200.test.jsは元ワークストリームで作成されていない。検証は既存スイート(normalizeState移行はv67、クイック完了・実行接点はv70等)とrelease-gate --finalの自動選定束に依存する。専用テストの追加是非は再配置プロジェクト側の判断に委ねる。",
+    "everStartedAtは同期ではBlockオブジェクト全体のマージ(mergeBlockLists)に乗る前提で、フィールド単位の特別扱いはしていない。"
+  ],
+  "reviewFocus": [
+    "everStartedAtの刻印経路に漏れがないか(着手を作る操作の網羅)。ポモドーロ開始経路はactualStartAt設定時にupdateBlockField/toggleBlock系を通るかどうか。",
+    "deferrableBlocksの除外規則(ルーティン/繰り返し/タイムライン由来/stale)が「先送りの母集合」として妥当か。",
+    "クイック完了取り消し時のsnapshot復元がeverStartedAtも正しく巻き戻すこと。"
+  ],
+  "verification": [
+    "元ワークストリームで2026-08-11に検証済み(記録は同プロジェクトのhandoff)。本コミット時の再検証: node scripts/release-gate.js releases/v200.json --final を実行しPASSを確認(結果はコミット時の作業ログ参照)。",
+    "npm run code:index:write で索引を再生成。"
+  ],
+  "knownLimitations": [
+    "表示は今日タブのみ(履歴・週次の先送りトレンドは対象外)。",
+    "再配置プロジェクトB2以降(loop側の再プラン連携等)は本リリースに含まれない。"
+  ]
+}
