@@ -1,0 +1,224 @@
+{
+  "schemaVersion": 1,
+  "runtimePaths": [
+    "app.js",
+    "index.html",
+    "styles.css",
+    "sw.js",
+    "marked.min.js",
+    "manifest.webmanifest",
+    "assets/",
+    "src/"
+  ],
+  "baseline": [
+    "action-registry-core"
+  ],
+  "finalBaseline": [
+    "sw-integration",
+    "v50",
+    "v59",
+    "v67",
+    "v70",
+    "v72",
+    "v105",
+    "v136",
+    "xss-sanitizer"
+  ],
+  "areas": {
+    "legacy-app": {
+      "paths": [
+        "^app\\.js$"
+      ],
+      "suites": [
+        "action-registry-core"
+      ]
+    },
+    "navigation-view": {
+      "patterns": [
+        "currentView|selectedDate|defaultView|renderMain|showView|date-(?:prev|next)|data-action=[\"'](?:nav|set-date)"
+      ],
+      "suites": [
+        "today-core",
+        "v54",
+        "v57",
+        "v75",
+        "v134",
+        "v140",
+        "v143"
+      ]
+    },
+    "dashboard-report": {
+      "paths": [
+        "^src/features/dashboard"
+      ],
+      "patterns": [
+        "renderStats|renderDashboard|report-index|dashboard|emptyPanel|stats-|report"
+      ],
+      "suites": [
+        "dashboard-core",
+        "v54",
+        "v140",
+        "v143"
+      ]
+    },
+    "avoid-feature": {
+      "paths": [
+        "^src/features/avoid"
+      ],
+      "patterns": [
+        "renderAvoid|saveAvoid|avoidEditor|avoidItems"
+      ],
+      "suites": [
+        "avoid-core"
+      ]
+    },
+    "wish-feature": {
+      "paths": [
+        "^src/features/wish"
+      ],
+      "patterns": [
+        "renderWish|saveWish|deleteWish|realizeWish|wishProject|wishOpen"
+      ],
+      "suites": [
+        "wish-core"
+      ]
+    },
+    "journal-feature": {
+      "paths": [
+        "^src/features/journal"
+      ],
+      "patterns": [
+        "renderJournal|saveJournal|journalEntry|conditionLog|storeVisit|gymRecord"
+      ],
+      "suites": [
+        "journal-core",
+        "v141",
+        "v142"
+      ]
+    },
+    "routine-feature": {
+      "paths": [
+        "^src/features/routine"
+      ],
+      "patterns": [
+        "renderRoutine|saveRoutine|completeRoutine|recurrence|routineChain"
+      ],
+      "suites": [
+        "routine-core",
+        "v144"
+      ]
+    },
+    "today-feature": {
+      "paths": [
+        "^src/features/today"
+      ],
+      "patterns": [
+        "renderToday|todayCockpit|buildToday|flightPlan"
+      ],
+      "suites": [
+        "today-core",
+        "v153"
+      ]
+    },
+    "action-dispatch": {
+      "paths": [
+        "^src/ui/actions"
+      ],
+      "suites": [
+        "action-registry-core"
+      ]
+    },
+    "sync-storage": {
+      "paths": [
+        "^src/(?:sync/|storage/|core/merge)"
+      ],
+      "patterns": [
+        "^[+-].*saveState|sync|github|pushState|pullState|mergeById|dataModifiedAt|updatedAt"
+      ],
+      "suites": [
+        "merge-core",
+        "store-core",
+        "v72",
+        "v118",
+        "v134",
+        "v135",
+        "v136"
+      ]
+    },
+    "state-migration": {
+      "paths": [
+        "^src/state/"
+      ],
+      "patterns": [
+        "normalizeState|seedState|setState|migration|migrat"
+      ],
+      "suites": [
+        "store-core",
+        "v67",
+        "v105",
+        "v135",
+        "v136"
+      ]
+    },
+    "timeline-execution": {
+      "paths": [
+        "^src/features/timeline"
+      ],
+      "patterns": [
+        "renderTimeline|timeline|pomodoro|scheduleDraft|now-line"
+      ],
+      "suites": [
+        "timeline-layout-core",
+        "timeline-render-core",
+        "today-core",
+        "v50",
+        "v70"
+      ]
+    },
+    "responsive-theme": {
+      "paths": [
+        "^(?:styles\\.css|index\\.html)$"
+      ],
+      "patterns": [
+        "data-theme|resolveTheme|viewport|@media|responsive|cockpit"
+      ],
+      "suites": [
+        "today-core",
+        "v123",
+        "v127",
+        "v151"
+      ]
+    },
+    "security-offline": {
+      "paths": [
+        "^(?:sw\\.js|marked\\.min\\.js|manifest\\.webmanifest|assets/)"
+      ],
+      "patterns": [
+        "APP_SHELL|CACHE_NAME|serviceWorker|innerHTML|escapeHtml|sanitize"
+      ],
+      "suites": [
+        "sw-integration",
+        "v140",
+        "xss-sanitizer"
+      ]
+    },
+    "timeswitch": {
+      "paths": [
+        "^src/features/timeswitch\\.js$"
+      ],
+      "suites": [
+        "today-core",
+        "action-registry-core"
+      ]
+    },
+    "calendar": {
+      "paths": [
+        "^src/features/calendar\\.js$"
+      ],
+      "suites": [
+        "calendar-core",
+        "action-registry-core"
+      ]
+    }
+  }
+}

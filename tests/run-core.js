@@ -13,21 +13,12 @@
 //   - v70: タイムラインカードの実行接点(いま開始/いま終了ボタン)描画
 // 削除・スキップ・弱体化は一切していない — 対象は「pushのたびにローカルで何を回すか」の
 // 既定だけで、npm test(全量)・CIは無改変。
-const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
+const { FIXED_CORE, RECENT_COUNT, getCoreSuites } = require("./core-suites");
 
 const DIR = __dirname;
-const RECENT_COUNT = 5;
-const FIXED_CORE = ["v72", "v59", "v67", "v50", "v70"];
-
-const all = fs.readdirSync(DIR).filter((f) => /^v\d+\.test\.js$/.test(f));
-const byVersionDesc = all
-  .map((f) => ({ f, n: parseInt(f.match(/^v(\d+)/)[1], 10) }))
-  .sort((a, b) => b.n - a.n);
-
-const recentTokens = byVersionDesc.slice(0, RECENT_COUNT).map(({ f }) => f.replace(/\.test\.js$/, ""));
-const tokens = [...new Set([...recentTokens, ...FIXED_CORE])];
+const tokens = getCoreSuites(DIR);
 
 console.log(`test:core 実行対象(直近${RECENT_COUNT}件 + 固定横断コア${FIXED_CORE.length}件、重複除き計${tokens.length}件): ${tokens.join(", ")}`);
 console.log("※ push前ローカルゲートの既定。CI・npm test(全量)はこのファイルの影響を受けない。");

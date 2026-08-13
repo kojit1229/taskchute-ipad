@@ -2,6 +2,9 @@
 
 const { spawnSync } = require("child_process");
 const path = require("path");
+const fs = require("fs");
+const { collectRepositoryImpact, validateConfig } = require("./impact-regression");
+const { getCoreSuites } = require("../tests/core-suites");
 
 const repoRoot = path.resolve(__dirname, "..");
 const args = process.argv.slice(2);
@@ -13,13 +16,36 @@ const suites = args
   .filter(Boolean);
 const finalMode = args.includes("--final");
 const dryRun = args.includes("--dry-run");
+const impactBase = args.find((arg) => arg.startsWith("--impact-base="))?.slice("--impact-base=".length);
 
-if (!manifest || (!finalMode && !suites.length)) {
-  console.error("使い方: node scripts/release-gate.js releases/vNNN.json --suite=vNNN[,回帰対象] [--final] [--dry-run]");
+if (!manifest) {
+  console.error("使い方: node scripts/release-gate.js releases/vNNN.json [--suite=追加対象] [--final] [--dry-run]");
   process.exit(1);
 }
-if (finalMode && suites.length) {
-  console.error("--finalでは--suiteを指定しません。最終coreだけを実行します");
+console.log("\n=== release-record-schema ===");
+const schemaArgs = [path.join(repoRoot, "scripts", "release-record.js"), manifest, "--validate"];
+console.log([process.execPath, ...schemaArgs].join(" "));
+if (!dryRun) {
+  const schema = spawnSync(process.execPath, schemaArgs, { cwd: repoRoot, stdio: "inherit" });
+  if (schema.status !== 0) process.exit(schema.status ?? 1);
+}
+const unknownImpactSuites = validateConfig();
+if (unknownImpactSuites.length) {
+  console.error(`impact mapの検証エラー: ${unknownImpactSuites.join(", ")}`);
+  process.exit(1);
+}
+const impact = collectRepositoryImpact({ cwd: repoRoot, base: impactBase, final: finalMode });
+const releaseSuite = path.basename(manifest, path.extname(manifest));
+const releaseTestExists = fs.existsSync(path.join(repoRoot, "tests", `${releaseSuite}.test.js`));
+const selectedSuites = [...new Set([
+  ...suites,
+  ...(releaseTestExists ? [releaseSuite] : []),
+  ...impact.suites
+])];
+const coreSuites = finalMode ? new Set(getCoreSuites()) : new Set();
+const impactOnlySuites = selectedSuites.filter((suite) => !coreSuites.has(suite));
+if (!finalMode && !selectedSuites.length) {
+  console.error("実行差分または--suiteがありません。対象スイートを指定してください");
   process.exit(1);
 }
 
@@ -60,11 +86,6 @@ function checkAppShellPrecache() {
 
 const commands = [
   {
-    label: "release-record-schema",
-    command: process.execPath,
-    args: [path.join(repoRoot, "scripts", "release-record.js"), manifest, "--validate"]
-  },
-  {
     label: "test-manifest",
     command: process.execPath,
     args: [path.join(repoRoot, "scripts", "test-manifest.js"), "--check"]
@@ -88,6 +109,11 @@ if (finalMode) {
       command: process.execPath,
       args: [path.join(repoRoot, "scripts", "release-record.js"), manifest, "--check"]
     },
+    ...(impactOnlySuites.length ? [{
+      label: "impact-regression",
+      command: process.execPath,
+      args: [path.join(repoRoot, "tests", "run-all.js"), ...impactOnlySuites]
+    }] : []),
     {
       label: "core",
       command: process.execPath,
@@ -96,11 +122,18 @@ if (finalMode) {
   );
 } else {
   commands.push({
-    label: "related",
+    label: "related+impact-regression",
     command: process.execPath,
-    args: [path.join(repoRoot, "tests", "run-all.js"), ...suites]
+    args: [path.join(repoRoot, "tests", "run-all.js"), ...selectedSuites]
   });
 }
+
+console.log("\n=== impact-selection ===");
+console.log(`変更実行ファイル: ${impact.files.join(", ") || "(なし)"}`);
+console.log(`影響領域: ${impact.areas.join(", ") || "(なし)"}`);
+console.log(`自動回帰スイート: ${impact.suites.join(", ") || "(なし)"}`);
+console.log(`統合実行スイート: ${selectedSuites.join(", ") || "(なし)"}`);
+if (finalMode) console.log(`coreとの重複除外後: ${impactOnlySuites.join(", ") || "(なし)"}`);
 
 console.log("\n=== app-shell-precache ===");
 const appShellCheck = checkAppShellPrecache();

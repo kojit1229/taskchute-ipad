@@ -113,9 +113,11 @@ workspace CLAUDE.md NEVER 1に従い、1コミットの**実行コード差分**
   `npm run test:core`を1回だけ実行する。最終core後に実行コード・共有helperを直した場合だけ、
   関連スイート→coreを再実行する。文書・release記録だけの修正ではcoreを繰り返さない。
 - v164以降の開発中は
-  `node scripts/release-gate.js releases/vNNN.json --suite=<関連スイート[,回帰対象]>`、
-  仕様変更で`vNNN.test.js`がある場合だけvNNNも含める。
-  最終時は`node scripts/release-gate.js releases/vNNN.json --final`として検証順を一本化する。
+  `node scripts/release-gate.js releases/vNNN.json [--suite=<追加対象>]`を使う。
+  release番号のテストと、実行差分から選ばれる高速Node baseline・領域別回帰束は自動で加算される。
+  選定規則は`tests/impact-regression-map.json`を正本とし、CIを最初の回帰検出場所にしない。
+  最終時は`node scripts/release-gate.js releases/vNNN.json --final [--suite=<追加対象>]`として
+  重要導線smoke・自動回帰束・追加対象→coreの検証順を一本化する。core重複分は自動除外する。
 - **CI(GitHub Actions)では4シャードの和集合で必ず全量**(`npm test -- --shard=N/4`)。
   これが唯一の完全な安全網。push後は必ずGitHub ActionsのCI成功を確認すること
   (test:coreは範囲を絞ったローカル既定であり、全量の代替ではない)。

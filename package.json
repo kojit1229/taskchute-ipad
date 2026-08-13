@@ -8,6 +8,7 @@
     "test": "node tests/run-all.js",
     "test:manifest": "node scripts/test-manifest.js --check",
     "test:manifest:write": "node scripts/test-manifest.js --write",
+    "test:impact": "node scripts/impact-regression.js",
     "code:index": "node scripts/code-index.js --check",
     "code:index:write": "node scripts/code-index.js --write",
     "test:fast": "node tests/run-all.js --group=fast-node --workers=2",
