@@ -4360,7 +4360,7 @@ h3 {
 .cond-corr-row:last-child { border-bottom: none; }
 .cond-corr-head { font-weight: 700; color: var(--muted); font-size: 11px; }
 
-/* v203: TOWER T2。読み取り専用TWRヘッダだけを先行し、本文は空のままにする。 */
+/* v204: TOWER T3。読み取り専用のARRIVALS/DEPARTURESボードを追加する。 */
 .today-tower {
   --tower-bg: #050a14;
   --tower-panel: #0a1422;
@@ -4399,6 +4399,28 @@ h3 {
 .tower-day-left { display: grid; gap: 2px; min-width: 120px; padding-left: 14px; border-left: 1px solid var(--tower-line); }
 .tower-day-left strong { color: var(--tower-amber); font-size: 20px; }
 @keyframes tower-beacon-pulse { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+.tower-board { display: grid; gap: 12px; padding: 12px 0; }
+.tower-arrivals,
+.tower-departures { border: 1px solid var(--tower-line); background: var(--tower-panel); }
+.tower-board h2 { margin: 0; padding: 8px 10px; border-bottom: 1px solid var(--tower-line); color: var(--tower-cyan); font-size: 11px; letter-spacing: .18em; }
+.tower-board h2 span { float: right; color: var(--tower-text); font-size: 10px; font-weight: 400; letter-spacing: .08em; opacity: .6; }
+.tower-flight-row { display: grid; grid-template-columns: 52px 64px minmax(0, 1fr) 78px; align-items: center; min-height: 44px; border-bottom: 1px solid var(--tower-line); font-size: 11px; }
+.tower-flight-row:last-child { border-bottom: 0; }
+.tower-flight-row time { padding-left: 8px; color: var(--tower-text); font-variant-numeric: tabular-nums; opacity: .6; }
+.tower-callsign { color: var(--tower-cyan); }
+.tower-flight-title { min-width: 0; min-height: 44px; padding: 0 6px; overflow: hidden; border: 0; color: var(--tower-text); font: inherit; font-family: system-ui, sans-serif; text-align: left; text-overflow: ellipsis; white-space: nowrap; background: transparent; }
+.tower-flight-title:focus-visible { outline: 2px solid var(--tower-amber); outline-offset: -2px; }
+.tower-status { justify-self: end; padding-right: 8px; color: var(--tower-text); opacity: .55; transform-origin: center; }
+.tower-status[data-status="final"],
+.tower-status[data-status="resloted"] { color: var(--tower-amber); opacity: 1; }
+.tower-status[data-status="landing"] { color: var(--tower-green); opacity: 1; }
+.tower-arrival-row[data-status="arrived"] { opacity: .42; }
+.tower-status.is-flip { animation: tower-board-flip 600ms ease-out; }
+.tower-departure-row { grid-template-columns: 52px 64px minmax(0, 1fr); }
+.tower-departure-row .tower-callsign { color: var(--tower-text); opacity: .6; }
+.tower-flight-summary { padding: 7px 10px; border-top: 1px solid var(--tower-line); color: var(--tower-text); font-size: 10px; text-align: right; opacity: .6; }
+.tower-flight-summary:empty { display: none; }
+@keyframes tower-board-flip { 0% { opacity: .2; transform: perspective(120px) rotateX(90deg); } 100% { opacity: 1; transform: perspective(120px) rotateX(0); } }
 /* Codexレビュー反映: 720px以下は.main-paneの高さが不定でmin-height:100%が解決されず背景が途切れるため、viewport基準にする。 */
 @media (max-width: 720px) { .today-tower { min-height: 100vh; min-height: 100dvh; } }
 
@@ -5014,6 +5036,7 @@ h3 {
 }
 @media (prefers-reduced-motion: reduce) {
   .tower-beacon i { animation: none; }
+  .tower-status.is-flip { animation: none; }
   .today-now-label i { animation: none; }
   /* C1(v192): 縞模様の流れるアニメだけ止め、静的な縞+文言で超過状態を伝える(サンプル432-433行準拠) */
   #todayNowProgress.over::before { animation: none; }

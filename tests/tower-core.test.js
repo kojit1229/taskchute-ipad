@@ -1,4 +1,4 @@
-// tests/tower-core.test.js — v203 TOWER T2のスキン切替・TWRヘッダ契約E2E。
+// tests/tower-core.test.js — v204 TOWERのスキン・TWRヘッダ・発着ボード契約E2E。
 // today-core.test.jsと同じく、localStorage seed + 既存nav + Playwright clockで検証する。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY } = require("./helpers");
 
@@ -22,6 +22,15 @@ function check(name, cond, extra = "") {
   const base = new Date();
   base.setHours(12, 0, 0, 0);
   const fixedTime = (seconds) => new Date(base.getFullYear(), base.getMonth(), base.getDate(), 12, 0, seconds, 0);
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const isoOf = (date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+  const today = isoOf(base);
+  const tomorrow = isoOf(new Date(base.getFullYear(), base.getMonth(), base.getDate() + 1));
+  const atMinute = (date, minute) => `${date}T${pad2(Math.floor(minute / 60))}:${pad2(minute % 60)}:00`;
+  const block = (id, title, date, minute, extra = {}) => ({
+    id, title, date, category: "開発", plannedStartAt: atMinute(date, minute), plannedEndAt: "",
+    actualStartAt: "", actualEndAt: "", completed: false, deleted: false, orderIndex: 0, ...extra
+  });
 
   async function seedSkin(value, view = "today") {
     await page.evaluate(({ KEY, value, view }) => {
@@ -37,6 +46,18 @@ function check(name, cond, extra = "") {
 
   async function storedSkin() {
     return page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).settings.todaySkin, KEY);
+  }
+
+  async function seedBoard(arrivals, departures = []) {
+    await page.evaluate(({ KEY, arrivals, departures }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.currentView = "today";
+      s.settings.todaySkin = "tower";
+      s.blocks = [...arrivals, ...departures];
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, arrivals, departures });
+    await page.reload();
+    await page.waitForSelector(".today-tower", { state: "attached" });
   }
 
   try {
@@ -100,8 +121,8 @@ function check(name, cond, extra = "") {
       const cs = getComputedStyle(root);
       const tokens = ["bg", "panel", "line", "text", "amber", "green", "cyan", "purple"]
         .map((key) => [`--tower-${key}`, cs.getPropertyValue(`--tower-${key}`).trim()]);
-      const els = [".tower-time time", ".tower-day-left strong", ".tower-eyebrow", ".tower-beacon i"]
-        .map((sel) => [sel, getComputedStyle(root.querySelector(sel)).color]);
+      const els = [".tower-time time", ".tower-day-left strong", ".tower-eyebrow", ".tower-beacon i", ".tower-status"]
+        .map((sel) => { const el = root.querySelector(sel); return [sel, el ? getComputedStyle(el).color : ""]; });
       return { tokens, els };
     });
     const parseColor = (text) => {
@@ -127,7 +148,6 @@ function check(name, cond, extra = "") {
       JSON.stringify(towerColors.els));
 
     console.log("[6] towerの日跨ぎで全再描画される(レビューM2反映)");
-    const pad2 = (n) => String(n).padStart(2, "0");
     await page.clock.setFixedTime(new Date(base.getFullYear(), base.getMonth(), base.getDate(), 23, 59, 59, 0));
     await page.waitForFunction(() => document.getElementById("towerClock")?.textContent === "23:59:59");
     const towerDateBefore = (await page.locator("#towerDate").textContent()) || "";
@@ -139,6 +159,74 @@ function check(name, cond, extra = "") {
     check("日跨ぎで#towerDateが翌日日付になる", towerDateAfter.startsWith(nextISO), towerDateAfter);
     check("日跨ぎで#towerDayLeftがほぼ丸一日へ戻る", /^23:59:/.test((await page.locator("#towerDayLeft").textContent()) || ""),
       await page.locator("#towerDayLeft").textContent());
+
+    console.log("[7] ARRIVALSは本日便の現在前後5便だけを表示する");
+    await page.clock.setFixedTime(fixedTime(0));
+    const arrivals = Array.from({ length: 13 }, (_, index) =>
+      block(`arr-${index}`, `本日便${index + 1}`, today, 9 * 60 + 30 + index * 30));
+    arrivals.push(block("routine-hidden", "除外ルーティン", today, 11 * 60, { category: "ルーティン" }));
+    arrivals.push(block("onetap-hidden", "除外ワンタップ", today, 11 * 60 + 15, { oneTap: true }));
+    const departures = [
+      block("dep-late", "明日15時", tomorrow, 15 * 60), block("dep-first", "明日8時半", tomorrow, 8 * 60 + 30),
+      block("dep-third", "明日13時", tomorrow, 13 * 60), block("dep-second", "明日10時", tomorrow, 10 * 60)
+    ];
+    await seedBoard(arrivals, departures);
+    check("ARRIVALSは最大11行", await page.locator(".tower-arrival-row").count() === 11);
+    check("窓外2便を数字だけで要約する", (await page.locator(".tower-flight-summary").textContent())?.trim() === "他 2 便");
+    const arrivalCallsigns = await page.locator(".tower-arrival-row .tower-callsign").allTextContents();
+    check("本日の便名はTC-701起点", arrivalCallsigns[0] === "TC-701", JSON.stringify(arrivalCallsigns));
+    const labels = await page.locator(".tower-arrival-row .tower-status").allTextContents();
+    const allowedLabels = new Set(["到着", "着陸中", "リスロット", "最終進入", "待機"]);
+    check("状態ラベルは確定語彙だけ", labels.every((label) => allowedLabels.has(label)), JSON.stringify(labels));
+    check("ルーティンはARRIVALSに出ない", await page.locator('.tower-flight-title:has-text("除外ルーティン")').count() === 0);
+    check("oneTapはARRIVALSに出ない", await page.locator('.tower-flight-title:has-text("除外ワンタップ")').count() === 0);
+
+    console.log("[8] ARRIVALSのタスク名タップは既存Blockモーダルを開く");
+    await page.locator('.tower-arrival-row[data-flight-id="arr-0"] .tower-flight-title').click();
+    await page.waitForSelector(".modal-card", { state: "attached" });
+    check("既存Block編集モーダルが開く", await page.locator(".modal-card").count() === 1);
+    await page.locator('.modal-card [data-action="modal-close"]').first().click();
+    await page.waitForSelector(".modal-card", { state: "detached" });
+
+    console.log("[9] DEPARTURESは明日の定刻順で3便まで表示する");
+    const departureRows = page.locator(".tower-departure-row");
+    check("DEPARTURESは3行上限", await departureRows.count() === 3);
+    check("DEPARTURESは定刻昇順", JSON.stringify(await departureRows.locator("time").allTextContents()) === JSON.stringify(["08:30", "10:00", "13:00"]));
+    check("明日の便名もTC-701から振り直す", JSON.stringify(await departureRows.locator(".tower-callsign").allTextContents()) === JSON.stringify(["TC-701", "TC-703", "TC-705"]));
+
+    console.log("[10] tickerは行を再構築せず状態文字列をフリップ更新する");
+    const crossing = [block("flip-first", "境界便", today, 12 * 60), block("flip-next", "次便", today, 13 * 60)];
+    await page.clock.setFixedTime(fixedTime(0));
+    await seedBoard(crossing);
+    // 起動時同期(404)後のアプリ全体render()がDOMを一度差し替えるため、沈静化してから同一性を計測する。
+    await page.waitForLoadState("networkidle");
+    const crossingStatus = page.locator('.tower-arrival-row[data-flight-id="flip-first"] .tower-status');
+    check("境界前は最終進入", (await crossingStatus.textContent()) === "最終進入");
+    // レビューM2反映: locator再解決ではDOM同一性を検証できないため、遷移前のElementHandleの生存で「再構築していない」を固定する。
+    // fixed clock下ではアニメーションイベントが発火しない(=is-flipはanimationendで外れず残る)ため、クラス+computedで検証する。
+    const statusHandle = await crossingStatus.elementHandle();
+    await page.clock.setFixedTime(new Date(base.getFullYear(), base.getMonth(), base.getDate(), 12, 1, 0, 0));
+    await page.waitForFunction(() => document.querySelector('[data-flight-id="flip-first"] .tower-status')?.textContent === "リスロット");
+    check("時刻経過後はリスロットへ差分更新", (await crossingStatus.textContent()) === "リスロット");
+    check("状態セルのDOM要素は再構築されず同一のまま", await statusHandle.evaluate((el) => el.isConnected && el.textContent === "リスロット"));
+    check("遷移した状態セルにis-flipが付与されflipアニメが適用される",
+      await statusHandle.evaluate((el) => el.classList.contains("is-flip") && getComputedStyle(el).animationName === "tower-board-flip"));
+
+    console.log("[11] 11便超の日は時間経過の窓ずれをtickが追従する(フォーカス中は保留)");
+    const many = Array.from({ length: 13 }, (_, i) => block(`w${i}`, `便${i}`, today, 9 * 60 + i * 30));
+    await page.clock.setFixedTime(new Date(base.getFullYear(), base.getMonth(), base.getDate(), 12, 0, 30, 0));
+    await seedBoard(many);
+    await page.waitForLoadState("networkidle");
+    check("12:00時点の窓は w1..w11", (await page.locator(".tower-arrival-row").first().getAttribute("data-flight-id")) === "w1");
+    await page.locator('.tower-arrival-row[data-flight-id="w6"] .tower-flight-title').focus();
+    await page.clock.setFixedTime(new Date(base.getFullYear(), base.getMonth(), base.getDate(), 12, 30, 30, 0));
+    await page.waitForFunction(() => document.getElementById("towerClock")?.textContent === "12:30:30");
+    check("フォーカス中は行を作り直さない(先頭はw1のまま)", (await page.locator(".tower-arrival-row").first().getAttribute("data-flight-id")) === "w1");
+    check("フォーカスは失われない", await page.evaluate(() => document.activeElement?.closest?.('[data-flight-id="w6"]') !== null));
+    await page.evaluate(() => document.activeElement.blur());
+    await page.waitForFunction(() => document.querySelector(".tower-arrival-row")?.dataset.flightId === "w2");
+    check("フォーカス解除後のtickで窓がw2..w12へずれる", (await page.locator(".tower-arrival-row").first().getAttribute("data-flight-id")) === "w2");
+    check("窓ずれ後も他 n 便のサマリが正しい", ((await page.locator("#towerArrivalSummary").textContent()) || "").trim() === "他 2 便");
   } finally {
     await browser.close();
     server.close();

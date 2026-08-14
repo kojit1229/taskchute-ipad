@@ -44,7 +44,7 @@ function configureToday(deps) {
     getScheduleData, makeBlock, saveState, openBlockEditor
   } = deps);
   configureCoach({ escapeHTML, todayISO, saveState, panelHeading, renderCircularProgress });
-  configureTodayTower({ escapeHTML, todayISO, homeSyncAlertBanner });
+  configureTodayTower({ escapeHTML, todayISO, homeSyncAlertBanner, blocksForDate, towerFlights });
   registerActions({
     "today-kindle-prev": () => moveTodayKindle(-1),
     "today-kindle-next": () => moveTodayKindle(1),
