@@ -4360,6 +4360,48 @@ h3 {
 .cond-corr-row:last-child { border-bottom: none; }
 .cond-corr-head { font-weight: 700; color: var(--muted); font-size: 11px; }
 
+/* v203: TOWER T2。読み取り専用TWRヘッダだけを先行し、本文は空のままにする。 */
+.today-tower {
+  --tower-bg: #050a14;
+  --tower-panel: #0a1422;
+  --tower-line: #25384d;
+  --tower-text: #d9e7f2;
+  --tower-amber: #f2b84b;
+  --tower-green: #52d68a;
+  --tower-cyan: #55d9e8;
+  --tower-purple: #a78bfa;
+  min-height: 100%;
+  color: var(--tower-text);
+  font-family: var(--mono, ui-monospace), "SFMono-Regular", Consolas, monospace;
+  background: var(--tower-bg);
+}
+.tower-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  border: 1px solid var(--tower-line);
+  background: var(--tower-panel);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
+}
+.tower-beacon { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--tower-line); border-radius: 50%; }
+.tower-beacon i { width: 10px; height: 10px; border-radius: 50%; background: var(--tower-amber); box-shadow: 0 0 12px var(--tower-amber); animation: tower-beacon-pulse 1.4s ease-in-out infinite; }
+.tower-identity { display: grid; gap: 2px; }
+.tower-eyebrow { color: var(--tower-cyan); font-size: 10px; font-weight: 700; letter-spacing: .18em; }
+.tower-identity strong { font-size: 20px; letter-spacing: .16em; }
+.tower-time { display: grid; gap: 2px; margin-left: auto; text-align: right; }
+.tower-time time,
+.tower-day-left strong { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; letter-spacing: .08em; }
+.tower-time time { color: var(--tower-green); font-size: 25px; font-weight: 700; }
+.tower-time span,
+.tower-day-left span { color: var(--tower-cyan); font-size: 10px; letter-spacing: .1em; }
+.tower-day-left { display: grid; gap: 2px; min-width: 120px; padding-left: 14px; border-left: 1px solid var(--tower-line); }
+.tower-day-left strong { color: var(--tower-amber); font-size: 20px; }
+@keyframes tower-beacon-pulse { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+/* Codexレビュー反映: 720px以下は.main-paneの高さが不定でmin-height:100%が解決されず背景が途切れるため、viewport基準にする。 */
+@media (max-width: 720px) { .today-tower { min-height: 100vh; min-height: 100dvh; } }
+
 /* v182: 「今日」コックピット(P1〜P4)。today名前空間に閉じ、既存home等へ波及させない。 */
 .today-cockpit {
   min-height: 100%;
@@ -4971,6 +5013,7 @@ h3 {
   .today-coach-log button { grid-column: 2 / -1; justify-self: end; }
 }
 @media (prefers-reduced-motion: reduce) {
+  .tower-beacon i { animation: none; }
   .today-now-label i { animation: none; }
   /* C1(v192): 縞模様の流れるアニメだけ止め、静的な縞+文言で超過状態を伝える(サンプル432-433行準拠) */
   #todayNowProgress.over::before { animation: none; }

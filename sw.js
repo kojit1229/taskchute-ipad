@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v202";
+const CACHE_NAME = "taskchute-journal-pwa-v203";
+// v203: 今日タブにTOWERスキン切替と読み取り専用TWRヘッダを追加した。
 // v202: 今日タブの純関数をsrc/core/today-model.jsへ抽出し、towerFlightsを追加した。
 // v201: AIコーチカード第1弾(1a)。摂取カロリー残量とクイック食事記録を今日タブへ追加し、
 //   coachLog.mealsをupdatedAt+tombstone対応の端末間和集合マージへ配線した。
@@ -260,6 +261,7 @@ const APP_SHELL = [
   "./src/features/timeline-layout.js",
   "./src/features/timeline.js",
   "./src/features/timeswitch.js",
+  "./src/features/today-tower.js",
   "./src/features/today.js",
   "./src/features/wish.js",
   "./src/state/feedback-cache.js",

@@ -1752,6 +1752,8 @@ function normalizeState(value) {
   if (!["light", "dark", "cockpit", "auto"].includes(value.settings.theme)) {
     value.settings.theme = "dark";
   }
+  // v203: 今日タブの表示スキン。既存端末・未知値は従来表示のcockpitへ戻す。
+  if (!["cockpit", "tower"].includes(value.settings.todaySkin)) value.settings.todaySkin = "cockpit";
   if (typeof value.settings.autoArchive !== "boolean") value.settings.autoArchive = true;
   value.settings.lastArchivedAt ||= "";
   // v43: 自動同期(既定OFF・保守的)。lastPushedAt = 最後に push した時の dataModifiedAt。
@@ -9613,6 +9615,7 @@ function renderSettingsGuidedAccessPanel() {
 // 保存直後のrender()でhtml[data-theme]/meta[theme-color]も自動的に追従する。
 function renderSettingsThemePanel() {
   const theme = ["light", "dark", "cockpit", "auto"].includes(state.settings.theme) ? state.settings.theme : "dark";
+  const todaySkin = ["cockpit", "tower"].includes(state.settings.todaySkin) ? state.settings.todaySkin : "cockpit";
   return `
     <h3>🌗 テーマ</h3>
     <div class="muted" style="font-size:12px; line-height:1.6">
@@ -9624,6 +9627,12 @@ function renderSettingsThemePanel() {
         <option value="light" ${theme === "light" ? "selected" : ""}>ライト</option>
         <option value="cockpit" ${theme === "cockpit" ? "selected" : ""}>コックピット</option>
         <option value="auto" ${theme === "auto" ? "selected" : ""}>OS追従</option>
+      </select>
+    </label>
+    <label>今日タブの表示
+      <select class="select" data-setting-field="todaySkin">
+        <option value="cockpit" ${todaySkin === "cockpit" ? "selected" : ""}>コックピット</option>
+        <option value="tower" ${todaySkin === "tower" ? "selected" : ""}>タワー(開発中・現在はヘッダのみ)</option>
       </select>
     </label>
   `;

@@ -5,6 +5,7 @@
 import { state } from "../state/store.js";
 import { registerActions } from "../ui/actions.js";
 import { configureCoach, renderCoach } from "./coach.js";
+import { configureTodayTower, renderTodayTower, updateTodayTowerTick } from "./today-tower.js";
 import {
   runningBlockOf as coreRunningBlockOf, queueBlocksOf as coreQueueBlocksOf,
   routineBandsOf as coreRoutineBandsOf, undoneRoutineBlocksOf as coreUndoneRoutineBlocksOf,
@@ -43,6 +44,7 @@ function configureToday(deps) {
     getScheduleData, makeBlock, saveState, openBlockEditor
   } = deps);
   configureCoach({ escapeHTML, todayISO, saveState, panelHeading, renderCircularProgress });
+  configureTodayTower({ escapeHTML, todayISO, homeSyncAlertBanner });
   registerActions({
     "today-kindle-prev": () => moveTodayKindle(-1),
     "today-kindle-next": () => moveTodayKindle(1),
@@ -615,6 +617,10 @@ function renderFlightPlan(blocks) {
 function renderToday() {
   const dateISO = todayISO();
   todayRenderedDateISO = dateISO;
+  if (state.settings.todaySkin === "tower") {
+    startTodayTicker();
+    return renderTodayTower();
+  }
   const blocks = blocksForDate(dateISO);
   const queue = queueBlocksOf(blocks);
   const deferred = deferralStats(blocks);
@@ -685,8 +691,6 @@ function updateTodayTick() {
     return;
   }
   if (typeof document === "undefined") return;
-  const clock = document.getElementById("todayClock");
-  if (!clock) return;
   if (document.hidden) return;
   const dateISO = todayISO();
   if (todayRenderedDateISO !== null && dateISO !== todayRenderedDateISO) {
@@ -694,6 +698,12 @@ function updateTodayTick() {
     renderDeferringForFocus();
     return;
   }
+  if (document.querySelector(".today-tower")) {
+    updateTodayTowerTick();
+    return;
+  }
+  const clock = document.getElementById("todayClock");
+  if (!clock) return;
   const now = new Date();
   clock.textContent = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
   const blocks = blocksForDate(dateISO);
