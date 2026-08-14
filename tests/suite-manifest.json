@@ -534,6 +534,29 @@
       }
     },
     {
+      "file": "tower-model-core.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "legacy-crosscutting"
+      ],
+      "assertionSignals": 6,
+      "assertionHash": "731e37b03928ef69",
+      "sourceHash": "b3e4fa507f156e10",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
       "file": "v100.test.js",
       "kind": "e2e",
       "tier": "full",

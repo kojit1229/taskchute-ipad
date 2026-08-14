@@ -1,0 +1,48 @@
+{
+  "version": 202,
+  "date": "2026-08-14",
+  "title": "TOWER T1: 今日タブのデータ層抽出と便モデル追加",
+  "summary": "今日タブの純関数群をsrc/core/today-model.jsへ抽出し、today.jsを互換ラッパー化した。既存表示の挙動差分はゼロとし、TOWERスキンの土台となる決定論的なtowerFlightsを新設した。",
+  "changedFiles": [
+    "CHANGES_v202.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v202.json",
+    "src/core/today-model.js",
+    "src/features/today.js",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/tower-model-core.test.js"
+  ],
+  "intent": [
+    "TOWERスキンの描画層を後続リリースで追加できるよう、今日タブの判断ロジックをstate非依存・importゼロの純粋なcore葉へ分離する。",
+    "既存のtoday.js公開関数と呼び出しシグネチャを薄い依存注入ラッパーで維持し、cockpitスキンのDOM・操作・ticker挙動を変えない。",
+    "同じ日の同じBlock集合から入力順に依存しない便名・状態を生成し、責めない航空語彙だけを返すtowerFlightsをT2以降の共通データ契約にする。"
+  ],
+  "changes": [
+    "src/core/today-model.jsを新設し、runningBlockOf/queueBlocksOf/routineBandsOf/undoneRoutineBlocksOf/twelveWeekMinutes/projectedInfo/flightPositionをロジック無変更で移設した。外部依存はhelpers、projects、tasks引数で受ける。",
+    "towerFlights(blocks, nowMin, helpers)を新設した。plannedStartAt→orderIndex→idの決定論的ソート、TC-701からの奇数連番、到着/着陸中/リスロット/最終進入/待機の優先状態判定を実装した。",
+    "src/features/today.jsはconfigureTodayで注入済みの依存をcoreへ渡す互換ラッパーへ置換し、towerFlightsも同モジュールからexportした。",
+    "sw.jsのAPP_SHELLへsrc/core/today-model.jsを追加し、CACHE_NAMEをv201からv202へ更新した。",
+    "tests/tower-model-core.test.jsを追加し、便名決定論、全状態境界、予定なし末尾、queueBlocksOf、projectedInfo翌日跨ぎ、coreのimport/state非依存を固定した。test manifestと影響マップを再生成した。"
+  ],
+  "uncertainties": [
+    "tests/today-core.test.jsの[76](reduced-motion時の縞模様アニメ停止)がレビュー時8回中2回失敗した(本差分にCSS/DOM変更はなく、独立レビューは既存の読み込みタイミング競合の露出と推測)。恒久対応([76]の待機条件強化)は別チケット。",
+    "iOS実機PWAでのv202キャッシュ更新とオフライン起動は未確認。"
+  ],
+  "reviewFocus": [
+    "today-model.jsがimport文・state参照・I/Oを持たず、移設7関数の分岐・ソート・既定値が抽出前と同一か。",
+    "towerFlightsの状態優先順位、plannedMin===nowMin境界、同時刻のorderIndex/idタイブレーク、plannedStartAt無しの末尾配置が仕様どおりか。",
+    "実行コード差分がSize-Exemptなしで200行以内に収まり、today.jsの既存export契約とSW APP_SHELLが維持されているか。"
+  ],
+  "verification": [
+    "npm run test:manifest:write → WROTE: 142 suites / npm run code:index:write → WROTE: code index 706 functions。",
+    "node tests/tower-model-core.test.js → 全件成功(レビュー反映後28チェック: 便名決定論・入力非破壊・状態境界・移設7関数のcharacterization)。",
+    "node scripts/release-record.js releases/v202.json --write → CHANGES/notes handoff再生成、--check → PASS。",
+    "node scripts/release-gate.js releases/v202.json(非final)→ All suites passed / PASS: release gate(ブラウザ回帰束・today-core含む)。",
+    "2系統レビュー: Codexレビュー=指摘なし(挙動保持・仕様適合・SW更新適切)。reviewer(Claude)=条件付き合格(med2件=v191根拠コメント消失・characterization不足 → 本記録の版で対応済み。low5件は対応またはT3申し送り)。",
+    "node scripts/release-gate.js releases/v202.json --final → PASS(コミット直前に監督者環境で実行。today-core単独3回の再現性確認も全PASS)。"
+  ],
+  "knownLimitations": [
+    "T1はデータ層だけを追加する。TOWERスキンの設定・描画・CSS・実機モーションはT2以降のスコープ。"
+  ]
+}

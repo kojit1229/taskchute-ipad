@@ -5,6 +5,12 @@
 import { state } from "../state/store.js";
 import { registerActions } from "../ui/actions.js";
 import { configureCoach, renderCoach } from "./coach.js";
+import {
+  runningBlockOf as coreRunningBlockOf, queueBlocksOf as coreQueueBlocksOf,
+  routineBandsOf as coreRoutineBandsOf, undoneRoutineBlocksOf as coreUndoneRoutineBlocksOf,
+  twelveWeekMinutes as coreTwelveWeekMinutes, projectedInfo as coreProjectedInfo,
+  flightPosition as coreFlightPosition, towerFlights as coreTowerFlights
+} from "../core/today-model.js";
 
 let escapeHTML, todayISO, blocksForDate, minutesOf, timeFromDateTime;
 let localDateTimeToMs, resolveEstimateMin, computeProjectedEnd;
@@ -110,68 +116,23 @@ function todayZeroDeck(zeroThinking) {
 }
 
 function runningBlockOf(blocks) {
-  // v191(C2): ルーティン系は「未実施チップ」経由の即完了に一本化するため、
-  // NOW FOCUSの対象(=実行中ブロック)からは除外する。
-  return (blocks || [])
-    .filter((b) => b.actualStartAt && !b.actualEndAt && b.category !== "ルーティン")
-    .sort((a, b) => localDateTimeToMs(b.actualStartAt) - localDateTimeToMs(a.actualStartAt))[0] || null;
+  return coreRunningBlockOf(blocks, { localDateTimeToMs });
 }
 
 function queueBlocksOf(blocks) {
-  // v191(C2): ルーティンはNEXT QUEUEに出さず、ROUTINEパネルのチップへ一本化する。
-  return (blocks || [])
-    .filter((b) => !b.completed && !b.actualStartAt && !isStaleBlock(b) && !b.oneTap && b.category !== "ルーティン")
-    .sort((a, b) => {
-      const aMin = a.plannedStartAt ? minutesOf(a.plannedStartAt) : Number.POSITIVE_INFINITY;
-      const bMin = b.plannedStartAt ? minutesOf(b.plannedStartAt) : Number.POSITIVE_INFINITY;
-      return aMin - bMin || (Number(a.orderIndex) || 0) - (Number(b.orderIndex) || 0);
-    })
-    .slice(0, 5);
-}
-
-function routineBandFor(block) {
-  const minute = block.plannedStartAt ? minutesOf(block.plannedStartAt) : 0;
-  if (minute < 9 * 60) return "朝";
-  if (minute < 12 * 60) return "午前";
-  if (minute < 18 * 60) return "午後";
-  return "夜";
+  return coreQueueBlocksOf(blocks, { minutesOf, isStaleBlock });
 }
 
 function routineBandsOf(blocks) {
-  // v191(C2): routineRate()(src/features/routine.js)は実績記録専用のoneTap Blockを
-  // 除外して集計するため、帯合計=routineRate と一致させるためここでも揃える。
-  const bands = ["朝", "午前", "午後", "夜"].map((label) => ({ label, done: 0, total: 0 }));
-  (blocks || []).filter((b) => b.category === "ルーティン" && !b.oneTap).forEach((block) => {
-    const band = bands.find((item) => item.label === routineBandFor(block));
-    band.total += 1;
-    if (block.completed) band.done += 1;
-  });
-  return bands;
+  return coreRoutineBandsOf(blocks, { minutesOf });
 }
 
-// v191(C2)、v191レビュー反映(修正2): ROUTINEパネルの「未実施」チップ列の対象(当日の未完了・未削除・
-// 非oneTapルーティンBlock)。oneTap(計時タブのカテゴリタイマー等、実績記録専用Block)は
-// 誤タップで完了させる導線が無いはずのため除外する(routineRate/routineBandsOfと同じ除外)。
 function undoneRoutineBlocksOf(blocks) {
-  return (blocks || []).filter((b) => b.category === "ルーティン" && !b.completed && !b.deleted && !b.oneTap);
-}
-
-function actualMinutes(block, nowMs = Date.now()) {
-  const startMs = localDateTimeToMs(block.actualStartAt);
-  if (!startMs) return 0;
-  const endMs = localDateTimeToMs(block.actualEndAt) || nowMs;
-  return Math.max(0, Math.floor((endMs - startMs) / 60000));
+  return coreUndoneRoutineBlocksOf(blocks);
 }
 
 function twelveWeekMinutes(blocks, nowMs = Date.now()) {
-  const goalProjectIds = new Set((state.projects || [])
-    .filter((p) => !p.deleted && p.kind === "normal" && p.status === "active" && p.twelveWeekStartDate)
-    .map((p) => p.id));
-  const goalTaskIds = new Set((state.tasks || [])
-    .filter((t) => !t.deleted && goalProjectIds.has(t.projectId))
-    .map((t) => t.id));
-  return (blocks || []).filter((b) => goalTaskIds.has(b.taskId))
-    .reduce((sum, block) => sum + actualMinutes(block, nowMs), 0);
+  return coreTwelveWeekMinutes(blocks, state.projects, state.tasks, { localDateTimeToMs }, nowMs);
 }
 
 function formatDuration(minutes) {
@@ -193,19 +154,7 @@ function nowEstimateLabel(over, estimate) {
 }
 
 function projectedInfo(blocks, now = new Date()) {
-  const remaining = (blocks || []).filter((b) => !b.completed);
-  if (!remaining.length) return { text: "完了", comparison: "", remainingMin: 0 };
-  const nowMin = now.getHours() * 60 + now.getMinutes();
-  const endMin = computeProjectedEnd(todayISO(), nowMin);
-  const plannedEnd = Math.max(0, ...(blocks || [])
-    .filter((b) => b.plannedStartAt)
-    .map((b) => minutesOf(b.plannedEndAt || b.plannedStartAt)));
-  const hh = Math.floor((endMin % 1440) / 60);
-  const mm = endMin % 60;
-  const text = `${endMin >= 1440 ? "翌" : ""}${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
-  const delta = plannedEnd ? endMin - plannedEnd : 0;
-  const comparison = plannedEnd ? `計画比 ${delta >= 0 ? "+" : "−"}${Math.abs(delta)}分` : "計画終端なし";
-  return { text, comparison, remainingMin: Math.max(0, endMin - nowMin) };
+  return coreProjectedInfo(blocks, { computeProjectedEnd, todayISO, minutesOf }, now);
 }
 
 function projectForBlock(block) {
@@ -556,7 +505,12 @@ function renderRoutine(blocks) {
 }
 
 function flightPosition(minute) {
-  return clamp((minute - 6 * 60) / (18 * 60) * 100, 0, 100);
+  return coreFlightPosition(minute, { clamp });
+}
+
+// v202: TOWER描画層へconfigureToday済みの時刻ヘルパーを中継する。
+function towerFlights(blocks, nowMin) {
+  return coreTowerFlights(blocks, nowMin, { minutesOf });
 }
 
 function todayExternalEvents() {
@@ -811,5 +765,5 @@ export {
   configureToday, renderToday, updateTodayTick, startTodayTicker, stopTodayTicker,
   isTodayTickerRunning, runningBlockOf, queueBlocksOf, routineBandsOf,
   undoneRoutineBlocksOf, twelveWeekMinutes, projectedInfo, flightPosition,
-  deterministicReadingDeck, todayZeroDeck
+  towerFlights, deterministicReadingDeck, todayZeroDeck
 };
