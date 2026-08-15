@@ -4447,6 +4447,34 @@ h3 {
 @keyframes tower-touchdown { 0% { opacity: 1; transform: translate(-50%, -50%) scale(.4); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(3); } }
 @media (max-width: 720px) { .tower-nowhud { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); } .tower-now-actions { flex-wrap: wrap; } }
 
+/* v206: TOWER T5。FUEL/TRAFFIC半円ゲージ。 */
+.tower-gauges { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding-top: 12px; }
+.tower-gauge { min-width: 0; padding: 10px; border: 1px solid var(--tower-line); background: var(--tower-panel); }
+.tower-gauge h3 { margin: 0; color: var(--tower-cyan); font-size: 11px; letter-spacing: .18em; }
+.tower-gauge h3 span { float: right; color: var(--tower-text); font-size: 10px; font-weight: 400; letter-spacing: .06em; opacity: .6; }
+.tower-gauge svg { display: block; width: min(100%, 280px); margin: 2px auto 0; overflow: visible; }
+.tower-gauge-arc,
+.tower-gauge-zone { fill: none; stroke-width: 4; stroke-linecap: round; }
+.tower-gauge-arc { stroke: var(--tower-line); }
+.tower-gauge-zone { stroke: var(--tower-amber); stroke-dasharray: 13 87; }
+.tower-gauge-needle { transform: rotate(var(--tower-needle-deg)); transform-box: view-box; transform-origin: 50px 50px; transition: transform 800ms cubic-bezier(.34, 1.56, .64, 1); }
+.tower-gauge-needle line { stroke: var(--tower-cyan); stroke-width: 2; stroke-linecap: round; }
+.tower-gauge-needle circle { fill: var(--tower-text); }
+.tower-gauge-read { display: flex; align-items: baseline; justify-content: center; gap: 6px; min-height: 25px; font-variant-numeric: tabular-nums; }
+.tower-gauge-read strong { color: var(--tower-green); font-size: 20px; }
+.tower-gauge-read span { font-size: 11px; opacity: .7; }
+.tower-fuel[data-warn="1"] .tower-gauge-read strong,
+.tower-fuel-warn { color: var(--tower-amber); }
+.tower-fuel-warn { min-height: 18px; font-size: 11px; text-align: center; }
+.tower-fuel-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; margin-top: 6px; }
+.tower-fuel-actions button { min-height: 44px; padding: 4px; border: 1px solid var(--tower-line); border-radius: 4px; color: var(--tower-text); font: inherit; font-size: 10px; background: var(--tower-bg); }
+.tower-fuel-actions button:focus-visible { outline: 2px solid var(--tower-amber); outline-offset: 1px; }
+.tower-fuel-undo { color: var(--tower-amber) !important; }
+.tower-traffic[data-zone="calm"] #towerTrafficZone { color: var(--tower-green); }
+.tower-traffic[data-zone="cruise"] #towerTrafficZone { color: var(--tower-cyan); }
+.tower-traffic[data-zone="dense"] #towerTrafficZone { color: var(--tower-amber); }
+@media (max-width: 720px) { .tower-gauges { grid-template-columns: 1fr; } .tower-fuel-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
 /* v182: 「今日」コックピット(P1〜P4)。today名前空間に閉じ、既存home等へ波及させない。 */
 .today-cockpit {
   min-height: 100%;

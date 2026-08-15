@@ -164,5 +164,5 @@ function configureCoach(deps) {
 }
 
 export {
-  configureCoach, renderCoach, coachSummaryForDate, trimCoachMeals, markCoachMealDeleted
+  configureCoach, renderCoach, coachSummaryForDate, trimCoachMeals, markCoachMealDeleted, QUICK_MEALS
 };

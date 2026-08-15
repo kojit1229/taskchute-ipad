@@ -298,6 +298,106 @@ function check(name, cond, extra = "") {
     const crossedX = await page.locator("#towerPlane").evaluate((el) => el.style.getPropertyValue("--tower-plane-x"));
     check("tickでlandingからlongへ遷移", (await page.locator("#towerNowRemain").textContent()) === "ロングフライト +1分");
     check("境界通過後の機体は100%で停止", parseFloat(crossedX) === 100, crossedX);
+
+    const seedT5 = async (blocks, meals = [], dailyKcal = 2278) => {
+      await page.evaluate(({ KEY, blocks, meals, dailyKcal }) => {
+        const s = JSON.parse(localStorage.getItem(KEY));
+        s.currentView = "today";
+        s.settings.todaySkin = "tower";
+        s.blocks = blocks;
+        s.coachLog = { meals, settings: { dailyKcal } };
+        localStorage.setItem(KEY, JSON.stringify(s));
+      }, { KEY, blocks, meals, dailyKcal });
+      await page.reload();
+      await page.waitForSelector(".tower-gauges", { state: "attached" });
+    };
+    const needleDeg = (id) => page.locator(id).evaluate((el) => parseFloat(el.style.getPropertyValue("--tower-needle-deg")));
+
+    console.log("[16] FUEL表示・既存食事記録導線・針スプリング");
+    await page.clock.setFixedTime(fixedTime(0));
+    const meal700 = { id: "meal-700", date: today, time: "11:30", kind: "quick", quickKcal: 700, label: "定食", updatedAt: new Date().toISOString() };
+    await seedT5([], [meal700]);
+    const fuel1578Deg = -90 + (1578 / 2278) * 180;
+    await page.waitForFunction((expected) => Math.abs(parseFloat(document.getElementById("towerFuelNeedle")?.style.getPropertyValue("--tower-needle-deg")) - expected) < .5, fuel1578Deg);
+    check("700kcal記録済みの残りは1,578", (await page.locator("#towerFuelValue").textContent()) === "1,578");
+    check("FUEL針は残量比の角度", Math.abs(await needleDeg("#towerFuelNeedle") - fuel1578Deg) < .5);
+    check("残り1,578ではwarn非表示", await page.locator('.tower-fuel[data-warn="0"] #towerFuelWarn').isHidden());
+    const needleTransition = await page.locator("#towerFuelNeedle").evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return { property: cs.transitionProperty, duration: cs.transitionDuration };
+    });
+    check("針にtransform 800ms transitionがある", needleTransition.property.includes("transform") && needleTransition.duration === "0.8s", JSON.stringify(needleTransition));
+    const beforeMealDeg = await needleDeg("#towerFuelNeedle");
+    const renderAfterMealDeg = await page.evaluate(() => {
+      document.querySelector('[data-action="coach-quick-add"][data-label="軽食"]')?.click();
+      document.querySelector('#sidebar [data-action="nav"][data-view="tasks"]')?.click();
+      document.querySelector('#sidebar [data-action="nav"][data-view="today"]')?.click();
+      return parseFloat(document.getElementById("towerFuelNeedle")?.style.getPropertyValue("--tower-needle-deg"));
+    });
+    check("食事記録後の全体render直後は旧角度", Math.abs(renderAfterMealDeg - beforeMealDeg) < .01, `${beforeMealDeg} -> ${renderAfterMealDeg}`);
+    check("軽食300追加で残り1,278", (await page.locator("#towerFuelValue").textContent()) === "1,278");
+    const fuel1278Deg = -90 + (1278 / 2278) * 180;
+    await page.waitForFunction((expected) => Math.abs(parseFloat(document.getElementById("towerFuelNeedle")?.style.getPropertyValue("--tower-needle-deg")) - expected) < .5, fuel1278Deg);
+    check("次tickで新しい目標角度へ更新", Math.abs(await needleDeg("#towerFuelNeedle") - fuel1278Deg) < .5);
+    await page.reload();
+    await page.waitForSelector("#towerFuelValue");
+    check("軽食記録はリロード後も保持", (await page.locator("#towerFuelValue").textContent()) === "1,278");
+    await page.locator(".tower-fuel-undo").click();
+    await page.waitForFunction(() => document.getElementById("towerFuelValue")?.textContent === "1,578");
+    check("取り消すで直近の軽食だけ消える", (await page.locator("#towerFuelValue").textContent()) === "1,578");
+
+    console.log("[17] FUEL warn境界・負値clamp・赤系禁止");
+    const meal1979 = { ...meal700, id: "meal-1979", quickKcal: 1979 };
+    await seedT5([], [meal1979]);
+    check("remaining 299はdata-warn=1", await page.locator('.tower-fuel[data-warn="1"]').count() === 1);
+    check("warn文言は今日はここまでの合図", (await page.locator("#towerFuelWarn").textContent()) === "今日はここまでの合図" && await page.locator("#towerFuelWarn").isVisible());
+    const warnColor = parseColor(await page.locator("#towerFuelWarn").evaluate((el) => getComputedStyle(el).color));
+    check("warn色は赤系でない", !isReddish(warnColor), JSON.stringify(warnColor));
+    const meal2500 = { ...meal700, id: "meal-2500", quickKcal: 2500 };
+    await seedT5([], [meal2500]);
+    await page.waitForFunction(() => parseFloat(document.getElementById("towerFuelNeedle")?.style.getPropertyValue("--tower-needle-deg")) === -90);
+    check("負のremainingも数値表示", (await page.locator("#towerFuelValue").textContent()) === "-222");
+    check("負のremainingでは針がE(-90deg)で止まる", await needleDeg("#towerFuelNeedle") === -90);
+    const negativeColors = await page.locator(".tower-fuel").evaluate((root) => [...root.querySelectorAll("*")].map((el) => getComputedStyle(el).color));
+    check("負値表示にも赤系色が無い", negativeColors.every((color) => !isReddish(parseColor(color))), JSON.stringify(negativeColors));
+
+    console.log("[18] TRAFFIC 3ゾーンと重複区間union");
+    const trafficCases = [
+      { blocks: [], zone: "calm", label: "凪" },
+      { blocks: [block("traffic-90", "90分", today, 12 * 60, { plannedEndAt: atMinute(today, 13 * 60 + 30) })], zone: "cruise", label: "巡航" },
+      { blocks: [block("traffic-150", "150分", today, 12 * 60, { plannedEndAt: atMinute(today, 14 * 60 + 30) })], zone: "dense", label: "過密" }
+    ];
+    for (const trafficCase of trafficCases) {
+      await seedT5(trafficCase.blocks);
+      check(`${trafficCase.label}はdata-zone=${trafficCase.zone}`, await page.locator(`.tower-traffic[data-zone="${trafficCase.zone}"]`).count() === 1);
+      check(`TRAFFIC表示は${trafficCase.label}`, (await page.locator("#towerTrafficZone").textContent()) === trafficCase.label);
+    }
+    const overlap = [
+      block("traffic-overlap-a", "重複A", today, 12 * 60, { plannedEndAt: atMinute(today, 15 * 60) }),
+      block("traffic-overlap-b", "重複B", today, 12 * 60, { plannedEndAt: atMinute(today, 15 * 60) })
+    ];
+    await seedT5(overlap);
+    await page.waitForFunction(() => parseFloat(document.getElementById("towerTrafficNeedle")?.style.getPropertyValue("--tower-needle-deg")) === 90);
+    check("重複予定はunionされ100%を超えない", await needleDeg("#towerTrafficNeedle") === 90);
+    // 2系統レビュー共通指摘: 日跨ぎ(23:30→翌00:30)はminutesOfが日付を捨てるためend<startとなり占有0分に落ちていた。
+    // +1440正規化後は窓[23:00,26:00]内の60分=ちょうど1/3で巡航(ゾーン境界の検証を兼ねる)。
+    await page.clock.setFixedTime(new Date(base.getFullYear(), base.getMonth(), base.getDate(), 23, 0, 0, 0));
+    const crossMidnight = [block("traffic-cross", "日跨ぎ便", today, 23 * 60 + 30, { plannedEndAt: atMinute(tomorrow, 30) })];
+    await seedT5(crossMidnight);
+    check("日跨ぎ予定の占有60分はdata-zone=cruise", await page.locator('.tower-traffic[data-zone="cruise"]').count() === 1, await page.locator(".tower-traffic").getAttribute("data-zone"));
+    check("日跨ぎ予定の針は-30deg(境界1/3ちょうど)", Math.abs(await needleDeg("#towerTrafficNeedle") - (-30)) < .5, String(await needleDeg("#towerTrafficNeedle")));
+    await page.clock.setFixedTime(fixedTime(0));
+
+    console.log("[19] 見積なし実行中とBlock 0件の空状態");
+    const noEstimate = block("rwy-no-estimate", "見積なし検証", today, 11 * 60, {
+      actualStartAt: atMinute(today, 11 * 60 + 30), estimateMin: 0
+    });
+    await seedT5([noEstimate]);
+    check("estimateMin:0の機体は0%固定", parseFloat(await page.locator("#towerPlane").evaluate((el) => el.style.getPropertyValue("--tower-plane-x"))) === 0);
+    check("estimateMin:0は見積なし", (await page.locator("#towerNowRemain").textContent()) === "見積なし");
+    await seedT5([]);
+    check("Block 0件はempty空状態", await page.locator('.tower-nowhud[data-status="empty"]').count() === 1
+      && (await page.locator(".tower-nowhud").textContent())?.trim() === "本日の着陸予定はありません");
   } finally {
     await browser.close();
     server.close();

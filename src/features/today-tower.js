@@ -1,17 +1,22 @@
-// src/features/today-tower.js — v205: 読み取り専用TOWERヘッダ+発着ボード+RWY/NOW LANDING。
+// src/features/today-tower.js — v206: TOWERヘッダ+発着ボード+RWY/NOW LANDING+FUEL/TRAFFIC。
 // state・保存・action登録には触れず、時刻・便状態は既存1秒tickerから差分更新する。
 
 let escapeHTML, todayISO, homeSyncAlertBanner, blocksForDate, towerFlights;
-let runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, timeFromDateTime, clamp;
+let runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, timeFromDateTime, minutesOf, clamp;
+let coachSummaryToday, QUICK_MEALS;
 let flipListenerBound = false;
 // undefined=セッション初回(未観測)。復元描画では接地の瞬間ではないためフラッシュを出さない
 // (起動時同期404後の全体render()と競合して非決定にもなる)。null=実行中なしを観測済み。
 let lastLandingId;
+let lastFuelDeg;
+let lastTrafficDeg;
+let lastTrafficMin;
 
 function configureTodayTower(deps) {
   ({
     escapeHTML, todayISO, homeSyncAlertBanner, blocksForDate, towerFlights,
-    runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, timeFromDateTime, clamp
+    runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, timeFromDateTime, minutesOf, clamp,
+    coachSummaryToday, QUICK_MEALS
   } = deps);
   if (!flipListenerBound && typeof document !== "undefined") {
     document.addEventListener("animationend", (event) => {
@@ -39,9 +44,8 @@ function localISO(date) {
     .map((value, index) => String(value).padStart(index ? 2 : 4, "0")).join("-");
 }
 
-function boardFlights(date, nowMin) {
-  const blocks = blocksForDate(date).filter((block) => block.category !== "ルーティン" && !block.oneTap);
-  return towerFlights(blocks, nowMin);
+function boardFlights(blocks, nowMin) {
+  return towerFlights(blocks.filter((block) => block.category !== "ルーティン" && !block.oneTap), nowMin);
 }
 
 function arrivalWindow(flights) {
@@ -68,7 +72,7 @@ function flightSetKey(flights) {
 function runwayMetrics(running, nowMs) {
   const startMs = localDateTimeToMs(running.actualStartAt);
   const elapsedSec = Math.max(0, Math.floor((nowMs - startMs) / 1000));
-  const estimate = resolveEstimateMin(running);
+  const estimate = running.estimateMin === 0 ? 0 : resolveEstimateMin(running);
   const ratio = estimate > 0 ? elapsedSec / (estimate * 60) : 0;
   const over = estimate > 0 && ratio >= 1;
   const minutes = over
@@ -80,8 +84,7 @@ function runwayMetrics(running, nowMs) {
   };
 }
 
-function renderTowerRunway(now) {
-  const blocks = blocksForDate(todayISO());
+function renderTowerRunway(now, blocks) {
   const running = runningBlockOf(blocks);
   const next = running ? null : queueBlocksOf(blocks)[0];
   const metrics = running ? runwayMetrics(running, now.getTime()) : { x: 0 };
@@ -127,12 +130,12 @@ function flightRow(flight, departure = false) {
   </div>`;
 }
 
-function renderTowerBoard(now) {
+function renderTowerBoard(now, todayBlocks) {
   const nowMin = now.getHours() * 60 + now.getMinutes();
-  const arrivalFlights = boardFlights(todayISO(), nowMin);
+  const arrivalFlights = boardFlights(todayBlocks, nowMin);
   const arrivals = arrivalWindow(arrivalFlights);
   const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-  const departures = boardFlights(localISO(tomorrow), 0).slice(0, 3);
+  const departures = boardFlights(blocksForDate(localISO(tomorrow)), 0).slice(0, 3);
   return `<section class="tower-board">
     <div class="tower-arrivals"><h2>ARRIVALS <span>本日</span></h2>
       <div id="towerArrivalRows" data-flight-set="${flightSetKey(arrivalFlights)}">${arrivals.rows.map((flight) => flightRow(flight)).join("")}</div>
@@ -144,9 +147,77 @@ function renderTowerBoard(now) {
   </section>`;
 }
 
+function gaugeSVG(needleId, deg, zonesHTML = "") {
+  return `<svg viewBox="0 0 100 58" aria-hidden="true">
+    <path class="tower-gauge-arc" d="M10 50 A40 40 0 0 1 90 50" pathLength="100"></path>${zonesHTML}
+    <g class="tower-gauge-needle" id="${needleId}" style="--tower-needle-deg:${deg}deg">
+      <line x1="50" y1="50" x2="50" y2="14"></line><circle cx="50" cy="50" r="3"></circle>
+    </g>
+  </svg>`;
+}
+
+function fuelDeg(summary) {
+  return -90 + clamp(summary.remaining / summary.dailyKcal, 0, 1) * 180;
+}
+
+function trafficState(blocks, nowMin) {
+  const ranges = blocks.filter((block) => !block.deleted && block.plannedStartAt).map((block) => {
+    const start = minutesOf(block.plannedStartAt);
+    const rawEnd = block.plannedEndAt ? minutesOf(block.plannedEndAt) : start + resolveEstimateMin(block);
+    // minutesOfは日付を捨てるため、日跨ぎ(23:30→00:30)はend<startになる。翌日分として+1440で正規化(2系統レビュー共通指摘)。
+    const end = rawEnd < start ? rawEnd + 1440 : rawEnd;
+    return [Math.max(nowMin, start), Math.min(nowMin + 180, end)];
+  }).filter(([start, end]) => end > start).sort((a, b) => a[0] - b[0]);
+  let occupied = 0;
+  let mergedEnd = -Infinity;
+  ranges.forEach(([start, end]) => {
+    occupied += Math.max(0, end - Math.max(start, mergedEnd));
+    mergedEnd = Math.max(mergedEnd, end);
+  });
+  const fraction = occupied / 180;
+  if (fraction < 1 / 3) return { deg: -90 + fraction * 180, zone: "calm", label: "凪" };
+  if (fraction < 2 / 3) return { deg: -90 + fraction * 180, zone: "cruise", label: "巡航" };
+  return { deg: -90 + fraction * 180, zone: "dense", label: "過密" };
+}
+
+function renderTowerGauges(blocks, now) {
+  const fuel = coachSummaryToday();
+  const targetFuelDeg = fuelDeg(fuel);
+  const traffic = trafficState(blocks, now.getHours() * 60 + now.getMinutes());
+  const warn = fuel.remaining < 300;
+  const lastMeal = fuel.entries[fuel.entries.length - 1];
+  const buttons = QUICK_MEALS.map(([label, kcal]) =>
+    `<button type="button" data-action="coach-quick-add" data-label="${escapeHTML(label)}" data-kcal="${kcal}">${escapeHTML(label)}${kcal}</button>`).join("");
+  lastTrafficMin = undefined;
+  // lastFuel/TrafficDeg=「最後に画面へ描いた角度」。renderは前回描画角のまま出し、次tickが目標角へ
+  // 書き換えることでtransitionが振れる(スプリング)。renderでも記録しないと、初回tick前に記録操作が
+  // 来た場合だけ針が瞬間ジャンプする(tick履歴依存の非決定)。
+  const shownFuelDeg = lastFuelDeg !== undefined ? lastFuelDeg : targetFuelDeg;
+  const shownTrafficDeg = lastTrafficDeg !== undefined ? lastTrafficDeg : traffic.deg;
+  lastFuelDeg = shownFuelDeg;
+  lastTrafficDeg = shownTrafficDeg;
+  return `<section class="tower-gauges">
+    <div class="tower-gauge tower-fuel" data-warn="${warn ? 1 : 0}">
+      <h3>FUEL <span>残りkcal</span></h3>
+      ${gaugeSVG("towerFuelNeedle", shownFuelDeg,
+        '<path class="tower-gauge-zone" d="M10 50 A40 40 0 0 1 90 50" pathLength="100"></path>')}
+      <div class="tower-gauge-read"><strong id="towerFuelValue">${fuel.remaining.toLocaleString("ja-JP")}</strong><span>/ ${fuel.dailyKcal.toLocaleString("ja-JP")} kcal</span></div>
+      <div class="tower-fuel-warn" id="towerFuelWarn"${warn ? "" : " hidden"}>今日はここまでの合図</div>
+      <div class="tower-fuel-actions">${buttons}<button type="button" class="tower-fuel-undo" data-action="coach-delete-meal" data-id="${lastMeal ? escapeHTML(lastMeal.id) : ""}"${lastMeal ? "" : " hidden"}>取り消す</button></div>
+    </div>
+    <div class="tower-gauge tower-traffic" data-zone="${traffic.zone}">
+      <h3>TRAFFIC <span>この先3時間</span></h3>
+      ${gaugeSVG("towerTrafficNeedle", shownTrafficDeg)}
+      <div class="tower-gauge-read"><span id="towerTrafficZone">${traffic.label}</span></div>
+    </div>
+  </section>`;
+}
+
 function renderTodayTower() {
   const now = new Date();
-  const date = escapeHTML(todayISO());
+  const today = todayISO();
+  const date = escapeHTML(today);
+  const blocks = blocksForDate(today);
   const weekday = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
   return `<div class="today-tower">
     ${homeSyncAlertBanner()}
@@ -156,13 +227,14 @@ function renderTodayTower() {
       <div class="tower-time"><time id="towerClock">${clockText(now)}</time><span id="towerDate">${date} (${weekday})</span></div>
       <div class="tower-day-left"><span>本日残り</span><strong id="towerDayLeft">${dayLeftText(now)}</strong></div>
     </header>
-    ${renderTowerRunway(now)}
-    ${renderTowerBoard(now)}
+    ${renderTowerRunway(now, blocks)}
+    ${renderTowerGauges(blocks, now)}
+    ${renderTowerBoard(now, blocks)}
   </div>`;
 }
 
-function updateTowerRunway(now) {
-  const running = runningBlockOf(blocksForDate(todayISO()));
+function updateTowerRunway(now, blocks) {
+  const running = runningBlockOf(blocks);
   const plane = document.getElementById("towerPlane");
   const hud = document.querySelector(".tower-nowhud");
   const remain = document.getElementById("towerNowRemain");
@@ -174,17 +246,47 @@ function updateTowerRunway(now) {
   if (metrics.over && hud.dataset.status === "landing") hud.dataset.status = "long";
 }
 
+function updateTowerGauges(blocks, nowMin) {
+  // coachSummaryForDateは最大500件のメモリ配列走査だけなので、既存1秒tickerで記録直後の差分を拾う。
+  const fuel = coachSummaryToday();
+  const fuelNeedle = document.getElementById("towerFuelNeedle");
+  const fuelValue = document.getElementById("towerFuelValue");
+  const fuelRoot = document.querySelector(".tower-fuel");
+  const fuelWarn = document.getElementById("towerFuelWarn");
+  const undo = document.querySelector(".tower-fuel-undo");
+  const lastMeal = fuel.entries[fuel.entries.length - 1];
+  if (fuelNeedle) fuelNeedle.style.setProperty("--tower-needle-deg", `${fuelDeg(fuel)}deg`);
+  lastFuelDeg = fuelDeg(fuel);
+  if (fuelValue) fuelValue.textContent = fuel.remaining.toLocaleString("ja-JP");
+  if (fuelRoot) fuelRoot.dataset.warn = fuel.remaining < 300 ? "1" : "0";
+  if (fuelWarn) fuelWarn.hidden = fuel.remaining >= 300;
+  if (undo) { undo.hidden = !lastMeal; undo.dataset.id = lastMeal ? String(lastMeal.id) : ""; }
+  if (lastTrafficMin === nowMin) return;
+  const traffic = trafficState(blocks, nowMin);
+  const trafficNeedle = document.getElementById("towerTrafficNeedle");
+  const trafficRoot = document.querySelector(".tower-traffic");
+  const trafficZone = document.getElementById("towerTrafficZone");
+  if (trafficNeedle) trafficNeedle.style.setProperty("--tower-needle-deg", `${traffic.deg}deg`);
+  if (trafficRoot) trafficRoot.dataset.zone = traffic.zone;
+  if (trafficZone) trafficZone.textContent = traffic.label;
+  lastTrafficDeg = traffic.deg;
+  lastTrafficMin = nowMin;
+}
+
 function updateTodayTowerTick() {
+  const blocks = blocksForDate(todayISO());
   const clock = document.getElementById("towerClock");
   const dayLeft = document.getElementById("towerDayLeft");
   if (!clock || !dayLeft) return;
   const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
   clock.textContent = clockText(now);
   dayLeft.textContent = dayLeftText(now);
-  updateTowerRunway(now);
+  updateTowerRunway(now, blocks);
+  updateTowerGauges(blocks, nowMin);
   const container = document.getElementById("towerArrivalRows");
   const rows = [...document.querySelectorAll(".tower-arrival-row")];
-  const flights = boardFlights(todayISO(), now.getHours() * 60 + now.getMinutes());
+  const flights = boardFlights(blocks, nowMin);
   const current = arrivalWindow(flights).rows;
   if (!container || container.dataset.flightSet !== flightSetKey(flights)) return;
   if (rows.length !== current.length || rows.some((row, index) => row.dataset.flightId !== String(current[index].id))) {

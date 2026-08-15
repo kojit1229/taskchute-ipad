@@ -4,7 +4,7 @@
 
 import { state } from "../state/store.js";
 import { registerActions } from "../ui/actions.js";
-import { configureCoach, renderCoach } from "./coach.js";
+import { configureCoach, renderCoach, coachSummaryForDate, QUICK_MEALS } from "./coach.js";
 import { configureTodayTower, renderTodayTower, updateTodayTowerTick } from "./today-tower.js";
 import {
   runningBlockOf as coreRunningBlockOf, queueBlocksOf as coreQueueBlocksOf,
@@ -46,7 +46,11 @@ function configureToday(deps) {
   configureCoach({ escapeHTML, todayISO, saveState, panelHeading, renderCircularProgress });
   configureTodayTower({
     escapeHTML, todayISO, homeSyncAlertBanner, blocksForDate, towerFlights,
-    runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, timeFromDateTime, clamp
+    runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, timeFromDateTime, minutesOf, clamp, QUICK_MEALS,
+    coachSummaryToday: () => {
+      const coach = state.coachLog && typeof state.coachLog === "object" ? state.coachLog : { meals: [], settings: { dailyKcal: 2278 } };
+      return coachSummaryForDate(coach.meals, todayISO(), coach.settings?.dailyKcal ?? 2278);
+    }
   });
   registerActions({
     "today-kindle-prev": () => moveTodayKindle(-1),
