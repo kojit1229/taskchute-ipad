@@ -4424,6 +4424,29 @@ h3 {
 /* Codexレビュー反映: 720px以下は.main-paneの高さが不定でmin-height:100%が解決されず背景が途切れるため、viewport基準にする。 */
 @media (max-width: 720px) { .today-tower { min-height: 100vh; min-height: 100dvh; } }
 
+/* v205: TOWER T4。RWY滑走路とNOW LANDING。 */
+.tower-runway { margin-top: 12px; border: 1px solid var(--tower-line); background: var(--tower-panel); }
+.tower-runway h2 { margin: 0; padding: 8px 10px; border-bottom: 1px solid var(--tower-line); color: var(--tower-cyan); font-size: 11px; letter-spacing: .18em; }
+.tower-runway h2 span { float: right; color: var(--tower-text); font-size: 10px; font-weight: 400; letter-spacing: .08em; opacity: .6; }
+.tower-runway-strip {
+  position: relative; height: 56px; overflow: hidden; border-top: 2px solid var(--tower-cyan); border-bottom: 2px solid var(--tower-cyan);
+  background: repeating-linear-gradient(90deg, var(--tower-line) 0 18px, transparent 18px 30px) center / 100% 2px no-repeat, var(--tower-bg);
+  box-shadow: inset 0 3px 8px var(--tower-line), inset 0 -3px 8px var(--tower-line);
+}
+#towerPlane { position: absolute; z-index: 2; top: 50%; left: var(--tower-plane-x, 0%); color: var(--tower-cyan); font-size: 24px; line-height: 1; text-shadow: 0 0 10px var(--tower-cyan); transform: translate(-50%, -50%); transition: left 1000ms linear; }
+.tower-touchdown { position: absolute; z-index: 1; top: 50%; left: var(--tower-plane-x, 50%); width: 16px; height: 16px; border: 2px solid var(--tower-amber); border-radius: 50%; box-shadow: 0 0 18px var(--tower-amber); transform: translate(-50%, -50%); animation: tower-touchdown 700ms ease-out 1; }
+.tower-nowhud { display: grid; grid-template-columns: auto minmax(120px, 1fr) auto auto auto; align-items: center; gap: 10px; min-height: 54px; padding: 8px 10px; color: var(--tower-text); }
+.tower-now-label { color: var(--tower-cyan); font-size: 10px; font-weight: 700; letter-spacing: .12em; }
+.tower-now-title { min-width: 0; min-height: 44px; overflow: hidden; border: 0; color: var(--tower-text); font: inherit; text-align: left; text-overflow: ellipsis; white-space: nowrap; background: transparent; }
+.tower-now-title:focus-visible { outline: 2px solid var(--tower-amber); outline-offset: -2px; }
+.tower-now-sched { font-size: 11px; opacity: .65; }
+#towerNowRemain { color: var(--tower-green); font-size: 13px; white-space: nowrap; }
+.tower-now-actions { display: flex; gap: 6px; }
+.tower-nowhud[data-status="long"] { border-top: 1px solid var(--tower-amber); }
+.tower-nowhud[data-status="long"] #towerNowRemain { color: var(--tower-amber); }
+@keyframes tower-touchdown { 0% { opacity: 1; transform: translate(-50%, -50%) scale(.4); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(3); } }
+@media (max-width: 720px) { .tower-nowhud { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); } .tower-now-actions { flex-wrap: wrap; } }
+
 /* v182: 「今日」コックピット(P1〜P4)。today名前空間に閉じ、既存home等へ波及させない。 */
 .today-cockpit {
   min-height: 100%;

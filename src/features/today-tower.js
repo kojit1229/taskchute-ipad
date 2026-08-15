@@ -1,14 +1,22 @@
-// src/features/today-tower.js — v204: 読み取り専用TOWERヘッダ+発着ボード。
+// src/features/today-tower.js — v205: 読み取り専用TOWERヘッダ+発着ボード+RWY/NOW LANDING。
 // state・保存・action登録には触れず、時刻・便状態は既存1秒tickerから差分更新する。
 
 let escapeHTML, todayISO, homeSyncAlertBanner, blocksForDate, towerFlights;
+let runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, timeFromDateTime, clamp;
 let flipListenerBound = false;
+// undefined=セッション初回(未観測)。復元描画では接地の瞬間ではないためフラッシュを出さない
+// (起動時同期404後の全体render()と競合して非決定にもなる)。null=実行中なしを観測済み。
+let lastLandingId;
 
 function configureTodayTower(deps) {
-  ({ escapeHTML, todayISO, homeSyncAlertBanner, blocksForDate, towerFlights } = deps);
+  ({
+    escapeHTML, todayISO, homeSyncAlertBanner, blocksForDate, towerFlights,
+    runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, timeFromDateTime, clamp
+  } = deps);
   if (!flipListenerBound && typeof document !== "undefined") {
     document.addEventListener("animationend", (event) => {
-      if (event.target.classList?.contains("tower-status")) event.target.classList.remove("is-flip");
+      if (event.target.classList?.contains("tower-touchdown")) event.target.remove();
+      else if (event.target.classList?.contains("tower-status")) event.target.classList.remove("is-flip");
     });
     flipListenerBound = true;
   }
@@ -57,6 +65,60 @@ function flightSetKey(flights) {
   return flights.map((flight) => encodeURIComponent(String(flight.id))).join(",");
 }
 
+function runwayMetrics(running, nowMs) {
+  const startMs = localDateTimeToMs(running.actualStartAt);
+  const elapsedSec = Math.max(0, Math.floor((nowMs - startMs) / 1000));
+  const estimate = resolveEstimateMin(running);
+  const ratio = estimate > 0 ? elapsedSec / (estimate * 60) : 0;
+  const over = estimate > 0 && ratio >= 1;
+  const minutes = over
+    ? Math.max(0, Math.ceil(elapsedSec / 60 - estimate))
+    : Math.max(0, Math.ceil(estimate - elapsedSec / 60));
+  return {
+    x: clamp(ratio * 100, 0, 100), over,
+    remain: estimate <= 0 ? "見積なし" : over ? `ロングフライト +${minutes}分` : `残り ${minutes}分`
+  };
+}
+
+function renderTowerRunway(now) {
+  const blocks = blocksForDate(todayISO());
+  const running = runningBlockOf(blocks);
+  const next = running ? null : queueBlocksOf(blocks)[0];
+  const metrics = running ? runwayMetrics(running, now.getTime()) : { x: 0 };
+  // フラッシュは#towerPlaneの兄弟でCSS変数を継承しないため、自身にも機体位置を持たせる(レビューM1)。
+  const touchdown = running && lastLandingId !== undefined && running.id !== lastLandingId
+    ? `<i class="tower-touchdown" aria-hidden="true" style="--tower-plane-x:${metrics.x}%"></i>` : "";
+  lastLandingId = running ? running.id : null;
+  let hud = '<div class="tower-nowhud" data-status="empty">本日の着陸予定はありません</div>';
+  if (running) {
+    const id = escapeHTML(running.id);
+    const scheduled = running.plannedStartAt ? timeFromDateTime(running.plannedStartAt) : "--:--";
+    hud = `<div class="tower-nowhud" data-status="${metrics.over ? "long" : "landing"}">
+      <span class="tower-now-label">NOW LANDING</span>
+      <button type="button" class="tower-now-title" data-action="edit-block" data-id="${id}">${escapeHTML(running.title)}</button>
+      <span class="tower-now-sched">定刻 ${escapeHTML(scheduled || "--:--")}</span>
+      <strong id="towerNowRemain">${metrics.remain}</strong>
+      <div class="tower-now-actions">
+        <button type="button" class="btn green" data-action="complete-block-with-actual" data-id="${id}">■ 完了</button>
+        <button type="button" class="btn" data-action="now-conveyor-complete" data-id="${id}">▶ 次へ</button>
+      </div>
+    </div>`;
+  } else if (next) {
+    const id = escapeHTML(next.id);
+    hud = `<div class="tower-nowhud" data-status="ready">
+      <button type="button" class="tower-now-title" data-action="edit-block" data-id="${id}">${escapeHTML(next.title)}</button>
+      <button type="button" class="btn primary" data-action="now-start" data-id="${id}">▶ 開始</button>
+    </div>`;
+  }
+  return `<section class="tower-runway">
+    <h2>RWY 12/30 <span>滑走路</span></h2>
+    <div class="tower-runway-strip">
+      <i id="towerPlane" aria-hidden="true" style="--tower-plane-x:${metrics.x}%">✈</i>${touchdown}
+    </div>
+    ${hud}
+  </section>`;
+}
+
 function flightRow(flight, departure = false) {
   const status = departure ? "" : `<span class="tower-status" data-status="${escapeHTML(flight.status)}">${escapeHTML(flight.label)}</span>`;
   return `<div class="tower-flight-row ${departure ? "tower-departure-row" : "tower-arrival-row"}" data-flight-id="${escapeHTML(flight.id)}"${departure ? "" : ` data-status="${escapeHTML(flight.status)}"`}>
@@ -94,8 +156,22 @@ function renderTodayTower() {
       <div class="tower-time"><time id="towerClock">${clockText(now)}</time><span id="towerDate">${date} (${weekday})</span></div>
       <div class="tower-day-left"><span>本日残り</span><strong id="towerDayLeft">${dayLeftText(now)}</strong></div>
     </header>
+    ${renderTowerRunway(now)}
     ${renderTowerBoard(now)}
   </div>`;
+}
+
+function updateTowerRunway(now) {
+  const running = runningBlockOf(blocksForDate(todayISO()));
+  const plane = document.getElementById("towerPlane");
+  const hud = document.querySelector(".tower-nowhud");
+  const remain = document.getElementById("towerNowRemain");
+  const hudId = hud?.querySelector("button[data-id]")?.dataset.id;
+  if (!running || !plane || !hud || !remain || hudId !== String(running.id)) return;
+  const metrics = runwayMetrics(running, now.getTime());
+  plane.style.setProperty("--tower-plane-x", `${metrics.x}%`);
+  remain.textContent = metrics.remain;
+  if (metrics.over && hud.dataset.status === "landing") hud.dataset.status = "long";
 }
 
 function updateTodayTowerTick() {
@@ -105,6 +181,7 @@ function updateTodayTowerTick() {
   const now = new Date();
   clock.textContent = clockText(now);
   dayLeft.textContent = dayLeftText(now);
+  updateTowerRunway(now);
   const container = document.getElementById("towerArrivalRows");
   const rows = [...document.querySelectorAll(".tower-arrival-row")];
   const flights = boardFlights(todayISO(), now.getHours() * 60 + now.getMinutes());

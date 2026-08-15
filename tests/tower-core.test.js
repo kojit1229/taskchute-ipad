@@ -227,6 +227,77 @@ function check(name, cond, extra = "") {
     await page.waitForFunction(() => document.querySelector(".tower-arrival-row")?.dataset.flightId === "w2");
     check("フォーカス解除後のtickで窓がw2..w12へずれる", (await page.locator(".tower-arrival-row").first().getAttribute("data-flight-id")) === "w2");
     check("窓ずれ後も他 n 便のサマリが正しい", ((await page.locator("#towerArrivalSummary").textContent()) || "").trim() === "他 2 便");
+
+    console.log("[12] 実行中BlockをRWYとNOW LANDINGへ表示する");
+    await page.clock.setFixedTime(fixedTime(0));
+    const landing = block("rwy-landing", "RWY検証タスク", today, 11 * 60, {
+      actualStartAt: atMinute(today, 11 * 60 + 30), estimateMin: 60
+    });
+    await seedBoard([landing]);
+    check(".tower-runwayと#towerPlaneが存在", await page.locator(".tower-runway #towerPlane").count() === 1);
+    const landingX = await page.locator("#towerPlane").evaluate((el) => parseFloat(el.style.getPropertyValue("--tower-plane-x")));
+    check("11:30開始・60分見積の12:00位置は約50%", Math.abs(landingX - 50) < 0.1, String(landingX));
+    check("残り30分を表示", (await page.locator("#towerNowRemain").textContent()) === "残り 30分");
+    check("定刻11:00を表示", (await page.locator(".tower-now-sched").textContent()) === "定刻 11:00");
+    // 復元(起動時から実行中)は接地の瞬間ではないためフラッシュを出さない。出す側は[14]の開始遷移で検証する。
+    check("復元描画では接地フラッシュを出さない", await page.locator(".tower-touchdown").count() === 0);
+    await page.locator('.tower-now-title[data-id="rwy-landing"]').click();
+    await page.waitForSelector(".modal-card", { state: "attached" });
+    check("タスク名クリックで既存Block編集モーダルが開く", await page.locator(".modal-card").count() === 1);
+    await page.locator('.modal-card [data-action="modal-close"]').first().click();
+    await page.waitForSelector(".modal-card", { state: "detached" });
+
+    console.log("[13] NOW LANDINGの完了導線は既存実績モーダルを開く");
+    await page.locator('.tower-now-actions [data-action="complete-block-with-actual"]').click();
+    await page.waitForSelector(".modal-card", { state: "attached" });
+    check("■ 完了で既存実績モーダルが開く", await page.locator('.modal-title:has-text("実績を登録")').count() === 1);
+    await page.locator('.modal-card [data-action="modal-close"]').first().click();
+    await page.waitForSelector(".modal-card", { state: "detached" });
+
+    console.log("[14] runningなし・queueありはREADYから既存now-startで開始する");
+    const ready = block("rwy-ready", "待機タスク", today, 13 * 60, { estimateMin: 45 });
+    await seedBoard([ready]);
+    check("queue先頭はdata-status=ready", await page.locator('.tower-nowhud[data-status="ready"]').count() === 1);
+    check("READYは開始だけを表示", await page.locator('.tower-nowhud [data-action="now-start"]').count() === 1
+      && await page.locator('.tower-nowhud [data-action="complete-block-with-actual"], .tower-nowhud [data-action="now-conveyor-complete"]').count() === 0);
+    await page.locator('.tower-nowhud [data-action="now-start"][data-id="rwy-ready"]').click();
+    await page.waitForSelector('[data-action="declare-skip"]', { state: "attached" });
+    await page.locator('[data-action="declare-skip"]').click();
+    await page.waitForSelector('.tower-nowhud[data-status="landing"] #towerNowRemain', { state: "attached" });
+    check("開始後は実行中の機体と残り表示へ遷移", await page.locator("#towerPlane").count() === 1
+      && await page.locator('.tower-now-title[data-id="rwy-ready"]').count() === 1);
+    // fixed clock下ではanimationendが発火しない=要素が残るので、クラス存在+computed animationNameで接地フラッシュを固定する。
+    check("開始遷移で接地フラッシュが1要素出る", await page.locator(".tower-touchdown").count() === 1
+      && await page.locator(".tower-touchdown").evaluate((el) => getComputedStyle(el).animationName === "tower-touchdown"));
+    // レビューM1再発防止: フラッシュはCSS変数を継承できない兄弟要素のため、機体と同じ位置を自身のinline styleに持つ。
+    check("接地フラッシュは機体位置と同じ--tower-plane-xを持つ", await page.evaluate(() => {
+      const plane = document.getElementById("towerPlane");
+      const flash = document.querySelector(".tower-touchdown");
+      return !!plane && !!flash && flash.style.getPropertyValue("--tower-plane-x") === plane.style.getPropertyValue("--tower-plane-x");
+    }));
+
+    console.log("[15] 見積超過は琥珀のロングフライト表示になりtickでも遷移する");
+    const long = block("rwy-long", "ロング検証", today, 9 * 60 + 30, {
+      actualStartAt: atMinute(today, 10 * 60), estimateMin: 60
+    });
+    await page.clock.setFixedTime(fixedTime(0));
+    await seedBoard([long]);
+    check("見積超過はdata-status=long", await page.locator('.tower-nowhud[data-status="long"]').count() === 1);
+    check("120分経過はロングフライト +60分", (await page.locator("#towerNowRemain").textContent()) === "ロングフライト +60分");
+    const longColor = parseColor(await page.locator("#towerNowRemain").evaluate((el) => getComputedStyle(el).color));
+    check("ロングフライト表示色は赤系でない", !isReddish(longColor), JSON.stringify(longColor));
+
+    const crossingLong = block("rwy-crossing", "境界ロング検証", today, 10 * 60 + 30, {
+      actualStartAt: atMinute(today, 11 * 60), estimateMin: 60
+    });
+    await page.clock.setFixedTime(new Date(base.getFullYear(), base.getMonth(), base.getDate(), 11, 59, 30, 0));
+    await seedBoard([crossingLong]);
+    check("境界前はlanding", await page.locator('.tower-nowhud[data-status="landing"]').count() === 1);
+    await page.clock.setFixedTime(new Date(base.getFullYear(), base.getMonth(), base.getDate(), 12, 0, 1, 0));
+    await page.waitForFunction(() => document.querySelector(".tower-nowhud")?.dataset.status === "long");
+    const crossedX = await page.locator("#towerPlane").evaluate((el) => el.style.getPropertyValue("--tower-plane-x"));
+    check("tickでlandingからlongへ遷移", (await page.locator("#towerNowRemain").textContent()) === "ロングフライト +1分");
+    check("境界通過後の機体は100%で停止", parseFloat(crossedX) === 100, crossedX);
   } finally {
     await browser.close();
     server.close();

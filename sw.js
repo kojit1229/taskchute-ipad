@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v204";
+const CACHE_NAME = "taskchute-journal-pwa-v205";
+// v205: TOWERへRWY滑走路(機体・接地フラッシュ)とNOW LANDINGパネルを追加した。
 // v204: TOWERへ本日便ARRIVALSと明日便DEPARTURES、状態フリップを追加した。
 // v203: 今日タブにTOWERスキン切替と読み取り専用TWRヘッダを追加した。
 // v202: 今日タブの純関数をsrc/core/today-model.jsへ抽出し、towerFlightsを追加した。
