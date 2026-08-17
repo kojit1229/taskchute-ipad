@@ -1,4 +1,4 @@
-// tests/tower-core.test.js — v207 TOWERのスキン・TWRヘッダ・発着ボード・GATE/APRON契約E2E。
+// tests/tower-core.test.js — v208 TOWERのスキン・発着ボード・GATE/APRON・RADAR/無線契約E2E。
 // today-core.test.jsと同じく、localStorage seed + 既存nav + Playwright clockで検証する。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY } = require("./helpers");
 
@@ -475,6 +475,106 @@ function check(name, cond, extra = "") {
           ...[cs.boxShadow, cs.textShadow].flatMap((shadow) => shadow.match(/rgba?\([^)]*\)/g) || [])];
       })));
     check("GATE/APRONの実描画色に赤系が無い", t6Colors.every((color) => !isReddish(parseColor(color))), JSON.stringify(t6Colors));
+
+    console.log("[25] RADARは未来5時間のboardFlightsだけを20件まで表示する");
+    await page.clock.setFixedTime(fixedTime(0));
+    // 300分境界は少数seedで独立検証する(25件seedだと20件切り捨てでも301分先が消え、境界を検証できない。レビューm5反映)。
+    const radarEdge = [
+      block("radar-edge", "300分ちょうど", today, 12 * 60 + 300),
+      block("radar-far", "301分先", today, 12 * 60 + 301),
+      block("radar-past", "過去便", today, 12 * 60 - 1),
+      block("radar-routine", "除外ルーティン", today, 12 * 60 + 5, { category: "ルーティン" }),
+      block("radar-onetap", "除外ワンタップ", today, 12 * 60 + 6, { oneTap: true })
+    ];
+    await seedT6(radarEdge);
+    const edgeSet = (await page.locator("#towerRadarScope").getAttribute("data-radar-set")) || "";
+    check("300分ちょうどは表示・301分先は除外(20件切り捨てと独立)", await page.locator(".tower-blip").count() === 1
+      && edgeSet.includes(encodeURIComponent("radar-edge")) && !edgeSet.includes(encodeURIComponent("radar-far")), edgeSet);
+    check("過去便・ルーティン・oneTapは対象外", ["radar-past", "radar-routine", "radar-onetap"]
+      .every((id) => !edgeSet.includes(encodeURIComponent(id))), edgeSet);
+    const radarCrowd = Array.from({ length: 25 }, (_, index) =>
+      block(`radar-${index}`, `接近便${index}`, today, 12 * 60 + index * 10));
+    await seedT6(radarCrowd);
+    const radarSet = (await page.locator("#towerRadarScope").getAttribute("data-radar-set")) || "";
+    check("未来便25件でもblipはMAX_BLIPS=20", await page.locator(".tower-blip").count() === 20);
+    check("近い順の先頭20便だけを表示", radarSet.split(",").length === 20 && radarSet.includes("radar-0:0") && radarSet.includes("radar-19:190") && !radarSet.includes("radar-20:200"), radarSet);
+
+    console.log("[26] RADAR blip座標は定刻とuntilから決定論的に算出する");
+    const radarPair = [block("radar-near", "近距離", today, 13 * 60), block("radar-farther", "遠距離", today, 17 * 60)];
+    await seedT6(radarPair);
+    const readBlips = () => page.locator(".tower-blip").evaluateAll((els) => els.map((el) => ({ left: parseFloat(el.style.left), top: parseFloat(el.style.top) })));
+    const firstBlips = await readBlips();
+    const expectedPoint = (plannedMin, until) => {
+      const radius = 10 + until / 300 * 32;
+      const angle = (plannedMin % 720) / 720 * 2 * Math.PI - Math.PI / 2;
+      return { left: 50 + Math.cos(angle) * radius, top: 50 + Math.sin(angle) * radius };
+    };
+    const expectedBlips = [expectedPoint(13 * 60, 60), expectedPoint(17 * 60, 300)];
+    check("left/topは仕様式の許容誤差0.1%以内", firstBlips.every((point, index) =>
+      Math.abs(point.left - expectedBlips[index].left) <= .1 && Math.abs(point.top - expectedBlips[index].top) <= .1), JSON.stringify(firstBlips));
+    await seedT6(radarPair);
+    const secondBlips = await readBlips();
+    check("同じ入力を2回描くと同じ座標", JSON.stringify(firstBlips) === JSON.stringify(secondBlips), JSON.stringify(secondBlips));
+    const distance = (point) => Math.hypot(point.left - 50, point.top - 50);
+    check("untilが小さい便ほど中心に近い", distance(firstBlips[0]) < distance(firstBlips[1]), JSON.stringify(firstBlips));
+    // tick経路: 分が進んでもblipは同一ノードのままin-placeで座標が変わる(remove→再生成だとtransitionが発火しない。レビューm2/m4反映)。
+    // DOM同一性を計るため、起動時同期404後の全体render()を先に消化する([10][11]と同じ作法)。
+    await page.waitForLoadState("networkidle");
+    await page.locator(".tower-blip").first().evaluate((el) => { el.__t7marker = true; });
+    const movedExpected = expectedPoint(13 * 60, 59);
+    await page.clock.setFixedTime(new Date(base.getFullYear(), base.getMonth(), base.getDate(), 12, 1, 0, 0));
+    await page.waitForFunction((left) => {
+      const blip = document.querySelector(".tower-blip");
+      return blip && Math.abs(parseFloat(blip.style.left) - left) <= .1;
+    }, movedExpected.left);
+    check("tickで同一ノードのままin-place移動する", await page.locator(".tower-blip").first().evaluate((el, top) =>
+      el.__t7marker === true && Math.abs(parseFloat(el.style.top) - top) <= .1, movedExpected.top));
+    await page.clock.setFixedTime(fixedTime(0));
+
+    console.log("[27] 無線ログは復元で騒がず状態遷移だけを最新3行で実況する");
+    const radioSeed = [block("radio-active", "着陸便", today, 11 * 60, { actualStartAt: atMinute(today, 11 * 60 + 30) }),
+      block("radio-cross", "管制便", today, 12 * 60 + 5)];
+    await seedT6(radioSeed);
+    check("初回renderは挨拶1行だけ", await page.locator(".tower-radio-line").count() === 1
+      && (await page.locator(".tower-radio-line").textContent()) === "TWR TASKCHUTE TOWER 運用開始");
+    await page.locator('.tower-now-actions [data-action="now-conveyor-complete"][data-id="radio-active"]').click();
+    await page.waitForFunction(() => document.getElementById("towerRadioLines")?.textContent.includes("スポット入り。おつかれさま"));
+    const radioTexts = ["TWR TASKCHUTE TOWER 運用開始", (await page.locator(".tower-radio-line.is-new").textContent()) || ""];
+    check("landing→arrivedでスポット入り実況が増える", radioTexts[1].includes("TC-701〈着陸便〉スポット入り。おつかれさま"), radioTexts[1]);
+    await page.clock.setFixedTime(new Date(base.getFullYear(), base.getMonth(), base.getDate(), 12, 6, 0, 0));
+    await page.waitForFunction(() => document.querySelector(".tower-radio-line.is-new")?.textContent.includes("リスロット"));
+    radioTexts.push((await page.locator(".tower-radio-line.is-new").textContent()) || "");
+    await page.clock.setFixedTime(fixedTime(0));
+    await page.waitForFunction(() => document.querySelector(".tower-radio-line.is-new")?.textContent.includes("最終進入"));
+    radioTexts.push((await page.locator(".tower-radio-line.is-new").textContent()) || "");
+    await page.clock.setFixedTime(new Date(base.getFullYear(), base.getMonth(), base.getDate(), 12, 6, 0, 0));
+    await page.waitForFunction(() => document.querySelector(".tower-radio-line.is-new")?.textContent.includes("リスロット"));
+    radioTexts.push((await page.locator(".tower-radio-line.is-new").textContent()) || "");
+    check("4遷移後も最新3行だけを保持", await page.locator(".tower-radio-line").count() === 3
+      && !(await page.locator("#towerRadioLines").textContent()).includes("スポット入り。おつかれさま"));
+    check("is-newは最新行だけ", await page.locator(".tower-radio-line.is-new").count() === 1
+      && await page.locator(".tower-radio-line:last-child.is-new").count() === 1);
+    // landingテンプレートも実生成して検証する(4テンプレ中landingだけ未検証だった。Codexレビュー反映)。
+    // now-startは宣言モーダルを挟むため「宣言せず開始」で確定する(既存導線どおり)。
+    await page.locator('.tower-nowhud [data-action="now-start"][data-id="radio-cross"]').click();
+    await page.locator('[data-action="declare-skip"]').click();
+    await page.waitForFunction(() => document.querySelector(".tower-radio-line.is-new")?.textContent.includes("着陸中"));
+    radioTexts.push((await page.locator(".tower-radio-line.is-new").textContent()) || "");
+    check("開始操作でlanding実況(着陸中)が増える", radioTexts[radioTexts.length - 1] === "TC-703〈管制便〉着陸中", radioTexts[radioTexts.length - 1]);
+
+    console.log("[28] 無線文は確定語彙だけ、RADAR/無線色は非赤系だけを使う");
+    const allowedRadio = /^(?:TWR TASKCHUTE TOWER 運用開始|TC-\d+〈[^〉]+〉(?:最終進入 定刻 \d{2}:\d{2}|着陸中|スポット入り。おつかれさま|リスロット))$/;
+    const forbiddenT7 = ["遅延", "DELAYED", "未達", "失敗", "急いで", "オーバー"];
+    check("生成した全無線文が確定テンプレだけ", radioTexts.every((line) => allowedRadio.test(line)), JSON.stringify(radioTexts));
+    check("無線文に禁止語を含まない", forbiddenT7.every((word) => radioTexts.every((line) => !line.includes(word))), JSON.stringify(radioTexts));
+    const t7Colors = await page.locator(".tower-radar, .tower-radio").evaluateAll((roots) => roots.flatMap((root) =>
+      [root, ...root.querySelectorAll("*")].flatMap((el) => {
+        const cs = getComputedStyle(el);
+        // 走査線・スコープ地のグラデーション色(background-image)も抽出して検査する(Codexレビュー反映)。
+        return [cs.color, cs.backgroundColor, cs.borderTopColor,
+          ...[cs.boxShadow, cs.textShadow, cs.backgroundImage].flatMap((value) => value.match(/rgba?\([^)]*\)/g) || [])];
+      })));
+    check("RADAR/無線の実描画色に赤系が無い", t7Colors.every((color) => !isReddish(parseColor(color))), JSON.stringify(t7Colors));
   } finally {
     await browser.close();
     server.close();

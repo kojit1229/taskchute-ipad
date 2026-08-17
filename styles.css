@@ -4497,6 +4497,29 @@ h3 {
 @keyframes tower-gate-docking { 0% { transform: translateY(-8px); box-shadow: 0 0 0 var(--tower-amber); } 100% { transform: translateY(0); box-shadow: 0 0 12px var(--tower-green); } }
 @keyframes tower-gates-full { 0% { box-shadow: 0 0 0 var(--tower-amber); } 100% { box-shadow: 0 0 18px var(--tower-green); } }
 
+/* v208: TOWER T7。RADARと無線ログ。 */
+.tower-radar { margin-top: 12px; border: 1px solid var(--tower-line); background: var(--tower-panel); }
+.tower-radar h2 { margin: 0; padding: 8px 10px; border-bottom: 1px solid var(--tower-line); color: var(--tower-cyan); font-size: 11px; letter-spacing: .18em; }
+.tower-radar h2 span { float: right; color: var(--tower-text); font-size: 10px; font-weight: 400; letter-spacing: .08em; opacity: .6; }
+.tower-radar-scope {
+  position: relative; width: min(100%, 300px); aspect-ratio: 1 / 1; margin: 10px auto; overflow: hidden;
+  border: 1px solid var(--tower-line); border-radius: 50%; background: radial-gradient(circle, var(--tower-panel), var(--tower-bg) 72%);
+  box-shadow: inset 0 0 24px var(--tower-line);
+}
+.tower-radar-ring { position: absolute; inset: 14%; border: 1px solid var(--tower-line); border-radius: 50%; }
+.tower-radar-ring.is-inner { inset: 32%; }
+.tower-radar-sweep { position: absolute; z-index: 1; top: 50%; left: 50%; width: 42%; height: 2px; background: linear-gradient(90deg, var(--tower-green), transparent); transform-origin: left center; animation: tower-radar-sweep 7s linear infinite; }
+.tower-radar-core { position: absolute; z-index: 2; top: 50%; left: 50%; width: 6px; height: 6px; border-radius: 50%; background: var(--tower-green); box-shadow: 0 0 8px var(--tower-green); transform: translate(-50%, -50%); }
+.tower-blip { position: absolute; z-index: 3; width: 6px; height: 6px; border-radius: 50%; background: var(--tower-cyan); box-shadow: 0 0 8px var(--tower-cyan); transform: translate(-50%, -50%); transition: left 600ms linear, top 600ms linear; }
+@keyframes tower-radar-sweep { to { transform: rotate(360deg); } }
+.tower-radio { border: 1px solid var(--tower-line); background: var(--tower-panel); }
+#towerRadioLines { min-height: 72px; padding: 7px 10px; }
+.tower-radio-line { min-height: 22px; color: var(--tower-text); font-size: 10px; line-height: 22px; opacity: .55; }
+.tower-radio-line.is-new { opacity: 1; }
+.tower-radio-line b { color: var(--tower-cyan); font-weight: 600; }
+.tower-radio-cursor { display: inline-block; width: 6px; height: 11px; margin-left: 4px; vertical-align: -1px; background: var(--tower-green); animation: tower-radio-cursor 900ms step-end infinite; }
+@keyframes tower-radio-cursor { 50% { opacity: 0; } }
+
 /* v182: 「今日」コックピット(P1〜P4)。today名前空間に閉じ、既存home等へ波及させない。 */
 .today-cockpit {
   min-height: 100%;
@@ -5112,6 +5135,8 @@ h3 {
   .tower-status.is-flip { animation: none; }
   .tower-gate.is-docking,
   .tower-gates.is-full { animation: none; box-shadow: none; }
+  .tower-radar-sweep { animation: none; }
+  .tower-radio-cursor { animation: none; }
   .today-now-label i { animation: none; }
   /* C1(v192): 縞模様の流れるアニメだけ止め、静的な縞+文言で超過状態を伝える(サンプル432-433行準拠) */
   #todayNowProgress.over::before { animation: none; }

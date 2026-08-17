@@ -1,4 +1,4 @@
-// src/features/today-tower.js — v207: TOWERにGATE定期便とAPRON駐機場を追加。
+// src/features/today-tower.js — v208: TOWERにRADARと無線ログを追加。
 // state・保存・action登録には触れず、時刻・便状態は既存1秒tickerから差分更新する。
 
 let escapeHTML, todayISO, homeSyncAlertBanner, blocksForDate, towerFlights;
@@ -14,6 +14,10 @@ let lastTrafficMin;
 let lastGateDocked;
 // undefined=未観測。復元描画では満灯フラッシュを出さない(lastLandingIdと同じ意味論)。
 let lastGateFull;
+const MAX_BLIPS = 20;
+let lastRadioStatuses;
+let lastRadioDate;
+let radioLines = [];
 
 function configureTodayTower(deps) {
   ({
@@ -86,6 +90,77 @@ function flightSetKey(flights) {
   return flights.map((flight) => encodeURIComponent(String(flight.id))).join(",");
 }
 
+function radarFlights(flights, nowMin) {
+  return flights.map((flight) => ({ ...flight, until: flight.plannedMin === null ? null : flight.plannedMin - nowMin }))
+    .filter((flight) => flight.until !== null && flight.until >= 0 && flight.until <= 300)
+    .sort((a, b) => a.until - b.until).slice(0, MAX_BLIPS);
+}
+
+function radarSetKey(flights) {
+  return flights.map((flight) => `${encodeURIComponent(String(flight.id))}:${flight.until}`).join(",");
+}
+
+function blipPoint(flight) {
+  const radius = 10 + flight.until / 300 * 32;
+  const angle = (flight.plannedMin % 720) / 720 * 2 * Math.PI - Math.PI / 2;
+  return { x: 50 + Math.cos(angle) * radius, y: 50 + Math.sin(angle) * radius };
+}
+
+function radarBlipsHTML(flights) {
+  return flights.map((flight) => {
+    const point = blipPoint(flight);
+    return `<i class="tower-blip" data-blip-id="${escapeHTML(String(flight.id))}" style="left:${point.x}%;top:${point.y}%"></i>`;
+  }).join("");
+}
+
+function renderTowerRadar(flights, nowMin) {
+  const radar = radarFlights(flights, nowMin);
+  return `<section class="tower-radar"><h2>RADAR <span>接近</span></h2>
+    <div class="tower-radar-scope" id="towerRadarScope" data-radar-set="${radarSetKey(radar)}">
+      <i class="tower-radar-ring"></i><i class="tower-radar-ring is-inner"></i>
+      <i class="tower-radar-sweep" aria-hidden="true"></i><i class="tower-radar-core" aria-hidden="true"></i>
+      ${radarBlipsHTML(radar)}
+    </div>
+  </section>`;
+}
+
+function radioObserve(flights) {
+  // 日付が変わったら前日の実況・観測状態を破棄する(翌日へ持ち越さない。Codexレビュー反映)。
+  const date = todayISO();
+  if (lastRadioDate !== undefined && lastRadioDate !== date) {
+    radioLines = [];
+    lastRadioStatuses = undefined;
+  }
+  lastRadioDate = date;
+  if (!radioLines.length) radioLines = ["TWR TASKCHUTE TOWER 運用開始"];
+  const previous = lastRadioStatuses;
+  lastRadioStatuses = new Map(flights.map((flight) => [String(flight.id), flight.status]));
+  if (previous === undefined) return;
+  const events = flights.flatMap((flight) => {
+    if (!previous.has(String(flight.id)) || previous.get(String(flight.id)) === flight.status) return [];
+    const suffix = {
+      final: `最終進入 定刻 ${flightTime(flight.plannedMin)}`,
+      landing: "着陸中",
+      arrived: "スポット入り。おつかれさま",
+      resloted: "リスロット"
+    }[flight.status];
+    return suffix ? [`<b>${escapeHTML(flight.callsign)}</b>〈${escapeHTML(flight.title)}〉${suffix}`] : [];
+  });
+  if (events.length) radioLines = radioLines.concat(events).slice(-3);
+}
+
+function radioLinesHTML() {
+  return radioLines.map((line, index) => `<div class="tower-radio-line${index === radioLines.length - 1 ? " is-new" : ""}">${line}${index === radioLines.length - 1 ? '<i class="tower-radio-cursor" aria-hidden="true"></i>' : ""}</div>`).join("");
+}
+
+function radioSetKey() {
+  return radioLines.map((line) => encodeURIComponent(line)).join(",");
+}
+
+function renderTowerRadio() {
+  return `<section class="tower-radio"><div id="towerRadioLines" data-radio-set="${radioSetKey()}">${radioLinesHTML()}</div></section>`;
+}
+
 function runwayMetrics(running, nowMs) {
   const startMs = localDateTimeToMs(running.actualStartAt);
   const elapsedSec = Math.max(0, Math.floor((nowMs - startMs) / 1000));
@@ -147,9 +222,7 @@ function flightRow(flight, departure = false) {
   </div>`;
 }
 
-function renderTowerBoard(now, todayBlocks) {
-  const nowMin = now.getHours() * 60 + now.getMinutes();
-  const arrivalFlights = boardFlights(todayBlocks, nowMin);
+function renderTowerBoard(now, arrivalFlights) {
   const arrivals = arrivalWindow(arrivalFlights);
   const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
   const departures = boardFlights(blocksForDate(localISO(tomorrow)), 0).slice(0, 3);
@@ -268,7 +341,10 @@ function renderTodayTower() {
   const today = todayISO();
   const date = escapeHTML(today);
   const blocks = blocksForDate(today);
-  const apronFlights = apronFlightsOf(boardFlights(blocks, now.getHours() * 60 + now.getMinutes()), blocks);
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const flights = boardFlights(blocks, nowMin);
+  const apronFlights = apronFlightsOf(flights, blocks);
+  radioObserve(flights);
   const weekday = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
   return `<div class="today-tower">
     ${homeSyncAlertBanner()}
@@ -279,10 +355,12 @@ function renderTodayTower() {
       <div class="tower-day-left"><span>本日残り</span><strong id="towerDayLeft">${dayLeftText(now)}</strong></div>
     </header>
     ${renderTowerRunway(now, blocks)}
+    ${renderTowerRadar(flights, nowMin)}
     ${renderTowerGauges(blocks, now)}
     ${renderTowerGates(blocks)}
     ${renderTowerApron(apronFlights)}
-    ${renderTowerBoard(now, blocks)}
+    ${renderTowerBoard(now, flights)}
+    ${renderTowerRadio()}
   </div>`;
 }
 
@@ -359,6 +437,38 @@ function updateTowerApron(flights) {
   container.dataset.apronSet = apronSet;
 }
 
+function updateTowerRadar(flights, nowMin) {
+  const radar = radarFlights(flights, nowMin);
+  const radarSet = radarSetKey(radar);
+  const container = document.getElementById("towerRadarScope");
+  if (!container || container.dataset.radarSet === radarSet) return;
+  // 既存blipはin-placeでleft/topだけ書き換え、CSS transitionで滑らかに動かす(remove→再生成では発火しない。2系統レビュー共通指摘)。
+  const existing = new Map([...container.querySelectorAll(".tower-blip")].map((blip) => [blip.dataset.blipId, blip]));
+  const keep = new Set();
+  radar.forEach((flight) => {
+    const id = String(flight.id);
+    keep.add(id);
+    const blip = existing.get(id);
+    const point = blipPoint(flight);
+    if (blip) {
+      blip.style.left = `${point.x}%`;
+      blip.style.top = `${point.y}%`;
+    } else {
+      container.insertAdjacentHTML("beforeend", radarBlipsHTML([flight]));
+    }
+  });
+  existing.forEach((blip, id) => { if (!keep.has(id)) blip.remove(); });
+  container.dataset.radarSet = radarSet;
+}
+
+function updateTowerRadio() {
+  // innerHTML文字列比較はescapeHTMLの実体参照がシリアライズで戻り永久不一致になる(レビューM1)。datasetキー比較に統一。
+  const container = document.getElementById("towerRadioLines");
+  if (!container || container.dataset.radioSet === radioSetKey()) return;
+  container.innerHTML = radioLinesHTML();
+  container.dataset.radioSet = radioSetKey();
+}
+
 function updateTodayTowerTick() {
   const blocks = blocksForDate(todayISO());
   const clock = document.getElementById("towerClock");
@@ -373,6 +483,9 @@ function updateTodayTowerTick() {
   updateTowerGates(blocks);
   const flights = boardFlights(blocks, nowMin);
   updateTowerApron(apronFlightsOf(flights, blocks));
+  updateTowerRadar(flights, nowMin);
+  radioObserve(flights);
+  updateTowerRadio();
   const container = document.getElementById("towerArrivalRows");
   const rows = [...document.querySelectorAll(".tower-arrival-row")];
   const current = arrivalWindow(flights).rows;

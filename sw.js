@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v207";
+const CACHE_NAME = "taskchute-journal-pwa-v208";
+// v208: TOWERへ接近予定RADARと状態遷移を実況する無線ログを追加した。
 // v207: TOWERへGATE定期便(タップ就航・満灯演出)とAPRON駐機場を追加した。
 // v206: TOWERへFUEL/TRAFFIC半円ゲージと既存コーチ食事記録導線を追加した。
 // v205: TOWERへRWY滑走路(機体・接地フラッシュ)とNOW LANDINGパネルを追加した。
