@@ -4475,6 +4475,28 @@ h3 {
 .tower-traffic[data-zone="dense"] #towerTrafficZone { color: var(--tower-amber); }
 @media (max-width: 720px) { .tower-gauges { grid-template-columns: 1fr; } .tower-fuel-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
+/* v207: TOWER T6。GATE定期便とAPRON駐機場。 */
+.tower-gates,
+.tower-apron { margin-top: 12px; border: 1px solid var(--tower-line); background: var(--tower-panel); }
+.tower-gates h2,
+.tower-apron h2 { margin: 0; padding: 8px 10px; border-bottom: 1px solid var(--tower-line); color: var(--tower-cyan); font-size: 11px; letter-spacing: .18em; }
+#towerGateStrip,
+#towerApronStrip { display: flex; align-items: stretch; gap: 8px; min-height: 44px; padding: 8px; overflow-x: auto; }
+.tower-gate { display: grid; grid-template-columns: auto minmax(72px, 1fr) 10px; align-items: center; gap: 7px; min-width: 132px; min-height: 48px; padding: 6px 8px; border: 1px solid var(--tower-line); border-radius: 4px; color: var(--tower-text); font: inherit; background: var(--tower-bg); }
+.tower-gate span { color: var(--tower-cyan); font-size: 10px; }
+.tower-gate strong { overflow: hidden; font-family: system-ui, sans-serif; font-size: 11px; font-weight: 500; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.tower-gate i { width: 8px; height: 8px; border-radius: 50%; background: var(--tower-line); }
+.tower-gate[data-docked="1"] strong { opacity: .55; }
+.tower-gate[data-docked="1"] i { background: var(--tower-green); box-shadow: 0 0 8px var(--tower-green); }
+.tower-gate:focus-visible { outline: 2px solid var(--tower-amber); outline-offset: 1px; }
+.tower-gate.is-docking { animation: tower-gate-docking 700ms ease-out 1; }
+#towerGateCount { padding: 0 10px 8px; color: var(--tower-green); font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; }
+.tower-gates.is-full { border-color: var(--tower-green); }
+.tower-gates.is-full-flash { animation: tower-gates-full 900ms ease-out 1; }
+.tower-apron-plane { flex: 0 0 auto; align-self: center; padding: 6px 9px; border-bottom: 1px solid var(--tower-cyan); color: var(--tower-green); font-size: 11px; text-shadow: 0 0 7px var(--tower-cyan); }
+@keyframes tower-gate-docking { 0% { transform: translateY(-8px); box-shadow: 0 0 0 var(--tower-amber); } 100% { transform: translateY(0); box-shadow: 0 0 12px var(--tower-green); } }
+@keyframes tower-gates-full { 0% { box-shadow: 0 0 0 var(--tower-amber); } 100% { box-shadow: 0 0 18px var(--tower-green); } }
+
 /* v182: 「今日」コックピット(P1〜P4)。today名前空間に閉じ、既存home等へ波及させない。 */
 .today-cockpit {
   min-height: 100%;
@@ -5088,6 +5110,8 @@ h3 {
 @media (prefers-reduced-motion: reduce) {
   .tower-beacon i { animation: none; }
   .tower-status.is-flip { animation: none; }
+  .tower-gate.is-docking,
+  .tower-gates.is-full { animation: none; box-shadow: none; }
   .today-now-label i { animation: none; }
   /* C1(v192): 縞模様の流れるアニメだけ止め、静的な縞+文言で超過状態を伝える(サンプル432-433行準拠) */
   #todayNowProgress.over::before { animation: none; }

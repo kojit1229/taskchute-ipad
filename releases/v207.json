@@ -1,0 +1,53 @@
+{
+  "version": 207,
+  "date": "2026-08-17",
+  "title": "TOWER T6: GATE定期便とAPRON駐機場",
+  "summary": "TOWER T6 GATE定期便とAPRON駐機場",
+  "changedFiles": [
+    "CHANGES_v207.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v207.json",
+    "src/features/today-tower.js",
+    "styles.css",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/tower-core.test.js"
+  ],
+  "intent": [
+    "今日タブTOWERスキンにROUTINE=定期便ゲート(タップ就航・n/m便・満灯演出)を追加し、ルーティン消化を空港世界の蓄積表現で見せる。",
+    "APRON駐機場に完了実績を機体で並べ、P3蓄積表現の本命を実装する。",
+    "既存now-conveyor-complete再利用とroutineRate同一母集団のみで実現し、新規action・新規純関数・新規ファイルを作らない。"
+  ],
+  "changes": [
+    "renderTowerGaugesとrenderTowerBoardの間にrenderTowerGates(GATE ROUTINE帯)とrenderTowerApron(APRON帯)を追加した。",
+    "GATE集合はroutineRateと同一母集団(category===ルーティン && !oneTap)、就航判定はblock.completed。各ゲートはdata-action=now-conveyor-complete+data-idのbuttonで既存アクションを再利用した。",
+    "全就航(done===total && total>0)でis-full満灯演出、新規就航はis-docking 700ms演出(animationendで既存リスナ束縛の型に追記)。",
+    "APRONはtowerFlightsのstatus===arrivedの便のみをactualEndAt昇順でcallsign付き機体として並べ、ルーティンはGATE側で表現して二重表示しない。",
+    "updateTowerGates/updateTowerApronを1秒tickへ追加し、ボードと同じ集合キー比較(data-gate-set/data-apron-set)とフォーカス保護で無駄再構築を抑止した。",
+    "§7語彙のみ(就航・到着)・赤系hueなし・未就航数を主語にしない。prefers-reduced-motionで満灯グローとdocking演出を停止(n/m数字は止めない)。",
+    "tower-core.test.jsへ[20]ゲート数・就航数一致、[21]タップ就航、[22]is-full境界、[23]APRON到着順・リロード保持、[24]語彙・非赤系色検査を追記した。",
+    "sw.jsのCACHE_NAMEをv207へ更新した(新規ファイルなしのためAPP_SHELL追記なし)。",
+    "2系統レビュー反映(B1共通指摘): APRONの母集団をboardFlights(非ルーティン・非oneTap)へ統一し、ワンタップ計時の完了BlockがARRIVALSとcallsignをずらす・駐機表示される欠陥を修正。apronFlightsOfヘルパへ集約しrender/tickの重複8行とtickのboardFlights二重呼び出しも解消した。",
+    "2系統レビュー反映(M2): 満灯アニメをis-full-flash(遷移の瞬間だけ・is-dockingと同じlastGateFull意味論)へ分離し、復元描画のたびに900msグローが再生する欠陥を修正。is-fullは定常状態(縁色)のみとした。"
+  ],
+  "uncertainties": [
+    "390px幅のiPhone/iOS PWA実機でのゲート横並びとAPRON機体の視認性は未確認。",
+    "CodexサンドボックスではChromium起動がspawn EPERMとなるため、E2Eは監督者環境での再実行が必要。",
+    "就航済みゲートの再タップ=確認なしの完了取消(toggleBlock)はレビューM3指摘の上でK承認済み(2026-08-17、トグル維持)。tower-core[21]で仕様として固定。"
+  ],
+  "reviewFocus": [
+    "t6-spec.mdのデータ界面(routineRate同一母集団・towerFlights arrivedのみ・now-conveyor-complete再利用)と一致しているか。",
+    "ルーティン0件の日にis-fullが付かず、空文言も出さないか。",
+    "tickの集合キー比較・フォーカス保護・animationend解除がT4/T5の型と揃っているか。",
+    "§7語彙のみ・赤系hue(340-20)なし・点滅なしか。"
+  ],
+  "verification": [
+    "node --check(today-tower.js/tower-core.test.js)→ exit 0。",
+    "監督者環境で node tests/tower-core.test.js([1]〜[24])と node tests/today-core.test.js → ALL PASS(レビュー修正後に再実行)。",
+    "reviewer(Claude)+Codexの2系統独立レビューを実施。共通Blocker(APRON母集団のoneTap不整合)とM2(満灯アニメの復元再生)・M1(算出重複)を修正し、再発防止テスト(oneTap混在[23]・復元フラッシュなし[22]・total=0[22]・shadow色検査[24])を追加。M3(就航済み再タップの完了取消)はK判断待ちでuncertaintiesに記録。",
+    "実行コード差分はJS+CSS合計200行以内(Size-Exemptなし)。"
+  ],
+  "knownLimitations": [
+    "ブラウザE2EとiOS実機のService Worker更新・オフライン起動は監督者環境での確認が必要。"
+  ]
+}

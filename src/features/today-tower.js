@@ -1,4 +1,4 @@
-// src/features/today-tower.js — v206: TOWERヘッダ+発着ボード+RWY/NOW LANDING+FUEL/TRAFFIC。
+// src/features/today-tower.js — v207: TOWERにGATE定期便とAPRON駐機場を追加。
 // state・保存・action登録には触れず、時刻・便状態は既存1秒tickerから差分更新する。
 
 let escapeHTML, todayISO, homeSyncAlertBanner, blocksForDate, towerFlights;
@@ -11,6 +11,9 @@ let lastLandingId;
 let lastFuelDeg;
 let lastTrafficDeg;
 let lastTrafficMin;
+let lastGateDocked;
+// undefined=未観測。復元描画では満灯フラッシュを出さない(lastLandingIdと同じ意味論)。
+let lastGateFull;
 
 function configureTodayTower(deps) {
   ({
@@ -22,6 +25,8 @@ function configureTodayTower(deps) {
     document.addEventListener("animationend", (event) => {
       if (event.target.classList?.contains("tower-touchdown")) event.target.remove();
       else if (event.target.classList?.contains("tower-status")) event.target.classList.remove("is-flip");
+      else if (event.target.classList?.contains("tower-gate")) event.target.classList.remove("is-docking");
+      else if (event.target.classList?.contains("tower-gates")) event.target.classList.remove("is-full-flash");
     });
     flipListenerBound = true;
   }
@@ -46,6 +51,18 @@ function localISO(date) {
 
 function boardFlights(blocks, nowMin) {
   return towerFlights(blocks.filter((block) => block.category !== "ルーティン" && !block.oneTap), nowMin);
+}
+
+// レビューB1反映: APRONはARRIVALSと同じ母集団(boardFlights=非ルーティン・非oneTap)から
+// 到着便だけを取り、callsignの採番をボードと一致させる。並びは実績終了(無ければ定刻)昇順。
+function apronFlightsOf(flights, blocks) {
+  const byId = new Map(blocks.map((block) => [block.id, block]));
+  const arrivedAt = (flight) => {
+    const block = byId.get(flight.id);
+    return String(block?.actualEndAt || block?.plannedStartAt || "");
+  };
+  return flights.filter((flight) => flight.status === "arrived")
+    .sort((a, b) => arrivedAt(a).localeCompare(arrivedAt(b)));
 }
 
 function arrivalWindow(flights) {
@@ -213,11 +230,45 @@ function renderTowerGauges(blocks, now) {
   </section>`;
 }
 
+function renderTowerGates(blocks) {
+  const gates = blocks.filter((block) => block.category === "ルーティン" && !block.oneTap && !block.deleted);
+  const done = gates.filter((block) => block.completed).length;
+  const gateSet = gates.map((block) => `${encodeURIComponent(String(block.id))}:${block.completed ? 1 : 0}`).join(",");
+  const docked = new Set(gates.filter((block) => block.completed).map((block) => String(block.id)));
+  const firstRender = lastGateDocked === undefined;
+  const buttons = gates.map((block, index) => {
+    const id = String(block.id);
+    const docking = !firstRender && block.completed && !lastGateDocked.has(id);
+    return `<button type="button" class="tower-gate${docking ? " is-docking" : ""}" data-action="now-conveyor-complete" data-id="${escapeHTML(id)}" data-docked="${block.completed ? 1 : 0}">
+      <span>G${String(index + 1).padStart(2, "0")}</span><strong>${escapeHTML(block.title)}</strong><i aria-hidden="true"></i>
+    </button>`;
+  }).join("");
+  const full = done === gates.length && gates.length > 0;
+  // レビューM2反映: フラッシュは「満灯へ遷移した瞬間」だけ(is-dockingと同じ意味論)。
+  // 復元描画(lastGateFull===undefined)では定常is-fullのみでアニメを走らせない。
+  const fullFlash = full && lastGateFull === false;
+  lastGateDocked = docked;
+  lastGateFull = full;
+  return `<section class="tower-gates${full ? " is-full" : ""}${fullFlash ? " is-full-flash" : ""}">
+    <h2>GATE ROUTINE</h2><div id="towerGateStrip" data-gate-set="${gateSet}">${buttons}</div>
+    <div id="towerGateCount">${done}/${gates.length}便 就航</div>
+  </section>`;
+}
+
+function renderTowerApron(flights) {
+  const apronSet = flights.map((flight) => `${encodeURIComponent(String(flight.id))}:1`).join(",");
+  return `<section class="tower-apron"><h2>APRON</h2>
+    <div id="towerApronStrip" data-apron-set="${apronSet}">${flights.map((flight) =>
+      `<span class="tower-apron-plane">✈ ${escapeHTML(flight.callsign)}</span>`).join("")}</div>
+  </section>`;
+}
+
 function renderTodayTower() {
   const now = new Date();
   const today = todayISO();
   const date = escapeHTML(today);
   const blocks = blocksForDate(today);
+  const apronFlights = apronFlightsOf(boardFlights(blocks, now.getHours() * 60 + now.getMinutes()), blocks);
   const weekday = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
   return `<div class="today-tower">
     ${homeSyncAlertBanner()}
@@ -229,6 +280,8 @@ function renderTodayTower() {
     </header>
     ${renderTowerRunway(now, blocks)}
     ${renderTowerGauges(blocks, now)}
+    ${renderTowerGates(blocks)}
+    ${renderTowerApron(apronFlights)}
     ${renderTowerBoard(now, blocks)}
   </div>`;
 }
@@ -273,6 +326,39 @@ function updateTowerGauges(blocks, nowMin) {
   lastTrafficMin = nowMin;
 }
 
+function updateTowerGates(blocks) {
+  const gates = blocks.filter((block) => block.category === "ルーティン" && !block.oneTap && !block.deleted);
+  const gateSet = gates.map((block) => `${encodeURIComponent(String(block.id))}:${block.completed ? 1 : 0}`).join(",");
+  const container = document.getElementById("towerGateStrip");
+  if (!container || container.dataset.gateSet === gateSet || container.contains(document.activeElement)) return;
+  const previous = new Set([...container.querySelectorAll('[data-docked="1"]')].map((gate) => gate.dataset.id));
+  const done = gates.filter((block) => block.completed).length;
+  container.innerHTML = gates.map((block, index) => `<button type="button" class="tower-gate${block.completed && !previous.has(String(block.id)) ? " is-docking" : ""}" data-action="now-conveyor-complete" data-id="${escapeHTML(block.id)}" data-docked="${block.completed ? 1 : 0}">
+    <span>G${String(index + 1).padStart(2, "0")}</span><strong>${escapeHTML(block.title)}</strong><i aria-hidden="true"></i>
+  </button>`).join("");
+  container.dataset.gateSet = gateSet;
+  const full = done === gates.length && gates.length > 0;
+  const section = container.closest(".tower-gates");
+  if (section) {
+    // レビューM2反映: フラッシュは「満灯へ遷移した瞬間」だけ。復元・再構築では光らせない。
+    if (full && lastGateFull === false) section.classList.add("is-full-flash");
+    section.classList.toggle("is-full", full);
+    if (!full) section.classList.remove("is-full-flash");
+  }
+  lastGateFull = full;
+  const count = document.getElementById("towerGateCount");
+  if (count) count.textContent = `${done}/${gates.length}便 就航`;
+  lastGateDocked = new Set(gates.filter((block) => block.completed).map((block) => String(block.id)));
+}
+
+function updateTowerApron(flights) {
+  const apronSet = flights.map((flight) => `${encodeURIComponent(String(flight.id))}:1`).join(",");
+  const container = document.getElementById("towerApronStrip");
+  if (!container || container.dataset.apronSet === apronSet) return;
+  container.innerHTML = flights.map((flight) => `<span class="tower-apron-plane">✈ ${escapeHTML(flight.callsign)}</span>`).join("");
+  container.dataset.apronSet = apronSet;
+}
+
 function updateTodayTowerTick() {
   const blocks = blocksForDate(todayISO());
   const clock = document.getElementById("towerClock");
@@ -284,9 +370,11 @@ function updateTodayTowerTick() {
   dayLeft.textContent = dayLeftText(now);
   updateTowerRunway(now, blocks);
   updateTowerGauges(blocks, nowMin);
+  updateTowerGates(blocks);
+  const flights = boardFlights(blocks, nowMin);
+  updateTowerApron(apronFlightsOf(flights, blocks));
   const container = document.getElementById("towerArrivalRows");
   const rows = [...document.querySelectorAll(".tower-arrival-row")];
-  const flights = boardFlights(blocks, nowMin);
   const current = arrivalWindow(flights).rows;
   if (!container || container.dataset.flightSet !== flightSetKey(flights)) return;
   if (rows.length !== current.length || rows.some((row, index) => row.dataset.flightId !== String(current[index].id))) {

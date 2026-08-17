@@ -1,4 +1,4 @@
-// tests/tower-core.test.js — v204 TOWERのスキン・TWRヘッダ・発着ボード契約E2E。
+// tests/tower-core.test.js — v207 TOWERのスキン・TWRヘッダ・発着ボード・GATE/APRON契約E2E。
 // today-core.test.jsと同じく、localStorage seed + 既存nav + Playwright clockで検証する。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY } = require("./helpers");
 
@@ -311,6 +311,10 @@ function check(name, cond, extra = "") {
       await page.reload();
       await page.waitForSelector(".tower-gauges", { state: "attached" });
     };
+    const seedT6 = async (blocks) => {
+      await seedT5(blocks);
+      await page.waitForSelector(".tower-gates", { state: "attached" });
+    };
     const needleDeg = (id) => page.locator(id).evaluate((el) => parseFloat(el.style.getPropertyValue("--tower-needle-deg")));
 
     console.log("[16] FUEL表示・既存食事記録導線・針スプリング");
@@ -398,6 +402,79 @@ function check(name, cond, extra = "") {
     await seedT5([]);
     check("Block 0件はempty空状態", await page.locator('.tower-nowhud[data-status="empty"]').count() === 1
       && (await page.locator(".tower-nowhud").textContent())?.trim() === "本日の着陸予定はありません");
+
+    console.log("[20] GATE数と就航数はroutineRateと同じ母集団を使う");
+    const gateSeed = [
+      block("gate-done", "朝便", today, 7 * 60, { category: "ルーティン", completed: true, actualEndAt: atMinute(today, 7 * 60 + 5) }),
+      block("gate-open", "昼便", today, 12 * 60, { category: "ルーティン" }),
+      block("gate-onetap", "記録専用", today, 13 * 60, { category: "ルーティン", oneTap: true }),
+      block("gate-deleted", "削除便", today, 14 * 60, { category: "ルーティン", deleted: true })
+    ];
+    await seedT6(gateSeed);
+    check("oneTapを除くゲートは2基", await page.locator(".tower-gate").count() === 2);
+    check("1/2便 就航を表示", (await page.locator("#towerGateCount").textContent()) === "1/2便 就航");
+
+    console.log("[21] GATEタップは既存action経由で完了し就航灯とカウントを更新する");
+    await page.locator('.tower-gate[data-id="gate-open"]').click();
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).blocks.find((b) => b.id === "gate-open")?.completed === true, KEY);
+    check("実DOMクリックでBlock.completedが保存される", await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).blocks.find((b) => b.id === "gate-open")?.completed, KEY));
+    check("タップしたゲートが就航灯になる", await page.locator('.tower-gate[data-id="gate-open"][data-docked="1"]').count() === 1);
+    check("新規就航はis-dockingの700ms演出", await page.locator('.tower-gate[data-id="gate-open"]').evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return el.classList.contains("is-docking") && cs.animationName === "tower-gate-docking" && cs.animationDuration === "0.7s";
+    }));
+    check("就航数が2/2へ増える", (await page.locator("#towerGateCount").textContent()) === "2/2便 就航");
+    // K判断(2026-08-17): 就航済みゲートの再タップは確認なしの完了取消(既存toggleBlockのトグル)を仕様として維持する。
+    await page.locator('.tower-gate[data-id="gate-open"]').click();
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).blocks.find((b) => b.id === "gate-open")?.completed !== true, KEY);
+    check("就航済み再タップで取消される(トグル仕様)", await page.locator('.tower-gate[data-id="gate-open"][data-docked="0"]').count() === 1
+      && (await page.locator("#towerGateCount").textContent()) === "1/2便 就航");
+    await page.locator('.tower-gate[data-id="gate-open"]').click();
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).blocks.find((b) => b.id === "gate-open")?.completed === true, KEY);
+
+    console.log("[22] 全就航だけis-fullになり、満灯フラッシュは遷移の瞬間だけ");
+    check("全就航ではis-full", await page.locator(".tower-gates.is-full").count() === 1);
+    check("就航遷移の瞬間はis-full-flashが付く", await page.locator(".tower-gates.is-full-flash").count() === 1);
+    await page.reload();
+    await page.waitForSelector(".tower-gates");
+    check("復元描画はis-fullのみでフラッシュを出さない", await page.locator(".tower-gates.is-full").count() === 1
+      && await page.locator(".tower-gates.is-full-flash").count() === 0);
+    check("復元描画のis-fullは満灯アニメが走らない", await page.locator(".tower-gates.is-full").evaluate((el) => getComputedStyle(el).animationName === "none"));
+    await seedT6(gateSeed);
+    check("部分就航ではis-fullなし", await page.locator(".tower-gates.is-full").count() === 0);
+    await seedT6([block("gate-none", "非ルーティンのみ", today, 9 * 60, { completed: true })]);
+    check("ルーティン0件はis-fullなし・0/0便 就航", await page.locator(".tower-gates.is-full").count() === 0
+      && (await page.locator("#towerGateCount").textContent()) === "0/0便 就航");
+
+    console.log("[23] 非ルーティン完了BlockがAPRONへ到着順に並びリロード後も保持される");
+    const apronSeed = [
+      block("apron-late", "午後便", today, 9 * 60, { completed: true, actualEndAt: atMinute(today, 11 * 60) }),
+      block("apron-first", "午前便", today, 10 * 60, { completed: true, actualEndAt: atMinute(today, 10 * 60 + 30) }),
+      block("apron-routine", "定期便", today, 8 * 60, { category: "ルーティン", completed: true, actualEndAt: atMinute(today, 9 * 60) }),
+      // レビューB1再発防止: 計時タブのワンタップ計時が作るoneTap完了Blockを混ぜても、
+      // APRONに駐機せず、ARRIVALSと同じ母集団でcallsign採番がずれないこと。
+      block("apron-onetap", "ワンタップ計時", today, 8 * 60 + 30, { oneTap: true, completed: true, actualEndAt: atMinute(today, 9 * 60 + 30) })
+    ];
+    await seedT6(apronSeed);
+    check("APRONは非ルーティン到着2機だけ(oneTap・ルーティンは駐機しない)", await page.locator(".tower-apron-plane").count() === 2);
+    check("実績終了の到着順でcallsignを表示", JSON.stringify(await page.locator(".tower-apron-plane").allTextContents()) === JSON.stringify(["✈ TC-703", "✈ TC-701"]));
+    await page.reload();
+    await page.waitForSelector(".tower-apron");
+    check("リロード後もAPRONの機体を保持", await page.locator(".tower-apron-plane").count() === 2);
+
+    console.log("[24] GATE/APRONは確定語彙と非赤系色だけを使う");
+    const t6Surface = await page.locator(".tower-gates, .tower-apron").allTextContents();
+    const forbidden = ["まもなく", "急いで", "遅延", "DELAYED", "未達", "遅れています", "オーバー", "超過しています",
+      "失敗", "未消化", "積み残し", "食べ過ぎ", "オーバーカロリー", "未実施", "未就航", "残り"];
+    check("禁止語を表示しない", forbidden.every((word) => !t6Surface.join(" ").includes(word)), JSON.stringify(t6Surface));
+    const t6Colors = await page.locator(".tower-gates, .tower-apron").evaluateAll((roots) => roots.flatMap((root) =>
+      [root, ...root.querySelectorAll("*")].flatMap((el) => {
+        const cs = getComputedStyle(el);
+        // 影・グロー(box-shadow/text-shadow)内の色も抽出して検査する(Codexレビュー反映)。
+        return [cs.color, cs.backgroundColor, cs.borderTopColor,
+          ...[cs.boxShadow, cs.textShadow].flatMap((shadow) => shadow.match(/rgba?\([^)]*\)/g) || [])];
+      })));
+    check("GATE/APRONの実描画色に赤系が無い", t6Colors.every((color) => !isReddish(parseColor(color))), JSON.stringify(t6Colors));
   } finally {
     await browser.close();
     server.close();
