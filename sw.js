@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v208";
+const CACHE_NAME = "taskchute-journal-pwa-v209";
+// v209: TOWERへPC 3面管制卓(1280px以上)と残パネル4本(annex)を追加した。
 // v208: TOWERへ接近予定RADARと状態遷移を実況する無線ログを追加した。
 // v207: TOWERへGATE定期便(タップ就航・満灯演出)とAPRON駐機場を追加した。
 // v206: TOWERへFUEL/TRAFFIC半円ゲージと既存コーチ食事記録導線を追加した。

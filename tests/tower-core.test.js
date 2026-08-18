@@ -575,6 +575,146 @@ function check(name, cond, extra = "") {
           ...[cs.boxShadow, cs.textShadow, cs.backgroundImage].flatMap((value) => value.match(/rgba?\([^)]*\)/g) || [])];
       })));
     check("RADAR/無線の実描画色に赤系が無い", t7Colors.every((color) => !isReddish(parseColor(color))), JSON.stringify(t7Colors));
+
+    const seedT8 = async ({ blocks = [], zeroThinking = null, pomodoro = null } = {}) => {
+      await page.evaluate(({ KEY, blocks, zeroThinking, pomodoro }) => {
+        const s = JSON.parse(localStorage.getItem(KEY));
+        s.currentView = "today";
+        s.settings.todaySkin = "tower";
+        s.blocks = blocks;
+        s.pomodoro = pomodoro
+          ? { ...s.pomodoro, ...pomodoro }
+          : { ...s.pomodoro, running: false, blockId: "", startedAt: "", endsAt: "", mode: "focus" };
+        s.zeroThinking = { themes: [], entries: [], groups: [], suggestedThemes: [], ...(zeroThinking || {}) };
+        localStorage.setItem(KEY, JSON.stringify(s));
+      }, { KEY, blocks, zeroThinking, pomodoro });
+      await page.reload();
+      await page.waitForSelector(".tower-annex", { state: "attached" });
+    };
+
+    console.log("[29] annex収容と航空語彙見出し");
+    await page.clock.setFixedTime(fixedTime(0));
+    await seedT8();
+    await page.waitForLoadState("networkidle");
+    check("highlights未取得時はINFLIGHT MAGパネルだけ存在しない", await page.locator(".tower-annex .today-kindle").count() === 0
+      && await page.locator(".tower-annex .today-pomodoro, .tower-annex .today-zero, .tower-annex .today-replan").count() === 3);
+    const highlightsFixture = { generatedAt: "2026-08-17T00:00:00Z", books: [{
+      id: "tower-book", title: "TOWER BOOK", author: "T8", count: 1,
+      highlights: [{ ref: "tower-ref", text: "T8 INFLIGHT HIGHLIGHT", location: 1 }]
+    }] };
+    await page.route((url) => url.hostname === "api.github.com", (route) => {
+      const path = decodeURIComponent(new URL(route.request().url()).pathname);
+      if (path.endsWith("/contents/taskchute/reading/highlights.json")) {
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(highlightsFixture) });
+      }
+      return route.fallback();
+    });
+    await seedT8();
+    await page.waitForLoadState("networkidle");
+    await page.waitForSelector(".tower-annex .today-kindle", { state: "attached" });
+    const annexHeadings = await page.locator(".tower-annex h2.today-panel-title").allTextContents();
+    check("annexにCABIN TIMER / INFLIGHT MAG / LOGBOOK / RESEQUENCEを収容",
+      ["CABIN TIMER", "INFLIGHT MAG", "LOGBOOK", "RESEQUENCE"].every((label) => annexHeadings.some((text) => text.includes(label))),
+      JSON.stringify(annexHeadings));
+    check("annex見出しにcockpit語彙を残さない",
+      ["POMODORO", "ZERO-SEC LAUNCH", "REPLAN"].every((label) => annexHeadings.every((text) => !text.includes(label))),
+      JSON.stringify(annexHeadings));
+    check("tower-annexは無線ログ直後のDOM末尾", await page.evaluate(() => {
+      const tower = document.querySelector(".today-tower");
+      const annex = tower?.querySelector(":scope > .tower-annex");
+      return annex === tower?.lastElementChild && annex?.previousElementSibling?.classList.contains("tower-radio");
+    }));
+
+    console.log("[30] CABIN TIMER実働");
+    const pomoT8 = block("pomo-t8", "CABIN TIMER検証", today, 12 * 60 + 30, { estimateMin: 25 });
+    await seedT8({ blocks: [pomoT8] });
+    await page.locator('.tower-annex .today-pomodoro [data-action="start-pomodoro"]').click();
+    await page.waitForFunction((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      return s.pomodoro.running === true && s.pomodoro.blockId === "pomo-t8";
+    }, KEY);
+    check("既存start-pomodoroでLIVE表示へ変わる", await page.locator(".tower-annex .today-pomodoro .today-panel-title b").textContent() === "LIVE"
+      && (await page.locator("#todayPomodoroMode").textContent())?.includes("作業中"));
+    const pomoBefore = (await page.locator(".tower-annex .today-pomodoro .pomo-time-overlay").textContent()) || "";
+    await page.clock.setFixedTime(new Date(base.getFullYear(), base.getMonth(), base.getDate(), 12, 0, 1, 0));
+    await page.waitForFunction((before) => document.querySelector(".tower-annex .today-pomodoro .pomo-time-overlay")?.textContent !== before, pomoBefore);
+    check("tower tickでCABIN TIMER残り時間が更新される",
+      (await page.locator(".tower-annex .today-pomodoro .pomo-time-overlay").textContent()) !== pomoBefore);
+
+    console.log("[31] LOGBOOK実働");
+    const zeroTheme = { id: "zero-t8", text: "T8 LOGBOOKテーマ", fav: false, groupId: null, createdAt: atMinute(today, 8 * 60) };
+    await seedT8({ zeroThinking: { themes: [zeroTheme] } });
+    await page.locator('.tower-annex .today-zero [data-action="today-zero-write"]').click();
+    await page.waitForSelector(".tower-annex #todayZeroText", { state: "visible" });
+    await page.locator(".tower-annex #todayZeroText").fill("T8 LOGBOOK本文");
+    await page.locator('.tower-annex .today-zero [data-action="today-zero-save"]').click();
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).zeroThinking.entries.length === 1, KEY);
+    const zeroEntry = await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).zeroThinking.entries[0], KEY);
+    check("既存actionでLOGBOOK entryを保存", zeroEntry.theme === "T8 LOGBOOKテーマ" && zeroEntry.body === "T8 LOGBOOK本文", JSON.stringify(zeroEntry));
+
+    console.log("[32] RESEQUENCE実働");
+    check("annexに既存today-replanボタンが存在", await page.locator('.tower-annex [data-action="today-replan"]').count() === 1);
+
+    console.log("[33] 1440pxで3面卓");
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForLoadState("networkidle");
+    const desktopLayout = await page.evaluate(() => {
+      const root = document.querySelector(".today-tower");
+      const rect = (selector) => {
+        const box = document.querySelector(selector).getBoundingClientRect();
+        return { x: box.x, width: box.width };
+      };
+      return {
+        columns: getComputedStyle(root).gridTemplateColumns,
+        board: rect(".tower-board"), runway: rect(".tower-runway"), gates: rect(".tower-gates"),
+        radio: rect(".tower-radio"), annex: rect(".tower-annex")
+      };
+    });
+    const columnParts = desktopLayout.columns.trim().split(/\s+/);
+    check("grid列は340pxで始まり320pxで終わる", columnParts[0] === "340px" && columnParts[columnParts.length - 1] === "320px", desktopLayout.columns);
+    // サイドバー分を差し引いても中央列が実用幅を持つこと(1024px時に18pxへ潰れた盲点の再発防止)。
+    check("中央列は300px以上", columnParts.length === 3 && parseFloat(columnParts[1]) >= 300, desktopLayout.columns);
+    check("board < runway < gatesの3カラム実配置", desktopLayout.board.x < desktopLayout.runway.x && desktopLayout.runway.x < desktopLayout.gates.x,
+      JSON.stringify(desktopLayout));
+    check("radioとannexは同じ全幅", Math.abs(desktopLayout.radio.x - desktopLayout.annex.x) < 1
+      && Math.abs(desktopLayout.radio.width - desktopLayout.annex.width) < 1, JSON.stringify(desktopLayout));
+    // 下限境界1280px(最も中央列が潰れやすい点)でも3面卓が成立し中央列が実用幅を持つこと(レビューm1)。
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const boundaryColumns = await page.evaluate(() => getComputedStyle(document.querySelector(".today-tower")).gridTemplateColumns);
+    const boundaryParts = boundaryColumns.trim().split(/\s+/);
+    check("境界1280pxでも3カラムかつ中央列300px以上", boundaryParts.length === 3
+      && boundaryParts[0] === "340px" && boundaryParts[2] === "320px" && parseFloat(boundaryParts[1]) >= 300, boundaryColumns);
+
+    console.log("[34] 390/768/1024pxで1カラム・横はみ出しなし");
+    for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1024, height: 768 }]) {
+      await page.setViewportSize(viewport);
+      await page.waitForLoadState("networkidle");
+      const mobileLayout = await page.evaluate(() => {
+        const board = document.querySelector(".tower-board").getBoundingClientRect();
+        const runway = document.querySelector(".tower-runway").getBoundingClientRect();
+        return { boardX: board.x, runwayX: runway.x, scrollWidth: document.scrollingElement.scrollWidth, innerWidth };
+      });
+      check(`${viewport.width}pxはboard/runwayが縦積み`, Math.abs(mobileLayout.boardX - mobileLayout.runwayX) < 1, JSON.stringify(mobileLayout));
+      check(`${viewport.width}pxは横はみ出しなし`, mobileLayout.scrollWidth <= mobileLayout.innerWidth, JSON.stringify(mobileLayout));
+    }
+
+    console.log("[35] annexでspan-2が無効");
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const annexDesktopWidths = await page.evaluate(() => ({
+      annex: document.querySelector(".tower-annex").getBoundingClientRect().width,
+      pomodoro: document.querySelector(".tower-annex .today-pomodoro").getBoundingClientRect().width
+    }));
+    check("1440pxはpomodoroがannex幅の約半分", annexDesktopWidths.pomodoro / annexDesktopWidths.annex > .45
+      && annexDesktopWidths.pomodoro / annexDesktopWidths.annex < .55, JSON.stringify(annexDesktopWidths));
+    // 768pxは.today-span-2のspan 2が生きる帯(>720px)。annex側の無効化が外れると暗黙2カラム化して横溢れする(レビューm2)。
+    for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 }]) {
+      await page.setViewportSize(viewport);
+      const annexMobileWidths = await page.evaluate(() => ({
+        annex: document.querySelector(".tower-annex").getBoundingClientRect().width,
+        pomodoro: document.querySelector(".tower-annex .today-pomodoro").getBoundingClientRect().width
+      }));
+      check(`${viewport.width}pxはpomodoroがannex全幅`, annexMobileWidths.pomodoro / annexMobileWidths.annex > .95, JSON.stringify(annexMobileWidths));
+    }
   } finally {
     await browser.close();
     server.close();

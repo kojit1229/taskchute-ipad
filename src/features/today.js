@@ -50,7 +50,8 @@ function configureToday(deps) {
     coachSummaryToday: () => {
       const coach = state.coachLog && typeof state.coachLog === "object" ? state.coachLog : { meals: [], settings: { dailyKcal: 2278 } };
       return coachSummaryForDate(coach.meals, todayISO(), coach.settings?.dailyKcal ?? 2278);
-    }
+    },
+    renderTodayPomodoro, renderTodayKindle, renderTodayZero, renderReplanControlHTML
   });
   registerActions({
     "today-kindle-prev": () => moveTodayKindle(-1),
@@ -707,6 +708,9 @@ function updateTodayTick() {
   }
   if (document.querySelector(".today-tower")) {
     updateTodayTowerTick();
+    updateTodayPomodoroTick();
+    updateTodayZeroTick();
+    updateTodayKindleAutoAdvance(Date.now());
     return;
   }
   const clock = document.getElementById("todayClock");

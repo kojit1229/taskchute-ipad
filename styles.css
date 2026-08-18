@@ -4520,6 +4520,61 @@ h3 {
 .tower-radio-cursor { display: inline-block; width: 6px; height: 11px; margin-left: 4px; vertical-align: -1px; background: var(--tower-green); animation: tower-radio-cursor 900ms step-end infinite; }
 @keyframes tower-radio-cursor { 50% { opacity: 0; } }
 
+/* v209: TOWER T8。PC 3面管制卓と残パネル収容。 */
+.tower-annex { display: grid; gap: 12px; margin-top: 12px; }
+/* today-span-2 は cockpit の2カラムdeck用。annexの1〜2カラムgridでは暗黙カラムを作るため無効化する。 */
+.tower-annex .today-span-2 { grid-column: auto; }
+.today-tower .today-panel { border-color: var(--tower-line); border-radius: 0; background: var(--tower-panel); box-shadow: none; }
+.today-tower .today-panel::before,
+.today-tower .today-panel::after { content: none; }
+.today-tower .today-panel-title { color: var(--tower-cyan); letter-spacing: .18em; }
+.today-tower .today-panel-title span { color: var(--tower-text); opacity: .6; }
+.today-tower .today-panel-title b { border-color: var(--tower-line); color: var(--tower-green); background: transparent; }
+/* annex内部はcockpit由来のテーマ依存トークン(--text/--panel-soft)を使うため、lightテーマだと
+   TOWER暗色背景上で判読不能になる(実測コントラスト1.0〜1.1)。TOWER系トークンへ固定する(レビューM1)。 */
+.today-tower .pomo-time-overlay { color: var(--tower-text); }
+.today-tower .today-deck-card,
+.today-tower .today-zero-theme,
+.today-tower .today-zero-text { border-color: var(--tower-line); background: rgba(255, 255, 255, .04); color: var(--tower-text); }
+.today-tower .today-deck-card > div { color: var(--tower-text); }
+.today-tower .today-deck-card > small { color: var(--tower-text); opacity: .6; }
+
+/* 3面卓の適用はviewport 1280px以上。設計書の900pxはサイドバー無しサンプル準拠の値で、
+   実アプリはサイドバー216px+余白により900〜1279pxでは中央列が340/320の固定レールに潰される(1024px実測18px)。 */
+@media (min-width: 1280px) {
+  .today-tower {
+    display: grid;
+    grid-template-columns: 340px minmax(0, 1fr) 320px;
+    grid-template-areas:
+      "alert  alert  alert"
+      "header header header"
+      "board  runway gates"
+      "board  radar  apron"
+      "board  gauges apron"
+      "radio  radio  radio"
+      "annex  annex  annex";
+    gap: 12px;
+    align-items: start;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 16px 16px;
+  }
+  .today-tower > .sync-alert-banner { grid-area: alert; }
+  .today-tower .tower-header { grid-area: header; }
+  .today-tower .tower-board { grid-area: board; padding: 0; }
+  .today-tower .tower-runway { grid-area: runway; margin-top: 0; }
+  .today-tower .tower-radar { grid-area: radar; margin-top: 0; }
+  .today-tower .tower-gauges { grid-area: gauges; padding-top: 0; }
+  .today-tower .tower-gates { grid-area: gates; margin-top: 0; }
+  .today-tower .tower-apron { grid-area: apron; margin-top: 0; }
+  .today-tower .tower-radio { grid-area: radio; }
+  .tower-annex { grid-area: annex; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 0; }
+}
+/* 1280〜1439pxは中央列が狭い(約290〜450px)ため、半円ゲージ2連を縦積みにして潰れを防ぐ。 */
+@media (min-width: 1280px) and (max-width: 1439px) {
+  .today-tower .tower-gauges { grid-template-columns: 1fr; }
+}
+
 /* v182: 「今日」コックピット(P1〜P4)。today名前空間に閉じ、既存home等へ波及させない。 */
 .today-cockpit {
   min-height: 100%;

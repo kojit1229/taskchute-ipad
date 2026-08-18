@@ -25,7 +25,7 @@
 | timeline-render-core.test.js | node | full | planning-execution, ui-responsive | 41 | 0 | 0 |
 | timeline-tick-wiring.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 16 | 8 | 4500 |
 | today-core.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 496 | 8 | 14400 |
-| tower-core.test.js | e2e | full | sync-storage, ui-responsive | 114 | 0 | 0 |
+| tower-core.test.js | e2e | full | sync-storage, ui-responsive | 131 | 0 | 0 |
 | tower-model-core.test.js | node | full | legacy-crosscutting | 6 | 0 | 0 |
 | v100.test.js | e2e | full | content-ai, ui-responsive | 31 | 9 | 3300 |
 | v101.test.js | e2e | full | content-ai, ui-responsive | 21 | 6 | 1400 |

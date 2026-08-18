@@ -1,9 +1,10 @@
-// src/features/today-tower.js — v208: TOWERにRADARと無線ログを追加。
+// src/features/today-tower.js — v209: TOWERにPC 3面管制卓と残パネルを追加。
 // state・保存・action登録には触れず、時刻・便状態は既存1秒tickerから差分更新する。
 
 let escapeHTML, todayISO, homeSyncAlertBanner, blocksForDate, towerFlights;
 let runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, timeFromDateTime, minutesOf, clamp;
 let coachSummaryToday, QUICK_MEALS;
+let renderTodayPomodoro, renderTodayKindle, renderTodayZero, renderReplanControlHTML;
 let flipListenerBound = false;
 // undefined=セッション初回(未観測)。復元描画では接地の瞬間ではないためフラッシュを出さない
 // (起動時同期404後の全体render()と競合して非決定にもなる)。null=実行中なしを観測済み。
@@ -23,7 +24,8 @@ function configureTodayTower(deps) {
   ({
     escapeHTML, todayISO, homeSyncAlertBanner, blocksForDate, towerFlights,
     runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, timeFromDateTime, minutesOf, clamp,
-    coachSummaryToday, QUICK_MEALS
+    coachSummaryToday, QUICK_MEALS,
+    renderTodayPomodoro, renderTodayKindle, renderTodayZero, renderReplanControlHTML
   } = deps);
   if (!flipListenerBound && typeof document !== "undefined") {
     document.addEventListener("animationend", (event) => {
@@ -159,6 +161,27 @@ function radioSetKey() {
 
 function renderTowerRadio() {
   return `<section class="tower-radio"><div id="towerRadioLines" data-radio-set="${radioSetKey()}">${radioLinesHTML()}</div></section>`;
+}
+
+// 見出しの英語ラベルだけ航空語彙へ置換する。panelHeading()の出力`>EN<span>`は
+// 各パネルHTML内で一意(本文中のPOMODORO等は`>POMODORO — `型で衝突しない)。
+const ANNEX_LABELS = [
+  ["POMODORO", "CABIN TIMER"],
+  ["KINDLE INSIGHT", "INFLIGHT MAG"],
+  ["ZERO-SEC LAUNCH", "LOGBOOK"],
+  ["REPLAN", "RESEQUENCE"]
+];
+function annexRelabel(html) {
+  return ANNEX_LABELS.reduce((out, [en, tower]) => out.replace(`>${en}<span>`, `>${tower}<span>`), html);
+}
+function renderTowerAnnex(blocks) {
+  const queue = queueBlocksOf(blocks);
+  return `<div class="tower-annex">${annexRelabel([
+    renderTodayPomodoro(blocks, queue),
+    renderTodayKindle(),
+    renderTodayZero(),
+    renderReplanControlHTML()
+  ].join(""))}</div>`;
 }
 
 function runwayMetrics(running, nowMs) {
@@ -361,6 +384,7 @@ function renderTodayTower() {
     ${renderTowerApron(apronFlights)}
     ${renderTowerBoard(now, flights)}
     ${renderTowerRadio()}
+    ${renderTowerAnnex(blocks)}
   </div>`;
 }
 
