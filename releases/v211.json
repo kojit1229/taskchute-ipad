@@ -1,0 +1,47 @@
+{
+  "version": 211,
+  "date": "2026-08-19",
+  "title": "今日タブ既定スキンをtowerへ切替",
+  "summary": "TOWER後続: 新規端末・未知値の既定スキンをcockpitからtowerへ反転",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v211.json",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/today-core.test.js",
+    "tests/tower-core.test.js"
+  ],
+  "intent": [
+    "設計書design-today-tower.md §11-2の承認済み方針「T8以降に既定をtowerへ切替」を実行する(K最終承認2026-08-19)。",
+    "新規端末・初回起動で設定変更なしにTOWERが表示されるようにし、「設定しないと見えない」を解消する。",
+    "保存済みの明示設定値は変更しない。normalizeは保存を伴わないため、todaySkin未設定のまま残っていた端末(v202以前から未起動等)は次回保存からtowerになる。これはユーザーが選んだ値の上書きではなく既定切替として意図した挙動(2系統レビューの指摘を受けた監督者裁定。K承認時に明示)。"
+  ],
+  "changes": [
+    "normalizeStateのtodaySkin fallbackをcockpitからtowerへ反転した(app.js:1756。未設定・未知値のみ対象)。",
+    "renderSettingsThemePanelの表示用fallbackも同値のtowerへ揃えた(app.js:9620。通常はnormalize後の値が来るため実挙動不変)。",
+    "tower-core[1]の期待値を反転した(未設定・不正値はtowerへ正規化・.today-cockpit非描画checkを不正値側にも追加)。",
+    "today-coreのseed系4箇所(seed/seedB2/seedW1/reducedPageインライン)へtodaySkin:cockpitの明示既定を追加し、cockpit専用DOMのassertionを無改変で維持した。",
+    "today-core[1](新規state初回起動)の期待値をtower既定描画(.today-tower+#towerDayLeftのHH:MM:SS)へ追随させた(起動ビュー=todayのassertは無改変。cockpit 5パネルassertは[9]等のseed済みテストで被覆維持)。",
+    "sw.jsのCACHE_NAMEをv211へ更新した。"
+  ],
+  "uncertainties": [
+    "iOS実機PWAでの新規インストール初回起動の見た目は未確認(既存端末は影響なし)。"
+  ],
+  "reviewFocus": [
+    "保存済みの明示値が維持されるか・todaySkin未設定stateの扱いが意図(未設定=新既定tower)と一致しているか。",
+    "todaySkin未設定で今日タブを描画する他スイートの取りこぼしがないか(影響調査はv211-impact.md: 影響あり2件・グレー2件・影響なし22件)。",
+    "today-core[1]の期待値差し替えがassertion弱体化になっていないか(cockpit 5パネルの被覆が他テストで維持されているか)。"
+  ],
+  "verification": [
+    "node tests/tower-core.test.js([1]〜[40])・node tests/today-core.test.js([1]〜[76])とも監督者環境でALL PASS。",
+    "グレー判定のv193/v196もtower既定のまま無改変でALL PASS(依存DOM .today-replanはtower annexでも同一描画)。",
+    "npm run code:index:write / npm run test:manifest:write 実行済み。実行コード差分はapp.js 2行+コメント+sw.js 1行+コメント。",
+    "reviewer(Claude)+Codexの2系統レビューを実施。共通指摘=「既存端末はnormalizeで明示cockpit保存済み」の過大な保証をコード・記録の文言から修正。Codex HIGH(v202以前state・旧snapshotの暗黙tower化)は「未設定=新既定の適用」として意図どおりと裁定しK承認時に明示。Claude Major(fresh profile起動経路の全スイート波及)はrelease-gate --finalとCI全量で担保。lightテーマannex残件3箇所はT9由来の既存事象として別弾送り。"
+  ],
+  "knownLimitations": [
+    "Service Worker更新とブラウザE2Eの実走はサンドボックス外またはCIでの確認が必要。"
+  ]
+}

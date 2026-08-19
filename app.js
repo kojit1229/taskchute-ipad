@@ -1752,8 +1752,9 @@ function normalizeState(value) {
   if (!["light", "dark", "cockpit", "auto"].includes(value.settings.theme)) {
     value.settings.theme = "dark";
   }
-  // v203: 今日タブの表示スキン。既存端末・未知値は従来表示のcockpitへ戻す。
-  if (!["cockpit", "tower"].includes(value.settings.todaySkin)) value.settings.todaySkin = "cockpit";
+  // v203: 今日タブの表示スキン。v211: 未設定・未知値の既定をtowerへ。保存済みの明示値は維持する
+  // (normalize自体は保存しない。未設定のまま残っていた端末は次回保存からtowerになる=既定切替の意図どおり)。
+  if (!["cockpit", "tower"].includes(value.settings.todaySkin)) value.settings.todaySkin = "tower";
   // v210: TOWERのモーション強度。未知値は通常へ。
   if (!["normal", "calm", "off"].includes(value.settings.towerMotion)) value.settings.towerMotion = "normal";
   if (typeof value.settings.autoArchive !== "boolean") value.settings.autoArchive = true;
@@ -9617,7 +9618,7 @@ function renderSettingsGuidedAccessPanel() {
 // 保存直後のrender()でhtml[data-theme]/meta[theme-color]も自動的に追従する。
 function renderSettingsThemePanel() {
   const theme = ["light", "dark", "cockpit", "auto"].includes(state.settings.theme) ? state.settings.theme : "dark";
-  const todaySkin = ["cockpit", "tower"].includes(state.settings.todaySkin) ? state.settings.todaySkin : "cockpit";
+  const todaySkin = ["cockpit", "tower"].includes(state.settings.todaySkin) ? state.settings.todaySkin : "tower";
   const towerMotion = ["normal", "calm", "off"].includes(state.settings.towerMotion) ? state.settings.towerMotion : "normal";
   return `
     <h3>🌗 テーマ</h3>

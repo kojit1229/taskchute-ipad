@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v210";
+const CACHE_NAME = "taskchute-journal-pwa-v211";
+// v211: 今日タブの既定スキンをtowerへ切り替えた(未設定・未知値のみ。保存済みの明示値は維持)。
 // v210: TOWERのreduced-motion・可視性停止・夜間色温度・モーション強度を仕上げた。
 // v209: TOWERへPC 3面管制卓(1280px以上)と残パネル4本(annex)を追加した。
 // v208: TOWERへ接近予定RADARと状態遷移を実況する無線ログを追加した。

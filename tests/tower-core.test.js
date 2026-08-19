@@ -66,19 +66,20 @@ function check(name, cond, extra = "") {
     await page.waitForSelector('[data-action="gate-continue"]', { state: "attached" });
     await passGithubGate(page);
 
-    console.log("[1] todaySkin未設定・不正値はcockpitへ正規化される");
+    console.log("[1] todaySkin未設定・不正値はtowerへ正規化される");
     await seedSkin("__missing__");
-    check("未設定では既存.today-cockpitが描画される", await page.locator(".today-cockpit").count() === 1);
-    check("未設定では.today-towerを描画しない", await page.locator(".today-tower").count() === 0);
+    check("未設定では.today-towerが描画される", await page.locator(".today-tower").count() === 1);
+    check("未設定では.today-cockpitを描画しない", await page.locator(".today-cockpit").count() === 0);
     await page.locator('#sidebar [data-action="nav"][data-view="tasks"]').click();
     await page.waitForSelector('#app[data-view="tasks"]');
-    check("未設定値は保存時にcockpitへ正規化される", await storedSkin() === "cockpit", await storedSkin());
+    check("未設定値は保存時にtowerへ正規化される", await storedSkin() === "tower", await storedSkin());
 
     await seedSkin("unknown-skin");
-    check("不正値でも既存.today-cockpitが描画される", await page.locator(".today-cockpit").count() === 1);
+    check("不正値でも.today-towerが描画される", await page.locator(".today-tower").count() === 1);
+    check("不正値では.today-cockpitを描画しない", await page.locator(".today-cockpit").count() === 0);
     await page.locator('#sidebar [data-action="nav"][data-view="tasks"]').click();
     await page.waitForSelector('#app[data-view="tasks"]');
-    check("不正値は保存時にcockpitへ正規化される", await storedSkin() === "cockpit", await storedSkin());
+    check("不正値は保存時にtowerへ正規化される", await storedSkin() === "tower", await storedSkin());
 
     console.log("[2] 設定UIでtowerへ切り替えるとTWRヘッダが描画される");
     await seedSkin("cockpit", "settings");

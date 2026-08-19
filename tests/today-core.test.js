@@ -86,6 +86,7 @@ function check(name, cond, extra = "") {
       s.sleep.logs = {};
       s.condition = s.condition || { logs: {} };
       s.condition.logs = {};
+      s.settings.todaySkin = "cockpit";
       Object.assign(s.settings, settings);
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, blocks, view, settings, TODAY });
@@ -114,16 +115,15 @@ function check(name, cond, extra = "") {
     // ============================================================
     // [1] 新規state(seedState)の起動ビューが today(D3)
     // ============================================================
-    console.log("[1] 新規state(seedState)の起動ビューが today で、5パネル+時計が描画される");
+    console.log("[1] 新規state(seedState)の起動ビューが today で、tower既定が描画される(v211)");
     await page.goto(`http://localhost:${PORT}/`);
     // 新規プロファイル = トークン未設定なのでまずゲートが出る(既存挙動)。通過後に起動ビューを判定する。
     await page.waitForSelector('[data-action="gate-continue"]', { state: "attached" });
     await passGithubGate(page);
     check("seedState(新規state)の起動ビューが today になる(D3)", (await currentDataView()) === "today", await currentDataView());
-    for (const sel of PANELS) {
-      check(`パネルroot ${sel} が描画される`, await page.locator(sel).count() === 1);
-    }
-    check("ヘッダ時計 #todayClock が描画される", await page.locator("#todayClock").count() === 1);
+    check("tower root .today-tower が描画される", await page.locator(".today-tower").count() === 1);
+    const towerDayLeft = (await page.locator("#towerDayLeft").textContent()) || "";
+    check("#towerDayLeft が描画されHH:MM:SS形式", /^\d{2}:\d{2}:\d{2}$/.test(towerDayLeft), towerDayLeft);
 
     // ============================================================
     // [2] 既存stateは最後のビュー復元が壊れない
@@ -483,6 +483,7 @@ function check(name, cond, extra = "") {
           ? { ...s.pomodoro, ...pomodoro }
           : { ...s.pomodoro, running: false, blockId: "", startedAt: "", endsAt: "", mode: "focus" };
         if (zeroThinking) s.zeroThinking = { themes: [], entries: [], groups: [], suggestedThemes: [], ...zeroThinking };
+        s.settings.todaySkin = "cockpit";
         Object.assign(s.settings, settings);
         localStorage.setItem(KEY, JSON.stringify(s));
       }, { KEY, blocks, view, settings, pomodoro, zeroThinking, TODAY });
@@ -1880,6 +1881,7 @@ function check(name, cond, extra = "") {
         if (extraTasks.length) {
           s.tasks = (s.tasks || []).filter((t) => !extraTasks.some((x) => x.id === t.id)).concat(extraTasks);
         }
+        s.settings.todaySkin = "cockpit";
         Object.assign(s.settings, settings);
         localStorage.setItem(KEY, JSON.stringify(s));
       }, { KEY, blocks, view, settings, selectedDate, extraTasks });
@@ -4061,6 +4063,7 @@ function check(name, cond, extra = "") {
       s.blocks = blocks;
       s.currentView = view;
       s.selectedDate = TODAY;
+      s.settings.todaySkin = "cockpit";
       localStorage.setItem(KEY, JSON.stringify(s));
     }, {
       KEY,

@@ -518,8 +518,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 496,
-      "assertionHash": "b145a2ab9b2bed9c",
-      "sourceHash": "d1e5734b0857bd06",
+      "assertionHash": "773e116e601ebd25",
+      "sourceHash": "482265e7cdd15038",
       "waits": {
         "fixedCount": 8,
         "numericMilliseconds": 14400,
@@ -541,9 +541,9 @@
         "sync-storage",
         "ui-responsive"
       ],
-      "assertionSignals": 147,
-      "assertionHash": "7f3bdf45957112fd",
-      "sourceHash": "c2a2289ce12bf0e4",
+      "assertionSignals": 148,
+      "assertionHash": "c2be7cbe10bb7cdd",
+      "sourceHash": "df93e1488477a524",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
