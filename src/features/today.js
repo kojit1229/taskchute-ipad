@@ -51,6 +51,7 @@ function configureToday(deps) {
       const coach = state.coachLog && typeof state.coachLog === "object" ? state.coachLog : { meals: [], settings: { dailyKcal: 2278 } };
       return coachSummaryForDate(coach.meals, todayISO(), coach.settings?.dailyKcal ?? 2278);
     },
+    towerMotionSetting: () => state.settings.towerMotion,
     renderTodayPomodoro, renderTodayKindle, renderTodayZero, renderReplanControlHTML
   });
   registerActions({

@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v209";
+const CACHE_NAME = "taskchute-journal-pwa-v210";
+// v210: TOWERのreduced-motion・可視性停止・夜間色温度・モーション強度を仕上げた。
 // v209: TOWERへPC 3面管制卓(1280px以上)と残パネル4本(annex)を追加した。
 // v208: TOWERへ接近予定RADARと状態遷移を実況する無線ログを追加した。
 // v207: TOWERへGATE定期便(タップ就航・満灯演出)とAPRON駐機場を追加した。

@@ -3,7 +3,7 @@
 
 let escapeHTML, todayISO, homeSyncAlertBanner, blocksForDate, towerFlights;
 let runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, timeFromDateTime, minutesOf, clamp;
-let coachSummaryToday, QUICK_MEALS;
+let coachSummaryToday, towerMotionSetting, QUICK_MEALS;
 let renderTodayPomodoro, renderTodayKindle, renderTodayZero, renderReplanControlHTML;
 let flipListenerBound = false;
 // undefined=セッション初回(未観測)。復元描画では接地の瞬間ではないためフラッシュを出さない
@@ -24,7 +24,7 @@ function configureTodayTower(deps) {
   ({
     escapeHTML, todayISO, homeSyncAlertBanner, blocksForDate, towerFlights,
     runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, timeFromDateTime, minutesOf, clamp,
-    coachSummaryToday, QUICK_MEALS,
+    coachSummaryToday, towerMotionSetting, QUICK_MEALS,
     renderTodayPomodoro, renderTodayKindle, renderTodayZero, renderReplanControlHTML
   } = deps);
   if (!flipListenerBound && typeof document !== "undefined") {
@@ -33,6 +33,10 @@ function configureTodayTower(deps) {
       else if (event.target.classList?.contains("tower-status")) event.target.classList.remove("is-flip");
       else if (event.target.classList?.contains("tower-gate")) event.target.classList.remove("is-docking");
       else if (event.target.classList?.contains("tower-gates")) event.target.classList.remove("is-full-flash");
+    });
+    document.addEventListener("visibilitychange", () => {
+      const root = document.querySelector(".today-tower");
+      if (root) root.dataset.paused = document.hidden ? "1" : "0";
     });
     flipListenerBound = true;
   }
@@ -53,6 +57,10 @@ function dayLeftText(now) {
 function localISO(date) {
   return [date.getFullYear(), date.getMonth() + 1, date.getDate()]
     .map((value, index) => String(value).padStart(index ? 2 : 4, "0")).join("-");
+}
+
+function isNightHour(hour) {
+  return hour >= 21 || hour < 5;
 }
 
 function boardFlights(blocks, nowMin) {
@@ -369,7 +377,7 @@ function renderTodayTower() {
   const apronFlights = apronFlightsOf(flights, blocks);
   radioObserve(flights);
   const weekday = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
-  return `<div class="today-tower">
+  return `<div class="today-tower" data-motion="${escapeHTML(towerMotionSetting())}" data-night="${isNightHour(now.getHours()) ? 1 : 0}" data-paused="${document.hidden ? 1 : 0}">
     ${homeSyncAlertBanner()}
     <header class="tower-header">
       <span class="tower-beacon" aria-hidden="true"><i></i></span>
@@ -494,11 +502,16 @@ function updateTowerRadio() {
 }
 
 function updateTodayTowerTick() {
+  const now = new Date();
+  const root = document.querySelector(".today-tower");
+  if (root) {
+    const night = isNightHour(now.getHours()) ? "1" : "0";
+    if (root.dataset.night !== night) root.dataset.night = night;
+  }
   const blocks = blocksForDate(todayISO());
   const clock = document.getElementById("towerClock");
   const dayLeft = document.getElementById("towerDayLeft");
   if (!clock || !dayLeft) return;
-  const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
   clock.textContent = clockText(now);
   dayLeft.textContent = dayLeftText(now);

@@ -715,6 +715,144 @@ function check(name, cond, extra = "") {
       }));
       check(`${viewport.width}pxはpomodoroがannex全幅`, annexMobileWidths.pomodoro / annexMobileWidths.annex > .95, JSON.stringify(annexMobileWidths));
     }
+
+    console.log("[36] reduced-motionは演出を止めても数字を更新する");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.clock.setFixedTime(fixedTime(0));
+    await seedT8();
+    const reducedTransitions = await page.evaluate(() => ({
+      needle: getComputedStyle(document.querySelector(".tower-gauge-needle")).transitionProperty,
+      plane: getComputedStyle(document.querySelector("#towerPlane")).transitionProperty,
+      sweep: getComputedStyle(document.querySelector(".tower-radar-sweep")).animationName,
+      // 接地フラッシュはanimationend削除に依存するため、animationが止まる環境では出さない契約(2系統レビューM1)。
+      touchdown: (() => {
+        const strip = document.querySelector(".tower-runway-strip");
+        strip.insertAdjacentHTML("beforeend", '<i class="tower-touchdown"></i>');
+        const display = getComputedStyle(strip.querySelector(".tower-touchdown")).display;
+        strip.querySelector(".tower-touchdown").remove();
+        return display;
+      })()
+    }));
+    check("reduced-motionでneedle/planeのtransitionがnone", reducedTransitions.needle === "none" && reducedTransitions.plane === "none",
+      JSON.stringify(reducedTransitions));
+    check("reduced-motionで走査線が止まり接地フラッシュは出ない", reducedTransitions.sweep === "none" && reducedTransitions.touchdown === "none",
+      JSON.stringify(reducedTransitions));
+    const reducedClockBefore = await page.locator("#towerClock").textContent();
+    await page.clock.setFixedTime(fixedTime(1));
+    await page.waitForFunction((before) => document.querySelector("#towerClock")?.textContent !== before, reducedClockBefore);
+    check("reduced-motionでも時計の数字は更新される", await page.locator("#towerClock").textContent() !== reducedClockBefore);
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+
+    console.log("[37] data-pausedで非表示中のCSS animationを停止する");
+    await page.evaluate(() => {
+      Object.defineProperty(document, "hidden", { get: () => true, configurable: true });
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    const pausedState = await page.evaluate(() => ({
+      paused: document.querySelector(".today-tower").dataset.paused,
+      playState: getComputedStyle(document.querySelector(".tower-radar-sweep")).animationPlayState
+    }));
+    check("hidden=trueでdata-paused=1かつ走査線paused", pausedState.paused === "1" && pausedState.playState === "paused", JSON.stringify(pausedState));
+    await page.evaluate(() => {
+      Object.defineProperty(document, "hidden", { get: () => false, configurable: true });
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    const resumedState = await page.evaluate(() => ({
+      paused: document.querySelector(".today-tower").dataset.paused,
+      playState: getComputedStyle(document.querySelector(".tower-radar-sweep")).animationPlayState
+    }));
+    check("hidden=falseでdata-paused=0かつ走査線running", resumedState.paused === "0" && resumedState.playState === "running", JSON.stringify(resumedState));
+
+    console.log("[38] 21:00〜4:59は夜間色温度へ切り替わる");
+    const clockAt = (hour, minute = 0, second = 0) => new Date(base.getFullYear(), base.getMonth(), base.getDate(), hour, minute, second, 0);
+    await page.clock.setFixedTime(clockAt(22));
+    await seedT8();
+    const towerTokens = () => ({
+      night: document.querySelector(".today-tower").dataset.night,
+      cyan: getComputedStyle(document.querySelector(".today-tower")).getPropertyValue("--tower-cyan").trim(),
+      amber: getComputedStyle(document.querySelector(".today-tower")).getPropertyValue("--tower-amber").trim()
+    });
+    const nightStyle = await page.evaluate(towerTokens);
+    await page.clock.setFixedTime(clockAt(12));
+    await seedT8();
+    const dayStyle = await page.evaluate(towerTokens);
+    check("22時はdata-night=1で昼とcyan/amberが異なる", nightStyle.night === "1" && dayStyle.night === "0"
+      && nightStyle.cyan !== dayStyle.cyan && nightStyle.amber !== dayStyle.amber,
+      JSON.stringify({ nightStyle, dayStyle }));
+    await page.clock.setFixedTime(clockAt(4, 59));
+    await seedT8();
+    const beforeDawn = await page.locator(".today-tower").getAttribute("data-night");
+    await page.clock.setFixedTime(clockAt(5));
+    await page.waitForFunction(() => document.querySelector(".today-tower")?.dataset.night === "0");
+    check("4:59は夜間で5:00にtickで昼へ戻る", beforeDawn === "1");
+    await page.clock.setFixedTime(clockAt(20, 59, 59));
+    await seedT8();
+    await page.clock.setFixedTime(clockAt(21));
+    await page.waitForFunction(() => document.querySelector(".today-tower")?.dataset.night === "1");
+    check("tickで20:59から21:00をまたぐとdata-night=1", await page.locator(".today-tower").getAttribute("data-night") === "1");
+
+    console.log("[39] towerMotionはnormal/calm/offの3段で保存・描画される");
+    await page.evaluate((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      delete s.settings.towerMotion;
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, KEY);
+    await page.reload();
+    await page.waitForSelector(".today-tower");
+    check("towerMotion未定義はnormalへ正規化", await page.locator(".today-tower").getAttribute("data-motion") === "normal");
+    await page.locator('#sidebar [data-action="nav"][data-view="settings"]').click();
+    await page.waitForSelector('#app[data-view="settings"]');
+    await page.evaluate(() => { const fold = document.querySelector('details[data-fold-id="settings-display"]'); if (fold) fold.open = true; });
+    const motionSelect = page.locator('select[data-setting-field="towerMotion"]');
+    check("towerMotion selectは3択", await motionSelect.locator("option").count() === 3);
+    await motionSelect.selectOption("off");
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).settings.towerMotion === "off", KEY);
+    await page.locator('#sidebar [data-action="nav"][data-view="today"]').click();
+    await page.waitForSelector('.today-tower[data-motion="off"]');
+    check("offはstate保存され走査線animation-nameがnone", await page.locator(".tower-radar-sweep").evaluate((el) => getComputedStyle(el).animationName) === "none");
+    const offExtras = await page.evaluate(() => {
+      const strip = document.querySelector(".tower-runway-strip");
+      strip.insertAdjacentHTML("beforeend", '<i class="tower-touchdown"></i>');
+      const touchdown = getComputedStyle(strip.querySelector(".tower-touchdown")).display;
+      strip.querySelector(".tower-touchdown").remove();
+      return { touchdown };
+    });
+    check("offでも接地フラッシュは出ない(残留防止)", offExtras.touchdown === "none", JSON.stringify(offExtras));
+    const offClockBefore = await page.locator("#towerClock").textContent();
+    await page.clock.setFixedTime(clockAt(12, 0, 30));
+    await page.waitForFunction((before) => document.querySelector("#towerClock")?.textContent !== before, offClockBefore);
+    check("offでも時計の数字は更新される", await page.locator("#towerClock").textContent() !== offClockBefore);
+    await page.locator('#sidebar [data-action="nav"][data-view="settings"]').click();
+    await page.waitForSelector('#app[data-view="settings"]');
+    await page.evaluate(() => { const fold = document.querySelector('details[data-fold-id="settings-display"]'); if (fold) fold.open = true; });
+    await page.locator('select[data-setting-field="towerMotion"]').selectOption("calm");
+    await seedT8({ blocks: [block("calm-event", "イベント演出確認", today, 13 * 60)] });
+    await page.waitForSelector('.today-tower[data-motion="calm"]');
+    const calmAnimations = await page.evaluate(() => ({
+      sweep: getComputedStyle(document.querySelector(".tower-radar-sweep")).animationName,
+      event: (() => {
+        const status = document.querySelector(".tower-status");
+        status.classList.add("is-flip");
+        return getComputedStyle(status).animationName;
+      })()
+    }));
+    check("calmは常時走査線だけ止めイベント演出を残す", calmAnimations.sweep === "none" && calmAnimations.event !== "none", JSON.stringify(calmAnimations));
+
+    console.log("[40] m7文言とm4の1280px内部横スクロールを回収する");
+    await page.locator('#sidebar [data-action="nav"][data-view="settings"]').click();
+    await page.waitForSelector('#app[data-view="settings"]');
+    await page.evaluate(() => { const fold = document.querySelector('details[data-fold-id="settings-display"]'); if (fold) fold.open = true; });
+    const towerLabel = await page.locator('select[data-setting-field="todaySkin"] option[value="tower"]').textContent();
+    check("todaySkinのtower文言に開発中を含まない", !towerLabel.includes("開発中"), towerLabel);
+    await page.locator('#sidebar [data-action="nav"][data-view="today"]').click();
+    await page.waitForSelector(".tower-annex .today-pomodoro-stage");
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.waitForLoadState("networkidle");
+    const pomodoroOverflow = await page.locator(".tower-annex .today-pomodoro-stage").evaluate((el) => ({
+      clientWidth: el.clientWidth, scrollWidth: el.scrollWidth
+    }));
+    check("1280pxでpomodoro stageに内部横スクロールなし", pomodoroOverflow.scrollWidth <= pomodoroOverflow.clientWidth,
+      JSON.stringify(pomodoroOverflow));
   } finally {
     await browser.close();
     server.close();

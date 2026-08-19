@@ -1,0 +1,48 @@
+{
+  "version": 210,
+  "date": "2026-08-18",
+  "title": "TOWER T9: reduced-motionとdata-pausedと夜間色温度とモーション強度",
+  "summary": "TOWER T9 電池・アクセシビリティ仕上げ",
+  "changedFiles": [
+    "app.js",
+    "releases/v210.json",
+    "src/features/today-tower.js",
+    "src/features/today.js",
+    "styles.css",
+    "sw.js",
+    "tests/tower-core.test.js"
+  ],
+  "intent": [
+    "TOWERの動きを端末・利用者設定・タブ可視性に応じて抑え、数字などの情報更新は維持する。",
+    "21:00〜4:59のTOWERを低彩度・低輝度の色温度へ切り替える。",
+    "T8レビューlow指摘の1280px内部横スクロールと設定ラベルの実態乖離を回収する。"
+  ],
+  "changes": [
+    "既存reduced-motionブロックへ接地演出とneedle/plane/blipのtransition停止を追加した。",
+    "visibilitychangeとdata-pausedで非表示タブのCSS animationを停止し、再表示時に再開するようにした。",
+    "data-nightとTOWER色トークンで21:00〜4:59の彩度・輝度を抑え、1秒tickerで境界を追従するようにした。",
+    "settings.towerMotionをnormal/calm/offへ正規化し、既存data-setting-field経路の3択selectとdata-motionによるTOWER限定制御を追加した。",
+    "1280px時のpomodoro stageは固定円154px・gap 28px・情報列min-width 280pxの合計が親幅を超えていたため、annex内情報列だけmin-width:0として縮小を許可した。",
+    "reduced-motion/モーションoffでは接地フラッシュをdisplay:noneで出さないようにした(animationend削除に依存するため停止環境では発光リングが残留する。2系統レビューM1反映)。",
+    "lightテーマでコントラスト3.68だったannexのpomodoro-info補足行をTOWERトークンへ固定した(T8 M1の取りこぼし回収)。",
+    "todaySkinのtower選択肢をタワーへ修正し、tower-core.test.jsへ[36]〜[40](走査線・接地フラッシュ抑止・夜間4:59/5:00境界とamber・off時の数字更新を含む)を追加した。",
+    "sw.jsのCACHE_NAMEをv210へ更新した。"
+  ],
+  "uncertainties": [
+    "iOS Safari実機PWAでの夜間色とモーション3段の最終視認性は未確認。"
+  ],
+  "reviewFocus": [
+    "reduced-motion/offでも時計などの数字更新が止まらず、calmではイベント演出だけ残るか。",
+    "data-pausedとdata-nightがTOWERルートだけに付き、cockpit・他ビューへ波及しないか。",
+    "towerMotionが既存data-setting-field経路だけで保存され、未知値はnormalへ戻るか。",
+    "1280pxのpomodoro修正がoverflow隠蔽ではなく情報列の縮小許可だけになっているか。"
+  ],
+  "verification": [
+    "node tests/tower-core.test.jsで[1]〜[40]がALL PASS、node tests/today-core.test.jsもALL PASS(監督者環境。reviewerも独立に再現確認)。",
+    "reviewer(Claude)+Codexの2系統レビューを実施。共通Major=接地フラッシュ残留をdisplay:noneで修正しテストで固定、Claude M2=release-record生成、テスト盲点(走査線・夜間境界5:00・amber・off時数字更新)を補強した。",
+    "release-gate --final PASS(監督者環境)。git diff --check、変更ファイル範囲、JS+CSS実行コード差分200行以内を確認した。"
+  ],
+  "knownLimitations": [
+    "Service Worker更新とブラウザE2Eの実走はサンドボックス外またはCIでの確認が必要。"
+  ]
+}

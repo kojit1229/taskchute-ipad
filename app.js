@@ -1754,6 +1754,8 @@ function normalizeState(value) {
   }
   // v203: 今日タブの表示スキン。既存端末・未知値は従来表示のcockpitへ戻す。
   if (!["cockpit", "tower"].includes(value.settings.todaySkin)) value.settings.todaySkin = "cockpit";
+  // v210: TOWERのモーション強度。未知値は通常へ。
+  if (!["normal", "calm", "off"].includes(value.settings.towerMotion)) value.settings.towerMotion = "normal";
   if (typeof value.settings.autoArchive !== "boolean") value.settings.autoArchive = true;
   value.settings.lastArchivedAt ||= "";
   // v43: 自動同期(既定OFF・保守的)。lastPushedAt = 最後に push した時の dataModifiedAt。
@@ -9616,6 +9618,7 @@ function renderSettingsGuidedAccessPanel() {
 function renderSettingsThemePanel() {
   const theme = ["light", "dark", "cockpit", "auto"].includes(state.settings.theme) ? state.settings.theme : "dark";
   const todaySkin = ["cockpit", "tower"].includes(state.settings.todaySkin) ? state.settings.todaySkin : "cockpit";
+  const towerMotion = ["normal", "calm", "off"].includes(state.settings.towerMotion) ? state.settings.towerMotion : "normal";
   return `
     <h3>🌗 テーマ</h3>
     <div class="muted" style="font-size:12px; line-height:1.6">
@@ -9632,7 +9635,14 @@ function renderSettingsThemePanel() {
     <label>今日タブの表示
       <select class="select" data-setting-field="todaySkin">
         <option value="cockpit" ${todaySkin === "cockpit" ? "selected" : ""}>コックピット</option>
-        <option value="tower" ${todaySkin === "tower" ? "selected" : ""}>タワー(開発中・現在はヘッダのみ)</option>
+        <option value="tower" ${todaySkin === "tower" ? "selected" : ""}>タワー</option>
+      </select>
+    </label>
+    <label>タワーの動き
+      <select class="select" data-setting-field="towerMotion">
+        <option value="normal" ${towerMotion === "normal" ? "selected" : ""}>通常</option>
+        <option value="calm" ${towerMotion === "calm" ? "selected" : ""}>控えめ(常時アニメを停止)</option>
+        <option value="off" ${towerMotion === "off" ? "selected" : ""}>なし(数字の更新は続く)</option>
       </select>
     </label>
   `;
