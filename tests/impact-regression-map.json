@@ -47,20 +47,6 @@
         "v143"
       ]
     },
-    "dashboard-report": {
-      "paths": [
-        "^src/features/dashboard"
-      ],
-      "patterns": [
-        "renderStats|renderDashboard|report-index|dashboard|emptyPanel|stats-|report"
-      ],
-      "suites": [
-        "dashboard-core",
-        "v54",
-        "v140",
-        "v143"
-      ]
-    },
     "avoid-feature": {
       "paths": [
         "^src/features/avoid"

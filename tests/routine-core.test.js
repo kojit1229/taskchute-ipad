@@ -1,7 +1,7 @@
 // tests/routine-core.test.js — 段階4-4抽出(ルーティンタブのドメインロジック+UI+連続ルーティン
 // (チェーン)+今日の庭+保護系ルーティン+過集中ブレーカー+繰り返し実体化エンジン)の
 // characterization test。
-// 対象: src/features/routine.js(configureRoutine(deps)による依存注入。dashboard.js/wish.js/
+// 対象: src/features/routine.js(configureRoutine(deps)による依存注入。wish.js/
 // journal.jsと同じ抽出パターン)。prep-stage4-routine.md §8が挙げた項目のうち、DOM描画や
 // ブラウザE2E(v89/v115/v153/v155)で別途カバーされない一次データ系ロジックをNode単体で固定する。
 //

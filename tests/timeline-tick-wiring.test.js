@@ -24,7 +24,7 @@
 //
 //     補足(既存コードの事実確認、v175での新規変更ではない): hydrateStaticMarkdownの
 //     renderDeferringForFocus()呼び出しはstate.currentViewが vision/journal/weekly/home/zero/
-//     tasks/stats/dashboard の場合のみ発火し、"timeline"はこの一覧に含まれない(app.js
+//     tasks/stats の場合のみ発火し、"timeline"はこの一覧に含まれない(app.js
 //     L13961)。そのためv137.test.jsと同じ「フォアグラウンド復帰で全体再描画が延期される」
 //     契約をタイムライン画面で再現する経路は現状存在しない(v175で変えていない、既存の
 //     view許可リストの仕様)。renderDeferringForFocus経由でstate.currentView非依存に発火する

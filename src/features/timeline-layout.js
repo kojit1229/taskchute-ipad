@@ -5,7 +5,7 @@
 // 抽出元: app.js(v170時点) assignBlocksToLanes:6569-6635 / adjustLaneTopPositions:6640-6649。
 // 呼び出し元(renderTimeline、app.js残留)は無改修(importの参照先が変わるのみ)。
 //
-// 契約(dashboard.js/wish.js/journal.js/routine.js冒頭コメントと同じconfigureXxx(deps)パターン):
+// 契約(wish.js/journal.js/routine.js冒頭コメントと同じconfigureXxx(deps)パターン):
 //   1. state を一切参照しない(引数のみに依存)。src/state/store.js を import しない。
 //   2. src/**/*.js を追加したら sw.js の APP_SHELL へ必ず追加し、CACHE_NAME を +1 する。
 //

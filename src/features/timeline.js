@@ -5,7 +5,7 @@
 // v127/v50/v70/v150を都度再走して直列に抽出した(段階Aの src/features/timeline-layout.js
 // と同じ抽出パターン)。
 //
-// 契約(dashboard.js/routine.js等と同じconfigureXxx(deps)パターン):
+// 契約(routine.js等と同じconfigureXxx(deps)パターン):
 //   1. state はsrc/state/store.jsからlive binding importする(再代入はしない)。
 //   2. escapeHTML/getCategoryColor/migrationBadgeHTML/leverageTypeMarkHTML/minutesOf/todayISO/
 //      pad2/clamp/formatDisplayDate/renderHeader/renderDateBar/defaultBatterySettings/

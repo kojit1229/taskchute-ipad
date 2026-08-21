@@ -3258,8 +3258,8 @@ function check(name, cond, extra = "") {
     //            (パス末尾 /contents/taskchute/ai-insights.json)で取得され、hydrateStaticMarkdown
     //            相乗せの energy-curve型TTL30分方式により起動(reload)ごとに毎回fetchされる
     //            (キャッシュはメモリのみ。同一セッション内のビュー往復では再fetchしない)。
-    //            dashboard用の同名別スキーマ(…/taskchute/dashboard/ai-insights.json)とはパスで
-    //            区別する(§12 F8「同名紛らわしいが別物」。routeのendsWith判定はdashboard側に一致しない)
+    //            同名の別スキーマとはパスで区別する(§12 F8「同名紛らわしいが別物」。
+    //            routeのendsWith判定が別パスに一致しないことを維持する)
     //   前提B7-2: パネルは routine / wish / avoid / zero 各ビューのrender内で描画され、fetch完了時は
     //            hydrateStaticMarkdown 末尾の再描画で開いたままのビューへも反映される(§12 F8
     //            「再描画view一覧に routine/wish/avoid を追加」)。検証は fetch応答後のDOM出現

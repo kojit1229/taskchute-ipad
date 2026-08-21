@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v212";
+const CACHE_NAME = "taskchute-journal-pwa-v213";
+// v213: ダッシュボードタブを削除した。
 // v212: TOWER annexのlightテーマ残件3箇所をtowerトークンへ固定した。
 // v211: 今日タブの既定スキンをtowerへ切り替えた(未設定・未知値のみ。保存済みの明示値は維持)。
 // v210: TOWERのreduced-motion・可視性停止・夜間色温度・モーション強度を仕上げた。
@@ -73,10 +74,6 @@ const CACHE_NAME = "taskchute-journal-pwa-v212";
 //   configureWish(deps)注入)をAPP_SHELLへ追加した。仕分けモード・儀式連携・Home週次カード
 //   (Tier3)はapp.jsに残したまま(prep-stage4-wish.md推奨)。挙動は抽出前と完全に同一
 //   (移動+依存注入化のみ)。
-// v167: app.js分割の段階4-1(ダッシュボードの閲覧専用render抽出)。src/features/dashboard.js
-//   (isDashboardDate〜requestDashboardFeedbackの12関数、configureDashboard(deps)注入)/
-//   src/state/feedback-cache.js(Home「AIから」カードとダッシュボードの共有cachedFeedback)を
-//   APP_SHELLへ追加した。挙動は抽出前と完全に同一(移動+依存注入化のみ)。
 // v166: app.js分割の段階3(state store + storage/sync gateway抽出)。src/state/store.js
 //   (setState契約)/src/storage/local.js(loadState/persistLocalNoSchedule)/
 //   src/sync/github.js(computeSyncMerge/syncCoreEqual/5フロー等)をAPP_SHELLへ追加した
@@ -264,7 +261,6 @@ const APP_SHELL = [
   "./src/features/avoid.js",
   "./src/features/calendar.js",
   "./src/features/coach.js",
-  "./src/features/dashboard.js",
   "./src/features/journal.js",
   "./src/features/routine.js",
   "./src/features/timeline-layout.js",

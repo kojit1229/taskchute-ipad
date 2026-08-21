@@ -12,19 +12,10 @@ import { state, setState } from "./src/state/store.js";
 // loadState/persistLocalNoScheduleはsrc/storage/local.jsへ抽出済み。saveStateはscheduleAutoSave等
 // app.js側の多数の関数へ依存するためapp.js側に残す(src/storage/local.js冒頭コメント参照)。
 import { loadState, persistLocalNoSchedule, _lastSaveError } from "./src/storage/local.js";
-// v167: app.js分割・段階4-1(ダッシュボードの閲覧専用render抽出)。cachedFeedbackはHomeの
-//   「AIから」カードとダッシュボードの共有オブジェクトのため独立モジュール化した
-//   (src/state/feedback-cache.js冒頭コメント参照)。
+// cachedFeedbackはHomeの「AIから」カードが使う共有キャッシュ
+// (src/state/feedback-cache.js冒頭コメント参照)。
 import { cachedFeedback } from "./src/state/feedback-cache.js";
-// src/features/dashboard.jsはstateをimportするがapp.js自身はimportしない(循環import回避)。
-// escapeHTML/renderMarkdown等の残る汎用ヘルパーはconfigureDashboard(deps)で注入する
-// (src/features/dashboard.js冒頭コメントの契約参照)。
-import {
-  configureDashboard,
-  renderDashboard, setDashboardDate, shiftDashboardDate,
-  currentDashboardDate, hydrateDashboardFeedback
-} from "./src/features/dashboard.js";
-// v182: 新トップレベル「今日」コックピット。dashboard.jsと同じ依存注入型で循環importを避ける。
+// v182: 新トップレベル「今日」コックピット。既存featureと同じ依存注入型で循環importを避ける。
 import { configureToday, renderToday } from "./src/features/today.js";
 import {
   configureTimeswitch, renderTimeswitch, stopTimeswitchTicker,
@@ -242,7 +233,6 @@ const navItems = [
   { id: "weekly", label: "週次", mark: "◷" },
   { id: "reports", label: "日報", mark: "R" },
   { id: "ai-reports", label: "AIレポート", mark: "A" },  // v92: コンテンツ総括・自己分析等の月次/不定期AIレポートビューア
-  { id: "dashboard", label: "ダッシュボード", mark: "D" },  // v163: 実績値ダッシュボード+AIフィードバック横並び
   { id: "stats", label: "計器盤", mark: "◔" },  // v53
   { id: "wish", label: "やりたい", mark: "✦" },
   { id: "avoid", label: "やらない", mark: "✕" },
@@ -290,12 +280,6 @@ configureGithubSync({
   sanitizedStateForGitHub, maybeWriteBackupSnapshot, updateAutoSaveStatus, updateSyncDot,
   renderSyncBanner, pruneExpiredSuggestedThemes,
   _startupDataModifiedAt
-});
-// v167: src/features/dashboard.jsも同じ理由(循環import回避)で依存注入する。
-configureDashboard({
-  renderHeader, escapeHTML, clamp, parseDate, addDays, dateToISO, localDateTimeToMs,
-  todayISO, fmtMinShort, renderMarkdown, getCategoryColor, personalDataReady,
-  fetchGitHubRawResult, renderDeferringForFocus, render
 });
 configureToday({
   escapeHTML, todayISO, blocksForDate, minutesOf, timeFromDateTime,
@@ -920,8 +904,6 @@ const _visionPageLoadInFlight = {};  // { 'now_vision.pdf': true }(ボード単�
 // v125追補(Codex P2): ページ画像の取得失敗を追跡する。取得成功 or 再試行開始でキーを消す
 // (=キーが残っている間だけ「再読み込み」ボタンを出す対象)。
 const _visionPageFailed = {};        // { 'now_vision-p01.jpg': true }
-// v167: cachedFeedback/dashboardSelectedDate/dashboardDateTouched/_dashboardFeedbackFetchStateは
-//   src/features/dashboard.js・src/state/feedback-cache.jsへ移した(ダッシュボード抽出)。
 const cachedWeeklyReviewMd = {};  // v62: { '週開始土曜YYYY-MM-DD': '...md text...' }(自宅PCバッチ生成)
 // v157: AI機能1「今日の敵」。loop/scripts/today-enemy.sh が personal-data/taskchute/ へ
 // 今日の敵_<date>.md(ラスボス風ナレーション1段落のプレーンテキスト)をpushする(契約は
@@ -1139,7 +1121,6 @@ document.addEventListener("click", (event) => {
 
   // v174: navはapp.js内のregisterActionsへ移行した。
   // v181: date-prev/date-next/todayはapp.js内のregisterActionsへ移行した。
-  // v173: dashboard-date-prev/nextはsrc/features/dashboard.jsのregisterActionsへ移行した。
   // v173: set-morning〜store-visit-yearはsrc/features/journal.jsのregisterActionsへ移行した。
   // v178: add-project/delete-project/add-task/toggle-taskはapp.js内のregisterActionsへ移行した。
   if (action === "toggle-criteria-request") toggleCriteriaRequest(id);  // v99: 翌朝AI設定依頼トグル
@@ -1392,7 +1373,6 @@ document.addEventListener("input", (event) => {
 document.addEventListener("change", (event) => {
   const target = event.target;
   if (target.matches("[data-date-picker]")) setSelectedDate(target.value);
-  if (target.matches("[data-dashboard-date]")) setDashboardDate(target.value);
   // v117(A): 今日の宣言(change時に保存)。
   // v149レビュー対応(必須5、Codexレビュー指摘): 旧実装はsaveAndRender()で全再描画していたが、
   // 宣言入力欄はホームタブ専用・警告表示先の.home-today-statusは今日タブ専用で、blur時点の
@@ -1682,7 +1662,7 @@ function normalizeState(value) {
   const allowedViews = new Set([
     "today", "timeswitch", "calendar", "home", "wbs", "wish", "avoid", "tasks", "routine", "timeline",
     "pomodoro", "journal", "zero", "vision", "reports", "ai-reports", "weekly",
-    "cycle", "dashboard", "stats", "settings", "more"
+    "cycle", "stats", "settings", "more"
   ]);
   if (!allowedViews.has(value.currentView)) value.currentView = "home";
   // v31: 残り時間表示用の生年月日(未設定なら補完)
@@ -2963,7 +2943,6 @@ function renderMain() {
   if (view === "ai-reports") main.innerHTML = renderAiReports();
   if (view === "weekly") main.innerHTML = renderWeekly();
   if (view === "cycle") main.innerHTML = renderCycle();
-  if (view === "dashboard") main.innerHTML = renderDashboard();
   if (view === "stats") main.innerHTML = renderStats();  // v53: 計器盤
   if (view === "settings") main.innerHTML = renderSettings();
   if (view === "more") main.innerHTML = renderMore();
@@ -9851,7 +9830,6 @@ const moreGroups = [
   ] },
   { id: "review", label: "振り返り", items: [
     { id: "weekly", label: "週次", mark: "🗓" },
-    { id: "dashboard", label: "ダッシュボード", mark: "📈" },  // v163: 実績値ダッシュボード+AIフィードバック横並び
     { id: "stats", label: "計器盤", mark: "📊" },
     { id: "ai-reports", label: "AIレポート", mark: "🤖" },
     { id: "reports", label: "日報", mark: "📤" }
@@ -10664,11 +10642,6 @@ function renderInsights(since, today, blocksByDate) {
       <div class="muted stats-axis">着手率(予定ベース)=計画Blockのうち実際に着手した割合(ヒートマップ・睡眠帯別と同じ定義。taskchute-notes/decisions.md 2026-07-26参照)。観察のみで判断は含みません</div>
     </div>`;
 }
-
-// v167: isDashboardDate/dashboardWeekStart/computeDashboardMetrics/defaultDashboardDate/
-//   currentDashboardDate/setDashboardDate/shiftDashboardDate/dashboardRateHTML/
-//   dashboardTrendBarsHTML/renderDashboardはsrc/features/dashboard.jsへ移した
-//   (app.js冒頭のimportからrenderDashboard等を参照する)。
 
 function statsTimeLogData(date, nowMs = Date.now()) {
   // v184レビューM1: カテゴリ集計・合計は当日全体(00:00〜24:00)。早朝の実績を黙って落とさない。
@@ -15222,10 +15195,6 @@ function autoIngestFeedback(date, text) {
 }
 const FEEDBACK_INGESTED_DATES_MAX = 300;  // aiPlanSkippedLog/zeroSecThemeLogと同じ軽量上限の思想
 
-// v167: hydrateDashboardFeedback/requestDashboardFeedbackはsrc/features/dashboard.jsへ移した
-//   (app.js冒頭のimportからhydrateDashboardFeedbackを参照する。requestDashboardFeedbackは
-//   app.js側から直接呼ばれていないためimportしていない)。
-
 // v190: ai-insights.jsonはバッチ出力を信用境界の外として扱う。トップレベルが正しいJSON
 // オブジェクトでも、4フィールドは互いに独立して検証し、壊れたフィールドだけを捨てる。
 function parseAiInsights(raw) {
@@ -15375,9 +15344,6 @@ async function hydrateStaticMarkdown() {
     changed = true;
     // v57: 直push検知した前日分は、以後の起動時fetchが正規ルートに乗るよう記録する
     if (!files.includes(prev)) recordFeedbackFile(prev);
-  }
-  if (state.currentView === "dashboard" && await hydrateDashboardFeedback(currentDashboardDate())) {
-    changed = true;
   }
   // v67: AI連携の鮮度インジケータ(柱1b)。todayFbは selectedDate 連動の fetch なので「今日」を
   //      見ているときの結果のみ鮮度シグナルに採用する(過去日ブラウズ中のfetchはその日の閲覧目的
@@ -15596,8 +15562,7 @@ async function hydrateStaticMarkdown() {
   // v137: 入力中/IME変換中は即renderせず保留する(review.md:28。renderDeferringForFocus参照)。
   // v161: "stats"(計器盤)を追加。エネルギーカーブの新着fetchが完了してもこの画面を開いた
   //       ままだと再描画されず節が出ないままになる不具合を防ぐ(他view追加時と同じ理由)。
-  // v163: "dashboard"も任意日AIフィードバック取得完了後に同じライブ再描画が必要。
-  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly" || state.currentView === "home" || state.currentView === "today" || state.currentView === "timeswitch" || state.currentView === "calendar" || state.currentView === "timeline" || state.currentView === "routine" || state.currentView === "wish" || state.currentView === "avoid" || state.currentView === "zero" || state.currentView === "tasks" || state.currentView === "stats" || state.currentView === "dashboard")) {
+  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly" || state.currentView === "home" || state.currentView === "today" || state.currentView === "timeswitch" || state.currentView === "calendar" || state.currentView === "timeline" || state.currentView === "routine" || state.currentView === "wish" || state.currentView === "avoid" || state.currentView === "zero" || state.currentView === "tasks" || state.currentView === "stats")) {
     renderDeferringForFocus();
   }
 }

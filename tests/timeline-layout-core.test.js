@@ -1,12 +1,12 @@
 // tests/timeline-layout-core.test.js — 段階4-5抽出(タイムライン段階A: 純粋レーン割付計算)の
 // characterization test。対象: src/features/timeline-layout.js(configureTimelineLayout(deps)に
-// よる依存注入。dashboard.js/routine.js等と同じ抽出パターン)。
+// よる依存注入。routine.js等と同じ抽出パターン)。
 //
 // [PHASE1-VM→PHASE2-DYNAMIC IMPORT] 抽出作業中、まずapp.js(v170時点・抽出前)に対して
 // vm.runInContextでassignBlocksToLanes/adjustLaneTopPositionsを直接実行し、本ファイルの
 // assertion一式を抽出前の実挙動として先に緑化した(v163.test.js方式)。移動後の本バージョンは
 // 同じassertionをdynamic import + configureTimelineLayout(deps)経由に差し替えたもので、
-// 期待値・検証項目は1つも変更・削除していない(参照先の差し替えのみ、dashboard-core.test.js
+// 期待値・検証項目は1つも変更・削除していない(参照先の差し替えのみ、既存characterization test
 // 冒頭コメントと同じ扱い)。
 //
 // §6のギャップ対応: [1]空入力 [2]非重複 [3]重複によるレーン分割 [4]v150(20分未満Blockの

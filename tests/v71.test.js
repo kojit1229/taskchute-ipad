@@ -116,7 +116,7 @@ function check(name, cond, extra = "") {
     // v188: 「カレンダー」を計時の直後へ追加
     const expectedOrder = [
       "今日", "計時", "カレンダー", "ホーム", "タスクシュート", "タイムライン", "WBS", "ルーティン",
-      "ジャーナル", "週次", "日報", "AIレポート", "ダッシュボード", "計器盤", "やりたい", "やらない",
+      "ジャーナル", "週次", "日報", "AIレポート", "計器盤", "やりたい", "やらない",
       "ビジョン", "0秒思考", "ポモドーロ", "設定"
     ];
     check("navItemsの並びが期待どおり", JSON.stringify(navLabels) === JSON.stringify(expectedOrder), JSON.stringify(navLabels));

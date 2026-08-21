@@ -1,14 +1,14 @@
 // src/features/routine.js — app.js分割・段階4-4(ルーティンタブのドメインロジック+UI+連続ルーティン
 // (チェーン)+今日の庭+保護系ルーティン+過集中ブレーカー+繰り返し実体化エンジンの抽出)。
 //
-// 契約(prep-stage4-routine.md §7、dashboard.js/wish.js/journal.js冒頭コメントと同じ
+// 契約(prep-stage4-routine.md §7、wish.js/journal.js冒頭コメントと同じ
 // configureXxx(deps)パターン):
 //   1. state の再代入はしない(src/state/store.jsからlive binding importし、プロパティ変更のみ)。
 //   2. escapeHTML/renderHeader/renderDateBar/todayISO/addDays/parseDate/minutesOf/timeFromDateTime/
 //      pad2/nowDateTime/getCategoryColor/showToast/saveAndRender/render/setView/closeModal/renderModal/
 //      blocksForDate/isTouchedBlock/WEEKDAY_LABELS/RECURRENCE_KEEP_PAST_DAYS/RECURRENCE_FUTURE_DAYS は
 //      まだapp.js側に残る汎用ヘルパー・定数のため、configureRoutine(deps) による依存注入で受け取る
-//      (dashboard.js/wish.js/journal.js方式と同一)。persistLocalNoScheduleはsrc/storage/local.jsの
+//      (wish.js/journal.js方式と同一)。persistLocalNoScheduleはsrc/storage/local.jsの
 //      静的export(app.js非常駐の真の葉)なのでdeps注入せず直接importする(stateと同じ扱い)。
 //   3. src/**/*.js を追加したら sw.js の APP_SHELL へ必ず追加し、CACHE_NAME を +1 する。
 //
@@ -38,7 +38,7 @@
 //   a) createRecurrenceRule/maintainRecurrences/triggerAnchorPlacements/makeRecurrenceInstance を
 //      実grepしたところ、saveBlockFromModal(Timeline Block編集モーダル、app.js残留)・importData・
 //      runDailyOpen・configureGithubSync(deps)からも呼ばれることを確認した(prep-stage4-routine.md
-//      §9が「呼び出し元未確認」としていた懸念の実測結果)。app.js側はdashboard.js/wish.js/journal.js
+//      §9が「呼び出し元未確認」としていた懸念の実測結果)。app.js側はwish.js/journal.js
 //      と同じ「src/features/*.jsから静的importして直接呼ぶ」既存パターンをそのまま踏襲でき、
 //      routine.js側からTimeline側への逆依存は発生しない(循環importにならない)ため、エンジンは
 //      移動する判断とした(app.js残置案は不要と判断)。

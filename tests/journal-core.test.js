@@ -1,6 +1,6 @@
 // tests/journal-core.test.js — 段階4-3抽出(ジャーナルタブ本体+コンディションOS・運動記録・
 // 今日行ったお店ログ)のcharacterization test。
-// 対象: src/features/journal.js(configureJournal(deps)による依存注入。wish.js/dashboard.jsと
+// 対象: src/features/journal.js(configureJournal(deps)による依存注入。wish.jsと
 // 同じ抽出パターン)、src/state/journal-fold.js(click dispatcherとrenderJournalの共有
 // _journalSegmentOverride)。
 //

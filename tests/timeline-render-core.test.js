@@ -1,11 +1,11 @@
 // tests/timeline-render-core.test.js — 段階4-6抽出(タイムライン段階B: 描画系)の
 // characterization test。prep-stage4-timeline.md §7「段階B」①②③。
-// 対象: src/features/timeline.js(configureTimeline(deps)による依存注入。dashboard.js/routine.js/
+// 対象: src/features/timeline.js(configureTimeline(deps)による依存注入。routine.js/
 // timeline-layout.js等と同じ抽出パターン)。
 //
 // renderTimelineCard/renderEnergyGraphの出力(inline styleのtop/height/left/width計算、SVG点列)は
 // 監査P0(タイムライン絶対配置CSSとの契約)の正典であるため、抽出前のapp.js実装をそのまま読み、
-// 期待値をここで固定してから移動する(dashboard-core.test.js冒頭コメントと同じ「実装をそのまま
+// 期待値をここで固定してから移動する(既存characterization testと同じ「実装をそのまま
 // 固定する」方針。exact文字列一致ではなく、構造的に壊れやすい箇所(style属性の各プロパティ値・
 // ボタンの有無・data-*属性・エスケープ)を正規表現抽出して検証することで、空白差分など無関係な
 // 変更にまでテストが過敏に反応しないようにする)。

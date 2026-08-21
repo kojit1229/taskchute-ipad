@@ -3639,32 +3639,6 @@ h3 {
 /* v54: 計器盤の追加チャート */
 .stats-wide { grid-column: 1 / -1; }
 
-/* v163: ダッシュボード。iPhone・iPad縦は縦積み、iPad横以上は実績/AI本文の2列。
-   レビュー是正: 2列トリガーを760pxのままにすると、iPad縦(サイドバー184px残置)では
-   実効コンテンツ幅が既に700px未満に落ちており、左カラムに入れ子の.stats-grid
-   (auto-fit minmax(340px,1fr))を置くと340px未満に縮んで横あふれする(Codexレビュー
-   P1・reviewer高評価で実測裏取り済み)。iPad横最小幅(mini横1024px)からは
-   サイドバー216px+左右padding48pxを差し引いても実効幅760px≧340px*2を確保できるため、
-   トリガーを1024pxへ引き上げてiPad縦を安全に縦積み側へ倒す。 */
-.dashboard-grid { grid-template-columns: minmax(0, 1fr); align-items: start; }
-.dashboard-achievement-column, .dashboard-feedback-column { min-width: 0; }
-/* レビュー是正(batch2、Codex P2): 素の.stats-grid(340px固定下限)は狭いiPhone(320px幅など、
-   .main-pane実効幅が340pxを割る機種)で横あふれする。min(340px,100%)でトラック下限を
-   コンテナ幅にクランプし、収まらない場合は1カラムへ自然に縮退させる(計器盤側の.stats-grid
-   自体は挙動を変えない、ダッシュボードの入れ子だけの限定オーバーライド)。 */
-.dashboard-achievement-column .stats-grid { grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); }
-.dashboard-date-nav { display: flex; align-items: center; gap: 8px; }
-.dashboard-date-input { min-width: 150px; width: auto; font-size: 16px; }
-.dashboard-week-label { margin: -4px 0 12px; }
-.dashboard-metric { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-.dashboard-metric strong { font-size: 26px; }
-.dashboard-gate-note { padding: 8px 10px; border-radius: 8px; background: var(--panel-soft); font-size: 12.5px; }
-.dashboard-category-row .row { justify-content: space-between; }
-.dashboard-feedback-body { overflow-wrap: anywhere; }
-@media (min-width: 1024px) {
-  .dashboard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
 /* ドーナツ + 凡例 */
 .stats-donut-wrap { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .stats-donut { width: 132px; height: 132px; flex: none; }

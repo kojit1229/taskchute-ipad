@@ -1,0 +1,65 @@
+{
+  "version": 213,
+  "date": "2026-08-22",
+  "title": "ダッシュボードタブを完全削除",
+  "summary": "スリム化P1の第1単位としてダッシュボードタブ本体・全接続・専用CSS・専用テストを削除し、共有資産と他機能の検証を維持したまま生成物とService Workerをv213へ更新",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v213.json",
+    "src/features/dashboard.js",
+    "src/features/journal.js",
+    "src/features/routine.js",
+    "src/features/timeline-layout.js",
+    "src/features/timeline.js",
+    "src/features/wish.js",
+    "src/state/feedback-cache.js",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/dashboard-core.test.js",
+    "tests/impact-regression-map.json",
+    "tests/journal-core.test.js",
+    "tests/routine-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/timeline-layout-core.test.js",
+    "tests/timeline-render-core.test.js",
+    "tests/timeline-tick-wiring.test.js",
+    "tests/today-core.test.js",
+    "tests/v163.test.js",
+    "tests/v71.test.js",
+    "tests/wish-core.test.js"
+  ],
+  "intent": [
+    "P1設計書§2のv213単位に従い、利用しないタブを導線だけでなくモジュール・依存注入・描画・イベント・CSS・SW事前キャッシュ・テスト登録まで一括で除去し、参照残骸による起動失敗を防ぐ。",
+    "Homeタブ「AIから」カードが使うsrc/state/feedback-cache.jsと、計器盤タブが使う.stats-*系CSSは共有資産のため維持する。",
+    "Size-Exempt理由「タブ丸ごと削除で分割不能」。本体削除と参照除去を別コミットにするとimport解決失敗または削除済み画面への導線が残る動かない途中状態になる。"
+  ],
+  "changes": [
+    "src/features/dashboard.jsを削除し、app.jsのimport・navItems・configure呼び出し・change dispatcher・allowedViews・renderMain・moreGroups・起動後取得・ライブ再描画と移動注記を除去した。旧state.currentViewが削除値の場合は既存のnormalizeState許可リスト処理によりhomeへフォールバックする。",
+    "styles.cssから専用セレクタ12種と関連media ruleを削除し、計器盤用の.stats-grid/.stats-bar/.stats-axis/.stats-wide等は残した。",
+    "sw.jsのAPP_SHELLから削除済みモジュールを外し、CACHE_NAMEをtaskchute-journal-pwa-v213へ更新した。",
+    "tests/dashboard-core.test.jsを削除し、action-registry-coreの削除済み2 action・1 featureだけを期待集合から除外した。journal/routine/timeline/today/wish系は参照コメントまたは削除機能固有assertionだけを整理し、v71のnav順序期待値を更新、v163に残る独立したSWバージョンassertionは維持した。",
+    "tests/impact-regression-map.jsonからdashboard-report領域を削除し、code index・suite manifest・test impact mapを再生成した。"
+  ],
+  "uncertainties": [
+    "サンドボックスがPlaywright Chromiumの起動をspawn EPERMで拒否するため、変更したブラウザ系2スイートのassertion実走とiOS実機PWA表示はこの環境では未確認。"
+  ],
+  "reviewFocus": [
+    "app.js/src/styles.css/sw.js/index.htmlに削除対象の参照が残らず、APP_SHELLが存在しないファイルを要求しないか。",
+    "共有のsrc/state/feedback-cache.jsと.stats-*系CSSが維持され、Home「AIから」カードと計器盤タブを巻き込んでいないか。",
+    "action-registry-coreとv163のテスト削減が削除機能に固有の部分だけで、残るaction保存則・SWキャッシュ更新契約を弱体化していないか。"
+  ],
+  "verification": [
+    "npm.cmd run code:index:writeはWROTE: code index 706 functions、npm.cmd run test:manifest:writeはWROTE: 142 suitesで成功。",
+    "node --check app.jsはexit 0。",
+    "grep -rn \"dashboard\" app.js src/ styles.css sw.js index.htmlは出力0件(exit 1=grepの一致なし)。除外ヒットなし。",
+    "関連スイート実行ではaction-registry-core/journal-core/routine-core/timeline-layout-core/timeline-render-core/v163/wish-coreが全件成功。timeline-tick-wiring/today-core/v71はassertion開始前のChromium起動がspawn EPERMで失敗した。",
+    "node scripts/release-gate.js releases/v213.jsonはrelease schema・APP_SHELL 19件・test manifest 142 suites・code index 706 functions・全JS構文をPASS後、related+impact-regressionのブラウザ系スイートが同じspawn EPERMとなりexit 1。"
+  ],
+  "knownLimitations": [
+    "ブラウザE2EとiOS実機PWAの確認は、Chromiumを起動できる監督者環境またはCIで必要。"
+  ]
+}

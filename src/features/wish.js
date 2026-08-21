@@ -1,10 +1,10 @@
 // src/features/wish.js — app.js分割・段階4-2(WishタブTier1のCRUD・描画・月間ボードD&D抽出)。
 //
-// 契約(prep-stage4-wish.md §7、src/features/dashboard.js冒頭コメントと同じconfigureXxx(deps)パターン):
+// 契約(prep-stage4-wish.md §7、既存featureと同じconfigureXxx(deps)パターン):
 //   1. state の再代入はしない(src/state/store.jsからlive binding importし、プロパティ変更のみ)。
 //   2. escapeHTML/renderHeader/todayISO/localDateTimeToMs/makeTask/makeBlock/defaultPlannedTimes/
 //      showToast/nowDateTime/saveAndRender/render/updateTaskFieldはまだapp.js側に残る汎用ヘルパー
-//      のため、configureWish(deps) による依存注入で受け取る(dashboard.js方式と同一)。
+//      のため、configureWish(deps) による依存注入で受け取る。
 //   3. renderWishTriage(仕分けモード、Tier3=非移動)も同じdeps注入で受け取る。renderWish()の
 //      viewMode==="triage"分岐はロジック無改変のため元のまま残し(prep-stage4-wish.md §7の
 //      2案のうち(a))、循環importにしないためstatic importではなくdeps注入にした
