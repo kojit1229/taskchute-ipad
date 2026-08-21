@@ -1,7 +1,7 @@
 // tests/wish-core.test.js — 段階4-2抽出(WishタブTier1のCRUD・描画・月間ボードD&D)の
 // characterization test。
-// 対象: src/features/wish.js(configureWish(deps)による依存注入。avoid.jsと
-// 同じ抽出パターン)。prep-stage4-wish.md §8の項目のうち、DOM描画+スクロール位置やPointer
+// 対象: src/features/wish.js(configureWish(deps)による依存注入)。
+// prep-stage4-wish.md §8の項目のうち、DOM描画+スクロール位置やPointer
 // Eventsのドラッグ確定が絡まない項目(既存のv79/v80/v121/v122/v126/v137/v152ブラウザE2Eで
 // 別途カバー)をNode単体で固定する。
 //

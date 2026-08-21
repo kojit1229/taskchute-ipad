@@ -94,7 +94,7 @@ const mkYesterdayBlock = (id, title, extra = {}) => ({
       s.migrationRitualLog = fixture.migrationRitualLog || [];
       (fixture.tasks || []).forEach((t) => s.tasks.push(t));
       s.selectedDate = TODAY;
-      s.currentView = fixture.view || "reports";
+      s.currentView = fixture.view || "journal";
       s.wishViewMode = fixture.wishViewMode || "list";
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, wishProjectId, fixture, TODAY });
@@ -134,7 +134,7 @@ const mkYesterdayBlock = (id, title, extra = {}) => ({
     // [2]-[5] 日次締め導線
     // ============================================================
     console.log("[2] 日次締め: 理由未記録の未完了Blockが残っていると「日報を生成」で直接は生成されず理由チップモーダルが開く");
-    await seed({ blocks: [mkTodayBlock("blk-close-1", "未完了A"), mkTodayBlock("blk-close-2", "未完了B", { completed: true })], view: "reports" });
+    await seed({ blocks: [mkTodayBlock("blk-close-1", "未完了A"), mkTodayBlock("blk-close-2", "未完了B", { completed: true })], view: "journal" });
     await page.click('[data-action="generate-report"]');
     await page.waitForTimeout(300);
     const s2 = await stateNow();
@@ -155,7 +155,7 @@ const mkYesterdayBlock = (id, title, extra = {}) => ({
     check("モーダルが閉じている", await page.locator(".modal-root.open").count() === 0);
 
     console.log("[4] 全件スキップでもgenerateReport()は最終的に実行される(理由は記録されない)");
-    await seed({ blocks: [mkTodayBlock("blk-skip-1", "スキップ対象A"), mkTodayBlock("blk-skip-2", "スキップ対象B")], view: "reports" });
+    await seed({ blocks: [mkTodayBlock("blk-skip-1", "スキップ対象A"), mkTodayBlock("blk-skip-2", "スキップ対象B")], view: "journal" });
     await page.click('[data-action="generate-report"]');
     await page.waitForTimeout(300);
     check("(準備)モーダルが開く", await page.locator(".modal-root.open").count() === 1);
@@ -177,7 +177,7 @@ const mkYesterdayBlock = (id, title, extra = {}) => ({
         mkTodayBlock("blk-already", "既に理由記録済み", { incompleteReason: { chip: "疲労", note: "", at: `${TODAY}T07:00:00` } }),
         mkTodayBlock("blk-fresh", "理由未記録")
       ],
-      view: "reports"
+      view: "journal"
     });
     await page.click('[data-action="generate-report"]');
     await page.waitForTimeout(300);
@@ -198,7 +198,7 @@ const mkYesterdayBlock = (id, title, extra = {}) => ({
         // ここでは「理由が無いBlockの行が出力に出ない」ことだけに焦点を絞る。
         mkTodayBlock("blk-report-3", "理由なしBlock", { completed: true })
       ],
-      view: "reports"
+      view: "journal"
     });
     await page.click('[data-action="generate-report"]');
     await page.waitForTimeout(300);
@@ -210,7 +210,7 @@ const mkYesterdayBlock = (id, title, extra = {}) => ({
     check("理由が無いBlockは行が出ない", !report6.includes("理由なしBlock]"), report6);
 
     console.log("[6b] 日報出力: 理由が1件も無い日は「## 未完了理由」節ごと省略される");
-    await seed({ blocks: [mkTodayBlock("blk-noreason", "理由なし未完了")], view: "reports" });
+    await seed({ blocks: [mkTodayBlock("blk-noreason", "理由なし未完了")], view: "journal" });
     await page.click('[data-action="generate-report"]');
     await page.waitForTimeout(300);
     const s6b = await stateNow();
@@ -222,7 +222,7 @@ const mkYesterdayBlock = (id, title, extra = {}) => ({
         mkTodayBlock("blk-still-incomplete", "未完了のまま", { incompleteReason: { chip: "疲労", note: "", at: `${TODAY}T09:00:00` } }),
         mkTodayBlock("blk-now-completed", "後で完了した", { completed: true, incompleteReason: { chip: "時間切れ", note: "", at: `${TODAY}T09:00:00` } })
       ],
-      view: "reports"
+      view: "journal"
     });
     await page.click('[data-action="generate-report"]');
     await page.waitForTimeout(300);
@@ -337,10 +337,10 @@ const mkYesterdayBlock = (id, title, extra = {}) => ({
     const carriedBlockBefore = beforeCarryReport.blocks.find((b) => b.id === "blk-carry-1");
     check("(準備)Block自体のdateは前日のまま(理由記録がdateを書き換えたりしない)",
       carriedBlockBefore?.date === YESTERDAY, carriedBlockBefore?.date);
-    // 日報タブへ切り替えて「日報を生成」(当日は他に未完了Blockが無いため直接生成される)
+    // ジャーナルへ切り替えて「日報を生成」(当日は他に未完了Blockが無いため直接生成される)
     await page.evaluate(({ KEY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
-      s.currentView = "reports";
+      s.currentView = "journal";
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY });
     await page.reload();
@@ -353,7 +353,7 @@ const mkYesterdayBlock = (id, title, extra = {}) => ({
       report10.includes("- [繰越タスク] 見積り過大: 見積もりが甘かった"), report10);
 
     console.log("[11] 日次締め: スキップしたBlockは同セッション内で「日報を生成」を再度押しても再質問されない(2系統レビュー対応・推奨4)");
-    await seed({ blocks: [mkTodayBlock("blk-skip-remember", "スキップ記憶対象")], view: "reports" });
+    await seed({ blocks: [mkTodayBlock("blk-skip-remember", "スキップ記憶対象")], view: "journal" });
     await page.click('[data-action="generate-report"]');
     await page.waitForTimeout(300);
     check("(準備)1回目はモーダルが開く", await page.locator(".modal-root.open").count() === 1);

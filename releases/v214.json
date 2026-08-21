@@ -1,0 +1,74 @@
+{
+  "version": 214,
+  "date": "2026-08-22",
+  "title": "Avoid Listと未使用自動化・独立日報タブを削除",
+  "summary": "スリム化P1のv214単位としてAvoid List、回復Block下書き提案、朝プラン自動実行、独立日報タブを接続・CSS・SW・専用テストまで一掃し、日報の手動生成導線をジャーナルへ集約",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v214.json",
+    "src/features/avoid.js",
+    "src/features/journal.js",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/avoid-core.test.js",
+    "tests/impact-regression-map.json",
+    "tests/journal-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/today-core.test.js",
+    "tests/v117.test.js",
+    "tests/v128.test.js",
+    "tests/v129.test.js",
+    "tests/v131.test.js",
+    "tests/v145.test.js",
+    "tests/v146.test.js",
+    "tests/v148.test.js",
+    "tests/v150.test.js",
+    "tests/v162.test.js",
+    "tests/v60.test.js",
+    "tests/v61.test.js",
+    "tests/v66.test.js",
+    "tests/v68.test.js",
+    "tests/v71.test.js",
+    "tests/v75.test.js",
+    "tests/v81.test.js",
+    "tests/v91.test.js"
+    ,"tests/wish-core.test.js"
+  ],
+  "intent": [
+    "P1設計書と監督者裁定1〜3に従い、利用しない4機能を導線だけでなく参照・設定・キャッシュ・専用回帰まで同一リリースで閉じる。",
+    "settings.avoidListの既存データと正規化は温存し、UIと書き込み経路だけを削除して同期・エクスポート時のデータ欠落を防ぐ。",
+    "手動の朝プランと_scheduleDraft、日報データ・生成処理・GitHub push、残るジャーナル・AIレポート機能の検証は維持する。",
+    "Size-Exempt理由「密結合したタブ・自動化機能の完全削除で分割不能」。参照元と実体、CSS、APP_SHELL、テストを別コミットにすると未定義関数呼び出しや存在しないESMのprecacheが残る。"
+  ],
+  "changes": [
+    "Avoid Listのナビ・その他グリッド・許可view・描画・action登録・CRUD・マイグレーション儀式書き込み経路・AI所見分岐を削除し、src/features/avoid.js、専用CSS 11セレクタ、APP_SHELL項目、avoid-coreを削除した。settings.avoidListのstate正規化は維持した。",
+    "回復Block下書き提案の設定UI・state補完・候補計算/再構築・起動時および毎分tick配線を削除し、updateBatteryTick本体の残量表示更新は維持した。v145を削除し、v146/v150から専用区間だけを除去した。",
+    "maybeAutoMorningPlanと起動/復帰呼び出し、autoMorningPlan設定トグル・保存ハンドラ・normalizeState既定値を削除した。旧保存値はnormalizeStateで除去し、runAiMorningPlanと手動ボタンは維持した。",
+    "独立日報タブとrenderReportsを削除し、既存ジャーナルの日報節へ不足していたコピー・共有・Markdown保存ボタンだけを移設した。生成後はジャーナルに留まり、検索の日報ヒットもジャーナルへ遷移する。",
+    "ジャーナルAIフィードバック撤去時の残骸コメントを削除し、影響テストを削除機能固有のassertionだけ縮退した。残る日報生成内容、Vision ALIGNMENT、AIパネル3ビュー、v59の手動朝プラン等は維持した。",
+    "Service Workerをv214へ更新し、影響回帰マップからavoid-featureを削除、コード索引・テストマニフェスト・影響マップを再生成した。"
+  ],
+  "uncertainties": [
+    "サンドボックスがPlaywright Chromiumの起動をspawn EPERMで拒否するため、変更したブラウザE2Eのassertion実走とiOS実機PWA表示はこの環境では未確認。"
+  ],
+  "reviewFocus": [
+    "settings.avoidListのデータ温存と、Avoid ListのUI・書き込み経路・ESM/SW参照削除が両立しているか。",
+    "updateBatteryTick、runAiMorningPlan、日報生成データ、ジャーナル本体など残す機能を削除対象と一緒に巻き込んでいないか。",
+    "独立日報タブ削除後もジャーナル上の生成・コピー・共有・Markdown保存・GitHub pushが到達可能で、生成後に削除済みviewへ遷移しないか。",
+    "テスト削減がavoid/recoveryDraft/自動朝プラン/独立日報UIに固有の区間だけで、Vision・手動朝プラン・日報本文生成等の回帰を弱体化していないか。"
+  ],
+  "verification": [
+    "npm.cmd run code:index:writeはWROTE: code index 695 functions、npm.cmd run test:manifest:writeはWROTE: 140 suitesで成功。",
+    "npm.cmd run test:fastはfast-node 17 suitesが全件PASS。action-registry-coreとjournal-coreの個別実行も全件PASS。",
+    "変更した全JavaScriptへのnode --checkは22ファイルでexit 0。git diff --checkは末尾空行を修正後PASS。",
+    "関連ブラウザ17スイートは全てassertion開始前のChromium起動がspawn EPERMで失敗したため、コード起因の成否は未確認。"
+  ],
+  "knownLimitations": [
+    "ブラウザE2EとiOS実機PWAの確認は、Chromiumを起動できる監督者環境またはCIで必要。",
+    "回復提案の旧保存フィールドを含む既存stateは破壊的に消去せず、未参照データとして残り得る。"
+  ]
+}

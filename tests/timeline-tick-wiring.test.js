@@ -27,10 +27,8 @@
 //     tasks/stats の場合のみ発火し、"timeline"はこの一覧に含まれない(app.js
 //     L13961)。そのためv137.test.jsと同じ「フォアグラウンド復帰で全体再描画が延期される」
 //     契約をタイムライン画面で再現する経路は現状存在しない(v175で変えていない、既存の
-//     view許可リストの仕様)。renderDeferringForFocus経由でstate.currentView非依存に発火する
-//     唯一の経路(起動時の回復Block下書き提案、app.js L16195/L16199)は起動シーケンス専用で
-//     再現条件が複雑なため、本ファイルでは採用せず、実際に存在するタイムライン⇔IMEの
-//     交差点(updateBatteryTickの直接パッチ経路)を対象にした。
+//     view許可リストの仕様)。本ファイルでは、実際に存在するタイムライン⇔IMEの交差点
+//     (updateBatteryTickの直接パッチ経路)を対象にした。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();

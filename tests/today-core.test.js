@@ -2829,50 +2829,11 @@ function check(name, cond, extra = "") {
     w3InboxFx.status = 200;
 
     // ============================================================
-    // ==== ここから B6(F6 avoid破り記録 / F7 vision ALIGNMENT)追記セクション [49]〜[52] ====
-    // 設計の正: ../taskchute-notes/designs/v169-today-cockpit.md §12 の F6/F7 行
-    //   (K裁定②=加点表現。ストリーク・連続日数は出さない)+
-    //   workbench/out/2026-07-29-today-cockpit-ideas/design-onetap-timetree.md §5裁定#20
-    //   (「破った」の当日分は再タップでトグル取消。Undo UI新設なし)。
-    // 現物調査: workbench/out/2026-07-29-today-cockpit-impl/b6-survey.md(§0/§2/§3・§5-3/5-4)。
-    // DOM契約(実装側と共有):
-    //   F6: avoidビューの「破った」ボタン [data-action="toggle-avoid-violation"][data-id] /
-    //       .avoid-compliance(直近7日で守れた日数 n/7)/ .avoid-compliance(今週の抵触 n件)
-    //   F7: visionビューのsegmented上の .vision-alignment(比率表示 or 未設定誘導)/
-    //       設定ビューのカテゴリマスタ節の .vision-direct-option(チェックボックス、data-category属性=実装実名へ突合済み)
-    // 実装(別担当が並行作業中)より先に仕様から書いた。前提が実装と食い違った場合は
-    // テストを弱めるのではなく、前提の側を実装と突合して直すこと:
-    //   前提B6-1: 「破った」タップは addAvoid 等と同じ保存系(saveAndRender相当)で、
-    //            settings.avoidList[].violations へ当日ISO日付(YYYY-MM-DD)を追記し、
-    //            即時にlocalStorageへ永続化+再描画する。当日分の再タップは取消(裁定#20)で、
-    //            当日以外の既存violationsには触れない
-    //   前提B6-2: 「直近7日で守れた日数」= 当日を含む7日窓(F3の前提B5-7と同じ窓の取り方)で、
-    //            violationsが1件も無い日を「守れた日」と数える。パネル集計(全項目の和集合)でも
-    //            項目単位表示でも成立する読み方(全 .avoid-compliance 要素の走査)で検証する
-    //   前提B6-3: 「今週」= weekRange と同じ土曜起点([22]のPREV_WEEK_DAYと同式)。
-    //            週開始日(土曜)当日のviolationは「今週」に含まれる(境界は両端含む)
-    //   前提B6-4: .avoid-compliance の件数は「n件」を含む表示(別形式なら下の抽出regexへ1つ足す)
-    //   前提B6-5: F6/F7のmigrationは normalizeState 時にメモリ上で補完され、次の保存契機
-    //            (setView)でlocalStorageへ書き戻される([21]と同じ踏み方)。
-    //            violations: 既存配列は非上書き・キー無しは[]補完・非配列の壊れ値は[]へ矯正
-    //            (b6-survey §0の map + Array.isArray 流儀)。
-    //            visionDirectCategories: キー無しは[]補完・既存配列は非上書き
-    //   前提B6-6: .vision-direct-option のチェックは data-category=カテゴリ名(マスタのname)の
-    //            checkbox(要素自身がinputか内包かは両対応で読む)。チェックの変更が
-    //            settings.visionDirectCategories(カテゴリ名配列)へ反映される
-    //   前提B6-7: ALIGNMENTの分子/分母は「当日Blockの実績時間」(actualStartAt/actualEndAt両方
-    //            あるもののみ。計画のみのBlockは入らない)。実行中Blockを含めるかは未裁定のため
-    //            契約にしない(b6-survey §3-4。フィクスチャに実行中Blockを含めない)
-    //   前提B6-8: 比率は%表示(66〜67.5%を 60/90=66.7% の一致とみなす。丸め形式は固定しない)。
-    //            未設定時は%を出さず、「設定」または「直結」を含む誘導文言のみ
-    // ============================================================
-
-    // B6用seed: seedB5/seedW1と同じ流儀に settings.avoidList / visionDirectCategories の直接seedを
-    // 足した拡張(既存関数は変更禁止のため別名で追加。pomodoro/zeroThinking/gardenLogは毎回リセット)。
-    // avoidList はそのまま代入する(violationsキー無しの旧形式・壊れ値もそのまま渡せる)。
-    // visionDirectCats は null=キー自体を削除(migration検証用)/ 配列=その値でseed。
-    async function seedB6({ blocks = [], view = "avoid", settings = {}, avoidList = [], visionDirectCats = null } = {}) {
-      await page.evaluate(({ KEY, blocks, view, settings, avoidList, visionDirectCats, TODAY }) => {
+    // ==== ここから B6(F7 vision ALIGNMENT)追記セクション [50]〜[51c] ====
+    // F7用seed: settings.visionDirectCategoriesを直接seedする。
+    // visionDirectCats は null=キー自体を削除(migration検証用)/配列=その値でseed。
+    async function seedB6({ blocks = [], view = "vision", settings = {}, visionDirectCats = null } = {}) {
+      await page.evaluate(({ KEY, blocks, view, settings, visionDirectCats, TODAY }) => {
         const s = JSON.parse(localStorage.getItem(KEY));
         s.blocks = blocks;
         s.currentView = view;
@@ -2884,172 +2845,22 @@ function check(name, cond, extra = "") {
         s.gardenLog = {};
         s.zeroThinking = { themes: [], entries: [], groups: [], suggestedThemes: [] };
         s.pomodoro = { ...s.pomodoro, running: false, blockId: "", startedAt: "", endsAt: "", mode: "focus" };
-        s.settings.avoidList = avoidList;
         if (visionDirectCats === null) delete s.settings.visionDirectCategories;
         else s.settings.visionDirectCategories = visionDirectCats;
         Object.assign(s.settings, settings);
         localStorage.setItem(KEY, JSON.stringify(s));
-      }, { KEY, blocks, view, settings, avoidList, visionDirectCats, TODAY });
+      }, { KEY, blocks, view, settings, visionDirectCats, TODAY });
       await page.reload();
       await page.waitForSelector('[data-action="nav"]', { state: "attached" });
     }
-
-    // F6表示の読み方(パネル集計でも項目単位でも成立するよう、該当クラス全要素を走査する。前提B6-2/B6-4)
-    const avoidWeekDaysTexts = () => page.evaluate(() =>
-      [...document.querySelectorAll(".avoid-compliance")].map((el) => el.textContent || ""));
-    const avoidWeekHitsCounts = () => page.evaluate(() =>
-      [...document.querySelectorAll(".avoid-compliance")].map((el) => {
-        const m = /([0-9]+)\s*件/.exec(el.textContent || "");
-        return m ? Number(m[1]) : null;
-      }));
-    // 「n/7」等の包含判定(前後に数字が続かないことまで見る。[22]の週番号判定と同じ流儀)
-    const hasRatio = (text, n, d) => new RegExp(`(^|[^0-9])${n}\\s*/\\s*${d}([^0-9]|$)`).test(text || "");
-    // 今週の土曜起点([22]のPREV_WEEK_DAYと同式: (getDay()+1)%7 → Sat=0。テスト実行日の曜日に依らず決定論)
-    const WEEK_START = daysAgoISO((now0.getDay() + 1) % 7);
-    const b6AvoidItem = (id, text, extra = {}) => ({ id, text, createdAt: atOn(daysAgoISO(30), "09:00"), ...extra });
-
-    // ============================================================
-    // [49] F6 migration: violationsキー無し→[]補完・既存値非上書き・非配列の壊れ値は[]へ矯正
-    // ============================================================
-    console.log("[49] F6 migration: violationsキー無しの旧avoidListが[]補完され、既存値は上書きされず、壊れ値は[]へ矯正される");
-    await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    const B6_KEEP_V = [daysAgoISO(10), daysAgoISO(20)];
-    await seedB6({
-      view: "avoid",
-      avoidList: [
-        b6AvoidItem("av-old", "B6-旧形式(キー無し)"),
-        b6AvoidItem("av-keep", "B6-既存値あり", { violations: B6_KEEP_V }),
-        b6AvoidItem("av-broken", "B6-壊れ値", { violations: "not-an-array" })
-      ]
-    });
-    await waitView("avoid");
-    // 読込時のnormalizeState結果はメモリ上にあるだけなので、保存契機(setView)を明示的に踏んで
-    // localStorageへ書き戻させてから突合する([21]と同じ踏み方。前提B6-5)
-    await w1GoView("tasks");
-    await page.waitForFunction((KEY) => {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      const it = (s.settings.avoidList || []).find((x) => x.id === "av-old");
-      return s.currentView === "tasks" && !!it && Array.isArray(it.violations);
-    }, KEY);
-    const migAvoid = (await stateNow()).settings.avoidList;
-    const migById = (id) => migAvoid.find((x) => x.id === id);
-    check("violationsキー無しの旧項目に [] が補完される(§12 F6 migration)",
-      Array.isArray(migById("av-old")?.violations) && migById("av-old").violations.length === 0,
-      JSON.stringify(migById("av-old")));
-    check("既存の violations 配列は上書きされない(既定→既存優先のmap流儀)",
-      JSON.stringify(migById("av-keep")?.violations) === JSON.stringify(B6_KEEP_V),
-      JSON.stringify(migById("av-keep")));
-    check("非配列の壊れ値('not-an-array')は [] へ矯正される(自己修復。前提B6-5)",
-      Array.isArray(migById("av-broken")?.violations) && migById("av-broken").violations.length === 0,
-      JSON.stringify(migById("av-broken")));
-    check("migrationで項目数・id/text/createdAt が変化しない(要素の他フィールド非破壊)",
-      migAvoid.length === 3 && migById("av-old")?.text === "B6-旧形式(キー無し)" &&
-      (migById("av-keep")?.createdAt || "").startsWith(daysAgoISO(30)),
-      JSON.stringify(migAvoid.map((x) => x.id)));
-
-    // ============================================================
-    // [49b] F6: 「破った」タップ→当日ISO追加・表示即時反映・再読込後も保持。当日分の再タップ=トグル取消(裁定#20)
-    // ============================================================
-    console.log("[49b] F6: 「破った」タップで当日ISOが追加・表示即時反映・再読込後も保持され、当日分の再タップはトグル取消(裁定#20)");
-    await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    await seedB6({
-      view: "avoid",
-      avoidList: [b6AvoidItem("av-t", "B6-夜のスマホ", { violations: [daysAgoISO(2)] })]
-    });
-    await page.waitForSelector('[data-action="toggle-avoid-violation"][data-id="av-t"]', { state: "attached" });
-    check("「破った」ボタンが項目に描画される(DOM契約)", true);
-    await page.waitForSelector(".avoid-compliance", { state: "attached" });
-    const wd0 = (await avoidWeekDaysTexts()).join("\n");
-    check("タップ前: 守れた日数 6/7(violation=-2日の1日ぶんだけ減る)", hasRatio(wd0, 6, 7), wd0);
-    await page.locator('[data-action="toggle-avoid-violation"][data-id="av-t"]').first().click();
-    await page.waitForFunction((KEY) => {
-      const it = JSON.parse(localStorage.getItem(KEY)).settings.avoidList.find((x) => x.id === "av-t");
-      return !!it && Array.isArray(it.violations) && it.violations.length === 2;
-    }, KEY);
-    const vAfterTap = (await stateNow()).settings.avoidList.find((x) => x.id === "av-t").violations;
-    check("violationsへ当日ISO日付(YYYY-MM-DD)が追加され、即時にlocalStorageへ永続化される(前提B6-1)",
-      vAfterTap.includes(TODAY), JSON.stringify(vAfterTap));
-    check("既存の過去分violation(-2日)は保持される", vAfterTap.includes(daysAgoISO(2)), JSON.stringify(vAfterTap));
-    const wd1 = (await avoidWeekDaysTexts()).join("\n");
-    check("表示が即時反映される(守れた 6/7 → 5/7。reloadなし)", hasRatio(wd1, 5, 7) && !hasRatio(wd1, 6, 7), wd1);
-    // 再読込後も保持
-    await page.reload();
-    await page.waitForSelector('[data-action="nav"]', { state: "attached" });
-    await waitView("avoid");
-    await page.waitForSelector(".avoid-compliance", { state: "attached" });
-    const vAfterReload = (await stateNow()).settings.avoidList.find((x) => x.id === "av-t").violations;
-    check("再読込後もviolationsが保持される(当日ISO+過去分の2件)",
-      vAfterReload.includes(TODAY) && vAfterReload.length === 2, JSON.stringify(vAfterReload));
-    check("再読込後の表示も 5/7 のまま", hasRatio((await avoidWeekDaysTexts()).join("\n"), 5, 7));
-    // 当日分の再タップ = トグル取消(裁定#20。Undo UI新設なし)
-    await page.locator('[data-action="toggle-avoid-violation"][data-id="av-t"]').first().click();
-    await page.waitForFunction((KEY) => {
-      const it = JSON.parse(localStorage.getItem(KEY)).settings.avoidList.find((x) => x.id === "av-t");
-      return !!it && Array.isArray(it.violations) && it.violations.length === 1;
-    }, KEY);
-    const vAfterUndo = (await stateNow()).settings.avoidList.find((x) => x.id === "av-t").violations;
-    check("当日分の再タップで当日ISOだけが取り消される(トグル取消。過去分-2日は残る。裁定#20)",
-      !vAfterUndo.includes(TODAY) && vAfterUndo.includes(daysAgoISO(2)), JSON.stringify(vAfterUndo));
-    check("取消後の表示が 6/7 へ戻る(即時反映)", hasRatio((await avoidWeekDaysTexts()).join("\n"), 6, 7));
-
-    // ============================================================
-    // [49c] F6: 「直近7日で守れた日数」の手計算一致 + K裁定②の語彙回帰ガード
-    // ============================================================
-    console.log("[49c] F6: 守れた日数がフィクスチャの手計算 5/7 と一致し、新パネルに「ストリーク」「連続」が出ない(K裁定②)");
-    await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    // 手計算: 7日窓 = 今日〜-6日。violations は -1・-3 の2日が窓内 → 守れた 5日。-7日は窓外。
-    //   窓の取り方が -1〜-7 の読みなら3件すべて窓内 = 4/7 になり、下の負の検証で落ちる(前提B6-2)
-    await seedB6({
-      view: "avoid",
-      avoidList: [
-        b6AvoidItem("av-main", "B6-手計算対象", { violations: [daysAgoISO(1), daysAgoISO(3), daysAgoISO(7)] }),
-        b6AvoidItem("av-clean", "B6-違反なし", { violations: [] })
-      ]
-    });
-    await page.waitForSelector(".avoid-compliance", { state: "attached" });
-    const wdAll = await avoidWeekDaysTexts();
-    check("守れた日数 5/7 が表示される(violationsフィクスチャの手計算と一致)",
-      wdAll.some((t) => hasRatio(t, 5, 7)), JSON.stringify(wdAll));
-    check("4/7 ではない(当日を含む7日窓。-1〜-7窓だと4/7になる。前提B6-2)",
-      !wdAll.some((t) => hasRatio(t, 4, 7)), JSON.stringify(wdAll));
-    check("6/7 ではない(窓内2日ぶんのviolationを1日に数え潰さない)",
-      !wdAll.some((t) => hasRatio(t, 6, 7)), JSON.stringify(wdAll));
-    // K裁定②の回帰ガード: 判定は新パネル2クラスにスコープする([33c]と同じ方式。
-    // avoidビュー既存文言の検査ではなく、F6の新規指標表現だけを対象にする)
-    const f6PanelText = await page.evaluate(() =>
-      [...document.querySelectorAll(".avoid-compliance")].map((el) => el.textContent || "").join("\n"));
-    check("F6新パネルに「ストリーク」が出ない(K裁定②回帰ガード)", !f6PanelText.includes("ストリーク"), f6PanelText);
-    check("F6新パネルに「連続」が出ない(加点表現のみ)", !f6PanelText.includes("連続"), f6PanelText);
-    check("F6新パネルに streak 表記も出ない", !/streak/i.test(f6PanelText), f6PanelText);
-
-    // ============================================================
-    // [49d] F6: 「今週の抵触」が土曜起点週の件数と一致する(週境界オフバイワン検証)
-    // ============================================================
-    console.log("[49d] F6: 今週の抵触が土曜起点週(weekRange同式)の手計算 1件 と一致する(週開始日含む・前日含まず)");
-    await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    // フィクスチャ: 週開始日(土曜)当日=今週(境界・含む)/ その前日(PREV_WEEK_DAY)=先週(含まない)/
-    //   さらに3日前=先週内(含まない)→ 期待値 1件。境界の数え間違いなら 0件 or 2件以上になる
-    await seedB6({
-      view: "avoid",
-      avoidList: [b6AvoidItem("av-week", "B6-週境界", {
-        createdAt: atOn(daysAgoISO(40), "09:00"),
-        violations: [WEEK_START, PREV_WEEK_DAY, daysAgoISO(((now0.getDay() + 1) % 7) + 3)]
-      })]
-    });
-    await page.waitForSelector(".avoid-compliance", { state: "attached" });
-    const hitsAll = await avoidWeekHitsCounts();
-    check("今週の抵触 = 1件(週開始日(土曜)当日のviolationは今週に含まれる。前提B6-3/B6-4)",
-      hitsAll.some((n) => n === 1), JSON.stringify(hitsAll));
-    check("2件・3件ではない(週開始前日・前週内のviolationをカウントしない=週境界のオフバイワン検証)",
-      !hitsAll.some((n) => n === 2 || n === 3), JSON.stringify(hitsAll));
 
     // ============================================================
     // [50] F7 migration: visionDirectCategoriesキー無し→[]補完・既存値は非上書き
     // ============================================================
     console.log("[50] F7 migration: visionDirectCategoriesキー無し→[]補完、既存値(['仕事'])は上書きされない");
     await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    await seedB6({ view: "avoid", visionDirectCats: null });  // null = キー自体を削除してseed(旧state再現)
-    await waitView("avoid");
+    await seedB6({ view: "vision", visionDirectCats: null });  // null = キー自体を削除してseed(旧state再現)
+    await waitView("vision");
     await w1GoView("tasks");  // 保存契機(setView)で書き戻し([21]・前提B6-5)
     await page.waitForFunction((KEY) => {
       const s = JSON.parse(localStorage.getItem(KEY));
@@ -3058,8 +2869,8 @@ function check(name, cond, extra = "") {
     const vdcMigrated = (await stateNow()).settings.visionDirectCategories;
     check("キー無しの旧stateに [] が補完される(§12 F7 migration)",
       Array.isArray(vdcMigrated) && vdcMigrated.length === 0, JSON.stringify(vdcMigrated));
-    await seedB6({ view: "avoid", visionDirectCats: ["仕事"] });  // マスタ外の名前でも値はそのまま保持される想定
-    await waitView("avoid");
+    await seedB6({ view: "vision", visionDirectCats: ["仕事"] });  // マスタ外の名前でも値はそのまま保持される想定
+    await waitView("vision");
     await w1GoView("tasks");
     await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).currentView === "tasks", KEY);
     const vdcKept = (await stateNow()).settings.visionDirectCategories;
@@ -3147,63 +2958,14 @@ function check(name, cond, extra = "") {
     check("[51c]区間の描画で pageerror が発生しない", failures === failuresBefore51c);
 
     // ============================================================
-    // [52] 既存avoidビューの無退行: リスト・追加フォームが従来どおり描画され、追加操作も機能する
+    // [53] v189レビュー反映: カテゴリ改名/削除のvisionDirectCategoriesカスケード(M1/M2)
     // ============================================================
-    console.log("[52] 既存avoidビュー無退行: リスト・追加フォーム(#avoidTitle/add-avoid/delete-avoid)が従来どおり描画・機能する");
-    const failuresBefore52 = failures;  // この区間のpageerror検出用
-    await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    await seedB6({
-      view: "avoid",
-      avoidList: [
-        b6AvoidItem("av-r1", "B6-回帰-既存1", { violations: [daysAgoISO(1)] }),
-        b6AvoidItem("av-r2", "B6-回帰-旧形式")  // violationsキー無しの旧形式も同居させる
-      ]
-    });
-    await waitView("avoid");
-    check("追加フォーム(#avoidTitle + add-avoidボタン)が従来どおり描画される",
-      await page.locator("#avoidTitle").count() === 1 &&
-      await page.locator('[data-action="add-avoid"]').count() === 1);
-    const avoidRowVals = await page.evaluate(() =>
-      [...document.querySelectorAll('input[data-avoid-field="text"]')].map((el) => ({ id: el.dataset.avoidId, value: el.value })));
-    check("既存項目2件のテキスト入力が値付きで描画される(violations有無に関わらず)",
-      avoidRowVals.length === 2 &&
-      avoidRowVals.some((r) => r.id === "av-r1" && r.value === "B6-回帰-既存1") &&
-      avoidRowVals.some((r) => r.id === "av-r2" && r.value === "B6-回帰-旧形式"),
-      JSON.stringify(avoidRowVals));
-    check("既存の削除ボタン(delete-avoid)が項目ごとに残る",
-      await page.locator('[data-action="delete-avoid"][data-id="av-r1"]').count() === 1 &&
-      await page.locator('[data-action="delete-avoid"][data-id="av-r2"]').count() === 1);
-    check("旧形式項目(violationsキー無し)にも「破った」ボタンが出る(migration後の一様描画)",
-      await page.locator('[data-action="toggle-avoid-violation"][data-id="av-r2"]').count() === 1);
-    // 追加操作の無退行(configureAvoid/dispatcher経由の add-avoid が引き続き機能する)
-    await page.locator("#avoidTitle").click();
-    await page.keyboard.type("B6-回帰-新規追加");
-    await page.locator('[data-action="add-avoid"]').click();
-    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).settings.avoidList.length === 3, KEY);
-    const avoidAfterAdd = (await stateNow()).settings.avoidList;
-    check("追加フォームから項目を追加できる(既存addAvoid導線の無退行)",
-      avoidAfterAdd.some((x) => x.text === "B6-回帰-新規追加"), JSON.stringify(avoidAfterAdd.map((x) => x.text)));
-    check("追加した項目の行が描画される",
-      await page.evaluate(() => [...document.querySelectorAll('input[data-avoid-field="text"]')].some((el) => el.value === "B6-回帰-新規追加")));
-    check("[52]区間の描画・操作で pageerror が発生しない", failures === failuresBefore52);
-
-    // ============================================================
-    // [53] v189レビュー反映: カテゴリ改名/削除のvisionDirectCategoriesカスケード(M1/M2)+
-    //      avoidList非オブジェクト要素の除去ガード(migration独立レビュー指摘)
-    // ============================================================
-    console.log("[53] v189: カテゴリ改名/削除がvisionDirectCategoriesへカスケードし、avoidListの非オブジェクト要素は起動時に除去される");
+    console.log("[53] v189: カテゴリ改名/削除がvisionDirectCategoriesへカスケードする");
     await page.clock.setFixedTime(fixedTime(12, 0, 0));
     await seedB6({
       view: "settings",
-      avoidList: [null, "壊れ文字列", { id: "av-ok", text: "生き残る項目", createdAt: at("08:00") }],
       visionDirectCats: ["開発", "回復"]
     });
-    // 非オブジェクト要素の除去(throw→全state初期化に至らない)
-    const av53 = (await stateNow()).settings.avoidList;
-    check("avoidListの非オブジェクト要素(null/文字列)は起動時に除去され、正常項目は残る",
-      av53.length === 1 && av53[0].id === "av-ok" && Array.isArray(av53[0].violations), JSON.stringify(av53));
-    check("非オブジェクト混入でも全state初期化(個人データゲート再表示)に至っていない",
-      await page.evaluate(() => !document.body.textContent.includes("初期状態で起動")));
     // カテゴリ改名カスケード(M1): 「開発」→「開発X」
     await page.evaluate(() => {
       const cat = JSON.parse(localStorage.getItem("taskchute-journal-pwa-state-v1")).settings.categories.find((c) => c.name === "開発");
@@ -3248,9 +3010,9 @@ function check(name, cond, extra = "") {
     //   { generatedAt: "YYYY-MM-DDTHH:MM:SS"(T区切り秒あり),
     //     routineSuggestions: [{ routineTitle, suggestion, reason }],
     //     wishRipe: [{ taskId, title, reason }],   ← 参照は projectId でなく taskId(実体はTask。F5と同じ)
-    //     avoidInsight: { body }, zeroPattern: { body } }
+    //     zeroPattern: { body } }
     // DOM契約(実装側と共有済み):
-    //   パネルroot .ai-insights[data-insight="routine|wish|avoid|zero"] /
+    //   パネルroot .ai-insights[data-insight="routine|wish|zero"] /
     //   鮮度 .ai-insights-freshness(26時間超で .is-stale +「古い」を含む文言)
     // 実装(別担当が並行作業中)より先に仕様から書いた。前提が実装と食い違った場合は
     // テストを弱めるのではなく、前提の側を実装と突合して直すこと:
@@ -3260,9 +3022,9 @@ function check(name, cond, extra = "") {
     //            (キャッシュはメモリのみ。同一セッション内のビュー往復では再fetchしない)。
     //            同名の別スキーマとはパスで区別する(§12 F8「同名紛らわしいが別物」。
     //            routeのendsWith判定が別パスに一致しないことを維持する)
-    //   前提B7-2: パネルは routine / wish / avoid / zero 各ビューのrender内で描画され、fetch完了時は
+    //   前提B7-2: パネルは routine / wish / zero 各ビューのrender内で描画され、fetch完了時は
     //            hydrateStaticMarkdown 末尾の再描画で開いたままのビューへも反映される(§12 F8
-    //            「再描画view一覧に routine/wish/avoid を追加」)。検証は fetch応答後のDOM出現
+    //            「再描画view一覧に routine/wish を追加」)。検証は fetch応答後のDOM出現
     //            (waitForSelector)/不在(応答待ち+マクロタスク2周。[45b]と同手法)で行う
     //   前提B7-3: 鮮度は localDateTimeToMs(generatedAt) 基準で、26時間超のとき .ai-insights-freshness に
     //            .is-stale が付き「古い」を含む文言になる。鮮度内では .is-stale は付かない。
@@ -3273,8 +3035,8 @@ function check(name, cond, extra = "") {
     //            state.tasks/blocks/settings は変化しない。突合は保存契機(setView)を踏んで
     //            localStorageへ書き戻させてから行う([34c]と同じ手順。初回normalize補完分を比較から除く)
     //   前提B7-6: 各パネルにフィクスチャ本文(routineSuggestions=suggestion/routineTitle・
-    //            wishRipe=title/reason・avoidInsight/zeroPattern=body)が表示される。レイアウト・
-    //            件数・整形は契約にしない(マーカー文字列 AI-ROUTINE/AI-WISH/AI-AVOID/AI-ZERO の包含で読む)
+    //            wishRipe=title/reason・zeroPattern=body)が表示される。レイアウト・
+    //            件数・整形は契約にしない(マーカー文字列 AI-ROUTINE/AI-WISH/AI-ZERO の包含で読む)
     //   前提B7-7: 404・壊れJSON・空文字(fetchGitHubRawTextの失敗時空文字と同型)では .ai-insights が
     //            1枚も出ず、pageerrorゼロ・各ビューの既存要素は無傷(フェイルソフト。[45b]/[48]と同思想)
     // ============================================================
@@ -3285,7 +3047,6 @@ function check(name, cond, extra = "") {
       generatedAt: `${TODAY}T07:00:00`,  // 当日朝生成=鮮度内(T区切り秒あり。FORMAT_CONTRACT整合)
       routineSuggestions: [{ routineTitle: "AIRT-TITLE-朝の散歩", suggestion: "AIRT-SUG-7時台へ前倒し", reason: "AIRT-REASON-起床後実績が7時台に集中" }],
       wishRipe: [{ taskId: B7_WISH_TASK_ID, title: "AIWS-TITLE-熟成やりたい", reason: "AIWS-REASON-作成から90日経過" }],
-      avoidInsight: { body: "AI-AVOID-夜のスマホは週後半に破りやすい" },
       zeroPattern: { body: "AI-ZERO-仕事テーマへの偏りが続いている" }
     };
     // 可変フィクスチャ+後発route(scheduleInboxFx/w3InboxFxと同方式。後発登録なのでこちらが優先され、
@@ -3311,10 +3072,10 @@ function check(name, cond, extra = "") {
 
     // B7用seed: seedB6と同じ流儀に「wishタスク1件(B7_WISH_TASK_ID)+wishプロジェクト」を必ず同居させる
     // 拡張(既存関数は変更禁止のため別名で追加)。wishビューの既存要素(.wish-card)の無傷検証と、
-    // wishRipe.taskId=既存wishタスク の契約フィクスチャを兼ねる。avoidListは既存avoidビュー描画用に1件。
+    // wishRipe.taskId=既存wishタスク の契約フィクスチャを兼ねる。
     const b7WishTask = wishTaskB5(B7_WISH_TASK_ID, "B7-熟成やりたい", atOn(daysAgoISO(90), "00:00"));
     async function seedB7({ blocks = [], view = "routine", settings = {} } = {}) {
-      await page.evaluate(({ KEY, blocks, view, settings, TODAY, wishProject, wishTask, avoidItem }) => {
+      await page.evaluate(({ KEY, blocks, view, settings, TODAY, wishProject, wishTask }) => {
         const s = JSON.parse(localStorage.getItem(KEY));
         s.blocks = blocks;
         s.currentView = view;
@@ -3326,15 +3087,13 @@ function check(name, cond, extra = "") {
         s.gardenLog = {};
         s.zeroThinking = { themes: [], entries: [], groups: [], suggestedThemes: [] };
         s.pomodoro = { ...s.pomodoro, running: false, blockId: "", startedAt: "", endsAt: "", mode: "focus" };
-        s.settings.avoidList = [avoidItem];
         s.projects = (s.projects || []).filter((p) => p.id !== wishProject.id).concat([wishProject]);
         s.tasks = (s.tasks || []).filter((t) => t.id !== wishTask.id).concat([wishTask]);
         Object.assign(s.settings, settings);
         localStorage.setItem(KEY, JSON.stringify(s));
       }, {
         KEY, blocks, view, settings, TODAY,
-        wishProject: wishProjectB5, wishTask: b7WishTask,
-        avoidItem: b6AvoidItem("av-b7", "B7-夜のスマホ", { violations: [] })
+        wishProject: wishProjectB5, wishTask: b7WishTask
       });
       await page.reload();
       await page.waitForSelector('[data-action="nav"]', { state: "attached" });
@@ -3347,10 +3106,6 @@ function check(name, cond, extra = "") {
       } else if (view === "wish") {
         check(`${label}: wishビューの既存要素(.wish-card)が無傷`,
           await page.locator(".wish-card").count() >= 1);
-      } else if (view === "avoid") {
-        check(`${label}: avoidビューの既存要素(#avoidTitle+add-avoid)が無傷`,
-          await page.locator("#avoidTitle").count() === 1 &&
-          await page.locator('[data-action="add-avoid"]').count() === 1);
       } else if (view === "zero") {
         check(`${label}: zeroビューの既存要素(.zt-toptab-row)が無傷`,
           await page.locator(".zt-toptab-row").count() === 1);
@@ -3358,9 +3113,9 @@ function check(name, cond, extra = "") {
     }
 
     // ============================================================
-    // [54] F8: 正常フィクスチャ → routine/wish/avoid/zero 各ビューに .ai-insights が出て本文が表示される
+    // [54] F8: 正常フィクスチャ → routine/wish/zero 各ビューに .ai-insights が出て本文が表示される
     // ============================================================
-    console.log("[54] F8: 正常フィクスチャで4ビューすべてに .ai-insights パネルが出て、各フィクスチャ本文が表示される");
+    console.log("[54] F8: 正常フィクスチャで3ビューすべてに .ai-insights パネルが出て、各フィクスチャ本文が表示される");
     const failuresBefore54 = failures;
     await page.clock.setFixedTime(fixedTime(12, 0, 0));
     await seedB7({ view: "routine" });
@@ -3378,13 +3133,6 @@ function check(name, cond, extra = "") {
     check("wishパネルに wishRipe の reason が表示される(titleは既存Wishカードが担うため非表示=実装仕様。レビューM2)",
       ((await panelText(aiPanelSel("wish"))) || "").includes("AIWS-REASON"),
       await panelText(aiPanelSel("wish")));
-    await w1GoView("avoid");
-    await page.waitForSelector(aiPanelSel("avoid"), { state: "attached" });
-    check("avoidビューに .ai-insights[data-insight='avoid'] が1つ描画される",
-      await page.locator(aiPanelSel("avoid")).count() === 1);
-    check("avoidパネルに avoidInsight.body が表示される",
-      ((await panelText(aiPanelSel("avoid"))) || "").includes("AI-AVOID"),
-      await panelText(aiPanelSel("avoid")));
     await w1GoView("zero");
     await page.waitForSelector(aiPanelSel("zero"), { state: "attached" });
     check("zeroビューに .ai-insights[data-insight='zero'] が1つ描画される",
@@ -3399,7 +3147,7 @@ function check(name, cond, extra = "") {
     // ============================================================
     // [55] F8: ファイル無し(404)→ 全ビューで .ai-insights が存在しない・pageerrorゼロ・既存要素は無傷
     // ============================================================
-    console.log("[55] F8: ai-insights.json 404 では4ビューとも .ai-insights が出ず、既存要素は無傷(一切エラーなし)");
+    console.log("[55] F8: ai-insights.json 404 では3ビューとも .ai-insights が出ず、既存要素は無傷(一切エラーなし)");
     const failuresBefore55 = failures;
     aiInsightsFx.status = 404;
     await page.clock.setFixedTime(fixedTime(12, 0, 0));
@@ -3411,8 +3159,8 @@ function check(name, cond, extra = "") {
     check("404: routineビューに .ai-insights が1枚も出ない(ファイル無しで一切エラーなし)",
       await page.locator(".ai-insights").count() === 0);
     await b7CheckViewIntact("routine", "404");
-    // 同一セッション内の残り3ビュー(TTL30分キャッシュにより再fetchなし=失敗結果のまま。前提B7-1)
-    for (const v of ["wish", "avoid", "zero"]) {
+    // 同一セッション内の残り2ビュー(TTL30分キャッシュにより再fetchなし=失敗結果のまま。前提B7-1)
+    for (const v of ["wish", "zero"]) {
       await w1GoView(v);
       check(`404: ${v}ビューに .ai-insights が1枚も出ない`,
         await page.locator(".ai-insights").count() === 0);
@@ -3457,7 +3205,7 @@ function check(name, cond, extra = "") {
     // ============================================================
     // [57] F8: フィールド型不一致 → 壊れたフィールドのパネルだけ非表示・正常フィールドは表示(個別無視)
     // ============================================================
-    console.log("[57] F8: routineSuggestions=文字列・wishRipe=数値の型不一致では routine/wish パネルだけが出ず、avoid/zero は通常表示");
+    console.log("[57] F8: routineSuggestions=文字列・wishRipe=数値の型不一致では routine/wish パネルだけが出ず、zero は通常表示");
     const failuresBefore57 = failures;
     aiInsightsFx.body = JSON.stringify({
       ...B7_AI_OK,
@@ -3465,13 +3213,8 @@ function check(name, cond, extra = "") {
       wishRipe: 12345                    // 配列であるべき所に数値
     });
     await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    await seedB7({ view: "avoid" });
+    await seedB7({ view: "zero" });
     // 正常フィールド側のパネル出現をfetch完了の合図にする(その後の不在断定は描画反映後で安全)
-    await page.waitForSelector(aiPanelSel("avoid"), { state: "attached" });
-    check("正常フィールド(avoidInsight)のパネルは通常表示される(前提B7-4)",
-      ((await panelText(aiPanelSel("avoid"))) || "").includes("AI-AVOID"),
-      await panelText(aiPanelSel("avoid")));
-    await w1GoView("zero");
     await page.waitForSelector(aiPanelSel("zero"), { state: "attached" });
     check("正常フィールド(zeroPattern)のパネルも通常表示される",
       ((await panelText(aiPanelSel("zero"))) || "").includes("AI-ZERO"),
@@ -3512,7 +3255,7 @@ function check(name, cond, extra = "") {
     // ============================================================
     // [59] F8: 提案の自動適用が無い(表示のみ)— 正常表示後に state.tasks/blocks/settings のJSONが不変
     // ============================================================
-    console.log("[59] F8: 正常フィクスチャを4ビューで表示しても tasks/blocks/settings のJSONが変化しない(表示のみ)");
+    console.log("[59] F8: 正常フィクスチャを3ビューで表示しても tasks/blocks/settings のJSONが変化しない(表示のみ)");
     await page.clock.setFixedTime(fixedTime(12, 0, 0));
     await seedB7({ view: "routine" });
     await page.waitForSelector(aiPanelSel("routine"), { state: "attached" });
@@ -3523,9 +3266,9 @@ function check(name, cond, extra = "") {
       const s = JSON.parse(localStorage.getItem(KEY));
       return JSON.stringify({ tasks: s.tasks, blocks: s.blocks, settings: s.settings });
     }, KEY);
-    // 4ビューを巡回してパネルを表示させる(wishRipe提案のtask変更・routine提案のblock変更等が
+    // 3ビューを巡回してパネルを表示させる(wishRipe提案のtask変更・routine提案のblock変更等が
     // 勝手に走っていればこの間にstateが変わり、下の突合で落ちる)
-    for (const v of ["routine", "wish", "avoid", "zero"]) {
+    for (const v of ["routine", "wish", "zero"]) {
       await w1GoView(v);
       await page.waitForSelector(aiPanelSel(v), { state: "attached" });
     }

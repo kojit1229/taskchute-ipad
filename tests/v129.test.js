@@ -195,20 +195,20 @@ function check(name, cond, extra = "") {
       { id: "bs-b", dateTime: `${TODAY}T09:15:00`, fatigue: 2, part: "", pomodoroBlockId: "blk-y" },
       { id: "bs-other-day", dateTime: `${YEST}T10:00:00`, fatigue: 5, part: "頭", pomodoroBlockId: "blk-z" }
     ];
-    await seed({ blocks: [], bodyScans: scans, view: "reports" });
+    await seed({ blocks: [], bodyScans: scans, view: "journal" });
     await page.click('[data-action="generate-report"]');
     await page.waitForTimeout(400);
-    const reportText1 = await page.locator(".report-output").inputValue().catch(() => "");
+    const reportText1 = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
     check("`### 身体スキャン`見出しが出る", reportText1.includes("### 身体スキャン"), reportText1.slice(0, 600));
     check("時刻昇順で出る(09:15が10:30より前)", reportText1.indexOf("09:15") < reportText1.indexOf("10:30"), reportText1);
     check("他日分は含まれない(該当エントリのpart「頭」が出ない)", !reportText1.includes("頭"), reportText1);
     check("部位が空の行は「—」になる", /09:15 \| 2 \| —/.test(reportText1), reportText1);
 
     console.log("[8] 日報生成: 当日分のbodyScansが0件なら`### 身体スキャン`節は省略される");
-    await seed({ blocks: [], bodyScans: [], view: "reports" });
+    await seed({ blocks: [], bodyScans: [], view: "journal" });
     await page.click('[data-action="generate-report"]');
     await page.waitForTimeout(400);
-    const reportText2 = await page.locator(".report-output").inputValue().catch(() => "");
+    const reportText2 = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
     check("`### 身体スキャン`見出しが出ない", !reportText2.includes("### 身体スキャン"), reportText2.slice(0, 400));
 
     // ============================================================

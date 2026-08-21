@@ -1,11 +1,6 @@
 // v164: app.js分割・段階1(最初の抽出)。純粋関数はsrc/core/**へ抽出し、依存グラフの葉として
 //   importする(src/core/**はstateを一切参照しない。claude-review-result.md §7の契約)。
 import { mergeById, mergeByIdPreferNewer } from "./src/core/merge.js";
-// v165: app.js分割・段階2(Avoid Listの読み取り専用render抽出)。src/features/avoid.jsは
-//   stateもapp.js自身もimportしない(呼び出し側が引数で渡す。src/features/avoid.js冒頭コメント参照)。
-// v173: 段階5-2(dispatcher分岐のレジストリ移行)でconfigureAvoid(deps)を追加。addAvoid/deleteAvoid
-//   本体は段階2の監督者裁定どおりapp.js残留のまま、dispatcher登録だけをavoid.js側へ委譲する。
-import { configureAvoid, renderAvoid } from "./src/features/avoid.js";
 // v166: app.js分割・段階3(state store + storage/sync gateway)。stateの再代入はsetState()
 //   経由のみ(claude-review-result.md §2 Blocker-1)。store.jsは何もimportしない真の葉。
 import { state, setState } from "./src/state/store.js";
@@ -216,10 +211,10 @@ function pruneExpiredSuggestedThemes(list) {
 
 // v71: タブ順 — 利用頻度・時間帯順に並び替え(CHANGES_v71.md参照)。
 //   実行系(ホーム/タスクシュート/タイムライン/WBS/ルーティン)を先頭に、
-//   日次1回系(ジャーナル/週次/日報)→参照系(計器盤/やりたい/やらない/ビジョン/0秒思考)→
+//   日次1回系(ジャーナル/週次)→参照系(計器盤/やりたい/ビジョン/0秒思考)→
 //   ポモドーロ(v70でBlock開始時に自動起動するため独立タブの優先度を下げた)→設定 の順。
 //   v33の順序: ホーム/ジャーナル/0秒思考/ビジョン/タスクシュート/WBS/タイムライン/
-//              ルーティン/ポモドーロ/やりたい/やらない/日報/週次/計器盤/設定
+//              ルーティン/ポモドーロ/やりたい/週次/計器盤/設定
 const navItems = [
   { id: "today", label: "今日", mark: "▶" },
   { id: "timeswitch", label: "計時", mark: "◉" },
@@ -231,11 +226,9 @@ const navItems = [
   { id: "routine", label: "ルーティン", mark: "↻" },
   { id: "journal", label: "ジャーナル", mark: "J" },
   { id: "weekly", label: "週次", mark: "◷" },
-  { id: "reports", label: "日報", mark: "R" },
   { id: "ai-reports", label: "AIレポート", mark: "A" },  // v92: コンテンツ総括・自己分析等の月次/不定期AIレポートビューア
   { id: "stats", label: "計器盤", mark: "◔" },  // v53
   { id: "wish", label: "やりたい", mark: "✦" },
-  { id: "avoid", label: "やらない", mark: "✕" },
   { id: "vision", label: "ビジョン", mark: "V" },
   { id: "zero", label: "0秒思考", mark: "○" },
   { id: "pomodoro", label: "ポモドーロ", mark: "P" },  // v70: Block開始で自動起動するため独立タブの優先度を下げた
@@ -336,12 +329,6 @@ configureTimeline({
   makeBlock, getOtherTask, openBlockEditor, saveState, isStaleBlock,
   getScheduleData: getTimeswitchSchedule,
   timelineRailEl: timelineRail, appRootEl: app
-});
-// v173/v189: src/features/avoid.jsのdispatcher登録。Avoidの書き込み操作はapp.js残留の
-// まま関数参照を渡し、日付集計も既存ユーティリティを注入する。
-configureAvoid({
-  addAvoid, deleteAvoid, toggleAvoidViolation,
-  todayISO, addDays, weekRange, aiInsightsPanelHTML
 });
 configureTimeswitch({
   escapeHTML, todayISO, nowDateTime, dateToLocalDateTime, localDateTimeToMs,
@@ -669,7 +656,7 @@ registerActions({
   "draft-discard": () => {
     if (!_scheduleDraft) return;
     // v52: 破棄も「この提案は不要だった」という学習シグナルとして記録(v62: source区別も記録)
-    // v145レビュー対応: 複数sourceの項目が合流した下書き(例: 朝プラン+回復提案)でも、
+    // 複数sourceの項目が合流した下書きでも、
     // 学習ログには項目ごとの出どころ(it.source)を優先して残す(無ければ従来どおり下書き全体のsource)。
     _scheduleDraft.items.forEach((it) => recordScheduleHistory(it, "discarded", _scheduleDraft.date, it.source || _scheduleDraft.source || "deterministic"));
     _scheduleDraft = null;
@@ -683,7 +670,7 @@ registerActions({
     if (!_scheduleDraft) return;
     const removed = _scheduleDraft.items.find((x) => x.id === id);
     let removedHistoryEntry = null;
-    // v145レビュー対応: item.source優先(合流下書きでの出どころ誤ラベル防止。draft-discardと同じ方針)
+    // item.source優先(合流下書きでの出どころ誤ラベル防止。draft-discardと同じ方針)
     if (removed) removedHistoryEntry = recordScheduleHistory(removed, "removed", _scheduleDraft.date, removed.source || _scheduleDraft.source || "deterministic");  // v52: 却下シグナル
     // v62(m2): 削除直前の下書き状態を1段Undoとして退避。このremovedエントリも一緒に退避し、
     //          Undoで取り消せるようにする(Undo→再確定でremoved/confirmedが二重計上されないため)。
@@ -1064,8 +1051,7 @@ let homeTab = "today";  // "today" | "home"
 // (app.js分割・段階4-2。wish.js冒頭コメント参照)。
 
 // v71: ホームの折りたたみカード(details)の開閉状態。端末ローカルのUI状態であり、
-//      GitHub同期やエクスポートの対象になる state オブジェクトとは意図的に分離するため、
-//      専用の localStorage キーに保存する(AUTO_MORNING_PLAN_KEY等と同じ「非致命・try/catch」流儀)。
+//      GitHub同期やエクスポートの対象になる state オブジェクトとは意図的に分離する。
 const HOME_FOLD_KEY = "taskchute-journal-home-fold-v1";
 function readHomeFoldMap() {
   try { return JSON.parse(localStorage.getItem(HOME_FOLD_KEY) || "{}"); } catch { return {}; }
@@ -1199,7 +1185,6 @@ document.addEventListener("click", (event) => {
   // v162: 仕分けの「手放す/延期」直後に出るインライン理由チップ欄
   if (action === "triage-reason-chip") recordTriageInlineReason(target.dataset.chip || "");
   if (action === "triage-reason-skip") skipTriageInlineReason();
-  // v173: add-avoid/delete-avoidはsrc/features/avoid.jsのregisterActionsへ移行した。
   // v149: ホームの2タブ(今日/ホーム)。非永続・view/dateは変えないため自動スクロールは発火しない。
   if (action === "home-tab") { homeTab = target.dataset.tab === "home" ? "home" : "today"; render(); }
   // v176: zt-*/zero-tab/zerosec-theme-*(0秒思考)・weekly-*/cycle-*/weekly-suggest-add
@@ -1288,8 +1273,6 @@ document.addEventListener("input", (event) => {
     meta.ideal = target.value;
     saveState();
   }
-  // v143: data-feedback-date(ジャーナルAIフィードバック欄の入力ハンドラ)はv141で該当欄自体を
-  // 撤去した際に到達不能になっていたため削除した(paste用の別ハンドラも同様。CHANGES_v143.md参照)。
   // v73: コンディションOS — 夜のひとこと(入力中も保存。全再描画しないのでフォーカスは維持される)
   if (target.matches("[data-condition-note-date]")) {
     const d = target.dataset.conditionNoteDate;
@@ -1365,7 +1348,7 @@ document.addEventListener("input", (event) => {
   if (target.matches("[data-msg-id][data-msg-field]")) {
     updateBreakMessageField(target.dataset.msgId, target.dataset.msgField, target.value);
   }
-  // v34: ここにあった Wish/Avoid のクリック処理(add-wish 等)は
+  // v34: ここにあった Wish のクリック処理(add-wish 等)は
   //      input リスナーでは action/id が未定義で動かず、毎入力で例外を投げていた。
   //      → click リスナー(上部)へ移設して修正済み。
 });
@@ -1437,12 +1420,6 @@ document.addEventListener("change", (event) => {
     saveState();
     render();
   }
-  // v59: 朝の一括プランニングの自動下書きトグル
-  if (target.matches("[data-ai-automorningplan]")) {
-    state.settings.ai.autoMorningPlan = target.checked;
-    saveState();
-    if (target.checked) showToast("朝の一括プランニングを有効にしました(翌朝から)");
-  }
   // v53: 自動アーカイブのトグル
   if (target.matches("[data-setting-autoarchive]")) {
     state.settings.autoArchive = target.checked;
@@ -1494,12 +1471,6 @@ document.addEventListener("change", (event) => {
     saveState();
     render();
   }
-  // v145: 行動接続(残量低下時の回復Block下書き提案)のopt-inトグル。既定OFF。
-  if (target.matches("[data-setting-battery-recoverydraft]")) {
-    state.settings.battery ||= defaultBatterySettings();
-    state.settings.battery.recoveryDraft = target.checked;
-    saveState();
-  }
   // v84: Study With Me の動画ID・開始秒(直接編集)
   if (target.matches("[data-swm-field]")) {
     const field = target.dataset.swmField;
@@ -1540,8 +1511,6 @@ document.addEventListener("change", (event) => {
     render();
   }
   if (target.matches("#importData")) importData(target.files?.[0]);
-  // v143: data-feedback-upload(.mdアップロード欄)はv141で該当欄自体を撤去した際に到達不能に
-  // なっていたため、ハンドラとuploadFeedbackFile()本体を削除した(CHANGES_v143.md参照)。
   // v120: AutoSleep書き出しCSVの取込。値を先に消し、同じファイルも再選択可能にする。
   if (target.matches("[data-sleep-csv-upload]")) {
     const file = target.files?.[0];
@@ -1601,10 +1570,6 @@ document.addEventListener("input", (event) => {
   if (target.matches('[data-action="wish-subtask-title"]')) {
     updateTaskField(target.dataset.id, "title", target.value);
   }
-  // v17: Avoid List のテキスト編集
-  if (target.matches('[data-avoid-id][data-avoid-field="text"]')) {
-    updateAvoidText(target.dataset.avoidId, target.value);
-  }
 });
 
 // loadState/persistLocalNoSchedule: src/storage/local.js へ抽出済み(v166)。冒頭のimportを参照。
@@ -1660,8 +1625,8 @@ function normalizeState(value) {
   value.settings ||= {};
   // v182: 未知viewでrenderMainの前画面が残る事故を防ぐ。todayは新規許可、旧版由来の不明値はhomeへ。
   const allowedViews = new Set([
-    "today", "timeswitch", "calendar", "home", "wbs", "wish", "avoid", "tasks", "routine", "timeline",
-    "pomodoro", "journal", "zero", "vision", "reports", "ai-reports", "weekly",
+    "today", "timeswitch", "calendar", "home", "wbs", "wish", "tasks", "routine", "timeline",
+    "pomodoro", "journal", "zero", "vision", "ai-reports", "weekly",
     "cycle", "stats", "settings", "more"
   ]);
   if (!allowedViews.has(value.currentView)) value.currentView = "home";
@@ -1711,9 +1676,8 @@ function normalizeState(value) {
   delete value.settings.ai.model;
   delete value.settings.ai.prompts;
   delete value.settings.ai.autoMorningReview;
-  // v59: 朝の一括プランニングの自動下書き(既定OFF。ONなら10:00以前の初回起動・当日の非ルーティンBlock0件時に自動実行)。
-  //      v60でAI呼び出しは無くなったが、決定論配置の自動下書き機能として引き続き有効。
-  if (typeof value.settings.ai.autoMorningPlan !== "boolean") value.settings.ai.autoMorningPlan = false;
+  // v214: 朝プランの自動実行設定を廃止。手動実行と下書き機構は維持する。
+  delete value.settings.ai.autoMorningPlan;
   // v52: スケジュール実績ログ(決定論配置の元値に対するユーザの採否・修正を記録)。
   if (!Array.isArray(value.aiScheduleHistory)) value.aiScheduleHistory = [];
   // v62: aiScheduleHistory の各エントリに source/reason のデフォルトを補完(後方互換。
@@ -1785,26 +1749,7 @@ function normalizeState(value) {
     b.decayPerHour = clampBatteryFieldValue("decayPerHour", Number.isFinite(b.decayPerHour) ? b.decayPerHour : def.decayPerHour);
     b.decayStartMinutes = clampBatteryFieldValue("decayStartMinutes", b.decayStartMinutes);
     b.max = clampBatteryFieldValue("max", Number.isFinite(b.max) ? b.max : def.max);
-    // v145: 行動接続(残量低下時の回復Block下書き提案)。既定OFF・しきい値40%(既存値優先で補完)。
-    if (typeof b.recoveryDraft !== "boolean") b.recoveryDraft = def.recoveryDraft;
-    b.recoveryThresholdPct = clampBatteryFieldValue("recoveryThresholdPct", Number.isFinite(b.recoveryThresholdPct) ? b.recoveryThresholdPct : def.recoveryThresholdPct);
   }
-  // v145: 回復Block下書き提案の1日1回冪等マーカー(feedbackIngestedDatesと同じ軽量配列の思想)。
-  // v150レビュー対応(項目5、Codex指摘): 旧形式は日付文字列の配列だった。PWA破棄後の再構築
-  // (maybeRebuildRecoveryDraft)で「元々どのタイトルを提案したか」を復元できるよう、
-  // 各要素を{date, titles}へ拡張する。旧形式(文字列)は{date, titles:[]}へ移行する
-  // (titles不明のため、その日は再構築の対象外=スキップになる。既存の冪等性=「その日はもう
-  // 新規発火しない」という意味自体は維持)。
-  if (!Array.isArray(value.batteryRecoveryDraftDates)) value.batteryRecoveryDraftDates = [];
-  value.batteryRecoveryDraftDates = value.batteryRecoveryDraftDates
-    .map((entry) => {
-      if (typeof entry === "string") return { date: entry, titles: [] };
-      if (entry && typeof entry === "object" && typeof entry.date === "string") {
-        return { date: entry.date, titles: Array.isArray(entry.titles) ? entry.titles.filter((t) => typeof t === "string") : [] };
-      }
-      return null;
-    })
-    .filter(Boolean);
   if (!("lastPushedAt" in value.settings)) value.settings.lastPushedAt = null;
   if (!("lastPulledAt" in value.settings)) value.settings.lastPulledAt = null;
   // v25: データ最終更新時刻(端末間で「新しい方が勝つ」判定に使用)
@@ -1835,13 +1780,11 @@ function normalizeState(value) {
   if (!Array.isArray(value.settings.lifeAreas) || value.settings.lifeAreas.length === 0) {
     value.settings.lifeAreas = defaultLifeAreas();
   }
-  // v17: Avoid List(やらないこと)
+  // v17/v189: Avoid Listのstateデータはv214でも温存する。UI・書き込み経路を削除しても、
+  // 既存データを同期・エクスポートで欠落させないため後方互換の正規化は維持する。
   if (!Array.isArray(value.settings.avoidList)) {
     value.settings.avoidList = [];
   }
-  // v189 F6 migration: 既存の各項目を保ったまま、当日単位の抵触記録を補完する。
-  // 非オブジェクト要素はv145(batteryRecoveryDraftDates)と同じ流儀で除去する
-  // (通すとnormalizeStateがthrowし全state初期化に至るため。migration独立レビュー指摘)
   value.settings.avoidList = value.settings.avoidList
     .filter((it) => it && typeof it === "object")
     .map((it) => ({
@@ -2916,7 +2859,6 @@ function renderMain() {
   }
   if (view === "wbs") main.innerHTML = renderWBS();
   if (view === "wish") main.innerHTML = renderWish();
-  if (view === "avoid") main.innerHTML = renderAvoid(state, escapeHTML, renderHeader);
   if (view === "tasks") {
     main.innerHTML = renderTasks();
     // v146: タスクシュートも着手中(無ければ次の未着手)Blockへ自動スクロール
@@ -2939,7 +2881,6 @@ function renderMain() {
   if (view === "journal") main.innerHTML = renderJournal();
   if (view === "zero") main.innerHTML = renderZeroThinking();
   if (view === "vision") main.innerHTML = renderVision();
-  if (view === "reports") main.innerHTML = renderReports();
   if (view === "ai-reports") main.innerHTML = renderAiReports();
   if (view === "weekly") main.innerHTML = renderWeekly();
   if (view === "cycle") main.innerHTML = renderCycle();
@@ -3244,7 +3185,7 @@ function homeConditionBudgetChip() {
 
 // v147レビュー対応: 電池残量の「良好/要注意」を判定する単一の閾値。旧実装はチップの警告色
 // (旧: pct<60でオレンジ)と今日の状態カードの非表示条件(旧: pct>=30で良好)が別の値で
-// 不整合だった。既存のrecoveryThresholdPct既定値(40)と揃え、以後はこの1箇所だけを見る。
+// 不整合だった。以後は40%の単一閾値だけを見る。
 const BATTERY_OK_PCT = 40;
 
 // v144/v147: 電池残量の計算(homeBatteryChip・homeTodayStatusCardの両方が必要とするため
@@ -4279,10 +4220,19 @@ async function copyReportToClipboard() {
     await navigator.clipboard.writeText(report);
     showToast("コピーしました — AIに貼り付けてください");
   } catch {
-    // フォールバック: textarea を選択して execCommand
-    const ta = document.querySelector(".report-output");
-    if (ta) { ta.removeAttribute("readonly"); ta.select(); try { document.execCommand("copy"); } catch {} ta.setAttribute("readonly", ""); showToast("コピーしました"); }
-    else showToast("コピーに失敗しました");
+    // v214: 独立日報タブの出力textarea撤去後もiOSのClipboard API失敗時にコピーできるよう、
+    // 一時textareaをDOMへ置いてexecCommandへフォールバックする(常設UIは増やさない)。
+    const ta = document.createElement("textarea");
+    ta.value = report;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    ta.style.fontSize = "16px";
+    document.body.appendChild(ta);
+    ta.select();
+    let copied = false;
+    try { copied = document.execCommand("copy"); } catch {}
+    ta.remove();
+    showToast(copied ? "コピーしました" : "コピーに失敗しました");
   }
 }
 async function shareReport() {
@@ -4290,15 +4240,6 @@ async function shareReport() {
   if (!report) return showToast("先に日報を生成してください");
   try { await navigator.share({ text: report }); } catch { /* キャンセル等は無視 */ }
 }
-
-// v143: 貼り付け取込モーダル一式(parseAiFeedback/openAiImportModal/buildAiImportModal/
-// submitAiImport/_aiImportCtx)を削除した。v141でジャーナルのAIフィードバック欄自体を撤去して
-// 以来、これらを呼び出す唯一の経路(data-feedback-date paste・journal-import-aiボタン)が
-// 到達不能になっており、事実上の死コードだったため(CHANGES_v143.md参照)。
-// AIフィードバックからの提案取込は現在 autoIngestFeedback()(hydrateStaticMarkdown内、
-// 確認なしで候補チップへ自動登録)に一本化されている — このコメントの直後にある
-// aiMitChips/adoptAiMitはそちらとは別系統(state.journalMeta.aiMitCandidates)のため削除して
-// いない。
 
 // タスクシュート上部の MIT候補チップ(前日フィードバックの取り込み分、当日限り)
 function aiMitChips() {
@@ -4380,11 +4321,8 @@ let _draftDrag = null;      // ドラッグ中の一時情報 非永続
 let _draftUndo = null;      // v62: 下書きレイヤ操作(×削除・ドラッグ)の直前スナップショット(1段Undo)非永続
 let _draftUndoHistoryEntry = null;  // v62(m2): _draftUndoが削除操作由来なら、その時記録したaiScheduleHistoryエントリの参照(Undoで取り消す)
 let _pendingRejectReason = null;  // v62: ×直後の却下理由ワンタップ選択(任意・非ブロッキング)非永続 { title, entry }
-// v145レビュー対応: runAiMorningPlanの非同期処理(AIプランJSONのfetch等)が完了するまでtrue。
-// この間は他の非同期処理(残量低下時の回復Block下書き提案)が_scheduleDraftを取り合わないよう、
-// ティッカー経路(updateBatteryTick)は本フラグが立っていれば静かにスキップする(冪等マーカーは
-// 焼かない=次tickで再評価される)。起動時経路はrunAiMorningPlanのPromiseそのものに連鎖させる
-// (maybeAutoMorningPlan参照)ため本フラグを直接は見ない。
+// runAiMorningPlanの非同期処理(AIプランJSONのfetch等)が完了するまでtrue。
+// 朝プラン処理中かどうかを、手動実行の多重起動防止と再プラン競合回避に使う。
 let _morningPlanInFlight = false;
 let _zeroSecThemeDraft = null;  // v75: AIプラン_*.jsonのzeroSecThemes提案(0秒思考テーマ)。{ date, items:[{theme,reason}] } 非永続(_scheduleDraftと同じ思想)
 
@@ -4419,6 +4357,23 @@ function blockOccupiedRange(b, dayStartMin, dayEndMin) {
   const s = clamp(sRaw, dayStartMin, dayEndMin);
   const e = clamp(eRaw, dayStartMin, dayEndMin);
   return e > s ? [s, e] : null;
+}
+
+// [start,end)区間の配列(occupied)を、gaps(同じく[start,end)の配列)から差し引く。
+// computeFreeGapsは実Block(plannedStartAt/plannedEndAt)しか占有として見ないため、
+// 「_scheduleDraftの既存下書き項目」のような非永続の占有区間を追加で差し引くための汎用ヘルパー
+// (v145レビュー対応で導入。v214: 回復下書き提案の削除後もAI再配置が使用するため存置)。
+function subtractOccupiedIntervals(gaps, occupied) {
+  if (!occupied.length) return gaps.map(([s, e]) => [s, e]);
+  return occupied.reduce((acc, [os, oe]) => {
+    const next = [];
+    acc.forEach(([s, e]) => {
+      if (oe <= s || os >= e) { next.push([s, e]); return; }  // 重ならない
+      if (os > s) next.push([s, os]);
+      if (oe < e) next.push([oe, e]);
+    });
+    return next;
+  }, gaps.map(([s, e]) => [s, e]));
 }
 
 // v59: 空き時間計算(純粋関数)。plannedStartAt を持つ当日Block(ルーティンのrec Blockも含む)
@@ -4644,11 +4599,8 @@ function draftBarHTML() {
   if (!_scheduleDraft || _scheduleDraft.date !== state.selectedDate) return "";
   const skipped = _scheduleDraft.skipped || [];  // v59: 朝プランで「配置しない」と判断した候補
   // v62: AI由来(自宅PCバッチ生成のAIプラン)か決定論配置由来かを小さく区別表示する
-  // v146(UI改善計画Phase1-6): battery-recovery(v145)由来は出どころ不明な「⚙ 決定論配置」
-  // ではなく「🔋 回復候補」と表示し、機能名から来ていることが分かるようにする
   const sourceLabel = _scheduleDraft.source === "ai-plan" ? "🤖 AIプラン由来"
     : _scheduleDraft.source === "ai-replan" ? "🤖 AI再プラン由来"
-    : _scheduleDraft.source === "battery-recovery" ? "🔋 回復候補"
     : "⚙ 決定論配置";
   // v199(4b・中3修正): 再配置で入り切らなかったBlockが1件以上あれば警告行を出す(トーストと同旨・
   //   理由別文言はrearrangeSkipMessageで共通化)。中2修正: 色は#c0392bのハードコードをやめ、
@@ -4840,7 +4792,7 @@ function confirmScheduleDraft() {
       block.carryCount = (src?.carryCount || 0) + 1;  // v61: 繰り越し回数を1つ積み上げる
     }
     state.blocks.push(block);
-    // v145レビュー対応: item.source優先(合流下書きでの出どころ誤ラベル防止。draft-discard/removeと同じ方針)
+    // item.source優先(合流下書きでの出どころ誤ラベル防止。draft-discard/removeと同じ方針)
     recordScheduleHistory(it, "confirmed", date, it.source || draftSource);
     // v59: 繰り越し由来の下書きは元Blockに migratedTo を設定(carryOverBlockと同じ二重繰越防止セマンティクス)
     if (it.carryFromId) {
@@ -5219,8 +5171,8 @@ async function runAiMorningPlan({ auto = false } = {}) {
     if (!auto) showToast("再プラン依頼中です。応答後に朝プランを実行してください");
     return;
   }
-  // v145レビュー対応: 完了(どの早期returnでもfinallyで確実に)までフラグを立て、回復Block
-  // 下書き提案(ティッカー経路)がこの間に割り込んで_scheduleDraftを取り合わないようにする。
+  // 完了(どの早期returnでもfinallyで確実に)までフラグを立て、手動の多重実行で
+  // _scheduleDraftを取り合わないようにする。
   _morningPlanInFlight = true;
   try {
   const date = todayISO();
@@ -5307,40 +5259,6 @@ async function runAiMorningPlan({ auto = false } = {}) {
   render();
   } finally {
     _morningPlanInFlight = false;
-  }
-}
-
-// v59: 朝の一括プランニングの自動起動(opt-in・既定OFF)。maybeAutoMorningReview と同じパターン。
-//      その日初めてアプリを開いたのが10:00以前 かつ 当日の非ルーティンBlockが0件のときだけ実行し、
-//      1日1回ガード(localStorage)。ガードは実行を決めた時点で立てるため、破棄しても再自動起動しない。
-const AUTO_MORNING_PLAN_KEY = "taskchute-auto-morning-plan-date";  // 端末ローカル
-
-// v145レビュー対応: 戻り値をvoidからPromise|nullへ変更した(実際にrunAiMorningPlanを起動した
-// ときだけそのPromiseを返す。起動条件を満たさなかった場合はnull)。起動時経路(state.selectedDate
-// ===todayISO()の起動シーケンス)が「朝プランの完了後に回復Block下書き提案を連鎖評価する」ために
-// 参照する。既存の呼び出し箇所(setTimeout(maybeAutoMorningPlan, ...)、戻り値を使わない)は
-// 戻り値の型変更による影響を受けない。
-function maybeAutoMorningPlan() {
-  if (!state.settings.ai?.autoMorningPlan) return null;
-  const today = todayISO();
-  try {
-    if (localStorage.getItem(AUTO_MORNING_PLAN_KEY) === today) return null;  // 1日1回(失敗・破棄後も再試行しない)
-  } catch { /* 読めなければ続行 */ }
-  const now = new Date();
-  if (now.getHours() * 60 + now.getMinutes() > 10 * 60) return null;  // 10:00より後の初回起動は対象外
-  const hasNonRoutineToday = state.blocks.some((b) =>
-    !b.deleted && b.date === today && b.category !== "ルーティン" && !b.recurrenceGroupId);
-  if (hasNonRoutineToday) return null;  // 既に当日のBlockがあれば白紙提案の出番ではない
-  try { localStorage.setItem(AUTO_MORNING_PLAN_KEY, today); } catch { /* 記録できなくても続行 */ }
-  // v62: runAiMorningPlan は AIプランJSONのfetchを含むため async 化した。同期 throw は
-  //      try/catch で、非同期 reject は .catch() で拾い、どちらも静かに握りつぶす(手動実行は常に可能)。
-  try {
-    return runAiMorningPlan({ auto: true }).catch((error) => {
-      console.warn("朝プラン自動下書きをスキップ:", error.message);
-    });
-  } catch (error) {
-    console.warn("朝プラン自動下書きをスキップ:", error.message);
-    return null;
   }
 }
 
@@ -5460,7 +5378,7 @@ function crossSearchHits(query) {
     push("feedback", "AIフィードバック", date, text, { view: "journal", date });
   });
   Object.entries(state.reports || {}).forEach(([date, text]) => {
-    push("report", "日報", date, text, { view: "reports", date });
+    push("report", "日報", date, text, { view: "journal", date });
   });
   // v53: アーカイブ合流(オプトイン時のみ。ジャンプ先は無い=スニペット閲覧)
   if (_archiveCache && document.querySelector("#cross-search-archive")?.checked) {
@@ -5703,7 +5621,6 @@ function buildMigrationRitualModal(block, nextCount) {
           <button class="btn" data-action="migration-ritual-choice" data-choice="today">今日やる(MIT候補に)</button>
           <button class="btn" data-action="migration-ritual-choice" data-choice="decompose">分解する(タイトル編集へ)</button>
           <button class="btn" data-action="migration-ritual-choice" data-choice="release">手放す(Wishへ移動 or 削除)</button>
-          <button class="btn ghost" data-action="migration-ritual-choice" data-choice="avoid">Avoid Listへ記録して手放す</button>
           <button class="btn ghost" data-action="migration-ritual-choice" data-choice="carry">それでも繰り越す</button>
         </div>
       </div>
@@ -5733,30 +5650,6 @@ function resolveMigrationRitual(choice) {
     }
     closeModal();
     saveAndRender(releaseMsg);
-    return;
-  }
-
-  // v66: 10x機構(designs/10x-mechanism.md 2-4)。「手放す」の第3の選択肢 — 3回以上繰り越された
-  // タスクは「無自覚な繰り返し作業」の実データそのものであり削除候補として精度が高いため、
-  // 既存のAvoid List(state.settings.avoidList、addAvoidと同じ形の項目)へそのまま記録して手放す。
-  // Wishへ迷わせず即座に「やらないこと」へ倒す点が release(Wish or 削除の二択)との違い。
-  if (choice === "avoid") {
-    const text = (src?.title || "").trim();
-    if (text) {
-      state.settings.avoidList = [...(state.settings.avoidList || []), {
-        id: crypto.randomUUID(),
-        text,
-        createdAt: nowDateTime(),
-        violations: []
-      }];
-    }
-    state.blocks = state.blocks.map((b) => b.id === srcId ? { ...b, deleted: true, updatedAt: nowDateTime() } : b);
-    if (origin === "draft" && _scheduleDraft) {
-      _scheduleDraft.items = _scheduleDraft.items.filter((x) => x.id !== draftItemId);
-      if (!_scheduleDraft.items.length) _scheduleDraft = null;
-    }
-    closeModal();
-    saveAndRender(text ? "Avoid Listへ記録し、手放しました" : "手放しました(削除)");
     return;
   }
 
@@ -6497,60 +6390,6 @@ function toggleCriteriaRequest(id) {
   updateTaskField(id, "criteriaRequest", !task.criteriaRequest);
   render();
 }
-
-// =============================================================
-// v17: Avoid List(やらないこと)タブ
-// v165: renderAvoidはsrc/features/avoid.jsへ抽出済み(冒頭のimport参照)。
-//   addAvoid/deleteAvoid/updateAvoidText/toggleAvoidViolationは操作系(state書き込み+保存ヘルパー依存)のため、
-//   dispatcher整理の段階まで意図的にここへ残す(監督者裁定)。
-// =============================================================
-
-function addAvoid() {
-  const input = document.querySelector("#avoidTitle");
-  const text = input?.value.trim();
-  if (!text) return showToast("やらないことを入力してください");
-  const item = {
-    id: crypto.randomUUID(),
-    text,
-    createdAt: nowDateTime(),
-    violations: []
-  };
-  state.settings.avoidList = [...(state.settings.avoidList || []), item];
-  if (input) input.value = "";
-  saveAndRender("やらないことを追加しました");
-}
-
-function deleteAvoid(id) {
-  state.settings.avoidList = (state.settings.avoidList || []).filter((it) => it.id !== id);
-  saveAndRender("削除しました");
-}
-
-function toggleAvoidViolation(id) {
-  const today = todayISO();
-  let removed = false;
-  state.settings.avoidList = (state.settings.avoidList || []).map((it) => {
-    if (it.id !== id) return it;
-    const violations = Array.isArray(it.violations) ? it.violations : [];
-    removed = violations.includes(today);
-    return {
-      ...it,
-      violations: removed
-        ? violations.filter((date) => date !== today)
-        : [...violations, today],
-      updatedAt: nowDateTime()
-    };
-  });
-  saveAndRender(removed ? "当日の抵触記録を取り消しました" : "当日の抵触記録を追加しました");
-}
-
-function updateAvoidText(id, text) {
-  state.settings.avoidList = (state.settings.avoidList || []).map((it) =>
-    it.id === id ? { ...it, text, updatedAt: nowDateTime() } : it
-  );
-  saveState();
-}
-
-// =============================================================
 
 // v63: WIP上限アラート(提案2)。「進行中の仕事は3つまで」の原則に対し、
 //      アクティブ(status=active・kind=normal)なProjectが4件以上になったら気づかせる。
@@ -8121,16 +7960,12 @@ function conditionBudget(date) {
 // マイグレーションと computeBatteryLevel の両方から参照する単一の正本。
 // v144レビュー対応(M4): 減衰開始時刻はtype="time"入力に対応するため分単位
 // (decayStartMinutes)で保持する(420=07:00固定。K確定の意味自体は不変)。
-// v145: 行動接続(残量低下時の回復Block下書き提案)のパラメタを追加。既定は全面OFF/40%
-// (opt-in。既存の3パラメタと同じくnormalizeStateのマイグレーション対象)。
 function defaultBatterySettings() {
   return {
     start: { deficit: 30, low: 40, normal: 50 },
     decayPerHour: 3,
     decayStartMinutes: 420,
-    max: 50,
-    recoveryDraft: false,
-    recoveryThresholdPct: 40
+    max: 50
   };
 }
 
@@ -8149,8 +7984,6 @@ function clampBatteryFieldValue(field, raw) {
   if (field === "decayPerHour") return Math.max(0, finite ?? 0);
   if (field === "max") return Math.max(1, finite ?? 1);
   if (field === "decayStartMinutes") return (finite !== null && finite >= 0 && finite <= 1439) ? finite : 420;
-  // v145: 回復提案の発火しきい値(開始値に対する%)。1〜100の範囲外・非数は既定40へ倒す。
-  if (field === "recoveryThresholdPct") return (finite !== null && finite >= 1 && finite <= 100) ? finite : 40;
   return finite ?? 0;
 }
 
@@ -8261,226 +8094,6 @@ function batteryCurvePoints(dateKey, nowMinutes, opts = {}) {
     }
   }
   return points;
-}
-
-// =========================================================
-// v145: エネルギーバッテリー「行動接続」— 残量低下時の回復Block下書き提案(opt-in・既定OFF)。
-// 設計提案書§3「行動接続(後続フェーズ・任意)」の実装。新しいUIは作らず、既存の
-// _scheduleDraft+draftレイヤ(runAiMorningPlanと同じ機構)へ1〜2件の下書きBlockとして
-// 静かに流し込むだけ(通知・アラート・トーストは出さない)。
-// =========================================================
-
-const BATTERY_RECOVERY_LOOKBACK_DAYS = 28;          // 「直近4週」固定(判定用途のため。P2 rule1と同じ考え方)
-const BATTERY_RECOVERY_MIN_SAMPLES = 3;             // n>=3件揃わないタイトルは候補にしない(過剰解釈防止)
-const BATTERY_RECOVERY_MAX_ITEMS = 2;               // 提案は最大2件
-const BATTERY_RECOVERY_DURATION_FALLBACK_MIN = 20;  // 実績時間が1件も無いタイトル用の既定所要時間
-const BATTERY_RECOVERY_DATES_MAX = 180;             // feedbackIngestedDates等と同じ軽量配列の上限思想
-
-// 完了Blockのタイトル別net(charge−discharge)中央値(回復提案の候補選定専用)。
-// computeChargeTopCategories(カテゴリ単位、v143。計器盤「今週のヒント」用)と同じ思想だが、
-// K指示は「ルーティン/タイトル単位」のため別実装にした(カテゴリだと粒度が粗く、個々の
-// 充電系ルーティン・タスクを名指しできないため)。n>=3・net中央値>0のみ、中央値降順。
-// durationMinは同タイトルの実績所要時間(_actualDurationMin)の中央値。1件も無ければ
-// BATTERY_RECOVERY_DURATION_FALLBACK_MINへフォールバックする(下書き配置の長さに使う)。
-function computeChargeTopTitles(since, today) {
-  const doneInRange = state.blocks.filter((b) => !b.deleted && b.completed && b.title && b.date >= since && b.date <= today);
-  const byTitle = {};
-  doneInRange.forEach((b) => {
-    const entry = (byTitle[b.title] ||= { nets: [], durations: [], category: "" });
-    entry.nets.push(Number(b.charge || 0) - Number(b.discharge || 0));
-    const d = _actualDurationMin(b);
-    if (d != null) entry.durations.push(d);
-    if (b.category) entry.category = b.category;  // 表示・下書き配置用に直近の完了分のカテゴリを採用
-  });
-  return Object.entries(byTitle)
-    .filter(([, v]) => v.nets.length >= BATTERY_RECOVERY_MIN_SAMPLES)
-    .map(([title, v]) => ({
-      title,
-      med: median(v.nets),
-      n: v.nets.length,
-      category: v.category,
-      durationMin: v.durations.length ? Math.round(median(v.durations)) : BATTERY_RECOVERY_DURATION_FALLBACK_MIN
-    }))
-    .filter((r) => r.med > 0)
-    .sort((a, b) => b.med - a.med);
-}
-
-// [start,end)区間の配列(occupied)を、gaps(同じく[start,end)の配列)から差し引く。
-// computeFreeGapsは実Block(plannedStartAt/plannedEndAt)しか占有として見ないため、
-// 「_scheduleDraftの既存下書き項目」のような非永続の占有区間を追加で差し引くための汎用ヘルパー
-// (v145レビュー対応: 朝プラン下書きの真上に回復提案が重なる事故の根絶)。
-function subtractOccupiedIntervals(gaps, occupied) {
-  if (!occupied.length) return gaps.map(([s, e]) => [s, e]);
-  return occupied.reduce((acc, [os, oe]) => {
-    const next = [];
-    acc.forEach(([s, e]) => {
-      if (oe <= s || os >= e) { next.push([s, e]); return; }  // 重ならない
-      if (os > s) next.push([s, os]);
-      if (oe < e) next.push([oe, e]);
-    });
-    return next;
-  }, gaps.map(([s, e]) => [s, e]));
-}
-
-// 判定(決定論・1日1回冪等)+配置。opt-in設定がONで、当日の残量が閾値
-// (開始値×settings.battery.recoveryThresholdPct%)を下回っていれば、直近4週の
-// computeChargeTopTitles上位1〜2件を空き時間(computeFreeGaps)へ下書きBlockとして配置する。
-// 冪等ガード(state.batteryRecoveryDraftDates)は「発火条件が成立した時点」で立てる
-// (maybeAutoMorningPlanと同じ思想: 候補0件・空き時間0件で何も置けなかった日も再試行しない)。
-// 戻り値は「新規に下書きを追加したか」(呼び出し側のrender()要否判定に使う)。
-function maybeSuggestRecoveryDraft(nowMinutes) {
-  if (!state.settings.battery?.recoveryDraft) return false;  // 既定OFF・opt-in
-  const today = todayISO();
-  // v145/v193レビュー対応: 朝プランまたは再プランの非同期処理と_scheduleDraftを
-  // 取り合わないよう、処理中はこのtickをスキップする(冪等マーカーは焼かない)。
-  if (_morningPlanInFlight || _replanPending) return false;
-  if (!Array.isArray(state.batteryRecoveryDraftDates)) state.batteryRecoveryDraftDates = [];
-  // v150レビュー対応(項目5、Codex指摘): マーカーは{date, titles}のオブジェクト配列(下記参照)。
-  if (state.batteryRecoveryDraftDates.some((e) => e && e.date === today)) return false;  // 冪等: 1日1回
-
-  const def = defaultBatterySettings();
-  const cfg = state.settings.battery || def;
-  const startCfg = { ...def.start, ...(cfg.start || {}) };
-  const budgetLevel = conditionBudget(today).level;
-  const startKey = budgetLevel === "deficit" ? "deficit" : budgetLevel === "low" ? "low" : "normal";
-  const startValue = Number(startCfg[startKey]);
-  const thresholdPct = Number.isFinite(cfg.recoveryThresholdPct) ? cfg.recoveryThresholdPct : def.recoveryThresholdPct;
-  const threshold = startValue * (thresholdPct / 100);
-  const level = computeBatteryLevel(today, nowMinutes, { budgetLevel });
-  if (level >= threshold) return false;  // 閾値以上なら対象外
-
-  // ここから先は「発火条件が成立した」とみなし、結果(候補0件・空き枠0件含む)に関わらず
-  // 1日1回のガードを立てる(空振りのたびに毎分再試行しないため)。titlesは実際に配置できた
-  // ぶんをplaceRecoveryDraftCandidates側で後から書き込む(まずは空配列で冪等マーカーだけ立てる)。
-  const marker = { date: today, titles: [] };
-  state.batteryRecoveryDraftDates.push(marker);
-  if (state.batteryRecoveryDraftDates.length > BATTERY_RECOVERY_DATES_MAX) {
-    state.batteryRecoveryDraftDates = state.batteryRecoveryDraftDates.slice(-BATTERY_RECOVERY_DATES_MAX);
-  }
-
-  return placeRecoveryDraftCandidates(today, nowMinutes);
-}
-
-// v150(UI改善計画Phase4b・S7): 候補計算+配置+_scheduleDraftへのマージ本体。
-// maybeSuggestRecoveryDraft(新規発火時)と maybeRebuildRecoveryDraft(下記、PWA破棄後の
-// 再構築時)の両方から呼ぶ共有部分に切り出した。冪等マーカー・閾値判定は呼び出し側の
-// 責務(ここでは行わない)。
-// v150レビュー対応(項目5、Codex指摘): 第3引数opts.restoreTitlesを指定すると「再構築モード」
-// になる。新規発火(上位N件を毎回計算し直す)とは違い、渡されたタイトル一覧のうち当日まだ
-// 実Block化されていない(=未確定)ものだけを対象にする——次点候補が繰り上がって新規提案
-// されることはない。
-function placeRecoveryDraftCandidates(today, nowMinutes, opts = {}) {
-  const restoreTitles = Array.isArray(opts.restoreTitles) ? opts.restoreTitles : null;
-  // v145レビュー対応(当日重複候補の除外): aiScheduleCandidates(app.js:3848近辺)の規約に
-  // 合わせ、「当日すでに同名Blockが存在する」「当日の_scheduleDraftに同名項目がある」タイトルは
-  // 候補から除外する(夕方発火時に今日もうやった「散歩」を再提案しない)。MAX_ITEMSへ絞る前に
-  // 除外することで、除外後も上位2件をきちんと拾えるようにする。
-  const existingDraftForToday = (_scheduleDraft && _scheduleDraft.date === today) ? _scheduleDraft : null;
-  const todaysBlockTitles = new Set(state.blocks.filter((b) => !b.deleted && b.date === today).map((b) => b.title));
-  const todaysDraftTitles = new Set((existingDraftForToday?.items || []).map((it) => it.title));
-  const since = addDays(today, -(BATTERY_RECOVERY_LOOKBACK_DAYS - 1));
-  let candidates;
-  if (restoreTitles) {
-    // 再構築モード: 元々提案したタイトルのうち未確定のものだけを、統計(所要時間・カテゴリ・
-    // net中央値)と突き合わせて復元する。computeChargeTopTitles側で該当タイトルが見つからない
-    // (直近4週データの入れ替わり等)場合は静かにスキップする(クラッシュしない)。
-    const pool = new Map(computeChargeTopTitles(since, today).map((c) => [c.title, c]));
-    candidates = restoreTitles
-      .filter((t) => !todaysBlockTitles.has(t) && !todaysDraftTitles.has(t))
-      .map((t) => pool.get(t))
-      .filter(Boolean);
-  } else {
-    candidates = computeChargeTopTitles(since, today)
-      .filter((c) => !todaysBlockTitles.has(c.title) && !todaysDraftTitles.has(c.title))
-      .slice(0, BATTERY_RECOVERY_MAX_ITEMS);
-  }
-  if (!candidates.length) { saveState(); return false; }
-
-  const DAY_START = 5 * 60, DAY_END = 23 * 60;
-  const nowFloor = Math.min(DAY_END, Math.ceil(nowMinutes / 15) * 15);
-  const rawGaps = computeFreeGaps(today, DAY_START, DAY_END)
-    .map(([s, e]) => [Math.max(s, nowFloor), e])
-    .filter(([s, e]) => e - s >= 15);
-  // v145レビュー対応(既存下書きとの重なり防止): computeFreeGapsは実Blockしか見ないため、
-  // 当日の既存_scheduleDraft項目(朝プラン等)の占有区間を追加で差し引く。
-  const draftOccupied = (existingDraftForToday?.items || []).map((it) => [it.start, it.start + it.minutes]);
-  const gaps = subtractOccupiedIntervals(rawGaps, draftOccupied).filter(([s, e]) => e - s >= 15);
-
-  const placed = [];
-  candidates.forEach((c) => {
-    const minutes = clamp(c.durationMin, 15, 120);
-    const gapIdx = gaps.findIndex((g) => g[1] - g[0] >= minutes);
-    if (gapIdx === -1) return;  // 入り切らなければ配置しない(詰め込まない、既存方針と同じ)
-    const start = gaps[gapIdx][0];
-    placed.push({
-      id: crypto.randomUUID(), title: c.title, taskId: "", category: c.category || "",
-      start, minutes, aiStart: start, aiMinutes: minutes,
-      source: "battery-recovery",  // v145レビュー対応: 合流時も学習ログでitem単位の出どころを残す
-      reason: `回復提案: 直近4週の充電効果(net中央値${signed(Math.round(c.med))})が高いBlock`
-    });
-    // v145レビュー対応: 既存のfallbackMorningPlanと同じブロック間バッファを空ける
-    gaps[gapIdx][0] += minutes + MORNING_PLAN_BUFFER_MIN;
-    if (gaps[gapIdx][1] - gaps[gapIdx][0] < 15) gaps.splice(gapIdx, 1);
-  });
-
-  // v150レビュー対応(項目5): 新規発火時(restoreTitles無し)だけ、実際に配置できたタイトルを
-  // マーカーへ書き戻す(将来のmaybeRebuildRecoveryDraftが参照する「元々提案した候補」)。
-  // 再構築モード(restoreTitles指定時)はマーカーを書き換えない——「元の提案どおり」を保つ。
-  // saveState()より前に反映することで、この後の1回のsaveStateでまとめて永続化する。
-  if (placed.length && !restoreTitles) {
-    const marker = state.batteryRecoveryDraftDates.find((e) => e && e.date === today);
-    if (marker) marker.titles = placed.map((p) => p.title);
-  }
-
-  saveState();
-  if (!placed.length) return false;
-
-  // 既存の下書き(朝プラン等)があれば末尾に合流させ、無ければ新規に作る。
-  // source:"battery-recovery" はdraftBarHTMLの表示分岐(ai-plan以外は「⚙ 決定論配置」表示)に
-  // そのまま乗る — 新規ラベル・新規UIは作らない。
-  if (existingDraftForToday) {
-    _scheduleDraft.items = [..._scheduleDraft.items, ...placed];
-    // v145レビュー対応: 新規追加分がある以上、前セッションのUndoは意味を持たないため
-    // 新規作成時と対称にリセットする(mergeでも同じ扱いに揃える)。
-    _draftUndo = null; _draftUndoHistoryEntry = null;
-  } else {
-    _scheduleDraft = { date: today, items: placed, skipped: [], source: "battery-recovery" };
-    _draftUndo = null; _draftUndoHistoryEntry = null;
-  }
-  return true;
-}
-
-// v150(UI改善計画Phase4b・S7): 回復候補ドラフトの再構築(PWA破棄対策)。
-// _scheduleDraft はセッション限りの非永続変数のため、iOSがプロセスを破棄した後の再起動では
-// 「冪等マーカー(state.batteryRecoveryDraftDates)は当日分が立ったまま、_scheduleDraftの
-// battery-recovery項目だけが消えている」状態になりうる(提案が出た事実だけが残り、Homeの
-// 「回復候補」→Timelineの導線が失われる、決定10の指摘)。新規stateフィールドは追加せず、
-// 「当日の冪等マーカーあり(=発火条件は成立済み)+現在のdraftにbattery-recovery項目が無い
-// +その候補がまだ実Blockとして確定していない(=未確定)」を起動時に検知したときだけ、
-// 候補計算(placeRecoveryDraftCandidates、閾値判定は再実行しない)をもう一度走らせて
-// 再構築する。呼び出しは起動シーケンス内で1回のみ(下記起動処理を参照)。
-// updateBatteryTickの毎分ループには載せない — 同一セッション内でユーザーが確定/却下した
-// 直後にも「マーカーあり+draft無し」の条件は一致してしまうため、そこで再度呼ぶと
-// 確定・却下済みの提案を蒸し返してしまう(このtradeoffは「新規フィールドを増やさない」方針を
-// 優先した結果。詳細はCHANGES_v150.md参照)。
-// v150レビュー対応(項目5、Codex指摘): マーカーには「その日実際に提案したタイトル一覧」も
-// 記録している(placeRecoveryDraftCandidates参照)。再構築はこの記録済みタイトルのうち
-// 未解決(=当日まだ同名の実Blockが無い)ものだけを復元対象にし、
-// computeChargeTopTitlesを素で再実行した「次点候補」を新規に繰り上げ提案することはない。
-// 旧形式(titles不明、文字列だった頃のマーカー)はtitlesが空配列のまま補完される
-// (normalizeState参照)ため、再構築の対象から自然に外れる(「旧形式の日は再構築スキップ」)。
-function maybeRebuildRecoveryDraft(nowMinutes) {
-  if (!state.settings.battery?.recoveryDraft) return false;
-  const today = todayISO();
-  const marker = Array.isArray(state.batteryRecoveryDraftDates)
-    ? state.batteryRecoveryDraftDates.find((e) => e && e.date === today)
-    : null;
-  if (!marker || !Array.isArray(marker.titles) || !marker.titles.length) return false;
-  const alreadyLive = _scheduleDraft && _scheduleDraft.date === today
-    && _scheduleDraft.items.some((it) => it.source === "battery-recovery");
-  if (alreadyLive) return false;  // このブート内では何も失っていない
-  if (_morningPlanInFlight || _replanPending) return false;  // 朝/再プラン生成と競合しないよう待つ
-  return placeRecoveryDraftCandidates(today, nowMinutes, { restoreTitles: marker.titles });
 }
 
 async function importSleepCsv(file) {
@@ -9294,7 +8907,7 @@ function sanitizeHTML(html) {
 }
 
 // v83: UX監査B8 — renderMarkdownの結果メモ化。
-// ジャーナル/ホーム「AIから」/日報タブは再描画(完了トグル1回等)のたびに前日分まで
+// ジャーナル/ホーム「AIから」は再描画(完了トグル1回等)のたびに前日分まで
 // marked.parse→sanitizeHTMLを再実行していた(B7と重複する無駄な再計算)。
 // 入力テキストそのものをキー、サニタイズ済みHTMLを値とする単純キャッシュで再計算を避ける。
 // cachedFeedback[date]は新着fetchで文字列自体が変わるため、キーが変わり自然に新規parseされる
@@ -9329,37 +8942,6 @@ function renderMarkdownUncached(text) {
   } catch {
     return `<pre style="white-space:pre-wrap; font-family:inherit">${escapeHTML(text)}</pre>`;
   }
-}
-
-function renderReports() {
-  const report = state.reports[state.selectedDate] || "";
-  // v75: 日報を書く前に前日のAIフィードバックを参照できるよう、既定closedのdetailsで表示する
-  //      (フェイルソフト: 無ければ何も出さない)。読み取り経路は「AIから」カードと同じcachedFeedback。
-  const prevDate = addDays(state.selectedDate, -1);
-  const prevFb = cachedFeedback[prevDate] || state.feedback[prevDate] || "";
-  const prevFeedbackHTML = prevFb ? `
-    <details class="report-prev-feedback" style="margin-bottom:12px">
-      <summary class="muted" style="cursor:pointer; font-size:12px; font-weight:600">🤖 前日(${escapeHTML(prevDate)})のAIフィードバックを見る</summary>
-      <div class="md-render readonly-md" style="margin-top:8px">${renderMarkdown(prevFb)}</div>
-    </details>` : "";
-  return `
-    ${renderHeader("生成AIへ渡す素材", "日報")}
-    ${renderDateBar()}
-    ${prevFeedbackHTML}
-    <div class="field" style="margin-bottom:10px">
-      <label class="field-label">今日AIに聞きたいこと(任意・1行)</label>
-      <input class="input" id="reportAskInput" style="font-size:16px" placeholder="例: 来週の12WY目標、このペースで間に合いそう?">
-      <div class="muted" style="font-size:11px; margin-top:4px">日報生成時に「## AIへの質問」節として日報へ加わり、翌朝のAIコーチングが冒頭で回答します。空欄なら節ごと省略されます。</div>
-    </div>
-    <div class="row" style="margin-bottom:12px; flex-wrap:wrap; gap:8px">
-      <button class="btn primary" data-action="generate-report">日報を生成</button>
-      ${report ? `<button class="btn" data-action="report-copy-ai">📋 AI用にコピー</button>` : ""}
-      ${report && typeof navigator !== "undefined" && navigator.share ? `<button class="btn" data-action="report-share-ai">↗ 共有</button>` : ""}
-      <button class="btn" data-action="download-report">Markdown保存</button>
-    </div>
-    ${report ? `<div class="muted" style="font-size:11.5px; margin-bottom:10px; line-height:1.6">コピー/共有で外部AIへ渡し、返信はジャーナルの「AIフィードバック」欄に貼り付け(または .md アップロード)で取り込めます。</div>` : ""}
-    <textarea class="textarea report-output" readonly>${escapeHTML(report || "まだ日報がありません。")}</textarea>
-  `;
 }
 
 // v148(UI改善計画Phase3-2): 設定13パネルを目的別4群のdetails(既定閉、homeFoldSection流用)へ。
@@ -9433,20 +9015,6 @@ function renderSettingsBatteryPanel() {
       <input class="input" type="number" min="1" step="1" data-setting-battery-field="max"
         value="${state.settings.battery.max}">
     </label>
-    <label class="checkbox-line">
-      <input type="checkbox" data-setting-battery-recoverydraft ${state.settings.battery.recoveryDraft ? "checked" : ""}>
-      🔋 残量低下時に回復Blockを下書き提案する(既定OFF)
-    </label>
-    <label>提案する残量のしきい値(開始値に対する%、既定40)
-      <input class="input" type="number" min="1" max="100" step="1" data-setting-battery-field="recoveryThresholdPct"
-        value="${state.settings.battery.recoveryThresholdPct}">
-    </label>
-    <div class="muted" style="font-size:11px; line-height:1.6">
-      ONの場合、当日の残量がこのしきい値を下回った時点で1日1回、直近4週の実績で充電効果
-      (充電−放電の中央値)が高いBlockを1〜2件、タイムラインの下書きへ静かに配置します
-      (通知・アラートは出しません)。承認/個別却下/ドラッグ調整/一括確定は既存の下書き
-      バーの操作(📋 下書きスケジュールと同じ)をそのまま使います。
-    </div>
   `;
 }
 
@@ -9554,10 +9122,6 @@ function renderSettingsMorningPlanPanel() {
       「🌅 朝プラン」は、繰越・WBS・MIT候補を空き時間へ機械的に前詰め配置する決定論ロジックで動作します
       (APIキーは不要)。AI活用は自宅PCのバッチ処理からのファイル連携(下記AIフィードバック欄)に限定しています。
     </div>
-    <label class="checkbox-line">
-      <input type="checkbox" data-ai-automorningplan ${state.settings.ai?.autoMorningPlan ? "checked" : ""}>
-      🌅 朝の一括プランニングを自動実行(10:00までの初回起動で当日の予定が空なら、繰越+WBS+MITの下書きを自動配置)
-    </label>
   `;
 }
 
@@ -9822,7 +9386,6 @@ const moreGroups = [
     { id: "home", label: "ホーム", mark: "🏠" },
     { id: "wbs", label: "WBS", mark: "🧩" },
     { id: "wish", label: "やりたい", mark: "✦" },
-    { id: "avoid", label: "やらない", mark: "✕" },
     { id: "vision", label: "ビジョン", mark: "🧭" }
   ] },
   { id: "think", label: "思考", items: [
@@ -9831,8 +9394,7 @@ const moreGroups = [
   { id: "review", label: "振り返り", items: [
     { id: "weekly", label: "週次", mark: "🗓" },
     { id: "stats", label: "計器盤", mark: "📊" },
-    { id: "ai-reports", label: "AIレポート", mark: "🤖" },
-    { id: "reports", label: "日報", mark: "📤" }
+    { id: "ai-reports", label: "AIレポート", mark: "🤖" }
   ] },
   { id: "tools", label: "ツール", items: [
     { id: "pomodoro", label: "ポモドーロ", mark: "🍅" },
@@ -13391,7 +12953,7 @@ function generateReport(dateArg, { quiet = false } = {}) {
       : []),
   ];
 
-  // v68: 非同期AI対話 — 日報タブの「今日AIに聞きたいこと」(origin:"user")のうち未解決のものを
+  // v68: 非同期AI対話 — origin:"user"の未解決質問を
   //      「## AIへの質問」節として出す。空(該当なし)なら節ごと省略。coach-daily.sh は日報全文を
   //      そのまま読むため、この節を追加するだけで翌朝のAIコーチングが応答できる(バッチ側改修不要)。
   const userQuestions = (state.questions || []).filter((q) =>
@@ -13588,13 +13150,8 @@ function generateReport(dateArg, { quiet = false } = {}) {
   const report = lines.join("\n");
   state.reports[date] = report;
   if (quiet) { saveState(); return report; }  // v51: バックグラウンド生成(画面を動かさない)
-  // v81: このあと currentView を "reports" に切り替えるが、トーストがそれを予告しないまま
-  // 画面が切り替わり「押したら黙って画面が変わった」体験になっていた(UX監査A4)。
-  // 遷移することを文言で明示する。
-  saveAndRender("日報を生成しました → 日報タブに移動します");
-  state.currentView = "reports";
-  saveState();
-  render();
+  // v214: 独立した日報タブを廃止したため、生成後もジャーナルに留まる。
+  saveAndRender("日報を生成しました");
   return report;
 }
 
@@ -15234,10 +14791,6 @@ function parseAiInsights(raw) {
         }));
       if (rows.length) data.wishRipe = rows;
     }
-    if (parsed.avoidInsight && typeof parsed.avoidInsight === "object"
-      && typeof parsed.avoidInsight.body === "string" && parsed.avoidInsight.body.trim()) {
-      data.avoidInsight = { body: parsed.avoidInsight.body.trim() };
-    }
     if (parsed.zeroPattern && typeof parsed.zeroPattern === "object"
       && typeof parsed.zeroPattern.body === "string" && parsed.zeroPattern.body.trim()) {
       data.zeroPattern = { body: parsed.zeroPattern.body.trim() };
@@ -15281,12 +14834,6 @@ function aiInsightsPanelHTML(kind, taskId = "") {
     return `<section class="ai-insights" data-insight="wish">
       <div class="ai-insights-head"><strong>AI 熟成判定</strong>${freshness}</div>
       <div class="ai-insights-body">${escapeHTML(row.reason)}</div>
-    </section>`;
-  }
-  if (kind === "avoid" && data.avoidInsight) {
-    return `<section class="panel ai-insights" data-insight="avoid">
-      <div class="ai-insights-head"><strong>AI 所見</strong>${freshness}</div>
-      <div class="ai-insights-body">${escapeHTML(data.avoidInsight.body).replace(/\n/g, "<br>")}</div>
     </section>`;
   }
   if (kind === "zero" && data.zeroPattern) {
@@ -15562,7 +15109,7 @@ async function hydrateStaticMarkdown() {
   // v137: 入力中/IME変換中は即renderせず保留する(review.md:28。renderDeferringForFocus参照)。
   // v161: "stats"(計器盤)を追加。エネルギーカーブの新着fetchが完了してもこの画面を開いた
   //       ままだと再描画されず節が出ないままになる不具合を防ぐ(他view追加時と同じ理由)。
-  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly" || state.currentView === "home" || state.currentView === "today" || state.currentView === "timeswitch" || state.currentView === "calendar" || state.currentView === "timeline" || state.currentView === "routine" || state.currentView === "wish" || state.currentView === "avoid" || state.currentView === "zero" || state.currentView === "tasks" || state.currentView === "stats")) {
+  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly" || state.currentView === "home" || state.currentView === "today" || state.currentView === "timeswitch" || state.currentView === "calendar" || state.currentView === "timeline" || state.currentView === "routine" || state.currentView === "wish" || state.currentView === "zero" || state.currentView === "tasks" || state.currentView === "stats")) {
     renderDeferringForFocus();
   }
 }
@@ -17344,10 +16891,6 @@ function recordFeedbackFile(date) {
   }
 }
 
-// v143: uploadFeedbackFile()(.mdアップロード欄の処理本体)は削除した。唯一の呼び出し元
-// だったdata-feedback-uploadハンドラがv141以来到達不能だったため(CHANGES_v143.md参照)。
-// recordFeedbackFile()はhydrateStaticMarkdown側からも呼ばれているため残す。
-
 async function pushReportToGitHub() {
   const date = state.selectedDate;
   const report = state.reports[date];
@@ -17647,16 +17190,6 @@ function updateBatteryTick() {
   if (Date.now() - _lastBatteryTickAt < BATTERY_TICK_INTERVAL_MS) return;
   _lastBatteryTickAt = Date.now();
   if (state.selectedDate !== todayISO()) return;
-  // v145: 残量が閾値を下回った時点で回復Block下書きを1回だけ静かに提案する(opt-in・冪等)。
-  // 冪等ガードは関数内部(state.batteryRecoveryDraftDates)にあり、新規追加時のみtrueが返る。
-  // 新規下書き追加(1日高々1回)は draft-layer/draft-bar という新しいDOMを出す必要があるため、
-  // このtickに限り再描画するが、検索入力・IME変換中を壊さないよう既存の
-  // renderDeferringForFocus()(v137/v140、focusout/compositionendまで延期+60秒フェイルセーフ)
-  // を使う(v145レビュー対応: render()直呼びをやめた)。
-  {
-    const now = new Date();
-    if (maybeSuggestRecoveryDraft(now.getHours() * 60 + now.getMinutes())) { renderDeferringForFocus(); return; }
-  }
   // v149レビュー対応(必須1): 「今日の状態」カード(.home-today-status)は今日タブにしか
   // 存在しないため、ホームタブ滞在中はstatusCardが常にnullになり、残量40%未満の間
   // else if分岐(renderDeferringForFocus)が毎分発火し続けてしまう(宣言入力等を脅かす)。
@@ -17747,7 +17280,7 @@ function computeDailyOverload(dateISO) {
 
 // v146(UI改善計画Phase1-4): バッファ残量帯は「今日を扱う」画面だけに限定する(UX監査N3。
 // 設定・計器盤・その他等の無関係画面から常時26px帯を消す)。
-const BUFFER_METER_VIEWS = ["home", "tasks", "timeline", "journal", "reports"];
+const BUFFER_METER_VIEWS = ["home", "tasks", "timeline", "journal"];
 function bufferMeterHTML() {
   if (!BUFFER_METER_VIEWS.includes(state.currentView)) return "";
   if (state.selectedDate !== todayISO()) return "";
@@ -17818,35 +17351,6 @@ startTimerTicker();
 // v25/v43: 起動後の pull。自動同期 ON なら v43 の pull(競合バナー付き)、OFF なら従来の起動時同期。
 if (state.settings.autoSync) runAutoSyncPull();
 else syncFromGitHubOnStartup();
-// v59: 朝の一括プランニングの自動下書き(opt-in・既定OFF)。起動直後は同期(pull)に少し譲ってから実行する。
-// v145レビュー対応: 回復Block下書き提案(下記)は朝プランの非同期処理(AIプランJSONのfetch等)と
-// _scheduleDraftを取り合うため、同時に走らせず「朝プランの完了を待ってから」評価するよう
-// 1本のsetTimeoutへ連鎖させた(以前は独立した2本のsetTimeout(4500ms/5000ms)で、朝プランの
-// fetchがわずかに長引くと回復提案が先に走り、後から朝プランが_scheduleDraftを上書きして
-// 提案だけ消える一方、冪等マーカーは焼けたままになる事故があった)。
-setTimeout(() => {
-  const morningPlanPromise = maybeAutoMorningPlan();
-  // v145: 残量低下時の回復Block下書き提案(opt-in・既定OFF)。起動直後にも1回チェックする
-  // (アプリを開いたまま日をまたいだ後の初回起動や、当日最初の起動時点で既に残量が閾値を
-  // 下回っているケースに対応。以後はupdateBatteryTick経由のティッカーが1分間隔で見る)。
-  const checkRecoveryDraft = () => {
-    if (state.selectedDate !== todayISO()) return;  // v145レビュー対応: ティッカー側と対称のガード
-    const now = new Date();
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    if (maybeSuggestRecoveryDraft(nowMinutes)) { renderDeferringForFocus(); return; }
-    // v150(UI改善計画Phase4b・S7): 今回の起動で新規に発火しなかった場合だけ、
-    // 「前回セッションで発火済み(マーカーあり)なのにPWA破棄でdraftが消えた」パターンを
-    // 起動時に1回だけ検知して再構築する(maybeRebuildRecoveryDraft参照)。
-    if (maybeRebuildRecoveryDraft(nowMinutes)) renderDeferringForFocus();
-  };
-  // maybeAutoMorningPlanが実際に起動した場合のみPromiseが返る(起動条件を満たさなければnull)。
-  // その場合は朝プランの完了(_scheduleDraft確定 or 何もせず終了)を待ってから評価する。
-  if (morningPlanPromise && typeof morningPlanPromise.then === "function") {
-    morningPlanPromise.then(checkRecoveryDraft);
-  } else {
-    checkRecoveryDraft();
-  }
-}, 4500);
 // v53: 自動アーカイブ(既定ON・1日1回)。同期・自動レビューの後に静かに実行。
 setTimeout(maybeAutoArchive, 8000);
 // v41/v43: 復帰時。自動同期 ON なら pull(内部で日次オープン)、OFF なら日次オープンのみ。
@@ -17866,11 +17370,6 @@ document.addEventListener("visibilitychange", () => {
   }
   if (state.settings.autoSync) runAutoSyncPull();
   else if (runDailyOpen()) render();
-  setTimeout(maybeAutoMorningPlan, 4500);    // v59: 日をまたいで復帰したケース
   setTimeout(maybeAutoArchive, 8000);        // v53: 同上
   maybeRefreshFeedback();                    // v77: フォアグラウンド復帰時にAIフィードバック等を再fetch
 });
-
-// v143: data-feedback-date欄への貼り付けで取込モーダルを開くpasteリスナー(v42)は削除した。
-// v141で該当欄自体を撤去して以来、イベントが発火しようがない到達不能コードだったため
-// (CHANGES_v143.md参照)。

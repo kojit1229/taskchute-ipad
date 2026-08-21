@@ -3,7 +3,7 @@
 // 折りたたみのみ)。
 //
 // (a) タブ順: navItems(サイドバー/「その他」メニュー)が実行系優先の新しい順序になっている
-//     (home, tasks, timeline, wbs, routine, journal, weekly, reports, stats, wish, avoid,
+//     (home, tasks, timeline, wbs, routine, journal, weekly, stats, wish,
 //      vision, zero, pomodoro, settings)。
 //     ※ mobileNav(下部タブ)はv71時点では意図的に不変更だったが、v82(UX監査B1)で
 //        WBS→ジャーナルに入れ替えた。下記[1b]はv82仕様に追従済み(詳細はCHANGES_v82.md/v82.test.js)。
@@ -116,7 +116,7 @@ function check(name, cond, extra = "") {
     // v188: 「カレンダー」を計時の直後へ追加
     const expectedOrder = [
       "今日", "計時", "カレンダー", "ホーム", "タスクシュート", "タイムライン", "WBS", "ルーティン",
-      "ジャーナル", "週次", "日報", "AIレポート", "計器盤", "やりたい", "やらない",
+      "ジャーナル", "週次", "AIレポート", "計器盤", "やりたい",
       "ビジョン", "0秒思考", "ポモドーロ", "設定"
     ];
     check("navItemsの並びが期待どおり", JSON.stringify(navLabels) === JSON.stringify(expectedOrder), JSON.stringify(navLabels));

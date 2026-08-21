@@ -6,8 +6,6 @@
 //     (旧来「鮮度表示+MIT候補抽出のみ」で本文を読む手段が無かった不具合の修正)
 // (2) 上記の読み取りが、公開Pages側(アプリ自身の同一オリジン)への個人md/jsonのfetchを
 //     一切発生させないことの否定アサーション(同一オリジンfetch回帰の防止)
-// (3) 日報生成画面(renderReports)に、前日のAIフィードバックが既定closedのdetailsで表示される
-//     (フェイルソフト: 前日分が無ければ何も出ない)
 // (4) AIプラン_YYYY-MM-DD.json トップレベルの zeroSecThemes(0秒思考のテーマ提案)を
 //     タイムラインの「AIプラン取り込みUI」(下書きバーの並び)にワンタップ選定カードとして表示し、
 //     「追加」で state.zeroThinking.themes に、「見送り」で zeroSecThemeLog に記録して
@@ -167,31 +165,6 @@ function check(name, cond, extra = "") {
     check("同一オリジンでの個人データファイルへのリクエストが0件(すべてapi.github.com経由)",
       sameOriginPersonalRequests.length === 0, JSON.stringify(sameOriginPersonalRequests));
 
-    // ============================================================
-    // (3) 日報生成画面(日報タブ)に前日のAIフィードバックが既定closedで表示される
-    // ============================================================
-    console.log("[3] 日報生成画面に前日のAIフィードバックが既定closedのdetailsで表示される");
-    await page.click('[data-action="nav"][data-view="reports"]');
-    await page.waitForTimeout(300);
-    const reportDetailsCount = await page.locator(".report-prev-feedback").count();
-    check("前日AIフィードバックのdetailsが1つ表示される", reportDetailsCount === 1);
-    const reportOpenAttr = await page.locator(".report-prev-feedback").getAttribute("open").catch(() => null);
-    check("前日AIフィードバックのdetailsは既定closed", reportOpenAttr === null, String(reportOpenAttr));
-    const reportsText = await page.locator("main").textContent();
-    check("前日のAIフィードバック本文が日報タブでも読める", reportsText.includes("前日分のテスト本文です。"), reportsText.slice(0, 300));
-
-    console.log("[3b] 前日分が無ければ日報タブに前日フィードバックのdetails自体が出ない(フェイルソフト)");
-    await seed({ feedbackFiles: [], view: "reports" });
-    // PREVのfeedbackFilesが空でも「今日から見た昨日」は無条件fetchされ得るため、
-    // ここではAPIフィクスチャ自体を空にして「前日分が本当に無い」状況を作る
-    delete FEEDBACK_FIXTURE[PREV];
-    await page.reload();
-    await page.waitForTimeout(700);
-    const reportDetailsCount2 = await page.locator(".report-prev-feedback").count();
-    check("前日フィードバックが無い日はdetails自体が出ない", reportDetailsCount2 === 0);
-    FEEDBACK_FIXTURE[PREV] = "# AIフィードバック本文PREV_v75\n\n前日分のテスト本文です。";  // 後続テストのため復元
-
-    // ============================================================
     // (4) zeroSecThemes: テーマ提案の表示 → 「追加」「見送り」のワンタップ選定
     // ============================================================
     console.log("[4] AIプラン_*.jsonのzeroSecThemesが、タイムラインの下書きバー付近にテーマ提案として出る");

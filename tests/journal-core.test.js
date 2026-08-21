@@ -235,6 +235,13 @@ async function loadModules() {
     setBaseState();
     let html = journalMod.renderJournal();
     check("renderJournalが例外を投げず描画する", typeof html === "string" && html.includes("journal-segment-morning"));
+    check("ジャーナルに日報生成・Markdown保存ボタンがある",
+      html.includes('data-action="generate-report"') && html.includes('data-action="download-report"'));
+    check("未生成時はAI用コピーボタンを出さない", !html.includes('data-action="report-copy-ai"'));
+
+    setBaseState({ reports: { "2026-07-28": "# 日報" } });
+    html = journalMod.renderJournal();
+    check("生成済み日報があればAI用コピーボタンが出る", html.includes('data-action="report-copy-ai"'));
 
     foldMod._journalSegmentOverride.morning = false;
     foldMod._journalSegmentOverride.evening = true;

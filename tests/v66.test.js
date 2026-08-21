@@ -7,8 +7,6 @@
 //     無ければ「今週、資産を1つ作ったか?」を裁かずに表示する(週送りで自動的に切り替わる)
 // (d) 2x:10x時間比トレンド(直近8週): 常に8行描画され、記録の無い週は0除算せず「記録なし」表示、
 //     記録がある週は資産+削減(10x) : 単発+未設定(2x)の比率(%)を表示する
-// (e) マイグレーション儀式(3回目の繰り越し)に「Avoid Listへ記録して手放す」選択肢が追加され、
-//     選ぶとAvoid Listへ記録されつつBlockが削除される(既存のaddAvoidロジックを流用)
 //
 // 方針: 既存スイート(v61/v65)と同じく、app.js は type="module" のため内部関数は window に
 // 露出しない。ブラウザ操作 + localStorage 状態の直接注入で観測する。
@@ -39,7 +37,6 @@ function check(name, cond, extra = "") {
   // v61/v65と同じ理由(朝プラン/週境界の実時刻依存を避ける)で日中に固定する。
   now0.setHours(10, 0, 0, 0);
   const TODAY = isoDate(now0);
-  const YEST = isoDate(new Date(now0.getTime() - 24 * 60 * 60 * 1000));
 
   // app.js の weekRange() と同じロジック(週開始=直近土曜)をNode側でも再現する
   function weekStartOf(dateStr) {
@@ -92,8 +89,6 @@ function check(name, cond, extra = "") {
       s.blocks = blocks;
       s.tasks = tasks;
       s.projects = projects;
-      s.migrationRitualLog = [];
-      s.settings.avoidList = [];
       s.selectedDate = TODAY;
       s.currentView = view;
       if (weeklySelectedWeek) s.settings.weeklySelectedWeek = weeklySelectedWeek;
@@ -234,33 +229,6 @@ function check(name, cond, extra = "") {
     // asset(10x)=60分、oneoff(2x)=30分 → 10x比率 = 60/90 = 67%
     check("記録がある週(今週)は10x比率67%が出る", lastRowText.includes("67%"), lastRowText);
 
-    // ============================================================
-    // (e) マイグレーション儀式に「Avoid Listへ記録して手放す」選択肢が追加される
-    // ============================================================
-    console.log("[6] 儀式の選択肢: Avoid Listへ記録して手放す → avoidListへ記録され、Blockは削除される");
-    await seed({
-      blocks: [makeBlockFixture({ id: "cb-avoid", date: YEST, title: "儀式テスト(Avoidへ記録)", startMin: 10 * 60, minutes: 30, carryCount: 2 })],
-      view: "tasks"
-    });
-    await page.click('[data-action="carry-over"][data-id="cb-avoid"]');
-    await page.waitForTimeout(300);
-    check("儀式モーダルが出る(3回目)", await page.locator(".migration-ritual-modal").count() === 1);
-    check("「Avoid Listへ記録して手放す」ボタンがある",
-      await page.locator('.migration-ritual-modal [data-action="migration-ritual-choice"][data-choice="avoid"]').count() === 1);
-    await page.click('.migration-ritual-modal [data-action="migration-ritual-choice"][data-choice="avoid"]');
-    await page.waitForTimeout(300);
-    const sAvoid = await stateNow();
-    const srcAvoid = (sAvoid.blocks || []).find((b) => b.id === "cb-avoid");
-    check("元Blockが削除扱いになる", !!srcAvoid && srcAvoid.deleted === true, JSON.stringify(srcAvoid));
-    const avoidEntry = (sAvoid.settings?.avoidList || []).find((it) => it.text === "儀式テスト(Avoidへ記録)");
-    check("Avoid Listに同名の項目が記録される", !!avoidEntry, JSON.stringify(sAvoid.settings?.avoidList));
-    check("選択ログに'avoid'が記録される", (sAvoid.migrationRitualLog || []).some((l) => l.choice === "avoid" && l.blockId === "cb-avoid"), JSON.stringify(sAvoid.migrationRitualLog));
-
-    // Avoid List画面にも実際に表示されることを確認する(入力欄のvalueなのでtextContentではなくinputValueで見る)
-    await page.click('[data-action="nav"][data-view="avoid"]');
-    await page.waitForTimeout(300);
-    const avoidInputValues = await page.$$eval('[data-avoid-field="text"]', (els) => els.map((el) => el.value));
-    check("Avoid List画面に記録した項目が表示される", avoidInputValues.includes("儀式テスト(Avoidへ記録)"), JSON.stringify(avoidInputValues));
   } finally {
     await browser.close();
     server.close();

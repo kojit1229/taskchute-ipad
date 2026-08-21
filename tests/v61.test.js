@@ -160,8 +160,8 @@ function check(name, cond, extra = "") {
   check("儀式モーダルが出る(3回目)", await page.locator(".migration-ritual-modal").count() === 1);
   const ritualTitle = await page.locator(".migration-ritual-modal .modal-title").textContent().catch(() => "");
   check("モーダルに「3回目」の文言がある", (ritualTitle || "").includes("3"), ritualTitle);
-  // v66: 「Avoid Listへ記録して手放す」選択肢が増えたため4→5(designs/10x-mechanism.md 2-4)
-  check("5つの選択肢が表示される(v66でAvoid List選択肢を追加)", await page.locator('.migration-ritual-modal [data-action="migration-ritual-choice"]').count() === 5);
+  // v214: Avoid Listへの記録導線を削除し、残る4選択肢を維持する。
+  check("4つの選択肢が表示される(Avoid List記録導線は削除)", await page.locator('.migration-ritual-modal [data-action="migration-ritual-choice"]').count() === 4);
   // モーダルを閉じてから次のシナリオへ(選択せず×で閉じても後の状態に影響しないこと)
   await page.click('[data-action="modal-close"]');
   await page.waitForTimeout(200);
@@ -360,10 +360,10 @@ function check(name, cond, extra = "") {
   check("表示は消え、入力欄に戻る", await page.locator(".home-ideal-text").count() === 0 && await page.locator('[data-ideal-date]').count() === 1);
 
   console.log("[16] 今日の理想: 日報生成(generateReport)への反映");
-  await seed({ journalMeta: { [TODAY]: { aiMitCandidates: [], aiImported: false, ideal: "日報反映テストの理想" } }, view: "reports" });
+  await seed({ journalMeta: { [TODAY]: { aiMitCandidates: [], aiImported: false, ideal: "日報反映テストの理想" } }, view: "journal" });
   await page.click('[data-action="generate-report"]');
   await page.waitForTimeout(400);
-  const reportText = await page.locator(".report-output").inputValue().catch(() => "");
+  const reportText = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
   check("日報に今日の理想が出力される", reportText.includes("日報反映テストの理想"), reportText.slice(0, 300));
   check("翌日以降も見える旨(3日リトライ)が明日への接続に記載される", reportText.includes("明日・明後日もホームに小さく残ります"), reportText);
   check("達成/未達の自己申告文言は含まない", !reportText.includes("達成できましたか"));

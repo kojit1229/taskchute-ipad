@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v213";
+const CACHE_NAME = "taskchute-journal-pwa-v214";
+// v214: Avoid List・回復Block下書き提案・朝プラン自動実行・独立日報タブを削除した。
 // v213: ダッシュボードタブを削除した。
 // v212: TOWER annexのlightテーマ残件3箇所をtowerトークンへ固定した。
 // v211: 今日タブの既定スキンをtowerへ切り替えた(未設定・未知値のみ。保存済みの明示値は維持)。
@@ -78,9 +79,6 @@ const CACHE_NAME = "taskchute-journal-pwa-v213";
 //   (setState契約)/src/storage/local.js(loadState/persistLocalNoSchedule)/
 //   src/sync/github.js(computeSyncMerge/syncCoreEqual/5フロー等)をAPP_SHELLへ追加した
 //   (独立レビューBlocker-2、/src/配下のcache-first戦略はv164のまま)。
-// v165: app.js分割の段階2(Avoid Listの読み取り専用render抽出)。src/features/avoid.js
-//   (renderAvoid)をAPP_SHELLへ追加した。addAvoid/deleteAvoid/updateAvoidTextは操作系のため
-//   app.jsに残す(監督者裁定、CHANGES_v165.md参照)。/src/配下のcache-first戦略はv164のまま。
 // v164: app.js分割の段階0(SW戦略)+段階1(純粋関数抽出)。src/core/merge.js
 //   (mergeById/mergeByIdPreferNewer)を最初の抽出対象としてAPP_SHELLへ追加。
 //   分割後は app.js + src/**/*.js の複数ファイルが個別にnetwork-first解決されるため、
@@ -258,7 +256,6 @@ const APP_SHELL = [
   "./assets/icon.svg",
   "./src/core/merge.js",
   "./src/core/today-model.js",
-  "./src/features/avoid.js",
   "./src/features/calendar.js",
   "./src/features/coach.js",
   "./src/features/journal.js",

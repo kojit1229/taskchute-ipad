@@ -47,17 +47,6 @@
         "v143"
       ]
     },
-    "avoid-feature": {
-      "paths": [
-        "^src/features/avoid"
-      ],
-      "patterns": [
-        "renderAvoid|saveAvoid|avoidEditor|avoidItems"
-      ],
-      "suites": [
-        "avoid-core"
-      ]
-    },
     "wish-feature": {
       "paths": [
         "^src/features/wish"

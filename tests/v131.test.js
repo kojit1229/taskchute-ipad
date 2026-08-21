@@ -100,10 +100,10 @@ function check(name, cond, extra = "") {
     check("「AutoSleep未確定」の注記が出る", (await sleepCardText()).includes("AutoSleep未確定"), await sleepCardText());
 
     console.log("[3] 日報生成: 前日分をフォールバックした体力予算行に日付ラベルが付く");
-    await seed({ sleepLogs: { [YEST]: sleepLog({ sleepH: 6.0 }) }, view: "reports" });
+    await seed({ sleepLogs: { [YEST]: sleepLog({ sleepH: 6.0 }) }, view: "journal" });
     await page.click('[data-action="generate-report"]');
     await page.waitForTimeout(400);
-    const reportText1 = await page.locator(".report-output").inputValue().catch(() => "");
+    const reportText1 = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
     check(`日報に「体力予算: 低予算(${shortDate(YEST)}朝: 睡眠6.0h)」が出る`,
       reportText1.includes(`体力予算: 低予算(${shortDate(YEST)}朝: 睡眠6.0h)`), reportText1.slice(0, 500));
 

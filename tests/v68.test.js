@@ -2,8 +2,7 @@
 //           人生実験機構(state.experiments、1件のみ推奨のカードUI)。
 //
 // (a) generateReport(): origin:"user"かつ未解決の問いがあれば「## AIへの質問」節が出る。
-//     無ければ節ごと省略される。日報タブの #reportAskInput に1行入力して「日報を生成」を押すと
-//     origin:"user" の問いが1件作られ、入力欄はクリアされる。
+//     無ければ節ごと省略される。
 // (b) 実験カード(state.experiments): 「+ 実験を始める」→モーダルで仮説/判定材料/開始日/終了日
 //     (既定14日後)を入力して保存 → running として1件作られる。
 // (c) 2件目の抑制: 実験中に「別の実験を試したい」を押してもモーダルは開かず
@@ -154,7 +153,7 @@ function check(name, cond, extra = "") {
     // ============================================================
     console.log("[2] generateReport(): origin:user & status!=settled の問いだけ「## AIへの質問」節に出る");
     await seed({
-      view: "reports",
+      view: "journal",
       questions: [
         makeQuestionSeed("来週の12WY目標、このペースで間に合いそう?", "user", "open"),
         makeQuestionSeed("結論済みのuser質問(出ないはず)", "user", "settled"),
@@ -172,27 +171,12 @@ function check(name, cond, extra = "") {
     check("origin:manualの問いは「## AIへの質問」節に出ない(既存v39の「いま持ち続けている問い」節とは別)", !askSection2.includes("originがmanualの問い"), askSection2);
 
     console.log("[3] generateReport(): origin:userの未解決質問が無ければ「## AIへの質問」節ごと省略される");
-    await seed({ view: "reports", questions: [makeQuestionSeed("manualの問い", "manual", "open")] });
+    await seed({ view: "journal", questions: [makeQuestionSeed("manualの問い", "manual", "open")] });
     await page.click('[data-action="generate-report"]');
     await page.waitForTimeout(300);
     const s3 = await stateNow();
     check("該当質問が無い日は見出しが出ない", !(s3.reports[TODAY] || "").includes("## AIへの質問"));
 
-    console.log("[4] 日報タブの#reportAskInputに1行入力→「日報を生成」でorigin:userの問いが1件作られ、入力欄がクリアされる");
-    await seed({ view: "reports", questions: [] });
-    check("#reportAskInputが存在する", await page.locator("#reportAskInput").count() === 1);
-    await page.fill("#reportAskInput", "投資の勉強、今のペースで合ってる?");
-    await page.click('[data-action="generate-report"]');
-    await page.waitForTimeout(300);
-    const s4 = await stateNow();
-    const createdQ = (s4.questions || []).find((q) => q.text === "投資の勉強、今のペースで合ってる?");
-    check("origin:userの問いが作られる", !!createdQ, JSON.stringify(s4.questions));
-    check("originはuser", createdQ?.origin === "user");
-    check("statusはopen", createdQ?.status === "open");
-    check("日報にも反映される", (s4.reports[TODAY] || "").includes("投資の勉強、今のペースで合ってる?"));
-    check("入力欄がクリアされる", await page.locator("#reportAskInput").inputValue() === "");
-
-    // ============================================================
     // (b) 実験カード: 新規作成
     // ============================================================
     console.log("[5] 実験カード: 「+ 実験を始める」→モーダルで仮説等を入力して保存→runningで1件作られる");

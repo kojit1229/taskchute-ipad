@@ -16,14 +16,6 @@
 //     A11: トースト消滅後、透明な当たり判定(pointer-events)が残留しない(項目1、elementFromPoint)。
 // (B) タイポ・余白トークン(S4): :root に --text-xs/sm/md/lg と --space-1〜5 が定義され、
 //     ホーム/今日タブ・ジャーナルCSSの一部(段階移行の第1弾)がそれを参照している。
-// (C) 回復候補ドラフトの再構築(S7): PWA破棄相当(reload=モジュール再読込で_scheduleDraftは
-//     リセットされるが、localStorage上のbatteryRecoveryDraftDatesは残る)からの起動時に、
-//     新規stateフィールド無しで候補を再構築する。既に実Blockとして確定済みの候補は
-//     再提案しない(未確定のものだけを対象にする)。
-//   レビュー対応(項目5、Codex指摘): マーカーを{date, titles}へ拡張し、旧形式(文字列)は
-//     normalizeStateで{date, titles:[]}へ後方互換マイグレーション(titles不明の日は再構築
-//     スキップ)。再構築は記録済みタイトルのうち未解決のものだけを復元し、記録に無い次点候補
-//     (computeChargeTopTitlesを素で再実行した場合の3番手)を繰り上げ提案しない(C1〜C4)。
 // (D) タイムライン短時間Blockの重なり解消(R9): 実績モード・1xズームで連続する15分Block
 //     (min-height 38pxで物理的に重なっていた)が、既存の横レーン分割(段差配置)により
 //     重ならなくなる。離れた時刻のBlockは従来どおりレーン分割されない(regression)。
@@ -87,8 +79,8 @@ function check(name, cond, extra = "") {
     description: "", createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false
   });
 
-  async function seed({ blocks = [], tasks = [], projects = [], view = "home", settings = {}, batteryRecoveryDraftDates } = {}) {
-    await page.evaluate(({ KEY, blocks, tasks, projects, TODAY, view, settings, batteryRecoveryDraftDates }) => {
+  async function seed({ blocks = [], tasks = [], projects = [], view = "home", settings = {} } = {}) {
+    await page.evaluate(({ KEY, blocks, tasks, projects, TODAY, view, settings }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.sleep = s.sleep || { logs: {} };
       s.sleep.logs = {};
@@ -101,9 +93,8 @@ function check(name, cond, extra = "") {
       s.currentView = view;
       s.timelineMode = "planned";
       Object.assign(s.settings, settings);
-      if (batteryRecoveryDraftDates !== undefined) s.batteryRecoveryDraftDates = batteryRecoveryDraftDates;
       localStorage.setItem(KEY, JSON.stringify(s));
-    }, { KEY, blocks, tasks, projects, TODAY, view, settings, batteryRecoveryDraftDates });
+    }, { KEY, blocks, tasks, projects, TODAY, view, settings });
     await page.reload();
     await page.waitForTimeout(500);
   }
@@ -366,101 +357,6 @@ function check(name, cond, extra = "") {
     });
     check(".journal-grid h2(390px幅)のfont-sizeは--text-sm(14px)を参照", journalH2Font === "14px", String(journalH2Font));
     await page.setViewportSize({ width: 1100, height: 1400 });
-
-    // ============================================================
-    // (C) 回復候補ドラフトの再構築(S7、v150レビュー対応・項目5で「日付+提案タイトル一覧」へ拡張)
-    // ============================================================
-    const titleA = "v150回復A";  // net中央値6(最有力)
-    const titleB = "v150回復B";  // net中央値4(2番手。当初の提案2件目)
-    const titleC = "v150回復C";  // net中央値2(3番手。「次点の繰り上げ」が起きていないかの検出役)
-    const mkPastCompleted = (idPrefix, title, charge, discharge) => [3, 6, 9].map((d, i) => planBlock({
-      id: `${idPrefix}-${i}`, date: addDaysISO(TODAY, -d), title, startMin: 12 * 60, minutes: 20,
-      completed: true, actualStartAt: `${addDaysISO(TODAY, -d)}T12:00`, actualEndAt: `${addDaysISO(TODAY, -d)}T12:20`,
-      charge, discharge
-    }));
-    const recoveryPool = [
-      ...mkPastCompleted("recA", titleA, 7, 1),
-      ...mkPastCompleted("recB", titleB, 5, 1),
-      ...mkPastCompleted("recC", titleC, 3, 1)
-    ];
-    // 「元々提案したタイトル一覧」= 新規発火時に実際に採用される上位2件(A・B)と同じにする
-    // (現実のシナリオ=前セッションでmaybeSuggestRecoveryDraftが立てたマーカーを模す)。
-    const markerAB = [{ date: TODAY, titles: [titleA, titleB] }];
-
-    console.log("[C1] PWA破棄相当(reloadで_scheduleDraftはリセット、マーカーは残る)からの起動時に、記録済みタイトルどおりに回復候補が再構築される");
-    // batteryRecoveryDraftDatesに当日+提案タイトルを先に立てておく=「前セッションで既に
-    // 発火済み(A・Bを提案済み)」を模す。実際に発火条件(残量閾値)を満たしたかどうかは
-    // maybeRebuildRecoveryDraftの再構築判定に関係しない(呼び出し側=起動シーケンスが
-    // 「マーカーあり」を根拠に再構築を試みる設計のため)。
-    await seed({
-      view: "timeline",
-      blocks: recoveryPool,
-      settings: { battery: { recoveryDraft: true } },
-      batteryRecoveryDraftDates: markerAB
-    });
-    // seed()内のreloadが「モジュール再読込(=_scheduleDraft初期化)」そのものにあたる。
-    await page.waitForTimeout(600);  // 起動シーケンスのsetTimeout(4500ms)より前でも、起動直後の
-    // checkRecoveryDraftはmaybeAutoMorningPlanが無効(既定OFF)なら即時実行されるため十分待てば見える。
-    await page.waitForTimeout(4200);
-    const draftTitlesAfterRestart = await page.locator(".draft-block-title").allTextContents();
-    check("マーカーありなのに消えていたbattery-recovery下書きが起動時に再構築される(A)",
-      draftTitlesAfterRestart.some((t) => t.includes(titleA)), JSON.stringify(draftTitlesAfterRestart));
-    check("記録済みのB も一緒に復元される", draftTitlesAfterRestart.some((t) => t.includes(titleB)), JSON.stringify(draftTitlesAfterRestart));
-    st = await stateNow();
-    const markerToday1 = (st.batteryRecoveryDraftDates || []).filter((e) => e && e.date === TODAY);
-    check("再構築してもbatteryRecoveryDraftDatesは当日1件のまま(重複しない)", markerToday1.length === 1, JSON.stringify(st.batteryRecoveryDraftDates));
-    check("マーカーは{date,titles}のオブジェクト形式で保持される", markerToday1[0] && Array.isArray(markerToday1[0].titles), JSON.stringify(markerToday1));
-
-    console.log("[C2] 一部未解決(Aは実Block化済み・Bは未確定): Bだけが復元され、次点C(記録に無いタイトル)は繰り上げ提案されない");
-    await seed({
-      view: "timeline",
-      blocks: [...recoveryPool, planBlock({ id: "already-confirmed-a", title: titleA, startMin: 14 * 60, minutes: 20 })],
-      settings: { battery: { recoveryDraft: true } },
-      batteryRecoveryDraftDates: markerAB
-    });
-    await page.waitForTimeout(4800);
-    const draftTitlesPartial = await page.locator(".draft-block-title").allTextContents();
-    check("確定済みのAは再提案されない(未解決のみ復元)", !draftTitlesPartial.some((t) => t.includes(titleA)), JSON.stringify(draftTitlesPartial));
-    check("未確定のBは復元される", draftTitlesPartial.some((t) => t.includes(titleB)), JSON.stringify(draftTitlesPartial));
-    check("記録に無いCは次点として繰り上げ提案されない(旧バグの再発防止)", !draftTitlesPartial.some((t) => t.includes(titleC)), JSON.stringify(draftTitlesPartial));
-    check("復元されるのはB1件だけ", draftTitlesPartial.length === 1, JSON.stringify(draftTitlesPartial));
-
-    console.log("[C3] 採用済み(A・Bとも実Block化済み)なら再構築で何も出さない");
-    await seed({
-      view: "timeline",
-      blocks: [
-        ...recoveryPool,
-        planBlock({ id: "already-confirmed-a2", title: titleA, startMin: 14 * 60, minutes: 20 }),
-        planBlock({ id: "already-confirmed-b2", title: titleB, startMin: 15 * 60, minutes: 20 })
-      ],
-      settings: { battery: { recoveryDraft: true } },
-      batteryRecoveryDraftDates: markerAB
-    });
-    await page.waitForTimeout(4800);
-    check("A・Bとも採用済みなら再構築は何も追加しない", await page.locator(".draft-block").count() === 0);
-
-    console.log("[C4] 旧形式マーカー(文字列のみ、titles不明)はnormalizeStateで{date,titles:[]}へ移行され、再構築の対象外になる(スキップ)");
-    await seed({
-      view: "timeline",
-      blocks: recoveryPool,
-      settings: { battery: { recoveryDraft: true } },
-      batteryRecoveryDraftDates: [TODAY]  // 旧形式(文字列)のまま注入
-    });
-    await page.waitForTimeout(4800);
-    check("旧形式の日は再構築されない(titles不明のためスキップ)", await page.locator(".draft-block").count() === 0);
-    st = await stateNow();
-    const migrated = (st.batteryRecoveryDraftDates || []).find((e) => e && e.date === TODAY);
-    check("旧形式は{date,titles:[]}へ後方互換マイグレーションされる", migrated && Array.isArray(migrated.titles) && migrated.titles.length === 0, JSON.stringify(migrated));
-
-    console.log("[C5] マーカーが無ければ再構築は起きない(通常の閾値未達フローのまま、regression)");
-    await seed({
-      view: "timeline",
-      blocks: recoveryPool,
-      settings: { battery: { recoveryDraft: false } },  // opt-in OFF、かつマーカー無し
-      batteryRecoveryDraftDates: []
-    });
-    await page.waitForTimeout(4800);
-    check("recoveryDraft OFF・マーカー無しでは下書きが出ない(regression)", await page.locator(".draft-block").count() === 0);
 
     // ============================================================
     // (D) タイムライン短時間Blockの重なり解消(R9)

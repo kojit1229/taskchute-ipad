@@ -95,7 +95,7 @@ function check(name, cond, extra = "") {
   check("model が保存値から削除される", !("model" in purged), JSON.stringify(purged));
   check("prompts が保存値から削除される", !("prompts" in purged), JSON.stringify(purged));
   check("autoMorningReview が保存値から削除される", !("autoMorningReview" in purged), JSON.stringify(purged));
-  check("autoMorningPlan は既定値のまま残る(別機能)", purged.autoMorningPlan === false, JSON.stringify(purged));
+  check("autoMorningPlan が保存値から削除される", !("autoMorningPlan" in purged), JSON.stringify(purged));
 
   // ---- (b) 設定画面にAPIキー欄・モデル選択・プロンプト編集欄が無い ----
   console.log("[2] 設定画面からAI関連UIが消えている");
@@ -107,7 +107,7 @@ function check(name, cond, extra = "") {
   check("朝イチ自動レビューのトグルが無い(機能ごと削除)", await page.locator("[data-ai-automorning]").count() === 0);
   const settingsText = await page.locator("main").textContent();
   check("設定画面に Anthropic の文言が残っていない", !settingsText.includes("Anthropic"));
-  check("朝の一括プランニングのトグルは残っている(決定論機能として存続)", await page.locator("[data-ai-automorningplan]").count() === 1);
+  check("朝の一括プランニング自動実行トグルが無い", await page.locator("[data-ai-automorningplan]").count() === 0);
 
   // ---- (c) 朝プランボタンがAPIキー無しで表示・動作する ----
   console.log("[3] 朝プラン(APIキー無し)");

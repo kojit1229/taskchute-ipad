@@ -275,9 +275,9 @@ function check(name, cond, extra = "") {
     check("(regression) labelでラップ後もinputへの直接クリックで実現済みにトグルできる", wishRealizedAfterClick === true, String(wishRealizedAfterClick));
 
     // ============================================================
-    // [A4] 「日報を生成」のトーストに遷移予告文言
+    // [A4] 「日報を生成」後もジャーナルに留まる
     // ============================================================
-    console.log("[A4] 「日報を生成」クリック後、トーストに遷移予告(日報タブへ移動する旨)が入る");
+    console.log("[A4] 「日報を生成」クリック後もジャーナルに留まり、生成完了トーストが出る");
     await page.evaluate(({ KEY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.currentView = "journal";
@@ -294,12 +294,12 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(200);
     const toastText = await page.locator("#toast").textContent();
     check(
-      "トースト文言が遷移(日報タブへ移動)を予告している",
-      /(日報タブ|移動)/.test(toastText || ""),
+      "トーストが日報生成完了を伝える",
+      (toastText || "").includes("日報を生成しました"),
       toastText
     );
     const viewAfterGenerate = await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).currentView, KEY);
-    check("(regression) 日報生成後、currentViewはreportsに遷移する", viewAfterGenerate === "reports", viewAfterGenerate);
+    check("日報生成後もcurrentViewはjournalのまま", viewAfterGenerate === "journal", viewAfterGenerate);
 
     // ============================================================
     // [A5] 「今日の理想」空欄カードの折りたたみ

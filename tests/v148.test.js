@@ -87,13 +87,13 @@ function check(name, cond, extra = "") {
     const moreNavButtons = await page.locator('.more-group [data-action="nav"]').evaluateAll(
       (els) => els.map((el) => el.dataset.view)
     );
-    // v182 D2 / v187: timeswitch / v188: calendar追加=15項目
-    check("その他グリッドは15項目(home+timeswitch+calendar追加・ルーティン除外)",
-      moreNavButtons.length === 15, JSON.stringify(moreNavButtons));
+    // v214: Avoid List・独立日報タブ削除後は12項目
+    check("その他グリッドは12項目(Avoid List・独立日報タブ・ルーティンを除外)",
+      moreNavButtons.length === 12, JSON.stringify(moreNavButtons));
     check("ルーティンはその他グリッドに含まれない", !moreNavButtons.includes("routine"), JSON.stringify(moreNavButtons));
     // v182 D2 + v187/v188(先頭に実行群=timeswitch,calendar)
     check("実行群→計画群の順にグループ単位でまとまっている",
-      moreNavButtons.slice(0, 7).join(",") === "timeswitch,calendar,home,wbs,wish,avoid,vision", JSON.stringify(moreNavButtons));
+      moreNavButtons.slice(0, 6).join(",") === "timeswitch,calendar,home,wbs,wish,vision", JSON.stringify(moreNavButtons));
     // 頭文字1字アイコン(W/R/A等)ではなく絵文字になっていることを確認(codex-ui-review N4対応)
     const badgeTexts = await page.locator('.more-group [data-action="nav"] .badge').allTextContents();
     check("バッジが1文字のアルファベットではない(絵文字化)",

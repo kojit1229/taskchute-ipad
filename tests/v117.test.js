@@ -165,18 +165,18 @@ function check(name, cond, extra = "") {
     // (b) 日報生成
     // ============================================================
     console.log("[3] 日報生成: 今日の宣言が入力済みなら本文がそのまま出る");
-    await seed({ dailyDeclarations: { [TODAY]: { text: "日報反映テストの宣言", updatedAt: `${TODAY}T07:00:00` } }, view: "reports" });
+    await seed({ dailyDeclarations: { [TODAY]: { text: "日報反映テストの宣言", updatedAt: `${TODAY}T07:00:00` } }, view: "journal" });
     await page.click('[data-action="generate-report"]');
     await page.waitForTimeout(400);
-    const reportText1 = await page.locator(".report-output").inputValue().catch(() => "");
+    const reportText1 = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
     check("`## 📣 今日の宣言`見出しが出力される", reportText1.includes("## 📣 今日の宣言"), reportText1.slice(0, 200));
     check("宣言本文が出力される", reportText1.includes("日報反映テストの宣言"), reportText1.slice(0, 300));
 
     console.log("[4] 日報生成: 未入力日は節自体は出て本文が「(未入力)」になる");
-    await seed({ dailyDeclarations: {}, view: "reports" });
+    await seed({ dailyDeclarations: {}, view: "journal" });
     await page.click('[data-action="generate-report"]');
     await page.waitForTimeout(400);
-    const reportText2 = await page.locator(".report-output").inputValue().catch(() => "");
+    const reportText2 = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
     check("見出しは省略されない(未入力でも節自体は常に出る)", reportText2.includes("## 📣 今日の宣言"), reportText2.slice(0, 200));
     check("本文は「(未入力)」になる", /## 📣 今日の宣言\s*\n\s*\(未入力\)/.test(reportText2), reportText2.slice(0, 200));
 

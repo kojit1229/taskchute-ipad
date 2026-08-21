@@ -11,11 +11,9 @@
 // (5) 🏁(タスク完了)はタスクシュート行から撤去され、Block編集モーダルへ移設されている
 //     (詳細な状態遷移の回帰はtests/v107.test.jsが担当。本ファイルは配置のみ確認)
 // (6) 誤タップ対策の44px当たり判定: .checkbox-button / .tl-start-btn / .modal-close
-// (7) バッファ残量帯は「今日を扱う」画面(home/tasks/timeline/journal/reports)だけに出る
+// (7) バッファ残量帯は「今日を扱う」画面(home/tasks/timeline/journal)だけに出る
 // (8) ジャーナルは720px以下で当日編集パネルが先頭(CSS order)。前日パネルは既定closedのdetails
 // (9) 設定画面から内部バージョン表記(vNNN)が消え、「現在のファイル構成」はdetails化(既定closed)
-// (10) バッテリー回復下書き(v145、source:"battery-recovery")の下書きバーラベルが
-//      「🔋 回復候補」になる(旧「⚙ 決定論配置」から変更)
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
@@ -317,7 +315,7 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (7) バッファ残量帯の画面限定
     // ============================================================
-    console.log("[7] バッファ残量帯は今日を扱う画面(home/tasks/timeline/journal/reports)だけに出る");
+    console.log("[7] バッファ残量帯は今日を扱う画面(home/tasks/timeline/journal)だけに出る");
     await seed({ blocks: [], view: "home", settings: { dailyBufferMin: 100 } });
     check("homeでは出る", await page.locator(".buffer-meter").count() === 1);
     await page.click('[data-action="nav"][data-view="tasks"]');
@@ -329,9 +327,6 @@ function check(name, cond, extra = "") {
     await page.click('[data-action="nav"][data-view="journal"]');
     await page.waitForTimeout(200);
     check("journalでは出る", await page.locator(".buffer-meter").count() === 1);
-    await page.click('[data-action="nav"][data-view="reports"]');
-    await page.waitForTimeout(200);
-    check("reportsでは出る", await page.locator(".buffer-meter").count() === 1);
     await page.click('[data-action="nav"][data-view="settings"]');
     await page.waitForTimeout(200);
     check("settingsでは出ない", await page.locator(".buffer-meter").count() === 0);
@@ -380,41 +375,6 @@ function check(name, cond, extra = "") {
     const fileStructFold = page.locator("details:has-text('現在のファイル構成')").first();
     check("「現在のファイル構成」はdetails要素で既定closed",
       await fileStructFold.count() === 1 && await fileStructFold.evaluate((el) => el.open) === false);
-
-    // ============================================================
-    // (10) バッテリー回復下書きのラベルが「🔋 回復候補」になる
-    // ============================================================
-    console.log("[10] バッテリー回復下書き(source:battery-recovery)の下書きバーラベルが「🔋 回復候補」になる");
-    const mk = (id, date, title, hStart, hEnd, charge, discharge) => ({
-      id, date, title, category: "休息",
-      plannedStartAt: `${date}T${hStart}`, plannedEndAt: `${date}T${hEnd}`,
-      actualStartAt: `${date}T${hStart}`, actualEndAt: `${date}T${hEnd}`,
-      completed: true, charge, discharge, estimateMin: 0, deleted: false
-    });
-    const recoveryBlocks = [
-      mk("v146-str-1", "2026-07-20", "ストレッチ", "09:00", "09:20", 5, 1),
-      mk("v146-str-2", "2026-07-21", "ストレッチ", "09:00", "09:20", 5, 1),
-      mk("v146-str-3", "2026-07-22", "ストレッチ", "09:00", "09:20", 5, 1)
-    ];
-    await page.clock.setFixedTime(new Date(2026, 6, 27, 18, 0, 0, 0));  // 07:00起点decay想定で残量が閾値を下回る時刻
-    await page.evaluate(({ KEY, blocks }) => {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      s.sleep = s.sleep || { logs: {} }; s.sleep.logs = {};
-      s.condition = s.condition || { logs: {} }; s.condition.logs = {};
-      s.blocks = blocks; s.tasks = []; s.projects = [];
-      s.selectedDate = "2026-07-27";
-      s.currentView = "timeline";
-      s.timelineMode = "planned";
-      s.settings.battery = { ...(s.settings.battery || {}), recoveryDraft: true };
-      s.batteryRecoveryDraftDates = [];
-      localStorage.setItem(KEY, JSON.stringify(s));
-    }, { KEY, blocks: recoveryBlocks });
-    await page.reload();
-    await page.waitForTimeout(900);
-    const draftBarText = await page.locator(".draft-bar").first().textContent().catch(() => "");
-    check("下書きバーに「🔋 回復候補」ラベルが出る(旧「⚙ 決定論配置」ではない)",
-      (draftBarText || "").includes("🔋 回復候補") && !(draftBarText || "").includes("⚙ 決定論配置"),
-      draftBarText);
 
     console.log(failures === 0 ? "\n✅ v146 ALL PASS" : `\n❌ v146: ${failures} 件失敗`);
   } finally {

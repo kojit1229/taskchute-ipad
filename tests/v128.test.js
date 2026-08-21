@@ -126,19 +126,19 @@ function check(name, cond, extra = "") {
     // (d) 日報生成
     // ============================================================
     console.log("[7] 日報生成: 低予算日は達成率表の後に体力予算行が出る");
-    await seed({ sleepLogs: { [TODAY]: sleepLog({ sleepH: 6.0 }) }, view: "reports" });
+    await seed({ sleepLogs: { [TODAY]: sleepLog({ sleepH: 6.0 }) }, view: "journal" });
     await page.click('[data-action="generate-report"]');
     await page.waitForTimeout(400);
-    const reportText1 = await page.locator(".report-output").inputValue().catch(() => "");
+    const reportText1 = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
     check("`体力予算: 低予算`行が出力される", reportText1.includes("体力予算: 低予算(睡眠6.0h)"), reportText1.slice(0, 400));
     check("達成率表の後に出る(12週の行より後)",
       reportText1.indexOf("12週 今週の進捗") < reportText1.indexOf("体力予算:"), reportText1.slice(0, 500));
 
     console.log("[8] 日報生成: データなし日は体力予算行が省略される");
-    await seed({ sleepLogs: {}, view: "reports" });
+    await seed({ sleepLogs: {}, view: "journal" });
     await page.click('[data-action="generate-report"]');
     await page.waitForTimeout(400);
-    const reportText2 = await page.locator(".report-output").inputValue().catch(() => "");
+    const reportText2 = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
     check("体力予算行が出ない", !reportText2.includes("体力予算:"), reportText2.slice(0, 400));
 
     // ============================================================

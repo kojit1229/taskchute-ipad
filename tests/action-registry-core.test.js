@@ -52,7 +52,6 @@ const ROOT = path.join(__dirname, "..");
 const appSource = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
 const ACTIONS_MODULE_PATH = path.join(ROOT, "src", "ui", "actions.js");
 const FEATURE_MODULE_PATHS = [
-  path.join(ROOT, "src", "features", "avoid.js"),
   path.join(ROOT, "src", "features", "wish.js"),
   path.join(ROOT, "src", "features", "journal.js"),
   path.join(ROOT, "src", "features", "routine.js"),
@@ -129,8 +128,6 @@ const GOLDEN_CLICK_ACTIONS = [
   "wish-subtask-to-tasks", "wish-realize", "wish-unrealize", "delete-wish",
   "wish-view-mode", "wish-board-jump-current",
   "triage-choice", "triage-undo", "triage-reason-chip", "triage-reason-skip",
-  "add-avoid", "delete-avoid",
-  "toggle-avoid-violation",  // v189: F6 破った記録(トグル)
   "zt-add-toggle", "zt-add-cancel", "zt-add-submit", "zt-tab", "home-tab",
   "zt-fav-toggle", "zt-importance-toggle", "zt-theme-delete",
   "zt-suggestion-adopt", "zt-suggestion-dismiss",
@@ -165,9 +162,6 @@ const GOLDEN_CLICK_ACTIONS = [
 // triage-*(wish Tier3・未抽出)とbody-scan-*(routineとは別ドメイン・未抽出)は
 // 確信が持てないため今回は移行せず、if連鎖に残した(下のEXPECTED_REMAINING_IF_CHAINに含まれる)。
 const MIGRATED_TO_REGISTRY_ACTIONS = [
-  // src/features/avoid.js(configureAvoid)
-  "add-avoid", "delete-avoid",
-  "toggle-avoid-violation",  // v189: F6 破った記録(トグル)
   // src/features/wish.js(configureWish、Tier1のみ)
   "add-wish", "open-wish", "add-wish-subtask", "toggle-wish-subtask",
   "wish-subtask-to-tasks", "wish-realize", "wish-unrealize", "delete-wish",
@@ -429,7 +423,7 @@ function extractModalHandlerTypes() {
   check("if連鎖側の残存action名に重複がない",
     new Set(extracted).size === extracted.length);
 
-  console.log("[3-b] 6feature(avoid/wish/journal/routine/timeline/calendar)のconfigureXxxを"
+  console.log("[3-b] 5feature(wish/journal/routine/timeline/calendar)のconfigureXxxを"
     + "空depsで呼び、registerActionsが実際に登録するaction名がMIGRATED_TO_REGISTRY_ACTIONSと"
     + "一致するか");
   // configureXxx本体はdestructuring代入+registerActions呼び出しのみで、渡されたdepsの中身は
@@ -438,8 +432,7 @@ function extractModalHandlerTypes() {
   const featureMods = await Promise.all(
     FEATURE_MODULE_PATHS.map((p) => import(pathToFileURL(p).href))
   );
-  const [avoidMod, wishMod, journalMod, routineMod, timelineMod, calendarMod] = featureMods;
-  avoidMod.configureAvoid({});
+  const [wishMod, journalMod, routineMod, timelineMod, calendarMod] = featureMods;
   wishMod.configureWish({});
   journalMod.configureJournal({});
   routineMod.configureRoutine({});

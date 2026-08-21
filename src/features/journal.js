@@ -476,6 +476,7 @@ function renderJournal() {
   ensureJournal(state.selectedDate);
   const previous = addDays(state.selectedDate, -1);
   const date = state.selectedDate;
+  const report = (state.reports || {})[date] || "";
   // v141: AIフィードバック列(3列目)はジャーナルタブの表示から撤去した(未使用のため。
   // CHANGES_v141.md参照)。fetchロジック(hydrateStaticMarkdown)・保存データ(state.feedback/
   // cachedFeedback)自体は削除しておらず、Homeの「AIから」カード(homeAiFeedbackReadHTML)で
@@ -505,6 +506,9 @@ function renderJournal() {
           <h2>📝 当日編集</h2>
           <div class="row">
             <button class="btn primary" data-action="generate-report">📊 日報を生成</button>
+            ${report ? `<button class="btn" data-action="report-copy-ai">📋 AI用にコピー</button>` : ""}
+            ${report && typeof navigator !== "undefined" && navigator.share ? `<button class="btn" data-action="report-share-ai">↗ 共有</button>` : ""}
+            <button class="btn" data-action="download-report">Markdown保存</button>
             ${personalDataReady(state.settings.github) ? `<button class="btn" data-action="push-report">📤 GitHubに日報push</button>` : ""}
           </div>
         </div>

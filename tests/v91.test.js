@@ -92,7 +92,7 @@ function check(name, cond, extra = "") {
       s.questions = [];
       s.blocks = []; s.tasks = []; s.projects = [];
       s.selectedDate = TODAY;
-      s.currentView = "reports";
+      s.currentView = "journal";
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, TODAY, customJournal });
     await page.reload();
