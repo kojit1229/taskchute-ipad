@@ -4538,6 +4538,7 @@ h3 {
 .today-tower .today-zero-text { border-color: var(--tower-line); background: rgba(255, 255, 255, .04); color: var(--tower-text); }
 .today-tower .today-deck-card > div { color: var(--tower-text); }
 .today-tower .today-deck-card > small { color: var(--tower-text); opacity: .6; }
+/* v212: annexテキストのlightテーマ固定の続きはファイル末尾のv212セクションにある。 */
 
 /* 3面卓の適用はviewport 1280px以上。設計書の900pxはサイドバー無しサンプル準拠の値で、
    実アプリはサイドバー216px+余白により900〜1279pxでは中央列が340/320の固定レールに潰される(1024px実測18px)。 */
@@ -6196,3 +6197,18 @@ h3 {
     gap: 4px;
   }
 }
+
+/* v212: TOWER annexのlightテーマ残件。--muted/--purple/--orangeのまま残る箇所をtowerトークンへ固定する
+   (同系のtower上書きはstyles.css 4527付近=v209にもある)。
+   opacityはテキスト側だけに掛ける(.today-replan-statusの容器に掛けると内包.sync-dot(自身opacity .7)へ
+   複合して実効.455となり図形基準3:1を割る=Codexレビュー指摘)。 */
+.today-tower .today-replan-status,
+.today-tower .today-empty,
+.today-tower .today-deck-nav > span,
+.today-tower .today-zero-writebar { color: var(--tower-text); }
+.today-tower .today-empty,
+.today-tower .today-deck-nav > span,
+.today-tower .today-replan-status > span:not(.sync-dot),
+.today-tower .today-zero-writebar > span { opacity: .65; }
+.today-tower .today-zero-writebar time { color: var(--tower-purple); }
+.today-tower .today-zero-writebar time.is-over { color: var(--tower-amber); }

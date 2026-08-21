@@ -1,0 +1,41 @@
+{
+  "version": 212,
+  "date": "2026-08-21",
+  "title": "TOWER annexのlightテーマ残件をtowerトークンへ固定",
+  "summary": "annex内で非towerトークンのままlightテーマで4.5:1を割る箇所(replan-status/empty/deck-nav/zero-writebar系)を修正し、コントラスト自動検査をtower-coreへ追加",
+  "changedFiles": [
+    "docs/test-impact-map.generated.md",
+    "releases/v212.json",
+    "styles.css",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/tower-core.test.js"
+  ],
+  "intent": [
+    "v211レビュー(Claude Minor)で確定したbacklog筆頭: .today-replan-status / .today-empty / .today-deck-nav > span がvar(--muted)のままで、lightテーマ時にtower暗色パネル上で実測3.68:1に落ちる(T9由来の既存事象・既定tower化で露出増)。v212レビュー(Claude B-2)で同族の取りこぼし .today-zero-writebar(--muted 3.68:1)とその time(--purple 4.40:1)・time.is-over(--orange)が発覚したため、これらも本弾に含めて4箇所+time系とした。",
+    "lightテーマ可読性の指摘がT8/T9/v211と3連続でレビュー往復の恒久発生源になっているため、修正と同時に効果コントラストの機械検査をテストへ固定し、再発を人間レビュー前に検出する(開発速度改善レーンの再発源機械化)。検査の保証範囲は列挙セレクタ(deck表示3種+writebar系3種)であり、annex全要素の網羅ではない。"
+  ],
+  "changes": [
+    "styles.css末尾にv212セクションを追加: .today-tower スコープで対象をcolor: var(--tower-text)へ固定し、opacity .65 はテキスト側だけに掛ける(.today-replan-statusの容器に掛けると内包.sync-dot(自身opacity .7)へ複合して実効.455となり図形基準3:1を割る=Codexレビュー指摘P2への対応)。writebarのtimeはvar(--tower-purple)、time.is-overはvar(--tower-amber)へ。towerトークンはテーマ非依存のためlight/dark両方で同一の見え方になる。元のcockpit側セレクタは無改変で、.btnは自前のcolorを持つため容器のcolor指定はボタンへ波及しない。4541付近へ末尾セクションへの参照コメントを追加(tower上書きの分散対策=レビューm-1)。",
+    "tower-core[41]を追加: light/dark両テーマで、テーマ適用そのもの(document.documentElement.dataset.theme)をassertした上で(レビューm-2)、deck表示モードの3セレクタ+LOGBOOK書き込みモードのwritebar 2セレクタ+is-overの効果コントラスト(要素と祖先のopacity・祖先背景のalpha合成込みWCAG比)が4.5:1以上であることと、各セレクタの要素実在(空振りの偽陽性防止)を検査。加えて.sync-dotの祖先opacity積=1(ドットへのopacity複合が再発しない)を固定。検査対象は配列で、annexへ要素を足すときは1行追加で検査対象へ入る。",
+    "sw.jsのCACHE_NAMEをv212へ更新した。"
+  ],
+  "uncertainties": [
+    "iOS実機PWAでの実表示は未確認(表示専用・towerトークン固定のため機種依存要素はない見込み)。",
+    "[41]の保証範囲は列挙セレクタのみ。annexの他要素(.sync-dot自体の図形コントラスト等)は未検査でbacklog扱い(レビューM-1後半)。"
+  ],
+  "reviewFocus": [
+    "opacity .65での効果コントラスト実測値が要件を満たすか(検査実測: 修正後は全セレクタ>=4.5、修正前はlightで3.68に一致してFAILすることを陰性対照で確認済み)。",
+    "towerスコープ上書きがcockpitスキン・他ビューへ漏れていないか(.today-towerスコープのため構造上漏れない。レビューで詳細度・順序とも確認済み)。",
+    "tower-core[41]の合成計算(祖先背景alpha・opacity積)が実描画と乖離するケースがないか(2系統レビューの独立机上計算と小数第2位まで一致)。"
+  ],
+  "verification": [
+    "node tests/tower-core.test.js([1]〜[41])・node tests/today-core.test.js とも監督者環境でALL PASS。",
+    "陰性対照: styles.cssの修正をstashで外した状態で[41]がlightテーマでちょうど3.68:1を検出してFAILすることを確認(handoff記載の約3.7:1と一致=検査が実欠陥を捕捉する)。修正復元後ALL PASS。",
+    "テスト最終確定後に npm run test:manifest:write を再実行し test-manifest --check PASS(レビューB-1対応)。実行コード差分はstyles.css+sw.jsのみで200行以内。",
+    "reviewer(Claude)+Codexの2系統レビューを実施(軽微レーン: 実装は監督者直接・Codexはレビュー専任)。Codex P2(sync-dotへのopacity複合)=opacity分離+再発防止checkで修正。Claude FAIL(B-1=manifest乖離・B-2=writebar取りこぼし)=manifest再生成とwritebar系の本弾取り込みで解消。M-1後半(.sync-dot図形コントラスト検査)は見送りbacklogへ、m-1/m-2/m-3は採用。"
+  ],
+  "knownLimitations": [
+    "Service Worker更新とブラウザE2Eの実走はサンドボックス外またはCIでの確認が必要。"
+  ]
+}

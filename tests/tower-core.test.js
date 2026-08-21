@@ -854,6 +854,96 @@ function check(name, cond, extra = "") {
     }));
     check("1280pxでpomodoro stageに内部横スクロールなし", pomodoroOverflow.scrollWidth <= pomodoroOverflow.clientWidth,
       JSON.stringify(pomodoroOverflow));
+
+    console.log("[41] annexテキストの効果コントラストがテーマ非依存で4.5:1以上(v212)");
+    // v212: T8/T9/v211と3連続でlightテーマの可読性指摘が出たため機械検査に固定する。
+    // 効果コントラスト=要素と祖先のopacity・祖先背景のalpha合成を含むWCAG比。祖先opacityは
+    // テキスト側にのみ乗じ背景層へは乗じないため、常に保守側(低め)の見積もりになり偽PASSは生まない。
+    // CSS側のスコープは.today-tower、本検査は.tower-annex内に実在する要素に限る(annex外へ同クラスを
+    // 使う場合は別途対象追加が要る)。annexへ検査対象を足すときは該当配列へ1行追加する。
+    const measureContrast = (selectors) => page.evaluate((selectors) => {
+      const toLin = (v) => { const c = v / 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+      const luminance = ([r, g, b]) => 0.2126 * toLin(r) + 0.7152 * toLin(g) + 0.0722 * toLin(b);
+      const parseColor = (str) => (str.match(/[\d.]+/g) || []).map(Number);
+      const blend = (top, alpha, bottom) => bottom.map((c, i) => top[i] * alpha + c * (1 - alpha));
+      const contrastOf = (el) => {
+        // 祖先を遡り、最初の不透明背景を基底に半透明背景を遠い側から合成する
+        const layers = [];
+        let node = el.parentElement;
+        let base = [255, 255, 255];
+        while (node && node !== document.documentElement) {
+          const bg = parseColor(getComputedStyle(node).backgroundColor);
+          if (bg.length >= 3 && (bg.length < 4 || bg[3] > 0)) {
+            if (bg.length < 4 || bg[3] >= 1) { base = bg.slice(0, 3); break; }
+            layers.push({ rgb: bg.slice(0, 3), a: bg[3] });
+          }
+          node = node.parentElement;
+        }
+        for (let i = layers.length - 1; i >= 0; i--) base = blend(layers[i].rgb, layers[i].a, base);
+        // テキスト実効色=color×(color alpha×要素と祖先のopacity積)を背景へ合成
+        const cs = getComputedStyle(el);
+        const text = parseColor(cs.color);
+        let alpha = (text.length >= 4 ? text[3] : 1);
+        for (let n = el; n && n !== document.documentElement; n = n.parentElement) {
+          alpha *= parseFloat(getComputedStyle(n).opacity);
+        }
+        const effective = blend(text.slice(0, 3), alpha, base);
+        const [l1, l2] = [luminance(effective), luminance(base)].sort((a, b) => b - a);
+        return (l1 + 0.05) / (l2 + 0.05);
+      };
+      return selectors.map((selector) => {
+        const els = [...document.querySelectorAll(selector)];
+        return { selector, count: els.length, ratios: els.map((el) => Math.round(contrastOf(el) * 100) / 100) };
+      });
+    }, selectors);
+    const checkContrast = (theme, results) => {
+      for (const r of results) {
+        check(`${theme}: ${r.selector} が存在する`, r.count > 0, JSON.stringify(r));
+        check(`${theme}: ${r.selector} の効果コントラスト>=4.5`, r.count > 0 && r.ratios.every((v) => v >= 4.5), JSON.stringify(r));
+      }
+    };
+    const annexContrastTargets = [
+      ".tower-annex .today-replan-status > span:not(.sync-dot)",
+      ".tower-annex .today-empty",
+      ".tower-annex .today-deck-nav > span"
+    ];
+    const writebarContrastTargets = [
+      ".tower-annex .today-zero-writebar > span",
+      ".tower-annex .today-zero-writebar time"
+    ];
+    for (const theme of ["light", "dark"]) {
+      await page.evaluate(({ KEY, theme }) => {
+        const s = JSON.parse(localStorage.getItem(KEY));
+        s.settings.theme = theme;
+        localStorage.setItem(KEY, JSON.stringify(s));
+      }, { KEY, theme });
+      // 空queue(CABIN TIMERのtoday-empty)と0秒思考テーマあり(LOGBOOKのdeck-nav)を同時に出す
+      await seedT8({ zeroThinking: { themes: [
+        { id: "zero-v212", text: "v212コントラスト検査テーマ", fav: false, groupId: null, createdAt: atMinute(today, 8 * 60) }
+      ] } });
+      await page.waitForLoadState("networkidle");
+      // normalizeStateが許可値外をdarkへ落とすため、light側が黙ってdarkを測る空回りを防ぐ(レビューm-2)
+      check(`${theme}テーマが適用されている`, await page.evaluate(() => document.documentElement.dataset.theme) === theme);
+      checkContrast(theme, await measureContrast(annexContrastTargets));
+      // LOGBOOK書き込みモードのwritebar(レビューB-2: deck-navと排他描画のため書き込みモードで測る)
+      await page.locator('.tower-annex [data-action="today-zero-write"]').click();
+      await page.waitForSelector(".tower-annex #todayZeroText", { state: "visible" });
+      checkContrast(theme, await measureContrast(writebarContrastTargets));
+      await page.evaluate(() => document.querySelector(".tower-annex .today-zero-writebar time").classList.add("is-over"));
+      checkContrast(theme, await measureContrast([".tower-annex .today-zero-writebar time.is-over"]));
+    }
+    // Codexレビュー(v212 P2)の再発防止: .sync-dotの祖先にopacityを掛けるとドット自身の.7へ複合して
+    // 図形基準3:1を割る。ドットの祖先opacity積が1のままであることを固定する。
+    const dotAncestorOpacity = await page.evaluate(() => {
+      const dot = document.querySelector(".tower-annex .today-replan-status .sync-dot");
+      if (!dot) return null;
+      let product = 1;
+      for (let n = dot.parentElement; n && n !== document.documentElement; n = n.parentElement) {
+        product *= parseFloat(getComputedStyle(n).opacity);
+      }
+      return product;
+    });
+    check("RESEQUENCEのsync-dotへ祖先opacityが複合しない", dotAncestorOpacity === 1, String(dotAncestorOpacity));
   } finally {
     await browser.close();
     server.close();

@@ -541,9 +541,9 @@
         "sync-storage",
         "ui-responsive"
       ],
-      "assertionSignals": 148,
-      "assertionHash": "c2be7cbe10bb7cdd",
-      "sourceHash": "df93e1488477a524",
+      "assertionSignals": 152,
+      "assertionHash": "ea783e3449874642",
+      "sourceHash": "4bc8555da47b509c",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
