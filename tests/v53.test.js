@@ -1,10 +1,10 @@
-// v53 検証: 計器盤(統計) / 自動アーカイブ
+// v53 検証: 自動アーカイブ
 //
 // v60メモ: 本スイートはもともと「朝の体調相関の学習注入」(下書きスケジュールのAIプロンプトへ
 // buildScheduleLearningDigest() の集計結果を注入する機能)も検証していたが、v60でアプリ内からの
 // Claude API直接呼び出しを全廃したのに伴い、そのプロンプト注入経路(および呼び出し元を失った
 // buildScheduleLearningDigest/morningEnergyCorrelation自体)を削除したため、該当セクションは
-// 削除した(詳細はCHANGES_v60.md)。計器盤・自動アーカイブはAI呼び出しと無関係なのでそのまま残す。
+// 削除した(詳細はCHANGES_v60.md)。自動アーカイブはAI呼び出しと無関係なのでそのまま残す。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, openSettingsGroup } = require("./helpers");
 
 const PORT = randomPort();
@@ -80,20 +80,6 @@ const b64ToObj = (b64) => JSON.parse(Buffer.from(b64, "base64").toString("utf8")
   }, { TODAY, KEY, daysAgoMap: { ...Object.fromEntries([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,21,22,100,200].map((n) => [n, daysAgo(n)])), prevYear: `${today.getFullYear() - 1}-01-15` } });
   await page.reload();
   await page.waitForTimeout(600);
-
-  // ---- [1] 計器盤 ----
-  console.log("[1] 計器盤");
-  check("ナビに計器盤", await page.locator('[data-action="nav"][data-view="stats"]').count() >= 1);
-  await page.click('[data-action="nav"][data-view="stats"]');
-  await page.waitForTimeout(400);
-  const statsText = await page.locator("main").textContent();
-  check("着手率の週次推移が出る", statsText.includes("着手率の週次推移") && await page.locator(".stats-bar-fill").count() >= 2);
-  check("エネルギー収支の週次推移が出る", statsText.includes("エネルギー収支の週次推移"));
-  check("ヒートマップにセル値が出る", await page.locator(".stats-hm-cell:not(.empty)").count() >= 1);
-  check("見積vs実績: 中央値150%", statsText.includes("見積 vs 実績") && statsText.includes("150%"), statsText.match(/中央値.{0,20}/)?.[0] || "");
-  await page.click('[data-action="stats-range"][data-range="12w"]');
-  await page.waitForTimeout(300);
-  check("期間切替が保存される(UI状態)", await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).settings.statsRange, KEY) === "12w");
 
   // ---- [2] アーカイブ用のGitHub fetchモックを設置 ----
   await page.evaluate(() => {
@@ -248,7 +234,6 @@ const b64ToObj = (b64) => JSON.parse(Buffer.from(b64, "base64").toString("utf8")
   await page.evaluate((KEY) => {
     const s = JSON.parse(localStorage.getItem(KEY));
     delete s.settings.autoArchive;
-    delete s.settings.statsRange;
     localStorage.setItem(KEY, JSON.stringify(s));
   }, KEY);
   await page.reload();
@@ -257,9 +242,9 @@ const b64ToObj = (b64) => JSON.parse(Buffer.from(b64, "base64").toString("utf8")
   await page.waitForTimeout(300);
   const compat = await page.evaluate((KEY) => {
     const s = JSON.parse(localStorage.getItem(KEY));
-    return { auto: s.settings.autoArchive, range: s.settings.statsRange };
+    return { auto: s.settings.autoArchive };
   }, KEY);
-  check("旧stateにデフォルトが補完される", compat.auto === true && compat.range === "4w", JSON.stringify(compat));
+  check("旧stateにデフォルトが補完される", compat.auto === true, JSON.stringify(compat));
 
   await browser.close();
   server.close();

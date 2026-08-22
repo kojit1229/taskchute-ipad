@@ -10,7 +10,6 @@
 // (e) AIプランのtitle先頭「[資産]」検出 → 下書き段階でマーク表示 → 確定後のBlockに
 //     leverageType=asset が自動付与される(プレフィックス無しの項目は影響を受けない)
 // (f) v64設計§3残余: AIプラン自身のskipped(kind:"ai")が state.aiPlanSkippedLog に記録される
-// (g) 週次レビュータブのbucketゲージ下に、leverageType別の実績時間1行集計が表示される
 //
 // 方針: 既存スイート(v61/v62/v63)と同じく、app.js は type="module" のため内部関数は window に
 // 露出しない。ブラウザ操作 + localStorage 状態の直接注入で観測する。AIプランのfetchは
@@ -42,19 +41,6 @@ function check(name, cond, extra = "") {
   now0.setHours(10, 0, 0, 0);
   const TODAY = isoDate(now0);
 
-  // app.js の weekRange() と同じロジック(週開始=直近土曜)をNode側でも再現する
-  function weekStartOf(dateStr) {
-    const [y, m, d] = dateStr.split("-").map(Number);
-    const date = new Date(y, m - 1, d);
-    const dow = (date.getDay() + 1) % 7; // Sat=0 ... Fri=6
-    date.setDate(date.getDate() - dow);
-    return isoDate(date);
-  }
-  const WEEK = weekStartOf(TODAY);
-  // v70: 実ファイルを書く代わりに、この変数をfetchのモック応答として使う(null=404)。
-  let aiPlanFixture = null;
-
-  const hhmm = (min) => `${pad2(Math.floor(min / 60))}:${pad2(min % 60)}`;
   function makeBlockFixture({ id, date = TODAY, title, startMin = 9 * 60, minutes = 30, category = "",
     taskId = "", completed = false, leverageType, includeLeverageField = true }) {
     const b = {
@@ -83,8 +69,8 @@ function check(name, cond, extra = "") {
     deleted: false, collapsed: false
   });
 
-  async function seed({ blocks = [], tasks = [], projects = [], view = "tasks", weeklySelectedWeek = null } = {}) {
-    await page.evaluate(({ KEY, blocks, tasks, projects, TODAY, view, weeklySelectedWeek }) => {
+  async function seed({ blocks = [], tasks = [], projects = [], view = "tasks" } = {}) {
+    await page.evaluate(({ KEY, blocks, tasks, projects, TODAY, view }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.blocks = blocks;
       s.tasks = tasks;
@@ -92,9 +78,8 @@ function check(name, cond, extra = "") {
       s.aiScheduleHistory = [];
       s.selectedDate = TODAY;
       s.currentView = view;
-      if (weeklySelectedWeek) s.settings.weeklySelectedWeek = weeklySelectedWeek;
       localStorage.setItem(KEY, JSON.stringify(s));
-    }, { KEY, blocks, tasks, projects, TODAY, view, weeklySelectedWeek });
+    }, { KEY, blocks, tasks, projects, TODAY, view });
     await page.reload();
     await page.waitForTimeout(500);
   }
@@ -309,27 +294,6 @@ function check(name, cond, extra = "") {
     const skippedLog = (s7.aiPlanSkippedLog || []).find((e) => e.title === "AIが見送ったタスク");
     check("aiPlanSkippedLogにAIの見送り理由が記録される", !!skippedLog && skippedLog.reason === "時間帯が合わない" && skippedLog.date === TODAY, JSON.stringify(skippedLog));
 
-    // ============================================================
-    // (g) 週次レビューの leverageType 別1行集計
-    // ============================================================
-    console.log("[9] 週次レビュータブのbucketゲージ下にleverageType別実績時間の1行集計が表示される");
-    await seed({
-      blocks: [
-        makeBlockFixture({ id: "wk-asset", date: WEEK, title: "週次集計・資産", leverageType: "asset", completed: true, startMin: 9 * 60, minutes: 60 }),
-        makeBlockFixture({ id: "wk-elim", date: WEEK, title: "週次集計・削減", leverageType: "eliminate", completed: true, startMin: 10 * 60 + 30, minutes: 30 }),
-        makeBlockFixture({ id: "wk-oneoff", date: WEEK, title: "週次集計・単発", leverageType: "oneoff", completed: true, startMin: 11 * 60 + 30, minutes: 15 }),
-        makeBlockFixture({ id: "wk-unset", date: WEEK, title: "週次集計・未設定", leverageType: "", completed: true, startMin: 12 * 60, minutes: 45 })
-      ],
-      view: "weekly",
-      weeklySelectedWeek: WEEK
-    });
-    await page.waitForTimeout(400);
-    check("leverageType別1行集計が表示される", await page.locator(".lev-week-summary").count() === 1);
-    const summaryText = await page.locator(".lev-week-summary").textContent();
-    check("資産の実績時間(1h)が集計に含まれる", summaryText.includes("⚙資産") && summaryText.includes("1h"), summaryText);
-    check("削減の実績時間(30m)が集計に含まれる", summaryText.includes("✂削減") && summaryText.includes("30m"), summaryText);
-    check("単発の実績時間(15m)が集計に含まれる", summaryText.includes("単発") && summaryText.includes("15m"), summaryText);
-    check("未設定の実績時間(45m)が集計に含まれる", summaryText.includes("未設定") && summaryText.includes("45m"), summaryText);
   } finally {
     // v70: page.routeでモックしているため、実ファイルの後始末は不要(何も書いていない)。
     await browser.close();

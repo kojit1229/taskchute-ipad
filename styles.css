@@ -2477,23 +2477,6 @@ h3 {
 .home-rate-pct.green { color: var(--green-text); }
 .home-rate-frac { font-size: 11.5px; color: var(--muted); margin-left: auto; }
 
-.home-stat { display: flex; align-items: center; gap: 9px; margin-bottom: var(--space-2); }
-.home-stat-cap { font-size: var(--text-xs); font-weight: 700; color: var(--muted); width: 70px; flex: none; }
-.home-stat .progress { flex: 1; }
-.home-stat-pct {
-  font-size: 13px; font-weight: 800; color: var(--accent);
-  width: 40px; text-align: right; flex: none;
-  font-variant-numeric: tabular-nums;
-}
-.home-wk {
-  display: flex; justify-content: space-between; align-items: baseline;
-  margin-bottom: 11px; font-size: 15px; font-weight: 700;
-}
-.home-wk strong { color: var(--accent); font-size: 21px; font-variant-numeric: tabular-nums; }
-.home-divider { height: 1px; background: var(--line-soft); margin: var(--space-3) 0; }
-.home-goal { margin-top: 11px; }
-.home-goal:first-of-type { margin-top: 0; }
-.home-goal-title { font-size: 14.5px; font-weight: 700; margin-bottom: 5px; }
 
 .home-due-name { font-size: var(--text-sm); }
 .home-due-sub { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
@@ -2732,7 +2715,6 @@ h3 {
 .home-tc, .home-flow, .home-ck { flex-wrap: wrap; }
 
 /* v33: 12週ヘッダの残り日数(少し大きめ) */
-.home-wk-days { font-size: 15px; font-weight: 700; color: var(--accent); }
 
 /* v33: 今日の足あと — エネルギー集計表示 */
 .home-energy {
@@ -2918,41 +2900,6 @@ h3 {
 .home-q-badge { flex: none; font-size: 10.5px; font-weight: 800; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 6px; background: rgba(0,0,0,.06); color: var(--muted); }
 .home-q-badge.deepening { background: rgba(0,122,255,.16); color: var(--accent); }
 .home-q-text { font-size: 13.5px; line-height: 1.45; }
-.home-weekly-link { display: flex; justify-content: space-between; align-items: center; margin-top: var(--space-3); padding: 11px 14px; background: rgba(0,122,255,.07); border: 1px solid rgba(0,122,255,.2); border-radius: 10px; cursor: pointer; font-size: 13.5px; font-weight: 700; }
-.home-weekly-arrow { color: var(--accent); }
-
-/* --- 週次レビュー --- */
-.weekly-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 10px; }
-.weekly-week { font-size: 16px; font-weight: 800; }
-.weekly-week-dow { font-size: 12px; color: var(--muted); font-weight: 600; margin-left: 6px; }
-.weekly-sec { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; margin-bottom: 14px; }
-.weekly-sec h3 { font-size: 14px; font-weight: 800; margin: 0 0 12px; }
-.weekly-metric-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
-.weekly-metric { flex: 1; min-width: 90px; background: var(--panel-soft); border-radius: 10px; padding: 10px 12px; }
-.weekly-metric-lab { display: block; font-size: 11.5px; color: var(--muted); font-weight: 700; }
-.weekly-metric-val { display: block; font-size: 26px; font-weight: 900; line-height: 1.1; margin-top: 2px; }
-.weekly-metric-val small { font-size: 14px; color: var(--muted); font-weight: 700; }
-.weekly-metric-sub { font-size: 11.5px; color: var(--muted); }
-.wk-bars { display: flex; gap: 6px; align-items: flex-end; }
-.wk-bar-cell { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px; }
-.wk-bar { width: 100%; max-width: 34px; height: 56px; background: var(--panel-soft); border-radius: 6px; display: flex; align-items: flex-end; overflow: hidden; }
-.wk-bar-fill { width: 100%; background: var(--accent); border-radius: 6px 6px 0 0; min-height: 2px; }
-.wk-bar-lab { font-size: 11px; color: var(--muted); font-weight: 700; }
-.wk-net { font-size: 13px; font-weight: 800; }
-.wk-net.pos { color: var(--green-text); }
-.wk-net.neg { color: var(--red); }
-.weekly-energy-tot { font-size: 14px; margin-bottom: 12px; }
-.weekly-energy-tot .pos { color: var(--green-text); }
-.weekly-energy-tot .neg { color: var(--red); }
-.weekly-12wy { font-size: 15px; margin-bottom: 10px; }
-.weekly-tasklist { display: flex; flex-direction: column; gap: 4px; }
-.weekly-struct-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
-.weekly-struct-desc { font-size: 13.5px; font-weight: 600; flex: 1; min-width: 200px; }
-.weekly-q-row { font-size: 13.5px; padding: 6px 0; line-height: 1.5; }
-.weekly-q-move { font-size: 11px; font-weight: 800; color: var(--green-text); background: rgba(47,185,109,.14); border-radius: 6px; padding: 1px 7px; margin-right: 8px; }
-.weekly-q-stall { font-size: 11px; font-weight: 800; color: var(--muted); background: rgba(0,0,0,.06); border-radius: 6px; padding: 1px 7px; margin-right: 8px; }
-.weekly-close .weekly-change-btn { width: 100%; }
-.weekly-close .weekly-change-btn:disabled { opacity: .55; }
 
 /* =========================================================
    v40: 着手ジュース / 4週スパークライン / 双極エネルギーバー
@@ -2967,26 +2914,6 @@ h3 {
 /* v124: 減衰スプリング近似(apple-design §4)に調整。ease-out 0.3s から変更 */
 .just-started { animation: just-started-juice 280ms cubic-bezier(0.22, 1, 0.36, 1); }
 @media (prefers-reduced-motion: reduce) { .just-started { animation: none; } }
-
-/* 実行スコア 4週スパークライン(目標線・達成色なし=鏡) */
-.wk-spark-wrap { display: flex; align-items: center; gap: 12px; margin: 4px 0 14px; }
-.wk-spark-cap { font-size: 11.5px; color: var(--muted); font-weight: 700; flex: none; }
-.wk-spark { display: flex; align-items: flex-end; gap: 4px; height: 32px; }
-.wk-spark-bar { width: 8px; min-height: 2px; background: var(--accent); border-radius: 2px 2px 0 0; opacity: .5; }
-.wk-spark-bar:last-of-type { opacity: 1; }
-.wk-spark-val { font-size: 12px; color: var(--muted); font-weight: 700; margin-left: 6px; align-self: center; }
-
-/* 日別差引バー: ゼロ軸中央、正=teal(green)/ 負=red */
-.wk-net-bar { width: 100%; max-width: 34px; height: 56px; display: flex; flex-direction: column; margin: 0 auto; }
-.wk-net-pos, .wk-net-neg { flex: 1; display: flex; }
-.wk-net-pos { align-items: flex-end; }
-.wk-net-pos span { width: 100%; background: var(--green); border-radius: 4px 4px 0 0; }
-.wk-net-neg { align-items: flex-start; }
-.wk-net-neg span { width: 100%; background: var(--red); border-radius: 0 0 4px 4px; }
-.wk-net-zero { height: 1px; background: var(--line); }
-.wk-net-val { font-size: 11.5px; font-weight: 800; text-align: center; margin-top: 3px; color: var(--muted); }
-.wk-net-val.pos { color: var(--green-text); }
-.wk-net-val.neg { color: var(--red); }
 
 /* v41: 見込み終了時刻(色分け・警告なし。有限性を時刻で見せるだけ) */
 .projected-end { font-size: 12.5px; font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -3045,11 +2972,6 @@ h3 {
 /* v44: 問い→プロジェクト橋 — 実行リンク */
 .q-linked { margin-top: 8px; font-size: 12.5px; font-weight: 700; color: var(--accent); cursor: pointer; }
 
-/* v45: 12週サイクルレビュー */
-.weekly-cycle-link { display: block; text-align: center; font-size: 13px; font-weight: 700; color: var(--accent); background: rgba(0,122,255,.06); border: 1px solid rgba(0,122,255,.2); border-radius: 10px; padding: 11px; margin-bottom: 14px; cursor: pointer; }
-.cycle-goal { margin-bottom: 12px; }
-.cycle-goal-top { display: flex; justify-content: space-between; font-size: 13.5px; font-weight: 600; margin-bottom: 5px; gap: 10px; }
-
 /* v46: 未完了ブロックの繰り越し */
 .carryover-panel { margin-bottom: 12px; padding: 10px 12px; background: rgba(124,178,228,.08); border: 1px solid rgba(124,178,228,.28); border-radius: 10px; }
 .carryover-cap { font-size: 12px; font-weight: 800; color: var(--muted); margin-bottom: 6px; }
@@ -3107,161 +3029,13 @@ h3 {
 .draft-resize { position: absolute; left: 0; right: 0; bottom: 0; height: 14px; cursor: ns-resize; touch-action: none; }
 .draft-resize::after { content: ""; display: block; width: 36px; height: 4px; margin: 5px auto 0; border-radius: 2px; background: var(--accent); opacity: .55; }
 
-/* v53: 計器盤(統計ダッシュボード) */
-.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; }
-.stats-bars { display: flex; align-items: stretch; gap: 3px; height: 84px; }
-.stats-bar-cell { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; min-width: 4px; }
-.stats-bar { flex: 1; display: flex; align-items: flex-end; background: var(--panel-soft); border-radius: 3px; overflow: hidden; }
-.stats-bar-fill { width: 100%; background: var(--accent); opacity: .65; border-radius: 3px 3px 0 0; }
-.stats-bar-cell:last-child .stats-bar-fill { opacity: 1; }
-.stats-axis { font-size: 11px; }
-.stats-hm { border-collapse: collapse; font-size: 11.5px; }
-.stats-hm th { font-weight: 700; color: var(--muted); padding: 4px 6px; text-align: center; }
-.stats-hm-band { text-align: right; white-space: nowrap; font-size: 10.5px; }
-.stats-hm-cell { width: 40px; height: 30px; text-align: center; border: 1px solid var(--line); border-radius: 4px; font-weight: 700; }
-.stats-hm-cell.empty { background: transparent; color: var(--muted); }
-.stats-est-head { font-size: 13.5px; }
-.stats-est { border-collapse: collapse; font-size: 12.5px; width: 100%; }
-.stats-est th { text-align: left; color: var(--muted); font-size: 11px; padding: 4px 8px; border-bottom: 1px solid var(--line); }
-.stats-est td { padding: 5px 8px; border-bottom: 1px solid var(--line-soft, var(--line)); }
-
-/* v184: 計器盤 TIME LOG / 12WY TRACKER */
-.stats-time-log-chart {
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-  height: 76px;
-  padding: 6px 5px 0;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel-soft);
-}
-.stats-time-log-hour {
-  position: relative;
-  display: flex;
-  flex: 1;
-  flex-direction: column-reverse;
-  gap: 1px;
-  height: 100%;
-  min-width: 2px;
-}
-.stats-time-log-hour.is-now::after {
-  content: "";
-  position: absolute;
-  inset: -3px -2px;
-  border: 1px solid var(--accent);
-  border-radius: 4px;
-  pointer-events: none;
-}
-.stats-time-log-segment { display: block; flex: none; width: 100%; min-height: 1px; border-radius: 2px; }
-.stats-time-log-axis { display: flex; justify-content: space-between; padding: 4px 2px 0; color: var(--muted); font-size: 10px; }
-.stats-time-log-list, .stats-twelve-week-list { display: grid; gap: 7px; margin-top: 10px; }
-.stats-time-log-row {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 7px 9px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel-soft);
-}
-.stats-time-log-row.is-live { border-color: var(--accent); }
-.stats-time-log-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; }
-.stats-time-log-name { width: 110px; flex: none; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
-.stats-time-log-row.is-live .stats-time-log-name::after {
-  content: " ●";
-  color: var(--accent-text);
-  animation: today-blink 1.4s infinite;
-}
-.stats-time-log-bar, .stats-twelve-week-bar {
-  height: 7px;
-  flex: 1;
-  overflow: hidden;
-  border-radius: 3px;
-  background: var(--line-soft);
-}
-.stats-time-log-bar > span, .stats-twelve-week-bar > span { display: block; height: 100%; border-radius: 3px; transition: width 1s linear; }
-.stats-time-log-value { width: 74px; flex: none; text-align: right; font-variant-numeric: tabular-nums; }
-.stats-time-log-row.is-live .stats-time-log-value { color: var(--accent-text); }
-.stats-time-log-total { display: flex; align-items: baseline; gap: 10px; padding-top: 9px; border-top: 1px dashed var(--line); font-size: 12px; color: var(--muted); }
-.stats-time-log-total strong { color: var(--text); font-size: 18px; font-variant-numeric: tabular-nums; }
-
-.stats-twelve-week-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.stats-twelve-week-head strong { color: var(--orange-text); font-size: 25px; letter-spacing: .04em; }
-.stats-twelve-week-head small { color: var(--muted); font-size: 11px; }
-.stats-twelve-week-head > span { color: var(--muted); font-size: 12px; }
-.stats-twelve-week-row { display: grid; gap: 7px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-soft); }
-.stats-twelve-week-title, .stats-twelve-week-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-.stats-twelve-week-title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.stats-twelve-week-title span { flex: none; font-variant-numeric: tabular-nums; }
-.stats-twelve-week-bar > span { background: linear-gradient(90deg, var(--accent), var(--green)); }
-.stats-twelve-week-meta { color: var(--muted); font-size: 11px; }
-.stats-twelve-week-meta .is-ahead { color: var(--green-text); }
-.stats-twelve-week-meta .is-behind { color: var(--red); }
-.stats-twelve-week-target { justify-self: start; }
-.project-weekly-target { font-size: 16px; }
-
 /* v53: 横断検索のアーカイブヒット(閲覧のみ) */
 .search-hit.is-archive { opacity: .78; cursor: default; }
 .search-hit.is-archive:hover { border-color: var(--line); }
 .search-kind-arch { background: rgba(120,120,128,.16); color: var(--muted); }
 
-/* v54: 計器盤の追加チャート */
-.stats-wide { grid-column: 1 / -1; }
-
-/* ドーナツ + 凡例 */
-.stats-donut-wrap { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-.stats-donut { width: 132px; height: 132px; flex: none; }
-.stats-donut circle { transition: none; }
-.stats-donut-c1 { font-size: 6px; font-weight: 800; text-anchor: middle; fill: var(--text); }
-.stats-donut-c2 { font-size: 3.2px; text-anchor: middle; fill: var(--muted); }
-.stats-legend { display: flex; flex-direction: column; gap: 5px; min-width: 160px; flex: 1; }
-.stats-legend-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
-.stats-swatch { width: 11px; height: 11px; border-radius: 3px; flex: none; }
-.stats-legend-name { font-weight: 600; }
-.stats-legend-val { margin-left: auto; color: var(--muted); font-size: 11.5px; white-space: nowrap; }
-.stats-legend-inline-row { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 8px; }
-.stats-legend-inline { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
-
-/* カテゴリ別 双極(横)バー */
-.stats-div-row { display: grid; grid-template-columns: 84px 1fr 44px; align-items: center; gap: 8px; padding: 3px 0; }
-.stats-div-label { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.stats-div-track { position: relative; display: flex; align-items: center; height: 16px; }
-.stats-div-neg, .stats-div-pos { flex: 1; display: flex; align-items: center; height: 10px; }
-.stats-div-neg { justify-content: flex-end; }
-.stats-div-neg > span { height: 100%; background: var(--red); border-radius: 3px 0 0 3px; }
-.stats-div-pos > span { height: 100%; background: var(--green); border-radius: 0 3px 3px 0; }
-.stats-div-axis { width: 1px; height: 16px; background: var(--line); flex: none; }
-.stats-div-val { font-size: 11.5px; font-weight: 700; text-align: right; color: var(--muted); }
-.stats-div-val.pos { color: var(--green-text); }
-.stats-div-val.neg { color: var(--red); }
-
-/* 複数折れ線 */
-.stats-line-svg { width: 100%; height: 120px; }
-
-/* コントリビューション・カレンダー */
-.stats-cal-scroll { overflow-x: auto; padding-bottom: 4px; }
-.stats-cal { display: flex; flex-direction: column; gap: 3px; width: max-content; }
-.stats-cal-row { display: flex; gap: 3px; }
-.stats-cal-cell { width: 12px; height: 12px; border-radius: 3px; background: var(--panel-soft); flex: none; }
-.stats-cal-cell.out { background: transparent; }
-.stats-cal-cell.lv0 { background: var(--panel-soft); }
-.stats-cal-cell.lv1 { background: rgba(0,122,255,.30); }
-.stats-cal-cell.lv2 { background: rgba(0,122,255,.55); }
-.stats-cal-cell.lv3 { background: rgba(0,122,255,.85); }
-.stats-cal-legend { display: flex; align-items: center; gap: 4px; font-size: 11px; margin-top: 8px; }
-.stats-cal-legend .stats-cal-cell { width: 11px; height: 11px; }
-
-/* 時間帯ヒストグラム */
-.stats-hist { display: flex; align-items: flex-end; gap: 3px; height: 96px; }
-.stats-hist-cell { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 6px; height: 100%; }
-.stats-hist-bar { flex: 1; width: 100%; display: flex; align-items: flex-end; background: var(--panel-soft); border-radius: 3px; overflow: hidden; }
-.stats-hist-fill { width: 100%; background: var(--accent); opacity: .7; border-radius: 3px 3px 0 0; }
-.stats-hist-lab { font-size: 9px; color: var(--muted); height: 12px; line-height: 12px; }
-
-/* v161: エネルギーカーブ(時間帯別)。.stats-histとDOM構造は似せつつ、将来の.stats-hist系
-   件数カウントとの衝突を避けるため専用クラスにする(2026-07-28レビュー対応・推奨修正9)。
-   バー下に着手率の数値を出す行(.energy-curve-rate)を追加した点が.stats-histとの主な違い。 */
+/* v161: エネルギーカーブ(時間帯別)。専用クラスで表示する(2026-07-28レビュー対応・推奨修正9)。
+   バー下に着手率の数値を出す行(.energy-curve-rate)を追加した。 */
 .energy-curve-grid { display: flex; align-items: flex-end; gap: 3px; height: 96px; }
 .energy-curve-cell { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 6px; height: 100%; }
 .energy-curve-bar { flex: 1; width: 100%; display: flex; align-items: flex-end; background: var(--panel-soft); border-radius: 3px; overflow: hidden; }
@@ -3273,27 +3047,10 @@ h3 {
 .energy-curve-rate { font-size: 8px; color: var(--muted); height: 10px; line-height: 10px; }
 .energy-curve-lab { font-size: 9px; color: var(--muted); height: 12px; line-height: 12px; }
 
-/* v142: 計器盤「睡眠」セクション */
-.stats-sleep-sub { margin-bottom: 16px; }
-.stats-sleep-sub:last-child { margin-bottom: 0; }
-.stats-sleep-subhead { font-size: 13px; font-weight: 800; margin: 0 0 8px; }
-.stats-sleep-band { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow-y: auto; }
-.stats-sleep-band-row { display: flex; align-items: center; gap: 8px; height: 9px; }
-.stats-sleep-band-date { width: 34px; flex: none; font-size: 9.5px; color: var(--muted); text-align: right; }
-.stats-sleep-band-track { position: relative; flex: 1; height: 100%; background: var(--panel-soft); border-radius: 3px; overflow: hidden; }
-.stats-sleep-band-bar { position: absolute; top: 0; bottom: 0; background: var(--accent); opacity: .7; border-radius: 3px; }
-.stats-sleep-bucket-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 5px 0; border-bottom: 1px solid var(--line-soft, var(--line)); font-size: 12px; }
-.stats-sleep-bucket-row:last-of-type { border-bottom: none; }
-.stats-sleep-bucket-label { min-width: 96px; font-weight: 700; }
-.stats-sleep-bucket-metric { display: flex; align-items: center; gap: 6px; font-size: 11.5px; }
-.stats-sleep-bucket-bar { width: 60px; flex: none; }
-.stats-sleep-bucket-metric b.pos { color: var(--green-text); }
-.stats-sleep-bucket-metric b.neg { color: var(--red); }
-
-/* v143: 計器盤「今週のヒント」(観察文+ドリルダウンボタン。weekly-struct-rowと同じ行パターン) */
-.stats-insight-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
-.stats-insight-row:first-of-type { border-top: none; }
-.stats-insight-text { font-size: 13.5px; font-weight: 600; flex: 1; min-width: 200px; }
+.insight-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.insight-row:first-of-type { border-top: none; }
+.insight-text { font-size: 13.5px; font-weight: 600; flex: 1; min-width: 200px; }
+.insight-axis { font-size: 11px; }
 
 /* v55: WBS インライン編集(編集モード時の行内フォーム) */
 .wbs-inline { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -3515,52 +3272,11 @@ h3 {
 .wip-banner-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .wip-banner-name { font-size: 12.5px; }
 
-/* v63: 戦略/雑用/休息ゲージ(提案6)。目標値なし、まず現実を見る道具に徹する。 */
-.bucket-gauge { display: flex; flex-direction: column; gap: 8px; }
-.bucket-gauge-bar { display: flex; width: 100%; height: 22px; border-radius: 6px; overflow: hidden; background: var(--panel-soft); }
-.bucket-gauge-seg { height: 100%; min-width: 2px; }
-.bucket-gauge-seg.strategy { background: #007AFF; }
-.bucket-gauge-seg.chore { background: #FF9500; }
-.bucket-gauge-seg.rest { background: #34C759; }
-.bucket-gauge-seg.unclassified { background: #8E8E93; }
-.bucket-gauge-legend { display: flex; flex-direction: column; gap: 4px; }
-.bucket-gauge-legend-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
-.bucket-gauge-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
-.bucket-gauge-swatch.strategy { background: #007AFF; }
-.bucket-gauge-swatch.chore { background: #FF9500; }
-.bucket-gauge-swatch.rest { background: #34C759; }
-.bucket-gauge-swatch.unclassified { background: #8E8E93; }
-.bucket-gauge-name { min-width: 70px; }
-
-/* v66: 2x:10x 時間比トレンド(直近8週、CSS横棒のみ・ライブラリ不使用) */
-.lev-trend { display: flex; flex-direction: column; gap: 6px; }
-.lev-trend-row { display: flex; align-items: center; gap: 8px; font-size: 11px; }
-.lev-trend-label { width: 42px; flex: none; color: var(--muted); }
-.lev-trend-bar { flex: 1; height: 14px; border-radius: 4px; overflow: hidden; background: var(--panel-soft); display: flex; }
-.lev-trend-seg { height: 100%; min-width: 2px; }
-.lev-trend-seg.tenx { background: var(--teal); }
-.lev-trend-seg.twox { background: #8E8E93; }
-.lev-trend-empty { display: block; width: 100%; height: 100%; }
-.lev-trend-pct { width: 44px; flex: none; text-align: right; color: var(--muted); }
-
-/* v66: レバレッジ台帳(designs/10x-mechanism.md 2-2)。専用ログではなく
-   leverageType=asset で完了したTask/Blockそのものを都度集計する派生ビュー。 */
-.lev-ledger { display: flex; flex-direction: column; gap: 10px; }
-.lev-ledger-prompt { font-size: 13px; font-weight: 700; }
-.lev-ledger-prompt-yes { color: var(--green-text); }
-.lev-ledger-list { display: flex; flex-direction: column; gap: 6px; }
-.lev-ledger-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) 1fr; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line-soft); }
-.lev-ledger-row:last-child { border-bottom: none; }
-.lev-ledger-date { font-size: 11px; white-space: nowrap; }
-.lev-ledger-title { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lev-ledger-note { padding: 6px 8px; }  /* iOS Safariズーム防止: font-sizeは.input既定(16px)のまま変更しない */
-
 /* v68: 人生実験カード(ジャーナル/週次レビュー両タブ共通)。同時に1件だけ走らせる思想のため、
    実験中は結論記入までカードのまま留まる(リスト化しない)。 */
 .exp-card .exp-hypothesis { font-size: 15px; font-weight: 700; line-height: 1.5; }
 .exp-card .exp-judge { padding: 10px 12px; background: rgba(255,149,0,.08); border: 1px solid rgba(255,149,0,.25); border-radius: 10px; }
 .exp-card .exp-promote .exp-hypothesis { color: var(--green-text); }
-.bucket-gauge-val { color: var(--muted); }
 
 /* v70: タイムラインカードのワンタップ実績ボタン(▶いま開始/■いま終了)。
    既存○ボタン(左・完了登録モーダル)とは別に右上へ配置し、指サイズより見た目を優先する
@@ -3714,9 +3430,6 @@ h3 {
   color: var(--text);
 }
 
-/* 週次レビュー: 体調×実行率のミニ相関表(軽い一覧。分析はしない) */
-.cond-corr-table { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
-
 /* =========================================================
    v124: prefers-reduced-motion(apple-design §14)
    方針: 「無効化」ではなく「穏やかな等価表現」。
@@ -3823,18 +3536,6 @@ h3 {
   75% { opacity: 1; }
   100% { opacity: 0; }
 }
-.cond-corr-row {
-  display: grid;
-  grid-template-columns: 0.8fr 1fr 1fr 1.3fr 1.1fr;
-  gap: 4px;
-  padding: 6px 4px;
-  font-size: 12.5px;
-  border-bottom: 1px solid var(--line-soft);
-  text-align: center;
-}
-.cond-corr-row:last-child { border-bottom: none; }
-.cond-corr-head { font-weight: 700; color: var(--muted); font-size: 11px; }
-
 /* v204: TOWER T3。読み取り専用のARRIVALS/DEPARTURESボードを追加する。 */
 .today-tower {
   --tower-bg: #050a14;

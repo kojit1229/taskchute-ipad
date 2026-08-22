@@ -1,0 +1,67 @@
+{
+  "version": 217,
+  "date": "2026-08-22",
+  "title": "週次・旧計器盤・12週サイクルを削除し週次提案をAIレポートへ移設",
+  "summary": "スリム化P2のv217単位として週次・旧計器盤・12週サイクルの3ビューと専用ヘルパー・CSS・テストを削除し、AI週次レビューの来週タスク提案をAIレポートへ移設",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v217.json",
+    "src/features/journal.js",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/impact-regression-map.json",
+    "tests/suite-manifest.json",
+    "tests/today-core.test.js",
+    "tests/v142.test.js",
+    "tests/v143.test.js",
+    "tests/v148.test.js",
+    "tests/v53.test.js",
+    "tests/v54.test.js",
+    "tests/v58.test.js",
+    "tests/v62.test.js",
+    "tests/v63.test.js",
+    "tests/v65.test.js",
+    "tests/v66.test.js",
+    "tests/v68.test.js",
+    "tests/v71.test.js",
+    "tests/v73.test.js"
+  ],
+  "intent": [
+    "承認済みslim-specの変更単位どおり、週次・旧計器盤・12週サイクルの専用ビューを導線・描画・state補完・CSS・テストまで一括で削除する。",
+    "週次レビューMarkdownの来週タスク提案はAIレポートの週次種別へ移し、既存の1件登録処理と見積分数反映を継続する。",
+    "裁定7どおり週次レポートの日付に関係なく提案を登録可能とし、日報routineRate・computeMetrics・Vision ALIGNMENT・ATIS・renderInsights等は温存する。",
+    "Size-Exempt理由「3ビューが共有するヘルパー・state・CSS・テストを一括除去し、同時に唯一の継続機能を移設するため分割不能」。"
+  ],
+  "changes": [
+    "navItems・その他グリッド・allowedViews・renderディスパッチ・ライブ再描画・ホーム導線からweekly/stats/cycleを除去した。",
+    "renderWeekly/renderStats/renderCycle本体と専用action、Markdown生成、計器盤集計、週次バケット・レバレッジ台帳・コンディション表、cycleレビュー用state補完を削除した。",
+    "AIレポートのweekly本文だけMarkdownを提案節と分離して表示し、本文キャッシュをcachedWeeklyReviewMdへ橋渡しして既存weekly-suggest-addでWBSへ1件登録できるようにした。",
+    "週次・計器盤の固有CSSを削除し、温存するrenderInsightsのクラス名だけ汎用名へ変更した。",
+    "旧ビュー専用テスト3本を削除し、混在テストは旧ビュー依存部分だけ削除またはAIレポート経由へ更新した。",
+    "Service WorkerのCACHE_NAMEをv217へ更新し、コード索引とテストmanifestを再生成した。"
+  ],
+  "uncertainties": [
+    "サンドボックスがPlaywright Chromiumの起動をspawn EPERMで拒否したため、変更したブラウザE2Eのassertion実走とiOS実機PWA表示は未確認。"
+  ],
+  "reviewFocus": [
+    "renderWeekly・renderStats・renderCycle・open-cycleと.wk-/.stats-の実行参照・CSSが残っていないか。",
+    "AIレポートの週次種別で過去週を含む選択中レポートの提案が表示され、+登録が1件だけWBSへ追加して見積分数を反映するか。",
+    "日報routineRate、computeMetrics、renderInsights、Vision ALIGNMENT用statsTimeLogData/statsHMS、ATISのAIフィードバック参照が巻き添えになっていないか。",
+    "weekDaysはjournalの週次記録日数、computeEnergyStructureと各insight集計はrenderInsightsのために温存されているか。"
+  ],
+  "verification": [
+    "npm.cmd run code:index:writeはWROTE: code index 605 functions、npm.cmd run test:manifest:writeはWROTE: 130 suitesで成功し、各--checkもPASS。",
+    "npm.cmd run test:fastはfast-node 17 suitesが全件PASS。action-registry-coreとstore-coreの個別実行もPASS。",
+    "node --checkはapp.jsと変更テストでexit 0、git diff --checkもPASS。",
+    "node tests/v62.test.jsはPlaywright Chromium起動時のspawn EPERMで停止した。",
+    "release-gateはschema、impact selection、APP_SHELL 16件、test manifest 130件、code index 605件、app/src/sw全構文検査までPASSし、related+impact-regressionのブラウザ起動だけspawn EPERMで停止した。",
+    "release-record --writeはCHANGES_v217.md生成後、notes側handoff.md書き込みだけEPERM。--checkはCHANGES=OK、handoff=NG。"
+  ],
+  "knownLimitations": [
+    "iOS Safari実機PWAの表示・操作確認は監督者側で必要。"
+  ]
+}

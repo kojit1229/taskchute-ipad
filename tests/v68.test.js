@@ -272,12 +272,6 @@ function check(name, cond, extra = "") {
     check("昇格候補の結論文が出る", (await page.locator(".exp-promote").textContent()).includes("朝一MIT着手を標準の進め方にする"));
     check("結論をコピーボタンがある", await page.locator('[data-action="experiment-copy-conclusion"]').count() === 1);
 
-    console.log("[11] 週次レビュータブにも同じ実験セクションが出る(ジャーナルと共有)");
-    await page.click('[data-action="nav"][data-view="weekly"]');
-    await page.waitForTimeout(300);
-    check("週次レビューにも人生実験セクションが出る", await page.locator('.weekly-sec.exp-card:has-text("人生実験")').count() === 1);
-    check("週次レビューにも昇格候補が出る", (await page.locator(".exp-promote").textContent()).includes("朝一MIT着手を標準の進め方にする"));
-
     console.log("[12] 終了日超過→「手放す(dropped)」: status:dropped、昇格候補には出ない");
     await seed({
       view: "journal",

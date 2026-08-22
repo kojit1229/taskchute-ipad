@@ -39,7 +39,6 @@
       ],
       "suites": [
         "today-core",
-        "v54",
         "v57",
         "v75",
         "v134",
@@ -67,8 +66,7 @@
       ],
       "suites": [
         "journal-core",
-        "v141",
-        "v142"
+        "v141"
       ]
     },
     "routine-feature": {

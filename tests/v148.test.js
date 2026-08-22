@@ -4,7 +4,6 @@
 //     の上部リンクへ昇格し、その他グリッドからは除外される
 // (2) その他配下のビュー(例: 0秒思考)を開いたとき、ヘッダに「その他 › 群名」の現在地表示が出る
 // (3) 設定13パネル → 4群アコーディオン(既定全閉。「データと同期」は同期停止アラート発生時だけ初期open)
-// (4) 計器盤 → 常時表示(ヒント+着手率+睡眠1行要約)+詳細details(既定閉、既存チャートは全部残る)
 // (5) ジャーナル当日パネル → 朝/夜/本文の3details。現在時刻(〜14時=朝/14時〜=夜)で自動open。
 //     本文は常時open
 // (6) タイムラインのエネルギー/バッテリー切替トグル。選択状態はstate.settings.timelineEnergyGraphMode
@@ -86,9 +85,9 @@ function check(name, cond, extra = "") {
     const moreNavButtons = await page.locator('.more-group [data-action="nav"]').evaluateAll(
       (els) => els.map((el) => el.dataset.view)
     );
-    // v215: 計時・カレンダー削除後は10項目
-    check("その他グリッドは10項目(削除済みタブとルーティンを除外)",
-      moreNavButtons.length === 10, JSON.stringify(moreNavButtons));
+    // v217: 週次・計器盤の削除後は7項目
+    check("その他グリッドは7項目(削除済みタブとルーティンを除外)",
+      moreNavButtons.length === 7, JSON.stringify(moreNavButtons));
     check("ルーティンはその他グリッドに含まれない", !moreNavButtons.includes("routine"), JSON.stringify(moreNavButtons));
     check("計画群が先頭でグループ単位にまとまっている",
       moreNavButtons.slice(0, 4).join(",") === "home,wbs,wish,vision", JSON.stringify(moreNavButtons));
@@ -246,66 +245,6 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(300);
     check("認証エラーバナーからの遷移で「データと同期」群が自動openになる",
       await syncGroupLoc.evaluate((el) => el.open) === true);
-
-    // ============================================================
-    // (4) 計器盤: 常時表示(ヒント+着手率+睡眠1行要約) + 詳細details(既定閉、チャートは全部残る)
-    // ============================================================
-    console.log("[4] 計器盤は常時表示+詳細detailsの2層。詳細は既定closedで、格納後もチャートは全部存在する");
-    const TODAY = isoDate(now0);
-    // 着手率の週次推移(rateChart)はtaskchuteBlocks()(taskId+Project紐づきTaskを持つBlockのみ)
-    // を母数にするため、Task/Projectも合わせて用意する。
-    const statsProject = {
-      id: "v148-stats-proj", kind: "normal", title: "統計用案件", category: "", status: "active",
-      description: "", dueDate: "", twelveWeekStartDate: "", createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`,
-      deleted: false, collapsed: false
-    };
-    const statsTask = {
-      id: "v148-stats-task", projectId: "v148-stats-proj", parentTaskId: "", title: "統計用タスク",
-      category: "", status: "todo", dueDate: "", description: "", createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`,
-      deleted: false
-    };
-    const blocksForStats = Array.from({ length: 8 }, (_, i) => {
-      const d = new Date(now0);
-      d.setDate(d.getDate() - i * 7);  // 8週分、週1件ずつ
-      const dateStr = isoDate(d);
-      return {
-        id: `v148-stats-${i}`, taskId: "v148-stats-task", date: dateStr, title: `統計用Block${i}`, category: "作業",
-        plannedStartAt: `${dateStr}T09:00`, plannedEndAt: `${dateStr}T09:30`,
-        actualStartAt: `${dateStr}T09:00`, actualEndAt: `${dateStr}T09:30`,
-        completed: true, charge: 3, discharge: 1, comment: "", recurrenceGroupId: "", pomodoroCount: 0,
-        migratedTo: "", orderIndex: 0, carryCount: 0, isMIT: false, source: "", estimateMin: 20,
-        leverageType: "", createdAt: `${dateStr}T00:00`, updatedAt: `${dateStr}T00:00`, deleted: false
-      };
-    });
-    await page.evaluate(({ KEY, blocks, task, project, view }) => {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      s.blocks = blocks;
-      s.tasks = [task]; s.projects = [project];
-      s.currentView = view;
-      s.settings.statsRange = "12w";
-      localStorage.setItem(KEY, JSON.stringify(s));
-    }, { KEY, blocks: blocksForStats, task: statsTask, project: statsProject, view: "stats" });
-    await page.reload();
-    await page.waitForTimeout(500);
-    check("常時表示に「今週のヒント」または「着手率の週次推移」が出る(要約が空でない)",
-      await page.locator(".stats-grid").first().count() >= 1);
-    const detailsFold = page.locator('details[data-fold-id="stats-details"]');
-    check("詳細detailsが存在し既定closed", await detailsFold.count() === 1 && await detailsFold.evaluate((el) => el.open) === false);
-    const chartClassesInDetails = [
-      ".stats-donut-wrap", ".stats-bars", ".stats-hm-band", ".stats-hist", ".stats-cal-row"
-    ];
-    for (const sel of chartClassesInDetails) {
-      const cnt = await page.locator(`details[data-fold-id="stats-details"] ${sel}`).count();
-      check(`既存チャート(${sel})が詳細details内に存在する(削除されていない)`, cnt >= 1, String(cnt));
-    }
-    // rateChart(着手率の週次推移=主要指標)は常時表示側にあり、詳細detailsの外にある
-    const rateChartInDetails = await page.evaluate(() => {
-      const h2 = [...document.querySelectorAll("#main h2")].find((el) => el.textContent === "着手率の週次推移");
-      if (!h2) return null;  // 見つからない場合はnull(件数不足で非表示の可能性。下のcheckで区別する)
-      return !!h2.closest('details[data-fold-id="stats-details"]');
-    });
-    check("着手率の週次推移(主要指標)の見出しが存在する", rateChartInDetails !== null, String(rateChartInDetails));
-    check("着手率の週次推移(主要指標)は常時表示側にある(詳細detailsの外)", rateChartInDetails === false, String(rateChartInDetails));
 
     // ============================================================
     // (5) ジャーナル当日パネル: 朝/夜/本文の3details。現在時刻で自動open。本文は常時open

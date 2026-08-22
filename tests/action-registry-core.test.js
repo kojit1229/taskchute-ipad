@@ -3,11 +3,9 @@
 // v173: 段階5-2(抽出済みfeatureのaction移行)で
 // [3]を拡張した。
 // v174: 段階5-3(残ドメイン=settings/sync/core(nav)、20分岐の相乗り移行)で[3]をさらに拡張した。
-// v176: 段階5-6a(journal系残ドメインの前半=0秒思考/週次/12週サイクル、36分岐の相乗り移行)で
 // [3]をさらに拡張した(独立レビュー対応: journal系71件見積りの一括移行は実行コード差分が
 // 200行を超えるため、設計書§7どおり2コミットへ分割した)。
 // v177: 段階5-6b(journal系残ドメインの後半=問い10+その他19、計29分岐の相乗り移行)で
-// [3]をさらに拡張した。これでjournal系残ドメイン(0秒思考+週次/サイクル+問い+その他)の
 // 計65分岐すべての移行が完了した。
 // v174分(20件)+v176分(36件)+v177分(29件)=計85件は、いずれもsrc/features/journal.js等へ
 // 未抽出(ハンドラ実体がapp.js残留)のため、app.js自身がregisterActionsを直接呼ぶ(4featureの
@@ -131,9 +129,6 @@ const GOLDEN_CLICK_ACTIONS = [
   "question-add", "question-edit", "question-to-theme", "question-settle", "question-reopen",
   "question-bridge", "question-bridge-submit", "question-delete",
   "entry-to-question", "open-questions",
-  "open-weekly", "weekly-prev", "weekly-next", "weekly-change-theme",
-  "weekly-download", "weekly-push", "weekly-open-question",
-  "open-cycle", "cycle-prev", "cycle-next", "cycle-start-new", "cycle-download", "cycle-push",
   "report-copy-ai", "report-share-ai",
   "ai-mit-adopt", "ai-task-adopt", "ai-task-dismiss",
   "weekly-wish-open", "weekly-wish-submit", "weekly-wish-toggle",
@@ -143,7 +138,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "draft-remove-reason", "draft-remove-reason-dismiss",
   "weekly-suggest-add",
   "open-backup-list", "restore-backup",
-  "stats-range", "run-archive",
+  "run-archive",
   "open-search", "search-jump",
   "carry-over", "ideal-retry",
   "energy-open-routine", "energy-open-category",
@@ -179,14 +174,11 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
 // registerActions({...})(app.js内、src/features/への抽出はまだ行っていない)へ移行した。
 // ハンドラ本体はif連鎖からロジック無改変で移しただけで、追加・削除・リネームはしていない。
 //
-// v176: 段階5-6aで以下36件(journal系残ドメインの前半: 0秒思考22+週次/12週サイクル14)を
 // 同じくapp.js自身が呼ぶregisterActions({...})へ移行した(独立レビュー対応: journal系71件
 // (見積り)の一括移行は実行コード差分が200行を超えるため、設計書§7どおり機械的に分割可能な
-// 単位で2コミットへ分けた。前半=0秒思考+週次/サイクル、後半=問い+その他)。
 // v177: 段階5-6bで以下29件(journal系残ドメインの後半: 問い10+その他19)を、同じく
 // app.js自身が呼ぶ別のregisterActions({...})呼び出しへ移行した。ハンドラ本体はいずれも
 // if連鎖からロジック無改変で移しただけで、追加・削除・リネームはしていない。
-// これでjournal系残ドメイン(0秒思考+週次/サイクル+問い+その他)の計65分岐すべての移行が
 // 完了した。
 // v180: 段階5-8(前半)で以下27件(timeline系のBlock作成2+Block/Now9+ポモドーロ16)を、
 // 同じくapp.js自身が呼ぶregisterActions({...})へ移行した。
@@ -194,7 +186,7 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
 // 同じくapp.js自身が呼ぶregisterActions({...})へ移行した(timeline-modeのみsrc/features/
 // timeline.js側のMIGRATED_TO_REGISTRY_ACTIONSで検証する)。これでtimeline系40分岐すべての
 // 移行が完了した。所属ドメインに確信が持てなかった6件(toggle-mit・mit-candidate-add・home-tab・
-// open-md-in-github・reload-md・stats-range)、toggle-criteria-request/home-jump(WBS/ホーム寄り
+// open-md-in-github・reload-md)、toggle-criteria-request/home-jump(WBS/ホーム寄り
 // で確信が持てない)、body-scan-*(ポモドーロ完了時トリガーだがroutine.js未抽出の既存判断を
 // 維持)、energy-open-routine(ルーティンタブへの導線でtimeline状態を触らない)、
 // weekly-wish-*(wish週次選定、weekly-wish-toggleはpreventDefault依存)は
@@ -215,10 +207,6 @@ const APP_JS_REGISTERED_ACTIONS = [
   "zt-group-add", "zt-group-rename", "zt-group-delete", "zt-group-toggle",
   "zt-write", "zt-save", "zt-discard", "zt-entry-open", "zt-edit-close", "zt-edit-save",
   "zero-tab", "zerosec-theme-add", "zerosec-theme-skip",
-  // --- v176: 週次レビュー/12週サイクル(14) ---
-  "open-weekly", "weekly-prev", "weekly-next", "weekly-change-theme",
-  "weekly-download", "weekly-push", "weekly-open-question",
-  "open-cycle", "cycle-prev", "cycle-next", "cycle-start-new", "cycle-download", "cycle-push",
   "weekly-suggest-add",
   // --- v177: 問い(10) ---
   "question-add", "question-edit", "question-to-theme", "question-settle", "question-reopen",

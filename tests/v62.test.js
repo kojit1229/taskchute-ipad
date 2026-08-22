@@ -1,4 +1,4 @@
-// v62 検証: バッチ生成物のアプリ側着地(AIプラン・週次レビュー) + 下書きUndo/Redo・却下理由メモ
+// v62 検証: バッチ生成物のアプリ側着地(AIプラン・AIレポート週次レビュー) + 下書きUndo/Redo・却下理由メモ
 //           + ホーム信条の実データ化。
 //
 // (a) 朝プラン(runAiMorningPlan)が当日の AIプラン_YYYY-MM-DD.json を同一オリジンfetchし、
@@ -87,8 +87,8 @@ function check(name, cond, extra = "") {
     deleted: false, collapsed: false
   });
 
-  async function seed({ blocks = [], tasks = [], projects = [], view = "tasks" } = {}) {
-    await page.evaluate(({ KEY, blocks, tasks, projects, TODAY, view }) => {
+  async function seed({ blocks = [], tasks = [], projects = [], view = "tasks", settings = {} } = {}) {
+    await page.evaluate(({ KEY, blocks, tasks, projects, TODAY, view, settings }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.blocks = blocks;
       s.tasks = tasks;
@@ -96,8 +96,9 @@ function check(name, cond, extra = "") {
       s.aiScheduleHistory = [];
       s.selectedDate = TODAY;
       s.currentView = view;
+      s.settings = { ...s.settings, ...settings };
       localStorage.setItem(KEY, JSON.stringify(s));
-    }, { KEY, blocks, tasks, projects, TODAY, view });
+    }, { KEY, blocks, tasks, projects, TODAY, view, settings });
     await page.reload();
     await page.waitForTimeout(500);
   }
@@ -131,6 +132,16 @@ function check(name, cond, extra = "") {
       if (aiPlanFixture === null) return route.fulfill({ status: 404, body: "not found (test-fixture)" });
       route.fulfill({ status: 200, contentType: "application/json", body: aiPlanFixture });
     });
+    await page.route((url) =>
+      url.hostname === "api.github.com" && decodeURIComponent(url.pathname).endsWith("/taskchute/report-index.json"),
+    (route) => route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        generatedAt: `${TODAY}T01:00:00Z`,
+        files: [{ name: `週次レビュー_${WEEK}.md`, date: WEEK, kind: "weekly" }]
+      })
+    }));
     await page.route((url) =>
       url.hostname === "api.github.com" && decodeURIComponent(url.pathname).endsWith(`/taskchute/週次レビュー_${WEEK}.md`),
     (route) => {
@@ -409,29 +420,20 @@ function check(name, cond, extra = "") {
     check("理由を選ばなければreasonは空文字のまま", !!histNoReason && histNoReason.reason === "", JSON.stringify(histNoReason));
 
     // ============================================================
-    // (d) 週次レビュー_*.md のアプリ内表示(無い場合は非表示 → ある場合は表示+登録)
+    // (d) AIレポートの週次レビュー表示(無い場合は提案非表示 → ある場合は表示+登録)
     // ============================================================
-    console.log("[8] 週次レビュー_*.mdが無い週は「AI週次レビュー」セクションが非表示");
+    console.log("[8] AIレポート週次レビューの本文が無いときは提案セクションが出ない");
     weeklyReviewFixture = null;
-    await seed({ view: "weekly" });
+    await seed({ view: "ai-reports", settings: { aiReportType: "weekly" } });
     await page.waitForTimeout(600);
-    check("AI週次レビュー見出しが出ない(ファイル無し)", await page.locator('.weekly-sec h3:has-text("AI週次レビュー")').count() === 0);
+    check("本文取得失敗時は提案セクションが出ない", await page.locator(".ai-weekly-suggest").count() === 0);
 
-    console.log("[9] 週次レビュー_*.mdがある週は表示され、「+登録」で1件ずつWBSへ登録できる");
+    console.log("[9] AIレポート週次レビューに提案が表示され、+登録で1件ずつWBSへ登録できる");
     weeklyReviewFixture = [
       `# 週次レビュー ${WEEK}`,
       "",
       "## 今週の事実",
       "- v62テスト用ダミー",
-      "",
-      "## ルーティン最適化の提案",
-      "対象なし",
-      "",
-      "## WBS棚卸し",
-      "対象なし",
-      "",
-      "## 12WYレビュー",
-      "進捗データなし",
       "",
       "## 来週のタスク提案",
       "Kが内容を確認のうえ手動でアプリに登録する前提の提案です。",
@@ -442,9 +444,8 @@ function check(name, cond, extra = "") {
       "## アプリ改善の種",
       "なし"
     ].join("\n");
-    await seed({ view: "weekly" });
+    await seed({ view: "ai-reports", settings: { aiReportType: "weekly" } });
     await page.waitForTimeout(700);
-    check("AI週次レビュー見出しが表示される", await page.locator('.weekly-sec h3:has-text("AI週次レビュー")').count() === 1);
     const weeklyMdText = await page.locator(".ai-weekly-suggest").textContent().catch(() => "");
     check("週次提案タスクA/Bの両方が一覧に出る", weeklyMdText.includes("週次提案タスクA") && weeklyMdText.includes("週次提案タスクB"), weeklyMdText);
     check("+登録ボタンが2件分ある(一括登録ボタンではない)", await page.locator('[data-action="weekly-suggest-add"]').count() === 2);
@@ -452,16 +453,14 @@ function check(name, cond, extra = "") {
     await page.locator('[data-action="weekly-suggest-add"]').first().click();
     await page.waitForTimeout(400);
     const s9 = await stateNow();
-    // v62(m7レビュー対応): 「(30分)」はestimateMinへ分離され、タイトルからは取り除かれる
     const registeredTask = (s9.tasks || []).find((t) => t.title === "週次提案タスクA");
     check("1件目の+登録でWBSタスクが作られる(タイトルから見積表記が除去される)", !!registeredTask && registeredTask.status === "todo", JSON.stringify(registeredTask));
     check("見積分数(30分)がestimateMinに反映される", !!registeredTask && registeredTask.estimateMin === 30, JSON.stringify(registeredTask));
     const notRegisteredYet = (s9.tasks || []).find((t) => t.title === "週次提案タスクB");
     check("2件目は自動登録されない(一括登録はしない)", !notRegisteredYet, JSON.stringify(notRegisteredYet));
-    check("登録済みの行は「+登録」ボタンが消え「✓ 登録済み」になる",
+    check("登録済みの行は+登録ボタンが消え、未登録行には残る",
       await page.locator('.ai-weekly-suggest-row:has-text("週次提案タスクA") button[data-action="weekly-suggest-add"]').count() === 0
-      && (await page.locator('.ai-weekly-suggest-row:has-text("週次提案タスクA")').textContent()).includes("登録済み"));
-    check("未登録行にはまだ+登録ボタンが残る", await page.locator('.ai-weekly-suggest-row:has-text("週次提案タスクB") [data-action="weekly-suggest-add"]').count() === 1);
+      && await page.locator('.ai-weekly-suggest-row:has-text("週次提案タスクB") [data-action="weekly-suggest-add"]').count() === 1);
 
     // ============================================================
     // (f) ホーム信条の実データ化

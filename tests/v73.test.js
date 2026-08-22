@@ -11,7 +11,6 @@
 // (e) 縮退モード: 今日の朝の体調が閾値(既存ピッカーの3=少し悪い以下)のとき、ホームに
 //     「今日は最低限だけ」バナーが出て、「今日のリズム」ゾーンと「AIから」カードが既定closedの
 //     折りたたみになる。体調が良い日は通常表示(バナー無し・折りたたみ無し)のまま
-// (f) 週次レビュー: 体調×タスク着手率×ルーティン実行率の7日ミニ表が表示される(分析はしない)
 // (g) normalizeState 後方互換: state.condition フィールド自体が無い旧stateでもクラッシュせず
 //     起動でき、condition.logsがオブジェクトとして補完される
 //
@@ -83,9 +82,8 @@ function check(name, cond, extra = "") {
     };
   }
 
-  async function seed({ blocks = [], tasks = [], view = "home", selectedDate = TODAY, condition, morningEnergyLog,
-    weeklySelectedWeek = null } = {}) {
-    await page.evaluate(({ KEY, blocks, tasks, view, selectedDate, condition, morningEnergyLog, weeklySelectedWeek }) => {
+  async function seed({ blocks = [], tasks = [], view = "home", selectedDate = TODAY, condition, morningEnergyLog } = {}) {
+    await page.evaluate(({ KEY, blocks, tasks, view, selectedDate, condition, morningEnergyLog }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.blocks = blocks;
       s.tasks = tasks;
@@ -97,9 +95,8 @@ function check(name, cond, extra = "") {
       s.currentView = view;
       if (condition) s.condition = condition;
       if (morningEnergyLog) s.settings.morningEnergyLog = morningEnergyLog;
-      if (weeklySelectedWeek) s.settings.weeklySelectedWeek = weeklySelectedWeek;
       localStorage.setItem(KEY, JSON.stringify(s));
-    }, { KEY, blocks, tasks, view, selectedDate, condition, morningEnergyLog, weeklySelectedWeek });
+    }, { KEY, blocks, tasks, view, selectedDate, condition, morningEnergyLog });
     await page.reload();
     await page.waitForTimeout(500);
   }
@@ -257,37 +254,6 @@ function check(name, cond, extra = "") {
     check("「AIから」カードは通常のai-hub(縮退用ではない)側が使われる",
       await page.locator('details[data-fold-id="ai-hub-degraded"]').count() === 0
       && await page.locator('details[data-fold-id="ai-hub"].home-ai-hub').count() === 1);
-
-    // ============================================================
-    // (f) 週次レビューのミニ相関表
-    // ============================================================
-    console.log("[6] 週次レビュー: 体調×タスク着手率×ルーティン実行率の7日ミニ表が出る");
-    await seed({
-      blocks: [
-        planBlock({ id: "wk-routine", date: WEEK, title: "週次相関・ルーティン", category: "ルーティン", completed: true, startMin: 7 * 60 }),
-        planBlock({ id: "wk-task", date: SUN, title: "週次相関・タスク", taskId: "some-task", completed: false, startMin: 9 * 60 })
-      ],
-      tasks: [{
-        id: "some-task", projectId: "proj-x", parentTaskId: "", title: "週次相関・タスク", category: "",
-        status: "todo", dueDate: "", description: "", createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false
-      }],
-      view: "weekly", selectedDate: TODAY,
-      weeklySelectedWeek: WEEK,
-      morningEnergyLog: { [WEEK]: 8, [SUN]: 3 },
-      condition: { logs: { [WEEK]: {
-        sleepHours: null, meds: null, capacity: "", morningRecordedAt: "",
-        eveningMood: 7, eveningNote: "", eveningRecordedAt: `${WEEK}T22:00`, gym: []
-      } } }
-    });
-    check("体調×実行率の週次ミニ表が表示される", await page.locator(".cond-corr-table").count() === 1);
-    const rowTexts = (await page.locator(".cond-corr-row").allTextContents()).map((t) => t.trim().replace(/\s+/g, " "));
-    check("見出し行を含めて8行(見出し+7日)ある", rowTexts.length === 8, JSON.stringify(rowTexts));
-    const satRow = rowTexts.find((t) => t.startsWith("土"));
-    const sunRow = rowTexts.find((t) => t.startsWith("日"));
-    check("土曜日の行に朝体調(8)と夜体調(7)が出る", !!satRow && satRow.includes("8") && satRow.includes("7"), satRow);
-    check("日曜日の行に朝体調(3)とタスク着手率(0%)が出る", !!sunRow && sunRow.includes("3") && sunRow.includes("0%"), sunRow);
-    check("分析色を出さない注記(相関係数などの分析はしていません)が添えられる",
-      (await page.locator("main").innerHTML()).includes("相関係数などの分析はしていません"));
 
     // ============================================================
     // (g) normalizeState 後方互換

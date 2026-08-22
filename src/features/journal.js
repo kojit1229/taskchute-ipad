@@ -8,7 +8,7 @@
 //      latestSleepLogWithin/shortSleepDate/upsertMorningLine/renderExperimentSection/
 //      JOURNAL_REQUEST_SECTIONはまだapp.js側に残る汎用ヘルパー・定数のため、configureJournal(deps)
 //      による依存注入で受け取る(wish.js方式と同一)。
-//   3. renderExperimentSection()は週次レビュー(renderWeekly、app.js残留・対象外)とも共有する
+//   3. renderExperimentSection()はapp.js側の実験表示と共有する
 //      コンポーネントのため、実体は移さずdeps注入で「呼ぶだけ」にする(§0/§4/§9 Must級)。
 //   4. _journalSegmentOverride(朝/夜/本文detailsの手動開閉オーバーライド)は、click dispatcher
 //      (app.js残留・"toggle-journal-segment"分岐)とこのファイルのrenderJournal()の両方が

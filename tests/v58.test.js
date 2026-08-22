@@ -95,44 +95,6 @@ function check(name, cond, extra = "") {
   check("Pomodoro残り時間が期待レンジ内(9:30〜10:00、9時間ズレなら成立しない)",
     totalSec >= 560 && totalSec <= 600, overlayText);
 
-  // ---- [3] weekRange(): 週起点(土曜)判定 ----
-  console.log("[3] weekRange() の週起点判定(土曜)");
-  const day = now.getDay(); // 0=Sun .. 6=Sat
-  const satOffset = (6 - day + 7) % 7;
-  const sat = new Date(now.getFullYear(), now.getMonth(), now.getDate() + satOffset);
-  const fri = new Date(sat.getTime() - 24 * 60 * 60 * 1000); // 前週金曜(週をまたぐ境界)
-
-  // v85: 起動時は常にselectedDate=今日に強制されるため(各タブ既定=今日)、検証したい曜日
-  // (土曜/金曜)へはreload後にセッション中の日付ピッカー操作で移動する(起動時injectionは無効化された)。
-  await page.evaluate(({ KEY }) => {
-    const s = JSON.parse(localStorage.getItem(KEY));
-    s.currentView = "home";
-    localStorage.setItem(KEY, JSON.stringify(s));
-  }, { KEY });
-  await page.reload();
-  await page.waitForTimeout(500);
-  // v149(UI改善計画Phase4a): 週次レビュー導線(homeWeeklyLink)は「長い弧をたしかめる」の
-  // 一部としてホームの2タブ分割でホームタブへ移動した(既定は今日タブ)。
-  await page.click('[data-action="home-tab"][data-tab="home"]');
-  await page.waitForTimeout(150);
-  await page.evaluate((satISO) => {
-    const el = document.querySelector("[data-date-picker]");
-    el.value = satISO;
-    el.dispatchEvent(new Event("change", { bubbles: true }));
-  }, isoDate(sat));
-  await page.waitForTimeout(200);
-  check("土曜日は週次レビュー導線が表示される(weekStart===selectedDate)",
-    await page.locator('[data-action="open-weekly"]').count() === 1, isoDate(sat));
-
-  await page.evaluate((friISO) => {
-    const el = document.querySelector("[data-date-picker]");
-    el.value = friISO;
-    el.dispatchEvent(new Event("change", { bubbles: true }));
-  }, isoDate(fri));
-  await page.waitForTimeout(200);
-  check("金曜日(前週扱い)は週次レビュー導線が表示されない(9時間ズレなら曜日判定がずれ得る)",
-    await page.locator('[data-action="open-weekly"]').count() === 0, isoDate(fri));
-
   // ---- [4] 短い下書きBlockの削除ボタン(×)が .draft-resize にクリックを奪われない ----
   // v60メモ: 元はAIモックで「15分」の配置案を返させていたが、v60で下書きスケジュールは
   // 決定論配置(computeFreeGaps→fallbackMorningPlan)になったため、候補タスクの

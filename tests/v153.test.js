@@ -276,6 +276,10 @@ function makeRoutineBlock(id, date, title, completed) {
   check("12週サイクルの日付非依存タスクが既定シードに存在する", !!taskIdForToggle);
 
   console.log("[C2] 前日を閲覧中にsaveStateを伴う操作(タスク完了)を行っても、前日gardenLog(total全滅パターン)は悪化上書きされない");
+  // v217: ホームの12週サイクルカード(toggle-task導線)は仕様削除されたため、同じtoggle-taskを
+  //       持つWBSビューへセッション内遷移して操作する(selectedDate=前日は維持される。検証意図は不変)
+  await pageC.click('.nav-button[data-view="wbs"]');
+  await pageC.waitForSelector(`[data-action="toggle-task"][data-id="${taskIdForToggle}"]`, { state: "attached" });
   await pageC.click(`[data-action="toggle-task"][data-id="${taskIdForToggle}"]`);
   await pageC.waitForTimeout(300);
   const sC2 = await pageC.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
@@ -308,8 +312,13 @@ function makeRoutineBlock(id, date, title, completed) {
   }, { KEY, TODAY, YESTERDAY, taskIdForToggle });
   await pageC.reload();
   await pageC.waitForTimeout(400);
+  // v217: C2でWBSビューへ遷移済みのままreloadされるため、date-prevを持つhomeへ明示的に戻る
+  await pageC.click('.nav-button[data-view="home"]');
+  await pageC.waitForTimeout(200);
   await pageC.click('[data-action="date-prev"]');  // reload直後にtodayへ強制されるためもう一度前日へ
   await pageC.waitForTimeout(200);
+  await pageC.click('.nav-button[data-view="wbs"]');
+  await pageC.waitForSelector(`[data-action="toggle-task"][data-id="${taskIdForToggle}"]`, { state: "attached" });
   await pageC.click(`[data-action="toggle-task"][data-id="${taskIdForToggle}"]`);
   await pageC.waitForTimeout(300);
   const sC3 = await pageC.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
@@ -434,9 +443,9 @@ function makeRoutineBlock(id, date, title, completed) {
   }, { KEY, OLD_DATE, RECENT_OLD_DATE });
   await pageE.reload();
   await pageE.waitForTimeout(400);
-  // v182 D3: 起動ビューがtodayのため、toggle-taskがあるhomeへ明示遷移(検証意図は不変)
-  await pageE.click('.nav-button[data-view="home"]');
-  await pageE.waitForTimeout(200);
+  // v217: ホームの12週サイクルカードは仕様削除されたため、toggle-taskがあるWBSへ明示遷移(検証意図は不変)
+  await pageE.click('.nav-button[data-view="wbs"]');
+  await pageE.waitForSelector(`[data-action="toggle-task"][data-id="${taskIdForToggleE}"]`, { state: "attached" });
   // saveState()を1回発火させる(日付非依存のtoggle-task)
   await pageE.click(`[data-action="toggle-task"][data-id="${taskIdForToggleE}"]`);
   await pageE.waitForTimeout(300);

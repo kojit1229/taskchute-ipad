@@ -114,8 +114,7 @@ function check(name, cond, extra = "") {
     // v182 D2: mobileNav先頭差替え/moreGroups計画群へhome追加
     const expectedOrder = [
       "今日", "ホーム", "タスクシュート", "タイムライン", "WBS", "ルーティン",
-      "ジャーナル", "週次", "AIレポート", "計器盤", "やりたい",
-      "ビジョン", "0秒思考", "ポモドーロ", "設定"
+      "ジャーナル", "AIレポート", "やりたい", "ビジョン", "0秒思考", "設定"
     ];
     check("navItemsの並びが期待どおり", JSON.stringify(navLabels) === JSON.stringify(expectedOrder), JSON.stringify(navLabels));
 
@@ -230,45 +229,11 @@ function check(name, cond, extra = "") {
       hubTextFull);
 
     // ============================================================
-    // (d) スコアボードのジャンプ先
+    // (d) 今日の主役アンカー
     // ============================================================
-    // v149(UI改善計画Phase4a)追補: 「12週 今週」セルのジャンプ先(#homezone-3)は今日タブの
-    // 12週サイクルカード(homeCycle、常時表示・非折りたたみ)になった。旧仕様(「長い弧」の
-    // 折りたたみを自動で開く)は、12週サイクルが「長い弧をたしかめる」から分離されホームタブへ
-    // 移った(K指定)ことで意味を失ったため、新しい対応関係を検証する(CHANGES_v149.md参照)。
-    console.log("[7] スコアボード「今日の主役」は#home-mit-anchorへ、「12週 今週」は#homezone-3(今日タブの12週サイクルカード)へジャンプする");
-    await page.evaluate((FOLD_KEY) => localStorage.removeItem(FOLD_KEY), FOLD_KEY);
+    console.log("[7] 今日の主役アンカーが維持される");
     await seed({ blocks: [planBlock({ id: "mit-jump", title: "ジャンプ確認MIT", startMin: 9 * 60, isMIT: true })], view: "home" });
     check("#home-mit-anchorが存在し今日の主役を含む", (await page.locator("#home-mit-anchor").textContent()).includes("ジャンプ確認MIT"));
-    check("#homezone-3(今日タブ)は12週サイクルカードで、折りたたみを持たない(常時表示)",
-      await page.locator("#homezone-3 details[data-fold-id]").count() === 0
-      && (await page.locator("#homezone-3").textContent()).includes("12週サイクル"));
-    // v82: スコアボード自体も既定closedの折りたたみになった(CHANGES_v82.md)ため、
-    // 中の「今日の主役」セルをクリックするには先にスコアボードを開く必要がある。
-    await page.locator('details[data-fold-id="home-scoreboard"] summary').click();
-    await page.waitForTimeout(150);
-    await page.evaluate(() => {
-      window.__homeJumpScrollTargets = [];
-      window.__origScrollIntoView = Element.prototype.scrollIntoView;
-      Element.prototype.scrollIntoView = function (...args) {
-        window.__homeJumpScrollTargets.push(this.id || this.className || this.tagName);
-        return window.__origScrollIntoView.apply(this, args);
-      };
-    });
-    await page.click('.home-score[data-id="homezone-3"]');
-    await page.waitForTimeout(300);
-    const jumpTargets = await page.evaluate(() => window.__homeJumpScrollTargets || []);
-    // v149レビュー対応(推奨9): モンキーパッチしたscrollIntoViewを元に戻す(以降の操作
-    // (gotoHomeTab等)に影響を残さない)。
-    await page.evaluate(() => {
-      if (window.__origScrollIntoView) Element.prototype.scrollIntoView = window.__origScrollIntoView;
-    });
-    check("「12週 今週」ジャンプで#homezone-3へscrollIntoViewが呼ばれる", jumpTargets.includes("homezone-3"), JSON.stringify(jumpTargets));
-    await gotoHomeTab();
-    check("ホームタブの「長い弧をたしかめる」(zone3)は、12週ジャンプでは自動的に開かない(分離済み)",
-      await page.locator('details[data-fold-id="zone3"]').evaluate((el) => el.open) === false);
-    const fm2 = await foldMap();
-    check("zone3はlocalStorageにも記録されない(ジャンプと無関係)", fm2.zone3 !== true, JSON.stringify(fm2));
   } finally {
     await browser.close();
     server.close();
