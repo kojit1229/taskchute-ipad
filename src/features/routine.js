@@ -6,8 +6,9 @@
 //   1. state の再代入はしない(src/state/store.jsからlive binding importし、プロパティ変更のみ)。
 //   2. escapeHTML/renderHeader/renderDateBar/todayISO/addDays/parseDate/minutesOf/timeFromDateTime/
 //      pad2/nowDateTime/getCategoryColor/showToast/saveAndRender/render/setView/closeModal/renderModal/
-//      blocksForDate/isTouchedBlock/WEEKDAY_LABELS/RECURRENCE_KEEP_PAST_DAYS/RECURRENCE_FUTURE_DAYS は
-//      まだapp.js側に残る汎用ヘルパー・定数のため、configureRoutine(deps) による依存注入で受け取る
+//      blocksForDate/isTouchedBlock/WEEKDAY_LABELS と、src/core/recurrence.jsへ移設した
+//      routineRate/makeRecurrenceInstance/triggerAnchorPlacements/anchorCandidateOptions は
+//      configureRoutine(deps) による依存注入で受け取る
 //      (wish.js/journal.js方式と同一)。persistLocalNoScheduleはsrc/storage/local.jsの
 //      静的export(app.js非常駐の真の葉)なのでdeps注入せず直接importする(stateと同じ扱い)。
 //   3. src/**/*.js を追加したら sw.js の APP_SHELL へ必ず追加し、CACHE_NAME を +1 する。
@@ -25,9 +26,10 @@
 //   gardenPixelDayAriaLabel + モジュール定数GARDEN_LOG_KEEP_DAYS/GARDEN_STAGE_YOUNG_PCT
 //   (元はapp.js冒頭、routine.js以外から参照されないためここへ移動)。
 //   [繰り返し実体化エンジン、§1-C]: recurrenceMatchesDate/makeRecurrenceInstance/
-//   findActiveDuplicateRecurrenceRule/createRecurrenceRule/triggerAnchorPlacements/maintainRecurrences。
-//   isTouchedBlock/removeUntouchedInstances/recurrenceKindLabel/inferRecurrenceKind/
-//   migrateRecurrencesIfNeeded はTimeline側(Block編集モーダル・旧データ移行)専用のためapp.js残留
+//   findActiveDuplicateRecurrenceRule/createRecurrenceRule/triggerAnchorPlacements/maintainRecurrencesは
+//   src/core/recurrence.jsへv218で移設。isTouchedBlock/removeUntouchedInstances/
+//   recurrenceKindLabel/inferRecurrenceKind/migrateRecurrencesIfNeeded はTimeline側
+//   (Block編集モーダル・旧データ移行)専用のためapp.js残留
 //   (§9参照、下記コメントで詳述)。
 //   [タブ本体+チェーンUI、§1-A]: renderRoutine/chainSectionHTML/anchorLabelFor/chainCardHTML/
 //   renderRoutineCard/renderRoutineNowMarker/openRoutineForWeekday/bulkCheckRoutinesUpToNow/
@@ -66,7 +68,7 @@ let escapeHTML, renderHeader, renderDateBar, todayISO, addDays, parseDate;
 let minutesOf, timeFromDateTime, pad2, nowDateTime, getCategoryColor;
 let showToast, saveAndRender, render, setView, closeModal, renderModal;
 let blocksForDate, isTouchedBlock, WEEKDAY_LABELS;
-let RECURRENCE_KEEP_PAST_DAYS, RECURRENCE_FUTURE_DAYS;
+let routineRate, makeRecurrenceInstance, triggerAnchorPlacements, anchorCandidateOptions;
 let aiInsightsPanelHTML = () => "";
 
 function configureRoutine(deps) {
@@ -75,7 +77,7 @@ function configureRoutine(deps) {
     minutesOf, timeFromDateTime, pad2, nowDateTime, getCategoryColor,
     showToast, saveAndRender, render, setView, closeModal, renderModal,
     blocksForDate, isTouchedBlock, WEEKDAY_LABELS,
-    RECURRENCE_KEEP_PAST_DAYS, RECURRENCE_FUTURE_DAYS
+    routineRate, makeRecurrenceInstance, triggerAnchorPlacements, anchorCandidateOptions
   } = deps);
   aiInsightsPanelHTML = deps.aiInsightsPanelHTML || (() => "");
   // v173: app.js分割・段階5-2(prep-stage5-dispatcher.md案A)。click dispatcherのルーティンタブ+
@@ -122,14 +124,6 @@ let _activeChainId = "";
 // 閾値を1箇所に集約する(罰なしルール③「閾値は定数1箇所に」)。
 const GARDEN_LOG_KEEP_DAYS = 400;
 const GARDEN_STAGE_YOUNG_PCT = 50;  // これ未満=芽(薄緑)、これ以上=若木(緑)。全完了のみ開花(濃緑)
-
-// v33: ルーティン実行率
-function routineRate(blocks) {
-  // 率計器は計画Blockの消化を測るため、実績記録専用のoneTap Blockは除外する。
-  const list = blocks.filter((b) => b.category === "ルーティン" && !b.oneTap);
-  const done = list.filter((b) => b.completed).length;
-  return { done, total: list.length, pct: list.length ? Math.round((done / list.length) * 100) : 0 };
-}
 
 // v153: 今日の庭。routineRate()の戻り値({done,total,pct})から段階ランクを導く
 // (新しい完了率計算は書かない、既存routineRate()の再利用。設計書§③)。
@@ -648,183 +642,6 @@ function isChainRunActive() {
   return Boolean(_activeChainId);
 }
 
-// ===== v23: 繰り返しエンジン(ルール + ローリングウィンドウ materialization) =====
-// 繰り返しは state.recurrences[] にルールとして保持する。表示用の Block は
-// 「今日を中心とした一定期間」だけ実体化し、期間外で未編集のものは破棄する。
-// これにより、以前のように 1 シリーズ 400 件を恒久保存することがなくなる。
-// 期間の定数 RECURRENCE_KEEP_PAST_DAYS / RECURRENCE_FUTURE_DAYS はapp.js冒頭で定義され、
-// configureRoutine(deps)経由で受け取る(src/sync/github.jsのconfigureGithubSyncと同じ理由。
-// buildBlockModal等Timeline側の表示文言でも参照されるため、app.js側に定数自体は残した)。
-// isTouchedBlock/removeUntouchedInstances/recurrenceKindLabel/inferRecurrenceKind/
-// migrateRecurrencesIfNeededはTimeline側のBlock編集モーダル・旧データ移行専用のためapp.js残留。
-
-// ルールが指定日付に発生するか
-function recurrenceMatchesDate(rule, isoDate) {
-  if (!rule || rule.deleted) return false;
-  if (rule.anchorDate && isoDate < rule.anchorDate) return false;
-  if (Array.isArray(rule.exceptionDates) && rule.exceptionDates.includes(isoDate)) return false;
-  const d = parseDate(isoDate);
-  const wd = d.getDay();  // 0=日曜
-  switch (rule.kind) {
-    case "daily":    return true;
-    case "weekdays": return wd >= 1 && wd <= 5;
-    case "weekly":   return rule.anchorDate ? wd === parseDate(rule.anchorDate).getDay() : true;
-    case "monthly":  return rule.anchorDate ? d.getDate() === parseDate(rule.anchorDate).getDate() : true;
-    default:         return false;
-  }
-}
-
-// ルール + 日付 から表示用 Block(実体)を生成
-function makeRecurrenceInstance(rule, isoDate) {
-  return {
-    id: `rec_${rule.id}_${isoDate}`,
-    taskId: rule.taskId || "",
-    date: isoDate,
-    title: rule.title || "繰り返しBlock",
-    category: rule.category || "",
-    plannedStartAt: rule.startTime ? `${isoDate}T${rule.startTime}` : "",
-    plannedEndAt: rule.endTime ? `${isoDate}T${rule.endTime}` : "",
-    actualStartAt: "",
-    actualEndAt: "",
-    completed: false,
-    // v33: ルーティンはルールの既定 充電/放電 をすべての実体に適用
-    charge: rule.category === "ルーティン" ? (Number(rule.expectedCharge) || 0) : 0,
-    discharge: rule.category === "ルーティン" ? (Number(rule.expectedDischarge) || 0) : 0,
-    expectedCharge: rule.expectedCharge ?? "",
-    expectedDischarge: rule.expectedDischarge ?? "",
-    comment: "",
-    recurrenceGroupId: rule.id,
-    pomodoroCount: 0,
-    migratedTo: "",
-    carryCount: 0,  // v61: ルーティン実体は繰り越し対象外(carryableBlocksで除外)
-    orderIndex: 0,
-    isMIT: false,
-    source: rule.source || "",
-    createdAt: nowDateTime(),
-    updatedAt: nowDateTime(),
-    deleted: false
-  };
-}
-
-// Block(テンプレート)から新しい繰り返しルールを作成
-// v108: 同タイトル・同開始時刻のアクティブな(deletedでない)繰り返しルールが既にあれば
-//       新規作成しない(保存の二重発火等で同一内容のルールが重複生成される事故の再発防止、
-//       2026-05-22実害・2026-07-15調査で確定)。削除済みルールは対象外(誤ブロックしない)。
-function findActiveDuplicateRecurrenceRule(title, startTime) {
-  const t = (title || "").trim();
-  return (state.recurrences || []).find(
-    (r) => !r.deleted && (r.title || "").trim() === t && (r.startTime || "") === (startTime || ""));
-}
-
-// 戻り値: 作成したルール。重複検知時は作成せず null(呼び出し側はトースト表示済みとして扱う)。
-function createRecurrenceRule(block, kind) {
-  const title = block.title || "繰り返しBlock";
-  const startTime = block.plannedStartAt ? (block.plannedStartAt.split("T")[1] || "") : "";
-  if (findActiveDuplicateRecurrenceRule(title, startTime)) {
-    showToast(`「${title}」の繰り返しルールは既にあるため作成しませんでした`);
-    return null;
-  }
-  const rule = {
-    id: crypto.randomUUID(),
-    title,
-    category: block.category || "",
-    taskId: block.taskId || "",
-    kind,
-    startTime,
-    endTime: block.plannedEndAt ? (block.plannedEndAt.split("T")[1] || "") : "",
-    anchorDate: block.date || todayISO(),
-    expectedCharge: block.expectedCharge ?? "",
-    expectedDischarge: block.expectedDischarge ?? "",
-    source: block.source || "",
-    exceptionDates: [],
-    protection: false,  // v114: 保護系ルーティン(提案F)。既定false、編集モーダルでON可能
-    fallbackTitle: "",  // v115: 縮退版(提案G①)。既定未設定
-    fallbackMinutes: null,
-    anchor: "",  // v115: アンカー(提案G③)。既定未設定
-    createdAt: nowDateTime(),
-    updatedAt: nowDateTime(),
-    deleted: false
-  };
-  state.recurrences ||= [];
-  state.recurrences.push(rule);
-  return rule;
-}
-
-// v115: アンカー配置(習慣スタッキング、提案G③)。anchorIdが「今日完了」したタイミングで、
-// anchorがそれと一致する後続のルーティン/チェーンを直後の時刻に自動配置する。
-// ルーティン側(state.recurrences)は既存の繰り返し実体化(makeRecurrenceInstance)を再利用し、
-// 時刻だけ「アンカー完了時刻の1分後」に差し替える。チェーン側(state.routineChains)は
-// Blockという概念を持たないため、当日分のrunにscheduledStartAtを記録するだけに留める
-// (Routineタブのチェーンカードに開始目安として表示する。詳細はdecisions.md参照)。
-function triggerAnchorPlacements(anchorId, completedAtDateTime) {
-  if (!anchorId || !completedAtDateTime) return;
-  const today = todayISO();
-  const afterMin = Math.min(23 * 60 + 59, minutesOf(completedAtDateTime) + 1);
-  const startTime = `${pad2(Math.floor(afterMin / 60))}:${pad2(afterMin % 60)}`;
-  (state.recurrences || []).forEach((r) => {
-    if (r.deleted || r.anchor !== anchorId) return;
-    const already = state.blocks.some((b) => !b.deleted && b.recurrenceGroupId === r.id && b.date === today);
-    if (already) return;
-    const inst = makeRecurrenceInstance(r, today);
-    const durMin = (r.startTime && r.endTime)
-      ? Math.max(1, minutesOf(`${today}T${r.endTime}`) - minutesOf(`${today}T${r.startTime}`))
-      : 10;
-    const endMin = Math.min(23 * 60 + 59, afterMin + durMin);
-    inst.plannedStartAt = `${today}T${startTime}`;
-    inst.plannedEndAt = `${today}T${pad2(Math.floor(endMin / 60))}:${pad2(endMin % 60)}`;
-    state.blocks.push(inst);
-  });
-  (state.routineChains || []).forEach((c) => {
-    if (c.deleted || c.anchor !== anchorId) return;
-    const run = ensureChainRun(c.id);
-    if (!run.completedAt) run.scheduledStartAt = `${today}T${startTime}`;
-  });
-}
-
-// 指定期間に繰り返し Block を実体化(既存があれば温存)。
-// purge=true で「期間外 かつ 未編集」の繰り返し実体を破棄しファイルを小さく保つ。
-function maintainRecurrences({ purge = false } = {}) {
-  state.recurrences ||= [];
-  state.blocks ||= [];
-  const rules = state.recurrences.filter((r) => !r.deleted);
-  const today = todayISO();
-  const from = addDays(today, -RECURRENCE_KEEP_PAST_DAYS);
-  const to = addDays(today, RECURRENCE_FUTURE_DAYS);
-  // 既存の (ruleId + date) を索引化(削除済みも含めて重複生成を防ぐ)
-  const existing = new Set();
-  for (const b of state.blocks) {
-    if (b.recurrenceGroupId) existing.add(`${b.recurrenceGroupId}|${b.date}`);
-  }
-  // 期間内の発生日を実体化
-  for (const rule of rules) {
-    // v115: アンカー(提案G③)を持つルールは、通常のスケジュール実体化から除外する。
-    //       このルールのBlockは「アンカーが完了した直後」にtriggerAnchorPlacementsだけが
-    //       生成する(=事前に毎日分が生成されてしまうと「完了直後に配置」の意味が無くなるため)。
-    if (rule.anchor) continue;
-    let cur = from;
-    let guard = 0;
-    while (cur <= to && guard < 800) {
-      guard++;
-      if (recurrenceMatchesDate(rule, cur) && !existing.has(`${rule.id}|${cur}`)) {
-        state.blocks.push(makeRecurrenceInstance(rule, cur));
-        existing.add(`${rule.id}|${cur}`);
-      }
-      cur = addDays(cur, 1);
-    }
-  }
-  // 破棄: 繰り返し実体 かつ 期間外 かつ 未編集 のものを取り除く
-  if (purge) {
-    const ruleIds = new Set(state.recurrences.map((r) => r.id));
-    state.blocks = state.blocks.filter((b) => {
-      const isRecInstance = b.recurrenceGroupId && ruleIds.has(b.recurrenceGroupId);
-      if (!isRecInstance) return true;                   // 通常 Block は残す
-      if (b.date >= from && b.date <= to) return true;   // 期間内は残す
-      if (isTouchedBlock(b)) return true;                // 実績ありは履歴として残す
-      return false;                                      // 期間外・未編集は破棄
-    });
-  }
-}
-
 // v19: ルーティンタブ(Structured 風、上から順にいま何をするか)
 function renderRoutine() {
   // 表示モード: "routine"(ルーティンのみ) / "all"(ルーティン + タイムライン Block)
@@ -1073,21 +890,6 @@ function openChainEditor(id) {
 
 // ---------- Chain(連続ルーティン)モーダル ---------- v115: 提案G②③
 
-// アンカー候補(既存の繰り返しルール+他の連続ルーティン)。excludeIdで自分自身を除外する
-// (idはルール・チェーンで衝突しないUUIDのため、両方まとめて1つの除外引数でよい)。
-// v170実測: buildChainModal(このモジュール内)に加えて、buildBlockModal(Timeline Block編集
-// モーダルのアンカー選択、app.js残留)からも呼ばれる(prep-stage4-routine.md §9の「呼び出し元
-// 未確認」懸念の実測結果。上記「監督者裁定・逸脱点 b)」参照)。
-function anchorCandidateOptions(excludeId) {
-  const ruleOpts = (state.recurrences || [])
-    .filter((r) => !r.deleted && r.id !== excludeId)
-    .map((r) => ({ id: r.id, label: `↻ ${r.title}` }));
-  const chainOpts = (state.routineChains || [])
-    .filter((c) => !c.deleted && c.id !== excludeId)
-    .map((c) => ({ id: c.id, label: `🔗 ${c.title}` }));
-  return [...ruleOpts, ...chainOpts];
-}
-
 // ステップ入力(1行1ステップ「タイトル, 見積分」)⇄ steps配列の変換。
 // ダイアログでの動的な行追加UIを避け、平文テキストで簡潔に入力できるようにするための往復変換。
 function parseChainStepsText(text) {
@@ -1169,7 +971,7 @@ function deleteChain(id) {
 export {
   configureRoutine,
   // 今日の庭(S1/S2)
-  routineRate, gardenStageRank, updateGardenLog, pruneGardenLog,
+  gardenStageRank, updateGardenLog, pruneGardenLog,
   gardenPixelCalendarHTML, gardenPixelRank, addMonthsKey, gardenPixelDayAriaLabel,
   navigateGardenPixelMonth,
   // ゼロ摩擦チェック・保護系ルーティン・縮退版
@@ -1182,12 +984,9 @@ export {
   // 連続ルーティン(チェーン)データ操作+進行UI
   chainRunKey, findChainRun, ensureChainRun, openChainRun, closeChainRun,
   chainStepComplete, renderChainRun, isChainRunActive,
-  // 繰り返し実体化エンジン
-  recurrenceMatchesDate, makeRecurrenceInstance, findActiveDuplicateRecurrenceRule,
-  createRecurrenceRule, triggerAnchorPlacements, maintainRecurrences,
   // タブ本体+チェーンUI
   renderRoutine, chainSectionHTML, anchorLabelFor, chainCardHTML,
   renderRoutineCard, renderRoutineNowMarker, openRoutineForWeekday, bulkCheckRoutinesUpToNow,
-  openChainEditor, anchorCandidateOptions, parseChainStepsText, chainStepsToText,
+  openChainEditor, parseChainStepsText, chainStepsToText,
   buildChainModal, saveChainFromModal, deleteChain
 };

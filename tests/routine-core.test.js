@@ -13,6 +13,7 @@ const { pathToFileURL } = require("url");
 
 const ROOT = path.join(__dirname, "..");
 const ROUTINE_PATH = path.join(ROOT, "src", "features", "routine.js");
+const RECURRENCE_PATH = path.join(ROOT, "src", "core", "recurrence.js");
 const STORE_PATH = path.join(ROOT, "src", "state", "store.js");
 
 let failures = 0;
@@ -94,7 +95,9 @@ const RECURRENCE_FUTURE_DAYS = 31;
 
 async function loadModules() {
   const storeMod = await import(pathToFileURL(STORE_PATH).href);
-  const routineMod = await import(pathToFileURL(ROUTINE_PATH).href);
+  const routineFeatureMod = await import(pathToFileURL(ROUTINE_PATH).href);
+  const recurrenceMod = await import(pathToFileURL(RECURRENCE_PATH).href);
+  const routineMod = { ...routineFeatureMod, ...recurrenceMod };
   return { storeMod, routineMod };
 }
 
@@ -102,12 +105,20 @@ async function loadModules() {
   const { storeMod, routineMod } = await loadModules();
   storeModRef = storeMod;
 
+  routineMod.configureRecurrence({
+    todayISO, addDays, parseDate, minutesOf, pad2, nowDateTime, showToast, isTouchedBlock,
+    RECURRENCE_KEEP_PAST_DAYS, RECURRENCE_FUTURE_DAYS,
+    getState: () => storeMod.state
+  });
   routineMod.configureRoutine({
     escapeHTML, renderHeader, renderDateBar, todayISO, addDays, parseDate,
     minutesOf, timeFromDateTime, pad2, nowDateTime, getCategoryColor,
     showToast, saveAndRender, render, setView, closeModal, renderModal,
     blocksForDate, isTouchedBlock, WEEKDAY_LABELS,
-    RECURRENCE_KEEP_PAST_DAYS, RECURRENCE_FUTURE_DAYS
+    routineRate: routineMod.routineRate,
+    makeRecurrenceInstance: routineMod.makeRecurrenceInstance,
+    triggerAnchorPlacements: routineMod.triggerAnchorPlacements,
+    anchorCandidateOptions: routineMod.anchorCandidateOptions
   });
 
   function setBaseState(extra = {}) {

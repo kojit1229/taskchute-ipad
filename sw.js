@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v217";
+const CACHE_NAME = "taskchute-journal-pwa-v218";
+// v218: 繰り返し実体化エンジンとroutineRateをsrc/core/recurrence.jsへ移設した(挙動不変)。
 // v217: 週次・旧計器盤・12週サイクルの専用ビューを削除し、週次提案登録をAIレポートへ移設した。
 // v216: ポモドーロ独立タブ・Study With Me・Wish仕分け・月間ボードを削除した。
 // v215: カレンダー・計時タブと共有予定レイヤを削除した。
@@ -254,6 +255,7 @@ const APP_SHELL = [
   "./manifest.webmanifest",
   "./assets/icon.svg",
   "./src/core/merge.js",
+  "./src/core/recurrence.js",
   "./src/core/today-model.js",
   "./src/features/coach.js",
   "./src/features/journal.js",

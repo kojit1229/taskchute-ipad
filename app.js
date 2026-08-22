@@ -51,15 +51,19 @@ import {
 //   (_activeChainId/_gardenPixelMonth)を直接参照していた箇所を解消するために新設した。
 import {
   configureRoutine,
-  routineRate, gardenStageRank, overdueUncheckedRoutines,
+  gardenStageRank, overdueUncheckedRoutines,
   protectionStreakBadgeHTML, fallbackButtonHTML,
   updateGardenLog, pruneGardenLog, navigateGardenPixelMonth,
   maybeOpenHyperfocusGate, hyperfocusGateFallback, hyperfocusGateMakeBlock,
   renderChainRun, isChainRunActive, openChainRun, chainStepComplete, closeChainRun,
-  createRecurrenceRule, maintainRecurrences, triggerAnchorPlacements, anchorCandidateOptions,
   renderRoutine, openRoutineForWeekday, bulkCheckRoutinesUpToNow,
   openChainEditor, saveChainFromModal, deleteChain, executeRoutineFallback
 } from "./src/features/routine.js";
+import {
+  configureRecurrence,
+  routineRate, makeRecurrenceInstance, createRecurrenceRule, maintainRecurrences,
+  triggerAnchorPlacements, anchorCandidateOptions
+} from "./src/core/recurrence.js";
 // v171: app.js分割・段階4-5(タイムライン抽出・段階A: 純粋レーン割付計算のみ)。
 //   src/features/timeline-layout.jsはstateもDOMも参照しない引数のみの純粋関数だが、
 //   minutesOf/nowDateTime(いずれもapp.js側の汎用ヘルパー)を呼ぶためconfigureTimelineLayout(deps)
@@ -282,16 +286,21 @@ configureJournal({
   renderExperimentSection, JOURNAL_REQUEST_SECTION
 });
 // v170: src/features/routine.jsも同じ理由(循環import回避)で依存注入する。
-// isTouchedBlock/blocksForDate/WEEKDAY_LABELS/RECURRENCE_KEEP_PAST_DAYS/RECURRENCE_FUTURE_DAYSは
-// Timeline側(app.js残留)とも共有するためapp.js側に残したまま注入する
-// (configureGithubSyncと同じ「複数モジュールへ同じ定数/関数を注入する」パターン)。
+// v218: 繰り返しエンジンはsrc/core/recurrence.jsへ移設し、routine.js内で使う公開関数だけを
+// configureRoutine(deps)経由で注入する。
 configureRoutine({
   escapeHTML, renderHeader, renderDateBar, todayISO, addDays, parseDate,
   minutesOf, timeFromDateTime, pad2, nowDateTime, getCategoryColor,
   showToast, saveAndRender, render, setView, closeModal, renderModal,
   blocksForDate, isTouchedBlock, WEEKDAY_LABELS,
-  RECURRENCE_KEEP_PAST_DAYS, RECURRENCE_FUTURE_DAYS,
+  routineRate, makeRecurrenceInstance, triggerAnchorPlacements, anchorCandidateOptions,
   aiInsightsPanelHTML
+});
+// v218: getStateでstore.jsのstate再代入後も最新のlive bindingへ追従させる。
+configureRecurrence({
+  todayISO, addDays, parseDate, minutesOf, pad2, nowDateTime, showToast, isTouchedBlock,
+  RECURRENCE_KEEP_PAST_DAYS, RECURRENCE_FUTURE_DAYS,
+  getState: () => state
 });
 // v171: src/features/timeline-layout.jsも同じ理由(循環import回避)で依存注入する。
 configureTimelineLayout({ minutesOf, nowDateTime });
@@ -12831,8 +12840,8 @@ function recurrenceKindLabel(kind) {
   return { daily: "毎日", weekdays: "平日のみ", weekly: "毎週", monthly: "毎月" }[kind] || kind || "";
 }
 
-// v170: recurrenceMatchesDate〜maintainRecurrences(繰り返し実体化エンジン、計166行)は
-// src/features/routine.jsへ移動した(app.js分割・段階4-4)。isTouchedBlock/
+// v218: recurrenceMatchesDate〜maintainRecurrences(繰り返し実体化エンジン)は
+// src/core/recurrence.jsへ移動した。isTouchedBlock/
 // removeUntouchedInstances/recurrenceKindLabel(直前に残置)はTimeline側のBlock編集モーダル・
 // 旧データ移行専用のためapp.js残留。createRecurrenceRule/maintainRecurrences/
 // triggerAnchorPlacements/makeRecurrenceInstanceの呼び出し元(saveBlockFromModal/importData/

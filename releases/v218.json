@@ -1,0 +1,53 @@
+{
+  "version": 218,
+  "date": "2026-08-22",
+  "title": "recurrenceエンジンをsrc/coreへ移設",
+  "summary": "routine.js内の繰り返し実体化エンジンとroutineRateをsrc/core/recurrence.jsへ移し、getState方式の依存注入でstate再代入への追従を維持した挙動不変のスリム化",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v218.json",
+    "src/core/recurrence.js",
+    "src/features/routine.js",
+    "sw.js",
+    "tests/recurrence-core.test.js",
+    "tests/routine-core.test.js",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "事前作成・単体検証済みのrecurrence.jsをsrc/coreへ導入し、routine.jsから繰り返し実体化エンジンとroutineRateの関数本体・exportを除去する。",
+    "app.jsを唯一の結線点としてconfigureRecurrenceへ全依存とgetStateを注入し、setState後も最新stateへの追従を維持する。",
+    "routine.js内部で継続利用する4関数はconfigureRoutineのdepsとして注入し、coreとfeatureの結線をapp.jsへ集約する。",
+    "既存挙動・テストケース・assertionを変えず、移設先の単体テスト22件と既存回帰テストで同値性を確認する。"
+  ],
+  "changes": [
+    "routineRate、recurrenceMatchesDate、makeRecurrenceInstance、findActiveDuplicateRecurrenceRule、createRecurrenceRule、triggerAnchorPlacements、maintainRecurrences、anchorCandidateOptionsをsrc/core/recurrence.jsへ移設した。",
+    "triggerAnchorPlacements専用のchainRunKey/findChainRun/ensureChainRunは裁定どおりrecurrence.jsへ複製し、チェーンUI用の同名関数はroutine.jsに残した。",
+    "app.jsの参照元をrecurrence.jsへ差し替え、configureRecurrenceに日付・時刻・表示・期間定数とgetStateを注入した。",
+    "routine-core.test.jsはrecurrenceモジュールのimportとDI初期化だけを追加し、テストケース・入力・assertion・呼び出し行は変更していない。",
+    "Service WorkerのAPP_SHELLへsrc/core/recurrence.jsを追加し、CACHE_NAMEをv218へ更新した。"
+  ],
+  "uncertainties": [
+    "release-gateのブラウザ回帰束はPlaywright Chromium起動時のspawn EPERMで実走できず、iOS Safari実機PWAの更新・オフライン動作もローカルNode検証では確認できない。"
+  ],
+  "reviewFocus": [
+    "recurrence.jsの関数本体がroutine.jsの元実装と同値で、変更がgetState方式DIと裁定済みchainRunヘルパー複製に限られるか。",
+    "routine.jsから移設対象8関数の定義・exportがすべて消え、UI側chainRunKey/findChainRun/ensureChainRunだけが残っているか。",
+    "app.jsの全呼び出し元とconfigureGithubSyncへの注入がrecurrence.jsの同名exportへ透過的に切り替わっているか。",
+    "setStateを行うimportData・restoreBackup・resetDemoData直後のmaintainRecurrencesがgetState経由で最新stateを操作するか。"
+  ],
+  "verification": [
+    "node tests/recurrence-core.test.jsは22/22 PASS。",
+    "node tests/routine-core.test.jsとnode tests/store-core.test.jsは全件PASS。",
+    "npm.cmd run test:fastはfast-node 18スイートが全件PASS。",
+    "node --check app.js、src/features/routine.js、src/core/recurrence.jsはexit 0。",
+    "npm.cmd run code:index:writeは605 functions、npm.cmd run test:manifest:writeは131 suitesを生成。",
+    "release-gateはschema、impact selection、APP_SHELL 17件、test manifest 131件、code index 605件、app/src/sw全構文検査までPASSし、related+impact-regressionのブラウザ起動だけspawn EPERMで停止した。",
+    "release-record --writeはCHANGES_v218.md生成後、notes側handoff.md書き込みだけEPERM。--checkはCHANGES=OK、handoff=NG。"
+  ],
+  "knownLimitations": [
+    "iOS Safari実機PWAの更新・オフライン動作確認は監督者側で必要。"
+  ]
+}

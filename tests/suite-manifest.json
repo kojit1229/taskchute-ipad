@@ -195,6 +195,30 @@
       }
     },
     {
+      "file": "recurrence-core.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution"
+      ],
+      "assertionSignals": 55,
+      "assertionHash": "a3ada55cd4c80046",
+      "sourceHash": "5962dfae4746e276",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
       "file": "release-gate.test.js",
       "kind": "node",
       "tier": "full",
@@ -252,7 +276,7 @@
       ],
       "assertionSignals": 35,
       "assertionHash": "bc8475eb65247c00",
-      "sourceHash": "6a3674224c332ee2",
+      "sourceHash": "868d8b7bc2ce5e5d",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
