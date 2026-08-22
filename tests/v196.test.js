@@ -183,9 +183,9 @@ function check(name, cond, extra = "") {
     console.log("[1b] 承認中は相互排他で再プラン依頼を拒む(既存排他機構に倣う)");
     await page.locator('[data-action="modal-close"]').first().click();
     await page.locator('#sidebar [data-action="nav"][data-view="today"]').click();
-    await page.waitForSelector(".today-replan [data-replan-button]");
-    await page.locator(".today-replan [data-replan-button]").click();
-    await page.waitForFunction(() => (document.querySelector(".today-replan-status")?.textContent || "").includes("実行計画の依頼を処理中です"));
+    await page.waitForSelector(".sec-atis [data-replan-button]");  // v230: 再プランはATISへ移設
+    await page.locator(".sec-atis [data-replan-button]").click();
+    await page.waitForFunction(() => (document.querySelector("[data-atis-status]")?.textContent || "").includes("実行計画の依頼を処理中です"));
     check("実行計画の下書き未決定中は再プラン依頼をブロック", true);
     await page.locator('#sidebar [data-action="nav"][data-view="wbs"]').click();
     await page.waitForSelector('#app[data-view="wbs"]');

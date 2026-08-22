@@ -87,7 +87,7 @@ function check(name, cond, extra = "") {
     deleted: false, collapsed: false
   });
 
-  async function seed({ blocks = [], tasks = [], projects = [], view = "tasks", settings = {} } = {}) {
+  async function seed({ blocks = [], tasks = [], projects = [], view = "today", settings = {} } = {}) { // v230: AI導線はATIS
     await page.evaluate(({ KEY, blocks, tasks, projects, TODAY, view, settings }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.blocks = blocks;
@@ -108,7 +108,7 @@ function check(name, cond, extra = "") {
   }
 
   async function runMorningPlan() {
-    await page.click('[data-action="nav"][data-view="tasks"]');
+    await page.click('[data-action="nav"][data-view="today"]'); // v230: AI導線はATISへ移設
     await page.waitForTimeout(150);
     await page.click('[data-action="ai-morning-plan"]');
     await page.waitForTimeout(700);
@@ -173,7 +173,7 @@ function check(name, cond, extra = "") {
     }, { KEY, TODAY });
     await page.reload();
     await page.waitForTimeout(400);
-    await page.click('[data-action="nav"][data-view="home"]');  // 正規化値を永続化させる
+    await page.click('[data-action="nav"][data-view="today"]');  // v230: home撤去後の現行viewで正規化値を永続化
     await page.waitForTimeout(200);
     const normalized0 = await stateNow();
     const legacyEntry = (normalized0.aiScheduleHistory || []).find((h) => h.title === "旧データ(v61以前)");
@@ -331,6 +331,8 @@ function check(name, cond, extra = "") {
       ],
       projects: [testProject()]
     });
+    await page.click('[data-action="nav"][data-view="today"]'); // v230: ai-scheduleはATISへ移設
+    await page.waitForTimeout(150);
     await page.click('[data-action="ai-schedule"]');
     await page.waitForTimeout(500);
     const beforeRemove = await draftTitles();
@@ -465,17 +467,12 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (f) ホーム信条の実データ化
     // ============================================================
-    console.log("[10] ホーム信条がKの実データ裏付け型の文言になっている");
+    console.log("[10] v230: 旧home信条カードは描画されない");
     await seed({ view: "home" });
-    // v149(UI改善計画Phase4a): 三つの信条(homeCreed)はホームの2タブ分割で「ホーム」タブへ
-    // 移動した(既定は今日タブ)。
-    await page.click('[data-action="home-tab"][data-tab="home"]');
-    await page.waitForTimeout(150);
-    const creedText = await page.locator(".home-creed").textContent();
-    check("「決めた一つは、必ずやり切れる(MIT達成率100%)」が含まれる", creedText.includes("決めた一つは、") && creedText.includes("必ずやり切れる(MIT達成率100%)"), creedText);
-    check("「進んだ量で測る。実行率で自分を裁かない」が含まれる", creedText.includes("進んだ量で測る。") && creedText.includes("実行率で自分を裁かない"), creedText);
-    check("「朝に全部を注ぐ。夜は手放して充電する」が含まれる", creedText.includes("朝に全部を注ぐ。") && creedText.includes("夜は手放して充電する"), creedText);
-    check("旧文言(着手第一主義!)は残っていない", !creedText.includes("着手第一主義"));
+    check("旧home信条カードとサブタブは描画されない",
+      await page.locator('.home-creed, [data-action="home-tab"]').count() === 0);
+    check("旧home viewはtoday/TOWERへフォールバックする",
+      await page.locator('#app[data-view="today"] .sec-atis').count() === 1);
   } finally {
     // v70: page.routeでモックしているため、実ファイルの後始末は不要(何も書いていない)。
     await browser.close();

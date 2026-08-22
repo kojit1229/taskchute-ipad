@@ -60,7 +60,7 @@ function check(name, cond, extra = "") {
       s.condition.logs = {};
       s.blocks = blocks || [];
       s.selectedDate = TODAY;
-      s.currentView = "home";
+      s.currentView = "today"; // v230: home撤去後の現行view
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, TODAY, sleepLog, blocks });
     await page.reload();
@@ -68,7 +68,17 @@ function check(name, cond, extra = "") {
   }
 
   async function batteryChipText() {
-    const loc = page.locator(".home-battery-chip");
+    // v230: home電池チップは撤去。現行の同等表示はタイムラインのbattery-curve-label。
+    if (await page.locator('#app[data-view="timeline"]').count() === 0) {
+      await page.click('[data-action="nav"][data-view="timeline"]');
+      await page.waitForTimeout(250);
+    }
+    const mode = page.locator('[data-action="tl-energy-mode"][data-mode="battery"]');
+    if (await mode.count()) {
+      await mode.click();
+      await page.waitForTimeout(100);
+    }
+    const loc = page.locator(".battery-curve-label");
     if ((await loc.count()) === 0) return null;
     return (await loc.textContent()).trim();
   }
@@ -129,8 +139,9 @@ function check(name, cond, extra = "") {
         completed: true, charge: 5, discharge: 1, estimateMin: 0, deleted: false
       }]
     });
-    check("電池チップに残量45(41+net4、actualEndAtが未来でも合算される)",
-      (await batteryChipText())?.includes("残量 45"), await batteryChipText());
+    // v230: homeチップの当日丸ごと合算はUIごと撤去。現行timelineは現在時刻までを表示する。
+    check("タイムライン残量は未来時刻の完了イベントをまだ合算せず41",
+      (await batteryChipText())?.includes("残量 41"), await batteryChipText());
 
     // ============================================================
     // (4) クランプ0: 体力予算「赤字」(睡眠5.0h→deficit、開始値30)+ 23:00(16時間分の減衰=48)
@@ -180,10 +191,10 @@ function check(name, cond, extra = "") {
     check("当日は電池チップが表示される(前提確認)", (await batteryChipText()) !== null);
     await page.click('[data-action="date-prev"]');
     await page.waitForTimeout(300);
-    check("過去日では電池チップが非表示になる", await page.locator(".home-battery-chip").count() === 0);
+    check("過去日では旧home電池チップが描画されない", await page.locator(".home-battery-chip").count() === 0);
     await page.click('[data-action="today"]');
     await page.waitForTimeout(300);
-    check("今日へ戻すと電池チップが再表示される", await page.locator(".home-battery-chip").count() === 1);
+    check("今日へ戻すとタイムラインの残量表示が再表示される", (await batteryChipText()) !== null);
     check("再表示後の値は変わらない(残量50)", (await batteryChipText())?.includes("残量 50"), await batteryChipText());
 
     // ============================================================
@@ -202,7 +213,9 @@ function check(name, cond, extra = "") {
       }]
     });
     check("編集前: 電池チップに残量45(50-9+net4)", (await batteryChipText())?.includes("残量 45"), await batteryChipText());
-    await page.click('.home-box[data-action="toggle-block"][data-id="b-mit"]');
+    await page.click('[data-action="nav"][data-view="tasks"]');
+    await page.waitForTimeout(150);
+    await page.click('.checkbox-button[data-action="toggle-block"][data-id="b-mit"]');
     await page.waitForTimeout(200);
     check("toggle-block後: reload無しで電池チップが残量41(50-9、completed解除でnet分が抜ける)に再描画される",
       (await batteryChipText())?.includes("残量 41"), await batteryChipText());
@@ -230,14 +243,14 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(200);
     check("当日はbattery-curveのpolylineが1本出る", await page.locator(".battery-curve").count() === 1);
 
-    await page.click('[data-action="nav"][data-view="home"]');
+    await page.click('[data-action="nav"][data-view="tasks"]'); // v230: 日付バーの現行配置
     await page.waitForTimeout(300);
     await page.click('[data-action="date-prev"]');
     await page.waitForTimeout(300);
     await page.click('[data-action="nav"][data-view="timeline"]');
     await page.waitForTimeout(400);
     check("当日以外の日付ではbattery-curveが出ない", await page.locator(".battery-curve").count() === 0);
-    await page.click('[data-action="nav"][data-view="home"]');
+    await page.click('[data-action="nav"][data-view="tasks"]');
     await page.waitForTimeout(200);
     await page.click('[data-action="today"]');
     await page.waitForTimeout(300);
@@ -280,7 +293,7 @@ function check(name, cond, extra = "") {
     //      固定時刻を進めるだけで電池チップの表示が変わることを確認する。
     // ============================================================
     console.log("[10] ティッカーによる自動更新(reload無し)");
-    await page.click('[data-action="nav"][data-view="home"]');
+    await page.click('[data-action="nav"][data-view="today"]');
     await page.waitForTimeout(200);
     await page.clock.setFixedTime(new Date(2026, 6, 27, 10, 0, 0, 0));  // 10:00固定
     await seed({ sleepLog: null, blocks: [] });
@@ -370,7 +383,7 @@ function check(name, cond, extra = "") {
     await page.reload();
     await page.waitForTimeout(500);
     // v67テストと同じ手法: navをクリックし、normalizeStateが補完した値をlocalStorageへ永続化させる
-    await page.click('[data-action="nav"][data-view="home"]');
+    await page.click('[data-action="nav"][data-view="today"]');
     await page.waitForTimeout(200);
     let stMig = await stateNow();
     const b1 = stMig.settings.battery;
@@ -390,7 +403,7 @@ function check(name, cond, extra = "") {
     }, KEY);
     await page.reload();
     await page.waitForTimeout(500);
-    await page.click('[data-action="nav"][data-view="home"]');
+    await page.click('[data-action="nav"][data-view="today"]');
     await page.waitForTimeout(200);
     stMig = await stateNow();
     const b2 = stMig.settings.battery;
@@ -410,7 +423,7 @@ function check(name, cond, extra = "") {
     }, KEY);
     await page.reload();
     await page.waitForTimeout(500);
-    await page.click('[data-action="nav"][data-view="home"]');
+    await page.click('[data-action="nav"][data-view="today"]');
     await page.waitForTimeout(200);
     stMig = await stateNow();
     const b3 = stMig.settings.battery;

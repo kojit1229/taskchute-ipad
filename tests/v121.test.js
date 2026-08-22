@@ -86,124 +86,37 @@ function check(name, cond, extra = "") {
 
     const wishes = [
       makeWish({ id: "w-1", title: "京都へ旅行する" }),
-      makeWish({ id: "w-2", title: "書籍を出版する" }),
-      makeWish({ id: "w-3", title: "フルマラソン完走" }),
-      makeWish({ id: "w-4", title: "実家をリフォーム" })
+      makeWish({ id: "w-2", title: "書籍を出版する" })
     ];
 
-    // ============================================================
-    // (a) 未設定週のホームに赤帯が出る
-    // ============================================================
-    // v147: 未設定時の赤帯アラート(.home-weekly-wish-alert)はhomeTodayStatusCard(「今日の状態」
-    // 1枚化)へ統合された。専用の赤帯クラスは廃止し、統合カード内の文言+設定するボタンで代替する。
-    console.log("[1] 未設定週: 「今日の状態」カードに表示される(専用カードは出ない)");
-    await seed({ tasks: wishes, projects: [wishProject()], weeklyWishes: {}, view: "home" });
-    const todayStatusText = () => page.locator(".home-today-status").textContent().catch(() => "");
-    check("「今日の状態」カードに週Wish未設定の表示が出る", (await todayStatusText()).includes("週Wish未設定"), await todayStatusText());
-    check("設定するボタンが出る", await page.locator('[data-action="weekly-wish-open"]').count() === 1);
-    check("専用カードは出ない", await page.locator(".home-weekly-wish-card").count() === 0);
-    // v147: 設定するボタンは「今日の状態」カードのdetails内(既定closed)にある。クリックする
-    // には開く必要がある(以降はlocalStorageのfold状態が保持され、reloadしても開いたまま)。
-    const statusFold = page.locator('details[data-fold-id="today-status"]');
-    if (await statusFold.count()) await statusFold.locator("summary").click();
+    // v230: home完全撤去に伴い週間Wishカード・設定モーダルへの入口も仕様削除。
+    // 同等UIはないため、不存在とstateマイグレーション/既存値保持へ置換する。
+    console.log("[1-6] v230: 旧週間Wish UIの不存在とデータ互換");
+    await seed({
+      tasks: wishes,
+      projects: [wishProject()],
+      weeklyWishes: { [WEEK_KEY]: { taskIds: ["w-1"], updatedAt: `${TODAY}T09:00` } },
+      view: "home"
+    });
+    check("旧home週間Wish UIと入口は描画されない",
+      await page.locator('.home-weekly-wish-alert, .home-weekly-wish-card, [data-action="weekly-wish-open"]').count() === 0);
+    check("旧home viewはtodayへフォールバックする", await page.locator('#app[data-view="today"]').count() === 1);
+    const kept = await stateNow();
+    check("既存weeklyWishes.taskIdsは正規化後も保持される",
+      kept.weeklyWishes?.[WEEK_KEY]?.taskIds?.join(",") === "w-1", JSON.stringify(kept.weeklyWishes));
 
-    // ============================================================
-    // (b) モーダルで2件選択→保存でカード表示になり赤帯が消える
-    // ============================================================
-    console.log("[2] モーダルで2件選択して保存 → カード表示になり赤帯が消える");
-    await page.click('[data-action="weekly-wish-open"]');
-    await page.waitForTimeout(200);
-    check("選択肢が4件出る(未実現・未削除のトップレベルWishのみ)",
-      await page.locator('input[data-wish-id]').count() === 4);
-    await page.check('input[data-wish-id="w-1"]');
-    await page.check('input[data-wish-id="w-2"]');
-    await page.click('[data-action="weekly-wish-submit"]');
-    await page.waitForTimeout(300);
-    check("「今日の状態」カードから週Wish未設定の表示が消える", !(await todayStatusText()).includes("週Wish未設定"), await todayStatusText());
-    check("カードが表示される", await page.locator(".home-weekly-wish-card").count() === 1);
-    const cardText = await page.locator(".home-weekly-wish-card").innerText();
-    check("選んだ2件のタイトルが出る", cardText.includes("京都へ旅行する") && cardText.includes("書籍を出版する"), cardText);
-    const s2 = await stateNow();
-    check("weeklyWishes[週キー].taskIdsに2件保存される",
-      Array.isArray(s2.weeklyWishes?.[WEEK_KEY]?.taskIds) && s2.weeklyWishes[WEEK_KEY].taskIds.length === 2,
-      JSON.stringify(s2.weeklyWishes));
-    check("updatedAtも記録される", !!s2.weeklyWishes?.[WEEK_KEY]?.updatedAt, JSON.stringify(s2.weeklyWishes));
-
-    console.log("[2b] 「変更」で再度開くと既存選択がチェック済みで開く");
-    await page.click('[data-action="weekly-wish-open"]');
-    await page.waitForTimeout(200);
-    check("既存選択(w-1)がチェック済み", await page.locator('input[data-wish-id="w-1"]').isChecked());
-    check("既存選択(w-2)がチェック済み", await page.locator('input[data-wish-id="w-2"]').isChecked());
-    check("未選択(w-3)はチェックなし", !(await page.locator('input[data-wish-id="w-3"]').isChecked()));
-    await page.click('[data-action="modal-close"]');
-    await page.waitForTimeout(200);
-    check("キャンセルではstateが変わらない", (await stateNow()).weeklyWishes[WEEK_KEY].taskIds.length === 2);
-
-    // ============================================================
-    // (c) 4件目の選択が拒否される
-    // ============================================================
-    console.log("[3] モーダルで3件選択済みの状態から4件目をチェックすると拒否される");
-    await page.click('[data-action="weekly-wish-open"]');
-    await page.waitForTimeout(200);
-    await page.check('input[data-wish-id="w-3"]');  // これで3件目
-    check("3件目まではチェックできる", await page.locator('input[data-wish-id]:checked').count() === 3);
-    await page.click('input[data-wish-id="w-4"]');  // 4件目はクリックしても拒否される
-    await page.waitForTimeout(150);
-    check("4件目はチェックされない(拒否)", !(await page.locator('input[data-wish-id="w-4"]').isChecked()));
-    check("チェック数は3のまま", await page.locator('input[data-wish-id]:checked').count() === 3);
-    check("トーストで拒否理由が出る", (await page.locator("#toast").innerText()).includes("3つまでに絞りましょう"));
-    await page.click('[data-action="modal-close"]');
-    await page.waitForTimeout(200);
-
-    // ============================================================
-    // (d) weeklyWishesの無い旧stateでも起動できる
-    // ============================================================
-    console.log("[4] weeklyWishesフィールドが無い旧stateでも起動でき、normalizeStateが補完する");
-    const failuresBefore = failures;
     await page.evaluate((KEY) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       delete s.weeklyWishes;
-      s.tasks = [];
-      s.projects = [];
       s.currentView = "home";
       localStorage.setItem(KEY, JSON.stringify(s));
     }, KEY);
     await page.reload();
-    await page.waitForTimeout(400);
-    check("旧stateでも例外なく起動できる(pageerrorなし)", failures === failuresBefore);
-    check("ホームのヘッダが描画される", await page.locator("h1, .header-title").count() > 0);
-    const s4 = await stateNow();
-    check("normalizeStateがweeklyWishesを{}で補完する",
-      s4.weeklyWishes && typeof s4.weeklyWishes === "object" && Object.keys(s4.weeklyWishes).length === 0,
-      JSON.stringify(s4.weeklyWishes));
-
-    // ============================================================
-    // (e) 過去日表示では赤帯を出さない
-    // ============================================================
-    console.log("[5] 過去日(昨日)を見ている時は未設定でも「今日の状態」カード・専用カードとも出ない");
-    await seed({ tasks: wishes, projects: [wishProject()], weeklyWishes: {}, view: "home" });
-    await page.click('[data-action="date-prev"]');
-    await page.waitForTimeout(200);
-    check("過去日では「今日の状態」カードが出ない(体力予算チップの単独表示のみ)", await page.locator(".home-today-status").count() === 0);
-    check("過去日では専用カードも出ない", await page.locator(".home-weekly-wish-card").count() === 0);
-    check("過去日では設定するボタンも出ない", await page.locator('[data-action="weekly-wish-open"]').count() === 0);
-
-    // ============================================================
-    // (f) 保存側の3件ハードキャップ(UI層のpreventDefaultを迂回して4件checkedにしても3件しか保存されない)
-    // ============================================================
-    console.log("[6] プログラム的に4件checkedにして保存しても3件しか保存されない(slice(0,3)の防波堤)");
-    await seed({ tasks: wishes, projects: [wishProject()], weeklyWishes: {}, view: "home" });
-    await page.click('[data-action="weekly-wish-open"]');
-    await page.waitForTimeout(200);
-    // clickイベント(pre-activationガード)を通さず、DOMプロパティ直接代入で4件checkedにする
-    await page.evaluate(() => {
-      document.querySelectorAll("input[data-wish-id]").forEach((el, i) => { if (i < 4) el.checked = true; });
-    });
-    await page.click('[data-action="weekly-wish-submit"]');
-    await page.waitForTimeout(300);
-    const s6 = await stateNow();
-    const savedIds = ((s6.weeklyWishes[WEEK_KEY] || {}).taskIds) || [];
-    check("保存されたtaskIdsが3件にキャップされる", savedIds.length === 3, `actual=${savedIds.length}`);
+    await page.waitForTimeout(350);
+    const migrated = await stateNow();
+    check("旧stateではweeklyWishesを空objectで補完する",
+      migrated.weeklyWishes && typeof migrated.weeklyWishes === "object"
+      && Object.keys(migrated.weeklyWishes).length === 0, JSON.stringify(migrated.weeklyWishes));
   } finally {
     await browser.close();
     server.close();

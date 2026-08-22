@@ -120,7 +120,7 @@ function check(name, cond, extra = "") {
   await page.reload();
   await page.waitForTimeout(500);
   // 何か保存操作を挟んでメモリ上の正規化値を永続化させる(v59/v60のテストと同じ作法)
-  await page.click('[data-action="nav"][data-view="home"]');
+  await page.click('[data-action="nav"][data-view="today"]');  // v230: home撤去後の現行view
   await page.waitForTimeout(300);
   const normalized = await stateNow();
   const legacyBlock = (normalized.blocks || []).find((b) => b.id === "legacy-block");
@@ -255,7 +255,8 @@ function check(name, cond, extra = "") {
   // (a)(b) 朝プラン確定(confirmScheduleDraft)経路でも carryCount が増える・3回目で儀式
   // ============================================================
   async function runMorningPlan() {
-    await page.click('[data-action="nav"][data-view="tasks"]');
+    // v230: 朝プランはtasksから統合画面ATISへ移設。
+    await page.click('[data-action="nav"][data-view="today"]');
     await page.waitForTimeout(150);
     await page.click('[data-action="ai-morning-plan"]');
     await page.waitForTimeout(600);
@@ -295,67 +296,18 @@ function check(name, cond, extra = "") {
   // ============================================================
   // (c) 今日の理想ワンライナー: 保存・3日表示・3日目リトライ・日報反映
   // ============================================================
-  // v149(UI改善計画Phase4a): 今日の理想(homeIdeal)はホームの2タブ分割で「アファメーション」
-  // としてホームタブへ移動した(既定は今日タブ)。reload/seedのたびにタブは既定へ戻るため、
-  // ホーム画面を見る箇所ごとに切り替える。
-  const gotoHomeTab = async () => { await page.click('[data-action="home-tab"][data-tab="home"]'); await page.waitForTimeout(150); };
-
-  console.log("[11] 今日の理想: 未入力日は入力欄のみ(邪魔しない)");
-  await seed({ journalMeta: {}, view: "home" });
-  await gotoHomeTab();
-  check("入力欄が表示される", await page.locator('[data-ideal-date]').count() === 1);
-  check("表示テキスト(.home-ideal-text)は出ない(未入力)", await page.locator(".home-ideal-text").count() === 0);
-  const idealInput = page.locator('[data-ideal-date]');
-  const fontSize = await idealInput.evaluate((el) => getComputedStyle(el).fontSize);
-  check("入力欄は16px以上(iOS自動ズーム対策)", parseFloat(fontSize) >= 16, fontSize);
-
-  console.log("[12] 今日の理想: 入力→保存→1日目表示");
-  // v81: 未入力日のカードは既定で閉じた折りたたみ(<details>)になった(UX監査A5)ため、
-  // 入力欄はタップで展開してから操作する(保存ロジック自体は無変更)。
-  await page.click('details[data-fold-id="home-ideal-empty"] summary');
-  await page.waitForTimeout(150);
-  await idealInput.fill("家族と穏やかに過ごす");
-  await page.waitForTimeout(300);
-  let s12 = await stateNow();
-  check("journalMeta[today].idealに保存される", s12.journalMeta?.[TODAY]?.ideal === "家族と穏やかに過ごす", JSON.stringify(s12.journalMeta?.[TODAY]));
-  await page.reload();
-  await page.waitForTimeout(400);
-  await gotoHomeTab();
-  const idealText1 = await page.locator(".home-ideal-text").textContent().catch(() => "");
-  check("1日目はホームに表示される", idealText1 === "家族と穏やかに過ごす", idealText1);
-  const eyebrow1 = await page.locator(".home-ideal-eyebrow").textContent().catch(() => "");
-  check("1日目のラベルになっている", (eyebrow1 || "").includes("1日目"), eyebrow1);
-  check("1日目はリトライ選択肢が出ない", await page.locator('[data-action="ideal-retry"]').count() === 0);
-
-  console.log("[13] 今日の理想: 3日目(2日前に書いた理想が今日も残り、続ける/手放すを問う)");
-  await seed({ journalMeta: { [YEST2]: { aiMitCandidates: [], aiImported: false, ideal: "継続的な理想" } }, view: "home" });
-  await gotoHomeTab();
-  const eyebrow3 = await page.locator(".home-ideal-eyebrow").textContent().catch(() => "");
-  check("3日目のラベルになっている", (eyebrow3 || "").includes("3日目"), eyebrow3);
-  check("3日目はリトライ選択肢(続ける/手放す)が出る", await page.locator('[data-action="ideal-retry"]').count() === 2);
-
-  console.log("[14] 今日の理想: 3日目「続ける」→ 今日を起点に新しい3日間サイクル");
-  await page.click('[data-action="ideal-retry"][data-choice="continue"]');
-  await page.waitForTimeout(300);
-  const s14 = await stateNow();
-  check("今日のjournalMetaに同じ理想がコピーされる", s14.journalMeta?.[TODAY]?.ideal === "継続的な理想", JSON.stringify(s14.journalMeta?.[TODAY]));
-  await page.reload();
-  await page.waitForTimeout(400);
-  await gotoHomeTab();
-  const eyebrow14 = await page.locator(".home-ideal-eyebrow").textContent().catch(() => "");
-  check("続けた直後は1日目に戻る", (eyebrow14 || "").includes("1日目"), eyebrow14);
-
-  console.log("[15] 今日の理想: 3日目「手放す」→ 表示窓が閉じ、入力欄に戻る");
-  await seed({ journalMeta: { [YEST2]: { aiMitCandidates: [], aiImported: false, ideal: "手放す理想" } }, view: "home" });
-  await gotoHomeTab();
-  await page.click('[data-action="ideal-retry"][data-choice="release"]');
-  await page.waitForTimeout(300);
-  const s15 = await stateNow();
-  check("元の理想(2日前)が空になる", s15.journalMeta?.[YEST2]?.ideal === "", JSON.stringify(s15.journalMeta?.[YEST2]));
-  await page.reload();
-  await page.waitForTimeout(400);
-  await gotoHomeTab();
-  check("表示は消え、入力欄に戻る", await page.locator(".home-ideal-text").count() === 0 && await page.locator('[data-ideal-date]').count() === 1);
+  // v230: home撤去に伴い「今日の理想」入力・3日リトライUIも描画対象から削除。
+  // 日報への既存データ反映は[16]で引き続き検証する。
+  console.log("[11-15] v230: 旧home理想UIは描画せず、既存データは保持する");
+  await seed({
+    journalMeta: { [TODAY]: { aiMitCandidates: [], aiImported: false, ideal: "保持される理想" } },
+    view: "home"
+  });
+  check("旧home理想UIは描画されない",
+    await page.locator('.home-ideal-text, .home-ideal-eyebrow, [data-ideal-date], [data-action="ideal-retry"]').count() === 0);
+  check("旧home viewはtodayへフォールバックする", await page.locator('#app[data-view="today"]').count() === 1);
+  check("journalMetaのidealは正規化後も保持される",
+    (await stateNow()).journalMeta?.[TODAY]?.ideal === "保持される理想");
 
   console.log("[16] 今日の理想: 日報生成(generateReport)への反映");
   await seed({ journalMeta: { [TODAY]: { aiMitCandidates: [], aiImported: false, ideal: "日報反映テストの理想" } }, view: "journal" });

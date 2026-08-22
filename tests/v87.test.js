@@ -185,23 +185,16 @@ function check(name, cond, extra = "") {
     check("スキップでは報告ログが残らない", (s3b.declarations || []).length === 0, JSON.stringify(s3b.declarations));
 
     // ============================================================
-    console.log("[⑥b] should-fix: Now全画面(実行コンベア)からの終了操作でもトーストが.now-fullscreenの裏に隠れない");
+    // v230: home上のNow全画面入口は描画導線ごと撤去。Now開始/終了・報告の現行導線は
+    // [①]〜[⑥]で引き続き検証する。
+    console.log("[⑥b] v230: 旧Now全画面入口は描画されない");
     await seed({
-      blocks: [planBlock({ id: "blk-now-fs", title: "Now全画面トースト検証", startMin: new Date().getHours() * 60, minutes: 60 })],
+      blocks: [planBlock({ id: "blk-now-fs", title: "Now全画面撤去確認", startMin: new Date().getHours() * 60, minutes: 60 })],
       view: "home"
     });
-    await page.click('[data-action="now-mode-open"]');
-    await page.waitForTimeout(200);
-    check("(準備)Now全画面が開く", await page.locator(".now-fullscreen").count() === 1);
-    await page.click('.now-fullscreen [data-action="now-conveyor-complete"]');
-    await page.waitForTimeout(300);
-    check("(準備)完了操作後もNow全画面は表示されたまま(全ブロック完了で完了メッセージ表示に切り替わる)", await page.locator(".now-fullscreen").count() === 1);
-    check("(準備)完了トーストが表示状態(.show)になっている", await page.locator("#toast.show").count() === 1);
-    const zIndexCheck2 = await page.evaluate(() => ({
-      toast: Number(getComputedStyle(document.querySelector("#toast")).zIndex),
-      fullscreen: Number(getComputedStyle(document.querySelector(".now-fullscreen")).zIndex)
-    }));
-    check("トーストのz-indexが.now-fullscreenより大きい(視覚的に手前)", zIndexCheck2.toast > zIndexCheck2.fullscreen, JSON.stringify(zIndexCheck2));
+    check("旧now-mode-open導線とfullscreenは描画されない",
+      await page.locator('[data-action="now-mode-open"], .now-fullscreen').count() === 0);
+    check("旧home viewはtodayへフォールバックする", await page.locator('#app[data-view="today"]').count() === 1);
 
     // ============================================================
     // [⑤] normalizeState 後方互換 + 上限300件

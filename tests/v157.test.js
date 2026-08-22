@@ -93,75 +93,13 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (1)(4) ファイルがある日: 今日タブhero直後に既定openのカードで本文+注記が表示される
     // ============================================================
-    console.log("[1][4] 今日の敵_TODAY.mdがある日は、ホーム『今日』タブに既定openのカードで本文+『※AI演出』注記が出る");
-    enemyFixture = "7月28日、恐るべき「積読タワー」が今日のラスボスとして立ちはだかる_v157テスト本文。";
+    // v230: home完全撤去に伴い「今日の敵」演出カードも描画・取得対象から削除。
+    console.log("[1-7] v230: 今日の敵カードの不存在と不要fetch防止");
+    enemyFixture = "今日の敵_v157本文";
     await seed({ selectedDate: TODAY, view: "home" });
-    check("api.github.comの今日の敵_TODAY.mdへリクエストが実際に飛んでいる(personal-data API経由の裏取り)",
-      enemyApiRequests.some((p) => p.endsWith(`今日の敵_${TODAY}.md`)), JSON.stringify(enemyApiRequests));
-    const cardCount1 = await page.locator(".home-today-enemy").count();
-    check("『今日の敵』カードが1つ表示される", cardCount1 === 1);
-    const openAttr1 = await page.locator(".home-today-enemy").getAttribute("open").catch(() => null);
-    check("カードは既定open(open属性がある)", openAttr1 !== null, String(openAttr1));
-    const homeText1 = await page.locator("main").textContent();
-    check("本文がDOM上に読める", homeText1.includes("積読タワー"), homeText1.slice(0, 400));
-    check("見出し『👹 今日の敵』が出る", homeText1.includes("今日の敵"));
-    check("『※AI演出』の注記が出る", homeText1.includes("※AI演出"), homeText1.slice(0, 400));
-
-    // ============================================================
-    // (2) ファイルが無い日: カード自体が出ない
-    // ============================================================
-    console.log("[2] 今日の敵_TODAY.mdが無い日(404)はカード自体が表示されない");
-    enemyFixture = null;
-    await seed({ selectedDate: TODAY, view: "home" });
-    const cardCount2 = await page.locator(".home-today-enemy").count();
-    check("ファイルが無ければカードが0件", cardCount2 === 0);
-
-    // ============================================================
-    // (3) HTML/Markdown的な文字列はエスケープされ、タグとして実行されない
-    // ============================================================
-    console.log("[3] 本文中のHTMLタグ的な文字列はエスケープされ、要素として実行されない");
-    enemyFixture = "<img src=x onerror=alert(1)>今日のラスボスは<b>強敵</b>_v157XSSテスト";
-    await seed({ selectedDate: TODAY, view: "home" });
-    const injectedImgCount = await page.locator(".home-today-enemy img[onerror]").count();
-    check("onerror付きimgタグが実行可能な要素として存在しない(エスケープ済み)", injectedImgCount === 0);
-    const homeText3 = await page.locator("main").textContent();
-    check("エスケープされたタグ文字列自体はテキストとして読める", homeText3.includes("今日のラスボスは") && homeText3.includes("強敵"), homeText3.slice(0, 400));
-
-    // ============================================================
-    // (7) 4000字を超える本文は表示側でも末尾を省略する(表示側の二重防御)
-    // ============================================================
-    console.log("[7] 4000字を超える本文は表示側でクリップされ、末尾は表示されない");
-    const CLIP_TAIL_MARKER = "TAIL_MARKER_SHOULD_BE_CLIPPED_v157";
-    enemyFixture = "あ".repeat(4000) + CLIP_TAIL_MARKER;
-    await seed({ selectedDate: TODAY, view: "home" });
-    const cardCount7 = await page.locator(".home-today-enemy").count();
-    check("4000字超でもカード自体は表示される", cardCount7 === 1);
-    const bodyText7 = await page.locator(".home-today-enemy .home-fold-body > div").first().textContent();
-    check("4000字を超えた末尾のマーカーは表示されない(クリップされている)", !bodyText7.includes(CLIP_TAIL_MARKER), bodyText7.slice(-60));
-    check("クリップされたことを示す省略記号(…)が末尾に付く", bodyText7.endsWith("…"), bodyText7.slice(-10));
-    check("表示本文の長さは4000字+省略記号1字(4001字)以内", bodyText7.length <= 4001, String(bodyText7.length));
-
-    // ============================================================
-    // (5) 過去日を閲覧中はカードが出ない
-    // ============================================================
-    // v18951の起動時仕様(state.selectedDate = todayISO()を毎回強制)により、localStorageへ
-    // selectedDate=前日を直接注入してreloadしても次の起動処理で今日へ戻されてしまう。
-    // 実際のユーザー操作(「前日」ボタン=date-prevアクション)でセッション内移動させて検証する。
-    console.log("[5] ホームで『前日』ボタンを押して今日以外の日付を閲覧している間はカードが出ない");
-    enemyFixture = "今日の敵_v157本文(過去日閲覧テスト用)";
-    await seed({ selectedDate: TODAY, view: "home" });
-    const cardCount5before = await page.locator(".home-today-enemy").count();
-    check("前提: 今日を見ている間はカードが出ている", cardCount5before === 1);
-    await page.click('[data-action="date-prev"]');
-    await page.waitForTimeout(200);
-    const cardCount5 = await page.locator(".home-today-enemy").count();
-    check("『前日』を押した後(過去日閲覧中)はカードが0件(当日データはfetch済みでも非表示)", cardCount5 === 0);
-
-    // ============================================================
-    // (6) 公開Pages側(同一オリジン)への今日の敵_*.mdのfetchは一切発生しない
-    // ============================================================
-    console.log("[6] 公開Pages側(同一オリジン)への今日の敵_*.mdのfetchは一度も発生しない");
-    check("同一オリジンでの今日の敵_*.mdへのリクエストが0件(すべてapi.github.com経由)",
+    check("旧今日の敵カードは描画されない", await page.locator(".home-today-enemy").count() === 0);
+    check("旧home viewはtodayへフォールバックする", await page.locator('#app[data-view="today"]').count() === 1);
+    check("削除済みカード用データを同一オリジンから取得しない",
       sameOriginRequests.length === 0, JSON.stringify(sameOriginRequests));
   } finally {
     await browser.close();

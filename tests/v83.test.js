@@ -151,21 +151,10 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(400);
 
     // ============================================================
-    // [B4-1] 5種の完了トグルの形状統一(丸チェック)
+    // [B4-1] v230でhome2種を撤去。残る3種の完了トグルの形状統一(丸チェック)
     // ============================================================
-    console.log("[B4-1] 完了トグル5種(.home-box/.home-dot/.checkbox-button/.tl-complete-btn/.wish-check)が丸チェックに統一されている");
-
-    check(".home-boxが描画されている", await page.locator(".home-box").count() >= 1);
-    const homeBoxShape = await isCircular(".home-box");
-    check(".home-boxが円形(border-radiusが短辺の半分以上)", homeBoxShape.isCircle, JSON.stringify(homeBoxShape));
-
-    check(".home-dotが描画されている", await page.locator(".home-dot").count() >= 1);
-    const homeDotShape = await isCircular(".home-dot");
-    check(".home-dotが円形", homeDotShape.isCircle, JSON.stringify(homeDotShape));
-
-    // home viewにいる間に.home-boxの完了色(v83-mit-blockはcompleted:true)を確認しておく
-    const homeBoxDoneBg = await page.locator(".home-ck.done .home-box").first().evaluate((el) => getComputedStyle(el).backgroundColor);
-    const homeBoxDoneText = await page.locator(".home-ck.done .home-box").first().textContent();
+    console.log("[B4-1] v230: homeトグルは不存在、残る.checkbox-button/.tl-complete-btn/.wish-checkは丸チェック");
+    check("削除済み.home-box/.home-dotは描画されない", await page.locator(".home-box, .home-dot").count() === 0);
 
     await page.evaluate(({ KEY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
@@ -215,13 +204,12 @@ function check(name, cond, extra = "") {
 
     // ---- チェック済み状態(塗り+✓)も統一されているか ----
     console.log("[B4-1] チェック済み状態(塗り+✓)の表現統一");
-    // .home-boxは.home-ck.doneの子。.checkbox-buttonは自身に.doneが付く。.wish-checkは:checked。
+    // .checkbox-buttonは自身に.doneが付く。.wish-checkは:checked。
     check(
-      "チェック済みの塗り色が.home-box/.checkbox-button/.wish-checkで一致する(var(--green)に統一)",
-      homeBoxDoneBg === checkboxButtonDoneBg && checkboxButtonDoneBg === wishCheckedBg,
-      JSON.stringify({ homeBoxDoneBg, checkboxButtonDoneBg, wishCheckedBg })
+      "チェック済みの塗り色が.checkbox-button/.wish-checkで一致する(var(--green)に統一)",
+      checkboxButtonDoneBg === wishCheckedBg,
+      JSON.stringify({ checkboxButtonDoneBg, wishCheckedBg })
     );
-    check("チェック済みの.home-boxに✓が表示される", (homeBoxDoneText || "").includes("✓"), homeBoxDoneText);
     check("チェック済みの.checkbox-buttonに✓が表示される", (checkboxButtonDoneText || "").includes("✓"), checkboxButtonDoneText);
     const wishCheckedAfter = await afterContent(wishSel2);
     check("実現済み.wish-checkは::afterで✓を表示する(塗り+✓の表現に統一)", wishCheckedAfter.includes("✓"), wishCheckedAfter);
@@ -229,23 +217,9 @@ function check(name, cond, extra = "") {
     check("未実現.wish-checkは✓を表示しない(regression)", !wishUncheckedAfter.includes("✓"), wishUncheckedAfter);
 
     // ============================================================
-    // [B4-2] v81の当たり判定44px拡張が壊れていないことの回帰確認
+    // [B4-2] v81の残存wish当たり判定44px拡張が壊れていないことの回帰確認
     // ============================================================
-    console.log("[B4-2] v81の当たり判定44px拡張(.home-box::before / .wish-check-wrap)の回帰確認");
-    await page.evaluate(({ KEY }) => {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      s.currentView = "home";
-      localStorage.setItem(KEY, JSON.stringify(s));
-    }, { KEY });
-    await page.reload();
-    await page.waitForTimeout(400);
-    const homeBoxBefore = await getPseudoInset(".home-box", "::before");
-    check(
-      ".home-boxの::beforeが引き続き44px相当のinset(-12px)を持つ(v81回帰)",
-      homeBoxBefore.top === "-12px" && homeBoxBefore.left === "-12px" && homeBoxBefore.right === "-12px" && homeBoxBefore.bottom === "-12px",
-      JSON.stringify(homeBoxBefore)
-    );
-
+    console.log("[B4-2] v230: 削除済みhome拡張は不存在、残る.wish-check-wrapの44pxを回帰確認");
     await page.evaluate(({ KEY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.currentView = "wish";
@@ -286,10 +260,10 @@ function check(name, cond, extra = "") {
     // selectedDate=今日のまま一度でも描画してしまうと、その時点の「前日パネル」=YESTERDAY
     // (テキストB)が先にmarked.parseでキャッシュされてしまい、後段の「date-next後は
     // キャッシュミスでparseが走る」検証が偽陰性になる。そのため、日付移動を終えてから
-    // 初めてjournalタブへ入る順序にする(home→日付ピッカーでYESTERDAYへ→journalへnav)。
+    // 初めてjournalタブへ入る順序にする(tasks→日付ピッカーでYESTERDAYへ→journalへnav)。
     await page.evaluate(({ KEY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
-      s.currentView = "home";
+      s.currentView = "tasks";  // v230: home撤去後もdatebarを持つ現行view
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY });
     await page.reload();
@@ -340,8 +314,7 @@ function check(name, cond, extra = "") {
     // [B8-2] 新着FB(cachedFeedback更新)時に表示が正しく更新される(明示的invalidation不要の設計)
     // ============================================================
     console.log("[B8-2] cachedFeedback更新(新着fetch)時、renderMarkdownのキャッシュに邪魔されず表示が更新される");
-    // v141: AIフィードバック列はジャーナルタブのUIから撤去したため、表示確認はHomeの
-    // 「AIから」カード(homeAiFeedbackReadHTML、cachedFeedbackをrenderMarkdownする点は同じ)で行う。
+    // v230: Home撤去後は同じcachedFeedback/renderMarkdown経路をATISで確認する。
     const OLD_MARKER = "v83旧フィードバックマーカー_" + Date.now();
     const NEW_MARKER = "v83新フィードバックマーカー_" + Date.now();
 
@@ -349,26 +322,20 @@ function check(name, cond, extra = "") {
     await page.evaluate(({ KEY, YESTERDAY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.selectedDate = YESTERDAY;
-      s.currentView = "home";
+      s.currentView = "today";
       if (s.feedback) delete s.feedback[YESTERDAY];
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, YESTERDAY });
     await page.reload();
     await page.waitForTimeout(700);
-    // v149(UI改善計画Phase4a): 「AIから」(home-ai-feedback-read)はホームの2タブ分割で
-    // ホームタブへ移動した(既定は今日タブ)。
-    await page.click('[data-action="home-tab"][data-tab="home"]');
-    await page.waitForTimeout(150);
-    const fbTextOld = await page.locator(".home-ai-feedback-read").textContent();
+    const fbTextOld = await page.locator(".tower-atis-feedback").textContent();
     check("旧フィードバック内容が表示される(cachedFeedback経由のrenderMarkdown)", (fbTextOld || "").includes(OLD_MARKER), (fbTextOld || "").slice(0, 300));
 
     // バッチが新しい内容で上書きした状況を再現(fixtureを差し替えて再取得=アプリ再起動相当)
     feedbackFixture = `# AIフィードバック\n\n${NEW_MARKER}\n`;
     await page.reload();
     await page.waitForTimeout(700);
-    await page.click('[data-action="home-tab"][data-tab="home"]');
-    await page.waitForTimeout(150);
-    const fbTextNew = await page.locator(".home-ai-feedback-read").textContent();
+    const fbTextNew = await page.locator(".tower-atis-feedback").textContent();
     check("新着フィードバックの内容が表示される(古い内容のまま固まっていない)", (fbTextNew || "").includes(NEW_MARKER), (fbTextNew || "").slice(0, 300));
     check("旧フィードバック内容が残留していない(regression: キャッシュの取り違えが無い)", !(fbTextNew || "").includes(OLD_MARKER));
 

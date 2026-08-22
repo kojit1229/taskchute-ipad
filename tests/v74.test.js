@@ -120,171 +120,21 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (a) 日次1ハイライト提示
     // ============================================================
-    console.log("[1] ホームに「今日の1冊から」カードが表示され、書籍・著者・ハイライト本文が出る");
+    // v230: home完全撤去に伴い読書カード/言語化入力も描画導線ごと削除。
+    console.log("[1-8] v230: 旧読書UIの不存在と旧state起動互換");
     await page.evaluate((KEY) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.currentView = "home";
+      s.readingReflections = { "2026-07-27": "既存の言語化" };
       localStorage.setItem(KEY, JSON.stringify(s));
     }, KEY);
     await page.reload();
-    await page.waitForTimeout(700);
-    const homeText = await page.locator("main").textContent();
-    check("カード見出し「今日の1冊から」が表示される", homeText.includes("今日の1冊から"), homeText.slice(0, 300));
-    check("書籍タイトルが表示される(閉じたdetails内でもDOM上には存在する)", homeText.includes("テスト書籍タイトル_v74"));
-    check("著者名が表示される(閉じたdetails内でもDOM上には存在する)", homeText.includes("テスト著者_v74"));
-    check("ハイライト本文が表示される(閉じたdetails内でもDOM上には存在する)", homeText.includes("テストハイライト本文_v74"));
-    check("言語化欄は保存前は空", await page.locator("[data-reading-reflection-input]").inputValue() === "");
-    check("保存ボタンがある", await page.locator('[data-action="reading-save"]').count() === 1);
-
-    // v82(UX監査B3・K承認): 読書カードは常時フル表示だとホームの一等地を占有するため、
-    // 既定closedの折りたたみ(homeFoldSection, data-fold-id="home-reading")に縮小した
-    // (CHANGES_v82.md参照)。以降の入力操作(fill/click)は要素の可視性を要求するため、
-    // ここで一度サマリーをタップして開く(開閉状態はlocalStorageに記憶され、以降のreloadでも開いたまま)。
-    console.log("[1b] v82: 読書カードは既定closedの折りたたみ。タップで開くと入力欄が操作できる");
-    const readingFold = page.locator('details[data-fold-id="home-reading"]');
-    check("既定で閉じている(open属性が無い)", !(await readingFold.evaluate((el) => el.open)));
-    await readingFold.locator("summary").click();
-    await page.waitForTimeout(150);
-    check("タップで開く(open属性が付く)", await readingFold.evaluate((el) => el.open));
-
-    // ============================================================
-    // (b) 1行言語化の保存(read-merge-write。他日のエントリを消さない)
-    // ============================================================
-    console.log("[2] 既存の他日エントリがある状態で、今日の言語化を入力→保存すると、reflections.jsonへマージpushされる");
-    fixtures.reflections = {
-      entries: [{
-        date: OTHER_DAY, bookId: "b0", bookTitle: "別の日の本", author: "別の著者",
-        highlightRef: "ref-old", highlightText: "別の日のハイライト", reflection: "前に書いた感想",
-        savedAt: `${OTHER_DAY}T08:00:00`
-      }]
-    };
-    fixtures.puts.length = 0;
-    await page.fill("[data-reading-reflection-input]", "これは自分の言葉での言語化_v74");
-    await page.click('[data-action="reading-save"]');
     await page.waitForTimeout(500);
-    const put1 = fixtures.puts.find((p) => p.url.endsWith("/contents/taskchute/reading/reflections.json"));
-    check("reflections.jsonがPUTされる", !!put1, JSON.stringify(fixtures.puts.map((p) => p.url)));
-    const entries1 = put1 && put1.entries;
-    check("PUT内容が配列entriesを持つ", Array.isArray(entries1), JSON.stringify(entries1));
-    check("他日(OTHER_DAY)のエントリが保持されている(消えていない)",
-      !!entries1 && entries1.some((e) => e.date === OTHER_DAY && e.reflection === "前に書いた感想"),
-      JSON.stringify(entries1));
-    const todayEntry1 = entries1 && entries1.find((e) => e.date === TODAY);
-    check("今日のエントリが追加されている", !!todayEntry1, JSON.stringify(entries1));
-    check("今日のエントリのreflectionが入力内容と一致する",
-      !!todayEntry1 && todayEntry1.reflection === "これは自分の言葉での言語化_v74", JSON.stringify(todayEntry1));
-    check("今日のエントリにbookTitle/highlightTextが記録される",
-      !!todayEntry1 && todayEntry1.bookTitle === "テスト書籍タイトル_v74" && todayEntry1.highlightText === "テストハイライト本文_v74",
-      JSON.stringify(todayEntry1));
-    check("エントリは今日について1件のみ(重複していない)",
-      !!entries1 && entries1.filter((e) => e.date === TODAY).length === 1, JSON.stringify(entries1));
-
-    console.log("[3] 保存後、同じ日にもう一度保存すると新規追加ではなく上書きされる(重複しない)");
-    fixtures.puts.length = 0;
-    await page.fill("[data-reading-reflection-input]", "書き直した言語化_v74");
-    await page.click('[data-action="reading-save"]');
-    await page.waitForTimeout(500);
-    const put2 = fixtures.puts.find((p) => p.url.endsWith("/contents/taskchute/reading/reflections.json"));
-    const entries2 = put2 && put2.entries;
-    check("上書き後も今日のエントリは1件のみ", !!entries2 && entries2.filter((e) => e.date === TODAY).length === 1, JSON.stringify(entries2));
-    check("上書き後のreflectionが最新入力になっている",
-      !!entries2 && entries2.find((e) => e.date === TODAY)?.reflection === "書き直した言語化_v74", JSON.stringify(entries2));
-    check("他日のエントリは2回目の保存後も保持されている",
-      !!entries2 && entries2.some((e) => e.date === OTHER_DAY), JSON.stringify(entries2));
-
-    // ============================================================
-    // (b') should-fix: 既存データの読み込みが非404で失敗した場合は保存を中断する
-    //      (404と区別できずに空配列から始めてしまうと、reflections.jsonが「今日の1件だけ」に
-    //      上書きされ過去の全言語化が消失しうるため)
-    // ============================================================
-    console.log("[3b] 既存データの読み込みが500で失敗 → 保存を中断し、PUTは送信されない(データ消失を防ぐ)");
-    fixtures.puts.length = 0;
-    fixtures.reflectionsGetStatus = 500;
-    await page.fill("[data-reading-reflection-input]", "読み失敗中に書いた言語化_v74");
-    await page.click('[data-action="reading-save"]');
-    await page.waitForTimeout(500);
-    const putsDuringFailure = fixtures.puts.filter((p) => p.url.endsWith("/contents/taskchute/reading/reflections.json"));
-    check("読み込み失敗時はreflections.jsonへのPUTが送信されない", putsDuringFailure.length === 0, JSON.stringify(putsDuringFailure));
-    const toastText = await page.locator("#toast").textContent();
-    check("保存中止のエラーがトーストで表示される", /保存失敗|保存を中止/.test(toastText || ""), toastText);
-    fixtures.reflectionsGetStatus = null;
-    const afterFailureText = await page.evaluate(async () => {
-      const res = await fetch("https://api.github.com/repos/kojit1229/personal-data/contents/taskchute/reading/reflections.json?ref=main", {
-        headers: { "Accept": "application/vnd.github.raw+json" }
-      });
-      return res.text();
-    });
-    const afterFailureEntries = JSON.parse(afterFailureText).entries;
-    check("read失敗を挟んでも既存の2エントリ(今日+他日)が両方とも保持されている(消失していない)",
-      afterFailureEntries.length === 2
-        && afterFailureEntries.some((e) => e.date === TODAY && e.reflection === "書き直した言語化_v74")
-        && afterFailureEntries.some((e) => e.date === OTHER_DAY),
-      JSON.stringify(afterFailureEntries));
-
-    // ============================================================
-    // (c) 永続性: リロード後もプリフィルされる
-    // ============================================================
-    console.log("[4] リロード後、保存済みの言語化がテキスト欄にプリフィルされる");
-    await page.reload();
-    await page.waitForTimeout(700);
-    const reflVal = await page.locator("[data-reading-reflection-input]").inputValue();
-    check("リロード後、保存済みの言語化がプリフィルされる", reflVal === "書き直した言語化_v74", reflVal);
-
-    // ============================================================
-    // (d) 月次要約: 2026-08-22時点で「週次レビュー」タブ自体が仕様削除済み
-    //     (workbench/out/2026-08-21-taskchute-slim-spec/slim-spec.md §1-1)。
-    //     currentView="weekly" は現在どのビューにも一致せずhomeへフォールバックするため、
-    //     readingMonthlySummarySectionHTML() の呼び出し元(週次レビュー描画)自体が
-    //     app.js から失われている(関数定義は残るが呼び出しが無く到達不能。実装側の
-    //     整理漏れの可能性があるため別途報告する)。表示先タブが無い以上この観点は
-    //     検証しようがないため、(d)の2アサーションを削除する。
-    // ============================================================
-
-    // ============================================================
-    // (e) highlights.json 404/0冊のフェイルソフト
-    // ============================================================
-    console.log("[7] highlights.jsonが404の間はホームに読書カードが出ない(クラッシュしない)");
-    fixtures.highlightsStatus = 404;
-    await page.evaluate((KEY) => {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      s.currentView = "home";
-      localStorage.setItem(KEY, JSON.stringify(s));
-    }, KEY);
-    await page.reload();
-    await page.waitForTimeout(700);
-    const homeText2 = await page.locator("main").textContent();
-    check("読書カードの見出しが出ない", !homeText2.includes("今日の1冊から"));
-    check("それでもホームの他の要素は表示される(クラッシュしていない)", homeText2.includes("いま、これ"), homeText2.slice(0, 200));
-
-    // ============================================================
-    // (f) normalizeState 後方互換
-    // ============================================================
-    console.log("[8] 読書関連キーが一切無い旧stateでもクラッシュせず起動できる");
-    fixtures.highlightsStatus = 200;
-    await page.evaluate((KEY) => {
-      const legacy = {
-        settings: { github: {} },
-        pomodoro: { running: false, blockId: "", startedAt: "", endsAt: "", mode: "focus" },
-        projects: [], tasks: [], blocks: [], journals: {}, journalMeta: {},
-        feedback: {}, reports: {}, feedbackFiles: [], zeroThinking: { themes: [], entries: [] },
-        questions: [], experiments: [], weeklyReviews: {}, cycleReviews: {},
-        aiScheduleHistory: [], aiPlanSkippedLog: [], migrationRitualLog: [],
-        aiLinkFreshness: {}, aiWorkProcessedIds: [],
-        selectedDate: "", currentView: "home", dataModifiedAt: ""
-      };
-      localStorage.setItem(KEY, JSON.stringify(legacy));
-    }, KEY);
-    await page.reload();
-    await page.waitForTimeout(500);
-    await passGithubGate(page);
-    await page.evaluate((KEY) => {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      s.currentView = "home";
-      localStorage.setItem(KEY, JSON.stringify(s));
-    }, KEY);
-    await page.reload();
-    await page.waitForTimeout(700);
-    check("旧stateでもホームタブが表示される(pageerrorなし)", await page.locator(".nav-button").count() > 0);
+    check("旧読書カード・入力・保存導線は描画されない",
+      await page.locator('[data-fold-id="home-reading"], [data-reading-reflection], [data-action="save-reading-reflection"]').count() === 0);
+    check("旧home viewはtodayへフォールバックする", await page.locator('#app[data-view="today"]').count() === 1);
+    check("旧stateでも現行ナビとTOWERが起動する",
+      await page.locator(".nav-button").count() > 0 && await page.locator(".sec-atis").count() === 1);
   } finally {
     await browser.close();
     server.close();

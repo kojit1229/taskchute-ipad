@@ -107,15 +107,18 @@ function check(name, cond, extra = "") {
     // v149(UI改善計画Phase4a): 「AIから」(home-ai-feedback-readを含む)はホームの2タブ分割で
     // ホームタブへ移動した(既定は今日タブ)。reload/seedのたびにタブは既定へ戻るため、
     // ホームを見る箇所ごとに切り替える。
-    const gotoHomeTab = async () => { await page.click('[data-action="home-tab"][data-tab="home"]'); await page.waitForTimeout(150); };
+    const gotoHomeTab = async () => { // v230: feedback表示はtoday/TOWERのATISへ移設
+      if (await page.locator('#app[data-view="today"]').count() === 0) await page.click('[data-action="nav"][data-view="today"]');
+      await page.waitForTimeout(150);
+    };
 
     console.log("[1] ホーム『AIから』で、実際のAIフィードバック_*.mdと同じ見出し構造の前日本文が読める(回帰)");
     await seed({ view: "home" });
     check("api.github.comへ前日分のfetchが実際に飛んでいる", feedbackApiRequests.some((p) => p.endsWith(`AIフィードバック_${PREV}.md`)), JSON.stringify(feedbackApiRequests));
     await gotoHomeTab();
-    const detailsCount = await page.locator(".home-ai-feedback-read").count();
+    const detailsCount = await page.locator(".tower-atis-feedback").count();
     check("「AIフィードバックを読む」detailsが1つ表示される", detailsCount === 1);
-    const openAttr = await page.locator(".home-ai-feedback-read").getAttribute("open").catch(() => null);
+    const openAttr = await page.locator(".tower-atis-feedback").getAttribute("open").catch(() => null);
     check("既定closed", openAttr === null, String(openAttr));
     const homeText = await page.locator("main").textContent();
     check("前日フィードバックの本文(実データ構造)が読める", homeText.includes("提案1_v76") && homeText.includes("提案2_v76"), homeText.slice(0, 300));
@@ -125,6 +128,8 @@ function check(name, cond, extra = "") {
     // (以前のように selectedDate をlocalStorageへ仕込んでreloadでは今日に上書きされてしまう)。
     console.log("[1b] 根本原因の回帰: Home で state.selectedDate が『今日』以外(=セッション中に過去日へ移動した状態)でも読める");
     await seed({ view: "home" });
+    await page.click('[data-action="nav"][data-view="tasks"]'); // v230: 日付ピッカーの現行配置
+    await page.waitForTimeout(150);
     await page.evaluate((d) => {
       const el = document.querySelector("[data-date-picker]");
       el.value = d;
@@ -132,7 +137,7 @@ function check(name, cond, extra = "") {
     }, PREV2);
     await page.waitForTimeout(300);
     await gotoHomeTab();
-    const homeDetailsCountPastDay = await page.locator(".home-ai-feedback-read").count();
+    const homeDetailsCountPastDay = await page.locator(".tower-atis-feedback").count();
     const homeTextPastDay = await page.locator("main").textContent();
     check("selectedDateが2日前でも、実際の今日から見た前日フィードバックが読める(selectedDate依存バグの回帰)",
       homeDetailsCountPastDay === 1 && homeTextPastDay.includes("提案1_v76"), homeTextPastDay.slice(0, 300));
@@ -153,7 +158,7 @@ function check(name, cond, extra = "") {
     feedbackFixture = {};  // 全部404
     await seed({ view: "home" });
     await gotoHomeTab();
-    const detailsCount404 = await page.locator(".home-ai-feedback-read").count();
+    const detailsCount404 = await page.locator(".tower-atis-feedback").count();
     check("ホーム: 前日分が無ければdetails自体が出ない(フェイルソフト)", detailsCount404 === 0);
     check("404が続いてもクラッシュしていない(pageerror無し。ここまで到達していれば正常)", true);
 
@@ -166,7 +171,7 @@ function check(name, cond, extra = "") {
     await seed({ view: "home" });
     await gotoHomeTab();
     const homeTextAfterRecover = await page.locator("main").textContent();
-    const detailsCountRecover = await page.locator(".home-ai-feedback-read").count();
+    const detailsCountRecover = await page.locator(".tower-atis-feedback").count();
     check("直前は404だったが、ファイルが用意された後の再起動では正しく取得・表示される(失敗の永続キャッシュなし)",
       detailsCountRecover === 1 && homeTextAfterRecover.includes("提案1_v76"), homeTextAfterRecover.slice(0, 300));
 

@@ -114,15 +114,18 @@ function check(name, cond, extra = "") {
     // ============================================================
     // 修正1(a): autoIngestFeedback → 候補チップ化。「＋」タップでタスク作成、チップが消える
     // ============================================================
-    console.log("[1] AIフィードバックの「明日への提案」は候補チップとして表示され、直接state.tasksには入らない");
+    console.log("[1] AIフィードバックの「明日への提案」はATISの候補チップとして表示され、直接state.tasksには入らない");
     feedbackFixture = { [YEST]: "# AIフィードバック本文_v133\n\n## 明日への提案\n\n- [ ] AI候補タスク_v133: 理由の説明\n" };
-    await seed({ tasks: [], projects: [], view: "tasks" });
+    // v230: 候補チップはtasks上部から統合画面ATISへ集約された。
+    await seed({ tasks: [], projects: [], view: "today" });
     const s1 = await readState();
     check("state.tasksへ直接登録されない", !(s1.tasks || []).some((t) => t.title === "AI候補タスク_v133"), JSON.stringify(s1.tasks));
     check("journalMeta[前日].aiTaskCandidatesへ候補として登録される",
       (s1.journalMeta?.[YEST]?.aiTaskCandidates || []).includes("AI候補タスク_v133"), JSON.stringify(s1.journalMeta?.[YEST]));
-    const chipText1 = await page.locator(".ai-mit-chips", { hasText: "タスク候補" }).textContent().catch(() => "");
-    check("タスクシュート上部にチップとして表示される", (chipText1 || "").includes("AI候補タスク_v133"), chipText1);
+    const chipText1 = await page.locator("[data-atis-task-candidates]").textContent().catch(() => "");
+    check("ATISにチップとして表示される", (chipText1 || "").includes("AI候補タスク_v133"), chipText1);
+    check("ATIS内のタスク候補コンテナは1つだけ(v230)",
+      await page.locator('#app[data-view="today"] .sec-atis [data-atis-task-candidates]').count() === 1);
 
     console.log("[2] チップの「＋」タップでタスクが作成され(dueDate=今日)、チップが消える");
     await page.click('[data-action="ai-task-adopt"][data-index="0"]');
@@ -137,7 +140,7 @@ function check(name, cond, extra = "") {
     console.log("[3] チップの「×」タップでは候補が消えるだけでタスクは作られない");
     feedbackFixture = {};  // 以降のseed()のreloadでtest[1]のfixtureが再ingestされないようクリア
     await seed({
-      tasks: [], projects: [], view: "tasks",
+      tasks: [], projects: [], view: "today",
       journalMeta: { [YEST]: { aiMitCandidates: [], aiImported: false, ideal: "", aiTaskCandidates: ["却下候補_v133"] } }
     });
     check("却下前: チップが表示されている", await page.locator('[data-action="ai-task-dismiss"][data-index="0"]').count() === 1);
@@ -194,7 +197,7 @@ function check(name, cond, extra = "") {
     }, { KEY, TODAY });
     await page.reload();
     await page.waitForTimeout(500);
-    await page.click('[data-action="nav"][data-view="home"]');
+    await page.click('[data-action="nav"][data-view="today"]');  // v230: home撤去後の現行view
     await page.waitForTimeout(300);
     const s6 = await readState();
     check("aiTaskCandidatesが空配列で補完される", Array.isArray(s6.journalMeta?.[TODAY]?.aiTaskCandidates) && s6.journalMeta[TODAY].aiTaskCandidates.length === 0,

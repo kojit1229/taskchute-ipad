@@ -216,45 +216,28 @@ function check(name, cond, extra = "") {
     check("未記入・欠席を責める表現は出ない", !/未記入|さぼ|サボ|できていません|忘れずに/.test(journalHTML));
 
     // ============================================================
-    // (e) 縮退モード
+    // (e) v230: home縮退モードUIは描画コードごと撤去
     // ============================================================
-    console.log("[5] 縮退モード: 朝の体調が3(少し悪い)以下だとホームに案内バナー+ゾーンの折りたたみが出る");
+    console.log("[5] v230: 朝の体調が3以下でも削除済みhome縮退UIは描画されずTOWERを維持する");
     await seed({
       blocks: [planBlock({ id: "mit-degraded", title: "縮退モード確認MIT", isMIT: true })],
-      view: "home", selectedDate: TODAY,
+      view: "today", selectedDate: TODAY,
       morningEnergyLog: { [TODAY]: 3 }
     });
-    check("縮退モードの案内バナーが出る", await page.locator(".cond-degraded-banner").count() === 1);
-    check("「今日のリズム」ゾーンが既定closedの折りたたみになる",
-      await page.locator('details[data-fold-id="zone2-degraded"]').evaluate((el) => el.open) === false);
-    check("MIT(今日の主役)は縮退時も表示される",
-      (await page.locator("#home-mit-anchor").textContent()).includes("縮退モード確認MIT"));
-    // v149(UI改善計画Phase4a): 「AIから」(home-ai-hub)はホームタブへ移動した(既定は今日タブ)。
-    await page.click('[data-action="home-tab"][data-tab="home"]');
-    await page.waitForTimeout(150);
-    check("「AIから」カードも既定closedの折りたたみになる",
-      await page.locator('details[data-fold-id="ai-hub-degraded"]').evaluate((el) => el.open) === false);
-    await page.click('[data-action="home-tab"][data-tab="today"]');
-    await page.waitForTimeout(150);
+    check("縮退モードの案内バナーは描画されない", await page.locator(".cond-degraded-banner").count() === 0);
+    check("縮退専用zone/AI hubは描画されない",
+      await page.locator('[data-fold-id="zone2-degraded"], [data-fold-id="ai-hub-degraded"]').count() === 0);
+    check("現行todayのTOWERは維持される", await page.locator(".today-tower").count() === 1);
 
-    console.log("[5b] 体調が普通(7)なら縮退モードは発火せず通常表示のまま");
+    console.log("[5b] 体調が普通(7)でも同じTOWER表示で、削除UIは復活しない");
     await seed({
       blocks: [planBlock({ id: "mit-normal", title: "通常モード確認MIT", isMIT: true })],
-      view: "home", selectedDate: TODAY,
+      view: "today", selectedDate: TODAY,
       morningEnergyLog: { [TODAY]: 7 }
     });
     check("縮退バナーは出ない", await page.locator(".cond-degraded-banner").count() === 0);
-    check("「今日のリズム」ゾーンは折りたたみ化されない(通常表示)",
-      await page.locator('details[data-fold-id="zone2-degraded"]').count() === 0);
-    // v146(UI改善計画Phase1-1): 「AIから」は常時表示のsectionから既定closedのdetailsへ変更された。
-    // ここで検証したいのは「縮退専用の ai-hub-degraded ではなく通常の ai-hub 側が使われる」ことなので、
-    // タグをdetailsに追随させる(常時表示自体はH3の折りたたみ既定値検証の担当)。
-    // v149: 「AIから」はホームタブへ移動した(既定は今日タブ)。
-    await page.click('[data-action="home-tab"][data-tab="home"]');
-    await page.waitForTimeout(150);
-    check("「AIから」カードは通常のai-hub(縮退用ではない)側が使われる",
-      await page.locator('details[data-fold-id="ai-hub-degraded"]').count() === 0
-      && await page.locator('details[data-fold-id="ai-hub"].home-ai-hub').count() === 1);
+    check("home専用AI hubは無く、移設先ATISが1つだけ出る",
+      await page.locator(".home-ai-hub").count() === 0 && await page.locator(".sec-atis").count() === 1);
 
     // ============================================================
     // (g) normalizeState 後方互換

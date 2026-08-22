@@ -88,7 +88,7 @@ function check(name, cond, extra = "") {
   await page.reload();
   await page.waitForTimeout(600);
   // normalizeState はメモリ上の補正なので、何か保存操作を挟んで永続化させる
-  await page.click('[data-action="nav"][data-view="home"]');
+  await page.click('[data-action="nav"][data-view="today"]');  // v230: home撤去後の現行view
   await page.waitForTimeout(200);
   const purged = await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).settings.ai, KEY);
   check("apiKey が保存値から削除される", !("apiKey" in purged), JSON.stringify(purged));
@@ -111,7 +111,7 @@ function check(name, cond, extra = "") {
 
   // ---- (c) 朝プランボタンがAPIキー無しで表示・動作する ----
   console.log("[3] 朝プラン(APIキー無し)");
-  await page.click('[data-action="nav"][data-view="tasks"]');
+  await page.click('[data-action="nav"][data-view="today"]'); // v230: AI導線はATISへ移設
   await page.waitForTimeout(300);
   check("🌅 朝プランボタンがAPIキー無しで表示される", await page.locator('[data-action="ai-morning-plan"]').count() === 1);
   check("📋 下書きスケジュールボタンもAPIキー無しで表示される", await page.locator('[data-action="ai-schedule"]').count() === 1);
@@ -138,12 +138,12 @@ function check(name, cond, extra = "") {
       createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false
     }];
     s.selectedDate = TODAY;
-    s.currentView = "tasks";
+    s.currentView = "today"; // v230: 下書きスケジュール導線はATISへ移設
     localStorage.setItem(KEY, JSON.stringify(s));
   }, { KEY, TODAY });
   await page.reload();
   await page.waitForTimeout(500);
-  await page.click('[data-action="nav"][data-view="tasks"]');
+  await page.click('[data-action="nav"][data-view="today"]');
   await page.waitForTimeout(200);
   await page.click('[data-action="ai-schedule"]');
   await page.waitForTimeout(500);
@@ -190,12 +190,12 @@ function check(name, cond, extra = "") {
     ];
     s.aiScheduleHistory = [];
     s.selectedDate = TODAY;
-    s.currentView = "tasks";
+    s.currentView = "today";
     localStorage.setItem(KEY, JSON.stringify(s));
   }, { KEY, TODAY });
   await page.reload();
   await page.waitForTimeout(500);
-  await page.click('[data-action="nav"][data-view="tasks"]');
+  await page.click('[data-action="nav"][data-view="today"]');
   await page.waitForTimeout(200);
   await page.click('[data-action="ai-schedule"]');
   await page.waitForTimeout(500);
@@ -225,7 +225,7 @@ function check(name, cond, extra = "") {
   }, { KEY, TODAY });
   await page.reload();
   await page.waitForTimeout(500);
-  await page.click('[data-action="nav"][data-view="tasks"]');
+  await page.click('[data-action="nav"][data-view="today"]');
   await page.waitForTimeout(200);
   await page.click('[data-action="ai-schedule"]');
   await page.waitForTimeout(500);

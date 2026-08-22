@@ -81,7 +81,7 @@ function check(name, cond, extra = "") {
       localStorage.setItem(key, JSON.stringify(state));
     }, { key: STATE_KEY, today: TODAY });
     await page.reload();
-    await page.waitForSelector(".today-replan [data-replan-button]");
+    await page.waitForSelector(".sec-atis [data-replan-button]");  // v230: 再プランはATISへ移設
   }
 
   try {
@@ -99,9 +99,9 @@ function check(name, cond, extra = "") {
 
     console.log("[1] 押下→受付→response→下書きバー→承認");
     await resetToday("hold-ok");
-    await page.locator(".today-replan [data-replan-button]").click();
-    await page.waitForFunction(() => (document.querySelector(".today-replan-status")?.textContent || "").includes("依頼受付済み・数分後に反映"));
-    check("受付表示中はボタンが無効", await page.locator(".today-replan [data-replan-button]").isDisabled());
+    await page.locator(".sec-atis [data-replan-button]").click();
+    await page.waitForFunction(() => (document.querySelector("[data-atis-status]")?.textContent || "").includes("依頼受付済み・数分後に反映"));
+    check("受付表示中はボタンが無効", await page.locator(".sec-atis [data-replan-button]").isDisabled());
     check("push直後にはresponseを即時取得しない", responseRequestCount === 0, String(responseRequestCount));
     await page.clock.setFixedTime(new Date(now.getFullYear(), now.getMonth(), now.getDate(), 13, 0, 30, 0));
     await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
@@ -114,11 +114,11 @@ function check(name, cond, extra = "") {
       requestPayload?.date === TODAY && requestPayload?.fromTime === "13:00" && typeof requestPayload?.requestedAt === "string",
       JSON.stringify(requestPayload));
     releaseHeldResponse();
-    await page.waitForFunction(() => (document.querySelector(".today-replan-status")?.textContent || "").includes("下書きが届きました。タイムラインで確認してください"));
+    await page.waitForFunction(() => (document.querySelector("[data-atis-status]")?.textContent || "").includes("下書きが届きました。タイムラインで確認してください"));
     check("応答到着後も今日ビューから強制遷移しない", await page.locator("#app[data-view='today']").count() === 1);
     const requestCountBeforeRetry = requestPutCount;
-    await page.locator(".today-replan [data-replan-button]").click();
-    await page.waitForFunction(() => (document.querySelector(".today-replan-status")?.textContent || "").includes("未確定の下書きがあります"));
+    await page.locator(".sec-atis [data-replan-button]").click();
+    await page.waitForFunction(() => (document.querySelector("[data-atis-status]")?.textContent || "").includes("未確定の下書きがあります"));
     check("既存下書きがある間は新しいrequestを送らない", requestPutCount === requestCountBeforeRetry);
     await page.locator('#sidebar [data-action="nav"][data-view="timeline"]').click();
     await page.waitForSelector("#app[data-view='timeline'] .draft-bar");
@@ -131,45 +131,45 @@ function check(name, cond, extra = "") {
     console.log("[2] budget_exceeded / limit_exceeded / error の表示分岐");
     for (const mode of ["budget_exceeded", "limit_exceeded"]) {
       await resetToday(mode);
-      await page.locator(".today-replan [data-replan-button]").click();
+      await page.locator(".sec-atis [data-replan-button]").click();
       // レース対策: request-PUT(replan-request.json)の完了を待たずにクロックを進めて
       // visibilitychangeを発火すると、テストのresponseモックがrequestPayload未設定の
       // 状態でresponseを組み立ててしまい(requestId不一致でpollが空振り→以後は再照合の
       // きっかけが無いままタイムアウト)、CI実測で断続的に失敗していた。[1]と同じく
       // 「依頼受付済み」表示(=push完了)を必ず待ってから進める。
-      await page.waitForFunction(() => (document.querySelector(".today-replan-status")?.textContent || "").includes("依頼受付済み・数分後に反映"));
+      await page.waitForFunction(() => (document.querySelector("[data-atis-status]")?.textContent || "").includes("依頼受付済み・数分後に反映"));
       await page.clock.setFixedTime(new Date(now.getFullYear(), now.getMonth(), now.getDate(), 13, 1, 0, 0));
       await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
-      await page.waitForFunction(() => (document.querySelector(".today-replan-status")?.textContent || "").includes("本日の再プラン上限"));
+      await page.waitForFunction(() => (document.querySelector("[data-atis-status]")?.textContent || "").includes("本日の再プラン上限"));
       check(`${mode}で本日の上限表示`, true);
     }
     await resetToday("error");
-    await page.locator(".today-replan [data-replan-button]").click();
-    await page.waitForFunction(() => (document.querySelector(".today-replan-status")?.textContent || "").includes("依頼受付済み・数分後に反映"));
+    await page.locator(".sec-atis [data-replan-button]").click();
+    await page.waitForFunction(() => (document.querySelector("[data-atis-status]")?.textContent || "").includes("依頼受付済み・数分後に反映"));
     await page.clock.setFixedTime(new Date(now.getFullYear(), now.getMonth(), now.getDate(), 13, 1, 0, 0));
     await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
-    await page.waitForFunction(() => (document.querySelector(".today-replan-status")?.textContent || "").includes("再プランの生成に失敗しました: worker_failed"));
+    await page.waitForFunction(() => (document.querySelector("[data-atis-status]")?.textContent || "").includes("再プランの生成に失敗しました: worker_failed"));
     check("errorでreason付き生成失敗表示", true);
 
     await resetToday("ok");
-    await page.locator(".today-replan [data-replan-button]").click();
-    await page.waitForFunction(() => (document.querySelector(".today-replan-status")?.textContent || "").includes("依頼受付済み・数分後に反映"));
+    await page.locator(".sec-atis [data-replan-button]").click();
+    await page.waitForFunction(() => (document.querySelector("[data-atis-status]")?.textContent || "").includes("依頼受付済み・数分後に反映"));
     await page.clock.setFixedTime(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 13, 1, 0, 0));
     await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
-    await page.waitForFunction(() => (document.querySelector(".today-replan-status")?.textContent || "").includes("日付が変わったため前日の再プランを破棄しました"));
+    await page.waitForFunction(() => (document.querySelector("[data-atis-status]")?.textContent || "").includes("日付が変わったため前日の再プランを破棄しました"));
     check("日付境界を越えた応答を破棄", true);
 
     console.log("[3] 15分無応答でPC起動確認を表示");
     await resetToday("missing");
-    await page.locator(".today-replan [data-replan-button]").click();
+    await page.locator(".sec-atis [data-replan-button]").click();
     check("無応答経路もpush直後にはresponseを即時取得しない", responseRequestCount === 0, String(responseRequestCount));
-    await page.waitForFunction(() => (document.querySelector(".today-replan-status")?.textContent || "").includes("依頼受付済み・数分後に反映"));
+    await page.waitForFunction(() => (document.querySelector("[data-atis-status]")?.textContent || "").includes("依頼受付済み・数分後に反映"));
     await page.clock.setFixedTime(new Date(now.getFullYear(), now.getMonth(), now.getDate(), 13, 1, 0, 0));
     await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
     await responseRequested;
     await page.clock.setFixedTime(new Date(now.getFullYear(), now.getMonth(), now.getDate(), 13, 15, 0, 0));
     await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
-    await page.waitForFunction(() => (document.querySelector(".today-replan-status")?.textContent || "").includes("届いていません(PC起動を確認)"));
+    await page.waitForFunction(() => (document.querySelector("[data-atis-status]")?.textContent || "").includes("届いていません(PC起動を確認)"));
     check("15分無応答の案内", true);
 
     console.log("[4] トークン未設定端末では機能に到達できず、ゲート案内を表示");

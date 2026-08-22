@@ -104,7 +104,7 @@ function check(name, cond, extra = "") {
     }, { KEY, TODAY });
     await page.reload();
     await page.waitForTimeout(400);
-    await page.click('[data-action="nav"][data-view="home"]');
+    await page.click('[data-action="nav"][data-view="today"]');  // v230: home撤去後の現行view
     await page.waitForTimeout(200);
     const normalized = await stateNow(page);
     const legacyTask = (normalized.tasks || []).find((t) => t.id === "legacy-task");

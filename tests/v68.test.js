@@ -124,7 +124,7 @@ function check(name, cond, extra = "") {
     }, { KEY, TODAY });
     await page.reload();
     await page.waitForTimeout(400);
-    await page.click('[data-action="nav"][data-view="home"]');  // 正規化値を永続化させる
+    await page.click('[data-action="nav"][data-view="today"]');  // v230: home撤去後の現行viewで正規化値を永続化
     await page.waitForTimeout(200);
     const norm1 = await stateNow();
     check("旧stateにexperiments:[]が補完される", Array.isArray(norm1.experiments) && norm1.experiments.length === 0, JSON.stringify(norm1.experiments));
@@ -139,7 +139,7 @@ function check(name, cond, extra = "") {
     }, { KEY, TODAY });
     await page.reload();
     await page.waitForTimeout(400);
-    await page.click('[data-action="nav"][data-view="home"]');
+    await page.click('[data-action="nav"][data-view="today"]');  // v230: home撤去後の現行view
     await page.waitForTimeout(200);
     const norm2 = await stateNow();
     const legacyExp = (norm2.experiments || []).find((e) => e.id === "legacy-exp");

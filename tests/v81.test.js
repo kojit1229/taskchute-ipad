@@ -64,9 +64,9 @@ function check(name, cond, extra = "") {
 
   try {
     // ============================================================
-    // [A1] ホームの完了トグル(.home-box / .home-dot)
+    // [A1] v230: ホームの完了トグル(.home-box / .home-dot)は描画ごと撤去
     // ============================================================
-    console.log("[A1] ホーム完了トグル: 見た目20pxのまま::beforeで当たり判定44px相当");
+    console.log("[A1] v230: home完了トグルは不存在で、旧home stateはtodayへ縮退する");
     await page.evaluate(({ KEY, TODAY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.projects = s.projects || [];
@@ -82,7 +82,7 @@ function check(name, cond, extra = "") {
         createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false
       });
       s.selectedDate = TODAY;
-      s.currentView = "home";
+      s.currentView = "home";  // 旧端末stateを模擬。normalizeStateがtodayへ補完する。
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, TODAY });
     await page.evaluate(({ KEY, block }) => {
@@ -98,45 +98,10 @@ function check(name, cond, extra = "") {
     await page.reload();
     await page.waitForTimeout(400);
 
-    check(".home-boxが描画されている(今日の主役)", await page.locator(".home-box").count() >= 1);
-    const homeBoxRect = await getRect(".home-box");
-    check(".home-boxの見た目サイズは変わっていない(<=24px)", homeBoxRect.width <= 24 && homeBoxRect.height <= 24, JSON.stringify(homeBoxRect));
-    const homeBoxBefore = await getPseudoInset(".home-box", "::before");
-    check(
-      ".home-boxの::beforeが44px相当のinset(-12px)を持つ",
-      homeBoxBefore.top === "-12px" && homeBoxBefore.left === "-12px" && homeBoxBefore.right === "-12px" && homeBoxBefore.bottom === "-12px",
-      JSON.stringify(homeBoxBefore)
-    );
-
-    check(".home-dotが描画されている(タスクシュート/ながれ)", await page.locator(".home-dot").count() >= 1);
-    const homeDotRect = await getRect(".home-dot");
-    check(".home-dotの見た目サイズは変わっていない(<=24px)", homeDotRect.width <= 24 && homeDotRect.height <= 24, JSON.stringify(homeDotRect));
-    const homeDotBefore = await getPseudoInset(".home-dot", "::before");
-    check(
-      ".home-dotの::beforeが44px相当のinset(-12px)を持つ",
-      homeDotBefore.top === "-12px" && homeDotBefore.left === "-12px" && homeDotBefore.right === "-12px" && homeDotBefore.bottom === "-12px",
-      JSON.stringify(homeDotBefore)
-    );
-
-    // regression: ::beforeは.home-box自身の生成コンテンツなのでクリックのtargetは.home-box自身になり、
-    // 実クリックを妨げない(擬似要素を別要素でラップしたwish-checkと違い、同一要素内では問題ない)ことを確認
-    // v150(UI改善計画Phase4b・R3、完了作法統一): .home-boxはtoggle-block(即完了)に一本化された
-    // ため、直接クリックはモーダルを開かず即座に完了する。実績の編集は完了直後のトースト
-    // 「実績を編集」ボタンから、従来の実績登録モーダル(complete-block-with-actual)を開く形になった。
-    await page.locator('.home-box[data-id="v81-mit-block"]').click();
-    await page.waitForTimeout(150);
-    const mitBlockAfterClick = await page.evaluate((KEY) => {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      return s.blocks.find((b) => b.id === "v81-mit-block")?.completed;
-    }, KEY);
-    check("(regression) .home-boxへの直接クリックで完了トグルが機能する(::beforeに邪魔されていない)", mitBlockAfterClick === true, String(mitBlockAfterClick));
-    check("完了直後のトーストに「実績を編集」ボタンが出る",
-      await page.locator('.toast-action[data-action="complete-block-with-actual"][data-id="v81-mit-block"]').count() === 1);
-    await page.click('.toast-action[data-action="complete-block-with-actual"][data-id="v81-mit-block"]');
-    await page.waitForTimeout(150);
-    check("トーストの「実績を編集」から実績登録モーダルが開く", await page.locator('[data-action="modal-save"]').count() === 1);
-    await page.click('[data-action="modal-save"]');
-    await page.waitForTimeout(150);
+    check(".home-box/.home-dotは描画されない", await page.locator(".home-box, .home-dot").count() === 0);
+    check("旧currentView=homeはtodayへ縮退する",
+      await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).currentView, KEY) === "today");
+    check("縮退先でTOWERが描画される", await page.locator(".today-tower").count() === 1);
 
     // ============================================================
     // [A2] コンディション記録ボタン群(ジャーナルタブ)
@@ -302,43 +267,25 @@ function check(name, cond, extra = "") {
     check("日報生成後もcurrentViewはjournalのまま", viewAfterGenerate === "journal", viewAfterGenerate);
 
     // ============================================================
-    // [A5] 「今日の理想」空欄カードの折りたたみ
+    // [A5] v230: 「今日の理想」homeカードは撤去、旧state値は温存
     // ============================================================
-    console.log("[A5] 「今日の理想」空欄カード: 既定で閉じた1行、タップで展開して入力・保存できる");
-    await page.evaluate(({ KEY }) => {
+    console.log("[A5] v230: 「今日の理想」homeカードは描画されず、既存journalMeta.idealは保持される");
+    await page.evaluate(({ KEY, TODAY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
-      s.currentView = "home";
+      s.currentView = "today";
+      s.journalMeta = s.journalMeta || {};
+      s.journalMeta[TODAY] = { ...(s.journalMeta[TODAY] || {}), ideal: "v81既存の理想" };
       localStorage.setItem(KEY, JSON.stringify(s));
-    }, { KEY });
+    }, { KEY, TODAY });
     await page.reload();
     await page.waitForTimeout(400);
-    // v149: 「今日の理想」はホームの2タブ分割でアファメーション扱いとなり「ホーム」タブへ移動した
-    // (今日タブが既定のため、まずタブを切り替える)。
-    await page.click('[data-action="home-tab"][data-tab="home"]');
-    await page.waitForTimeout(150);
-
-    const idealFold = page.locator('details[data-fold-id="home-ideal-empty"]');
-    check("「今日の理想」空欄カードがdetailsとして描画されている", await idealFold.count() === 1);
-    check("既定で閉じている(open属性が無い)", !(await idealFold.evaluate((el) => el.open)));
-    const idealSummaryText = await idealFold.locator("summary").textContent();
-    check("summaryにタップ展開を示す文言がある", /タップ/.test(idealSummaryText || ""), idealSummaryText);
-    // <details>は閉じていてもDOM上には子要素が残る(ブラウザのUAスタイルでdisplay:noneになるだけ)ため、
-    // 存在(count)ではなく可視性(isVisible)で「閉じている間は見えない」ことを確認する。
-    check("閉じている間は.home-ideal-inputが非表示", !(await idealFold.locator(".home-ideal-input").isVisible()));
-
-    await idealFold.locator("summary").click();
-    await page.waitForTimeout(150);
-    check("クリックで展開される(open属性が付く)", await idealFold.evaluate((el) => el.open));
-    const idealInput = idealFold.locator(".home-ideal-input");
-    check("展開後は.home-ideal-inputが見える", await idealInput.count() === 1);
-
-    await idealInput.fill("v81テストの理想");
-    await page.waitForTimeout(150);
+    check("home-ideal-empty/home-ideal-inputは描画されない",
+      await page.locator('[data-fold-id="home-ideal-empty"], .home-ideal-input').count() === 0);
     const savedIdeal = await page.evaluate(({ KEY, TODAY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       return s.journalMeta?.[TODAY]?.ideal;
     }, { KEY, TODAY });
-    check("(regression) 入力した理想がstate.journalMeta[date].idealに保存される", savedIdeal === "v81テストの理想", savedIdeal);
+    check("既存state.journalMeta[date].idealは削除されない", savedIdeal === "v81既存の理想", savedIdeal);
 
     console.log(failures === 0 ? "\n✅ v81 ALL PASS" : `\n❌ v81: ${failures} 件失敗`);
   } finally {

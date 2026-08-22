@@ -120,7 +120,7 @@ function check(name, cond, extra = "") {
   }
 
   async function runMorningPlan() {
-    await page.click('[data-action="nav"][data-view="tasks"]');
+    await page.click('[data-action="nav"][data-view="today"]');  // v230: 朝プランはATISへ移設
     await page.waitForTimeout(150);
     await page.click('[data-action="ai-morning-plan"]');
     await page.waitForTimeout(700);
@@ -216,9 +216,8 @@ function check(name, cond, extra = "") {
     await seed({ tasks: [], view: "home" });
     // v149(UI改善計画Phase4a): 「AIから」(home-ai-feedback-read)はホームタブへ移動した
     // (既定は今日タブ)。visibilitychangeはreloadを伴わないため、以降の再描画でもタブ選択は維持される。
-    await page.click('[data-action="home-tab"][data-tab="home"]');
-    await page.waitForTimeout(150);
-    const beforeCount4 = await page.locator(".home-ai-feedback-read").count();
+    // v230: feedbackは既定todayのATISに表示される。
+    const beforeCount4 = await page.locator(".tower-atis-feedback").count(); // v230: feedbackはATISへ移設
     check("起動直後は前日フィードバックがまだ無い(フェイルソフトでdetails非表示)", beforeCount4 === 0);
 
     // 5分経過させる(多重発火防止の最短間隔=60秒ガードを超えさせる)。その間にバッチが新規pushしたと想定。
@@ -229,7 +228,7 @@ function check(name, cond, extra = "") {
       document.dispatchEvent(new Event("visibilitychange"));
     });
     await page.waitForTimeout(700);
-    const afterCount4 = await page.locator(".home-ai-feedback-read").count();
+    const afterCount4 = await page.locator(".tower-atis-feedback").count();
     const afterText4 = await page.locator("main").textContent();
     check("visibilitychange復帰で前日分が再fetchされ、アプリ再起動なしに自動表示される",
       afterCount4 === 1 && afterText4.includes("新着提案_v77"), afterText4.slice(0, 300));
@@ -312,7 +311,7 @@ function check(name, cond, extra = "") {
       (s6b.zeroThinking?.themes || []).some((t) => t.text === "テーマFB限定_v77"), JSON.stringify(s6b.zeroThinking));
 
     await runMorningPlan();
-    const zst6bRowsCount = await page.locator(".home-ck").count();
+    const zst6bRowsCount = await page.locator('[data-action="zerosec-theme-add"]').count();
     const zst6bText = await page.locator("main").textContent();
     check("プラン由来のうち既に自動登録済みの同名テーマ(重複)はカードに出ず、プラン限定の1件だけ出る",
       zst6bRowsCount === 1, `count=${zst6bRowsCount}`);
@@ -333,7 +332,7 @@ function check(name, cond, extra = "") {
     check("見出しが無いので新規テーマは増えない", (s6c.zeroThinking?.themes || []).length === 0, JSON.stringify(s6c.zeroThinking));
 
     await runMorningPlan();
-    const zst6cCount = await page.locator(".home-ck").count();
+    const zst6cCount = await page.locator('[data-action="zerosec-theme-add"]').count();
     check("0秒思考テーマのカードは出ない(候補0件)", zst6cCount === 0, `count=${zst6cCount}`);
   } finally {
     await browser.close();

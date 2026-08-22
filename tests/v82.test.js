@@ -107,110 +107,32 @@ function check(name, cond, extra = "") {
     const viewAfterTap = await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).currentView, KEY);
     check("1タップでcurrentViewがjournalになる", viewAfterTap === "journal", viewAfterTap);
 
-    console.log("[1c] 「その他」画面にhome/WBSが受け皿として出る。ジャーナル/実行/時間は「その他」に出ない");
+    console.log("[1c] 「その他」はv233の8項目で、削除済みhomeや主要4タブを重複表示しない");
     await seed({ blocks: [], view: "more" });
-    const moreLabels = await page.locator("main section.grid button strong").allTextContents();
-    check("WBSが「その他」に出る", moreLabels.includes("WBS"), JSON.stringify(moreLabels));
-    check("ジャーナルは「その他」に出ない(bottom-navへ移動済み)", !moreLabels.includes("ジャーナル"), JSON.stringify(moreLabels));
-    const moreDataViews = await page.locator('main [data-action="nav"]').evaluateAll((els) => els.map((el) => el.dataset.view));
+    const moreGridText = await page.locator(".more-tower-grid").textContent();
+    check("WBSが「その他」に出る", moreGridText.includes("WBS"), moreGridText);
+    check("ジャーナルは「その他」に出ない(bottom-navへ移動済み)", !moreGridText.includes("ジャーナル"), moreGridText);
+    const moreDataViews = await page.locator('.more-tower-grid [data-action="nav"]').evaluateAll((els) => els.map((el) => el.dataset.view));
     check("「その他」の受け皿にwbsが含まれる", moreDataViews.includes("wbs"), JSON.stringify(moreDataViews));
-    // v182 D2: mobileNav先頭差替え/moreGroups計画群へhome追加
-    check("「その他」の受け皿にhomeが含まれ、journal/tasks/timelineは含まれない",
-      moreDataViews.includes("home") && !moreDataViews.includes("journal") && !moreDataViews.includes("tasks") && !moreDataViews.includes("timeline"),
+    // v230でhome撤去、v233でinstruments/iron-log追加。
+    check("「その他」は現行8項目の順序と一致する",
+      moreDataViews.join(",") === "wbs,wish,vision,zero,ai-reports,instruments,iron-log,settings",
       JSON.stringify(moreDataViews));
+    check("削除済みhomeと主要4タブは「その他」に重複しない",
+      !moreDataViews.includes("home") && !moreDataViews.includes("journal")
+      && !moreDataViews.includes("tasks") && !moreDataViews.includes("timeline"), JSON.stringify(moreDataViews));
 
-    // ============================================================
-    // (b) B2: 「今日のリズム」ゾーンの既定折りたたみ + summary集計
-    // ============================================================
-    console.log("[2] B2(通常時): 「今日のリズム」(ながれ)は既定open(v146)。summaryに集計値が出る");
-    await page.evaluate((FOLD_KEY) => localStorage.removeItem(FOLD_KEY), FOLD_KEY);
-    await seed({
-      blocks: [
-        planBlock({ id: "flow-1", title: "ながれ1", startMin: 9 * 60, completed: true }),
-        planBlock({ id: "flow-2", title: "ながれ2", startMin: 10 * 60, completed: false })
-      ],
-      view: "home"
-    });
-    const zone2 = page.locator('details[data-fold-id="zone2"]');
-    check("zone2(今日のリズム)が描画されている", await zone2.count() === 1);
-    check("zone2は既定open(v146)", await zone2.evaluate((el) => el.open) === true);
-    check("zone2-degradedは通常時には存在しない(独立foldIdで排他)", await page.locator('details[data-fold-id="zone2-degraded"]').count() === 0);
-    const zone2Summary = await zone2.locator("summary").textContent();
-    check("summaryに「ながれ 1/2」の集計が出る", zone2Summary.includes("ながれ 1/2"), zone2Summary);
-    check("既定openなので本文(ながれ2)が最初から見える", await zone2.locator("text=ながれ2").isVisible());
-
-    await zone2.locator("summary").click();
-    await page.waitForTimeout(150);
-    check("タップで閉じる", await zone2.evaluate((el) => el.open) === false);
-    check("閉じると本文(ながれ2)が見えなくなる", !(await zone2.locator("text=ながれ2").isVisible()));
-    const fm1 = await foldMap();
-    check("開閉状態がlocalStorageに記憶される(zone2:false)", fm1.zone2 === false, JSON.stringify(fm1));
-
-    console.log("[2b] リロード後も閉じた状態が保たれる(一度閉じたセクションは既定値を上書きしない)");
-    await page.reload();
-    await page.waitForTimeout(400);
-    check("リロード後もzone2は閉じたまま", await page.locator('details[data-fold-id="zone2"]').evaluate((el) => el.open) === false);
-
-    console.log("[3] B2(縮退時): zone2-degradedも既定closedで、独立してsummary集計を持つ(zone2とは別foldId)");
-    await page.evaluate((FOLD_KEY) => localStorage.removeItem(FOLD_KEY), FOLD_KEY);
-    await seed({
-      blocks: [
-        planBlock({ id: "flow-1d", title: "縮退ながれ1", startMin: 9 * 60, completed: true })
-      ],
-      view: "home",
-      morningEnergyLog: { [TODAY]: 3 }
-    });
-    check("縮退モードの案内バナーが出る", await page.locator(".cond-degraded-banner").count() === 1);
-    const zone2d = page.locator('details[data-fold-id="zone2-degraded"]');
-    check("zone2-degradedが描画されている", await zone2d.count() === 1);
-    check("zone2(非縮退用foldId)は縮退時には存在しない", await page.locator('details[data-fold-id="zone2"]').count() === 0);
-    check("zone2-degradedは既定closed", await zone2d.evaluate((el) => el.open) === false);
-    const zone2dSummary = await zone2d.locator("summary").textContent();
-    check("縮退時summaryにも集計値が出る", zone2dSummary.includes("ながれ 1/1"), zone2dSummary);
-
-    // ============================================================
-    // (c) B3: ホーム常時表示のスリム化
-    // ============================================================
-    console.log("[4] B3: 初期表示(何も開かない状態)でいま、これ/MIT/タスクシュートが見える。信条/寿命/AIからは参照系(既定closed、v146)");
-    await page.evaluate((FOLD_KEY) => localStorage.removeItem(FOLD_KEY), FOLD_KEY);
-    await seed({
-      blocks: [
-        planBlock({ id: "mit-slim", title: "スリム化確認MIT", startMin: 8 * 60, isMIT: true }),
-        planBlock({ id: "tc-slim", title: "スリム化確認タスクシュート", startMin: 9 * 60, taskId: "v82-task" })
-      ],
-      view: "home",
-      extraProjects: [V82_PROJECT],
-      extraTasks: [V82_TASK]
-    });
-    // v149(UI改善計画Phase4a)追補: 信条/寿命/AIから/長い弧(zone3)はホームの2タブ分割で
-    // 「ホーム」タブへ移動した(既定は今日タブ)。さらにK指定で信条・寿命はホームタブでの
-    // 既定値がclosed→openへ変更された(CHANGES_v149.md参照)。
-    const heroText = await page.locator("main").textContent();
-    check("「いま、これ」(hero)は折りたたみ無しで常時表示", heroText.includes("いま、これ"));
-    check("MITは常時表示(#home-mit-anchor)", (await page.locator("#home-mit-anchor").textContent()).includes("スリム化確認MIT"));
-    check("タスクシュート(homezone-1)は折りたたみ無しで常時表示",
-      (await page.locator("#homezone-1").textContent()).includes("スリム化確認タスクシュート")
-      && await page.locator("#homezone-1 details").count() === 0);
-    await page.click('[data-action="home-tab"][data-tab="home"]');
-    await page.waitForTimeout(150);
-    check("信条(creed)はホームタブで既定open(v149)", await page.locator('details.home-creed').evaluate((el) => el.open) === true);
-    check("寿命(lifespan)はホームタブで既定open(v149)", await page.locator('details.home-lifespan').evaluate((el) => el.open) === true);
-    check("AIから(home-ai-hub)は既定closedの折りたたみ(v146)",
-      await page.locator("details.home-ai-hub").count() === 1
-      && await page.locator("details.home-ai-hub").evaluate((el) => el.open) === false);
-    check("長い弧(zone3、ホームタブ)は既定closedのまま(既存仕様を維持)",
-      await page.locator('details[data-fold-id="zone3"]').evaluate((el) => el.open) === false);
-    await page.click('[data-action="home-tab"][data-tab="today"]');
-    await page.waitForTimeout(150);
-
-    console.log("[5] B3: スコアボード・読書カードは既定closedの折りたたみ(常時表示から除外)");
-    const scoreboardFold = page.locator('details[data-fold-id="home-scoreboard"]');
-    check("スコアボードがdetailsとして描画されている", await scoreboardFold.count() === 1);
-    check("スコアボードは既定closed", await scoreboardFold.evaluate((el) => el.open) === false);
-    const scoreboardSummary = await scoreboardFold.locator("summary").textContent();
-    check("スコアボードのsummaryに集計値が出る(着手/主役/12週)", /着手\d+%/.test(scoreboardSummary) && scoreboardSummary.includes("主役"), scoreboardSummary);
-    check("足あと(zone4、今日タブ)は既定closedのまま(既存仕様を維持)",
-      await page.locator('details[data-fold-id="zone4"]').evaluate((el) => el.open) === false);
+    // v230: home描画コードごと撤去。移設先のない折りたたみ/縮退UIは不存在を固定し、
+    // 現行同等の統合起点(TOWER/ATIS)が描画されることを肯定検証する。
+    console.log("[2] v230: home専用ゾーン・縮退バナーは描画されず、TOWER/ATISへ一本化される");
+    await seed({ blocks: [planBlock({ id: "flow-now", title: "現行便", startMin: 9 * 60 })], view: "today" });
+    check("削除済みhomeナビが無い", await page.locator('[data-action="nav"][data-view="home"]').count() === 0);
+    check("homeタブバーが無い", await page.locator(".home-tabbar").count() === 0);
+    check("旧homeゾーン(zone2/zone2-degraded/homezone-1)が無い",
+      await page.locator('[data-fold-id="zone2"], [data-fold-id="zone2-degraded"], #homezone-1').count() === 0);
+    check("縮退モードバナーが無い", await page.locator(".cond-degraded-banner").count() === 0);
+    check("現行todayはTOWERを描画する", await page.locator(".today-tower").count() === 1);
+    check("AI導線の移設先ATISを描画する", await page.locator(".sec-atis").count() === 1);
 
     console.log(failures === 0 ? "\n✅ v82 ALL PASS" : `\n❌ v82: ${failures} 件失敗`);
   } finally {

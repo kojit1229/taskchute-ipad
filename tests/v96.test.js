@@ -98,7 +98,7 @@ function check(name, cond, extra = "") {
     }, { KEY, TODAY });
     await page.reload();
     await page.waitForTimeout(400);
-    await page.click('[data-action="nav"][data-view="home"]');  // 正規化値を永続化させる
+    await page.click('[data-action="nav"][data-view="today"]');  // v230: home撤去後の現行viewで正規化値を永続化
     await page.waitForTimeout(200);
     const normalized = await stateNow();
     const legacyTask = (normalized.tasks || []).find((t) => t.id === "legacy-task");

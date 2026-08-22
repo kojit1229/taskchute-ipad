@@ -158,8 +158,7 @@ const freshGeneratedAt = () => toUtcIso(new Date());
     }, KEY);
     await page.reload();
     await page.waitForTimeout(700);
-    await page.click('[data-action="home-tab"][data-tab="home"]');
-    await page.waitForTimeout(200);
+    // v230: home自体が撤去されたため旧viewはtodayへフォールバックする。
 
     // レビュー対応(推奨修正6): 以前は「0件であること」だけを見ており、ホーム(内省側)タブが
     // そもそも正しく描画されていない場合でも同じく0件になるため判定に実質的な意味が無かった
@@ -167,14 +166,13 @@ const freshGeneratedAt = () => toUtcIso(new Date());
     // 確認し、描画が生きている前提のもとで「言い訳」専用要素が0件であることを確認する構成に
     // 差し替える(陽性側の確認が無いと、陰性側の「0件」は描画崩壊による見せかけの陽性でも
     // 同じ結果になってしまうため)。
-    const aiHubLabelCount = await page.locator('.home-plabel:has-text("AIから")').count();
-    check("前提: ホーム(内省側)タブが実際に描画されている(既存『AIから』カードのラベルが存在する)",
-      aiHubLabelCount >= 1, String(aiHubLabelCount));
+    const atisCount = await page.locator(".sec-atis").count();
+    check("前提: 現行today/TOWERが実際に描画されている", atisCount === 1, String(atisCount));
 
     const excuseActionCount = await page.locator('[data-action*="excuse"]').count();
     check("data-action名に'excuse'を含む要素(専用導線)が0件", excuseActionCount === 0, String(excuseActionCount));
     const homeMainHtml = await page.$eval("#main", (el) => el.innerHTML).catch(() => "");
-    check("ホーム(内省側)タブの実際の描画内容(#main)に『言い訳レポートが届いています』の専用文言が無い",
+    check("現行todayの描画内容(#main)に『言い訳レポートが届いています』の専用文言が無い",
       !homeMainHtml.includes("言い訳レポートが届いています"), String(homeMainHtml.includes("言い訳レポートが届いています")));
 
     // ============================================================

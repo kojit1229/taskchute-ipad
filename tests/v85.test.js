@@ -145,9 +145,8 @@ function check(name, cond, extra = "") {
     const afterRestart = await stateNow();
     check("再起動後、localStorageのselectedDateは永続値(過去日)ではなく今日に強制されている",
       afterRestart.selectedDate === TODAY, afterRestart.selectedDate);
-    // v85注記: ホームのヘッダーには常時表示の「今日へ」ボタンが別にあるため(押せば今日に戻せる導線)、
-    // 「今日を見ている間は隠れる」条件付きボタン(renderDateBar側、.datebar内)で確認する
-    await page.click('[data-action="nav"][data-view="home"]');
+    // v230: home撤去後もrenderDateBar契約はtasksで検証できる。
+    await page.click('[data-action="nav"][data-view="tasks"]');
     await page.waitForTimeout(150);
     const todayBtnCount = await page.locator('.datebar [data-action="today"]').count();
     check("再起動後の画面も日付バーの『今日へ』ボタンが出ない(=今日を見ている)", todayBtnCount === 0);
@@ -162,9 +161,9 @@ function check(name, cond, extra = "") {
     check("日付ピッカー操作直後、selectedDateが過去日になっている", picked === PAST, picked);
 
     // 別タブへ切り替えて戻ってくる(setViewはselectedDateに触らないことの確認)
-    await page.click('[data-action="nav"][data-view="tasks"]');
+    await page.click('[data-action="nav"][data-view="timeline"]');
     await page.waitForTimeout(150);
-    await page.click('[data-action="nav"][data-view="home"]');
+    await page.click('[data-action="nav"][data-view="tasks"]');
     await page.waitForTimeout(150);
     picked = await page.locator("[data-date-picker]").inputValue();
     check("タブを行き来しても、意図的に選んだ過去日がリセットされずに維持される(セッション中は尊重)",

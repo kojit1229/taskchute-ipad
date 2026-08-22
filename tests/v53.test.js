@@ -238,7 +238,7 @@ const b64ToObj = (b64) => JSON.parse(Buffer.from(b64, "base64").toString("utf8")
   }, KEY);
   await page.reload();
   await page.waitForTimeout(500);
-  await page.click('[data-action="nav"][data-view="home"]');
+  await page.click('[data-action="nav"][data-view="today"]');  // v230: home撤去後の現行view
   await page.waitForTimeout(300);
   const compat = await page.evaluate((KEY) => {
     const s = JSON.parse(localStorage.getItem(KEY));

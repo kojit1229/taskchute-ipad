@@ -130,7 +130,7 @@ function check(name, cond, extra = "") {
   await page.reload();
   await page.waitForTimeout(500);
 
-  await page.click('[data-action="nav"][data-view="tasks"]');
+  await page.click('[data-action="nav"][data-view="today"]');  // v230: 下書きスケジュールはATISへ移設
   await page.waitForTimeout(200);
   const scheduleBtn = page.locator('[data-action="ai-schedule"]');
   if (await scheduleBtn.count()) {

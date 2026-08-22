@@ -121,6 +121,8 @@ function buildLargePdf(sizeBytes) {
     await page.click('[data-action="vision-board-tab"][data-index="2"]');
     await page.waitForTimeout(150);
     check("<object>タグはページ内のどこにも存在しない(インライン埋め込み完全撤去)", await page.locator("object").count() === 0);
+    const blobHref = await page.locator('.vision-actions a').getAttribute("href");
+    check("別タブリンク自体のhrefがblob:である", (blobHref || "").startsWith("blob:"), blobHref);
     const [popup] = await Promise.all([
       ctx.waitForEvent("page", { timeout: RESPONSE_BUDGET_MS }),
       page.click('.vision-actions a[href^="blob:"]')
@@ -128,7 +130,10 @@ function buildLargePdf(sizeBytes) {
     check("別タブで開くリンクのクリックで実際に新しいタブが開く", !!popup);
     if (popup) {
       const popupUrl = popup.url();
-      check("開いた新しいタブのURLがblob:である(公開URLへのフォールバックではない)", popupUrl.startsWith("blob:"), popupUrl);
+      // system Edgeではblobリンクで開いたpopupの観測URLがabout:blankのままになる。
+      // 遷移先の契約は上の実アンカーhref、クリック結果はpopup発生で独立して検証する。
+      check("popupはblobリンクのクリックで生成され、公開URLへ遷移していない",
+        popupUrl.startsWith("blob:") || popupUrl === "about:blank" || popupUrl === "", popupUrl);
       await popup.close();
     }
   } finally {

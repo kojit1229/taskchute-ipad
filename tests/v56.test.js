@@ -167,7 +167,7 @@ function check(name, cond, extra = "") {
   await page.waitForTimeout(700);
   const reqsEmpty = await page.evaluate(() => (window.__fbReqs || []).slice());
   // 補完は正規化時(メモリ)→ 保存で永続化されるため、nav操作で書き出してから確認
-  await page.click('[data-action="nav"][data-view="home"]');
+  await page.click('[data-action="nav"][data-view="today"]');  // v230: home撤去後の現行view
   await page.waitForTimeout(200);
   check("旧stateから feedbackFiles(配列)が補完される",
     await page.evaluate((KEY) => Array.isArray(JSON.parse(localStorage.getItem(KEY)).feedbackFiles), KEY));

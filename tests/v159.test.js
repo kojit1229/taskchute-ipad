@@ -93,10 +93,7 @@ const freshGeneratedAt = () => toUtcIso(new Date());
     return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
   });
 
-  // v159の導線はホームの「ホーム(内省側)」タブ(homeTab==="home")にある。K指定「起動時は
-  // 常に今日」により homeTab はセッション非永続でリロードのたび"today"へ戻るため
-  // (renderHomeReflectTab/homeTabの定義参照)、毎回シードの直後に実際のタブ切替クリックで
-  // 「ホーム」サブタブへ移動してから導線を確認する。
+  // v230: home撤去後は旧viewからtodayへフォールバックする。
   async function seedHome({ selectedDate = TODAY } = {}) {
     await page.evaluate(({ KEY, selectedDate }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
@@ -107,8 +104,6 @@ const freshGeneratedAt = () => toUtcIso(new Date());
     }, { KEY, selectedDate });
     await page.reload();
     await page.waitForTimeout(700);
-    await page.click('[data-action="home-tab"][data-tab="home"]');
-    await page.waitForTimeout(200);
   }
 
   async function seedAiReports(typeId = "letter") {
@@ -180,45 +175,14 @@ const freshGeneratedAt = () => toUtcIso(new Date());
     // ============================================================
     // [2] 当月分が存在する日は、ホーム(内省側)タブで導線が表示される
     // ============================================================
-    console.log("[2] 未来からの手紙_当月.mdがある日は、ホーム(内省側)タブに『届いています』導線が出る");
-    reportIndexFixture = null;  // ホーム側の導線判定はhydrateStaticMarkdownの直接fetchのみで完結する
-    await seedHome({ selectedDate: TODAY });
-    check("api.github.comの未来からの手紙_当月.mdへリクエストが実際に飛んでいる(personal-data API経由の裏取り)",
-      letterApiRequests.some((p) => p.endsWith(`未来からの手紙_${MONTH}.md`)), JSON.stringify(letterApiRequests));
-    const linkCount2 = await page.locator('[data-action="open-future-letter"]').count();
-    check("導線が1つ表示される", linkCount2 === 1);
-    const linkText2 = await page.locator('[data-action="open-future-letter"]').textContent();
-    check("導線の文言が『✉️ 未来からの手紙が届いています』を含む", linkText2.includes("✉️ 未来からの手紙が届いています"), linkText2);
-
-    // ============================================================
-    // [3] 当月分が存在しない日(404)は導線が表示されない
-    // ============================================================
-    console.log("[3] 未来からの手紙_当月.mdが無い月(404)は導線が表示されない");
-    letterFixture = null;
-    await seedHome({ selectedDate: TODAY });
-    const linkCount3 = await page.locator('[data-action="open-future-letter"]').count();
-    check("ファイルが無ければ導線が0件", linkCount3 === 0);
-
-    // ============================================================
-    // [4] 導線をタップするとAIレポート画面の『未来からの手紙』タブへ遷移する
-    // ============================================================
-    console.log("[4] 導線タップでAIレポート画面へ遷移し『未来からの手紙』タブが選択される");
+    // v230: home導線は描画ごと削除。AIレポート内の履歴/本文検証は[1][1b]で維持する。
+    console.log("[2-4] v230: 未来からの手紙の旧home導線は描画されない");
     letterFixture = LETTER_BODY;
-    reportIndexFixture = {
-      generatedAt: freshGeneratedAt(),
-      files: [{ name: `未来からの手紙_${MONTH}.md`, date: MONTH, kind: "letter" }]
-    };
     await seedHome({ selectedDate: TODAY });
-    const linkCount4before = await page.locator('[data-action="open-future-letter"]').count();
-    check("前提: 導線が出ている", linkCount4before === 1);
-    await page.click('[data-action="open-future-letter"]');
-    await page.waitForTimeout(300);
-    const activeTabAfterClick = await page.$eval(".segmented button.active", (e) => e.textContent.trim());
-    check("遷移後、AIレポート画面の『未来からの手紙』タブがactiveになっている", activeTabAfterClick === "未来からの手紙", activeTabAfterClick);
-    const mdText4 = await page.textContent("#main .md-render");
-    check("遷移後の本文も未来からの手紙のものが表示される", mdText4.includes(LETTER_BODY), mdText4.slice(0, 120));
+    check("旧home導線は描画されない", await page.locator('[data-action="open-future-letter"]').count() === 0);
+    check("旧home viewはtodayへフォールバックしTOWERを表示する",
+      await page.locator('#app[data-view="today"] .sec-atis').count() === 1);
 
-    // ============================================================
     // [5] 公開Pages側(同一オリジン)への未来からの手紙_*.mdのfetchは一切発生しない
     // ============================================================
     console.log("[5] 公開Pages側(同一オリジン)への未来からの手紙_*.mdへのfetchは一度も発生しない");
@@ -252,10 +216,9 @@ const freshGeneratedAt = () => toUtcIso(new Date());
     await page.waitForTimeout(700);
     check("設定完了後、未来からの手紙_当月.mdへの実fetchが行われる(修正前は失敗キャッシュが固着し二度とfetchされなかった)",
       letterApiRequests.some((p) => p.endsWith(`未来からの手紙_${MONTH}.md`)), JSON.stringify(letterApiRequests));
-    await page.click('[data-action="home-tab"][data-tab="home"]');
-    await page.waitForTimeout(200);
     const linkCount6 = await page.locator('[data-action="open-future-letter"]').count();
-    check("設定完了後は導線も正しく表示される", linkCount6 === 1);
+    check("v230: 設定完了後も削除済みhome導線は描画されない", linkCount6 === 0);
+    check("設定完了後はtoday/TOWERへ復帰する", await page.locator('#app[data-view="today"] .sec-atis').count() === 1);
   } finally {
     await browser.close();
     server.close();

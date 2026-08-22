@@ -146,7 +146,7 @@ function check(name, cond, extra = "") {
     await pageD.waitForTimeout(500);
     check("ページエラー無く起動する(旧entryでクラッシュしない)", failures === 0 || true);
     check("旧entryが履歴に表示される", (await pageD.locator(".zt-hi-theme").allTextContents()).some((t) => t.includes("旧テーマ")));
-    await pageD.click('[data-action="nav"][data-view="home"]');  // 正規化値を永続化させる
+    await pageD.click('[data-action="nav"][data-view="today"]');  // v230: home撤去後の現行viewで正規化値を永続化
     await pageD.waitForTimeout(200);
     const normalized = await stateNow(pageD);
     const legacyNormalized = normalized.zeroThinking.entries.find((e) => e.id === "legacy-e2");

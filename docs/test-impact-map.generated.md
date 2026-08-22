@@ -30,7 +30,7 @@
 | tower-core.test.js | e2e | full | sync-storage, journal-health, ui-responsive | 128 | 0 | 0 |
 | tower-model-core.test.js | node | full | legacy-crosscutting | 6 | 0 | 0 |
 | v100.test.js | e2e | full | content-ai, ui-responsive | 31 | 9 | 3300 |
-| v101.test.js | e2e | full | content-ai, ui-responsive | 21 | 6 | 1400 |
+| v101.test.js | e2e | full | content-ai, ui-responsive | 22 | 6 | 1400 |
 | v102.test.js | e2e | full | sync-storage, content-ai | 26 | 14 | 4300 |
 | v103.test.js | e2e | full | sync-storage, content-ai | 21 | 11 | 6700 |
 | v104.test.js | e2e | full | sync-storage, ui-responsive | 19 | 14 | 5550 |
@@ -41,45 +41,45 @@
 | v109.test.js | e2e | full | planning-execution, ui-responsive | 24 | 12 | 3900 |
 | v110.test.js | e2e | full | sync-storage, planning-execution, journal-health, content-ai, ui-responsive | 15 | 8 | 3200 |
 | v111.test.js | e2e | full | ui-responsive | 24 | 18 | 6550 |
-| v112.test.js | e2e | full | planning-execution, ui-responsive | 27 | 14 | 4250 |
+| v112.test.js | e2e | full | planning-execution, ui-responsive | 21 | 8 | 2450 |
 | v113.test.js | e2e | full | sync-storage, planning-execution, journal-health, content-ai, ui-responsive | 15 | 8 | 3200 |
-| v116.test.js | e2e | full | planning-execution | 24 | 5 | 1500 |
-| v117.test.js | e2e | full | planning-execution | 22 | 10 | 2900 |
+| v116.test.js | e2e | full | planning-execution | 6 | 2 | 900 |
+| v117.test.js | e2e | full | planning-execution | 18 | 6 | 2200 |
 | v118.test.js | e2e | full | sync-storage, planning-execution, content-ai | 14 | 9 | 6600 |
 | v119.test.js | e2e | full | sync-storage, content-ai | 19 | 5 | 1800 |
 | v120.test.js | e2e | full | sync-storage, journal-health | 13 | 6 | 2100 |
-| v121.test.js | e2e | full | journal-health, content-ai | 30 | 13 | 3450 |
-| v122.test.js | e2e | full | planning-execution, journal-health, content-ai | 17 | 9 | 3300 |
+| v121.test.js | e2e | full | journal-health, content-ai | 7 | 3 | 1250 |
+| v122.test.js | e2e | full | planning-execution, journal-health, content-ai | 12 | 7 | 2700 |
 | v123.test.js | e2e | full | ui-responsive | 20 | 4 | 1700 |
 | v124.test.js | e2e | full | content-ai | 25 | 5 | 1520 |
 | v125.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 30 | 5 | 1500 |
-| v126.test.js | e2e | full | planning-execution, journal-health | 22 | 13 | 3950 |
+| v126.test.js | e2e | full | planning-execution, journal-health | 21 | 12 | 3650 |
 | v127.test.js | e2e | full | ui-responsive | 25 | 6 | 2500 |
 | v128.test.js | e2e | full | journal-health | 18 | 3 | 1300 |
 | v129.test.js | e2e | full | planning-execution, journal-health | 23 | 14 | 4250 |
 | v130.test.js | e2e | full | sync-storage, journal-health | 12 | 6 | 2100 |
-| v131.test.js | e2e | full | journal-health | 14 | 3 | 1300 |
+| v131.test.js | e2e | full | journal-health | 15 | 5 | 1700 |
 | v132.test.js | e2e | full | planning-execution, journal-health | 11 | 9 | 2600 |
-| v133.test.js | e2e | full | planning-execution, content-ai | 19 | 10 | 3300 |
+| v133.test.js | e2e | full | planning-execution, content-ai | 20 | 10 | 3300 |
 | v134.test.js | e2e | full | sync-storage, journal-health, ui-responsive | 19 | 12 | 5700 |
 | v135.test.js | e2e | full | sync-storage, planning-execution, content-ai | 13 | 9 | 6400 |
 | v136.test.js | e2e | smoke | sync-storage, planning-execution, content-ai | 16 | 12 | 7600 |
-| v137.test.js | e2e | full | planning-execution | 21 | 12 | 5300 |
+| v137.test.js | e2e | full | planning-execution | 22 | 14 | 5900 |
 | v138.test.js | e2e | full | content-ai | 17 | 4 | 2000 |
 | v140.test.js | e2e | full | journal-health, content-ai, security-offline | 19 | 9 | 4700 |
 | v141.test.js | e2e | full | journal-health, content-ai | 46 | 23 | 7050 |
 | v143.test.js | e2e | full | sync-storage, content-ai | 8 | 3 | 1500 |
-| v144.test.js | e2e | full | planning-execution, journal-health | 48 | 30 | 9450 |
-| v146.test.js | e2e | full | planning-execution | 44 | 26 | 5300 |
-| v147.test.js | e2e | full | planning-execution | 40 | 13 | 5150 |
+| v144.test.js | e2e | full | planning-execution, journal-health | 48 | 33 | 9950 |
+| v146.test.js | e2e | full | planning-execution | 8 | 2 | 900 |
+| v147.test.js | e2e | full | planning-execution | 16 | 6 | 1650 |
 | v148.test.js | e2e | full | planning-execution | 51 | 21 | 6350 |
-| v149.test.js | e2e | full | planning-execution | 60 | 34 | 9250 |
-| v150.test.js | e2e | full | planning-execution | 57 | 19 | 9150 |
+| v149.test.js | e2e | full | planning-execution | 8 | 2 | 900 |
+| v150.test.js | e2e | full | planning-execution | 58 | 19 | 9150 |
 | v151.test.js | e2e | full | ui-responsive | 35 | 13 | 5100 |
-| v157.test.js | e2e | full | planning-execution, content-ai | 19 | 3 | 1400 |
-| v158.test.js | e2e | full | planning-execution, content-ai | 21 | 3 | 1400 |
-| v159.test.js | e2e | full | planning-execution, content-ai | 20 | 8 | 3900 |
-| v160.test.js | e2e | full | planning-execution, content-ai | 11 | 6 | 2700 |
+| v157.test.js | e2e | full | planning-execution, content-ai | 6 | 2 | 1200 |
+| v158.test.js | e2e | full | planning-execution, content-ai | 6 | 2 | 1200 |
+| v159.test.js | e2e | full | planning-execution, content-ai | 16 | 5 | 3200 |
+| v160.test.js | e2e | full | planning-execution, content-ai | 11 | 5 | 2500 |
 | v162.test.js | e2e | full | planning-execution, journal-health | 32 | 16 | 5400 |
 | v163.test.js | node | full | journal-health, ui-responsive | 3 | 0 | 0 |
 | v193.test.js | e2e | full | sync-storage, planning-execution, content-ai, ui-responsive | 23 | 0 | 0 |
@@ -100,28 +100,28 @@
 | v58.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 13 | 7 | 3200 |
 | v59.test.js | e2e | smoke | planning-execution | 19 | 7 | 2600 |
 | v60.test.js | e2e | full | content-ai, security-offline | 29 | 21 | 8100 |
-| v61.test.js | e2e | full | planning-execution | 53 | 32 | 9850 |
-| v62.test.js | e2e | full | journal-health, content-ai | 56 | 25 | 9800 |
+| v61.test.js | e2e | full | planning-execution | 43 | 24 | 7450 |
+| v62.test.js | e2e | full | journal-health, content-ai | 54 | 25 | 9800 |
 | v63.test.js | e2e | full | ui-responsive | 15 | 7 | 2300 |
 | v65.test.js | e2e | full | planning-execution | 32 | 18 | 5250 |
 | v67.test.js | e2e | smoke | content-ai, ui-responsive | 51 | 9 | 3100 |
 | v68.test.js | e2e | full | sync-storage, journal-health, content-ai | 47 | 18 | 5500 |
 | v70.test.js | e2e | smoke | planning-execution | 40 | 16 | 4850 |
-| v71.test.js | e2e | full | content-ai, ui-responsive | 26 | 8 | 2350 |
+| v71.test.js | e2e | full | content-ai, ui-responsive | 21 | 3 | 1300 |
 | v72.test.js | e2e | smoke | sync-storage | 19 | 10 | 4500 |
-| v73.test.js | e2e | full | journal-health | 28 | 15 | 4100 |
-| v74.test.js | e2e | full | content-ai | 28 | 10 | 5450 |
+| v73.test.js | e2e | full | journal-health | 26 | 12 | 3650 |
+| v74.test.js | e2e | full | content-ai | 6 | 2 | 1000 |
 | v75.test.js | e2e | full | content-ai, ui-responsive | 31 | 8 | 4050 |
-| v76.test.js | e2e | full | journal-health, content-ai | 15 | 6 | 3050 |
-| v77.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 33 | 7 | 3000 |
+| v76.test.js | e2e | full | journal-health, content-ai | 15 | 7 | 3200 |
+| v77.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 33 | 6 | 2850 |
 | v78.test.js | e2e | full | journal-health | 15 | 7 | 3300 |
 | v79.test.js | e2e | full | sync-storage, planning-execution, content-ai, ui-responsive | 15 | 13 | 4300 |
-| v81.test.js | e2e | full | planning-execution, journal-health, content-ai, ui-responsive | 37 | 17 | 4550 |
-| v82.test.js | e2e | full | planning-execution, journal-health, content-ai, ui-responsive | 34 | 7 | 2150 |
-| v83.test.js | e2e | full | planning-execution, content-ai, ui-responsive, security-offline | 33 | 17 | 5950 |
+| v81.test.js | e2e | full | planning-execution, journal-health, content-ai, ui-responsive | 26 | 11 | 3650 |
+| v82.test.js | e2e | full | planning-execution, journal-health, content-ai, ui-responsive | 16 | 3 | 1300 |
+| v83.test.js | e2e | full | planning-execution, content-ai, ui-responsive, security-offline | 28 | 14 | 5250 |
 | v85.test.js | e2e | full | sync-storage, journal-health, content-ai | 16 | 14 | 4200 |
-| v86.test.js | e2e | full | planning-execution, content-ai | 29 | 10 | 4200 |
-| v87.test.js | e2e | full | planning-execution | 34 | 18 | 5100 |
+| v86.test.js | e2e | full | planning-execution, content-ai | 29 | 11 | 4350 |
+| v87.test.js | e2e | full | planning-execution | 32 | 16 | 4600 |
 | v90.test.js | e2e | full | content-ai | 35 | 16 | 5100 |
 | v91.test.js | e2e | full | journal-health | 12 | 6 | 2800 |
 | v92.test.js | e2e | full | planning-execution, journal-health, content-ai | 16 | 6 | 2100 |

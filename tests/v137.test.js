@@ -90,6 +90,7 @@ function check(name, cond, extra = "") {
       s.feedback = {};
       s.feedbackFiles = [];
       s.feedbackIngestedDates = [];
+      s.blocks = []; // 日報生成を未完了理由モーダルに横取りさせない
       s.sleep = s.sleep || { logs: {} };
       s.sleep.logs = sleepLogs;
       localStorage.setItem(KEY, JSON.stringify(s));
@@ -242,7 +243,12 @@ function check(name, cond, extra = "") {
     const pageErrorsBefore4 = pageErrorCount;
     await seed({ view: "home", sleepLogs: { [TODAY]: { sleepH: "4.5" } } });  // 文字列(非正規state)。5.5h未満=赤字想定
     await page.waitForTimeout(300);
-    const chipText = await page.locator(".home-condition-budget-chip").textContent().catch(() => null);
+    check("v230: 旧home体力予算チップは描画されない", await page.locator(".home-condition-budget-chip").count() === 0);
+    await page.evaluate((KEY) => { const s = JSON.parse(localStorage.getItem(KEY)); s.blocks = []; localStorage.setItem(KEY, JSON.stringify(s)); }, KEY);
+    await page.click('[data-action="nav"][data-view="journal"]');
+    await page.click('[data-action="generate-report"]');
+    await page.waitForTimeout(300);
+    const chipText = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
     check("pageerror(TypeError)が発生していない", pageErrorCount === pageErrorsBefore4, `(発生件数: ${pageErrorCount - pageErrorsBefore4})`);
     check("体力予算チップが表示される", !!chipText, chipText);
     check("睡眠4.5hが赤字判定として表示される(toFixed(1)がNumber経由で成功している)",
@@ -251,7 +257,11 @@ function check(name, cond, extra = "") {
     console.log("[4-回帰] sleepHが数値(通常state)でも従来どおり動く");
     await seed({ view: "home", sleepLogs: { [TODAY]: { sleepH: 7.2 } } });  // 7.2h → 通常
     await page.waitForTimeout(300);
-    const chipText2 = await page.locator(".home-condition-budget-chip").textContent().catch(() => null);
+    await page.evaluate((KEY) => { const s = JSON.parse(localStorage.getItem(KEY)); s.blocks = []; localStorage.setItem(KEY, JSON.stringify(s)); }, KEY);
+    await page.click('[data-action="nav"][data-view="journal"]');
+    await page.click('[data-action="generate-report"]');
+    await page.waitForTimeout(300);
+    const chipText2 = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
     check("数値型のsleepHでも従来どおり通常判定される", !!chipText2 && chipText2.includes("通常"), chipText2);
   } finally {
     await browser.close();

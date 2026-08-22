@@ -87,7 +87,7 @@ function check(name, cond, extra = "") {
   await page.evaluate((KEY) => { const s = JSON.parse(localStorage.getItem(KEY)); delete s.settings.wbsEditMode; localStorage.setItem(KEY, JSON.stringify(s)); }, KEY);
   await page.reload();
   await page.waitForTimeout(400);
-  await page.click('[data-action="nav"][data-view="home"]');
+  await page.click('[data-action="nav"][data-view="today"]');  // v230: home撤去後の現行view
   await page.waitForTimeout(200);
   check("旧stateから wbsEditMode が補完される", await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).settings.wbsEditMode === false, KEY));
 

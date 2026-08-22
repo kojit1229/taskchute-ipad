@@ -127,7 +127,7 @@ function check(name, cond, extra = "") {
     check("ページエラー無く起動する", failures === 0 || true);  // pageerrorリスナで別途集計
     check("旧テーマが表示される", (await page.locator(".zt-theme-text").allTextContents()).some((t) => t.includes("旧テーマ")));
     check("セクションは出ない(pending無し)", await page.locator(".zt-suggest-section").count() === 0);
-    await page.click('[data-action="nav"][data-view="home"]');  // 正規化値を永続化させる
+    await page.click('[data-action="nav"][data-view="today"]');  // v230: home撤去後の現行viewで正規化値を永続化
     await page.waitForTimeout(200);
     const normalized = await stateNow();
     check("suggestedThemesが[]で補完される", Array.isArray(normalized.zeroThinking.suggestedThemes) && normalized.zeroThinking.suggestedThemes.length === 0);
@@ -176,7 +176,7 @@ function check(name, cond, extra = "") {
     });
     check("画面上は2日前pendingの1件だけが候補として見える", await page.locator(".zt-suggest-item").count() === 1);
     check("2日前pendingのテキストが見える", (await page.locator(".zt-suggest-text").allTextContents()).some((t) => t.includes("2日前pending")));
-    await page.click('[data-action="nav"][data-view="home"]');  // normalizeStateの正規化結果を永続化
+    await page.click('[data-action="nav"][data-view="today"]');  // v230: home撤去後の現行viewで正規化値を永続化
     await page.waitForTimeout(200);
     st = await stateNow();
     const ids = st.zeroThinking.suggestedThemes.map((s) => s.id);

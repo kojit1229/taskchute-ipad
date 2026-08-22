@@ -270,8 +270,8 @@ process.on("beforeExit", async () => {
     await loadWbsState(page, projectB, [legacyAiTask]);
     const legacyLine = page.locator('span[data-action="edit-task"][data-id="reg-b-legacy-ai"]').locator("..");
     await legacyLine.locator(".ai-work-flag").waitFor();
-    await page.locator('[data-action="nav"][data-view="home"]').click();
-    await page.waitForSelector('#app[data-view="home"]');
+    await page.locator('[data-action="nav"][data-view="today"]').first().click();  // v230: home撤去後の現行起点
+    await page.waitForSelector('#app[data-view="today"]');
     await page.waitForFunction(({ key, id }) => {
       const task = JSON.parse(localStorage.getItem(key)).tasks.find((item) => item.id === id);
       return task?.owner === "ai" && task.aiWork === true;

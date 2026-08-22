@@ -132,7 +132,7 @@ function check(name, cond, extra = "") {
       view: "tasks"
     });
 
-    await page.click('[data-action="nav"][data-view="tasks"]');
+    await page.click('[data-action="nav"][data-view="today"]');  // v230: 朝プランはATISへ移設
     await page.waitForTimeout(150);
     await page.click('[data-action="ai-morning-plan"]');
     await page.waitForTimeout(600);
@@ -164,7 +164,7 @@ function check(name, cond, extra = "") {
       weeklyWishes: { [WEEK_KEY]: { taskIds: ["w-6"], updatedAt: `${TODAY}T09:00` } },
       view: "tasks"
     });
-    await page.click('[data-action="nav"][data-view="tasks"]');
+    await page.click('[data-action="nav"][data-view="today"]');  // v230: 朝プランはATISへ移設
     await page.waitForTimeout(150);
     await page.click('[data-action="ai-morning-plan"]');
     await page.waitForTimeout(700);
@@ -179,9 +179,10 @@ function check(name, cond, extra = "") {
     aiPlanFixture = null;
 
     // ============================================================
-    // (c) ホームカード「今日へ」で今日のBlockが作られ、二重登録は弾かれる(v121/v122のUIは無変更)
     // ============================================================
-    console.log("[3] ホームカードの「今日へ」ボタン");
+    // (c) v230: home週間Wishカード撤去
+    // ============================================================
+    console.log("[3] v230: 旧週間Wishカードは描画せず、既存選択は保持する");
     const HOME_WISH_TITLE = "フルマラソン完走";
     await seed({
       tasks: [makeWish({ id: "w-5", title: HOME_WISH_TITLE })],
@@ -189,42 +190,14 @@ function check(name, cond, extra = "") {
       weeklyWishes: { [WEEK_KEY]: { taskIds: ["w-5"], updatedAt: `${TODAY}T09:00` } },
       view: "home"
     });
-
-    const wishRow = page.locator(".home-weekly-wish-card li", { hasText: HOME_WISH_TITLE });
-    check("未Block時は「今日へ」ボタンが出る", await wishRow.locator('[data-action="wish-subtask-to-tasks"]').count() === 1);
-    check("未Block時は「済」が出ない", !(await wishRow.innerText()).includes("済"));
-
-    await wishRow.locator('[data-action="wish-subtask-to-tasks"]').click();
-    await page.waitForTimeout(300);
-    check("登録トーストが出る", (await page.locator("#toast").innerText()).includes("今日のタスクシュートに登録しました"));
-
-    const s1 = await stateNow();
-    const newBlock = (s1.blocks || []).find((b) => !b.deleted && b.taskId === "w-5" && b.date === TODAY);
-    check("今日のBlockが作られる", !!newBlock, JSON.stringify(s1.blocks));
-    const wishTaskAfter = (s1.tasks || []).find((t) => t.id === "w-5");
-    check("Wishタスクのstatusがdoingになる", wishTaskAfter && wishTaskAfter.status === "doing", JSON.stringify(wishTaskAfter));
-
-    const wishRowAfter = page.locator(".home-weekly-wish-card li", { hasText: HOME_WISH_TITLE });
-    check("Block化後はボタンが消え「済」表示になる",
-      await wishRowAfter.locator('[data-action="wish-subtask-to-tasks"]').count() === 0
-      && (await wishRowAfter.innerText()).includes("済"));
-
-    // 既存のwishSubtaskToTasksガードをこのボタン(同じdata-action)経由でも確認する:
-    // UI上のボタンは既にBlock化済みで消えているため、同じdata-action/data-idの要素を
-    // 直接クリックして二重登録が弾かれることを検証する(デリゲーションはdocument.clickのみ見る)。
-    await page.evaluate((wid) => {
-      const btn = document.createElement("button");
-      btn.id = "test-dup-wish-btn";
-      btn.dataset.action = "wish-subtask-to-tasks";
-      btn.dataset.id = wid;
-      document.body.appendChild(btn);
-    }, "w-5");
-    await page.click("#test-dup-wish-btn");
-    await page.waitForTimeout(300);
-    check("二重登録は既存のトーストで弾かれる", (await page.locator("#toast").innerText()).includes("既に今日のタスクシュートにあります"));
-    const s2 = await stateNow();
-    const dupBlocks = (s2.blocks || []).filter((b) => !b.deleted && b.taskId === "w-5" && b.date === TODAY);
-    check("二重登録によるBlockは増えない(1件のまま)", dupBlocks.length === 1, JSON.stringify(dupBlocks));
+    check("旧home週間Wishカードと「今日へ」導線は描画されない",
+      await page.locator('.home-weekly-wish-card, [data-action="wish-subtask-to-tasks"]').count() === 0);
+    check("旧home viewはtodayへフォールバックする", await page.locator('#app[data-view="today"]').count() === 1);
+    const sHome = await stateNow();
+    check("既存weeklyWishes選択は保持され、意図しないBlockを作らない",
+      sHome.weeklyWishes?.[WEEK_KEY]?.taskIds?.[0] === "w-5"
+      && !(sHome.blocks || []).some((b) => !b.deleted && b.taskId === "w-5" && b.date === TODAY),
+      JSON.stringify({ weeklyWishes: sHome.weeklyWishes, blocks: sHome.blocks }));
   } finally {
     await browser.close();
     server.close();

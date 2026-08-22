@@ -114,7 +114,7 @@ function check(name, cond, extra = "") {
     // ============================================================
     console.log("[A1] ホーム今日タブ: タスクシュートのドット(home-dot)を直接クリックすると即完了する(モーダルを介さない)");
     await seed({
-      view: "home",
+      view: "tasks",
       tasks: [testTask("task-A", "A用タスク")],
       projects: [testProject()],
       blocks: [
@@ -129,7 +129,8 @@ function check(name, cond, extra = "") {
     // ":00"を補って19文字へ揃えるため、クリック前の(正規化後の)plannedStartAtを控えておき、
     // これと比較する(自前でhhmm()から組み立てた無補正の文字列とは一致しないため)。
     const plannedStartAtNormalized = (await stateNow()).blocks.find((x) => x.id === "block-hd").plannedStartAt;
-    await page.locator('.home-tc .home-dot[data-action="toggle-block"][data-id="block-hd"]').click();
+    check("v230: 旧home完了ドットは描画されない", await page.locator(".home-dot").count() === 0);
+    await page.locator('.checkbox-button[data-action="toggle-block"][data-id="block-hd"]').click();
     await page.waitForTimeout(200);
     check("モーダルは開かない(即完了)", await page.locator(".modal-card").count() === 0);
     let st = await stateNow();
@@ -148,7 +149,7 @@ function check(name, cond, extra = "") {
     check(".toastにhas-actionクラスが付く", await page.locator("#toast.has-action").count() === 1);
 
     console.log("[A2] ホーム今日タブ: ながれのチェック(home-dot)も同様に即完了する");
-    await page.locator('.home-flow .home-dot[data-action="toggle-block"][data-id="block-flow"]').click();
+    await page.locator('.checkbox-button[data-action="toggle-block"][data-id="block-flow"]').click();
     await page.waitForTimeout(200);
     st = await stateNow();
     b = st.blocks.find((x) => x.id === "block-flow");
@@ -193,13 +194,13 @@ function check(name, cond, extra = "") {
 
     console.log("[A6] 完了解除(トグルOFF)は従来どおりプレーンなトースト(実績編集ボタンは出ない)");
     await seed({
-      view: "home",
+      view: "tasks",
       blocks: [planBlock({
         id: "block-done", title: "解除確認", startMin: 8 * 60, minutes: 30,
         completed: true, actualStartAt: `${TODAY}T08:00`, actualEndAt: `${TODAY}T08:30`
       })]
     });
-    await page.locator('.home-flow .home-dot[data-action="toggle-block"][data-id="block-done"]').click();
+    await page.locator('.checkbox-button[data-action="toggle-block"][data-id="block-done"]').click();
     await page.waitForTimeout(200);
     st = await stateNow();
     b = st.blocks.find((x) => x.id === "block-done");
@@ -217,10 +218,10 @@ function check(name, cond, extra = "") {
       charge: 4, discharge: 1
     }));
     await seed({
-      view: "home",
+      view: "tasks",
       blocks: [...pastEnergyBlocks, planBlock({ id: "block-energy", title: energyTitle, startMin: 9 * 60, minutes: 20 })]
     });
-    await page.locator('.home-flow .home-dot[data-action="toggle-block"][data-id="block-energy"]').click();
+    await page.locator('.checkbox-button[data-action="toggle-block"][data-id="block-energy"]').click();
     await page.waitForTimeout(200);
     st = await stateNow();
     b = st.blocks.find((x) => x.id === "block-energy");
@@ -229,10 +230,10 @@ function check(name, cond, extra = "") {
 
     console.log("[A8] plannedStartAtが未来(先取り完了)のときは、終了−予定所要ぶんに実績開始時刻が丸められる(開始>終了にならない)");
     await seed({
-      view: "home",
+      view: "tasks",
       blocks: [planBlock({ id: "block-future", title: "先取り完了確認", startMin: 20 * 60, minutes: 30 })]  // 20:00〜(現在時刻18:00より未来)
     });
-    await page.locator('.home-flow .home-dot[data-action="toggle-block"][data-id="block-future"]').click();
+    await page.locator('.checkbox-button[data-action="toggle-block"][data-id="block-future"]').click();
     await page.waitForTimeout(200);
     st = await stateNow();
     b = st.blocks.find((x) => x.id === "block-future");
@@ -249,12 +250,12 @@ function check(name, cond, extra = "") {
       charge: 4, discharge: 1  // prefillEnergyが働けば中央値4/1になる(=このテストで検出したい値と紛れないよう手入力側は別値にする)
     }));
     await seed({
-      view: "home",
+      view: "tasks",
       blocks: [...pastManualEnergyBlocks, planBlock({
         id: "block-manual-energy", title: manualEnergyTitle, startMin: 9 * 60, minutes: 20, charge: 2, discharge: 3
       })]
     });
-    await page.locator('.home-flow .home-dot[data-action="toggle-block"][data-id="block-manual-energy"]').click();
+    await page.locator('.checkbox-button[data-action="toggle-block"][data-id="block-manual-energy"]').click();
     await page.waitForTimeout(200);
     st = await stateNow();
     b = st.blocks.find((x) => x.id === "block-manual-energy");
@@ -269,16 +270,16 @@ function check(name, cond, extra = "") {
       charge: 5, discharge: 2
     }));
     await seed({
-      view: "home",
+      view: "tasks",
       blocks: [...pastSnapEnergyBlocks, planBlock({ id: "block-snap", title: snapEnergyTitle, startMin: 9 * 60, minutes: 20 })]
     });
-    await page.locator('.home-flow .home-dot[data-action="toggle-block"][data-id="block-snap"]').click();
+    await page.locator('.checkbox-button[data-action="toggle-block"][data-id="block-snap"]').click();
     await page.waitForTimeout(200);
     st = await stateNow();
     b = st.blocks.find((x) => x.id === "block-snap");
     check("(準備)即完了で実績・充放電が自動記録される", b.completed === true && !!b.actualStartAt && !!b.actualEndAt && b.charge === 5 && b.discharge === 2);
     // 同セッション内で完了解除する(toggle-block再クリック)
-    await page.locator('.home-flow .home-dot[data-action="toggle-block"][data-id="block-snap"]').click();
+    await page.locator('.checkbox-button[data-action="toggle-block"][data-id="block-snap"]').click();
     await page.waitForTimeout(200);
     st = await stateNow();
     b = st.blocks.find((x) => x.id === "block-snap");
@@ -291,10 +292,10 @@ function check(name, cond, extra = "") {
     console.log("[A11] トースト消滅後、透明な当たり判定がボトムナビ等の上に残留しない(elementFromPoint、項目1)");
     await page.setViewportSize({ width: 390, height: 844 });
     await seed({
-      view: "home",
+      view: "tasks",
       blocks: [planBlock({ id: "block-toastcheck", title: "消滅確認Block", startMin: 9 * 60, minutes: 30 })]
     });
-    await page.locator('.home-flow .home-dot[data-action="toggle-block"][data-id="block-toastcheck"]').click();
+    await page.locator('.checkbox-button[data-action="toggle-block"][data-id="block-toastcheck"]').click();
     await page.waitForTimeout(200);
     check("完了直後はhas-actionが付く(前提)", await page.locator("#toast.has-action").count() === 1);
     // トーストは画面下部中央に固定表示されるため、5個並ぶボトムナビの中央付近(index2、
@@ -339,11 +340,8 @@ function check(name, cond, extra = "") {
 
     console.log("[B2] ホーム/今日タブ・ジャーナルのCSSが実際にトークンを参照している(適用範囲の確認)");
     await seed({ view: "home", blocks: [] });
-    const scoreLabFont = await page.evaluate(() => {
-      const el = document.querySelector(".home-score-lab");
-      return el ? getComputedStyle(el).fontSize : null;
-    });
-    check(".home-score-lab(今日タブ)のfont-sizeは--text-xs(12px)を参照", scoreLabFont === "12px", String(scoreLabFont));
+    check("v230: 旧homeスコアラベルは描画されずtodayへ移行する",
+      await page.locator(".home-score-lab").count() === 0 && await page.locator('#app[data-view="today"]').count() === 1);
 
     await page.setViewportSize({ width: 390, height: 844 });
     // 390px幅ではサイドバーのnavボタンが非表示になり、bottom-navと合わせて同一selectorが

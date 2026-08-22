@@ -143,7 +143,7 @@ function check(name, cond, extra = "") {
     }, { KEY, TODAY });
     await page.reload();
     await page.waitForTimeout(400);
-    await page.click('[data-action="nav"][data-view="home"]');  // 正規化値を永続化させる
+    await page.click('[data-action="nav"][data-view="today"]');  // v230: home撤去後の現行viewで正規化値を永続化
     await page.waitForTimeout(200);
     const normalized1 = await stateNow();
     const legacyTask = (normalized1.tasks || []).find((t) => t.id === "legacy-task");
@@ -267,7 +267,7 @@ function check(name, cond, extra = "") {
       ]
     }, null, 2);
     await seed({ tasks: [], projects: [] });
-    await page.click('[data-action="nav"][data-view="tasks"]');
+    await page.click('[data-action="nav"][data-view="today"]'); // v230: AI導線はATISへ移設
     await page.waitForTimeout(150);
     await page.click('[data-action="ai-morning-plan"]');
     await page.waitForTimeout(700);

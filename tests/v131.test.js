@@ -65,7 +65,17 @@ function check(name, cond, extra = "") {
     await page.reload();
     await page.waitForTimeout(400);
   }
-  const chipText = () => page.locator(".home-condition-budget-chip").innerText().catch(() => "");
+  // v230: home体力予算チップ撤去後の同等出力は日報の体力予算行で検証する。
+  const chipText = async () => {
+    if (await page.locator('#app[data-view="journal"]').count() === 0) {
+      await page.click('[data-action="nav"][data-view="journal"]');
+      await page.waitForTimeout(150);
+    }
+    await page.click('[data-action="generate-report"]');
+    await page.waitForTimeout(250);
+    const report = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
+    return report.split("\n").find((line) => line.startsWith("体力予算:")) || "";
+  };
   const sleepCardText = () => page.locator(".row").filter({ hasText: "睡眠" }).first().innerText().catch(() => "");
 
   try {
@@ -79,10 +89,7 @@ function check(name, cond, extra = "") {
     // ============================================================
     console.log("[1] 当日分のログがあればラベル無しで通常表示");
     await seed({ sleepLogs: { [TODAY]: sleepLog({ sleepH: 6.0 }) }, view: "home" });
-    // v147: 体力予算チップは「今日の状態」カード(homeTodayStatusCard)のdetails内(既定closed)
-    // へ移動した。一度開けばlocalStorageのfold状態が保持され、以降のreloadでも開いたままになる。
-    const statusFold = page.locator('details[data-fold-id="today-status"]');
-    if (await statusFold.count()) await statusFold.locator("summary").click();
+    check("v230: 旧home体力予算チップは描画されない", await page.locator(".home-condition-budget-chip").count() === 0);
     check("チップに「低予算」が出る", (await chipText()).includes("低予算"), await chipText());
     check("日付ラベル(M/D朝)は出ない", !(await chipText()).includes("朝"), await chipText());
 
@@ -121,7 +128,7 @@ function check(name, cond, extra = "") {
     // ============================================================
     console.log("[5] 3日前のログしか無い場合はフォールバック対象外(赤警告+データなし)");
     await seed({ sleepLogs: { [THREE_AGO]: sleepLog({ sleepH: 5.0 }) }, view: "home" });
-    check("チップは「データなし」のまま", (await chipText()).includes("データなし"), await chipText());
+    check("対象ログが無ければ日報に体力予算行を出さない", (await chipText()) === "", await chipText());
 
     await seed({ sleepLogs: { [THREE_AGO]: sleepLog({ sleepH: 5.0 }) }, view: "journal" });
     check("睡眠カードは赤警告のまま(3日前は対象外)",

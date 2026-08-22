@@ -192,51 +192,17 @@ function check(name, cond, extra = "") {
     //        当日登録済み・未完了でも再追加ボタンが押せ、2件目のBlockが作られる
     //        (K指摘: Kの体感の原因はここのdisabledだった可能性が高い)
     // ============================================================
-    console.log("[6][7] ホームタブ: 当日登録済み・未完了タスクでも「＋今日に追加」が押せ、2件目のBlockが作られる");
+    console.log("[6][7] v230: 旧home backlog導線は描画されない");
     await seed({
-      tasks: [wbsTask("task-home", "ホーム複数回追加検証Task")],
+      tasks: [wbsTask("task-home", "旧home複数回追加検証Task")],
       blocks: [],
       projects: [testProject()],
       view: "home"
     });
-    // v149(UI改善計画Phase4a): homeBacklog()はホームの2タブ分割で「今日」タブ(既定タブ)
-    // 直下の常時表示カードになった(旧: 「長い弧をたしかめる」の折りたたみの中)。
-    // seed()のview:"home"は既定で「今日」タブが選ばれるため、開く操作は不要。
-    function homeRow(taskId) {
-      return page.locator(`.home-due:has([data-action="home-add-today"][data-id="${taskId}"])`);
-    }
-    check("ホームの未完了タスクパネルに出る", await homeRow("task-home").count() === 1);
-    check("初期状態ではバッジは出ない", !(await homeRow("task-home").textContent())?.includes("追加済み"));
-    await page.click('[data-action="home-add-today"][data-id="task-home"]');
-    await page.waitForTimeout(300);
-    // addTaskToToday()はBlock作成直後に編集モーダルを開くが、closeModal()は背景の再描画を
-    // 伴わない(modalRootのみ操作)ため、背景側の最新状態(バッジ・ボタン)を見るには
-    // モーダルを閉じたあとページをreloadして正規のrender()経路を通す必要がある
-    // (state自体はaddTaskToToday内のsaveState()で既に永続化済み)
-    await page.click('[data-action="modal-close"]');
-    await page.waitForTimeout(200);
-    const sf1 = await stateNow();
-    const blocksHome1 = sf1.blocks.filter((b) => b.taskId === "task-home" && !b.deleted);
-    check("1回目クリックでBlockが1件作られる", blocksHome1.length === 1, JSON.stringify(blocksHome1));
-    await page.reload();
-    await page.waitForTimeout(400);
-    check("(f) 1回目クリック後も再追加ボタンはdisabledにならず押せる状態で残る(再描画後)",
-      await page.locator('[data-action="home-add-today"][data-id="task-home"][disabled]').count() === 0
-      && await page.locator('[data-action="home-add-today"][data-id="task-home"]').count() === 1);
-    check("「本日 1 件追加済み」バッジが出る(再描画後)", (await homeRow("task-home").textContent())?.includes("本日 1 件追加済み"),
-      await homeRow("task-home").textContent());
-    await page.click('[data-action="home-add-today"][data-id="task-home"]');
-    await page.waitForTimeout(300);
-    await page.click('[data-action="modal-close"]');
-    await page.waitForTimeout(200);
-    const sf2 = await stateNow();
-    const blocksHome2 = sf2.blocks.filter((b) => b.taskId === "task-home" && !b.deleted);
-    check("(g) 2回目クリックで2件目のBlockが作られる(同一taskId、別id)", blocksHome2.length === 2, JSON.stringify(blocksHome2));
-    check("2件のBlock idは別々", blocksHome2[0]?.id !== blocksHome2[1]?.id, JSON.stringify(blocksHome2));
-    await page.reload();
-    await page.waitForTimeout(400);
-    check("「本日 2 件追加済み」バッジに更新される(再描画後)", (await homeRow("task-home").textContent())?.includes("本日 2 件追加済み"),
-      await homeRow("task-home").textContent());
+    check("旧home backlogとhome-add-today導線は描画されない",
+      await page.locator('.home-due, [data-action="home-add-today"]').count() === 0);
+    check("旧home viewはtodayへフォールバックする", await page.locator('#app[data-view="today"]').count() === 1);
+    // 現行タスクシュートでの複数回追加契約は本スイート(a)〜(e)で維持している。
   } finally {
     await browser.close();
     server.close();

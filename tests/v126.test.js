@@ -197,7 +197,7 @@ function check(name, cond, extra = "") {
       projects: [wishProject(), testProject()],
       view: "tasks"
     });
-    await page.click('[data-action="nav"][data-view="tasks"]');
+    await page.click('[data-action="nav"][data-view="today"]');  // v230: 朝プランはATISへ移設
     await page.waitForTimeout(150);
     await page.click('[data-action="ai-morning-plan"]');
     await page.waitForTimeout(600);
@@ -212,9 +212,10 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(200);
 
     // ============================================================
-    // (d) ホームカードの「今日へ」で今日のBlockが作られる(v121/v122のUIは無変更で存続)
     // ============================================================
-    console.log("[3] ホームカード(今週のやりたいこと)の「今日へ」ボタン");
+    // (c) v230: home週間Wishカード撤去
+    // ============================================================
+    console.log("[3] v230: 旧週間Wishカードは描画せず、既存選択は保持する");
     const HOME_WISH_TITLE = "フルマラソン完走";
     await seed({
       tasks: [makeWish({ id: "w-5", title: HOME_WISH_TITLE })],
@@ -222,22 +223,14 @@ function check(name, cond, extra = "") {
       weeklyWishes: { [WEEK_KEY]: { taskIds: ["w-5"], updatedAt: `${TODAY}T09:00` } },
       view: "home"
     });
-
-    const wishRow = page.locator(".home-weekly-wish-card li", { hasText: HOME_WISH_TITLE });
-    check("未Block時は「今日へ」ボタンが出る", await wishRow.locator('[data-action="wish-subtask-to-tasks"]').count() === 1);
-
-    await wishRow.locator('[data-action="wish-subtask-to-tasks"]').click();
-    await page.waitForTimeout(300);
-    check("登録トーストが出る", (await page.locator("#toast").innerText()).includes("今日のタスクシュートに登録しました"));
-
+    check("旧home週間Wishカードと「今日へ」導線は描画されない",
+      await page.locator('.home-weekly-wish-card, [data-action="wish-subtask-to-tasks"]').count() === 0);
+    check("旧home viewはtodayへフォールバックする", await page.locator('#app[data-view="today"]').count() === 1);
     const sHome = await stateNow();
-    const newBlock = (sHome.blocks || []).find((b) => !b.deleted && b.taskId === "w-5" && b.date === TODAY);
-    check("今日のBlockが作られる", !!newBlock, JSON.stringify(sHome.blocks));
-
-    const wishRowAfter = page.locator(".home-weekly-wish-card li", { hasText: HOME_WISH_TITLE });
-    check("Block化後はボタンが消え「済」表示になる",
-      await wishRowAfter.locator('[data-action="wish-subtask-to-tasks"]').count() === 0
-      && (await wishRowAfter.innerText()).includes("済"));
+    check("既存weeklyWishes選択は保持され、意図しないBlockを作らない",
+      sHome.weeklyWishes?.[WEEK_KEY]?.taskIds?.[0] === "w-5"
+      && !(sHome.blocks || []).some((b) => !b.deleted && b.taskId === "w-5" && b.date === TODAY),
+      JSON.stringify({ weeklyWishes: sHome.weeklyWishes, blocks: sHome.blocks }));
   } finally {
     await browser.close();
     server.close();

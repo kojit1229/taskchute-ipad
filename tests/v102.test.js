@@ -115,7 +115,7 @@ function check(name, cond, extra = "") {
     check("旧entryも開ける(本文が表示される)", await page.locator("#zt-edit-input").inputValue() === "旧本文");
     await page.click('[data-action="zt-edit-close"]');
     await page.waitForTimeout(150);
-    await page.click('[data-action="nav"][data-view="home"]');  // 正規化値を永続化させる
+    await page.click('[data-action="nav"][data-view="today"]');  // v230: home撤去後の現行viewで正規化値を永続化
     await page.waitForTimeout(200);
     const normalized = await stateNow();
     const legacyNormalized = normalized.zeroThinking.entries.find((e) => e.id === "legacy-e");
