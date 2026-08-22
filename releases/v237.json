@@ -1,0 +1,50 @@
+{
+  "version": 237,
+  "date": "2026-08-23",
+  "title": "P5第2弾 未参照CSS削除とstatus更新共通化",
+  "summary": "現HEADで本番参照0件を再確認したCSSセレクタを一括削除し、Project/Taskの中断・再開4関数を挙動不変の共通ヘルパーへ集約した",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v237.json",
+    "styles.css",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/v124.test.js"
+  ],
+  "intent": [
+    "v213〜v236のスリム化後も残っていた未参照CSSを、コメント除外・本番コード語境界検索・動的テンプレート構築確認を通して安全に削除する。",
+    "Project/Taskの中断・再開に重複していたstatus更新、updatedAt更新、保存・再描画を1か所へ集約し、関数名・action結線・文言・外部挙動を維持する。"
+  ],
+  "changes": [
+    "energy-curve、grid.two/three、metric、report-output、vision-pdf-frame、timeline-card .tl-time、ce-next、ai-insights-item系、insight-row系、cond-degraded-bannerの未参照CSSを削除した。生存している.settings-grid、.ai-insights本体/head/body/freshness、TOWER共有・状態クラスは保持した。",
+    "ce-nextとce-next-fadeの削除に合わせ、tests/v124.test.jsからce-nextの古いreduced-motion期待値だけを追従削除した。ce-particle/ce-messageと両keyframesの検証は維持した。",
+    "setEntityStatus(collectionKey, id, status, message)を追加し、suspendProject/resumeProject/suspendTask/resumeTaskを1行ラッパー化した。status値、updatedAt: nowDateTime()、saveAndRenderのメッセージは従来どおり維持した。",
+    "Service WorkerのAPP_SHELLは変更せず、CACHE_NAMEをv237へ更新した。"
+  ],
+  "uncertainties": [
+    ".gridと.timeline-card自体は本番参照があるため、参照0件の.two/.three/.tl-timeを含むルールだけを削除し、基底クラスは温存した。",
+    "home-box/home-dot/breakMessages系は現HEADのstyles.cssにコメント外セレクタ定義が既に無く、追加削除は参照0件だったcond-degraded-bannerだけになった。"
+  ],
+  "reviewFocus": [
+    "削除対象の各クラストークンがapp.js・src/**/*.js・index.html・sw.jsで0件かつ動的テンプレート構築されず、禁止指定の生存セレクタが保持されているか。",
+    ".grid.two/.grid.threeを外したレスポンシブルールに.settings-gridが残り、cockpit共有ルールからは.metric-labelだけが除かれているか。",
+    "setEntityStatusが対象collectionだけをmapし、一致entityだけstatusとupdatedAtを更新して、従来と同じメッセージでsaveAndRenderするか。",
+    "tests/v124.test.jsの変更が削除済みce-nextの期待値追従だけで、残るreduced-motion検証を弱体化していないか。"
+  ],
+  "verification": [
+    "node --check app.js、node --check tests/v124.test.js: exit 0。",
+    "npm.cmd run code:index:write/check: PASS(code index 561 functions)。npm.cmd run test:manifest:write/check: PASS(test manifest 131 suites)。",
+    "system Edge指定のtests/v124.test.js、tests/action-registry-core.test.js、tests/v63.test.js、tests/v73.test.js、tests/v101.test.js: 全件PASS。",
+    "実行コード差分は190行(追加13・削除177、テスト・生成物・release記録を除外)で200行以下。",
+    "release-record --writeはCHANGES_v237.md生成後、ワークスペース外taskchute-notes/handoff.mdへの書き込みだけEPERM。最終gateでは一時handoffへ同じ生成ブロックを書いて整合を検証した。",
+    "system Edge指定のnode scripts/release-gate.js releases/v237.json --final: exit 0。"
+  ],
+  "knownLimitations": [
+    "iOS Safari実機PWAでのService Worker更新とオフライン起動は監督者側で確認が必要。",
+    "標準Playwright Chromiumがspawn EPERMになる場合はsystem EdgeをCHROME_PATHへ指定する。",
+    "taskchute-notes/handoff.mdがワークスペース外でEPERMになる場合、release-record --writeはCHANGES生成までを採用し、notes側更新は監督者が再実行する。"
+  ]
+}

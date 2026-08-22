@@ -11688,22 +11688,15 @@ function taskStatusLabel(s) {
   return ({ todo: "未着手", doing: "着手中", completed: "完了", suspended: "中断", cancelled: "中止" })[s] || s || "未着手";
 }
 
-function suspendProject(id) {
-  state.projects = state.projects.map((p) => p.id === id ? { ...p, status: "paused", updatedAt: nowDateTime() } : p);
-  saveAndRender("プロジェクトを中断しました");
+// v237: Project/Taskの中断・再開で共通のstatus更新と保存描画を一元化する。
+function setEntityStatus(collectionKey, id, status, message) {
+  state[collectionKey] = state[collectionKey].map((entity) => entity.id === id ? { ...entity, status, updatedAt: nowDateTime() } : entity);
+  saveAndRender(message);
 }
-function resumeProject(id) {
-  state.projects = state.projects.map((p) => p.id === id ? { ...p, status: "active", updatedAt: nowDateTime() } : p);
-  saveAndRender("プロジェクトを再開しました");
-}
-function suspendTask(id) {
-  state.tasks = state.tasks.map((t) => t.id === id ? { ...t, status: "suspended", updatedAt: nowDateTime() } : t);
-  saveAndRender("タスクを中断しました");
-}
-function resumeTask(id) {
-  state.tasks = state.tasks.map((t) => t.id === id ? { ...t, status: "todo", updatedAt: nowDateTime() } : t);
-  saveAndRender("タスクを再開しました");
-}
+function suspendProject(id) { setEntityStatus("projects", id, "paused", "プロジェクトを中断しました"); }
+function resumeProject(id) { setEntityStatus("projects", id, "active", "プロジェクトを再開しました"); }
+function suspendTask(id) { setEntityStatus("tasks", id, "suspended", "タスクを中断しました"); }
+function resumeTask(id) { setEntityStatus("tasks", id, "todo", "タスクを再開しました"); }
 
 function rangeOptions(min, max, selected) {
   let html = "";

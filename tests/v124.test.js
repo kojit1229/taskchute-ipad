@@ -90,10 +90,9 @@ function extractAllBlockBodies(css, headerRe) {
       !/transform:\s*(scale|translate)/.test(reducedMotionBody));
     check("モーダルのreduced-motion版アニメーションが指定されている(.modal-card)",
       /\.modal-card\s*\{[^}]*animation:\s*modal-materialize-reduced/.test(reducedMotionBody));
-    check("完了演出(.ce-particle/.ce-message/.ce-next)が短いフェードに縮退している",
+    check("完了演出(.ce-particle/.ce-message)が短いフェードに縮退している",
       /\.ce-particle\s*\{[^}]*animation:\s*ce-fade-reduced/.test(reducedMotionBody) &&
-      /\.ce-message\s*\{[^}]*animation:\s*ce-fade-reduced/.test(reducedMotionBody) &&
-      /\.ce-next\s*\{[^}]*animation:\s*ce-fade-reduced/.test(reducedMotionBody));
+      /\.ce-message\s*\{[^}]*animation:\s*ce-fade-reduced/.test(reducedMotionBody));
   }
 
   // 縮退フェード側のkeyframes自体がopacityのみで、transformを一切使っていないこと
