@@ -3350,41 +3350,10 @@ h3 {
 @keyframes tower-touchdown { 0% { opacity: 1; transform: translate(-50%, -50%) scale(.4); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(3); } }
 @media (max-width: 720px) { .tower-nowhud { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); } .tower-now-actions { flex-wrap: wrap; } }
 
-/* v206: TOWER T5。FUEL/TRAFFIC半円ゲージ。 */
-.tower-gauges { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding-top: 12px; }
-.tower-gauge { min-width: 0; padding: 10px; border: 1px solid var(--tower-line); background: var(--tower-panel); }
-.tower-gauge h3 { margin: 0; color: var(--tower-cyan); font-size: 11px; letter-spacing: .18em; }
-.tower-gauge h3 span { float: right; color: var(--tower-text); font-size: 10px; font-weight: 400; letter-spacing: .06em; opacity: .6; }
-.tower-gauge svg { display: block; width: min(100%, 280px); margin: 2px auto 0; overflow: visible; }
-.tower-gauge-arc,
-.tower-gauge-zone { fill: none; stroke-width: 4; stroke-linecap: round; }
-.tower-gauge-arc { stroke: var(--tower-line); }
-.tower-gauge-zone { stroke: var(--tower-amber); stroke-dasharray: 13 87; }
-.tower-gauge-needle { transform: rotate(var(--tower-needle-deg)); transform-box: view-box; transform-origin: 50px 50px; transition: transform 800ms cubic-bezier(.34, 1.56, .64, 1); }
-.tower-gauge-needle line { stroke: var(--tower-cyan); stroke-width: 2; stroke-linecap: round; }
-.tower-gauge-needle circle { fill: var(--tower-text); }
-.tower-gauge-read { display: flex; align-items: baseline; justify-content: center; gap: 6px; min-height: 25px; font-variant-numeric: tabular-nums; }
-.tower-gauge-read strong { color: var(--tower-green); font-size: 20px; }
-.tower-gauge-read span { font-size: 11px; opacity: .7; }
-.tower-fuel[data-warn="1"] .tower-gauge-read strong,
-.tower-fuel-warn { color: var(--tower-amber); }
-.tower-fuel-warn { min-height: 18px; font-size: 11px; text-align: center; }
-.tower-fuel-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; margin-top: 6px; }
-.tower-fuel-actions button { min-height: 44px; padding: 4px; border: 1px solid var(--tower-line); border-radius: 4px; color: var(--tower-text); font: inherit; font-size: 10px; background: var(--tower-bg); }
-.tower-fuel-actions button:focus-visible { outline: 2px solid var(--tower-amber); outline-offset: 1px; }
-.tower-fuel-undo { color: var(--tower-amber) !important; }
-.tower-traffic[data-zone="calm"] #towerTrafficZone { color: var(--tower-green); }
-.tower-traffic[data-zone="cruise"] #towerTrafficZone { color: var(--tower-cyan); }
-.tower-traffic[data-zone="dense"] #towerTrafficZone { color: var(--tower-amber); }
-@media (max-width: 720px) { .tower-gauges { grid-template-columns: 1fr; } .tower-fuel-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-
-/* v207: TOWER T6。GATE定期便とAPRON駐機場。 */
-.tower-gates,
-.tower-apron { margin-top: 12px; border: 1px solid var(--tower-line); background: var(--tower-panel); }
-.tower-gates h2,
-.tower-apron h2 { margin: 0; padding: 8px 10px; border-bottom: 1px solid var(--tower-line); color: var(--tower-cyan); font-size: 11px; letter-spacing: .18em; }
-#towerGateStrip,
-#towerApronStrip { display: flex; align-items: stretch; gap: 8px; min-height: 44px; padding: 8px; overflow-x: auto; }
+/* v207: TOWER T6。GATE定期便。 */
+.tower-gates { margin-top: 12px; border: 1px solid var(--tower-line); background: var(--tower-panel); }
+.tower-gates h2 { margin: 0; padding: 8px 10px; border-bottom: 1px solid var(--tower-line); color: var(--tower-cyan); font-size: 11px; letter-spacing: .18em; }
+#towerGateStrip { display: flex; align-items: stretch; gap: 8px; min-height: 44px; padding: 8px; overflow-x: auto; }
 .tower-gate { display: grid; grid-template-columns: auto minmax(72px, 1fr) 10px; align-items: center; gap: 7px; min-width: 132px; min-height: 48px; padding: 6px 8px; border: 1px solid var(--tower-line); border-radius: 4px; color: var(--tower-text); font: inherit; background: var(--tower-bg); }
 .tower-gate span { color: var(--tower-cyan); font-size: 10px; }
 .tower-gate strong { overflow: hidden; font-family: system-ui, sans-serif; font-size: 11px; font-weight: 500; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
@@ -3396,119 +3365,8 @@ h3 {
 #towerGateCount { padding: 0 10px 8px; color: var(--tower-green); font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; }
 .tower-gates.is-full { border-color: var(--tower-green); }
 .tower-gates.is-full-flash { animation: tower-gates-full 900ms ease-out 1; }
-.tower-apron-plane { flex: 0 0 auto; align-self: center; padding: 6px 9px; border-bottom: 1px solid var(--tower-cyan); color: var(--tower-green); font-size: 11px; text-shadow: 0 0 7px var(--tower-cyan); }
 @keyframes tower-gate-docking { 0% { transform: translateY(-8px); box-shadow: 0 0 0 var(--tower-amber); } 100% { transform: translateY(0); box-shadow: 0 0 12px var(--tower-green); } }
 @keyframes tower-gates-full { 0% { box-shadow: 0 0 0 var(--tower-amber); } 100% { box-shadow: 0 0 18px var(--tower-green); } }
-
-/* v208: TOWER T7。RADARと無線ログ。 */
-.tower-radar { margin-top: 12px; border: 1px solid var(--tower-line); background: var(--tower-panel); }
-.tower-radar h2 { margin: 0; padding: 8px 10px; border-bottom: 1px solid var(--tower-line); color: var(--tower-cyan); font-size: 11px; letter-spacing: .18em; }
-.tower-radar h2 span { float: right; color: var(--tower-text); font-size: 10px; font-weight: 400; letter-spacing: .08em; opacity: .6; }
-.tower-radar-scope {
-  position: relative; width: min(100%, 300px); aspect-ratio: 1 / 1; margin: 10px auto; overflow: hidden;
-  border: 1px solid var(--tower-line); border-radius: 50%; background: radial-gradient(circle, var(--tower-panel), var(--tower-bg) 72%);
-  box-shadow: inset 0 0 24px var(--tower-line);
-}
-.tower-radar-ring { position: absolute; inset: 14%; border: 1px solid var(--tower-line); border-radius: 50%; }
-.tower-radar-ring.is-inner { inset: 32%; }
-.tower-radar-sweep { position: absolute; z-index: 1; top: 50%; left: 50%; width: 42%; height: 2px; background: linear-gradient(90deg, var(--tower-green), transparent); transform-origin: left center; animation: tower-radar-sweep 7s linear infinite; }
-.tower-radar-core { position: absolute; z-index: 2; top: 50%; left: 50%; width: 6px; height: 6px; border-radius: 50%; background: var(--tower-green); box-shadow: 0 0 8px var(--tower-green); transform: translate(-50%, -50%); }
-.tower-blip { position: absolute; z-index: 3; width: 6px; height: 6px; border-radius: 50%; background: var(--tower-cyan); box-shadow: 0 0 8px var(--tower-cyan); transform: translate(-50%, -50%); transition: left 600ms linear, top 600ms linear; }
-@keyframes tower-radar-sweep { to { transform: rotate(360deg); } }
-.tower-radio { border: 1px solid var(--tower-line); background: var(--tower-panel); }
-#towerRadioLines { min-height: 72px; padding: 7px 10px; }
-.tower-radio-line { min-height: 22px; color: var(--tower-text); font-size: 10px; line-height: 22px; opacity: .55; }
-.tower-radio-line.is-new { opacity: 1; }
-.tower-radio-line b { color: var(--tower-cyan); font-weight: 600; }
-.tower-radio-cursor { display: inline-block; width: 6px; height: 11px; margin-left: 4px; vertical-align: -1px; background: var(--tower-green); animation: tower-radio-cursor 900ms step-end infinite; }
-@keyframes tower-radio-cursor { 50% { opacity: 0; } }
-
-/* v209: TOWER T8。PC 3面管制卓と残パネル収容。 */
-.tower-annex { display: grid; gap: 12px; margin-top: 12px; }
-/* today-span-2 は cockpit の2カラムdeck用。annexの1〜2カラムgridでは暗黙カラムを作るため無効化する。 */
-.tower-annex .today-span-2 { grid-column: auto; }
-.today-tower .today-panel { border-color: var(--tower-line); border-radius: 0; background: var(--tower-panel); box-shadow: none; }
-.today-tower .today-panel::before,
-.today-tower .today-panel::after { content: none; }
-.today-tower .today-panel-title { color: var(--tower-cyan); letter-spacing: .18em; }
-.today-tower .today-panel-title span { color: var(--tower-text); opacity: .6; }
-.today-tower .today-panel-title b { border-color: var(--tower-line); color: var(--tower-green); background: transparent; }
-/* annex内部はcockpit由来のテーマ依存トークン(--text/--panel-soft)を使うため、lightテーマだと
-   TOWER暗色背景上で判読不能になる(実測コントラスト1.0〜1.1)。TOWER系トークンへ固定する(レビューM1)。 */
-.today-tower .pomo-time-overlay { color: var(--tower-text); }
-.today-tower .today-deck-card,
-.today-tower .today-zero-theme,
-.today-tower .today-zero-text { border-color: var(--tower-line); background: rgba(255, 255, 255, .04); color: var(--tower-text); }
-.today-tower .today-deck-card > div { color: var(--tower-text); }
-.today-tower .today-deck-card > small { color: var(--tower-text); opacity: .6; }
-/* v212: annexテキストのlightテーマ固定の続きはファイル末尾のv212セクションにある。 */
-
-/* 3面卓の適用はviewport 1280px以上。設計書の900pxはサイドバー無しサンプル準拠の値で、
-   実アプリはサイドバー216px+余白により900〜1279pxでは中央列が340/320の固定レールに潰される(1024px実測18px)。 */
-@media (min-width: 1280px) {
-  .today-tower {
-    display: grid;
-    grid-template-columns: 340px minmax(0, 1fr) 320px;
-    grid-template-areas:
-      "alert  alert  alert"
-      "header header header"
-      "board  runway gates"
-      "board  radar  apron"
-      "board  gauges apron"
-      "radio  radio  radio"
-      "annex  annex  annex";
-    gap: 12px;
-    align-items: start;
-    max-width: 1280px;
-    margin: 0 auto;
-    padding: 0 16px 16px;
-  }
-  .today-tower > .sync-alert-banner { grid-area: alert; }
-  .today-tower .tower-header { grid-area: header; }
-  .today-tower .tower-board { grid-area: board; padding: 0; }
-  .today-tower .tower-runway { grid-area: runway; margin-top: 0; }
-  .today-tower .tower-radar { grid-area: radar; margin-top: 0; }
-  .today-tower .tower-gauges { grid-area: gauges; padding-top: 0; }
-  .today-tower .tower-gates { grid-area: gates; margin-top: 0; }
-  .today-tower .tower-apron { grid-area: apron; margin-top: 0; }
-  .today-tower .tower-radio { grid-area: radio; }
-  .tower-annex { grid-area: annex; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 0; }
-}
-/* 1280〜1439pxは中央列が狭い(約290〜450px)ため、半円ゲージ2連を縦積みにして潰れを防ぐ。 */
-@media (min-width: 1280px) and (max-width: 1439px) {
-  .today-tower .tower-gauges { grid-template-columns: 1fr; }
-}
-
-/* v210: TOWER T9。可視性停止・夜間色温度・モーション強度3段。 */
-/* 非表示タブでもCSS animationが走る実装があるため、visibilitychangeで明示停止する(設計D6)。 */
-.today-tower[data-paused="1"] * { animation-play-state: paused !important; }
-/* 夜間(21:00〜4:59)は彩度・輝度を落とした低色温度トークンへ上書きする。 */
-.today-tower[data-night="1"] {
-  --tower-text: #c2cdd8;
-  --tower-amber: #d9a648;
-  --tower-green: #47b97a;
-  --tower-cyan: #4bb0c0;
-  --tower-purple: #8f7bd0;
-}
-/* 控えめ: 常時回り続けるアンビエントアニメ(走査線・ビーコン・無線カーソル)だけ止める。イベント演出は残す。 */
-.today-tower[data-motion="calm"] .tower-radar-sweep,
-.today-tower[data-motion="calm"] .tower-beacon i,
-.today-tower[data-motion="calm"] .tower-radio-cursor { animation: none; }
-/* なし: 全アニメーションと演出トランジションを止める。数字・実データの更新は止めない。 */
-.today-tower[data-motion="off"] *,
-.today-tower[data-motion="off"] *::before,
-.today-tower[data-motion="off"] *::after { animation: none !important; }
-.today-tower[data-motion="off"] .tower-gauge-needle,
-.today-tower[data-motion="off"] #towerPlane,
-.today-tower[data-motion="off"] .tower-blip { transition: none; }
-/* offはanimationendが発火しないため接地フラッシュが残留する。フラッシュ自体を出さない(2系統レビューM1)。 */
-.today-tower[data-motion="off"] .tower-touchdown { display: none; }
-/* T8 M1の取りこぼし: lightテーマでpomodoro-infoの補足行がコントラスト3.68だった(レビューm指摘)。 */
-.today-tower .today-pomodoro-info > span { color: var(--tower-text); opacity: .75; }
-/* 1280px以上のannexは154px円+28px gap+情報列min-width 280pxがstage幅を超えうるため、情報列の縮小を許可する。 */
-@media (min-width: 1280px) {
-  .tower-annex .today-pomodoro-info { min-width: 0; }
-}
 
 .today-span-2 { grid-column: span 2; }
 .today-panel {
@@ -3564,21 +3422,6 @@ h3 {
 }
 .today-empty { color: var(--muted); font-size: 12px; }
 
-/* v193: GitHubメールボックス経由の再プラン受付状態。同期ドットと同じ計器表現を使う。 */
-.today-replan-body {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-}
-.today-replan-status {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--muted);
-  font-size: 12px;
-}
-.today-replan-status .sync-dot { margin-left: 0; flex: none; }
 /* v183: 今日ビューへポモ/カードデッキを統合。 */
 .today-pomodoro-stage {
   display: flex;
@@ -3603,106 +3446,77 @@ h3 {
 .today-pomodoro-info > span { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .today-pomodoro-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .today-pomodoro .interrupt-reason-picker { margin-top: 4px; }
-.today-deck-card {
-  position: relative;
-  display: flex;
-  min-height: 150px;
-  padding: 14px 16px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: var(--panel-soft);
-  flex-direction: column;
-}
-.today-deck-card::before,
-.today-deck-card::after {
-  position: absolute;
-  inset: 4px -5px -5px 4px;
-  z-index: -1;
-  border: 1px solid var(--line);
-  border-radius: inherit;
-  background: var(--panel);
-  content: "";
-}
-.today-deck-card::after { inset: 8px -9px -9px 8px; opacity: 0.55; }
-.today-deck-card > div {
-  display: flex;
-  align-items: center;
-  flex: 1;
-  color: var(--text);
-  font-size: 13px;
-  line-height: 1.85;
-  overflow-wrap: anywhere;
-}
-.today-deck-card > small { margin-top: 10px; color: var(--muted); font-size: 10px; }
-.today-kindle-card { border-left: 3px solid var(--yellow, var(--orange)); }
-.today-kindle-card > div::before { margin-right: 5px; color: var(--yellow, var(--orange)); content: "❝"; }
-.today-kindle-card > small { color: var(--yellow-text, var(--orange-text)); }
-.today-zero-card { border-left: 3px solid var(--purple); }
-.today-zero-card > small { color: var(--purple); }
-.today-deck-nav {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin-top: 12px;
-  flex-wrap: wrap;
-}
-.today-deck-nav > span { margin-left: auto; color: var(--muted); font-size: 10px; }
-.today-zero-theme {
-  padding: 10px 12px;
-  border-left: 3px solid var(--purple);
-  background: var(--panel-soft);
-  font-size: 13px;
-  line-height: 1.7;
-}
-.today-zero-text {
-  width: 100%;
-  min-height: 112px;
-  margin-top: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--purple);
-  border-radius: 4px;
-  outline: none;
-  background: var(--panel-soft);
-  color: var(--text);
-  font-family: inherit;
-  font-size: 16px;
-  line-height: 1.7;
-  resize: vertical;
-}
-.today-zero-text:focus { box-shadow: 0 0 10px var(--cockpit-go-glow, transparent); }
-.today-zero-writebar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  color: var(--muted);
-  font-size: 10px;
-}
-.today-zero-writebar time {
-  color: var(--purple);
-  font-size: 15px;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 1px;
-}
-.today-zero-writebar time.is-over { color: var(--orange); }
-.today-zero-writebar button:first-of-type { margin-left: auto; }
+
+.today-tower .today-pomodoro { margin-top: 12px; }
+.today-tower .today-panel { border-color: var(--tower-line); border-radius: 0; background: var(--tower-panel); box-shadow: none; }
+.today-tower .today-panel::before,
+.today-tower .today-panel::after { content: none; }
+.today-tower .today-panel-title { color: var(--tower-cyan); letter-spacing: .18em; }
+.today-tower .today-panel-title span { color: var(--tower-text); opacity: .6; }
+.today-tower .today-panel-title b { border-color: var(--tower-line); color: var(--tower-green); background: transparent; }
+.today-tower .pomo-time-overlay { color: var(--tower-text); }
+.today-tower .today-pomodoro-info > span { color: var(--tower-text); opacity: .75; }
+
 @media (max-width: 720px) {
   .today-span-2 { grid-column: span 1; }
   .today-pomodoro-stage { align-items: stretch; gap: 14px; flex-direction: column; }
   .today-pomodoro .pomo-circle-wrap { margin: 0 auto; }
 }
+
+/* v222: 残した4区画と共有CABIN TIMERをPC 3面卓へ配置する。 */
+/* 3面卓の適用はviewport 1280px以上。設計書の900pxはサイドバー無しサンプル準拠の値で、
+   実アプリはサイドバー216px+余白により900〜1279pxでは中央列が340/320の固定レールに潰される(1024px実測18px)。 */
+@media (min-width: 1280px) {
+  .today-tower {
+    display: grid;
+    grid-template-columns: 340px minmax(0, 1fr) 320px;
+    grid-template-areas:
+      "alert  alert  alert"
+      "header header header"
+      "board  runway gates"
+      "board  timer  gates";
+    gap: 12px;
+    align-items: start;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 16px 16px;
+  }
+  .today-tower > .sync-alert-banner { grid-area: alert; }
+  .today-tower .tower-header { grid-area: header; }
+  .today-tower .tower-board { grid-area: board; padding: 0; }
+  .today-tower .tower-runway { grid-area: runway; margin-top: 0; }
+  .today-tower .today-pomodoro { grid-area: timer; margin-top: 0; }
+  .today-tower .tower-gates { grid-area: gates; margin-top: 0; }
+}
+
+/* v210: TOWER T9。可視性停止・夜間色温度・モーション強度3段。 */
+/* 非表示タブでもCSS animationが走る実装があるため、visibilitychangeで明示停止する(設計D6)。 */
+.today-tower[data-paused="1"] * { animation-play-state: paused !important; }
+/* 夜間(21:00〜4:59)は彩度・輝度を落とした低色温度トークンへ上書きする。 */
+.today-tower[data-night="1"] {
+  --tower-text: #c2cdd8;
+  --tower-amber: #d9a648;
+  --tower-green: #47b97a;
+  --tower-cyan: #4bb0c0;
+  --tower-purple: #8f7bd0;
+}
+/* 控えめ: 常時動くビーコンだけ止める。イベント演出は残す。 */
+.today-tower[data-motion="calm"] .tower-beacon i { animation: none; }
+/* なし: 全アニメーションと演出トランジションを止める。数字・実データの更新は止めない。 */
+.today-tower[data-motion="off"] *,
+.today-tower[data-motion="off"] *::before,
+.today-tower[data-motion="off"] *::after { animation: none !important; }
+.today-tower[data-motion="off"] #towerPlane { transition: none; }
+/* offはanimationendが発火しないため接地フラッシュが残留する。フラッシュ自体を出さない(2系統レビューM1)。 */
+.today-tower[data-motion="off"] .tower-touchdown { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .tower-beacon i { animation: none; }
   .tower-status.is-flip { animation: none; }
   .tower-gate.is-docking,
   .tower-gates.is-full { animation: none; box-shadow: none; }
-  .tower-radar-sweep { animation: none; }
-  .tower-radio-cursor { animation: none; }
   /* 接地フラッシュはanimationendで自己削除するため、animation停止だと発光リングが残留する。フラッシュ自体を出さない(2系統レビューM1)。 */
   .tower-touchdown { display: none; }
-  .tower-gauge-needle { transition: none; }
   #towerPlane { transition: none; }
-  .tower-blip { transition: none; }
 }
 
 /* v185 B4 P11a: cockpitテーマ時だけ、全ビューの共通chromeを管制室調へ統一する。 */
@@ -3926,9 +3740,6 @@ h3 {
   box-shadow: 0 0 8px rgba(63, 208, 255, 0.18);
 }
 
-:root[data-theme="cockpit"] .today-kindle-card { border-left-color: var(--book); }
-:root[data-theme="cockpit"] .today-kindle-card > div::before,
-:root[data-theme="cockpit"] .today-kindle-card > small { color: var(--book); }
 :root[data-theme="cockpit"] .home-ai-hub { border-color: rgba(180, 140, 255, 0.45); }
 :root[data-theme="cockpit"] .home-ai-hub::before { border-color: var(--purple); }
 
@@ -4102,18 +3913,3 @@ h3 {
     gap: 4px;
   }
 }
-
-/* v212: TOWER annexのlightテーマ残件。--muted/--purple/--orangeのまま残る箇所をtowerトークンへ固定する
-   (同系のtower上書きはstyles.css 4527付近=v209にもある)。
-   opacityはテキスト側だけに掛ける(.today-replan-statusの容器に掛けると内包.sync-dot(自身opacity .7)へ
-   複合して実効.455となり図形基準3:1を割る=Codexレビュー指摘)。 */
-.today-tower .today-replan-status,
-.today-tower .today-empty,
-.today-tower .today-deck-nav > span,
-.today-tower .today-zero-writebar { color: var(--tower-text); }
-.today-tower .today-empty,
-.today-tower .today-deck-nav > span,
-.today-tower .today-replan-status > span:not(.sync-dot),
-.today-tower .today-zero-writebar > span { opacity: .65; }
-.today-tower .today-zero-writebar time { color: var(--tower-purple); }
-.today-tower .today-zero-writebar time.is-over { color: var(--tower-amber); }

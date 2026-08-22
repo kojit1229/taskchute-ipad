@@ -223,439 +223,24 @@ function check(name, cond, extra = "") {
     check("lightテーマの body 背景が従来値 #f7f7fa = rgb(247, 247, 250) のまま",
       lightBg === "rgb(247, 247, 250)", lightBg);
 
-    // ============================================================
-    // ==== ここから B2(P5〜P7)追記セクション [15]〜[18] ====
-    // 設計の正: ../taskchute-notes/designs/v169-today-cockpit.md §4-6/7・§7のP5〜P7行。
-    // 現物調査: workbench/out/2026-07-29-today-cockpit-impl/b2-survey.md。
-    // DOM契約(実装側と共有済み):
-    //   .today-pomodoro / .today-kindle / .today-kindle-card / .today-zero /
-    //   ZERO-SEC textarea id=todayZeroText / KINDLE操作の data-action は "today-kindle-" プレフィクス
-    // 実装(別担当が並行作業中)より先に仕様から書いたため、上記契約に加えて以下を前提にする。
-    // 前提が実装と食い違った場合はテストを弱めるのではなく、前提の側を実装と突合して直すこと:
-    //   前提1: 今日ビューのポモ開始/停止は既存アクション実名 start-pomodoro / stop-pomodoro を
-    //          data-action で再利用する(§4-1「既存アクションの実名で再利用」)
-    //   前提2: 今日ビューの中断は stop-pomodoro 発火後、理由ピッカー
-    //          (既存 data-action="interrupt-reason" / data-reason)が今日ビュー内に表示される
-    //          (b2-survey.md §2の結論 = ピッカー表示分岐の関数化を今日ビューへ接続)
-    //   前提3: KINDLEの「現在のカード」= .today-kindle-card のうち可視の先頭要素
-    //          (全カードDOM保持型でも1枚描画型でも成立する読み方をする)
-    //   前提4: 45秒自動送りは §4 の単一1秒tickerから Date.now(=page.clockの固定時刻)基準で
-    //          45秒経過を判定して駆動する。raw setInterval(45000) 実装は §4「interval idを
-    //          1本だけ保持」に反し、page.clock.setFixedTime で検証もできないため契約違反とする
-    //   前提5: ZERO-SEC の「このテーマで書く」「保存」は .today-zero 内の button 文言
-    //   前提6: ZERO-SEC 書き込み中の経過タイマー表示は .today-zero 内にあり毎秒tickerで更新される
-    // ============================================================
-
-    // B2用seed: 既存 seed() と同じ流儀に pomodoro / zeroThinking の直接seedを足した拡張。
-    // (既存 seed() は変更禁止のため別名で追加。pomodoro未指定時は必ず非実行中へリセットし、
-    //  直前セクションのセッションが持ち越されないようにする)
-    async function seedB2({ blocks = [], view = "today", settings = {}, pomodoro = null, zeroThinking = null } = {}) {
-      await page.evaluate(({ KEY, blocks, view, settings, pomodoro, zeroThinking, TODAY }) => {
-        const s = JSON.parse(localStorage.getItem(KEY));
-        s.blocks = blocks;
-        s.currentView = view;
-        s.selectedDate = TODAY;
-        s.sleep = s.sleep || { logs: {} };
-        s.sleep.logs = {};
-        s.condition = s.condition || { logs: {} };
-        s.condition.logs = {};
-        s.pomodoro = pomodoro
-          ? { ...s.pomodoro, ...pomodoro }
-          : { ...s.pomodoro, running: false, blockId: "", startedAt: "", endsAt: "", mode: "focus" };
-        if (zeroThinking) s.zeroThinking = { themes: [], entries: [], groups: [], suggestedThemes: [], ...zeroThinking };
-        Object.assign(s.settings, settings);
-        localStorage.setItem(KEY, JSON.stringify(s));
-      }, { KEY, blocks, view, settings, pomodoro, zeroThinking, TODAY });
-      await page.reload();
-      await page.waitForSelector('[data-action="nav"]', { state: "attached" });
-    }
-
-    // KINDLE用フィクスチャ+ルート(v74.test.js と同じ Contents API 偽装。
-    // highlights.json 以外は route.fallback() で既定の404ブロッカーへ委ねる)
-    const kindleFixtures = { status: 200 };
-    const KINDLE_HIGHLIGHTS_FIXTURE = {
-      generatedAt: "2026-07-01T00:00:00Z",
-      books: [
-        { id: "kb1", title: "テスト書籍A_B2", author: "著者A", count: 3, highlights: [
-          { ref: "a1", text: "KINDLE-HL-1 学びの一節その1", location: 10 },
-          { ref: "a2", text: "KINDLE-HL-2 学びの一節その2", location: 20 },
-          { ref: "a3", text: "KINDLE-HL-3 学びの一節その3", location: 30 }
-        ] },
-        { id: "kb2", title: "テスト書籍B_B2", author: "著者B", count: 2, highlights: [
-          { ref: "b1", text: "KINDLE-HL-4 学びの一節その4", location: 40 },
-          { ref: "b2", text: "KINDLE-HL-5 学びの一節その5", location: 50 }
-        ] }
-      ]
-    };
-    await page.route((url) => url.hostname === "api.github.com", (route) => {
-      const p = decodeURIComponent(new URL(route.request().url()).pathname);
-      if (p.endsWith("/contents/taskchute/reading/highlights.json")) {
-        if (kindleFixtures.status !== 200) return route.fulfill({ status: kindleFixtures.status, body: "not found" });
-        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(KINDLE_HIGHLIGHTS_FIXTURE) });
-      }
-      return route.fallback();
-    });
-
-    // 前提3の読み方: 現在カード = 可視の先頭 .today-kindle-card(無ければDOM上の先頭)
-    async function kindleCardText() {
-      return page.evaluate(() => {
-        const cards = [...document.querySelectorAll(".today-kindle-card")];
-        const visible = cards.filter((c) => c.offsetParent !== null &&
-          getComputedStyle(c).visibility !== "hidden" && getComputedStyle(c).display !== "none");
-        return (visible[0] || cards[0])?.textContent ?? null;
-      });
-    }
-    async function waitKindleCardChange(prev) {
-      await page.waitForFunction((p) => {
-        const cards = [...document.querySelectorAll(".today-kindle-card")];
-        const visible = cards.filter((c) => c.offsetParent !== null &&
-          getComputedStyle(c).visibility !== "hidden" && getComputedStyle(c).display !== "none");
-        const t = (visible[0] || cards[0])?.textContent ?? null;
-        return t !== null && t !== p;
-      }, prev);
-    }
-    const kindleNextBtn = () => page.locator('.today-kindle [data-action^="today-kindle-"]', { hasText: "▶" }).first();
-
-    // ============================================================
-    // [15] P5: 今日ビューからポモ開始 → state.pomodoro が更新される(双方向同期・行き)
-    // ============================================================
-    console.log("[15] P5: 今日ビューのポモ開始(既存アクション実名 start-pomodoro)で state.pomodoro が実行中へ更新される");
-    await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    await seedB2({
-      view: "today",
-      blocks: [
-        block("pomo-run", { title: "POMO-RUN-実行中", actualStartAt: at("11:00"), plannedStartAt: at("11:00"), plannedEndAt: at("12:30"), estimateMin: 90 })
-      ]
-    });
-    await page.waitForSelector(".today-pomodoro", { state: "attached" });
-    check("今日ビューに .today-pomodoro パネルが描画される(DOM契約)", await page.locator(".today-pomodoro").count() === 1);
-    check("パネル内にポモ開始ボタン(data-action='start-pomodoro')がある(前提1)",
-      await page.locator('.today-pomodoro [data-action="start-pomodoro"]').count() >= 1);
-    await page.locator('.today-pomodoro [data-action="start-pomodoro"]').first().click();
-    await page.waitForFunction((KEY) => {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      return s.pomodoro.running === true && s.pomodoro.blockId === "pomo-run";
-    }, KEY);
-    const pomoState = (await stateNow()).pomodoro;
-    check("state.pomodoro.running=true / blockId=実行中Block(既存 startPomodoro と同結果)",
-      pomoState.running === true && pomoState.blockId === "pomo-run");
-    check("state.pomodoro.mode が 'focus' で開始される", pomoState.mode === "focus", pomoState.mode);
-    check("startedAt が固定現在時刻 12:00:00 になる", (pomoState.startedAt || "").includes("12:00:00"), pomoState.startedAt);
-    check("endsAt が実時間25分後 12:25:00 になる(実タイマー25分の既存仕様を変えていない)",
-      (pomoState.endsAt || "").includes("12:25:00"), pomoState.endsAt);
-    // v183レビューH1: 実行中Blockからの開始で実績開始時刻を上書きしない(v13「既存値維持」契約)
-    const runBlockAfterStart = (await stateNow()).blocks.find((b) => b.id === "pomo-run");
-    check("実行中Blockの actualStartAt(11:00)が上書きされない(実績保持・レビューH1)",
-      (runBlockAfterStart.actualStartAt || "").includes("11:00"), runBlockAfterStart.actualStartAt);
-
-    // ============================================================
-    // [15c] P5: 今日ビューの中断(stop-pomodoro)→ 理由ピッカー → 理由選択で記録+リセット
-    // ============================================================
-    console.log("[15c] P5: 今日ビューの中断で理由ピッカーが出て、理由選択で中断記録+pomodoroリセットになる");
-    await page.locator('#sidebar .nav-button[data-action="nav"][data-view="today"]').click();
-    await waitView("today");
-    check("実行中は .today-pomodoro に停止導線(data-action='stop-pomodoro')がある(前提1)",
-      await page.locator('.today-pomodoro [data-action="stop-pomodoro"]').count() >= 1);
-    await page.locator('.today-pomodoro [data-action="stop-pomodoro"]').first().click();
-    await page.waitForSelector('[data-action="interrupt-reason"]', { state: "attached" });
-    check("blockId連結中の停止で既存の中断理由ピッカーが出る(前提2・§4-6)", true);
-    await page.locator('[data-action="interrupt-reason"][data-reason="割込み"]').click();
-    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).pomodoro.running === false, KEY);
-    const stAfterStop = await stateNow();
-    const stoppedBlock = stAfterStop.blocks.find((b) => b.id === "pomo-run");
-    check("理由選択後 state.pomodoro.running=false(既存 stopPomodoro と同結果)", stAfterStop.pomodoro.running === false);
-    check("blockに中断理由 '割込み' が記録される(既存 recordBlockInterruption 経由)",
-      Array.isArray(stoppedBlock.interruptions) && stoppedBlock.interruptions.some((i) => i.reason === "割込み"),
-      JSON.stringify(stoppedBlock.interruptions));
-    check("中断で block.actualStartAt がクリアされる(既存 stopPomodoro と同結果)",
-      !stoppedBlock.actualStartAt, stoppedBlock.actualStartAt);
-
-    // ============================================================
-    // [15d] P5: state側で実行中のセッションが今日ビューにも実行中として見える(双方向同期・帰り)
-    // ============================================================
-    console.log("[15d] P5: stateが実行中なら今日ビューの .today-pomodoro が実行中表示になる(逆方向の同期)");
-    await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    await seedB2({
-      view: "today",
-      blocks: [
-        block("pomo-run2", { title: "POMO-RUN2", actualStartAt: at("11:50"), plannedStartAt: at("11:50"), plannedEndAt: at("12:20") })
-      ],
-      pomodoro: { running: true, blockId: "pomo-run2", startedAt: at("11:50"), endsAt: at("12:15"), mode: "focus" }
-    });
-    await page.waitForSelector(".today-pomodoro", { state: "attached" });
-    check("state側が実行中なら .today-pomodoro に停止導線が出る(実行中表示への同期)",
-      await page.locator('.today-pomodoro [data-action="stop-pomodoro"]').count() >= 1);
-    check("実行中表示では開始ボタンが出ない(開始/停止の状態が排他表示)",
-      await page.locator('.today-pomodoro [data-action="start-pomodoro"]').count() === 0);
-
-    // ============================================================
-    // [15e] P5: focusTimerAuto=OFF でも今日ビューのポモ開始ボタンでセッションが始まる(レビューM2)
-    // ============================================================
-    console.log("[15e] P5: focusTimerAuto=OFF でも今日ビューの開始でポモが始まり、未着手Blockには着手時刻が付く");
-    await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    await seedB2({
-      view: "today",
-      blocks: [
-        block("pomo-idle", { title: "POMO-IDLE-未着手", plannedStartAt: at("12:30"), plannedEndAt: at("13:00") })
-      ],
-      settings: { focusTimerAuto: false }
-    });
-    await page.waitForSelector('.today-pomodoro [data-action="start-pomodoro"]', { state: "attached" });
-    await page.locator('.today-pomodoro [data-action="start-pomodoro"]').first().click();
-    await page.waitForFunction((KEY) => {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      return s.pomodoro.running === true && s.pomodoro.blockId === "pomo-idle";
-    }, KEY);
-    const idleAfter = await stateNow();
-    check("focusTimerAuto=OFF でも running=true(手動開始は設定に依存しない)", idleAfter.pomodoro.running === true);
-    check("未着手Blockには actualStartAt=12:00 が記録される",
-      ((idleAfter.blocks.find((b) => b.id === "pomo-idle") || {}).actualStartAt || "").includes("12:00"));
-
-    // ============================================================
-    // [16] P6: highlights.json あり → .today-kindle にカードデッキが出る
-    // ============================================================
-    console.log("[16] P6: highlights.json(fetchモック)をseed → .today-kindle にカードが表示される");
-    kindleFixtures.status = 200;
-    await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    await seedB2({ view: "today" });
-    await page.waitForSelector(".today-kindle", { state: "attached" });
-    check(".today-kindle パネルが描画される(DOM契約)", await page.locator(".today-kindle").count() === 1);
-    check(".today-kindle-card が1枚以上描画される(DOM契約)", await page.locator(".today-kindle-card").count() >= 1);
-    const firstCard = await kindleCardText();
-    check("現在カードにseedしたハイライト本文(KINDLE-HL-*)が表示される", /KINDLE-HL-\d/.test(firstCard || ""), firstCard);
-    check("KINDLE操作ボタンの data-action が 'today-kindle-' プレフィクス(DOM契約)",
-      await page.locator('.today-kindle [data-action^="today-kindle-"]').count() >= 1);
-
-    // ============================================================
-    // [16b] P6: highlights.json が404 → .today-kindle 自体が存在しない(フェイルソフト非表示)
-    // ============================================================
-    console.log("[16b] P6: highlights未取得(404)では .today-kindle が存在せず、他パネルは通常描画される");
-    kindleFixtures.status = 404;
-    await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    const respHighlights404 = page.waitForResponse((r) => r.url().includes("reading/highlights.json"));
-    await seedB2({ view: "today" });
-    await respHighlights404;
-    // 404応答後に最低1tick経過してから不在を断定する(固定waitではなく時計表示の前進で待つ)
-    await page.clock.setFixedTime(fixedTime(12, 1, 0));
-    await page.waitForFunction(() => (document.getElementById("towerClock")?.textContent || "").includes("12:01"));
-    check("highlights未取得(404)では .today-kindle が存在しない(§4-6: 未取得/空でパネル非表示)",
-      await page.locator(".today-kindle").count() === 0);
-    check("404でもTOWER本体は通常描画される(フェイルソフト)",
-      await page.locator(".today-tower").count() === 1);
-    kindleFixtures.status = 200;
-
-    // ============================================================
-    // [16c] P6: 同一dateISOで2回描画してもカードの並び順が同じ(決定論シャッフル)+手動めくり
-    // ============================================================
-    console.log("[16c] P6: 同一dateISOの再描画で並び順が一致する(決定論)。あわせて▶手動めくりの動作を確認");
-    await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    await seedB2({ view: "today" });
-    await page.waitForSelector(".today-kindle-card", { state: "attached" });
-    async function readDeckSequence(steps) {
-      const seq = [await kindleCardText()];
-      for (let i = 1; i < steps; i++) {
-        const prev = seq[seq.length - 1];
-        await kindleNextBtn().click();
-        await waitKindleCardChange(prev);
-        seq.push(await kindleCardText());
-      }
-      // カード本文からハイライト識別子だけ抜き出して比較する(装飾差分の影響を受けない)
-      return seq.map((t) => (t || "").match(/KINDLE-HL-\d+/)?.[0] ?? t);
-    }
-    const deckSeq1 = await readDeckSequence(3);
-    check("▶(めくる)でカードが順に切り替わる(手動送り)", new Set(deckSeq1).size === 3, JSON.stringify(deckSeq1));
-    // 同じ固定時刻・同じdateISOのまま再描画(reload)して同じ並びになることを確認する
-    await seedB2({ view: "today" });
-    await page.waitForSelector(".today-kindle-card", { state: "attached" });
-    const deckSeq2 = await readDeckSequence(3);
-    check("同一dateISOの2回目の描画で並び順が一致する(決定論シャッフル・§7 P6完了条件)",
-      JSON.stringify(deckSeq1) === JSON.stringify(deckSeq2),
-      `1回目=${JSON.stringify(deckSeq1)} 2回目=${JSON.stringify(deckSeq2)}`);
-
-    // ============================================================
-    // [17] P7: pending の提案テーマが最優先で出る
-    // ============================================================
-    console.log("[17] P7: pendingの提案テーマが通常テーマより優先して .today-zero に出る(§4-7の優先順)");
-    const ZT_SEED = {
-      themes: [{ id: "zt-theme-normal", text: "ZT-NORMAL-通常テーマ", fav: false, groupId: null, createdAt: at("08:00") }],
-      entries: [],
-      groups: [],
-      suggestedThemes: [{ id: "zt-sugg-1", text: "ZT-SUGGEST-提案テーマ", status: "pending", createdAt: at("09:00") }]
-    };
-    await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    await seedB2({ view: "today", zeroThinking: ZT_SEED });
-    await page.waitForSelector(".today-zero", { state: "attached" });
-    const zeroText0 = await panelText(".today-zero");
-    const idxSuggest = (zeroText0 || "").indexOf("ZT-SUGGEST-提案テーマ");
-    const idxNormal = (zeroText0 || "").indexOf("ZT-NORMAL-通常テーマ");
-    check("pending提案テーマが .today-zero に表示される", idxSuggest >= 0, zeroText0);
-    // 1枚描画型(通常テーマはDOM未出現=-1)でも全件描画型(提案が先頭)でも成立する判定
-    check("pending提案が通常テーマより先(最優先)に出る",
-      idxSuggest >= 0 && (idxNormal === -1 || idxSuggest < idxNormal),
-      `idxSuggest=${idxSuggest} idxNormal=${idxNormal}`);
-
-    // ============================================================
-    // [17b] P7: 「このテーマで書く」→ #todayZeroText が表示され入力できる
-    // ============================================================
-    console.log("[17b] P7: 「このテーマで書く」でインラインtextarea #todayZeroText が出て入力できる");
-    await page.locator(".today-zero button", { hasText: "このテーマで書く" }).first().click();
-    await page.waitForSelector("#todayZeroText", { state: "visible" });
-    check("インラインtextarea #todayZeroText が表示される(DOM契約)", await page.locator("#todayZeroText").count() === 1);
-    await page.locator("#todayZeroText").click();
-    await page.keyboard.type("ZERO-B2-今日ビューから書いた本文");
-    check("textareaへ入力できる", (await page.locator("#todayZeroText").inputValue()) === "ZERO-B2-今日ビューから書いた本文");
-
-    // ============================================================
-    // [17c] P7: textarea入力中の毎秒tick再描画で入力が消えない(既存保護機構への相乗り)
-    // ============================================================
-    console.log("[17c] P7: 入力中に固定時刻を進めてtick更新が起きても、入力値とフォーカスが消えない(§4・C5)");
-    const zeroPanelBefore = await panelText(".today-zero");
-    await page.clock.setFixedTime(fixedTime(12, 1, 30));
-    // 前提6: 書き込み中の経過タイマー表示がtickで変わるのを「更新が起きた」正の条件として待つ
-    // (textareaの入力値は .value であり textContent に混ざらないため、この変化はタイマー等の表示更新)
-    await page.waitForFunction((prev) => {
-      const el = document.querySelector(".today-zero");
-      return el && el.textContent !== prev;
-    }, zeroPanelBefore);
-    check("入力中もtickerがパネル表示(経過タイマー)を更新し続ける(前提6)", true);
-    check("tick更新後も入力値が消えない(isFocusInEditableElement保護への相乗り)",
-      (await page.locator("#todayZeroText").inputValue()) === "ZERO-B2-今日ビューから書いた本文");
-    check("tick更新後もフォーカスがtextareaに残る(再描画で吹き飛ばされない)",
-      await page.evaluate(() => document.activeElement?.id === "todayZeroText"));
-
-    // ============================================================
-    // [17d] P7: 保存で entries に durationSec 付きで追記され、提案は既存採用アクション経由で adopted
-    // ============================================================
-    console.log("[17d] P7: 保存で zeroThinking.entries が増え(durationSec付き)、提案テーマは adopted に遷移する");
-    await page.locator(".today-zero button", { hasText: "保存" }).first().click();
-    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).zeroThinking.entries.length === 1, KEY);
-    const ztAfterSave = (await stateNow()).zeroThinking;
-    const ztEntry = ztAfterSave.entries[0];
-    check("entry.body に入力本文が入る", (ztEntry.body || "").includes("ZERO-B2-今日ビューから書いた本文"), JSON.stringify(ztEntry));
-    check("entry.theme が書いたテーマ(提案テーマ)のテキストになる", ztEntry.theme === "ZT-SUGGEST-提案テーマ", ztEntry.theme);
-    check("entry.date が今日になる", ztEntry.date === TODAY, ztEntry.date);
-    check("entry.durationSec に書き始め→保存の実測秒(固定時刻差=約90秒)が記録される(§7 P7完了条件)",
-      Number.isFinite(ztEntry.durationSec) && ztEntry.durationSec >= 60 && ztEntry.durationSec <= 120, String(ztEntry.durationSec));
-    check("pending提案が既存採用アクション経由で status='adopted' に遷移している(D7・§4-7)",
-      ztAfterSave.suggestedThemes.find((s) => s.id === "zt-sugg-1")?.status === "adopted",
-      JSON.stringify(ztAfterSave.suggestedThemes));
-
-    // ============================================================
-    // [17e] P7: 保存したentryが0秒思考ビューにも反映される
-    // ============================================================
-    console.log("[17e] P7: 0秒思考ビューの「今日 n 本」カウントに保存分が反映される");
-    await page.locator('#sidebar .nav-button[data-action="nav"][data-view="zero"]').click();
-    await waitView("zero");
-    const dayCountText = await page.locator(".zt-day-count").textContent();
-    check("0秒思考ビューの「今日 1 本」カウントに保存分が反映される(§7 P7: 0秒思考ビューに出る)",
-      /今日\s*1\s*本/.test((dayCountText || "").replace(/\s+/g, " ")), dayCountText);
-
-    // ============================================================
-    // [17f] P7: 書きかけ本文が、他パネル操作による全再描画(render())でも消えない(レビューM3/M4)
-    //   毎秒tickの差分更新([17c])ではなく、実際に main.innerHTML を丸ごと差し替える
-    //   経路(ポモ開始の saveAndRender)を発火させて下書きバッファの実効性を検証する
-    // ============================================================
-    console.log("[17f] P7: 入力中に他パネル操作(ポモ開始=全再描画)が起きても下書きが消えない");
-    await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    await seedB2({
-      view: "today",
-      blocks: [
-        block("draft-pomo", { title: "DRAFT-POMO", plannedStartAt: at("12:30"), plannedEndAt: at("13:00") })
-      ],
-      zeroThinking: { themes: [{ id: "th-draft", text: "下書き保持テーマ", fav: false, groupId: null, createdAt: at("08:00") }], entries: [], groups: [], suggestedThemes: [] }
-    });
-    await page.waitForSelector('.today-zero [data-action="today-zero-write"]', { state: "attached" });
-    await page.locator('.today-zero [data-action="today-zero-write"]').first().click();
-    await page.waitForSelector("#todayZeroText", { state: "attached" });
-    await page.locator("#todayZeroText").fill("消えてはいけない下書き");
-    await page.locator('.today-pomodoro [data-action="start-pomodoro"]').first().click();
-    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).pomodoro.running === true, KEY);
-    await page.waitForSelector("#todayZeroText", { state: "attached" });
-    check("全再描画後も textarea に下書き本文が残っている(レビューM3の実効検証)",
-      (await page.locator("#todayZeroText").inputValue()) === "消えてはいけない下書き",
-      await page.locator("#todayZeroText").inputValue());
-
-    // ============================================================
-    // [18] P6: 45秒自動送り — 45秒経過で次カードへ送られ、ビュー離脱でtimerが停止する
-    // ============================================================
-    console.log("[18] P6: 45秒自動送りが固定時刻+46秒で発火し、ビュー離脱で停止する(おとり方式=既存[7]参照)");
-    await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    await seedB2({ view: "today" });
-    await page.waitForSelector(".today-kindle-card", { state: "attached" });
-    const autoCard0 = await kindleCardText();
-    // 前提4: 自動送りは1秒tickerが Date.now(=固定時刻)基準で45秒経過を判定する設計。
-    // 固定時刻を+46秒進めると、実時間1〜2秒内の次tickで自動送りが発火する(固定waitなしで待てる)。
-    await page.clock.setFixedTime(fixedTime(12, 0, 46));
-    await waitKindleCardChange(autoCard0);
-    check("45秒経過(固定時刻+46秒)で自動的に次のカードへ送られる(§4-6: 45秒自動送り)",
-      (await kindleCardText()) !== autoCard0);
-    // ビュー離脱 → おとり注入 → さらに45秒相当前進しても、おとりが書き換えられない=timer停止
-    await page.locator('#sidebar .nav-button[data-action="nav"][data-view="tasks"]').click();
-    await waitView("tasks");
-    check("ビュー離脱で .today-kindle がDOMから消える", await page.locator(".today-kindle").count() === 0);
-    // 離脱直後のtickが自分でclearIntervalする猶予として1周期分待つ
-    // (固定wait例外: ticker周期1秒そのものが仕様(§4)。既存[7]と同根拠)
-    await page.waitForTimeout(1300);
-    await page.evaluate(() => {
-      const decoy = document.createElement("section");
-      decoy.className = "today-kindle";
-      decoy.id = "kindleDecoyRoot";
-      decoy.innerHTML = '<div class="today-kindle-card">DECOY-KINDLE-CARD</div>';
-      document.getElementById("main").appendChild(decoy);
-    });
-    await page.clock.setFixedTime(fixedTime(12, 1, 35));
-    await page.waitForTimeout(2300);  // 固定wait例外([7]と同根拠): tickerが生きていれば2周期以内におとりへ触るはずの負検証
-    check("離脱後は自動送りtimerが停止している(おとりカードが45秒相当の前進+2周期でも書き換えられない)",
-      (await page.evaluate(() => document.querySelector("#kindleDecoyRoot .today-kindle-card")?.textContent)) === "DECOY-KINDLE-CARD");
-    await page.evaluate(() => document.getElementById("kindleDecoyRoot")?.remove());
-
-    // ============================================================
-    // ==== ここから B4(P10 cockpitテーマ6点セット / P11 全画面適用)追記セクション [24]〜[29] ====
-    // 設計の正: ../taskchute-notes/designs/v169-today-cockpit.md §6(6点セット。1つでも漏れるとドリフト)・
-    //   §7のP10/P11行(完了条件。特にP10「cockpit選択が再読込・同期後も維持される(A2再発防止の明示テスト)」)・
-    //   §11(P11対応表。now-line色は「cockpit時のみ変数で上書き」)。
-    // 現物調査: workbench/out/2026-07-29-today-cockpit-impl/b4-css-inventory.md(6点セットの実位置)。
-    // 実装(別担当が並行作業中)より先に仕様から書いた。前提が実装と食い違った場合は
-    // テストを弱めるのではなく、前提の側を実装と突合して直すこと:
-    //   前提B4-1: cockpit適用も既存2テーマと同じ html[data-theme] 属性経路
-    //            (index.html同期スクリプト(§6-6)+ render()内applyTheme()(§6-2/3))で行う
-    //   前提B4-2: 設定画面のテーマ選択肢は既存 select[data-setting-field="theme"] に
-    //            option value="cockpit"(表示名に「コックピット」を含む)を追加する(§6-5。
-    //            変更適用は既存data-setting-field汎用changeハンドラ=selectOptionで発火)
-    //   前提B4-3: 未知テーマ値はnormalizeStateの許可リスト(§6-4)で既定 "dark" へフォールバック
-    //            (既存実装 app.js の normalizeState がテーマ不正値を "dark" に落とす現挙動を維持)
-    //   前提B4-4: cockpitの --bg は #050a14系(サンプル値。b4-css-inventory.md §3-2)。実装が
-    //            近傍色へ調整する余地を残すため、厳密hex一致ではなく
-    //            「既存light/darkのどちらの値でもない」+「暗い青系(全ch<64かつ青>赤)」で判定する
-    //   前提B4-5: timelineのnow-line色(src/features/timeline.js のインライン#FF3B30)は
-    //            cockpit時のみ #FF3B30 以外へ上書きされ、light/darkでは従来色 #FF3B30 のまま
-    //            (§11は「上書き検討(1行)」表記だが、本スイートは委譲指示に従い契約として検証する。
-    //             実装が意図的に上書きを見送る場合はこの前提を実装と突合して直す)
-    // ============================================================
-
-    // 色文字列 "rgb(r, g, b)" / "rgba(...)" のパース(B4専用小物)
     const parseRgbB4 = (s) => {
       const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(s || "");
       return m ? { r: +m[1], g: +m[2], b: +m[3] } : null;
     };
-    // 現在テーマでの var(--bg) の解決値を、probe要素のcomputed backgroundColorとして読む
-    // (bodyの背景がグラデーション等のshorthandでも --bg 自体の値を直接検証できる)
     async function resolvedBgVar() {
       return page.evaluate(() => {
         const probe = document.createElement("div");
         probe.style.background = "var(--bg)";
         document.body.appendChild(probe);
-        const c = getComputedStyle(probe).backgroundColor;
+        const color = getComputedStyle(probe).backgroundColor;
         probe.remove();
-        return c;
+        return color;
       });
     }
-    const LEGACY_DARK_BG = "rgb(17, 18, 22)";     // #111216
-    const LEGACY_LIGHT_BG = "rgb(247, 247, 250)"; // #f7f7fa
-    const NOW_LINE_LEGACY = "rgb(255, 59, 48)";   // #FF3B30(timeline.jsの従来ハードコード)
+    const LEGACY_DARK_BG = "rgb(17, 18, 22)";
+    const LEGACY_LIGHT_BG = "rgb(247, 247, 250)";
+    const NOW_LINE_LEGACY = "rgb(255, 59, 48)";
 
-    // ============================================================
-    // [24] P10 A2再発防止(最重要): theme="cockpit" がリロード・保存・再リロードを跨いで維持される
     // ============================================================
     console.log("[24] P10 A2再発防止: settings.theme='cockpit' をseed→リロードしてもテーマが維持される(§6-4許可リスト)");
     await page.clock.setFixedTime(fixedTime(12, 0, 0));
@@ -823,7 +408,7 @@ function check(name, cond, extra = "") {
     //            (30〜90日を線形補間するなら 50 + (45-30)×(50/60) = 62.5%)
     // ============================================================
 
-    // B5用seed: 既存seed()/seedB2()/seedB3()と同じ流儀に selectedDate を足した拡張
+    // B5用seed: 既存seed()/seedB3()と同じ流儀に selectedDate を足した拡張
     // (既存関数は変更禁止のため別名で追加。pomodoro/zeroThinkingは前セクションの持ち越し防止で毎回リセット)
     async function seedB5({ blocks = [], view = "tasks", settings = {}, selectedDate = TODAY, projects = null, tasks = null } = {}) {
       await page.evaluate(({ KEY, blocks, view, settings, selectedDate, projects, tasks }) => {
@@ -914,6 +499,16 @@ function check(name, cond, extra = "") {
     //   (プローブDOMの消滅で「延期→flush」が実際に起きたことを正の証拠として確認する)
     // ============================================================
     console.log("[30c] F1: 入力中にhydrate由来の再描画トリガが発火しても文字が残る(isFocusInEditableElement保護・前提B5-3)");
+    const KINDLE_HIGHLIGHTS_FIXTURE = {
+      generatedAt: "2026-07-01T00:00:00Z",
+      books: [{
+        id: "kb1",
+        title: "読書カード入力保持フィクスチャ",
+        author: "著者",
+        count: 1,
+        highlights: [{ ref: "a1", text: "入力保持テスト", location: 10 }]
+      }]
+    };
     const kindleHold = { active: false, held: [] };
     await page.route((url) => url.hostname === "api.github.com", (route) => {
       const p = decodeURIComponent(new URL(route.request().url()).pathname);
@@ -1621,25 +1216,6 @@ function check(name, cond, extra = "") {
     // v221: cockpit専用NOW FOCUS/NEXT QUEUE/FLIGHT PLAN検証は実装削除に合わせて撤去。
 
     // ============================================================
-    // [63] C2仕様4: ポモドーロパネルは実行中ポモがルーティンBlockに紐づく場合タスク名を出さない
-    // ============================================================
-    console.log("[63] C2仕様4: 実行中ポモがルーティンBlockに紐づく場合、タスク名を出さずタイマー自体は継続表示する");
-    await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    await seedB2({
-      view: "today",
-      blocks: [
-        block("c2-pomo-routine", { title: "C2-POMO-ROUTINE-秘密のルーティン名", category: "ルーティン", actualStartAt: at("11:50"), plannedStartAt: at("11:50"), plannedEndAt: at("12:20") })
-      ],
-      pomodoro: { running: true, blockId: "c2-pomo-routine", startedAt: at("11:50"), endsAt: at("12:15"), mode: "focus" }
-    });
-    await page.waitForSelector(".today-pomodoro", { state: "attached" });
-    const pomoRoutineText = await panelText(".today-pomodoro");
-    check("ルーティンBlockに紐づく実行中ポモは、タスク名(C2-POMO-ROUTINE-秘密のルーティン名)を表示しない",
-      !(pomoRoutineText || "").includes("C2-POMO-ROUTINE-秘密のルーティン名"), pomoRoutineText);
-    check("タイマー自体は継続表示される(停止導線 stop-pomodoro が引き続き出る)",
-      await page.locator('.today-pomodoro [data-action="stop-pomodoro"]').count() >= 1);
-
-    // v221: cockpit専用ROUTINE検証は撤去し、GATE検証はtower-coreへ集約。
 
     console.log("[73] ポモドーロのタイマー満了ではblock.actualEndAtを書かず、NOW LANDINGに残り続ける");
     await page.clock.setFixedTime(fixedTime(9, 0, 0));

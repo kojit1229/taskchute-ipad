@@ -233,13 +233,10 @@ configureGithubSync({
 configureToday({
   escapeHTML, todayISO, blocksForDate, minutesOf, timeFromDateTime,
   localDateTimeToMs, resolveEstimateMin,
-  clamp, isStaleBlock, render, renderDeferringForFocus,
+  clamp, isStaleBlock, renderDeferringForFocus,
   renderCircularProgress, remainingText, remainingTextNormal,
   renderPomodoroInterruptControls,
-  getCachedReadingHighlights: () => cachedReadingHighlights,
-  beginTodayZeroWrite, saveTodayZeroEntry, discardTodayZeroWrite, getTodayZeroWriteState,
-  homeSyncAlertBanner, renderReplanControlHTML, requestReplan,
-  saveState
+  homeSyncAlertBanner
 });
 // v168: src/features/wish.jsも同じ理由(循環import回避)で依存注入する。
 configureWish({
@@ -277,14 +274,16 @@ configureTimeline({
   makeBlock, getOtherTask, openBlockEditor, saveState, isStaleBlock,
   timelineRailEl: timelineRail, appRootEl: app
 });
-// v174: app.js分割・段階5-3(残ドメインのaction相乗り移行)。settings(11)+sync(8)+core/nav(1)の
+// v222: 設定へ残したAI再プランactionもapp.js側のレジストリで管理する。
+// v174: app.js分割・段階5-3(残ドメインのaction相乗り移行)。settings(12)+sync(8)+core/nav(1)の
 // 計20分岐を、click dispatcherのif連鎖からregisterActions経由のレジストリへ移行した
 // (prep-stage5-dispatcher.md §4の相乗り方式。この20件はまだsrc/features/へ抽出されていない
 // ため、ハンドラは既存のapp.js関数・module変数をそのまま参照する形で登録する。ロジック自体は
 // if連鎖からの機械的な移動のみで無改変)。
 registerActions({
   "nav": ({ target }) => setView(target.dataset.view),
-  // --- settings(11): サイドバー/WBS表示設定/カテゴリ・休憩メッセージ管理 ---
+  "today-replan": () => requestReplan(),
+  // --- settings(12): サイドバー/WBS表示設定/カテゴリ・休憩メッセージ管理・AI再プラン ---
   "toggle-show-suspended": () => {
     state.settings.showSuspended = !state.settings.showSuspended;
     saveAndRender();
@@ -671,16 +670,7 @@ registerActions({
   // --- ポモドーロ(16) ---
   "start-pomodoro": ({ target }) => {
     const blockId = target.dataset.blockId || "";
-    // v183レビュー反映: 今日コックピットの開始は startPomodoro 直行にする。
-    // setBlockTime経由は (a)実行中Blockの actualStartAt を無条件上書きし実績を壊す
-    // (b)focusTimerAuto=OFF だとポモが始まらない。startPomodoro は既存値維持(v13契約)
-    // かつ設定に依らず開始する。単体/タイムライン側は従来どおり宣言モーダル。
-    if (target.closest(".today-pomodoro")) {
-      forceResetPomodoroSession();
-      startPomodoro(blockId);
-    } else {
-      openDeclareModal(blockId, "pomodoro");
-    }
+    openDeclareModal(blockId, "pomodoro");
   },
   "stop-pomodoro": () => {
     if (state.pomodoro.blockId) {
@@ -4588,18 +4578,6 @@ function finishReplan(kind, message) {
   setReplanUi(kind, message);
 }
 
-function renderReplanControlHTML() {
-  const active = _replanUi.kind === "sending" || _replanUi.kind === "pending";
-  const dot = active ? "pending" : _replanUi.kind === "success" ? "ok" : "off";
-  return `<section class="today-panel today-replan today-span-2">
-    <h2 class="today-panel-title">REPLAN<span>残り時間を組み直す</span><b>AI</b></h2>
-    <div class="today-replan-body">
-      <button class="btn primary" data-action="today-replan" data-replan-button ${active ? "disabled" : ""}>残り時間で再プラン</button>
-      <div class="today-replan-status"><span class="sync-dot ${dot}"></span><span>${escapeHTML(_replanUi.message)}</span></div>
-    </div>
-  </section>`;
-}
-
 async function requestReplan() {
   if (!personalDataReady(state.settings.github)) {
     setReplanUi("error", "GitHubトークンを設定すると再プランを依頼できます");
@@ -6462,7 +6440,6 @@ function remainingTextNormal(remainingMs) {
   const sec = Math.max(0, Math.floor(remainingMs / 1000));
   return `${pad2(Math.floor(sec / 60))}:${pad2(sec % 60)}`;
 }
-
 
 // v169: renderMorningEnergyPicker/renderConditionMorningExtra/renderEveningConditionCard/
 // lastGymRecord/renderGymLogCard(+CONDITION_SLEEP_PRESETS/CONDITION_CAPACITY_OPTIONS/
@@ -9360,30 +9337,6 @@ function saveZtEntry(inputSelector = "#zt-write-input") {
   ztCurrent = null;
   ztWriteStartedAt = null;  // v104
   saveAndRender(cur.fav ? "保存しました(★は残ります) — 日報に追加" : "保存しました — 日報に追加");
-}
-
-// v183: 今日ビューのインライン0秒思考も、単体ビューと同じztCurrent/
-// ztWriteStartedAt/saveZtEntry経路を使う。入力要素だけ#todayZeroTextへ差し替え、
-// entryスキーマ・durationSec・非お気に入りテーマの消費規則は一切分岐させない。
-function beginTodayZeroWrite(id, isSuggestion) {
-  const themeId = isSuggestion ? ztSuggestionAdopt(id, { deferRender: true }) : id;
-  if (!themeId || !beginZtWrite(themeId)) return;
-  render();
-  setTimeout(() => document.querySelector("#todayZeroText")?.focus(), 60);
-}
-
-function saveTodayZeroEntry() {
-  saveZtEntry("#todayZeroText");
-}
-
-function discardTodayZeroWrite() {
-  discardZtWrite("#todayZeroText");
-}
-
-function getTodayZeroWriteState() {
-  return ztCurrent && ztWriteStartedAt != null
-    ? { ...ztCurrent, startedAtMs: ztWriteStartedAt }
-    : null;
 }
 
 // v102: 過去のentry(回答済み)を開いて追記・編集する。書く画面(ztCurrent)とは別の

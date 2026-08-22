@@ -15,7 +15,7 @@
       ],
       "assertionSignals": 34,
       "assertionHash": "f841e3459002f00f",
-      "sourceHash": "0488f50de182f6b4",
+      "sourceHash": "aaf81ba4a7b7995d",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -440,12 +440,12 @@
         "content-ai",
         "ui-responsive"
       ],
-      "assertionSignals": 178,
-      "assertionHash": "1abfdb09d96cb2f8",
-      "sourceHash": "8c75cafa12dde75c",
+      "assertionSignals": 135,
+      "assertionHash": "a4c6ed4b6032e1cc",
+      "sourceHash": "3c5c99d9373e7dbf",
       "waits": {
-        "fixedCount": 4,
-        "numericMilliseconds": 7200,
+        "fixedCount": 2,
+        "numericMilliseconds": 3600,
         "unresolvedCount": 0
       },
       "sideEffects": {
@@ -464,9 +464,9 @@
         "sync-storage",
         "ui-responsive"
       ],
-      "assertionSignals": 151,
-      "assertionHash": "ad3ef370d3b3c5d9",
-      "sourceHash": "97f7841fd836de93",
+      "assertionSignals": 95,
+      "assertionHash": "7f7583b93bbb8144",
+      "sourceHash": "6b0ae17b2e0286c7",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -476,7 +476,7 @@
         "browser": true,
         "server": true,
         "fileWrite": false,
-        "networkMock": true,
+        "networkMock": false,
         "clock": true
       }
     },

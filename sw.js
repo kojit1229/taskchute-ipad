@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v221";
+const CACHE_NAME = "taskchute-journal-pwa-v222";
+// v222: TOWERをNOW LANDING/ARRIVALS/DEPARTURES/GATEへ減量した。
 // v221: 今日タブのcockpitスキンとtodaySkin切替を廃止し、TOWERへ一本化した。
 // v219: routineタブUI・今日の庭・チェーン実行・過集中ゲート・保護系UIを削除した。
 // v218: 繰り返し実体化エンジンとroutineRateをsrc/core/recurrence.jsへ移設した(挙動不変)。
