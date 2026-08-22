@@ -161,6 +161,17 @@
         "v140",
         "xss-sanitizer"
       ]
+    },
+    "recurrence-engine": {
+      "paths": [
+        "^src/core/recurrence"
+      ],
+      "patterns": [
+        "maintainRecurrences|createRecurrenceRule|triggerAnchorPlacements|recurrenceMatchesDate|makeRecurrenceInstance|anchorCandidateOptions|routineRate"
+      ],
+      "suites": [
+        "recurrence-core"
+      ]
     }
   }
 }
