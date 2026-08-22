@@ -5,9 +5,8 @@
 // (b) 疲労選択→部位選択(ステップ2)へ遷移し、部位タップでstate.bodyScansに記録・モーダルが閉じる
 // (c) 「スキップして記録」ではpart=""で記録される
 // (d) 「記録せず閉じる」ではどのステップからでもbodyScansに何も追加されない
-// (e) 身体スキャンを閉じた後(保存/スキップ/discardいずれも)に過集中ゲートが判定される(順序契約)
-// (f) 日報生成: 当日分のbodyScansがあれば`### 身体スキャン`表が出る/0件の日は節ごと省略
-// (g) normalizeStateの後方互換: bodyScansフィールドが無い旧stateでも起動できる
+// (e) 日報生成: 当日分のbodyScansがあれば`### 身体スキャン`表が出る/0件の日は節ごと省略
+// (f) normalizeStateの後方互換: bodyScansフィールドが無い旧stateでも起動できる
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
@@ -39,24 +38,6 @@ function check(name, cond, extra = "") {
   const YEST = isoOffset(-1);
   const hhmm = (m) => `${pad2(Math.floor(m / 60))}:${pad2(m % 60)}`;
 
-  function makeRule({ id, title, time }) {
-    return {
-      id, title, category: "ルーティン", taskId: "", kind: "daily", startTime: time, endTime: "",
-      anchorDate: YEST, expectedCharge: "", expectedDischarge: "", source: "", exceptionDates: [],
-      protection: true, fallbackTitle: "", fallbackMinutes: null, anchor: "",
-      createdAt: `${YEST}T00:00`, updatedAt: `${YEST}T00:00`, deleted: false
-    };
-  }
-  function makeRoutineBlock({ id, ruleId, title, time }) {
-    return {
-      id, taskId: "", date: TODAY, title, category: "ルーティン",
-      plannedStartAt: `${TODAY}T${time}`, plannedEndAt: `${TODAY}T${time}`,
-      actualStartAt: "", actualEndAt: "", completed: false, charge: 0, discharge: 0,
-      expectedCharge: "", expectedDischarge: "", comment: "", recurrenceGroupId: ruleId,
-      pomodoroCount: 0, migratedTo: "", carryCount: 0, orderIndex: 0, isMIT: false, source: "",
-      createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false
-    };
-  }
   function makeBlock({ id, title, startMin }) {
     return {
       id, taskId: "", date: TODAY, title, category: "",
@@ -171,29 +152,6 @@ function check(name, cond, extra = "") {
     const s5 = await stateNow();
     check("疲労を選んでいてもdiscardならbodyScansに追加されない", (s5.bodyScans || []).length === 0, JSON.stringify(s5.bodyScans));
 
-    // ============================================================
-    // (e) 身体スキャンを閉じた後に過集中ゲートが判定される(順序契約)
-    // ============================================================
-    console.log("[6] 身体スキャンを記録して閉じた後、保護系ルーティン未実行があればゲートが開く");
-    const rule = makeRule({ id: "rule-1", title: "白湯を飲む", time: "06:30" });
-    const routineBlock = makeRoutineBlock({ id: "blk-routine", ruleId: "rule-1", title: "白湯を飲む", time: "06:30" });
-    await seed({
-      blocks: [routineBlock, makeBlock({ id: "blk-5", title: "対象5", startMin: 14 * 60 })],
-      recurrences: [rule], bodyScans: [], pomodoro: runningPomodoro("blk-5")
-    });
-    await completeActivePomodoro();
-    check("(準備)身体スキャンモーダルが開く", await page.locator(".modal-title", { hasText: "いまの疲労感は?" }).count() === 1);
-    await page.click('[data-action="body-scan-fatigue"][data-value="1"]');
-    await page.waitForTimeout(150);
-    await page.click('[data-action="body-scan-part"][data-part=""]');
-    await page.waitForTimeout(300);
-    check("身体スキャンを閉じた後に過集中ゲートモーダルが開く",
-      await page.locator(".modal-title", { hasText: "保護ルーティンが残っています" }).count() === 1);
-    await page.click('[data-action="hyperfocus-gate-later"]');
-    await page.waitForTimeout(200);
-
-    // ============================================================
-    // (f) 日報生成
     // ============================================================
     console.log("[7] 日報生成: 当日分のbodyScansがあれば`### 身体スキャン`表が出る");
     const scans = [

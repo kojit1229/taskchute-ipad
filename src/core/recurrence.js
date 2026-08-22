@@ -5,10 +5,9 @@
 // findActiveDuplicateRecurrenceRule / createRecurrenceRule / triggerAnchorPlacements /
 // maintainRecurrences / routineRate / anchorCandidateOptions(Block編集モーダルが使用)。
 // 内部でのみ使うヘルパー(非export): chainRunKey / findChainRun / ensureChainRun
-// (triggerAnchorPlacementsがチェーン側のアンカー配置に使う。同名の3関数はUI側
-// src/features/routine.js にも残る=連続ルーティンのチェーン進行UIが引き続き使うため。
-// 対象範囲(状態はstate.chainRuns)を共有するだけで、ロジックは元routine.jsから
-// そのまま複製している。詳細はnotes.md参照)。
+// (triggerAnchorPlacementsがチェーン側のアンカー配置に使う。v219でチェーン進行UIは
+// 削除されたが、挙動不変を優先して3関数とstate.chainRuns連携は現状のまま残す。
+// ロジックは元routine.jsからそのまま複製している。詳細はnotes.md参照)。
 //
 // 契約:
 //   1. src/core/ は src/state/store.js を import しない(純粋性の機械的な判定基準、
@@ -159,9 +158,8 @@ function createRecurrenceRule(block, kind) {
 
 // ---- 内部ヘルパー(非export): 連続ルーティン(チェーン)runの取得/作成 ----
 // triggerAnchorPlacementsがアンカー完了直後のチェーン開始目安(scheduledStartAt)を
-// 記録するためだけに使う。UI側(src/features/routine.js)にも同名3関数が残る
-// (チェーン進行UI=openChainRun/chainStepComplete/renderChainRunが使用)。
-// 対象はどちらもstate.chainRunsで、ロジックは元routine.jsの該当関数の逐語コピー
+// 記録するためだけに使う。v219でチェーン進行UIは削除されたが、この3関数と
+// state.chainRuns連携は挙動不変を優先して残す。ロジックは元routine.jsの該当関数の逐語コピー
 // (notes.md参照)。
 
 // 元routine.js:553-555、逐語コピー。state参照なし。
@@ -198,7 +196,7 @@ function ensureChainRun(chainId) {
 // ルーティン側(state.recurrences)は既存の繰り返し実体化(makeRecurrenceInstance)を再利用し、
 // 時刻だけ「アンカー完了時刻の1分後」に差し替える。チェーン側(state.routineChains)は
 // Blockという概念を持たないため、当日分のrunにscheduledStartAtを記録するだけに留める
-// (Routineタブのチェーンカードに開始目安として表示する。詳細はdecisions.md参照)。
+// (v219で表示UIは削除。既存データへの記録挙動は温存する。詳細はdecisions.md参照)。
 // (元routine.js:759-782、逐語コピー。stateアクセスをgetState()経由に変更)
 function triggerAnchorPlacements(anchorId, completedAtDateTime) {
   const state = getState();
@@ -274,9 +272,7 @@ function maintainRecurrences({ purge = false } = {}) {
 
 // アンカー候補(既存の繰り返しルール+他の連続ルーティン)。excludeIdで自分自身を除外する
 // (idはルール・チェーンで衝突しないUUIDのため、両方まとめて1つの除外引数でよい)。
-// v170実測: 連続ルーティン(チェーン)編集モーダル(src/features/routine.js buildChainModal、
-// UI側に残る)に加えて、buildBlockModal(Timeline Block編集モーダルのアンカー選択、
-// app.js残留)からも呼ばれる。
+// v219: buildBlockModal(Timeline Block編集モーダルのアンカー選択、app.js残留)から呼ばれる。
 // (元routine.js:1081-1089、逐語コピー。stateアクセスをgetState()経由に変更)
 function anchorCandidateOptions(excludeId) {
   const state = getState();

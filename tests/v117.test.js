@@ -1,4 +1,4 @@
-// v117 検証: 今日の宣言(A)+自己締切の自動前倒し(B)+過集中ブレーカーのゲート化(C)。
+// v117 検証: 今日の宣言(A)+自己締切の自動前倒し(B)。
 // K承認済み案件(2026-07-17)。
 //
 // (a) 今日の宣言カード: 表示・change時の保存・赤警告の出現(今日・未入力)/消灯(入力後)。
@@ -7,10 +7,6 @@
 //     未入力時は「(未入力)」)
 // (c) effectiveDueDate: 既定(selfDueOff false)でdueDateの2日前倒し・selfDueOff=trueで無効化・
 //     WBS行の期限切れ判定/締切ラベル併記(前倒しが効く時だけ「実 M/D」を併記)への反映
-// (d) 過集中ブレーカーのゲート: 保護系ルーティン未実行時、Block完了(toggle-block)直後に出る。
-//     保護系ルーティンが無い/全部実行済みなら出ない。「あとで」を押した直後は抑止フラグが立ち、
-//     同一セッション内では再表示されない(90分の実経過待ちはモックが難しいため、抑止フラグの
-//     単体確認に留める)
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
@@ -40,7 +36,6 @@ function check(name, cond, extra = "") {
   }
   const TODAY = isoOffset(0);
   const YEST = isoOffset(-1);
-  const hhmm = (m) => `${pad2(Math.floor(m / 60))}:${pad2(m % 60)}`;
 
   const testProject = () => ({
     id: "proj-1", kind: "normal", title: "テスト案件", category: "", status: "active", priority: "中",
@@ -54,34 +49,6 @@ function check(name, cond, extra = "") {
       realized: false, realizedDate: "", nextRoutineId: "", leverageType: "", leverageNote: "",
       aiWork: false, aiWorkBrief: "", progressNum: 0, progressDen: 10, doneCriteria: "", firstStep: "",
       criteriaRequest: false, createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false
-    };
-  }
-  function makeRule({ id, title, time, protection = true, fallbackTitle = "" }) {
-    return {
-      id, title, category: "ルーティン", taskId: "", kind: "daily", startTime: time, endTime: "",
-      anchorDate: YEST, expectedCharge: "", expectedDischarge: "", source: "", exceptionDates: [],
-      protection, fallbackTitle, fallbackMinutes: fallbackTitle ? 5 : null, anchor: "",
-      createdAt: `${YEST}T00:00`, updatedAt: `${YEST}T00:00`, deleted: false
-    };
-  }
-  function makeRoutineBlock({ id, ruleId, title, time, completed = false }) {
-    return {
-      id, taskId: "", date: TODAY, title, category: "ルーティン",
-      plannedStartAt: `${TODAY}T${time}`, plannedEndAt: `${TODAY}T${time}`,
-      actualStartAt: "", actualEndAt: "", completed, charge: 0, discharge: 0,
-      expectedCharge: "", expectedDischarge: "", comment: "", recurrenceGroupId: ruleId,
-      pomodoroCount: 0, migratedTo: "", carryCount: 0, orderIndex: 0, isMIT: false, source: "",
-      createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false
-    };
-  }
-  function makeBlock({ id, title, startMin, completed = false }) {
-    return {
-      id, taskId: "", date: TODAY, title, category: "",
-      plannedStartAt: `${TODAY}T${hhmm(startMin)}`, plannedEndAt: `${TODAY}T${hhmm(startMin + 30)}`,
-      actualStartAt: "", actualEndAt: "", completed, charge: 0, discharge: 0,
-      comment: "", recurrenceGroupId: "", pomodoroCount: 0, migratedTo: "", orderIndex: 0,
-      carryCount: 0, isMIT: false, source: "", createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`,
-      deleted: false
     };
   }
 
@@ -235,90 +202,6 @@ function check(name, cond, extra = "") {
     const tPressuredAfter = (s8.tasks || []).find((t) => t.id === "t-pressured");
     check("チェックを外すとselfDueOff=trueで保存される", tPressuredAfter && tPressuredAfter.selfDueOff === true, JSON.stringify(tPressuredAfter));
 
-    // ============================================================
-    // (d) 過集中ブレーカーのゲート
-    // ============================================================
-    console.log("[9] ゲート: 保護系ルーティン未実行がある状態でBlock完了すると軽量モーダルが出る");
-    const ruleProtected = makeRule({ id: "rule-protect", title: "運動", time: "06:00", protection: true });
-    const blkRoutine = makeRoutineBlock({ id: "blk-routine", ruleId: "rule-protect", title: "運動", time: "06:00", completed: false });
-    const blkOther = makeBlock({ id: "blk-other", title: "普通のBlock", startMin: 9 * 60, completed: false });
-    await seed({ blocks: [blkRoutine, blkOther], recurrences: [ruleProtected], view: "tasks" });
-    await page.click('[data-action="toggle-block"][data-id="blk-other"]');
-    await page.waitForTimeout(300);
-    check("保護系ルーティン未実行がある時、Block完了直後にゲートモーダルが出る",
-      await page.locator(".modal-title", { hasText: "保護ルーティンが残っています" }).count() === 1);
-    check("未実行の保護系ルーティン名が一覧に出る",
-      (await page.locator(".modal-body").innerText()).includes("運動"));
-    check("縮退版未設定のルーティンには「Block作成」ボタンが出る",
-      await page.locator('[data-action="hyperfocus-gate-make-block"][data-id="rule-protect"]').count() === 1);
-
-    console.log("[10] ゲート: 「Block作成」を押すとBlockが作られる(完了はさせない=偽装しない)");
-    await page.click('[data-action="hyperfocus-gate-make-block"][data-id="rule-protect"]');
-    await page.waitForTimeout(300);
-    const s10 = await stateNow();
-    const madeBlock = (s10.blocks || []).find((b) => !b.deleted && b.recurrenceGroupId === "rule-protect" && b.date === TODAY);
-    check("今日のルーティンBlockが新規作成される", !!madeBlock, JSON.stringify(madeBlock));
-    check("作成しただけでは完了扱いにしない(完了の偽装をしない)", madeBlock && madeBlock.completed === false, JSON.stringify(madeBlock));
-
-    console.log("[11] ゲート: 保護系ルーティンが全部実行済みなら出ない");
-    const blkRoutineDone = makeRoutineBlock({ id: "blk-routine2", ruleId: "rule-protect", title: "運動", time: "06:00", completed: true });
-    const blkOther2 = makeBlock({ id: "blk-other2", title: "普通のBlock2", startMin: 10 * 60, completed: false });
-    await seed({ blocks: [blkRoutineDone, blkOther2], recurrences: [ruleProtected], view: "tasks" });
-    await page.click('[data-action="toggle-block"][data-id="blk-other2"]');
-    await page.waitForTimeout(300);
-    check("保護系ルーティンが実行済みならゲートは出ない", await page.locator(".modal-title", { hasText: "保護ルーティンが残っています" }).count() === 0);
-
-    console.log("[12] ゲート: 縮退版が設定されたルーティンはワンタップボタンになる/「あとで」で閉じられ、直後は抑止される");
-    const ruleFallback = makeRule({ id: "rule-fb", title: "睡眠記録", time: "07:00", protection: true, fallbackTitle: "メモだけ残す" });
-    const blkFbRoutine = makeRoutineBlock({ id: "blk-fb-routine", ruleId: "rule-fb", title: "睡眠記録", time: "07:00", completed: false });
-    const blkFbOther = makeBlock({ id: "blk-fb-other", title: "普通のBlock3", startMin: 11 * 60, completed: false });
-    const blkFbOther2 = makeBlock({ id: "blk-fb-other2", title: "普通のBlock4", startMin: 12 * 60, completed: false });
-    await seed({ blocks: [blkFbRoutine, blkFbOther, blkFbOther2], recurrences: [ruleFallback], view: "tasks" });
-    await page.click('[data-action="toggle-block"][data-id="blk-fb-other"]');
-    await page.waitForTimeout(300);
-    check("縮退版が設定されたルーティンはワンタップ実行ボタンが出る",
-      await page.locator('[data-action="hyperfocus-gate-fallback"][data-id="rule-fb"]').count() === 1);
-    await page.click('[data-action="hyperfocus-gate-later"]');
-    await page.waitForTimeout(200);
-    check("「あとで」でモーダルが閉じる", await page.locator(".modal-title", { hasText: "保護ルーティンが残っています" }).count() === 0);
-    await page.click('[data-action="toggle-block"][data-id="blk-fb-other2"]');
-    await page.waitForTimeout(300);
-    check("表示直後(90分以内)の再度のBlock完了ではゲートが再表示されない(抑止フラグ)",
-      await page.locator(".modal-title", { hasText: "保護ルーティンが残っています" }).count() === 0);
-
-    console.log("[13] ゲート: ポモドーロ完了エンジンでも開く");
-    const ruleProtectedPomo = makeRule({ id: "rule-protect-pomo", title: "白湯を飲む", time: "06:30", protection: true });
-    const blkPomoRoutine = makeRoutineBlock({ id: "blk-pomo-routine", ruleId: "rule-protect-pomo", title: "白湯を飲む", time: "06:30", completed: false });
-    const blkPomoTarget = makeBlock({ id: "blk-pomo-target", title: "ポモドーロ対象Block", startMin: 9 * 60 + 50, completed: false });
-    await seed({
-      blocks: [blkPomoRoutine, blkPomoTarget], recurrences: [ruleProtectedPomo], view: "today",
-      pomodoro: { running: true, blockId: "blk-pomo-target", startedAt: `${TODAY}T09:50:00`, endsAt: `${TODAY}T10:25:00`, mode: "focus" }
-    });
-    await page.evaluate(() => {
-      const button = document.createElement("button");
-      button.dataset.action = "complete-pomodoro";
-      button.dataset.testAction = "complete-pomodoro";
-      document.body.appendChild(button);
-    });
-    await page.click('[data-test-action="complete-pomodoro"]');
-    await page.waitForTimeout(200);
-    // v87の終了報告モーダル(宣言/報告ループ)が挟まるため、スキップして先にBlock完了自体を確定させる
-    if (await page.locator('[data-action="report-skip"]').count() > 0) {
-      await page.click('[data-action="report-skip"]');
-      await page.waitForTimeout(300);
-    }
-    check("ポモドーロ完了でBlockがcompletedになる",
-      (await stateNow()).blocks.find((b) => b.id === "blk-pomo-target")?.completed === true);
-    // v129: ポモドーロ完了直後は先に身体スキャンモーダルが開く(順序契約: 身体スキャン→ゲート)。
-    // 「記録せず閉じる」で抜けても、閉じた後にゲートが開くことを確認する。
-    check("ポモドーロ完了直後は先に身体スキャンモーダルが開く",
-      await page.locator(".modal-title", { hasText: "いまの疲労感は?" }).count() === 1);
-    await page.click('[data-action="body-scan-discard"]');
-    await page.waitForTimeout(200);
-    check("身体スキャンを記録せず閉じた後に過集中ブレーカーのゲートモーダルが開く(独立レビュー指摘対応)",
-      await page.locator(".modal-title", { hasText: "保護ルーティンが残っています" }).count() === 1);
-    check("未実行の保護系ルーティン名(白湯を飲む)が一覧に出る",
-      (await page.locator(".modal-body").innerText()).includes("白湯を飲む"));
   } finally {
     await browser.close();
     server.close();

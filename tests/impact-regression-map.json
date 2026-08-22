@@ -69,18 +69,6 @@
         "v141"
       ]
     },
-    "routine-feature": {
-      "paths": [
-        "^src/features/routine"
-      ],
-      "patterns": [
-        "renderRoutine|saveRoutine|completeRoutine|recurrence|routineChain"
-      ],
-      "suites": [
-        "routine-core",
-        "v144"
-      ]
-    },
     "today-feature": {
       "paths": [
         "^src/features/today"
@@ -89,8 +77,7 @@
         "renderToday|todayCockpit|buildToday|flightPlan"
       ],
       "suites": [
-        "today-core",
-        "v153"
+        "today-core"
       ]
     },
     "action-dispatch": {

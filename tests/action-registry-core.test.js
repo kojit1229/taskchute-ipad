@@ -17,8 +17,8 @@
 // 過去判定どおりreturn意味論がありif連鎖に残置。ビジョンボード/実験ログ/AIスケジュール下書き/
 // 検索(計21分岐)は200行予算のため次バージョンへ継続する。
 // v178はさらに、submitModal/deleteFromModalのstate.modal.typeによるif-else連鎖(project/task/
-// block/actualEntry/question/experiment/chain/storeVisitの8 type)をregisterModalHandlerへ
-// 全件移行した(段階5-8、prep-stage5-dispatcher.md §5のMust級指摘の解消)。[5]でこの8 typeの
+// block/actualEntry/question/experiment/storeVisit)をregisterModalHandlerへ
+// 全件移行した(段階5-8、prep-stage5-dispatcher.md §5のMust級指摘の解消)。[5]でこの7 typeの
 // golden list exhaustiveness(if連鎖残存type+レジストリ登録type=全typeの完全一致)を検証する。
 // v179: 段階5-7b(modal系dispatcher分岐の移行・後半=ビジョンボード6+実験ログ5+AIスケジュール
 // 下書き8+検索2、計21分岐)で[3]をさらに拡張した。これでprep-stage5-dispatcher.md §2-Cの
@@ -52,7 +52,6 @@ const ACTIONS_MODULE_PATH = path.join(ROOT, "src", "ui", "actions.js");
 const FEATURE_MODULE_PATHS = [
   path.join(ROOT, "src", "features", "wish.js"),
   path.join(ROOT, "src", "features", "journal.js"),
-  path.join(ROOT, "src", "features", "routine.js"),
   // v181: timeline-modeのハンドラ実体がこのファイルにあるため追加(configureTimeline({})を
   // 空depsで呼んでも、registerActions呼び出し自体はdepsを参照しないため安全に実測できる)。
   path.join(ROOT, "src", "features", "timeline.js")
@@ -89,10 +88,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "generate-report", "download-report", "download-data", "save-github", "load-github",
   "gate-continue", "reset-demo",
   "toggle-mit", "mit-candidate-add",
-  "routine-mode", "garden-pixel-month", "routine-bulk-check", "routine-fallback",
-  "hyperfocus-gate-fallback", "hyperfocus-gate-make-block", "hyperfocus-gate-later",
   "body-scan-fatigue", "body-scan-part", "body-scan-discard",
-  "chain-run-open", "chain-step-complete", "chain-run-close", "chain-new", "chain-edit",
   "start-pomodoro", "stop-pomodoro", "interrupt-reason", "interrupt-reason-cancel",
   "complete-pomodoro", "declare-confirm", "declare-skip", "report-outcome", "report-skip",
   "incomplete-reason-chip", "incomplete-reason-skip", "guided-access-dismiss",
@@ -141,8 +137,8 @@ const GOLDEN_CLICK_ACTIONS = [
   "run-archive",
   "open-search", "search-jump",
   "carry-over", "ideal-retry",
-  "energy-open-routine", "energy-open-category",
-  "timeline-clear-cat", "routine-clear-day"
+  "energy-open-category",
+  "timeline-clear-cat"
 ];
 
 // v173: 段階5-2で抽出済みfeatureの分岐をregisterActions経由のレジストリへ移行した
@@ -158,11 +154,6 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
   "set-morning", "set-sleep", "toggle-meds", "set-capacity", "set-evening-mood",
   "add-gym-entry", "delete-gym-entry",
   "store-visit-add", "store-visit-edit", "store-visit-delete", "store-visit-year",
-  // src/features/routine.js(configureRoutine)
-  "routine-mode", "garden-pixel-month", "routine-bulk-check", "routine-fallback",
-  "hyperfocus-gate-fallback", "hyperfocus-gate-make-block", "hyperfocus-gate-later",
-  "chain-run-open", "chain-step-complete", "chain-run-close", "chain-new", "chain-edit",
-  "routine-clear-day",
   // v181: src/features/timeline.js(configureTimeline)。ハンドラ実体(setTimelineMode)が
   // このファイルに既に存在するため、timeline系の中で唯一この動的実測方式で検証する。
   "timeline-mode",
@@ -187,8 +178,7 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
 // timeline.js側のMIGRATED_TO_REGISTRY_ACTIONSで検証する)。これでtimeline系40分岐すべての
 // 移行が完了した。所属ドメインに確信が持てなかった6件(toggle-mit・mit-candidate-add・home-tab・
 // open-md-in-github・reload-md)、toggle-criteria-request/home-jump(WBS/ホーム寄り
-// で確信が持てない)、body-scan-*(ポモドーロ完了時トリガーだがroutine.js未抽出の既存判断を
-// 維持)、energy-open-routine(ルーティンタブへの導線でtimeline状態を触らない)、
+  // で確信が持てない)、body-scan-*(ポモドーロ完了時トリガー)、
 // weekly-wish-*(wish週次選定、weekly-wish-toggleはpreventDefault依存)は
 // 従来どおり移行せず、if連鎖に残した(下のEXPECTED_REMAINING_IF_CHAINに含まれる)。
 const APP_JS_REGISTERED_ACTIONS = [
@@ -295,18 +285,18 @@ function extractAppRegisteredActions() {
   return [...body.matchAll(/^\s*"([^"]+)":/gm)].map((m) => m[1]);
 }
 
-// v178: 段階5-8。submitModal/deleteFromModalのstate.modal.typeによるif-else連鎖(8 type)を
-// registerModalHandlerへ全件移行した。§6-1で持ち越されていた「modalHandlers 8 typeのgolden
+// v178: 段階5-8。submitModal/deleteFromModalのstate.modal.typeによるif-else連鎖を
+// registerModalHandlerへ全件移行した。§6-1で持ち越されていた「modalHandlersのgolden
 // list exhaustiveness検証」をここで行う(click側と同じ保存則方式: if連鎖残存type+レジストリ
 // 登録type=全typeの完全一致)。
 const GOLDEN_MODAL_TYPES = [
-  "project", "task", "block", "actualEntry", "question", "experiment", "chain", "storeVisit"
+  "project", "task", "block", "actualEntry", "question", "experiment", "storeVisit"
 ];
-// v178時点で8 typeすべてをregisterModalHandlerへ移行済みのため、if連鎖側の残存は0件になる
+// 登録対象typeはすべてregisterModalHandlerへ移行済みのため、if連鎖側の残存は0件になる
 // (将来型が増えてif連鎖に残った場合の退行を検知できるよう、ハードコードせずGOLDENからの
 // filterで期待値を出す)。
 const MIGRATED_TO_MODAL_REGISTRY = [
-  "project", "task", "block", "actualEntry", "question", "experiment", "chain", "storeVisit"
+  "project", "task", "block", "actualEntry", "question", "experiment", "storeVisit"
 ];
 const EXPECTED_REMAINING_MODAL_IF_CHAIN = GOLDEN_MODAL_TYPES.filter(
   (t) => !MIGRATED_TO_MODAL_REGISTRY.includes(t)
@@ -400,7 +390,7 @@ function extractModalHandlerTypes() {
   check("if連鎖側の残存action名に重複がない",
     new Set(extracted).size === extracted.length);
 
-  console.log("[3-b] 4feature(wish/journal/routine/timeline)のconfigureXxxを"
+  console.log("[3-b] 3feature(wish/journal/timeline)のconfigureXxxを"
     + "空depsで呼び、registerActionsが実際に登録するaction名がMIGRATED_TO_REGISTRY_ACTIONSと"
     + "一致するか");
   // configureXxx本体はdestructuring代入+registerActions呼び出しのみで、渡されたdepsの中身は
@@ -409,10 +399,9 @@ function extractModalHandlerTypes() {
   const featureMods = await Promise.all(
     FEATURE_MODULE_PATHS.map((p) => import(pathToFileURL(p).href))
   );
-  const [wishMod, journalMod, routineMod, timelineMod] = featureMods;
+  const [wishMod, journalMod, timelineMod] = featureMods;
   wishMod.configureWish({});
   journalMod.configureJournal({});
-  routineMod.configureRoutine({});
   timelineMod.configureTimeline({});
   const registered = actionsMod.__debugActionNames().filter((name) => !name.startsWith("__test"));
   check(`レジストリ側の登録件数は期待どおり${MIGRATED_TO_REGISTRY_ACTIONS.length}件`,
@@ -457,14 +446,14 @@ function extractModalHandlerTypes() {
   console.log("[4] 段階5-1のフック配線がapp.js内に存在すること(dispatch呼び出し箇所の接続契約)");
   check("click dispatcherの先頭にdispatchAction(action, { event, target, id })呼び出しがある",
     /if \(dispatchAction\(action, \{ event, target, id \}\)\) return;/.test(appSource));
-  check("submitModal内にdispatchModalSave呼び出しがある(v178: 8 type全移行によりif-else連鎖を"
+  check("submitModal内にdispatchModalSave呼び出しがある(v178: 全type移行によりif-else連鎖を"
     + "撤去したため、もはや`if (...) return;`でラップされない単独呼び出しになった)",
     /dispatchModalSave\(state\.modal\.type, state\.modal\.id, fields\);/.test(appSource));
   check("deleteFromModalの先頭にdispatchModalDelete呼び出しがある",
     /if \(dispatchModalDelete\(state\.modal\.type, state\.modal\.id\)\) \{/.test(appSource));
 
   console.log("[5] submitModal/deleteFromModalのmodal typeレジストリ移行(段階5-8): "
-    + "8 typeのgolden list exhaustiveness検証(if連鎖残存type+レジストリ登録type=全typeの完全一致)");
+    + "golden list exhaustiveness検証(if連鎖残存type+レジストリ登録type=全typeの完全一致)");
   const modalIfChainTypes = extractModalIfChainTypes();
   check(`if連鎖側に残るtypeは期待どおり${EXPECTED_REMAINING_MODAL_IF_CHAIN.length}件`,
     modalIfChainTypes.length === EXPECTED_REMAINING_MODAL_IF_CHAIN.length,
@@ -484,7 +473,7 @@ function extractModalHandlerTypes() {
   check(`和集合の件数はgolden listと同じ${GOLDEN_MODAL_TYPES.length}件`,
     modalUnion.length === GOLDEN_MODAL_TYPES.length,
     `実際: ${modalUnion.length}件`);
-  check("和集合はgolden listと集合として完全一致(8 typeのexhaustiveness)",
+  check("和集合はgolden listと集合として完全一致(typeのexhaustiveness)",
     new Set(modalUnion).size === GOLDEN_MODAL_TYPES.length
     && GOLDEN_MODAL_TYPES.every((t) => modalUnion.includes(t)),
     `差分: 追加=${JSON.stringify(modalUnion.filter((t) => !GOLDEN_MODAL_TYPES.includes(t)))} `

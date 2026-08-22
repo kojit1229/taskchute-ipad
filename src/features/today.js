@@ -488,7 +488,7 @@ function renderDayGauge(blocks) {
   </section>`;
 }
 
-function renderRoutine(blocks) {
+function renderGateRoutinePanel(blocks) {
   const summary = routineRate(blocks);
   const bands = routineBandsOf(blocks);
   const undone = undoneRoutineBlocksOf(blocks);
@@ -594,7 +594,7 @@ function renderToday() {
       ${renderCoach()}
       ${renderNextQueue(queue)}
       ${renderDayGauge(blocks)}
-      ${renderRoutine(blocks)}
+      ${renderGateRoutinePanel(blocks)}
       ${renderReplanControlHTML()}
       ${renderFlightPlan(blocks)}
       ${renderTodayKindle()}

@@ -40,34 +40,15 @@ import {
   openStoreVisitEditor, openStoreVisitsYearModal, deleteStoreVisitWithConfirm,
   saveStoreVisitFromModal, deleteStoreVisit
 } from "./src/features/journal.js";
-// v170: app.js分割・段階4-4(ルーティンタブのドメインロジック+UI+連続ルーティン(チェーン)+
-//   今日の庭+保護系ルーティン+過集中ブレーカー+繰り返し実体化エンジン抽出)。
-//   src/features/routine.jsはstateをimportするがapp.js自身はimportしない(循環import回避)。
-//   createRecurrenceRule/maintainRecurrences/triggerAnchorPlacements/anchorCandidateOptionsは
-//   実grepの結果、saveBlockFromModal/buildBlockModal(Timeline Block編集モーダル)・importData・
-//   runDailyOpen・configureGithubSync(deps)からも呼ばれることが判明したため、既存のimport参照
-//   切替パターンで解決した(routine.js冒頭コメントの契約参照)。isChainRunActive/
-//   navigateGardenPixelMonthは、renderMain・click dispatcherがモジュールプライベート変数
-//   (_activeChainId/_gardenPixelMonth)を直接参照していた箇所を解消するために新設した。
-import {
-  configureRoutine,
-  gardenStageRank, overdueUncheckedRoutines,
-  protectionStreakBadgeHTML, fallbackButtonHTML,
-  updateGardenLog, pruneGardenLog, navigateGardenPixelMonth,
-  maybeOpenHyperfocusGate, hyperfocusGateFallback, hyperfocusGateMakeBlock,
-  renderChainRun, isChainRunActive, openChainRun, chainStepComplete, closeChainRun,
-  renderRoutine, openRoutineForWeekday, bulkCheckRoutinesUpToNow,
-  openChainEditor, saveChainFromModal, deleteChain, executeRoutineFallback
-} from "./src/features/routine.js";
 import {
   configureRecurrence,
-  routineRate, makeRecurrenceInstance, createRecurrenceRule, maintainRecurrences,
+  routineRate, createRecurrenceRule, maintainRecurrences,
   triggerAnchorPlacements, anchorCandidateOptions
 } from "./src/core/recurrence.js";
 // v171: app.js分割・段階4-5(タイムライン抽出・段階A: 純粋レーン割付計算のみ)。
 //   src/features/timeline-layout.jsはstateもDOMも参照しない引数のみの純粋関数だが、
 //   minutesOf/nowDateTime(いずれもapp.js側の汎用ヘルパー)を呼ぶためconfigureTimelineLayout(deps)
-//   による依存注入で受け取る(routine.js等と同型のパターン。src/features/timeline-layout.js
+//   による依存注入で受け取る(src/features/timeline-layout.js
 //   冒頭コメントの契約参照)。呼び出し元のrenderTimeline(app.js残留)は無改修。
 import {
   configureTimelineLayout,
@@ -80,8 +61,8 @@ import {
 //   draftRejectReasonPickerHTML/renderDraftLayer(下書きスケジュール機能、別関心事のため
 //   app.js残留)・render・blocksForDate・formatDisplayDate等はconfigureTimeline(deps)で注入する
 //   (src/features/timeline.js冒頭コメントの契約参照)。_scheduleDraftはモジュールプライベート
-//   変数を露出させず新設のscheduleDraftActive()経由でDIする(routine.jsのisChainRunActiveと
-//   同じ方式)。updateBatteryTick(app.js残留)からのrenderEnergyGraph呼び出しは、この
+//   変数を露出させず新設のscheduleDraftActive()経由でDIする。updateBatteryTick(app.js残留)からの
+//   renderEnergyGraph呼び出しは、この
 //   importでの名前解決先切替のみで配線を維持する(呼び出し箇所は無改修)。
 import {
   configureTimeline,
@@ -112,7 +93,7 @@ import {
 //   §4の「相乗り方式」。ハンドラ実体はapp.js内の既存関数のまま、将来featureが抽出される時に
 //   登録ブロックごと一緒に移せる形にしてある)。
 // v178: 段階5-8。submitModal/deleteFromModalのstate.modal.typeによるif-else連鎖(project/task/
-//   block/actualEntry/question/experiment/chain/storeVisitの8 type)をregisterModalHandlerへ
+//   block/actualEntry/question/experiment/storeVisit)をregisterModalHandlerへ
 //   全件移行するため、registerModalHandlerをimportに追加する(prep-stage5-dispatcher.md §5)。
 import {
   registerActions, dispatchAction,
@@ -146,14 +127,6 @@ const SWIPE_TRIAGE_LOG_MAX = 200;
 // v201: AIコーチ食事ログは90日保持に加え、端末内の最大件数も制限する。
 const COACH_MEALS_MAX = 500;
 
-// v153: 今日の庭(ADHD支援、罰なしゲーミフィケーション。設計書§③④)のGARDEN_LOG_KEEP_DAYS/
-// GARDEN_STAGE_YOUNG_PCTはv170でsrc/features/routine.jsへ移動した(app.js分割・段階4-4。
-// routine.js以外から参照されないため、configureRoutine(deps)へは注入せずroutine.js側の
-// モジュール定数として再宣言している)。
-
-// v170: WEEKDAY_LABELS(曜日ラベル、元は9856行目付近)は、configureRoutine()
-// (このすぐ下の起動処理)がこの定数を参照するため、SWIPE_TRIAGE_LOG_MAXと同じ理由で
-// ファイル冒頭へ移動した(constのTDZ回避。値・用途は一切変更していない)。
 const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
 
 // v100: AI提案お題キュー(zeroThinking.suggestedThemes)のハウスキーピングTTL。
@@ -210,7 +183,6 @@ const navItems = [
   { id: "tasks", label: "タスクシュート", mark: "T" },
   { id: "timeline", label: "タイムライン", mark: "L" },
   { id: "wbs", label: "WBS", mark: "W" },
-  { id: "routine", label: "ルーティン", mark: "↻" },
   { id: "journal", label: "ジャーナル", mark: "J" },
   { id: "ai-reports", label: "AIレポート", mark: "A" },  // v92: コンテンツ総括・自己分析等の月次/不定期AIレポートビューア
   { id: "wish", label: "やりたい", mark: "✦" },
@@ -284,17 +256,6 @@ configureJournal({
   addDays, todayISO, weekRange, weekDays, showToast, nowDateTime, saveAndRender,
   personalDataReady, latestSleepLogWithin, shortSleepDate, upsertMorningLine,
   renderExperimentSection, JOURNAL_REQUEST_SECTION
-});
-// v170: src/features/routine.jsも同じ理由(循環import回避)で依存注入する。
-// v218: 繰り返しエンジンはsrc/core/recurrence.jsへ移設し、routine.js内で使う公開関数だけを
-// configureRoutine(deps)経由で注入する。
-configureRoutine({
-  escapeHTML, renderHeader, renderDateBar, todayISO, addDays, parseDate,
-  minutesOf, timeFromDateTime, pad2, nowDateTime, getCategoryColor,
-  showToast, saveAndRender, render, setView, closeModal, renderModal,
-  blocksForDate, isTouchedBlock, WEEKDAY_LABELS,
-  routineRate, makeRecurrenceInstance, triggerAnchorPlacements, anchorCandidateOptions,
-  aiInsightsPanelHTML
 });
 // v218: getStateでstore.jsのstate再代入後も最新のlive bindingへ追従させる。
 configureRecurrence({
@@ -555,10 +516,10 @@ registerActions({
   }
 });
 // v178: app.js分割・段階5-8。submitModal/deleteFromModalのstate.modal.typeによるif-else連鎖
-// (project/task/block/actualEntry/question/experiment/chain/storeVisitの8 type)を
+// (project/task/block/actualEntry/question/experiment/storeVisit)を
 // registerModalHandlerへ全件移行した(prep-stage5-dispatcher.md §5、Must級指摘の解消)。
-// project/task/blockはsrc/features/へ未抽出のためapp.js内関数をそのまま参照する。chainは
-// routine.js、storeVisitはjournal.jsからimport済みの関数をそのまま参照する。actualEntryは
+// project/task/blockはsrc/features/へ未抽出のためapp.js内関数をそのまま参照する。
+// storeVisitはjournal.jsからimport済みの関数をそのまま参照する。actualEntryは
 // 従来からdeleteFromModal側に対応する型が無い(saveのみ)ためdelete keyを持たせない
 // (dispatchModalDeleteがfalseを返し、deleteFromModal側の共通closeModal()へ素通りする——
 // 移行前の「どの型にもマッチせずcloseModal()だけ実行される」挙動と完全に一致)。
@@ -584,10 +545,6 @@ registerModalHandler("question", {
 registerModalHandler("experiment", {
   save: (id, fields) => saveExperimentFromModal(id, fields),  // v68
   delete: (id) => deleteExperiment(id)  // v68
-});
-registerModalHandler("chain", {
-  save: (id, fields) => saveChainFromModal(id, fields),  // v115: 連続ルーティン(提案G②)
-  delete: (id) => deleteChain(id)  // v115
 });
 registerModalHandler("storeVisit", {
   save: (id, fields) => saveStoreVisitFromModal(id, fields),  // v141: 今日行ったお店ログ
@@ -991,8 +948,6 @@ let _pendingLifecycleCtx = null;
 // v108: Block保存モーダルの二重送信ガード(iOS Safariでの保存ボタン二重発火対策)。非永続。
 //       saveBlockFromModal の実行中だけ true になり、完了/失敗いずれも finally で必ず解除する。
 let _blockSaveInFlight = false;
-// v170: _activeChainId(連続ルーティン進行中フラグ)はsrc/features/routine.jsへ移動した
-// (app.js分割・段階4-4)。renderMainはisChainRunActive()を経由して参照する(下記コメント参照)。
 // v149(UI改善計画Phase4a): ホームの2タブ(今日/ホーム)切替。非永続(state外)—
 // K指定「起動時は常に今日」を満たすため、リロード/再起動のたびに既定へ戻る。
 let homeTab = "today";  // "today" | "home"
@@ -1081,9 +1036,7 @@ document.addEventListener("click", (event) => {
   if (action === "toggle-mit") toggleMIT(id);
   // v38: AIフィードバックのMIT候補 → 今日の主役ブロック化
   if (action === "mit-candidate-add") addMITCandidate(target.dataset.title);
-  // v173: routine-mode/garden-pixel-month/routine-bulk-check/routine-fallback/
-  // hyperfocus-gate-*/chain-*はsrc/features/routine.jsのregisterActionsへ移行した。
-  // body-scan-*(ポモドーロ身体スキャン)はroutine.jsに未抽出のためここに残す。
+  // body-scan-*(ポモドーロ身体スキャン)はapp.jsに残す。
   if (action === "body-scan-fatigue") bodyScanRecordFatigue(Number(target.dataset.value));
   if (action === "body-scan-part") bodyScanRecordPart(target.dataset.part || "");
   if (action === "body-scan-discard") bodyScanDiscard();
@@ -1155,10 +1108,7 @@ document.addEventListener("click", (event) => {
   // v174: open-backup-list/restore-backup/run-archiveはapp.js内のregisterActionsへ移行した。
   // v179: open-search/search-jump(検索2)はapp.js内のregisterActionsへ移行した。
   // v177: carry-over/ideal-retryはapp.js内のregisterActionsへ移行した。
-  // v39/v40: エネルギー構造からの行動導線
-  if (action === "energy-open-routine") openRoutineForWeekday(Number(target.dataset.day));
   // v181: energy-open-category/timeline-clear-catはapp.js内のregisterActionsへ移行した。
-  // v173: routine-clear-dayはsrc/features/routine.jsのregisterActionsへ移行した。
 });
 
 // v71: ホームの折りたたみカード(details)の開閉をlocalStorageへ即時記憶する。
@@ -1457,11 +1407,6 @@ function saveState() {
   // v25: 実データの変更時刻を記録(端末間の「新しい方が勝つ」判定に使用)。
   //      persistLocalNoSchedule(リモート採用・GitHub保存)では更新しない。
   state.dataModifiedAt = nowDateTime();
-  // v153: 今日の庭。saveState()を通るすべての操作でupsert(配線漏れ防止、設計書§③)。
-  //       当日 + 選択日(異なる場合のみ)の2キーをスナップショットしてからprune。
-  updateGardenLog(todayISO());
-  if (state.selectedDate && state.selectedDate !== todayISO()) updateGardenLog(state.selectedDate);
-  pruneGardenLog();
   // v23: localStorage 書き込み失敗で例外を投げない(画面が固まるのを防ぐ)
   persistLocalNoSchedule();
   // v37: 容量超過などで保存できていない場合、黙って入力を失わせず一度は知らせる
@@ -1501,7 +1446,7 @@ function normalizeState(value) {
   value.settings ||= {};
   // v182: 未知viewでrenderMainの前画面が残る事故を防ぐ。todayは新規許可、旧版由来の不明値はhomeへ。
   const allowedViews = new Set([
-    "today", "home", "wbs", "wish", "tasks", "routine", "timeline",
+    "today", "home", "wbs", "wish", "tasks", "timeline",
     "journal", "zero", "vision", "ai-reports", "settings", "more"
   ]);
   if (!allowedViews.has(value.currentView)) value.currentView = "home";
@@ -1986,14 +1931,6 @@ function normalizeState(value) {
   // または連続ルーティン(チェーンid)を指定すると、それが当日完了した直後の時刻にこの
   // ルーティンのBlockを自動生成する。既定は未設定("")。
   value.recurrences = value.recurrences.map((r) => ({ anchor: "", ...r }));
-  // v115: 連続ルーティン(チェーン、ROADMAP提案G②)。複数の小ルーティンを順序付きでまとめ、
-  // 開始→順送り表示→完了で構成要素すべてに記録を落とす。既存端末には配列自体が無いため
-  // []で補完する(anchorは提案G③、既定は未設定)。
-  if (!Array.isArray(value.routineChains)) value.routineChains = [];
-  value.routineChains = value.routineChains.map((c) => ({
-    title: "新規チェーン", steps: [], anchor: "", deleted: false,
-    createdAt: nowDateTime(), updatedAt: nowDateTime(), ...c
-  }));
   // v115: チェーンの当日進行状態(id=`${chainId}_${date}`)。既存端末には配列自体が無いため
   // []で補完する。currentIndexは次に完了すべきステップの添字、completedAtが付けば全ステップ完了。
   if (!Array.isArray(value.chainRuns)) value.chainRuns = [];
@@ -2082,14 +2019,6 @@ function normalizeState(value) {
   if (typeof value.settings.journalTemplate === "string") {
     value.settings.journalTemplate = value.settings.journalTemplate
       .replace(/## 🛏 睡眠\n就寝: __:__ +\/ +起床: __:__\n質: ★+☆*\n*/, "");
-  }
-  // v153: 今日の庭(ADHD支援、罰なしゲーミフィケーション)。日別のルーティン完了スナップショット
-  // (date ISO → {done, total})。繰り返し実体はRECURRENCE_KEEP_PAST_DAYS超過で物理削除され
-  // 過去日の分母(total)が失われるため、saveState()経路のフック(updateGardenLog)で
-  // 当日・選択日を都度スナップショットして保持する(設計書§③)。既存stateには存在しない
-  // だけなので後方互換は自明(空オブジェクト補完のみ、過去分の遡及生成はしない)。
-  if (!value.gardenLog || typeof value.gardenLog !== "object" || Array.isArray(value.gardenLog)) {
-    value.gardenLog = {};
   }
   value.modal = null;  // 起動時はモーダル閉じた状態
   return value;
@@ -2545,8 +2474,6 @@ function render() {
   renderPersonalDataAuthBanner();  // v72: 401時の案内(全再描画で消えるため再注入)
   // v40: 着手ジュースは1回の描画で消費する(次の描画では付かない)。CSS アニメは挿入時に1回再生。
   state._justStartedBlockId = null;
-  // v153: 今日の芽のフェードインも同様に1回の描画で消費する。
-  state._gardenJustGrewDate = null;
 }
 
 // v72: 起動時セットアップ画面(トークンゲート)。sidebar/bottomNav/timelineRailは空にし、
@@ -2619,11 +2546,7 @@ function renderSidebar() {
   `;
 }
 
-// v148レビュー対応(Codex指摘・項目3): ルーティンは「その他」から実行系(タスクシュート)
-// 上部リンクへ昇格した(moreGroupsから除外済み)ため、bottom-navの現在地表示も「その他」
-// ではなく「実行」(mobileNavのid "tasks")をactiveにする。
 function bottomNavEffectiveView(view) {
-  if (view === "routine") return "tasks";
   if (view === "home") return "more";
   return view;
 }
@@ -2679,13 +2602,6 @@ function renderMain() {
     main.innerHTML = renderNowConveyor();
     return;
   }
-  // v115: 連続ルーティン(チェーン)の進行中も同様に全画面優先で表示する
-  // v170: _activeChainIdはsrc/features/routine.jsのモジュールプライベート変数になったため、
-  //       isChainRunActive()経由で判定する(値そのものは露出させない)。
-  if (isChainRunActive()) {
-    main.innerHTML = renderChainRun();
-    return;
-  }
   const view = state.currentView;
   // v146レビュー対応: フォーカスガードはmain.innerHTMLを差し替える「前」に評価する(差し替え後は
   // 旧main内のフォーカス要素がDOMごと消えてbodyへ戻ってしまい、判定が構造的に効かなくなるため)。
@@ -2722,7 +2638,6 @@ function renderMain() {
       }
     }
   }
-  if (view === "routine") main.innerHTML = renderRoutine();
   if (view === "timeline") {
     main.innerHTML = renderTimelineView();
     // v47: 今日を表示中なら現在時刻ラインへ自動スクロール(探す手間をなくす)
@@ -2814,7 +2729,6 @@ function renderHomeTodayTab(blocks, isToday, degraded, metrics) {
           <div class="home-fold-body">
             <div class="home-grid">
               ${homeFlow(blocks, isToday)}
-              ${homeRoutine(blocks, isToday)}
             </div>
           </div>
         </details>
@@ -2824,7 +2738,6 @@ function renderHomeTodayTab(blocks, isToday, degraded, metrics) {
           <div class="home-fold-body">
             <div class="home-grid">
               ${homeFlow(blocks, isToday)}
-              ${homeRoutine(blocks, isToday)}
             </div>
           </div>
         </details>
@@ -2833,7 +2746,7 @@ function renderHomeTodayTab(blocks, isToday, degraded, metrics) {
     ${homeTodayStatusCard()}
     ${homeWeeklyWishCard()}
     ${degraded ? "" : homeReadingCard()}
-    ${degraded ? homeDegradedBanner() : homeRoutineCheckBanner(blocks, isToday)}
+    ${degraded ? homeDegradedBanner() : ""}
     ${homeScoreboard(blocks)}
     ${homeBacklog()}
     <div class="home-zone-block z-green" id="homezone-4">
@@ -3619,15 +3532,9 @@ function taskchuteStartRate(blocks) {
   return { done, total: list.length, pct: list.length ? Math.round((done / list.length) * 100) : 0 };
 }
 
-// v170: routineRate〜renderChainRun(今日の庭S1/S2・保護系ルーティン・過集中ブレーカー・
-// 連続ルーティン(チェーン)データ操作、計467行)はsrc/features/routine.jsへ移動した
-// (app.js分割・段階4-4)。Homeタブ側(homeRoutine/homeScoreboard/homeZone2Summary/
-// homeRoutineCheckBanner)はimportで参照する(冒頭import文参照)。
-
-// --- ひと目スコアボード(4つの達成率)── v33 ---
+// --- ひと目スコアボード── v33 ---
 function homeScoreboard(blocks) {
   const tc = taskchuteStartRate(blocks);
-  const rt = routineRate(blocks);
   const wk = cycleWeekProgress();
   const mit = blocks.filter((b) => b.isMIT);
   const mitDone = mit.filter((b) => b.completed).length;
@@ -3645,12 +3552,11 @@ function homeScoreboard(blocks) {
   const body = `<div class="home-scoreboard">
     ${cell("orange", "タスクシュート着手", tc.pct, "%", `${tc.done}/${tc.total}`, tc.pct, "homezone-1")}
     ${cell("orange", "今日の主役", mitDone, `/${mit.length}`, "MIT", mitPct, "home-mit-anchor")}
-    ${cell("green", "ルーティン実行", rt.pct, "%", `${rt.done}/${rt.total}`, rt.pct, "homezone-2")}
     ${cell("blue", "12週 今週", wk.pct, "%", `${wk.done}/${wk.total}`, wk.pct, "homezone-3")}
   </div>`;
   // v82(B3): ホーム常時表示スリム化のため既定closedの折りたたみへ。集計値自体は
   //      summary行に要約表示するので、閉じたままでも「ひと目」の用は足りる。
-  const summary = `ひと目スコア: 着手${tc.pct}% ・ 主役${mitDone}/${mit.length} ・ ルーティン${rt.pct}% ・ 12週${wk.pct}%`;
+  const summary = `ひと目スコア: 着手${tc.pct}% ・ 主役${mitDone}/${mit.length} ・ 12週${wk.pct}%`;
   return homeFoldSection("home-scoreboard", false, "", "", summary, body);
 }
 
@@ -3768,81 +3674,12 @@ function homeFlow(blocks, isToday) {
   return `<section class="panel"><div class="home-plabel">今日のながれ</div>${rows}</section>`;
 }
 
-// v153: 今日の芽(zone2ルーティンカード内)。4状態(土/芽/若木/開花)を静的パスの出し分けだけで
-// 表現する(成長トゥイーンは作らない。homeSteps()と同じテンプレートリテラルSVG方式、
-// createElementNS不使用)。色は3段階の緑濃淡のみ(decisions.md 2026-07-27 K確定:
-// 完了1件=薄緑/50%以上=緑/全完了=濃緑。オレンジの花は使わない)。
-// justGrewはtoggleBlock()が完了操作直後にだけ立てる非永続フラグ由来(state._justStartedBlockIdと
-// 同じ「1回の描画で消費」パターン)。文言は罰なしルール⑥(加点表現のみ)に従い、
-// done===0(土)のときは何も言わず沈黙する(「まだ」「未達」等は出さない)。
-function gardenSproutHTML(rank, done, justGrew) {
-  if (rank < 0) return "";  // その日ルーティン0件 → 非表示(設計書§④)
-  const pot = `<path d="M9 39 L37 39 L33 45 L13 45 Z" fill="none" stroke="var(--line)" stroke-width="2"/>
-    <ellipse cx="23" cy="39" rx="13" ry="3" fill="var(--line-soft)"/>`;
-  // v153レビュー対応(2026-07-28): 塗り色は<g class="g-stageN">側のCSS color(--garden-pale/
-  // mid/deep)に一本化し、パス側はcurrentColorだけを参照する(段階配色をCSSトークン化した
-  // ことで、opacity半透明合成のテーマ依存問題を避ける。stylesheet参照)。
-  let plant = "", stageCls = "", emoji = "";
-  if (rank === 1) {  // 芽: 双葉
-    stageCls = "g-stage1"; emoji = "🌱";
-    plant = `<path d="M23 39 L23 30" stroke="currentColor" stroke-width="2" fill="none"/>
-      <path d="M23 32 Q17 28 15 32 Q19 36 23 32" fill="currentColor"/>
-      <path d="M23 32 Q29 28 31 32 Q27 36 23 32" fill="currentColor"/>`;
-  } else if (rank === 2) {  // 若木: 茎+葉
-    stageCls = "g-stage2"; emoji = "🌿";
-    plant = `<path d="M23 39 L23 18" stroke="currentColor" stroke-width="2.5" fill="none"/>
-      <path d="M23 26 Q15 22 14 28 Q19 32 23 26" fill="currentColor"/>
-      <path d="M23 22 Q31 18 32 24 Q27 28 23 22" fill="currentColor"/>`;
-  } else if (rank === 3) {  // 開花: 茎+葉+花
-    stageCls = "g-stage3"; emoji = "🌸";
-    plant = `<path d="M23 39 L23 16" stroke="currentColor" stroke-width="2.5" fill="none"/>
-      <path d="M23 26 Q15 22 14 28 Q19 32 23 26" fill="currentColor"/>
-      <circle cx="23" cy="12" r="5" fill="currentColor"/>
-      <circle cx="17" cy="14" r="3.5" fill="currentColor"/>
-      <circle cx="29" cy="14" r="3.5" fill="currentColor"/>
-      <circle cx="23" cy="8" r="3.5" fill="currentColor"/>`;
-  }
-  const svg = `<svg class="home-garden-svg${justGrew ? " garden-grew" : ""}" width="46" height="46"
-    viewBox="0 0 46 46" aria-hidden="true">${pot}<g class="${stageCls}">${plant}</g></svg>`;
-  const caption = done ? `<div class="home-garden-caption">今日は${done}件できた ${emoji}</div>` : "";
-  return `<div class="home-garden">${svg}${caption}</div>`;
-}
-
-// --- 今日のルーティン(実行率)---
-// v89: isToday引数を追加(ゼロ摩擦ルーティンチェックの一括確定ボタンは今日のみ表示するため)。
-function homeRoutine(blocks, isToday) {
-  const r = blocks.filter((b) => b.category === "ルーティン");
-  const done = r.filter((b) => b.completed).length;
-  const pct = r.length ? Math.round((done / r.length) * 100) : 0;
-  const rows = r.length
-    // v114: 保護系ルーティン(protection:true)は実行率でなく連続欠落バッジを追加表示する
-    // (protectionRuleForがnullを返す=protection:falseの既存ルーティンはバッジ無しで従来どおり)。
-    ? r.map((b) => homeCheckRow(b, "", true, protectionStreakBadgeHTML(b), fallbackButtonHTML(b, isToday))).join("")
-    : `<div class="muted" style="font-size:13px">カテゴリ「ルーティン」のBlockがここに表示されます。</div>`;
-  const overdue = isToday ? overdueUncheckedRoutines(r) : [];
-  // v153: 今日の芽。カードの日付は呼び出し元(renderHomeTodayTab)でstate.selectedDateに固定。
-  const gardenRank = gardenStageRank({ done, total: r.length, pct });
-  const gardenJustGrew = gardenRank >= 0 && state._gardenJustGrewDate === state.selectedDate;
-  return `<section class="panel"><div class="home-plabel green">今日のルーティン</div>
-    ${gardenSproutHTML(gardenRank, done, gardenJustGrew)}
-    ${r.length ? `<div class="home-rate"><span class="home-rate-cap">実行率</span>
-      <span class="home-rate-pct green">${pct}%</span>
-      <span class="home-rate-frac">${done} / ${r.length}</span></div>
-      <div class="progress" style="margin-bottom:10px"><span style="width:${pct}%"></span></div>` : ""}
-    ${overdue.length ? `<button class="btn primary" data-action="routine-bulk-check" style="width:100%; margin-bottom:10px">✓ ここまで全部やった(${overdue.length}件を一括チェック)</button>` : ""}
-    ${rows}</section>`;
-}
-
-// v82(B2): 「今日のリズム」ゾーンを既定折りたたみにする際、集計値(ながれの完了数・
-//      ルーティン実行率)を失わないよう畳んだsummary行に要約表示するための文言。
-//      degraded/非degradedの両方のsummaryで共用する。
+// v82(B2): 「今日のリズム」ゾーンの折りたたみ要約。
 function homeZone2Summary(blocks) {
   const flowList = blocks.filter((b) => b.category !== "ルーティン");
   const flowDone = flowList.filter((b) => b.completed).length;
-  const rt = routineRate(blocks);
   const parts = [];
   if (flowList.length) parts.push(`ながれ ${flowDone}/${flowList.length}`);
-  if (rt.total) parts.push(`ルーティン実行 ${rt.pct}%(${rt.done}/${rt.total})`);
   return parts.length ? parts.join(" ・ ") : "記録なし";
 }
 
@@ -4111,8 +3948,7 @@ let _zeroSecThemeDraft = null;  // v75: AIプラン_*.jsonのzeroSecThemes提案
 
 // v175: renderTimelineView(src/features/timeline.js側)は「下書きが1件も無い時だけ
 // "下書きスケジュール"ボタンを出す」判定に_scheduleDraftの有無だけを見る。変数自体を
-// 露出させず、この1関数越しにconfigureTimeline(deps)へ注入する(routine.jsの
-// isChainRunActive()と同じ「モジュールプライベート変数を直接晒さない」方式)。
+// 露出させず、この1関数越しにconfigureTimeline(deps)へ注入する。
 function scheduleDraftActive() {
   return Boolean(_scheduleDraft);
 }
@@ -6242,9 +6078,6 @@ function renderTasks() {
   return `
     ${renderHeader("今日の実行リスト", "タスクシュート", projectedEndBadge())}
     ${renderDateBar()}
-    <div class="row" style="margin-bottom:10px">
-      <button class="btn ghost" data-action="nav" data-view="routine">↻ 今日使うルーティンを見る →</button>
-    </div>
     ${aiMitChips()}
     ${aiTaskChips()}
     ${carryOverPanel()}
@@ -6437,10 +6270,6 @@ function renderBlockItem(block) {
 //   src/features/timeline.jsへ移動した(app.js分割・段階4-6・段階B①②③)。呼び出しはファイル
 //   冒頭のimportを参照する。updateBatteryTick(このファイル後方)からのrenderEnergyGraph呼び出しも
 //   同じimport経由(呼び出し箇所は無改修)。
-
-// v170: renderRoutine〜renderRoutineNowMarker(ルーティンタブ本体、計196行)は
-// src/features/routine.jsへ移動した(app.js分割・段階4-4)。renderMainからのimport参照に
-// 切り替えた(冒頭import文参照)。
 
 // v171: assignBlocksToLanes/adjustLaneTopPositionsはsrc/features/timeline-layout.jsへ
 //   移動した(app.js分割・段階4-5・段階A)。呼び出しはファイル冒頭のimportを参照する。
@@ -8320,7 +8149,7 @@ function computeInsights(since, today, blocksByDate) {
         ? `${top.label}が構造的にマイナス(平均 ${top.value.toFixed(1)}、直近4週で評価)`
         : `${top.label}が放電超過(${signed(top.value)}、直近4週で評価)`,
       actions: top.type === "weekday"
-        ? [{ action: "energy-open-routine", data: { day: top.dayIndex }, label: `${top.label}のルーティンを見る` }]
+        ? []
         : [{ action: "energy-open-category", data: { cat: top.key }, label: "ブロックを見る" }]
     });
   }
@@ -8335,10 +8164,7 @@ function computeInsights(since, today, blocksByDate) {
       findings.push({
         id: "heatmap",
         text: `${best.wdLabel}曜${bandName(best.bandLabel)}は着手率${Math.round(best.rate * 100)}%、${worst.wdLabel}曜${bandName(worst.bandLabel)}は${Math.round(worst.rate * 100)}%`,
-        actions: [
-          { action: "energy-open-routine", data: { day: best.dayIndex }, label: `${best.wdLabel}曜のルーティンを見る` },
-          { action: "energy-open-routine", data: { day: worst.dayIndex }, label: `${worst.wdLabel}曜のルーティンを見る` }
-        ]
+        actions: []
       });
     }
   }
@@ -9767,12 +9593,6 @@ let _quickCompleteSnapshots = {};
 function toggleBlock(id) {
   let justCompleted = false;
   let completedBlock = null;
-  // v153: 今日の芽。段階が上がった直後だけ控えめなフェードインを掛けるため、トグル前後の
-  // ルーティン実行率から段階ランクを比較する(v150の統一完了経路=このtoggleBlockのみが対象。
-  // routine-bulk-check等の他経路は再描画で段階自体は即時反映されるが、フェード演出は付けない)。
-  const toggledBlock = blockById(id);
-  const gardenDate = toggledBlock && toggledBlock.category === "ルーティン" && !toggledBlock.deleted ? toggledBlock.date : null;
-  const prevGardenRank = gardenDate ? gardenStageRank(routineRate(blocksForDate(gardenDate))) : -1;
   state.blocks = state.blocks.map((block) => {
     if (block.id !== id) return block;
     const completed = !block.completed;
@@ -9827,12 +9647,6 @@ function toggleBlock(id) {
   if (justCompleted && completedBlock && completedBlock.recurrenceGroupId) {
     triggerAnchorPlacements(completedBlock.recurrenceGroupId, nowDateTime());
   }
-  // v153: 今日の芽。段階が上がっていれば非永続フラグを立てる(render()直後にクリア、
-  // state._justStartedBlockIdと同じ「1回の描画で消費」パターン)。
-  if (gardenDate) {
-    const nextRank = gardenStageRank(routineRate(blocksForDate(gardenDate)));
-    if (nextRank > prevGardenRank) state._gardenJustGrewDate = gardenDate;
-  }
   if (justCompleted && completedBlock) {
     // v150: 完了直後だけ「実績を編集」ボタン付きトースト(既存の実績モーダルを編集導線として再利用)。
     saveAndRender("Blockを完了しました", { blockId: id, actionLabel: "実績を編集" });
@@ -9844,8 +9658,6 @@ function toggleBlock(id) {
     const celebrateMsg = getRandomCelebrate();
     triggerCompletionEffect(celebrateMsg, completedBlock.isMIT);
   }
-  // v117(C): 過集中ブレーカーのゲート化。○タップでの直接完了(「完了への状態変更」)の直後。
-  if (justCompleted) maybeOpenHyperfocusGate();
 }
 
 // v107: タスクシュートのBlock行「タスク完了」チェック(K指示 2026-07-15)。
@@ -9890,9 +9702,6 @@ function toggleTaskCompleteFromBlock(blockId) {
     rerenderActiveModal(["completed"]);
   }
 }
-
-// v170: bulkCheckRoutinesUpToNow(ゼロ摩擦ルーティンチェックの一括確定)はsrc/features/routine.js
-// へ移動した(app.js分割・段階4-4)。呼び出し元(routine-bulk-check分岐)はimportで参照する。
 
 // v17: MIT(今日の主役)の切り替え。1日最大3個
 function toggleMIT(blockId) {
@@ -10849,7 +10658,6 @@ function sanitizedStateForGitHub() {
   if (copy.settings?.github) copy.settings.github.token = "";
   copy.modal = null;  // v37: ローカル保存(persistLocalNoSchedule)と同様、モーダル状態は共有しない
   delete copy._justStartedBlockId;  // v40: 非永続の着手ジュースフラグは同期しない
-  delete copy._gardenJustGrewDate;  // v153: 今日の芽のフェード演出フラグも同様に非永続
   return copy;
 }
 
@@ -11447,8 +11255,6 @@ function closeBodyScanFlow(saved) {
   closeModal();
   if (saved) saveAndRender("身体スキャンを記録しました");
   else render();
-  // v117(C)と同じ条件(blockId必須)でゲート判定。身体スキャンを閉じた後に行う(順序契約)。
-  if (ctx && ctx.pomodoroBlockId) maybeOpenHyperfocusGate();
 }
 
 // ============================================================
@@ -11760,8 +11566,6 @@ function finishReport(outcome, note) {
     const feedback = buildDeclareFeedback(entry);
     if (feedback) showToast(feedback);
   }
-  // v117(C): 過集中ブレーカーのゲート化。「■いま終了」(v70)が終了報告モーダルを解決した直後。
-  if (ctx.kind === "block") maybeOpenHyperfocusGate();
 }
 
 // v9: 「☕ 休憩へ」: focus → break に遷移(+5分休憩開始)
@@ -12020,19 +11824,6 @@ function parseAiInsights(raw) {
         ? parsed.generatedAt.trim()
         : ""
     };
-    if (Array.isArray(parsed.routineSuggestions)) {
-      const rows = parsed.routineSuggestions
-        .filter((row) => row && typeof row === "object"
-          && typeof row.routineTitle === "string" && row.routineTitle.trim()
-          && typeof row.suggestion === "string" && row.suggestion.trim()
-          && typeof row.reason === "string" && row.reason.trim())
-        .map((row) => ({
-          routineTitle: row.routineTitle.trim(),
-          suggestion: row.suggestion.trim(),
-          reason: row.reason.trim()
-        }));
-      if (rows.length) data.routineSuggestions = rows;
-    }
     if (Array.isArray(parsed.wishRipe)) {
       const rows = parsed.wishRipe
         .filter((row) => row && typeof row === "object"
@@ -12072,17 +11863,6 @@ function aiInsightsPanelHTML(kind, taskId = "") {
   const data = cachedAiInsightsJson.data;
   if (!data) return "";
   const freshness = aiInsightsFreshnessHTML(data);
-  if (kind === "routine" && Array.isArray(data.routineSuggestions) && data.routineSuggestions.length) {
-    return `<section class="panel ai-insights" data-insight="routine">
-      <div class="ai-insights-head"><strong>AI ルーティン入替提案</strong>${freshness}</div>
-      <div class="ai-insights-list">${data.routineSuggestions.map((row) => `
-        <div class="ai-insights-item">
-          <div class="ai-insights-item-title">${escapeHTML(row.routineTitle)}</div>
-          <div>${escapeHTML(row.suggestion)}</div>
-          <small>${escapeHTML(row.reason)}</small>
-        </div>`).join("")}</div>
-    </section>`;
-  }
   if (kind === "wish" && Array.isArray(data.wishRipe)) {
     const row = data.wishRipe.find((item) => item.taskId === taskId);
     if (!row) return "";
@@ -12353,7 +12133,7 @@ async function hydrateStaticMarkdown() {
   // v137: 入力中/IME変換中は即renderせず保留する(review.md:28。renderDeferringForFocus参照)。
   // v161: "stats"(計器盤)を追加。エネルギーカーブの新着fetchが完了してもこの画面を開いた
   //       ままだと再描画されず節が出ないままになる不具合を防ぐ(他view追加時と同じ理由)。
-  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly" || state.currentView === "home" || state.currentView === "today" || state.currentView === "timeline" || state.currentView === "routine" || state.currentView === "wish" || state.currentView === "zero" || state.currentView === "tasks" || state.currentView === "stats")) {
+  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly" || state.currentView === "home" || state.currentView === "today" || state.currentView === "timeline" || state.currentView === "wish" || state.currentView === "zero" || state.currentView === "tasks" || state.currentView === "stats")) {
     renderDeferringForFocus();
   }
 }
@@ -12593,20 +12373,6 @@ function homeAiFeedbackReadHTML() {
 function homeDegradedBanner() {
   return `<div class="cond-degraded-banner" data-action="nav" data-view="journal">
     今日は最低限だけでいい日です。MITと体調記録だけ見えていれば十分。
-  </div>`;
-}
-
-// v89: ゼロ摩擦ルーティンチェック — 時刻ベースの自動チェック提案バナー(ROADMAP v93)。
-// 「予定時刻を過ぎた未チェックのルーティンがある」ときだけ、責めないトーンで一括確定へ誘導する。
-// 呼び出し元(renderHome)でdegraded(v73縮退モード)日はhomeDegradedBannerと排他表示にする
-// (縮退モードの日にまで「やっていないこと」を思い出させるのは方針に反するため)。
-// タップでルーティンタブへ(そこで「ここまで全部やった」ボタンから一括確定できる)。
-function homeRoutineCheckBanner(blocks, isToday) {
-  if (!isToday) return "";
-  const overdue = overdueUncheckedRoutines(blocks);
-  if (!overdue.length) return "";
-  return `<div class="routine-check-banner" data-action="nav" data-view="routine">
-    ${overdue.length}件のルーティン、やっていたら1タップで記録 →
   </div>`;
 }
 
@@ -13186,9 +12952,6 @@ function openBlockEditor(id) {
   renderModal(buildBlockModal(block));
 }
 
-// v170: openChainEditor(チェーン新規作成/編集モーダルの起動)はsrc/features/routine.jsへ
-// 移動した(app.js分割・段階4-4)。呼び出し元(chain-new/chain-edit分岐)はimportで参照する。
-
 function renderModal(innerHTML) {
   modalRoot.innerHTML = innerHTML;
   modalRoot.classList.add("open");
@@ -13239,7 +13002,7 @@ function readModalFields() {
 function submitModal() {
   if (!state.modal) return;
   const fields = readModalFields();
-  // v178: 8 type(project/task/block/actualEntry/question/experiment/chain/storeVisit)すべてを
+  // v178: project/task/block/actualEntry/question/experiment/storeVisitを
   // registerModalHandlerへ移行済みのため、if-else連鎖は撤去した(dispatchModalSaveが必ずtrueを
   // 返す。未登録typeが将来増えた場合はfalseで素通りし、何もしない=移行前の「どのtypeにも
   // マッチしない」場合と同じ挙動)。
@@ -13250,8 +13013,8 @@ function deleteFromModal() {
   if (!state.modal) return;
   const ok = window.confirm("削除しますか? この操作は取り消せます(deleted フラグ)。");
   if (!ok) return;
-  // v178: 同上(submitModal参照)。7 type(project/task/block/question/experiment/chain/
-  // storeVisit)はdispatchModalDelete経由でcloseModal()まで実行する。actualEntryはdelete未登録
+  // v178: 同上(submitModal参照)。project/task/block/question/experiment/storeVisitは
+  // dispatchModalDelete経由でcloseModal()まで実行する。actualEntryはdelete未登録
   // (従来からdeleteFromModal側に対応する型が無い)ため、dispatchModalDeleteがfalseを返し
   // 下のcloseModal()だけが実行される(移行前と同じ挙動)。
   if (dispatchModalDelete(state.modal.type, state.modal.id)) {
@@ -13260,12 +13023,6 @@ function deleteFromModal() {
   }
   closeModal();
 }
-
-// v170: anchorCandidateOptions〜deleteChain(チェーン編集モーダル一式、計91行)は
-// src/features/routine.jsへ移動した(app.js分割・段階4-4)。anchorCandidateOptionsは
-// buildBlockModal(Timeline Block編集モーダルのアンカー選択、実grepで判明)からも参照するため
-// importで解決した。submitModal/deleteFromModal(直前、app.js残留)のchain分岐は
-// saveChainFromModal/deleteChainのimport参照へ切り替えただけで巨大if連鎖の構造は無改変。
 
 // ---------- Project モーダル ----------
 
@@ -13717,20 +13474,6 @@ function buildBlockModal(block) {
                 </div>
                 <div class="muted" style="font-size:11px; margin-top:4px">既定値を変更すると、未完了のすべての繰り返しに充電/放電が一括適用されます(個別の日の値はホーム画面で変更できます)。</div>
                 <div class="field" style="margin-top:10px">
-                  <label class="checkbox-line">
-                    <input type="checkbox" data-modal-field="protection" ${liveRule.protection ? "checked" : ""}>
-                    制約保護系(運動・睡眠・内省・家族時間など)
-                  </label>
-                  <div class="muted" style="font-size:11px; margin-top:4px">ONにすると実行率(%)の代わりに「連続欠落日数」で表示します(実行率で裁かない。2日連続から責めないトーンで案内)。</div>
-                </div>
-                ${liveRule.protection ? `
-                <div class="field" style="margin-top:10px">
-                  <label class="field-label">縮退版(崩れた日の最小構成)</label>
-                  <input class="input" type="text" data-modal-field="fallbackTitle" value="${escapeHTML(liveRule.fallbackTitle || "")}" placeholder="例: 自宅スクワット5分">
-                  <input class="input" type="number" min="0" step="1" data-modal-field="fallbackMinutes" data-modal-kind="number" value="${liveRule.fallbackMinutes ?? ""}" placeholder="分(任意)" style="margin-top:6px; max-width:120px">
-                  <div class="muted" style="font-size:11px; margin-top:4px">設定すると、ルーティンタブ・ホームに「縮退版で実行」ボタンが出ます。フルで出来ない日もワンタップで実行でき、連続欠落日数がリセットされます。</div>
-                </div>
-                <div class="field" style="margin-top:10px">
                   <label class="field-label">アンカー(既存の別ルーティン/チェーンの直後に自動配置)</label>
                   <select class="select" data-modal-field="anchor">
                     <option value="" ${!liveRule.anchor ? "selected" : ""}>(アンカーなし)</option>
@@ -13738,7 +13481,6 @@ function buildBlockModal(block) {
                   </select>
                   <div class="muted" style="font-size:11px; margin-top:4px">選んだルーティン/チェーンが完了した直後の時刻に、このルーティンのBlockを自動生成します。</div>
                 </div>
-                ` : ""}
                 ` : ""}
               `;
             }
@@ -14486,7 +14228,7 @@ function bufferMeterHTML() {
   const overload = computeDailyOverload(state.selectedDate);
   if (overload.overloaded) {
     // 第4状態(灰色): 通常の緑/黄/赤の代わりに「計画時点でバッファ未確保」を表示する。
-    // 責めないトーン(v93 homeRoutineCheckBannerと同じ文体)で提案するだけに留める。
+    // 責めないトーンで提案するだけに留める。
     return `
       <div class="buffer-meter overload" data-buffer-level="overload" data-overload-shortfall="${overload.shortfallMin}">計画時点でバッファ未確保(${overload.shortfallMin}分不足)</div>
       <div class="buffer-overload-hint">見積もりが1日の枠を超えています。タスクを減らすか、見積もりを見直しませんか</div>

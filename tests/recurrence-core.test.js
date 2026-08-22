@@ -267,6 +267,19 @@ test("triggerAnchorPlacements: アンカー完了1分後にルール側Blockを�
   assert.equal(placed[0].plannedEndAt, "2026-08-20T08:11");
 });
 
+test("triggerAnchorPlacements: 23:58完了時は開始・終了を23:59へクランプする", () => {
+  resetState();
+  TODAY = "2026-08-20";
+  currentState.recurrences.push({
+    id: "lateFollow", title: "夜のログ", category: "ルーティン", kind: "daily",
+    anchor: "lateAnchor", startTime: "", endTime: "", deleted: false
+  });
+  triggerAnchorPlacements("lateAnchor", "2026-08-20T23:58");
+  const placed = currentState.blocks.find((b) => b.recurrenceGroupId === "lateFollow");
+  assert.equal(placed?.plannedStartAt, "2026-08-20T23:59");
+  assert.equal(placed?.plannedEndAt, "2026-08-20T23:59");
+});
+
 test("triggerAnchorPlacements: 同日に既にBlockがあれば重複配置しない", () => {
   resetState();
   TODAY = "2026-08-20";

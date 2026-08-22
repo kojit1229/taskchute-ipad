@@ -567,7 +567,7 @@ function mergeWeeklyWishMaps(localMap, remoteMap) {
 
 // v153レビュー対応(2026-07-28、両レビュー一致・データ消失クラス指摘): 今日の庭(gardenLog)。
 // 日付キー{done,total}にはupdatedAtが無いため、他の日付マップ(dailyDeclarations等)と同じ
-// タイムスタンプ比較ではなく、updateGardenLog()と同じ「フィールド別max」で端末間もマージする
+// タイムスタンプ比較ではなく、「フィールド別max」で端末間もマージする
 // (設計書§③「競合時はキーごとにdoneの大きい方を採用(加点式マージ)」をtotalにも適用)。
 // 片方にしか無い日付キーもそのまま合流するため、端末Aだけが記録したエントリがリモート採用後も
 // 消えない。

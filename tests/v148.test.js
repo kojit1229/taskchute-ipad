@@ -1,7 +1,6 @@
 // v148 検証: UI改善計画Phase3(導線の再編)。CHANGES_v148.md参照。
 //
-// (1) 「その他」12項目 → 目的別4群(計画/思考/振り返り/ツール)。ルーティンは実行系(タスクシュート)
-//     の上部リンクへ昇格し、その他グリッドからは除外される
+// (1) 「その他」12項目 → 目的別4群(計画/思考/振り返り/ツール)
 // (2) その他配下のビュー(例: 0秒思考)を開いたとき、ヘッダに「その他 › 群名」の現在地表示が出る
 // (3) 設定13パネル → 4群アコーディオン(既定全閉。「データと同期」は同期停止アラート発生時だけ初期open)
 // (5) ジャーナル当日パネル → 朝/夜/本文の3details。現在時刻(〜14時=朝/14時〜=夜)で自動open。
@@ -75,9 +74,9 @@ function check(name, cond, extra = "") {
       });
 
     // ============================================================
-    // (1) 「その他」の目的別4群 + ルーティンの昇格
+    // (1) 「その他」の目的別4群
     // ============================================================
-    console.log("[1] 「その他」12項目 → 目的別4群。ルーティンは除外され、タスクシュート上部リンクへ昇格");
+    console.log("[1] 「その他」12項目 → 目的別4群");
     await seed({ view: "more" });
     const groupTitles = await page.locator(".more-group-title").allTextContents();
     check("4群の見出しが揃っている(計画/思考/振り返り/ツール)",
@@ -86,32 +85,14 @@ function check(name, cond, extra = "") {
       (els) => els.map((el) => el.dataset.view)
     );
     // v217: 週次・計器盤の削除後は7項目
-    check("その他グリッドは7項目(削除済みタブとルーティンを除外)",
+    check("その他グリッドは7項目(削除済みタブを除外)",
       moreNavButtons.length === 7, JSON.stringify(moreNavButtons));
-    check("ルーティンはその他グリッドに含まれない", !moreNavButtons.includes("routine"), JSON.stringify(moreNavButtons));
     check("計画群が先頭でグループ単位にまとまっている",
       moreNavButtons.slice(0, 4).join(",") === "home,wbs,wish,vision", JSON.stringify(moreNavButtons));
     // 頭文字1字アイコン(W/R/A等)ではなく絵文字になっていることを確認(codex-ui-review N4対応)
     const badgeTexts = await page.locator('.more-group [data-action="nav"] .badge').allTextContents();
     check("バッジが1文字のアルファベットではない(絵文字化)",
       badgeTexts.every((t) => !/^[A-Za-z]$/.test(t.trim())), JSON.stringify(badgeTexts));
-
-    console.log("[1b] タスクシュート上部にルーティンへのリンクがあり、遷移できる");
-    await seed({ view: "tasks" });
-    const routineLink = page.locator('#main [data-action="nav"][data-view="routine"]');
-    check("タスクシュート画面にルーティンへのリンクがある", await routineLink.count() === 1);
-    await routineLink.click();
-    await page.waitForTimeout(300);
-    const viewAfterRoutineLink = (await stateNow()).currentView;
-    check("クリックでルーティン画面へ遷移する", viewAfterRoutineLink === "routine", viewAfterRoutineLink);
-
-    console.log("[1c] ルーティン画面ではbottom-navの「実行」がactiveになる(「その他」ではない、Codex指摘)");
-    // 現在state.currentView==="routine"のまま(renderBottomNavはビューポート幅に関係なく
-    // #bottomNav.innerHTMLを描画するため、デスクトップ幅のままでもclass判定は検証できる)。
-    const tasksNavActive = await page.locator('#bottomNav [data-action="nav"][data-view="tasks"]').evaluate((el) => el.classList.contains("active"));
-    const moreNavActive = await page.locator('#bottomNav [data-action="nav"][data-view="more"]').evaluate((el) => el.classList.contains("active"));
-    check("ルーティン画面でbottom-navの「実行」がactiveになる", tasksNavActive === true, String(tasksNavActive));
-    check("ルーティン画面でbottom-navの「その他」はactiveにならない", moreNavActive === false, String(moreNavActive));
 
     // ============================================================
     // (2) その他配下ビューの現在地表示(その他 › 群名)
@@ -120,8 +101,8 @@ function check(name, cond, extra = "") {
     await seed({ view: "zero" });
     const breadcrumbText = await page.locator(".view-breadcrumb").first().textContent();
     check("0秒思考のヘッダに「その他 › 思考」が出る", (breadcrumbText || "").includes("その他") && (breadcrumbText || "").includes("思考"), breadcrumbText);
-    console.log("[2b] home/tasks/timeline/journal/routineには現在地表示が出ない(その他配下ではないため)");
-    for (const v of ["home", "tasks", "timeline", "journal", "routine"]) {
+    console.log("[2b] home/tasks/timeline/journalには現在地表示が出ない(その他配下ではないため)");
+    for (const v of ["home", "tasks", "timeline", "journal"]) {
       await seed({ view: v });
       const bc = await page.locator(".view-breadcrumb").count();
       check(`${v}にはview-breadcrumbが出ない`, bc === 0, String(bc));

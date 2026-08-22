@@ -102,6 +102,7 @@ const explicitDomains = {
   "v123.test.js": ["ui-responsive"],
   "v127.test.js": ["ui-responsive"],
   "v129.test.js": ["planning-execution", "journal-health"],
+  "v132.test.js": ["planning-execution", "journal-health"],
   "v133.test.js": ["planning-execution", "content-ai"],
   "v151.test.js": ["ui-responsive"],
   "v155.test.js": ["planning-execution", "ui-responsive"],

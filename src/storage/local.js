@@ -9,7 +9,7 @@
 //   3. state自体はsrc/state/store.js(何もimportしない真の葉)からimportする一方向依存のみ
 //      (store.js→storage/local.jsの逆流はなく、循環は発生しない)。
 //   4. saveState()は本来この3関数と同じstorage層だが、scheduleAutoSave/scheduleAutoSync
-//      (src/sync/github.js側)・showToast/updateGardenLog/pruneGardenLog等アプリ全体の
+//      (src/sync/github.js側)・showToast等アプリ全体の
 //      多数の関数に依存しており、これらをすべて依存注入すると設計書のloadState(normalize, seed)
 //      パターンをはるかに超える大きな注入面になる(呼び出し元は数百箇所あり、注入引数を
 //      増やすと「6行の置換で済む」という設計方針そのものに反する)。そのため saveState() は

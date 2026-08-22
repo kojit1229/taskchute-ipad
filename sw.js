@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v218";
+const CACHE_NAME = "taskchute-journal-pwa-v219";
+// v219: routineタブUI・今日の庭・チェーン実行・過集中ゲート・保護系UIを削除した。
 // v218: 繰り返し実体化エンジンとroutineRateをsrc/core/recurrence.jsへ移設した(挙動不変)。
 // v217: 週次・旧計器盤・12週サイクルの専用ビューを削除し、週次提案登録をAIレポートへ移設した。
 // v216: ポモドーロ独立タブ・Study With Me・Wish仕分け・月間ボードを削除した。
@@ -259,7 +260,6 @@ const APP_SHELL = [
   "./src/core/today-model.js",
   "./src/features/coach.js",
   "./src/features/journal.js",
-  "./src/features/routine.js",
   "./src/features/timeline-layout.js",
   "./src/features/timeline.js",
   "./src/features/today-tower.js",

@@ -1038,14 +1038,12 @@ function check(name, cond, extra = "") {
       (await nowLineBorderColor()) === NOW_LINE_LEGACY, await nowLineBorderColor());
 
     // ============================================================
-    // ==== ここから B5(F1/F2/F3/F5)追記セクション [30]〜[34] ====
-    // 設計の正: ../taskchute-notes/designs/v169-today-cockpit.md §12 の F1/F2/F3/F5 行
-    //   (2026-07-29改訂版。K裁定②=F3は加点表現・ストリーク/連続日数は出さない)。
+    // ==== ここから B5(F1/F2/F5)追記セクション [30]〜[34] ====
+    // 設計の正: ../taskchute-notes/designs/v169-today-cockpit.md §12 の F1/F2/F5 行。
     // 現物調査: workbench/out/2026-07-29-today-cockpit-impl/b5-survey.md(部品実名の正)。
     // DOM契約(実装側と共有済み):
     //   F1: 既存 #blockTitle(renderTasksのform-strip) / F2: .drift-panel / .time-comb /
-    //   .time-comb-gap[data-start][data-end] / F3: .routine-week-days / .routine-trend /
-    //   F5: .wish-ripeness / .wish-ripeness-bar
+    //   .time-comb-gap[data-start][data-end] / F5: .wish-ripeness / .wish-ripeness-bar
     // 実装(別担当が並行作業中)より先に仕様から書いた。前提が実装と食い違った場合は
     // テストを弱めるのではなく、前提の側を実装と突合して直すこと:
     //   前提B5-1: F1のEnter確定は #blockTitle のkeydown(Enter)。IME変換中は既存の
@@ -1061,19 +1059,15 @@ function check(name, cond, extra = "") {
     //            migratedTo・carryCount+1)。追加UIは挟まない
     //   前提B5-6: .time-comb-gap の data-start/data-end は "HH:MM"系文字列か分数値のどちらか
     //            (両対応で解釈する)。タップは「先にBlockを作ってから」編集モーダルを開く(§12 F2)
-    //   前提B5-7: F3の「直近7日」は当日を含む7日窓。「実施できた日」= done≥1。当日ぶんは
-    //            gardenLog[今日]とroutineRate(当日blocks)を同値にseedし、どちらの実装でも一致させる
-    //   前提B5-8: F3トレンドの点は .routine-trend 内の [data-date] 要素(キー存在日のみ描画・
-    //            30日窓は当日を含む)。欠測日・窓外日には要素を作らない
-    //   前提B5-9: F5の熟成度は .wish-ripeness-bar のインラインstyle width%(30日=50%・90日=100%
+    //   前提B5-7: F5の熟成度は .wish-ripeness-bar のインラインstyle width%(30日=50%・90日=100%
     //            の固定写像・90日以降は100%で頭打ち)。45日は50〜100%の中間
     //            (30〜90日を線形補間するなら 50 + (45-30)×(50/60) = 62.5%)
     // ============================================================
 
-    // B5用seed: 既存seed()/seedB2()/seedB3()と同じ流儀に selectedDate / gardenLog を足した拡張
+    // B5用seed: 既存seed()/seedB2()/seedB3()と同じ流儀に selectedDate を足した拡張
     // (既存関数は変更禁止のため別名で追加。pomodoro/zeroThinkingは前セクションの持ち越し防止で毎回リセット)
-    async function seedB5({ blocks = [], view = "tasks", settings = {}, selectedDate = TODAY, projects = null, tasks = null, gardenLog = null } = {}) {
-      await page.evaluate(({ KEY, blocks, view, settings, selectedDate, projects, tasks, gardenLog }) => {
+    async function seedB5({ blocks = [], view = "tasks", settings = {}, selectedDate = TODAY, projects = null, tasks = null } = {}) {
+      await page.evaluate(({ KEY, blocks, view, settings, selectedDate, projects, tasks }) => {
         const s = JSON.parse(localStorage.getItem(KEY));
         s.blocks = blocks;
         s.currentView = view;
@@ -1082,14 +1076,13 @@ function check(name, cond, extra = "") {
         s.sleep.logs = {};
         s.condition = s.condition || { logs: {} };
         s.condition.logs = {};
-        s.gardenLog = gardenLog || {};
         s.zeroThinking = { themes: [], entries: [], groups: [], suggestedThemes: [] };
         s.pomodoro = { ...s.pomodoro, running: false, blockId: "", startedAt: "", endsAt: "", mode: "focus" };
         if (projects) s.projects = projects;
         if (tasks) s.tasks = tasks;
         Object.assign(s.settings, settings);
         localStorage.setItem(KEY, JSON.stringify(s));
-      }, { KEY, blocks, view, settings, selectedDate, projects, tasks, gardenLog });
+      }, { KEY, blocks, view, settings, selectedDate, projects, tasks });
       await page.reload();
       await page.waitForSelector('[data-action="nav"]', { state: "attached" });
     }
@@ -1338,82 +1331,6 @@ function check(name, cond, extra = "") {
     await page.waitForSelector(".modal-card", { state: "detached" });
 
     // ============================================================
-    // [33] F3: 「直近7日で実施できた日数 n/7」が gardenLog フィクスチャの期待値と一致する
-    // ============================================================
-    console.log("[33] F3: gardenLogフィクスチャで「直近7日 4/7」(今日・-1・-3・-6が実施。-2/-5は0件、-4は欠測)が一致する");
-    // 実施できた日(done≥1): 今日(2/3)・-1(2/3)・-3(1/1)・-6(3/3)= 4日。
-    // -2(0/3)・-5(0/2)は記録ありの0件日、-4は欠測(キーなし)、-40は30日トレンド窓外の検証用。
-    // 当日ぶんはgardenLog[今日]={2,3}と実blocks(ルーティン3件中2完了)を同値にし、
-    // 実装が当日をgardenLog/routineRateのどちらで読んでも同じ結果にする(前提B5-7)
-    const gardenFixture = {
-      [TODAY]: { done: 2, total: 3 },
-      [daysAgoISO(1)]: { done: 2, total: 3 },
-      [daysAgoISO(2)]: { done: 0, total: 3 },
-      [daysAgoISO(3)]: { done: 1, total: 1 },
-      [daysAgoISO(5)]: { done: 0, total: 2 },
-      [daysAgoISO(6)]: { done: 3, total: 3 },
-      [daysAgoISO(40)]: { done: 1, total: 1 }
-    };
-    await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    await seedB5({
-      view: "routine",
-      gardenLog: gardenFixture,
-      blocks: [
-        block("f3-r1", { title: "F3-ルーティン1", category: "ルーティン", plannedStartAt: at("07:00"), plannedEndAt: at("07:15"), completed: true, actualStartAt: at("07:00"), actualEndAt: at("07:15") }),
-        block("f3-r2", { title: "F3-ルーティン2", category: "ルーティン", plannedStartAt: at("08:00"), plannedEndAt: at("08:15"), completed: true, actualStartAt: at("08:00"), actualEndAt: at("08:15") }),
-        block("f3-r3", { title: "F3-ルーティン3", category: "ルーティン", plannedStartAt: at("21:00"), plannedEndAt: at("21:15") })
-      ]
-    });
-    await page.waitForSelector(".routine-week-days", { state: "attached" });
-    const weekDaysText = await panelText(".routine-week-days");
-    check("「直近7日 4/7」が表示される(gardenLog生データからの期待値と一致)",
-      /4\s*\/\s*7/.test(weekDaysText || ""), weekDaysText);
-    check("3/7ではない(今日を含む7日窓。-1〜-7窓だと3/7になる。前提B5-7)", !/3\s*\/\s*7/.test(weekDaysText || ""), weekDaysText);
-    check("5/7ではない(欠測日-4を実施扱いにしない)", !/5\s*\/\s*7/.test(weekDaysText || ""), weekDaysText);
-
-    // ============================================================
-    // [33b] F3 トレンド: データ点数=キー存在日数。欠測日を0%として描かない
-    // ============================================================
-    console.log("[33b] F3: 30日トレンドの点はキー存在日のみ(6点)。0件日(-2)は点になり、欠測日(-4)・窓外(-40)は点にならない");
-    await page.waitForSelector(".routine-trend", { state: "attached" });
-    const trendDates = await page.evaluate(() =>
-      [...document.querySelectorAll(".routine-trend [data-date]")].map((el) => el.dataset.date));
-    check("トレンドのデータ点数=30日窓内のキー存在日数(6点: 今日・-1・-2・-3・-5・-6)(前提B5-8)",
-      trendDates.length === 6, JSON.stringify(trendDates));
-    check("記録ありの0件日(-2)は点として描かれる(欠測との区別)", trendDates.includes(daysAgoISO(2)), JSON.stringify(trendDates));
-    // v186レビューT-1: 点の%値が生データと一致することを1点で突合(-1日 = 2/3 = 67%)
-    const trendPct1 = await page.evaluate((d) =>
-      document.querySelector(`.routine-trend [data-date="${d}"]`)?.style.getPropertyValue("--routine-rate"), daysAgoISO(1));
-    check("トレンド点の%値が生データと一致(-1日: 2/3=67%)", (trendPct1 || "").trim() === "67%", trendPct1);
-    check("欠測日(-4)は0%として描かれない(点が無い)", !trendDates.includes(daysAgoISO(4)), JSON.stringify(trendDates));
-    check("30日窓の外(-40)は描かれない", !trendDates.includes(daysAgoISO(40)), JSON.stringify(trendDates));
-
-    // ============================================================
-    // [33c] F3 K裁定の回帰ガード: 新パネルに「ストリーク」「連続」の語が出ない
-    // ============================================================
-    console.log("[33c] F3: 新パネル(.routine-week-days / .routine-trend)に「ストリーク」「連続」が出ない(K裁定②の回帰ガード)");
-    // 判定は新パネル2要素にスコープする(ルーティンビュー全体には既存の「連続ルーティン(チェーン)」
-    // 「連続欠落」表示が正当に存在するため。K裁定の対象はF3の新規指標表現)
-    const f3PanelText = `${(await panelText(".routine-week-days")) || ""}\n${(await panelText(".routine-trend")) || ""}`;
-    check("F3パネルに「ストリーク」が出ない", !f3PanelText.includes("ストリーク"), f3PanelText);
-    check("F3パネルに「連続」が出ない(加点表現のみ)", !f3PanelText.includes("連続"), f3PanelText);
-    check("F3パネルに streak 表記も出ない", !/streak/i.test(f3PanelText), f3PanelText);
-
-    // ============================================================
-    // [33d] F3: gardenLog空でも崩れない
-    // ============================================================
-    console.log("[33d] F3: gardenLogが空でもルーティンビューがエラーなく描画される");
-    const failuresBeforeF3Empty = failures;  // この区間のpageerror検出用([13]と同じ方式)
-    await seedB5({ view: "routine", gardenLog: {}, blocks: [] });
-    await waitView("routine");
-    check("gardenLog空でも #main が空にならない",
-      await page.evaluate(() => document.getElementById("main").innerHTML.trim().length > 0));
-    check("gardenLog空のパネルに NaN/undefined が出ない",
-      await page.evaluate(() => {
-        const t = [".routine-week-days", ".routine-trend"].map((sel) => document.querySelector(sel)?.textContent || "").join("");
-        return !/NaN|undefined|Infinity/.test(t);
-      }));
-    check("[33d]区間の描画で pageerror が発生しない", failures === failuresBeforeF3Empty);
 
     // ============================================================
     // [34] F5: Wish熟成度ゲージ — 固定写像(30日=50%・90日=100%)との一致
@@ -1526,7 +1443,6 @@ function check(name, cond, extra = "") {
         s.sleep.logs = {};
         s.condition = s.condition || { logs: {} };
         s.condition.logs = {};
-        s.gardenLog = {};
         s.zeroThinking = { themes: [], entries: [], groups: [], suggestedThemes: [] };
         s.pomodoro = { ...s.pomodoro, running: false, blockId: "", startedAt: "", endsAt: "", mode: "focus" };
         if (visionDirectCats === null) delete s.settings.visionDirectCategories;
@@ -1692,11 +1608,10 @@ function check(name, cond, extra = "") {
     //   generatedAt 26時間超で「古い」/ ファイル無しで一切エラーなし。
     // ファイル契約(バッチ側=loop/の別発注。アプリはこの形だけを読む):
     //   { generatedAt: "YYYY-MM-DDTHH:MM:SS"(T区切り秒あり),
-    //     routineSuggestions: [{ routineTitle, suggestion, reason }],
     //     wishRipe: [{ taskId, title, reason }],   ← 参照は projectId でなく taskId(実体はTask。F5と同じ)
     //     zeroPattern: { body } }
     // DOM契約(実装側と共有済み):
-    //   パネルroot .ai-insights[data-insight="routine|wish|zero"] /
+    //   パネルroot .ai-insights[data-insight="wish|zero"] /
     //   鮮度 .ai-insights-freshness(26時間超で .is-stale +「古い」を含む文言)
     // 実装(別担当が並行作業中)より先に仕様から書いた。前提が実装と食い違った場合は
     // テストを弱めるのではなく、前提の側を実装と突合して直すこと:
@@ -1706,9 +1621,9 @@ function check(name, cond, extra = "") {
     //            (キャッシュはメモリのみ。同一セッション内のビュー往復では再fetchしない)。
     //            同名の別スキーマとはパスで区別する(§12 F8「同名紛らわしいが別物」。
     //            routeのendsWith判定が別パスに一致しないことを維持する)
-    //   前提B7-2: パネルは routine / wish / zero 各ビューのrender内で描画され、fetch完了時は
+    //   前提B7-2: パネルは wish / zero 各ビューのrender内で描画され、fetch完了時は
     //            hydrateStaticMarkdown 末尾の再描画で開いたままのビューへも反映される(§12 F8
-    //            「再描画view一覧に routine/wish を追加」)。検証は fetch応答後のDOM出現
+    //            「再描画view一覧にwishを追加」)。検証は fetch応答後のDOM出現
     //            (waitForSelector)/不在(応答待ち+マクロタスク2周。[45b]と同手法)で行う
     //   前提B7-3: 鮮度は localDateTimeToMs(generatedAt) 基準で、26時間超のとき .ai-insights-freshness に
     //            .is-stale が付き「古い」を含む文言になる。鮮度内では .is-stale は付かない。
@@ -1718,9 +1633,8 @@ function check(name, cond, extra = "") {
     //   前提B7-5: F8は表示のみ(提案の適用は手動・アプリ内AI呼び出しなし)。正常表示しても
     //            state.tasks/blocks/settings は変化しない。突合は保存契機(setView)を踏んで
     //            localStorageへ書き戻させてから行う([34c]と同じ手順。初回normalize補完分を比較から除く)
-    //   前提B7-6: 各パネルにフィクスチャ本文(routineSuggestions=suggestion/routineTitle・
-    //            wishRipe=title/reason・zeroPattern=body)が表示される。レイアウト・
-    //            件数・整形は契約にしない(マーカー文字列 AI-ROUTINE/AI-WISH/AI-ZERO の包含で読む)
+    //   前提B7-6: 各パネルにフィクスチャ本文(wishRipe=title/reason・zeroPattern=body)が表示される。
+    //            レイアウト・件数・整形は契約にしない(マーカー文字列 AI-WISH/AI-ZERO の包含で読む)
     //   前提B7-7: 404・壊れJSON・空文字(fetchGitHubRawTextの失敗時空文字と同型)では .ai-insights が
     //            1枚も出ず、pageerrorゼロ・各ビューの既存要素は無傷(フェイルソフト。[45b]/[48]と同思想)
     // ============================================================
@@ -1729,7 +1643,6 @@ function check(name, cond, extra = "") {
     const B7_WISH_TASK_ID = "w-b7-ripe";
     const B7_AI_OK = {
       generatedAt: `${TODAY}T07:00:00`,  // 当日朝生成=鮮度内(T区切り秒あり。FORMAT_CONTRACT整合)
-      routineSuggestions: [{ routineTitle: "AIRT-TITLE-朝の散歩", suggestion: "AIRT-SUG-7時台へ前倒し", reason: "AIRT-REASON-起床後実績が7時台に集中" }],
       wishRipe: [{ taskId: B7_WISH_TASK_ID, title: "AIWS-TITLE-熟成やりたい", reason: "AIWS-REASON-作成から90日経過" }],
       zeroPattern: { body: "AI-ZERO-仕事テーマへの偏りが続いている" }
     };
@@ -1758,7 +1671,7 @@ function check(name, cond, extra = "") {
     // 拡張(既存関数は変更禁止のため別名で追加)。wishビューの既存要素(.wish-card)の無傷検証と、
     // wishRipe.taskId=既存wishタスク の契約フィクスチャを兼ねる。
     const b7WishTask = wishTaskB5(B7_WISH_TASK_ID, "B7-熟成やりたい", atOn(daysAgoISO(90), "00:00"));
-    async function seedB7({ blocks = [], view = "routine", settings = {} } = {}) {
+    async function seedB7({ blocks = [], view = "wish", settings = {} } = {}) {
       await page.evaluate(({ KEY, blocks, view, settings, TODAY, wishProject, wishTask }) => {
         const s = JSON.parse(localStorage.getItem(KEY));
         s.blocks = blocks;
@@ -1768,7 +1681,6 @@ function check(name, cond, extra = "") {
         s.sleep.logs = {};
         s.condition = s.condition || { logs: {} };
         s.condition.logs = {};
-        s.gardenLog = {};
         s.zeroThinking = { themes: [], entries: [], groups: [], suggestedThemes: [] };
         s.pomodoro = { ...s.pomodoro, running: false, blockId: "", startedAt: "", endsAt: "", mode: "focus" };
         s.projects = (s.projects || []).filter((p) => p.id !== wishProject.id).concat([wishProject]);
@@ -1784,10 +1696,7 @@ function check(name, cond, extra = "") {
     }
     // 各ビューの既存要素の無傷判定(404/壊れJSON区間で使う。[45b]の「タブ本体は無傷」と同思想)
     async function b7CheckViewIntact(view, label) {
-      if (view === "routine") {
-        check(`${label}: routineビューの既存要素(.segmented表示切替)が無傷`,
-          await page.locator("#main .segmented").count() >= 1);
-      } else if (view === "wish") {
+      if (view === "wish") {
         check(`${label}: wishビューの既存要素(.wish-card)が無傷`,
           await page.locator(".wish-card").count() >= 1);
       } else if (view === "zero") {
@@ -1797,20 +1706,12 @@ function check(name, cond, extra = "") {
     }
 
     // ============================================================
-    // [54] F8: 正常フィクスチャ → routine/wish/zero 各ビューに .ai-insights が出て本文が表示される
+    // [54] F8: 正常フィクスチャ → wish/zero各ビューに .ai-insights が出て本文が表示される
     // ============================================================
-    console.log("[54] F8: 正常フィクスチャで3ビューすべてに .ai-insights パネルが出て、各フィクスチャ本文が表示される");
+    console.log("[54] F8: 正常フィクスチャでwish/zeroに .ai-insights パネルが出て、各フィクスチャ本文が表示される");
     const failuresBefore54 = failures;
     await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    await seedB7({ view: "routine" });
-    // fetch完了→hydrateStaticMarkdown末尾の再描画で、開いたままのroutineビューにパネルが出る(前提B7-2)
-    await page.waitForSelector(aiPanelSel("routine"), { state: "attached" });
-    check("routineビューに .ai-insights[data-insight='routine'] が1つ描画される(DOM契約)",
-      await page.locator(aiPanelSel("routine")).count() === 1);
-    const rtText54 = (await panelText(aiPanelSel("routine"))) || "";
-    check("routineパネルに suggestion と reason がそれぞれ表示される(フィールド別マーカーで弁別。レビューM2)",
-      rtText54.includes("AIRT-SUG") && rtText54.includes("AIRT-REASON"), rtText54);
-    await w1GoView("wish");
+    await seedB7({ view: "wish" });
     await page.waitForSelector(aiPanelSel("wish"), { state: "attached" });
     check("wishビューに .ai-insights[data-insight='wish'] が1つ描画される",
       await page.locator(aiPanelSel("wish")).count() === 1);
@@ -1829,22 +1730,22 @@ function check(name, cond, extra = "") {
     check("[54]区間の描画で pageerror が発生しない", failures === failuresBefore54);
 
     // ============================================================
-    // [55] F8: ファイル無し(404)→ 全ビューで .ai-insights が存在しない・pageerrorゼロ・既存要素は無傷
+    // [55] F8: ファイル無し(404)→ 両ビューで .ai-insights が存在しない・pageerrorゼロ・既存要素は無傷
     // ============================================================
-    console.log("[55] F8: ai-insights.json 404 では3ビューとも .ai-insights が出ず、既存要素は無傷(一切エラーなし)");
+    console.log("[55] F8: ai-insights.json 404 ではwish/zeroとも .ai-insights が出ず、既存要素は無傷(一切エラーなし)");
     const failuresBefore55 = failures;
     aiInsightsFx.status = 404;
     await page.clock.setFixedTime(fixedTime(12, 0, 0));
     const b7Resp404 = b7WaitAiResponse();
-    await seedB7({ view: "routine" });
+    await seedB7({ view: "wish" });
     await b7Resp404;
-    await waitView("routine");
+    await waitView("wish");
     await b7FlushMacrotasks();
-    check("404: routineビューに .ai-insights が1枚も出ない(ファイル無しで一切エラーなし)",
+    check("404: wishビューに .ai-insights が1枚も出ない(ファイル無しで一切エラーなし)",
       await page.locator(".ai-insights").count() === 0);
-    await b7CheckViewIntact("routine", "404");
-    // 同一セッション内の残り2ビュー(TTL30分キャッシュにより再fetchなし=失敗結果のまま。前提B7-1)
-    for (const v of ["wish", "zero"]) {
+    await b7CheckViewIntact("wish", "404");
+    // 同一セッション内の残りビュー(TTL30分キャッシュにより再fetchなし=失敗結果のまま。前提B7-1)
+    for (const v of ["zero"]) {
       await w1GoView(v);
       check(`404: ${v}ビューに .ai-insights が1枚も出ない`,
         await page.locator(".ai-insights").count() === 0);
@@ -1862,14 +1763,13 @@ function check(name, cond, extra = "") {
     aiInsightsFx.body = "{broken";
     await page.clock.setFixedTime(fixedTime(12, 0, 0));
     const b7RespBroken = b7WaitAiResponse();
-    await seedB7({ view: "routine" });
+    await seedB7({ view: "zero" });
     await b7RespBroken;
-    await waitView("routine");
+    await waitView("zero");
     await b7FlushMacrotasks();
     check("壊れJSON('{broken')では .ai-insights が出ない(例外を投げず無傷スキップ。完了条件(b))",
       await page.locator(".ai-insights").count() === 0);
-    await b7CheckViewIntact("routine", "壊れJSON");
-    await w1GoView("zero");
+    await b7CheckViewIntact("zero", "壊れJSON");
     check("壊れJSON: zeroビューにも .ai-insights が出ない",
       await page.locator(".ai-insights").count() === 0);
     await b7CheckViewIntact("zero", "壊れJSON");
@@ -1889,11 +1789,10 @@ function check(name, cond, extra = "") {
     // ============================================================
     // [57] F8: フィールド型不一致 → 壊れたフィールドのパネルだけ非表示・正常フィールドは表示(個別無視)
     // ============================================================
-    console.log("[57] F8: routineSuggestions=文字列・wishRipe=数値の型不一致では routine/wish パネルだけが出ず、zero は通常表示");
+    console.log("[57] F8: wishRipe=数値の型不一致ではwishパネルだけが出ず、zeroは通常表示");
     const failuresBefore57 = failures;
     aiInsightsFx.body = JSON.stringify({
       ...B7_AI_OK,
-      routineSuggestions: "壊れ文字列",  // 配列であるべき所に文字列(完了条件(c))
       wishRipe: 12345                    // 配列であるべき所に数値
     });
     await page.clock.setFixedTime(fixedTime(12, 0, 0));
@@ -1903,11 +1802,6 @@ function check(name, cond, extra = "") {
     check("正常フィールド(zeroPattern)のパネルも通常表示される",
       ((await panelText(aiPanelSel("zero"))) || "").includes("AI-ZERO"),
       await panelText(aiPanelSel("zero")));
-    await w1GoView("routine");
-    await b7FlushMacrotasks();
-    check("壊れたフィールド(routineSuggestions=文字列)のパネルだけが出ない(1フィールド壊れて全滅させない)",
-      await page.locator(aiPanelSel("routine")).count() === 0);
-    await b7CheckViewIntact("routine", "型不一致");
     await w1GoView("wish");
     await b7FlushMacrotasks();
     check("壊れたフィールド(wishRipe=数値)のパネルも出ない",
@@ -1924,11 +1818,11 @@ function check(name, cond, extra = "") {
     // 固定時刻12:00基準で27時間前 = 前日09:00(ISO文字列リテラルで組み立て。new Date('文字列')は使わない)
     aiInsightsFx.body = JSON.stringify({ ...B7_AI_OK, generatedAt: `${YESTERDAY}T09:00:00` });
     await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    await seedB7({ view: "routine" });
-    await page.waitForSelector(aiPanelSel("routine"), { state: "attached" });
+    await seedB7({ view: "wish" });
+    await page.waitForSelector(aiPanelSel("wish"), { state: "attached" });
     check("鮮度超過でもパネル自体は表示される(データは見える。[45c]の鮮度方針と同じ)",
-      await page.locator(aiPanelSel("routine")).count() === 1
-      && ((await panelText(aiPanelSel("routine"))) || "").includes("AIRT-SUG"));
+      await page.locator(aiPanelSel("wish")).count() === 1
+      && ((await panelText(aiPanelSel("wish"))) || "").includes("AIWS-REASON"));
     await page.waitForSelector(".ai-insights-freshness.is-stale", { state: "attached" });
     const b7StaleTexts = await page.evaluate(() =>
       [...document.querySelectorAll(".ai-insights-freshness.is-stale")].map((el) => el.textContent || ""));
@@ -1939,10 +1833,10 @@ function check(name, cond, extra = "") {
     // ============================================================
     // [59] F8: 提案の自動適用が無い(表示のみ)— 正常表示後に state.tasks/blocks/settings のJSONが不変
     // ============================================================
-    console.log("[59] F8: 正常フィクスチャを3ビューで表示しても tasks/blocks/settings のJSONが変化しない(表示のみ)");
+    console.log("[59] F8: 正常フィクスチャをwish/zeroで表示しても tasks/blocks/settings のJSONが変化しない(表示のみ)");
     await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    await seedB7({ view: "routine" });
-    await page.waitForSelector(aiPanelSel("routine"), { state: "attached" });
+    await seedB7({ view: "wish" });
+    await page.waitForSelector(aiPanelSel("wish"), { state: "attached" });
     // 保存契機(setView)を踏んで初回normalize補完分をlocalStorageへ書き戻させてから基準を取る([34c]と同手順)
     await w1GoView("tasks");
     await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).currentView === "tasks", KEY);
@@ -1950,9 +1844,9 @@ function check(name, cond, extra = "") {
       const s = JSON.parse(localStorage.getItem(KEY));
       return JSON.stringify({ tasks: s.tasks, blocks: s.blocks, settings: s.settings });
     }, KEY);
-    // 3ビューを巡回してパネルを表示させる(wishRipe提案のtask変更・routine提案のblock変更等が
+    // 2ビューを巡回してパネルを表示させる(wishRipe提案のtask変更等が
     // 勝手に走っていればこの間にstateが変わり、下の突合で落ちる)
-    for (const v of ["routine", "wish", "zero"]) {
+    for (const v of ["wish", "zero"]) {
       await w1GoView(v);
       await page.waitForSelector(aiPanelSel(v), { state: "attached" });
     }

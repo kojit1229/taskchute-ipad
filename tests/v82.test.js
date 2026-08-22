@@ -2,8 +2,8 @@
 // K承認済みの B1/B2/B3 に対応。CHANGES_v82.md参照。
 //   B1: bottom-nav(mobileNav)の入替。WBSを「その他」へ降ろし、ジャーナルを5枠に昇格
 //       (ホーム/ジャーナル/実行/時間/その他)。朝の体調記録(ホーム→ジャーナル)を1タップにする。
-//   B2: 「今日のリズム」ゾーン(ながれ+ルーティン)を折りたたみにし、集計値
-//       (ながれ完了数・ルーティン実行率)をsummary行に要約表示する。v73縮退モードの
+//   B2: 「今日のリズム」ゾーン(ながれ)を折りたたみにし、集計値
+//       (ながれ完了数)をsummary行に要約表示する。v73縮退モードの
 //       zone2-degradedとは独立foldId(zone2 / zone2-degraded)で共存させる。
 //       (注: 既定open/closedはv82時点は既定closedだったが、v146(CHANGES_v146.md)で
 //       行動優先の並び替えとあわせて既定openへ反転した。本ファイルはv146仕様に追従済み)
@@ -122,14 +122,12 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (b) B2: 「今日のリズム」ゾーンの既定折りたたみ + summary集計
     // ============================================================
-    console.log("[2] B2(通常時): 「今日のリズム」(ながれ+ルーティン)は既定open(v146)。summaryに集計値が出る");
+    console.log("[2] B2(通常時): 「今日のリズム」(ながれ)は既定open(v146)。summaryに集計値が出る");
     await page.evaluate((FOLD_KEY) => localStorage.removeItem(FOLD_KEY), FOLD_KEY);
     await seed({
       blocks: [
         planBlock({ id: "flow-1", title: "ながれ1", startMin: 9 * 60, completed: true }),
-        planBlock({ id: "flow-2", title: "ながれ2", startMin: 10 * 60, completed: false }),
-        planBlock({ id: "rt-1", title: "ルーティン1", startMin: 7 * 60, category: "ルーティン", completed: true }),
-        planBlock({ id: "rt-2", title: "ルーティン2", startMin: 7 * 60 + 30, category: "ルーティン", completed: false })
+        planBlock({ id: "flow-2", title: "ながれ2", startMin: 10 * 60, completed: false })
       ],
       view: "home"
     });
@@ -139,7 +137,6 @@ function check(name, cond, extra = "") {
     check("zone2-degradedは通常時には存在しない(独立foldIdで排他)", await page.locator('details[data-fold-id="zone2-degraded"]').count() === 0);
     const zone2Summary = await zone2.locator("summary").textContent();
     check("summaryに「ながれ 1/2」の集計が出る", zone2Summary.includes("ながれ 1/2"), zone2Summary);
-    check("summaryに「ルーティン実行 50%(1/2)」の集計が出る", zone2Summary.includes("ルーティン実行 50%(1/2)"), zone2Summary);
     check("既定openなので本文(ながれ2)が最初から見える", await zone2.locator("text=ながれ2").isVisible());
 
     await zone2.locator("summary").click();
@@ -158,8 +155,7 @@ function check(name, cond, extra = "") {
     await page.evaluate((FOLD_KEY) => localStorage.removeItem(FOLD_KEY), FOLD_KEY);
     await seed({
       blocks: [
-        planBlock({ id: "flow-1d", title: "縮退ながれ1", startMin: 9 * 60, completed: true }),
-        planBlock({ id: "rt-1d", title: "縮退ルーティン1", startMin: 7 * 60, category: "ルーティン", completed: true })
+        planBlock({ id: "flow-1d", title: "縮退ながれ1", startMin: 9 * 60, completed: true })
       ],
       view: "home",
       morningEnergyLog: { [TODAY]: 3 }
@@ -170,7 +166,7 @@ function check(name, cond, extra = "") {
     check("zone2(非縮退用foldId)は縮退時には存在しない", await page.locator('details[data-fold-id="zone2"]').count() === 0);
     check("zone2-degradedは既定closed", await zone2d.evaluate((el) => el.open) === false);
     const zone2dSummary = await zone2d.locator("summary").textContent();
-    check("縮退時summaryにも集計値が出る", zone2dSummary.includes("ながれ 1/1") && zone2dSummary.includes("ルーティン実行 100%(1/1)"), zone2dSummary);
+    check("縮退時summaryにも集計値が出る", zone2dSummary.includes("ながれ 1/1"), zone2dSummary);
 
     // ============================================================
     // (c) B3: ホーム常時表示のスリム化
@@ -212,24 +208,9 @@ function check(name, cond, extra = "") {
     check("スコアボードがdetailsとして描画されている", await scoreboardFold.count() === 1);
     check("スコアボードは既定closed", await scoreboardFold.evaluate((el) => el.open) === false);
     const scoreboardSummary = await scoreboardFold.locator("summary").textContent();
-    check("スコアボードのsummaryに集計値が出る(着手/主役/ルーティン/12週)", /着手\d+%/.test(scoreboardSummary) && scoreboardSummary.includes("主役"), scoreboardSummary);
+    check("スコアボードのsummaryに集計値が出る(着手/主役/12週)", /着手\d+%/.test(scoreboardSummary) && scoreboardSummary.includes("主役"), scoreboardSummary);
     check("足あと(zone4、今日タブ)は既定closedのまま(既存仕様を維持)",
       await page.locator('details[data-fold-id="zone4"]').evaluate((el) => el.open) === false);
-
-    console.log("[6] B3: スコアボードからのジャンプは、閉じているzone2(今日のリズム)も自動的に開く");
-    // v146: zone2は既定openになったため(この時点でFOLD_KEYはクリア済みで新規なので開いている)、
-    // まずユーザーが閉じた状態を作ってからジャンプの自動オープン挙動そのものを検証する
-    // (home-jumpの挙動自体は無変更)。
-    await page.locator('details[data-fold-id="zone2"] summary').click();
-    await page.waitForTimeout(150);
-    check("検証のため一旦zone2を閉じる", await page.locator('details[data-fold-id="zone2"]').evaluate((el) => el.open) === false);
-    await scoreboardFold.locator("summary").click();
-    await page.waitForTimeout(150);
-    check("スコアボードを開くとルーティンのジャンプ先セルが見える", await page.locator('.home-score[data-id="homezone-2"]').isVisible());
-    check("zone2はこの時点でまだclosed", await page.locator('details[data-fold-id="zone2"]').evaluate((el) => el.open) === false);
-    await page.click('.home-score[data-id="homezone-2"]');
-    await page.waitForTimeout(300);
-    check("ジャンプでzone2(今日のリズム)が自動的に開く", await page.locator('details[data-fold-id="zone2"]').evaluate((el) => el.open));
 
     console.log(failures === 0 ? "\n✅ v82 ALL PASS" : `\n❌ v82: ${failures} 件失敗`);
   } finally {

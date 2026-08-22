@@ -3,7 +3,7 @@
 // 抽出元: src/features/today.js:112-209 (runningBlockOf〜projectedInfo) / :558-560 (flightPosition)。
 // 抽出した7関数はロジックを変えず、依存だけhelpers/projects/tasks引数へ置き換えた。
 // v191(C2)の不変条件: ルーティンBlockはNOW FOCUS/NEXT QUEUE(runningBlockOf/queueBlocksOf)から除外しROUTINEパネルへ一本化。
-// oneTap(実績記録専用Block)の除外は src/features/routine.js routineRate() と帯合計を一致させる契約(routineBandsOf/undoneRoutineBlocksOf)。
+// oneTap(実績記録専用Block)の除外は src/core/recurrence.js routineRate() と帯合計を一致させる契約(routineBandsOf/undoneRoutineBlocksOf)。
 // 時刻の既定引数(Date.now()/new Date())のみ純粋性の例外。呼び出し側が明示注入すれば決定論になる。
 // characterization test: tests/tower-model-core.test.js / tests/today-core.test.js。
 

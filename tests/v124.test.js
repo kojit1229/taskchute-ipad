@@ -112,15 +112,13 @@ function extractAllBlockBodies(css, headerRe) {
 
   // ============================================================
   // v124追補(Codexレビュー P2指摘対応): 「v124で新規追加した分」しか
-  // 止めていなかった既存の位置系エフェクト(.toast / .routine-card:hover /
-  // 開閉シェブロン)がreduced-motionブロックでカバーされているかの静的検査。
+  // 止めていなかった既存の位置系エフェクト(.toast / 開閉シェブロン)が
+  // reduced-motionブロックでカバーされているかの静的検査。
   // 既存チェックは無改変で、ここに追加のみ行う。
   // ============================================================
   if (reducedMotionBodies.length > 0) {
     check("reduced-motionブロックが.toastの縦スライドtransitionを止めている",
       /\.toast\s*\{[^}]*transition:\s*opacity/.test(reducedMotionBody));
-    check("reduced-motionブロックが.routine-card:hoverの水平シフトを打ち消している(transform: none)",
-      /\.routine-card:hover\s*\{[^}]*transform:\s*none/.test(reducedMotionBody));
     check("reduced-motionブロックが開閉シェブロン3種(journal-prompts/home-fold/lev-helper)の回転transitionを止めている",
       /\.journal-prompts summary::before[^{]*\{[^}]*transition:\s*none/.test(reducedMotionBody) &&
       /\.home-fold-chevron[^{]*\{[^}]*transition:\s*none/.test(reducedMotionBody) &&

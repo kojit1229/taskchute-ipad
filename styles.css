@@ -41,23 +41,6 @@
   --orange-text: #8a5100;
   --green-text: #1b6b3f;
   --teal-text: #0a6a61;
-  /* v153レビュー対応(2026-07-28): 今日の庭(今日の芽)の3段階配色。decisions.md
-     2026-07-27 K確定「完了1件=薄緑/50%以上=緑/全完了=濃緑」の直訳。
-     opacity(半透明合成)ではなく専用の実色トークンにした(ダークで薄緑が暗く沈んだ緑に
-     化ける問題を避けるため、ライト/ダークそれぞれで別の実測値を持つ)。--garden-midは
-     既存--greenと同値(装飾アイコン用途としての既存precedentを踏襲、白背景2.54:1は
-     v147コメント同様に許容範囲。node script実測: パネル上pale 2.26:1/deep 6.52:1)。
-     v155レビュー対応(2026-07-28、Claude実測): 旧--garden-pale(#6bbd8d)は--garden-mid
-     (#2fb96d)とのL*(CIE明度)差がわずか3.7しかなく、月間ピクセルのような小面積(18px角)
-     セルでは薄緑/緑がライトテーマで判別困難だった。単調に明度が下がるランプへ調整
-     (node script実測、L*: pale 86.9 / mid 66.8 / deep 39.8。pale-mid間ΔL*=20.0、
-     mid-deep間ΔL*=27.1)。芽アイコン(.home-garden-svg .g-stage1、S1)も同トークンを使うため
-     見え方を確認: パネル(白)上のコントラストはpale 1.41:1(装飾アイコン用途、テキストではない
-     ため4.5:1は要求しない。薄い緑という印象は保たれ、mid/deepとの区別が付くようになった分
-     むしろS1の3段階識別性も改善)。CHANGES_v155.md参照。 */
-  --garden-pale: #b7e4c8;
-  --garden-mid: #2fb96d;
-  --garden-deep: #1b6b3f;
   /* v151レビュー対応(必須1由来): .zt-theme-qtag(「問い」「AI提案」タグ)がvar(--accent)を
      文字色に直接使っており、ダーク既定への切替でapp.jsをroute.abort()して単体検証した際に
      panel(#202129)上で3.99:1・panel-soft上で3.46:1とAA未達なことが判明した(ライトも
@@ -130,13 +113,6 @@
   --orange-text: var(--orange);
   --green-text: var(--green);
   --teal-text: var(--teal);
-  /* v153レビュー対応(2026-07-28): 今日の庭のダーク値。--garden-deepをライトと同じ
-     #1b6b3f(暗緑)にすると黒に近いダーク背景(--panel #202129)にほぼ溶けて見えなくなるため、
-     ダークでは逆に「濃い=明るく鮮やか」で強さを表現する(GitHub草表示のダークモード配色と同じ
-     考え方)。node script実測(--panel上): pale 4.13:1 / mid 6.32:1 / deep 9.29:1。 */
-  --garden-pale: #4a8f66;
-  --garden-mid: #2fb96d;
-  --garden-deep: #33e08c;
   /* v151レビュー対応: 素の--accent(#007aff)はダークpanel/panel-soft上でAA未達(3.99:1/3.46:1)
      のため、orange/green/tealとは逆にダーク側でも専用の明るい値へ上書きする。node script実測:
      panel 5.81:1 / panel-soft 5.04:1 / bg 6.78:1 / accent-soft 5.28:1(いずれも--accent-textの値、
@@ -196,9 +172,6 @@
   --book: #ffd76a;
   --book-dim: rgba(255, 215, 106, 0.07);
   --mono: ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", "Consolas", monospace;
-  --garden-pale: #4a8f66;
-  --garden-mid: #2fb96d;
-  --garden-deep: #33e08c;
   --timeline-now-line: var(--red);
   --cockpit-panel-2: #0d1526;
   --cockpit-grid-line: rgba(70, 110, 170, 0.06);
@@ -2219,140 +2192,6 @@ h3 {
   100% { opacity: 0; transform: translate(-50%, 50%) scale(0.95); }
 }
 
-/* === v19: ルーティンタブ(Structured 風) === */
-.routine-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-bottom: 40px;
-}
-
-.routine-card {
-  display: grid;
-  grid-template-columns: 64px 1fr 40px;
-  gap: 12px;
-  align-items: center;
-  padding: 12px 14px;
-  background: var(--panel);
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-.routine-card:hover {
-  border-color: var(--accent);
-  transform: translateX(2px);
-}
-
-.routine-card-time {
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.routine-card-time-start {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-}
-.routine-card-time-end {
-  font-size: 11px;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-.routine-card-time-dur {
-  font-size: 10px;
-  color: var(--muted);
-  margin-top: 2px;
-}
-
-.routine-card-body {
-  min-width: 0;
-}
-.routine-card-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 4px;
-  word-break: break-word;
-}
-.routine-card-meta {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-/* フェーズ別のスタイリング */
-.routine-card-done {
-  opacity: 0.5;
-  background: var(--panel-soft);
-}
-.routine-card-done .routine-card-title {
-  text-decoration: line-through;
-}
-
-.routine-card-current {
-  background: linear-gradient(90deg, rgba(245, 166, 35, 0.12), transparent 60%);
-  border-color: #F5A623;
-  box-shadow: 0 0 0 1px #F5A623, 0 4px 12px rgba(245, 166, 35, 0.15);
-}
-.routine-card-current .routine-card-title {
-  color: #F5A623;
-  font-weight: 700;
-}
-
-.routine-card-past {
-  opacity: 0.6;
-}
-
-.routine-card-future {
-  /* default */
-}
-
-/* 現在時刻マーカー */
-.routine-now-marker {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 12px 0;
-  padding: 0 4px;
-}
-.routine-now-dot {
-  width: 10px;
-  height: 10px;
-  background: #FF3B30;
-  border-radius: 50%;
-  box-shadow: 0 0 0 4px rgba(255, 59, 48, 0.2);
-  flex-shrink: 0;
-}
-.routine-now-label {
-  font-size: 11px;
-  font-weight: 700;
-  color: #FF3B30;
-  letter-spacing: 1px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.routine-now-line {
-  flex: 1;
-  height: 0;
-  border-top: 2px dashed #FF3B30;
-  opacity: 0.6;
-}
-
-@media (max-width: 720px) {
-  .routine-card {
-    grid-template-columns: 52px 1fr 32px;
-    padding: 10px 12px;
-    gap: 10px;
-  }
-  .routine-card-time-start {
-    font-size: 15px;
-  }
-}
-
 /* タイムラインの現在時刻線(.now-line は既にインライン定義) */
 
 /* ============================================================
@@ -2493,61 +2332,6 @@ h3 {
   margin-top: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--line-soft);
   font-size: var(--text-xs); color: var(--muted);
 }
-
-/* v153: 今日の庭(今日の芽)。罰なし6ルール⑤=静かな計器。フェードは完了トグル直後の
-   1回のみ(garden-grewクラス、app.js toggleBlock()が非永続フラグで1描画だけ付与)。
-   2系統レビュー対応(2026-07-28):
-   - 段階の濃淡はopacity(背景との半透明合成)をやめ、--garden-pale/mid/deep(:root冒頭で
-     ライト/ダーク別に定義)を使う。opacityだと同じ値でもテーマの背景色によって見え方が
-     変わってしまい(ダークで「薄緑」が暗く沈んだ緑になる)、K確定の3色文言と食い違っていた。
-   - フェードは設計書どおり不透明度のみ(拡大縮小のscaleは削除、静かな計器の趣旨に合わせた)。
-   - .home-garden-svg自体へのtransition: opacityは、DOM差し替え型の再描画では実際には
-     発火しない死コードだったため削除した(フェードは.garden-grewのanimationのみが担う)。 */
-.home-garden { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
-.home-garden-svg { flex: none; }
-.home-garden-svg.garden-grew { animation: garden-grow-in .3s ease; }
-@keyframes garden-grow-in { from { opacity: 0; } to { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) {
-  .home-garden-svg.garden-grew { animation: none; }
-}
-.home-garden-svg .g-stage1 { color: var(--garden-pale); }  /* 芽: 薄緑(K確定2026-07-27) */
-.home-garden-svg .g-stage2 { color: var(--garden-mid); }   /* 若木: 緑 */
-.home-garden-svg .g-stage3 { color: var(--garden-deep); }  /* 開花: 濃緑 */
-.home-garden-caption { font-size: 12.5px; color: var(--muted); }
-
-/* v155: 今日の庭 S2(月間ピクセル、ルーティンタブ先頭)。設計書§④の「達成順の累積方式」
-   ではなく、decisions.md 2026-07-27 K確定の段階表示(完了1件=薄緑/50%以上=緑/全完了=濃緑)を
-   実カレンダー(日付位置固定)へ適用する(CHANGES_v155.md参照)。未達日(rank<=0)は罰なし
-   ルール②に従い色を塗らない=in-monthの薄い罫線のみで区画する(空白セルだけを強調する
-   バツ・警告色は使わない。当月の全セルに同じ罫線を付けることで「未達日を名指しで囲わない」)。
-   罫線は実機のライト側コントラスト対策も兼ねる(--garden-paleの単独面積コントラストが
-   3:1未達な既知制約への補助。v153コメント・decisions.md参照)。
-   v155レビュー対応(2026-07-28、Codex指摘): 当初`grid-template-columns: repeat(7, 1fr)`+
-   `aspect-ratio: 1/1`の組合せは、パネル幅が広い実機(iPad縦横、760〜1020px)で1セルが
-   70〜105pxまで膨張し、ルーティン一覧を画面外へ押し下げていた。列を`1fr`ではなく固定px
-   (`--garden-pixel-cell-size`)にしてセルサイズの上限をキャップし、グリッド自体は
-   `justify-content: center`で中央寄せにする(パネル幅が余ってもセルは伸びず、グリッドの
-   位置だけが動く)。 */
-.garden-pixel-card { --garden-pixel-cell-size: 18px; }  /* 16〜22pxの目安内で固定(v155レビュー対応) */
-.garden-pixel-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-2); }
-.garden-pixel-nav button:disabled { opacity: .35; }
-.garden-pixel-month-label { font-size: var(--text-sm); font-weight: 700; }
-.garden-pixel-weekdays, .garden-pixel-grid {
-  display: grid; grid-template-columns: repeat(7, var(--garden-pixel-cell-size));
-  justify-content: center; gap: 3px;
-}
-.garden-pixel-weekday { text-align: center; font-size: 10px; color: var(--faint); }
-.garden-pixel-cell {
-  width: var(--garden-pixel-cell-size); height: var(--garden-pixel-cell-size);
-  border-radius: 3px; background: transparent;
-}
-.garden-pixel-cell.in-month { border: 1px solid var(--line); }
-.garden-pixel-cell.lv1 { background: var(--garden-pale); }
-.garden-pixel-cell.lv2 { background: var(--garden-mid); }
-.garden-pixel-cell.lv3 { background: var(--garden-deep); }
-.garden-pixel-cell.swatch { display: inline-block; width: 11px; height: 11px; vertical-align: middle; margin-right: 2px; }
-.garden-pixel-legend { display: flex; align-items: center; gap: 4px; font-size: 11px; margin-top: var(--space-2); }
-.garden-pixel-complete { font-size: 12.5px; color: var(--muted); margin-top: var(--space-2); }
 
 /* ============================================================
    v33: ホーム — フル幅ヒーロー / スコアボード / ゾーン別テーマ色
@@ -3113,23 +2897,6 @@ h3 {
 .lev-mark.lev-asset { background: var(--green-soft); color: var(--green-text); }
 .lev-mark.lev-eliminate { background: var(--purple-soft); color: var(--purple); }
 
-/* v114: 保護系ルーティン(提案F)の連続欠落バッジ。実行率%の代わりに表示する。
-   0〜1日は落ち着いた緑系(警告なし)、2日以上だけ軽いオレンジ系に切り替える
-   (cond-degraded-banner/routine-check-bannerと同じ「責めない・煽らない」トーン)。 */
-.protection-badge {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--green-soft);
-  color: var(--green-text);
-  font-size: 11px;
-  font-weight: 700;
-  vertical-align: middle;
-  white-space: nowrap;
-}
-.protection-badge.warn { background: var(--orange-soft); color: var(--orange-text); }
-
 /* v116: 1日バッファ+消化率メーター(ROADMAP提案E)。ヘッダーに1行常時表示(今日を
    表示中のときのみ)。緑(残40%以上)/黄(40%未満)/赤(0以下)の3段階に加え、
    バッファ未設定(unset)と計画過積載(overload、K追加要件)の中立トーンを持つ。 */
@@ -3157,34 +2924,6 @@ h3 {
   color: var(--muted);
 }
 
-/* v115: 縮退版で実行ボタン(fallbackTitle設定済みルーティンにのみ表示)。
-   ルーティン行に埋め込むため通常の.btnより小さくする。 */
-.fallback-btn {
-  min-height: 26px;
-  padding: 3px 10px;
-  font-size: 12px;
-  border: 1px solid var(--accent);
-}
-
-/* v115: 連続ルーティン(チェーン)カード */
-.chain-card {
-  background: var(--panel-soft);
-  border-radius: 10px;
-  padding: 10px 12px;
-  margin-bottom: 8px;
-  cursor: pointer;
-}
-.chain-card-title { font-weight: 700; }
-.chain-card-steps { margin-top: 2px; }
-.chain-card-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 6px;
-  gap: 8px;
-}
-.chain-card-status { font-size: 12px; color: var(--muted); }
-.chain-card-status.done { color: var(--green-text); font-weight: 700; }
 .lev-helper { margin-top: 8px; }
 .lev-helper summary {
   list-style: none;
@@ -3390,20 +3129,6 @@ h3 {
   cursor: pointer;
 }
 
-/* v89: ゼロ摩擦ルーティンチェック(ROADMAP v93)の提案バナー。同じ「情報を渡すだけ」の
-   落ち着いたトーンだが、ルーティン実行率(home-plabel green系)に合わせて緑系にする。 */
-.routine-check-banner {
-  background: rgba(47,185,109,.10);
-  border: 1px solid rgba(47,185,109,.32);
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 700;
-  padding: 11px 14px;
-  border-radius: 10px;
-  margin-bottom: 14px;
-  cursor: pointer;
-}
-
 /* ジャーナル当日編集: 朝の記録の拡張(睡眠・服薬・今日の余力)+夜の記録 */
 .cond-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .cond-row-label { font-size: 12.5px; font-weight: 700; min-width: 62px; }
@@ -3482,8 +3207,7 @@ h3 {
    v124追補(Codexレビュー P2指摘対応): 上のブロックは「v124で新規に
    追加した」transform系のみを止めており、v124以前から存在する
    transform系のtransition/animationが動き続けていた(指摘: .toast の
-   translateY(20px)系スライド、.routine-card:hover の水平シフト、
-   開閉シェブロンのrotate)。styles.css全体を
+   translateY(20px)系スライド、開閉シェブロンのrotate)。styles.css全体を
    `transform\s*:` / `transition:` / `animation:` / `@keyframes` で
    洗い出し、対象を網羅した(洗い出し結果はCHANGES_v124.md追補段落を参照)。
    除外したのは (a)opacity/colorのみの遷移 (b)位置決め用の静的transform
@@ -3502,13 +3226,6 @@ h3 {
      (transformプロパティの値自体はどちらのルールも変更していない) */
   .toast {
     transition: opacity 0.2s ease;
-  }
-
-  /* .routine-card:hover の水平シフト(translateX(2px))を止める。
-     base側の `transition: all` はborder-colorのフェードも兼ねているため
-     transitionごと消さず、hover側のtransform値だけを打ち消す */
-  .routine-card:hover {
-    transform: none;
   }
 
   /* 開閉シェブロン3種: 状態を表すrotate(90deg)自体は([open]側のルールに)
@@ -4441,10 +4158,9 @@ h3 {
   letter-spacing: 0.06em;
 }
 
-/* v186 B5: DRIFT / TIME COMB / ルーティン実施日数 / Wish熟成度。全テーマ共通トークンのみ使用。 */
+/* v186 B5: DRIFT / TIME COMB / Wish熟成度。全テーマ共通トークンのみ使用。 */
 .drift-panel,
-.time-comb,
-.routine-summary {
+.time-comb {
   margin-bottom: var(--space-3);
 }
 .drift-value {
@@ -4456,7 +4172,6 @@ h3 {
 }
 .drift-note,
 .time-comb-note,
-.routine-trend-note,
 .wish-ripeness-note {
   font-size: var(--text-xs);
 }
@@ -4486,51 +4201,6 @@ h3 {
   text-align: left;
 }
 .time-comb-gap strong { color: var(--accent-text); }
-.routine-week-days {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-2);
-  margin: var(--space-2) 0 var(--space-3);
-}
-.routine-week-days strong {
-  color: var(--green-text);
-  font-size: var(--text-lg);
-  font-variant-numeric: tabular-nums;
-}
-.routine-trend {
-  display: grid;
-  grid-template-columns: repeat(30, minmax(2px, 1fr));
-  align-items: end;
-  gap: 2px;
-  height: 72px;
-  padding: 6px;
-  border: 1px solid var(--line-soft);
-  background: var(--panel-soft);
-}
-.routine-trend-day {
-  position: relative;
-  height: 100%;
-}
-.routine-trend-day.is-recorded::after {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 2px;
-  background: var(--green);
-  content: "";
-}
-.routine-trend-day i {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: var(--routine-rate);
-  min-height: 0;
-  background: var(--green);
-  opacity: 0.8;
-}
 .wish-ripeness {
   margin-top: var(--space-2);
   padding-top: var(--space-2);
