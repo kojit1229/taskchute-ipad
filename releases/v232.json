@@ -1,0 +1,60 @@
+{
+  "version": 232,
+  "date": "2026-08-22",
+  "title": "P4 IRON LOG・INSTRUMENTS成果物の配置",
+  "summary": "完成済み並列レーン成果物のIRON LOG・INSTRUMENTSモジュール、coreテスト、CSSをリポジトリへ配置し、v233の画面結線前にfast-nodeで検証可能な状態へ整えた",
+  "changedFiles": [
+    "docs/test-impact-map.generated.md",
+    "releases/v232.json",
+    "src/features/instruments.js",
+    "src/features/iron-log.js",
+    "styles.css",
+    "sw.js",
+    "tests/instruments-core.test.js",
+    "tests/iron-log-core.test.js",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "p4-interface.mdで凍結されたIRON LOGとINSTRUMENTSの完成済み成果物を、次リリースのapp.js結線から独立した配置単位として取り込む。",
+    "両モジュールの純ロジックをブラウザ不要のcoreテストとして単独実行でき、fast-nodeグループからも実行される状態にする。",
+    "CSSとService Workerの事前配置までをv232で完了し、v233ではapp.jsのDI・ナビ・normalizeState結線へ集中できるようにする。"
+  ],
+  "changes": [
+    "p4-parallel/iron-log/iron-log.jsとp4-parallel/instruments/instruments.jsを内容変更なしでsrc/featuresへ配置した。",
+    "両coreテストをtestsへ配置し、実行パス表記とMODULE_PATHだけをリポジトリ内の../src/features参照へ修正した。",
+    "css-iron-log.cssとcss-instruments.cssを既存--tower-*トークンの再定義なしでstyles.css末尾へv232セクションコメント付きでマージした。",
+    "Service WorkerのAPP_SHELLへsrc/features/instruments.jsとsrc/features/iron-log.jsを追加し、CACHE_NAMEをv232へ更新した。",
+    "test manifestを再生成し、2本の新規coreテストをfast-node対象へ登録した。",
+    "Size-Exempt: 完成済みレーン成果物のモジュール単位配置で分割不能"
+  ],
+  "uncertainties": [
+    "app.jsのimport・依存注入・ナビ・描画・完了フックとnormalizeState既定値は意図どおりv233へ保留しており、v232単体では両画面へ遷移できない。",
+    "iOS Safari実機PWAでのService Worker更新、オフラインprecache、390/768/1024px表示はローカルNode検証では確認できない。"
+  ],
+  "reviewFocus": [
+    "src/features/iron-log.jsとsrc/features/instruments.jsがレーン成果物と同一で、配置時のロジック変更が混入していないか。",
+    "coreテストの変更がMODULE_PATHと単独実行コメントだけに限定され、assertionの削除・スキップ・弱体化が無いか。",
+    "styles.css追記がIRON LOG/INSTRUMENTSセクションに閉じ、--tower-*の再定義、16px未満の入力欄、既存セレクタとの重複定義が無いか。",
+    "sw.jsのAPP_SHELLに新規ESM 2件が列挙され、CACHE_NAMEがv232へ更新されているか。",
+    "app.js、index.html、normalizeStateに差分が無く、画面結線がv233へ明確に保留されているか。"
+  ],
+  "verification": [
+    "src/features/iron-log.jsとsrc/features/instruments.jsは各レーン成果物とのSHA-256一致を確認した。",
+    "node --checkで両feature、両coreテスト、sw.jsがexit 0。",
+    "node tests/iron-log-core.test.js: 全件PASS。",
+    "node tests/instruments-core.test.js: 全件PASS。",
+    "node tests/run-all.js iron-log-core instruments-core: 2スイートともPASSし、runner経由でもfast-node形式として実行可能。",
+    "npm.cmd run test:manifest:writeとnpm.cmd run test:manifest: PASS(test manifest 128 suites)。",
+    "npm.cmd run code:index:writeとnpm.cmd run code:index: PASS(code index 576 functions)。",
+    "標準Playwright Chromiumではspawn EPERMを確認し、CHROME_PATHをsystem Edgeへ切り替えてnode scripts/release-gate.js releases/v232.jsonを再実行: PASS(統合対象31スイート、APP_SHELL 19件)。",
+    "npm.cmd run test:fastでは新規2スイートを含む19スイートがPASSし、既存code-index.test.jsだけがclick dispatcher 100行に対する既存条件>100で失敗した。app.js変更禁止・既存テスト弱体化禁止のため本リリースでは未修正。",
+    "node scripts/release-record.js releases/v232.json --writeはCHANGES_v232.md生成後、ワークスペース外taskchute-notes/handoff.mdでEPERM。"
+  ],
+  "knownLimitations": [
+    "v232は成果物配置のみで、画面結線・normalizeState・ブラウザE2Eはv233で実施する。",
+    "iOS Safari実機PWAでのService Worker更新・オフライン動作と表示の最終確認は監督者側で必要。",
+    "fast-node全体は今回の差分と独立した既存code-index.test.jsの境界条件不一致(click dispatcher実測100行に対して>100を要求)によりexit 1。新規iron-log/instruments coreとrelease-gateの回帰束はPASSしている。",
+    "この環境では標準Playwright Chromiumがspawn EPERMになるため、ブラウザ回帰はsystem EdgeをCHROME_PATHへ指定して実行した。",
+    "taskchute-notes/handoff.mdがワークスペース外書き込み制限でEPERMになる場合、release-recordはCHANGES生成までとして監督者側で再実行が必要。"
+  ]
+}

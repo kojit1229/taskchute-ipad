@@ -4288,3 +4288,360 @@ h3 {
 /* ---- エネルギー/バッテリーグラフのラベル(既存.energy-graph-overlayのまま配色だけ) ---- */
 .timeline-tower .energy-graph-overlay { color: var(--tower-text); }
 .timeline-tower .battery-curve-label { color: var(--tower-amber) !important; }
+
+/* ===== v232: IRON LOG (P4 lane artifact) ===== */
+/* css-iron-log.css — IRON LOG専用画面(レーンB)。.iron-* プレフィクスのみ。
+   移植元: mockup-iron-log.html。
+   --tower-*トークン(bg/panel/line/text/amber/green/cyan)は既存styles.cssの定義を参照する前提で
+   ここでは再定義しない(p4-interface.md §4)。統合時にstyles.cssへマージする。 */
+
+.iron {
+  min-height: 100vh;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 12px 12px 40px;
+  color: var(--tower-text);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  background: var(--tower-bg);
+  font-size: 12px;
+}
+
+/* パネル共通 */
+.iron-box { margin-top: 12px; border: 1px solid var(--tower-line); background: var(--tower-panel); }
+.iron-box h2 {
+  margin: 0; padding: 8px 10px; border-bottom: 1px solid var(--tower-line);
+  color: var(--tower-cyan); font-size: 11px; letter-spacing: .18em;
+}
+.iron-box h2 span {
+  float: right; color: var(--tower-text); font-size: 10px;
+  font-weight: 400; letter-spacing: .08em; opacity: .6;
+}
+
+/* LINKED FLIGHT: 連動中のジムタスク */
+.iron-linked {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px; font-size: 11px;
+}
+.iron-linked-status { color: var(--tower-green); }
+.iron-linked-status.is-idle { color: var(--tower-text); opacity: .6; }
+.iron-linked-name { font-family: system-ui, sans-serif; font-size: 13px; font-weight: 600; }
+.iron-linked-time {
+  margin-left: auto; color: var(--tower-text); opacity: .65;
+  font-variant-numeric: tabular-nums;
+}
+.iron-linked-foot {
+  padding: 0 10px 8px; color: var(--tower-cyan); font-size: 9.5px;
+  letter-spacing: .06em; opacity: .8; line-height: 1.7;
+}
+
+/* PAYLOAD: 当日総重量+目標ゲージ */
+.iron-payload { padding: 16px 14px; text-align: center; }
+.iron-total {
+  font-size: 52px; font-weight: 700; color: var(--tower-amber);
+  font-variant-numeric: tabular-nums; letter-spacing: .04em; line-height: 1.1;
+  text-shadow: 0 0 18px rgba(242, 184, 75, .35);
+}
+.iron-total small { font-size: 18px; font-weight: 400; color: var(--tower-text); opacity: .7; }
+.iron.goal-hit .iron-total { color: var(--tower-green); text-shadow: 0 0 22px rgba(82, 214, 138, .5); }
+.iron-goal-line { margin-top: 4px; font-size: 11px; color: var(--tower-cyan); letter-spacing: .1em; }
+.iron-bar-wrap {
+  position: relative; height: 16px; margin: 14px 4px 6px;
+  border: 1px solid var(--tower-line); background: var(--tower-bg);
+}
+.iron-bar {
+  height: 100%; width: 0%; background: var(--tower-amber);
+  box-shadow: 0 0 12px var(--tower-amber); transition: width .6s cubic-bezier(.34, 1.2, .64, 1);
+}
+.iron.goal-hit .iron-bar { background: var(--tower-green); box-shadow: 0 0 14px var(--tower-green); }
+.iron-bar-ticks {
+  position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(90deg, transparent 0 calc(25% - 1px), var(--tower-line) calc(25% - 1px) 25%);
+}
+.iron-remain { font-size: 12px; margin-top: 8px; }
+.iron-remain b { color: var(--tower-amber); font-variant-numeric: tabular-nums; }
+.iron-remain .hint {
+  display: block; margin-top: 3px; font-size: 10px; opacity: .6;
+  font-family: system-ui, sans-serif;
+}
+@keyframes iron-achieved-pulse {
+  0%, 100% { box-shadow: 0 0 10px rgba(82, 214, 138, .3); }
+  50% { box-shadow: 0 0 26px rgba(82, 214, 138, .7); }
+}
+.iron-achieved {
+  display: none; margin: 12px 4px 0; padding: 10px; text-align: center;
+  border: 1px solid var(--tower-green); color: var(--tower-green);
+  font-size: 13px; font-weight: 700; letter-spacing: .18em;
+  animation: iron-achieved-pulse 1.6s ease-in-out infinite;
+}
+.iron.goal-hit .iron-achieved { display: block; }
+
+/* LOAD SET: 1行フォーム(font-size 16px以上でiOSズーム防止) */
+.iron-form {
+  display: grid; grid-template-columns: minmax(0, 1.4fr) 1fr 1fr auto;
+  gap: 8px; padding: 12px 10px;
+}
+.iron-form select, .iron-form input {
+  min-width: 0; padding: 8px 9px;
+  background: var(--tower-bg); border: 1px solid var(--tower-line); border-radius: 0;
+  color: var(--tower-text); font-family: system-ui, sans-serif; font-size: 16px;
+}
+.iron-form select:focus-visible, .iron-form input:focus-visible {
+  outline: 2px solid var(--tower-amber); outline-offset: -2px;
+}
+.iron-form button {
+  padding: 8px 18px; background: transparent;
+  border: 1px solid var(--tower-green); color: var(--tower-green);
+  font: inherit; font-size: 11px; letter-spacing: .14em; cursor: pointer;
+}
+.iron-form button:hover { background: rgba(82, 214, 138, .08); }
+.iron-form-labels {
+  display: grid; grid-template-columns: minmax(0, 1.4fr) 1fr 1fr auto;
+  gap: 8px; padding: 10px 10px 0;
+}
+.iron-form-labels span { color: var(--tower-cyan); font-size: 9.5px; font-weight: 700; letter-spacing: .14em; }
+
+/* TODAY'S SETS */
+.iron-empty { padding: 14px; text-align: center; color: var(--tower-text); opacity: .5; font-size: 11px; }
+.iron-set-row {
+  display: grid; grid-template-columns: 56px minmax(0, 1fr) 110px 80px 28px;
+  align-items: center; min-height: 38px; border-bottom: 1px solid var(--tower-line); font-size: 11px;
+}
+.iron-set-row:last-child { border-bottom: 0; }
+.iron-set-row time { padding-left: 8px; font-variant-numeric: tabular-nums; opacity: .6; }
+.iron-set-name {
+  font-family: system-ui, sans-serif; padding: 0 6px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.iron-set-detail { text-align: right; opacity: .75; font-variant-numeric: tabular-nums; }
+.iron-set-kg {
+  justify-self: end; padding-right: 8px; color: var(--tower-green);
+  font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.iron-set-del {
+  background: transparent; border: 0; color: var(--tower-text); opacity: .5;
+  font-size: 13px; cursor: pointer; padding: 4px;
+}
+.iron-set-del:hover { opacity: 1; color: var(--tower-amber); }
+
+/* TOTALS */
+.iron-totals { display: grid; grid-template-columns: 1fr 1fr 1fr; }
+.iron-totals-cell { padding: 12px 10px; border-right: 1px solid var(--tower-line); }
+.iron-totals-cell:last-child { border-right: 0; }
+.iron-totals-cell span { color: var(--tower-cyan); font-size: 10px; letter-spacing: .12em; display: block; }
+.iron-totals-cell strong {
+  color: var(--tower-text); font-size: 18px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== v232: INSTRUMENTS (P4 lane artifact) ===== */
+/* css-instruments.css — 新計器盤(INSTRUMENTS)。p4-interface.md §4の指定どおり
+   `.instr-*` プレフィクスのみを使う。--tower-* トークンはstyles.cssの `.today-tower` 側の
+   定義を参照する(instruments.jsのrenderInstruments()がルートに"today-tower"クラスを
+   付けてトークンをスコープ内に持ち込む。ここでの再定義はしない)。
+   統合時: このファイル一式をstyles.cssへ追記マージする(セレクタの衝突なし想定)。 */
+
+/* ============ 計器盤ぜんたいのレイアウト ============ */
+.instr-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 12px 12px 40px;
+}
+
+/* ============ パネル共通(tower-panel-boxと同形) ============ */
+.instr-panel-box {
+  border: 1px solid var(--tower-line);
+  background: var(--tower-panel);
+}
+.instr-panel-box h2 {
+  margin: 0;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--tower-line);
+  color: var(--tower-cyan);
+  font-size: 11px;
+  letter-spacing: .18em;
+}
+.instr-panel-box h2 span {
+  float: right;
+  color: var(--tower-text);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: .08em;
+  opacity: .6;
+}
+.instr-panel-foot {
+  padding: 6px 10px;
+  color: var(--tower-cyan);
+  font-size: 9.5px;
+  letter-spacing: .06em;
+  opacity: .8;
+}
+
+/* ============ EARLY BIRD ============ */
+.instr-streak-hero {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 16px 12px 6px;
+}
+.instr-streak-hero strong {
+  color: var(--tower-amber);
+  font-size: 44px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.instr-streak-hero span {
+  color: var(--tower-text);
+  font-size: 12px;
+  opacity: .8;
+}
+
+.instr-stats-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-top: 1px solid var(--tower-line);
+}
+.instr-stat-cell {
+  padding: 8px 12px;
+  display: grid;
+  gap: 4px;
+}
+.instr-stat-cell:first-child {
+  border-right: 1px solid var(--tower-line);
+}
+.instr-stat-cell span {
+  color: var(--tower-cyan);
+  font-size: 10px;
+  letter-spacing: .08em;
+}
+.instr-stat-cell strong {
+  color: var(--tower-green);
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.instr-stat-cell strong small {
+  color: var(--tower-text);
+  font-size: 11px;
+  font-weight: 400;
+  opacity: .6;
+}
+
+.instr-dots {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--tower-line);
+}
+.instr-dot {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  background: var(--tower-line);
+}
+.instr-dot.is-checked {
+  background: var(--tower-amber);
+  box-shadow: 0 0 6px var(--tower-amber);
+}
+
+/* ============ IRON LOGサマリ(専用画面IRON LOGへの遷移カード) ============ */
+.instr-iron-log {
+  cursor: pointer;
+}
+.instr-iron-today {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 16px 12px 6px;
+  flex-wrap: wrap;
+}
+.instr-iron-today strong {
+  color: var(--tower-green);
+  font-size: 36px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.instr-iron-today strong small {
+  color: var(--tower-text);
+  font-size: 14px;
+  font-weight: 400;
+  opacity: .7;
+  margin-left: 2px;
+}
+.instr-iron-today span {
+  color: var(--tower-text);
+  font-size: 12px;
+  opacity: .7;
+}
+
+.instr-iron-bar {
+  height: 6px;
+  margin: 0 12px 12px;
+  background: var(--tower-line);
+  overflow: hidden;
+}
+.instr-iron-bar span {
+  display: block;
+  height: 100%;
+  background: var(--tower-amber);
+  box-shadow: 0 0 6px var(--tower-amber);
+}
+
+.instr-iron-lifetime {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 12px 12px;
+  border-bottom: 1px solid var(--tower-line);
+}
+.instr-iron-lifetime span {
+  color: var(--tower-cyan);
+  font-size: 10px;
+  letter-spacing: .08em;
+}
+.instr-iron-lifetime strong {
+  color: var(--tower-purple);
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.instr-iron-lifetime strong small {
+  color: var(--tower-text);
+  font-size: 11px;
+  font-weight: 400;
+  opacity: .6;
+}
+
+.instr-open-btn {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: 0;
+  border-top: 0;
+  color: var(--tower-cyan);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: .1em;
+  text-align: right;
+  cursor: pointer;
+}
+.instr-open-btn:hover {
+  color: var(--tower-green);
+}
+
+/* ============ タブレット・PC幅(タスクシュートの他TOWER画面と同じブレークポイント) ============ */
+@media (min-width: 768px) {
+  .instr-view {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+    max-width: 1000px;
+  }
+}

@@ -60,8 +60,8 @@
         "legacy-crosscutting"
       ],
       "assertionSignals": 18,
-      "assertionHash": "c15b3593c801dcda",
-      "sourceHash": "b7842832d0a0ef15",
+      "assertionHash": "f563fd808a781cbc",
+      "sourceHash": "8659a4b545f961fe",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -143,6 +143,55 @@
         "server": true,
         "fileWrite": false,
         "networkMock": true,
+        "clock": false
+      }
+    },
+    {
+      "file": "instruments-core.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "legacy-crosscutting"
+      ],
+      "assertionSignals": 44,
+      "assertionHash": "3913b609d8cd9508",
+      "sourceHash": "3b7f1f670d2b2027",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "iron-log-core.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution",
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 45,
+      "assertionHash": "c4d7bdade181b6a5",
+      "sourceHash": "8baaf453d839e8dc",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
         "clock": false
       }
     },
