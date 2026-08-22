@@ -42,8 +42,11 @@ const changeDispatcher = index.functions.find((fn) => fn.name.startsWith("event:
 // v174: dispatcher分解(段階5)でclick dispatcherは設計どおり段階的に縮小する
 // (v173: 534行 → v174: 472行)。閾値は「listenerが索引に載っている+空になっていない」を
 // 検知する下限に留め、if連鎖の全撤去(最終cleanup)時にこの検証自体を再設計する。
-assert(clickDispatcher?.lines > 100, "click dispatcherを索引化(縮小中、下限は空振り検知)");
-assert(changeDispatcher?.lines > 100, "change dispatcherを索引化(同上)");
+// v232: スリム化P1〜P3の削除でclick dispatcherがちょうど100行まで縮み旧下限(>100)を踏んだ。
+// 目的は空振り検知(登録漏れ・索引崩壊の検出)であって規模の固定ではないため、下限を30行へ
+// 引き下げる(if連鎖全撤去時の再設計方針は従来どおり維持)。
+assert(clickDispatcher?.lines > 30, "click dispatcherを索引化(縮小中、下限は空振り検知)");
+assert(changeDispatcher?.lines > 30, "change dispatcherを索引化(同上)");
 
 // --- 固定点(独立レビュー Must-2 対応): area分類の負検証 ---
 // 旧実装は「関数名+本文全文」に正規表現を当てており、`.push(`(Array.prototype.push)や
@@ -74,13 +77,16 @@ assert(areaOf("fetchGitHubRawResult").includes("sync") &&
   index.functions.find((f) => f.name === "fetchGitHubRawResult").effects.includes("fetch"),
   "fetchGitHubRawResult(GitHub Raw取得)はsync+fetch境界");
 
-// homeZone2Summary(app.js:4123-): ホーム集計テキスト生成。`parts.push(...)`はArray.push。
-assert(!areaOf("homeZone2Summary").includes("sync"),
-  "homeZone2Summary(ホーム集計)はsyncを含まない");
+// v232: 旧固定点homeZone2Summary(ホーム集計)はv230のhomeタブ撤去で、addTaskToToday
+// (タスク追加)はスリム化P1〜P3で削除された。負検証の趣旨(Array.pushを使う集計・state操作系が
+// syncへ誤分類されない)は維持し、同型の現存関数へ差し替える。
+// rearrangeSkipMessage(再配置スキップ理由の集計テキスト生成): `parts.push(...)`はArray.push。
+assert(!areaOf("rearrangeSkipMessage").includes("sync"),
+  "rearrangeSkipMessage(再配置スキップ集計)はsyncを含まない");
 
-// addTaskToToday(app.js:4324-): `state.blocks.push(block)`はArray.pushでGitHub同期と無関係。
-assert(!areaOf("addTaskToToday").includes("sync"),
-  "addTaskToToday(タスク追加)はsyncを含まない");
+// addMITCandidate: `state.blocks.push(block)`はArray.pushでGitHub同期と無関係。
+assert(!areaOf("addMITCandidate").includes("sync"),
+  "addMITCandidate(MIT候補追加)はsyncを含まない");
 
 // v164: mergeByIdはapp.js分割・段階1でsrc/core/merge.jsへ抽出済み。code-index.jsはapp.js
 // しか走査しないため、抽出後は索引から消えるのが正しい(indexに残っていたら二重定義の疑い)。
