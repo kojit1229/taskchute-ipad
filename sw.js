@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v237";
+const CACHE_NAME = "taskchute-journal-pwa-v238";
+// v238: 完全同型の標準モーダル骨格を共通ヘルパーへ集約した(APP_SHELL変更なし)。
 // v237: 未参照CSSを削除し、Project/Taskの中断・再開status更新を共通化した(APP_SHELL変更なし)。
 // v235: 主観睡眠時間の入力UI・書き込みactionを廃止した(APP_SHELL変更なし)。
 // v232: P4完成済み成果物のIRON LOG・INSTRUMENTSモジュールとCSSを配置した(画面結線はv233)。

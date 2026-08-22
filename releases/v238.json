@@ -1,0 +1,47 @@
+{
+  "version": 238,
+  "date": "2026-08-23",
+  "title": "P5第3弾 モーダル標準骨格の共通化",
+  "summary": "完全同型の標準モーダル11箇所について、見た目・文言・aria属性・HTML出力を変えずにヘッダ骨格を共通ヘルパーへ集約した",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v238.json",
+    "sw.js"
+  ],
+  "intent": [
+    "各buildXxxModal()に重複していた標準modal-card、modal-header、modal-title、modal-close、modal-body開始タグを1関数へ集約する。",
+    "単独リリースとして挙動不変を機械検証し、専用classまたは専用close actionを持つ変形骨格は変更しない。"
+  ],
+  "changes": [
+    "modalHeaderHTML(title)を追加し、標準class、role=dialog、aria-modal=true、modal-close action、aria-label=閉じるが完全同型の11関数から呼び出すようにした。",
+    "buildWeeklyWishModal、buildQuestionModal、buildQuestionBridgeModal、buildExperimentModal、buildBackupListModal、buildDeclareModal、buildReportModal、buildProjectModal、buildTaskModal、buildBlockModal、buildActualEntryModalの定型骨格を1行呼び出しへ置換した。",
+    "追加classを持つbuildSearchModal、buildMigrationRitualModal、buildAiStepConfirmModalと、専用close actionを持つbuildGuidedAccessHintModal、buildBodyScanStep1Modal、buildBodyScanStep2Modal、buildIncompleteReasonModalは温存した。",
+    "Service WorkerのAPP_SHELLは変更せず、CACHE_NAMEをv238へ更新した。"
+  ],
+  "uncertainties": [
+    "タイトルはヘルパー内で新たにエスケープせず、従来のテンプレート展開と同じ値をそのまま出力する契約にした。現対象11箇所にタイトル用escapeHTML呼び出しはなく、固定文字列または既存の条件式だけである。",
+    "専用classまたは専用close actionの7箇所は標準骨格と完全同型ではないため、重複が残っても共通化対象外とした。"
+  ],
+  "reviewFocus": [
+    "11箇所のヘルパー呼び出しを逆展開するとHEAD版app.jsと一致し、各タイトル値で生成HTMLのUTF-8バイト列が一致するか。",
+    "追加class 3箇所と専用close action 4箇所が無変更で残り、modalHeaderHTMLがタイトルを追加エスケープしていないか。",
+    "見た目・文言・role・aria-modal・aria-label・data-action・空白と改行を含むHTML出力に変化がないか。"
+  ],
+  "verification": [
+    "HEAD版の各骨格と現行ヘルパー呼び出しを機械的に逆展開して比較し、11関数すべてでタイトル引数・UTF-8 HTMLバイト列がMATCH、逆展開後のapp.js全体もMATCHした。",
+    "node --check app.js: exit 0。npm.cmd run code:index:write: PASS(code index 562 functions)。",
+    "npm.cmd run test:manifest:write: PASS(test manifest 131 suites)。テスト本体は未変更だが、app.jsの行番号変更に伴う必須生成物を更新した。",
+    "system Edge指定のaction-registry-core、tower-core、v150、v49、v56、v63、v68、v87: 全件PASS。",
+    "release-record --writeはCHANGES_v238.md生成後、ワークスペース外taskchute-notes/handoff.mdへの書き込みだけEPERM。最終gateでは一時handoffへ同じ生成ブロックを書いて整合を検証した。",
+    "実行コード差分は90行(追加23・削除67、app.jsとsw.js)で200行以下。",
+    "system Edge指定のnode scripts/release-gate.js releases/v238.json --final: exit 0。"
+  ],
+  "knownLimitations": [
+    "iOS Safari実機PWAでのService Worker更新とオフライン起動は監督者側で確認が必要。",
+    "標準Playwright Chromiumがspawn EPERMになる場合はsystem EdgeをCHROME_PATHへ指定する。",
+    "taskchute-notes/handoff.mdがワークスペース外でEPERMになる場合、notes側更新は監督者が再実行する。"
+  ]
+}

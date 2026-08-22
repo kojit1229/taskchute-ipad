@@ -2671,12 +2671,7 @@ function buildWeeklyWishModal() {
     ? state.tasks.filter((t) => !t.deleted && t.projectId === wishProject.id && !t.parentTaskId && !t.realized)
     : [];
   return `
-    <div class="modal-card" role="dialog" aria-modal="true">
-      <div class="modal-header">
-        <h3 class="modal-title">🌟 今週のやりたいこと(最大3つ)</h3>
-        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
-      </div>
-      <div class="modal-body">
+    ${modalHeaderHTML("🌟 今週のやりたいこと(最大3つ)")}
         ${candidates.length ? candidates.map((w) => `
           <label class="row" style="gap:8px; align-items:center; padding:6px 0; font-size:16px">
             <input type="checkbox" style="width:20px; height:20px" data-action="weekly-wish-toggle" data-wish-id="${w.id}" ${selected.has(w.id) ? "checked" : ""}>
@@ -7337,12 +7332,7 @@ function buildQuestionModal(q) {
   const isNew = !q;
   const status = q?.status || "open";
   return `
-    <div class="modal-card" role="dialog" aria-modal="true">
-      <div class="modal-header">
-        <h3 class="modal-title">${isNew ? "問いを追加" : "問いを編集"}</h3>
-        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
-      </div>
-      <div class="modal-body">
+    ${modalHeaderHTML(isNew ? "問いを追加" : "問いを編集")}
         <div class="field">
           <label class="field-label">問い(数週間持ち続ける "10x" の問い)</label>
           <textarea class="textarea" data-modal-field="text" style="min-height:96px" placeholder="例: SEJ案件で「効率化提案」を「経営指標提案」に変えるには何が要るか">${escapeHTML(q?.text || "")}</textarea>
@@ -7419,12 +7409,7 @@ function buildQuestionBridgeModal(q) {
   const defaultText = (q.settledNote || "").trim() || q.text;
   const projects = state.projects.filter((p) => !p.deleted && p.kind === "normal");
   return `
-    <div class="modal-card" role="dialog" aria-modal="true">
-      <div class="modal-header">
-        <h3 class="modal-title">問いを実行へ</h3>
-        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
-      </div>
-      <div class="modal-body">
+    ${modalHeaderHTML("問いを実行へ")}
         <div class="muted" style="font-size:12.5px; line-height:1.6; margin-bottom:12px">「${escapeHTML(q.text)}」に結論が出ました。<br>この結論を実行に移しますか?(スキップも可)</div>
         <div class="field">
           <label class="field-label">実行内容</label>
@@ -7551,12 +7536,7 @@ function buildExperimentModal(e) {
   const startDate = e?.startDate || todayISO();
   const endDate = e?.endDate || addDays(startDate, 14);
   return `
-    <div class="modal-card" role="dialog" aria-modal="true">
-      <div class="modal-header">
-        <h3 class="modal-title">${isNew ? "実験を始める" : "実験を編集"}</h3>
-        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
-      </div>
-      <div class="modal-body">
+    ${modalHeaderHTML(isNew ? "実験を始める" : "実験を編集")}
         <div class="muted" style="font-size:11.5px; line-height:1.6; margin-bottom:10px">同時に走らせる実験は1つまで。仮説を1つ選び、期限を決めて試し、期限が来たら「続ける/手放す」を判定します。</div>
         <div class="field">
           <label class="field-label">仮説(1文)</label>
@@ -9752,12 +9732,7 @@ async function openBackupListModal() {
 
 function buildBackupListModal(backups) {
   return `
-    <div class="modal-card" role="dialog" aria-modal="true">
-      <div class="modal-header">
-        <h3 class="modal-title">📦 バックアップ世代から復元</h3>
-        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
-      </div>
-      <div class="modal-body">
+    ${modalHeaderHTML("📦 バックアップ世代から復元")}
         <div class="muted" style="font-size:12px; line-height:1.6; margin-bottom:8px">
           各日の GitHub 保存時点のスナップショットです。復元するとこの端末のデータが置き換わり、
           次回の保存/自動同期で GitHub 側にも反映されます。
@@ -10441,12 +10416,7 @@ function openDeclareModal(blockId, kind) {
 function buildDeclareModal(block, estimateMin) {
   const estText = estimateMin ? `${estimateMin}分` : "";
   return `
-    <div class="modal-card" role="dialog" aria-modal="true">
-      <div class="modal-header">
-        <h3 class="modal-title">宣言</h3>
-        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
-      </div>
-      <div class="modal-body">
+    ${modalHeaderHTML("宣言")}
         <div style="font-size:15px; font-weight:600">今から「${escapeHTML(block.title)}」を${estText}やる</div>
         <div class="field" style="margin-top:10px">
           <label class="field-label">一言(任意)</label>
@@ -10512,12 +10482,7 @@ function openReportModal(blockId, kind) {
 
 function buildReportModal(block) {
   return `
-    <div class="modal-card" role="dialog" aria-modal="true">
-      <div class="modal-header">
-        <h3 class="modal-title">終了報告</h3>
-        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
-      </div>
-      <div class="modal-body">
+    ${modalHeaderHTML("終了報告")}
         <div style="font-size:14px">「${escapeHTML(block.title)}」お疲れさまでした</div>
         <div class="field" style="margin-top:10px">
           <label class="field-label">一言(任意)</label>
@@ -11878,6 +11843,16 @@ function registerServiceWorker() {
 
 const modalRoot = document.querySelector("#modalRoot");
 
+// v238: 完全同型の標準モーダル骨格だけを共通化する。専用class/actionの骨格は呼び出し側に残す。
+function modalHeaderHTML(title) {
+  return `<div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">${title}</h3>
+        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">`;
+}
+
 function openProjectEditor(id) {
   const project = state.projects.find((p) => p.id === id);
   if (!project) return;
@@ -11984,12 +11959,7 @@ function buildProjectModal(project) {
   // ガードと二重防御)。
   const isWishSingleton = kind === "wish";
   return `
-    <div class="modal-card" role="dialog" aria-modal="true">
-      <div class="modal-header">
-        <h3 class="modal-title">Project を編集</h3>
-        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
-      </div>
-      <div class="modal-body">
+    ${modalHeaderHTML("Project を編集")}
         <div class="field">
           <label class="field-label">タイトル</label>
           <input class="input" data-modal-field="title" value="${escapeHTML(project.title || "")}">
@@ -12104,12 +12074,7 @@ function buildTaskModal(task) {
     ...parentCandidates.map((t) => `<option value="${t.id}" ${task.parentTaskId === t.id ? "selected" : ""}>${escapeHTML(t.title)}</option>`)
   ].join("");
   return `
-    <div class="modal-card" role="dialog" aria-modal="true">
-      <div class="modal-header">
-        <h3 class="modal-title">${task.id ? "Task を編集" : "Task を追加"}</h3>
-        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
-      </div>
-      <div class="modal-body">
+    ${modalHeaderHTML(task.id ? "Task を編集" : "Task を追加")}
         ${task.id ? "" : `<input type="hidden" data-modal-field="order" data-modal-kind="number" value="${Number.isFinite(task.order) ? task.order : ""}">`}
         <div class="field">
           <label class="field-label">タイトル</label>
@@ -12308,12 +12273,7 @@ function buildBlockModal(block) {
           </button>
         </div>` : "";
   return `
-    <div class="modal-card" role="dialog" aria-modal="true">
-      <div class="modal-header">
-        <h3 class="modal-title">Block を編集</h3>
-        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
-      </div>
-      <div class="modal-body">
+    ${modalHeaderHTML("Block を編集")}
         <div class="field">
           <label class="field-label">タイトル</label>
           <input class="input" data-modal-field="title" value="${escapeHTML(block.title || "")}">
@@ -12880,12 +12840,7 @@ function buildActualEntryModal(block, defaultStart, defaultEnd) {
   const chargeSel = pf ? pf.charge : (block.charge || 0);
   const dischargeSel = pf ? pf.discharge : (block.discharge || 0);
   return `
-    <div class="modal-card" role="dialog" aria-modal="true">
-      <div class="modal-header">
-        <h3 class="modal-title">✅ 実績を登録</h3>
-        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
-      </div>
-      <div class="modal-body">
+    ${modalHeaderHTML("✅ 実績を登録")}
         <div style="background:var(--green-soft); padding:10px; border-radius:8px">
           <strong>${escapeHTML(block.title)}</strong>
           <div class="muted" style="font-size:12px; margin-top:4px">
