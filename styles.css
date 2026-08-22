@@ -2463,6 +2463,9 @@ h3 {
 .home-zone-block .home-fold-summary { margin: 10px 2px 0; }  /* .home-zone の margin を踏襲 */
 
 /* v71: 「AIから」集約カード(鮮度・AI作業結果・AIフィードバック候補) */
+/* v220: .home-dividerは「AIから」カード3箇所が出力し続ける実使用クラス。v217の.home-*一括削除の
+   巻き添えで消えていた1行を復元(レビューB-1。P3でATISへ移設される当該コードの下ごしらえ)。 */
+.home-divider { height: 1px; background: var(--line-soft); margin: var(--space-3) 0; }
 .home-ai-hub { border-color: var(--orange); }
 .home-ai-sub {
   font-size: 11.5px; font-weight: 700; color: var(--muted); margin-bottom: 6px;
@@ -2865,6 +2868,9 @@ h3 {
   vertical-align: middle;
   white-space: nowrap;
 }
+.migration-ritual-title { font-size: 15px; font-weight: 700; margin: 0 0 4px; }
+.migration-ritual-choices { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.migration-ritual-choices .btn { width: 100%; text-align: left; padding: 11px 14px; }
 /* v186レビュー(M-1): migratedTo付きBlock(翌日へ送済)の控えめなバッジ。一覧からは消さず
    減光(.timeline-card.is-migrated / .block-row.is-migrated)と併用する。 */
 .migrated-badge {
@@ -3011,8 +3017,12 @@ h3 {
 .wip-banner-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .wip-banner-name { font-size: 12.5px; }
 
-/* v68: 人生実験カード(ジャーナル/週次レビュー両タブ共通)。同時に1件だけ走らせる思想のため、
-   実験中は結論記入までカードのまま留まる(リスト化しない)。 */
+/* v68: 人生実験カード(週次タブ削除後はジャーナルタブ専用)。同時に1件だけ走らせる思想のため、
+   実験中は結論記入までカードのまま留まる(リスト化しない)。
+   v220: .weekly-secはrenderExperimentSection()が出力し続ける実使用クラス。週次タブ削除(v217)の
+   巻き添えで消えていた枠スタイル2行をここへ復元(レビューA-2)。 */
+.weekly-sec { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; margin-bottom: 14px; }
+.weekly-sec h3 { font-size: 14px; font-weight: 800; margin: 0 0 12px; }
 .exp-card .exp-hypothesis { font-size: 15px; font-weight: 700; line-height: 1.5; }
 .exp-card .exp-judge { padding: 10px 12px; background: rgba(255,149,0,.08); border: 1px solid rgba(255,149,0,.25); border-radius: 10px; }
 .exp-card .exp-promote .exp-hypothesis { color: var(--green-text); }

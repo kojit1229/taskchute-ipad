@@ -1,0 +1,56 @@
+{
+  "version": 220,
+  "date": "2026-08-22",
+  "title": "一括レビュー対応: 移行儀式の復元ほか",
+  "summary": "2系統レビューで検出された3回目繰り越しのマイグレーション儀式をdb8f37d時点から復元し、廃止済みAvoid Listへの選択肢だけを除外するとともに、CSS巻き添え削除2件と到達不能な再描画条件を是正した",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v220.json",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/v61.test.js"
+  ],
+  "intent": [
+    "db8f37d時点の3回目繰り越し確認モーダルを、繰越パネルと朝プラン一括確定の両経路へ復元する。",
+    "v214で仕様削除済みのAvoid Listへ書き込む選択肢だけを除去し、今日やる・分解する・手放す・それでも繰り越すの4択を維持する。",
+    "監督者が先行復元した.weekly-secと.home-dividerを保持し、レビューで確認された巻き添え削除を解消する。",
+    "hydrateStaticMarkdownの再描画条件からallowedViewsに存在しないweeklyとstatsだけを除去する。"
+  ],
+  "changes": [
+    "MIGRATION_RITUAL_THRESHOLD、openMigrationRitual、resolveMigrationRitual、buildMigrationRitualModal、logMigrationRitual、moveBlockToWish、carryOverBlockのforceMIT処理、migration-ritual-choiceハンドラをdb8f37d版から復元した。",
+    "confirmScheduleDraftとrequestCarryOverへ3回目繰り越しの儀式ゲートを戻し、モーダルを閉じた際の一時コンテキスト破棄も復元した。",
+    "儀式モーダルCSS3セレクタとv61の3回目発火・4選択肢の挙動・logMigrationRitual記録テストを復元し、action-registryのゴールデンリストへ復元actionを戻した。",
+    "v219補記: 削除したテストスイートはroutine-core、v114、v115、v153、v155、v89の6本。",
+    "既知ギャップ: v88削除に伴いhomeBacklogの回帰検証が消失した。homeBacklogはP3のhomeタブ撤去で機能ごと削除予定のため、今回は復元を見送った。",
+    "v215補記: タイムラインのTimeTree外部予定バンドは、計時タブ削除によりデータ供給元が消滅したことに伴って削除した。",
+    "Service WorkerのCACHE_NAMEをv220へ更新した。"
+  ],
+  "uncertainties": [
+    "Playwright Chromiumはローカル環境のspawn EPERMで起動できず、v61とrelease-gateのブラウザ回帰束は実走不能。iOS Safari実機PWAの更新・オフライン動作もローカル検証の対象外。"
+  ],
+  "reviewFocus": [
+    "儀式本体と両入口がdb8f37d版と同一で、差分がAvoid List書き込み分岐とモーダル内Avoidボタンの除去だけに限られるか。",
+    "今日やる・分解する・手放す・それでも繰り越すの4経路で、carryCount、MIT化、Wish移動/削除、下書き再開、migrationRitualLogが従来どおり更新されるか。",
+    ".weekly-secと.home-dividerの監督者復元差分が保持され、儀式CSS3セレクタ以外のCSSを巻き戻していないか。",
+    "hydrateStaticMarkdownの条件変更がweekly/statsの除去だけで、現存viewのライブ再描画を損なっていないか。"
+  ],
+  "verification": [
+    "node --check app.jsとnode --check tests/v61.test.jsはexit 0。",
+    "node tests/action-registry-core.test.jsは全件PASSし、npm.cmd run test:fastは17スイート全件PASS。",
+    "node tests/v61.test.jsはChromium起動時のspawn EPERMで停止し、ブラウザassertionは実走不能。",
+    "npm.cmd run code:index:writeは607 functions、npm.cmd run test:manifest:writeは125 suitesを生成。",
+    "静的grepでmigration-ritual-choice、openMigrationRitual、MIGRATION_RITUAL_THRESHOLDの存在と、choice=avoidボタンおよびchoice === avoid書き込み分岐の不存在を確認した。",
+    "関数単位比較でcarryOverBlock、moveBlockToWish、logMigrationRitual、openMigrationRitualはdb8f37d版と完全一致し、buildMigrationRitualModalとresolveMigrationRitualはAvoidボタン/分岐の除去だけで一致した。",
+    "release-gateはschema、APP_SHELL 16件、test manifest 125件、code index 607件、app/src/sw全構文検査までPASSし、related+impact-regressionのブラウザ起動だけspawn EPERMで停止した。",
+    "release-record --writeはCHANGES_v220.md生成後、notes側handoff.md書き込みだけEPERM。--checkはCHANGES=OK、handoff=NG。"
+  ],
+  "knownLimitations": [
+    "iOS Safari実機PWAの更新・オフライン動作確認は監督者側で必要。",
+    "v88削除でhomeBacklog回帰検証は消失したままだが、P3でhomeタブと機能本体を撤去予定のため復元しない。"
+  ]
+}

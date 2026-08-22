@@ -136,7 +136,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "open-backup-list", "restore-backup",
   "run-archive",
   "open-search", "search-jump",
-  "carry-over", "ideal-retry",
+  "carry-over", "migration-ritual-choice", "ideal-retry",
   "energy-open-category",
   "timeline-clear-cat"
 ];
@@ -208,7 +208,7 @@ const APP_JS_REGISTERED_ACTIONS = [
   "ai-mit-adopt", "ai-task-adopt", "ai-task-dismiss",
   "report-copy-ai", "report-share-ai",
   "generate-report", "download-report", "download-data",
-  "carry-over", "ideal-retry",
+  "carry-over", "migration-ritual-choice", "ideal-retry",
   "toggle-journal-segment", "toggle-home-reflect-fold",
   // --- v178: WBS/Project/Task CRUD(18) ---
   "add-project", "delete-project", "add-task", "toggle-task", "delete-task",

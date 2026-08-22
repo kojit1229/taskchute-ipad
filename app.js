@@ -456,6 +456,7 @@ registerActions({
   "download-report": () => downloadReport(),
   "download-data": () => downloadData(),
   "carry-over": ({ id }) => requestCarryOver(id),
+  "migration-ritual-choice": ({ target }) => resolveMigrationRitual(target.dataset.choice),
   "ideal-retry": ({ target }) => resolveIdealRetry(target.dataset.choice),
   "toggle-journal-segment": ({ target }) => {
     const seg = target.dataset.segment;
@@ -1107,7 +1108,7 @@ document.addEventListener("click", (event) => {
   // v217: weekly-suggest-addはAIレポートの週次レビューから呼ぶ。
   // v174: open-backup-list/restore-backup/run-archiveはapp.js内のregisterActionsへ移行した。
   // v179: open-search/search-jump(検索2)はapp.js内のregisterActionsへ移行した。
-  // v177: carry-over/ideal-retryはapp.js内のregisterActionsへ移行した。
+  // v177: carry-over/migration-ritual-choice/ideal-retryはapp.js内のregisterActionsへ移行した。
   // v181: energy-open-category/timeline-clear-catはapp.js内のregisterActionsへ移行した。
 });
 
@@ -4361,6 +4362,15 @@ function confirmScheduleDraft() {
   if (!_scheduleDraft || !_scheduleDraft.items.length) return;
   const { date, items } = _scheduleDraft;
   const draftSource = _scheduleDraft.source || "deterministic";  // v62: 確定記録にも出どころを残す
+  // v61: マイグレーション儀式 — 繰越由来(carryFromId)の項目が3回目の繰り越しになる場合は、
+  //      一括確定の前に一呼吸置く。既に選択済み(_ritualResolved)の項目はスキップする。
+  const ritualItem = items.find((it) =>
+    it.carryFromId && !it._ritualResolved && migrationNextCount(it.carryFromId) >= MIGRATION_RITUAL_THRESHOLD);
+  if (ritualItem) {
+    openMigrationRitual(ritualItem.carryFromId, migrationNextCount(ritualItem.carryFromId),
+      { origin: "draft", draftItemId: ritualItem.id });
+    return;
+  }
   let updatedCount = 0, createdCount = 0;  // v199(軽微3): 確定トーストを「登録」と「時刻更新」で書き分ける
   items.forEach((it) => {
     // v199: blockId付き項目(当日タスクシュート再配置)は既存Blockの時刻だけ更新する。
@@ -4392,6 +4402,11 @@ function confirmScheduleDraft() {
     block.aiPlan = { start: minToHHMM(it.aiStart ?? it.start), minutes: it.aiMinutes ?? it.minutes };
     // v65: AIプランのtitle先頭「[資産]」検出分は確定時にleverageType=assetを引き継ぐ
     if (it.leverageType) block.leverageType = it.leverageType;
+    if (it.forceMIT) {
+      // v61: マイグレーション儀式で「今日やる」を選んだ項目はMIT化(既存の最大3個ルールは尊重する)
+      const sameDayMITs = state.blocks.filter((b) => !b.deleted && b.date === date && b.isMIT);
+      if (sameDayMITs.length < 3) block.isMIT = true;
+    }
     if (it.carryFromId) {
       const src = blockById(it.carryFromId);
       block.carryCount = (src?.carryCount || 0) + 1;  // v61: 繰り越し回数を1つ積み上げる
@@ -5100,7 +5115,14 @@ function detectLeverageTypeFromTitle(title) {
 // v65(v64設計§3残余): AIプランのskipped(kind:"ai")ログの上限。migrationRitualLogと同じ思想。
 const AI_PLAN_SKIPPED_LOG_MAX = 300;
 
-// v61: 繰り越し回数(carryCount)の視覚マーク。
+// v61: マイグレーション儀式(提案1)==============================
+// 繰り越し回数(carryCount)を積み上げ、2回目以降は視覚マーク、3回目の繰り越しでは
+// 即座に繰り越さず一呼吸置く確認モーダルを挟む。「書き写す手間が価値の審査になる」
+// というバレットジャーナルの思想を、既存の carryOverBlock / 朝プラン確定(confirmScheduleDraft)
+// の両経路に対して同じルールで適用する。
+const MIGRATION_RITUAL_THRESHOLD = 3;
+const MIGRATION_RITUAL_LOG_MAX = 300;
+let _migrationRitualCtx = null;  // { srcId, nextCount, origin: 'panel'|'draft', draftItemId } 非永続
 
 // SWIPE_TRIAGE_LOG_MAX: v166でファイル冒頭(RECURRENCE_FUTURE_DAYSの直後)へ移動した
 // (configureGithubSync()のconstTDZ回避のため。値・用途は変更していない)。
@@ -5117,13 +5139,19 @@ function migrationNextCount(id) {
   return (src?.carryCount || 0) + 1;
 }
 
+// carryOverPanel の「→ 今日へ」入口。3回目以降は儀式モーダルを先に出す。
 function requestCarryOver(id) {
   const src = blockById(id);
   if (!src || src.migratedTo) return;
+  const nextCount = migrationNextCount(id);
+  if (nextCount >= MIGRATION_RITUAL_THRESHOLD) {
+    openMigrationRitual(id, nextCount, { origin: "panel" });
+    return;
+  }
   carryOverBlock(id);
 }
 
-function carryOverBlock(id, { toDate = todayISO(), toastMessage = "今日へ繰り越しました" } = {}) {
+function carryOverBlock(id, { forceMIT = false, toDate = todayISO(), toastMessage = "今日へ繰り越しました" } = {}) {
   const src = blockById(id);
   if (!src || src.migratedTo) return;
   const shift = (dt) => dt ? `${toDate}${dt.slice(10)}` : "";  // 予定時刻は同 HH:mm のまま送付先へ
@@ -5134,6 +5162,11 @@ function carryOverBlock(id, { toDate = todayISO(), toastMessage = "今日へ繰�
   });
   block.source = src.source || "";
   block.carryCount = (src.carryCount || 0) + 1;  // v61: 繰り越し回数を1つ積み上げる
+  if (forceMIT) {
+    // v61: 儀式で「今日やる」を選んだ場合はMIT化(既存の最大3個ルールは尊重する)
+    const sameDayMITs = state.blocks.filter((b) => !b.deleted && b.date === toDate && b.isMIT);
+    if (sameDayMITs.length < 3) block.isMIT = true;
+  }
   state.blocks.push(block);
   // 旧ブロックを「繰り越し済み」に(未完了リストから外れ、再提案されない)
   state.blocks = state.blocks.map((b) => b.id === src.id ? { ...b, migratedTo: block.id, updatedAt: nowDateTime() } : b);
@@ -5146,6 +5179,140 @@ function postponeBlockToNextDay(id) {
     toDate: addDays(todayISO(), 1),
     toastMessage: "明日へ送りました"
   });
+}
+
+// 手放す選択時の「Wishへ移動」実行(Block削除は呼び出し側で行う)。
+// 戻り値: 作成できたWishタスク本体(失敗時はfalse)。normalizeStateがWish Projectの存在を
+// 必ず保証するため通常falseにはならないが、念のための防御(v61レビュー対応: トースト文言の
+// 実態合わせ)。v152レビュー対応: 呼び出し元(仕分けモード)が作成後の新Wishのidを
+// 参照できるよう、真偽値ではなくタスク本体を返す(既存の呼び出し元は真偽判定にしか
+// 使っていないため後方互換)。
+function moveBlockToWish(id) {
+  const src = blockById(id);
+  if (!src) return false;
+  const wishProject = getWishProject();
+  if (!wishProject) return false;
+  const task = makeTask({ projectId: wishProject.id, title: src.title });
+  // v79: addWish()と同じ理由でdueDateの「今日」既定を持ち込まない(Wishは期限任意)。
+  task.dueDate = "";
+  state.tasks.push(task);
+  return task;
+}
+
+// 選択結果を軽量ログに記録(将来のバッチ分析用。aiScheduleHistoryと同じ思想)
+// v156 2系統レビュー対応(必須1): logSwipeTriageと同じ理由で戻り値を { entry, evicted } にした。
+// 既存の呼び出し元(戻り値未使用、下記5389行目)は影響なし。
+function logMigrationRitual(block, choice) {
+  const entry = {
+    blockId: block?.id || "",
+    title: block?.title || "",
+    carryCount: (block?.carryCount || 0) + 1,
+    choice,  // 'today' | 'decompose' | 'release' | 'avoid' | 'carry'
+    at: nowDateTime()
+  };
+  state.migrationRitualLog.push(entry);
+  let evicted = null;
+  if (state.migrationRitualLog.length > MIGRATION_RITUAL_LOG_MAX) {
+    evicted = state.migrationRitualLog.slice(0, state.migrationRitualLog.length - MIGRATION_RITUAL_LOG_MAX);
+    state.migrationRitualLog = state.migrationRitualLog.slice(-MIGRATION_RITUAL_LOG_MAX);
+  }
+  return { entry, evicted };
+}
+
+function openMigrationRitual(srcId, nextCount, ctx) {
+  const src = blockById(srcId);
+  if (!src) return;
+  _migrationRitualCtx = { srcId, nextCount, ...ctx };
+  state.modal = { type: "migrationRitual", id: srcId };
+  renderModal(buildMigrationRitualModal(src, nextCount));
+}
+
+function buildMigrationRitualModal(block, nextCount) {
+  return `
+    <div class="modal-card migration-ritual-modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">↻ ${nextCount}回目の繰り越しです</h3>
+        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="migration-ritual-title">${escapeHTML(block.title)}</p>
+        <p class="muted" style="font-size:13px; line-height:1.6">${nextCount}回持ち越しています。まだ価値がありますか?</p>
+        <div class="migration-ritual-choices">
+          <button class="btn" data-action="migration-ritual-choice" data-choice="today">今日やる(MIT候補に)</button>
+          <button class="btn" data-action="migration-ritual-choice" data-choice="decompose">分解する(タイトル編集へ)</button>
+          <button class="btn" data-action="migration-ritual-choice" data-choice="release">手放す(Wishへ移動 or 削除)</button>
+          <button class="btn ghost" data-action="migration-ritual-choice" data-choice="carry">それでも繰り越す</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function resolveMigrationRitual(choice) {
+  if (!_migrationRitualCtx) return closeModal();
+  const { srcId, origin, draftItemId } = _migrationRitualCtx;
+  const src = blockById(srcId);
+  logMigrationRitual(src, choice);
+  _migrationRitualCtx = null;
+
+  if (choice === "release") {
+    const toWish = window.confirm(`「${src?.title || ""}」をWishへ移動しますか?\n(キャンセルで削除)`);
+    // v61レビュー対応: Wish Projectが存在せず移動できなかった場合は、実態(削除のみ)に
+    // 合わせてトースト文言を変える(normalizeStateが保証するため通常は起きないが念のため)。
+    let releaseMsg = "手放しました(削除)";
+    if (toWish) {
+      releaseMsg = moveBlockToWish(srcId) ? "Wishへ移動しました" : "Blockを削除しました(Wishプロジェクトなし)";
+    }
+    state.blocks = state.blocks.map((b) => b.id === srcId ? { ...b, deleted: true, updatedAt: nowDateTime() } : b);
+    if (origin === "draft" && _scheduleDraft) {
+      _scheduleDraft.items = _scheduleDraft.items.filter((x) => x.id !== draftItemId);
+      if (!_scheduleDraft.items.length) _scheduleDraft = null;
+    }
+    closeModal();
+    saveAndRender(releaseMsg);
+    return;
+  }
+
+  if (choice === "decompose") {
+    if (origin === "draft" && _scheduleDraft) {
+      _scheduleDraft.items = _scheduleDraft.items.filter((x) => x.id !== draftItemId);
+      if (!_scheduleDraft.items.length) _scheduleDraft = null;
+    }
+    // v61レビュー対応: saveState()だけだと下書きから除外した項目がタイムラインに残存表示される
+    // (renderModal はモーダル部分しか書き換えないため)。既存の saveAndRender 慣習に合わせ、
+    // 先に render() で背後の画面(下書きレイヤ等)を最新化してからモーダルを開く。
+    saveAndRender();
+    openBlockEditor(srcId);  // タイトル編集モーダルへ(分解のきっかけ)。renderModalが上書きするのでcloseModal不要
+    return;
+  }
+
+  if (choice === "today") {
+    if (origin === "panel") {
+      carryOverBlock(srcId, { forceMIT: true });
+      closeModal();
+    } else if (origin === "draft" && _scheduleDraft) {
+      const it = _scheduleDraft.items.find((x) => x.id === draftItemId);
+      if (it) { it.forceMIT = true; it._ritualResolved = true; }
+      closeModal();
+      confirmScheduleDraft();  // この項目は解決済みなので再スキャンでスキップされ、そのまま確定処理へ進む
+    } else {
+      closeModal();
+    }
+    return;
+  }
+
+  // choice === "carry"(それでも繰り越す)
+  if (origin === "panel") {
+    carryOverBlock(srcId);
+    closeModal();
+  } else if (origin === "draft" && _scheduleDraft) {
+    const it = _scheduleDraft.items.find((x) => x.id === draftItemId);
+    if (it) it._ritualResolved = true;
+    closeModal();
+    confirmScheduleDraft();
+  } else {
+    closeModal();
+  }
 }
 
 function extractMITCandidatesFromReport(reportText) {
@@ -12133,7 +12300,7 @@ async function hydrateStaticMarkdown() {
   // v137: 入力中/IME変換中は即renderせず保留する(review.md:28。renderDeferringForFocus参照)。
   // v161: "stats"(計器盤)を追加。エネルギーカーブの新着fetchが完了してもこの画面を開いた
   //       ままだと再描画されず節が出ないままになる不具合を防ぐ(他view追加時と同じ理由)。
-  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly" || state.currentView === "home" || state.currentView === "today" || state.currentView === "timeline" || state.currentView === "wish" || state.currentView === "zero" || state.currentView === "tasks" || state.currentView === "stats")) {
+  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "home" || state.currentView === "today" || state.currentView === "timeline" || state.currentView === "wish" || state.currentView === "zero" || state.currentView === "tasks")) {
     renderDeferringForFocus();
   }
 }
@@ -12976,6 +13143,7 @@ function closeModal() {
   modalRoot.setAttribute("aria-hidden", "true");
   modalRoot.innerHTML = "";
   modalRoot.onclick = null;
+  _migrationRitualCtx = null;  // v61: 選択せずに閉じた場合も一時状態を残さない
   _pendingLifecycleCtx = null;  // v87: 宣言/報告モーダルを×で閉じた場合は開始/終了自体も取り消す
   // v129: 背景タップ等の暗黙クローズは記録せず破棄する(_pendingLifecycleCtxと同じ扱い)。
   // 明示的な保存/discard経路(closeBodyScanFlow)は既にnull化済みのため、ここは冪等。
