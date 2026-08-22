@@ -8,7 +8,7 @@ let runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minute
 let towerMotionSetting;
 let renderTodayPomodoro;
 let journalForDate;
-let gateRules, earlyBirdLogForDate, earlyRiseTarget, gateEditMode;
+let gateRules, earlyBirdLogForDate, earlyRiseTarget, linkedGymBlock, gateEditMode;
 let flipListenerBound = false;
 // undefined=セッション初回(未観測)。復元描画では接地の瞬間ではないためフラッシュを出さない
 // (起動時同期404後の全体render()と競合して非決定にもなる)。null=実行中なしを観測済み。
@@ -24,7 +24,7 @@ function configureTodayTower(deps) {
     escapeHTML, todayISO, syncAlertBanner, renderAtisPanel, blocksForDate, towerFlights,
     runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp,
     towerMotionSetting, renderTodayPomodoro, journalForDate,
-    gateRules, earlyBirdLogForDate, earlyRiseTarget, gateEditMode
+    gateRules, earlyBirdLogForDate, earlyRiseTarget, linkedGymBlock, gateEditMode
   } = deps);
   if (!flipListenerBound && typeof document !== "undefined") {
     document.addEventListener("animationend", (event) => {
@@ -121,11 +121,15 @@ function renderTowerRunway(now, blocks) {
   let hud = '<div class="tower-nowhud" data-status="empty">本日の着陸予定はありません</div>';
   if (running) {
     const id = escapeHTML(running.id);
+    const ironLink = typeof linkedGymBlock === "function"
+      && linkedGymBlock(blocks, now.getHours() * 60 + now.getMinutes())
+      ? '<button class="tower-ironlog-link" data-action="open-iron-log">▶ IRON LOG</button>' : "";
     hud = `<div class="tower-nowhud" data-status="${metrics.over ? "long" : "landing"}">
       <button type="button" class="tower-now-title" data-action="edit-block" data-id="${id}">${escapeHTML(running.title)}</button>
       <span class="tower-now-pct" id="towerNowPct">進捗 ${metrics.pct}%</span>
       <strong id="towerNowRemain">${metrics.remain}</strong>
       <div class="tower-now-actions">
+        ${ironLink}
         <button type="button" class="btn green" data-action="complete-block-with-actual" data-id="${id}">■ 完了</button>
         <button type="button" class="btn" data-action="now-conveyor-complete" data-id="${id}">▶ 次へ</button>
       </div>

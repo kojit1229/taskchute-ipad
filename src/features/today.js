@@ -3,6 +3,7 @@
 
 import { state } from "../state/store.js";
 import { configureTodayTower, renderTodayTower, updateTodayTowerTick } from "./today-tower.js";
+import { linkedGymBlock } from "./iron-log.js";
 import {
   runningBlockOf as coreRunningBlockOf, queueBlocksOf as coreQueueBlocksOf,
   towerFlights as coreTowerFlights
@@ -39,6 +40,7 @@ function configureToday(deps) {
     gateRules: () => state.recurrences || [],
     earlyBirdLogForDate: (date) => state.earlyBird?.logs?.[date] || null,
     earlyRiseTarget: () => state.settings.earlyRiseTarget,
+    linkedGymBlock: (blocks, nowMinutes) => linkedGymBlock({ settings: state.settings, blocks }, nowMinutes),
     gateEditMode
   });
 }

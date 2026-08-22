@@ -3111,6 +3111,7 @@ h3 {
 .tower-now-pct { color: var(--tower-amber); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 #towerNowRemain { color: var(--tower-green); font-size: 13px; white-space: nowrap; }
 .tower-now-actions { display: flex; grid-column: 1 / -1; gap: 6px; }
+.tower-ironlog-link { min-height: 44px; border: 1px solid var(--tower-amber); border-radius: 8px; padding: 0 12px; color: var(--tower-amber); background: transparent; font: inherit; font-weight: 700; }
 .tower-nowhud[data-status="long"] { border-top: 1px solid var(--tower-amber); }
 .tower-nowhud[data-status="long"] #towerNowRemain { color: var(--tower-amber); }
 @keyframes tower-touchdown { 0% { opacity: 1; transform: translate(-50%, -50%) scale(.4); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(3); } }

@@ -13,7 +13,9 @@ import { cachedFeedback } from "./src/state/feedback-cache.js";
 // v223: TOWER上帯(STANDING ORDERS/COUNTDOWN)は自己完結featureへ依存注入する。
 import { configureTopband, cycleWeekForDate } from "./src/features/topband.js";
 // v233: P4第2弾。v232で配置済みのIRON LOG/INSTRUMENTSを画面結線する。
-import { configureIronLog, renderIronLog } from "./src/features/iron-log.js";
+import {
+  configureIronLog, renderIronLog, linkedGymBlock, gymCommentSummary, runIronImport
+} from "./src/features/iron-log.js";
 import { configureInstruments, renderInstruments } from "./src/features/instruments.js";
 // v182: 新トップレベル「今日」コックピット。既存featureと同じ依存注入型で循環importを避ける。
 import { configureToday, renderToday } from "./src/features/today.js";
@@ -220,6 +222,12 @@ const toastEl = document.querySelector("#toast");
 // v166: state本体の所有はsrc/state/store.jsへ移した。stateの初期化はここで明示的に行う
 //   (store.js自身の先頭でloadStateを呼ぶとTDZ相当のリスクを生むため。store.js冒頭コメント参照)。
 setState(loadState(normalizeState, seedState));
+// v234: normalizeState後に一度だけ過去のジムBlockコメントをIRON LOG累計へ移行する。
+// doneをlocalStorageへ即時保存し、起動を繰り返しても再集計しない。
+if (!state.ironImport.done) {
+  runIronImport(state);
+  persistLocalNoSchedule();
+}
 // v37: 起動時点のデータ更新時刻を退避。
 //      起動同期(syncFromGitHubOnStartup)の新旧比較はこの値と行う。
 //      (fetch 完了前にユーザー操作で saveState が走っても比較が壊れないように)
@@ -311,6 +319,7 @@ configureTimeline({
 // if連鎖からの機械的な移動のみで無改変)。
 registerActions({
   "nav": ({ target }) => setView(target.dataset.view),
+  "open-iron-log": () => setView("iron-log"),
   "departures-open-tomorrow": () => {
     setSelectedDate(addDays(todayISO(), 1));
     setView("tasks");
@@ -8905,6 +8914,34 @@ function quickCompleteActualStart(block, endDateTime) {
   return start;
 }
 
+// v234: ジムBlockの完了4導線で共有するIRON LOG転記フック。
+// blockId付きセットを優先し、無ければ未連動セットをこのBlockへ一度だけ割り当てる。
+function transferIronLogToCompletedBlock(blockId) {
+  const block = state.blocks.find((b) => b.id === blockId);
+  if (!block?.completed) return;
+  const probe = {
+    ...block,
+    actualStartAt: block.actualStartAt || block.plannedStartAt || `${block.date || todayISO()}T00:00`,
+    actualEndAt: ""
+  };
+  if (!linkedGymBlock({ settings: state.settings, blocks: [probe] }, 0)) return;
+
+  const allSets = state.condition?.logs?.[block.date]?.gym;
+  const list = Array.isArray(allSets) ? allSets : [];
+  const linkedSets = list.filter((set) => String(set?.blockId || "") === String(blockId));
+  const sets = linkedSets.length ? linkedSets : list.filter((set) => !set?.blockId);
+  const summary = gymCommentSummary(sets);
+  if (!summary) {
+    window.confirm("IRON LOGのセットが未記録です。このままBlockを完了しますか?");
+    return;
+  }
+  if (!linkedSets.length) sets.forEach((set) => { set.blockId = blockId; });
+  const comment = String(block.comment || "");
+  if (!comment.split(/\r?\n/).includes(summary)) {
+    block.comment = comment ? `${comment}${comment.endsWith("\n") ? "" : "\n"}${summary}` : summary;
+  }
+}
+
 // v150レビュー対応(項目4): 即完了(quick complete)で自動補完した値(実績時刻・充放電)を
 // blockId単位で退避しておき、同セッション内で完了解除(トグルOFF)されたときに元へ戻す。
 // セッション限りの非永続モジュール変数(セッションを跨いだ解除は現状維持=許容、CHANGES参照)。
@@ -8980,6 +9017,7 @@ function toggleBlock(id) {
     triggerAnchorPlacements(completedBlock.recurrenceGroupId, nowDateTime());
   }
   if (justCompleted && completedBlock) {
+    transferIronLogToCompletedBlock(id);
     generateReport(completedBlock.date, { quiet: true });
     // v150: 完了直後だけ「実績を編集」ボタン付きトースト(既存の実績モーダルを編集導線として再利用)。
     saveAndRender("Blockを完了しました", { blockId: id, actionLabel: "実績を編集" });
@@ -9013,6 +9051,7 @@ function toggleTaskCompleteFromBlock(blockId) {
     state.blocks = state.blocks.map((b) => b.id === blockId
       ? { ...b, completed: true, actualEndAt: b.actualEndAt || nowDateTime(), updatedAt: nowDateTime() }
       : b);
+    transferIronLogToCompletedBlock(blockId);
   } else {
     const hasProgress = state.blocks.some((b) => !b.deleted && b.taskId === task.id && (b.completed || b.actualStartAt));
     state.tasks = state.tasks.map((t) => t.id === task.id
@@ -9155,6 +9194,7 @@ function bulkApproveAsPlanned() {
   state.blocks = state.blocks.map((b) => ids.has(b.id)
     ? { ...b, actualStartAt: b.plannedStartAt, everStartedAt: b.everStartedAt || b.plannedStartAt, actualEndAt: b.plannedEndAt || b.plannedStartAt, completed: true, updatedAt: nowDateTime() }
     : b);
+  targets.forEach((block) => transferIronLogToCompletedBlock(block.id));
   const taskIds = new Set(targets.map((b) => b.taskId).filter(Boolean));
   if (taskIds.size) {
     state.tasks = state.tasks.map((t) => taskIds.has(t.id) && t.status === "todo"
@@ -10491,6 +10531,7 @@ function completePomodoro() {
           updatedAt: nowDateTime()
         }
       : block);
+    transferIronLogToCompletedBlock(blockId);
   }
   const completedBlock = blockId ? state.blocks.find((block) => block.id === blockId) : null;
   if (completedBlock) generateReport(completedBlock.date, { quiet: true });
@@ -10964,6 +11005,7 @@ function finishBlockFromBreak() {
           updatedAt: nowDateTime()
         }
       : b);
+    transferIronLogToCompletedBlock(lastBlockId);
   }
   // タイマーを終了状態に
   state.pomodoro = {
@@ -12951,6 +12993,7 @@ function saveBlockFromModal(id, fields) {
           : r);
     }
     state.blocks = state.blocks.map((b) => b.id === id ? updated : b);
+    if (!existing.completed && updated.completed) transferIronLogToCompletedBlock(id);
     const rk = fields.recurrenceKind;
     // v23: "__keep__"・空・未指定 → この Block の編集のみ(シリーズ設定は不変)
     if (rk && rk !== "__keep__") {
@@ -13344,6 +13387,7 @@ function buildActualEntryModal(block, defaultStart, defaultEnd) {
 }
 
 function saveActualEntryFromModal(blockId, fields) {
+  const wasCompleted = Boolean(state.blocks.find((b) => b.id === blockId)?.completed);
   state.blocks = state.blocks.map((b) => {
     if (b.id !== blockId) return b;
     return {
@@ -13358,6 +13402,7 @@ function saveActualEntryFromModal(blockId, fields) {
       updatedAt: nowDateTime()
     };
   });
+  if (!wasCompleted) transferIronLogToCompletedBlock(blockId);
   // Task の状態を doing に
   const block = state.blocks.find((b) => b.id === blockId);
   if (block?.taskId) {

@@ -36,11 +36,11 @@
 //       registerModalHandler/dispatchModalSave/dispatchModalDelete、重複登録ガード、
 //       未登録時のfalseフォールバック)。
 //   [2] app.jsのclick dispatcher("event:click"、data-action分岐)から`action === "..."`を
-//       静的抽出する(削除済み機能のactionを除く233件のゴールデンリストを維持したまま、
+//       静的抽出する(削除済み機能のactionを除く234件のゴールデンリストを維持したまま、
 //       段階5-2/5-3で移行済みの分だけif連鎖から消えている前提)。
 //   [3] 「if連鎖側の残存分岐リスト」(§2で静的抽出)と「レジストリ側の登録済みリスト」
 //       (4featureのconfigureXxxを空depsで呼ぶ動的実測 + app.js自身のregisterActions呼び出しの
-//       静的抽出)の**和集合が233件のゴールデンリストと完全一致・重複ゼロ**であることを検証する
+//       静的抽出)の**和集合が234件のゴールデンリストと完全一致・重複ゼロ**であることを検証する
 //       (総数と名前一覧の保存則。段階5以降でさらに分岐を移行する際もこの形式を維持する)。
 const fs = require("fs");
 const path = require("path");
@@ -69,10 +69,10 @@ function check(name, cond, extra = "") {
   else { failures++; console.log(`  ❌ ${name} ${extra}`); }
 }
 
-// §6-1: click dispatcherから確定させたゴールデンリスト(削除済み機能のactionを除く233件)。
+// §6-1: click dispatcherから確定させたゴールデンリスト(削除済み機能のactionを除く234件)。
 // 増減・リネームがあれば、それが意図した変更(action追加/削除/移行)かどうかを必ず確認すること。
 const GOLDEN_CLICK_ACTIONS = [
-  "nav", "instruments-open-iron-log", "departures-open-tomorrow", "today-replan", "save-tower-journal",
+  "nav", "open-iron-log", "instruments-open-iron-log", "departures-open-tomorrow", "today-replan", "save-tower-journal",
   "early-bird-check", "tower-gate-edit-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move",
   "date-prev", "date-next", "today",
   "set-morning", "set-sleep", "toggle-meds", "set-capacity", "set-evening-mood",
@@ -184,7 +184,7 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
 // weekly-wish-*(wish週次選定、weekly-wish-toggleはpreventDefault依存)は
 // 従来どおり移行せず、if連鎖に残した(下のEXPECTED_REMAINING_IF_CHAINに含まれる)。
 const APP_JS_REGISTERED_ACTIONS = [
-  "nav", "instruments-open-iron-log", "departures-open-tomorrow", "today-replan", "save-tower-journal",
+  "nav", "open-iron-log", "instruments-open-iron-log", "departures-open-tomorrow", "today-replan", "save-tower-journal",
   "early-bird-check", "tower-gate-edit-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move",
   "toggle-show-suspended", "toggle-wbs-hide-done", "toggle-tasks-show-future",
   "toggle-wbs-edit", "wbs-collapse-all",

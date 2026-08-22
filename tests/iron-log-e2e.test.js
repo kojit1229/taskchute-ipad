@@ -128,6 +128,70 @@ function check(name, cond, extra = "") {
     const linkedAddedSet = linkedState.condition.logs[today].gym[0];
     check("追加したセットのblockIdが実行中Blockに一致", linkedAddedSet.blockId === "gym-running", JSON.stringify(linkedAddedSet));
 
+    console.log("[5] ジムBlock完了時、紐づくセットがblock.commentへ凍結書式で自動転記される");
+    await page.clock.setFixedTime(fixedTime(9, 0, 0));
+    const gymForComment = gymBlock("gym-complete", "ジム(自動転記)", 9 * 60, {
+      actualStartAt: atMinute(today, 9 * 60), estimateMin: 60
+    });
+    const linkedSets = [
+      set("ベンチプレス", 60, 10, 9 * 60 + 5, { blockId: "gym-complete" }),
+      set("ベンチプレス", 60, 10, 9 * 60 + 10, { blockId: "gym-complete" }),
+      set("ショルダープレス", 30, 8, 9 * 60 + 15, { blockId: "gym-complete" })
+    ];
+    await seed({ view: "today", blocks: [gymForComment], gym: linkedSets });
+    await page.waitForSelector('.tower-now-actions [data-action="complete-block-with-actual"]');
+    await page.locator('.tower-now-actions [data-action="complete-block-with-actual"]').click();
+    await page.locator('[data-modal-field="actualStartAt"]').fill(atMinute(today, 9 * 60).slice(0, 16));
+    await page.locator('[data-modal-field="actualEndAt"]').fill(atMinute(today, 10 * 60).slice(0, 16));
+    await page.locator('.modal-card [data-action="modal-save"]').click();
+    await page.waitForFunction(({ KEY, id }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      return s.blocks.find((b) => b.id === id)?.completed === true;
+    }, { KEY, id: "gym-complete" });
+    const afterComplete = await readState();
+    const completedBlock = afterComplete.blocks.find((b) => b.id === "gym-complete");
+    check("block.commentへ凍結書式(合計1,440kg・×2圧縮)で自動転記される",
+      completedBlock.comment === "総重量 1,440kg(ベンチプレス 60kg×10×2、ショルダープレス 30kg×8)",
+      completedBlock.comment);
+
+    console.log("[6] 未記録(紐づくセット0件)での完了時に確認を出す(slim-spec.md §3-4)");
+    // 設計注記(notes.mdに記載): window.confirmで実装される想定(app.js既存の確認導線と同じ慣習)。
+    // 実際にカスタムモーダル等で実装された場合はこのテストの要追随。
+    await page.clock.setFixedTime(fixedTime(9, 0, 0));
+    const gymNoSets = gymBlock("gym-empty", "ジム(未記録)", 9 * 60, {
+      actualStartAt: atMinute(today, 9 * 60), estimateMin: 30
+    });
+    await seed({ view: "today", blocks: [gymNoSets], gym: [] });
+    await page.waitForSelector('.tower-now-actions [data-action="complete-block-with-actual"]');
+    let dialogMessage = null;
+    page.once("dialog", async (dialog) => { dialogMessage = dialog.message(); await dialog.accept(); });
+    await page.locator('.tower-now-actions [data-action="complete-block-with-actual"]').click();
+    await page.locator('[data-modal-field="actualStartAt"]').fill(atMinute(today, 9 * 60).slice(0, 16));
+    await page.locator('[data-modal-field="actualEndAt"]').fill(atMinute(today, 9 * 60 + 30).slice(0, 16));
+    await page.locator('.modal-card [data-action="modal-save"]').click();
+    await page.waitForFunction(({ KEY, id }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      return s.blocks.find((b) => b.id === id)?.completed === true;
+    }, { KEY, id: "gym-empty" });
+    check("紐づくセット0件の完了で「未記録」確認が出る", dialogMessage !== null && /セット|未記録|記録/.test(dialogMessage || ""), dialogMessage);
+    const afterEmptyComplete = await readState();
+    check("確認を承認すると完了自体は成立する", afterEmptyComplete.blocks.find((b) => b.id === "gym-empty")?.completed === true);
+
+    console.log("[7] NOW LANDINGのIRON LOG導線は実行中ジムBlockだけに表示され遷移できる");
+    await page.clock.setFixedTime(fixedTime(9, 30, 0));
+    const gymForLink = gymBlock("gym-link", "ジム導線", 9 * 60, { actualStartAt: atMinute(today, 9 * 60) });
+    await seed({ view: "today", blocks: [gymForLink], gym: [] });
+    const ironLink = page.locator('.tower-nowhud .tower-ironlog-link[data-action="open-iron-log"]');
+    check("実行中ジムBlockでは▶ IRON LOGボタンが出る", await ironLink.count() === 1
+      && (await ironLink.textContent()) === "▶ IRON LOG");
+    await ironLink.click();
+    await page.waitForSelector('#app[data-view="iron-log"]');
+    check("ボタン押下でiron-log画面へ遷移する", await page.locator('#app[data-view="iron-log"] .iron').count() === 1);
+    const nonGym = block("dev-running", "通常作業", today, 9 * 60, { actualStartAt: atMinute(today, 9 * 60) });
+    await seed({ view: "today", blocks: [nonGym], gym: [] });
+    check("実行中の非ジムBlockでは▶ IRON LOGボタンが出ない",
+      await page.locator('.tower-nowhud .tower-ironlog-link[data-action="open-iron-log"]').count() === 0);
+
     console.log(failures === 0 ? "[iron-log-e2e] 全PASS" : `[iron-log-e2e] ${failures}件失敗`);
   } catch (e) {
     failures++;
@@ -138,4 +202,3 @@ function check(name, cond, extra = "") {
     process.exit(failures === 0 ? 0 : 1);
   }
 })();
-

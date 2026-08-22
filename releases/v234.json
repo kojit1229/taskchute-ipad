@@ -1,0 +1,62 @@
+{
+  "version": 234,
+  "date": "2026-08-23",
+  "title": "IRON LOG運用結線",
+  "summary": "ジムBlockのNOW LANDING導線、完了時コメント自動転記、過去コメントの一回きり移行を結線し、IRON LOGの実運用フローを完成させた",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v234.json",
+    "src/features/today-tower.js",
+    "src/features/today.js",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/iron-log-e2e.test.js",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "ジム系Blockの実行中HUDからIRON LOGへ1タップで移動できるようにする。",
+    "Block完了の全導線で当日の筋トレセットを凍結書式のコメントへ転記し、日報生成前に反映する。",
+    "旧Blockコメントの総重量を起動時に一度だけ累計へ移行し、既存利用者の過去実績を保持する。"
+  ],
+  "changes": [
+    "linkedGymBlockとsettings.gymBlockKeywordsの判定を使い、実行中ジムBlockのNOW LANDING HUDだけに▶ IRON LOGボタンを表示した。open-iron-logはaction registryからsetView(iron-log)を呼ぶ薄いラッパとして登録した。",
+    "完了時の共通フックを追加し、blockId一致セットを優先してgymCommentSummaryでコメント化した。一致セットが無い場合はblockId未設定の当日セットを対象Blockへ割り当て、同日複数Blockでの二重転記を防いだ。",
+    "既存コメントは上書きせず末尾へ改行追記し、同一サマリ行が既にある場合は再追記しない。セット0件では転記せず、未記録確認を表示して完了を継続する。",
+    "自動転記フックをtoggleBlock、Block編集モーダルの未完了→完了保存、実績登録モーダル保存、completePomodoro、休憩後完了へ接続した。Task完了連動と予定どおり一括完了にも同じフックを適用した。",
+    "normalizeState後の起動初期化でrunIronImportをdone=false時だけ実行し、結果をlocalStorageへ即時保存して再起動時の再集計を防いだ。",
+    "iron-log E2Eへ先行版[5][6]とNOW LANDING導線ブロックを追加し、action registryゴールデンへopen-iron-logを意図的に追加した。",
+    "Service WorkerのAPP_SHELLは変更せず、CACHE_NAMEをv234へ更新した。"
+  ],
+  "uncertainties": [
+    "先行実装メモに既存コメントの上書き規則が無かったため、依頼の既定判断どおり末尾への改行追記を採用した。",
+    "blockId一致セットが無い場合の未転記判定フィールドは凍結stateに無いため、blockId未設定セットを最初の完了ジムBlockへ割り当てる方式で一回性を表現した。",
+    "セット0件の確認は先行E2Eの想定に合わせてwindow.confirmを使用し、承認時の完了継続を検証した。"
+  ],
+  "reviewFocus": [
+    "NOW LANDINGの表示条件がlinkedGymBlockと同一で、非ジムBlockや未実行Blockに導線が出ないか。",
+    "NOW LANDING完了、軽量完了、Block編集モーダル完了保存、実績登録モーダル保存、ポモドーロ完了の各経路で、転記が日報生成・保存より前に発火するか。",
+    "blockId一致優先、未連動セットの一度きり割り当て、既存コメント改行追記、同一サマリ再追記防止が同日複数Blockでも二重計上を起こさないか。",
+    "runIronImportがnormalizeState後かつconfigure/render前に一度だけ走り、doneと集計値がlocalStorageへ残るか。",
+    "new Date(文字列)追加なし、data-action委譲、入力font-size、SW v234・APP_SHELL不変、実行コード差分200行以下を満たすか。"
+  ],
+  "verification": [
+    "node --check app.js、src/features/today.js、src/features/today-tower.js、tests/iron-log-e2e.test.js、sw.js: exit 0。",
+    "node tests/iron-log-core.test.js: runIronImport冪等・gymCommentSummary凍結書式を含む全件PASS。",
+    "node tests/action-registry-core.test.js: open-iron-log追加後の保存則・重複ガードが全件PASS。",
+    "system Edge指定のnode tests/iron-log-e2e.test.js: [1]〜[6]+NOW LANDING導線ブロックが全PASS。",
+    "system Edge指定のnode tests/tower-core.test.js、today-core.test.js、sw-integration.test.js: 全件PASS。",
+    "npm.cmd run code:index:write/check: PASS(code index 577 functions)。",
+    "npm.cmd run test:manifest:write/check: PASS(test manifest 130 suites)。",
+    "CHROME_PATHをsystem Edgeへ指定したnode scripts/release-gate.js releases/v234.json --suite=iron-log-e2e: exit 0。選定32スイート、APP_SHELL 19件、manifest 130、code index 577が全PASS。",
+    "release-record --writeはCHANGES_v234.mdを生成後、ワークスペース外taskchute-notes/handoff.mdへの書き込みだけEPERM。依頼どおりnotes側をスキップした。"
+  ],
+  "knownLimitations": [
+    "iOS Safari実機PWAでのService Worker更新、オフライン起動、390/768/1024pxの最終目視は監督者側で必要。",
+    "標準Playwright Chromiumはこの環境でspawn EPERMになるため、ブラウザE2Eとrelease gateはsystem EdgeをCHROME_PATHへ指定する。",
+    "taskchute-notes/handoff.mdはワークスペース外のため、release-record --writeがEPERMになった場合はCHANGES生成までを採用し、notes側更新は監督者が再実行する。"
+  ]
+}
