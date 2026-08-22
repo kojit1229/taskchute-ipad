@@ -176,24 +176,6 @@
         "v140",
         "xss-sanitizer"
       ]
-    },
-    "timeswitch": {
-      "paths": [
-        "^src/features/timeswitch\\.js$"
-      ],
-      "suites": [
-        "today-core",
-        "action-registry-core"
-      ]
-    },
-    "calendar": {
-      "paths": [
-        "^src/features/calendar\\.js$"
-      ],
-      "suites": [
-        "calendar-core",
-        "action-registry-core"
-      ]
     }
   }
 }

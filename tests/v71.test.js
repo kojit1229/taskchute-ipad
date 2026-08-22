@@ -112,10 +112,8 @@ function check(name, cond, extra = "") {
     await seed({ blocks: [], view: "home" });
     const navLabels = await page.locator(".nav-list .nav-button .nav-label").allTextContents();
     // v182 D2: mobileNav先頭差替え/moreGroups計画群へhome追加
-    // v187 裁定15: サイドバーに「計時」(timeswitch)を今日の直後へ追加
-    // v188: 「カレンダー」を計時の直後へ追加
     const expectedOrder = [
-      "今日", "計時", "カレンダー", "ホーム", "タスクシュート", "タイムライン", "WBS", "ルーティン",
+      "今日", "ホーム", "タスクシュート", "タイムライン", "WBS", "ルーティン",
       "ジャーナル", "週次", "AIレポート", "計器盤", "やりたい",
       "ビジョン", "0秒思考", "ポモドーロ", "設定"
     ];

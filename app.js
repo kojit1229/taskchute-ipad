@@ -12,12 +12,6 @@ import { loadState, persistLocalNoSchedule, _lastSaveError } from "./src/storage
 import { cachedFeedback } from "./src/state/feedback-cache.js";
 // v182: 新トップレベル「今日」コックピット。既存featureと同じ依存注入型で循環importを避ける。
 import { configureToday, renderToday } from "./src/features/today.js";
-import {
-  configureTimeswitch, renderTimeswitch, stopTimeswitchTicker,
-  hydrateTimeswitchSchedule, getTimeswitchSchedule,
-  closeOrphanedOneTap, prepareTimeswitchForTaskStart
-} from "./src/features/timeswitch.js";
-import { configureCalendar, renderCalendar } from "./src/features/calendar.js";
 // v168: app.js分割・段階4-2(WishタブTier1のCRUD・描画・月間ボードD&D抽出)。src/features/wish.js
 //   はstateをimportするがapp.js自身はimportしない(循環import回避)。renderWishTriage(仕分けモード、
 //   Tier3=非移動)を含む残りの汎用ヘルパーはconfigureWish(deps)で注入する
@@ -217,8 +211,6 @@ function pruneExpiredSuggestedThemes(list) {
 //              ルーティン/ポモドーロ/やりたい/週次/計器盤/設定
 const navItems = [
   { id: "today", label: "今日", mark: "▶" },
-  { id: "timeswitch", label: "計時", mark: "◉" },
-  { id: "calendar", label: "カレンダー", mark: "C" },
   { id: "home", label: "ホーム", mark: "H" },
   { id: "tasks", label: "タスクシュート", mark: "T" },
   { id: "timeline", label: "タイムライン", mark: "L" },
@@ -283,7 +275,7 @@ configureToday({
   getCachedReadingHighlights: () => cachedReadingHighlights,
   beginTodayZeroWrite, saveTodayZeroEntry, discardTodayZeroWrite, getTodayZeroWriteState,
   homeSyncAlertBanner, renderReplanControlHTML, requestReplan,
-  getScheduleData: getTimeswitchSchedule, makeBlock, saveState, openBlockEditor
+  saveState
 });
 // v168: src/features/wish.jsも同じ理由(循環import回避)で依存注入する。renderWishTriage
 // (仕分けモード、Tier3)はapp.js側に残るためここで注入する(prep-stage4-wish.md §7の(a)案、
@@ -327,18 +319,7 @@ configureTimeline({
   draftBarHTML, zeroSecThemeBarHTML, draftRejectReasonPickerHTML, renderDraftLayer,
   scheduleDraftActive, render, blocksForDate, postponeBlockToNextDay,
   makeBlock, getOtherTask, openBlockEditor, saveState, isStaleBlock,
-  getScheduleData: getTimeswitchSchedule,
   timelineRailEl: timelineRail, appRootEl: app
-});
-configureTimeswitch({
-  escapeHTML, todayISO, nowDateTime, dateToLocalDateTime, localDateTimeToMs,
-  blocksForDate, getCategoryColor, getOtherTask, makeBlock,
-  fetchGitHubRawText, personalDataReady, saveState, saveAndRender, render,
-  forceResetPomodoroSession, startPomodoro
-});
-configureCalendar({
-  escapeHTML, todayISO, parseDate, addDays, dateToISO, renderHeader, render,
-  getScheduleData: getTimeswitchSchedule
 });
 // v174: app.js分割・段階5-3(残ドメインのaction相乗り移行)。settings(11)+sync(8)+core/nav(1)の
 // 計20分岐を、click dispatcherのif連鎖からregisterActions経由のレジストリへ移行した
@@ -926,7 +907,7 @@ const cachedFutureLetterMd = {};  // { 'YYYY-MM': '...手紙本文...' | undefin
 // 失敗が続いても30分に1回だけリトライする=連打しない)。
 let cachedEnergyCurveJson = { fetchedAt: 0, data: undefined };  // data: {generatedAt,days,hourly:[...]} | undefined
 // v190: coach-daily系バッチが生成する4ビュー共通のAI所見。stateへは保存せず、
-// schedule-inbox(v187)と同じく取得成功時だけTTLキャッシュを更新する。
+// 取得成功時だけTTLキャッシュを更新する。
 let cachedAiInsightsJson = { fetchedAt: 0, data: undefined };
 const AI_INSIGHTS_STALE_MS = 26 * 60 * 60 * 1000;
 const AI_INSIGHTS_GENERATED_AT_RE = /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/;
@@ -1625,7 +1606,7 @@ function normalizeState(value) {
   value.settings ||= {};
   // v182: 未知viewでrenderMainの前画面が残る事故を防ぐ。todayは新規許可、旧版由来の不明値はhomeへ。
   const allowedViews = new Set([
-    "today", "timeswitch", "calendar", "home", "wbs", "wish", "tasks", "routine", "timeline",
+    "today", "home", "wbs", "wish", "tasks", "routine", "timeline",
     "pomodoro", "journal", "zero", "vision", "ai-reports", "weekly",
     "cycle", "stats", "settings", "more"
   ]);
@@ -2831,7 +2812,6 @@ function renderMain() {
     return;
   }
   const view = state.currentView;
-  if (view !== "timeswitch") stopTimeswitchTicker();
   // v146レビュー対応: フォーカスガードはmain.innerHTMLを差し替える「前」に評価する(差し替え後は
   // 旧main内のフォーカス要素がDOMごと消えてbodyへ戻ってしまい、判定が構造的に効かなくなるため)。
   // 自作ガードではなく既存のisFocusInEditableElement(input/textarea/contenteditable判定)を使う。
@@ -2841,8 +2821,6 @@ function renderMain() {
   _lastScrollDate = state.selectedDate;
 
   if (view === "today") main.innerHTML = renderToday();
-  if (view === "timeswitch") main.innerHTML = renderTimeswitch();
-  if (view === "calendar") main.innerHTML = renderCalendar();
   if (view === "home") {
     main.innerHTML = renderHome();
     // v146: 今日を表示中なら「いま、これ」(=着手中/次の未着手Blockそのもの)へ自動スクロール
@@ -9378,11 +9356,7 @@ function renderBreakMessagesSettings() {
 //   もの)へ差し替える。ルーティンは実行系(タスクシュート)の上部リンクへ昇格したため、
 //   この4群からは除外する(renderTasks参照)。
 const moreGroups = [
-  { id: "execute", label: "実行", items: [
-    { id: "timeswitch", label: "計時", mark: "⏱" }
-  ] },
   { id: "plan", label: "計画", items: [
-    { id: "calendar", label: "カレンダー", mark: "🗓" },
     { id: "home", label: "ホーム", mark: "🏠" },
     { id: "wbs", label: "WBS", mark: "🧩" },
     { id: "wish", label: "やりたい", mark: "✦" },
@@ -12620,8 +12594,39 @@ function triggerCompletionEffect(message, isMIT) {
   setTimeout(() => container.remove(), 1500);
 }
 
+// v215: 計時タブ削除に伴い、旧timeswitch.jsのprepareTimeswitchForTaskStartからタブ非依存の
+// 不変条件だけをapp.jsへ存置した(v191修正1: 新タスク開始時に放置中の実行ルーティンBlockを
+// 未完了で自動クローズし、対象ポモドーロはfinishAllRunningと同じ後始末を行う)。
+// 計時固有部(oneTap/isTimeswitchRunning/closeOrphanedOneTap)は仕様どおり削除済み。
+function resetPomodoroForBlock(blockId) {
+  if (!state.pomodoro?.running || state.pomodoro.blockId !== blockId) return;
+  state.pomodoro = {
+    ...state.pomodoro,
+    running: false,
+    blockId: "",
+    startedAt: "",
+    endsAt: "",
+    mode: "focus"
+  };
+}
+
+function autoCloseStaleRoutineRuns(blockId) {
+  const at = nowDateTime();
+  state.blocks.forEach((block) => {
+    if (block.id === blockId || block.deleted || block.actualEndAt || !block.actualStartAt) return;
+    if (block.category === "ルーティン") {
+      // 過去日のBlockへ当日の終了時刻を書かない(旧finishBlockの二重防御を踏襲)。
+      const finishedAt = block.date < todayISO() ? `${block.date}T23:59:00` : at;
+      block.actualEndAt = finishedAt;
+      block.completed = false;
+      block.updatedAt = finishedAt;
+      resetPomodoroForBlock(block.id);
+    }
+  });
+}
+
 function setBlockTime(id, field) {
-  if (field === "actualStartAt") prepareTimeswitchForTaskStart(id);
+  if (field === "actualStartAt") autoCloseStaleRoutineRuns(id);
   updateBlockField(id, field, nowDateTime());
   if (field === "actualStartAt") {
     // v48: 着手した瞬間に Task を doing へ(従来は Block 完了時のみで、
@@ -13899,7 +13904,7 @@ function buildGuidedAccessHintModal() {
 
 function startPomodoro(blockId) {
   if (!blockId) return showToast("Blockを選んでください");
-  prepareTimeswitchForTaskStart(blockId);
+  autoCloseStaleRoutineRuns(blockId);  // v215: 旧prepareTimeswitchForTaskStartのタブ非依存部
   // v14: state.pomodoro を完全再構築(spread を使わず、必要なフィールドだけ明示的に作成)
   // これで以前のセッションの endsAt/startedAt/mode が確実にリセットされる
   const tab = state.pomodoro?.tab || "manual";
@@ -14642,7 +14647,6 @@ function setView(view) {
     ztCurrent = null;
     ztWriteStartedAt = null;  // v104
   }
-  if (state.currentView === "timeswitch" && view !== "timeswitch") stopTimeswitchTicker();
   state.currentView = view;
   // v37: 画面切替は「データの変更」ではない。dataModifiedAt を汚すと
   //      端末間の新旧比較が壊れる(タブを触っただけの古い端末が「最新」扱いになる)ため、
@@ -14849,9 +14853,8 @@ async function hydrateStaticMarkdown() {
   // v72: 個人データリポジトリ(taskchute/content/配下)からのGitHub API取得に切替(同一オリジンfetch廃止)
   const visionPromise = fetchGitHubRawText("content/Vision.md");
   const affirmPromise = fetchGitHubRawText("content/Daily_Affirmation.md");
-  const schedulePromise = hydrateTimeswitchSchedule();
-  const [visionText, affirmText, scheduleChanged] = await Promise.all([visionPromise, affirmPromise, schedulePromise]);
-  let changed = scheduleChanged;
+  const [visionText, affirmText] = await Promise.all([visionPromise, affirmPromise]);
+  let changed = false;
   if (visionText && visionText !== cachedVisionMd) {
     cachedVisionMd = visionText;
     changed = true;
@@ -15109,7 +15112,7 @@ async function hydrateStaticMarkdown() {
   // v137: 入力中/IME変換中は即renderせず保留する(review.md:28。renderDeferringForFocus参照)。
   // v161: "stats"(計器盤)を追加。エネルギーカーブの新着fetchが完了してもこの画面を開いた
   //       ままだと再描画されず節が出ないままになる不具合を防ぐ(他view追加時と同じ理由)。
-  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly" || state.currentView === "home" || state.currentView === "today" || state.currentView === "timeswitch" || state.currentView === "calendar" || state.currentView === "timeline" || state.currentView === "routine" || state.currentView === "wish" || state.currentView === "zero" || state.currentView === "tasks" || state.currentView === "stats")) {
+  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "weekly" || state.currentView === "home" || state.currentView === "today" || state.currentView === "timeline" || state.currentView === "routine" || state.currentView === "wish" || state.currentView === "zero" || state.currentView === "tasks" || state.currentView === "stats")) {
     renderDeferringForFocus();
   }
 }
@@ -16563,8 +16566,7 @@ function saveBlockFromModal(id, fields) {
     source: existing?.source || "",
     // v41: 見積時間(分)。空欄は null(解決順で補完)
     estimateMin: (fields.estimateMin != null && fields.estimateMin !== "") ? Number(fields.estimateMin) : (existing?.estimateMin ?? null),
-    // v187: 計時タブ由来のマーカーは編集モーダルで落とさない(落ちるとQUEUE/着地の除外や
-    //       TT取込済み判定が壊れる)
+    // v215: 旧版の実績記録マーカーは編集モーダルで落とさず、過去データの除外契約を維持する。
     oneTap: existing?.oneTap || false,
     externalRef: existing?.externalRef || "",
     label: existing?.label || "",
@@ -16578,13 +16580,9 @@ function saveBlockFromModal(id, fields) {
     showToast("予定の開始・終了日時を入力してください");
     return;
   }
-  // v187レビュー: モーダル保存で実行中(actualStartAtあり・EndAtなし)になる場合は、
-  // 計時タブ由来の実行中Blockを先に終了して running最大1 の不変条件を保つ。
-  // v191レビュー反映(修正9・3周目): 呼び出し位置を検証(直上の必須欄チェック)より後へ
-  // 移動した。検証前に呼ぶと、検証エラーで保存が中断されても実行中ルーティン/oneTapが
-  // 閉じられたまま巻き戻らない穴があった(Codexレビュー)。検証成功パスでは
-  // 「クローズ→保存」の実行順は従来のまま変わらない。
-  if (updated.actualStartAt && !updated.actualEndAt) prepareTimeswitchForTaskStart(updated.id);
+  // v191レビュー反映(修正9・3周目): 検証より後で呼ぶ(検証エラー中断時に実行中ルーティンが
+  // 閉じられたまま巻き戻らない穴を防ぐ)。v215: 呼び先はタブ非依存の存置版に差し替え。
+  if (updated.actualStartAt && !updated.actualEndAt) autoCloseStaleRoutineRuns(updated.id);
   if (isNew) {
     const rk = fields.recurrenceKind;
     if (rk && rk !== "__keep__" && rk !== "__end__") {
@@ -17092,7 +17090,6 @@ function runDailyOpen({ force = false } = {}) {
   const isNewDay = state.settings.lastOpenedDate !== today;
   if (!force && !isNewDay) return false;
   maintainRecurrences({ purge: true });  // 既存の展開ロジックを流用
-  const repairedOneTap = closeOrphanedOneTap();
   if (isNewDay) {
     state.settings.lastOpenedDate = today;
     // v85: 日をまたいでの復帰(前回操作日から暦日が変わった)は、閲覧中の日付を「今日」へ戻す。
@@ -17103,10 +17100,8 @@ function runDailyOpen({ force = false } = {}) {
     state.selectedDate = today;
     ensureJournal(today);
     saveState();  // 実データ変更(dataModifiedAt 更新)
-  } else if (repairedOneTap) {
-    saveState();
   }
-  return isNewDay || repairedOneTap;
+  return isNewDay;
 }
 
 // §3 見込み終了時刻 -------------------------------------------------

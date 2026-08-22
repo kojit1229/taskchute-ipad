@@ -20,7 +20,7 @@ let renderCircularProgress, remainingText, remainingTextNormal;
 let renderPomodoroInterruptControls, getCachedReadingHighlights;
 let beginTodayZeroWrite, saveTodayZeroEntry, discardTodayZeroWrite, getTodayZeroWriteState;
 let homeSyncAlertBanner, renderReplanControlHTML, requestReplan;
-let getScheduleData, makeBlock, saveState, openBlockEditor;
+let saveState;
 let todayTickerId = null;
 let todayHeavyTickCount = 0;
 let todayRenderedDateISO = null;
@@ -41,7 +41,7 @@ function configureToday(deps) {
     renderPomodoroInterruptControls, getCachedReadingHighlights,
     beginTodayZeroWrite, saveTodayZeroEntry, discardTodayZeroWrite, getTodayZeroWriteState,
     homeSyncAlertBanner, renderReplanControlHTML, requestReplan,
-    getScheduleData, makeBlock, saveState, openBlockEditor
+    saveState
   } = deps);
   configureCoach({ escapeHTML, todayISO, saveState, panelHeading, renderCircularProgress });
   configureTodayTower({
@@ -63,7 +63,6 @@ function configureToday(deps) {
     "today-zero-write": ({ id, target }) => { todayZeroDraft = ""; beginTodayZeroWrite(id, target.dataset.kind === "suggestion"); },
     "today-zero-save": () => { saveTodayZeroEntry(); todayZeroDraft = ""; },
     "today-zero-cancel": () => { discardTodayZeroWrite(); todayZeroDraft = ""; },
-    "today-import-external": ({ target }) => importTodayExternal(target.dataset.externalId || ""),
     "today-replan": () => requestReplan()
   });
 }
@@ -524,46 +523,8 @@ function towerFlights(blocks, nowMin) {
   return coreTowerFlights(blocks, nowMin, { minutesOf });
 }
 
-function todayExternalEvents() {
-  const data = typeof getScheduleData === "function" ? getScheduleData() : undefined;
-  return (data?.events || []).filter((event) =>
-    event.date === todayISO() && event.label === "こーじ" && !event.allDay
-    && event.startAt && event.endAt);
-}
-
-function importedExternalBlock(externalId) {
-  return (state.blocks || []).find((block) =>
-    !block.deleted && block.externalRef === externalId) || null;
-}
-
-function externalDateTime(date, time) {
-  return date && time ? `${date}T${time}:00` : "";
-}
-
-function importTodayExternal(externalId) {
-  if (!externalId || importedExternalBlock(externalId)) return;
-  const event = todayExternalEvents().find((item) => item.externalId === externalId);
-  if (!event) return;
-  const block = makeBlock({
-    date: event.date,
-    title: event.title,
-    category: "",
-    externalRef: event.externalId,
-    label: event.label,
-    plannedStartAt: externalDateTime(event.date, event.startAt),
-    plannedEndAt: externalDateTime(event.date, event.endAt)
-  });
-  block.externalRef = event.externalId;
-  block.label = event.label;
-  state.blocks.push(block);
-  saveState();
-  render();
-  openBlockEditor(block.id);
-}
-
 function renderFlightPlan(blocks) {
   // v191(C2): ルーティンはFLIGHT PLANの帯に出さない(ROUTINEパネルへ一本化)。
-  // TimeTree外部予定(todayExternalEvents由来)の扱いは現状維持。
   const candidates = blocks.filter((b) => b.plannedStartAt && b.category !== "ルーティン").map((block, index) => {
     const start = minutesOf(block.plannedStartAt);
     const rawEnd = block.plannedEndAt ? minutesOf(block.plannedEndAt) : start + resolveEstimateMin(block);
@@ -572,32 +533,7 @@ function renderFlightPlan(blocks) {
     return { block, index, start: Math.max(6 * 60, start), end: Math.min(24 * 60, Math.max(start + 1, end)) };
   }).filter(Boolean).sort((a, b) => a.start - b.start || a.index - b.index);
   const laneEnds = [];
-  const externalLaneEnds = [];
-  const external = todayExternalEvents().map((event, index) => {
-    const start = minutesOf(event.startAt);
-    const rawEnd = minutesOf(event.endAt);
-    const end = rawEnd <= start ? 24 * 60 : rawEnd;
-    if (end <= 6 * 60 || start >= 24 * 60) return null;
-    return {
-      event,
-      index,
-      start: Math.max(6 * 60, start),
-      end: Math.min(24 * 60, Math.max(start + 1, end))
-    };
-  }).filter(Boolean).sort((a, b) => a.start - b.start || a.index - b.index)
-    .map(({ event, start, end }) => {
-      let lane = externalLaneEnds.findIndex((laneEnd) => laneEnd <= start);
-      if (lane === -1) lane = externalLaneEnds.length;
-      externalLaneEnds[lane] = end;
-      const left = flightPosition(start);
-      const right = flightPosition(end);
-      const imported = Boolean(importedExternalBlock(event.externalId));
-      return `<button type="button" class="today-flight-tt${imported ? " is-imported" : ""}"
-        style="left:${left}%;width:${Math.max(0.8, right - left)}%;top:${20 + lane * 18}px"
-        data-action="today-import-external" data-external-id="${escapeHTML(event.externalId)}"
-        title="${escapeHTML(event.title)}">TT ${escapeHTML(event.title)}</button>`;
-    });
-  const plannedTop = 24 + externalLaneEnds.length * 18;
+  const plannedTop = 24;
   const planned = candidates.map(({ block, start, end }) => {
     let lane = laneEnds.findIndex((laneEnd) => laneEnd <= start);
     if (lane === -1) lane = laneEnds.length;
@@ -612,12 +548,12 @@ function renderFlightPlan(blocks) {
   const nowPos = flightPosition(now.getHours() * 60 + now.getMinutes());
   const grid = [6, 9, 12, 15, 18, 21, 24].map((hour) =>
     `<i class="today-flight-hour ${hour === 24 ? "is-end" : ""}" style="left:${flightPosition(hour * 60)}%"><span>${String(hour).padStart(2, "0")}</span></i>`).join("");
-  const trackHeight = 72 + externalLaneEnds.length * 18 + Math.max(0, laneEnds.length - 1) * 33;
+  const trackHeight = 72 + Math.max(0, laneEnds.length - 1) * 33;
   return `<section class="today-panel today-flight-plan today-span-2">
     ${panelHeading("FLIGHT PLAN", "今日の航路 — 緑=完了 / 青=実行中 / 灰=これから", "PLAN")}
-    <div class="today-flight-track" style="--today-flight-track-height:${trackHeight}px">${grid}${external.join("")}${planned.join("")}
+    <div class="today-flight-track" style="--today-flight-track-height:${trackHeight}px">${grid}${planned.join("")}
       <i class="today-flight-now" id="todayFlightNow" style="left:${nowPos}%"></i>
-      ${planned.length || external.length ? "" : `<span class="today-flight-empty">予定Blockはありません</span>`}
+      ${planned.length ? "" : `<span class="today-flight-empty">予定Blockはありません</span>`}
     </div>
     <div class="today-flight-cap"><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div>
   </section>`;

@@ -1,0 +1,58 @@
+{
+  "version": 215,
+  "date": "2026-08-22",
+  "title": "カレンダー・計時タブと共有予定レイヤを削除",
+  "summary": "スリム化P1のv215単位としてcalendarとtimeswitchを依存関係ごと同時削除し、今日・タイムラインの共有予定レイヤ、専用CSS、SW、回帰テストまで一掃",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v215.json",
+    "src/features/calendar.js",
+    "src/features/timeline.js",
+    "src/features/timeswitch.js",
+    "src/features/today.js",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/calendar-core.test.js",
+    "tests/impact-regression-map.json",
+    "tests/suite-manifest.json",
+    "tests/today-core.test.js",
+    "tests/v148.test.js",
+    "tests/v71.test.js"
+  ],
+  "intent": [
+    "承認済みslim-specの変更単位どおり、calendarがtimeswitchの予定キャッシュへ依存するため2タブを同一リリースで削除する。",
+    "ナビだけでなくimport、依存注入、描画・開始・日次起動・ライブ再描画の配線、共有予定レイヤ、CSS、APP_SHELL、専用回帰まで同時に閉じる。",
+    "過去データ耐性のためoneTapとtimeswitchStartのBlockフィールド、oneTapの繰越除外、GATE ROUTINE等の除外フィルタは維持する。",
+    "Size-Exempt理由「相互依存する2タブの完全削除で分割不能」。参照元、本体、共有予定レイヤ、SW、テストを別コミットにすると未定義参照または存在しないESMのprecacheが残る。"
+  ],
+  "changes": [
+    "calendar/timeswitchのESMとapp.jsのimport、サイドバー・その他グリッド、許可view、configure、renderディスパッチ、ticker・予定hydrate・ライブ再描画配線を削除した。",
+    "通常Block開始、ポモドーロ開始、Blockモーダル保存、日次オープンからtimeswitch固有の事前処理と孤児oneTap補修を除去し、新規oneTap生成経路を閉じた。",
+    "configureToday/configureTimelineから予定取得DIを外し、今日FLIGHT PLANとタイムラインの外部予定帯・取込action・専用CSSを削除した。",
+    "計時・カレンダー・確認オーバーレイの専用CSS、calendar-core、today-coreのW1/W3専用区間、action registryとナビ期待値、impact regression mapの2エリアを削除・更新した。",
+    "Service Workerをv215へ更新して2ファイルをAPP_SHELLから外し、コード索引・テストmanifest・影響マップを再生成した。"
+  ],
+  "uncertainties": [
+    "サンドボックスがPlaywright Chromiumの起動をspawn EPERMで拒否したため、変更したブラウザE2Eのassertion実走とiOS実機PWA表示は未確認。"
+  ],
+  "reviewFocus": [
+    "calendar/timeswitch/getTimeswitchSchedule/closeOrphanedOneTapの実行参照が残らず、削除済みESMをAPP_SHELLやテストが参照していないか。",
+    "today/timelineから外部予定帯だけが除かれ、既存BlockのFLIGHT PLAN・タイムライン描画とTIME COMB等を巻き込んでいないか。",
+    "oneTap/timeswitchStartの既存フィールドと、繰越・TOWER/GATE ROUTINE・routineRateの受動フィルタが維持されているか。",
+    "v148のその他グリッド4群10項目とv71のサイドバー順が実装後の構成に一致するか。"
+  ],
+  "verification": [
+    "npm.cmd run code:index:writeはWROTE: code index 696 functions、npm.cmd run test:manifest:writeはWROTE: 139 suitesで成功。",
+    "npm.cmd run test:fastはfast-node 17 suitesが全件PASS。action-registry-core、suite-manifest、code-indexの個別実行もPASS。",
+    "node --checkはapp.js、today.js、timeline.js、変更テスト4本でexit 0。git diff --checkもPASS。",
+    "release-gateはschema、impact selection、APP_SHELL 16件、test manifest 139件、code index 696件、app/src/sw全構文検査までPASSし、related+impact-regressionのブラウザ起動だけspawn EPERMで停止。",
+    "release-record --writeはCHANGES_v215.md生成後、notes側handoff.md書き込みだけEPERM。--checkはCHANGES=OK、handoff=NG。"
+  ],
+  "knownLimitations": [
+    "ブラウザE2EとiOS実機PWAの最終確認は、Chromiumを起動できる監督者環境またはCIで必要。"
+  ]
+}

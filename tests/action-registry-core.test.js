@@ -10,7 +10,7 @@
 // [3]をさらに拡張した。これでjournal系残ドメイン(0秒思考+週次/サイクル+問い+その他)の
 // 計65分岐すべての移行が完了した。
 // v174分(20件)+v176分(36件)+v177分(29件)=計85件は、いずれもsrc/features/journal.js等へ
-// 未抽出(ハンドラ実体がapp.js残留)のため、app.js自身がregisterActionsを直接呼ぶ(5featureの
+// 未抽出(ハンドラ実体がapp.js残留)のため、app.js自身がregisterActionsを直接呼ぶ(4featureの
 // configureXxxのようにdeps注入で呼び出す関数がない)。app.jsはDOM初期化を伴い素朴にはNode環境
 // でimportできないため、この85件はダミー実行ではなく静的正規表現抽出(extractAppRegisteredActions、
 // §2のextractClickActionsと同じ方式)で検証する。
@@ -30,7 +30,7 @@
 // 後半(日付ナビ3+タイムライン設定/カテゴリフィルタ9+timeline-mode)はv181で継続する。
 // v181: 段階5-8(timeline系dispatcher分岐の移行・後半=日付ナビ3+タイムライン設定/
 // カテゴリフィルタ9、計12分岐)で[3]をさらに拡張した。ハンドラ実体がsrc/features/timeline.jsに
-// 既にあるtimeline-mode(1件)は5feature側と同じ動的実測方式([3-b])で検証する
+// 既にあるtimeline-mode(1件)は4feature側と同じ動的実測方式([3-b])で検証する
 // (FEATURE_MODULE_PATHSにtimeline.jsを追加)。これでtimeline系40分岐(v180前半27+v181後半12+
 // timeline-mode1)すべての移行が完了した。
 // prep-stage5-dispatcher.md §6-1の方式どおり構成:
@@ -38,11 +38,11 @@
 //       registerModalHandler/dispatchModalSave/dispatchModalDelete、重複登録ガード、
 //       未登録時のfalseフォールバック)。
 //   [2] app.jsのclick dispatcher("event:click"、data-action分岐)から`action === "..."`を
-//       静的抽出する(v171時点で確定させた225件のゴールデンリストは維持したまま、
+//       静的抽出する(削除済み機能のactionを除く233件のゴールデンリストを維持したまま、
 //       段階5-2/5-3で移行済みの分だけif連鎖から消えている前提)。
 //   [3] 「if連鎖側の残存分岐リスト」(§2で静的抽出)と「レジストリ側の登録済みリスト」
-//       (5featureのconfigureXxxを空depsで呼ぶ動的実測 + app.js自身のregisterActions呼び出しの
-//       静的抽出)の**和集合が225件のゴールデンリストと完全一致・重複ゼロ**であることを検証する
+//       (4featureのconfigureXxxを空depsで呼ぶ動的実測 + app.js自身のregisterActions呼び出しの
+//       静的抽出)の**和集合が233件のゴールデンリストと完全一致・重複ゼロ**であることを検証する
 //       (総数と名前一覧の保存則。段階5以降でさらに分岐を移行する際もこの形式を維持する)。
 const fs = require("fs");
 const path = require("path");
@@ -57,14 +57,12 @@ const FEATURE_MODULE_PATHS = [
   path.join(ROOT, "src", "features", "routine.js"),
   // v181: timeline-modeのハンドラ実体がこのファイルにあるため追加(configureTimeline({})を
   // 空depsで呼んでも、registerActions呼び出し自体はdepsを参照しないため安全に実測できる)。
-  path.join(ROOT, "src", "features", "timeline.js"),
-  // v188: カレンダービュー(configureCalendar({})も同じく空depsで安全に実測できる)
-  path.join(ROOT, "src", "features", "calendar.js")
+  path.join(ROOT, "src", "features", "timeline.js")
 ];
 
 // wish.jsはモジュール読み込み時にdocument.addEventListener(pointerdown/move/up/cancel、月間ボード
 // D&D)をトップレベルで呼ぶ(tests/wish-core.test.jsと同じ既知の事情)。Node環境にはdocumentが
-// 無いため、5featureをimportする前に最小限のスタブを用意する(ドラッグ確定の検証はしない=
+// 無いため、4featureをimportする前に最小限のスタブを用意する(ドラッグ確定の検証はしない=
 // ブラウザE2E側の責務のまま。actions.js自身はstateもDOMも参照しないため[1][2]には影響しない)。
 global.document = { addEventListener: () => {} };
 
@@ -74,7 +72,7 @@ function check(name, cond, extra = "") {
   else { failures++; console.log(`  ❌ ${name} ${extra}`); }
 }
 
-// §6-1: v171時点(段階5-1着手直前)のclick dispatcher(225分岐)から確定させたゴールデンリスト。
+// §6-1: click dispatcherから確定させたゴールデンリスト(削除済み機能のactionを除く233件)。
 // 増減・リネームがあれば、それが意図した変更(action追加/削除/移行)かどうかを必ず確認すること。
 const GOLDEN_CLICK_ACTIONS = [
   "nav", "date-prev", "date-next", "today",
@@ -116,8 +114,6 @@ const GOLDEN_CLICK_ACTIONS = [
   "ai-step-confirm-send", "ai-step-confirm-later",  // v198: 完了トリガー→引き継ぎシート
   "timeline-new-block", "timeline-mode", "complete-block-with-actual",
   "drift-postpone", "time-comb-fill",  // v186: F2 DRIFT(明日へ送る)+TIME COMB(隙間補完)の意図的追加
-  "timeline-import-external",  // v188: 時間ビューTT帯のBlock化
-  "calendar-prev-month", "calendar-next-month", "calendar-open-day", "calendar-close-popover",  // v188: カレンダービュー
 
   "add-category", "delete-category", "add-break-message", "delete-break-message",
   "toggle-vision-direct-category", "vision-open-direct-settings",  // v189: F7 直結カテゴリ選択+誘導(設定ビュー)
@@ -179,11 +175,7 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
   // このファイルに既に存在するため、timeline系の中で唯一この動的実測方式で検証する。
   "timeline-mode",
   // v186: F2でtimeline.jsのregisterActionsへ意図的に追加(DRIFT送り+TIME COMB隙間補完)
-  "drift-postpone", "time-comb-fill",
-  // v188: 時間ビューTT帯のBlock化(timeline.js registerActions)
-  "timeline-import-external",
-  // v188: カレンダービュー(calendar.js registerActions)
-  "calendar-prev-month", "calendar-next-month", "calendar-open-day", "calendar-close-popover"
+  "drift-postpone", "time-comb-fill"
 ];
 
 // v174: 段階5-3で以下20件(settings 11 + sync 8 + core/nav 1)を、app.js自身が呼ぶ
@@ -300,7 +292,7 @@ function extractClickActions() {
 }
 
 // v174: app.js自身が呼ぶregisterActions({...})(settings/sync/core、5-3で移行した20件)を
-// 静的抽出する。app.jsはDOM初期化を伴うためNode環境でそのままimportできず、5featureの
+// 静的抽出する。app.jsはDOM初期化を伴うためNode環境でそのままimportできず、4featureの
 // configureXxxのような「空depsで呼んで実測する」方式が使えない(§3-bコメント参照)。
 // registerActions({...})の呼び出しは行頭が`"key":`の形で並ぶオブジェクトリテラルのため、
 // 呼び出し開始位置から次の`let toastTimer = null;`(app.js固有の直後の行)までを切り出し、
@@ -423,7 +415,7 @@ function extractModalHandlerTypes() {
   check("if連鎖側の残存action名に重複がない",
     new Set(extracted).size === extracted.length);
 
-  console.log("[3-b] 5feature(wish/journal/routine/timeline/calendar)のconfigureXxxを"
+  console.log("[3-b] 4feature(wish/journal/routine/timeline)のconfigureXxxを"
     + "空depsで呼び、registerActionsが実際に登録するaction名がMIGRATED_TO_REGISTRY_ACTIONSと"
     + "一致するか");
   // configureXxx本体はdestructuring代入+registerActions呼び出しのみで、渡されたdepsの中身は
@@ -432,12 +424,11 @@ function extractModalHandlerTypes() {
   const featureMods = await Promise.all(
     FEATURE_MODULE_PATHS.map((p) => import(pathToFileURL(p).href))
   );
-  const [wishMod, journalMod, routineMod, timelineMod, calendarMod] = featureMods;
+  const [wishMod, journalMod, routineMod, timelineMod] = featureMods;
   wishMod.configureWish({});
   journalMod.configureJournal({});
   routineMod.configureRoutine({});
   timelineMod.configureTimeline({});
-  calendarMod.configureCalendar({});
   const registered = actionsMod.__debugActionNames().filter((name) => !name.startsWith("__test"));
   check(`レジストリ側の登録件数は期待どおり${MIGRATED_TO_REGISTRY_ACTIONS.length}件`,
     registered.length === MIGRATED_TO_REGISTRY_ACTIONS.length,

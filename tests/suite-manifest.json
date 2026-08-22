@@ -15,7 +15,7 @@
       ],
       "assertionSignals": 34,
       "assertionHash": "762ae1f14763a615",
-      "sourceHash": "7dab1cb1da0ab6fa",
+      "sourceHash": "7882aacee01ead8a",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -27,30 +27,6 @@
         "fileWrite": false,
         "networkMock": false,
         "clock": false
-      }
-    },
-    {
-      "file": "calendar-core.test.js",
-      "kind": "e2e",
-      "tier": "full",
-      "domains": [
-        "planning-execution",
-        "ui-responsive"
-      ],
-      "assertionSignals": 33,
-      "assertionHash": "1d3c4951537eca7b",
-      "sourceHash": "b5be8ed9d6783504",
-      "waits": {
-        "fixedCount": 0,
-        "numericMilliseconds": 0,
-        "unresolvedCount": 0
-      },
-      "sideEffects": {
-        "browser": true,
-        "server": true,
-        "fileWrite": false,
-        "networkMock": true,
-        "clock": true
       }
     },
     {
@@ -466,12 +442,12 @@
         "content-ai",
         "ui-responsive"
       ],
-      "assertionSignals": 462,
-      "assertionHash": "9429222d111d2c61",
-      "sourceHash": "62fadb9715cc2790",
+      "assertionSignals": 324,
+      "assertionHash": "0402d718b4d303a3",
+      "sourceHash": "c9aab7e63543e8e0",
       "waits": {
-        "fixedCount": 8,
-        "numericMilliseconds": 14400,
+        "fixedCount": 6,
+        "numericMilliseconds": 10800,
         "unresolvedCount": 0
       },
       "sideEffects": {
@@ -1644,8 +1620,8 @@
         "planning-execution"
       ],
       "assertionSignals": 61,
-      "assertionHash": "738730698651335f",
-      "sourceHash": "1be3c144d48f0258",
+      "assertionHash": "3494ca9eb1f739aa",
+      "sourceHash": "6870ca312660feee",
       "waits": {
         "fixedCount": 23,
         "numericMilliseconds": 7150,
@@ -2621,7 +2597,7 @@
       ],
       "assertionSignals": 30,
       "assertionHash": "49be76a428345ca9",
-      "sourceHash": "51ce780f157ba977",
+      "sourceHash": "f569fca61faa6571",
       "waits": {
         "fixedCount": 10,
         "numericMilliseconds": 2800,
