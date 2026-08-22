@@ -11,7 +11,7 @@ import { loadState, persistLocalNoSchedule, _lastSaveError } from "./src/storage
 // (src/state/feedback-cache.js冒頭コメント参照)。
 import { cachedFeedback } from "./src/state/feedback-cache.js";
 // v223: TOWER上帯(STANDING ORDERS/COUNTDOWN)は自己完結featureへ依存注入する。
-import { configureTopband } from "./src/features/topband.js";
+import { configureTopband, cycleWeekForDate } from "./src/features/topband.js";
 // v182: 新トップレベル「今日」コックピット。既存featureと同じ依存注入型で循環importを避ける。
 import { configureToday, renderToday } from "./src/features/today.js";
 // v168: app.js分割・段階4-2(WishタブTier1のCRUD・描画を抽出)。src/features/wish.js
@@ -9276,6 +9276,7 @@ function generateReport(dateArg, { quiet = false } = {}) {
   };
   const rateRoutine = routineRate(blocks);
   const rateCycleWeek = cycleWeekProgress(date);
+  const cycleWeek = cycleWeekForDate(date);
   const rateDeferral = deferralStats(blocks);
 
   // v17: 計画 vs 実行
@@ -9404,7 +9405,7 @@ function generateReport(dateArg, { quiet = false } = {}) {
     `| タスクシュート着手率 | ${rateTaskchute.done} / ${rateTaskchute.total} | ${rateTaskchute.pct}% |`,
     `| 今日の主役 (MIT) | ${rateMIT.done} / ${rateMIT.total} | ${rateMIT.pct}% |`,
     `| ルーティン実行率 | ${rateRoutine.done} / ${rateRoutine.total} | ${rateRoutine.pct}% |`,
-    `| 12週 今週の進捗 | ${rateCycleWeek.done} / ${rateCycleWeek.total} | ${rateCycleWeek.pct}% |`,
+    `| 12週 今週の進捗(Week ${cycleWeek}/12) | ${rateCycleWeek.done} / ${rateCycleWeek.total} | ${rateCycleWeek.pct}% |`,
     `| 先送り | ${rateDeferral.pending}件 | ${rateDeferral.started} / ${rateDeferral.total} |`,
     "",
     ...(conditionBudgetToday.level !== "none"

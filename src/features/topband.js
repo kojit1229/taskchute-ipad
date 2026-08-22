@@ -24,9 +24,8 @@
 //   daysBetween: 12988 / addDays: 12965 / addYears: 12982 / clamp: 13038
 //   信条3行の文言移設元: 2800
 //
-// 「Week n/12」表示は既存app.jsのどこにも実装がない新規要素(旧カウントダウンは
-// 12WY項目をフィルタで除外しており、12週の週番号表示自体が存在しなかった)。このモジュールが
-// dateSpanMetricのelapsed日数から新規に導出する(定義は本ファイル内コメント参照)。
+// 「Week n/12」は本モジュールのcycleWeekForDate()を単一正本とし、COUNTDOWNと日報で共用する。
+// dateSpanMetricのelapsed日数から導出する(定義は本ファイル内コメント参照)。
 //
 // 【統合時に確認してほしい論点(このレーン単体では判断できない)】
 // computeMetrics()は「today」に state.selectedDate(タスクシュートの表示日を切替できる値)を
@@ -107,6 +106,15 @@ function cycleWeekNumber(elapsedDays) {
   return clampLocal(Math.floor(elapsedDays / 7) + 1, 1, 12);
 }
 
+// v231: 日付に対応する12週サイクルの週番号。開始日未設定時は対象日を開始日としてWeek 1を返す。
+export function cycleWeekForDate(dateISO) {
+  const date = dateISO || todayISO();
+  const settings = (typeof getSettings === "function" ? getSettings() : {}) || {};
+  const start = settings.twelveWeekStartDate || date;
+  const cycle = dateSpanMetric(date, start, addDaysLocal(start, 84));
+  return cycleWeekNumber(cycle.elapsed);
+}
+
 // ---- STANDING ORDERS(三つの信条。ハードコード3行。slim-spec.md §1-2の明記どおり
 //      データ連動なし。文言はデザイン正mockup-today-home-v2.htmlの表記に合わせた) ----
 
@@ -163,7 +171,7 @@ export function renderCountdown(variant = "") {
   const start12 = settings.twelveWeekStartDate || today;
   const end12 = addDaysLocal(start12, 84);
   const cycle = dateSpanMetric(today, start12, end12);
-  const weekNum = cycleWeekNumber(cycle.elapsed);
+  const weekNum = cycleWeekForDate(today);
 
   const yearStart = `${String(today).slice(0, 4)}-01-01`;
   const yearEnd = `${String(today).slice(0, 4)}-12-31`;

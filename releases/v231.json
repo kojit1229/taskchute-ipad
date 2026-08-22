@@ -1,0 +1,53 @@
+{
+  "version": 231,
+  "date": "2026-08-22",
+  "title": "日報12週進捗の週番号表示",
+  "summary": "日報の12週進捗行へWeek n/12を追加し、週番号導出をtopband.jsの単一正本としてCOUNTDOWNと日報で共用した",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v231.json",
+    "src/features/topband.js",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/v128.test.js",
+    "tests/v231.test.js"
+  ],
+  "intent": [
+    "日報の達成率表だけで12週サイクルの何週目かを判別できるようにする。",
+    "COUNTDOWNと日報の週番号算式をtopband.jsの公開関数へ一本化し、日付境界の定義ずれを防ぐ。"
+  ],
+  "changes": [
+    "src/features/topband.jsへcycleWeekForDate(dateISO)を追加し、開始日当日をWeek 1、7日後をWeek 2、84日目以降をWeek 12へクランプする既存定義を公開した。",
+    "renderCountdownもcycleWeekForDate()を使うよう変更し、週番号算式の単一正本化を行った。",
+    "generateReportの日報対象日をcycleWeekForDate()へ渡し、達成率表を「12週 今週の進捗(Week n/12)」形式へ変更した。",
+    "v230で撤去済みのhome体力予算チップを参照していたv128回帰テストを、同じ判定内容を現行の日報出力で検証する形へ追従した。",
+    "Service WorkerのCACHE_NAMEをv231へ更新した。"
+  ],
+  "uncertainties": [
+    "週番号は従来のCOUNTDOWN定義をそのまま共用し、開始日前はWeek 1、84日目以降はWeek 12にクランプする。",
+    "twelveWeekStartDate未設定時は日報対象日をサイクル開始日としてWeek 1を表示する。"
+  ],
+  "reviewFocus": [
+    "cycleWeekForDate()が文字列をDateコンストラクタへ直接渡さず、既存の数値パースとdateSpanMetric/cycleWeekNumberだけで導出しているか。",
+    "COUNTDOWNとgenerateReportの両方がcycleWeekForDate()を参照し、別の週番号算式を持っていないか。",
+    "日報対象日が実際の今日と異なる場合も、その対象日を基準にWeek n/12を出すか。",
+    "開始日当日、7日後、84日後、開始日未設定の境界ケースと、v128の達成率表後方位置検証が維持されているか。"
+  ],
+  "verification": [
+    "node --check app.js、src/features/topband.js、tests/v231.test.js、tests/v128.test.js、sw.js: PASS。",
+    "node tests/topband-core.test.js: 全件PASS。",
+    "CHROME_PATHをsystem Edgeへ指定したnode tests/v231.test.js: 全件PASS(週境界4ケース、日報Week 3/12、未設定Week 1/12)。",
+    "CHROME_PATHをsystem Edgeへ指定したnode tests/v128.test.js: 全件PASS(12週行より後の体力予算行を含む)。",
+    "npm run code:index:write、npm run test:manifest:writeと各check: PASS(code index 576 functions、test manifest 126 suites)。",
+    "CHROME_PATHをsystem Edgeへ指定したnode scripts/release-gate.js releases/v231.json: PASS(統合対象32スイート)。",
+    "node scripts/release-record.js releases/v231.json --writeはCHANGES_v231.md生成後、ワークスペース外taskchute-notes/handoff.mdでEPERM。"
+  ],
+  "knownLimitations": [
+    "iOS Safari実機PWAでのService Worker更新・オフライン動作と日報表示の最終確認は監督者側で必要。",
+    "この環境では標準Playwright Chromiumがspawn EPERMになるため、ブラウザ検査はsystem Edgeで実行する。",
+    "taskchute-notes/handoff.mdはワークスペース外のためrelease-recordがEPERMになる場合があり、その場合は監督者側で再実行が必要。"
+  ]
+}

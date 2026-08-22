@@ -1,6 +1,6 @@
 // v128 検証: 体力予算(朝の睡眠心拍データから疲労を先取り判定)。K承認済み案件(2026-07-18)。
 //
-// (a) データなし: 当日sleep.logsが無い日はホームで灰色「データなし」、日報の行も省略される
+// (a) データなし: 当日sleep.logsが無い日は日報の体力予算行が省略される
 // (b) 睡眠時間のみでの3段階判定(通常/低予算/赤字。ベースライン無し=サンプル不足でも判定できる)
 // (c) HRVベースラインを反映した判定(7日分以上のサンプルがあれば心拍系も判定に使う)
 // (d) 日報生成: `体力予算: ...`行がサマリの達成率表の後に出る/データなし日は行ごと省略
@@ -44,13 +44,8 @@ function check(name, cond, extra = "") {
     return out;
   }
 
-  // v147レビュー対応: 体力予算チップは「今日の状態」カード(homeTodayStatusCard)のdetails内に
-  // 移動しており、そのカードは宣言済み+週Wish設定済み+体力予算正常+電池残量健全の4つが
-  // 揃うと非表示になる。このテストは体力予算の判定ロジックだけを見たいため、宣言・週Wishを
-  // 明示的に毎回未設定へリセットし(dailyDeclarations/weeklyWishes={})、カードが電池残量の
-  // 状態に関わらず常に表示される(=以前の「一度開けば済む」という暗黙の前提に依存しない)
-  // ことを保証する。
-  async function seed({ sleepLogs = {}, view = "home" } = {}) {
+  // v230でhomeタブと体力予算チップが撤去されたため、判定結果は現行の出力先である日報で検証する。
+  async function seed({ sleepLogs = {}, view = "journal" } = {}) {
     await page.evaluate(({ KEY, sleepLogs, TODAY, view }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.sleep = s.sleep || {};
@@ -62,12 +57,17 @@ function check(name, cond, extra = "") {
       s.blocks = [];
       s.selectedDate = TODAY;
       s.currentView = view;
+      s.reports[TODAY] = "";
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, sleepLogs, TODAY, view });
     await page.reload();
     await page.waitForTimeout(400);
   }
-  const chipText = () => page.locator(".home-condition-budget-chip").innerText().catch(() => "");
+  async function generatedReport() {
+    await page.click('[data-action="generate-report"]');
+    await page.waitForFunction(({ KEY, TODAY }) => Boolean(JSON.parse(localStorage.getItem(KEY)).reports[TODAY]), { KEY, TODAY });
+    return page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
+  }
 
   try {
     await page.clock.setFixedTime(now0);
@@ -78,31 +78,31 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (a) データなし
     // ============================================================
-    console.log("[1] 当日のsleep.logsが無い日はホームで「データなし」");
-    await seed({ sleepLogs: {}, view: "home" });
-    // v147: 体力予算チップは「今日の状態」カード(homeTodayStatusCard)のdetails内(既定closed)
-    // へ移動した。一度開けばlocalStorageのfold状態が保持され、以降のreloadでも開いたままになる。
-    const statusFold = page.locator('details[data-fold-id="today-status"]');
-    if (await statusFold.count()) await statusFold.locator("summary").click();
-    check("チップが1個出る", await page.locator(".home-condition-budget-chip").count() === 1);
-    check("「データなし」と出る", (await chipText()).includes("データなし"), await chipText());
+    console.log("[1] 当日のsleep.logsが無い日は日報の体力予算行が省略される");
+    await seed({ sleepLogs: {} });
+    const noDataReport = await generatedReport();
+    check("日報が生成される", noDataReport.startsWith(`# 日報 ${TODAY} (`), noDataReport.slice(0, 120));
+    check("体力予算行が出ない", !noDataReport.includes("体力予算:"), noDataReport.slice(0, 400));
 
     // ============================================================
     // (b) 睡眠時間のみでの3段階判定
     // ============================================================
     console.log("[2] 睡眠7.5h(ベースラインなし)は「通常」");
-    await seed({ sleepLogs: { [TODAY]: sleepLog({ sleepH: 7.5 }) }, view: "home" });
-    check("「通常」と出る", (await chipText()).includes("通常"), await chipText());
+    await seed({ sleepLogs: { [TODAY]: sleepLog({ sleepH: 7.5 }) } });
+    const normalReport = await generatedReport();
+    check("「通常」と出る", normalReport.includes("体力予算: 通常"), normalReport.slice(0, 400));
 
     console.log("[3] 睡眠6.0h(5.5〜6.5h)は「低予算」・根拠に睡眠時間が出る");
-    await seed({ sleepLogs: { [TODAY]: sleepLog({ sleepH: 6.0 }) }, view: "home" });
-    check("「低予算」と出る", (await chipText()).includes("低予算"), await chipText());
-    check("根拠に睡眠6.0hが出る", (await chipText()).includes("睡眠6.0h"), await chipText());
+    await seed({ sleepLogs: { [TODAY]: sleepLog({ sleepH: 6.0 }) } });
+    const lowReport = await generatedReport();
+    check("「低予算」と出る", lowReport.includes("体力予算: 低予算"), lowReport.slice(0, 400));
+    check("根拠に睡眠6.0hが出る", lowReport.includes("睡眠6.0h"), lowReport.slice(0, 400));
 
     console.log("[4] 睡眠5.0h(<5.5h)は「赤字」");
-    await seed({ sleepLogs: { [TODAY]: sleepLog({ sleepH: 5.0 }) }, view: "home" });
-    check("「赤字」と出る", (await chipText()).includes("赤字"), await chipText());
-    check("根拠に睡眠5.0hが出る", (await chipText()).includes("睡眠5.0h"), await chipText());
+    await seed({ sleepLogs: { [TODAY]: sleepLog({ sleepH: 5.0 }) } });
+    const deficitReport = await generatedReport();
+    check("「赤字」と出る", deficitReport.includes("体力予算: 赤字"), deficitReport.slice(0, 400));
+    check("根拠に睡眠5.0hが出る", deficitReport.includes("睡眠5.0h"), deficitReport.slice(0, 400));
 
     // ============================================================
     // (c) HRVベースラインを反映した判定
@@ -110,53 +110,54 @@ function check(name, cond, extra = "") {
     console.log("[5] 過去7日分のHRVベースライン(50)に対し当日40(-20%)は「赤字」(睡眠時間は正常)");
     await seed({
       sleepLogs: { ...baselineLogs(7, { hrSleep: 60, hrvSleep: 50 }), [TODAY]: sleepLog({ sleepH: 8, hrSleep: 60, hrvSleep: 40 }) },
-      view: "home"
+      view: "journal"
     });
-    check("「赤字」と出る", (await chipText()).includes("赤字"), await chipText());
-    check("根拠にHRVが出る", (await chipText()).includes("HRV"), await chipText());
+    const hrvReport = await generatedReport();
+    check("「赤字」と出る", hrvReport.includes("体力予算: 赤字"), hrvReport.slice(0, 400));
+    check("根拠にHRVが出る", hrvReport.includes("HRV"), hrvReport.slice(0, 400));
 
     console.log("[6] サンプル不足(3日分)だと心拍系は判定に使われず、睡眠時間だけで「通常」");
     await seed({
       sleepLogs: { ...baselineLogs(3, { hrSleep: 60, hrvSleep: 50 }), [TODAY]: sleepLog({ sleepH: 8, hrSleep: 90, hrvSleep: 10 }) },
-      view: "home"
+      view: "journal"
     });
-    check("HRV/HRが極端でもサンプル不足なら「通常」(睡眠8hのみで判定)", (await chipText()).includes("通常"), await chipText());
+    const insufficientReport = await generatedReport();
+    check("HRV/HRが極端でもサンプル不足なら「通常」(睡眠8hのみで判定)",
+      insufficientReport.includes("体力予算: 通常"), insufficientReport.slice(0, 400));
 
     // ============================================================
     // (d) 日報生成
     // ============================================================
     console.log("[7] 日報生成: 低予算日は達成率表の後に体力予算行が出る");
     await seed({ sleepLogs: { [TODAY]: sleepLog({ sleepH: 6.0 }) }, view: "journal" });
-    await page.click('[data-action="generate-report"]');
-    await page.waitForTimeout(400);
-    const reportText1 = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
+    const reportText1 = await generatedReport();
     check("`体力予算: 低予算`行が出力される", reportText1.includes("体力予算: 低予算(睡眠6.0h)"), reportText1.slice(0, 400));
     check("達成率表の後に出る(12週の行より後)",
       reportText1.indexOf("12週 今週の進捗") < reportText1.indexOf("体力予算:"), reportText1.slice(0, 500));
 
     console.log("[8] 日報生成: データなし日は体力予算行が省略される");
     await seed({ sleepLogs: {}, view: "journal" });
-    await page.click('[data-action="generate-report"]');
-    await page.waitForTimeout(400);
-    const reportText2 = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
+    const reportText2 = await generatedReport();
     check("体力予算行が出ない", !reportText2.includes("体力予算:"), reportText2.slice(0, 400));
 
     // ============================================================
     // (e) 旧stateでも起動できる(normalizeStateの後方互換。sleep.logs自体は既存フィールドのため
-    //     新規migrationは無いが、conditionBudget()を呼ぶ home render がクラッシュしないことを確認)
+    //     新規migrationは無いが、conditionBudget()を呼ぶ日報生成がクラッシュしないことを確認)
     // ============================================================
     console.log("[9] sleepフィールドが無い旧stateでも例外なく起動できる");
     const failuresBefore = failures;
-    await page.evaluate((KEY) => {
+    await page.evaluate(({ KEY, TODAY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       delete s.sleep;
-      s.currentView = "home";
+      s.currentView = "journal";
+      s.reports[TODAY] = "";
       localStorage.setItem(KEY, JSON.stringify(s));
-    }, KEY);
+    }, { KEY, TODAY });
     await page.reload();
     await page.waitForTimeout(400);
     check("旧stateでも例外なく起動できる(pageerrorなし)", failures === failuresBefore);
-    check("チップは「データなし」で描画される", (await chipText()).includes("データなし"), await chipText());
+    const legacyReport = await generatedReport();
+    check("旧stateの日報では体力予算行が省略される", !legacyReport.includes("体力予算:"), legacyReport.slice(0, 400));
   } finally {
     await browser.close();
     server.close();

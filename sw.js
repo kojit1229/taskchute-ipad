@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v230";
+const CACHE_NAME = "taskchute-journal-pwa-v231";
 // v230: homeタブを撤去し、統合画面ATISと「その他」TOWERグリッドへ集約した。
 // v229: ARRIVALS見積列、GATE編集モード、state.earlyBirdへ書く☀固定ゲートを追加した。
 // v228: JOURNAL 2枠とFLIGHT LOGを追加し、完了3経路で日報を都度再生成する。

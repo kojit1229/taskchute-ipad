@@ -1165,11 +1165,11 @@
         "journal-health"
       ],
       "assertionSignals": 18,
-      "assertionHash": "978e41d46b947a40",
-      "sourceHash": "e5d408cba8f61e11",
+      "assertionHash": "ad5912c0d529095d",
+      "sourceHash": "63543b33041c8f25",
       "waits": {
-        "fixedCount": 5,
-        "numericMilliseconds": 2100,
+        "fixedCount": 3,
+        "numericMilliseconds": 1300,
         "unresolvedCount": 0
       },
       "sideEffects": {
@@ -1959,6 +1959,29 @@
       "waits": {
         "fixedCount": 8,
         "numericMilliseconds": 3150,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v231.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "journal-health"
+      ],
+      "assertionSignals": 9,
+      "assertionHash": "e1d331292edab766",
+      "sourceHash": "216f0be9ec6e4a4d",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
         "unresolvedCount": 0
       },
       "sideEffects": {
