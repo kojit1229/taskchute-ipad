@@ -15,7 +15,7 @@
       ],
       "assertionSignals": 34,
       "assertionHash": "f841e3459002f00f",
-      "sourceHash": "7c8a9bf79eea1069",
+      "sourceHash": "d90797665e51830f",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -170,6 +170,30 @@
       }
     },
     {
+      "file": "instruments-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 29,
+      "assertionHash": "95a9d67c3f0c5251",
+      "sourceHash": "4c03299cd1bf7a6e",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
       "file": "iron-log-core.test.js",
       "kind": "node",
       "tier": "full",
@@ -193,6 +217,30 @@
         "fileWrite": false,
         "networkMock": false,
         "clock": false
+      }
+    },
+    {
+      "file": "iron-log-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "ui-responsive"
+      ],
+      "assertionSignals": 26,
+      "assertionHash": "b3cbd52a8cda5365",
+      "sourceHash": "54566e6bbfadf469",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
       }
     },
     {

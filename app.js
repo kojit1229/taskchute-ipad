@@ -12,6 +12,9 @@ import { loadState, persistLocalNoSchedule, _lastSaveError } from "./src/storage
 import { cachedFeedback } from "./src/state/feedback-cache.js";
 // v223: TOWER上帯(STANDING ORDERS/COUNTDOWN)は自己完結featureへ依存注入する。
 import { configureTopband, cycleWeekForDate } from "./src/features/topband.js";
+// v233: P4第2弾。v232で配置済みのIRON LOG/INSTRUMENTSを画面結線する。
+import { configureIronLog, renderIronLog } from "./src/features/iron-log.js";
+import { configureInstruments, renderInstruments } from "./src/features/instruments.js";
 // v182: 新トップレベル「今日」コックピット。既存featureと同じ依存注入型で循環importを避ける。
 import { configureToday, renderToday } from "./src/features/today.js";
 // v168: app.js分割・段階4-2(WishタブTier1のCRUD・描画を抽出)。src/features/wish.js
@@ -249,6 +252,19 @@ configureTopband({
   getSettings: () => ({
     twelveWeekStartDate: state.settings.twelveWeekStartDate,
     birthDate: state.settings.birthDate
+  })
+});
+configureIronLog({
+  getState: () => state,
+  escapeHTML, todayISO, renderHeader, saveAndRender, registerActions
+});
+configureInstruments({
+  getState: () => state,
+  escapeHTML, todayISO, addDays, renderHeader,
+  // モジュールの凍結action名を保ち、プレースホルダだけ統合層の実遷移へ差し替える。
+  registerActions: (handlers) => registerActions({
+    ...handlers,
+    "instruments-open-iron-log": () => setView("iron-log")
   })
 });
 // v168: src/features/wish.jsも同じ理由(循環import回避)で依存注入する。
@@ -1426,11 +1442,21 @@ function applyTheme() {
 }
 
 function normalizeState(value) {
-  value.settings ||= {};
+  const actualSettings = value.settings && typeof value.settings === "object" && !Array.isArray(value.settings)
+    ? value.settings
+    : {};
+  value.settings = {
+    earlyRiseTarget: "06:00",
+    ironDailyTarget: 2000,
+    ironManualBaseKg: 0,
+    gymBlockKeywords: ["ジム", "筋トレ"],
+    ...actualSettings
+  };
   // v230: home撤去後も旧state・未知viewで白画面にしないため、todayへ縮退する。
   const allowedViews = new Set([
     "today", "wbs", "wish", "tasks", "timeline",
-    "journal", "zero", "vision", "ai-reports", "settings", "more"
+    "journal", "zero", "vision", "ai-reports", "settings", "more",
+    "iron-log", "instruments"
   ]);
   if (!allowedViews.has(value.currentView)) value.currentView = "today";
   // v31: 残り時間表示用の生年月日(未設定なら補完)
@@ -1442,6 +1468,10 @@ function normalizeState(value) {
   // v229: EARLY BIRDの正本。旧stateと壊れた形状は空ログへ後方互換正規化する。
   if (!value.earlyBird || typeof value.earlyBird !== "object" || Array.isArray(value.earlyBird)) value.earlyBird = {};
   if (!value.earlyBird.logs || typeof value.earlyBird.logs !== "object" || Array.isArray(value.earlyBird.logs)) value.earlyBird.logs = {};
+  const actualIronImport = value.ironImport && typeof value.ironImport === "object" && !Array.isArray(value.ironImport)
+    ? value.ironImport
+    : {};
+  value.ironImport = { done: false, importedTotalKg: 0, importedDays: 0, ...actualIronImport };
   value.settings.github ||= defaultGitHubSettings();
   value.settings.github.owner ||= "kojit1229";
   value.settings.github.repo ||= "taskchute-ipad";
@@ -2619,6 +2649,8 @@ function renderMain() {
     }
   }
   if (view === "journal") main.innerHTML = renderJournal();
+  if (view === "iron-log") main.innerHTML = renderIronLog();
+  if (view === "instruments") main.innerHTML = renderInstruments();
   if (view === "zero") main.innerHTML = renderZeroThinking();
   if (view === "vision") main.innerHTML = renderVision();
   if (view === "ai-reports") main.innerHTML = renderAiReports();
@@ -7307,6 +7339,8 @@ const moreItems = [
   { id: "vision", label: "ビジョン", mark: "🧭", group: "計画" },
   { id: "zero", label: "0秒思考", mark: "💡", group: "思考" },
   { id: "ai-reports", label: "AIレポート", mark: "🤖", group: "振り返り" },
+  { id: "instruments", label: "INSTRUMENTS", mark: "◉", group: "ツール" },
+  { id: "iron-log", label: "IRON LOG", mark: "▰", group: "ツール" },
   { id: "settings", label: "設定", mark: "⚙️", group: "ツール" }
 ];
 

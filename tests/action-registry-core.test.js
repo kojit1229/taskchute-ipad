@@ -72,7 +72,7 @@ function check(name, cond, extra = "") {
 // §6-1: click dispatcherから確定させたゴールデンリスト(削除済み機能のactionを除く233件)。
 // 増減・リネームがあれば、それが意図した変更(action追加/削除/移行)かどうかを必ず確認すること。
 const GOLDEN_CLICK_ACTIONS = [
-  "nav", "departures-open-tomorrow", "today-replan", "save-tower-journal",
+  "nav", "instruments-open-iron-log", "departures-open-tomorrow", "today-replan", "save-tower-journal",
   "early-bird-check", "tower-gate-edit-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move",
   "date-prev", "date-next", "today",
   "set-morning", "set-sleep", "toggle-meds", "set-capacity", "set-evening-mood",
@@ -184,7 +184,7 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
 // weekly-wish-*(wish週次選定、weekly-wish-toggleはpreventDefault依存)は
 // 従来どおり移行せず、if連鎖に残した(下のEXPECTED_REMAINING_IF_CHAINに含まれる)。
 const APP_JS_REGISTERED_ACTIONS = [
-  "nav", "departures-open-tomorrow", "today-replan", "save-tower-journal",
+  "nav", "instruments-open-iron-log", "departures-open-tomorrow", "today-replan", "save-tower-journal",
   "early-bird-check", "tower-gate-edit-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move",
   "toggle-show-suspended", "toggle-wbs-hide-done", "toggle-tasks-show-future",
   "toggle-wbs-edit", "wbs-collapse-all",
