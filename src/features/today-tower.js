@@ -1,4 +1,4 @@
-// src/features/today-tower.js — v227: NOW LANDING強化とDEPARTURES 1行縮約。
+// src/features/today-tower.js — v228: JOURNAL 2枠とFLIGHT LOGを統合。
 // state・保存・action登録には触れず、時刻・便状態・信条は既存1秒tickerから差分更新する。
 
 import { renderStandingOrders, renderCountdown, renderTopbandPC, creedRotationLine } from "./topband.js";
@@ -7,6 +7,7 @@ let escapeHTML, todayISO, homeSyncAlertBanner, blocksForDate, towerFlights;
 let runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp;
 let towerMotionSetting;
 let renderTodayPomodoro;
+let journalForDate;
 let flipListenerBound = false;
 // undefined=セッション初回(未観測)。復元描画では接地の瞬間ではないためフラッシュを出さない
 // (起動時同期404後の全体render()と競合して非決定にもなる)。null=実行中なしを観測済み。
@@ -14,17 +15,20 @@ let lastLandingId;
 let lastGateDocked;
 // undefined=未観測。復元描画では満灯フラッシュを出さない(lastLandingIdと同じ意味論)。
 let lastGateFull;
+let lastFlightLogDate;
+let lastFlightLogKeys;
 
 function configureTodayTower(deps) {
   ({
     escapeHTML, todayISO, homeSyncAlertBanner, blocksForDate, towerFlights,
     runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp,
-    towerMotionSetting, renderTodayPomodoro
+    towerMotionSetting, renderTodayPomodoro, journalForDate
   } = deps);
   if (!flipListenerBound && typeof document !== "undefined") {
     document.addEventListener("animationend", (event) => {
       if (event.target.classList?.contains("tower-touchdown")) event.target.remove();
       else if (event.target.classList?.contains("tower-status")) event.target.classList.remove("is-flip");
+      else if (event.target.classList?.contains("tower-log-row")) event.target.classList.remove("is-flip");
       else if (event.target.classList?.contains("tower-gate")) event.target.classList.remove("is-docking");
       else if (event.target.classList?.contains("tower-gates")) event.target.classList.remove("is-full-flash");
     });
@@ -58,7 +62,7 @@ function isNightHour(hour) {
 }
 
 function boardFlights(blocks, nowMin) {
-  return towerFlights(blocks.filter((block) => block.category !== "ルーティン" && !block.oneTap), nowMin);
+  return towerFlights(blocks.filter((block) => !block.completed && block.category !== "ルーティン" && !block.oneTap), nowMin);
 }
 
 function arrivalWindow(flights) {
@@ -165,6 +169,54 @@ function renderTowerBoard(now, arrivalFlights) {
   </section>`;
 }
 
+function flightLogDuration(block) {
+  if (!block.actualStartAt || !block.actualEndAt) return "—";
+  const minutes = Math.max(0, Math.round((localDateTimeToMs(block.actualEndAt) - localDateTimeToMs(block.actualStartAt)) / 60000));
+  return `${minutes}分`;
+}
+
+function renderFlightLog(date, blocks) {
+  const completed = blocks
+    .filter((block) => block.completed && block.actualEndAt)
+    .sort((a, b) => String(a.actualEndAt).localeCompare(String(b.actualEndAt)));
+  const keys = new Set(completed.map((block) => `${block.id}:${block.actualEndAt}`));
+  const latest = completed[completed.length - 1];
+  const latestKey = latest ? `${latest.id}:${latest.actualEndAt}` : "";
+  const flashLatest = lastFlightLogDate === date && lastFlightLogKeys instanceof Set
+    && latestKey && !lastFlightLogKeys.has(latestKey);
+  lastFlightLogDate = date;
+  lastFlightLogKeys = keys;
+  const rows = completed.map((block) => {
+    const isLatest = flashLatest && block === latest;
+    const start = timeFromDateTime(block.actualStartAt) || "--:--";
+    const end = timeFromDateTime(block.actualEndAt) || "--:--";
+    return `<div class="tower-log-row${isLatest ? " is-flip" : ""}" data-flight-id="${escapeHTML(block.id)}">
+      <time>${start}-${end}</time><span class="tower-log-title">${escapeHTML(block.title)}</span>
+      <span class="tower-log-dur">${flightLogDuration(block)}</span>
+      ${isLatest ? '<i class="tower-touchdown" aria-hidden="true" style="--tower-plane-x:50%"></i>' : ""}
+    </div>`;
+  }).join("");
+  return `<section class="tower-panel-box sec-log">
+    <h2>FLIGHT LOG <span>本日の航跡・完了便のみ</span></h2>
+    <div id="towerFlightLog">${rows || '<div class="tower-log-empty">完了便はまだありません</div>'}</div>
+    <div class="tower-log-foot">タスク完了のたびに自動追記 — 同時に日報mdを再生成</div>
+  </section>`;
+}
+
+function renderTowerJournal(date) {
+  const journal = journalForDate(date);
+  return `<section class="tower-panel-box sec-journal">
+    <h2>JOURNAL <span>ジャーナル</span></h2>
+    <div class="tower-journal-body">
+      <label class="tower-journal-label" for="towerJournalFree">FREE NOTE <span>自由記述</span></label>
+      <textarea id="towerJournalFree" placeholder="気づき・所感をそのまま書く">${escapeHTML(journal.free)}</textarea>
+      <label class="tower-journal-label" for="towerJournalAi">AI DISPATCH <span>AIに依頼すること</span></label>
+      <textarea id="towerJournalAi" placeholder="夜のAIバッチへの依頼・質問">${escapeHTML(journal.aiRequest)}</textarea>
+      <button type="button" class="tower-journal-save" data-action="save-tower-journal" data-date="${escapeHTML(date)}">SAVE 記録</button>
+    </div>
+  </section>`;
+}
+
 function renderTowerGates(blocks) {
   const gates = blocks.filter((block) => block.category === "ルーティン" && !block.oneTap && !block.deleted);
   const done = gates.filter((block) => block.completed).length;
@@ -212,9 +264,10 @@ function renderTodayTower() {
     <div class="tower-col-left">
       ${renderTowerRunway(now, blocks)}
       ${renderTowerBoard(now, flights)}
+      ${renderFlightLog(today, blocks)}
     </div>
     <div class="tower-col-center">${renderTowerGates(blocks)}</div>
-    <div class="tower-col-right">${renderStandingOrders()}${renderCountdown()}</div>
+    <div class="tower-col-right">${renderTowerJournal(today)}${renderStandingOrders()}${renderCountdown()}</div>
     ${renderTodayPomodoro(blocks, queueBlocksOf(blocks)).replace(">POMODORO<span>", ">CABIN TIMER<span>")}
   </div>`;
 }

@@ -3294,7 +3294,9 @@ h3 {
 .sec-rwy { order: 1; }
 .sec-arrivals { order: 2; }
 .sec-gates { order: 3; }
+.sec-log { order: 4; }
 .today-tower > .today-pomodoro { order: 4; }
+.sec-journal { order: 6; }
 .sec-creed { order: 7; }
 .sec-life { order: 8; }
 .tower-header {
@@ -3339,6 +3341,15 @@ h3 {
 .tower-status.is-flip { animation: tower-board-flip 600ms ease-out; }
 .tower-flight-summary { padding: 7px 10px; border-top: 1px solid var(--tower-line); color: var(--tower-text); font-size: 10px; text-align: right; opacity: .6; }
 .tower-flight-summary:empty { display: none; }
+.tower-log-row { position: relative; display: grid; grid-template-columns: 100px minmax(0, 1fr) 52px; align-items: center; min-height: 36px; border-bottom: 1px solid var(--tower-line); font-size: 11px; }
+.tower-log-row:last-child { border-bottom: 0; }
+.tower-log-row time { padding-left: 8px; font-variant-numeric: tabular-nums; opacity: .6; }
+.tower-log-title { padding: 0 6px; overflow: hidden; font-family: system-ui, sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.tower-log-dur { justify-self: end; padding-right: 8px; color: var(--tower-green); font-variant-numeric: tabular-nums; }
+.tower-log-row.is-flip { animation: tower-board-flip 600ms ease-out 1; }
+.tower-log-row .tower-touchdown { left: var(--tower-plane-x, 50%); }
+.tower-log-empty { padding: 12px 10px; color: var(--tower-text); font-family: system-ui, sans-serif; opacity: .6; }
+.tower-log-foot { padding: 6px 8px; color: var(--tower-cyan); font-size: 9.5px; letter-spacing: .08em; opacity: .8; }
 .tower-departures {
   display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 8px 10px;
   border: 0; border-top: 1px dashed var(--tower-line); color: var(--tower-cyan); font: inherit;
@@ -3531,6 +3542,13 @@ h3 {
   color: var(--tower-cyan); font-size: 11px; letter-spacing: .18em;
 }
 .tower-panel-box h2 span { float: right; color: var(--tower-text); font-size: 10px; font-weight: 400; letter-spacing: .08em; opacity: .6; }
+
+.tower-journal-body { display: grid; gap: 6px; padding: 10px; }
+.tower-journal-label { color: var(--tower-cyan); font-size: 9.5px; font-weight: 700; letter-spacing: .14em; }
+.tower-journal-label span { margin-left: 6px; color: var(--tower-text); font-weight: 400; letter-spacing: .06em; opacity: .6; }
+.tower-journal-body textarea { min-height: 130px; padding: 8px 10px; resize: vertical; border: 1px solid var(--tower-line); border-radius: 0; color: var(--tower-text); background: var(--tower-bg); font-family: system-ui, sans-serif; font-size: 16px; line-height: 1.6; }
+.tower-journal-body textarea:focus-visible { outline: 2px solid var(--tower-amber); outline-offset: -2px; }
+.tower-journal-save { justify-self: end; min-height: 32px; margin-top: 2px; padding: 4px 16px; border: 1px solid var(--tower-green); color: var(--tower-green); background: transparent; font: inherit; font-size: 10px; letter-spacing: .14em; }
 
 /* ============ STANDING ORDERS(三つの信条) ============ */
 .tower-creed-body { display: grid; gap: 0; }

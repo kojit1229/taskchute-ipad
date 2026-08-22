@@ -297,6 +297,17 @@ registerActions({
     setView("tasks");
   },
   "today-replan": () => requestReplan(),
+  "save-tower-journal": ({ target }) => {
+    const date = target.dataset.date || todayISO();
+    const free = document.getElementById("towerJournalFree");
+    const ai = document.getElementById("towerJournalAi");
+    if (!free || !ai) return;
+    state.journals[date] = free.value;
+    const meta = (state.journalMeta[date] ||= { aiMitCandidates: [], aiImported: false, ideal: "", aiTaskCandidates: [], aiRequest: "" });
+    meta.aiRequest = ai.value;
+    meta.textUpdatedAt = nowDateTime();
+    saveAndRender("ジャーナルを保存しました");
+  },
   // --- settings(12): サイドバー/WBS表示設定/カテゴリ・休憩メッセージ管理・AI再プラン ---
   "toggle-show-suspended": () => {
     state.settings.showSuspended = !state.settings.showSuspended;
@@ -1151,14 +1162,14 @@ document.addEventListener("input", (event) => {
     const d = target.dataset.journalDate;
     state.journals[d] = target.value;
     // v106: 本文の編集時刻を記録(端末間マージの新旧判定に使用)
-    const meta = (state.journalMeta[d] ||= { aiMitCandidates: [], aiImported: false, ideal: "", aiTaskCandidates: [] });
+    const meta = (state.journalMeta[d] ||= { aiMitCandidates: [], aiImported: false, ideal: "", aiTaskCandidates: [], aiRequest: "" });
     meta.textUpdatedAt = nowDateTime();
     saveState();
   }
   // v61: 今日の理想ワンライナー(入力中も保存。全再描画しないのでフォーカスは維持される)
   if (target.matches("[data-ideal-date]")) {
     const d = target.dataset.idealDate;
-    const meta = (state.journalMeta[d] ||= { aiMitCandidates: [], aiImported: false, ideal: "", aiTaskCandidates: [] });
+    const meta = (state.journalMeta[d] ||= { aiMitCandidates: [], aiImported: false, ideal: "", aiTaskCandidates: [], aiRequest: "" });
     meta.ideal = target.value;
     saveState();
   }
@@ -1777,6 +1788,7 @@ function normalizeState(value) {
     // v133: AIフィードバックから抽出したタスク候補(aiMitCandidatesと同じ「溜めて＋で採用」方式へ回帰。
     //       詳細はautoIngestFeedbackのコメント参照)
     if (!Array.isArray(j.aiTaskCandidates)) j.aiTaskCandidates = [];
+    if (typeof j.aiRequest !== "string") j.aiRequest = "";  // v228: TOWER JOURNALのAI依頼枠
   });
   // v61: マイグレーション儀式(3回目以降の繰り越し確認)の選択ログ。将来のバッチ分析用に軽量記録。
   if (!Array.isArray(value.migrationRitualLog)) value.migrationRitualLog = [];
@@ -3112,7 +3124,7 @@ function resolveIdealRetry(choice) {
   if (!active || active.dayNum < IDEAL_RETRY_WINDOW_DAYS) return;
   if (choice === "continue") {
     // 今日を起点に新しい3日間サイクルを始める(同じ理想のまま継続)
-    const meta = (state.journalMeta[today] ||= { aiMitCandidates: [], aiImported: false, ideal: "", aiTaskCandidates: [] });
+    const meta = (state.journalMeta[today] ||= { aiMitCandidates: [], aiImported: false, ideal: "", aiTaskCandidates: [], aiRequest: "" });
     meta.ideal = active.text;
     saveAndRender("理想を続けます");
   } else {
@@ -9777,6 +9789,7 @@ function toggleBlock(id) {
     triggerAnchorPlacements(completedBlock.recurrenceGroupId, nowDateTime());
   }
   if (justCompleted && completedBlock) {
+    generateReport(completedBlock.date, { quiet: true });
     // v150: 完了直後だけ「実績を編集」ボタン付きトースト(既存の実績モーダルを編集導線として再利用)。
     saveAndRender("Blockを完了しました", { blockId: id, actionLabel: "実績を編集" });
   } else {
@@ -11287,6 +11300,8 @@ function completePomodoro() {
         }
       : block);
   }
+  const completedBlock = blockId ? state.blocks.find((block) => block.id === blockId) : null;
+  if (completedBlock) generateReport(completedBlock.date, { quiet: true });
   state.pomodoro = {
     running: false,
     blockId: "",
@@ -11902,7 +11917,7 @@ function autoIngestFeedback(date, text) {
 
   const mitCandidates = extractMITCandidatesFromReport(text);
   if (mitCandidates.length) {
-    const meta = (state.journalMeta[date] ||= { aiMitCandidates: [], aiImported: false, ideal: "", aiTaskCandidates: [] });
+    const meta = (state.journalMeta[date] ||= { aiMitCandidates: [], aiImported: false, ideal: "", aiTaskCandidates: [], aiRequest: "" });
     if (!Array.isArray(meta.aiTaskCandidates)) meta.aiTaskCandidates = [];
     // v133: 重複排除対象は「現在生きている(todo/doing)タスクのtitle」に加え、
     //       「既にaiTaskCandidatesに入っているtitle」も含める(日をまたいだ重複チップ防止)。
@@ -14142,6 +14157,7 @@ function saveActualEntryFromModal(blockId, fields) {
         : t
     );
   }
+  if (block) generateReport(block.date, { quiet: true });
   closeModal();
   // 実績モードに切り替えて表示
   state.timelineMode = "actual";

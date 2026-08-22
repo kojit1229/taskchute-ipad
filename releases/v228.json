@@ -1,0 +1,60 @@
+{
+  "version": 228,
+  "date": "2026-08-22",
+  "title": "JOURNAL 2枠+FLIGHT LOG+日報都度再生成",
+  "summary": "統合画面へ自由記述とAI依頼のJOURNAL、完了便だけのFLIGHT LOGを追加し、Block完了3経路で当日日報mdを都度再生成するようにした",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v228.json",
+    "src/features/today-tower.js",
+    "src/features/today.js",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/tower-core.test.js"
+  ],
+  "intent": [
+    "統合画面だけで当日の自由記述と夜間AIバッチへの依頼を記録できるようにする。",
+    "ARRIVALSを未完了便、FLIGHT LOGを完了便へ分離し、今日これから対応する便と今日の実績を重複なく読めるようにする。",
+    "タスク完了のたびに既存の決定論日報生成を走らせ、state.reportsの当日mdを最新実績へ追随させる。"
+  ],
+  "changes": [
+    "TOWER右列へFREE NOTEとAI DISPATCHの各130px・16px textareaと委譲式SAVEを追加し、自由記述をstate.journals[date]、AI依頼をstate.journalMeta[date].aiRequestへ保存した。",
+    "normalizeStateでjournalMeta各日へaiRequestの空文字既定を補完し、既存state.journals[date]の単一文字列は構造変更せず自由記述として読み続ける後方互換にした。",
+    "boardFlightsの母集団へ!block.completedを追加してARRIVALSから完了便を除外し、actualEndAtを持つ完了Blockを終了時刻昇順に並べるFLIGHT LOGを左列末尾へ追加した。",
+    "FLIGHT LOGは実績開始-終了、タスク名、実績分を表示し、復元時には光らせず新しい完了キーが増えた時だけ最新行へ既存is-flip/tower-touchdownの1回演出を付けた。",
+    "toggleBlock、saveActualEntryFromModal、completePomodoroの完了確定箇所へgenerateReport(block.date, { quiet: true })を個別挿入し、完了時だけ既存state.reports保存経路を更新した。",
+    "tower-coreへFLIGHT LOG表示、ARRIVALS完了便除外、JOURNAL移行・保存、3完了経路の日報更新、PC/モバイル配置のassertionを追加し、actionレジストリ一覧を追随した。",
+    "Service WorkerのCACHE_NAMEをv228へ更新した。"
+  ],
+  "uncertainties": [
+    "actualEndAtがありactualStartAtが無いレガシー完了便は時刻帯の開始を--:--、実績分を—として表示する。",
+    "JOURNALのAI依頼はjournalMeta全体の既存同期単位に乗り、自由記述と同じtextUpdatedAtで端末間の新旧判定を行う。"
+  ],
+  "reviewFocus": [
+    "journalMeta[date].aiRequestの初期化・normalizeState補完・textUpdatedAt更新が既存ジャーナル編集と同期マージ契約を壊していないか。",
+    "ARRIVALSが未完了便だけ、FLIGHT LOGがactualEndAtを持つ完了便だけになり、実行中の着陸中表示を維持しているか。",
+    "最新行フラッシュが初回復元や完了解除では走らず、新規完了時だけ1回走り、motion off/reduced-motionで残留演出を見せないか。",
+    "toggleBlock/saveActualEntryFromModal/completePomodoroの3関数すべてで完了後のBlockを含むstate.reports[date]が更新され、未完了解除やblockId無しでは生成しないか。",
+    "390/768/1024pxでNOW LANDING→ARRIVALS→GATE→FLIGHT LOG→JOURNAL→STANDING ORDERS→COUNTDOWNの順、1280px以上でFLIGHT LOGが左列末尾・JOURNALが右列に収まるか。"
+  ],
+  "verification": [
+    "node --check app.js、src/features/today.js、src/features/today-tower.js、tests/tower-core.test.js、tests/action-registry-core.test.js、sw.jsはPASS。",
+    "node tests/action-registry-core.test.jsは新規save-tower-journalを含む登録一覧・保存則を含め全件PASS。",
+    "system Chrome指定のnode tests/tower-core.test.jsはJOURNAL/FLIGHT LOG・3完了経路の日報更新・390/768/1024/1280/1440px配置を含め全件PASS。",
+    "system Chrome指定のnode tests/run-all.js today-core journal-core v67はジャーナル・今日タブ・normalizeState後方互換を含め全件PASS。",
+    "npm run code:index:writeとnpm run test:manifest:writeをnpm.cmd経由で実行した。",
+    "system Edge指定のnode scripts/release-gate.js releases/v228.jsonは最終実行で全31選択スイートと非ブラウザ検査がPASS。初回全体実行の一過性1スイート失敗後、関連分割再実行と同一ゲート再実行で再現しなかった。",
+    "node scripts/release-record.js releases/v228.json --writeはCHANGES_v228.mdを生成後、ワークスペース外のtaskchute-notes/handoff.md更新だけEPERM。--checkはCHANGES=OK、handoff=NGで同じ権限制約を確認した。"
+  ],
+  "knownLimitations": [
+    "iOS Safari実機PWAでの更新・オフライン動作、実機フォントでのtextareaと長いタスク名の最終表示確認は監督者側で必要。",
+    "この環境では標準Playwright Chromiumがspawn EPERMになる可能性があるため、ブラウザ検査はsystem Chrome/Edgeで補完する。",
+    "test suite manifestのsourceHashには既存のCRLF/run-all.js起因のstale警告が残るが、release-gateのmanifest整合検査自体はPASSする。",
+    "ATISパネル本体は本変更単位の対象外であり、右列では後続のATIS結線後にJOURNALがその直下へ並ぶ構造を維持する。"
+  ]
+}

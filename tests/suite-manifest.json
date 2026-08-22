@@ -15,7 +15,7 @@
       ],
       "assertionSignals": 34,
       "assertionHash": "f841e3459002f00f",
-      "sourceHash": "cf385fd5ed28ce6f",
+      "sourceHash": "22d14b699922fe31",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -487,11 +487,12 @@
       "tier": "full",
       "domains": [
         "sync-storage",
+        "journal-health",
         "ui-responsive"
       ],
-      "assertionSignals": 102,
-      "assertionHash": "924748cbf9265df7",
-      "sourceHash": "396ae09d8c8bde07",
+      "assertionSignals": 112,
+      "assertionHash": "2df57e6ba4d1e04d",
+      "sourceHash": "9da2da4308da6217",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

@@ -30,7 +30,11 @@ function configureToday(deps) {
     escapeHTML, todayISO, homeSyncAlertBanner, blocksForDate, towerFlights,
     runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp,
     towerMotionSetting: () => state.settings.towerMotion,
-    renderTodayPomodoro
+    renderTodayPomodoro,
+    journalForDate: (date) => ({
+      free: state.journals[date] || "",
+      aiRequest: state.journalMeta[date]?.aiRequest || ""
+    })
   });
 }
 

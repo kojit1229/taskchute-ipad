@@ -1,4 +1,4 @@
-// tests/tower-core.test.js — v227 NOW LANDING強化・DEPARTURES縮約と1秒ticker契約E2E。
+// tests/tower-core.test.js — v228 JOURNAL/FLIGHT LOG・日報再生成と1秒ticker契約E2E。
 // today-core.test.jsと同じく、localStorage seed + 既存nav + Playwright clockで検証する。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY } = require("./helpers");
 
@@ -163,6 +163,9 @@ function check(name, cond, extra = "") {
       block(`arr-${index}`, `本日便${index + 1}`, today, 9 * 60 + 30 + index * 30));
     arrivals.push(block("routine-hidden", "除外ルーティン", today, 11 * 60, { category: "ルーティン" }));
     arrivals.push(block("onetap-hidden", "除外ワンタップ", today, 11 * 60 + 15, { oneTap: true }));
+    arrivals.push(block("arr-completed", "完了済み便", today, 8 * 60, {
+      completed: true, actualStartAt: atMinute(today, 8 * 60), actualEndAt: atMinute(today, 8 * 60 + 25)
+    }));
     const departures = [
       block("dep-late", "明日15時", tomorrow, 15 * 60), block("dep-first", "明日8時半", tomorrow, 8 * 60 + 30),
       block("dep-third", "明日13時", tomorrow, 13 * 60), block("dep-second", "明日10時", tomorrow, 10 * 60)
@@ -177,6 +180,44 @@ function check(name, cond, extra = "") {
     check("状態ラベルは確定語彙だけ", labels.every((label) => allowedLabels.has(label)), JSON.stringify(labels));
     check("ルーティンはARRIVALSに出ない", await page.locator('.tower-flight-title:has-text("除外ルーティン")').count() === 0);
     check("oneTapはARRIVALSに出ない", await page.locator('.tower-flight-title:has-text("除外ワンタップ")').count() === 0);
+    check("完了便はARRIVALSから除外", await page.locator('.tower-arrival-row[data-flight-id="arr-completed"]').count() === 0);
+    const completedLog = page.locator('.tower-log-row[data-flight-id="arr-completed"]');
+    check("完了便はFLIGHT LOGへ時系列表示", await completedLog.count() === 1
+      && (await completedLog.locator("time").textContent()) === "08:00-08:25"
+      && (await completedLog.locator(".tower-log-title").textContent()) === "完了済み便"
+      && (await completedLog.locator(".tower-log-dur").textContent()) === "25分");
+    check("復元描画の最新完了行はフラッシュしない", await completedLog.evaluate((el) => !el.classList.contains("is-flip"))
+      && await page.locator('.sec-log .tower-touchdown').count() === 0);
+
+    console.log("[7-b] JOURNALは既存単一文字列を自由記述として読み、2枠をsaveAndRender保存する");
+    await page.evaluate(({ KEY, today }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.journals[today] = "既存の自由記述";
+      s.journalMeta[today] = { aiMitCandidates: [], aiImported: false, ideal: "", aiTaskCandidates: [] };
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, today });
+    await page.reload();
+    await page.waitForSelector("#towerJournalFree");
+    check("既存文字列はFREE NOTEへ表示されAI依頼は空で正規化", await page.locator("#towerJournalFree").inputValue() === "既存の自由記述"
+      && await page.locator("#towerJournalAi").inputValue() === ""
+      && await page.evaluate(({ KEY, today }) => JSON.parse(localStorage.getItem(KEY)).journalMeta[today]?.aiRequest === "", { KEY, today }));
+    const journalStyle = await page.locator("#towerJournalFree").evaluate((el) => ({
+      minHeight: parseFloat(getComputedStyle(el).minHeight), fontSize: parseFloat(getComputedStyle(el).fontSize)
+    }));
+    check("JOURNAL textareaは130px以上・16px以上", journalStyle.minHeight >= 130 && journalStyle.fontSize >= 16, JSON.stringify(journalStyle));
+    await page.locator("#towerJournalFree").fill("更新した自由記述");
+    await page.locator("#towerJournalAi").fill("明日の計画に運動を入れて");
+    await page.locator('[data-action="save-tower-journal"]').click();
+    await page.waitForFunction(({ KEY, today }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      return s.journals[today] === "更新した自由記述" && s.journalMeta[today]?.aiRequest === "明日の計画に運動を入れて";
+    }, { KEY, today });
+    const savedJournal = await page.evaluate(({ KEY, today }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      return { free: s.journals[today], ai: s.journalMeta[today].aiRequest, updatedAt: s.journalMeta[today].textUpdatedAt };
+    }, { KEY, today });
+    check("SAVEでjournals/dateとjournalMeta.aiRequestを保存", savedJournal.free === "更新した自由記述"
+      && savedJournal.ai === "明日の計画に運動を入れて" && !!savedJournal.updatedAt, JSON.stringify(savedJournal));
 
     console.log("[8] ARRIVALSのタスク名タップは既存Blockモーダルを開く");
     await page.locator('.tower-arrival-row[data-flight-id="arr-0"] .tower-flight-title').click();
@@ -337,6 +378,50 @@ function check(name, cond, extra = "") {
       && (await page.locator(".tower-nowhud").textContent())?.trim() === "本日の着陸予定はありません");
     check("明日0便は空メッセージの1行", ((await page.locator(".tower-departures").textContent()) || "").includes("明日の便はまだありません"));
 
+    console.log("[19-b] 実績モーダル完了で当日日報mdを再生成する");
+    const actualPath = block("report-actual", "実績モーダル経路", today, 11 * 60, { actualStartAt: atMinute(today, 11 * 60) });
+    await page.evaluate(({ KEY, actualPath, today }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.currentView = "today";
+      s.blocks = [actualPath];
+      s.reports[today] = "STALE_ACTUAL";
+      s.pomodoro = { running: false, blockId: "", startedAt: "", endsAt: "", mode: "focus" };
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, actualPath, today });
+    await page.reload();
+    await page.waitForSelector('.tower-now-actions [data-action="complete-block-with-actual"]');
+    await page.locator('.tower-now-actions [data-action="complete-block-with-actual"]').click();
+    await page.locator('[data-modal-field="actualStartAt"]').fill(atMinute(today, 11 * 60).slice(0, 16));
+    await page.locator('[data-modal-field="actualEndAt"]').fill(atMinute(today, 11 * 60 + 40).slice(0, 16));
+    await page.locator('.modal-card [data-action="modal-save"]').click();
+    await page.waitForFunction(({ KEY, today }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      return s.blocks[0]?.completed && s.reports[today] !== "STALE_ACTUAL";
+    }, { KEY, today });
+    check("saveActualEntryFromModal後のstate.reportsへ完了便を反映", await page.evaluate(({ KEY, today }) =>
+      JSON.parse(localStorage.getItem(KEY)).reports[today].includes("実績モーダル経路"), { KEY, today }));
+
+    console.log("[19-c] ポモドーロ完了で当日日報mdを再生成する");
+    const pomodoroPath = block("report-pomodoro", "ポモドーロ経路", today, 11 * 60, { actualStartAt: atMinute(today, 11 * 60) });
+    await page.evaluate(({ KEY, pomodoroPath, today }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.currentView = "today";
+      s.blocks = [pomodoroPath];
+      s.reports[today] = "STALE_POMODORO";
+      s.pomodoro = { running: true, blockId: pomodoroPath.id, startedAt: pomodoroPath.actualStartAt, endsAt: `${today}T12:50:00`, mode: "focus" };
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, pomodoroPath, today });
+    await page.reload();
+    await page.waitForSelector('.tower-now-actions [data-action="now-conveyor-complete"]');
+    await page.locator('.tower-now-actions [data-action="now-conveyor-complete"]').click();
+    await page.waitForFunction(({ KEY, today }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      return s.blocks[0]?.completed && s.reports[today] !== "STALE_POMODORO";
+    }, { KEY, today });
+    check("completePomodoro後のstate.reportsへ完了便を反映", await page.evaluate(({ KEY, today }) =>
+      JSON.parse(localStorage.getItem(KEY)).reports[today].includes("ポモドーロ経路"), { KEY, today }));
+    if (await page.locator('[data-action="body-scan-discard"]').count()) await page.locator('[data-action="body-scan-discard"]').first().click();
+
     console.log("[20] GATE数と就航数はroutineRateと同じ母集団を使う");
     const gateSeed = [
       block("gate-done", "朝便", today, 7 * 60, { category: "ルーティン", completed: true, actualEndAt: atMinute(today, 7 * 60 + 5) }),
@@ -345,6 +430,13 @@ function check(name, cond, extra = "") {
       block("gate-deleted", "削除便", today, 14 * 60, { category: "ルーティン", deleted: true })
     ];
     await seedT6(gateSeed);
+    await page.evaluate(({ KEY, today }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.reports[today] = "STALE_TOGGLE";
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, today });
+    await page.reload();
+    await page.waitForSelector(".tower-gates");
     check("oneTapを除くゲートは2基", await page.locator(".tower-gate").count() === 2);
     check("1/2便 就航を表示", (await page.locator("#towerGateCount").textContent()) === "1/2便 就航");
 
@@ -358,6 +450,14 @@ function check(name, cond, extra = "") {
       return el.classList.contains("is-docking") && cs.animationName === "tower-gate-docking" && cs.animationDuration === "0.7s";
     }));
     check("就航数が2/2へ増える", (await page.locator("#towerGateCount").textContent()) === "2/2便 就航");
+    check("toggleBlock後のstate.reportsへ完了便を反映", await page.evaluate(({ KEY, today }) => {
+      const report = JSON.parse(localStorage.getItem(KEY)).reports[today] || "";
+      return report !== "STALE_TOGGLE" && report.includes("昼便");
+    }, { KEY, today }));
+    const latestLog = page.locator('.tower-log-row[data-flight-id="gate-open"]');
+    check("最新完了行に既存is-flip/tower-touchdownの1回演出", await latestLog.evaluate((el) => el.classList.contains("is-flip")
+      && getComputedStyle(el).animationName === "tower-board-flip")
+      && await latestLog.locator(".tower-touchdown").count() === 1);
     // K判断(2026-08-17): 就航済みゲートの再タップは確認なしの完了取消(既存toggleBlockのトグル)を仕様として維持する。
     await page.locator('.tower-gate[data-id="gate-open"]').click();
     await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).blocks.find((b) => b.id === "gate-open")?.completed !== true, KEY);
@@ -392,13 +492,16 @@ function check(name, cond, extra = "") {
       return {
         columns: getComputedStyle(root).gridTemplateColumns,
         board: rect(".tower-board"), runway: rect(".tower-runway"), gates: rect(".tower-gates"),
+        log: rect(".sec-log"), journal: rect(".sec-journal"),
         right: rect(".tower-col-right"), topbandDisplay: getComputedStyle(document.querySelector(".tower-topband-pc")).display
       };
     });
     const columnParts = desktopLayout.columns.trim().split(/\s+/);
     check("grid列は340px/320px/可変の順", columnParts.length === 3 && columnParts[0] === "340px" && columnParts[1] === "320px" && parseFloat(columnParts[2]) > 0, desktopLayout.columns);
     check("NOW LANDINGとARRIVALSは左、GATEは中央、右列はその右", Math.abs(desktopLayout.board.x - desktopLayout.runway.x) < 1
-      && desktopLayout.runway.x < desktopLayout.gates.x && desktopLayout.gates.x < desktopLayout.right.x,
+      && Math.abs(desktopLayout.log.x - desktopLayout.runway.x) < 1
+      && desktopLayout.runway.x < desktopLayout.gates.x && desktopLayout.gates.x < desktopLayout.right.x
+      && Math.abs(desktopLayout.journal.x - desktopLayout.right.x) < 1,
       JSON.stringify(desktopLayout));
     check("PC上帯はflex表示", desktopLayout.topbandDisplay === "flex", desktopLayout.topbandDisplay);
     const pcTopbandText = (await page.locator(".tower-topband-pc").textContent()) || "";
@@ -419,17 +522,19 @@ function check(name, cond, extra = "") {
         const board = document.querySelector(".tower-board").getBoundingClientRect();
         const runway = document.querySelector(".tower-runway").getBoundingClientRect();
         const gates = document.querySelector(".tower-gates").getBoundingClientRect();
+        const log = document.querySelector(".sec-log").getBoundingClientRect();
+        const journal = document.querySelector(".sec-journal").getBoundingClientRect();
         const creed = document.querySelector(".tower-col-right .sec-creed").getBoundingClientRect();
         const life = document.querySelector(".tower-col-right .sec-life").getBoundingClientRect();
         return {
           boardX: board.x, runwayX: runway.x, scrollWidth: document.scrollingElement.scrollWidth, innerWidth,
-          order: [runway.top, board.top, gates.top, creed.top, life.top],
+          order: [runway.top, board.top, gates.top, log.top, journal.top, creed.top, life.top],
           topbandDisplay: getComputedStyle(document.querySelector(".tower-topband-pc")).display
         };
       });
       check(`${viewport.width}pxはboard/runwayが縦積み`, Math.abs(mobileLayout.boardX - mobileLayout.runwayX) < 1, JSON.stringify(mobileLayout));
       check(`${viewport.width}pxは横はみ出しなし`, mobileLayout.scrollWidth <= mobileLayout.innerWidth, JSON.stringify(mobileLayout));
-      check(`${viewport.width}pxはNOW→ARRIVALS→GATE→STANDING ORDERS→COUNTDOWN順`, mobileLayout.order.every((top, index, list) => index === 0 || list[index - 1] < top), JSON.stringify(mobileLayout));
+      check(`${viewport.width}pxはNOW→ARRIVALS→GATE→FLIGHT LOG→JOURNAL→STANDING ORDERS→COUNTDOWN順`, mobileLayout.order.every((top, index, list) => index === 0 || list[index - 1] < top), JSON.stringify(mobileLayout));
       check(`${viewport.width}pxはPC上帯を非表示`, mobileLayout.topbandDisplay === "none", mobileLayout.topbandDisplay);
     }
 
