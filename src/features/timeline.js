@@ -36,6 +36,11 @@
 // prep-stage4-timeline.md §2「サイレント退行警告」への対応)。
 //
 // characterization test: tests/timeline-render-core.test.js。
+//
+// TOWER意匠化(第3弾先行分・2026-08-22): renderTimelineView()だけをtower-skin(css-timeline-
+// tower.css)でラップした。絶対配置エンジン(renderTimeline/renderTimelineCard/renderEnergyGraph/
+// assignBlocksToLanes/adjustLaneTopPositions)・D&D・now-line・レール描画(renderTimelineRail)・
+// data-action・既存クラス名は一切変更していない(詳細はnotes.md参照)。
 
 import { state } from "../state/store.js";
 import { persistLocalNoSchedule } from "../storage/local.js";
@@ -104,30 +109,45 @@ function renderTimelineRail() {
 function renderTimelineView() {
   const nowMinute = (new Date().getHours() + 1) * 60;
   const mode = state.timelineMode || "planned";
+  // TOWER意匠化(第3弾先行分): タブ全体を .tower-skin.timeline-tower でラップし、
+  // 日付バーとタイムライン本体(グリッド)だけを新設のパネル枠(.tl-datebar-panel/
+  // .tl-radar-panel/.tl-radar-body)で囲む。囲まれる各関数(renderHeader/renderDateBar/
+  // draftBarHTML/zeroSecThemeBarHTML/draftRejectReasonPickerHTML/driftPanelHTML/
+  // timeCombHTML/renderTimeline)の呼び出し・引数・返り値は一切変更していない
+  // (見た目はcss-timeline-tower.cssの子孫セレクタだけで変わる)。
   return `
-    ${renderHeader("時間軸とエネルギー", "タイムライン")}
-    ${renderDateBar()}
-    <div class="segmented" style="margin-bottom:10px">
-      <button class="${mode === "planned" ? "active" : ""}" data-action="timeline-mode" data-mode="planned">📅 予定</button>
-      <button class="${mode === "actual" ? "active" : ""}" data-action="timeline-mode" data-mode="actual">✅ 実績</button>
+    <div class="tower-skin timeline-tower">
+      ${renderHeader("時間軸とエネルギー", "タイムライン")}
+      <div class="tl-datebar-panel">
+        ${renderDateBar()}
+      </div>
+      <div class="segmented" style="margin-bottom:10px">
+        <button class="${mode === "planned" ? "active" : ""}" data-action="timeline-mode" data-mode="planned">📅 予定</button>
+        <button class="${mode === "actual" ? "active" : ""}" data-action="timeline-mode" data-mode="actual">✅ 実績</button>
+      </div>
+      <div class="row" style="margin-bottom:10px; gap:8px; flex-wrap:wrap">
+        <button class="btn primary" data-action="timeline-new-block" data-minute="${nowMinute}">+ 新規Block</button>
+        ${!scheduleDraftActive() ? `<button class="btn" data-action="ai-schedule">📋 下書きスケジュール</button>` : ""}
+        ${mode === "planned" && state.selectedDate === todayISO()
+          ? `<button class="btn" data-action="bulk-approve-planned">✅ 予定通りだった(一括承認)</button>` : ""}
+        <span class="muted" style="font-size:12px">空き時間タップで追加 / ○タップで完了登録 / ▶いま開始・■いま終了でワンタップ実績 / カードタップで編集 / 赤線は現在時刻</span>
+      </div>
+      ${draftBarHTML()}
+      ${zeroSecThemeBarHTML()}
+      ${draftRejectReasonPickerHTML()}
+      ${driftPanelHTML()}
+      ${timeCombHTML()}
+      ${state.settings.timelineCategoryFilter ? `<div class="row" style="margin-bottom:10px; gap:8px; align-items:center">
+        <span class="cat-chip" style="background:${getCategoryColor(state.settings.timelineCategoryFilter)}1f; color:${getCategoryColor(state.settings.timelineCategoryFilter)}; border:1px solid ${getCategoryColor(state.settings.timelineCategoryFilter)}66">カテゴリ: ${escapeHTML(state.settings.timelineCategoryFilter)}</span>
+        <button class="btn ghost" data-action="timeline-clear-cat" style="font-size:12px">フィルタ解除 ✕</button>
+      </div>` : ""}
+      <section class="tl-radar-panel">
+        <h2>TIMELINE RADAR <span>タイムライン</span></h2>
+        <div class="tl-radar-body">
+          ${renderTimeline({ compact: false, mode })}
+        </div>
+      </section>
     </div>
-    <div class="row" style="margin-bottom:10px; gap:8px; flex-wrap:wrap">
-      <button class="btn primary" data-action="timeline-new-block" data-minute="${nowMinute}">+ 新規Block</button>
-      ${!scheduleDraftActive() ? `<button class="btn" data-action="ai-schedule">📋 下書きスケジュール</button>` : ""}
-      ${mode === "planned" && state.selectedDate === todayISO()
-        ? `<button class="btn" data-action="bulk-approve-planned">✅ 予定通りだった(一括承認)</button>` : ""}
-      <span class="muted" style="font-size:12px">空き時間タップで追加 / ○タップで完了登録 / ▶いま開始・■いま終了でワンタップ実績 / カードタップで編集 / 赤線は現在時刻</span>
-    </div>
-    ${draftBarHTML()}
-    ${zeroSecThemeBarHTML()}
-    ${draftRejectReasonPickerHTML()}
-    ${driftPanelHTML()}
-    ${timeCombHTML()}
-    ${state.settings.timelineCategoryFilter ? `<div class="row" style="margin-bottom:10px; gap:8px; align-items:center">
-      <span class="cat-chip" style="background:${getCategoryColor(state.settings.timelineCategoryFilter)}1f; color:${getCategoryColor(state.settings.timelineCategoryFilter)}; border:1px solid ${getCategoryColor(state.settings.timelineCategoryFilter)}66">カテゴリ: ${escapeHTML(state.settings.timelineCategoryFilter)}</span>
-      <button class="btn ghost" data-action="timeline-clear-cat" style="font-size:12px">フィルタ解除 ✕</button>
-    </div>` : ""}
-    ${renderTimeline({ compact: false, mode })}
   `;
 }
 

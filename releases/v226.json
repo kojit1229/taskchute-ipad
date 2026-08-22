@@ -1,0 +1,38 @@
+{
+  "version": 226,
+  "date": "2026-08-22",
+  "title": "タイムラインタブのTOWER意匠化(第3弾先行分3/3)",
+  "summary": "第3弾の先行分として、タイムラインタブを配置ロジック不変のままTOWER管制室テイストへ改装した",
+  "changedFiles": [
+    "releases/v226.json",
+    "src/features/timeline.js",
+    "styles.css",
+    "sw.js"
+  ],
+  "intent": [
+    "第3弾(TOWER意匠の全タブ統一)の先行分3タブ目。P3/P4と非干渉のタイムラインタブへ適用する。",
+    "Blockの開始時刻ベース絶対配置(iOS Safari罠の再発防止ガード付き)には一切触れない制約で改装する。"
+  ],
+  "changes": [
+    "renderTimelineView()にtower-skin timeline-towerラップ・日付バーパネル・TIMELINE RADAR見出しの3ラッパを追加(他関数・引数・条件分岐は無改変)。",
+    "css-timeline-tower.cssを統合(重複トークン10行は除去し定義正本1箇所を維持)。配色は子孫セレクタのみで、position/top/height等の座標系プロパティは不変。",
+    "sw.js CACHE_NAMEをv226へ更新した。"
+  ],
+  "uncertainties": [
+    "now-lineのインライン色をamberへ揃える!important 1点はインラインstyle実装への依存(座標系には非干渉)。",
+    "実機PWAでの見た目確認は未実施(次回K実機確認に含める)。"
+  ],
+  "reviewFocus": [
+    "timeline.jsのdiffがrenderTimelineView内のラップ追加のみであること",
+    "絶対配置関連プロパティ・D&D/now-line/レール描画のJSフック・テスト参照セレクタの完全温存"
+  ],
+  "verification": [
+    "node --check src/features/timeline.js PASS",
+    "node tests/run-all.js timeline-layout-core timeline-render-core timeline-tick-wiring 全件PASS(適用後の本体ツリー)",
+    "node scripts/release-gate.js releases/v226.json(監督者実行)"
+  ],
+  "knownLimitations": [
+    "bufferMeter・下書きスケジュールUIの配色は今回対象外(既定のまま)。第3弾本体で統一",
+    "ライトテーマ時はtowerダーク基調が優先(第3弾統一方針)"
+  ]
+}

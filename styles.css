@@ -4352,3 +4352,130 @@ h3 {
 .journal-tower [style*="var(--red-soft)"] {
   background: rgba(242, 184, 75, .12) !important; border-color: var(--tower-amber) !important;
 }
+/* css-timeline-tower.css — TOWER意匠化(タイムラインタブ、第3弾先行分)。
+   統合手順はnotes.md参照。既存styles.cssの .today-tower ブロックが定義している
+   まだ .today-tower の外にあるため、他のTOWER化済みタブと同じ配色を独立して持たせる。
+   将来 .tower-skin を今のうちからの共通土台として他タブへ流用できるよう、命名を
+   .today-tower専用ではなく .tower-skin にしてある)。
+
+   厳守事項(taskchute-journal Skill/CLAUDE.md): タイムラインのBlockは開始時刻ベースの
+   純粋な絶対配置。以下のルールは.timeline-card/.timeline-cards-area/.timeline/.now-line/
+   .time-row の position・top・left・height・width を一切上書きしない(色・枠線・影・
+   透明度・タイポグラフィのみ)。既存クラス名は一切リネームしていない — 子孫セレクタで
+   上書きするだけなので、tests/timeline-render-core.test.js・tests/timeline-tick-wiring.test.js・
+   v81/v83/v107/v108/v124/v146/v148/v150等が参照するセレクタ(.tl-complete-btn/.tl-start-btn/
+   .drift-panel/.time-comb/.time-comb-gap/#timelineRail/.segmented/data-action=*等)は
+   すべて温存される。 */
+
+.tower-skin.timeline-tower {
+  min-height: 100%;
+  color: var(--tower-text);
+  font-family: var(--mono, ui-monospace), "SFMono-Regular", Consolas, monospace;
+  background: var(--tower-bg);
+  padding: 12px 12px 40px;
+}
+
+/* ---- 見出し(renderHeaderの共通マークアップはそのまま。配色だけ上書き) ---- */
+.timeline-tower .view-header {
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--tower-line);
+  background: var(--tower-panel);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
+}
+.timeline-tower .view-header .eyebrow { color: var(--tower-cyan); font-size: 10px; font-weight: 700; letter-spacing: .18em; }
+.timeline-tower .view-header h1 { margin: 2px 0 0; color: var(--tower-text); font-size: 20px; letter-spacing: .06em; }
+.timeline-tower .view-header .view-breadcrumb { color: var(--tower-cyan); opacity: .6; font-size: 10px; }
+
+/* ---- 日付バー(renderDateBarの.datebar/.btn/.inputは無改修。配色だけ) ---- */
+.timeline-tower .tl-datebar-panel {
+  margin-bottom: 12px;
+  padding: 4px;
+  border: 1px solid var(--tower-line);
+  background: var(--tower-panel);
+}
+.timeline-tower .tl-datebar-panel .datebar { gap: 8px; }
+.timeline-tower .tl-datebar-panel .btn { border-color: var(--tower-line); background: var(--tower-bg); color: var(--tower-text); }
+.timeline-tower .tl-datebar-panel .btn.primary { border-color: var(--tower-amber); color: var(--tower-amber); }
+.timeline-tower .tl-datebar-panel .input { border-color: var(--tower-line); background: var(--tower-bg); color: var(--tower-text); }
+
+/* ---- 予定/実績 切替(既存.segmentedのまま配色だけ) ---- */
+.timeline-tower .segmented { border: 1px solid var(--tower-line); background: var(--tower-panel); }
+.timeline-tower .segmented button { color: var(--tower-text); opacity: .6; }
+.timeline-tower .segmented button.active { color: var(--tower-cyan); opacity: 1; background: var(--tower-bg); }
+
+/* ---- 操作行のボタン群(既存.row/.btn/.mutedのまま配色だけ) ---- */
+.timeline-tower > .row .btn { border-color: var(--tower-line); background: var(--tower-panel); color: var(--tower-text); }
+.timeline-tower > .row .btn.primary { border-color: var(--tower-amber); color: var(--tower-amber); }
+.timeline-tower > .row .muted { color: var(--tower-text); opacity: .55; }
+.timeline-tower .cat-chip { border-radius: 0; }
+
+/* ---- DRIFT / TIME COMB(既存.panel/.drift-panel/.time-comb/.home-plabelのまま配色だけ) ---- */
+.timeline-tower .drift-panel,
+.timeline-tower .time-comb {
+  margin-bottom: 12px;
+  border: 1px solid var(--tower-line);
+  border-radius: 0;
+  background: var(--tower-panel);
+  color: var(--tower-text);
+  box-shadow: none;
+}
+.timeline-tower .home-plabel { color: var(--tower-cyan); font-size: 11px; font-weight: 700; letter-spacing: .18em; }
+.timeline-tower .drift-value { color: var(--tower-amber); font-size: 20px; font-weight: 700; }
+.timeline-tower .drift-note,
+.timeline-tower .time-comb-note { color: var(--tower-text); opacity: .6; }
+.timeline-tower .drift-suggestion .btn { border-color: var(--tower-line); background: var(--tower-bg); color: var(--tower-text); }
+.timeline-tower .time-comb-gap {
+  border: 1px solid var(--tower-line);
+  border-radius: 0;
+  background: var(--tower-bg);
+  color: var(--tower-text);
+}
+.timeline-tower .time-comb-gap strong { color: var(--tower-green); }
+
+/* ---- TIMELINE RADARパネル(新設ラッパのみ。中身のrenderTimeline()は無改修) ---- */
+.timeline-tower .tl-radar-panel {
+  border: 1px solid var(--tower-line);
+  background: var(--tower-panel);
+}
+.timeline-tower .tl-radar-panel h2 {
+  margin: 0;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--tower-line);
+  color: var(--tower-cyan);
+  font-size: 11px;
+  letter-spacing: .18em;
+}
+.timeline-tower .tl-radar-panel h2 span { float: right; color: var(--tower-text); font-size: 10px; font-weight: 400; letter-spacing: .08em; opacity: .6; }
+.timeline-tower .tl-radar-body { padding: 8px; }
+
+/* ---- ズーム/エネルギー切替コントロール(既存.tl-zoom-controlsのまま配色だけ) ---- */
+.timeline-tower .tl-zoom-controls .btn { border-color: var(--tower-line); background: var(--tower-panel); color: var(--tower-text); }
+.timeline-tower .tl-zoom-controls .btn.active { border-color: var(--tower-cyan); color: var(--tower-cyan); }
+.timeline-tower .tl-controls-divider { border-color: var(--tower-line); }
+
+/* ---- タイムライングリッド本体(position/top/left/height/widthは一切上書きしない) ---- */
+.timeline-tower .timeline { background: var(--tower-bg); border: 1px solid var(--tower-line); }
+.timeline-tower .time-row { color: var(--tower-text); opacity: .5; border-top: 1px solid var(--tower-line); }
+.timeline-tower .timeline-card {
+  border-radius: 0;
+  border: 1px solid var(--tower-line);
+  box-shadow: none;
+  color: var(--tower-text);
+}
+.timeline-tower .timeline-card.completed { opacity: .5; }
+.timeline-tower .timeline-card.is-migrated { opacity: .45; }
+.timeline-tower .tl-start-btn,
+.timeline-tower .tl-complete-btn {
+  background: var(--tower-panel);
+  border: 1px solid var(--tower-line);
+  color: var(--tower-text);
+}
+.timeline-tower .tl-complete-btn.done { color: var(--tower-green); border-color: var(--tower-green); }
+.timeline-tower .migrated-badge { color: var(--tower-amber); }
+.timeline-tower .now-line { border-top-color: var(--tower-amber) !important; }
+.timeline-tower .now-line span { background: var(--tower-amber) !important; }
+
+/* ---- エネルギー/バッテリーグラフのラベル(既存.energy-graph-overlayのまま配色だけ) ---- */
+.timeline-tower .energy-graph-overlay { color: var(--tower-text); }
+.timeline-tower .battery-curve-label { color: var(--tower-amber) !important; }

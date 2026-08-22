@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v225";
+const CACHE_NAME = "taskchute-journal-pwa-v226";
 // v223: TOWER上帯(STANDING ORDERS/COUNTDOWN)とPC 3列・モバイル縦順の骨格を結線した。
 // v222: TOWERをNOW LANDING/ARRIVALS/DEPARTURES/GATEへ減量した。
 // v221: 今日タブのcockpitスキンとtodaySkin切替を廃止し、TOWERへ一本化した。
