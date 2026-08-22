@@ -5,8 +5,8 @@
 //     Yは実際に一覧表示されるProject紐づきBlock数と一致する(母数をヒートマップ等と同じ
 //     「当日の全Block」へ統一すると一覧件数とズレて別の混乱を生むため、見出しで明示する
 //     代替案を採った。taskchute-notes/decisions.md 2026-07-27参照)
-// (2) 12週サイクル残り日数の基準日をtodayISO()へ統一(ホーム/週次で一致。selectedDateを
-//     動かしても値が変わらない)
+// (2) 廃止(2026-08-22): 12週サイクル残り日数の基準日統一検証。週次タブ・ホーム12週
+//     サイクルカードともにv217で仕様削除済み(slim-spec.md §1-1/§4-2)のため削除した。
 // (3) 「今日の状態」1枚化: 宣言・体力予算・電池残量・週Wishの4つとも良好なら非表示。
 //     いずれか要対応なら1〜2行summary+detailsに内訳(体力予算チップ/電池チップ/
 //     宣言未入力/週Wish未設定)が揃う。過去日は体力予算チップの単独表示のみ(既存仕様維持)
@@ -119,38 +119,11 @@ function check(name, cond, extra = "") {
     check("一覧行数も1件(ルーティンBlockは対象外)", rowCount === 1, String(rowCount));
 
     // ============================================================
-    // (2) 12週サイクル残り日数: 基準日をtodayISO()へ統一
+    // (2) 12週サイクル残り日数: 廃止(2026-08-22)。週次タブ・ホーム12週サイクルカード
+    //     ともにv217で仕様削除済み(slim-spec.md §1-1/§4-2、CHANGES_v217.md参照。
+    //     「ホーム12週サイクルカードも仕様どおり削除」と明記)。.home-wk-days/.home-wk/
+    //     .weekly-12wyはDOMに存在しないためこの観点は検証しようがなく、(2)の検証を削除する。
     // ============================================================
-    console.log("[2] 12週サイクル Week N + 残り日数: ホーム/週次で一致し、selectedDateを動かしても不変");
-    await seed({ settings: { twelveWeekStartDate: "2026-07-13" }, view: "home" });
-    const daysLeftBefore = await page.locator(".home-wk-days").first().textContent();
-    const weekNBefore = await page.locator(".home-wk strong").first().textContent();
-    await page.click('[data-action="date-next"]');
-    await page.waitForTimeout(150);
-    await page.click('[data-action="date-next"]');
-    await page.waitForTimeout(150);
-    const daysLeftAfterNav = await page.locator(".home-wk-days").first().textContent();
-    const weekNAfterNav = await page.locator(".home-wk strong").first().textContent();
-    check("selectedDateを2日進めても残り日数は変わらない(todayISO基準)",
-      daysLeftBefore === daysLeftAfterNav, `${daysLeftBefore} vs ${daysLeftAfterNav}`);
-    // v147レビュー対応: Week N(旧: selectedDate基準)も残り日数と同じtodayISO()基準に統一した。
-    // 統一しないと、同じウィジェット内で「Week N」だけ動き「残りX日」は動かないという
-    // 新たな不整合を生むため、Week Nもここで不変であることを確認する。
-    check("selectedDateを2日進めてもWeek Nも変わらない(todayISO基準に統一)",
-      weekNBefore === weekNAfterNav, `${weekNBefore} vs ${weekNAfterNav}`);
-    await page.click('[data-action="today"]');
-    await page.waitForTimeout(150);
-
-    await page.click('[data-action="nav"][data-view="weekly"]');
-    await page.waitForTimeout(250);
-    const weeklyText = await page.locator(".weekly-12wy").first().textContent();
-    const weeklyWeekNText = await page.locator(".weekly-12wy b").first().textContent();
-    const homeNum = (daysLeftBefore.match(/残り\s*(\d+)\s*日/) || [])[1];
-    const weeklyNum = (weeklyText.match(/残り\s*(\d+)\s*日/) || [])[1];
-    check("ホームと週次の残り日数が同じ値になる(基準日統一)",
-      !!homeNum && homeNum === weeklyNum, `home=${daysLeftBefore} weekly=${weeklyText}`);
-    check("ホームと週次のWeek Nが同じ値になる(基準日統一。同一ウィジェット内の整合も兼ねる)",
-      !!weekNBefore && weekNBefore === weeklyWeekNText, `home=${weekNBefore} weekly=${weeklyWeekNText}`);
 
     // ============================================================
     // (3) 「今日の状態」1枚化

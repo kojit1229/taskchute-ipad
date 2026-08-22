@@ -41,6 +41,12 @@ function check(name, cond, extra = "") {
   now0.setHours(10, 0, 0, 0);
   const TODAY = isoDate(now0);
 
+  const hhmm = (min) => `${pad2(Math.floor(min / 60))}:${pad2(min % 60)}`;
+
+  // v70: 実ファイルを書く代わりに、この変数をfetchのモック応答として使う(null=404)。
+  //      page.route登録後は、シナリオごとにこの変数を書き換えるだけで良い(実ファイル操作なし)。
+  let aiPlanFixture = null;
+
   function makeBlockFixture({ id, date = TODAY, title, startMin = 9 * 60, minutes = 30, category = "",
     taskId = "", completed = false, leverageType, includeLeverageField = true }) {
     const b = {

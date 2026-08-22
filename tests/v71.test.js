@@ -112,8 +112,10 @@ function check(name, cond, extra = "") {
     await seed({ blocks: [], view: "home" });
     const navLabels = await page.locator(".nav-list .nav-button .nav-label").allTextContents();
     // v182 D2: mobileNav先頭差替え/moreGroups計画群へhome追加
+    // 2026-08-22: ルーティンタブは仕様削除済み(slim-spec.md §1-1。K承認2026-08-21)。
+    // 現行app.jsのnavItems(180-192行)に合わせて期待配列から除外する。
     const expectedOrder = [
-      "今日", "ホーム", "タスクシュート", "タイムライン", "WBS", "ルーティン",
+      "今日", "ホーム", "タスクシュート", "タイムライン", "WBS",
       "ジャーナル", "AIレポート", "やりたい", "ビジョン", "0秒思考", "設定"
     ];
     check("navItemsの並びが期待どおり", JSON.stringify(navLabels) === JSON.stringify(expectedOrder), JSON.stringify(navLabels));

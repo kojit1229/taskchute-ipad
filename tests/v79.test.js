@@ -89,6 +89,23 @@ function check(name, cond, extra = "") {
   }, KEY);
   check("再タップでrealized=falseに戻る(既存unrealizeWishの挙動)", afterUnrealize.realized === false, JSON.stringify(afterUnrealize));
 
+  // 2026-08-22 CI切り分け対応: 月間プランニングボード削除コミット(5f40200)で旧[3]の
+  // wish-board-target seedごと巻き添え削除されていた(タスク自体は削除されていないのに
+  // 参照だけ残った)。[5]は月間ボードとは無関係(詳細展開パネルの回帰+dueDate保存検証)の
+  // ため、ボードなしの最小seedだけ復元する。
+  await page.evaluate(({ KEY, wishProjectId }) => {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    s.tasks.push({
+      id: "wish-board-target", projectId: wishProjectId, parentTaskId: "", title: "詳細展開検証用Wish",
+      category: "", status: "todo", dueDate: "", description: "", lifeArea: "", motivation: "",
+      targetYear: null, targetMonth: null, realized: false, realizedDate: "", createdAt: "2026-01-01T09:00:00", updatedAt: "2026-01-01T09:00:00", deleted: false
+    });
+    s.currentView = "wish";
+    localStorage.setItem(KEY, JSON.stringify(s));
+  }, { KEY, wishProjectId });
+  await page.reload();
+  await page.waitForTimeout(500);
+
   console.log("[5] Wish詳細展開(編集パネル)の既存フィールド回帰 + 新規dueDate保存(Kフォローアップ)");
   await page.click('[data-action="open-wish"][data-id="wish-board-target"]');
   await page.waitForTimeout(300);

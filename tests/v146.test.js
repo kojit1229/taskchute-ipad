@@ -330,9 +330,8 @@ function check(name, cond, extra = "") {
     await page.click('[data-action="nav"][data-view="settings"]');
     await page.waitForTimeout(200);
     check("settingsでは出ない", await page.locator(".buffer-meter").count() === 0);
-    await page.click('[data-action="nav"][data-view="stats"]');
-    await page.waitForTimeout(200);
-    check("stats(計器盤)では出ない", await page.locator(".buffer-meter").count() === 0);
+    // 2026-08-22: 計器盤(stats)タブは仕様削除済み(slim-spec.md §1-1)。サイドバーに
+    // data-view="stats"のnavボタン自体が無くclickがtimeoutするため、このチェックは削除する。
     // 「その他」(more)はモバイル下部ナビ専用のIDでデスクトップ幅のサイドバーには無いため、
     // state.currentViewを直接注入して確認する(既存スイートと同じ手法)。
     await seed({ blocks: [], view: "more", settings: { dailyBufferMin: 100 } });

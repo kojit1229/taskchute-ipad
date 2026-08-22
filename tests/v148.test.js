@@ -54,6 +54,7 @@ function check(name, cond, extra = "") {
   try {
     const now0 = new Date();
     now0.setHours(10, 0, 0, 0);  // 朝(〜14時)固定の基準時刻
+    const TODAY = isoDate(now0);
     await page.clock.setFixedTime(now0);
     await page.goto(`http://localhost:${PORT}/`);
     await page.waitForTimeout(500);

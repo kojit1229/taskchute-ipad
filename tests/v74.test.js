@@ -5,8 +5,9 @@
 // (b) 1行言語化: カード上のテキスト欄+保存ボタンで taskchute/reading/reflections.json へ
 //     read-merge-write でpushする。他日のエントリを消さず、同じ日は上書きする
 // (c) 永続性: 保存後にリロードしても、reflections.json 経由で言語化がプリフィルされる
-// (d) 月次要約: taskchute/reading/summary_YYYY-MM.md があれば週次レビュータブに折りたたみ表示、
-//     404ならフェイルソフト(非表示)
+// (d) 月次要約: 廃止(2026-08-22)。週次レビュータブ自体が仕様削除済み
+//     (slim-spec.md §1-1)で表示先が無く、readingMonthlySummarySectionHTML()も
+//     呼び出し元を失っている(app.js側の整理漏れの可能性。詳細は別途報告)
 // (e) highlights.json が404/0冊でもホームがクラッシュしない
 // (f) normalizeState 後方互換: 読書機能は永続state項目を追加していないため、
 //     読書関連キーが一切無い旧stateでもクラッシュせず起動できる
@@ -230,28 +231,14 @@ function check(name, cond, extra = "") {
     check("リロード後、保存済みの言語化がプリフィルされる", reflVal === "書き直した言語化_v74", reflVal);
 
     // ============================================================
-    // (d) 月次要約: 404フェイルソフト → 表示ありの切り替え
+    // (d) 月次要約: 2026-08-22時点で「週次レビュー」タブ自体が仕様削除済み
+    //     (workbench/out/2026-08-21-taskchute-slim-spec/slim-spec.md §1-1)。
+    //     currentView="weekly" は現在どのビューにも一致せずhomeへフォールバックするため、
+    //     readingMonthlySummarySectionHTML() の呼び出し元(週次レビュー描画)自体が
+    //     app.js から失われている(関数定義は残るが呼び出しが無く到達不能。実装側の
+    //     整理漏れの可能性があるため別途報告する)。表示先タブが無い以上この観点は
+    //     検証しようがないため、(d)の2アサーションを削除する。
     // ============================================================
-    console.log("[5] summary_YYYY-MM.md が404の間は週次レビューに要約セクションが出ない");
-    fixtures.summaryMd = null;
-    await page.evaluate((KEY) => {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      s.currentView = "weekly";
-      localStorage.setItem(KEY, JSON.stringify(s));
-    }, KEY);
-    await page.reload();
-    await page.waitForTimeout(700);
-    let weeklyText = await page.locator("main").textContent();
-    check("要約が無い間は「今月の読書ふりかえり」セクションが出ない", !weeklyText.includes("今月の読書ふりかえり"));
-
-    console.log("[6] summary_YYYY-MM.md がある場合、週次レビューに折りたたみセクションとして中身が出る");
-    fixtures.summaryMd = `# ${MONTH}の読書の変化\n\n今月は言語化の習慣が定着してきた_v74マーカー`;
-    await page.reload();
-    await page.waitForTimeout(700);
-    weeklyText = await page.locator("main").textContent();
-    check("要約セクションの見出しが表示される", weeklyText.includes("今月の読書ふりかえり"), weeklyText.slice(0, 400));
-    check("要約本文(マーカー)が表示される(detailsが閉じていてもDOM上には存在する)",
-      weeklyText.includes("今月は言語化の習慣が定着してきた_v74マーカー"));
 
     // ============================================================
     // (e) highlights.json 404/0冊のフェイルソフト

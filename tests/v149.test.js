@@ -114,7 +114,6 @@ function check(name, cond, extra = "") {
     check("ホームタブでは「長い弧をたしかめる」が見える", await page.locator('details[data-fold-id="zone3"]').count() === 1);
     check("ホームタブでは「いま、これ」が消える(今日タブのカード)", await page.locator("#home-mit-anchor").count() === 0);
     check("ホームタブでは今日のタスクシュート(homezone-1)が消える", await page.locator("#homezone-1").count() === 0);
-    check("ホームタブでは12週サイクル(homezone-3)が消える", await page.locator("#homezone-3").count() === 0);
 
     console.log("[2b] 「今日」タブに戻す: ホームタブのカードが消え、今日タブのカードが戻る");
     await page.click('[data-action="home-tab"][data-tab="today"]');
@@ -128,9 +127,12 @@ function check(name, cond, extra = "") {
     // 限定)の一覧には載らない(homeTaskchute自体の絞り込み仕様であり本テストの対象外)。
     // ここではタブ切替でカード自体(#homezone-1)が再び存在することだけを確認する。
     check("今日タブに戻ると今日のタスクシュート(homezone-1)が見える", await page.locator("#homezone-1").count() === 1);
-    check("今日タブに戻ると12週サイクル(homezone-3)が見える(常時表示・非foldable)",
-      (await page.locator("#homezone-3").textContent()).includes("12週サイクル")
-      && await page.locator("#homezone-3 details[data-fold-id]").count() === 0);
+    // 2026-08-22 CI切り分け対応: #homezone-3(12週サイクルの常時表示カード)はv217で
+    // 仕様削除済み(slim-spec.md §1-1/§4-2、CHANGES_v217.md「ホーム12週サイクルカードも
+    // 仕様どおり削除」)。DOM上に該当要素が存在しないためこの観点は削除する。
+    // なお homeScoreboard() 内の「12週 今週」セルは data-id="homezone-3" のジャンプ先を
+    // 今も参照しており(app.js:3556)、タップしても着地先が存在しないダングリング参照に
+    // なっている可能性がある(実装側の欠陥候補。別途報告)。
 
     // ============================================================
     // (3) 信条・寿命はホームタブで既定open + セッション限定オーバーライド(必須6)
