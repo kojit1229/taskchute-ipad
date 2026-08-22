@@ -71,13 +71,16 @@
     },
     "today-feature": {
       "paths": [
-        "^src/features/today"
+        "^src/features/(?:today(?:-tower)?|coach)\\.js$"
       ],
       "patterns": [
-        "renderToday|todayCockpit|buildToday|flightPlan"
+        "renderToday|renderTodayTower|towerFlights|todaySkin|coachSummaryForDate|QUICK_MEALS"
       ],
       "suites": [
-        "today-core"
+        "today-core",
+        "tower-core",
+        "tower-model-core",
+        "coach-core"
       ]
     },
     "action-dispatch": {
@@ -140,7 +143,7 @@
         "^(?:styles\\.css|index\\.html)$"
       ],
       "patterns": [
-        "data-theme|resolveTheme|viewport|@media|responsive|cockpit"
+        "data-theme|resolveTheme|viewport|@media|responsive"
       ],
       "suites": [
         "today-core",

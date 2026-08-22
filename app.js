@@ -232,8 +232,8 @@ configureGithubSync({
 });
 configureToday({
   escapeHTML, todayISO, blocksForDate, minutesOf, timeFromDateTime,
-  localDateTimeToMs, resolveEstimateMin, computeProjectedEnd,
-  routineRate, getCategoryColor, clamp, isStaleBlock, deferralStats, render, renderDeferringForFocus,
+  localDateTimeToMs, resolveEstimateMin,
+  clamp, isStaleBlock, render, renderDeferringForFocus,
   renderCircularProgress, remainingText, remainingTextNormal,
   renderPomodoroInterruptControls,
   getCachedReadingHighlights: () => cachedReadingHighlights,
@@ -1508,9 +1508,8 @@ function normalizeState(value) {
   if (!["light", "dark", "cockpit", "auto"].includes(value.settings.theme)) {
     value.settings.theme = "dark";
   }
-  // v203: 今日タブの表示スキン。v211: 未設定・未知値の既定をtowerへ。保存済みの明示値は維持する
-  // (normalize自体は保存しない。未設定のまま残っていた端末は次回保存からtowerになる=既定切替の意図どおり)。
-  if (!["cockpit", "tower"].includes(value.settings.todaySkin)) value.settings.todaySkin = "tower";
+  // v221: cockpitスキン廃止。旧stateも含め、互換フィールドはtower固定へ正規化する。
+  value.settings.todaySkin = "tower";
   // v210: TOWERのモーション強度。未知値は通常へ。
   if (!["normal", "calm", "off"].includes(value.settings.towerMotion)) value.settings.towerMotion = "normal";
   if (typeof value.settings.autoArchive !== "boolean") value.settings.autoArchive = true;
@@ -4575,7 +4574,7 @@ async function tryFetchAiPlan(date, freeGaps, providedData = null) {
 
 function setReplanUi(kind, message) {
   _replanUi = { kind, message };
-  if (app?.dataset.view === "today") renderDeferringForFocus();
+  if (app?.dataset.view === "today" || app?.dataset.view === "settings") renderDeferringForFocus();
 }
 
 function stopReplanPolling() {
@@ -7894,6 +7893,7 @@ function renderSettingsCloudPanel(github) {
 }
 
 function renderSettingsMorningPlanPanel() {
+  const replanActive = _replanUi.kind === "sending" || _replanUi.kind === "pending";
   return `
     <h3>朝の一括プランニング</h3>
     <div class="muted" style="font-size:12px; line-height:1.6">
@@ -7901,6 +7901,8 @@ function renderSettingsMorningPlanPanel() {
       「🌅 朝プラン」は、繰越・WBS・MIT候補を空き時間へ機械的に前詰め配置する決定論ロジックで動作します
       (APIキーは不要)。AI活用は自宅PCのバッチ処理からのファイル連携(下記AIフィードバック欄)に限定しています。
     </div>
+    <button class="btn primary" data-action="today-replan" data-replan-button ${replanActive ? "disabled" : ""}>AI再プラン実行</button>
+    <div class="muted">${escapeHTML(_replanUi.message)}</div>
   `;
 }
 
@@ -7940,7 +7942,6 @@ function renderSettingsGuidedAccessPanel() {
 // 保存直後のrender()でhtml[data-theme]/meta[theme-color]も自動的に追従する。
 function renderSettingsThemePanel() {
   const theme = ["light", "dark", "cockpit", "auto"].includes(state.settings.theme) ? state.settings.theme : "dark";
-  const todaySkin = ["cockpit", "tower"].includes(state.settings.todaySkin) ? state.settings.todaySkin : "tower";
   const towerMotion = ["normal", "calm", "off"].includes(state.settings.towerMotion) ? state.settings.towerMotion : "normal";
   return `
     <h3>🌗 テーマ</h3>
@@ -7953,12 +7954,6 @@ function renderSettingsThemePanel() {
         <option value="light" ${theme === "light" ? "selected" : ""}>ライト</option>
         <option value="cockpit" ${theme === "cockpit" ? "selected" : ""}>コックピット</option>
         <option value="auto" ${theme === "auto" ? "selected" : ""}>OS追従</option>
-      </select>
-    </label>
-    <label>今日タブの表示
-      <select class="select" data-setting-field="todaySkin">
-        <option value="cockpit" ${todaySkin === "cockpit" ? "selected" : ""}>コックピット</option>
-        <option value="tower" ${todaySkin === "tower" ? "selected" : ""}>タワー</option>
       </select>
     </label>
     <label>タワーの動き

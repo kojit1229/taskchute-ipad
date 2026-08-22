@@ -52,7 +52,6 @@ function check(name, cond, extra = "") {
     await page.evaluate(({ KEY, arrivals, departures }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.currentView = "today";
-      s.settings.todaySkin = "tower";
       s.blocks = [...arrivals, ...departures];
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, arrivals, departures });
@@ -66,32 +65,39 @@ function check(name, cond, extra = "") {
     await page.waitForSelector('[data-action="gate-continue"]', { state: "attached" });
     await passGithubGate(page);
 
-    console.log("[1] todaySkin未設定・不正値はtowerへ正規化される");
+    console.log("[1] todaySkinの旧stateは値にかかわらずtowerへ正規化される");
     await seedSkin("__missing__");
     check("未設定では.today-towerが描画される", await page.locator(".today-tower").count() === 1);
-    check("未設定では.today-cockpitを描画しない", await page.locator(".today-cockpit").count() === 0);
     await page.locator('#sidebar [data-action="nav"][data-view="tasks"]').click();
     await page.waitForSelector('#app[data-view="tasks"]');
     check("未設定値は保存時にtowerへ正規化される", await storedSkin() === "tower", await storedSkin());
 
     await seedSkin("unknown-skin");
     check("不正値でも.today-towerが描画される", await page.locator(".today-tower").count() === 1);
-    check("不正値では.today-cockpitを描画しない", await page.locator(".today-cockpit").count() === 0);
     await page.locator('#sidebar [data-action="nav"][data-view="tasks"]').click();
     await page.waitForSelector('#app[data-view="tasks"]');
     check("不正値は保存時にtowerへ正規化される", await storedSkin() === "tower", await storedSkin());
 
-    console.log("[2] 設定UIでtowerへ切り替えるとTWRヘッダが描画される");
+    await seedSkin("cockpit");
+    check("旧cockpit値でも.today-towerが描画される", await page.locator(".today-tower").count() === 1);
+    check("旧cockpit値はtowerへ固定正規化される", await storedSkin() === "tower", await storedSkin());
+
+    console.log("[2] todaySkin設定UIは廃止され、設定にAI再プラン導線がある");
     await seedSkin("cockpit", "settings");
-    await page.evaluate(() => { const fold = document.querySelector('details[data-fold-id="settings-display"]'); if (fold) fold.open = true; });
-    const skinSelect = page.locator('select[data-setting-field="todaySkin"]');
-    check("今日タブの表示selectにtower選択肢がある", await skinSelect.locator('option[value="tower"]').count() === 1);
-    await skinSelect.selectOption("tower");
-    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).settings.todaySkin === "tower", KEY);
+    check("todaySkinの設定selectが存在しない", await page.locator('select[data-setting-field="todaySkin"]').count() === 0);
+    await page.evaluate(() => { const fold = document.querySelector('details[data-fold-id="settings-daily"]'); if (fold) fold.open = true; });
+    check("設定にAI再プラン実行ボタンがある", await page.locator('[data-action="today-replan"]', { hasText: "AI再プラン実行" }).count() === 1);
+    await page.locator('[data-action="today-replan"]', { hasText: "AI再プラン実行" }).click();
+    // v221: seed済みトークンがあるためトークン未設定案内は出ない。requestReplanが呼ばれた証拠として
+    // _replanUiのフィードバック(送信中/排他エラー/通信エラーのいずれか)が設定画面の状態行に出ることを待つ
+    await page.waitForFunction(() => {
+      const spans = Array.from(document.querySelectorAll("#main .muted"));
+      return spans.some((el) => /再プラン|依頼|送信|下書き|処理中|失敗|エラー/.test(el.textContent || ""));
+    }, null, { timeout: 15000 });
+    check("AI再プラン実行ボタンが既存requestReplanを呼びフィードバックが表示される", true);
     await page.locator('#sidebar [data-action="nav"][data-view="today"]').click();
     await page.waitForSelector(".today-tower");
-    check("tower選択で.today-towerが描画される", await page.locator(".today-tower").count() === 1);
-    check("tower選択では.today-cockpitを描画しない", await page.locator(".today-cockpit").count() === 0);
+    check("今日タブは常に.today-towerを描画する", await page.locator(".today-tower").count() === 1);
     const firstLeft = (await page.locator("#towerDayLeft").textContent()) || "";
     check("#towerDayLeftはHH:MM:SS形式", /^\d{2}:\d{2}:\d{2}$/.test(firstLeft), firstLeft);
 
@@ -101,17 +107,6 @@ function check(name, cond, extra = "") {
     const secondLeft = (await page.locator("#towerDayLeft").textContent()) || "";
     const toSeconds = (text) => text.split(":").reduce((sum, part) => sum * 60 + Number(part), 0);
     check("1秒進行で#towerDayLeftが1秒減る", toSeconds(firstLeft) - toSeconds(secondLeft) === 1, `${firstLeft} -> ${secondLeft}`);
-
-    console.log("[4] cockpitへ戻すと既存DOM契約が復元される");
-    await page.locator('#sidebar [data-action="nav"][data-view="settings"]').click();
-    await page.waitForSelector('#app[data-view="settings"]');
-    await page.evaluate(() => { const fold = document.querySelector('details[data-fold-id="settings-display"]'); if (fold) fold.open = true; });
-    await page.locator('select[data-setting-field="todaySkin"]').selectOption("cockpit");
-    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).settings.todaySkin === "cockpit", KEY);
-    await page.locator('#sidebar [data-action="nav"][data-view="today"]').click();
-    await page.waitForSelector(".today-now-focus");
-    check("cockpit復帰で.today-cockpitが描画される", await page.locator(".today-cockpit").count() === 1);
-    check("cockpit復帰で既存.today-now-focusが復元される", await page.locator(".today-now-focus").count() === 1);
 
     console.log("[5] TOWERの色トークン・実描画色に赤系を使わない(D7)");
     await seedSkin("tower");
@@ -304,7 +299,6 @@ function check(name, cond, extra = "") {
       await page.evaluate(({ KEY, blocks, meals, dailyKcal }) => {
         const s = JSON.parse(localStorage.getItem(KEY));
         s.currentView = "today";
-        s.settings.todaySkin = "tower";
         s.blocks = blocks;
         s.coachLog = { meals, settings: { dailyKcal } };
         localStorage.setItem(KEY, JSON.stringify(s));
@@ -581,7 +575,6 @@ function check(name, cond, extra = "") {
       await page.evaluate(({ KEY, blocks, zeroThinking, pomodoro }) => {
         const s = JSON.parse(localStorage.getItem(KEY));
         s.currentView = "today";
-        s.settings.todaySkin = "tower";
         s.blocks = blocks;
         s.pomodoro = pomodoro
           ? { ...s.pomodoro, ...pomodoro }
@@ -843,8 +836,7 @@ function check(name, cond, extra = "") {
     await page.locator('#sidebar [data-action="nav"][data-view="settings"]').click();
     await page.waitForSelector('#app[data-view="settings"]');
     await page.evaluate(() => { const fold = document.querySelector('details[data-fold-id="settings-display"]'); if (fold) fold.open = true; });
-    const towerLabel = await page.locator('select[data-setting-field="todaySkin"] option[value="tower"]').textContent();
-    check("todaySkinのtower文言に開発中を含まない", !towerLabel.includes("開発中"), towerLabel);
+    check("todaySkin設定UIは後半の設定再訪でも復活しない", await page.locator('select[data-setting-field="todaySkin"]').count() === 0);
     await page.locator('#sidebar [data-action="nav"][data-view="today"]').click();
     await page.waitForSelector(".tower-annex .today-pomodoro-stage");
     await page.setViewportSize({ width: 1280, height: 800 });

@@ -1,28 +1,25 @@
-// src/features/today.js — v182「今日」コックピット(P1〜P4)、v183(P5〜P7)。
+// src/features/today.js — v221: 今日タブをTOWERへ一本化し、共有ANNEX機能だけを保持する。
 // stateはlive bindingで読み取り、app.js側の汎用ヘルパーはconfigureToday(deps)で注入する。
 // tickerは表示だけを差分更新し、日跨ぎ時だけ全再描画する。state変更・saveStateは行わない。
 
 import { state } from "../state/store.js";
 import { registerActions } from "../ui/actions.js";
-import { configureCoach, renderCoach, coachSummaryForDate, QUICK_MEALS } from "./coach.js";
+import { configureCoach, coachSummaryForDate, QUICK_MEALS } from "./coach.js";
 import { configureTodayTower, renderTodayTower, updateTodayTowerTick } from "./today-tower.js";
 import {
   runningBlockOf as coreRunningBlockOf, queueBlocksOf as coreQueueBlocksOf,
-  routineBandsOf as coreRoutineBandsOf, undoneRoutineBlocksOf as coreUndoneRoutineBlocksOf,
-  twelveWeekMinutes as coreTwelveWeekMinutes, projectedInfo as coreProjectedInfo,
-  flightPosition as coreFlightPosition, towerFlights as coreTowerFlights
+  towerFlights as coreTowerFlights
 } from "../core/today-model.js";
 
 let escapeHTML, todayISO, blocksForDate, minutesOf, timeFromDateTime;
-let localDateTimeToMs, resolveEstimateMin, computeProjectedEnd;
-let routineRate, getCategoryColor, clamp, isStaleBlock, deferralStats, render, renderDeferringForFocus;
+let localDateTimeToMs, resolveEstimateMin;
+let clamp, isStaleBlock, render, renderDeferringForFocus;
 let renderCircularProgress, remainingText, remainingTextNormal;
 let renderPomodoroInterruptControls, getCachedReadingHighlights;
 let beginTodayZeroWrite, saveTodayZeroEntry, discardTodayZeroWrite, getTodayZeroWriteState;
 let homeSyncAlertBanner, renderReplanControlHTML, requestReplan;
 let saveState;
 let todayTickerId = null;
-let todayHeavyTickCount = 0;
 let todayRenderedDateISO = null;
 let todayKindleIndex = 0;
 let todayKindleAdvanceAtMs = 0;
@@ -35,15 +32,15 @@ let todayZeroDraft = "";
 function configureToday(deps) {
   ({
     escapeHTML, todayISO, blocksForDate, minutesOf, timeFromDateTime,
-    localDateTimeToMs, resolveEstimateMin, computeProjectedEnd,
-    routineRate, getCategoryColor, clamp, isStaleBlock, deferralStats, render, renderDeferringForFocus,
+    localDateTimeToMs, resolveEstimateMin,
+    clamp, isStaleBlock, render, renderDeferringForFocus,
     renderCircularProgress, remainingText, remainingTextNormal,
     renderPomodoroInterruptControls, getCachedReadingHighlights,
     beginTodayZeroWrite, saveTodayZeroEntry, discardTodayZeroWrite, getTodayZeroWriteState,
     homeSyncAlertBanner, renderReplanControlHTML, requestReplan,
     saveState
   } = deps);
-  configureCoach({ escapeHTML, todayISO, saveState, panelHeading, renderCircularProgress });
+  configureCoach({ todayISO, saveState });
   configureTodayTower({
     escapeHTML, todayISO, homeSyncAlertBanner, blocksForDate, towerFlights,
     runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, timeFromDateTime, minutesOf, clamp, QUICK_MEALS,
@@ -133,102 +130,14 @@ function queueBlocksOf(blocks) {
   return coreQueueBlocksOf(blocks, { minutesOf, isStaleBlock });
 }
 
-function routineBandsOf(blocks) {
-  return coreRoutineBandsOf(blocks, { minutesOf });
-}
-
-function undoneRoutineBlocksOf(blocks) {
-  return coreUndoneRoutineBlocksOf(blocks);
-}
-
-function twelveWeekMinutes(blocks, nowMs = Date.now()) {
-  return coreTwelveWeekMinutes(blocks, state.projects, state.tasks, { localDateTimeToMs }, nowMs);
-}
-
-function formatDuration(minutes) {
-  const value = Math.max(0, Math.round(minutes || 0));
-  const hours = Math.floor(value / 60);
-  return hours ? `${hours}時間${value % 60}分` : `${value}分`;
-}
-
 function formatElapsed(seconds) {
   const safe = Math.max(0, Math.floor(seconds || 0));
   const minutes = Math.floor(safe / 60);
   return `${String(minutes).padStart(2, "0")}:${String(safe % 60).padStart(2, "0")}`;
 }
 
-// C1(v192): 見積超過は警告(is-warn/is-late)ではなく中立の継続表示にする。
-// サンプル(cockpit-today-fusion-sample.html JS 889-897)準拠の文言。
-function nowEstimateLabel(over, estimate) {
-  return over ? `見積 ${estimate}分 超過 — 完了まで計測継続` : `経過 / 見積 ${estimate}分`;
-}
-
-function projectedInfo(blocks, now = new Date()) {
-  return coreProjectedInfo(blocks, { computeProjectedEnd, todayISO, minutesOf }, now);
-}
-
-function projectForBlock(block) {
-  const task = (state.tasks || []).find((item) => item.id === block?.taskId);
-  if (!task) return null;
-  return (state.projects || []).find((project) =>
-    project.id === task.projectId && !project.deleted && project.kind === "normal"
-    && project.status === "active" && project.twelveWeekStartDate) || null;
-}
-
-function sectionInfo(now = new Date()) {
-  const minute = now.getHours() * 60 + now.getMinutes();
-  if (minute < 9 * 60) return { label: "朝", remaining: 9 * 60 - minute };
-  if (minute < 12 * 60) return { label: "午前", remaining: 12 * 60 - minute };
-  if (minute < 18 * 60) return { label: "午後", remaining: 18 * 60 - minute };
-  return { label: "夜", remaining: Math.max(0, 24 * 60 - minute) };
-}
-
-function categoryChip(block) {
-  if (!block?.category) return "";
-  const color = getCategoryColor(block.category);
-  return `<span class="today-chip" style="--today-category:${escapeHTML(color)}">${escapeHTML(block.category)}</span>`;
-}
-
 function panelHeading(en, ja, source) {
   return `<h2 class="today-panel-title">${en}<span>${ja}</span><b>${source}</b></h2>`;
-}
-
-function renderNowFocus(blocks, queue) {
-  const running = runningBlockOf(blocks);
-  if (!running) {
-    const next = queue[0];
-    return `<section class="today-panel today-now-focus today-span-2">
-      ${panelHeading("NOW FOCUS", "いまの1手", "READY")}
-      <div class="today-now-empty">
-        <div><strong>${next ? escapeHTML(next.title) : "今日のBlockはありません"}</strong>
-          <span>${next ? "次の1手を開始できます" : "タイムラインで今日のBlockを追加してください"}</span></div>
-        ${next ? `<button class="btn primary" data-action="now-start" data-id="${escapeHTML(next.id)}">▶ 開始</button>` : ""}
-      </div>
-    </section>`;
-  }
-  const startMs = localDateTimeToMs(running.actualStartAt);
-  const elapsedSec = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
-  const estimate = resolveEstimateMin(running);
-  const ratio = estimate > 0 ? elapsedSec / (estimate * 60) : 0;
-  const over = ratio >= 1;
-  const after = queue[0];
-  const goal = projectForBlock(running);
-  return `<section class="today-panel today-now-focus today-span-2">
-    ${panelHeading("NOW FOCUS", "いまの1手", "LIVE")}
-    <div class="today-now-label"><i></i>実行中 — これだけをやる</div>
-    <div class="today-now-task" data-action="edit-block" data-id="${escapeHTML(running.id)}">${escapeHTML(running.title)}</div>
-    <div class="today-now-meta">${categoryChip(running)}
-      <span class="today-chip">開始 ${escapeHTML(timeFromDateTime(running.actualStartAt))}</span>
-      <span class="today-chip">見積 ${estimate}分</span></div>
-    <div class="today-now-elapsed"><strong id="todayNowElapsed">${formatElapsed(elapsedSec)}</strong><span id="todayNowEstimate">${nowEstimateLabel(over, estimate)}</span></div>
-    <div class="today-progress"><i id="todayNowProgress" class="${over ? "over" : ""}" style="width:${clamp(ratio * 100, 0, 100)}%"></i></div>
-    <div class="today-now-actions">
-      <button class="btn green" data-action="complete-block-with-actual" data-id="${escapeHTML(running.id)}">■ 完了</button>
-      <button class="btn" data-action="now-conveyor-complete" data-id="${escapeHTML(running.id)}">▶ 次へ</button>
-    </div>
-    <div class="today-now-next">この後 → <em>${after ? escapeHTML(after.title) : "キューなし"}</em>
-      ${goal ? ` / 12WY連動中: <em>${escapeHTML(goal.title)}</em>` : ""}</div>
-  </section>`;
 }
 
 function todayPomodoroDisplay(nowMs = Date.now()) {
@@ -447,160 +356,16 @@ function renderTodayZero() {
   </section>`;
 }
 
-function renderNextQueue(queue) {
-  return `<section class="today-panel today-next-queue today-span-2">
-    ${panelHeading("NEXT QUEUE", "この後の発進順", "PLAN")}
-    <div class="today-queue">${queue.length ? queue.map((block, index) => `
-      <div class="today-queue-row ${index === 0 ? "is-first" : ""} ${index >= 2 ? "is-dim" : ""}">
-        <span>#${index + 1}</span><time>${escapeHTML(timeFromDateTime(block.plannedStartAt) || "未定")}</time>
-        <strong data-action="edit-block" data-id="${escapeHTML(block.id)}">${escapeHTML(block.title)}</strong>
-        <small>${resolveEstimateMin(block)}分</small>
-        ${index === 0 ? `<button data-action="now-start" data-id="${escapeHTML(block.id)}">▶ 繰上げ開始</button>` : ""}
-      </div>`).join("") : `<div class="today-empty">未着手のBlockはありません</div>`}</div>
-  </section>`;
-}
-
-// v200(B1): 先送り予備軍の表示文言。裁かない・赤くしない(既存の中立表現に合わせる)。
-function deferredHeadText(pending) {
-  return pending === 0 ? "先送り0 🎉" : `先送り予備軍 ${pending}`;
-}
-function deferredGaugeText(pending) {
-  return pending === 0 ? "0件 🎉" : `${pending}件`;
-}
-
-function renderDayGauge(blocks) {
-  const done = blocks.filter((b) => b.completed).length;
-  const total = blocks.length;
-  const pct = total ? Math.round(done / total * 100) : 0;
-  const projected = projectedInfo(blocks);
-  const deferred = deferralStats(blocks);
-  return `<section class="today-panel today-day-gauge">
-    ${panelHeading("DAY GAUGE", "今日の計器", "LIVE")}
-    <div class="today-gauge-count"><strong>${done}</strong><span>/ ${total} Block完了</span></div>
-    <div class="today-progress"><i style="width:${pct}%"></i></div>
-    <div class="today-progress-cap"><span>0%</span><b>${pct}%</b><span>100%</span></div>
-    <div class="today-kv">
-      <div><span>着地予定</span><strong id="todayProjectedLanding">${projected.text}</strong><small id="todayProjectedComparison">${projected.comparison}</small></div>
-      <div><span>残り見積</span><strong id="todayRemainingEstimate">${formatDuration(projected.remainingMin)}</strong></div>
-      <div><span>12WY 今日</span><strong id="todayTwelveWeek">${formatDuration(twelveWeekMinutes(blocks))}</strong><small>投資済</small></div>
-      <div><span>先送り予備軍</span><strong id="todayDeferredCount">${deferredGaugeText(deferred.pending)}</strong><small>着手済 ${deferred.started} / ${deferred.total}</small></div>
-    </div>
-  </section>`;
-}
-
-function renderGateRoutinePanel(blocks) {
-  const summary = routineRate(blocks);
-  const bands = routineBandsOf(blocks);
-  const undone = undoneRoutineBlocksOf(blocks);
-  return `<section class="today-panel today-routine" data-routine-done="${summary.done}" data-routine-total="${summary.total}">
-    ${panelHeading("ROUTINE", "ルーティン消化", "LIVE")}
-    <div class="today-routine-list">${bands.map((band) => {
-      const pct = band.total ? Math.round(band.done / band.total * 100) : 0;
-      return `<div class="today-routine-row"><span>${band.label}</span>
-        <div><i style="width:${pct}%"></i></div><b>${band.done} / ${band.total}</b></div>`;
-    }).join("")}</div>
-    <div class="today-routine-total">合計 完了${summary.done}件・対象${summary.total}件(${summary.pct}%)</div>
-    ${undone.length ? `<div class="today-routine-undone">
-      <div class="today-routine-undone-label">未実施 — タップで完了</div>
-      <div class="today-routine-undone-chips">${undone.map((b) => {
-        // v191レビュー反映(修正3): 実行中(actualStartAtあり・actualEndAtなし)はチップに残しつつ視覚区別する。
-        // v191レビュー反映(修正7・2周目): タップは now-conveyor-complete(app.js既存アクション)を使う。
-        // state.pomodoro.blockId と一致すればcompletePomodoro()(Block完了+ポモ後始末を一括)、
-        // 一致しなければ従来どおりtoggleBlock(id)に委譲される(新規ロジックは追加していない)。
-        const running = Boolean(b.actualStartAt && !b.actualEndAt);
-        return `<button type="button" class="today-chip today-routine-chip${running ? " is-running" : ""}" data-action="now-conveyor-complete" data-id="${escapeHTML(b.id)}">${running ? "▶ " : ""}${escapeHTML(b.title)}</button>`;
-      }).join("")}</div>
-    </div>` : ""}
-  </section>`;
-}
-
-function flightPosition(minute) {
-  return coreFlightPosition(minute, { clamp });
-}
-
 // v202: TOWER描画層へconfigureToday済みの時刻ヘルパーを中継する。
 function towerFlights(blocks, nowMin) {
   return coreTowerFlights(blocks, nowMin, { minutesOf });
 }
 
-function renderFlightPlan(blocks) {
-  // v191(C2): ルーティンはFLIGHT PLANの帯に出さない(ROUTINEパネルへ一本化)。
-  const candidates = blocks.filter((b) => b.plannedStartAt && b.category !== "ルーティン").map((block, index) => {
-    const start = minutesOf(block.plannedStartAt);
-    const rawEnd = block.plannedEndAt ? minutesOf(block.plannedEndAt) : start + resolveEstimateMin(block);
-    const end = rawEnd < start ? 24 * 60 : rawEnd;
-    if (end <= 6 * 60 || start >= 24 * 60) return null;
-    return { block, index, start: Math.max(6 * 60, start), end: Math.min(24 * 60, Math.max(start + 1, end)) };
-  }).filter(Boolean).sort((a, b) => a.start - b.start || a.index - b.index);
-  const laneEnds = [];
-  const plannedTop = 24;
-  const planned = candidates.map(({ block, start, end }) => {
-    let lane = laneEnds.findIndex((laneEnd) => laneEnd <= start);
-    if (lane === -1) lane = laneEnds.length;
-    laneEnds[lane] = end;
-    const left = flightPosition(start);
-    const right = flightPosition(end);
-    const status = block.completed ? "is-done" : block.actualStartAt && !block.actualEndAt ? "is-now" : "is-todo";
-    return `<button class="today-flight-block ${status}" style="left:${left}%;width:${Math.max(0.8, right - left)}%;top:${plannedTop + lane * 33}px"
-      data-action="edit-block" data-id="${escapeHTML(block.id)}" title="${escapeHTML(block.title)}">${escapeHTML(block.title)}</button>`;
-  });
-  const now = new Date();
-  const nowPos = flightPosition(now.getHours() * 60 + now.getMinutes());
-  const grid = [6, 9, 12, 15, 18, 21, 24].map((hour) =>
-    `<i class="today-flight-hour ${hour === 24 ? "is-end" : ""}" style="left:${flightPosition(hour * 60)}%"><span>${String(hour).padStart(2, "0")}</span></i>`).join("");
-  const trackHeight = 72 + Math.max(0, laneEnds.length - 1) * 33;
-  return `<section class="today-panel today-flight-plan today-span-2">
-    ${panelHeading("FLIGHT PLAN", "今日の航路 — 緑=完了 / 青=実行中 / 灰=これから", "PLAN")}
-    <div class="today-flight-track" style="--today-flight-track-height:${trackHeight}px">${grid}${planned.join("")}
-      <i class="today-flight-now" id="todayFlightNow" style="left:${nowPos}%"></i>
-      ${planned.length ? "" : `<span class="today-flight-empty">予定Blockはありません</span>`}
-    </div>
-    <div class="today-flight-cap"><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div>
-  </section>`;
-}
-
 function renderToday() {
   const dateISO = todayISO();
   todayRenderedDateISO = dateISO;
-  if (state.settings.todaySkin === "tower") {
-    startTodayTicker();
-    return renderTodayTower();
-  }
-  const blocks = blocksForDate(dateISO);
-  const queue = queueBlocksOf(blocks);
-  const deferred = deferralStats(blocks);
-  const done = blocks.filter((b) => b.completed).length;
-  const progress = blocks.length ? Math.round(done / blocks.length * 100) : 0;
-  const projected = projectedInfo(blocks);
-  const section = sectionInfo();
-  const now = new Date();
   startTodayTicker();
-  // v183: 同期停止の赤帯バナーはhome専用だったが、起動ビューがtodayになったため
-  //       「1日中開きっぱなし」の本ビューにも出す(出さないと同期停止に気づけない。CI v134で検出)
-  return `<div class="today-cockpit">
-    ${homeSyncAlertBanner()}
-    <header class="today-header">
-      <div><div class="today-eyebrow">TASKCHUTE DECK</div><h1>今日 <span>管制室</span></h1></div>
-      <div class="today-head-stats">PROGRESS <b id="todayHeaderProgress">${done}/${blocks.length} (${progress}%)</b> /
-        着地 <b id="todayHeaderLanding">${projected.text}</b> /
-        <span id="todayHeaderSection">${section.label} 残り ${section.remaining}分</span> /
-        <span id="todayHeaderDeferred">${deferredHeadText(deferred.pending)}</span></div>
-      <div class="today-clock"><strong id="todayClock">${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}</strong>
-        <span id="todayDate">${dateISO} (${["日", "月", "火", "水", "木", "金", "土"][now.getDay()]})</span></div>
-    </header>
-    <div class="today-deck">
-      ${renderNowFocus(blocks, queue)}
-      ${renderTodayPomodoro(blocks, queue)}
-      ${renderCoach()}
-      ${renderNextQueue(queue)}
-      ${renderDayGauge(blocks)}
-      ${renderGateRoutinePanel(blocks)}
-      ${renderReplanControlHTML()}
-      ${renderFlightPlan(blocks)}
-      ${renderTodayKindle()}
-      ${renderTodayZero()}
-    </div>
-  </div>`;
+  return renderTodayTower();
 }
 
 function updateTodayPomodoroTick() {
@@ -650,60 +415,10 @@ function updateTodayTick() {
     updateTodayKindleAutoAdvance(Date.now());
     return;
   }
-  const clock = document.getElementById("todayClock");
-  if (!clock) return;
-  const now = new Date();
-  clock.textContent = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
-  const blocks = blocksForDate(dateISO);
-  const running = runningBlockOf(blocks);
-  const elapsed = document.getElementById("todayNowElapsed");
-  const bar = document.getElementById("todayNowProgress");
-  if (running && elapsed) {
-    const seconds = Math.max(0, Math.floor((Date.now() - localDateTimeToMs(running.actualStartAt)) / 1000));
-    const estimate = resolveEstimateMin(running);
-    const ratio = estimate > 0 ? seconds / (estimate * 60) : 0;
-    const over = ratio >= 1;
-    elapsed.textContent = formatElapsed(seconds);
-    if (bar) {
-      bar.style.width = `${clamp(ratio * 100, 0, 100)}%`;
-      bar.classList.toggle("over", over);
-    }
-    const estimateEl = document.getElementById("todayNowEstimate");
-    if (estimateEl) estimateEl.textContent = nowEstimateLabel(over, estimate);
-  }
-  const runHeavyUpdates = todayHeavyTickCount === 0;
-  todayHeavyTickCount = (todayHeavyTickCount + 1) % 30;
-  if (runHeavyUpdates) {
-    const projected = projectedInfo(blocks, now);
-    const landing = document.getElementById("todayProjectedLanding");
-    const comparison = document.getElementById("todayProjectedComparison");
-    const remaining = document.getElementById("todayRemainingEstimate");
-    const headerLanding = document.getElementById("todayHeaderLanding");
-    if (landing) landing.textContent = projected.text;
-    if (comparison) comparison.textContent = projected.comparison;
-    if (remaining) remaining.textContent = formatDuration(projected.remainingMin);
-    if (headerLanding) headerLanding.textContent = projected.text;
-    const twelveWeek = document.getElementById("todayTwelveWeek");
-    if (twelveWeek) twelveWeek.textContent = formatDuration(twelveWeekMinutes(blocks));
-    const deferredStats = deferralStats(blocks);
-    const deferredCount = document.getElementById("todayDeferredCount");
-    const headerDeferred = document.getElementById("todayHeaderDeferred");
-    if (deferredCount) deferredCount.textContent = deferredGaugeText(deferredStats.pending);
-    if (headerDeferred) headerDeferred.textContent = deferredHeadText(deferredStats.pending);
-  }
-  const section = document.getElementById("todayHeaderSection");
-  const sectionValue = sectionInfo(now);
-  if (section) section.textContent = `${sectionValue.label} 残り ${sectionValue.remaining}分`;
-  const nowLine = document.getElementById("todayFlightNow");
-  if (nowLine) nowLine.style.left = `${flightPosition(now.getHours() * 60 + now.getMinutes())}%`;
-  updateTodayPomodoroTick();
-  updateTodayZeroTick();
-  updateTodayKindleAutoAdvance(Date.now());
 }
 
 function startTodayTicker() {
   if (todayTickerId !== null || typeof document === "undefined") return;
-  todayHeavyTickCount = 0;
   todayTickerId = setInterval(updateTodayTick, 1000);
 }
 
@@ -721,7 +436,6 @@ function isTodayTickerRunning() {
 
 export {
   configureToday, renderToday, updateTodayTick, startTodayTicker, stopTodayTicker,
-  isTodayTickerRunning, runningBlockOf, queueBlocksOf, routineBandsOf,
-  undoneRoutineBlocksOf, twelveWeekMinutes, projectedInfo, flightPosition,
-  towerFlights, deterministicReadingDeck, todayZeroDeck
+  isTodayTickerRunning, runningBlockOf, queueBlocksOf, towerFlights,
+  deterministicReadingDeck, todayZeroDeck
 };

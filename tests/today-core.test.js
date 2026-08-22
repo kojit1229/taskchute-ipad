@@ -1,39 +1,6 @@
-// tests/today-core.test.js — 「今日」コックピットビュー(B1 = P1〜P4)の仕様ベースE2Eスイート。
-// 設計の正: ../taskchute-notes/designs/v169-today-cockpit.md §4(ビュー仕様・ライブ更新原則)と
-// §7 P1〜P4行の完了条件。実装(別担当が並行作業中)とは独立に、以下のDOM契約だけを前提に書いた:
-//   - ビューid "today"(render()が #app の data-view に反映する既存パターン)
-//   - ナビ遷移は既存 data-action="nav" data-view="today"(サイドバー .nav-button / #bottomNav button)
-//   - パネルroot: .today-now-focus / .today-next-queue / .today-day-gauge / .today-routine / .today-flight-plan
-//   - ヘッダ時計: #todayClock(今日ビュー内のみ = #main配下。ビューを離れるとDOMごと消える)
-//   - NOW FOCUSの完了ボタンは既存アクション data-action="complete-block-with-actual" の実名再利用
-//     (既存挙動 = 実績登録モーダル(actualEntry)が開き、modal-save で actualEndAt + completed が付く)
-//
-// 検証観点(§7 P1〜P4完了条件から):
-//   [1] 新規state(seedState)の起動ビューが today(D3)+ 5パネル・時計が描画される
-//   [2] 既存stateは最後のビュー復元が壊れない(currentView復元の後方互換)
-//   [3] normalizeState が未知の currentView を "home" へ補完する(D3・§8-4)
-//   [4] サイドバーから today へ遷移できる
-//   [5] bottom-nav(モバイル幅)から today へ遷移できる(D2)
-//   [5b] home滞在時はbottom-navの「その他」がactiveになる(D2)
-//   [6] #todayClock が毎秒tickし、固定時刻の前進へ追随する(§4ライブ更新原則)
-//   [7] ビューを離れると ticker が停止する(離脱後に #todayClock 相当のDOM更新が起きない)+ 再入場で再開
-//   [8] NOW FOCUS: 実行中Block(actualStartAt && !actualEndAt)のタイトル表示・複数あれば最新開始・経過が進む
-//   [9] NOW FOCUS: 完了ボタン → 既存実績登録モーダル保存で block に actualEndAt が付き completed になる
-//   [9b] modal-saveの全再描画後もtickerが時計・経過表示を更新し続ける(C1)
-//   [10] NEXT QUEUE: 未着手Blockが plannedStartAt→orderIndex 順に最大5件(着手済み・完了は出ない)
-//   [11] DAY GAUGE: 完了n/総数が state からの期待値と一致(deleted除外)
-//   [12] ROUTINE: 時間帯別 done/total の合計が routineRate 相当(カテゴリ"ルーティン"のcompleted集計)と一致(D5・A7)
-//   [13] FLIGHT PLAN: 当日Block 0件でもエラーなく5パネルが描画される
-//   [13b] 深夜跨ぎBlockが当日24:00までの幅で描画される
-//   [13c] 同時刻開始Blockが別レーンに配置され、両方の編集モーダルを開ける
-//   [14] cockpit CSS変数(P1先行定義)が light/dark テーマの見た目に影響しない(D10・§6)
-//
-// 作法: v161.test.js / v150.test.js / timeline-tick-wiring.test.js と同じ
-// (ブラウザ操作 + serviceWorkers:"block" + localStorage直接seed + page.clock.setFixedTime)。
-// 日時はすべてISO文字列リテラルで組み立てる(new Date("文字列") 禁止、§8-2)。
-// 新しい固定waitは原則使わず selector / waitForFunction で成立を待つ。例外は[7]の
-// 「tickerが止まっている」負の検証のみ(ticker周期1秒そのものが仕様(§4)のため、
-// 2周期分を実時間で待って「更新が起きない」ことを確認する。CLAUDE.mdの例外条件に該当)。
+// tests/today-core.test.js — 今日TOWERビューと共有ANNEX機能の仕様ベースE2Eスイート。
+// cockpit専用5パネルはv221で削除。TOWERの描画・ブロック実行・AI/テーマ契約とGATEを検証する。
+// 日時はISO文字列を組み立て、文字列をnew Dateへ渡さない。
 const fs = require("fs");
 const path = require("path");
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY } = require("./helpers");
@@ -106,7 +73,6 @@ function check(name, cond, extra = "") {
       s.sleep.logs = {};
       s.condition = s.condition || { logs: {} };
       s.condition.logs = {};
-      s.settings.todaySkin = "cockpit";
       Object.assign(s.settings, settings);
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, blocks, view, settings, TODAY });
@@ -126,8 +92,6 @@ function check(name, cond, extra = "") {
   async function panelText(selector) {
     return page.evaluate((sel) => document.querySelector(sel)?.textContent ?? null, selector);
   }
-
-  const PANELS = [".today-now-focus", ".today-next-queue", ".today-day-gauge", ".today-routine", ".today-flight-plan"];
 
   try {
     await page.clock.setFixedTime(now0);
@@ -172,7 +136,7 @@ function check(name, cond, extra = "") {
     await page.locator('#sidebar .nav-button[data-action="nav"][data-view="today"]').click();
     await waitView("today");
     check("クリックで today ビューが表示される", (await currentDataView()) === "today");
-    check("遷移後にNOW FOCUSパネルが存在する", await page.locator(".today-now-focus").count() === 1);
+    check("遷移後にTOWERが存在する", await page.locator(".today-tower").count() === 1);
     check("サイドバーの today ボタンが active になる",
       await page.locator('#sidebar .nav-button[data-view="today"].active').count() === 1);
 
@@ -196,26 +160,26 @@ function check(name, cond, extra = "") {
     await page.setViewportSize({ width: 1100, height: 1400 });
 
     // ============================================================
-    // [6] #todayClock が毎秒tickし、固定時刻の前進へ追随する
+    // [6] #towerClock が毎秒tickし、固定時刻の前進へ追随する
     // ============================================================
-    console.log("[6] #todayClock が tick で進む(page.clockの固定時刻を前進させ、reload・クリック無しで表示が追随する)");
+    console.log("[6] #towerClock が tick で進む(page.clockの固定時刻を前進させ、reload・クリック無しで表示が追随する)");
     await page.clock.setFixedTime(fixedTime(12, 0, 0));
     await seed({ view: "today" });
-    await page.waitForFunction(() => (document.getElementById("todayClock")?.textContent || "").includes("12:00"));
+    await page.waitForFunction(() => (document.getElementById("towerClock")?.textContent || "").includes("12:00"));
     check("固定時刻12:00:00で時計に '12:00' が表示される", true);
     // 固定時刻を12:01:05へ前進(実タイマーは動き続けるため、1秒周期のtickerが新時刻を拾って書き換える)
     await page.clock.setFixedTime(fixedTime(12, 1, 5));
-    await page.waitForFunction(() => (document.getElementById("todayClock")?.textContent || "").includes("12:01"));
+    await page.waitForFunction(() => (document.getElementById("towerClock")?.textContent || "").includes("12:01"));
     check("固定時刻の前進(+65秒)が reload なしで時計表示へ反映される(tickerが生きている証拠)", true);
 
     // ============================================================
     // [7] ビューを離れると ticker が停止する + 再入場で再開する
     // ============================================================
-    console.log("[7] today を離れると ticker が停止し(おとり#todayClockが書き換えられない)、再入場で再開する");
+    console.log("[7] today を離れると ticker が停止し(おとり#towerClockが書き換えられない)、再入場で再開する");
     await page.locator('#sidebar .nav-button[data-action="nav"][data-view="tasks"]').click();
     await waitView("tasks");
-    check("ビュー離脱で #todayClock がDOMから消える(時計はtodayビュー内のみ)",
-      await page.locator("#todayClock").count() === 0);
+    check("ビュー離脱で #towerClock がDOMから消える(時計はtodayビュー内のみ)",
+      await page.locator("#towerClock").count() === 0);
     // 離脱直後のtickが自分でclearIntervalする猶予として、まずticker 1周期分を実時間で待つ
     // (固定wait例外: ticker周期1秒そのものが仕様(§4)。この待機と次の待機のみ)
     await page.waitForTimeout(1300);
@@ -223,226 +187,22 @@ function check(name, cond, extra = "") {
     // 書き換えられてしまうはず。2周期分待っても書き換わらなければ停止している。
     await page.evaluate(() => {
       const decoy = document.createElement("span");
-      decoy.id = "todayClock";
+      decoy.id = "towerClock";
       decoy.textContent = "DECOY-v-today";
       document.getElementById("main").appendChild(decoy);
     });
     await page.clock.setFixedTime(fixedTime(12, 3, 0));
     await page.waitForTimeout(2300);  // 固定wait例外(上記コメント参照): 負の検証はticker 2周期分の実時間経過が必要
-    check("離脱後は ticker が停止している(おとり#todayClockが2周期経っても書き換えられない)",
-      (await page.evaluate(() => document.getElementById("todayClock")?.textContent)) === "DECOY-v-today");
-    await page.evaluate(() => document.getElementById("todayClock")?.remove());
+    check("離脱後は ticker が停止している(おとり#towerClockが2周期経っても書き換えられない)",
+      (await page.evaluate(() => document.getElementById("towerClock")?.textContent)) === "DECOY-v-today");
+    await page.evaluate(() => document.getElementById("towerClock")?.remove());
     // 再入場: tickerが再開し、新しい固定時刻(12:03)が表示される
     await page.locator('#sidebar .nav-button[data-action="nav"][data-view="today"]').click();
     await waitView("today");
-    await page.waitForFunction(() => (document.getElementById("todayClock")?.textContent || "").includes("12:03"));
+    await page.waitForFunction(() => (document.getElementById("towerClock")?.textContent || "").includes("12:03"));
     check("再入場で ticker が再開し現在の固定時刻(12:03)を表示する", true);
-
-    // ============================================================
-    // [8] NOW FOCUS: 実行中Blockのタイトル表示・最新開始優先・経過が進む
-    // ============================================================
-    console.log("[8] NOW FOCUS: 実行中Block(actualStartAt && !actualEndAt)のタイトルが表示され、複数あれば最新開始、経過表示が進む");
-    await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    await seed({
-      view: "today",
-      blocks: [
-        block("nf-early", { title: "NF-EARLY-古い実行中", actualStartAt: at("09:00"), plannedStartAt: at("09:00"), plannedEndAt: at("10:00"), estimateMin: 60 }),
-        block("nf-late", { title: "NF-LATE-最新実行中", actualStartAt: at("10:30"), plannedStartAt: at("10:30"), plannedEndAt: at("11:30"), estimateMin: 60 }),
-        block("nf-queued", { title: "NF-QUEUED-未着手", plannedStartAt: at("14:00"), plannedEndAt: at("14:30") })
-      ]
-    });
-    await page.waitForSelector(".today-now-focus", { state: "attached" });
-    const nfText = await panelText(".today-now-focus");
-    check("実行中Blockのうち最新開始(10:30開始)のタイトルが NOW FOCUS に表示される",
-      (nfText || "").includes("NF-LATE-最新実行中"), nfText);
-    check("より古い実行中Block(09:00開始)は NOW FOCUS の対象にならない",
-      !(nfText || "").includes("NF-EARLY-古い実行中"), nfText);
-    // 経過タイマー: 固定時刻を+65秒進めると、reload無しでパネル内テキスト(経過表示)が変わる
-    await page.clock.setFixedTime(fixedTime(12, 1, 5));
-    await page.waitForFunction((prev) => {
-      const el = document.querySelector(".today-now-focus");
-      return el && el.textContent !== prev;
-    }, nfText);
-    check("固定時刻+65秒で NOW FOCUS の経過表示が reload なしで更新される(毎秒tick)", true);
-
-    // ============================================================
-    // [9] NOW FOCUS: 完了ボタン → 既存実績登録モーダル保存で actualEndAt + completed
-    // ============================================================
-    console.log("[9] NOW FOCUS の完了ボタン(data-action='complete-block-with-actual')で既存アクションと同結果になる");
-    check("NOW FOCUS 内に complete-block-with-actual の完了ボタンがある(既存アクションの実名再利用)",
-      await page.locator('.today-now-focus [data-action="complete-block-with-actual"]').count() >= 1);
-    await page.locator('.today-now-focus [data-action="complete-block-with-actual"]').first().click();
-    // 既存挙動: 実績登録モーダル(actualEntry)が開く。保存で actualEndAt + completed が付く。
-    await page.waitForSelector(".modal-card", { state: "attached" });
-    check("既存の実績登録モーダルが開く(新規ビジネスロジックを作らない検証)",
-      await page.locator('.modal-title:has-text("実績を登録")').count() === 1);
-    await page.locator('[data-action="modal-save"]').click();
-    await page.waitForFunction((KEY) => {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      const b = s.blocks.find((x) => x.id === "nf-late");
-      return b && b.completed === true && !!b.actualEndAt;
-    }, KEY);
-    const stAfterComplete = await stateNow();
-    const nfLate = stAfterComplete.blocks.find((b) => b.id === "nf-late");
-    check("保存後 block に actualEndAt が付く", !!nfLate.actualEndAt, JSON.stringify(nfLate));
-    check("保存後 block が completed になる(既存 saveActualEntryFromModal と同結果)", nfLate.completed === true);
-    console.log("[9b] modal-saveの全再描画後もtickerが新DOMの時計・経過表示を更新し続ける(C1)");
-    await page.waitForSelector("#todayNowElapsed", { state: "attached" });
-    const elapsedAfterSave = await page.locator("#todayNowElapsed").textContent();
-    await page.clock.setFixedTime(fixedTime(12, 2, 10));
-    await page.waitForFunction((previousElapsed) => {
-      const clock = document.getElementById("todayClock");
-      const elapsed = document.getElementById("todayNowElapsed");
-      return (clock?.textContent || "").includes("12:02") && elapsed?.textContent !== previousElapsed;
-    }, elapsedAfterSave);
-    check("modal-save後も時計が固定時刻12:02へ進む(tickerが新DOMを毎tick再取得)", true);
-    check("modal-save後もNOW FOCUSの経過表示が再び進む",
-      (await page.locator("#todayNowElapsed").textContent()) !== elapsedAfterSave);
-
-    // ============================================================
-    // [10] NEXT QUEUE: plannedStartAt→orderIndex 順に最大5件
-    // ============================================================
-    console.log("[10] NEXT QUEUE: 未着手Blockが plannedStartAt→orderIndex 順に最大5件表示され、着手済み・完了は出ない");
-    await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    await seed({
-      view: "today",
-      blocks: [
-        // 意図的に順不同でseedする(表示側のソートを検証するため)
-        block("q-e", { title: "QN-E-1200", plannedStartAt: at("12:00"), plannedEndAt: at("12:30") }),
-        block("q-a", { title: "QN-A-0900", plannedStartAt: at("09:00"), plannedEndAt: at("09:30") }),
-        block("q-d", { title: "QN-D-1100b", plannedStartAt: at("11:00"), plannedEndAt: at("11:30"), orderIndex: 2 }),
-        block("q-c", { title: "QN-C-1100a", plannedStartAt: at("11:00"), plannedEndAt: at("11:30"), orderIndex: 1 }),
-        block("q-b", { title: "QN-B-1000", plannedStartAt: at("10:00"), plannedEndAt: at("10:30") }),
-        block("q-f", { title: "QN-F-1300-6件目", plannedStartAt: at("13:00"), plannedEndAt: at("13:30") }),
-        block("q-g", { title: "QN-G-1400-7件目", plannedStartAt: at("14:00"), plannedEndAt: at("14:30") }),
-        block("q-run", { title: "QN-RUN-実行中", plannedStartAt: at("08:00"), actualStartAt: at("08:00") }),
-        block("q-done", { title: "QN-DONE-完了済み", plannedStartAt: at("07:00"), actualStartAt: at("07:00"), actualEndAt: at("07:30"), completed: true })
-      ]
-    });
-    await page.waitForSelector(".today-next-queue", { state: "attached" });
-    const queueText = await panelText(".today-next-queue");
-    const idx = (t) => (queueText || "").indexOf(t);
-    check("先頭5件(QN-A/B/C/D/E)がすべて表示される",
-      idx("QN-A-0900") >= 0 && idx("QN-B-1000") >= 0 && idx("QN-C-1100a") >= 0 && idx("QN-D-1100b") >= 0 && idx("QN-E-1200") >= 0,
-      queueText);
-    check("plannedStartAt昇順で並ぶ(09:00 → 10:00 → 11:00 → 12:00)",
-      idx("QN-A-0900") < idx("QN-B-1000") && idx("QN-B-1000") < idx("QN-C-1100a") && idx("QN-D-1100b") < idx("QN-E-1200"));
-    check("plannedStartAt同時刻(11:00)は orderIndex 順(1→2)で並ぶ",
-      idx("QN-C-1100a") < idx("QN-D-1100b"));
-    check("6件目以降(QN-F/QN-G)は表示されない(最大5件)",
-      idx("QN-F-1300-6件目") === -1 && idx("QN-G-1400-7件目") === -1, queueText);
-    check("実行中Block(actualStartAtあり)は NEXT QUEUE に出ない", idx("QN-RUN-実行中") === -1);
-    check("完了Blockは NEXT QUEUE に出ない", idx("QN-DONE-完了済み") === -1);
-
-    // ============================================================
-    // [11] DAY GAUGE: 完了n/総数が state からの期待値と一致
-    // ============================================================
-    console.log("[11] DAY GAUGE: 完了n/総数が state から計算した期待値(2/5、deleted除外)と一致する");
-    await seed({
-      view: "today",
-      blocks: [
-        block("g-1", { title: "GAUGE-1", completed: true, actualStartAt: at("08:00"), actualEndAt: at("08:30") }),
-        block("g-2", { title: "GAUGE-2", completed: true, actualStartAt: at("09:00"), actualEndAt: at("09:30") }),
-        block("g-3", { title: "GAUGE-3", plannedStartAt: at("13:00"), plannedEndAt: at("13:30") }),
-        block("g-4", { title: "GAUGE-4", plannedStartAt: at("14:00"), plannedEndAt: at("14:30") }),
-        block("g-5", { title: "GAUGE-5", plannedStartAt: at("15:00"), plannedEndAt: at("15:30") }),
-        // deleted は総数にも完了数にも入らない(入ると 3/6 になり下の一致判定が落ちる)
-        block("g-del", { title: "GAUGE-DEL", completed: true, deleted: true })
-      ]
-    });
-    await page.waitForSelector(".today-day-gauge", { state: "attached" });
-    const gaugeText = await panelText(".today-day-gauge");
-    check("DAY GAUGE に 完了2/総数5 が表示される(deleted除外)",
-      /2\s*\/\s*5/.test(gaugeText || ""), gaugeText);
-    check("deletedを含む誤集計(3/6)になっていない", !/3\s*\/\s*6/.test(gaugeText || ""), gaugeText);
-
-    // ============================================================
-    // [12] ROUTINE: 時間帯別 done/total の合計が routineRate 相当と一致
-    // ============================================================
-    console.log("[12] ROUTINE: 時間帯別 done/total の合計が routineRate(カテゴリ'ルーティン'のcompleted集計)= 2/4 と一致する");
-    await seed({
-      view: "today",
-      blocks: [
-        // ルーティン4件(朝・午前・午後・夜に分散)、うち完了2件 → routineRate = 2/4
-        block("r-1", { title: "RT-朝", category: "ルーティン", plannedStartAt: at("07:00"), plannedEndAt: at("07:15"), completed: true, actualStartAt: at("07:00"), actualEndAt: at("07:15") }),
-        block("r-2", { title: "RT-午前", category: "ルーティン", plannedStartAt: at("10:00"), plannedEndAt: at("10:15") }),
-        block("r-3", { title: "RT-午後", category: "ルーティン", plannedStartAt: at("14:00"), plannedEndAt: at("14:15"), completed: true, actualStartAt: at("14:00"), actualEndAt: at("14:15") }),
-        block("r-4", { title: "RT-夜", category: "ルーティン", plannedStartAt: at("21:00"), plannedEndAt: at("21:15") }),
-        // ルーティン以外の完了Blockは分子にも分母にも入らない(入ると合計が 3/5 になり判定が落ちる)
-        block("r-x", { title: "RT外-完了仕事", category: "仕事", completed: true, actualStartAt: at("11:00"), actualEndAt: at("11:30") })
-      ]
-    });
-    await page.waitForSelector(".today-routine", { state: "attached" });
-    const routineText = await panelText(".today-routine");
-    // パネル内の「n/m」形式(時間帯別 done/total)を全部拾って合計し、routineRate(2/4)と突合する。
-    // 前提: .today-routine 内の n/m 表記は時間帯別 done/total のみ(§4-4の完了条件を機械検証するための契約)。
-    const pairs = [...(routineText || "").matchAll(/(\d+)\s*\/\s*(\d+)/g)];
-    const doneSum = pairs.reduce((a, m) => a + Number(m[1]), 0);
-    const totalSum = pairs.reduce((a, m) => a + Number(m[2]), 0);
-    check("ROUTINE パネルに時間帯別 done/total が1つ以上表示される", pairs.length >= 1, routineText);
-    check("全時間帯の done 合計が routineRate の done(2)と一致する", doneSum === 2, `doneSum=${doneSum} text=${routineText}`);
-    check("全時間帯の total 合計が routineRate の total(4)と一致する(ルーティン以外・deletedを混ぜない)",
-      totalSum === 4, `totalSum=${totalSum} text=${routineText}`);
-
-    // ============================================================
-    // [13] FLIGHT PLAN: 当日Block 0件でもエラーなく描画される
-    // ============================================================
-    console.log("[13] 当日Block 0件でも today ビュー(FLIGHT PLAN含む5パネル)がエラーなく描画される");
-    const failuresBeforeEmpty = failures;  // この区間のpageerror検出用(page.on('pageerror')が加算する)
-    await seed({ view: "today", blocks: [] });
-    await page.waitForSelector(".today-flight-plan", { state: "attached" });
-    for (const sel of PANELS) {
-      check(`0件日でも ${sel} が描画される`, await page.locator(sel).count() === 1);
-    }
-    check("0件日の描画で pageerror が発生しない", failures === failuresBeforeEmpty);
-
-    // ============================================================
-    // [13b] FLIGHT PLAN: 深夜跨ぎBlockを当日24:00でクリップする
-    // ============================================================
-    console.log("[13b] 深夜跨ぎBlock(23:30→翌00:30)は当日24:00までの幅で描画される");
-    await seed({
-      view: "today",
-      blocks: [
-        block("flight-overnight", {
-          title: "FLIGHT-OVERNIGHT",
-          plannedStartAt: at("23:30"),
-          plannedEndAt: `${TOMORROW}T00:30:00`
-        })
-      ]
-    });
-    const overnight = page.locator('.today-flight-block[data-id="flight-overnight"]');
-    await overnight.waitFor({ state: "attached" });
-    const overnightWidth = await overnight.evaluate((el) => parseFloat(el.style.width));
-    const expectedOvernightWidth = 30 / (18 * 60) * 100;
-    check("23:30→翌00:30の帯幅が23:30→24:00の30分相当になる",
-      Math.abs(overnightWidth - expectedOvernightWidth) < 0.05,
-      `width=${overnightWidth} expected=${expectedOvernightWidth}`);
-
-    // ============================================================
-    // [13c] FLIGHT PLAN: 同時刻開始Blockを別レーンへ配置する
-    // ============================================================
-    console.log("[13c] 同時刻開始の2Blockは別レーンに配置され、両方ともタップで編集できる");
-    await seed({
-      view: "today",
-      blocks: [
-        block("flight-lane-a", { title: "FLIGHT-LANE-A", plannedStartAt: at("10:00"), plannedEndAt: at("11:00") }),
-        block("flight-lane-b", { title: "FLIGHT-LANE-B", plannedStartAt: at("10:00"), plannedEndAt: at("11:00") })
-      ]
-    });
-    const laneBlocks = page.locator('.today-flight-block[data-id^="flight-lane-"]');
-    await laneBlocks.first().waitFor({ state: "attached" });
-    const laneTops = await laneBlocks.evaluateAll((els) => els.map((el) => el.style.top));
-    check("同時刻開始の2Blockが異なるtop(別レーン)に配置される",
-      laneTops.length === 2 && new Set(laneTops).size === 2, JSON.stringify(laneTops));
-    for (const id of ["flight-lane-a", "flight-lane-b"]) {
-      await page.locator(`.today-flight-block[data-id="${id}"]`).click();
-      await page.waitForSelector(".modal-card", { state: "attached" });
-      check(`${id}をタップすると既存Block編集モーダルが開く`, await page.locator(".modal-card").count() === 1);
-      await page.locator('.modal-card [data-action="modal-close"]').first().click();
-      await page.waitForSelector(".modal-card", { state: "detached" });
-    }
-
-    // ============================================================
+    // v221: cockpit専用5パネルの描画検証は実装削除に合わせて撤去。
+    // TOWERのNOW LANDING/ARRIVALS/GATEはtower-coreで継続検証する。
     // [14] cockpit CSS変数の先行定義が light/dark の見た目に影響しない(D10・§6)
     // ============================================================
     console.log("[14] cockpit CSS変数(P1先行定義)が存在し、light/dark テーマの見た目(body背景色)は従来値のまま");
@@ -455,7 +215,7 @@ function check(name, cond, extra = "") {
     const darkBg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
     check("darkテーマの body 背景が従来値 #111216 = rgb(17, 18, 22) のまま(cockpit変数が漏れて汚染していない)",
       darkBg === "rgb(17, 18, 22)", darkBg);
-    check("darkテーマでも today ビューのパネルが描画される", await page.locator(".today-now-focus").count() === 1);
+    check("darkテーマでも today TOWERが描画される", await page.locator(".today-tower").count() === 1);
 
     await seed({ view: "today", settings: { theme: "light" } });
     await page.waitForSelector('html[data-theme="light"]', { state: "attached" });
@@ -503,7 +263,6 @@ function check(name, cond, extra = "") {
           ? { ...s.pomodoro, ...pomodoro }
           : { ...s.pomodoro, running: false, blockId: "", startedAt: "", endsAt: "", mode: "focus" };
         if (zeroThinking) s.zeroThinking = { themes: [], entries: [], groups: [], suggestedThemes: [], ...zeroThinking };
-        s.settings.todaySkin = "cockpit";
         Object.assign(s.settings, settings);
         localStorage.setItem(KEY, JSON.stringify(s));
       }, { KEY, blocks, view, settings, pomodoro, zeroThinking, TODAY });
@@ -678,11 +437,11 @@ function check(name, cond, extra = "") {
     await respHighlights404;
     // 404応答後に最低1tick経過してから不在を断定する(固定waitではなく時計表示の前進で待つ)
     await page.clock.setFixedTime(fixedTime(12, 1, 0));
-    await page.waitForFunction(() => (document.getElementById("todayClock")?.textContent || "").includes("12:01"));
+    await page.waitForFunction(() => (document.getElementById("towerClock")?.textContent || "").includes("12:01"));
     check("highlights未取得(404)では .today-kindle が存在しない(§4-6: 未取得/空でパネル非表示)",
       await page.locator(".today-kindle").count() === 0);
-    check("404でも他のパネル(NOW FOCUS)は通常描画される(フェイルソフト)",
-      await page.locator(".today-now-focus").count() === 1);
+    check("404でもTOWER本体は通常描画される(フェイルソフト)",
+      await page.locator(".today-tower").count() === 1);
     kindleFixtures.status = 200;
 
     // ============================================================
@@ -959,7 +718,7 @@ function check(name, cond, extra = "") {
     check("未知テーマ('neon')は data-theme='dark'(既定)へフォールバックする(前提B4-3)", true);
     check("フォールバック後も today ビューが白画面にならない(#main非空)",
       await page.evaluate(() => document.getElementById("main").innerHTML.trim().length > 0));
-    check("フォールバック後もパネル(NOW FOCUS)が描画される", await page.locator(".today-now-focus").count() === 1);
+    check("フォールバック後もTOWERが描画される", await page.locator(".today-tower").count() === 1);
     // 保存契機を踏むと不正値がstorage上も既定値へ正規化される(不正値の永続化を許さない)
     await page.locator('#sidebar .nav-button[data-action="nav"][data-view="tasks"]').click();
     await waitView("tasks");
@@ -1859,65 +1618,7 @@ function check(name, cond, extra = "") {
     check("パネル表示の前後で tasks/blocks/settings のJSONが不変(提案の適用は手動のみ。前提B7-5)",
       b7SnapA === b7SnapB);
 
-    // ============================================================
-    // ==== C2: ルーティン分離(v191) [60]〜[65] ====
-    // 委譲仕様1〜7: NOW FOCUS/ポモドーロ/NEXT QUEUE/FLIGHT PLANからルーティン系タスクを除外し、
-    // ROUTINEパネルに「未実施ルーティンのチップ列(タップで完了&消える)」を追加する。
-    // ============================================================
-
-    // ============================================================
-    // [60] C2仕様1: NOW FOCUS はルーティンBlockが実行中でも対象にしない
-    // ============================================================
-    console.log("[60] C2仕様1: NOW FOCUSは実行中ルーティンBlockを対象にせず、フォールバック(次の1手)へ回る");
-    await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    await seed({
-      view: "today",
-      blocks: [
-        block("c2-routine-run", { title: "C2-ROUTINE-RUN-実行中ルーティン", category: "ルーティン", actualStartAt: at("11:00"), plannedStartAt: at("11:00"), plannedEndAt: at("11:15") }),
-        block("c2-next", { title: "C2-NEXT-未着手", plannedStartAt: at("13:00"), plannedEndAt: at("13:30") })
-      ]
-    });
-    await page.waitForSelector(".today-now-focus", { state: "attached" });
-    const nfRoutineText = await panelText(".today-now-focus");
-    check("実行中ルーティンBlockのタイトルはNOW FOCUSに出ない",
-      !(nfRoutineText || "").includes("C2-ROUTINE-RUN-実行中ルーティン"), nfRoutineText);
-    check("実行中ルーティンしかない場合、NOW FOCUSは非実行(READY)表示になり次の未着手Blockを提示する",
-      (nfRoutineText || "").includes("C2-NEXT-未着手"), nfRoutineText);
-
-    // ============================================================
-    // [61] C2仕様2: NEXT QUEUE はルーティンBlockを出さない
-    // ============================================================
-    console.log("[61] C2仕様2: NEXT QUEUEは未着手ルーティンBlockを対象にしない");
-    await seed({
-      view: "today",
-      blocks: [
-        block("c2-q-routine", { title: "C2-Q-ROUTINE-未着手ルーティン", category: "ルーティン", plannedStartAt: at("09:00"), plannedEndAt: at("09:15") }),
-        block("c2-q-normal", { title: "C2-Q-NORMAL-未着手通常", plannedStartAt: at("10:00"), plannedEndAt: at("10:30") })
-      ]
-    });
-    await page.waitForSelector(".today-next-queue", { state: "attached" });
-    const c2QueueText = await panelText(".today-next-queue");
-    check("未着手ルーティンBlockはNEXT QUEUEに出ない",
-      !(c2QueueText || "").includes("C2-Q-ROUTINE-未着手ルーティン"), c2QueueText);
-    check("通常の未着手Blockは引き続きNEXT QUEUEに出る(対照)",
-      (c2QueueText || "").includes("C2-Q-NORMAL-未着手通常"), c2QueueText);
-
-    // ============================================================
-    // [62] C2仕様3: FLIGHT PLAN はルーティンBlockの帯を描画しない
-    // ============================================================
-    console.log("[62] C2仕様3: FLIGHT PLANはルーティンBlockの帯を出さない(TimeTree外部予定帯は対象外・現状維持)");
-    await seed({
-      view: "today",
-      blocks: [
-        block("c2-flight-routine", { title: "C2-FLIGHT-ROUTINE", category: "ルーティン", plannedStartAt: at("08:00"), plannedEndAt: at("08:15") }),
-        block("c2-flight-normal", { title: "C2-FLIGHT-NORMAL", plannedStartAt: at("09:00"), plannedEndAt: at("09:30") })
-      ]
-    });
-    await page.waitForSelector(".today-flight-plan", { state: "attached" });
-    check("ルーティンBlockのFLIGHT PLAN帯(.today-flight-block)が描画されない",
-      await page.locator('.today-flight-block[data-id="c2-flight-routine"]').count() === 0);
-    check("通常BlockのFLIGHT PLAN帯は引き続き描画される(対照)",
-      await page.locator('.today-flight-block[data-id="c2-flight-normal"]').count() === 1);
+    // v221: cockpit専用NOW FOCUS/NEXT QUEUE/FLIGHT PLAN検証は実装削除に合わせて撤去。
 
     // ============================================================
     // [63] C2仕様4: ポモドーロパネルは実行中ポモがルーティンBlockに紐づく場合タスク名を出さない
@@ -1938,369 +1639,9 @@ function check(name, cond, extra = "") {
     check("タイマー自体は継続表示される(停止導線 stop-pomodoro が引き続き出る)",
       await page.locator('.today-pomodoro [data-action="stop-pomodoro"]').count() >= 1);
 
-    // ============================================================
-    // [64] C2仕様5: ROUTINEパネルに未実施ルーティンのチップ列(タップで完了→消える、確認なし)
-    // ============================================================
-    console.log("[64] C2仕様5: ROUTINEパネルに未実施ルーティンのチップが出て、タップで即完了して消える(確認なし)");
-    await seed({
-      view: "today",
-      blocks: [
-        block("c2-chip-1", { title: "C2-CHIP-未実施1", category: "ルーティン", plannedStartAt: at("07:00"), plannedEndAt: at("07:15") }),
-        block("c2-chip-2", { title: "C2-CHIP-未実施2", category: "ルーティン", plannedStartAt: at("10:00"), plannedEndAt: at("10:15") }),
-        block("c2-chip-done", { title: "C2-CHIP-完了済み", category: "ルーティン", completed: true, plannedStartAt: at("08:00"), plannedEndAt: at("08:15"), actualStartAt: at("08:00"), actualEndAt: at("08:15") })
-      ]
-    });
-    await page.waitForSelector(".today-routine-undone", { state: "attached" });
-    const undoneLabelText = await panelText(".today-routine-undone-label");
-    check("見出し「未実施 — タップで完了」が表示される",
-      (undoneLabelText || "").includes("未実施") && (undoneLabelText || "").includes("タップで完了"), undoneLabelText);
-    check("未完了ルーティンのみチップとして2件出る(完了済みは出ない)",
-      await page.locator(".today-routine-undone-chips .today-routine-chip").count() === 2);
-    const chipsText = await panelText(".today-routine-undone-chips");
-    check("未実施チップに完了済みルーティンのタイトルは含まれない", !(chipsText || "").includes("C2-CHIP-完了済み"), chipsText);
-    // レビュー修正7(2周目)で data-action を toggle-block → now-conveyor-complete(app.js既存)へ
-    // 変更した(ポモ実行中ルーティンをチップ完了させたときstate.pomodoroが残る穴の修正)。
-    // now-conveyor-complete は pomodoro.blockId 不一致なら従来どおり toggleBlock(id) に委譲するため、
-    // このケース(ポモ未連動)の完了結果自体は変わらない。
-    check("チップは既存アクション data-action='now-conveyor-complete' を再利用する(新規ビジネスロジックを作らない)",
-      await page.locator('.today-routine-undone-chips [data-action="now-conveyor-complete"][data-id="c2-chip-1"]').count() === 1);
-    await page.locator('.today-routine-undone-chips [data-action="now-conveyor-complete"][data-id="c2-chip-1"]').click();
-    check("タップ直後に確認ダイアログ(.modal-card)は出ない(確認なし即完了)",
-      await page.locator(".modal-card").count() === 0);
-    await page.waitForFunction((KEY) => {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      const b = s.blocks.find((x) => x.id === "c2-chip-1");
-      return b && b.completed === true;
-    }, KEY);
-    await page.waitForFunction(() =>
-      !document.querySelector('.today-routine-undone-chips [data-id="c2-chip-1"]'));
-    check("完了後は再描画でチップ自体が消える(タップで完了&消える)",
-      await page.locator('.today-routine-undone-chips [data-id="c2-chip-1"]').count() === 0);
-    check("残り1件の未実施チップはまだ表示される",
-      await page.locator(".today-routine-undone-chips .today-routine-chip").count() === 1);
+    // v221: cockpit専用ROUTINE検証は撤去し、GATE検証はtower-coreへ集約。
 
-    console.log("[64b] C2仕様5: 未実施ルーティンが0件ならチップ列自体を出さない");
-    await seed({
-      view: "today",
-      blocks: [
-        block("c2-allcomplete", { title: "C2-ALL-完了", category: "ルーティン", completed: true, plannedStartAt: at("07:00"), plannedEndAt: at("07:15"), actualStartAt: at("07:00"), actualEndAt: at("07:15") })
-      ]
-    });
-    await page.waitForSelector(".today-routine", { state: "attached" });
-    check("未実施が0件のとき .today-routine-undone 自体が描画されない(チップ列を出さない)",
-      await page.locator(".today-routine-undone").count() === 0);
-
-    // ============================================================
-    // [64c] レビュー修正2: 未実施チップは旧版oneTapルーティンBlockを対象にしない
-    // ============================================================
-    console.log("[64c] レビュー修正2: 旧版oneTapルーティンBlockはチップに出ない(誤完了防止)");
-    await seed({
-      view: "today",
-      blocks: [
-        block("c2-chip-onetap", { title: "C2-CHIP-ONETAP-旧版記録", category: "ルーティン", oneTap: true, plannedStartAt: at("06:00"), plannedEndAt: at("06:15") }),
-        block("c2-chip-normal2", { title: "C2-CHIP-通常未実施", category: "ルーティン", plannedStartAt: at("07:30"), plannedEndAt: at("07:45") })
-      ]
-    });
-    await page.waitForSelector(".today-routine-undone", { state: "attached" });
-    check("oneTapルーティンBlockは未実施チップとして出ない",
-      await page.locator('.today-routine-undone-chips [data-id="c2-chip-onetap"]').count() === 0);
-    check("非oneTapの未実施ルーティンは引き続きチップに出る(対照)",
-      await page.locator('.today-routine-undone-chips [data-id="c2-chip-normal2"]').count() === 1);
-    check("未実施チップは1件だけ(oneTap分は混入しない)",
-      await page.locator(".today-routine-undone-chips .today-routine-chip").count() === 1);
-
-    // ============================================================
-    // [64d] レビュー修正3: 実行中ルーティンはチップに残り、is-running(視覚区別)が付く
-    // ============================================================
-    console.log("[64d] レビュー修正3: 実行中ルーティンはチップ列に残り、is-runningクラス+「▶ 」接頭辞で視覚区別される");
-    await seed({
-      view: "today",
-      blocks: [
-        block("c2-chip-running", { title: "C2-CHIP-実行中ルーティン", category: "ルーティン", actualStartAt: at("11:40"), plannedStartAt: at("11:40"), plannedEndAt: at("11:55") }),
-        block("c2-chip-idle", { title: "C2-CHIP-未着手ルーティン", category: "ルーティン", plannedStartAt: at("08:00"), plannedEndAt: at("08:15") })
-      ]
-    });
-    await page.waitForSelector(".today-routine-undone", { state: "attached" });
-    check("実行中ルーティンも未実施チップ列に残る(K仕様: タップで正しい終了時刻のまま完了できる)",
-      await page.locator('.today-routine-undone-chips [data-id="c2-chip-running"]').count() === 1);
-    check("実行中ルーティンのチップに is-running クラスが付く",
-      await page.locator('.today-routine-undone-chips [data-id="c2-chip-running"].is-running').count() === 1);
-    const runningChipText = await page.locator('.today-routine-undone-chips [data-id="c2-chip-running"]').textContent();
-    check("実行中ルーティンのチップタイトルに「▶ 」接頭辞が付く",
-      (runningChipText || "").trim().startsWith("▶"), runningChipText);
-    check("未着手ルーティンのチップには is-running が付かない(対照)",
-      await page.locator('.today-routine-undone-chips [data-id="c2-chip-idle"].is-running').count() === 0);
-    const idleChipText = await page.locator('.today-routine-undone-chips [data-id="c2-chip-idle"]').textContent();
-    check("未着手ルーティンのチップタイトルには「▶ 」が付かない(対照)",
-      !(idleChipText || "").trim().startsWith("▶"), idleChipText);
-    // レビュー修正7(2周目): このケースはポモがc2-chip-runningに連動していないため、
-    // now-conveyor-completeはtoggleBlock(id)に委譲され、確認なしで正しい終了時刻のまま完了する。
-    check("実行中ルーティンチップをタップすると now-conveyor-complete で正しい終了時刻のまま完了する(確認なし)",
-      await page.locator('.today-routine-undone-chips [data-id="c2-chip-running"][data-action="now-conveyor-complete"]').count() === 1);
-    await page.locator('.today-routine-undone-chips [data-id="c2-chip-running"]').click();
-    await page.waitForFunction((KEY) => {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      const b = s.blocks.find((x) => x.id === "c2-chip-running");
-      return !!b && b.completed === true && !!b.actualEndAt;
-    }, KEY);
-    check("タップ後に確認ダイアログは出ない(確認なし即完了)", await page.locator(".modal-card").count() === 0);
-
-    // ============================================================
-    // [66] レビュー修正1(P1・重): 実行中ルーティンを放置したまま次タスク(ポモ)を開始すると自動クローズされる
-    // ============================================================
-    console.log("[66] レビュー修正1: 実行中ルーティンBlockがあるままポモ開始→ルーティンにactualEndAtが付き、実行中が1本になる");
-    await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    await seedB2({
-      view: "today",
-      blocks: [
-        block("fix1-routine-run", { title: "FIX1-ROUTINE-放置ルーティン", category: "ルーティン", actualStartAt: at("11:00"), plannedStartAt: at("11:00"), plannedEndAt: at("11:15") }),
-        block("fix1-next", { title: "FIX1-NEXT-次タスク", plannedStartAt: at("13:00"), plannedEndAt: at("13:30") })
-      ]
-    });
-    await page.waitForSelector('.today-pomodoro [data-action="start-pomodoro"][data-block-id="fix1-next"]', { state: "attached" });
-    await page.locator('.today-pomodoro [data-action="start-pomodoro"][data-block-id="fix1-next"]').click();
-    await page.waitForFunction((KEY) => {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      return s.pomodoro.running === true && s.pomodoro.blockId === "fix1-next";
-    }, KEY);
-    const st66 = await stateNow();
-    const routine66 = st66.blocks.find((b) => b.id === "fix1-routine-run");
-    check("ポモ開始経路: 放置されていたルーティンBlockにactualEndAtが付く(自動クローズ)",
-      !!routine66.actualEndAt, JSON.stringify(routine66));
-    check("ポモ開始経路: 放置ルーティンはcompletedにはならない(completedは立てない・裁定どおり)",
-      routine66.completed === false, JSON.stringify(routine66));
-    const running66 = st66.blocks.filter((b) => b.actualStartAt && !b.actualEndAt);
-    check("ポモ開始経路: 実行中Blockが新タスク(fix1-next)の1本だけになる(2本走行の穴が塞がれている)",
-      running66.length === 1 && running66[0].id === "fix1-next", JSON.stringify(running66.map((b) => b.id)));
-
-    // ============================================================
-    // [67] レビュー修正1(now-start経路): NEXT QUEUEの繰上げ開始でも実行中ルーティンが自動クローズされる
-    // ============================================================
-    console.log("[67] レビュー修正1: NEXT QUEUEの繰上げ開始(now-start→宣言モーダル)でも実行中ルーティンが自動クローズされる");
-    await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    await seed({
-      view: "today",
-      blocks: [
-        block("fix1b-routine-run", { title: "FIX1B-ROUTINE-放置ルーティン", category: "ルーティン", actualStartAt: at("11:00"), plannedStartAt: at("11:00"), plannedEndAt: at("11:15") }),
-        block("fix1b-next", { title: "FIX1B-NEXT-次タスク", plannedStartAt: at("13:00"), plannedEndAt: at("13:30") })
-      ]
-    });
-    await page.waitForSelector('.today-next-queue [data-action="now-start"][data-id="fix1b-next"]', { state: "attached" });
-    await page.locator('.today-next-queue [data-action="now-start"][data-id="fix1b-next"]').click();
-    await page.waitForSelector('[data-action="declare-skip"]', { state: "attached" });
-    await page.locator('[data-action="declare-skip"]').click();
-    await page.waitForFunction((KEY) => {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      const t = s.blocks.find((b) => b.id === "fix1b-next");
-      return !!t && !!t.actualStartAt;
-    }, KEY);
-    const st67 = await stateNow();
-    const routine67 = st67.blocks.find((b) => b.id === "fix1b-routine-run");
-    check("now-start経路: 放置ルーティンにactualEndAtが付く(自動クローズ)",
-      !!routine67.actualEndAt, JSON.stringify(routine67));
-    check("now-start経路: 放置ルーティンはcompletedにならない",
-      routine67.completed === false, JSON.stringify(routine67));
-    const running67 = st67.blocks.filter((b) => b.actualStartAt && !b.actualEndAt);
-    check("now-start経路: 実行中Blockが新タスク(fix1b-next)の1本だけになる",
-      running67.length === 1 && running67[0].id === "fix1b-next", JSON.stringify(running67.map((b) => b.id)));
-
-    // ============================================================
-    // [68] レビュー修正7(2周目): ポモ実行中ルーティンのチップをタップ→Block完了+ポモ後始末が両方起きる
-    // ============================================================
-    console.log("[68] レビュー修正7: ポモが連動している実行中ルーティンのチップをタップすると、Block完了とポモ後始末(停止・クリア)が両方起きる");
-    await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    await seedB2({
-      view: "today",
-      blocks: [
-        block("fix7-routine-pomo", { title: "FIX7-ROUTINE-POMO連動", category: "ルーティン", actualStartAt: at("11:50"), plannedStartAt: at("11:50"), plannedEndAt: at("12:05") })
-      ],
-      pomodoro: { running: true, blockId: "fix7-routine-pomo", startedAt: at("11:50"), endsAt: at("12:15"), mode: "focus" }
-    });
-    await page.waitForSelector('.today-routine-undone-chips [data-id="fix7-routine-pomo"]', { state: "attached" });
-    check("ポモ連動チップにも is-running が付く(実行中表示のまま)",
-      await page.locator('.today-routine-undone-chips [data-id="fix7-routine-pomo"].is-running').count() === 1);
-    await page.locator('.today-routine-undone-chips [data-id="fix7-routine-pomo"]').click();
-    await page.waitForFunction((KEY) => {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      const b = s.blocks.find((x) => x.id === "fix7-routine-pomo");
-      return !!b && b.completed === true && !!b.actualEndAt;
-    }, KEY);
-    const st68 = await stateNow();
-    const routine68 = st68.blocks.find((b) => b.id === "fix7-routine-pomo");
-    check("Blockはcompleted:true+actualEndAtが付いて完了する(completePomodoro経由・now-conveyor-complete)",
-      routine68.completed === true && !!routine68.actualEndAt, JSON.stringify(routine68));
-    check("state.pomodoroが後始末される(running:false・blockId空、放置されない)",
-      st68.pomodoro.running === false && st68.pomodoro.blockId === "", JSON.stringify(st68.pomodoro));
-    // completePomodoro()は既存の身体スキャンモーダル(post-completion。完了を止める確認ゲートではない)を
-    // 開く。完了自体は直前のwaitForFunctionで既に成立しているため、閉じるだけで後続テストへ影響を残さない。
-    check("既存の身体スキャンモーダルが開く(completePomodoro経由の既存挙動。完了はすでに成立済み)",
-      await page.locator('.modal-title:has-text("いまの疲労感")').count() === 1);
-    await page.locator('[data-action="body-scan-discard"]').first().click();
-    await page.waitForSelector(".modal-card", { state: "detached" });
-    check("身体スキャンモーダルを閉じてもcompleted状態は変わらない(記録せず閉じるでロールバックされない)",
-      (await stateNow()).blocks.find((b) => b.id === "fix7-routine-pomo")?.completed === true);
-
-    // ============================================================
-    // [69] レビュー修正8(2周目): ポモ連動ルーティンがある状態でnow-start経由の新タスク開始
-    //      → ルーティンクローズ+旧ポモクリア+新Blockの自動ポモが正常起動する
-    // ============================================================
-    console.log("[69] レビュー修正8: ポモ実行中ルーティンがある状態でnow-start(宣言スキップ)→ルーティンにactualEndAt付与+旧ポモクリア+新タスクの自動ポモが正常起動する");
-    await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    await seedB2({
-      view: "today",
-      blocks: [
-        block("fix8-routine-pomo", { title: "FIX8-ROUTINE-POMO連動", category: "ルーティン", actualStartAt: at("11:45"), plannedStartAt: at("11:45"), plannedEndAt: at("12:00") }),
-        block("fix8-next", { title: "FIX8-NEXT-次タスク", plannedStartAt: at("13:00"), plannedEndAt: at("13:30") })
-      ],
-      // endsAtは固定時刻12:00より未来にする(過去だと自動でbreakへ遷移し、focusTimerAutoの
-      // 「!running」判定に引っかからず新セッションが始まらない=このテストの検証対象外の別挙動を踏む)。
-      // v215: このテストの前提「focusTimerAuto既定ON」を明示seedする。[15e]がOFFをseedした後、
-      // 従来はタブ削除で消えた中間セクションが暗黙にONへ戻していた(セクション間結合の解消)。
-      settings: { focusTimerAuto: true },
-      pomodoro: { running: true, blockId: "fix8-routine-pomo", startedAt: at("11:45"), endsAt: at("12:10"), mode: "focus" }
-    });
-    await page.waitForSelector('.today-next-queue [data-action="now-start"][data-id="fix8-next"]', { state: "attached" });
-    await page.locator('.today-next-queue [data-action="now-start"][data-id="fix8-next"]').click();
-    await page.waitForSelector('[data-action="declare-skip"]', { state: "attached" });
-    await page.locator('[data-action="declare-skip"]').click();
-    await page.waitForFunction((KEY) => {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      const t = s.blocks.find((b) => b.id === "fix8-next");
-      return !!t && !!t.actualStartAt;
-    }, KEY);
-    const st69 = await stateNow();
-    const routine69 = st69.blocks.find((b) => b.id === "fix8-routine-pomo");
-    check("ルーティンがクローズされる(actualEndAtが付く)", !!routine69.actualEndAt, JSON.stringify(routine69));
-    check("ルーティンはcompletedにならない", routine69.completed === false, JSON.stringify(routine69));
-    check("旧ポモ(ルーティン連動)は放置されず、新Block(fix8-next)へ連動した新セッションに置き換わる(focusTimerAuto既定ON)",
-      st69.pomodoro.blockId === "fix8-next" && st69.pomodoro.running === true, JSON.stringify(st69.pomodoro));
-    const running69 = st69.blocks.filter((b) => b.actualStartAt && !b.actualEndAt);
-    check("実行中Blockが新タスク(fix8-next)の1本だけになる",
-      running69.length === 1 && running69[0].id === "fix8-next", JSON.stringify(running69.map((b) => b.id)));
-
-    // ============================================================
-    // [70] レビュー修正9(3周目): saveBlockFromModal()は検証失敗時にルーティンを閉じたままにしない
-    // ============================================================
-    console.log("[70] レビュー修正9: Block編集モーダルの保存が必須欄不足で失敗しても実行中ルーティンは閉じられたままにならず、正しい保存では従来どおりクローズされる");
-    await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    await seed({
-      view: "today",
-      blocks: [
-        block("fix9-routine-run", { title: "FIX9-ROUTINE-放置ルーティン", category: "ルーティン", actualStartAt: at("11:00"), plannedStartAt: at("11:00"), plannedEndAt: at("11:15") }),
-        block("fix9-target", { title: "FIX9-TARGET-編集対象", plannedStartAt: at("13:00"), plannedEndAt: at("13:30") })
-      ]
-    });
-    await page.waitForSelector('.today-next-queue [data-action="edit-block"][data-id="fix9-target"]', { state: "attached" });
-    await page.locator('.today-next-queue [data-action="edit-block"][data-id="fix9-target"]').click();
-    await page.waitForSelector('.modal-title:has-text("を編集")', { state: "attached" });
-    // actualStartAtを入れて「保存後は実行中になる」状態を作りつつ、plannedEndAtを空にして
-    // 既存の必須欄検証(app.js:16019付近)をわざと失敗させる。
-    await page.locator('[data-modal-field="actualStartAt"]').fill(at("12:00").slice(0, 16));
-    await page.locator('[data-modal-field="plannedEndAt"]').fill("");
-    await page.locator('[data-action="modal-save"]').click();
-    // 検証失敗パスはcloseModal()を呼ばない(app.js該当コード確認済み)ため、モーダルは開いたまま残る。
-    // 固定waitではなくその状態(モーダル残存)自体を待つ。
-    await page.waitForFunction(() => document.querySelectorAll(".modal-card").length === 1);
-    check("必須欄不足の保存はモーダルを閉じない(closeModal()未実行の証拠)",
-      await page.locator(".modal-card").count() === 1);
-    const st70a = await stateNow();
-    const routine70a = st70a.blocks.find((b) => b.id === "fix9-routine-run");
-    check("検証失敗時、実行中ルーティンはactualEndAtが付かず実行継続している(修正9の検証観点)",
-      !routine70a.actualEndAt, JSON.stringify(routine70a));
-    const target70a = st70a.blocks.find((b) => b.id === "fix9-target");
-    check("検証失敗時、編集対象Block自体も保存されていない(actualStartAt未反映。保存が本当に中断されたことの裏付け)",
-      !target70a.actualStartAt, JSON.stringify(target70a));
-    // plannedEndAtを正しく埋めて再保存する(修正9後も「検証成功パスは従来どおり」であることの確認)
-    await page.locator('[data-modal-field="plannedEndAt"]').fill(at("13:30").slice(0, 16));
-    await page.locator('[data-action="modal-save"]').click();
-    await page.waitForFunction((KEY) => {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      const t = s.blocks.find((b) => b.id === "fix9-target");
-      return !!t && !!t.actualStartAt;
-    }, KEY);
-    check("正しい保存後はモーダルが閉じる", await page.locator(".modal-card").count() === 0);
-    const st70b = await stateNow();
-    const routine70b = st70b.blocks.find((b) => b.id === "fix9-routine-run");
-    check("正しい保存では従来どおり実行中ルーティンがクローズされる(actualEndAtが付く)",
-      !!routine70b.actualEndAt, JSON.stringify(routine70b));
-    check("クローズされたルーティンはcompletedにならない(修正1の契約を維持)",
-      routine70b.completed === false, JSON.stringify(routine70b));
-
-    // ============================================================
-    // [65] C2仕様6: ROUTINE時間帯別合計は oneTap Block を除外し routineRate と一致する
-    // ============================================================
-    console.log("[65] C2仕様6: ROUTINEの時間帯別合計はoneTap Blockを除外し、routineRate(D5)と一致する");
-    await seed({
-      view: "today",
-      blocks: [
-        block("c2-band-1", { title: "C2-BAND-1", category: "ルーティン", plannedStartAt: at("07:00"), plannedEndAt: at("07:15"), completed: true, actualStartAt: at("07:00"), actualEndAt: at("07:15") }),
-        block("c2-band-2", { title: "C2-BAND-2", category: "ルーティン", plannedStartAt: at("10:00"), plannedEndAt: at("10:15") }),
-        // oneTap = 実績記録専用Block。routine.js routineRate() と同じ除外ルールを帯集計にも適用する(仕様6)。
-        block("c2-band-onetap", { title: "C2-BAND-ONETAP", category: "ルーティン", oneTap: true, completed: true, plannedStartAt: at("11:00"), plannedEndAt: at("11:15"), actualStartAt: at("11:00"), actualEndAt: at("11:15") })
-      ]
-    });
-    await page.waitForSelector(".today-routine", { state: "attached" });
-    const bandText = await panelText(".today-routine-list");
-    const bandPairs = [...(bandText || "").matchAll(/(\d+)\s*\/\s*(\d+)/g)];
-    const bandDoneSum = bandPairs.reduce((a, m) => a + Number(m[1]), 0);
-    const bandTotalSum = bandPairs.reduce((a, m) => a + Number(m[2]), 0);
-    check("oneTap Blockを含めても時間帯別合計の done は1(oneTap除外、routineRateと一致)",
-      bandDoneSum === 1, `doneSum=${bandDoneSum} text=${bandText}`);
-    check("oneTap Blockを含めても時間帯別合計の total は2(oneTap除外、routineRateと一致)",
-      bandTotalSum === 2, `totalSum=${bandTotalSum} text=${bandText}`);
-
-    // ============================================================
-    // [71]〜[76] C1(v192): NOW FOCUSは完了を押すまで計測継続
-    // ============================================================
-    console.log("[71] C1仕様1/2: 見積超過で is-warn/is-late が付かず、#todayNowProgress に over クラス+中立文言が付く(初期描画時点)");
-    await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    await seed({
-      view: "today",
-      blocks: [
-        block("c1-over", { title: "C1-OVER-超過タスク", actualStartAt: at("11:00"), plannedStartAt: at("11:00"), plannedEndAt: at("11:10"), estimateMin: 10 })
-      ]
-    });
-    await page.waitForSelector(".today-now-focus", { state: "attached" });
-    const overBar0 = (await page.locator("#todayNowProgress").getAttribute("class")) || "";
-    check("初期描画時点でis-warn/is-lateクラスが付かない",
-      !overBar0.includes("is-warn") && !overBar0.includes("is-late"), overBar0);
-    check("初期描画時点で見積超過(60分経過/見積10分)を検知しoverクラスが付く", overBar0.includes("over"), overBar0);
-    const estText0 = await page.locator("#todayNowEstimate").textContent();
-    check("初期描画時点で超過文言「見積 10分 超過 — 完了まで計測継続」になる",
-      (estText0 || "").includes("見積 10分 超過") && (estText0 || "").includes("完了まで計測継続"), estText0);
-    const elapsedClass0 = (await page.locator("#todayNowElapsed").getAttribute("class")) || "";
-    check("経過表示自体にも警告色クラスが付かない(非懲罰原則: 赤・琥珀を出さない)",
-      !elapsedClass0.includes("is-warn") && !elapsedClass0.includes("is-late"), elapsedClass0);
-    const barWidthOver0 = await page.locator("#todayNowProgress").evaluate((el) => el.style.width);
-    check("超過時もバー幅は100%で張り付く(clamp維持)", barWidthOver0 === "100%", barWidthOver0);
-    // レビュー修正⑤: 通常(非reduced-motion)文脈ではover状態の縞模様アニメが実際に動くことを
-    // animation-name自体で検証する(keyframes名typoや::beforeルール欠落を検知できるように)。
-    const overAnimName0 = await page.locator("#todayNowProgress").evaluate((el) => getComputedStyle(el, "::before").animationName);
-    check("通常文脈ではover状態の縞模様アニメが動く(animation-name: today-over-flow)",
-      overAnimName0 === "today-over-flow", overAnimName0);
-
-    console.log("[72] C1仕様1/2: tickでも同様(80%地点ではoverが付かず、100%到達でoverへ切り替わる)");
-    await seed({
-      view: "today",
-      blocks: [
-        block("c1-tick", { title: "C1-TICK-tick経由", actualStartAt: at("11:51"), plannedStartAt: at("11:51"), plannedEndAt: at("12:01"), estimateMin: 10 })
-      ]
-    });
-    await page.clock.setFixedTime(fixedTime(11, 59, 0));  // 経過8分(80%)
-    await page.waitForFunction(() => (document.getElementById("todayNowElapsed")?.textContent || "").startsWith("08:"));
-    const barAt80 = (await page.locator("#todayNowProgress").getAttribute("class")) || "";
-    check("80%到達時点でもoverクラスが付かない(is-warn相当の中間警告を出さない)", !barAt80.includes("over"), barAt80);
-    await page.clock.setFixedTime(fixedTime(12, 1, 30));  // 経過10分30秒(105%)
-    await page.waitForFunction(() => (document.getElementById("todayNowProgress")?.className || "").includes("over"));
-    // レビュー修正⑥: waitForFunctionの成立を検証済み扱いにする恒真checkではなく、
-    // 実DOMのclassを再取得した値をcheckへ渡す(assertion自体が失敗し得る形にする)。
-    const barAfterOver = (await page.locator("#todayNowProgress").getAttribute("class")) || "";
-    check("100%超過後はtickでoverクラスへ切り替わる(毎tick再取得、C1)", barAfterOver.includes("over"), barAfterOver);
-    const estTextTick = await page.locator("#todayNowEstimate").textContent();
-    check("tick後も超過文言(見積 n分 超過 — 完了まで計測継続)に切り替わる",
-      (estTextTick || "").includes("超過") && (estTextTick || "").includes("完了まで計測継続"), estTextTick);
-
-    console.log("[73] C1仕様5: ポモドーロのタイマー満了(自動発火のgoBreakPomodoro)ではblock.actualEndAtを書かず、NOW FOCUSに残り続ける");
+    console.log("[73] ポモドーロのタイマー満了ではblock.actualEndAtを書かず、NOW LANDINGに残り続ける");
     await page.clock.setFixedTime(fixedTime(9, 0, 0));
     await seed({
       view: "today",
@@ -2327,51 +1668,9 @@ function check(name, cond, extra = "") {
     check("pomodoroCountは従来どおり加算される(タイマー機能自体は維持)",
       pomoBlockAfter.pomodoroCount === 1, JSON.stringify(pomoBlockAfter));
     check("state.pomodoro.modeが休憩(break)へ遷移する(休憩自体は維持)", stAfterAutoBreak.pomodoro.mode === "break");
-    const nfTextAfterBreak = await panelText(".today-now-focus");
-    check("自動休憩遷移後もNOW FOCUSに実行中Blockが残り続ける(C1)",
+    const nfTextAfterBreak = await panelText(".tower-nowhud");
+    check("自動休憩遷移後もNOW LANDINGに実行中Blockが残り続ける",
       (nfTextAfterBreak || "").includes("C1-POMO-満了タスク"), nfTextAfterBreak);
-
-    console.log("[76] prefers-reduced-motion時は縞模様アニメが停止する(静的表示+文言のみで状態を伝える)");
-    // レビュー修正⑦: 既存ctx/pageは閉じずに残す(以後の追記が閉じたpageへ触れてしまう事故を防ぐ)。
-    // reduced-motion確認専用の別contextを並行して開き、使い終わったらreducedCtxだけを閉じる。
-    const reducedCtx = await browser.newContext({
-      serviceWorkers: "block", viewport: { width: 1100, height: 1400 }, reducedMotion: "reduce"
-    });
-    const reducedPage = await reducedCtx.newPage();
-    reducedPage.on("pageerror", (e) => { failures++; console.log("  ❌ reducedPage pageerror:", e.message); });
-    await blockGithubApiByDefault(reducedPage);
-    await reducedPage.clock.setFixedTime(fixedTime(12, 0, 0));
-    await reducedPage.goto(`http://localhost:${PORT}/`);
-    await reducedPage.waitForSelector('[data-action="gate-continue"]', { state: "attached" });
-    await passGithubGate(reducedPage);
-    await reducedPage.evaluate(({ KEY, blocks, view, TODAY }) => {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      s.blocks = blocks;
-      s.currentView = view;
-      s.selectedDate = TODAY;
-      s.settings.todaySkin = "cockpit";
-      localStorage.setItem(KEY, JSON.stringify(s));
-    }, {
-      KEY,
-      blocks: [block("c1-reduced", { title: "C1-REDUCED-超過タスク", actualStartAt: at("11:00"), plannedStartAt: at("11:00"), plannedEndAt: at("11:10"), estimateMin: 10 })],
-      view: "today",
-      TODAY
-    });
-    // seed()と同様、reload後はまずナビ要素の出現を待ってからパネルを待つ(早すぎるDOM参照を避ける)。
-    await reducedPage.reload();
-    await reducedPage.waitForSelector('[data-action="nav"]', { state: "attached" });
-    await reducedPage.waitForSelector(".today-now-focus", { state: "attached" });
-    // v217: 直読みだと全体実行の負荷下でスタイル適用前に評価してまれに失敗した(既知フレーク)。
-    // 固定waitではなく検証対象(animation-name: none)の成立自体を待ってから同じassertを行う。
-    const reducedAnim = await reducedPage.waitForFunction(() => {
-      const el = document.querySelector("#todayNowProgress");
-      return el && getComputedStyle(el, "::before").animationName === "none" ? "none" : false;
-    }, null, { timeout: 10000 }).then((h) => h.jsonValue()).catch(async () =>
-      reducedPage.locator("#todayNowProgress").evaluate((el) => getComputedStyle(el, "::before").animationName));
-    check("reduced-motion時は縞模様の流れるアニメが止まる(animation-name: none)", reducedAnim === "none", reducedAnim);
-    const reducedOverClass = (await reducedPage.locator("#todayNowProgress").getAttribute("class")) || "";
-    check("reduced-motion時もoverクラス自体(静的な縞表示)は付いたまま", reducedOverClass.includes("over"), reducedOverClass);
-    await reducedCtx.close();
   } finally {
     await browser.close();
     server.close();

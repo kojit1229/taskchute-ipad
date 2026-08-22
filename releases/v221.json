@@ -1,0 +1,57 @@
+{
+  "version": 221,
+  "date": "2026-08-22",
+  "title": "今日タブのcockpitスキン削除",
+  "summary": "TOWERと重複していた今日タブの旧cockpitスキンを削除し、todaySkinをtower固定の後方互換フィールドへ縮退するとともに、AI再プラン導線を設定へ移した",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v221.json",
+    "src/features/coach.js",
+    "src/features/today.js",
+    "styles.css",
+    "sw.js",
+    "tests/impact-regression-map.json",
+    "tests/suite-manifest.json",
+    "tests/today-core.test.js",
+    "tests/tower-core.test.js"
+  ],
+  "intent": [
+    "slim-spec §4-1の変更単位(a)として、今日タブのcockpit専用描画とCSSだけを削除し、TOWER共有資産を保持する。",
+    "todaySkinの設定UIと描画分岐を廃止し、旧stateをnormalizeStateでtowerへ固定正規化する。",
+    "cockpit削除後もAI再プラン機能へ到達できるよう、設定画面へ最小ボタンを移設する。"
+  ],
+  "changes": [
+    "today.jsからNOW FOCUS、NEXT QUEUE、DAY GAUGE、ROUTINE、FLIGHT PLANとcockpit専用tickerを削除し、renderTodayをTOWER直行にした。",
+    "coach.jsからrenderCoachBody、renderCoach、patchCoachと専用表示依存を削除し、QUICK_MEALS・食事記録・TOWER FUEL集計を残した。",
+    "todaySkinの設定selectと切替経路を削除し、normalizeStateで旧値を含め常にtowerへ正規化するようにした。",
+    "設定の朝プラン節へAI再プラン実行ボタンを追加し、既存today-replan actionとrequestReplanを再利用した。",
+    "調査でcockpit専用と確定した40 CSSクラスだけを削除し、TOWER/共有18クラスとtoday-tower名前空間を温存した。",
+    "today-coreのcockpit専用描画検証を削除し、TOWER上のポモドーロ・Kindle・0秒思考・タイマー満了検証を維持した。GATE契約はtower-coreで継続検証する。",
+    "impact-regression-mapのtoday-featureをcoach.jsまで含むTOWER関連4スイートへ接続し、廃止済みcockpit専用patternを除去した。",
+    "Service WorkerのCACHE_NAMEをv221へ更新した。"
+  ],
+  "uncertainties": [
+    "iOS Safari実機PWAでの更新・オフライン動作はローカル検証の対象外。"
+  ],
+  "reviewFocus": [
+    "today.jsから削除した関数がcockpit専用に限られ、renderTodayPomodoro、renderTodayKindle、renderTodayZero、todayPomodoroDisplay、towerFlights等が保持されているか。",
+    "coach.jsのQUICK_MEALS・appendQuickMeal・coachSummaryForDateが残り、TOWER FUELの記録と集計が維持されているか。",
+    "todaySkinは設定UI・描画分岐から消え、normalizeStateのtower固定という後方互換用途だけに限定されているか。",
+    "設定のAI再プラン実行ボタンが既存actionを呼び、ANNEX側の再プラン導線も壊していないか。",
+    "CSS削除が指定40クラスだけで、共有18クラスとtoday-tower配下へ波及していないか。"
+  ],
+  "verification": [
+    "node --check app.js、src/features/today.js、src/features/coach.js、tests/today-core.test.js、tests/tower-core.test.jsはexit 0。",
+    "npm run test:fastは17スイート全件PASS。coach-core、tower-model-core、action-registry-coreも個別実行で全件PASS。",
+    "npm run code:index:writeとnpm run test:manifest:writeを実行し、release-gate内のschema・impact選定・app-shell precache・manifest・code-index・全JS構文検査はPASS。",
+    "静的grepでrenderCoach系とcockpit専用render群が0件、todaySkinの設定UI・読取分岐が0件、cockpit専用40 CSSクラスが0件であること、および共有today/TOWER資産の残存を確認した。",
+    "today-core、tower-core、およびrelease-gateのブラウザ回帰はPlaywright Chromium起動時のspawn EPERMにより未実行。"
+  ],
+  "knownLimitations": [
+    "iOS Safari実機PWAの更新・オフライン動作確認は監督者側で必要。",
+    "この実行環境ではPlaywright Chromiumがspawn EPERMとなるため、ブラウザE2Eは監督者環境での再実行が必要。"
+  ]
+}

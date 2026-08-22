@@ -3510,39 +3510,6 @@ h3 {
   .tower-annex .today-pomodoro-info { min-width: 0; }
 }
 
-/* v182: 「今日」コックピット(P1〜P4)。today名前空間に閉じ、既存home等へ波及させない。 */
-.today-cockpit {
-  min-height: 100%;
-  color: var(--text);
-  font-family: var(--cockpit-mono, inherit);
-  background-image:
-    linear-gradient(var(--cockpit-grid-line, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, var(--cockpit-grid-line, transparent) 1px, transparent 1px);
-  background-size: 36px 36px;
-}
-.today-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding: 0 0 10px;
-  margin-bottom: 12px;
-  border-bottom: 1px solid var(--line);
-}
-.today-eyebrow { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: 2px; }
-.today-header h1 { margin: 2px 0 0; font-size: 22px; letter-spacing: 2px; }
-.today-header h1 span { color: var(--faint); font-size: 11px; font-weight: 500; letter-spacing: 1px; }
-.today-head-stats { color: var(--muted); font-size: 11px; letter-spacing: 0.04em; }
-.today-head-stats b { color: var(--cockpit-go, var(--accent)); }
-.today-clock { display: grid; gap: 2px; margin-left: auto; text-align: right; }
-.today-clock strong {
-  color: var(--text);
-  font-size: 23px;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 2px;
-}
-.today-clock span { color: var(--muted); font-size: 10px; }
-.today-deck { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .today-span-2 { grid-column: span 2; }
 .today-panel {
   position: relative;
@@ -3595,171 +3562,7 @@ h3 {
   font-weight: 600;
   letter-spacing: 1px;
 }
-.today-now-focus { border-color: var(--cockpit-go, var(--accent)); }
-.today-now-focus::before { border-color: var(--cockpit-go, var(--accent)); }
-.today-now-label { color: var(--cockpit-go, var(--accent)); font-size: 10px; letter-spacing: 1px; }
-.today-now-label i {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  margin-right: 6px;
-  border-radius: 50%;
-  background: var(--cockpit-go, var(--accent));
-  animation: today-blink 1.4s infinite;
-}
-.today-now-task {
-  margin-top: 7px;
-  overflow-wrap: anywhere;
-  font-size: clamp(19px, 3vw, 27px);
-  font-weight: 750;
-  line-height: 1.3;
-  cursor: pointer;
-}
-.today-now-meta,
-.today-now-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
-.today-chip {
-  padding: 2px 8px;
-  border: 1px solid var(--today-category, var(--line));
-  border-radius: 3px;
-  color: var(--today-category, var(--muted));
-  background: var(--panel-soft);
-  font-size: 11px;
-}
-.today-now-elapsed { display: flex; align-items: baseline; gap: 12px; margin-top: 16px; }
-.today-now-elapsed strong {
-  color: var(--cockpit-go, var(--accent));
-  font-size: 31px;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 2px;
-  text-shadow: 0 0 12px var(--cockpit-go-glow, transparent);
-}
-.today-now-elapsed span,
-.today-now-next { color: var(--muted); font-size: 11px; }
-.today-progress {
-  height: 7px;
-  margin-top: 8px;
-  overflow: hidden;
-  border-radius: 3px;
-  background: var(--cockpit-track, var(--panel-soft));
-}
-.today-progress i {
-  display: block;
-  position: relative;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--purple), var(--cockpit-go, var(--accent)));
-}
-/* C1(v192): 見積超過は警告色(赤/琥珀)ではなく中立の縞模様(青系)で継続表示する
-   (サンプル cockpit-today-fusion-sample.html CSS 141-147行準拠)。 */
-#todayNowProgress.over {
-  background: var(--cockpit-go-dim, var(--accent-soft));
-  box-shadow: none;
-}
-#todayNowProgress.over::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  left: -24px;
-  background: repeating-linear-gradient(45deg, var(--cockpit-go, var(--accent)) 0 8px, transparent 8px 16px);
-  opacity: 0.45;
-  animation: today-over-flow 1.2s linear infinite;
-}
-@keyframes today-over-flow {
-  to { transform: translateX(22.6px); }
-}
-.today-now-next { margin-top: 12px; padding-top: 9px; border-top: 1px dashed var(--line); }
-.today-now-next em { color: var(--text); font-style: normal; }
-.today-now-empty {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 92px;
-}
-.today-now-empty div { display: grid; gap: 6px; }
-.today-now-empty strong { font-size: 20px; }
-.today-now-empty span,
 .today-empty { color: var(--muted); font-size: 12px; }
-.today-queue { display: grid; gap: 6px; }
-.today-queue-row {
-  display: grid;
-  grid-template-columns: 28px 48px minmax(0, 1fr) 44px auto;
-  gap: 8px;
-  align-items: center;
-  min-height: 38px;
-  padding: 6px 9px;
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  background: var(--panel-soft);
-  font-size: 11px;
-}
-.today-queue-row.is-first { border-color: var(--cockpit-go, var(--accent)); }
-.today-queue-row.is-dim { opacity: 0.55; }
-.today-queue-row > span,
-.today-queue-row time,
-.today-queue-row small { color: var(--muted); }
-.today-queue-row strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.today-queue-row button {
-  padding: 4px 8px;
-  border: 1px solid var(--cockpit-go, var(--accent));
-  border-radius: 3px;
-  color: var(--cockpit-go, var(--accent));
-  background: var(--accent-soft);
-  cursor: pointer;
-}
-.today-gauge-count { display: flex; align-items: baseline; gap: 7px; }
-.today-gauge-count strong { font-size: 28px; font-variant-numeric: tabular-nums; }
-.today-gauge-count span,
-.today-progress-cap { color: var(--muted); font-size: 11px; }
-.today-progress-cap { display: flex; justify-content: space-between; margin-top: 4px; }
-.today-progress-cap b { color: var(--text); }
-.today-kv {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 12px;
-}
-.today-kv > div {
-  display: grid;
-  gap: 3px;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  background: var(--panel-soft);
-}
-.today-kv span,
-.today-kv small { color: var(--muted); font-size: 10px; }
-.today-kv strong { font-size: 16px; font-variant-numeric: tabular-nums; }
-.today-routine-list { display: grid; gap: 8px; }
-.today-routine-row {
-  display: grid;
-  grid-template-columns: 54px minmax(0, 1fr) 48px;
-  gap: 8px;
-  align-items: center;
-  color: var(--muted);
-  font-size: 11px;
-}
-.today-routine-row > div {
-  height: 8px;
-  overflow: hidden;
-  border-radius: 2px;
-  background: var(--cockpit-track, var(--panel-soft));
-}
-.today-routine-row i { display: block; height: 100%; border-radius: inherit; background: var(--green); }
-.today-routine-row b { text-align: right; font-variant-numeric: tabular-nums; }
-.today-routine-total {
-  margin-top: 12px;
-  padding-top: 8px;
-  border-top: 1px dashed var(--line);
-  color: var(--muted);
-  font-size: 11px;
-  text-align: right;
-}
 
 /* v193: GitHubメールボックス経由の再プラン受付状態。同期ドットと同じ計器表現を使う。 */
 .today-replan-body {
@@ -3776,125 +3579,7 @@ h3 {
   font-size: 12px;
 }
 .today-replan-status .sync-dot { margin-left: 0; flex: none; }
-.today-routine-undone {
-  margin-top: 10px;
-  padding-top: 9px;
-  border-top: 1px dashed var(--line);
-}
-.today-routine-undone-label {
-  color: var(--faint);
-  font-size: 10px;
-  letter-spacing: 1px;
-}
-.today-routine-undone-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 6px;
-}
-/* v191レビュー反映(修正6・2周目): ::before(inset)方式はgap 6pxを超えて隣接チップと重なり、
-   確認なし即完了と組み合わさると隣を誤完了する穴があった(Codex P1)。疑似要素での当たり判定
-   拡張はやめ、チップ自体の実寸(min-height/padding)を拡大して重なりをゼロにする。 */
-.today-routine-chip {
-  min-height: 40px;
-  padding: 8px 14px;
-  appearance: none;
-  -webkit-appearance: none;
-  font-family: inherit;
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
-}
-.today-routine-chip:hover {
-  color: var(--cockpit-go, var(--accent));
-  border-color: var(--cockpit-go, var(--accent));
-}
-/* v191レビュー反映(修正3): 実行中ルーティンはチップに残しつつ枠色で視覚区別する(未実施と混同しない)。 */
-.today-routine-chip.is-running {
-  border-color: var(--cockpit-go, var(--accent));
-  color: var(--cockpit-go, var(--accent));
-}
-.today-flight-track {
-  position: relative;
-  height: var(--today-flight-track-height, 72px);
-  overflow: visible;
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  background: var(--panel-soft);
-}
-.today-flight-hour {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  border-left: 1px solid var(--line);
-}
-.today-flight-hour span {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  color: var(--faint);
-  font-size: 8px;
-  font-style: normal;
-}
-.today-flight-hour.is-end span {
-  right: 3px;
-  left: auto;
-}
-.today-flight-block {
-  position: absolute;
-  top: 24px;
-  height: 29px;
-  min-width: 4px;
-  overflow: hidden;
-  padding: 0 4px;
-  border: 1px solid var(--line);
-  border-radius: 2px;
-  color: var(--muted);
-  background: var(--panel);
-  font-size: 9px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.today-flight-block.is-done { border-color: var(--green); color: var(--green-text); background: var(--green-soft); }
-.today-flight-block.is-now {
-  border-color: var(--cockpit-go, var(--accent));
-  color: var(--cockpit-go, var(--accent));
-  background: var(--accent-soft);
-  box-shadow: 0 0 10px var(--cockpit-go-glow, transparent);
-}
-.today-flight-now {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: var(--cockpit-go, var(--accent));
-  box-shadow: 0 0 8px var(--cockpit-go-glow, transparent);
-}
-.today-flight-now::after {
-  position: absolute;
-  top: -2px;
-  left: -5px;
-  color: var(--cockpit-go, var(--accent));
-  font-size: 9px;
-  font-style: normal;
-  content: "▼";
-}
-.today-flight-empty {
-  position: absolute;
-  top: 30px;
-  left: 12px;
-  color: var(--muted);
-  font-size: 11px;
-}
-.today-flight-cap {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 5px;
-  color: var(--faint);
-  font-size: 9px;
-}
-
-/* v183: 今日コックピット B2(P5〜P7)。today名前空間内だけでポモ/カードデッキを統合。 */
+/* v183: 今日ビューへポモ/カードデッキを統合。 */
 .today-pomodoro-stage {
   display: flex;
   align-items: center;
@@ -3918,56 +3603,6 @@ h3 {
 .today-pomodoro-info > span { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .today-pomodoro-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .today-pomodoro .interrupt-reason-picker { margin-top: 4px; }
-.today-coach-stage {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 24px;
-  min-height: 170px;
-}
-.today-coach .pomo-circle-wrap { width: 150px; height: 150px; margin: 0; flex: 0 0 auto; }
-.today-coach .pomo-time-overlay { display: grid; gap: 1px; font-size: 11px; line-height: 1.1; }
-.today-coach .pomo-time-overlay strong { font-size: 25px; font-variant-numeric: tabular-nums; }
-.today-coach .pomo-time-overlay small { color: var(--muted); font-size: 9px; }
-.today-coach-numbers { display: grid; gap: 7px; min-width: min(100%, 260px); }
-.today-coach-numbers strong { color: var(--cockpit-go, var(--accent)); font-size: 20px; font-variant-numeric: tabular-nums; }
-.today-coach-numbers span { color: var(--muted); font-size: 12px; }
-.today-coach-numbers small { color: var(--faint); font-size: 10px; line-height: 1.6; }
-.today-coach-quick { padding-top: 10px; border-top: 1px dashed var(--line); }
-.today-coach-quick > span { color: var(--muted); font-size: 10px; letter-spacing: 1px; }
-.today-coach-quick > span small { color: var(--faint); letter-spacing: 0; }
-.today-coach-quick > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin-top: 7px; }
-.today-coach-quick button {
-  min-height: 42px;
-  padding: 7px 6px;
-  border: 1px solid var(--cockpit-go, var(--accent));
-  border-radius: 4px;
-  color: var(--cockpit-go, var(--accent));
-  background: var(--cockpit-go-dim, var(--accent-soft));
-  font-family: inherit;
-  font-size: 12px;
-  cursor: pointer;
-  touch-action: manipulation;
-  -webkit-touch-callout: none;
-  user-select: none;
-  -webkit-user-select: none;
-}
-.today-coach-log { display: grid; gap: 6px; margin: 12px 0 0; padding: 0; list-style: none; }
-.today-coach-log li {
-  display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) auto auto;
-  gap: 8px;
-  align-items: center;
-  padding: 7px 9px;
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  background: var(--panel-soft);
-  font-size: 11px;
-}
-.today-coach-log time { color: var(--muted); font-variant-numeric: tabular-nums; }
-.today-coach-log b { font-variant-numeric: tabular-nums; }
-.today-coach-log button { padding: 5px 8px; border: 1px solid var(--line); color: var(--muted); background: transparent; font: inherit; cursor: pointer; }
-.today-coach-log .is-empty { display: block; color: var(--muted); text-align: center; }
 .today-deck-card {
   position: relative;
   display: flex;
@@ -4051,20 +3686,10 @@ h3 {
 }
 .today-zero-writebar time.is-over { color: var(--orange); }
 .today-zero-writebar button:first-of-type { margin-left: auto; }
-@keyframes today-blink { 50% { opacity: 0.3; } }
 @media (max-width: 720px) {
-  .today-deck { grid-template-columns: minmax(0, 1fr); }
   .today-span-2 { grid-column: span 1; }
-  .today-clock { width: 100%; margin-left: 0; text-align: left; }
-  .today-queue-row { grid-template-columns: 24px 42px minmax(0, 1fr) 40px; }
-  .today-queue-row button { grid-column: 3 / -1; justify-self: start; }
   .today-pomodoro-stage { align-items: stretch; gap: 14px; flex-direction: column; }
   .today-pomodoro .pomo-circle-wrap { margin: 0 auto; }
-  .today-coach-stage { gap: 12px; flex-direction: column; }
-  .today-coach .pomo-circle-wrap { margin: 0 auto; }
-  .today-coach-numbers { text-align: center; }
-  .today-coach-log li { grid-template-columns: 42px minmax(0, 1fr) auto; }
-  .today-coach-log button { grid-column: 2 / -1; justify-self: end; }
 }
 @media (prefers-reduced-motion: reduce) {
   .tower-beacon i { animation: none; }
@@ -4078,9 +3703,6 @@ h3 {
   .tower-gauge-needle { transition: none; }
   #towerPlane { transition: none; }
   .tower-blip { transition: none; }
-  .today-now-label i { animation: none; }
-  /* C1(v192): 縞模様の流れるアニメだけ止め、静的な縞+文言で超過状態を伝える(サンプル432-433行準拠) */
-  #todayNowProgress.over::before { animation: none; }
 }
 
 /* v185 B4 P11a: cockpitテーマ時だけ、全ビューの共通chromeを管制室調へ統一する。 */

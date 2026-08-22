@@ -122,9 +122,17 @@ function check(name, cond, extra = "") {
     await page.reload();
     await page.waitForTimeout(400);
 
-    const wishTitleFont = await page.locator("#wishTitle").evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    // v221: locator解決後の再描画で要素がdetachされるとgetComputedStyleが空文字→NaNになる競合が
+    // 全体実行時にまれに発生(既知フレーク)。評価時点でquerySelectorし直し、値の成立自体を待つ。
+    const fontOf = (sel) => page.waitForFunction((s) => {
+      const el = document.querySelector(s);
+      if (!el) return false;
+      const v = parseFloat(getComputedStyle(el).fontSize);
+      return Number.isFinite(v) ? v : false;
+    }, sel, { timeout: 10000 }).then((h) => h.jsonValue());
+    const wishTitleFont = await fontOf("#wishTitle");
     check("#wishTitle(input)のfont-sizeは16px以上", wishTitleFont >= 16, `fontSize=${wishTitleFont}`);
-    const wishFilterFont = await page.locator("#wishFilterArea").evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    const wishFilterFont = await fontOf("#wishFilterArea");
     check("#wishFilterArea(select)のfont-sizeは16px以上", wishFilterFont >= 16, `fontSize=${wishFilterFont}`);
 
     await page.evaluate((KEY) => {
@@ -134,8 +142,7 @@ function check(name, cond, extra = "") {
     }, KEY);
     await page.reload();
     await page.waitForTimeout(400);
-    const journalTextareaFont = await page.locator("textarea[data-journal-date]").first()
-      .evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    const journalTextareaFont = await fontOf("textarea[data-journal-date]");
     check("ジャーナルtextareaのfont-sizeは16px以上", journalTextareaFont >= 16, `fontSize=${journalTextareaFont}`);
   } finally {
     await browser.close();
