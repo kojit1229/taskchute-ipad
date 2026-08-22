@@ -1,6 +1,11 @@
 // src/features/journal.js — app.js分割・段階4-3(ジャーナルタブ本体+コンディションOS
 // (朝/夜の体調・睡眠・服薬・余力)・運動記録・今日行ったお店ログの抽出)。
 //
+// 【tower-restyle改装版】TOWER意匠化(第3弾先行分)。改装元: v223時点のsrc/features/journal.js。
+// 変更点は renderJournal() 本体のみ(意匠ラッパー追加+パネル見出し文言の英語+日本語化)。
+// ロジック・data-action・data-*・class・id・state操作・保存経路は一切変更していない
+// (詳細差分はnotes.md参照)。
+//
 // 契約(prep-stage4-journal.md §7、src/features/wish.js冒頭コメントと同じconfigureXxx(deps)パターン):
 //   1. state の再代入はしない(src/state/store.jsからlive binding importし、プロパティ変更のみ)。
 //   2. escapeHTML/renderHeader/renderDateBar/renderMarkdown/renderModal/closeModal/addDays/
@@ -472,6 +477,11 @@ function defaultJournal(date) {
   ].join("\n");
 }
 
+// 【tower-restyle】renderJournal()のみ改装。ロジック(ensureJournal/日付計算/segment開閉判定)は
+// 完全に無改変。変更は (a) 全体を<div class="tower-skin journal-tower">でラップ、
+// (b) パネル見出し・summaryの文言をTOWER意匠の英語+日本語併記に変更、の2点のみ。
+// class/data-action/data-*/id・DOM階層・タグ種別は既存のまま(tests/journal-core.test.js・
+// tests/v146.test.js等の参照セレクタと完全一致を維持)。
 function renderJournal() {
   ensureJournal(state.selectedDate);
   const previous = addDays(state.selectedDate, -1);
@@ -493,60 +503,62 @@ function renderJournal() {
   const eveningOpen = "evening" in _journalSegmentOverride ? _journalSegmentOverride.evening : !isMorning;
   const bodyOpen = "body" in _journalSegmentOverride ? _journalSegmentOverride.body : true;
   return `
-    ${renderHeader("過去の自分・今の自分・外部視点", "ジャーナル")}
-    ${renderDateBar()}
-    ${renderExperimentSection()}
-    <section class="journal-grid">
-      <details class="panel home-fold journal-panel-prev">
-        <summary class="home-fold-summary"><span class="home-fold-chevron">▶</span>📓 前日 (${previous})</summary>
-        <div class="home-fold-body"><div class="md-render readonly-md">${renderMarkdown(state.journals[previous] || "記載なし")}</div></div>
-      </details>
-      <div class="panel journal-panel-today">
-        <div class="row" style="margin-bottom:10px">
-          <h2>📝 当日編集</h2>
-          <div class="row">
-            <button class="btn primary" data-action="generate-report">📊 日報を生成</button>
-            ${report ? `<button class="btn" data-action="report-copy-ai">📋 AI用にコピー</button>` : ""}
-            ${report && typeof navigator !== "undefined" && navigator.share ? `<button class="btn" data-action="report-share-ai">↗ 共有</button>` : ""}
-            <button class="btn" data-action="download-report">Markdown保存</button>
-            ${personalDataReady(state.settings.github) ? `<button class="btn" data-action="push-report">📤 GitHubに日報push</button>` : ""}
+    <div class="tower-skin journal-tower">
+      ${renderHeader("過去の自分・今の自分・外部視点", "ジャーナル")}
+      ${renderDateBar()}
+      ${renderExperimentSection()}
+      <section class="journal-grid">
+        <details class="panel home-fold journal-panel-prev">
+          <summary class="home-fold-summary"><span class="home-fold-chevron">▶</span>LOG PREV <span>前日 (${previous})</span></summary>
+          <div class="home-fold-body"><div class="md-render readonly-md">${renderMarkdown(state.journals[previous] || "記載なし")}</div></div>
+        </details>
+        <div class="panel journal-panel-today">
+          <div class="row" style="margin-bottom:10px">
+            <h2>JOURNAL LOG <span>当日編集</span></h2>
+            <div class="row">
+              <button class="btn primary" data-action="generate-report">📊 日報を生成</button>
+              ${report ? `<button class="btn" data-action="report-copy-ai">📋 AI用にコピー</button>` : ""}
+              ${report && typeof navigator !== "undefined" && navigator.share ? `<button class="btn" data-action="report-share-ai">↗ 共有</button>` : ""}
+              <button class="btn" data-action="download-report">Markdown保存</button>
+              ${personalDataReady(state.settings.github) ? `<button class="btn" data-action="push-report">📤 GitHubに日報push</button>` : ""}
+            </div>
           </div>
+          <details class="home-fold journal-segment journal-segment-morning" ${morningOpen ? "open" : ""}>
+            <summary class="home-fold-summary" data-action="toggle-journal-segment" data-segment="morning"><span class="home-fold-chevron">▶</span>MORNING BRIEF <span>朝(前夜の睡眠・体調・睡眠時間・服薬・余力)</span></summary>
+            <div class="home-fold-body">
+              ${renderSleepCard(date)}
+              ${renderMorningEnergyPicker(date)}
+              ${renderConditionMorningExtra(date)}
+            </div>
+          </details>
+          <details class="home-fold journal-segment journal-segment-evening" ${eveningOpen ? "open" : ""}>
+            <summary class="home-fold-summary" data-action="toggle-journal-segment" data-segment="evening"><span class="home-fold-chevron">▶</span>NIGHT BRIEF <span>夜(体調・メモ・運動・お店ログ)</span></summary>
+            <div class="home-fold-body">
+              ${renderEveningConditionCard(date)}
+              ${renderGymLogCard(date)}
+              ${renderStoreVisitsCard(date)}
+            </div>
+          </details>
+          <details class="home-fold journal-segment journal-segment-body" ${bodyOpen ? "open" : ""}>
+            <summary class="home-fold-summary" data-action="toggle-journal-segment" data-segment="body"><span class="home-fold-chevron">▶</span>FREE LOG <span>本文</span></summary>
+            <div class="home-fold-body">
+              <details class="journal-prompts" style="margin-bottom:10px; padding:8px 12px; background:var(--panel-soft); border-radius:8px">
+                <summary style="cursor:pointer; font-size:13px; color:var(--muted); font-weight:600">💡 思考のヒント(クリックで開閉)</summary>
+                <div style="margin-top:10px; display:grid; gap:10px; font-size:12px">
+                  ${Object.entries(JOURNAL_PROMPTS).map(([section, prompt]) => `
+                    <div>
+                      <div style="font-weight:600; color:var(--text); margin-bottom:2px">${section}</div>
+                      <div class="muted" style="white-space:pre-line; line-height:1.5">${escapeHTML(prompt)}</div>
+                    </div>
+                  `).join("")}
+                </div>
+              </details>
+              <textarea class="textarea" data-journal-date="${date}">${escapeHTML(state.journals[date])}</textarea>
+            </div>
+          </details>
         </div>
-        <details class="home-fold journal-segment journal-segment-morning" ${morningOpen ? "open" : ""}>
-          <summary class="home-fold-summary" data-action="toggle-journal-segment" data-segment="morning"><span class="home-fold-chevron">▶</span>🌅 朝(前夜の睡眠・体調・睡眠時間・服薬・余力)</summary>
-          <div class="home-fold-body">
-            ${renderSleepCard(date)}
-            ${renderMorningEnergyPicker(date)}
-            ${renderConditionMorningExtra(date)}
-          </div>
-        </details>
-        <details class="home-fold journal-segment journal-segment-evening" ${eveningOpen ? "open" : ""}>
-          <summary class="home-fold-summary" data-action="toggle-journal-segment" data-segment="evening"><span class="home-fold-chevron">▶</span>🌙 夜(体調・メモ・運動・お店ログ)</summary>
-          <div class="home-fold-body">
-            ${renderEveningConditionCard(date)}
-            ${renderGymLogCard(date)}
-            ${renderStoreVisitsCard(date)}
-          </div>
-        </details>
-        <details class="home-fold journal-segment journal-segment-body" ${bodyOpen ? "open" : ""}>
-          <summary class="home-fold-summary" data-action="toggle-journal-segment" data-segment="body"><span class="home-fold-chevron">▶</span>📝 本文</summary>
-          <div class="home-fold-body">
-            <details class="journal-prompts" style="margin-bottom:10px; padding:8px 12px; background:var(--panel-soft); border-radius:8px">
-              <summary style="cursor:pointer; font-size:13px; color:var(--muted); font-weight:600">💡 思考のヒント(クリックで開閉)</summary>
-              <div style="margin-top:10px; display:grid; gap:10px; font-size:12px">
-                ${Object.entries(JOURNAL_PROMPTS).map(([section, prompt]) => `
-                  <div>
-                    <div style="font-weight:600; color:var(--text); margin-bottom:2px">${section}</div>
-                    <div class="muted" style="white-space:pre-line; line-height:1.5">${escapeHTML(prompt)}</div>
-                  </div>
-                `).join("")}
-              </div>
-            </details>
-            <textarea class="textarea" data-journal-date="${date}">${escapeHTML(state.journals[date])}</textarea>
-          </div>
-        </details>
-      </div>
-    </section>
+      </section>
+    </div>
   `;
 }
 

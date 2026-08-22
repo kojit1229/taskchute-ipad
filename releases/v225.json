@@ -1,0 +1,37 @@
+{
+  "version": 225,
+  "date": "2026-08-22",
+  "title": "ジャーナルタブのTOWER意匠化(第3弾先行分2/3)",
+  "summary": "第3弾の先行分として、ジャーナルタブを機能ロジック不変のままTOWER管制室テイストへ改装した",
+  "changedFiles": [
+    "releases/v225.json",
+    "src/features/journal.js",
+    "styles.css",
+    "sw.js"
+  ],
+  "intent": [
+    "第3弾(TOWER意匠の全タブ統一)を、P3(e)の統合画面JOURNALパネルとは独立なジャーナルタブ側へ先行適用する。",
+    "並列レーンで作成・ミラーツリーのjournal-core全件PASSまで検証済みの改装版を適用する。"
+  ],
+  "changes": [
+    "renderJournal()の戻り値をtower-skin journal-towerでラップし、summary/h2見出しを英語+日本語併記型(JOURNAL LOG等)へ置換。class/data-action/data-*/id・タグ種別・DOM階層は無改変。",
+    "css-journal-tower.cssを統合(レーン側が重複定義していた--tower-*トークン8行は除去し、定義正本=styles.cssの.today-tower, .tower-skin 1箇所を維持)。",
+    "sw.js CACHE_NAMEをv225へ更新した。"
+  ],
+  "uncertainties": [
+    "睡眠カード赤警告帯を属性セレクタ[style*=var(--red-soft)]で拾う箇所が1点あり、renderSleepCardのインラインstyle文言変更に脆い(第3弾本体で専用クラス化を検討)。",
+    "実機PWAでの見た目確認は未実施(次回K実機確認に含める)。"
+  ],
+  "reviewFocus": [
+    "journal.jsのdiffがラップ追加+見出しテキスト置換のみで、保存経路・IME差分パッチング・data-*に変更が無いこと",
+    "journal-core参照セレクタ(journal-segment系の完全一致・journal-panel系のタグ種別)の温存"
+  ],
+  "verification": [
+    "node --check src/features/journal.js PASS",
+    "node tests/journal-core.test.js 全件成功(適用後の本体ツリーで実行)",
+    "node scripts/release-gate.js releases/v225.json(監督者実行)"
+  ],
+  "knownLimitations": [
+    "ライトテーマ時はtowerダーク基調が優先(第3弾統一方針)。テーマ整合の最終調整は第3弾本体で実施"
+  ]
+}

@@ -4197,3 +4197,158 @@ h3 {
 .tower-skin.wish-tower .tower-flight-detail .grid > .row {
   border: 1px solid var(--tower-line);
 }
+/* css-journal-tower.css — TaskChute Journal TOWER意匠化・第3弾先行分(ジャーナルタブ)。
+   出典: repos/taskchute-ipad/styles.css の .today-tower 節(トークン・.tower-panel-box等の
+   意匠語彙)+ workbench/out/2026-08-21-taskchute-slim-spec/mockup-today-home-v2.html の
+   JOURNALパネル(.tower-journal-*)を踏襲。
+
+   スコープ: すべて `.tower-skin.journal-tower` 配下(タブ全体ラッパー、src/features/journal.js
+   のrenderJournal()が返す最外殻div)。既存クラス(.journal-grid/.panel/.journal-panel-prev/
+   .journal-panel-today/.journal-segment-*/.home-fold-*/.cond-*/.store-visit-card/.home-ck/
+   .btn/.input/.textarea 等)は一切リネームしていない。本ファイルは「色・背景・境界線・
+   フォント」等の見た目プロパティだけを子孫セレクタで追加するもので、display/grid-template-
+   columns/orderなど構造・レイアウトを決めるプロパティには触れていない
+   (tests/v146.test.jsがgetComputedStyle(el).orderを直接検査しているため、既存の
+   .journal-grid/.journal-panel-prev/.journal-panel-today の order定義はstyles.css側の
+   既存ルールを温存し、本ファイルでは上書きしない)。
+
+   【統合時の注意】
+   - --tower-*トークンは既存styles.cssの.today-tower定義と同一値(意図的な重複)。
+     .tower-skin.journal-tower は .today-tower の外側で使われるタブ(今日タブとは独立の
+     ジャーナルタブ)のため、.today-tower祖先が無くても変数解決できるよう自前で再定義している。
+     統合時に「.tower-skin」共通トークン化(.today-towerからの重複を1箇所に集約)するか、
+     このまま維持するかは監督者判断(規約の指示どおりトークン拡張は統合時に一本化)。
+   - .tower-panel-box 自体はstyles.cssに既存(v223統合済み)だが、本ファイルは.journal-tower
+     配下でも同じ見た目を出すために.panel/.journal-panel-prev/.journal-panel-todayを
+     直接スタイルしている(既存.tower-panel-boxクラスをjournal.js側のDOMへ新規付与すると
+     tests/v146.test.jsの完全一致セレクタ(class="home-fold journal-segment journal-segment-
+     morning"等)を壊すおそれがあるため、クラス追加ではなく子孫セレクタでの再現にとどめた)。
+   - renderHeader()/renderDateBar()/renderExperimentSection()はapp.js側のdeps注入関数
+     (journal.js外)のため、判明している出力クラス(.view-header/.eyebrow/h1/.view-breadcrumb/
+     .datebar/.weekly-sec.exp-card等)だけを子孫セレクタで dark reskin している。
+     bufferMeterHTML()等の内部構造までは踏み込んでいない(未確認のため)。
+*/
+
+.tower-skin.journal-tower {
+  display: block;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 12px 12px 40px;
+  color: var(--tower-text);
+  font-family: var(--mono, ui-monospace), "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  background: var(--tower-bg);
+}
+
+/* ============ ヘッダ/日付バー(app.js renderHeader/renderDateBar・dark reskin) ============ */
+.journal-tower .view-header {
+  padding: 14px 16px;
+  border: 1px solid var(--tower-line);
+  background: var(--tower-panel);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
+}
+.journal-tower .view-breadcrumb { color: var(--tower-cyan); font-size: 10px; letter-spacing: .06em; opacity: .8; }
+.journal-tower .eyebrow { color: var(--tower-cyan); font-size: 10px; font-weight: 700; letter-spacing: .18em; }
+.journal-tower h1 {
+  margin: 2px 0 0; color: var(--tower-text); font-family: system-ui, sans-serif;
+  font-size: 18px; letter-spacing: .04em;
+}
+.journal-tower .datebar { margin-top: 12px; }
+.journal-tower .datebar .input,
+.journal-tower .datebar .btn {
+  background: var(--tower-bg); border: 1px solid var(--tower-line); color: var(--tower-text);
+}
+
+/* ============ 人生実験カード(.weekly-sec/.exp-card。構造は既存v220復元CSSに委ねる) ============ */
+.journal-tower .weekly-sec.exp-card {
+  margin-top: 12px; border: 1px solid var(--tower-line); background: var(--tower-panel);
+  color: var(--tower-text);
+}
+
+/* ============ パネル外枠(.journal-grid配下の2パネル。order/displayはstyles.css既存定義のまま) ============ */
+.journal-tower .journal-grid > .panel {
+  border: 1px solid var(--tower-line);
+  border-radius: 0;
+  background: var(--tower-panel);
+  box-shadow: none;
+}
+.journal-tower .journal-grid > .panel::before,
+.journal-tower .journal-grid > .panel::after { content: none; }
+
+/* 前日パネル(details.journal-panel-prev)の見出し行 = summary。TOWER意匠のパネル見出し語彙
+   (英語見出し+<span>日本語</span>)はjournal.js側の文言変更で対応済み。ここでは配色のみ。 */
+.journal-tower .journal-panel-prev > .home-fold-summary,
+.journal-tower .journal-segment > summary.home-fold-summary {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--tower-line);
+  color: var(--tower-cyan);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  cursor: pointer;
+}
+.journal-tower .home-fold-summary span:not(.home-fold-chevron) {
+  margin-left: 6px; color: var(--tower-text); font-weight: 400; font-size: 10px;
+  font-family: system-ui, sans-serif; letter-spacing: .02em; opacity: .7;
+}
+.journal-tower .home-fold-chevron {
+  display: inline-block; margin-right: 6px; color: var(--tower-cyan); transition: transform 150ms ease;
+}
+.journal-tower details[open] > .home-fold-summary .home-fold-chevron { transform: rotate(90deg); }
+.journal-tower .home-fold-body { padding: 10px; }
+.journal-tower .journal-panel-prev .home-fold-body { padding: 10px 12px; }
+
+/* 当日編集パネルの見出し(h2)。tower-panel-boxのh2語彙(cyan・大文字letter-spacing+span控えめ)を再現。 */
+.journal-tower .journal-panel-today > .row > h2 {
+  margin: 0; color: var(--tower-cyan); font-size: 13px; font-weight: 700; letter-spacing: .14em;
+}
+.journal-tower .journal-panel-today > .row > h2 span {
+  margin-left: 8px; color: var(--tower-text); font-size: 11px; font-weight: 400;
+  font-family: system-ui, sans-serif; letter-spacing: .02em; opacity: .7;
+}
+
+/* 朝/夜/本文の3segment。他パネルと区別するため上部にアクセント罫線。 */
+.journal-tower .journal-segment { border-top: 1px solid var(--tower-line); }
+.journal-tower .journal-segment-morning { border-top: 0; }
+
+/* 思考のヒント(ネストしたdetails)もパネル内トーンに合わせる。 */
+.journal-tower .journal-prompts { border: 1px solid var(--tower-line) !important; background: var(--tower-bg) !important; }
+.journal-tower .journal-prompts summary { color: var(--tower-cyan) !important; }
+
+/* ============ ボタン(.btn/.btn.primary/.btn.ghost。TOWERのgate/flightボタン語彙を流用) ============ */
+.journal-tower .btn {
+  background: transparent; border: 1px solid var(--tower-line); color: var(--tower-text);
+  border-radius: 2px; font-family: inherit;
+}
+.journal-tower .btn.primary { border-color: var(--tower-green); color: var(--tower-green); }
+.journal-tower .btn.ghost { border-color: var(--tower-line); color: var(--tower-cyan); }
+.journal-tower .btn.danger { border-color: #ef4444; color: #ef4444; }
+.journal-tower .btn:focus-visible { outline: 2px solid var(--tower-amber); outline-offset: 1px; }
+
+/* ============ 入力欄(input/textarea。既存グローバルルールで16px以上は温存済み・色のみ変更) ============ */
+.journal-tower input,
+.journal-tower select,
+.journal-tower textarea {
+  background: var(--tower-bg); border: 1px solid var(--tower-line); color: var(--tower-text);
+  border-radius: 2px;
+}
+.journal-tower textarea:focus-visible,
+.journal-tower input:focus-visible { outline: 2px solid var(--tower-amber); outline-offset: -2px; }
+.journal-tower .muted { color: var(--tower-text); opacity: .6; }
+
+/* ============ コンディションOS(cond-row/cond-btn-row/cond-gym-card等) ============ */
+.journal-tower .cond-row { color: var(--tower-text); }
+.journal-tower .cond-row-label { color: var(--tower-cyan); opacity: 1; font-weight: 700; }
+.journal-tower .cond-gym-card,
+.journal-tower .store-visit-card {
+  background: var(--tower-bg) !important; border: 1px solid var(--tower-line); border-radius: 2px;
+}
+.journal-tower .home-ck {
+  border-bottom: 1px solid var(--tower-line); color: var(--tower-text);
+}
+.journal-tower .home-ck:last-child { border-bottom: 0; }
+
+/* ============ 睡眠カード/警告帯。赤警告(未アップロード)はtower-amberで代替(TOWERの配色に統一)。 ============ */
+.journal-tower [style*="var(--red-soft)"] {
+  background: rgba(242, 184, 75, .12) !important; border-color: var(--tower-amber) !important;
+}
