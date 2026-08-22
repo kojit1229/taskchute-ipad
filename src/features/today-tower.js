@@ -1,10 +1,10 @@
-// src/features/today-tower.js — v223: TOWER上帯を結線し、PC 3列/モバイル縦順の骨格へ移行。
+// src/features/today-tower.js — v227: NOW LANDING強化とDEPARTURES 1行縮約。
 // state・保存・action登録には触れず、時刻・便状態・信条は既存1秒tickerから差分更新する。
 
 import { renderStandingOrders, renderCountdown, renderTopbandPC, creedRotationLine } from "./topband.js";
 
 let escapeHTML, todayISO, homeSyncAlertBanner, blocksForDate, towerFlights;
-let runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, timeFromDateTime, clamp;
+let runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp;
 let towerMotionSetting;
 let renderTodayPomodoro;
 let flipListenerBound = false;
@@ -18,7 +18,7 @@ let lastGateFull;
 function configureTodayTower(deps) {
   ({
     escapeHTML, todayISO, homeSyncAlertBanner, blocksForDate, towerFlights,
-    runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, timeFromDateTime, clamp,
+    runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp,
     towerMotionSetting, renderTodayPomodoro
   } = deps);
   if (!flipListenerBound && typeof document !== "undefined") {
@@ -93,6 +93,9 @@ function runwayMetrics(running, nowMs) {
     : Math.max(0, Math.ceil(estimate - elapsedSec / 60));
   return {
     x: clamp(ratio * 100, 0, 100), over,
+    start: timeFromDateTime(running.actualStartAt) || "--:--",
+    landing: estimate > 0 ? flightTime(minutesOf(running.actualStartAt) + estimate) : "--:--",
+    pct: Math.round(clamp(ratio * 100, 0, 100)),
     remain: estimate <= 0 ? "見積なし" : over ? `ロングフライト +${minutes}分` : `残り ${minutes}分`
   };
 }
@@ -108,11 +111,9 @@ function renderTowerRunway(now, blocks) {
   let hud = '<div class="tower-nowhud" data-status="empty">本日の着陸予定はありません</div>';
   if (running) {
     const id = escapeHTML(running.id);
-    const scheduled = running.plannedStartAt ? timeFromDateTime(running.plannedStartAt) : "--:--";
     hud = `<div class="tower-nowhud" data-status="${metrics.over ? "long" : "landing"}">
-      <span class="tower-now-label">NOW LANDING</span>
       <button type="button" class="tower-now-title" data-action="edit-block" data-id="${id}">${escapeHTML(running.title)}</button>
-      <span class="tower-now-sched">定刻 ${escapeHTML(scheduled || "--:--")}</span>
+      <span class="tower-now-pct" id="towerNowPct">進捗 ${metrics.pct}%</span>
       <strong id="towerNowRemain">${metrics.remain}</strong>
       <div class="tower-now-actions">
         <button type="button" class="btn green" data-action="complete-block-with-actual" data-id="${id}">■ 完了</button>
@@ -130,14 +131,16 @@ function renderTowerRunway(now, blocks) {
     <h2>NOW LANDING <span>滑走路</span></h2>
     <div class="tower-runway-strip">
       <i id="towerPlane" aria-hidden="true" style="--tower-plane-x:${metrics.x}%">✈</i>${touchdown}
+      ${running ? `<span class="tower-rwy-mark start">${escapeHTML(metrics.start)} 開始</span>
+      <span class="tower-rwy-mark end">${escapeHTML(metrics.landing)} 着陸予定</span>` : ""}
     </div>
     ${hud}
   </section>`;
 }
 
-function flightRow(flight, departure = false) {
-  const status = departure ? "" : `<span class="tower-status" data-status="${escapeHTML(flight.status)}">${escapeHTML(flight.label)}</span>`;
-  return `<div class="tower-flight-row ${departure ? "tower-departure-row" : "tower-arrival-row"}" data-flight-id="${escapeHTML(flight.id)}"${departure ? "" : ` data-status="${escapeHTML(flight.status)}"`}>
+function flightRow(flight) {
+  const status = `<span class="tower-status" data-status="${escapeHTML(flight.status)}">${escapeHTML(flight.label)}</span>`;
+  return `<div class="tower-flight-row tower-arrival-row" data-flight-id="${escapeHTML(flight.id)}" data-status="${escapeHTML(flight.status)}">
     <time>${flightTime(flight.plannedMin)}</time><span class="tower-callsign">${escapeHTML(flight.callsign)}</span>
     <button type="button" class="tower-flight-title" data-action="edit-block" data-id="${escapeHTML(flight.id)}">${escapeHTML(flight.title)}</button>${status}
   </div>`;
@@ -146,14 +149,18 @@ function flightRow(flight, departure = false) {
 function renderTowerBoard(now, arrivalFlights) {
   const arrivals = arrivalWindow(arrivalFlights);
   const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-  const departures = boardFlights(blocksForDate(localISO(tomorrow)), 0).slice(0, 3);
+  const departures = boardFlights(blocksForDate(localISO(tomorrow)), 0);
+  const firstDeparture = departures[0];
+  const departureSummary = firstDeparture
+    ? `明日 ${departures.length}便 / 最初は ${flightTime(firstDeparture.plannedMin)} ${escapeHTML(firstDeparture.title)}`
+    : "明日の便はまだありません";
   return `<section class="tower-board sec-arrivals">
     <div class="tower-arrivals"><h2>ARRIVALS <span>本日</span></h2>
       <div id="towerArrivalRows" data-flight-set="${flightSetKey(arrivalFlights)}">${arrivals.rows.map((flight) => flightRow(flight)).join("")}</div>
       <div class="tower-flight-summary" id="towerArrivalSummary">${arrivals.omitted ? `他 ${arrivals.omitted} 便` : ""}</div>
-    </div>
-    <div class="tower-departures"><h2>DEPARTURES <span>明日</span></h2>
-      <div>${departures.map((flight) => flightRow(flight, true)).join("")}</div>
+      <button type="button" class="tower-departures" data-action="departures-open-tomorrow">
+        <b>DEPARTURES ▸</b><span>${departureSummary}</span>
+      </button>
     </div>
   </section>`;
 }
@@ -216,11 +223,13 @@ function updateTowerRunway(now, blocks) {
   const running = runningBlockOf(blocks);
   const plane = document.getElementById("towerPlane");
   const hud = document.querySelector(".tower-nowhud");
+  const pct = document.getElementById("towerNowPct");
   const remain = document.getElementById("towerNowRemain");
   const hudId = hud?.querySelector("button[data-id]")?.dataset.id;
-  if (!running || !plane || !hud || !remain || hudId !== String(running.id)) return;
+  if (!running || !plane || !hud || !pct || !remain || hudId !== String(running.id)) return;
   const metrics = runwayMetrics(running, now.getTime());
   plane.style.setProperty("--tower-plane-x", `${metrics.x}%`);
+  pct.textContent = `進捗 ${metrics.pct}%`;
   remain.textContent = metrics.remain;
   if (metrics.over && hud.dataset.status === "landing") hud.dataset.status = "long";
 }

@@ -292,6 +292,10 @@ configureTimeline({
 // if連鎖からの機械的な移動のみで無改変)。
 registerActions({
   "nav": ({ target }) => setView(target.dataset.view),
+  "departures-open-tomorrow": () => {
+    setSelectedDate(addDays(todayISO(), 1));
+    setView("tasks");
+  },
   "today-replan": () => requestReplan(),
   // --- settings(12): サイドバー/WBS表示設定/カテゴリ・休憩メッセージ管理・AI再プラン ---
   "toggle-show-suspended": () => {

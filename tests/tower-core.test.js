@@ -1,4 +1,4 @@
-// tests/tower-core.test.js — v223 TOWER上帯・統合グリッドと1秒ticker契約E2E。
+// tests/tower-core.test.js — v227 NOW LANDING強化・DEPARTURES縮約と1秒ticker契約E2E。
 // today-core.test.jsと同じく、localStorage seed + 既存nav + Playwright clockで検証する。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY } = require("./helpers");
 
@@ -185,11 +185,18 @@ function check(name, cond, extra = "") {
     await page.locator('.modal-card [data-action="modal-close"]').first().click();
     await page.waitForSelector(".modal-card", { state: "detached" });
 
-    console.log("[9] DEPARTURESは明日の定刻順で3便まで表示する");
-    const departureRows = page.locator(".tower-departure-row");
-    check("DEPARTURESは3行上限", await departureRows.count() === 3);
-    check("DEPARTURESは定刻昇順", JSON.stringify(await departureRows.locator("time").allTextContents()) === JSON.stringify(["08:30", "10:00", "13:00"]));
-    check("明日の便名もTC-701から振り直す", JSON.stringify(await departureRows.locator(".tower-callsign").allTextContents()) === JSON.stringify(["TC-701", "TC-703", "TC-705"]));
+    console.log("[9] DEPARTURESは明日便を1行縮約しtasksタブを明日で開く");
+    const departuresLine = page.locator('.tower-departures[data-action="departures-open-tomorrow"]');
+    check("DEPARTURESは1行だけ", await departuresLine.count() === 1 && await page.locator(".tower-departure-row").count() === 0);
+    check("全4便と先頭便を要約", ((await departuresLine.textContent()) || "").replace(/\s+/g, " ").includes("明日 4便 / 最初は 08:30 明日8時半"));
+    await departuresLine.click();
+    await page.waitForSelector('#app[data-view="tasks"]');
+    const departuresDestination = await page.evaluate((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      return { view: s.currentView, date: s.selectedDate };
+    }, KEY);
+    check("タップでview=tasksかつselectedDate=明日", departuresDestination.view === "tasks" && departuresDestination.date === tomorrow,
+      JSON.stringify(departuresDestination));
 
     console.log("[10] tickerは行を再構築せず状態文字列をフリップ更新する");
     const crossing = [block("flip-first", "境界便", today, 12 * 60), block("flip-next", "次便", today, 13 * 60)];
@@ -235,8 +242,15 @@ function check(name, cond, extra = "") {
     check("滑走路パネル名はNOW LANDING", ((await page.locator(".tower-runway h2").textContent()) || "").includes("NOW LANDING"));
     const landingX = await page.locator("#towerPlane").evaluate((el) => parseFloat(el.style.getPropertyValue("--tower-plane-x")));
     check("11:30開始・60分見積の12:00位置は約50%", Math.abs(landingX - 50) < 0.1, String(landingX));
+    check("実開始11:30と開始+見積の着陸予定12:30を表示", (await page.locator(".tower-rwy-mark.start").textContent()) === "11:30 開始"
+      && (await page.locator(".tower-rwy-mark.end").textContent()) === "12:30 着陸予定");
+    check("経過/見積の進捗50%を表示", (await page.locator("#towerNowPct").textContent()) === "進捗 50%");
     check("残り30分を表示", (await page.locator("#towerNowRemain").textContent()) === "残り 30分");
-    check("定刻11:00を表示", (await page.locator(".tower-now-sched").textContent()) === "定刻 11:00");
+    const pctHandle = await page.locator("#towerNowPct").elementHandle();
+    await page.clock.setFixedTime(new Date(base.getFullYear(), base.getMonth(), base.getDate(), 12, 15, 1, 0));
+    await page.waitForFunction(() => document.getElementById("towerNowPct")?.textContent === "進捗 75%");
+    check("tickで全再描画せず進捗%・残り分を差分更新", await pctHandle.evaluate((el) => el.isConnected && el.textContent === "進捗 75%")
+      && (await page.locator("#towerNowRemain").textContent()) === "残り 15分");
     // 復元(起動時から実行中)は接地の瞬間ではないためフラッシュを出さない。出す側は[14]の開始遷移で検証する。
     check("復元描画では接地フラッシュを出さない", await page.locator(".tower-touchdown").count() === 0);
     await page.locator('.tower-now-title[data-id="rwy-landing"]').click();
@@ -321,6 +335,7 @@ function check(name, cond, extra = "") {
     await seedT5([]);
     check("Block 0件はempty空状態", await page.locator('.tower-nowhud[data-status="empty"]').count() === 1
       && (await page.locator(".tower-nowhud").textContent())?.trim() === "本日の着陸予定はありません");
+    check("明日0便は空メッセージの1行", ((await page.locator(".tower-departures").textContent()) || "").includes("明日の便はまだありません"));
 
     console.log("[20] GATE数と就航数はroutineRateと同じ母集団を使う");
     const gateSeed = [

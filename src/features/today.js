@@ -28,7 +28,7 @@ function configureToday(deps) {
   } = deps);
   configureTodayTower({
     escapeHTML, todayISO, homeSyncAlertBanner, blocksForDate, towerFlights,
-    runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, timeFromDateTime, clamp,
+    runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp,
     towerMotionSetting: () => state.settings.towerMotion,
     renderTodayPomodoro
   });

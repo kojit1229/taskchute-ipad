@@ -3322,8 +3322,7 @@ h3 {
 .tower-day-left strong { color: var(--tower-amber); font-size: 20px; }
 @keyframes tower-beacon-pulse { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
 .tower-board { display: grid; gap: 12px; padding: 12px 0; }
-.tower-arrivals,
-.tower-departures { border: 1px solid var(--tower-line); background: var(--tower-panel); }
+.tower-arrivals { border: 1px solid var(--tower-line); background: var(--tower-panel); }
 .tower-board h2 { margin: 0; padding: 8px 10px; border-bottom: 1px solid var(--tower-line); color: var(--tower-cyan); font-size: 11px; letter-spacing: .18em; }
 .tower-board h2 span { float: right; color: var(--tower-text); font-size: 10px; font-weight: 400; letter-spacing: .08em; opacity: .6; }
 .tower-flight-row { display: grid; grid-template-columns: 52px 64px minmax(0, 1fr) 78px; align-items: center; min-height: 44px; border-bottom: 1px solid var(--tower-line); font-size: 11px; }
@@ -3338,10 +3337,17 @@ h3 {
 .tower-status[data-status="landing"] { color: var(--tower-green); opacity: 1; }
 .tower-arrival-row[data-status="arrived"] { opacity: .42; }
 .tower-status.is-flip { animation: tower-board-flip 600ms ease-out; }
-.tower-departure-row { grid-template-columns: 52px 64px minmax(0, 1fr); }
-.tower-departure-row .tower-callsign { color: var(--tower-text); opacity: .6; }
 .tower-flight-summary { padding: 7px 10px; border-top: 1px solid var(--tower-line); color: var(--tower-text); font-size: 10px; text-align: right; opacity: .6; }
 .tower-flight-summary:empty { display: none; }
+.tower-departures {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 8px 10px;
+  border: 0; border-top: 1px dashed var(--tower-line); color: var(--tower-cyan); font: inherit;
+  font-size: 10.5px; text-align: left; letter-spacing: .04em; background: transparent;
+}
+.tower-departures b { color: var(--tower-cyan); font-weight: 700; letter-spacing: .1em; white-space: nowrap; }
+.tower-departures span { min-width: 0; overflow: hidden; color: var(--tower-text); font-family: system-ui, sans-serif; text-overflow: ellipsis; white-space: nowrap; opacity: .85; }
+.tower-departures::after { content: "›"; margin-left: auto; color: var(--tower-cyan); font-size: 14px; opacity: .7; }
+.tower-departures:focus-visible { outline: 2px solid var(--tower-amber); outline-offset: -2px; }
 @keyframes tower-board-flip { 0% { opacity: .2; transform: perspective(120px) rotateX(90deg); } 100% { opacity: 1; transform: perspective(120px) rotateX(0); } }
 /* Codexレビュー反映: 720px以下は.main-paneの高さが不定でmin-height:100%が解決されず背景が途切れるため、viewport基準にする。 */
 @media (max-width: 720px) { .today-tower { min-height: 100vh; min-height: 100dvh; } }
@@ -3351,23 +3357,26 @@ h3 {
 .tower-runway h2 { margin: 0; padding: 8px 10px; border-bottom: 1px solid var(--tower-line); color: var(--tower-cyan); font-size: 11px; letter-spacing: .18em; }
 .tower-runway h2 span { float: right; color: var(--tower-text); font-size: 10px; font-weight: 400; letter-spacing: .08em; opacity: .6; }
 .tower-runway-strip {
-  position: relative; height: 56px; overflow: hidden; border-top: 2px solid var(--tower-cyan); border-bottom: 2px solid var(--tower-cyan);
-  background: repeating-linear-gradient(90deg, var(--tower-line) 0 18px, transparent 18px 30px) center / 100% 2px no-repeat, var(--tower-bg);
-  box-shadow: inset 0 3px 8px var(--tower-line), inset 0 -3px 8px var(--tower-line);
+  position: relative; height: 38px; margin: 8px 10px; overflow: hidden;
+  border-top: 2px solid var(--tower-cyan); border-bottom: 2px solid var(--tower-cyan);
+  background: repeating-linear-gradient(90deg, var(--tower-line) 0 18px, transparent 18px 30px) center / 100% 2px no-repeat;
+  box-shadow: inset 0 0 20px rgba(85, 217, 232, .08);
 }
-#towerPlane { position: absolute; z-index: 2; top: 50%; left: var(--tower-plane-x, 0%); color: var(--tower-cyan); font-size: 24px; line-height: 1; text-shadow: 0 0 10px var(--tower-cyan); transform: translate(-50%, -50%); transition: left 1000ms linear; }
+#towerPlane { position: absolute; z-index: 2; top: 50%; left: var(--tower-plane-x, 0%); color: var(--tower-cyan); font-size: 20px; line-height: 1; text-shadow: 0 0 10px var(--tower-cyan); transform: translate(-50%, -50%); transition: left 1000ms linear; }
 .tower-touchdown { position: absolute; z-index: 1; top: 50%; left: var(--tower-plane-x, 50%); width: 16px; height: 16px; border: 2px solid var(--tower-amber); border-radius: 50%; box-shadow: 0 0 18px var(--tower-amber); transform: translate(-50%, -50%); animation: tower-touchdown 700ms ease-out 1; }
-.tower-nowhud { display: grid; grid-template-columns: auto minmax(120px, 1fr) auto auto auto; align-items: center; gap: 10px; min-height: 54px; padding: 8px 10px; color: var(--tower-text); }
-.tower-now-label { color: var(--tower-cyan); font-size: 10px; font-weight: 700; letter-spacing: .12em; }
+.tower-rwy-mark { position: absolute; bottom: 3px; color: var(--tower-cyan); font-size: 9px; letter-spacing: .06em; white-space: nowrap; opacity: .8; }
+.tower-rwy-mark.start { left: 6px; }
+.tower-rwy-mark.end { right: 6px; }
+.tower-nowhud { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; min-height: 40px; padding: 4px 10px 8px; color: var(--tower-text); }
 .tower-now-title { min-width: 0; min-height: 44px; overflow: hidden; border: 0; color: var(--tower-text); font: inherit; text-align: left; text-overflow: ellipsis; white-space: nowrap; background: transparent; }
 .tower-now-title:focus-visible { outline: 2px solid var(--tower-amber); outline-offset: -2px; }
-.tower-now-sched { font-size: 11px; opacity: .65; }
+.tower-now-pct { color: var(--tower-amber); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 #towerNowRemain { color: var(--tower-green); font-size: 13px; white-space: nowrap; }
-.tower-now-actions { display: flex; gap: 6px; }
+.tower-now-actions { display: flex; grid-column: 1 / -1; gap: 6px; }
 .tower-nowhud[data-status="long"] { border-top: 1px solid var(--tower-amber); }
 .tower-nowhud[data-status="long"] #towerNowRemain { color: var(--tower-amber); }
 @keyframes tower-touchdown { 0% { opacity: 1; transform: translate(-50%, -50%) scale(.4); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(3); } }
-@media (max-width: 720px) { .tower-nowhud { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); } .tower-now-actions { flex-wrap: wrap; } }
+@media (max-width: 720px) { .tower-nowhud { grid-template-columns: minmax(0, 1fr) auto; } .tower-now-title { grid-column: 1 / -1; } .tower-now-actions { flex-wrap: wrap; } }
 
 /* v207: TOWER T6。GATE定期便。 */
 .tower-gates { margin-top: 12px; border: 1px solid var(--tower-line); background: var(--tower-panel); }
@@ -3612,6 +3621,7 @@ h3 {
   .tower-day-left strong { font-size: 30px; }
   .tower-col-left .sec-rwy .tower-nowhud { grid-template-columns: 1fr; gap: 3px; padding: 4px 10px 8px; }
   .tower-col-left .sec-rwy .tower-now-title { white-space: normal; overflow: visible; text-overflow: clip; }
+  .tower-col-left .sec-rwy .tower-now-pct,
   .tower-col-left .sec-rwy #towerNowRemain,
   .tower-col-left .sec-rwy .tower-now-actions { justify-self: start; }
   .tower-col-center #towerGateStrip { flex-wrap: wrap; overflow-x: visible; }

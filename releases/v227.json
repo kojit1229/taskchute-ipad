@@ -1,0 +1,55 @@
+{
+  "version": 227,
+  "date": "2026-08-22",
+  "title": "NOW LANDING強化+DEPARTURES 1行縮約",
+  "summary": "NOW LANDINGへ実開始・着陸予定・進捗率・残り分を追加し、DEPARTURESを明日tasksへ遷移する1行要約へ置き換えた",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v227.json",
+    "src/features/today-tower.js",
+    "src/features/today.js",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/tower-core.test.js"
+  ],
+  "intent": [
+    "デザイン正mockup-today-home-v2.htmlに合わせ、実行中タスクの開始から着陸予定までをNOW LANDINGだけで把握できるようにする。",
+    "明日の便一覧を1行へ縮約し、詳細確認はtasksタブを明日日付で開く既存画面へ委ねる。",
+    "既存の待機時表示・Block編集/完了/開始導線・滑走路上の進捗連動を維持する。"
+  ],
+  "changes": [
+    "runwayMetricsへactualStartAtの表示時刻、開始分+見積分の着陸予定時刻、経過秒/見積秒を0〜100%へ丸めた進捗率を追加し、既存の機体位置・残り分と同じ計算結果をHUDへ描画した。",
+    "updateTodayTowerTick配下のupdateTowerRunwayで機体位置に加えて進捗率と残り分だけを1秒tickerから差分更新し、全体renderは追加しなかった。",
+    "DEPARTURESを明日便の全件数と定刻順先頭便だけを示す1行ボタンへ置換し、0件時は『明日の便はまだありません』を表示した。",
+    "departures-open-tomorrow actionを委譲レジストリへ登録し、selectedDateを明日にしてtasksビューを開くようにした。",
+    "モックv2の滑走路マーク、NOW LANDING HUD、DEPARTURES行スタイルを既存TOWERクラスと機体位置座標を保ったまま統合した。",
+    "tower-coreへ絶対時刻・進捗率・残り分のtick差分更新、DEPARTURES 1行要約・0件表示・明日tasks遷移のassertionを追加し、action-registry-coreの委譲action一覧を追従、CACHE_NAMEをv227へ更新した。"
+  ],
+  "uncertainties": [
+    "着陸予定は仕様どおりactualStartAt+resolveEstimateMinで算出し、日跨ぎ時は時刻部分のみ00:xxとして表示する。",
+    "iOS Safari実機PWAでの滑走路マークと長い日本語タスク名の最終見た目はローカル環境では未確認。"
+  ],
+  "reviewFocus": [
+    "日時文字列をnew Dateへ渡さず、timeFromDateTime/minutesOf/localDateTimeToMsの既存iOS安全ヘルパーだけで算出しているか。",
+    "進捗率・残り分・機体位置がrunwayMetricsの同じ経過/見積比率に基づき、tickで対象DOMだけを更新しているか。",
+    "DEPARTURESが明日便の全件数と定刻順先頭便を表示し、クリック後のcurrentView=tasks・selectedDate=明日が永続化されるか。",
+    "390/768/1024pxの1列表示、1280px以上の340px左列、既存の開始/完了/編集導線が退行していないか。"
+  ],
+  "verification": [
+    "node --check app.js、src/features/today.js、src/features/today-tower.js、tests/tower-core.test.js、sw.jsはPASS。",
+    "system Chrome指定のnode tests/tower-core.test.jsは新規assertionと既存レイアウト・操作回帰を含め全件PASS。標準Playwright Chromiumはspawn EPERMのためsystem Chromeで補完した。",
+    "node tests/action-registry-core.test.jsは新規委譲actionを含む登録一覧・保存則を含め全件PASS。",
+    "npm run code:index:writeとnpm run test:manifest:writeをnpm.cmd経由で実行した。",
+    "system Edge指定のnode scripts/release-gate.js releases/v227.jsonはschema・APP_SHELL・manifest・code-index・全JS構文と自動選定31スイートを含めPASS。system Chromeでは既知フレークv118がrunner内で1回失敗したが、v118単体とEdge最終gateではPASSした。"
+  ],
+  "knownLimitations": [
+    "iOS Safari実機PWAでの更新・オフライン動作と実機フォントでの表示確認は監督者側で必要。",
+    "この環境では標準Playwright Chromiumがspawn EPERMになるため、ブラウザ検査はsystem Chrome/Edgeで補完した。",
+    "run-allはCRLFを正規化せずsourceHash比較するため既存suiteのstale警告を出すが、正本のtest-manifest --checkはPASSしている。"
+  ]
+}
