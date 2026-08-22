@@ -13,7 +13,7 @@ let localDateTimeToMs, resolveEstimateMin;
 let clamp, isStaleBlock, renderDeferringForFocus;
 let renderCircularProgress, remainingText, remainingTextNormal;
 let renderPomodoroInterruptControls;
-let homeSyncAlertBanner;
+let syncAlertBanner, renderAtisPanel;
 let gateEditMode;
 let todayTickerId = null;
 let todayRenderedDateISO = null;
@@ -25,10 +25,10 @@ function configureToday(deps) {
     clamp, isStaleBlock, renderDeferringForFocus,
     renderCircularProgress, remainingText, remainingTextNormal,
     renderPomodoroInterruptControls,
-    homeSyncAlertBanner, gateEditMode
+    syncAlertBanner, renderAtisPanel, gateEditMode
   } = deps);
   configureTodayTower({
-    escapeHTML, todayISO, homeSyncAlertBanner, blocksForDate, towerFlights,
+    escapeHTML, todayISO, syncAlertBanner, renderAtisPanel, blocksForDate, towerFlights,
     runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp,
     towerMotionSetting: () => state.settings.towerMotion,
     renderTodayPomodoro,

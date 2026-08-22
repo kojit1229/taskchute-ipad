@@ -105,26 +105,22 @@ function check(name, cond, extra = "") {
     check("昨日のAIフィードバックdetailsが無い", await page.locator(".journal-yesterday-feedback").count() === 0);
 
     // ============================================================
-    // (a-2) fetchロジック・保存データは無変更: Homeの「AIから」カードで引き続き読める
+    // (a-2) fetchロジック・保存データは無変更: 統合画面のATISで引き続き読める
     // ============================================================
-    console.log("[a-2] 回帰: AIフィードバックのfetch・保存はHomeの「AIから」カードで引き続き機能する");
+    console.log("[a-2] 回帰: AIフィードバックのfetch・保存は統合画面のATISで引き続き機能する");
     // hydrateStaticMarkdownは起動時に一度だけ「今日から見た昨日」分を無条件fetchするため、
     // fixtureを用意した後は再起動相当(reload)で再fetchさせる(v57等と同じ流儀)。
     feedbackFixture = "# AIフィードバック本文_v141\n\n昨日の振り返り_v141\n";
     await page.evaluate(({ KEY, YESTERDAY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
-      s.currentView = "home";
+      s.currentView = "today";
       if (s.feedback) delete s.feedback[YESTERDAY];
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, YESTERDAY });
     await page.reload();
     await page.waitForTimeout(700);
-    // v149(UI改善計画Phase4a): 「AIから」(home-ai-feedback-read)はホームの2タブ分割で
-    // ホームタブへ移動した(既定は今日タブ)。
-    await page.click('[data-action="home-tab"][data-tab="home"]');
-    await page.waitForTimeout(150);
-    const homeFbText = await page.locator(".home-ai-feedback-read").textContent().catch(() => "");
-    check("Homeの「AIから」カードに前日フィードバックが読める(回帰)", (homeFbText || "").includes("昨日の振り返り_v141"), (homeFbText || "").slice(0, 200));
+    const atisFbText = await page.locator(".tower-atis-feedback").textContent().catch(() => "");
+    check("ATISに前日フィードバックが読める(回帰)", (atisFbText || "").includes("昨日の振り返り_v141"), (atisFbText || "").slice(0, 200));
 
     // ============================================================
     // (b-1) normalizeState後方互換: storeVisitsキーが無い旧stateにも[]が補完される

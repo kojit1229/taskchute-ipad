@@ -204,8 +204,8 @@ function renderGymLogCard(date) {
       ${entries.length ? `<div class="cond-gym-list" style="margin-top:8px">
         ${entries.map((g) => {
           const best = lastGymRecord(g.exercise, date);
-          return `<div class="home-ck">
-            <span class="home-ck-name">${escapeHTML(g.exercise)} ${g.weight}kg × ${g.reps}${best ? `<span class="muted" style="font-size:11px"> (前回 ${best.weight}kg×${best.reps} / ${best.date})</span>` : ""}</span>
+          return `<div class="check-row">
+            <span class="check-row-name">${escapeHTML(g.exercise)} ${g.weight}kg × ${g.reps}${best ? `<span class="muted" style="font-size:11px"> (前回 ${best.weight}kg×${best.reps} / ${best.date})</span>` : ""}</span>
             <button class="btn ghost" style="font-size:11px; padding:4px 8px" data-action="delete-gym-entry" data-date="${date}" data-id="${g.id}">×</button>
           </div>`;
         }).join("")}
@@ -248,9 +248,9 @@ function renderStoreVisitsCard(date) {
       ${visits.length ? visits.map((v) => {
         const safeUrl = safeExternalUrl(v.url);
         return `
-        <div class="home-ck" style="align-items:flex-start; flex-wrap:wrap">
+        <div class="check-row" style="align-items:flex-start; flex-wrap:wrap">
           <div style="flex:1; min-width:0">
-            <div class="home-ck-name" style="font-weight:600">
+            <div class="check-row-name" style="font-weight:600">
               ${safeUrl ? `<a href="${escapeHTML(safeUrl)}" target="_blank" rel="noopener noreferrer">${escapeHTML(v.name)}</a>` : escapeHTML(v.name)}
             </div>
             ${v.comment ? `<div class="muted" style="font-size:12px; white-space:pre-wrap; margin-top:2px">${escapeHTML(v.comment)}</div>` : ""}
@@ -362,7 +362,7 @@ function buildStoreVisitsYearModal(year) {
       ${byMonth.get(m).map((v) => {
         const safeUrl = safeExternalUrl(v.url);
         return `
-        <div class="home-ck" style="align-items:flex-start; flex-wrap:wrap">
+        <div class="check-row" style="align-items:flex-start; flex-wrap:wrap">
           <div style="flex:1; min-width:0">
             <div class="muted" style="font-size:11.5px">${escapeHTML(v.date)}</div>
             <div style="font-weight:600">${safeUrl ? `<a href="${escapeHTML(safeUrl)}" target="_blank" rel="noopener noreferrer">${escapeHTML(v.name)}</a>` : escapeHTML(v.name)}</div>
@@ -489,7 +489,7 @@ function renderJournal() {
   const report = (state.reports || {})[date] || "";
   // v141: AIフィードバック列(3列目)はジャーナルタブの表示から撤去した(未使用のため。
   // CHANGES_v141.md参照)。fetchロジック(hydrateStaticMarkdown)・保存データ(state.feedback/
-  // cachedFeedback)自体は削除しておらず、Homeの「AIから」カード(homeAiFeedbackReadHTML)で
+  // cachedFeedback)自体は削除しておらず、統合画面のATISで
   // 引き続き読める。
   // v148(UI改善計画Phase3-4): 当日パネルを朝/夜/本文の3detailsへ再編する。既定openは現在時刻
   // (〜14時=朝、14時〜=夜)/常時(本文)から計算するが、_journalSegmentOverride(src/state/
@@ -508,9 +508,9 @@ function renderJournal() {
       ${renderDateBar()}
       ${renderExperimentSection()}
       <section class="journal-grid">
-        <details class="panel home-fold journal-panel-prev">
-          <summary class="home-fold-summary"><span class="home-fold-chevron">▶</span>LOG PREV <span>前日 (${previous})</span></summary>
-          <div class="home-fold-body"><div class="md-render readonly-md">${renderMarkdown(state.journals[previous] || "記載なし")}</div></div>
+        <details class="panel fold journal-panel-prev">
+          <summary class="fold-summary"><span class="fold-chevron">▶</span>LOG PREV <span>前日 (${previous})</span></summary>
+          <div class="fold-body"><div class="md-render readonly-md">${renderMarkdown(state.journals[previous] || "記載なし")}</div></div>
         </details>
         <div class="panel journal-panel-today">
           <div class="row" style="margin-bottom:10px">
@@ -523,25 +523,25 @@ function renderJournal() {
               ${personalDataReady(state.settings.github) ? `<button class="btn" data-action="push-report">📤 GitHubに日報push</button>` : ""}
             </div>
           </div>
-          <details class="home-fold journal-segment journal-segment-morning" ${morningOpen ? "open" : ""}>
-            <summary class="home-fold-summary" data-action="toggle-journal-segment" data-segment="morning"><span class="home-fold-chevron">▶</span>MORNING BRIEF <span>朝(前夜の睡眠・体調・睡眠時間・服薬・余力)</span></summary>
-            <div class="home-fold-body">
+          <details class="fold journal-segment journal-segment-morning" ${morningOpen ? "open" : ""}>
+            <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="morning"><span class="fold-chevron">▶</span>MORNING BRIEF <span>朝(前夜の睡眠・体調・睡眠時間・服薬・余力)</span></summary>
+            <div class="fold-body">
               ${renderSleepCard(date)}
               ${renderMorningEnergyPicker(date)}
               ${renderConditionMorningExtra(date)}
             </div>
           </details>
-          <details class="home-fold journal-segment journal-segment-evening" ${eveningOpen ? "open" : ""}>
-            <summary class="home-fold-summary" data-action="toggle-journal-segment" data-segment="evening"><span class="home-fold-chevron">▶</span>NIGHT BRIEF <span>夜(体調・メモ・運動・お店ログ)</span></summary>
-            <div class="home-fold-body">
+          <details class="fold journal-segment journal-segment-evening" ${eveningOpen ? "open" : ""}>
+            <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="evening"><span class="fold-chevron">▶</span>NIGHT BRIEF <span>夜(体調・メモ・運動・お店ログ)</span></summary>
+            <div class="fold-body">
               ${renderEveningConditionCard(date)}
               ${renderGymLogCard(date)}
               ${renderStoreVisitsCard(date)}
             </div>
           </details>
-          <details class="home-fold journal-segment journal-segment-body" ${bodyOpen ? "open" : ""}>
-            <summary class="home-fold-summary" data-action="toggle-journal-segment" data-segment="body"><span class="home-fold-chevron">▶</span>FREE LOG <span>本文</span></summary>
-            <div class="home-fold-body">
+          <details class="fold journal-segment journal-segment-body" ${bodyOpen ? "open" : ""}>
+            <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="body"><span class="fold-chevron">▶</span>FREE LOG <span>本文</span></summary>
+            <div class="fold-body">
               <details class="journal-prompts" style="margin-bottom:10px; padding:8px 12px; background:var(--panel-soft); border-radius:8px">
                 <summary style="cursor:pointer; font-size:13px; color:var(--muted); font-weight:600">💡 思考のヒント(クリックで開閉)</summary>
                 <div style="margin-top:10px; display:grid; gap:10px; font-size:12px">

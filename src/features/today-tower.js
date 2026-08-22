@@ -3,7 +3,7 @@
 
 import { renderStandingOrders, renderCountdown, renderTopbandPC, creedRotationLine } from "./topband.js";
 
-let escapeHTML, todayISO, homeSyncAlertBanner, blocksForDate, towerFlights;
+let escapeHTML, todayISO, syncAlertBanner, renderAtisPanel, blocksForDate, towerFlights;
 let runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp;
 let towerMotionSetting;
 let renderTodayPomodoro;
@@ -21,7 +21,7 @@ let lastFlightLogKeys;
 
 function configureTodayTower(deps) {
   ({
-    escapeHTML, todayISO, homeSyncAlertBanner, blocksForDate, towerFlights,
+    escapeHTML, todayISO, syncAlertBanner, renderAtisPanel, blocksForDate, towerFlights,
     runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp,
     towerMotionSetting, renderTodayPomodoro, journalForDate,
     gateRules, earlyBirdLogForDate, earlyRiseTarget, gateEditMode
@@ -315,7 +315,7 @@ function renderTodayTower() {
   const flights = boardFlights(blocks, nowMin);
   const weekday = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
   return `<div class="today-tower" data-motion="${escapeHTML(towerMotionSetting())}" data-night="${isNightHour(now.getHours()) ? 1 : 0}" data-paused="${document.hidden ? 1 : 0}">
-    ${homeSyncAlertBanner()}
+    ${syncAlertBanner()}
     <div class="tower-topband">
       <header class="tower-header">
         <span class="tower-beacon" aria-hidden="true"><i></i></span>
@@ -331,7 +331,7 @@ function renderTodayTower() {
       ${renderFlightLog(today, blocks)}
     </div>
     <div class="tower-col-center">${renderTowerGates(blocks)}</div>
-    <div class="tower-col-right">${renderTowerJournal(today)}${renderStandingOrders()}${renderCountdown()}</div>
+    <div class="tower-col-right">${renderAtisPanel()}${renderTowerJournal(today)}${renderStandingOrders()}${renderCountdown()}</div>
     ${renderTodayPomodoro(blocks, queueBlocksOf(blocks)).replace(">POMODORO<span>", ">CABIN TIMER<span>")}
   </div>`;
 }

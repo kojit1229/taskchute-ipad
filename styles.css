@@ -405,16 +405,59 @@ button {
   margin-bottom: 2px;
 }
 
-/* v148: 「その他」の目的別4群見出し */
-.more-group { margin-top: 18px; }
-.more-group:first-of-type { margin-top: 0; }
-.more-group-title {
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--muted);
-  margin: 0 2px 8px;
-  letter-spacing: 0.02em;
+/* v230: 「その他」は群見出しを持たないフラットなTOWERグリッド。 */
+.tower-skin.more-tower {
+  min-height: 100%;
+  padding: 12px 12px 40px;
+  color: var(--tower-text);
+  font-family: var(--mono, ui-monospace), "SFMono-Regular", Consolas, monospace;
+  background: var(--tower-bg);
 }
+.more-tower .view-header {
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--tower-line);
+  background: var(--tower-panel);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
+}
+.more-tower .view-header .eyebrow { color: var(--tower-cyan); font-size: 10px; letter-spacing: .18em; }
+.more-tower .view-header h1 { color: var(--tower-text); font-size: 20px; letter-spacing: .06em; }
+.more-tower-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+.more-tower-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  gap: 3px 10px;
+  min-height: 76px;
+  padding: 13px 14px;
+  overflow: hidden;
+  border: 1px solid var(--tower-line);
+  border-radius: 0;
+  color: var(--tower-text);
+  background: var(--tower-panel);
+  text-align: left;
+}
+.more-tower-item::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  border-top: 2px solid var(--tower-cyan);
+  border-right: 2px solid var(--tower-cyan);
+  opacity: .55;
+}
+.more-tower-item:focus-visible { outline: 2px solid var(--tower-amber); outline-offset: 2px; }
+.more-tower-code { grid-row: 1 / 3; align-self: center; color: var(--tower-cyan); font-size: 10px; letter-spacing: .12em; }
+.more-tower-mark { margin-right: 7px; }
+.more-tower-item strong { align-self: end; font-size: 14px; letter-spacing: .04em; }
+.more-tower-item small { color: var(--tower-text); font-size: 10px; opacity: .55; }
 
 h1,
 h2,
@@ -710,7 +753,7 @@ h3 {
   position: relative;
 }
 /* v146(UI改善計画Phase1-3): 見た目は30pxのまま、::beforeで当たり判定だけ44px相当に拡張
-   (.home-box/.home-dotの既存パターン=styles.css:2442-2463を流用)。誤タップ対策。 */
+   (既存の当たり判定拡張パターンを流用)。誤タップ対策。 */
 .checkbox-button::before {
   content: "";
   position: absolute;
@@ -801,15 +844,8 @@ h3 {
     flex: 0 1 auto;
   }
   /* v149レビュー対応(必須2続き): ヘッダー〜「いま、これ」までの縦幅を375pxで実測しながら
-     切り詰めた(.home-header-wrapはrenderHome()専用のラッパーで他ビューには存在しないため、
+     切り詰めた(専用ラッパーに限定していたため、
      ここから下は影響範囲がホームのみに限定される)。 */
-  .home-header-wrap .view-header {
-    margin-bottom: var(--space-1);
-    gap: var(--space-1);
-  }
-  .home-header-wrap .buffer-meter {
-    margin: -8px 0 2px;
-  }
 }
 
 .block-row {
@@ -1029,7 +1065,7 @@ h3 {
 }
 
 /* v150レビュー対応(項目7): 見た目のサイズは変えず、::beforeの透明拡張で当たり判定だけ
-   44px相当に広げる(.home-box::before等、既存の当たり判定拡張パターンと同じ手法)。 */
+   44px相当に広げる(既存の当たり判定拡張パターンと同じ手法)。 */
 .toast-action::before {
   content: "";
   position: absolute;
@@ -2193,284 +2229,51 @@ h3 {
 }
 
 /* タイムラインの現在時刻線(.now-line は既にインライン定義) */
-
-/* ============================================================
-   v31: ホーム(コックピット)
-   ============================================================ */
-.home-grid { display: grid; grid-template-columns: 1fr; gap: var(--space-3); margin-top: var(--space-3); }
-@media (min-width: 760px) { .home-grid { grid-template-columns: 1fr 1fr; } }
-
-.home-creed {
-  margin-top: var(--space-3); border-color: var(--orange);
-  background: linear-gradient(180deg, var(--orange-soft), transparent);
-}
-.home-creed-head {
-  font-size: 21px; letter-spacing: 0.12em; color: var(--orange-text);
-  font-weight: 700; text-align: center; margin-bottom: 14px;
-}
-.home-creed-row { display: flex; align-items: center; gap: 14px; padding: 6px 2px; }
-.home-creed-num {
-  font-size: 35px; font-weight: 700; color: var(--orange-text);
-  width: 35px; text-align: center; flex: none; line-height: 1;
-}
-.home-creed-text { font-size: 24px; font-weight: 600; line-height: 1.5; }
-/* v71: 信条カードは折りたたみ化(details)したため、横並びレイアウトは
-   本体側の .home-fold-body(旧: .home-creed自身)に付け替えた。見出しは
-   summary側(.home-creed-head)に残り、常に1行(=幅100%相当)で表示される。 */
-@media (min-width: 760px) {
-  .home-creed-row { padding: 5px 14px; }
-  .home-creed .home-fold-body { display: flex; gap: 6px; flex-wrap: wrap; }
-  .home-creed-row { flex: 1; min-width: 220px; }
-}
-
-.home-life {
-  margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr 1fr;
-  gap: 0; padding: 0;
-}
-.home-life-cell { padding: 15px 14px; border-right: 1px solid var(--line-soft); }
-.home-life-cell:last-child { border-right: none; }
-.home-life-top { display: flex; justify-content: space-between; align-items: baseline; }
-.home-life-label { font-size: 12.5px; font-weight: 700; color: var(--muted); }
-.home-life-pct { font-size: 11.5px; font-weight: 700; color: var(--accent); }
-.home-life-num { font-size: 27px; font-weight: 300; margin: 3px 0 var(--space-2); font-variant-numeric: tabular-nums; } /* v123: 寿命カウントダウンの数字 */
-
-.home-hero { border-color: var(--orange); }
-/* v150レビュー対応(項目10): font-sizeはこの後方(v33節)の`.home-hero-title { font-size: 24px; }`
-   (同specificity・後勝ち)で常に上書きされるため死んだ宣言だった(v150のトークン置換時に
-   気づかず`var(--text-lg)`へ書き換えてしまい、実質無意味な変更になっていた)。実際の表示値
-   (24px)を変えない範囲で、ここではfont-size自体を持たせない形に整理した。
-   font-weight/line-height/cursorはこのルールだけが持つ有効な宣言なので残す。 */
-.home-hero-title { font-weight: 800; line-height: 1.4; cursor: pointer; }
-.home-hero-btn { width: 100%; margin-top: 13px; font-size: 15px; padding: var(--space-3) 0; }
-
-.home-plabel {
-  /* v127: 「章立て」感の強化(帯デザイン自体は維持、字間・上マージンのみ調整) */
-  display: flex; align-items: center; gap: 9px; font-size: 21px; margin-top: var(--space-2);
-  font-weight: 800; letter-spacing: 0.03em; color: var(--muted); margin-bottom: 15px;
-}
-.home-plabel::before {
-  content: ""; width: 16px; height: 4px; border-radius: 2px;
-  background: var(--muted); flex: none;
-}
-.home-plabel.orange { color: var(--orange-text); }
-.home-plabel.orange::before { background: var(--orange); }
-.home-plabel.blue { color: var(--accent); }
-.home-plabel.blue::before { background: var(--accent); }
-.home-plabel.green { color: var(--green-text); }
-.home-plabel.green::before { background: var(--green); }
-.home-count { margin-left: auto; font-weight: 700; }
-.home-foot {
-  margin-top: 11px; padding-top: 9px; border-top: 1px solid var(--line-soft);
-  font-size: 12.5px; color: var(--muted);
-}
-
-.home-ck, .home-tc, .home-flow, .home-due {
-  display: flex; align-items: center; gap: 10px;
-  padding: 7px 6px; margin: 0 -6px; border-radius: 7px;
-}
-.home-ck:hover, .home-tc:hover, .home-flow:hover, .home-due:hover { background: var(--panel-soft); }
-.home-tc, .home-flow { border-bottom: 1px solid var(--line-soft); }
-.home-box {
-  /* v83: UX監査B4 — 完了トグルの形状を丸チェックに統一(角丸四角→円)。サイズ・当たり判定は現状維持 */
-  width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line);
-  flex: none; display: flex; align-items: center; justify-content: center;
-  font-size: 11px; color: #fff; cursor: pointer;
-  position: relative;
-}
-.home-ck.done .home-box { background: var(--green); border-color: var(--green); }
-.home-dot {
-  width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line);
-  flex: none; display: flex; align-items: center; justify-content: center;
-  font-size: 10px; color: #fff; cursor: pointer;
-  position: relative;
-}
-.home-dot.done { background: var(--green); border-color: var(--green); }
-.home-dot.doing { border-color: var(--orange); background: var(--orange); }
-/* v81: 見た目は20pxのまま、::beforeで当たり判定だけ44px相当に拡張(UX監査A1) */
-.home-box::before, .home-dot::before {
-  content: "";
-  position: absolute;
-  inset: -12px;
-}
-.home-ck-name, .home-tc-name, .home-flow-name, .home-due-main {
-  flex: 1; min-width: 0; cursor: pointer; font-size: 14.5px;
-}
-.home-ck.done .home-ck-name, .home-tc.done .home-tc-name, .home-flow.done .home-flow-name {
-  color: var(--faint); text-decoration: line-through;
-}
-.home-star { color: var(--orange-text); font-size: var(--text-xs); }
-.home-flow-time { font-size: 12.5px; color: var(--muted); width: 44px; flex: none; }
-.home-flow.now {
-  background: var(--orange-soft); border-radius: 7px; border-bottom-color: transparent;
-}
-.home-badge {
-  /* v147(UI改善計画Phase2 2-3): 10px→11.5px(AA対応の一環、可読性の最低線) */
-  font-size: 11.5px; font-weight: 700; padding: 2px 7px; border-radius: 5px; flex: none;
-}
-.home-badge.doing { color: var(--orange-text); background: var(--orange-soft); }
-.home-badge.todo { color: var(--faint); background: var(--panel-soft); }
-
-.home-rate { display: flex; align-items: baseline; gap: var(--space-2); margin-bottom: 7px; }
-.home-rate-cap { font-size: var(--text-xs); font-weight: 700; color: var(--muted); }
-.home-rate-pct { font-size: 21px; font-weight: 800; color: var(--orange-text); font-variant-numeric: tabular-nums; }
-.home-rate-pct.green { color: var(--green-text); }
-.home-rate-frac { font-size: 11.5px; color: var(--muted); margin-left: auto; }
-
-
-.home-due-name { font-size: var(--text-sm); }
-.home-due-sub { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
-.home-add { white-space: nowrap; }
-
-.home-steps { display: flex; align-items: center; gap: var(--space-4); }
-.home-ring { position: relative; width: 78px; height: 78px; flex: none; }
-.home-ring-txt {
-  position: absolute; inset: 0; display: flex; align-items: center;
-  justify-content: center; font-size: 17px; font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-.home-energy {
-  margin-top: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--line-soft);
-  font-size: var(--text-xs); color: var(--muted);
-}
-
-/* ============================================================
-   v33: ホーム — フル幅ヒーロー / スコアボード / ゾーン別テーマ色
-   ============================================================ */
-
-/* いま、これ(フル幅・2カラム) */
-.home-hero { margin-top: var(--space-3); }
-.home-hero-grid {
-  display: grid; grid-template-columns: 1fr; gap: 14px;
-  align-items: center; margin-top: var(--space-1);
-}
-@media (min-width: 760px) {
-  .home-hero-grid { grid-template-columns: 1fr 240px; gap: 22px; }
-}
-.home-hero-main { min-width: 0; }
-.home-hero-title { font-size: 24px; }
-.home-hero-cat {
-  display: inline-block; margin-left: var(--space-2); padding: 2px var(--space-2); border-radius: 6px;
-  font-size: 11px; font-weight: 700; color: var(--orange-text); background: var(--orange-soft);
-}
-.home-hero-side { display: flex; flex-direction: column; gap: 9px; }
-.home-hero-btn { margin-top: 0; }
-.home-hero-next {
-  font-size: var(--text-xs); color: var(--muted); padding: 9px 11px;
-  border: 1px solid var(--line-soft); border-radius: 8px;
-}
-.home-hero-next-lab { color: var(--orange-text); font-weight: 700; margin-right: 6px; }
-.home-hero-next strong { color: var(--text); }
-
-/* ひと目スコアボード(4つの達成率) */
-.home-scoreboard {
-  margin-top: var(--space-3); display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
-}
-@media (min-width: 760px) {
-  .home-scoreboard { grid-template-columns: repeat(4, 1fr); }
-}
-.home-score {
-  background: var(--panel); border: 1px solid var(--line);
-  border-radius: var(--radius); padding: 14px 15px;
-  cursor: pointer; box-shadow: var(--shadow);
-}
-.home-score:active { transform: scale(0.985); }
-.home-score-lab { font-size: var(--text-xs); font-weight: 800; color: var(--muted); letter-spacing: 0.03em; }
-.home-score-val { display: flex; align-items: baseline; gap: var(--space-1); margin: var(--space-2) 0 10px; }
-.home-score-num { font-size: 21px; font-weight: 800; line-height: 1; }
-.home-score-unit { font-size: 13px; font-weight: 800; }
-.home-score-frac {
-  margin-left: auto; font-size: 11px; color: var(--muted);
-  font-weight: 700; align-self: flex-end;
-}
-.home-score-bar { height: 6px; }
-.home-score.orange .home-score-num, .home-score.orange .home-score-unit { color: var(--orange-text); }
-.home-score.orange .home-score-bar > span { background: var(--orange); }
-.home-score.green .home-score-num, .home-score.green .home-score-unit { color: var(--green-text); }
-.home-score.green .home-score-bar > span { background: var(--green); }
-.home-score.blue .home-score-num, .home-score.blue .home-score-unit { color: var(--accent); }
-.home-score.blue .home-score-bar > span { background: var(--accent); }
-
-/* ゾーン見出し */
-/* v127: 「章立て」感の強化。帯デザイン(色付きマーク+罫線)は維持し、上マージンを広げて
-   ゾーン間の区切りを明確化、字間をわずかに強める(v123の設計判断どおりラベル的性格は維持)。 */
-.home-zone {
-  display: flex; align-items: center; gap: 10px; margin: 20px 2px 0;
-  font-size: 21px; font-weight: 800; letter-spacing: 0.06em; color: var(--muted);
-}
-.home-zone::before {
-  content: ""; width: 10px; height: 10px; border-radius: 2px;
-  background: var(--muted); flex: none;
-}
-.home-zone::after { content: ""; flex: 1; height: 1px; background: var(--line-soft); }
-.home-zone.amber { color: var(--orange-text); } .home-zone.amber::before { background: var(--orange); }
-.home-zone.teal  { color: var(--teal-text); }   .home-zone.teal::before  { background: var(--teal); }
-.home-zone.blue  { color: var(--accent); } .home-zone.blue::before  { background: var(--accent); }
-.home-zone.green { color: var(--green-text); }  .home-zone.green::before { background: var(--green); }
-
-/* ゾーン・バンド(背景をテーマ色へ少し寄せる) */
-.home-zone-block {
-  margin-top: 14px; border: 1px solid var(--zl); border-radius: 14px;
-  padding: var(--space-1) 11px 13px; background: var(--zb);
-}
-.home-zone-block .home-grid { margin-top: var(--space-2); }
-.home-grid.single { grid-template-columns: 1fr; }
-
-/* v146(UI改善計画Phase1-1・K承認): 縦の長さを縮めるため、タップ対象を持たない受け身の
-   小さいチップ(体力予算・バッテリー残量)だけを2列表示にする。375px幅でも読める分量に
-   留め、子要素自身のflex-wrapで文言はそのまま折り返す(見た目の縮小はしない)。 */
-/* v146レビュー対応: 過去日はバッテリー残量チップが空文字になり片方だけが半分幅で残るため、
-   固定2列(1fr 1fr)ではなくauto-fit+minmaxにする。子が1個ならその1個が1列いっぱいに広がり、
-   2個ある(=375px幅相当の余地がある)ときだけ2列に分かれる。狭い幅では自然に1列へ畳まれるため
-   360px用の個別@media指定は不要になった。 */
-.home-chip-2col {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: var(--space-2);
-  align-items: start;
-}
-.z-amber { --zb: rgba(255, 149, 0, 0.075); --zl: rgba(255, 149, 0, 0.24); }
-.z-teal  { --zb: rgba(19, 181, 166, 0.085); --zl: rgba(19, 181, 166, 0.26); }
-.z-blue  { --zb: rgba(0, 122, 255, 0.065); --zl: rgba(0, 122, 255, 0.22); }
-.z-green { --zb: rgba(47, 185, 109, 0.075); --zl: rgba(47, 185, 109, 0.22); }
-
-/* ゾーン内パネルも背景をテーマ色へごく薄く寄せる */
-.z-amber .panel { background: linear-gradient(0deg, rgba(255, 149, 0, 0.045), rgba(255, 149, 0, 0.045)), var(--panel); }
-.z-teal  .panel { background: linear-gradient(0deg, rgba(19, 181, 166, 0.05), rgba(19, 181, 166, 0.05)), var(--panel); }
-.z-blue  .panel { background: linear-gradient(0deg, rgba(0, 122, 255, 0.04), rgba(0, 122, 255, 0.04)), var(--panel); }
-.z-green .panel { background: linear-gradient(0deg, rgba(47, 185, 109, 0.045), rgba(47, 185, 109, 0.045)), var(--panel); }
-
-/* ============================================================
-   v71: ホームの折りたたみカード(参照系セクションを既定closedに)
-   ============================================================ */
-.home-fold { margin-top: var(--space-3); }
-.home-zone-block .home-fold { margin-top: 0; }  /* ゾーン内(zone3/zone4)は帯自体が既に間隔を持つ */
-/* v146: journal-grid/settings-gridはCSS gridのgapで間隔を持つため、.home-foldの
-   margin-topを流用するとgapと二重に空いてしまう。ここでも既存の.home-zone-block同様に0へ戻す */
-.journal-grid .home-fold,
-.settings-grid .home-fold { margin-top: 0; }
-.home-fold-summary {
+/* 共有の折りたたみカード(details)。 */
+.fold { margin-top: var(--space-3); }
+.journal-grid .fold,
+.settings-grid .fold { margin-top: 0; }
+.fold-summary {
   cursor: pointer; list-style: none; -webkit-tap-highlight-color: transparent;
 }
-.home-fold-summary::-webkit-details-marker { display: none; }
-.home-fold-chevron {
+.fold-summary::-webkit-details-marker { display: none; }
+.fold-chevron {
   display: inline-block; margin-right: 6px; font-size: 11px;
   transition: transform 0.15s ease; color: var(--muted);
 }
-.home-fold[open] > .home-fold-summary .home-fold-chevron {
+.fold[open] > .fold-summary .fold-chevron {
   transform: rotate(90deg);
 }
-.home-fold-body { margin-top: 10px; }
-.home-zone-block .home-fold-summary { margin: 10px 2px 0; }  /* .home-zone の margin を踏襲 */
+.fold-body { margin-top: 10px; }
 
-/* v71: 「AIから」集約カード(鮮度・AI作業結果・AIフィードバック候補) */
-/* v220: .home-dividerは「AIから」カード3箇所が出力し続ける実使用クラス。v217の.home-*一括削除の
-   巻き添えで消えていた1行を復元(レビューB-1。P3でATISへ移設される当該コードの下ごしらえ)。 */
-.home-divider { height: 1px; background: var(--line-soft); margin: var(--space-3) 0; }
-.home-ai-hub { border-color: var(--orange); }
-.home-ai-sub {
-  font-size: 11.5px; font-weight: 700; color: var(--muted); margin-bottom: 6px;
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 6px;
+  margin: 0 -6px;
+  border-radius: 7px;
 }
-.home-ai-hub .ai-freshness-line { margin: 0 0 2px; }
+.check-row-name { flex: 1; min-width: 0; font-size: 14.5px; }
+
+.panel-label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: var(--space-2) 0 15px;
+  color: var(--muted);
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: .03em;
+}
+.panel-label::before {
+  content: "";
+  width: 16px;
+  height: 4px;
+  flex: none;
+  border-radius: 2px;
+  background: var(--muted);
+}
 
 /* v33: WBS 折りたたみキャレット */
 .wbs-caret {
@@ -2480,35 +2283,6 @@ h3 {
 }
 .wbs-caret:hover { background: var(--panel-soft); color: var(--text); }
 .wbs-caret-spacer { display: inline-block; width: 19px; flex: none; }
-
-/* v33: 未完了タスク — 期限切れ行の強調 */
-.home-due.overdue { box-shadow: inset 3px 0 0 var(--red); padding-left: 9px; border-radius: 6px; }
-.home-due.overdue .home-due-sub { color: var(--red); }
-
-/* v33: ホーム行のインライン充電/放電セレクト */
-.home-cd-wrap {
-  display: inline-flex; align-items: center; gap: 3px;
-  margin-left: auto; flex: none; padding-left: 6px;
-}
-/* v147(UI改善計画Phase2 2-3): 10px→11.5px(AA対応の一環、可読性の最低線) */
-.home-cd-lab { font-size: 11.5px; font-weight: 800; }
-.home-cd-lab.c { color: var(--green-text); }
-.home-cd-lab.d { color: var(--orange-text); }
-.home-cd {
-  font-family: inherit; font-size: var(--text-md); font-weight: 700;
-  padding: 3px 2px 3px var(--space-1); border: 1px solid var(--line);
-  border-radius: 6px; background: var(--panel-soft); color: var(--text);
-}
-.home-tc, .home-flow, .home-ck { flex-wrap: wrap; }
-
-/* v33: 12週ヘッダの残り日数(少し大きめ) */
-
-/* v33: 今日の足あと — エネルギー集計表示 */
-.home-energy {
-  display: flex; flex-wrap: wrap; gap: 3px var(--space-4);
-}
-.home-energy-item strong { font-size: 15px; }
-
 /* ============================================================
    v34: 0秒思考(Zero Second Thinking)
    配色はアプリの CSS 変数に追従(light/dark 両対応)。
@@ -2682,12 +2456,6 @@ h3 {
 .q-settled-note { font-size: 13px; color: var(--muted); margin-top: 8px; padding: 8px 10px; background: rgba(47,185,109,.08); border-radius: 8px; white-space: pre-line; }
 .q-card-actions { display: flex; gap: 7px; margin-top: 11px; flex-wrap: wrap; }
 
-/* --- ホーム: 開いている問い --- */
-.home-q { display: flex; gap: var(--space-2); align-items: flex-start; padding: 7px 0; cursor: pointer; }
-.home-q-badge { flex: none; font-size: 10.5px; font-weight: 800; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 6px; background: rgba(0,0,0,.06); color: var(--muted); }
-.home-q-badge.deepening { background: rgba(0,122,255,.16); color: var(--accent); }
-.home-q-text { font-size: 13.5px; line-height: 1.45; }
-
 /* =========================================================
    v40: 着手ジュース / 4週スパークライン / 双極エネルギーバー
    ========================================================= */
@@ -2705,8 +2473,6 @@ h3 {
 /* v41: 見込み終了時刻(色分け・警告なし。有限性を時刻で見せるだけ) */
 .projected-end { font-size: 12.5px; font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; }
 .projected-end:empty { display: none; }
-.home-zone .projected-end { margin-left: auto; font-size: var(--text-xs); }
-
 /* v42: AIループ搬送 — MIT候補チップ */
 /* v143: .ai-import-sec/.ai-import-h/.ai-import-row(取り込みモーダル専用)はbuildAiImportModal
    削除に伴い到達不能になったため削除した(CHANGES_v143.md参照)。 */
@@ -2948,23 +2714,6 @@ h3 {
 .lev-helper[open] summary::before { transform: rotate(90deg); }
 .lev-helper-body { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
 
-/* v61: 今日の理想ワンライナー + 3日リトライ */
-.home-ideal { margin-top: var(--space-3); padding: 10px 14px; }
-.home-ideal-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.home-ideal-eyebrow { color: var(--accent); font-size: 11.5px; font-weight: 800; white-space: nowrap; }
-.home-ideal-text { font-size: var(--text-sm); font-weight: 600; }
-.home-ideal-retry { margin-top: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--line-soft); }
-.home-ideal-empty { padding: var(--space-2) 14px; }
-.home-ideal-input {
-  width: 100%;
-  font-size: var(--text-md);
-  padding: var(--space-2) 10px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: var(--panel);
-  color: var(--text);
-}
-
 /* v62: AIプランの reason(下書きBlock内の小さな注記) */
 .draft-block-reason { font-size: 10px; color: var(--muted); line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -2981,29 +2730,6 @@ h3 {
 .ai-weekly-suggest-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line-soft); }
 .ai-weekly-suggest-row:last-child { border-bottom: none; }
 .ai-weekly-suggest-text { font-size: 13px; flex: 1; }
-.home-ideal-input::placeholder { color: var(--faint); }
-
-/* v74: 読書複利化 — 今日の1冊カード */
-.home-reading-book { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
-.home-reading-highlight {
-  font-size: var(--text-sm); line-height: 1.7; font-style: italic; color: var(--text);
-  padding: 10px var(--space-3); margin-bottom: 10px;
-  border-left: 3px solid var(--accent); background: var(--panel-soft); border-radius: 0 8px 8px 0;
-}
-.home-reading-input {
-  width: 100%;
-  font-size: var(--text-md);  /* iOS Safari のズーム防止: 16px 以上で zoom しない */
-  line-height: 1.5;
-  padding: 9px 10px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: var(--panel);
-  color: var(--text);
-  resize: vertical;
-  min-height: 44px;
-}
-.home-reading-input::placeholder { color: var(--faint); }
-
 /* v63: WIP上限アラート(提案2)。実行率で裁く赤ではなく、情報を渡すだけのアクセントトーン。 */
 .wip-banner {
   background: rgba(0,122,255,.06);
@@ -3241,7 +2967,7 @@ h3 {
   /* 開閉シェブロン3種: 状態を表すrotate(90deg)自体は([open]側のルールに)
      残したまま、そこへ至る回転アニメーションだけを止める */
   .journal-prompts summary::before,
-  .home-fold-chevron,
+  .fold-chevron,
   .lev-helper summary::before {
     transition: none;
   }
@@ -3296,6 +3022,7 @@ h3 {
 .sec-gates { order: 3; }
 .sec-log { order: 4; }
 .today-tower > .today-pomodoro { order: 4; }
+.sec-atis { order: 5; }
 .sec-journal { order: 6; }
 .sec-creed { order: 7; }
 .sec-life { order: 8; }
@@ -3562,6 +3289,46 @@ h3 {
 }
 .tower-panel-box h2 span { float: right; color: var(--tower-text); font-size: 10px; font-weight: 400; letter-spacing: .08em; opacity: .6; }
 
+.tower-atis-body { display: grid; gap: 8px; padding: 10px; }
+.tower-atis-sub { color: var(--tower-cyan); font-size: 10px; font-weight: 700; letter-spacing: .08em; }
+.tower-atis-sub span { color: var(--tower-text); opacity: .6; }
+.atis-divider { height: 1px; background: var(--tower-line); }
+.tower-atis-feedback { border: 1px solid var(--tower-line); background: var(--tower-bg); }
+.tower-atis-feedback summary { min-height: 32px; padding: 8px; color: var(--tower-cyan); cursor: pointer; list-style: none; }
+.tower-atis-feedback summary::-webkit-details-marker { display: none; }
+.tower-atis-feedback-body { padding: 8px; border-top: 1px solid var(--tower-line); font-family: system-ui, sans-serif; line-height: 1.55; }
+.tower-atis-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.atis-chip {
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 1px solid var(--tower-line);
+  border-radius: 0;
+  color: var(--tower-cyan);
+  background: var(--tower-bg);
+  font: inherit;
+  font-size: 10px;
+  text-align: left;
+}
+.atis-chip.chip-mit { border-color: var(--tower-amber); color: var(--tower-amber); }
+.tower-atis-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.atis-btn {
+  min-height: 36px;
+  padding: 6px 8px;
+  border: 1px solid var(--tower-green);
+  border-radius: 0;
+  color: var(--tower-green);
+  background: transparent;
+  font: inherit;
+  font-size: 10px;
+}
+.atis-btn:disabled { opacity: .4; }
+.atis-chip:focus-visible,
+.atis-btn:focus-visible { outline: 2px solid var(--tower-amber); outline-offset: 1px; }
+.tower-atis-status { min-height: 1em; color: var(--tower-text); font-size: 10px; opacity: .65; }
+@media (max-width: 520px) {
+  .tower-atis-actions { grid-template-columns: 1fr; }
+}
+
 .tower-journal-body { display: grid; gap: 6px; padding: 10px; }
 .tower-journal-label { color: var(--tower-cyan); font-size: 9.5px; font-weight: 700; letter-spacing: .14em; }
 .tower-journal-label span { margin-left: 6px; color: var(--tower-text); font-weight: 400; letter-spacing: .06em; opacity: .6; }
@@ -3719,8 +3486,7 @@ h3 {
 :root[data-theme="cockpit"] .view-header { border-bottom: 1px solid var(--panel-edge); background: linear-gradient(180deg, rgba(13, 21, 38, 0.92), rgba(10, 17, 32, 0.84)); box-shadow: 0 1px 0 rgba(63, 208, 255, 0.08); }
 
 :root[data-theme="cockpit"] .eyebrow,
-:root[data-theme="cockpit"] .view-breadcrumb,
-:root[data-theme="cockpit"] .more-group-title {
+:root[data-theme="cockpit"] .view-breadcrumb {
   font-family: var(--mono);
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -3730,8 +3496,7 @@ h3 {
 
 :root[data-theme="cockpit"] .panel,
 :root[data-theme="cockpit"] .item,
-:root[data-theme="cockpit"] .form-strip,
-:root[data-theme="cockpit"] .home-score {
+:root[data-theme="cockpit"] .form-strip {
   border-color: var(--panel-edge);
   border-radius: 4px;
   background: linear-gradient(180deg, var(--panel-2), var(--panel));
@@ -3915,9 +3680,6 @@ h3 {
   background: linear-gradient(90deg, var(--accent), var(--go));
   box-shadow: 0 0 8px rgba(63, 208, 255, 0.18);
 }
-
-:root[data-theme="cockpit"] .home-ai-hub { border-color: rgba(180, 140, 255, 0.45); }
-:root[data-theme="cockpit"] .home-ai-hub::before { border-color: var(--purple); }
 
 :root[data-theme="cockpit"] .modal-root { background: rgba(2, 5, 12, 0.72); }
 
@@ -4251,7 +4013,7 @@ h3 {
 
    スコープ: すべて `.tower-skin.journal-tower` 配下(タブ全体ラッパー、src/features/journal.js
    のrenderJournal()が返す最外殻div)。既存クラス(.journal-grid/.panel/.journal-panel-prev/
-   .journal-panel-today/.journal-segment-*/.home-fold-*/.cond-*/.store-visit-card/.home-ck/
+   .journal-panel-today/.journal-segment-*/.fold-*/.cond-*/.store-visit-card/.check-row/
    .btn/.input/.textarea 等)は一切リネームしていない。本ファイルは「色・背景・境界線・
    フォント」等の見た目プロパティだけを子孫セレクタで追加するもので、display/grid-template-
    columns/orderなど構造・レイアウトを決めるプロパティには触れていない
@@ -4324,8 +4086,8 @@ h3 {
 
 /* 前日パネル(details.journal-panel-prev)の見出し行 = summary。TOWER意匠のパネル見出し語彙
    (英語見出し+<span>日本語</span>)はjournal.js側の文言変更で対応済み。ここでは配色のみ。 */
-.journal-tower .journal-panel-prev > .home-fold-summary,
-.journal-tower .journal-segment > summary.home-fold-summary {
+.journal-tower .journal-panel-prev > .fold-summary,
+.journal-tower .journal-segment > summary.fold-summary {
   padding: 8px 10px;
   border-bottom: 1px solid var(--tower-line);
   color: var(--tower-cyan);
@@ -4334,16 +4096,16 @@ h3 {
   letter-spacing: .14em;
   cursor: pointer;
 }
-.journal-tower .home-fold-summary span:not(.home-fold-chevron) {
+.journal-tower .fold-summary span:not(.fold-chevron) {
   margin-left: 6px; color: var(--tower-text); font-weight: 400; font-size: 10px;
   font-family: system-ui, sans-serif; letter-spacing: .02em; opacity: .7;
 }
-.journal-tower .home-fold-chevron {
+.journal-tower .fold-chevron {
   display: inline-block; margin-right: 6px; color: var(--tower-cyan); transition: transform 150ms ease;
 }
-.journal-tower details[open] > .home-fold-summary .home-fold-chevron { transform: rotate(90deg); }
-.journal-tower .home-fold-body { padding: 10px; }
-.journal-tower .journal-panel-prev .home-fold-body { padding: 10px 12px; }
+.journal-tower details[open] > .fold-summary .fold-chevron { transform: rotate(90deg); }
+.journal-tower .fold-body { padding: 10px; }
+.journal-tower .journal-panel-prev .fold-body { padding: 10px 12px; }
 
 /* 当日編集パネルの見出し(h2)。tower-panel-boxのh2語彙(cyan・大文字letter-spacing+span控えめ)を再現。 */
 .journal-tower .journal-panel-today > .row > h2 {
@@ -4390,10 +4152,10 @@ h3 {
 .journal-tower .store-visit-card {
   background: var(--tower-bg) !important; border: 1px solid var(--tower-line); border-radius: 2px;
 }
-.journal-tower .home-ck {
+.journal-tower .check-row {
   border-bottom: 1px solid var(--tower-line); color: var(--tower-text);
 }
-.journal-tower .home-ck:last-child { border-bottom: 0; }
+.journal-tower .check-row:last-child { border-bottom: 0; }
 
 /* ============ 睡眠カード/警告帯。赤警告(未アップロード)はtower-amberで代替(TOWERの配色に統一)。 ============ */
 .journal-tower [style*="var(--red-soft)"] {
@@ -4457,7 +4219,7 @@ h3 {
 .timeline-tower > .row .muted { color: var(--tower-text); opacity: .55; }
 .timeline-tower .cat-chip { border-radius: 0; }
 
-/* ---- DRIFT / TIME COMB(既存.panel/.drift-panel/.time-comb/.home-plabelのまま配色だけ) ---- */
+/* ---- DRIFT / TIME COMB(既存パネルの配色だけ変更) ---- */
 .timeline-tower .drift-panel,
 .timeline-tower .time-comb {
   margin-bottom: 12px;
@@ -4467,7 +4229,7 @@ h3 {
   color: var(--tower-text);
   box-shadow: none;
 }
-.timeline-tower .home-plabel { color: var(--tower-cyan); font-size: 11px; font-weight: 700; letter-spacing: .18em; }
+.timeline-tower .panel-label { color: var(--tower-cyan); font-size: 11px; font-weight: 700; letter-spacing: .18em; }
 .timeline-tower .drift-value { color: var(--tower-amber); font-size: 20px; font-weight: 700; }
 .timeline-tower .drift-note,
 .timeline-tower .time-comb-note { color: var(--tower-text); opacity: .6; }

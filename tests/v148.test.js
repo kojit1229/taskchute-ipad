@@ -34,7 +34,7 @@ function check(name, cond, extra = "") {
   const pad2 = (n) => String(n).padStart(2, "0");
   const isoDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 
-  async function seed({ view = "home", selectedDate, settings = {}, fixedTime } = {}) {
+  async function seed({ view = "today", selectedDate, settings = {}, fixedTime } = {}) {
     if (fixedTime) await page.clock.setFixedTime(fixedTime);
     await page.evaluate(({ KEY, view, selectedDate, settings }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
@@ -69,29 +69,27 @@ function check(name, cond, extra = "") {
     // [3e]だけは401専用の後発route登録で明示的に上書きし、認証エラーを検証する。
     await page.route((url) => url.hostname === "api.github.com" && url.pathname.includes("/contents/taskchute/app-state.json"),
       (route) => {
-        const body = JSON.stringify({ dataModifiedAt: "2000-01-01T00:00:00", currentView: "home", selectedDate: "2000-01-01", blocks: [], projects: [], tasks: [], settings: {} });
+        const body = JSON.stringify({ dataModifiedAt: "2000-01-01T00:00:00", currentView: "today", selectedDate: "2000-01-01", blocks: [], projects: [], tasks: [], settings: {} });
         const content = Buffer.from(body, "utf-8").toString("base64");
         route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ sha: "sha-startup-mock", content, encoding: "base64" }) });
       });
 
     // ============================================================
-    // (1) 「その他」の目的別4群
+    // (1) 「その他」のフラットTOWERグリッド
     // ============================================================
-    console.log("[1] 「その他」12項目 → 目的別4群");
+    console.log("[1] 「その他」は群見出しなしの単一TOWERグリッド");
     await seed({ view: "more" });
-    const groupTitles = await page.locator(".more-group-title").allTextContents();
-    check("4群の見出しが揃っている(計画/思考/振り返り/ツール)",
-      JSON.stringify(groupTitles) === JSON.stringify(["計画", "思考", "振り返り", "ツール"]), JSON.stringify(groupTitles));
-    const moreNavButtons = await page.locator('.more-group [data-action="nav"]').evaluateAll(
+    check("群見出しが撤去されている", await page.locator(".more-group-title, .more-group").count() === 0);
+    check("単一グリッドが描画される", await page.locator(".more-tower-grid").count() === 1);
+    const moreNavButtons = await page.locator('.more-tower-grid [data-action="nav"]').evaluateAll(
       (els) => els.map((el) => el.dataset.view)
     );
-    // v217: 週次・計器盤の削除後は7項目
-    check("その他グリッドは7項目(削除済みタブを除外)",
-      moreNavButtons.length === 7, JSON.stringify(moreNavButtons));
-    check("計画群が先頭でグループ単位にまとまっている",
-      moreNavButtons.slice(0, 4).join(",") === "home,wbs,wish,vision", JSON.stringify(moreNavButtons));
+    check("その他グリッドは6項目(homeを除外)",
+      moreNavButtons.length === 6, JSON.stringify(moreNavButtons));
+    check("フラットな項目順が仕様どおり",
+      moreNavButtons.join(",") === "wbs,wish,vision,zero,ai-reports,settings", JSON.stringify(moreNavButtons));
     // 頭文字1字アイコン(W/R/A等)ではなく絵文字になっていることを確認(codex-ui-review N4対応)
-    const badgeTexts = await page.locator('.more-group [data-action="nav"] .badge').allTextContents();
+    const badgeTexts = await page.locator('.more-tower-grid [data-action="nav"] .more-tower-mark').allTextContents();
     check("バッジが1文字のアルファベットではない(絵文字化)",
       badgeTexts.every((t) => !/^[A-Za-z]$/.test(t.trim())), JSON.stringify(badgeTexts));
 
@@ -102,8 +100,8 @@ function check(name, cond, extra = "") {
     await seed({ view: "zero" });
     const breadcrumbText = await page.locator(".view-breadcrumb").first().textContent();
     check("0秒思考のヘッダに「その他 › 思考」が出る", (breadcrumbText || "").includes("その他") && (breadcrumbText || "").includes("思考"), breadcrumbText);
-    console.log("[2b] home/tasks/timeline/journalには現在地表示が出ない(その他配下ではないため)");
-    for (const v of ["home", "tasks", "timeline", "journal"]) {
+    console.log("[2b] today/tasks/timeline/journalには現在地表示が出ない(その他配下ではないため)");
+    for (const v of ["today", "tasks", "timeline", "journal"]) {
       await seed({ view: v });
       const bc = await page.locator(".view-breadcrumb").count();
       check(`${v}にはview-breadcrumbが出ない`, bc === 0, String(bc));
@@ -221,7 +219,7 @@ function check(name, cond, extra = "") {
     await syncGroupLoc.locator("summary").click();
     await page.waitForTimeout(150);
     check("(前提)いったん手動でcloseできる", await syncGroupLoc.evaluate((el) => el.open) === false);
-    await page.click('[data-action="nav"][data-view="home"]');
+    await page.click('[data-action="nav"][data-view="today"]');
     await page.waitForTimeout(200);
     await page.click(".pd-auth-banner");
     await page.waitForTimeout(300);

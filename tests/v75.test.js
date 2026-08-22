@@ -109,7 +109,7 @@ function check(name, cond, extra = "") {
   // 起動時のhydrateStaticMarkdown(app.js:16315)の非同期継続(recordFeedbackFile→saveState、
   // 鮮度persist等)がseed書込〜reloadコミットの隙間に着弾し、在メモリstate(currentView="today"、
   // v182の新既定)でseedを丸ごと上書きする競合があった(低速環境ほど高確率)。
-  async function seed({ blocks = [], feedbackFiles = [], view = "home" } = {}) {
+  async function seed({ blocks = [], feedbackFiles = [], view = "today" } = {}) {
     await page.goto(`http://localhost:${PORT}/styles.css`);  // アプリJSを停止させてから書く
     await page.evaluate(({ KEY, blocks, feedbackFiles, TODAY, view }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
@@ -125,9 +125,9 @@ function check(name, cond, extra = "") {
   }
 
   async function runMorningPlan() {
-    await page.click('[data-action="nav"][data-view="tasks"]');
+    await page.click('[data-action="nav"][data-view="today"]');
     await page.waitForTimeout(150);
-    await page.click('[data-action="ai-morning-plan"]');
+    await page.click('.sec-atis [data-action="ai-morning-plan"]');
     await page.waitForTimeout(700);
   }
 
@@ -138,21 +138,17 @@ function check(name, cond, extra = "") {
     await passGithubGate(page);
 
     // ============================================================
-    // (1) ホーム「AIから」で当日/前日のAIフィードバック本文が読める(personal-data API経由)
+    // (1) 統合画面ATISで当日/前日のAIフィードバック本文が読める(personal-data API経由)
     // ============================================================
-    console.log("[1] ホーム『AIから』カードに、personal-data API経由のAIフィードバック本文を読むdetailsが既定closedで出る");
-    await seed({ feedbackFiles: [TODAY], view: "home" });
-    // v149(UI改善計画Phase4a): 「AIから」(home-ai-hub、その中の.home-ai-feedback-read)は
-    // ホームの2タブ分割でホームタブへ移動した(既定は今日タブ)。
-    await page.click('[data-action="home-tab"][data-tab="home"]');
-    await page.waitForTimeout(150);
+    console.log("[1] 統合画面ATISに、personal-data API経由のAIフィードバック本文を読むdetailsが既定closedで出る");
+    await seed({ feedbackFiles: [TODAY], view: "today" });
     check("api.github.comのAIフィードバック_TODAY.mdへリクエストが実際に飛んでいる(personal-data API経由の裏取り)",
       feedbackApiRequests.some((p) => p.endsWith(`AIフィードバック_${TODAY}.md`)), JSON.stringify(feedbackApiRequests));
     check("api.github.comのAIフィードバック_PREV.mdへリクエストが実際に飛んでいる(前日1日分の無条件fetch仕様)",
       feedbackApiRequests.some((p) => p.endsWith(`AIフィードバック_${PREV}.md`)), JSON.stringify(feedbackApiRequests));
-    const detailsCount = await page.locator(".home-ai-feedback-read").count();
+    const detailsCount = await page.locator(".tower-atis-feedback").count();
     check("「AIフィードバックを読む」detailsが1つ表示される", detailsCount === 1);
-    const detailsOpenAttr = await page.locator(".home-ai-feedback-read").getAttribute("open").catch(() => null);
+    const detailsOpenAttr = await page.locator(".tower-atis-feedback").getAttribute("open").catch(() => null);
     check("detailsは既定closed(open属性が無い)", detailsOpenAttr === null, String(detailsOpenAttr));
     const homeText = await page.locator("main").textContent();
     check("当日のAIフィードバック本文が読める(DOM上に存在)", homeText.includes("本日分のテスト本文です。"), homeText.slice(0, 300));
@@ -187,7 +183,7 @@ function check(name, cond, extra = "") {
     check("下書きバー(AIプラン由来のスケジュール)も同時に表示される", timelineText1.includes("AIプラン由来"));
 
     console.log("[4b] 「追加」を押すとzeroThinking.themesへ入り、カードから消え、zeroSecThemeLogに記録される");
-    const row1 = page.locator(".home-ck", { hasText: "テーマ1_v75" });
+    const row1 = page.locator(".check-row", { hasText: "テーマ1_v75" });
     await row1.locator('[data-action="zerosec-theme-add"]').click();
     await page.waitForTimeout(300);
     const s4a = await stateNow();
@@ -201,7 +197,7 @@ function check(name, cond, extra = "") {
     check("テーマ2はまだカードに残っている", timelineText2.includes("テーマ2_v75"));
 
     console.log("[4c] 「見送り」を押すとzeroThinking.themesには入らず、zeroSecThemeLogにskippedで記録され、カードごと消える");
-    const row2 = page.locator(".home-ck", { hasText: "テーマ2_v75" });
+    const row2 = page.locator(".check-row", { hasText: "テーマ2_v75" });
     await row2.locator('[data-action="zerosec-theme-skip"]').click();
     await page.waitForTimeout(300);
     const s4b = await stateNow();
@@ -253,12 +249,12 @@ function check(name, cond, extra = "") {
       s.tasks = [];
       s.projects = [];
       s.selectedDate = TODAY;
-      s.currentView = "tasks";
+      s.currentView = "today";
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, TODAY });
     await page.goto(`http://localhost:${PORT}/`);
     await page.waitForTimeout(700);
-    await page.click('[data-action="ai-morning-plan"]');
+    await page.click('.sec-atis [data-action="ai-morning-plan"]');
     await page.waitForTimeout(700);
     const s6 = await stateNow();
     check("候補0件でもタイムラインへ遷移する", s6.currentView === "timeline", s6.currentView);
@@ -274,23 +270,19 @@ function check(name, cond, extra = "") {
     // ============================================================
     console.log("[7] 「タスク名: 理由」形式のMIT候補行はタスク名のみを候補にする。コロン無しの行は従来どおり全文(should-fix2)");
     FEEDBACK_FIXTURE[PREV] = "## 明日への提案\n\n- タスクA_v75: 理由A_v75の説明文\n- タスクB_v75\n";
-    await seed({ blocks: [], feedbackFiles: [], view: "home" });
-    await page.click('[data-action="home-tab"][data-tab="home"]');
-    await page.waitForTimeout(150);
+    await seed({ blocks: [], feedbackFiles: [], view: "today" });
     // v75: 「AIから」カードには、生の本文をそのまま読めるdetails(homeAiFeedbackReadHTML、意図した
     // 仕様)と、抽出済みの候補リスト(aiFeedbackCandidatesHTML)が両方入っている。ここで検証したいのは
     // 「候補として抽出された文言」からコロン以降が除かれていることなので、判定は候補行(候補見出し
     // 「昨日のフィードバックからの候補」の直後、追加ボタンを含む行群)のテキストだけに絞る。
-    const candidatesSectionText = await page.locator(".home-ai-hub .home-ai-sub", { hasText: "昨日のフィードバックからの候補" })
-      .locator("xpath=following-sibling::div[contains(@class,'home-ck')]")
-      .allTextContents();
+    const candidatesSectionText = await page.locator("[data-atis-feedback-candidates]").allTextContents();
     const candidatesText = candidatesSectionText.join(" / ");
-    const homeText7 = await page.locator(".home-ai-hub").textContent();
+    const atisText7 = await page.locator(".sec-atis").textContent();
     check("コロン付き候補は候補行にタスク名のみが表示される(理由部分は含まれない)",
       candidatesText.includes("タスクA_v75") && !candidatesText.includes("理由A_v75"), candidatesText);
     check("コロン無しの候補行は従来どおり全文がそのまま候補になる(旧フォーマット互換)",
-      homeText7.includes("タスクB_v75"), homeText7);
-    const addBtnTitle7 = await page.locator('.home-ai-hub [data-action="mit-candidate-add"]').first().getAttribute("data-title");
+      atisText7.includes("タスクB_v75"), atisText7);
+    const addBtnTitle7 = await page.locator('.sec-atis [data-action="mit-candidate-add"]').first().getAttribute("data-title");
     check("追加ボタンのdata-titleにも理由が混入していない", addBtnTitle7 === "タスクA_v75", addBtnTitle7);
   } finally {
     await browser.close();

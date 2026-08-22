@@ -192,7 +192,7 @@ function driftPanelHTML() {
     : null;
   const driftLabel = `${drift > 0 ? "+" : ""}${drift}分`;
   return `<section class="panel drift-panel">
-    <div class="home-plabel">DRIFT</div>
+    <div class="panel-label">DRIFT</div>
     <div class="drift-value">${driftLabel}</div>
     <div class="muted drift-note">今日の全Block(ルーティン・タイムライン由来を含む)で、着地予定と計画上の最終終了を比較。</div>
     ${candidate ? `<div class="drift-suggestion">
@@ -231,7 +231,7 @@ function actualGaps(blocks) {
 function timeCombHTML() {
   const gaps = actualGaps(blocksForDate(state.selectedDate));
   return `<section class="panel time-comb">
-    <div class="home-plabel">TIME COMB</div>
+    <div class="panel-label">TIME COMB</div>
     <div class="muted time-comb-note">実績記録どうしの15分以上の隙間を表示します。</div>
     <div class="time-comb-list">${gaps.length ? gaps.map(([start, end]) => `
       <button type="button" class="time-comb-gap" data-action="time-comb-fill" data-start="${start}" data-end="${end}">

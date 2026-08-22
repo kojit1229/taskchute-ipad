@@ -115,8 +115,8 @@ function extractBlockBody(css, headerRe) {
     // ============================================================
     // (c) 主要タブの描画確認
     // ============================================================
-    console.log("[1] 主要タブ(ホーム/WBS/タイムライン/ジャーナル)の描画確認");
-    for (const view of ["home", "wbs", "timeline", "journal"]) {
+    console.log("[1] 主要タブ(タスク/WBS/タイムライン/ジャーナル)の描画確認");
+    for (const view of ["tasks", "wbs", "timeline", "journal"]) {
       await page.evaluate((args) => {
         const [KEY, view] = args;
         const s = JSON.parse(localStorage.getItem(KEY));
@@ -141,12 +141,12 @@ function extractBlockBody(css, headerRe) {
     }
 
     // ============================================================
-    // (a) ヘッダーマテリアルのcomputed style(ホーム画面で確認)
+    // (a) ヘッダーマテリアルのcomputed style(タスク画面で確認)
     // ============================================================
     console.log("[2] .view-headerのマテリアル(computed style)");
     await page.evaluate((KEY) => {
       const s = JSON.parse(localStorage.getItem(KEY));
-      s.currentView = "home";
+      s.currentView = "tasks";
       localStorage.setItem(KEY, JSON.stringify(s));
     }, KEY);
     await page.reload();

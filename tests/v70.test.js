@@ -80,7 +80,7 @@ function check(name, cond, extra = "") {
     deleted: false, collapsed: false
   });
 
-  async function seed({ blocks = [], tasks = [], projects = [], view = "home", focusTimerAuto, pomodoro } = {}) {
+  async function seed({ blocks = [], tasks = [], projects = [], view = "today", focusTimerAuto, pomodoro } = {}) {
     await page.evaluate(({ KEY, blocks, tasks, projects, TODAY, view, focusTimerAuto, pomodoro }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.blocks = blocks;
@@ -161,7 +161,7 @@ function check(name, cond, extra = "") {
     }, { KEY, TODAY });
     await page.reload();
     await page.waitForTimeout(400);
-    await page.click('[data-action="nav"][data-view="home"]');  // 正規化値を永続化させる
+    await page.click('[data-action="nav"][data-view="today"]');  // 正規化値を永続化させる
     await page.waitForTimeout(200);
     const norm1 = await stateNow();
     check("settings.focusTimerAutoが無ければtrueが補完される", norm1.settings.focusTimerAuto === true, JSON.stringify(norm1.settings.focusTimerAuto));
@@ -243,51 +243,6 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(300);
     const toastText3b = await page.locator("#toast").textContent();
     check("対象0件のトーストが出る", toastText3b.includes("対象のBlockがありません"), toastText3b);
-
-    // ============================================================
-    // (d) Now画面(実行コンベア)
-    // ============================================================
-    console.log("[4] Now画面: 「▶ Now」で全画面表示 → 開始/完了/スキップで次のBlockへ遷移 → ✕で通常UIへ");
-    await page.evaluate(() => { window.confirm = () => true; });
-    await seed({
-      blocks: [
-        planBlock({ id: "now-current", title: "いまのBlock", startMin: 9 * 60 + 45, minutes: 30 }),  // 09:45-10:15 (now=10:00を含む)
-        planBlock({ id: "now-next", title: "つぎのBlock", startMin: 11 * 60, minutes: 30 })
-      ],
-      view: "home",
-      focusTimerAuto: false
-    });
-    check("ホームに▶ Nowボタンがある", await page.locator('[data-action="now-mode-open"]').count() === 1);
-    await page.click('[data-action="now-mode-open"]');
-    await page.waitForTimeout(300);
-    check("Now全画面が開く", await page.locator("#nowFullscreen").count() === 1);
-    check("現在時刻を含むBlockが表示される", (await page.locator(".now-title").textContent()).includes("いまのBlock"));
-    check("開始ボタンが出る(未着手)", await page.locator('.now-fullscreen [data-action="now-start"]').count() === 1);
-    await clickAndSkipLifecycleModal('.now-fullscreen [data-action="now-start"]');
-    await page.waitForTimeout(300);
-    check("開始後は「開始」ボタンが disabled になる", await page.locator('.now-fullscreen [data-action="now-start"]').isDisabled());
-    check("着手中の表示が出る", (await page.locator(".now-status").textContent()).includes("着手中"));
-    const s4a = await stateNow();
-    check("actualStartAtが記録される", !!s4a.blocks.find((b) => b.id === "now-current")?.actualStartAt);
-
-    await page.click('.now-fullscreen [data-action="now-conveyor-complete"]');
-    await page.waitForTimeout(300);
-    const s4b = await stateNow();
-    check("完了操作でBlockがcompletedになる", s4b.blocks.find((b) => b.id === "now-current")?.completed === true);
-    check("完了後は次のBlockへ自動で切り替わる", (await page.locator(".now-title").textContent()).includes("つぎのBlock"));
-
-    console.log("[4b] スキップで次へ進み、全部片付くと完了メッセージになる");
-    await page.click('.now-fullscreen [data-action="now-conveyor-skip"]');
-    await page.waitForTimeout(300);
-    const s4c = await stateNow();
-    check("スキップはBlockのデータを変更しない(セッション内で無視するだけ)", s4c.blocks.find((b) => b.id === "now-next")?.completed !== true);
-    check("スキップ後は対象が無くなり完了メッセージになる", (await page.locator(".now-fullscreen-content").textContent()).includes("すべて片づきました"));
-
-    await page.click('[data-action="now-mode-close"]');
-    await page.waitForTimeout(300);
-    check("✕で通常UIに戻る(Now全画面が消える)", await page.locator("#nowFullscreen").count() === 0);
-    check("ホーム画面に戻っている", await page.locator('[data-action="now-mode-open"]').count() === 1);
-
     // ============================================================
     // (e) タイマー自動起動(focusTimerAuto)
     // ============================================================

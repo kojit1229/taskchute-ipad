@@ -24,7 +24,7 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(500);
     await passGithubGate(page);
 
-    console.log("[1] Home『AIから』カードがstate.feedbackを表示する");
+    console.log("[1] 統合画面ATISがstate.feedbackを表示する");
     const PREV = "2026-07-30";
     await page.evaluate(({ KEY, PREV }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
@@ -32,14 +32,12 @@ function check(name, cond, extra = "") {
       s.feedback = { [PREV]: "## 明日への提案\n\n- [ ] v143回帰確認用マーカー\n" };
       s.feedbackFiles = [PREV];
       s.selectedDate = "2026-07-31";
-      s.currentView = "home";
+      s.currentView = "today";
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, PREV });
     await page.reload();
     await page.waitForTimeout(700);
-    await page.click('[data-action="home-tab"][data-tab="home"]');
-    await page.waitForTimeout(150);
-    check("ホーム『AIから』の本文閲覧detailsが出る", await page.locator(".home-ai-feedback-read").count() === 1);
+    check("ATISの本文閲覧detailsが出る", await page.locator(".tower-atis-feedback").count() === 1);
     const homeText = await page.locator("main").textContent();
     check("state.feedback由来の前日フィードバック本文が読める",
       homeText.includes("v143回帰確認用マーカー"), homeText.slice(0, 300));

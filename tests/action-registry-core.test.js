@@ -79,7 +79,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "add-gym-entry", "delete-gym-entry",
   "store-visit-add", "store-visit-edit", "store-visit-delete", "store-visit-year",
   "add-project", "delete-project", "add-task", "toggle-task", "toggle-criteria-request",
-  "task-today", "home-add-today", "home-jump", "delete-task",
+  "task-today", "delete-task",
   "toggle-project-collapse", "toggle-task-collapse",
   "suspend-project", "resume-project", "suspend-task", "resume-task",
   "toggle-show-suspended", "toggle-wbs-hide-done", "toggle-tasks-show-future",
@@ -114,11 +114,11 @@ const GOLDEN_CLICK_ACTIONS = [
   "add-category", "delete-category", "add-break-message", "delete-break-message",
   "toggle-vision-direct-category", "vision-open-direct-settings",  // v189: F7 直結カテゴリ選択+誘導(設定ビュー)
   "tl-zoom", "tl-energy-mode",
-  "toggle-journal-segment", "toggle-home-reflect-fold", "toggle-settings-sync",
+  "toggle-journal-segment", "toggle-settings-sync",
   "toggle-sidebar",
   "add-wish", "open-wish", "add-wish-subtask", "toggle-wish-subtask",
   "wish-subtask-to-tasks", "wish-realize", "wish-unrealize", "delete-wish",
-  "zt-add-toggle", "zt-add-cancel", "zt-add-submit", "zt-tab", "home-tab",
+  "zt-add-toggle", "zt-add-cancel", "zt-add-submit", "zt-tab",
   "zt-fav-toggle", "zt-importance-toggle", "zt-theme-delete",
   "zt-suggestion-adopt", "zt-suggestion-dismiss",
   "zt-group-add", "zt-group-rename", "zt-group-delete", "zt-group-toggle",
@@ -212,7 +212,7 @@ const APP_JS_REGISTERED_ACTIONS = [
   "report-copy-ai", "report-share-ai",
   "generate-report", "download-report", "download-data",
   "carry-over", "migration-ritual-choice", "ideal-retry",
-  "toggle-journal-segment", "toggle-home-reflect-fold",
+  "toggle-journal-segment",
   // --- v178: WBS/Project/Task CRUD(18) ---
   "add-project", "delete-project", "add-task", "toggle-task", "delete-task",
   "toggle-project-collapse", "toggle-task-collapse",
@@ -236,8 +236,8 @@ const APP_JS_REGISTERED_ACTIONS = [
   "draft-undo", "draft-remove-reason", "draft-remove-reason-dismiss",
   // --- v179: 検索(2) ---
   "open-search", "search-jump",
-  // --- v180: Block作成(2、WBS/ホームからの「今日へ追加」) ---
-  "task-today", "home-add-today",
+  // --- v180: Block作成(WBSからの「今日へ追加」) ---
+  "task-today",
   // --- v180: Block/Now(9) ---
   "toggle-block", "toggle-task-complete", "now-start", "now-end", "bulk-approve-planned",
   "now-mode-open", "now-mode-close", "now-conveyor-complete", "now-conveyor-skip",
@@ -259,7 +259,7 @@ const EXPECTED_REMAINING_IF_CHAIN = GOLDEN_CLICK_ACTIONS.filter(
 
 function extractClickActions() {
   const startMarker = 'document.addEventListener("click", (event) => {';
-  const endMarker = "// v71: ホームの折りたたみカード";
+  const endMarker = 'document.addEventListener("toggle", (event) => {';
   const start = appSource.indexOf(startMarker);
   const end = appSource.indexOf(endMarker, start);
   if (start < 0 || end < 0) {

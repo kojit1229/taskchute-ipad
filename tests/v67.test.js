@@ -85,7 +85,7 @@ function check(name, cond, extra = "") {
     deleted: false, collapsed: false
   });
 
-  async function seed({ blocks = [], tasks = [], projects = [], view = "home", aiLinkFreshness, aiWorkProcessedIds = [] } = {}) {
+  async function seed({ blocks = [], tasks = [], projects = [], view = "today", aiLinkFreshness, aiWorkProcessedIds = [] } = {}) {
     await page.evaluate(({ KEY, blocks, tasks, projects, TODAY, view, aiLinkFreshness, aiWorkProcessedIds }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.blocks = blocks;
@@ -136,7 +136,7 @@ function check(name, cond, extra = "") {
     }, { KEY, TODAY });
     await page.reload();
     await page.waitForTimeout(400);
-    await page.click('[data-action="nav"][data-view="home"]');  // 正規化値を永続化させる
+    await page.click('[data-action="nav"][data-view="today"]');  // 正規化値を永続化させる
     await page.waitForTimeout(200);
     const normalized1 = await stateNow();
     const legacyTask = (normalized1.tasks || []).find((t) => t.id === "legacy-task");
@@ -174,14 +174,11 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (c) AI連携鮮度: 経過日数の表示 + 3日閾値の注意バナー
     // ============================================================
-    // v149(UI改善計画Phase4a): 「AIから」(home-ai-hub、鮮度ライン・AI作業結果を含む)は
-    // ホームの2タブ分割でホームタブへ移動した(既定は今日タブ)。reload/seedのたびにタブは
-    // 既定へ戻るため、ホームを見る箇所ごとに切り替える。
-    const gotoHomeTab = async () => { await page.click('[data-action="home-tab"][data-tab="home"]'); await page.waitForTimeout(150); };
+    const waitForAtis = async () => { await page.waitForSelector(".sec-atis"); };
 
     console.log("[3] AI連携鮮度: 両方とも新しければ注意バナー無し、テキストに経過日数が出る");
-    await seed({ view: "home", aiLinkFreshness: { feedbackAt: TODAY, planAt: TODAY } });
-    await gotoHomeTab();
+    await seed({ view: "today", aiLinkFreshness: { feedbackAt: TODAY, planAt: TODAY } });
+    await waitForAtis();
     check("鮮度ラインが表示される", await page.locator(".ai-freshness-line").count() === 1);
     const freshText = await page.locator(".ai-freshness-line").textContent();
     check("フィードバック「今日届いた」が出る", freshText.includes("フィードバック 今日届いた"), freshText);
@@ -190,8 +187,8 @@ function check(name, cond, extra = "") {
     check("注意バナーは出ない", await page.locator(".ai-freshness-banner").count() === 0);
 
     console.log("[4] AI連携鮮度: フィードバックが3日途絶えると注意バナーが出る(責めない文言)");
-    await seed({ view: "home", aiLinkFreshness: { feedbackAt: D3AGO, planAt: TODAY } });
-    await gotoHomeTab();
+    await seed({ view: "today", aiLinkFreshness: { feedbackAt: D3AGO, planAt: TODAY } });
+    await waitForAtis();
     const freshText2 = await page.locator(".ai-freshness-line").textContent();
     check("フィードバック「3日前」が出る", freshText2.includes("フィードバック 3日前"), freshText2);
     check("ドットはwarn(注意あり)", await page.locator(".ai-freshness-dot.warn").count() === 1);
@@ -200,13 +197,13 @@ function check(name, cond, extra = "") {
     check("バナー文言は「止まっているかも」で責めない", bannerText.includes("AI連携が止まっているかも"), bannerText);
 
     console.log("[5] AI連携鮮度: 2日前は閾値未満なので注意バナーは出ない");
-    await seed({ view: "home", aiLinkFreshness: { feedbackAt: D1AGO, planAt: D1AGO } });
-    await gotoHomeTab();
+    await seed({ view: "today", aiLinkFreshness: { feedbackAt: D1AGO, planAt: D1AGO } });
+    await waitForAtis();
     check("1日前は注意バナー無し", await page.locator(".ai-freshness-banner").count() === 0);
 
     console.log("[6] AI連携鮮度: 一度も届いていない(null)場合も「まだ届いていません」+ 注意バナー");
-    await seed({ view: "home", aiLinkFreshness: { feedbackAt: null, planAt: null } });
-    await gotoHomeTab();
+    await seed({ view: "today", aiLinkFreshness: { feedbackAt: null, planAt: null } });
+    await waitForAtis();
     const freshText3 = await page.locator(".ai-freshness-line").textContent();
     check("未取得は「まだ届いていません」表示", freshText3.includes("まだ届いていません"), freshText3);
     check("未取得も注意バナーが出る", await page.locator(".ai-freshness-banner").count() === 1);
@@ -226,15 +223,14 @@ function check(name, cond, extra = "") {
         wbsTask("ai-task-2", "請求書テンプレ更新", { aiWork: true })
       ],
       projects: [testProject()],
-      view: "home"
+      view: "today"
     });
-    await gotoHomeTab();
+    await waitForAtis();
     await page.waitForTimeout(400);  // hydrateStaticMarkdown() の非同期fetch完了を待つ
     const resultIdCompleted = `${TODAY}__ai-task-1`;
     const resultIdBlocked = `${TODAY}__ai-task-2`;
     const resultIdQueued = `${TODAY}__idx2`;
-    // v71: 「AIが処理した作業」は独立カードから「AIから」集約カード内のサブ見出し(.home-ai-sub)に変更された
-    check("「AIが処理した作業」カードが表示される", await page.locator('.home-ai-sub:has-text("AIが処理した作業")').count() === 1);
+    check("ATISに「AIが処理した作業」が表示される", await page.locator('.tower-atis-sub:has-text("AIが処理した作業")').count() === 1);
     check("3件のai-work-rowが表示される", await page.locator(".ai-work-row").count() === 3);
     check("completed行に「実績として登録」ボタンがある",
       await page.locator(`[data-action="ai-work-approve"][data-result-id="${resultIdCompleted}"]`).count() === 1);
@@ -247,12 +243,6 @@ function check(name, cond, extra = "") {
       (await page.locator(".ai-work-row:has-text(\"本番環境への反映\")").textContent()).includes("承認待ち(PC側のqueueにあります)"));
     check("queued行には承認/質問ボタンが無い",
       await page.locator(`.ai-work-row:has-text("本番環境への反映") button`).count() === 0);
-
-    // v146(UI改善計画Phase1-1): 「AIから」は参照系として既定closedの折りたたみになった。
-    // 上のcount()ベースの検証はDOMに常在するため無影響だが、ここからのクリック操作には
-    // 表示(open)が要るため開く。
-    await page.locator("details.home-ai-hub summary").first().click();
-    await page.waitForTimeout(150);
 
     console.log("[8] completed: 「実績として登録」ワンタップで実績Blockが作成され、Taskも完了化される");
     await page.click(`[data-action="ai-work-approve"][data-result-id="${resultIdCompleted}"]`);
@@ -287,7 +277,7 @@ function check(name, cond, extra = "") {
     // 600ms内に収まらないことがあり、まれに1回目のrender直後の状態を観測してしまう
     // (queued行だけでなく処理済み分も含めて見える誤検出。アサーション自体は変更していない)。
     // 2回目renderの完了を示す「行数が安定するまで」ポーリング待機して環境依存のflakeを解消する。
-    await gotoHomeTab();
+    await waitForAtis();
     await page.waitForFunction(
       () => document.querySelectorAll(".ai-work-row").length === 1,
       null, { timeout: 5000 }

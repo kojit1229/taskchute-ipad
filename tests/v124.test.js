@@ -119,9 +119,9 @@ function extractAllBlockBodies(css, headerRe) {
   if (reducedMotionBodies.length > 0) {
     check("reduced-motionブロックが.toastの縦スライドtransitionを止めている",
       /\.toast\s*\{[^}]*transition:\s*opacity/.test(reducedMotionBody));
-    check("reduced-motionブロックが開閉シェブロン3種(journal-prompts/home-fold/lev-helper)の回転transitionを止めている",
+    check("reduced-motionブロックが開閉シェブロン3種(journal-prompts/fold/lev-helper)の回転transitionを止めている",
       /\.journal-prompts summary::before[^{]*\{[^}]*transition:\s*none/.test(reducedMotionBody) &&
-      /\.home-fold-chevron[^{]*\{[^}]*transition:\s*none/.test(reducedMotionBody) &&
+      /\.fold-chevron[^{]*\{[^}]*transition:\s*none/.test(reducedMotionBody) &&
       /\.lev-helper summary::before[^{]*\{[^}]*transition:\s*none/.test(reducedMotionBody));
     check("zt-drain(残り時間の機能情報)はreduced-motionブロックで止めない(監督判断: §14はフィードバック除去ではない)",
       !/\.zt-write-card\.run::before/.test(reducedMotionBody));
@@ -147,12 +147,12 @@ function extractAllBlockBodies(css, headerRe) {
     console.log("[1] アプリ起動確認");
     await page.evaluate((KEY) => {
       const s = JSON.parse(localStorage.getItem(KEY));
-      s.currentView = "home";
+      s.currentView = "tasks";
       localStorage.setItem(KEY, JSON.stringify(s));
     }, KEY);
     await page.reload();
     await page.waitForTimeout(400);
-    check("アプリが起動しホーム画面が表示される",
+    check("アプリが起動し統合画面が表示される",
       await page.locator("#app").count() >= 1);
 
     console.log("[2] モーダル(横断検索)の開閉");

@@ -25,6 +25,7 @@ function check(name, cond, extra = "") {
   const pad2 = (n) => String(n).padStart(2, "0");
   const isoOf = (date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
   const today = isoOf(base);
+  const yesterday = isoOf(new Date(base.getFullYear(), base.getMonth(), base.getDate() - 1));
   const tomorrow = isoOf(new Date(base.getFullYear(), base.getMonth(), base.getDate() + 1));
   const atMinute = (date, minute) => `${date}T${pad2(Math.floor(minute / 60))}:${pad2(minute % 60)}:00`;
   const block = (id, title, date, minute, extra = {}) => ({
@@ -82,19 +83,31 @@ function check(name, cond, extra = "") {
     check("旧cockpit値でも.today-towerが描画される", await page.locator(".today-tower").count() === 1);
     check("旧cockpit値はtowerへ固定正規化される", await storedSkin() === "tower", await storedSkin());
 
-    console.log("[2] todaySkin設定UIは廃止され、設定にAI再プラン導線がある");
+    console.log("[2] ATISにAI操作3ボタンを集約し、設定・tasks側の重複導線を撤去");
     await seedSkin("cockpit", "settings");
     check("todaySkinの設定selectが存在しない", await page.locator('select[data-setting-field="todaySkin"]').count() === 0);
     await page.evaluate(() => { const fold = document.querySelector('details[data-fold-id="settings-daily"]'); if (fold) fold.open = true; });
-    check("設定にAI再プラン実行ボタンがある", await page.locator('[data-action="today-replan"]', { hasText: "AI再プラン実行" }).count() === 1);
-    await page.locator('[data-action="today-replan"]', { hasText: "AI再プラン実行" }).click();
-    // v221: seed済みトークンがあるためトークン未設定案内は出ない。requestReplanが呼ばれた証拠として
-    // _replanUiのフィードバック(送信中/排他エラー/通信エラーのいずれか)が設定画面の状態行に出ることを待つ
-    await page.waitForFunction(() => {
-      const spans = Array.from(document.querySelectorAll("#main .muted"));
-      return spans.some((el) => /再プラン|依頼|送信|下書き|処理中|失敗|エラー/.test(el.textContent || ""));
-    }, null, { timeout: 15000 });
-    check("AI再プラン実行ボタンが既存requestReplanを呼びフィードバックが表示される", true);
+    check("設定にAI再プランボタンが残っていない", await page.locator('[data-action="today-replan"]').count() === 0);
+    await page.evaluate(({ KEY, yesterday }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.journalMeta[yesterday] = { ...(s.journalMeta[yesterday] || {}), aiMitCandidates: ["ATIS MIT候補"], aiTaskCandidates: ["ATISタスク候補"] };
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, yesterday });
+    await page.reload();
+    await page.waitForSelector('#app[data-view="settings"]');
+    await page.locator('#sidebar [data-action="nav"][data-view="today"]').click();
+    await page.waitForSelector(".sec-atis");
+    check("ATISに朝プラン/下書きスケジュール/AI再プランの3ボタンが各1つある",
+      await page.locator('.sec-atis [data-action="ai-morning-plan"]').count() === 1
+      && await page.locator('.sec-atis [data-action="ai-schedule"]').count() === 1
+      && await page.locator('.sec-atis [data-action="today-replan"]').count() === 1);
+    check("ATISにMIT候補・タスク候補チップが集約される",
+      await page.locator('.sec-atis [data-atis-mit-candidates]').count() === 1
+      && await page.locator('.sec-atis [data-atis-task-candidates]').count() === 1);
+    await page.locator('#sidebar [data-action="nav"][data-view="tasks"]').click();
+    await page.waitForSelector('#app[data-view="tasks"]');
+    check("tasks側にAI操作ボタン・候補チップの重複がない",
+      await page.locator('[data-action="ai-morning-plan"], [data-action="ai-schedule"], .ai-mit-chips, .ai-task-chips').count() === 0);
     await page.locator('#sidebar [data-action="nav"][data-view="today"]').click();
     await page.waitForSelector(".today-tower");
     check("今日タブは常に.today-towerを描画する", await page.locator(".today-tower").count() === 1);
@@ -578,7 +591,7 @@ function check(name, cond, extra = "") {
       return {
         columns: getComputedStyle(root).gridTemplateColumns,
         board: rect(".tower-board"), runway: rect(".tower-runway"), gates: rect(".tower-gates"),
-        log: rect(".sec-log"), journal: rect(".sec-journal"),
+        log: rect(".sec-log"), atis: rect(".sec-atis"), journal: rect(".sec-journal"),
         right: rect(".tower-col-right"), topbandDisplay: getComputedStyle(document.querySelector(".tower-topband-pc")).display
       };
     });
@@ -587,7 +600,8 @@ function check(name, cond, extra = "") {
     check("NOW LANDINGとARRIVALSは左、GATEは中央、右列はその右", Math.abs(desktopLayout.board.x - desktopLayout.runway.x) < 1
       && Math.abs(desktopLayout.log.x - desktopLayout.runway.x) < 1
       && desktopLayout.runway.x < desktopLayout.gates.x && desktopLayout.gates.x < desktopLayout.right.x
-      && Math.abs(desktopLayout.journal.x - desktopLayout.right.x) < 1,
+       && Math.abs(desktopLayout.atis.x - desktopLayout.right.x) < 1
+       && Math.abs(desktopLayout.journal.x - desktopLayout.right.x) < 1,
       JSON.stringify(desktopLayout));
     check("PC上帯はflex表示", desktopLayout.topbandDisplay === "flex", desktopLayout.topbandDisplay);
     const pcTopbandText = (await page.locator(".tower-topband-pc").textContent()) || "";
@@ -609,18 +623,19 @@ function check(name, cond, extra = "") {
         const runway = document.querySelector(".tower-runway").getBoundingClientRect();
         const gates = document.querySelector(".tower-gates").getBoundingClientRect();
         const log = document.querySelector(".sec-log").getBoundingClientRect();
+        const atis = document.querySelector(".sec-atis").getBoundingClientRect();
         const journal = document.querySelector(".sec-journal").getBoundingClientRect();
         const creed = document.querySelector(".tower-col-right .sec-creed").getBoundingClientRect();
         const life = document.querySelector(".tower-col-right .sec-life").getBoundingClientRect();
         return {
           boardX: board.x, runwayX: runway.x, scrollWidth: document.scrollingElement.scrollWidth, innerWidth,
-          order: [runway.top, board.top, gates.top, log.top, journal.top, creed.top, life.top],
+          order: [runway.top, board.top, gates.top, log.top, atis.top, journal.top, creed.top, life.top],
           topbandDisplay: getComputedStyle(document.querySelector(".tower-topband-pc")).display
         };
       });
       check(`${viewport.width}pxはboard/runwayが縦積み`, Math.abs(mobileLayout.boardX - mobileLayout.runwayX) < 1, JSON.stringify(mobileLayout));
       check(`${viewport.width}pxは横はみ出しなし`, mobileLayout.scrollWidth <= mobileLayout.innerWidth, JSON.stringify(mobileLayout));
-      check(`${viewport.width}pxはNOW→ARRIVALS→GATE→FLIGHT LOG→JOURNAL→STANDING ORDERS→COUNTDOWN順`, mobileLayout.order.every((top, index, list) => index === 0 || list[index - 1] < top), JSON.stringify(mobileLayout));
+      check(`${viewport.width}pxはNOW→ARRIVALS→GATE→FLIGHT LOG→ATIS→JOURNAL→STANDING ORDERS→COUNTDOWN順`, mobileLayout.order.every((top, index, list) => index === 0 || list[index - 1] < top), JSON.stringify(mobileLayout));
       check(`${viewport.width}pxはPC上帯を非表示`, mobileLayout.topbandDisplay === "none", mobileLayout.topbandDisplay);
     }
 

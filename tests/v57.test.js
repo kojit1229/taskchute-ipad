@@ -100,9 +100,8 @@ function check(name, cond, extra = "") {
     }, { KEY });
     await page.reload();
     await page.waitForTimeout(700);
-    // v182 D3: 新規stateの起動ビューがtodayになり、[data-date-picker]はhome側にある。
-    //          homeへ明示遷移してから日付移動する(検証意図は不変)。
-    await page.click('.nav-button[data-view="home"]');
+    // 統合画面には日付ピッカーが無いため、タスク画面へ移動して日付変更する。
+    await page.click('.nav-button[data-view="tasks"]');
     await page.waitForTimeout(300);
     await page.evaluate(({ KEY, PAST }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
@@ -149,17 +148,12 @@ function check(name, cond, extra = "") {
     check("直push検知した前日分が feedbackFiles に登録される(以後は正規ルート)",
       Array.isArray(ffAfter) && ffAfter.includes(YESTERDAY), JSON.stringify(ffAfter));
 
-    // v141: AIフィードバック列はジャーナルタブのUIから撤去したため、反映確認はHomeの
-    // 「AIから」カード(homeAiFeedbackReadHTML)で行う(fetchロジック・保存データ自体は無変更)
-    await page.click('[data-action="nav"][data-view="home"]');
+    // AIフィードバック列はジャーナルタブのUIから撤去済みのため、統合画面ATISで確認する。
+    await page.click('[data-action="nav"][data-view="today"]');
     await page.waitForTimeout(400);
-    // v149(UI改善計画Phase4a): 「AIから」(home-ai-feedback-read)はホームの2タブ分割で
-    // ホームタブへ移動した(既定は今日タブ)。
-    await page.click('[data-action="home-tab"][data-tab="home"]');
-    await page.waitForTimeout(150);
-    const homeText = await page.locator(".home-ai-feedback-read").textContent();
-    check("取得した前日フィードバックの本文がHomeの「AIから」カードに反映される(マーカー一致)",
-      (homeText || "").includes(FEEDBACK_MARKER), (homeText || "").slice(0, 200));
+    const atisText = await page.locator(".tower-atis-feedback").textContent();
+    check("取得した前日フィードバックの本文がATISに反映される(マーカー一致)",
+      (atisText || "").includes(FEEDBACK_MARKER), (atisText || "").slice(0, 200));
   } finally {
     await browser.close();
     server.close();

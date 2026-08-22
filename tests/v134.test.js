@@ -150,7 +150,7 @@ function hoursAgoIso(h) { return isoLocal(new Date(Date.now() - h * 3600000)); }
     check("この端末のpush成功時刻が現在時刻付近に更新される", Math.abs(pushKeyMs - beforePush) < 60000, pushKeyVal);
     const settingsText = await page.locator("main").textContent();
     check("設定タブに「この端末」のpush/pull成功時刻が表示される", settingsText.includes("この端末:") && settingsText.includes("push成功"), settingsText.slice(0, 50));
-    await page.click('[data-action="nav"][data-view="home"]');
+    await page.click('[data-action="nav"][data-view="today"]');
     await page.waitForTimeout(200);
     check("push成功後、次の描画でバナーが消える", await page.locator(".sync-alert-banner").count() === 0);
 

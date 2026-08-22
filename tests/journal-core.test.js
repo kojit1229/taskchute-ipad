@@ -246,8 +246,8 @@ async function loadModules() {
     foldMod._journalSegmentOverride.morning = false;
     foldMod._journalSegmentOverride.evening = true;
     html = journalMod.renderJournal();
-    const morningBlock = /<details class="home-fold journal-segment journal-segment-morning"[^>]*>/.exec(html)?.[0] || "";
-    const eveningBlock = /<details class="home-fold journal-segment journal-segment-evening"[^>]*>/.exec(html)?.[0] || "";
+    const morningBlock = /<details class="fold journal-segment journal-segment-morning"[^>]*>/.exec(html)?.[0] || "";
+    const eveningBlock = /<details class="fold journal-segment journal-segment-evening"[^>]*>/.exec(html)?.[0] || "";
     check("overrideでmorning=falseにすると朝segmentはopenが付かない", !morningBlock.includes("open"), morningBlock);
     check("overrideでevening=trueにすると夜segmentはopenが付く", eveningBlock.includes("open"), eveningBlock);
 
@@ -264,8 +264,8 @@ async function loadModules() {
     global.Date = MorningFixedDate;
     try {
       html = journalMod.renderJournal();
-      const morningBlock2 = /<details class="home-fold journal-segment journal-segment-morning"[^>]*>/.exec(html)?.[0] || "";
-      const eveningBlock2 = /<details class="home-fold journal-segment journal-segment-evening"[^>]*>/.exec(html)?.[0] || "";
+      const morningBlock2 = /<details class="fold journal-segment journal-segment-morning"[^>]*>/.exec(html)?.[0] || "";
+      const eveningBlock2 = /<details class="fold journal-segment journal-segment-evening"[^>]*>/.exec(html)?.[0] || "";
       check("9時(14時前)は朝segmentがopen(時刻ベース既定)", morningBlock2.includes("open"), morningBlock2);
       check("9時は夜segmentがopenでない", !eveningBlock2.includes("open"), eveningBlock2);
     } finally {

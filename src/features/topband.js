@@ -22,9 +22,9 @@
 // 参照した app.js 側の実物(2026-08-22時点、git show HEAD:app.js):
 //   computeMetrics: 12690 / metric: 12707 / ageMetric: 12716
 //   daysBetween: 12988 / addDays: 12965 / addYears: 12982 / clamp: 13038
-//   homeCreedBody(信条3行の文言移設元・現行): 2800
+//   信条3行の文言移設元: 2800
 //
-// 「Week n/12」表示は既存app.jsのどこにも実装がない新規要素(旧ホームのhomeLifespanBodyは
+// 「Week n/12」表示は既存app.jsのどこにも実装がない新規要素(旧カウントダウンは
 // 12WY項目をフィルタで除外しており、12週の週番号表示自体が存在しなかった)。このモジュールが
 // dateSpanMetricのelapsed日数から新規に導出する(定義は本ファイル内コメント参照)。
 //

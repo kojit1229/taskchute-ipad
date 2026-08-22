@@ -88,10 +88,10 @@ function check(name, cond, extra = "") {
 
   // ---- スケジュール下書き(決定論配置) + D&D ----
   console.log("[1] 下書きスケジュール(決定論配置)");
-  await page.click('[data-action="nav"][data-view="tasks"]');
+  await page.click('[data-action="nav"][data-view="today"]');
   await page.waitForTimeout(300);
-  check("タスクシュートに下書きボタンがAPIキー無しで表示される", await page.locator('[data-action="ai-schedule"]').count() === 1);
-  await page.click('[data-action="ai-schedule"]');
+  check("ATISに下書きボタンがAPIキー無しで表示される", await page.locator('.sec-atis [data-action="ai-schedule"]').count() === 1);
+  await page.click('.sec-atis [data-action="ai-schedule"]');
   await page.waitForTimeout(500);
   check("タイムラインへ自動遷移", await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).currentView, KEY) === "timeline");
   check("下書きブロックが表示される", await page.locator(".draft-block").count() === 1);
@@ -141,11 +141,11 @@ function check(name, cond, extra = "") {
 
   // 破棄フロー(v199: blk-Aは確定後も引き続き未着手Blockのため再度候補になりうる。
   //   候補の有無どちらでも安全に倒れるよう両分岐を維持する)
-  await page.click('[data-action="nav"][data-view="tasks"]');
+  await page.click('[data-action="nav"][data-view="today"]');
   await page.waitForTimeout(200);
-  const cand2 = await page.locator('[data-action="ai-schedule"]').count();
+  const cand2 = await page.locator('.sec-atis [data-action="ai-schedule"]').count();
   if (cand2) {
-    await page.click('[data-action="ai-schedule"]');
+    await page.click('.sec-atis [data-action="ai-schedule"]');
     await page.waitForTimeout(500);
     const hasDraft = await page.locator(".draft-block").count();
     if (hasDraft) {

@@ -183,7 +183,6 @@ function pruneExpiredSuggestedThemes(list) {
 // v217: 振り返り系の専用3ビューを削除し、週次レビューはAIレポートに集約。
 const navItems = [
   { id: "today", label: "今日", mark: "▶" },
-  { id: "home", label: "ホーム", mark: "H" },
   { id: "tasks", label: "タスクシュート", mark: "T" },
   { id: "timeline", label: "タイムライン", mark: "L" },
   { id: "wbs", label: "WBS", mark: "W" },
@@ -240,7 +239,8 @@ configureToday({
   clamp, isStaleBlock, renderDeferringForFocus,
   renderCircularProgress, remainingText, remainingTextNormal,
   renderPomodoroInterruptControls,
-  homeSyncAlertBanner,
+  syncAlertBanner,
+  renderAtisPanel,
   gateEditMode: () => _towerGateEditMode
 });
 configureTopband({
@@ -351,7 +351,7 @@ registerActions({
   "delete-category": ({ target }) => deleteCategory(target.dataset.catId),
   // v189レビューL4: ALIGNMENT誘導→設定のマスタ群(既定閉・localStorage記憶)を開いて着地させる
   "vision-open-direct-settings": () => {
-    setHomeFoldOpen("settings-master", true);
+    setFoldOpen("settings-master", true);
     setView("settings");
   },
   "toggle-vision-direct-category": ({ target }) => {
@@ -498,11 +498,6 @@ registerActions({
     const parent = target.closest("details");
     if (seg && parent) _journalSegmentOverride[seg] = !parent.open;  // クリック時点ではまだ未反映のため反転
   },
-  "toggle-home-reflect-fold": ({ target }) => {
-    const seg = target.dataset.segment;
-    const parent = target.closest("details");
-    if (seg && parent) _homeReflectFoldOverride[seg] = !parent.open;  // クリック時点ではまだ未反映のため反転
-  }
 });
 // v178: app.js分割・段階5-7a(modal系dispatcher分岐の移行・前半)。prep-stage5-dispatcher.md
 // §2-Cの「WBS/Project/Task CRUD(18)」+モーダル起動系(modal-close/modal-delete/lev-judge、3)の
@@ -671,7 +666,7 @@ registerActions({
   // --- 検索(2) ---
   "open-search": () => openSearchModal(),
   "search-jump": ({ target }) => {
-    const view = target.dataset.view || "home";
+    const view = target.dataset.view || "today";
     const date = target.dataset.date || "";
     const zeroTab = target.dataset.zeroTab || "";
     const ztQuery = target.dataset.ztSearch;
@@ -690,9 +685,8 @@ registerActions({
 // timeline-mode)はv181で継続する。ハンドラ実体はいずれもapp.js残留のため相乗りregisterActions
 // (v174方式)へ移行した。ロジック無改変。
 registerActions({
-  // --- Block作成(2、WBS/ホームからの「今日へ追加」) ---
+  // --- Block作成(WBSからの「今日へ追加」) ---
   "task-today": ({ id }) => createBlockFromTask(id),
-  "home-add-today": ({ id }) => addTaskToToday(id),
   // --- Block/Now(9) ---
   "toggle-block": ({ id }) => toggleBlock(id),
   "toggle-task-complete": ({ id }) => toggleTaskCompleteFromBlock(id),
@@ -793,7 +787,7 @@ let _lastBatteryTickAt = 0;
 const BATTERY_TICK_INTERVAL_MS = 60000;
 // v148: 「動的にopen既定が変わるdetails」(ジャーナル朝/夜・設定「データと同期」)の手動開閉
 // オーバーライド(セッション内のみ、非永続 = リロードで消える)。これらのdetailsは現在時刻や
-// 同期異常の有無から既定open/closedを毎回計算するため、通常のhomeFoldSection(localStorage
+// 同期異常の有無から既定open/closedを毎回計算するため、通常のfoldSection(localStorage
 // 記憶)をそのまま使うと「動的にopenのまま描画されただけで、ブラウザがdetailsの'toggle'
 // イベントを自動発火する仕様(実測確認済み)」により、ユーザーが触ってもいないのに
 // 『手動で開いた』扱いでlocalStorageへ永続化されてしまう(条件が変わっても二度と元に
@@ -803,10 +797,6 @@ const BATTERY_TICK_INTERVAL_MS = 60000;
 // v169: _journalSegmentOverrideはsrc/state/journal-fold.jsへ切り出し、冒頭でimportした
 // (app.js分割・段階4-3。click dispatcherのtoggle-journal-segment分岐とrenderJournalの共有)。
 let _settingsSyncOpenOverride = null;  // null=未操作、true/false=ユーザーが実際にクリックした最新状態
-// v149レビュー対応(必須6): ホームタブの信条/寿命は「タブを開くたび既定で展開、手動で閉じたら
-// そのセッション中(reloadまで)だけ閉じる」。localStorage永続のisHomeFoldOpenは使わず、
-// 上記_journalSegmentOverrideと同じ非永続セッションオーバーライド方式にする。
-let _homeReflectFoldOverride = {};  // { creed: bool, lifespan: bool }
 let cachedVisionMd = "";
 let cachedAffirmationMd = "";
 // v85: ビジョンボード(45/80/nowの各PDF)はpersonal-dataリポジトリのtaskchute/content/配下にあり、
@@ -975,48 +965,33 @@ let _pendingLifecycleCtx = null;
 // v108: Block保存モーダルの二重送信ガード(iOS Safariでの保存ボタン二重発火対策)。非永続。
 //       saveBlockFromModal の実行中だけ true になり、完了/失敗いずれも finally で必ず解除する。
 let _blockSaveInFlight = false;
-// v149(UI改善計画Phase4a): ホームの2タブ(今日/ホーム)切替。非永続(state外)—
-// K指定「起動時は常に今日」を満たすため、リロード/再起動のたびに既定へ戻る。
-let homeTab = "today";  // "today" | "home"
 // v168: 月間プランニングボードのドラッグ状態(_wishDrag)はsrc/features/wish.jsへ移動した
 // (app.js分割・段階4-2。wish.js冒頭コメント参照)。
 
-// v71: ホームの折りたたみカード(details)の開閉状態。端末ローカルのUI状態であり、
+// 折りたたみカード(details)の開閉状態。端末ローカルのUI状態であり、
 //      GitHub同期やエクスポートの対象になる state オブジェクトとは意図的に分離する。
-const HOME_FOLD_KEY = "taskchute-journal-home-fold-v1";
-function readHomeFoldMap() {
-  try { return JSON.parse(localStorage.getItem(HOME_FOLD_KEY) || "{}"); } catch { return {}; }
+const FOLD_KEY = "taskchute-journal-home-fold-v1";
+function readFoldMap() {
+  try { return JSON.parse(localStorage.getItem(FOLD_KEY) || "{}"); } catch { return {}; }
 }
-function isHomeFoldOpen(id, defaultOpen) {
-  const stored = readHomeFoldMap()[id];
+function isFoldOpen(id, defaultOpen) {
+  const stored = readFoldMap()[id];
   return typeof stored === "boolean" ? stored : Boolean(defaultOpen);
 }
-function setHomeFoldOpen(id, open) {
+function setFoldOpen(id, open) {
   try {
-    const map = readHomeFoldMap();
+    const map = readFoldMap();
     map[id] = open;
-    localStorage.setItem(HOME_FOLD_KEY, JSON.stringify(map));
+    localStorage.setItem(FOLD_KEY, JSON.stringify(map));
   } catch { /* 保存できなくても致命的ではない(UI状態のみ) */ }
 }
 // 折りたたみカードの共通ラッパー。bodyHTML が空なら(非表示条件を満たさない場合)カードごと出さない。
-// wrapperClass は details 自体に付与(既存の .home-creed 等のパネル装飾をそのまま活かすため)。
-function homeFoldSection(id, defaultOpen, wrapperClass, summaryClass, summaryText, bodyHTML) {
+function foldSection(id, defaultOpen, wrapperClass, summaryClass, summaryText, bodyHTML) {
   if (!bodyHTML) return "";
-  const open = isHomeFoldOpen(id, defaultOpen);
-  return `<details class="home-fold panel ${wrapperClass || ""}" data-fold-id="${id}" ${open ? "open" : ""}>
-    <summary class="home-fold-summary ${summaryClass || ""}"><span class="home-fold-chevron">▶</span>${escapeHTML(summaryText)}</summary>
-    <div class="home-fold-body">${bodyHTML}</div>
-  </details>`;
-}
-// v149レビュー対応(必須6): homeFoldSectionのlocalStorage永続版とは別に、非永続セッション
-// オーバーライド版(_homeReflectFoldOverride参照)。data-fold-idを持たない(=グローバルの
-// "toggle"イベント委譲によるlocalStorage永続化を意図的に受けない)。既定は常にopen。
-function homeReflectFoldSection(id, wrapperClass, summaryClass, summaryText, bodyHTML) {
-  if (!bodyHTML) return "";
-  const open = id in _homeReflectFoldOverride ? _homeReflectFoldOverride[id] : true;
-  return `<details class="home-fold panel ${wrapperClass || ""}" ${open ? "open" : ""}>
-    <summary class="home-fold-summary ${summaryClass || ""}" data-action="toggle-home-reflect-fold" data-segment="${id}"><span class="home-fold-chevron">▶</span>${escapeHTML(summaryText)}</summary>
-    <div class="home-fold-body">${bodyHTML}</div>
+  const open = isFoldOpen(id, defaultOpen);
+  return `<details class="fold panel ${wrapperClass || ""}" data-fold-id="${id}" ${open ? "open" : ""}>
+    <summary class="fold-summary ${summaryClass || ""}"><span class="fold-chevron">▶</span>${escapeHTML(summaryText)}</summary>
+    <div class="fold-body">${bodyHTML}</div>
   </details>`;
 }
 
@@ -1041,17 +1016,6 @@ document.addEventListener("click", (event) => {
   // v173: set-morning〜store-visit-yearはsrc/features/journal.jsのregisterActionsへ移行した。
   // v178: add-project/delete-project/add-task/toggle-taskはapp.js内のregisterActionsへ移行した。
   if (action === "toggle-criteria-request") toggleCriteriaRequest(id);  // v99: 翌朝AI設定依頼トグル
-  // v180: task-today/home-add-todayはapp.js内のregisterActionsへ移行した。
-  // v33: ホームのスコアボード → 対応ゾーンへスクロール
-  // v71: ジャンプ先が折りたたみ(details)の中にある場合は、閉じたままだと中身が見えないので開く
-  if (action === "home-jump") {
-    const el = document.getElementById(id);
-    if (el) {
-      const fold = el.matches?.("details[data-fold-id]") ? el : el.querySelector?.("details[data-fold-id]");
-      if (fold && !fold.open) { fold.open = true; setHomeFoldOpen(fold.dataset.foldId, true); }
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }
   // v178: delete-task/toggle-project-collapse/toggle-task-collapse/suspend-project/resume-project/
   // suspend-task/resume-task/add-blockはapp.js内のregisterActionsへ移行した。
   // v174: toggle-show-suspended〜wbs-collapse-allはapp.js内のregisterActionsへ移行した。
@@ -1103,11 +1067,9 @@ document.addEventListener("click", (event) => {
   // v174: push-reportはapp.js内のregisterActionsへ移行した。
   // v178: add-task-to-project/add-subtaskはapp.js内のregisterActionsへ移行した。
   // v174: add-category〜delete-break-messageはapp.js内のregisterActionsへ移行した。
-  // v177: toggle-journal-segment/toggle-home-reflect-foldはapp.js内のregisterActionsへ移行した。
+  // v177: toggle-journal-segmentはapp.js内のregisterActionsへ移行した。
   // v174: toggle-settings-sync/toggle-sidebarはapp.js内のregisterActionsへ移行した。
   // v173: Wish CRUDはsrc/features/wish.jsのregisterActionsへ移行した。
-  // v149: ホームの2タブ(今日/ホーム)。非永続・view/dateは変えないため自動スクロールは発火しない。
-  if (action === "home-tab") { homeTab = target.dataset.tab === "home" ? "home" : "today"; render(); }
   // v176: zt-*/zero-tab/zerosec-theme-*(0秒思考)はapp.js内のregisterActionsへ移行した。
   // v177: question-*/open-questions/entry-to-question(問い)・report-copy-ai/report-share-ai/
   // ai-mit-adopt/ai-task-adopt/ai-task-dismiss(AI連携)はapp.js内のregisterActionsへ移行した
@@ -1138,13 +1100,13 @@ document.addEventListener("click", (event) => {
   // v181: energy-open-category/timeline-clear-catはapp.js内のregisterActionsへ移行した。
 });
 
-// v71: ホームの折りたたみカード(details)の開閉をlocalStorageへ即時記憶する。
+// 折りたたみカード(details)の開閉をlocalStorageへ即時記憶する。
 // "toggle" イベントは bubbles しない仕様のため、document への委譲はキャプチャフェーズで行う
 // (キャプチャは非バブリングイベントでもターゲットまでの経路を通過するため、これで拾える)。
 document.addEventListener("toggle", (event) => {
   const el = event.target;
   if (!el?.dataset?.foldId) return;
-  setHomeFoldOpen(el.dataset.foldId, el.open);
+  setFoldOpen(el.dataset.foldId, el.open);
 }, true);
 
 // v137: hydrateStaticMarkdownの新着render延期(review.md:28)。IME変換中フラグの追跡と、
@@ -1238,13 +1200,7 @@ document.addEventListener("change", (event) => {
   const target = event.target;
   if (target.matches("[data-date-picker]")) setSelectedDate(target.value);
   // v117(A): 今日の宣言(change時に保存)。
-  // v149レビュー対応(必須5、Codexレビュー指摘): 旧実装はsaveAndRender()で全再描画していたが、
-  // 宣言入力欄はホームタブ専用・警告表示先の.home-today-statusは今日タブ専用で、blur時点の
-  // 現在DOMには互いに存在しない(タブが排他のため)。にもかかわらず全再描画すると、宣言を
-  // blurした直後にタブボタンへ直接タップした1回目のクリックがDOM入れ替えに巻き込まれて
-  // 消費されてしまう(2回目でようやく切り替わる)。この保存は実際には即時再描画を必要としない
-  // (タブ切替自体が別途render()するため、状態は次の描画で自然に反映される)ため、保存のみに
-  // 留める。
+  // 宣言入力は保存だけを行い、入力中のDOMを全再描画しない。
   if (target.matches("[data-declaration-date]")) {
     const d = target.dataset.declarationDate;
     state.dailyDeclarations[d] = { text: target.value.trim(), updatedAt: nowDateTime() };
@@ -1471,12 +1427,12 @@ function applyTheme() {
 
 function normalizeState(value) {
   value.settings ||= {};
-  // v182: 未知viewでrenderMainの前画面が残る事故を防ぐ。todayは新規許可、旧版由来の不明値はhomeへ。
+  // v230: home撤去後も旧state・未知viewで白画面にしないため、todayへ縮退する。
   const allowedViews = new Set([
-    "today", "home", "wbs", "wish", "tasks", "timeline",
+    "today", "wbs", "wish", "tasks", "timeline",
     "journal", "zero", "vision", "ai-reports", "settings", "more"
   ]);
-  if (!allowedViews.has(value.currentView)) value.currentView = "home";
+  if (!allowedViews.has(value.currentView)) value.currentView = "today";
   // v31: 残り時間表示用の生年月日(未設定なら補完)
   if (!value.settings.birthDate) value.settings.birthDate = "1992-12-29";
   value.settings.staticFilesLoaded ||= { vision: false, affirmation: false };
@@ -2582,20 +2538,15 @@ function renderSidebar() {
   `;
 }
 
-function bottomNavEffectiveView(view) {
-  if (view === "home") return "more";
-  return view;
-}
 function renderBottomNav() {
-  const effectiveView = bottomNavEffectiveView(state.currentView);
-  const active = mobileNav.some((item) => item.id === effectiveView) ? effectiveView : "more";
+  const active = mobileNav.some((item) => item.id === state.currentView) ? state.currentView : "more";
   bottomNav.innerHTML = mobileNav.map((item) => `
     <button class="${active === item.id ? "active" : ""}" data-action="nav" data-view="${item.id}">${item.label}</button>
   `).join("");
 }
 
 // v146(UI改善計画Phase1-2): タスクシュートの「着手中(無ければ次の未着手)Block」を求める。
-// homeHero/nowConveyorTargetと同じ抽出ロジック(現在時刻に該当する未完了Block、無ければ
+// nowConveyorTargetと同じ抽出ロジック(現在時刻に該当する未完了Block、無ければ
 // 次の未着手)を使うが、対象はrenderTasks()が実際に描画するBlock集合に限定する
 // (renderTasks()は単発Block・ルーティン・timeline由来・Project未紐づけTaskのBlock等を
 // 描画しないため、それらを選ぶと自動スクロールが無言で不発になる。レビュー指摘対応)。
@@ -2648,20 +2599,6 @@ function renderMain() {
   _lastScrollDate = state.selectedDate;
 
   if (view === "today") main.innerHTML = renderToday();
-  if (view === "home") {
-    main.innerHTML = renderHome();
-    // v146: 今日を表示中なら「いま、これ」(=着手中/次の未着手Blockそのもの)へ自動スクロール
-    // (タイムラインの.now-line自動スクロールと同じ「探す手間をなくす」目的)
-    // v149レビュー対応(必須4、Codex指摘): ホームタブ滞在中は.home-heroが存在しないため、
-    // 他ビューから戻ってきた際にscrollIntoViewが不発になり前のスクロール位置に取り残される。
-    // .home-heroが無ければ.home-tabbar(常に両タブ共通で先頭にある)へフォールバックする。
-    if (shouldAutoScroll) {
-      setTimeout(() => {
-        const target = document.querySelector(".home-hero") || document.querySelector(".home-tabbar");
-        target?.scrollIntoView({ block: "start" });
-      }, 50);
-    }
-  }
   if (view === "wbs") main.innerHTML = renderWBS();
   if (view === "wish") main.innerHTML = renderWish();
   if (view === "tasks") {
@@ -2711,163 +2648,6 @@ function renderHeader(eyebrow, title, action = "") {
   `;
 }
 
-// =============================================================
-// v31: ホーム(コックピット)— 信条 / 残り時間 / 行動パネル群
-// =============================================================
-// v71: 情報過多だったコックピットを整理。
-// v146(UI改善計画Phase1-1): 行動優先の縦順序へ再編。
-// v149(UI改善計画Phase4a、K指定2026-07-27): ホームを「今日」(行動系。既定タブ)/「ホーム」
-//   (内省・参照系)の2タブへ分割。タブ選択はhomeTab(非永続・モジュール変数、起動時は常に
-//   「今日」)。日付ナビ(前日/日付/翌日/今日へ/検索)はヘッダー領域(renderHeaderのaction欄)へ
-//   統合し独立行を廃止(縦幅圧縮)。詳細な振り分け対応表はCHANGES_v149.md参照。
-function renderHome() {
-  const today = state.selectedDate;
-  const isToday = today === todayISO();
-  const blocks = blocksForDate(today);
-  const metrics = computeMetrics();
-  // v73: 縮退モード。今日を見ている時だけ発火する(過去日を振り返っている時にまで
-  //      「最低限だけ」と出すのは意味が違うため)。
-  const degraded = isToday && isConditionDegraded(today);
-  return `
-    <div class="home-header-wrap">
-      ${renderHeader("今日の入口", "ホーム", `<div class="row" style="gap:8px; flex-wrap:wrap">
-        <button class="btn orange" data-action="now-mode-open">▶ Now</button>
-        ${renderDateBar()}
-      </div>`)}
-    </div>
-    ${homeSyncAlertBanner()}
-    <div class="segmented home-tabbar" style="margin-bottom:4px">
-      <button class="${homeTab === "today" ? "active" : ""}" data-action="home-tab" data-tab="today">今日</button>
-      <button class="${homeTab === "home" ? "active" : ""}" data-action="home-tab" data-tab="home">ホーム</button>
-    </div>
-    ${homeTab === "home"
-      ? renderHomeReflectTab(metrics, blocks, isToday, degraded)
-      : renderHomeTodayTab(blocks, isToday, degraded, metrics)}
-  `;
-}
-
-// v149: 「今日」タブ本体 — 旧renderHomeの行動系すべて(hero〜足あと)。K指定の起動時既定タブ。
-function renderHomeTodayTab(blocks, isToday, degraded, metrics) {
-  return `
-    ${homeHero(blocks, isToday)}
-    ${homeTodayEnemyCard(isToday)}
-    <div id="home-mit-anchor">${homeMIT(blocks)}</div>
-    <div class="home-zone-block z-amber" id="homezone-1">
-      <div class="home-zone amber">今日、すすめる${projectedEndBadge()}</div>
-      <div class="home-grid single">
-        ${homeTaskchute(blocks)}
-      </div>
-    </div>
-    <div class="home-zone-block z-teal" id="homezone-2">
-      ${degraded ? `
-        <details class="home-fold" data-fold-id="zone2-degraded" ${isHomeFoldOpen("zone2-degraded", false) ? "open" : ""}>
-          <summary class="home-zone teal home-fold-summary"><span class="home-fold-chevron">▶</span>今日のリズム(たたんでいます)・${homeZone2Summary(blocks)}</summary>
-          <div class="home-fold-body">
-            <div class="home-grid">
-              ${homeFlow(blocks, isToday)}
-            </div>
-          </div>
-        </details>
-      ` : `
-        <details class="home-fold" data-fold-id="zone2" ${isHomeFoldOpen("zone2", true) ? "open" : ""}>
-          <summary class="home-zone teal home-fold-summary"><span class="home-fold-chevron">▶</span>今日のリズム・${homeZone2Summary(blocks)}</summary>
-          <div class="home-fold-body">
-            <div class="home-grid">
-              ${homeFlow(blocks, isToday)}
-            </div>
-          </div>
-        </details>
-      `}
-    </div>
-    ${homeTodayStatusCard()}
-    ${homeWeeklyWishCard()}
-    ${degraded ? "" : homeReadingCard()}
-    ${degraded ? homeDegradedBanner() : ""}
-    ${homeScoreboard(blocks)}
-    ${homeBacklog()}
-    <div class="home-zone-block z-green" id="homezone-4">
-      <details class="home-fold" data-fold-id="zone4" ${isHomeFoldOpen("zone4", false) ? "open" : ""}>
-        <summary class="home-zone green home-fold-summary"><span class="home-fold-chevron">▶</span>今日の足あと</summary>
-        <div class="home-fold-body">
-          <div class="home-grid single">
-            ${homeSteps(blocks)}
-          </div>
-        </div>
-      </details>
-    </div>
-    ${homeQuoteCard(isToday)}
-  `;
-}
-
-// v149: 「ホーム」タブ本体 — 内省・参照系(三つの信条/寿命/アファメーション=今日の理想・宣言/
-// AIから/長い弧)。K指定「信条・寿命はこのタブでは既定展開(折りたたまない)」により、旧来
-// defaultOpen=falseだったcreed/lifespanをtrueへ変更(ローカル記憶が無い初回のみ有効。
-// 折りたたみ機構自体は残す)。「アファメーション」はK指示で「今日の理想/宣言まわりの該当カード」
-// (homeIdeal/homeDeclarationCard)と対応付け(CHANGES_v149.md参照)。
-function renderHomeReflectTab(metrics, blocks, isToday, degraded) {
-  return `
-    ${homeReflectFoldSection("creed", "home-creed", "home-creed-head", "三 つ の 信 条", homeCreedBody())}
-    ${homeReflectFoldSection("lifespan", "home-lifespan", "", "寿命カウントダウン(残り時間)", homeLifespanBody(metrics))}
-    ${homeIdeal(isToday)}
-    ${homeDeclarationCard()}
-    ${homeVisionCard()}
-    ${homeFutureLetterLink()}
-    ${degraded
-      ? homeFoldSection("ai-hub-degraded", false, "home-ai-hub", "", "AIから(たたんでいます)", homeAiHubBody(blocks, isToday))
-      : homeFoldSection("ai-hub", false, "home-ai-hub", "", "AIから", homeAiHubBody(blocks, isToday))}
-    <div class="home-zone-block z-blue" id="home-arc-zone">
-      <details class="home-fold" data-fold-id="zone3" ${isHomeFoldOpen("zone3", false) ? "open" : ""}>
-        <summary class="home-zone blue home-fold-summary"><span class="home-fold-chevron">▶</span>長い弧をたしかめる</summary>
-        <div class="home-fold-body">
-          <div class="home-grid">
-            ${homeQuestions()}
-          </div>
-        </div>
-      </details>
-    </div>
-  `;
-}
-
-// --- 三つの信条 ---
-// v62: Daily_Affirmation.md v4.1(実データ裏付け型に刷新)と整合させ、ハードコードの
-//      標語からKの実データ(MIT達成率100%・実行率と充電の無相関・朝型)に基づく文言へ更新。
-// v71: 参照系セクションとして折りたたみ化(homeFoldSection)するため、本体行のみを返す
-//      body専用関数にした(見出し「三 つ の 信 条」は折りたたみのsummary側で表示する)。
-function homeCreedBody() {
-  const creeds = [
-    ["決めた一つは、", "必ずやり切れる(MIT達成率100%)"],
-    ["進んだ量で測る。", "実行率で自分を裁かない"],
-    ["朝に全部を注ぐ。", "夜は手放して充電する"]
-  ];
-  const nums = ["一", "二", "三"];
-  return creeds.map((c, i) => `
-    <div class="home-creed-row">
-      <span class="home-creed-num">${nums[i]}</span>
-      <span class="home-creed-text">${escapeHTML(c[0])}<br>${escapeHTML(c[1])}</span>
-    </div>`).join("");
-}
-
-// --- 残り時間(今年 / 45歳 / 80歳)---
-// v71: 参照系セクションとして折りたたみ化(homeFoldSection)するため、本体(.home-life グリッド)
-//      のみを返すbody専用関数にした。
-function homeLifespanBody(metrics) {
-  const items = metrics.filter((m) => m.label !== "12WY");
-  if (items.length === 0) return "";
-  return `
-    <div class="home-life">
-      ${items.map((m) => `
-        <div class="home-life-cell">
-          <div class="home-life-top">
-            <span class="home-life-label">${m.label}</span>
-            <span class="home-life-pct">${Math.round(m.progress)}%経過</span>
-          </div>
-          <div class="home-life-num">${(m.value || "").replace("あと", "")}</div>
-          <div class="progress"><span style="width:${clamp(m.progress, 0, 100)}%"></span></div>
-        </div>`).join("")}
-    </div>`;
-}
-
-// 予定時刻の範囲表示
 function plannedRange(b) {
   const s = b.plannedStartAt ? timeFromDateTime(b.plannedStartAt) : "—";
   const e = b.plannedEndAt ? timeFromDateTime(b.plannedEndAt) : "—";
@@ -2894,98 +2674,6 @@ function idealActiveEntry(today) {
 }
 
 // ホームの「いま、これ」の上に表示する軽量カード。未入力日はUIを邪魔しない(空なら非表示に近い最小表示)。
-function homeIdeal(isToday) {
-  if (!isToday) return "";
-  const today = todayISO();
-  const active = idealActiveEntry(today);
-  if (!active) {
-    // v81: 未入力日は常時フル表示のカードでは場所を取りすぎるため(UX監査A5)、
-    // 既存の折りたたみ機構(homeFoldSection)を再利用し、既定は閉じた1行プレースホルダに縮小する。
-    // 保存ロジック(input handlerのdata-ideal-date処理)自体は変更しない。
-    return homeFoldSection(
-      "home-ideal-empty",
-      false,
-      "home-ideal home-ideal-empty",
-      "muted",
-      "今日の理想を一行で(任意・タップで記入)",
-      `<input type="text" class="home-ideal-input" maxlength="60"
-        placeholder="今日の理想を一行で(任意・スキップ可)"
-        data-ideal-date="${today}" value="">`
-    );
-  }
-  const retryDay = active.dayNum >= IDEAL_RETRY_WINDOW_DAYS;
-  return `<section class="panel home-ideal">
-    <div class="home-ideal-row">
-      <span class="home-ideal-eyebrow">今日の理想(${active.dayNum}日目)</span>
-      <span class="home-ideal-text">${escapeHTML(active.text)}</span>
-    </div>
-    ${retryDay ? `
-      <div class="home-ideal-retry">
-        <span class="muted" style="font-size:12px">3日間、この理想と過ごしました。続けますか、手放しますか?</span>
-        <span class="row" style="gap:6px; margin-top:6px">
-          <button class="btn" data-action="ideal-retry" data-choice="continue">続ける</button>
-          <button class="btn ghost" data-action="ideal-retry" data-choice="release">手放す</button>
-        </span>
-      </div>` : ""}
-  </section>`;
-}
-
-// v117(A): 今日の宣言。dailyDeclarations[date] = {text, updatedAt}。selectedDateごとに編集できる
-// (過去日を振り返る時も同じ入力欄で確認・修正できる、他のjournal系日付キー入力と同じ思想)。
-// homeIdealと異なりisTodayに関わらず常時表示する(過去日の宣言も見返せるようにするため)。
-// v147: 未入力時の赤警告はここから撤去し、homeTodayStatusCard(「今日の状態」1枚化)へ統合した
-// (UI改善計画Phase2 2-2。警告チップ4種の重複表示を避けるため)。
-function homeDeclarationCard() {
-  const date = state.selectedDate;
-  const entry = state.dailyDeclarations[date] || { text: "", updatedAt: "" };
-  return `<section class="panel home-declaration-card" style="padding:12px 14px">
-    <div class="muted" style="font-size:12px; font-weight:700; margin-bottom:6px">📣 今日の宣言</div>
-    <input type="text" class="input" style="font-size:16px" maxlength="80"
-      data-declaration-date="${date}" placeholder="今日◯◯に着手する" value="${escapeHTML(entry.text || "")}">
-  </section>`;
-}
-
-// v149レビュー対応(必須3): K指定リスト「80歳ビジョン」の導線カード。ホームには専用の
-// 80歳ビジョンカードそのもの(PDF/画像表示)は無い(既存実装は「ビジョン」タブのビジョン
-// ボード内サブページとしてのみ存在)ため、新規カードを追加せず既存のビジョンボードへの
-// ワンタップ導線として実装した(機能そのものを複製しない)。
-function homeVisionCard() {
-  return `<section class="panel home-vision-card" style="padding:12px 14px; cursor:pointer" data-action="open-vision-board" data-index="2">
-    <div class="row" style="justify-content:space-between; align-items:center">
-      <span class="muted" style="font-size:12px; font-weight:700">🌅 80歳ビジョン</span>
-      <span class="muted" style="font-size:12px">見る →</span>
-    </div>
-  </section>`;
-}
-
-// v128: 体力予算チップ。conditionBudget()の判定を宣言カード付近に表示する。
-// 過去日を見ている時も(睡眠ログがあれば)その日の判定をそのまま出す(睡眠カードと同じ流儀)。
-function homeConditionBudgetChip() {
-  const budget = conditionBudget(state.selectedDate);
-  // v147(UI改善計画Phase2 2-2 色ルール): 赤は同期異常等データ保全系の異常だけに使う。
-  // 体力予算「赤字」はデータ破損ではないため、他の低調状態(low)と同じオレンジへ統一する
-  // (taskchute-notes/decisions.md 2026-07-27参照)。
-  const style = {
-    deficit: { bg: "var(--orange-soft)", fg: "var(--orange-text)" },
-    low: { bg: "var(--orange-soft)", fg: "var(--orange-text)" },
-    normal: { bg: "var(--green-soft)", fg: "var(--green-text)" },
-    none: { bg: "var(--panel-soft)", fg: "var(--muted)" }
-  }[budget.level];
-  const label = budget.level === "none" ? "データなし" : CONDITION_BUDGET_LABELS[budget.level];
-  return `
-    <div class="row home-condition-budget-chip" style="margin-bottom:10px; padding:8px 12px; border-radius:10px; background:${style.bg}; align-items:center; gap:8px; flex-wrap:wrap">
-      <span style="font-size:13px; font-weight:700; color:${style.fg}">🔋 体力予算: ${label}</span>
-      ${budget.reason ? `<span class="muted" style="font-size:12px">${escapeHTML(budget.reason)}</span>` : ""}
-    </div>`;
-}
-
-// v147レビュー対応: 電池残量の「良好/要注意」を判定する単一の閾値。旧実装はチップの警告色
-// (旧: pct<60でオレンジ)と今日の状態カードの非表示条件(旧: pct>=30で良好)が別の値で
-// 不整合だった。以後は40%の単一閾値だけを見る。
-const BATTERY_OK_PCT = 40;
-
-// v144/v147: 電池残量の計算(homeBatteryChip・homeTodayStatusCardの両方が必要とするため
-// 共通ヘルパーへ統一。旧実装は同じ計算を2箇所に重複していた)。当日限定(呼び出し側でtoday判定)。
 function computeHomeBatteryInfo(date) {
   const def = defaultBatterySettings();
   const cfg = state.settings.battery || def;
@@ -3002,99 +2690,7 @@ function computeHomeBatteryInfo(date) {
 // 変更(充放電編集・完了登録)は他のdata-actionハンドラが呼ぶrender()で自然に再描画され、
 // 時間経過(減衰)はupdateBatteryTick()(startTimerTicker経由、約1分間隔)が差分更新する。
 // レビュー対応(監督者裁定): 既定パラメタでは過去日は構造的に残量0(≒毎回赤ゲージ)になり
-// 「裁かない」思想に反するため、当日限定で表示する(homeDeclarationCardと同じ型)。
-function homeBatteryChip() {
-  const date = state.selectedDate;
-  if (date !== todayISO()) return "";
-  const { level, pct, ok } = computeHomeBatteryInfo(date);
-  // v147(UI改善計画Phase2 2-2 色ルール): 赤は同期異常等データ保全系の異常だけに使う。
-  // 電池残量の低下はデータ破損ではないため赤を使わず、低残量=オレンジ/健全=緑の2段にする。
-  // レビュー対応: 文字色(AA対応の-textトークン)とバー塗り色(装飾、素の彩色トークン)を分ける
-  // — バーはAA対応の対象外(装飾要素)なので暗くする必要が無く、視認性の良い元の彩度に戻す。
-  const textColor = ok ? "var(--green-text)" : "var(--orange-text)";
-  const barColor = ok ? "var(--green)" : "var(--orange)";
-  return `
-    <div class="row home-battery-chip" style="margin-bottom:10px; padding:8px 12px; border-radius:10px; background:var(--panel-soft); align-items:center; gap:8px; flex-wrap:wrap">
-      <span style="font-size:13px; font-weight:700; color:${textColor}">🔋 残量 ${Math.round(level)}</span>
-      <span class="home-battery-bar" style="flex:1; min-width:60px; height:8px; border-radius:4px; background:var(--line); overflow:hidden">
-        <span style="display:block; height:100%; width:${pct}%; background:${barColor}; border-radius:4px"></span>
-      </span>
-    </div>`;
-}
-
-// v121: 今週のやりたいこと(Wishからの週次選定)。homeDeclarationCardと同じ思想で、
-// 今日を見ている時だけ判定・表示する(過去日を振り返っている時に警告するのは筋違い)。
-// 週キーはweekRange().weekStart(土曜起点、12週サイクルの週定義と統一)をそのまま使う
-// ため、週替わり時のリセット処理は不要(参照するキーが自然に変わるだけ)。
-// v147: 未設定時の赤警告バナーはここから撤去し、homeTodayStatusCard(「今日の状態」1枚化)へ
-// 統合した(UI改善計画Phase2 2-2)。設定済みの一覧表示(以下)は無変更。
-function homeWeeklyWishCard() {
-  const date = state.selectedDate;
-  if (date !== todayISO()) return "";
-  const weekKey = weekRange(date).weekStart;
-  const entry = state.weeklyWishes[weekKey];
-  const taskIds = (entry && entry.taskIds) || [];
-  if (taskIds.length === 0) return "";
-  // 削除済み・実現済みになったWishはtaskIdsを書き換えず、表示からだけ自然に外す
-  const wishes = taskIds
-    .map((wid) => state.tasks.find((t) => t.id === wid))
-    .filter((t) => t && !t.deleted && !t.realized);
-  // v122: 各Wishに「今日へ」ボタンを追加(wishSubtaskToTasksを再利用)。既に今日Block化済みなら
-  // ボタンの代わりに控えめな「済」表示にする(二重登録は既存関数側のトーストガードでも弾かれる)。
-  const wishRowHTML = (w) => {
-    const blockedToday = state.blocks.some((b) => !b.deleted && b.taskId === w.id && b.date === date);
-    return `
-      <li class="row" style="justify-content:space-between; align-items:center; gap:8px; padding:3px 0">
-        <span>${escapeHTML(w.title)}</span>
-        ${blockedToday
-          ? `<span class="muted" style="font-size:11px">済</span>`
-          : `<button class="btn ghost" style="font-size:13px; padding:4px 9px" data-action="wish-subtask-to-tasks" data-id="${w.id}">今日へ</button>`}
-      </li>`;
-  };
-  return `
-    <section class="panel home-weekly-wish-card" style="padding:12px 14px; margin-bottom:10px">
-      <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:6px">
-        <span class="muted" style="font-size:12px; font-weight:700">🌟 今週のやりたいこと</span>
-        <button class="btn ghost" style="font-size:16px; padding:6px 10px" data-action="weekly-wish-open">変更</button>
-      </div>
-      ${wishes.length
-        ? `<ul style="margin:0; padding-left:0; list-style:none; font-size:14px">${wishes.map(wishRowHTML).join("")}</ul>`
-        : `<div class="muted" style="font-size:12px">選択したやりたいことは表示できなくなりました</div>`}
-    </section>`;
-}
-
-// v147:「今日の状態」1枚化(UI改善計画Phase2 2-2)。宣言未入力・体力予算・電池残量・週Wish
-// 未設定の4種を1つの折りたたみカードへ統合する。<summary>行(常時表示)に1〜2行の要約を出し、
-// 個別チップ・個別アラートの本体はdetails内(既定closed、home-foldの共通パターンを流用)。
-// 4つとも良好(宣言済み・週Wish設定済み・体力予算が正常/データなし・電池残量BATTERY_OK_PCT
-// (=40)以上)なら何も返さずカードごと非表示にする(「未対応0件+状態正常なら非表示」)。
-// バッテリーの良好判定はhomeBatteryChip()の警告色閾値と同じcomputeHomeBatteryInfo()を使う
-// (レビュー対応: 旧実装はpct>=30(非表示)とpct<60(チップの警告色)が別値で不整合だった)。
-// 過去日を見ている時は電池/宣言未入力/週Wishの警告がそもそも対象外(homeBatteryChip等と同じ
-// 「今日限定」の思想)なので、体力予算チップだけを単独表示する従来の見え方を維持する。
-function homeTodayStatusCard() {
-  const date = state.selectedDate;
-  if (date !== todayISO()) {
-    return `<div class="home-chip-2col">${homeConditionBudgetChip()}</div>`;
-  }
-  const declEntry = state.dailyDeclarations[date] || { text: "" };
-  const declFilled = !!(declEntry.text || "").trim();
-  const budget = conditionBudget(date);
-  const budgetOK = budget.level === "normal" || budget.level === "none";
-  const { level, ok: batteryOK } = computeHomeBatteryInfo(date);
-  const weekKey = weekRange(date).weekStart;
-  const wishEntry = state.weeklyWishes[weekKey];
-  const wishSet = !!(wishEntry && wishEntry.taskIds && wishEntry.taskIds.length);
-  if (declFilled && wishSet && budgetOK && batteryOK) return "";  // 未対応0件+状態正常
-  const budgetLabel = budget.level === "none" ? "データなし" : CONDITION_BUDGET_LABELS[budget.level];
-  const summary = `エネルギー: ${budgetLabel}・残量${Math.round(level)} / 準備: ${declFilled ? "宣言済み" : "宣言未入力"}・${wishSet ? "週Wish設定済み" : "週Wish未設定"}`;
-  const body = `<div class="home-chip-2col">${homeConditionBudgetChip()}${homeBatteryChip()}</div>
-    ${!declFilled ? `<div class="home-today-status-item muted" style="font-size:12px; margin-top:6px; display:flex; align-items:center; gap:8px; flex-wrap:wrap">📣 今日の宣言が未入力です<button class="btn ghost" style="font-size:13px; padding:3px 9px" data-action="home-tab" data-tab="home">ホームタブへ →</button></div>` : ""}
-    ${!wishSet ? `<div class="home-today-status-item muted" style="font-size:12px; margin-top:6px; display:flex; align-items:center; gap:8px; flex-wrap:wrap">🌟 今週のやりたいことが未設定です<button class="btn ghost" style="font-size:13px; padding:3px 9px" data-action="weekly-wish-open">設定する</button></div>` : ""}`;
-  return homeFoldSection("today-status", false, "home-today-status", "", summary, body);
-}
-
-// 選択モーダルを開く(設定する/変更どちらも同じモーダル。既存選択はチェック済みで開く)
+// 「裁かない」思想に反するため、当日限定で表示する。
 function openWeeklyWishModal() {
   state.modal = { type: "weeklyWish" };
   renderModal(buildWeeklyWishModal());
@@ -3191,32 +2787,6 @@ function todaysReadingPick() {
 
 // ホームカード: 今日のハイライト提示 + 1行言語化の入力欄。ハイライトが引けない
 // (未取得・personal-data未設定・0冊)なら何も出さない(既存の404フェイルソフトと同じ流儀)
-function homeReadingCard() {
-  const pick = todaysReadingPick();
-  if (!pick) return "";
-  const date = todayISO();
-  const saved = cachedReadingReflections[date] || "";
-  // v82(B3): 常時フル表示だとホームの一等地を占有するため既定closedの折りたたみへ縮小。
-  //      ただし1行言語化の入力があるカードなので、朝の動線で気づけるよう書名+記入状況を
-  //      summary行に出す(タップで展開すればハイライト本文と入力欄が現れる。保存ロジックは無変更)。
-  const body = `
-    <div class="home-reading-book">${escapeHTML(pick.bookTitle)}${pick.author ? `<span class="muted" style="font-size:12px"> — ${escapeHTML(pick.author)}</span>` : ""}</div>
-    <div class="home-reading-highlight">${escapeHTML(pick.text)}</div>
-    <textarea class="home-reading-input" data-reading-reflection-input rows="2"
-      placeholder="読んで何を思うか、一行で">${escapeHTML(saved)}</textarea>
-    <div class="row" style="justify-content:flex-end;margin-top:6px">
-      <button class="btn primary" data-action="reading-save">保存</button>
-    </div>`;
-  const summary = `今日の1冊から: ${pick.bookTitle}${saved ? "(記入済み)" : "(未記入)"}`;
-  return homeFoldSection("home-reading", false, "home-reading", "", summary, body);
-}
-
-// v74: personal-data リポジトリのサブディレクトリpath("reading/reflections.json"等)への
-// 書き込み専用PUT。既存 pushFileToGitHub は `personalDataPath(encodeURIComponent(filename))`
-// という組み立てのため、filename に "/" が含まれると丸ごと%2Fにエンコードされてしまい
-// サブディレクトリを正しく指せない(既存の呼び出し元は全てフラットなファイル名のため顕在化して
-// いなかった)。fetchGitHubRawText / gitHubContentsURL と同じ「セグメントごとにencodeして"/"で
-// 結合」方式で正しいURLを組み立てる。
 async function pushGitHubPath(relPath, content, label) {
   const raw = state.settings.github;
   if (!personalDataReady(raw)) {
@@ -3356,138 +2926,15 @@ function readingMonthlySummarySectionHTML() {
   const month = todayISO().slice(0, 7);
   const md = cachedReadingSummaryMd[month] || "";
   if (!md) return "";
-  return homeFoldSection(`reading-summary-${month}`, false, "", "",
+  return foldSection(`reading-summary-${month}`, false, "", "",
     `📖 今月の読書ふりかえり(${month})`,
     `<div class="md-render readonly-md">${renderMarkdown(md)}</div>`);
 }
 
 // --- いま、これ(進行中 / 次のブロック)── v33: フル幅・2カラム ---
-function homeHero(blocks, isToday) {
-  // タイムラインと同じ対象(カテゴリ「ルーティン」は除外)。時刻順にソート
-  // v48: 中断/中止タスクの未完了 Block は「いま、これ」に出さない
-  const tl = blocks
-    .filter((b) => b.category !== "ルーティン" && b.plannedStartAt && !isStaleBlock(b))
-    .sort((a, b) => minutesOf(a.plannedStartAt) - minutesOf(b.plannedStartAt));
-  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
-  // タイムラインの「現在時刻ブロック」= 予定時間が今を含む未完了Block
-  const current = isToday ? tl.find((b) => !b.completed
-    && minutesOf(b.plannedStartAt) <= nowMin
-    && nowMin < minutesOf(b.plannedEndAt || b.plannedStartAt)) : null;
-  // 現在時刻にブロックが無ければ、次の未着手ブロック
-  const target = current || tl.find((b) => !b.completed && !b.actualStartAt);
-  if (!target) {
-    return `<section class="panel home-hero">
-      <div class="eyebrow" style="color:var(--orange-text)">いま、これ</div>
-      <div style="font-size:15px;font-weight:700;color:var(--green-text);padding:8px 0">
-        ${tl.length ? "いまの時間のブロックはありません。" : "今日のブロックはまだありません。"}</div>
-    </section>`;
-  }
-  const started = Boolean(target.actualStartAt);
-  let mid;
-  if (target === current) {
-    const s = minutesOf(target.plannedStartAt);
-    const e = minutesOf(target.plannedEndAt || target.plannedStartAt);
-    const pct = e > s ? clamp(Math.round(((nowMin - s) / (e - s)) * 100), 0, 100) : 0;
-    const left = Math.max(0, e - nowMin);
-    mid = `<div class="progress" style="margin:12px 0 8px"><span style="width:${pct}%"></span></div>
-      <div style="font-size:13.5px">${started ? "取り組み中" : "いまの時間です"} — 残り <strong>${left}分</strong></div>`;
-  } else {
-    mid = `<div style="font-size:13.5px;margin-top:12px">まだ着手していません。</div>
-      <div style="font-size:12.5px;color:var(--orange-text);font-weight:600;margin-top:3px">まず5分でいい。やれば乗ってくる。</div>`;
-  }
-  // v150(UI改善計画Phase4b・R3): 完了作法統一。即完了(toggle-block)へ変更、実績は
-  // 完了直後のトースト「実績を編集」から直す(下記toggleBlock参照)。
-  const btn = started
-    ? `<button class="btn green home-hero-btn" data-action="toggle-block" data-id="${target.id}">✓ 完了にする</button>`
-    : `<button class="btn orange home-hero-btn" data-action="now-start" data-id="${target.id}">▶ いま着手する</button>`;
-  // このあとのブロック
-  // v37: 「target の次」は target 自身を除いた最初の未来ブロック。
-  //      以前の [current ? 0 : 1] は、target が過去枠(期限切れの未着手)のときに
-  //      本来の次ブロックを飛ばして2番目を表示していた。
-  const after = tl.find((b) => !b.completed && b !== target && minutesOf(b.plannedStartAt) > nowMin);
-  const nextBox = after
-    ? `<div class="home-hero-next"><span class="home-hero-next-lab">このあと</span>
-        <strong>${after.plannedStartAt ? timeFromDateTime(after.plannedStartAt) : ""}</strong> ${escapeHTML(after.title)}</div>`
-    : "";
-  const heroJuice = target.id === state._justStartedBlockId ? " just-started" : "";  // v40: 着手ジュース
-  return `<section class="panel home-hero${heroJuice}">
-    <div class="eyebrow" style="color:var(--orange-text)">いま、これ</div>
-    <div class="home-hero-grid">
-      <div class="home-hero-main">
-        <div class="home-hero-title" data-action="edit-block" data-id="${target.id}">${escapeHTML(target.title)}</div>
-        <div class="muted" style="font-size:12.5px;margin-top:5px">予定 ${plannedRange(target)}${
-          target.category ? `<span class="home-hero-cat">${escapeHTML(target.category)}</span>` : ""}</div>
-        ${mid}
-      </div>
-      <div class="home-hero-side">
-        ${btn}
-        ${nextBox}
-      </div>
-    </div>
-  </section>`;
-}
-
-// v157: AI機能1「今日の敵」。自宅PCバッチ(loop/scripts/today-enemy.sh)が生成した
-// 今日の敵_<today>.md(ラスボス風ナレーション1段落)を、hero直後に既定openの折りたたみカードで
-// 表示する。ファイルが無い日(cachedTodayEnemyMdに当日分が無い)は、下記の
-// `if (!raw) return "";` で早期returnし何も出さない(homeFoldSection自体の
-// 「bodyHTMLが空ならカードごと出さない」仕様には到達しない。2026-07-28レビュー対応・項目7:
-// 実際のガード箇所を指す記述に修正)。
-// 過去日を閲覧中(isToday===false)は出さない(当日の演出であり、過去日を読み返す機能ではないため)。
-const TODAY_ENEMY_MAX_CHARS = 4000;  // today-enemy-validate.pyのバッチ側上限と揃える(表示側の二重防御)
-function homeTodayEnemyCard(isToday) {
-  if (!isToday) return "";
-  const raw = (cachedTodayEnemyMd[todayISO()] || "").trim();
-  if (!raw) return "";
-  const clipped = raw.length > TODAY_ENEMY_MAX_CHARS
-    ? `${raw.slice(0, TODAY_ENEMY_MAX_CHARS)}…`
-    : raw;
-  // v157: バッチ生成物はMarkdownではなくプレーンテキスト契約(FORMAT_CONTRACT.md)のため
-  // renderMarkdownは使わず、escapeHTML済みテキストをそのまま表示する(内部のMarkdown/HTML記法を
-  // 誤って実行させないための防御。改行はwhite-space:pre-wrapで見た目だけ保持する)。
-  const bodyHTML = `
-    <div style="white-space:pre-wrap; line-height:1.6">${escapeHTML(clipped)}</div>
-    <div class="muted" style="font-size:11px; margin-top:8px">※AI演出(自動生成のジョーク文章です)</div>
-  `;
-  return homeFoldSection("today-enemy", true, "home-today-enemy", "", "👹 今日の敵", bodyHTML);
-}
-
-// v158: AI機能2「勝手に格言」。自宅PCバッチ(loop/scripts/quote-forge.sh)が生成した
-// 勝手に格言_<today>.json(前日の行動にちなんだ偉人風の捏造格言)を、今日タブ最下部
-// (「今日の足あと」の下)に小さな1行カードで表示する。ファイルが無い日/JSONパース失敗/
-// quote・author欠損(cachedQuoteJsonに当日分が無い、hydrateStaticMarkdown側でフェイルソフト
-// 済み)は何も出さない。過去日を閲覧中(isToday===false)も出さない(今日の敵と同じ「当日限定」
-// 演出の思想)。表示側でもバッチ側の上限(quote200字/author80字)と揃えた二重防御クリップを行う。
-const QUOTE_CARD_QUOTE_MAX_CHARS = 200;   // quote-forge-validate.pyのQUOTE_MAX_CHARSと揃える
-const QUOTE_CARD_AUTHOR_MAX_CHARS = 80;   // quote-forge-validate.pyのAUTHOR_MAX_CHARSと揃える
-function homeQuoteCard(isToday) {
-  if (!isToday) return "";
-  const q = cachedQuoteJson[todayISO()];
-  if (!q || !q.quote || !q.author) return "";
-  // 2026-07-28レビュー対応・項目1(Codex指摘): 絵文字等はJSの.length/.sliceだとUTF-16
-  // コード単位(サロゲートペアは2単位)で数えるため、境界がサロゲートの途中に落ちると
-  // 文字化け(孤立サロゲート「�」)を起こす。Array.fromでコードポイント単位に分割してから
-  // クリップし、バッチ側(quote-forge-validate.py、Pythonのlen()=コードポイント単位)と
-  // 数え方を一致させる。
-  const clip = (s, max) => {
-    const codePoints = Array.from(s);
-    return codePoints.length > max ? `${codePoints.slice(0, max).join("")}…` : s;
-  };
-  const quote = clip(q.quote, QUOTE_CARD_QUOTE_MAX_CHARS);
-  const author = clip(q.author, QUOTE_CARD_AUTHOR_MAX_CHARS);
-  // v158: "※AIによる捏造です" はJSONの"note"フィールドを読まず、固定文言としてここで
-  // 常時付ける(quote-forge-validate.py側の信頼境界と対称。バッチが将来壊れても注記自体は
-  // 必ず出る)。
-  return `<div class="panel home-quote-card" style="font-size:12px; padding:8px 12px; display:flex; align-items:baseline; gap:6px; flex-wrap:wrap">
-    <span>📜 ${escapeHTML(quote)} — ${escapeHTML(author)}</span>
-    <span class="muted">※AIによる捏造です</span>
-  </div>`;
-}
-
-// v33: 12週サイクル「今週の進捗」(homeCycle と同一ロジック)
 function cycleWeekProgress(dateISO) {
   const date = dateISO || state.selectedDate;
-  // v33: 12WY にチェック済みの Project のみ(homeCycle と一致)
+  // 12WY にチェック済みの Project のみ
   const goals = state.projects.filter((p) =>
     !p.deleted && p.kind === "normal" && p.status === "active" && p.twelveWeekStartDate);
   const goalIds = goals.map((p) => p.id);
@@ -3499,7 +2946,7 @@ function cycleWeekProgress(dateISO) {
   return { done, total, pct: total ? Math.round((done / total) * 100) : 0 };
 }
 
-// v33: 今日のタスクシュート対象ブロック(homeTaskchute と着手率で共用)
+// 今日のタスクシュート対象ブロック(着手率で共用)
 //   Project に紐づく Block のみ。単発ブロック(kind:"other" の受け皿 Task)は除外。
 // v48: 紐づく Task が中断/中止/削除された未完了 Block は「もう実行しない計画」。
 //      一覧・着手率・繰り越し提案から外す(完了済み Block は実績として残す)。
@@ -3561,7 +3008,7 @@ function deferralStats(blocks) {
   return { pending: list.length - started, started, total: list.length };
 }
 
-// v33: タスクシュート着手率(homeTaskchute と同一の抽出)
+// タスクシュート着手率(同一の抽出)
 function taskchuteStartRate(blocks) {
   const list = taskchuteBlocks(blocks);
   const done = list.filter((b) => b.completed || b.actualStartAt).length;
@@ -3569,78 +3016,6 @@ function taskchuteStartRate(blocks) {
 }
 
 // --- ひと目スコアボード── v33 ---
-function homeScoreboard(blocks) {
-  const tc = taskchuteStartRate(blocks);
-  const wk = cycleWeekProgress();
-  const mit = blocks.filter((b) => b.isMIT);
-  const mitDone = mit.filter((b) => b.completed).length;
-  const mitPct = mit.length ? Math.round((mitDone / mit.length) * 100) : 0;
-  const cell = (cls, lab, num, unit, frac, pct, jump) => `
-    <div class="home-score ${cls}" data-action="home-jump" data-id="${jump}">
-      <div class="home-score-lab">${lab}</div>
-      <div class="home-score-val">
-        <span class="home-score-num">${num}</span><span class="home-score-unit">${unit}</span>
-        <span class="home-score-frac">${frac}</span>
-      </div>
-      <div class="progress home-score-bar"><span style="width:${pct}%"></span></div>
-    </div>`;
-  // v71: 「今日の主役」はhomeMITがトップ(home-mit-anchor)に移動したため、ジャンプ先もそこに追従
-  const body = `<div class="home-scoreboard">
-    ${cell("orange", "タスクシュート着手", tc.pct, "%", `${tc.done}/${tc.total}`, tc.pct, "homezone-1")}
-    ${cell("orange", "今日の主役", mitDone, `/${mit.length}`, "MIT", mitPct, "home-mit-anchor")}
-    ${cell("blue", "12週 今週", wk.pct, "%", `${wk.done}/${wk.total}`, wk.pct, "homezone-3")}
-  </div>`;
-  // v82(B3): ホーム常時表示スリム化のため既定closedの折りたたみへ。集計値自体は
-  //      summary行に要約表示するので、閉じたままでも「ひと目」の用は足りる。
-  const summary = `ひと目スコア: 着手${tc.pct}% ・ 主役${mitDone}/${mit.length} ・ 12週${wk.pct}%`;
-  return homeFoldSection("home-scoreboard", false, "", "", summary, body);
-}
-
-// チェック+編集できる行(Block 用)
-// v33: ホーム行のインライン充電/放電セレクト(編集画面を開かず記録)
-function homeChargeSelects(b) {
-  return `<span class="home-cd-wrap">
-    <span class="home-cd-lab c">充</span>
-    <select class="home-cd" data-block-field="charge" data-id="${b.id}" aria-label="充電(0-5)">${rangeOptions(0, 5, b.charge || 0)}</select>
-    <span class="home-cd-lab d">放</span>
-    <select class="home-cd" data-block-field="discharge" data-id="${b.id}" aria-label="放電(0-5)">${rangeOptions(0, 5, b.discharge || 0)}</select>
-  </span>`;
-}
-
-// v114: 第4引数extraBadgeは保護系ルーティンの連続欠落バッジ用(任意、既存呼び出しは
-// 渡さないため常に空文字扱いで従来どおり)。
-// v115: 第5引数extraButtonは縮退版実行ボタン用(任意、既存呼び出しは渡さないため常に
-// 空文字扱いで従来どおり)。
-function homeCheckRow(b, star, showCD, extraBadge, extraButton) {
-  // v150(UI改善計画Phase4b・R3): 完了作法統一により、完了/未完了どちらもtoggle-blockに一本化
-  // (旧: 未完了→complete-block-with-actualで実績モーダルが割り込んでいた)。
-  return `<div class="home-ck ${b.completed ? "done" : ""}">
-    <span class="home-box" data-action="toggle-block" data-id="${b.id}">${b.completed ? "✓" : ""}</span>
-    <span class="home-ck-name" data-action="edit-block" data-id="${b.id}">${escapeHTML(b.title)}</span>
-    ${star ? `<span class="home-star">${star}</span>` : ""}
-    ${extraBadge || ""}
-    ${extraButton || ""}
-    ${showCD ? homeChargeSelects(b) : ""}
-  </div>`;
-}
-
-// --- 今日の主役(MIT)---
-// v71: 前日AIフィードバックのMIT候補ブロックは「AIから」カード(homeAiHub / aiFeedbackCandidatesHTML)へ
-//      移動した(散らばったAI系表示の集約)。追加アクション自体(mit-candidate-add)は変更していない。
-function homeMIT(blocks) {
-  const mit = blocks.filter((b) => b.isMIT);
-  const done = mit.filter((b) => b.completed).length;
-  const rows = mit.length
-    ? mit.map((b) => homeCheckRow(b, "★")).join("")
-    : `<div class="muted" style="font-size:13px;padding:6px 0">タスクシュート画面の ☆ で、今日の主役(最大3)を設定できます。</div>`;
-  return `<section class="panel">
-    <div class="home-plabel orange">今日の主役<span class="home-count">${done} / ${mit.length}</span></div>
-    ${rows}
-    ${mit.length ? `<div class="home-foot">今日はこの${mit.length}つ。ここに集中する。</div>` : ""}
-  </section>`;
-}
-
-// v38: AIフィードバックのMIT候補を、今日の主役ブロックとして追加する
 function addMITCandidate(title) {
   const text = (title || "").trim();
   if (!text) return;
@@ -3659,67 +3034,6 @@ function addMITCandidate(title) {
 // 表記がY≠一覧件数になり別の混乱を生む(母数統一が意味を壊すケース)。そのため分母は
 // 従来どおりProject紐づきBlockのままとし、見出しへ「(Project紐づき)」を明示する代替案を採る
 // (taskchute-notes/decisions.md 2026-07-27参照)。
-function homeTaskchute(blocks) {
-  // v33: Project に紐づく Block のみ(単発ブロックは taskchuteBlocks で除外)
-  const list = taskchuteBlocks(blocks);
-  if (!list.length) {
-    return `<section class="panel"><div class="home-plabel orange">今日のタスクシュート(Project紐づき)</div>
-      <div class="muted" style="font-size:13px">Projectに紐づくBlockがありません。</div></section>`;
-  }
-  const started = list.filter((b) => b.completed || b.actualStartAt).length;
-  const pct = Math.round((started / list.length) * 100);
-  const rows = list.map((b) => {
-    const st = b.completed ? "done" : (b.actualStartAt ? "doing" : "todo");
-    const badge = st === "doing" ? `<span class="home-badge doing">着手中</span>`
-      : (st === "todo" ? `<span class="home-badge todo">未着手</span>` : "");
-    // v150(UI改善計画Phase4b・R3): 完了作法統一。toggle-blockに一本化(homeCheckRow同様)。
-    return `<div class="home-tc ${st}">
-      <span class="home-dot ${st}" data-action="toggle-block" data-id="${b.id}">${b.completed ? "✓" : ""}</span>
-      <span class="home-tc-name" data-action="edit-block" data-id="${b.id}">${escapeHTML(b.title)}</span>${badge}
-      ${homeChargeSelects(b)}</div>`;
-  }).join("");
-  return `<section class="panel"><div class="home-plabel orange">今日のタスクシュート(Project紐づき)</div>
-    <div class="home-rate"><span class="home-rate-cap">着手率</span>
-      <span class="home-rate-pct">${pct}%</span>
-      <span class="home-rate-frac">${started} / ${list.length} ブロック</span></div>
-    <div class="progress" style="margin-bottom:10px"><span style="width:${pct}%;background:var(--orange)"></span></div>
-    ${rows}</section>`;
-}
-
-// --- 今日のながれ ---
-function homeFlow(blocks, isToday) {
-  // タイムラインと同様、カテゴリ「ルーティン」は除外
-  const list = blocks.filter((b) => b.category !== "ルーティン");
-  if (!list.length) {
-    return `<section class="panel"><div class="home-plabel">今日のながれ</div>
-      <div class="muted" style="font-size:13px">本日のブロックがありません。</div></section>`;
-  }
-  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
-  const rows = list.map((b) => {
-    const s = minutesOf(b.plannedStartAt);
-    const e = minutesOf(b.plannedEndAt || b.plannedStartAt);
-    const isNow = isToday && !b.completed && nowMin >= s && nowMin < e;
-    const cls = b.completed ? "done" : (isNow ? "now" : "");
-    return `<div class="home-flow ${cls}">
-      <span class="home-flow-time">${b.plannedStartAt ? timeFromDateTime(b.plannedStartAt) : "—"}</span>
-      <span class="home-dot ${b.completed ? "done" : ""}" data-action="toggle-block" data-id="${b.id}">${b.completed ? "✓" : ""}</span>
-      <span class="home-flow-name" data-action="edit-block" data-id="${b.id}">${escapeHTML(b.title)}</span>
-      ${isNow ? `<span class="home-badge doing">NOW</span>` : ""}
-      ${homeChargeSelects(b)}</div>`;
-  }).join("");
-  return `<section class="panel"><div class="home-plabel">今日のながれ</div>${rows}</section>`;
-}
-
-// v82(B2): 「今日のリズム」ゾーンの折りたたみ要約。
-function homeZone2Summary(blocks) {
-  const flowList = blocks.filter((b) => b.category !== "ルーティン");
-  const flowDone = flowList.filter((b) => b.completed).length;
-  const parts = [];
-  if (flowList.length) parts.push(`ながれ ${flowDone}/${flowList.length}`);
-  return parts.length ? parts.join(" ・ ") : "記録なし";
-}
-
-// 週の範囲(12週サイクル用) v33: 土曜〜金曜を1週とみなす
 function weekRange(dateISO) {
   const d = parseDate(dateISO); // v56: new Date("...T00:00:00") は iOS で UTC 誤解釈のため parseDate に統一
   const dow = (d.getDay() + 1) % 7; // Sat=0, Sun=1, ... Fri=6
@@ -3729,146 +3043,6 @@ function weekRange(dateISO) {
 
 // v39: 開いている問い(Zone 3)。最大3件、deepening を lastTouchedAt 降順で優先。
 //      バッチ思考対策として全表示しない(CONCEPT §5.1)。空なら何も出さない。
-function homeQuestions() {
-  const qs = (state.questions || []).filter((q) => !q.deleted && q.status !== "settled");
-  if (!qs.length) return "";
-  const sorted = [...qs].sort((a, b) => {
-    if ((a.status === "deepening") !== (b.status === "deepening")) return a.status === "deepening" ? -1 : 1;
-    return (b.lastTouchedAt || "").localeCompare(a.lastTouchedAt || "");
-  }).slice(0, 3);
-  return `<section class="panel">
-    <div class="home-plabel blue">開いている問い<span class="home-count">${qs.length}</span></div>
-    ${sorted.map((q) => `<div class="home-q" data-action="open-questions">
-      <span class="home-q-badge ${q.status}">${q.status === "deepening" ? "深" : "開"}</span>
-      <span class="home-q-text">${escapeHTML(q.text)}</span>
-    </div>`).join("")}
-    ${qs.length > 3 ? `<div class="home-foot">ほか ${qs.length - 3} 件 — タップで一覧へ</div>` : `<div class="home-foot">10xの問いを、少しずつ掘る。</div>`}
-  </section>`;
-}
-
-// --- 未完了タスク(今日に追加できる)---
-// v88: 表示過多対策として「当日〜+3日」を既定表示、「+4日以降」は既存のhomeFoldSection
-// (details、開閉記憶あり)に格納する(完全非表示にはしない=見えなくなる事故防止)。
-// 期限切れ(dueDate < 当日)は従来どおり最優先で常時表示(当日+3日の枠に自然に含まれる)。
-// 期限なしタスクは従来から除外(t.dueDate の真偽チェック)で、この扱いは変更していない。
-// v126: Wish除外を撤去。「期日付きWishはタスクと同じ」の原則により、このリストは元々
-//       dueDate必須(下のfilterでt.dueDateを見る)なので、期日を持つWishだけが自然に混ざる。
-function homeBacklog() {
-  const excluded = state.projects
-    .filter((p) => p.kind === "other")
-    .map((p) => p.id);
-  // v33: 期限切れ + 当日から1週間以内のタスクのみ(期限なしは除外)。量が多すぎる対策。
-  // v88: この7日という全体の取得上限は維持し、その中を「当日+3日」で表示/折りたたみに分ける。
-  const limit = addDays(state.selectedDate, 7);
-  const nearLimit = addDays(state.selectedDate, 3);
-  // v117(B): 表示範囲・並び順は effectiveDueDate()(自己締切の自動前倒し)を基準にする。
-  //          存在チェック(t.dueDate)自体は実期日のまま(前倒しで空文字にはならないため影響なし)。
-  const tasks = state.tasks
-    .filter((t) => !t.deleted && !isTaskDead(t) && !excluded.includes(t.projectId)
-      && t.dueDate && effectiveDueDate(t) <= limit)
-    .sort((a, b) => (effectiveDueDate(a) || "99").localeCompare(effectiveDueDate(b) || "99"));
-  // v112: 当日Block登録済みでも未完了なら再追加できるようにする(K依頼2026-07-15。1日に
-  //       複数ブロックを登録したいという要望に対し、以前はscheduled済みタスクの追加ボタンを
-  //       disabledにしていたため矛盾していた)。タスクシュート画面のrenderOpenTasksと同じ思想
-  //       (件数はブロックせず「本日N件」バッジで示すだけ)に揃え、blockCountByTaskIdの流儀を
-  //       ここでも再利用する。
-  const todayCountByTaskId = {};
-  blocksForDate(state.selectedDate).forEach((b) => {
-    if (b.taskId) todayCountByTaskId[b.taskId] = (todayCountByTaskId[b.taskId] || 0) + 1;
-  });
-  const renderRow = (t) => {
-    const todayCount = todayCountByTaskId[t.id] || 0;
-    const eff = effectiveDueDate(t);
-    const overdue = eff < state.selectedDate;
-    // v117(B): 前倒しが効いているタスクは「締切 M/D(実 M/D)」で自己締切・実期日を併記する
-    const due = eff !== t.dueDate
-      ? `締切 ${eff.slice(5).replace("-", "/")}(実 ${t.dueDate.slice(5).replace("-", "/")})`
-      : `締切 ${t.dueDate.slice(5).replace("-", "/")}`;
-    const todayBadgeHTML = todayCount > 0
-      ? ` <span style="color:var(--green-text); font-weight:600">/ 本日 ${todayCount} 件追加済み</span>` : "";
-    return `<div class="home-due${overdue ? " overdue" : ""}">
-      <div class="home-due-main" data-action="edit-task" data-id="${t.id}">
-        <div class="home-due-name">${escapeHTML(t.title)}</div>
-        <div class="home-due-sub">${escapeHTML(projectName(t.projectId))} ・ ${due}${overdue ? "(期限切れ)" : ""}${todayBadgeHTML}</div>
-      </div>
-      <button class="btn ghost home-add" data-action="home-add-today" data-id="${t.id}" style="font-size:11px;padding:7px 10px">＋今日に追加</button>
-    </div>`;
-  };
-  const nearTasks = tasks.filter((t) => effectiveDueDate(t) <= nearLimit);
-  const farTasks = tasks.filter((t) => effectiveDueDate(t) > nearLimit);
-  const nearRows = nearTasks.slice(0, 8).map(renderRow).join("");
-  const farRows = farTasks.map(renderRow).join("");
-  // v88: homeBacklog()自体が既に<section class="panel">なので、homeFoldSection()の
-  // 自動付与"panel"クラスは二重の箱に見えてしまう。zone2〜4と同じ「既存パネル内の
-  // 素の<details class="home-fold">」パターンを使う(開閉記憶はisHomeFoldOpenを直接利用)。
-  const farFold = farTasks.length
-    ? `<details class="home-fold" data-fold-id="home-backlog-far" ${isHomeFoldOpen("home-backlog-far", false) ? "open" : ""}>
-        <summary class="home-fold-summary"><span class="home-fold-chevron">▶</span>＋4日以降 ${farTasks.length}件</summary>
-        <div class="home-fold-body">${farRows}</div>
-      </details>`
-    : "";
-  return `<section class="panel"><div class="home-plabel blue">未完了タスク<span class="home-count">${tasks.length}件</span></div>
-    ${nearTasks.length ? nearRows : `<div class="muted" style="font-size:13px">期限が近い未完了タスクはありません。</div>`}
-    ${farFold}</section>`;
-}
-
-// --- 今日の足あと ---
-function homeSteps(blocks) {
-  const done = blocks.filter((b) => b.completed);
-  const total = blocks.length || 1;
-  const charge = done.reduce((s, b) => s + Number(b.charge || 0), 0);
-  const discharge = done.reduce((s, b) => s + Number(b.discharge || 0), 0);
-  const net = charge - discharge;  // v33: エネルギー量(集計値)
-  const C = 226.2;
-  const off = (C * (1 - done.length / total)).toFixed(1);
-  return `<section class="panel"><div class="home-plabel green">今日の足あと</div>
-    <div class="home-steps">
-      <div class="home-ring">
-        <svg width="78" height="78" viewBox="0 0 84 84">
-          <circle cx="42" cy="42" r="36" fill="none" stroke="var(--line-soft)" stroke-width="7"/>
-          <circle cx="42" cy="42" r="36" fill="none" stroke="var(--green)" stroke-width="7"
-            stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${off}"
-            transform="rotate(-90 42 42)"/>
-        </svg>
-        <div class="home-ring-txt">${done.length}/${blocks.length}</div>
-      </div>
-      <div style="flex:1;min-width:0">
-        ${done.length
-          ? done.map((b) => `<div class="muted" style="font-size:12.5px">✓ ${escapeHTML(b.title)}</div>`).join("")
-          : `<div class="muted" style="font-size:12.5px">まだ完了したブロックがありません。</div>`}
-        <div class="home-energy">
-          <span class="home-energy-item">充電 <strong style="color:var(--green-text)">+${charge}</strong></span>
-          <span class="home-energy-item">放電 <strong style="color:var(--orange-text)">−${discharge}</strong></span>
-          <span class="home-energy-item">エネルギー <strong style="color:${net >= 0 ? "var(--green)" : "var(--orange)"}">${net >= 0 ? "+" : ""}${net}</strong></span>
-        </div>
-      </div>
-    </div></section>`;
-}
-
-// v31: 未完了タスクを今日のBlockにして編集画面を開く(予定時刻を入力できる)
-function addTaskToToday(taskId) {
-  const task = state.tasks.find((t) => t.id === taskId);
-  if (!task) return;
-  const { plannedStartAt, plannedEndAt } = defaultPlannedTimes();
-  const block = makeBlock({
-    taskId,
-    date: state.selectedDate,
-    title: task.title,
-    category: task.category || projectName(task.projectId),
-    plannedStartAt,
-    plannedEndAt
-  });
-  state.blocks.push(block);
-  saveState();
-  openBlockEditor(block.id);
-}
-
-// v17: 前日の日報から「明日の MIT 候補」を抽出する
-// v42: =========================================================
-//  AIループ搬送自動化(日報 ⇄ AI の運搬だけを自動化。思考は自動化しない)
-// =========================================================
-
-// 出力: 1タップ搬出(コピー / 共有)
 async function copyReportToClipboard() {
   const report = state.reports[state.selectedDate];
   if (!report) return showToast("先に日報を生成してください");
@@ -3900,13 +3074,11 @@ async function shareReport() {
 // タスクシュート上部の MIT候補チップ(前日フィードバックの取り込み分、当日限り)
 function aiMitChips() {
   const today = todayISO();
-  if (state.selectedDate !== today) return "";
   const prev = addDays(today, -1);
   const cands = state.journalMeta[prev]?.aiMitCandidates || [];
   if (!cands.length) return "";
-  return `<div class="ai-mit-chips">
-    <span class="ai-mit-cap">MIT候補(昨日のAIより):</span>
-    ${cands.map((t, i) => `<button class="ai-mit-chip" data-action="ai-mit-adopt" data-index="${i}">＋ ${escapeHTML(t)}</button>`).join("")}
+  return `<div class="tower-atis-chips" data-atis-mit-candidates>
+    ${cands.map((title, index) => `<button type="button" class="atis-chip chip-mit" data-action="ai-mit-adopt" data-index="${index}">＋ MIT候補: ${escapeHTML(title)}</button>`).join("")}
   </div>`;
 }
 function adoptAiMit(index) {
@@ -3924,21 +3096,19 @@ function adoptAiMit(index) {
   saveAndRender("✦ 今日の主役に追加しました");
 }
 
-// v133: タスクシュート上部の AIタスク候補チップ(前日フィードバックの取り込み分、当日限り)。
+// v133: 前日フィードバックのAIタスク候補チップ。
 //       aiMitChips/adoptAiMitと全く同じ「溜めて＋で採用」設計。採用せず消す×(却下)だけは
 //       候補が溜まり続けないよう追加した(aiMitChipsには無い機能)。
 function aiTaskChips() {
   const today = todayISO();
-  if (state.selectedDate !== today) return "";
   const prev = addDays(today, -1);
   const cands = state.journalMeta[prev]?.aiTaskCandidates || [];
   if (!cands.length) return "";
-  return `<div class="ai-mit-chips">
-    <span class="ai-mit-cap">タスク候補(昨日のAIより):</span>
-    ${cands.map((t, i) => `
-      <span class="ai-mit-chip" style="display:inline-flex; align-items:center; gap:4px">
-        <button data-action="ai-task-adopt" data-index="${i}" style="border:none; background:none; padding:0; font:inherit; color:inherit">＋ ${escapeHTML(t)}</button>
-        <button data-action="ai-task-dismiss" data-index="${i}" aria-label="候補を却下" style="border:none; background:none; padding:0 2px; font:inherit; color:inherit; opacity:0.6">×</button>
+  return `<div class="tower-atis-chips" data-atis-task-candidates>
+    ${cands.map((title, index) => `
+      <span class="atis-chip">
+        <button type="button" data-action="ai-task-adopt" data-index="${index}">＋ ${escapeHTML(title)}</button>
+        <button type="button" data-action="ai-task-dismiss" data-index="${index}" aria-label="候補を却下">×</button>
       </span>`).join("")}
   </div>`;
 }
@@ -4294,9 +3464,9 @@ function zeroSecThemeBarHTML() {
     <div class="draft-bar" style="flex-direction:column; align-items:stretch; gap:6px">
       <span>🧠 0秒思考のテーマ提案</span>
       ${_zeroSecThemeDraft.items.map((t, i) => `
-        <div class="home-ck" style="flex-wrap:wrap">
+        <div class="check-row" style="flex-wrap:wrap">
           <div style="flex:1; min-width:180px">
-            <div class="home-ck-name">${escapeHTML(t.theme)}</div>
+            <div class="check-row-name">${escapeHTML(t.theme)}</div>
             ${t.reason ? `<div class="muted" style="font-size:11px">${escapeHTML(t.reason)}</div>` : ""}
           </div>
           <button class="btn ghost" style="font-size:11px; padding:5px 9px" data-action="zerosec-theme-add" data-idx="${i}">＋ 0秒思考リストに追加</button>
@@ -6268,14 +5438,7 @@ function renderTasks() {
   return `
     ${renderHeader("今日の実行リスト", "タスクシュート", projectedEndBadge())}
     ${renderDateBar()}
-    ${aiMitChips()}
-    ${aiTaskChips()}
     ${carryOverPanel()}
-    <div class="row" style="margin-bottom:10px; flex-wrap:wrap; gap:8px">
-      <button class="btn" data-action="ai-schedule">📋 下書きスケジュール</button>
-      ${state.selectedDate === todayISO() ? `<button class="btn" data-action="ai-morning-plan">🌅 朝プラン</button>` : ""}
-      <span class="muted" style="font-size:11.5px">下書き=空きに仮配置→ドラッグ調整→確定 / 朝プラン=繰越+WBS+MITをまとめて1日ぶん下書き</span>
-    </div>
     <section class="form-strip">
       <input id="blockTitle" class="input" placeholder="Block名">
       <select id="blockCategory" class="select">
@@ -7745,7 +6908,7 @@ function renderMarkdownUncached(text) {
   }
 }
 
-// v148(UI改善計画Phase3-2): 設定13パネルを目的別4群のdetails(既定閉、homeFoldSection流用)へ。
+// 設定13パネルを目的別4群のdetails(既定閉、共有foldSection利用)へ。
 // 既定open判定は群ごとに1つだけ持つ(現在「異常」を検出できるのはデータと同期のsyncAlertMessage()
 // のみ。他3群は判定材料が無いため既定false=閉。将来異常検出を増やす場合はここへ足す)。
 function renderSettingsProfilePanel() {
@@ -7916,16 +7079,13 @@ function renderSettingsCloudPanel(github) {
 }
 
 function renderSettingsMorningPlanPanel() {
-  const replanActive = _replanUi.kind === "sending" || _replanUi.kind === "pending";
   return `
     <h3>朝の一括プランニング</h3>
     <div class="muted" style="font-size:12px; line-height:1.6">
       v60でアプリ内からのClaude API直接呼び出しは廃止しました(コスト理由)。「📋 下書きスケジュール」
       「🌅 朝プラン」は、繰越・WBS・MIT候補を空き時間へ機械的に前詰め配置する決定論ロジックで動作します
-      (APIキーは不要)。AI活用は自宅PCのバッチ処理からのファイル連携(下記AIフィードバック欄)に限定しています。
+      (APIキーは不要)。操作ボタンと候補チップは今日タブのATISへ集約しています。
     </div>
-    <button class="btn primary" data-action="today-replan" data-replan-button ${replanActive ? "disabled" : ""}>AI再プラン実行</button>
-    <div class="muted">${escapeHTML(_replanUi.message)}</div>
   `;
 }
 
@@ -8002,9 +7162,9 @@ function renderSettingsBreakMessagesPanel() {
 
 function renderSettingsFileStructurePanel() {
   return `
-    <details class="panel home-fold settings-file-structure">
-      <summary class="home-fold-summary"><span class="home-fold-chevron">▶</span>現在のファイル構成</summary>
-      <div class="home-fold-body">
+    <details class="panel fold settings-file-structure">
+      <summary class="fold-summary"><span class="fold-chevron">▶</span>現在のファイル構成</summary>
+      <div class="fold-body">
         <pre style="background:var(--panel-soft); padding:10px; border-radius:6px; font-size:11px; overflow-x:auto; margin:0">リポジトリ直下:
 ├── app-state.json          ← メインデータ(自動保存先)
 ├── Vision.md
@@ -8061,19 +7221,19 @@ function renderSettings() {
   return `
     ${renderHeader("Web版の保存と公開", "設定")}
     <section class="settings-grid">
-      ${homeFoldSection(groups[0].id, false, "settings-group", "settings-group-summary", groups[0].label,
+      ${foldSection(groups[0].id, false, "settings-group", "settings-group-summary", groups[0].label,
         `<div class="stack" style="gap:16px">${groups[0].body.join("")}</div>`)}
-      ${homeFoldSection(groups[1].id, false, "settings-group", "settings-group-summary", groups[1].label,
+      ${foldSection(groups[1].id, false, "settings-group", "settings-group-summary", groups[1].label,
         `<div class="stack" style="gap:16px">${groups[1].body.join("")}</div>`)}
       ${renderSettingsSyncGroup(github)}
-      ${homeFoldSection(groups[2].id, false, "settings-group", "settings-group-summary", groups[2].label,
+      ${foldSection(groups[2].id, false, "settings-group", "settings-group-summary", groups[2].label,
         `<div class="stack" style="gap:16px">${groups[2].body.join("")}</div>`)}
     </section>
   `;
 }
 
 // v148レビュー対応(2系統レビューFAIL項目2): 「データと同期」群だけ、他3群と違って
-// homeFoldSection(localStorage記憶)を使わない専用実装にする(_settingsSyncOpenOverrideの
+// foldSection(localStorage記憶)を使わない専用実装にする(_settingsSyncOpenOverrideの
 // 宣言・経緯コメントはファイル冒頭のモジュール変数群を参照)。
 function renderSettingsSyncGroup(github) {
   // v148レビュー対応(項目5): 認証エラーバナー(pd-auth-banner、personalDataAuthError)からの
@@ -8083,9 +7243,9 @@ function renderSettingsSyncGroup(github) {
   const open = dynamicOpen || Boolean(_settingsSyncOpenOverride);
   const body = [renderSettingsDataPanel(), renderSettingsCloudPanel(github), renderSettingsPagesPanel()].join("");
   return `
-    <details class="home-fold panel settings-group" data-settings-sync ${open ? "open" : ""}>
-      <summary class="home-fold-summary settings-group-summary" data-action="toggle-settings-sync"><span class="home-fold-chevron">▶</span>データと同期(データ管理・クラウド保存・GitHub Pages)</summary>
-      <div class="home-fold-body"><div class="stack" style="gap:16px">${body}</div></div>
+    <details class="fold panel settings-group" data-settings-sync ${open ? "open" : ""}>
+      <summary class="fold-summary settings-group-summary" data-action="toggle-settings-sync"><span class="fold-chevron">▶</span>データと同期(データ管理・クラウド保存・GitHub Pages)</summary>
+      <div class="fold-body"><div class="stack" style="gap:16px">${body}</div></div>
     </details>
   `;
 }
@@ -8140,57 +7300,34 @@ function renderBreakMessagesSettings() {
   `;
 }
 
-// v148(UI改善計画Phase3-1): 「その他」の目的別4群。navItemsとは別の配列にする理由 —
-//   navItems.markはサイドバー(デスクトップ)でも使う頭文字1字(W/R/A等)で、日本語ラベルと
-//   対応しないという指摘(codex-ui-review N4)はこの「その他」グリッド固有の問題のため、
-//   サイドバー側(navItems)は変更せずここだけ既存絵文字(アプリ内の他画面で既に使っている
-//   もの)へ差し替える。ルーティンは実行系(タスクシュート)の上部リンクへ昇格したため、
-//   この4群からは除外する(renderTasks参照)。
-const moreGroups = [
-  { id: "plan", label: "計画", items: [
-    { id: "home", label: "ホーム", mark: "🏠" },
-    { id: "wbs", label: "WBS", mark: "🧩" },
-    { id: "wish", label: "やりたい", mark: "✦" },
-    { id: "vision", label: "ビジョン", mark: "🧭" }
-  ] },
-  { id: "think", label: "思考", items: [
-    { id: "zero", label: "0秒思考", mark: "💡" }
-  ] },
-  { id: "review", label: "振り返り", items: [
-    { id: "ai-reports", label: "AIレポート", mark: "🤖" }
-  ] },
-  { id: "tools", label: "ツール", items: [
-    { id: "settings", label: "設定", mark: "⚙️" }
-  ] }
+// v230: 群見出しは描画せず、現在地breadcrumb用の分類だけ各項目へ保持する。
+const moreItems = [
+  { id: "wbs", label: "WBS", mark: "🧩", group: "計画" },
+  { id: "wish", label: "やりたい", mark: "✦", group: "計画" },
+  { id: "vision", label: "ビジョン", mark: "🧭", group: "計画" },
+  { id: "zero", label: "0秒思考", mark: "💡", group: "思考" },
+  { id: "ai-reports", label: "AIレポート", mark: "🤖", group: "振り返り" },
+  { id: "settings", label: "設定", mark: "⚙️", group: "ツール" }
 ];
 
-// v148: renderHeader()から呼び、現在のビューがmoreGroupsのどれかに属していれば
+// v148: renderHeader()から呼び、現在のビューがmoreItemsのどれかに属していれば
 // 「その他 › 群名」を返す(その他配下での現在地表示。codex-ui-review N1対応)。
-// 属さない(home/journal/tasks/timeline/routine等)場合は空文字。
+// 属さないビューでは空文字。
 function moreGroupLabelFor(viewId) {
-  // v182: homeは「その他」からの到達口だけを追加し、既存homeヘッダにはbreadcrumbを足さない。
-  if (viewId === "home") return "";
-  const group = moreGroups.find((g) => g.items.some((item) => item.id === viewId));
-  return group ? group.label : "";
+  return moreItems.find((item) => item.id === viewId)?.group || "";
 }
 
 function renderMore() {
-  return `
+  return `<div class="tower-skin more-tower">
     ${renderHeader("追加画面", "その他")}
-    ${moreGroups.map((group) => `
-      <div class="more-group">
-        <h2 class="more-group-title">${group.label}</h2>
-        <section class="grid">
-          ${group.items.map((item) => `
-            <button class="item row" data-action="nav" data-view="${item.id}">
-              <strong>${item.label}</strong>
-              <span class="badge">${item.mark}</span>
-            </button>
-          `).join("")}
-        </section>
-      </div>
-    `).join("")}
-  `;
+    <section class="more-tower-grid" aria-label="その他の画面">
+      ${moreItems.map((item, index) => `<button type="button" class="more-tower-item" data-action="nav" data-view="${item.id}">
+        <span class="more-tower-code">NAV ${String(index + 1).padStart(2, "0")}</span>
+        <strong><span class="more-tower-mark" aria-hidden="true">${item.mark}</span>${item.label}</strong>
+        <small>${item.group}</small>
+      </button>`).join("")}
+    </section>
+  </div>`;
 }
 
 // v39: =========================================================
@@ -9272,7 +8409,7 @@ function deleteZtTheme(id) {
 // K指示「WBSのプロジェクトのように大テーマ、小テーマの階層構造にしてください」への対応。
 // ドラッグ&ドロップは作らず、v79月間ボードのカード上「月選択」と同じ「select常時同居」の
 // タップ代替のみで小テーマのグループ移動を成立させる(実装コストと誤操作リスクを避ける)。
-// 開閉状態はホームの折りたたみカード(v71 isHomeFoldOpen/setHomeFoldOpen)と同じ
+// 開閉状態は共通の折りたたみカード(isFoldOpen/setFoldOpen)と同じ
 // localStorageベースの記憶機構をそのまま再利用する(専用のstate/永続化を増やさない)。
 function ztGroupAdd() {
   const title = (window.prompt("大テーマ名を入力してください") || "").trim();
@@ -9318,12 +8455,12 @@ function ztThemeSetGroup(themeId, groupId) {
   saveState();
 }
 
-// v90: グループの折りたたみ開閉(既定=開いた状態。isHomeFoldOpenのdefaultOpen引数を再利用)
+// v90: グループの折りたたみ開閉(既定=開いた状態。isFoldOpenのdefaultOpen引数を再利用)
 function ztGroupIsOpen(groupId) {
-  return isHomeFoldOpen(`zt-group-${groupId}`, true);
+  return isFoldOpen(`zt-group-${groupId}`, true);
 }
 function ztGroupToggleOpen(groupId) {
-  setHomeFoldOpen(`zt-group-${groupId}`, !ztGroupIsOpen(groupId));
+  setFoldOpen(`zt-group-${groupId}`, !ztGroupIsOpen(groupId));
   render();
 }
 
@@ -10013,7 +9150,7 @@ function closeNowMode() {
   render();
 }
 
-// homeHero と同じ「現在時刻に該当するBlock、無ければ次(未着手優先)」の抽出ロジックに
+// 「現在時刻に該当するBlock、無ければ次(未着手優先)」の抽出ロジックに
 // スキップ集合の除外を加えたもの。当日固定(Nowモードに入る時点でselectedDateは今日に揃えている)。
 function nowConveyorTarget() {
   const today = todayISO();
@@ -10545,7 +9682,7 @@ function syncAlertMessage() {
   return null;
 }
 
-function homeSyncAlertBanner() {
+function syncAlertBanner() {
   const msg = syncAlertMessage();
   if (!msg) return "";
   return `<div class="sync-alert-banner" data-action="nav" data-view="settings">⚠️ ${escapeHTML(msg)}</div>`;
@@ -11857,7 +10994,7 @@ function startTimerTicker() {
   }, 500);
 }
 
-function setView(view) {
+function setView(view = "today") {
   // v34/v183: 0秒思考の書く画面(単体/今日インライン)から離脱するときは
   // タイマー停止 + 共通一時状態をリセットする。
   if ((state.currentView === "zero" && view !== "zero")
@@ -12297,7 +11434,7 @@ async function hydrateStaticMarkdown() {
   // v137: 入力中/IME変換中は即renderせず保留する(review.md:28。renderDeferringForFocus参照)。
   // v161: "stats"(計器盤)を追加。エネルギーカーブの新着fetchが完了してもこの画面を開いた
   //       ままだと再描画されず節が出ないままになる不具合を防ぐ(他view追加時と同じ理由)。
-  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "home" || state.currentView === "today" || state.currentView === "timeline" || state.currentView === "wish" || state.currentView === "zero" || state.currentView === "tasks")) {
+  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "today" || state.currentView === "timeline" || state.currentView === "wish" || state.currentView === "zero" || state.currentView === "tasks")) {
     renderDeferringForFocus();
   }
 }
@@ -12459,112 +11596,66 @@ function aiWorkResultRowHTML(r) {
   </div>`;
 }
 
-// v71: 散らばっていたAI系表示(鮮度インジケータ・AI作業結果・前日AIフィードバックのMIT候補)を
-//      「AIから」1カードに集約した(旧homeAiWork+旧aiFreshnessLine単独表示+旧homeMIT内候補を統合)。
-//      個々の中身(pendingAiWorkResults/aiWorkResultRowHTML/aiFreshnessLine/
-//      extractMITCandidatesFromReport)自体は変更せず、置き場所だけをまとめている。
-// v73: 縮退モードでhomeFoldSection(details)に相乗りできるよう、外側の<section>無しの
-//      中身だけを返す形に分離した(中身自体は無変更)。
-// v146: 通常時も既定closedの折りたたみへ変更したため(UI改善計画Phase1-1)、外側<section>で
-//      包むhomeAiHub()は両呼び出し元がhomeFoldSection+本関数の直接呼び出しに統一され不要になり削除した。
-// v159: AI機能3「未来の自分からの手紙」。自宅PCバッチ(loop/scripts/future-letter.sh)が
-// 月次で生成した 未来からの手紙_<当月>.md が存在する間だけ、「AIから」カードの近くに小さな
-// 導線を1行出す(タップでAIレポート画面の「未来からの手紙」タブへ)。無い月は何も出さない
-// (cachedFutureLetterMdに当月分が無い=フェイルソフト)。本文そのものはここでは表示せず、
-// 既存のAIレポート一覧・本文表示機構(AI_REPORT_TYPES/renderAiReportBody)に相乗りする。
-function homeFutureLetterLink() {
-  const month = todayISO().slice(0, 7);
-  if (!(cachedFutureLetterMd[month] || "").trim()) return "";
-  return `<div class="panel home-future-letter-link" data-action="open-future-letter" style="font-size:13px; padding:8px 12px; cursor:pointer">
-    ✉️ 未来からの手紙が届いています
-  </div>`;
-}
-
-function homeAiHubBody(blocks, isToday) {
-  const workItems = isToday ? pendingAiWorkResults() : [];
-  const workHTML = workItems.length ? `
-    <div class="home-divider"></div>
-    <div class="home-ai-sub">AIが処理した作業<span class="home-count">${workItems.length}</span></div>
-    ${workItems.map((r) => aiWorkResultRowHTML(r)).join("")}` : "";
-  const candidatesHTML = isToday ? aiFeedbackCandidatesHTML(blocks) : "";
-  // v75: 「AIから」カードは鮮度表示とMIT候補抽出のみで、フィードバック本文そのものを読む手段が
-  //      無かった(README不具合「ホームAIからでAIフィードバックが見れない」の実体)。ジャーナルタブと
-  //      同じ「details 既定closed」パターンで本文を読めるようにする(新規UIコンポーネントは作らず流用)。
-  // v76: isToday(= state.selectedDate === 今日)でゲートしていたため、Home で過去日を閲覧中は
-  //      本文があってもこのdetails自体が出なかった(homeAiFeedbackReadHTML側もselectedDate基準の
-  //      不具合を併発しており、二重の原因で「読めない」symptomになっていた。CHANGES_v76.md参照)。
-  //      読む機能自体は閲覧中の日付に関係なく常に出す。
-  const readHTML = homeAiFeedbackReadHTML();
-  return `
-    <div class="home-plabel orange">AIから</div>
-    ${aiFreshnessLine()}
-    ${workHTML}
-    ${readHTML}
-    ${candidatesHTML}
-  `;
-}
-
-// v75: 「AIから」カードから、当日/前日のAIフィードバック本文を読めるようにする(既定closed)。
-//      読み取り経路は cachedFeedback(hydrateStaticMarkdown が personal-data API=fetchGitHubRawText
-//      経由で埋める。v72から同一オリジンfetchは使っていない)をそのまま流用する。
-// v76: today を state.selectedDate ではなく実際の今日(todayISO())に固定した。selectedDateは
-//      タブ間で共有・永続化されるため、Homeで過去日を閲覧している間はここが「今日」ではなく
-//      「閲覧中の日付」を基準にしてしまい、hydrateStaticMarkdown側が埋めた cachedFeedback[実際の昨日]
-//      と鍵が一致せず本文が出ない不具合があった(CHANGES_v76.md参照)。
-function homeAiFeedbackReadHTML() {
+// v230: AIフィードバック本文・候補・操作導線を統合画面のATISへ集約する。
+function atisFeedbackReadHTML() {
   const today = todayISO();
   const prev = addDays(today, -1);
   const todayFb = cachedFeedback[today] || state.feedback[today] || "";
   const prevFb = cachedFeedback[prev] || state.feedback[prev] || "";
   if (!todayFb && !prevFb) return "";
-  return `
-    <div class="home-divider"></div>
-    <details class="home-ai-feedback-read">
-      <summary class="muted" style="cursor:pointer; font-size:12px; font-weight:600">🤖 AIフィードバックを読む</summary>
-      <div style="margin-top:8px">
-        ${todayFb ? `<div class="md-render readonly-md">${renderMarkdown(todayFb)}</div>` : ""}
-        ${prevFb ? (todayFb ? `
-        <details style="margin-top:10px">
-          <summary class="muted" style="cursor:pointer; font-size:11.5px">前日(${escapeHTML(prev)})のフィードバックも見る</summary>
-          <div class="md-render readonly-md" style="margin-top:6px; opacity:0.85">${renderMarkdown(prevFb)}</div>
-        </details>` : `<div class="md-render readonly-md">${renderMarkdown(prevFb)}</div>`) : ""}
-      </div>
-    </details>`;
+  return `<details class="tower-atis-feedback">
+    <summary>🤖 AIフィードバックを読む</summary>
+    <div class="tower-atis-feedback-body">
+      ${todayFb ? `<div class="md-render readonly-md">${renderMarkdown(todayFb)}</div>` : ""}
+      ${prevFb ? (todayFb ? `<details>
+        <summary>前日(${escapeHTML(prev)})のフィードバックも見る</summary>
+        <div class="md-render readonly-md">${renderMarkdown(prevFb)}</div>
+      </details>` : `<div class="md-render readonly-md">${renderMarkdown(prevFb)}</div>`) : ""}
+    </div>
+  </details>`;
 }
 
-// v73: コンディションOS — 縮退モードの案内バナー。責めない・煽らないトーン(wip-bannerと同じ
-// 「情報を渡すだけ」の思想)。タップでジャーナル(体調記録の入口)へ。
-function homeDegradedBanner() {
-  return `<div class="cond-degraded-banner" data-action="nav" data-view="journal">
-    今日は最低限だけでいい日です。MITと体調記録だけ見えていれば十分。
+function atisFeedbackCandidatesHTML(blocks) {
+  const mit = blocks.filter((block) => block.isMIT);
+  if (mit.length >= 3) return "";
+  const prev = addDays(todayISO(), -1);
+  const feedbackText = cachedFeedback[prev] || state.feedback[prev] || "";
+  const existingTitles = new Set(blocks.map((block) => block.title));
+  const candidates = extractMITCandidatesFromReport(feedbackText)
+    .filter((candidate) => !existingTitles.has(candidate))
+    .slice(0, 3 - mit.length);
+  if (!candidates.length) return "";
+  return `<div class="tower-atis-chips" data-atis-feedback-candidates>
+    ${candidates.map((candidate) => `<button type="button" class="atis-chip chip-mit" data-action="mit-candidate-add" data-title="${escapeHTML(candidate)}">＋ MIT候補: ${escapeHTML(candidate)}</button>`).join("")}
   </div>`;
 }
 
-// v71: homeMIT内にあった「前日AIフィードバックのMIT候補」提示を分離(枠が空いている日のみ)。
-//      ワンタップで今日の主役ブロックに追加できる(mit-candidate-add アクションは既存のまま)。
-function aiFeedbackCandidatesHTML(blocks) {
-  const mit = blocks.filter((b) => b.isMIT);
-  if (mit.length >= 3) return "";
-  const prev = addDays(state.selectedDate, -1);
-  const feedbackText = cachedFeedback[prev] || state.feedback[prev] || "";
-  const existingTitles = new Set(blocks.map((b) => b.title));
-  const candidates = extractMITCandidatesFromReport(feedbackText)
-    .filter((c) => !existingTitles.has(c))
-    .slice(0, 3 - mit.length);
-  if (!candidates.length) return "";
-  return `
-    <div class="home-divider"></div>
-    <div class="home-ai-sub">🤖 昨日のフィードバックからの候補</div>
-    ${candidates.map((c) => `
-      <div class="home-ck">
-        <button class="btn ghost" style="font-size:11px; padding:5px 9px" data-action="mit-candidate-add" data-title="${escapeHTML(c)}">＋ 主役に</button>
-        <span class="home-ck-name">${escapeHTML(c)}</span>
-      </div>`).join("")}`;
+function renderAtisPanel() {
+  const blocks = blocksForDate(todayISO());
+  const workItems = pendingAiWorkResults();
+  const workHTML = workItems.length ? `<div class="atis-divider"></div>
+    <div class="tower-atis-sub">AIが処理した作業 <span>${workItems.length}</span></div>
+    ${workItems.map((result) => aiWorkResultRowHTML(result)).join("")}` : "";
+  const replanActive = _replanUi.kind === "sending" || _replanUi.kind === "pending";
+  return `<section class="tower-panel-box sec-atis" data-atis-panel>
+    <h2>ATIS <span>AIから</span></h2>
+    <div class="tower-atis-body">
+      ${aiFreshnessLine()}
+      ${workHTML}
+      ${atisFeedbackReadHTML()}
+      ${atisFeedbackCandidatesHTML(blocks)}
+      ${aiMitChips()}
+      ${aiTaskChips()}
+      <div class="tower-atis-actions">
+        <button type="button" class="atis-btn" data-action="ai-morning-plan">🌅 朝プラン</button>
+        <button type="button" class="atis-btn" data-action="ai-schedule">📋 下書きスケジュール</button>
+        <button type="button" class="atis-btn" data-action="today-replan" data-replan-button ${replanActive ? "disabled" : ""}>♻️ AI再プラン</button>
+      </div>
+      <div class="tower-atis-status" data-atis-status>${escapeHTML(_replanUi.message)}</div>
+    </div>
+  </section>`;
 }
 
-// v67: AI連携の鮮度インジケータ(柱1b)。フィードバック/プランそれぞれの最終取得成功日からの
-// 経過日数を1行表示する。3日以上(どちらか)途絶えたら sync-banner と同じ静かな見た目で注意喚起
-// する(責める色は使わない)。
 function aiFreshnessLine() {
   const today = todayISO();
   const fbAt = state.aiLinkFreshness?.feedbackAt || null;
@@ -14341,35 +13432,16 @@ function updateProjectedEndTick() {
 }
 
 // v144レビュー対応: エネルギーバッテリーは時間経過(減衰)だけで値が変わるため、render()の
-// きっかけ(Block操作等)が無いまま時間が過ぎると電池チップ・タイムライン実カーブの表示が
+// きっかけ(Block操作等)が無いまま時間が過ぎるとタイムライン実カーブの表示が
 // 凍ったままになる。startTimerTicker(500ms周期)に載せて軽量な差分更新をするが、減衰は
 // 1時間3程度の緩やかな変化のためBATTERY_TICK_INTERVAL_MS(既定1分)でスロットルする。
 // 全再描画(render())はしない — 検索入力のフォーカス・IME入力中の状態を飛ばさないため、
-// 該当要素(.home-today-status / .energy-graph-overlay)だけをouterHTMLで差し替える。
-// v147レビュー対応: 旧実装は`.home-battery-chip`だけを差し替えており、それを包む
-// `.home-today-status`(homeFoldSectionの<summary>、常時表示の「残量N」要約)は初回描画時の
-// まま凍っていた。カード全体をouterHTMLで差し替える(homeFoldSectionはlocalStorageの
-// fold開閉状態(isHomeFoldOpen)を再読込するため、開閉状態は自然に保持される)。さらに、
-// 全て良好でカード自体が非表示だった場合でも、電池残量が減衰でBATTERY_OK_PCTを割った
-// 可能性があるため、その場合だけ全再描画(renderDeferringForFocus)で初めてカードを出す。
+// 該当要素(.energy-graph-overlay)だけをouterHTMLで差し替える。
 function updateBatteryTick() {
   if (Date.now() - _lastBatteryTickAt < BATTERY_TICK_INTERVAL_MS) return;
   _lastBatteryTickAt = Date.now();
   if (state.selectedDate !== todayISO()) return;
-  // v149レビュー対応(必須1): 「今日の状態」カード(.home-today-status)は今日タブにしか
-  // 存在しないため、ホームタブ滞在中はstatusCardが常にnullになり、残量40%未満の間
-  // else if分岐(renderDeferringForFocus)が毎分発火し続けてしまう(宣言入力等を脅かす)。
-  // 今日タブ滞在中だけに絞る。
-  if (state.currentView === "home" && homeTab === "today") {
-    const statusCard = document.querySelector(".home-today-status");
-    if (statusCard) {
-      statusCard.outerHTML = homeTodayStatusCard();
-    } else if (!computeHomeBatteryInfo(state.selectedDate).ok) {
-      // 「今日の状態」カードが非存在(=前回描画時は全て良好で非表示だった)のに、
-      // 電池残量が閾値を割った → カードを新たに出す必要があるため全再描画する。
-      renderDeferringForFocus();
-    }
-  } else if (state.currentView === "timeline") {
+  if (state.currentView === "timeline") {
     const layer = document.querySelector(".energy-graph-overlay");
     if (layer) {
       const allBlocks = blocksForDate(state.selectedDate);
@@ -14446,7 +13518,7 @@ function computeDailyOverload(dateISO) {
 
 // v146(UI改善計画Phase1-4): バッファ残量帯は「今日を扱う」画面だけに限定する(UX監査N3。
 // 設定・計器盤・その他等の無関係画面から常時26px帯を消す)。
-const BUFFER_METER_VIEWS = ["home", "tasks", "timeline", "journal"];
+const BUFFER_METER_VIEWS = ["tasks", "timeline", "journal"];
 function bufferMeterHTML() {
   if (!BUFFER_METER_VIEWS.includes(state.currentView)) return "";
   if (state.selectedDate !== todayISO()) return "";

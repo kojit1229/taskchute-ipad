@@ -118,21 +118,22 @@ function check(name, cond, extra = "") {
       (await currentDataView()) === "timeline", await currentDataView());
 
     // ============================================================
-    // [3] normalizeState が未知の currentView を "home" へ補完する
+    // [3] normalizeState が未知の currentView を "today" へ補完する
     // ============================================================
-    console.log("[3] 未知の currentView は normalizeState が 'home' へ補完する(旧app.jsとの相互事故防止、D3)");
+    console.log("[3] 未知の currentView は normalizeState が 'today' へ補完する(home撤去後の白画面防止)");
     await seed({ view: "no-such-view-v999" });
-    check("未知view('no-such-view-v999')が 'home' に補完される", (await currentDataView()) === "home", await currentDataView());
-    check("補完後のhomeビューが空画面にならない(renderMainのif羅列・else無し対策 §8-4)",
-      await page.evaluate(() => document.getElementById("main").innerHTML.trim().length > 0));
+    check("未知view('no-such-view-v999')が 'today' に補完される", (await currentDataView()) === "today", await currentDataView());
+    check("補完後にTOWERが描画され白画面にならない", await page.locator(".today-tower").count() === 1);
 
     // ============================================================
     // [4] サイドバーから today へ遷移できる
     // ============================================================
     console.log("[4] サイドバー(.nav-button)から today へ遷移できる");
-    await seed({ view: "home" });
+    await seed({ view: "tasks" });
     check("サイドバーに today のナビボタンがある",
       await page.locator('#sidebar .nav-button[data-action="nav"][data-view="today"]').count() === 1);
+    check("サイドバーからhomeナビが撤去されている",
+      await page.locator('#sidebar [data-action="nav"][data-view="home"]').count() === 0);
     await page.locator('#sidebar .nav-button[data-action="nav"][data-view="today"]').click();
     await waitView("today");
     check("クリックで today ビューが表示される", (await currentDataView()) === "today");
@@ -148,14 +149,16 @@ function check(name, cond, extra = "") {
     await seed({ view: "tasks" });
     check("bottom-nav に today ボタンがある(D2: mobileNav先頭差替え)",
       await page.locator('#bottomNav button[data-action="nav"][data-view="today"]').count() === 1);
+    check("bottom-navからhomeナビが撤去されている",
+      await page.locator('#bottomNav [data-action="nav"][data-view="home"]').count() === 0);
     await page.locator('#bottomNav button[data-action="nav"][data-view="today"]').click();
     await waitView("today");
     check("bottom-nav から today ビューへ遷移できる", (await currentDataView()) === "today");
     check("bottom-nav の today ボタンが active になる",
       await page.locator('#bottomNav button[data-view="today"].active').count() === 1);
-    console.log("[5b] home画面滞在時はbottom-navの「その他」がactiveになる(D2)");
-    await seed({ view: "home" });
-    check("home滞在時はbottom-navの「その他」がactiveになる",
+    console.log("[5b] more画面滞在時はbottom-navの「その他」がactiveになる");
+    await seed({ view: "more" });
+    check("more滞在時はbottom-navの「その他」がactiveになる",
       await page.locator('#bottomNav button[data-view="more"].active').count() === 1);
     await page.setViewportSize({ width: 1100, height: 1400 });
 
@@ -329,7 +332,7 @@ function check(name, cond, extra = "") {
     // ============================================================
     // [28] P11: cockpitテーマで主要ビューを巡回して pageerror ゼロ・#main非空
     // ============================================================
-    console.log("[28] P11: cockpitテーマで today/home/timeline/settings を巡回し、pageerrorゼロ・#main非空");
+    console.log("[28] P11: cockpitテーマで today/tasks/timeline/settings を巡回し、pageerrorゼロ・#main非空");
     const failuresBeforeTour = failures;  // 巡回区間のpageerror検出用(page.on('pageerror')が加算する)
     await page.clock.setFixedTime(fixedTime(12, 0, 0));
     await seed({
@@ -343,7 +346,7 @@ function check(name, cond, extra = "") {
       ]
     });
     await page.waitForSelector('html[data-theme="cockpit"]', { state: "attached" });
-    for (const view of ["today", "home", "timeline", "settings"]) {
+    for (const view of ["today", "tasks", "timeline", "settings"]) {
       await page.locator(`#sidebar .nav-button[data-action="nav"][data-view="${view}"]`).click();
       await waitView(view);
       check(`cockpitテーマで ${view} ビューの #main が空でない`,
