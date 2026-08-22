@@ -1,5 +1,7 @@
-// src/features/today-tower.js — v222: TOWERをNOW LANDING/ARRIVALS/DEPARTURES/GATEへ減量。
-// state・保存・action登録には触れず、時刻・便状態は既存1秒tickerから差分更新する。
+// src/features/today-tower.js — v223: TOWER上帯を結線し、PC 3列/モバイル縦順の骨格へ移行。
+// state・保存・action登録には触れず、時刻・便状態・信条は既存1秒tickerから差分更新する。
+
+import { renderStandingOrders, renderCountdown, renderTopbandPC, creedRotationLine } from "./topband.js";
 
 let escapeHTML, todayISO, homeSyncAlertBanner, blocksForDate, towerFlights;
 let runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, timeFromDateTime, clamp;
@@ -124,7 +126,7 @@ function renderTowerRunway(now, blocks) {
       <button type="button" class="btn primary" data-action="now-start" data-id="${id}">▶ 開始</button>
     </div>`;
   }
-  return `<section class="tower-runway">
+  return `<section class="tower-runway sec-rwy">
     <h2>NOW LANDING <span>滑走路</span></h2>
     <div class="tower-runway-strip">
       <i id="towerPlane" aria-hidden="true" style="--tower-plane-x:${metrics.x}%">✈</i>${touchdown}
@@ -145,7 +147,7 @@ function renderTowerBoard(now, arrivalFlights) {
   const arrivals = arrivalWindow(arrivalFlights);
   const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
   const departures = boardFlights(blocksForDate(localISO(tomorrow)), 0).slice(0, 3);
-  return `<section class="tower-board">
+  return `<section class="tower-board sec-arrivals">
     <div class="tower-arrivals"><h2>ARRIVALS <span>本日</span></h2>
       <div id="towerArrivalRows" data-flight-set="${flightSetKey(arrivalFlights)}">${arrivals.rows.map((flight) => flightRow(flight)).join("")}</div>
       <div class="tower-flight-summary" id="towerArrivalSummary">${arrivals.omitted ? `他 ${arrivals.omitted} 便` : ""}</div>
@@ -175,7 +177,7 @@ function renderTowerGates(blocks) {
   const fullFlash = full && lastGateFull === false;
   lastGateDocked = docked;
   lastGateFull = full;
-  return `<section class="tower-gates${full ? " is-full" : ""}${fullFlash ? " is-full-flash" : ""}">
+  return `<section class="tower-gates sec-gates${full ? " is-full" : ""}${fullFlash ? " is-full-flash" : ""}">
     <h2>GATE ROUTINE</h2><div id="towerGateStrip" data-gate-set="${gateSet}">${buttons}</div>
     <div id="towerGateCount">${done}/${gates.length}便 就航</div>
   </section>`;
@@ -191,16 +193,22 @@ function renderTodayTower() {
   const weekday = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
   return `<div class="today-tower" data-motion="${escapeHTML(towerMotionSetting())}" data-night="${isNightHour(now.getHours()) ? 1 : 0}" data-paused="${document.hidden ? 1 : 0}">
     ${homeSyncAlertBanner()}
-    <header class="tower-header">
-      <span class="tower-beacon" aria-hidden="true"><i></i></span>
-      <div class="tower-identity"><span class="tower-eyebrow">TASKCHUTE TOWER</span><strong>TWR</strong></div>
-      <div class="tower-time"><time id="towerClock">${clockText(now)}</time><span id="towerDate">${date} (${weekday})</span></div>
-      <div class="tower-day-left"><span>本日残り</span><strong id="towerDayLeft">${dayLeftText(now)}</strong></div>
-    </header>
-    ${renderTowerRunway(now, blocks)}
+    <div class="tower-topband">
+      <header class="tower-header">
+        <span class="tower-beacon" aria-hidden="true"><i></i></span>
+        <div class="tower-identity"><span class="tower-eyebrow" id="towerEyebrow">${creedRotationLine(Math.floor(now.getTime() / 8000))}</span><strong>TWR</strong></div>
+        <div class="tower-time"><time id="towerClock">${clockText(now)}</time><span id="towerDate">${date} (${weekday})</span></div>
+        <div class="tower-day-left"><span>本日残り</span><strong id="towerDayLeft">${dayLeftText(now)}</strong></div>
+      </header>
+    </div>
+    ${renderTopbandPC()}
+    <div class="tower-col-left">
+      ${renderTowerRunway(now, blocks)}
+      ${renderTowerBoard(now, flights)}
+    </div>
+    <div class="tower-col-center">${renderTowerGates(blocks)}</div>
+    <div class="tower-col-right">${renderStandingOrders()}${renderCountdown()}</div>
     ${renderTodayPomodoro(blocks, queueBlocksOf(blocks)).replace(">POMODORO<span>", ">CABIN TIMER<span>")}
-    ${renderTowerGates(blocks)}
-    ${renderTowerBoard(now, flights)}
   </div>`;
 }
 
@@ -252,10 +260,15 @@ function updateTodayTowerTick() {
   const blocks = blocksForDate(todayISO());
   const clock = document.getElementById("towerClock");
   const dayLeft = document.getElementById("towerDayLeft");
+  const eyebrow = document.getElementById("towerEyebrow");
   if (!clock || !dayLeft) return;
   const nowMin = now.getHours() * 60 + now.getMinutes();
   clock.textContent = clockText(now);
   dayLeft.textContent = dayLeftText(now);
+  if (eyebrow) {
+    const creed = creedRotationLine(Math.floor(now.getTime() / 8000));
+    if (eyebrow.innerHTML !== creed) eyebrow.innerHTML = creed;
+  }
   updateTowerRunway(now, blocks);
   updateTowerGates(blocks);
   const flights = boardFlights(blocks, nowMin);

@@ -3274,10 +3274,27 @@ h3 {
   --tower-cyan: #55d9e8;
   --tower-purple: #a78bfa;
   min-height: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 12px 12px 40px;
   color: var(--tower-text);
   font-family: var(--mono, ui-monospace), "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
   background: var(--tower-bg);
+  display: flex;
+  flex-direction: column;
 }
+.tower-topband,
+.tower-col-left,
+.tower-col-center,
+.tower-col-right { display: contents; }
+.tower-header { order: 0; }
+.sec-rwy { order: 1; }
+.sec-arrivals { order: 2; }
+.sec-gates { order: 3; }
+.today-tower > .today-pomodoro { order: 4; }
+.sec-creed { order: 7; }
+.sec-life { order: 8; }
 .tower-header {
   display: flex;
   align-items: center;
@@ -3463,30 +3480,140 @@ h3 {
   .today-pomodoro .pomo-circle-wrap { margin: 0 auto; }
 }
 
-/* v222: 残した4区画と共有CABIN TIMERをPC 3面卓へ配置する。 */
-/* 3面卓の適用はviewport 1280px以上。設計書の900pxはサイドバー無しサンプル準拠の値で、
-   実アプリはサイドバー216px+余白により900〜1279pxでは中央列が340/320の固定レールに潰される(1024px実測18px)。 */
++/* css-topband.css — TaskChute Journal スリム化P3・単位(c)の一部。
+   上帯コンポーネント(STANDING ORDERS + COUNTDOWN)専用CSS。
+   出典: mockup-today-home-v2.html(該当スタイルをそのまま移植。プレフィクスはモックの
+   クラス名に従う: .tower-creed-* / .tower-life-* / .tower-topband-pc / .sec-creed-pc /
+   .sec-life-pc)。統合時にstyles.cssへマージする(p4-interface.md §4のCSS受け渡し方式を踏襲)。
+
+   【統合時の注意】
+   - `.tower-eyebrow` の基底ルール(color/font-size/font-weight/letter-spacing)は既存
+     styles.css:3294に既にある。本ファイルは b/em/small の子孫セレクタだけを追加するので、
+     既存ルールと衝突しない(上書きではなく追加)。マージ時は既存ルールの直後に足せばよい。
+   - `.tower-panel-box` / `.tower-panel-box h2` は現行styles.cssに存在しない新クラス
+     (現行TOWERは .tower-runway / .tower-apron 等パネルごと個別クラスで同じ border/background
+     を重複定義している)。mockup-today-home-v2.html全体が .tower-panel-box への統一を前提に
+     設計されているため、他の並列単位(RWY/ARRIVALS/GATE等)のCSSでも同名クラスが必要になる
+     可能性が高い。二重定義を避けるため、統合時にどのファイルが .tower-panel-box の基底定義を
+     持つか(このファイル、または(b)TOWER減量単位側)を監督者が一本化すること。本ファイルには
+     参照用に含めてあるが、他単位と重複する場合は片方を残して統合する。
+   - CSS変数(--tower-bg/--tower-panel/--tower-line/--tower-text/--tower-amber/--tower-green/
+     --tower-cyan/--tower-purple)は既存styles.cssの .today-tower 定義を再利用する(本ファイルは
+     再定義しない)。
+   - input/select/textareaを含まないため16px以上ルールの対象外。
+*/
+
+/* ============ ヘッダeyebrow: 信条ローテーション行(creedRotationLine用) ============ */
+/* 既存 .tower-eyebrow 基底(styles.css:3294)への追加。 */
+.tower-eyebrow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.tower-eyebrow b { color: var(--tower-cyan); font-weight: 700; }
+.tower-eyebrow em {
+  font-style: normal; color: var(--tower-text); font-family: system-ui, sans-serif;
+  font-weight: 500; letter-spacing: 0; opacity: .9;
+}
+.tower-eyebrow small { color: var(--tower-text); font-weight: 400; opacity: .4; letter-spacing: .04em; }
+
+/* ============ セクション共通(パネル外枠。他単位と重複の可能性あり。上部の注意参照) ============ */
+.tower-panel-box { position: relative; margin-top: 12px; border: 1px solid var(--tower-line); background: var(--tower-panel); }
+.tower-panel-box h2 {
+  margin: 0; padding: 8px 10px; border-bottom: 1px solid var(--tower-line);
+  color: var(--tower-cyan); font-size: 11px; letter-spacing: .18em;
+}
+.tower-panel-box h2 span { float: right; color: var(--tower-text); font-size: 10px; font-weight: 400; letter-spacing: .08em; opacity: .6; }
+
+/* ============ STANDING ORDERS(三つの信条) ============ */
+.tower-creed-body { display: grid; gap: 0; }
+.tower-creed-row {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: center;
+  gap: 10px; padding: 12px 10px; border-bottom: 1px solid var(--tower-line);
+}
+.tower-creed-row:last-child { border-bottom: 0; }
+.tower-creed-num {
+  display: grid; place-items: center; width: 36px; height: 36px;
+  border: 1px solid var(--tower-amber); color: var(--tower-amber);
+  font-size: 18px; font-weight: 700;
+}
+.tower-creed-text { font-family: system-ui, sans-serif; font-size: 16px; font-weight: 600; line-height: 1.5; }
+.tower-creed-text small {
+  display: block; color: var(--tower-cyan); font-size: 10px; font-weight: 400;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; letter-spacing: .08em; margin-top: 2px;
+}
+
+/* ============ COUNTDOWN(12週サイクル+寿命) ============ */
+.tower-life { display: grid; grid-template-columns: 1fr 1fr; }
+.tower-life-cell { padding: 12px 10px; border-right: 1px solid var(--tower-line); border-bottom: 1px solid var(--tower-line); }
+.tower-life-cell:nth-child(2n) { border-right: 0; }
+.tower-life-cell:nth-child(n+3) { border-bottom: 0; }
+.tower-life-cell.is-cycle .tower-life-num { color: var(--tower-cyan); }
+.tower-life-top { display: flex; justify-content: space-between; align-items: baseline; }
+.tower-life-label { color: var(--tower-cyan); font-size: 10px; letter-spacing: .12em; }
+.tower-life-pct { color: var(--tower-amber); font-size: 10px; font-variant-numeric: tabular-nums; }
+.tower-life-num { color: var(--tower-green); font-size: 22px; font-weight: 700; margin: 6px 0 8px; font-variant-numeric: tabular-nums; }
+.tower-life-num small { color: var(--tower-text); font-size: 11px; font-weight: 400; opacity: .6; }
+.tower-life-bar { height: 4px; background: var(--tower-line); overflow: hidden; }
+.tower-life-bar span { display: block; height: 100%; background: var(--tower-amber); box-shadow: 0 0 6px var(--tower-amber); }
+
+/* ============ PC専用の上帯(信条+寿命。モバイルでは常時非表示) ============ */
+.tower-topband-pc { display: none; }
+
+@media (min-width: 1280px) {
+  /* PC(1280px以上): ヘッダeyebrowの信条ローテはPCでは冗長なので非表示
+     (mockup-today-home-v2.html注記どおり: K指示「PCは未来情報を上部の上帯2に集約」) */
+  .tower-header .tower-eyebrow { display: none; }
+
+  /* 上帯2: STANDING ORDERS + COUNTDOWN を横並びで常時表示。grid-area: band2 は
+     (b)TOWER減量/レイアウト単位側の .today-tower grid-template-areas 定義に依存する
+     (統合時にband2エリアが確保されていることを確認すること)。 */
+  .tower-topband-pc { display: flex; grid-area: band2; gap: 12px; margin-top: 12px; align-items: stretch; }
+  .tower-topband-pc .tower-panel-box { margin-top: 0; }
+  .tower-topband-pc .sec-creed-pc { flex: 1.15; min-width: 0; }
+  .tower-topband-pc .sec-life-pc { flex: 1; min-width: 0; }
+  .tower-topband-pc .tower-creed-row { padding: 8px 12px; gap: 10px; }
+  .tower-topband-pc .tower-creed-num { width: 30px; height: 30px; font-size: 15px; }
+  .tower-topband-pc .tower-creed-text { font-size: 13px; }
+  .tower-topband-pc .tower-creed-text small { font-size: 9px; }
+  .tower-life-row { grid-template-columns: repeat(4, 1fr); }
+  .tower-life-row .tower-life-cell { border-bottom: 0; border-right: 1px solid var(--tower-line); }
+  .tower-life-row .tower-life-cell:last-child { border-right: 0; }
+
+  /* モバイル用の最下段カード(信条・寿命)はPCでは非表示(上帯2へ移設のため二重表示にしない)。
+     .tower-col-right は(b)/(d)〜(f)側のレイアウト単位が定義する列ラッパクラス。 */
+  .tower-col-right .sec-creed, .tower-col-right .sec-life { display: none; }
+}
+
+
+/* v223: 上帯2と列ラッパを結線し、PC 340px/320px/可変の3列骨格へ移行する。 */
 @media (min-width: 1280px) {
   .today-tower {
     display: grid;
-    grid-template-columns: 340px minmax(0, 1fr) 320px;
+    grid-template-columns: 340px 320px minmax(0, 1fr);
     grid-template-areas:
-      "alert  alert  alert"
-      "header header header"
-      "board  runway gates"
-      "board  timer  gates";
-    gap: 12px;
+      "alert alert  alert"
+      "band  band   band"
+      "band2 band2  band2"
+      "left  center right"
+      "timer timer  timer";
+    column-gap: 12px;
+    row-gap: 0;
     align-items: start;
     max-width: 1280px;
     margin: 0 auto;
-    padding: 0 16px 16px;
+    padding: 12px 16px 40px;
   }
   .today-tower > .sync-alert-banner { grid-area: alert; }
-  .today-tower .tower-header { grid-area: header; }
-  .today-tower .tower-board { grid-area: board; padding: 0; }
-  .today-tower .tower-runway { grid-area: runway; margin-top: 0; }
-  .today-tower .today-pomodoro { grid-area: timer; margin-top: 0; }
-  .today-tower .tower-gates { grid-area: gates; margin-top: 0; }
+  .today-tower .tower-topband { display: block; grid-area: band; }
+  .today-tower .tower-col-left { display: block; grid-area: left; min-width: 0; }
+  .today-tower .tower-col-center { display: block; grid-area: center; min-width: 0; }
+  .today-tower .tower-col-right { display: block; grid-area: right; min-width: 0; }
+  .today-tower > .today-pomodoro { grid-area: timer; margin-top: 12px; }
+  .tower-header .tower-time time { font-size: 46px; }
+  .tower-day-left strong { font-size: 30px; }
+  .tower-col-left .sec-rwy .tower-nowhud { grid-template-columns: 1fr; gap: 3px; padding: 4px 10px 8px; }
+  .tower-col-left .sec-rwy .tower-now-title { white-space: normal; overflow: visible; text-overflow: clip; }
+  .tower-col-left .sec-rwy #towerNowRemain,
+  .tower-col-left .sec-rwy .tower-now-actions { justify-self: start; }
+  .tower-col-center #towerGateStrip { flex-wrap: wrap; overflow-x: visible; }
+  .tower-col-center .tower-gate { min-width: 0; flex: 1 1 46%; }
 }
 
 /* v210: TOWER T9。可視性停止・夜間色温度・モーション強度3段。 */

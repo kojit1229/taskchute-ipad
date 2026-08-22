@@ -10,6 +10,8 @@ import { loadState, persistLocalNoSchedule, _lastSaveError } from "./src/storage
 // cachedFeedbackはHomeの「AIから」カードが使う共有キャッシュ
 // (src/state/feedback-cache.js冒頭コメント参照)。
 import { cachedFeedback } from "./src/state/feedback-cache.js";
+// v223: TOWER上帯(STANDING ORDERS/COUNTDOWN)は自己完結featureへ依存注入する。
+import { configureTopband } from "./src/features/topband.js";
 // v182: 新トップレベル「今日」コックピット。既存featureと同じ依存注入型で循環importを避ける。
 import { configureToday, renderToday } from "./src/features/today.js";
 // v168: app.js分割・段階4-2(WishタブTier1のCRUD・描画を抽出)。src/features/wish.js
@@ -237,6 +239,14 @@ configureToday({
   renderCircularProgress, remainingText, remainingTextNormal,
   renderPomodoroInterruptControls,
   homeSyncAlertBanner
+});
+configureTopband({
+  escapeHTML,
+  todayISO,
+  getSettings: () => ({
+    twelveWeekStartDate: state.settings.twelveWeekStartDate,
+    birthDate: state.settings.birthDate
+  })
 });
 // v168: src/features/wish.jsも同じ理由(循環import回避)で依存注入する。
 configureWish({

@@ -1,4 +1,4 @@
-// tests/tower-core.test.js — v222 TOWERの残置パネルと1秒ticker契約E2E。
+// tests/tower-core.test.js — v223 TOWER上帯・統合グリッドと1秒ticker契約E2E。
 // today-core.test.jsと同じく、localStorage seed + 既存nav + Playwright clockで検証する。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY } = require("./helpers");
 
@@ -365,7 +365,7 @@ function check(name, cond, extra = "") {
     check("ルーティン0件はis-fullなし・0/0便 就航", await page.locator(".tower-gates.is-full").count() === 0
       && (await page.locator("#towerGateCount").textContent()) === "0/0便 就航");
 
-    console.log("[33] 1440pxで残置4区画の3面卓");
+    console.log("[33] 1440pxでPC上帯と340px/320px/可変の3列骨格");
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.waitForLoadState("networkidle");
     const desktopLayout = await page.evaluate(() => {
@@ -376,21 +376,25 @@ function check(name, cond, extra = "") {
       };
       return {
         columns: getComputedStyle(root).gridTemplateColumns,
-        board: rect(".tower-board"), runway: rect(".tower-runway"), gates: rect(".tower-gates")
+        board: rect(".tower-board"), runway: rect(".tower-runway"), gates: rect(".tower-gates"),
+        right: rect(".tower-col-right"), topbandDisplay: getComputedStyle(document.querySelector(".tower-topband-pc")).display
       };
     });
     const columnParts = desktopLayout.columns.trim().split(/\s+/);
-    check("grid列は340pxで始まり320pxで終わる", columnParts[0] === "340px" && columnParts[columnParts.length - 1] === "320px", desktopLayout.columns);
-    // サイドバー分を差し引いても中央列が実用幅を持つこと(1024px時に18pxへ潰れた盲点の再発防止)。
-    check("中央列は300px以上", columnParts.length === 3 && parseFloat(columnParts[1]) >= 300, desktopLayout.columns);
-    check("board < runway < gatesの3カラム実配置", desktopLayout.board.x < desktopLayout.runway.x && desktopLayout.runway.x < desktopLayout.gates.x,
+    check("grid列は340px/320px/可変の順", columnParts.length === 3 && columnParts[0] === "340px" && columnParts[1] === "320px" && parseFloat(columnParts[2]) > 0, desktopLayout.columns);
+    check("NOW LANDINGとARRIVALSは左、GATEは中央、右列はその右", Math.abs(desktopLayout.board.x - desktopLayout.runway.x) < 1
+      && desktopLayout.runway.x < desktopLayout.gates.x && desktopLayout.gates.x < desktopLayout.right.x,
       JSON.stringify(desktopLayout));
+    check("PC上帯はflex表示", desktopLayout.topbandDisplay === "flex", desktopLayout.topbandDisplay);
+    const pcTopbandText = (await page.locator(".tower-topband-pc").textContent()) || "";
+    check("PC上帯にSTANDING ORDERS/COUNTDOWN", pcTopbandText.includes("STANDING ORDERS") && pcTopbandText.includes("COUNTDOWN"), pcTopbandText);
+    check("PCではモバイル最下段カードを非表示", await page.locator(".tower-col-right .sec-creed:visible, .tower-col-right .sec-life:visible").count() === 0);
     // 下限境界1280px(最も中央列が潰れやすい点)でも3面卓が成立し中央列が実用幅を持つこと(レビューm1)。
     await page.setViewportSize({ width: 1280, height: 800 });
     const boundaryColumns = await page.evaluate(() => getComputedStyle(document.querySelector(".today-tower")).gridTemplateColumns);
     const boundaryParts = boundaryColumns.trim().split(/\s+/);
-    check("境界1280pxでも3カラムかつ中央列300px以上", boundaryParts.length === 3
-      && boundaryParts[0] === "340px" && boundaryParts[2] === "320px" && parseFloat(boundaryParts[1]) >= 300, boundaryColumns);
+    check("境界1280pxでも340px/320px/可変の3カラム", boundaryParts.length === 3
+      && boundaryParts[0] === "340px" && boundaryParts[1] === "320px" && parseFloat(boundaryParts[2]) > 0, boundaryColumns);
 
     console.log("[34] 390/768/1024pxで1カラム・横はみ出しなし");
     for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1024, height: 768 }]) {
@@ -399,10 +403,19 @@ function check(name, cond, extra = "") {
       const mobileLayout = await page.evaluate(() => {
         const board = document.querySelector(".tower-board").getBoundingClientRect();
         const runway = document.querySelector(".tower-runway").getBoundingClientRect();
-        return { boardX: board.x, runwayX: runway.x, scrollWidth: document.scrollingElement.scrollWidth, innerWidth };
+        const gates = document.querySelector(".tower-gates").getBoundingClientRect();
+        const creed = document.querySelector(".tower-col-right .sec-creed").getBoundingClientRect();
+        const life = document.querySelector(".tower-col-right .sec-life").getBoundingClientRect();
+        return {
+          boardX: board.x, runwayX: runway.x, scrollWidth: document.scrollingElement.scrollWidth, innerWidth,
+          order: [runway.top, board.top, gates.top, creed.top, life.top],
+          topbandDisplay: getComputedStyle(document.querySelector(".tower-topband-pc")).display
+        };
       });
       check(`${viewport.width}pxはboard/runwayが縦積み`, Math.abs(mobileLayout.boardX - mobileLayout.runwayX) < 1, JSON.stringify(mobileLayout));
       check(`${viewport.width}pxは横はみ出しなし`, mobileLayout.scrollWidth <= mobileLayout.innerWidth, JSON.stringify(mobileLayout));
+      check(`${viewport.width}pxはNOW→ARRIVALS→GATE→STANDING ORDERS→COUNTDOWN順`, mobileLayout.order.every((top, index, list) => index === 0 || list[index - 1] < top), JSON.stringify(mobileLayout));
+      check(`${viewport.width}pxはPC上帯を非表示`, mobileLayout.topbandDisplay === "none", mobileLayout.topbandDisplay);
     }
 
     console.log("[36] reduced-motionは演出を止めても数字を更新する");

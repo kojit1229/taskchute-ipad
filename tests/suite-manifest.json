@@ -457,6 +457,31 @@
       }
     },
     {
+      "file": "topband-core.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution",
+        "journal-health"
+      ],
+      "assertionSignals": 46,
+      "assertionHash": "d18812f51966fd56",
+      "sourceHash": "617fd121528ed0dd",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
       "file": "tower-core.test.js",
       "kind": "e2e",
       "tier": "full",
@@ -464,9 +489,9 @@
         "sync-storage",
         "ui-responsive"
       ],
-      "assertionSignals": 95,
-      "assertionHash": "7f7583b93bbb8144",
-      "sourceHash": "6b0ae17b2e0286c7",
+      "assertionSignals": 99,
+      "assertionHash": "d9f9c4edd76b8057",
+      "sourceHash": "d2f2219f46bee0e7",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

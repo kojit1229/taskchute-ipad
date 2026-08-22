@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v222";
+const CACHE_NAME = "taskchute-journal-pwa-v223";
+// v223: TOWER上帯(STANDING ORDERS/COUNTDOWN)とPC 3列・モバイル縦順の骨格を結線した。
 // v222: TOWERをNOW LANDING/ARRIVALS/DEPARTURES/GATEへ減量した。
 // v221: 今日タブのcockpitスキンとtodaySkin切替を廃止し、TOWERへ一本化した。
 // v219: routineタブUI・今日の庭・チェーン実行・過集中ゲート・保護系UIを削除した。
@@ -264,6 +265,7 @@ const APP_SHELL = [
   "./src/features/journal.js",
   "./src/features/timeline-layout.js",
   "./src/features/timeline.js",
+  "./src/features/topband.js",
   "./src/features/today-tower.js",
   "./src/features/today.js",
   "./src/features/wish.js",
