@@ -202,9 +202,15 @@ function check(name, cond, extra = "") {
     check("既存文字列はFREE NOTEへ表示されAI依頼は空で正規化", await page.locator("#towerJournalFree").inputValue() === "既存の自由記述"
       && await page.locator("#towerJournalAi").inputValue() === ""
       && await page.evaluate(({ KEY, today }) => JSON.parse(localStorage.getItem(KEY)).journalMeta[today]?.aiRequest === "", { KEY, today }));
-    const journalStyle = await page.locator("#towerJournalFree").evaluate((el) => ({
-      minHeight: parseFloat(getComputedStyle(el).minHeight), fontSize: parseFloat(getComputedStyle(el).fontSize)
-    }));
+    // v229: locator解決後の再描画detachでcomputed styleがnullになる競合の恒久対策(v123と同型)。
+    // 評価時点でquerySelectorし直し、数値の成立自体を待ってから同じassertを行う。
+    const journalStyle = await page.waitForFunction(() => {
+      const el = document.querySelector("#towerJournalFree");
+      if (!el) return false;
+      const cs = getComputedStyle(el);
+      const v = { minHeight: parseFloat(cs.minHeight), fontSize: parseFloat(cs.fontSize) };
+      return Number.isFinite(v.minHeight) && Number.isFinite(v.fontSize) ? v : false;
+    }, null, { timeout: 10000 }).then((h) => h.jsonValue());
     check("JOURNAL textareaは130px以上・16px以上", journalStyle.minHeight >= 130 && journalStyle.fontSize >= 16, JSON.stringify(journalStyle));
     await page.locator("#towerJournalFree").fill("更新した自由記述");
     await page.locator("#towerJournalAi").fill("明日の計画に運動を入れて");
@@ -295,6 +301,8 @@ function check(name, cond, extra = "") {
     const pctHandle = await page.locator("#towerNowPct").elementHandle();
     await page.clock.setFixedTime(new Date(base.getFullYear(), base.getMonth(), base.getDate(), 12, 15, 1, 0));
     await page.waitForFunction(() => document.getElementById("towerNowPct")?.textContent === "進捗 75%");
+    // v229: 残り分の更新はtick到達直後だと未反映のことがあるため、成立自体を待ってからassert(検証意図不変)
+    await page.waitForFunction(() => document.getElementById("towerNowRemain")?.textContent === "残り 15分");
     check("tickで全再描画せず進捗%・残り分を差分更新", await pctHandle.evaluate((el) => el.isConnected && el.textContent === "進捗 75%")
       && (await page.locator("#towerNowRemain").textContent()) === "残り 15分");
     // 復元(起動時から実行中)は接地の瞬間ではないためフラッシュを出さない。出す側は[14]の開始遷移で検証する。
