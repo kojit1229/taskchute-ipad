@@ -112,7 +112,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "timeline-new-block", "timeline-mode", "complete-block-with-actual",
   "drift-postpone", "time-comb-fill",  // v186: F2 DRIFT(明日へ送る)+TIME COMB(隙間補完)の意図的追加
 
-  "add-category", "delete-category", "add-break-message", "delete-break-message",
+  "add-category", "delete-category",
   "toggle-vision-direct-category", "vision-open-direct-settings",  // v189: F7 直結カテゴリ選択+誘導(設定ビュー)
   "tl-zoom", "tl-energy-mode",
   "toggle-journal-segment", "toggle-settings-sync",
@@ -190,7 +190,7 @@ const APP_JS_REGISTERED_ACTIONS = [
   "early-bird-check", "tower-gate-edit-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move",
   "toggle-show-suspended", "toggle-wbs-hide-done", "toggle-tasks-show-future",
   "toggle-wbs-edit", "wbs-collapse-all",
-  "add-category", "delete-category", "add-break-message", "delete-break-message",
+  "add-category", "delete-category",
   "toggle-vision-direct-category", "vision-open-direct-settings",  // v189: F7 直結カテゴリ選択+誘導(設定ビュー)
   "toggle-sidebar", "toggle-settings-sync",
   "save-github", "load-github", "gate-continue", "reset-demo", "push-report",

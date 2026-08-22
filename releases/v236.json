@@ -1,0 +1,52 @@
+{
+  "version": 236,
+  "date": "2026-08-23",
+  "title": "P5第1弾 到達不能・未使用コード削除",
+  "summary": "到達不能なInsightsサブグラフ、休憩メッセージ機構、未使用関数、energy-curve.jsonの無駄な取得処理を削除し、挙動を変えずに実装を縮小した",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v236.json",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/v235.test.js",
+    "tests/v74.test.js"
+  ],
+  "intent": [
+    "2系統調査で到達不能・未使用が確定しK承認済みのコードだけを削除する。",
+    "共通化、死にCSS、pomodoroティック二重更新、AIプランfetchプリアンブルは次版以降へ残す。"
+  ],
+  "changes": [
+    "renderInsightsと配下7関数を、関連する専用定数・コメントとともに削除した。削除前に現HEADの語境界検索で削除対象サブグラフ外の本番呼び出し元0件を確認した。",
+    "settings.breakMessagesのdefault・normalize・CRUD・設定UI・action登録・input処理・getBreakMessageを一括削除し、action registryテストの該当期待値だけを追従した。",
+    "readingMonthlySummarySectionHTMLとenergyPointsを削除した。computeDailyMetricsを直接抽出していたv235テストは、現行仕様である関数不存在のassertionへ追従した。",
+    "cachedEnergyCurveJson、TTL判定、Promise.allのenergy-curve.json取得要素、JSONパース・検証・キャッシュ更新ブロックを削除した。他の4種類のfetch分岐は維持した。",
+    "Service WorkerのAPP_SHELLは変更せず、CACHE_NAMEをv236へ更新した。"
+  ],
+  "uncertainties": [
+    "computeDailyMetricsはv235テストだけが直接実行していたため、製品コードの呼び出し元0件を確認した上で、そのテストを不存在検証へ追従した。",
+    "設計書とService Workerの過去版コメントには削除機能名が履歴として残るが、実行時参照ではないため本版では変更していない。"
+  ],
+  "reviewFocus": [
+    "renderInsights系8関数の参照が製品コードから消え、隣接するweekDaysとstatsTimeLogDataが保持されているか。",
+    "breakMessagesの設定UI・action・input・normalize・関数がすべて消え、カテゴリ設定など隣接機能に差分が広がっていないか。",
+    "Promise.allからenergy-curve要素だけが除かれ、todayEnemy・quote・futureLetter・aiInsightsの分割代入とfetch順が一致しているか。",
+    "CSS・承認外state・共通化対象に変更がなく、SW v236、コード索引、テストmanifestが最新か。"
+  ],
+  "verification": [
+    "node --check app.js、tests/v235.test.js、tests/action-registry-core.test.js、tests/v74.test.js: exit 0。",
+    "node tests/v235.test.js、node tests/action-registry-core.test.js: 全件PASS。",
+    "npm.cmd run code:index:write/check: PASS(code index 560 functions)。npm.cmd run test:manifest:write/check: PASS(test manifest 131 suites)。",
+    "node scripts/release-record.js releases/v236.json --writeはCHANGES_v236.md生成後、ワークスペース外taskchute-notes/handoff.mdへの書き込みだけEPERM。notes側をスキップし、同じ生成ブロックを一時handoffへ出力してrelease-record整合を検証した。",
+    "system Edge指定のnode scripts/release-gate.js releases/v236.json --final: exit 0。"
+  ],
+  "knownLimitations": [
+    "iOS Safari実機PWAでのService Worker更新とオフライン起動は監督者側で確認が必要。",
+    "標準Playwright Chromiumがspawn EPERMになる場合はsystem EdgeをCHROME_PATHへ指定する。",
+    "taskchute-notes/handoff.mdがワークスペース外でEPERMになる場合、release-record --writeはCHANGES生成までを採用し、notes側更新は監督者が再実行する。",
+    "死にCSSと共通化候補は承認スコープどおりv237以降へ残している。"
+  ]
+}

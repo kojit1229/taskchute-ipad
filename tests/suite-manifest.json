@@ -15,7 +15,7 @@
       ],
       "assertionSignals": 34,
       "assertionHash": "f841e3459002f00f",
-      "sourceHash": "695db7a5ff69d714",
+      "sourceHash": "1c91451b1fca2bbb",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2096,9 +2096,9 @@
       "domains": [
         "journal-health"
       ],
-      "assertionSignals": 12,
-      "assertionHash": "30e0097cefeea2e3",
-      "sourceHash": "477109f7a06d60fc",
+      "assertionSignals": 8,
+      "assertionHash": "784cef4b3e2c21a9",
+      "sourceHash": "b5a9f5687b3fdd43",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2570,7 +2570,7 @@
       ],
       "assertionSignals": 6,
       "assertionHash": "f9a4e4885055baab",
-      "sourceHash": "5eced22548b7638a",
+      "sourceHash": "f7d85c342cbc612d",
       "waits": {
         "fixedCount": 2,
         "numericMilliseconds": 1000,

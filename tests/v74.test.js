@@ -6,8 +6,6 @@
 //     read-merge-write でpushする。他日のエントリを消さず、同じ日は上書きする
 // (c) 永続性: 保存後にリロードしても、reflections.json 経由で言語化がプリフィルされる
 // (d) 月次要約: 廃止(2026-08-22)。週次レビュータブ自体が仕様削除済み
-//     (slim-spec.md §1-1)で表示先が無く、readingMonthlySummarySectionHTML()も
-//     呼び出し元を失っている(app.js側の整理漏れの可能性。詳細は別途報告)
 // (e) highlights.json が404/0冊でもホームがクラッシュしない
 // (f) normalizeState 後方互換: 読書機能は永続state項目を追加していないため、
 //     読書関連キーが一切無い旧stateでもクラッシュせず起動できる

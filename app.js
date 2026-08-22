@@ -382,8 +382,6 @@ registerActions({
   "toggle-vision-direct-category": ({ target }) => {
     toggleVisionDirectCategory(target.dataset.category || "", target.checked);
   },
-  "add-break-message": () => addBreakMessage(),
-  "delete-break-message": ({ target }) => deleteBreakMessage(target.dataset.msgId),
   "toggle-sidebar": () => {
     state.settings.sidebarCollapsed = !state.settings.sidebarCollapsed;
     persistLocalNoSchedule();
@@ -860,21 +858,6 @@ const cachedQuoteJson = {};  // { 'YYYY-MM-DD': {quote, author} | undefined }
 // セッション内で1回だけ確認する(前月以前の無条件fetchは行わない。過去の手紙自体はAIレポート
 // 画面の一覧〈AI_REPORT_TYPES〉から読む導線に任せる)。
 const cachedFutureLetterMd = {};  // { 'YYYY-MM': '...手紙本文...' | undefined }
-// v161: AI機能第5弾(最終)「エネルギーカーブ」。loop/scripts/energy-curve.sh が
-// personal-data/taskchute/ へ energy-curve.json({generatedAt,days,hourly:[{hour,count,netAvg,
-// startRate}...24件]}、直近28日の完了Block実績から決定論集計した時間帯別の実行量/充放電net/
-// 着手率)を**単一の上書きファイル**として日次でpushする(契約は
-// loop/FORMAT_CONTRACT.md「energy-curve.jsonの契約」)。集計はバッチ側のみ(K発注仕様
-// 「アプリに分析ロジックを足さない」)、アプリは描画のみ。
-// 2026-07-28レビュー対応(Codex P1): today-enemy/勝手に格言のような日付キー方式(「今日分は
-// 1回だけ確認」)にすると、バッチが同日中に再生成しても新しい内容が翌日まで反映されない
-// (単一の上書きファイルという性質上、同じ「今日」のキーの中身が日中に変わりうるため)。
-// そのため日付キーではなく**取得時刻ベースのTTLキャッシュ**にし、既存のAIフィードバック等の
-// 定期再fetch機構(FEEDBACK_REFRESH_INTERVAL_MS=30分、visibilitychange復帰時 or 定期tick経由の
-// maybeRefreshFeedback→hydrateStaticMarkdown)にそのまま乗せる。fetchedAt=0(初回)、または
-// 前回取得から30分以上経過していれば再fetchする(成功・失敗を問わずfetchedAtは更新し、
-// 失敗が続いても30分に1回だけリトライする=連打しない)。
-let cachedEnergyCurveJson = { fetchedAt: 0, data: undefined };  // data: {generatedAt,days,hourly:[...]} | undefined
 // v190: coach-daily系バッチが生成する4ビュー共通のAI所見。stateへは保存せず、
 // 取得成功時だけTTLキャッシュを更新する。
 let cachedAiInsightsJson = { fetchedAt: 0, data: undefined };
@@ -1091,7 +1074,6 @@ document.addEventListener("click", (event) => {
   // registerActions(v173方式)へ移行した。
   // v174: push-reportはapp.js内のregisterActionsへ移行した。
   // v178: add-task-to-project/add-subtaskはapp.js内のregisterActionsへ移行した。
-  // v174: add-category〜delete-break-messageはapp.js内のregisterActionsへ移行した。
   // v177: toggle-journal-segmentはapp.js内のregisterActionsへ移行した。
   // v174: toggle-settings-sync/toggle-sidebarはapp.js内のregisterActionsへ移行した。
   // v173: Wish CRUDはsrc/features/wish.jsのregisterActionsへ移行した。
@@ -1211,10 +1193,6 @@ document.addEventListener("input", (event) => {
   // === v9: カテゴリ編集 ===
   if (target.matches("[data-cat-id][data-cat-field]")) {
     updateCategoryField(target.dataset.catId, target.dataset.catField, target.value);
-  }
-  // === v9: 休憩メッセージ編集 ===
-  if (target.matches("[data-msg-id][data-msg-field]")) {
-    updateBreakMessageField(target.dataset.msgId, target.dataset.msgField, target.value);
   }
   // v34: ここにあった Wish のクリック処理(add-wish 等)は
   //      input リスナーでは action/id が未定義で動かず、毎入力で例外を投げていた。
@@ -1608,10 +1586,6 @@ function normalizeState(value) {
   // v189 F7 migration: ビジョン直結カテゴリ名の複数選択。既存の配列はそのまま保持する。
   if (!Array.isArray(value.settings.visionDirectCategories)) {
     value.settings.visionDirectCategories = [];
-  }
-  // v9: 休憩メッセージマスタ
-  if (!Array.isArray(value.settings.breakMessages) || value.settings.breakMessages.length === 0) {
-    value.settings.breakMessages = defaultBreakMessages();
   }
   // v16: やりたいことリスト用の人生領域マスタ
   if (!Array.isArray(value.settings.lifeAreas) || value.settings.lifeAreas.length === 0) {
@@ -2067,16 +2041,6 @@ function defaultCategories() {
   ];
 }
 
-// v9: 休憩メッセージマスタのデフォルト(残り秒ベース)
-function defaultBreakMessages() {
-  return [
-    { id: crypto.randomUUID(), fromSec: 0,   toSec: 30,  message: "もうすぐ次のセッション。深呼吸して準備を。" },
-    { id: crypto.randomUUID(), fromSec: 30,  toSec: 120, message: "ゆっくり水を一口。" },
-    { id: crypto.randomUUID(), fromSec: 120, toSec: 240, message: "立ち上がって、肩を回しましょう。" },
-    { id: crypto.randomUUID(), fromSec: 240, toSec: 301, message: "目を閉じて、息を整えて。" }
-  ];
-}
-
 // v16: 人生領域マスタ(やりたいことリストのカテゴリ)
 function defaultLifeAreas() {
   return [
@@ -2205,36 +2169,6 @@ function toggleVisionDirectCategory(category, checked) {
   saveState();
 }
 
-// v9: 休憩メッセージ追加
-function addBreakMessage() {
-  const msgs = state.settings.breakMessages || [];
-  state.settings.breakMessages = [...msgs, {
-    id: crypto.randomUUID(),
-    fromSec: 0,
-    toSec: 30,
-    message: "新しいメッセージ"
-  }];
-  saveAndRender("休憩メッセージを追加しました");
-}
-
-// v9: 休憩メッセージ削除
-function deleteBreakMessage(msgId) {
-  if (!window.confirm("このメッセージを削除しますか?")) return;
-  state.settings.breakMessages = (state.settings.breakMessages || []).filter((m) => m.id !== msgId);
-  saveAndRender("削除しました");
-}
-
-// v9: 休憩メッセージのフィールド編集
-function updateBreakMessageField(msgId, field, value) {
-  const msgs = state.settings.breakMessages || [];
-  const idx = msgs.findIndex((m) => m.id === msgId);
-  if (idx < 0) return;
-  const parsed = (field === "fromSec" || field === "toSec") ? Number(value) : value;
-  state.settings.breakMessages = msgs.map((m, i) => i === idx ? { ...m, [field]: parsed } : m);
-  saveState();
-  scheduleAutoSave();
-}
-
 // v9: カテゴリー名から色を取得(マスタ未登録ならグレー)
 function getCategoryColor(name) {
   if (!name) return "#8E8E93";
@@ -2246,14 +2180,6 @@ function getCategoryColor(name) {
 // v9: カテゴリー名一覧(編集モーダルのドロップダウン用)
 function getCategoryNames() {
   return (state.settings?.categories || []).map((c) => c.name);
-}
-
-// v9: 休憩中の残り秒に対応するメッセージを取得
-function getBreakMessage(remainingSec) {
-  const msgs = state.settings?.breakMessages || [];
-  const sec = Math.max(0, Math.floor(remainingSec));
-  const found = msgs.find((m) => sec >= m.fromSec && sec < m.toSec);
-  return found ? found.message : "";
 }
 
 function defaultGitHubSettings() {
@@ -2960,16 +2886,6 @@ async function hydrateReadingData() {
     if (md) changed = true;
   }
   return changed;
-}
-
-// v74: 週次レビュータブの折りたたみ表示。今月分が無ければ(バッチ未生成/404)何も出さない
-function readingMonthlySummarySectionHTML() {
-  const month = todayISO().slice(0, 7);
-  const md = cachedReadingSummaryMd[month] || "";
-  if (!md) return "";
-  return foldSection(`reading-summary-${month}`, false, "", "",
-    `📖 今月の読書ふりかえり(${month})`,
-    `<div class="md-render readonly-md">${renderMarkdown(md)}</div>`);
 }
 
 // --- いま、これ(進行中 / 次のブロック)── v33: フル幅・2カラム ---
@@ -6077,58 +5993,6 @@ async function importSleepCsv(file) {
 
 // v169: hoursLabel/renderSleepCardはsrc/features/journal.jsへ移動した(app.js分割・段階4-3)。
 
-// v142: 日次結合ヘルパー ============================================================
-// sleep.logs(実測)/condition.logs(主観)/blocksの実績(着手率・完了数・充放電)を
-// dateKeyで突き合わせて1つのオブジェクトに結合する純関数。保存はしない(旧計器盤と同じ
-// 都度計算思想)。実測と主観は統合しない(現状維持) — 分析側では実測(sleepH)を主とし、
-// 欠損時のみ主観(condition.logs.sleepHours、プリセット値)をsleepHFinalへフォールバックする
-// (sleepHIsSubjectiveで注釈できるようにする)。
-// sleep.logsは起床日をキーに持つため、dateKeyのblocks実績とそのまま組み合わせれば
-// 「前夜の睡眠→その日の実績」の対応になる(日付シフト不要)。
-// opts.blocksByDate: buildBlocksByDateMap()で事前構築したMapを渡すと、1日ごとの
-// state.blocks全走査(O(日数×全Block数))を避けられる(v142、全期間レンジでの一括集計向け)。
-// 単発呼び出し(opts省略)は従来どおりstate.blocksをその場でfilterする。
-function computeDailyMetrics(dateKey, opts = {}) {
-  const sleepLog = state.sleep.logs[dateKey] || null;
-  const condLog = state.condition.logs[dateKey] || null;
-  const sleepH = sleepLog ? toNumber(sleepLog.sleepH) : null;
-  const sleepHoursSubjective = condLog ? toNumber(condLog.sleepHours) : null;
-
-  const dayBlocks = opts.blocksByDate
-    ? (opts.blocksByDate.get(dateKey) || [])
-    : state.blocks.filter((b) => !b.deleted && b.date === dateKey);
-  const plannedBlocks = dayBlocks.filter((b) => b.plannedStartAt);
-  const startedCount = plannedBlocks.filter((b) => b.actualStartAt).length;
-  const completed = dayBlocks.filter((b) => b.completed);
-  const chargeSum = completed.reduce((s, b) => s + Number(b.charge || 0), 0);
-  const dischargeSum = completed.reduce((s, b) => s + Number(b.discharge || 0), 0);
-
-  return {
-    date: dateKey,
-    // 実測(state.sleep.logs)
-    bed: sleepLog ? sleepLog.bed || null : null,
-    wake: sleepLog ? sleepLog.wake || null : null,
-    sleepH,
-    eff: sleepLog ? toNumber(sleepLog.eff) : null,
-    deepH: sleepLog ? toNumber(sleepLog.deepH) : null,
-    hrSleep: sleepLog ? toNumber(sleepLog.hrSleep) : null,
-    hrvSleep: sleepLog ? toNumber(sleepLog.hrvSleep) : null,
-    // 主観(state.condition.logs)
-    sleepHours: sleepHoursSubjective,
-    capacity: condLog ? (condLog.capacity ?? null) : null,
-    gym: condLog ? (condLog.gym ?? null) : null,
-    meds: condLog ? (condLog.meds ?? null) : null,
-    // 実測を主・主観をフォールバックとした結合値(欠損時のみ主観を使う。注釈用フラグ付き)
-    sleepHFinal: sleepH != null ? sleepH : sleepHoursSubjective,
-    sleepHIsSubjective: sleepH == null && sleepHoursSubjective != null,
-    // 実績(state.blocks)
-    startPct: plannedBlocks.length ? Math.round((startedCount / plannedBlocks.length) * 100) : null,
-    startTotal: plannedBlocks.length,
-    completedCount: completed.length,
-    chargeSum, dischargeSum, net: chargeSum - dischargeSum
-  };
-}
-
 // v169: renderJournal(+JOURNAL_PROMPTS)はsrc/features/journal.jsへ移動した(app.js分割・段階4-3。
 // 冒頭でimportして参照を切り替えた)。
 
@@ -7190,17 +7054,6 @@ function renderSettingsThemePanel() {
   `;
 }
 
-function renderSettingsBreakMessagesPanel() {
-  return `
-    <h3>休憩メッセージ</h3>
-    <div class="muted" style="font-size:12px; line-height:1.6">
-      休憩中(任意・常時タイマー)に、残り秒数の範囲に応じて表示されるメッセージです。
-    </div>
-    ${renderBreakMessagesSettings()}
-    <button class="btn primary" data-action="add-break-message">+ メッセージを追加</button>
-  `;
-}
-
 function renderSettingsFileStructurePanel() {
   return `
     <details class="panel fold settings-file-structure">
@@ -7251,8 +7104,8 @@ function renderSettings() {
       body: [renderSettingsBufferPanel(), renderSettingsBatteryPanel(), renderSettingsMorningPlanPanel(), renderSettingsExecPanel()]
     },
     {
-      id: "settings-display", label: "表示・タイマー(テーマ・ガイド付きアクセス・休憩)",
-      body: [renderSettingsThemePanel(), renderSettingsGuidedAccessPanel(), renderSettingsBreakMessagesPanel()]
+      id: "settings-display", label: "表示・タイマー(テーマ・ガイド付きアクセス)",
+      body: [renderSettingsThemePanel(), renderSettingsGuidedAccessPanel()]
     },
     {
       id: "settings-master", label: "マスタ・詳細(プロフィール・カテゴリ管理・ファイル構成)",
@@ -7318,29 +7171,6 @@ function renderCategoriesSettings() {
   `;
 }
 
-// v9: 休憩メッセージ管理 UI
-function renderBreakMessagesSettings() {
-  const msgs = state.settings.breakMessages || [];
-  if (!msgs.length) return `<div class="muted">未登録</div>`;
-  return `
-    <div class="stack" style="gap:6px">
-      ${msgs.map((m) => `
-        <div class="stack" style="background:var(--panel-soft); padding:8px; border-radius:6px; gap:6px">
-          <div class="row" style="gap:6px; align-items:center; font-size:12px">
-            <span class="muted">残り</span>
-            <input class="input" type="number" min="0" max="300" data-msg-id="${escapeHTML(m.id)}" data-msg-field="fromSec" value="${Number(m.fromSec) || 0}" style="width:70px">
-            <span class="muted">〜</span>
-            <input class="input" type="number" min="0" max="301" data-msg-id="${escapeHTML(m.id)}" data-msg-field="toSec" value="${Number(m.toSec) || 0}" style="width:70px">
-            <span class="muted">秒</span>
-            <button class="btn danger" data-action="delete-break-message" data-msg-id="${m.id}" style="margin-left:auto">×</button>
-          </div>
-          <input class="input" data-msg-id="${m.id}" data-msg-field="message" value="${escapeHTML(m.message)}" placeholder="メッセージ">
-        </div>
-      `).join("")}
-    </div>
-  `;
-}
-
 // v230: 群見出しは描画せず、現在地breadcrumb用の分類だけ各項目へ保持する。
 const moreItems = [
   { id: "wbs", label: "WBS", mark: "🧩", group: "計画" },
@@ -7377,230 +7207,6 @@ function renderMore() {
 //  週次レビュー + エネルギー構造分析
 // ジャーナルの週次コンディション集計で使用する7日展開。
 function weekDays(weekStart) { return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)); }
-
-// renderInsightsからも利用する決定論のエネルギー構造集計。
-function computeEnergyStructure(weekStart, weeks = 4) {
-  const startDate = addDays(weekStart, -7 * (weeks - 1));
-  const endDate = addDays(weekStart, 6);
-  const inRange = state.blocks.filter((b) => !b.deleted && b.completed && b.date >= startDate && b.date <= endDate);
-  if (inRange.length < weeks * 7) return { eligible: false, findings: [] };  // 28件未満
-
-  // 曜日別 平均差引(n>=3、平均が負)
-  const wd = WEEKDAY_LABELS.map((label, i) => ({ dayIndex: i, label: `${label}曜`, net: 0, n: 0 }));
-  inRange.forEach((b) => {
-    const i = parseDate(b.date).getDay();  // 0=日..6=土(parseDate=安全な数値コンストラクタ)
-    wd[i].net += Number(b.charge || 0) - Number(b.discharge || 0);
-    wd[i].n += 1;
-  });
-  const worstWeekday = wd.filter((r) => r.n >= 3 && r.net / r.n < 0)
-    .map((r) => ({ type: "weekday", dayIndex: r.dayIndex, label: r.label, value: r.net / r.n, n: r.n }))
-    .sort((a, b) => a.value - b.value)[0];
-  // カテゴリ別 差引合計(n>=3、合計が負)
-  const cat = {};
-  inRange.forEach((b) => {
-    const c = b.category || "未分類";
-    (cat[c] ||= { net: 0, n: 0 });
-    cat[c].net += Number(b.charge || 0) - Number(b.discharge || 0);
-    cat[c].n += 1;
-  });
-  const worstCats = Object.entries(cat).filter(([, v]) => v.n >= 3 && v.net < 0)
-    .map(([key, v]) => ({ type: "category", key, label: `〈${key}〉`, value: v.net, n: v.n }))
-    .sort((a, b) => a.value - b.value);
-  // 曜日の信号がカテゴリ合計に埋もれないよう、曜日1件を先頭に置いてから上位3件
-  const findings = [];
-  if (worstWeekday) findings.push(worstWeekday);
-  worstCats.forEach((c) => { if (findings.length < 3) findings.push(c); });
-  return { eligible: true, findings };
-}
-
-// v217: 旧計器盤ビューは削除。AI/他ビューが利用する決定論集計と表示補助だけを温存する。
-const SLEEP_BUCKETS = [
-  { key: "lt55", label: "5.5h未満", test: (h) => h < 5.5 },
-  { key: "55to65", label: "5.5〜6.5h", test: (h) => h >= 5.5 && h < 6.5 },
-  { key: "65to75", label: "6.5〜7.5h", test: (h) => h >= 6.5 && h < 7.5 },
-  { key: "gt75", label: "7.5h以上", test: (h) => h >= 7.5 }
-];
-
-const SLEEP_BUCKET_MIN_SAMPLES = 3;
-
-function computeHeatmapCells(since, today) {
-  const past = state.blocks.filter((b) => !b.deleted && b.date >= since && b.date <= today && b.plannedStartAt);
-  const wdOrder = [6, 0, 1, 2, 3, 4, 5];  // 週定義に合わせて 土曜始まり
-  const wdLabels = ["土", "日", "月", "火", "水", "木", "金"];
-  const cells = [];
-  SCHED_BANDS.forEach(([s, e, bandLabel], bandIdx) => {
-    wdOrder.forEach((wd, i) => {
-      const cellBlocks = past.filter((b) => {
-        if (parseDate(b.date).getDay() !== wd) return false;
-        const m = minutesOf(b.plannedStartAt);
-        return m >= s * 60 && m < e * 60;
-      });
-      const n = cellBlocks.length;
-      const rate = n >= 3 ? cellBlocks.filter((b) => b.actualStartAt).length / n : null;  // n不足はノイズなので出さない
-      cells.push({ bandIdx, bandLabel, dayIndex: wd, wdLabel: wdLabels[i], n, rate });
-    });
-  });
-  return cells;
-}
-
-function computeEstimateStats(since, today) {
-  const past = state.blocks.filter((b) => !b.deleted && b.date >= since && b.date <= today && b.plannedStartAt);
-  const est = past
-    .filter((b) => b.completed && Number(b.estimateMin) > 0)
-    .map((b) => ({ b, actual: _actualDurationMin(b) }))
-    .filter((x) => x.actual && x.actual > 0);
-  if (est.length < 5) return { eligible: false, est: [], catRows: [] };
-  const ratios = est.map((x) => x.actual / Number(x.b.estimateMin));
-  const medRatio = Math.round(median(ratios) * 100);
-  const meanAbsErr = Math.round(est.reduce((s, x) => s + Math.abs(x.actual - Number(x.b.estimateMin)), 0) / est.length);
-  const byCat = {};
-  est.forEach((x) => { (byCat[x.b.category || "未分類"] ||= []).push(x.actual / Number(x.b.estimateMin)); });
-  const catRows = Object.entries(byCat)
-    .filter(([, arr]) => arr.length >= 3)
-    .map(([cat, arr]) => ({ cat, med: median(arr), n: arr.length }))
-    .sort((a, b) => Math.abs(b.med - 1) - Math.abs(a.med - 1))
-    .slice(0, 5);
-  return { eligible: true, est, medRatio, meanAbsErr, catRows };
-}
-
-function computeSleepBucketStats(since, today, blocksByDate) {
-  const days = [];
-  for (let d = since; d <= today; d = addDays(d, 1)) days.push(d);
-  const metrics = days.map((d) => computeDailyMetrics(d, { blocksByDate })).filter((m) => m.sleepH != null);
-  return SLEEP_BUCKETS
-    .map((b) => {
-      const inBucket = metrics.filter((m) => b.test(m.sleepH));
-      const startRows = inBucket.filter((m) => m.startTotal > 0);
-      const netRows = inBucket.filter((m) => m.completedCount > 0);
-      return {
-        ...b,
-        n: inBucket.length,
-        startVals: startRows.map((m) => m.startPct),
-        startDates: startRows.map((m) => m.date),  // v143: startValsと同じ絞り込みの日付(ドリルダウン用)
-        netVals: netRows.map((m) => m.net),
-        netDates: netRows.map((m) => m.date)
-      };
-    })
-    .filter((r) => r.n >= SLEEP_BUCKET_MIN_SAMPLES);
-}
-
-function computeChargeTopCategories(since, today) {
-  const doneInRange = state.blocks.filter((b) => !b.deleted && b.date >= since && b.date <= today && b.completed);
-  const byCat = {};
-  doneInRange.forEach((b) => {
-    const c = b.category || "未分類";
-    (byCat[c] ||= []).push(Number(b.charge || 0) - Number(b.discharge || 0));
-  });
-  return Object.entries(byCat)
-    .filter(([, arr]) => arr.length >= 3)
-    .map(([cat, arr]) => ({ cat, med: median(arr), n: arr.length }))
-    .filter((r) => r.med > 0)
-    .sort((a, b) => b.med - a.med);
-}
-
-function computeInsights(since, today, blocksByDate) {
-  const findings = [];
-
-  // 1) 放電超過カテゴリ/曜日(既存computeEnergyStructureの結果を統合表示。二重実装しない)
-  // v143レビュー対応(監督者裁定): computeEnergyStructureは足切り条件を含め本体は変更せず、
-  // 従来どおり直近4週固定で評価する。
-  const weekStart = weekRange(today).weekStart;
-  const struct = computeEnergyStructure(weekStart);
-  if (struct.eligible && struct.findings.length) {
-    const top = struct.findings[0];
-    findings.push({
-      id: "discharge",
-      text: top.type === "weekday"
-        ? `${top.label}が構造的にマイナス(平均 ${top.value.toFixed(1)}、直近4週で評価)`
-        : `${top.label}が放電超過(${signed(top.value)}、直近4週で評価)`,
-      actions: top.type === "weekday"
-        ? []
-        : [{ action: "energy-open-category", data: { cat: top.key }, label: "ブロックを見る" }]
-    });
-  }
-
-  // 2) 時間帯×曜日の着手率(予定ベース)の上位・下位セルを言語化
-  const hmCells = computeHeatmapCells(since, today).filter((c) => c.rate != null);
-  if (hmCells.length >= 2) {
-    const best = hmCells.reduce((a, b) => (b.rate > a.rate ? b : a));
-    const worst = hmCells.reduce((a, b) => (b.rate < a.rate ? b : a));
-    if (best !== worst) {
-      const bandName = (label) => label.replace(/\(.+\)/, "");
-      findings.push({
-        id: "heatmap",
-        text: `${best.wdLabel}曜${bandName(best.bandLabel)}は着手率${Math.round(best.rate * 100)}%、${worst.wdLabel}曜${bandName(worst.bandLabel)}は${Math.round(worst.rate * 100)}%`,
-        actions: []
-      });
-    }
-  }
-
-  // 3) 見積誤差が大きいカテゴリ(既存の見積vs実績集計を流用、5件未満ガード踏襲)
-  // v143レビュー対応: 丸め後pctではなく生のmedで「意味のある誤差か(±5%以上)」を判定し、
-  // 長引きがち/早く終わりがちの方向もmed基準にする(丸め誤差で「100%(早く終わりがち)」の
-  // ような自己矛盾文が出ないようにする)。
-  const estStats = computeEstimateStats(since, today);
-  if (estStats.eligible && estStats.catRows.length) {
-    const c = estStats.catRows[0];
-    if (Math.abs(c.med - 1) >= 0.05) {  // ±5%未満のズレは観察するほどの意味を持たないため出さない
-      const pct = Math.round(c.med * 100);
-      findings.push({
-        id: "estimate",
-        text: `〈${c.cat}〉は実績が見積の${pct}%(${c.med > 1 ? "長引きがち" : "早く終わりがち"}、${c.n}件)`,
-        actions: [{ action: "energy-open-category", data: { cat: c.cat }, label: "ブロックを見る" }]
-      });
-    }
-  }
-
-  // 4) 睡眠帯×実績の観察(全体中央値比でもっとも差が大きい帯。3件未満の帯・対サンプルは対象外)
-  const bucketRows = computeSleepBucketStats(since, today, blocksByDate)
-    .map((r) => ({ ...r, startMed: r.startVals.length >= SLEEP_BUCKET_MIN_SAMPLES ? median(r.startVals) : null }))
-    .filter((r) => r.startMed != null);
-  if (bucketRows.length >= 2) {
-    const overallMed = median(bucketRows.flatMap((r) => r.startVals));
-    const worst = bucketRows.reduce((a, b) => (b.startMed - overallMed < a.startMed - overallMed ? b : a));
-    const diff = Math.round(worst.startMed - overallMed);
-    if (diff <= -5) {  // 全体比-5pt以上の落ち込みだけを観察対象にする(恣意的な閾値。過剰検出を避ける目的)
-      // v143レビュー対応: 件数・ドリルダウン先はworst.n(帯の睡眠件数、Blockが無い日も含む)ではなく
-      // worst.startVals/startDates(実際に着手率計算に使った日)で揃える。
-      const recentDate = worst.startDates.length ? worst.startDates[worst.startDates.length - 1] : null;
-      findings.push({
-        id: "sleep",
-        text: `睡眠${worst.label}の日は着手率が${signed(diff)}pt(全体比、${worst.startVals.length}日)`,
-        actions: recentDate ? [{ action: "search-jump", data: { view: "journal", date: recentDate }, label: "直近の該当日を見る" }] : []
-      });
-    }
-  }
-
-  // 5) 充電効果の高いカテゴリ上位(完了Blockのnet中央値、n>=3・正のみ)
-  const chargeTop = computeChargeTopCategories(since, today);
-  if (chargeTop.length) {
-    const c = chargeTop[0];
-    findings.push({
-      id: "charge",
-      text: `〈${c.cat}〉は充電効果が高い(net中央値 ${signed(Math.round(c.med * 10) / 10)}、${c.n}件)`,
-      actions: [{ action: "energy-open-category", data: { cat: c.cat }, label: "ブロックを見る" }]
-    });
-  }
-
-  return findings.slice(0, 5);
-}
-
-function renderInsights(since, today, blocksByDate) {
-  const findings = computeInsights(since, today, blocksByDate);
-  if (!findings.length) return "";
-  return `
-    <div class="panel stack insights-panel">
-      <h2>今週のヒント</h2>
-      ${findings.map((f) => `
-        <div class="insight-row">
-          <span class="insight-text">${escapeHTML(f.text)}</span>
-          ${f.actions.map((a) => `<button class="btn ghost" data-action="${a.action}"${
-            Object.entries(a.data || {}).map(([k, v]) => ` data-${k}="${escapeHTML(String(v))}"`).join("")
-          }>${escapeHTML(a.label)}</button>`).join("")}
-        </div>`).join("")}
-      <div class="muted insight-axis">着手率(予定ベース)=計画Blockのうち実際に着手した割合(ヒートマップ・睡眠帯別と同じ定義。taskchute-notes/decisions.md 2026-07-26参照)。観察のみで判断は含みません</div>
-    </div>`;
-}
 
 function statsTimeLogData(date, nowMs = Date.now()) {
   // v184レビューM1: カテゴリ集計・合計は当日全体(00:00〜24:00)。早朝の実績を黙って落とさない。
@@ -11380,15 +10986,11 @@ async function hydrateStaticMarkdown() {
   const wantTodayEnemyFetch = ghReady && !(realToday in cachedTodayEnemyMd);
   const wantQuoteFetch = ghReady && !(realToday in cachedQuoteJson);
   const wantFutureLetterFetch = ghReady && !(realCurrentMonth in cachedFutureLetterMd);
-  // v161(2026-07-28レビュー対応・必須修正4): 日付キーではなくTTL(FEEDBACK_REFRESH_INTERVAL_MS
-  // =30分)で判定する(単一の上書きファイルのため、同日中の再pushを拾えるようにする)。
-  const wantEnergyCurveFetch = ghReady && (Date.now() - cachedEnergyCurveJson.fetchedAt >= FEEDBACK_REFRESH_INTERVAL_MS);
   const wantAiInsightsFetch = ghReady && (Date.now() - cachedAiInsightsJson.fetchedAt >= FEEDBACK_REFRESH_INTERVAL_MS);
-  const [todayEnemyMd, quoteRaw, futureLetterMd, energyCurveRaw, aiInsightsRaw] = await Promise.all([
+  const [todayEnemyMd, quoteRaw, futureLetterMd, aiInsightsRaw] = await Promise.all([
     wantTodayEnemyFetch ? fetchGitHubRawText(`今日の敵_${realToday}.md`) : Promise.resolve(undefined),
     wantQuoteFetch ? fetchGitHubRawText(`勝手に格言_${realToday}.json`) : Promise.resolve(undefined),
     wantFutureLetterFetch ? fetchGitHubRawText(`未来からの手紙_${realCurrentMonth}.md`) : Promise.resolve(undefined),
-    wantEnergyCurveFetch ? fetchGitHubRawText("energy-curve.json") : Promise.resolve(undefined),
     wantAiInsightsFetch ? fetchGitHubRawText("ai-insights.json").catch(() => undefined) : Promise.resolve(undefined),
   ]);
   if (wantTodayEnemyFetch) {
@@ -11433,45 +11035,6 @@ async function hydrateStaticMarkdown() {
     }
     cachedQuoteJson[realToday] = parsedQuote;
     if (parsedQuote) changed = true;
-  }
-  if (wantEnergyCurveFetch) {
-    // v161: energy-curve.json はファイル名が日付を含まない単一の上書きファイルのため、
-    // 判定はJSONパース+スキーマ検証の成否のみで行う(勝手に格言と同じフェイルソフト方針。
-    // バッチが壊れて配信していても、アプリは静かにセクション非表示へ倒す。hourlyは必ず24件・
-    // hour昇順を要求し、要素数が違えば丸ごと不採用にする)。
-    let parsedEnergyCurve;
-    if (energyCurveRaw) {
-      try {
-        const parsed = JSON.parse(energyCurveRaw);
-        if (parsed && typeof parsed === "object" && Array.isArray(parsed.hourly) && parsed.hourly.length === 24
-          && parsed.hourly.every((row, i) => row && typeof row === "object" && Number(row.hour) === i
-            && Number.isFinite(Number(row.count))
-            && (row.netAvg === null || Number.isFinite(Number(row.netAvg)))
-            && (row.startRate === null || Number.isFinite(Number(row.startRate))))) {
-          parsedEnergyCurve = {
-            generatedAt: typeof parsed.generatedAt === "string" ? parsed.generatedAt : "",
-            days: Number.isFinite(Number(parsed.days)) ? Number(parsed.days) : 28,
-            hourly: parsed.hourly.map((row) => ({
-              hour: Number(row.hour),
-              count: Number(row.count) || 0,
-              netAvg: row.netAvg === null ? null : Number(row.netAvg),
-              startRate: row.startRate === null ? null : Number(row.startRate),
-            })),
-          };
-        }
-      } catch (e) {
-        // 壊れたJSON。フェイルソフト(parsedEnergyCurveはundefinedのまま=セクション非表示)。
-      }
-    }
-    // 2026-07-28レビュー対応・必須修正4: 日付キーではなくfetchedAtで更新する(TTLキャッシュ)。
-    // 成否に関わらずfetchedAtは進める(失敗が続いても30分に1回だけリトライ=連打しない)。
-    // changedは「前回と内容が変わった場合」だけ立てる(30分ごとに同じ内容を再取得しても
-    // 無駄な再描画をしない。JSON.stringify比較で十分。オブジェクトが小さいため許容)。
-    const prevEnergyCurveData = cachedEnergyCurveJson.data;
-    cachedEnergyCurveJson = { fetchedAt: Date.now(), data: parsedEnergyCurve };
-    if (parsedEnergyCurve && JSON.stringify(parsedEnergyCurve) !== JSON.stringify(prevEnergyCurveData)) {
-      changed = true;
-    }
   }
   if (wantAiInsightsFetch) {
     const parsedAiInsights = parseAiInsights(aiInsightsRaw);
@@ -12140,19 +11703,6 @@ function suspendTask(id) {
 function resumeTask(id) {
   state.tasks = state.tasks.map((t) => t.id === id ? { ...t, status: "todo", updatedAt: nowDateTime() } : t);
   saveAndRender("タスクを再開しました");
-}
-
-function energyPoints(blocks, rowHeight, startHour) {
-  let value = Number(state.settings.morningEnergyLog[state.selectedDate] ?? 5);
-  return blocks
-    .filter((block) => block.completed || block.actualEndAt)
-    .sort((a, b) => (a.actualEndAt || a.plannedEndAt || "").localeCompare(b.actualEndAt || b.plannedEndAt || ""))
-    .map((block) => {
-      value += Number(block.charge || 0) - Number(block.discharge || 0);
-      const time = block.actualEndAt || block.plannedEndAt || block.plannedStartAt;
-      const top = Math.max(8, ((minutesOf(time) - startHour * 60) / 60) * rowHeight);
-      return { top, value, right: 80 - clamp(value, -20, 20) * 3 };
-    });
 }
 
 function rangeOptions(min, max, selected) {
