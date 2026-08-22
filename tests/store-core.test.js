@@ -55,7 +55,7 @@ function configureMinimalStubs(syncMod) {
 }
 
 // computeSyncMerge/syncCoreEqualが参照するキーを一式そろえた最小state(SYNC_CORE_COMPARE_KEYS
-// の4キーはlocal/remoteで意図的に一致させ、syncCoreEqual()がtrueを返す=自動解決経路に入る
+// のキーはlocal/remoteで意図的に一致させ、syncCoreEqual()がtrueを返す=自動解決経路に入る
 // 状況を作る)。
 function baseState(extra) {
   return {
@@ -139,11 +139,20 @@ async function loadModules() {
     return baseState({ journals: { "2026-07-27": "別端末で書いたジャーナル本文" } });
   }
 
-  console.log("[B-1] syncCoreEqual: 比較対象4キーが一致すればtrue(自動解決経路に入る前提)");
+  console.log("[B-1] syncCoreEqual: 比較対象キーが一致すればtrue(自動解決経路に入る前提)");
   {
     storeMod.setState(makeLocalWithPrimaryData());
     const remoteNorm = makeRemoteDiffOnlyInJournals();
     check("syncCoreEqualはtrueを返す", syncMod.syncCoreEqual(remoteNorm) === true);
+  }
+  console.log("[B-1b] earlyBirdは取消が物理削除のため競合時にfail-closeする");
+  {
+    const local = makeLocalWithPrimaryData();
+    local.earlyBird = { logs: { "2026-07-27": { checkedAt: "2026-07-27T05:55:00" } } };
+    storeMod.setState(local);
+    const remoteNorm = makeRemoteDiffOnlyInJournals();
+    remoteNorm.earlyBird = { logs: {} };
+    check("earlyBird不一致ならsyncCoreEqualはfalse", syncMod.syncCoreEqual(remoteNorm) === false);
   }
 
   console.log("[B-2] ローカルを基準に残す経路(applySyncMergeToLocal): 4キーは触れられないため保全される");

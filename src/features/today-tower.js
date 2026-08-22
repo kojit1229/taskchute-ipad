@@ -1,4 +1,4 @@
-// src/features/today-tower.js — v228: JOURNAL 2枠とFLIGHT LOGを統合。
+// src/features/today-tower.js — v229: ARRIVALS見積列・GATE編集・早起きゲートを統合。
 // state・保存・action登録には触れず、時刻・便状態・信条は既存1秒tickerから差分更新する。
 
 import { renderStandingOrders, renderCountdown, renderTopbandPC, creedRotationLine } from "./topband.js";
@@ -8,6 +8,7 @@ let runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minute
 let towerMotionSetting;
 let renderTodayPomodoro;
 let journalForDate;
+let gateRules, earlyBirdLogForDate, earlyRiseTarget, gateEditMode;
 let flipListenerBound = false;
 // undefined=セッション初回(未観測)。復元描画では接地の瞬間ではないためフラッシュを出さない
 // (起動時同期404後の全体render()と競合して非決定にもなる)。null=実行中なしを観測済み。
@@ -22,7 +23,8 @@ function configureTodayTower(deps) {
   ({
     escapeHTML, todayISO, homeSyncAlertBanner, blocksForDate, towerFlights,
     runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp,
-    towerMotionSetting, renderTodayPomodoro, journalForDate
+    towerMotionSetting, renderTodayPomodoro, journalForDate,
+    gateRules, earlyBirdLogForDate, earlyRiseTarget, gateEditMode
   } = deps);
   if (!flipListenerBound && typeof document !== "undefined") {
     document.addEventListener("animationend", (event) => {
@@ -62,7 +64,11 @@ function isNightHour(hour) {
 }
 
 function boardFlights(blocks, nowMin) {
-  return towerFlights(blocks.filter((block) => !block.completed && block.category !== "ルーティン" && !block.oneTap), nowMin);
+  const candidates = blocks.filter((block) => !block.completed && block.category !== "ルーティン" && !block.oneTap);
+  const byId = new Map(candidates.map((block) => [String(block.id), block]));
+  return towerFlights(candidates, nowMin).map((flight) => ({
+    ...flight, estimateMin: resolveEstimateMin(byId.get(String(flight.id)))
+  }));
 }
 
 function arrivalWindow(flights) {
@@ -145,8 +151,9 @@ function renderTowerRunway(now, blocks) {
 function flightRow(flight) {
   const status = `<span class="tower-status" data-status="${escapeHTML(flight.status)}">${escapeHTML(flight.label)}</span>`;
   return `<div class="tower-flight-row tower-arrival-row" data-flight-id="${escapeHTML(flight.id)}" data-status="${escapeHTML(flight.status)}">
-    <time>${flightTime(flight.plannedMin)}</time><span class="tower-callsign">${escapeHTML(flight.callsign)}</span>
-    <button type="button" class="tower-flight-title" data-action="edit-block" data-id="${escapeHTML(flight.id)}">${escapeHTML(flight.title)}</button>${status}
+    <time>${flightTime(flight.plannedMin)}</time>
+    <button type="button" class="tower-flight-title" data-action="edit-block" data-id="${escapeHTML(flight.id)}">${escapeHTML(flight.title)}</button>
+    <span class="tower-flight-est">${escapeHTML(flight.estimateMin)}分</span>${status}
   </div>`;
 }
 
@@ -217,28 +224,85 @@ function renderTowerJournal(date) {
   </section>`;
 }
 
+function orderedGateRules() {
+  return (gateRules() || []).map((rule, index) => ({ rule, index }))
+    .filter(({ rule }) => !rule.deleted && rule.category === "ルーティン")
+    .sort((a, b) => (Number.isFinite(a.rule.order) ? a.rule.order : a.index)
+      - (Number.isFinite(b.rule.order) ? b.rule.order : b.index))
+    .map(({ rule }) => rule);
+}
+
+function orderedGateBlocks(blocks) {
+  const order = new Map(orderedGateRules().map((rule, index) => [String(rule.id), Number.isFinite(rule.order) ? rule.order : index]));
+  return blocks.filter((block) => block.category === "ルーティン" && !block.oneTap && !block.deleted)
+    .map((block, index) => ({ block, index }))
+    .sort((a, b) => (order.get(String(a.block.recurrenceGroupId)) ?? Number.MAX_SAFE_INTEGER)
+      - (order.get(String(b.block.recurrenceGroupId)) ?? Number.MAX_SAFE_INTEGER) || a.index - b.index)
+    .map(({ block }) => block);
+}
+
+function earlyBirdGate() {
+  const log = earlyBirdLogForDate(todayISO());
+  const checkedAt = String(log?.checkedAt || "");
+  const checkedTime = checkedAt.match(/T(\d{2}:\d{2})/)?.[1] || "";
+  const target = earlyRiseTarget();
+  return { checked: Boolean(log), checkedTime, target, late: Boolean(checkedTime && checkedTime > target) };
+}
+
+function earlyBirdHTML(early, docking = false) {
+  return `<button type="button" class="tower-gate tower-gate-fixed${docking ? " is-docking" : ""}${early.late ? " is-late" : ""}"
+    data-action="early-bird-check" data-id="__early_bird__" data-docked="${early.checked ? 1 : 0}" aria-pressed="${early.checked ? "true" : "false"}">
+    <span>G01 ☀</span><strong>早起き(${escapeHTML(early.target)}まで)</strong><i aria-hidden="true"></i>
+    <span class="tower-gate-lock">🔒 固定枠(削除不可)</span>
+  </button>`;
+}
+
+function regularGateHTML(block, index, docking = false) {
+  return `<button type="button" class="tower-gate${docking ? " is-docking" : ""}" data-action="now-conveyor-complete" data-id="${escapeHTML(block.id)}" data-docked="${block.completed ? 1 : 0}">
+    <span>G${String(index + 2).padStart(2, "0")}</span><strong>${escapeHTML(block.title)}</strong><i aria-hidden="true"></i>
+  </button>`;
+}
+
+function gateEditorHTML(early) {
+  const rules = orderedGateRules();
+  const rows = rules.map((rule, index) => `<div class="tower-gate-edit-row" data-rule-id="${escapeHTML(rule.id)}">
+    <span>G${String(index + 2).padStart(2, "0")}</span><strong>${escapeHTML(rule.title)}</strong><time>${escapeHTML(rule.startTime || "--:--")}</time>
+    <button type="button" data-action="tower-gate-move" data-rule-id="${escapeHTML(rule.id)}" data-direction="-1" ${index === 0 ? "disabled" : ""} aria-label="上へ">↑</button>
+    <button type="button" data-action="tower-gate-move" data-rule-id="${escapeHTML(rule.id)}" data-direction="1" ${index === rules.length - 1 ? "disabled" : ""} aria-label="下へ">↓</button>
+    <button type="button" class="danger" data-action="tower-gate-delete" data-rule-id="${escapeHTML(rule.id)}">削除</button>
+  </div>`).join("");
+  return `${earlyBirdHTML(early)}<div class="tower-gate-editor">${rows || '<div class="tower-gate-edit-empty">登録済みゲートはありません</div>'}
+    <div class="tower-gate-add"><input id="towerGateTitle" type="text" placeholder="タイトル" aria-label="ゲートタイトル">
+      <input id="towerGateTime" type="time" step="300" aria-label="ゲート時刻">
+      <button type="button" data-action="tower-gate-add">＋ 登録</button></div>
+  </div>`;
+}
+
 function renderTowerGates(blocks) {
-  const gates = blocks.filter((block) => block.category === "ルーティン" && !block.oneTap && !block.deleted);
-  const done = gates.filter((block) => block.completed).length;
-  const gateSet = gates.map((block) => `${encodeURIComponent(String(block.id))}:${block.completed ? 1 : 0}`).join(",");
-  const docked = new Set(gates.filter((block) => block.completed).map((block) => String(block.id)));
+  const gates = orderedGateBlocks(blocks);
+  const early = earlyBirdGate();
+  const done = gates.filter((block) => block.completed).length + (early.checked ? 1 : 0);
+  const gateSet = [`early:${early.checked ? 1 : 0}`, ...gates.map((block) => `${encodeURIComponent(String(block.id))}:${block.completed ? 1 : 0}`)].join(",");
+  const docked = new Set([...(early.checked ? ["__early_bird__"] : []), ...gates.filter((block) => block.completed).map((block) => String(block.id))]);
   const firstRender = lastGateDocked === undefined;
   const buttons = gates.map((block, index) => {
     const id = String(block.id);
     const docking = !firstRender && block.completed && !lastGateDocked.has(id);
-    return `<button type="button" class="tower-gate${docking ? " is-docking" : ""}" data-action="now-conveyor-complete" data-id="${escapeHTML(id)}" data-docked="${block.completed ? 1 : 0}">
-      <span>G${String(index + 1).padStart(2, "0")}</span><strong>${escapeHTML(block.title)}</strong><i aria-hidden="true"></i>
-    </button>`;
+    return regularGateHTML(block, index, docking);
   }).join("");
-  const full = done === gates.length && gates.length > 0;
+  const earlyDocking = !firstRender && early.checked && !lastGateDocked.has("__early_bird__");
+  const total = gates.length + 1;
+  const full = done === total;
   // レビューM2反映: フラッシュは「満灯へ遷移した瞬間」だけ(is-dockingと同じ意味論)。
   // 復元描画(lastGateFull===undefined)では定常is-fullのみでアニメを走らせない。
   const fullFlash = full && lastGateFull === false;
   lastGateDocked = docked;
   lastGateFull = full;
   return `<section class="tower-gates sec-gates${full ? " is-full" : ""}${fullFlash ? " is-full-flash" : ""}">
-    <h2>GATE ROUTINE</h2><div id="towerGateStrip" data-gate-set="${gateSet}">${buttons}</div>
-    <div id="towerGateCount">${done}/${gates.length}便 就航</div>
+    <h2>GATE ROUTINE <button type="button" class="tower-gate-edit" data-action="tower-gate-edit-toggle">${gateEditMode() ? "DONE 完了" : "EDIT 編集"}</button></h2>
+    <div id="towerGateStrip" data-gate-set="${gateSet}">${gateEditMode() ? gateEditorHTML(early) : `${earlyBirdHTML(early, earlyDocking)}${buttons}`}</div>
+    ${early.late ? `<div class="tower-gate-warning">⚠ ${escapeHTML(early.checkedTime)}打刻 — 目標${escapeHTML(early.target)}より遅いチェックです</div>` : ""}
+    <div id="towerGateCount">${done}/${total}便 就航</div>
   </section>`;
 }
 
@@ -288,17 +352,19 @@ function updateTowerRunway(now, blocks) {
 }
 
 function updateTowerGates(blocks) {
-  const gates = blocks.filter((block) => block.category === "ルーティン" && !block.oneTap && !block.deleted);
-  const gateSet = gates.map((block) => `${encodeURIComponent(String(block.id))}:${block.completed ? 1 : 0}`).join(",");
+  if (gateEditMode()) return;
+  const gates = orderedGateBlocks(blocks);
+  const early = earlyBirdGate();
+  const gateSet = [`early:${early.checked ? 1 : 0}`, ...gates.map((block) => `${encodeURIComponent(String(block.id))}:${block.completed ? 1 : 0}`)].join(",");
   const container = document.getElementById("towerGateStrip");
   if (!container || container.dataset.gateSet === gateSet || container.contains(document.activeElement)) return;
   const previous = new Set([...container.querySelectorAll('[data-docked="1"]')].map((gate) => gate.dataset.id));
-  const done = gates.filter((block) => block.completed).length;
-  container.innerHTML = gates.map((block, index) => `<button type="button" class="tower-gate${block.completed && !previous.has(String(block.id)) ? " is-docking" : ""}" data-action="now-conveyor-complete" data-id="${escapeHTML(block.id)}" data-docked="${block.completed ? 1 : 0}">
-    <span>G${String(index + 1).padStart(2, "0")}</span><strong>${escapeHTML(block.title)}</strong><i aria-hidden="true"></i>
-  </button>`).join("");
+  const done = gates.filter((block) => block.completed).length + (early.checked ? 1 : 0);
+  container.innerHTML = earlyBirdHTML(early, early.checked && !previous.has("__early_bird__"))
+    + gates.map((block, index) => regularGateHTML(block, index, block.completed && !previous.has(String(block.id)))).join("");
   container.dataset.gateSet = gateSet;
-  const full = done === gates.length && gates.length > 0;
+  const total = gates.length + 1;
+  const full = done === total;
   const section = container.closest(".tower-gates");
   if (section) {
     // レビューM2反映: フラッシュは「満灯へ遷移した瞬間」だけ。復元・再構築では光らせない。
@@ -308,8 +374,8 @@ function updateTowerGates(blocks) {
   }
   lastGateFull = full;
   const count = document.getElementById("towerGateCount");
-  if (count) count.textContent = `${done}/${gates.length}便 就航`;
-  lastGateDocked = new Set(gates.filter((block) => block.completed).map((block) => String(block.id)));
+  if (count) count.textContent = `${done}/${total}便 就航`;
+  lastGateDocked = new Set([...(early.checked ? ["__early_bird__"] : []), ...gates.filter((block) => block.completed).map((block) => String(block.id))]);
 }
 
 function updateTodayTowerTick() {

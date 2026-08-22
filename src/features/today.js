@@ -1,4 +1,4 @@
-// src/features/today.js — v222: 今日タブのTOWER描画と共有ポモドーロを統合する。
+// src/features/today.js — v229: TOWERのGATE編集状態と早起き正本を依存注入する。
 // stateはlive bindingで読み取り、TOWER描画層へ必要最小限の依存を注入する。
 
 import { state } from "../state/store.js";
@@ -14,6 +14,7 @@ let clamp, isStaleBlock, renderDeferringForFocus;
 let renderCircularProgress, remainingText, remainingTextNormal;
 let renderPomodoroInterruptControls;
 let homeSyncAlertBanner;
+let gateEditMode;
 let todayTickerId = null;
 let todayRenderedDateISO = null;
 
@@ -24,7 +25,7 @@ function configureToday(deps) {
     clamp, isStaleBlock, renderDeferringForFocus,
     renderCircularProgress, remainingText, remainingTextNormal,
     renderPomodoroInterruptControls,
-    homeSyncAlertBanner
+    homeSyncAlertBanner, gateEditMode
   } = deps);
   configureTodayTower({
     escapeHTML, todayISO, homeSyncAlertBanner, blocksForDate, towerFlights,
@@ -34,7 +35,11 @@ function configureToday(deps) {
     journalForDate: (date) => ({
       free: state.journals[date] || "",
       aiRequest: state.journalMeta[date]?.aiRequest || ""
-    })
+    }),
+    gateRules: () => state.recurrences || [],
+    earlyBirdLogForDate: (date) => state.earlyBird?.logs?.[date] || null,
+    earlyRiseTarget: () => state.settings.earlyRiseTarget,
+    gateEditMode
   });
 }
 

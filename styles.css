@@ -3327,12 +3327,12 @@ h3 {
 .tower-arrivals { border: 1px solid var(--tower-line); background: var(--tower-panel); }
 .tower-board h2 { margin: 0; padding: 8px 10px; border-bottom: 1px solid var(--tower-line); color: var(--tower-cyan); font-size: 11px; letter-spacing: .18em; }
 .tower-board h2 span { float: right; color: var(--tower-text); font-size: 10px; font-weight: 400; letter-spacing: .08em; opacity: .6; }
-.tower-flight-row { display: grid; grid-template-columns: 52px 64px minmax(0, 1fr) 78px; align-items: center; min-height: 44px; border-bottom: 1px solid var(--tower-line); font-size: 11px; }
+.tower-flight-row { display: grid; grid-template-columns: 52px minmax(0, 1fr) 48px 64px; align-items: center; min-height: 44px; border-bottom: 1px solid var(--tower-line); font-size: 11px; }
 .tower-flight-row:last-child { border-bottom: 0; }
 .tower-flight-row time { padding-left: 8px; color: var(--tower-text); font-variant-numeric: tabular-nums; opacity: .6; }
-.tower-callsign { color: var(--tower-cyan); }
 .tower-flight-title { min-width: 0; min-height: 44px; padding: 0 6px; overflow: hidden; border: 0; color: var(--tower-text); font: inherit; font-family: system-ui, sans-serif; text-align: left; text-overflow: ellipsis; white-space: nowrap; background: transparent; }
 .tower-flight-title:focus-visible { outline: 2px solid var(--tower-amber); outline-offset: -2px; }
+.tower-flight-est { justify-self: end; padding-right: 6px; font-variant-numeric: tabular-nums; opacity: .55; white-space: nowrap; }
 .tower-status { justify-self: end; padding-right: 8px; color: var(--tower-text); opacity: .55; transform-origin: center; }
 .tower-status[data-status="final"],
 .tower-status[data-status="resloted"] { color: var(--tower-amber); opacity: 1; }
@@ -3392,6 +3392,8 @@ h3 {
 /* v207: TOWER T6。GATE定期便。 */
 .tower-gates { margin-top: 12px; border: 1px solid var(--tower-line); background: var(--tower-panel); }
 .tower-gates h2 { margin: 0; padding: 8px 10px; border-bottom: 1px solid var(--tower-line); color: var(--tower-cyan); font-size: 11px; letter-spacing: .18em; }
+.tower-gate-edit { float: right; margin-top: -2px; padding: 2px 10px; border: 1px solid var(--tower-line); color: var(--tower-cyan); font: inherit; font-size: 9px; letter-spacing: .14em; background: transparent; }
+.tower-gate-edit:hover { border-color: var(--tower-cyan); }
 #towerGateStrip { display: flex; align-items: stretch; gap: 8px; min-height: 44px; padding: 8px; overflow-x: auto; }
 .tower-gate { display: grid; grid-template-columns: auto minmax(72px, 1fr) 10px; align-items: center; gap: 7px; min-width: 132px; min-height: 48px; padding: 6px 8px; border: 1px solid var(--tower-line); border-radius: 4px; color: var(--tower-text); font: inherit; background: var(--tower-bg); }
 .tower-gate span { color: var(--tower-cyan); font-size: 10px; }
@@ -3401,6 +3403,23 @@ h3 {
 .tower-gate[data-docked="1"] i { background: var(--tower-green); box-shadow: 0 0 8px var(--tower-green); }
 .tower-gate:focus-visible { outline: 2px solid var(--tower-amber); outline-offset: 1px; }
 .tower-gate.is-docking { animation: tower-gate-docking 700ms ease-out 1; }
+.tower-gate-fixed { border: 3px double var(--tower-amber); }
+.tower-gate-fixed > span:first-child { color: var(--tower-amber); }
+.tower-gate-lock { grid-column: 1 / -1; color: var(--tower-amber) !important; font-size: 8.5px !important; letter-spacing: .04em; opacity: .85; }
+.tower-gate-fixed.is-late { box-shadow: inset 0 0 0 1px var(--tower-amber); }
+.tower-gate-warning { padding: 0 10px 6px; color: var(--tower-amber); font-size: 10px; }
+.tower-gate-editor { display: grid; flex: 1 0 270px; gap: 6px; min-width: 270px; }
+.tower-gate-edit-row { display: grid; grid-template-columns: 34px minmax(82px, 1fr) 48px 32px 32px auto; align-items: center; gap: 4px; min-height: 40px; padding: 4px 6px; border: 1px solid var(--tower-line); }
+.tower-gate-edit-row > span { color: var(--tower-cyan); font-size: 10px; }
+.tower-gate-edit-row > strong { overflow: hidden; font-family: system-ui, sans-serif; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.tower-gate-edit-row > time { opacity: .65; }
+.tower-gate-edit-row button,
+.tower-gate-add button { min-height: 32px; border: 1px solid var(--tower-line); color: var(--tower-cyan); font: inherit; background: transparent; }
+.tower-gate-edit-row button.danger { color: var(--danger); }
+.tower-gate-edit-row button:disabled { opacity: .3; }
+.tower-gate-add { display: grid; grid-template-columns: minmax(110px, 1fr) 100px auto; gap: 6px; }
+.tower-gate-add input { min-width: 0; min-height: 44px; padding: 6px 8px; border: 1px solid var(--tower-line); color: var(--tower-text); font-size: 16px; background: var(--tower-bg); }
+.tower-gate-edit-empty { padding: 10px; border: 1px dashed var(--tower-line); opacity: .65; }
 #towerGateCount { padding: 0 10px 8px; color: var(--tower-green); font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; }
 .tower-gates.is-full { border-color: var(--tower-green); }
 .tower-gates.is-full-flash { animation: tower-gates-full 900ms ease-out 1; }

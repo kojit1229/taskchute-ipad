@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v228";
+const CACHE_NAME = "taskchute-journal-pwa-v229";
+// v229: ARRIVALS見積列、GATE編集モード、state.earlyBirdへ書く☀固定ゲートを追加した。
 // v228: JOURNAL 2枠とFLIGHT LOGを追加し、完了3経路で日報を都度再生成する。
 // v227: NOW LANDINGに実開始/着陸予定/進捗/残りを追加し、DEPARTURESを明日導線1行へ縮約した。
 // v223: TOWER上帯(STANDING ORDERS/COUNTDOWN)とPC 3列・モバイル縦順の骨格を結線した。

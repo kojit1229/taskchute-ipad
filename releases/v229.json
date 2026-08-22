@@ -1,0 +1,64 @@
+{
+  "version": 229,
+  "date": "2026-08-22",
+  "title": "ARRIVALS行編集+見積列+GATE編集モード+☀早起きゲート",
+  "summary": "ARRIVALSを時刻・タイトル・見積分・ステータスの4列へ改め、既存Block編集モーダル、GATEの登録・シリーズ終了・並び替え、EARLY BIRD正本へ記録する☀固定ゲートを統合した",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v229.json",
+    "src/features/today-tower.js",
+    "src/features/today.js",
+    "src/sync/github.js",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/store-core.test.js",
+    "tests/tower-core.test.js"
+  ],
+  "intent": [
+    "ARRIVALSの各行から既存のフルスペックBlock編集へ入り、見積分を一覧で判断できるようにする。",
+    "GATE ROUTINE内で日次ルーティンの登録・シリーズ終了・上下並び替えを完結させる。",
+    "G01☀を削除不能の固定枠として常設し、EARLY BIRD計器盤が読む当日チェック時刻を正本stateへ保存する。"
+  ],
+  "changes": [
+    "ARRIVALS行を時刻・タイトル・resolveEstimateMinによる見積分・ステータスの4列へ変更し、callsign列を廃止した。タイトルのdata-action=edit-blockは維持し、既存buildBlockModalの全フィールドをそのまま開く。",
+    "GATEヘッダへ委譲式EDIT/DONEボタンを追加し、編集モードでタイトル+time(step=300)からcreateRecurrenceRule(..., daily)を呼ぶ登録、上下ボタンによるstate.recurrences[].order更新、削除を実装した。",
+    "Block編集のrecurrenceKind=__end__分岐をendRecurrenceSeriesへ共通化し、GATE削除のendGateRecurrence薄いラッパーも同じ論理削除+当日以降の未編集実体除去を呼ぶようにした。",
+    "GATE先頭へG01☀の二重罫線・🔒固定枠を追加し、タップでstate.earlyBird.logs[todayISO()]={checkedAt:nowDateTime()}を書き、当日再タップでキーを削除するトグルにした。",
+    "earlyRiseTargetよりcheckedAtのHH:mmが遅い場合もチェックを有効のまま保持し、固定枠と警告行へ遅延表示を出すようにした。",
+    "normalizeStateでearlyBird/logsの壊れた形状を空オブジェクトへ、settings.earlyRiseTargetを既定06:00へ、既存recurrencesのorder欠損を従来配列順へ後方互換正規化した。",
+    "earlyBirdは取消を物理削除するため和集合マージせず、SYNC_CORE_COMPARE_KEYSへ追加して別端末差分がある自動pushをfail-closeにした。",
+    "tower-coreへ見積列・callsign不在・フル編集モーダル・GATE登録/シリーズ終了/並び替え・早起き書き込み/取消/遅チェック警告のassertionを追加し、actionレジストリ保存則を追随した。",
+    "Service WorkerのCACHE_NAMEをv229へ更新した。"
+  ],
+  "uncertainties": [
+    "GATE編集からの新規登録はタイトルと開始時刻だけを受け取り、日次ルールとして作成するため終了時刻は未設定のままになる。",
+    "GATEのorderはルーティン系recurrenceだけに使い、単発のルーティンBlockは並び順付きrecurrenceの後へ従来入力順で表示する。"
+  ],
+  "reviewFocus": [
+    "ARRIVALSがcallsignを描画せず、resolveEstimateMinの手入力→同一シリーズ過去実績中央値→30分という既存解決順を表示しているか。",
+    "GATE通常モードのnow-conveyor-completeトグルを変えず、編集モードの追加だけがcreateRecurrenceRuleとmaintainRecurrencesを通るか。",
+    "endGateRecurrenceがBlock編集の__end__と同じendRecurrenceSeriesを呼び、ルール論理削除・当日以降の未編集実体除去・実績保持を満たすか。",
+    "earlyBirdの後方互換正規化、当日キーへのローカルnowDateTime書き込み、再タップ削除、日跨ぎ時の当日判定にUTC文字列パースが混入していないか。",
+    "earlyBirdの端末間差分がsyncCoreEqualで不一致となり、自動pushで片側ログを上書きしないか。",
+    "G01☀が通常/編集の両モードで削除不能の固定枠として残り、遅チェックを無効化せず警告だけ表示するか。",
+    "390/768/1024pxでGATE編集入力がページ横幅を押し広げず、time入力step=300・全入力16px以上を維持するか。"
+  ],
+  "verification": [
+    "node --check app.js、src/features/today.js、src/features/today-tower.js、tests/tower-core.test.js、tests/action-registry-core.test.js、sw.js: PASS。",
+    "node tests/action-registry-core.test.js、tests/recurrence-core.test.js、tests/tower-model-core.test.js、tests/store-core.test.js: PASS。",
+    "CHROME_PATHをsystem Edgeへ指定したnode tests/tower-core.test.js: ALL PASS。標準Playwright Chromiumはspawn EPERMのためEdgeで補完した。",
+    "npm run code:index:write / code:index、npm run test:manifest:write / test:manifest: PASS(code index 607 functions、test manifest 125 suites)。",
+    "CHROME_PATHをsystem Edgeへ指定したnode scripts/release-gate.js releases/v229.json: PASS(31 suites、非ブラウザ検査を含む)。",
+    "node scripts/release-record.js releases/v229.json --writeはCHANGES_v229.md生成後、ワークスペース外taskchute-notes/handoff.mdでEPERM。--checkはCHANGES=OK、handoff=NG。"
+  ],
+  "knownLimitations": [
+    "iOS Safari実機PWAでのService Worker更新・オフライン動作、timeピッカー、長いゲート名の最終表示確認は監督者側で必要。",
+    "この環境では標準Playwright Chromiumがspawn EPERMになるため、ブラウザ検査はsystem Chrome/Edgeで補完する。",
+    "taskchute-notes/handoff.mdはワークスペース外のためrelease-recordがEPERMになる場合があり、その場合はCHANGES生成結果と権限制約を報告する。"
+  ]
+}

@@ -146,6 +146,8 @@ let _replanPending = null;
 let _replanPollTimer = null;
 let _replanPollBusy = false;
 let _replanUi = { kind: "idle", message: "残り時間の計画をAIへ依頼できます" };
+// v229: GATE編集モードは画面状態だけなので永続stateへ混ぜず、セッション内だけ保持する。
+let _towerGateEditMode = false;
 
 // v196: 実行計画の叩き台をAIに作らせる(第2弾b)。ファイル契約はplan-request.json/
 // plan-response.json(personal-data taskchute/requests/配下)。ポーリング機構はv193再プランと
@@ -238,7 +240,8 @@ configureToday({
   clamp, isStaleBlock, renderDeferringForFocus,
   renderCircularProgress, remainingText, remainingTextNormal,
   renderPomodoroInterruptControls,
-  homeSyncAlertBanner
+  homeSyncAlertBanner,
+  gateEditMode: () => _towerGateEditMode
 });
 configureTopband({
   escapeHTML,
@@ -308,6 +311,14 @@ registerActions({
     meta.textUpdatedAt = nowDateTime();
     saveAndRender("ジャーナルを保存しました");
   },
+  "early-bird-check": () => toggleEarlyBird(),
+  "tower-gate-edit-toggle": () => {
+    _towerGateEditMode = !_towerGateEditMode;
+    render();
+  },
+  "tower-gate-add": () => addTowerGate(),
+  "tower-gate-delete": ({ target }) => endGateRecurrence(target.dataset.ruleId),
+  "tower-gate-move": ({ target }) => moveTowerGate(target.dataset.ruleId, Number(target.dataset.direction)),
   // --- settings(12): サイドバー/WBS表示設定/カテゴリ・休憩メッセージ管理・AI再プラン ---
   "toggle-show-suspended": () => {
     state.settings.showSuspended = !state.settings.showSuspended;
@@ -1472,6 +1483,9 @@ function normalizeState(value) {
   // v37: インポート/同期で欠けていると描画がクラッシュするキーを補完
   value.settings.morningEnergyLog ||= {};
   value.pomodoro ||= { running: false, blockId: "", startedAt: "", endsAt: "", mode: "focus" };
+  // v229: EARLY BIRDの正本。旧stateと壊れた形状は空ログへ後方互換正規化する。
+  if (!value.earlyBird || typeof value.earlyBird !== "object" || Array.isArray(value.earlyBird)) value.earlyBird = {};
+  if (!value.earlyBird.logs || typeof value.earlyBird.logs !== "object" || Array.isArray(value.earlyBird.logs)) value.earlyBird.logs = {};
   value.settings.github ||= defaultGitHubSettings();
   value.settings.github.owner ||= "kojit1229";
   value.settings.github.repo ||= "taskchute-ipad";
@@ -1525,6 +1539,8 @@ function normalizeState(value) {
   }
   // v221: cockpitスキン廃止。旧stateも含め、互換フィールドはtower固定へ正規化する。
   value.settings.todaySkin = "tower";
+  // v229: 早起きチェックは目標超過でも有効。ここは警告表示に使うHH:mmだけを正規化する。
+  if (!/^\d{2}:\d{2}$/.test(value.settings.earlyRiseTarget || "")) value.settings.earlyRiseTarget = "06:00";
   // v210: TOWERのモーション強度。未知値は通常へ。
   if (!["normal", "calm", "off"].includes(value.settings.towerMotion)) value.settings.towerMotion = "normal";
   if (typeof value.settings.autoArchive !== "boolean") value.settings.autoArchive = true;
@@ -1947,6 +1963,10 @@ function normalizeState(value) {
   // または連続ルーティン(チェーンid)を指定すると、それが当日完了した直後の時刻にこの
   // ルーティンのBlockを自動生成する。既定は未設定("")。
   value.recurrences = value.recurrences.map((r) => ({ anchor: "", ...r }));
+  // v229: GATE編集の表示順。既存ルールは従来の配列順を初期orderとして維持する。
+  value.recurrences = value.recurrences.map((r, index) => ({
+    ...r, order: Number.isFinite(r.order) ? r.order : index
+  }));
   // v115: チェーンの当日進行状態(id=`${chainId}_${date}`)。既存端末には配列自体が無いため
   // []で補完する。currentIndexは次に完了すべきステップの添字、completedAtが付けば全ステップ完了。
   if (!Array.isArray(value.chainRuns)) value.chainRuns = [];
@@ -12746,6 +12766,78 @@ function removeUntouchedInstances(ruleId, { fromDate = "", excludeId = "" } = {}
   });
 }
 
+// v229: Block編集の「__end__」とGATE削除が共有するシリーズ終了本体。
+// GATE側はendGateRecurrence()からこの既存分岐相当だけを呼ぶ薄いラッパーにする。
+function endRecurrenceSeries(ruleId, { excludeId = "" } = {}) {
+  const active = (state.recurrences || []).some((rule) => rule.id === ruleId && !rule.deleted);
+  if (!active) return false;
+  state.recurrences = state.recurrences.map((rule) => rule.id === ruleId
+    ? { ...rule, deleted: true, updatedAt: nowDateTime() }
+    : rule);
+  removeUntouchedInstances(ruleId, { fromDate: todayISO(), excludeId });
+  return true;
+}
+
+function endGateRecurrence(ruleId) {
+  if (!endRecurrenceSeries(ruleId)) return;
+  saveAndRender("ゲートの繰り返しシリーズを終了しました");
+}
+
+function addTowerGate() {
+  const title = (document.getElementById("towerGateTitle")?.value || "").trim();
+  const time = document.getElementById("towerGateTime")?.value || "";
+  if (!title || !/^\d{2}:\d{2}$/.test(time)) {
+    showToast("タイトルと時刻を入力してください");
+    return;
+  }
+  const date = todayISO();
+  const rule = createRecurrenceRule({
+    title, date, category: "ルーティン", taskId: "",
+    plannedStartAt: `${date}T${time}`, plannedEndAt: ""
+  }, "daily");
+  if (!rule) return;
+  const orders = (state.recurrences || []).filter((item) => !item.deleted && item.category === "ルーティン" && item.id !== rule.id)
+    .map((item) => item.order).filter(Number.isFinite);
+  rule.order = orders.length ? Math.max(...orders) + 1 : 0;
+  maintainRecurrences();
+  saveAndRender("ゲートを登録しました");
+}
+
+function moveTowerGate(ruleId, direction) {
+  if (direction !== -1 && direction !== 1) return;
+  const rules = (state.recurrences || []).map((rule, index) => ({ rule, index }))
+    .filter(({ rule }) => !rule.deleted && rule.category === "ルーティン")
+    .sort((a, b) => (Number.isFinite(a.rule.order) ? a.rule.order : a.index)
+      - (Number.isFinite(b.rule.order) ? b.rule.order : b.index))
+    .map(({ rule }) => rule);
+  const from = rules.findIndex((rule) => rule.id === ruleId);
+  const to = from + direction;
+  if (from < 0 || to < 0 || to >= rules.length) return;
+  [rules[from], rules[to]] = [rules[to], rules[from]];
+  const orderById = new Map(rules.map((rule, index) => [rule.id, index]));
+  const changedAt = nowDateTime();
+  state.recurrences = state.recurrences.map((rule) => orderById.has(rule.id) && rule.order !== orderById.get(rule.id)
+    ? { ...rule, order: orderById.get(rule.id), updatedAt: changedAt }
+    : rule);
+  saveAndRender("ゲートの順番を変更しました");
+}
+
+function toggleEarlyBird() {
+  const date = todayISO();
+  state.earlyBird ||= { logs: {} };
+  state.earlyBird.logs ||= {};
+  if (state.earlyBird.logs[date]) {
+    delete state.earlyBird.logs[date];
+    saveAndRender("早起きチェックを取り消しました");
+    return;
+  }
+  const checkedAt = nowDateTime();
+  state.earlyBird.logs[date] = { checkedAt };
+  const checkedTime = checkedAt.match(/T(\d{2}:\d{2})/)?.[1] || "";
+  const late = checkedTime > state.settings.earlyRiseTarget;
+  saveAndRender(late ? "早起きを記録しました(目標時刻より遅いチェックです)" : "早起きを記録しました");
+}
+
 function recurrenceKindLabel(kind) {
   return { daily: "毎日", weekdays: "平日のみ", weekly: "毎週", monthly: "毎月" }[kind] || kind || "";
 }
@@ -13738,15 +13830,7 @@ function saveBlockFromModal(id, fields) {
     if (rk && rk !== "__keep__") {
       if (rk === "__end__") {
         // シリーズ終了(以降の自動生成を停止。実績履歴はそのまま残る)
-        if (existing.recurrenceGroupId) {
-          state.recurrences = (state.recurrences || []).map((r) =>
-            r.id === existing.recurrenceGroupId
-              ? { ...r, deleted: true, updatedAt: nowDateTime() }
-              : r);
-          // v37: 実体化済みの未来分(未編集)も取り除く。
-          //      残すと「終了したのに31日先まで表示され続ける」状態になる。
-          removeUntouchedInstances(existing.recurrenceGroupId, { fromDate: todayISO(), excludeId: id });
-        }
+        if (existing.recurrenceGroupId) endRecurrenceSeries(existing.recurrenceGroupId, { excludeId: id });
         closeModal();
         saveAndRender("繰り返しシリーズを終了しました");
         return;

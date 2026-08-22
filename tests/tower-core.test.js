@@ -160,7 +160,7 @@ function check(name, cond, extra = "") {
     console.log("[7] ARRIVALSは本日便の現在前後5便だけを表示する");
     await page.clock.setFixedTime(fixedTime(0));
     const arrivals = Array.from({ length: 13 }, (_, index) =>
-      block(`arr-${index}`, `本日便${index + 1}`, today, 9 * 60 + 30 + index * 30));
+      block(`arr-${index}`, `本日便${index + 1}`, today, 9 * 60 + 30 + index * 30, { estimateMin: index === 0 ? 45 : null }));
     arrivals.push(block("routine-hidden", "除外ルーティン", today, 11 * 60, { category: "ルーティン" }));
     arrivals.push(block("onetap-hidden", "除外ワンタップ", today, 11 * 60 + 15, { oneTap: true }));
     arrivals.push(block("arr-completed", "完了済み便", today, 8 * 60, {
@@ -173,8 +173,9 @@ function check(name, cond, extra = "") {
     await seedBoard(arrivals, departures);
     check("ARRIVALSは最大11行", await page.locator(".tower-arrival-row").count() === 11);
     check("窓外2便を数字だけで要約する", (await page.locator(".tower-flight-summary").textContent())?.trim() === "他 2 便");
-    const arrivalCallsigns = await page.locator(".tower-arrival-row .tower-callsign").allTextContents();
-    check("本日の便名はTC-701起点", arrivalCallsigns[0] === "TC-701", JSON.stringify(arrivalCallsigns));
+    check("callsign列は存在しない", await page.locator(".tower-arrival-row .tower-callsign").count() === 0);
+    const arrivalEstimates = await page.locator(".tower-arrival-row .tower-flight-est").allTextContents();
+    check("見積列は手入力45分とresolveEstimateMin既定30分を表示", arrivalEstimates[0] === "45分" && arrivalEstimates.slice(1).every((text) => text === "30分"), JSON.stringify(arrivalEstimates));
     const labels = await page.locator(".tower-arrival-row .tower-status").allTextContents();
     const allowedLabels = new Set(["到着", "着陸中", "リスロット", "最終進入", "待機"]);
     check("状態ラベルは確定語彙だけ", labels.every((label) => allowedLabels.has(label)), JSON.stringify(labels));
@@ -223,6 +224,10 @@ function check(name, cond, extra = "") {
     await page.locator('.tower-arrival-row[data-flight-id="arr-0"] .tower-flight-title').click();
     await page.waitForSelector(".modal-card", { state: "attached" });
     check("既存Block編集モーダルが開く", await page.locator(".modal-card").count() === 1);
+    check("buildBlockModalのフルスペックを流用", await page.locator('[data-modal-field="plannedStartAt"]').count() === 1
+      && await page.locator('[data-modal-field="estimateMin"]').count() === 1
+      && await page.locator('[data-modal-field="comment"]').count() === 1
+      && await page.locator('[data-modal-field="recurrenceKind"]').count() === 1);
     await page.locator('.modal-card [data-action="modal-close"]').first().click();
     await page.waitForSelector(".modal-card", { state: "detached" });
 
@@ -437,8 +442,9 @@ function check(name, cond, extra = "") {
     }, { KEY, today });
     await page.reload();
     await page.waitForSelector(".tower-gates");
-    check("oneTapを除くゲートは2基", await page.locator(".tower-gate").count() === 2);
-    check("1/2便 就航を表示", (await page.locator("#towerGateCount").textContent()) === "1/2便 就航");
+    check("oneTapを除く通常ゲート2基+☀固定枠", await page.locator(".tower-gate:not(.tower-gate-fixed)").count() === 2
+      && await page.locator(".tower-gate-fixed").count() === 1);
+    check("☀未チェックを含め1/3便 就航を表示", (await page.locator("#towerGateCount").textContent()) === "1/3便 就航");
 
     console.log("[21] GATEタップは既存action経由で完了し就航灯とカウントを更新する");
     await page.locator('.tower-gate[data-id="gate-open"]').click();
@@ -449,7 +455,7 @@ function check(name, cond, extra = "") {
       const cs = getComputedStyle(el);
       return el.classList.contains("is-docking") && cs.animationName === "tower-gate-docking" && cs.animationDuration === "0.7s";
     }));
-    check("就航数が2/2へ増える", (await page.locator("#towerGateCount").textContent()) === "2/2便 就航");
+    check("就航数が2/3へ増える", (await page.locator("#towerGateCount").textContent()) === "2/3便 就航");
     check("toggleBlock後のstate.reportsへ完了便を反映", await page.evaluate(({ KEY, today }) => {
       const report = JSON.parse(localStorage.getItem(KEY)).reports[today] || "";
       return report !== "STALE_TOGGLE" && report.includes("昼便");
@@ -462,9 +468,19 @@ function check(name, cond, extra = "") {
     await page.locator('.tower-gate[data-id="gate-open"]').click();
     await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).blocks.find((b) => b.id === "gate-open")?.completed !== true, KEY);
     check("就航済み再タップで取消される(トグル仕様)", await page.locator('.tower-gate[data-id="gate-open"][data-docked="0"]').count() === 1
-      && (await page.locator("#towerGateCount").textContent()) === "1/2便 就航");
+      && (await page.locator("#towerGateCount").textContent()) === "1/3便 就航");
     await page.locator('.tower-gate[data-id="gate-open"]').click();
     await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).blocks.find((b) => b.id === "gate-open")?.completed === true, KEY);
+
+    console.log("[21-b] ☀早起きゲートはEARLY BIRD正本へローカル時刻を書き、遅チェックを警告する");
+    await page.locator('.tower-gate-fixed[data-action="early-bird-check"]').click();
+    await page.waitForFunction(({ KEY, today }) => Boolean(JSON.parse(localStorage.getItem(KEY)).earlyBird?.logs?.[today]), { KEY, today });
+    const earlyBird = await page.evaluate(({ KEY, today }) => JSON.parse(localStorage.getItem(KEY)).earlyBird.logs[today], { KEY, today });
+    check("state.earlyBird.logs[当日].checkedAtへ書き込む", /^\d{4}-\d{2}-\d{2}T12:00:\d{2}$/.test(earlyBird.checkedAt), JSON.stringify(earlyBird));
+    check("G01☀は二重罫線の固定枠で削除UIを持たない", await page.locator('.tower-gate-fixed .tower-gate-lock', { hasText: "固定枠(削除不可)" }).count() === 1
+      && await page.locator('.tower-gate-fixed [data-action="tower-gate-delete"]').count() === 0);
+    check("06:00より遅い12:00チェックも有効のまま警告表示", await page.locator('.tower-gate-fixed[data-docked="1"].is-late').count() === 1
+      && await page.locator('.tower-gate-warning', { hasText: "目標06:00より遅い" }).count() === 1);
 
     console.log("[22] 全就航だけis-fullになり、満灯フラッシュは遷移の瞬間だけ");
     check("全就航ではis-full", await page.locator(".tower-gates.is-full").count() === 1);
@@ -474,11 +490,73 @@ function check(name, cond, extra = "") {
     check("復元描画はis-fullのみでフラッシュを出さない", await page.locator(".tower-gates.is-full").count() === 1
       && await page.locator(".tower-gates.is-full-flash").count() === 0);
     check("復元描画のis-fullは満灯アニメが走らない", await page.locator(".tower-gates.is-full").evaluate((el) => getComputedStyle(el).animationName === "none"));
+    await page.locator('.tower-gate-fixed[data-action="early-bird-check"]').click();
+    await page.waitForFunction(({ KEY, today }) => !JSON.parse(localStorage.getItem(KEY)).earlyBird?.logs?.[today], { KEY, today });
+    check("当日再タップで早起き記録を取り消し警告も消える", await page.locator('.tower-gate-fixed[data-docked="0"]').count() === 1
+      && await page.locator('.tower-gate-warning').count() === 0);
     await seedT6(gateSeed);
     check("部分就航ではis-fullなし", await page.locator(".tower-gates.is-full").count() === 0);
     await seedT6([block("gate-none", "非ルーティンのみ", today, 9 * 60, { completed: true })]);
-    check("ルーティン0件はis-fullなし・0/0便 就航", await page.locator(".tower-gates.is-full").count() === 0
-      && (await page.locator("#towerGateCount").textContent()) === "0/0便 就航");
+    check("ルーティン0件でも☀固定枠を残し0/1便 就航", await page.locator(".tower-gates.is-full").count() === 0
+      && await page.locator(".tower-gate-fixed").count() === 1
+      && (await page.locator("#towerGateCount").textContent()) === "0/1便 就航");
+
+    console.log("[23] GATE編集モードで登録・削除(シリーズ終了)・上下並び替えを行う");
+    const editRules = [
+      { id: "gate-rule-a", title: "朝の準備", category: "ルーティン", taskId: "", kind: "daily", startTime: "06:30", endTime: "", anchorDate: today, order: 0, exceptionDates: [], deleted: false },
+      { id: "gate-rule-b", title: "日報確認", category: "ルーティン", taskId: "", kind: "daily", startTime: "07:00", endTime: "", anchorDate: today, order: 1, exceptionDates: [], deleted: false }
+    ];
+    await page.evaluate(({ KEY, editRules }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.currentView = "today";
+      s.blocks = [];
+      s.recurrences = editRules;
+      s.earlyBird = { logs: {} };
+      delete s.settings.earlyRiseTarget;
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, editRules });
+    await page.reload();
+    await page.waitForSelector('.tower-gate-edit[data-action="tower-gate-edit-toggle"]');
+    check("earlyRiseTarget未定義は06:00へ正規化", ((await page.locator(".tower-gate-fixed").textContent()) || "").includes("06:00まで"));
+    await page.locator('[data-action="tower-gate-edit-toggle"]').click();
+    await page.waitForSelector(".tower-gate-editor");
+    check("編集モードでも☀固定枠に削除ボタンなし", await page.locator('.tower-gate-fixed [data-action="tower-gate-delete"]').count() === 0);
+    const gateInputs = await page.locator(".tower-gate-add input").evaluateAll((els) => els.map((el) => ({
+      type: el.type, step: el.step, fontSize: parseFloat(getComputedStyle(el).fontSize)
+    })));
+    check("登録入力はタイトル+time(step=300)かつ16px", gateInputs[0]?.type === "text" && gateInputs[0]?.fontSize >= 16
+      && gateInputs[1]?.type === "time" && gateInputs[1]?.step === "300" && gateInputs[1]?.fontSize >= 16, JSON.stringify(gateInputs));
+
+    await page.locator("#towerGateTitle").fill("読書");
+    await page.locator("#towerGateTime").fill("08:15");
+    await page.locator('[data-action="tower-gate-add"]').click();
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).recurrences.some((rule) => !rule.deleted && rule.title === "読書"), KEY);
+    const addedGate = await page.evaluate((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      const rule = s.recurrences.find((item) => !item.deleted && item.title === "読書");
+      return { rule, hasBlock: s.blocks.some((block) => block.recurrenceGroupId === rule.id) };
+    }, KEY);
+    check("登録はcreateRecurrenceRuleの日次ルールを作り実体化", addedGate.rule.kind === "daily" && addedGate.rule.category === "ルーティン"
+      && addedGate.rule.startTime === "08:15" && Number.isFinite(addedGate.rule.order) && addedGate.hasBlock, JSON.stringify(addedGate));
+
+    await page.locator('.tower-gate-edit-row[data-rule-id="gate-rule-a"] [data-action="tower-gate-move"][data-direction="1"]').click();
+    await page.waitForFunction(() => document.querySelector(".tower-gate-edit-row")?.dataset.ruleId === "gate-rule-b");
+    const movedOrders = await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).recurrences
+      .filter((rule) => !rule.deleted && rule.category === "ルーティン")
+      .sort((a, b) => a.order - b.order).map((rule) => rule.id), KEY);
+    check("↓でrecurrences[].orderを書き換え表示順も反映", movedOrders[0] === "gate-rule-b" && movedOrders[1] === "gate-rule-a", JSON.stringify(movedOrders));
+
+    await page.locator('.tower-gate-edit-row[data-rule-id="gate-rule-b"] [data-action="tower-gate-delete"]').click();
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).recurrences.find((rule) => rule.id === "gate-rule-b")?.deleted === true, KEY);
+    const endedGate = await page.evaluate((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      return { deleted: s.recurrences.find((rule) => rule.id === "gate-rule-b")?.deleted,
+        liveInstances: s.blocks.filter((block) => block.recurrenceGroupId === "gate-rule-b").length };
+    }, KEY);
+    check("削除はルールを論理削除し当日以降の未編集実体を除去", endedGate.deleted === true && endedGate.liveInstances === 0, JSON.stringify(endedGate));
+    check("削除後も固定枠は残る", await page.locator(".tower-gate-fixed").count() === 1);
+    await page.locator('[data-action="tower-gate-edit-toggle"]').click();
+    await page.waitForSelector('.tower-gate[data-action="now-conveyor-complete"]');
 
     console.log("[33] 1440pxでPC上帯と340px/320px/可変の3列骨格");
     await page.setViewportSize({ width: 1440, height: 900 });
