@@ -1,0 +1,59 @@
+{
+  "version": 235,
+  "date": "2026-08-23",
+  "title": "睡眠実測一本化",
+  "summary": "主観睡眠時間の入力UIと書き込み経路を廃止し、AutoSleep CSV由来の実測sleep.logsへ入力を一本化した",
+  "changedFiles": [
+    "app.js",
+    "docs/test-impact-map.generated.md",
+    "releases/v235.json",
+    "src/features/journal.js",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/journal-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/v148.test.js",
+    "tests/v199.test.js",
+    "tests/v235.test.js",
+    "tests/v59.test.js",
+    "tests/v73.test.js",
+    "tests/v81.test.js"
+  ],
+  "intent": [
+    "睡眠の新規入力をstate.sleep.logsへ一本化し、condition.logs[date].sleepHoursの二重入力を終える。",
+    "旧端末・旧データとの互換性に必要なstate形、同期マージ、実測欠損時フォールバックは維持する。"
+  ],
+  "changes": [
+    "ジャーナル朝セクションから睡眠時間プリセットボタン群を削除し、set-sleep actionとsetConditionSleep書き込み関数・export/importを削除した。服薬・今日の余力・朝夜の体調・運動記録は維持した。",
+    "action registryのゴールデンリストからset-sleepを意図的削除として記録した。",
+    "journal-core、v73、v81、v148の旧入力検証を、UI不存在・旧sleepHours保持・残存操作の保存と44pxタップ領域の検証へ置き換えた。",
+    "v235 Node回帰テストで入力経路不存在と、実測あり/実測なし・旧主観ありのcomputeDailyMetrics結合契約を実コードから検証した。",
+    "最終coreで顕在化したv59/v199の旧WBS配置導線を、同じai-morning-plan/ai-schedule actionを提供する現行ATIS/timeline導線へ追従させた。assertionは削減していない。",
+    "Service WorkerのAPP_SHELLは変更せず、CACHE_NAMEをv235へ更新した。"
+  ],
+  "uncertainties": [
+    "依頼文ではapp.js 6084〜6123をconditionBudget周辺と呼んでいるが、現コード上の関数名はcomputeDailyMetricsであるため、その実体を無改変で回帰固定した。",
+    "主観睡眠値の表示経路ではなく入力・書き込み経路のみが廃止対象のため、normalizeStateとensureConditionLogのsleepHours:nullは残した。"
+  ],
+  "reviewFocus": [
+    "src/features/journal.jsからdata-action=set-sleep、setConditionSleep、睡眠プリセットUIだけが消え、服薬・capacity等の隣接項目が無改変相当で動くか。",
+    "condition.logs[date].sleepHoursの既存値、normalizeState既定形、src/sync/github.jsのCONDITION_MORNING_FIELDS、computeDailyMetricsの実測優先・欠損時主観フォールバックが維持されているか。",
+    "action registryとゴールデンリストの双方からset-sleepだけが削除され、重複・未登録action検証が通るか。",
+    "new Date(文字列)追加なし、個別addEventListener追加なし、SW v235・APP_SHELL不変、実行コード差分200行以下を満たすか。"
+  ],
+  "verification": [
+    "node --check app.js、src/features/journal.js、tests/v235.test.js: exit 0。",
+    "node tests/v235.test.js: 入力UI/action/書き込み関数の不存在、旧state既定形、実測優先、実測欠損時の旧主観フォールバックが全件PASS。",
+    "node tests/journal-core.test.js、tests/action-registry-core.test.js: 全件PASS。",
+    "system Edge指定のnode tests/v59.test.js、tests/v199.test.js: 現行ATIS/timeline導線への追従後、既存assertionを維持して全件PASS。",
+    "system Edge指定のtests/v73.test.jsは変更対象[1]が全件PASS後、削除済みHome縮退UIの旧検証で失敗。tests/v148.test.jsは変更対象[5b][5c]が全件PASS後、過去版のその他6項目期待で2件失敗。tests/v81.test.jsは削除済み.home-boxの旧[A1]で停止し、更新した[A2]へ未到達。いずれもv235 release-gate自動選定外。",
+    "npm run code:index:write/check: PASS(code index 577 functions)。npm run test:manifest:write/check: PASS(test manifest 131 suites)。",
+    "system Edge指定のnode scripts/release-gate.js releases/v235.json --final: exit 0。"
+  ],
+  "knownLimitations": [
+    "iOS Safari実機PWAでのService Worker更新、オフライン起動、390/768/1024pxの最終目視は監督者側で必要。",
+    "標準Playwright Chromiumがspawn EPERMになる場合はsystem EdgeをCHROME_PATHへ指定する。",
+    "v73・v81・v148には過去の削除済みHome UIや旧ナビ項目数を期待するv235無関係の既存失敗が残る。今回変更した睡眠関連assertionはv235/journal-coreと到達できた各該当ブロックでPASSし、正式ゲート選定スイートは別途全件実行する。",
+    "taskchute-notes/handoff.mdがワークスペース外でEPERMになる場合、release-record --writeはCHANGES生成までを採用し、notes側更新は監督者が再実行する。"
+  ]
+}

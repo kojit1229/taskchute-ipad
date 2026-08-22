@@ -1,7 +1,7 @@
 // v73 検証: コンディションOS(体調記録)をアプリ機能として統合。CHANGES_v73.md参照。
 //
 // (a) 朝の記録の拡張: 既存の朝の体調ピッカー(state.settings.morningEnergyLog)の下に
-//     睡眠時間・服薬・今日の余力のボタンが並び、タップでstate.condition.logs[date]へ保存される
+//     服薬・今日の余力のボタンが並ぶ。v235で主観睡眠の入力UIは廃止し、旧stateだけ保持する
 // (b) 夜の記録: 体調(既存の5段階を再利用)+ひとこと(input)がジャーナル当日編集に追加され、
 //     入力中も保存される(全再描画しないのでフォーカスは維持される既存パターンと同じ)
 // (c) 運動記録: 種目・重量・回数を1タップで追記でき、同じ種目の直近記録が「前回」として
@@ -129,20 +129,21 @@ function check(name, cond, extra = "") {
     await passGithubGate(page);
 
     // ============================================================
-    // (a) 朝の記録の拡張(睡眠/服薬/今日の余力)
+    // (a) 朝の記録の拡張(服薬/今日の余力。主観睡眠UIは廃止)
     // ============================================================
-    console.log("[1] 朝の記録: 睡眠(7h)・服薬・今日の余力(最低限)をタップで記録できる");
-    await seed({ blocks: [], view: "journal", selectedDate: TODAY });
-    check("睡眠プリセットボタンが表示される", await page.locator('[data-action="set-sleep"]').count() === 5);
-    await page.click('[data-action="set-sleep"][data-value="7"]');
-    await page.waitForTimeout(200);
+    console.log("[1] 朝の記録: 主観睡眠UIは無く、服薬・今日の余力(最低限)をタップで記録できる");
+    await seed({ blocks: [], view: "journal", selectedDate: TODAY, condition: { logs: { [TODAY]: {
+      sleepHours: 7, meds: null, capacity: "", morningRecordedAt: "",
+      eveningMood: null, eveningNote: "", eveningRecordedAt: "", gym: []
+    } } } });
+    check("廃止された睡眠プリセットボタンが存在しない", await page.locator('[data-action="set-sleep"]').count() === 0);
     await page.click('[data-action="toggle-meds"]');
     await page.waitForTimeout(200);
     await page.click('[data-action="set-capacity"][data-value="minimal"]');
     await page.waitForTimeout(200);
     const s1 = await stateNow();
     const log1 = s1.condition.logs[TODAY];
-    check("睡眠時間(7h)が保存される", log1?.sleepHours === 7, JSON.stringify(log1));
+    check("他項目の操作後も旧睡眠値(7h)は温存される", log1?.sleepHours === 7, JSON.stringify(log1));
     check("服薬済みが保存される", log1?.meds === true, JSON.stringify(log1));
     check("今日の余力(最低限)が保存される", log1?.capacity === "minimal", JSON.stringify(log1));
     check("記録印(morningRecordedAt)が付く", !!log1?.morningRecordedAt, JSON.stringify(log1));

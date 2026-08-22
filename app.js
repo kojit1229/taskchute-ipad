@@ -42,7 +42,7 @@ import {
   configureJournal,
   ensureConditionLog,
   renderJournal, ensureJournal, defaultJournal,
-  setMorningEnergy, setConditionSleep, toggleConditionMeds, setConditionCapacity, setEveningMood,
+  setMorningEnergy, toggleConditionMeds, setConditionCapacity, setEveningMood,
   addGymEntry, deleteGymEntry,
   openStoreVisitEditor, openStoreVisitsYearModal, deleteStoreVisitWithConfirm,
   saveStoreVisitFromModal, deleteStoreVisit
@@ -5692,7 +5692,7 @@ function remainingTextNormal(remainingMs) {
 }
 
 // v169: renderMorningEnergyPicker/renderConditionMorningExtra/renderEveningConditionCard/
-// lastGymRecord/renderGymLogCard(+CONDITION_SLEEP_PRESETS/CONDITION_CAPACITY_OPTIONS/
+// lastGymRecord/renderGymLogCard(+CONDITION_CAPACITY_OPTIONS/
 // CONDITION_GYM_PRESETS)はsrc/features/journal.jsへ移動した(app.js分割・段階4-3)。
 
 // v141: 今日行ったお店ログ =========================================================
@@ -9304,7 +9304,7 @@ function deleteBlock(id) {
 }
 
 // v169: setMorningEnergy/ensureConditionLog/conditionRecordedDates/conditionRecordedCountThisWeek/
-// setConditionSleep/toggleConditionMeds/setConditionCapacity/setEveningMood/addGymEntry/
+// toggleConditionMeds/setConditionCapacity/setEveningMood/addGymEntry/
 // deleteGymEntryはsrc/features/journal.jsへ移動した(app.js分割・段階4-3)。ensureConditionLogは
 // inputイベントdispatcher(data-condition-note-date分岐)からも呼ばれるため冒頭でimportして
 // 参照を切り替えた。isConditionDegraded/CONDITION_DEGRADED_THRESHOLD(Home縮退モード表示が

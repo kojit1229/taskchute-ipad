@@ -246,9 +246,8 @@ function check(name, cond, extra = "") {
     const eveningOpenAt20 = await page.locator(".journal-segment-evening").evaluate((el) => el.open);
     check("20:00: 朝detailsはclosed", morningOpenAt20 === false, String(morningOpenAt20));
     check("20:00: 夜detailsはopen", eveningOpenAt20 === true, String(eveningOpenAt20));
-    // 格納するだけで機能自体は削除していないことの確認(朝の入力欄がDOM上に存在する)
-    check("朝の欄(睡眠プリセット)はDOM上に存在する(closedでも削除されていない)",
-      await page.locator('[data-action="set-sleep"]').count() === 5);
+    check("朝detailsがclosedでも廃止された主観睡眠UIはDOM上に存在しない",
+      await page.locator('[data-action="set-sleep"]').count() === 0);
 
     console.log("[5c] 20:00でも朝detailsを手動展開して操作すれば、その後の再描画でも閉じ直らない"
       + "(時刻ベースの再計算だけに頼ると、閉じている側の欄を開いて入力するたびに再render毎に"
@@ -258,14 +257,16 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(150);
     check("手動展開直後は朝detailsがopenになる",
       await page.locator(".journal-segment-morning").evaluate((el) => el.open) === true);
-    // 朝欄内のボタン(set-sleep)をクリックしてsaveAndRender()経由の全体再描画を誘発する
-    await page.click('[data-action="set-sleep"][data-value="7"]');
+    // 温存対象の服薬ボタンをクリックしてsaveAndRender()経由の全体再描画を誘発する
+    const stateBefore5c = await stateNow();
+    const medsBefore5c = stateBefore5c.condition.logs[stateBefore5c.selectedDate]?.meds ?? null;
+    await page.click('[data-action="toggle-meds"]');
     await page.waitForTimeout(200);
     check("再描画後も朝detailsはopenのまま(時刻基準に巻き戻らない)",
       await page.locator(".journal-segment-morning").evaluate((el) => el.open) === true);
     const stateAfter5c = await stateNow();
-    check("再描画後もset-sleepの入力は保存されている(操作自体は機能する)",
-      stateAfter5c.condition.logs[stateAfter5c.selectedDate]?.sleepHours === 7,
+    check("再描画後も服薬入力は保存されている(温存対象の操作は機能する)",
+      stateAfter5c.condition.logs[stateAfter5c.selectedDate]?.meds !== medsBefore5c,
       JSON.stringify(stateAfter5c.condition.logs[stateAfter5c.selectedDate]));
 
     // ============================================================

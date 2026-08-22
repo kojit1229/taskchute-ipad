@@ -197,15 +197,19 @@ async function loadModules() {
     check("2回目呼び出しでも既存の値を上書きしない(同一オブジェクト参照)", log2.sleepHours === 7 && log2 === log1);
   }
 
-  console.log("[6] setConditionSleep/toggleConditionMeds/setConditionCapacity/setEveningMood: 値の保存とmorningRecordedAtの初回スタンプ");
+  console.log("[6] 主観睡眠の入力UI廃止・服薬/余力/夜の体調: 旧睡眠値を保ったまま他項目を保存する");
   {
-    setBaseState();
-    journalMod.setConditionSleep("2026-07-28", 7);
-    check("睡眠時間が保存される", storeMod.state.condition.logs["2026-07-28"].sleepHours === 7);
-    check("morningRecordedAtが記録される", !!storeMod.state.condition.logs["2026-07-28"].morningRecordedAt);
+    setBaseState({ condition: { logs: { "2026-07-28": {
+      sleepHours: 7, meds: null, capacity: "", morningRecordedAt: "",
+      eveningMood: null, eveningNote: "", eveningRecordedAt: "", gym: []
+    } } } });
+    const morningHtml = journalMod.renderConditionMorningExtra("2026-07-28");
+    check("睡眠プリセットUIが存在しない", !morningHtml.includes('data-action="set-sleep"') && !morningHtml.includes("💤 睡眠"));
 
     journalMod.toggleConditionMeds("2026-07-28");
     check("服薬トグルでtrueになる", storeMod.state.condition.logs["2026-07-28"].meds === true);
+    check("服薬操作は旧睡眠値を書き換えない", storeMod.state.condition.logs["2026-07-28"].sleepHours === 7);
+    check("morningRecordedAtが記録される", !!storeMod.state.condition.logs["2026-07-28"].morningRecordedAt);
     journalMod.toggleConditionMeds("2026-07-28");
     check("再トグルでfalseに戻る", storeMod.state.condition.logs["2026-07-28"].meds === false);
 

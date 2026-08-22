@@ -81,7 +81,8 @@ function check(name, cond, extra = "") {
   });
 
   async function runMorningPlan() {
-    await page.click('[data-action="nav"][data-view="tasks"]');
+    // v230: 朝プラン導線はWBS(tasks)からATIS(today)へ集約された。action自体は同じ。
+    await page.click('[data-action="nav"][data-view="today"]');
     await page.waitForTimeout(150);
     await page.click('[data-action="ai-morning-plan"]');
     await page.waitForTimeout(600);
@@ -106,6 +107,8 @@ function check(name, cond, extra = "") {
   // ---- [1] 空き時間の境界: 占有なし ----
   console.log("[1] computeFreeGaps 境界(占有なし)— 今〜23:00の1本に収まる");
   await seed({ tasks: [wbsTask("test-task-1", "占有なし候補タスク")], projects: [testProject()] });
+  await page.click('[data-action="nav"][data-view="today"]');
+  await page.waitForTimeout(150);
   check("🌅 朝プランボタンが存在する(APIキー不要・今日を選択中)", await page.locator('[data-action="ai-morning-plan"]').count() === 1);  // (e)
   await runMorningPlan();
   const gaps1 = await draftBlocks();

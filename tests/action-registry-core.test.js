@@ -69,13 +69,14 @@ function check(name, cond, extra = "") {
   else { failures++; console.log(`  ❌ ${name} ${extra}`); }
 }
 
-// §6-1: click dispatcherから確定させたゴールデンリスト(削除済み機能のactionを除く234件)。
+// §6-1: click dispatcherから確定させたゴールデンリスト(削除済み機能のactionを除く233件)。
 // 増減・リネームがあれば、それが意図した変更(action追加/削除/移行)かどうかを必ず確認すること。
+// v235: set-sleepは主観睡眠の入力経路廃止に伴う意図的削除。
 const GOLDEN_CLICK_ACTIONS = [
   "nav", "open-iron-log", "instruments-open-iron-log", "departures-open-tomorrow", "today-replan", "save-tower-journal",
   "early-bird-check", "tower-gate-edit-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move",
   "date-prev", "date-next", "today",
-  "set-morning", "set-sleep", "toggle-meds", "set-capacity", "set-evening-mood",
+  "set-morning", "toggle-meds", "set-capacity", "set-evening-mood",
   "add-gym-entry", "delete-gym-entry",
   "store-visit-add", "store-visit-edit", "store-visit-delete", "store-visit-year",
   "add-project", "delete-project", "add-task", "toggle-task", "toggle-criteria-request",
@@ -153,7 +154,8 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
   "add-wish", "open-wish", "add-wish-subtask", "toggle-wish-subtask",
   "wish-subtask-to-tasks", "wish-realize", "wish-unrealize", "delete-wish",
   // src/features/journal.js(configureJournal、コンディションOS+運動記録+お店ログ)
-  "set-morning", "set-sleep", "toggle-meds", "set-capacity", "set-evening-mood",
+  // v235: set-sleepは主観睡眠の入力経路廃止に伴う意図的削除。
+  "set-morning", "toggle-meds", "set-capacity", "set-evening-mood",
   "add-gym-entry", "delete-gym-entry",
   "store-visit-add", "store-visit-edit", "store-visit-delete", "store-visit-year",
   // v181: src/features/timeline.js(configureTimeline)。ハンドラ実体(setTimelineMode)が

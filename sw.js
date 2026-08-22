@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v234";
+const CACHE_NAME = "taskchute-journal-pwa-v235";
+// v235: 主観睡眠時間の入力UI・書き込みactionを廃止した(APP_SHELL変更なし)。
 // v232: P4完成済み成果物のIRON LOG・INSTRUMENTSモジュールとCSSを配置した(画面結線はv233)。
 // v230: homeタブを撤去し、統合画面ATISと「その他」TOWERグリッドへ集約した。
 // v229: ARRIVALS見積列、GATE編集モード、state.earlyBirdへ書く☀固定ゲートを追加した。

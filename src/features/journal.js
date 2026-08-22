@@ -1,5 +1,5 @@
 // src/features/journal.js — app.js分割・段階4-3(ジャーナルタブ本体+コンディションOS
-// (朝/夜の体調・睡眠・服薬・余力)・運動記録・今日行ったお店ログの抽出)。
+// (朝/夜の体調・服薬・余力)・運動記録・今日行ったお店ログの抽出)。
 //
 // 【tower-restyle改装版】TOWER意匠化(第3弾先行分)。改装元: v223時点のsrc/features/journal.js。
 // 変更点は renderJournal() 本体のみ(意匠ラッパー追加+パネル見出し文言の英語+日本語化)。
@@ -32,9 +32,9 @@
 //   openStoreVisitEditor/buildStoreVisitModal/saveStoreVisitFromModal/deleteStoreVisit/
 //   deleteStoreVisitWithConfirm/openStoreVisitsYearModal/buildStoreVisitsYearModal/
 //   hoursLabel/renderSleepCard/renderJournal/ensureJournal/defaultJournal/setMorningEnergy/
-//   ensureConditionLog/conditionRecordedDates/conditionRecordedCountThisWeek/setConditionSleep/
+//   ensureConditionLog/conditionRecordedDates/conditionRecordedCountThisWeek/
 //   toggleConditionMeds/setConditionCapacity/setEveningMood/addGymEntry/deleteGymEntry
-//   (以上、排他的サブウィジェット+アクションハンドラ)+ energyLevels/CONDITION_SLEEP_PRESETS/
+//   (以上、排他的サブウィジェット+アクションハンドラ)+ energyLevels/
 //   CONDITION_CAPACITY_OPTIONS/CONDITION_GYM_PRESETS/JOURNAL_PROMPTS(モジュール定数、
 //   移動後はこのファイル内のみで参照)。
 //
@@ -70,12 +70,12 @@ function configureJournal(deps) {
     renderExperimentSection, JOURNAL_REQUEST_SECTION
   } = deps);
   // v173: app.js分割・段階5-2(prep-stage5-dispatcher.md案A)。click dispatcherのコンディションOS
-  // (朝/夜の体調・睡眠・服薬・余力)+運動記録+お店ログの分岐をレジストリへ移行する
+  // (朝/夜の体調・服薬・余力)+運動記録+お店ログの分岐をレジストリへ移行する
   // (ロジック無改変)。0秒思考/週次/サイクル/問い等の他journalドメインはこのファイル未抽出のため
   // 対象外(app.js残留)。
   registerActions({
     "set-morning": (ctx) => setMorningEnergy(Number(ctx.target.dataset.value)),
-    "set-sleep": (ctx) => setConditionSleep(state.selectedDate, Number(ctx.target.dataset.value)),
+    // v235: set-sleepは主観睡眠の入力経路廃止に伴う意図的削除。旧stateは読み取り互換のため温存する。
     "toggle-meds": () => toggleConditionMeds(state.selectedDate),
     "set-capacity": (ctx) => setConditionCapacity(state.selectedDate, ctx.target.dataset.value),
     "set-evening-mood": (ctx) => setEveningMood(state.selectedDate, Number(ctx.target.dataset.value)),
@@ -117,9 +117,8 @@ function renderMorningEnergyPicker(date) {
 
 // v73: コンディションOS ==========================================================
 // 「朝の体調」欄(上のrenderMorningEnergyPicker)を入口として拡張する。体調の値そのものは
-// 既存の morningEnergyLog を継続利用し(二重管理を避ける)、ここでは睡眠・服薬・今日の余力
-// という新しい軽量フィールドだけを state.condition.logs[date] に足す。
-const CONDITION_SLEEP_PRESETS = [5, 6, 7, 8, 9];  // 9は「9h+」表記
+// 既存の morningEnergyLog を継続利用し(二重管理を避ける)、ここでは服薬・今日の余力という
+// 軽量フィールドだけを入力する。v235で主観睡眠の入力UIは廃止し、実測sleep.logsへ一本化した。
 const CONDITION_CAPACITY_OPTIONS = [
   { value: "full", label: "全力でいける" },
   { value: "normal", label: "普通" },
@@ -129,15 +128,6 @@ const CONDITION_CAPACITY_OPTIONS = [
 function renderConditionMorningExtra(date) {
   const log = state.condition.logs[date] || {};
   return `
-    <div class="cond-row" style="margin-bottom:8px">
-      <span class="muted cond-row-label">💤 睡眠</span>
-      <span class="row cond-btn-row">
-        ${CONDITION_SLEEP_PRESETS.map((h) => `
-          <button class="btn ${log.sleepHours === h ? "primary" : "ghost"}" style="font-size:12px; padding:6px 10px; min-height:44px; display:inline-flex; align-items:center"
-            data-action="set-sleep" data-value="${h}">${h}${h === 9 ? "h+" : "h"}</button>
-        `).join("")}
-      </span>
-    </div>
     <div class="cond-row" style="margin-bottom:8px">
       <span class="muted cond-row-label">💊 服薬</span>
       <button class="btn ${log.meds ? "primary" : "ghost"}" style="font-size:12px; padding:6px 10px; min-height:44px; display:inline-flex; align-items:center" data-action="toggle-meds">
@@ -594,13 +584,6 @@ function conditionRecordedCountThisWeek() {
   return conditionRecordedDates(weekDays(weekStart)).length;
 }
 
-function setConditionSleep(date, hours) {
-  const log = ensureConditionLog(date);
-  log.sleepHours = hours;
-  log.morningRecordedAt ||= nowDateTime();
-  saveAndRender("睡眠時間を記録しました");
-}
-
 function toggleConditionMeds(date) {
   const log = ensureConditionLog(date);
   log.meds = !log.meds;
@@ -657,6 +640,6 @@ export {
   renderSleepCard,
   ensureJournal, defaultJournal, renderJournal,
   setMorningEnergy, ensureConditionLog, conditionRecordedCountThisWeek,
-  setConditionSleep, toggleConditionMeds, setConditionCapacity, setEveningMood,
+  toggleConditionMeds, setConditionCapacity, setEveningMood,
   addGymEntry, deleteGymEntry
 };

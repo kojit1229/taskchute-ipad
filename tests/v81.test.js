@@ -1,7 +1,7 @@
 // v81 検証: UX監査(workbench/out/2026-07-12-ux-audit/findings.md)の
 // 「A. 即実装推奨(小さく安全)」5件(CHANGES_v81.md参照)。
 //   A1: ホームの完了トグル(.home-box/.home-dot, 20px)を::beforeで当たり判定44px相当に拡張
-//   A2: コンディション記録ボタン群(朝の体調/睡眠/服薬/余力/夜の体調)にmin-height:44pxを付与
+//   A2: コンディション記録ボタン群(朝の体調/服薬/余力/夜の体調)にmin-height:44pxを付与
 //   A3: タイムライン完了ボタン(.tl-complete-btn)を::afterで、Wish完了チェック(.wish-check)を
 //       padding+負のmarginで、それぞれ見た目を変えず当たり判定を44px相当に拡張
 //   A4: 「日報を生成」のトーストに遷移予告文言を追加
@@ -141,7 +141,7 @@ function check(name, cond, extra = "") {
     // ============================================================
     // [A2] コンディション記録ボタン群(ジャーナルタブ)
     // ============================================================
-    console.log("[A2] コンディション記録ボタン(朝の体調/睡眠/服薬/余力/夜の体調)がmin-height 44px以上");
+    console.log("[A2] コンディション記録ボタン(朝の体調/服薬/余力/夜の体調)がmin-height 44px以上");
     await page.evaluate(({ KEY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.currentView = "journal";
@@ -163,7 +163,6 @@ function check(name, cond, extra = "") {
 
     const condButtons = [
       ["朝の体調", '[data-action="set-morning"]'],
-      ["睡眠", '[data-action="set-sleep"]'],
       ["服薬", '[data-action="toggle-meds"]'],
       ["今日の余力", '[data-action="set-capacity"]'],
       ["夜の体調", '[data-action="set-evening-mood"]']
@@ -173,6 +172,7 @@ function check(name, cond, extra = "") {
       const rect = await getRect(sel);
       check(`${label}ボタンの実測height >= 44px`, rect.height >= 44, JSON.stringify(rect));
     }
+    check("廃止された主観睡眠ボタンは描画されない", await page.locator('[data-action="set-sleep"]').count() === 0);
 
     // ============================================================
     // [A3-1] タイムライン完了ボタン(.tl-complete-btn)

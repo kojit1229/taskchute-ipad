@@ -100,6 +100,9 @@ function check(name, cond, extra = "") {
   }
 
   async function runAiSchedule() {
+    // v230: 下書きスケジュール導線はWBS(tasks)からtimelineへ集約された。action自体は同じ。
+    await page.click('[data-action="nav"][data-view="timeline"]');
+    await page.waitForTimeout(150);
     await page.click('[data-action="ai-schedule"]');
     await page.waitForTimeout(500);
   }
