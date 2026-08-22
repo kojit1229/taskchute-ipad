@@ -3264,7 +3264,9 @@ h3 {
   100% { opacity: 0; }
 }
 /* v204: TOWER T3。読み取り専用のARRIVALS/DEPARTURESボードを追加する。 */
-.today-tower {
+/* v224: 第3弾(TOWER意匠の全タブ統一)先行分。--tower-*トークンを.tower-skin(各タブの
+   TOWER化ラッパ)にも共有する。トークン定義の正本はここ1箇所のみ(タブ側での再定義禁止)。 */
+.today-tower, .tower-skin {
   --tower-bg: #050a14;
   --tower-panel: #0a1422;
   --tower-line: #25384d;
@@ -4039,4 +4041,159 @@ h3 {
     flex-direction: column;
     gap: 4px;
   }
+}
+/* css-wish-tower.css — WishタブのTOWER意匠化(第3弾先行分)。
+ *
+ * スコープ: `.tower-skin.wish-tower` 配下のみ(wish.jsの<div class="tower-skin wish-tower">直下)。
+ * --tower-*トークン(--tower-bg/--tower-panel/--tower-line/--tower-text/--tower-amber/
+ * --tower-green/--tower-cyan/--tower-purple)は値をここで再定義しない。既存styles.cssの
+ * `.today-tower`定義を`.tower-skin`にも効かせるセレクタ拡張は統合時に監督者が行う前提
+ * (依頼書の意匠規約どおり)。このファイルはvar(--tower-*)を参照するだけ。
+ *
+ * 温存確認(notes.md参照): .wish-check(24px・円形)/.wish-check-wrap(44px当たり判定)/
+ * .input・.select・.textareaのfont-size(16px以上)には一切触れていない。
+ */
+
+.tower-skin.wish-tower {
+  background: var(--tower-bg);
+  color: var(--tower-text);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+
+/* ---- ヘッダ(既存 .view-header をTOWER風に。app.js側のrenderHeader()構造は不変) ---- */
+.tower-skin.wish-tower .view-header {
+  border: 1px solid var(--tower-line);
+  background: var(--tower-panel);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
+}
+.tower-skin.wish-tower .view-header .eyebrow {
+  color: var(--tower-cyan);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .12em;
+}
+.tower-skin.wish-tower .view-header h1 {
+  color: var(--tower-text);
+  font-family: system-ui, sans-serif;
+}
+
+/* ---- パネル枠(today-tower.jsの.tower-panel-box相当をWishタブへ適用) ---- */
+.tower-skin.wish-tower .tower-panel-box {
+  position: relative;
+  border: 1px solid var(--tower-line);
+  background: var(--tower-panel);
+  border-radius: 0;
+}
+.tower-skin.wish-tower .tower-panel-box > h2 {
+  margin: 0;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--tower-line);
+  color: var(--tower-cyan);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .18em;
+}
+.tower-skin.wish-tower .tower-panel-box > h2 span {
+  float: right;
+  color: var(--tower-text);
+  font-size: 10px;
+  font-weight: 400;
+  font-family: system-ui, sans-serif;
+  letter-spacing: .04em;
+  opacity: .7;
+}
+/* h2直後の最初のブロックだけ上に余白を作る(パネル枠と中身の間隔) */
+.tower-skin.wish-tower .tower-panel-box > h2 + * {
+  margin-top: 10px;
+}
+.tower-skin.wish-tower .tower-panel-box > .row,
+.tower-skin.wish-tower .tower-panel-box > .form-strip,
+.tower-skin.wish-tower .tower-panel-box > .grid {
+  margin-left: 10px;
+  margin-right: 10px;
+}
+.tower-skin.wish-tower .tower-panel-box > .form-strip:last-child,
+.tower-skin.wish-tower .tower-panel-box > .grid:last-child {
+  margin-bottom: 10px;
+}
+
+/* WISH DECK(追加・絞り込み)パネル: 2段のform-stripの間隔調整 */
+.tower-skin.wish-tower .wish-deck-panel .form-strip + .form-strip {
+  margin-top: 8px;
+}
+
+/* FLIGHT PLAN(時期グループ)パネル: グリッドの余白 */
+.tower-skin.wish-tower .wish-group-panel > .grid {
+  padding-bottom: 10px;
+}
+
+/* ---- Wishカード(TOWERの「便」相当の個別カード) ---- */
+.tower-skin.wish-tower .tower-flight-card {
+  background: var(--tower-bg);
+  border-color: var(--tower-line) !important;
+  border-radius: 2px;
+  color: var(--tower-text);
+}
+.tower-skin.wish-tower .tower-flight-card.is-realized {
+  opacity: .6;
+}
+.tower-skin.wish-tower .tower-flight-card strong {
+  color: var(--tower-text);
+  font-family: system-ui, sans-serif;
+}
+.tower-skin.wish-tower .tower-flight-card .chip {
+  background: transparent;
+  border-color: var(--tower-line);
+  color: var(--tower-cyan);
+}
+.tower-skin.wish-tower .tower-flight-card .progress {
+  background: var(--tower-line);
+}
+.tower-skin.wish-tower .tower-flight-card .progress span {
+  background: var(--tower-green);
+}
+.tower-skin.wish-tower .tower-flight-card .btn.ghost {
+  border-color: var(--tower-line);
+  color: var(--tower-cyan);
+  background: transparent;
+}
+.tower-skin.wish-tower .tower-flight-card .btn.primary {
+  border-color: var(--tower-green);
+  color: var(--tower-green);
+  background: transparent;
+}
+.tower-skin.wish-tower .tower-flight-card .btn.danger {
+  border-color: var(--tower-amber);
+  color: var(--tower-amber);
+  background: transparent;
+}
+
+/* 熟成度ゲージ(.wish-ripeness* は既存クラス。色だけTOWERトーンへ) */
+.tower-skin.wish-tower .wish-ripeness-track {
+  background: var(--tower-line);
+}
+.tower-skin.wish-tower .wish-ripeness-bar {
+  background: var(--tower-amber);
+}
+
+/* ---- Wish詳細展開 ---- */
+.tower-skin.wish-tower .tower-flight-detail {
+  border-top: 1px dashed var(--tower-line) !important;
+}
+.tower-skin.wish-tower .tower-flight-detail .select,
+.tower-skin.wish-tower .tower-flight-detail .input,
+.tower-skin.wish-tower .tower-flight-detail .textarea {
+  background: var(--tower-bg);
+  color: var(--tower-text);
+  border-color: var(--tower-line);
+  border-radius: 0;
+}
+.tower-skin.wish-tower .tower-flight-detail .row > .btn.ghost {
+  border-color: var(--tower-line);
+  color: var(--tower-cyan);
+}
+
+/* サブタスク行(既存インラインbackground:var(--panel-soft)は温存。枠線だけ追加) */
+.tower-skin.wish-tower .tower-flight-detail .grid > .row {
+  border: 1px solid var(--tower-line);
 }

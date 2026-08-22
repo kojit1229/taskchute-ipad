@@ -1,0 +1,46 @@
+{
+  "version": 224,
+  "date": "2026-08-22",
+  "title": "WishタブのTOWER意匠化(第3弾先行分1/3)",
+  "summary": "第3弾(TOWER意匠の全タブ統一)の先行分として、Wishタブを機能ロジック不変のままTOWER管制室テイストへ改装した",
+  "changedFiles": [
+    "releases/v224.json",
+    "src/features/wish.js",
+    "styles.css",
+    "sw.js"
+  ],
+  "intent": [
+    "K指示(2026-08-22)の第3弾を、P3/P4と干渉しないfeature別ファイルのタブから先行適用する。",
+    "並列レーンで作成・検証済みの改装版(ロジック・data-action・テスト参照セレクタ不変)を適用する。",
+    "--tower-*トークンの定義正本を.today-towerの1箇所に保ち、.tower-skinへセレクタ共有する。"
+  ],
+  "changes": [
+    "renderWish()全体をtower-skin wish-towerでラップし、WISH RADAR/WISH DECK/FLIGHT PLAN型のパネル見出しへ置換(状態操作・条件分岐・data-actionは無改変)。",
+    "wishカード/詳細のルート要素へtower-flight-card/tower-flight-detailクラスを追加(既存クラスは全温存)。",
+    "styles.cssの--tower-*トークン定義セレクタを.today-tower, .tower-skinへ拡張し、css-wish-tower.css(.tower-skin.wish-towerスコープ)を統合した。",
+    "sw.js CACHE_NAMEをv224へ更新した。"
+  ],
+  "verification": [
+    "node --check src/features/wish.js PASS",
+    "node tests/wish-core.test.js 全件成功(改装後の本体ツリーで実行)",
+    "改装レーンで現行とのdiffがHTML/クラス追加のみであること、tests参照セレクタ全温存を確認済み",
+    "node scripts/release-gate.js releases/v224.json(監督者実行)"
+  ],
+  "notes": [
+    "第3弾の残りタブ: ジャーナル(v225)・タイムライン(v226)は続けて適用。app.js内タブはP3完了後、設定はP5後。",
+    "トークンのタブ側再定義は禁止(定義正本は.today-tower, .tower-skinの1箇所)。"
+  ],
+  "uncertainties": [
+    "実機(iPhone/iPad PWA)での見た目確認は未実施。K実機確認時にWishタブの配色・視認性を要チェック。",
+    "towerトークンはダーク基調のため、ライトテーマ時のWishタブのコントラストは実機確認までの暫定。"
+  ],
+  "reviewFocus": [
+    "wish.jsのdiffがHTMLラップ・クラス追加・見出し置換のみで、state操作・条件分岐・data-actionに変更が無いこと",
+    "styles.cssのトークンセレクタ拡張(.today-tower, .tower-skin)が既存TOWER表示へ影響しないこと(定義値は不変)",
+    "wish-core等のテスト参照セレクタ(#wishTitle/#wishFilterArea/.wish-check系)の温存"
+  ],
+  "knownLimitations": [
+    "ライトテーマ時のWishタブはtowerダーク基調が優先される(第3弾の統一方針。テーマ整合の最終調整は第3弾本体で実施)",
+    "実機PWAでの見た目確認は未実施(次回K実機確認に含める)"
+  ]
+}

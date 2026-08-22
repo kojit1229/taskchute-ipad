@@ -19,6 +19,11 @@
 // renderWishCardから呼ばれる。lifeAreaColorもrenderWishCardから利用する。
 //
 // characterization test: tests/wish-core.test.js。
+//
+// TOWER意匠化(第3弾先行分・2026-08-22): renderWish/renderWishCard/renderWishDetailの
+// HTML構造(クラス追加・見出し)とCSSのみを改装。ロジック・state操作・data-action・既存クラスは
+// 1行も変えていない(既存クラスは削除せず、tower-*クラスを追加するだけ)。詳細は
+// workbench/out/2026-08-21-taskchute-slim-spec/tower-restyle/wish/notes.md 参照。
 
 import { state } from "../state/store.js";
 import { registerActions } from "../ui/actions.js";
@@ -152,12 +157,18 @@ function lifeAreaColor(name) {
 }
 
 // メインレンダリング
+// TOWER意匠化: タブ全体を<div class="tower-skin wish-tower">でラップし、各パネルに
+// tower-panel-box(TOWERパネル枠)クラスと「PANEL NAME<span>説明</span>」型h2見出しを追加した。
+// 既存クラス(panel/form-strip/section/grid/row/muted/progress等)・id・data-actionは
+// 1つも削除・変更していない(既存テストの参照セレクタを温存)。
 function renderWish() {
   const wishProject = getWishProject();
   if (!wishProject) {
     return `
-      ${renderHeader("やりたいことリスト", "Wish")}
-      <section class="panel">Wish Project が存在しません。リロードしてください。</section>
+      <div class="tower-skin wish-tower">
+        ${renderHeader("やりたいことリスト", "Wish")}
+        <section class="panel tower-panel-box">Wish Project が存在しません。リロードしてください。</section>
+      </div>
     `;
   }
 
@@ -194,8 +205,10 @@ function renderWish() {
   });
 
   return `
+    <div class="tower-skin wish-tower">
     ${renderHeader("やりたいことリスト", "Wish")}
-    <section class="panel" style="margin-bottom:12px">
+    <section class="panel tower-panel-box wish-rate-panel" style="margin-bottom:12px">
+      <h2>WISH RADAR<span>実現率</span></h2>
       <div class="row" style="align-items:center; gap:8px; flex-wrap:wrap">
         <strong>実現率</strong>
         <div style="font-size:20px; font-weight:700; color:var(--accent)">${realizedCount} / ${allWishes.length}</div>
@@ -204,45 +217,49 @@ function renderWish() {
       </div>
     </section>
 
-    <section class="form-strip">
-      <input id="wishTitle" class="input" placeholder="やりたいこと(壮大でOK)">
-      <button class="btn primary" data-action="add-wish">追加</button>
-    </section>
+    <section class="panel tower-panel-box wish-deck-panel">
+      <h2>WISH DECK<span>追加・絞り込み</span></h2>
+      <section class="form-strip">
+        <input id="wishTitle" class="input" placeholder="やりたいこと(壮大でOK)">
+        <button class="btn primary" data-action="add-wish">追加</button>
+      </section>
 
-    <section class="form-strip" style="margin-top:8px">
-      <select id="wishFilterArea" class="select" data-action="wish-filter-area">
-        <option value="">全領域</option>
-        ${lifeAreas.map((a) => `<option value="${escapeHTML(a.name)}" ${filter.area === a.name ? "selected" : ""}>${escapeHTML(a.name)}</option>`).join("")}
-      </select>
-      <label class="row" style="gap:6px; align-items:center; padding:0 8px">
-        <input type="checkbox" data-action="wish-toggle-realized" ${filter.showRealized ? "checked" : ""}>
-        <span class="muted" style="font-size:12px">実現済みも表示</span>
-      </label>
+      <section class="form-strip" style="margin-top:8px">
+        <select id="wishFilterArea" class="select" data-action="wish-filter-area">
+          <option value="">全領域</option>
+          ${lifeAreas.map((a) => `<option value="${escapeHTML(a.name)}" ${filter.area === a.name ? "selected" : ""}>${escapeHTML(a.name)}</option>`).join("")}
+        </select>
+        <label class="row" style="gap:6px; align-items:center; padding:0 8px">
+          <input type="checkbox" data-action="wish-toggle-realized" ${filter.showRealized ? "checked" : ""}>
+          <span class="muted" style="font-size:12px">実現済みも表示</span>
+        </label>
+      </section>
     </section>
 
     ${groupOrder.length === 0
-      ? `<section class="panel" style="margin-top:12px; text-align:center; padding:32px"><div class="muted">${filter.area ? `「${escapeHTML(filter.area)}」のやりたいことはまだありません` : "やりたいことを追加してみましょう(壮大なものでもOK)"}</div></section>`
+      ? `<section class="panel tower-panel-box" style="margin-top:12px; text-align:center; padding:32px"><div class="muted">${filter.area ? `「${escapeHTML(filter.area)}」のやりたいことはまだありません` : "やりたいことを追加してみましょう(壮大なものでもOK)"}</div></section>`
       : groupOrder.map((key) => `
-        <section class="section" style="margin-top:14px">
-          <div class="row" style="margin-bottom:8px">
-            <h3>${wishGroupLabel(key)}</h3>
-            <div class="muted">${groups[key].length} 件</div>
-          </div>
+        <section class="section tower-panel-box wish-group-panel" style="margin-top:14px">
+          <h2>FLIGHT PLAN<span>${wishGroupLabel(key)} ・ ${groups[key].length} 件</span></h2>
           <div class="grid">
             ${groups[key].map(renderWishCard).join("")}
           </div>
         </section>
       `).join("")}
+    </div>
   `;
 }
 
+// TOWER意匠化: 既存クラス(panel/wish-card/is-realized等)は温存し、tower-flight-card
+// クラスを追加しただけ(見出し追加はしていない。個々のカードはTOWERの「便」相当のため、
+// パネル見出し=h2は付けずCSSのみで枠を寄せる)。
 function renderWishCard(wish) {
   const progress = wishProgress(wish.id);
   const nextStep = nextStepOf(wish.id);
   const stagnant = isWishStagnant(wish.id);
   const areaColor = lifeAreaColor(wish.lifeArea);
   return `
-    <div class="panel wish-card ${wish.realized ? "is-realized" : ""}" style="border-left:4px solid ${areaColor}">
+    <div class="panel wish-card tower-flight-card ${wish.realized ? "is-realized" : ""}" style="border-left:4px solid ${areaColor}">
       <div class="row" style="align-items:center; gap:8px">
         <label class="wish-check-wrap">
           <input type="checkbox" class="wish-check" data-action="${wish.realized ? "wish-unrealize" : "wish-realize"}" data-id="${wish.id}" ${wish.realized ? "checked" : ""} title="実現済みにする" aria-label="実現済みにする">
@@ -274,6 +291,7 @@ function renderWishCard(wish) {
 }
 
 // Wish 詳細展開(サブタスク・編集)
+// TOWER意匠化: 既存クラス(wish-detail)は温存し、tower-flight-detailクラスを追加しただけ。
 function renderWishDetail(wish) {
   const subtasks = state.tasks.filter((t) => !t.deleted && t.parentTaskId === wish.id);
   if (subtasks.some((task) => Number.isFinite(task.order))) {
@@ -309,7 +327,7 @@ function renderWishDetail(wish) {
   ].join("");
 
   return `
-    <div class="wish-detail" style="margin-top:12px; padding-top:12px; border-top:1px solid var(--line)">
+    <div class="wish-detail tower-flight-detail" style="margin-top:12px; padding-top:12px; border-top:1px solid var(--line)">
       <div class="form-strip" style="margin-bottom:10px">
         <select class="select" data-action="wish-set-year" data-id="${wish.id}" style="flex:1">${yearOptions}</select>
         <select class="select" data-action="wish-set-area" data-id="${wish.id}" style="flex:1">
