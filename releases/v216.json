@@ -1,0 +1,72 @@
+{
+  "version": 216,
+  "date": "2026-08-22",
+  "title": "ポモドーロ独立タブとWish仕分け・月間ボードを削除",
+  "summary": "スリム化P2のv216単位としてポモドーロ独立タブと内包するStudy With Me、Wish仕分けスワイプと月間ボードを削除し、タイマーエンジン・Today共有表示・WishリストCRUDを温存",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v216.json",
+    "src/features/wish.js",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/today-core.test.js",
+    "tests/v111.test.js",
+    "tests/v117.test.js",
+    "tests/v129.test.js",
+    "tests/v132.test.js",
+    "tests/v148.test.js",
+    "tests/v152.test.js",
+    "tests/v154.test.js",
+    "tests/v156.test.js",
+    "tests/v162.test.js",
+    "tests/v58.test.js",
+    "tests/v61.test.js",
+    "tests/v70.test.js",
+    "tests/v79.test.js",
+    "tests/v80.test.js",
+    "tests/v84.test.js",
+    "tests/v87.test.js",
+    "tests/v88.test.js",
+    "tests/wish-core.test.js"
+  ],
+  "intent": [
+    "承認済みslim-specの変更単位どおり、ポモドーロ独立タブとタブ内包のStudy With Meを同時に削除する。",
+    "Wish仕分けと月間ボードはsegmented controlを共有するため同時に削除し、Wish表示をリスト1本へ戻す。",
+    "ポモドーロのタイマーエンジンとToday共有表示、Wishリストの表示・CRUD・サブタスク操作は変更せず温存する。",
+    "裁定どおりcomplete-pomodoroとfinish-blockの代替UIは追加せず、migrationRitualLog等の既存履歴データは後方互換のため保持する。",
+    "Size-Exempt理由「相互依存する2機能群の完全削除で分割不能」。ナビ・描画・CSS・action・テストを別コミットにすると到達不能UIまたは登録不整合が残る。"
+  ],
+  "changes": [
+    "ポモドーロのナビ・その他グリッド・許可view・renderディスパッチと独立タブ描画、全画面表示、Study With Me設定・埋め込み・action・固有CSSを削除した。",
+    "startPomodoro等のタイマーエンジンを維持し、updatePomodoroTickはToday共有表示だけを差分更新する形にした。",
+    "Wish仕分けキュー・スワイプ・Undo・理由入力・移行儀式UIと、月間ボード・D&D・表示切替action・固有CSSを削除した。",
+    "src/features/wish.jsはリスト描画、Wish/サブタスクCRUD、実現済み切替、今日のBlock化を温存した。",
+    "専用テスト6本を削除し、混在テストは削除UI依存だけを除去またはToday共有表示へ差し替え、コード索引・テストmanifest・影響マップを再生成した。",
+    "Service WorkerのCACHE_NAMEをv216へ更新した。"
+  ],
+  "uncertainties": [
+    "サンドボックスがPlaywright Chromiumの起動をspawn EPERMで拒否したため、変更したブラウザE2Eのassertion実走とiOS実機PWA表示は未確認。"
+  ],
+  "reviewFocus": [
+    "renderPomodoro・triageQueue・仕分け系data-action・月間ボード・Study With Meの実行参照と固有CSSが残っていないか。",
+    "startPomodoro/goBreakPomodoro/stopPomodoro/updatePomodoroTick/startTimerTicker等のタイマーエンジンとTodayの円形進捗・中断UIが維持されているか。",
+    "Wishリストの追加・編集・削除・実現済み切替・サブタスクCRUD・今日のBlock化だけが無退行で残っているか。",
+    "v70のFIXED_CORE検証がToday共有表示への最小差し替えに留まり、Block開始時自動フォーカス検証を失っていないか。"
+  ],
+  "verification": [
+    "npm.cmd run code:index:writeはWROTE: code index 658 functions、npm.cmd run test:manifest:writeはWROTE: 133 suitesで成功し、各--checkもPASS。",
+    "npm.cmd run test:fastはfast-node 17 suitesが全件PASS。wish-coreとaction-registry-coreの個別実行もPASS。",
+    "node --checkはapp.js、wish.js、変更テスト14本でexit 0。git diff --checkもPASS。",
+    "node tests/v70.test.jsはPlaywright Chromium起動時のspawn EPERMで停止した。",
+    "release-gateはschema、impact selection、APP_SHELL 16件、test manifest 133件、code index 658件、app/src/sw全構文検査までPASSし、related+impact-regressionのブラウザ起動だけspawn EPERMで停止した。",
+    "release-record --writeはCHANGES_v216.md生成後、notes側handoff.md書き込みだけEPERM。--checkはCHANGES=OK、handoff=NG。"
+  ],
+  "knownLimitations": [
+    "ブラウザE2EとiOS実機PWAの最終確認は、Chromiumを起動できる監督者環境またはCIで必要。"
+  ]
+}

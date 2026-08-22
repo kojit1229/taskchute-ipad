@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v215";
+const CACHE_NAME = "taskchute-journal-pwa-v216";
+// v216: ポモドーロ独立タブ・Study With Me・Wish仕分け・月間ボードを削除した。
 // v215: カレンダー・計時タブと共有予定レイヤを削除した。
 // v214: Avoid List・回復Block下書き提案・朝プラン自動実行・独立日報タブを削除した。
 // v213: ダッシュボードタブを削除した。

@@ -12,16 +12,12 @@ import { loadState, persistLocalNoSchedule, _lastSaveError } from "./src/storage
 import { cachedFeedback } from "./src/state/feedback-cache.js";
 // v182: 新トップレベル「今日」コックピット。既存featureと同じ依存注入型で循環importを避ける。
 import { configureToday, renderToday } from "./src/features/today.js";
-// v168: app.js分割・段階4-2(WishタブTier1のCRUD・描画・月間ボードD&D抽出)。src/features/wish.js
-//   はstateをimportするがapp.js自身はimportしない(循環import回避)。renderWishTriage(仕分けモード、
-//   Tier3=非移動)を含む残りの汎用ヘルパーはconfigureWish(deps)で注入する
-//   (src/features/wish.js冒頭コメントの契約参照)。getWishProject/nextStepOf/wishSubtaskToTasks/
-//   wishHasTodayBlockはTier3側(moveBlockToWish/buildWeeklyWishModal/triageAction/triageQueue、
-//   いずれもapp.js残留)からも共有importする。
+// v168: app.js分割・段階4-2(WishタブTier1のCRUD・描画を抽出)。src/features/wish.js
+//   はstateをimportするがapp.js自身はimportしない(循環import回避)。
+//   getWishProjectはapp.js側の週次Wish選定からも共有importする。
 import {
   configureWish,
-  getWishProject, nextStepOf, wishSubtaskToTasks, wishHasTodayBlock,
-  renderWish, scrollWishBoardToCurrentMonth,
+  getWishProject, renderWish,
   addWish, toggleWishOpen, addWishSubtask, toggleWishSubtask,
   realizeWish, unrealizeWish, deleteWish
 } from "./src/features/wish.js";
@@ -138,7 +134,7 @@ const JOURNAL_REQUEST_SECTION = [
 const RECURRENCE_KEEP_PAST_DAYS = 7;    // 過去はこの日数だけ実体を保持
 const RECURRENCE_FUTURE_DAYS = 31;      // 未来はこの日数先まで実体化
 
-// v152: 仕分けモード(designs/03-task-swipe.md §④)のログ上限。migrationRitualLogと同じ思想。
+// v152で追加された仕分け履歴データの同期上限。UI削除後も既存データ互換のため保持する。
 // v166: configureGithubSync()(このすぐ下の起動処理)がこの定数を参照するため、元の宣言位置
 // (5416行目付近、computeSyncMerge内で使う箇所の近く)からファイル冒頭へ移動した
 // (constのTDZ回避。値・用途は一切変更していない)。
@@ -188,7 +184,7 @@ let _planStepUi = { kind: "idle", message: "", taskId: "" };
 // _aiStepPendingは「確認シート表示中(1件ロック)」の意味に限定する(request送信済みの追跡は
 // aiStepRequestId/aiStepPendingRequests(3d実装済み・永続)が担うため、この変数を重複させない)。
 let _aiStepPending = null;       // { stepTaskId, nextStepTaskId }
-let _aiStepConfirmCtx = null;    // { stepTaskId, nextStepTaskId } 非永続(_migrationRitualCtxと同型)
+let _aiStepConfirmCtx = null;    // { stepTaskId, nextStepTaskId } 非永続
 
 // v103: 上記TTLでの物理削除本体。normalizeState() と、リモートpull時の0秒思考マージ後の
 //       再剪定(mergeZeroThinkingIntoLocal、app.js後方の同期関数群を参照)の両方から呼ぶ
@@ -205,8 +201,7 @@ function pruneExpiredSuggestedThemes(list) {
 
 // v71: タブ順 — 利用頻度・時間帯順に並び替え(CHANGES_v71.md参照)。
 //   実行系(ホーム/タスクシュート/タイムライン/WBS/ルーティン)を先頭に、
-//   日次1回系(ジャーナル/週次)→参照系(計器盤/やりたい/ビジョン/0秒思考)→
-//   ポモドーロ(v70でBlock開始時に自動起動するため独立タブの優先度を下げた)→設定 の順。
+//   日次1回系(ジャーナル/週次)→参照系(計器盤/やりたい/ビジョン/0秒思考)→設定 の順。
 //   v33の順序: ホーム/ジャーナル/0秒思考/ビジョン/タスクシュート/WBS/タイムライン/
 //              ルーティン/ポモドーロ/やりたい/週次/計器盤/設定
 const navItems = [
@@ -223,7 +218,6 @@ const navItems = [
   { id: "wish", label: "やりたい", mark: "✦" },
   { id: "vision", label: "ビジョン", mark: "V" },
   { id: "zero", label: "0秒思考", mark: "○" },
-  { id: "pomodoro", label: "ポモドーロ", mark: "P" },  // v70: Block開始で自動起動するため独立タブの優先度を下げた
   { id: "settings", label: "設定", mark: "S" }
 ];
 
@@ -277,13 +271,11 @@ configureToday({
   homeSyncAlertBanner, renderReplanControlHTML, requestReplan,
   saveState
 });
-// v168: src/features/wish.jsも同じ理由(循環import回避)で依存注入する。renderWishTriage
-// (仕分けモード、Tier3)はapp.js側に残るためここで注入する(prep-stage4-wish.md §7の(a)案、
-// 循環importはconfigureXxx(deps)注入のため発生しない)。
+// v168: src/features/wish.jsも同じ理由(循環import回避)で依存注入する。
 configureWish({
   escapeHTML, renderHeader, todayISO, localDateTimeToMs, makeTask, makeBlock,
   defaultPlannedTimes, showToast, nowDateTime, saveAndRender, render, updateTaskField,
-  renderWishTriage, aiInsightsPanelHTML,
+  aiInsightsPanelHTML,
   maybeQueueNextAiStep  // v198(第3弾3e): 完了6経路#6(Wish詳細のサブタスクチェックボックス)
 });
 // v169: src/features/journal.jsも同じ理由(循環import回避)で依存注入する。renderExperimentSection
@@ -513,7 +505,6 @@ registerActions({
   "download-report": () => downloadReport(),
   "download-data": () => downloadData(),
   "carry-over": ({ id }) => requestCarryOver(id),
-  "migration-ritual-choice": ({ target }) => resolveMigrationRitual(target.dataset.choice),
   "ideal-retry": ({ target }) => resolveIdealRetry(target.dataset.choice),
   "toggle-journal-segment": ({ target }) => {
     const seg = target.dataset.segment;
@@ -792,7 +783,6 @@ registerActions({
   "date-next": () => shiftSelectedDate(1),
   "today": () => setSelectedDate(todayISO()),
   // --- タイムライン設定/カテゴリフィルタ(9) ---
-  "pomo-tab": ({ target }) => setPomodoroTab(target.dataset.tab),
   "timeline-new-block": ({ target }) => {
     const minute = Number(target.dataset.minute || 0);
     openTimelineNewBlock(minute);
@@ -808,16 +798,6 @@ registerActions({
   },
   "tl-energy-mode": ({ target }) => {
     state.settings.timelineEnergyGraphMode = target.dataset.mode === "battery" ? "battery" : "energy";
-    persistLocalNoSchedule();
-    render();
-  },
-  "toggle-pomo-fullscreen": () => {
-    state.pomodoro.fullscreen = !state.pomodoro.fullscreen;
-    persistLocalNoSchedule();
-    render();
-  },
-  "toggle-study-with-me": () => {
-    state.pomodoro.studyWithMeOn = !state.pomodoro.studyWithMeOn;
     persistLocalNoSchedule();
     render();
   },
@@ -1148,8 +1128,8 @@ document.addEventListener("click", (event) => {
   //        reading-saveはapp.js内のregisterActionsへ移行した。
   // v179: experiment-add〜experiment-copy-conclusion(実験ログ5)はapp.js内の
   // registerActionsへ移行した。
-  // v181: pomo-tab/timeline-new-block/complete-block-with-actual/tl-zoom/tl-energy-mode/
-  // toggle-pomo-fullscreen/toggle-study-with-meはapp.js内のregisterActionsへ移行した。
+  // v181: timeline-new-block/complete-block-with-actual/tl-zoom/tl-energy-modeは
+  // app.js内のregisterActionsへ移行した。
   // timeline-modeのみハンドラ実体がsrc/features/timeline.js側のため、そちらの
   // registerActions(v173方式)へ移行した。
   // v174: push-reportはapp.js内のregisterActionsへ移行した。
@@ -1157,15 +1137,7 @@ document.addEventListener("click", (event) => {
   // v174: add-category〜delete-break-messageはapp.js内のregisterActionsへ移行した。
   // v177: toggle-journal-segment/toggle-home-reflect-foldはapp.js内のregisterActionsへ移行した。
   // v174: toggle-settings-sync/toggle-sidebarはapp.js内のregisterActionsへ移行した。
-  // v173: add-wish〜wish-board-jump-currentはsrc/features/wish.jsのregisterActionsへ移行した。
-  // triage-*(仕分けモード、Tier3=wish.js未抽出)はapp.js残留のためここに残す。
-  // v152: 仕分けモード(先送りBlock+Wishバックログの三択トリアージ、ボタン版=S1)
-  if (action === "triage-choice") triageAction(target.dataset.kind, id, target.dataset.choice);
-  // v156: 仕分けモードUndo(S3)。トースト内「元に戻す」ボタン(v150の機構を再利用)
-  if (action === "triage-undo") triageUndo(id);
-  // v162: 仕分けの「手放す/延期」直後に出るインライン理由チップ欄
-  if (action === "triage-reason-chip") recordTriageInlineReason(target.dataset.chip || "");
-  if (action === "triage-reason-skip") skipTriageInlineReason();
+  // v173: Wish CRUDはsrc/features/wish.jsのregisterActionsへ移行した。
   // v149: ホームの2タブ(今日/ホーム)。非永続・view/dateは変えないため自動スクロールは発火しない。
   if (action === "home-tab") { homeTab = target.dataset.tab === "home" ? "home" : "today"; render(); }
   // v176: zt-*/zero-tab/zerosec-theme-*(0秒思考)・weekly-*/cycle-*/weekly-suggest-add
@@ -1201,7 +1173,7 @@ document.addEventListener("click", (event) => {
     render();
   }
   // v179: open-search/search-jump(検索2)はapp.js内のregisterActionsへ移行した。
-  // v177: carry-over/migration-ritual-choice/ideal-retryはapp.js内のregisterActionsへ移行した。
+  // v177: carry-over/ideal-retryはapp.js内のregisterActionsへ移行した。
   // v39/v40: エネルギー構造からの行動導線
   if (action === "energy-open-routine") openRoutineForWeekday(Number(target.dataset.day));
   // v181: energy-open-category/timeline-clear-catはapp.js内のregisterActionsへ移行した。
@@ -1287,22 +1259,6 @@ document.addEventListener("input", (event) => {
   if (target.matches("[data-vision-field]")) {
     state.settings[target.dataset.visionField] = target.value;
     saveState();
-  }
-  // v84: Study With Me のURL貼り付けから動画ID・開始秒を自動抽出。
-  //      貼り付け直後の1入力イベントで完結するため render() してよいが、他の入力欄の
-  //      フォーカスを奪わないよう、対象2フィールドはDOM直接更新に留める(vision/github欄と同じ方針)。
-  if (target.matches("#study-with-me-url-input")) {
-    const parsed = parseYouTubeUrl(target.value);
-    if (parsed.videoId) {
-      state.settings.studyWithMe.videoId = parsed.videoId;
-      if (parsed.startSec !== null) state.settings.studyWithMe.startSec = parsed.startSec;
-      saveState();
-      const idEl = document.querySelector('[data-swm-field="videoId"]');
-      const secEl = document.querySelector('[data-swm-field="startSec"]');
-      if (idEl) idEl.value = state.settings.studyWithMe.videoId;
-      if (secEl) secEl.value = state.settings.studyWithMe.startSec;
-      showToast(`Study With Me: 動画ID/開始秒を抽出しました(${parsed.videoId} / ${state.settings.studyWithMe.startSec}秒)`);
-    }
   }
   if (target.matches("[data-github-field]")) {
     // v37: autoSave チェックボックスもこのセレクタに一致してしまい、
@@ -1452,17 +1408,6 @@ document.addEventListener("change", (event) => {
     saveState();
     render();
   }
-  // v84: Study With Me の動画ID・開始秒(直接編集)
-  if (target.matches("[data-swm-field]")) {
-    const field = target.dataset.swmField;
-    if (field === "startSec") {
-      state.settings.studyWithMe.startSec = Math.max(0, Math.floor(Number(target.value) || 0));
-    } else {
-      state.settings.studyWithMe.videoId = target.value.trim();
-    }
-    saveState();
-    render();
-  }
   // v53: 横断検索のアーカイブ合流トグル(lazy fetch)
   if (target.matches("#cross-search-archive")) {
     if (target.checked) loadArchiveForSearch();
@@ -1524,14 +1469,6 @@ document.addEventListener("change", (event) => {
   // v79: Wish編集の期限(任意)。表示側(バッジ等)は作らない — 週次レビューが読むだけ。
   if (target.matches('[data-action="wish-set-duedate"]')) {
     updateTaskField(target.dataset.id, "dueDate", target.value);
-  }
-  // v79: 月間プランニングボードのカード上「月選択」(タップ代替)。
-  //      updateTaskFieldはsaveStateのみでrenderしないため、これを呼ばないとカードが
-  //      新しい月枠へ視覚的に移動せず「未定」プールに残ったまま見える(データは保存済み)。
-  //      ボードの主眼=空間配置を成立させるため、選択直後に再描画する。
-  if (target.matches('[data-action="wish-set-month"]')) {
-    updateTaskField(target.dataset.id, "targetMonth", target.value ? Number(target.value) : null);
-    render();
   }
   // v90: 0秒思考テーマの大テーマ割り当て(v79月間ボードの月選択と同じ「select常時同居」の
   //      タップ代替。ドラッグ&ドロップは作らない)。選択直後にグループ間の見た目の移動を
@@ -1607,7 +1544,7 @@ function normalizeState(value) {
   // v182: 未知viewでrenderMainの前画面が残る事故を防ぐ。todayは新規許可、旧版由来の不明値はhomeへ。
   const allowedViews = new Set([
     "today", "home", "wbs", "wish", "tasks", "routine", "timeline",
-    "pomodoro", "journal", "zero", "vision", "ai-reports", "weekly",
+    "journal", "zero", "vision", "ai-reports", "weekly",
     "cycle", "stats", "settings", "more"
   ]);
   if (!allowedViews.has(value.currentView)) value.currentView = "home";
@@ -1617,13 +1554,6 @@ function normalizeState(value) {
   // v37: インポート/同期で欠けていると描画がクラッシュするキーを補完
   value.settings.morningEnergyLog ||= {};
   value.pomodoro ||= { running: false, blockId: "", startedAt: "", endsAt: "", mode: "focus" };
-  // v84: Study With Me(YouTube埋め込み)のトグル状態。既定OFF(常時ロード禁止のため)。
-  //      pomodoroオブジェクトが既にある既存端末でもここで補完する(既存値優先)。
-  if (typeof value.pomodoro.studyWithMeOn !== "boolean") value.pomodoro.studyWithMeOn = false;
-  // v84: Study With Me の動画設定(動画ID・開始秒)。既定はKが指定した動画。既存値優先。
-  value.settings.studyWithMe ||= {};
-  value.settings.studyWithMe.videoId ||= "WgxzRsiIwb8";
-  if (typeof value.settings.studyWithMe.startSec !== "number") value.settings.studyWithMe.startSec = 1986;
   value.settings.github ||= defaultGitHubSettings();
   value.settings.github.owner ||= "kojit1229";
   value.settings.github.repo ||= "taskchute-ipad";
@@ -2855,7 +2785,6 @@ function renderMain() {
       setTimeout(() => document.querySelector(".now-line")?.scrollIntoView({ block: "center" }), 50);
     }
   }
-  if (view === "pomodoro") main.innerHTML = renderPomodoro();
   if (view === "journal") main.innerHTML = renderJournal();
   if (view === "zero") main.innerHTML = renderZeroThinking();
   if (view === "vision") main.innerHTML = renderVision();
@@ -4720,15 +4649,6 @@ function confirmScheduleDraft() {
   if (!_scheduleDraft || !_scheduleDraft.items.length) return;
   const { date, items } = _scheduleDraft;
   const draftSource = _scheduleDraft.source || "deterministic";  // v62: 確定記録にも出どころを残す
-  // v61: マイグレーション儀式 — 繰越由来(carryFromId)の項目が3回目の繰り越しになる場合は、
-  //      一括確定の前に一呼吸置く。既に選択済み(_ritualResolved)の項目はスキップする。
-  const ritualItem = items.find((it) =>
-    it.carryFromId && !it._ritualResolved && migrationNextCount(it.carryFromId) >= MIGRATION_RITUAL_THRESHOLD);
-  if (ritualItem) {
-    openMigrationRitual(ritualItem.carryFromId, migrationNextCount(ritualItem.carryFromId),
-      { origin: "draft", draftItemId: ritualItem.id });
-    return;
-  }
   let updatedCount = 0, createdCount = 0;  // v199(軽微3): 確定トーストを「登録」と「時刻更新」で書き分ける
   items.forEach((it) => {
     // v199: blockId付き項目(当日タスクシュート再配置)は既存Blockの時刻だけ更新する。
@@ -4760,11 +4680,6 @@ function confirmScheduleDraft() {
     block.aiPlan = { start: minToHHMM(it.aiStart ?? it.start), minutes: it.aiMinutes ?? it.minutes };
     // v65: AIプランのtitle先頭「[資産]」検出分は確定時にleverageType=assetを引き継ぐ
     if (it.leverageType) block.leverageType = it.leverageType;
-    if (it.forceMIT) {
-      // v61: マイグレーション儀式で「今日やる」を選んだ項目はMIT化(既存の最大3個ルールは尊重する)
-      const sameDayMITs = state.blocks.filter((b) => !b.deleted && b.date === date && b.isMIT);
-      if (sameDayMITs.length < 3) block.isMIT = true;
-    }
     if (it.carryFromId) {
       const src = blockById(it.carryFromId);
       block.carryCount = (src?.carryCount || 0) + 1;  // v61: 繰り越し回数を1つ積み上げる
@@ -5473,14 +5388,7 @@ function detectLeverageTypeFromTitle(title) {
 // v65(v64設計§3残余): AIプランのskipped(kind:"ai")ログの上限。migrationRitualLogと同じ思想。
 const AI_PLAN_SKIPPED_LOG_MAX = 300;
 
-// v61: マイグレーション儀式(提案1)==============================
-// 繰り越し回数(carryCount)を積み上げ、2回目以降は視覚マーク、3回目の繰り越しでは
-// 即座に繰り越さず一呼吸置く確認モーダルを挟む。「書き写す手間が価値の審査になる」
-// というバレットジャーナルの思想を、既存の carryOverBlock / 朝プラン確定(confirmScheduleDraft)
-// の両経路に対して同じルールで適用する。
-const MIGRATION_RITUAL_THRESHOLD = 3;
-const MIGRATION_RITUAL_LOG_MAX = 300;
-let _migrationRitualCtx = null;  // { srcId, nextCount, origin: 'panel'|'draft', draftItemId } 非永続
+// v61: 繰り越し回数(carryCount)の視覚マーク。
 
 // SWIPE_TRIAGE_LOG_MAX: v166でファイル冒頭(RECURRENCE_FUTURE_DAYSの直後)へ移動した
 // (configureGithubSync()のconstTDZ回避のため。値・用途は変更していない)。
@@ -5497,19 +5405,13 @@ function migrationNextCount(id) {
   return (src?.carryCount || 0) + 1;
 }
 
-// carryOverPanel の「→ 今日へ」入口。3回目以降は儀式モーダルを先に出す。
 function requestCarryOver(id) {
   const src = blockById(id);
   if (!src || src.migratedTo) return;
-  const nextCount = migrationNextCount(id);
-  if (nextCount >= MIGRATION_RITUAL_THRESHOLD) {
-    openMigrationRitual(id, nextCount, { origin: "panel" });
-    return;
-  }
   carryOverBlock(id);
 }
 
-function carryOverBlock(id, { forceMIT = false, toDate = todayISO(), toastMessage = "今日へ繰り越しました" } = {}) {
+function carryOverBlock(id, { toDate = todayISO(), toastMessage = "今日へ繰り越しました" } = {}) {
   const src = blockById(id);
   if (!src || src.migratedTo) return;
   const shift = (dt) => dt ? `${toDate}${dt.slice(10)}` : "";  // 予定時刻は同 HH:mm のまま送付先へ
@@ -5520,11 +5422,6 @@ function carryOverBlock(id, { forceMIT = false, toDate = todayISO(), toastMessag
   });
   block.source = src.source || "";
   block.carryCount = (src.carryCount || 0) + 1;  // v61: 繰り越し回数を1つ積み上げる
-  if (forceMIT) {
-    // v61: 儀式で「今日やる」を選んだ場合はMIT化(既存の最大3個ルールは尊重する)
-    const sameDayMITs = state.blocks.filter((b) => !b.deleted && b.date === toDate && b.isMIT);
-    if (sameDayMITs.length < 3) block.isMIT = true;
-  }
   state.blocks.push(block);
   // 旧ブロックを「繰り越し済み」に(未完了リストから外れ、再提案されない)
   state.blocks = state.blocks.map((b) => b.id === src.id ? { ...b, migratedTo: block.id, updatedAt: nowDateTime() } : b);
@@ -5537,140 +5434,6 @@ function postponeBlockToNextDay(id) {
     toDate: addDays(todayISO(), 1),
     toastMessage: "明日へ送りました"
   });
-}
-
-// 手放す選択時の「Wishへ移動」実行(Block削除は呼び出し側で行う)。
-// 戻り値: 作成できたWishタスク本体(失敗時はfalse)。normalizeStateがWish Projectの存在を
-// 必ず保証するため通常falseにはならないが、念のための防御(v61レビュー対応: トースト文言の
-// 実態合わせ)。v152レビュー対応: 呼び出し元(仕分けモード)が作成後の新Wishのidを
-// 参照できるよう、真偽値ではなくタスク本体を返す(既存の呼び出し元は真偽判定にしか
-// 使っていないため後方互換)。
-function moveBlockToWish(id) {
-  const src = blockById(id);
-  if (!src) return false;
-  const wishProject = getWishProject();
-  if (!wishProject) return false;
-  const task = makeTask({ projectId: wishProject.id, title: src.title });
-  // v79: addWish()と同じ理由でdueDateの「今日」既定を持ち込まない(Wishは期限任意)。
-  task.dueDate = "";
-  state.tasks.push(task);
-  return task;
-}
-
-// 選択結果を軽量ログに記録(将来のバッチ分析用。aiScheduleHistoryと同じ思想)
-// v156 2系統レビュー対応(必須1): logSwipeTriageと同じ理由で戻り値を { entry, evicted } にした。
-// 既存の呼び出し元(戻り値未使用、下記5389行目)は影響なし。
-function logMigrationRitual(block, choice) {
-  const entry = {
-    blockId: block?.id || "",
-    title: block?.title || "",
-    carryCount: (block?.carryCount || 0) + 1,
-    choice,  // 'today' | 'decompose' | 'release' | 'avoid' | 'carry'
-    at: nowDateTime()
-  };
-  state.migrationRitualLog.push(entry);
-  let evicted = null;
-  if (state.migrationRitualLog.length > MIGRATION_RITUAL_LOG_MAX) {
-    evicted = state.migrationRitualLog.slice(0, state.migrationRitualLog.length - MIGRATION_RITUAL_LOG_MAX);
-    state.migrationRitualLog = state.migrationRitualLog.slice(-MIGRATION_RITUAL_LOG_MAX);
-  }
-  return { entry, evicted };
-}
-
-function openMigrationRitual(srcId, nextCount, ctx) {
-  const src = blockById(srcId);
-  if (!src) return;
-  _migrationRitualCtx = { srcId, nextCount, ...ctx };
-  state.modal = { type: "migrationRitual", id: srcId };
-  renderModal(buildMigrationRitualModal(src, nextCount));
-}
-
-function buildMigrationRitualModal(block, nextCount) {
-  return `
-    <div class="modal-card migration-ritual-modal" role="dialog" aria-modal="true">
-      <div class="modal-header">
-        <h3 class="modal-title">↻ ${nextCount}回目の繰り越しです</h3>
-        <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
-      </div>
-      <div class="modal-body">
-        <p class="migration-ritual-title">${escapeHTML(block.title)}</p>
-        <p class="muted" style="font-size:13px; line-height:1.6">${nextCount}回持ち越しています。まだ価値がありますか?</p>
-        <div class="migration-ritual-choices">
-          <button class="btn" data-action="migration-ritual-choice" data-choice="today">今日やる(MIT候補に)</button>
-          <button class="btn" data-action="migration-ritual-choice" data-choice="decompose">分解する(タイトル編集へ)</button>
-          <button class="btn" data-action="migration-ritual-choice" data-choice="release">手放す(Wishへ移動 or 削除)</button>
-          <button class="btn ghost" data-action="migration-ritual-choice" data-choice="carry">それでも繰り越す</button>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function resolveMigrationRitual(choice) {
-  if (!_migrationRitualCtx) return closeModal();
-  const { srcId, origin, draftItemId } = _migrationRitualCtx;
-  const src = blockById(srcId);
-  logMigrationRitual(src, choice);
-  _migrationRitualCtx = null;
-
-  if (choice === "release") {
-    const toWish = window.confirm(`「${src?.title || ""}」をWishへ移動しますか?\n(キャンセルで削除)`);
-    // v61レビュー対応: Wish Projectが存在せず移動できなかった場合は、実態(削除のみ)に
-    // 合わせてトースト文言を変える(normalizeStateが保証するため通常は起きないが念のため)。
-    let releaseMsg = "手放しました(削除)";
-    if (toWish) {
-      releaseMsg = moveBlockToWish(srcId) ? "Wishへ移動しました" : "Blockを削除しました(Wishプロジェクトなし)";
-    }
-    state.blocks = state.blocks.map((b) => b.id === srcId ? { ...b, deleted: true, updatedAt: nowDateTime() } : b);
-    if (origin === "draft" && _scheduleDraft) {
-      _scheduleDraft.items = _scheduleDraft.items.filter((x) => x.id !== draftItemId);
-      if (!_scheduleDraft.items.length) _scheduleDraft = null;
-    }
-    closeModal();
-    saveAndRender(releaseMsg);
-    return;
-  }
-
-  if (choice === "decompose") {
-    if (origin === "draft" && _scheduleDraft) {
-      _scheduleDraft.items = _scheduleDraft.items.filter((x) => x.id !== draftItemId);
-      if (!_scheduleDraft.items.length) _scheduleDraft = null;
-    }
-    // v61レビュー対応: saveState()だけだと下書きから除外した項目がタイムラインに残存表示される
-    // (renderModal はモーダル部分しか書き換えないため)。既存の saveAndRender 慣習に合わせ、
-    // 先に render() で背後の画面(下書きレイヤ等)を最新化してからモーダルを開く。
-    saveAndRender();
-    openBlockEditor(srcId);  // タイトル編集モーダルへ(分解のきっかけ)。renderModalが上書きするのでcloseModal不要
-    return;
-  }
-
-  if (choice === "today") {
-    if (origin === "panel") {
-      carryOverBlock(srcId, { forceMIT: true });
-      closeModal();
-    } else if (origin === "draft" && _scheduleDraft) {
-      const it = _scheduleDraft.items.find((x) => x.id === draftItemId);
-      if (it) { it.forceMIT = true; it._ritualResolved = true; }
-      closeModal();
-      confirmScheduleDraft();  // この項目は解決済みなので再スキャンでスキップされ、そのまま確定処理へ進む
-    } else {
-      closeModal();
-    }
-    return;
-  }
-
-  // choice === "carry"(それでも繰り越す)
-  if (origin === "panel") {
-    carryOverBlock(srcId);
-    closeModal();
-  } else if (origin === "draft" && _scheduleDraft) {
-    const it = _scheduleDraft.items.find((x) => x.id === draftItemId);
-    if (it) it._ritualResolved = true;
-    closeModal();
-    confirmScheduleDraft();
-  } else {
-    closeModal();
-  }
 }
 
 function extractMITCandidatesFromReport(reportText) {
@@ -5711,612 +5474,13 @@ function extractMITCandidatesFromReport(reportText) {
   return candidates.filter(Boolean).slice(0, 3);
 }
 
-// v168: WishタブTier1(CRUD・描画・月間ボードD&D)はsrc/features/wish.jsへ移動した
+// v168: WishタブTier1(CRUD・リスト描画)はsrc/features/wish.jsへ移動した
 // (getWishProject/getSubtasksOf/wishProgress/nextStepOf/wishLastActivity/isWishStagnant/
-// wishGroupKey/wishGroupLabel/lifeAreaColor/renderWish/renderWishBoard/
-// scrollWishBoardToCurrentMonth/renderWishBoardCard/renderWishCard/renderWishDetail/
+// wishGroupKey/wishGroupLabel/lifeAreaColor/renderWish/renderWishCard/renderWishDetail/
 // renderWishSubtask/addWish/toggleWishOpen/addWishSubtask/toggleWishSubtask/
 // wishSubtaskToTasks/realizeWish/unrealizeWish/deleteWish。app.js分割・段階4-2、
 // wish.js冒頭コメント参照)。getWishProject/nextStepOf/wishSubtaskToTasksは
 // 冒頭のimportで共有する。
-
-// v152: 仕分けモード(designs/03-task-swipe.md S1「ボタン版」)==============================
-// 決断疲れによる仕分けの先送りに対処するADHD支援機能。先送りBlock+Wishバックログを1枚ずつ
-// 「今日やる/手放す/延期(来月)」の三択で処理する。データモデルへの新フィールド追加はゼロ
-// (既存の migratedTo/carryCount/deleted/updatedAt/targetMonth/targetYear/status のみで表現)。
-// 三択の意味は儀式(resolveMigrationRitual)の5択の部分集合に対応させ、新しい状態語彙は作らない。
-
-// v152 2系統レビュー対応: セッション内(非永続・ページリロードで消える)の処理済みidセット。
-// 「今日やる/延期」は元データを削除しない(Wish自体は残る)ため、これが無いとキューが
-// updatedAt昇順で並び替わるだけで同じセッション内に何度も先頭へ再浮上し、終端しなかった。
-let _triageSessionDone = new Set();
-// 直近の描画で先頭に出したカードのid(二重タップガード。renderWishTriageで毎回更新)。非永続。
-let _triageCurrentCardId = "";
-// 直近に成立したtriageAction呼び出しの対象idと実行時刻(ms)。二重タップガード用。非永続。
-let _triageLastActionId = "";
-let _triageLastActionAt = 0;
-// v154レビュー対応(FAIL修正、時間ベースの閾値だけでは解決不能と判明した経緯は下記):
-//  - 「同一カードid」への短時間の二重発火は常にTRIAGE_ACTION_COOLDOWN_MS(350ms)ブロックする
-//    (via問わず)。
-//  - 「別カードへの操作」のブロックは**via==="button"の場合のみ**に限定する(スワイプは対象外)。
-//    タップは指が触れた瞬間に完了する動作のため、新しく表示されたカードへ指の勢いで
-//    そのまま反射的に触れてしまう事故(v152の「二重タップガード」テストが検出していた事故)が
-//    起こりうるが、スワイプは閾値超のドラッグという物理的コストを伴う別ジェスチャのため、
-//    直前の確定直後でも別カードへの正当な連続スワイプが起こりうる(=210ms間隔の連続スワイプの
-//    2件目まで飲み込んでいたのが本バグ)。
-//  検討過程の記録: 当初「直前の成功からの経過時間が短ければvia不問で一律ブロックする」
-//  (quick guard)を試したが、Playwrightの`locator.click()`は要素の安定性待機のため
-//  実測で二重クリックの間隔が41〜362msまで大きくばらつくことが分かり(page.evaluate内で
-//  click()を直接呼ぶ場合はこの限りではない)、210ms間隔の意図的な連続スワイプと安全に
-//  分離できる閾値が存在しなかった(どんな閾値でも一方を誤検知する)。via(呼び出し経路が
-//  ボタンかスワイプか)という時間に依存しない構造的な条件に切り替えることで解決した。
-const TRIAGE_ACTION_COOLDOWN_MS = 350;
-// v162: 手放す/延期の直後に理由チップを尋ねる。全画面モーダルにするとUndoトースト
-// (triageUndoToastOpts、5秒間)を覆ってタップ不能にしてしまうため、モーダルではなく
-// 仕分けカードの下に出す控えめなインライン欄にする(下記_pendingInlineReason参照。
-// 遅延setTimeoutは使わない=Undoトーストと同時に見えていて構わない設計にした)。
-
-// v168: wishHasTodayBlock(Tier2)はsrc/features/wish.jsへ移動した(冒頭のimportで共有する。
-// app.js分割・段階4-2、wish.js冒頭コメント参照)。
-
-// キュー = 先送りBlock(carryableBlocks、既存順)→ Wishバックログ(未実現・updatedAt昇順)の順。
-// wishes は呼び出し元(renderWish)が area/実現済みフィルタ済みのものをそのまま渡す
-// (仕分けも今見ているフィルタ範囲に揃える。フィルタ無しなら全件)。
-// v152レビュー対応(必須1): セッション内処理済み(_triageSessionDone)と、既に当日Block化済み
-// (status=doing かつ wishHasTodayBlock)のWishをキューから除外し、全カード処理で必ず
-// 「仕分け完了」(0件)へ到達するようにする。
-function triageQueue(wishes) {
-  const blocks = carryableBlocks().filter((b) => !_triageSessionDone.has(b.id));
-  const wishQueue = (wishes || [])
-    .filter((w) => !w.realized)
-    .filter((w) => !_triageSessionDone.has(w.id))
-    .filter((w) => !(w.status === "doing" && wishHasTodayBlock(w.id)))
-    .slice()
-    .sort((a, b) => (a.updatedAt || "").localeCompare(b.updatedAt || ""));
-  return [
-    ...blocks.map((b) => ({ kind: "block", id: b.id, item: b })),
-    ...wishQueue.map((w) => ({ kind: "wish", id: w.id, item: w }))
-  ];
-}
-
-// カードの出所バッジ(「昨日の先送り ↻N」/「Wish」)
-function triageBadgeHTML(entry) {
-  if (entry.kind === "block") {
-    const n = Number(entry.item.carryCount || 0);
-    return `<span class="triage-badge">昨日の先送り${n >= 1 ? ` ↻${n}` : ""}</span>`;
-  }
-  return `<span class="triage-badge">Wish</span>`;
-}
-
-// カードの補足1行(見積・カテゴリ or 動機・領域)
-function triageSubtitleText(entry) {
-  if (entry.kind === "block") {
-    const b = entry.item;
-    const parts = [];
-    if (b.category) parts.push(b.category);
-    if (b.estimateMin) parts.push(`見積${b.estimateMin}分`);
-    return parts.join(" · ") || "先送りされたタスクです";
-  }
-  const w = entry.item;
-  return w.motivation || (w.lifeArea ? `領域: ${w.lifeArea}` : "やりたいこと");
-}
-
-// 選択結果を軽量ログに記録(migrationRitualLogと同じ思想。集計・分析はバッチ側)
-// v154: viaはtriageAction呼び出し元から渡される('button'|'swipe')。既定は後方互換のため'button'。
-// v156 2系統レビュー対応(必須1): 戻り値を { entry, evicted } にした。呼び出し元(triageAction)が
-// Undo用に「積んだエントリそのものへの参照」と「上限超過で押し出された最古エントリ」を保持できる
-// ようにするため(詳細は_triageUndo付近のコメント参照)。既存の呼び出し元(戻り値未使用)は影響なし。
-function logSwipeTriage(kind, targetId, action, carryCount, via = "button") {
-  const entry = {
-    at: nowDateTime(),
-    targetId,
-    kind,          // 'block' | 'wish'
-    action,        // 'today' | 'drop' | 'defer'
-    via,           // 'button' | 'swipe'(v154)
-    carryCount: Number(carryCount || 0)
-  };
-  state.swipeTriageLog.push(entry);
-  let evicted = null;
-  if (state.swipeTriageLog.length > SWIPE_TRIAGE_LOG_MAX) {
-    evicted = state.swipeTriageLog.slice(0, state.swipeTriageLog.length - SWIPE_TRIAGE_LOG_MAX);
-    state.swipeTriageLog = state.swipeTriageLog.slice(-SWIPE_TRIAGE_LOG_MAX);
-  }
-  return { entry, evicted };
-}
-
-// v156: 仕分けモードUndo(designs/03-task-swipe.md S3、K確定2026-07-27「手放すの復元は
-// Undoトースト(直後のみ)で足りる。復元一覧画面は作らない」)。直前1操作のみが対象で
-// スタックは持たない——次のtriageAction成立(新しい三択操作)が_triageUndoを上書きするだけで
-// 自動的に前のUndoは失効する(明示クリア不要)。
-// v156 2系統レビュー対応(必須2、Codex指摘): 5秒の視覚的な非表示化(showToastの既存タイマー+
-// `.toast:not(.show)`のpointer-events:noneガード)だけでは、ボタンに既にキーボードフォーカスが
-// 当たっていた場合Enter/Spaceでの活性化がpointer-eventsを無視して素通りしてしまう。
-// triageUndoToastOpts()のonExpireで、タイマー満了と同時に_triageUndoそのものを明示的にnull化
-// することで、期限切れ後にEnterで発動しても実質的に無害(triageUndo側のguardId不一致で無視)に
-// なるよう二重に防いだ。
-// revertクロージャは「巻き戻し先の値」だけを持つデータで、state操作以外は一切行わない
-// (呼び出し側のtriageUndo()がsaveAndRenderをまとめて行う)。
-let _triageUndo = null; // { guardId, revert() } | null
-// v162: 「手放す/延期」の直後、renderWishTriage()がカードの下にインラインで理由チップ欄を
-// 出すためのフラグ(_triageUndoと同じ「単一スロット・非永続」の型)。triageAction()の冒頭で
-// 三択が成立するたびに必ずnullへリセットしてから(2系統レビュー対応・推奨5)、
-// block/drop・block/deferの分岐だけが自分のid向けへ改めてセットする。そのため
-// 「今日やる」やWish系操作の後には出ない(前カード分が次カードの下に居座らない)。
-// Undo(triageUndo)のrevertクロージャでも対象idが一致すればnull化する。
-let _pendingInlineReason = null; // { blockId } | null
-
-// Undoトースト用のtoastOpts(v150のアクション付きトースト機構を再利用。5秒固定は設計書§③)。
-function triageUndoToastOpts(guardId) {
-  return {
-    action: "triage-undo", id: guardId, label: "元に戻す", durationMs: 5000,
-    // guardId一致を確認してからnull化する(念のための防御。showToastは新規呼び出しのたびに
-    // clearTimeoutで前のタイマーを破棄するため、実際にはこのonExpireが「既に上書きされた
-    // 古いUndo」に対して発火することは無いはずだが、二重の安全策として残す)。
-    onExpire: () => { if (_triageUndo && _triageUndo.guardId === guardId) _triageUndo = null; }
-  };
-}
-
-// v156 2系統レビュー対応(必須1): swipeTriageLog/migrationRitualLogから「参照が一致する
-// エントリ」だけを取り除き、上限超過(200/300件)で押し出されていた最古エントリ(あれば)を
-// 先頭へ戻す。配列中の位置(末尾/添字)に一切依存しないため、上限トリムが絡んでも・将来ログへの
-// 追記コードが増えても構造的に正しく動く(このtriageActionが呼ばれてからUndoされるまでの間に
-// 他のtriageActionは起こらない=_triageUndoは次の成功で上書きされ古いrevertはもう呼ばれない、
-// という不変条件はあるが、それに依存しない実装にした)。
-function triageUndoLogArray(arr, entry, evicted) {
-  const kept = arr.filter((e) => e !== entry);
-  return evicted && evicted.length ? [...evicted, ...kept] : kept;
-}
-
-// トースト「元に戻す」ボタンの実行。guardIdが直近の_triageUndoと一致しない場合は無視する
-// (v150二重タップガードと同じ「idが一致しなければ無視」パターン。古いトーストの残骸や
-// 次の操作で既に失効したUndoへの誤発火を防ぐ)。
-function triageUndo(id) {
-  if (!_triageUndo || _triageUndo.guardId !== id) return;
-  const revert = _triageUndo.revert;
-  _triageUndo = null;
-  revert();
-  saveAndRender("元に戻しました");
-}
-
-// 三択ボタンの実行(kind: 'block'|'wish', action: 'today'|'drop'|'defer')。
-// v152 2系統レビュー対応:
-//  (a) 二重タップガード: 直前の実行からTRIAGE_ACTION_COOLDOWN_MS未満の呼び出し、または
-//      現在描画中のカードid(_triageCurrentCardId)と一致しない呼び出しは無視する
-//      (連打・再描画後の新カードへの誤爆を防ぐ)。
-//  (b) logSwipeTriageは行動が実際に成立した箇所の直前(saveAndRender/委譲呼び出しの直前)に
-//      移した。早期return(該当id無し等)ではログを一切積まない。
-//  (c) 処理成立時は必ず_triageSessionDoneへidを積み、以後このセッションのキューから除外する。
-//  (d) v154: 第4引数viaは呼び出し元('button'クリック or スワイプ確定)を示す。
-//      logSwipeTriageへそのまま渡すほか、下記(e)のクールダウン判定にも使う(状態遷移の
-//      分岐そのものには一切使わない=どの三択がどう作用するかはvia非依存のまま)。
-// v154 2系統レビュー対応(FAIL修正):
-//  (e) クールダウンの「別カードへの操作」ブロックをvia==="button"の場合に限定した
-//      (詳細はTRIAGE_ACTION_COOLDOWN_MSの定義コメント参照)。旧実装は別カードへの操作も
-//      viaを問わず一律350msブロックしていたため、退場アニメ180ms+短い間隔での連続スワイプが
-//      2件目を飲み込んでいた(修正のテストはtests/v154.test.js「連続スワイプ」、既存の
-//      二重タップガードの回帰確認はtests/v152.test.js参照)。
-//  (f) 戻り値をboolean化(成立=true/不成立=false)。呼び出し元(スワイプの退場アニメ確定処理)は
-//      falseの場合にカードを視覚的に原状復帰させる(state変更なしで見た目だけ消えるのを防ぐ)。
-function triageAction(kind, id, action, via = "button") {
-  const now = Date.now();
-  const withinCooldown = now - _triageLastActionAt < TRIAGE_ACTION_COOLDOWN_MS;
-  if (withinCooldown && id === _triageLastActionId) return false;  // 同一idの二重発火(via問わず)
-  if (withinCooldown && via === "button") return false;  // 別カードへの操作はボタン限定でブロック
-  if (_triageCurrentCardId && id !== _triageCurrentCardId) return false;
-  // v162 2系統レビュー対応(推奨5): ここから先は必ず何らかの三択が成立するため、まず
-  // 前カード分の_pendingInlineReasonを引っ込める(「今日やる」やWish系操作では再設定しない
-  // ため、そのままだと次カードの下に前Blockの理由欄が居座り続けてしまう)。block/drop・
-  // block/deferの分岐は、この直後に自分のid向けへ再セットする。
-  _pendingInlineReason = null;
-
-  if (kind === "block") {
-    const block = blockById(id);
-    if (!block || block.deleted) return false;
-    if (action === "today") {
-      // v156: Undo用に変更前のBlockを丸ごとスナップショットし、carryOverBlockが新規に
-      // 作るBlockをid集合の差分で特定する(carryOverBlock自体は他の呼び出し元
-      // 〈requestCarryOver〉とも共有する既存関数のため、戻り値を変えて対応するより
-      // 差分検出のほうが安全=既存の挙動に一切触れない)。
-      const blockSnapshot = { ...block };
-      const blockIdsBefore = new Set(state.blocks.map((b) => b.id));
-      _triageLastActionAt = now;
-      _triageLastActionId = id;
-      _triageSessionDone.add(id);
-      const logResult = logSwipeTriage("block", id, action, block.carryCount, via);
-      carryOverBlock(id);  // 内部でsaveAndRender済み(既定トースト「今日へ繰り越しました」)
-      const newBlock = state.blocks.find((b) => !blockIdsBefore.has(b.id));
-      if (newBlock) {
-        _triageUndo = {
-          guardId: id,
-          revert: () => {
-            state.blocks = state.blocks.filter((b) => b.id !== newBlock.id);  // 作成したBlockを取り消し
-            state.blocks = state.blocks.map((b) => b.id === id ? { ...blockSnapshot, updatedAt: nowDateTime() } : b);  // 元(carryable)へ復元
-            state.swipeTriageLog = triageUndoLogArray(state.swipeTriageLog, logResult.entry, logResult.evicted);
-            _triageSessionDone.delete(id);
-          }
-        };
-        // carryOverBlockの既定トーストをUndoボタン付きへ上書きする(#toastは#appの外にあり
-        // carryOverBlock内のrender()では触れられないため、二重呼び出しでも問題ない)。
-        // v156 2系統レビュー対応(推奨4): carryOverBlock内のsaveAndRenderが既に容量超過警告
-        // (_lastSaveError)を出している場合は上書きしない(警告の握り潰し防止)。
-        if (!_lastSaveError) showToast("今日へ繰り越しました", triageUndoToastOpts(id));
-      }
-      return true;
-    }
-    if (action === "drop") {
-      // 儀式のavoid相当(designs/03-task-swipe.md §③表): deleted化+migrationRitualLogにも記録
-      // (集計源を分裂させない。avoidListへの追記まではしない=表に明記された2アクションのみ)
-      const blockSnapshot = { ...block };  // v156: Undo用
-      _triageLastActionAt = now;
-      _triageLastActionId = id;
-      _triageSessionDone.add(id);
-      const migResult = logMigrationRitual(block, "avoid");
-      state.blocks = state.blocks.map((b) => b.id === id ? { ...b, deleted: true, updatedAt: nowDateTime() } : b);
-      const logResult = logSwipeTriage("block", id, action, block.carryCount, via);
-      // v156: deleted:trueを解除するだけで完全復元できる(新規レコード生成が無いため単純)。
-      // migrationRitualLog/swipeTriageLogとも参照一致するエントリだけを取り消す(必須1)。
-      _triageUndo = {
-        guardId: id,
-        revert: () => {
-          state.blocks = state.blocks.map((b) => b.id === id ? { ...blockSnapshot, updatedAt: nowDateTime() } : b);
-          state.migrationRitualLog = triageUndoLogArray(state.migrationRitualLog, migResult.entry, migResult.evicted);
-          state.swipeTriageLog = triageUndoLogArray(state.swipeTriageLog, logResult.entry, logResult.evicted);
-          _triageSessionDone.delete(id);
-          // v162: Undoされたので理由チップ欄も引っ込める(このidが対象のままなら)
-          if (_pendingInlineReason && _pendingInlineReason.blockId === id) _pendingInlineReason = null;
-        }
-      };
-      // v162: インラインの理由チップ欄はrenderWishTriage()がこのフラグを見て描画するため、
-      // saveAndRender()より前に立てておけば同じ render() で一緒に出る(Undoトーストと同時表示)。
-      _pendingInlineReason = { blockId: id };
-      saveAndRender("手放しました", triageUndoToastOpts(id));
-      return true;
-    }
-    if (action === "defer") {
-      // 儀式のrelease相当: Wishへ移動してから元Blockをdeleted化(moveBlockToWish自体は削除しない)。
-      // v152レビュー対応(設計書§④明文の記録漏れ): logMigrationRitual(release)を追加し、
-      // 集計源(migrationRitualLogが正)を分裂させない。
-      // v154: 延期はボタン専用(スワイプの方向割当から廃止。CHANGES_v154.md参照)。
-      const blockSnapshot = { ...block };  // v156: Undo用
-      _triageLastActionAt = now;
-      _triageLastActionId = id;
-      _triageSessionDone.add(id);
-      const moved = moveBlockToWish(id);
-      // v152レビュー対応(必須1・終端性): moveBlockToWishが新規に作るWishは、この場で今まさに
-      // 「延期する」と判断した対象そのものなので、同じセッションのキューへ即座に再浮上させない
-      // (次回セッション=リロード後には通常のWishバックログとして自然に現れる)。
-      if (moved) _triageSessionDone.add(moved.id);
-      const migResult = logMigrationRitual(block, "release");
-      state.blocks = state.blocks.map((b) => b.id === id ? { ...b, deleted: true, updatedAt: nowDateTime() } : b);
-      const logResult = logSwipeTriage("block", id, action, block.carryCount, via);
-      // v156: 生成物(moveBlockToWishが作ったWish)を丸ごと取り消し、元Blockのdeleted:trueを解除する。
-      // ログは参照一致するエントリだけを取り消す(必須1)。
-      _triageUndo = {
-        guardId: id,
-        revert: () => {
-          if (moved) {
-            state.tasks = state.tasks.filter((t) => t.id !== moved.id);
-            _triageSessionDone.delete(moved.id);
-          }
-          state.blocks = state.blocks.map((b) => b.id === id ? { ...blockSnapshot, updatedAt: nowDateTime() } : b);
-          state.migrationRitualLog = triageUndoLogArray(state.migrationRitualLog, migResult.entry, migResult.evicted);
-          state.swipeTriageLog = triageUndoLogArray(state.swipeTriageLog, logResult.entry, logResult.evicted);
-          _triageSessionDone.delete(id);
-          if (_pendingInlineReason && _pendingInlineReason.blockId === id) _pendingInlineReason = null;
-        }
-      };
-      _pendingInlineReason = { blockId: id };
-      saveAndRender(moved ? "Wishへ移動しました" : "Blockを削除しました(Wishプロジェクトなし)", triageUndoToastOpts(id));
-      return true;
-    }
-    return false;
-  }
-
-  if (kind === "wish") {
-    const wish = state.tasks.find((t) => t.id === id && !t.deleted);
-    if (!wish) return false;
-    if (action === "today") {
-      // ⑥未解決論点1の仮案(設計書に明記): 本体をカードにし、未完了サブタスクがあれば
-      // 先頭(nextStepOf)をBlock化。サブタスクが無ければ本体自身をBlock化する。
-      const next = nextStepOf(id);
-      const targetId = next ? next.id : id;
-      // v156: Undo用スナップショット。対象(サブタスク or 本体自身)のstatus/updatedAtと、
-      // サブタスク経由の場合のみ更新される本体のupdatedAtも別途保持する(両者は別レコード)。
-      const targetSnapshot = (() => {
-        const t = state.tasks.find((x) => x.id === targetId);
-        return t ? { ...t } : null;
-      })();
-      const bodySnapshot = next ? { ...wish } : null;
-      const blockIdsBefore = new Set(state.blocks.map((b) => b.id));
-      _triageLastActionAt = now;
-      _triageLastActionId = id;
-      _triageSessionDone.add(id);
-      if (next) {
-        // 対象がサブタスクの場合、wishSubtaskToTasksが更新するのはサブタスク側のupdatedAtのみ
-        // (本体は変わらない)。本体(カード)のupdatedAtも合わせて進めておく(再出現防止の本体は
-        // _triageSessionDone+wishHasTodayBlockだが、こちらもデータの一貫性として揃える)。
-        state.tasks = state.tasks.map((t) => t.id === id ? { ...t, updatedAt: nowDateTime() } : t);
-      }
-      const logResult = logSwipeTriage("wish", id, action, 0, via);
-      wishSubtaskToTasks(next ? next.id : id);
-      const newBlock = state.blocks.find((b) => !blockIdsBefore.has(b.id));
-      // 新規Blockが作られなかった場合(既に今日Block済み等のガードに当たった)は、
-      // wishSubtaskToTasks自身が別の(Undo対象ではない)トーストを既に出しているため、
-      // Undoは登録せず何も上書きしない。
-      if (newBlock) {
-        _triageUndo = {
-          guardId: id,
-          revert: () => {
-            state.blocks = state.blocks.filter((b) => b.id !== newBlock.id);  // 作成したBlockを取り消し
-            if (targetSnapshot) {
-              state.tasks = state.tasks.map((t) => t.id === targetId ? { ...targetSnapshot, updatedAt: nowDateTime() } : t);  // 元(Wish)へ復元
-            }
-            if (bodySnapshot) {
-              state.tasks = state.tasks.map((t) => t.id === id ? { ...bodySnapshot, updatedAt: nowDateTime() } : t);
-            }
-            state.swipeTriageLog = triageUndoLogArray(state.swipeTriageLog, logResult.entry, logResult.evicted);
-            _triageSessionDone.delete(id);
-          }
-        };
-        // v156 2系統レビュー対応(推奨4): wishSubtaskToTasks内のsaveAndRenderが既に容量超過
-        // 警告を出している場合は上書きしない(block/todayと同じ理由)。
-        if (!_lastSaveError) showToast("今日のタスクシュートに登録しました", triageUndoToastOpts(id));
-      }
-      return true;
-    }
-    if (action === "drop") {
-      // 裁定(2026-07-28、2系統レビュー): 既存deleteWish()のセマンティクスに統一し、
-      // 子孫サブタスクもカスケードでsoft-delete(deleted:true+updatedAt bump)する
-      // (設計書§③表は「本体のみ」だが、本体だけ消して子孫が孤児のまま残る方が不整合なため
-      // 統一を優先。理由はCHANGES_v152.md参照)。
-      const allIds = new Set([id]);
-      const collect = (parentId) => {
-        state.tasks.forEach((t) => {
-          if (!t.deleted && t.parentTaskId === parentId) {
-            allIds.add(t.id);
-            collect(t.id);
-          }
-        });
-      };
-      collect(id);
-      // v156: Undo用に本体+全子孫のスナップショットをカスケード範囲と同じ集合で取る
-      // (子孫だけ復元漏れ・取り違えが起きないよう、削除に使うallIdsをそのまま流用する)。
-      const snapshots = [...allIds]
-        .map((tid) => state.tasks.find((t) => t.id === tid))
-        .filter(Boolean)
-        .map((t) => ({ ...t }));
-      _triageLastActionAt = now;
-      _triageLastActionId = id;
-      _triageSessionDone.add(id);
-      state.tasks = state.tasks.map((t) => allIds.has(t.id) ? { ...t, deleted: true, updatedAt: nowDateTime() } : t);
-      const logResult = logSwipeTriage("wish", id, action, 0, via);
-      _triageUndo = {
-        guardId: id,
-        revert: () => {
-          state.tasks = state.tasks.map((t) => {
-            const snap = snapshots.find((s) => s.id === t.id);
-            return snap ? { ...snap, updatedAt: nowDateTime() } : t;
-          });
-          state.swipeTriageLog = triageUndoLogArray(state.swipeTriageLog, logResult.entry, logResult.evicted);
-          _triageSessionDone.delete(id);
-        }
-      };
-      saveAndRender("手放しました", triageUndoToastOpts(id));
-      return true;
-    }
-    if (action === "defer") {
-      // targetMonthがあれば+1(12月→翌年1月)。targetYearが設定済みならそれも+1、未設定なら
-      // 翌年(todayISO()年+1)を設定する(v152レビュー対応: 月間ボードはtargetMonthだけで
-      // 並ぶため、年を進めないと1月枠=先頭へ見かけ上戻ってしまう=逆行して見えるため)。
-      // targetMonth未設定は据え置き=updatedAtのみbumpしてキュー末尾へ(design §③表)。
-      // v154: 延期はボタン専用(スワイプの方向割当から廃止。CHANGES_v154.md参照)。
-      const wishSnapshot = { ...wish };  // v156: Undo用(targetMonth/targetYearとも変更前を保持)
-      _triageLastActionAt = now;
-      _triageLastActionId = id;
-      _triageSessionDone.add(id);
-      if (wish.targetMonth) {
-        let month = wish.targetMonth + 1;
-        let year = wish.targetYear;
-        if (month > 12) {
-          month = 1;
-          year = year ? year + 1 : Number(todayISO().slice(0, 4)) + 1;
-        }
-        state.tasks = state.tasks.map((t) => t.id === id ? { ...t, targetMonth: month, targetYear: year, updatedAt: nowDateTime() } : t);
-      } else {
-        state.tasks = state.tasks.map((t) => t.id === id ? { ...t, updatedAt: nowDateTime() } : t);
-      }
-      const logResult = logSwipeTriage("wish", id, action, 0, via);
-      _triageUndo = {
-        guardId: id,
-        revert: () => {
-          state.tasks = state.tasks.map((t) => t.id === id ? { ...wishSnapshot, updatedAt: nowDateTime() } : t);
-          state.swipeTriageLog = triageUndoLogArray(state.swipeTriageLog, logResult.entry, logResult.evicted);
-          _triageSessionDone.delete(id);
-        }
-      };
-      saveAndRender("延期しました", triageUndoToastOpts(id));
-      return true;
-    }
-    return false;
-  }
-  return false;
-}
-
-// v162: 「手放す/延期」直後、_pendingInlineReasonが指す(まだUndoされていない)Blockについて、
-// カードの下に控えめな理由チップ欄を出す(モーダルではない=Undoトーストと同時に見える設計。
-// 上記TRIAGE_ACTION_COOLDOWN_MS付近のコメント参照)。対象Blockが無い/既に理由記録済みなら
-// 何も出さない(壊れたctxを黙って無視するフェイルソフト)。
-function triageInlineReasonHTML() {
-  if (!_pendingInlineReason) return "";
-  const block = blockById(_pendingInlineReason.blockId);
-  if (!block || hasIncompleteReason(block)) return "";
-  return `
-    <section class="panel triage-inline-reason" style="margin-top:10px; padding:14px">
-      <div class="muted" style="font-size:11px; margin-bottom:6px">よければ、未完了の理由をメモ(任意)</div>
-      <div style="font-size:13px; margin-bottom:8px">「${escapeHTML(block.title)}」</div>
-      <input class="input" style="font-size:16px; margin-bottom:8px; width:100%; box-sizing:border-box" data-triage-reason-note placeholder="状況など">
-      <div class="row" style="gap:6px; flex-wrap:wrap">
-        ${INCOMPLETE_REASON_CHIPS.map((c) => `<button class="btn ghost" data-action="triage-reason-chip" data-chip="${escapeHTML(c)}">${escapeHTML(c)}</button>`).join("")}
-        <button class="btn ghost" data-action="triage-reason-skip">スキップ</button>
-      </div>
-    </section>
-  `;
-}
-
-// メインレンダリング(1枚ずつ表示+三択ボタン+残枚数。0件時は「仕分け完了」)
-function renderWishTriage(wishes) {
-  const queue = triageQueue(wishes);
-  _triageCurrentCardId = queue.length ? queue[0].id : "";  // 二重タップガード用(毎描画で更新)
-  if (!queue.length) {
-    return `
-      <section class="panel triage-panel" style="margin-top:14px; text-align:center; padding:40px 20px">
-        <div style="font-size:16px">仕分け完了 🎉</div>
-        <div class="muted" style="margin-top:6px; font-size:12px">先送り・Wishの未仕分けはありません</div>
-      </section>
-      ${triageInlineReasonHTML()}
-    `;
-  }
-  const current = queue[0];
-  return `
-    <section class="panel triage-panel" style="margin-top:14px">
-      <div class="muted" style="text-align:right; font-size:11px">あと ${queue.length} 枚</div>
-      <div class="triage-card" data-triage-id="${current.id}" data-triage-kind="${current.kind}">
-        <div class="triage-swipe-hint" aria-hidden="true"></div>
-        ${triageBadgeHTML(current)}
-        <div class="triage-card-title">${escapeHTML(current.item.title)}</div>
-        <div class="triage-card-sub muted">${escapeHTML(triageSubtitleText(current))}</div>
-      </div>
-      <div class="triage-actions">
-        <button class="btn primary triage-btn" data-action="triage-choice" data-kind="${current.kind}" data-id="${current.id}" data-choice="today">✅ 今日やる</button>
-        <button class="btn ghost triage-btn" data-action="triage-choice" data-kind="${current.kind}" data-id="${current.id}" data-choice="drop">🕊 手放す</button>
-        <button class="btn ghost triage-btn" data-action="triage-choice" data-kind="${current.kind}" data-id="${current.id}" data-choice="defer">🌙 延期(来月)</button>
-      </div>
-    </section>
-    ${triageInlineReasonHTML()}
-  `;
-}
-
-// v154: 仕分けモードのスワイプジェスチャ(designs/03-task-swipe.md S2)。=====================
-// Pointer Events統一(pointerdown/move/up/cancel。touchstart等は使わない)。既存の
-// _draftDrag(4880行〜)/ _wishDrag(4915行〜)と同じ「documentレベル委譲+移動量が閾値を
-// 超えるまでドラッグ扱いにしない」流儀を踏襲する。確定ロジックはtriageActionへ完全委譲し
-// (ロジックの二重化はしない)、三択ボタンは変更せず併存させる(設計書§③「必ずボタンでも
-// 実行可能」)。
-//
-// v154 2系統レビュー対応(FAIL修正、監督者裁定2026-07-28):
-//  - **スワイプは左右のみ**(右=今日やる/左=手放す)。上スワイプ=延期は廃止し延期はボタン専用に
-//    した(仕分けビューは実測で縦スクロールが発生しており、touch-action:noneのカード上では
-//    上フリック=通常のスクロール操作が取り消せない延期として誤確定する事故があったため)。
-//    touch-actionも`none`→`pan-y`へ変更し、縦方向はブラウザのネイティブスクロールに譲る。
-//  - **多指の誤確定防止**: pointerdownはevent.isPrimaryのみ受け付け、_triageSwipe.pointerIdを
-//    保持してmove/up/cancelはpointerId一致のイベントだけを処理する(2本目の指のupで
-//    誤って確定しない)。
-//  - **setPointerCaptureをtry/catchで保護**(NotFoundError観測あり。ポインタが既に
-//    リリース済み等の状況でも例外で処理全体を止めない)。
-
-// ドラッグ中の一時情報(非永続)。{ id, kind, el, pointerId, startX, startY, moved }
-let _triageSwipe = null;
-const TRIAGE_SWIPE_MOVE_THRESHOLD = 8;   // px。これ未満はタップ扱い(_wishDrag踏襲。transform未適用)
-const TRIAGE_SWIPE_CONFIRM_PX = 70;      // px。設計書「横60〜80px」の中間値
-const TRIAGE_SWIPE_EXIT_MS = 180;        // 退場アニメの時間。styles.cssの.triage-cardのtransitionと一致させる
-
-// 設計書§③の方向割当(v154改訂): 右=今日やる/左=手放す。縦方向(上下どちらも)は候補なし
-// (=ネイティブの縦スクロールに譲る。touch-action:pan-yと対になる判定)。
-function triageSwipeCandidate(dx, dy) {
-  const absX = Math.abs(dx), absY = Math.abs(dy);
-  if (absX < 4 || absX < absY) return null;  // ほぼ静止 or 縦優位はスクロール意図とみなし候補なし
-  return dx > 0 ? "today" : "drop";
-}
-
-const TRIAGE_SWIPE_HINT_LABEL = { today: "✅ 今日やる", drop: "🕊 手放す" };
-
-// スワイプ中の視覚フィードバック(方向ヒント表示)。進捗はTRIAGE_SWIPE_CONFIRM_PXに対する割合
-function updateTriageSwipeHint(el, dx, dy) {
-  const hint = el.querySelector(".triage-swipe-hint");
-  if (!hint) return;
-  const action = triageSwipeCandidate(dx, dy);
-  hint.textContent = action ? TRIAGE_SWIPE_HINT_LABEL[action] : "";
-  hint.className = "triage-swipe-hint" + (action ? ` hint-${action}` : "");
-  hint.style.opacity = action ? String(Math.min(1, Math.abs(dx) / TRIAGE_SWIPE_CONFIRM_PX)) : "0";
-}
-
-// 確定時の退場方向(カードが画面外へ抜ける向き。左右のみ)
-function triageExitTransform(action, dx, dy) {
-  const vw = window.innerWidth || 800;
-  return action === "today"
-    ? `translate(${vw}px, ${dy}px) rotate(20deg)`
-    : `translate(${-vw}px, ${dy}px) rotate(-20deg)`;
-}
-
-function triagePrefersReducedMotion() {
-  return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-}
-
-// カードの見た目を未操作状態へ完全に戻す(スナップバック/pointercancel/triageAction失敗時の
-// 原状復帰で共通利用)。stateには一切触れない。
-function resetTriageCardVisual(el) {
-  el.style.transform = "translate(0,0) rotate(0deg)";
-  el.style.opacity = "";
-  el.style.pointerEvents = "";
-  const hint = el.querySelector(".triage-swipe-hint");
-  if (hint) hint.style.opacity = "0";
-}
-
-document.addEventListener("pointerdown", (event) => {
-  const card = event.target.closest(".triage-card");
-  if (!card) return;
-  if (!event.isPrimary) return;  // 2本目以降の指は無視(多指操作の誤確定防止)
-  if (_triageSwipe) return;  // 既にドラッグ中なら新規に開始しない(念のための二重防御)
-  if (event.target.closest("[data-action]")) return;  // カード内に将来ボタンが増えても通常タップに譲る
-  try { card.setPointerCapture(event.pointerId); } catch (e) { /* NotFoundError等は無害化して継続 */ }
-  _triageSwipe = { id: card.dataset.triageId, kind: card.dataset.triageKind, el: card, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, moved: false };
-});
-document.addEventListener("pointermove", (event) => {
-  if (!_triageSwipe || event.pointerId !== _triageSwipe.pointerId) return;
-  const dx = event.clientX - _triageSwipe.startX;
-  const dy = event.clientY - _triageSwipe.startY;
-  if (!_triageSwipe.moved && Math.hypot(dx, dy) < TRIAGE_SWIPE_MOVE_THRESHOLD) return;
-  _triageSwipe.moved = true;
-  _triageSwipe.el.classList.add("is-dragging");  // transitionを止め、指に1:1追従させる
-  _triageSwipe.el.style.transform = `translate(${dx}px, ${dy}px) rotate(${dx * 0.05}deg)`;
-  updateTriageSwipeHint(_triageSwipe.el, dx, dy);
-  event.preventDefault();  // 横方向ジェスチャ中のみ働く(touch-action:pan-yにより縦はブラウザに譲る)
-});
-// 確定は指を離した時のみ(スワイプ中に発火しない)。閾値未満・縦方向優位はスナップバックして何もしない
-const endTriageSwipe = (event) => {
-  if (!_triageSwipe || (event && event.pointerId !== _triageSwipe.pointerId)) return;
-  const { id, kind, el, moved, startX, startY } = _triageSwipe;
-  const dx = event ? event.clientX - startX : 0;
-  const dy = event ? event.clientY - startY : 0;
-  _triageSwipe = null;
-  if (!moved) return;  // 誤爆防止: 閾値未満の指の震え等はドラッグ扱いにすらしていない
-  el.classList.remove("is-dragging");
-  const candidate = triageSwipeCandidate(dx, dy);
-  if (!candidate || Math.abs(dx) < TRIAGE_SWIPE_CONFIRM_PX) {
-    resetTriageCardVisual(el);  // 元位置へスナップバック(誤爆防止。縦スクロール意図もここに含む)
-    return;
-  }
-  if (triagePrefersReducedMotion()) {
-    // reduced-motion時はアニメ無効・即時確定(設計書§③)
-    const ok = triageAction(kind, id, candidate, "swipe");
-    if (!ok) resetTriageCardVisual(el);  // クールダウン等でブロックされた場合は原状復帰
-    return;
-  }
-  el.style.pointerEvents = "none";  // 退場アニメ中の再操作を防ぐ
-  el.style.transform = triageExitTransform(candidate, dx, dy);
-  el.style.opacity = "0";
-  setTimeout(() => {
-    const ok = triageAction(kind, id, candidate, "swipe");
-    if (!ok) resetTriageCardVisual(el);  // 退場アニメ後にブロックされていたら見た目だけ戻す
-  }, TRIAGE_SWIPE_EXIT_MS);
-};
-document.addEventListener("pointerup", endTriageSwipe);
-// pointercancel時は必ずリセット(通話着信・システムジェスチャ等での中断。状態変更は一切しない)
-document.addEventListener("pointercancel", (event) => {
-  if (!_triageSwipe || (event && event.pointerId !== _triageSwipe.pointerId)) return;
-  resetTriageCardVisual(_triageSwipe.el);
-  _triageSwipe = null;
-});
 
 // 汎用: Task のフィールド更新(saveState のみ、再描画なし)
 function updateTaskField(id, field, value) {
@@ -7405,252 +6569,6 @@ function renderBlockItem(block) {
 // v171: assignBlocksToLanes/adjustLaneTopPositionsはsrc/features/timeline-layout.jsへ
 //   移動した(app.js分割・段階4-5・段階A)。呼び出しはファイル冒頭のimportを参照する。
 
-function renderPomodoro() {
-  const running = state.pomodoro.running;
-  const mode = state.pomodoro.mode || "focus";
-  // focus は 2倍速で 50:00 → 0:00、break は等速で 5:00 → 0:00
-  const remaining = running
-    ? remainingText(state.pomodoro.endsAt, mode === "focus")
-    : "50:00";
-  // v10: ポモドーロには「ルーティン」カテゴリの Block は表示しない
-  const blockOptions = blocksForDate(state.selectedDate)
-    .filter((block) => !block.completed)
-    .filter((block) => block.category !== "ルーティン");
-  const pomoTab = state.pomodoro.tab || "manual";
-  // v12: 全画面モード
-  const fullscreen = state.pomodoro.fullscreen || false;
-  if (fullscreen) {
-    return renderPomodoroFullscreen(running, remaining, blockOptions, pomoTab);
-  }
-  const studyWithMeOn = state.pomodoro.studyWithMeOn || false;  // v84
-  return `
-    ${renderHeader("集中タイマー", "ポモドーロ", `
-      <button class="btn" data-action="toggle-pomo-fullscreen">⛶ 全画面</button>
-      <button class="btn ${studyWithMeOn ? "primary" : ""}" data-action="toggle-study-with-me">🎥 Study With Me</button>
-    `)}
-    ${studyWithMeOn ? renderStudyWithMeFrame() : ""}
-    <div class="segmented" style="margin-bottom:14px">
-      <button class="${pomoTab === "manual" ? "active" : ""}" data-action="pomo-tab" data-tab="manual">任意タイマー</button>
-      <button class="${pomoTab === "passive" ? "active" : ""}" data-action="pomo-tab" data-tab="passive">常時タイマー</button>
-    </div>
-    ${pomoTab === "manual" ? renderManualPomodoro(running, remaining, blockOptions) : renderPassivePomodoro()}
-  `;
-}
-
-// v84: Study With Me — ポモドーロ画面に「疑似同席」のBGM的環境としてYouTube動画を埋め込む。
-// ONの間だけiframeをDOM生成し、OFF/タブ離脱(main.innerHTMLの全再描画)で自然に破棄される
-// (常時ロード禁止 — iOS PWAのメモリとタブの軽さを守るため)。500ms tickによる頻繁な
-// 全再描画でiframeが再読込されないよう、startTimerTicker側はこの表示中、時刻・進捗の
-// 差分パッチ(updatePomodoroTick)に切り替える。autoplay は一切付与しない(iOS Safariは
-// 音付き自動再生不可なので、再生開始は常にユーザーのタップに委ねる)。
-// v88: src組み立てを共通化(通常表示の16:9埋め込みと、全画面背景レイヤの両方から使う)。
-// 静的URLのみを組み立てる(トークン等の個人情報は一切含めない)。videoId未設定なら空文字。
-function studyWithMeSrc() {
-  const swm = state.settings.studyWithMe || {};
-  const videoId = String(swm.videoId || "").trim();
-  if (!videoId) return "";
-  const startSec = Math.max(0, Math.floor(Number(swm.startSec) || 0));
-  return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?start=${startSec}`;
-}
-
-function renderStudyWithMeFrame() {
-  const src = studyWithMeSrc();
-  if (!src) {
-    return `<div class="muted" style="margin:0 0 10px; font-size:12px">Study With Me: 設定 → Study With Me で動画IDを指定してください</div>`;
-  }
-  return `
-    <div class="study-with-me-frame-wrap">
-      <iframe class="study-with-me-frame" src="${escapeHTML(src)}" title="Study With Me"
-        allow="encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe>
-    </div>
-  `;
-}
-
-// v88: ポモドーロ全画面モードの背景レイヤ。Study With Me ON時、YouTube iframeを
-// 画面いっぱいに(16:9を維持したままCSSのmax()でcover相当に拡大・中央クリップ)敷き、
-// 円形プログレス+残り時間のHUD(.pomo-fullscreen-content)を半透明で前面に重ねる。
-// タップ制御: HUD全体をpointer-events:noneにし(styles.css)、動画の初回再生タップを
-// どこからでも妨げないようにする。ボタン・select・input・aだけCSS側で個別にautoへ戻す
-// (YouTube IFrame APIでの再生状態監視は行わない — 過剰実装を避けた)。
-function renderStudyWithMeFullscreenBg() {
-  const src = studyWithMeSrc();
-  if (!src) return "";
-  return `
-    <div class="pomo-fs-bg-wrap">
-      <iframe class="pomo-fs-bg-iframe" src="${escapeHTML(src)}" title="Study With Me"
-        allow="encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe>
-    </div>
-  `;
-}
-
-// v84: YouTube URL文字列から videoId / 開始秒 を抽出する(正規表現のみ、new Date は使わない)。
-// 対応形式: watch?v=/youtu.be//embed//shorts/ の videoId、t=/start= の秒数指定(数値 or 1h2m3s形式)。
-function parseYouTubeUrl(text) {
-  const s = String(text || "").trim();
-  const idMatch = s.match(/(?:youtu\.be\/|[?&]v=|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/);
-  const videoId = idMatch ? idMatch[1] : "";
-  let startSec = null;
-  const tMatch = s.match(/[?&#](?:t|start)=([0-9hms]+)/i);
-  if (tMatch) {
-    const raw = tMatch[1];
-    if (/^\d+$/.test(raw)) {
-      startSec = Number(raw);
-    } else {
-      const hm = raw.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/i);
-      if (hm && (hm[1] || hm[2] || hm[3])) {
-        startSec = Number(hm[1] || 0) * 3600 + Number(hm[2] || 0) * 60 + Number(hm[3] || 0);
-      }
-    }
-  }
-  return { videoId, startSec };
-}
-
-// v12: ポモドーロ全画面モード(背景動画 + 半透明フィルタ + 中央タイマー)
-// v88: Study With Me ON時は背景をYouTube iframe(画面いっぱいにcover表示)へ切り替える。
-function renderPomodoroFullscreen(running, remaining, blockOptions, pomoTab) {
-  const studyWithMeOn = state.pomodoro?.studyWithMeOn || false;
-  const swmBgHTML = studyWithMeOn ? renderStudyWithMeFullscreenBg() : "";
-  const hasSwmBg = Boolean(swmBgHTML);  // videoId未設定ならOFF扱いと同じ(mp4背景にフォールバック)
-  return `
-    <div class="pomo-fullscreen${hasSwmBg ? " has-swm-bg" : ""}" id="pomoFullscreen">
-      ${hasSwmBg ? swmBgHTML : `
-      <video class="pomo-bg-video" autoplay muted loop playsinline poster="">
-        <source src="./study_with_me.mp4" type="video/mp4">
-      </video>`}
-      <div class="pomo-bg-overlay"></div>
-      <div class="pomo-fullscreen-content">
-        <button class="pomo-fullscreen-close" data-action="toggle-pomo-fullscreen" aria-label="全画面を解除" title="全画面を解除">✕</button>
-        <button class="pomo-fullscreen-swm-toggle ${studyWithMeOn ? "active" : ""}" data-action="toggle-study-with-me" aria-label="Study With Me切替" title="Study With Me切替">🎥</button>
-        <div class="segmented pomo-fs-tabs">
-          <button class="${pomoTab === "manual" ? "active" : ""}" data-action="pomo-tab" data-tab="manual">任意</button>
-          <button class="${pomoTab === "passive" ? "active" : ""}" data-action="pomo-tab" data-tab="passive">常時</button>
-        </div>
-        <div class="pomo-fs-stage">
-          ${pomoTab === "manual" ? renderManualPomodoro(running, remaining, blockOptions) : renderPassivePomodoro()}
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function renderManualPomodoro(running, remaining, blockOptions) {
-  // v14セーフガード強化: running フラグが残っていても、以下のいずれかなら未起動扱いに矯正:
-  //   1. endsAt が空
-  //   2. endsAt が過去(セッション切れ)
-  //   3. startedAt から60分以上経過(休憩込みでも30分なので、60分超は異常)
-  //   4. startedAt が未来(時計巻き戻し)
-  if (running) {
-    const endsAtMs = state.pomodoro.endsAt ? localDateTimeToMs(state.pomodoro.endsAt) : 0;
-    const startedAtMs = state.pomodoro.startedAt ? localDateTimeToMs(state.pomodoro.startedAt) : 0;
-    const now = Date.now();
-    const isInvalid =
-      !endsAtMs ||
-      endsAtMs <= now ||
-      (startedAtMs && (now - startedAtMs) > 60 * 60 * 1000) ||
-      (startedAtMs && startedAtMs > now + 60 * 1000);
-    if (isInvalid) {
-      // 自動修復: state も書き戻して 50:00 を保証
-      state.pomodoro = {
-        tab: state.pomodoro?.tab || "manual",
-        passive: state.pomodoro?.passive || defaultPassivePomodoro(),
-        fullscreen: state.pomodoro?.fullscreen || false,
-        studyWithMeOn: state.pomodoro?.studyWithMeOn || false,  // v84
-        running: false,
-        blockId: "",
-        startedAt: "",
-        endsAt: "",
-        mode: "focus"
-      };
-      saveState();
-      running = false;
-      remaining = "50:00";
-    }
-  }
-  if (running) {
-    const mode = state.pomodoro.mode || "focus";
-    const endsAtMs = localDateTimeToMs(state.pomodoro.endsAt);
-    const remainingMs = Math.max(0, endsAtMs - Date.now());
-    const remainingSec = Math.floor(remainingMs / 1000);
-    const currentBlock = state.blocks.find((b) => b.id === state.pomodoro.blockId);
-
-    if (mode === "break") {
-      // 休憩フェーズ: 等速 5:00 → 0:00、オレンジ色
-      const breakTotalMs = 5 * 60 * 1000;
-      const progress = 1 - remainingMs / breakTotalMs;
-      const breakDisplay = remainingTextNormal(remainingMs);
-      const message = getBreakMessage(remainingSec);
-      // v19: 休憩前の Block 情報(続ける/完了 の選択肢用)
-      const lastBlockId = state.pomodoro.lastFocusBlockId;
-      const lastBlock = lastBlockId ? state.blocks.find((b) => b.id === lastBlockId && !b.deleted) : null;
-      return `
-        <section class="panel" style="display:grid; place-items:center; min-height:380px; padding:24px">
-          ${renderCircularProgress(progress, breakDisplay, "var(--orange)")}
-          <div style="text-align:center; margin-top:14px">
-            <div style="font-size:13px; font-weight:700; color:var(--orange-text)">☕️ 休憩中</div>
-            <div class="muted" style="font-size:11px; margin-top:4px">5:00 → 0:00(実時間)</div>
-            ${message ? `<div style="margin-top:10px; font-size:14px; font-weight:600; color:var(--text)">${escapeHTML(message)}</div>` : ""}
-          </div>
-          ${lastBlock ? `
-            <div style="margin-top:14px; padding:10px; background:var(--panel-soft); border-radius:8px; text-align:center; max-width:340px">
-              <div class="muted" style="font-size:11px; margin-bottom:4px">直前のセッション:</div>
-              <strong style="font-size:13px">${escapeHTML(lastBlock.title)}</strong>
-              <div style="margin-top:10px; display:flex; gap:6px; justify-content:center; flex-wrap:wrap">
-                <button class="btn green" data-action="continue-focus">🔁 同じBlockで続ける</button>
-                <button class="btn primary" data-action="finish-block">✅ ここで完了する</button>
-              </div>
-            </div>
-          ` : ""}
-          <div style="margin-top:14px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap">
-            <button class="btn" data-action="end-break">✕ 別のタスクへ</button>
-          </div>
-        </section>
-        <section class="panel stack" style="margin-top:12px">
-          <div class="muted" style="font-size:12px">次にとりかかる別のBlockを選択(休憩を終了して即開始)</div>
-          <div style="display:flex; gap:8px; flex-wrap:wrap">
-            ${blockOptions.length
-              ? blockOptions.filter((b) => b.id !== lastBlockId).map((block) => `
-                <button class="btn orange" data-action="start-pomodoro" data-block-id="${block.id}">${escapeHTML(block.title)}</button>
-              `).join("")
-              : `<div class="muted">他に選択可能な Block がありません</div>`}
-          </div>
-        </section>
-      `;
-    }
-    // focus フェーズ: 50:00 → 00:00、青色、2倍速
-    const startedAtMs = localDateTimeToMs(state.pomodoro.startedAt);
-    const totalMs = endsAtMs - startedAtMs;
-    const progress = 1 - remainingMs / totalMs;
-    return `
-      <section class="panel" style="display:grid; place-items:center; min-height:380px; padding:24px">
-        ${renderCircularProgress(progress, remaining, "var(--accent)")}
-        <div style="text-align:center; margin-top:14px">
-          <div class="muted" style="font-size:12px">作業中(50:00 → 00:00 を 2 倍速で進行)</div>
-          ${currentBlock ? `<div style="margin-top:4px; font-weight:700">${escapeHTML(currentBlock.title)}</div>` : ""}
-        </div>
-        ${renderPomodoroInterruptControls(`
-        <div style="margin-top:18px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap">
-          <button class="btn green" data-action="complete-pomodoro">✓ 完了</button>
-          <button class="btn orange" data-action="go-break">☕ 休憩へ</button>
-          <button class="btn danger" data-action="stop-pomodoro">中断</button>
-        </div>`)}
-      </section>
-    `;
-  }
-  return `
-    <section class="panel" style="display:grid; place-items:center; min-height:300px; padding:24px">
-      <div style="text-align:center">
-        ${renderCircularProgress(0, "50:00", "var(--faint)")}
-        <div class="muted" style="margin-top:14px">Blockを選んで開始</div>
-        <div style="margin-top:18px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; max-width:320px">
-          ${blockOptions.map((block) => `
-            <button class="btn orange" data-action="start-pomodoro" data-block-id="${block.id}">${escapeHTML(block.title)}</button>
-          `).join("") || `<button class="btn" data-action="nav" data-view="tasks">Blockを作る</button>`}
-        </div>
-      </div>
-    </section>
-  `;
-}
-
 // 円形プログレスバー — progress: 0(始まり) 〜 1(終わり)、表示文字、進捗色
 function renderCircularProgress(progress, displayText, color = "var(--accent)") {
   const R = 90;
@@ -7667,75 +6585,6 @@ function renderCircularProgress(progress, displayText, color = "var(--accent)") 
       <div class="pomo-time-overlay">${displayText}</div>
     </div>
   `;
-}
-
-function renderPassivePomodoro() {
-  // 常時タイマーは壁時計ベースで常に動作中
-  const session = getPassiveSessionStatus();
-  const remainingDisplay = session.phase === "focus"
-    ? remainingText2x(session.remainingMs)
-    : remainingTextNormal(session.remainingMs);
-  const color = session.phase === "focus" ? "var(--accent)" : "var(--orange)";
-  const now = new Date();
-  const cycleStartMin = Math.floor(now.getMinutes() / 30) * 30;
-  const cycleStartLabel = `${pad2(now.getHours())}:${pad2(cycleStartMin)}`;
-  // 休憩中は残り秒に応じた文言を表示(v9)
-  const breakMsg = session.phase === "break"
-    ? getBreakMessage(Math.floor(session.remainingMs / 1000))
-    : "";
-  return `
-    <section class="panel" style="display:grid; place-items:center; min-height:400px; padding:24px">
-      ${renderCircularProgress(session.progress, remainingDisplay, color)}
-      <div style="text-align:center; margin-top:14px">
-        <div style="font-size:13px; font-weight:700; color:${color}">
-          ${session.phase === "focus" ? "🎯 集中タイム" : "☕️ 休憩"}
-        </div>
-        <div class="muted" style="font-size:11px; margin-top:4px">
-          ${session.phase === "focus" ? "50:00 → 00:00 を 2 倍速で進行(実時間 25 分)" : "残り休憩時間(実時間)"}
-        </div>
-        ${breakMsg ? `<div style="margin-top:10px; font-size:14px; font-weight:600; color:var(--text)">${escapeHTML(breakMsg)}</div>` : ""}
-        <div class="muted" style="font-size:11px; margin-top:8px">
-          現サイクル開始: ${cycleStartLabel} / 毎時 00 分・30 分にリセット
-        </div>
-      </div>
-    </section>
-  `;
-}
-
-
-// 現在の常時タイマーセッションの状態を返す(壁時計モデル: 常にアクティブ)
-// 30分サイクル(0〜24分59秒=集中、25〜29分59秒=休憩)を時計から直接読む
-function getPassiveSessionStatus() {
-  const now = new Date();
-  const minutesInCycle = now.getMinutes() % 30 + now.getSeconds() / 60 + now.getMilliseconds() / 60000;
-  const FOCUS_MIN = 25;
-  const BREAK_MIN = 5;
-  if (minutesInCycle < FOCUS_MIN) {
-    // 集中フェーズ(0〜24:59)
-    const elapsedMs = minutesInCycle * 60 * 1000;
-    const focusMs = FOCUS_MIN * 60 * 1000;
-    return {
-      active: true,
-      phase: "focus",
-      progress: elapsedMs / focusMs,
-      remainingMs: focusMs - elapsedMs
-    };
-  }
-  // 休憩フェーズ(25:00〜29:59)
-  const elapsedInBreakMs = (minutesInCycle - FOCUS_MIN) * 60 * 1000;
-  const breakMs = BREAK_MIN * 60 * 1000;
-  return {
-    active: true,
-    phase: "break",
-    progress: elapsedInBreakMs / breakMs,
-    remainingMs: breakMs - elapsedInBreakMs
-  };
-}
-
-function remainingText2x(remainingMs) {
-  // 2倍速: 500ms = 表示1秒 として扱う(1秒ずつ自然に減る)
-  const display = Math.max(0, Math.floor(remainingMs / 500));
-  return `${pad2(Math.floor(display / 60))}:${pad2(display % 60)}`;
 }
 
 function remainingTextNormal(remainingMs) {
@@ -9170,25 +8019,6 @@ function renderSettingsThemePanel() {
   `;
 }
 
-function renderSettingsStudyWithMePanel() {
-  return `
-    <h3>🎥 Study With Me</h3>
-    <div class="muted" style="font-size:12px; line-height:1.6">
-      ポモドーロタブの「Study With Me」トグルで表示するYouTube動画です。ONの間だけ埋め込み、
-      OFF・タブ離脱で破棄します(常時ロードしません)。再生はタップで開始してください(自動再生なし)。
-    </div>
-    <label>YouTube URLを貼り付け(動画ID・開始秒を自動抽出)
-      <input class="input" type="text" id="study-with-me-url-input" placeholder="https://www.youtube.com/watch?v=...&t=...s" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
-    </label>
-    <label>動画ID
-      <input class="input" type="text" data-swm-field="videoId" value="${escapeHTML(state.settings.studyWithMe.videoId)}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
-    </label>
-    <label>開始秒
-      <input class="input" type="number" min="0" step="1" data-swm-field="startSec" value="${state.settings.studyWithMe.startSec}">
-    </label>
-  `;
-}
-
 function renderSettingsBreakMessagesPanel() {
   return `
     <h3>休憩メッセージ</h3>
@@ -9250,8 +8080,8 @@ function renderSettings() {
       body: [renderSettingsBufferPanel(), renderSettingsBatteryPanel(), renderSettingsMorningPlanPanel(), renderSettingsExecPanel()]
     },
     {
-      id: "settings-display", label: "表示・タイマー(テーマ・Study With Me・ガイド付きアクセス・休憩)",
-      body: [renderSettingsThemePanel(), renderSettingsStudyWithMePanel(), renderSettingsGuidedAccessPanel(), renderSettingsBreakMessagesPanel()]
+      id: "settings-display", label: "表示・タイマー(テーマ・ガイド付きアクセス・休憩)",
+      body: [renderSettingsThemePanel(), renderSettingsGuidedAccessPanel(), renderSettingsBreakMessagesPanel()]
     },
     {
       id: "settings-master", label: "マスタ・詳細(プロフィール・カテゴリ管理・ファイル構成)",
@@ -9371,7 +8201,6 @@ const moreGroups = [
     { id: "ai-reports", label: "AIレポート", mark: "🤖" }
   ] },
   { id: "tools", label: "ツール", items: [
-    { id: "pomodoro", label: "ポモドーロ", mark: "🍅" },
     { id: "settings", label: "設定", mark: "⚙️" }
   ] }
 ];
@@ -13907,16 +12736,8 @@ function startPomodoro(blockId) {
   autoCloseStaleRoutineRuns(blockId);  // v215: 旧prepareTimeswitchForTaskStartのタブ非依存部
   // v14: state.pomodoro を完全再構築(spread を使わず、必要なフィールドだけ明示的に作成)
   // これで以前のセッションの endsAt/startedAt/mode が確実にリセットされる
-  const tab = state.pomodoro?.tab || "manual";
-  const passive = state.pomodoro?.passive || defaultPassivePomodoro();
-  const fullscreen = state.pomodoro?.fullscreen || false;
-  const studyWithMeOn = state.pomodoro?.studyWithMeOn || false;  // v84
   const now = Date.now();
   state.pomodoro = {
-    tab,
-    passive,
-    fullscreen,
-    studyWithMeOn,
     running: true,
     blockId,
     startedAt: dateToLocalDateTime(new Date(now)),
@@ -13936,10 +12757,6 @@ function startPomodoro(blockId) {
 // click ハンドラで start-pomodoro の前に呼んで、中断/完了/休憩後の再開で確実に 50:00 から始まることを保証
 function forceResetPomodoroSession() {
   state.pomodoro = {
-    tab: state.pomodoro?.tab || "manual",
-    passive: state.pomodoro?.passive || defaultPassivePomodoro(),
-    fullscreen: state.pomodoro?.fullscreen || false,
-    studyWithMeOn: state.pomodoro?.studyWithMeOn || false,  // v84
     running: false,
     blockId: "",
     startedAt: "",
@@ -13974,9 +12791,9 @@ function interruptReasonPickerHTML() {
     </div>`;
 }
 
-// v183: 中断理由ピッカーの表示条件をポモドーロ単体/今日ビューで共有する。
+// v183: 中断理由ピッカーを今日ビューのタイマー表示から利用する。
 // stop-pomodoroがセットする_pendingInterruptBlockIdを唯一の前提にし、通常時の操作HTMLは
-// 呼び出し側から受け取るため、単体ビューのボタン構成と挙動は変えない。
+// 呼び出し側から受け取る。
 function renderPomodoroInterruptControls(defaultHTML) {
   return _pendingInterruptBlockId === state.pomodoro.blockId
     ? interruptReasonPickerHTML()
@@ -13993,10 +12810,6 @@ function stopPomodoro() {
   }
   // v14: state.pomodoro を完全再構築(再開時に確実に 50:00 から)
   state.pomodoro = {
-    tab: state.pomodoro?.tab || "manual",
-    passive: state.pomodoro?.passive || defaultPassivePomodoro(),
-    fullscreen: state.pomodoro?.fullscreen || false,
-    studyWithMeOn: state.pomodoro?.studyWithMeOn || false,  // v84
     running: false,
     blockId: "",
     startedAt: "",
@@ -14021,10 +12834,6 @@ function completePomodoro() {
       : block);
   }
   state.pomodoro = {
-    tab: state.pomodoro?.tab || "manual",
-    passive: state.pomodoro?.passive || defaultPassivePomodoro(),
-    fullscreen: state.pomodoro?.fullscreen || false,
-    studyWithMeOn: state.pomodoro?.studyWithMeOn || false,  // v84
     running: false,
     blockId: "",
     startedAt: "",
@@ -14126,49 +12935,19 @@ function closeBodyScanFlow(saved) {
 }
 
 // ============================================================
-// v162: 未完了理由クイック入力(K裁定2026-07-28「言い訳ハンターの入力源」b案)
-// 2つの入口がある:
-//  (a) 仕分けモードの「手放す/延期」実行直後 — triageAction()が_pendingInlineReasonを立て、
-//      renderWishTriage()(上記triageInlineReasonHTML参照)がカードの下にインラインで
-//      理由チップ欄を出す。全画面モーダルにしないのは、Undoトースト(5秒間)を覆って
-//      タップ不能にしないため(recordTriageInlineReason/skipTriageInlineReasonが処理)。
-//  (b) 日次締め(「日報を生成」ボタン押下時に当日の未完了Blockが理由未記録のまま残っている
-//      場合) — こちらはUndoトーストと同時に出る心配が無いため、通常のモーダル
-//      (openIncompleteReasonModal以下)で複数件を1件ずつキューで尋ねる。
-// どちらもv129身体スキャンと同じ「強制しない」設計(いつでもスキップ/×で抜けられる)。
+// v162: 日次締めの未完了理由クイック入力(K裁定2026-07-28「言い訳ハンターの入力源」b案)。
+// 「日報を生成」ボタン押下時に当日の未完了Blockが理由未記録のまま残っている場合、
+// 通常のモーダルで複数件を1件ずつ尋ねる。v129身体スキャンと同じ「強制しない」設計。
 // ============================================================
 const INCOMPLETE_REASON_CHIPS = ["疲労", "時間切れ", "気分が乗らない", "割り込み", "見積り過大", "その他"];
 let _pendingIncompleteReasonCtx = null; // { queue: string[](残りのblock id), mode: 'dailyClose' } | null
-// v162 2系統レビュー対応(推奨4): 日次締めモーダルで「スキップ」したBlock idを積む
-// (_triageSessionDoneと同じ「セッション内・非永続」の流儀)。同じセッション内で「日報を生成」を
+// v162 2系統レビュー対応(推奨4): 日次締めモーダルで「スキップ」したBlock idを積む。
+// 同じセッション内で「日報を生成」を
 // 再度押しても、既にスキップ済みのBlockは再質問しない(ページリロードで自然にリセットされる)。
 let _dailyCloseReasonSkipped = new Set();
 
 function hasIncompleteReason(block) {
   return Boolean(block && block.incompleteReason && block.incompleteReason.chip);
-}
-
-// (a) 仕分けモードのインライン理由チップ欄(triageInlineReasonHTML)の確定/スキップ。
-// modalRootではなく#app本体に描画されるため、noteの取得は素直にdocument.querySelectorで行う。
-function recordTriageInlineReason(chip) {
-  if (!_pendingInlineReason || !chip) { skipTriageInlineReason(); return; }
-  const blockId = _pendingInlineReason.blockId;
-  const note = (document.querySelector("[data-triage-reason-note]")?.value || "").trim();
-  state.blocks = state.blocks.map((b) => b.id === blockId
-    ? { ...b, incompleteReason: { chip, note, at: nowDateTime() }, updatedAt: nowDateTime() }
-    : b);
-  _pendingInlineReason = null;
-  // v162: saveAndRender()で新しいトーストを出すと、直前の手放す/延期のUndoトースト
-  // (triageUndoToastOpts、5秒間有効)を上書きして「元に戻す」ボタンごと消してしまう。
-  // 理由記録自体はUndo対象の一部(_triageUndoのrevertが完全に元へ戻す)であり続けたいので、
-  // ここではトーストを出さずsaveState()+render()だけに留める(Undoの生存期間に触れない)。
-  saveState();
-  render();
-}
-
-function skipTriageInlineReason() {
-  _pendingInlineReason = null;
-  render();
 }
 
 // (b) 日次締めモーダル: blockIds を1件ずつ順に尋ねる。存在しないidは無視。空(または全件無効)なら
@@ -14484,10 +13263,6 @@ function goBreakPomodoro() {
   // v19: lastFocusBlockId に保存(休憩後に「続ける/完了」選択用)
   const now = Date.now();
   state.pomodoro = {
-    tab: state.pomodoro?.tab || "manual",
-    passive: state.pomodoro?.passive || defaultPassivePomodoro(),
-    fullscreen: state.pomodoro?.fullscreen || false,
-    studyWithMeOn: state.pomodoro?.studyWithMeOn || false,  // v84
     running: true,
     blockId: "",
     lastFocusBlockId: blockId || "",  // v19
@@ -14502,10 +13277,6 @@ function goBreakPomodoro() {
 function endBreakPomodoro() {
   // v14: 完全再構築
   state.pomodoro = {
-    tab: state.pomodoro?.tab || "manual",
-    passive: state.pomodoro?.passive || defaultPassivePomodoro(),
-    fullscreen: state.pomodoro?.fullscreen || false,
-    studyWithMeOn: state.pomodoro?.studyWithMeOn || false,  // v84
     running: false,
     blockId: "",
     startedAt: "",
@@ -14539,10 +13310,6 @@ function finishBlockFromBreak() {
   }
   // タイマーを終了状態に
   state.pomodoro = {
-    tab: state.pomodoro?.tab || "manual",
-    passive: state.pomodoro?.passive || defaultPassivePomodoro(),
-    fullscreen: state.pomodoro?.fullscreen || false,
-    studyWithMeOn: state.pomodoro?.studyWithMeOn || false,  // v84
     running: false,
     blockId: "",
     startedAt: "",
@@ -14552,49 +13319,25 @@ function finishBlockFromBreak() {
   saveAndRender("✅ Block を完了しました(実績終了時刻を記録)");
 }
 
-// v84: ポモドーロのtick更新(500ms毎)。Study With Me表示中は main.innerHTML の丸ごと
-// 置換(renderMain())をせず、時刻テキストと進捗円のみをDOM直接更新する。
-// renderPomodoro()が返す文字列自体は毎回同じでも、innerHTML代入はDOMノードを作り直すため、
-// 埋め込み中のiframeがtick毎(1秒に2回)に再読込されてしまう(v34の検索欄差分パッチと同じ理由)。
-// Study With Me非表示時は従来どおり renderMain() にフォールバックする(挙動変更なし)。
+// タイマー表示の差分更新。独立タブ削除後は共有のToday表示だけを更新する。
 function updatePomodoroTick() {
-  if (!state.pomodoro.studyWithMeOn || state.currentView !== "pomodoro") {
-    renderMain();
-    return;
-  }
-  const overlay = document.querySelector(".pomo-time-overlay");
-  const circle = document.querySelector(".pomo-progress-circle");
-  if (!overlay || !circle) { renderMain(); return; }  // 想定外の構造なら安全側でフル再描画
-  const R = 90;
-  const C = 2 * Math.PI * R;
-  const pomoTab = state.pomodoro.tab || "manual";
-  let text, progress, color;
-  if (pomoTab === "passive") {
-    const session = getPassiveSessionStatus();
-    text = session.phase === "focus" ? remainingText2x(session.remainingMs) : remainingTextNormal(session.remainingMs);
-    progress = session.progress;
-    color = session.phase === "focus" ? "var(--accent)" : "var(--orange)";
-  } else if (state.pomodoro.running) {
-    const mode = state.pomodoro.mode || "focus";
-    const endsAtMs = localDateTimeToMs(state.pomodoro.endsAt);
-    const remainingMs = Math.max(0, endsAtMs - Date.now());
-    if (mode === "break") {
-      text = remainingTextNormal(remainingMs);
-      progress = 1 - remainingMs / (5 * 60 * 1000);
-      color = "var(--orange)";
-    } else {
-      const startedAtMs = localDateTimeToMs(state.pomodoro.startedAt);
-      text = remainingText(state.pomodoro.endsAt, true);
-      progress = 1 - remainingMs / (endsAtMs - startedAtMs);
-      color = "var(--accent)";
-    }
-  } else {
-    return;  // 手動タブ未起動時は表示が変化しないので何もしない
-  }
-  overlay.textContent = text;
-  circle.style.stroke = color;
-  circle.style.strokeDasharray = String(C);
-  circle.style.strokeDashoffset = String(C * (1 - Math.min(1, Math.max(0, progress))));
+  const root = document.querySelector(".today-pomodoro");
+  if (!root || !state.pomodoro.running) return;
+  const overlay = root.querySelector(".pomo-time-overlay");
+  const circle = root.querySelector(".pomo-progress-circle");
+  if (!overlay || !circle) return;
+  const radius = 90;
+  const circumference = 2 * Math.PI * radius;
+  const endsAtMs = localDateTimeToMs(state.pomodoro.endsAt);
+  const remainingMs = Math.max(0, endsAtMs - Date.now());
+  const isBreak = state.pomodoro.mode === "break";
+  const startedAtMs = localDateTimeToMs(state.pomodoro.startedAt);
+  const totalMs = isBreak ? 5 * 60 * 1000 : Math.max(1, endsAtMs - startedAtMs);
+  const progress = 1 - remainingMs / totalMs;
+  overlay.textContent = isBreak ? remainingTextNormal(remainingMs) : remainingText(state.pomodoro.endsAt, true);
+  circle.style.stroke = isBreak ? "var(--orange)" : "var(--accent)";
+  circle.style.strokeDasharray = String(circumference);
+  circle.style.strokeDashoffset = String(circumference * (1 - clamp(progress, 0, 1)));
 }
 
 function startTimerTicker() {
@@ -14610,18 +13353,9 @@ function startTimerTicker() {
           // focus フェーズ終了 → 自動で休憩へ
           goBreakPomodoro();
         }
-      } else if (state.currentView === "pomodoro" && personalDataReady(state.settings.github)) {
-        // v72レビュー対応: renderMain()はrender()のトークンゲート判定を経由しないため、
-        // トークン喪失等でゲートに戻るべき状態のままここが直接呼ばれると、ゲート画面の
-        // 裏で#mainだけが再描画され続ける穴になる。ここでも同じ判定を明示的にかける。
-        // v84: renderMain()直呼びをupdatePomodoroTick()に置換(Study With Me表示中に
-        // iframeを500msごとに再生成させないため。中は従来どおりrenderMain()にフォールバック)
+      } else if (state.currentView === "today" && personalDataReady(state.settings.github)) {
         updatePomodoroTick();
       }
-    }
-    // 常時タイマー(壁時計モデル): ポモドーロ画面を開いている間は常に再描画
-    if (state.currentView === "pomodoro" && state.pomodoro?.tab === "passive" && personalDataReady(state.settings.github)) {
-      updatePomodoroTick();
     }
     // v41: 見込み終了時刻は該当 span のみ差し替え(全再描画しない)
     updateProjectedEndTick();
@@ -15972,7 +14706,6 @@ function closeModal() {
   modalRoot.setAttribute("aria-hidden", "true");
   modalRoot.innerHTML = "";
   modalRoot.onclick = null;
-  _migrationRitualCtx = null;  // v61: 選択せずに閉じた場合も一時状態を残さない
   _pendingLifecycleCtx = null;  // v87: 宣言/報告モーダルを×で閉じた場合は開始/終了自体も取り消す
   // v129: 背景タップ等の暗黙クローズは記録せず破棄する(_pendingLifecycleCtxと同じ扱い)。
   // 明示的な保存/discard経路(closeBodyScanFlow)は既にnull化済みのため、ここは冪等。
@@ -16840,41 +15573,6 @@ document.addEventListener("keydown", (event) => {
 });
 
 // ============================================================
-// ポモドーロ常時起動 (v3)
-// ============================================================
-
-function defaultPassivePomodoro() {
-  return {
-    enabled: false,
-    activeWeekdays: [false, true, true, true, true, true, false],  // 平日
-    activeStartHHMM: "08:00",
-    activeEndHHMM: "19:00",
-    lastFiredKey: ""
-  };
-}
-
-
-
-
-function setPomodoroTab(tab) {
-  state.pomodoro.tab = tab;
-  persistLocalNoSchedule();  // v37: タブ切替は UI 操作(dataModifiedAt を汚さない)
-  render();
-}
-
-
-
-// normalizeState の補完
-function ensurePassivePomodoro() {
-  state.pomodoro ||= {};
-  state.pomodoro.passive ||= defaultPassivePomodoro();
-  // activeWeekdays が配列でない / 7 要素未満の場合フォールバック
-  if (!Array.isArray(state.pomodoro.passive.activeWeekdays) || state.pomodoro.passive.activeWeekdays.length !== 7) {
-    state.pomodoro.passive.activeWeekdays = [false, true, true, true, true, true, false];
-  }
-}
-
-// ============================================================
 // AI フィードバック アップロード + 日報 GitHub push (v3)
 // ============================================================
 
@@ -17327,7 +16025,6 @@ state.selectedDate = todayISO();
 ensureJournal(state.selectedDate);
 persistLocalNoSchedule();
 
-ensurePassivePomodoro();
 // v151: テーマ設定が"auto"のとき、アプリを開いたままOSの外観(ライト/ダーク)が切り替わったら
 // 追従する(iOS設定アプリからの変更・日没での自動切替など)。addEventListenerが無い古いWebKitへの
 // フォールバックとしてaddListenerも試す(iOS Safariの実機バリエーション対策)。

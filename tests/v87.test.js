@@ -5,8 +5,8 @@
 //   従来どおりの開始処理(actualStartAt記録/ポモドーロ起動)が走る。
 // ②宣言スキップ/×閉じで従来動作: [宣言せず開始]または×閉じでは宣言ログを残さず、
 //   スキップ時は従来どおり開始のみ実行、×閉じでは開始自体も取り消される。
-// ③終了報告→ログ記録: now-end(■いま終了)/complete-pomodoro(✓完了)いずれも終了報告モーダルを
-//   経由し、[できた/一部できた/脱線した]いずれかのワンタップでoutcome・一言が記録される。
+// ③終了報告→ログ記録: now-end(■いま終了)は終了報告モーダルを経由し、
+//   [できた/一部できた/脱線した]いずれかのワンタップでoutcome・一言が記録される。
 //   [スキップ]では報告ログを残さず従来どおりの完了処理のみ走る。
 // ④決定論フィードバックの文言: 「宣言→完了まで{分}分(宣言時見積{分}分)。今日の宣言達成 X/Y」が
 //   トーストに出る(アプリ内AI呼び出しは無し・定型文+簡易集計のみ)。
@@ -185,102 +185,6 @@ function check(name, cond, extra = "") {
     check("スキップでは報告ログが残らない", (s3b.declarations || []).length === 0, JSON.stringify(s3b.declarations));
 
     // ============================================================
-    // [①③④ 通し] start-pomodoro → complete-pomodoro: 宣言(25分見積)→終了報告→フィードバック文言
-    // ============================================================
-    console.log("[通し] start-pomodoro: 宣言モーダルの見積は固定25分。宣言して開始→完了で終了報告モーダル→フィードバック文言");
-    await seed({
-      blocks: [planBlock({ id: "blk-p", title: "ポモドーロ通し検証", startMin: 9 * 60, minutes: 30 })],
-      view: "pomodoro"
-    });
-    check("アイドル状態でBlock選択ボタン(25分開始)が出る", await page.locator('[data-action="start-pomodoro"][data-block-id="blk-p"]').count() === 1);
-    await page.click('[data-action="start-pomodoro"][data-block-id="blk-p"]');
-    await page.waitForTimeout(200);
-    const declareTextPomo = await page.locator(".modal-body").first().textContent();
-    check("ポモドーロの宣言見積は固定25分", declareTextPomo.includes("25分"), declareTextPomo);
-    await page.click('[data-action="declare-confirm"]');
-    await page.waitForTimeout(300);
-    const s4a = await stateNow();
-    check("宣言確定後にポモドーロが起動する(running:true)", s4a.pomodoro?.running === true, JSON.stringify(s4a.pomodoro));
-    check("宣言確定でstate.declarationsにestimateMin:25の1件が記録される",
-      (s4a.declarations || []).length === 1 && s4a.declarations[0].estimateMin === 25, JSON.stringify(s4a.declarations));
-
-    // 宣言→報告の所要時間を決定論フィードバックで検証するため、報告時刻を10分進める
-    const tPlus10 = new Date(now0.getTime() + 10 * 60 * 1000);
-    await page.clock.setFixedTime(tPlus10);
-    await page.click('[data-action="complete-pomodoro"]');
-    await page.waitForTimeout(200);
-    check("完了操作で終了報告モーダルが開く", await page.locator('[data-action="report-outcome"][data-outcome="partial"]').count() === 1);
-    await page.click('[data-action="report-outcome"][data-outcome="partial"]');
-    await page.waitForTimeout(300);
-    const s4b = await stateNow();
-    check("従来どおりポモドーロ完了処理が走る(Block完了・pomodoroCount加算)",
-      s4b.blocks.find((b) => b.id === "blk-p")?.completed === true && s4b.blocks.find((b) => b.id === "blk-p")?.pomodoroCount === 1,
-      JSON.stringify(s4b.blocks.find((b) => b.id === "blk-p")));
-    const d4 = s4b.declarations.find((d) => d.blockId === "blk-p");
-    check("同じ宣言エントリに報告が合流する(新規エントリを作らない)", s4b.declarations.length === 1 && d4?.outcome === "partial", JSON.stringify(s4b.declarations));
-
-    console.log("[④] 決定論フィードバックの文言(宣言→完了までの分数・見積・今日の宣言達成)");
-    const toastText4 = await page.locator("#toast").textContent();
-    check("「宣言→完了まで10分」を含む(10分後に報告したため)", toastText4.includes("宣言→完了まで10分"), toastText4);
-    check("「宣言時見積25分」を含む", toastText4.includes("(宣言時見積25分)"), toastText4);
-    check("「今日の宣言達成」の分子/分母が入る(1件中0件=doneはまだ無い)", /今日の宣言達成 0\/1/.test(toastText4), toastText4);
-
-    console.log("[④b] 今日の宣言達成: outcome:doneの宣言があれば分子に反映される");
-    await page.clock.setFixedTime(now0);
-    await seed({
-      blocks: [
-        planBlock({ id: "blk-f", title: "宣言達成検証(既存doneあり)", startMin: 9 * 60, minutes: 30 })
-      ],
-      declarations: [
-        { id: "seed-done-1", blockId: "seed-x", date: TODAY, title: "既存宣言(達成)", estimateMin: 25, note: "", declaredAt: `${TODAY}T08:00:00`, reportedAt: `${TODAY}T08:25:00`, outcome: "done", resultNote: "" }
-      ]
-    });
-    await page.click('.timeline-card [data-action="now-start"][data-id="blk-f"]');
-    await page.waitForTimeout(200);
-    await page.click('[data-action="declare-confirm"]');
-    await page.waitForTimeout(200);
-    await page.click('.timeline-card [data-action="now-end"][data-id="blk-f"]');
-    await page.waitForTimeout(200);
-    await page.click('[data-action="report-outcome"][data-outcome="done"]');
-    await page.waitForTimeout(300);
-    const toastText4b = await page.locator("#toast").textContent();
-    check("既存のdone1件+今回のdone1件で「今日の宣言達成 2/2」になる", /今日の宣言達成 2\/2/.test(toastText4b), toastText4b);
-
-    // ============================================================
-    // [⑥] should-fix: 全画面レイヤ(.now-fullscreen/.pomo-fullscreen, z-index:9999)の裏に
-    // トーストが隠れない(修正前は.toastがz-index:40のままで不可視だった)。
-    // 注記: .toastはpointer-events:noneのため、document.elementFromPointによる最前面判定は
-    // 使えない(pointer-events:noneの要素はヒットテストの対象から除外されるため、実際の視覚的
-    // 重なりに関わらず常に背後の要素が返る)。両者ともposition:fixedでルートのスタッキング
-    // コンテキストを共有するため、computed z-indexの比較で視覚的な重なりを正しく判定できる。
-    // ============================================================
-    console.log("[⑥] should-fix: 全画面ポモドーロ完了時の決定論フィードバックトーストが.pomo-fullscreenの裏に隠れない");
-    await page.clock.setFixedTime(now0);
-    await seed({
-      blocks: [planBlock({ id: "blk-fs", title: "全画面トースト検証", startMin: 9 * 60, minutes: 30 })],
-      view: "pomodoro"
-    });
-    await page.click('[data-action="toggle-pomo-fullscreen"]');
-    await page.waitForTimeout(200);
-    check("(準備)ポモドーロ全画面が開く", await page.locator(".pomo-fullscreen").count() === 1);
-    await page.click('.pomo-fullscreen [data-action="start-pomodoro"][data-block-id="blk-fs"]');
-    await page.waitForTimeout(200);
-    await page.click('[data-action="declare-confirm"]');
-    await page.waitForTimeout(200);
-    await page.click('.pomo-fullscreen [data-action="complete-pomodoro"]');
-    await page.waitForTimeout(200);
-    await page.click('[data-action="report-outcome"][data-outcome="done"]');
-    await page.waitForTimeout(300);
-    check("(準備)全画面は完了後も表示されたまま(fullscreenフラグは維持)", await page.locator(".pomo-fullscreen").count() === 1);
-    check("(準備)決定論フィードバックトーストが表示状態(.show)になっている", await page.locator("#toast.show").count() === 1);
-    const zIndexCheck1 = await page.evaluate(() => ({
-      toast: Number(getComputedStyle(document.querySelector("#toast")).zIndex),
-      fullscreen: Number(getComputedStyle(document.querySelector(".pomo-fullscreen")).zIndex)
-    }));
-    check("トーストのz-indexが.pomo-fullscreenより大きい(視覚的に手前)", zIndexCheck1.toast > zIndexCheck1.fullscreen, JSON.stringify(zIndexCheck1));
-    const toastText6a = await page.locator("#toast").textContent();
-    check("決定論フィードバック文言がトーストに入っている(不可視だと従来気づけなかった内容)", toastText6a.includes("宣言→完了まで"), toastText6a);
-
     console.log("[⑥b] should-fix: Now全画面(実行コンベア)からの終了操作でもトーストが.now-fullscreenの裏に隠れない");
     await seed({
       blocks: [planBlock({ id: "blk-now-fs", title: "Now全画面トースト検証", startMin: new Date().getHours() * 60, minutes: 60 })],

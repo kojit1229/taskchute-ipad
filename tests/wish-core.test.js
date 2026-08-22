@@ -46,9 +46,6 @@ function escapeHTML(value) {
 function renderHeader(eyebrow, title, action = "") {
   return `<div class="stub-header">${eyebrow}/${title}</div>${action}`;
 }
-function renderWishTriage(wishes) {
-  return `<div class="stub-triage">仕分け対象${wishes.length}件</div>`;
-}
 function localDateTimeToMs(dateTime) {
   if (!dateTime) return 0;
   const m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{1,2}):(\d{2})(?::(\d{2}))?)?/.exec(dateTime);
@@ -118,8 +115,7 @@ async function loadModules() {
 
   wishMod.configureWish({
     escapeHTML, renderHeader, todayISO, localDateTimeToMs, makeTask, makeBlock,
-    defaultPlannedTimes, showToast, nowDateTime, saveAndRender, render, updateTaskField,
-    renderWishTriage
+    defaultPlannedTimes, showToast, nowDateTime, saveAndRender, render, updateTaskField
   });
 
   const WISH_PROJECT_ID = "proj-wish";
@@ -129,7 +125,6 @@ async function loadModules() {
       tasks: [], blocks: [],
       settings: { lifeAreas: [] },
       wishFilter: { area: "", showRealized: false },
-      wishViewMode: "list",
       wishOpenId: "",
       selectedDate: "2026-07-20",
       ...extra
@@ -268,26 +263,6 @@ async function loadModules() {
     check("タスクのstatusがdoingになる", storeMod.state.tasks[0].status === "doing");
   }
 
-  console.log("[8] wishHasTodayBlock: 本体またはサブタスクいずれかに今日のBlockがあればtrue");
-  {
-    todayISOValue = "2026-07-28";
-    setBaseState({
-      tasks: [
-        { id: "w1", parentTaskId: "", deleted: false },
-        { id: "s1", parentTaskId: "w1", deleted: false }
-      ],
-      blocks: [{ id: "b1", taskId: "s1", date: "2026-07-28", deleted: false }]
-    });
-    check("サブタスク経由の今日Blockを検知", wishMod.wishHasTodayBlock("w1") === true);
-    check("無関係のWishはfalse", wishMod.wishHasTodayBlock("other") === false);
-
-    setBaseState({
-      tasks: [{ id: "w2", parentTaskId: "", deleted: false }],
-      blocks: [{ id: "b2", taskId: "w2", date: "2026-07-27", deleted: false }]  // 前日
-    });
-    check("前日のBlockは対象外(today基準)", wishMod.wishHasTodayBlock("w2") === false);
-  }
-
   console.log("[9] wishGroupKey/wishGroupLabel: realized/someday/年ラベルの判定");
   {
     check("realized:trueは'realized'", wishMod.wishGroupKey({ realized: true }) === "realized");
@@ -297,7 +272,7 @@ async function loadModules() {
     check("'someday'キーのラベル", wishMod.wishGroupLabel("someday").includes("いつか"));
   }
 
-  console.log("[10] renderWishCard/renderWishBoard: スモーク(例外を投げず描画し、現在月にis-currentが付く)");
+  console.log("[10] renderWishCard: スモーク(例外を投げず描画する)");
   {
     todayISOValue = "2026-07-28";
     setBaseState({
@@ -308,9 +283,6 @@ async function loadModules() {
     try { cardHTML = wishMod.renderWishCard(storeMod.state.tasks[0]); } catch (e) { threw = true; console.log(e); }
     check("renderWishCardが例外を投げない", threw === false);
     check("タイトルが描画される", cardHTML.includes("旅行"));
-
-    const boardHTML = wishMod.renderWishBoard(storeMod.state.tasks);
-    check("7月の行にis-currentが付く(todayISO=2026-07-28)", /data-month="7"[^>]*is-current/.test(boardHTML.replace(/\n/g, " ")) || boardHTML.includes('is-current'));
   }
 
   console.log(failures === 0 ? "\nwish-core: 全件成功" : `\nwish-core: ${failures}件失敗`);

@@ -108,7 +108,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "reading-save",
   "experiment-add", "edit-experiment", "experiment-keep", "experiment-drop",
   "experiment-copy-conclusion",
-  "pomo-tab", "push-report", "add-task-to-project", "add-subtask",
+  "push-report", "add-task-to-project", "add-subtask",
   "toggle-plan-owner", "move-plan-step", "add-plan-step-below",  // v195: 実行計画UI
   "plan-step-request", "plan-step-approve", "plan-step-discard",  // v196: 実行計画の叩き台をAIに依頼
   "ai-step-confirm-send", "ai-step-confirm-later",  // v198: 完了トリガー→引き継ぎシート
@@ -119,11 +119,9 @@ const GOLDEN_CLICK_ACTIONS = [
   "toggle-vision-direct-category", "vision-open-direct-settings",  // v189: F7 直結カテゴリ選択+誘導(設定ビュー)
   "tl-zoom", "tl-energy-mode",
   "toggle-journal-segment", "toggle-home-reflect-fold", "toggle-settings-sync",
-  "toggle-sidebar", "toggle-pomo-fullscreen", "toggle-study-with-me",
+  "toggle-sidebar",
   "add-wish", "open-wish", "add-wish-subtask", "toggle-wish-subtask",
   "wish-subtask-to-tasks", "wish-realize", "wish-unrealize", "delete-wish",
-  "wish-view-mode", "wish-board-jump-current",
-  "triage-choice", "triage-undo", "triage-reason-chip", "triage-reason-skip",
   "zt-add-toggle", "zt-add-cancel", "zt-add-submit", "zt-tab", "home-tab",
   "zt-fav-toggle", "zt-importance-toggle", "zt-theme-delete",
   "zt-suggestion-adopt", "zt-suggestion-dismiss",
@@ -147,7 +145,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "open-backup-list", "restore-backup",
   "stats-range", "run-archive",
   "open-search", "search-jump",
-  "carry-over", "migration-ritual-choice", "ideal-retry",
+  "carry-over", "ideal-retry",
   "energy-open-routine", "energy-open-category",
   "timeline-clear-cat", "routine-clear-day"
 ];
@@ -155,13 +153,12 @@ const GOLDEN_CLICK_ACTIONS = [
 // v173: 段階5-2で抽出済みfeatureの分岐をregisterActions経由のレジストリへ移行した
 // (GOLDEN_CLICK_ACTIONSの部分集合)。
 // ハンドラ本体はif連鎖からロジック無改変で移しただけで、追加・削除・リネームはしていない。
-// triage-*(wish Tier3・未抽出)とbody-scan-*(routineとは別ドメイン・未抽出)は
-// 確信が持てないため今回は移行せず、if連鎖に残した(下のEXPECTED_REMAINING_IF_CHAINに含まれる)。
+// body-scan-*(routineとは別ドメイン・未抽出)はif連鎖に残した
+// (下のEXPECTED_REMAINING_IF_CHAINに含まれる)。
 const MIGRATED_TO_REGISTRY_ACTIONS = [
   // src/features/wish.js(configureWish、Tier1のみ)
   "add-wish", "open-wish", "add-wish-subtask", "toggle-wish-subtask",
   "wish-subtask-to-tasks", "wish-realize", "wish-unrealize", "delete-wish",
-  "wish-view-mode", "wish-board-jump-current",
   // src/features/journal.js(configureJournal、コンディションOS+運動記録+お店ログ)
   "set-morning", "set-sleep", "toggle-meds", "set-capacity", "set-evening-mood",
   "add-gym-entry", "delete-gym-entry",
@@ -200,7 +197,7 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
 // open-md-in-github・reload-md・stats-range)、toggle-criteria-request/home-jump(WBS/ホーム寄り
 // で確信が持てない)、body-scan-*(ポモドーロ完了時トリガーだがroutine.js未抽出の既存判断を
 // 維持)、energy-open-routine(ルーティンタブへの導線でtimeline状態を触らない)、
-// triage-*(wish Tier3)・weekly-wish-*(wish週次選定、weekly-wish-toggleはpreventDefault依存)は
+// weekly-wish-*(wish週次選定、weekly-wish-toggleはpreventDefault依存)は
 // 従来どおり移行せず、if連鎖に残した(下のEXPECTED_REMAINING_IF_CHAINに含まれる)。
 const APP_JS_REGISTERED_ACTIONS = [
   "nav",
@@ -227,13 +224,13 @@ const APP_JS_REGISTERED_ACTIONS = [
   "question-add", "question-edit", "question-to-theme", "question-settle", "question-reopen",
   "question-bridge", "question-bridge-submit", "question-delete",
   "entry-to-question", "open-questions",
-  // --- v177: その他(19、日報/AIレポート/AI連携/読書/マイグレーション儀式/朝夜detailsトグル) ---
+  // --- v177: その他(日報/AIレポート/AI連携/読書/朝夜detailsトグル) ---
   "reading-save", "ai-report-type", "ai-report-refresh", "open-future-letter",
   "ai-work-approve", "ai-work-question",
   "ai-mit-adopt", "ai-task-adopt", "ai-task-dismiss",
   "report-copy-ai", "report-share-ai",
   "generate-report", "download-report", "download-data",
-  "carry-over", "migration-ritual-choice", "ideal-retry",
+  "carry-over", "ideal-retry",
   "toggle-journal-segment", "toggle-home-reflect-fold",
   // --- v178: WBS/Project/Task CRUD(18) ---
   "add-project", "delete-project", "add-task", "toggle-task", "delete-task",
@@ -271,8 +268,8 @@ const APP_JS_REGISTERED_ACTIONS = [
   // --- v181: 日付ナビ(3) ---
   "date-prev", "date-next", "today",
   // --- v181: タイムライン設定/カテゴリフィルタ(9) ---
-  "pomo-tab", "timeline-new-block", "complete-block-with-actual", "tl-zoom", "tl-energy-mode",
-  "toggle-pomo-fullscreen", "toggle-study-with-me", "energy-open-category", "timeline-clear-cat"
+  "timeline-new-block", "complete-block-with-actual", "tl-zoom", "tl-energy-mode",
+  "energy-open-category", "timeline-clear-cat"
 ];
 
 const EXPECTED_REMAINING_IF_CHAIN = GOLDEN_CLICK_ACTIONS.filter(

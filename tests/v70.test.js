@@ -325,11 +325,11 @@ function check(name, cond, extra = "") {
     console.log("[6] フォーカスタイマー中の「中断」は理由ワンタップピッカーを経由し、選択でinterruptionsに記録される");
     await seed({
       blocks: [planBlock({ id: "interrupt-block", title: "中断検証Block", startMin: 9 * 60, minutes: 30, actualStartAt: `${TODAY}T10:00:00` })],
-      view: "pomodoro",
-      pomodoro: { running: true, blockId: "interrupt-block", startedAt: `${TODAY}T10:00:00`, endsAt: `${TODAY}T10:25:00`, mode: "focus", tab: "manual" }
+      view: "today",
+      pomodoro: { running: true, blockId: "interrupt-block", startedAt: `${TODAY}T10:00:00`, endsAt: `${TODAY}T10:25:00`, mode: "focus" }
     });
-    check("作業中の中断ボタンが出る", await page.locator('[data-action="stop-pomodoro"]').count() === 1);
-    await page.click('[data-action="stop-pomodoro"]');
+    check("作業中の中断ボタンが出る", await page.locator('.today-pomodoro [data-action="stop-pomodoro"]').count() === 1);
+    await page.click('.today-pomodoro [data-action="stop-pomodoro"]');
     await page.waitForTimeout(300);
     check("理由ワンタップピッカーが出る", await page.locator(".interrupt-reason-picker").count() === 1);
     const sMidInterrupt = await stateNow();
@@ -344,7 +344,7 @@ function check(name, cond, extra = "") {
     check("キャンセルではinterruptionsは記録されない", (sAfterCancel.blocks.find((b) => b.id === "interrupt-block")?.interruptions || []).length === 0);
 
     console.log("[6c] 理由を選ぶとinterruptionsに記録され、タイマーは中断される(既存挙動どおりactualStartAtはクリア)");
-    await page.click('[data-action="stop-pomodoro"]');
+    await page.click('.today-pomodoro [data-action="stop-pomodoro"]');
     await page.waitForTimeout(200);
     await page.click('.interrupt-reason-picker [data-action="interrupt-reason"][data-reason="疲労"]');
     await page.waitForTimeout(300);

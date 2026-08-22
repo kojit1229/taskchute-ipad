@@ -164,8 +164,7 @@ function check(name, cond, extra = "") {
       // (中断UIの経路検証はv70スイートの担当範囲のため、ここでは設定の永続化だけを見る)
       await page.evaluate((KEY) => {
         const s = JSON.parse(localStorage.getItem(KEY));
-        s.pomodoro = { tab: "manual", passive: s.pomodoro?.passive, fullscreen: false, studyWithMeOn: false,
-          running: false, blockId: "", startedAt: "", endsAt: "", mode: "focus" };
+        s.pomodoro = { running: false, blockId: "", startedAt: "", endsAt: "", mode: "focus" };
         localStorage.setItem(KEY, JSON.stringify(s));
       }, KEY);
       await page.reload();

@@ -14,22 +14,11 @@
 //  [6] 日報出力: 理由が1件以上ある日は「## 未完了理由」節が
 //      `- [Block名] チップ名: ひと言`(ひと言なしは`- [Block名] チップ名`)形式で出る。
 //      理由が無い日は節ごと省略される。
-//  [7] 仕分けモード「手放す」実行直後、カードの下にインライン理由チップ欄が(モーダルではなく)
-//      即座に出る。全画面モーダルにしないのは、同時に出ているUndoトーストのタップを妨げない
-//      ため——実際にUndoボタンがタップ可能な状態のままであることも確認する。チップをタップすると
-//      deleted:true化されたBlockにも理由が記録される。
-//  [8] 仕分けモード「手放す」実行直後にUndoすると、インライン理由チップ欄も引っ込む
-//      (undoされた行動の理由を今さら尋ねない)。
-//  [9] 理由記録後にUndoしても、記録した理由ごと完全に元へ戻る(v156のUndo契約)。
-//
 // 2026-07-28 2系統レビュー対応の追加検証(必須1-3・推奨4-6):
 //  [6c] 記録後に完了へ転じたBlockは「## 未完了理由」から消える(必須2)。
-//  [10] 一気通貫: 仕分けで記録した理由(前日Block)が当日の日報「## 未完了理由」に載る
-//       (必須1。block.dateではなくincompleteReason.atの日付でも拾う修正の検証)。
 //  [11] 日次締めでスキップしたBlockは同セッション内で再質問されない(推奨4)。
-//  必須3(state.questions.push直後のsaveState())・推奨5(_pendingInlineReasonの
-//  取りこぼしクリア)・推奨6(incompleteReason.atのString()正規化)はコード変更のみで
-//  専用のUIテストは追加していない([9]等の既存テストで副作用的に経路を通っている)。
+//  必須3(state.questions.push直後のsaveState())・推奨6(incompleteReason.atのString()正規化)は
+//  コード変更のみで専用のUIテストは追加していない。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
@@ -56,12 +45,6 @@ const mkTodayBlock = (id, title, extra = {}) => ({
   charge: 0, discharge: 0, comment: "", pomodoroCount: 0, isMIT: false,
   createdAt: `${TODAY}T09:00:00`, updatedAt: `${TODAY}T09:00:00`, ...extra
 });
-const mkYesterdayBlock = (id, title, extra = {}) => ({
-  id, taskId: "", date: YESTERDAY, title, category: "仕事", estimateMin: 20, carryCount: 0,
-  migratedTo: "", completed: false, recurrenceGroupId: "", deleted: false, incompleteReason: null,
-  createdAt: "2026-01-01T09:00:00", updatedAt: "2026-01-01T09:00:00", ...extra
-});
-
 (async () => {
   const server = startServer(PORT);
   const browser = await chromium.launch(launchOptions());
@@ -95,7 +78,6 @@ const mkYesterdayBlock = (id, title, extra = {}) => ({
       (fixture.tasks || []).forEach((t) => s.tasks.push(t));
       s.selectedDate = TODAY;
       s.currentView = fixture.view || "journal";
-      s.wishViewMode = fixture.wishViewMode || "list";
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, wishProjectId, fixture, TODAY });
     await page.reload();
@@ -238,120 +220,6 @@ const mkYesterdayBlock = (id, title, extra = {}) => ({
       s6c.blocks.find((b) => b.id === "blk-now-completed")?.incompleteReason?.chip === "時間切れ");
 
     // ============================================================
-    // [7]-[8] 仕分けモード(triage)からの理由チップ
-    // ============================================================
-    console.log("[7] 仕分け「手放す」実行直後、カードの下にインライン理由チップ欄が即座に出る(Undoトーストも同時にタップ可能)");
-    await seed({ blocks: [mkYesterdayBlock("blk-triage-drop", "仕分け手放す対象")], view: "wish", wishViewMode: "triage" });
-    await page.locator('.triage-actions [data-choice="drop"]').click();
-    await page.waitForTimeout(200);
-    const beforePrompt = await stateNow();
-    check("(準備)手放す実行直後はdeleted:trueになる", beforePrompt.blocks.find((b) => b.id === "blk-triage-drop")?.deleted === true);
-    check("全画面モーダルは開かない(インライン方式のため)", await page.locator(".modal-root.open").count() === 0);
-    check("インライン理由チップ欄がカードの下に即座に出る", await page.locator(".triage-inline-reason").count() === 1);
-    check("同時にUndoトーストも表示されタップ可能(理由欄に覆われていない)",
-      await page.locator('.toast-action[data-action="triage-undo"]').isVisible());
-    await page.fill("[data-triage-reason-note]", "急な割り込み対応");
-    await page.click('[data-action="triage-reason-chip"][data-chip="割り込み"]');
-    await page.waitForTimeout(200);
-    const s7 = await stateNow();
-    const droppedBlock = s7.blocks.find((b) => b.id === "blk-triage-drop");
-    check("deleted:true化されたBlockにも理由が記録される",
-      droppedBlock?.incompleteReason?.chip === "割り込み" && droppedBlock?.incompleteReason?.note === "急な割り込み対応", JSON.stringify(droppedBlock));
-    check("deleted状態自体は変わらない(理由記録がUndoではないことの確認)", droppedBlock?.deleted === true);
-    check("記録後はインライン欄が引っ込む", await page.locator(".triage-inline-reason").count() === 0);
-    check("triageモードは記録後もgenerateReport()を呼ばない(reportsは空のまま)", Object.keys(s7.reports || {}).length === 0);
-
-    console.log("[7b] 仕分け「手放す」実行直後、インライン欄の「スキップ」で記録せず引っ込む");
-    await seed({ blocks: [mkYesterdayBlock("blk-triage-skip", "仕分け手放すスキップ対象")], view: "wish", wishViewMode: "triage" });
-    await page.locator('.triage-actions [data-choice="drop"]').click();
-    await page.waitForTimeout(200);
-    check("(準備)インライン理由チップ欄が出る", await page.locator(".triage-inline-reason").count() === 1);
-    await page.click('[data-action="triage-reason-skip"]');
-    await page.waitForTimeout(200);
-    const s7b = await stateNow();
-    check("スキップ後はインライン欄が引っ込む", await page.locator(".triage-inline-reason").count() === 0);
-    check("理由は記録されない", s7b.blocks.find((b) => b.id === "blk-triage-skip")?.incompleteReason === null);
-
-    console.log("[7c] 仕分け「手放す」の後、インライン欄を放置したまま次カードで「今日やる」を選んでも欄が居座らない(2系統レビュー対応・推奨5)");
-    await seed({
-      blocks: [mkYesterdayBlock("blk-orphan-drop", "手放す対象(欄を放置)"), mkYesterdayBlock("blk-next-today", "次カード今日やる対象")],
-      view: "wish", wishViewMode: "triage"
-    });
-    await page.locator('.triage-actions [data-choice="drop"]').click();
-    await page.waitForTimeout(200);
-    check("(準備)手放す直後はインライン理由チップ欄が出る(対象: 手放す対象)",
-      (await page.locator(".triage-inline-reason").textContent()).includes("手放す対象"));
-    // インライン欄には触れず、次カード(次カード今日やる対象)に対して「今日やる」を選ぶ
-    // (別カードへのボタン操作クールダウンTRIAGE_ACTION_COOLDOWN_MS=350msを跨ぐ待機)
-    await page.waitForTimeout(300);
-    await page.locator('.triage-actions [data-choice="today"]').click();
-    await page.waitForTimeout(200);
-    check("次カードで別操作をすると、前カード分のインライン理由チップ欄は引っ込む(居座らない)",
-      await page.locator(".triage-inline-reason").count() === 0);
-
-    console.log("[8] 仕分け「手放す」直後にUndoすると、インライン理由チップ欄も引っ込む");
-    await seed({ blocks: [mkYesterdayBlock("blk-triage-undo", "仕分け手放すUndo対象")], view: "wish", wishViewMode: "triage" });
-    await page.locator('.triage-actions [data-choice="drop"]').click();
-    await page.waitForTimeout(200);
-    check("(準備)Undo前はインライン理由チップ欄が出ている", await page.locator(".triage-inline-reason").count() === 1);
-    await page.locator('.toast-action[data-action="triage-undo"]').click();
-    await page.waitForTimeout(200);
-    const restored = await stateNow();
-    check("(準備)Undoで元に戻る(deleted:false)", restored.blocks.find((b) => b.id === "blk-triage-undo")?.deleted === false);
-    check("Undo後はインライン理由チップ欄も引っ込む(undoされた行動の理由は尋ねない)", await page.locator(".triage-inline-reason").count() === 0);
-
-    console.log("[9] 理由を記録した後でもUndoを押すと、記録した理由ごと完全に元へ戻る(v156のUndo契約)");
-    await seed({ blocks: [mkYesterdayBlock("blk-triage-both", "理由記録後にUndoする対象", { carryCount: 1 })], view: "wish", wishViewMode: "triage" });
-    const before9 = (await stateNow()).blocks.find((b) => b.id === "blk-triage-both");
-    await page.locator('.triage-actions [data-choice="drop"]').click();
-    await page.waitForTimeout(200);
-    await page.click('[data-action="triage-reason-chip"][data-chip="見積り過大"]');
-    await page.waitForTimeout(200);
-    const withReason = (await stateNow()).blocks.find((b) => b.id === "blk-triage-both");
-    check("(準備)理由が記録された状態", withReason?.incompleteReason?.chip === "見積り過大", JSON.stringify(withReason));
-    check("(準備)Undoボタンはまだ表示されている(理由記録後もUndo自体は生きている)",
-      await page.locator('.toast-action[data-action="triage-undo"]').count() === 1);
-    await page.locator('.toast-action[data-action="triage-undo"]').click();
-    await page.waitForTimeout(200);
-    const after9 = (await stateNow()).blocks.find((b) => b.id === "blk-triage-both");
-    const sameExceptUpdatedAt = (a, b) => {
-      const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
-      keys.delete("updatedAt");
-      for (const k of keys) { if (JSON.stringify(a[k]) !== JSON.stringify(b[k])) return false; }
-      return true;
-    };
-    check("Undoで理由ごと完全に元へ戻る(incompleteReasonもnullへ)",
-      after9?.incompleteReason === null && sameExceptUpdatedAt(before9, after9), JSON.stringify({ before: before9, after: after9 }));
-
-    // ============================================================
-    // [10]-[11] 2系統レビュー対応(2026-07-28)の追加検証
-    // ============================================================
-    console.log("[10] 一気通貫(2系統レビュー対応・必須1): 仕分けで記録した理由(前日Block)が当日の日報「## 未完了理由」に載る");
-    await seed({ blocks: [mkYesterdayBlock("blk-carry-1", "繰越タスク")], view: "wish", wishViewMode: "triage" });
-    await page.locator('.triage-actions [data-choice="drop"]').click();
-    await page.waitForTimeout(200);
-    await page.fill("[data-triage-reason-note]", "見積もりが甘かった");
-    await page.click('[data-action="triage-reason-chip"][data-chip="見積り過大"]');
-    await page.waitForTimeout(200);
-    const beforeCarryReport = await stateNow();
-    const carriedBlockBefore = beforeCarryReport.blocks.find((b) => b.id === "blk-carry-1");
-    check("(準備)Block自体のdateは前日のまま(理由記録がdateを書き換えたりしない)",
-      carriedBlockBefore?.date === YESTERDAY, carriedBlockBefore?.date);
-    // ジャーナルへ切り替えて「日報を生成」(当日は他に未完了Blockが無いため直接生成される)
-    await page.evaluate(({ KEY }) => {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      s.currentView = "journal";
-      localStorage.setItem(KEY, JSON.stringify(s));
-    }, { KEY });
-    await page.reload();
-    await page.waitForTimeout(500);
-    await page.click('[data-action="generate-report"]');
-    await page.waitForTimeout(300);
-    const s10 = await stateNow();
-    const report10 = s10.reports[TODAY] || "";
-    check("前日Blockの理由が当日の日報「## 未完了理由」に載る(構造上はb.date!==dateだが、記録時刻atがdate一致で拾われる)",
-      report10.includes("- [繰越タスク] 見積り過大: 見積もりが甘かった"), report10);
-
     console.log("[11] 日次締め: スキップしたBlockは同セッション内で「日報を生成」を再度押しても再質問されない(2系統レビュー対応・推奨4)");
     await seed({ blocks: [mkTodayBlock("blk-skip-remember", "スキップ記憶対象")], view: "journal" });
     await page.click('[data-action="generate-report"]');

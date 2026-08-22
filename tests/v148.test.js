@@ -149,9 +149,6 @@ function check(name, cond, extra = "") {
     // パネルは各群のdetails内に格納されているだけで、消えてはいない(格納するだけの原則)
     check("エネルギーバッテリー欄はDOM上に存在する(閉じているだけ)",
       await page.locator('[data-setting-battery-field="max"]').count() === 1);
-    check("Study With Me欄はDOM上に存在する(閉じているだけ)",
-      await page.locator('[data-swm-field="videoId"]').count() === 1);
-
     console.log("[3b] 同期停止アラートが出る状態では「データと同期」群だけ既定openになる");
     // syncAlertMessage()はpersonalDataReady(github token/owner/repo)+「この端末が最後に
     // pullへ成功した時刻」(taskchute-journal-last-sync-pull-atという別のlocalStorageキー、

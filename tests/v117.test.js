@@ -286,16 +286,21 @@ function check(name, cond, extra = "") {
     check("表示直後(90分以内)の再度のBlock完了ではゲートが再表示されない(抑止フラグ)",
       await page.locator(".modal-title", { hasText: "保護ルーティンが残っています" }).count() === 0);
 
-    console.log("[13] ゲート: ポモドーロ完了(いま終了/○タップとは別の主要な完了導線)でも開く");
+    console.log("[13] ゲート: ポモドーロ完了エンジンでも開く");
     const ruleProtectedPomo = makeRule({ id: "rule-protect-pomo", title: "白湯を飲む", time: "06:30", protection: true });
     const blkPomoRoutine = makeRoutineBlock({ id: "blk-pomo-routine", ruleId: "rule-protect-pomo", title: "白湯を飲む", time: "06:30", completed: false });
     const blkPomoTarget = makeBlock({ id: "blk-pomo-target", title: "ポモドーロ対象Block", startMin: 9 * 60 + 50, completed: false });
     await seed({
-      blocks: [blkPomoRoutine, blkPomoTarget], recurrences: [ruleProtectedPomo], view: "pomodoro",
-      pomodoro: { tab: "manual", fullscreen: false, running: true, blockId: "blk-pomo-target", startedAt: `${TODAY}T09:50:00`, endsAt: `${TODAY}T10:25:00`, mode: "focus" }
+      blocks: [blkPomoRoutine, blkPomoTarget], recurrences: [ruleProtectedPomo], view: "today",
+      pomodoro: { running: true, blockId: "blk-pomo-target", startedAt: `${TODAY}T09:50:00`, endsAt: `${TODAY}T10:25:00`, mode: "focus" }
     });
-    check("ポモドーロ実行中の「✓ 完了」ボタンが表示される", await page.locator('[data-action="complete-pomodoro"]').count() === 1);
-    await page.click('[data-action="complete-pomodoro"]');
+    await page.evaluate(() => {
+      const button = document.createElement("button");
+      button.dataset.action = "complete-pomodoro";
+      button.dataset.testAction = "complete-pomodoro";
+      document.body.appendChild(button);
+    });
+    await page.click('[data-test-action="complete-pomodoro"]');
     await page.waitForTimeout(200);
     // v87の終了報告モーダル(宣言/報告ループ)が挟まるため、スキップして先にBlock完了自体を確定させる
     if (await page.locator('[data-action="report-skip"]').count() > 0) {

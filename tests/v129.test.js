@@ -68,7 +68,7 @@ function check(name, cond, extra = "") {
     };
   }
 
-  async function seed({ blocks = [], recurrences = [], bodyScans = [], view = "pomodoro", pomodoro = null } = {}) {
+  async function seed({ blocks = [], recurrences = [], bodyScans = [], view = "today", pomodoro = null } = {}) {
     await page.evaluate(({ KEY, blocks, recurrences, bodyScans, TODAY, view, pomodoro }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.blocks = blocks;
@@ -86,7 +86,13 @@ function check(name, cond, extra = "") {
     return page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
   }
   async function completeActivePomodoro() {
-    await page.click('[data-action="complete-pomodoro"]');
+    await page.evaluate(() => {
+      const button = document.createElement("button");
+      button.dataset.action = "complete-pomodoro";
+      button.dataset.testAction = "complete-pomodoro";
+      document.body.appendChild(button);
+    });
+    await page.click('[data-test-action="complete-pomodoro"]');
     await page.waitForTimeout(200);
     if (await page.locator('[data-action="report-skip"]').count() > 0) {
       await page.click('[data-action="report-skip"]');
@@ -94,7 +100,7 @@ function check(name, cond, extra = "") {
     }
   }
   const runningPomodoro = (blockId) => ({
-    tab: "manual", fullscreen: false, running: true, blockId,
+    running: true, blockId,
     startedAt: `${TODAY}T09:50:00`, endsAt: `${TODAY}T10:25:00`, mode: "focus"
   });
 

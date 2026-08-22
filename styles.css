@@ -1003,7 +1003,7 @@ h3 {
   padding: 10px 14px;
   border-radius: 999px;
   font-size: 13px;
-  /* v87 should-fix: 全画面レイヤ(.now-fullscreen/.pomo-fullscreen, z-index:9999)の裏に
+  /* v87 should-fix: 全画面レイヤ(.now-fullscreen, z-index:9999)の裏に
      隠れて決定論フィードバックトーストが見えなくなっていた。全画面超・モーダル(10050)未満に。 */
   z-index: 10001;
 }
@@ -1429,8 +1429,8 @@ h3 {
 .modal-root {
   position: fixed;
   inset: 0;
-  /* v87: 宣言/終了報告モーダルは pomo-fullscreen(9999)・now-fullscreen(9999)・
-     completion-effect(10000)より上に来る必要がある(Now画面/ポモドーロ全画面中でも
+  /* v87: 宣言/終了報告モーダルは now-fullscreen(9999)・completion-effect(10000)より
+     上に来る必要がある(Now画面中でも
      操作できるように)。50のままだと全画面モードの裏に隠れてタップできなくなる。 */
   z-index: 10050;
   display: none;
@@ -1889,23 +1889,6 @@ h3 {
   }
 }
 
-/* v84: Study With Me(ポモドーロYouTube埋め込み) */
-.study-with-me-frame-wrap {
-  width: 100%;
-  max-width: 480px;
-  margin: 0 auto 14px;
-  aspect-ratio: 16 / 9;
-  border-radius: 10px;
-  overflow: hidden;
-  background: #000;
-}
-.study-with-me-frame {
-  width: 100%;
-  height: 100%;
-  border: 0;
-  display: block;
-}
-
 /* ============ タイムラインカード(v7改修) ============ */
 .timeline-card {
   padding-left: 36px !important;
@@ -2028,244 +2011,6 @@ h3 {
   opacity: 0.7;
 }
 
-/* === v12: ポモドーロ全画面モード === */
-.pomo-fullscreen {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  background: #000;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* 背景動画(study_with_me.mp4) */
-.pomo-bg-video {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  z-index: 0;
-}
-
-/* v88: Study With Me 全画面背景(YouTube iframe)。
-   iframeにはobject-fitが効かない(Safari含め挙動不安定)ため、
-   16:9の実寸をCSSのmax()でvw/vhの大きい方に合わせて拡大し、中央からはみ出た分を
-   親のoverflow:hiddenでクリップする「cover」相当のクラシックな手法を使う。 */
-.pomo-fs-bg-wrap {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  background: #000;
-}
-.pomo-fs-bg-iframe {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: max(100vw, 177.78vh);   /* 100vh を16:9の横幅に換算(100vh * 16/9) */
-  height: max(100vh, 56.25vw);   /* 100vw を16:9の高さに換算(100vw * 9/16) */
-  transform: translate(-50%, -50%);
-  border: 0;
-}
-
-/* 半透明グレーフィルタ */
-.pomo-bg-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(20, 20, 25, 0.55);
-  backdrop-filter: blur(2px);
-  z-index: 1;
-  pointer-events: none;  /* v88: 下の動画(mp4/iframe)へのタップを妨げない */
-}
-
-/* 全画面コンテンツ層 */
-.pomo-fullscreen-content {
-  position: relative;
-  z-index: 2;
-  width: 100%;
-  height: 100%;
-  max-width: 900px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: max(20px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));
-  color: #fff;
-}
-
-/* 全画面解除ボタン(右上) */
-.pomo-fullscreen-close {
-  position: absolute;
-  top: max(16px, env(safe-area-inset-top));
-  right: 16px;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  background: rgba(0, 0, 0, 0.3);
-  color: #fff;
-  font-size: 18px;
-  cursor: pointer;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  line-height: 1;
-  z-index: 3;
-}
-.pomo-fullscreen-close:hover {
-  background: rgba(0, 0, 0, 0.5);
-}
-
-/* v88: 全画面内のStudy With Meトグル(✕ボタンの左隣) */
-.pomo-fullscreen-swm-toggle {
-  position: absolute;
-  top: max(16px, env(safe-area-inset-top));
-  right: 64px;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  background: rgba(0, 0, 0, 0.3);
-  color: #fff;
-  font-size: 16px;
-  cursor: pointer;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  line-height: 1;
-  z-index: 3;
-}
-.pomo-fullscreen-swm-toggle.active {
-  background: rgba(255, 59, 92, 0.75);
-  border-color: rgba(255, 255, 255, 0.6);
-}
-
-/* v88: 背景がStudy With Me動画のとき、HUD(タイマー・操作パネル一式)は下の動画への
-   タップを妨げないようpointer-events:noneにする。実際に押す必要があるボタン・select・
-   input・aだけ個別にautoへ戻す(再生状態のJS監視はせず、CSSだけで「タップは動画へ、
-   操作はボタンへ」を成立させる)。 */
-.pomo-fullscreen.has-swm-bg .pomo-fullscreen-content {
-  pointer-events: none;
-}
-.pomo-fullscreen.has-swm-bg .pomo-fullscreen-content button,
-.pomo-fullscreen.has-swm-bg .pomo-fullscreen-content select,
-.pomo-fullscreen.has-swm-bg .pomo-fullscreen-content input,
-.pomo-fullscreen.has-swm-bg .pomo-fullscreen-content a {
-  pointer-events: auto;
-}
-/* v88: タイマーHUD自体は半透明にして「動画の上に重ねた表示」であることを見せる */
-.pomo-fullscreen.has-swm-bg .pomo-circle-wrap {
-  opacity: 0.9;
-}
-
-/* 全画面でのタブ切替 */
-.pomo-fs-tabs {
-  position: absolute;
-  top: max(16px, env(safe-area-inset-top));
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 999px;
-  padding: 4px;
-  display: flex;
-  gap: 4px;
-  z-index: 3;
-}
-.pomo-fs-tabs button {
-  background: transparent;
-  border: none;
-  color: rgba(255, 255, 255, 0.7);
-  padding: 6px 16px;
-  font-size: 13px;
-  border-radius: 999px;
-  cursor: pointer;
-}
-.pomo-fs-tabs button.active {
-  background: rgba(255, 255, 255, 0.85);
-  color: #000;
-  font-weight: 600;
-}
-
-/* 全画面でのタイマーステージ(中央) */
-.pomo-fs-stage {
-  width: 100%;
-  max-width: 600px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* 全画面内の .panel は背景透明・枠なし(動画背景を活かす) */
-.pomo-fullscreen-content .panel {
-  background: transparent !important;
-  box-shadow: none !important;
-  border: none !important;
-  min-height: 0 !important;
-  padding: 0 !important;
-  width: 100%;
-}
-
-/* 全画面の円形プログレスバーを最大化 */
-.pomo-fullscreen-content .pomo-circle-wrap {
-  width: min(60vh, 60vw, 480px) !important;
-  height: min(60vh, 60vw, 480px) !important;
-}
-.pomo-fullscreen-content .pomo-time-overlay {
-  font-size: clamp(56px, 12vw, 110px) !important;
-  color: #fff !important;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
-}
-.pomo-fullscreen-content .pomo-bg-circle {
-  stroke: rgba(255, 255, 255, 0.18) !important;
-}
-
-/* 全画面のテキスト類は白系に */
-.pomo-fullscreen-content .muted {
-  color: rgba(255, 255, 255, 0.7) !important;
-}
-.pomo-fullscreen-content strong,
-.pomo-fullscreen-content h2 {
-  color: #fff !important;
-}
-
-/* 全画面のボタンは見やすく(背景半透明) */
-.pomo-fullscreen-content .btn {
-  background: rgba(0, 0, 0, 0.4);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  backdrop-filter: blur(4px);
-}
-.pomo-fullscreen-content .btn.green {
-  background: rgba(52, 199, 89, 0.85);
-  border-color: rgba(52, 199, 89, 0.95);
-}
-.pomo-fullscreen-content .btn.orange {
-  background: rgba(255, 149, 0, 0.85);
-  border-color: rgba(255, 149, 0, 0.95);
-}
-.pomo-fullscreen-content .btn.danger {
-  background: rgba(255, 59, 48, 0.85);
-  border-color: rgba(255, 59, 48, 0.95);
-}
-
-/* 全画面では時刻軸ラベル(現サイクル開始)を上側に */
-.pomo-fullscreen-content section > div[style*="text-align:center"] > div {
-  color: #fff;
-}
-
-@media (max-width: 720px) {
-  .pomo-fullscreen-content .pomo-circle-wrap {
-    width: min(70vw, 70vh, 320px) !important;
-    height: min(70vw, 70vh, 320px) !important;
-  }
-  .pomo-fullscreen-content .pomo-time-overlay {
-    font-size: clamp(44px, 14vw, 80px) !important;
-  }
-}
-
 /* === v16: やりたいことリスト(Wish) === */
 .wish-card {
   transition: box-shadow 0.15s ease;
@@ -2332,118 +2077,6 @@ h3 {
   cursor: pointer;
 }
 
-/* === v79: 月間プランニングボード(v80でグリッド→縦積みリストに変更。詳細はapp.jsのコメント参照) === */
-.wish-board-pool-body {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-height: 44px;
-  border-radius: 8px;
-  transition: box-shadow 0.1s ease;
-  max-height: 260px;
-  overflow-y: auto;
-  padding: 8px;
-  background: var(--panel-soft);
-}
-/* v80: ボード上部の補助行(縦積みの説明 + 「今月へ」ジャンプボタン) */
-.wish-board-toolbar {
-  margin-top: 14px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-/* v80: 1〜12月を縦一列に並べるリスト(旧: auto-fill grid) */
-.wish-board-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 10px;
-}
-/* v80: 月1行。month-zone を行全体に付けているので、空月でもヘッダだけの行自体が
-   ドロップターゲットになる(D&D実装(app.js)は closest(".month-zone") で判定するため)。 */
-.wish-board-month-row {
-  background: var(--panel);
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 8px 10px;
-  transition: box-shadow 0.1s ease;
-}
-.wish-board-month-row.is-empty {
-  padding: 6px 10px;
-  opacity: 0.6;
-}
-.wish-board-month-row.is-current {
-  border-color: var(--accent);
-}
-.wish-board-current-badge {
-  font-size: 10px;
-  font-weight: 600;
-  background: var(--accent);
-  color: #fff;
-  padding: 1px 7px;
-  border-radius: 999px;
-}
-.wish-board-month-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.wish-board-month-body {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 8px;
-}
-.month-zone.drag-over {
-  box-shadow: inset 0 0 0 2px var(--accent);
-}
-.wish-board-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: var(--panel-soft);
-  cursor: grab;
-  touch-action: none;
-}
-.wish-board-card.is-dragging {
-  opacity: 0.85;
-  box-shadow: 0 6px 16px rgba(0,0,0,0.2);
-  z-index: 50;
-  position: relative;
-  cursor: grabbing;
-  pointer-events: none; /* ドラッグ中は自分自身を透過させ、elementFromPointが下の月枠を拾えるようにする */
-}
-.wish-board-card-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-/* v80: 見切れ対策の本丸。単一行ellipsisをやめ、2行までは折り返して全文を読めるようにする */
-.wish-board-card-title {
-  font-size: 13px;
-  line-height: 1.35;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-}
-.wish-board-card-area {
-  font-size: 10px;
-  opacity: 0.85;
-}
-.wish-board-card-month {
-  width: 74px;
-  flex-shrink: 0;
-  padding: 4px 4px;
-  font-size: 16px; /* iOS: 16px未満は自動ズームするため */
-}
 .wish-detail .textarea {
   width: 100%;
   border: 1px solid var(--line);
@@ -3678,7 +3311,7 @@ h3 {
 .wbs-progress-agg { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 .wbs-progress-agg .progress { flex: 1; }
 
-/* v61: マイグレーション儀式(繰り越し回数バッジ・確認モーダル) */
+/* v61: 繰り越し回数バッジ */
 .migration-badge {
   display: inline-block;
   margin-left: 6px;
@@ -3709,61 +3342,6 @@ h3 {
 .block-row.is-migrated {
   opacity: 0.55;
 }
-.migration-ritual-title { font-size: 15px; font-weight: 700; margin: 0 0 4px; }
-.migration-ritual-choices { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
-.migration-ritual-choices .btn { width: 100%; text-align: left; padding: 11px 14px; }
-
-/* v152: 仕分けモード(designs/03-task-swipe.md S1)。1件ずつ大きく表示+三択ボタン。
-   タップターゲットは44px以上(.triage-btn min-height 48px)。「手放す」は罰なしトーンの規約に
-   従い赤色・危険表現は使わない(.btn.ghostのニュートラル配色のまま)。 */
-.triage-panel { display: flex; flex-direction: column; gap: 14px; }
-.triage-card {
-  position: relative;
-  padding: 28px 20px;
-  border-radius: var(--radius);
-  background: var(--panel-soft);
-  border: 1px solid var(--line);
-  text-align: center;
-  /* v154(2026-07-28改訂、2系統レビュー対応): スワイプは左右のみ(今日やる/手放す)。
-     仕分けビューは実測で縦スクロールが発生するため、touch-action: pan-y にして縦方向は
-     ブラウザのネイティブスクロールへ譲る(当初案のtouch-action:noneは、上フリック=延期を
-     廃止したことに伴い撤回した)。preventDefault()は横方向ジェスチャ確定時のみJS側で呼ぶ。
-     transitionはスナップバック/退場アニメ用(pointermove中はis-draggingで無効化し1:1追従)。 */
-  touch-action: pan-y;
-  user-select: none;
-  -webkit-user-select: none;
-  cursor: grab;
-  transition: transform .18s cubic-bezier(.22, 1, .36, 1), opacity .18s ease;
-}
-.triage-card.is-dragging { transition: none; cursor: grabbing; }
-.triage-swipe-hint {
-  position: absolute;
-  top: 8px;
-  left: 0;
-  right: 0;
-  text-align: center;
-  font-size: 14px;
-  font-weight: 800;
-  opacity: 0;
-  pointer-events: none;
-}
-.triage-swipe-hint.hint-today { color: var(--green-text); }
-.triage-swipe-hint.hint-drop { color: var(--orange-text); }
-.triage-badge {
-  display: inline-block;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: var(--panel);
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
-  margin-bottom: 12px;
-}
-.triage-card-title { font-size: 21px; font-weight: 800; line-height: 1.45; }
-.triage-card-sub { margin-top: 10px; font-size: 13px; }
-.triage-actions { display: flex; flex-direction: column; gap: 10px; }
-.triage-btn { min-height: 48px; width: 100%; font-size: 15px; }
-
 /* v65: 10x機構 — leverageType の控えめマーク + 10秒判定ヘルプの折りたたみ */
 .lev-mark {
   display: inline-block;
@@ -4033,8 +3611,8 @@ h3 {
   text-align: center;
 }
 
-/* v70: Now画面(実行コンベア)。pomo-fullscreen と同じ position:fixed; inset:0 の全画面手法
-   (iOS Safariの100vh問題を避け、動画背景の代わりにテーマ変数の背景色を使う)。 */
+/* v70: Now画面(実行コンベア)。position:fixed; inset:0 の全画面手法で
+   iOS Safariの100vh問題を避ける。 */
 .now-fullscreen {
   position: fixed;
   inset: 0;
@@ -4232,20 +3810,6 @@ h3 {
      3px・60秒・1回きりの残り時間表現で前庭刺激性がなく、止めると
      機能情報(残り時間)が失われるため(apple-design §14:
      reduced motionはフィードバック除去ではない) */
-}
-
-/* =========================================================
-   v154: 仕分けモードのスワイプ(designs/03-task-swipe.md §③)。
-   スナップバック/退場のtransformアニメーション(.triage-cardのtransition)を止める。
-   JS側(triagePrefersReducedMotion)も同じmatchMediaを見て退場アニメの待機
-   (TRIAGE_SWIPE_EXIT_MS)自体をスキップし、離した瞬間に即時確定する
-   (「無効化」ではなくCSS/JS両側で揃えて即時反映にする方針)。三択ボタンの操作性・
-   見た目はこのブロックの対象外(元々アニメーションを伴わない)。
-   ========================================================= */
-@media (prefers-reduced-motion: reduce) {
-  .triage-card {
-    transition: none;
-  }
 }
 
 @keyframes modal-materialize-reduced {
@@ -5403,8 +4967,7 @@ h3 {
 /* v185 B4 P11b: 背景グリッドとhome固有zone tint。timeline色はtimeline.jsで変数化する。 */
 :root[data-theme="cockpit"] body,
 :root[data-theme="cockpit"] .app-shell,
-:root[data-theme="cockpit"] .now-fullscreen,
-:root[data-theme="cockpit"] .pomo-fullscreen {
+:root[data-theme="cockpit"] .now-fullscreen {
   background-color: var(--bg);
   background-image:
     radial-gradient(ellipse 90% 60% at 50% -10%, rgba(40, 90, 180, 0.12), transparent),

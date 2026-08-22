@@ -79,13 +79,13 @@ function check(name, cond, extra = "") {
     s.blocks = s.blocks || [];
     s.blocks.push({ id: "blk-pomo", taskId: "", date: "", title: "集中作業", category: "", plannedStartAt: "", plannedEndAt: "", actualStartAt: "", actualEndAt: "", completed: false, charge: 0, discharge: 0, comment: "", recurrenceGroupId: "", pomodoroCount: 0, migratedTo: "", orderIndex: 0, createdAt: startedAtISO, updatedAt: startedAtISO, deleted: false });
     s.pomodoro = { running: true, blockId: "blk-pomo", startedAt: startedAtISO, endsAt: endsAtISO, mode: "focus" };
-    s.currentView = "pomodoro";
+    s.currentView = "today";
     localStorage.setItem(KEY, JSON.stringify(s));
   }, { KEY, startedAtISO: isoDateTime(startedAt), endsAtISO: isoDateTime(endsAt) });
   await page.reload();
   await page.waitForTimeout(500);
 
-  const overlayText = (await page.locator(".pomo-time-overlay").first().textContent()).trim();
+  const overlayText = (await page.locator(".today-pomodoro .pomo-time-overlay").textContent()).trim();
   const parts = overlayText.split(":").map(Number);
   const totalSec = (parts[0] || 0) * 60 + (parts[1] || 0);
   check("Pomodoroが「セッション切れ」として自動リセットされていない(50:00 に戻っていない)",

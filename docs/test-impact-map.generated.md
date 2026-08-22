@@ -21,7 +21,7 @@
 | timeline-layout-core.test.js | node | full | planning-execution | 25 | 0 | 0 |
 | timeline-render-core.test.js | node | full | planning-execution, ui-responsive | 41 | 0 | 0 |
 | timeline-tick-wiring.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 16 | 8 | 4500 |
-| today-core.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 324 | 6 | 10800 |
+| today-core.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 316 | 6 | 10800 |
 | tower-core.test.js | e2e | full | sync-storage, ui-responsive | 152 | 0 | 0 |
 | tower-model-core.test.js | node | full | legacy-crosscutting | 6 | 0 | 0 |
 | v100.test.js | e2e | full | content-ai, ui-responsive | 31 | 9 | 3300 |
@@ -41,7 +41,7 @@
 | v114.test.js | e2e | full | planning-execution, journal-health, ui-responsive | 32 | 11 | 4100 |
 | v115.test.js | e2e | full | planning-execution, ui-responsive | 34 | 11 | 3200 |
 | v116.test.js | e2e | full | planning-execution | 24 | 5 | 1500 |
-| v117.test.js | e2e | full | planning-execution | 36 | 19 | 5300 |
+| v117.test.js | e2e | full | planning-execution | 35 | 19 | 5300 |
 | v118.test.js | e2e | full | sync-storage, planning-execution, content-ai | 14 | 9 | 6600 |
 | v119.test.js | e2e | full | sync-storage, content-ai | 19 | 5 | 1800 |
 | v120.test.js | e2e | full | sync-storage, journal-health | 13 | 6 | 2100 |
@@ -70,21 +70,18 @@
 | v144.test.js | e2e | full | planning-execution, journal-health | 48 | 30 | 9450 |
 | v146.test.js | e2e | full | planning-execution | 45 | 27 | 5500 |
 | v147.test.js | e2e | full | planning-execution | 44 | 17 | 5850 |
-| v148.test.js | e2e | full | planning-execution | 61 | 23 | 7150 |
+| v148.test.js | e2e | full | planning-execution | 60 | 23 | 7150 |
 | v149.test.js | e2e | full | planning-execution | 62 | 34 | 9250 |
 | v150.test.js | e2e | full | planning-execution | 57 | 19 | 9150 |
 | v151.test.js | e2e | full | ui-responsive | 35 | 13 | 5100 |
-| v152.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 59 | 24 | 4950 |
 | v153.test.js | e2e | full | content-ai | 49 | 23 | 8650 |
-| v154.test.js | e2e | full | ui-responsive | 52 | 23 | 2980 |
 | v155.test.js | e2e | full | planning-execution, ui-responsive | 43 | 14 | 4800 |
-| v156.test.js | e2e | full | planning-execution | 72 | 32 | 6700 |
 | v157.test.js | e2e | full | planning-execution, content-ai | 19 | 3 | 1400 |
 | v158.test.js | e2e | full | planning-execution, content-ai | 21 | 3 | 1400 |
 | v159.test.js | e2e | full | planning-execution, content-ai | 20 | 8 | 3900 |
 | v160.test.js | e2e | full | planning-execution, content-ai | 11 | 6 | 2700 |
 | v161.test.js | e2e | full | planning-execution, content-ai | 21 | 3 | 1900 |
-| v162.test.js | e2e | full | planning-execution, journal-health | 53 | 32 | 9100 |
+| v162.test.js | e2e | full | planning-execution, journal-health | 32 | 16 | 5400 |
 | v163.test.js | node | full | journal-health, ui-responsive | 3 | 0 | 0 |
 | v193.test.js | e2e | full | sync-storage, planning-execution, content-ai, ui-responsive | 23 | 0 | 0 |
 | v194.test.js | e2e | full | planning-execution | 8 | 0 | 0 |
@@ -103,7 +100,7 @@
 | v58.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 15 | 11 | 4250 |
 | v59.test.js | e2e | smoke | planning-execution | 19 | 6 | 2450 |
 | v60.test.js | e2e | full | content-ai, security-offline | 29 | 21 | 8100 |
-| v61.test.js | e2e | full | planning-execution | 54 | 32 | 9850 |
+| v61.test.js | e2e | full | planning-execution | 34 | 19 | 6650 |
 | v62.test.js | e2e | full | journal-health, content-ai | 58 | 25 | 9800 |
 | v63.test.js | e2e | full | journal-health | 29 | 11 | 3400 |
 | v65.test.js | e2e | full | planning-execution | 37 | 19 | 5650 |
@@ -119,16 +116,13 @@
 | v76.test.js | e2e | full | journal-health, content-ai | 15 | 6 | 3050 |
 | v77.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 33 | 7 | 3000 |
 | v78.test.js | e2e | full | journal-health | 15 | 7 | 3300 |
-| v79.test.js | e2e | full | sync-storage, planning-execution, content-ai, ui-responsive | 23 | 18 | 6000 |
-| v80.test.js | e2e | full | ui-responsive | 22 | 5 | 2000 |
+| v79.test.js | e2e | full | sync-storage, planning-execution, content-ai, ui-responsive | 15 | 12 | 3800 |
 | v81.test.js | e2e | full | planning-execution, journal-health, content-ai, ui-responsive | 36 | 17 | 4550 |
 | v82.test.js | e2e | full | planning-execution, journal-health, content-ai, ui-responsive | 39 | 10 | 2750 |
 | v83.test.js | e2e | full | planning-execution, content-ai, ui-responsive, security-offline | 33 | 17 | 5950 |
-| v84.test.js | e2e | full | planning-execution, ui-responsive | 40 | 22 | 6800 |
 | v85.test.js | e2e | full | sync-storage, journal-health, content-ai | 16 | 14 | 4200 |
 | v86.test.js | e2e | full | planning-execution, content-ai | 29 | 10 | 4200 |
-| v87.test.js | e2e | full | planning-execution | 50 | 31 | 8100 |
-| v88.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 39 | 9 | 3750 |
+| v87.test.js | e2e | full | planning-execution | 34 | 18 | 5100 |
 | v89.test.js | e2e | full | planning-execution, ui-responsive | 25 | 8 | 3400 |
 | v90.test.js | e2e | full | content-ai | 35 | 16 | 5100 |
 | v91.test.js | e2e | full | journal-health | 12 | 6 | 2800 |
@@ -140,7 +134,7 @@
 | v97.test.js | e2e | full | planning-execution, ui-responsive | 22 | 7 | 2800 |
 | v98.test.js | e2e | full | ui-responsive | 9 | 7 | 3100 |
 | v99.test.js | e2e | full | sync-storage, planning-execution, content-ai, ui-responsive | 21 | 12 | 4100 |
-| wish-core.test.js | node | full | content-ai, ui-responsive | 37 | 0 | 0 |
+| wish-core.test.js | node | full | content-ai, ui-responsive | 33 | 0 | 0 |
 | xss-sanitizer.test.js | e2e | smoke | content-ai, security-offline | 24 | 2 | 1000 |
 
 ## Area → suite map (code-index area ⇔ test-manifest domain)
@@ -149,10 +143,10 @@
 
 | Code-index area | Test-manifest domain | Functions | Suites | Suite list |
 |---|---|---:|---:|---|
-| content | content-ai | 98 | 65 | action-registry-core.test.js, coach-core.test.js, github-vision-pdf-fallback.test.js, journal-core.test.js, routine-core.test.js, store-core.test.js, today-core.test.js, v100.test.js, v101.test.js, v102.test.js, v103.test.js, v110.test.js, v113.test.js, v118.test.js, v119.test.js, v121.test.js, v122.test.js, v124.test.js, v125.test.js, v133.test.js, v135.test.js, v136.test.js, v138.test.js, v140.test.js, v141.test.js, v142.test.js, v143.test.js, v152.test.js, v153.test.js, v157.test.js, v158.test.js, v159.test.js, v160.test.js, v161.test.js, v193.test.js, v195.test.js, v196.test.js, v197.test.js, v198.test.js, v199.test.js, v49.test.js, v56.test.js, v57.test.js, v58.test.js, v60.test.js, v62.test.js, v67.test.js, v68.test.js, v71.test.js, v74.test.js, v75.test.js, v76.test.js, v77.test.js, v79.test.js, v81.test.js, v82.test.js, v83.test.js, v85.test.js, v86.test.js, v88.test.js, v90.test.js, v92.test.js, v99.test.js, wish-core.test.js, xss-sanitizer.test.js |
-| core | legacy-crosscutting | 203 | 7 | code-index.test.js, commit-size-gate.test.js, release-gate.test.js, release-record.test.js, run-all-options.test.js, suite-manifest.test.js, tower-model-core.test.js |
-| execution | planning-execution | 156 | 74 | action-registry-core.test.js, github-state-blob-fallback.test.js, routine-core.test.js, store-core.test.js, sw-integration.test.js, timeline-layout-core.test.js, timeline-render-core.test.js, timeline-tick-wiring.test.js, today-core.test.js, v106.test.js, v107.test.js, v108.test.js, v109.test.js, v110.test.js, v112.test.js, v113.test.js, v114.test.js, v115.test.js, v116.test.js, v117.test.js, v118.test.js, v122.test.js, v125.test.js, v126.test.js, v129.test.js, v133.test.js, v135.test.js, v136.test.js, v137.test.js, v144.test.js, v146.test.js, v147.test.js, v148.test.js, v149.test.js, v150.test.js, v152.test.js, v155.test.js, v156.test.js, v157.test.js, v158.test.js, v159.test.js, v160.test.js, v161.test.js, v162.test.js, v193.test.js, v194.test.js, v195.test.js, v196.test.js, v197.test.js, v199.test.js, v50.test.js, v55.test.js, v58.test.js, v59.test.js, v61.test.js, v65.test.js, v66.test.js, v70.test.js, v77.test.js, v79.test.js, v81.test.js, v82.test.js, v83.test.js, v84.test.js, v86.test.js, v87.test.js, v88.test.js, v89.test.js, v92.test.js, v94.test.js, v95.test.js, v96.test.js, v97.test.js, v99.test.js |
+| content | content-ai | 93 | 63 | action-registry-core.test.js, coach-core.test.js, github-vision-pdf-fallback.test.js, journal-core.test.js, routine-core.test.js, store-core.test.js, today-core.test.js, v100.test.js, v101.test.js, v102.test.js, v103.test.js, v110.test.js, v113.test.js, v118.test.js, v119.test.js, v121.test.js, v122.test.js, v124.test.js, v125.test.js, v133.test.js, v135.test.js, v136.test.js, v138.test.js, v140.test.js, v141.test.js, v142.test.js, v143.test.js, v153.test.js, v157.test.js, v158.test.js, v159.test.js, v160.test.js, v161.test.js, v193.test.js, v195.test.js, v196.test.js, v197.test.js, v198.test.js, v199.test.js, v49.test.js, v56.test.js, v57.test.js, v58.test.js, v60.test.js, v62.test.js, v67.test.js, v68.test.js, v71.test.js, v74.test.js, v75.test.js, v76.test.js, v77.test.js, v79.test.js, v81.test.js, v82.test.js, v83.test.js, v85.test.js, v86.test.js, v90.test.js, v92.test.js, v99.test.js, wish-core.test.js, xss-sanitizer.test.js |
+| core | legacy-crosscutting | 198 | 7 | code-index.test.js, commit-size-gate.test.js, release-gate.test.js, release-record.test.js, run-all-options.test.js, suite-manifest.test.js, tower-model-core.test.js |
+| execution | planning-execution | 126 | 70 | action-registry-core.test.js, github-state-blob-fallback.test.js, routine-core.test.js, store-core.test.js, sw-integration.test.js, timeline-layout-core.test.js, timeline-render-core.test.js, timeline-tick-wiring.test.js, today-core.test.js, v106.test.js, v107.test.js, v108.test.js, v109.test.js, v110.test.js, v112.test.js, v113.test.js, v114.test.js, v115.test.js, v116.test.js, v117.test.js, v118.test.js, v122.test.js, v125.test.js, v126.test.js, v129.test.js, v133.test.js, v135.test.js, v136.test.js, v137.test.js, v144.test.js, v146.test.js, v147.test.js, v148.test.js, v149.test.js, v150.test.js, v155.test.js, v157.test.js, v158.test.js, v159.test.js, v160.test.js, v161.test.js, v162.test.js, v193.test.js, v194.test.js, v195.test.js, v196.test.js, v197.test.js, v199.test.js, v50.test.js, v55.test.js, v58.test.js, v59.test.js, v61.test.js, v65.test.js, v66.test.js, v70.test.js, v77.test.js, v79.test.js, v81.test.js, v82.test.js, v83.test.js, v86.test.js, v87.test.js, v89.test.js, v92.test.js, v94.test.js, v95.test.js, v96.test.js, v97.test.js, v99.test.js |
 | journal-health | journal-health | 90 | 36 | action-registry-core.test.js, journal-core.test.js, routine-core.test.js, v105.test.js, v106.test.js, v110.test.js, v113.test.js, v114.test.js, v120.test.js, v121.test.js, v122.test.js, v126.test.js, v128.test.js, v129.test.js, v130.test.js, v131.test.js, v134.test.js, v140.test.js, v141.test.js, v142.test.js, v144.test.js, v162.test.js, v163.test.js, v53.test.js, v54.test.js, v62.test.js, v63.test.js, v68.test.js, v73.test.js, v76.test.js, v78.test.js, v81.test.js, v82.test.js, v85.test.js, v91.test.js, v92.test.js |
-| state | sync-storage | 150 | 35 | action-registry-core.test.js, github-state-blob-fallback.test.js, github-vision-pdf-fallback.test.js, merge-core.test.js, store-core.test.js, timeline-tick-wiring.test.js, tower-core.test.js, v102.test.js, v103.test.js, v104.test.js, v105.test.js, v106.test.js, v108.test.js, v110.test.js, v113.test.js, v118.test.js, v119.test.js, v120.test.js, v130.test.js, v134.test.js, v135.test.js, v136.test.js, v143.test.js, v193.test.js, v195.test.js, v197.test.js, v49.test.js, v53.test.js, v57.test.js, v68.test.js, v72.test.js, v79.test.js, v85.test.js, v94.test.js, v99.test.js |
+| state | sync-storage | 140 | 35 | action-registry-core.test.js, github-state-blob-fallback.test.js, github-vision-pdf-fallback.test.js, merge-core.test.js, store-core.test.js, timeline-tick-wiring.test.js, tower-core.test.js, v102.test.js, v103.test.js, v104.test.js, v105.test.js, v106.test.js, v108.test.js, v110.test.js, v113.test.js, v118.test.js, v119.test.js, v120.test.js, v130.test.js, v134.test.js, v135.test.js, v136.test.js, v143.test.js, v193.test.js, v195.test.js, v197.test.js, v49.test.js, v53.test.js, v57.test.js, v68.test.js, v72.test.js, v79.test.js, v85.test.js, v94.test.js, v99.test.js |
 | sync | sync-storage | 66 | 35 | action-registry-core.test.js, github-state-blob-fallback.test.js, github-vision-pdf-fallback.test.js, merge-core.test.js, store-core.test.js, timeline-tick-wiring.test.js, tower-core.test.js, v102.test.js, v103.test.js, v104.test.js, v105.test.js, v106.test.js, v108.test.js, v110.test.js, v113.test.js, v118.test.js, v119.test.js, v120.test.js, v130.test.js, v134.test.js, v135.test.js, v136.test.js, v143.test.js, v193.test.js, v195.test.js, v197.test.js, v49.test.js, v53.test.js, v57.test.js, v68.test.js, v72.test.js, v79.test.js, v85.test.js, v94.test.js, v99.test.js |
-| ui | ui-responsive | 322 | 51 | action-registry-core.test.js, journal-core.test.js, routine-core.test.js, timeline-render-core.test.js, timeline-tick-wiring.test.js, today-core.test.js, tower-core.test.js, v100.test.js, v101.test.js, v104.test.js, v105.test.js, v109.test.js, v110.test.js, v111.test.js, v112.test.js, v113.test.js, v114.test.js, v115.test.js, v123.test.js, v125.test.js, v127.test.js, v132.test.js, v134.test.js, v142.test.js, v151.test.js, v152.test.js, v154.test.js, v155.test.js, v163.test.js, v193.test.js, v50.test.js, v54.test.js, v58.test.js, v66.test.js, v67.test.js, v71.test.js, v75.test.js, v77.test.js, v79.test.js, v80.test.js, v81.test.js, v82.test.js, v83.test.js, v84.test.js, v88.test.js, v89.test.js, v93.test.js, v97.test.js, v98.test.js, v99.test.js, wish-core.test.js |
+| ui | ui-responsive | 303 | 46 | action-registry-core.test.js, journal-core.test.js, routine-core.test.js, timeline-render-core.test.js, timeline-tick-wiring.test.js, today-core.test.js, tower-core.test.js, v100.test.js, v101.test.js, v104.test.js, v105.test.js, v109.test.js, v110.test.js, v111.test.js, v112.test.js, v113.test.js, v114.test.js, v115.test.js, v123.test.js, v125.test.js, v127.test.js, v132.test.js, v134.test.js, v142.test.js, v151.test.js, v155.test.js, v163.test.js, v193.test.js, v50.test.js, v54.test.js, v58.test.js, v66.test.js, v67.test.js, v71.test.js, v75.test.js, v77.test.js, v79.test.js, v81.test.js, v82.test.js, v83.test.js, v89.test.js, v93.test.js, v97.test.js, v98.test.js, v99.test.js, wish-core.test.js |

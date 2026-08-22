@@ -570,19 +570,6 @@ function check(name, cond, extra = "") {
       (runBlockAfterStart.actualStartAt || "").includes("11:00"), runBlockAfterStart.actualStartAt);
 
     // ============================================================
-    // [15b] P5: 今日ビューで開始したセッションがポモドーロ単体ビューでも見え、
-    //        既存の2倍速表示(実25分=50:00表示)が不変であること
-    // ============================================================
-    console.log("[15b] P5: 単体ビューに同セッションが 50:00(2倍速)で表示され、+1分で 48:00 に進む(既存表示仕様の不変検証)");
-    await page.locator('#sidebar .nav-button[data-action="nav"][data-view="pomodoro"]').click();
-    await waitView("pomodoro");
-    await page.waitForFunction(() => (document.getElementById("main")?.textContent || "").includes("50:00"));
-    check("単体ビューの残り表示が 50:00(実25分の2倍速換算。今日ビュー統合で壊れていない)", true);
-    await page.clock.setFixedTime(fixedTime(12, 1, 0));
-    await page.waitForFunction(() => (document.getElementById("main")?.textContent || "").includes("48:00"));
-    check("実時間+1分で残り表示が 48:00 に進む(2倍速仕様=実1分で表示2分減が維持されている)", true);
-
-    // ============================================================
     // [15c] P5: 今日ビューの中断(stop-pomodoro)→ 理由ピッカー → 理由選択で記録+リセット
     // ============================================================
     console.log("[15c] P5: 今日ビューの中断で理由ピッカーが出て、理由選択で中断記録+pomodoroリセットになる");
@@ -1356,8 +1343,7 @@ function check(name, cond, extra = "") {
     //   前提B5-4: DRIFTのズレ分数は textHasMin() の許容形式(「n分」等)で表示される。
     //            ズレ = computeProjectedEnd(今日, now) − 当日blocksの最大plannedEnd(b5-survey §2-2)
     //   前提B5-5: 「送る」は既存carryOverBlockのセマンティクス踏襲(翌日に新Block・元Blockに
-    //            migratedTo・carryCount+1)。この経路では儀式モーダルを出さない
-    //            (carryCount=2 → nextCount=3 = MIGRATION_RITUAL_THRESHOLD 到達でも出ない)
+    //            migratedTo・carryCount+1)。追加UIは挟まない
     //   前提B5-6: .time-comb-gap の data-start/data-end は "HH:MM"系文字列か分数値のどちらか
     //            (両対応で解釈する)。タップは「先にBlockを作ってから」編集モーダルを開く(§12 F2)
     //   前提B5-7: F3の「直近7日」は当日を含む7日窓。「実施できた日」= done≥1。当日ぶんは
@@ -1518,7 +1504,7 @@ function check(name, cond, extra = "") {
     const driftBlocks = [
       block("d-done", { title: "DRIFT-完了済", category: "仕事", completed: true, plannedStartAt: at("09:00"), plannedEndAt: at("10:00"), actualStartAt: at("09:00"), actualEndAt: at("10:00"), estimateMin: 60 }),
       block("d-run", { title: "DRIFT-実行中", actualStartAt: at("11:00"), plannedStartAt: at("11:00"), plannedEndAt: at("12:00"), estimateMin: 120 }),
-      // carryCount:2 → nextCount=3 = 儀式閾値。旧requestCarryOver経路なら儀式モーダルが開く値(前提B5-5の検証用)
+      // carryCount:2 → nextCount=3でも追加UIを挟まず送る(前提B5-5の検証用)
       block("d-send", { title: "DRIFT-送る対象", plannedStartAt: at("12:30"), plannedEndAt: at("13:15"), estimateMin: 90, carryCount: 2 }),
       block("d-small", { title: "DRIFT-小粒", plannedStartAt: at("13:30"), plannedEndAt: at("14:00"), estimateMin: 55 })
     ];
@@ -1531,7 +1517,7 @@ function check(name, cond, extra = "") {
     check("ズレ分数 85分が手計算と一致して表示される(前提B5-4)", textHasMin(driftText, 85), driftText);
 
     // ============================================================
-    // [31b] F2 DRIFT「送る」: 対象Blockが翌日へ移り(migratedTo記録・儀式モーダルなし)、着地が再計算される
+    // [31b] F2 DRIFT「送る」: 対象Blockが翌日へ移り(migratedTo記録・追加UIなし)、着地が再計算される
     // ============================================================
     console.log("[31b] F2: 「送る」で決定論選出の1件(残90分のd-sendのみがズレ85分を吸収可能)が翌日へ移る");
     await page.locator(".drift-panel button", { hasText: "送る" }).first().click();
@@ -1546,7 +1532,7 @@ function check(name, cond, extra = "") {
     check("新Blockのタイトルが引き継がれる", movedNew?.title === "DRIFT-送る対象", movedNew?.title);
     check("carryCount が +1 される(2→3。既存carryOverBlockと同じ積み上げ)", movedNew?.carryCount === 3,
       String(movedNew?.carryCount));
-    check("儀式モーダルが出ない(nextCount=3=閾値到達でも、この経路では儀式を出さない。前提B5-5)",
+    check("追加モーダルが出ない(nextCount=3でも直接送る。前提B5-5)",
       await page.locator(".modal-card").count() === 0);
     check("送られていない残Block(d-run/d-small)に migratedTo が付かない",
       !stAfterSend.blocks.find((b) => b.id === "d-run")?.migratedTo && !stAfterSend.blocks.find((b) => b.id === "d-small")?.migratedTo);
@@ -2735,44 +2721,6 @@ function check(name, cond, extra = "") {
     const nfTextAfterBreak = await panelText(".today-now-focus");
     check("自動休憩遷移後もNOW FOCUSに実行中Blockが残り続ける(C1)",
       (nfTextAfterBreak || "").includes("C1-POMO-満了タスク"), nfTextAfterBreak);
-
-    console.log("[74] 明示的完了経路(休憩中「✅ここで完了する」)は従来どおりactualEndAtが付く(goBreakPomodoroの変更は完了経路に影響しない)");
-    await page.locator('#sidebar .nav-button[data-action="nav"][data-view="pomodoro"]').click();
-    await waitView("pomodoro");
-    check("休憩中の「ここで完了する」ボタンがある(既存アクションの実名再利用)",
-      await page.locator('[data-action="finish-block"]').count() === 1);
-    await page.locator('[data-action="finish-block"]').click();
-    await page.waitForFunction((KEY) => {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      const b = s.blocks.find((x) => x.id === "c1-pomo");
-      return b && b.completed === true && !!b.actualEndAt;
-    }, KEY);
-    const stAfterFinish = await stateNow();
-    const pomoBlockFinished = stAfterFinish.blocks.find((b) => b.id === "c1-pomo");
-    check("明示的完了(ここで完了する)ではactualEndAtが付く(従来どおり)", !!pomoBlockFinished.actualEndAt, JSON.stringify(pomoBlockFinished));
-    check("明示的完了ではcompletedがtrueになる(従来どおり)", pomoBlockFinished.completed === true);
-
-    console.log("[75] 手動「☕ 休憩へ」(go-break)も自動発火と同じgoBreakPomodoroのため、actualEndAtを書かない(C1の統一適用)");
-    await page.clock.setFixedTime(fixedTime(14, 0, 0));
-    await seed({
-      view: "pomodoro",
-      blocks: [
-        block("c1-manual-break", { title: "C1-MANUAL-手動休憩", plannedStartAt: at("14:00"), plannedEndAt: at("14:25"), estimateMin: 25 })
-      ]
-    });
-    await page.locator('[data-action="start-pomodoro"][data-block-id="c1-manual-break"]').click();
-    await page.waitForSelector('[data-action="declare-confirm"]', { state: "attached" });
-    await page.locator('[data-action="declare-confirm"]').click();
-    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).pomodoro?.running === true, KEY);
-    await page.locator('[data-action="go-break"]').click();
-    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).pomodoro?.mode === "break", KEY);
-    const stManualBreak = await stateNow();
-    const manualBreakBlock = stManualBreak.blocks.find((b) => b.id === "c1-manual-break");
-    check("手動「☕ 休憩へ」でもactualEndAtが書かれない(C1: 完了を押すまで計測継続)",
-      !manualBreakBlock.actualEndAt, JSON.stringify(manualBreakBlock));
-    check("手動休憩でもactualStartAtは維持される(計測は継続中)", !!manualBreakBlock.actualStartAt, JSON.stringify(manualBreakBlock));
-    check("手動休憩でもpomodoroCountは加算される(従来どおり)",
-      manualBreakBlock.pomodoroCount === 1, JSON.stringify(manualBreakBlock));
 
     console.log("[76] prefers-reduced-motion時は縞模様アニメが停止する(静的表示+文言のみで状態を伝える)");
     // レビュー修正⑦: 既存ctx/pageは閉じずに残す(以後の追記が閉じたpageへ触れてしまう事故を防ぐ)。
