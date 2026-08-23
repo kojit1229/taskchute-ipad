@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v243";
+const CACHE_NAME = "taskchute-journal-pwa-v244";
+// v244: 12WY同期配線のローカル側にも || [] ガードを追加(v197対応・挙動対称化)。
 // v243: 12WYのデータ契約・端末ローカルトーストログ・3コレクション同期配線を追加した(APP_SHELL変更なし)。
 // v242: 12WY二軸MVPの特殊マージ純関数2件をsrc/core/merge.jsへ追加した(APP_SHELL変更なし)。
 // v241: TodayフォーカスモードとPC時のCABIN TIMER右列表示を追加した(APP_SHELL変更なし)。

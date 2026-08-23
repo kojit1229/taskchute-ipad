@@ -1,0 +1,35 @@
+{
+  "version": 244,
+  "date": "2026-08-23",
+  "title": "12WY同期配線の防御ガード対称化",
+  "summary": "computeSyncMergeの3コレクション配線で、ローカル側とマージ入力にも || [] ガードを追加し、normalizeState未通過のstateでも例外化しないようにした。",
+  "changedFiles": [
+    "releases/v244.json",
+    "src/sync/github.js",
+    "sw.js"
+  ],
+  "intent": [
+    "CI全量のv197(素のfixtureでcomputeSyncMergeを直接呼ぶ)で発覚した、v243配線のローカル側ガード欠落を塞ぐ。",
+    "remoteNorm側のchangedVsRemoteガード(v243)と同じ防御水準へ両側を揃え、fail-closeの取りこぼしをなくす。"
+  ],
+  "changes": [
+    "computeSyncMergeの3コレクションのマージ呼び出し(tracks/trackMeasurements/weeklyCommitments)で、state側・remoteNorm側の両引数を || [] でガードした。",
+    "changedVsLocal相当の3項のsameArrayByReference比較で、state側配列を || [] でガードした(未定義時は空配列同士の比較となり誤検知しない)。",
+    "Service WorkerのCACHE_NAMEをv244へ更新した。APP_SHELLは変更なし。"
+  ],
+  "uncertainties": [
+    "本番経路はnormalizeState通過が保証されるため挙動変化はない。変わるのはnormalizeState未通過のstateを直接渡した場合の挙動(例外→正常マージ)のみ。"
+  ],
+  "reviewFocus": [
+    "|| [] の追加が既存の変更検知(sameArrayByReference)へ誤検知を持ち込んでいないか(未定義時のみ新規空配列が作られ、要素0件同士の比較で等価判定になる)。"
+  ],
+  "verification": [
+    "node tests/v197.test.js: ALL PASS(修正前はTypeErrorでnull化)。",
+    "node tests/run-all.js store-core merge-core track-merge-core track-sync-characterization track-normalize: 5 suite全件PASS、exit 0。",
+    "node scripts/release-gate.js releases/v244.json --final: 監督者の標準環境で実行しexit 0(結果は最終報告参照)。",
+    "実行コード差分はsrc/sync/github.js 8行・sw.js 2行で200行以下。"
+  ],
+  "knownLimitations": [
+    "v197が示したとおり、normalizeStateを介さずcomputeSyncMergeを呼ぶテストは最小fixtureで新コレクションを持たない。今後コレクションを追加する際は両側ガードを標準とする。"
+  ]
+}

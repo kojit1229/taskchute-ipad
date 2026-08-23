@@ -731,12 +731,14 @@ function computeSyncMerge(remoteNorm, tieWinner) {
     // v141: 「今日行ったお店」ログ。ユーザーが削除できる(tombstone)ため、mergeByIdと違い
     // tasks/projectsと同じupdatedAt優先+同値時tombstone優先のmergeByIdPreferNewerを使う。
     const storeVisits = mergeByIdPreferNewer(state.storeVisits, remoteNorm.storeVisits, tieWinner);
-    const tracks = mergeTracksPreferNewer(state.tracks, remoteNorm.tracks, tieWinner);
+    // v243: normalizeState未通過のstateが渡っても例外化しないよう、両側とも || [] で防御する
+    // (remoteNorm側のchangedVsRemoteガードと同じ思想。CI v197のような素のfixture直呼びにも耐える)
+    const tracks = mergeTracksPreferNewer(state.tracks || [], remoteNorm.tracks || [], tieWinner);
     const trackMeasurements = mergeByIdPreferNewer(
-      state.trackMeasurements, remoteNorm.trackMeasurements, tieWinner
+      state.trackMeasurements || [], remoteNorm.trackMeasurements || [], tieWinner
     );
     const weeklyCommitments = mergeWeeklyCommitments(
-      state.weeklyCommitments, remoteNorm.weeklyCommitments, tieWinner
+      state.weeklyCommitments || [], remoteNorm.weeklyCommitments || [], tieWinner
     );
     // v152レビュー対応(Codex指摘): swipeTriageLogも端末間で和集合マージする(複合キー重複排除)。
     // 上限は他の軽量ログと同じ思想(SWIPE_TRIAGE_LOG_MAX、末尾優先で切り詰め)。
@@ -783,9 +785,9 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(tasks, state.tasks) ||
       !sameArrayByReference(projects, state.projects) ||
       !sameArrayByReference(storeVisits, state.storeVisits) ||
-      !sameArrayByReference(tracks, state.tracks) ||
-      !sameArrayByReference(trackMeasurements, state.trackMeasurements) ||
-      !sameArrayByReference(weeklyCommitments, state.weeklyCommitments) ||
+      !sameArrayByReference(tracks, state.tracks || []) ||
+      !sameArrayByReference(trackMeasurements, state.trackMeasurements || []) ||
+      !sameArrayByReference(weeklyCommitments, state.weeklyCommitments || []) ||
       !sameArrayByReference(swipeTriageLog, state.swipeTriageLog) ||
       jsonChanged(gardenLog, state.gardenLog) ||
       !sameArrayByReference(coachMeals, state.coachLog?.meals || []) ||
