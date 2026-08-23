@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v254";
+const CACHE_NAME = "taskchute-journal-pwa-v255";
+// v255: 設計思想の図解HTMLを同梱し、設定画面から別タブで開けるオフライン導線を追加した。
 // v254: 12WY共通フック2本を全開始・完了導線へ結線した(APP_SHELL変更なし)。
 // v253: 固定化ルーティンのストリークを計器盤へ表示し、保護ルーティンを実行率から除外した(APP_SHELL変更なし)。
 // v252: 固定化ルーティンのストリークデータ層と純関数を追加した。
@@ -278,6 +279,7 @@ const APP_SHELL = [
   "./index.html",
   "./styles.css",
   "./app.js",
+  "./concept.html",
   "./marked.min.js",
   "./manifest.webmanifest",
   "./assets/icon.svg",

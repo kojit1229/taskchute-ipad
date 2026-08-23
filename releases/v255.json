@@ -1,0 +1,51 @@
+{
+  "version": 255,
+  "date": "2026-08-23",
+  "title": "設計思想図解の同梱と設定導線",
+  "summary": "設計思想の図解HTMLをアプリへ無改変で同梱し、設定画面から別タブで開けるオフライン対応リンクを追加した。",
+  "changedFiles": [
+    "app.js",
+    "concept.html",
+    "CHANGES_v255.md",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v255.json",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/sw-integration.test.js",
+    "tests/v255.test.js"
+  ],
+  "intent": [
+    "設計思想の図解をアプリ本体と同じ配信単位へ含め、オンライン・オフラインを問わず参照できるようにする。",
+    "設定画面の既存GitHub Pagesパネルから、noopener付きの安全な別タブ導線を提供する。",
+    "正本はtaskchute-notes側に維持し、アプリ側のconcept.htmlは内容を変更しない生成物として扱う。"
+  ],
+  "changes": [
+    "taskchute-notes/concept.htmlをリポジトリ直下へバイト単位で同一のままコピーした。",
+    "設定の「データと同期」群にあるGitHub Pagesパネルへ、href=./concept.html・target=_blank・rel=noopenerの「設計思想(CONCEPT)」リンクを追加した。",
+    "Service WorkerのAPP_SHELLへ./concept.htmlを追加し、CACHE_NAMEをv255へ更新した。",
+    "v255 E2Eで設定画面のリンク文言と3属性、concept.htmlの存在、APP_SHELL登録、CACHE_NAMEを固定した。",
+    "既存SW統合テストへconcept.htmlの実precache検証を追加した。"
+  ],
+  "uncertainties": [
+    "仕様との差異・未解決の曖昧点はない。リンクは既存の設定群構成を増やさず、関連するGitHub Pagesパネル内へ配置した。"
+  ],
+  "reviewFocus": [
+    "concept.htmlがtaskchute-notes側の正本と完全一致し、コピー後に編集されていないか。",
+    "設定画面のリンクが指定どおりhref=./concept.html・target=_blank・rel=noopenerで描画されるか。",
+    "Service WorkerのAPP_SHELL登録とCACHE_NAME更新により、オフラインでもconcept.htmlを取得できるか。"
+  ],
+  "verification": [
+    "concept.html: 正本とコピーのサイズ20,827 bytes・SHA-256 E9769E5057C2E84AEA917E3E2CD095122A064AF28278701224A75AB9ECF0AEB6が一致。",
+    "node --check app.js、tests/v255.test.js: PASS。",
+    "system Edge指定 tests/v255.test.js: 設定リンクの描画・href・target・rel、APP_SHELL登録、CACHE_NAMEを全件PASS。",
+    "system Edge指定 tests/sw-integration.test.js: SW install/activate、v255キャッシュ、concept.htmlの実precache、オフラインreloadを全件PASS。",
+    "npm run code:index:write: PASS(567 functions)。npm run test:manifest:write / test:manifest: PASS(140 suites)。",
+    "system Edge・検証用handoffミラー指定 release-gate --final: 254.2秒、exit 0。impact regression・最終coreを含め全件PASS。"
+  ],
+  "knownLimitations": [
+    "iOS Safari実機PWAでのService Worker更新と、オフライン状態での別タブ表示確認は監督者側で必要。",
+    "concept.htmlの正本を将来更新した場合は、notes側から再コピーしてSWキャッシュも更新する必要がある。"
+  ]
+}

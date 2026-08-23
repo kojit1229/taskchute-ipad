@@ -69,6 +69,7 @@ function check(name, cond, extra = "") {
     check("index.htmlまたは./がキャッシュされている", shellCached.some((p) => p.endsWith("/") || p.endsWith("index.html")), JSON.stringify(shellCached));
     check("app.jsがキャッシュされている", shellCached.some((p) => p.endsWith("app.js")), JSON.stringify(shellCached));
     check("styles.cssがキャッシュされている", shellCached.some((p) => p.endsWith("styles.css")), JSON.stringify(shellCached));
+    check("concept.htmlがキャッシュされている", shellCached.some((p) => p.endsWith("concept.html")), JSON.stringify(shellCached));
 
     // v164: app.js分割の段階0(SW戦略)。独立レビューBlocker-2 —
     // src/**/*.jsをAPP_SHELLへ列挙し忘れると、新app.js×旧src/*.jsのモジュールグラフ版ズレで

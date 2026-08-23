@@ -440,9 +440,9 @@
         "planning-execution",
         "security-offline"
       ],
-      "assertionSignals": 14,
-      "assertionHash": "4993df2c7ae48bad",
-      "sourceHash": "e7d7cf625c8f8e90",
+      "assertionSignals": 15,
+      "assertionHash": "e90ebb671a4c4268",
+      "sourceHash": "31218505cbec3957",
       "waits": {
         "fixedCount": 2,
         "numericMilliseconds": 3500,
@@ -2304,7 +2304,8 @@
       "kind": "e2e",
       "tier": "full",
       "domains": [
-        "legacy-crosscutting"
+        "planning-execution",
+        "sync-storage"
       ],
       "assertionSignals": 45,
       "assertionHash": "cc986efbd5337ba5",
@@ -2320,6 +2321,30 @@
         "fileWrite": false,
         "networkMock": true,
         "clock": true
+      }
+    },
+    {
+      "file": "v255.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "ui-responsive",
+        "security-offline"
+      ],
+      "assertionSignals": 10,
+      "assertionHash": "5ad2fa0086b59671",
+      "sourceHash": "dfbcdcb1b7c6379b",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
       }
     },
     {

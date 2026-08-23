@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="ja">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TaskChute Journal 設計思想</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;700&family=IBM+Plex+Sans+JP:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#f5f7f4; --surface:#ecefe9; --card:#ffffff; --ink:#1c2420; --muted:#5c665f;
+  --line:#d3d9d1; --accent:#2e7d6b; --accent-soft:#e2ede9; --amber:#a06f22; --amber-soft:#f2e8d6;
+  --chip-neutral:#6b756e;
+}
+:root:not([data-theme="light"]){}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#12171a; --surface:#1a2124; --card:#1f272a; --ink:#dfe6e1; --muted:#8a958c;
+    --line:#2c3639; --accent:#57b39a; --accent-soft:#1e3630; --amber:#d3a558; --amber-soft:#3a2f1c;
+    --chip-neutral:#98a29a;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#12171a; --surface:#1a2124; --card:#1f272a; --ink:#dfe6e1; --muted:#8a958c;
+  --line:#2c3639; --accent:#57b39a; --accent-soft:#1e3630; --amber:#d3a558; --amber-soft:#3a2f1c;
+  --chip-neutral:#98a29a;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"IBM Plex Sans JP","Hiragino Sans","Yu Gothic",sans-serif;
+  font-size:15px; line-height:1.85; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:900px; margin:0 auto; padding:48px 24px 80px; display:flex; flex-direction:column; gap:56px}
+header.hero{border-bottom:1px solid var(--line); padding-bottom:36px}
+.eyebrow{
+  font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.18em;
+  color:var(--accent); text-transform:uppercase; margin:0 0 14px;
+}
+h1{
+  font-family:"Shippori Mincho",serif; font-weight:700; font-size:clamp(28px,5vw,40px);
+  line-height:1.35; margin:0 0 18px; text-wrap:balance;
+}
+.lede{font-size:16px; max-width:40em; color:var(--ink); margin:0 0 20px}
+.lede strong{color:var(--accent)}
+.hero-meta{font-family:"IBM Plex Mono",monospace; font-size:11.5px; color:var(--muted); display:flex; flex-wrap:wrap; gap:6px 18px}
+section{display:flex; flex-direction:column; gap:18px}
+h2{
+  font-family:"Shippori Mincho",serif; font-weight:600; font-size:22px; margin:0;
+  display:flex; align-items:baseline; gap:12px; text-wrap:balance;
+}
+h2 .no{font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--muted); font-weight:400}
+p{margin:0}
+.note{color:var(--muted); font-size:13.5px; max-width:44em}
+/* chips */
+.chip{
+  display:inline-block; font-family:"IBM Plex Mono",monospace; font-size:10.5px;
+  padding:2px 8px; border-radius:3px; letter-spacing:.06em; white-space:nowrap; vertical-align:middle;
+}
+.chip.done{background:var(--accent-soft); color:var(--accent)}
+.chip.plan{background:var(--amber-soft); color:var(--amber)}
+.chip.est{border:1px solid var(--line); color:var(--chip-neutral)}
+/* pillars */
+.pillars{display:grid; grid-template-columns:repeat(3,1fr); gap:14px}
+@media(max-width:760px){.pillars{grid-template-columns:1fr}}
+.pillar{background:var(--card); border:1px solid var(--line); border-top:3px solid var(--accent); padding:18px 18px 16px; display:flex; flex-direction:column; gap:10px}
+.pillar h3{font-size:15.5px; margin:0; font-weight:700}
+.pillar .src{font-family:"IBM Plex Mono",monospace; font-size:10.5px; color:var(--muted); letter-spacing:.05em}
+.pillar ul{margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:8px; font-size:13.5px}
+.pillar li{padding-left:14px; position:relative; line-height:1.6}
+.pillar li::before{content:""; position:absolute; left:0; top:.65em; width:6px; height:2px; background:var(--accent)}
+.pillar li b{font-weight:700}
+/* figure */
+figure{margin:0; background:var(--card); border:1px solid var(--line); padding:22px 18px 14px; overflow-x:auto}
+figure svg{display:block; min-width:640px; max-width:100%; height:auto; margin:0 auto}
+figcaption{font-size:12.5px; color:var(--muted); margin-top:12px; text-align:center}
+/* principles */
+.principles{display:grid; grid-template-columns:repeat(2,1fr); gap:12px}
+@media(max-width:680px){.principles{grid-template-columns:1fr}}
+.pr{background:var(--card); border:1px solid var(--line); padding:14px 16px; display:flex; gap:12px; align-items:flex-start}
+.pr .k{font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--accent); padding-top:3px; min-width:2.2em}
+.pr div p:first-child{font-weight:700; font-size:14px; margin-bottom:2px}
+.pr div p+p{font-size:13px; color:var(--muted); line-height:1.65}
+/* loop table */
+table{border-collapse:collapse; width:100%; font-size:13.5px; background:var(--card)}
+th,td{border:1px solid var(--line); padding:9px 12px; text-align:left; vertical-align:top}
+th{background:var(--surface); font-size:12px; font-family:"IBM Plex Mono",monospace; letter-spacing:.08em; font-weight:500}
+.tablebox{overflow-x:auto; border:1px solid var(--line)}
+.tablebox table{border:0}
+/* non-goals */
+.nogoals{display:flex; flex-direction:column; gap:0; background:var(--card); border:1px solid var(--line)}
+.ng{display:flex; gap:14px; padding:12px 18px; border-bottom:1px solid var(--line); align-items:baseline}
+.ng:last-child{border-bottom:0}
+.ng .x{font-family:"IBM Plex Mono",monospace; color:var(--muted); font-size:13px}
+.ng b{font-weight:700}
+.ng span{color:var(--muted); font-size:13px}
+/* appendix */
+.appendix{background:var(--surface); border:1px solid var(--line); padding:16px 20px; font-size:13px; color:var(--muted)}
+.appendix ul{margin:6px 0 0; padding-left:1.2em; display:flex; flex-direction:column; gap:4px}
+.legend{display:flex; gap:16px; flex-wrap:wrap; font-size:12px; color:var(--muted); align-items:center}
+</style>
+
+<div class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">TaskChute Journal / Concept</p>
+  <h1>時間ではなく「どんな日を積み重ねているか」を可視化する</h1>
+  <p class="lede">仕事もプライベートも分断せず、すべての予定・プロジェクト・タスクを1つの道具で管理する。日々の<strong>実行率(着手率)</strong>を上げ、実行が<strong>自動で記録</strong>され、<strong>AIフィードバックの改善ループ</strong>を回す——単一ユーザー(K)専用に最適化した、ローカルファーストな自己ダッシュボード。ホーム画面はタスク一覧ではなく<strong>操縦席</strong>として組織される。</p>
+  <div class="hero-meta">
+    <span>基盤: 12 Week Year × タスクシュート『先送り0』 × PMBOK</span>
+    <span>2026-08-23 / 正本: taskchute-notes/CONCEPT.md</span>
+  </div>
+</header>
+
+<section>
+  <h2><span class="no">01</span>理論的基盤 — 3本柱と機能の対応</h2>
+  <div class="pillars">
+    <div class="pillar">
+      <h3>12 Week Year</h3>
+      <p class="src">12週間を1年として実行する</p>
+      <ul>
+        <li><b>84日サイクル</b> — twelveWeekStartDate を持つ Project がサイクル目標 <span class="chip done">実装済み</span></li>
+        <li><b>第13週レビュー</b> — cycleビューで締め、「新しい12週を今日から」で次へ接続</li>
+        <li><b>週次コミット</b> — 候補ブロック自動コミット・達成率目標(既定85)</li>
+        <li>日・週・84日の3スケールは都度計算、永続化はレビューメモだけ</li>
+      </ul>
+    </div>
+    <div class="pillar">
+      <h3>タスクシュート『先送り0』</h3>
+      <p class="src">1分着手・ログ先行・ルーチン化</p>
+      <ul>
+        <li><b>1分着手</b> — 主指標は完了率でなく着手率。MITは1日3件まで。着手の瞬間だけ祝う「着手ジュース」 <span class="chip done">実装済み</span></li>
+        <li><b>先送りゼロ</b> — 繰り越しパネル+3回で一呼吸置く「儀式」+migratedTo で二重繰越防止</li>
+        <li><b>ログ先行</b> — Block は予定(planned)と実績(actual)を分離して記録</li>
+        <li><b>ルーチン化</b> — 繰り返しルールから冪等に実体化。保護属性・縮退版・アンカー・チェーン</li>
+      </ul>
+    </div>
+    <div class="pillar">
+      <h3>PMBOK</h3>
+      <p class="src">プロジェクトマネジメント</p>
+      <ul>
+        <li><b>WBS</b> — Project → Task 最大3階層 → 日別Block <span class="chip done">実装済み</span></li>
+        <li><b>バッファ管理</b> — 見積超過を「1日バッファ」1本に集約し残量%のみ表示。過積載も自動解消しない</li>
+        <li><b>状態遷移</b> — active / paused / completed / archived / cancelled。中断・中止は進捗分母から除外</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="no">02</span>実行ループ — 計画から改善までを1つの系にする</h2>
+  <figure>
+    <svg viewBox="0 0 960 260" role="img" aria-label="目標を定める、今日へ落とす、実行する、観測する、振り返るの5段が順につながり、振り返るから今日へ落とすへ戻る改善の弧が点線で描かれている。改善の弧はAIフィードバックで、まだ完全には閉じていない">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+        </marker>
+        <marker id="arA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="var(--amber)"/>
+        </marker>
+      </defs>
+      <g fill="none" stroke="currentColor" stroke-width="1.2">
+        <rect x="16"  y="70" width="160" height="64" rx="3"/>
+        <rect x="208" y="70" width="160" height="64" rx="3"/>
+        <rect x="400" y="70" width="160" height="64" rx="3"/>
+        <rect x="592" y="70" width="160" height="64" rx="3"/>
+        <rect x="784" y="70" width="160" height="64" rx="3"/>
+      </g>
+      <g font-family="IBM Plex Sans JP,sans-serif" font-size="13" fill="currentColor" text-anchor="middle" font-weight="700">
+        <text x="96"  y="96">目標を定める</text>
+        <text x="288" y="96">今日へ落とす</text>
+        <text x="480" y="96">実行する</text>
+        <text x="672" y="96">観測する</text>
+        <text x="864" y="96">振り返る</text>
+      </g>
+      <g font-family="IBM Plex Sans JP,sans-serif" font-size="10.5" fill="var(--muted, #5c665f)" text-anchor="middle">
+        <text x="96"  y="116">Vision・Wish・12週・WBS</text>
+        <text x="288" y="116">MIT・朝プラン・ルーティン</text>
+        <text x="480" y="116">Nowコンベア・ポモドーロ</text>
+        <text x="672" y="116">着手率・充放電・計器盤</text>
+        <text x="864" y="116">日報・週次・12週レビュー</text>
+      </g>
+      <g stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)">
+        <line x1="176" y1="102" x2="204" y2="102"/>
+        <line x1="368" y1="102" x2="396" y2="102"/>
+        <line x1="560" y1="102" x2="588" y2="102"/>
+        <line x1="752" y1="102" x2="780" y2="102"/>
+      </g>
+      <path d="M864 134 C 864 210, 288 210, 292 138" fill="none" stroke="var(--amber)" stroke-width="1.4" stroke-dasharray="6 5" marker-end="url(#arA)"/>
+      <text x="576" y="196" font-family="IBM Plex Sans JP,sans-serif" font-size="11.5" fill="var(--amber)" text-anchor="middle">改善する — AIフィードバック・AIレポート(一部実装済み。v62/v64 で閉じる構想)</text>
+      <g font-family="IBM Plex Mono,monospace" font-size="10" fill="var(--muted, #5c665f)" text-anchor="middle">
+        <text x="96" y="52">84日 / 週</text>
+        <text x="480" y="52">日</text>
+        <text x="864" y="52">日 → 週 → 84日</text>
+      </g>
+    </svg>
+    <figcaption>実行ループの6段。前向きの5段は実装済みで、戻りの「改善」弧だけがまだ完全には閉じていない(点線)。</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2><span class="no">03</span>設計原則 — このアプリ固有の憲法</h2>
+  <div class="principles">
+    <div class="pr"><span class="k">P1</span><div><p>静かな道具</p><p>通知サブシステムはv38で削除。締切・リマインド・催促・Web Pushを持たない。</p></div></div>
+    <div class="pr"><span class="k">P2</span><div><p>裁かない計器</p><p>実行率を自己評価の点数にしない。保護系ルーティンは%でなく連続欠落日数で見せ、1日の欠落では警告しない(Never miss twice)。</p></div></div>
+    <div class="pr"><span class="k">P3</span><div><p>保護属性・縮退版</p><p>運動・睡眠・内省・家族時間は生産性で裁かないメンテナンス工程。崩れた日は最小構成(縮退版)でも継続扱い。</p></div></div>
+    <div class="pr"><span class="k">P4</span><div><p>搬送は自動化、判断は人に残す</p><p>転記・プリフィル・提案は自動化するが、採否は常に人間。AIループ全体を貫く最重要原則。</p></div></div>
+    <div class="pr"><span class="k">P5</span><div><p>下書き承認フロー</p><p>配置提案は非永続の下書きに仮置きし、「確定して登録」を押すまでBlockにならない。</p></div></div>
+    <div class="pr"><span class="k">P6</span><div><p>ローカルファースト・データ主権</p><p>localStorage主+private GitHub同期。サーバー・アカウント・課金なし。曖昧なら上書きせず止まる(fail-close)。</p></div></div>
+    <div class="pr"><span class="k">P7</span><div><p>物理削除しない・後方互換を壊さない</p><p>論理削除のみ。stateスキーマ変更は normalizeState() のデフォルト補完だけ。</p></div></div>
+    <div class="pr"><span class="k">P8</span><div><p>実行時依存ゼロ・ビルドなし</p><p>フレームワーク不使用、単一状態+全再描画。src/core(純粋関数)/features/state/storage へ境界分割進行中。</p></div></div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="no">04</span>AIフィードバックの搬送構成 — アプリはAIを呼ばない</h2>
+  <figure>
+    <svg viewBox="0 0 880 330" role="img" aria-label="TaskChute JournalアプリはGitHubのpersonal-dataリポジトリへ日報とapp-stateをpushし、自宅PCバッチがそれを読んでAIフィードバックを生成してGitHubへpushし、アプリはContents APIでfetchして表示する。アプリからAnthropic APIへの直接呼び出しはv60で全廃され、バツ印付きの点線で示されている">
+      <defs>
+        <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="var(--accent)"/>
+        </marker>
+      </defs>
+      <g fill="none" stroke="currentColor" stroke-width="1.2">
+        <rect x="30" y="90" width="200" height="90" rx="3"/>
+        <rect x="340" y="30" width="200" height="80" rx="3"/>
+        <rect x="650" y="90" width="200" height="90" rx="3"/>
+      </g>
+      <g font-family="IBM Plex Sans JP,sans-serif" font-size="13.5" fill="currentColor" text-anchor="middle" font-weight="700">
+        <text x="130" y="126">TaskChute Journal</text>
+        <text x="440" y="62">personal-data</text>
+        <text x="750" y="126">自宅PCバッチ</text>
+      </g>
+      <g font-family="IBM Plex Mono,monospace" font-size="10.5" fill="var(--muted, #5c665f)" text-anchor="middle">
+        <text x="130" y="146">iPhone PWA</text>
+        <text x="130" y="162">localStorage 主</text>
+        <text x="440" y="82">private GitHub repo</text>
+        <text x="440" y="98">= 交換所</text>
+        <text x="750" y="146">coach-daily.sh 等</text>
+        <text x="750" y="162">Claude はここでだけ動く</text>
+      </g>
+      <g stroke="var(--accent)" stroke-width="1.4" fill="none" marker-end="url(#ar2)">
+        <path d="M200 90 C 240 66, 290 58, 336 58"/>
+        <path d="M544 74 C 600 84, 650 96, 680 108"/>
+        <path d="M400 114 C 330 140, 280 148, 236 150"/>
+      </g>
+      <g font-family="IBM Plex Sans JP,sans-serif" font-size="11" fill="var(--accent)">
+        <text x="212" y="48">push: 日報 / app-state.json</text>
+        <text x="560" y="122">push: AIフィードバック_日付.md</text>
+        <text x="284" y="172">fetch: Contents API → 表示</text>
+      </g>
+      <g stroke="var(--muted, #5c665f)" stroke-width="1.2" stroke-dasharray="5 5" fill="none">
+        <rect x="340" y="240" width="200" height="56" rx="3"/>
+        <line x1="130" y1="180" x2="130" y2="268"/>
+        <line x1="130" y1="268" x2="336" y2="268"/>
+      </g>
+      <g font-family="IBM Plex Sans JP,sans-serif" font-size="12.5" fill="var(--muted, #5c665f)" text-anchor="middle">
+        <text x="440" y="264" font-weight="700">Anthropic API 直接呼び出し</text>
+        <text x="440" y="282" font-size="10.5">アプリ内APIキー保持</text>
+      </g>
+      <g stroke="var(--muted, #5c665f)" stroke-width="1.6">
+        <line x1="226" y1="258" x2="246" y2="278"/>
+        <line x1="246" y1="258" x2="226" y2="278"/>
+      </g>
+      <text x="258" y="252" font-family="IBM Plex Sans JP,sans-serif" font-size="11" fill="var(--muted, #5c665f)">v60 で全廃(コスト・複雑性)</text>
+    </svg>
+    <figcaption>非対称構成: 重い計算は自宅PCバッチに寄せ、アプリは「記録を書き、結果ファイルを読む」だけ。アプリ→AIの直接経路は存在しない。</figcaption>
+  </figure>
+  <div class="tablebox"><table>
+    <tr><th style="width:8em">現状</th><td>記録(採否・修正・実績 = aiScheduleHistory)は貯まっているが、次回提案への自動注入はv60で廃止。<b>ループは完全には閉じていない</b> <span class="chip done">実装済み</span></td></tr>
+    <tr><th>構想 v62</th><td>バッチが app-state.json を読んで AIプラン_日付.json を生成し、朝プランが下書き採用(オフライン時は決定論フォールバック) <span class="chip plan">構想</span></td></tr>
+    <tr><th>構想 v64</th><td>採否履歴・見積乖離・時間帯別成功率を学習シグナルとして集計し、AIプラン・コーチングのプロンプトへ注入。無修正採用率を週次追跡 <span class="chip plan">構想</span></td></tr>
+  </table></div>
+</section>
+
+<section>
+  <h2><span class="no">05</span>やらないこと(非目標)</h2>
+  <div class="nogoals">
+    <div class="ng"><span class="x">✕</span><p><b>多人数SaaS・汎用PMツール化</b> — <span>単一ユーザー最適化を崩さない。同期は「ファイル丸ごと新しい方が勝つ」のみ</span></p></div>
+    <div class="ng"><span class="x">✕</span><p><b>ネイティブiOSアプリ化</b> — <span>Safariホーム画面PWA+ビルドなし・依存最小を維持</span></p></div>
+    <div class="ng"><span class="x">✕</span><p><b>アプリ内AI直接呼び出し</b> — <span>APIキーを持たない。AIはバッチ→GitHub→fetchのみ</span></p></div>
+    <div class="ng"><span class="x">✕</span><p><b>通知・催促・Web Push</b> — <span>v38削除以後、復活させない。外部通知もアプリ状態を書き換えない</span></p></div>
+    <div class="ng"><span class="x">✕</span><p><b>ストリーク罰・派手なゲーミフィケーション</b> — <span>継続可視化はオプトイン+自己ベスト保持+静かなリセットの型に限る</span></p></div>
+    <div class="ng"><span class="x">✕</span><p><b>AI・計器によるTask/Blockの無断変更</b> — <span>自動化は提案・搬送・下書きまで</span></p></div>
+    <div class="ng"><span class="x">✕</span><p><b>完璧なタイムゾーン対応</b> — <span>端末ローカル時刻・文字列辞書順比較のみ</span></p></div>
+  </div>
+</section>
+
+<section>
+  <div class="appendix">
+    <b>付記: 資料の時点差(2026-08-23)</b>
+    <ul>
+      <li>設計書.md はv137時点が主。app.js はv251付近まで進行、TOWERスキン以降の画面は未反映部分あり</li>
+      <li>ROADMAP の「app.js単一ファイル」は古い。src/features 配下に10モジュール現存</li>
+      <li>v114連続欠落バッジ・v115縮退版の実行導線は刷新で消失(思想・データ属性は存続)。復活は習慣ストリーク計画(第1弾: 固定化+汎用ストリーク計器/第2弾: 最小版で開始)に含める</li>
+    </ul>
+  </div>
+  <p class="legend"><span class="chip done">実装済み</span> 現物で確認 <span class="chip plan">構想</span> ロードマップ上の目標 — 正本は taskchute-notes/CONCEPT.md(Claude+Codex 2系統分析の統合)</p>
+</section>
+
+</div>
+
+</html>

@@ -7099,6 +7099,7 @@ function renderSettingsPagesPanel() {
   return `
     <h3>GitHub Pages</h3>
     <div class="muted">このフォルダをGitHubリポジトリへpushし、Pagesの公開元をルートにすると公開できます。</div>
+    <a class="btn" href="./concept.html" target="_blank" rel="noopener">設計思想(CONCEPT)</a>
   `;
 }
 
