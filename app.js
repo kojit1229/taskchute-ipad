@@ -11151,6 +11151,16 @@ function aiWorkResultRowHTML(r) {
   </div>`;
 }
 
+// v251: 新形式FBの「## サマリー」だけをATISへ常時表示する。旧形式は空を返して
+// 従来の全文detailsだけを維持する。
+function extractFeedbackSummary(markdown) {
+  const lines = String(markdown || "").replace(/\r\n?/g, "\n").split("\n");
+  const start = lines.findIndex((line) => /^##[ \t]+サマリー[ \t]*$/.test(line));
+  if (start < 0) return "";
+  const nextHeading = lines.findIndex((line, index) => index > start && /^##[ \t]+/.test(line));
+  return lines.slice(start + 1, nextHeading < 0 ? undefined : nextHeading).join("\n").trim();
+}
+
 // v230: AIフィードバック本文・候補・操作導線を統合画面のATISへ集約する。
 function atisFeedbackReadHTML() {
   const today = todayISO();
@@ -11158,8 +11168,16 @@ function atisFeedbackReadHTML() {
   const todayFb = cachedFeedback[today] || state.feedback[today] || "";
   const prevFb = cachedFeedback[prev] || state.feedback[prev] || "";
   if (!todayFb && !prevFb) return "";
-  return `<details class="tower-atis-feedback">
-    <summary>🤖 AIフィードバックを読む</summary>
+  const targetDate = todayFb ? today : prev;
+  const targetFb = todayFb || prevFb;
+  const shortDate = targetDate.slice(5);
+  const summary = extractFeedbackSummary(targetFb);
+  const summaryHTML = summary ? `<div class="tower-atis-summary">
+    <div class="tower-atis-summary-date">対象日 ${escapeHTML(shortDate)}</div>
+    <div class="tower-atis-summary-text">${escapeHTML(summary)}</div>
+  </div>` : "";
+  return `${summaryHTML}<details class="tower-atis-feedback">
+    <summary>🤖 全文を読む(${escapeHTML(shortDate)})</summary>
     <div class="tower-atis-feedback-body">
       ${todayFb ? `<div class="md-render readonly-md">${renderMarkdown(todayFb)}</div>` : ""}
       ${prevFb ? (todayFb ? `<details>

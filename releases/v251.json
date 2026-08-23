@@ -1,0 +1,50 @@
+{
+  "version": 251,
+  "date": "2026-08-23",
+  "title": "ATISフィードバックサマリー常時表示",
+  "summary": "AIフィードバックのサマリー節をATISへ常時表示し、対象日と日付付き全文導線を明示した。",
+  "changedFiles": [
+    "app.js",
+    "CHANGES_v251.md",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v251.json",
+    "styles.css",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/v251.test.js"
+  ],
+  "intent": [
+    "毎朝届くAIフィードバックの要点を、全文detailsを開かなくてもATISで確認できるようにする。",
+    "当日分が無い場合の前日フォールバックで、古い情報を今日の情報と誤認しないよう対象日を本文直前へ必ず表示する。",
+    "旧形式フィードバック、既存の全文閲覧、取得・保存・state契約は壊さず維持する。"
+  ],
+  "changes": [
+    "AIフィードバック本文の厳密な「## サマリー」見出しから次のレベル2見出し直前までを抽出する表示専用関数を追加した。",
+    "当日FBを優先し、当日分が無ければ前日FBを対象として、対象日MM-DDとescapeHTML済みサマリー本文をATISの全文details直前へ常時表示した。",
+    "サマリー節が無い旧形式では常時表示部を出さず、全文detailsだけを維持した。",
+    "全文detailsの文言を「🤖 全文を読む(MM-DD)」へ変更し、既定closedと開閉挙動、当日・前日両本文の既存構造は維持した。",
+    "TOWERパレットのcyan・green・panel背景を使う控えめなサマリー意匠を追加し、Service WorkerのCACHE_NAMEをv251へ更新した。"
+  ],
+  "uncertainties": [
+    "FORMAT_CONTRACT.mdは日報入力側の構造契約が中心でAIフィードバック出力見出しを定義していないため、実ファイルAIフィードバック_2026-08-22.mdの「## サマリー」→「## 詳細」構造を表示契約として採用した。"
+  ],
+  "reviewFocus": [
+    "当日FBが存在する場合は当日を優先し、当日分が無い場合だけ前日へフォールバックして、対象日ラベルと全文summaryの日付が一致するか。",
+    "サマリー抽出が厳密なレベル2見出し境界で止まり、旧形式・空節・HTML文字列で常時表示やXSSを誤発生させないか。",
+    "全文detailsの当日・前日併記、既定closed、クリック開閉が従来どおりで、state書き込み・個別イベント・日付文字列パースを追加していないか。",
+    "390pxを含むTOWERレイアウトでサマリーのpre-wrap本文が横幅を壊さず、色と文字サイズが既存ATISに馴染むか。"
+  ],
+  "verification": [
+    "node --check app.js、tests/v251.test.js: PASS。",
+    "system Edge指定 node tests/v251.test.js: 当日サマリー、旧形式非表示、前日フォールバック、対象日、escapeHTML、details開閉を全件PASS。",
+    "npm run code:index:write: PASS(code index 560 functions)。npm run test:manifest:write: PASS(136 suites)。",
+    "system Edge指定 node scripts/release-gate.js releases/v251.json --final: exit 0。関連回帰10スイートとcore 10スイートを全件PASS。"
+  ],
+  "knownLimitations": [
+    "同梱Chromiumは実行環境のspawn EPERMで起動できないため、ブラウザE2Eとrelease gateはsystem Edge指定で検証する。",
+    "iOS Safari実機PWAでのService Worker更新とATIS表示確認は監督者側で必要。",
+    "taskchute-notes/handoff.mdがワークスペース外でEPERMになる場合、notes側更新は監督者が再実行する。"
+  ]
+}

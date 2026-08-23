@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v250";
+const CACHE_NAME = "taskchute-journal-pwa-v251";
+// v251: ATISへAIフィードバックのサマリー節と対象日を常時表示した(APP_SHELL変更なし)。
 // v250: 表示先の無い外部fetch・home撤去後の死にコードを削除し、Block完了3経路の日報再生成を補完した(APP_SHELL変更なし)。
 // v249: Today 3パネルへ終了実績と見積時間付き未Block化Taskの予定行を反映した(APP_SHELL変更なし)。
 // v248: FOCUS中のCABIN TIMERをPC・iPhoneで拡大した(APP_SHELL変更なし)。

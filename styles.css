@@ -3210,6 +3210,10 @@ h3 {
 .tower-atis-sub { color: var(--tower-cyan); font-size: 10px; font-weight: 700; letter-spacing: .08em; }
 .tower-atis-sub span { color: var(--tower-text); opacity: .6; }
 .atis-divider { height: 1px; background: var(--tower-line); }
+.tower-atis-summary { display: grid; gap: 4px; padding: 8px; border-left: 2px solid var(--tower-green); background: var(--tower-bg); }
+.tower-atis-summary-date { color: var(--tower-cyan); font-size: 10px; font-weight: 700; letter-spacing: .08em; }
+.tower-atis-summary-text { white-space: pre-wrap; color: var(--tower-text); font-family: system-ui, sans-serif; font-size: 12.5px; line-height: 1.7; }
+.tower-atis-summary-text::before { content: "» "; color: var(--tower-green); font-family: ui-monospace, Consolas, monospace; }
 .tower-atis-feedback { border: 1px solid var(--tower-line); background: var(--tower-bg); }
 .tower-atis-feedback summary { min-height: 32px; padding: 8px; color: var(--tower-cyan); cursor: pointer; list-style: none; }
 .tower-atis-feedback summary::-webkit-details-marker { display: none; }
