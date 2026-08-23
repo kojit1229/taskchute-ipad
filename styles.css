@@ -4445,6 +4445,32 @@ h3 {
   background: var(--tower-amber);
   box-shadow: 0 0 6px var(--tower-amber);
 }
+.instr-dot.is-skipped {
+  border-radius: 2px;
+  background: repeating-linear-gradient(135deg, transparent 0 3px, var(--tower-line) 3px 5px);
+  opacity: .55;
+}
+
+/* ============ 固定化ルーティン(1枠目を主役、2・3枠目は静かな補助計器) ============ */
+.instr-habit-panel { min-width: 0; }
+.instr-habit-panel h2 { color: var(--tower-green); }
+.instr-habit-panel h2 span {
+  max-width: 68%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.instr-habit-panel.is-primary {
+  border-color: color-mix(in srgb, var(--tower-green) 70%, var(--tower-line));
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--tower-green) 75%, transparent);
+}
+.instr-habit-panel.is-primary .instr-streak-hero strong { font-size: 50px; }
+.instr-habit-panel.is-secondary { opacity: .82; }
+.instr-habit-panel.is-secondary .instr-streak-hero { padding-top: 11px; }
+.instr-habit-panel.is-secondary .instr-streak-hero strong { font-size: 30px; }
+.instr-habit-panel .instr-stat-cell { padding-inline: 8px; }
+.instr-habit-panel .instr-stat-cell strong { font-size: 18px; }
+.instr-habit-challenge strong { font-size: 15px; white-space: nowrap; }
 
 /* ============ IRON LOGサマリ(専用画面IRON LOGへの遷移カード) ============ */
 .instr-iron-log {

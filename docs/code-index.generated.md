@@ -356,7 +356,7 @@ Source: app.js (13216 lines, 564 top-level functions)
 | updateBlockField | function | 8880 | 9 | state, execution | blocks | save |
 | deleteBlock | function | 8890 | 12 | state, execution, ui | blocks, recurrences | save |
 | isConditionDegraded | function | 8914 | 4 | core | settings | - |
-| generateReport | function | 8921 | 367 | state, execution, journal-health, ui, content | blocks, bodyScans, dailyDeclarations, journalMeta, journals, projects, questions, reports +4 | save |
+| generateReport | function | 8921 | 367 | state, execution, journal-health, ui, content | blocks, bodyScans, dailyDeclarations, journalMeta, journals, projects, questions, recurrences +5 | save |
 | downloadReport | function | 9289 | 5 | state, ui, content | reports, selectedDate | file |
 | downloadData | function | 9295 | 5 | sync, state | - | file |
 | importData | function | 9301 | 21 | state, ui | settings | save, file |

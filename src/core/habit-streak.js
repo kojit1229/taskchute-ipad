@@ -24,22 +24,35 @@ function appliesOn(rule, iso) {
 function habitStreakStats(rule, habit, todayIso) {
   const since = rule?.streakSince;
   if (!dateParts(since) || !dateParts(todayIso) || since > todayIso || !["daily", "weekdays"].includes(rule?.kind)) {
-    return { currentStreak: 0, bestStreak: 0 };
+    return { currentStreak: 0, bestStreak: 0, totalCount: 0, challengeDay: 0, last28: [] };
   }
   const logs = habit?.logs && typeof habit.logs === "object" ? habit.logs : {};
   let currentStreak = 0;
   let bestStreak = 0;
+  let totalCount = 0;
+  let challengeDay = 0;
   let cursor = since;
   let guard = 0;
   while (cursor && cursor <= todayIso && guard++ < 20000) {
+    challengeDay++;
     if (appliesOn(rule, cursor)) {
-      if (logs[cursor]) currentStreak++;
+      if (logs[cursor]) {
+        currentStreak++;
+        totalCount++;
+      }
       else if (cursor !== todayIso) currentStreak = 0;
       bestStreak = Math.max(bestStreak, currentStreak);
     }
     cursor = shiftDate(cursor, 1);
   }
-  return { currentStreak, bestStreak };
+  const last28 = [];
+  cursor = shiftDate(todayIso, -27);
+  for (let i = 0; i < 28; i++) {
+    const applicable = cursor >= since && appliesOn(rule, cursor);
+    last28.push({ date: cursor, applicable, checked: applicable && !!logs[cursor] });
+    cursor = shiftDate(cursor, 1);
+  }
+  return { currentStreak, bestStreak, totalCount, challengeDay, last28 };
 }
 
 export { habitStreakStats };

@@ -1,0 +1,55 @@
+{
+  "version": 253,
+  "date": "2026-08-23",
+  "title": "固定化習慣ストリークの計器盤表示",
+  "summary": "最大3件の固定化ルーティンを静かな計器として表示し、保護ルーティンを実行率の分母から除外した。",
+  "changedFiles": [
+    "app.js",
+    "CHANGES_v253.md",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v253.json",
+    "src/core/habit-streak.js",
+    "src/core/recurrence.js",
+    "src/features/instruments.js",
+    "styles.css",
+    "sw.js",
+    "tests/recurrence-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/v253.test.js"
+  ],
+  "intent": [
+    "自分で固定化したdaily/weekdaysルーティンだけを、書籍の『1つに絞れ』に沿って1枠目中心の静かな計器として確認できるようにする。",
+    "弾1のhabitStreaksと純関数を表示専用に利用し、新しいstate書き込み・通知・未達赤表示を増やさない。",
+    "保護系ルーティンは実行率で裁かないというv114の契約をroutineRateの分母にも反映する。"
+  ],
+  "changes": [
+    "EARLY BIRDの既存ストリークDOMを共通部品化し、固定化ルーティンごとに現在値・自己ベスト・累計・30日チャレンジ・直近28日ドットを表示した。",
+    "weekdaysの土日とstreakSince前の日は四角いスキップ意匠にし、固定化1枠目を大きく、2・3枠目を控えめにした。解除済み・削除済みルールは表示対象から除外した。",
+    "habitStreakStatsへ累計、streakSince起点の暦日challengeDay、適格日付きlast28を追加し、日付文字列パースなしで算出した。",
+    "routineRateへrecurrencesを任意引数で渡し、protection=trueの有効ルールに属するBlockを分母・分子から除外した。既存の引数1個の呼び出し契約は維持した。",
+    "Service WorkerのCACHE_NAMEをv253へ更新した(APP_SHELLの登録内容は変更なし)。"
+  ],
+  "uncertainties": [
+    "30日チャレンジのn日目はweekdaysでもstreakSinceからの暦日経過を採用し、実施対象外の土日はドット側で区別した。"
+  ],
+  "reviewFocus": [
+    "EARLY BIRDとIRONの表示値・DOM・遷移actionが従来どおりで、習慣パネル追加以外の挙動差がないか。",
+    "dailyの未完了日リセットとweekdaysの土日スキップが現在値だけに作用し、自己ベスト・累計を壊さないか。",
+    "固定化順の先頭だけがprimary、2・3枠目がsecondaryとなり、解除・削除済み・固定化0件で余計なパネルが出ないか。",
+    "routineRateがprotectionルールを除外しつつ、oneTap除外と通常ルーティンの既存集計を維持するか。",
+    "390pxで長い習慣名・達成済み表現・28ドットが画面全体の横スクロールを生まないか。"
+  ],
+  "verification": [
+    "変更前実測: protectionルールを渡してもroutineRateは1/2・50%となり、保護ルーティンを分母へ含めていた。修正後recurrence-coreでは1/1・100%をPASS。",
+    "node --check app.js、src/core/habit-streak.js、src/core/recurrence.js、src/features/instruments.js、tests/v253.test.js: PASS。",
+    "system Edge指定 tests/v253.test.js: daily完了2日、weekdays土日スキップ、未完了リセット+自己ベスト保持、0件/解除/削除非表示、30日超、既存計器、390pxを全件PASS。",
+    "instruments-core、v247、instruments-e2e、v252、recurrence-core: 全件PASS。",
+    "npm run code:index:write: PASS(564 functions)。npm run test:manifest:write: PASS(138 suites)。system Edge指定 release-gate --final: 302.7秒、exit 0。"
+  ],
+  "knownLimitations": [
+    "iOS Safari実機PWAでのService Worker更新とオフライン表示確認は監督者側で必要。",
+    "taskchute-notes/handoff.mdがワークスペース外でEPERMになる場合、notes側更新は監督者が再実行する。"
+  ]
+}

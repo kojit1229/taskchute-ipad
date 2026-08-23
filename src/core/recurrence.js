@@ -45,9 +45,11 @@ function configureRecurrence(deps) {
 //      stateアクセスのみ `const state = getState();` を関数先頭に追加) ----
 
 // v33: ルーティン実行率(元routine.js:127-132、逐語コピー。state参照なしのため無変更)。
-function routineRate(blocks) {
+function routineRate(blocks, recurrences = []) {
   // 率計器は計画Blockの消化を測るため、実績記録専用のoneTap Blockは除外する。
-  const list = blocks.filter((b) => b.category === "ルーティン" && !b.oneTap);
+  // v253: protectionは実行率で裁かない契約のため、対応するルールのBlockも母集団から除外する。
+  const protectedIds = new Set(recurrences.filter((rule) => !rule.deleted && rule.protection).map((rule) => rule.id));
+  const list = blocks.filter((b) => b.category === "ルーティン" && !b.oneTap && !protectedIds.has(b.recurrenceGroupId));
   const done = list.filter((b) => b.completed).length;
   return { done, total: list.length, pct: list.length ? Math.round((done / list.length) * 100) : 0 };
 }

@@ -8945,7 +8945,7 @@ function generateReport(dateArg, { quiet = false } = {}) {
     total: mitBlocks.length,
     pct: mitBlocks.length ? Math.round((mitDone / mitBlocks.length) * 100) : 0
   };
-  const rateRoutine = routineRate(blocks);
+  const rateRoutine = routineRate(blocks, state.recurrences || []);
   const rateCycleWeek = cycleWeekProgress(date);
   const cycleWeek = cycleWeekForDate(date);
   const rateDeferral = deferralStats(blocks);

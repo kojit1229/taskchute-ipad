@@ -299,9 +299,9 @@
         "sync-storage",
         "planning-execution"
       ],
-      "assertionSignals": 57,
-      "assertionHash": "ad2056eebb0fadc4",
-      "sourceHash": "9bf59f2df537fcd3",
+      "assertionSignals": 58,
+      "assertionHash": "516c535e8e4522a7",
+      "sourceHash": "2ca44f36eb1c199e",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2262,6 +2262,30 @@
       "assertionSignals": 24,
       "assertionHash": "248554d8f4b746e6",
       "sourceHash": "cd2f825af756a222",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v253.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "ui-responsive"
+      ],
+      "assertionSignals": 17,
+      "assertionHash": "ea7f7509d755d563",
+      "sourceHash": "3857488613393092",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

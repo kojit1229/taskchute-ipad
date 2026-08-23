@@ -1,8 +1,7 @@
 // src/features/instruments.js(予定パス)— TaskChute Journal スリム化P4・レーンC(新計器盤)。
 //
 // 契約(p4-interface.md §3。dashboard.js/wish.js と同じ configureXxx(deps) DIパターンだが、
-// 界面凍結書の指定どおり**他ファイルを一切importしない**(全依存はconfigureInstruments(deps)
-// 経由のDIのみ。state store・ui/actions.js等への直接importはしない)。
+// state store・ui/actions.js等は直接importせず、表示用の純関数だけを葉モジュールからimportする。
 //   deps: { getState, escapeHTML, todayISO, addDays, weekRange, renderHeader, registerActions }
 //
 // stateスキーマ(p4-interface.md §1、凍結。正本データの書き込みはP3側・GATE ROUTINE実装が担う):
@@ -31,6 +30,8 @@
 // v247の月別×種目別重量グラフは構造化セットだけを読む独立した表示専用集計とする。
 //
 // characterization test: instruments-core.test.js(同ディレクトリ、ブラウザ不要)。
+
+import { habitStreakStats } from "../core/habit-streak.js";
 
 // ---- 依存注入(configureInstruments) ----
 // 呼び出し前のフォールバック(単体で読み込んだだけでは壊れないようにするための最小スタブ。
@@ -178,10 +179,45 @@ function ironPeriodStats(state, todayIso) {
 
 // ---- 描画 ----
 
-function earlyBirdDotsHTML(last28) {
+function streakDotsHTML(last28) {
   return last28
-    .map((day) => `<span class="instr-dot${day.checked ? " is-checked" : ""}" title="${escapeHTML(day.date)}"></span>`)
+    .map((day) => `<span class="instr-dot${day.checked ? " is-checked" : day.applicable === false ? " is-skipped" : ""}" title="${escapeHTML(day.date)}${day.applicable === false ? " (対象外)" : ""}"></span>`)
     .join("");
+}
+
+function streakPanelHTML({ className, title, subtitle, stats, cells, dotsLabel, foot }) {
+  return `<section class="instr-panel-box ${className}">
+        <h2>${title} <span>${subtitle}</span></h2>
+        <div class="instr-streak-hero"><strong>${stats.currentStreak}</strong><span>日連続</span></div>
+        <div class="instr-stats-row">${cells.map((cell) => `
+          <div class="instr-stat-cell${cell.className ? ` ${cell.className}` : ""}">
+            <span>${cell.label}</span><strong>${cell.value}<small>${cell.unit}</small></strong>
+          </div>`).join("")}
+        </div>
+        <div class="instr-dots" aria-label="${dotsLabel}">${streakDotsHTML(stats.last28)}</div>
+        <div class="instr-panel-foot">${foot}</div>
+      </section>`;
+}
+
+function habitPanelsHTML(state, todayIso) {
+  return (state.recurrences || []).filter((rule) => !rule?.deleted && rule.streakSince)
+    .slice(0, 3).map((rule, index) => {
+      const stats = habitStreakStats(rule, state.habitStreaks?.[rule.id], todayIso);
+      const challenge = stats.challengeDay <= 30
+        ? { value: `${stats.challengeDay}/30`, unit: "日目" }
+        : { value: "達成済み", unit: `(${stats.challengeDay}日目)` };
+      return streakPanelHTML({
+        className: `instr-habit-panel ${index === 0 ? "is-primary" : "is-secondary"}`,
+        title: `HABIT ${index + 1}`, subtitle: escapeHTML(rule.title || "固定化ルーティン"), stats,
+        cells: [
+          { label: "自己ベスト", value: stats.bestStreak, unit: "日" },
+          { label: "累計", value: stats.totalCount, unit: "回" },
+          { label: "30日チャレンジ", ...challenge, className: "instr-habit-challenge" }
+        ],
+        dotsLabel: `${escapeHTML(rule.title || "固定化ルーティン")}の直近28日`,
+        foot: "直近4週(28日) — ● 達成・－ 非該当日"
+      });
+    }).join("");
 }
 
 function ironChartHTML(stats) {
@@ -208,34 +244,22 @@ function renderInstruments() {
   const iron = ironSummary(state, todayIso);
   const period = ironPeriodStats(state, todayIso);
   const targetPct = iron.targetKg > 0 ? Math.min(100, Math.round((iron.todayKg / iron.targetKg) * 100)) : 0;
+  const earlyBirdPanel = streakPanelHTML({
+    className: "instr-early-bird", title: "EARLY BIRD", subtitle: "早起き", stats: eb,
+    cells: [
+      { label: "自己ベスト", value: eb.bestStreak, unit: "日" },
+      { label: "累計", value: eb.totalCount, unit: "回" },
+      { label: "今年", value: eb.yearCount, unit: "回" }
+    ],
+    dotsLabel: "直近4週の達成カレンダー", foot: "直近4週(28日) — ● は早起きゲート達成日"
+  });
 
   return `
     <div class="today-tower instr-view">
       ${renderHeader("計器盤", "INSTRUMENTS")}
 
-      <section class="instr-panel-box instr-early-bird">
-        <h2>EARLY BIRD <span>早起き</span></h2>
-        <div class="instr-streak-hero">
-          <strong>${eb.currentStreak}</strong>
-          <span>日連続</span>
-        </div>
-        <div class="instr-stats-row">
-          <div class="instr-stat-cell">
-            <span>自己ベスト</span>
-            <strong>${eb.bestStreak}<small>日</small></strong>
-          </div>
-          <div class="instr-stat-cell">
-            <span>累計</span>
-            <strong>${eb.totalCount}<small>回</small></strong>
-          </div>
-          <div class="instr-stat-cell">
-            <span>今年</span>
-            <strong>${eb.yearCount}<small>回</small></strong>
-          </div>
-        </div>
-        <div class="instr-dots" aria-label="直近4週の達成カレンダー">${earlyBirdDotsHTML(eb.last28)}</div>
-        <div class="instr-panel-foot">直近4週(28日) — ● は早起きゲート達成日</div>
-      </section>
+      ${earlyBirdPanel}
+      ${habitPanelsHTML(state, todayIso)}
 
       <section class="instr-panel-box instr-iron-log" data-action="instruments-open-iron-log">
         <h2>IRON LOG <span>筋トレサマリ</span></h2>

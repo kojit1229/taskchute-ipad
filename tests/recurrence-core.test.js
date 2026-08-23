@@ -158,6 +158,15 @@ test("routineRate: 対象0件はpct 0", () => {
   assert.deepEqual(routineRate([]), { done: 0, total: 0, pct: 0 });
 });
 
+test("routineRate: protectionルールのBlockを分母から除外", () => {
+  const blocks = [
+    { category: "ルーティン", recurrenceGroupId: "normal", completed: true },
+    { category: "ルーティン", recurrenceGroupId: "protected", completed: false }
+  ];
+  const rules = [{ id: "normal", protection: false }, { id: "protected", protection: true }];
+  assert.deepEqual(routineRate(blocks, rules), { done: 1, total: 1, pct: 100 });
+});
+
 // =====================================================================
 // findActiveDuplicateRecurrenceRule / createRecurrenceRule
 // =====================================================================

@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v252";
+const CACHE_NAME = "taskchute-journal-pwa-v253";
+// v253: 固定化ルーティンのストリークを計器盤へ表示し、保護ルーティンを実行率から除外した(APP_SHELL変更なし)。
 // v252: 固定化ルーティンのストリークデータ層と純関数を追加した。
 // v251: ATISへAIフィードバックのサマリー節と対象日を常時表示した(APP_SHELL変更なし)。
 // v250: 表示先の無い外部fetch・home撤去後の死にコードを削除し、Block完了3経路の日報再生成を補完した(APP_SHELL変更なし)。
