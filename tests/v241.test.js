@@ -85,18 +85,24 @@ function check(name, cond, extra = "") {
     await page.waitForSelector(".sec-journal");
 
     console.log("[4] 1280px以上ではATIS/JOURNAL非表示時だけCABIN TIMERを右列へ置く");
+    const desktopNormalFont = await page.locator(".today-pomodoro .pomo-time-overlay")
+      .evaluate((overlay) => parseFloat(getComputedStyle(overlay).fontSize));
+    check("PC非FOCUS時は従来の27px", Math.abs(desktopNormalFont - 27) < 0.1, `${desktopNormalFont}px`);
     await page.click('[data-action="focus-mode"]');
     await page.waitForSelector('.today-tower[data-focus-mode="1"]');
     const desktopFocusLayout = await page.evaluate(() => {
       const right = document.querySelector(".tower-col-right").getBoundingClientRect();
       const timer = document.querySelector(".today-pomodoro");
       const rect = timer.getBoundingClientRect();
-      return { rightX: right.x, rightWidth: right.width, timerX: rect.x, timerWidth: rect.width, gridArea: getComputedStyle(timer).gridArea };
+      const overlay = timer.querySelector(".pomo-time-overlay");
+      return { rightX: right.x, rightWidth: right.width, timerX: rect.x, timerWidth: rect.width, gridArea: getComputedStyle(timer).gridArea, fontSize: parseFloat(getComputedStyle(overlay).fontSize) };
     });
     check("PCフォーカス時はCABIN TIMERが右列と同じ位置・幅",
       Math.abs(desktopFocusLayout.rightX - desktopFocusLayout.timerX) < 1
       && Math.abs(desktopFocusLayout.rightWidth - desktopFocusLayout.timerWidth) < 1
       && desktopFocusLayout.gridArea === "right", JSON.stringify(desktopFocusLayout));
+    check("PCフォーカス時はタイマー数字が通常時より大きい",
+      desktopFocusLayout.fontSize > desktopNormalFont, `${desktopNormalFont}px -> ${desktopFocusLayout.fontSize}px`);
     await page.click('[data-action="focus-mode"]');
     await page.waitForSelector(".sec-journal");
     const restoredArea = await page.locator(".today-pomodoro").evaluate((timer) => getComputedStyle(timer).gridArea);
@@ -104,6 +110,11 @@ function check(name, cond, extra = "") {
 
     console.log("[5] iPhone幅ではフォーカス時もCABIN TIMERの既存縦順を保つ");
     await page.setViewportSize({ width: 390, height: 844 });
+    const mobileNormal = await page.evaluate(() => {
+      const timer = document.querySelector(".today-pomodoro");
+      return { fontSize: parseFloat(getComputedStyle(timer.querySelector(".pomo-time-overlay")).fontSize), height: timer.getBoundingClientRect().height };
+    });
+    check("iPhone非FOCUS時は従来の27px", Math.abs(mobileNormal.fontSize - 27) < 0.1, `${mobileNormal.fontSize}px`);
     await page.click('[data-action="focus-mode"]');
     await page.waitForSelector('.today-tower[data-focus-mode="1"]');
     const mobileLayout = await page.evaluate(() => {
@@ -111,11 +122,16 @@ function check(name, cond, extra = "") {
       const log = document.querySelector(".sec-log").getBoundingClientRect();
       const timerRect = timer.getBoundingClientRect();
       const standing = document.querySelector(".sec-creed").getBoundingClientRect();
-      return { direct: timer.parentElement.classList.contains("today-tower"), logBottom: log.bottom, timerTop: timerRect.top, timerBottom: timerRect.bottom, standingTop: standing.top };
+      const overlay = timer.querySelector(".pomo-time-overlay");
+      return { direct: timer.parentElement.classList.contains("today-tower"), logBottom: log.bottom, timerTop: timerRect.top, timerBottom: timerRect.bottom, standingTop: standing.top, timerHeight: timerRect.height, fontSize: parseFloat(getComputedStyle(overlay).fontSize) };
     });
     check("iPhoneはFLIGHT LOG→CABIN TIMER→STANDING ORDERSの縦順",
       mobileLayout.direct && mobileLayout.logBottom <= mobileLayout.timerTop && mobileLayout.timerBottom <= mobileLayout.standingTop,
       JSON.stringify(mobileLayout));
+    check("iPhoneフォーカス時はパネル高とタイマー数字が通常時より大きい",
+      mobileLayout.timerHeight > mobileNormal.height && mobileLayout.fontSize > mobileNormal.fontSize,
+      `${mobileNormal.height}px/${mobileNormal.fontSize}px -> ${mobileLayout.timerHeight}px/${mobileLayout.fontSize}px`);
+    console.log(`  measured font-size: PC ${desktopNormalFont}px -> ${desktopFocusLayout.fontSize}px; iPhone ${mobileNormal.fontSize}px -> ${mobileLayout.fontSize}px`);
     await page.click('[data-action="focus-mode"]');
     await page.waitForSelector(".sec-journal");
 

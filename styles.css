@@ -3152,6 +3152,13 @@ h3 {
   .today-span-2 { grid-column: span 1; }
   .today-pomodoro-stage { align-items: stretch; gap: 14px; flex-direction: column; }
   .today-pomodoro .pomo-circle-wrap { margin: 0 auto; }
+  /* v248: FOCUS中だけCABIN TIMERを遠目でも読める大きさへ広げる。 */
+  .today-tower[data-focus-mode="1"] .today-pomodoro-stage { min-height: clamp(420px, 62dvh, 520px); }
+  .today-tower[data-focus-mode="1"] .today-pomodoro .pomo-circle-wrap {
+    width: min(82vw, 320px);
+    height: min(82vw, 320px);
+  }
+  .today-tower[data-focus-mode="1"] .today-pomodoro .pomo-time-overlay { font-size: clamp(60px, 18vw, 74px); }
 }
 
 /* css-topband.css — TaskChute Journal スリム化P3・単位(c)の一部。
@@ -3330,6 +3337,15 @@ h3 {
   .today-tower .tower-col-right { display: block; grid-area: right; min-width: 0; }
   .today-tower > .today-pomodoro { grid-area: timer; margin-top: 12px; }
   .today-tower[data-focus-pomodoro-right="1"] > .today-pomodoro { grid-area: right; margin-top: 0; }
+  .today-tower[data-focus-mode="1"] .today-pomodoro-stage {
+    min-height: clamp(480px, 70vh, 680px);
+    flex-direction: column;
+  }
+  .today-tower[data-focus-mode="1"] .today-pomodoro .pomo-circle-wrap {
+    width: clamp(330px, 32vw, 430px);
+    height: clamp(330px, 32vw, 430px);
+  }
+  .today-tower[data-focus-mode="1"] .today-pomodoro .pomo-time-overlay { font-size: clamp(81px, 8vw, 108px); }
   .tower-header .tower-time time { font-size: 46px; }
   .tower-day-left strong { font-size: 30px; }
   .tower-col-left .sec-rwy .tower-nowhud { grid-template-columns: 1fr; gap: 3px; padding: 4px 10px 8px; }

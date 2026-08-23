@@ -1,0 +1,43 @@
+{
+  "version": 248,
+  "date": "2026-08-23",
+  "title": "FOCUS時CABIN TIMER拡大",
+  "summary": "TodayのFOCUS中だけCABIN TIMERの円・数字・パネル高をPCとiPhoneで拡大し、遠目から残り時間を読みやすくした。",
+  "changedFiles": [
+    "CHANGES_v248.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v248.json",
+    "styles.css",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/v241.test.js"
+  ],
+  "intent": [
+    "GATE ROUTINE、ATIS、JOURNALを隠したFOCUS状態では、空いた表示領域をCABIN TIMERへ配分して残り時間を遠目でも読めるようにする。",
+    "非FOCUS時の見た目、既存DOM、タイマーエンジン、ticker、state、data-actionを一切変えない。"
+  ],
+  "changes": [
+    "data-focus-mode=1配下だけにCSSを追加し、1280px以上ではCABIN TIMERの円を最大430px、時間表示を最大108px、stage高を最大680pxへ拡大した。",
+    "720px以下では円を画面幅の82%・最大320px、時間表示を画面幅追随の60〜74px、stage高を420〜520pxへ拡大した。",
+    "v241 E2EへPC・390pxそれぞれの非FOCUS時27px固定、FOCUS時のcomputed font-size増加、モバイルのパネル高増加を追加し、既存ticker継続検証と合わせて固定した。",
+    "Service WorkerのCACHE_NAMEをv248へ更新した。"
+  ],
+  "uncertainties": [
+    "PCではv241の右列配置を維持し、その列内で円と数字を拡大する。中央列へ跨がせないため、既存の左・中央パネル配置へ影響しない。",
+    "iPhoneのstage最小高はdvhへ追随しつつ上限520pxとし、コンテンツが必要とする場合は自然に伸びる。"
+  ],
+  "reviewFocus": [
+    "追加CSSがdata-focus-mode=1配下だけに限定され、非FOCUS時の27px・154px円・既存パネル高に退行がないか。",
+    "1280px以上で右列grid-areaと他パネル配置を維持し、390pxでFLIGHT LOG→CABIN TIMER→STANDING ORDERSの縦順を壊していないか。",
+    "DOM・app.js・state・個別イベント・animation/reduced-motion規則へ差分がなく、FOCUS切替後も1秒tickerが更新されるか。"
+  ],
+  "verification": [
+    "system Edge指定 node tests/v241.test.js: 通常時27px、PC 108px、390px 70.2px、モバイルパネル高増加、既存配置・復元・ticker継続を全件PASS。",
+    "npm run test:manifest:write/check: PASS(test manifest 135 suites)。",
+    "system Edge指定 node scripts/release-gate.js releases/v248.json --final --suite=v241: 影響回帰12スイートとcore 10スイートを全件PASS、213.3秒、exit 0。"
+  ],
+  "knownLimitations": [
+    "iOS Safari実機PWAでのService Worker更新、390px実機の文字可読性と縦スクロール感は監督者側で確認が必要。",
+    "taskchute-notes/handoff.mdがワークスペース外でEPERMになる場合、notes側更新は監督者が再実行する。"
+  ]
+}

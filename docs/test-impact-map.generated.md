@@ -94,7 +94,7 @@
 | v231.test.js | e2e | full | journal-health | 9 | 0 | 0 |
 | v235.test.js | node | full | journal-health | 8 | 0 | 0 |
 | v240.test.js | node | full | planning-execution | 11 | 0 | 0 |
-| v241.test.js | e2e | full | ui-responsive | 19 | 0 | 0 |
+| v241.test.js | e2e | full | ui-responsive | 23 | 0 | 0 |
 | v247.test.js | node | full | legacy-crosscutting | 17 | 0 | 0 |
 | v49.test.js | e2e | full | sync-storage, content-ai | 19 | 16 | 7900 |
 | v50.test.js | e2e | smoke | planning-execution, ui-responsive | 16 | 12 | 4200 |
