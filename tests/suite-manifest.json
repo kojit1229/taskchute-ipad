@@ -658,9 +658,33 @@
         "planning-execution",
         "journal-health"
       ],
-      "assertionSignals": 42,
-      "assertionHash": "deb189b79cedeabc",
-      "sourceHash": "3bab70d6688ece76",
+      "assertionSignals": 48,
+      "assertionHash": "194f3c92ea66c172",
+      "sourceHash": "a6f90b24e11f1f6f",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "track-crud-core.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "sync-storage"
+      ],
+      "assertionSignals": 35,
+      "assertionHash": "eb0fbfd9873d0810",
+      "sourceHash": "577e1fbfdc4a0c87",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2332,8 +2356,8 @@
         "security-offline"
       ],
       "assertionSignals": 10,
-      "assertionHash": "0ed8ef2855ae7148",
-      "sourceHash": "f16bb9677deb09f8",
+      "assertionHash": "d1dafb7ef8f59260",
+      "sourceHash": "5cc894a686759337",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

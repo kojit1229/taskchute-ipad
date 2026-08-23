@@ -1,7 +1,9 @@
 // v164: app.js分割・段階1(最初の抽出)。純粋関数はsrc/core/**へ抽出し、依存グラフの葉として
 //   importする(src/core/**はstateを一切参照しない。claude-review-result.md §7の契約)。
 import { mergeById, mergeByIdPreferNewer } from "./src/core/merge.js";
-import { activeTrackForProject } from "./src/core/track.js";
+import {
+  activeTrackForProject, dateParts, latestMeasurement, validateTrackDraft, trackDefinitionChanged
+} from "./src/core/track.js";
 // v166: app.js分割・段階3(state store + storage/sync gateway)。stateの再代入はsetState()
 //   経由のみ(claude-review-result.md §2 Blocker-1)。store.jsは何もimportしない真の葉。
 import { state, setState } from "./src/state/store.js";
@@ -3030,6 +3032,138 @@ function addCommitmentItems(weekStart, blockIds) {
     commitmentItemForBlock(state, byId.get(id), weekStart, "added", now)
   ));
   saveState();
+}
+
+// v257: 12WYトラック定義CRUD。UI更新は呼び出し元に任せ、ここではstate保存だけを行う。
+function closeTracksForOwner(ownerType, ownerId, reason) {
+  const now = nowDateTime();
+  let closed = 0;
+  state.tracks = (state.tracks || []).map((track) => {
+    if (track.deleted || track.status !== "active" || track.ownerType !== ownerType || track.ownerId !== ownerId) return track;
+    closed += 1;
+    return { ...track, status: "closed", closedAt: now, closedReason: reason, updatedAt: now };
+  });
+  return closed;
+}
+
+function trackRecord(projectId, kind, fields, now, links = {}) {
+  const milestones = kind === "milestone" ? fields.milestones.map((milestone) => ({
+    id: milestone.id || "ms_" + crypto.randomUUID(),
+    label: String(milestone.label || "").trim(), plannedDate: milestone.plannedDate,
+    originalPlannedDate: milestone.originalPlannedDate || milestone.plannedDate,
+    doneAt: milestone.doneAt || "", doneChangedAt: milestone.doneChangedAt || "",
+    updatedAt: now, deleted: Boolean(milestone.deleted)
+  })) : [];
+  return {
+    id: "trk_" + crypto.randomUUID(), ownerType: "project", ownerId: projectId,
+    cycleStartDate: state.settings.twelveWeekStartDate || "", kind,
+    name: String(fields.name || "").trim(), unit: kind === "numeric" ? String(fields.unit || "").trim() : "",
+    startDate: fields.startDate || "", deadline: kind === "numeric" ? fields.deadline : "",
+    baselineValue: kind === "numeric" ? Number(fields.baselineValue) : 0,
+    goalValue: kind === "numeric" ? Number(fields.goalValue) : 0,
+    valueStep: kind === "numeric" ? Number(fields.valueStep) : 1, milestones,
+    status: "active", closedAt: "", closedReason: "", supersedesTrackId: "", carriedFromTrackId: "",
+    createdAt: now, updatedAt: now, deleted: false, ...links
+  };
+}
+
+function mergeEditedMilestones(existing, fields, incoming, now) {
+  const byId = new Map((existing || []).map((milestone) => [milestone.id, milestone]));
+  const seen = new Set();
+  const merged = incoming.map((next, index) => {
+    const current = byId.get(fields[index].id);
+    if (!current) return next;
+    seen.add(current.id);
+    for (const key of ["originalPlannedDate", "doneAt", "doneChangedAt", "deleted"]) {
+      if (!Object.prototype.hasOwnProperty.call(fields[index], key)) next[key] = current[key];
+    }
+    const unchanged = ["label", "plannedDate", "originalPlannedDate", "doneAt", "deleted"]
+      .every((key) => next[key] === current[key]);
+    next.updatedAt = unchanged ? current.updatedAt : now;
+    return next;
+  });
+  return [...merged, ...(existing || []).filter((milestone) => !seen.has(milestone.id))
+    .map((milestone) => milestone.deleted ? milestone : { ...milestone, deleted: true, updatedAt: now })];
+}
+
+function saveTrackFromForm(projectId, kind, fields) {
+  const validation = validateTrackDraft(kind, fields);
+  if (!validation.ok) return validation;
+  const existing = activeTrackForProject(state.tracks || [], projectId);
+  const now = nowDateTime();
+  let track;
+  if (existing && !trackDefinitionChanged(existing, kind, fields)) {
+    const incoming = trackRecord(projectId, kind, fields, now);
+    if (kind === "milestone") incoming.milestones = mergeEditedMilestones(
+      existing.milestones, fields.milestones, incoming.milestones, now
+    );
+    track = { ...existing, ...incoming, id: existing.id, cycleStartDate: existing.cycleStartDate,
+      ownerType: existing.ownerType,
+      createdAt: existing.createdAt, supersedesTrackId: existing.supersedesTrackId || "",
+      carriedFromTrackId: existing.carriedFromTrackId || "" };
+    state.tracks = state.tracks.map((entry) => entry.id === existing.id ? track : entry);
+  } else {
+    if (existing) closeTracksForOwner("project", projectId, "superseded");
+    track = trackRecord(projectId, kind, fields, now, existing ? { supersedesTrackId: existing.id } : {});
+    state.tracks = [...(state.tracks || []), track];
+  }
+  saveState();
+  return { ok: true, track };
+}
+
+function closeActiveTrackManual(projectId) {
+  if (!closeTracksForOwner("project", projectId, "manual")) return { ok: true };
+  saveState();
+  return { ok: true };
+}
+
+function carryProjectToNewCycle(projectId, newCycleStartDate, fields = {}) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(newCycleStartDate || "") || !dateParts(newCycleStartDate)) {
+    return { ok: false, errors: ["newCycleStartDateは有効な日付が必須"] };
+  }
+  const project = state.projects.find((entry) => entry.id === projectId && !entry.deleted);
+  if (!project) return { ok: false, errors: ["projectが見つかりません"] };
+  const existing = activeTrackForProject(state.tracks || [], projectId);
+  if (!existing) {
+    const now = nowDateTime();
+    state.projects = state.projects.map((entry) => entry.id === projectId
+      ? { ...entry, twelveWeekStartDate: newCycleStartDate, updatedAt: now } : entry);
+    saveState();
+    return { ok: true };
+  }
+  const draft = existing.kind === "numeric" ? {
+    name: existing.name, unit: existing.unit, startDate: newCycleStartDate, deadline: fields.deadline,
+    baselineValue: latestMeasurement(state.trackMeasurements || [], existing.id)?.value ?? existing.baselineValue,
+    goalValue: fields.goalValue ?? existing.goalValue, valueStep: existing.valueStep
+  } : {
+    name: existing.name, startDate: newCycleStartDate,
+    milestones: (existing.milestones || []).filter((milestone) => !milestone.deleted && !milestone.doneAt)
+      .map((milestone) => ({
+        label: milestone.label, plannedDate: fields.milestonePlannedDates?.[milestone.id] || ""
+      }))
+  };
+  const carriedWithoutTrack = existing.kind === "milestone" ? draft.milestones.length === 0
+    : fields.goalValue === undefined && Number(draft.baselineValue) === Number(draft.goalValue);
+  const validation = carriedWithoutTrack ? { ok: true, errors: [] } : validateTrackDraft(existing.kind, draft);
+  if (!carriedWithoutTrack && validation.ok && existing.kind === "milestone"
+    && draft.milestones.some((milestone) => milestone.plannedDate < newCycleStartDate)) {
+    validation.ok = false;
+    validation.errors.push("plannedDateは新サイクル開始日以後が必須");
+  }
+  if (!validation.ok) return validation;
+  const now = nowDateTime();
+  state.projects = state.projects.map((entry) => entry.id === projectId
+    ? { ...entry, twelveWeekStartDate: newCycleStartDate, updatedAt: now } : entry);
+  closeTracksForOwner("project", projectId, "carried");
+  if (carriedWithoutTrack) {
+    saveState();
+    return { ok: true, carriedWithoutTrack: true };
+  }
+  const track = trackRecord(projectId, existing.kind, draft, now, { carriedFromTrackId: existing.id });
+  track.cycleStartDate = newCycleStartDate;
+  state.tracks = [...state.tracks, track];
+  saveState();
+  return { ok: true, track };
 }
 
 // v39: 開いている問い(Zone 3)。最大3件、deepening を lastTouchedAt 降順で優先。
@@ -8271,7 +8405,10 @@ function deleteProject(id) {
   if (target && target.kind === "wish") {
     return showToast("「Wish」はやりたいことの保存先のため削除できません");
   }
-  state.projects = state.projects.map((project) => project.id === id ? { ...project, deleted: true, updatedAt: nowDateTime() } : project);
+  const now = nowDateTime();
+  state.tracks = (state.tracks || []).map((track) => track.ownerType === "project" && track.ownerId === id
+    && !track.deleted && track.status === "active" ? { ...track, deleted: true, updatedAt: now } : track);
+  state.projects = state.projects.map((project) => project.id === id ? { ...project, deleted: true, updatedAt: now } : project);
   saveAndRender("Projectを削除しました");
 }
 
@@ -12085,7 +12222,12 @@ function buildProjectModal(project) {
 }
 
 function saveProjectFromModal(id, fields) {
-  const twelveWeekStartDate = fields.is12WY ? (state.settings.twelveWeekStartDate || todayISO()) : "";
+  const existing = state.projects.find((project) => project.id === id);
+  let twelveWeekStartDate = fields.is12WY ? (state.settings.twelveWeekStartDate || todayISO()) : "";
+  if (existing?.twelveWeekStartDate && !fields.is12WY && activeTrackForProject(state.tracks || [], id)) {
+    if (window.confirm("12WYトラックを終了しますか?")) closeActiveTrackManual(id);
+    else twelveWeekStartDate = existing.twelveWeekStartDate;
+  }
   state.projects = state.projects.map((p) => {
     if (p.id !== id) return p;
     return {

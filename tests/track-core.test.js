@@ -31,7 +31,7 @@ function item(id, weekStart, extra = {}) {
   const {
     dateParts, daysBetween, weeklyScore, latestMeasurement, paceNumeric, paceMilestone,
     trackStatus, forwardTracksForWeek, selectTrackFooter, activeTrackForProject,
-    PACE_TOLERANCE_DAYS, STALE_DAYS
+    validateTrackDraft, trackDefinitionChanged, PACE_TOLERANCE_DAYS, STALE_DAYS
   } = mod;
 
   console.log("[1] 日付ヘルパーと依存ゼロ契約");
@@ -43,6 +43,41 @@ function item(id, weekStart, extra = {}) {
   check("new Date(文字列)を使わない", !/new\s+Date\s*\(\s*["'`]/.test(source));
   check("state/store.js/app.jsをimportしない", !/^\s*import\s/m.test(source)
     && !/from\s*["'][^"']*(?:state|store\.js|app\.js)/.test(source));
+
+  console.log("[1b] track保存前の構造バリデーションと計測定義変更");
+  const validNumeric = {
+    name: "執筆", unit: "ページ", startDate: "2026-08-24", deadline: "2026-11-16",
+    baselineValue: 0, goalValue: 100, valueStep: 5
+  };
+  const validMilestone = { name: "刊行", milestones: [{ label: "初稿", plannedDate: "2026-09-10" }] };
+  check("numeric最小構成は合格", validateTrackDraft("numeric", validNumeric).ok);
+  check("milestone最小構成は合格", validateTrackDraft("milestone", validMilestone).ok);
+  const invalidNumeric = [
+    { ...validNumeric, deadline: "" },
+    { ...validNumeric, startDate: validNumeric.deadline },
+    { ...validNumeric, startDate: "2026-12-01" },
+    { ...validNumeric, goalValue: validNumeric.baselineValue },
+    { ...validNumeric, valueStep: 0 },
+    { ...validNumeric, baselineValue: "not-number" }
+  ];
+  check("numeric各違反を個別に拒否", invalidNumeric.every((draft) => !validateTrackDraft("numeric", draft).ok),
+    JSON.stringify(invalidNumeric.map((draft) => validateTrackDraft("numeric", draft))));
+  const missingDates = validateTrackDraft("numeric", { ...validNumeric, startDate: "", deadline: "" });
+  check("startDate必須はdeadline必須と独立に通知", missingDates.errors.includes("startDate必須")
+    && missingDates.errors.includes("deadline必須"), JSON.stringify(missingDates));
+  const invalidMilestones = [
+    { ...validMilestone, milestones: [] },
+    { ...validMilestone, milestones: [{ label: "", plannedDate: "2026-09-10" }] },
+    { ...validMilestone, milestones: [{ label: "初稿", plannedDate: "" }] }
+  ];
+  check("milestone各違反を個別に拒否", invalidMilestones.every((draft) => !validateTrackDraft("milestone", draft).ok),
+    JSON.stringify(invalidMilestones.map((draft) => validateTrackDraft("milestone", draft))));
+  const existingDefinition = { kind: "numeric", unit: "ページ" };
+  check("kind変更とunit変更だけをsupersede対象にする",
+    trackDefinitionChanged(existingDefinition, "milestone", validMilestone)
+      && trackDefinitionChanged(existingDefinition, "numeric", { ...validNumeric, unit: "章" })
+      && !trackDefinitionChanged(existingDefinition, "numeric", { ...validNumeric, unit: " ページ " })
+      && !trackDefinitionChanged(existingDefinition, "numeric", { ...validNumeric, goalValue: 200, deadline: "2026-12-01" }));
 
   console.log("[2] weeklyScore");
   const week = "2026-08-22";

@@ -142,7 +142,38 @@ function activeTrackForProject(tracks, projectId) {
       || String(a.id || "").localeCompare(String(b.id || "")))[0] || null;
 }
 
+function validateTrackDraft(kind, fields = {}) {
+  const errors = [];
+  if (kind === "numeric") {
+    const numericKeys = ["baselineValue", "goalValue", "valueStep"];
+    if (!fields.deadline) errors.push("deadline必須");
+    if (!fields.startDate) errors.push("startDate必須");
+    if (fields.startDate && fields.deadline
+      && (!dateParts(fields.startDate) || !dateParts(fields.deadline) || fields.startDate >= fields.deadline)) {
+      errors.push("startDateはdeadlineより前が必須");
+    }
+    if (numericKeys.some((key) => fields[key] === "" || fields[key] === null
+      || !Number.isFinite(Number(fields[key])))) errors.push("数値フィールドは有限数が必須");
+    if (Number(fields.goalValue) === Number(fields.baselineValue)) errors.push("goalValueはbaselineValueと異なる値が必須");
+    if (!(Number(fields.valueStep) > 0)) errors.push("valueStepは0より大きい値が必須");
+  } else if (kind === "milestone") {
+    const milestones = (Array.isArray(fields.milestones) ? fields.milestones : []).filter((milestone) => !milestone?.deleted);
+    if (!milestones.length) errors.push("milestoneは1件以上必須");
+    if (milestones.some((milestone) => !String(milestone?.label || "").trim())) errors.push("各milestoneのlabel必須");
+    if (milestones.some((milestone) => !dateParts(milestone?.plannedDate))) errors.push("各milestoneのplannedDate必須");
+  } else {
+    errors.push("kindはnumericまたはmilestoneが必須");
+  }
+  return { ok: errors.length === 0, errors };
+}
+
+function trackDefinitionChanged(existing, kind, fields = {}) {
+  return Boolean(existing && (existing.kind !== kind
+    || (kind === "numeric" && String(existing.unit || "").trim() !== String(fields.unit || "").trim())));
+}
+
 export {
   PACE_TOLERANCE_DAYS, STALE_DAYS, dateParts, daysBetween, weeklyScore, latestMeasurement,
-  paceNumeric, paceMilestone, trackStatus, forwardTracksForWeek, selectTrackFooter, activeTrackForProject
+  paceNumeric, paceMilestone, trackStatus, forwardTracksForWeek, selectTrackFooter, activeTrackForProject,
+  validateTrackDraft, trackDefinitionChanged
 };

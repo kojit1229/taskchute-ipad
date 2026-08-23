@@ -1,0 +1,61 @@
+{
+  "version": 257,
+  "date": "2026-08-24",
+  "title": "12WYトラック定義CRUDデータ層",
+  "summary": "12WY成果トラックの構造バリデーション、節目id単位の安全な同一定義編集、計測定義変更時のsupersede、manual close、新track不要時を含むサイクルcarry、Project削除tombstoneをUI非依存のデータ層として実装した。",
+  "changedFiles": [
+    "app.js",
+    "CHANGES_v257.md",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v257.json",
+    "src/core/track.js",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/track-core.test.js",
+    "tests/track-crud-core.test.js",
+    "tests/v255.test.js"
+  ],
+  "intent": [
+    "実装単位#7の登録フォームと#8の移行UIが共有できる、renderやtoastを伴わないトラック定義CRUD入口を提供する。",
+    "kindまたはnumericのunitが変わる場合だけ旧trackをsupersededで閉じ、目標値・期限だけの変更は同一track編集として履歴の意味を守る。",
+    "同期和集合で重複した同一ownerのactive trackをclose・supersede・carry操作時に全件処理し、古い重複が再浮上しないようにする。"
+  ],
+  "changes": [
+    "src/core/track.jsへvalidateTrackDraftとtrackDefinitionChangedを純関数として追加し、numeric/milestoneの構造違反とkind/unit変更判定を一箇所に集約した。",
+    "app.jsへcloseTracksForOwner、saveTrackFromForm、closeActiveTrackManual、carryProjectToNewCycleを追加し、成功時だけsaveStateするデータ層契約を実装した。",
+    "numeric carryは最新measurement値をbaselineに採用し期限再入力を必須化、milestone carryは未完了節目だけを新id・新開始日・再設定予定日で複製するようにした。",
+    "同一定義のmilestone編集は節目idで突き合わせ、省略節目をtombstone化し、省略されたoriginalPlannedDate/doneAt/doneChangedAtと未編集節目のupdatedAtを保持するようにした。",
+    "全節目doneまたは目標到達済みnumericのcarryは旧trackだけをcarriedで閉じ、project開始日を更新してcarriedWithoutTrackを返すようにした。",
+    "Project削除時にactive trackをdeleted:trueへtombstone化し、Projectモーダルで12WYをOFFにする際はactive trackがある場合だけ確認してmanual closeするようにした。",
+    "track-coreと新規track-crud-core fast-nodeテストで全作成・編集・supersede・close・carry・削除経路、各負例、保存回数、失敗時state不変、既存正方向を固定した。",
+    "Service WorkerのCACHE_NAMEをv257へ更新した(APP_SHELLの登録内容は変更なし)。"
+  ],
+  "notes": [
+    "実装単位#8のcarryフォームは、戻り値carriedWithoutTrackを新しい目標・節目を持つtrack登録への誘導に使える。"
+  ],
+  "uncertainties": [
+    "設計B項の公開シグネチャからの逸脱はない。saveTrackFromFormのfieldsは共通name/startDate、numericはunit/deadline/baselineValue/goalValue/valueStep、milestoneはmilestones配列を受け取る形で確定した。",
+    "milestones配列の各要素はid、originalPlannedDate、doneAt、doneChangedAt、deletedを省略可能とし、新規時の既定値をデータ層で補完する。同一定義編集ではデータ層が既存節目とidで突き合わせ、省略フィールドとtombstoneを防御的に保持する。"
+  ],
+  "reviewFocus": [
+    "saveTrackFromFormの同一定義編集がtrackのid/createdAt/cycleStartDate/ownerType/由来リンクと節目の履歴・tombstoneを保持し、kind/unit変更だけがsupersedeになるか。",
+    "バリデーションとcarry予定日検査がstate変更より前に完了し、1件の違反でもproject更新・旧track close・saveStateが部分実行されないか。",
+    "重複activeのclose/supersede/carryが同一owner全件に及び、別owner・既closed・Project削除時のclosed trackを変更しないか。",
+    "12WY OFF確認Noで旧twelveWeekStartDateだけを保ち、同時に編集したProjectの他フィールドが保存されるか。"
+  ],
+  "verification": [
+    "node --check app.js、src/core/track.js、sw.js、tests/track-crud-core.test.js: PASS。",
+    "node tests/track-core.test.js: 構造バリデーションと定義変更判定を含め全件PASS。",
+    "node tests/track-crud-core.test.js: track CRUD・close・carry・Project既存経路に加え、節目tombstone/履歴保持・未編集updatedAt不変・空白unit・不正日付・新track不要carry・ownerType保持を全件PASS。",
+    "npm run code:index:write / npm run test:manifest:write: PASS(573 functions / 142 suites)。",
+    "system Edge・検証用handoffミラー指定 node scripts/release-gate.js releases/v257.json --final --suite=track-crud-core: 279.3秒、exit 0。impact regression・Service Worker統合・最終coreを含め全件PASS。"
+  ],
+  "knownLimitations": [
+    "トラック登録フォーム、計測定義変更前の確認UI、型なし保存UIは実装単位#7、新サイクルcarryフォームは#8の担当で本版には含めない。",
+    "2端末同期で生じた重複activeは操作しない限り残り、読取側のactiveTrackForProjectが決定論で1本を選ぶ既存MVP契約を維持する。",
+    "iOS Safari実機PWAでのService Worker更新とオフライン動作確認は監督者側で必要。",
+    "taskchute-notes/handoff.mdがワークスペース外で更新できない場合は、検証用ミラーで生成・照合後に監督者がnotes側へ反映する。"
+  ]
+}
