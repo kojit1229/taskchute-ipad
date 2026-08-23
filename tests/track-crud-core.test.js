@@ -14,6 +14,7 @@ function sourceBetween(startMarker, endMarker) {
 }
 const trackSource = sourceBetween("function closeTracksForOwner(ownerType, ownerId, reason) {", "// v39: 開いている問い");
 const deleteSource = sourceBetween("function deleteProject(id) {", "function addTask() {");
+const projectTrackSaveSource = sourceBetween("function saveProjectTrackFromModal(id, fields) {", "function buildProjectModal(project) {");
 const projectSaveSource = sourceBetween("function saveProjectFromModal(id, fields) {", "// ---------- Task モーダル");
 
 let failures = 0;
@@ -45,7 +46,7 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
     showToast: () => { sandbox.toastCount += 1; }
   };
   vm.createContext(sandbox);
-  vm.runInContext(trackSource + deleteSource + projectSaveSource, sandbox);
+  vm.runInContext(trackSource + deleteSource + projectTrackSaveSource + projectSaveSource, sandbox);
 
   function project(id = "p1", extra = {}) {
     return {

@@ -1512,6 +1512,31 @@ h3 {
   height: 18px;
 }
 
+/* v258: Projectモーダル内12WYトラック登録フォーム。 */
+.twy-track-section { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
+.twy-track-section[hidden], .twy-track-section [hidden] { display: none; }
+.twy-track-title { color: var(--accent-text); font-size: 12px; font-weight: 800; letter-spacing: .1em; }
+.twy-track-title span { float: right; color: var(--muted); font-size: 11px; font-weight: 400; letter-spacing: 0; }
+.twy-kind { display: flex; gap: 8px; }
+.twy-kind button { flex: 1; min-height: 56px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--panel-soft); cursor: pointer; }
+.twy-kind button.sel { border-color: var(--accent); color: var(--accent-text); box-shadow: inset 0 0 0 1px var(--accent); }
+.twy-kind b, .twy-kind i { display: block; }
+.twy-kind i { margin-top: 2px; color: var(--muted); font-size: 10px; font-style: normal; }
+.twy-form, .twy-ms-edit, [data-twy-ms-list] { display: grid; gap: 8px; }
+.twy-form label { display: grid; gap: 4px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.twy-form .input { min-width: 0; font-size: 16px; }
+.twy-grid2, .twy-grid3 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.twy-grid3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.twy-ms-edit-row { display: grid; grid-template-columns: minmax(0, 1fr) 130px 44px; gap: 6px; align-items: center; }
+.twy-ms-edit-row button, .twy-ms-add { min-height: 44px; border: 1px solid var(--line); border-radius: 8px; color: var(--red); background: transparent; cursor: pointer; }
+.twy-ms-add { justify-self: start; padding: 6px 12px; border-style: dashed; color: var(--accent-text); }
+.twy-guard { display: grid; gap: 5px; padding: 9px; border: 1px dashed var(--orange); border-radius: 8px; font-size: 12px; line-height: 1.45; }
+.twy-guard-title { color: var(--orange-text); font-weight: 800; }
+.twy-guard-item.ok { color: var(--green-text); }
+.twy-guard-item.ng { color: var(--orange-text); }
+.twy-track-errors { padding: 8px; border-radius: 8px; color: var(--red); background: var(--red-soft); font-size: 13px; }
+@media (max-width: 560px) { .twy-grid2, .twy-grid3 { grid-template-columns: 1fr; } .twy-kind { display: grid; grid-template-columns: repeat(3, 1fr); } }
+
 /* ===== Markdown レンダリング ===== */
 
 .md-render {

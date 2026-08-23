@@ -98,7 +98,9 @@ const GOLDEN_CLICK_ACTIONS = [
   "complete-pomodoro", "declare-confirm", "declare-skip", "report-outcome", "report-skip",
   "incomplete-reason-chip", "incomplete-reason-skip", "guided-access-dismiss",
   "go-break", "end-break", "continue-focus", "finish-block",
-  "edit-project", "edit-task", "edit-block", "modal-close", "modal-save", "modal-delete",
+  "edit-project", "edit-task", "edit-block",
+  "twy-kind-numeric", "twy-kind-milestone", "twy-kind-none", "twy-ms-add", "twy-ms-del",
+  "modal-close", "modal-save", "modal-delete",
   "lev-judge",
   "vision-section", "open-vision-board", "vision-board-tab", "vision-board-load",
   "vision-board-load-images", "vision-board-retry-images",
@@ -226,6 +228,8 @@ const APP_JS_REGISTERED_ACTIONS = [
   "ai-step-confirm-send", "ai-step-confirm-later",  // v198: 完了トリガー→引き継ぎシート
   "add-block", "delete-block",
   "edit-project", "edit-task", "edit-block",
+  // --- v258: 12WYトラックフォームのDOM局所操作(5) ---
+  "twy-kind-numeric", "twy-kind-milestone", "twy-kind-none", "twy-ms-add", "twy-ms-del",
   // --- v178: モーダル起動系(3、modal-saveはreturn意味論のためif連鎖に残置) ---
   "modal-close", "modal-delete", "lev-judge",
   // --- v179: ビジョンボード(6) ---

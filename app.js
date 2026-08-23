@@ -557,6 +557,14 @@ registerActions({
   "edit-project": ({ id }) => openProjectEditor(id),
   "edit-task": ({ id }) => openTaskEditor(id),
   "edit-block": ({ id }) => openBlockEditor(id),
+  "twy-kind-numeric": () => setTrackKind("numeric"),
+  "twy-kind-milestone": () => setTrackKind("milestone"),
+  "twy-kind-none": () => setTrackKind("none"),
+  "twy-ms-add": () => {
+    modalRoot.querySelector("[data-twy-ms-list]")?.insertAdjacentHTML("beforeend", trackMilestoneRowHTML());
+    refreshTrackForm();
+  },
+  "twy-ms-del": ({ target }) => { target.closest(".twy-ms-edit-row")?.remove(); refreshTrackForm(); },
   // --- モーダル起動系(3、modal-saveは残置) ---
   "modal-close": () => closeModal(),
   "modal-delete": () => deleteFromModal(),
@@ -1105,6 +1113,7 @@ document.addEventListener("focusout", () => {
 
 document.addEventListener("input", (event) => {
   const target = event.target;
+  if (target.closest("[data-twy-track]")) refreshTrackForm();
   if (target.matches("[data-journal-date]")) {
     const d = target.dataset.journalDate;
     state.journals[d] = target.value;
@@ -1168,6 +1177,10 @@ document.addEventListener("input", (event) => {
 
 document.addEventListener("change", (event) => {
   const target = event.target;
+  if (target.matches('[data-modal-field="is12WY"]')) {
+    const section = modalRoot.querySelector("[data-twy-track]");
+    if (section) section.hidden = !target.checked;
+  }
   if (target.matches("[data-date-picker]")) setSelectedDate(target.value);
   // v92: AIレポートビューアの履歴セレクタ(種類ごとに選択中の日付をUIキャッシュに保持)
   if (target.matches("[data-ai-report-date]")) {
@@ -12139,11 +12152,112 @@ function deleteFromModal() {
 }
 
 // ---------- Project モーダル ----------
+// v258: 12WYトラックフォームは入力中の値を守るため、kind/節目/警告をモーダルDOM内だけで更新する。
+
+function trackMilestoneRowHTML(milestone = {}) {
+  return `<div class="twy-ms-edit-row" data-twy-ms-id="${escapeHTML(milestone.id || "")}">
+    <input class="input" data-twy-ms-label value="${escapeHTML(milestone.label || "")}" placeholder="節目">
+    <input class="input" type="date" data-twy-ms-date value="${escapeHTML(milestone.plannedDate || "")}">
+    <button type="button" data-action="twy-ms-del" aria-label="節目を削除">×</button></div>`;
+}
+
+function readTrackDraft(fields) {
+  const common = { name: fields.twyName || "", startDate: fields.twyStartDate || "" };
+  if (fields.twyKind === "numeric") return { ...common, unit: fields.twyUnit || "", deadline: fields.twyDeadline || "",
+    baselineValue: fields.twyBaseline, goalValue: fields.twyGoal, valueStep: fields.twyStep };
+  return { ...common, milestones: [...modalRoot.querySelectorAll(".twy-ms-edit-row")].map((row) => ({
+    ...(row.dataset.twyMsId ? { id: row.dataset.twyMsId } : {}),
+    label: row.querySelector("[data-twy-ms-label]")?.value || "",
+    plannedDate: row.querySelector("[data-twy-ms-date]")?.value || ""
+  })) };
+}
+
+function trackDraftMatchesExisting(existing, kind, draft) {
+  if (!existing || existing.kind !== kind
+    || String(existing.name || "").trim() !== String(draft.name || "").trim()
+    || (existing.startDate || "") !== (draft.startDate || "")) return false;
+  if (kind === "numeric") return String(existing.unit || "").trim() === String(draft.unit || "").trim()
+    && (existing.deadline || "") === (draft.deadline || "")
+    && ["baselineValue", "goalValue", "valueStep"].every((key) =>
+      draft[key] !== null && draft[key] !== "" && Number(existing[key]) === Number(draft[key]));
+  const milestones = (existing.milestones || []).filter((milestone) => !milestone.deleted);
+  return milestones.length === draft.milestones.length && milestones.every((milestone, index) => {
+    const edited = draft.milestones[index];
+    return milestone.id === edited.id && String(milestone.label || "").trim() === String(edited.label || "").trim()
+      && (milestone.plannedDate || "") === (edited.plannedDate || "");
+  });
+}
+
+function trackGuardHTML(projectId, kind, draft) {
+  const taskIds = new Set((state.tasks || []).filter((task) => !task.deleted && task.projectId === projectId).map((task) => task.id));
+  const range = weekRange(todayISO());
+  const hasAction = (state.recurrences || []).some((rule) => !rule.deleted && taskIds.has(rule.taskId))
+    || (state.blocks || []).some((block) => !block.deleted && !block.migratedTo && taskIds.has(block.taskId)
+      && block.date >= range.weekStart && block.date <= range.weekEnd);
+  const milestones = draft.milestones || [];
+  const dates = milestones.map((m) => m.plannedDate).filter((date) => dateParts(date)).sort();
+  const rows = [
+    [kind === "numeric" ? draft.goalValue !== null && draft.goalValue !== ""
+      && Number.isFinite(Number(draft.goalValue)) && Number(draft.goalValue) !== Number(draft.baselineValue) : milestones.length > 0, "完了条件が数値/節目で判定できる"],
+    [kind === "numeric" ? Boolean(draft.deadline) : dates.length > 0, "期限がある"],
+    [hasAction, "行動コマがある — 無ければ繰り返しコマか当週の単発コマを設定"]
+  ];
+  if (kind === "milestone") rows.push(
+    [milestones.length >= 2, "節目が少ないと期限直前まで遅れを検出できません。2週に1本を目安に刻んでください"],
+    [milestones.length >= 2 && dates.length === milestones.length
+      && dates.slice(1).every((date, i) => daysBetween(dates[i], date) <= 21), "隣接節目は3週(21日)以内を目安にしてください"]
+  );
+  return `<div class="twy-guard-title">粒度ガード(3チェック・12WY 5ルールの簡略版)</div>${rows.map(([ok, text]) =>
+    `<div class="twy-guard-item ${ok ? "ok" : "ng"}">${ok ? "✓" : "△"} ${text}</div>`).join("")}`;
+}
+
+function refreshTrackForm() {
+  const section = modalRoot.querySelector("[data-twy-track]");
+  if (!section) return;
+  const kind = section.querySelector('[data-modal-field="twyKind"]')?.value || "none";
+  section.querySelectorAll("[data-twy-kind]").forEach((button) => button.classList.toggle("sel", button.dataset.twyKind === kind));
+  section.querySelector("[data-twy-details]").hidden = kind === "none";
+  section.querySelector("[data-twy-numeric]").hidden = kind !== "numeric";
+  section.querySelector("[data-twy-milestone]").hidden = kind !== "milestone";
+  section.querySelector("[data-twy-guard]").hidden = kind === "none";
+  section.querySelector("[data-twy-guard]").innerHTML = kind === "none" ? "" : trackGuardHTML(state.modal?.id, kind, readTrackDraft(readModalFields()));
+  const errors = section.querySelector("[data-twy-errors]");
+  errors.hidden = true; errors.textContent = "";
+}
+
+function setTrackKind(kind) {
+  const input = modalRoot.querySelector('[data-modal-field="twyKind"]');
+  if (input) { input.value = kind; refreshTrackForm(); }
+}
+
+function saveProjectTrackFromModal(id, fields) {
+  if (!fields.is12WY) return true;
+  const existing = activeTrackForProject(state.tracks || [], id);
+  const kind = fields.twyKind || "none";
+  if (kind === "none") {
+    if (existing && !window.confirm("12WYトラックを終了しますか?(過去の記録は保持されます)")) {
+      setTrackKind(existing.kind); return true;
+    }
+    if (existing) closeActiveTrackManual(id);
+    return true;
+  }
+  const draft = readTrackDraft(fields);
+  if (existing && trackDefinitionChanged(existing, kind, draft)
+    && !window.confirm("計測方法が変わります。過去の記録を保持して新しいトラックを開始しますか?")) return false;
+  if (trackDraftMatchesExisting(existing, kind, draft)) return true;
+  const result = saveTrackFromForm(id, kind, draft);
+  if (result.ok) return true;
+  const errors = modalRoot.querySelector("[data-twy-errors]");
+  if (errors) { errors.hidden = false; errors.textContent = result.errors.join(" / "); }
+  return false;
+}
 
 function buildProjectModal(project) {
   const status = project.status || "active";
   const kind = project.kind || "normal";
   const is12WY = Boolean(project.twelveWeekStartDate);
+  const track = activeTrackForProject(state.tracks || [], project.id);
+  const trackKind = track?.kind || "none";
   // v127追補(Codex P1): やりたいことの唯一のコンテナ(kind:"wish")は種別変更・削除ができると
   // getWishProject()の前提が壊れる(既存Wishタスクが迷子になる)ため、編集モーダル側でも
   // 種別プルダウンをdisabledにして固定表示にし、削除ボタン自体を出さない(deleteProject側の
@@ -12201,6 +12315,37 @@ function buildProjectModal(project) {
             12WY 期間に登録する(現在の 12WY 開始日: ${state.settings.twelveWeekStartDate || "未設定"})
           </label>
         </div>
+        <section class="twy-track-section" data-twy-track ${is12WY ? "" : "hidden"}>
+          <div class="twy-track-title">12WY TRACK <span>任意・1プロジェクト1トラック</span></div>
+          <div class="twy-kind">
+            ${[["numeric", "数値", "章・kg・件・冊など"], ["milestone", "節目", "要件→設計→提出など"], ["none", "なし", "行動コマだけで運用"]].map(([value, label, hint]) =>
+              `<button type="button" class="${trackKind === value ? "sel" : ""}" data-action="twy-kind-${value}" data-twy-kind="${value}"><b>${label}</b><i>${hint}</i></button>`).join("")}
+          </div>
+          <input type="hidden" data-modal-field="twyKind" value="${trackKind}">
+          <div class="twy-form" data-twy-details ${trackKind === "none" ? "hidden" : ""}>
+            <div class="twy-grid2">
+              <label>トラック名<input class="input" data-modal-field="twyName" value="${escapeHTML(track?.name || "")}"></label>
+              <label>開始日<input class="input" type="date" data-modal-field="twyStartDate" value="${escapeHTML(track?.startDate || todayISO())}"></label>
+            </div>
+            <div class="twy-grid3" data-twy-numeric ${trackKind === "numeric" ? "" : "hidden"}>
+              <label>開始値<input class="input" type="number" inputmode="decimal" data-modal-field="twyBaseline" value="${escapeHTML(track?.baselineValue ?? 0)}"></label>
+              <label>目標値<input class="input" type="number" inputmode="decimal" data-modal-field="twyGoal" value="${escapeHTML(track?.goalValue ?? 0)}"></label>
+              <label>単位<input class="input" data-modal-field="twyUnit" value="${escapeHTML(track?.unit || "")}"></label>
+              <label>期限<input class="input" type="date" data-modal-field="twyDeadline" value="${escapeHTML(track?.deadline || "")}"></label>
+              <label>刻み幅<input class="input" type="number" inputmode="decimal" data-modal-field="twyStep" value="${escapeHTML(track?.valueStep ?? 1)}"></label>
+            </div>
+            <div class="twy-ms-edit" data-twy-milestone ${trackKind === "milestone" ? "" : "hidden"}>
+              <div data-twy-ms-list>${(track?.milestones || []).filter((m) => !m.deleted).map(trackMilestoneRowHTML).join("")}</div>
+              <button type="button" class="twy-ms-add" data-action="twy-ms-add">+ 節目を追加</button>
+            </div>
+            <div class="twy-track-errors" data-twy-errors role="alert" hidden></div>
+            <div class="twy-guard" data-twy-guard ${trackKind === "none" ? "hidden" : ""}>${trackKind === "none" ? "" : trackGuardHTML(project.id, trackKind, {
+              name: track?.name || "", startDate: track?.startDate || todayISO(), unit: track?.unit || "", deadline: track?.deadline || "",
+              baselineValue: track?.baselineValue ?? 0, goalValue: track?.goalValue ?? 0, valueStep: track?.valueStep ?? 1,
+              milestones: (track?.milestones || []).filter((m) => !m.deleted)
+            })}</div>
+          </div>
+        </section>
         <div class="field">
           <label class="checkbox-line">
             <input type="checkbox" data-modal-field="showProgress" ${project.showProgress ? "checked" : ""}>
@@ -12223,7 +12368,14 @@ function buildProjectModal(project) {
 
 function saveProjectFromModal(id, fields) {
   const existing = state.projects.find((project) => project.id === id);
-  let twelveWeekStartDate = fields.is12WY ? (state.settings.twelveWeekStartDate || todayISO()) : "";
+  const previousCycleStartDate = state.settings.twelveWeekStartDate || "";
+  let twelveWeekStartDate = fields.is12WY
+    ? (previousCycleStartDate || existing?.twelveWeekStartDate || todayISO()) : "";
+  if (fields.is12WY && !previousCycleStartDate) state.settings.twelveWeekStartDate = twelveWeekStartDate;
+  if (!saveProjectTrackFromModal(id, fields)) {
+    state.settings.twelveWeekStartDate = previousCycleStartDate;
+    return;
+  }
   if (existing?.twelveWeekStartDate && !fields.is12WY && activeTrackForProject(state.tracks || [], id)) {
     if (window.confirm("12WYトラックを終了しますか?")) closeActiveTrackManual(id);
     else twelveWeekStartDate = existing.twelveWeekStartDate;
