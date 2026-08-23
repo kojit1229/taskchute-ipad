@@ -1143,10 +1143,10 @@
       ],
       "assertionSignals": 14,
       "assertionHash": "2fd8ffa425b4eb85",
-      "sourceHash": "e0912b1459d08629",
+      "sourceHash": "7454d5a1354efdb5",
       "waits": {
-        "fixedCount": 9,
-        "numericMilliseconds": 6600,
+        "fixedCount": 3,
+        "numericMilliseconds": 2100,
         "unresolvedCount": 0
       },
       "sideEffects": {
@@ -2296,6 +2296,29 @@
         "server": true,
         "fileWrite": false,
         "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v254.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "legacy-crosscutting"
+      ],
+      "assertionSignals": 45,
+      "assertionHash": "cc986efbd5337ba5",
+      "sourceHash": "81490ffdab6dbc4e",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
         "clock": true
       }
     },

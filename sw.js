@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v253";
+const CACHE_NAME = "taskchute-journal-pwa-v254";
+// v254: 12WY共通フック2本を全開始・完了導線へ結線した(APP_SHELL変更なし)。
 // v253: 固定化ルーティンのストリークを計器盤へ表示し、保護ルーティンを実行率から除外した(APP_SHELL変更なし)。
 // v252: 固定化ルーティンのストリークデータ層と純関数を追加した。
 // v251: ATISへAIフィードバックのサマリー節と対象日を常時表示した(APP_SHELL変更なし)。

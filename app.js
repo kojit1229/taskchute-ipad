@@ -2978,6 +2978,20 @@ function stampCommitmentCompletion(block, isNowCompleted) {
   saveState();
 }
 
+// v254: 進捗トースト本体は12WY MVP実装単位#11で実装する。本単位#5では呼び出し契約だけを
+// 固定するため、interactiveな完了遷移から到達するno-opスタブとして置く。
+function showTrackProgressToastStub(_block) {}
+
+function trackOnBlockStarted(block) {
+  autoCommitWeekIfNeeded(block);
+}
+
+function trackOnBlockCompletionChanged(block, isNowCompleted, { interactive = false } = {}) {
+  autoCommitWeekIfNeeded(block);
+  stampCommitmentCompletion(block, isNowCompleted);
+  if (interactive && isNowCompleted) showTrackProgressToastStub(block);
+}
+
 function excuseCommitmentItem(itemId, reason) {
   const text = (reason || "").trim();
   if (!text) return;
@@ -8554,6 +8568,7 @@ let _quickCompleteSnapshots = {};
 function toggleBlock(id) {
   let justCompleted = false;
   let completedBlock = null;
+  let changedBlock = null;
   state.blocks = state.blocks.map((block) => {
     if (block.id !== id) return block;
     const completed = !block.completed;
@@ -8601,6 +8616,7 @@ function toggleBlock(id) {
         delete _quickCompleteSnapshots[id];
       }
     }
+    changedBlock = next;
     return next;
   });
   syncHabitStreakForBlock(state.blocks.find((block) => block.id === id));
@@ -8612,9 +8628,15 @@ function toggleBlock(id) {
   if (justCompleted && completedBlock) {
     transferIronLogToCompletedBlock(id);
     generateReport(completedBlock.date, { quiet: true });
+    saveState();
+    trackOnBlockCompletionChanged(changedBlock, true, { interactive: true });
     // v150: 完了直後だけ「実績を編集」ボタン付きトースト(既存の実績モーダルを編集導線として再利用)。
     saveAndRender("Blockを完了しました", { blockId: id, actionLabel: "実績を編集" });
   } else {
+    if (changedBlock) {
+      saveState();
+      trackOnBlockCompletionChanged(changedBlock, false, { interactive: true });
+    }
     saveAndRender("Blockを更新しました");
   }
   // v17/v18: 完了時の演出(常にランダム祝福)
@@ -8637,6 +8659,7 @@ function toggleTaskCompleteFromBlock(blockId) {
   const task = state.tasks.find((t) => t.id === block.taskId);
   if (!task) return;
   const completing = task.status !== "completed";
+  const wasBlockCompleted = Boolean(block.completed);
   if (completing) {
     state.tasks = state.tasks.map((t) => t.id === task.id
       ? { ...t, status: "completed", progressNum: fillProgressOnComplete(t), updatedAt: nowDateTime() }
@@ -8652,6 +8675,11 @@ function toggleTaskCompleteFromBlock(blockId) {
     state.tasks = state.tasks.map((t) => t.id === task.id
       ? { ...t, status: hasProgress ? "doing" : "todo", updatedAt: nowDateTime() }
       : t);
+  }
+  const changedBlock = state.blocks.find((b) => b.id === blockId);
+  if (!wasBlockCompleted && changedBlock?.completed) {
+    saveState();
+    trackOnBlockCompletionChanged(changedBlock, true, { interactive: true });
   }
   saveAndRender(completing ? "Taskを完了しました" : "Taskを未完了に戻しました");
   // v198(第3弾3e): 完了6経路#2(タイムラインBlock行の「タスク完了」)。task.statusは
@@ -8748,12 +8776,14 @@ function autoCloseStaleRoutineRuns(blockId) {
 }
 
 function setBlockTime(id, field) {
+  const wasStarted = Boolean(blockById(id)?.actualStartAt);
   if (field === "actualStartAt") autoCloseStaleRoutineRuns(id);
   updateBlockField(id, field, nowDateTime());
   if (field === "actualStartAt") {
     // v48: 着手した瞬間に Task を doing へ(従来は Block 完了時のみで、
     //      「着手率>完了率」の哲学に反して着手が Task に反映されていなかった)
     const blk = blockById(id);
+    if (!wasStarted && blk?.actualStartAt) trackOnBlockStarted(blk);
     if (blk?.taskId) {
       state.tasks = state.tasks.map((t) => t.id === blk.taskId && t.status === "todo"
         ? { ...t, status: "doing", updatedAt: nowDateTime() } : t);
@@ -8797,6 +8827,13 @@ function bulkApproveAsPlanned() {
     state.tasks = state.tasks.map((t) => taskIds.has(t.id) && t.status === "todo"
       ? { ...t, status: "doing", updatedAt: nowDateTime() } : t);
   }
+  saveState();
+  targets.forEach((block) => {
+    const completedBlock = state.blocks.find((entry) => entry.id === block.id);
+    if (completedBlock?.completed) {
+      trackOnBlockCompletionChanged(completedBlock, true, { interactive: false });
+    }
+  });
   saveAndRender(`${targets.length}件を予定通り完了にしました`);
 }
 
@@ -10021,6 +10058,7 @@ function buildGuidedAccessHintModal() {
 
 function startPomodoro(blockId) {
   if (!blockId) return showToast("Blockを選んでください");
+  const wasStarted = Boolean(blockById(blockId)?.actualStartAt);
   autoCloseStaleRoutineRuns(blockId);  // v215: 旧prepareTimeswitchForTaskStartのタブ非依存部
   // v14: state.pomodoro を完全再構築(spread を使わず、必要なフィールドだけ明示的に作成)
   // これで以前のセッションの endsAt/startedAt/mode が確実にリセットされる
@@ -10034,6 +10072,8 @@ function startPomodoro(blockId) {
   };
   // v13: ポモドーロ開始時、Blockの実績開始時間を自動記録(既存値があれば維持)
   updateBlockField(blockId, "actualStartAt", blockById(blockId)?.actualStartAt || nowDateTime());
+  const startedBlock = blockById(blockId);
+  if (!wasStarted && startedBlock?.actualStartAt) trackOnBlockStarted(startedBlock);
   saveAndRender("ポモドーロを開始しました(50:00 から)");
   // v111: タイマー開始後(非ブロッキング)にiOSガイド付きアクセスのリマインドを出す。
   //       modalRootはrender()と独立したDOMルートのため、直前のsaveAndRenderの再描画で
@@ -10109,6 +10149,7 @@ function stopPomodoro() {
 
 function completePomodoro() {
   const blockId = state.pomodoro.blockId;
+  const wasCompleted = Boolean(blockId && blockById(blockId)?.completed);
   if (blockId) {
     // v19: 完了時、Block の完了フラグも立てる + 実績終了時刻記録
     state.blocks = state.blocks.map((block) => block.id === blockId
@@ -10132,6 +10173,10 @@ function completePomodoro() {
     endsAt: "",
     mode: "focus"
   };
+  if (!wasCompleted && completedBlock?.completed) {
+    saveState();
+    trackOnBlockCompletionChanged(completedBlock, true, { interactive: true });
+  }
   saveAndRender("ポモドーロを完了しました(Blockに完了チェック)");
   // v129: 身体スキャン(強制サンプリング)を先に見せ、閉じた後に過集中ゲート判定を行う
   // (モーダルは1枚ずつしか出せないため。ゲート自体はv117(C)のまま、blockId必須の条件も維持)。
@@ -10575,6 +10620,7 @@ function continueFocusPomodoro() {
 // v19: 休憩中「✅ ここで完了する」: Blockに完了フラグ + 実績終了時刻(=休憩開始時刻)を記録
 function finishBlockFromBreak() {
   const lastBlockId = state.pomodoro.lastFocusBlockId;
+  const wasCompleted = Boolean(lastBlockId && blockById(lastBlockId)?.completed);
   const breakStartedAt = state.pomodoro.startedAt;  // 休憩開始時刻 = 直前セッションの終了時刻
   if (lastBlockId) {
     state.blocks = state.blocks.map((b) => b.id === lastBlockId
@@ -10596,6 +10642,11 @@ function finishBlockFromBreak() {
     endsAt: "",
     mode: "focus"
   };
+  const completedBlock = lastBlockId ? blockById(lastBlockId) : null;
+  if (!wasCompleted && completedBlock?.completed) {
+    saveState();
+    trackOnBlockCompletionChanged(completedBlock, true, { interactive: true });
+  }
   saveAndRender("✅ Block を完了しました(実績終了時刻を記録)");
 }
 
@@ -11124,6 +11175,8 @@ function approveAiWorkResult(resultId) {
       ? { ...t, status: "completed", progressNum: fillProgressOnComplete(t), updatedAt: nowDateTime() }
       : t);
   }
+  saveState();
+  trackOnBlockCompletionChanged(block, true, { interactive: false });
   saveAndRender("AIの作業実績を登録しました");
 }
 
@@ -12464,6 +12517,14 @@ function saveBlockFromModal(id, fields) {
     updatedAt: nowDateTime(),
     deleted: false
   };
+  const trackSavedBlockTransitions = () => {
+    const savedBlock = state.blocks.find((block) => block.id === id);
+    saveState();
+    if (!existing?.actualStartAt && savedBlock?.actualStartAt) trackOnBlockStarted(savedBlock);
+    if (Boolean(existing?.completed) !== Boolean(savedBlock?.completed)) {
+      trackOnBlockCompletionChanged(savedBlock, Boolean(savedBlock?.completed), { interactive: false });
+    }
+  };
   // v29: 予定の開始・終了日時は必須。空のままでは登録/保存させない。
   if (!updated.plannedStartAt || !updated.plannedEndAt) {
     showToast("予定の開始・終了日時を入力してください");
@@ -12493,11 +12554,13 @@ function saveBlockFromModal(id, fields) {
       updated.recurrenceGroupId = rule.id;
       state.blocks.push(updated);
       maintainRecurrences();
+      trackSavedBlockTransitions();
       closeModal();
       saveAndRender(`繰り返し「${recurrenceKindLabel(rk)}」を設定しました`);
       return;
     }
     state.blocks.push(updated);
+    trackSavedBlockTransitions();
     closeModal();
     saveAndRender("Blockを追加しました");
   } else {
@@ -12527,6 +12590,7 @@ function saveBlockFromModal(id, fields) {
       if (rk === "__end__") {
         // シリーズ終了(以降の自動生成を停止。実績履歴はそのまま残る)
         if (existing.recurrenceGroupId) endRecurrenceSeries(existing.recurrenceGroupId, { excludeId: id });
+        trackSavedBlockTransitions();
         closeModal();
         saveAndRender("繰り返しシリーズを終了しました");
         return;
@@ -12569,6 +12633,7 @@ function saveBlockFromModal(id, fields) {
           // v108: 重複ルール検知(トーストはcreateRecurrenceRule内で表示済み)。
           //      シリーズ化はスキップし、直前(state.blocks.map)で確定済みのBlock本体の
           //      編集だけ保存する(黙って握りつぶさない)。
+          trackSavedBlockTransitions();
           closeModal();
           saveAndRender("Blockを更新しました");
           return;
@@ -12577,6 +12642,7 @@ function saveBlockFromModal(id, fields) {
         state.blocks = state.blocks.map((b) => b.id === id ? updated : b);
       }
       maintainRecurrences();
+      trackSavedBlockTransitions();
       closeModal();
       saveAndRender("繰り返し設定を更新しました");
       return;
@@ -12635,6 +12701,7 @@ function saveBlockFromModal(id, fields) {
           : r);
       }
     }
+    trackSavedBlockTransitions();
     closeModal();
     saveAndRender("Blockを更新しました");
   }
@@ -12909,7 +12976,8 @@ function buildActualEntryModal(block, defaultStart, defaultEnd) {
 }
 
 function saveActualEntryFromModal(blockId, fields) {
-  const wasCompleted = Boolean(state.blocks.find((b) => b.id === blockId)?.completed);
+  const previousBlock = state.blocks.find((b) => b.id === blockId);
+  const wasCompleted = Boolean(previousBlock?.completed);
   state.blocks = state.blocks.map((b) => {
     if (b.id !== blockId) return b;
     return {
@@ -12939,6 +13007,11 @@ function saveActualEntryFromModal(blockId, fields) {
   closeModal();
   // 実績モードに切り替えて表示
   state.timelineMode = "actual";
+  saveState();
+  if (!previousBlock?.actualStartAt && block?.actualStartAt) trackOnBlockStarted(block);
+  if (!wasCompleted && block?.completed) {
+    trackOnBlockCompletionChanged(block, true, { interactive: false });
+  }
   saveAndRender("✅ 実績を登録しました");
 }
 

@@ -60,6 +60,24 @@ function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
     return page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
   }
 
+  function waitForAppStateGet() {
+    return page.waitForRequest((request) =>
+      request.method() === "GET"
+        && new URL(request.url()).pathname.endsWith("/contents/taskchute/app-state.json"));
+  }
+
+  async function addProjectDuringPendingGet(title) {
+    const nav = page.locator('[data-action="nav"][data-view="wbs"]');
+    await nav.waitFor({ state: "visible" });
+    await nav.click();
+    const input = page.locator("#projectTitle");
+    await input.waitFor({ state: "visible" });
+    await input.fill(title);
+    await page.locator('[data-action="add-project"]').click();
+    await page.waitForFunction(({ KEY, title }) => JSON.parse(localStorage.getItem(KEY)).projects
+      .some((entry) => entry.title === title), { KEY, title });
+  }
+
   const project = (id, title, extra = {}) => ({
     id, kind: "normal", title, category: "", status: "active", priority: "中",
     twelveWeekStartDate: "", createdAt: "2026-01-01T00:00:00", updatedAt: "2026-01-01T00:00:00",
@@ -98,14 +116,13 @@ function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
       fixtures.remoteJson = JSON.stringify(remote);
       fixtures.delayGetMs = 1200;  // この間にUI操作を注入する
     }
+    const getA = waitForAppStateGet();
     const reloadA = page.reload();
-    await page.waitForTimeout(300);  // GETが飛んで待機中であろうタイミング
-    await page.click('[data-action="nav"][data-view="wbs"]');
-    await page.waitForTimeout(150);
-    await page.fill("#projectTitle", "GET待ち編集マーカー_v118");
-    await page.click('[data-action="add-project"]');
+    await getA;  // 遅延GETが実際に始まり、編集を差し込む窓が成立したことを待つ
+    await addProjectDuringPendingGet("GET待ち編集マーカー_v118");
     await reloadA;
-    await page.waitForTimeout(1800);  // delayGetMs(1200) + 同期処理の余裕
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).projects
+      .some((entry) => entry.title === "REMOTE_ONLY_PROJECT_v118"), KEY);
 
     const sA = await stateNow();
     check("GET待ち中に追加したローカルProjectが消えずに残る(全置換なら消えるはず)",
@@ -136,14 +153,13 @@ function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
       fixtures.remoteJson = JSON.stringify(remote);
       fixtures.delayGetMs = 1200;
     }
+    const getA2 = waitForAppStateGet();
     const reloadA2 = page.reload();
-    await page.waitForTimeout(300);
-    await page.click('[data-action="nav"][data-view="wbs"]');
-    await page.waitForTimeout(150);
-    await page.fill("#projectTitle", "GET待ち編集マーカー_v118b");
-    await page.click('[data-action="add-project"]');
+    await getA2;
+    await addProjectDuringPendingGet("GET待ち編集マーカー_v118b");
     await reloadA2;
-    await page.waitForTimeout(1800);
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).projects
+      .some((entry) => entry.title === "REMOTE_ONLY_PROJECT_v118b"), KEY);
 
     const sA2 = await stateNow();
     check("[1b] ローカル編集Projectは消えない", sA2.projects.some((p) => p.title === "GET待ち編集マーカー_v118b"),
