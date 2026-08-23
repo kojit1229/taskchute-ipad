@@ -2892,6 +2892,7 @@ h3 {
 .tower-col-center,
 .tower-col-right { display: contents; }
 .tower-header { order: 0; }
+.today-focus-bar { order: 1; }
 .sec-rwy { order: 1; }
 .sec-arrivals { order: 2; }
 .sec-gates { order: 3; }
@@ -2911,6 +2912,35 @@ h3 {
   background: var(--tower-panel);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
 }
+.today-focus-bar {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 4px;
+  border: 1px solid var(--tower-line);
+  background: var(--tower-panel);
+}
+.today-focus-main,
+.today-focus-chip {
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--tower-line);
+  border-radius: 2px;
+  color: var(--tower-text);
+  background: #07101c;
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: .04em;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.today-focus-main { flex: 0 0 92px; color: var(--tower-amber); letter-spacing: .1em; }
+.today-focus-chips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; flex: 1; min-width: 0; }
+.today-focus-chip.is-active { border-color: var(--tower-cyan); color: var(--tower-cyan); background: rgba(85, 217, 232, .08); }
+.today-focus-main.is-active { border-color: var(--tower-amber); background: rgba(242, 184, 75, .12); box-shadow: inset 0 0 0 1px rgba(242, 184, 75, .12); }
+.today-focus-main:focus-visible,
+.today-focus-chip:focus-visible { outline: 2px solid var(--tower-green); outline-offset: 2px; }
 .tower-beacon { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--tower-line); border-radius: 50%; }
 .tower-beacon i { width: 10px; height: 10px; border-radius: 50%; background: var(--tower-amber); box-shadow: 0 0 12px var(--tower-amber); animation: tower-beacon-pulse 1.4s ease-in-out infinite; }
 .tower-identity { display: grid; gap: 2px; }
@@ -3281,6 +3311,7 @@ h3 {
     grid-template-areas:
       "alert alert  alert"
       "band  band   band"
+      "focus focus  focus"
       "band2 band2  band2"
       "left  center right"
       "timer timer  timer";
@@ -3293,10 +3324,12 @@ h3 {
   }
   .today-tower > .sync-alert-banner { grid-area: alert; }
   .today-tower .tower-topband { display: block; grid-area: band; }
+  .today-tower .today-focus-bar { grid-area: focus; }
   .today-tower .tower-col-left { display: block; grid-area: left; min-width: 0; }
   .today-tower .tower-col-center { display: block; grid-area: center; min-width: 0; }
   .today-tower .tower-col-right { display: block; grid-area: right; min-width: 0; }
   .today-tower > .today-pomodoro { grid-area: timer; margin-top: 12px; }
+  .today-tower[data-focus-pomodoro-right="1"] > .today-pomodoro { grid-area: right; margin-top: 0; }
   .tower-header .tower-time time { font-size: 46px; }
   .tower-day-left strong { font-size: 30px; }
   .tower-col-left .sec-rwy .tower-nowhud { grid-template-columns: 1fr; gap: 3px; padding: 4px 10px 8px; }

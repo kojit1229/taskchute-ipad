@@ -101,8 +101,8 @@ function check(name, cond, extra = "") {
       await page.locator('.sec-atis [data-action="ai-morning-plan"]').count() === 1
       && await page.locator('.sec-atis [data-action="ai-schedule"]').count() === 1
       && await page.locator('.sec-atis [data-action="today-replan"]').count() === 1);
-    check("ATISにMIT候補・タスク候補チップが集約される",
-      await page.locator('.sec-atis [data-atis-mit-candidates]').count() === 1
+    check("ATISのMIT候補チップは撤去され、タスク候補チップは残る",
+      await page.locator('.sec-atis [data-atis-mit-candidates], .sec-atis [data-atis-feedback-candidates], .sec-atis [data-action="ai-mit-adopt"], .sec-atis [data-action="mit-candidate-add"]').count() === 0
       && await page.locator('.sec-atis [data-atis-task-candidates]').count() === 1);
     await page.locator('#sidebar [data-action="nav"][data-view="tasks"]').click();
     await page.waitForSelector('#app[data-view="tasks"]');

@@ -7,6 +7,7 @@ let escapeHTML, todayISO, syncAlertBanner, renderAtisPanel, blocksForDate, tower
 let runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp;
 let towerMotionSetting;
 let renderTodayPomodoro;
+let todayFocusVisibility, renderTodayFocusBar;
 let journalForDate;
 let gateRules, earlyBirdLogForDate, earlyRiseTarget, linkedGymBlock, gateEditMode;
 let flipListenerBound = false;
@@ -23,7 +24,7 @@ function configureTodayTower(deps) {
   ({
     escapeHTML, todayISO, syncAlertBanner, renderAtisPanel, blocksForDate, towerFlights,
     runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp,
-    towerMotionSetting, renderTodayPomodoro, journalForDate,
+    towerMotionSetting, renderTodayPomodoro, todayFocusVisibility, renderTodayFocusBar, journalForDate,
     gateRules, earlyBirdLogForDate, earlyRiseTarget, linkedGymBlock, gateEditMode
   } = deps);
   if (!flipListenerBound && typeof document !== "undefined") {
@@ -317,8 +318,10 @@ function renderTodayTower() {
   const blocks = blocksForDate(today);
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const flights = boardFlights(blocks, nowMin);
+  const focusVisibility = todayFocusVisibility();
+  const pomodoroRight = !focusVisibility.atis && !focusVisibility.journal;
   const weekday = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
-  return `<div class="today-tower" data-motion="${escapeHTML(towerMotionSetting())}" data-night="${isNightHour(now.getHours()) ? 1 : 0}" data-paused="${document.hidden ? 1 : 0}">
+  return `<div class="today-tower" data-motion="${escapeHTML(towerMotionSetting())}" data-night="${isNightHour(now.getHours()) ? 1 : 0}" data-paused="${document.hidden ? 1 : 0}" data-focus-mode="${Object.values(focusVisibility).some(Boolean) ? 0 : 1}" data-focus-pomodoro-right="${pomodoroRight ? 1 : 0}">
     ${syncAlertBanner()}
     <div class="tower-topband">
       <header class="tower-header">
@@ -328,14 +331,15 @@ function renderTodayTower() {
         <div class="tower-day-left"><span>本日残り</span><strong id="towerDayLeft">${dayLeftText(now)}</strong></div>
       </header>
     </div>
+    ${renderTodayFocusBar(focusVisibility)}
     ${renderTopbandPC()}
     <div class="tower-col-left">
       ${renderTowerRunway(now, blocks)}
       ${renderTowerBoard(now, flights)}
       ${renderFlightLog(today, blocks)}
     </div>
-    <div class="tower-col-center">${renderTowerGates(blocks)}</div>
-    <div class="tower-col-right">${renderAtisPanel()}${renderTowerJournal(today)}${renderStandingOrders()}${renderCountdown()}</div>
+    <div class="tower-col-center">${focusVisibility.gate ? renderTowerGates(blocks) : ""}</div>
+    <div class="tower-col-right">${focusVisibility.atis ? renderAtisPanel() : ""}${focusVisibility.journal ? renderTowerJournal(today) : ""}${renderStandingOrders()}${renderCountdown()}</div>
     ${renderTodayPomodoro(blocks, queueBlocksOf(blocks)).replace(">POMODORO<span>", ">CABIN TIMER<span>")}
   </div>`;
 }

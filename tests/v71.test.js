@@ -155,18 +155,13 @@ function check(name, cond, extra = "") {
     check("候補タスクYが表示される", hubText.includes("テスト候補タスクY"), hubText);
     check("鮮度インジケータはページ全体で1箇所(AIからカード内)のみ(集約済み・重複表示なし)", await page.locator(".ai-freshness-line").count() === 1);
 
-    console.log("[5] 候補の「＋ 主役に」はATIS移設後も動作し、MITに追加される");
-    await page.click('.sec-atis [data-action="mit-candidate-add"][data-title="テスト候補タスクX"]');
-    await page.waitForTimeout(300);
+    console.log("[5] MIT候補チップはATISから撤去され、フィードバック本文だけを読める");
+    check("MIT候補の追加ボタンが存在しない",
+      await page.locator('.sec-atis [data-action="mit-candidate-add"], .sec-atis [data-action="ai-mit-adopt"]').count() === 0);
     const s5 = await stateNow();
     const added = (s5.blocks || []).find((b) => b.title === "テスト候補タスクX");
-    check("候補がMITブロックとして追加される", !!added && added.isMIT === true, JSON.stringify(added));
-    // v75: 「AIから」カードにAIフィードバック本文をそのまま読めるdetails(homeAiFeedbackReadHTML)が
-    // 追加されたため、.home-ai-hub 全体のtextContentには(既に候補から除外された後でも)元のraw
-    // フィードバック本文として「テスト候補タスクX」という文字列が残り得る(意図した仕様。CHANGES_v75.md参照)。
-    // ここで検証したい「既存タイトルは候補として二重に出ない」は、候補行(追加ボタン)の消滅で判定する。
-    check("追加後は候補(追加ボタン)がカードから消える(既存タイトルは除外される)",
-      await page.locator('.sec-atis [data-action="mit-candidate-add"][data-title="テスト候補タスクX"]').count() === 0);
+    check("表示だけでMITブロックは追加されない", !added, JSON.stringify(added));
+    check("フィードバック本文の候補文言は引き続き読める", hubText.includes("テスト候補タスクX"), hubText);
 
     console.log("[6] MITが3件埋まっていれば候補セクション自体を出さない(既存仕様を踏襲)");
     await seed({
@@ -178,12 +173,10 @@ function check(name, cond, extra = "") {
       view: "today",
       feedback: { [YESTERDAY]: "## 明日のMIT候補\n- 埋まっているはずの候補\n" }
     });
-    // v75: raw本文を読めるdetailsのぶんATIS全体のtextContentには
-    // フィードバック本文がそのまま出るため、「候補セクション自体が無い」ことは候補見出しの不在で判定する。
+    // raw本文はdetailsに残るが、MIT候補UIはMIT数に関係なく描画しない。
     const hubTextFull = await page.locator(".sec-atis").textContent();
-    check("MIT3件埋まっていれば候補セクション(見出し・追加ボタン)は出ない",
-      !hubTextFull.includes("昨日のフィードバックからの候補")
-        && await page.locator('.sec-atis [data-action="mit-candidate-add"]').count() === 0,
+    check("MIT3件時も候補セクション(追加ボタン)は出ない",
+      await page.locator('.sec-atis [data-action="mit-candidate-add"], .sec-atis [data-atis-feedback-candidates]').count() === 0,
       hubTextFull);
 
     // ============================================================

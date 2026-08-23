@@ -2,6 +2,7 @@
 // stateはlive bindingで読み取り、TOWER描画層へ必要最小限の依存を注入する。
 
 import { state } from "../state/store.js";
+import { registerActions } from "../ui/actions.js";
 import { configureTodayTower, renderTodayTower, updateTodayTowerTick } from "./today-tower.js";
 import { linkedGymBlock } from "./iron-log.js";
 import {
@@ -18,6 +19,68 @@ let syncAlertBanner, renderAtisPanel;
 let gateEditMode;
 let todayTickerId = null;
 let todayRenderedDateISO = null;
+let todayFocusUi = null;
+
+const TODAY_FOCUS_STORAGE_KEY = "taskchute-journal-today-focus-v1";
+const DEFAULT_FOCUS_SECTIONS = Object.freeze({ gate: true, atis: true, journal: true });
+
+function normalizedFocusSections(value) {
+  return {
+    gate: typeof value?.gate === "boolean" ? value.gate : true,
+    atis: typeof value?.atis === "boolean" ? value.atis : true,
+    journal: typeof value?.journal === "boolean" ? value.journal : true
+  };
+}
+
+function todayFocusUiState() {
+  if (todayFocusUi) return todayFocusUi;
+  try {
+    const saved = JSON.parse(localStorage.getItem(TODAY_FOCUS_STORAGE_KEY) || "null");
+    todayFocusUi = {
+      sections: normalizedFocusSections(saved?.sections),
+      restore: normalizedFocusSections(saved?.restore)
+    };
+  } catch {
+    todayFocusUi = { sections: { ...DEFAULT_FOCUS_SECTIONS }, restore: { ...DEFAULT_FOCUS_SECTIONS } };
+  }
+  return todayFocusUi;
+}
+
+function persistTodayFocusUi(next) {
+  todayFocusUi = next;
+  try { localStorage.setItem(TODAY_FOCUS_STORAGE_KEY, JSON.stringify(next)); } catch {}
+  renderDeferringForFocus();
+}
+
+function toggleTodayFocusSection(section) {
+  const current = todayFocusUiState();
+  const sections = { ...current.sections, [section]: !current.sections[section] };
+  const hasVisibleSection = Object.values(sections).some(Boolean);
+  persistTodayFocusUi({
+    sections,
+    restore: hasVisibleSection ? { ...sections } : { ...current.sections }
+  });
+}
+
+function toggleTodayFocusMode() {
+  const current = todayFocusUiState();
+  const focused = !Object.values(current.sections).some(Boolean);
+  const restore = normalizedFocusSections(current.restore);
+  persistTodayFocusUi(focused
+    ? { sections: Object.values(restore).some(Boolean) ? restore : { ...DEFAULT_FOCUS_SECTIONS }, restore }
+    : { sections: { gate: false, atis: false, journal: false }, restore: { ...current.sections } });
+}
+
+function renderTodayFocusBar(visibility = todayFocusUiState().sections) {
+  const focused = !Object.values(visibility).some(Boolean);
+  const chip = (section, label) => `<button type="button" class="today-focus-chip${visibility[section] ? " is-active" : ""}" data-action="focus-toggle-${section}" aria-pressed="${visibility[section]}">${label}</button>`;
+  return `<nav class="today-focus-bar" aria-label="Today表示切替">
+    <button type="button" class="today-focus-main${focused ? " is-active" : ""}" data-action="focus-mode" aria-pressed="${focused}">🎯 FOCUS</button>
+    <div class="today-focus-chips" role="group" aria-label="セクション表示">
+      ${chip("gate", "ルーティン")}${chip("atis", "AI")}${chip("journal", "ジャーナル")}
+    </div>
+  </nav>`;
+}
 
 function configureToday(deps) {
   ({
@@ -33,6 +96,8 @@ function configureToday(deps) {
     runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp,
     towerMotionSetting: () => state.settings.towerMotion,
     renderTodayPomodoro,
+    todayFocusVisibility: () => todayFocusUiState().sections,
+    renderTodayFocusBar,
     journalForDate: (date) => ({
       free: state.journals[date] || "",
       aiRequest: state.journalMeta[date]?.aiRequest || ""
@@ -42,6 +107,12 @@ function configureToday(deps) {
     earlyRiseTarget: () => state.settings.earlyRiseTarget,
     linkedGymBlock: (blocks, nowMinutes) => linkedGymBlock({ settings: state.settings, blocks }, nowMinutes),
     gateEditMode
+  });
+  registerActions({
+    "focus-toggle-gate": () => toggleTodayFocusSection("gate"),
+    "focus-toggle-atis": () => toggleTodayFocusSection("atis"),
+    "focus-toggle-journal": () => toggleTodayFocusSection("journal"),
+    "focus-mode": () => toggleTodayFocusMode()
   });
 }
 

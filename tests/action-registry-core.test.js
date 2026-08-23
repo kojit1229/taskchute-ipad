@@ -54,7 +54,8 @@ const FEATURE_MODULE_PATHS = [
   path.join(ROOT, "src", "features", "journal.js"),
   // v181: timeline-modeのハンドラ実体がこのファイルにあるため追加(configureTimeline({})を
   // 空depsで呼んでも、registerActions呼び出し自体はdepsを参照しないため安全に実測できる)。
-  path.join(ROOT, "src", "features", "timeline.js")
+  path.join(ROOT, "src", "features", "timeline.js"),
+  path.join(ROOT, "src", "features", "today.js")
 ];
 
 // wish.jsはモジュール読み込み時にdocument.addEventListener(pointerdown/move/up/cancel、月間ボード
@@ -74,6 +75,7 @@ function check(name, cond, extra = "") {
 // v235: set-sleepは主観睡眠の入力経路廃止に伴う意図的削除。
 const GOLDEN_CLICK_ACTIONS = [
   "nav", "open-iron-log", "instruments-open-iron-log", "departures-open-tomorrow", "today-replan", "save-tower-journal",
+  "focus-toggle-gate", "focus-toggle-atis", "focus-toggle-journal", "focus-mode",
   "early-bird-check", "tower-gate-edit-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move",
   "date-prev", "date-next", "today",
   "set-morning", "toggle-meds", "set-capacity", "set-evening-mood",
@@ -129,7 +131,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "question-bridge", "question-bridge-submit", "question-delete",
   "entry-to-question", "open-questions",
   "report-copy-ai", "report-share-ai",
-  "ai-mit-adopt", "ai-task-adopt", "ai-task-dismiss",
+  "ai-task-adopt", "ai-task-dismiss",
   "weekly-wish-open", "weekly-wish-submit", "weekly-wish-toggle",
   "ai-schedule", "ai-morning-plan",
   "zerosec-theme-add", "zerosec-theme-skip",
@@ -162,7 +164,9 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
   // このファイルに既に存在するため、timeline系の中で唯一この動的実測方式で検証する。
   "timeline-mode",
   // v186: F2でtimeline.jsのregisterActionsへ意図的に追加(DRIFT送り+TIME COMB隙間補完)
-  "drift-postpone", "time-comb-fill"
+  "drift-postpone", "time-comb-fill",
+  // v241: src/features/today.jsの端末ローカル表示切替
+  "focus-toggle-gate", "focus-toggle-atis", "focus-toggle-journal", "focus-mode"
 ];
 
 // v174: 段階5-3で以下20件(settings 11 + sync 8 + core/nav 1)を、app.js自身が呼ぶ
@@ -210,7 +214,7 @@ const APP_JS_REGISTERED_ACTIONS = [
   // --- v177: その他(日報/AIレポート/AI連携/読書/朝夜detailsトグル) ---
   "reading-save", "ai-report-type", "ai-report-refresh", "open-future-letter",
   "ai-work-approve", "ai-work-question",
-  "ai-mit-adopt", "ai-task-adopt", "ai-task-dismiss",
+  "ai-task-adopt", "ai-task-dismiss",
   "report-copy-ai", "report-share-ai",
   "generate-report", "download-report", "download-data",
   "carry-over", "migration-ritual-choice", "ideal-retry",
@@ -395,7 +399,7 @@ function extractModalHandlerTypes() {
   check("if連鎖側の残存action名に重複がない",
     new Set(extracted).size === extracted.length);
 
-  console.log("[3-b] 3feature(wish/journal/timeline)のconfigureXxxを"
+  console.log("[3-b] 4feature(wish/journal/timeline/today)のconfigureXxxを"
     + "空depsで呼び、registerActionsが実際に登録するaction名がMIGRATED_TO_REGISTRY_ACTIONSと"
     + "一致するか");
   // configureXxx本体はdestructuring代入+registerActions呼び出しのみで、渡されたdepsの中身は
@@ -404,10 +408,11 @@ function extractModalHandlerTypes() {
   const featureMods = await Promise.all(
     FEATURE_MODULE_PATHS.map((p) => import(pathToFileURL(p).href))
   );
-  const [wishMod, journalMod, timelineMod] = featureMods;
+  const [wishMod, journalMod, timelineMod, todayMod] = featureMods;
   wishMod.configureWish({});
   journalMod.configureJournal({});
   timelineMod.configureTimeline({});
+  todayMod.configureToday({});
   const registered = actionsMod.__debugActionNames().filter((name) => !name.startsWith("__test"));
   check(`レジストリ側の登録件数は期待どおり${MIGRATED_TO_REGISTRY_ACTIONS.length}件`,
     registered.length === MIGRATED_TO_REGISTRY_ACTIONS.length,

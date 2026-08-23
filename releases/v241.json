@@ -1,0 +1,57 @@
+{
+  "version": 241,
+  "date": "2026-08-23",
+  "title": "Todayフォーカスモード",
+  "summary": "Today上部にFOCUSと3セクションの表示切替を追加し、端末ローカル保持・DOM生成省略・PCでのCABIN TIMER右列配置を実装した",
+  "changedFiles": [
+    "docs/test-impact-map.generated.md",
+    "releases/v241.json",
+    "src/features/today-tower.js",
+    "src/features/today.js",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/v241.test.js"
+  ],
+  "intent": [
+    "GATE ROUTINE、ATIS、JOURNALを必要な時だけ表示し、Todayの実行対象へ集中できる端末別UIを提供する。",
+    "既存同期state・タイマーエンジン・既定DOMを変えず、表示状態とPCレイアウトだけを独立して切り替える。"
+  ],
+  "changes": [
+    "TOWERヘッダ直下に44px以上のFOCUSボタンとルーティン・AI・ジャーナルの3チップを追加し、today featureのaction registryへ4 actionを登録した。",
+    "専用localStorageキーtaskchute-journal-today-focus-v1へ表示状態と復元状態を保存し、同期対象stateから分離した。",
+    "非表示のGATE ROUTINE、ATIS、JOURNALはrenderTodayTowerで各render関数を呼ばずDOM生成を省略した。",
+    "ATISとJOURNALが両方非表示の時、1280px以上だけCABIN TIMERのgrid-areaをrightへ変更し、解除時は従来のtimer全幅へ戻すCSSを追加した。",
+    "v241 E2Eで既定DOM、個別切替、リロード保持、直前状態復元、PC/iPhone配置、ポモドーロticker継続、同期state非混入を固定した。",
+    "Service WorkerのCACHE_NAMEをv241へ更新した。"
+  ],
+  "uncertainties": [
+    "FOCUSの『直前の表示状態』は、FOCUS押下前の3値をrestoreへ保存する。個別チップで最後の1つを消して全非表示になった場合は、その直前の1つ表示状態を復元対象とした。",
+    "CABIN TIMERは既定DOMのtoday-tower直下を維持し、PCだけCSS grid-areaでtower-col-rightと同じ右列へ視覚配置した。これによりiPhoneのDOM順とticker参照を変えない。",
+    "ATIS/JOURNALが両方非表示なら、GATE ROUTINEの表示状態にかかわらずPC右列化する仕様として実装した。",
+    "専用キー未設定の既定値は全表示だが、読取だけではlocalStorageへ書き戻さず、最初のユーザー操作時に保存する。",
+    "localStorageの読取・書込例外時は同期stateへフォールバックせず、そのセッションのUI状態だけで継続する。"
+  ],
+  "reviewFocus": [
+    "専用localStorageキー以外へ表示状態を書かず、src/sync/github.js・normalizeState・保存gatewayに差分が無いか。",
+    "4つのdata-actionがregistry方式で、個別addEventListenerを追加していないか。",
+    "非表示セクションのrender関数が呼ばれず、既定全表示時の各パネル親子構造とCABIN TIMER直下構造が維持されるか。",
+    "1280px以上の右列化と390/768/1024pxの縦順、44pxタップ領域、TOWER色トークンが成立するか。",
+    "ポモドーロ実行中の切替後もstate.pomodoroと1秒ticker表示が継続するか。"
+  ],
+  "verification": [
+    "node --check src/features/today.js、src/features/today-tower.js、tests/v241.test.js: exit 0。",
+    "node tests/action-registry-core.test.js: 新規4 actionを含む202 actionの保存則が全件PASS。",
+    "system Edge指定のnode tests/v241.test.js: 個別切替・保持・復元・PC/iPhone配置・ticker継続を含め全件PASS。",
+    "system Edge指定のrun-all(v241、tower-core、today-core、v58、v70、action-registry-core): 全6スイートPASS、103.7秒、exit 0。",
+    "npm.cmd run code:index:write/check: PASS(code index 559 functions)。",
+    "npm.cmd run test:manifest:write/check: PASS(test manifest 134 suites)。",
+    "実行コード差分はtoday.js 71追加、today-tower.js純増4、styles.css 33追加、sw.js純増2で200行以下。",
+    "system Edge指定のnode scripts/release-gate.js releases/v241.json --final: exit 0。"
+  ],
+  "knownLimitations": [
+    "iOS Safari実機PWAでのService Worker更新、オフライン起動、実機タップ感は監督者側で確認が必要。",
+    "taskchute-notes/handoff.mdがワークスペース外でEPERMになる場合、notes側更新は監督者が再実行する。"
+  ]
+}

@@ -483,7 +483,6 @@ registerActions({
   },
   "ai-work-approve": ({ target }) => approveAiWorkResult(target.dataset.resultId),
   "ai-work-question": ({ target }) => raiseAiWorkQuestion(target.dataset.resultId),
-  "ai-mit-adopt": ({ target }) => adoptAiMit(Number(target.dataset.index)),
   "ai-task-adopt": ({ target }) => adoptAiTaskCandidate(Number(target.dataset.index)),
   "ai-task-dismiss": ({ target }) => dismissAiTaskCandidate(Number(target.dataset.index)),
   "report-copy-ai": () => copyReportToClipboard(),
@@ -1079,7 +1078,7 @@ document.addEventListener("click", (event) => {
   // v173: Wish CRUDはsrc/features/wish.jsのregisterActionsへ移行した。
   // v176: zt-*/zero-tab/zerosec-theme-*(0秒思考)はapp.js内のregisterActionsへ移行した。
   // v177: question-*/open-questions/entry-to-question(問い)・report-copy-ai/report-share-ai/
-  // ai-mit-adopt/ai-task-adopt/ai-task-dismiss(AI連携)はapp.js内のregisterActionsへ移行した
+  // ai-task-adopt/ai-task-dismiss(AI連携)はapp.js内のregisterActionsへ移行した
   // (段階5-6b)。
   // v143: journal-import-ai(手動貼り付け取込ボタン)はv141でジャーナルのAIフィードバック列
   // 自体を撤去した際に到達不能になっていたため、ハンドラごと削除した(openAiImportModal一式・
@@ -3023,34 +3022,8 @@ async function shareReport() {
   try { await navigator.share({ text: report }); } catch { /* キャンセル等は無視 */ }
 }
 
-// タスクシュート上部の MIT候補チップ(前日フィードバックの取り込み分、当日限り)
-function aiMitChips() {
-  const today = todayISO();
-  const prev = addDays(today, -1);
-  const cands = state.journalMeta[prev]?.aiMitCandidates || [];
-  if (!cands.length) return "";
-  return `<div class="tower-atis-chips" data-atis-mit-candidates>
-    ${cands.map((title, index) => `<button type="button" class="atis-chip chip-mit" data-action="ai-mit-adopt" data-index="${index}">＋ MIT候補: ${escapeHTML(title)}</button>`).join("")}
-  </div>`;
-}
-function adoptAiMit(index) {
-  const prev = addDays(todayISO(), -1);
-  const meta = state.journalMeta[prev];
-  const title = meta?.aiMitCandidates?.[index];
-  if (!title) return;
-  const today = todayISO();
-  const sameDayMITs = state.blocks.filter((b) => !b.deleted && b.date === today && b.isMIT);
-  if (sameDayMITs.length >= 3) return showToast("今日の主役は最大3個まで。先に他を外してください");
-  const block = makeBlock({ date: today, title });
-  block.isMIT = true;
-  state.blocks.push(block);
-  meta.aiMitCandidates.splice(index, 1);  // 採用したら候補から外す
-  saveAndRender("✦ 今日の主役に追加しました");
-}
-
 // v133: 前日フィードバックのAIタスク候補チップ。
-//       aiMitChips/adoptAiMitと全く同じ「溜めて＋で採用」設計。採用せず消す×(却下)だけは
-//       候補が溜まり続けないよう追加した(aiMitChipsには無い機能)。
+//       候補を溜めて＋で採用し、採用せず消す×(却下)も提供する。
 function aiTaskChips() {
   const today = todayISO();
   const prev = addDays(today, -1);
@@ -10706,12 +10679,12 @@ function saveAndRender(message, toastOpts) {
 //      テーマには source:"ai-feedback" を付け、手動追加(source:null)と区別する。ワンタップ削除
 //      (deleteZtTheme)がAI由来かどうかを判定し、AI由来ならzeroSecThemeLogへ不採用記録する。
 // v133: タスク側のみ方針転換(K指示)。v86で「確認なしで直接state.tasksへpush」に自動化した
-//      挙動を撤回し、aiMitChips/adoptAiMit(journalMeta[date].aiMitCandidates)と全く同じ
-//      「候補として溜めておき、チップの＋タップで初めて実体化」方式に戻す。テーマ側(0秒思考)の
+//      挙動を撤回し、「候補として溜めておき、チップの＋タップで初めて実体化」方式に戻す。
+//      テーマ側(0秒思考)の
 //      自動追加は今回のスコープ外で変更しない(上のコメント・下のthemeCandidates節は従来どおり)。
 //      候補はjournalMeta[date].aiTaskCandidatesへ格納し、aiTaskChips()/adoptAiTaskCandidate()/
 //      dismissAiTaskCandidate()で表示・採用・却下する(表示は常にjournalMeta[前日].aiTaskCandidates
-//      のみ、aiMitChipsと同じ表示条件)。addedTasksの意味は「タスクとして直接追加した件数」から
+//      のみ)。addedTasksの意味は「タスクとして直接追加した件数」から
 //      「候補として追加した件数」に変わった(変数名はそのまま流用)。
 function autoIngestFeedback(date, text) {
   if (!text) return null;
@@ -11220,23 +11193,7 @@ function atisFeedbackReadHTML() {
   </details>`;
 }
 
-function atisFeedbackCandidatesHTML(blocks) {
-  const mit = blocks.filter((block) => block.isMIT);
-  if (mit.length >= 3) return "";
-  const prev = addDays(todayISO(), -1);
-  const feedbackText = cachedFeedback[prev] || state.feedback[prev] || "";
-  const existingTitles = new Set(blocks.map((block) => block.title));
-  const candidates = extractMITCandidatesFromReport(feedbackText)
-    .filter((candidate) => !existingTitles.has(candidate))
-    .slice(0, 3 - mit.length);
-  if (!candidates.length) return "";
-  return `<div class="tower-atis-chips" data-atis-feedback-candidates>
-    ${candidates.map((candidate) => `<button type="button" class="atis-chip chip-mit" data-action="mit-candidate-add" data-title="${escapeHTML(candidate)}">＋ MIT候補: ${escapeHTML(candidate)}</button>`).join("")}
-  </div>`;
-}
-
 function renderAtisPanel() {
-  const blocks = blocksForDate(todayISO());
   const workItems = pendingAiWorkResults();
   const workHTML = workItems.length ? `<div class="atis-divider"></div>
     <div class="tower-atis-sub">AIが処理した作業 <span>${workItems.length}</span></div>
@@ -11248,8 +11205,6 @@ function renderAtisPanel() {
       ${aiFreshnessLine()}
       ${workHTML}
       ${atisFeedbackReadHTML()}
-      ${atisFeedbackCandidatesHTML(blocks)}
-      ${aiMitChips()}
       ${aiTaskChips()}
       <div class="tower-atis-actions">
         <button type="button" class="atis-btn" data-action="ai-morning-plan">🌅 朝プラン</button>

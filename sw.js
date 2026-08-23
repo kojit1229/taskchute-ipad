@@ -1,4 +1,6 @@
-const CACHE_NAME = "taskchute-journal-pwa-v239";
+const CACHE_NAME = "taskchute-journal-pwa-v241";
+// v241: TodayフォーカスモードとPC時のCABIN TIMER右列表示を追加した(APP_SHELL変更なし)。
+// v240: Today ATISからMIT候補チップ2系統と採用actionを撤去した(APP_SHELL変更なし)。
 // v239: 12WY二軸MVPの純関数track.jsを追加し、オフライン配信用APP_SHELLへ登録した。
 // v238: 完全同型の標準モーダル骨格を共通ヘルパーへ集約した(APP_SHELL変更なし)。
 // v237: 未参照CSSを削除し、Project/Taskの中断・再開status更新を共通化した(APP_SHELL変更なし)。

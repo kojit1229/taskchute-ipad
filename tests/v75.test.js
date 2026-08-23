@@ -109,17 +109,21 @@ function check(name, cond, extra = "") {
   // 起動時のhydrateStaticMarkdown(app.js:16315)の非同期継続(recordFeedbackFile→saveState、
   // 鮮度persist等)がseed書込〜reloadコミットの隙間に着弾し、在メモリstate(currentView="today"、
   // v182の新既定)でseedを丸ごと上書きする競合があった(低速環境ほど高確率)。
-  async function seed({ blocks = [], feedbackFiles = [], view = "today" } = {}) {
+  async function seed({ blocks = [], feedbackFiles = [], view = "today", resetFeedbackIngest = false } = {}) {
     await page.goto(`http://localhost:${PORT}/styles.css`);  // アプリJSを停止させてから書く
-    await page.evaluate(({ KEY, blocks, feedbackFiles, TODAY, view }) => {
+    await page.evaluate(({ KEY, blocks, feedbackFiles, TODAY, PREV, view, resetFeedbackIngest }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.blocks = blocks;
       s.feedbackFiles = feedbackFiles;
       s.feedback = {};
+      if (resetFeedbackIngest) {
+        s.feedbackIngestedDates = [];
+        s.journalMeta[PREV] = { ...(s.journalMeta[PREV] || {}), aiTaskCandidates: [] };
+      }
       s.selectedDate = TODAY;
       s.currentView = view;
       localStorage.setItem(KEY, JSON.stringify(s));
-    }, { KEY, blocks, feedbackFiles, TODAY, view });
+    }, { KEY, blocks, feedbackFiles, TODAY, PREV, view, resetFeedbackIngest });
     await page.goto(`http://localhost:${PORT}/`);
     await page.waitForTimeout(700);
   }
@@ -270,20 +274,19 @@ function check(name, cond, extra = "") {
     // ============================================================
     console.log("[7] 「タスク名: 理由」形式のMIT候補行はタスク名のみを候補にする。コロン無しの行は従来どおり全文(should-fix2)");
     FEEDBACK_FIXTURE[PREV] = "## 明日への提案\n\n- タスクA_v75: 理由A_v75の説明文\n- タスクB_v75\n";
-    await seed({ blocks: [], feedbackFiles: [], view: "today" });
-    // v75: 「AIから」カードには、生の本文をそのまま読めるdetails(homeAiFeedbackReadHTML、意図した
-    // 仕様)と、抽出済みの候補リスト(aiFeedbackCandidatesHTML)が両方入っている。ここで検証したいのは
-    // 「候補として抽出された文言」からコロン以降が除かれていることなので、判定は候補行(候補見出し
-    // 「昨日のフィードバックからの候補」の直後、追加ボタンを含む行群)のテキストだけに絞る。
-    const candidatesSectionText = await page.locator("[data-atis-feedback-candidates]").allTextContents();
+    await seed({ blocks: [], feedbackFiles: [], view: "today", resetFeedbackIngest: true });
+    await page.waitForSelector("[data-atis-task-candidates]");
+    // MIT候補チップ撤去後も同じ抽出関数はAIタスク候補の生成に使う。ここでは残るタスク候補チップで
+    // 「候補として抽出された文言」からコロン以降が除かれていることを固定する。
+    const candidatesSectionText = await page.locator("[data-atis-task-candidates]").allTextContents();
     const candidatesText = candidatesSectionText.join(" / ");
     const atisText7 = await page.locator(".sec-atis").textContent();
     check("コロン付き候補は候補行にタスク名のみが表示される(理由部分は含まれない)",
       candidatesText.includes("タスクA_v75") && !candidatesText.includes("理由A_v75"), candidatesText);
     check("コロン無しの候補行は従来どおり全文がそのまま候補になる(旧フォーマット互換)",
       atisText7.includes("タスクB_v75"), atisText7);
-    const addBtnTitle7 = await page.locator('.sec-atis [data-action="mit-candidate-add"]').first().getAttribute("data-title");
-    check("追加ボタンのdata-titleにも理由が混入していない", addBtnTitle7 === "タスクA_v75", addBtnTitle7);
+    const taskChipText7 = await page.locator('.sec-atis [data-action="ai-task-adopt"]').first().textContent();
+    check("タスク候補の追加ボタンにも理由が混入していない", taskChipText7.includes("タスクA_v75") && !taskChipText7.includes("理由A_v75"), taskChipText7);
   } finally {
     await browser.close();
     server.close();
