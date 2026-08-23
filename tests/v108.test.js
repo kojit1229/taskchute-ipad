@@ -20,6 +20,7 @@
 // (c) 同名・同開始時刻の削除済み(deleted:true)ルールがある場合は誤ブロックせず、
 //     新規Block+ルールが作成できる
 // (d) 正常系(繰り返しなしの単発Block新規作成)の保存は従来どおり動く(回帰)
+// (e) 既存Blockを編集モーダルで完了保存すると日報が再生成される
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
@@ -46,18 +47,19 @@ function check(name, cond, extra = "") {
   const TODAY = `${now0.getFullYear()}-${pad2(now0.getMonth() + 1)}-${pad2(now0.getDate())}`;
   const DECLARE_TITLE = "宣言(今日も最高の一日にします!)";
 
-  async function seed({ recurrences = [] } = {}) {
-    await page.evaluate(({ KEY, recurrences, TODAY }) => {
+  async function seed({ recurrences = [], blocks = [] } = {}) {
+    await page.evaluate(({ KEY, recurrences, blocks, TODAY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.tasks = [];
-      s.blocks = [];
+      s.blocks = blocks;
       s.projects = [];
       s.recurrences = recurrences;
       s.selectedDate = TODAY;
       s.currentView = "timeline";
       s.timelineMode = "planned";
+      s.reports[TODAY] = "STALE_BLOCK_MODAL_SAVE";
       localStorage.setItem(KEY, JSON.stringify(s));
-    }, { KEY, recurrences, TODAY });
+    }, { KEY, recurrences, blocks, TODAY });
     await page.reload();
     await page.waitForTimeout(400);
   }
@@ -180,6 +182,28 @@ function check(name, cond, extra = "") {
     check("単発Blockが1件作られる", (s4.blocks || []).filter((b) => !b.deleted).length === 1, JSON.stringify(s4.blocks));
     check("繰り返しルールは作られない", (s4.recurrences || []).length === 0, JSON.stringify(s4.recurrences));
     check("保存成功のトーストが出る", (await toastText()) === "Blockを追加しました", await toastText());
+
+    // ============================================================
+    // (e) 既存Blockの編集完了保存→日報再生成
+    // ============================================================
+    console.log("[5] 既存Blockを編集モーダルで完了保存すると日報が再生成される");
+    await seed({
+      blocks: [{
+        id: "modal-complete-report", taskId: "", date: TODAY, title: "編集完了の日報反映", category: "学習",
+        plannedStartAt: `${TODAY}T09:00`, plannedEndAt: `${TODAY}T09:45`,
+        actualStartAt: "", actualEndAt: "", completed: false, charge: 0, discharge: 0, comment: "",
+        recurrenceGroupId: "", pomodoroCount: 0, migratedTo: "", orderIndex: 0, carryCount: 0,
+        isMIT: false, source: "", createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false
+      }]
+    });
+    await page.click('.timeline-card[data-action="edit-block"][data-id="modal-complete-report"]');
+    await page.check('[data-modal-field="completed"]');
+    await page.click('[data-action="modal-save"]');
+    await page.waitForTimeout(300);
+    const s5 = await stateNow();
+    check("Block編集完了保存でcompletedになる", s5.blocks.find((b) => b.id === "modal-complete-report")?.completed === true);
+    check("Block編集完了保存の直後に日報が再生成される",
+      s5.reports[TODAY] !== "STALE_BLOCK_MODAL_SAVE" && s5.reports[TODAY].includes("編集完了の日報反映"), s5.reports[TODAY]);
   } finally {
     await browser.close();
     server.close();

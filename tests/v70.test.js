@@ -88,6 +88,7 @@ function check(name, cond, extra = "") {
       s.projects = projects;
       s.selectedDate = TODAY;
       s.currentView = view;
+      s.reports[TODAY] = "STALE_BULK_APPROVE";
       s.settings = s.settings || {};
       if (typeof focusTimerAuto === "boolean") s.settings.focusTimerAuto = focusTimerAuto;
       if (pomodoro) s.pomodoro = pomodoro;
@@ -228,6 +229,8 @@ function check(name, cond, extra = "") {
     check("対象Aは計画時刻がそのまま実績にコピーされる", targetA?.actualStartAt === targetA?.plannedStartAt && targetA?.actualEndAt === targetA?.plannedEndAt, JSON.stringify(targetA));
     check("対象Aはcompleted化される", targetA?.completed === true);
     check("対象Bもcompleted化される", targetB?.completed === true);
+    check("一括承認の最後に日報が再生成される",
+      s3.reports[TODAY] !== "STALE_BULK_APPROVE" && s3.reports[TODAY].includes("一括承認対象A"), s3.reports[TODAY]);
     check("紐づくTaskはtodo→doingになる(自動完了はしない)", s3.tasks.find((t) => t.id === "bulk-task-1")?.status === "doing", JSON.stringify(s3.tasks));
     const hasActual = s3.blocks.find((b) => b.id === "bulk-has-actual");
     check("既に実績があるBlockは対象外(変更されない)", hasActual?.completed !== true && hasActual?.actualStartAt === `${TODAY}T11:00:00`, JSON.stringify(hasActual));

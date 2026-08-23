@@ -92,6 +92,7 @@ function check(name, cond, extra = "") {
       s.projects = projects;
       s.selectedDate = TODAY;
       s.currentView = view;
+      s.reports[TODAY] = "STALE_TASK_COMPLETE_FROM_BLOCK";
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, tasks, blocks, projects, TODAY, view });
     await page.reload();
@@ -165,6 +166,8 @@ function check(name, cond, extra = "") {
     check("Taskの分子が分母(10)に揃う(v95連動)", t2?.progressNum === 10, JSON.stringify(t2));
     check("チェックしたBlock(B1)はcompletedになる", bB1?.completed === true, JSON.stringify(bB1));
     check("同じTaskの他のBlock(B2)は完了にならない", bB2?.completed === false, JSON.stringify(bB2));
+    check("BlockからTask完了にした直後に日報が再生成される",
+      s2.reports[TODAY] !== "STALE_TASK_COMPLETE_FROM_BLOCK" && s2.reports[TODAY].includes("セッション1"), s2.reports[TODAY]);
     await page.click('[data-action="modal-close"]');
     await page.waitForTimeout(150);
     check("未完了タスク一覧から消える", await page.locator('.item [data-action="task-today"][data-id="task-B"]').count() === 0);

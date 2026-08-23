@@ -398,7 +398,7 @@ function check(name, cond, extra = "") {
     //   前提B5-2: F1の確定は既存 addBlock() 相当(getOtherTask()紐づけ+defaultPlannedTimes())。
     //            「当日固定」= selectedDateが過去日でも date/planned は今日になる(§12 F1)
     //   前提B5-3: F1の入力保護は既存 renderDeferringForFocus 相乗り(§4・C5。新フラグを作らない)。
-    //            検証はhighlights.json応答の保留→入力中に解放→hydrateStaticMarkdown(v133で
+    //            検証はVision.md応答の保留→入力中に解放→hydrateStaticMarkdown(v133で
     //            tasksもライブ再描画対象)が発火するrenderDeferringForFocusの延期で行う
     //   前提B5-4: DRIFTのズレ分数は textHasMin() の許容形式(「n分」等)で表示される。
     //            ズレ = computeProjectedEnd(今日, now) − 当日blocksの最大plannedEnd(b5-survey §2-2)
@@ -496,34 +496,29 @@ function check(name, cond, extra = "") {
 
     // ============================================================
     // [30c] F1: 入力中の再描画トリガで文字が消えない(renderDeferringForFocus相乗り。[17f]の発展形)
-    //   手順: highlights.json応答を保留したままseed → #blockTitleに入力 → 応答を解放して
+    //   手順: Vision.md応答を保留したままseed → #blockTitleに入力 → 応答を解放して
     //   hydrateStaticMarkdown(changed=true・tasksは再描画対象)にrenderDeferringForFocusを
     //   発火させる → フォーカス中は再描画が延期され入力が残る → blurで延期分がflushされる
     //   (プローブDOMの消滅で「延期→flush」が実際に起きたことを正の証拠として確認する)
     // ============================================================
     console.log("[30c] F1: 入力中にhydrate由来の再描画トリガが発火しても文字が残る(isFocusInEditableElement保護・前提B5-3)");
-    const KINDLE_HIGHLIGHTS_FIXTURE = {
-      generatedAt: "2026-07-01T00:00:00Z",
-      books: [{
-        id: "kb1",
-        title: "読書カード入力保持フィクスチャ",
-        author: "著者",
-        count: 1,
-        highlights: [{ ref: "a1", text: "入力保持テスト", location: 10 }]
-      }]
-    };
-    const kindleHold = { active: false, held: [] };
+    const visionHold = { active: false, held: [] };
+    const deadHydrationRequests = [];
     await page.route((url) => url.hostname === "api.github.com", (route) => {
       const p = decodeURIComponent(new URL(route.request().url()).pathname);
-      if (kindleHold.active && p.endsWith("/contents/taskchute/reading/highlights.json")) {
-        kindleHold.held.push(route);  // 応答保留(下で明示的にfulfillする)
+      if (/\/contents\/taskchute\/(?:今日の敵_[^/]+\.md|勝手に格言_[^/]+\.json|reading\/(?:highlights\.json|reflections\.json|summary_[^/]+\.md))$/.test(p)) {
+        deadHydrationRequests.push(p);
+        return route.fallback();
+      }
+      if (visionHold.active && p.endsWith("/contents/taskchute/content/Vision.md")) {
+        visionHold.held.push(route);  // 応答保留(下で明示的にfulfillする)
         return;
       }
       return route.fallback();  // 保留しない時はB2登録済みのフィクスチャ応答へ
     });
     await page.clock.setFixedTime(fixedTime(12, 0, 0));
-    kindleHold.active = true;
-    const heldReq = page.waitForRequest((r) => r.url().includes("reading/highlights.json"));
+    visionHold.active = true;
+    const heldReq = page.waitForRequest((r) => r.url().includes("/contents/taskchute/content/Vision.md"));
     await seedB5({ view: "tasks", blocks: [] });
     await heldReq;  // リクエスト到達=保留成立(この時点でhydrateは未完了のまま待っている)
     await page.waitForSelector("#blockTitle", { state: "attached" });
@@ -535,12 +530,14 @@ function check(name, cond, extra = "") {
       probe.id = "b5RenderProbe";
       document.getElementById("main").appendChild(probe);
     });
-    const heldResp = page.waitForResponse((r) => r.url().includes("reading/highlights.json"));
-    kindleHold.active = false;
-    for (const r of kindleHold.held.splice(0)) {
-      await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(KINDLE_HIGHLIGHTS_FIXTURE) });
+    const heldResp = page.waitForResponse((r) => r.url().includes("/contents/taskchute/content/Vision.md"));
+    visionHold.active = false;
+    for (const r of visionHold.held.splice(0)) {
+      await r.fulfill({ status: 200, contentType: "text/markdown", body: "# VISION-HYDRATE-INPUT-PROTECTION" });
     }
     await heldResp;
+    check("表示先を失った今日の敵・勝手に格言・reading 3種へAPIリクエストしない",
+      deadHydrationRequests.length === 0, JSON.stringify(deadHydrationRequests));
     // hydrate継続(promise連鎖)がrenderDeferringForFocusの判定へ到達するまでイベントループを回す
     // (固定waitではなくprotocolラウンドトリップでマクロタスクを消化する)
     await page.evaluate(() => new Promise((r) => setTimeout(r, 0)));

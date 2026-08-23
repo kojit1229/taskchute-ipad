@@ -84,9 +84,9 @@ assert(areaOf("fetchGitHubRawResult").includes("sync") &&
 assert(!areaOf("rearrangeSkipMessage").includes("sync"),
   "rearrangeSkipMessage(再配置スキップ集計)はsyncを含まない");
 
-// addMITCandidate: `state.blocks.push(block)`はArray.pushでGitHub同期と無関係。
-assert(!areaOf("addMITCandidate").includes("sync"),
-  "addMITCandidate(MIT候補追加)はsyncを含まない");
+// computeFreeGaps: `gaps.push(...)`はArray.pushでGitHub同期と無関係。
+assert(!areaOf("computeFreeGaps").includes("sync"),
+  "computeFreeGaps(空き時間計算)はsyncを含まない");
 
 // v164: mergeByIdはapp.js分割・段階1でsrc/core/merge.jsへ抽出済み。code-index.jsはapp.js
 // しか走査しないため、抽出後は索引から消えるのが正しい(indexに残っていたら二重定義の疑い)。

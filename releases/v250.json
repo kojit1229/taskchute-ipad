@@ -1,0 +1,57 @@
+{
+  "version": 250,
+  "date": "2026-08-23",
+  "title": "死にfetch掃除・日報再生成6経路化",
+  "summary": "home撤去後に表示先を失っていた外部fetchと到達不能コードを削除し、Block完了時の日報再生成を残り3経路へ対称に補完した。",
+  "changedFiles": [
+    "CHANGES_v250.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v250.json",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/code-index.test.js",
+    "tests/suite-manifest.json",
+    "tests/today-core.test.js",
+    "tests/v107.test.js",
+    "tests/v108.test.js",
+    "tests/v70.test.js"
+  ],
+  "intent": [
+    "表示先が無い個人データファイルを起動時に取得し続ける無駄を止める。",
+    "home撤去で生成元が消えたaction・モーダル・入力保存処理・CSSを除去する。",
+    "Blockを完了へ遷移させる6経路すべてで、保存済み日報を即時再生成する。",
+    "既存のdailyDeclarations・weeklyWishesと、そのnormalizeState・同期・日報読み取り契約は温存する。"
+  ],
+  "changes": [
+    "今日の敵・勝手に格言のキャッシュ、fetch、JSONパースと、reading/highlights.json・reflections.json・summary_YYYY-MM.mdのhydrate・孤児読み手・保存actionを削除した。",
+    "hydrateStaticMarkdownのPromise.allを未来からの手紙とai-insightsの2分岐へ整合させ、hydrationテストで削除対象5系統へのAPIリクエスト0件を検証した。",
+    "weekly wishモーダル一式、daily declaration入力ハンドラ、MIT候補追加分岐・関数・専用CSSを削除し、action/code indexの死んだ期待値だけを追従した。",
+    "toggleTaskCompleteFromBlock・bulkApproveAsPlanned・saveBlockFromModalの完了遷移でgenerateReport(date, { quiet: true })を追加した。bulkApproveAsPlannedは全対象のIRON LOG搬送後に1回だけ再生成する。",
+    "modalHeaderHTMLへtitleは呼び出し側でエスケープ済みのリテラルだけを渡す契約をコメント追記した。",
+    "Service WorkerのCACHE_NAMEをv250へ更新した。"
+  ],
+  "uncertainties": [
+    "特になし。削除対象は現HEADで生成元・読み手が無いことを語境界検索で確認した。"
+  ],
+  "reviewFocus": [
+    "削除対象ファイル名・キャッシュ・action・関数・CSSが語境界検索で残っておらず、未来からの手紙・ai-insights等の隣接fetchを巻き込んでいないか。",
+    "toggleTaskCompleteFromBlockとBlock編集完了保存ではIRON LOG搬送直後、bulk一括承認では搬送ループ後1回だけ日報を再生成しているか。",
+    "dailyDeclarationsのgenerateReport読み取り、weeklyWishesを含む温存state、normalizeState、同期処理に差分が無いか。",
+    "新しい日時文字列パース・入力・個別イベント・stateフィールドが混入していないか。"
+  ],
+  "verification": [
+    "node --check app.js、sw.js、変更した5テスト: PASS。",
+    "node tests/action-registry-core.test.js、node tests/code-index.test.js: PASS。",
+    "system Edge指定 node tests/run-all.js v70 v107 v108 today-core: 4 suites ALL PASS。追加3経路の日報再生成と削除対象APIリクエスト0件を確認。",
+    "npm.cmd run code:index:write、npm.cmd run test:manifest:write: PASS。"
+  ],
+  "knownLimitations": [
+    "実行コード差分は死にコードの一括削除が主体で200行を超えるため、依頼の完了条件に従い分割せず報告する。",
+    "iOS Safari実機PWAでのService Worker更新確認は監督者側で必要。",
+    "taskchute-notes/handoff.mdがワークスペース外でEPERMになる場合、notes側更新は監督者が再実行する。"
+  ]
+}

@@ -70,7 +70,7 @@ function check(name, cond, extra = "") {
   else { failures++; console.log(`  ❌ ${name} ${extra}`); }
 }
 
-// §6-1: click dispatcherから確定させたゴールデンリスト(削除済み機能のactionを除く233件)。
+// §6-1: click dispatcherから確定させたゴールデンリスト(削除済み機能のactionを除く228件)。
 // 増減・リネームがあれば、それが意図した変更(action追加/削除/移行)かどうかを必ず確認すること。
 // v235: set-sleepは主観睡眠の入力経路廃止に伴う意図的削除。
 const GOLDEN_CLICK_ACTIONS = [
@@ -92,7 +92,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "now-conveyor-complete", "now-conveyor-skip",
   "generate-report", "download-report", "download-data", "save-github", "load-github",
   "gate-continue", "reset-demo",
-  "toggle-mit", "mit-candidate-add",
+  "toggle-mit",
   "body-scan-fatigue", "body-scan-part", "body-scan-discard",
   "start-pomodoro", "stop-pomodoro", "interrupt-reason", "interrupt-reason-cancel",
   "complete-pomodoro", "declare-confirm", "declare-skip", "report-outcome", "report-skip",
@@ -104,7 +104,6 @@ const GOLDEN_CLICK_ACTIONS = [
   "vision-board-load-images", "vision-board-retry-images",
   "open-md-in-github", "reload-md", "ai-report-type", "ai-report-refresh",
   "open-future-letter", "ai-work-approve", "ai-work-question",
-  "reading-save",
   "experiment-add", "edit-experiment", "experiment-keep", "experiment-drop",
   "experiment-copy-conclusion",
   "push-report", "add-task-to-project", "add-subtask",
@@ -132,7 +131,6 @@ const GOLDEN_CLICK_ACTIONS = [
   "entry-to-question", "open-questions",
   "report-copy-ai", "report-share-ai",
   "ai-task-adopt", "ai-task-dismiss",
-  "weekly-wish-open", "weekly-wish-submit", "weekly-wish-toggle",
   "ai-schedule", "ai-morning-plan",
   "zerosec-theme-add", "zerosec-theme-skip",
   "draft-confirm", "draft-discard", "draft-remove", "draft-undo",
@@ -184,11 +182,10 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
 // v181: 段階5-8(後半)で以下12件(timeline系の日付ナビ3+タイムライン設定/カテゴリフィルタ9)を、
 // 同じくapp.js自身が呼ぶregisterActions({...})へ移行した(timeline-modeのみsrc/features/
 // timeline.js側のMIGRATED_TO_REGISTRY_ACTIONSで検証する)。これでtimeline系40分岐すべての
-// 移行が完了した。所属ドメインに確信が持てなかった6件(toggle-mit・mit-candidate-add・home-tab・
+// 移行が完了した。所属ドメインに確信が持てなかったaction(toggle-mit・home-tab・
 // open-md-in-github・reload-md)、toggle-criteria-request/home-jump(WBS/ホーム寄り
   // で確信が持てない)、body-scan-*(ポモドーロ完了時トリガー)、
-// weekly-wish-*(wish週次選定、weekly-wish-toggleはpreventDefault依存)は
-// 従来どおり移行せず、if連鎖に残した(下のEXPECTED_REMAINING_IF_CHAINに含まれる)。
+// は従来どおり移行せず、if連鎖に残した(下のEXPECTED_REMAINING_IF_CHAINに含まれる)。
 const APP_JS_REGISTERED_ACTIONS = [
   "nav", "open-iron-log", "instruments-open-iron-log", "departures-open-tomorrow", "today-replan", "save-tower-journal",
   "early-bird-check", "tower-gate-edit-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move",
@@ -211,8 +208,8 @@ const APP_JS_REGISTERED_ACTIONS = [
   "question-add", "question-edit", "question-to-theme", "question-settle", "question-reopen",
   "question-bridge", "question-bridge-submit", "question-delete",
   "entry-to-question", "open-questions",
-  // --- v177: その他(日報/AIレポート/AI連携/読書/朝夜detailsトグル) ---
-  "reading-save", "ai-report-type", "ai-report-refresh", "open-future-letter",
+  // --- v177: その他(日報/AIレポート/AI連携/朝夜detailsトグル) ---
+  "ai-report-type", "ai-report-refresh", "open-future-letter",
   "ai-work-approve", "ai-work-question",
   "ai-task-adopt", "ai-task-dismiss",
   "report-copy-ai", "report-share-ai",

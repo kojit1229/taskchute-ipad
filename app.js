@@ -454,8 +454,8 @@ registerActions({
   "weekly-suggest-add": ({ target }) => addWeeklySuggestedTask(target.dataset.week, Number(target.dataset.index))
 });
 // v177: app.js分割・段階5-6b(journal系dispatcher分岐の移行・後半)。段階5-6a(v176、0秒思考+
-// 週次/12週サイクルの36分岐)に続き、問い(10)+その他(19、日報生成・AIレポートビューア・
-// AI連携・読書複利化・マイグレーション儀式・朝夜detailsトグル)の計29分岐を、click dispatcher
+// 週次/12週サイクルの36分岐)に続き、問い(10)+その他(日報生成・AIレポートビューア・
+// AI連携・マイグレーション儀式・朝夜detailsトグル)を、click dispatcher
 // のif連鎖からregisterActions経由のレジストリへ移行した(prep-stage5-dispatcher.md §4の
 // 相乗り方式)。この29件もいずれもsrc/features/journal.jsへ未抽出(ハンドラ実体がapp.js残留)
 // のため、v176と同じくapp.js自身がregisterActionsを直接呼ぶ形をとる。ロジック自体はif連鎖
@@ -473,8 +473,7 @@ registerActions({
   "question-delete": ({ id }) => deleteQuestion(id),
   "entry-to-question": ({ id }) => entryToQuestion(id),
   "open-questions": () => { state.settings.zeroTab = "question"; persistLocalNoSchedule(); setView("zero"); },
-  // --- その他(19): 日報/AIレポート/AI連携/読書/マイグレーション儀式/朝夜detailsトグル ---
-  "reading-save": () => saveReadingReflection(),
+  // --- その他: 日報/AIレポート/AI連携/マイグレーション儀式/朝夜detailsトグル ---
   "ai-report-type": ({ target }) => setAiReportType(target.dataset.type),
   "ai-report-refresh": () => refreshAiReports(),
   "open-future-letter": () => {
@@ -840,21 +839,10 @@ const _visionPageLoadInFlight = {};  // { 'now_vision.pdf': true }(ボード単�
 // (=キーが残っている間だけ「再読み込み」ボタンを出す対象)。
 const _visionPageFailed = {};        // { 'now_vision-p01.jpg': true }
 const cachedWeeklyReviewMd = {};  // v62: { '週開始土曜YYYY-MM-DD': '...md text...' }(自宅PCバッチ生成)
-// v157: AI機能1「今日の敵」。loop/scripts/today-enemy.sh が personal-data/taskchute/ へ
-// 今日の敵_<date>.md(ラスボス風ナレーション1段落のプレーンテキスト)をpushする(契約は
-// loop/FORMAT_CONTRACT.md「今日の敵_YYYY-MM-DD.mdの契約」)。実際の今日分のみを扱う
-// (AIフィードバックのような前日1日分の無条件fetchは行わない。過去日を読み返す機能ではないため)。
-const cachedTodayEnemyMd = {};  // { 'YYYY-MM-DD': '...1段落プレーンテキスト...' }
-// v158: AI機能2「勝手に格言」。loop/scripts/quote-forge.sh が personal-data/taskchute/ へ
-// 勝手に格言_<date>.json({"quote","author","note","date"})をpushする(契約は
-// loop/FORMAT_CONTRACT.md「勝手に格言_YYYY-MM-DD.jsonの契約」)。今日の敵と同じく実際の
-// 今日分のみを扱う(前日1日分の無条件fetchは行わない)。値は{quote,author}のパース済みJSON、
-// またはfetch未完了/該当ファイル無し/JSONパース失敗/quote・author欠損ならundefined。
-const cachedQuoteJson = {};  // { 'YYYY-MM-DD': {quote, author} | undefined }
 // v159: AI機能3「未来の自分からの手紙」。loop/scripts/future-letter.sh が personal-data/taskchute/
 // へ 未来からの手紙_<YYYY-MM>.md(1年後の自分視点の手紙本文プレーンテキスト)を月次でpushする
 // (契約は loop/FORMAT_CONTRACT.md「未来からの手紙_YYYY-MM.mdの契約」)。ホームの導線表示は
-// 「当月分の存在有無」だけを知ればよいため、今日の敵/勝手に格言と同じく実際の当月キーのみを
+// 「当月分の存在有無」だけを知ればよいため、実際の当月キーのみを
 // セッション内で1回だけ確認する(前月以前の無条件fetchは行わない。過去の手紙自体はAIレポート
 // 画面の一覧〈AI_REPORT_TYPES〉から読む導線に任せる)。
 const cachedFutureLetterMd = {};  // { 'YYYY-MM': '...手紙本文...' | undefined }
@@ -865,9 +853,6 @@ const AI_INSIGHTS_STALE_MS = 26 * 60 * 60 * 1000;
 const AI_INSIGHTS_GENERATED_AT_RE = /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/;
 // v67: AI作業結果_<today>.json のパース済み配列(非永続、当日分のみ)。二重登録防止のIDは state.aiWorkProcessedIds 側で永続化する。
 let cachedAiWorkResults = null;
-// v74: 読書複利化 — taskchute/reading/highlights.json の books 配列(null=未取得。永続化しない、
-//      他のcached*と同じくアプリ内メモリのみ。ハイライト本体は個人データリポジトリが正)
-let cachedReadingHighlights = null;
 // v92: AIレポートビューア(コンテンツ総括・自己分析・基盤ヘルス・週次レビューをアプリ内で横断閲覧)。
 // v110: バッチ実行サマリを追加。
 // taskchute/直下の一覧を取得し、種類ごとにファイル名prefixでローカルにフィルタする
@@ -946,12 +931,6 @@ function attemptFlushDeferredRender() {
   _deferredRenderPendingSince = 0;
   render();
 }
-// v74: 自分が保存した言語化の当日分エコー表示用({ 'YYYY-MM-DD': '入力文字列' }、非永続)。
-//      保存済み内容の真実は reflections.json 側。リロード時は hydrateReadingData() が再取得する
-const cachedReadingReflections = {};
-// v74: taskchute/reading/summary_YYYY-MM.md(月次AI要約、自宅PCバッチ生成予定・404はフェイルソフト)
-const cachedReadingSummaryMd = {};
-
 // v34: 0秒思考 — 画面内の一時状態(永続化しない)
 let ztTab = "other";          // "other" | "fav"
 let ztAddOpen = false;         // テーマ追加パネルの開閉
@@ -1033,8 +1012,6 @@ document.addEventListener("click", (event) => {
   // v174: save-github/load-github/gate-continue/reset-demoはapp.js内のregisterActionsへ移行した。
   // v17: MIT(今日の主役)の切替(最大3個)
   if (action === "toggle-mit") toggleMIT(id);
-  // v38: AIフィードバックのMIT候補 → 今日の主役ブロック化
-  if (action === "mit-candidate-add") addMITCandidate(target.dataset.title);
   // body-scan-*(ポモドーロ身体スキャン)はapp.jsに残す。
   if (action === "body-scan-fatigue") bodyScanRecordFatigue(Number(target.dataset.value));
   if (action === "body-scan-part") bodyScanRecordPart(target.dataset.part || "");
@@ -1064,8 +1041,8 @@ document.addEventListener("click", (event) => {
   // registerActionsへ移行した。
   if (action === "open-md-in-github") openMdInGithub(target.dataset.path);
   if (action === "reload-md") reloadStaticMarkdown();
-  // v177: ai-report-type/ai-report-refresh/open-future-letter/ai-work-approve/ai-work-question/
-  //        reading-saveはapp.js内のregisterActionsへ移行した。
+  // v177: ai-report-type/ai-report-refresh/open-future-letter/ai-work-approve/ai-work-questionは
+  // app.js内のregisterActionsへ移行した。
   // v179: experiment-add〜experiment-copy-conclusion(実験ログ5)はapp.js内の
   // registerActionsへ移行した。
   // v181: timeline-new-block/complete-block-with-actual/tl-zoom/tl-energy-modeは
@@ -1084,18 +1061,6 @@ document.addEventListener("click", (event) => {
   // v143: journal-import-ai(手動貼り付け取込ボタン)はv141でジャーナルのAIフィードバック列
   // 自体を撤去した際に到達不能になっていたため、ハンドラごと削除した(openAiImportModal一式・
   // ai-import-submitも同様。CHANGES_v143.md参照)。
-  // v121: 今週のやりたいこと(Wishからの週次選定)
-  if (action === "weekly-wish-open") openWeeklyWishModal();
-  if (action === "weekly-wish-submit") submitWeeklyWish();
-  if (action === "weekly-wish-toggle") {
-    // checkboxのchecked切替はclickイベントのpre-activationでリスナー実行前に反映済みのため、
-    // target.checkedは既に新しい値(チェック後)。4件目でpreventDefaultすると
-    // canceled-activation-stepsによりブラウザ側が自動でchecked=falseへ戻す。
-    if (target.checked && modalRoot.querySelectorAll("input[data-wish-id]:checked").length > 3) {
-      event.preventDefault();
-      showToast("今週は3つまでに絞りましょう");
-    }
-  }
   // v179: ai-schedule/ai-morning-plan/draft-confirm/draft-discard/draft-remove/draft-undo/
   // draft-remove-reason/draft-remove-reason-dismiss(AIスケジュール下書き8)はapp.js内の
   // registerActionsへ移行した。
@@ -1202,14 +1167,6 @@ document.addEventListener("input", (event) => {
 document.addEventListener("change", (event) => {
   const target = event.target;
   if (target.matches("[data-date-picker]")) setSelectedDate(target.value);
-  // v117(A): 今日の宣言(change時に保存)。
-  // 宣言入力は保存だけを行い、入力中のDOMを全再描画しない。
-  if (target.matches("[data-declaration-date]")) {
-    const d = target.dataset.declarationDate;
-    state.dailyDeclarations[d] = { text: target.value.trim(), updatedAt: nowDateTime() };
-    saveState();
-    if (_lastSaveError) showToast("⚠️ 端末内保存に失敗(容量超過の可能性)。設定からGitHubへ保存してください");
-  }
   // v92: AIレポートビューアの履歴セレクタ(種類ごとに選択中の日付をUIキャッシュに保持)
   if (target.matches("[data-ai-report-date]")) {
     _aiReportSelectedDate[target.dataset.typeId] = target.value;
@@ -2731,43 +2688,6 @@ function computeHomeBatteryInfo(date) {
 // 時間経過(減衰)はupdateBatteryTick()(startTimerTicker経由、約1分間隔)が差分更新する。
 // レビュー対応(監督者裁定): 既定パラメタでは過去日は構造的に残量0(≒毎回赤ゲージ)になり
 // 「裁かない」思想に反するため、当日限定で表示する。
-function openWeeklyWishModal() {
-  state.modal = { type: "weeklyWish" };
-  renderModal(buildWeeklyWishModal());
-}
-function buildWeeklyWishModal() {
-  const wishProject = getWishProject();
-  const weekKey = weekRange(todayISO()).weekStart;
-  const selected = new Set(((state.weeklyWishes[weekKey] || {}).taskIds) || []);
-  // 未実現・未削除のトップレベルWishのみ選択対象
-  const candidates = wishProject
-    ? state.tasks.filter((t) => !t.deleted && t.projectId === wishProject.id && !t.parentTaskId && !t.realized)
-    : [];
-  return `
-    ${modalHeaderHTML("🌟 今週のやりたいこと(最大3つ)")}
-        ${candidates.length ? candidates.map((w) => `
-          <label class="row" style="gap:8px; align-items:center; padding:6px 0; font-size:16px">
-            <input type="checkbox" style="width:20px; height:20px" data-action="weekly-wish-toggle" data-wish-id="${w.id}" ${selected.has(w.id) ? "checked" : ""}>
-            <span>${escapeHTML(w.title)}</span>
-          </label>`).join("")
-          : `<div class="muted">Wishリストが空です。先にWishタブで追加してください</div>`}
-      </div>
-      <div class="modal-footer">
-        <button class="btn" data-action="modal-close">キャンセル</button>
-        <button class="btn primary" data-action="weekly-wish-submit">保存</button>
-      </div>
-    </div>`;
-}
-function submitWeeklyWish() {
-  // v124: UI層(preventDefault)に加え保存側でも3件ハードキャップ(reviewer指摘: 支援技術等で
-  // 4件checkedになった場合の防波堤。先頭3件を採用)
-  const ids = Array.from(modalRoot.querySelectorAll("input[data-wish-id]:checked")).map((el) => el.dataset.wishId).slice(0, 3);
-  const weekKey = weekRange(todayISO()).weekStart;
-  state.weeklyWishes[weekKey] = { taskIds: ids, updatedAt: nowDateTime() };
-  closeModal();
-  saveAndRender(ids.length ? "今週のやりたいことを設定しました" : "今週のやりたいことをクリアしました");
-}
-
 // 3日目の「続ける/手放す」選択を解決する
 function resolveIdealRetry(choice) {
   const today = todayISO();
@@ -2786,42 +2706,7 @@ function resolveIdealRetry(choice) {
   }
 }
 
-// v74: 読書複利化 — =========================================================
-//  既存49冊分のKindleハイライト(個人データリポジトリ taskchute/reading/highlights.json)を
-//  日替わりで1件だけ提示し、「自分の言葉で1行言語化する」入力を reading/reflections.json へ
-//  push する。新しいタブは作らず、ホームカード1枚+週次レビューの折りたたみで完結させる。
-// =========================================================
-
-// 文字列から決定論的な整数ハッシュを作る(日付ごとに毎回違う書籍/ハイライトを選ぶため。
-// 「日にち mod 冊数」だと月をまたいで同じ選ばれ方に偏るので、日付文字列全体をハッシュ化する)
-function dateHashSeed(str) {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) h = (Math.imul(h, 31) + str.charCodeAt(i)) >>> 0;
-  return h;
-}
-
-// 今日提示するハイライトを1件選ぶ(cachedReadingHighlights未取得/0件ならnull)
-function todaysReadingPick() {
-  const books = cachedReadingHighlights;
-  if (!Array.isArray(books) || books.length === 0) return null;
-  const date = todayISO();
-  const bookIdx = dateHashSeed(date) % books.length;
-  const book = books[bookIdx];
-  const highlights = Array.isArray(book?.highlights) ? book.highlights : [];
-  if (highlights.length === 0) return null;
-  const hIdx = dateHashSeed(`${date}|${book.id || bookIdx}`) % highlights.length;
-  const h = highlights[hIdx];
-  return {
-    bookId: book.id || "",
-    bookTitle: book.title || "",
-    author: book.author || "",
-    ref: h.ref || "",
-    text: h.text || ""
-  };
-}
-
-// ホームカード: 今日のハイライト提示 + 1行言語化の入力欄。ハイライトが引けない
-// (未取得・personal-data未設定・0冊)なら何も出さない(既存の404フェイルソフトと同じ流儀)
+// personal-data内の任意パスへ書き込む共通gateway。
 async function pushGitHubPath(relPath, content, label) {
   const raw = state.settings.github;
   if (!personalDataReady(raw)) {
@@ -2857,103 +2742,6 @@ async function pushGitHubPath(relPath, content, label) {
     throw new Error(await gitHubErrorMessage(response));
   }
   if (label) showToast(`📤 ${label} をGitHubへpushしました`);
-}
-
-// reflections.json のスキーマ(このアプリが正): { "entries": [{ date, bookId, bookTitle, author,
-// highlightRef, highlightText, reflection, savedAt }, ...] }。1日1件(同じdateは上書き)。
-// loop/scripts/reading-monthly-extract.py の寛容パース仕様(トップレベル配列 or {entries:[...]}、
-// 各要素は "date" キー必須)に適合させている。
-function parseReadingReflections(raw) {
-  if (!raw) return [];
-  let data;
-  try { data = JSON.parse(raw); } catch { return []; }
-  if (Array.isArray(data)) return data;
-  if (data && Array.isArray(data.entries)) return data.entries;
-  return [];
-}
-
-// 今日の言語化入力を読み→マージ→書き込みする(読み込み専用GET + 書き込み専用PUTの単純flow。
-// 楽観排他はしない設計。他日のエントリを消さないよう、必ず既存entriesを取得してから
-// 今日の分だけ差し替える)
-async function saveReadingReflection() {
-  const el = document.querySelector("[data-reading-reflection-input]");
-  if (!el) return;
-  const text = (el.value || "").trim();
-  if (!text) { showToast("言語化を入力してください"); return; }
-  if (!personalDataReady(state.settings.github)) {
-    showToast("GitHub設定(個人データリポジトリ)が未入力です");
-    return;
-  }
-  const pick = todaysReadingPick();
-  if (!pick) { showToast("今日のハイライトを取得できていません"); return; }
-  const date = todayISO();
-  try {
-    // v74 should-fix: 404(本当に無い)と401/5xx/ネットワーク例外(読めたかどうか分からない)を
-    // 区別する。後者を「まだ無い」として空配列から始めてしまうと、一過性の読み失敗の直後に
-    // pushGitHubPathが成功した場合、reflections.jsonが「今日の1件だけ」に上書きされ、
-    // 過去の全言語化が消失しうる。そのため非404失敗時は空ベースでの上書きを禁止し、保存自体を
-    // 中断する(throw → 下のcatchでtoast表示、pushGitHubPathは呼ばれない)。
-    const result = await fetchGitHubRawResult("reading/reflections.json");
-    let entries;
-    if (result.ok) {
-      entries = parseReadingReflections(result.text);
-    } else if (result.status === 404) {
-      entries = [];  // 真の404(初回保存)のみ空から始めてよい
-    } else {
-      throw new Error(`既存データの読み込みに失敗したため保存を中止しました(status: ${result.status || "network"})`);
-    }
-    entries = entries.filter((e) => !(e && e.date === date));
-    entries.push({
-      date,
-      bookId: pick.bookId,
-      bookTitle: pick.bookTitle,
-      author: pick.author,
-      highlightRef: pick.ref,
-      highlightText: pick.text,
-      reflection: text,
-      savedAt: nowDateTime()
-    });
-    entries.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
-    await pushGitHubPath("reading/reflections.json", JSON.stringify({ entries }, null, 2) + "\n", "読書の言語化");
-    cachedReadingReflections[date] = text;
-    saveAndRender("言語化を保存しました");
-  } catch (e) {
-    showToast(`保存失敗: ${e.message}`);
-  }
-}
-
-// hydrateStaticMarkdown から呼ばれる。(1) highlights.json は一度取得できたらキャッシュのまま
-// 使い回す(ほぼ静的データのため)。(2) 当日分の reflections.json は起動のたび1回だけ取得し、
-// 既に保存済みなら入力欄をプリフィルする。(3) 今月の summary_YYYY-MM.md は月1回だけ取得を試み、
-// 404はフェイルソフト(非表示のまま)。戻り値: 再描画が必要な変更があったか
-async function hydrateReadingData() {
-  let changed = false;
-  if (cachedReadingHighlights === null) {
-    const raw = await fetchGitHubRawText("reading/highlights.json");
-    if (raw) {
-      try {
-        const data = JSON.parse(raw);
-        if (data && Array.isArray(data.books)) {
-          cachedReadingHighlights = data.books;
-          changed = true;
-        }
-      } catch { /* 壊れたJSONは無視。cachedReadingHighlightsはnullのままで次回起動時に再取得を試みる */ }
-    }
-  }
-  const date = todayISO();
-  if (!(date in cachedReadingReflections)) {
-    const raw = await fetchGitHubRawText("reading/reflections.json");
-    const entry = parseReadingReflections(raw).find((e) => e && e.date === date);
-    cachedReadingReflections[date] = (entry && typeof entry.reflection === "string") ? entry.reflection : "";
-    changed = true;
-  }
-  const month = date.slice(0, 7);
-  if (!(month in cachedReadingSummaryMd)) {
-    const md = await fetchGitHubRawText(`reading/summary_${month}.md`);
-    cachedReadingSummaryMd[month] = md || "";
-    if (md) changed = true;
-  }
-  return changed;
 }
 
 // --- いま、これ(進行中 / 次のブロック)── v33: フル幅・2カラム ---
@@ -3041,18 +2829,6 @@ function taskchuteStartRate(blocks) {
 }
 
 // --- ひと目スコアボード── v33 ---
-function addMITCandidate(title) {
-  const text = (title || "").trim();
-  if (!text) return;
-  const today = todayISO();
-  const sameDayMITs = state.blocks.filter((b) => !b.deleted && b.date === today && b.isMIT);
-  if (sameDayMITs.length >= 3) return showToast("今日の主役は最大3個まで。先に他を外してください");
-  const block = makeBlock({ date: today, title: text });
-  block.isMIT = true;
-  state.blocks.push(block);
-  saveAndRender("✦ 今日の主役に追加しました(時間はタスクシュート画面で設定できます)");
-}
-
 // --- 今日のタスクシュート(着手率)---
 // v147(UI改善計画Phase2 2-1a): 分母をヒートマップ等と同じ「当日の全Block」へ統一すると、
 // この関数自体が一覧表示する対象(Project紐づきBlockのみ)と分母がズレて「X/Yブロック」の
@@ -6338,9 +6114,7 @@ function unionAiReportEntries(indexFiles, dirList) {
 // (鮮度チェック自体は48時間以内なので通ってしまう=「indexにはまだ載っていないが実際には
 // 存在する」状態)。hydrateStaticMarkdown()が直接fetchGitHubRawTextで実在を確認できた月は
 // cachedFutureLetterMdに記録済みのため、それをindex/Contents API由来の一覧へunionすることで、
-// index側の反映遅延に関わらずAIレポート画面の「未来からの手紙」タブが空にならないようにする
-// (今日の敵/勝手に格言は当日限定のホームカード表示のみでAIレポート一覧タブの対象外のため、
-// 本unionは未来からの手紙のみを対象とする)。
+// index側の反映遅延に関わらずAIレポート画面の「未来からの手紙」タブが空にならないようにする。
 function knownFutureLetterEntries() {
   return Object.keys(cachedFutureLetterMd)
     .filter((month) => cachedFutureLetterMd[month])
@@ -8859,6 +8633,7 @@ function toggleTaskCompleteFromBlock(blockId) {
       ? { ...b, completed: true, actualEndAt: b.actualEndAt || nowDateTime(), updatedAt: nowDateTime() }
       : b);
     transferIronLogToCompletedBlock(blockId);
+    generateReport(block.date, { quiet: true });
   } else {
     const hasProgress = state.blocks.some((b) => !b.deleted && b.taskId === task.id && (b.completed || b.actualStartAt));
     state.tasks = state.tasks.map((t) => t.id === task.id
@@ -9002,6 +8777,7 @@ function bulkApproveAsPlanned() {
     ? { ...b, actualStartAt: b.plannedStartAt, everStartedAt: b.everStartedAt || b.plannedStartAt, actualEndAt: b.plannedEndAt || b.plannedStartAt, completed: true, updatedAt: nowDateTime() }
     : b);
   targets.forEach((block) => transferIronLogToCompletedBlock(block.id, { suppressEmptyToast: true }));
+  generateReport(today, { quiet: true });
   const taskIds = new Set(targets.map((b) => b.taskId).filter(Boolean));
   if (taskIds.size) {
     state.tasks = state.tasks.map((t) => taskIds.has(t.id) && t.status === "todo"
@@ -9663,12 +9439,8 @@ function personalDataFileConfig(rawCfg, name) {
 // v72: personal-data リポジトリからの読み込み専用GET(Contents API、raw取得)。
 // 未設定/404は静かに空文字を返す(既存fetchTextと同じ「無ければ無視」流儀)。
 // 401(トークン権限不足)だけは具体的なバナーを出す(セットアップ画面通過後に起きうる)。
-// v74: fetchGitHubRawText の内部実装。「本文」だけでなく「404(本当に無い)」と
-// 「401/5xx/ネットワーク例外(読めたかどうか分からない)」を区別して返す。
-// read-merge-write で書き戻す保存経路(saveReadingReflection)は、この区別が無いと
-// 一過性の読み失敗を「まだ無い」と誤認し、空配列ベースで上書きして既存データを
-// 消失させかねない(should-fixレビュー対応)。既存の呼び出し元(fetchGitHubRawText経由)
-// への挙動は一切変えていない。
+// v74: fetchGitHubRawText の内部実装。「本文」だけでなくHTTP statusも返し、呼び出し側が
+// 404と認証・一時障害を区別できるようにする。
 // v85: kind="blob" でバイナリ(PDF等)もこの経路で取得できるようにした。Accept: raw+json は
 // GitHubのContents APIで1〜100MBのファイルに対してもraw bytesを返す(1MB以下限定ではない)ため、
 // response.text() の代わりに response.blob() を使えばテキストと同じ経路で画像・PDFも読める。
@@ -11145,20 +10917,8 @@ async function hydrateStaticMarkdown() {
     if (ingestedThemesTotal) parts.push(`テーマ${ingestedThemesTotal}件を追加しました`);
     showToast(parts.join("・"));
   }
-  // v157: AI機能1「今日の敵」/ v158: AI機能2「勝手に格言」。どちらも実際の今日分のみ、
-  //      未取得なら1回だけfetchする(前日分の無条件fetchは行わない。ファイルが無い日は
-  //      404を静かに無視し、カード自体を出さない)。
-  //      2026-07-28レビュー対応・項目3(取得試行済みの明示化): `!cachedXxx[realToday]`という
-  //      falsy判定だけだと、fetch失敗/該当ファイル無しの日は値がundefinedのままキャッシュに
-  //      「登録されない」ため、日付をまたがず同一セッション内で再度hydrateStaticMarkdownが
-  //      走るたび(タブ切替・visibilitychange復帰等)に404を毎回再発行してしまっていた。
-  //      `realToday in cachedXxx`(キーの有無)で判定し、取得を試みたら成否に関わらず
-  //      `cachedXxx[realToday] = 値 || undefined`を明示代入することで、「1セッション1回だけ
-  //      試す」をコメントどおりの実挙動にする。
-  //      2026-07-28レビュー対応・項目4(並列化): 今日の敵と勝手に格言は別ファイル・別キャッシュで
-  //      互いに独立しているため、逐次awaitではなくPromise.allで並列fetchしレイテンシを縮める。
   // v159: 「未来からの手紙」は月次ファイルのため、判定キーは日付ではなく当月(YYYY-MM)。
-  //      今日の敵/勝手に格言と同じ「1セッション1回だけ試す」設計をそのまま月キーに適用する。
+  //      実際の当月分だけを、1セッション1回取得する。
   //      2026-07-28レビュー対応・必須修正3: GitHub(personal-data)連携が未設定
   //      (personalDataReady()===false)の間はどの`want*Fetch`も立てない。fetchGitHubRawText
   //      自体は未設定時に静かに空文字を返す(=フェッチ「済み」に見えてしまう)ため、これを
@@ -11166,24 +10926,15 @@ async function hydrateStaticMarkdown() {
   //      1回でもhydrateStaticMarkdownが走った時点で「取得試行済み(undefined)」がキャッシュに
   //      固定されてしまい、直後の`gate-continue`(セットアップ完了、449行目
   //      `syncFromGitHubOnStartup().then(() => hydrateStaticMarkdown())`)で再度呼ばれても
-  //      `realToday/realCurrentMonth in cachedXxx`が既にtrueのため二度とフェッチされなくなる
-  //      (今日の敵/勝手に格言/未来からの手紙が永久に出ない実害バグだった)。
+  //      `realCurrentMonth in cachedFutureLetterMd`が既にtrueのため二度とフェッチされなくなる。
   const ghReady = personalDataReady(state.settings.github);
   const realCurrentMonth = realToday.slice(0, 7);
-  const wantTodayEnemyFetch = ghReady && !(realToday in cachedTodayEnemyMd);
-  const wantQuoteFetch = ghReady && !(realToday in cachedQuoteJson);
   const wantFutureLetterFetch = ghReady && !(realCurrentMonth in cachedFutureLetterMd);
   const wantAiInsightsFetch = ghReady && (Date.now() - cachedAiInsightsJson.fetchedAt >= FEEDBACK_REFRESH_INTERVAL_MS);
-  const [todayEnemyMd, quoteRaw, futureLetterMd, aiInsightsRaw] = await Promise.all([
-    wantTodayEnemyFetch ? fetchGitHubRawText(`今日の敵_${realToday}.md`) : Promise.resolve(undefined),
-    wantQuoteFetch ? fetchGitHubRawText(`勝手に格言_${realToday}.json`) : Promise.resolve(undefined),
+  const [futureLetterMd, aiInsightsRaw] = await Promise.all([
     wantFutureLetterFetch ? fetchGitHubRawText(`未来からの手紙_${realCurrentMonth}.md`) : Promise.resolve(undefined),
     wantAiInsightsFetch ? fetchGitHubRawText("ai-insights.json").catch(() => undefined) : Promise.resolve(undefined),
   ]);
-  if (wantTodayEnemyFetch) {
-    cachedTodayEnemyMd[realToday] = todayEnemyMd || undefined;
-    if (todayEnemyMd) changed = true;
-  }
   if (wantFutureLetterFetch) {
     cachedFutureLetterMd[realCurrentMonth] = futureLetterMd || undefined;
     if (futureLetterMd) {
@@ -11202,26 +10953,6 @@ async function hydrateStaticMarkdown() {
         if (state.currentView === "ai-reports") render();
       }
     }
-  }
-  if (wantQuoteFetch) {
-    // 生成物はJSON契約(FORMAT_CONTRACT.md)だが、バッチ側の壊れ・仕様変更でもアプリが落ちない
-    // よう、JSON.parse失敗・オブジェクトでない・quote/author欠損はすべてフェイルソフトで
-    // 「取得できなかった扱い」(undefined)にする。"note"フィールドは信用しない(UI側で固定
-    // 文言を出す。quote-forge-validate.py冒頭コメントと対称の信頼境界)。
-    let parsedQuote;
-    if (quoteRaw) {
-      try {
-        const parsed = JSON.parse(quoteRaw);
-        if (parsed && typeof parsed.quote === "string" && parsed.quote.trim()
-          && typeof parsed.author === "string" && parsed.author.trim()) {
-          parsedQuote = { quote: parsed.quote.trim(), author: parsed.author.trim() };
-        }
-      } catch (e) {
-        // 壊れたJSON。フェイルソフト(parsedQuoteはundefinedのまま=カード非表示)。
-      }
-    }
-    cachedQuoteJson[realToday] = parsedQuote;
-    if (parsedQuote) changed = true;
   }
   if (wantAiInsightsFetch) {
     const parsedAiInsights = parseAiInsights(aiInsightsRaw);
@@ -11248,9 +10979,6 @@ async function hydrateStaticMarkdown() {
   // v67: AI作業結果_<今日>.json(柱2・実績還流)。当日分のみ、network-first(sw.jsのjson扱いを流用)。
   const gotAiWork = await hydrateAiWorkResults();
   if (gotAiWork) changed = true;
-  // v74: 読書複利化 — 今日のハイライト(初回のみ) + 当日の言語化(起動毎) + 今月の要約(月1回)
-  const gotReading = await hydrateReadingData();
-  if (gotReading) changed = true;
   // v37: state.view というプロパティは存在しない(正しくは currentView)。
   //      このタイポのせいで、ビジョン画面を開いたまま読み込みが終わっても再描画されなかった。
   // v86 should-fix: "zero"(0秒思考タブ)を追加。autoIngestFeedbackがテーマを自動追加しても、
@@ -12048,6 +11776,7 @@ function registerServiceWorker() {
 const modalRoot = document.querySelector("#modalRoot");
 
 // v238: 完全同型の標準モーダル骨格だけを共通化する。専用class/actionの骨格は呼び出し側に残す。
+// titleは呼び出し側でエスケープ済みであること(リテラル文字列のみ渡す)。
 function modalHeaderHTML(title) {
   return `<div class="modal-card" role="dialog" aria-modal="true">
       <div class="modal-header">
@@ -12700,7 +12429,10 @@ function saveBlockFromModal(id, fields) {
           : r);
     }
     state.blocks = state.blocks.map((b) => b.id === id ? updated : b);
-    if (!existing.completed && updated.completed) transferIronLogToCompletedBlock(id);
+    if (!existing.completed && updated.completed) {
+      transferIronLogToCompletedBlock(id);
+      generateReport(updated.date, { quiet: true });
+    }
     const rk = fields.recurrenceKind;
     // v23: "__keep__"・空・未指定 → この Block の編集のみ(シリーズ設定は不変)
     if (rk && rk !== "__keep__") {
