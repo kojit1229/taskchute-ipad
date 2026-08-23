@@ -75,3 +75,134 @@ function mergeByIdPreferNewer(localList, remoteList, tieWinner) {
 }
 
 export { mergeById, mergeByIdPreferNewer };
+
+function preferNewerRecord(local, remote, tieWinner) {
+  const localTs = local.updatedAt || "";
+  const remoteTs = remote.updatedAt || "";
+  if (remoteTs > localTs) return remote;
+  if (remoteTs < localTs) return local;
+  if (!!local.deleted !== !!remote.deleted) return remote.deleted ? remote : local;
+  return tieWinner === "remote" ? remote : local;
+}
+
+function recordsById(list) {
+  const records = new Map();
+  (Array.isArray(list) ? list : []).forEach((record) => {
+    if (record && record.id) records.set(record.id, record);
+  });
+  return records;
+}
+
+function sameRecordContent(a, b) {
+  if (a === b) return true;
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  return aKeys.length === bKeys.length
+    && aKeys.every((key) => Object.prototype.hasOwnProperty.call(b, key) && a[key] === b[key]);
+}
+
+function sameRecordArrayContent(a, b) {
+  return Array.isArray(a) && a.length === b.length
+    && a.every((record, index) => sameRecordContent(record, b[index]));
+}
+
+function changedFieldWinner(local, remote, changedAtField, base) {
+  const localChangedAt = local[changedAtField] || "";
+  const remoteChangedAt = remote[changedAtField] || "";
+  if (remoteChangedAt > localChangedAt) return remote;
+  if (remoteChangedAt < localChangedAt) return local;
+  return base;
+}
+
+function mergeMilestonePair(local, remote, tieWinner) {
+  const base = preferNewerRecord(local, remote, tieWinner);
+  const doneSource = changedFieldWinner(local, remote, "doneChangedAt", base);
+  if (doneSource.doneAt === base.doneAt && doneSource.doneChangedAt === base.doneChangedAt) return base;
+  return { ...base, doneAt: doneSource.doneAt, doneChangedAt: doneSource.doneChangedAt };
+}
+
+function mergeMilestones(localList, remoteList, winner, tieWinner) {
+  const local = recordsById(localList);
+  const remote = recordsById(remoteList);
+  const winnerIsRemote = winner === "remote";
+  const winnerRecords = winnerIsRemote ? remote : local;
+  const loserRecords = winnerIsRemote ? local : remote;
+  const merged = [];
+  winnerRecords.forEach((record, id) => {
+    const localRecord = local.get(id);
+    const remoteRecord = remote.get(id);
+    merged.push(localRecord && remoteRecord
+      ? mergeMilestonePair(localRecord, remoteRecord, tieWinner)
+      : record);
+  });
+  loserRecords.forEach((record, id) => {
+    if (!winnerRecords.has(id)) merged.push(record);
+  });
+  return merged;
+}
+
+function mergeTracksPreferNewer(localArr, remoteArr, tieWinner) {
+  const merged = recordsById(localArr);
+  recordsById(remoteArr).forEach((remote, id) => {
+    const local = merged.get(id);
+    if (!local) { merged.set(id, remote); return; }
+    const winner = preferNewerRecord(local, remote, tieWinner);
+    const winnerSide = winner === remote ? "remote" : "local";
+    const milestones = mergeMilestones(local.milestones, remote.milestones, winnerSide, tieWinner);
+    merged.set(id, sameRecordArrayContent(milestones, winner.milestones)
+      ? winner
+      : { ...winner, milestones });
+  });
+  return Array.from(merged.values());
+}
+
+const SOURCE_PRIORITY = { auto: 0, confirmed: 1, added: 2 };
+const LANE_PRIORITY = { task: 0, cycle: 1 };
+
+function higherPriorityValue(base, other, field, priorities) {
+  return (priorities[other[field]] ?? -1) > (priorities[base[field]] ?? -1)
+    ? other[field]
+    : base[field];
+}
+
+function mergeCommitmentItem(local, remote, tieWinner) {
+  const base = preferNewerRecord(local, remote, tieWinner);
+  const other = base === local ? remote : local;
+  const excusedSource = changedFieldWinner(local, remote, "excusedChangedAt", base);
+  const completedSource = changedFieldWinner(local, remote, "completedChangedAt", base);
+  const fields = {
+    excused: excusedSource.excused,
+    excusedReason: excusedSource.excusedReason,
+    excusedChangedAt: excusedSource.excusedChangedAt,
+    completedAt: completedSource.completedAt,
+    completedChangedAt: completedSource.completedChangedAt,
+    source: higherPriorityValue(base, other, "source", SOURCE_PRIORITY),
+    lane: higherPriorityValue(base, other, "lane", LANE_PRIORITY)
+  };
+  return Object.keys(fields).every((field) => fields[field] === base[field])
+    ? base
+    : { ...base, ...fields };
+}
+
+function mergeWeeklyCommitmentPair(local, remote, tieWinner) {
+  if (local.recordType === "week" && remote.recordType === "week") {
+    if (local.committedVia === "manual" && remote.committedVia === "auto") return local;
+    if (remote.committedVia === "manual" && local.committedVia === "auto") return remote;
+    return preferNewerRecord(local, remote, tieWinner);
+  }
+  if (local.recordType === "item" && remote.recordType === "item") {
+    return mergeCommitmentItem(local, remote, tieWinner);
+  }
+  return preferNewerRecord(local, remote, tieWinner);
+}
+
+function mergeWeeklyCommitments(localArr, remoteArr, tieWinner) {
+  const merged = recordsById(localArr);
+  recordsById(remoteArr).forEach((remote, id) => {
+    const local = merged.get(id);
+    merged.set(id, local ? mergeWeeklyCommitmentPair(local, remote, tieWinner) : remote);
+  });
+  return Array.from(merged.values());
+}
+
+export { mergeTracksPreferNewer, mergeWeeklyCommitments };

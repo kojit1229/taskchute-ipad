@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v241";
+const CACHE_NAME = "taskchute-journal-pwa-v242";
+// v242: 12WY二軸MVPの特殊マージ純関数2件をsrc/core/merge.jsへ追加した(APP_SHELL変更なし)。
 // v241: TodayフォーカスモードとPC時のCABIN TIMER右列表示を追加した(APP_SHELL変更なし)。
 // v240: Today ATISからMIT候補チップ2系統と採用actionを撤去した(APP_SHELL変更なし)。
 // v239: 12WY二軸MVPの純関数track.jsを追加し、オフライン配信用APP_SHELLへ登録した。

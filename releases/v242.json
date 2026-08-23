@@ -1,0 +1,49 @@
+{
+  "version": 242,
+  "date": "2026-08-23",
+  "title": "12WY特殊マージ純関数",
+  "summary": "12WY二軸MVPのトラック節目と週間コミットを端末間で決定論的に合成する特殊マージ純関数2件を追加した。",
+  "changedFiles": [
+    "docs/test-impact-map.generated.md",
+    "releases/v242.json",
+    "src/core/merge.js",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/track-merge-core.test.js"
+  ],
+  "intent": [
+    "単位#3の同期結線に先立ち、親レコードLWWを維持しながら節目と週間コミットの独立編集を失わず合成できる葉の純粋関数を確立する。",
+    "内容不変時の勝者レコード参照を維持し、sameArrayByReferenceを使う既存同期経路で不要なstate更新を発生させない。"
+  ],
+  "changes": [
+    "src/core/merge.jsへmergeTracksPreferNewerを追加し、親トラックは既存LWW、milestonesはid和集合とdone系／その他フィールドの独立マージ、同秒tieのtombstone優先とtieWinner、内容不変時の参照安定性を実装した。",
+    "src/core/merge.jsへmergeWeeklyCommitmentsを追加し、weekのmanual優先、itemのexcused／completed独立マージ、source added>confirmed>auto、lane cycle>task、tombstone、ChangedAt同秒ベース優先、参照安定性を実装した。",
+    "tests/track-merge-core.test.jsを新設し、仕様§6.1と単位#2で指定された15 assertionをfast-nodeで固定した。",
+    "Service WorkerのCACHE_NAMEをv242へ更新し、既存APP_SHELLのsrc/core/merge.js登録は変更しなかった。",
+    "test manifestとtest impact mapを再生成し、track-merge-coreをsync-storage領域へ登録した。"
+  ],
+  "uncertainties": [
+    "依頼文のsrc/sync/merge.jsは現リポジトリに存在せず、仕様が示すmerge.js:51-75、既存import、APP_SHELLはいずれもsrc/core/merge.jsを指すため、既存の葉モジュールsrc/core/merge.jsへ実装した。",
+    "単位#2の制約どおりgithub.jsへのimport・同期結線、normalizeState、app.jsは変更していない。"
+  ],
+  "reviewFocus": [
+    "親トラックとweek/itemのベース選択がupdatedAt、同値tombstone、tieWinnerの既存規則と一致するか。",
+    "milestoneのdone系とその他フィールド、itemのexcused系とcompleted系が独立に合成され、空ChangedAtと同秒tieが仕様どおり決着するか。",
+    "sourceとlaneが優先順位から後退せず、フィールド合成が不要な場合に勝者／ベースのレコード参照そのものを返すか。",
+    "state/store import、新しいAPP_SHELL項目、github.js・normalizeState・app.jsへの差分が無いか。"
+  ],
+  "verification": [
+    "node tests/track-merge-core.test.js: 15 assertion全件PASS、exit 0。",
+    "node tests/run-all.js track-merge-core merge-core store-core: 3 suite全件PASS。",
+    "標準Playwright Chromiumのv72/v135/v136はbrowser spawn EPERMを確認し、CHROME_PATHをsystem Edgeへ切り替えた同3 suiteは全件PASS、exit 0。",
+    "npm.cmd run test:manifest:write/check: PASS(test manifest 135 suites)。",
+    "npm.cmd run code:index:write/check: PASS(code index 559 functions、生成差分なし)。",
+    "system Edge指定のnode scripts/release-gate.js releases/v242.json --final: exit 0。",
+    "実行コード差分はsrc/core/merge.jsの131行追加で200行以下。"
+  ],
+  "knownLimitations": [
+    "本版は純粋関数の追加のみで、state.tracks／trackMeasurements／weeklyCommitmentsへの同期結線は単位#3で実施する。",
+    "taskchute-notes/handoff.mdがワークスペース外でEPERMになる場合、notes側更新は監督者が再実行する。",
+    "iOS Safari実機PWAでのService Worker更新とオフライン起動は監督者側で確認が必要。"
+  ]
+}
