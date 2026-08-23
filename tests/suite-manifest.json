@@ -587,9 +587,9 @@
         "journal-health",
         "ui-responsive"
       ],
-      "assertionSignals": 128,
-      "assertionHash": "9f6f2eb98518cd9a",
-      "sourceHash": "b04c228347499f29",
+      "assertionSignals": 135,
+      "assertionHash": "bdde788569398fbb",
+      "sourceHash": "bff0073eea8d2cf7",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -610,9 +610,9 @@
       "domains": [
         "legacy-crosscutting"
       ],
-      "assertionSignals": 6,
-      "assertionHash": "731e37b03928ef69",
-      "sourceHash": "b3e4fa507f156e10",
+      "assertionSignals": 7,
+      "assertionHash": "1cdca5f5c8452300",
+      "sourceHash": "45c03dba3d946adb",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

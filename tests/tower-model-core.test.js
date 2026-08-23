@@ -66,6 +66,8 @@ function minutesOf(value) {
   equal("定刻ちょうどは最終進入", [byId.exact.status, byId.exact.label], ["final", "最終進入"]);
   equal("実行中は着陸中", [byId.running.status, byId.running.label], ["landing", "着陸中"]);
   equal("完了は到着（実行中条件より優先）", [byId.done.status, byId.done.label], ["arrived", "到着"]);
+  const endedOnly = towerFlights([{ id: "ended-only", title: "終了のみ", actualEndAt: "2026-08-14T09:30" }], 10 * 60, { minutesOf })[0];
+  equal("actualEndAtのみでも到着扱い", [endedOnly.status, endedOnly.label], ["arrived", "到着"]);
   equal("定刻過ぎ未着手はリスロット", [byId.late.status, byId.late.label], ["resloted", "リスロット"]);
   equal("2便目以降の未来は待機", [byId["future-a"].status, byId["future-b"].status], ["holding", "holding"]);
   equal("予定なしは末尾・待機・plannedMin=null", [first.at(-1).id, first.at(-1).status, first.at(-1).plannedMin], ["no-plan", "holding", null]);
@@ -76,10 +78,12 @@ function minutesOf(value) {
     { id: "q5", plannedStartAt: "11:00" }, { id: "q3", plannedStartAt: "09:00", orderIndex: 1 },
     { id: "q1", plannedStartAt: "08:00" }, { id: "q4", plannedStartAt: "10:00" },
     { id: "stale", plannedStartAt: "07:00", stale: true }, { id: "tap", oneTap: true },
-    { id: "routine", category: "ルーティン" }, { id: "done-q", completed: true }, { id: "run-q", actualStartAt: "09:00" }
+    { id: "routine", category: "ルーティン" }, { id: "done-q", completed: true }, { id: "run-q", actualStartAt: "09:00" },
+    { id: "ended-q", actualEndAt: "09:30" }
   ];
   const queue = queueBlocksOf(queueInput, { minutesOf, isStaleBlock: (block) => Boolean(block.stale) });
   equal("対象だけを予定時刻・orderIndex順に5件返す", queue.map((x) => x.id), ["q1", "q3", "q2", "q4", "q5"]);
+  check("actualEndAt付きBlockはNEXT QUEUEから除外", !queue.some((block) => block.id === "ended-q"));
 
   console.log("[5] projectedInfoの翌日跨ぎ表記");
   const projected = projectedInfo(

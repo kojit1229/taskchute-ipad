@@ -1,0 +1,59 @@
+{
+  "version": 249,
+  "date": "2026-08-23",
+  "title": "Today終了実績・予定Task表示",
+  "summary": "Todayの3パネルでactualEndAtを終了実績の正典として扱い、見積時間付きの未Block化TaskをARRIVALSから既存の今日へ追加導線へ接続した。",
+  "changedFiles": [
+    "CHANGES_v249.md",
+    "app.js",
+    "docs/test-impact-map.generated.md",
+    "releases/v249.json",
+    "src/core/today-model.js",
+    "src/features/today-tower.js",
+    "src/features/today.js",
+    "styles.css",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/tower-core.test.js",
+    "tests/tower-model-core.test.js"
+  ],
+  "intent": [
+    "「■ 終了」でactualEndAtだけが記録されたBlockも実績としてFLIGHT LOGへ残し、ARRIVALSとNOW LANDINGの未終了候補から外す。",
+    "Taskの既存estimateMinを予定時間として読み、当日までが期日の未完了・未Block化TaskをARRIVALSから既存task-todayへ1タップで追加できるようにする。",
+    "completedの意味論、保存・同期、既存完了フックを変更しない。"
+  ],
+  "changes": [
+    "ARRIVALSのBlock候補をcompletedなしに加えてactualEndAtなしへ限定し、FLIGHT LOGはactualEndAtがある全Blockを終了時刻順に表示するよう変更した。",
+    "FLIGHT LOGへcompleted=trueの「完了」とcompletedなしの「終了」を区別するラベルを追加し、見出し・空表示・フッタを終了実績基準へ更新した。",
+    "queueBlocksOfへactualEndAt除外を追加し、towerFlightsではactualEndAt付きBlockをcompletedの有無にかかわらず到着扱いにした。",
+    "TaskデータのestimateMinが正の有限値、dueDateが当日以前、未完了・未削除・受け皿Task以外、当日Block未生成という条件で予定行を合成した。",
+    "予定行はBlockを生成しない読み取り表示とし、行全体のdata-action=task-todayで既存createBlockFromTaskを呼ぶ。Block生成後はtaskId重複判定で予定行から消える。",
+    "予定行へ破線と薄いcyan背景、FLIGHT LOGへ完了/終了の控えめな状態色を追加した。",
+    "tower-coreとtower-model-coreへ終了のみBlock、従来完了、NEXT除外、予定Task表示・重複除外・既存action到達のassertionを追加した。既存assertionは削除・skip・弱体化していない。",
+    "Service WorkerのCACHE_NAMEをv249へ更新した。"
+  ],
+  "uncertainties": [
+    "Taskには予定開始時刻フィールドがなく、既存の予定時間データはestimateMin(分)だけだった。通常Task編集モーダルにはestimateMin入力がないため、現状はAI提案など既存経路で値を持つTaskだけが対象になる。",
+    "当日のARRIVALSには期日が当日以前のTaskを出し、未来期日のTaskは見積時間があっても除外する。"
+  ],
+  "reviewFocus": [
+    "actualEndAt付きBlockがcompletedの有無を問わずARRIVALS/NEXTから外れ、FLIGHT LOGだけに終了時刻順で出るか。",
+    "completed=trueかつactualEndAtありの従来完了便が完了ラベルで従来どおり表示されるか。",
+    "予定Task行がstateやBlockを描画だけで変更せず、タップ時だけ既存task-todayからBlockを生成して二重表示が消えるか。",
+    "Taskの対象条件が未完了・未削除・kind!=other・dueDate<=当日・estimateMin>0・当日taskId Blockなしに限定されているか。",
+    "新規個別イベント、日時文字列パース、stateフィールド、保存・同期・completed代入が混入していないか。",
+    "390/768/1024pxで4列の予定行とFLIGHT LOG状態列が横幅を押し広げないか。"
+  ],
+  "verification": [
+    "node --check app.js、src/core/today-model.js、src/features/today.js、src/features/today-tower.js、tests/tower-core.test.js、tests/tower-model-core.test.js、sw.js: PASS。",
+    "node tests/tower-model-core.test.js: 全件PASS。",
+    "system Edge指定 node tests/tower-core.test.js: 新規7 assertionを含めALL PASS。",
+    "system Edge指定 node tests/today-core.test.js: ポモドーロ満了後もactualEndAtを書かずNOW LANDINGに残る既存契約を含めALL PASS。",
+    "npm.cmd run code:index:write/check、npm.cmd run test:manifest:write/check: PASS(code index 568 functions、test manifest 135 suites)。"
+  ],
+  "knownLimitations": [
+    "通常Task編集画面にはestimateMinの入力欄がないため、予定行へ出す見積時間をアプリ内で直接設定する導線は今回追加していない。",
+    "iOS Safari実機PWAでのService Worker更新、390px実機での予定行・FLIGHT LOG状態列の最終視認確認は監督者側で必要。",
+    "taskchute-notes/handoff.mdがワークスペース外でEPERMになる場合、notes側更新は監督者が再実行する。"
+  ]
+}

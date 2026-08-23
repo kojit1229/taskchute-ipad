@@ -10,6 +10,7 @@ let renderTodayPomodoro;
 let todayFocusVisibility, renderTodayFocusBar;
 let journalForDate;
 let gateRules, earlyBirdLogForDate, earlyRiseTarget, linkedGymBlock, gateEditMode;
+let scheduledTasksForDate;
 let flipListenerBound = false;
 // undefined=セッション初回(未観測)。復元描画では接地の瞬間ではないためフラッシュを出さない
 // (起動時同期404後の全体render()と競合して非決定にもなる)。null=実行中なしを観測済み。
@@ -25,7 +26,7 @@ function configureTodayTower(deps) {
     escapeHTML, todayISO, syncAlertBanner, renderAtisPanel, blocksForDate, towerFlights,
     runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp,
     towerMotionSetting, renderTodayPomodoro, todayFocusVisibility, renderTodayFocusBar, journalForDate,
-    gateRules, earlyBirdLogForDate, earlyRiseTarget, linkedGymBlock, gateEditMode
+    gateRules, earlyBirdLogForDate, earlyRiseTarget, linkedGymBlock, scheduledTasksForDate, gateEditMode
   } = deps);
   if (!flipListenerBound && typeof document !== "undefined") {
     document.addEventListener("animationend", (event) => {
@@ -64,12 +65,17 @@ function isNightHour(hour) {
   return hour >= 21 || hour < 5;
 }
 
-function boardFlights(blocks, nowMin) {
-  const candidates = blocks.filter((block) => !block.completed && block.category !== "ルーティン" && !block.oneTap);
+function boardFlights(blocks, nowMin, tasks = []) {
+  const candidates = blocks.filter((block) => !block.completed && !block.actualEndAt && block.category !== "ルーティン" && !block.oneTap);
   const byId = new Map(candidates.map((block) => [String(block.id), block]));
-  return towerFlights(candidates, nowMin).map((flight) => ({
+  const blockFlights = towerFlights(candidates, nowMin).map((flight) => ({
     ...flight, estimateMin: resolveEstimateMin(byId.get(String(flight.id)))
   }));
+  const taskFlights = tasks.map((task) => ({
+    id: `task:${task.id}`, taskId: task.id, kind: "task-plan", title: task.title,
+    plannedMin: null, estimateMin: Number(task.estimateMin), status: "scheduled", label: "予定"
+  }));
+  return [...blockFlights, ...taskFlights];
 }
 
 function arrivalWindow(flights) {
@@ -79,6 +85,7 @@ function arrivalWindow(flights) {
   // レビューM1反映: 全便未着手のまま時間が過ぎた日は「直近の過去便(最後のリスロット)」を中心にする(朝への張り付き防止)。
   if (center < 0) for (let i = flights.length - 1; i >= 0; i--) if (flights[i].status === "resloted") { center = i; break; }
   if (center < 0) center = flights.findIndex((flight) => flight.status === "holding");
+  if (center < 0) center = flights.findIndex((flight) => flight.status === "scheduled");
   if (center < 0) center = flights.length - 1;
   const rows = flights.slice(Math.max(0, center - 5), center + 6);
   return { rows, omitted: flights.length - rows.length };
@@ -155,6 +162,12 @@ function renderTowerRunway(now, blocks) {
 
 function flightRow(flight) {
   const status = `<span class="tower-status" data-status="${escapeHTML(flight.status)}">${escapeHTML(flight.label)}</span>`;
+  if (flight.kind === "task-plan") {
+    return `<button type="button" class="tower-flight-row tower-arrival-row tower-task-plan" data-flight-id="${escapeHTML(flight.id)}" data-kind="task-plan" data-status="scheduled" data-action="task-today" data-id="${escapeHTML(flight.taskId)}">
+      <time>--:--</time><span class="tower-flight-title">${escapeHTML(flight.title)}</span>
+      <span class="tower-flight-est">${escapeHTML(flight.estimateMin)}分</span>${status}
+    </button>`;
+  }
   return `<div class="tower-flight-row tower-arrival-row" data-flight-id="${escapeHTML(flight.id)}" data-status="${escapeHTML(flight.status)}">
     <time>${flightTime(flight.plannedMin)}</time>
     <button type="button" class="tower-flight-title" data-action="edit-block" data-id="${escapeHTML(flight.id)}">${escapeHTML(flight.title)}</button>
@@ -189,7 +202,7 @@ function flightLogDuration(block) {
 
 function renderFlightLog(date, blocks) {
   const completed = blocks
-    .filter((block) => block.completed && block.actualEndAt)
+    .filter((block) => block.actualEndAt)
     .sort((a, b) => String(a.actualEndAt).localeCompare(String(b.actualEndAt)));
   const keys = new Set(completed.map((block) => `${block.id}:${block.actualEndAt}`));
   const latest = completed[completed.length - 1];
@@ -205,13 +218,14 @@ function renderFlightLog(date, blocks) {
     return `<div class="tower-log-row${isLatest ? " is-flip" : ""}" data-flight-id="${escapeHTML(block.id)}">
       <time>${start}-${end}</time><span class="tower-log-title">${escapeHTML(block.title)}</span>
       <span class="tower-log-dur">${flightLogDuration(block)}</span>
+      <span class="tower-log-state" data-state="${block.completed ? "completed" : "ended"}">${block.completed ? "完了" : "終了"}</span>
       ${isLatest ? '<i class="tower-touchdown" aria-hidden="true" style="--tower-plane-x:50%"></i>' : ""}
     </div>`;
   }).join("");
   return `<section class="tower-panel-box sec-log">
-    <h2>FLIGHT LOG <span>本日の航跡・完了便のみ</span></h2>
-    <div id="towerFlightLog">${rows || '<div class="tower-log-empty">完了便はまだありません</div>'}</div>
-    <div class="tower-log-foot">タスク完了のたびに自動追記 — 同時に日報mdを再生成</div>
+    <h2>FLIGHT LOG <span>本日の航跡・終了実績</span></h2>
+    <div id="towerFlightLog">${rows || '<div class="tower-log-empty">終了実績はまだありません</div>'}</div>
+    <div class="tower-log-foot">終了実績を時系列で表示</div>
   </section>`;
 }
 
@@ -317,7 +331,7 @@ function renderTodayTower() {
   const date = escapeHTML(today);
   const blocks = blocksForDate(today);
   const nowMin = now.getHours() * 60 + now.getMinutes();
-  const flights = boardFlights(blocks, nowMin);
+  const flights = boardFlights(blocks, nowMin, scheduledTasksForDate(today, blocks));
   const focusVisibility = todayFocusVisibility();
   const pomodoroRight = !focusVisibility.atis && !focusVisibility.journal;
   const weekday = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
@@ -407,7 +421,7 @@ function updateTodayTowerTick() {
   }
   updateTowerRunway(now, blocks);
   updateTowerGates(blocks);
-  const flights = boardFlights(blocks, nowMin);
+  const flights = boardFlights(blocks, nowMin, scheduledTasksForDate(todayISO(), blocks));
   const container = document.getElementById("towerArrivalRows");
   const rows = [...document.querySelectorAll(".tower-arrival-row")];
   const current = arrivalWindow(flights).rows;

@@ -248,7 +248,7 @@ configureGithubSync({
 configureToday({
   escapeHTML, todayISO, blocksForDate, minutesOf, timeFromDateTime,
   localDateTimeToMs, resolveEstimateMin,
-  clamp, isStaleBlock, renderDeferringForFocus,
+  clamp, isStaleBlock, isTaskDead, renderDeferringForFocus,
   renderCircularProgress, remainingText, remainingTextNormal,
   renderPomodoroInterruptControls,
   syncAlertBanner,

@@ -14,7 +14,7 @@ function runningBlockOf(blocks, helpers) {
 
 function queueBlocksOf(blocks, helpers) {
   return (blocks || [])
-    .filter((b) => !b.completed && !b.actualStartAt && !helpers.isStaleBlock(b) && !b.oneTap && b.category !== "ルーティン")
+    .filter((b) => !b.completed && !b.actualStartAt && !b.actualEndAt && !helpers.isStaleBlock(b) && !b.oneTap && b.category !== "ルーティン")
     .sort((a, b) => {
       const aMin = a.plannedStartAt ? helpers.minutesOf(a.plannedStartAt) : Number.POSITIVE_INFINITY;
       const bMin = b.plannedStartAt ? helpers.minutesOf(b.plannedStartAt) : Number.POSITIVE_INFINITY;
@@ -94,7 +94,7 @@ function towerFlights(blocks, nowMin, helpers) {
   let finalAssigned = false;
   return sorted.map(({ block, plannedMin }, index) => {
     let status = "holding", label = "待機";
-    if (block.completed) { status = "arrived"; label = "到着"; }
+    if (block.completed || block.actualEndAt) { status = "arrived"; label = "到着"; }
     else if (block.actualStartAt && !block.actualEndAt) { status = "landing"; label = "着陸中"; }
     else if (!block.actualStartAt && plannedMin !== null && plannedMin < nowMin) { status = "resloted"; label = "リスロット"; }
     else if (!block.actualStartAt && plannedMin !== null && plannedMin >= nowMin && !finalAssigned) {

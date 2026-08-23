@@ -49,13 +49,14 @@ function check(name, cond, extra = "") {
     return page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).settings.todaySkin, KEY);
   }
 
-  async function seedBoard(arrivals, departures = []) {
-    await page.evaluate(({ KEY, arrivals, departures }) => {
+  async function seedBoard(arrivals, departures = [], tasks = null) {
+    await page.evaluate(({ KEY, arrivals, departures, tasks }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.currentView = "today";
       s.blocks = [...arrivals, ...departures];
+      if (tasks) s.tasks = tasks;
       localStorage.setItem(KEY, JSON.stringify(s));
-    }, { KEY, arrivals, departures });
+    }, { KEY, arrivals, departures, tasks });
     await page.reload();
     await page.waitForSelector(".today-tower", { state: "attached" });
   }
@@ -250,6 +251,37 @@ function check(name, cond, extra = "") {
     await page.locator('.modal-card [data-action="modal-close"]').first().click();
     await page.waitForSelector(".modal-card", { state: "detached" });
 
+    console.log("[8-b] 終了のみBlockと見積時間付き未Block化Taskを3パネルへ反映する");
+    const endedOnlyBlock = block("ended-only", "終了のみ便", today, 9 * 60, {
+      actualStartAt: atMinute(today, 9 * 60), actualEndAt: atMinute(today, 9 * 60 + 20)
+    });
+    const completedBlock = block("completed-actual", "完了実績便", today, 9 * 60 + 30, {
+      completed: true, actualStartAt: atMinute(today, 9 * 60 + 30), actualEndAt: atMinute(today, 10 * 60)
+    });
+    const nextBlock = block("next-open", "次のBlock", today, 13 * 60);
+    const taskBlock = block("already-blocked", "Block生成済みTask", today, 14 * 60, { taskId: "task-blocked" });
+    const tasks = [
+      { id: "task-plan", title: "予定時間付きTask", status: "todo", dueDate: today, estimateMin: 35, deleted: false },
+      { id: "task-blocked", title: "Block生成済みTask", status: "todo", dueDate: today, estimateMin: 40, deleted: false },
+      { id: "task-no-estimate", title: "見積なしTask", status: "todo", dueDate: today, estimateMin: null, deleted: false },
+      { id: "task-future", title: "未来期日Task", status: "todo", dueDate: tomorrow, estimateMin: 50, deleted: false }
+    ];
+    await seedBoard([endedOnlyBlock, completedBlock, nextBlock, taskBlock], departures, tasks);
+    check("終了のみBlockはARRIVALSから消える", await page.locator('[data-flight-id="ended-only"].tower-arrival-row').count() === 0);
+    check("終了のみBlockはFLIGHT LOGへ終了ラベル付きで出る", await page.locator('[data-flight-id="ended-only"] .tower-log-state[data-state="ended"]', { hasText: "終了" }).count() === 1);
+    check("completed+actualEndAtは従来どおり完了実績として出る", await page.locator('[data-flight-id="completed-actual"] .tower-log-state[data-state="completed"]', { hasText: "完了" }).count() === 1);
+    const runwayReadyId = await page.locator('.tower-nowhud[data-status="ready"] [data-action="now-start"]').getAttribute("data-id");
+    check("NOW LANDINGは終了のみBlockでなく次の未着手Blockを選ぶ", runwayReadyId === "next-open", `actual=${runwayReadyId}`);
+    const taskPlan = page.locator('.tower-task-plan[data-id="task-plan"]');
+    check("見積時間付き未Block化Taskは予定行でARRIVALSへ出る", await taskPlan.count() === 1
+      && (await taskPlan.locator(".tower-flight-est").textContent()) === "35分"
+      && (await taskPlan.locator(".tower-status").textContent()) === "予定");
+    check("Block生成済み・見積なし・未来期日のTaskは予定行に出ない",
+      await page.locator('.tower-task-plan[data-id="task-blocked"], .tower-task-plan[data-id="task-no-estimate"], .tower-task-plan[data-id="task-future"]').count() === 0);
+    await taskPlan.click();
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).blocks.some((item) => item.taskId === "task-plan"), KEY);
+    check("予定行タップは既存task-todayでBlockを生成し二重表示を消す", await page.locator('.tower-task-plan[data-id="task-plan"]').count() === 0);
+
     console.log("[9] DEPARTURESは明日便を1行縮約しtasksタブを明日で開く");
     const departuresLine = page.locator('.tower-departures[data-action="departures-open-tomorrow"]');
     check("DEPARTURESは1行だけ", await departuresLine.count() === 1 && await page.locator(".tower-departure-row").count() === 0);
@@ -266,7 +298,7 @@ function check(name, cond, extra = "") {
     console.log("[10] tickerは行を再構築せず状態文字列をフリップ更新する");
     const crossing = [block("flip-first", "境界便", today, 12 * 60), block("flip-next", "次便", today, 13 * 60)];
     await page.clock.setFixedTime(fixedTime(0));
-    await seedBoard(crossing);
+    await seedBoard(crossing, [], []);
     // 起動時同期(404)後のアプリ全体render()がDOMを一度差し替えるため、沈静化してから同一性を計測する。
     await page.waitForLoadState("networkidle");
     const crossingStatus = page.locator('.tower-arrival-row[data-flight-id="flip-first"] .tower-status');

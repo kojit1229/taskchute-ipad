@@ -2966,6 +2966,8 @@ h3 {
 .tower-flight-title:focus-visible { outline: 2px solid var(--tower-amber); outline-offset: -2px; }
 .tower-flight-est { justify-self: end; padding-right: 6px; font-variant-numeric: tabular-nums; opacity: .55; white-space: nowrap; }
 .tower-status { justify-self: end; padding-right: 8px; color: var(--tower-text); opacity: .55; transform-origin: center; }
+.tower-task-plan { width: 100%; padding: 0; color: var(--tower-text); font: inherit; text-align: left; background: color-mix(in srgb, var(--tower-cyan) 5%, transparent); border-style: dashed; cursor: pointer; }
+.tower-task-plan:hover, .tower-task-plan:focus-visible { background: color-mix(in srgb, var(--tower-cyan) 10%, transparent); outline: 1px solid var(--tower-cyan); outline-offset: -1px; }
 .tower-status[data-status="final"],
 .tower-status[data-status="resloted"] { color: var(--tower-amber); opacity: 1; }
 .tower-status[data-status="landing"] { color: var(--tower-green); opacity: 1; }
@@ -2973,10 +2975,12 @@ h3 {
 .tower-status.is-flip { animation: tower-board-flip 600ms ease-out; }
 .tower-flight-summary { padding: 7px 10px; border-top: 1px solid var(--tower-line); color: var(--tower-text); font-size: 10px; text-align: right; opacity: .6; }
 .tower-flight-summary:empty { display: none; }
-.tower-log-row { position: relative; display: grid; grid-template-columns: 100px minmax(0, 1fr) 52px; align-items: center; min-height: 36px; border-bottom: 1px solid var(--tower-line); font-size: 11px; }
+.tower-log-row { position: relative; display: grid; grid-template-columns: 100px minmax(0, 1fr) 52px 40px; align-items: center; min-height: 36px; border-bottom: 1px solid var(--tower-line); font-size: 11px; }
 .tower-log-row:last-child { border-bottom: 0; }
 .tower-log-row time { padding-left: 8px; font-variant-numeric: tabular-nums; opacity: .6; }
 .tower-log-title { padding: 0 6px; overflow: hidden; font-family: system-ui, sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.tower-log-state { justify-self: end; padding-right: 8px; color: var(--tower-green); opacity: .72; }
+.tower-log-state[data-state="ended"] { color: var(--tower-cyan); }
 .tower-log-dur { justify-self: end; padding-right: 8px; color: var(--tower-green); font-variant-numeric: tabular-nums; }
 .tower-log-row.is-flip { animation: tower-board-flip 600ms ease-out 1; }
 .tower-log-row .tower-touchdown { left: var(--tower-plane-x, 50%); }

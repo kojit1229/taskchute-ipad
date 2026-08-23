@@ -12,7 +12,7 @@ import {
 
 let escapeHTML, todayISO, blocksForDate, minutesOf, timeFromDateTime;
 let localDateTimeToMs, resolveEstimateMin;
-let clamp, isStaleBlock, renderDeferringForFocus;
+let clamp, isStaleBlock, isTaskDead, renderDeferringForFocus;
 let renderCircularProgress, remainingText, remainingTextNormal;
 let renderPomodoroInterruptControls;
 let syncAlertBanner, renderAtisPanel;
@@ -86,7 +86,7 @@ function configureToday(deps) {
   ({
     escapeHTML, todayISO, blocksForDate, minutesOf, timeFromDateTime,
     localDateTimeToMs, resolveEstimateMin,
-    clamp, isStaleBlock, renderDeferringForFocus,
+    clamp, isStaleBlock, isTaskDead, renderDeferringForFocus,
     renderCircularProgress, remainingText, remainingTextNormal,
     renderPomodoroInterruptControls,
     syncAlertBanner, renderAtisPanel, gateEditMode
@@ -106,6 +106,15 @@ function configureToday(deps) {
     earlyBirdLogForDate: (date) => state.earlyBird?.logs?.[date] || null,
     earlyRiseTarget: () => state.settings.earlyRiseTarget,
     linkedGymBlock: (blocks, nowMinutes) => linkedGymBlock({ settings: state.settings, blocks }, nowMinutes),
+    scheduledTasksForDate: (date, blocks) => {
+      const blockedTaskIds = new Set((blocks || []).map((block) => block.taskId).filter(Boolean));
+      return (state.tasks || []).filter((task) => {
+        const estimate = Number(task.estimateMin);
+        return !task.deleted && !isTaskDead(task) && task.kind !== "other"
+          && Boolean(task.dueDate) && task.dueDate <= date
+          && Number.isFinite(estimate) && estimate > 0 && !blockedTaskIds.has(task.id);
+      }).sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.title.localeCompare(b.title, "ja"));
+    },
     gateEditMode
   });
   registerActions({

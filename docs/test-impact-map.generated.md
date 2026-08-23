@@ -27,8 +27,8 @@
 | timeline-tick-wiring.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 16 | 8 | 4500 |
 | today-core.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 137 | 2 | 3600 |
 | topband-core.test.js | node | full | sync-storage, planning-execution, journal-health | 46 | 0 | 0 |
-| tower-core.test.js | e2e | full | sync-storage, journal-health, ui-responsive | 128 | 0 | 0 |
-| tower-model-core.test.js | node | full | legacy-crosscutting | 6 | 0 | 0 |
+| tower-core.test.js | e2e | full | sync-storage, journal-health, ui-responsive | 135 | 0 | 0 |
+| tower-model-core.test.js | node | full | legacy-crosscutting | 7 | 0 | 0 |
 | track-commit-core.test.js | node | full | planning-execution, journal-health | 50 | 0 | 0 |
 | track-core.test.js | node | full | planning-execution, journal-health | 42 | 0 | 0 |
 | track-merge-core.test.js | node | full | sync-storage | 20 | 0 | 0 |
