@@ -50,7 +50,9 @@
 // characterization test: tests/store-core.test.js。
 
 import { state, setState } from "../state/store.js";
-import { mergeById, mergeByIdPreferNewer } from "../core/merge.js";
+import {
+  mergeById, mergeByIdPreferNewer, mergeTracksPreferNewer, mergeWeeklyCommitments
+} from "../core/merge.js";
 import { persistLocalNoSchedule } from "../storage/local.js";
 
 // ---- 依存注入(configureGithubSync) ----
@@ -411,6 +413,9 @@ function mergeZeroThinkingIntoLocal(remoteZt) {
 //   - zeroThinking              … v103の既存マージ(mergeById)をそのまま使用
 //   - storeVisits               … v141。idキー和集合(updatedAtの新しい方、同値時tombstone優先)。
 //                                 削除操作があるためtasks/projectsと同じmergeByIdPreferNewerを使用
+//   - tracks                    … v243。親trackはid+updatedAt、milestonesは節目単位の特殊マージ
+//   - trackMeasurements         … v243。idキー和集合(updatedAtの新しい方、同値時tombstone優先)
+//   - weeklyCommitments         … v243。week/item別の競合規則を持つidキー特殊マージ
 //   - tasks / projects          … v135。idキー和集合(updatedAtの新しい方)。事故対策の本体
 //                                 (下のv135セクション参照)。シングルトン(wish/other Project、
 //                                 other Task)の重複はマージ後にreconcileSingletonDuplicates
@@ -726,6 +731,13 @@ function computeSyncMerge(remoteNorm, tieWinner) {
     // v141: 「今日行ったお店」ログ。ユーザーが削除できる(tombstone)ため、mergeByIdと違い
     // tasks/projectsと同じupdatedAt優先+同値時tombstone優先のmergeByIdPreferNewerを使う。
     const storeVisits = mergeByIdPreferNewer(state.storeVisits, remoteNorm.storeVisits, tieWinner);
+    const tracks = mergeTracksPreferNewer(state.tracks, remoteNorm.tracks, tieWinner);
+    const trackMeasurements = mergeByIdPreferNewer(
+      state.trackMeasurements, remoteNorm.trackMeasurements, tieWinner
+    );
+    const weeklyCommitments = mergeWeeklyCommitments(
+      state.weeklyCommitments, remoteNorm.weeklyCommitments, tieWinner
+    );
     // v152レビュー対応(Codex指摘): swipeTriageLogも端末間で和集合マージする(複合キー重複排除)。
     // 上限は他の軽量ログと同じ思想(SWIPE_TRIAGE_LOG_MAX、末尾優先で切り詰め)。
     const swipeTriageLog = mergeAppendOnlyLogByKey(state.swipeTriageLog, remoteNorm.swipeTriageLog, swipeTriageLogKey)
@@ -771,6 +783,9 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(tasks, state.tasks) ||
       !sameArrayByReference(projects, state.projects) ||
       !sameArrayByReference(storeVisits, state.storeVisits) ||
+      !sameArrayByReference(tracks, state.tracks) ||
+      !sameArrayByReference(trackMeasurements, state.trackMeasurements) ||
+      !sameArrayByReference(weeklyCommitments, state.weeklyCommitments) ||
       !sameArrayByReference(swipeTriageLog, state.swipeTriageLog) ||
       jsonChanged(gardenLog, state.gardenLog) ||
       !sameArrayByReference(coachMeals, state.coachLog?.meals || []) ||
@@ -792,6 +807,9 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(tasks, remoteNorm.tasks || []) ||
       !sameArrayByReference(projects, remoteNorm.projects || []) ||
       !sameArrayByReference(storeVisits, remoteNorm.storeVisits || []) ||
+      !sameArrayByReference(tracks, remoteNorm.tracks || []) ||
+      !sameArrayByReference(trackMeasurements, remoteNorm.trackMeasurements || []) ||
+      !sameArrayByReference(weeklyCommitments, remoteNorm.weeklyCommitments || []) ||
       !sameArrayByReference(swipeTriageLog, remoteNorm.swipeTriageLog || []) ||
       jsonChanged(gardenLog, remoteNorm.gardenLog) ||
       !sameArrayByReference(coachMeals, remoteNorm.coachLog?.meals || []) ||
@@ -800,7 +818,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(aiStepPendingRequests, remoteNorm.aiStepPendingRequests || []) ||
       (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, remoteNorm.zeroThinking) : false);
     return {
-      values: { journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans, tasks, projects, storeVisits, swipeTriageLog, gardenLog, coachMeals, aiStepProcessedIds, aiStepDismissedIds, aiStepPendingRequests },
+      values: { journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans, tasks, projects, storeVisits, tracks, trackMeasurements, weeklyCommitments, swipeTriageLog, gardenLog, coachMeals, aiStepProcessedIds, aiStepDismissedIds, aiStepPendingRequests },
       changedVsLocal, changedVsRemote
     };
   } catch (error) {
@@ -826,6 +844,9 @@ function applySyncMergeToLocal(merged) {
   state.tasks = v.tasks;  // v135
   state.projects = v.projects;  // v135
   state.storeVisits = v.storeVisits;  // v141
+  state.tracks = v.tracks;  // v243
+  state.trackMeasurements = v.trackMeasurements;  // v243
+  state.weeklyCommitments = v.weeklyCommitments;  // v243
   state.swipeTriageLog = v.swipeTriageLog;  // v152
   state.gardenLog = v.gardenLog;  // v153
   // v201 AIコーチ1a: coachLog未初期化のstate(normalizeState前の経路)でも落ちないよう
@@ -860,6 +881,9 @@ function applySyncMergeToRemote(merged, remoteNorm) {
   remoteNorm.tasks = v.tasks;  // v135
   remoteNorm.projects = v.projects;  // v135
   remoteNorm.storeVisits = v.storeVisits;  // v141
+  remoteNorm.tracks = v.tracks;  // v243
+  remoteNorm.trackMeasurements = v.trackMeasurements;  // v243
+  remoteNorm.weeklyCommitments = v.weeklyCommitments;  // v243
   remoteNorm.swipeTriageLog = v.swipeTriageLog;  // v152
   remoteNorm.gardenLog = v.gardenLog;  // v153
   // v201 AIコーチ1a: 上のapplySyncMergeToLocalと同じ理由でオブジェクトごと再構成

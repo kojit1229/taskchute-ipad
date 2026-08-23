@@ -1436,6 +1436,7 @@ function normalizeState(value) {
     ironDailyTarget: 2000,
     ironManualBaseKg: 0,
     gymBlockKeywords: ["ジム", "筋トレ"],
+    twelveWeekScoreTarget: 85,
     ...actualSettings
   };
   // v230: home撤去後も旧state・未知viewで白画面にしないため、todayへ縮退する。
@@ -1513,6 +1514,13 @@ function normalizeState(value) {
   value.settings.todaySkin = "tower";
   // v229: 早起きチェックは目標超過でも有効。ここは警告表示に使うHH:mmだけを正規化する。
   if (!/^\d{2}:\d{2}$/.test(value.settings.earlyRiseTarget || "")) value.settings.earlyRiseTarget = "06:00";
+  // v243: 12WY週次コミット達成率の目安。整数へ丸め、設定可能範囲70〜100に収める。
+  {
+    const scoreTarget = Number(value.settings.twelveWeekScoreTarget);
+    value.settings.twelveWeekScoreTarget = Number.isFinite(scoreTarget)
+      ? clamp(Math.round(scoreTarget), 70, 100)
+      : 85;
+  }
   // v210: TOWERのモーション強度。未知値は通常へ。
   if (!["normal", "calm", "off"].includes(value.settings.towerMotion)) value.settings.towerMotion = "normal";
   if (typeof value.settings.autoArchive !== "boolean") value.settings.autoArchive = true;
@@ -2008,6 +2016,69 @@ function normalizeState(value) {
     deleted: false,
     ...sv
   }));
+  // v243: 12WY二軸MVPのトラック定義。normalizeでは既定値だけを補完し、updatedAtは進めない。
+  if (!Array.isArray(value.tracks)) value.tracks = [];
+  value.tracks = value.tracks.map((entry) => {
+    const t = entry || {};
+    return {
+      ownerType: "project", ownerId: "", cycleStartDate: "", kind: "numeric",
+      name: "", unit: "", startDate: "", deadline: "",
+      baselineValue: 0, goalValue: 0, valueStep: 1,
+      status: "active", closedAt: "", closedReason: "",
+      supersedesTrackId: "", carriedFromTrackId: "", deleted: false,
+      ...t,
+      id: t.id || "trk_" + crypto.randomUUID(),
+      createdAt: t.createdAt || nowDateTime(),
+      updatedAt: t.updatedAt || "",
+      milestones: (Array.isArray(t.milestones) ? t.milestones : []).map((milestone) => {
+        const m = milestone || {};
+        return {
+          label: "", plannedDate: "", originalPlannedDate: "", doneAt: "",
+          doneChangedAt: "", deleted: false, ...m,
+          id: m.id || "ms_" + crypto.randomUUID(),
+          updatedAt: m.updatedAt || ""
+        };
+      })
+    };
+  });
+  // v243: numericトラックの絶対値測定履歴。
+  if (!Array.isArray(value.trackMeasurements)) value.trackMeasurements = [];
+  value.trackMeasurements = value.trackMeasurements.map((entry) => {
+    const m = entry || {};
+    return {
+      trackId: "", value: 0, observedAt: "", sourceKind: "toast",
+      blockId: "", note: "", deleted: false, ...m,
+      id: m.id || "trm_" + crypto.randomUUID(),
+      createdAt: m.createdAt || nowDateTime(),
+      updatedAt: m.updatedAt || ""
+    };
+  });
+  // v243: 週メタとコミットitemは形が異なるため、recordTypeで既定値を分離する。
+  if (!Array.isArray(value.weeklyCommitments)) value.weeklyCommitments = [];
+  value.weeklyCommitments = value.weeklyCommitments.map((entry) => {
+    const r = entry || {};
+    return r.recordType === "week" ? ({
+      recordType: "week", weekStart: "", cycleStartDate: "", committedAt: "",
+      committedVia: "manual", selectedBlockIds: [], deleted: false, ...r,
+      id: r.id || (r.weekStart ? "wcw_" + r.weekStart : "wcw_" + crypto.randomUUID()),
+      createdAt: r.createdAt || nowDateTime(),
+      updatedAt: r.updatedAt || ""
+    }) : ({
+      weekStart: "", blockId: "", taskId: "", projectId: "", trackId: "",
+      title: "", plannedDate: "", source: "confirmed", lane: "cycle",
+      excused: false, excusedReason: "", excusedChangedAt: "",
+      completedAt: "", completedChangedAt: "", deleted: false, ...r,
+      recordType: "item",
+      id: r.id || (r.weekStart && r.blockId
+        ? "wci_" + r.weekStart + "_" + r.blockId
+        : "wci_" + crypto.randomUUID()),
+      createdAt: r.createdAt || nowDateTime(),
+      updatedAt: r.updatedAt || ""
+    });
+  });
+  if (!value._trackToastLog || typeof value._trackToastLog !== "object" || Array.isArray(value._trackToastLog)) {
+    value._trackToastLog = {};
+  }
   // v91: 「### 依頼」節を日報テンプレの機械可読契約として追加(K指示: 依頼はこの見出し配下に
   //      書く運用へ)。既存のjournalTemplateを上書きせず、まだ持っていない端末にだけ追記する
   //      (ユーザーが自由記述欄等をカスタマイズしていても壊さない)。
@@ -2289,6 +2360,7 @@ function seedState() {
     settings: {
       birthDate: "",
       twelveWeekStartDate: today,
+      twelveWeekScoreTarget: 85,
       morningEnergyLog: {},
       journalTemplate: defaultJournal(today),
       vision: "# Vision\n\n人生の目的に沿ったプロジェクトを、日々の実行と振り返りで前に進める。",
@@ -2366,6 +2438,7 @@ function seedState() {
     },
     feedback: {},
     reports: {},
+    _trackToastLog: {},
     pomodoro: {
       running: false,
       blockId: "",
@@ -9591,6 +9664,7 @@ function sanitizedStateForGitHub() {
   if (copy.settings?.github) copy.settings.github.token = "";
   copy.modal = null;  // v37: ローカル保存(persistLocalNoSchedule)と同様、モーダル状態は共有しない
   delete copy._justStartedBlockId;  // v40: 非永続の着手ジュースフラグは同期しない
+  delete copy._trackToastLog;  // v243: 12WY進捗トーストの1日1回制御は端末単位
   return copy;
 }
 

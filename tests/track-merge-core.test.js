@@ -117,6 +117,11 @@ function item(overrides = {}) {
     const loser = track({ milestones: [milestone()], updatedAt: "2026-08-23T10:00:00" });
     const result = mergeTracksPreferNewer([winner], [loser], "remote")[0];
     check("合成内容が勝者milestonesと同一なら勝者トラック参照を返す", result === winner);
+
+    const loserWithoutMilestones = track({ milestones: undefined, updatedAt: "2026-08-23T10:00:00" });
+    const winnerWithoutMilestones = track({ milestones: undefined, updatedAt: "2026-08-23T12:00:00" });
+    const guarded = mergeTracksPreferNewer([loserWithoutMilestones], [winnerWithoutMilestones], "remote")[0];
+    check("勝者milestonesが非配列でも例外化せず空配列相当で参照を保つ", guarded === winnerWithoutMilestones);
   }
 
   console.log("[weekly-1] week manual優先");
@@ -147,6 +152,18 @@ function item(overrides = {}) {
     const auto = item({ source: "auto", updatedAt: "2026-08-23T12:00:00" });
     check("sourceはupdatedAtよりadded優先で後退しない",
       mergeWeeklyCommitments([added], [auto], "remote")[0].source === "added");
+
+    for (const [higher, lower] of [["added", "confirmed"], ["confirmed", "auto"]]) {
+      const higherOlder = item({ source: higher, updatedAt: "2026-08-23T09:00:00" });
+      const lowerNewer = item({ source: lower, updatedAt: "2026-08-23T12:00:00" });
+      check(`source隣接順位${higher}>${lower}は高順位側が旧でも勝つ`,
+        mergeWeeklyCommitments([higherOlder], [lowerNewer], "remote")[0].source === higher);
+
+      const lowerOlder = item({ source: lower, updatedAt: "2026-08-23T09:00:00" });
+      const higherNewer = item({ source: higher, updatedAt: "2026-08-23T12:00:00" });
+      check(`source隣接順位${higher}>${lower}は高順位側が新でも勝つ`,
+        mergeWeeklyCommitments([lowerOlder], [higherNewer], "remote")[0].source === higher);
+    }
 
     const cycle = item({ lane: "cycle", updatedAt: "2026-08-23T09:00:00" });
     const taskNewer = item({ lane: "task", updatedAt: "2026-08-23T12:00:00" });

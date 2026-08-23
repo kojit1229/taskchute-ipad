@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v242";
+const CACHE_NAME = "taskchute-journal-pwa-v243";
+// v243: 12WYのデータ契約・端末ローカルトーストログ・3コレクション同期配線を追加した(APP_SHELL変更なし)。
 // v242: 12WY二軸MVPの特殊マージ純関数2件をsrc/core/merge.jsへ追加した(APP_SHELL変更なし)。
 // v241: TodayフォーカスモードとPC時のCABIN TIMER右列表示を追加した(APP_SHELL変更なし)。
 // v240: Today ATISからMIT候補チップ2系統と採用actionを撤去した(APP_SHELL変更なし)。

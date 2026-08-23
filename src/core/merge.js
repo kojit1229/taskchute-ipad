@@ -149,7 +149,8 @@ function mergeTracksPreferNewer(localArr, remoteArr, tieWinner) {
     const winner = preferNewerRecord(local, remote, tieWinner);
     const winnerSide = winner === remote ? "remote" : "local";
     const milestones = mergeMilestones(local.milestones, remote.milestones, winnerSide, tieWinner);
-    merged.set(id, sameRecordArrayContent(milestones, winner.milestones)
+    const winnerMilestones = Array.isArray(winner.milestones) ? winner.milestones : [];
+    merged.set(id, sameRecordArrayContent(milestones, winnerMilestones)
       ? winner
       : { ...winner, milestones });
   });
