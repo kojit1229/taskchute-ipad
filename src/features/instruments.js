@@ -3,7 +3,7 @@
 // 契約(p4-interface.md §3。dashboard.js/wish.js と同じ configureXxx(deps) DIパターンだが、
 // 界面凍結書の指定どおり**他ファイルを一切importしない**(全依存はconfigureInstruments(deps)
 // 経由のDIのみ。state store・ui/actions.js等への直接importはしない)。
-//   deps: { getState, escapeHTML, todayISO, addDays, renderHeader, registerActions }
+//   deps: { getState, escapeHTML, todayISO, addDays, weekRange, renderHeader, registerActions }
 //
 // stateスキーマ(p4-interface.md §1、凍結。正本データの書き込みはP3側・GATE ROUTINE実装が担う):
 //   state.earlyBird.logs["YYYY-MM-DD"] = { checkedAt: "YYYY-MM-DDTHH:mm" }
@@ -27,8 +27,8 @@
 // navigate系のdepsがこのモジュールに渡されていないため、ここでは安全なno-opを登録し、
 // 統合時にapp.js側がregisterActionsで同名アクションを実処理へ上書きする想定)。
 //
-// 非目標(p4-interface.md §6): 旧計器盤の分析グラフ(ヒートマップ・相関・ドーナツ等)は
-// 一切持ち込まない。app.js/styles.css/sw.js/index.html/normalizeStateへの変更もしない。
+// 非目標(p4-interface.md §6): 旧計器盤のヒートマップ・相関・ドーナツ等は持ち込まない。
+// v247の月別×種目別重量グラフは構造化セットだけを読む独立した表示専用集計とする。
 //
 // characterization test: instruments-core.test.js(同ディレクトリ、ブラウザ不要)。
 
@@ -39,11 +39,12 @@ let getState = () => ({});
 let escapeHTML = (value) => String(value ?? "");
 let todayISO = () => "";
 let addDays = (date) => date;
+let weekRange = (date) => ({ weekStart: date, weekEnd: date });
 let renderHeader = (eyebrow, title) => `<h1>${eyebrow} / ${title}</h1>`;
 let registerActions = () => {};
 
 function configureInstruments(deps) {
-  ({ getState, escapeHTML, todayISO, addDays, renderHeader, registerActions } = deps || {});
+  ({ getState, escapeHTML, todayISO, addDays, weekRange, renderHeader, registerActions } = deps || {});
   if (typeof registerActions === "function") {
     registerActions({
       // 統合時にapp.js側がnav結線するまでのプレースホルダ(p4-interface.md §3参照)。
@@ -75,6 +76,8 @@ function earlyBirdStats(state, todayIso) {
   // (配列の並び順ではなく addDays(prev, 1) === cur で暦日連続かどうかを判定する)。
   const dates = Object.keys(logs).filter((d) => logs[d]).sort();
   const totalCount = dates.length;
+  const yearStart = `${todayIso.slice(0, 4)}-01-01`;
+  const yearCount = dates.filter((date) => date >= yearStart && date <= todayIso).length;
   let bestStreak = 0;
   let runLength = 0;
   let prevDate = null;
@@ -94,7 +97,7 @@ function earlyBirdStats(state, todayIso) {
     d = addDays(d, 1);
   }
 
-  return { currentStreak, bestStreak, totalCount, last28 };
+  return { currentStreak, bestStreak, totalCount, yearCount, last28 };
 }
 
 // 1日分のジムセット配列から総重量kg(Σ weight × reps)を計算する。
@@ -121,6 +124,58 @@ function ironSummary(state, todayIso) {
   return { todayKg, targetKg, lifetimeKg };
 }
 
+const GRAPH_COLORS = [
+  "var(--tower-amber)", "var(--tower-green)", "var(--tower-cyan)", "var(--tower-purple)",
+  "color-mix(in srgb, var(--tower-amber) 65%, var(--tower-purple))",
+  "color-mix(in srgb, var(--tower-green) 65%, var(--tower-cyan))"
+];
+
+// 期間統計は構造化セットのatだけを正本とする。日付を持たないironImport.importedTotalKgと
+// ironManualBaseKgはIRON LOGの累計には残すが、週・年・月別へ配賦できないため含めない。
+function ironPeriodStats(state, todayIso) {
+  const logs = state?.condition?.logs || {};
+  const year = todayIso.slice(0, 4);
+  const yearStart = `${year}-01-01`;
+  const monthCount = Number(todayIso.slice(5, 7)) || 1;
+  const months = Array.from({ length: monthCount }, (_, index) => ({
+    key: `${year}-${String(index + 1).padStart(2, "0")}`,
+    label: `${index + 1}月`, totalKg: 0, byExercise: Object.create(null)
+  }));
+  const currentWeek = weekRange(todayIso);
+  const activeWeeks = new Set();
+  const exercises = new Set();
+  let weekKg = 0;
+  let yearKg = 0;
+
+  for (const entry of Object.values(logs)) {
+    for (const set of Array.isArray(entry?.gym) ? entry.gym : []) {
+      const match = /^(\d{4}-\d{2}-\d{2})T\d{2}:\d{2}/.exec(String(set?.at || ""));
+      const date = match?.[1] || "";
+      if (!date || date > todayIso) continue;
+      const kg = (Number(set?.weight) || 0) * (Number(set?.reps) || 0);
+      activeWeeks.add(weekRange(date).weekStart);
+      if (date >= currentWeek.weekStart && date <= currentWeek.weekEnd) weekKg += kg;
+      if (date < yearStart) continue;
+      yearKg += kg;
+      const exercise = String(set?.exercise || "その他");
+      exercises.add(exercise);
+      const month = months[Number(date.slice(5, 7)) - 1];
+      if (month) {
+        month.totalKg += kg;
+        month.byExercise[exercise] = (month.byExercise[exercise] || 0) + kg;
+      }
+    }
+  }
+
+  let gymStreakWeeks = 0;
+  let cursor = activeWeeks.has(currentWeek.weekStart) ? currentWeek.weekStart : addDays(currentWeek.weekStart, -7);
+  while (activeWeeks.has(cursor)) {
+    gymStreakWeeks++;
+    cursor = addDays(cursor, -7);
+  }
+  return { gymStreakWeeks, weekKg, yearKg, months, exercises: [...exercises].sort((a, b) => a.localeCompare(b, "ja")) };
+}
+
 // ---- 描画 ----
 
 function earlyBirdDotsHTML(last28) {
@@ -129,7 +184,20 @@ function earlyBirdDotsHTML(last28) {
     .join("");
 }
 
-// 新計器盤(EARLY BIRD + IRON LOGサマリの2枚構成)。
+function ironChartHTML(stats) {
+  const maxKg = Math.max(1, ...stats.months.map((month) => month.totalKg));
+  const bars = stats.months.map((month) => `<div class="instr-chart-month" data-month="${month.key}">
+    <div class="instr-chart-bar" title="${month.label} ${month.totalKg.toLocaleString()}kg">${stats.exercises.map((exercise, index) => {
+      const kg = month.byExercise[exercise] || 0;
+      return `<span data-exercise="${escapeHTML(exercise)}" style="height:${(kg / maxKg) * 100}%;background:${GRAPH_COLORS[index % GRAPH_COLORS.length]}" title="${escapeHTML(exercise)} ${kg.toLocaleString()}kg"></span>`;
+    }).join("")}</div><small>${month.label}</small></div>`).join("");
+  const legend = stats.exercises.length ? stats.exercises.map((exercise, index) =>
+    `<span class="instr-chart-legend-item"><i style="background:${GRAPH_COLORS[index % GRAPH_COLORS.length]}"></i>${escapeHTML(exercise)}</span>`
+  ).join("") : '<span class="instr-chart-empty">構造化セットの記録はまだありません</span>';
+  return `<div class="instr-chart-scroll"><div class="instr-chart">${bars}</div></div><div class="instr-chart-legend">${legend}</div>`;
+}
+
+// 新計器盤(EARLY BIRD + IRON LOGサマリ + 年間PAYLOADグラフ)。
 // today-tower.js等と同じTOWERテイストの --tower-* トークンを使うため、ルートに
 // "today-tower" クラスを付けてトークンをスコープ内に持ち込む(styles.cssの重複定義はしない。
 // p4-interface.md §4)。
@@ -138,6 +206,7 @@ function renderInstruments() {
   const todayIso = todayISO();
   const eb = earlyBirdStats(state, todayIso);
   const iron = ironSummary(state, todayIso);
+  const period = ironPeriodStats(state, todayIso);
   const targetPct = iron.targetKg > 0 ? Math.min(100, Math.round((iron.todayKg / iron.targetKg) * 100)) : 0;
 
   return `
@@ -159,6 +228,10 @@ function renderInstruments() {
             <span>累計</span>
             <strong>${eb.totalCount}<small>回</small></strong>
           </div>
+          <div class="instr-stat-cell">
+            <span>今年</span>
+            <strong>${eb.yearCount}<small>回</small></strong>
+          </div>
         </div>
         <div class="instr-dots" aria-label="直近4週の達成カレンダー">${earlyBirdDotsHTML(eb.last28)}</div>
         <div class="instr-panel-foot">直近4週(28日) — ● は早起きゲート達成日</div>
@@ -171,14 +244,25 @@ function renderInstruments() {
           <span>/ 目標 ${iron.targetKg.toLocaleString()}kg</span>
         </div>
         <div class="instr-iron-bar"><span style="width:${targetPct}%"></span></div>
+        <div class="instr-stats-row instr-iron-stats">
+          <div class="instr-stat-cell"><span>週ストリーク</span><strong>${period.gymStreakWeeks}<small>週</small></strong></div>
+          <div class="instr-stat-cell"><span>今週</span><strong>${period.weekKg.toLocaleString()}<small>kg</small></strong></div>
+          <div class="instr-stat-cell"><span>今年</span><strong>${period.yearKg.toLocaleString()}<small>kg</small></strong></div>
+        </div>
         <div class="instr-iron-lifetime">
           <span>累計</span>
           <strong>${(iron.lifetimeKg / 1000).toFixed(1)}<small>t</small></strong>
         </div>
         <button type="button" class="instr-open-btn" data-action="instruments-open-iron-log">IRON LOGを開く ▶</button>
       </section>
+
+      <section class="instr-panel-box instr-iron-chart">
+        <h2>ANNUAL PAYLOAD <span>月別 × 種目別</span></h2>
+        ${ironChartHTML(period)}
+        <div class="instr-panel-foot">今年の構造化セット(at基準)のみ。日付のない過去コメント移行分は含みません</div>
+      </section>
     </div>
   `;
 }
 
-export { configureInstruments, renderInstruments, earlyBirdStats, ironSummary };
+export { configureInstruments, renderInstruments, earlyBirdStats, ironSummary, ironPeriodStats };

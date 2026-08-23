@@ -1,0 +1,54 @@
+{
+  "version": 247,
+  "date": "2026-08-23",
+  "title": "計器盤の早起き・IRON年間統計",
+  "summary": "INSTRUMENTSへ早起き年間回数、ジム週ストリーク、今週・年間総重量、月別×種目別の年間積み上げ棒グラフを追加した。",
+  "changedFiles": [
+    "app.js",
+    "CHANGES_v247.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v247.json",
+    "src/features/instruments.js",
+    "styles.css",
+    "sw.js",
+    "tests/instruments-core.test.js",
+    "tests/instruments-e2e.test.js",
+    "tests/suite-manifest.json",
+    "tests/v247.test.js"
+  ],
+  "intent": [
+    "☀固定ゲートのearlyBird.logsを既存ストリーク定義のまま読み、今年の達成回数も同じ計器盤で把握できるようにする。",
+    "IRON LOGの構造化セットをat基準で土〜金の週と暦年へ集計し、運動の継続と負荷量を短期・長期の両方で確認できるようにする。",
+    "今年1月から当月までの総重量を種目別の積み上げ棒で可視化し、390pxでは画面全体を崩さずグラフ内だけ横スクロール可能にする。"
+  ],
+  "changes": [
+    "earlyBirdStatsへ今年1月1日〜当日のtruthyなearlyBird.logs件数yearCountを追加し、既存の現在ストリーク・自己ベスト・全期間累計と並べて表示した。",
+    "ironPeriodStatsを表示専用の純粋集計として追加した。各gymセットのatから正規表現でYYYY-MM-DDを抽出し、既存weekRange(土〜金)で週ストリークと今週重量、暦年で年間重量と月別×種目別重量を計算する。",
+    "月別×種目別グラフを外部ライブラリなしのHTML/CSS積み上げ棒として追加し、TOWERカラーの種目凡例、1月〜当月の月軸、0件案内を表示した。",
+    "日付を持たないironImport.importedTotalKgとironManualBaseKgは従来の生涯累計だけに残し、週・年・月別から除外する方針をコードコメントと画面注記へ明記した。",
+    "既存CSSコメント中のワイルドカードが意図せずコメント終端を作り、JOURNAL以降のIRON/INSTRUMENTS規則をCSSOMから脱落させていたためコメント表記を修正した。復帰時に既存契約と衝突したnow-lineの琥珀色指定はcockpitテーマだけへ限定した。",
+    "app.jsから既存weekRangeを依存注入し、Service WorkerのCACHE_NAMEをv247へ更新した。"
+  ],
+  "uncertainties": [
+    "ジム週ストリークは日次早起きと同様に進行中期間を未達扱いしないため、今週が未記録なら前週から遡る。今週に1件あれば今週を起点にする。",
+    "種目色はTOWERの4基本色とその混色2色を順に割り当て、7種目以上では同じ順序を循環する。"
+  ],
+  "reviewFocus": [
+    "期間集計がcondition.logsの格納キーではなくgymセットのatを使い、new Date文字列パースやstate書き込みを追加していないか。",
+    "1月1日・土曜週境界・今週未記録・週の途切れで期待値どおりになり、importedTotalKg/manualBaseKgが週・年・グラフへ混入しないか。",
+    "390pxで外側の横スクロールが発生せず、グラフの内包コンテナだけが横スクロールし、0件時にも1月〜当月の軸と案内が残るか。",
+    "復帰した既存JOURNAL/TIMELINE/IRON/INSTRUMENTS規則に意図しない回帰がなく、now-lineはcockpitだけ琥珀色、light/darkでは従来の赤を維持するか。"
+  ],
+  "verification": [
+    "node tests/v247.test.js: 早起き年境界、ジム週連続・途切れ・週跨ぎ、1/1境界、移行分除外、月・種目・凡例DOM数、0件縮退を全件PASS。",
+    "node tests/instruments-core.test.js: 全件PASS。",
+    "system Edge指定 node tests/instruments-e2e.test.js: 既存導線と390px横幅検証を全件PASS。",
+    "npm run code:index:write: PASS(code index 568 functions)。npm run test:manifest:write: PASS(135 suites)。",
+    "node scripts/release-gate.js releases/v247.json --final: 最終工程で実行し、結果を完了報告へ記載する。"
+  ],
+  "knownLimitations": [
+    "同梱Chromiumは実行環境のspawn EPERMで起動できないため、ブラウザE2Eとrelease gateはsystem Edge指定で検証する。",
+    "iOS Safari実機PWAでのService Worker更新・オフライン起動・グラフのタッチスクロールは監督者側で確認が必要。",
+    "taskchute-notes/handoff.mdがワークスペース外でEPERMになる場合、notes側更新は監督者が再実行する。"
+  ]
+}

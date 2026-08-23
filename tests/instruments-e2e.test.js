@@ -153,6 +153,24 @@ function check(name, cond, extra = "") {
     await page.waitForSelector('#app[data-view="more"]', { state: "attached" });
     check("IRON LOGからその他へ戻れる", await page.locator(".more-tower-grid").count() === 1);
 
+    console.log("[9] 390px幅では画面全体をはみ出さず、グラフ内だけ横スクロールできる");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await seed({ earlyBirdLogs: {}, gym: gymSets });
+    const widths = await page.evaluate(() => {
+      const chart = document.querySelector(".instr-chart-scroll");
+      const inner = chart?.querySelector(".instr-chart");
+      return {
+        pageClient: document.documentElement.clientWidth,
+        pageScroll: document.documentElement.scrollWidth,
+        chartClient: chart?.clientWidth || 0,
+        chartScroll: chart?.scrollWidth || 0,
+        innerWidth: inner?.getBoundingClientRect().width || 0,
+        innerMinWidth: inner ? getComputedStyle(inner).minWidth : ""
+      };
+    });
+    check("画面全体に横スクロールなし", widths.pageScroll <= widths.pageClient, JSON.stringify(widths));
+    check("棒グラフ内包コンテナは横スクロール可能", widths.chartScroll > widths.chartClient, JSON.stringify(widths));
+
     console.log(failures === 0 ? "[instruments-e2e] 全PASS" : `[instruments-e2e] ${failures}件失敗`);
   } catch (e) {
     failures++;

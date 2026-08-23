@@ -269,7 +269,7 @@ configureIronLog({
 });
 configureInstruments({
   getState: () => state,
-  escapeHTML, todayISO, addDays, renderHeader,
+  escapeHTML, todayISO, addDays, weekRange, renderHeader,
   // モジュールの凍結action名を保ち、プレースホルダだけ統合層の実遷移へ差し替える。
   registerActions: (handlers) => registerActions({
     ...handlers,

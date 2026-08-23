@@ -3889,7 +3889,7 @@ h3 {
 
    スコープ: すべて `.tower-skin.journal-tower` 配下(タブ全体ラッパー、src/features/journal.js
    のrenderJournal()が返す最外殻div)。既存クラス(.journal-grid/.panel/.journal-panel-prev/
-   .journal-panel-today/.journal-segment-*/.fold-*/.cond-*/.store-visit-card/.check-row/
+   .journal-panel-today / journal-segment系 / fold系 / cond系 / .store-visit-card / .check-row /
    .btn/.input/.textarea 等)は一切リネームしていない。本ファイルは「色・背景・境界線・
    フォント」等の見た目プロパティだけを子孫セレクタで追加するもので、display/grid-template-
    columns/orderなど構造・レイアウトを決めるプロパティには触れていない
@@ -4158,8 +4158,8 @@ h3 {
 }
 .timeline-tower .tl-complete-btn.done { color: var(--tower-green); border-color: var(--tower-green); }
 .timeline-tower .migrated-badge { color: var(--tower-amber); }
-.timeline-tower .now-line { border-top-color: var(--tower-amber) !important; }
-.timeline-tower .now-line span { background: var(--tower-amber) !important; }
+:root[data-theme="cockpit"] .timeline-tower .now-line { border-top-color: var(--tower-amber) !important; }
+:root[data-theme="cockpit"] .timeline-tower .now-line span { background: var(--tower-amber) !important; }
 
 /* ---- エネルギー/バッテリーグラフのラベル(既存.energy-graph-overlayのまま配色だけ) ---- */
 .timeline-tower .energy-graph-overlay { color: var(--tower-text); }
@@ -4377,7 +4377,7 @@ h3 {
 
 .instr-stats-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   border-top: 1px solid var(--tower-line);
 }
 .instr-stat-cell {
@@ -4385,9 +4385,7 @@ h3 {
   display: grid;
   gap: 4px;
 }
-.instr-stat-cell:first-child {
-  border-right: 1px solid var(--tower-line);
-}
+.instr-stat-cell + .instr-stat-cell { border-left: 1px solid var(--tower-line); }
 .instr-stat-cell span {
   color: var(--tower-cyan);
   font-size: 10px;
@@ -4512,6 +4510,33 @@ h3 {
   color: var(--tower-green);
 }
 
+.instr-iron-stats strong { font-size: 16px; overflow-wrap: anywhere; }
+.instr-iron-chart { min-width: 0; }
+.instr-chart-scroll { overflow-x: auto; overscroll-behavior-inline: contain; }
+.instr-chart {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  min-width: 480px;
+  height: 190px;
+  padding: 16px 12px 0;
+}
+.instr-chart-month { display: grid; flex: 1; gap: 5px; min-width: 30px; height: 100%; text-align: center; }
+.instr-chart-month small { color: var(--tower-text); font-size: 9px; opacity: .7; }
+.instr-chart-bar {
+  display: flex;
+  flex-direction: column-reverse;
+  align-self: end;
+  height: 160px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--tower-line);
+}
+.instr-chart-bar span { display: block; min-height: 0; }
+.instr-chart-legend { display: flex; flex-wrap: wrap; gap: 6px 12px; padding: 10px 12px; }
+.instr-chart-legend-item { display: inline-flex; align-items: center; gap: 5px; color: var(--tower-text); font-size: 10px; }
+.instr-chart-legend-item i { width: 8px; height: 8px; }
+.instr-chart-empty { color: var(--tower-text); font-size: 10px; opacity: .6; }
+
 /* ============ タブレット・PC幅(タスクシュートの他TOWER画面と同じブレークポイント) ============ */
 @media (min-width: 768px) {
   .instr-view {
@@ -4520,4 +4545,5 @@ h3 {
     align-items: start;
     max-width: 1000px;
   }
+  .instr-iron-chart { grid-column: 1 / -1; }
 }

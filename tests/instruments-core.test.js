@@ -47,6 +47,14 @@ function renderHeader(eyebrow, title) {
   return `<div class="stub-header">${eyebrow}/${title}</div>`;
 }
 
+function weekRange(dateISO) {
+  const [y, m, d] = dateISO.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  const dow = (date.getDay() + 1) % 7;
+  const weekStart = addDays(dateISO, -dow);
+  return { weekStart, weekEnd: addDays(weekStart, 6) };
+}
+
 // 早起きログを作る補助: baseDateから連続する日数分だけ logs[date] を埋める(古い→新しいの順)。
 function logsFor(dates) {
   const logs = {};
@@ -64,7 +72,7 @@ function logsFor(dates) {
     getState: () => ({}),
     escapeHTML,
     todayISO: () => "2026-08-22",
-    addDays,
+    addDays, weekRange,
     renderHeader,
     registerActions: (actions) => { registeredActions = actions; }
   });
@@ -246,7 +254,7 @@ function logsFor(dates) {
       getState: () => state,
       escapeHTML,
       todayISO: () => TODAY,
-      addDays,
+      addDays, weekRange,
       renderHeader,
       registerActions: () => {}
     });

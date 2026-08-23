@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v246";
+const CACHE_NAME = "taskchute-journal-pwa-v247";
+// v247: INSTRUMENTSへ早起き・IRON期間統計と月別積み上げ棒グラフを追加した(APP_SHELL変更なし)。
 // v245: 12WY週次コミットの候補導出・確定・完了刻印・免除・計画追加データ層を追加した(APP_SHELL変更なし)。
 // v244: 12WY同期配線のローカル側にも || [] ガードを追加(v197対応・挙動対称化)。
 // v243: 12WYのデータ契約・端末ローカルトーストログ・3コレクション同期配線を追加した(APP_SHELL変更なし)。
