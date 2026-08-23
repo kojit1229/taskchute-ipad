@@ -6615,8 +6615,7 @@
         "currentView"
       ],
       "effects": [
-        "save",
-        "render"
+        "save"
       ]
     },
     {

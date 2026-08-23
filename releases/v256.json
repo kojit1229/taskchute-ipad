@@ -1,0 +1,49 @@
+{
+  "version": 256,
+  "date": "2026-08-24",
+  "title": "JOURNAL未確定入力のタブ切替保護",
+  "summary": "IME変換中にJOURNALから他タブへ切り替えた際の全再描画を既存ガードで延期し、未確定入力を保持してから要求済みビューを最終描画するよう修正した。",
+  "changedFiles": [
+    "app.js",
+    "CHANGES_v256.md",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v256.json",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/v255.test.js",
+    "tests/v256.test.js"
+  ],
+  "intent": [
+    "JOURNAL本文などのIME未確定入力を、ユーザーのタブ切替が起こすmain全再描画から保護する。",
+    "v137/v140で導入済みのフォーカス・IME描画遅延契約を再利用し、新しいガード実装を増やさない。",
+    "非IME操作とJOURNAL以外からの通常タブ切替は、従来どおり同期的に描画する。"
+  ],
+  "changes": [
+    "setViewのpersistLocalNoSchedule後のrenderをrenderDeferringForFocusへ差し替え、入力フォーカス中またはIME変換中だけ描画を保留するようにした。",
+    "v256 E2EでIME composition中のJOURNAL DOM・未確定値保持、composition確定後のstate復元、非IMEとJOURNAL以外の負例、60秒フェイルセーフの最終描画を固定した。",
+    "v255 E2EのCACHE_NAME完全一致期待を現行v256へ更新した(assertionの削除・skip・緩和なし)。",
+    "Service WorkerのCACHE_NAMEをv256へ更新した(APP_SHELL変更なし)。"
+  ],
+  "uncertainties": [
+    "診断書の推奨方針Cからの実装上の逸脱はない。IME変換中はcomposition確定またはfocusoutまでタブ表示を遅延し、両イベント欠落時は既存の60秒フェイルセーフで最終描画する。",
+    "テスト網羅条項(d)の既存テスト無改変からは、v255 E2EがCACHE_NAME=v255を完全一致で固定しており、必須のv256更新と両立しなかったため期待値2行のみ更新した。assertion強度は維持した。"
+  ],
+  "reviewFocus": [
+    "setViewがcurrentViewの永続化後に既存ガードを呼び、ガード本体や保存時刻契約を変えていないか。",
+    "composition中の未確定値がDOMに残り、input・compositionend・focusout後は要求済みビューへ遷移してJOURNAL全文を復元できるか。",
+    "非IMEのJOURNAL切替、JOURNAL以外からの切替、60秒フェイルセーフが描画固着なく従来契約を保つか。"
+  ],
+  "verification": [
+    "修正前のsystem Edge指定 tests/v256.test.jsで対象3 assertionの失敗を確認し、setViewの即時renderによるJOURNAL DOM・未確定値消失を再現した。",
+    "node --check app.js、sw.js、tests/v256.test.js: PASS。",
+    "system Edge指定 tests/v137.test.js、tests/v140.test.js、tests/v256.test.js: 既存IME回帰とv256の11チェックを全件PASS。",
+    "npm run code:index:write: PASS(567 functions)。npm run test:manifest:write / test:manifest: PASS(141 suites)。",
+    "system Edge・検証用handoffミラー指定 release-gate --final: exit 0。impact regression・最終coreを含め全件PASS。"
+  ],
+  "knownLimitations": [
+    "iOS Safari実機PWAでの日本語IMEイベント順序、タブ切替の触感、Service Worker更新確認は監督者側で必要。",
+    "taskchute-notes/handoff.mdがワークスペース外でEPERMになる場合、notes側更新は監督者が再実行する。"
+  ]
+}

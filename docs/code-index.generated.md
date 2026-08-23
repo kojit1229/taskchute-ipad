@@ -448,7 +448,7 @@ Source: app.js (13290 lines, 567 top-level functions)
 | finishBlockFromBreak | function | 10622 | 31 | sync, state, execution, ui | blocks, pomodoro | save |
 | updatePomodoroTick | function | 10655 | 19 | execution | pomodoro | dom, clock |
 | startTimerTicker | function | 10675 | 31 | execution, journal-health, ui, content | currentView, pomodoro, settings | fetch, render, timer, clock |
-| setView | function | 10707 | 16 | state, execution, ui | currentView | save, render |
+| setView | function | 10707 | 16 | state, execution, ui | currentView | save |
 | openVisionBoard | function | 10727 | 5 | ui, content | settings | - |
 | setSelectedDate | function | 10733 | 7 | state, execution, journal-health, ui | selectedDate | save, render |
 | shiftSelectedDate | function | 10741 | 3 | core | selectedDate | - |

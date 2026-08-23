@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v255";
+const CACHE_NAME = "taskchute-journal-pwa-v256";
+// v256: IME変換中のタブ切替renderを既存の入力フォーカス遅延ガードへ結線した(APP_SHELL変更なし)。
 // v255: 設計思想の図解HTMLを同梱し、設定画面から別タブで開けるオフライン導線を追加した。
 // v254: 12WY共通フック2本を全開始・完了導線へ結線した(APP_SHELL変更なし)。
 // v253: 固定化ルーティンのストリークを計器盤へ表示し、保護ルーティンを実行率から除外した(APP_SHELL変更なし)。

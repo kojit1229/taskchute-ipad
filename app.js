@@ -910,7 +910,7 @@ function isFocusInEditableElement() {
   const tag = el.tagName;
   return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable === true;
 }
-// hydrateStaticMarkdown等の「新着があれば再描画」用の入口。入力中/IME変換中なら即renderせず
+// hydrateStaticMarkdown等の新着反映やsetViewの画面切替用の入口。入力中/IME変換中なら即renderせず
 // 保留し、focusout/compositionend(またはフェイルセーフのタイムアウト)で自動的に1回だけ実行させる。
 function renderDeferringForFocus() {
   if (_imeComposing || isFocusInEditableElement()) {
@@ -10718,7 +10718,7 @@ function setView(view = "today") {
   //      端末間の新旧比較が壊れる(タブを触っただけの古い端末が「最新」扱いになる)ため、
   //      永続化のみ行い、更新時刻スタンプと自動保存はしない。
   persistLocalNoSchedule();
-  render();
+  renderDeferringForFocus();  // v256: JOURNAL等のIME未確定入力をタブ切替の全renderから守る
 }
 
 // v149レビュー対応(必須3): ホーム「80歳ビジョン」カードから、ビジョン画面のビジョンボード
