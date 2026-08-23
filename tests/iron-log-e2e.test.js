@@ -1,7 +1,7 @@
 // tests/iron-log-e2e.test.js(先行執筆・結線前) — P4 IRON LOG専用画面のE2E契約。
 // 正典: p4-interface.md §3(iron-log.js界面凍結)、slim-spec.md §2-2・§3(仕様)。
 // v233の対象は画面結線・表示・当日セット追加・実行中Block連動まで。
-// NOW LANDING導線・Block完了時の自動転記・未記録確認はv234以降のため本E2Eの対象外。
+// NOW LANDING導線・Block完了時の自動転記・未記録通知はv234以降で追加済み。
 // tower-core.test.js / helpers.js の書式・helpers利用・seed流儀をそのまま踏襲する。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY } = require("./helpers");
 
@@ -43,6 +43,10 @@ function check(name, cond, extra = "") {
     await page.evaluate(({ KEY, view, blocks, gym, settings, today }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.currentView = view;
+      if (view === "timeline") {
+        s.timelineMode = "planned";
+        s.selectedDate = today;
+      }
       s.blocks = blocks;
       s.condition = s.condition || {};
       s.condition.logs = s.condition.logs || {};
@@ -154,17 +158,17 @@ function check(name, cond, extra = "") {
       completedBlock.comment === "総重量 1,440kg(ベンチプレス 60kg×10×2、ショルダープレス 30kg×8)",
       completedBlock.comment);
 
-    console.log("[6] 未記録(紐づくセット0件)での完了時に確認を出す(slim-spec.md §3-4)");
-    // 設計注記(notes.mdに記載): window.confirmで実装される想定(app.js既存の確認導線と同じ慣習)。
-    // 実際にカスタムモーダル等で実装された場合はこのテストの要追随。
+    console.log("[6] 未記録(紐づくセット0件)での完了時に非ブロッキング通知を出す");
     await page.clock.setFixedTime(fixedTime(9, 0, 0));
     const gymNoSets = gymBlock("gym-empty", "ジム(未記録)", 9 * 60, {
       actualStartAt: atMinute(today, 9 * 60), estimateMin: 30
     });
     await seed({ view: "today", blocks: [gymNoSets], gym: [] });
     await page.waitForSelector('.tower-now-actions [data-action="complete-block-with-actual"]');
-    let dialogMessage = null;
-    page.once("dialog", async (dialog) => { dialogMessage = dialog.message(); await dialog.accept(); });
+    await page.evaluate(() => {
+      window.__emptyConfirmCalls = 0;
+      window.confirm = () => { window.__emptyConfirmCalls += 1; return true; };
+    });
     await page.locator('.tower-now-actions [data-action="complete-block-with-actual"]').click();
     await page.locator('[data-modal-field="actualStartAt"]').fill(atMinute(today, 9 * 60).slice(0, 16));
     await page.locator('[data-modal-field="actualEndAt"]').fill(atMinute(today, 9 * 60 + 30).slice(0, 16));
@@ -173,11 +177,76 @@ function check(name, cond, extra = "") {
       const s = JSON.parse(localStorage.getItem(KEY));
       return s.blocks.find((b) => b.id === id)?.completed === true;
     }, { KEY, id: "gym-empty" });
-    check("紐づくセット0件の完了で「未記録」確認が出る", dialogMessage !== null && /セット|未記録|記録/.test(dialogMessage || ""), dialogMessage);
+    await page.waitForFunction(() => document.querySelector("#toast")?.textContent === "IRON LOGのセットが未記録です", null, { timeout: 1000 }).catch(() => {});
+    check("未記録通知でconfirmを呼ばない", (await page.evaluate(() => window.__emptyConfirmCalls)) === 0);
+    check("紐づくセット0件の完了で未記録トーストが出る",
+      (await page.locator("#toast").textContent()) === "IRON LOGのセットが未記録です");
     const afterEmptyComplete = await readState();
-    check("確認を承認すると完了自体は成立する", afterEmptyComplete.blocks.find((b) => b.id === "gym-empty")?.completed === true);
+    check("通知後も完了自体は成立する", afterEmptyComplete.blocks.find((b) => b.id === "gym-empty")?.completed === true);
 
-    console.log("[7] NOW LANDINGのIRON LOG導線は実行中ジムBlockだけに表示され遷移できる");
+    console.log("[7] 未連動セットはBlock実行時間内だけをフォールバック紐付けする");
+    const gymForRange = gymBlock("gym-range", "ジム(時間範囲)", 9 * 60, {
+      actualStartAt: atMinute(today, 9 * 60), estimateMin: 60
+    });
+    const rangeSets = [
+      set("範囲前", 10, 1, 8 * 60 + 55),
+      set("ベンチプレス", 60, 10, 9 * 60 + 15),
+      set("範囲後", 20, 1, 10 * 60 + 5)
+    ];
+    await seed({ view: "today", blocks: [gymForRange], gym: rangeSets });
+    await page.locator('.tower-now-actions [data-action="complete-block-with-actual"]').click();
+    await page.locator('[data-modal-field="actualStartAt"]').fill(atMinute(today, 9 * 60).slice(0, 16));
+    await page.locator('[data-modal-field="actualEndAt"]').fill(atMinute(today, 10 * 60).slice(0, 16));
+    await page.locator('.modal-card [data-action="modal-save"]').click();
+    await page.waitForFunction(({ KEY, id }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      return s.blocks.find((b) => b.id === id)?.completed === true;
+    }, { KEY, id: "gym-range" });
+    const afterRangeComplete = await readState();
+    const storedRangeSets = afterRangeComplete.condition.logs[today].gym;
+    check("範囲内セットは完了Blockへ紐付く", storedRangeSets[1].blockId === "gym-range", JSON.stringify(storedRangeSets));
+    check("範囲前後のセットは未連動のまま残る",
+      !storedRangeSets[0].blockId && !storedRangeSets[2].blockId, JSON.stringify(storedRangeSets));
+    check("Blockコメントは範囲内セットだけで生成される",
+      afterRangeComplete.blocks.find((b) => b.id === "gym-range")?.comment === "総重量 600kg(ベンチプレス 60kg×10)",
+      afterRangeComplete.blocks.find((b) => b.id === "gym-range")?.comment);
+
+    console.log("[8] 一括承認では未記録トーストを抑止する");
+    const bulkGym = gymBlock("gym-bulk-empty", "ジム(一括承認)", 10 * 60, {
+      plannedEndAt: atMinute(today, 10 * 60 + 30)
+    });
+    await seed({ view: "timeline", blocks: [bulkGym], gym: [] });
+    await page.evaluate(() => {
+      window.__bulkConfirmCalls = 0;
+      window.__bulkToastMessages = [];
+      window.confirm = () => { window.__bulkConfirmCalls += 1; return true; };
+      const toast = document.querySelector("#toast");
+      new MutationObserver((records) => {
+        for (const record of records) {
+          for (const node of record.addedNodes) {
+            if (node.textContent) window.__bulkToastMessages.push(node.textContent);
+          }
+        }
+      }).observe(toast, { childList: true, subtree: true, characterData: true });
+    });
+    await page.locator('[data-action="bulk-approve-planned"]').click();
+    await page.waitForFunction(({ KEY, id }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      return s.blocks.find((b) => b.id === id)?.completed === true;
+    }, { KEY, id: "gym-bulk-empty" });
+    await page.waitForFunction(() => document.querySelector("#toast")?.textContent?.includes("予定通り完了"));
+    const bulkSignals = await page.evaluate(() => ({
+      confirmCalls: window.__bulkConfirmCalls,
+      toastMessages: window.__bulkToastMessages,
+      currentToast: document.querySelector("#toast")?.textContent || ""
+    }));
+    check("一括承認のconfirmは全体確認1回だけ", bulkSignals.confirmCalls === 1, JSON.stringify(bulkSignals));
+    check("一括承認では未記録トーストを出さない",
+      !bulkSignals.toastMessages.includes("IRON LOGのセットが未記録です")
+        && !bulkSignals.currentToast.includes("IRON LOGのセットが未記録です"),
+      JSON.stringify(bulkSignals));
+
+    console.log("[9] NOW LANDINGのIRON LOG導線は実行中ジムBlockだけに表示され遷移できる");
     await page.clock.setFixedTime(fixedTime(9, 30, 0));
     const gymForLink = gymBlock("gym-link", "ジム導線", 9 * 60, { actualStartAt: atMinute(today, 9 * 60) });
     await seed({ view: "today", blocks: [gymForLink], gym: [] });

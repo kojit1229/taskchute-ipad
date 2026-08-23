@@ -14,6 +14,7 @@ const path = require("path");
 const { pathToFileURL } = require("url");
 
 const MODULE_PATH = path.join(__dirname, "..", "src", "features", "instruments.js");
+const IRON_LOG_MODULE_PATH = path.join(__dirname, "..", "src", "features", "iron-log.js");
 
 let failures = 0;
 function check(name, cond, extra = "") {
@@ -55,6 +56,7 @@ function logsFor(dates) {
 
 (async () => {
   const mod = await import(pathToFileURL(MODULE_PATH).href);
+  const { ironTotals } = await import(pathToFileURL(IRON_LOG_MODULE_PATH).href);
   const { configureInstruments, renderInstruments, earlyBirdStats, ironSummary } = mod;
 
   let registeredActions = null;
@@ -219,7 +221,21 @@ function logsFor(dates) {
     check("todayKg=0", s.todayKg === 0);
   }
 
-  console.log("[11] renderInstruments: 表示要素(現在ストリーク/自己ベスト/累計回数/ドットカレンダー/IRON LOGサマリ)を含む");
+  console.log("[11] ironSummary: 過去コメント移行分を含むIRON LOG詳細の累計と一致する");
+  {
+    const state = {
+      settings: { ironManualBaseKg: 100 },
+      ironImport: { importedTotalKg: 700 },
+      condition: { logs: { [TODAY]: { gym: [{ exercise: "ベンチプレス", weight: 60, reps: 10 }] } } }
+    };
+    const summary = ironSummary(state, TODAY);
+    const totals = ironTotals(state);
+    check("計器盤とIRON LOG詳細のlifetimeKgが一致する", summary.lifetimeKg === totals.lifetimeKg,
+      `summary=${summary.lifetimeKg}, totals=${totals.lifetimeKg}`);
+    check("累計は構造化600+手動100+移行700=1400", summary.lifetimeKg === 1400, `got ${summary.lifetimeKg}`);
+  }
+
+  console.log("[12] renderInstruments: 表示要素(現在ストリーク/自己ベスト/累計回数/ドットカレンダー/IRON LOGサマリ)を含む");
   {
     const state = {
       earlyBird: { logs: logsFor(["2026-08-21", "2026-08-22"]) },

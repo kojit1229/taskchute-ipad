@@ -8713,8 +8713,8 @@ function quickCompleteActualStart(block, endDateTime) {
 }
 
 // v234: ジムBlockの完了4導線で共有するIRON LOG転記フック。
-// blockId付きセットを優先し、無ければ未連動セットをこのBlockへ一度だけ割り当てる。
-function transferIronLogToCompletedBlock(blockId) {
+// v246: blockId付きセットを優先し、無ければ実績時間内の未連動セットだけを割り当てる。
+function transferIronLogToCompletedBlock(blockId, { suppressEmptyToast = false } = {}) {
   const block = state.blocks.find((b) => b.id === blockId);
   if (!block?.completed) return;
   const probe = {
@@ -8727,10 +8727,19 @@ function transferIronLogToCompletedBlock(blockId) {
   const allSets = state.condition?.logs?.[block.date]?.gym;
   const list = Array.isArray(allSets) ? allSets : [];
   const linkedSets = list.filter((set) => String(set?.blockId || "") === String(blockId));
-  const sets = linkedSets.length ? linkedSets : list.filter((set) => !set?.blockId);
+  const startMs = localDateTimeToMs(block.actualStartAt);
+  const endMs = localDateTimeToMs(block.actualEndAt);
+  const sets = linkedSets.length ? linkedSets : list.filter((set) => {
+    if (set?.blockId || !startMs || endMs < startMs) return false;
+    const atMs = localDateTimeToMs(set?.at);
+    return atMs >= startMs && atMs <= endMs;
+  });
   const summary = gymCommentSummary(sets);
   if (!summary) {
-    window.confirm("IRON LOGのセットが未記録です。このままBlockを完了しますか?");
+    if (!suppressEmptyToast) {
+      // 呼び出し元の完了トーストより後に表示し、警告が同一スタック内で上書きされるのを防ぐ。
+      Promise.resolve().then(() => showToast("IRON LOGのセットが未記録です"));
+    }
     return;
   }
   if (!linkedSets.length) sets.forEach((set) => { set.blockId = blockId; });
@@ -8992,7 +9001,7 @@ function bulkApproveAsPlanned() {
   state.blocks = state.blocks.map((b) => ids.has(b.id)
     ? { ...b, actualStartAt: b.plannedStartAt, everStartedAt: b.everStartedAt || b.plannedStartAt, actualEndAt: b.plannedEndAt || b.plannedStartAt, completed: true, updatedAt: nowDateTime() }
     : b);
-  targets.forEach((block) => transferIronLogToCompletedBlock(block.id));
+  targets.forEach((block) => transferIronLogToCompletedBlock(block.id, { suppressEmptyToast: true }));
   const taskIds = new Set(targets.map((b) => b.taskId).filter(Boolean));
   if (taskIds.size) {
     state.tasks = state.tasks.map((t) => taskIds.has(t.id) && t.status === "todo"

@@ -109,10 +109,11 @@ function ironSummary(state, todayIso) {
   const conditionLogs = (state && state.condition && state.condition.logs) || {};
   const targetKg = Number(state?.settings?.ironDailyTarget) || 2000;
   const manualBaseKg = Number(state?.settings?.ironManualBaseKg) || 0;
+  const importedTotalKg = Number(state?.ironImport?.importedTotalKg) || 0;
 
   const todayKg = gymSetsTotalKg(conditionLogs[todayIso]?.gym);
 
-  let lifetimeKg = manualBaseKg;
+  let lifetimeKg = manualBaseKg + importedTotalKg;
   for (const date of Object.keys(conditionLogs)) {
     lifetimeKg += gymSetsTotalKg(conditionLogs[date]?.gym);
   }
