@@ -627,6 +627,30 @@
       }
     },
     {
+      "file": "track-commit-core.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "journal-health"
+      ],
+      "assertionSignals": 50,
+      "assertionHash": "8c2676aa33b8b33a",
+      "sourceHash": "0981013d4f6021fd",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
       "file": "track-core.test.js",
       "kind": "node",
       "tier": "full",

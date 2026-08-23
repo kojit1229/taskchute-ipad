@@ -1,0 +1,58 @@
+{
+  "version": 245,
+  "date": "2026-08-23",
+  "title": "12WY週次コミットのデータ層",
+  "summary": "12WY二軸MVPの週次コミットについて、候補導出、manual／auto確定、完了刻印、免除／解除、計画追加を決定論的id upsertで実装した。",
+  "changedFiles": [
+    "app.js",
+    "CHANGES_v245.md",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v245.json",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/track-commit-core.test.js"
+  ],
+  "intent": [
+    "週範囲・現サイクル・Project／Task／Block健在性をcandidateBlocksForWeek(state, weekStart)の1純関数へ閉じ、後続フェーズ2の拡張点を一本化する。",
+    "週メタとitemを決定論的idでupsertし、確定時点の参照・表示値・lane・完了状態を保持しながら、過去週の分母を再計算しない契約を成立させる。",
+    "UI・共通フックを追加せず、実装単位#4のデータ層だけを独立して機械検証可能にする。"
+  ],
+  "changes": [
+    "candidateBlocksForWeek(value, weekStart)を追加し、設定開始日空、週範囲、現サイクル開始日から+83日以内のactive normal Project、健在Task、非deleted／非migrated／taskId有りBlockだけを候補化した。",
+    "commitWeek(weekStart, selectedBlockIds)を追加し、選択候補のwci itemとmanual週メタをupsertした。itemはtask／project／active track／title／plannedDateをスナップショットし、laneをcycleへ固定、完了済みBlockのactualEndAtが分精度なら秒を補完した。",
+    "autoCommitWeekIfNeeded(block)を追加し、当週候補Block・当週日付・週メタ不存在の全ガード成立時だけ、その瞬間の候補全件をsource:autoで一括確定した。週メタ存在後は保存も行わない。",
+    "stampCommitmentCompletion(block, isNowCompleted)を追加し、当週のweekStart+blockId itemだけへ完了刻印／解除とChangedAt／updatedAtを記録した。過去・未来週と別週移動元itemは変更しない。",
+    "excuseCommitmentItem(itemId, reason)／unexcuseCommitmentItem(itemId)を追加し、当週itemだけを理由必須で免除・解除できるようにした。",
+    "addCommitmentItems(weekStart, blockIds)を追加し、確定済み当週の候補だけをsource:addedでupsertした。全更新操作はsaveStateを通してdataModifiedAtをbumpし、renderは呼ばない。",
+    "tests/track-commit-core.test.jsをfast-node形式で追加し、仕様§6.2の単位#4該当境界と全upsert二重実行を固定した。Service WorkerのCACHE_NAMEをv245へ更新した。"
+  ],
+  "uncertainties": [
+    "仕様との差異はない。§2.5の『確定後の追加』を、addCommitmentItemsが当週の非deleted週メタを必要とするガードとして実装した。",
+    "manual／計画追加へ渡された非候補idは保存せず、候補集合との積集合だけをselectedBlockIds／itemへ採用した。UIは後続単位だが、データ層単独でも候補契約を破れない防御としている。",
+    "常駐関数へUIフックを追加しない単位のため、新設テストはv197で確立済みのVM抽出fast-node方式を採用し、saveStateはdataModifiedAt bumpを含む最小スタブで呼び出し回数まで検証した。"
+  ],
+  "reviewFocus": [
+    "candidateBlocksForWeek以外に候補条件が重複せず、+83／+84日、Task中断・中止・削除、BlockのtaskId空・deleted・migratedToを正しく分けているか。",
+    "manual／auto／addedの週メタ・item形状、source、selectedBlockIds、lane、active trackスナップショットと秒精度日時が§1.4／§2.2〜§2.5に一致するか。",
+    "当週以外の完了刻印・免除・解除・計画追加がno-opで、Block別週移動後も元週itemを更新しないか。",
+    "upsertが同一idを1件へ畳み、既存のsource優先・lane cycle・ChangedAt付き免除／完了を不用意に後退させないか。",
+    "全更新がupdatedAtとdataModifiedAtを進め、render・UI・フック・同期・normalizeStateへ変更を広げていないか。"
+  ],
+  "verification": [
+    "node tests/track-commit-core.test.js: 6群26観点すべてPASS、exit 0。",
+    "node tests/run-all.js track-commit-core track-core track-merge-core track-sync-characterization: 4 suite全件PASS、exit 0。",
+    "system Edge指定のnode tests/track-normalize.test.js: 全件PASS、exit 0。",
+    "node --check app.js／tests/track-commit-core.test.js／sw.js、npm run code:index:write/check、npm run test:manifest:write/check: PASS(code index 568 functions、test manifest 134 suites)。",
+    "node scripts/release-gate.js releases/v245.json --final: 最終工程で実行し結果を完了報告へ記載する。",
+    "実行コード差分はapp.js 163行追加、sw.js 2行追加1行削除の合計165行相当で200行以下。"
+  ],
+  "knownLimitations": [
+    "UI・共通フック結線は依頼どおり後続の実装単位#12／#5に残しているため、本版だけでは画面操作から新設関数は呼ばれない。",
+    "iOS Safari実機PWAでのService Worker更新とオフライン起動は監督者側で確認が必要。",
+    "taskchute-notes/handoff.mdがワークスペース外でEPERMになる場合、notes側更新は監督者が再実行する。",
+    "tombstone週メタはauto確定では存在扱いとして復活防止を優先する一方、addCommitmentItems／weeklyScoreは非削除を要求するため述語が非対称。MVPでは削除経路が存在せず実害はないが、削除機能を作る際に述語を統一すること。",
+    "VM抽出テストのweekRange等のスタブは本体コピーのため、本体変更時に乖離しうる。既知陽性アサートで乖離を抑止する。"
+  ]
+}

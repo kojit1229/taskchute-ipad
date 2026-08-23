@@ -1,6 +1,7 @@
 // v164: app.js分割・段階1(最初の抽出)。純粋関数はsrc/core/**へ抽出し、依存グラフの葉として
 //   importする(src/core/**はstateを一切参照しない。claude-review-result.md §7の契約)。
 import { mergeById, mergeByIdPreferNewer } from "./src/core/merge.js";
+import { activeTrackForProject } from "./src/core/track.js";
 // v166: app.js分割・段階3(state store + storage/sync gateway)。stateの再代入はsetState()
 //   経由のみ(claude-review-result.md §2 Blocker-1)。store.jsは何もimportしない真の葉。
 import { state, setState } from "./src/state/store.js";
@@ -3063,6 +3064,171 @@ function weekRange(dateISO) {
   const dow = (d.getDay() + 1) % 7; // Sat=0, Sun=1, ... Fri=6
   const sat = addDays(dateISO, -dow);
   return { weekStart: sat, weekEnd: addDays(sat, 6) };
+}
+
+// v245: 12WY週次コミットの候補判定をこの純関数だけに閉じる。フェーズ2のtaskレーン追加時も
+// 候補定義の変更点をここへ集約し、確定・自動確定・計画追加の母集合を分岐させない。
+function candidateBlocksForWeek(value, weekStart) {
+  const cycleStart = value?.settings?.twelveWeekStartDate || "";
+  if (!cycleStart) return [];
+  const cycleEnd = addDays(cycleStart, 83);
+  const range = weekRange(weekStart);
+  const projects = new Map((value.projects || []).filter((project) =>
+    !project.deleted && project.kind === "normal" && project.status === "active"
+      && project.twelveWeekStartDate >= cycleStart && project.twelveWeekStartDate <= cycleEnd
+  ).map((project) => [project.id, project]));
+  const tasks = new Map((value.tasks || []).filter((task) =>
+    !task.deleted && projects.has(task.projectId)
+  ).map((task) => [task.id, task]));
+  return (value.blocks || []).filter((block) => {
+    const task = tasks.get(block.taskId);
+    return !block.deleted && !block.migratedTo && block.taskId && task
+      && (block.completed || (task.status !== "suspended" && task.status !== "cancelled"))
+      && block.date >= range.weekStart && block.date <= range.weekEnd;
+  });
+}
+
+const COMMITMENT_SOURCE_PRIORITY = { auto: 0, confirmed: 1, added: 2 };
+
+function commitmentItemForBlock(value, block, weekStart, source, now) {
+  const id = `wci_${weekStart}_${block.id}`;
+  const existing = (value.weeklyCommitments || []).find((record) => record.id === id);
+  const task = (value.tasks || []).find((entry) => entry.id === block.taskId);
+  const projectId = task?.projectId || "";
+  const actualEndAt = block.completed ? (block.actualEndAt || now) : "";
+  const completedAt = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(actualEndAt)
+    ? actualEndAt + ":00"
+    : actualEndAt;
+  const incoming = {
+    id, recordType: "item", weekStart, blockId: block.id,
+    taskId: block.taskId, projectId,
+    trackId: activeTrackForProject(value.tracks || [], projectId)?.id || "",
+    title: block.title || "", plannedDate: block.date, source, lane: "cycle",
+    excused: false, excusedReason: "", excusedChangedAt: "",
+    completedAt, completedChangedAt: completedAt ? now : "",
+    createdAt: existing?.createdAt || now, updatedAt: now, deleted: false
+  };
+  if (!existing) return incoming;
+  const keepExcused = String(existing.excusedChangedAt || "") > String(incoming.excusedChangedAt || "");
+  const keepCompleted = String(existing.completedChangedAt || "") > String(incoming.completedChangedAt || "");
+  return {
+    ...existing, ...incoming,
+    source: (COMMITMENT_SOURCE_PRIORITY[existing.source] ?? -1) > COMMITMENT_SOURCE_PRIORITY[source]
+      ? existing.source : source,
+    lane: existing.lane === "cycle" ? "cycle" : incoming.lane,
+    ...(keepExcused ? {
+      excused: existing.excused, excusedReason: existing.excusedReason,
+      excusedChangedAt: existing.excusedChangedAt
+    } : {}),
+    ...(keepCompleted ? {
+      completedAt: existing.completedAt, completedChangedAt: existing.completedChangedAt
+    } : {}),
+    deleted: Boolean(existing.deleted)
+  };
+}
+
+function upsertWeeklyCommitment(record) {
+  state.weeklyCommitments = [
+    ...(state.weeklyCommitments || []).filter((entry) => entry.id !== record.id),
+    record
+  ];
+}
+
+function commitWeek(weekStart, selectedBlockIds) {
+  weekStart = weekRange(weekStart).weekStart;
+  if (weekStart !== weekRange(todayISO()).weekStart) return;
+  const candidates = candidateBlocksForWeek(state, weekStart);
+  const byId = new Map(candidates.map((block) => [block.id, block]));
+  const selected = [...new Set(Array.isArray(selectedBlockIds) ? selectedBlockIds : [])]
+    .filter((id) => byId.has(id));
+  const now = nowDateTime();
+  selected.forEach((id) => upsertWeeklyCommitment(
+    commitmentItemForBlock(state, byId.get(id), weekStart, "confirmed", now)
+  ));
+  const id = "wcw_" + weekStart;
+  const existing = (state.weeklyCommitments || []).find((record) => record.id === id);
+  upsertWeeklyCommitment({
+    id, recordType: "week", weekStart,
+    cycleStartDate: state.settings.twelveWeekStartDate || "",
+    committedAt: now, committedVia: "manual", selectedBlockIds: selected,
+    createdAt: existing?.createdAt || now, updatedAt: now, deleted: false
+  });
+  saveState();
+}
+
+function autoCommitWeekIfNeeded(block) {
+  if (!block?.date) return;
+  const weekStart = weekRange(block.date).weekStart;
+  if (weekStart !== weekRange(todayISO()).weekStart) return;
+  if ((state.weeklyCommitments || []).some((record) => record.id === "wcw_" + weekStart)) return;
+  const candidates = candidateBlocksForWeek(state, weekStart);
+  if (!candidates.some((candidate) => candidate.id === block.id)) return;
+  const now = nowDateTime();
+  candidates.forEach((candidate) => upsertWeeklyCommitment(
+    commitmentItemForBlock(state, candidate, weekStart, "auto", now)
+  ));
+  upsertWeeklyCommitment({
+    id: "wcw_" + weekStart, recordType: "week", weekStart,
+    cycleStartDate: state.settings.twelveWeekStartDate || "",
+    committedAt: now, committedVia: "auto", selectedBlockIds: [],
+    createdAt: now, updatedAt: now, deleted: false
+  });
+  saveState();
+}
+
+function stampCommitmentCompletion(block, isNowCompleted) {
+  if (!block?.date) return;
+  const weekStart = weekRange(block.date).weekStart;
+  if (weekStart !== weekRange(todayISO()).weekStart) return;
+  const id = `wci_${weekStart}_${block.id}`;
+  const item = (state.weeklyCommitments || []).find((record) => record.id === id && !record.deleted);
+  if (!item) return;
+  const now = nowDateTime();
+  upsertWeeklyCommitment({
+    ...item, completedAt: isNowCompleted ? now : "",
+    completedChangedAt: now, updatedAt: now
+  });
+  saveState();
+}
+
+function excuseCommitmentItem(itemId, reason) {
+  const text = (reason || "").trim();
+  if (!text) return;
+  const item = (state.weeklyCommitments || []).find((record) =>
+    record.id === itemId && record.recordType === "item" && !record.deleted);
+  if (!item || item.weekStart !== weekRange(todayISO()).weekStart) return;
+  const now = nowDateTime();
+  upsertWeeklyCommitment({
+    ...item, excused: true, excusedReason: text,
+    excusedChangedAt: now, updatedAt: now
+  });
+  saveState();
+}
+
+function unexcuseCommitmentItem(itemId) {
+  const item = (state.weeklyCommitments || []).find((record) =>
+    record.id === itemId && record.recordType === "item" && !record.deleted);
+  if (!item || item.weekStart !== weekRange(todayISO()).weekStart) return;
+  const now = nowDateTime();
+  upsertWeeklyCommitment({
+    ...item, excused: false, excusedReason: "",
+    excusedChangedAt: now, updatedAt: now
+  });
+  saveState();
+}
+
+function addCommitmentItems(weekStart, blockIds) {
+  if (weekStart !== weekRange(todayISO()).weekStart) return;
+  if (!(state.weeklyCommitments || []).some((record) =>
+    record.id === "wcw_" + weekStart && record.recordType === "week" && !record.deleted)) return;
+  const byId = new Map(candidateBlocksForWeek(state, weekStart).map((block) => [block.id, block]));
+  const selected = [...new Set(Array.isArray(blockIds) ? blockIds : [])].filter((id) => byId.has(id));
+  if (!selected.length) return;
+  const now = nowDateTime();
+  selected.forEach((id) => upsertWeeklyCommitment(
+    commitmentItemForBlock(state, byId.get(id), weekStart, "added", now)
+  ));
+  saveState();
 }
 
 // v39: 開いている問い(Zone 3)。最大3件、deepening を lastTouchedAt 降順で優先。
