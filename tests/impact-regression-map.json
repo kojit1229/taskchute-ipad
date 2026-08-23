@@ -175,6 +175,17 @@
       "suites": [
         "recurrence-core"
       ]
+    },
+    "track-core": {
+      "paths": [
+        "^src/core/track"
+      ],
+      "patterns": [
+        "weeklyScore|paceNumeric|paceMilestone|trackStatus|forwardTracksForWeek|selectTrackFooter|activeTrackForProject|latestMeasurement"
+      ],
+      "suites": [
+        "track-core"
+      ]
     }
   }
 }

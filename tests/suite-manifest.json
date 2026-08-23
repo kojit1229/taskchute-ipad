@@ -627,6 +627,30 @@
       }
     },
     {
+      "file": "track-core.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "journal-health"
+      ],
+      "assertionSignals": 42,
+      "assertionHash": "deb189b79cedeabc",
+      "sourceHash": "3bab70d6688ece76",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
       "file": "v100.test.js",
       "kind": "e2e",
       "tier": "full",

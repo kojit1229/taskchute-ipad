@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v238";
+const CACHE_NAME = "taskchute-journal-pwa-v239";
+// v239: 12WY二軸MVPの純関数track.jsを追加し、オフライン配信用APP_SHELLへ登録した。
 // v238: 完全同型の標準モーダル骨格を共通ヘルパーへ集約した(APP_SHELL変更なし)。
 // v237: 未参照CSSを削除し、Project/Taskの中断・再開status更新を共通化した(APP_SHELL変更なし)。
 // v235: 主観睡眠時間の入力UI・書き込みactionを廃止した(APP_SHELL変更なし)。
@@ -268,6 +269,7 @@ const APP_SHELL = [
   "./assets/icon.svg",
   "./src/core/merge.js",
   "./src/core/recurrence.js",
+  "./src/core/track.js",
   "./src/core/today-model.js",
   "./src/features/coach.js",
   "./src/features/instruments.js",

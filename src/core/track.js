@@ -1,0 +1,148 @@
+// src/core/track.js — v239: 12WY二軸MVPのスコア・成果トラック純関数。
+// state / store.js / app.js に依存しない葉モジュールとして、日付もUTC数値演算だけで扱う。
+
+const PACE_TOLERANCE_DAYS = 3.5;
+const STALE_DAYS = 8;
+
+function dateParts(iso) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || "");
+  if (!match) return null;
+  const y = Number(match[1]), m = Number(match[2]), d = Number(match[3]);
+  const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
+  const monthDays = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return m >= 1 && m <= 12 && d >= 1 && d <= monthDays[m - 1] ? { y, m, d } : null;
+}
+
+function daysBetween(aISO, bISO) {
+  const a = dateParts(aISO), b = dateParts(bISO);
+  if (!a || !b) return Number.NaN;
+  return Math.round((Date.UTC(b.y, b.m - 1, b.d) - Date.UTC(a.y, a.m - 1, a.d)) / 86400000);
+}
+
+function dedupeById(records) {
+  const byId = new Map();
+  for (const record of records || []) {
+    const current = byId.get(record.id);
+    if (!current || String(record.updatedAt || "") > String(current.updatedAt || "")) byId.set(record.id, record);
+  }
+  return [...byId.values()];
+}
+
+function weeklyScore(weeklyCommitments, weekStart) {
+  const records = dedupeById(weeklyCommitments);
+  const meta = records.find((record) => record.recordType === "week" && record.weekStart === weekStart && !record.deleted);
+  if (!meta) return { status: "uncommitted" };
+  const laneItems = records.filter((record) => record.recordType === "item" && record.weekStart === weekStart
+    && !record.deleted && record.lane === "cycle");
+  if (!laneItems.length) return { status: "uncommitted" };
+  const selected = new Set(Array.isArray(meta.selectedBlockIds) ? meta.selectedBlockIds : []);
+  const scope = meta.committedVia === "manual"
+    ? laneItems.filter((item) => selected.has(item.blockId) || item.source === "added")
+    : laneItems;
+  const active = scope.filter((item) => !item.excused);
+  if (!active.length) return { status: scope.length ? "na" : "uncommitted" };
+  const done = active.filter((item) => item.completedAt).length;
+  return { status: "scored", done, total: active.length, pct: Math.round(done / active.length * 100) };
+}
+
+function latestMeasurement(measurements, trackId) {
+  let latest = null;
+  for (const measurement of measurements || []) {
+    if (measurement.deleted || measurement.trackId !== trackId) continue;
+    if (!latest
+      || String(measurement.observedAt || "") > String(latest.observedAt || "")
+      || (measurement.observedAt === latest.observedAt
+        && String(measurement.updatedAt || "") > String(latest.updatedAt || ""))
+      || (measurement.observedAt === latest.observedAt && measurement.updatedAt === latest.updatedAt
+        && String(measurement.id || "") < String(latest.id || ""))) latest = measurement;
+  }
+  return latest;
+}
+
+function paceNumeric(track, latestValue, todayISO) {
+  const baseline = Number(track?.baselineValue), goal = Number(track?.goalValue);
+  const totalDays = daysBetween(track?.startDate, track?.deadline);
+  if (!Number.isFinite(baseline) || !Number.isFinite(goal) || !Number.isFinite(totalDays)
+    || totalDays <= 0 || goal === baseline) return { invalid: true };
+  const elapsedRaw = daysBetween(track.startDate, todayISO);
+  if (!Number.isFinite(elapsedRaw)) return { invalid: true };
+  const elapsed = Math.max(0, Math.min(totalDays, elapsedRaw));
+  const expected = baseline + (goal - baseline) * (elapsed / totalDays);
+  const latest = latestValue === null || latestValue === undefined || latestValue === "" ? baseline : Number(latestValue);
+  if (!Number.isFinite(latest)) return { invalid: true };
+  const diffRaw = latest - expected;
+  const diffNorm = diffRaw * Math.sign(goal - baseline);
+  const tolerance = Math.abs(goal - baseline) / totalDays * PACE_TOLERANCE_DAYS;
+  return { expected, diffRaw, diffNorm, tolerance };
+}
+
+function paceMilestone(track, todayISO) {
+  const milestones = (track?.milestones || []).filter((milestone) => !milestone.deleted);
+  const plannedDates = milestones.map((milestone) => milestone.plannedDate).filter(Boolean);
+  const done = milestones.filter((milestone) => milestone.doneAt).length;
+  const expected = milestones.filter((milestone) => milestone.plannedDate && milestone.plannedDate <= todayISO).length;
+  const deadline = plannedDates.length ? plannedDates.reduce((latest, date) => date > latest ? date : latest) : "";
+  return { done, total: milestones.length, expected, diffNorm: done - expected, deadline };
+}
+
+function trackStatus(track, pace, latestValue, lastObservedISO, todayISO) {
+  if (pace?.invalid) return { state: "ontrack", label: "順調", severity: 2 };
+  const milestones = (track?.milestones || []).filter((milestone) => !milestone.deleted);
+  const latest = latestValue === null || latestValue === undefined ? Number(track?.baselineValue) : Number(latestValue);
+  const dir = Math.sign(Number(track?.goalValue) - Number(track?.baselineValue));
+  const done = track?.kind === "milestone"
+    ? milestones.length > 0 && milestones.every((milestone) => milestone.doneAt)
+    : Number.isFinite(latest) && (latest - Number(track?.goalValue)) * dir >= 0;
+  if (done) return { state: "done", label: "完了", severity: 0 };
+  const deadline = track?.kind === "milestone" ? (pace?.deadline || "") : (track?.deadline || "");
+  if (deadline && todayISO > deadline) return { state: "warn", label: "期限超過", severity: 5 };
+  if (track?.kind !== "milestone"
+    && daysBetween(lastObservedISO || track?.startDate, todayISO) >= STALE_DAYS) {
+    return { state: "stale", label: "未更新", severity: 3 };
+  }
+  const tolerance = track?.kind === "milestone" ? 0 : Number(pace?.tolerance);
+  if (pace?.diffNorm > tolerance) return { state: "ahead", label: "先行", severity: 1 };
+  if (pace?.diffNorm >= -tolerance) return { state: "ontrack", label: "順調", severity: 2 };
+  return { state: "warn", label: "要注意", severity: 4 };
+}
+
+function forwardTracksForWeek(tracks, measurements, weekStart, weekEnd) {
+  const results = [];
+  for (const track of (tracks || []).filter((item) => !item.deleted)) {
+    if (track.kind === "milestone") {
+      const labels = (track.milestones || []).filter((milestone) => !milestone.deleted
+        && milestone.doneAt >= weekStart && milestone.doneAt <= weekEnd).map((milestone) => milestone.label);
+      if (labels.length) results.push({ trackId: track.id, delta: labels });
+      continue;
+    }
+    const inWeek = (measurements || []).filter((measurement) => measurement.observedAt?.slice(0, 10) >= weekStart
+      && measurement.observedAt.slice(0, 10) <= weekEnd);
+    const beforeWeek = (measurements || []).filter((measurement) => measurement.observedAt?.slice(0, 10) < weekStart);
+    const current = latestMeasurement(inWeek, track.id);
+    if (!current) continue;
+    const previous = latestMeasurement(beforeWeek, track.id);
+    const previousValue = previous ? Number(previous.value) : Number(track.baselineValue);
+    const delta = Number(current.value) - previousValue;
+    const dir = Math.sign(Number(track.goalValue) - Number(track.baselineValue));
+    if (Number.isFinite(delta) && delta * dir > 0) results.push({ trackId: track.id, delta });
+  }
+  return results;
+}
+
+function selectTrackFooter(entries) {
+  const open = (entries || []).filter(({ track, status }) => track && status && !track.deleted
+    && track.status !== "closed" && status.state !== "done").sort((a, b) => b.status.severity - a.status.severity);
+  if (!open.length) return [];
+  return open.every(({ status }) => status.state === "ahead" || status.state === "ontrack") ? open.slice(0, 1) : open.slice(0, 2);
+}
+
+function activeTrackForProject(tracks, projectId) {
+  return (tracks || []).filter((track) => !track.deleted && track.status === "active" && track.ownerId === projectId)
+    .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || ""))
+      || String(a.id || "").localeCompare(String(b.id || "")))[0] || null;
+}
+
+export {
+  PACE_TOLERANCE_DAYS, STALE_DAYS, dateParts, daysBetween, weeklyScore, latestMeasurement,
+  paceNumeric, paceMilestone, trackStatus, forwardTracksForWeek, selectTrackFooter, activeTrackForProject
+};
