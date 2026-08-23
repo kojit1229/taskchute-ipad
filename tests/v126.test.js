@@ -223,8 +223,6 @@ function check(name, cond, extra = "") {
       weeklyWishes: { [WEEK_KEY]: { taskIds: ["w-5"], updatedAt: `${TODAY}T09:00` } },
       view: "home"
     });
-    check("旧home週間Wishカードと「今日へ」導線は描画されない",
-      await page.locator('.home-weekly-wish-card, [data-action="wish-subtask-to-tasks"]').count() === 0);
     check("旧home viewはtodayへフォールバックする", await page.locator('#app[data-view="today"]').count() === 1);
     const sHome = await stateNow();
     check("既存weeklyWishes選択は保持され、意図しないBlockを作らない",

@@ -98,7 +98,6 @@ function check(name, cond, extra = "") {
     await page.reload();
     await page.waitForTimeout(400);
 
-    check(".home-box/.home-dotは描画されない", await page.locator(".home-box, .home-dot").count() === 0);
     check("旧currentView=homeはtodayへ縮退する",
       await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).currentView, KEY) === "today");
     check("縮退先でTOWERが描画される", await page.locator(".today-tower").count() === 1);

@@ -243,7 +243,6 @@ function check(name, cond, extra = "") {
     const pageErrorsBefore4 = pageErrorCount;
     await seed({ view: "home", sleepLogs: { [TODAY]: { sleepH: "4.5" } } });  // 文字列(非正規state)。5.5h未満=赤字想定
     await page.waitForTimeout(300);
-    check("v230: 旧home体力予算チップは描画されない", await page.locator(".home-condition-budget-chip").count() === 0);
     await page.evaluate((KEY) => { const s = JSON.parse(localStorage.getItem(KEY)); s.blocks = []; localStorage.setItem(KEY, JSON.stringify(s)); }, KEY);
     await page.click('[data-action="nav"][data-view="journal"]');
     await page.click('[data-action="generate-report"]');

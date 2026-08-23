@@ -89,7 +89,6 @@ function check(name, cond, extra = "") {
     // ============================================================
     console.log("[1] 当日分のログがあればラベル無しで通常表示");
     await seed({ sleepLogs: { [TODAY]: sleepLog({ sleepH: 6.0 }) }, view: "home" });
-    check("v230: 旧home体力予算チップは描画されない", await page.locator(".home-condition-budget-chip").count() === 0);
     check("チップに「低予算」が出る", (await chipText()).includes("低予算"), await chipText());
     check("日付ラベル(M/D朝)は出ない", !(await chipText()).includes("朝"), await chipText());
 

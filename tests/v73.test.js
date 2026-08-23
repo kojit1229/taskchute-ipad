@@ -136,7 +136,6 @@ function check(name, cond, extra = "") {
       sleepHours: 7, meds: null, capacity: "", morningRecordedAt: "",
       eveningMood: null, eveningNote: "", eveningRecordedAt: "", gym: []
     } } } });
-    check("廃止された睡眠プリセットボタンが存在しない", await page.locator('[data-action="set-sleep"]').count() === 0);
     await page.click('[data-action="toggle-meds"]');
     await page.waitForTimeout(200);
     await page.click('[data-action="set-capacity"][data-value="minimal"]');

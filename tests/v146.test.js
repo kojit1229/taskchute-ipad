@@ -95,11 +95,6 @@ function check(name, cond, extra = "") {
     // ============================================================
     console.log("[1-8] v230: home折りたたみ/専用カードの不存在とview移行");
     await seed({ blocks: [], view: "home" });
-    check("旧homeナビ・タブ・折りたたみは描画されない",
-      await page.locator('[data-view="home"], .home-tabbar, [data-fold-id^="home-"], #homezone-1').count() === 0);
-    check("旧home viewはtodayへフォールバックする", await page.locator('#app[data-view="today"]').count() === 1);
-    check("現行の今日TOWERは描画される", await page.locator(".sec-atis").count() === 1);
-
     // (9) 設定画面のvNNN非表示 + 現在のファイル構成のdetails化
     // ============================================================
     console.log("[9] 設定画面から内部バージョン表記(vNNN)が消え、「現在のファイル構成」はdetails既定closed");

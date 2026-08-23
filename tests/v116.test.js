@@ -107,9 +107,6 @@ function check(name, cond, extra = "") {
       settings: { dailyBufferMin: 45 },
       view: "home"
     });
-    check("旧buffer meter/過積載ヒントは描画されない",
-      await page.locator(".buffer-meter, .buffer-overload-hint").count() === 0);
-    check("旧home viewはtodayへフォールバックする", await page.locator('#app[data-view="today"]').count() === 1);
     const kept = await stateNow();
     check("既存dailyBufferMinは正規化後も保持される",
       kept.settings?.dailyBufferMin === 45, String(kept.settings?.dailyBufferMin));

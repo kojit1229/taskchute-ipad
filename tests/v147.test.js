@@ -111,8 +111,6 @@ function check(name, cond, extra = "") {
       projects: [testProject()],
       view: "home"
     });
-    check("旧homeタスクシュート/状態/電池UIは描画されない",
-      await page.locator('.home-tc, .home-today-status, .home-condition-budget-chip, .home-battery-chip').count() === 0);
     check("旧home viewはtodayへフォールバックしTOWERを表示する",
       await page.locator('#app[data-view="today"] .sec-atis').count() === 1);
 

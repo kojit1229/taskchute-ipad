@@ -199,8 +199,6 @@ function check(name, cond, extra = "") {
       projects: [testProject()],
       view: "home"
     });
-    check("旧home backlogとhome-add-today導線は描画されない",
-      await page.locator('.home-due, [data-action="home-add-today"]').count() === 0);
     check("旧home viewはtodayへフォールバックする", await page.locator('#app[data-view="today"]').count() === 1);
     // 現行タスクシュートでの複数回追加契約は本スイート(a)〜(e)で維持している。
   } finally {

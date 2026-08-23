@@ -129,7 +129,6 @@ function check(name, cond, extra = "") {
     // ":00"を補って19文字へ揃えるため、クリック前の(正規化後の)plannedStartAtを控えておき、
     // これと比較する(自前でhhmm()から組み立てた無補正の文字列とは一致しないため)。
     const plannedStartAtNormalized = (await stateNow()).blocks.find((x) => x.id === "block-hd").plannedStartAt;
-    check("v230: 旧home完了ドットは描画されない", await page.locator(".home-dot").count() === 0);
     await page.locator('.checkbox-button[data-action="toggle-block"][data-id="block-hd"]').click();
     await page.waitForTimeout(200);
     check("モーダルは開かない(即完了)", await page.locator(".modal-card").count() === 0);
@@ -340,9 +339,6 @@ function check(name, cond, extra = "") {
 
     console.log("[B2] ホーム/今日タブ・ジャーナルのCSSが実際にトークンを参照している(適用範囲の確認)");
     await seed({ view: "home", blocks: [] });
-    check("v230: 旧homeスコアラベルは描画されずtodayへ移行する",
-      await page.locator(".home-score-lab").count() === 0 && await page.locator('#app[data-view="today"]').count() === 1);
-
     await page.setViewportSize({ width: 390, height: 844 });
     // 390px幅ではサイドバーのnavボタンが非表示になり、bottom-navと合わせて同一selectorが
     // 2件ヒットして曖昧になる(片方は非表示でクリック不可)ため、他のseed()呼び出しと同じく

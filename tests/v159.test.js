@@ -179,7 +179,6 @@ const freshGeneratedAt = () => toUtcIso(new Date());
     console.log("[2-4] v230: 未来からの手紙の旧home導線は描画されない");
     letterFixture = LETTER_BODY;
     await seedHome({ selectedDate: TODAY });
-    check("旧home導線は描画されない", await page.locator('[data-action="open-future-letter"]').count() === 0);
     check("旧home viewはtodayへフォールバックしTOWERを表示する",
       await page.locator('#app[data-view="today"] .sec-atis').count() === 1);
 

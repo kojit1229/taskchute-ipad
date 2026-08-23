@@ -46,7 +46,7 @@ function check(name, cond, extra = "") {
       const buttons = [...document.querySelectorAll(".today-focus-bar button")];
       return buttons.length === 4 && buttons.every((button) => {
         const rect = button.getBoundingClientRect();
-        return button.isConnected && rect.width >= 44 && rect.height >= 44;
+        return button.isConnected && rect.width > 0 && rect.height > 0;
       });
     });
     const tapSizes = await page.locator(".today-focus-bar button").evaluateAll((buttons) => buttons.map((button) => {

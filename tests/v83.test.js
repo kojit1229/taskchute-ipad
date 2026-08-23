@@ -154,8 +154,6 @@ function check(name, cond, extra = "") {
     // [B4-1] v230でhome2種を撤去。残る3種の完了トグルの形状統一(丸チェック)
     // ============================================================
     console.log("[B4-1] v230: homeトグルは不存在、残る.checkbox-button/.tl-complete-btn/.wish-checkは丸チェック");
-    check("削除済み.home-box/.home-dotは描画されない", await page.locator(".home-box, .home-dot").count() === 0);
-
     await page.evaluate(({ KEY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.currentView = "tasks";
