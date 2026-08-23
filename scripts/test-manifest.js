@@ -106,7 +106,8 @@ const explicitDomains = {
   "v133.test.js": ["planning-execution", "content-ai"],
   "v151.test.js": ["ui-responsive"],
   "v155.test.js": ["planning-execution", "ui-responsive"],
-  "v163.test.js": ["journal-health", "ui-responsive"]
+  "v163.test.js": ["journal-health", "ui-responsive"],
+  "v254.test.js": ["planning-execution", "sync-storage"]
 };
 
 function countMatches(source, pattern) {
