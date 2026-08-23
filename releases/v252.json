@@ -1,0 +1,54 @@
+{
+  "version": 252,
+  "date": "2026-08-23",
+  "title": "固定化ルーティンの習慣ストリーク基盤",
+  "summary": "自分で固定化した最大3件のdaily/weekdaysルーティンだけを、固定化日以降の完了ログから静かに数えるデータ層を追加した。",
+  "changedFiles": [
+    "app.js",
+    "CHANGES_v252.md",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v252.json",
+    "src/core/habit-streak.js",
+    "src/core/recurrence.js",
+    "src/sync/github.js",
+    "sw.js",
+    "tests/store-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/v252.test.js"
+  ],
+  "intent": [
+    "全ルーティンを自動採点せず、自分で固定化したdaily/weekdaysルーティンだけを静かな計器の対象にする。",
+    "過去Blockを逆算せず、streakSince以降に完了フックが残した汎用ログだけを正本にする。",
+    "弾2の計器盤表示と縮退版完了が、UI経路に依存せず同じログ・純関数を利用できる境界を先に作る。"
+  ],
+  "changes": [
+    "recurrencesへstreakSinceを追加し、normalizeStateで欠損・null・非対象kindをupdatedAt非改変のままnull補完した。",
+    "Block編集モーダルへdaily/weekdaysだけの固定化トグルを追加し、固定化日を今日として保存、解除はnull、4件目はトーストで拒否した。",
+    "habitStreaks[ruleId].logs[date]へdoneAtを記録する汎用書き込み口と削除口を追加し、当日Blockの完了・取消経路へ対称に配線した。",
+    "stateをimportしないsrc/core/habit-streak.jsへ、streakSince境界・weekdays非該当日スキップ・現在値リセット・自己ベスト算出を実装した。",
+    "取消ログを和集合で復活させないためhabitStreaksを同期コア比較へ加え、recurrencesのstreakSinceとともに不一致時fail-closeとした。",
+    "Service Workerをv252へ更新し、新しい純関数モジュールをAPP_SHELLへ追加した。"
+  ],
+  "uncertainties": [
+    "habitStreaksは完了取消を物理削除するため、earlyBirdと同じく自動和集合ではなく競合時fail-closeを選んだ。複数端末で同時操作した場合は自動収束より取消の非復活を優先する。"
+  ],
+  "reviewFocus": [
+    "固定化操作以外でstreakSinceが設定されず、非daily/weekdaysや4件目を対象にできないか。",
+    "当日完了の全経路が同じログ関数へ到達し、完了取消だけが同日のログを対称に削除するか。",
+    "純関数がstreakSince前のログを無視し、weekdaysの土日を切断扱いせず、過去の未完了適格日で現在値だけをリセットして自己ベストを保持するか。",
+    "normalizeStateと同期比較が既存データ・updatedAt・earlyBird/IRON計器を壊さず、iOS Safariの日付文字列パースを追加していないか。"
+  ],
+  "verification": [
+    "node --check app.js、src/core/habit-streak.js、tests/v252.test.js: PASS。",
+    "system Edge指定 tests/v252.test.js: 固定化・解除・最大3件・完了/取消ログ・daily/weekdays計算・streakSince境界・normalizeStateを全件PASS。",
+    "store-core、recurrence-core、instruments-core: 全件PASS。"
+  ],
+  "knownLimitations": [
+    "弾1ではストリーク値の計器盤表示を追加しない。弾2でhabitStreakStatsをINSTRUMENTSへ結線する。",
+    "縮退版UIは現行版で撤去済みのため、弾2以降で復帰・追加する場合はrecordHabitStreakDone相当の書き込み口へ結線する。",
+    "同梱Chromiumは実行環境のspawn EPERMで起動できないため、ブラウザE2Eとrelease gateはsystem Edge指定で検証する。",
+    "iOS Safari実機PWAでのService Worker更新とオフライン確認は監督者側で必要。"
+  ]
+}

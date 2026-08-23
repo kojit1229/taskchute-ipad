@@ -154,6 +154,57 @@ async function loadModules() {
     remoteNorm.earlyBird = { logs: {} };
     check("earlyBird不一致ならsyncCoreEqualはfalse", syncMod.syncCoreEqual(remoteNorm) === false);
   }
+  console.log("[B-1c] habitStreaksも取消を復活させないため競合時にfail-closeする");
+  {
+    const local = makeLocalWithPrimaryData();
+    local.habitStreaks = { r1: { logs: { "2026-07-27": { doneAt: "2026-07-27T08:00:00" } } } };
+    storeMod.setState(local);
+    const remoteNorm = makeRemoteDiffOnlyInJournals();
+    remoteNorm.habitStreaks = { r1: { logs: {} } };
+    check("habitStreaks不一致ならsyncCoreEqualはfalse", syncMod.syncCoreEqual(remoteNorm) === false);
+  }
+
+  function habitStreakFixture() {
+    return {
+      done: { logs: { "2026-07-28": { doneAt: "2026-07-28T08:00:00" } } },
+      cancelled: { logs: { "2026-07-27": { doneAt: "2026-07-27T08:00:00" } } }
+    };
+  }
+
+  console.log("[B-1d] ローカル採用でhabitStreaksの当日ログと当日取消を保持する");
+  {
+    const local = makeLocalWithPrimaryData();
+    local.habitStreaks = habitStreakFixture();
+    storeMod.setState(local);
+    const remoteNorm = makeRemoteDiffOnlyInJournals();
+    remoteNorm.habitStreaks = habitStreakFixture();
+    check("ローカル採用の前提としてsyncCoreEqualはtrue", syncMod.syncCoreEqual(remoteNorm) === true);
+    const merged = syncMod.computeSyncMerge(remoteNorm, "local");
+    syncMod.applySyncMergeToLocal(merged);
+    check("ローカル採用後も当日完了ログを保持", storeMod.state.habitStreaks.done.logs["2026-07-28"]?.doneAt === "2026-07-28T08:00:00");
+    check("ローカル採用後も取消済みruleの当日ログなしを保持",
+      storeMod.state.habitStreaks.cancelled.logs["2026-07-28"] == null
+        && storeMod.state.habitStreaks.cancelled.logs["2026-07-27"] != null,
+      JSON.stringify(storeMod.state.habitStreaks.cancelled));
+  }
+
+  console.log("[B-1e] リモート採用でhabitStreaksの当日ログと当日取消を保持する");
+  {
+    const local = makeLocalWithPrimaryData();
+    local.habitStreaks = habitStreakFixture();
+    storeMod.setState(local);
+    const remoteNorm = makeRemoteDiffOnlyInJournals();
+    remoteNorm.habitStreaks = habitStreakFixture();
+    check("リモート採用の前提としてsyncCoreEqualはtrue", syncMod.syncCoreEqual(remoteNorm) === true);
+    const merged = syncMod.computeSyncMerge(remoteNorm, "remote");
+    syncMod.applySyncMergeToRemote(merged, remoteNorm);
+    storeMod.setState(remoteNorm);
+    check("リモート採用後も当日完了ログを保持", storeMod.state.habitStreaks.done.logs["2026-07-28"]?.doneAt === "2026-07-28T08:00:00");
+    check("リモート採用後も取消済みruleの当日ログなしを保持",
+      storeMod.state.habitStreaks.cancelled.logs["2026-07-28"] == null
+        && storeMod.state.habitStreaks.cancelled.logs["2026-07-27"] != null,
+      JSON.stringify(storeMod.state.habitStreaks.cancelled));
+  }
 
   console.log("[B-2] ローカルを基準に残す経路(applySyncMergeToLocal): 4キーは触れられないため保全される");
   {

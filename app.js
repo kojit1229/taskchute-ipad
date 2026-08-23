@@ -1413,6 +1413,12 @@ function normalizeState(value) {
   // v229: EARLY BIRDの正本。旧stateと壊れた形状は空ログへ後方互換正規化する。
   if (!value.earlyBird || typeof value.earlyBird !== "object" || Array.isArray(value.earlyBird)) value.earlyBird = {};
   if (!value.earlyBird.logs || typeof value.earlyBird.logs !== "object" || Array.isArray(value.earlyBird.logs)) value.earlyBird.logs = {};
+  // v252: 固定化ルーティンの汎用ログ。ruleIdごとのnull/壊れた値も空ログへ補完する。
+  if (!value.habitStreaks || typeof value.habitStreaks !== "object" || Array.isArray(value.habitStreaks)) value.habitStreaks = {};
+  value.habitStreaks = Object.fromEntries(Object.entries(value.habitStreaks).sort().map(([ruleId, habit]) => [ruleId, {
+    ...(habit && typeof habit === "object" && !Array.isArray(habit) ? habit : {}),
+    logs: habit?.logs && typeof habit.logs === "object" && !Array.isArray(habit.logs) ? habit.logs : {}
+  }]));
   const actualIronImport = value.ironImport && typeof value.ironImport === "object" && !Array.isArray(value.ironImport)
     ? value.ironImport
     : {};
@@ -1900,6 +1906,11 @@ function normalizeState(value) {
   // v229: GATE編集の表示順。既存ルールは従来の配列順を初期orderとして維持する。
   value.recurrences = value.recurrences.map((r, index) => ({
     ...r, order: Number.isFinite(r.order) ? r.order : index
+  }));
+  // v252: 固定化はdaily/weekdaysだけ。既存ruleのupdatedAtは移行で変更しない。
+  value.recurrences = value.recurrences.map((r) => ({
+    ...r, streakSince: ["daily", "weekdays"].includes(r.kind) && /^\d{4}-\d{2}-\d{2}$/.test(String(r.streakSince || ""))
+      ? r.streakSince : null
   }));
   // v115: チェーンの当日進行状態(id=`${chainId}_${date}`)。既存端末には配列自体が無いため
   // []で補完する。currentIndexは次に完了すべきステップの添字、completedAtが付けば全ステップ完了。
@@ -8592,6 +8603,7 @@ function toggleBlock(id) {
     }
     return next;
   });
+  syncHabitStreakForBlock(state.blocks.find((block) => block.id === id));
   // v115: アンカー配置(提案G③)。完了したBlockが繰り返しルーティンに属していれば、
   // それをアンカーにする後続のルーティン/チェーンを直後の時刻に自動配置する。
   if (justCompleted && completedBlock && completedBlock.recurrenceGroupId) {
@@ -8632,6 +8644,7 @@ function toggleTaskCompleteFromBlock(blockId) {
     state.blocks = state.blocks.map((b) => b.id === blockId
       ? { ...b, completed: true, actualEndAt: b.actualEndAt || nowDateTime(), updatedAt: nowDateTime() }
       : b);
+    syncHabitStreakForBlock(state.blocks.find((b) => b.id === blockId));
     transferIronLogToCompletedBlock(blockId);
     generateReport(block.date, { quiet: true });
   } else {
@@ -8776,6 +8789,7 @@ function bulkApproveAsPlanned() {
   state.blocks = state.blocks.map((b) => ids.has(b.id)
     ? { ...b, actualStartAt: b.plannedStartAt, everStartedAt: b.everStartedAt || b.plannedStartAt, actualEndAt: b.plannedEndAt || b.plannedStartAt, completed: true, updatedAt: nowDateTime() }
     : b);
+  targets.forEach((block) => syncHabitStreakForBlock(state.blocks.find((b) => b.id === block.id)));
   targets.forEach((block) => transferIronLogToCompletedBlock(block.id, { suppressEmptyToast: true }));
   generateReport(today, { quiet: true });
   const taskIds = new Set(targets.map((b) => b.taskId).filter(Boolean));
@@ -10106,6 +10120,7 @@ function completePomodoro() {
           updatedAt: nowDateTime()
         }
       : block);
+    syncHabitStreakForBlock(state.blocks.find((block) => block.id === blockId));
     transferIronLogToCompletedBlock(blockId);
   }
   const completedBlock = blockId ? state.blocks.find((block) => block.id === blockId) : null;
@@ -10570,6 +10585,7 @@ function finishBlockFromBreak() {
           updatedAt: nowDateTime()
         }
       : b);
+    syncHabitStreakForBlock(state.blocks.find((b) => b.id === lastBlockId));
     transferIronLogToCompletedBlock(lastBlockId);
   }
   // タイマーを終了状態に
@@ -11484,6 +11500,39 @@ function toggleEarlyBird() {
   saveAndRender(late ? "早起きを記録しました(目標時刻より遅いチェックです)" : "早起きを記録しました");
 }
 
+// v252: 完了UIに依存しない固定化ルーティンの書き込み口。当日実体だけをログ正本へ反映する。
+function recordHabitStreakDone(ruleId, dateISO) {
+  const rule = (state.recurrences || []).find((r) => r.id === ruleId && !r.deleted);
+  if (!rule?.streakSince || !["daily", "weekdays"].includes(rule.kind) || dateISO < rule.streakSince) return false;
+  state.habitStreaks ||= {};
+  const habit = (state.habitStreaks[ruleId] ||= { logs: {} });
+  habit.logs ||= {};
+  habit.logs[dateISO] ||= { doneAt: nowDateTime() };
+  return true;
+}
+
+function removeHabitStreakDone(ruleId, dateISO) {
+  const logs = state.habitStreaks?.[ruleId]?.logs;
+  if (!logs?.[dateISO]) return false;
+  delete logs[dateISO];
+  return true;
+}
+
+function syncHabitStreakForBlock(block) {
+  if (!block?.recurrenceGroupId || block.date !== todayISO()) return;
+  if (block.completed) recordHabitStreakDone(block.recurrenceGroupId, block.date);
+  else removeHabitStreakDone(block.recurrenceGroupId, block.date);
+}
+
+function habitStreakEdit(rule, nextKind, requested) {
+  if (!rule || !["daily", "weekdays"].includes(nextKind)) return { ok: true, value: null };
+  if (requested === undefined) return { ok: true, value: rule.streakSince || null };
+  if (!requested) return { ok: true, value: null };
+  if (rule.streakSince) return { ok: true, value: rule.streakSince };
+  const fixedCount = (state.recurrences || []).filter((r) => !r.deleted && r.id !== rule.id && r.streakSince).length;
+  return fixedCount >= 3 ? { ok: false, value: null } : { ok: true, value: todayISO() };
+}
+
 function recurrenceKindLabel(kind) {
   return { daily: "毎日", weekdays: "平日のみ", weekly: "毎週", monthly: "毎月" }[kind] || kind || "";
 }
@@ -12320,6 +12369,11 @@ function buildBlockModal(block) {
                   実績・コメント・完了の編集は<strong>この日のみ</strong>に反映されます。<br>
                   「終了する」を選ぶと今後の自動生成が止まります(過去の実績は残ります)。
                 </div>
+                ${["daily", "weekdays"].includes(liveRule.kind) ? `
+                <label class="checkbox-line" style="margin-top:10px">
+                  <input type="checkbox" data-modal-field="streakFixed" ${liveRule.streakSince ? "checked" : ""}>
+                  固定化してストリークを記録する
+                </label>` : ""}
                 ${block.category === "ルーティン" ? `
                 <div class="field-row" style="margin-top:10px">
                   <div class="field">
@@ -12415,6 +12469,16 @@ function saveBlockFromModal(id, fields) {
     showToast("予定の開始・終了日時を入力してください");
     return;
   }
+  const currentRule = existing?.recurrenceGroupId
+    ? (state.recurrences || []).find((r) => r.id === existing.recurrenceGroupId && !r.deleted)
+    : null;
+  const requestedKind = fields.recurrenceKind;
+  const nextRuleKind = requestedKind && !requestedKind.startsWith("__") ? requestedKind : currentRule?.kind;
+  const streakEdit = habitStreakEdit(currentRule, nextRuleKind, fields.streakFixed);
+  if (!streakEdit.ok) {
+    showToast("固定化できるルーティンは3件までです");
+    return;
+  }
   // v191レビュー反映(修正9・3周目): 検証より後で呼ぶ(検証エラー中断時に実行中ルーティンが
   // 閉じられたまま巻き戻らない穴を防ぐ)。v215: 呼び先はタブ非依存の存置版に差し替え。
   if (updated.actualStartAt && !updated.actualEndAt) autoCloseStaleRoutineRuns(updated.id);
@@ -12447,6 +12511,12 @@ function saveBlockFromModal(id, fields) {
           : r);
     }
     state.blocks = state.blocks.map((b) => b.id === id ? updated : b);
+    if (currentRule && currentRule.streakSince !== streakEdit.value) {
+      state.recurrences = state.recurrences.map((r) => r.id === currentRule.id
+        ? { ...r, streakSince: streakEdit.value, updatedAt: nowDateTime() }
+        : r);
+    }
+    if (existing.completed !== updated.completed) syncHabitStreakForBlock(updated);
     if (!existing.completed && updated.completed) {
       transferIronLogToCompletedBlock(id);
       generateReport(updated.date, { quiet: true });
@@ -12857,6 +12927,7 @@ function saveActualEntryFromModal(blockId, fields) {
   if (!wasCompleted) transferIronLogToCompletedBlock(blockId);
   // Task の状態を doing に
   const block = state.blocks.find((b) => b.id === blockId);
+  if (!wasCompleted && block) syncHabitStreakForBlock(block);
   if (block?.taskId) {
     state.tasks = state.tasks.map((t) =>
       t.id === block.taskId && t.status === "todo"

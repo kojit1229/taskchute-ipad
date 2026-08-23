@@ -147,6 +147,7 @@ function createRecurrenceRule(block, kind) {
     fallbackTitle: "",  // v115: 縮退版(提案G①)。既定未設定
     fallbackMinutes: null,
     anchor: "",  // v115: アンカー(提案G③)。既定未設定
+    streakSince: null,  // v252: 明示的に固定化したdaily/weekdaysだけ日付を持つ
     createdAt: nowDateTime(),
     updatedAt: nowDateTime(),
     deleted: false

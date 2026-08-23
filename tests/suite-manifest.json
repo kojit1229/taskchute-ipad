@@ -393,9 +393,9 @@
         "planning-execution",
         "content-ai"
       ],
-      "assertionSignals": 16,
-      "assertionHash": "68a1980bfa8fd7b9",
-      "sourceHash": "bedc0892ded8c748",
+      "assertionSignals": 23,
+      "assertionHash": "008d7fb095214844",
+      "sourceHash": "5ea496f6338a8164",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2239,6 +2239,29 @@
       "assertionSignals": 19,
       "assertionHash": "66972e858037cf2f",
       "sourceHash": "5e1884b18979092a",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v252.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage"
+      ],
+      "assertionSignals": 24,
+      "assertionHash": "248554d8f4b746e6",
+      "sourceHash": "cd2f825af756a222",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
