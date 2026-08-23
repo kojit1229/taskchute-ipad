@@ -345,11 +345,24 @@ function check(name, cond, extra = "") {
     // state.currentView直接指定+reloadでジャーナル画面へ遷移する(nav操作の検証はこのテストの
     // 主眼ではないため)。
     await seed({ view: "journal", blocks: [] });
-    const journalH2Font = await page.evaluate(() => {
+    // v247でTOWERスキンのコメント破損が直り、意図された見出し指定が再び有効になった。
+    const journalH2Style = await page.evaluate(() => {
       const el = document.querySelector(".journal-grid h2");
-      return el ? getComputedStyle(el).fontSize : null;
+      if (!el) return null;
+      const style = getComputedStyle(el);
+      const tower = el.closest(".journal-tower");
+      const towerCyan = tower ? getComputedStyle(tower).getPropertyValue("--tower-cyan").trim() : "";
+      const probe = document.createElement("span");
+      probe.style.color = towerCyan;
+      document.body.appendChild(probe);
+      const resolvedTowerCyan = getComputedStyle(probe).color;
+      probe.remove();
+      return { fontSize: style.fontSize, color: style.color, towerCyan, resolvedTowerCyan };
     });
-    check(".journal-grid h2(390px幅)のfont-sizeは--text-sm(14px)を参照", journalH2Font === "14px", String(journalH2Font));
+    check(".journal-grid h2(390px幅)にTOWER見出しデザイン(13px・var(--tower-cyan))が適用される",
+      journalH2Style?.fontSize === "13px" && !!journalH2Style.towerCyan
+        && journalH2Style.color === journalH2Style.resolvedTowerCyan,
+      JSON.stringify(journalH2Style));
     await page.setViewportSize({ width: 1100, height: 1400 });
 
     // ============================================================

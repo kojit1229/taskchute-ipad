@@ -42,18 +42,28 @@ function check(name, cond, extra = "") {
     check("CABIN TIMERは従来どおりtoday-tower直下",
       await page.locator(".today-tower > .today-pomodoro").count() === 1);
     check("既定値の読取だけでは専用キーを書かない", await page.evaluate((key) => localStorage.getItem(key) === null, FOCUS_KEY));
-    await page.waitForFunction(() => {
-      const buttons = [...document.querySelectorAll(".today-focus-bar button")];
-      return buttons.length === 4 && buttons.every((button) => {
-        const rect = button.getBoundingClientRect();
-        return button.isConnected && rect.width > 0 && rect.height > 0;
-      });
-    });
-    const tapSizes = await page.locator(".today-focus-bar button").evaluateAll((buttons) => buttons.map((button) => {
+    const focusButtonSelectors = [
+      '[data-action="focus-mode"]',
+      '[data-action="focus-toggle-gate"]',
+      '[data-action="focus-toggle-atis"]',
+      '[data-action="focus-toggle-journal"]'
+    ];
+    let focusWaitError = "";
+    await page.waitForFunction((selectors) => selectors.every((selector) => {
+      const button = document.querySelector(`.today-focus-bar ${selector}`);
+      if (!button || !button.isConnected) return false;
       const rect = button.getBoundingClientRect();
-      return { width: rect.width, height: rect.height };
-    }));
-    check("FOCUSと3チップはすべて44px以上", tapSizes.length === 4 && tapSizes.every(({ width, height }) => width >= 44 && height >= 44), JSON.stringify(tapSizes));
+      return rect.width > 0 && rect.height > 0;
+    }), focusButtonSelectors).catch((error) => { focusWaitError = error.message; });
+    const tapRects = await page.evaluate((selectors) => selectors.map((selector) => {
+      const button = document.querySelector(`.today-focus-bar ${selector}`);
+      if (!button) return { selector, missing: true, x: 0, y: 0, width: 0, height: 0 };
+      const rect = button.getBoundingClientRect();
+      return { selector, x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    }), focusButtonSelectors);
+    check("FOCUSと3チップはすべて44px以上",
+      !focusWaitError && tapRects.length === 4 && tapRects.every(({ width, height }) => width >= 44 && height >= 44),
+      JSON.stringify({ focusWaitError, tapRects }));
 
     console.log("[2] 個別トグルはDOM生成を省略し、状態をリロード後も維持する");
     await page.click('[data-action="focus-toggle-gate"]');

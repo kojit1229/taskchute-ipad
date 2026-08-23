@@ -108,6 +108,9 @@ function check(name, cond, extra = "") {
     check("tower root .today-tower が描画される", await page.locator(".today-tower").count() === 1);
     const towerDayLeft = (await page.locator("#towerDayLeft").textContent()) || "";
     check("#towerDayLeft が描画されHH:MM:SS形式", /^\d{2}:\d{2}:\d{2}$/.test(towerDayLeft), towerDayLeft);
+    // v250で削除された旧読書UIが別ビューへ残存・再出現しないことをtoday-coreへ移管する。
+    check("旧読書カード・入力・保存セレクタはDOMに出現しない",
+      await page.locator('details[data-fold-id="home-reading"], [data-reading-reflection-input], [data-action="reading-save"]').count() === 0);
 
     // ============================================================
     // [2] 既存stateは最後のビュー復元が壊れない

@@ -11,7 +11,7 @@
 // (5) 🏁(タスク完了)はタスクシュート行から撤去され、Block編集モーダルへ移設されている
 //     (詳細な状態遷移の回帰はtests/v107.test.jsが担当。本ファイルは配置のみ確認)
 // (6) 誤タップ対策の44px当たり判定: .checkbox-button / .tl-start-btn / .modal-close
-// (7) バッファ残量帯は「今日を扱う」画面(home/tasks/timeline/journal)だけに出る
+// (7) バッファ残量帯は「今日を扱う」画面(tasks/timeline/journal)だけに出る
 // (8) ジャーナルは720px以下で当日編集パネルが先頭(CSS order)。前日パネルは既定closedのdetails
 // (9) 設定画面から内部バージョン表記(vNNN)が消え、「現在のファイル構成」はdetails化(既定closed)
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
@@ -40,14 +40,15 @@ function check(name, cond, extra = "") {
   const TODAY = `${now0.getFullYear()}-${pad2(now0.getMonth() + 1)}-${pad2(now0.getDate())}`;
   const hhmm = (min) => `${pad2(Math.floor(min / 60) % 24)}:${pad2(min % 60)}`;
 
-  function planBlock({ id, title, startMin, minutes = 30, taskId = "", category = "", completed = false }) {
+  function planBlock({ id, title, startMin, minutes = 30, taskId = "", category = "", completed = false,
+    estimateMin = null, actualStartAt = "", actualEndAt = "" }) {
     return {
       id, taskId, date: TODAY, title, category,
       plannedStartAt: `${TODAY}T${hhmm(startMin)}`,
       plannedEndAt: `${TODAY}T${hhmm(startMin + minutes)}`,
-      actualStartAt: "", actualEndAt: "",
+      actualStartAt, actualEndAt,
       completed, charge: 0, discharge: 0, comment: "", recurrenceGroupId: "", pomodoroCount: 0,
-      migratedTo: "", orderIndex: 0, carryCount: 0, isMIT: false, source: "", estimateMin: null,
+      migratedTo: "", orderIndex: 0, carryCount: 0, isMIT: false, source: "", estimateMin,
       leverageType: "", createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false
     };
   }
@@ -61,7 +62,7 @@ function check(name, cond, extra = "") {
     description: "", createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false
   });
 
-  async function seed({ blocks = [], tasks = [], projects = [], view = "home", settings = {} } = {}) {
+  async function seed({ blocks = [], tasks = [], projects = [], view = "tasks", settings = {} } = {}) {
     await page.evaluate(({ KEY, blocks, tasks, projects, TODAY, view, settings }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.blocks = blocks;
@@ -93,8 +94,66 @@ function check(name, cond, extra = "") {
     // 移動した。加えて信条・寿命はK指定によりホームタブでの既定値がopenへ変更された
     // (CHANGES_v149.md参照)。タブをまたいで検証する。
     // ============================================================
-    console.log("[1-8] v230: home折りたたみ/専用カードの不存在とview移行");
-    await seed({ blocks: [], view: "home" });
+    // ============================================================
+    // (7) BUFFER_METER_VIEWSと色/過積載状態の回帰
+    // home撤去後もbufferMeterHTML/BUFFER_METER_VIEWSはtasks/timeline/journalで現役。
+    // ============================================================
+    console.log("[7] バッファメーターの境界値・過積載・対象ビューを現行tasks起点で検証する");
+    await seed({
+      view: "tasks",
+      settings: { dailyBufferMin: 100 },
+      blocks: [planBlock({ id: "buffer-40", title: "40%境界", startMin: 9 * 60, estimateMin: 20, completed: true,
+        actualStartAt: `${TODAY}T09:00:00`, actualEndAt: `${TODAY}T10:20:00` })]
+    });
+    let meter = page.locator(".buffer-meter");
+    check("残量40%境界はgreen", await meter.getAttribute("data-buffer-level") === "green"
+      && await meter.getAttribute("data-buffer-percent") === "40");
+
+    await seed({
+      view: "tasks",
+      settings: { dailyBufferMin: 100 },
+      blocks: [planBlock({ id: "buffer-20", title: "20%黄", startMin: 9 * 60, estimateMin: 20, completed: true,
+        actualStartAt: `${TODAY}T09:00:00`, actualEndAt: `${TODAY}T10:40:00` })]
+    });
+    meter = page.locator(".buffer-meter");
+    check("残量40%未満・0%超はyellow", await meter.getAttribute("data-buffer-level") === "yellow"
+      && await meter.getAttribute("data-buffer-percent") === "20");
+
+    await seed({
+      view: "tasks",
+      settings: { dailyBufferMin: 100 },
+      blocks: [planBlock({ id: "buffer-0", title: "0%境界", startMin: 9 * 60, estimateMin: 20, completed: true,
+        actualStartAt: `${TODAY}T09:00:00`, actualEndAt: `${TODAY}T11:00:00` })]
+    });
+    meter = page.locator(".buffer-meter");
+    check("残量0%境界はred", await meter.getAttribute("data-buffer-level") === "red"
+      && await meter.getAttribute("data-buffer-percent") === "0");
+
+    await seed({
+      view: "tasks",
+      settings: { dailyBufferMin: 60, dayCloseHours: 24 },
+      blocks: [planBlock({ id: "buffer-overload", title: "過積載", startMin: 23 * 60, estimateMin: 100 })]
+    });
+    meter = page.locator(".buffer-meter");
+    check("計画過積載は緑/黄/赤と別の第4状態overload", await meter.getAttribute("data-buffer-level") === "overload");
+    check("overloadの不足100分をdata-overload-shortfallへ保持", await meter.getAttribute("data-overload-shortfall") === "100");
+
+    const visibleByView = {};
+    for (const view of ["tasks", "timeline", "journal"]) {
+      await seed({ blocks: [], view, settings: { dailyBufferMin: 100 } });
+      visibleByView[view] = await page.locator(".buffer-meter").count();
+    }
+    check("BUFFER_METER_VIEWSのtasks/timeline/journalでは表示される",
+      Object.values(visibleByView).every((count) => count === 1), JSON.stringify(visibleByView));
+
+    const hiddenByView = {};
+    for (const view of ["settings", "more"]) {
+      await seed({ blocks: [], view, settings: { dailyBufferMin: 100 } });
+      hiddenByView[view] = await page.locator(".buffer-meter").count();
+    }
+    check("BUFFER_METER_VIEWS外のsettings/moreでは表示されない",
+      Object.values(hiddenByView).every((count) => count === 0), JSON.stringify(hiddenByView));
+
     // (9) 設定画面のvNNN非表示 + 現在のファイル構成のdetails化
     // ============================================================
     console.log("[9] 設定画面から内部バージョン表記(vNNN)が消え、「現在のファイル構成」はdetails既定closed");

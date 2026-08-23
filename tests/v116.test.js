@@ -99,17 +99,25 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (1) 残量計算: 超過で減る・早終わりで戻る・見積/実績無し・未完了は除外
     // ============================================================
-    // v230: home完全撤去に伴いバッファメーター/過積載ヒントも描画対象から削除。
-    // dailyBufferMinは旧state互換の設定値として保持されることを確認する。
-    console.log("[1-5d] v230: 旧バッファUIの不存在と設定値互換");
+    // v230でhomeは撤去されたが、bufferMeterHTML/BUFFER_METER_VIEWSはtasks等で現役。
+    console.log("[3] バッファメーターは当日だけ表示され、前日・翌日には出ない");
     await seed({
-      blocks: [],
-      settings: { dailyBufferMin: 45 },
-      view: "home"
+      blocks: [makeBlock({ id: "today-guard", title: "当日ガード", startMin: 9 * 60, estimateMin: 30, completed: true,
+        actualStartAt: `${TODAY}T09:00:00`, actualEndAt: `${TODAY}T09:40:00` })],
+      settings: { dailyBufferMin: 100 },
+      view: "tasks"
     });
+    check("当日表示中はバッファメーターが出る", await page.locator(".buffer-meter").count() === 1);
+    await page.click('[data-action="date-prev"]');
+    await page.waitForTimeout(200);
+    check("前日表示中はバッファメーターが出ない", await page.locator(".buffer-meter").count() === 0);
+    await page.click('[data-action="date-next"]');
+    await page.click('[data-action="date-next"]');
+    await page.waitForTimeout(200);
+    check("翌日表示中はバッファメーターが出ない", await page.locator(".buffer-meter").count() === 0);
     const kept = await stateNow();
     check("既存dailyBufferMinは正規化後も保持される",
-      kept.settings?.dailyBufferMin === 45, String(kept.settings?.dailyBufferMin));
+      kept.settings?.dailyBufferMin === 100, String(kept.settings?.dailyBufferMin));
   } finally {
     await browser.close();
     server.close();

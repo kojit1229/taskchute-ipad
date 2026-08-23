@@ -25,7 +25,7 @@
 | timeline-layout-core.test.js | node | full | planning-execution | 25 | 0 | 0 |
 | timeline-render-core.test.js | node | full | planning-execution, ui-responsive | 41 | 0 | 0 |
 | timeline-tick-wiring.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 16 | 8 | 4500 |
-| today-core.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 138 | 2 | 3600 |
+| today-core.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 139 | 2 | 3600 |
 | topband-core.test.js | node | full | sync-storage, planning-execution, journal-health | 46 | 0 | 0 |
 | tower-core.test.js | e2e | full | sync-storage, journal-health, ui-responsive | 135 | 0 | 0 |
 | tower-model-core.test.js | node | full | legacy-crosscutting | 7 | 0 | 0 |
@@ -48,7 +48,7 @@
 | v111.test.js | e2e | full | ui-responsive | 24 | 18 | 6550 |
 | v112.test.js | e2e | full | planning-execution, ui-responsive | 20 | 8 | 2450 |
 | v113.test.js | e2e | full | sync-storage, planning-execution, journal-health, content-ai, ui-responsive | 15 | 8 | 3200 |
-| v116.test.js | e2e | full | planning-execution | 4 | 2 | 900 |
+| v116.test.js | e2e | full | planning-execution | 7 | 4 | 1300 |
 | v117.test.js | e2e | full | planning-execution | 18 | 6 | 2200 |
 | v118.test.js | e2e | full | sync-storage, planning-execution, content-ai | 14 | 9 | 6600 |
 | v119.test.js | e2e | full | sync-storage, content-ai | 19 | 5 | 1800 |
@@ -75,7 +75,7 @@
 | v141.test.js | e2e | full | journal-health, content-ai | 46 | 23 | 7050 |
 | v143.test.js | e2e | full | sync-storage, content-ai | 8 | 3 | 1500 |
 | v144.test.js | e2e | full | planning-execution, journal-health | 48 | 33 | 9950 |
-| v146.test.js | e2e | full | planning-execution | 5 | 2 | 900 |
+| v146.test.js | e2e | full | planning-execution | 12 | 2 | 900 |
 | v147.test.js | e2e | full | planning-execution | 15 | 6 | 1650 |
 | v148.test.js | e2e | full | planning-execution | 51 | 21 | 6350 |
 | v150.test.js | e2e | full | planning-execution | 56 | 19 | 9150 |
