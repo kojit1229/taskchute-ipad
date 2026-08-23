@@ -506,11 +506,69 @@ function check(name, cond, extra = "") {
     console.log("[22] 全就航だけis-fullになり、満灯フラッシュは遷移の瞬間だけ");
     check("全就航ではis-full", await page.locator(".tower-gates.is-full").count() === 1);
     check("就航遷移の瞬間はis-full-flashが付く", await page.locator(".tower-gates.is-full-flash").count() === 1);
+    await page.addInitScript(() => {
+      const observation = { classHistory: [], tickerCycles: 0 };
+      window.__towerGateRestoreObservation = observation;
+      const hasTowerGatesClass = (className) => String(className || "").split(/\s+/).includes("tower-gates");
+      const recordAddedSections = (node) => {
+        if (!(node instanceof Element)) return;
+        const sections = [node, ...node.querySelectorAll(".tower-gates")];
+        sections.filter((el) => el.matches(".tower-gates")).forEach((el) => {
+          observation.classHistory.push({
+            phase: "added",
+            className: el.getAttribute("class") || "",
+            atMs: Math.round(performance.now())
+          });
+        });
+      };
+      new MutationObserver((mutations) => {
+        mutations.forEach((mutation, index) => {
+          if (mutation.type === "childList") {
+            if (mutation.target instanceof Element && mutation.target.id === "towerClock") observation.tickerCycles++;
+            mutation.addedNodes.forEach(recordAddedSections);
+            return;
+          }
+          if (mutation.type !== "attributes") return;
+          const currentClass = mutation.target.getAttribute("class") || "";
+          if (!hasTowerGatesClass(mutation.oldValue) && !hasTowerGatesClass(currentClass)) return;
+          const nextMutation = mutations.slice(index + 1)
+            .find((candidate) => candidate.type === "attributes" && candidate.target === mutation.target);
+          observation.classHistory.push({
+            phase: "class-change",
+            oldClassName: mutation.oldValue || "",
+            className: nextMutation ? (nextMutation.oldValue || "") : currentClass,
+            atMs: Math.round(performance.now())
+          });
+        });
+      }).observe(document, {
+        subtree: true,
+        childList: true,
+        attributes: true,
+        attributeFilter: ["class"],
+        attributeOldValue: true
+      });
+    });
     await page.reload();
     await page.waitForSelector(".tower-gates");
     check("復元描画はis-fullのみでフラッシュを出さない", await page.locator(".tower-gates.is-full").count() === 1
       && await page.locator(".tower-gates.is-full-flash").count() === 0);
-    check("復元描画のis-fullは満灯アニメが走らない", await page.locator(".tower-gates.is-full").evaluate((el) => getComputedStyle(el).animationName === "none"));
+    await page.waitForFunction(() => window.__towerGateRestoreObservation?.tickerCycles >= 2);
+    const restoredFullObservation = await page.evaluate(() => {
+      const section = document.querySelector(".tower-gates");
+      const observation = window.__towerGateRestoreObservation;
+      return {
+        classHistory: observation?.classHistory || [],
+        tickerCycles: observation?.tickerCycles || 0,
+        isFull: section?.classList.contains("is-full") || false,
+        animationName: section ? getComputedStyle(section).animationName : "<missing>"
+      };
+    });
+    const restoredFlashHistory = restoredFullObservation.classHistory.filter((entry) =>
+      String(entry.oldClassName || "").split(/\s+/).includes("is-full-flash")
+      || String(entry.className || "").split(/\s+/).includes("is-full-flash"));
+    check("復元描画のis-fullは満灯アニメが走らない",
+      restoredFullObservation.isFull && restoredFlashHistory.length === 0 && restoredFullObservation.animationName === "none",
+      `classHistory=${JSON.stringify(restoredFullObservation.classHistory)} animationName=${restoredFullObservation.animationName} tickerCycles=${restoredFullObservation.tickerCycles}`);
     await page.locator('.tower-gate-fixed[data-action="early-bird-check"]').click();
     await page.waitForFunction(({ KEY, today }) => !JSON.parse(localStorage.getItem(KEY)).earlyBird?.logs?.[today], { KEY, today });
     check("当日再タップで早起き記録を取り消し警告も消える", await page.locator('.tower-gate-fixed[data-docked="0"]').count() === 1
