@@ -19,6 +19,21 @@ function daysBetween(aISO, bISO) {
   return Math.round((Date.UTC(b.y, b.m - 1, b.d) - Date.UTC(a.y, a.m - 1, a.d)) / 86400000);
 }
 
+// v259: 12WYの現サイクルは開始日から83日後までを包含する。
+function isProjectInCurrentCycle(project, cycleStart) {
+  if (!dateParts(cycleStart) || !dateParts(project?.twelveWeekStartDate)) return false;
+  const offset = daysBetween(cycleStart, project.twelveWeekStartDate);
+  return offset >= 0 && offset <= 83;
+}
+
+// v259: numeric目標の増加・減少方向を共通化し、到達超過も完了として扱う。
+function numericGoalReached(track, latestValue) {
+  const baseline = Number(track?.baselineValue), goal = Number(track?.goalValue), latest = Number(latestValue);
+  const direction = Math.sign(goal - baseline);
+  return Number.isFinite(baseline) && Number.isFinite(goal) && Number.isFinite(latest)
+    && direction !== 0 && (latest - goal) * direction >= 0;
+}
+
 function dedupeById(records) {
   const byId = new Map();
   for (const record of records || []) {
@@ -89,10 +104,9 @@ function trackStatus(track, pace, latestValue, lastObservedISO, todayISO) {
   if (pace?.invalid) return { state: "ontrack", label: "順調", severity: 2 };
   const milestones = (track?.milestones || []).filter((milestone) => !milestone.deleted);
   const latest = latestValue === null || latestValue === undefined ? Number(track?.baselineValue) : Number(latestValue);
-  const dir = Math.sign(Number(track?.goalValue) - Number(track?.baselineValue));
   const done = track?.kind === "milestone"
     ? milestones.length > 0 && milestones.every((milestone) => milestone.doneAt)
-    : Number.isFinite(latest) && (latest - Number(track?.goalValue)) * dir >= 0;
+    : numericGoalReached(track, latest);
   if (done) return { state: "done", label: "完了", severity: 0 };
   const deadline = track?.kind === "milestone" ? (pace?.deadline || "") : (track?.deadline || "");
   if (deadline && todayISO > deadline) return { state: "warn", label: "期限超過", severity: 5 };
@@ -173,7 +187,8 @@ function trackDefinitionChanged(existing, kind, fields = {}) {
 }
 
 export {
-  PACE_TOLERANCE_DAYS, STALE_DAYS, dateParts, daysBetween, weeklyScore, latestMeasurement,
+  PACE_TOLERANCE_DAYS, STALE_DAYS, dateParts, daysBetween, isProjectInCurrentCycle, numericGoalReached,
+  weeklyScore, latestMeasurement,
   paceNumeric, paceMilestone, trackStatus, forwardTracksForWeek, selectTrackFooter, activeTrackForProject,
   validateTrackDraft, trackDefinitionChanged
 };

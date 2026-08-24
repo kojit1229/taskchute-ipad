@@ -34,6 +34,7 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
     activeTrackForProject: trackCore.activeTrackForProject,
     dateParts: trackCore.dateParts,
     latestMeasurement: trackCore.latestMeasurement,
+    numericGoalReached: trackCore.numericGoalReached,
     validateTrackDraft: trackCore.validateTrackDraft,
     trackDefinitionChanged: trackCore.trackDefinitionChanged,
     nowDateTime: () => currentNow,
@@ -253,6 +254,34 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
       && completed.carriedWithoutTrack && !("track" in completed) && sandbox.state.tracks.length === 1
       && sandbox.state.tracks[0].closedReason === "carried"
       && sandbox.state.projects[0].twelveWeekStartDate === "2026-08-24" && sandbox.saveCount === 1);
+
+    setState(baseState({
+      tracks: [numericTrack("trk-over", "p1", { goalValue: 30 })],
+      trackMeasurements: [{ id: "over", trackId: "trk-over", value: 35,
+        observedAt: "2026-08-23T10:00:00", updatedAt: "2026-08-23T10:00:00" }]
+    }));
+    const overachieved = sandbox.carryProjectToNewCycle("p1", "2026-08-24", {});
+    check("増加目標の超過達成も旧trackだけcarriedで閉じる", overachieved.carriedWithoutTrack
+      && sandbox.state.tracks.length === 1 && sandbox.state.tracks[0].closedReason === "carried");
+
+    setState(baseState({
+      tracks: [numericTrack("trk-down", "p1", { baselineValue: 90, goalValue: 70 })],
+      trackMeasurements: [{ id: "down-done", trackId: "trk-down", value: 68,
+        observedAt: "2026-08-23T10:00:00", updatedAt: "2026-08-23T10:00:00" }]
+    }));
+    const decreaseReached = sandbox.carryProjectToNewCycle("p1", "2026-08-24", {});
+    check("減少目標の超過達成も旧trackだけcarriedで閉じる", decreaseReached.carriedWithoutTrack
+      && sandbox.state.tracks.length === 1 && sandbox.state.tracks[0].closedReason === "carried");
+
+    setState(baseState({
+      tracks: [numericTrack("trk-down-open", "p1", { baselineValue: 90, goalValue: 70 })],
+      trackMeasurements: [{ id: "down-open", trackId: "trk-down-open", value: 75,
+        observedAt: "2026-08-23T10:00:00", updatedAt: "2026-08-23T10:00:00" }]
+    }));
+    const decreaseOpen = sandbox.carryProjectToNewCycle("p1", "2026-08-24", { deadline: "2026-11-16" });
+    check("減少目標の未達は最新値75→目標70の新trackを作る", decreaseOpen.ok && !decreaseOpen.carriedWithoutTrack
+      && decreaseOpen.track.baselineValue === 75 && decreaseOpen.track.goalValue === 70
+      && decreaseOpen.track.carriedFromTrackId === "trk-down-open", JSON.stringify(decreaseOpen));
   }
 
   console.log("[6] carryProjectToNewCycle milestone");

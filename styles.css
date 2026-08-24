@@ -1523,11 +1523,16 @@ h3 {
 .twy-kind b, .twy-kind i { display: block; }
 .twy-kind i { margin-top: 2px; color: var(--muted); font-size: 10px; font-style: normal; }
 .twy-form, .twy-ms-edit, [data-twy-ms-list] { display: grid; gap: 8px; }
+/* v259: carry内の作者display指定がhidden属性を打ち消さず、各要素間にも余白を保つ。 */
+.twy-carry { display: grid; gap: 8px; }
+.twy-carry[hidden], .twy-carry [hidden] { display: none; }
 .twy-form label { display: grid; gap: 4px; color: var(--muted); font-size: 12px; font-weight: 700; }
 .twy-form .input { min-width: 0; font-size: 16px; }
 .twy-grid2, .twy-grid3 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .twy-grid3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .twy-ms-edit-row { display: grid; grid-template-columns: minmax(0, 1fr) 130px 44px; gap: 6px; align-items: center; }
+/* v259: carry対象の未完了節目は日付再入力だけの2カラムにする。 */
+.twy-carry-ms-row { display: grid; grid-template-columns: minmax(0, 1fr) 130px; gap: 6px; align-items: center; }
 .twy-ms-edit-row button, .twy-ms-add { min-height: 44px; border: 1px solid var(--line); border-radius: 8px; color: var(--red); background: transparent; cursor: pointer; }
 .twy-ms-add { justify-self: start; padding: 6px 12px; border-style: dashed; color: var(--accent-text); }
 .twy-guard { display: grid; gap: 5px; padding: 9px; border: 1px dashed var(--orange); border-radius: 8px; font-size: 12px; line-height: 1.45; }

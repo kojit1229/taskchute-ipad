@@ -100,6 +100,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "go-break", "end-break", "continue-focus", "finish-block",
   "edit-project", "edit-task", "edit-block",
   "twy-kind-numeric", "twy-kind-milestone", "twy-kind-none", "twy-ms-add", "twy-ms-del",
+  "twy-carry-cycle", "twy-carry-confirm",
   "modal-close", "modal-save", "modal-delete",
   "lev-judge",
   "vision-section", "open-vision-board", "vision-board-tab", "vision-board-load",
@@ -230,6 +231,8 @@ const APP_JS_REGISTERED_ACTIONS = [
   "edit-project", "edit-task", "edit-block",
   // --- v258: 12WYトラックフォームのDOM局所操作(5) ---
   "twy-kind-numeric", "twy-kind-milestone", "twy-kind-none", "twy-ms-add", "twy-ms-del",
+  // --- v259: 12WY新サイクル移行UI(2) ---
+  "twy-carry-cycle", "twy-carry-confirm",
   // --- v178: モーダル起動系(3、modal-saveはreturn意味論のためif連鎖に残置) ---
   "modal-close", "modal-delete", "lev-judge",
   // --- v179: ビジョンボード(6) ---

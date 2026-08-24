@@ -15,7 +15,7 @@
       ],
       "assertionSignals": 34,
       "assertionHash": "f841e3459002f00f",
-      "sourceHash": "5c03b94b15c31eda",
+      "sourceHash": "ccaa75d75cfb2a0c",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -635,8 +635,8 @@
         "journal-health"
       ],
       "assertionSignals": 50,
-      "assertionHash": "8c2676aa33b8b33a",
-      "sourceHash": "0981013d4f6021fd",
+      "assertionHash": "25b8c6788fe59a07",
+      "sourceHash": "ab5b56b555fdc36c",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -658,9 +658,9 @@
         "planning-execution",
         "journal-health"
       ],
-      "assertionSignals": 48,
-      "assertionHash": "194f3c92ea66c172",
-      "sourceHash": "a6f90b24e11f1f6f",
+      "assertionSignals": 51,
+      "assertionHash": "04d134ba1800221e",
+      "sourceHash": "7cd7bbf62ffe6f39",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -682,9 +682,9 @@
         "planning-execution",
         "sync-storage"
       ],
-      "assertionSignals": 35,
-      "assertionHash": "eb0fbfd9873d0810",
-      "sourceHash": "2a25b52a2720eeaa",
+      "assertionSignals": 38,
+      "assertionHash": "e7a5bd8f925cbd5c",
+      "sourceHash": "96164afc08d79b81",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2356,8 +2356,8 @@
         "security-offline"
       ],
       "assertionSignals": 10,
-      "assertionHash": "ea8fa1e93cf40ea6",
-      "sourceHash": "f850f085578e801c",
+      "assertionHash": "99cdb689e9331827",
+      "sourceHash": "696264d78a8ade63",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2405,6 +2405,30 @@
       "assertionSignals": 40,
       "assertionHash": "c74b997d9b3f94b8",
       "sourceHash": "eb05810c02d3cde6",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v259.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "journal-health"
+      ],
+      "assertionSignals": 52,
+      "assertionHash": "95666ed0fbe669bb",
+      "sourceHash": "86842cb4fdb0151d",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

@@ -27,10 +27,10 @@ function check(name, cond, extra = "") {
     ? [...appShellMatch[1].matchAll(/["']([^"']+)["']/g)].map((match) => match[1])
     : [];
 
-  console.log("[1] concept.htmlをAPP_SHELLへ登録し、SWキャッシュを現行v258へ更新");
+  console.log("[1] concept.htmlをAPP_SHELLへ登録し、SWキャッシュを現行v259へ更新");
   check("concept.htmlがリポジトリ直下に存在する", fs.existsSync(path.join(ROOT, "concept.html")));
   check("APP_SHELLに./concept.htmlが含まれる", appShellEntries.includes("./concept.html"), JSON.stringify(appShellEntries));
-  check("CACHE_NAMEが現行v258", /^const CACHE_NAME = "taskchute-journal-pwa-v258";/m.test(swSource));
+  check("CACHE_NAMEが現行v259", /^const CACHE_NAME = "taskchute-journal-pwa-v259";/m.test(swSource));
 
   const server = startServer(PORT);
   const browser = await chromium.launch(launchOptions());

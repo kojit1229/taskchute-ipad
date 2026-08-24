@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v258";
+const CACHE_NAME = "taskchute-journal-pwa-v259";
+// v259: 前サイクル12WY Projectのcarryフォームと新サイクル移行導線を追加した(APP_SHELL変更なし)。
 // v258: Projectモーダルへ12WYトラック登録フォームを追加した(APP_SHELL変更なし)。
 // v257: 12WYトラック定義のCRUD・構造検証・close/supersede/carryデータ層を追加した(APP_SHELL変更なし)。
 // v256: IME変換中のタブ切替renderを既存の入力フォーカス遅延ガードへ結線した(APP_SHELL変更なし)。

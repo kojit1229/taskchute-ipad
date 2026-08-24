@@ -2,7 +2,8 @@
 //   importする(src/core/**はstateを一切参照しない。claude-review-result.md §7の契約)。
 import { mergeById, mergeByIdPreferNewer } from "./src/core/merge.js";
 import {
-  activeTrackForProject, dateParts, latestMeasurement, validateTrackDraft, trackDefinitionChanged
+  activeTrackForProject, dateParts, isProjectInCurrentCycle, latestMeasurement, numericGoalReached,
+  validateTrackDraft, trackDefinitionChanged
 } from "./src/core/track.js";
 // v166: app.js分割・段階3(state store + storage/sync gateway)。stateの再代入はsetState()
 //   経由のみ(claude-review-result.md §2 Blocker-1)。store.jsは何もimportしない真の葉。
@@ -565,6 +566,18 @@ registerActions({
     refreshTrackForm();
   },
   "twy-ms-del": ({ target }) => { target.closest(".twy-ms-edit-row")?.remove(); refreshTrackForm(); },
+  // v259: carryは表示条件と同じガードを通し、フォーム再展開時に古いエラーを消す。
+  "twy-carry-cycle": () => {
+    const id = state.modal?.id;
+    const project = state.projects.find((entry) => entry.id === id && !entry.deleted);
+    if (!id || !canCarryProjectCycle(project)) return;
+    if (!activeTrackForProject(state.tracks || [], id)) { confirmCarryProjectCycle(); return; }
+    const errors = modalRoot.querySelector("[data-twy-carry-errors]");
+    if (errors) { errors.hidden = true; errors.textContent = ""; }
+    const form = modalRoot.querySelector("[data-twy-carry-form]");
+    if (form) form.hidden = false;
+  },
+  "twy-carry-confirm": () => confirmCarryProjectCycle(),
   // --- モーダル起動系(3、modal-saveは残置) ---
   "modal-close": () => closeModal(),
   "modal-delete": () => deleteFromModal(),
@@ -1180,6 +1193,9 @@ document.addEventListener("change", (event) => {
   if (target.matches('[data-modal-field="is12WY"]')) {
     const section = modalRoot.querySelector("[data-twy-track]");
     if (section) section.hidden = !target.checked;
+    // v259: 未保存の12WY切替にもcarry導線の表示を同期する。
+    const carry = modalRoot.querySelector("[data-twy-carry]");
+    if (carry) carry.hidden = !target.checked;
   }
   if (target.matches("[data-date-picker]")) setSelectedDate(target.value);
   // v92: AIレポートビューアの履歴セレクタ(種類ごとに選択中の日付をUIキャッシュに保持)
@@ -2873,11 +2889,10 @@ function weekRange(dateISO) {
 function candidateBlocksForWeek(value, weekStart) {
   const cycleStart = value?.settings?.twelveWeekStartDate || "";
   if (!cycleStart) return [];
-  const cycleEnd = addDays(cycleStart, 83);
   const range = weekRange(weekStart);
   const projects = new Map((value.projects || []).filter((project) =>
     !project.deleted && project.kind === "normal" && project.status === "active"
-      && project.twelveWeekStartDate >= cycleStart && project.twelveWeekStartDate <= cycleEnd
+      && isProjectInCurrentCycle(project, cycleStart)
   ).map((project) => [project.id, project]));
   const tasks = new Map((value.tasks || []).filter((task) =>
     !task.deleted && projects.has(task.projectId)
@@ -3155,8 +3170,9 @@ function carryProjectToNewCycle(projectId, newCycleStartDate, fields = {}) {
         label: milestone.label, plannedDate: fields.milestonePlannedDates?.[milestone.id] || ""
       }))
   };
+  // v259: 目標方向へ到達済みなら、超過分を逆向きの新trackとしてcarryしない。
   const carriedWithoutTrack = existing.kind === "milestone" ? draft.milestones.length === 0
-    : fields.goalValue === undefined && Number(draft.baselineValue) === Number(draft.goalValue);
+    : fields.goalValue === undefined && numericGoalReached(existing, draft.baselineValue);
   const validation = carriedWithoutTrack ? { ok: true, errors: [] } : validateTrackDraft(existing.kind, draft);
   if (!carriedWithoutTrack && validation.ok && existing.kind === "milestone"
     && draft.milestones.some((milestone) => milestone.plannedDate < newCycleStartDate)) {
@@ -12161,6 +12177,58 @@ function trackMilestoneRowHTML(milestone = {}) {
     <button type="button" data-action="twy-ms-del" aria-label="節目を削除">×</button></div>`;
 }
 
+function trackCarryMilestoneRowsHTML(track) {
+  const milestones = (track?.milestones || []).filter((milestone) => !milestone.deleted && !milestone.doneAt);
+  if (!milestones.length) return `<div class="muted">未完了の節目はありません(全節目達成済み)。このまま移行するとトラックは終了し、新しい目標を登録できます。</div>`;
+  return milestones.map((milestone) => `<div class="twy-carry-ms-row" data-twy-carry-ms-row data-twy-carry-ms-id="${escapeHTML(milestone.id)}">
+    <span>${escapeHTML(milestone.label)}</span>
+    <input class="input" type="date" data-twy-carry-ms-date>
+  </div>`).join("");
+}
+
+function readCarryDraft(existing) {
+  if (existing.kind === "numeric") {
+    const deadline = modalRoot.querySelector("[data-twy-carry-deadline]")?.value || "";
+    const goalRaw = modalRoot.querySelector("[data-twy-carry-goal]")?.value ?? "";
+    return { deadline, ...(goalRaw !== "" ? { goalValue: Number(goalRaw) } : {}) };
+  }
+  const milestonePlannedDates = {};
+  modalRoot.querySelectorAll("[data-twy-carry-ms-row]").forEach((row) => {
+    milestonePlannedDates[row.dataset.twyCarryMsId] = row.querySelector("[data-twy-carry-ms-date]")?.value || "";
+  });
+  return { milestonePlannedDates };
+}
+
+// v259: carry対象は現サイクル外のうち過去側だけに限定する。
+function canCarryProjectCycle(project) {
+  const cycleStart = state.settings.twelveWeekStartDate;
+  return Boolean(project?.twelveWeekStartDate && cycleStart
+    && !isProjectInCurrentCycle(project, cycleStart) && project.twelveWeekStartDate < cycleStart);
+}
+
+function confirmCarryProjectCycle() {
+  const id = state.modal?.id;
+  const project = state.projects.find((entry) => entry.id === id && !entry.deleted);
+  const newCycleStartDate = state.settings.twelveWeekStartDate;
+  if (!id || !canCarryProjectCycle(project)) return;
+  const existing = activeTrackForProject(state.tracks || [], id);
+  if (!window.confirm(`12WY開始日を新サイクル(${newCycleStartDate})へ更新しますか?\nモーダルの未保存の編集は破棄されます`)) return;
+  const result = carryProjectToNewCycle(id, newCycleStartDate, existing ? readCarryDraft(existing) : {});
+  if (!result.ok) {
+    const errors = modalRoot.querySelector("[data-twy-carry-errors]");
+    if (errors) { errors.hidden = false; errors.textContent = result.errors.join(" / "); }
+    else showToast(result.errors.join(" / "));
+    return;
+  }
+  if (result.carriedWithoutTrack) {
+    saveAndRender("トラックを終了して新サイクルへ移行しました。新しい目標があれば登録してください");
+    openProjectEditor(id);
+    return;
+  }
+  closeModal();
+  saveAndRender("新サイクルへ移行しました");
+}
+
 function readTrackDraft(fields) {
   const common = { name: fields.twyName || "", startDate: fields.twyStartDate || "" };
   if (fields.twyKind === "numeric") return { ...common, unit: fields.twyUnit || "", deadline: fields.twyDeadline || "",
@@ -12258,6 +12326,10 @@ function buildProjectModal(project) {
   const is12WY = Boolean(project.twelveWeekStartDate);
   const track = activeTrackForProject(state.tracks || [], project.id);
   const trackKind = track?.kind || "none";
+  // v259: 表示・action・確定の3経路で同じ過去側carry判定を使う。
+  const canCarryCycle = is12WY && canCarryProjectCycle(project);
+  const numericGoalIsReached = trackKind === "numeric" && numericGoalReached(track,
+    latestMeasurement(state.trackMeasurements || [], track.id)?.value ?? track.baselineValue);
   // v127追補(Codex P1): やりたいことの唯一のコンテナ(kind:"wish")は種別変更・削除ができると
   // getWishProject()の前提が壊れる(既存Wishタスクが迷子になる)ため、編集モーダル側でも
   // 種別プルダウンをdisabledにして固定表示にし、削除ボタン自体を出さない(deleteProject側の
@@ -12312,9 +12384,29 @@ function buildProjectModal(project) {
         <div class="field">
           <label class="checkbox-line">
             <input type="checkbox" data-modal-field="is12WY" ${is12WY ? "checked" : ""}>
-            12WY 期間に登録する(現在の 12WY 開始日: ${state.settings.twelveWeekStartDate || "未設定"})
+            12WY 期間に登録する(現在の 12WY 開始日: ${escapeHTML(state.settings.twelveWeekStartDate || "未設定")})
           </label>
         </div>
+        ${canCarryCycle ? `<div class="twy-carry" data-twy-carry>
+          <div class="twy-track-errors" style="background:transparent;color:var(--muted)">
+            前サイクルのプロジェクトです(開始日: ${escapeHTML(project.twelveWeekStartDate)})。新サイクル(${escapeHTML(state.settings.twelveWeekStartDate)})へ移行できます。
+            移行するとこのモーダルの未保存の編集は破棄されます。
+          </div>
+          <button type="button" class="btn" data-action="twy-carry-cycle">新サイクルへ移行</button>
+          ${track ? `<div class="twy-form" data-twy-carry-form hidden>
+            ${numericGoalIsReached ? `<div class="muted" data-twy-carry-goal-reached>目標に到達しています。空欄のまま確定するとトラックは終了し、新しい目標を登録できます。</div>` : ""}
+            <div class="twy-grid2" data-twy-carry-numeric ${trackKind === "numeric" ? "" : "hidden"}>
+              <label>新しい期限<input class="input" type="date" data-twy-carry-deadline></label>
+              <label>新しい目標値(空欄=旧目標を引き継ぐ(達成済みなら終了))<input class="input" type="number" inputmode="decimal" data-twy-carry-goal
+                placeholder="現在の目標: ${escapeHTML(track.goalValue ?? "")}"></label>
+            </div>
+            <div data-twy-carry-milestones ${trackKind === "milestone" ? "" : "hidden"}>
+              ${trackKind === "milestone" ? trackCarryMilestoneRowsHTML(track) : ""}
+            </div>
+            <div class="twy-track-errors" data-twy-carry-errors role="alert" hidden></div>
+            <button type="button" class="btn primary" data-action="twy-carry-confirm">移行を確定</button>
+          </div>` : ""}
+        </div>` : ""}
         <section class="twy-track-section" data-twy-track ${is12WY ? "" : "hidden"}>
           <div class="twy-track-title">12WY TRACK <span>任意・1プロジェクト1トラック</span></div>
           <div class="twy-kind">

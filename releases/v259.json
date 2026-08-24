@@ -1,0 +1,74 @@
+{
+  "version": 259,
+  "date": "2026-08-24",
+  "title": "12WY新サイクル移行UI",
+  "summary": "前サイクルの12WY Projectモーダルへ新サイクル移行導線とnumeric/milestone別carryフォームを追加し、v257データ層の通常・エラー・新track不要の各戻り値へ安全に結線した。",
+  "changedFiles": [
+    "app.js",
+    "CHANGES_v259.md",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v259.json",
+    "src/core/track.js",
+    "styles.css",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/action-registry-core.test.js",
+    "tests/track-commit-core.test.js",
+    "tests/track-core.test.js",
+    "tests/track-crud-core.test.js",
+    "tests/v255.test.js",
+    "tests/v259.test.js"
+  ],
+  "intent": [
+    "前サイクルの12WY ProjectをKの明示操作で現サイクルへ移し、active trackがあれば成果定義をcarryできるようにする。",
+    "numericの期限再入力とmilestone未完了節目の予定日再設定をデータ層の保存条件へそのまま委譲する。",
+    "達成済みtrackは新trackを作らず終了し、同じProjectモーダルを再構築してv258登録フォームへ誘導する。"
+  ],
+  "changes": [
+    "Projectモーダルの12WYチェック直後へ、現サイクル0〜83日の範囲外かつ過去側のProjectだけに表示する新サイクル移行ブロックを追加した。",
+    "isProjectInCurrentCycleをtrack.jsの純関数として追加し、carry表示・action・確定ガードと週次コミット候補の包含判定を一本化した。",
+    "numeric carryは空期限と任意の新目標値、milestone carryは未完了節目だけの新予定日をDOM局所フォームから読み取るようにした。",
+    "goalValue空欄時はキー自体を作らず、目標到達済みnumericのcarriedWithoutTrack判定を壊さないようにした。",
+    "twy-carry-cycle/twy-carry-confirmをaction registryへ登録し、非12WY・12WY未設定・現サイクル内・未来側を確定ハンドラ内でも拒否するようにした。",
+    "numericGoalReachedをtrackStatusとcarryで共用し、増加・減少目標とも一致および超過到達なら新trackを作らず終了するようにした。",
+    "データ層エラーはフォーム内へ表示して入力とstateを維持し、通常成功はclose、carriedWithoutTrackはProjectモーダル再構築へ分岐した。",
+    "carryフォームの同期由来表示値をescapeHTMLし、既存の現在12WY開始日表示にも同じ防御を適用した。",
+    "carry全体のgrid余白と配下hidden規則、milestone carry専用2カラム行を追加し、numeric欄がmilestone時に見えないようにした。",
+    "track有無を問わず確定前に未保存編集の破棄を確認し、案内文にも同じ警告を表示するようにした。",
+    "numeric到達済みだけ終了案内を表示し、目標値空欄ラベルを旧目標引継ぎと達成済み終了の実挙動へ揃えた。",
+    "is12WY切替時のcarry表示同期、再展開時のエラー消去、エラー欄不在時のtoastフォールバックを追加した。",
+    "action registryのゴールデンリストを新規2 actionへ正当に追従させ、登録全量の保存則を維持した。",
+    "v255のService Worker現行CACHE_NAME期待値をv259へ正当に追従させた。",
+    "v259テストでtrack無し・numeric・milestone・達成済み・エラー・サイクル境界+1/+83/+84/-1・可視性・確認文言・表示切替・DOM直接操作ガード・保存回数・XSS・v258フォーム回帰を固定した。",
+    "track core/CRUDテストで純関数の依存ゼロ契約、厳密一致の既存挙動、増加超過、減少到達、減少未達carryを固定した。"
+  ],
+  "uncertainties": [
+    "design-08 F-1〜F-4は発注書の監督者裁定どおり実装し、未確定事項は残っていない。",
+    "carry配下の作者display指定がhidden属性を上書きしないよう、carry自身と全子孫を対象にしたhidden CSSを追加した。",
+    "v257データ層とv258フォームの既存シグネチャ・保存分岐・track編集動作は変更していない。"
+  ],
+  "reviewFocus": [
+    "isProjectInCurrentCycleが0〜83日を包含し、carryは現サイクル外の過去側だけを対象にするか。",
+    "goalValue空欄がundefined扱いになり、numericの増加・減少方向で一致/超過到達だけcarriedWithoutTrackへ正しく分岐するか。",
+    "milestoneの完了済み除外・旧idキー予定日・移行日前日拒否・当日以後許可がデータ層契約どおりか。",
+    "表示・action・確定の統一ガードがtrack無しの正規移行を妨げず、現サイクル内・未来側・不正な直接DOM操作を拒否するか。",
+    "track有り/無しの確認と案内文が未保存編集の破棄を明示し、到達済みnumericだけ終了案内を出すか。",
+    "carriedWithoutTrack後にモーダルがkind:noneで再構築され、通常成功とtrack無し成功では閉じるか。",
+    "390/768/1024pxとiOS Safariで16px日付/数値input、2カラム節目行、hiddenフォームが崩れないか。"
+  ],
+  "verification": [
+    "node --check app.js、tests/v259.test.js、tests/track-core.test.js、tests/track-crud-core.test.js: PASS。",
+    "system Edge指定 node tests/v259.test.js: 全carry経路・負例・0〜83日境界・可視性・確認文言・保存回数・XSS・既存フォーム回帰を含め全件PASS。",
+    "node tests/action-registry-core.test.js / tests/track-core.test.js / tests/track-crud-core.test.js / tests/track-commit-core.test.js: action保存則、純関数、到達方向、carryデータ層、週次候補の既存期待値を含め全件PASS。",
+    "system Edge指定 node tests/v258.test.js / tests/sw-integration.test.js: v258フォーム回帰・Service Worker更新/オフラインを含め全件PASS。",
+    "npm run code:index:write / npm run test:manifest:write: PASS。v259はsync-storage/journal-health分類でlegacy-crosscutting追加不要。",
+    "system Edge・検証用handoffミラー指定 node scripts/release-gate.js releases/v259.json --final: exit 0。impact regression・v259・smoke・最終coreを含め全件PASS。"
+  ],
+  "knownLimitations": [
+    "WBSの前サイクル注記描画と注記タップ導線は仕様どおり実装単位#9の担当で、本版には含めない。",
+    "iOS Safari実機PWAでの日付picker、ソフトキーボード、Service Worker更新とオフライン動作確認は監督者側で必要。",
+    "taskchute-notes/handoff.mdがワークスペース外で更新できない環境では、検証用ミラーで生成・照合後に監督者がnotes側へ反映する。"
+  ]
+}

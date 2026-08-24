@@ -29,7 +29,8 @@ function item(id, weekStart, extra = {}) {
 (async () => {
   const mod = await import(pathToFileURL(MODULE_PATH).href);
   const {
-    dateParts, daysBetween, weeklyScore, latestMeasurement, paceNumeric, paceMilestone,
+    dateParts, daysBetween, isProjectInCurrentCycle, numericGoalReached,
+    weeklyScore, latestMeasurement, paceNumeric, paceMilestone,
     trackStatus, forwardTracksForWeek, selectTrackFooter, activeTrackForProject,
     validateTrackDraft, trackDefinitionChanged, PACE_TOLERANCE_DAYS, STALE_DAYS
   } = mod;
@@ -39,6 +40,18 @@ function item(id, weekStart, extra = {}) {
   check("うるう年跨ぎは2日", daysBetween("2024-02-28", "2024-03-01") === 2);
   check("月末跨ぎは1日", daysBetween("2026-04-30", "2026-05-01") === 1);
   check("不正日付はnull/NaN", dateParts("2026-02-30") === null && Number.isNaN(daysBetween("bad", "2026-01-01")));
+  const cycleProject = (twelveWeekStartDate) => ({ twelveWeekStartDate });
+  check("現サイクルは開始日から+83日までを包含", ["2026-08-15", "2026-08-16", "2026-11-06"]
+    .every((date) => isProjectInCurrentCycle(cycleProject(date), "2026-08-15")));
+  check("-1日/+84日と不正日付は現サイクル外", ["2026-08-14", "2026-11-07", "", "2026-02-30"]
+    .every((date) => !isProjectInCurrentCycle(cycleProject(date), "2026-08-15"))
+    && !isProjectInCurrentCycle(cycleProject("2026-08-15"), "bad"));
+  check("numeric到達判定は増加・減少の一致と超過を含み未達を除く",
+    numericGoalReached({ baselineValue: 0, goalValue: 30 }, 30)
+      && numericGoalReached({ baselineValue: 0, goalValue: 30 }, 35)
+      && numericGoalReached({ baselineValue: 90, goalValue: 70 }, 70)
+      && numericGoalReached({ baselineValue: 90, goalValue: 70 }, 68)
+      && !numericGoalReached({ baselineValue: 90, goalValue: 70 }, 75));
   const source = fs.readFileSync(MODULE_PATH, "utf8");
   check("new Date(文字列)を使わない", !/new\s+Date\s*\(\s*["'`]/.test(source));
   check("state/store.js/app.jsをimportしない", !/^\s*import\s/m.test(source)

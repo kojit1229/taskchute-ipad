@@ -6,9 +6,13 @@ const vm = require("vm");
 
 const ROOT = path.join(__dirname, "..");
 const appSource = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
+const trackSource = fs.readFileSync(path.join(ROOT, "src", "core", "track.js"), "utf8");
+const cycleStart = trackSource.indexOf("function dateParts(iso) {");
+const cycleEnd = trackSource.indexOf("function dedupeById(records) {");
 const start = appSource.indexOf("function candidateBlocksForWeek(value, weekStart) {");
 const end = appSource.indexOf("// v39: 開いている問い", start);
-if (start < 0 || end < 0) throw new Error("週次コミット関数のsource markerが見つかりません");
+if (cycleStart < 0 || cycleEnd < 0 || start < 0 || end < 0) throw new Error("週次コミット関数のsource markerが見つかりません");
+const cycleSource = trackSource.slice(cycleStart, cycleEnd);
 const commitSource = appSource.slice(start, end);
 
 let failures = 0;
@@ -48,7 +52,7 @@ sandbox.saveState = () => {
   sandbox.saveCount += 1;
 };
 vm.createContext(sandbox);
-vm.runInContext(commitSource, sandbox);
+vm.runInContext(cycleSource + commitSource, sandbox);
 
 function project(id = "p1", twelveWeekStartDate = "2026-06-01", extra = {}) {
   return { id, kind: "normal", status: "active", twelveWeekStartDate, deleted: false, ...extra };
