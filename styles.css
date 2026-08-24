@@ -2547,6 +2547,52 @@ h3 {
 .wbs-progress-agg { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 .wbs-progress-agg .progress { flex: 1; }
 
+/* v260: 12WY WBS成果トラック行。色は全テーマ共通トークンへ割り当てる。 */
+.twy-row { margin-top: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-soft); }
+.twy-row-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.t-state { flex: none; padding: 1px 7px; border: 1px solid; border-radius: 3px; font-size: 10px; font-weight: 700; letter-spacing: .08em; }
+.t-state.s-ahead, .t-state.s-done { color: var(--green-text); border-color: var(--green-text); }
+.t-state.s-ontrack { color: var(--accent-text); border-color: var(--accent); }
+.t-state.s-warn { color: var(--orange-text); border-color: var(--orange-text); }
+.t-state.s-overdue { color: var(--red); border-color: var(--red); }
+.t-state.s-stale { color: var(--muted); border-color: var(--line); }
+.t-state.s-done, .twy-correct { opacity: .7; }
+.twy-val { color: var(--text); font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.twy-val small { font-size: 10px; font-weight: 400; opacity: .65; }
+.twy-pace { font-size: 11px; font-variant-numeric: tabular-nums; }
+.twy-pace.pos { color: var(--green-text); }
+.twy-pace.neg { color: var(--orange-text); }
+.twy-meta { margin-left: auto; color: var(--muted); font-size: 10px; flex: none; }
+.twy-update-btn { flex: none; padding: 3px 10px; border: 1px solid var(--accent); border-radius: 4px; color: var(--accent-text); background: transparent; font: inherit; font-size: 10px; letter-spacing: .08em; cursor: pointer; }
+.twy-update-btn:hover { background: var(--accent-soft); }
+.twy-row.s-stale .twy-val, .twy-row.s-stale .twy-pace, .twy-row.s-stale .twy-bar { opacity: .55; }
+.twy-bar { position: relative; height: 6px; margin-top: 7px; background: var(--line); overflow: visible; }
+.twy-bar > span { display: block; height: 100%; background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.twy-bar.s-warn > span { background: var(--orange-text); box-shadow: 0 0 6px var(--orange-text); }
+.twy-bar.s-ahead > span { background: var(--green-text); box-shadow: 0 0 6px var(--green-text); }
+.twy-bar > i { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text); opacity: .8; }
+.twy-bar > i::after { content: "今日の理想"; position: absolute; top: -12px; left: -18px; color: var(--muted); font-size: 8px; font-style: normal; white-space: nowrap; }
+.twy-bar-scale { display: flex; justify-content: space-between; margin-top: 3px; color: var(--muted); font-size: 9px; font-variant-numeric: tabular-nums; }
+.twy-ms { display: flex; align-items: flex-start; margin-top: 8px; padding-bottom: 2px; overflow-x: auto; }
+.twy-ms-node { position: relative; flex: 1 1 0; min-width: 74px; text-align: center; }
+.twy-ms-node::before { content: ""; position: absolute; top: 7px; left: -50%; width: 100%; height: 2px; background: var(--line); }
+.twy-ms-node:first-child::before { display: none; }
+.twy-ms-node.done::before { background: var(--green-text); }
+.twy-ms-dot { position: relative; z-index: 1; display: inline-grid; place-items: center; width: 16px; height: 16px; border: 2px solid var(--line); border-radius: 50%; color: var(--text); background: var(--panel-soft); font-size: 9px; }
+.twy-ms-node.done .twy-ms-dot { color: var(--green-text); border-color: var(--green-text); }
+.twy-ms-node.next .twy-ms-dot { border-color: var(--orange-text); box-shadow: 0 0 8px var(--orange-soft); }
+.twy-ms-node.late .twy-ms-dot, .twy-ms-node.late .twy-ms-date { color: var(--red); border-color: var(--red); }
+.twy-ms-label, .twy-ms-date { display: block; line-height: 1.3; }
+.twy-ms-label { margin-top: 4px; font-size: 10px; }
+.twy-ms-date { color: var(--muted); font-size: 9px; font-variant-numeric: tabular-nums; }
+.twy-ms-date del { margin-right: 3px; opacity: .6; }
+.twy-stale-note { margin-top: 8px; padding: 7px 9px; border: 1px dashed var(--orange-text); border-radius: 6px; color: var(--orange-text); background: var(--orange-soft); font-size: 11px; cursor: pointer; }
+@media (max-width: 560px) {
+  .twy-meta { margin-left: 0; }
+  .twy-update-btn { margin-left: auto; }
+  .twy-row { padding: 8px 6px; }
+}
+
 /* v61: 繰り越し回数バッジ */
 .migration-badge {
   display: inline-block;

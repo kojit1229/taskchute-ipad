@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v259";
+const CACHE_NAME = "taskchute-journal-pwa-v260";
+// v260: WBSへ12WY成果トラック状態行と前サイクル注記を追加した(APP_SHELL変更なし)。
 // v259: 前サイクル12WY Projectのcarryフォームと新サイクル移行導線を追加した(APP_SHELL変更なし)。
 // v258: Projectモーダルへ12WYトラック登録フォームを追加した(APP_SHELL変更なし)。
 // v257: 12WYトラック定義のCRUD・構造検証・close/supersede/carryデータ層を追加した(APP_SHELL変更なし)。

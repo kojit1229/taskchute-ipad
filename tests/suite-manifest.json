@@ -2356,8 +2356,8 @@
         "security-offline"
       ],
       "assertionSignals": 10,
-      "assertionHash": "99cdb689e9331827",
-      "sourceHash": "696264d78a8ade63",
+      "assertionHash": "d045d23f8ff2074e",
+      "sourceHash": "6c0c78e3f841f980",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2429,6 +2429,31 @@
       "assertionSignals": 52,
       "assertionHash": "95666ed0fbe669bb",
       "sourceHash": "86842cb4fdb0151d",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v260.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "journal-health",
+        "ui-responsive"
+      ],
+      "assertionSignals": 49,
+      "assertionHash": "2232bf9253e45b99",
+      "sourceHash": "f5e4762b19220895",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

@@ -3,6 +3,7 @@
 import { mergeById, mergeByIdPreferNewer } from "./src/core/merge.js";
 import {
   activeTrackForProject, dateParts, isProjectInCurrentCycle, latestMeasurement, numericGoalReached,
+  paceMilestone, paceNumeric, trackStatus, daysBetween as trackDaysBetween,
   validateTrackDraft, trackDefinitionChanged
 } from "./src/core/track.js";
 // v166: app.js分割・段階3(state store + storage/sync gateway)。stateの再代入はsetState()
@@ -5382,10 +5383,127 @@ function renderProjectProgressAgg(liveTasks) {
   `;
 }
 
+// v260: 12WY成果トラックはWBS内でstateを読むだけの表示専用行として描画する。
+function renderTwyTrackBlock(project) {
+  if (!project?.twelveWeekStartDate) return "";
+  const track = activeTrackForProject(state.tracks || [], project.id);
+  return `${canCarryProjectCycle(project) ? renderTwyStaleNote(project) : ""}${track ? renderTwyTrackRow(track) : ""}`;
+}
+
+function renderTwyStaleNote(project) {
+  return `<div class="twy-stale-note" data-action="edit-project" data-id="${escapeHTML(project.id)}">
+    前サイクルのプロジェクトです。タップして新サイクルへ移行
+  </div>`;
+}
+
+function roundToStep(value, step) {
+  const amount = Number(value), size = Number(step);
+  if (!Number.isFinite(amount) || !(size > 0)) return "";
+  const decimals = Math.min(10, (String(size).split(".")[1] || "").length);
+  const rounded = Number((Math.round(amount / size) * size).toFixed(decimals));
+  return String(Object.is(rounded, -0) ? 0 : rounded);
+}
+
+function mdFmt(iso) {
+  const match = /^\d{4}-(\d{2})-(\d{2})/.exec(String(iso || ""));
+  return match ? `${Number(match[1])}/${Number(match[2])}` : "";
+}
+
+function twyNumericValueHTML(track, latestValue, pace, status, achievedISO) {
+  const unit = escapeHTML(track.unit || "");
+  const current = Number(latestValue), goal = Number(track.goalValue);
+  let paceHTML = "";
+  if (status.state === "done") {
+    paceHTML = `<span class="twy-pace pos">${escapeHTML(mdFmt(achievedISO))} 達成</span>`;
+  } else if (status.state === "stale") {
+    paceHTML = `<span class="twy-pace">ペース不明</span>`;
+  } else if (!pace.invalid) {
+    const diff = roundToStep(pace.diffRaw, track.valueStep);
+    if (diff !== "") paceHTML = `<span class="twy-pace ${pace.diffNorm >= 0 ? "pos" : "neg"}">${diff !== "0" && pace.diffRaw >= 0 ? "+" : ""}${diff}${unit}</span>`;
+  }
+  const valueHTML = Number.isFinite(current) && Number.isFinite(goal)
+    ? `<span class="twy-val">${current}<small>/${goal}${unit}</small></span>` : "";
+  return `${valueHTML}${paceHTML}`;
+}
+
+function twyMilestoneValueHTML(pace, status, milestones, today) {
+  if (status.state === "done") {
+    const latestDoneAt = milestones.reduce((latest, milestone) => {
+      const doneAt = String(milestone.doneAt || "");
+      return doneAt > latest ? doneAt : latest;
+    }, "");
+    return `<span class="twy-val">${pace.done}<small>/${pace.total}節目</small></span>
+      <span class="twy-pace pos">${escapeHTML(mdFmt(latestDoneAt))} 達成</span>`;
+  }
+  const next = milestones.find((milestone) => !milestone.doneAt);
+  const overdue = next?.plannedDate && next.plannedDate < today;
+  const detail = next ? `${overdue ? "残" : "次"}: ${escapeHTML(next.label)}${overdue ? "" : ` ${escapeHTML(mdFmt(next.plannedDate))}`}` : "";
+  return `<span class="twy-val">${pace.done}<small>/${pace.total}節目</small></span>
+    ${detail ? `<span class="twy-pace${overdue ? " neg" : ""}">${detail}</span>` : ""}`;
+}
+
+function twyBarHTML(track, latestValue, pace, status) {
+  const baseline = Number(track.baselineValue), goal = Number(track.goalValue);
+  const pct = goal === baseline ? 0 : clamp((Number(latestValue) - baseline) / (goal - baseline) * 100, 0, 100);
+  const markerPct = pace.invalid || status.state === "done" ? null
+    : clamp((pace.expected - baseline) / (goal - baseline) * 100, 0, 100);
+  const barClass = status.label === "期限超過" ? "s-warn" : status.state === "done" ? "s-ahead" : `s-${status.state}`;
+  const unit = escapeHTML(track.unit || "");
+  return `<div class="twy-bar ${barClass}"><span style="width:${pct}%"></span>
+      ${markerPct === null ? "" : `<i style="left:${markerPct}%"></i>`}</div>
+    <div class="twy-bar-scale"><span>${baseline}${unit}</span><span>${goal}${unit}</span></div>`;
+}
+
+function twyMilestoneChainHTML(milestones, today) {
+  let nextAssigned = false;
+  return `<div class="twy-ms">${milestones.map((milestone) => {
+    const done = Boolean(milestone.doneAt), late = !done && milestone.plannedDate < today;
+    const next = !done && !late && !nextAssigned;
+    if (next) nextAssigned = true;
+    const cls = done ? "done" : late ? "late" : next ? "next" : "";
+    let dateHTML = escapeHTML(done ? `${mdFmt(milestone.doneAt)} 済`
+      : late ? `${mdFmt(milestone.plannedDate)} 超過` : mdFmt(milestone.plannedDate));
+    if (!done && milestone.originalPlannedDate && milestone.originalPlannedDate !== milestone.plannedDate) {
+      dateHTML = `<del>${escapeHTML(mdFmt(milestone.originalPlannedDate))}</del>${escapeHTML(mdFmt(milestone.plannedDate))} 予定変更済`;
+    }
+    return `<span class="twy-ms-node ${cls}"><span class="twy-ms-dot">${done ? "✓" : late ? "!" : ""}</span>
+      <span class="twy-ms-label">${escapeHTML(milestone.label)}</span><span class="twy-ms-date">${dateHTML}</span></span>`;
+  }).join("")}</div>`;
+}
+
+function renderTwyTrackRow(track) {
+  const today = todayISO();
+  const measurement = latestMeasurement(state.trackMeasurements || [], track.id);
+  const latestValue = track.kind === "numeric" ? (measurement ? Number(measurement.value) : Number(track.baselineValue)) : undefined;
+  const lastObservedISO = measurement ? String(measurement.observedAt || "").slice(0, 10) : track.startDate;
+  const pace = track.kind === "numeric" ? paceNumeric(track, latestValue, today) : paceMilestone(track, today);
+  const status = trackStatus(track, pace, latestValue, lastObservedISO, today);
+  const stateClass = status.label === "期限超過" ? "s-overdue" : `s-${status.state}`;
+  const milestones = track.kind === "milestone" ? (track.milestones || []).filter((item) => !item.deleted)
+    .slice().sort((a, b) => String(a.plannedDate || "").localeCompare(String(b.plannedDate || ""))) : [];
+  const valueHTML = track.kind === "numeric"
+    ? twyNumericValueHTML(track, latestValue, pace, status, lastObservedISO)
+    : twyMilestoneValueHTML(pace, status, milestones, today);
+  const metaHTML = track.kind === "numeric"
+    ? (status.state === "done" ? `期限 ${mdFmt(track.deadline)}`
+      : `最終 ${mdFmt(lastObservedISO)}${status.state === "stale" ? `・${trackDaysBetween(lastObservedISO, today)}日前` : ""}`)
+    : `期限 ${mdFmt(pace.deadline)}${status.label === "期限超過" ? " 超過" : ""}`;
+  return `<div class="twy-row s-${status.state}" data-twy-track-id="${escapeHTML(track.id)}">
+    <div class="twy-row-top"><span class="t-state ${stateClass}">${escapeHTML(status.label)}</span>${valueHTML}
+      <span class="twy-meta">${escapeHTML(metaHTML)}</span>
+      <button type="button" class="twy-update-btn${status.state === "done" ? " twy-correct" : ""}"
+        data-action="twy-open-editor" data-id="${escapeHTML(track.id)}">${status.state === "done" ? "訂正" : "更新"}</button>
+    </div>
+    ${track.kind === "numeric" ? twyBarHTML(track, latestValue, pace, status) : twyMilestoneChainHTML(milestones, today)}
+  </div>`;
+}
+
 function renderProjectTree(project) {
   const allTasksOfProject = state.tasks.filter((task) => !task.deleted && task.projectId === project.id);
   const progress = taskProgress(allTasksOfProject);
   const is12WY = Boolean(project.twelveWeekStartDate);
+  const hideOldProgress = is12WY && project.status === "active"
+    && isProjectInCurrentCycle(project, state.settings.twelveWeekStartDate);
   const collapsed = Boolean(project.collapsed);  // v33: 折りたたみ
   // v35: 中断
   const showSusp = Boolean(state.settings.showSuspended);
@@ -5424,12 +5542,13 @@ function renderProjectTree(project) {
       ${project.description ? `<div class="muted" style="font-size:12px">${escapeHTML(project.description)}</div>` : ""}
       <div class="progress"><span style="width:${progress}%"></span></div>
       <div class="muted wbs-proj-meta">${doneCount} / ${liveTasks.length} 完了${projDue}</div>
-      ${project.showProgress ? renderProjectProgressAgg(liveTasks) : ""}
+      ${renderTwyTrackBlock(project)}
+      ${project.showProgress && !hideOldProgress ? renderProjectProgressAgg(liveTasks) : ""}
       ${collapsed
         ? `<div class="muted" style="font-size:12px; margin-top:6px">${rootTasks.length ? `${visibleTasks.length}件のタスク(折りたたみ中)` : "Task未登録"}</div>`
         : `<div class="stack">
             ${rootTasks.length
-              ? rootTasks.map((t) => renderTaskTree(t, visibleTasks, 0)).join("")
+              ? rootTasks.map((t) => renderTaskTree(t, visibleTasks, 0, hideOldProgress)).join("")
               : `<div class="muted">Task未登録</div>`}
           </div>`}
     </div>
@@ -5448,21 +5567,21 @@ function toggleTaskCollapse(id) {
   saveAndRender();
 }
 
-function renderTaskTree(task, allTasksOfProject, depth) {
+function renderTaskTree(task, allTasksOfProject, depth, hideProgress = false) {
   const children = allTasksOfProject.filter((t) => t.parentTaskId === task.id).sort(siblingTaskCompare);  // v48 / v194: order優先
   const indent = depth * 18;
   const collapsed = Boolean(task.collapsed);  // v33: 折りたたみ
   return `
     <div style="margin-left:${indent}px">
-      ${renderTaskRow(task, depth, children.length > 0, collapsed)}
+      ${renderTaskRow(task, depth, children.length > 0, collapsed, hideProgress)}
       ${children.length && !collapsed
-        ? children.map((c) => renderTaskTree(c, allTasksOfProject, depth + 1)).join("")
+        ? children.map((c) => renderTaskTree(c, allTasksOfProject, depth + 1, hideProgress)).join("")
         : ""}
     </div>
   `;
 }
 
-function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false) {
+function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false, hideProgress = false) {
   const canAddSub = depth < 2;  // 最大 3 階層(0,1,2)、depth=2 の子はもう作らない
   // v33: 子を持つタスクには折りたたみキャレット、無ければ位置合わせのスペーサー
   const caret = hasChildren
@@ -5548,7 +5667,7 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false) 
         ${dueHTML}
         ${stats.count ? `<span class="muted" style="font-size:11px">⏱ ${stats.count}回${stats.minutes ? `・${fmtMinShort(stats.minutes)}` : ""}</span>` : ""}`}
       </div>
-      ${progressHTML}
+      ${hideProgress ? "" : progressHTML}
       <div class="row wbs-actions">
         ${planActionsHTML}
         <button class="btn" data-action="task-today" data-id="${task.id}">${scheduledToday ? "＋もう一度" : "今日へ"}</button>
