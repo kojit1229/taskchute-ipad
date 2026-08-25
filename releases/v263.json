@@ -1,0 +1,70 @@
+{
+  "version": 263,
+  "date": "2026-08-25",
+  "title": "12WY週次確定シート pre-commit",
+  "summary": "WBSから到達できる週次コミット確定シートの未確定側を実装し、候補Blockのタスク集約・展開・個別選択・manual確定を既存commitWeekへ安全に結線した。",
+  "changedFiles": [
+    "app.js",
+    "CHANGES_v263.md",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v263.json",
+    "scripts/test-manifest.js",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/v262.test.js",
+    "tests/v263.test.js"
+  ],
+  "intent": [
+    "土曜朝のmanual確定を、WBSツールバーから実機で到達できる既存モーダル導線として提供する。",
+    "候補表示はタスク単位に集約しつつ、選択・保存の正本をBlock id集合のまま維持する。",
+    "チェック・展開を非永続の直接DOM操作に限定し、入力中のモーダル再構築と不要な保存を避ける。"
+  ],
+  "changes": [
+    "app.jsへopenTwyCommitSheet/buildTwyCommitSheetHTML/twyCommitPreHTMLと集約・子行描画helperを追加し、当週候補を既定全選択で表示した。",
+    "twy-open-commit/twy-commit-toggle-group/twy-commit-toggle-block/twy-commit-expand/twy-commit-weekの5 actionを既存registerActionsへ登録した。",
+    "集約ON/OFF、Block個別選択、展開/折りたたみはCSS.escapeを使う直接DOM更新とし、saveState/renderModalを呼ばない契約にした。",
+    "manual確定はcommitWeekへBlock id集合を渡し、saveAndRenderの直後にrenderModalを呼んで確定済み暫定表示へ切り替えた。",
+    "確定送信時に当週一致と生きた週メタ不在を再確認し、週跨ぎは当週シートへ開き直し、他端末確定済みは上書きせず読み取り表示へ切り替えた。",
+    "WBS上部の今週を確定ボタンを12WY設定時だけ表示し、既存テーマトークンと390px折り返しを含むpre-commit専用CSSを追加した。",
+    "欠落group時のcheckbox復元、候補走査の1クリック1回化、モーダル日付範囲・track名(単位)・入口ボタン文字サイズをレビュー指摘へ追従した。",
+    "Service WorkerのCACHE_NAMEをv263へ更新した。",
+    "v263 E2Eとaction registry台帳を追加・追従し、B-9対象経路、送信時競合・週跨ぎ・12WY未設定の負例、保存回数、XSS、既存モーダル、WBS、responsiveを固定し、v262のSW期待値を現行v263へ正当に追従した。"
+  ],
+  "uncertainties": [
+    "design-12のgroup.project.nameは監督者裁定で誤記と確定し、現行Project契約のgroup.project.titleをescapeHTMLして表示した。",
+    "ctx=add用の選択Setと分岐はv264で再利用するため残したが、本リリースでは計画追加UIへ未結線である。",
+    "確定成功1操作の保存はcommitWeek内1回とsaveAndRender内1回の計2回で、generateReportは呼ばない。"
+  ],
+  "reviewFocus": [
+    "候補0件は案内のみ、候補ありは既定全選択、選択0件でもmanual確定できるB-1裁定どおりか。",
+    "task集約とBlock個別選択が同じBlock id Setを更新し、親checked/indeterminate・子・カウンタ・キャレットが同期するか。",
+    "task/project/track/unit/id/日付表示がescapeHTMLされ、selectorだけCSS.escape標準APIを使っているか。",
+    "twy-commit-weekが#4データ層だけを呼び、state.weeklyCommitmentsへ直接書かず、保存2回・generateReport 0回か。",
+    "送信直前に週が変わった場合と同期済み週メタが現れた場合に、commitWeekと成功トーストを通らず安全な表示へ遷移するか。",
+    "project/task/block既存モーダル、WBS表示、#5フック、#9〜#11、COUNTDOWNに退行やスコープ越境がないか。"
+  ],
+  "verification": [
+    "node --check app.js / tests/v263.test.js、git diff --check: PASS。",
+    "system Edge指定 tests/v263.test.js: B-9 #1〜#7/#20、送信時競合・週跨ぎ・12WY未設定の負例、保存2回、XSS、既存モーダル、WBS、390pxを含め全件PASS。",
+    "tests/action-registry-core.test.jsとtests/track-commit-core.test.js: PASS。",
+    "関連v258/v260/v261/v262とService Worker回帰: PASS。",
+    "npm run code:index:write / npm run test:manifest:write、release-record --write/--check: PASS。",
+    "system Edge指定 release-gate releases/v263.json --final: impact回帰束・coreともPASS、exit 0。"
+  ],
+  "notes": [
+    "仕様§4.1のtrack-ui.js総則とrepo CLAUDE.mdのapp.js縮小という段階分割の恒久契約から意図的に逸脱し、監督者裁定どおり既存モーダル基盤へ直接依存する本シートUIをapp.jsへ配置した。",
+    "v263は分割(a)=B-0〜B-5とWBS入口のみ。post-commit詳細表示・免除/解除・計画追加(B-6〜B-8)はv264へ持ち越した。",
+    "確定後はcloseModalではなくsaveAndRender→renderModalを採用し、確定済みです(詳細表示は次リリース)の暫定メタ表示へ切り替える。",
+    "実行コード差分はapp.js 160行、styles.css 17行、sw.js追加2行/削除1行、test-manifest分類1行の合計追加180行+削除1行で原則200行以内。"
+  ],
+  "knownLimitations": [
+    "確定済み週のitem詳細、免除・解除、計画追加はv264まで表示せず、暫定メタだけを表示する。",
+    "モーダル表示中に同期で候補集合が変わると一覧が一時的に古く見えるが、確定済み週メタは送信時に読み取り表示へ切り替え、候補差分はcommitWeekの候補フィルタでデータ不整合を防ぐ。",
+    "iOS Safari実機PWAでのService Worker更新、オフライン起動、390/768/1024pxの最終表示確認は監督者側で必要。",
+    "taskchute-notes/handoff.mdが書き込み不可の環境では検証用ミラーで生成・照合し、監督者がnotes側へ反映する。"
+  ]
+}

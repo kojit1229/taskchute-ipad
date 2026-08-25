@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v262";
+const CACHE_NAME = "taskchute-journal-pwa-v263";
+// v263: WBSから開ける週次コミット確定シート(pre-commit)を追加した(APP_SHELL変更なし)。
 // v262: 12WY進捗トーストを独立featureとして追加し、測定保存と日報quiet再生成を結線した。
 // v261: WBS成果トラック行へnumeric/milestoneインライン編集を追加した(APP_SHELL変更なし)。
 // v260: WBSへ12WY成果トラック状態行と前サイクル注記を追加した(APP_SHELL変更なし)。

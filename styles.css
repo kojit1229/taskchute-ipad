@@ -1476,6 +1476,7 @@ h3 {
   line-height: 1.2;
   letter-spacing: -0.01em; /* v123: モーダルタイトルの見出しトラッキング */
 }
+.modal-title span { font-size: .8em; color: var(--muted); }
 
 .modal-close {
   width: 32px;
@@ -1571,6 +1572,22 @@ h3 {
 .twy-guard-item.ng { color: var(--orange-text); }
 .twy-track-errors { padding: 8px; border-radius: 8px; color: var(--red); background: var(--red-soft); font-size: 13px; }
 @media (max-width: 560px) { .twy-grid2, .twy-grid3 { grid-template-columns: 1fr; } .twy-kind { display: grid; grid-template-columns: repeat(3, 1fr); } }
+
+/* v263: 週次コミット確定シート(pre-commit)とWBSの最小入口。 */
+.twy-commit-sheet { padding: 0; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.twy-commit-meta { padding: 9px 10px; border-bottom: 1px solid var(--line); color: var(--accent-text); font-size: 11px; line-height: 1.5; letter-spacing: .03em; }
+.twy-commit-row, .twy-commit-sub { display: grid; grid-template-columns: 28px minmax(0, 1fr) 90px; gap: 8px; align-items: center; padding: 0 10px; border-bottom: 1px solid var(--line); }
+.twy-commit-row { min-height: 48px; font-size: 12px; }
+.twy-commit-sub { min-height: 40px; padding-left: 34px; border-bottom-style: dashed; background: var(--panel-soft); font-size: 11px; }
+.twy-commit-row input[type="checkbox"], .twy-commit-sub input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--green-text); }
+.twy-commit-sheet .c-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.twy-commit-sheet .c-title small { display: block; color: var(--muted); font-size: 10px; overflow: hidden; text-overflow: ellipsis; }
+.twy-commit-sheet .c-caret, .twy-commit-sheet .c-when { justify-self: end; color: var(--accent-text); font-size: 10px; font-variant-numeric: tabular-nums; }
+.twy-commit-sheet .c-caret { min-height: 44px; display: inline-flex; align-items: center; cursor: pointer; }
+.twy-commit-foot { display: flex; align-items: center; gap: 8px; padding: 10px; }
+.twy-commit-count { color: var(--muted); font-size: 11px; }
+.twy-commit-foot .commit-btn { min-height: 44px; margin-left: auto; padding: 8px 16px; border: 1px solid var(--orange-text); border-radius: 7px; color: var(--orange-text); background: transparent; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+@media (max-width: 420px) { .twy-commit-row, .twy-commit-sub { grid-template-columns: 24px minmax(0, 1fr) 78px; gap: 5px; padding-right: 7px; } .twy-commit-foot { align-items: flex-start; flex-direction: column; } .twy-commit-foot .commit-btn { width: 100%; margin-left: 0; } }
 
 /* ===== Markdown レンダリング ===== */
 
