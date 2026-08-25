@@ -30,7 +30,7 @@
         "^app\\.js$"
       ],
       "suites": [
-        "action-registry-core"
+        "action-registry-core", "track-crud-core"
       ]
     },
     "navigation-view": {

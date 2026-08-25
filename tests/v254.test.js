@@ -9,6 +9,7 @@ const {
 
 const ROOT = path.join(__dirname, "..");
 const appSource = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
+const trackUiSource = fs.readFileSync(path.join(ROOT, "src", "features", "track-ui.js"), "utf8");
 const PORT = randomPort();
 const KEY = STATE_KEY;
 let failures = 0;
@@ -33,10 +34,6 @@ const instrumentedAppSource = appSource
   .replace("function saveState() {", `function saveState() {
   globalThis.__v254SaveCalls?.push("save");
   globalThis.__v254HookOrder?.push("save");`)
-  .replace("function showTrackProgressToastStub(_block) {}", `function showTrackProgressToastStub(_block) {
-  globalThis.__v254ToastCalls?.push(_block?.id || "");
-  globalThis.__v254HookOrder?.push("toast");
-}`)
   .replace("function trackOnBlockStarted(block) {", `function trackOnBlockStarted(block) {
   globalThis.__v254StartCalls?.push(block?.id || "");
   globalThis.__v254HookOrder?.push("start");`)
@@ -46,16 +43,20 @@ const instrumentedAppSource = appSource
   globalThis.__v254CompletionCalls?.push({ blockId: block?.id || "", isNowCompleted, interactive });
   globalThis.__v254HookOrder?.push("completion");`
   );
+const instrumentedTrackUiSource = trackUiSource.replace(
+  "function maybeShowTrackProgressToast(block) {",
+  `function maybeShowTrackProgressToast(block) {
+  globalThis.__v254ToastCalls?.push(block?.id || "");
+  globalThis.__v254HookOrder?.push("toast");`
+);
 
 console.log("[0] 共通フック契約と全経路の機械検査");
 {
-  const hookStart = appSource.indexOf("function showTrackProgressToastStub(");
+  const hookStart = appSource.indexOf("function trackOnBlockStarted(");
   const hookEnd = appSource.indexOf("function excuseCommitmentItem(", hookStart);
   const calls = [];
-  const hookSource = appSource.slice(hookStart, hookEnd).replace(
-    "function showTrackProgressToastStub(_block) {}",
-    "function showTrackProgressToastStub(block) { calls.push(`toast:${block.id}`); }"
-  );
+  const hookSource = `function maybeShowTrackProgressToast(block) { calls.push(\`toast:\${block.id}\`); }\n`
+    + appSource.slice(hookStart, hookEnd);
   const sandbox = {
     calls,
     autoCommitWeekIfNeeded: (block) => calls.push(`auto:${block.id}`),
@@ -67,15 +68,15 @@ console.log("[0] 共通フック契約と全経路の機械検査");
   check("開始フックは自動確定だけ", calls.join("|") === "auto:started", calls.join("|"));
   calls.length = 0;
   sandbox.trackOnBlockCompletionChanged({ id: "interactive" }, true, { interactive: true });
-  check("interactive完了はauto→stamp→トーストスタブ順",
+  check("interactive完了はauto→stamp→進捗トースト判定順",
     calls.join("|") === "auto:interactive|stamp:interactive:true|toast:interactive", calls.join("|"));
   calls.length = 0;
   sandbox.trackOnBlockCompletionChanged({ id: "cancel" }, false, { interactive: true });
-  check("完了取消はトーストスタブを呼ばない",
+  check("完了取消は進捗トースト判定を呼ばない",
     calls.join("|") === "auto:cancel|stamp:cancel:false", calls.join("|"));
   calls.length = 0;
   sandbox.trackOnBlockCompletionChanged({ id: "batch" }, true, { interactive: false });
-  check("非interactive完了はトーストスタブを呼ばない",
+  check("非interactive完了は進捗トースト判定を呼ばない",
     calls.join("|") === "auto:batch|stamp:batch:true", calls.join("|"));
 
   const completionRoutes = {
@@ -110,6 +111,9 @@ console.log("[0] 共通フック契約と全経路の機械検査");
   await blockGithubApiByDefault(page);
   await page.route((url) => url.pathname.endsWith("/app.js"), (route) => route.fulfill({
     status: 200, contentType: "text/javascript", body: instrumentedAppSource
+  }));
+  await page.route((url) => url.pathname.endsWith("/src/features/track-ui.js"), (route) => route.fulfill({
+    status: 200, contentType: "text/javascript", body: instrumentedTrackUiSource
   }));
 
   let aiWorkFixture = null;
@@ -240,7 +244,7 @@ console.log("[0] 共通フック契約と全経路の機械検査");
     check(`${label}: interactive=${interactive}`,
       routeCalls[0]?.interactive === interactive && routeCalls[0]?.isNowCompleted === true,
       JSON.stringify(routeCalls));
-    check(`${label}: interactive経路だけトーストスタブを1回呼ぶ`,
+    check(`${label}: interactive経路だけ進捗トースト判定を1回呼ぶ`,
       spies.toasts.filter((id) => id === blockId).length === (interactive ? 1 : 0), JSON.stringify(spies));
     check(`${label}: saveState呼び出し回数`, spies.saves.length === expectedSaveCalls,
       JSON.stringify(spies.order));

@@ -55,14 +55,15 @@ const FEATURE_MODULE_PATHS = [
   // v181: timeline-modeのハンドラ実体がこのファイルにあるため追加(configureTimeline({})を
   // 空depsで呼んでも、registerActions呼び出し自体はdepsを参照しないため安全に実測できる)。
   path.join(ROOT, "src", "features", "timeline.js"),
-  path.join(ROOT, "src", "features", "today.js")
+  path.join(ROOT, "src", "features", "today.js"),
+  path.join(ROOT, "src", "features", "track-ui.js")
 ];
 
 // wish.jsはモジュール読み込み時にdocument.addEventListener(pointerdown/move/up/cancel、月間ボード
 // D&D)をトップレベルで呼ぶ(tests/wish-core.test.jsと同じ既知の事情)。Node環境にはdocumentが
 // 無いため、4featureをimportする前に最小限のスタブを用意する(ドラッグ確定の検証はしない=
 // ブラウザE2E側の責務のまま。actions.js自身はstateもDOMも参照しないため[1][2]には影響しない)。
-global.document = { addEventListener: () => {} };
+global.document = { addEventListener: () => {}, querySelector: () => null };
 
 let failures = 0;
 function check(name, cond, extra = "") {
@@ -101,6 +102,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "edit-project", "edit-task", "edit-block",
   "twy-kind-numeric", "twy-kind-milestone", "twy-kind-none", "twy-ms-add", "twy-ms-del",
   "twy-open-editor", "twy-close-editor", "twy-save-measurement", "twy-ms-toggle-done", "twy-ms-edit-date",
+  "twy-toast-inc", "twy-toast-same", "twy-toast-other", "twy-toast-other-confirm", "twy-toast-later",
   "twy-carry-cycle", "twy-carry-confirm",
   "modal-close", "modal-save", "modal-delete",
   "lev-judge",
@@ -168,7 +170,9 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
   // v186: F2でtimeline.jsのregisterActionsへ意図的に追加(DRIFT送り+TIME COMB隙間補完)
   "drift-postpone", "time-comb-fill",
   // v241: src/features/today.jsの端末ローカル表示切替
-  "focus-toggle-gate", "focus-toggle-atis", "focus-toggle-journal", "focus-mode"
+  "focus-toggle-gate", "focus-toggle-atis", "focus-toggle-journal", "focus-mode",
+  // v262: src/features/track-ui.jsの12WY進捗トースト
+  "twy-toast-inc", "twy-toast-same", "twy-toast-other", "twy-toast-other-confirm", "twy-toast-later"
 ];
 
 // v174: 段階5-3で以下20件(settings 11 + sync 8 + core/nav 1)を、app.js自身が呼ぶ
@@ -406,7 +410,7 @@ function extractModalHandlerTypes() {
   check("if連鎖側の残存action名に重複がない",
     new Set(extracted).size === extracted.length);
 
-  console.log("[3-b] 4feature(wish/journal/timeline/today)のconfigureXxxを"
+  console.log("[3-b] 5feature(wish/journal/timeline/today/track-ui)のconfigureXxxを"
     + "空depsで呼び、registerActionsが実際に登録するaction名がMIGRATED_TO_REGISTRY_ACTIONSと"
     + "一致するか");
   // configureXxx本体はdestructuring代入+registerActions呼び出しのみで、渡されたdepsの中身は
@@ -415,11 +419,12 @@ function extractModalHandlerTypes() {
   const featureMods = await Promise.all(
     FEATURE_MODULE_PATHS.map((p) => import(pathToFileURL(p).href))
   );
-  const [wishMod, journalMod, timelineMod, todayMod] = featureMods;
+  const [wishMod, journalMod, timelineMod, todayMod, trackUiMod] = featureMods;
   wishMod.configureWish({});
   journalMod.configureJournal({});
   timelineMod.configureTimeline({});
   todayMod.configureToday({});
+  trackUiMod.configureTrackUi({});
   const registered = actionsMod.__debugActionNames().filter((name) => !name.startsWith("__test"));
   check(`レジストリ側の登録件数は期待どおり${MIGRATED_TO_REGISTRY_ACTIONS.length}件`,
     registered.length === MIGRATED_TO_REGISTRY_ACTIONS.length,

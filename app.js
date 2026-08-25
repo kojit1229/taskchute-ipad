@@ -22,6 +22,7 @@ import {
   configureIronLog, renderIronLog, linkedGymBlock, gymCommentSummary, runIronImport
 } from "./src/features/iron-log.js";
 import { configureInstruments, renderInstruments } from "./src/features/instruments.js";
+import { configureTrackUi, maybeShowTrackProgressToast } from "./src/features/track-ui.js";
 // v182: 新トップレベル「今日」コックピット。既存featureと同じ依存注入型で循環importを避ける。
 import { configureToday, renderToday } from "./src/features/today.js";
 // v168: app.js分割・段階4-2(WishタブTier1のCRUD・描画を抽出)。src/features/wish.js
@@ -267,6 +268,7 @@ configureTopband({
     birthDate: state.settings.birthDate
   })
 });
+configureTrackUi({ escapeHTML, todayISO, saveAndRender, generateReport, recordTrackMeasurement });
 configureIronLog({
   getState: () => state,
   escapeHTML, todayISO, renderHeader, saveAndRender, registerActions
@@ -531,6 +533,11 @@ registerActions({
 // (相乗り方式。project/task/blockはsrc/features/へ未抽出のためapp.js関数をそのまま参照する)。
 // modal-saveは過去判定どおりreturn意味論(disable連動のearly return)がありif連鎖に残置する。
 // 後半(ビジョンボード6+実験ログ5+AIスケジュール下書き8+検索2、計21)はv179以降で継続する。
+function twyEditorCommitted(message) {
+  generateReport(todayISO(), { quiet: true });
+  saveAndRender(message);
+}
+
 registerActions({
   // --- WBS/Project/Task CRUD(18) ---
   "add-project": () => addProject(),
@@ -3037,10 +3044,6 @@ function stampCommitmentCompletion(block, isNowCompleted) {
   saveState();
 }
 
-// v254: 進捗トースト本体は12WY MVP実装単位#11で実装する。本単位#5では呼び出し契約だけを
-// 固定するため、interactiveな完了遷移から到達するno-opスタブとして置く。
-function showTrackProgressToastStub(_block) {}
-
 function trackOnBlockStarted(block) {
   autoCommitWeekIfNeeded(block);
 }
@@ -3048,7 +3051,7 @@ function trackOnBlockStarted(block) {
 function trackOnBlockCompletionChanged(block, isNowCompleted, { interactive = false } = {}) {
   autoCommitWeekIfNeeded(block);
   stampCommitmentCompletion(block, isNowCompleted);
-  if (interactive && isNowCompleted) showTrackProgressToastStub(block);
+  if (interactive && isNowCompleted) maybeShowTrackProgressToast(block);
 }
 
 function excuseCommitmentItem(itemId, reason) {
@@ -3270,11 +3273,6 @@ function updateTrackMilestone(trackId, milestoneId, patch) {
   state.tracks = state.tracks.map((entry) => entry.id === trackId ? nextTrack : entry);
   saveState();
   return { ok: true, track: nextTrack };
-}
-
-function twyEditorCommitted(message) {
-  generateReport(todayISO(), { quiet: true });
-  saveAndRender(message);
 }
 
 // v39: 開いている問い(Zone 3)。最大3件、deepening を lastTouchedAt 降順で優先。

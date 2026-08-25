@@ -29,8 +29,8 @@ function clone(value) { return JSON.parse(JSON.stringify(value)); }
 
   console.log("[1] データ層2関数: 成功・失敗不変・保存回数・同期時刻契約");
   const dataSource = sourceBetween(appSource,
-    "function recordTrackMeasurement(trackId, value,", "function twyEditorCommitted");
-  const committedSource = sourceBetween(appSource, "function twyEditorCommitted", "// v39: 開いている問い");
+    "function recordTrackMeasurement(trackId, value,", "// v39: 開いている問い");
+  const committedSource = sourceBetween(appSource, "function twyEditorCommitted", "registerActions({");
   let uuidSeq = 0;
   const dataCalls = [];
   const dataSandbox = {
