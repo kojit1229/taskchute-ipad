@@ -14,6 +14,8 @@ const trackUiSource = fs.readFileSync(path.join(ROOT, "src", "features", "track-
 const indexSource = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const cssSource = fs.readFileSync(path.join(ROOT, "styles.css"), "utf8");
 const swSource = fs.readFileSync(path.join(ROOT, "sw.js"), "utf8");
+// v265: CACHE_NAME期待値をreleases最大版から導出(v255と同方式。リリースごとの追従漏れでCIが割れるクラスの根絶)
+const maxRelease = Math.max(...fs.readdirSync(path.join(ROOT, "releases")).map((f) => /^v(\d+)\.json$/.exec(f)?.[1]).filter(Boolean).map(Number));
 const PORT = randomPort();
 const TODAY = "2026-08-25", CYCLE = "2026-08-15", NOW = `${TODAY}T10:00:00`;
 // 監督者裁定: recordTrackMeasurement 1 + generateReport quiet 1 + saveAndRender 1。
@@ -323,8 +325,8 @@ class FakeToast {
     check("L-7 その他入力は既存input classと太枠・背景のエラー表現を使う",
       trackUiSource.includes('class="input"')
       && /\.twy-toast input\.is-error\s*\{[^}]*border:\s*2px[^}]*background:\s*var\(--red-soft\)/s.test(cssSource));
-    check("SWはtrack-uiをAPP_SHELL登録し現行CACHE_NAME v264", swSource.includes('"./src/features/track-ui.js"')
-      && /^const CACHE_NAME = "taskchute-journal-pwa-v264";/m.test(swSource));
+    check(`SWはtrack-uiをAPP_SHELL登録し現行CACHE_NAMEがreleases最大版v${maxRelease}と一致`, swSource.includes('"./src/features/track-ui.js"')
+      && new RegExp(`^const CACHE_NAME = "taskchute-journal-pwa-v${maxRelease}";`, "m").test(swSource));
 
     check("app.js配線はimport+configure+スタブ削除+共通フック1行置換", appSource.includes(
       'import { configureTrackUi, maybeShowTrackProgressToast } from "./src/features/track-ui.js";')

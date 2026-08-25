@@ -11,6 +11,8 @@ const ROOT = path.join(__dirname, "..");
 const appSource = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
 const cssSource = fs.readFileSync(path.join(ROOT, "styles.css"), "utf8");
 const swSource = fs.readFileSync(path.join(ROOT, "sw.js"), "utf8");
+// v265: CACHE_NAME期待値をreleases最大版から導出(v255と同方式。リリースごとの追従漏れでCIが割れるクラスの根絶)
+const maxRelease = Math.max(...fs.readdirSync(path.join(ROOT, "releases")).map((f) => /^v(\d+)\.json$/.exec(f)?.[1]).filter(Boolean).map(Number));
 const PORT = randomPort();
 const TODAY = "2026-08-25", WEEK = "2026-08-22", CYCLE = "2026-08-15";
 let failures = 0;
@@ -49,7 +51,7 @@ check("CSS.escape標準API・project.title裁定・日付文字列parse禁止を
 check("v263 CSSとService Worker更新", cssSource.includes(".twy-commit-sheet")
   && /\.modal-title span\s*\{[^}]*font-size:\s*\.8em;[^}]*color:\s*var\(--muted\)/s.test(cssSource)
   && !/\.twy-commit-open\s*\{[^}]*font-size:/s.test(cssSource)
-  && swSource.includes('CACHE_NAME = "taskchute-journal-pwa-v264"'));
+  && swSource.includes(`CACHE_NAME = "taskchute-journal-pwa-v${maxRelease}"`));
 for (const action of ["twy-commit-toggle-group", "twy-commit-toggle-block"]) {
   const source = actionSource(action);
   check(`${action}は欠落groupガードをSet変更前に置きcheckedを戻す`, source.indexOf("if (!group)") < source.indexOf("selection.add")

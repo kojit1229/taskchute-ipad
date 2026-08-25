@@ -171,6 +171,22 @@ function check(name, cond, extra = "") {
     check("画面全体に横スクロールなし", widths.pageScroll <= widths.pageClient, JSON.stringify(widths));
     check("棒グラフ内包コンテナは横スクロール可能", widths.chartScroll > widths.chartClient, JSON.stringify(widths));
 
+    // v265: 幅依存の導線欠落の再発防止。720px超はボトムナビが消えサイドバーだけになるため、
+    // サイドバー側にも「その他」入口が実在することをPC幅で固定する。
+    console.log("[10] PC幅(1280px)ではサイドバー「その他」経由で計器盤へ到達できる");
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await seed({ view: "today", earlyBirdLogs: {} });
+    check("PC幅でサイドバーの「その他」ボタンが見える", await page.locator('#sidebar [data-action="nav"][data-view="more"]').isVisible());
+    check("PC幅でボトムナビは非表示", !(await page.locator("#bottomNav").isVisible()));
+    await page.locator('#sidebar [data-action="nav"][data-view="more"]').click();
+    await page.waitForSelector('#app[data-view="more"]', { state: "attached" });
+    check("サイドバー › その他グリッドが開く", await page.locator(".more-tower-grid").count() === 1);
+    await page.locator('[data-action="nav"][data-view="instruments"]').click();
+    await page.waitForSelector('#app[data-view="instruments"]', { state: "attached" });
+    check("サイドバー › その他 › 計器盤へ到達できる", await page.locator(".instr-early-bird").count() === 1);
+    check("計器盤表示中はサイドバー「その他」がactive", await page.locator('#sidebar [data-view="more"].active').count() === 1);
+    check("計器盤表示中に「設定」等がactiveにならない", await page.locator("#sidebar .nav-button.active").count() === 1);
+
     console.log(failures === 0 ? "[instruments-e2e] 全PASS" : `[instruments-e2e] ${failures}件失敗`);
   } catch (e) {
     failures++;

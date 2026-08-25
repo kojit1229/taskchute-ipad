@@ -1,0 +1,52 @@
+{
+  "version": 265,
+  "date": "2026-08-26",
+  "title": "PCサイドバーへ「その他」導線を追加(計器盤/IRON LOG到達不能の修正)",
+  "summary": "721px以上ではボトムナビが消えるのにサイドバーへ「その他」が無く、計器盤(INSTRUMENTS)とIRON LOGへPCから到達できなかった導線欠落を修正した。",
+  "changedFiles": [
+    "app.js",
+    "CHANGES_v265.md",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v265.json",
+    "sw.js",
+    "tests/instruments-e2e.test.js",
+    "tests/suite-manifest.json",
+    "tests/v262.test.js",
+    "tests/v263.test.js",
+    "tests/v71.test.js"
+  ],
+  "intent": [
+    "モバイル専用だった「その他」グリッド入口をPCサイドバーにも置き、720px境界のどちら側でも同じ画面群へ到達できるようにする。",
+    "moreItemsへ将来画面が増えてもPC導線が自動追従する形(サイドバー→その他グリッド)を選び、サイドバーへの個別項目追加はしない。"
+  ],
+  "changes": [
+    "navItems(PCサイドバー)の設定の前へ { id: \"more\", label: \"その他\", mark: \"…\" } を1件追加した。",
+    "Service WorkerのCACHE_NAMEをv265へ更新した。",
+    "instruments-e2eへPC幅(1280px)のサイドバー経由到達テスト[10]を追加し、幅依存の導線欠落の再発を防止した。",
+    "v262/v263テストのCACHE_NAMEリテラル期待をreleases最大版から導出する動的検査へ変更した(v255=v264で確立した方式へ統一。検査強度は不変)。",
+    "instruments/iron-log等サイドバー直接項目に無いビューでは「その他」をactive表示する(renderBottomNavと同型のフォールバック。Codexレビュー P2)。",
+    "v71のサイドバー順序期待値を11項目(「その他」を設定の前)へ追従した(Codexレビュー P1)。"
+  ],
+  "uncertainties": [
+    "サイドバーが11項目になるが、折りたたみ・通常とも既存レイアウトの範囲内(項目追加のみでCSS変更なし)。"
+  ],
+  "reviewFocus": [
+    "サイドバー「その他」からmoreグリッド経由でinstruments/iron-logへ遷移でき、既存10項目のナビ挙動に退行がないか。",
+    "PC幅テスト[10]がボトムナビ非表示・サイドバー表示の前提を正しく固定しているか。"
+  ],
+  "verification": [
+    "node --check app.js: PASS。",
+    "node tests/instruments-e2e.test.js: 全PASS(既存[1]〜[9]+新規[10])。",
+    "npm run code:index:write / npm run test:manifest:write: PASS。",
+    "release-gate releases/v265.json --final: exit 0(GATE-RC=0目視)。"
+  ],
+  "notes": [
+    "原因調査の全容はworkbench/out(調査エージェント報告)にあり、CSSは無罪・ナビ定義の欠落が真因。ROADMAPの「TOWER準拠のため対象外」は意匠変換不要の意味でPC導線を外した仕様ではない。",
+    "実行コード差分はapp.js追加1行+sw.js 1行更新のみ。軽微レーン(監督者直接実装+Codexレビュー)。"
+  ],
+  "knownLimitations": [
+    "iOS実機PWAでのService Worker更新確認は監督者側で必要(表示はPC幅のみの変更)。"
+  ]
+}

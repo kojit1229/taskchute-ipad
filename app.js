@@ -202,6 +202,7 @@ const navItems = [
   { id: "wish", label: "やりたい", mark: "✦" },
   { id: "vision", label: "ビジョン", mark: "V" },
   { id: "zero", label: "0秒思考", mark: "○" },
+  { id: "more", label: "その他", mark: "…" },  // v265: PCサイドバーに「その他」が無くinstruments/iron-logへ721px以上で到達不能だった導線欠落の修正
   { id: "settings", label: "設定", mark: "S" }
 ];
 
@@ -2713,6 +2714,8 @@ function renderSidebar() {
   const collapsed = state.settings?.sidebarCollapsed || false;
   if (collapsed) sidebar.classList.add("collapsed");
   else sidebar.classList.remove("collapsed");
+  // v265: サイドバー直接項目に無いビュー(instruments/iron-log等「その他」配下)では「その他」をactiveにする(renderBottomNavと同型)
+  const sidebarActiveId = navItems.some((item) => item.id === state.currentView) ? state.currentView : "more";
   sidebar.innerHTML = `
     <div class="brand">
       <div class="brand-title">${collapsed ? "TJ" : "TaskChute Journal"}<span class="sync-dot ${syncDotClass()}" title="同期状態"></span></div>
@@ -2721,7 +2724,7 @@ function renderSidebar() {
     </div>
     <div class="nav-list">
       ${navItems.map((item) => `
-        <button class="nav-button ${state.currentView === item.id ? "active" : ""}" data-action="nav" data-view="${item.id}" title="${item.label}">
+        <button class="nav-button ${sidebarActiveId === item.id ? "active" : ""}" data-action="nav" data-view="${item.id}" title="${item.label}">
           <span class="nav-mark">${item.mark}</span>
           <span class="nav-label">${item.label}</span>
         </button>

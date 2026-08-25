@@ -112,9 +112,10 @@ function check(name, cond, extra = "") {
     await seed({ blocks: [], view: "home" });
     const navLabels = await page.locator(".nav-list .nav-button .nav-label").allTextContents();
     // v230: homeを削除。現行サイドバー順を固定する。
+    // v265: PC導線欠落の修正で「その他」を設定の前へ追加(11項目)。
     const expectedOrder = [
       "今日", "タスクシュート", "タイムライン", "WBS",
-      "ジャーナル", "AIレポート", "やりたい", "ビジョン", "0秒思考", "設定"
+      "ジャーナル", "AIレポート", "やりたい", "ビジョン", "0秒思考", "その他", "設定"
     ];
     check("navItemsの並びが期待どおり", JSON.stringify(navLabels) === JSON.stringify(expectedOrder), JSON.stringify(navLabels));
 
