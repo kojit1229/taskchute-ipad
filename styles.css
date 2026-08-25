@@ -1584,9 +1584,18 @@ h3 {
 .twy-commit-sheet .c-title small { display: block; color: var(--muted); font-size: 10px; overflow: hidden; text-overflow: ellipsis; }
 .twy-commit-sheet .c-caret, .twy-commit-sheet .c-when { justify-self: end; color: var(--accent-text); font-size: 10px; font-variant-numeric: tabular-nums; }
 .twy-commit-sheet .c-caret { min-height: 44px; display: inline-flex; align-items: center; cursor: pointer; }
+.twy-commit-sheet .c-when[data-action] { min-height: 44px; display: inline-flex; align-items: center; cursor: pointer; }
+.twy-commit-sheet .c-done { justify-self: end; color: var(--green-text); font-size: 11px; }
+.twy-commit-row.excused { opacity: .58; }
+.twy-commit-row.added { box-shadow: inset 3px 0 0 var(--accent); }
 .twy-commit-foot { display: flex; align-items: center; gap: 8px; padding: 10px; }
 .twy-commit-count { color: var(--muted); font-size: 11px; }
 .twy-commit-foot .commit-btn { min-height: 44px; margin-left: auto; padding: 8px 16px; border: 1px solid var(--orange-text); border-radius: 7px; color: var(--orange-text); background: transparent; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.twy-excuse-form, .twy-add-panel { padding: 10px; border-bottom: 1px solid var(--line); background: var(--panel-soft); }
+.twy-excuse-form { display: flex; align-items: center; gap: 8px; }
+.twy-excuse-form input { min-width: 0; flex: 1; font-size: 16px; }
+.twy-add-panel { border-top: 1px solid var(--line); }
+.twy-add-panel > .btn { margin-top: 10px; }
 @media (max-width: 420px) { .twy-commit-row, .twy-commit-sub { grid-template-columns: 24px minmax(0, 1fr) 78px; gap: 5px; padding-right: 7px; } .twy-commit-foot { align-items: flex-start; flex-direction: column; } .twy-commit-foot .commit-btn { width: 100%; margin-left: 0; } }
 
 /* ===== Markdown レンダリング ===== */

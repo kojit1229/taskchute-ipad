@@ -4,7 +4,7 @@ import { mergeById, mergeByIdPreferNewer } from "./src/core/merge.js";
 import {
   activeTrackForProject, dateParts, isProjectInCurrentCycle, latestMeasurement, numericGoalReached,
   paceMilestone, paceNumeric, trackStatus, daysBetween as trackDaysBetween,
-  validateTrackDraft, trackDefinitionChanged
+  validateTrackDraft, trackDefinitionChanged, weeklyScore
 } from "./src/core/track.js";
 // v166: app.js分割・段階3(state store + storage/sync gateway)。stateの再代入はsetState()
 //   経由のみ(claude-review-result.md §2 Blocker-1)。store.jsは何もimportしない真の葉。
@@ -629,6 +629,64 @@ registerActions({
     saveAndRender("今週を確定しました");
     renderModal(buildTwyCommitSheetHTML(weekStart));
   },
+  // v264: 確定済み週の免除/解除と計画追加。データ層保存後にモーダルも明示更新する。
+  "twy-excuse": ({ id }) => {
+    const weekStart = twyCurrentCommitModalWeek();
+    if (!weekStart || !twyCommitItemForWeek(id, weekStart)) return;
+    _twyExcuseOpenItemId = id;
+    renderModal(buildTwyCommitSheetHTML(weekStart));
+  },
+  "twy-excuse-confirm": ({ id, target }) => {
+    const weekStart = twyCurrentCommitModalWeek();
+    if (!weekStart) { openTwyCommitSheet(); showToast("週が変わったため当週のシートを開き直しました"); return; }
+    const item = twyCommitItemForWeek(id, weekStart);
+    if (!item || item.completedAt || item.excused) return;
+    const reason = target.closest(".twy-excuse-form")?.querySelector("[data-twy-excuse-reason]")?.value || "";
+    if (!reason.trim()) { showToast("免除理由を入力してください"); return; }
+    excuseCommitmentItem(id, reason);
+    _twyExcuseOpenItemId = null;
+    saveAndRender("免除しました");
+    renderModal(buildTwyCommitSheetHTML(weekStart));
+  },
+  "twy-excuse-cancel": () => {
+    const weekStart = twyCurrentCommitModalWeek();
+    if (!weekStart) return;
+    _twyExcuseOpenItemId = null;
+    renderModal(buildTwyCommitSheetHTML(weekStart));
+  },
+  "twy-unexcuse": ({ id }) => {
+    const weekStart = twyCurrentCommitModalWeek();
+    if (!weekStart) { openTwyCommitSheet(); showToast("週が変わったため当週のシートを開き直しました"); return; }
+    const item = twyCommitItemForWeek(id, weekStart);
+    if (!item?.excused) return;
+    unexcuseCommitmentItem(id);
+    saveAndRender("免除を解除しました");
+    renderModal(buildTwyCommitSheetHTML(weekStart));
+  },
+  "twy-add-item": () => {
+    const weekStart = twyCurrentCommitModalWeek();
+    if (!weekStart || !twyCommittedWeekMeta(weekStart)) return;
+    _twyAddPanelOpen = true;
+    _twyAddCandidateSelectedIds = new Set();
+    renderModal(buildTwyCommitSheetHTML(weekStart));
+  },
+  "twy-add-item-confirm": () => {
+    const weekStart = twyCurrentCommitModalWeek();
+    if (!weekStart) { openTwyCommitSheet(); showToast("週が変わったため当週のシートを開き直しました"); return; }
+    if (!_twyAddCandidateSelectedIds.size || !twyCommittedWeekMeta(weekStart)) return;
+    const selected = twyAddCandidates(weekStart).filter((block) => _twyAddCandidateSelectedIds.has(block.id)).map((block) => block.id);
+    if (!selected.length) { showToast("追加できる候補がありませんでした"); return; }
+    addCommitmentItems(weekStart, selected);
+    _twyAddPanelOpen = false;
+    saveAndRender("計画に追加しました");
+    renderModal(buildTwyCommitSheetHTML(weekStart));
+  },
+  "twy-add-item-cancel": () => {
+    const weekStart = twyCurrentCommitModalWeek();
+    if (!weekStart) return;
+    _twyAddPanelOpen = false;
+    renderModal(buildTwyCommitSheetHTML(weekStart));
+  },
   // v261: WBSトラック行のインラインエディタ。全操作をdata-actionデリゲーションへ集約する。
   "twy-open-editor": ({ id }) => { _twyOpenEditorIds.add(id); render(); },
   "twy-close-editor": ({ id }) => { _twyOpenEditorIds.delete(id); render(); },
@@ -1062,6 +1120,8 @@ let _twyOpenEditorIds = new Set();
 let _twyCommitSelectedBlockIds = new Set();
 let _twyCommitOpenGroupIds = new Set();
 let _twyAddCandidateSelectedIds = new Set();
+let _twyExcuseOpenItemId = null;
+let _twyAddPanelOpen = false;
 // v70: フォーカスタイマー「中断」の理由ワンタップピッカー(チョコ停記録)。非永続。
 let _pendingInterruptBlockId = null;
 // v87: 宣言/終了報告モーダルが解決するまでの一時コンテキスト。非永続。
@@ -12371,6 +12431,8 @@ function openTwyCommitSheet() {
   const weekStart = weekRange(todayISO()).weekStart;
   _twyCommitOpenGroupIds = new Set();
   _twyAddCandidateSelectedIds = new Set();
+  _twyExcuseOpenItemId = null;
+  _twyAddPanelOpen = false;
   const meta = twyCommittedWeekMeta(weekStart);
   _twyCommitSelectedBlockIds = meta ? new Set()
     : new Set(candidateBlocksForWeek(state, weekStart).map((block) => block.id));
@@ -12383,7 +12445,7 @@ function buildTwyCommitSheetHTML(weekStart) {
   const range = weekRange(weekStart);
   const title = `WEEKLY COMMIT <span>${escapeHTML(twyDateLabel(range.weekStart))}〜${escapeHTML(twyDateLabel(range.weekEnd))}</span>`;
   return modalHeaderHTML(title) + `<div class="twy-commit-sheet">
-    ${meta ? `<div class="twy-commit-meta">確定済みです(詳細表示は次リリース)</div>` : twyCommitPreHTML(weekStart)}
+    ${meta ? twyCommitPostHTML(weekStart) : twyCommitPreHTML(weekStart)}
     </div></div></div>`;
 }
 
@@ -12399,6 +12461,65 @@ function twyCommitPreHTML(weekStart) {
 
 function twyCommitCountLabel(total) {
   return `選択中 ${_twyCommitSelectedBlockIds.size}コマ / 候補 ${total}コマ(Block単位で保存)`;
+}
+
+function twyCommitPostHTML(weekStart) {
+  const meta = twyCommittedWeekMeta(weekStart);
+  const items = (state.weeklyCommitments || []).filter((record) =>
+    record.recordType === "item" && record.weekStart === weekStart && !record.deleted)
+    .sort((a, b) => (a.plannedDate || "").localeCompare(b.plannedDate || ""));
+  const selected = new Set(meta?.selectedBlockIds || []);
+  const scoreItems = items.filter((item) => item.lane === "cycle"
+    && (meta?.committedVia !== "manual" || selected.has(item.blockId) || item.source === "added"));
+  const scoreItemIds = new Set(scoreItems.map((item) => item.id));
+  const rows = items.map((item) => twyCommitItemRowHTML(item, scoreItemIds.has(item.id))).join("");
+  return `<div class="twy-commit-meta">確定済 ${escapeHTML((meta?.committedAt || "").replace("T", " ").slice(0, 16))}</div>
+    <div data-twy-commit-list>${rows || `<div class="twy-commit-meta">確定itemがありません。</div>`}</div>
+    <div class="twy-commit-foot"><span class="twy-commit-count">${twyCommitScoreLabel(weeklyScore(state.weeklyCommitments || [], weekStart), Boolean(meta), scoreItems.filter((item) => item.excused).length)}</span>
+      <button type="button" class="commit-btn" data-action="twy-add-item">+ 計画追加</button></div>
+    ${_twyAddPanelOpen ? twyAddItemPanelHTML(weekStart) : ""}`;
+}
+
+function twyCommitScoreLabel(score, hasMeta = false, excusedCount = 0) {
+  if (score.status === "uncommitted") return hasMeta ? "今週は対象なし" : "未確定";
+  if (score.status === "na") return "N/A(全件免除)";
+  return `完了 ${score.done}${excusedCount ? ` / 免除 ${excusedCount}` : ""} / 分母 ${score.total} → 実行 ${score.pct}%`;
+}
+
+function twyCommitItemRowHTML(item, inScoreScope = true) {
+  const status = item.excused
+    ? `<span class="c-when" data-action="twy-unexcuse" data-id="${escapeHTML(item.id)}">免除中(タップで解除)</span>`
+    : item.completedAt ? `<span class="c-done">✓ 完了</span>`
+      : inScoreScope ? `<span class="c-when" data-action="twy-excuse" data-id="${escapeHTML(item.id)}">未完了(タップで免除)</span>`
+        : `<span class="c-when">対象外</span>`;
+  return `<div class="twy-commit-row${item.excused ? " excused" : ""}${item.source === "added" ? " added" : ""}" data-twy-commit-item data-id="${escapeHTML(item.id)}">
+    <input type="checkbox" checked disabled><span class="c-title">${escapeHTML(item.title)}(${escapeHTML(twyDateLabel(item.plannedDate))})
+      ${item.excused ? `<small>免除理由: ${escapeHTML(item.excusedReason)}</small>` : ""}
+      ${item.source === "added" ? `<small>確定後に追加</small>` : ""}</span>${status}</div>
+    ${_twyExcuseOpenItemId === item.id ? twyExcuseFormHTML(item.id) : ""}`;
+}
+
+function twyExcuseFormHTML(itemId) {
+  return `<div class="twy-excuse-form" data-twy-excuse-form><input type="text" data-twy-excuse-reason placeholder="免除理由(必須)">
+    <button type="button" class="btn primary" data-action="twy-excuse-confirm" data-id="${escapeHTML(itemId)}">免除する</button>
+    <button type="button" class="btn" data-action="twy-excuse-cancel">やめる</button></div>`;
+}
+
+function twyAddCandidates(weekStart) {
+  const committed = new Set((state.weeklyCommitments || []).filter((record) =>
+    record.recordType === "item" && record.weekStart === weekStart && !record.deleted).map((record) => record.blockId));
+  return candidateBlocksForWeek(state, weekStart).filter((block) => !committed.has(block.id));
+}
+
+function twyAddItemPanelHTML(weekStart) {
+  const candidates = twyAddCandidates(weekStart);
+  if (!candidates.length) return `<div class="twy-add-panel" data-twy-add-panel><div class="twy-commit-meta">追加できる未コミット候補がありません。</div>
+    <button type="button" class="btn" data-action="twy-add-item-cancel">閉じる</button></div>`;
+  const rows = twyCommitGroups(candidates).map((group) => twyCommitGroupRowHTML(group, "add")).join("");
+  return `<div class="twy-add-panel" data-twy-add-panel><div data-twy-commit-list>${rows}</div><div class="twy-commit-foot">
+    <span class="twy-commit-count" data-twy-add-count>選択中 ${_twyAddCandidateSelectedIds.size}コマ</span>
+    <button type="button" class="btn primary" data-action="twy-add-item-confirm">追加する</button>
+    <button type="button" class="btn" data-action="twy-add-item-cancel">閉じる</button></div></div>`;
 }
 
 function twyCommitGroups(blocks) {
@@ -12444,20 +12565,32 @@ function twyCommittedWeekMeta(weekStart) {
     record.id === "wcw_" + weekStart && record.recordType === "week" && !record.deleted);
 }
 
+function twyCurrentCommitModalWeek() {
+  const weekStart = state.modal?.id;
+  return state.modal?.type === "twyCommit" && weekStart === weekRange(todayISO()).weekStart ? weekStart : "";
+}
+
+function twyCommitItemForWeek(itemId, weekStart) {
+  return (state.weeklyCommitments || []).find((record) =>
+    record.id === itemId && record.recordType === "item" && record.weekStart === weekStart && !record.deleted);
+}
+
 function twyDateLabel(iso) {
   return `${iso.slice(5).replace("-", "/")}(${weekdayLabel(iso)})`;
 }
 
 function twyCommitGroupByTaskId(ctx, taskId) {
-  const blocks = ctx === "commit" && state.modal?.id ? candidateBlocksForWeek(state, state.modal.id) : [];
+  const blocks = !state.modal?.id ? [] : ctx === "add"
+    ? twyAddCandidates(state.modal.id) : ctx === "commit" ? candidateBlocksForWeek(state, state.modal.id) : [];
   const group = twyCommitGroups(blocks).find((entry) => entry.taskId === taskId);
   return group ? { ...group, candidateCount: blocks.length } : null;
 }
 
 function twyCommitRefreshFooter(ctx, candidateCount) {
-  if (ctx !== "commit" || !state.modal?.id) return;
-  const count = modalRoot.querySelector("[data-twy-commit-count]");
-  if (count) count.textContent = twyCommitCountLabel(candidateCount);
+  if (!state.modal?.id) return;
+  const count = modalRoot.querySelector(ctx === "add" ? "[data-twy-add-count]" : "[data-twy-commit-count]");
+  if (count) count.textContent = ctx === "add"
+    ? `選択中 ${_twyAddCandidateSelectedIds.size}コマ` : twyCommitCountLabel(candidateCount);
 }
 
 function twyCommitUpdateCaret(ctx, group, checkedCount) {

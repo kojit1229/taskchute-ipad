@@ -323,8 +323,8 @@ class FakeToast {
     check("L-7 その他入力は既存input classと太枠・背景のエラー表現を使う",
       trackUiSource.includes('class="input"')
       && /\.twy-toast input\.is-error\s*\{[^}]*border:\s*2px[^}]*background:\s*var\(--red-soft\)/s.test(cssSource));
-    check("SWはtrack-uiをAPP_SHELL登録し現行CACHE_NAME v263", swSource.includes('"./src/features/track-ui.js"')
-      && /^const CACHE_NAME = "taskchute-journal-pwa-v263";/m.test(swSource));
+    check("SWはtrack-uiをAPP_SHELL登録し現行CACHE_NAME v264", swSource.includes('"./src/features/track-ui.js"')
+      && /^const CACHE_NAME = "taskchute-journal-pwa-v264";/m.test(swSource));
 
     check("app.js配線はimport+configure+スタブ削除+共通フック1行置換", appSource.includes(
       'import { configureTrackUi, maybeShowTrackProgressToast } from "./src/features/track-ui.js";')

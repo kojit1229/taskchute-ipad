@@ -20,17 +20,25 @@ function check(name, cond, extra = "") {
   else { failures++; console.log(`  ❌ ${name} ${extra}`); }
 }
 
+function maxReleaseVersion(files) {
+  return Math.max(...files.map((file) => /^v(\d+)\.json$/.exec(file)?.[1]).filter(Boolean).map(Number));
+}
+
 (async () => {
   const swSource = fs.readFileSync(path.join(ROOT, "sw.js"), "utf8");
+  const releaseFiles = fs.readdirSync(path.join(ROOT, "releases"));
+  const maxRelease = maxReleaseVersion(releaseFiles);
+  const cacheName = /^const CACHE_NAME = "([^"]+)";/m.exec(swSource)?.[1] || "";
   const appShellMatch = swSource.match(/APP_SHELL\s*=\s*\[([\s\S]*?)\]/);
   const appShellEntries = appShellMatch
     ? [...appShellMatch[1].matchAll(/["']([^"']+)["']/g)].map((match) => match[1])
     : [];
 
-  console.log("[1] concept.htmlをAPP_SHELLへ登録し、SWキャッシュを現行v262へ更新");
+  console.log("[1] concept.htmlのAPP_SHELL登録と最新release連動CACHE_NAME");
   check("concept.htmlがリポジトリ直下に存在する", fs.existsSync(path.join(ROOT, "concept.html")));
   check("APP_SHELLに./concept.htmlが含まれる", appShellEntries.includes("./concept.html"), JSON.stringify(appShellEntries));
-  check("CACHE_NAMEが現行v262", /^const CACHE_NAME = "taskchute-journal-pwa-v262";/m.test(swSource));
+  check(`CACHE_NAMEが最新release v${maxRelease}と完全一致`, cacheName === `taskchute-journal-pwa-v${maxRelease}`, cacheName);
+  check("release追加の模擬でも最大バージョン導出が追随", maxReleaseVersion([...releaseFiles, `v${maxRelease + 1}.json`]) === maxRelease + 1);
 
   const server = startServer(PORT);
   const browser = await chromium.launch(launchOptions());

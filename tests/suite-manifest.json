@@ -15,7 +15,7 @@
       ],
       "assertionSignals": 34,
       "assertionHash": "f841e3459002f00f",
-      "sourceHash": "409f5067739aef1b",
+      "sourceHash": "5809b0bf0ae3fef4",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2355,9 +2355,9 @@
         "ui-responsive",
         "security-offline"
       ],
-      "assertionSignals": 10,
-      "assertionHash": "9ff22d4204939ae2",
-      "sourceHash": "c8e7a92b3995b263",
+      "assertionSignals": 11,
+      "assertionHash": "eb615082ca3d6d9e",
+      "sourceHash": "81e6eaf1518b502b",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2505,8 +2505,8 @@
         "security-offline"
       ],
       "assertionSignals": 58,
-      "assertionHash": "cb74aafcc44c2260",
-      "sourceHash": "80140fc46b9acc9a",
+      "assertionHash": "a3ac64ee629a0ea3",
+      "sourceHash": "8b7c5ac496d8df01",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2530,8 +2530,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 42,
-      "assertionHash": "13ce7175316d71ae",
-      "sourceHash": "97aaf3bf97c70938",
+      "assertionHash": "119908b5adcd136a",
+      "sourceHash": "7c308c8b59ab86a9",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2541,7 +2541,32 @@
         "browser": true,
         "server": true,
         "fileWrite": false,
-        "networkMock": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v264.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "sync-storage",
+        "ui-responsive"
+      ],
+      "assertionSignals": 50,
+      "assertionHash": "49e69cdf42fa2488",
+      "sourceHash": "c0e2e1d6731cda7e",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
         "clock": true
       }
     },

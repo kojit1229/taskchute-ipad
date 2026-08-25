@@ -105,6 +105,8 @@ const GOLDEN_CLICK_ACTIONS = [
   "twy-toast-inc", "twy-toast-same", "twy-toast-other", "twy-toast-other-confirm", "twy-toast-later",
   "twy-carry-cycle", "twy-carry-confirm",
   "twy-open-commit", "twy-commit-toggle-group", "twy-commit-toggle-block", "twy-commit-expand", "twy-commit-week",
+  "twy-excuse", "twy-excuse-confirm", "twy-excuse-cancel", "twy-unexcuse",
+  "twy-add-item", "twy-add-item-confirm", "twy-add-item-cancel",
   "modal-close", "modal-save", "modal-delete",
   "lev-judge",
   "vision-section", "open-vision-board", "vision-board-tab", "vision-board-load",
@@ -241,8 +243,10 @@ const APP_JS_REGISTERED_ACTIONS = [
   "twy-open-editor", "twy-close-editor", "twy-save-measurement", "twy-ms-toggle-done", "twy-ms-edit-date",
   // --- v259: 12WY新サイクル移行UI(2) ---
   "twy-carry-cycle", "twy-carry-confirm",
-  // --- v263: 週次コミット確定シートpre-commit(5) ---
+  // --- v263/v264: 週次コミット確定シート(12) ---
   "twy-open-commit", "twy-commit-toggle-group", "twy-commit-toggle-block", "twy-commit-expand", "twy-commit-week",
+  "twy-excuse", "twy-excuse-confirm", "twy-excuse-cancel", "twy-unexcuse",
+  "twy-add-item", "twy-add-item-confirm", "twy-add-item-cancel",
   // --- v178: モーダル起動系(3、modal-saveはreturn意味論のためif連鎖に残置) ---
   "modal-close", "modal-delete", "lev-judge",
   // --- v179: ビジョンボード(6) ---

@@ -30,6 +30,10 @@ function actionHandler(name, sandbox) {
   const source = actionSource(name).trim().replace(/,$/, "");
   return vm.runInContext(`({${source}})[${JSON.stringify(name)}]`, sandbox);
 }
+const instrumentedAppSource = appSource.replace(
+  "function generateReport(dateArg, { quiet = false } = {}) {",
+  "function generateReport(dateArg, { quiet = false } = {}) { window.__v263GenerateReportCalls = (window.__v263GenerateReportCalls || 0) + 1;"
+);
 
 console.log("[1] action契約・#4データ層負例");
 for (const action of ["twy-commit-toggle-group", "twy-commit-toggle-block", "twy-commit-expand"]) {
@@ -37,15 +41,15 @@ for (const action of ["twy-commit-toggle-group", "twy-commit-toggle-block", "twy
   check(`${action}はsaveState/renderModalを呼ばない`, !/saveState|saveAndRender|renderModal/.test(source));
 }
 const commitAction = actionSource("twy-commit-week");
-check("確定はsaveAndRender→renderModal、generateReportなし", /saveAndRender/.test(commitAction)
-  && /renderModal/.test(commitAction) && !/generateReport/.test(commitAction));
+check("確定はsaveAndRender→renderModal", /saveAndRender/.test(commitAction)
+  && /renderModal/.test(commitAction));
 check("CSS.escape標準API・project.title裁定・日付文字列parse禁止を固定",
   appSource.includes("CSS.escape(taskId)") && appSource.includes("group.project?.title || \"\"")
   && !/new Date\s*\(\s*["'`]/.test(appSource.slice(appSource.indexOf("function openTwyCommitSheet"), appSource.indexOf("function openProjectEditor"))));
 check("v263 CSSとService Worker更新", cssSource.includes(".twy-commit-sheet")
   && /\.modal-title span\s*\{[^}]*font-size:\s*\.8em;[^}]*color:\s*var\(--muted\)/s.test(cssSource)
   && !/\.twy-commit-open\s*\{[^}]*font-size:/s.test(cssSource)
-  && swSource.includes('CACHE_NAME = "taskchute-journal-pwa-v263"'));
+  && swSource.includes('CACHE_NAME = "taskchute-journal-pwa-v264"'));
 for (const action of ["twy-commit-toggle-group", "twy-commit-toggle-block"]) {
   const source = actionSource(action);
   check(`${action}は欠落groupガードをSet変更前に置きcheckedを戻す`, source.indexOf("if (!group)") < source.indexOf("selection.add")
@@ -118,12 +122,15 @@ check("週跨ぎ送信はデータ不変・偽成功なしで当週シートへ�
   && sandbox.state.modal.id === WEEK && toastMessage.includes("週が変わった") && !toastMessage.includes("確定しました"));
 
 (async () => {
-  console.log("[2] B-9 #1〜#7/#20・保存回数・暫定表示・既存モーダル回帰");
+  console.log("[2] B-9 #1〜#7/#20・保存回数・C'追従・既存モーダル回帰");
   const server = startServer(PORT);
   const browser = await chromium.launch(launchOptions());
   const context = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1024, height: 900 } });
   const page = await context.newPage();
   page.on("pageerror", (error) => { failures++; console.log("  ❌ pageerror:", error.message); });
+  await page.route("**/app.js", (route) => route.fulfill({
+    status: 200, contentType: "text/javascript; charset=utf-8", body: instrumentedAppSource
+  }));
   await blockGithubApiByDefault(page);
   const xss = '\"><img src=x onerror="window.__v263Xss=true"><span data-v263-breach="';
   const project = (id, title, extra = {}) => ({ id, kind: "normal", title, status: "active", priority: "中",
@@ -160,10 +167,12 @@ check("週跨ぎ送信はデータ不変・偽成功なしで当週シートへ�
     await page.evaluate((key) => {
       window.__v263OriginalSetItem ||= Storage.prototype.setItem;
       const original = window.__v263OriginalSetItem; window.__v263SaveCount = 0;
+      window.__v263GenerateReportCalls = 0;
       Storage.prototype.setItem = function(k, value) { if (k === key) window.__v263SaveCount += 1; return original.call(this, k, value); };
     }, STATE_KEY);
   }
   const saveCount = () => page.evaluate(() => window.__v263SaveCount || 0);
+  const generateReportCount = () => page.evaluate(() => window.__v263GenerateReportCalls || 0);
   const openSheet = () => page.locator('.twy-commit-open[data-action="twy-open-commit"]').click();
   const group = (taskId) => page.locator(`.twy-commit-row[data-twy-task-id="${taskId.replaceAll('"', '\\"')}"]`);
   try {
@@ -239,8 +248,9 @@ check("週跨ぎ送信はデータ不変・偽成功なしで当週シートへ�
     check("#6 選択1件以上でmanual確定・selectedBlockIds一致・source confirmed", meta?.committedVia === "manual"
       && JSON.stringify(meta.selectedBlockIds) === '["b2","b\\"3"]' && items.length === 2
       && items.every((item) => item.source === "confirmed") && !items.some((item) => item.blockId === "outside"), JSON.stringify({ meta, items }));
-    check("確定はsaveState計2回・generateReport 0回", await saveCount() === 2 && !/generateReport/.test(commitAction));
-    check("確定後はrenderModalで暫定表示へ切替", (await page.locator(".twy-commit-meta").textContent()).includes("詳細表示は次リリース")
+    check("確定はsaveState計2回・generateReport呼び出し0回", await saveCount() === 2 && await generateReportCount() === 0);
+    check("確定後はrenderModalでC'へ切替", (await page.locator(".twy-commit-meta").textContent()).includes("確定済")
+      && await page.locator('[data-twy-commit-item]').count() === 2
       && await page.locator('[data-action="twy-commit-week"]').count() === 0);
     check("saveAndRender後もWBS表示・入口に退行なし", await page.locator('.twy-commit-open[data-action="twy-open-commit"]').count() === 1);
 
@@ -260,7 +270,7 @@ check("週跨ぎ送信はデータ不変・偽成功なしで当週シートへ�
       committedAt: `${WEEK}T07:00:00`, committedVia: "auto", selectedBlockIds: [],
       createdAt: `${WEEK}T07:00:00`, updatedAt: `${WEEK}T07:00:00`, deleted: false };
     await seed({ weeklyCommitments: [autoMeta] }); await openSheet();
-    check("auto週メタ既存時も暫定確定済み表示", (await page.locator(".twy-commit-meta").textContent()).includes("確定済みです")
+    check("auto週メタ既存時もC'表示", (await page.locator(".twy-commit-meta").first().textContent()).includes("確定済")
       && await page.locator(".twy-commit-row").count() === 0);
 
     await seed();
