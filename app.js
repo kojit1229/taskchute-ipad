@@ -567,6 +567,32 @@ registerActions({
     refreshTrackForm();
   },
   "twy-ms-del": ({ target }) => { target.closest(".twy-ms-edit-row")?.remove(); refreshTrackForm(); },
+  // v261: WBSトラック行のインラインエディタ。全操作をdata-actionデリゲーションへ集約する。
+  "twy-open-editor": ({ id }) => { _twyOpenEditorIds.add(id); render(); },
+  "twy-close-editor": ({ id }) => { _twyOpenEditorIds.delete(id); render(); },
+  "twy-save-measurement": ({ id, target }) => {
+    const input = target.closest(".twy-editor")?.querySelector("[data-twy-editor-value]");
+    const raw = input?.value ?? "";
+    if (raw === "" || !Number.isFinite(Number(raw))) { showToast("有効な数値を入力してください"); return; }
+    const result = recordTrackMeasurement(id, Number(raw));
+    if (!result.ok) { showToast(result.errors.join(" / ")); return; }
+    _twyOpenEditorIds.delete(id);
+    twyEditorCommitted("記録しました");
+  },
+  "twy-ms-toggle-done": ({ id, target }) => {
+    const result = updateTrackMilestone(id, target.dataset.twyMsId,
+      { doneAt: target.checked ? todayISO() : "" });
+    if (!result.ok) { render(); showToast(result.errors.join(" / ")); return; }
+    twyEditorCommitted(target.checked ? "節目を完了にしました" : "節目を未完了に戻しました");
+  },
+  "twy-ms-edit-date": ({ id, target }) => {
+    const row = target.closest(".twy-ms-edit-item");
+    const value = row?.querySelector("[data-twy-ms-date-input]")?.value || "";
+    if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) { showToast("有効な日付を入力してください"); return; }
+    const result = updateTrackMilestone(id, target.dataset.twyMsId, { plannedDate: value });
+    if (!result.ok) { showToast(result.errors.join(" / ")); return; }
+    twyEditorCommitted("予定日を変更しました");
+  },
   // v259: carryは表示条件と同じガードを通し、フォーム再展開時に古いエラーを消す。
   "twy-carry-cycle": () => {
     const id = state.modal?.id;
@@ -968,6 +994,8 @@ let ztWriteStartedAt = null;   // v104: 書く画面を開いた時刻(Date.now(
 // v70: Now画面(実行コンベア)— 画面内の一時状態(永続化しない。normalizeStateは不要)
 let nowMode = false;             // trueの間、renderMain()は通常ビューの代わりに全画面コンベアを描く
 let _nowSkippedIds = new Set();  // このNowセッション中に「スキップ」したBlock id(セッションを抜けるとクリア)
+// v261: 開いているWBSトラックエディタ。表示専用の非永続状態。
+let _twyOpenEditorIds = new Set();
 // v70: フォーカスタイマー「中断」の理由ワンタップピッカー(チョコ停記録)。非永続。
 let _pendingInterruptBlockId = null;
 // v87: 宣言/終了報告モーダルが解決するまでの一時コンテキスト。非永続。
@@ -3194,6 +3222,59 @@ function carryProjectToNewCycle(projectId, newCycleStartDate, fields = {}) {
   state.tracks = [...state.tracks, track];
   saveState();
   return { ok: true, track };
+}
+
+// v261: WBS/後続トーストから共有する測定追記。UI副作用は呼び出し元へ任せる。
+function recordTrackMeasurement(trackId, value, { sourceKind = "wbs", blockId = "", note = "" } = {}) {
+  const track = (state.tracks || []).find((entry) => entry.id === trackId
+    && entry.status === "active" && !entry.deleted && entry.kind === "numeric");
+  if (!track) return { ok: false, errors: ["対象のトラックが見つかりません"] };
+  if (!Number.isFinite(Number(value))) return { ok: false, errors: ["valueは有限数が必須"] };
+  const now = nowDateTime();
+  const latest = latestMeasurement(state.trackMeasurements || [], trackId);
+  const observedAt = latest?.observedAt && latest.observedAt >= now
+    ? dateToLocalDateTime(new Date(localDateTimeToMs(latest.observedAt) + 1000)) : now;
+  const measurement = {
+    id: "trm_" + crypto.randomUUID(), trackId, value: Number(value), observedAt,
+    sourceKind, blockId, note, createdAt: now, updatedAt: now, deleted: false
+  };
+  state.trackMeasurements = [...(state.trackMeasurements || []), measurement];
+  saveState();
+  return { ok: true, measurement };
+}
+
+// v261: 既存節目1件だけをid指定で更新し、同期勝敗に使う親track.updatedAtも進める。
+function updateTrackMilestone(trackId, milestoneId, patch) {
+  const track = (state.tracks || []).find((entry) => entry.id === trackId
+    && entry.status === "active" && !entry.deleted && entry.kind === "milestone");
+  if (!track) return { ok: false, errors: ["対象のトラックが見つかりません"] };
+  const milestone = (track.milestones || []).find((entry) => entry.id === milestoneId && !entry.deleted);
+  if (!milestone) return { ok: false, errors: ["対象の節目が見つかりません"] };
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)
+    || Object.keys(patch).some((key) => !["doneAt", "plannedDate"].includes(key))) {
+    return { ok: false, errors: ["patchはdoneAt/plannedDateのみ指定できます"] };
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, "doneAt")
+    && patch.doneAt !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(patch.doneAt)) {
+    return { ok: false, errors: ["doneAtは空またはYYYY-MM-DD形式が必須"] };
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, "plannedDate") && !dateParts(patch.plannedDate)) {
+    return { ok: false, errors: ["plannedDateは有効な日付が必須"] };
+  }
+  const now = nowDateTime();
+  const nextMilestone = { ...milestone, ...patch, updatedAt: now };
+  if (Object.prototype.hasOwnProperty.call(patch, "plannedDate")) nextMilestone.originalPlannedDate = milestone.originalPlannedDate || milestone.plannedDate;
+  if (Object.prototype.hasOwnProperty.call(patch, "doneAt")) nextMilestone.doneChangedAt = now;
+  const nextMilestones = track.milestones.map((entry) => entry.id === milestoneId ? nextMilestone : entry);
+  const nextTrack = { ...track, milestones: nextMilestones, updatedAt: now };
+  state.tracks = state.tracks.map((entry) => entry.id === trackId ? nextTrack : entry);
+  saveState();
+  return { ok: true, track: nextTrack };
+}
+
+function twyEditorCommitted(message) {
+  generateReport(todayISO(), { quiet: true });
+  saveAndRender(message);
 }
 
 // v39: 開いている問い(Zone 3)。最大3件、deepening を lastTouchedAt 降順で優先。
@@ -5471,6 +5552,41 @@ function twyMilestoneChainHTML(milestones, today) {
   }).join("")}</div>`;
 }
 
+// v261: 開いている行だけにエディタDOMを生成し、複数行の同時展開を許す。
+function twyEditorHTML(track) {
+  if (!_twyOpenEditorIds.has(track.id)) return "";
+  return track.kind === "numeric" ? twyNumericEditorHTML(track) : twyMilestoneEditorHTML(track);
+}
+
+function twyNumericEditorHTML(track) {
+  const measurement = latestMeasurement(state.trackMeasurements || [], track.id);
+  const latest = measurement ? measurement.value : track.baselineValue;
+  return `<div class="twy-editor">
+    <label>現在値 <input type="number" inputmode="decimal" step="${escapeHTML(track.valueStep)}"
+      value="${escapeHTML(latest)}" data-twy-editor-value></label>
+    <span class="unit">${escapeHTML(track.unit)}</span>
+    <button type="button" data-action="twy-save-measurement" data-id="${escapeHTML(track.id)}">記録</button>
+    <button type="button" class="cancel" data-action="twy-close-editor" data-id="${escapeHTML(track.id)}">取消</button>
+  </div>`;
+}
+
+function twyMilestoneEditorHTML(track) {
+  const milestones = (track.milestones || []).filter((milestone) => !milestone.deleted)
+    .slice().sort((a, b) => (a.plannedDate || "").localeCompare(b.plannedDate || ""));
+  return `<div class="twy-editor twy-editor-ms">
+    ${milestones.map((milestone) => `<div class="twy-ms-edit-item">
+      <label class="checkbox-line"><input type="checkbox" data-action="twy-ms-toggle-done"
+        data-id="${escapeHTML(track.id)}" data-twy-ms-id="${escapeHTML(milestone.id)}"
+        ${milestone.doneAt ? "checked" : ""}>${escapeHTML(milestone.label)}</label>
+      <input type="date" data-twy-ms-date-input value="${escapeHTML(milestone.plannedDate)}">
+      <button type="button" data-action="twy-ms-edit-date" data-id="${escapeHTML(track.id)}"
+        data-twy-ms-id="${escapeHTML(milestone.id)}">変更</button>
+    </div>`).join("")}
+    <button type="button" class="cancel" data-action="twy-close-editor"
+      data-id="${escapeHTML(track.id)}">閉じる</button>
+  </div>`;
+}
+
 function renderTwyTrackRow(track) {
   const today = todayISO();
   const measurement = latestMeasurement(state.trackMeasurements || [], track.id);
@@ -5495,6 +5611,7 @@ function renderTwyTrackRow(track) {
         data-action="twy-open-editor" data-id="${escapeHTML(track.id)}">${status.state === "done" ? "訂正" : "更新"}</button>
     </div>
     ${track.kind === "numeric" ? twyBarHTML(track, latestValue, pace, status) : twyMilestoneChainHTML(milestones, today)}
+    ${twyEditorHTML(track)}
   </div>`;
 }
 

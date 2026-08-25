@@ -70,7 +70,7 @@ function check(name, cond, extra = "") {
   else { failures++; console.log(`  ❌ ${name} ${extra}`); }
 }
 
-// §6-1: click dispatcherから確定させたゴールデンリスト(削除済み機能のactionを除く228件)。
+// §6-1: click dispatcherから確定させたゴールデンリスト(削除済み機能のactionを除く209件)。
 // 増減・リネームがあれば、それが意図した変更(action追加/削除/移行)かどうかを必ず確認すること。
 // v235: set-sleepは主観睡眠の入力経路廃止に伴う意図的削除。
 const GOLDEN_CLICK_ACTIONS = [
@@ -100,6 +100,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "go-break", "end-break", "continue-focus", "finish-block",
   "edit-project", "edit-task", "edit-block",
   "twy-kind-numeric", "twy-kind-milestone", "twy-kind-none", "twy-ms-add", "twy-ms-del",
+  "twy-open-editor", "twy-close-editor", "twy-save-measurement", "twy-ms-toggle-done", "twy-ms-edit-date",
   "twy-carry-cycle", "twy-carry-confirm",
   "modal-close", "modal-save", "modal-delete",
   "lev-judge",
@@ -231,6 +232,8 @@ const APP_JS_REGISTERED_ACTIONS = [
   "edit-project", "edit-task", "edit-block",
   // --- v258: 12WYトラックフォームのDOM局所操作(5) ---
   "twy-kind-numeric", "twy-kind-milestone", "twy-kind-none", "twy-ms-add", "twy-ms-del",
+  // --- v261: WBSトラック行インライン編集(5) ---
+  "twy-open-editor", "twy-close-editor", "twy-save-measurement", "twy-ms-toggle-done", "twy-ms-edit-date",
   // --- v259: 12WY新サイクル移行UI(2) ---
   "twy-carry-cycle", "twy-carry-confirm",
   // --- v178: モーダル起動系(3、modal-saveはreturn意味論のためif連鎖に残置) ---

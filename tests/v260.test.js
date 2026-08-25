@@ -29,6 +29,7 @@ function sourceBetween(source, startMarker, endMarker) {
   const sandbox = {
     String, Number, Boolean, Math, Object,
     state: { settings: { twelveWeekStartDate: "2026-08-15" }, trackMeasurements: [], tracks: [] },
+    _twyOpenEditorIds: new Set(),
     activeTrackForProject: trackCore.activeTrackForProject,
     latestMeasurement: trackCore.latestMeasurement,
     paceNumeric: trackCore.paceNumeric,

@@ -1,0 +1,66 @@
+{
+  "version": 261,
+  "date": "2026-08-24",
+  "title": "12WY WBS成果トラック編集",
+  "summary": "WBS成果トラック行へnumeric測定追記とmilestone完了訂正・予定日変更のインラインエディタを追加し、独立したデータ層2関数と成果更新後の日報quiet再生成を結線した。",
+  "changedFiles": [
+    "app.js",
+    "CHANGES_v261.md",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v261.json",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/v255.test.js",
+    "tests/v260.test.js",
+    "tests/v261.test.js"
+  ],
+  "intent": [
+    "WBS上で成果トラックの最新値を記録し、節目の完了・訂正・予定日変更を画面遷移なしで逐次保存できるようにする。",
+    "測定追記と節目更新をUI副作用のない独立データ層関数へ閉じ、後続の進捗トーストから測定関数を再利用できる契約を用意する。",
+    "成果更新直後に当日の日報をquiet再生成し、後から入力した測定・節目変更を日報stateへ反映する。"
+  ],
+  "changes": [
+    "非永続Set _twyOpenEditorIdsとtwy-open-editor/twy-close-editorを追加し、複数トラック行を同時展開できるようにした。",
+    "twyEditorHTML・twyNumericEditorHTML・twyMilestoneEditorHTMLを追加し、numericの最新測定値入力とmilestoneの予定日順チェック・日付変更UIをrenderTwyTrackRowへ結線した。",
+    "recordTrackMeasurementを追加し、active numeric trackへobservedAtを原則nowDateTime、対象trackの既存最新以下なら最新+1秒として絶対値measurementを単調追記できるようにした。sourceKind既定wbsとblockId/noteのoptsを持つ。",
+    "updateTrackMilestoneをsaveTrackFromFormから独立して追加し、既存節目1件のdoneAt/plannedDateだけを更新しながらdoneChangedAtと親track.updatedAtを同期契約どおり進めるようにした。",
+    "twy-save-measurement・twy-ms-toggle-done・twy-ms-edit-dateをdata-actionレジストリへ追加し、成功時は共通twyEditorCommittedから当日quiet日報再生成とsaveAndRenderを行い、失敗時はtoastへフォールバックするようにした。",
+    "既存テーマトークンを使うtwy-editor/twy-ms-edit-item CSSを追加し、number/date入力をfont-size 16px、dateをネイティブtype=dateにした。",
+    "v261テストでB-5全13操作、失敗時state不変、保存回数、親updatedAt、doneChangedAt、originalPlannedDate、carry制約非混入、quiet日報、Set遷移、escapeHTML、390px、既存WBS操作を検証した。",
+    "action-registry-coreのゴールデンリストへ新規twy-* 5 actionを追記し、dispatcher登録集合の完全一致検証を維持した。",
+    "v260の表示専用VM sandboxへ空の_twyOpenEditorIdsを注入し、エディタ未展開時の#9出力・state不変・保存0回検証を維持した。",
+    "Service Worker CACHE_NAMEをv261へ更新し、v255の現行キャッシュ期待値を正当に追従させた。"
+  ],
+  "uncertainties": [
+    "generateReport(date, {quiet:true})自身がsaveStateを行う現行実体を確認し、監督者裁定Aにより成功1操作の保存計3回を正式に受容した。",
+    "複数行同時展開、予定日変更のボタンクリック駆動、updateTrackMilestoneの既存フォーム関数からの独立は監督者裁定済みで未確定事項は残っていない。",
+    "WBS予定日変更にはcarry専用の移行日以後制約を適用せず、正規日付であればサイクル開始日前も受け入れる。"
+  ],
+  "reviewFocus": [
+    "recordTrackMeasurement/updateTrackMilestoneが失敗時state不変・保存0回、成功時関数単体で保存1回を維持し、UIのrender/toastを内包しないか。",
+    "milestoneのdoneAt/plannedDate更新でoriginalPlannedDateが不変、doneChangedAtがdoneAt経路だけで進み、親track.updatedAtが必ず進むか。",
+    "成功3経路だけがtwyEditorCommittedを通ってquiet日報を生成し、取消・入力エラー・データ層エラーでは日報と保存が発火しないか。",
+    "全ユーザー由来値がescapeHTMLされ、number/date入力がiOS Safariのネイティブ型と16px条件を満たすか。",
+    "エディタ未展開時の#9表示、closed track、既存WBS折りたたみ、390px表示に退行がないか。"
+  ],
+  "verification": [
+    "node --check app.js / tests/v261.test.js、git diff --check: PASS。",
+    "system Edge指定 tests/v261.test.js: データ層・全13経路・保存3回/失敗0回・quiet日報・CSS・既存WBS回帰を含め全件PASS。",
+    "npm run code:index:write / npm run test:manifest:write、検証用handoffミラー指定release-record --write/--check: PASS。",
+    "system Edge・検証用handoffミラー指定 release-gate releases/v261.json --final: exit 0。"
+  ],
+  "notes": [
+    "成功1操作あたりsaveState()は計3回(データ層1回 + generateReport(todayISO(), {quiet:true})の既存quiet保存1回 + saveAndRender 1回)。generateReportのquiet経路が保存を含む既存挙動由来であり、design-10 E-3の2回想定から実体へ追従する監督者裁定Aを採用した。",
+    "CodexレビューP2-2(generateReportがtrack情報を含まない)は、追補#2が#15実装前のno-op同然の先行結線を明文化しており、日報トラック表は#15担当・MVP判定外のため対応不要と裁定した。"
+  ],
+  "knownLimitations": [
+    "WBSインラインエディタの未保存入力は、①別行のnumeric測定保存、②同一/別行の節目チェック、③同一/別行の予定日変更、④別行のProject/Taskモーダル保存がrenderを発火すると、エディタは開いたまま最新保存値へ巻き戻る。特に同一エディタ内でms-aの日付を打ってからms-bをチェックすると、打った日付が無言で消える。既知の限界として受容し、対策コードは追加しない。",
+    "成功1操作でsaveStateが計3回走る冗長は、generateReport quietの既存保存契約を変えず、データ層単体保存とsaveAndRenderを維持した結果として受容する。",
+    "iOS Safari実機PWAでの入力ピッカー、Service Worker更新、オフライン動作確認は監督者側で必要。",
+    "taskchute-notes/handoff.mdが書き込み不可の環境では検証用ミラーで生成・照合し、監督者がnotes側へ反映する。"
+  ]
+}
