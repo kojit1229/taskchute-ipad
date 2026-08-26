@@ -132,7 +132,7 @@ function check(name, cond, extra = "") {
       const cs = getComputedStyle(root);
       const tokens = ["bg", "panel", "line", "text", "amber", "green", "cyan", "purple"]
         .map((key) => [`--tower-${key}`, cs.getPropertyValue(`--tower-${key}`).trim()]);
-      const els = [".tower-time time", ".tower-day-left strong", ".tower-eyebrow", ".tower-beacon i", ".tower-status"]
+      const els = [".clock-box time", ".clock-box .dayleft", ".life-title", ".tower-beacon i", ".tower-status"]
         .map((sel) => { const el = root.querySelector(sel); return [sel, el ? getComputedStyle(el).color : ""]; });
       return { tokens, els };
     });
@@ -833,7 +833,7 @@ function check(name, cond, extra = "") {
     await page.locator('[data-action="tower-gate-edit-toggle"]').click();
     await page.waitForSelector('.tower-gate[data-action="now-conveyor-complete"]');
 
-    console.log("[33] 1440pxでPC上帯と340px/320px/可変の3列骨格");
+    console.log("[33] 1440pxでLIFE BAND 70%+時計30%・SO全幅と340px/320px/可変の3列骨格");
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.waitForLoadState("networkidle");
     const desktopLayout = await page.evaluate(() => {
@@ -846,7 +846,7 @@ function check(name, cond, extra = "") {
         columns: getComputedStyle(root).gridTemplateColumns,
         board: rect(".tower-board"), runway: rect(".tower-runway"), gates: rect(".tower-gates"),
         log: rect(".sec-log"), atis: rect(".sec-atis"), journal: rect(".sec-journal"),
-        right: rect(".tower-col-right"), topbandDisplay: getComputedStyle(document.querySelector(".tower-topband-pc")).display
+        right: rect(".tower-col-right"), life: rect(".life-band"), clock: rect(".clock-box"), so: rect(".so-row"), root: rect(".today-tower")
       };
     });
     const columnParts = desktopLayout.columns.trim().split(/\s+/);
@@ -857,10 +857,12 @@ function check(name, cond, extra = "") {
        && Math.abs(desktopLayout.atis.x - desktopLayout.right.x) < 1
        && Math.abs(desktopLayout.journal.x - desktopLayout.right.x) < 1,
       JSON.stringify(desktopLayout));
-    check("PC上帯はflex表示", desktopLayout.topbandDisplay === "flex", desktopLayout.topbandDisplay);
-    const pcTopbandText = (await page.locator(".tower-topband-pc").textContent()) || "";
-    check("PC上帯にSTANDING ORDERS/COUNTDOWN", pcTopbandText.includes("STANDING ORDERS") && pcTopbandText.includes("COUNTDOWN"), pcTopbandText);
-    check("PCではモバイル最下段カードを非表示", await page.locator(".tower-col-right .sec-creed:visible, .tower-col-right .sec-life:visible").count() === 0);
+    const bandRatio = desktopLayout.life.width / (desktopLayout.life.width + 12 + desktopLayout.clock.width);
+    check("PC上帯はLIFE BAND 70%+時計30%", Math.abs(bandRatio - 0.7) < 0.01 && desktopLayout.life.x < desktopLayout.clock.x, JSON.stringify(desktopLayout));
+    check("STANDING ORDERSは上帯コンテンツ全幅", Math.abs(desktopLayout.so.x - desktopLayout.life.x) < 1
+      && Math.abs(desktopLayout.so.width - (desktopLayout.life.width + 12 + desktopLayout.clock.width)) < 1, JSON.stringify(desktopLayout));
+    check("PCでもLIFE BAND/SOは各1マークアップ", await page.locator(".life-band").count() === 1
+      && await page.locator(".so-row").count() === 1 && await page.locator(".so-item").count() === 3);
     // 下限境界1280px(最も中央列が潰れやすい点)でも3面卓が成立し中央列が実用幅を持つこと(レビューm1)。
     await page.setViewportSize({ width: 1280, height: 800 });
     const boundaryColumns = await page.evaluate(() => getComputedStyle(document.querySelector(".today-tower")).gridTemplateColumns);
@@ -879,18 +881,21 @@ function check(name, cond, extra = "") {
         const log = document.querySelector(".sec-log").getBoundingClientRect();
         const atis = document.querySelector(".sec-atis").getBoundingClientRect();
         const journal = document.querySelector(".sec-journal").getBoundingClientRect();
-        const creed = document.querySelector(".tower-col-right .sec-creed").getBoundingClientRect();
-        const life = document.querySelector(".tower-col-right .sec-life").getBoundingClientRect();
+        const life = document.querySelector(".life-band").getBoundingClientRect();
+        const clock = document.querySelector(".clock-box").getBoundingClientRect();
+        const standing = document.querySelector(".so-row").getBoundingClientRect();
+        const focus = document.querySelector(".today-focus-bar").getBoundingClientRect();
+        const timer = document.querySelector(".today-pomodoro").getBoundingClientRect();
         return {
           boardX: board.x, runwayX: runway.x, scrollWidth: document.scrollingElement.scrollWidth, innerWidth,
-          order: [runway.top, board.top, gates.top, log.top, atis.top, journal.top, creed.top, life.top],
-          topbandDisplay: getComputedStyle(document.querySelector(".tower-topband-pc")).display
+          panelX: [life.x, clock.x, standing.x],
+          order: [life.top, clock.top, standing.top, focus.top, runway.top, board.top, gates.top, log.top, timer.top, atis.top, journal.top]
         };
       });
       check(`${viewport.width}pxはboard/runwayが縦積み`, Math.abs(mobileLayout.boardX - mobileLayout.runwayX) < 1, JSON.stringify(mobileLayout));
       check(`${viewport.width}pxは横はみ出しなし`, mobileLayout.scrollWidth <= mobileLayout.innerWidth, JSON.stringify(mobileLayout));
-      check(`${viewport.width}pxはNOW→ARRIVALS→GATE→FLIGHT LOG→ATIS→JOURNAL→STANDING ORDERS→COUNTDOWN順`, mobileLayout.order.every((top, index, list) => index === 0 || list[index - 1] < top), JSON.stringify(mobileLayout));
-      check(`${viewport.width}pxはPC上帯を非表示`, mobileLayout.topbandDisplay === "none", mobileLayout.topbandDisplay);
+      check(`${viewport.width}pxはLIFE→時計→SO→FOCUS→NOW→ARRIVALS→GATE→LOG→TIMER→ATIS→JOURNAL順`, mobileLayout.order.every((top, index, list) => index === 0 || list[index - 1] < top), JSON.stringify(mobileLayout));
+      check(`${viewport.width}pxは上帯3パネルも同じ左端`, mobileLayout.panelX.every((x) => Math.abs(x - mobileLayout.runwayX) < 1), JSON.stringify(mobileLayout));
     }
 
     console.log("[36] reduced-motionは演出を止めても数字を更新する");

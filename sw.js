@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v274";
+const CACHE_NAME = "taskchute-journal-pwa-v275";
 // v274: Today統合画面をS2 GLASS意匠へ移行し、端末ローカルのぼかし縮退を追加した(APP_SHELL変更なし)。
 // v272: IRON LOGの種目メニュー管理を追加した(APP_SHELL変更なし)。
 // v271: TOWERのNOW LANDING選択とFLIGHT LOGタップ編集を追加した(APP_SHELL変更なし)。

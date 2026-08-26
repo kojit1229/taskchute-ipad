@@ -75,9 +75,9 @@ function configureSync(syncMod) {
     await page.waitForSelector("[data-twy-track]", { state: "attached" });
   };
   const openScoreDetail = async () => {
-    const score = page.locator('.sec-life [data-action="twy-score-toggle"]');
+    const score = page.locator('.life-band [data-action="twy-score-toggle"]');
     if (await score.getAttribute("aria-expanded") !== "true") await score.click();
-    await page.waitForSelector(".sec-life .twy-score-detail");
+    await page.waitForSelector(".life-band .twy-score-detail");
     return score;
   };
   const excuseCommitment = async (itemId, reason) => {
@@ -154,7 +154,7 @@ function configureSync(syncMod) {
     JSON.stringify({ completedItem, saves: await saveCalls() }));
     await page.locator('.nav-button[data-view="today"]').click();
     const signal = await openScoreDetail();
-    check("条件2 COUNTDOWN実行率は1/2=50%・low色", (await page.locator(".sec-life .twy-score-detail").textContent()).includes("50% (1/2)")
+    check("条件2 LIFE BAND実行率は1/2=50%・low色", (await page.locator(".life-band .twy-score-detail").textContent()).includes("50% (1/2)")
       && await signal.evaluate((element) => element.classList.contains("is-low")));
 
     await resetSaveProbe(); await page.locator('#trackToast [data-action="twy-toast-inc"]').click();
@@ -178,8 +178,8 @@ function configureSync(syncMod) {
     await page.locator('[data-action="modal-close"]').click();
     await page.locator('.nav-button[data-view="today"]').click();
     const reducedSignal = await openScoreDetail();
-    check("条件2 COUNTDOWN信号/展開内訳も1/1へ減る", (await reducedSignal.textContent()).includes("1/1・軌道内")
-      && (await page.locator(".sec-life .twy-score-detail").textContent()).includes("100% (1/1)"));
+    check("条件2 LIFE BAND信号/展開内訳も1/1へ減る", (await reducedSignal.textContent()).includes("1/1・軌道内")
+      && (await page.locator(".life-band .twy-score-detail").textContent()).includes("100% (1/1)"));
 
     await page.locator('.nav-button[data-view="tasks"]').click();
     const undoButton = page.locator(`[data-action="toggle-block"][data-id="${completionSeed.blockId}"]`).first();
@@ -191,8 +191,8 @@ function configureSync(syncMod) {
     await page.locator('[data-action="modal-close"]').click();
     await page.locator('.nav-button[data-view="today"]').click();
     const naSignal = await openScoreDetail();
-    check("条件2 COUNTDOWN信号/展開内訳も全免除N/A", (await naSignal.textContent()).includes("N/A・免除")
-      && (await page.locator(".sec-life .twy-score-detail").textContent()).includes("N/A(免除)"));
+    check("条件2 LIFE BAND信号/展開内訳も全免除N/A", (await naSignal.textContent()).includes("N/A・免除")
+      && (await page.locator(".life-band .twy-score-detail").textContent()).includes("N/A(免除)"));
     state = await savedState();
 
     const remote = JSON.parse(JSON.stringify(baseline));

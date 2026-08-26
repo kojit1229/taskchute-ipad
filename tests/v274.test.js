@@ -37,14 +37,15 @@ function check(name, condition, extra = "") {
   const panelSelectors = panelMatch[1] || "";
   const panelRule = panelMatch[2] || "";
   check("現行全パネルと将来用共通クラスを単一GLASSルールへ集約",
-    ["tower-glass-panel", "tower-header", "today-focus-bar", "tower-panel-box", "tower-runway", "tower-gates", "tower-arrivals", "today-panel"]
+    ["tower-glass-panel", "today-focus-bar", "tower-panel-box", "tower-runway", "tower-gates", "tower-arrivals", "today-panel"]
       .every((name) => panelSelectors.includes(`.today-tower .${name}`))
+    && !panelSelectors.includes(".today-tower .tower-header")
     && panelRule.includes("border-radius: 18px;")
     && panelRule.includes("-webkit-backdrop-filter: var(--tower-glass-blur);")
     && panelRule.includes("backdrop-filter: var(--tower-glass-blur);"));
   check("手動縮退helperは専用localStorage読取で属性を切替", towerSource.includes(`getItem("${BLUR_KEY}") === "1"`)
     && towerSource.includes("data-glass-blur=\"off\""));
-  check("CACHE_NAMEはv274", /^const CACHE_NAME = "taskchute-journal-pwa-v274";/m.test(swSource));
+  check("CACHE_NAMEは後続v275へ更新", /^const CACHE_NAME = "taskchute-journal-pwa-v275";/m.test(swSource));
 
   console.log("[2] 実DOMの主要パネル・非流出・縮退・他タブ非波及");
   const server = startServer(PORT);
@@ -84,7 +85,7 @@ function check(name, condition, extra = "") {
     }, { stateKey: STATE_KEY, blurKey: BLUR_KEY });
     await page.reload();
     await page.waitForFunction(() => [
-      ".tower-header", ".today-focus-bar", ".tower-panel-box", ".tower-runway",
+      ".life-band", ".clock-box", ".so-row", ".today-focus-bar", ".tower-panel-box", ".tower-runway",
       ".tower-gates", ".tower-arrivals", ".today-panel"
     ].every((selector) => document.querySelector(selector)));
 
@@ -96,7 +97,7 @@ function check(name, condition, extra = "") {
       const rootStyle = getComputedStyle(root);
       const aurora = getComputedStyle(root, "::before");
       const panelStyles = [
-        ["header", ".tower-header"], ["FOCUS", ".today-focus-bar"],
+        ["LIFE BAND", ".life-band"], ["clock", ".clock-box"], ["STANDING ORDERS", ".so-row"], ["FOCUS", ".today-focus-bar"],
         ["GATE", ".tower-gates"], ["ARRIVALS", ".tower-arrivals"],
         ["CABIN TIMER", ".today-panel"], ["tower-glass-panel", ".tower-glass-panel"]
       ].map(([name, selector]) => {
@@ -134,7 +135,7 @@ function check(name, condition, extra = "") {
       && panel.boxShadow.includes("rgba(0, 0, 0, 0.35)")
       && panel.boxShadow.includes("rgba(255, 255, 255, 0.12)")
       && panel.boxShadow.includes("inset") && panel.zIndex === "1");
-    check("未設定は主要6種すべてGLASS実効値・両blur・枠・影・z-order", visual.blurAttr === null
+    check("未設定は主要8種すべてGLASS実効値・両blur・枠・影・z-order", visual.blurAttr === null
       && visual.tokens.join("|") === "#0b0d1c|rgba(255, 255, 255, .07)|rgba(255, 255, 255, .14)|#eef0ff|#f0c674|#6ee7c8|#8ab6ff|#c4b5fd"
       && visual.font.includes("Segoe UI") && visual.isolation === "isolate" && panelsOk,
       JSON.stringify(visual));

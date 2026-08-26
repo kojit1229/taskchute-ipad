@@ -45,7 +45,7 @@ check("tower-coreに負方向の実DOM検証を残す",
   && towerTestSource.includes("Block 0件でもDEPARTURESは復活しない"));
 check("tower-coreに周辺セクションの表示・順序検証を残す",
   towerTestSource.includes("左列はNOW LANDING→ARRIVALS→FLIGHT LOG順を維持")
-  && towerTestSource.includes("NOW→ARRIVALS→GATE→FLIGHT LOG→ATIS→JOURNAL→STANDING ORDERS→COUNTDOWN順"));
+  && towerTestSource.includes("LIFE→時計→SO→FOCUS→NOW→ARRIVALS→GATE→LOG→TIMER→ATIS→JOURNAL順"));
 check("旧DEPARTURES正期待を残さない",
   !towerTestSource.includes("DEPARTURESは1行だけ")
   && !towerTestSource.includes("タップでview=tasksかつselectedDate=明日")

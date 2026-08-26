@@ -131,12 +131,13 @@ function check(name, cond, extra = "") {
       const timer = document.querySelector(".today-pomodoro");
       const log = document.querySelector(".sec-log").getBoundingClientRect();
       const timerRect = timer.getBoundingClientRect();
-      const standing = document.querySelector(".sec-creed").getBoundingClientRect();
+      const standing = document.querySelector(".so-row").getBoundingClientRect();
       const overlay = timer.querySelector(".pomo-time-overlay");
-      return { direct: timer.parentElement.classList.contains("today-tower"), logBottom: log.bottom, timerTop: timerRect.top, timerBottom: timerRect.bottom, standingTop: standing.top, timerHeight: timerRect.height, fontSize: parseFloat(getComputedStyle(overlay).fontSize) };
+      return { direct: timer.parentElement.classList.contains("today-tower"), logTop: log.top, logBottom: log.bottom,
+        timerTop: timerRect.top, standingBottom: standing.bottom, timerHeight: timerRect.height, fontSize: parseFloat(getComputedStyle(overlay).fontSize) };
     });
-    check("iPhoneはFLIGHT LOG→CABIN TIMER→STANDING ORDERSの縦順",
-      mobileLayout.direct && mobileLayout.logBottom <= mobileLayout.timerTop && mobileLayout.timerBottom <= mobileLayout.standingTop,
+    check("iPhoneもSTANDING ORDERS→FLIGHT LOG→CABIN TIMERの新しい縦順",
+      mobileLayout.direct && mobileLayout.standingBottom <= mobileLayout.logTop && mobileLayout.logBottom <= mobileLayout.timerTop,
       JSON.stringify(mobileLayout));
     check("iPhoneフォーカス時はパネル高とタイマー数字が通常時より大きい",
       mobileLayout.timerHeight > mobileNormal.height && mobileLayout.fontSize > mobileNormal.fontSize,

@@ -1,7 +1,7 @@
 // src/features/today-tower.js — v229: ARRIVALS見積列・GATE編集・早起きゲートを統合。
 // state・保存・action登録には触れず、時刻・便状態・信条は既存1秒tickerから差分更新する。
 
-import { renderStandingOrders, renderCountdown, renderTopbandPC, creedRotationLine } from "./topband.js";
+import { renderLifeBand, renderStandingOrders } from "./topband.js";
 
 let escapeHTML, todayISO, syncAlertBanner, renderAtisPanel, blocksForDate, towerFlights;
 let runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp;
@@ -371,23 +371,17 @@ function renderTodayTower() {
   const weekday = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
   return `<div class="today-tower" data-motion="${escapeHTML(towerMotionSetting())}" data-night="${isNightHour(now.getHours()) ? 1 : 0}" data-paused="${document.hidden ? 1 : 0}" data-focus-mode="${Object.values(focusVisibility).some(Boolean) ? 0 : 1}" data-focus-pomodoro-right="${pomodoroRight ? 1 : 0}"${glassBlurOff() ? ' data-glass-blur="off"' : ""}>
     ${syncAlertBanner()}
-    <div class="tower-topband">
-      <header class="tower-header">
-        <span class="tower-beacon" aria-hidden="true"><i></i></span>
-        <div class="tower-identity"><span class="tower-eyebrow" id="towerEyebrow">${creedRotationLine(Math.floor(now.getTime() / 8000))}</span><strong>TWR</strong></div>
-        <div class="tower-time"><time id="towerClock">${clockText(now)}</time><span id="towerDate">${date} (${weekday})</span></div>
-        <div class="tower-day-left"><span>本日残り</span><strong id="towerDayLeft">${dayLeftText(now)}</strong></div>
-      </header>
+    <div class="tower-band1 band1">${renderLifeBand()}<section class="tower-glass-panel clock-box" aria-label="現在時刻"><time id="towerClock">${clockText(now)}</time><span id="towerDate">${date} (${weekday})</span><strong class="dayleft" id="towerDayLeft">${dayLeftText(now)}</strong><span>本日残り</span></section>
     </div>
+    ${renderStandingOrders()}
     ${renderTodayFocusBar(focusVisibility)}
-    ${renderTopbandPC()}
     <div class="tower-col-left">
       ${renderTowerRunway(now, blocks, flights)}
       ${renderTowerBoard(flights)}
       ${renderFlightLog(today, blocks)}
     </div>
     <div class="tower-col-center">${focusVisibility.gate ? renderTowerGates(blocks) : ""}</div>
-    <div class="tower-col-right">${focusVisibility.atis ? renderAtisPanel() : ""}${focusVisibility.journal ? renderTowerJournal(today) : ""}${renderStandingOrders()}${renderCountdown()}</div>
+    <div class="tower-col-right">${focusVisibility.atis ? renderAtisPanel() : ""}${focusVisibility.journal ? renderTowerJournal(today) : ""}</div>
     ${renderTodayPomodoro(blocks, queueBlocksOf(blocks)).replace(">POMODORO<span>", ">CABIN TIMER<span>")}
   </div>`;
 }
@@ -468,15 +462,10 @@ function updateTodayTowerTick() {
   const blocks = blocksForDate(todayISO());
   const clock = document.getElementById("towerClock");
   const dayLeft = document.getElementById("towerDayLeft");
-  const eyebrow = document.getElementById("towerEyebrow");
   if (!clock || !dayLeft) return;
   const nowMin = now.getHours() * 60 + now.getMinutes();
   clock.textContent = clockText(now);
   dayLeft.textContent = dayLeftText(now);
-  if (eyebrow) {
-    const creed = creedRotationLine(Math.floor(now.getTime() / 8000));
-    if (eyebrow.innerHTML !== creed) eyebrow.innerHTML = creed;
-  }
   updateTowerRunway(now, blocks);
   updateTowerGates(blocks);
   const flights = boardFlights(blocks, nowMin, scheduledTasksForDate(todayISO(), blocks));

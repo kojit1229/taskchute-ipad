@@ -1,5 +1,4 @@
 // src/features/topband.js(予定パス)— TaskChute Journal スリム化P3・単位(c)の一部。
-// 上帯コンポーネント(STANDING ORDERS=三つの信条 + COUNTDOWN=12週サイクル・寿命カウントダウン)。
 //
 // 契約: dashboard.js/wish.js/instruments.js(P4レーン)と同じ configureXxx(deps) DIパターン。
 // **他ファイルを一切importしない自己完結モジュール**(委譲指示の制約)。
@@ -9,9 +8,6 @@
 //     - getSettings(): { twelveWeekStartDate?: "YYYY-MM-DD", birthDate?: "YYYY-MM-DD" }
 //       — state.settingsの該当2キーだけを渡す最小DI(getState丸ごとは渡さない)
 //
-// デザイン正: mockup-today-home-v2.html(STANDING ORDERS=sec-creed/sec-creed-pc、
-// COUNTDOWN=sec-life/sec-life-pc、ヘッダeyebrowの信条ローテ表示)。HTML構造・クラス名は
-// 同ファイルからそのまま採用。
 //
 // 12週サイクル/今年/年齢カウントダウンの算式(slim-spec.md 裁定10: computeMetrics の
 // metric()/ageMetric() を正本とする)を、「他ファイルimport禁止」の制約下でこのファイル内に
@@ -133,24 +129,15 @@ const CREEDS = [
 
 function creedRowHTML(creed) {
   return `
-    <div class="tower-creed-row">
-      <span class="tower-creed-num">${escapeHTML(creed.num)}</span>
-      <span class="tower-creed-text">${escapeHTML(creed.text)}
+    <div class="so-item"><span class="so-num">${escapeHTML(creed.num)}</span><span><em>${escapeHTML(creed.text)}</em>
         <small>${escapeHTML(creed.small)}</small></span>
     </div>`;
 }
 
-// variant: "" = モバイル/右列カード用(class="sec-creed")、"-pc" = PC上帯2用(class="sec-creed-pc")
-// モバイル用とPC用で中身(信条3行)は完全に同一。PC/モバイルどちらを見せるかはCSS側
-// (.tower-col-right .sec-creed 等を@media(min-width:1280px)で非表示化)に委ねる設計
-// (mockup-today-home-v2.htmlの sec-creed / sec-creed-pc がまさにこの二重レンダリング構造)。
-export function renderStandingOrders(variant = "") {
-  const cls = variant === "-pc" ? "sec-creed-pc" : "sec-creed";
+export function renderStandingOrders() {
   const rows = CREEDS.map(creedRowHTML).join("");
   return `
-    <section class="tower-panel-box ${cls}">
-      <h2>STANDING ORDERS <span>三つの信条</span></h2>
-      <div class="tower-creed-body">${rows}</div>
+    <section class="tower-glass-panel so-row" aria-label="STANDING ORDERS"><div class="so-grid">${rows}</div>
     </section>`;
 }
 
@@ -159,11 +146,8 @@ export function renderStandingOrders(variant = "") {
 function lifeCellHTML({ label, pctLabel, remaining, progress, isCycle, extraHTML = "" }) {
   const pct = clampLocal(progress, 0, 100);
   return `
-    <div class="tower-life-cell${isCycle ? " is-cycle" : ""}">
-      <div class="tower-life-top"><span class="tower-life-label">${escapeHTML(label)}</span><span class="tower-life-pct">${escapeHTML(pctLabel)}</span></div>
-      <div class="tower-life-num">${Number(remaining || 0).toLocaleString()}<small> 日</small></div>
+    <div class="life-sig${isCycle ? " wy" : ""}"><span>${escapeHTML(label)}</span><strong>${Number(remaining || 0).toLocaleString()}<em>${isCycle ? "/12" : "日"}</em></strong><div class="life-bar"><i style="width:${pct}%"></i></div>
       ${extraHTML}
-      <div class="tower-life-bar"><span style="width:${pct}%"></span></div>
     </div>`;
 }
 
@@ -235,12 +219,7 @@ function twyCommitBannerHTML(digest) {
     <button type="button" data-action="twy-open-commit">今週を確定</button></div>`;
 }
 
-// variant: "" = モバイル/右列カード用(class="sec-life"、内側は"tower-life"のみ=2x2グリッド)
-//          "-pc" = PC上帯2用(class="sec-life-pc"、内側は"tower-life tower-life-row"=4列並び)
-export function renderCountdown(variant = "") {
-  const cls = variant === "-pc" ? "sec-life-pc" : "sec-life";
-  const gridCls = variant === "-pc" ? "tower-life tower-life-row" : "tower-life";
-
+export function renderLifeBand() {
   const today = todayISO();
   const settings = (typeof getSettings === "function" ? getSettings() : {}) || {};
   const digest = typeof getTrackDigest === "function" ? getTrackDigest() : null;
@@ -255,8 +234,8 @@ export function renderCountdown(variant = "") {
   const year = dateSpanMetric(today, yearStart, yearEnd);
 
   const cells = [
-    lifeCellHTML({ label: "12週サイクル", pctLabel: `Week ${weekNum}/12`, remaining: cycle.remaining, progress: cycle.progress, isCycle: true,
-      extraHTML: digest ? twyScoreHTML(digest) : "" }),
+    lifeCellHTML({ label: "12WY WEEK", pctLabel: `Week ${weekNum}/12`, remaining: weekNum, progress: cycle.progress, isCycle: true,
+      extraHTML: digest ? `${twyScoreHTML(digest)}${twyCommitBannerHTML(digest)}` : "" }),
     lifeCellHTML({ label: "今年", pctLabel: `${clampLocal(year.progress, 0, 100)}%経過`, remaining: year.remaining, progress: year.progress, isCycle: false })
   ];
 
@@ -267,28 +246,7 @@ export function renderCountdown(variant = "") {
     cells.push(lifeCellHTML({ label: "80歳まで", pctLabel: "—", remaining: age80.remaining, progress: age80.progress, isCycle: false }));
   }
 
-  const footHTML = digest && !digest.hasMeta ? twyCommitBannerHTML(digest) : "";
-
   return `
-    <section class="tower-panel-box ${cls}">
-      <h2>COUNTDOWN <span>12週サイクル・寿命</span></h2>
-      <div class="${gridCls}">${cells.join("")}</div>
-      ${footHTML}
+    <section class="tower-glass-panel life-band"><span class="tower-beacon" aria-hidden="true"><i></i></span><span class="life-title">LIFE BAND</span><div class="life-sigs">${cells.join("")}</div>
     </section>`;
-}
-
-// ---- PC上帯2(STANDING ORDERS + COUNTDOWN 横並び合成) ----
-export function renderTopbandPC() {
-  return `<div class="tower-topband-pc">${renderStandingOrders("-pc")}${renderCountdown("-pc")}</div>`;
-}
-
-// ---- ヘッダeyebrow用: 信条1行のローテーション表示 ----
-// index を3で正規化して1行分の内側HTML(<span class="tower-eyebrow">の中身)を返す。
-// 呼び出し側は <span class="tower-eyebrow">${creedRotationLine(idx)}</span> として使う想定
-// (mockup-today-home-v2.htmlのheader部と同一構造)。
-export function creedRotationLine(index) {
-  const n = CREEDS.length;
-  const i = ((Number(index) % n) + n) % n;
-  const creed = CREEDS[i];
-  return `<b>STANDING ORDER ${i + 1}/${n}</b><em>${escapeHTML(creed.text)}</em><small>⟳ 3行ローテーション</small>`;
 }

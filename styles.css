@@ -3034,11 +3034,10 @@ h3 {
   display: flex;
   flex-direction: column;
 }
-.tower-topband,
 .tower-col-left,
 .tower-col-center,
 .tower-col-right { display: contents; }
-.tower-header { order: 0; }
+.tower-band1, .so-row { order: 0; }
 .today-focus-bar { order: 1; }
 .sec-rwy { order: 1; }
 .sec-arrivals { order: 2; }
@@ -3047,18 +3046,6 @@ h3 {
 .today-tower > .today-pomodoro { order: 4; }
 .sec-atis { order: 5; }
 .sec-journal { order: 6; }
-.sec-creed { order: 7; }
-.sec-life { order: 8; }
-.tower-header {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-  padding: 14px 16px;
-  border: 1px solid var(--tower-line);
-  background: var(--tower-panel);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
-}
 .today-focus-bar {
   display: flex;
   align-items: stretch;
@@ -3090,17 +3077,6 @@ h3 {
 .today-focus-chip:focus-visible { outline: 2px solid var(--tower-green); outline-offset: 2px; }
 .tower-beacon { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--tower-line); border-radius: 50%; }
 .tower-beacon i { width: 10px; height: 10px; border-radius: 50%; background: var(--tower-amber); box-shadow: 0 0 12px var(--tower-amber); animation: tower-beacon-pulse 1.4s ease-in-out infinite; }
-.tower-identity { display: grid; gap: 2px; }
-.tower-eyebrow { color: var(--tower-cyan); font-size: 10px; font-weight: 700; letter-spacing: .18em; }
-.tower-identity strong { font-size: 20px; letter-spacing: .16em; }
-.tower-time { display: grid; gap: 2px; margin-left: auto; text-align: right; }
-.tower-time time,
-.tower-day-left strong { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; letter-spacing: .08em; }
-.tower-time time { color: var(--tower-green); font-size: 25px; font-weight: 700; }
-.tower-time span,
-.tower-day-left span { color: var(--tower-cyan); font-size: 10px; letter-spacing: .1em; }
-.tower-day-left { display: grid; gap: 2px; min-width: 120px; padding-left: 14px; border-left: 1px solid var(--tower-line); }
-.tower-day-left strong { color: var(--tower-amber); font-size: 20px; }
 @keyframes tower-beacon-pulse { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
 .tower-board { display: grid; gap: 12px; padding: 12px 0; }
 .tower-arrivals { border: 1px solid var(--tower-line); background: var(--tower-panel); }
@@ -3307,16 +3283,8 @@ h3 {
   .today-tower[data-focus-mode="1"] .today-pomodoro .pomo-time-overlay { font-size: clamp(60px, 18vw, 74px); }
 }
 
-/* css-topband.css — TaskChute Journal スリム化P3・単位(c)の一部。
-   上帯コンポーネント(STANDING ORDERS + COUNTDOWN)専用CSS。
-   出典: mockup-today-home-v2.html(該当スタイルをそのまま移植。プレフィクスはモックの
-   クラス名に従う: .tower-creed-* / .tower-life-* / .tower-topband-pc / .sec-creed-pc /
-   .sec-life-pc)。統合時にstyles.cssへマージする(p4-interface.md §4のCSS受け渡し方式を踏襲)。
-
+/* v275: mockup-tower-v5.htmlの単一DOM上帯へ更新済み。
    【統合時の注意】
-   - `.tower-eyebrow` の基底ルール(color/font-size/font-weight/letter-spacing)は既存
-     styles.css:3294に既にある。本ファイルは b/em/small の子孫セレクタだけを追加するので、
-     既存ルールと衝突しない(上書きではなく追加)。マージ時は既存ルールの直後に足せばよい。
    - `.tower-panel-box` / `.tower-panel-box h2` は現行styles.cssに存在しない新クラス
      (現行TOWERは .tower-runway / .tower-apron 等パネルごと個別クラスで同じ border/background
      を重複定義している)。mockup-today-home-v2.html全体が .tower-panel-box への統一を前提に
@@ -3329,16 +3297,6 @@ h3 {
      再定義しない)。
    - input/select/textareaを含まないため16px以上ルールの対象外。
 */
-
-/* ============ ヘッダeyebrow: 信条ローテーション行(creedRotationLine用) ============ */
-/* 既存 .tower-eyebrow 基底(styles.css:3294)への追加。 */
-.tower-eyebrow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
-.tower-eyebrow b { color: var(--tower-cyan); font-weight: 700; }
-.tower-eyebrow em {
-  font-style: normal; color: var(--tower-text); font-family: system-ui, sans-serif;
-  font-weight: 500; letter-spacing: 0; opacity: .9;
-}
-.tower-eyebrow small { color: var(--tower-text); font-weight: 400; opacity: .4; letter-spacing: .04em; }
 
 /* ============ セクション共通(パネル外枠。他単位と重複の可能性あり。上部の注意参照) ============ */
 .tower-panel-box { position: relative; margin-top: 12px; border: 1px solid var(--tower-line); background: var(--tower-panel); }
@@ -3432,36 +3390,14 @@ h3 {
 .tower-journal-save { justify-self: end; min-height: 32px; margin-top: 2px; padding: 4px 16px; border: 1px solid var(--tower-green); color: var(--tower-green); background: transparent; font: inherit; font-size: 10px; letter-spacing: .14em; }
 
 /* ============ STANDING ORDERS(三つの信条) ============ */
-.tower-creed-body { display: grid; gap: 0; }
-.tower-creed-row {
-  display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: center;
-  gap: 10px; padding: 12px 10px; border-bottom: 1px solid var(--tower-line);
-}
-.tower-creed-row:last-child { border-bottom: 0; }
-.tower-creed-num {
-  display: grid; place-items: center; width: 36px; height: 36px;
-  border: 1px solid var(--tower-amber); color: var(--tower-amber);
-  font-size: 18px; font-weight: 700;
-}
-.tower-creed-text { font-family: system-ui, sans-serif; font-size: 16px; font-weight: 600; line-height: 1.5; }
-.tower-creed-text small {
-  display: block; color: var(--tower-cyan); font-size: 10px; font-weight: 400;
-  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; letter-spacing: .08em; margin-top: 2px;
-}
+.so-row { margin-top: 12px; overflow: hidden; } .so-grid { display: grid; gap: 0; } .so-item { display: flex; align-items: center; gap: 10px; padding: 12px 10px; border-bottom: 1px solid var(--tower-line); } .so-item:last-child { border-bottom: 0; }
+.so-num { display: grid; flex: none; place-items: center; width: 30px; height: 30px; border: 1px solid var(--tower-amber); color: var(--tower-amber); font-size: 13px; font-weight: 700; } .so-item em { font-style: normal; font-family: system-ui, sans-serif; font-size: 12.5px; font-weight: 600; line-height: 1.5; } .so-item small { display: block; margin-top: 2px; color: var(--tower-cyan); font-family: system-ui, sans-serif; font-size: 8.5px; font-weight: 400; letter-spacing: .08em; }
 
-/* ============ COUNTDOWN(12週サイクル+寿命) ============ */
-.tower-life { display: grid; grid-template-columns: 1fr 1fr; }
-.tower-life-cell { padding: 12px 10px; border-right: 1px solid var(--tower-line); border-bottom: 1px solid var(--tower-line); }
-.tower-life-cell:nth-child(2n) { border-right: 0; }
-.tower-life-cell:nth-child(n+3) { border-bottom: 0; }
-.tower-life-cell.is-cycle .tower-life-num { color: var(--tower-cyan); }
-.tower-life-top { display: flex; justify-content: space-between; align-items: baseline; }
-.tower-life-label { color: var(--tower-cyan); font-size: 10px; letter-spacing: .12em; }
-.tower-life-pct { color: var(--tower-amber); font-size: 10px; font-variant-numeric: tabular-nums; }
-.tower-life-num { color: var(--tower-green); font-size: 22px; font-weight: 700; margin: 6px 0 8px; font-variant-numeric: tabular-nums; }
-.tower-life-num small { color: var(--tower-text); font-size: 11px; font-weight: 400; opacity: .6; }
-.tower-life-bar { height: 4px; background: var(--tower-line); overflow: hidden; }
-.tower-life-bar span { display: block; height: 100%; background: var(--tower-amber); box-shadow: 0 0 6px var(--tower-amber); }
+/* ============ v275 LIFE BAND(12週サイクル+寿命)+時計 ============ */
+.band1 { display: grid; grid-template-columns: 1fr; gap: 12px; } .life-band { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 10px 14px; overflow: hidden; } .life-title { color: var(--tower-amber); font-size: 10px; font-weight: 700; letter-spacing: .18em; }
+.life-sigs { display: flex; flex: 1 1 100%; flex-wrap: wrap; min-width: 0; } .life-sig { display: grid; flex: 1 1 calc(50% - 1px); gap: 1px; min-width: 0; padding: 0 16px; border-left: 1px solid var(--tower-line); } .life-sig.wy:has(.twy-score.is-open), .life-sig.wy:has(.twy-commit-banner) { flex-basis: 100%; } .life-sig:first-child { border-left: 0; } .life-sig > span { color: var(--tower-cyan); font-size: 9px; letter-spacing: .1em; }
+.life-sig > strong { color: var(--tower-amber); font-size: 22px; line-height: 1.1; } .life-sig > strong em { font-style: normal; font-size: 11px; opacity: .7; } .life-sig.wy > strong { color: var(--tower-green); } .life-bar { position: relative; height: 3px; margin-top: 3px; overflow: hidden; background: var(--tower-line); } .life-bar i { position: absolute; inset: 0 auto 0 0; background: var(--tower-amber); } .life-sig.wy .life-bar i { background: var(--tower-green); }
+.clock-box { display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 8px 2px 0; overflow: hidden; text-align: left; } .clock-box time { color: var(--tower-green); font-size: 30px; font-weight: 700; letter-spacing: .08em; } .clock-box span { color: var(--tower-cyan); font-size: 9.5px; letter-spacing: .1em; } .clock-box .dayleft { color: var(--tower-amber); font-size: 18px; letter-spacing: .08em; }
 
 /* v266: 12WY週次スコアは既定1行、内訳とTRACKSはタップ時だけ展開する。 */
 .twy-score { display: flex; align-items: center; gap: 6px; min-width: 0; margin: 2px 0 8px; }
@@ -3494,32 +3430,8 @@ h3 {
 .twy-commit-banner { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-top: 1px dashed var(--tower-amber); color: var(--tower-amber); font-size: 10.5px; }
 .twy-commit-banner button { min-height: 32px; margin-left: auto; padding: 4px 12px; border: 1px solid var(--tower-amber); color: var(--tower-amber); background: transparent; font: inherit; font-size: 10px; letter-spacing: .12em; cursor: pointer; }
 
-/* ============ PC専用の上帯(信条+寿命。モバイルでは常時非表示) ============ */
-.tower-topband-pc { display: none; }
-
 @media (min-width: 1280px) {
-  /* PC(1280px以上): ヘッダeyebrowの信条ローテはPCでは冗長なので非表示
-     (mockup-today-home-v2.html注記どおり: K指示「PCは未来情報を上部の上帯2に集約」) */
-  .tower-header .tower-eyebrow { display: none; }
-
-  /* 上帯2: STANDING ORDERS + COUNTDOWN を横並びで常時表示。grid-area: band2 は
-     (b)TOWER減量/レイアウト単位側の .today-tower grid-template-areas 定義に依存する
-     (統合時にband2エリアが確保されていることを確認すること)。 */
-  .tower-topband-pc { display: flex; grid-area: band2; gap: 12px; margin-top: 12px; align-items: stretch; }
-  .tower-topband-pc .tower-panel-box { margin-top: 0; }
-  .tower-topband-pc .sec-creed-pc { flex: 1.15; min-width: 0; }
-  .tower-topband-pc .sec-life-pc { flex: 1; min-width: 0; }
-  .tower-topband-pc .tower-creed-row { padding: 8px 12px; gap: 10px; }
-  .tower-topband-pc .tower-creed-num { width: 30px; height: 30px; font-size: 15px; }
-  .tower-topband-pc .tower-creed-text { font-size: 13px; }
-  .tower-topband-pc .tower-creed-text small { font-size: 9px; }
-  .tower-life-row { grid-template-columns: repeat(4, 1fr); }
-  .tower-life-row .tower-life-cell { border-bottom: 0; border-right: 1px solid var(--tower-line); }
-  .tower-life-row .tower-life-cell:last-child { border-right: 0; }
-
-  /* モバイル用の最下段カード(信条・寿命)はPCでは非表示(上帯2へ移設のため二重表示にしない)。
-     .tower-col-right は(b)/(d)〜(f)側のレイアウト単位が定義する列ラッパクラス。 */
-  .tower-col-right .sec-creed, .tower-col-right .sec-life { display: none; }
+  .band1 { grid-template-columns: minmax(0, 7fr) minmax(0, 3fr); } .life-sigs { flex: 1; } .life-sig { flex-basis: 120px; } .clock-box { padding: 10px 14px; text-align: right; } .so-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .so-item { padding: 10px 14px; border-bottom: 0; border-left: 1px solid var(--tower-line); } .so-item:first-child { border-left: 0; }
 }
 
 
@@ -3530,9 +3442,9 @@ h3 {
     grid-template-columns: 340px 320px minmax(0, 1fr);
     grid-template-areas:
       "alert alert  alert"
-      "band  band   band"
+      "life  life   life"
+      "so    so     so"
       "focus focus  focus"
-      "band2 band2  band2"
       "left  center right"
       "timer timer  timer";
     column-gap: 12px;
@@ -3543,7 +3455,8 @@ h3 {
     padding: 12px 16px 40px;
   }
   .today-tower > .sync-alert-banner { grid-area: alert; }
-  .today-tower .tower-topband { display: block; grid-area: band; }
+  .today-tower > .tower-band1 { grid-area: life; }
+  .today-tower > .so-row { grid-area: so; }
   .today-tower .today-focus-bar { grid-area: focus; }
   .today-tower .tower-col-left { display: block; grid-area: left; min-width: 0; }
   .today-tower .tower-col-center { display: block; grid-area: center; min-width: 0; }
@@ -3559,8 +3472,6 @@ h3 {
     height: clamp(330px, 32vw, 430px);
   }
   .today-tower[data-focus-mode="1"] .today-pomodoro .pomo-time-overlay { font-size: clamp(81px, 8vw, 108px); }
-  .tower-header .tower-time time { font-size: 46px; }
-  .tower-day-left strong { font-size: 30px; }
   .tower-col-left .sec-rwy .tower-nowhud { grid-template-columns: 1fr; gap: 3px; padding: 4px 10px 8px; }
   .tower-col-left .sec-rwy .tower-now-title { white-space: normal; overflow: visible; text-overflow: clip; }
   .tower-col-left .sec-rwy .tower-now-pct,
@@ -4925,7 +4836,6 @@ h3 {
 #app[data-view="today"] .today-tower > * { position: relative; z-index: 1; }
 
 #app[data-view="today"] .today-tower .tower-glass-panel,
-#app[data-view="today"] .today-tower .tower-header,
 #app[data-view="today"] .today-tower .today-focus-bar,
 #app[data-view="today"] .today-tower .tower-panel-box,
 #app[data-view="today"] .today-tower .tower-runway,

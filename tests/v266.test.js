@@ -1,4 +1,4 @@
-// v266: COUNTDOWNの12WY週次スコア信号、展開内訳、設定、ATIS縦予算を検証する。
+// v266: LIFE BANDの12WY週次スコア信号、展開内訳、設定、ATIS縦予算を検証する。
 const fs = require("fs");
 const path = require("path");
 const { pathToFileURL } = require("url");
@@ -51,7 +51,7 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
   check("toggleTwyScoreExpanded import/呼出とaction登録は重複なし", countMatches(appSource, /\btoggleTwyScoreExpanded\b/g) === 2
     && countMatches(appSource, /"twy-score-toggle"\s*:/g) === 1);
   check("表示トグルはsaveState/generateReportを呼ばずrenderだけ", /"twy-score-toggle"\s*:\s*\(\)\s*=>\s*\{\s*toggleTwyScoreExpanded\(\);\s*render\(\);\s*\}/.test(appSource));
-  const scoreRendererSource = topbandSource.slice(topbandSource.indexOf("function twyScoreHTML"), topbandSource.indexOf("export function renderCountdown"));
+  const scoreRendererSource = topbandSource.slice(topbandSource.indexOf("function twyScoreHTML"), topbandSource.indexOf("export function renderLifeBand"));
   check("topbandは個別listener/id/new Date文字列パースを追加しない", !topbandSource.includes("addEventListener")
     && !/\sid=/.test(scoreRendererSource) && !/new Date\s*\(/.test(scoreRendererSource));
   check(".t-state 5+1は既存定義を再利用", countMatches(stylesSource, /^\.t-state\.s-/gm) === 6
@@ -67,8 +67,8 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
   const topband = await import(pathToFileURL(path.join(ROOT, "src", "features", "topband.js")).href);
   topband.configureTopband({ escapeHTML: (value) => String(value), todayISO: () => "2026-08-25",
     getSettings: () => ({ twelveWeekStartDate: "2026-08-15", birthDate: "" }), getTrackDigest: () => null });
-  const noBirthHTML = topband.renderCountdown();
-  check("birthDate未設定ならtopbandは寿命2セルを描画しない", countMatches(noBirthHTML, /class="tower-life-cell/g) === 2
+  const noBirthHTML = topband.renderLifeBand();
+  check("birthDate未設定ならtopbandは寿命2セルを描画しない", countMatches(noBirthHTML, /class="life-sig(?: |")/g) === 2
     && !noBirthHTML.includes("45歳まで") && !noBirthHTML.includes("80歳まで"));
 
   const instrumentedApp = appSource
@@ -155,12 +155,12 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
       localStorage.setItem(key, JSON.stringify(state));
     }, { key: STATE_KEY, fixture, today: TODAY });
     await page.reload();
-    await page.waitForSelector(".sec-life");
+    await page.waitForSelector(".life-band");
     await page.evaluate(() => window.__v266SetAiWorkResults?.([]));
     await resetCounters();
   }
 
-  const mobile = () => page.locator(".sec-life");
+  const mobile = () => page.locator(".life-band");
   const signal = () => mobile().locator('[data-action="twy-score-toggle"]');
   const signalText = () => signal().textContent();
 
@@ -196,7 +196,7 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
     await resetCounters();
     await page.locator('.nav-button[data-view="settings"]').click();
     await page.locator('.nav-button[data-view="today"]').click();
-    await page.waitForSelector('.sec-life [data-action="twy-score-toggle"]');
+    await page.waitForSelector('.life-band [data-action="twy-score-toggle"]');
     let probe = await counters();
     check("初期・折りたたみの無関係renderはsave/report 0回", probe.save === 0 && probe.report === 0
       && await signal().getAttribute("aria-expanded") === "false", JSON.stringify(probe));
@@ -220,7 +220,7 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
         probe.remove();
         return color;
       })(),
-      panelBackground: getComputedStyle(el.closest(".tower-panel-box")).backgroundColor,
+      panelBackground: getComputedStyle(el.closest(".life-band")).backgroundColor,
       rootBackground: getComputedStyle(el.closest(".today-tower")).backgroundColor,
       display: getComputedStyle(el).display,
       alignItems: getComputedStyle(el).alignItems,
@@ -289,22 +289,22 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
     check("B-6 #15 severity混在は期限超過→要注意の最大2件", mixedRows.length === 2
       && mixedRows[0].includes("期限超過") && mixedRows[1].includes("要注意"), JSON.stringify(mixedRows));
     check("期限超過だけs-overdueへ変換", await mobile().locator(".twy-track-line").first().locator(".t-state.s-overdue").count() === 1);
-    check("B-6 #16 mobile/PCに同じtoggle actionが各1件", await page.locator('.sec-life [data-action="twy-score-toggle"]').count() === 1
-      && await page.locator('.sec-life-pc [data-action="twy-score-toggle"]').count() === 1);
+    check("B-6 #16 toggle actionは単一LIFE BANDに1件だけ", await page.locator('.life-band [data-action="twy-score-toggle"]').count() === 1
+      && await page.locator('[data-action="twy-score-toggle"]').count() === 1);
     await seed({ ...candidateFixture() });
-    check("B-6 #16 mobile/PCに同じopen-commit actionが各1件", await page.locator('.sec-life [data-action="twy-open-commit"]').count() === 1
-      && await page.locator('.sec-life-pc [data-action="twy-open-commit"]').count() === 1);
+    check("B-6 #16 open-commit actionは単一LIFE BANDに1件だけ", await page.locator('.life-band [data-action="twy-open-commit"]').count() === 1
+      && await page.locator('[data-action="twy-open-commit"]').count() === 1);
 
     await seed({ weeklyCommitments: scoredCommitments(1, 1) });
     await page.setViewportSize({ width: 390, height: 844 });
     await signal().click();
     await page.setViewportSize({ width: 1280, height: 900 });
-    check("B-6 #17 mobile展開後にPC幅でも共有状態が展開", await page.locator(".sec-life-pc .twy-score-detail").count() === 1
-      && await page.locator('.sec-life-pc [aria-expanded="true"]').count() === 1);
+    check("B-6 #17 mobile展開後にPC幅でも同じ単一DOMが展開", await page.locator(".life-band .twy-score-detail").count() === 1
+      && await page.locator('.life-band [aria-expanded="true"]').count() === 1);
     await page.locator('.nav-button[data-view="settings"]').click();
     await page.waitForSelector('[data-setting-scoretarget]', { state: "attached" });
     await page.locator('.nav-button[data-view="today"]').click();
-    await page.waitForSelector(".sec-life-pc .twy-score-detail");
+    await page.waitForSelector(".life-band .twy-score-detail");
     check("B-6 #18 無関係renderを跨いでも展開状態を保持", await mobile().locator(".twy-score-detail").count() === 1);
 
     await page.setViewportSize({ width: 1024, height: 900 });
@@ -359,7 +359,7 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
     probe = await counters();
     check("build/render/toggleは保存state不変・save/report 0回", beforeDisplay === afterDisplay && probe.save === 0 && probe.report === 0);
 
-    console.log("[5] 設定70〜100・保存1回・normalize安定・既存COUNTDOWN/ATIS/#9回帰");
+    console.log("[5] 設定70〜100・保存1回・normalize安定・既存LIFE BAND/ATIS/#9回帰");
     await page.locator('.nav-button[data-view="settings"]').click();
     await page.waitForSelector('[data-setting-scoretarget]', { state: "attached" });
     await openSettingsGroup(page, "settings-master");
@@ -401,22 +401,21 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
       JSON.stringify({ normalized70, normalized100, normalized85 }));
 
     await seed({ cycleStart: "", birthDate: "1980-01-01" });
-    const countdownWithoutDigest = await mobile().locator(".tower-life-cell:not(.is-cycle)").evaluateAll((cells) => cells.map((cell) => cell.outerHTML));
+    const countdownWithoutDigest = await mobile().locator(".life-sig:not(.wy)").evaluateAll((cells) => cells.map((cell) => cell.outerHTML));
     await seed({ weeklyCommitments: scoredCommitments(1, 1), birthDate: "1980-01-01",
       projects: [project("p-wbs")], tracks: [numericTrack("same-status", "p-wbs")],
       trackMeasurements: [measurement("same-status", 0)] });
-    const countdownWithDigest = await mobile().locator(".tower-life-cell:not(.is-cycle)").evaluateAll((cells) => cells.map((cell) => cell.outerHTML));
-    const countdownMetrics = await mobile().locator(".tower-life-cell:not(.is-cycle)").evaluateAll((cells) => cells.map((cell) => ({
-      label: cell.querySelector(".tower-life-label")?.textContent,
-      pct: cell.querySelector(".tower-life-pct")?.textContent,
-      remaining: cell.querySelector(".tower-life-num")?.textContent.replace(/\s+/g, " ").trim(),
-      barWidth: cell.querySelector(".tower-life-bar > span")?.style.width
+    const countdownWithDigest = await mobile().locator(".life-sig:not(.wy)").evaluateAll((cells) => cells.map((cell) => cell.outerHTML));
+    const countdownMetrics = await mobile().locator(".life-sig:not(.wy)").evaluateAll((cells) => cells.map((cell) => ({
+      label: cell.querySelector(":scope > span")?.textContent,
+      remaining: cell.querySelector(":scope > strong")?.textContent.replace(/\s+/g, " ").trim(),
+      barWidth: cell.querySelector(".life-bar > i")?.style.width
     })));
-    check("既存COUNTDOWN 3セルのHTMLはdigest追加前後で完全一致", JSON.stringify(countdownWithoutDigest) === JSON.stringify(countdownWithDigest));
-    check("既存COUNTDOWNの残日数・進捗率・バー幅を固定", JSON.stringify(countdownMetrics) === JSON.stringify([
-      { label: "今年", pct: "65%経過", remaining: "128 日", barWidth: "65%" },
-      { label: "45歳まで", pct: "—", remaining: "0 日", barWidth: "100%" },
-      { label: "80歳まで", pct: "—", remaining: "12,182 日", barWidth: "58%" }
+    check("LIFE BAND 3残日数セルのHTMLはdigest追加前後で完全一致", JSON.stringify(countdownWithoutDigest) === JSON.stringify(countdownWithDigest));
+    check("LIFE BANDの残日数・進捗バー幅を固定", JSON.stringify(countdownMetrics) === JSON.stringify([
+      { label: "今年", remaining: "128日", barWidth: "65%" },
+      { label: "45歳まで", remaining: "0日", barWidth: "100%" },
+      { label: "80歳まで", remaining: "12,182日", barWidth: "58%" }
     ]), JSON.stringify(countdownMetrics));
 
     const longFeedback = `## サマリー\n${Array.from({ length: 80 }, (_, index) => `実データ行${index + 1}`).join("\n")}\n## 詳細\n本文`;
@@ -452,7 +451,7 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
     await page.locator('.nav-button[data-view="wbs"]').click();
     await page.waitForSelector('.twy-row[data-twy-track-id="same-status"]');
     const wbsStatus = await page.locator('.twy-row[data-twy-track-id="same-status"] .t-state').textContent();
-    check("#9 WBSとCOUNTDOWNが同じtrackStatus結果", countdownStatus === wbsStatus && countdownStatus === "要注意");
+    check("#9 WBSとLIFE BANDが同じtrackStatus結果", countdownStatus === wbsStatus && countdownStatus === "要注意");
   } catch (error) {
     failures++;
     console.log("  ❌ 例外:", error.stack || error.message);

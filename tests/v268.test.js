@@ -73,14 +73,14 @@ function check(name, condition, extra = "") {
       localStorage.setItem(key, JSON.stringify(state));
     }, { key: STATE_KEY, today: TODAY, cycle: CYCLE, track, observedAt, value, scoredState: scored });
     await page.reload();
-    await page.waitForSelector('.sec-life [data-action="twy-score-toggle"]');
+    await page.waitForSelector('.life-band [data-action="twy-score-toggle"]');
     await page.evaluate(() => { window.__v268SaveCalls = 0; });
   }
 
   async function readBoth(track) {
-    const signal = page.locator('.sec-life [data-action="twy-score-toggle"]');
+    const signal = page.locator('.life-band [data-action="twy-score-toggle"]');
     await signal.click();
-    const countdown = page.locator(".sec-life .twy-track-line");
+    const countdown = page.locator(".life-band .twy-track-line");
     const result = { countdown: {
       state: await countdown.locator(".t-state").textContent(),
       pace: await countdown.locator(".t-pace").textContent(),
