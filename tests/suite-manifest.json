@@ -2765,7 +2765,7 @@
       "kind": "e2e",
       "tier": "full",
       "domains": [
-        "legacy-crosscutting"
+        "ui-responsive"
       ],
       "assertionSignals": 32,
       "assertionHash": "1f61105912d5632e",
