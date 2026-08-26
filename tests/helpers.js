@@ -45,9 +45,10 @@ function launchOptions() {
 // 異なるスイートが同じportを引く」ケースは別途ゼロ化した。ここは残りうる別要因(外部プロセス・
 // カーネル側の一過性状態等)への保険であり、リトライを使い果たしたら従来どおり例外を投げて
 // クラッシュする(検証の弱体化ではない。フェイルラウドの原則は維持)。
-function startServer(port) {
+function startServer(port, mountPath = "") {
   const server = http.createServer((req, res) => {
     let p = decodeURIComponent(req.url.split("?")[0]);
+    if (mountPath && p.startsWith(`${mountPath}/`)) p = p.slice(mountPath.length);
     if (p === "/") p = "/index.html";
     const file = path.join(ROOT, p);
     if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {

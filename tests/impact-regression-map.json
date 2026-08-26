@@ -161,6 +161,7 @@
       ],
       "suites": [
         "sw-integration",
+        "sw-self-heal",
         "v140",
         "xss-sanitizer"
       ]

@@ -68,6 +68,119 @@
     <div id="modalRoot" class="modal-root" aria-hidden="true"></div>
     <div id="toast" class="toast" role="status"></div>
     <div id="trackToast" class="twy-toast" role="status" hidden></div>
-    <script type="module" src="./app.js"></script>
+    <!-- v273: app.js自身がlink失敗する版ズレを直すため、依存を持たないclassic scriptをmoduleより先に置く。
+         scriptの取得失敗とwindowへ届くlink errorはブラウザ差があるため両方をboot中だけ捕捉する。
+         案内UIはapp.js/styles.cssが読めない状態でも表示できるよう、このbootstrapだけで完結させる。 -->
+    <script>
+      (function () {
+        var FLAG = "tcj-sw-self-heal-attempted-v1";
+        var CACHE_PREFIX = "taskchute-journal-pwa-";
+        var APP_SCOPE = new URL("./", location.href).href;
+        var handlingFailure = false;
+
+        function showRecoveryGuidance(reason) {
+          var box = document.createElement("div");
+          box.setAttribute("role", "alert");
+          box.setAttribute("data-tcj-recovery", reason);
+          box.style.cssText =
+            "position:fixed;inset:0;z-index:99999;background:#111216;color:#f2f2f5;" +
+            "display:flex;align-items:center;justify-content:center;padding:24px;" +
+            "font-family:-apple-system,sans-serif;text-align:center;line-height:1.7;";
+          var msg = reason === "offline"
+            ? "通信が切れているため読み込めませんでした。通信を確認してからもう一度開いてください。"
+            : "読み込みに失敗しました。復旧しない場合は「設定 > アプリ > Safari > 履歴とWebサイトデータを消去」を行ってから、もう一度アプリを開いてください。";
+          box.innerHTML =
+            '<div style="max-width:320px"><p style="margin:0 0 16px">' + msg + "</p>" +
+            '<button type="button" data-action="tcj-heal-retry" style="padding:10px 20px;border-radius:8px;' +
+            'border:none;background:#3d7fff;color:#fff;font-size:16px">もう一度試す</button></div>';
+          document.body.appendChild(box);
+          document.addEventListener("click", function (event) {
+            if (event.target.closest('[data-action="tcj-heal-retry"]')) window.location.reload();
+          });
+        }
+
+        function cleanupAppStorage() {
+          if (typeof caches === "undefined") return Promise.reject(new Error("Cache API unavailable"));
+          var cacheCleanup = caches.keys().then(function (keys) {
+            return Promise.all(keys.filter(function (key) {
+              return key.indexOf(CACHE_PREFIX) === 0;
+            }).map(function (key) { return caches.delete(key); }));
+          });
+          var swCleanup = navigator.serviceWorker
+            ? navigator.serviceWorker.getRegistrations().then(function (registrations) {
+                return Promise.all(registrations.filter(function (registration) {
+                  return registration.scope.indexOf(APP_SCOPE) === 0;
+                }).map(function (registration) { return registration.unregister(); }));
+              })
+            : Promise.resolve();
+          return Promise.all([cacheCleanup, swCleanup]);
+        }
+
+        function appEntryIsReachable() {
+          return fetch(new URL("./app.js", location.href), { cache: "no-store", credentials: "same-origin" })
+            .then(function (response) {
+              return response.ok && /(?:java|ecma)script/i.test(response.headers.get("content-type") || "");
+            }).catch(function () { return false; });
+        }
+
+        function handleBootFailure(checkReachability) {
+          if (handlingFailure) return;
+          handlingFailure = true;
+          var attempted = false;
+          var storageAvailable = true;
+          try { attempted = sessionStorage.getItem(FLAG) === "1"; } catch (e) { storageAvailable = false; }
+          if (!storageAvailable) {
+            showRecoveryGuidance("retry-failed");
+            return;
+          }
+          if (!navigator.onLine || attempted) {
+            showRecoveryGuidance(attempted ? "retry-failed" : "offline");
+            return;
+          }
+          var guarded = false;
+          try {
+            sessionStorage.setItem(FLAG, "1");
+            guarded = sessionStorage.getItem(FLAG) === "1";
+          } catch (e) {}
+          if (!guarded) {
+            showRecoveryGuidance("retry-failed");
+            return;
+          }
+          var reachable = checkReachability ? appEntryIsReachable() : Promise.resolve(true);
+          reachable.then(function (canRepair) {
+            if (!canRepair) {
+              showRecoveryGuidance("retry-failed");
+              return;
+            }
+            cleanupAppStorage().then(function () {
+              window.location.reload();
+            }).catch(function () { showRecoveryGuidance("retry-failed"); });
+          });
+        }
+
+        function isModuleLinkError(event) {
+          var message = event.message || (event.error && event.error.message) || "";
+          var syntaxError = !event.error || event.error.name === "SyntaxError";
+          var sourceInApp = !event.filename || new URL(event.filename, location.href).href.indexOf(APP_SCOPE) === 0;
+          return syntaxError && sourceInApp && (
+            /^(?:Uncaught )?(?:SyntaxError: )?The requested module .+ does not provide an export named .+$/i.test(message) ||
+            /^(?:Uncaught )?(?:SyntaxError: )?Importing binding name .+ is not found\.?$/i.test(message)
+          );
+        }
+
+        function onBootError(event) {
+          if (event.target && event.target.id === "appEntry") handleBootFailure(true);
+          else if (isModuleLinkError(event)) handleBootFailure(false);
+        }
+        function onAppEntryLoad(event) {
+          if (!event.target || event.target.id !== "appEntry") return;
+          window.removeEventListener("error", onBootError, true);
+          document.removeEventListener("load", onAppEntryLoad, true);
+        }
+        window.addEventListener("error", onBootError, true);
+        document.addEventListener("load", onAppEntryLoad, true);
+      })();
+    </script>
+    <script type="module" src="./app.js" id="appEntry"></script>
   </body>
 </html>

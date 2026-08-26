@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v272";
+const CACHE_NAME = "taskchute-journal-pwa-v273";
 // v272: IRON LOGの種目メニュー管理を追加した(APP_SHELL変更なし)。
 // v271: TOWERのNOW LANDING選択とFLIGHT LOGタップ編集を追加した(APP_SHELL変更なし)。
 // v270: TOWERのDEPARTURES(明日便)を削除した(APP_SHELL変更なし)。
@@ -346,7 +346,7 @@ self.addEventListener("message", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
+      Promise.all(keys.filter((key) => key.startsWith("taskchute-journal-pwa-") && key !== CACHE_NAME).map((key) => caches.delete(key)))
     )
   );
   self.clients.claim();

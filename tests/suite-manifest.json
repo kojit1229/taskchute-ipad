@@ -457,6 +457,29 @@
       }
     },
     {
+      "file": "sw-self-heal.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 42,
+      "assertionHash": "76c1f1d0d94a3cc2",
+      "sourceHash": "b00764181b193470",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": false
+      }
+    },
+    {
       "file": "timeline-layout-core.test.js",
       "kind": "node",
       "tier": "full",

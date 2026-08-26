@@ -1,0 +1,68 @@
+{
+  "version": 273,
+  "date": "2026-08-26",
+  "title": "SWキャッシュ固着の自己修復強化",
+  "summary": "古いService Workerキャッシュと最新app.jsの版ズレでモジュール読込が失敗した際、1セッション1回だけキャッシュとSW登録を自己修復し、再失敗時またはオフライン時は安全な案内へ切り替える起動ブートストラップを追加した。",
+  "changedFiles": [
+    "CHANGES_v273.md",
+    "docs/test-impact-map.generated.md",
+    "index.html",
+    "releases/v273.json",
+    "sw.js",
+    "tests/fixtures/dummy-sw.js",
+    "tests/helpers.js",
+    "tests/impact-regression-map.json",
+    "tests/suite-manifest.json",
+    "tests/sw-self-heal.test.js"
+  ],
+  "intent": [
+    "app.jsのモジュールグラフ外に自己修復処理を置き、app.js自体を読み込めない版ズレでも復旧経路を実行できるようにする。",
+    "sessionStorageの書込みと読戻しを確認できた場合だけ自動修復を1セッション1回に制限し、Storage例外または2回目失敗時は無限reloadせず人間向け案内へfail-closeする。",
+    "navigator.onLineがfalseのときはキャッシュ削除・SW解除・自動reloadを行わず、利用可能な整合キャッシュを破壊しない。",
+    "既存parser-inserted moduleの起動順序を維持し、app.jsとsw.js本体のfetch戦略を変更しない。"
+  ],
+  "changes": [
+    "index.htmlのapp.js読込直前に独立ブートストラップを追加し、script取得失敗はapp.jsの2xxかつJavaScript MIME到達確認後だけ、window errorはboot期間中の同一app由来SyntaxErrorかつ限定したnamed export不一致文言だけを自己修復へ結線した。",
+    "sessionStorageのsetItem直後にgetItemで読戻し確認し、Storage例外・永続化失敗・Cache API不在・app.js不達時は破壊操作や自動reloadをせず案内だけへfail-closeするようにした。",
+    "cache削除をtaskchute-journal-pwa-プレフィックスだけ、Service Worker解除を本アプリscope配下だけに限定し、同一originの他アプリを巻き添えにしないようにした。",
+    "v273以前からsw.js activateがCACHE_NAME以外のorigin内cacheを全削除していた潜在事象を確認し、TaskChuteプレフィックスの旧cacheだけを掃除するよう本リリースで根治した。",
+    "復旧ボタンをdata-action=tcj-heal-retryとbootstrap独自のdocument委譲へ変更し、破壊APIのwindow公開とインラインonerrorを廃止した。",
+    "tests/sw-self-heal.test.jsを35 assertionへ拡張し、他アプリdummy cache/registration生存、Storage例外2連load VM、script到達性、matcher正負例、復旧後SW再登録、正常系ゼロ副作用、2タブ同時失敗の有限収束を固定した。",
+    "Service WorkerのCACHE_NAMEをv273へ更新した。"
+  ],
+  "uncertainties": [
+    "iOS Safari PWA実機でnamed export不一致がresource errorまたはwindow補足のどちらに届くか、unregister直後のreloadで確実に最新版へ切り替わるかはK実機確認が必要。",
+    "案内文の設定導線はAppleサポートの現行一般表記へ合わせたが、K実機のiOSバージョンで最終文言確認が必要。",
+    "navigator.onLineはキャプティブポータル等で誤判定しうるためapp.jsの応答MIMEも確認するが、実機固有のポータル挙動はK実機確認が必要。",
+    "同一originの需給ナビ・旅のしおり+・stock_portforioがv273修復後も登録・オフラインcacheを維持することはdummyによる自動検証済みで、K実機でも最終確認が必要。"
+  ],
+  "reviewFocus": [
+    "named export不一致だけをwindow error補足対象とし、app.js評価開始後の一般的な実行時例外を自己修復で揉み消さないか。",
+    "初回失敗時にsessionStorageフラグの書込み・読戻しを確認し、TaskChute cache/scopeだけの削除・解除完了後にreloadしているか。",
+    "2回目失敗時とオフライン時にcache削除・unregister・自動reloadが発生せず、案内UIだけが表示されるか。",
+    "parser-inserted moduleの通常起動順序、boot完了後のerror listener解除、復旧後のcontrollerchange・SW再install・v273 cache安定が成立するか。",
+    "案内UIがapp.js/styles.cssに依存せず、16pxの再試行ボタンとAppleサポート準拠の設定手順を表示するか。"
+  ],
+  "verification": [
+    "CHROME_PATH=Microsoft Edgeでnode tests/sw-self-heal.test.js: 35 assertion全件成功。",
+    "sw-self-heal [1]-[9]で他アプリ生存、Storage例外2連load fail-close、WebKit matcher変異、script到達性、SW再登録、通常/オフライン起動ゼロ副作用、2タブ同時失敗の有限収束を確認。",
+    "CHROME_PATH=Microsoft Edgeでnode tests/run-all.js sw-integration sw-self-heal: 2スイートとも全件成功。",
+    "npm.cmd run test:manifest:write: PASS。sw-self-healはfull E2E、sync-storage + security-offline分類、固定wait 0件として生成。",
+    "CHROME_PATH=Microsoft Edge・作業ツリー内handoffミラー指定でnode scripts/release-gate.js releases/v273.json --final: exit 0。影響回帰とcoreを含め全件PASS。",
+    "最終gate内のapp-shell-precache、test-manifest、code-index、app.js/sw.js/src全JS構文、release-record check: PASS。"
+  ],
+  "notes": [
+    "実行コード差分はindex.html 追加114/削除1行とsw.js 追加2/削除2行の合算119行で、原則200行以内を維持した。",
+    "設計案のmodule script生成方式はnamed export不一致を捕捉できたが、既存sw-integrationのcontrollerchange時機を不安定化したため採用しなかった。parser-inserted moduleを維持し、直前に復旧処理を登録する方式で既存契約と自己修復を両立した。",
+    "Chromium/Edge実測ではnamed export不一致がwindow ErrorEventへSyntaxError名・[object Error]タグ・import元filename付きで届いたため、error.nameと同一app filenameに加えV8/WebKitの厳密文言で限定補足した。一般的なruntime errorは対象外。",
+    "sessionStorageはタブ単位のため2タブが同時に修復を実行しうる仕様を許容する。bootstrapはlocalStorageへ触れずデータは無害で、両タブのreloadが有限回で収束し、最終SW/controller/cacheが健全になることを2page E2Eで固定した。",
+    "v273以前のsw.js activateはCACHE_NAME以外の同一origin cacheを全削除する潜在バグを持っていた。v273の再登録E2Eで他アプリdummy cache消失として初めて顕在化し、TaskChuteプレフィックス限定へ修正して本リリースで根治した。",
+    "案内文はAppleサポートの現行一般表記に合わせた。K実機での導線・文言とiOS PWA上の自動復旧効果を最終確認事項とする。",
+    "app.js・styles.css・state・normalizeStateは変更しておらず、code-index再生成は不要。sw.js本体は監督者裁定によりactivate cleanupの1行だけ修正した。"
+  ],
+  "knownLimitations": [
+    "自動修復対象は到達性を確認できたmodule scriptの直接読込失敗と、限定したnamed export不一致のlink失敗であり、app.js評価開始後の一般的な実行時例外は対象外。",
+    "Safariのstar export entries・ambiguous multiple bindings文言は現行構成で発生しにくく誤発動面を広げないため自動修復対象外とし、案内UIへフォールバックする。",
+    "K実機確認で狭い範囲のcache削除+SW解除だけでは復旧しない場合、案内UIからSafariのWebサイトデータ削除へフォールバックする。"
+  ]
+}
