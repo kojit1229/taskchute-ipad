@@ -157,7 +157,8 @@ async function waitHealthy(page) {
   }, { expected: EXPECTED_CACHE, scope: APP_SCOPE }, { timeout: 15000 });
 }
 
-async function waitForPostCleanupRegistration(logs, timeout = 10000) {
+// v275着地時: gate直列実行の高負荷下で10秒上限が偽赤になった(単独実行は緑)ため、条件待ちの上限のみ30秒へ拡大(検証内容は不変)。
+async function waitForPostCleanupRegistration(logs, timeout = 30000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     const lastUnregister = logs.events.map((item) => item.type).lastIndexOf("unregistered");
@@ -168,7 +169,7 @@ async function waitForPostCleanupRegistration(logs, timeout = 10000) {
   throw new Error(`修復cleanup後のSW再登録がありません: ${JSON.stringify(logs.events)}`);
 }
 
-async function waitForNavigationCount(readCount, minimum, timeout = 10000) {
+async function waitForNavigationCount(readCount, minimum, timeout = 30000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     if (readCount() >= minimum) return;

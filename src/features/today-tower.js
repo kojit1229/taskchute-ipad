@@ -285,9 +285,15 @@ function orderedGateRules() {
     .map(({ rule }) => rule);
 }
 
+// v276: app.jsのワンタップ実績補完とGATE描画で母集団条件を共有する。
+// oneTapだけを条件にすると非ルーティンが混入するため、categoryを正本にして除外条件も揃える。
+export function isRoutineGateBlock(block) {
+  return block?.category === "ルーティン" && !block.oneTap && !block.deleted;
+}
+
 function orderedGateBlocks(blocks) {
   const order = new Map(orderedGateRules().map((rule, index) => [String(rule.id), Number.isFinite(rule.order) ? rule.order : index]));
-  return blocks.filter((block) => block.category === "ルーティン" && !block.oneTap && !block.deleted)
+  return blocks.filter(isRoutineGateBlock)
     .map((block, index) => ({ block, index }))
     .sort((a, b) => (order.get(String(a.block.recurrenceGroupId)) ?? Number.MAX_SAFE_INTEGER)
       - (order.get(String(b.block.recurrenceGroupId)) ?? Number.MAX_SAFE_INTEGER) || a.index - b.index)

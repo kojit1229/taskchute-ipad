@@ -25,7 +25,7 @@ import { configureInstruments, renderInstruments } from "./src/features/instrume
 import { configureTrackUi, maybeShowTrackProgressToast } from "./src/features/track-ui.js";
 // v182: 新トップレベル「今日」コックピット。既存featureと同じ依存注入型で循環importを避ける。
 import { configureToday, renderToday } from "./src/features/today.js";
-import { setTowerArrivalSelection } from "./src/features/today-tower.js";
+import { isRoutineGateBlock, setTowerArrivalSelection } from "./src/features/today-tower.js";
 // v168: app.js分割・段階4-2(WishタブTier1のCRUD・描画を抽出)。src/features/wish.js
 //   はstateをimportするがapp.js自身はimportしない(循環import回避)。
 //   getWishProjectはapp.js側の週次Wish選定からも共有importする。
@@ -9089,15 +9089,16 @@ function subtractMinutesFromDateTime(dateTimeStr, minutes) {
 }
 
 // v150レビュー対応(項目2、両レビュー一致): 即完了で実績開始時刻を自動記録する際、
-// 単純に「現在時刻」を入れると、未着手のまま先取り完了した場合にactualStartAt=actualEndAtの
-// 0分実績になり、日報「時間実行」の集計(実績両方ありのBlockだけ分加算する分岐)が抜け落ちる。
-// plannedStartAtがあればそれを使い(実態に近い)、無ければ終了時刻をそのまま使う。
+// 非ルーティンBlockはplannedStartAtがあればそれを使い(実態に近い)、無ければ終了時刻を使う。
+// v276(K指示2026-08-27): GATE対象ルーティンだけは、ワンタップを実際に押した時刻をFLIGHT LOGへ
+// 残すため、未開始ならplannedStartAtよりactualEndAtを優先し、意図的に0分実績とする。
 // さらに、plannedStartAtが終了時刻より後(未来のBlockを先取り完了した等)で開始>終了に
 // なってしまう場合は、終了−予定所要(estimateMinか、plannedStart/End差)ぶん巻き戻す
 // (それも無ければ開始=終了、従来どおり0分実績を許容)。
 // 日時文字列は "YYYY-MM-DDTHH:mm" 形式でゼロ埋めされているため、文字列としての大小比較が
 // そのまま時系列の前後判定になる(既存のlocalDateTimeToMs節と同じ前提)。
 function quickCompleteActualStart(block, endDateTime) {
+  if (!block.actualStartAt && isRoutineGateBlock(block)) return endDateTime;
   let start = block.actualStartAt || block.plannedStartAt || endDateTime;
   if (start > endDateTime) {
     let estimateMin = Number.isFinite(block.estimateMin) && block.estimateMin > 0 ? block.estimateMin : null;
@@ -12348,6 +12349,44 @@ function dateToLocalDateTime(date) {
   return `${dateToISO(date)}T${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
 }
 
+// v276: datetime-localへコードが書く値を最寄りの5分境界へ整列する。
+// iOS SafariのUTC誤解釈を避けるためDateへ文字列を渡さず、日付繰り上がりも数値分解した
+// 年月日だけで処理する。秒は丸め判定に含めず落とす(分の0〜2は下、3〜4は上)。
+function roundDateTimeTo5Min(dateTime) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(String(dateTime || ""));
+  if (!match) return "";
+  let year = Number(match[1]);
+  let month = Number(match[2]);
+  let day = Number(match[3]);
+  let hour = Number(match[4]);
+  let minute = Number(match[5]);
+  const second = Number(match[6] || 0);
+  const daysInMonth = (y, m) => {
+    if (m === 2) return (y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0)) ? 29 : 28;
+    return [4, 6, 9, 11].includes(m) ? 30 : 31;
+  };
+  if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)
+    || hour > 23 || minute > 59 || second > 59) return "";
+  minute = Math.round(minute / 5) * 5;
+  if (minute === 60) {
+    minute = 0;
+    hour += 1;
+  }
+  if (hour === 24) {
+    hour = 0;
+    day += 1;
+    if (day > daysInMonth(year, month)) {
+      day = 1;
+      month += 1;
+      if (month === 13) {
+        month = 1;
+        year += 1;
+      }
+    }
+  }
+  return `${String(year).padStart(4, "0")}-${pad2(month)}-${pad2(day)}T${pad2(hour)}:${pad2(minute)}`;
+}
+
 function parseDate(date) {
   const [year, month, day] = date.split("-").map(Number);
   return new Date(year, month - 1, day);
@@ -13756,12 +13795,9 @@ function openTimelineNewBlock(startMinute) {
 
 function toLocalInput(isoString) {
   if (!isoString) return "";
-  // v18: Date を経由せず、文字列をそのまま使う(TZ 変換バグを避ける)
-  // 既に "YYYY-MM-DDTHH:mm" or "YYYY-MM-DDTHH:mm:ss" 形式ならそのまま 16 文字に整形
-  const s = String(isoString);
-  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/.exec(s);
-  if (m) return `${m[1]}T${m[2]}:${m[3]}`;
-  return "";
+  // v276: ネイティブdatetime-localへ表示する全既存値を5分境界へ整列する。
+  // Dateを経由しないTZ安全な文字列処理というv18の契約はroundDateTimeTo5Minが維持する。
+  return roundDateTimeTo5Min(isoString);
 }
 
 function fromLocalInput(value) {
