@@ -1,0 +1,60 @@
+{
+  "version": 270,
+  "date": "2026-08-26",
+  "title": "TOWER DEPARTURES削除",
+  "summary": "Kの削除裁定に従い、TOWERのDEPARTURES（明日便）表示・遷移action・専用CSSと削除起点の死にコードを除去した。",
+  "changedFiles": [
+    "app.js",
+    "CHANGES_v270.md",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v270.json",
+    "src/features/today-tower.js",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/tower-core.test.js",
+    "tests/v270.test.js"
+  ],
+  "intent": [
+    "TOWERから不要と裁定されたDEPARTURES（明日便）だけを削除する。",
+    "ARRIVALS・NOW LANDING・FLIGHT LOG・GATEなど周辺セクションのDOMと表示順を維持する。",
+    "削除後の専用CSS・action・helperを残さず、共有helperは参照確認後に維持する。"
+  ],
+  "changes": [
+    "renderTowerBoardから明日便の取得・先頭便要約・DEPARTURESボタンを削除し、未使用になったnow引数とlocalISO helperを除去した。",
+    "app.jsのdepartures-open-tomorrow登録とstyles.cssの.tower-departures専用ルール一式を削除した。boardFlights・flightTime・blocksForDateはARRIVALS等の参照が残るため維持した。",
+    "tower-coreのDEPARTURES正期待3件と0便メッセージ期待を削除し、明日便データが存在しても旧要素・action・タイトルを描画しない負方向検証、ARRIVALS/GATE表示、左列と390/768/1024pxの順序検証へ追随した。",
+    "action-registry-coreのゴールデンとapp.js直接登録一覧から旧actionだけを除去し、保存則・完全一致assertionは維持した。",
+    "v270静的回帰テストを追加し、DEPARTURES残骸の不在、共有boardFlights参照、影響テストの負方向契約、CACHE_NAME v270を固定した。",
+    "Service WorkerのCACHE_NAMEをv270へ更新し、code-indexとtest-manifestを再生成した。"
+  ],
+  "uncertainties": [
+    "iOS実機PWAでのService Worker更新、オフライン起動、390/768/1024pxの最終目視は監督者側で確認が必要。3幅のDOM順序と横はみ出しはtower-coreで自動検証した。"
+  ],
+  "reviewFocus": [
+    "DEPARTURESの描画・明日便データ組み立て・旧action・専用CSS・localISOが残っていないか。",
+    "boardFlights・flightTime・blocksForDateなどARRIVALS等と共有する処理を誤って削除していないか。",
+    "ARRIVALS・NOW LANDING・FLIGHT LOG・GATEのDOM、表示、順序が削除前のままか。",
+    "既存2テストはDEPARTURES正期待だけを除き、他assertionを削除・skip・弱体化していないか。"
+  ],
+  "verification": [
+    "node --check app.js / src/features/today-tower.js / tests/v270.test.js / tests/tower-core.test.js / tests/action-registry-core.test.js: PASS。",
+    "node tests/v270.test.js: ALL PASS。",
+    "node tests/action-registry-core.test.js: ALL PASS（旧action削除後も226 actionの保存則・完全一致を維持）。",
+    "CHROME_PATH=Microsoft Edgeでnode tests/tower-core.test.js: ALL PASS（DEPARTURES負方向、ARRIVALS/GATE、左列、390/768/1024px順序を含む）。",
+    "npm run code:index:write / npm run test:manifest:write: PASS（154 suites）。",
+    "ミラーhandoff指定 release-record --write / --check: PASS（本番handoff反映は監督者側）。",
+    "CHROME_PATH=Microsoft Edge・ミラーhandoff指定 release-gate --final: exit 0。"
+  ],
+  "notes": [
+    "実行コード差分はapp.js/src/features/today-tower.js/styles.css/sw.js合計で追加4行・削除31行（正味-27行）。",
+    "Test-Reduction: 削除対象UIの正期待だけを除き、同じtower-core内の実DOM負方向検証と周辺表示・順序検証へ置換した。他のassertionは維持した。",
+    "新しいstateフィールド、保存経路、日付文字列パース、入力欄、APP_SHELL項目は追加していない。"
+  ],
+  "knownLimitations": [
+    "明日tasksへの専用ショートカットは削除される。明日の確認は既存の日付ナビゲーションを使う。"
+  ]
+}

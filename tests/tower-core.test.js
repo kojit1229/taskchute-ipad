@@ -49,14 +49,14 @@ function check(name, cond, extra = "") {
     return page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).settings.todaySkin, KEY);
   }
 
-  async function seedBoard(arrivals, departures = [], tasks = null) {
-    await page.evaluate(({ KEY, arrivals, departures, tasks }) => {
+  async function seedBoard(blocks, tasks = null) {
+    await page.evaluate(({ KEY, blocks, tasks }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.currentView = "today";
-      s.blocks = [...arrivals, ...departures];
+      s.blocks = blocks;
       if (tasks) s.tasks = tasks;
       localStorage.setItem(KEY, JSON.stringify(s));
-    }, { KEY, arrivals, departures, tasks });
+    }, { KEY, blocks, tasks });
     await page.reload();
     await page.waitForSelector(".today-tower", { state: "attached" });
   }
@@ -180,11 +180,11 @@ function check(name, cond, extra = "") {
     arrivals.push(block("arr-completed", "完了済み便", today, 8 * 60, {
       completed: true, actualStartAt: atMinute(today, 8 * 60), actualEndAt: atMinute(today, 8 * 60 + 25)
     }));
-    const departures = [
+    const tomorrowBlocks = [
       block("dep-late", "明日15時", tomorrow, 15 * 60), block("dep-first", "明日8時半", tomorrow, 8 * 60 + 30),
       block("dep-third", "明日13時", tomorrow, 13 * 60), block("dep-second", "明日10時", tomorrow, 10 * 60)
     ];
-    await seedBoard(arrivals, departures);
+    await seedBoard([...arrivals, ...tomorrowBlocks]);
     check("ARRIVALSは最大11行", await page.locator(".tower-arrival-row").count() === 11);
     check("窓外2便を数字だけで要約する", (await page.locator(".tower-flight-summary").textContent())?.trim() === "他 2 便");
     check("callsign列は存在しない", await page.locator(".tower-arrival-row .tower-callsign").count() === 0);
@@ -266,7 +266,7 @@ function check(name, cond, extra = "") {
       { id: "task-no-estimate", title: "見積なしTask", status: "todo", dueDate: today, estimateMin: null, deleted: false },
       { id: "task-future", title: "未来期日Task", status: "todo", dueDate: tomorrow, estimateMin: 50, deleted: false }
     ];
-    await seedBoard([endedOnlyBlock, completedBlock, nextBlock, taskBlock], departures, tasks);
+    await seedBoard([endedOnlyBlock, completedBlock, nextBlock, taskBlock, ...tomorrowBlocks], tasks);
     check("終了のみBlockはARRIVALSから消える", await page.locator('[data-flight-id="ended-only"].tower-arrival-row').count() === 0);
     check("終了のみBlockはFLIGHT LOGへ終了ラベル付きで出る", await page.locator('[data-flight-id="ended-only"] .tower-log-state[data-state="ended"]', { hasText: "終了" }).count() === 1);
     check("completed+actualEndAtは従来どおり完了実績として出る", await page.locator('[data-flight-id="completed-actual"] .tower-log-state[data-state="completed"]', { hasText: "完了" }).count() === 1);
@@ -282,23 +282,20 @@ function check(name, cond, extra = "") {
     await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).blocks.some((item) => item.taskId === "task-plan"), KEY);
     check("予定行タップは既存task-todayでBlockを生成し二重表示を消す", await page.locator('.tower-task-plan[data-id="task-plan"]').count() === 0);
 
-    console.log("[9] DEPARTURESは明日便を1行縮約しtasksタブを明日で開く");
-    const departuresLine = page.locator('.tower-departures[data-action="departures-open-tomorrow"]');
-    check("DEPARTURESは1行だけ", await departuresLine.count() === 1 && await page.locator(".tower-departure-row").count() === 0);
-    check("全4便と先頭便を要約", ((await departuresLine.textContent()) || "").replace(/\s+/g, " ").includes("明日 4便 / 最初は 08:30 明日8時半"));
-    await departuresLine.click();
-    await page.waitForSelector('#app[data-view="tasks"]');
-    const departuresDestination = await page.evaluate((KEY) => {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      return { view: s.currentView, date: s.selectedDate };
-    }, KEY);
-    check("タップでview=tasksかつselectedDate=明日", departuresDestination.view === "tasks" && departuresDestination.date === tomorrow,
-      JSON.stringify(departuresDestination));
+    console.log("[9] DEPARTURESは明日便データがあっても描画せず周辺セクションを維持する");
+    check("DEPARTURES要素・旧action・明日便タイトルを描画しない",
+      await page.locator('.tower-departures, [data-action="departures-open-tomorrow"], .tower-board :text("明日8時半")').count() === 0);
+    const leftSectionOrder = await page.locator(".tower-col-left > section").evaluateAll((sections) =>
+      sections.map((section) => [...section.classList].find((name) => name.startsWith("sec-"))));
+    check("左列はNOW LANDING→ARRIVALS→FLIGHT LOG順を維持", JSON.stringify(leftSectionOrder) === JSON.stringify(["sec-rwy", "sec-arrivals", "sec-log"]),
+      JSON.stringify(leftSectionOrder));
+    check("ARRIVALSとGATEは引き続き表示", await page.locator(".sec-arrivals .tower-arrivals").count() === 1
+      && await page.locator(".sec-gates").count() === 1);
 
     console.log("[10] tickerは行を再構築せず状態文字列をフリップ更新する");
     const crossing = [block("flip-first", "境界便", today, 12 * 60), block("flip-next", "次便", today, 13 * 60)];
     await page.clock.setFixedTime(fixedTime(0));
-    await seedBoard(crossing, [], []);
+    await seedBoard(crossing, []);
     // 起動時同期(404)後のアプリ全体render()がDOMを一度差し替えるため、沈静化してから同一性を計測する。
     await page.waitForLoadState("networkidle");
     const crossingStatus = page.locator('.tower-arrival-row[data-flight-id="flip-first"] .tower-status');
@@ -434,7 +431,7 @@ function check(name, cond, extra = "") {
     await seedT5([]);
     check("Block 0件はempty空状態", await page.locator('.tower-nowhud[data-status="empty"]').count() === 1
       && (await page.locator(".tower-nowhud").textContent())?.trim() === "本日の着陸予定はありません");
-    check("明日0便は空メッセージの1行", ((await page.locator(".tower-departures").textContent()) || "").includes("明日の便はまだありません"));
+    check("Block 0件でもDEPARTURESは復活しない", await page.locator('.tower-departures, [data-action="departures-open-tomorrow"]').count() === 0);
 
     console.log("[19-b] 実績モーダル完了で当日日報mdを再生成する");
     const actualPath = block("report-actual", "実績モーダル経路", today, 11 * 60, { actualStartAt: atMinute(today, 11 * 60) });

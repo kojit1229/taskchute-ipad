@@ -71,11 +71,12 @@ function check(name, cond, extra = "") {
   else { failures++; console.log(`  ❌ ${name} ${extra}`); }
 }
 
-// §6-1: click dispatcherから確定させたゴールデンリスト(削除済み機能のactionを除く209件)。
+// §6-1: click dispatcherから確定させたゴールデンリスト(削除済み機能のactionを除く208件)。
 // 増減・リネームがあれば、それが意図した変更(action追加/削除/移行)かどうかを必ず確認すること。
 // v235: set-sleepは主観睡眠の入力経路廃止に伴う意図的削除。
+// v270: departures-open-tomorrowはDEPARTURES削除に伴う意図的削除。
 const GOLDEN_CLICK_ACTIONS = [
-  "nav", "open-iron-log", "instruments-open-iron-log", "departures-open-tomorrow", "today-replan", "save-tower-journal",
+  "nav", "open-iron-log", "instruments-open-iron-log", "today-replan", "save-tower-journal",
   "focus-toggle-gate", "focus-toggle-atis", "focus-toggle-journal", "focus-mode",
   "early-bird-check", "tower-gate-edit-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move",
   "date-prev", "date-next", "today",
@@ -201,7 +202,7 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
   // で確信が持てない)、body-scan-*(ポモドーロ完了時トリガー)、
 // は従来どおり移行せず、if連鎖に残した(下のEXPECTED_REMAINING_IF_CHAINに含まれる)。
 const APP_JS_REGISTERED_ACTIONS = [
-  "nav", "open-iron-log", "instruments-open-iron-log", "departures-open-tomorrow", "today-replan", "save-tower-journal",
+  "nav", "open-iron-log", "instruments-open-iron-log", "today-replan", "save-tower-journal",
   "early-bird-check", "tower-gate-edit-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move",
   "toggle-show-suspended", "toggle-wbs-hide-done", "toggle-tasks-show-future",
   "toggle-wbs-edit", "wbs-collapse-all",

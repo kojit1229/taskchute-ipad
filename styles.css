@@ -3010,7 +3010,7 @@ h3 {
   75% { opacity: 1; }
   100% { opacity: 0; }
 }
-/* v204: TOWER T3。読み取り専用のARRIVALS/DEPARTURESボードを追加する。 */
+/* v204: TOWER T3。読み取り専用ボードの基礎スタイル。 */
 /* v224: 第3弾(TOWER意匠の全タブ統一)先行分。--tower-*トークンを.tower-skin(各タブの
    TOWER化ラッパ)にも共有する。トークン定義の正本はここ1箇所のみ(タブ側での再定義禁止)。 */
 .today-tower, .tower-skin {
@@ -3133,15 +3133,6 @@ h3 {
 .tower-log-row .tower-touchdown { left: var(--tower-plane-x, 50%); }
 .tower-log-empty { padding: 12px 10px; color: var(--tower-text); font-family: system-ui, sans-serif; opacity: .6; }
 .tower-log-foot { padding: 6px 8px; color: var(--tower-cyan); font-size: 9.5px; letter-spacing: .08em; opacity: .8; }
-.tower-departures {
-  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 8px 10px;
-  border: 0; border-top: 1px dashed var(--tower-line); color: var(--tower-cyan); font: inherit;
-  font-size: 10.5px; text-align: left; letter-spacing: .04em; background: transparent;
-}
-.tower-departures b { color: var(--tower-cyan); font-weight: 700; letter-spacing: .1em; white-space: nowrap; }
-.tower-departures span { min-width: 0; overflow: hidden; color: var(--tower-text); font-family: system-ui, sans-serif; text-overflow: ellipsis; white-space: nowrap; opacity: .85; }
-.tower-departures::after { content: "›"; margin-left: auto; color: var(--tower-cyan); font-size: 14px; opacity: .7; }
-.tower-departures:focus-visible { outline: 2px solid var(--tower-amber); outline-offset: -2px; }
 @keyframes tower-board-flip { 0% { opacity: .2; transform: perspective(120px) rotateX(90deg); } 100% { opacity: 1; transform: perspective(120px) rotateX(0); } }
 /* Codexレビュー反映: 720px以下は.main-paneの高さが不定でmin-height:100%が解決されず背景が途切れるため、viewport基準にする。 */
 @media (max-width: 720px) { .today-tower { min-height: 100vh; min-height: 100dvh; } }

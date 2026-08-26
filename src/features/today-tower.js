@@ -56,11 +56,6 @@ function dayLeftText(now) {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-function localISO(date) {
-  return [date.getFullYear(), date.getMonth() + 1, date.getDate()]
-    .map((value, index) => String(value).padStart(index ? 2 : 4, "0")).join("-");
-}
-
 function isNightHour(hour) {
   return hour >= 21 || hour < 5;
 }
@@ -175,21 +170,12 @@ function flightRow(flight) {
   </div>`;
 }
 
-function renderTowerBoard(now, arrivalFlights) {
+function renderTowerBoard(arrivalFlights) {
   const arrivals = arrivalWindow(arrivalFlights);
-  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-  const departures = boardFlights(blocksForDate(localISO(tomorrow)), 0);
-  const firstDeparture = departures[0];
-  const departureSummary = firstDeparture
-    ? `明日 ${departures.length}便 / 最初は ${flightTime(firstDeparture.plannedMin)} ${escapeHTML(firstDeparture.title)}`
-    : "明日の便はまだありません";
   return `<section class="tower-board sec-arrivals">
     <div class="tower-arrivals"><h2>ARRIVALS <span>本日</span></h2>
       <div id="towerArrivalRows" data-flight-set="${flightSetKey(arrivalFlights)}">${arrivals.rows.map((flight) => flightRow(flight)).join("")}</div>
       <div class="tower-flight-summary" id="towerArrivalSummary">${arrivals.omitted ? `他 ${arrivals.omitted} 便` : ""}</div>
-      <button type="button" class="tower-departures" data-action="departures-open-tomorrow">
-        <b>DEPARTURES ▸</b><span>${departureSummary}</span>
-      </button>
     </div>
   </section>`;
 }
@@ -349,7 +335,7 @@ function renderTodayTower() {
     ${renderTopbandPC()}
     <div class="tower-col-left">
       ${renderTowerRunway(now, blocks)}
-      ${renderTowerBoard(now, flights)}
+      ${renderTowerBoard(flights)}
       ${renderFlightLog(today, blocks)}
     </div>
     <div class="tower-col-center">${focusVisibility.gate ? renderTowerGates(blocks) : ""}</div>

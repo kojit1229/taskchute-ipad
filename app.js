@@ -331,10 +331,6 @@ configureTimeline({
 registerActions({
   "nav": ({ target }) => setView(target.dataset.view),
   "open-iron-log": () => setView("iron-log"),
-  "departures-open-tomorrow": () => {
-    setSelectedDate(addDays(todayISO(), 1));
-    setView("tasks");
-  },
   "today-replan": () => requestReplan(),
   "save-tower-journal": ({ target }) => {
     const date = target.dataset.date || todayISO();
