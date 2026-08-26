@@ -634,9 +634,9 @@
         "planning-execution",
         "journal-health"
       ],
-      "assertionSignals": 50,
-      "assertionHash": "25b8c6788fe59a07",
-      "sourceHash": "ab5b56b555fdc36c",
+      "assertionSignals": 51,
+      "assertionHash": "ee7ad5c49fca1794",
+      "sourceHash": "fe402efcfbbe07ed",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2402,9 +2402,9 @@
       "domains": [
         "sync-storage"
       ],
-      "assertionSignals": 40,
-      "assertionHash": "c74b997d9b3f94b8",
-      "sourceHash": "eb05810c02d3cde6",
+      "assertionSignals": 41,
+      "assertionHash": "881e6240d4cdd46b",
+      "sourceHash": "737bfc64436e1bde",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2504,9 +2504,9 @@
         "ui-responsive",
         "security-offline"
       ],
-      "assertionSignals": 58,
-      "assertionHash": "86de2a509ba737e2",
-      "sourceHash": "bdbfcc2cd2151197",
+      "assertionSignals": 59,
+      "assertionHash": "f873c4a0f9e991cc",
+      "sourceHash": "3d8192b912855833",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2580,8 +2580,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 59,
-      "assertionHash": "9e37ac5d16777e4a",
-      "sourceHash": "4c591a6e07685314",
+      "assertionHash": "13625caa25a83645",
+      "sourceHash": "b03821c8f9822297",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2608,6 +2608,29 @@
       "assertionSignals": 22,
       "assertionHash": "e33f158f0ce1a237",
       "sourceHash": "d8988db6f5a3bd99",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v268.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 10,
+      "assertionHash": "490a4706a9b4269c",
+      "sourceHash": "2efb1c559e76e3de",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

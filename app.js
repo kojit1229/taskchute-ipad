@@ -3074,8 +3074,10 @@ function candidateBlocksForWeek(value, weekStart) {
   });
 }
 
-function twyPaceLabel(track, pace) {
+// v268: WBS/COUNTDOWNとも未更新はペース不明、許容幅内は順調色へ統一する。
+function twyPaceLabel(track, pace, status) {
   if (track.kind !== "numeric" || pace.invalid) return { sign: "", text: "—" };
+  if (status.state === "stale") return { sign: "", text: "不明" };
   const diff = roundToStep(pace.diffRaw, track.valueStep);
   if (diff === "") return { sign: "", text: "—" };
   return { sign: pace.diffNorm >= -Number(pace.tolerance || 0) ? "pos" : "neg",
@@ -3116,7 +3118,7 @@ function buildTrackDigest() {
     const pace = track.kind === "numeric" ? paceNumeric(track, latestValue, today) : paceMilestone(track, today);
     const lastObservedISO = measurement ? String(measurement.observedAt || "").slice(0, 10) : track.startDate;
     const status = trackStatus(track, pace, latestValue, lastObservedISO, today);
-    return { track, status, paceLabel: twyPaceLabel(track, pace), metaLabel: twyMetaLabel(track, latestValue, measurement) };
+    return { track, status, paceLabel: twyPaceLabel(track, pace, status), metaLabel: twyMetaLabel(track, latestValue, measurement) };
   }).filter(Boolean);
   return { hasMeta, score, prevScore, candidateCount, scoreTarget: state.settings.twelveWeekScoreTarget,
     tracksFootLines: selectTrackFooter(entries) };
@@ -3194,7 +3196,8 @@ function autoCommitWeekIfNeeded(block) {
   if (!block?.date) return;
   const weekStart = weekRange(block.date).weekStart;
   if (weekStart !== weekRange(todayISO()).weekStart) return;
-  if ((state.weeklyCommitments || []).some((record) => record.id === "wcw_" + weekStart)) return;
+  // v268: tombstone週メタは未確定として扱い、表示側と同じ意味論で自動確定する。
+  if ((state.weeklyCommitments || []).some((record) => record.id === "wcw_" + weekStart && !record.deleted)) return;
   const candidates = candidateBlocksForWeek(state, weekStart);
   if (!candidates.some((candidate) => candidate.id === block.id)) return;
   const now = nowDateTime();
@@ -5680,7 +5683,7 @@ function twyNumericValueHTML(track, latestValue, pace, status, achievedISO) {
     paceHTML = `<span class="twy-pace">ペース不明</span>`;
   } else if (!pace.invalid) {
     const diff = roundToStep(pace.diffRaw, track.valueStep);
-    if (diff !== "") paceHTML = `<span class="twy-pace ${pace.diffNorm >= 0 ? "pos" : "neg"}">${diff !== "0" && pace.diffRaw >= 0 ? "+" : ""}${diff}${unit}</span>`;
+    if (diff !== "") paceHTML = `<span class="twy-pace ${pace.diffNorm >= -Number(pace.tolerance || 0) ? "pos" : "neg"}">${diff !== "0" && pace.diffRaw >= 0 ? "+" : ""}${diff}${unit}</span>`;
   }
   const valueHTML = Number.isFinite(current) && Number.isFinite(goal)
     ? `<span class="twy-val">${current}<small>/${goal}${unit}</small></span>` : "";
@@ -12868,7 +12871,8 @@ function trackGuardHTML(projectId, kind, draft) {
     [milestones.length >= 2 && dates.length === milestones.length
       && dates.slice(1).every((date, i) => daysBetween(dates[i], date) <= 21), "隣接節目は3週(21日)以内を目安にしてください"]
   );
-  return `<div class="twy-guard-title">粒度ガード(3チェック・12WY 5ルールの簡略版)</div>${rows.map(([ok, text]) =>
+  // v268: numeric 3件/milestone 5件で変わるため、見出しに固定件数を出さない。
+  return `<div class="twy-guard-title">粒度ガード(12WY 5ルールの簡略版)</div>${rows.map(([ok, text]) =>
     `<div class="twy-guard-item ${ok ? "ok" : "ng"}">${ok ? "✓" : "△"} ${text}</div>`).join("")}`;
 }
 

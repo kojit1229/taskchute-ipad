@@ -230,6 +230,12 @@ console.log("[3] autoCommitWeekIfNeeded: 当週候補全件・候補起点ガー
   check("当週でも非候補Block起点のauto確定はno-op",
     nonCandidate.weeklyCommitments.length === 0 && sandbox.saveCount === 0);
 
+  const tombstoned = baseState({ weeklyCommitments: [weekMeta("2026-08-22", { deleted: true })] });
+  setState(tombstoned);
+  sandbox.autoCommitWeekIfNeeded(tombstoned.blocks[0]);
+  check("tombstone週メタは未確定としてauto確定し直す", records("week").length === 1
+    && records("week")[0].deleted === false && records("item").length === 1 && sandbox.saveCount === 1);
+
   const past = baseState({ blocks: [block("past", "t1", "2026-08-15")] });
   setState(past);
   sandbox.autoCommitWeekIfNeeded(past.blocks[0]);

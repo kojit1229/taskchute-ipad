@@ -316,7 +316,8 @@ function contrastRatio(foreground, background) {
       tracks: [numericTrack("baseline-only", "p-baseline")], trackMeasurements: [] });
     await signal().click();
     const baselineText = await mobile().locator(".twy-track-line").textContent();
-    check("measurement 0件はbaselineValueでpace/metaを直接表示", baselineText.includes("-22章")
+    check("measurement 0件で8日以上なら具体paceを出さず未更新表示", baselineText.includes("未更新")
+      && baselineText.includes("不明") && !baselineText.includes("-22章")
       && baselineText.includes("0/100章"), baselineText);
 
     await seed({ weeklyCommitments: scoredCommitments(1, 1), projects: [project("p-tolerance")],

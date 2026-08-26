@@ -221,6 +221,9 @@ class FakeToast {
     state = reset(); show(); runTimers();
     check("B-7 #8 8秒自動消滅は測定・日報・保存なし", toast.hidden
       && recordCalls.length === 0 && reportCalls.length === 0 && saveCalls === 0);
+    show();
+    check("v268 8秒自動消滅後も同一track同日は再表示しない", toast.hidden
+      && timers.size === 0 && recordCalls.length === 0 && reportCalls.length === 0 && saveCalls === 0);
 
     state = reset(); show(); dispatch("twy-toast-later"); show();
     check("B-7 #9 同一track同日2回目は再表示しない", toast.hidden && timers.size === 0);

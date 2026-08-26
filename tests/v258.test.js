@@ -303,6 +303,15 @@ function sourceBetween(source, startMarker, endMarker) {
     check("型なしconfirm Yesはmanual close", dialogs.length === 1 && state.tracks[0].status === "closed"
       && state.tracks[0].closedReason === "manual");
 
+    await seed({ tracks: [numericTrack()] });
+    await page.locator('[data-modal-field="is12WY"]').uncheck();
+    acceptDialog = true;
+    await page.locator('[data-action="modal-save"]').click();
+    state = await savedState();
+    check("v268 is12WYチェックボックス直接OFF→confirm YesでProject解除+track close",
+      dialogs.length === 1 && state.projects[0].twelveWeekStartDate === ""
+      && state.tracks[0].status === "closed" && state.tracks[0].closedReason === "manual");
+
     await seed({ is12WY: false, cycle: "" });
     await page.locator('[data-modal-field="is12WY"]').check();
     await selectKind("numeric");
