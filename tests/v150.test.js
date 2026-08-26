@@ -11,6 +11,8 @@
 //   レビュー対応追加分:
 //     A8: 実績開始時刻はplannedStartAt優先(0分実績にならない)+開始>終了になる場合は
 //         終了−予定所要ぶんに丸め込まれる(項目2)。
+//     v276仕様変更(K指示2026-08-27): 上記は非ルーティンBlockでは維持する。GATE対象ルーティン
+//         だけは押下時刻でstart=endの0分実績にするため、A1/A8の非ルーティン期待値は残す。
 //     A9: 手入力済みの充放電はprefillEnergyで上書きされない(項目3)。
 //     A10: 完了解除(同セッション)で自動記録した実績時刻・充放電が元へ復元される(項目4)。
 //     A11: トースト消滅後、透明な当たり判定(pointer-events)が残留しない(項目1、elementFromPoint)。
@@ -137,8 +139,8 @@ function check(name, cond, extra = "") {
     check("即完了でcompletedになる", b.completed === true);
     check("実績開始時刻が自動記録される", !!b.actualStartAt, b.actualStartAt);
     check("実績終了時刻が自動記録される", !!b.actualEndAt, b.actualEndAt);
-    // v150レビュー対応(項目2、両レビュー一致): actualStartAt=actualEndAt(0分実績)にならない
-    // ことを確認する。plannedStartAt(09:00)が現在時刻(18:00固定)より過去なので、
+    // v276仕様変更理由: GATE対象ルーティンだけが押下時刻=0分実績となる。ここは非ルーティンの
+    // 回帰契約なので、plannedStartAt(09:00)が現在時刻(18:00固定)より過去なら、
     // 実績開始時刻はplannedStartAtを優先して使うはず(単純な「現在時刻」ではない)。
     check("実績開始時刻はplannedStartAt(過去)を優先する(現在時刻に丸められない)",
       b.actualStartAt === plannedStartAtNormalized, `actualStartAt=${b.actualStartAt} planned=${plannedStartAtNormalized}`);

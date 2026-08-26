@@ -9596,19 +9596,17 @@ function generateReport(dateArg, { quiet = false } = {}) {
     }
     return sum;
   }, 0);
-  const actualMinutes = blocks.filter((b) => b.completed).reduce((sum, b) => {
+  const reportDurationMinutes = (b) => {
     if (b.actualStartAt && b.actualEndAt) {
-      const s = minutesOf(b.actualStartAt);
-      const e = minutesOf(b.actualEndAt);
-      return sum + Math.max(0, e - s);
-    } else if (b.plannedStartAt && b.plannedEndAt) {
-      // 実績時刻が無い場合は予定で代替
-      const s = minutesOf(b.plannedStartAt);
-      const e = minutesOf(b.plannedEndAt);
-      return sum + Math.max(0, e - s);
+      const actual = Math.max(0, minutesOf(b.actualEndAt) - minutesOf(b.actualStartAt));
+      // v276(K指示2026-08-27): FLIGHT LOGは0分実績を保持し、日報集計だけ予定所要で補完する。
+      if (actual > 0 || !b.plannedStartAt || !b.plannedEndAt) return actual;
     }
-    return sum;
-  }, 0);
+    if (!b.plannedStartAt || !b.plannedEndAt) return 0;
+    return Math.max(0, minutesOf(b.plannedEndAt) - minutesOf(b.plannedStartAt));
+  };
+  const actualMinutes = blocks.filter((b) => b.completed)
+    .reduce((sum, b) => sum + reportDurationMinutes(b), 0);
   const blockCompletionRate = blocks.length === 0 ? 0 : Math.round((completed.length / blocks.length) * 100);
   const timeCompletionRate = plannedMinutes === 0 ? 0 : Math.round((actualMinutes / plannedMinutes) * 100);
   const fmtMinutes = (m) => `${Math.floor(m / 60)}h${m % 60 > 0 ? `${m % 60}m` : ""}`;
@@ -9616,16 +9614,7 @@ function generateReport(dateArg, { quiet = false } = {}) {
   // v17: カテゴリ別時間配分(完了 Block のみ)
   const catTime = {};
   completed.forEach((b) => {
-    if (!b.actualStartAt || !b.actualEndAt) {
-      // 実績が無ければ予定時刻で代替
-      if (b.plannedStartAt && b.plannedEndAt) {
-        const dur = Math.max(0, minutesOf(b.plannedEndAt) - minutesOf(b.plannedStartAt));
-        const cat = b.category || "未分類";
-        catTime[cat] = (catTime[cat] || 0) + dur;
-      }
-      return;
-    }
-    const dur = Math.max(0, minutesOf(b.actualEndAt) - minutesOf(b.actualStartAt));
+    const dur = reportDurationMinutes(b);
     const cat = b.category || "未分類";
     catTime[cat] = (catTime[cat] || 0) + dur;
   });
@@ -12350,8 +12339,8 @@ function dateToLocalDateTime(date) {
 }
 
 // v276: datetime-localへコードが書く値を最寄りの5分境界へ整列する。
-// iOS SafariのUTC誤解釈を避けるためDateへ文字列を渡さず、日付繰り上がりも数値分解した
-// 年月日だけで処理する。秒は丸め判定に含めず落とす(分の0〜2は下、3〜4は上)。
+// iOS SafariのUTC誤解釈を避けるためDateへ文字列を渡さず処理する。秒は丸め判定に
+// 含めず落とし(分の0〜2は下、3〜4は上)、日付を跨ぐ丸めは同日23:55へクランプする。
 function roundDateTimeTo5Min(dateTime) {
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(String(dateTime || ""));
   if (!match) return "";
@@ -12368,21 +12357,10 @@ function roundDateTimeTo5Min(dateTime) {
   if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)
     || hour > 23 || minute > 59 || second > 59) return "";
   minute = Math.round(minute / 5) * 5;
+  if (hour === 23 && minute === 60) minute = 55;
   if (minute === 60) {
     minute = 0;
     hour += 1;
-  }
-  if (hour === 24) {
-    hour = 0;
-    day += 1;
-    if (day > daysInMonth(year, month)) {
-      day = 1;
-      month += 1;
-      if (month === 13) {
-        month = 1;
-        year += 1;
-      }
-    }
   }
   return `${String(year).padStart(4, "0")}-${pad2(month)}-${pad2(day)}T${pad2(hour)}:${pad2(minute)}`;
 }
