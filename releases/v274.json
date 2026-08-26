@@ -1,0 +1,66 @@
+{
+  "version": 274,
+  "date": "2026-08-26",
+  "title": "TOWER統合画面S2 GLASS意匠基盤",
+  "summary": "Today統合画面だけにS2 GLASSの配色トークン、画面内オーロラ背景、共通ガラスパネル、端末ローカルのぼかし縮退を導入し、他のTOWER系タブと既存DOM・grid・機能を維持した。",
+  "changedFiles": [
+    "CHANGES_v274.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v274.json",
+    "src/features/today-tower.js",
+    "styles.css",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/v266.test.js",
+    "tests/v274.test.js"
+  ],
+  "intent": [
+    "後続R2〜R6が同じGLASSトークンとtower-glass-panel共通クラスを再利用できる意匠基盤を、Today統合画面のスコープ内に敷く。",
+    "backdrop-filterを既定のblur(16px)としつつ、taskchute-journal-glass-blur-offが1の端末ではぼかしだけを無効化してiOS性能問題へ縮退できるようにする。",
+    "計器盤もトークン継承目的でtoday-towerクラスを持つ現行構造を考慮し、#app[data-view=today]で限定して他タブをGLASS化しない。",
+    "既存--tower-red:#ff6d7fは変更せず、Today内の低調スコアはamberへ上書きして赤禁止とGLASS面上のコントラストを両立する。"
+  ],
+  "changes": [
+    "Today統合画面へS2 GLASS正本の8トークン、Segoe UI/system-ui、tabular-nums、Today本体の描画矩形に閉じた3灯オーロラ背景を追加した。",
+    "tower-header、FOCUSバー、tower-panel-box、NOW LANDING、GATE、ARRIVALS、CABIN TIMERを単一の共通ルールへまとめ、半透明面、16px blur、両backdrop-filter宣言、18px角丸、ソフトシャドウを適用した。",
+    "将来用tower-glass-panelを同じ共通ルールへ含め、既存DOM・クラス・grid-template-areasは変更しなかった。",
+    "描画時に専用localStorageキーを読み、値が1のときだけdata-glass-blur=offを付ける縮退結線を追加した。state・saveState・設定UIは変更していない。",
+    "Service WorkerのCACHE_NAMEをv274へ更新し、GLASS既定・縮退・他タブ非波及・赤トークン不変を検証するv274 E2Eを追加した。",
+    "v266のコントラスト検証を半透明GLASS面と深紺rootの実効合成色で計算するよう更新し、4.5:1基準自体は維持した。"
+  ],
+  "uncertainties": [
+    "R0 result.mdは未記入のためA/B判定は未確定。監督者裁定に従いblurを既定とし、B相当の手動localStorage縮退を無条件で組み込んだ。",
+    "iPhone/iPad実機のSafari/PWAでblur(16px)を長時間表示した際のFPS・発熱・スクロール追従はK実機確認が必要。",
+    "PC/モバイルの自動スクリーンショットはChromium互換Edgeで確認するため、iOS Safari固有の合成結果は実機確認が必要。"
+  ],
+  "reviewFocus": [
+    "#app[data-view=today]の限定で、today-towerクラスを再利用する計器盤やtower-skinの他タブへGLASSトークン・オーロラ・フォントが波及しないか。",
+    "Today本体内オーロラのz-indexと各パネルのstackingで、サイドバーへ流出せず390/768/1024/1440pxの操作要素が覆われず、既存grid・DOM順・フォーカス導線が維持されるか。",
+    "localStorageキー未設定またはStorage例外ではblur既定、値1ではbackdrop-filterだけnoneとなり、state保存・同期・再描画副作用が増えていないか。",
+    "--tower-red:#ff6d7fが不変かつGLASS上書きに再定義されず、Today内の低調信号がamberで赤禁止・可読性契約を満たすか。"
+  ],
+  "verification": [
+    "レビュー修正後にMicrosoft Edge指定でnode tests/v274.test.jsを実行し、静的6件と強化した実DOM検証を全件成功。主要6パネル、両blur宣言、line/border/shadow、isolation/z-order、オーロラ非流出、GATE満灯、保存0回、他TOWER画面非波及を確認した。",
+    "レビュー修正後にMicrosoft Edge指定でnode tests/tower-core.test.jsを実行し全件成功。DOM構造・grid・FOCUS/CABIN TIMER・GATE満灯クラス・responsive・reduced-motion契約を維持した。",
+    "レビュー修正後にMicrosoft Edge指定でnode tests/v266.test.jsを実行し全件成功。低調信号とバーが--tower-amber実効色に一致し、半透明面を深紺rootへ合成した4.5:1以上を確認した。",
+    "独立レビューのQA画素実測でサイドバーへのオーロラ流出を検出し、absolute化後はToday本体とサイドバーの実測矩形分離および疑似要素computed positionで非流出を固定した。",
+    "npm.cmd run code:index:writeを実行し、docs/code-index.generated.json/mdとtests/impact-regression-map.jsonは内容不変だった。",
+    "npm.cmd run test:manifest:writeを実行し、v274をui-responsive・固定wait 0件としてtests/suite-manifest.jsonとdocs/test-impact-map.generated.mdへ追加した。"
+  ],
+  "notes": [
+    "実行コード差分はsrc/features/today-tower.js 10追加/1削除、styles.css 88追加、sw.js 2追加/1削除で、合算100追加/2削除の原則200行以内。",
+    "旧TOWERとのスキン切替クラス・設定トグルUI・stateフィールド・個別addEventListenerは追加していない。",
+    "APP_SHELL列挙対象の新規実行ファイルはなく、sw.jsはCACHE_NAMEとリリースコメントだけを更新した。",
+    "Claude M-1はR2以降へ繰越: modalRootはToday本体の外にあり、LINK FLIGHTモーダルへGLASS基盤を継承する経路をR4発注で明示する。",
+    "Claude M-2はR2以降へ繰越: iOS実機で操作できるぼかし縮退トグル、または自動縮退条件を後続リリースで設計する。",
+    "Claude M-3はR2以降へ繰越: 18px角丸と内部罫線のクリップ方法をoverflow:hidden等から後続パネル実装時に決める。",
+    "Claude M-4はR2以降へ繰越: FOCUSチップの旧不透明背景を後続VIEWチップ意匠と合わせてトークン化する。",
+    "Claude M-5はR2以降へ繰越: 夜間はオーロラの彩度・輝度を落とす低色温度契約を後続意匠ラウンドで適用する。",
+    "Claude L-1はdisplay:contents列ラッパーと実ボックスのstacking責務をCSSコメントで明示した。L-2は既存--tower-red定義に関する発注前提の情報指摘、L-4はR1スコープ外の正常な未適用のため実装修正なし。",
+    "Claude L-3で指摘された発注項目外の低調amber化は、赤禁止契約とToday限定スコープに基づく意図的変更としてchangesへ明記済み。L-5は実DOMの描画矩形・保存0回・主要パネル実効値検証で補強した。"
+  ],
+  "knownLimitations": [
+    "R0の実機判定が後追いでAまたはBに確定した場合、既定blur値または設定UIの具体化は後続リリースで調整する。",
+    "prefers-reduced-transparencyによる自動性能判定は行わず、今回は発注文指定のlocalStorage手動フラグだけを結線している。"
+  ]
+}

@@ -4880,3 +4880,91 @@ h3 {
   }
   .instr-iron-chart { grid-column: 1 / -1; }
 }
+
+/* v274: Today統合画面だけをS2 GLASSへ完全移行する。計器盤など.tower-skin系の現行意匠は維持。 */
+#app[data-view="today"] .today-tower {
+  --tower-bg: #0b0d1c;
+  --tower-panel: rgba(255, 255, 255, .07);
+  --tower-line: rgba(255, 255, 255, .14);
+  --tower-text: #eef0ff;
+  --tower-amber: #f0c674;
+  --tower-green: #6ee7c8;
+  --tower-cyan: #8ab6ff;
+  --tower-purple: #c4b5fd;
+  --tower-glass-blur: blur(16px);
+  position: relative;
+  isolation: isolate;
+  background: var(--tower-bg);
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+#app[data-view="today"] .today-tower,
+#app[data-view="today"] .today-tower *,
+#app[data-view="today"] .today-tower button,
+#app[data-view="today"] .today-tower input,
+#app[data-view="today"] .today-tower select,
+#app[data-view="today"] .today-tower textarea {
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+#app[data-view="today"] .today-tower::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background:
+    radial-gradient(600px 400px at 12% 0%, rgba(124, 140, 255, .28), transparent 70%),
+    radial-gradient(700px 500px at 95% 12%, rgba(94, 215, 255, .16), transparent 70%),
+    radial-gradient(700px 500px at 55% 100%, rgba(167, 139, 250, .20), transparent 70%);
+  content: "";
+  pointer-events: none;
+}
+
+/* display:contents の列ラッパーではなく、実ボックスを持つ子と共通パネル側で前景化する。 */
+#app[data-view="today"] .today-tower > * { position: relative; z-index: 1; }
+
+#app[data-view="today"] .today-tower .tower-glass-panel,
+#app[data-view="today"] .today-tower .tower-header,
+#app[data-view="today"] .today-tower .today-focus-bar,
+#app[data-view="today"] .today-tower .tower-panel-box,
+#app[data-view="today"] .today-tower .tower-runway,
+#app[data-view="today"] .today-tower .tower-gates,
+#app[data-view="today"] .today-tower .tower-arrivals,
+#app[data-view="today"] .today-tower .today-panel {
+  position: relative;
+  z-index: 1;
+  border: 1px solid var(--tower-line);
+  border-radius: 18px;
+  background: var(--tower-panel);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(255, 255, 255, .12);
+  -webkit-backdrop-filter: var(--tower-glass-blur);
+  backdrop-filter: var(--tower-glass-blur);
+}
+
+#app[data-view="today"] .today-tower .tower-gates.is-full {
+  border-color: var(--tower-green);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #app[data-view="today"] .today-tower .tower-gates.is-full { box-shadow: none; }
+}
+
+#app[data-view="today"] .today-tower[data-glass-blur="off"] { --tower-glass-blur: none; }
+
+/* 既存の夜間低色温度契約はGLASS配色内で維持する。 */
+#app[data-view="today"] .today-tower[data-night="1"] {
+  --tower-text: #d9dbec;
+  --tower-amber: #d8b668;
+  --tower-green: #63cfb4;
+  --tower-cyan: #7ca4e6;
+  --tower-purple: #b0a2e3;
+}
+
+/* 赤禁止契約: 既存--tower-redは互換用に維持し、Todayの低調信号はamberで表す。 */
+#app[data-view="today"] .today-tower .twy-score-signal.is-low,
+#app[data-view="today"] .today-tower .twy-score-val.is-low { color: var(--tower-amber); }
+#app[data-view="today"] .today-tower .twy-score-bar.is-low > span {
+  background: var(--tower-amber);
+  box-shadow: 0 0 6px var(--tower-amber);
+}

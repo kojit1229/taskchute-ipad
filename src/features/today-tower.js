@@ -71,6 +71,15 @@ function isNightHour(hour) {
   return hour >= 21 || hour < 5;
 }
 
+// v274: GLASSのぼかし縮退は端末ローカル専用。stateや保存経路へ混ぜず、描画時に読むだけにする。
+function glassBlurOff() {
+  try {
+    return globalThis.localStorage?.getItem("taskchute-journal-glass-blur-off") === "1";
+  } catch {
+    return false;
+  }
+}
+
 function boardFlights(blocks, nowMin, tasks = []) {
   const candidates = blocks.filter((block) => !block.completed && !block.actualEndAt && block.category !== "ルーティン" && !block.oneTap);
   const byId = new Map(candidates.map((block) => [String(block.id), block]));
@@ -360,7 +369,7 @@ function renderTodayTower() {
   const focusVisibility = todayFocusVisibility();
   const pomodoroRight = !focusVisibility.atis && !focusVisibility.journal;
   const weekday = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
-  return `<div class="today-tower" data-motion="${escapeHTML(towerMotionSetting())}" data-night="${isNightHour(now.getHours()) ? 1 : 0}" data-paused="${document.hidden ? 1 : 0}" data-focus-mode="${Object.values(focusVisibility).some(Boolean) ? 0 : 1}" data-focus-pomodoro-right="${pomodoroRight ? 1 : 0}">
+  return `<div class="today-tower" data-motion="${escapeHTML(towerMotionSetting())}" data-night="${isNightHour(now.getHours()) ? 1 : 0}" data-paused="${document.hidden ? 1 : 0}" data-focus-mode="${Object.values(focusVisibility).some(Boolean) ? 0 : 1}" data-focus-pomodoro-right="${pomodoroRight ? 1 : 0}"${glassBlurOff() ? ' data-glass-blur="off"' : ""}>
     ${syncAlertBanner()}
     <div class="tower-topband">
       <header class="tower-header">

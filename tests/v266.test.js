@@ -25,16 +25,22 @@ function countMatches(source, pattern) {
   return (source.match(pattern) || []).length;
 }
 
-function contrastRatio(foreground, background) {
-  const luminance = (color) => {
-    const values = (String(color).match(/[\d.]+/g) || []).slice(0, 3).map(Number);
+function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
+  const valuesOf = (color) => (String(color).match(/[\d.]+/g) || []).map(Number);
+  const backgroundValues = valuesOf(background);
+  const underlayValues = valuesOf(underlay);
+  const effectiveBackground = backgroundValues.length > 3 && backgroundValues[3] < 1
+    ? backgroundValues.slice(0, 3).map((value, index) => value * backgroundValues[3]
+      + underlayValues[index] * (1 - backgroundValues[3]))
+    : backgroundValues.slice(0, 3);
+  const luminance = (values) => {
     const channels = values.map((value) => {
       const normalized = value / 255;
       return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
     });
     return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
   };
-  const a = luminance(foreground), b = luminance(background);
+  const a = luminance(valuesOf(foreground).slice(0, 3)), b = luminance(effectiveBackground);
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 }
 
@@ -206,15 +212,28 @@ function contrastRatio(foreground, background) {
     await signal().click();
     const lowStyles = await signal().evaluate((el) => ({
       color: getComputedStyle(el).color,
+      amberColor: (() => {
+        const probe = document.createElement("span");
+        probe.style.color = "var(--tower-amber)";
+        el.closest(".today-tower").appendChild(probe);
+        const color = getComputedStyle(probe).color;
+        probe.remove();
+        return color;
+      })(),
       panelBackground: getComputedStyle(el.closest(".tower-panel-box")).backgroundColor,
+      rootBackground: getComputedStyle(el.closest(".today-tower")).backgroundColor,
       display: getComputedStyle(el).display,
       alignItems: getComputedStyle(el).alignItems,
       height: el.getBoundingClientRect().height
     }));
-    const lowBarBackground = await mobile().locator(".twy-score-bar.is-low > span").evaluate((el) => getComputedStyle(el).backgroundColor);
-    check("is-lowは暗パネル比4.5:1以上の実色・バー非透明", contrastRatio(lowStyles.color, lowStyles.panelBackground) >= 4.5
-      && lowBarBackground !== "rgba(0, 0, 0, 0)" && lowBarBackground !== "transparent",
-      JSON.stringify({ ...lowStyles, lowBarBackground, ratio: contrastRatio(lowStyles.color, lowStyles.panelBackground) }));
+    const lowBarStyles = await mobile().locator(".twy-score-bar.is-low > span").evaluate((el) => ({
+      background: getComputedStyle(el).backgroundColor,
+      shadow: getComputedStyle(el).boxShadow
+    }));
+    check("is-lowは--tower-amber実効色で暗パネル比4.5:1以上", lowStyles.color === lowStyles.amberColor
+      && lowBarStyles.background === lowStyles.amberColor && lowBarStyles.shadow.includes(lowStyles.amberColor)
+      && contrastRatio(lowStyles.color, lowStyles.panelBackground, lowStyles.rootBackground) >= 4.5,
+      JSON.stringify({ ...lowStyles, lowBarStyles, ratio: contrastRatio(lowStyles.color, lowStyles.panelBackground, lowStyles.rootBackground) }));
     check("スコア信号はinline-flex中央揃え・実測40px以上", lowStyles.display === "inline-flex"
       && lowStyles.alignItems === "center" && lowStyles.height >= 40, JSON.stringify(lowStyles));
     await seed({ weeklyCommitments: scoredCommitments(7, 10), scoreTarget: 70 });
