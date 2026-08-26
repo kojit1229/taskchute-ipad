@@ -4792,6 +4792,21 @@ h3 {
   .instr-iron-chart { grid-column: 1 / -1; }
 }
 
+/* v277: PCではサイドバー以外の主領域を活用する。1024px以下とTodayの3面卓は従来契約を維持。 */
+@media (min-width: 1100px) {
+  .tower-skin { max-width: 1360px; }
+  .tower-skin.journal-tower { max-width: 1360px; }
+  .iron { max-width: 960px; }
+  .instr-view { max-width: 1360px; }
+  .more-tower-grid { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  /* Project編集だけを広げ、既存のfield/twy 2・3列グリッドへ幅を渡す。 */
+  .project-modal { max-width: 960px; }
+}
+
+@media (min-width: 1280px) {
+  .instr-view { grid-template-columns: 1fr 1fr 1fr; }
+}
+
 /* v274: Today統合画面だけをS2 GLASSへ完全移行する。計器盤など.tower-skin系の現行意匠は維持。 */
 #app[data-view="today"] .today-tower {
   --tower-bg: #0b0d1c;

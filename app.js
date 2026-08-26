@@ -12517,8 +12517,8 @@ const modalRoot = document.querySelector("#modalRoot");
 
 // v238: 完全同型の標準モーダル骨格だけを共通化する。専用class/actionの骨格は呼び出し側に残す。
 // titleは呼び出し側でエスケープ済みであること(リテラル文字列のみ渡す)。
-function modalHeaderHTML(title) {
-  return `<div class="modal-card" role="dialog" aria-modal="true">
+function modalHeaderHTML(title, className = "") {
+  return `<div class="modal-card${className ? ` ${className}` : ""}" role="dialog" aria-modal="true">
       <div class="modal-header">
         <h3 class="modal-title">${title}</h3>
         <button class="modal-close" data-action="modal-close" aria-label="閉じる">×</button>
@@ -12963,7 +12963,7 @@ function buildProjectModal(project) {
   // ガードと二重防御)。
   const isWishSingleton = kind === "wish";
   return `
-    ${modalHeaderHTML("Project を編集")}
+    ${modalHeaderHTML("Project を編集", "project-modal")}
         <div class="field">
           <label class="field-label">タイトル</label>
           <input class="input" data-modal-field="title" value="${escapeHTML(project.title || "")}">

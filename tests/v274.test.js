@@ -46,7 +46,7 @@ function check(name, condition, extra = "") {
   check("手動縮退helperは専用localStorage読取で属性を切替", towerSource.includes(`getItem("${BLUR_KEY}") === "1"`)
     && towerSource.includes("data-glass-blur=\"off\""));
   // v276: 後続リリースの実行コード変更ではCACHE_NAMEをさらに+1する契約。assertionは維持して最新版へ追従する。
-  check("CACHE_NAMEは後続v276へ更新", /^const CACHE_NAME = "taskchute-journal-pwa-v276";/m.test(swSource));
+  check("CACHE_NAMEは後続v277へ更新", /^const CACHE_NAME = "taskchute-journal-pwa-v277";/m.test(swSource));
 
   console.log("[2] 実DOMの主要パネル・非流出・縮退・他タブ非波及");
   const server = startServer(PORT);

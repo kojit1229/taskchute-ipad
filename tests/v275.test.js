@@ -41,7 +41,7 @@ function check(name, condition, extra = "") {
   check("iOS禁止の日付文字列パース・個別listenerを追加しない", !/new Date\s*\(\s*["'`]/.test(executableTopband)
     && !topbandSource.includes("addEventListener"));
   // v276: 本スイートのUI契約は維持しつつ、後続実行コード変更に必要なCACHE_NAME +1へ期待値を追従する。
-  check("CACHE_NAMEは後続v276", /^const CACHE_NAME = "taskchute-journal-pwa-v276";/m.test(swSource));
+  check("CACHE_NAMEは後続v277", /^const CACHE_NAME = "taskchute-journal-pwa-v277";/m.test(swSource));
   const topband = await import(pathToFileURL(path.join(ROOT, "src", "features", "topband.js")).href);
   topband.configureTopband({ escapeHTML: (value) => String(value), todayISO: () => "2026-08-26",
     getSettings: () => ({ twelveWeekStartDate: "2026-08-15", birthDate: "" }), getTrackDigest: () => null });

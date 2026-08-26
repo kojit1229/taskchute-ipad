@@ -1,0 +1,58 @@
+{
+  "version": 277,
+  "date": "2026-08-27",
+  "title": "PCメインコンテンツ拡幅",
+  "summary": "PC表示のTOWER系ビューとProject詳細が、サイドバー以外の利用可能な横幅を広く使うようにした。",
+  "changedFiles": [
+    "CHANGES_v277.md",
+    "app.js",
+    "docs/test-impact-map.generated.md",
+    "releases/v277.json",
+    "scripts/test-manifest.js",
+    "styles.css",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/v274.test.js",
+    "tests/v275.test.js",
+    "tests/v277.test.js"
+  ],
+  "intent": [
+    "PCでTOWER系の各画面が共通max-width 760pxに制限され、中央の細い帯だけを使う状態を解消する。",
+    "1024px以下とTodayの既存3面卓を変えず、1100px以上だけを安全なPC拡幅対象にする。",
+    "Project詳細の共通モーダル幅制限を専用指定で解き、既存の2列・3列入力グリッドへ利用可能幅を渡す。"
+  ],
+  "changes": [
+    "min-width 1100pxのmedia queryを追加し、tower-skinとjournal-towerを最大1360px、IRON LOGを最大960pxへ拡幅した。today-towerは対象セレクタに含めていない。",
+    "INSTRUMENTSを1100px以上で最大1360pxとし、1280px以上だけを3列化して1100〜1279pxの既存2列契約を維持した。",
+    "その他グリッドは1099px以下のminmax(210px, 1fr)を維持し、1100px以上だけminmax(280px, 1fr)としてPCで4〜5列に収めた。",
+    "共通モーダル生成ヘルパーへ任意の専用classを渡せるようにし、Project編集だけproject-modalとして1100px以上で最大960pxへ拡幅した。field-row、twy-grid2、twy-grid3の既存列構造は変更していない。",
+    "v277 E2Eで1099/1100pxの拡幅境界、1279/1280pxの計器盤列境界、768/1024pxのその他列数、1920px幅、対象4ビューの多層overflow、12WYと通常Projectの幅を検証した。",
+    "v274/v275のService Worker版固定テストはassertionを維持したまま、後続v277への+1を検証する期待値へ追従した。",
+    "Service WorkerのCACHE_NAMEをv277へ更新し、APP_SHELLの列挙変更が不要であることを確認した。"
+  ],
+  "uncertainties": [
+    "Chromium版Google Chromeで実寸と横スクロールを確認した。iPhone/iPad Safari PWAの実機表示はK確認対象。"
+  ],
+  "reviewFocus": [
+    "1100px境界が1024pxの既存1カラム契約へ影響せず、Todayのtoday-towerへtower-skin用1360pxが波及していないか。",
+    "INSTRUMENTSが1100〜1279pxでは2列を維持し、1280px以上だけ3列化してもANNUAL PAYLOADの全幅spanとエネルギーグラフ幅90pxが維持されているか。",
+    "Project編集以外の共通モーダルが560pxのままで、project-modalだけがPCで960pxになるか。",
+    "more-tower-gridの280px最小幅が390/768/1024pxでページ全体の横スクロールを発生させないか。"
+  ],
+  "verification": [
+    "Google Chrome指定でnode tests/v277.test.jsを実行し、専用レスポンシブ契約を全件成功。",
+    "Google Chrome指定でnode tests/run-all.js tower-core instruments-e2e v141 v277を実行し、既存3スイート無改変を含む4スイートを全件成功。",
+    "node --checkでapp.js、scripts/test-manifest.js、tests/v277.test.jsの構文を確認。",
+    "npm run code:index:write後にnpm run code:index、npm run test:manifest:write後にnpm run test:manifestを実行し、生成物を確認してv277をui-responsiveへ明示登録。",
+    "Google Chrome指定・一時handoff出力先でnode scripts/release-gate.js releases/v277.json --finalを実行し、影響回帰とcoreを含めexit 0。"
+  ],
+  "notes": [
+    "12WY Project詳細の右余白原因はWBS本体やトラック行ではなく、Project編集が共通modal-cardのmax-width 560pxを使っていたこと。project-modal専用拡幅で既存内部グリッドへ幅を渡した。",
+    "project-modalの960px指定はWishを含む全Project編集モーダルが対象で、12WY限定ではない。監督者裁定により、PC幅活用の一環として全Projectで統一した。",
+    "timeline.jsのmaxLanes=5、エネルギーグラフ幅90px、mobileNav、Today 3面卓、新規state、イベント方式は変更していない。",
+    "artifacts配下のPNGは着手時から変更済みでchangedFiles対象外。最終coreがv275の既存screenshot処理を実行して再生成したため、監督者は選択的コミット時にartifactsを除外する。"
+  ],
+  "knownLimitations": [
+    "1100px以上でも実効幅はサイドバーとviewportの残り幅が上限で、1360pxは超広幅画面でのキャップとして働く。"
+  ]
+}
