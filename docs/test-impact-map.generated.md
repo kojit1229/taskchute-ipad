@@ -11,8 +11,8 @@
 | github-vision-pdf-fallback.test.js | e2e | full | sync-storage, content-ai | 6 | 4 | 1600 |
 | instruments-core.test.js | node | full | legacy-crosscutting | 46 | 0 | 0 |
 | instruments-e2e.test.js | e2e | full | content-ai, ui-responsive | 37 | 0 | 0 |
-| iron-log-core.test.js | node | full | sync-storage, planning-execution, content-ai, ui-responsive | 45 | 0 | 0 |
-| iron-log-e2e.test.js | e2e | full | planning-execution, ui-responsive | 38 | 0 | 0 |
+| iron-log-core.test.js | node | full | sync-storage, planning-execution, content-ai, ui-responsive | 78 | 0 | 0 |
+| iron-log-e2e.test.js | e2e | full | planning-execution, ui-responsive | 51 | 0 | 0 |
 | journal-core.test.js | node | full | journal-health, content-ai, ui-responsive | 42 | 0 | 0 |
 | merge-core.test.js | node | full | sync-storage | 23 | 0 | 0 |
 | recurrence-core.test.js | node | full | sync-storage, planning-execution | 58 | 0 | 0 |

@@ -4528,6 +4528,84 @@ h3 {
 }
 .iron-set-del:hover { opacity: 1; color: var(--tower-amber); }
 
+/* v272: MENU 種目メニュー(入力は16px以上、操作ボタンはタップしやすい44px)。 */
+.iron-menu-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px 44px 44px;
+  align-items: center;
+  min-height: 44px;
+  border-bottom: 1px solid var(--tower-line);
+}
+.iron-menu-row:last-child { border-bottom: 0; }
+.iron-menu-list {
+  max-height: 264px;
+  overflow-y: auto;
+}
+.iron-menu-name {
+  min-width: 0;
+  padding: 0 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+}
+.iron-menu-move, .iron-menu-del {
+  align-self: stretch;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid var(--tower-line);
+  background: transparent;
+  color: var(--tower-cyan);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.iron-menu-del { color: var(--tower-text); }
+.iron-menu-move:hover:not(:disabled), .iron-menu-del:hover:not(:disabled) {
+  color: var(--tower-amber);
+  background: rgba(242, 184, 75, .08);
+}
+.iron-menu-move:focus-visible, .iron-menu-del:focus-visible,
+.iron-menu-form input:focus-visible, .iron-menu-form button:focus-visible {
+  outline: 2px solid var(--tower-amber);
+  outline-offset: -2px;
+}
+.iron-menu-move:disabled, .iron-menu-del:disabled {
+  opacity: .25;
+  cursor: default;
+}
+.iron-menu-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 12px 10px;
+  border-top: 1px solid var(--tower-line);
+}
+.iron-menu-form input {
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 9px;
+  border: 1px solid var(--tower-line);
+  border-radius: 0;
+  background: var(--tower-bg);
+  color: var(--tower-text);
+  font-family: system-ui, sans-serif;
+  font-size: 16px;
+}
+.iron-menu-form button {
+  min-height: 44px;
+  padding: 8px 18px;
+  border: 1px solid var(--tower-green);
+  background: transparent;
+  color: var(--tower-green);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: .14em;
+  cursor: pointer;
+}
+.iron-menu-form button:hover { background: rgba(82, 214, 138, .08); }
+
 /* TOTALS */
 .iron-totals { display: grid; grid-template-columns: 1fr 1fr 1fr; }
 .iron-totals-cell { padding: 12px 10px; border-right: 1px solid var(--tower-line); }

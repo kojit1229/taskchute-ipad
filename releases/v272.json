@@ -1,0 +1,76 @@
+{
+  "version": 272,
+  "date": "2026-08-26",
+  "title": "IRON LOG種目メニュー管理",
+  "summary": "IRON LOG画面内で筋トレ種目を追加・削除・上下移動でき、LOAD SETの選択肢へ即時反映される種目メニューを追加した。",
+  "changedFiles": [
+    "CHANGES_v272.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v272.json",
+    "src/features/iron-log.js",
+    "styles.css",
+    "sw.js",
+    "tests/iron-log-core.test.js",
+    "tests/iron-log-e2e.test.js",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "state.settings.gymExerciseListを文字列配列のまま管理し、既存DEFAULT_EXERCISESとの後方互換を維持する。",
+    "界面凍結済みiron-log.jsのimport・DI・exportを増やさず、既存action registryとsaveAndRenderの結線だけで完結させる。",
+    "メニューから種目を削除しても過去のcondition.logs[date].gym[]を変更せず、筋トレ履歴を保持する。"
+  ],
+  "changes": [
+    "LOAD SETとTODAY'S SETSの間へ常設MENUセクションを追加し、種目名入力、▲▼並び替え、削除ボタンを実装した。",
+    "空白・重複追加、最後の1件削除、先頭/末尾の範囲外移動をno-opにし、disabled属性とロジック側ガードの二重防御を設けた。",
+    "非配列または空のgymExerciseListは表示時に既定6種目へフォールバックし、最初の有効操作で既定値の複製へ自己修復するようにした。",
+    "種目名をescapeHTMLし、省略時も全文確認できるtitle属性を付け、追加入力をmaxlength=24・font-size 16px・高さ44px、操作ボタンを44pxのタップ標的にした。",
+    "MENU一覧を既定6行分の264pxに制限し、7件目以降は一覧内を縦スクロールするようにした。",
+    "Node coreへ登録ハンドラ直呼びの単体検証、Playwright E2EへMENU/LOAD SET同期・履歴保持・既存セット操作回帰を追加した。壊れた値からの削除/移動、空配列、24文字追加成功、負例の個別判定、seedの明示削除も固定した。",
+    "Service WorkerのCACHE_NAMEをv272へ更新した。"
+  ],
+  "uncertainties": [
+    "390/768/1024pxとiOS実機PWAでの一覧密度、44pxボタンの押しやすさ、ネイティブ入力挙動は最終目視が必要。",
+    "24文字上限は現行・想定種目名には余裕があるが、より長い正式種目名を使う場合は将来見直しが必要。",
+    "Service Worker更新後の実機オフライン起動は監督者側で最終確認が必要。"
+  ],
+  "reviewFocus": [
+    "iron-log.jsが他ファイルをimportせず、configureIronLogのDIと既存export一覧も増やしていないか。",
+    "追加・削除・上下移動がstate.settings.gymExerciseListだけを書き換え、成功操作ごとにsaveAndRenderを1回だけ呼ぶか。",
+    "壊れたgymExerciseListのフォールバックと自己修復、最後の1件・先頭・末尾の二重ガードが成立するか。",
+    "メニュー削除が過去セットのexercise文字列とTODAY'S SETS/TOTALSを変更しないか。",
+    "ユーザー入力のescapeHTML、16px入力、44px操作標的、data-action委譲、CACHE_NAME v272を満たすか。"
+  ],
+  "verification": [
+    "修正後のnode --check src/features/iron-log.js / tests/iron-log-core.test.js / tests/iron-log-e2e.test.js: PASS。",
+    "修正後のnode tests/iron-log-core.test.js: 全件成功。壊れた値からの削除/移動と各saveAndRender 1回、空配列、負例の操作別no-opを含む。",
+    "修正後のCHROME_PATH=Microsoft Edgeでnode tests/iron-log-e2e.test.js: 全PASS。24文字追加成功、44px実寸、title、7件目スクロールを含む。",
+    "npm.cmd run code:index:write / npm.cmd run test:manifest:write: PASS。iron-log 2スイートはlegacy-crosscuttingではなく既存domain分類を維持。",
+    "修正後にRELEASE_HANDOFF_PATHを作業ツリー内一時ミラーへ向けたrelease-record --write / --check: PASS。本番handoff反映は既知の役割分担どおり監督者側。",
+    "修正後にCHROME_PATH=Microsoft Edge・同一handoffミラー指定でnode scripts/release-gate.js releases/v272.json --final: exit 0（選定回帰+coreを含め全スイートPASS）。",
+    "最終gate後のnode scripts/test-manifest.js --check / git diff --check: PASS。"
+  ],
+  "notes": [
+    "実行コード差分はsrc/features/iron-log.jsとstyles.cssとsw.jsの追加156行・削除3行、合計159行で原則200行以内。",
+    "normalizeStateは設計正典どおり変更せず、exerciseListとexerciseListForWriteの防御で後方互換と自己修復を担保した。",
+    "監督者裁定: p4-interface.mdは旧P4並列開発時の歴史的凍結書として変更せず、現行action凍結リストの正本はsrc/features/iron-log.js冒頭コメントとする。",
+    "F-1確認結果: package.jsonにjsdomは無く、既存addSetFromFormはcore未テスト・E2Eのみの方針②だった。採用方式はglobal.documentの最小querySelectorスタブで登録ハンドラをcoreから直呼びし、state書き込みとsaveAndRender回数を個別検査する方式。",
+    "B-3対応 #1: 未設定時の既定6件とMENU/LOAD SET同順をcoreとE2Eで検証。",
+    "B-3対応 #2: trim後の末尾追加、state保存、MENU/LOAD SET即時反映をcoreとE2Eで検証。",
+    "B-3対応 #3: 空欄と空白のみを別々のcore checkでno-op検証。",
+    "B-3対応 #4: 完全一致とtrim後一致を別々のcore checkで重複no-op検証。",
+    "B-3対応 #5: maxlengthによる25文字目拒否に加え、24文字ちょうどがstate・MENU・title・LOAD SETへ追加成功することをE2Eで検証。",
+    "B-3対応 #6: 最後の1件はHTML disabledとロジックno-opをcoreで検証。",
+    "B-3対応 #7: 先頭上・末尾下・不正indexを操作ごとのcore checkへ分離し、通常の上下swapと保存1回も検証。",
+    "B-3対応 #8: メニュー削除後もcondition.logsのexercise、TODAY'S SETS、TOTALSが保持されることをcoreとE2Eで検証。",
+    "B-3対応 #9: 追加・並び替え後のMENU/LOAD SET順一致をE2Eで検証。",
+    "B-3対応 #10: 非配列表示フォールバックに加え、壊れた値からの追加・削除・移動それぞれの自己修復結果とsaveAndRender 1回をcoreで検証。空配列フォールバックも固定。",
+    "design-iron-menu.mdからの逸脱1: F-1で既存方針②を特定したが、state/saveAndRenderを精密に固定するためglobal.document最小スタブを新設してcoreにもテストを置いた。監督者が妥当な逸脱として承認。",
+    "design-iron-menu.mdからの逸脱2: CSSは指定されたstyles.css 4479行目直前ではなく、既存.iron-set-del:hoverとTOTALSの間の.iron-*ブロック内へ挿入した。機能的に同じまとまりを優先した妥当な逸脱。",
+    "Claude low-1〜3: 監督者裁定により入力44px、種目名title、一覧264px+overflow-y:autoを実装しE2E固定。low-4〜6・9は空配列、自己修復、負例分離、seed明示削除のテストで対応。",
+    "Claude low-7: iron-menu-*はメニュー操作のグルーピングを優先した意図的命名で、正本コメントに凍結済みのため改名不要。low-8: オブジェクト配列化はフェーズ2非目標で、その際normalizeState型サニタイズを必須とするため現版修正不要。low-10: ▲▼+全再描画は承認済み設計で、操作時だけ再描画され入力途中の定期render消失も無いため現版修正不要。"
+  ],
+  "knownLimitations": [
+    "種目別の既定重量・回数プリセットはフェーズ2であり本リリースには含めない。",
+    "種目名の編集・ドラッグ&ドロップ・設定画面への集約は対象外で、並び替えは▲▼ボタン方式に限定する。"
+  ]
+}

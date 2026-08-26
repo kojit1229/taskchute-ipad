@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v271";
+const CACHE_NAME = "taskchute-journal-pwa-v272";
+// v272: IRON LOGの種目メニュー管理を追加した(APP_SHELL変更なし)。
 // v271: TOWERのNOW LANDING選択とFLIGHT LOGタップ編集を追加した(APP_SHELL変更なし)。
 // v270: TOWERのDEPARTURES(明日便)を削除した(APP_SHELL変更なし)。
 // v269: ATISの未処理件数・再プラン状態色・タップ標的を改善した(APP_SHELL変更なし)。

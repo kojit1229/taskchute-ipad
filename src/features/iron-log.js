@@ -14,7 +14,8 @@
 //       ironDailyTarget(既定2000) / ironManualBaseKg(既定0) / gymBlockKeywords(既定["ジム","筋トレ"])
 //     追加(界面凍結書の外・任意上書き用。無くても内部既定値で動く): gymExerciseList
 //   - 日時パースはnew Date("文字列")を使わず正規表現で処理する(iOS Safari対策)。
-//   - data-actionプレフィクス(凍結): iron-add-set / iron-delete-set / iron-exercise-select
+//   - data-actionプレフィクス(凍結): iron-add-set / iron-delete-set / iron-exercise-select /
+//     iron-menu-add / iron-menu-delete / iron-menu-up / iron-menu-down
 
 // ---- 依存注入(configureIronLog) ----
 let getState, escapeHTML, todayISO, renderHeader, saveAndRender, registerActions;
@@ -31,7 +32,12 @@ function configureIronLog(deps) {
     "iron-delete-set": (ctx) => deleteSet(ctx),
     // 種目セレクトの変更自体はstateを変えない(追加時にDOMから直接読み取るため)。
     // data-actionとして登録だけしておく(界面凍結・action registry方式に合わせるため)。
-    "iron-exercise-select": () => {}
+    "iron-exercise-select": () => {},
+    // v272: IRON LOG内で種目メニューを管理し、LOAD SETの選択肢と同じ配列を使う。
+    "iron-menu-add": () => addExercise(),
+    "iron-menu-delete": (ctx) => deleteExercise(ctx),
+    "iron-menu-up": (ctx) => moveExercise(ctx, -1),
+    "iron-menu-down": (ctx) => moveExercise(ctx, 1)
   });
 }
 
@@ -81,6 +87,12 @@ function gymKeywords(state) {
 function exerciseList(state) {
   const list = state?.settings?.gymExerciseList;
   return Array.isArray(list) && list.length ? list : DEFAULT_EXERCISES;
+}
+
+// v272: 壊れた旧stateも最初のメニュー操作で既定値の複製へ自己修復する。
+function exerciseListForWrite(state) {
+  const list = state?.settings?.gymExerciseList;
+  return Array.isArray(list) && list.length ? list.slice() : DEFAULT_EXERCISES.slice();
 }
 
 function matchesGymKeywords(block, keywords) {
@@ -248,7 +260,67 @@ function deleteSet(ctx) {
   saveAndRender("セットを削除しました");
 }
 
+// v272: LOAD SETと同じDOM直読み方式で、種目名だけを文字列配列へ保存する。
+function addExercise() {
+  const state = getState();
+  const raw = document.querySelector("#ironMenuName")?.value || "";
+  const name = raw.trim();
+  if (!name) return;
+  const list = exerciseListForWrite(state);
+  if (list.includes(name)) return;
+  list.push(name);
+  state.settings.gymExerciseList = list;
+  saveAndRender("種目を追加しました");
+}
+
+function deleteExercise(ctx) {
+  const state = getState();
+  const list = exerciseListForWrite(state);
+  const idx = Number(ctx?.id);
+  if (!Number.isInteger(idx) || idx < 0 || idx >= list.length) return;
+  if (list.length <= 1) return;
+  list.splice(idx, 1);
+  state.settings.gymExerciseList = list;
+  saveAndRender("種目を削除しました");
+}
+
+function moveExercise(ctx, dir) {
+  const state = getState();
+  const list = exerciseListForWrite(state);
+  const idx = Number(ctx?.id);
+  const target = idx + dir;
+  if (!Number.isInteger(idx) || idx < 0 || idx >= list.length) return;
+  if (target < 0 || target >= list.length) return;
+  [list[idx], list[target]] = [list[target], list[idx]];
+  state.settings.gymExerciseList = list;
+  saveAndRender("並び順を変更しました");
+}
+
 // ---- 画面描画 ----
+
+// v272: 種目名はユーザー入力なので表示時に必ずescapeHTMLする。
+function exerciseMenuHTML(exercises) {
+  const rows = exercises.map((ex, idx) => `
+    <div class="iron-menu-row">
+      <span class="iron-menu-name" title="${escapeHTML(ex)}">${escapeHTML(ex)}</span>
+      <button type="button" class="iron-menu-move" data-action="iron-menu-up" data-id="${idx}"
+        ${idx === 0 ? "disabled" : ""} aria-label="上へ">▲</button>
+      <button type="button" class="iron-menu-move" data-action="iron-menu-down" data-id="${idx}"
+        ${idx === exercises.length - 1 ? "disabled" : ""} aria-label="下へ">▼</button>
+      <button type="button" class="iron-menu-del" data-action="iron-menu-delete" data-id="${idx}"
+        ${exercises.length <= 1 ? "disabled" : ""} aria-label="削除">✕</button>
+    </div>`).join("");
+
+  return `
+    <section class="iron-box">
+      <h2>MENU <span>種目メニュー</span></h2>
+      <div class="iron-menu-list">${rows}</div>
+      <div class="iron-menu-form">
+        <input id="ironMenuName" type="text" placeholder="種目名を追加" maxlength="24">
+        <button type="button" data-action="iron-menu-add">+ 追加</button>
+      </div>
+    </section>`;
+}
 
 function renderIronLog() {
   const state = getState();
@@ -352,6 +424,8 @@ function renderIronLog() {
           <button type="button" data-action="iron-add-set">+ 追加</button>
         </div>
       </section>
+
+      ${exerciseMenuHTML(exercises)}
 
       <section class="iron-box">
         <h2>TODAY'S SETS <span>${rows.length} セット</span></h2>

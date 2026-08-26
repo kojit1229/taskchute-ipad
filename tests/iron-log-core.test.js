@@ -246,6 +246,158 @@ async function loadModule() {
     check("セット件数(3 セット)を表示", htmlHit.includes("3 セット"));
   }
 
+  console.log("[8] v272 種目メニュー(描画・追加・削除・上下移動・負例・自己修復)");
+  {
+    let currentState = null;
+    let actions = {};
+    let saveMessages = [];
+    let menuInput = "";
+    const originalDocument = global.document;
+    // 既存coreにjsdomは無くaddSetFromFormもE2Eのみのため、同じDOM直読みを最小スタブで検証する。
+    global.document = {
+      querySelector: (selector) => selector === "#ironMenuName" ? { value: menuInput } : null
+    };
+
+    try {
+      configureIronLog({
+        getState: () => currentState,
+        escapeHTML,
+        todayISO: () => "2026-08-22",
+        renderHeader,
+        saveAndRender: (message) => saveMessages.push(message),
+        registerActions: (registered) => { actions = registered; }
+      });
+
+      check("新規4アクションをregistryへ登録", ["iron-menu-add", "iron-menu-delete", "iron-menu-up", "iron-menu-down"]
+        .every((name) => typeof actions[name] === "function"));
+
+      currentState = { settings: {}, condition: { logs: {} }, blocks: [] };
+      const defaultHTML = renderIronLog();
+      check("未設定時はMENUへDEFAULT_EXERCISES 6件を描画",
+        (defaultHTML.match(/class="iron-menu-row"/g) || []).length === 6);
+      currentState = { settings: { gymExerciseList: [] }, condition: { logs: {} }, blocks: [] };
+      check("空配列もDEFAULT_EXERCISES 6件へフォールバック",
+        (renderIronLog().match(/class="iron-menu-row"/g) || []).length === 6);
+      currentState = { settings: {}, condition: { logs: {} }, blocks: [] };
+      check("MENUはLOAD SETとTODAY'S SETSの間に描画",
+        defaultHTML.indexOf("<h2>LOAD SET") < defaultHTML.indexOf("<h2>MENU")
+          && defaultHTML.indexOf("<h2>MENU") < defaultHTML.indexOf("<h2>TODAY'S SETS"));
+      check("MENUとLOAD SETは既定6種目を共有", (defaultHTML.match(/<option value=/g) || []).length === 6
+        && ["ベンチプレス", "スクワット", "デッドリフト", "ラットプルダウン", "ショルダープレス", "その他"]
+          .every((name) => defaultHTML.includes(name)));
+      check("追加欄はmaxlength=24", defaultHTML.includes('id="ironMenuName" type="text"')
+        && defaultHTML.includes('maxlength="24"'));
+      check("先頭▲と末尾▼はHTML側でdisabled",
+        /data-action="iron-menu-up" data-id="0"\s+disabled/.test(defaultHTML)
+          && /data-action="iron-menu-down" data-id="5"\s+disabled/.test(defaultHTML));
+
+      currentState = { settings: { gymExerciseList: ["<img src=x onerror=alert(1)>"] }, condition: { logs: {} }, blocks: [] };
+      const escapedHTML = renderIronLog();
+      check("ユーザー入力種目名はMENU/option/titleともescapeHTML済み", !escapedHTML.includes("<img src=x")
+        && (escapedHTML.match(/&lt;img src=x onerror=alert\(1\)&gt;/g) || []).length === 4
+        && escapedHTML.includes('title="&lt;img src=x onerror=alert(1)&gt;"'));
+      check("残り1件の削除はHTML側でdisabled",
+        /data-action="iron-menu-delete" data-id="0"\s+disabled/.test(escapedHTML));
+
+      currentState = { settings: { gymExerciseList: ["A", "B"] }, condition: { logs: {} }, blocks: [] };
+      saveMessages = [];
+      menuInput = "  C  ";
+      actions["iron-menu-add"]();
+      check("追加はtrim後の名前を末尾へ保存", JSON.stringify(currentState.settings.gymExerciseList) === '["A","B","C"]');
+      check("追加はsaveAndRenderを1回だけ呼ぶ", saveMessages.length === 1 && saveMessages[0] === "種目を追加しました");
+
+      menuInput = "";
+      actions["iron-menu-add"]();
+      check("空欄追加はno-op",
+        JSON.stringify(currentState.settings.gymExerciseList) === '["A","B","C"]' && saveMessages.length === 1);
+      menuInput = "   ";
+      actions["iron-menu-add"]();
+      check("空白のみ追加はno-op",
+        JSON.stringify(currentState.settings.gymExerciseList) === '["A","B","C"]' && saveMessages.length === 1);
+      menuInput = "A";
+      actions["iron-menu-add"]();
+      check("完全一致の重複追加はno-op",
+        JSON.stringify(currentState.settings.gymExerciseList) === '["A","B","C"]' && saveMessages.length === 1);
+      menuInput = "  A  ";
+      actions["iron-menu-add"]();
+      check("trim後完全一致の重複追加はno-op",
+        JSON.stringify(currentState.settings.gymExerciseList) === '["A","B","C"]' && saveMessages.length === 1);
+
+      currentState = {
+        settings: { gymExerciseList: ["A", "B", "C"] },
+        condition: { logs: { "2026-08-22": { gym: [{ exercise: "B", weight: 10, reps: 2 }] } } },
+        blocks: []
+      };
+      saveMessages = [];
+      actions["iron-menu-delete"]({ id: "1" });
+      check("削除は指定indexだけを除きstateへ保存", JSON.stringify(currentState.settings.gymExerciseList) === '["A","C"]');
+      check("メニュー削除後も過去セットのexercise文字列は不変",
+        currentState.condition.logs["2026-08-22"].gym[0].exercise === "B");
+      check("削除はsaveAndRenderを1回だけ呼ぶ", saveMessages.length === 1 && saveMessages[0] === "種目を削除しました");
+
+      currentState = { settings: { gymExerciseList: ["ONLY"] }, condition: { logs: {} }, blocks: [] };
+      saveMessages = [];
+      actions["iron-menu-delete"]({ id: "0" });
+      check("最後の1件はロジック側でも削除no-op",
+        JSON.stringify(currentState.settings.gymExerciseList) === '["ONLY"]' && saveMessages.length === 0);
+      actions["iron-menu-delete"]({ id: "invalid" });
+      check("不正indexは削除no-op",
+        JSON.stringify(currentState.settings.gymExerciseList) === '["ONLY"]' && saveMessages.length === 0);
+
+      currentState = { settings: { gymExerciseList: ["A", "B", "C"] }, condition: { logs: {} }, blocks: [] };
+      saveMessages = [];
+      actions["iron-menu-up"]({ id: "1" });
+      check("上移動は直前要素とswap", JSON.stringify(currentState.settings.gymExerciseList) === '["B","A","C"]');
+      check("上移動はsaveAndRenderを1回だけ呼ぶ", saveMessages.length === 1);
+      actions["iron-menu-down"]({ id: "1" });
+      check("下移動は直後要素とswap", JSON.stringify(currentState.settings.gymExerciseList) === '["B","C","A"]');
+      check("下移動もsaveAndRenderを1回だけ呼ぶ", saveMessages.length === 2);
+      actions["iron-menu-up"]({ id: "0" });
+      check("先頭の上移動はno-op",
+        JSON.stringify(currentState.settings.gymExerciseList) === '["B","C","A"]' && saveMessages.length === 2);
+      actions["iron-menu-down"]({ id: "2" });
+      check("末尾の下移動はno-op",
+        JSON.stringify(currentState.settings.gymExerciseList) === '["B","C","A"]' && saveMessages.length === 2);
+      actions["iron-menu-up"]({ id: "invalid" });
+      check("不正indexは移動no-op",
+        JSON.stringify(currentState.settings.gymExerciseList) === '["B","C","A"]' && saveMessages.length === 2);
+
+      currentState = { settings: { gymExerciseList: "broken" }, condition: { logs: {} }, blocks: [] };
+      const corruptHTML = renderIronLog();
+      check("非配列の壊れた値はDEFAULT_EXERCISES表示へフォールバック",
+        (corruptHTML.match(/class="iron-menu-row"/g) || []).length === 6);
+      saveMessages = [];
+      menuInput = "ケーブルフライ";
+      actions["iron-menu-add"]();
+      check("壊れた値への初回操作は既定6件の複製+操作結果へ自己修復",
+        Array.isArray(currentState.settings.gymExerciseList)
+          && currentState.settings.gymExerciseList.length === 7
+          && currentState.settings.gymExerciseList[6] === "ケーブルフライ"
+          && saveMessages.length === 1);
+
+      currentState = { settings: { gymExerciseList: "broken" }, condition: { logs: {} }, blocks: [] };
+      saveMessages = [];
+      actions["iron-menu-delete"]({ id: "1" });
+      check("壊れた値からの削除は既定6件から指定1件を除いて自己修復",
+        JSON.stringify(currentState.settings.gymExerciseList)
+          === '["ベンチプレス","デッドリフト","ラットプルダウン","ショルダープレス","その他"]');
+      check("壊れた値からの削除もsaveAndRenderを1回だけ呼ぶ",
+        saveMessages.length === 1 && saveMessages[0] === "種目を削除しました");
+
+      currentState = { settings: { gymExerciseList: "broken" }, condition: { logs: {} }, blocks: [] };
+      saveMessages = [];
+      actions["iron-menu-down"]({ id: "0" });
+      check("壊れた値からの移動は既定6件を隣接swapして自己修復",
+        JSON.stringify(currentState.settings.gymExerciseList)
+          === '["スクワット","ベンチプレス","デッドリフト","ラットプルダウン","ショルダープレス","その他"]');
+      check("壊れた値からの移動もsaveAndRenderを1回だけ呼ぶ",
+        saveMessages.length === 1 && saveMessages[0] === "並び順を変更しました");
+    } finally {
+      if (originalDocument === undefined) delete global.document;
+      else global.document = originalDocument;
+    }
+  }
+
   console.log(failures === 0 ? "\niron-log-core: 全件成功" : `\niron-log-core: ${failures}件失敗`);
   process.exit(failures === 0 ? 0 : 1);
 })();

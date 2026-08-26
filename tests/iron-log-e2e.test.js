@@ -39,8 +39,8 @@ function check(name, cond, extra = "") {
   // condition.logs[today].gym の1セット。at はfixed clock範囲内のHH:mm。
   const set = (exercise, weight, reps, minute, extra = {}) => ({ exercise, weight, reps, at: atMinute(today, minute), ...extra });
 
-  async function seed({ view = "iron-log", blocks = [], gym = [], settings = {}, reload = true } = {}) {
-    await page.evaluate(({ KEY, view, blocks, gym, settings, today }) => {
+  async function seed({ view = "iron-log", blocks = [], gym = [], settings = {}, deleteSettings = [], reload = true } = {}) {
+    await page.evaluate(({ KEY, view, blocks, gym, settings, deleteSettings, today }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.currentView = view;
       if (view === "timeline") {
@@ -53,8 +53,9 @@ function check(name, cond, extra = "") {
       s.condition.logs[today] = s.condition.logs[today] || {};
       s.condition.logs[today].gym = gym;
       s.settings = { ...s.settings, ...settings };
+      for (const key of deleteSettings) delete s.settings[key];
       localStorage.setItem(KEY, JSON.stringify(s));
-    }, { KEY, view, blocks, gym, settings, today });
+    }, { KEY, view, blocks, gym, settings, deleteSettings, today });
     if (reload) {
       await page.reload();
       await page.waitForSelector(`#app[data-view="${view}"]`, { state: "attached" });
@@ -260,6 +261,78 @@ function check(name, cond, extra = "") {
     await seed({ view: "today", blocks: [nonGym], gym: [] });
     check("実行中の非ジムBlockでは▶ IRON LOGボタンが出ない",
       await page.locator('.tower-nowhud .tower-ironlog-link[data-action="open-iron-log"]').count() === 0);
+
+    console.log("[10] v272 種目メニューは追加・並び替え・削除をLOAD SETへ同期し、過去セットを保持する");
+    await seed({ gym: [], settings: { gymExerciseList: ["STALE"] }, deleteSettings: ["gymExerciseList"] });
+    const defaultNames = ["ベンチプレス", "スクワット", "デッドリフト", "ラットプルダウン", "ショルダープレス", "その他"];
+    check("未編集時はMENU/LOAD SETの両方に既定6種目を同順で表示",
+      JSON.stringify(await page.locator(".iron-menu-name").allTextContents()) === JSON.stringify(defaultNames)
+        && JSON.stringify(await page.locator("#ironFormExercise option").allTextContents()) === JSON.stringify(defaultNames));
+    check("先頭▲・末尾▼はdisabled",
+      await page.locator('[data-action="iron-menu-up"][data-id="0"]').isDisabled()
+        && await page.locator('[data-action="iron-menu-down"][data-id="5"]').isDisabled());
+    check("追加入力は44px以上、既定6件の一覧は264px縦予算内",
+      await page.locator("#ironMenuName").evaluate((el) => el.getBoundingClientRect().height >= 44)
+        && await page.locator(".iron-menu-list").evaluate((el) => {
+          const style = getComputedStyle(el);
+          return style.maxHeight === "264px" && style.overflowY === "auto";
+        }));
+
+    const menuInput = page.locator("#ironMenuName");
+    const maxLengthName = "123456789012345678901234";
+    await menuInput.pressSequentially(`${maxLengthName}5`);
+    check("25文字目以降はmaxlength=24により入力されない", (await menuInput.inputValue()) === maxLengthName);
+    await page.locator('[data-action="iron-menu-add"]').click();
+    await page.waitForFunction(({ KEY, maxLengthName }) => {
+      const list = JSON.parse(localStorage.getItem(KEY)).settings.gymExerciseList;
+      return Array.isArray(list) && list.at(-1) === maxLengthName;
+    }, { KEY, maxLengthName });
+    check("24文字ちょうどはstate・MENU・LOAD SETへ追加成功",
+      (await readState()).settings.gymExerciseList.at(-1) === maxLengthName
+        && (await page.locator(".iron-menu-name").last().textContent()) === maxLengthName
+        && (await page.locator(".iron-menu-name").last().getAttribute("title")) === maxLengthName
+        && (await page.locator("#ironFormExercise option").last().textContent()) === maxLengthName);
+    check("7件目からMENU一覧内でスクロール可能",
+      await page.locator(".iron-menu-list").evaluate((el) => el.scrollHeight > el.clientHeight));
+
+    await seed({
+      gym: [set("A", 60, 10, 9 * 60)],
+      settings: { gymExerciseList: ["A", "B", "C"] }
+    });
+    await page.locator("#ironMenuName").fill("  D  ");
+    await page.locator('[data-action="iron-menu-add"]').click();
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).settings.gymExerciseList.length === 4, KEY);
+    let menuState = await readState();
+    check("追加はtrim後の名前をstate末尾へ保存", JSON.stringify(menuState.settings.gymExerciseList) === '["A","B","C","D"]');
+    check("追加した種目はMENU/LOAD SETの末尾へ即時反映",
+      JSON.stringify(await page.locator(".iron-menu-name").allTextContents()) === '["A","B","C","D"]'
+        && JSON.stringify(await page.locator("#ironFormExercise option").allTextContents()) === '["A","B","C","D"]');
+
+    await page.locator('[data-action="iron-menu-down"][data-id="0"]').click();
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).settings.gymExerciseList[0] === "B", KEY);
+    menuState = await readState();
+    check("▼で隣接swapをstateへ保存", JSON.stringify(menuState.settings.gymExerciseList) === '["B","A","C","D"]');
+    check("並び替え後のMENU/LOAD SET順も一致",
+      JSON.stringify(await page.locator(".iron-menu-name").allTextContents()) === '["B","A","C","D"]'
+        && JSON.stringify(await page.locator("#ironFormExercise option").allTextContents()) === '["B","A","C","D"]');
+
+    await page.locator('[data-action="iron-menu-delete"][data-id="1"]').click();
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).settings.gymExerciseList.length === 3, KEY);
+    menuState = await readState();
+    check("削除はメニューstateとLOAD SETから対象種目だけを除く",
+      JSON.stringify(menuState.settings.gymExerciseList) === '["B","C","D"]'
+        && await page.locator('#ironFormExercise option[value="A"]').count() === 0);
+    check("メニューからAを削除してもTODAY'S SETS/TOTALSの過去記録は残る",
+      (await page.locator(".iron-set-name").textContent()) === "A"
+        && (await page.locator(".iron-total span").textContent()) === "600");
+
+    await page.locator(".iron-set-del").click();
+    await page.waitForFunction(({ KEY, today }) => JSON.parse(localStorage.getItem(KEY)).condition.logs[today]?.gym?.length === 0,
+      { KEY, today });
+    const afterSetDelete = await readState();
+    check("既存iron-delete-setは引き続き当日セットだけを削除",
+      afterSetDelete.condition.logs[today].gym.length === 0
+        && JSON.stringify(afterSetDelete.settings.gymExerciseList) === '["B","C","D"]');
 
     console.log(failures === 0 ? "[iron-log-e2e] 全PASS" : `[iron-log-e2e] ${failures}件失敗`);
   } catch (e) {
