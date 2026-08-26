@@ -156,6 +156,8 @@ const REPLAN_TIMEOUT_MS = 15 * 60 * 1000;
 let _replanPending = null;
 let _replanPollTimer = null;
 let _replanPollBusy = false;
+// v269: statusのdata-kindへ未知値を流さず、既存warn系の見た目へ安全にフォールバックする。
+const REPLAN_UI_KINDS = new Set(["idle", "sending", "pending", "error", "success", "limit", "timeout"]);
 let _replanUi = { kind: "idle", message: "残り時間の計画をAIへ依頼できます" };
 // v229: GATE編集モードは画面状態だけなので永続stateへ混ぜず、セッション内だけ保持する。
 let _towerGateEditMode = false;
@@ -4171,7 +4173,7 @@ async function tryFetchAiPlan(date, freeGaps, providedData = null) {
 }
 
 function setReplanUi(kind, message) {
-  _replanUi = { kind, message };
+  _replanUi = { kind: REPLAN_UI_KINDS.has(kind) ? kind : "idle", message };
   if (app?.dataset.view === "today" || app?.dataset.view === "settings") renderDeferringForFocus();
 }
 
@@ -11849,12 +11851,16 @@ function atisFeedbackReadHTML() {
 
 function renderAtisPanel() {
   const workItems = pendingAiWorkResults();
+  const pendingCount = Number(workItems.length);
+  const pendingBadgeHTML = pendingCount > 0
+    ? `<b class="tower-atis-pending-badge" data-atis-pending-count>未処理 ${escapeHTML(String(pendingCount))}件</b>`
+    : "";
   const workHTML = workItems.length ? `<div class="atis-divider"></div>
     <div class="tower-atis-sub">AIが処理した作業 <span>${workItems.length}</span></div>
     ${workItems.map((result) => aiWorkResultRowHTML(result)).join("")}` : "";
   const replanActive = _replanUi.kind === "sending" || _replanUi.kind === "pending";
   return `<section class="tower-panel-box sec-atis" data-atis-panel>
-    <h2>ATIS <span>AIから</span></h2>
+    <h2>ATIS <span>AIから</span>${pendingBadgeHTML}</h2>
     <div class="tower-atis-body">
       ${aiFreshnessLine()}
       ${workHTML}
@@ -11865,7 +11871,7 @@ function renderAtisPanel() {
         <button type="button" class="atis-btn" data-action="ai-schedule">📋 下書きスケジュール</button>
         <button type="button" class="atis-btn" data-action="today-replan" data-replan-button ${replanActive ? "disabled" : ""}>♻️ AI再プラン</button>
       </div>
-      <div class="tower-atis-status" data-atis-status>${escapeHTML(_replanUi.message)}</div>
+      <div class="tower-atis-status" data-atis-status data-kind="${_replanUi.kind}">${escapeHTML(_replanUi.message)}</div>
     </div>
   </section>`;
 }

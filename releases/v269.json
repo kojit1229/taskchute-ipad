@@ -1,0 +1,58 @@
+{
+  "version": 269,
+  "date": "2026-08-26",
+  "title": "ATIS表示改善",
+  "summary": "K承認済みATIS改善パッケージ1〜3の未消化分を、再プラン状態・未処理件数・タップ標的の表示改善としてまとめた。",
+  "changedFiles": [
+    "app.js",
+    "CHANGES_v269.md",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v269.json",
+    "styles.css",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/v269.test.js"
+  ],
+  "intent": [
+    "ATIS見出しだけで、AI作業結果の未処理件数を把握できるようにする。",
+    "再プランの進行・成功・注意状態を、赤系や懲罰的表現を使わず見分けられるようにする。",
+    "ATISの候補チップと操作ボタンを、iOS PWAで押しやすいタップ標的へ引き上げる。"
+  ],
+  "changes": [
+    "pendingAiWorkResultsの件数をATIS見出しへ『未処理 n件』として表示し、0件ではバッジ自体を描画しないようにした。候補チップと処理済みAI作業結果は件数へ含めない。",
+    "再プランstatusへidle/sending/pending/error/success/limit/timeoutのdata-kindを付け、未知kindはidleへフォールバックするようにした。進行中はcyan、成功はgreen、error/limit/timeoutは既存amberで表示する。",
+    ".atis-chipと内包buttonを40px、ATIS操作ボタンを44px/11pxへ引き上げ、内包buttonのborder・背景・font・focus意匠を統一した。",
+    "v269 E2Eでバッジ0/1/n件とamber実色、7kindとcyan/green/amber等のcomputed color完全対応、属性注入負例、表示系saveState 0回を固定した。",
+    "実際の再プラン送信からfinishReplanへ至る失敗・成功分岐、1024px/390px双方の40/44px実寸、ATIS DOMのタグ・直親子・重複なし・status末尾配置を実DOMで固定した。",
+    "Service WorkerのCACHE_NAMEをv269へ更新し、code-indexとtest-manifestを再生成した。"
+  ],
+  "uncertainties": [
+    "iOS実機PWAでのService Worker更新、オフライン起動、390/768/1024pxの最終目視とタップ感は監督者側で確認が必要。390px/1024pxの自動実寸検証はv269 E2Eへ追加済み。"
+  ],
+  "reviewFocus": [
+    "未処理バッジがAI作業結果の未処理だけを数え、0件で非表示になり、候補チップや処理済み結果を含めないか。",
+    "再プランの既知7kindがdata-kindへ反映され、各kindが承認済みトークンのcomputed colorに一致し、不正kind・属性注入payloadがidleへ落ちるか。",
+    "実際の再プラン失敗・成功応答がfinishReplan経由でerror/amber・success/greenとして実DOMへ反映されるか。",
+    ".atis-chip内の採用・却下buttonがともに40px以上、ATIS操作3ボタンが44px以上で、既存data-actionを維持するか。",
+    "表示更新でsaveStateを呼ばず、計測フックが一意に注入され、鮮度/work/FB/チップ/操作ボタン/statusのタグ・直親子・重複なし・順序を維持するか。"
+  ],
+  "verification": [
+    "node --check app.js / tests/v269.test.js: PASS。",
+    "node tests/v269.test.js: 計測フック3件の一意注入チェックPASS後、Chromium起動がspawn EPERMとなりブラウザ検証未実行。",
+    "npm run code:index:write / npm run test:manifest:write: PASS(153 suites、v269はcontent-ai+ui-responsive分類)。",
+    "ミラーhandoff指定 release-record --write / --check: PASS(本番handoff反映は監督者側)。",
+    "ミラーhandoff指定 release-gate --final: exit 1。schema/manifest/code-index/構文/release-record/Node系回帰はPASS、ブラウザ系9スイートが一律Chromium spawn EPERMで停止。"
+  ],
+  "notes": [
+    "新しいstateフィールド、イベント、data-action、日付パース、APP_SHELL項目は追加していない。",
+    "実行コード差分はapp.js/styles.css/sw.js合計で追加48行・削除9行となり、発注文の約80行以内に収めた。",
+    "提案二重表示除外・前日FB日付ラベル・FB冒頭常時表示・summary日付・テスト棚卸しは先行リリースで消化済みのため変更していない。",
+    "パッケージ4/5、CABIN TIMER順序、DEPARTURESには触れていない。"
+  ],
+  "knownLimitations": [
+    "バッジは当日AI作業結果ファイルの取得後に更新され、取得前または取得失敗時は表示しない。",
+    "候補チップは40px、主要操作ボタンは44pxという承認済みの二段階基準を維持する。"
+  ]
+}
