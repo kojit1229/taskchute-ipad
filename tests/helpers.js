@@ -137,13 +137,53 @@ async function passGithubGate(page, keyName = STATE_KEY) {
 // groupIdで分岐する。<summary>への本物のクリックで開く(.open=trueの直接代入は、ブラウザが
 // 'toggle'イベントを自動発火しlocalStorageへ永続化してしまう場合があり、「stateを汚さない
 // 純粋なDOM操作」という説明が事実と異なっていたため、実クリックへ統一した)。
+// v151フレーク対策: summaryクリックのdetails 'toggle'イベントは非同期タスクで発火するため、
+// 直後の同期render()(innerHTML差し替え)で要素がdetachされるとtoggleが失われFOLD_KEYへ
+// 永続化されない。render()はFOLD_KEYからopen/closedを再構築するので、未永続のまま次のrenderが
+// 走ると群はclosedへ戻る。そこで「DOMでopen かつ FOLD_KEYへ永続化済み」まで確立してから戻る。
+// 注意: 本ヘルパーは既定closed(defaultOpen=false)の群を前提にしている。defaultOpen=trueの
+// 群(未永続でもopenが正常系)へ使うと、初回3秒待ち+一度閉じる副作用が出るため設計を見直すこと。
 async function openSettingsGroup(page, groupId) {
   const sel = groupId === "settings-sync" ? "[data-settings-sync]" : `[data-fold-id="${groupId}"]`;
   const el = page.locator(sel);
   if ((await el.count()) === 0) return;
-  const isOpen = await el.evaluate((e) => e.open);
-  if (!isOpen) await el.locator("summary").first().click();
-  await page.waitForFunction((selector) => document.querySelector(selector)?.open === true, sel);
+  const FOLD_KEY = "taskchute-journal-home-fold-v1";
+  // settings-syncはFOLD_KEYを使わない設計(in-memoryオーバーライド。app.jsの
+  // renderSettingsSyncGroup参照)のため、DOMのopenのみ待つ(リトライの恩恵だけ受ける)。
+  const needsPersist = groupId !== "settings-sync";
+  let lastError = null;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const isOpen = await el.evaluate((e) => e.open);
+    if (!isOpen) await el.locator("summary").first().click();
+    try {
+      await page.waitForFunction(
+        ({ selector, key, id, persist }) => {
+          const details = document.querySelector(selector);
+          if (!details || details.open !== true) return false;
+          if (!persist) return true;
+          // app.js readFoldMap()と同じ保護(不正JSONで評価関数ごと即死させない)
+          let fold;
+          try { fold = JSON.parse(localStorage.getItem(key) || "{}"); } catch { fold = null; }
+          return !!fold && fold[id] === true;
+        },
+        { selector: sel, key: FOLD_KEY, id: groupId, persist: needsPersist },
+        { timeout: 3000 }
+      );
+      return;
+    } catch (err) {
+      lastError = err;
+      // toggle喪失(open済みだが未永続)のままではrenderで閉じ直されるため、実クリックで
+      // 一度閉じてtoggleを再発火させ、次のループで開き直す(.open直接代入は上記コメントの理由で不可)。
+      const stillOpen = await el.evaluate((e) => e.open).catch(() => false);
+      if (stillOpen) await el.locator("summary").first().click();
+    }
+  }
+  const finalState = await el.evaluate((e) => e.open).catch(() => "evaluate失敗");
+  const foldRaw = await page.evaluate((key) => localStorage.getItem(key), FOLD_KEY).catch(() => "取得失敗");
+  throw new Error(
+    `openSettingsGroup: ${groupId} をopen+永続化済みへ確立できませんでした(5回試行)。` +
+    `最終DOM open=${finalState} / FOLD_KEY=${foldRaw} / 最終エラー=${String(lastError).split("\n")[0]}`
+  );
 }
 
 function randomPort(min = 20000, max = 40000) {
