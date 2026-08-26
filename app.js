@@ -4,7 +4,7 @@ import { mergeById, mergeByIdPreferNewer } from "./src/core/merge.js";
 import {
   activeTrackForProject, dateParts, isProjectInCurrentCycle, latestMeasurement, numericGoalReached,
   paceMilestone, paceNumeric, trackStatus, daysBetween as trackDaysBetween,
-  validateTrackDraft, trackDefinitionChanged, weeklyScore
+  validateTrackDraft, trackDefinitionChanged, weeklyScore, selectTrackFooter
 } from "./src/core/track.js";
 // v166: app.js分割・段階3(state store + storage/sync gateway)。stateの再代入はsetState()
 //   経由のみ(claude-review-result.md §2 Blocker-1)。store.jsは何もimportしない真の葉。
@@ -16,7 +16,7 @@ import { loadState, persistLocalNoSchedule, _lastSaveError } from "./src/storage
 // (src/state/feedback-cache.js冒頭コメント参照)。
 import { cachedFeedback } from "./src/state/feedback-cache.js";
 // v223: TOWER上帯(STANDING ORDERS/COUNTDOWN)は自己完結featureへ依存注入する。
-import { configureTopband, cycleWeekForDate } from "./src/features/topband.js";
+import { configureTopband, cycleWeekForDate, toggleTwyScoreExpanded } from "./src/features/topband.js";
 // v233: P4第2弾。v232で配置済みのIRON LOG/INSTRUMENTSを画面結線する。
 import {
   configureIronLog, renderIronLog, linkedGymBlock, gymCommentSummary, runIronImport
@@ -267,7 +267,8 @@ configureTopband({
   getSettings: () => ({
     twelveWeekStartDate: state.settings.twelveWeekStartDate,
     birthDate: state.settings.birthDate
-  })
+  }),
+  getTrackDigest: () => buildTrackDigest()
 });
 configureTrackUi({ escapeHTML, todayISO, saveAndRender, generateReport, recordTrackMeasurement });
 configureIronLog({
@@ -575,6 +576,8 @@ registerActions({
     refreshTrackForm();
   },
   "twy-ms-del": ({ target }) => { target.closest(".twy-ms-edit-row")?.remove(); refreshTrackForm(); },
+  // v266: COUNTDOWNのスコア信号を展開/折りたたむ。
+  "twy-score-toggle": () => { toggleTwyScoreExpanded(); render(); },
   // v263: 週次確定シート。チェックと展開は入力保持のためモーダルDOMだけを更新する。
   "twy-open-commit": () => openTwyCommitSheet(),
   "twy-commit-toggle-group": ({ target }) => {
@@ -1423,6 +1426,14 @@ document.addEventListener("change", (event) => {
   if (target.matches("[data-setting-dayclosehours]")) {
     const n = parseFloat(target.value);
     state.settings.dayCloseHours = (Number.isFinite(n) && n > 0) ? n : 24;
+    saveState();
+    render();
+  }
+  // v266: 12WY週次実行率の目安はnormalizeStateと同じ70〜100の整数へ即時補正する。
+  if (target.matches("[data-setting-scoretarget]")) {
+    const raw = String(target.value || "").trim();
+    const n = raw ? Math.round(Number(raw)) : Number.NaN;
+    state.settings.twelveWeekScoreTarget = Number.isFinite(n) ? clamp(n, 70, 100) : 85;
     saveState();
     render();
   }
@@ -3061,6 +3072,54 @@ function candidateBlocksForWeek(value, weekStart) {
       && (block.completed || (task.status !== "suspended" && task.status !== "cancelled"))
       && block.date >= range.weekStart && block.date <= range.weekEnd;
   });
+}
+
+function twyPaceLabel(track, pace) {
+  if (track.kind !== "numeric" || pace.invalid) return { sign: "", text: "—" };
+  const diff = roundToStep(pace.diffRaw, track.valueStep);
+  if (diff === "") return { sign: "", text: "—" };
+  return { sign: pace.diffNorm >= -Number(pace.tolerance || 0) ? "pos" : "neg",
+    text: `${diff !== "0" && pace.diffRaw >= 0 ? "+" : ""}${diff}${track.unit || ""}` };
+}
+
+function twyMetaLabel(track, latestValue, measurement) {
+  if (track.kind === "milestone") {
+    const milestones = (track.milestones || []).filter((item) => !item.deleted);
+    return `${milestones.filter((item) => item.doneAt).length}/${milestones.length}節目`;
+  }
+  const latest = Number(latestValue), goal = Number(track.goalValue);
+  if (Number.isFinite(latest) && Number.isFinite(goal)) return `${latest}/${goal}${track.unit || ""}`;
+  return measurement ? `最終 ${mdFmt(measurement.observedAt)}` : "—";
+}
+
+// v266: COUNTDOWN表示専用digest。core/週次データは読み取りだけに留める。
+function buildTrackDigest() {
+  const cycleStart = state.settings.twelveWeekStartDate || "";
+  if (!cycleStart) return null;
+  const today = todayISO(), weekStart = weekRange(today).weekStart;
+  const latestWeekMeta = (state.weeklyCommitments || []).reduce((latest, record) =>
+    record.id === `wcw_${weekStart}` && (!latest || String(record.updatedAt || "") > String(latest.updatedAt || ""))
+      ? record : latest, null);
+  const hasMeta = latestWeekMeta?.recordType === "week" && latestWeekMeta.weekStart === weekStart && !latestWeekMeta.deleted;
+  const score = weeklyScore(state.weeklyCommitments || [], weekStart);
+  let prevScore = null;
+  if (!hasMeta) {
+    const previous = weeklyScore(state.weeklyCommitments || [], addDays(weekStart, -7));
+    prevScore = previous.status === "scored" ? previous.pct : null;
+  }
+  const candidateCount = hasMeta ? 0 : candidateBlocksForWeek(state, weekStart).length;
+  const entries = (state.tracks || []).filter((track) => !track.deleted && track.status !== "closed").map((track) => {
+    const project = (state.projects || []).find((item) => item.id === track.ownerId && !item.deleted);
+    if (!project || !isProjectInCurrentCycle(project, cycleStart)) return null;
+    const measurement = latestMeasurement(state.trackMeasurements || [], track.id);
+    const latestValue = measurement ? measurement.value : track.baselineValue;
+    const pace = track.kind === "numeric" ? paceNumeric(track, latestValue, today) : paceMilestone(track, today);
+    const lastObservedISO = measurement ? String(measurement.observedAt || "").slice(0, 10) : track.startDate;
+    const status = trackStatus(track, pace, latestValue, lastObservedISO, today);
+    return { track, status, paceLabel: twyPaceLabel(track, pace), metaLabel: twyMetaLabel(track, latestValue, measurement) };
+  }).filter(Boolean);
+  return { hasMeta, score, prevScore, candidateCount, scoreTarget: state.settings.twelveWeekScoreTarget,
+    tracksFootLines: selectTrackFooter(entries) };
 }
 
 const COMMITMENT_SOURCE_PRIORITY = { auto: 0, confirmed: 1, added: 2 };
@@ -7350,6 +7409,10 @@ function renderSettingsProfilePanel() {
     </label>
     <label>12WY開始日
       <input class="input" type="date" data-setting-field="twelveWeekStartDate" value="${state.settings.twelveWeekStartDate || todayISO()}">
+    </label>
+    <label>12WY週次実行率の目安(%・70〜100)
+      <input class="input" type="number" min="70" max="100" step="1" data-setting-scoretarget
+        value="${Number.isFinite(state.settings.twelveWeekScoreTarget) ? state.settings.twelveWeekScoreTarget : 85}">
     </label>
   `;
 }

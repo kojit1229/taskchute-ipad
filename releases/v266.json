@@ -1,0 +1,67 @@
+{
+  "version": 266,
+  "date": "2026-08-26",
+  "title": "12WY COUNTDOWNスコア信号・設定",
+  "summary": "COUNTDOWNの12週サイクルセルへ週次実行スコアの1行信号とタップ展開内訳、TRACKSフッタ、未確定バナーを追加し、実行率目安設定とATIS縦予算を実装した。",
+  "changedFiles": [
+    "app.js",
+    "CHANGES_v266.md",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v266.json",
+    "scripts/test-manifest.js",
+    "src/features/topband.js",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/v266.test.js"
+  ],
+  "intent": [
+    "PC上帯2の既定高さを増やしすぎず、12WYの週次実行状況を1行で把握し、必要なときだけバーと成果トラック内訳を開けるようにする。",
+    "未確定週から既存の週次確定シートへ到達できるようにし、確定済み対象0件と真の未確定を区別する。",
+    "12WY実行率の目安を70〜100で変更可能にし、長いATIS本文が後続パネルを押し下げ続けないよう内部スクロール化する。"
+  ],
+  "changes": [
+    "topbandのDIへgetTrackDigestを追加し、12WY未設定時は従来表示のまま、設定済み時は週次スコアの1行信号を12週セル内へ描画した。",
+    "確定済み信号をdata-action=twy-score-toggleで展開し、スコアバー、動的な目安ラベル、severity順最大2件のTRACKSフッタを表示する非永続状態を追加した。",
+    "週メタとweeklyScoreを独立判定し、未確定候補がある場合だけtwy-open-commit付きバナーを描画して既存確定シートへ結線した。",
+    "app.jsで既存core関数だけを呼ぶbuildTrackDigestを追加し、現サイクル内の生きたトラックからpace/status/短い表示ラベルを組み立てた。",
+    "設定画面へ12WY週次実行率の目安入力を追加し、空欄は85、範囲外は70〜100へ丸め・クランプして1操作1回だけ保存する専用change分岐を追加した。",
+    "ATIS本文へmax-height:60vhとoverflow-y:autoを設定し、ATIS内readonly-mdのmin-heightだけを0へ上書きした。",
+    "TOWERトークン正本へ暗背景比4.5:1以上の赤を追加し、遅延信号とスコアバーを実色表示するとともに、信号のタップ高を40pxへ拡大した。",
+    "週メタの重複時はupdatedAtが最新のレコードを採用し、pace色はtrackStatusと同じtolerance境界へ揃え、TRACKS用pace/meta CSSを行内へ限定した。",
+    "Service WorkerのCACHE_NAMEをv266へ更新した。",
+    "v266 E2Eを追加し、B-6の19表示パターン、境界・負例、保存回数、normalize安定、COUNTDOWN/ATIS/#9/#12回帰を固定し、computed色・40px高・設定境界・既存HTML・ATIS実データ・baseline表示まで検出力を強化した。",
+    "action registry台帳でCOUNTDOWNトグルと週次確定シートのグループ・件数注記を分離した。"
+  ],
+  "uncertainties": [
+    "ATISの60vhは設計正典が指定した初期値であり、iOS実機の縦横向き双方で最終的な読みやすさ確認が必要。",
+    "TRACKSフッタの短いpace/meta表記は既存WBSと同じcore結果を使うが、狭幅での情報密度は実機確認後に文言調整の余地がある。"
+  ],
+  "reviewFocus": [
+    "確定済み対象0件が未確定バナーへ戻らず、真の未確定かつ候補ありの場合だけ確定導線が出るか。",
+    "展開状態が保存・同期されず、render再実行と390px/1280px切替では保持されるか。",
+    "scoreTarget変更が空欄85・69→70・101→100となり、saveState 1回、generateReport 0回を守るか。",
+    "TRACKS選抜が現サイクル・closed/deleted除外とseverity順最大2件を守り、WBSと同じ状態語を示すか。",
+    "ATISのDOM/action順序を変えず、長文時だけ内部スクロールできるか。"
+  ],
+  "verification": [
+    "node --check app.js / src/features/topband.js / tests/v266.test.js: PASS。",
+    "system Edge指定 tests/v266.test.js: B-6 #1〜#19、負例・境界、保存/normalize、COUNTDOWN/ATIS/#9/#12回帰を含め全件PASS。",
+    "tests/action-registry-core.test.js: 新規twy-score-toggleを含む登録action 189件・全action保存則227件ともPASS。",
+    "npm run code:index:write / npm run test:manifest:write: PASS。",
+    "handoff反映はnotes書き込み可能な監督者側で実施・ミラー照合まで完了。",
+    "system Edge指定 release-gate releases/v266.json --final: 本番handoff未反映のrelease-record checkで停止しexit 1。停止前の全検査と、停止後に個別実行したimpact回帰束18件・core 10件は全てPASS。"
+  ],
+  "notes": [
+    "weeklyScoreはv264で既にimport済みだったため重複追加せず、selectTrackFooterとtoggleTwyScoreExpandedだけを追加した。",
+    "core関数、#4データ層、#9〜#12既存実装は変更せず呼び出しだけに限定した。",
+    "実行コード差分は設計正典F-7の監督者裁定によるSize-Exempt対象で、コミットは監督者が行う。"
+  ],
+  "knownLimitations": [
+    "ライトテーマのTRACKS状態チップはTOWER暗背景で約2.9〜3.7:1となる既存v260由来のコントラスト制約があり、別リリースで対応する。",
+    "iOS実機PWAでのService Worker更新、オフライン起動、390/768/1024/1280pxの最終目視確認は監督者側で必要。"
+  ]
+}

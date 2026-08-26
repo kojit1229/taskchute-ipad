@@ -3021,6 +3021,7 @@ h3 {
   --tower-amber: #f2b84b;
   --tower-green: #52d68a;
   --tower-cyan: #55d9e8;
+  --tower-red: #ff6d7f;
   --tower-purple: #a78bfa;
   min-height: 100%;
   max-width: 760px;
@@ -3352,7 +3353,7 @@ h3 {
 }
 .tower-panel-box h2 span { float: right; color: var(--tower-text); font-size: 10px; font-weight: 400; letter-spacing: .08em; opacity: .6; }
 
-.tower-atis-body { display: grid; gap: 8px; padding: 10px; }
+.tower-atis-body { display: grid; gap: 8px; padding: 10px; max-height: 60vh; overflow-y: auto; }
 .tower-atis-sub { color: var(--tower-cyan); font-size: 10px; font-weight: 700; letter-spacing: .08em; }
 .tower-atis-sub span { color: var(--tower-text); opacity: .6; }
 .atis-divider { height: 1px; background: var(--tower-line); }
@@ -3364,6 +3365,7 @@ h3 {
 .tower-atis-feedback summary { min-height: 32px; padding: 8px; color: var(--tower-cyan); cursor: pointer; list-style: none; }
 .tower-atis-feedback summary::-webkit-details-marker { display: none; }
 .tower-atis-feedback-body { padding: 8px; border-top: 1px solid var(--tower-line); font-family: system-ui, sans-serif; line-height: 1.55; }
+.tower-atis-feedback-body .readonly-md { min-height: 0; }
 .tower-atis-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .atis-chip {
   min-height: 32px;
@@ -3433,6 +3435,37 @@ h3 {
 .tower-life-num small { color: var(--tower-text); font-size: 11px; font-weight: 400; opacity: .6; }
 .tower-life-bar { height: 4px; background: var(--tower-line); overflow: hidden; }
 .tower-life-bar span { display: block; height: 100%; background: var(--tower-amber); box-shadow: 0 0 6px var(--tower-amber); }
+
+/* v266: 12WY週次スコアは既定1行、内訳とTRACKSはタップ時だけ展開する。 */
+.twy-score { display: flex; align-items: center; gap: 6px; min-width: 0; margin: 2px 0 8px; }
+.twy-score.is-open { display: block; }
+.twy-score-signal { display: inline-flex; align-items: center; gap: 6px; width: 100%; min-width: 0; min-height: 40px; padding: 0; border: 0; color: inherit; background: transparent; font: inherit; text-align: left; cursor: pointer; }
+.twy-score-label { flex: none; color: var(--tower-cyan); font-size: 9.5px; letter-spacing: .08em; opacity: .9; }
+.twy-score-val { min-width: 0; overflow: hidden; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.twy-score-val small { margin-left: 3px; font-size: 9px; font-weight: 400; opacity: .55; }
+.twy-score-caret { flex: none; margin-left: auto; font-size: 10px; opacity: .65; }
+.twy-score-signal.is-good, .twy-score-val.is-good { color: var(--tower-green); }
+.twy-score-signal.is-mid, .twy-score-val.is-mid { color: var(--tower-amber); }
+.twy-score-signal.is-low, .twy-score-val.is-low { color: var(--tower-red); }
+.twy-score.is-na, .twy-score-signal.is-na, .twy-score-val.is-na { color: var(--tower-text); opacity: .65; }
+.twy-score-detail { margin-top: 6px; }
+.twy-score-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 3px; }
+.twy-score-bar { position: relative; height: 4px; background: var(--tower-line); overflow: visible; }
+.twy-score-bar > span { display: block; height: 100%; }
+.twy-score-bar.is-good > span { background: var(--tower-green); box-shadow: 0 0 6px var(--tower-green); }
+.twy-score-bar.is-mid > span { background: var(--tower-amber); box-shadow: 0 0 6px var(--tower-amber); }
+.twy-score-bar.is-low > span { background: var(--tower-red); box-shadow: 0 0 6px var(--tower-red); }
+.twy-score-bar > i { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--tower-text); opacity: .75; }
+.twy-score-target { display: block; margin-top: 3px; color: var(--tower-text); font-size: 8px; text-align: right; opacity: .65; }
+.twy-tracks-foot { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--tower-line); }
+.twy-track-line { display: flex; align-items: center; gap: 8px; min-height: 22px; font-size: 10.5px; }
+.twy-track-line .t-name { min-width: 0; overflow: hidden; font-family: system-ui, sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.twy-track-line .t-pace { flex: none; font-variant-numeric: tabular-nums; }
+.twy-track-line .t-pace.neg { color: var(--tower-amber); }
+.twy-track-line .t-pace.pos { color: var(--tower-green); }
+.twy-track-line .t-meta { flex: none; margin-left: auto; font-size: 9.5px; opacity: .5; }
+.twy-commit-banner { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-top: 1px dashed var(--tower-amber); color: var(--tower-amber); font-size: 10.5px; }
+.twy-commit-banner button { min-height: 32px; margin-left: auto; padding: 4px 12px; border: 1px solid var(--tower-amber); color: var(--tower-amber); background: transparent; font: inherit; font-size: 10px; letter-spacing: .12em; cursor: pointer; }
 
 /* ============ PC専用の上帯(信条+寿命。モバイルでは常時非表示) ============ */
 .tower-topband-pc { display: none; }

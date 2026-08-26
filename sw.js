@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v265";
+const CACHE_NAME = "taskchute-journal-pwa-v266";
+// v266: COUNTDOWNへ12WY週次スコア信号/展開内訳/設定を追加し、ATISを内部スクロール化した。
 // v264: 確定済み週のC'表示、免除/解除、計画追加UIを追加した(APP_SHELL変更なし)。
 // v263: WBSから開ける週次コミット確定シート(pre-commit)を追加した(APP_SHELL変更なし)。
 // v262: 12WY進捗トーストを独立featureとして追加し、測定保存と日報quiet再生成を結線した。
