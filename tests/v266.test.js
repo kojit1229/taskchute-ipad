@@ -12,6 +12,8 @@ const appSource = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
 const topbandSource = fs.readFileSync(path.join(ROOT, "src", "features", "topband.js"), "utf8");
 const stylesSource = fs.readFileSync(path.join(ROOT, "styles.css"), "utf8");
 const swSource = fs.readFileSync(path.join(ROOT, "sw.js"), "utf8");
+const maxRelease = Math.max(...fs.readdirSync(path.join(ROOT, "releases"))
+  .map((file) => /^v(\d+)\.json$/.exec(file)?.[1]).filter(Boolean).map(Number));
 let failures = 0;
 
 function check(name, condition, extra = "") {
@@ -54,7 +56,8 @@ function contrastRatio(foreground, background) {
     && /\.twy-score-signal\s*\{[^}]*display:\s*inline-flex;[^}]*align-items:\s*center;[^}]*min-height:\s*40px;/.test(stylesSource));
   check("TRACKS pace/meta CSSは行内へスコープ", !/^\.t-(?:pace|meta)\b/m.test(stylesSource)
     && countMatches(stylesSource, /^\.twy-track-line \.t-(?:pace|meta)\b/gm) === 4);
-  check("CACHE_NAMEはv266", /^const CACHE_NAME = "taskchute-journal-pwa-v266";/m.test(swSource));
+  check(`CACHE_NAMEはreleases最大版v${maxRelease}`, new RegExp(
+    `^const CACHE_NAME = "taskchute-journal-pwa-v${maxRelease}";`, "m").test(swSource));
   const topband = await import(pathToFileURL(path.join(ROOT, "src", "features", "topband.js")).href);
   topband.configureTopband({ escapeHTML: (value) => String(value), todayISO: () => "2026-08-25",
     getSettings: () => ({ twelveWeekStartDate: "2026-08-15", birthDate: "" }), getTrackDigest: () => null });

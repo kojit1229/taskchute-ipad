@@ -2580,8 +2580,34 @@
         "ui-responsive"
       ],
       "assertionSignals": 59,
-      "assertionHash": "e5e09f409dcc7dd6",
-      "sourceHash": "728d9b81cf3ff7eb",
+      "assertionHash": "9e37ac5d16777e4a",
+      "sourceHash": "4c591a6e07685314",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v267.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "sync-storage",
+        "journal-health",
+        "ui-responsive"
+      ],
+      "assertionSignals": 22,
+      "assertionHash": "e33f158f0ce1a237",
+      "sourceHash": "d8988db6f5a3bd99",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v266";
+const CACHE_NAME = "taskchute-journal-pwa-v267";
+// v267: 12WY MVP統合E2Eと既知の限界をリリース記録へ集約した(APP_SHELL変更なし)。
 // v266: COUNTDOWNへ12WY週次スコア信号/展開内訳/設定を追加し、ATISを内部スクロール化した。
 // v264: 確定済み週のC'表示、免除/解除、計画追加UIを追加した(APP_SHELL変更なし)。
 // v263: WBSから開ける週次コミット確定シート(pre-commit)を追加した(APP_SHELL変更なし)。
