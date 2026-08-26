@@ -201,6 +201,8 @@ function check(name, cond, extra = "") {
       && (await completedLog.locator("time").textContent()) === "08:00-08:25"
       && (await completedLog.locator(".tower-log-title").textContent()) === "完了済み便"
       && (await completedLog.locator(".tower-log-dur").textContent()) === "25分");
+    check("FLIGHT LOG行は44px以上のbutton", await completedLog.evaluate((el) =>
+      el.tagName === "BUTTON" && parseFloat(getComputedStyle(el).minHeight) >= 44));
     check("復元描画の最新完了行はフラッシュしない", await completedLog.evaluate((el) => !el.classList.contains("is-flip"))
       && await page.locator('.sec-log .tower-touchdown').count() === 0);
 
@@ -270,6 +272,16 @@ function check(name, cond, extra = "") {
     check("終了のみBlockはARRIVALSから消える", await page.locator('[data-flight-id="ended-only"].tower-arrival-row').count() === 0);
     check("終了のみBlockはFLIGHT LOGへ終了ラベル付きで出る", await page.locator('[data-flight-id="ended-only"] .tower-log-state[data-state="ended"]', { hasText: "終了" }).count() === 1);
     check("completed+actualEndAtは従来どおり完了実績として出る", await page.locator('[data-flight-id="completed-actual"] .tower-log-state[data-state="completed"]', { hasText: "完了" }).count() === 1);
+    await page.locator('.tower-log-row[data-flight-id="ended-only"]').click();
+    await page.waitForSelector(".modal-card", { state: "attached" });
+    check("終了のみFLIGHT LOG行タップで対象Block編集モーダルを開く",
+      await page.locator('[data-modal-field="title"]').inputValue() === "終了のみ便");
+    await page.locator('.modal-card [data-action="modal-close"]').first().click();
+    await page.locator('.tower-log-row[data-flight-id="completed-actual"]').click();
+    await page.waitForSelector(".modal-card", { state: "attached" });
+    check("完了済みFLIGHT LOG行タップでも対象Block編集モーダルを開く",
+      await page.locator('[data-modal-field="title"]').inputValue() === "完了実績便");
+    await page.locator('.modal-card [data-action="modal-close"]').first().click();
     const runwayReadyId = await page.locator('.tower-nowhud[data-status="ready"] [data-action="now-start"]').getAttribute("data-id");
     check("NOW LANDINGは終了のみBlockでなく次の未着手Blockを選ぶ", runwayReadyId === "next-open", `actual=${runwayReadyId}`);
     const taskPlan = page.locator('.tower-task-plan[data-id="task-plan"]');
@@ -316,15 +328,38 @@ function check(name, cond, extra = "") {
     await seedBoard(many);
     await page.waitForLoadState("networkidle");
     check("12:00時点の窓は w1..w11", (await page.locator(".tower-arrival-row").first().getAttribute("data-flight-id")) === "w1");
+    check("既定queue先頭が窓外でもselectを保ち、表示候補はARRIVALS窓と一致",
+      await page.locator("[data-tower-arrival-select]").inputValue() === "w0"
+      && JSON.stringify(await page.locator("[data-tower-arrival-select] option:not([hidden])").evaluateAll((options) => options.map((option) => option.value)))
+        === JSON.stringify(Array.from({ length: 11 }, (_, index) => `w${index + 1}`)));
+    await page.locator("[data-tower-arrival-select]").focus();
+    await page.locator("[data-tower-arrival-select]").selectOption("w1");
+    await page.evaluate(() => document.activeElement.blur());
+    await page.waitForFunction(() => document.querySelector("[data-tower-arrival-select]")?.value === "w1");
     await page.locator('.tower-arrival-row[data-flight-id="w6"] .tower-flight-title').focus();
     await page.clock.setFixedTime(new Date(base.getFullYear(), base.getMonth(), base.getDate(), 12, 30, 30, 0));
     await page.waitForFunction(() => document.getElementById("towerClock")?.textContent === "12:30:30");
     check("フォーカス中は行を作り直さない(先頭はw1のまま)", (await page.locator(".tower-arrival-row").first().getAttribute("data-flight-id")) === "w1");
     check("フォーカスは失われない", await page.evaluate(() => document.activeElement?.closest?.('[data-flight-id="w6"]') !== null));
     await page.evaluate(() => document.activeElement.blur());
-    await page.waitForFunction(() => document.querySelector(".tower-arrival-row")?.dataset.flightId === "w2");
+    await page.waitForFunction(() => document.querySelector(".tower-arrival-row")?.dataset.flightId === "w2"
+      && document.querySelector("[data-tower-arrival-select]")?.value === "w0");
     check("フォーカス解除後のtickで窓がw2..w12へずれる", (await page.locator(".tower-arrival-row").first().getAttribute("data-flight-id")) === "w2");
+    check("tick窓移動でselectもw2..w12へ追従し、窓外選択w1はqueue先頭w0へ戻る",
+      JSON.stringify(await page.locator("[data-tower-arrival-select] option:not([hidden])").evaluateAll((options) => options.map((option) => option.value)))
+        === JSON.stringify(Array.from({ length: 11 }, (_, index) => `w${index + 2}`)));
     check("窓ずれ後も他 n 便のサマリが正しい", ((await page.locator("#towerArrivalSummary").textContent()) || "").trim() === "他 2 便");
+    const focusedSelect = page.locator("[data-tower-arrival-select]");
+    const focusedSelectHandle = await focusedSelect.elementHandle();
+    await focusedSelect.focus();
+    await page.clock.setFixedTime(new Date(base.getFullYear(), base.getMonth(), base.getDate(), 13, 0, 30, 0));
+    await page.waitForFunction(() => document.querySelector(".tower-arrival-row")?.dataset.flightId === "w3");
+    check("selectフォーカス中はtick候補更新を保留してpicker要素を維持", await focusedSelectHandle.evaluate((el) =>
+      el.isConnected && document.activeElement === el && el.querySelector('option:not([hidden])')?.value === "w2"));
+    await page.evaluate(() => document.activeElement.blur());
+    await page.waitForFunction(() => document.querySelector('[data-tower-arrival-select] option:not([hidden])')?.value === "w3");
+    check("selectのblur後の次tickで保留候補をw3..w12へ反映",
+      (await page.locator("[data-tower-arrival-select] option:not([hidden])").first().getAttribute("value")) === "w3");
 
     console.log("[12] 実行中BlockをRWYとNOW LANDINGへ表示する");
     await page.clock.setFixedTime(fixedTime(0));
@@ -362,7 +397,138 @@ function check(name, cond, extra = "") {
     await page.locator('.modal-card [data-action="modal-close"]').first().click();
     await page.waitForSelector(".modal-card", { state: "detached" });
 
-    console.log("[14] runningなし・queueありはREADYから既存now-startで開始する");
+    console.log("[14] NOW LANDINGはARRIVALS候補を一時選択し、既存edit-block/now-startへ追従する");
+    const selectable = [
+      block("rwy-first", "既定の次便", today, 12 * 60 + 30, { updatedAt: "2026-08-26T08:00:00" }),
+      block("rwy-second", "選び替える便", today, 13 * 60, { updatedAt: "2026-08-26T08:05:00" }),
+      block("rwy-completed-hidden", "完了済み候補外", today, 12 * 60 + 15, { completed: true }),
+      block("rwy-ended-hidden", "終了済み候補外", today, 12 * 60 + 20, {
+        actualStartAt: atMinute(today, 12 * 60), actualEndAt: atMinute(today, 12 * 60 + 20)
+      }),
+      block("rwy-routine-hidden", "ルーティン候補外", today, 12 * 60 + 45, { category: "ルーティン" }),
+      block("rwy-suspended-hidden", "中断タスク候補外", today, 13 * 60 + 15, { taskId: "task-suspended" }),
+      block("rwy-cancelled-hidden", "中止タスク候補外", today, 13 * 60 + 30, { taskId: "task-cancelled" }),
+      block("rwy-deleted-hidden", "削除タスク候補外", today, 13 * 60 + 45, { taskId: "task-deleted" })
+    ];
+    const staleTasks = [
+      { id: "task-suspended", title: "中断", status: "suspended", deleted: false },
+      { id: "task-cancelled", title: "中止", status: "cancelled", deleted: false },
+      { id: "task-deleted", title: "削除", status: "todo", deleted: true }
+    ];
+    await seedBoard(selectable, staleTasks);
+    const arrivalSelect = page.locator("[data-tower-arrival-select]");
+    check("既定はqueue先頭の次便", await arrivalSelect.inputValue() === "rwy-first"
+      && await page.locator('.tower-nowhud [data-action="now-start"]').getAttribute("data-id") === "rwy-first");
+    check("候補ラベルは時刻+タイトルで、完了/終了/ルーティンと中断/中止/削除タスク由来を除外",
+      JSON.stringify(await arrivalSelect.locator("option").allTextContents()) === JSON.stringify(["12:30 既定の次便", "13:00 選び替える便"]));
+    const selectionTimestamps = await page.evaluate(({ KEY }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      return { dataModifiedAt: s.dataModifiedAt, updatedAt: Object.fromEntries(s.blocks.map((item) => [item.id, item.updatedAt])) };
+    }, { KEY });
+    await page.evaluate((KEY) => {
+      window.__towerStateWrites = 0;
+      window.__towerOriginalSetItem = Storage.prototype.setItem;
+      Storage.prototype.setItem = function(key, value) {
+        if (this === localStorage && key === KEY) window.__towerStateWrites += 1;
+        return window.__towerOriginalSetItem.call(this, key, value);
+      };
+    }, KEY);
+    const guardedSelectHandle = await arrivalSelect.elementHandle();
+    await arrivalSelect.focus();
+    await arrivalSelect.selectOption("rwy-second");
+    check("selectフォーカス中は全体renderを保留しつつ編集・開始IDは即時追従", await guardedSelectHandle.evaluate((el) =>
+      el.isConnected && document.activeElement === el)
+      && await page.locator('.tower-now-title').getAttribute("data-id") === "rwy-second"
+      && await page.locator('.tower-nowhud [data-action="now-start"]').getAttribute("data-id") === "rwy-second");
+    check("選択操作はstate保存0回", await page.evaluate(() => window.__towerStateWrites) === 0);
+    await page.evaluate(() => document.activeElement.blur());
+    await page.waitForFunction(() => document.querySelector("[data-tower-arrival-select]")?.value === "rwy-second");
+    await page.evaluate(() => { Storage.prototype.setItem = window.__towerOriginalSetItem; });
+    await page.locator('#sidebar [data-action="nav"][data-view="tasks"]').click();
+    await page.waitForSelector('#app[data-view="tasks"]');
+    await page.locator('#sidebar [data-action="nav"][data-view="today"]').click();
+    await page.waitForSelector("[data-tower-arrival-select]");
+    check("有効選択は無関係の全体renderをもう1回跨いでも保持",
+      await page.locator("[data-tower-arrival-select]").inputValue() === "rwy-second");
+    const timestampsAfterSelection = await page.evaluate(({ KEY }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      return { dataModifiedAt: s.dataModifiedAt, updatedAt: Object.fromEntries(s.blocks.map((item) => [item.id, item.updatedAt])) };
+    }, { KEY });
+    check("選択操作はstate.dataModifiedAtとBlock.updatedAtも変更しない",
+      JSON.stringify(timestampsAfterSelection) === JSON.stringify(selectionTimestamps));
+    await page.locator('.tower-now-title[data-id="rwy-second"]').click();
+    await page.waitForSelector(".modal-card", { state: "attached" });
+    check("選択後のタイトル編集は選び替えたBlockを開く", await page.locator('[data-modal-field="title"]').inputValue() === "選び替える便");
+    await page.locator('.modal-card [data-action="modal-close"]').first().click();
+    await page.locator('.tower-nowhud [data-action="now-start"][data-id="rwy-second"]').click();
+    await page.waitForSelector('[data-action="declare-confirm"]', { state: "attached" });
+    check("既存now-startは選び替えたBlockで発火", ((await page.locator(".modal-card").textContent()) || "").includes("選び替える便"));
+    await page.locator('[data-action="declare-confirm"]').click();
+    await page.waitForFunction(({ KEY }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      return !!s.blocks.find((item) => item.id === "rwy-second")?.actualStartAt
+        && !s.blocks.find((item) => item.id === "rwy-first")?.actualStartAt;
+    }, { KEY });
+    check("declare-confirm後のactualStartAtは選択Blockだけに付く", await page.evaluate(({ KEY }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      return !!s.blocks.find((item) => item.id === "rwy-second")?.actualStartAt
+        && !s.blocks.find((item) => item.id === "rwy-first")?.actualStartAt;
+    }, { KEY }));
+
+    console.log("[14-a] NOW LANDING選択の負例マトリクスを固定する");
+    await page.clock.setFixedTime(fixedTime(0));
+    const completionCandidates = [
+      block("complete-first", "完了時の戻り先", today, 12 * 60 + 30),
+      block("complete-selected", "完了にする選択便", today, 13 * 60, { plannedEndAt: atMinute(today, 13 * 60 + 30) })
+    ];
+    await seedBoard(completionCandidates, []);
+    await page.locator("[data-tower-arrival-select]").selectOption("complete-selected");
+    await page.evaluate(() => document.activeElement.blur());
+    await page.locator('.tower-now-title[data-id="complete-selected"]').click();
+    await page.locator('[data-modal-field="completed"]').check();
+    await page.locator('.modal-card [data-action="modal-save"]').click();
+    await page.waitForFunction(() => document.querySelector("[data-tower-arrival-select]")?.value === "complete-first");
+    check("選択中Blockが完了したら既定の次便へフォールバック",
+      await page.locator('.tower-now-title').getAttribute("data-id") === "complete-first"
+      && await page.locator('.tower-nowhud [data-action="now-start"]').getAttribute("data-id") === "complete-first");
+
+    const deletionCandidates = [block("delete-first", "削除時の戻り先", today, 12 * 60 + 30), block("delete-selected", "削除する選択便", today, 13 * 60)];
+    await seedBoard(deletionCandidates, []);
+    await page.locator("[data-tower-arrival-select]").selectOption("delete-selected");
+    await page.evaluate(() => document.activeElement.blur());
+    await page.locator('.tower-now-title[data-id="delete-selected"]').click();
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.locator('.modal-card [data-action="modal-delete"]').click();
+    await page.waitForFunction(() => document.querySelector("[data-tower-arrival-select]")?.value === "delete-first");
+    check("選択候補が削除されたら既定の次便へフォールバック",
+      await page.locator('.tower-now-title').getAttribute("data-id") === "delete-first");
+
+    const runningWithQueue = [block("negative-running", "実行中", today, 11 * 60, { actualStartAt: atMinute(today, 11 * 60) }), block("negative-queue", "待機便", today, 13 * 60)];
+    await seedBoard(runningWithQueue, []);
+    check("実行中BlockがあればARRIVALS selectを表示しない", await page.locator("[data-tower-arrival-select]").count() === 0);
+
+    const taskPlanOnly = [{ id: "only-task-plan", title: "予定便のみ", status: "todo", dueDate: today, estimateMin: 30, deleted: false }];
+    await seedBoard([], taskPlanOnly);
+    check("task-planだけで選択可能Block 0件ならselectを表示しない",
+      await page.locator('.tower-task-plan[data-id="only-task-plan"]').count() === 1
+      && await page.locator("[data-tower-arrival-select]").count() === 0);
+
+    const crossDayBlocks = [
+      block("cross-today-first", "今日の次便", today, 23 * 60 + 30), block("cross-today-second", "今日の選択便", today, 23 * 60 + 45),
+      block("cross-next-first", "翌日の次便", tomorrow, 8 * 60), block("cross-next-second", "翌日の別便", tomorrow, 9 * 60)
+    ];
+    await page.clock.setFixedTime(new Date(base.getFullYear(), base.getMonth(), base.getDate(), 23, 59, 59, 0));
+    await seedBoard(crossDayBlocks, []);
+    await page.locator("[data-tower-arrival-select]").selectOption("cross-today-second");
+    await page.evaluate(() => document.activeElement.blur());
+    const nextDayForSelection = new Date(base.getFullYear(), base.getMonth(), base.getDate() + 1, 0, 0, 1, 0);
+    await page.clock.setFixedTime(nextDayForSelection);
+    await page.waitForFunction(() => document.querySelector("[data-tower-arrival-select]")?.value === "cross-next-first");
+    check("日跨ぎで前日選択を持ち越さず翌日のqueue先頭へフォールバック",
+      await page.locator('.tower-now-title').getAttribute("data-id") === "cross-next-first");
+
+    console.log("[14-b] runningなし・queueありはREADYから既存now-startで開始する");
+    await page.clock.setFixedTime(fixedTime(0));
     const ready = block("rwy-ready", "待機タスク", today, 13 * 60, { estimateMin: 45 });
     await seedBoard([ready]);
     check("queue先頭はdata-status=ready", await page.locator('.tower-nowhud[data-status="ready"]').count() === 1);
@@ -431,6 +597,7 @@ function check(name, cond, extra = "") {
     await seedT5([]);
     check("Block 0件はempty空状態", await page.locator('.tower-nowhud[data-status="empty"]').count() === 1
       && (await page.locator(".tower-nowhud").textContent())?.trim() === "本日の着陸予定はありません");
+    check("候補0件ではARRIVALS選択プルダウンを描画しない", await page.locator("[data-tower-arrival-select]").count() === 0);
     check("Block 0件でもDEPARTURESは復活しない", await page.locator('.tower-departures, [data-action="departures-open-tomorrow"]').count() === 0);
 
     console.log("[19-b] 実績モーダル完了で当日日報mdを再生成する");

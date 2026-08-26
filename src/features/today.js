@@ -93,7 +93,7 @@ function configureToday(deps) {
   } = deps);
   configureTodayTower({
     escapeHTML, todayISO, syncAlertBanner, renderAtisPanel, blocksForDate, towerFlights,
-    runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp,
+    runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp, isStaleBlock,
     towerMotionSetting: () => state.settings.towerMotion,
     renderTodayPomodoro,
     todayFocusVisibility: () => todayFocusUiState().sections,

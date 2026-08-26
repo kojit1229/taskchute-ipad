@@ -587,9 +587,9 @@
         "journal-health",
         "ui-responsive"
       ],
-      "assertionSignals": 135,
-      "assertionHash": "1c09d2120f902588",
-      "sourceHash": "87b7b124843f9f9f",
+      "assertionSignals": 158,
+      "assertionHash": "30263285de4a65e9",
+      "sourceHash": "1c9054d8bd775b49",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2676,8 +2676,31 @@
         "legacy-crosscutting"
       ],
       "assertionSignals": 14,
-      "assertionHash": "e4e023e3fb6da65b",
-      "sourceHash": "8899d40dc4c0fe8a",
+      "assertionHash": "a5678555fc21acd5",
+      "sourceHash": "dd70199be90dc4e2",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v271.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "legacy-crosscutting"
+      ],
+      "assertionSignals": 16,
+      "assertionHash": "8c9f03c528263a75",
+      "sourceHash": "9f3cc269c629f477",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

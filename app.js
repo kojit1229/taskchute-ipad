@@ -25,6 +25,7 @@ import { configureInstruments, renderInstruments } from "./src/features/instrume
 import { configureTrackUi, maybeShowTrackProgressToast } from "./src/features/track-ui.js";
 // v182: 新トップレベル「今日」コックピット。既存featureと同じ依存注入型で循環importを避ける。
 import { configureToday, renderToday } from "./src/features/today.js";
+import { setTowerArrivalSelection } from "./src/features/today-tower.js";
 // v168: app.js分割・段階4-2(WishタブTier1のCRUD・描画を抽出)。src/features/wish.js
 //   はstateをimportするがapp.js自身はimportしない(循環import回避)。
 //   getWishProjectはapp.js側の週次Wish選定からも共有importする。
@@ -1080,7 +1081,7 @@ function isFocusInEditableElement() {
   const el = document.activeElement;
   if (!el) return false;
   const tag = el.tagName;
-  return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable === true;
+  return tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA" || el.isContentEditable === true;
 }
 // hydrateStaticMarkdown等の新着反映やsetViewの画面切替用の入口。入力中/IME変換中なら即renderせず
 // 保留し、focusout/compositionend(またはフェイルセーフのタイムアウト)で自動的に1回だけ実行させる。
@@ -1347,6 +1348,10 @@ document.addEventListener("input", (event) => {
 
 document.addEventListener("change", (event) => {
   const target = event.target;
+  if (target.matches("[data-tower-arrival-select]")) {
+    setTowerArrivalSelection(target.value);
+    render();
+  }
   if (target.matches('[data-modal-field="is12WY"]')) {
     const section = modalRoot.querySelector("[data-twy-track]");
     if (section) section.hidden = !target.checked;
@@ -2648,6 +2653,12 @@ function makeBlock(input) {
 }
 
 function render() {
+  // v271: iOSのネイティブpickerを開いている間はselectを含む全体DOMを差し替えず、focusout後に1回反映する。
+  if (document.activeElement?.matches?.("[data-tower-arrival-select]")) {
+    if (!_deferredRenderPending) _deferredRenderPendingSince = Date.now();
+    _deferredRenderPending = true;
+    return;
+  }
   // v151: 毎回の再描画でテーマを再適用(冪等)。設定変更経路を問わず常に最新のstate.settings.themeへ
   // html[data-theme]/meta[theme-color]を同期させ、適用漏れを作らない。
   applyTheme();

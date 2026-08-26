@@ -1,0 +1,66 @@
+{
+  "version": 271,
+  "date": "2026-08-26",
+  "title": "TOWER操作性改善",
+  "summary": "NOW LANDINGでARRIVALSの未着手Block便を選んで開始できる非永続プルダウンと、FLIGHT LOG行から既存Block編集モーダルを開く導線を追加した。",
+  "changedFiles": [
+    "app.js",
+    "CHANGES_v271.md",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v271.json",
+    "src/features/today-tower.js",
+    "src/features/today.js",
+    "styles.css",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/tower-core.test.js",
+    "tests/v270.test.js",
+    "tests/v271.test.js"
+  ],
+  "intent": [
+    "NOW LANDINGの既定動作を次のタスクのまま保ちつつ、ARRIVALSに見えている別の未着手Block便を選んで開始できるようにする。",
+    "選択中の便をタイトル編集と開始の両導線へ一貫して反映し、候補消滅時は安全に既定へ戻す。",
+    "FLIGHT LOGの終了実績を行全体の44pxタップ標的から既存Block編集モーダルで確認・編集できるようにする。"
+  ],
+  "changes": [
+    "ARRIVALS表示窓のholding/final/resloted Block便だけをNOW LANDINGのselect候補とし、時刻+タイトルを表示した。task-plan・実行中・完了/終了済み・ルーティン・oneTapに加え、中断/中止/削除タスク由来のisStaleBlockもqueueBlocksOfと同じ条件で除外した。",
+    "選択idをtoday-tower.jsの非永続モジュール変数へ置き、既存now-start/edit-blockのdata-idを選択中Blockへ追従させた。change時はsetter+renderだけでsaveStateを呼ばず、候補削除・完了・日跨ぎ・ARRIVALS窓外化等で無効になればqueue先頭へフォールバックする。",
+    "1秒tickでARRIVALS表示窓が移動したときselect候補も差分同期する。selectフォーカス中は候補DOMと全体renderを保留してblur後に反映し、ユーザーが選んだ直後のタイトル/edit-block/now-start IDだけは即時同期する安全側方式を採用した。",
+    "FLIGHT LOG行をtype=buttonへ変更し、既存edit-blockをdata-actionで再利用した。buttonリセット、focus-visible、min-height 44pxを追加した。",
+    "tower-coreへtick窓追従、フォーカス保留、declare-confirm後のactualStartAt、無関係render後の保持、state時刻不変、stale除外、完了/削除/実行中/task-planのみ/日跨ぎの負例、完了/終了ログ行編集、44pxの実DOM回帰を追加した。",
+    "v270のSW回帰期待を固定v270からv270以上の単調増加契約へ追随し、v271はreleases最大版から期待値を導出して将来の正規CACHE_NAME更新でも旧スイートが退行しないようにした。",
+    "v271補助センチネルに主防御がtower-coreである旨を明記し、候補選定本体の実行結果ベース検証を追加した。Service WorkerのCACHE_NAMEはv271を維持した。"
+  ],
+  "uncertainties": [
+    "iOS実機PWAでネイティブselectピッカーを開いたまま非同期更新が来てもpickerが維持されるかは最終確認が必要。フォーカス中のDOM保持とblur後反映はtower-coreで自動検証した。",
+    "NOW LANDINGの2段化による高さ増とFLIGHT LOGの44px化による一覧密度は390px実機で最終確認が必要。3幅の順序と横はみ出しはtower-coreで自動検証した。",
+    "queue先頭がARRIVALS窓外のときに使うhidden optionはSafari実機で最終確認が必要。hiddenが無視された場合は窓外の既定便が候補に1件多く見える良性劣化となる。",
+    "Service Worker更新・オフライン起動、390/768/1024pxの最終目視とタップ感は監督者側で確認が必要。"
+  ],
+  "reviewFocus": [
+    "候補集合がARRIVALSの表示窓と一致し、task-plan・landing・完了/終了済み・ルーティン・oneTap・isStaleBlockを混入させないか。",
+    "既定が従来のqueue先頭で、render後も有効な選択を保持し、選択候補の完了・削除・日付跨ぎ等では既定へフォールバックするか。",
+    "選択変更がstate/dataModifiedAt/localStorage保存を発生させず、タイトルedit-blockとnow-startが同一Block idへ追従するか。",
+    "FLIGHT LOG行がbutton+既存edit-blockで完了/終了済みBlockを開き、44px・focus-visible・buttonリセットを満たすか。",
+    "赤系・懲罰語彙、新規data-action、新規stateフィールド、日付文字列パースを追加していないか。"
+  ],
+  "verification": [
+    "node --check app.js / src/features/today-tower.js / tests/tower-core.test.js / tests/v271.test.js: PASS。",
+    "node tests/v271.test.js: ALL PASS（候補選定本体の実行結果ベース検証を含む）。",
+    "CHROME_PATH=Microsoft Edgeでnode tests/tower-core.test.js: ALL PASS（tick窓追従・フォーカス保留・actualStartAt・選択保持・state時刻不変・負例マトリクス・既存TOWER回帰を含む）。",
+    "npm run code:index:write / npm run test:manifest:write: PASS（suite-manifest分類を確認）。",
+    "ミラーhandoff指定 release-record --write / --check: PASS（本番handoff反映は監督者側）。",
+    "CHROME_PATH=Microsoft Edge・ミラーhandoff指定 release-gate --final --suite=tower-core: exit 0（選定14回帰+coreを含め全スイートPASS）。"
+  ],
+  "notes": [
+    "実行コード差分は元実装と本修正の合算で追加91行・削除11行（追加+削除102行）となり、原則200行以内に収めた。",
+    "新規actionは追加せず既存now-start/edit-blockを再利用した。既存action本体、startPomodoro、保存処理、normalizeState、APP_SHELLは変更していない。",
+    "選択値はv266の一時UI状態と同様にモジュール変数だけで保持し、リロード後は従来どおりqueue先頭へ戻る。"
+  ],
+  "knownLimitations": [
+    "プルダウン候補はARRIVALSに実際に表示される最大11件の窓に限定し、未Block化task-planは既存task-today導線を使うため候補に含めない。",
+    "候補が1件でもARRIVALSから選択する導線を一貫して表示する。1件時のselect抑止は意匠判断のため本ラウンドでは行わない。"
+  ]
+}

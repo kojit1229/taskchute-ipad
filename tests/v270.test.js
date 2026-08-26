@@ -51,8 +51,9 @@ check("旧DEPARTURES正期待を残さない",
   && !towerTestSource.includes("タップでview=tasksかつselectedDate=明日")
   && !towerTestSource.includes("明日0便は空メッセージの1行"));
 
-console.log("[4] Service Worker版をv270へ更新する");
-check("CACHE_NAMEはv270", /const CACHE_NAME = "taskchute-journal-pwa-v270";/.test(swSource));
+console.log("[4] Service Worker版はv270以上へ単調増加する");
+const cacheVersion = Number(swSource.match(/const CACHE_NAME = "taskchute-journal-pwa-v(\d+)";/)?.[1]);
+check("CACHE_NAMEはv270以上", Number.isInteger(cacheVersion) && cacheVersion >= 270, `actual=v${cacheVersion}`);
 
 console.log(failures === 0 ? "\n✅ v270 ALL PASS" : `\n❌ v270: ${failures} 件失敗`);
 process.exit(failures === 0 ? 0 : 1);

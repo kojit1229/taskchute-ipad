@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v270";
+const CACHE_NAME = "taskchute-journal-pwa-v271";
+// v271: TOWERのNOW LANDING選択とFLIGHT LOGタップ編集を追加した(APP_SHELL変更なし)。
 // v270: TOWERのDEPARTURES(明日便)を削除した(APP_SHELL変更なし)。
 // v269: ATISの未処理件数・再プラン状態色・タップ標的を改善した(APP_SHELL変更なし)。
 // v268: 12WY一括レビューの表示基準・週メタ判定・粒度表記を是正した(APP_SHELL変更なし)。

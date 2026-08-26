@@ -3122,8 +3122,9 @@ h3 {
 .tower-status.is-flip { animation: tower-board-flip 600ms ease-out; }
 .tower-flight-summary { padding: 7px 10px; border-top: 1px solid var(--tower-line); color: var(--tower-text); font-size: 10px; text-align: right; opacity: .6; }
 .tower-flight-summary:empty { display: none; }
-.tower-log-row { position: relative; display: grid; grid-template-columns: 100px minmax(0, 1fr) 52px 40px; align-items: center; min-height: 36px; border-bottom: 1px solid var(--tower-line); font-size: 11px; }
+.tower-log-row { position: relative; display: grid; grid-template-columns: 100px minmax(0, 1fr) 52px 40px; align-items: center; width: 100%; min-height: 44px; padding: 0; border: 0; border-bottom: 1px solid var(--tower-line); color: var(--tower-text); font: inherit; font-size: 11px; text-align: left; background: transparent; cursor: pointer; }
 .tower-log-row:last-child { border-bottom: 0; }
+.tower-log-row:focus-visible { outline: 2px solid var(--tower-amber); outline-offset: -2px; }
 .tower-log-row time { padding-left: 8px; font-variant-numeric: tabular-nums; opacity: .6; }
 .tower-log-title { padding: 0 6px; overflow: hidden; font-family: system-ui, sans-serif; text-overflow: ellipsis; white-space: nowrap; }
 .tower-log-state { justify-self: end; padding-right: 8px; color: var(--tower-green); opacity: .72; }
@@ -3153,6 +3154,9 @@ h3 {
 .tower-rwy-mark.start { left: 6px; }
 .tower-rwy-mark.end { right: 6px; }
 .tower-nowhud { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; min-height: 40px; padding: 4px 10px 8px; color: var(--tower-text); }
+.tower-nowhud[data-status="ready"] { grid-template-columns: minmax(0, 1fr) auto; }
+.tower-nowhud[data-status="ready"] .tower-now-title { grid-column: 1 / -1; }
+.tower-arrival-select { width: 100%; min-height: 44px; border: 1px solid var(--tower-line); border-radius: 4px; color: var(--tower-text); font-size: 16px; background: var(--tower-bg); }
 .tower-now-title { min-width: 0; min-height: 44px; overflow: hidden; border: 0; color: var(--tower-text); font: inherit; text-align: left; text-overflow: ellipsis; white-space: nowrap; background: transparent; }
 .tower-now-title:focus-visible { outline: 2px solid var(--tower-amber); outline-offset: -2px; }
 .tower-now-pct { color: var(--tower-amber); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }

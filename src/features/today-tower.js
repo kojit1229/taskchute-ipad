@@ -5,6 +5,7 @@ import { renderStandingOrders, renderCountdown, renderTopbandPC, creedRotationLi
 
 let escapeHTML, todayISO, syncAlertBanner, renderAtisPanel, blocksForDate, towerFlights;
 let runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp;
+let isStaleBlock;
 let towerMotionSetting;
 let renderTodayPomodoro;
 let todayFocusVisibility, renderTodayFocusBar;
@@ -20,11 +21,21 @@ let lastGateDocked;
 let lastGateFull;
 let lastFlightLogDate;
 let lastFlightLogKeys;
+let _towerArrivalSelectedId = null;
+
+function setTowerArrivalSelection(id) {
+  _towerArrivalSelectedId = id || null;
+  if (typeof document !== "undefined") {
+    const now = new Date();
+    const blocks = blocksForDate(todayISO());
+    updateTowerArrivalSelection(blocks, boardFlights(blocks, now.getHours() * 60 + now.getMinutes(), scheduledTasksForDate(todayISO(), blocks)), true);
+  }
+}
 
 function configureTodayTower(deps) {
   ({
     escapeHTML, todayISO, syncAlertBanner, renderAtisPanel, blocksForDate, towerFlights,
-    runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp,
+    runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp, isStaleBlock,
     towerMotionSetting, renderTodayPomodoro, todayFocusVisibility, renderTodayFocusBar, journalForDate,
     gateRules, earlyBirdLogForDate, earlyRiseTarget, linkedGymBlock, scheduledTasksForDate, gateEditMode
   } = deps);
@@ -113,9 +124,35 @@ function runwayMetrics(running, nowMs) {
   };
 }
 
-function renderTowerRunway(now, blocks) {
+function runwayArrivalSelection(blocks, flights) {
+  const fallback = queueBlocksOf(blocks)[0] || null;
+  const blocksById = new Map(blocks.map((block) => [String(block.id), block]));
+  const candidates = arrivalWindow(flights).rows.filter((flight) => flight.kind !== "task-plan"
+    && ["holding", "final", "resloted"].includes(flight.status)
+    && !isStaleBlock(blocksById.get(String(flight.id))));
+  const selected = candidates.find((flight) => String(flight.id) === String(_towerArrivalSelectedId))
+    || candidates.find((flight) => String(flight.id) === String(fallback?.id)) || fallback;
+  return { candidates, selected };
+}
+
+function towerArrivalOptions(selection) {
+  const next = selection.selected;
+  if (!next || !selection.candidates.length) return "";
+  const selectedInWindow = selection.candidates.some((flight) => String(flight.id) === String(next.id));
+  const optionFlights = selectedInWindow ? selection.candidates : [{
+    id: next.id, title: next.title, plannedMin: next.plannedStartAt ? minutesOf(next.plannedStartAt) : null, hidden: true
+  }, ...selection.candidates];
+  return optionFlights.map((flight) => `<option value="${escapeHTML(flight.id)}" ${String(flight.id) === String(next.id) ? "selected" : ""} ${flight.hidden ? "hidden" : ""}>${flightTime(flight.plannedMin)} ${escapeHTML(flight.title)}</option>`).join("");
+}
+
+function towerArrivalSelectionKey(selection) {
+  return `${encodeURIComponent(String(selection.selected?.id || ""))}|${flightSetKey(selection.candidates)}`;
+}
+
+function renderTowerRunway(now, blocks, flights) {
   const running = runningBlockOf(blocks);
-  const next = running ? null : queueBlocksOf(blocks)[0];
+  const selection = running ? null : runwayArrivalSelection(blocks, flights);
+  const next = selection?.selected || null;
   const metrics = running ? runwayMetrics(running, now.getTime()) : { x: 0 };
   // フラッシュは#towerPlaneの兄弟でCSS変数を継承しないため、自身にも機体位置を持たせる(レビューM1)。
   const touchdown = running && lastLandingId !== undefined && running.id !== lastLandingId
@@ -139,8 +176,10 @@ function renderTowerRunway(now, blocks) {
     </div>`;
   } else if (next) {
     const id = escapeHTML(next.id);
+    const candidateOptions = towerArrivalOptions(selection);
     hud = `<div class="tower-nowhud" data-status="ready">
       <button type="button" class="tower-now-title" data-action="edit-block" data-id="${id}">${escapeHTML(next.title)}</button>
+      ${candidateOptions ? `<select class="tower-arrival-select" data-tower-arrival-select data-arrival-set="${escapeHTML(towerArrivalSelectionKey(selection))}" aria-label="開始するARRIVALS便">${candidateOptions}</select>` : ""}
       <button type="button" class="btn primary" data-action="now-start" data-id="${id}">▶ 開始</button>
     </div>`;
   }
@@ -201,12 +240,12 @@ function renderFlightLog(date, blocks) {
     const isLatest = flashLatest && block === latest;
     const start = timeFromDateTime(block.actualStartAt) || "--:--";
     const end = timeFromDateTime(block.actualEndAt) || "--:--";
-    return `<div class="tower-log-row${isLatest ? " is-flip" : ""}" data-flight-id="${escapeHTML(block.id)}">
+    return `<button type="button" class="tower-log-row${isLatest ? " is-flip" : ""}" data-flight-id="${escapeHTML(block.id)}" data-action="edit-block" data-id="${escapeHTML(block.id)}">
       <time>${start}-${end}</time><span class="tower-log-title">${escapeHTML(block.title)}</span>
       <span class="tower-log-dur">${flightLogDuration(block)}</span>
       <span class="tower-log-state" data-state="${block.completed ? "completed" : "ended"}">${block.completed ? "完了" : "終了"}</span>
       ${isLatest ? '<i class="tower-touchdown" aria-hidden="true" style="--tower-plane-x:50%"></i>' : ""}
-    </div>`;
+    </button>`;
   }).join("");
   return `<section class="tower-panel-box sec-log">
     <h2>FLIGHT LOG <span>本日の航跡・終了実績</span></h2>
@@ -334,7 +373,7 @@ function renderTodayTower() {
     ${renderTodayFocusBar(focusVisibility)}
     ${renderTopbandPC()}
     <div class="tower-col-left">
-      ${renderTowerRunway(now, blocks)}
+      ${renderTowerRunway(now, blocks, flights)}
       ${renderTowerBoard(flights)}
       ${renderFlightLog(today, blocks)}
     </div>
@@ -386,6 +425,30 @@ function updateTowerGates(blocks) {
   lastGateDocked = new Set([...(early.checked ? ["__early_bird__"] : []), ...gates.filter((block) => block.completed).map((block) => String(block.id))]);
 }
 
+function updateTowerArrivalSelection(blocks, flights, userSelection = false) {
+  const hud = document.querySelector('.tower-nowhud[data-status="ready"]');
+  if (!hud) return;
+  const select = hud.querySelector("[data-tower-arrival-select]");
+  if (select === document.activeElement && !userSelection) return;
+  const selection = runwayArrivalSelection(blocks, flights);
+  const next = selection.selected;
+  if (!next) return;
+  const title = hud.querySelector(".tower-now-title");
+  const start = hud.querySelector('[data-action="now-start"]');
+  if (title) { title.dataset.id = String(next.id); title.textContent = next.title; }
+  if (start) start.dataset.id = String(next.id);
+  if (select === document.activeElement) return;
+  const options = towerArrivalOptions(selection);
+  if (!options) { select?.remove(); return; }
+  const selectionKey = towerArrivalSelectionKey(selection);
+  if (!select) {
+    start?.insertAdjacentHTML("beforebegin", `<select class="tower-arrival-select" data-tower-arrival-select data-arrival-set="${escapeHTML(selectionKey)}" aria-label="開始するARRIVALS便">${options}</select>`);
+  } else if (select.dataset.arrivalSet !== selectionKey) {
+    select.innerHTML = options;
+    select.dataset.arrivalSet = selectionKey;
+  }
+}
+
 function updateTodayTowerTick() {
   const now = new Date();
   const root = document.querySelector(".today-tower");
@@ -408,6 +471,7 @@ function updateTodayTowerTick() {
   updateTowerRunway(now, blocks);
   updateTowerGates(blocks);
   const flights = boardFlights(blocks, nowMin, scheduledTasksForDate(todayISO(), blocks));
+  updateTowerArrivalSelection(blocks, flights);
   const container = document.getElementById("towerArrivalRows");
   const rows = [...document.querySelectorAll(".tower-arrival-row")];
   const current = arrivalWindow(flights).rows;
@@ -438,4 +502,4 @@ function updateTodayTowerTick() {
   });
 }
 
-export { configureTodayTower, renderTodayTower, updateTodayTowerTick };
+export { configureTodayTower, renderTodayTower, runwayArrivalSelection, setTowerArrivalSelection, updateTodayTowerTick };
