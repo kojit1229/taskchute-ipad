@@ -15,6 +15,7 @@ import { loadState, persistLocalNoSchedule, _lastSaveError } from "./src/storage
 // cachedFeedbackはHomeの「AIから」カードが使う共有キャッシュ
 // (src/state/feedback-cache.js冒頭コメント参照)。
 import { cachedFeedback } from "./src/state/feedback-cache.js";
+import { configureFund, hydrateFundData, renderFund } from "./src/features/fund.js";
 // v223: TOWER上帯(STANDING ORDERS/COUNTDOWN)は自己完結featureへ依存注入する。
 import { configureTopband, cycleWeekForDate, toggleTwyScoreExpanded } from "./src/features/topband.js";
 // v233: P4第2弾。v232で配置済みのIRON LOG/INSTRUMENTSを画面結線する。
@@ -207,6 +208,7 @@ const navItems = [
   { id: "zero", label: "0秒思考", mark: "○" },
   { id: "instruments", label: "INSTRUMENTS", mark: "◉" },
   { id: "iron-log", label: "IRON LOG", mark: "▰" },
+  { id: "fund", label: "FUND", mark: "📈" },
   { id: "more", label: "その他", mark: "…" },  // v265: PCサイドバーに「その他」が無くinstruments/iron-logへ721px以上で到達不能だった導線欠落の修正
   { id: "settings", label: "設定", mark: "S" }
 ];
@@ -296,6 +298,7 @@ configureWish({
   aiInsightsPanelHTML,
   maybeQueueNextAiStep  // v198(第3弾3e): 完了6経路#6(Wish詳細のサブタスクチェックボックス)
 });
+configureFund({ escapeHTML, renderHeader, personalDataReady, fetchGitHubRawText });
 // v169: src/features/journal.jsも同じ理由(循環import回避)で依存注入する。renderExperimentSection
 // (週次レビューと共有、app.js残留)はここで注入する(prep-stage4-journal.md §0/§4/§9 Must級、
 // 「呼ぶだけで実体は移さない」をdeps注入で満たす)。
@@ -1618,7 +1621,7 @@ function normalizeState(value) {
   const allowedViews = new Set([
     "today", "wbs", "wish", "tasks", "timeline",
     "journal", "zero", "vision", "ai-reports", "settings", "more",
-    "iron-log", "instruments"
+    "iron-log", "instruments", "fund"
   ]);
   if (!allowedViews.has(value.currentView)) value.currentView = "today";
   // v31: 残り時間表示用の生年月日(未設定なら補完)
@@ -2845,6 +2848,7 @@ function renderMain() {
   if (view === "today") main.innerHTML = renderToday();
   if (view === "wbs") main.innerHTML = renderWBS();
   if (view === "wish") main.innerHTML = renderWish();
+  if (view === "fund") main.innerHTML = renderFund();
   if (view === "tasks") {
     main.innerHTML = renderTasks();
     // v146: タスクシュートも着手中(無ければ次の未着手)Blockへ自動スクロール
@@ -7809,6 +7813,7 @@ const moreItems = [
   { id: "vision", label: "ビジョン", mark: "🧭", group: "計画" },
   { id: "zero", label: "0秒思考", mark: "💡", group: "思考" },
   { id: "ai-reports", label: "AIレポート", mark: "🤖", group: "振り返り" },
+  { id: "fund", label: "FUND", mark: "📈", group: "振り返り" },
   { id: "instruments", label: "INSTRUMENTS", mark: "◉", group: "ツール" },
   { id: "iron-log", label: "IRON LOG", mark: "▰", group: "ツール" },
   { id: "settings", label: "設定", mark: "⚙️", group: "ツール" }
@@ -11616,10 +11621,12 @@ async function hydrateStaticMarkdown() {
   const realCurrentMonth = realToday.slice(0, 7);
   const wantFutureLetterFetch = ghReady && !(realCurrentMonth in cachedFutureLetterMd);
   const wantAiInsightsFetch = ghReady && (Date.now() - cachedAiInsightsJson.fetchedAt >= FEEDBACK_REFRESH_INTERVAL_MS);
-  const [futureLetterMd, aiInsightsRaw] = await Promise.all([
+  const [futureLetterMd, aiInsightsRaw, fundChanged] = await Promise.all([
     wantFutureLetterFetch ? fetchGitHubRawText(`未来からの手紙_${realCurrentMonth}.md`) : Promise.resolve(undefined),
     wantAiInsightsFetch ? fetchGitHubRawText("ai-insights.json").catch(() => undefined) : Promise.resolve(undefined),
+    hydrateFundData(FEEDBACK_REFRESH_INTERVAL_MS),
   ]);
+  if (fundChanged) changed = true;
   if (wantFutureLetterFetch) {
     cachedFutureLetterMd[realCurrentMonth] = futureLetterMd || undefined;
     if (futureLetterMd) {
@@ -11674,7 +11681,7 @@ async function hydrateStaticMarkdown() {
   // v137: 入力中/IME変換中は即renderせず保留する(review.md:28。renderDeferringForFocus参照)。
   // v161: "stats"(計器盤)を追加。エネルギーカーブの新着fetchが完了してもこの画面を開いた
   //       ままだと再描画されず節が出ないままになる不具合を防ぐ(他view追加時と同じ理由)。
-  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "today" || state.currentView === "timeline" || state.currentView === "wish" || state.currentView === "zero" || state.currentView === "tasks")) {
+  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "today" || state.currentView === "timeline" || state.currentView === "wish" || state.currentView === "zero" || state.currentView === "tasks" || state.currentView === "fund")) {
     renderDeferringForFocus();
   }
 }

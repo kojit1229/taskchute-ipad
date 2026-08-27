@@ -61,7 +61,8 @@ const block = (id, ruleId, title = "朝の読書") => ({
 
     console.log("[1] PCサイドバーからINSTRUMENTS/IRON LOGへ直接遷移しmobileNavは不変");
     const navLabels = await page.locator(".nav-list .nav-label").allTextContents();
-    check("zeroとmoreの間にINSTRUMENTS→IRON LOG", navLabels.slice(-5).join("|") === "0秒思考|INSTRUMENTS|IRON LOG|その他|設定", JSON.stringify(navLabels));
+    // v281: FUNDタブがIRON LOGの後へ常設されたため期待列を追従(INSTRUMENTS→IRON LOGの隣接と0秒思考〜その他の位置関係は維持して検証)。
+    check("zeroとmoreの間にINSTRUMENTS→IRON LOG(→FUND)", navLabels.slice(-6).join("|") === "0秒思考|INSTRUMENTS|IRON LOG|FUND|その他|設定", JSON.stringify(navLabels));
     check("mobileNavは今日/ジャーナル/実行/時間/その他の5枠を維持",
       (await page.locator("#bottomNav button").allTextContents()).join("|") === "今日|ジャーナル|実行|時間|その他");
     await page.locator('.nav-button[data-view="instruments"]').click();

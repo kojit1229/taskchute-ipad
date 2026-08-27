@@ -4924,3 +4924,23 @@ h3 {
   background: var(--tower-amber);
   box-shadow: 0 0 6px var(--tower-amber);
 }
+
+/* v279: FABLE FUND閲覧タブ。既存の全体grid定義には干渉しないview固有スタイル。 */
+.fund-view { display: grid; gap: 14px; }
+.fund-summary { padding: 14px; }
+.fund-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.fund-metric { min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 12px; }
+.fund-metric span { display: block; margin-bottom: 4px; color: var(--muted); font-size: 12px; }
+.fund-metric strong { display: block; overflow-wrap: anywhere; font-size: 17px; }
+.fund-section { display: grid; gap: 10px; }
+.fund-section h2 { margin: 4px 0 0; font-size: 16px; }
+.fund-card { padding: 14px; }
+.fund-card h3 { margin: 0 0 8px; font-size: 16px; }
+.fund-card h3 span { color: var(--muted); font-size: 13px; }
+.fund-facts { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; }
+.fund-note, .fund-card details p { margin: 10px 0 0; color: var(--muted); line-height: 1.65; white-space: pre-wrap; }
+.fund-card summary { margin-top: 10px; color: var(--accent); cursor: pointer; }
+.fund-empty, .fund-loading { margin: 0; padding: 18px; color: var(--muted); text-align: center; }
+.fund-view .is-positive { color: var(--green-text); }
+.fund-view .is-negative { color: var(--red); }
+@media (min-width: 720px) { .fund-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); } }

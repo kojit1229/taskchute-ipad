@@ -28,7 +28,7 @@ function check(name, condition, extra = "") {
 }
 
 async function observedContext(browser, { blockUntilGuard = false } = {}) {
-  const logs = { deleted: [], unregistered: [], registered: [], errors: [], events: [] };
+  const logs = { deleted: [], unregistered: [], registered: [], errors: [], appLoads: [], events: [] };
   const ctx = await browser.newContext({ viewport: { width: 1100, height: 900 } });
   await ctx.exposeBinding("__tcjObserve", (_source, event) => {
     logs[event.type].push(event.value);
@@ -45,6 +45,11 @@ async function observedContext(browser, { blockUntilGuard = false } = {}) {
         targetId: event.target && event.target.id || ""
       }
     }), true);
+    document.addEventListener("load", (event) => {
+      if (event.target && event.target.id === "appEntry") {
+        window.__tcjObserve({ type: "appLoads", value: event.target.src || "" });
+      }
+    }, true);
     if (!navigator.serviceWorker || !window.caches) return;
     const nativeRegister = navigator.serviceWorker.register.bind(navigator.serviceWorker);
     window.__tcjTestNativeRegister = (...args) => nativeRegister(...args);
@@ -170,12 +175,16 @@ async function waitForPostCleanupRegistration(logs, timeout = 30000) {
 }
 
 async function waitForNavigationCount(readCount, minimum, timeout = 30000) {
+  return waitForObservedCount(readCount, minimum, "navigation", timeout);
+}
+
+async function waitForObservedCount(readCount, minimum, label, timeout = 30000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     if (readCount() >= minimum) return;
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
-  throw new Error(`navigationが${minimum}回へ到達しません: ${readCount()}`);
+  throw new Error(`${label}が${minimum}回へ到達しません: ${readCount()}`);
 }
 
 function runBootstrapVm({ message, errorKind = "SyntaxError", filename = `${ORIGIN}/app.js`, storageThrows = false }) {
@@ -354,8 +363,11 @@ async function settleVm() {
       const navigations = countNavigations(page);
       await page.goto(`${ORIGIN}/`, { waitUntil: "domcontentloaded" }).catch(() => {});
       await page.waitForFunction((flag) => sessionStorage.getItem(flag) === "1", FLAG);
-      await page.waitForFunction(() => document.getElementById("appEntry") && !document.querySelector('[role="alert"]'));
-      check("健全な再取得確認後だけreloadする", appRequests >= 3 && navigations() === 2, JSON.stringify({ appRequests, navigations: navigations(), logs }));
+      // FLAGは到達性fetchより先に同期設定されるため、script要素の存在だけでは修復完了を表さない。
+      // 実際のreloadと、reload後のmodule scriptがloadしたことを条件として待つ。
+      await waitForNavigationCount(navigations, 2);
+      await waitForObservedCount(() => logs.appLoads.length, 1, "appEntry load");
+      check("健全な再取得確認後だけreloadする", appRequests >= 3 && navigations() === 2 && logs.appLoads.length === 1, JSON.stringify({ appRequests, navigations: navigations(), logs }));
       await ctx.close();
     }
 
@@ -393,12 +405,15 @@ async function settleVm() {
       const { ctx, pages, logs } = await installScenario(browser, 2);
       const counts = pages.map((page) => countNavigations(page));
       await Promise.all(pages.map((page) => page.goto(`${ORIGIN}/?self-heal=two-tabs`, { waitUntil: "domcontentloaded" }).catch(() => {})));
+      // 先に復旧したタブのSWがclaim済みになってから遅いタブがreloadすると、遅い側は
+      // controllerchange由来の追加reloadなしで2 navigationのまま正常収束する。
+      // 各reloadは各タブのcleanup完了後に起きるので、両方のreload後に最後の再登録を待てば
+      // 遅いタブのcleanupが先行タブの新registrationを解除する競合も取り切れる。
+      await Promise.all(counts.map((count) => waitForNavigationCount(count, 2)));
       await waitForPostCleanupRegistration(logs);
       await Promise.all(pages.map((page) => waitHealthy(page)));
-      await Promise.all(counts.map((count) => waitForNavigationCount(count, 3)));
-      await Promise.all(pages.map((page) => waitHealthy(page)));
       const states = await Promise.all(pages.map((page) => pageState(page)));
-      check("両タブが有限回で復旧する", counts.every((count) => count() >= 1 && count() <= 4) && states.every((state) => state.ownHealthy), JSON.stringify({ counts: counts.map((x) => x()), states }));
+      check("両タブが有限回で復旧する", counts.every((count) => count() >= 2 && count() <= 4) && states.every((state) => state.ownHealthy), JSON.stringify({ counts: counts.map((x) => x()), states }));
       check("localStorageデータと他アプリは競合後も無害", states.every((state) => state.sentinel === "preserved" && state.otherAlive), JSON.stringify(states));
       check("同時修復の破壊対象もTaskChute内だけ", logs.deleted.every((x) => x.name.startsWith(CACHE_PREFIX)) && logs.unregistered.every((x) => x.scope.startsWith(APP_SCOPE)), JSON.stringify(logs));
       await ctx.close();

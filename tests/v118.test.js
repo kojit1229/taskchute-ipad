@@ -27,8 +27,6 @@ function check(name, cond, extra = "") {
   if (cond) console.log(`  ✅ ${name}`);
   else { failures++; console.log(`  ❌ ${name} ${extra}`); }
 }
-function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
-
 (async () => {
   const server = startServer(PORT);
   const browser = await chromium.launch(launchOptions());
@@ -36,7 +34,7 @@ function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
   const page = await ctx.newPage();
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
 
-  const fixtures = { remoteJson: null, delayGetMs: 0, puts: [] };
+  const fixtures = { remoteJson: null, holdGet: false, pendingGetReleases: [], puts: [] };
   await page.route((url) => url.hostname === API_HOST, async (route) => {
     const u = new URL(route.request().url());
     const method = route.request().method();
@@ -45,8 +43,8 @@ function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
         fixtures.puts.push(route.request().postData());
         return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ content: { sha: "sha-after-put" } }) });
       }
-      // GET: 意図的に遅延させ、待ち中にテスト側からUI操作を注入できる隙を作る
-      if (fixtures.delayGetMs) await sleep(fixtures.delayGetMs);
+      // GET: テスト側が編集を終えるまで応答を保留し、固定時間に依存せず競合窓を作る。
+      if (fixtures.holdGet) await new Promise((resolve) => { fixtures.pendingGetReleases.push(resolve); });
       if (fixtures.remoteJson === null) return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
       return route.fulfill({
         status: 200, contentType: "application/json",
@@ -64,6 +62,11 @@ function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
     return page.waitForRequest((request) =>
       request.method() === "GET"
         && new URL(request.url()).pathname.endsWith("/contents/taskchute/app-state.json"));
+  }
+
+  function releaseHeldGets() {
+    fixtures.holdGet = false;
+    fixtures.pendingGetReleases.splice(0).forEach((resolve) => resolve());
   }
 
   async function addProjectDuringPendingGet(title) {
@@ -113,12 +116,13 @@ function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
       remote.dataModifiedAt = "2026-01-02T00:00:00";  // ローカル起動時スナップショットより新しい
       remote.projects = [...(base.projects || []), project("remote-only-1", "REMOTE_ONLY_PROJECT_v118")];
       fixtures.remoteJson = JSON.stringify(remote);
-      fixtures.delayGetMs = 1200;  // この間にUI操作を注入する
+      fixtures.holdGet = true;
     }
     const getA = waitForAppStateGet();
     const reloadA = page.reload();
     await getA;  // 遅延GETが実際に始まり、編集を差し込む窓が成立したことを待つ
     await addProjectDuringPendingGet("GET待ち編集マーカー_v118");
+    releaseHeldGets();
     await reloadA;
     await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).projects
       .some((entry) => entry.title === "REMOTE_ONLY_PROJECT_v118"), KEY);
@@ -151,12 +155,13 @@ function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
       remote.questions = [{ id: "q-remote-1", text: "リモート限定の問い_v118", origin: "manual", status: "open", settledNote: "", settledAt: null, lastTouchedAt: null, linkedProjectId: null, linkedTaskId: null }];
       remote.projects = [...(base.projects || []), project("remote-only-1b", "REMOTE_ONLY_PROJECT_v118b")];
       fixtures.remoteJson = JSON.stringify(remote);
-      fixtures.delayGetMs = 1200;
+      fixtures.holdGet = true;
     }
     const getA2 = waitForAppStateGet();
     const reloadA2 = page.reload();
     await getA2;
     await addProjectDuringPendingGet("GET待ち編集マーカー_v118b");
+    releaseHeldGets();
     await reloadA2;
     await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).projects
       .some((entry) => entry.title === "REMOTE_ONLY_PROJECT_v118b"), KEY);
@@ -178,7 +183,6 @@ function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
     //     v106以来「採用前にローカル限定の記録を合流させる」既存パターンにProjectも乗った)。
     // ============================================================
     console.log("[2] 起動pull(legacy)でGET待ち中の編集が無い → remoteベースで採用しつつ、v135マージでローカル限定Projectも合流する");
-    fixtures.delayGetMs = 0;
     await page.evaluate(({ KEY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.dataModifiedAt = "2026-01-03T00:00:00";  // これから使うremoteより古い
@@ -207,6 +211,7 @@ function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
     failures++;
     console.log("  ❌ 実行エラー:", e.message);
   } finally {
+    releaseHeldGets();
     await browser.close();
     server.close();
   }

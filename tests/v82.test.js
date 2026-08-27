@@ -107,7 +107,7 @@ function check(name, cond, extra = "") {
     const viewAfterTap = await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).currentView, KEY);
     check("1タップでcurrentViewがjournalになる", viewAfterTap === "journal", viewAfterTap);
 
-    console.log("[1c] 「その他」はv233の8項目で、削除済みhomeや主要4タブを重複表示しない");
+    console.log("[1c] 「その他」はFUND追加後の9項目で、削除済みhomeや主要4タブを重複表示しない");
     await seed({ blocks: [], view: "more" });
     const moreGridText = await page.locator(".more-tower-grid").textContent();
     check("WBSが「その他」に出る", moreGridText.includes("WBS"), moreGridText);
@@ -115,8 +115,8 @@ function check(name, cond, extra = "") {
     const moreDataViews = await page.locator('.more-tower-grid [data-action="nav"]').evaluateAll((els) => els.map((el) => el.dataset.view));
     check("「その他」の受け皿にwbsが含まれる", moreDataViews.includes("wbs"), JSON.stringify(moreDataViews));
     // v230でhome撤去、v233でinstruments/iron-log追加。
-    check("「その他」は現行8項目の順序と一致する",
-      moreDataViews.join(",") === "wbs,wish,vision,zero,ai-reports,instruments,iron-log,settings",
+    check("「その他」は現行9項目の順序と一致する",
+      moreDataViews.join(",") === "wbs,wish,vision,zero,ai-reports,fund,instruments,iron-log,settings",
       JSON.stringify(moreDataViews));
     check("削除済みhomeと主要4タブは「その他」に重複しない",
       !moreDataViews.includes("home") && !moreDataViews.includes("journal")

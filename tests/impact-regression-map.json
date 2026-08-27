@@ -57,6 +57,19 @@
         "wish-core"
       ]
     },
+    "fund-feature": {
+      "paths": [
+        "^src/(?:features/fund|state/fund-cache)\\.js$"
+      ],
+      "patterns": [
+        "renderFund|hydrateFundData|dashboard/fund\\.json|data-view=[\"']fund"
+      ],
+      "suites": [
+        "v82",
+        "v148",
+        "v281"
+      ]
+    },
     "journal-feature": {
       "paths": [
         "^src/features/journal"

@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v280";
+const CACHE_NAME = "taskchute-journal-pwa-v281";
+// v281: FABLE FUND閲覧タブと非永続キャッシュをAPP_SHELLへ追加した(旧番号v279から改番。v279/v280との整合はrebaseで確保)。
 // v280: 固定化解除履歴とINSTRUMENTSのPIN ARCHIVEを追加した(APP_SHELL変更なし、v279は予約済みのため欠番)。
 // v278: PCサイドバー導線とGATE編集の固定化トグルを追加した(APP_SHELL変更なし)。
 // v277: PC幅でTOWER系ビューと12WY Project詳細を拡幅した(APP_SHELL変更なし)。
@@ -320,7 +321,9 @@ const APP_SHELL = [
   "./src/features/today.js",
   "./src/features/track-ui.js",
   "./src/features/wish.js",
+  "./src/features/fund.js",
   "./src/state/feedback-cache.js",
+  "./src/state/fund-cache.js",
   "./src/state/journal-fold.js",
   "./src/state/store.js",
   "./src/storage/local.js",
