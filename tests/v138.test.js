@@ -106,11 +106,11 @@ const freshGeneratedAt = () => toUtcIso(new Date());
     };
     await gotoAiReports();
 
-    check("report-index.jsonへのfetchが1回飛んだ", reportIndexRequests === 1, `(実際: ${reportIndexRequests})`);
+    check("report-index.jsonへのfetchが通知hydrate分を含め3回飛んだ", reportIndexRequests === 3, `(実際: ${reportIndexRequests})`);
     check("ディレクトリ一覧API(/contents/taskchute)は1回も飛んでいない", dirListRequests === 0, `(実際: ${dirListRequests})`);
 
     let options = await page.$$eval("[data-ai-report-date] option", (els) => els.map((e) => e.value));
-    check("コンテンツ総括の履歴がindex由来で新しい順に2件並ぶ(AIフィードバックはAIレポートタブの対象外なので混ざらない)",
+    check("コンテンツ総括の履歴がindex由来で新しい順に2件並ぶ(AIフィードバックは別prefixなので混ざらない)",
       JSON.stringify(options) === JSON.stringify(["2026-07-14", "2026-04-01"]), `(実際: ${JSON.stringify(options)})`);
 
     let mdText = await page.textContent("#main .md-render");
@@ -131,7 +131,7 @@ const freshGeneratedAt = () => toUtcIso(new Date());
     bodyRequests.length = 0;
     await gotoAiReports();
 
-    check("report-index.jsonへのfetchがまず試みられる(404)", reportIndexRequests === 1, `(実際: ${reportIndexRequests})`);
+    check("report-index.jsonへのfetchが通知hydrate分を含め2回試みられる(404)", reportIndexRequests === 2, `(実際: ${reportIndexRequests})`);
     check("indexが無いためディレクトリ一覧APIへフォールバックする", dirListRequests === 1, `(実際: ${dirListRequests})`);
 
     options = await page.$$eval("[data-ai-report-date] option", (els) => els.map((e) => e.value));

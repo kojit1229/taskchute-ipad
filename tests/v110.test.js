@@ -1,12 +1,10 @@
-// v110 検証: AIレポートビューア(その他 > AIレポート)に「バッチ実行サマリ」種別を追加。
-// loop/batch-summary.sh が毎朝 personal-data/taskchute/ へ push する
-// 「バッチ実行サマリ_YYYY-MM-DD.md」を、既存の AI_REPORT_TYPES(コンテンツ総括/自己分析/
-// 基盤ヘルス/週次レビュー)と同じ流儀でアプリに表示する。
+// v110由来回帰 / v283追従: バッチ実行サマリをタブから削除し、保存済みbatch設定を
+// 先頭のAIフィードバックへ安全に縮退する。
 //
-// ①種類タブに「バッチ実行サマリ」が並ぶ→選択で一覧取得(Contents API)が飛ぶ
-// ②履歴セレクタに日付が並び、選択で本文(該当ファイルのGET)が表示される
-// ③ファイルが1件も無い(一覧はあるがバッチ実行サマリ_prefix一致0件)→フェイルソフト表示で壊れない
-// ④一覧そのものが空配列(taskchute/直下に何も無い初回状態)→他種別同様に壊れない
+// ①batchタブが無く、保存済みbatchはfeedbackをactiveにする
+// ②feedback履歴・本文は既存ビューア機構で表示される
+// ③他種別との往復で壊れない
+// ④一覧空でもfeedbackのフェイルソフト表示へ縮退する
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
@@ -27,14 +25,14 @@ function check(name, cond, extra = "") {
   await blockGithubApiByDefault(page);
 
   const DIR_LIST = [
-    { name: "バッチ実行サマリ_2026-07-16.md", path: "taskchute/バッチ実行サマリ_2026-07-16.md", type: "file" },
-    { name: "バッチ実行サマリ_2026-07-15.md", path: "taskchute/バッチ実行サマリ_2026-07-15.md", type: "file" },
+    { name: "AIフィードバック_2026-07-16.md", path: "taskchute/AIフィードバック_2026-07-16.md", type: "file" },
+    { name: "AIフィードバック_2026-07-15.md", path: "taskchute/AIフィードバック_2026-07-15.md", type: "file" },
     { name: "コンテンツ総括_2026-07-14.md", path: "taskchute/コンテンツ総括_2026-07-14.md", type: "file" },
     { name: "日報_2026-07-13.md", path: "taskchute/日報_2026-07-13.md", type: "file" }
   ];
   const BODIES = {
-    "バッチ実行サマリ_2026-07-16.md": "# バッチ実行サマリ 2026-07-16\n\n- journal-requests: 成功\n- coach-daily: 成功",
-    "バッチ実行サマリ_2026-07-15.md": "# バッチ実行サマリ 2026-07-15\n\n- journal-requests: 失敗"
+    "AIフィードバック_2026-07-16.md": "# AIフィードバック 2026-07-16\n\n- 最新フィードバック本文_v110",
+    "AIフィードバック_2026-07-15.md": "# AIフィードバック 2026-07-15\n\n- 前日フィードバック本文_v110"
   };
 
   let dirListRequests = 0;
@@ -60,48 +58,45 @@ function check(name, cond, extra = "") {
     await passGithubGate(page);
 
     // ============================================================
-    // [1] 種類タブに「バッチ実行サマリ」が並び、選択すると一覧取得→履歴セレクタに新しい順で並ぶ
+    // [1] 保存済みbatch設定は先頭feedbackへ縮退し、履歴セレクタに新しい順で並ぶ
     // ============================================================
-    console.log("[1] AIレポート画面で「バッチ実行サマリ」タブを選択→履歴セレクタ・本文が表示される");
+    console.log("[1] 保存済みbatch設定からAIフィードバックへ縮退し、履歴セレクタ・本文が表示される");
     await page.evaluate((KEY) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.currentView = "ai-reports";
+      s.settings.aiReportType = "batch";
       localStorage.setItem(KEY, JSON.stringify(s));
     }, KEY);
     await page.reload();
     await page.waitForTimeout(400);
 
-    const hasBatchTab = await page.evaluate(() =>
-      Array.from(document.querySelectorAll('[data-action="ai-report-type"]')).some((b) => b.dataset.type === "batch"));
-    check("種類タブに「バッチ実行サマリ」がある", hasBatchTab);
-
-    await page.click('[data-action="ai-report-type"][data-type="batch"]');
-    await page.waitForTimeout(400);
+    check("種類タブに「バッチ実行サマリ」が無い", await page.locator('[data-type="batch"]').count() === 0);
+    check("保存済みbatchは先頭feedbackをactive表示", await page.locator('[data-type="feedback"].active').count() === 1);
     check("一覧取得(Contents API)が1回飛んだ", dirListRequests === 1, `(実際: ${dirListRequests})`);
 
     const options = await page.$$eval("[data-ai-report-date] option", (els) => els.map((e) => e.value));
-    check("バッチ実行サマリの履歴が新しい順に2件並ぶ", JSON.stringify(options) === JSON.stringify(["2026-07-16", "2026-07-15"]), `(実際: ${JSON.stringify(options)})`);
+    check("AIフィードバックの履歴が新しい順に2件並ぶ", JSON.stringify(options) === JSON.stringify(["2026-07-16", "2026-07-15"]), `(実際: ${JSON.stringify(options)})`);
 
     let mdText = await page.textContent("#main .md-render");
-    check("既定選択(最新)の本文が表示される", mdText.includes("journal-requests: 成功"), `(実際: ${mdText.slice(0, 80)})`);
+    check("既定選択(最新)の本文が表示される", mdText.includes("最新フィードバック本文_v110"), `(実際: ${mdText.slice(0, 80)})`);
 
     // ============================================================
     // [2] セレクタで別日付を選ぶと本文が切り替わる(失敗ログを含む日)
     // ============================================================
-    console.log("[2] セレクタで前日を選択すると失敗ログを含む本文に切り替わる");
+    console.log("[2] セレクタで前日を選択すると前日の本文に切り替わる");
     await page.selectOption("[data-ai-report-date]", "2026-07-15");
     await page.waitForTimeout(300);
     mdText = await page.textContent("#main .md-render");
-    check("選択した日付の本文(失敗ログ)に切り替わる", mdText.includes("journal-requests: 失敗"), `(実際: ${mdText.slice(0, 80)})`);
-    check("選択したファイルがGETされた", bodyRequests.includes("バッチ実行サマリ_2026-07-15.md"), `(実際: ${JSON.stringify(bodyRequests)})`);
+    check("選択した日付の本文に切り替わる", mdText.includes("前日フィードバック本文_v110"), `(実際: ${mdText.slice(0, 80)})`);
+    check("選択したファイルがGETされた", bodyRequests.includes("AIフィードバック_2026-07-15.md"), `(実際: ${JSON.stringify(bodyRequests)})`);
 
     // ============================================================
-    // [3] 他種別(コンテンツ総括)からバッチタブへ戻っても一覧キャッシュ共有で壊れない
+    // [3] 他種別(コンテンツ総括)からfeedbackへ戻っても一覧キャッシュ共有で壊れない
     // ============================================================
-    console.log("[3] 他タブへ切替→バッチタブへ戻ってもフェイルソフトのまま壊れない");
+    console.log("[3] 他タブへ切替→feedbackへ戻っても壊れない");
     await page.click('[data-action="ai-report-type"][data-type="content"]');
     await page.waitForTimeout(300);
-    await page.click('[data-action="ai-report-type"][data-type="batch"]');
+    await page.click('[data-action="ai-report-type"][data-type="feedback"]');
     await page.waitForTimeout(300);
     const stillHasSelect = await page.$("[data-ai-report-date]") !== null;
     check("タブ往復後もセレクタが表示されたまま", stillHasSelect);
@@ -126,7 +121,7 @@ function check(name, cond, extra = "") {
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) });
   });
   try {
-    console.log("[4] taskchute/直下が0件(バッチ未実行)でもバッチタブが壊れない");
+    console.log("[4] taskchute/直下が0件でも保存済みbatch設定からfeedbackへ縮退して壊れない");
     await page2.goto(`http://localhost:${PORT + 1}/`);
     await page2.waitForTimeout(500);
     await passGithubGate(page2);
@@ -140,7 +135,8 @@ function check(name, cond, extra = "") {
     await page2.waitForTimeout(500);
     const mainText = await page2.textContent("#main");
     check("0件時は「まだ生成されていません」の案内が出る(例外なし)", mainText.includes("まだ生成されていません"), `(実際: ${mainText.slice(0, 120)})`);
-    check("0件時のガイド文にバッチ関連の案内が含まれる", mainText.includes("日次バッチ"), `(実際: ${mainText.slice(0, 200)})`);
+    check("0件時のガイド文にフィードバック生成案内が含まれる", mainText.includes("前日の日報"), `(実際: ${mainText.slice(0, 200)})`);
+    check("0件時は履歴セレクタを出さない", await page2.$("[data-ai-report-date]") === null);
   } catch (e) {
     failures++;
     console.log("  ❌ 例外(0件時):", e.message);

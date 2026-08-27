@@ -763,6 +763,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
     // v197(第3弾3d, S-3/C-4): AIステップの処理済み/取消済みrequestId集合+保留台帳もマージ対象へ追加。
     const aiStepProcessedIds = mergeStringIdSet(state.aiStepProcessedIds, remoteNorm.aiStepProcessedIds);
     const aiStepDismissedIds = mergeStringIdSet(state.aiStepDismissedIds, remoteNorm.aiStepDismissedIds);
+    const aiReportReadIds = mergeStringIdSet(state.aiReportReadIds, remoteNorm.aiReportReadIds);
     // v198(堅牢性レビュー修正2): 剪定をnormalizeStateだけに任せると、マージ適用直後〜次回
     // normalizeStateまでの間、処理済み/取消済みのrequestIdが台帳に一時復活する。剪定条件は
     // 従来どおり「processed∪dismissedから再導出」のまま、マージ適用の時点でも同じ規則を通す
@@ -793,6 +794,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(coachMeals, state.coachLog?.meals || []) ||
       !sameArrayByReference(aiStepProcessedIds, state.aiStepProcessedIds) ||
       !sameArrayByReference(aiStepDismissedIds, state.aiStepDismissedIds) ||
+      !sameArrayByReference(aiReportReadIds, state.aiReportReadIds || []) ||
       !sameArrayByReference(aiStepPendingRequests, state.aiStepPendingRequests) ||
       (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, state.zeroThinking) : false);
     const changedVsRemote =
@@ -817,10 +819,11 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(coachMeals, remoteNorm.coachLog?.meals || []) ||
       !sameArrayByReference(aiStepProcessedIds, remoteNorm.aiStepProcessedIds || []) ||
       !sameArrayByReference(aiStepDismissedIds, remoteNorm.aiStepDismissedIds || []) ||
+      !sameArrayByReference(aiReportReadIds, remoteNorm.aiReportReadIds || []) ||
       !sameArrayByReference(aiStepPendingRequests, remoteNorm.aiStepPendingRequests || []) ||
       (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, remoteNorm.zeroThinking) : false);
     return {
-      values: { journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans, tasks, projects, storeVisits, tracks, trackMeasurements, weeklyCommitments, swipeTriageLog, gardenLog, coachMeals, aiStepProcessedIds, aiStepDismissedIds, aiStepPendingRequests },
+      values: { journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans, tasks, projects, storeVisits, tracks, trackMeasurements, weeklyCommitments, swipeTriageLog, gardenLog, coachMeals, aiStepProcessedIds, aiStepDismissedIds, aiReportReadIds, aiStepPendingRequests },
       changedVsLocal, changedVsRemote
     };
   } catch (error) {
@@ -856,6 +859,7 @@ function applySyncMergeToLocal(merged) {
   state.coachLog = { ...(state.coachLog || {}), meals: v.coachMeals };
   state.aiStepProcessedIds = v.aiStepProcessedIds;  // v197
   state.aiStepDismissedIds = v.aiStepDismissedIds;  // v197
+  state.aiReportReadIds = v.aiReportReadIds;  // v283
   state.aiStepPendingRequests = v.aiStepPendingRequests;  // v197
   if (v.zeroThinking) {
     state.zeroThinking.entries = v.zeroThinking.entries;
@@ -892,6 +896,7 @@ function applySyncMergeToRemote(merged, remoteNorm) {
   remoteNorm.coachLog = { ...(remoteNorm.coachLog || {}), meals: v.coachMeals };
   remoteNorm.aiStepProcessedIds = v.aiStepProcessedIds;  // v197
   remoteNorm.aiStepDismissedIds = v.aiStepDismissedIds;  // v197
+  remoteNorm.aiReportReadIds = v.aiReportReadIds;  // v283
   remoteNorm.aiStepPendingRequests = v.aiStepPendingRequests;  // v197
   if (v.zeroThinking) {
     remoteNorm.zeroThinking.entries = v.zeroThinking.entries;

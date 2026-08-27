@@ -1,5 +1,5 @@
 // v92 検証: AIレポートビューア(その他 > AIレポート)。
-// コンテンツ総括・自己分析・基盤ヘルス・週次レビューを、personal-dataリポジトリの
+// コンテンツ総括・自己分析・週次レビューを、personal-dataリポジトリの
 // taskchute/直下のContents API一覧から取得し、種類タブ+日付セレクタで横断閲覧できるようにした。
 //
 // ①一覧取得(Contents APIのディレクトリ一覧モック)→タブ切替でセレクタに履歴日付が並ぶ
@@ -27,7 +27,7 @@ function check(name, cond, extra = "") {
   await blockGithubApiByDefault(page);
 
   // taskchute/ 直下のディレクトリ一覧(Contents API)モック。
-  // コンテンツ総括2件・自己分析1件・週次レビュー1件、基盤ヘルスは意図的に0件のまま(③のフェイルソフト対象)。
+  // コンテンツ総括2件・自己分析1件・週次レビュー1件。
   const DIR_LIST = [
     { name: "コンテンツ総括_2026-07-14.md", path: "taskchute/コンテンツ総括_2026-07-14.md", type: "file" },
     { name: "コンテンツ総括_2026-04-01.md", path: "taskchute/コンテンツ総括_2026-04-01.md", type: "file" },
@@ -81,6 +81,7 @@ function check(name, cond, extra = "") {
     await page.evaluate((KEY) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.currentView = "more";
+      s.settings.aiReportType = "content";
       localStorage.setItem(KEY, JSON.stringify(s));
     }, KEY);
     await page.reload();
@@ -119,16 +120,12 @@ function check(name, cond, extra = "") {
     check("自己分析タブへ切替→月次本文が表示される", mdText.includes("月次の自己分析本文"), `(実際: ${mdText.slice(0, 80)})`);
 
     // ============================================================
-    // [3] 0件フェイルソフト(基盤ヘルス: 一覧には存在するがhealthプレフィックス一致0件)
+    // [3] v283: 基盤ヘルス/バッチ実行サマリはタブから削除し、feedbackは追加
     // ============================================================
-    console.log("[3] 基盤ヘルスタブ(0件)でフェイルソフトの案内が出る");
-    await page.click('[data-action="ai-report-type"][data-type="health"]');
-    await page.waitForTimeout(300);
-    const mainText = await page.textContent("#main");
-    check("「まだ生成されていません」の案内が出る", mainText.includes("まだ生成されていません"));
-    check("案内文にガイド(生成方法)が含まれる", mainText.includes("日次バッチ") || mainText.includes("生成"));
-    const noSelectInHealthTab = await page.$("[data-ai-report-date]") === null;
-    check("0件時は履歴セレクタを出さない", noSelectInHealthTab);
+    console.log("[3] v283の種類構成へ追従し、運用ログ2種を非表示にする");
+    check("基盤ヘルスタブを表示しない", await page.locator('[data-type="health"]').count() === 0);
+    check("バッチ実行サマリタブを表示しない", await page.locator('[data-type="batch"]').count() === 0);
+    check("AIフィードバックタブを表示する", await page.locator('[data-type="feedback"]').count() === 1);
 
     // ============================================================
     // [4] 公開オリジン(同一オリジン)へレポートファイルのfetchが一切飛んでいない

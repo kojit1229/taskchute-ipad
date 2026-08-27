@@ -1077,8 +1077,7 @@ const AI_INSIGHTS_STALE_MS = 26 * 60 * 60 * 1000;
 const AI_INSIGHTS_GENERATED_AT_RE = /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/;
 // v67: AI作業結果_<today>.json のパース済み配列(非永続、当日分のみ)。二重登録防止のIDは state.aiWorkProcessedIds 側で永続化する。
 let cachedAiWorkResults = null;
-// v92: AIレポートビューア(コンテンツ総括・自己分析・基盤ヘルス・週次レビューをアプリ内で横断閲覧)。
-// v110: バッチ実行サマリを追加。
+// v92/v283: AIレポートビューア(AIフィードバック・コンテンツ総括・自己分析・週次レビュー等を横断閲覧)。
 // taskchute/直下の一覧を取得し、種類ごとにファイル名prefixでローカルにフィルタする
 // (セッションキャッシュ、手動更新ボタンでのみ再取得。自動ポーリングはしない)。
 // v138: 一覧の取得元は2段(report-index.json優先→無ければContents APIディレクトリ一覧に
@@ -1087,6 +1086,8 @@ let cachedAiWorkResults = null;
 let _aiReportDirCache = null;        // 一覧(index or Contents API)のレスポンス配列(null=未取得)
 let _aiReportDirError = false;       // 直近の一覧取得が失敗したか(静かなエラー表示 + 再試行ボタン用)
 let _aiReportDirLoadInFlight = false;
+const AI_REPORT_NOTIFY_WINDOW_DAYS = 14;
+let _aiReportNotifyFiles = null;      // v283: 有効なreport-index由来の{name,date,kind}配列(null=通知停止)
 // v140(Codexレビュー High-1): 手動「一覧を更新」時だけtrueにするフラグ。次のtriggerAiReportDirLoad
 // 呼び出しでreport-index.jsonとContents APIディレクトリ一覧の両方を取得し、name単位でunionする
 // (index側が1000件超過等で一部欠落していても、手動更新時だけは即座に補完できるようにする設計)。
@@ -1813,8 +1814,8 @@ function normalizeState(value) {
   if (typeof value.settings.visionBoardIndex !== "number") {
     value.settings.visionBoardIndex = 0;
   }
-  // v92: AIレポートビューアで選択中のタブ(コンテンツ総括/自己分析/基盤ヘルス/週次レビュー/バッチ実行サマリ/英語表現集)
-  value.settings.aiReportType ||= "content";
+  // v92/v283: AIレポートビューアで選択中のタブ。新規・未設定端末はAIフィードバックを既定にする。
+  value.settings.aiReportType ||= "feedback";
   // v9: カテゴリーマスタ
   if (!Array.isArray(value.settings.categories) || value.settings.categories.length === 0) {
     value.settings.categories = defaultCategories();
@@ -2052,6 +2053,9 @@ function normalizeState(value) {
   value.aiStepProcessedIds = value.aiStepProcessedIds.filter((id) => typeof id === "string" && id);
   if (!Array.isArray(value.aiStepDismissedIds)) value.aiStepDismissedIds = [];
   value.aiStepDismissedIds = value.aiStepDismissedIds.filter((id) => typeof id === "string" && id);
+  // v283: AIレポート既読ID(ファイル名)。壊れた値は除去し、端末間で結果が一致するよう重複排除+ソートで固定。
+  if (!Array.isArray(value.aiReportReadIds)) value.aiReportReadIds = [];
+  value.aiReportReadIds = [...new Set(value.aiReportReadIds.filter((id) => typeof id === "string" && id))].sort();
   // v197(第3弾3d, C-4): 保留中request台帳(state直下)。{requestId, taskId, requestedAt}の配列。
   // タスク側のaiStepRequestIdがマージ事故(§1「updatedAtの更新」節のwhole-object競合)で
   // 消えても、この台帳を経由して復帰時照合が応答を拾えるようにする。requestIdが
@@ -2744,6 +2748,7 @@ function render() {
   renderTimelineRail();
   renderSyncBanner();  // v43: 全再描画で消えるバナーを再注入
   renderPersonalDataAuthBanner();  // v72: 401時の案内(全再描画で消えるため再注入)
+  maybeMarkAiReportRead();  // v283: 本文取得成功後の描画だけを既読化する単一フック
   // v40: 着手ジュースは1回の描画で消費する(次の描画では付かない)。CSS アニメは挿入時に1回再生。
   state._justStartedBlockId = null;
 }
@@ -2803,6 +2808,7 @@ function renderSidebar() {
   else sidebar.classList.remove("collapsed");
   // v265: サイドバー直接項目に無いビュー(instruments/iron-log等「その他」配下)では「その他」をactiveにする(renderBottomNavと同型)
   const sidebarActiveId = navItems.some((item) => item.id === state.currentView) ? state.currentView : "more";
+  const unreadCount = aiReportUnreadCount();
   sidebar.innerHTML = `
     <div class="brand">
       <div class="brand-title">${collapsed ? "TJ" : "TaskChute Journal"}<span class="sync-dot ${syncDotClass()}" title="同期状態"></span></div>
@@ -2813,7 +2819,7 @@ function renderSidebar() {
       ${navItems.map((item) => `
         <button class="nav-button ${sidebarActiveId === item.id ? "active" : ""}" data-action="nav" data-view="${item.id}" title="${item.label}">
           <span class="nav-mark">${item.mark}</span>
-          <span class="nav-label">${item.label}</span>
+          <span class="nav-label">${item.label}</span>${item.id === "ai-reports" && unreadCount > 0 ? `<span class="nav-badge">${unreadCount > 99 ? "99+" : unreadCount}</span>` : ""}
         </button>
       `).join("")}
     </div>
@@ -2822,8 +2828,9 @@ function renderSidebar() {
 
 function renderBottomNav() {
   const active = mobileNav.some((item) => item.id === state.currentView) ? state.currentView : "more";
+  const unreadCount = aiReportUnreadCount();
   bottomNav.innerHTML = mobileNav.map((item) => `
-    <button class="${active === item.id ? "active" : ""}" data-action="nav" data-view="${item.id}">${item.label}</button>
+    <button class="${active === item.id ? "active" : ""}" data-action="nav" data-view="${item.id}">${item.label}${item.id === "more" && unreadCount > 0 ? `<span class="nav-badge">${unreadCount > 99 ? "99+" : unreadCount}</span>` : ""}</button>
   `).join("");
 }
 
@@ -6706,24 +6713,20 @@ async function importSleepCsv(file) {
 // 冒頭でimportして参照を切り替えた)。
 
 // v92: =========================================================
-//  AIレポートビューア — コンテンツ総括・自己分析・基盤ヘルス・週次レビュー・バッチ実行サマリ・
-//  英語表現集を「その他 > AIレポート」タブから横断閲覧する。生成は自宅PCのloop側バッチが担い、
+//  AIレポートビューア — AIフィードバック・コンテンツ総括・自己分析・週次レビュー・
+//  英語表現集等を「その他 > AIレポート」タブから横断閲覧する。生成は自宅PCのloop側バッチが担い、
 //  アプリ側はpersonal-dataリポジトリ(taskchute/直下)のContents API一覧+本文取得のみ。
 //  (アプリ内Claude API呼び出しはv60で全廃済み。ここでも新規に増やさない — SKILL.md参照)
 // =========================================================
 const AI_REPORT_TYPES = [
+  { id: "feedback", label: "AIフィードバック", prefix: "AIフィードバック_",
+    guide: "毎朝、前日の日報へのAIコーチングフィードバックを自動生成します" },
   { id: "content", label: "コンテンツ総括", prefix: "コンテンツ総括_",
     guide: "ジャーナルの「### 依頼」に「今年一年どう?」のように書くと、不定期または四半期ごとに生成されます" },
   { id: "self", label: "自己分析", prefix: "自己分析_",
     guide: "毎月1日に前月分が自動生成されます" },
-  { id: "health", label: "基盤ヘルス", prefix: "基盤ヘルス_",
-    guide: "自宅PCの日次バッチが自動生成します。しばらく実行されていない場合は生成されません" },
   { id: "weekly", label: "週次レビュー", prefix: "週次レビュー_",
     guide: "毎週末に自動生成されます。来週のタスク提案は内容を確認して1件ずつWBSへ登録できます" },
-  // v110: 自宅PCのloop各バッチ(日報依頼検知・お題提案・コーチング等)の毎朝の実行結果サマリ。
-  //       loop/batch-summary.sh が personal-data/taskchute/ へ生成する(K依頼2026-07-16)。
-  { id: "batch", label: "バッチ実行サマリ", prefix: "バッチ実行サマリ_",
-    guide: "自宅PCの日次バッチ群の実行結果を毎朝自動生成します。しばらく実行されていない場合は生成されません" },
   // v113: 英語ジャーナルのAIフィードバック「💬 使える表現」から loop/english-phrases.sh が
   //       日次で自動統合する表現集。personal-data/taskchute/ へ生成する(K依頼2026-07-16)。
   { id: "english", label: "英語表現集", prefix: "英語表現集_",
@@ -6804,7 +6807,7 @@ function parseAiStepIsoToMs(s) {
 //       手動更新(refreshAiReports)からはfetchPersonalDataDirListと同時に呼ばれ、呼び出し元
 //       (triggerAiReportDirLoad)がname単位でunionする。indexが1000件超のディレクトリで
 //       一部欠落していても、手動更新時だけはContents APIで即座に補完できる設計。
-// 戻り値: 採用可能な{name,type:"file"}配列、または不採用(404/スキーマ不正/0件/古すぎ)ならnull。
+// 戻り値: 採用可能な{name,type:"file",date,kind}配列、または不採用(404/スキーマ不正/0件/古すぎ)ならnull。
 const REPORT_INDEX_MAX_AGE_MS = 48 * 60 * 60 * 1000;
 async function fetchReportIndex() {
   const result = await fetchGitHubRawResult("report-index.json");
@@ -6820,8 +6823,40 @@ async function fetchReportIndex() {
   if (!generatedAtMs || Date.now() - generatedAtMs > REPORT_INDEX_MAX_AGE_MS) return null;
   const files = parsed.files
     .filter((f) => f && typeof f.name === "string" && f.name)
-    .map((f) => ({ name: f.name, type: "file" }));
+    .map((f) => ({ name: f.name, type: "file", date: f.date, kind: f.kind }));
   return files.length > 0 ? files : null;
+}
+
+// v283: 通知対象は既知のAIレポートだけを白名単で数える。indexが取れない・壊れている間は0件へ静かに縮退する。
+function aiReportUnreadCount() {
+  if (!Array.isArray(_aiReportNotifyFiles)) return 0;
+  const notifyKinds = new Set(["feedback", "content", "self", "weekly", "letter", "excuse"]);
+  const cutoff = addDays(todayISO(), -(AI_REPORT_NOTIFY_WINDOW_DAYS - 1));
+  const readIds = new Set(Array.isArray(state.aiReportReadIds) ? state.aiReportReadIds : []);
+  return _aiReportNotifyFiles.filter((entry) => {
+    if (!entry || !notifyKinds.has(entry.kind) || typeof entry.date !== "string") return false;
+    const effectiveDate = /^\d{4}-\d{2}$/.test(entry.date)
+      ? `${entry.date}-01`
+      : (/^\d{4}-\d{2}-\d{2}$/.test(entry.date) ? entry.date : "");
+    return effectiveDate >= cutoff && typeof entry.name === "string" && entry.name && !readIds.has(entry.name);
+  }).length;
+}
+
+function markAiReportRead(fileName) {
+  if (typeof fileName !== "string" || !fileName) return;
+  const readIds = Array.isArray(state.aiReportReadIds) ? state.aiReportReadIds : [];
+  if (readIds.includes(fileName)) return;
+  state.aiReportReadIds = [...readIds, fileName].sort();
+  saveState();
+  renderSidebar();
+  renderBottomNav();
+}
+
+function maybeMarkAiReportRead() {
+  if (state.currentView !== "ai-reports") return;
+  main.querySelectorAll('[data-report-file][data-report-loaded="1"]').forEach((element) => {
+    markAiReportRead(element.dataset.reportFile || "");
+  });
 }
 
 // v140: indexFiles([{name,type:"file"}]、report-index.json由来)とdirList
@@ -6928,7 +6963,7 @@ async function triggerAiReportBodyLoad(fileName) {
 //       残り、内容が更新されていても古い本文が表示され続けるバグがあった。失敗クールダウン
 //       (_aiReportBodyFailedAt)も明示的にクリアし、直近失敗直後でも手動更新は即座に再試行する。
 function refreshAiReports() {
-  const type = AI_REPORT_TYPES.find((t) => t.id === (state.settings.aiReportType || "content")) || AI_REPORT_TYPES[0];
+  const type = AI_REPORT_TYPES.find((t) => t.id === (state.settings.aiReportType || "feedback")) || AI_REPORT_TYPES[0];
   const filesBefore = aiReportFilesForType(type.prefix);
   const sel = (_aiReportSelectedDate[type.id] && filesBefore && filesBefore.some((f) => f.date === _aiReportSelectedDate[type.id]))
     ? _aiReportSelectedDate[type.id]
@@ -6954,8 +6989,9 @@ function renderAiReports() {
       <div class="panel"><p>設定画面で個人データリポジトリ(Owner/Repository/Token)を接続すると読めます。</p></div>
     `;
   }
-  const activeId = state.settings.aiReportType || "content";
-  const activeType = AI_REPORT_TYPES.find((t) => t.id === activeId) || AI_REPORT_TYPES[0];
+  const requestedId = state.settings.aiReportType || "feedback";
+  const activeType = AI_REPORT_TYPES.find((t) => t.id === requestedId) || AI_REPORT_TYPES[0];
+  const activeId = activeType.id;
   const refreshBtn = `<button class="btn ghost" data-action="ai-report-refresh">🔄 一覧を更新</button>`;
   return `
     ${renderHeader("AIが書いた振り返りをまとめて読む", "AIレポート", refreshBtn)}
@@ -7007,7 +7043,7 @@ function renderAiReportBody(type) {
       </select>
     </div>
     <div class="panel">
-      <div class="md-render readonly-md">${renderedBody}</div>
+      <div class="md-render readonly-md" data-report-file="${escapeHTML(file.name)}" data-report-loaded="${typeof body === "string" && body.length > 0 ? "1" : "0"}">${renderedBody}</div>
     </div>
   `;
 }
@@ -7904,12 +7940,13 @@ function moreGroupLabelFor(viewId) {
 }
 
 function renderMore() {
+  const unreadCount = aiReportUnreadCount();
   return `<div class="tower-skin more-tower">
     ${renderHeader("追加画面", "その他")}
     <section class="more-tower-grid" aria-label="その他の画面">
       ${moreItems.map((item, index) => `<button type="button" class="more-tower-item" data-action="nav" data-view="${item.id}">
         <span class="more-tower-code">NAV ${String(index + 1).padStart(2, "0")}</span>
-        <strong><span class="more-tower-mark" aria-hidden="true">${item.mark}</span>${item.label}</strong>
+        <strong><span class="more-tower-mark" aria-hidden="true">${item.mark}</span>${item.label}${item.id === "ai-reports" && unreadCount > 0 ? `<span class="nav-badge">${unreadCount > 99 ? "99+" : unreadCount}</span>` : ""}</strong>
         <small>${item.group}</small>
       </button>`).join("")}
     </section>
@@ -11594,7 +11631,14 @@ async function hydrateStaticMarkdown() {
   // v72: 個人データリポジトリ(taskchute/content/配下)からのGitHub API取得に切替(同一オリジンfetch廃止)
   const visionPromise = fetchGitHubRawText("content/Vision.md");
   const affirmPromise = fetchGitHubRawText("content/Daily_Affirmation.md");
-  const [visionText, affirmText] = await Promise.all([visionPromise, affirmPromise]);
+  const reportIndexPromise = fetchReportIndex();
+  const [visionText, affirmText, reportIndexFiles] = await Promise.all([visionPromise, affirmPromise, reportIndexPromise]);
+  _aiReportNotifyFiles = reportIndexFiles;
+  // v283: ゲート中はrenderGate()が空にしたナビを復活させない。接続済み時だけ通知を即時反映する。
+  if (personalDataReady(state.settings.github)) {
+    renderSidebar();
+    renderBottomNav();
+  }
   let changed = false;
   if (visionText && visionText !== cachedVisionMd) {
     cachedVisionMd = visionText;

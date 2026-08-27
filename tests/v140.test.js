@@ -101,7 +101,7 @@ function check(name, cond, extra = "") {
     dirListFixture = [{ name: "コンテンツ総括_2026-07-10.md", path: "taskchute/コンテンツ総括_2026-07-10.md", type: "file" }];
     reportIndexRequests = 0; dirListRequests = 0;
     await gotoAiReports();
-    check("report-index.jsonへのfetchが試みられる", reportIndexRequests === 1, `(実際: ${reportIndexRequests})`);
+    check("report-index.jsonへのfetchが通知hydrate分を含め2回試みられる", reportIndexRequests === 2, `(実際: ${reportIndexRequests})`);
     check("有効な要素が無いためContents APIへフォールバックする", dirListRequests === 1, `(実際: ${dirListRequests})`);
     let options = await page.$$eval("[data-ai-report-date] option", (els) => els.map((e) => e.value));
     check("フォールバック経由でContents APIの内容が表示される", JSON.stringify(options) === JSON.stringify(["2026-07-10"]), JSON.stringify(options));
@@ -114,7 +114,7 @@ function check(name, cond, extra = "") {
     dirListFixture = [{ name: "コンテンツ総括_2026-07-15.md", path: "taskchute/コンテンツ総括_2026-07-15.md", type: "file" }];
     reportIndexRequests = 0; dirListRequests = 0;
     await gotoAiReports();
-    check("report-index.jsonへのfetchが試みられる", reportIndexRequests === 1, `(実際: ${reportIndexRequests})`);
+    check("report-index.jsonへのfetchが通知hydrate分を含め2回試みられる", reportIndexRequests === 2, `(実際: ${reportIndexRequests})`);
     check("48時間超過のためContents APIへフォールバックする", dirListRequests === 1, `(実際: ${dirListRequests})`);
     options = await page.$$eval("[data-ai-report-date] option", (els) => els.map((e) => e.value));
     check("古いindexの内容(2026-07-01)ではなくContents APIの内容(2026-07-15)が表示される",

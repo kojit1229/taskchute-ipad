@@ -305,6 +305,7 @@ button {
 
 .nav-button,
 .bottom-nav button {
+  position: relative;
   color: var(--muted);
   background: transparent;
   border-radius: var(--radius);
@@ -317,6 +318,24 @@ button {
 .bottom-nav button:active {
   transform: scale(0.97);
 }
+
+/* v283: AIレポート未読件数。0件時はDOM自体を描画しない。 */
+.nav-badge {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  min-width: 18px;
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: var(--red);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.more-tower-item .nav-badge { top: 6px; right: 18px; }
 
 .nav-button {
   width: 100%;
