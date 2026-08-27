@@ -327,11 +327,17 @@ function check(name, cond, extra = "") {
         && (await page.locator(".iron-total span").textContent()) === "600");
 
     await page.locator(".iron-set-del").click();
-    await page.waitForFunction(({ KEY, today }) => JSON.parse(localStorage.getItem(KEY)).condition.logs[today]?.gym?.length === 0,
-      { KEY, today });
+    // v284: 削除は物理削除からtombstone化(同期での復活防止)。「当日セットだけを削除」の検証意図は
+    // 「有効セット0件+メニューは不変」なので、deleted除外後の件数とtombstone残存へ追従。
+    await page.waitForFunction(({ KEY, today }) => {
+      const gym = JSON.parse(localStorage.getItem(KEY)).condition.logs[today]?.gym || [];
+      return gym.filter((g) => !g?.deleted).length === 0;
+    }, { KEY, today });
     const afterSetDelete = await readState();
-    check("既存iron-delete-setは引き続き当日セットだけを削除",
-      afterSetDelete.condition.logs[today].gym.length === 0
+    const gymAfterDelete = afterSetDelete.condition.logs[today].gym || [];
+    check("既存iron-delete-setは引き続き当日セットだけを削除(tombstone化・メニュー不変)",
+      gymAfterDelete.filter((g) => !g?.deleted).length === 0
+        && gymAfterDelete.length === 1 && !!gymAfterDelete[0]?.deletedAt
         && JSON.stringify(afterSetDelete.settings.gymExerciseList) === '["B","C","D"]');
 
     console.log(failures === 0 ? "[iron-log-e2e] 全PASS" : `[iron-log-e2e] ${failures}件失敗`);
