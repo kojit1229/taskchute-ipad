@@ -67,9 +67,6 @@ function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
   }
 
   async function addProjectDuringPendingGet(title) {
-    const nav = page.locator('[data-action="nav"][data-view="wbs"]');
-    await nav.waitFor({ state: "visible" });
-    await nav.click();
     const input = page.locator("#projectTitle");
     await input.waitFor({ state: "visible" });
     await input.fill(title);
@@ -106,6 +103,8 @@ function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
     await page.evaluate(({ KEY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.dataModifiedAt = "2026-01-01T00:00:00";  // リモートより古い(比較で「remote採用」判定になる値)
+      // v278: reload後の遅延GET中にProject入力だけを競合させ、無関係なタブ遷移競合を混ぜない。
+      s.currentView = "wbs";
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY });
     {
@@ -141,6 +140,7 @@ function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
     await page.evaluate(({ KEY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.dataModifiedAt = "2026-01-01T12:00:00";  // これから使うremoteより古い
+      s.currentView = "wbs";
       s.questions = [{ id: "q-local-1", text: "ローカル限定の問い_v118", origin: "manual", status: "open", settledNote: "", settledAt: null, lastTouchedAt: null, linkedProjectId: null, linkedTaskId: null }];
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY });

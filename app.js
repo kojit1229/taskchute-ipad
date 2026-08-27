@@ -205,6 +205,8 @@ const navItems = [
   { id: "wish", label: "やりたい", mark: "✦" },
   { id: "vision", label: "ビジョン", mark: "V" },
   { id: "zero", label: "0秒思考", mark: "○" },
+  { id: "instruments", label: "INSTRUMENTS", mark: "◉" },
+  { id: "iron-log", label: "IRON LOG", mark: "▰" },
   { id: "more", label: "その他", mark: "…" },  // v265: PCサイドバーに「その他」が無くinstruments/iron-logへ721px以上で到達不能だった導線欠落の修正
   { id: "settings", label: "設定", mark: "S" }
 ];
@@ -352,6 +354,20 @@ registerActions({
   "tower-gate-add": () => addTowerGate(),
   "tower-gate-delete": ({ target }) => endGateRecurrence(target.dataset.ruleId),
   "tower-gate-move": ({ target }) => moveTowerGate(target.dataset.ruleId, Number(target.dataset.direction)),
+  "tower-gate-streak-toggle": ({ target }) => {
+    const rule = (state.recurrences || []).find((item) => item.id === target.dataset.ruleId && !item.deleted);
+    const streakEdit = habitStreakEdit(rule, rule?.kind, target.checked);
+    if (!streakEdit.ok) {
+      render();
+      showToast("固定化は3件まで");
+      return;
+    }
+    if (!rule || rule.streakSince === streakEdit.value) return;
+    state.recurrences = state.recurrences.map((item) => item.id === rule.id
+      ? { ...item, streakSince: streakEdit.value, updatedAt: nowDateTime() }
+      : item);
+    saveAndRender(streakEdit.value ? "ルーティンを固定化しました" : "ルーティンの固定化を解除しました");
+  },
   // --- settings(12): サイドバー/WBS表示設定/カテゴリ・休憩メッセージ管理・AI再プラン ---
   "toggle-show-suspended": () => {
     state.settings.showSuspended = !state.settings.showSuspended;

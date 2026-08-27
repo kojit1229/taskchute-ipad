@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v277";
+const CACHE_NAME = "taskchute-journal-pwa-v278";
+// v278: PCサイドバー導線とGATE編集の固定化トグルを追加した(APP_SHELL変更なし)。
 // v277: PC幅でTOWER系ビューと12WY Project詳細を拡幅した(APP_SHELL変更なし)。
 // v276: 時刻入力の5分整列とGATEルーティン完了の押下実時刻記録を追加した(APP_SHELL変更なし)。
 // v274: Today統合画面をS2 GLASS意匠へ移行し、端末ローカルのぼかし縮退を追加した(APP_SHELL変更なし)。

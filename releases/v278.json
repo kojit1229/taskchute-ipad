@@ -1,0 +1,73 @@
+{
+  "version": 278,
+  "date": "2026-08-27",
+  "title": "GATEルーティン固定化導線",
+  "summary": "PCサイドバーからINSTRUMENTS/IRON LOGへ直接移動でき、GATE ROUTINE編集パネルで最大3件のルーティン固定化を切り替えられるようにした。",
+  "changedFiles": [
+    "CHANGES_v278.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v278.json",
+    "scripts/test-manifest.js",
+    "src/features/today-tower.js",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/instruments-e2e.test.js",
+    "tests/suite-manifest.json",
+    "tests/v118.test.js",
+    "tests/v252.test.js",
+    "tests/v274.test.js",
+    "tests/v275.test.js",
+    "tests/v71.test.js",
+    "tests/v278.test.js"
+  ],
+  "intent": [
+    "PCの常設サイドバーから計器盤と筋トレ記録へ1クリックで到達できるようにする。",
+    "TOWERのGATE ROUTINE編集パネルからdaily/weekdaysルールを固定化し、既存INSTRUMENTSのHABITパネルへつなぐ。",
+    "既存habitStreakEditの最大3件ガードと保存経路を再利用し、Block編集モーダルとの固定化契約を一本化したまま保つ。"
+  ],
+  "changes": [
+    "PC用navItemsのzeroとmoreの間へINSTRUMENTSとIRON LOGを追加し、moreItemsとmobileNavは変更しなかった。",
+    "GATE編集行のdaily/weekdaysルールだけに📌チェックボックスを表示し、data-actionレジストリからhabitStreakEditを呼ぶようにした。",
+    "固定化ON/OFFではrecurrencesのstreakSinceとupdatedAtを更新し、saveAndRenderからsaveStateを通して永続化する。",
+    "4件目の固定化はstateを変更せず、チェック表示を戻してトースト「固定化は3件まで」を表示する。",
+    "GATE編集行を7列へ調整し、390pxでもページ横スクロールを発生させない最小幅にした。",
+    "v71の厳格なサイドバー順契約と、moreItems経由を検証するinstruments-e2eのselector/active契約を新しい直通導線へ追従させた。",
+    "action-registry-coreの厳格なaction一覧へ新actionを追加し、v252のPomodoro完了テストは期限切れseedによるticker競合を未来endsAtで除いた。",
+    "v274/v275のService Worker版固定assertionは検証内容を維持したままv278へ追従させた。",
+    "v118はreload前にWBSを選択して遅延GET中のProject編集へ検証対象を絞り、無関係なタブ遷移競合によるDOM置換フレークを除いた。",
+    "v278 E2Eをplanning-execution/ui-responsiveへ明示登録し、ON/OFF・拒否・永続化・負例・既存モーダル回帰を実DOMで検証した。",
+    "Service WorkerのCACHE_NAMEをv278へ更新し、APP_SHELLの列挙変更が不要であることを維持した。"
+  ],
+  "uncertainties": [
+    "Google Chromeの390px/1100pxで自動検証した。iPhone/iPad Safari PWAの実機でのチェックボックス操作感はK確認対象。"
+  ],
+  "reviewFocus": [
+    "GATE一覧の母集団がcategory=ルーティンのままで、weekly/monthlyや編集モードOFFに固定化トグルが漏れないか。",
+    "4件目拒否時にrecurrences・updatedAt・dataModifiedAtが変わらず、表示だけが未チェックへ戻るか。",
+    "固定化ON/OFFがsaveState後のreloadでも維持され、INSTRUMENTSの既存HABIT 1/2/3表示へ正しく反映されるか。",
+    "PC直通導線を追加してもmoreItemsとmobileNavの既存導線、およびBlock編集モーダルのstreakFixed経路が退行していないか。"
+  ],
+  "verification": [
+    "node --checkでapp.js、src/features/today-tower.js、scripts/test-manifest.js、tests/v278.test.jsの構文を確認。",
+    "Google Chrome指定でnode tests/v278.test.jsを実行し、PC導線、固定化ON/OFF、reload永続化、updatedAt/dataModifiedAt、4件目拒否、weekly/編集OFF負例、390px、既存モーダルを全件成功。",
+    "Google Chrome指定でnode tests/instruments-e2e.test.jsとnode tests/v252.test.jsを再実行し、moreItems導線と既存固定化6経路を全件成功。",
+    "Google Chrome指定でnode tests/run-all.js v71 v82 v150 v252 v253 v278 tower-core instruments-e2eを実行し、既知の一過性v252失敗と追従前selectorを除く6スイートが成功。両失敗は個別再実行で解消・修正確認した。",
+    "Google Chrome指定でaction-registry-core、競合修正後v252、SW版固定v274/v275を個別実行し、厳格契約を全件成功。",
+    "Google Chrome指定でsw-self-healと安定化後v118を個別実行し、Service Worker自己修復と遅延GET中編集の全契約を成功。",
+    "Google Chrome指定・一時handoff出力先でnode scripts/release-gate.js releases/v278.json --finalを実行し、追加回帰とcoreを含めexit 0。",
+    "npm run code:index:write/checkとtest:manifest:write/checkを実行し、v278をplanning-execution/ui-responsiveへ明示登録。"
+  ],
+  "notes": [
+    "設計裁定どおりGATE母集団は広げず、categoryがルーティンの既存GATEルールだけを表示対象にした。",
+    "habitPinHistoryとPIN ARCHIVEはR2対象のため、このリリースでは新しいstateフィールドやnormalizeState移行を追加していない。",
+    "Playwright同梱Chromiumは実行環境のspawn EPERMで起動できなかったため、既存helpersのCHROME_PATH対応を使ってローカルGoogle Chromeで検証した。",
+    "artifacts/v275配下のPNG 4点は着手時から変更済みで、今回の変更対象外として一切編集していない。"
+  ],
+  "knownLimitations": [
+    "固定化解除履歴のアーカイブ表示はR2で実装予定で、このリリースは現在固定化中の最大3件だけを既存HABITパネルへ表示する。"
+  ]
+}

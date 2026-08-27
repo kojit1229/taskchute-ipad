@@ -78,7 +78,7 @@ function check(name, cond, extra = "") {
 const GOLDEN_CLICK_ACTIONS = [
   "nav", "open-iron-log", "instruments-open-iron-log", "today-replan", "save-tower-journal",
   "focus-toggle-gate", "focus-toggle-atis", "focus-toggle-journal", "focus-mode",
-  "early-bird-check", "tower-gate-edit-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move",
+  "early-bird-check", "tower-gate-edit-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move", "tower-gate-streak-toggle",
   "date-prev", "date-next", "today",
   "set-morning", "toggle-meds", "set-capacity", "set-evening-mood",
   "add-gym-entry", "delete-gym-entry",
@@ -203,7 +203,7 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
 // は従来どおり移行せず、if連鎖に残した(下のEXPECTED_REMAINING_IF_CHAINに含まれる)。
 const APP_JS_REGISTERED_ACTIONS = [
   "nav", "open-iron-log", "instruments-open-iron-log", "today-replan", "save-tower-journal",
-  "early-bird-check", "tower-gate-edit-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move",
+  "early-bird-check", "tower-gate-edit-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move", "tower-gate-streak-toggle",
   "toggle-show-suspended", "toggle-wbs-hide-done", "toggle-tasks-show-future",
   "toggle-wbs-edit", "wbs-collapse-all",
   "add-category", "delete-category",

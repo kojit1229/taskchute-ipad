@@ -141,12 +141,12 @@ function check(name, cond, extra = "") {
     console.log("[8] 「その他」ナビからiron-log/instrumentsへ到達できる(nav結線の存在確認)");
     await seed({ view: "more", earlyBirdLogs: {} });
     check("その他画面が開く", await page.locator('#app[data-view="more"]').count() === 1);
-    await page.locator('[data-action="nav"][data-view="instruments"]').click();
+    await page.locator('.more-tower-grid [data-action="nav"][data-view="instruments"]').click();
     await page.waitForSelector('#app[data-view="instruments"]', { state: "attached" });
     check("その他 › 計器盤(instruments)へ遷移できる", await page.locator(".instr-early-bird").count() === 1);
     await page.locator('#bottomNav [data-action="nav"][data-view="more"]').click();
     await page.waitForSelector('#app[data-view="more"]', { state: "attached" });
-    await page.locator('[data-action="nav"][data-view="iron-log"]').click();
+    await page.locator('.more-tower-grid [data-action="nav"][data-view="iron-log"]').click();
     await page.waitForSelector('#app[data-view="iron-log"]', { state: "attached" });
     check("その他 › IRON LOG(iron-log)へ遷移できる", await page.locator(".iron-payload").count() === 1);
     await page.locator('#bottomNav [data-action="nav"][data-view="more"]').click();
@@ -177,14 +177,15 @@ function check(name, cond, extra = "") {
     await page.setViewportSize({ width: 1280, height: 900 });
     await seed({ view: "today", earlyBirdLogs: {} });
     check("PC幅でサイドバーの「その他」ボタンが見える", await page.locator('#sidebar [data-action="nav"][data-view="more"]').isVisible());
+    check("PC幅でサイドバーのINSTRUMENTS直通ボタンも見える", await page.locator('#sidebar [data-action="nav"][data-view="instruments"]').isVisible());
     check("PC幅でボトムナビは非表示", !(await page.locator("#bottomNav").isVisible()));
     await page.locator('#sidebar [data-action="nav"][data-view="more"]').click();
     await page.waitForSelector('#app[data-view="more"]', { state: "attached" });
     check("サイドバー › その他グリッドが開く", await page.locator(".more-tower-grid").count() === 1);
-    await page.locator('[data-action="nav"][data-view="instruments"]').click();
+    await page.locator('.more-tower-grid [data-action="nav"][data-view="instruments"]').click();
     await page.waitForSelector('#app[data-view="instruments"]', { state: "attached" });
     check("サイドバー › その他 › 計器盤へ到達できる", await page.locator(".instr-early-bird").count() === 1);
-    check("計器盤表示中はサイドバー「その他」がactive", await page.locator('#sidebar [data-view="more"].active').count() === 1);
+    check("計器盤表示中はサイドバー直通INSTRUMENTSがactive", await page.locator('#sidebar [data-view="instruments"].active').count() === 1);
     check("計器盤表示中に「設定」等がactiveにならない", await page.locator("#sidebar .nav-button.active").count() === 1);
 
     console.log(failures === 0 ? "[instruments-e2e] 全PASS" : `[instruments-e2e] ${failures}件失敗`);

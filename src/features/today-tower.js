@@ -326,6 +326,9 @@ function gateEditorHTML(early) {
   const rules = orderedGateRules();
   const rows = rules.map((rule, index) => `<div class="tower-gate-edit-row" data-rule-id="${escapeHTML(rule.id)}">
     <span>G${String(index + 2).padStart(2, "0")}</span><strong>${escapeHTML(rule.title)}</strong><time>${escapeHTML(rule.startTime || "--:--")}</time>
+    ${["daily", "weekdays"].includes(rule.kind) ? `<label class="tower-gate-streak-toggle" title="固定化">
+      <input type="checkbox" data-action="tower-gate-streak-toggle" data-rule-id="${escapeHTML(rule.id)}" aria-label="固定" ${rule.streakSince ? "checked" : ""}><span aria-hidden="true">📌</span>
+    </label>` : "<span></span>"}
     <button type="button" data-action="tower-gate-move" data-rule-id="${escapeHTML(rule.id)}" data-direction="-1" ${index === 0 ? "disabled" : ""} aria-label="上へ">↑</button>
     <button type="button" data-action="tower-gate-move" data-rule-id="${escapeHTML(rule.id)}" data-direction="1" ${index === rules.length - 1 ? "disabled" : ""} aria-label="下へ">↓</button>
     <button type="button" class="danger" data-action="tower-gate-delete" data-rule-id="${escapeHTML(rule.id)}">削除</button>

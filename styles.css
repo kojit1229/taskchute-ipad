@@ -3164,10 +3164,13 @@ h3 {
 .tower-gate-fixed.is-late { box-shadow: inset 0 0 0 1px var(--tower-amber); }
 .tower-gate-warning { padding: 0 10px 6px; color: var(--tower-amber); font-size: 10px; }
 .tower-gate-editor { display: grid; flex: 1 0 270px; gap: 6px; min-width: 270px; }
-.tower-gate-edit-row { display: grid; grid-template-columns: 34px minmax(82px, 1fr) 48px 32px 32px auto; align-items: center; gap: 4px; min-height: 40px; padding: 4px 6px; border: 1px solid var(--tower-line); }
+.tower-gate-edit-row { display: grid; grid-template-columns: 34px minmax(70px, 1fr) 48px 24px 32px 32px auto; align-items: center; gap: 4px; min-height: 40px; padding: 4px 6px; border: 1px solid var(--tower-line); }
 .tower-gate-edit-row > span { color: var(--tower-cyan); font-size: 10px; }
 .tower-gate-edit-row > strong { overflow: hidden; font-family: system-ui, sans-serif; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .tower-gate-edit-row > time { opacity: .65; }
+.tower-gate-streak-toggle { display: grid; place-items: center; cursor: pointer; }
+.tower-gate-streak-toggle input { width: 18px; height: 18px; margin: 0; }
+.tower-gate-streak-toggle span { font-size: 11px; line-height: 1; }
 .tower-gate-edit-row button,
 .tower-gate-add button { min-height: 32px; border: 1px solid var(--tower-line); color: var(--tower-cyan); font: inherit; background: transparent; }
 .tower-gate-edit-row button.danger { color: var(--danger); }
