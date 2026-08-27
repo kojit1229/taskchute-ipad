@@ -104,7 +104,9 @@ function earlyBirdStats(state, todayIso) {
 // 1日分のジムセット配列から総重量kg(Σ weight × reps)を計算する。
 function gymSetsTotalKg(sets) {
   if (!Array.isArray(sets)) return 0;
-  return sets.reduce((sum, set) => sum + (Number(set?.weight) || 0) * (Number(set?.reps) || 0), 0);
+  return sets.reduce((sum, set) => set?.deleted
+    ? sum
+    : sum + (Number(set?.weight) || 0) * (Number(set?.reps) || 0), 0);
 }
 
 // IRON LOGサマリ(p4-interface.md §3で凍結された返り値の形)。
@@ -150,6 +152,7 @@ function ironPeriodStats(state, todayIso) {
 
   for (const entry of Object.values(logs)) {
     for (const set of Array.isArray(entry?.gym) ? entry.gym : []) {
+      if (set?.deleted) continue;
       const match = /^(\d{4}-\d{2}-\d{2})T\d{2}:\d{2}/.exec(String(set?.at || ""));
       const date = match?.[1] || "";
       if (!date || date > todayIso) continue;

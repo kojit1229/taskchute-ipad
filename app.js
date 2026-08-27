@@ -1,6 +1,6 @@
 // v164: app.js分割・段階1(最初の抽出)。純粋関数はsrc/core/**へ抽出し、依存グラフの葉として
 //   importする(src/core/**はstateを一切参照しない。claude-review-result.md §7の契約)。
-import { mergeById, mergeByIdPreferNewer } from "./src/core/merge.js";
+import { mergeById, mergeByIdPreferNewer, normalizeGymSetIds } from "./src/core/merge.js";
 import {
   activeTrackForProject, dateParts, isProjectInCurrentCycle, latestMeasurement, numericGoalReached,
   milestoneProgressRatio, normalizeMilestoneProgress, paceMilestone, paceNumeric, trackStatus,
@@ -2208,7 +2208,7 @@ function normalizeState(value) {
       eveningRecordedAt: "",
       gym: [],
       ...(log || {}),
-      gym: Array.isArray(log?.gym) ? log.gym : []
+      gym: normalizeGymSetIds(date, log?.gym)
     }])
   );
   // v87: 宣言→終了報告ログ(ROADMAP v91)。上限300件で永続化肥大化を防ぐ(既存値優先で補完)。
@@ -9273,11 +9273,11 @@ function transferIronLogToCompletedBlock(blockId, { suppressEmptyToast = false }
 
   const allSets = state.condition?.logs?.[block.date]?.gym;
   const list = Array.isArray(allSets) ? allSets : [];
-  const linkedSets = list.filter((set) => String(set?.blockId || "") === String(blockId));
+  const linkedSets = list.filter((set) => !set?.deleted && String(set?.blockId || "") === String(blockId));
   const startMs = localDateTimeToMs(block.actualStartAt);
   const endMs = localDateTimeToMs(block.actualEndAt);
   const sets = linkedSets.length ? linkedSets : list.filter((set) => {
-    if (set?.blockId || !startMs || endMs < startMs) return false;
+    if (set?.deleted || set?.blockId || !startMs || endMs < startMs) return false;
     const atMs = localDateTimeToMs(set?.at);
     return atMs >= startMs && atMs <= endMs;
   });
@@ -9289,7 +9289,10 @@ function transferIronLogToCompletedBlock(blockId, { suppressEmptyToast = false }
     }
     return;
   }
-  if (!linkedSets.length) sets.forEach((set) => { set.blockId = blockId; });
+  if (!linkedSets.length) {
+    const timestamp = nowDateTime();
+    sets.forEach((set) => { set.blockId = blockId; set.updatedAt = timestamp; });
+  }
   const comment = String(block.comment || "");
   if (!comment.split(/\r?\n/).includes(summary)) {
     block.comment = comment ? `${comment}${comment.endsWith("\n") ? "" : "\n"}${summary}` : summary;

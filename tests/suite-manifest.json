@@ -2951,6 +2951,32 @@
       }
     },
     {
+      "file": "v284.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "journal-health",
+        "planning-execution",
+        "ui-responsive"
+      ],
+      "assertionSignals": 29,
+      "assertionHash": "e7946562b938f780",
+      "sourceHash": "ea3addfcfa2e873d",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
       "file": "v49.test.js",
       "kind": "e2e",
       "tier": "full",

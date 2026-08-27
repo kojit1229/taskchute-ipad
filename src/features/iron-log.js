@@ -7,7 +7,7 @@
 //   - 純粋関数(ironDailyTotal / ironTotals / gymSetsForDate / linkedGymBlock /
 //     gymCommentSummary / parseIronComment / runIronImport)はstate等を明示引数で受け取り、
 //     テストから直接呼べる(configureIronLog未呼び出しでも動く)。
-//   - 正本データ: state.condition.logs[date].gym[] = [{exercise, weight, reps, at, blockId?}]
+//   - 正本データ: state.condition.logs[date].gym[] = [{id, exercise, weight, reps, at, blockId?}]
 //     (p4-interface.md §1)。移行の受け皿: state.ironImport = {done, importedTotalKg, importedDays}。
 //   - settings(既定値。normalizeStateへの追記は統合時に監督者側で実施。ここでは未定義でも
 //     落ちない防御的読み取りのみ行う):
@@ -106,7 +106,8 @@ function matchesGymKeywords(block, keywords) {
 function gymSetsForDate(state, iso) {
   const list = state?.condition?.logs?.[iso]?.gym;
   if (!Array.isArray(list)) return [];
-  return list.map((s) => ({ ...s, kg: (Number(s.weight) || 0) * (Number(s.reps) || 0) }));
+  return list.filter((s) => !s?.deleted)
+    .map((s) => ({ ...s, kg: (Number(s.weight) || 0) * (Number(s.reps) || 0) }));
 }
 
 // 当日総重量kg
@@ -128,9 +129,9 @@ function ironTotals(state) {
   let monthKg = 0;
   let bestDay = null;
   for (const date of Object.keys(logs)) {
-    const sets = logs[date]?.gym;
-    if (!Array.isArray(sets) || sets.length === 0) continue;
-    const dayKg = sets.reduce((sum, s) => sum + (Number(s.weight) || 0) * (Number(s.reps) || 0), 0);
+    const sets = gymSetsForDate(state, date);
+    if (sets.length === 0) continue;
+    const dayKg = sets.reduce((sum, s) => sum + s.kg, 0);
     structuredKg += dayKg;
     if (date.slice(0, 7) === yearMonth) monthKg += dayKg;
     if (!bestDay || dayKg > bestDay.kg) bestDay = { date, kg: dayKg };
@@ -161,7 +162,7 @@ function linkedGymBlock(state, nowMinutes) {
 // Block完了時コメント文字列(書式凍結): 総重量 {合計}kg(種目 重量kg×回数[×同combo件数]、…)
 // 同じ(種目, 重量, 回数)の組が複数あれば「×N」で圧縮する。
 function gymCommentSummary(sets) {
-  const list = Array.isArray(sets) ? sets : [];
+  const list = Array.isArray(sets) ? sets.filter((set) => !set?.deleted) : [];
   if (list.length === 0) return "";
 
   const groups = [];
@@ -213,7 +214,7 @@ function runIronImport(state) {
     if (!b || b.deleted) continue;
     if (!matchesGymKeywords(b, keywords)) continue;
     const date = b.date || "";
-    if (date && Array.isArray(state?.condition?.logs?.[date]?.gym) && state.condition.logs[date].gym.length > 0) continue;
+    if (date && gymSetsForDate(state, date).length > 0) continue;
     if (date && seenDates.has(date)) continue;
     const kg = parseIronComment(b.comment);
     if (kg === null) continue;
@@ -236,7 +237,8 @@ function addSetFromForm() {
   if (!exercise || !weight || !reps) return;
 
   const iso = todayISO();
-  const set = { exercise, weight, reps, at: `${iso}T${nowTimeString()}` };
+  const timestamp = `${iso}T${nowTimeString()}`;
+  const set = { id: crypto.randomUUID(), exercise, weight, reps, at: timestamp, createdAt: timestamp, updatedAt: timestamp };
   const linked = linkedGymBlock(state, nowMinutesFromClock());
   if (linked?.block?.id) set.blockId = linked.block.id;
 
@@ -248,15 +250,16 @@ function addSetFromForm() {
   saveAndRender("セットを追加しました");
 }
 
-// ctx.id には当日gym[]配列内でのindex(文字列)を渡す想定
-// (gym[]要素にidが無いため。renderIronLogがdata-id=indexで描画する)。
+// ctx.id には当日gym[]配列内でのindex(文字列)を渡す想定。
+// 永続idの有無にかかわらず、既存UI契約どおりrenderIronLogはdata-id=indexで描画する。
 function deleteSet(ctx) {
   const state = getState();
   const iso = todayISO();
   const idx = Number(ctx?.id);
   const list = state?.condition?.logs?.[iso]?.gym;
   if (!Array.isArray(list) || !Number.isInteger(idx) || idx < 0 || idx >= list.length) return;
-  list.splice(idx, 1);
+  const timestamp = `${iso}T${nowTimeString()}`;
+  list[idx] = { ...list[idx], deleted: true, deletedAt: timestamp, updatedAt: timestamp };
   saveAndRender("セットを削除しました");
 }
 
@@ -330,8 +333,10 @@ function renderIronLog() {
   const exercises = exerciseList(state);
 
   const rawList = Array.isArray(state?.condition?.logs?.[iso]?.gym) ? state.condition.logs[iso].gym : [];
-  const rows = rawList
+  const activeList = rawList
     .map((s, idx) => ({ ...s, kg: (Number(s.weight) || 0) * (Number(s.reps) || 0), idx }))
+    .filter((s) => !s.deleted);
+  const rows = activeList
     .slice()
     .reverse(); // 新しいセットが上(mockupのprepend挙動に合わせる)
 
@@ -345,7 +350,7 @@ function renderIronLog() {
     remainHTML = `目標超過 <b>+${fmtNum(total - target)} kg</b>`;
   } else {
     const remain = target - total;
-    const last = rawList[rawList.length - 1];
+    const last = activeList[activeList.length - 1];
     const w = Number(last?.weight) || 0;
     const r = Number(last?.reps) || 0;
     if (w > 0 && r > 0) {

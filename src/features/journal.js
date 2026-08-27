@@ -171,7 +171,7 @@ function lastGymRecord(exercise, excludeDate) {
   const rows = [];
   Object.entries(state.condition.logs).forEach(([date, log]) => {
     if (date === excludeDate) return;
-    (log.gym || []).forEach((g) => { if (g.exercise === exercise) rows.push({ date, ...g }); });
+    (log.gym || []).forEach((g) => { if (!g.deleted && g.exercise === exercise) rows.push({ date, ...g }); });
   });
   rows.sort((a, b) => b.date.localeCompare(a.date));
   return rows[0] || null;
@@ -179,7 +179,7 @@ function lastGymRecord(exercise, excludeDate) {
 
 function renderGymLogCard(date) {
   const log = state.condition.logs[date] || {};
-  const entries = (log.gym || []).slice().reverse();
+  const entries = (log.gym || []).filter((g) => !g.deleted).slice().reverse();
   return `
     <div class="cond-gym-card" style="margin-bottom:10px">
       <span class="muted" style="font-size:12.5px; font-weight:700">🏋 運動記録</span>
@@ -196,7 +196,7 @@ function renderGymLogCard(date) {
           const best = lastGymRecord(g.exercise, date);
           return `<div class="check-row">
             <span class="check-row-name">${escapeHTML(g.exercise)} ${g.weight}kg × ${g.reps}${best ? `<span class="muted" style="font-size:11px"> (前回 ${best.weight}kg×${best.reps} / ${best.date})</span>` : ""}</span>
-            <button class="btn ghost" style="font-size:11px; padding:4px 8px" data-action="delete-gym-entry" data-date="${date}" data-id="${g.id}">×</button>
+            <button class="btn ghost" style="font-size:11px; padding:4px 8px" data-action="delete-gym-entry" data-date="${date}" data-id="${escapeHTML(g.id)}">×</button>
           </div>`;
         }).join("")}
       </div>` : `<div class="muted" style="font-size:11px; margin-top:6px">まだ記録がありません</div>`}
@@ -617,14 +617,18 @@ function addGymEntry(date) {
     return;
   }
   const log = ensureConditionLog(date);
-  log.gym.push({ id: crypto.randomUUID(), exercise, weight, reps, at: nowDateTime() });
-  log.morningRecordedAt ||= nowDateTime();
+  const timestamp = nowDateTime();
+  log.gym.push({ id: crypto.randomUUID(), exercise, weight, reps, at: timestamp, createdAt: timestamp, updatedAt: timestamp });
+  log.morningRecordedAt ||= timestamp;
   saveAndRender(`${exercise} ${weight}kg×${reps} を記録しました`);
 }
 
 function deleteGymEntry(date, entryId) {
   const log = ensureConditionLog(date);
-  log.gym = log.gym.filter((g) => g.id !== entryId);
+  const target = log.gym.find((g) => g.id === entryId);
+  if (!target) return;
+  const timestamp = nowDateTime();
+  Object.assign(target, { deleted: true, deletedAt: timestamp, updatedAt: timestamp });
   saveAndRender("削除しました");
 }
 // ========================================================================

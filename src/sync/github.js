@@ -51,7 +51,7 @@
 
 import { state, setState } from "../state/store.js";
 import {
-  mergeById, mergeByIdPreferNewer, mergeTracksPreferNewer, mergeWeeklyCommitments
+  mergeById, mergeByIdPreferNewer, mergeGymSets, mergeTracksPreferNewer, mergeWeeklyCommitments
 } from "../core/merge.js";
 import { persistLocalNoSchedule } from "../storage/local.js";
 
@@ -517,7 +517,7 @@ function mergeConditionLogMaps(localLogs, remoteLogs) {
     if ((r.eveningRecordedAt || "") > (l.eveningRecordedAt || "")) {
       CONDITION_EVENING_FIELDS.forEach((k) => { merged[k] = r[k]; });
     }
-    merged.gym = mergeById(l.gym, r.gym);
+    merged.gym = mergeGymSets(l.gym, r.gym);
     out[d] = merged;
   }
   return out;

@@ -30,6 +30,86 @@ function mergeById(localList, remoteList) {
   return Array.from(merged.values());
 }
 
+// v284: IRON LOGの旧セットはid無しで保存されていたため、mergeByIdでは全件破棄される。
+// 内容キーは旧セットの同一性判定専用。移行IDはdata-id属性にも安全な英数字トークンにする。
+const LEGACY_GYM_ID_PREFIX = "gymlegacy-";
+
+function gymSetContentKey(set) {
+  return JSON.stringify([
+    String(set?.exercise ?? ""), String(set?.at ?? ""),
+    String(set?.weight ?? ""), String(set?.reps ?? "")
+  ]);
+}
+
+function gymLegacyId(date, key, occurrence) {
+  const source = `${String(date || "")}\u001f${key}\u001f${occurrence}`;
+  let h1 = 0x811c9dc5, h2 = 0x9e3779b9;
+  for (let i = 0; i < source.length; i++) {
+    const code = source.charCodeAt(i);
+    h1 = Math.imul(h1 ^ code, 0x01000193) >>> 0;
+    h2 = Math.imul(h2 ^ code, 0x85ebca6b) >>> 0;
+  }
+  return `${LEGACY_GYM_ID_PREFIX}${h1.toString(16).padStart(8, "0")}${h2.toString(16).padStart(8, "0")}`;
+}
+
+function normalizeGymSetIds(date, list) {
+  const occurrences = new Map();
+  return (Array.isArray(list) ? list : []).filter((set) =>
+    set && typeof set === "object" && !Array.isArray(set)
+  ).map((set) => {
+    const key = gymSetContentKey(set);
+    const occurrence = occurrences.get(key) || 0;
+    occurrences.set(key, occurrence + 1);
+    const normalized = { ...set, id: set.id ? String(set.id) : gymLegacyId(date, key, occurrence) };
+    if (!set.deleted) return normalized;
+    const deletedAt = String(set.deletedAt || set.updatedAt || set.createdAt || set.at || "");
+    return { ...normalized, deleted: true, deletedAt, updatedAt: String(set.updatedAt || deletedAt) };
+  });
+}
+
+function mergeGymById(local, remote) {
+  const merged = new Map();
+  for (const item of [...local, ...remote]) {
+    if (!item.id) continue;
+    const current = merged.get(item.id);
+    if (!current) { merged.set(item.id, item); continue; }
+    const currentTs = current.updatedAt || current.createdAt || "";
+    const itemTs = item.updatedAt || item.createdAt || "";
+    if (itemTs > currentTs || (itemTs === currentTs && item.deleted && !current.deleted)) {
+      merged.set(item.id, item);
+    }
+  }
+  return [...merged.values()];
+}
+
+function mergeGymSets(localList, remoteList) {
+  const valid = (list) => (Array.isArray(list) ? list : [])
+    .filter((set) => set && typeof set === "object" && !Array.isArray(set));
+  const local = valid(localList);
+  const remote = valid(remoteList);
+  const idMerged = mergeGymById(local, remote);
+  const keys = new Set([...local, ...remote].map(gymSetContentKey));
+  const out = [];
+
+  for (const key of keys) {
+    const localGroup = local.filter((set) => gymSetContentKey(set) === key);
+    const remoteGroup = remote.filter((set) => gymSetContentKey(set) === key);
+    const idGroup = idMerged.filter((set) => gymSetContentKey(set) === key);
+    const regular = idGroup.filter((set) => !String(set.id).startsWith(LEGACY_GYM_ID_PREFIX));
+    const legacy = idGroup.filter((set) => String(set.id).startsWith(LEGACY_GYM_ID_PREFIX));
+    const targetCount = Math.max(localGroup.length, remoteGroup.length, regular.length);
+    const selected = [...regular, ...legacy].slice(0, targetCount);
+    const rawLocal = localGroup.filter((set) => !set.id);
+    const rawRemote = remoteGroup.filter((set) => !set.id);
+    const rawCandidates = remoteGroup.length > localGroup.length
+      ? [...rawRemote, ...rawLocal]
+      : [...rawLocal, ...rawRemote];
+    selected.push(...rawCandidates.slice(0, Math.max(0, targetCount - selected.length)));
+    out.push(...selected);
+  }
+  return out.sort((a, b) => String(a.at || "").localeCompare(String(b.at || "")));
+}
+
 // v135: ===============================================================
 //  tasks/projectsのマージ保護。事故(2026-07-20〜21): リモート側でtaskを外部修正した直後に
 //  端末が古いローカルの丸ごとpushで上書きし、修正が消えた(2回発生)。tasks/projectsは
@@ -74,7 +154,7 @@ function mergeByIdPreferNewer(localList, remoteList, tieWinner) {
   return Array.from(merged.values());
 }
 
-export { mergeById, mergeByIdPreferNewer };
+export { mergeById, mergeByIdPreferNewer, mergeGymSets, normalizeGymSetIds };
 
 function preferNewerRecord(local, remote, tieWinner) {
   const localTs = local.updatedAt || "";
