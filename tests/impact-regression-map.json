@@ -195,7 +195,7 @@
         "^src/core/track"
       ],
       "patterns": [
-        "weeklyScore|paceNumeric|paceMilestone|trackStatus|forwardTracksForWeek|selectTrackFooter|activeTrackForProject|latestMeasurement"
+        "weeklyScore|paceNumeric|paceMilestone|milestoneProgressRatio|normalizeMilestoneProgress|trackStatus|forwardTracksForWeek|selectTrackFooter|activeTrackForProject|latestMeasurement"
       ],
       "suites": [
         "track-core"

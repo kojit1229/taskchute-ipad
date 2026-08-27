@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v281";
+const CACHE_NAME = "taskchute-journal-pwa-v282";
+// v282: 12WYマイルストーンへ表示用の数値進捗入力を追加した(APP_SHELL変更なし)。
 // v281: FABLE FUND閲覧タブと非永続キャッシュをAPP_SHELLへ追加した(旧番号v279から改番。v279/v280との整合はrebaseで確保)。
 // v280: 固定化解除履歴とINSTRUMENTSのPIN ARCHIVEを追加した(APP_SHELL変更なし、v279は予約済みのため欠番)。
 // v278: PCサイドバー導線とGATE編集の固定化トグルを追加した(APP_SHELL変更なし)。

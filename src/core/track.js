@@ -100,6 +100,37 @@ function paceMilestone(track, todayISO) {
   return { done, total: milestones.length, expected, diffNorm: done - expected, deadline };
 }
 
+// v282: milestone進捗は完了判定・paceMilestoneとは独立した表示用メタデータ。
+function normalizeMilestoneProgress(progress) {
+  if (!progress || typeof progress !== "object" || Array.isArray(progress)) return undefined;
+  const type = progress.type;
+  if (!["count", "percent", "value"].includes(type)
+    || typeof progress.current !== "number" || !Number.isFinite(progress.current)
+    || typeof progress.unit !== "string") return undefined;
+  const start = progress.start;
+  if (start !== null && (typeof start !== "number" || !Number.isFinite(start))) return undefined;
+  if (type === "percent") {
+    if (progress.target !== null || start !== null || progress.unit !== ""
+      || progress.current < 0 || progress.current > 100) return undefined;
+  } else if (typeof progress.target !== "number" || !Number.isFinite(progress.target)) return undefined;
+  return { type, current: progress.current, target: progress.target, start, unit: progress.unit };
+}
+
+function milestoneProgressRatio(progress) {
+  const value = normalizeMilestoneProgress(progress);
+  if (!value) return null;
+  let ratio;
+  if (value.type === "percent") ratio = value.current / 100;
+  else if (value.start !== null) {
+    if (value.target === value.start) return null;
+    ratio = (value.current - value.start) / (value.target - value.start);
+  } else {
+    if (value.target === 0) return null;
+    ratio = value.current / value.target;
+  }
+  return Number.isFinite(ratio) ? Math.max(0, Math.min(1, ratio)) : null;
+}
+
 function trackStatus(track, pace, latestValue, lastObservedISO, todayISO) {
   if (pace?.invalid) return { state: "ontrack", label: "順調", severity: 2 };
   const milestones = (track?.milestones || []).filter((milestone) => !milestone.deleted);
@@ -189,6 +220,7 @@ function trackDefinitionChanged(existing, kind, fields = {}) {
 export {
   PACE_TOLERANCE_DAYS, STALE_DAYS, dateParts, daysBetween, isProjectInCurrentCycle, numericGoalReached,
   weeklyScore, latestMeasurement,
-  paceNumeric, paceMilestone, trackStatus, forwardTracksForWeek, selectTrackFooter, activeTrackForProject,
+  paceNumeric, paceMilestone, normalizeMilestoneProgress, milestoneProgressRatio,
+  trackStatus, forwardTracksForWeek, selectTrackFooter, activeTrackForProject,
   validateTrackDraft, trackDefinitionChanged
 };

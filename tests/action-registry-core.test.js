@@ -103,6 +103,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "edit-project", "edit-task", "edit-block",
   "twy-kind-numeric", "twy-kind-milestone", "twy-kind-none", "twy-ms-add", "twy-ms-del",
   "twy-open-editor", "twy-close-editor", "twy-save-measurement", "twy-ms-toggle-done", "twy-ms-edit-date",
+  "twy-ms-toggle-progress", "twy-ms-save-progress", "twy-ms-clear-progress",
   "twy-toast-inc", "twy-toast-same", "twy-toast-other", "twy-toast-other-confirm", "twy-toast-later",
   "twy-carry-cycle", "twy-carry-confirm",
   // v266: COUNTDOWNスコア信号(1)
@@ -243,8 +244,9 @@ const APP_JS_REGISTERED_ACTIONS = [
   "edit-project", "edit-task", "edit-block",
   // --- v258: 12WYトラックフォームのDOM局所操作(5) ---
   "twy-kind-numeric", "twy-kind-milestone", "twy-kind-none", "twy-ms-add", "twy-ms-del",
-  // --- v261: WBSトラック行インライン編集(5) ---
+  // --- v261/v282: WBSトラック行インライン編集(8) ---
   "twy-open-editor", "twy-close-editor", "twy-save-measurement", "twy-ms-toggle-done", "twy-ms-edit-date",
+  "twy-ms-toggle-progress", "twy-ms-save-progress", "twy-ms-clear-progress",
   // --- v259: 12WY新サイクル移行UI(2) ---
   "twy-carry-cycle", "twy-carry-confirm",
   // --- v266: COUNTDOWNスコア信号(1) ---

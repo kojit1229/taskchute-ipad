@@ -1,0 +1,71 @@
+{
+  "version": 282,
+  "date": "2026-08-27",
+  "title": "12WYマイルストーン数値進捗",
+  "summary": "12WYプロジェクトの各マイルストーンへ、件数・進捗率・開始値つき目標値の数値進捗を任意入力し、節目チェーンと編集一覧でミニバー付き表示できるようにする。",
+  "changedFiles": [
+    "CHANGES_v282.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v282.json",
+    "scripts/test-manifest.js",
+    "src/core/track.js",
+    "styles.css",
+    "sw.js",
+    "tests/impact-regression-map.json",
+    "tests/suite-manifest.json",
+    "tests/action-registry-core.test.js",
+    "tests/v261.test.js",
+    "tests/v274.test.js",
+    "tests/v275.test.js",
+    "tests/v282.test.js"
+  ],
+  "intent": [
+    "節目の手動完了チェックと二値ペースを維持したまま、途中経過だけを表示用メタデータとして記録できるようにする。",
+    "件数、0〜100%の進捗率、開始値を省略可能な目標値という3種類を同じ節目編集導線で扱う。",
+    "既存state・同期・Project再保存に対してprogress未設定を完全な後方互換とし、壊れたprogressはnormalize時に無効化する。"
+  ],
+  "changes": [
+    "milestone.progressの型ガードとmilestoneProgressRatio純関数を追加し、開始値あり・減少方向・0除算・clampを定義した。",
+    "updateTrackMilestoneへprogress保存とキー除去によるクリアを追加し、節目と親trackのupdatedAt更新、Projectフォーム再保存時のprogress保持を結線した。",
+    "節目エディタへdata-action委譲の進捗開閉・保存・進捗なし操作と、16px以上のselect/number/text入力を追加した。",
+    "節目チェーンとエディタ一覧へ3/10章・30%・45/80kg・70→65/60kg形式のテキストと、換算可能な場合だけ0〜100%ミニバーを表示した。",
+    "遅延節目の進捗表示を遅延色へ揃え、ミニバーへ節目ラベル由来のaria-labelと小数精度のaria-valuenowを追加した。",
+    "サイクル繰り越しでは未完了節目のprogressをリセットせず、新しい節目idへそのまま引き継ぐようにした。",
+    "tests/v282.test.jsで3型、開始値、減少方向、無効値、巨大値、保存・reload・clear、実同期双方向競合、Project再保存、完了独立、Project進捗バー不変、carry、390px横溢れを検証した。",
+    "action-registry-coreの完全一致リストへ新しい3操作を登録し、action保存則を維持した。",
+    "Service WorkerのCACHE_NAMEをv282へ更新し、テストマニフェストへplanning-executionとして登録した。"
+  ],
+  "uncertainties": [
+    "Chromeの390px・1024pxでは検証済みだが、iPhone/iPad Safari PWAのネイティブ数値キーボードと折返しはK実機確認が必要。",
+    "別端末で同一節目の予定日とprogressを同時編集した場合は、既存の通常フィールド契約どおりmilestone.updatedAtによるLWWとなる。"
+  ],
+  "reviewFocus": [
+    "percentの0〜100・target null・start null・unit空、およびcount/valueの有限current/target・任意startという型ガードが後方互換を壊さないか。",
+    "progress保存・クリア・Projectフォーム再保存・同期マージで値が消えず、節目と親trackのupdatedAtが進むか。",
+    "target到達時もdoneAt、paceMilestone、trackStatus、プロジェクト進捗バーへ混入しないか。",
+    "全操作がdata-action委譲で、input/selectが16px以上、既存date inputがtype=dateのままか。",
+    "未設定・壊れたprogressで既存表示が変わらず、ratio不能時にテキストだけへ安全に縮退するか。"
+  ],
+  "verification": [
+    "node tests/v282.test.jsをGoogle Chrome指定で実行し、純関数・保存・実同期双方向・HTML・Project進捗バー不変・carryを含む実ブラウザの全件に成功。",
+    "track-core、track-normalize、track-merge-core、track-sync-characterization、track-crud-core、v259、v261、v274の関連回帰を実行して成功。",
+    "test:core選定10本は、120秒の実行上限後に未完了4本を分割実行し、全10本の成功を確認。",
+    "node --checkでapp.js、src/core/track.js、sw.js、tests/v282.test.jsの構文を確認。",
+    "npm run code:index:writeとnpm run test:manifest:writeを実行し、生成物を更新。",
+    "一時handoffミラーを使用してrelease-record --write/--checkに成功。release-gate --finalは監督者の着地工程とし、この修正ラウンドでは実行していない。",
+    "Playwright同梱ChromiumのEPERMはGoogle Chrome明示で解消し、npm.ps1の実行ポリシー拒否はnpm.cmdへ切り替えて生成処理を完了した。"
+  ],
+  "notes": [
+    "実行コード差分は200行上限内。12wy-mvp-spec.md本文、mobileNav、artifacts/pngは変更していない。",
+    "progressはWBSタスクprogressNum/progressDen、IRON LOG、numeric track measurementとは連動しない。"
+  ],
+  "knownLimitations": [
+    "target=0またはstart===targetは比率を算出できないため、進捗テキストは表示するがミニバーは表示しない。",
+    "逆方向(start>target)は減少を進捗として正しく換算する。nullを返すのは0除算、start===target、非数の場合に限る。",
+    "サイクル繰り越しでは未完了節目のprogressをリセットせず、そのまま新サイクルへ引き継ぐ。",
+    "マイルストーン進捗から完了を自動判定せず、完了は従来どおり手動チェックのみとする。"
+  ]
+}

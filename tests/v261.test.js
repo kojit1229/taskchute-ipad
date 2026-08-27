@@ -238,11 +238,13 @@ function clone(value) { return JSON.parse(JSON.stringify(value)); }
   check("B-5 #11 milestone閉じるでSetから削除", !actionSandbox._twyOpenEditorIds.has("ms1"));
 
   console.log("[3] エディタHTML: 初期値・ソート・全escapeHTML・iOS入力属性");
-  const editorSource = sourceBetween(appSource, "function twyEditorHTML(track) {", "function renderTwyTrackRow(track) {");
+  const editorSource = sourceBetween(appSource, "function twyMilestoneProgressHTML(", "function renderTwyTrackRow(track) {");
   const escapeHTML = (value) => String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
   const renderSandbox = { state: { trackMeasurements: [] }, _twyOpenEditorIds: new Set(),
-    latestMeasurement: trackCore.latestMeasurement, escapeHTML };
+    latestMeasurement: trackCore.latestMeasurement,
+    normalizeMilestoneProgress: trackCore.normalizeMilestoneProgress,
+    milestoneProgressRatio: trackCore.milestoneProgressRatio, escapeHTML };
   vm.createContext(renderSandbox);
   vm.runInContext(editorSource, renderSandbox);
   const numericHtmlTrack = { id: "n-html", kind: "numeric", baselineValue: 2, valueStep: .5, unit: "章" };

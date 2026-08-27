@@ -3,7 +3,8 @@
 import { mergeById, mergeByIdPreferNewer } from "./src/core/merge.js";
 import {
   activeTrackForProject, dateParts, isProjectInCurrentCycle, latestMeasurement, numericGoalReached,
-  paceMilestone, paceNumeric, trackStatus, daysBetween as trackDaysBetween,
+  milestoneProgressRatio, normalizeMilestoneProgress, paceMilestone, paceNumeric, trackStatus,
+  daysBetween as trackDaysBetween,
   validateTrackDraft, trackDefinitionChanged, weeklyScore, selectTrackFooter
 } from "./src/core/track.js";
 // v166: app.js分割・段階3(state store + storage/sync gateway)。stateの再代入はsetState()
@@ -734,6 +735,37 @@ registerActions({
     const result = updateTrackMilestone(id, target.dataset.twyMsId, { plannedDate: value });
     if (!result.ok) { showToast(result.errors.join(" / ")); return; }
     twyEditorCommitted("予定日を変更しました");
+  },
+  "twy-ms-toggle-progress": ({ target }) => {
+    const panel = target.closest(".twy-ms-edit-item")?.querySelector("[data-twy-ms-progress-editor]");
+    if (!panel) return;
+    panel.hidden = !panel.hidden;
+    target.setAttribute("aria-expanded", String(!panel.hidden));
+  },
+  "twy-ms-save-progress": ({ id, target }) => {
+    const row = target.closest(".twy-ms-edit-item");
+    const type = row?.querySelector("[data-twy-progress-type]")?.value || "";
+    const currentRaw = row?.querySelector("[data-twy-progress-current]")?.value ?? "";
+    const targetRaw = row?.querySelector("[data-twy-progress-target]")?.value ?? "";
+    const startRaw = row?.querySelector("[data-twy-progress-start]")?.value ?? "";
+    const unit = String(row?.querySelector("[data-twy-progress-unit]")?.value || "").trim();
+    if (!["count", "percent", "value"].includes(type) || currentRaw === ""
+      || !Number.isFinite(Number(currentRaw))
+      || (type === "percent" && (Number(currentRaw) < 0 || Number(currentRaw) > 100))
+      || (type !== "percent" && (targetRaw === "" || !Number.isFinite(Number(targetRaw))))
+      || (startRaw !== "" && !Number.isFinite(Number(startRaw)))) {
+      showToast(type === "percent" ? "進捗率は0〜100で入力してください" : "進捗には有効な数値を入力してください"); return;
+    }
+    const progress = { type, current: Number(currentRaw), target: type === "percent" ? null : Number(targetRaw),
+      start: type === "percent" || startRaw === "" ? null : Number(startRaw), unit: type === "percent" ? "" : unit };
+    const result = updateTrackMilestone(id, target.dataset.twyMsId, { progress });
+    if (!result.ok) { showToast(result.errors.join(" / ")); return; }
+    twyEditorCommitted("進捗を記録しました");
+  },
+  "twy-ms-clear-progress": ({ id, target }) => {
+    const result = updateTrackMilestone(id, target.dataset.twyMsId, { progress: undefined });
+    if (!result.ok) { showToast(result.errors.join(" / ")); return; }
+    twyEditorCommitted("進捗をクリアしました");
   },
   // v259: carryは表示条件と同じガードを通し、フォーム再展開時に古いエラーを消す。
   "twy-carry-cycle": () => {
@@ -2234,11 +2266,14 @@ function normalizeState(value) {
       updatedAt: t.updatedAt || "",
       milestones: (Array.isArray(t.milestones) ? t.milestones : []).map((milestone) => {
         const m = milestone || {};
+        const { progress: rawProgress, ...fields } = m;
+        const progress = normalizeMilestoneProgress(rawProgress);
         return {
           label: "", plannedDate: "", originalPlannedDate: "", doneAt: "",
-          doneChangedAt: "", deleted: false, ...m,
+          doneChangedAt: "", deleted: false, ...fields,
           id: m.id || "ms_" + crypto.randomUUID(),
-          updatedAt: m.updatedAt || ""
+          updatedAt: m.updatedAt || "",
+          ...(progress ? { progress } : {})
         };
       })
     };
@@ -3338,7 +3373,8 @@ function trackRecord(projectId, kind, fields, now, links = {}) {
     label: String(milestone.label || "").trim(), plannedDate: milestone.plannedDate,
     originalPlannedDate: milestone.originalPlannedDate || milestone.plannedDate,
     doneAt: milestone.doneAt || "", doneChangedAt: milestone.doneChangedAt || "",
-    updatedAt: now, deleted: Boolean(milestone.deleted)
+    updatedAt: now, deleted: Boolean(milestone.deleted),
+    ...(milestone.progress ? { progress: milestone.progress } : {})
   })) : [];
   return {
     id: "trk_" + crypto.randomUUID(), ownerType: "project", ownerId: projectId,
@@ -3360,10 +3396,10 @@ function mergeEditedMilestones(existing, fields, incoming, now) {
     const current = byId.get(fields[index].id);
     if (!current) return next;
     seen.add(current.id);
-    for (const key of ["originalPlannedDate", "doneAt", "doneChangedAt", "deleted"]) {
+    for (const key of ["originalPlannedDate", "doneAt", "doneChangedAt", "progress", "deleted"]) {
       if (!Object.prototype.hasOwnProperty.call(fields[index], key)) next[key] = current[key];
     }
-    const unchanged = ["label", "plannedDate", "originalPlannedDate", "doneAt", "deleted"]
+    const unchanged = ["label", "plannedDate", "originalPlannedDate", "doneAt", "progress", "deleted"]
       .every((key) => next[key] === current[key]);
     next.updatedAt = unchanged ? current.updatedAt : now;
     return next;
@@ -3425,7 +3461,8 @@ function carryProjectToNewCycle(projectId, newCycleStartDate, fields = {}) {
     name: existing.name, startDate: newCycleStartDate,
     milestones: (existing.milestones || []).filter((milestone) => !milestone.deleted && !milestone.doneAt)
       .map((milestone) => ({
-        label: milestone.label, plannedDate: fields.milestonePlannedDates?.[milestone.id] || ""
+        label: milestone.label, plannedDate: fields.milestonePlannedDates?.[milestone.id] || "",
+        ...(milestone.progress ? { progress: milestone.progress } : {})
       }))
   };
   // v259: 目標方向へ到達済みなら、超過分を逆向きの新trackとしてcarryしない。
@@ -3480,8 +3517,8 @@ function updateTrackMilestone(trackId, milestoneId, patch) {
   const milestone = (track.milestones || []).find((entry) => entry.id === milestoneId && !entry.deleted);
   if (!milestone) return { ok: false, errors: ["対象の節目が見つかりません"] };
   if (!patch || typeof patch !== "object" || Array.isArray(patch)
-    || Object.keys(patch).some((key) => !["doneAt", "plannedDate"].includes(key))) {
-    return { ok: false, errors: ["patchはdoneAt/plannedDateのみ指定できます"] };
+    || Object.keys(patch).some((key) => !["doneAt", "plannedDate", "progress"].includes(key))) {
+    return { ok: false, errors: ["patchはdoneAt/plannedDate/progressのみ指定できます"] };
   }
   if (Object.prototype.hasOwnProperty.call(patch, "doneAt")
     && patch.doneAt !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(patch.doneAt)) {
@@ -3490,8 +3527,18 @@ function updateTrackMilestone(trackId, milestoneId, patch) {
   if (Object.prototype.hasOwnProperty.call(patch, "plannedDate") && !dateParts(patch.plannedDate)) {
     return { ok: false, errors: ["plannedDateは有効な日付が必須"] };
   }
+  const hasProgress = Object.prototype.hasOwnProperty.call(patch, "progress");
+  const normalizedProgress = hasProgress && patch.progress !== undefined
+    ? normalizeMilestoneProgress(patch.progress) : undefined;
+  if (hasProgress && patch.progress !== undefined && !normalizedProgress) {
+    return { ok: false, errors: ["progressの形式が不正です"] };
+  }
   const now = nowDateTime();
   const nextMilestone = { ...milestone, ...patch, updatedAt: now };
+  if (hasProgress) {
+    if (normalizedProgress) nextMilestone.progress = normalizedProgress;
+    else delete nextMilestone.progress;
+  }
   if (Object.prototype.hasOwnProperty.call(patch, "plannedDate")) nextMilestone.originalPlannedDate = milestone.originalPlannedDate || milestone.plannedDate;
   if (Object.prototype.hasOwnProperty.call(patch, "doneAt")) nextMilestone.doneChangedAt = now;
   const nextMilestones = track.milestones.map((entry) => entry.id === milestoneId ? nextMilestone : entry);
@@ -5760,6 +5807,18 @@ function twyBarHTML(track, latestValue, pace, status) {
     <div class="twy-bar-scale"><span>${baseline}${unit}</span><span>${goal}${unit}</span></div>`;
 }
 
+function twyMilestoneProgressHTML(progress, label = "") {
+  const value = normalizeMilestoneProgress(progress);
+  if (!value) return "";
+  const text = value.type === "percent" ? `${value.current}%`
+    : `${value.start === null ? "" : `${value.start}→`}${value.current}/${value.target}${value.unit}`;
+  const ratio = milestoneProgressRatio(value);
+  const pct = ratio === null ? null : Math.round(ratio * 1000) / 10;
+  return `<span class="twy-ms-progress"><span class="twy-ms-progress-text">${escapeHTML(text)}</span>
+    ${pct === null ? "" : `<span class="twy-ms-progress-bar" role="progressbar" aria-valuemin="0"
+      aria-valuemax="100" aria-valuenow="${pct}" aria-label="${escapeHTML(label)}の進捗"><i style="width:${pct}%"></i></span>`}</span>`;
+}
+
 function twyMilestoneChainHTML(milestones, today) {
   let nextAssigned = false;
   return `<div class="twy-ms">${milestones.map((milestone) => {
@@ -5773,7 +5832,8 @@ function twyMilestoneChainHTML(milestones, today) {
       dateHTML = `<del>${escapeHTML(mdFmt(milestone.originalPlannedDate))}</del>${escapeHTML(mdFmt(milestone.plannedDate))} 予定変更済`;
     }
     return `<span class="twy-ms-node ${cls}"><span class="twy-ms-dot">${done ? "✓" : late ? "!" : ""}</span>
-      <span class="twy-ms-label">${escapeHTML(milestone.label)}</span><span class="twy-ms-date">${dateHTML}</span></span>`;
+      <span class="twy-ms-label">${escapeHTML(milestone.label)}</span><span class="twy-ms-date">${dateHTML}</span>
+      ${twyMilestoneProgressHTML(milestone.progress, milestone.label)}</span>`;
   }).join("")}</div>`;
 }
 
@@ -5799,14 +5859,31 @@ function twyMilestoneEditorHTML(track) {
   const milestones = (track.milestones || []).filter((milestone) => !milestone.deleted)
     .slice().sort((a, b) => (a.plannedDate || "").localeCompare(b.plannedDate || ""));
   return `<div class="twy-editor twy-editor-ms">
-    ${milestones.map((milestone) => `<div class="twy-ms-edit-item">
-      <label class="checkbox-line"><input type="checkbox" data-action="twy-ms-toggle-done"
+    ${milestones.map((milestone) => {
+    const progress = normalizeMilestoneProgress(milestone.progress);
+    const option = (type, label) => `<option value="${type}"${(progress?.type || "count") === type ? " selected" : ""}>${label}</option>`;
+    return `<div class="twy-ms-edit-item">
+      <div class="twy-ms-edit-main"><label class="checkbox-line"><input type="checkbox" data-action="twy-ms-toggle-done"
         data-id="${escapeHTML(track.id)}" data-twy-ms-id="${escapeHTML(milestone.id)}"
         ${milestone.doneAt ? "checked" : ""}>${escapeHTML(milestone.label)}</label>
-      <input type="date" data-twy-ms-date-input value="${escapeHTML(milestone.plannedDate)}">
-      <button type="button" data-action="twy-ms-edit-date" data-id="${escapeHTML(track.id)}"
-        data-twy-ms-id="${escapeHTML(milestone.id)}">変更</button>
-    </div>`).join("")}
+        ${twyMilestoneProgressHTML(progress, milestone.label)}</div>
+      <span class="twy-ms-date-edit"><input type="date" data-twy-ms-date-input value="${escapeHTML(milestone.plannedDate)}">
+        <button type="button" data-action="twy-ms-edit-date" data-id="${escapeHTML(track.id)}"
+          data-twy-ms-id="${escapeHTML(milestone.id)}">変更</button></span>
+      <button type="button" data-action="twy-ms-toggle-progress" aria-expanded="false">進捗</button>
+      <div class="twy-ms-progress-editor" data-twy-ms-progress-editor hidden>
+        <label>型 <select data-twy-progress-type>${option("count", "件数")}${option("percent", "進捗率")}${option("value", "目標値")}</select></label>
+        <label>現在 <input type="number" inputmode="decimal" step="any" data-twy-progress-current value="${progress ? escapeHTML(progress.current) : ""}"></label>
+        <label>目標 <input type="number" inputmode="decimal" step="any" data-twy-progress-target value="${progress?.target === null || !progress ? "" : escapeHTML(progress.target)}"></label>
+        <label>開始 <input type="number" inputmode="decimal" step="any" data-twy-progress-start value="${progress?.start === null || !progress ? "" : escapeHTML(progress.start)}"></label>
+        <label>単位 <input type="text" maxlength="12" data-twy-progress-unit value="${escapeHTML(progress?.unit || "")}"></label>
+        <button type="button" data-action="twy-ms-save-progress" data-id="${escapeHTML(track.id)}"
+          data-twy-ms-id="${escapeHTML(milestone.id)}">保存</button>
+        ${progress ? `<button type="button" class="cancel" data-action="twy-ms-clear-progress" data-id="${escapeHTML(track.id)}"
+          data-twy-ms-id="${escapeHTML(milestone.id)}">進捗なし</button>` : ""}
+      </div>
+    </div>`;
+  }).join("")}
     <button type="button" class="cancel" data-action="twy-close-editor"
       data-id="${escapeHTML(track.id)}">閉じる</button>
   </div>`;
