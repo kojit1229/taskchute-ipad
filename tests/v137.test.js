@@ -199,6 +199,9 @@ function check(name, cond, extra = "") {
     aiDirList = [{ name: "コンテンツ総括_2026-07-01.md", path: "taskchute/コンテンツ総括_2026-07-01.md", type: "file" }];
     aiBodyAttempts = 0;
     await seed({ view: "ai-reports" });
+    // v283: 既定セグメントがfeedbackへ変更されたため、本fixture(contentのみ)ではセグメントを
+    // 明示選択してから本文取得を検証する(検証意図=失敗を成功キャッシュしない、は不変)。
+    await page.click('[data-action="ai-report-type"][data-type="content"]');
     await page.waitForTimeout(500);
     check("初回の本文取得(失敗)が1回飛んでいる", aiBodyAttempts === 1, `(実際: ${aiBodyAttempts})`);
     let mainText2 = await page.locator("main").textContent();
