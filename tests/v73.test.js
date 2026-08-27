@@ -198,7 +198,11 @@ function check(name, cond, extra = "") {
     await page.click('[data-action="delete-gym-entry"]');
     await page.waitForTimeout(300);
     const s3b = await stateNow();
-    check("削除後は記録が0件になる", (s3b.condition.logs[TODAY]?.gym || []).length === 0, JSON.stringify(s3b.condition.logs[TODAY]));
+    // v284: 削除は物理削除からtombstone化(同期での復活防止)。「記録が0件」の検証意図は
+    // 「有効な記録が残らない」なので、deleted除外後の件数0+tombstoneがdeletedAtを持つことへ追従。
+    const gym3b = s3b.condition.logs[TODAY]?.gym || [];
+    check("削除後は有効な記録が0件になる(tombstone除外)", gym3b.filter((g) => !g?.deleted).length === 0, JSON.stringify(s3b.condition.logs[TODAY]));
+    check("削除tombstoneがdeletedAt付きで残る(同期復活防止)", gym3b.length === 1 && !!gym3b[0]?.deletedAt, JSON.stringify(gym3b));
 
     // ============================================================
     // (d) 加点式(空白日を責めない)
