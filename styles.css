@@ -4759,6 +4759,32 @@ h3 {
 
 .instr-iron-stats strong { font-size: 16px; overflow-wrap: anywhere; }
 .instr-iron-chart { min-width: 0; }
+.instr-pin-archive { min-width: 0; }
+.instr-pin-archive-list {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+.instr-pin-archive-card {
+  min-width: 0;
+  border: 1px solid var(--tower-line);
+  background: color-mix(in srgb, var(--tower-panel) 82%, transparent);
+}
+.instr-pin-archive-card h3 {
+  margin: 0;
+  padding: 10px 12px 3px;
+  color: var(--tower-amber);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.instr-pin-archive-card time {
+  display: block;
+  padding: 0 12px 10px;
+  color: var(--tower-text);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  opacity: .72;
+}
 .instr-chart-scroll { overflow-x: auto; overscroll-behavior-inline: contain; }
 .instr-chart {
   display: flex;
@@ -4793,6 +4819,8 @@ h3 {
     max-width: 1000px;
   }
   .instr-iron-chart { grid-column: 1 / -1; }
+  .instr-pin-archive { grid-column: 1 / -1; }
+  .instr-pin-archive-list { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
 }
 
 /* v277: PCではサイドバー以外の主領域を活用する。1024px以下とTodayの3面卓は従来契約を維持。 */

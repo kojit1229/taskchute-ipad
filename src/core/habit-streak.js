@@ -2,7 +2,12 @@
 // 日付文字列は数値へ分解して扱い、iOS Safariでずれるnew Date("文字列")は使わない。
 function dateParts(iso) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ""));
-  return match ? match.slice(1).map(Number) : null;
+  if (!match) return null;
+  const parts = match.slice(1).map(Number);
+  const [year, month, day] = parts;
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const monthDays = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return month >= 1 && month <= 12 && day >= 1 && day <= monthDays[month - 1] ? parts : null;
 }
 
 function shiftDate(iso, days) {
@@ -55,4 +60,34 @@ function habitStreakStats(rule, habit, todayIso) {
   return { currentStreak, bestStreak, totalCount, challengeDay, last28 };
 }
 
-export { habitStreakStats };
+// v280: 固定化解除済みの閉区間だけを集計する。期間外ログは参照せず、非該当曜日は分母から除く。
+function habitStreakPeriodStats(rule, habit, fromIso, toIso) {
+  if (!dateParts(fromIso) || !dateParts(toIso) || fromIso > toIso || !["daily", "weekdays"].includes(rule?.kind)) {
+    return { bestStreak: 0, totalCount: 0, successRate: 0 };
+  }
+  const logs = habit?.logs && typeof habit.logs === "object" && !Array.isArray(habit.logs) ? habit.logs : {};
+  let bestStreak = 0;
+  let currentStreak = 0;
+  let totalCount = 0;
+  let applicableCount = 0;
+  let cursor = fromIso;
+  let guard = 0;
+  while (cursor && cursor <= toIso && guard++ < 20000) {
+    if (appliesOn(rule, cursor)) {
+      applicableCount++;
+      if (logs[cursor]) {
+        currentStreak++;
+        totalCount++;
+        bestStreak = Math.max(bestStreak, currentStreak);
+      } else currentStreak = 0;
+    }
+    cursor = shiftDate(cursor, 1);
+  }
+  return {
+    bestStreak,
+    totalCount,
+    successRate: applicableCount ? Math.round((totalCount / applicableCount) * 100) : 0
+  };
+}
+
+export { habitStreakStats, habitStreakPeriodStats };

@@ -430,8 +430,8 @@ function mergeZeroThinkingIntoLocal(remoteZt) {
 //  そのままstateへ合流させると既定値補完を素通りするため)。
 // ===============================================================
 
-// v252: earlyBird/habitStreaksは取消が物理削除のため和集合マージせず、recurrencesと同じfail-close比較に置く。
-const SYNC_CORE_COMPARE_KEYS = ["recurrences", "declarations", "questions", "experiments", "earlyBird", "habitStreaks"];
+// v280: habitPinHistoryはid+updatedAtでマージできない追記専用ツリーのため、earlyBird/habitStreaksと同じfail-close比較に置く。
+const SYNC_CORE_COMPARE_KEYS = ["recurrences", "declarations", "questions", "experiments", "earlyBird", "habitStreaks", "habitPinHistory"];
 
 // リモート生テキストからマージ・比較用のnormalize済みコピーを作る(失敗はnullで従来動作へ)
 function normalizedRemoteCopy(text) {

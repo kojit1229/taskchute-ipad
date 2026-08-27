@@ -1,0 +1,68 @@
+{
+  "version": 280,
+  "date": "2026-08-27",
+  "title": "固定化解除履歴とPIN ARCHIVE",
+  "summary": "ルーティンの固定化解除期間を履歴として保存し、INSTRUMENTS末尾のPIN ARCHIVEでタイトル・期間・期間内の連続BEST・累計・実施率を新しい順に確認できるようにした。",
+  "changedFiles": [
+    "CHANGES_v280.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v280.json",
+    "scripts/test-manifest.js",
+    "src/core/habit-streak.js",
+    "src/features/instruments.js",
+    "src/sync/github.js",
+    "styles.css",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/v274.test.js",
+    "tests/v275.test.js",
+    "tests/v280.test.js"
+  ],
+  "intent": [
+    "固定化を解除しても取り組んだ期間を失わず、後からINSTRUMENTSで振り返れるようにする。",
+    "固定化解除・対象外kindへの変更・シリーズ終了の各経路で、固定中の期間を重複なく閉じる。",
+    "期間統計をstate非依存の純関数に置き、期間外ログやweekdaysの非該当日を混ぜず再計算する。"
+  ],
+  "changes": [
+    "state.habitPinHistory[ruleId]へ固定化期間のfrom/toと解除時kindを追加し、normalizeStateで外側object・内側配列・実在日付・from<=toを検証してruleId順へ正規化する。",
+    "明示解除・対象外kindへの変更・GATE削除・Blockモーダルのシリーズ終了で、streakSince保持中だけfrom=streakSince/to=当日/kind=解除時種別をpushし、既存habitStreaksログは削除しない。",
+    "habitStreakPeriodStatsを追加し、from/to閉区間内だけの連続BEST・累計・実施率をdaily/weekdays別に算出する。",
+    "INSTRUMENTSの年間PAYLOAD後へPIN ARCHIVEを追加し、全履歴をto降順・同日内は新しい解除順でカード表示する。履歴0件ではセクション自体を描画しない。",
+    "論理削除済みrecurrencesもタイトル逆引き対象にし、ルール自体が無い場合は「(削除済みルーティン)」へフォールバックする。",
+    "habitPinHistoryを同期コア比較へ追加し、端末間で履歴が異なる競合を自動和集合せずfail-closeする。",
+    "PIN ARCHIVEを390pxで縦積み、768px以上で自動列の全幅セクションとして表示する。",
+    "Service WorkerのCACHE_NAMEを、予約済みv279を飛ばしてv280へ更新した。APP_SHELLは既存のhabit-streak.js/instruments.js列挙を維持した。",
+    "v280 E2Eをplanning-execution/ui-responsiveへ明示登録し、既存v274/v275の最新版CACHE_NAMEアサーションをv280へ追従させた。"
+  ],
+  "uncertainties": [
+    "Google Chromeの390px/1100pxで自動検証した。iPhone/iPad Safari PWAでのカード密度と長いルーティン名の見え方はK確認対象。",
+    "指定回帰のv252は既存fixtureのendsAt=09:50に対して固定時刻10:00のため、500ms timer tickerが先に自動休憩へ遷移し、completePomodoroの1 assertionだけ失敗した。Chrome/Edgeで再現し、v280差分箇所とは独立。既存テストを変更しない制約のため本ラウンドでは未修正。"
+  ],
+  "reviewFocus": [
+    "GATE編集とBlock編集モーダルの解除で履歴が各1件だけ追加され、再描画・reloadで重複追加されないか。",
+    "不正日付・逆転期間を除外しつつ、正しいhabitPinHistoryがexport/import相当のnormalize往復とsaveState後reloadで保持されるか。",
+    "期間統計がfrom/toの閉区間外ログを混ぜず、weekdaysでは土日を連続判定と実施率の分母から除くか。",
+    "habitPinHistory差分が同期の自動和集合解決を抑止するか。",
+    "履歴0件時の非表示、削除済みタイトル、既存HABITパネル、390px/768px/PCグリッドが退行していないか。"
+  ],
+  "verification": [
+    "node --checkでapp.js、habit-streak.js、instruments.js、github.js、test-manifest.js、v280.test.jsの構文を確認。",
+    "Google Chrome指定でnode tests/v280.test.jsを実行し、期間純関数、正規化、実push/pull同期fail-close、GATE削除・シリーズ終了・kind変更、reload永続化、新しい順、削除済みタイトル、390pxを全件成功。",
+    "v253/v274/v275を全件成功。v252は既存ポモドーロfixtureの時刻競合1件のみ失敗し、他assertionは成功。",
+    "npm run test:coreを実行し、直近5件(v280/v278/v277/v276/v275)+固定横断5件(v72/v59/v67/v50/v70)を全件成功。",
+    "npm run code:index:write/checkとtest:manifest:write/checkを実行し、v280をplanning-execution/ui-responsiveへ明示登録。",
+    "一時handoff出力先でrelease-record --write/--checkとrelease-gateを実行し、リリース記録・関連回帰・APP_SHELL列挙を確認。"
+  ],
+  "notes": [
+    "v279は別worktreeのFUND R2で予約済みのため、releases/v279.jsonの有無に関係なくv280を使用した。",
+    "履歴スキーマはfrom/toに解除時kindを任意項目として保持し、旧履歴のkind欠損時はrecurrencesの現kindへフォールバックする。",
+    "artifacts/v275配下のPNG 4点は着手時から変更済みで、今回の変更対象外として一切編集していない。"
+  ],
+  "knownLimitations": [
+    "kindを持たない旧履歴でrecurrencesからルールも物理的に消えている場合は、タイトルを削除済み表示とし、期間統計はdailyとして算出する。",
+    "PIN ARCHIVEからの再固定化操作とearlyBird履歴は対象外。habitStreaksログの掃除・圧縮も行わない。"
+  ]
+}

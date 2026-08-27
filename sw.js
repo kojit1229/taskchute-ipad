@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v278";
+const CACHE_NAME = "taskchute-journal-pwa-v280";
+// v280: 固定化解除履歴とINSTRUMENTSのPIN ARCHIVEを追加した(APP_SHELL変更なし、v279は予約済みのため欠番)。
 // v278: PCサイドバー導線とGATE編集の固定化トグルを追加した(APP_SHELL変更なし)。
 // v277: PC幅でTOWER系ビューと12WY Project詳細を拡幅した(APP_SHELL変更なし)。
 // v276: 時刻入力の5分整列とGATEルーティン完了の押下実時刻記録を追加した(APP_SHELL変更なし)。

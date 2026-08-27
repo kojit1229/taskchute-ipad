@@ -1636,6 +1636,19 @@ function normalizeState(value) {
     ...(habit && typeof habit === "object" && !Array.isArray(habit) ? habit : {}),
     logs: habit?.logs && typeof habit.logs === "object" && !Array.isArray(habit.logs) ? habit.logs : {}
   }]));
+  // v280: 固定化解除期間。ruleIdキー順を固定し、壊れた配列・日付は安全な空履歴へ縮退する。
+  if (!value.habitPinHistory || typeof value.habitPinHistory !== "object" || Array.isArray(value.habitPinHistory)) value.habitPinHistory = {};
+  value.habitPinHistory = Object.fromEntries(Object.entries(value.habitPinHistory).sort().map(([ruleId, periods]) => [ruleId,
+    (Array.isArray(periods) ? periods : []).filter((period) => {
+      const from = String(period?.from || ""), to = String(period?.to || "");
+      return /^\d{4}-\d{2}-\d{2}$/.test(from) && /^\d{4}-\d{2}-\d{2}$/.test(to)
+        && dateParts(from) && dateParts(to) && from <= to;
+    }).map((period) => ({
+      from: period.from,
+      to: period.to,
+      ...(typeof period.kind === "string" && period.kind ? { kind: period.kind } : {})
+    }))
+  ]));
   const actualIronImport = value.ironImport && typeof value.ironImport === "object" && !Array.isArray(value.ironImport)
     ? value.ironImport
     : {};
@@ -12090,11 +12103,21 @@ function removeUntouchedInstances(ruleId, { fromDate = "", excludeId = "" } = {}
   });
 }
 
+function archiveHabitPinPeriod(rule) {
+  if (!rule?.streakSince) return false;
+  state.habitPinHistory ||= {};
+  const history = Array.isArray(state.habitPinHistory[rule.id]) ? state.habitPinHistory[rule.id] : [];
+  state.habitPinHistory[rule.id] = history;
+  history.push({ from: rule.streakSince, to: todayISO(), kind: rule.kind });
+  return true;
+}
+
 // v229: Block編集の「__end__」とGATE削除が共有するシリーズ終了本体。
 // GATE側はendGateRecurrence()からこの既存分岐相当だけを呼ぶ薄いラッパーにする。
 function endRecurrenceSeries(ruleId, { excludeId = "" } = {}) {
-  const active = (state.recurrences || []).some((rule) => rule.id === ruleId && !rule.deleted);
-  if (!active) return false;
+  const activeRule = (state.recurrences || []).find((rule) => rule.id === ruleId && !rule.deleted);
+  if (!activeRule) return false;
+  archiveHabitPinPeriod(activeRule);
   state.recurrences = state.recurrences.map((rule) => rule.id === ruleId
     ? { ...rule, deleted: true, updatedAt: nowDateTime() }
     : rule);
@@ -12187,7 +12210,13 @@ function syncHabitStreakForBlock(block) {
 }
 
 function habitStreakEdit(rule, nextKind, requested) {
-  if (!rule || !["daily", "weekdays"].includes(nextKind)) return { ok: true, value: null };
+  if (!rule) return { ok: true, value: null };
+  const pinEligibleKind = ["daily", "weekdays"].includes(nextKind);
+  // v280: 明示解除と対象外kindへの変更は、rule検証後に固定化期間を1回だけ閉じる。
+  if (rule.streakSince && (!pinEligibleKind || (requested !== undefined && !requested))) {
+    archiveHabitPinPeriod(rule);
+  }
+  if (!pinEligibleKind) return { ok: true, value: null };
   if (requested === undefined) return { ok: true, value: rule.streakSince || null };
   if (!requested) return { ok: true, value: null };
   if (rule.streakSince) return { ok: true, value: rule.streakSince };

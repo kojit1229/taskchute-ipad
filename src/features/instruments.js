@@ -31,7 +31,7 @@
 //
 // characterization test: instruments-core.test.js(同ディレクトリ、ブラウザ不要)。
 
-import { habitStreakStats } from "../core/habit-streak.js";
+import { habitStreakPeriodStats, habitStreakStats } from "../core/habit-streak.js";
 
 // ---- 依存注入(configureInstruments) ----
 // 呼び出し前のフォールバック(単体で読み込んだだけでは壊れないようにするための最小スタブ。
@@ -220,6 +220,39 @@ function habitPanelsHTML(state, todayIso) {
     }).join("");
 }
 
+function pinArchiveHTML(state) {
+  let sequence = 0;
+  const entries = Object.entries(state.habitPinHistory || {}).flatMap(([ruleId, periods]) =>
+    (Array.isArray(periods) ? periods : [])
+      .filter((period) => typeof period?.from === "string" && typeof period?.to === "string" && period.from <= period.to)
+      .map((period) => ({ ruleId, period, sequence: sequence++ }))
+  ).sort((a, b) => b.period.to.localeCompare(a.period.to)
+    || b.period.from.localeCompare(a.period.from) || b.sequence - a.sequence);
+  if (!entries.length) return "";
+  const cards = entries.map(({ ruleId, period }) => {
+    const rule = (state.recurrences || []).find((item) => item?.id === ruleId);
+    const title = rule?.title || "(削除済みルーティン)";
+    const periodKind = ["daily", "weekdays"].includes(period.kind) ? period.kind : rule?.kind;
+    const stats = habitStreakPeriodStats(
+      { kind: ["daily", "weekdays"].includes(periodKind) ? periodKind : "daily" },
+      state.habitStreaks?.[ruleId], period.from, period.to
+    );
+    return `<article class="instr-pin-archive-card" data-rule-id="${escapeHTML(ruleId)}">
+      <h3>${escapeHTML(title)}</h3>
+      <time datetime="${escapeHTML(period.from)}">${escapeHTML(period.from)} 〜 ${escapeHTML(period.to)}</time>
+      <div class="instr-stats-row">
+        <div class="instr-stat-cell"><span>連続BEST</span><strong>${stats.bestStreak}<small>日</small></strong></div>
+        <div class="instr-stat-cell"><span>累計</span><strong>${stats.totalCount}<small>回</small></strong></div>
+        <div class="instr-stat-cell"><span>実施率</span><strong>${stats.successRate}<small>%</small></strong></div>
+      </div>
+    </article>`;
+  }).join("");
+  return `<section class="instr-panel-box instr-pin-archive" aria-label="PIN ARCHIVE">
+    <h2>PIN ARCHIVE <span>固定化履歴</span></h2>
+    <div class="instr-pin-archive-list">${cards}</div>
+  </section>`;
+}
+
 function ironChartHTML(stats) {
   const maxKg = Math.max(1, ...stats.months.map((month) => month.totalKg));
   const bars = stats.months.map((month) => `<div class="instr-chart-month" data-month="${month.key}">
@@ -285,6 +318,8 @@ function renderInstruments() {
         ${ironChartHTML(period)}
         <div class="instr-panel-foot">今年の構造化セット(at基準)のみ。日付のない過去コメント移行分は含みません</div>
       </section>
+
+      ${pinArchiveHTML(state)}
     </div>
   `;
 }
