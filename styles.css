@@ -3084,7 +3084,6 @@ h3 {
 .sec-gates { order: 3; }
 .sec-log { order: 4; }
 .today-tower > .today-pomodoro { order: 4; }
-.sec-atis { order: 5; }
 .sec-journal { order: 6; }
 .today-focus-bar {
   display: flex;
@@ -3348,82 +3347,6 @@ h3 {
   color: var(--tower-cyan); font-size: 11px; letter-spacing: .18em;
 }
 .tower-panel-box h2 span { float: right; color: var(--tower-text); font-size: 10px; font-weight: 400; letter-spacing: .08em; opacity: .6; }
-.tower-atis-pending-badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 20px;
-  margin-left: 8px;
-  padding: 1px 6px;
-  border: 1px solid var(--tower-amber);
-  color: var(--tower-amber);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: .06em;
-}
-
-.tower-atis-body { display: grid; gap: 8px; padding: 10px; max-height: 60vh; overflow-y: auto; }
-.tower-atis-sub { color: var(--tower-cyan); font-size: 10px; font-weight: 700; letter-spacing: .08em; }
-.tower-atis-sub span { color: var(--tower-text); opacity: .6; }
-.atis-divider { height: 1px; background: var(--tower-line); }
-.tower-atis-summary { display: grid; gap: 4px; padding: 8px; border-left: 2px solid var(--tower-green); background: var(--tower-bg); }
-.tower-atis-summary-date { color: var(--tower-cyan); font-size: 10px; font-weight: 700; letter-spacing: .08em; }
-.tower-atis-summary-text { white-space: pre-wrap; color: var(--tower-text); font-family: system-ui, sans-serif; font-size: 12.5px; line-height: 1.7; }
-.tower-atis-summary-text::before { content: "» "; color: var(--tower-green); font-family: ui-monospace, Consolas, monospace; }
-.tower-atis-feedback { border: 1px solid var(--tower-line); background: var(--tower-bg); }
-.tower-atis-feedback summary { min-height: 32px; padding: 8px; color: var(--tower-cyan); cursor: pointer; list-style: none; }
-.tower-atis-feedback summary::-webkit-details-marker { display: none; }
-.tower-atis-feedback-body { padding: 8px; border-top: 1px solid var(--tower-line); font-family: system-ui, sans-serif; line-height: 1.55; }
-.tower-atis-feedback-body .readonly-md { min-height: 0; }
-.tower-atis-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.atis-chip {
-  display: inline-flex;
-  min-height: 40px;
-  padding: 0;
-  border: 1px solid var(--tower-line);
-  border-radius: 0;
-  color: var(--tower-cyan);
-  background: var(--tower-bg);
-  font: inherit;
-  font-size: 10px;
-  text-align: left;
-}
-.atis-chip > button {
-  min-height: 40px;
-  padding: 5px 9px;
-  border: 0;
-  color: inherit;
-  background: transparent;
-  font: inherit;
-  cursor: pointer;
-}
-.atis-chip > button + button {
-  min-width: 40px;
-  border-left: 1px solid var(--tower-line);
-}
-.tower-atis-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-.atis-btn {
-  min-height: 44px;
-  padding: 6px 8px;
-  border: 1px solid var(--tower-green);
-  border-radius: 0;
-  color: var(--tower-green);
-  background: transparent;
-  font: inherit;
-  font-size: 11px;
-}
-.atis-btn:disabled { opacity: .4; }
-.atis-chip > button:focus-visible,
-.atis-btn:focus-visible { outline: 2px solid var(--tower-amber); outline-offset: 1px; }
-.tower-atis-status { min-height: 1em; color: var(--tower-text); font-size: 10px; opacity: .65; }
-.tower-atis-status[data-kind="sending"],
-.tower-atis-status[data-kind="pending"] { color: var(--tower-cyan); opacity: .9; }
-.tower-atis-status[data-kind="success"] { color: var(--tower-green); opacity: .9; }
-.tower-atis-status[data-kind="error"],
-.tower-atis-status[data-kind="limit"],
-.tower-atis-status[data-kind="timeout"] { color: var(--tower-amber); opacity: .9; }
-@media (max-width: 520px) {
-  .tower-atis-actions { grid-template-columns: 1fr; }
-}
 
 .tower-journal-body { display: grid; gap: 6px; padding: 10px; }
 .tower-journal-label { color: var(--tower-cyan); font-size: 9.5px; font-weight: 700; letter-spacing: .14em; }

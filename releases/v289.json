@@ -1,0 +1,46 @@
+{
+  "version": 289,
+  "date": "2026-08-29",
+  "title": "ATIS専用CSSの削除",
+  "summary": "v285で廃止済みのATISパネルに残っていた未参照の専用CSSを削除し、ATIS UI廃止後のスタイル残骸を整理する。",
+  "changedFiles": [
+    "CHANGES_v289.md",
+    "releases/v289.json",
+    "styles.css",
+    "sw.js"
+  ],
+  "intent": [
+    "廃止済みでDOMに描画されないATISパネル専用ルールを削除し、現行UIに必要なスタイルだけを残す。",
+    "R3-1をCSS掃除だけの独立リリースとして完了し、孤児action本体を扱うR3-2と分離する。"
+  ],
+  "changes": [
+    "styles.cssから.sec-atisとtower-atis/atis系の専用ルールを合計77行削除した。",
+    "Service WorkerのCACHE_NAMEをtaskchute-journal-pwa-v289へ更新した。",
+    "R3-2対象のaction登録・関数本体・テスト・state migrationには変更を加えていない。"
+  ],
+  "uncertainties": [
+    "ATIS専用セレクタは現行DOMに存在しないため表示影響は想定しないが、iPhone/iPad Safari PWAでの最終確認は実機で行う。"
+  ],
+  "reviewFocus": [
+    "styles.cssからATIS専用セレクタだけが削除され、隣接するTOWER共通ルールとJOURNALルールが保持されているか。",
+    "styles.css内のatis/ATIS参照が0件で、削除行数が指定どおり77行か。",
+    "app.js・src・testsに変更がなく、R3-2の孤児action削除へ着手していないか。",
+    "sw.jsのCACHE_NAMEがv289で、release記録と実変更ファイルが一致するか。"
+  ],
+  "verification": [
+    "styles.cssをatis/ATISで検索し、残存参照が0件であることを確認した。",
+    "npm.cmd run code:index:writeを実行し、code indexを現物に同期した。",
+    "release-recordのwrite/checkを実行し、v289のCHANGESと一時handoffがrelease記録に一致することを確認した。",
+    "CHROME_PATHにGoogle Chromeを指定してrelease-gate --finalを実行し、自動選定impact-regressionとcoreを全件成功、exit 0で完了した。同梱Chromiumでの初回は実行環境のspawn EPERMによりexit 1だった。",
+    "git diff --checkを実行し、空白エラーがないことを確認した。"
+  ],
+  "notes": [
+    "実行コード差分はstyles.css 77行削除とsw.js 1行変更の計79変更行で、200行上限内。",
+    "新規テストは発注どおり追加せず、既存テストも変更していない。"
+  ],
+  "knownLimitations": [
+    "サンドボックス境界により../taskchute-notes/handoff.md本体は更新せず、一時コピーでrelease-recordのwrite/checkを検証する。監督者が公式handoffへ生成反映する必要がある。",
+    "コミット・push・CI全量・iOS Safari実機PWA確認は実施していない。",
+    "作業開始前から変更済みのartifacts/v275 PNG 4件は本リリース対象外として保持した。"
+  ]
+}
