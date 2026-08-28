@@ -40,8 +40,9 @@ function check(name, condition, extra = "") {
   const executableTopband = topbandSource.replace(/\/\/.*$/gm, "");
   check("iOS禁止の日付文字列パース・個別listenerを追加しない", !/new Date\s*\(\s*["'`]/.test(executableTopband)
     && !topbandSource.includes("addEventListener"));
-  // v284: 本スイートのUI契約は維持しつつ、後続実行コード変更に必要なCACHE_NAME +1へ期待値を追従する。
-  check("CACHE_NAMEは後続v284", /^const CACHE_NAME = "taskchute-journal-pwa-v284";/m.test(swSource));
+  // v285: CACHE_NAME期待値をreleases最大版から動的導出へ統一(v255/v262と同方式。追従漏れ根絶・検証内容は不変)。
+  const maxRelease = Math.max(...require("fs").readdirSync(require("path").join(ROOT, "releases")).map((f) => /^v(\d+)\.json$/.exec(f)?.[1]).filter(Boolean).map(Number));
+  check(`CACHE_NAMEはreleases最大版v${maxRelease}と一致`, new RegExp(`^const CACHE_NAME = "taskchute-journal-pwa-v${maxRelease}";`, "m").test(swSource));
   const topband = await import(pathToFileURL(path.join(ROOT, "src", "features", "topband.js")).href);
   topband.configureTopband({ escapeHTML: (value) => String(value), todayISO: () => "2026-08-26",
     getSettings: () => ({ twelveWeekStartDate: "2026-08-15", birthDate: "" }), getTrackDigest: () => null });
