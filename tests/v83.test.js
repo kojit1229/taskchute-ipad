@@ -3,8 +3,8 @@
 //       形状を丸チェックに統一。チェック済み状態(塗り+✓)の表現も統一。
 //       v81で入れた当たり判定44px拡張(::before/::after・wish-check-wrapのlabel拡張)は壊さない。
 //   B8: renderMarkdownの結果メモ化(入力テキスト→サニタイズ済みHTMLの単純キャッシュ)。
-//       同一テキストの再描画はmarked.parseを再実行しない。cachedFeedback更新(新着fetch)時は
-//       テキスト自体が変わるためキーが変わり、表示は正しく更新される(明示的invalidation不要)。
+//       同一テキストの再描画はmarked.parseを再実行しない。AIレポートのfeedback本文更新時は
+//       テキスト自体が変わるためキーが変わり、表示は正しく更新される。
 // 主端末=iPhone縦持ち(幅390px)を想定した viewport で検証する。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
@@ -91,6 +91,17 @@ function check(name, cond, extra = "") {
       if (feedbackFixture === null) return route.fulfill({ status: 404, body: "not found (test-fixture)" });
       route.fulfill({ status: 200, contentType: "text/markdown", body: feedbackFixture });
     });
+    await page.route((url) =>
+      url.hostname === "api.github.com" && decodeURIComponent(url.pathname).endsWith("/taskchute/report-index.json"),
+    (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      generatedAt: now0.toISOString(),
+      files: [{ name: `AIフィードバック_${YESTERDAY}.md`, date: YESTERDAY, kind: "feedback" }]
+    }) }));
+    await page.route((url) =>
+      url.hostname === "api.github.com" && decodeURIComponent(url.pathname).endsWith("/contents/taskchute"),
+    (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([
+      { name: `AIフィードバック_${YESTERDAY}.md`, type: "file" }
+    ]) }));
 
     await page.clock.setFixedTime(now0);
     await page.goto(`http://localhost:${PORT}/`);
@@ -309,33 +320,31 @@ function check(name, cond, extra = "") {
     );
 
     // ============================================================
-    // [B8-2] 新着FB(cachedFeedback更新)時に表示が正しく更新される(明示的invalidation不要の設計)
+    // [B8-2] AIレポートfeedbackの本文更新で古いrenderMarkdown結果を返し続けない
     // ============================================================
-    console.log("[B8-2] cachedFeedback更新(新着fetch)時、renderMarkdownのキャッシュに邪魔されず表示が更新される");
-    // v230: Home撤去後は同じcachedFeedback/renderMarkdown経路をATISで確認する。
-    const OLD_MARKER = "v83旧フィードバックマーカー_" + Date.now();
-    const NEW_MARKER = "v83新フィードバックマーカー_" + Date.now();
-
+    console.log("[B8-2] AIレポートfeedback更新時、renderMarkdown cacheに邪魔されず本文を更新する");
+    const OLD_MARKER = "v83旧フィードバックマーカー";
+    const NEW_MARKER = "v83新フィードバックマーカー";
     feedbackFixture = `# AIフィードバック\n\n${OLD_MARKER}\n`;
-    await page.evaluate(({ KEY, YESTERDAY }) => {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      s.selectedDate = YESTERDAY;
-      s.currentView = "today";
-      if (s.feedback) delete s.feedback[YESTERDAY];
-      localStorage.setItem(KEY, JSON.stringify(s));
-    }, { KEY, YESTERDAY });
+    await page.evaluate(({ KEY }) => {
+      const state = JSON.parse(localStorage.getItem(KEY));
+      state.currentView = "ai-reports";
+      state.settings.aiReportType = "feedback";
+      localStorage.setItem(KEY, JSON.stringify(state));
+    }, { KEY });
     await page.reload();
-    await page.waitForTimeout(700);
-    const fbTextOld = await page.locator(".tower-atis-feedback").textContent();
-    check("旧フィードバック内容が表示される(cachedFeedback経由のrenderMarkdown)", (fbTextOld || "").includes(OLD_MARKER), (fbTextOld || "").slice(0, 300));
+    await page.waitForSelector('#app[data-view="ai-reports"]');
+    await page.locator('[data-action="ai-report-refresh"]').first().click();
+    await page.waitForFunction((marker) => document.querySelector(".md-render")?.textContent.includes(marker), OLD_MARKER);
+    const oldFeedbackText = await page.locator(".md-render").textContent();
+    check("旧feedback本文をAIレポートタブで表示", oldFeedbackText.includes(OLD_MARKER), oldFeedbackText);
 
-    // バッチが新しい内容で上書きした状況を再現(fixtureを差し替えて再取得=アプリ再起動相当)
     feedbackFixture = `# AIフィードバック\n\n${NEW_MARKER}\n`;
-    await page.reload();
-    await page.waitForTimeout(700);
-    const fbTextNew = await page.locator(".tower-atis-feedback").textContent();
-    check("新着フィードバックの内容が表示される(古い内容のまま固まっていない)", (fbTextNew || "").includes(NEW_MARKER), (fbTextNew || "").slice(0, 300));
-    check("旧フィードバック内容が残留していない(regression: キャッシュの取り違えが無い)", !(fbTextNew || "").includes(OLD_MARKER));
+    await page.locator('[data-action="ai-report-refresh"]').first().click();
+    await page.waitForFunction((marker) => document.querySelector(".md-render")?.textContent.includes(marker), NEW_MARKER);
+    const newFeedbackText = await page.locator(".md-render").textContent();
+    check("更新後のfeedback本文を表示", newFeedbackText.includes(NEW_MARKER), newFeedbackText);
+    check("旧feedback本文を残留させない", !newFeedbackText.includes(OLD_MARKER), newFeedbackText);
 
     console.log(failures === 0 ? "\n✅ v83 ALL PASS" : `\n❌ v83: ${failures} 件失敗`);
   } finally {

@@ -8,7 +8,7 @@
 //   - weekRange()/isWishStagnant()/Pomodoro 系の日時文字列パース(9時間ズレ回避)
 //   - AI下書きスケジュールの削除ボタン(.draft-remove)が .draft-resize に
 //     クリックを奪われる問題(短い下書きBlockで顕著)
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dispatchRegisteredAction } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -130,27 +130,28 @@ function check(name, cond, extra = "") {
   await page.reload();
   await page.waitForTimeout(500);
 
-  await page.click('[data-action="nav"][data-view="today"]');  // v230: 下書きスケジュールはATISへ移設
+  await page.click('[data-action="nav"][data-view="today"]');
   await page.waitForTimeout(200);
   const scheduleBtn = page.locator('[data-action="ai-schedule"]');
+  check("todayビューには旧下書きボタンを戻さない", await scheduleBtn.count() === 0);
   if (await scheduleBtn.count()) {
     await scheduleBtn.click();
-    await page.waitForTimeout(600);
-    check("15分の下書きBlockが表示される", await page.locator(".draft-block").count() === 1);
-    await page.locator(".draft-block").scrollIntoViewIfNeeded();
-    const box = await page.locator(".draft-block").boundingBox();
-    check("下書きBlockの高さが最小値(26px)に張り付いている(短いBlockケース)", !!box && box.height <= 27, box && box.height);
-
-    let removeError = null;
-    try {
-      await page.locator(".draft-remove").click({ timeout: 4000 });
-    } catch (e) { removeError = e.message; }
-    check("短いBlockでも×ボタンがクリックでき、.draft-resizeに横取りされない", !removeError, removeError || "");
-    await page.waitForTimeout(300);
-    check("削除後は下書きBlockが消える", await page.locator(".draft-block").count() === 0);
   } else {
-    check("下書きボタンが見つからずスキップ", false, "ai-schedule button not found");
+    await dispatchRegisteredAction(page, "ai-schedule");
   }
+  await page.waitForTimeout(600);
+  check("15分の下書きBlockが表示される", await page.locator(".draft-block").count() === 1);
+  await page.locator(".draft-block").scrollIntoViewIfNeeded();
+  const box = await page.locator(".draft-block").boundingBox();
+  check("下書きBlockの高さが最小値(26px)に張り付いている(短いBlockケース)", !!box && box.height <= 27, box && box.height);
+
+  let removeError = null;
+  try {
+    await page.locator(".draft-remove").click({ timeout: 4000 });
+  } catch (e) { removeError = e.message; }
+  check("短いBlockでも×ボタンがクリックでき、.draft-resizeに横取りされない", !removeError, removeError || "");
+  await page.waitForTimeout(300);
+  check("削除後は下書きBlockが消える", await page.locator(".draft-block").count() === 0);
 
   await browser.close();
   server.close();

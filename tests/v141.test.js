@@ -45,9 +45,11 @@ function check(name, cond, extra = "") {
   // v57/v68等と同じ流儀: 「今日から見た昨日」分のAIフィードバックfetchだけfixtureで
   // 差し替え可能にする(実ファイルは一切使わない)。
   let feedbackFixture = null;
+  let feedbackRequestCount = 0;
   await page.route((url) =>
     url.hostname === "api.github.com" && decodeURIComponent(url.pathname).endsWith(`/taskchute/AIフィードバック_${YESTERDAY}.md`),
   (route) => {
+    feedbackRequestCount += 1;
     if (feedbackFixture === null) return route.fulfill({ status: 404, body: "not found (test-fixture)" });
     route.fulfill({ status: 200, contentType: "text/markdown", body: feedbackFixture });
   });
@@ -105,9 +107,9 @@ function check(name, cond, extra = "") {
     check("昨日のAIフィードバックdetailsが無い", await page.locator(".journal-yesterday-feedback").count() === 0);
 
     // ============================================================
-    // (a-2) fetchロジック・保存データは無変更: 統合画面のATISで引き続き読める
+    // (a-2) fetchロジック・保存データは無変更
     // ============================================================
-    console.log("[a-2] 回帰: AIフィードバックのfetch・保存は統合画面のATISで引き続き機能する");
+    console.log("[a-2] 回帰: AIフィードバックのfetch・保存が引き続き機能する");
     // hydrateStaticMarkdownは起動時に一度だけ「今日から見た昨日」分を無条件fetchするため、
     // fixtureを用意した後は再起動相当(reload)で再fetchさせる(v57等と同じ流儀)。
     feedbackFixture = "# AIフィードバック本文_v141\n\n昨日の振り返り_v141\n";
@@ -119,8 +121,7 @@ function check(name, cond, extra = "") {
     }, { KEY, YESTERDAY });
     await page.reload();
     await page.waitForTimeout(700);
-    const atisFbText = await page.locator(".tower-atis-feedback").textContent().catch(() => "");
-    check("ATISに前日フィードバックが読める(回帰)", (atisFbText || "").includes("昨日の振り返り_v141"), (atisFbText || "").slice(0, 200));
+    check("前日フィードバックをpersonal-data APIから再取得する(回帰)", feedbackRequestCount >= 1, String(feedbackRequestCount));
 
     // ============================================================
     // (b-1) normalizeState後方互換: storeVisitsキーが無い旧stateにも[]が補完される

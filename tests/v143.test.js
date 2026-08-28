@@ -24,7 +24,7 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(500);
     await passGithubGate(page);
 
-    console.log("[1] 統合画面ATISがstate.feedbackを表示する");
+    console.log("[1] 旧state.feedbackを保持したままtodayを正常描画する");
     const PREV = "2026-07-30";
     await page.evaluate(({ KEY, PREV }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
@@ -37,10 +37,9 @@ function check(name, cond, extra = "") {
     }, { KEY, PREV });
     await page.reload();
     await page.waitForTimeout(700);
-    check("ATISの本文閲覧detailsが出る", await page.locator(".tower-atis-feedback").count() === 1);
-    const homeText = await page.locator("main").textContent();
-    check("state.feedback由来の前日フィードバック本文が読める",
-      homeText.includes("v143回帰確認用マーカー"), homeText.slice(0, 300));
+    check("todayのTOWERとJOURNALを描画する", await page.locator(".today-tower .sec-journal").count() === 1);
+    const savedFeedback = await page.evaluate(({ KEY, PREV }) => JSON.parse(localStorage.getItem(KEY)).feedback?.[PREV] || "", { KEY, PREV });
+    check("旧state.feedback本文を正規化後も保持する", savedFeedback.includes("v143回帰確認用マーカー"), savedFeedback);
 
     console.log("[2] 撤去済みのAIフィードバック手動取込UIが出ない");
     await page.click('[data-action="nav"][data-view="journal"]');

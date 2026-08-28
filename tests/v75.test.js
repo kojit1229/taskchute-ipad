@@ -19,7 +19,7 @@
 //
 // 方針: 既存スイート(v62/v72/v74)と同じく、app.js は type="module" のため内部関数は window に
 // 露出しない。ブラウザ操作 + page.route(api.github.com の偽装)+ localStorage 直接注入で観測する。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dispatchRegisteredAction } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -69,6 +69,8 @@ function check(name, cond, extra = "") {
   };
   // api.github.com へ実際に届いたAIフィードバックfetchのpathを記録(personal-data API経由の裏取り用)
   const feedbackApiRequests = [];
+  let resolveTodayFeedbackRequest;
+  const todayFeedbackRequested = new Promise((resolve) => { resolveTodayFeedbackRequest = resolve; });
 
   await blockGithubApiByDefault(page);
   await page.route((url) => url.hostname === API_HOST, (route) => {
@@ -77,6 +79,7 @@ function check(name, cond, extra = "") {
     const fbMatch = p.match(/\/contents\/taskchute\/AIフィードバック_(.+)\.md$/);
     if (fbMatch) {
       feedbackApiRequests.push(p);
+      if (fbMatch[1] === TODAY) resolveTodayFeedbackRequest();
       const body = FEEDBACK_FIXTURE[fbMatch[1]];
       if (!body) return route.fulfill({ status: 404, body: "not found (test-fixture)" });
       return route.fulfill({ status: 200, contentType: "text/markdown", body });
@@ -131,7 +134,9 @@ function check(name, cond, extra = "") {
   async function runMorningPlan() {
     await page.click('[data-action="nav"][data-view="today"]');
     await page.waitForTimeout(150);
-    await page.click('.sec-atis [data-action="ai-morning-plan"]');
+    const morningPlanButton = page.locator('[data-action="ai-morning-plan"]');
+    if (await morningPlanButton.count()) await morningPlanButton.click();
+    else await dispatchRegisteredAction(page, "ai-morning-plan");
     await page.waitForTimeout(700);
   }
 
@@ -142,21 +147,20 @@ function check(name, cond, extra = "") {
     await passGithubGate(page);
 
     // ============================================================
-    // (1) 統合画面ATISで当日/前日のAIフィードバック本文が読める(personal-data API経由)
+    // (1) 当日/前日のAIフィードバックをpersonal-data APIから取得して登録する
     // ============================================================
-    console.log("[1] 統合画面ATISに、personal-data API経由のAIフィードバック本文を読むdetailsが既定closedで出る");
+    console.log("[1] personal-data API経由でAIフィードバックを取得する");
     await seed({ feedbackFiles: [TODAY], view: "today" });
+    await todayFeedbackRequested;
     check("api.github.comのAIフィードバック_TODAY.mdへリクエストが実際に飛んでいる(personal-data API経由の裏取り)",
       feedbackApiRequests.some((p) => p.endsWith(`AIフィードバック_${TODAY}.md`)), JSON.stringify(feedbackApiRequests));
     check("api.github.comのAIフィードバック_PREV.mdへリクエストが実際に飛んでいる(前日1日分の無条件fetch仕様)",
       feedbackApiRequests.some((p) => p.endsWith(`AIフィードバック_${PREV}.md`)), JSON.stringify(feedbackApiRequests));
-    const detailsCount = await page.locator(".tower-atis-feedback").count();
-    check("「AIフィードバックを読む」detailsが1つ表示される", detailsCount === 1);
-    const detailsOpenAttr = await page.locator(".tower-atis-feedback").getAttribute("open").catch(() => null);
-    check("detailsは既定closed(open属性が無い)", detailsOpenAttr === null, String(detailsOpenAttr));
-    const homeText = await page.locator("main").textContent();
-    check("当日のAIフィードバック本文が読める(DOM上に存在)", homeText.includes("本日分のテスト本文です。"), homeText.slice(0, 300));
-    check("前日のAIフィードバック本文も読める(DOM上に存在)", homeText.includes("前日分のテスト本文です。"), homeText.slice(0, 300));
+    const feedbackState = await stateNow();
+    check("取得成功した当日をfeedbackFilesへ登録", feedbackState.feedbackFiles.includes(TODAY), JSON.stringify(feedbackState.feedbackFiles));
+    check("取得成功した前日をfeedbackFilesへ登録", feedbackState.feedbackFiles.includes(PREV), JSON.stringify(feedbackState.feedbackFiles));
+    check("旧フィードバック表示UIをtodayへ戻さない", await page.locator(".tower-col-right > .sec-journal").count() === 1);
+    check("旧ATISフィードバック要素を描画しない", await page.locator(".tower-atis-feedback, .tower-atis-summary").count() === 0);
 
     // ============================================================
     // (2) 公開Pages側(同一オリジン)への個人md/jsonのfetchが一切発生しない
@@ -258,7 +262,7 @@ function check(name, cond, extra = "") {
     }, { KEY, TODAY });
     await page.goto(`http://localhost:${PORT}/`);
     await page.waitForTimeout(700);
-    await page.click('.sec-atis [data-action="ai-morning-plan"]');
+    await dispatchRegisteredAction(page, "ai-morning-plan");
     await page.waitForTimeout(700);
     const s6 = await stateNow();
     check("候補0件でもタイムラインへ遷移する", s6.currentView === "timeline", s6.currentView);
@@ -275,18 +279,14 @@ function check(name, cond, extra = "") {
     console.log("[7] 「タスク名: 理由」形式のMIT候補行はタスク名のみを候補にする。コロン無しの行は従来どおり全文(should-fix2)");
     FEEDBACK_FIXTURE[PREV] = "## 明日への提案\n\n- タスクA_v75: 理由A_v75の説明文\n- タスクB_v75\n";
     await seed({ blocks: [], feedbackFiles: [], view: "today", resetFeedbackIngest: true });
-    await page.waitForSelector("[data-atis-task-candidates]");
-    // MIT候補チップ撤去後も同じ抽出関数はAIタスク候補の生成に使う。ここでは残るタスク候補チップで
-    // 「候補として抽出された文言」からコロン以降が除かれていることを固定する。
-    const candidatesSectionText = await page.locator("[data-atis-task-candidates]").allTextContents();
-    const candidatesText = candidatesSectionText.join(" / ");
-    const atisText7 = await page.locator(".sec-atis").textContent();
-    check("コロン付き候補は候補行にタスク名のみが表示される(理由部分は含まれない)",
-      candidatesText.includes("タスクA_v75") && !candidatesText.includes("理由A_v75"), candidatesText);
-    check("コロン無しの候補行は従来どおり全文がそのまま候補になる(旧フォーマット互換)",
-      atisText7.includes("タスクB_v75"), atisText7);
-    const taskChipText7 = await page.locator('.sec-atis [data-action="ai-task-adopt"]').first().textContent();
-    check("タスク候補の追加ボタンにも理由が混入していない", taskChipText7.includes("タスクA_v75") && !taskChipText7.includes("理由A_v75"), taskChipText7);
+    await page.waitForFunction(({ key, prev }) => (JSON.parse(localStorage.getItem(key)).journalMeta?.[prev]?.aiTaskCandidates || []).length === 2, { key: KEY, prev: PREV });
+    const candidateState = await stateNow();
+    const candidateTexts = candidateState.journalMeta?.[PREV]?.aiTaskCandidates || [];
+    check("コロン付き候補はstateへタスク名のみ格納し、理由部分を除く",
+      candidateTexts.includes("タスクA_v75") && !candidateTexts.some((text) => text.includes("理由A_v75")), JSON.stringify(candidateTexts));
+    check("コロン無しの候補行は従来どおり全文をstateへ格納する(旧フォーマット互換)",
+      candidateTexts.includes("タスクB_v75"), JSON.stringify(candidateTexts));
+    check("候補の採用ボタンを本番DOMへ描画しない", await page.locator('[data-action="ai-task-adopt"]').count() === 0);
   } finally {
     await browser.close();
     server.close();

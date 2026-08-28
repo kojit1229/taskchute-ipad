@@ -14,7 +14,7 @@
 // 方針: 既存スイート(v61/v62/v63)と同じく、app.js は type="module" のため内部関数は window に
 // 露出しない。ブラウザ操作 + localStorage 状態の直接注入で観測する。AIプランのfetchは
 // v70でv62.test.jsと同じくpage.route(実ファイル不使用)によるモックへ書き換えた(理由はv62.test.js参照)。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dispatchRegisteredAction } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -267,9 +267,11 @@ function check(name, cond, extra = "") {
       ]
     }, null, 2);
     await seed({ tasks: [], projects: [] });
-    await page.click('[data-action="nav"][data-view="today"]'); // v230: AI導線はATISへ移設
+    await page.click('[data-action="nav"][data-view="today"]');
     await page.waitForTimeout(150);
-    await page.click('[data-action="ai-morning-plan"]');
+    const morningPlanButton = page.locator('[data-action="ai-morning-plan"]');
+    if (await morningPlanButton.count()) await morningPlanButton.click();
+    else await dispatchRegisteredAction(page, "ai-morning-plan");
     await page.waitForTimeout(700);
     const titles7 = await draftTitles();
     check("[資産]プレフィックス項目・通常項目とも下書きに採用される",

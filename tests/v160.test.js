@@ -166,8 +166,8 @@ const freshGeneratedAt = () => toUtcIso(new Date());
     // 確認し、描画が生きている前提のもとで「言い訳」専用要素が0件であることを確認する構成に
     // 差し替える(陽性側の確認が無いと、陰性側の「0件」は描画崩壊による見せかけの陽性でも
     // 同じ結果になってしまうため)。
-    const atisCount = await page.locator(".sec-atis").count();
-    check("前提: 現行today/TOWERが実際に描画されている", atisCount === 1, String(atisCount));
+    const towerCount = await page.locator(".today-tower").count();
+    check("前提: 現行today/TOWERが実際に描画されている", towerCount === 1, String(towerCount));
 
     const excuseActionCount = await page.locator('[data-action*="excuse"]').count();
     check("data-action名に'excuse'を含む要素(専用導線)が0件", excuseActionCount === 0, String(excuseActionCount));

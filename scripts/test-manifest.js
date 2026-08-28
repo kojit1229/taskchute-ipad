@@ -107,6 +107,7 @@ const explicitDomains = {
   "v151.test.js": ["ui-responsive"],
   "v155.test.js": ["planning-execution", "ui-responsive"],
   "v163.test.js": ["journal-health", "ui-responsive"],
+  "v193.test.js": ["content-ai", "sync-storage", "planning-execution", "ui-responsive"],
   "v254.test.js": ["planning-execution", "sync-storage"],
   "v263.test.js": ["planning-execution", "sync-storage", "ui-responsive"],
   "v264.test.js": ["planning-execution", "sync-storage", "ui-responsive"],
@@ -120,6 +121,7 @@ const explicitDomains = {
   "v282.test.js": ["planning-execution"],
   "v283.test.js": ["content-ai", "sync-storage", "ui-responsive"],
   "v284.test.js": ["sync-storage", "journal-health", "planning-execution", "ui-responsive"],
+  "v285.test.js": ["content-ai", "sync-storage", "planning-execution", "ui-responsive"],
   "track-crud-core.test.js": ["planning-execution", "sync-storage"]
 };
 

@@ -186,6 +186,20 @@ async function openSettingsGroup(page, groupId) {
   );
 }
 
+// 廃止済みUIの背後に残るdata-action本体を、孤児掃除リリースまで回帰検証するための入口。
+// 本番DOMへ導線を戻さず、documentの既存イベントデリゲーションだけを通す。
+async function dispatchRegisteredAction(page, action, dataset = {}) {
+  await page.evaluate(({ actionName, actionData }) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.hidden = true;
+    Object.assign(button.dataset, actionData, { action: actionName });
+    document.body.appendChild(button);
+    button.click();
+    button.remove();
+  }, { actionName: action, actionData: dataset });
+}
+
 function randomPort(min = 20000, max = 40000) {
   const idx = process.env.TEST_PORT_INDEX;
   if (idx !== undefined && idx !== "") {
@@ -203,5 +217,5 @@ function randomPort(min = 20000, max = 40000) {
 module.exports = {
   chromium, ROOT, launchOptions, startServer,
   blockGithubApiByDefault, passGithubGate, GITHUB_API_HOST, STATE_KEY, randomPort,
-  openSettingsGroup
+  openSettingsGroup, dispatchRegisteredAction
 };

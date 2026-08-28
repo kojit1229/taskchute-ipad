@@ -3,7 +3,7 @@
 
 import { renderLifeBand, renderStandingOrders } from "./topband.js";
 
-let escapeHTML, todayISO, syncAlertBanner, renderAtisPanel, blocksForDate, towerFlights;
+let escapeHTML, todayISO, syncAlertBanner, blocksForDate, towerFlights;
 let runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp;
 let isStaleBlock;
 let towerMotionSetting;
@@ -34,7 +34,7 @@ function setTowerArrivalSelection(id) {
 
 function configureTodayTower(deps) {
   ({
-    escapeHTML, todayISO, syncAlertBanner, renderAtisPanel, blocksForDate, towerFlights,
+    escapeHTML, todayISO, syncAlertBanner, blocksForDate, towerFlights,
     runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp, isStaleBlock,
     towerMotionSetting, renderTodayPomodoro, todayFocusVisibility, renderTodayFocusBar, journalForDate,
     gateRules, earlyBirdLogForDate, earlyRiseTarget, linkedGymBlock, scheduledTasksForDate, gateEditMode
@@ -376,7 +376,7 @@ function renderTodayTower() {
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const flights = boardFlights(blocks, nowMin, scheduledTasksForDate(today, blocks));
   const focusVisibility = todayFocusVisibility();
-  const pomodoroRight = !focusVisibility.atis && !focusVisibility.journal;
+  const pomodoroRight = !focusVisibility.journal;
   const weekday = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
   return `<div class="today-tower" data-motion="${escapeHTML(towerMotionSetting())}" data-night="${isNightHour(now.getHours()) ? 1 : 0}" data-paused="${document.hidden ? 1 : 0}" data-focus-mode="${Object.values(focusVisibility).some(Boolean) ? 0 : 1}" data-focus-pomodoro-right="${pomodoroRight ? 1 : 0}"${glassBlurOff() ? ' data-glass-blur="off"' : ""}>
     ${syncAlertBanner()}
@@ -390,7 +390,7 @@ function renderTodayTower() {
       ${renderFlightLog(today, blocks)}
     </div>
     <div class="tower-col-center">${focusVisibility.gate ? renderTowerGates(blocks) : ""}</div>
-    <div class="tower-col-right">${focusVisibility.atis ? renderAtisPanel() : ""}${focusVisibility.journal ? renderTowerJournal(today) : ""}</div>
+    <div class="tower-col-right">${focusVisibility.journal ? renderTowerJournal(today) : ""}</div>
     ${renderTodayPomodoro(blocks, queueBlocksOf(blocks)).replace(">POMODORO<span>", ">CABIN TIMER<span>")}
   </div>`;
 }

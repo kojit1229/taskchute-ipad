@@ -266,7 +266,6 @@ configureToday({
   renderCircularProgress, remainingText, remainingTextNormal,
   renderPomodoroInterruptControls,
   syncAlertBanner,
-  renderAtisPanel,
   gateEditMode: () => _towerGateEditMode
 });
 configureTopband({
@@ -3585,21 +3584,6 @@ async function shareReport() {
   try { await navigator.share({ text: report }); } catch { /* キャンセル等は無視 */ }
 }
 
-// v133: 前日フィードバックのAIタスク候補チップ。
-//       候補を溜めて＋で採用し、採用せず消す×(却下)も提供する。
-function aiTaskChips() {
-  const today = todayISO();
-  const prev = addDays(today, -1);
-  const cands = state.journalMeta[prev]?.aiTaskCandidates || [];
-  if (!cands.length) return "";
-  return `<div class="tower-atis-chips" data-atis-task-candidates>
-    ${cands.map((title, index) => `
-      <span class="atis-chip">
-        <button type="button" data-action="ai-task-adopt" data-index="${index}">＋ ${escapeHTML(title)}</button>
-        <button type="button" data-action="ai-task-dismiss" data-index="${index}" aria-label="候補を却下">×</button>
-      </span>`).join("")}
-  </div>`;
-}
 function adoptAiTaskCandidate(index) {
   const prev = addDays(todayISO(), -1);
   const meta = state.journalMeta[prev];
@@ -7736,7 +7720,7 @@ function renderSettingsMorningPlanPanel() {
     <div class="muted" style="font-size:12px; line-height:1.6">
       v60でアプリ内からのClaude API直接呼び出しは廃止しました(コスト理由)。「📋 下書きスケジュール」
       「🌅 朝プラン」は、繰越・WBS・MIT候補を空き時間へ機械的に前詰め配置する決定論ロジックで動作します
-      (APIキーは不要)。操作ボタンと候補チップは今日タブのATISへ集約しています。
+      (APIキーは不要)。今日タブからの操作ボタンと候補チップは現在提供していません。
     </div>
   `;
 }
@@ -11510,9 +11494,8 @@ function saveAndRender(message, toastOpts) {
 //      挙動を撤回し、「候補として溜めておき、チップの＋タップで初めて実体化」方式に戻す。
 //      テーマ側(0秒思考)の
 //      自動追加は今回のスコープ外で変更しない(上のコメント・下のthemeCandidates節は従来どおり)。
-//      候補はjournalMeta[date].aiTaskCandidatesへ格納し、aiTaskChips()/adoptAiTaskCandidate()/
-//      dismissAiTaskCandidate()で表示・採用・却下する(表示は常にjournalMeta[前日].aiTaskCandidates
-//      のみ)。addedTasksの意味は「タスクとして直接追加した件数」から
+//      候補は後方互換のためjournalMeta[date].aiTaskCandidatesへ格納する。採用・却下UIは廃止済み
+//      だが、既存stateと取り込み契約は維持する。addedTasksの意味は「タスクとして直接追加した件数」から
 //      「候補として追加した件数」に変わった(変数名はそのまま流用)。
 function autoIngestFeedback(date, text) {
   if (!text) return null;
@@ -11799,9 +11782,7 @@ async function hydrateStaticMarkdown() {
   //      このタイポのせいで、ビジョン画面を開いたまま読み込みが終わっても再描画されなかった。
   // v86 should-fix: "zero"(0秒思考タブ)を追加。autoIngestFeedbackがテーマを自動追加しても、
   //      このタブを開いたまま待っていると一覧がライブ更新されなかったため。
-  // v133: "tasks"(タスクシュート)を追加。修正1でAI提案タスクがaiTaskChips経由の候補チップに
-  //      なったため、このタブを開いたまま待っていてもチップがライブ表示されない同種の不具合が
-  //      新たに生じていた(tests/v133.test.jsで検出)。
+  // v133: "tasks"(タスクシュート)を追加。AI提案タスクの取り込み完了を同じ描画周期へ反映する。
   // v137: 入力中/IME変換中は即renderせず保留する(review.md:28。renderDeferringForFocus参照)。
   // v161: "stats"(計器盤)を追加。エネルギーカーブの新着fetchが完了してもこの画面を開いた
   //       ままだと再描画されず節が出ないままになる不具合を防ぐ(他view追加時と同じ理由)。
@@ -11873,13 +11854,6 @@ async function hydrateAiWorkResults() {
   return changed;
 }
 
-// 未処理(state.aiWorkProcessedIds に無い)の結果のみをホームカードへ出す
-function pendingAiWorkResults() {
-  if (!Array.isArray(cachedAiWorkResults)) return [];
-  const processed = new Set(state.aiWorkProcessedIds || []);
-  return cachedAiWorkResults.filter((r) => !processed.has(r.resultId));
-}
-
 function markAiWorkResultProcessed(resultId) {
   if (!Array.isArray(state.aiWorkProcessedIds)) state.aiWorkProcessedIds = [];
   if (!state.aiWorkProcessedIds.includes(resultId)) state.aiWorkProcessedIds.push(resultId);
@@ -11937,117 +11911,6 @@ function raiseAiWorkQuestion(resultId) {
   const q = makeQuestion({ text: r.summary || r.title || "AIからの質問", origin: "ai" });
   state.questions.push(q);
   saveAndRender("AIからの質問を「問い」に積みました");
-}
-
-function aiWorkResultRowHTML(r) {
-  const title = escapeHTML(r.title || "(無題)");
-  if (r.status === "completed") {
-    return `<div class="ai-work-row">
-      <div class="ai-work-row-main">
-        <div class="ai-work-title">${title}</div>
-        ${r.summary ? `<div class="ai-work-summary">${escapeHTML(r.summary)}</div>` : ""}
-        ${r.minutes ? `<div class="muted" style="font-size:11px">所要 ${r.minutes}分</div>` : ""}
-      </div>
-      <button class="btn primary" data-action="ai-work-approve" data-result-id="${r.resultId}">実績として登録</button>
-    </div>`;
-  }
-  if (r.status === "blocked") {
-    return `<div class="ai-work-row">
-      <div class="ai-work-row-main">
-        <div class="ai-work-title">${title}</div>
-        <div class="ai-work-summary">${escapeHTML(r.summary || "(質問内容なし)")}</div>
-      </div>
-      <button class="btn" data-action="ai-work-question" data-result-id="${r.resultId}">質問として積む</button>
-    </div>`;
-  }
-  // queued: 表示のみ(PC側のqueueで承認待ち。アプリ側からの操作はない)
-  return `<div class="ai-work-row">
-    <div class="ai-work-row-main">
-      <div class="ai-work-title">${title}</div>
-      <div class="muted" style="font-size:12px">承認待ち(PC側のqueueにあります)</div>
-    </div>
-  </div>`;
-}
-
-// v251: 新形式FBの「## サマリー」だけをATISへ常時表示する。旧形式は空を返して
-// 従来の全文detailsだけを維持する。
-function extractFeedbackSummary(markdown) {
-  const lines = String(markdown || "").replace(/\r\n?/g, "\n").split("\n");
-  const start = lines.findIndex((line) => /^##[ \t]+サマリー[ \t]*$/.test(line));
-  if (start < 0) return "";
-  const nextHeading = lines.findIndex((line, index) => index > start && /^##[ \t]+/.test(line));
-  return lines.slice(start + 1, nextHeading < 0 ? undefined : nextHeading).join("\n").trim();
-}
-
-// v230: AIフィードバック本文・候補・操作導線を統合画面のATISへ集約する。
-function atisFeedbackReadHTML() {
-  const today = todayISO();
-  const prev = addDays(today, -1);
-  const todayFb = cachedFeedback[today] || state.feedback[today] || "";
-  const prevFb = cachedFeedback[prev] || state.feedback[prev] || "";
-  if (!todayFb && !prevFb) return "";
-  const targetDate = todayFb ? today : prev;
-  const targetFb = todayFb || prevFb;
-  const shortDate = targetDate.slice(5);
-  const summary = extractFeedbackSummary(targetFb);
-  const summaryHTML = summary ? `<div class="tower-atis-summary">
-    <div class="tower-atis-summary-date">対象日 ${escapeHTML(shortDate)}</div>
-    <div class="tower-atis-summary-text">${escapeHTML(summary)}</div>
-  </div>` : "";
-  return `${summaryHTML}<details class="tower-atis-feedback">
-    <summary>🤖 全文を読む(${escapeHTML(shortDate)})</summary>
-    <div class="tower-atis-feedback-body">
-      ${todayFb ? `<div class="md-render readonly-md">${renderMarkdown(todayFb)}</div>` : ""}
-      ${prevFb ? (todayFb ? `<details>
-        <summary>前日(${escapeHTML(prev)})のフィードバックも見る</summary>
-        <div class="md-render readonly-md">${renderMarkdown(prevFb)}</div>
-      </details>` : `<div class="md-render readonly-md">${renderMarkdown(prevFb)}</div>`) : ""}
-    </div>
-  </details>`;
-}
-
-function renderAtisPanel() {
-  const workItems = pendingAiWorkResults();
-  const pendingCount = Number(workItems.length);
-  const pendingBadgeHTML = pendingCount > 0
-    ? `<b class="tower-atis-pending-badge" data-atis-pending-count>未処理 ${escapeHTML(String(pendingCount))}件</b>`
-    : "";
-  const workHTML = workItems.length ? `<div class="atis-divider"></div>
-    <div class="tower-atis-sub">AIが処理した作業 <span>${workItems.length}</span></div>
-    ${workItems.map((result) => aiWorkResultRowHTML(result)).join("")}` : "";
-  const replanActive = _replanUi.kind === "sending" || _replanUi.kind === "pending";
-  return `<section class="tower-panel-box sec-atis" data-atis-panel>
-    <h2>ATIS <span>AIから</span>${pendingBadgeHTML}</h2>
-    <div class="tower-atis-body">
-      ${aiFreshnessLine()}
-      ${workHTML}
-      ${atisFeedbackReadHTML()}
-      ${aiTaskChips()}
-      <div class="tower-atis-actions">
-        <button type="button" class="atis-btn" data-action="ai-morning-plan">🌅 朝プラン</button>
-        <button type="button" class="atis-btn" data-action="ai-schedule">📋 下書きスケジュール</button>
-        <button type="button" class="atis-btn" data-action="today-replan" data-replan-button ${replanActive ? "disabled" : ""}>♻️ AI再プラン</button>
-      </div>
-      <div class="tower-atis-status" data-atis-status data-kind="${_replanUi.kind}">${escapeHTML(_replanUi.message)}</div>
-    </div>
-  </section>`;
-}
-
-function aiFreshnessLine() {
-  const today = todayISO();
-  const fbAt = state.aiLinkFreshness?.feedbackAt || null;
-  const planAt = state.aiLinkFreshness?.planAt || null;
-  const fbDays = fbAt ? daysBetween(fbAt, today) : null;
-  const planDays = planAt ? daysBetween(planAt, today) : null;
-  const fmt = (d) => d === null ? "まだ届いていません" : (d === 0 ? "今日届いた" : `${d}日前`);
-  const stale = fbDays === null || fbDays >= 3 || planDays === null || planDays >= 3;
-  return `
-    <div class="ai-freshness-line">
-      <span class="ai-freshness-dot ${stale ? "warn" : "ok"}"></span>
-      AI連携: フィードバック ${fmt(fbDays)} / プラン ${fmt(planDays)}
-    </div>
-    ${stale ? `<div class="ai-freshness-banner" data-action="nav" data-view="settings">⚠ AI連携が止まっているかも。PCのタスクスケジューラを確認 — 設定へ</div>` : ""}
-  `;
 }
 
 // v72レビュー対応: Vision/Affirmationの実体は個人データリポジトリの taskchute/content/ 配下に

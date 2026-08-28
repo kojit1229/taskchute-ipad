@@ -9,7 +9,7 @@
 //
 // 方針: 既存スイート(v59/v60)と同じく、app.js は type="module" のため内部関数は window に
 // 露出しない。ブラウザ操作 + localStorage 状態の直接注入で観測する。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dispatchRegisteredAction } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -255,10 +255,9 @@ function check(name, cond, extra = "") {
   // (a)(b) 朝プラン確定(confirmScheduleDraft)経路でも carryCount が増える・3回目で儀式
   // ============================================================
   async function runMorningPlan() {
-    // v230: 朝プランはtasksから統合画面ATISへ移設。
     await page.click('[data-action="nav"][data-view="today"]');
     await page.waitForTimeout(150);
-    await page.click('[data-action="ai-morning-plan"]');
+    await dispatchRegisteredAction(page, "ai-morning-plan");
     await page.waitForTimeout(600);
   }
   console.log("[9] 朝プラン確定経路: carryCountが0→1になる(儀式は発火しない)");

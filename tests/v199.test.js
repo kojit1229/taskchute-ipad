@@ -20,7 +20,7 @@
 // (j) 中3修正: 休日の仕事Blockのみskipされた日は、警告行/トーストが「タスク過多」と誤表示せず
 //     「仕事タスクは平日9-18のみ」の文言になる
 // (k) 候補0件時のトースト文言(仕様8番、ボーナス確認)
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dispatchRegisteredAction } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -100,10 +100,10 @@ function check(name, cond, extra = "") {
   }
 
   async function runAiSchedule() {
-    // v230: 下書きスケジュール導線はWBS(tasks)からtimelineへ集約された。action自体は同じ。
+    // v285: 本番UIは廃止済み。残存actionの内部契約をテスト専用delegation入口から検証する。
     await page.click('[data-action="nav"][data-view="timeline"]');
     await page.waitForTimeout(150);
-    await page.click('[data-action="ai-schedule"]');
+    await dispatchRegisteredAction(page, "ai-schedule");
     await page.waitForTimeout(500);
   }
 

@@ -15,19 +15,18 @@ let localDateTimeToMs, resolveEstimateMin;
 let clamp, isStaleBlock, isTaskDead, renderDeferringForFocus;
 let renderCircularProgress, remainingText, remainingTextNormal;
 let renderPomodoroInterruptControls;
-let syncAlertBanner, renderAtisPanel;
+let syncAlertBanner;
 let gateEditMode;
 let todayTickerId = null;
 let todayRenderedDateISO = null;
 let todayFocusUi = null;
 
 const TODAY_FOCUS_STORAGE_KEY = "taskchute-journal-today-focus-v1";
-const DEFAULT_FOCUS_SECTIONS = Object.freeze({ gate: true, atis: true, journal: true });
+const DEFAULT_FOCUS_SECTIONS = Object.freeze({ gate: true, journal: true });
 
 function normalizedFocusSections(value) {
   return {
     gate: typeof value?.gate === "boolean" ? value.gate : true,
-    atis: typeof value?.atis === "boolean" ? value.atis : true,
     journal: typeof value?.journal === "boolean" ? value.journal : true
   };
 }
@@ -68,7 +67,7 @@ function toggleTodayFocusMode() {
   const restore = normalizedFocusSections(current.restore);
   persistTodayFocusUi(focused
     ? { sections: Object.values(restore).some(Boolean) ? restore : { ...DEFAULT_FOCUS_SECTIONS }, restore }
-    : { sections: { gate: false, atis: false, journal: false }, restore: { ...current.sections } });
+    : { sections: { gate: false, journal: false }, restore: { ...current.sections } });
 }
 
 function renderTodayFocusBar(visibility = todayFocusUiState().sections) {
@@ -77,7 +76,7 @@ function renderTodayFocusBar(visibility = todayFocusUiState().sections) {
   return `<nav class="today-focus-bar" aria-label="Today表示切替">
     <button type="button" class="today-focus-main${focused ? " is-active" : ""}" data-action="focus-mode" aria-pressed="${focused}">🎯 FOCUS</button>
     <div class="today-focus-chips" role="group" aria-label="セクション表示">
-      ${chip("gate", "ルーティン")}${chip("atis", "AI")}${chip("journal", "ジャーナル")}
+      ${chip("gate", "ルーティン")}${chip("journal", "ジャーナル")}
     </div>
   </nav>`;
 }
@@ -89,10 +88,10 @@ function configureToday(deps) {
     clamp, isStaleBlock, isTaskDead, renderDeferringForFocus,
     renderCircularProgress, remainingText, remainingTextNormal,
     renderPomodoroInterruptControls,
-    syncAlertBanner, renderAtisPanel, gateEditMode
+    syncAlertBanner, gateEditMode
   } = deps);
   configureTodayTower({
-    escapeHTML, todayISO, syncAlertBanner, renderAtisPanel, blocksForDate, towerFlights,
+    escapeHTML, todayISO, syncAlertBanner, blocksForDate, towerFlights,
     runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp, isStaleBlock,
     towerMotionSetting: () => state.settings.towerMotion,
     renderTodayPomodoro,
@@ -119,7 +118,6 @@ function configureToday(deps) {
   });
   registerActions({
     "focus-toggle-gate": () => toggleTodayFocusSection("gate"),
-    "focus-toggle-atis": () => toggleTodayFocusSection("atis"),
     "focus-toggle-journal": () => toggleTodayFocusSection("journal"),
     "focus-mode": () => toggleTodayFocusMode()
   });

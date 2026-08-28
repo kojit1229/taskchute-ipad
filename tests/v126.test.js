@@ -10,7 +10,7 @@
 //     data-action="delete-project"を直接発火させても関数側のガードで拒否される
 // (f追補・v127レビュー対応) WBSのWish Project配下で新規タスクを作成すると期日が空のまま
 //     (addWish/addWishSubtaskと同じ挙動。ユーザーが明示入力しない限り当日日付を補完しない)
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dispatchRegisteredAction } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -197,9 +197,9 @@ function check(name, cond, extra = "") {
       projects: [wishProject(), testProject()],
       view: "tasks"
     });
-    await page.click('[data-action="nav"][data-view="today"]');  // v230: 朝プランはATISへ移設
+    await page.click('[data-action="nav"][data-view="today"]');
     await page.waitForTimeout(150);
-    await page.click('[data-action="ai-morning-plan"]');
+    await dispatchRegisteredAction(page, "ai-morning-plan");
     await page.waitForTimeout(600);
 
     const titlesB = await draftTitles();

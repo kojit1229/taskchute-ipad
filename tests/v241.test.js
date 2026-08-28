@@ -35,17 +35,16 @@ function check(name, cond, extra = "") {
     await page.waitForSelector(".today-tower");
 
     console.log("[1] 専用キー未設定の既定は全表示で、既存パネルDOM構造を維持する");
-    check("専用キー未設定では全3セクションを描画",
+    check("専用キー未設定では現行2セクションを描画",
       await page.locator(".tower-col-center > .sec-gates").count() === 1
-      && await page.locator(".tower-col-right > .sec-atis").count() === 1
       && await page.locator(".tower-col-right > .sec-journal").count() === 1);
+    check("右カラム直下はJOURNAL 1個だけ", await page.locator(".tower-col-right > *").count() === 1);
     check("CABIN TIMERは従来どおりtoday-tower直下",
       await page.locator(".today-tower > .today-pomodoro").count() === 1);
     check("既定値の読取だけでは専用キーを書かない", await page.evaluate((key) => localStorage.getItem(key) === null, FOCUS_KEY));
     const focusButtonSelectors = [
       '[data-action="focus-mode"]',
       '[data-action="focus-toggle-gate"]',
-      '[data-action="focus-toggle-atis"]',
       '[data-action="focus-toggle-journal"]'
     ];
     let focusWaitError = "";
@@ -61,40 +60,36 @@ function check(name, cond, extra = "") {
       const rect = button.getBoundingClientRect();
       return { selector, x: rect.x, y: rect.y, width: rect.width, height: rect.height };
     }), focusButtonSelectors);
-    check("FOCUSと3チップはすべて44px以上",
-      !focusWaitError && tapRects.length === 4 && tapRects.every(({ width, height }) => width >= 44 && height >= 44),
+    check("FOCUSと2チップはすべて44px以上",
+      !focusWaitError && tapRects.length === 3 && tapRects.every(({ width, height }) => width >= 44 && height >= 44),
       JSON.stringify({ focusWaitError, tapRects }));
 
     console.log("[2] 個別トグルはDOM生成を省略し、状態をリロード後も維持する");
     await page.click('[data-action="focus-toggle-gate"]');
     await page.waitForSelector(".sec-gates", { state: "detached" });
-    check("ルーティンだけ消え、ATIS/JOURNALは残る",
-      await page.locator(".sec-gates").count() === 0 && await page.locator(".sec-atis, .sec-journal").count() === 2);
+    check("ルーティンだけ消え、JOURNALは残る",
+      await page.locator(".sec-gates").count() === 0 && await page.locator(".sec-journal").count() === 1);
     await page.reload();
     await page.waitForSelector(".today-tower");
     check("ルーティン非表示はリロード後も維持", await page.locator(".sec-gates").count() === 0);
     await page.click('[data-action="focus-toggle-gate"]');
     await page.waitForSelector(".sec-gates");
-    await page.click('[data-action="focus-toggle-atis"]');
-    await page.waitForSelector(".sec-atis", { state: "detached" });
-    check("AIチップでATISだけ消える", await page.locator(".sec-gates, .sec-journal").count() === 2);
-    await page.click('[data-action="focus-toggle-atis"]');
     await page.click('[data-action="focus-toggle-journal"]');
     await page.waitForSelector(".sec-journal", { state: "detached" });
-    check("ジャーナルチップでJOURNALだけ消える", await page.locator(".sec-gates, .sec-atis").count() === 2);
+    check("ジャーナルチップでJOURNALだけ消える", await page.locator(".sec-gates").count() === 1);
 
-    console.log("[3] FOCUSは3つを一括非表示にし、直前の個別状態へ復元する");
+    console.log("[3] FOCUSは2つを一括非表示にし、直前の個別状態へ復元する");
     await page.click('[data-action="focus-mode"]');
     await page.waitForSelector('.today-tower[data-focus-mode="1"]');
-    check("FOCUSで3セクションのDOMがすべて無い", await page.locator(".sec-gates, .sec-atis, .sec-journal").count() === 0);
+    check("FOCUSで2セクションのDOMがすべて無い", await page.locator(".sec-gates, .sec-journal").count() === 0);
     await page.click('[data-action="focus-mode"]');
     await page.waitForSelector('.today-tower[data-focus-mode="0"]');
-    check("解除で直前状態(gate/atis表示・journal非表示)へ復元",
-      await page.locator(".sec-gates, .sec-atis").count() === 2 && await page.locator(".sec-journal").count() === 0);
+    check("解除で直前状態(gate表示・journal非表示)へ復元",
+      await page.locator(".sec-gates").count() === 1 && await page.locator(".sec-journal").count() === 0);
     await page.click('[data-action="focus-toggle-journal"]');
     await page.waitForSelector(".sec-journal");
 
-    console.log("[4] 1280px以上ではATIS/JOURNAL非表示時だけCABIN TIMERを右列へ置く");
+    console.log("[4] 1280px以上ではJOURNAL非表示時だけCABIN TIMERを右列へ置く");
     const desktopNormalFont = await page.locator(".today-pomodoro .pomo-time-overlay")
       .evaluate((overlay) => parseFloat(getComputedStyle(overlay).fontSize));
     check("PC非FOCUS時は従来の27px", Math.abs(desktopNormalFont - 27) < 0.1, `${desktopNormalFont}px`);

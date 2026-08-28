@@ -139,33 +139,29 @@ function check(name, cond, extra = "") {
       await page.locator('#app[data-view="today"] .today-tower').count() === 1);
 
     // ============================================================
-    // (c) 「AIから」集約カード
+    // (c) 廃止済みAI集約UIと旧stateの互換
     // ============================================================
-    console.log("[4] v230: ATISに鮮度・AI作業結果・前日AIフィードバック候補がまとまって出る");
+    console.log("[4] 旧AI連携stateを保持しつつ、廃止済み集約UIを描画しない");
     await seed({
       blocks: [planBlock({ id: "mit-1", title: "既存MIT", startMin: 9 * 60, isMIT: true })],
       view: "today",
       feedback: { [YESTERDAY]: "## 明日のMIT候補\n- テスト候補タスクX\n- テスト候補タスクY\n" },
       aiLinkFreshness: { feedbackAt: YESTERDAY, planAt: null }
     });
-    check("ATISが1つだけ表示される", await page.locator(".sec-atis").count() === 1);
-    const hubText = await page.locator(".sec-atis").textContent();
-    check("鮮度インジケータがATIS内にある", (await page.locator(".sec-atis .ai-freshness-line").count()) === 1);
-    check("鮮度テキストにフィードバック/プランの経過が出る", hubText.includes("AI連携:") && hubText.includes("フィードバック"), hubText);
-    check("前日フィードバックのMIT候補見出しが出る(v230 ATIS文言)", hubText.includes("明日のMIT候補"), hubText);
-    check("候補タスクXが表示される", hubText.includes("テスト候補タスクX"), hubText);
-    check("候補タスクYが表示される", hubText.includes("テスト候補タスクY"), hubText);
-    check("鮮度インジケータはページ全体で1箇所(AIからカード内)のみ(集約済み・重複表示なし)", await page.locator(".ai-freshness-line").count() === 1);
-
-    console.log("[5] MIT候補チップはATISから撤去され、フィードバック本文だけを読める");
-    check("MIT候補の追加ボタンが存在しない",
-      await page.locator('.sec-atis [data-action="mit-candidate-add"], .sec-atis [data-action="ai-mit-adopt"]').count() === 0);
+    check("today/TOWERの右カラムはJOURNALだけを描画", await page.locator(".tower-col-right > .sec-journal").count() === 1);
+    check("右カラム直下要素はJOURNAL 1個だけ", await page.locator(".tower-col-right > *").count() === 1);
+    check("旧ATISセクションを描画しない", await page.locator(".sec-atis").count() === 0);
+    check("旧ATIS data属性を描画しない", await page.locator("[data-atis-panel], [data-atis-task-candidates]").count() === 0);
+    check("鮮度・候補の旧UIを描画しない", await page.locator('.ai-freshness-line, [data-action="mit-candidate-add"], [data-action="ai-mit-adopt"]').count() === 0);
     const s5 = await stateNow();
     const added = (s5.blocks || []).find((b) => b.title === "テスト候補タスクX");
-    check("表示だけでMITブロックは追加されない", !added, JSON.stringify(added));
-    check("フィードバック本文の候補文言は引き続き読める", hubText.includes("テスト候補タスクX"), hubText);
+    check("旧フィードバックstateを保持し、MITブロックを自動追加しない", !added && (s5.feedback?.[YESTERDAY] || "").includes("テスト候補タスクX"), JSON.stringify(s5.feedback));
+    check("旧鮮度stateを正規化後も保持", s5.aiLinkFreshness?.feedbackAt === YESTERDAY && s5.aiLinkFreshness?.planAt === null, JSON.stringify(s5.aiLinkFreshness));
+    check("旧フィードバック本文をstateから削除しない", (s5.feedback?.[YESTERDAY] || "").includes("テスト候補タスクY"), JSON.stringify(s5.feedback));
+    check("MIT候補UIのAIラベルをtodayへ戻さない", !(await page.locator(".today-tower").textContent()).includes("明日のMIT候補"));
+    check("廃止済みMIT候補actionを描画しない", await page.locator('[data-action="mit-candidate-add"], [data-action="ai-mit-adopt"]').count() === 0);
 
-    console.log("[6] MITが3件埋まっていれば候補セクション自体を出さない(既存仕様を踏襲)");
+    console.log("[5] MIT数に関係なく廃止済み候補UIを戻さない");
     await seed({
       blocks: [
         planBlock({ id: "mit-a", title: "MIT-A", startMin: 8 * 60, isMIT: true }),
@@ -175,19 +171,16 @@ function check(name, cond, extra = "") {
       view: "today",
       feedback: { [YESTERDAY]: "## 明日のMIT候補\n- 埋まっているはずの候補\n" }
     });
-    // raw本文はdetailsに残るが、MIT候補UIはMIT数に関係なく描画しない。
-    const hubTextFull = await page.locator(".sec-atis").textContent();
     check("MIT3件時も候補セクション(追加ボタン)は出ない",
-      await page.locator('.sec-atis [data-action="mit-candidate-add"], .sec-atis [data-atis-feedback-candidates]').count() === 0,
-      hubTextFull);
+      await page.locator('[data-action="mit-candidate-add"], [data-action="ai-mit-adopt"]').count() === 0);
 
     // ============================================================
-    // (d) v230: homeアンカー不存在 + ATIS維持
+    // (d) homeアンカー不存在 + TOWER維持
     // ============================================================
-    console.log("[7] v230: home MITアンカーは撤去され、ATIS集約が維持される");
+    console.log("[6] home MITアンカーは撤去され、TOWERが維持される");
     await seed({ blocks: [planBlock({ id: "mit-jump", title: "ジャンプ確認MIT", startMin: 9 * 60, isMIT: true })], view: "today" });
     check("#home-mit-anchorは存在しない", await page.locator("#home-mit-anchor").count() === 0);
-    check("ATISは引き続き描画される", await page.locator(".sec-atis").count() === 1);
+    check("today/TOWERは引き続き描画される", await page.locator(".today-tower").count() === 1);
   } finally {
     await browser.close();
     server.close();

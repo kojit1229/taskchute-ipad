@@ -2,7 +2,7 @@
 // plan-request.json/plan-response.jsonのポーリング(v193再プランと同じ作法)→下書き承認→
 // サブタスク生成までを固定する。応答の型不正・件数超過は下書き全体を不採用にすることも固定する。
 const path = require("path");
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY, dispatchRegisteredAction } = require("./helpers");
 
 const PORT = randomPort();
 let failures = 0;
@@ -18,6 +18,11 @@ function check(name, cond, extra = "") {
   const page = await context.newPage();
   page.on("pageerror", (error) => { failures++; console.log("  ❌ pageerror:", error.message); });
   await blockGithubApiByDefault(page);
+  let replanRequestCount = 0;
+  await page.route((url) => url.pathname.endsWith("/contents/taskchute/requests/replan-request.json"), async (route) => {
+    replanRequestCount += 1;
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ content: { sha: "unexpected" } }) });
+  });
 
   const now = new Date();
   now.setHours(10, 0, 0, 0);
@@ -183,10 +188,11 @@ function check(name, cond, extra = "") {
     console.log("[1b] 承認中は相互排他で再プラン依頼を拒む(既存排他機構に倣う)");
     await page.locator('[data-action="modal-close"]').first().click();
     await page.locator('#sidebar [data-action="nav"][data-view="today"]').click();
-    await page.waitForSelector(".sec-atis [data-replan-button]");  // v230: 再プランはATISへ移設
-    await page.locator(".sec-atis [data-replan-button]").click();
-    await page.waitForFunction(() => (document.querySelector("[data-atis-status]")?.textContent || "").includes("実行計画の依頼を処理中です"));
-    check("実行計画の下書き未決定中は再プラン依頼をブロック", true);
+    await page.waitForSelector(".today-tower");
+    check("再プラン操作ボタンを本番DOMへ描画しない", await page.locator('[data-action="today-replan"]').count() === 0);
+    await dispatchRegisteredAction(page, "today-replan");
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve())));
+    check("実行計画の下書き未決定中は再プランrequestを送らない", replanRequestCount === 0, String(replanRequestCount));
     await page.locator('#sidebar [data-action="nav"][data-view="wbs"]').click();
     await page.waitForSelector('#app[data-view="wbs"]');
 

@@ -18,7 +18,7 @@
 // finally で削除していたが、本番バッチ(plan-daily.sh等)が同名の実ファイルを日次でcommitする
 // ため、実行日によってはテスト終了後に実ファイルが一時的に消える環境依存の副作用があった
 // (v67 CHANGES参照)。v70でこれを恒久修正し、実ファイルには一切触れない。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dispatchRegisteredAction } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -87,7 +87,7 @@ function check(name, cond, extra = "") {
     deleted: false, collapsed: false
   });
 
-  async function seed({ blocks = [], tasks = [], projects = [], view = "today", settings = {} } = {}) { // v230: AI導線はATIS
+  async function seed({ blocks = [], tasks = [], projects = [], view = "today", settings = {} } = {}) {
     await page.evaluate(({ KEY, blocks, tasks, projects, TODAY, view, settings }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.blocks = blocks;
@@ -108,10 +108,20 @@ function check(name, cond, extra = "") {
   }
 
   async function runMorningPlan() {
-    await page.click('[data-action="nav"][data-view="today"]'); // v230: AI導線はATISへ移設
+    await page.click('[data-action="nav"][data-view="today"]');
     await page.waitForTimeout(150);
-    await page.click('[data-action="ai-morning-plan"]');
+    const morningPlanButton = page.locator('[data-action="ai-morning-plan"]');
+    if (await morningPlanButton.count()) await morningPlanButton.click();
+    else await dispatchRegisteredAction(page, "ai-morning-plan");
     await page.waitForTimeout(700);
+  }
+
+  async function runScheduleFromTimeline() {
+    await page.click('[data-action="nav"][data-view="timeline"]');
+    await page.waitForSelector('#app[data-view="timeline"]');
+    const scheduleButton = page.locator('#app[data-view="timeline"] [data-action="ai-schedule"]');
+    if (await scheduleButton.count()) await scheduleButton.click();
+    else await dispatchRegisteredAction(page, "ai-schedule");
   }
 
   async function draftTitles() {
@@ -331,9 +341,9 @@ function check(name, cond, extra = "") {
       ],
       projects: [testProject()]
     });
-    await page.click('[data-action="nav"][data-view="today"]'); // v230: ai-scheduleはATISへ移設
+    await page.click('[data-action="nav"][data-view="today"]');
     await page.waitForTimeout(150);
-    await page.click('[data-action="ai-schedule"]');
+    await runScheduleFromTimeline();
     await page.waitForTimeout(500);
     const beforeRemove = await draftTitles();
     check("2件が下書きに配置される", beforeRemove.length === 2, JSON.stringify(beforeRemove));
@@ -362,7 +372,7 @@ function check(name, cond, extra = "") {
       ],
       projects: [testProject()]
     });
-    await page.click('[data-action="ai-schedule"]');
+    await runScheduleFromTimeline();
     await page.waitForTimeout(500);
     await page.locator('.draft-block:has-text("二重計上検証タスクA") .draft-remove').click();
     await page.waitForTimeout(300);
@@ -391,7 +401,7 @@ function check(name, cond, extra = "") {
       blocks: [planBlock({ id: "blk-reason1", date: TODAY, title: "却下理由ワンタップ検証タスク", taskId: "task-reason1", startMin: 9 * 60, endMin: 9 * 60 + 30 })],
       projects: [testProject()]
     });
-    await page.click('[data-action="ai-schedule"]');
+    await runScheduleFromTimeline();
     await page.waitForTimeout(500);
     await page.locator('.draft-block:has-text("却下理由ワンタップ検証タスク") .draft-remove').click();
     await page.waitForTimeout(300);
@@ -410,7 +420,7 @@ function check(name, cond, extra = "") {
       blocks: [planBlock({ id: "blk-u3", date: TODAY, title: "却下理由検証タスク", taskId: "task-u3", startMin: 9 * 60, endMin: 9 * 60 + 30 })],
       projects: [testProject()]
     });
-    await page.click('[data-action="ai-schedule"]');
+    await runScheduleFromTimeline();
     await page.waitForTimeout(500);
     await page.locator('.draft-block:has-text("却下理由検証タスク") .draft-remove').click();
     await page.waitForTimeout(300);
@@ -472,7 +482,7 @@ function check(name, cond, extra = "") {
     check("旧home信条カードとサブタブは描画されない",
       await page.locator('.home-creed, [data-action="home-tab"]').count() === 0);
     check("旧home viewはtoday/TOWERへフォールバックする",
-      await page.locator('#app[data-view="today"] .sec-atis').count() === 1);
+      await page.locator('#app[data-view="today"] .today-tower').count() === 1);
   } finally {
     // v70: page.routeでモックしているため、実ファイルの後始末は不要(何も書いていない)。
     await browser.close();

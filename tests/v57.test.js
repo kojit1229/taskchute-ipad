@@ -148,12 +148,8 @@ function check(name, cond, extra = "") {
     check("直push検知した前日分が feedbackFiles に登録される(以後は正規ルート)",
       Array.isArray(ffAfter) && ffAfter.includes(YESTERDAY), JSON.stringify(ffAfter));
 
-    // AIフィードバック列はジャーナルタブのUIから撤去済みのため、統合画面ATISで確認する。
-    await page.click('[data-action="nav"][data-view="today"]');
-    await page.waitForTimeout(400);
-    const atisText = await page.locator(".tower-atis-feedback").textContent();
-    check("取得した前日フィードバックの本文がATISに反映される(マーカー一致)",
-      (atisText || "").includes(FEEDBACK_MARKER), (atisText || "").slice(0, 200));
+    check("旧フィードバック表示UIをtodayへ戻さない",
+      await page.locator(".sec-atis, [data-atis-panel], [data-feedback-date]").count() === 0);
   } finally {
     await browser.close();
     server.close();

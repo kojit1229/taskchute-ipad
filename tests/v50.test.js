@@ -10,7 +10,7 @@
 // 前提に更新した。D&D・確定・破棄の検証意図(この見出しの主目的)は維持し、確定時のassertionだけ
 // 「新規Block化」から「既存Blockの時刻更新(blockIdマッチ・新規Block非生成)」へ更新している
 // (詳細はCHANGES_v199.md参照)。
-const { chromium, ROOT, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, ROOT, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dispatchRegisteredAction } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -90,8 +90,11 @@ function check(name, cond, extra = "") {
   console.log("[1] 下書きスケジュール(決定論配置)");
   await page.click('[data-action="nav"][data-view="today"]');
   await page.waitForTimeout(300);
-  check("ATISに下書きボタンがAPIキー無しで表示される", await page.locator('.sec-atis [data-action="ai-schedule"]').count() === 1);
-  await page.click('.sec-atis [data-action="ai-schedule"]');
+  check("todayビューには旧下書きボタンを戻さない", await page.locator('[data-action="ai-schedule"]').count() === 0);
+  await page.click('[data-action="nav"][data-view="timeline"]');
+  await page.waitForSelector('#app[data-view="timeline"] [data-action="ai-schedule"]');
+  check("timelineの現行下書き導線を維持", await page.locator('#app[data-view="timeline"] [data-action="ai-schedule"]').count() === 1);
+  await page.click('#app[data-view="timeline"] [data-action="ai-schedule"]');
   await page.waitForTimeout(500);
   check("タイムラインへ自動遷移", await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).currentView, KEY) === "timeline");
   check("下書きブロックが表示される", await page.locator(".draft-block").count() === 1);
@@ -143,18 +146,19 @@ function check(name, cond, extra = "") {
   //   候補の有無どちらでも安全に倒れるよう両分岐を維持する)
   await page.click('[data-action="nav"][data-view="today"]');
   await page.waitForTimeout(200);
-  const cand2 = await page.locator('.sec-atis [data-action="ai-schedule"]').count();
-  if (cand2) {
-    await page.click('.sec-atis [data-action="ai-schedule"]');
-    await page.waitForTimeout(500);
-    const hasDraft = await page.locator(".draft-block").count();
-    if (hasDraft) {
-      await page.click('[data-action="draft-discard"]');
-      await page.waitForTimeout(300);
-      check("破棄で下書きが消え、Blockは増えない", await page.locator(".draft-block").count() === 0);
-    } else {
-      check("破棄フロー(候補なしのためスキップ扱い)", true);
-    }
+  await page.click('[data-action="nav"][data-view="timeline"]');
+  const scheduleButton = page.locator('#app[data-view="timeline"] [data-action="ai-schedule"]');
+  if (await scheduleButton.count()) {
+    await scheduleButton.click();
+  } else {
+    await dispatchRegisteredAction(page, "ai-schedule");
+  }
+  await page.waitForTimeout(500);
+  const hasDraft = await page.locator(".draft-block").count();
+  if (hasDraft) {
+    await page.click('[data-action="draft-discard"]');
+    await page.waitForTimeout(300);
+    check("破棄で下書きが消え、Blockは増えない", await page.locator(".draft-block").count() === 0);
   } else {
     check("破棄フロー(候補なしのためスキップ扱い)", true);
   }

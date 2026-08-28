@@ -479,7 +479,7 @@ function renderJournal() {
   const report = (state.reports || {})[date] || "";
   // v141: AIフィードバック列(3列目)はジャーナルタブの表示から撤去した(未使用のため。
   // CHANGES_v141.md参照)。fetchロジック(hydrateStaticMarkdown)・保存データ(state.feedback/
-  // cachedFeedback)自体は削除しておらず、統合画面のATISで
+  // cachedFeedback)自体は削除しておらず、AIレポートタブ(kind: feedback)で
   // 引き続き読める。
   // v148(UI改善計画Phase3-4): 当日パネルを朝/夜/本文の3detailsへ再編する。既定openは現在時刻
   // (〜14時=朝、14時〜=夜)/常時(本文)から計算するが、_journalSegmentOverride(src/state/

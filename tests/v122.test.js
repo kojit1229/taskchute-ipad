@@ -10,7 +10,7 @@
 // (b) AIプラン採用ブランチでも同様に、週次選定Wishは自動では合流しない
 //     (v122追補で足していたaiPlan採用時の残り空き時間への追記合流ブロックを撤去したことの確認)
 // (c) ホームカード「今日へ」で今日のBlockが作られ、二重登録は弾かれる(v121/v122のUIは無変更で存続)
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dispatchRegisteredAction } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -132,9 +132,9 @@ function check(name, cond, extra = "") {
       view: "tasks"
     });
 
-    await page.click('[data-action="nav"][data-view="today"]');  // v230: 朝プランはATISへ移設
+    await page.click('[data-action="nav"][data-view="today"]');
     await page.waitForTimeout(150);
-    await page.click('[data-action="ai-morning-plan"]');
+    await dispatchRegisteredAction(page, "ai-morning-plan");
     await page.waitForTimeout(600);
 
     const titles1 = await draftTitles();
@@ -164,9 +164,9 @@ function check(name, cond, extra = "") {
       weeklyWishes: { [WEEK_KEY]: { taskIds: ["w-6"], updatedAt: `${TODAY}T09:00` } },
       view: "tasks"
     });
-    await page.click('[data-action="nav"][data-view="today"]');  // v230: 朝プランはATISへ移設
+    await page.click('[data-action="nav"][data-view="today"]');
     await page.waitForTimeout(150);
-    await page.click('[data-action="ai-morning-plan"]');
+    await dispatchRegisteredAction(page, "ai-morning-plan");
     await page.waitForTimeout(700);
     const titles2 = await draftTitles();
     const titles2Joined = titles2.join(" / ");

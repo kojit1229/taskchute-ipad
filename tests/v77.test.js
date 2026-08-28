@@ -18,7 +18,7 @@
 //   自動登録済みの同名テーマを重複表示しない」の回帰確認のみ行う(冪等・重複排除・削除時の
 //   採否ログ記録などの詳細はtests/v86.test.jsを参照)。後方互換(見出しが無い旧形式FBでも
 //   クラッシュしない)は維持。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dispatchRegisteredAction } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -120,9 +120,9 @@ function check(name, cond, extra = "") {
   }
 
   async function runMorningPlan() {
-    await page.click('[data-action="nav"][data-view="today"]');  // v230: 朝プランはATISへ移設
+    await page.click('[data-action="nav"][data-view="today"]');
     await page.waitForTimeout(150);
-    await page.click('[data-action="ai-morning-plan"]');
+    await dispatchRegisteredAction(page, "ai-morning-plan");
     await page.waitForTimeout(700);
   }
 
@@ -209,16 +209,15 @@ function check(name, cond, extra = "") {
     check("見積なしタスクは既定30分のまま(既存の慣習を維持)", !!noEst && noEst.minutes === 30, JSON.stringify(noEst));
 
     // ============================================================
-    // [4] visibilitychange復帰時にAIフィードバック等が再fetchされ、再起動なしで新着が自動表示される
+    // [4] visibilitychange復帰時にAIフィードバック等が再fetchされ、再起動なしで新着を自動取り込みする
     // ============================================================
-    console.log("[4] visibilitychange(フォアグラウンド復帰)で前日フィードバックの新着が自動再fetch・再表示される");
+    console.log("[4] visibilitychange(フォアグラウンド復帰)で前日フィードバックの新着が自動再fetch・取り込みされる");
     delete feedbackFixture[YEST];  // 起動時点ではまだバッチ未生成(404)
     await seed({ tasks: [], view: "home" });
     // v149(UI改善計画Phase4a): 「AIから」(home-ai-feedback-read)はホームタブへ移動した
     // (既定は今日タブ)。visibilitychangeはreloadを伴わないため、以降の再描画でもタブ選択は維持される。
-    // v230: feedbackは既定todayのATISに表示される。
-    const beforeCount4 = await page.locator(".tower-atis-feedback").count(); // v230: feedbackはATISへ移設
-    check("起動直後は前日フィードバックがまだ無い(フェイルソフトでdetails非表示)", beforeCount4 === 0);
+    const beforeCandidates4 = await page.evaluate(({ KEY, YEST }) => JSON.parse(localStorage.getItem(KEY)).journalMeta?.[YEST]?.aiTaskCandidates || [], { KEY, YEST });
+    check("起動直後は前日フィードバック候補がまだ無い(フェイルソフト)", !beforeCandidates4.includes("新着提案_v77"));
 
     // 5分経過させる(多重発火防止の最短間隔=60秒ガードを超えさせる)。その間にバッチが新規pushしたと想定。
     await page.clock.setFixedTime(new Date(now0.getTime() + 5 * 60 * 1000));
@@ -228,10 +227,9 @@ function check(name, cond, extra = "") {
       document.dispatchEvent(new Event("visibilitychange"));
     });
     await page.waitForTimeout(700);
-    const afterCount4 = await page.locator(".tower-atis-feedback").count();
-    const afterText4 = await page.locator("main").textContent();
-    check("visibilitychange復帰で前日分が再fetchされ、アプリ再起動なしに自動表示される",
-      afterCount4 === 1 && afterText4.includes("新着提案_v77"), afterText4.slice(0, 300));
+    const afterCandidates4 = await page.evaluate(({ KEY, YEST }) => JSON.parse(localStorage.getItem(KEY)).journalMeta?.[YEST]?.aiTaskCandidates || [], { KEY, YEST });
+    check("visibilitychange復帰で前日分が再fetchされ、アプリ再起動なしに候補stateへ反映される",
+      afterCandidates4.includes("新着提案_v77"), JSON.stringify(afterCandidates4));
     check("api.github.comへ前日分の再fetchが実際に飛んでいる(裏取り)",
       feedbackApiRequests.filter((p) => p.endsWith(`AIフィードバック_${YEST}.md`)).length >= 2, JSON.stringify(feedbackApiRequests));
     // v86: このFB本文(「新着提案_v77」)はautoIngestFeedbackで自動的にタスク化される副作用がある。

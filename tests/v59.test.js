@@ -7,7 +7,7 @@
 // そのまま「常用経路」の検証として引き続き成立する(fallbackMorningPlan自体は無改修)。
 // フォールバックは computeFreeGaps の出力をそのまま使うため、配置境界を見ることで
 // computeFreeGaps の境界(占有なし/連続占有/日跨ぎ端)も間接的に検証できる。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dispatchRegisteredAction } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -81,10 +81,9 @@ function check(name, cond, extra = "") {
   });
 
   async function runMorningPlan() {
-    // v230: 朝プラン導線はWBS(tasks)からATIS(today)へ集約された。action自体は同じ。
     await page.click('[data-action="nav"][data-view="today"]');
     await page.waitForTimeout(150);
-    await page.click('[data-action="ai-morning-plan"]');
+    await dispatchRegisteredAction(page, "ai-morning-plan");
     await page.waitForTimeout(600);
   }
 
@@ -109,7 +108,7 @@ function check(name, cond, extra = "") {
   await seed({ tasks: [wbsTask("test-task-1", "占有なし候補タスク")], projects: [testProject()] });
   await page.click('[data-action="nav"][data-view="today"]');
   await page.waitForTimeout(150);
-  check("🌅 朝プランボタンが存在する(APIキー不要・今日を選択中)", await page.locator('[data-action="ai-morning-plan"]').count() === 1);  // (e)
+  check("廃止済み朝プランボタンを本番DOMへ戻さない", await page.locator('[data-action="ai-morning-plan"]').count() === 0);  // (e)
   await runMorningPlan();
   const gaps1 = await draftBlocks();
   check("候補1件が下書きとして1件だけ配置される", gaps1.length === 1, JSON.stringify(gaps1));

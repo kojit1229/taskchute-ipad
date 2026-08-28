@@ -210,6 +210,8 @@ async function verifyBrowserMigrationAndCrud() {
   const page = await context.newPage();
   await blockGithubApiByDefault(page);
   try {
+    // v285とは独立したテスト保守: fixture日と起動日を揃え、翌日以降のselectedDate補正でIRON LOGが消えないようにする。
+    await page.clock.setFixedTime(new Date(2026, 7, 27, 12, 0, 0));
     await page.goto(`http://localhost:${PORT}/`);
     await passGithubGate(page);
     const legacy = [
@@ -271,6 +273,10 @@ async function verifyBrowserMigrationAndCrud() {
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY: STATE_KEY, TODAY });
     await page.reload();
+    const eveningSegment = page.locator(".journal-segment-evening");
+    if (await eveningSegment.count() && !(await eveningSegment.evaluate((element) => element.open))) {
+      await eveningSegment.locator("summary").click();
+    }
     await page.waitForSelector('#app[data-view="journal"] .cond-gym-card');
     const legacyId = afterIronDelete[0].id;
     const journalDelete = page.locator(`[data-action="delete-gym-entry"][data-id="${legacyId}"]`);

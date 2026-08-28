@@ -180,7 +180,7 @@ const freshGeneratedAt = () => toUtcIso(new Date());
     letterFixture = LETTER_BODY;
     await seedHome({ selectedDate: TODAY });
     check("旧home viewはtodayへフォールバックしTOWERを表示する",
-      await page.locator('#app[data-view="today"] .sec-atis').count() === 1);
+      await page.locator('#app[data-view="today"] .today-tower').count() === 1);
 
     // [5] 公開Pages側(同一オリジン)への未来からの手紙_*.mdのfetchは一切発生しない
     // ============================================================
@@ -217,7 +217,7 @@ const freshGeneratedAt = () => toUtcIso(new Date());
       letterApiRequests.some((p) => p.endsWith(`未来からの手紙_${MONTH}.md`)), JSON.stringify(letterApiRequests));
     const linkCount6 = await page.locator('[data-action="open-future-letter"]').count();
     check("v230: 設定完了後も削除済みhome導線は描画されない", linkCount6 === 0);
-    check("設定完了後はtoday/TOWERへ復帰する", await page.locator('#app[data-view="today"] .sec-atis').count() === 1);
+    check("設定完了後はtoday/TOWERへ復帰する", await page.locator('#app[data-view="today"] .today-tower').count() === 1);
   } finally {
     await browser.close();
     server.close();

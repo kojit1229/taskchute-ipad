@@ -1,4 +1,4 @@
-// v266: LIFE BANDの12WY週次スコア信号、展開内訳、設定、ATIS縦予算を検証する。
+// v266: LIFE BANDの12WY週次スコア信号、展開内訳、設定、TOWER回帰を検証する。
 const fs = require("fs");
 const path = require("path");
 const { pathToFileURL } = require("url");
@@ -56,7 +56,7 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
     && !/\sid=/.test(scoreRendererSource) && !/new Date\s*\(/.test(scoreRendererSource));
   check(".t-state 5+1は既存定義を再利用", countMatches(stylesSource, /^\.t-state\.s-/gm) === 6
     && stylesSource.includes(".t-state.s-ahead, .t-state.s-done"));
-  check("ATIS縦予算は指定2ルール", /\.tower-atis-body\s*\{[^}]*max-height:\s*60vh;[^}]*overflow-y:\s*auto;/.test(stylesSource)
+  check("R3送りのATIS専用縦予算CSSは本リリースで不変", /\.tower-atis-body\s*\{[^}]*max-height:\s*60vh;[^}]*overflow-y:\s*auto;/.test(stylesSource)
     && /\.tower-atis-feedback-body \.readonly-md\s*\{\s*min-height:\s*0;\s*\}/.test(stylesSource));
   check("TOWER赤トークンと40pxタップ標的を正本で定義", /\.today-tower, \.tower-skin\s*\{[^}]*--tower-red:\s*#ff6d7f;/.test(stylesSource)
     && /\.twy-score-signal\s*\{[^}]*display:\s*inline-flex;[^}]*align-items:\s*center;[^}]*min-height:\s*40px;/.test(stylesSource));
@@ -359,7 +359,7 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
     probe = await counters();
     check("build/render/toggleは保存state不変・save/report 0回", beforeDisplay === afterDisplay && probe.save === 0 && probe.report === 0);
 
-    console.log("[5] 設定70〜100・保存1回・normalize安定・既存LIFE BAND/ATIS/#9回帰");
+    console.log("[5] 設定70〜100・保存1回・normalize安定・既存LIFE BAND/TOWER/#9回帰");
     await page.locator('.nav-button[data-view="settings"]').click();
     await page.waitForSelector('[data-setting-scoretarget]', { state: "attached" });
     await openSettingsGroup(page, "settings-master");
@@ -422,27 +422,12 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
     await seed({ feedback: { [TODAY]: longFeedback }, journalMeta: { [PREVIOUS_DAY]: {
       aiMitCandidates: [], aiImported: false, ideal: "", aiTaskCandidates: ["実候補"], aiRequest: ""
     } }, aiLinkFreshness: { feedbackAt: TODAY, planAt: TODAY } });
-    await page.evaluate(() => window.__v266SetAiWorkResults?.([{
-      resultId: "v266-work", taskId: "", title: "実作業", status: "completed", summary: "実測用", outputPath: "", minutes: 10
-    }]));
     await page.locator('.nav-button[data-view="today"]').click();
-    await page.waitForSelector(".tower-atis-body .ai-work-row");
-    const atisActions = await page.locator(".tower-atis-actions [data-action]").evaluateAll((nodes) => nodes.map((node) => node.dataset.action));
-    const atisDom = await page.locator(".tower-atis-body").evaluate((body) => {
-      const selectors = [".ai-freshness-line", ".ai-work-row", ".tower-atis-feedback", ".tower-atis-chips", ".tower-atis-actions"];
-      const nodes = selectors.map((selector) => body.querySelector(selector));
-      return {
-        present: nodes.map(Boolean),
-        ordered: nodes.every((node, index) => index === 0 || Boolean(nodes[index - 1].compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING)),
-        overflow: getComputedStyle(body).overflowY,
-        scrollHeight: body.scrollHeight,
-        clientHeight: body.clientHeight
-      };
-    });
-    check("ATIS既存3 actionのDOM順序不変", JSON.stringify(atisActions) === JSON.stringify(["ai-morning-plan", "ai-schedule", "today-replan"]));
-    check("ATIS鮮度/work/feedback/chips/actionの存在・順序不変", atisDom.present.every(Boolean) && atisDom.ordered, JSON.stringify(atisDom));
-    check("ATIS実データ長文はfillerなしで内部スクロール可能", atisDom.overflow === "auto"
-      && atisDom.scrollHeight > atisDom.clientHeight, JSON.stringify(atisDom));
+    await page.waitForSelector(".tower-col-right > .sec-journal");
+    check("右カラムはJOURNALだけを描画", await page.locator(".tower-col-right > .sec-journal").count() === 1);
+    check("右カラム直下要素はJOURNAL 1個だけ", await page.locator(".tower-col-right > *").count() === 1);
+    check("廃止済みAI操作・候補・鮮度UIを描画しない",
+      await page.locator('[data-action="ai-morning-plan"], [data-action="ai-schedule"], [data-action="today-replan"], .ai-freshness-line, .ai-work-row').count() === 0);
 
     await seed({ weeklyCommitments: scoredCommitments(1, 1), projects: [project("p-wbs")],
       tracks: [numericTrack("same-status", "p-wbs")], trackMeasurements: [measurement("same-status", 0)] });

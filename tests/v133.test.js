@@ -23,7 +23,7 @@
 // このコンフリクトは依頼書からは読み取れず(「抜け道」という表現からは意図的な機能とは
 // 認識されていないように見える)、勝手に判断して機能を壊すのは危険と判断し、(a)=makeTask()の
 // 修正のみを実装して(b)(c)は保留した。詳細は完了報告を参照。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dispatchRegisteredAction } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -112,44 +112,42 @@ function check(name, cond, extra = "") {
     await passGithubGate(page);
 
     // ============================================================
-    // 修正1(a): autoIngestFeedback → 候補チップ化。「＋」タップでタスク作成、チップが消える
+    // 修正1(a): autoIngestFeedback → 候補state化。残存action本体による採用・却下も維持する
     // ============================================================
-    console.log("[1] AIフィードバックの「明日への提案」はATISの候補チップとして表示され、直接state.tasksには入らない");
+    console.log("[1] AIフィードバックの「明日への提案」は候補stateへ入り、直接state.tasksには入らない");
     feedbackFixture = { [YEST]: "# AIフィードバック本文_v133\n\n## 明日への提案\n\n- [ ] AI候補タスク_v133: 理由の説明\n" };
-    // v230: 候補チップはtasks上部から統合画面ATISへ集約された。
     await seed({ tasks: [], projects: [], view: "today" });
     const s1 = await readState();
     check("state.tasksへ直接登録されない", !(s1.tasks || []).some((t) => t.title === "AI候補タスク_v133"), JSON.stringify(s1.tasks));
     check("journalMeta[前日].aiTaskCandidatesへ候補として登録される",
       (s1.journalMeta?.[YEST]?.aiTaskCandidates || []).includes("AI候補タスク_v133"), JSON.stringify(s1.journalMeta?.[YEST]));
-    const chipText1 = await page.locator("[data-atis-task-candidates]").textContent().catch(() => "");
-    check("ATISにチップとして表示される", (chipText1 || "").includes("AI候補タスク_v133"), chipText1);
-    check("ATIS内のタスク候補コンテナは1つだけ(v230)",
-      await page.locator('#app[data-view="today"] .sec-atis [data-atis-task-candidates]').count() === 1);
+    check("候補stateはfixture由来の1件だけ", (s1.journalMeta?.[YEST]?.aiTaskCandidates || []).length === 1, JSON.stringify(s1.journalMeta?.[YEST]));
+    check("候補の採用・却下UIは描画しない",
+      await page.locator('[data-action="ai-task-adopt"], [data-action="ai-task-dismiss"]').count() === 0);
 
-    console.log("[2] チップの「＋」タップでタスクが作成され(dueDate=今日)、チップが消える");
-    await page.click('[data-action="ai-task-adopt"][data-index="0"]');
+    console.log("[2] 残存採用action本体でタスクが作成され(dueDate=今日)、候補が消える");
+    await dispatchRegisteredAction(page, "ai-task-adopt", { index: "0" });
     await page.waitForTimeout(300);
     const s2 = await readState();
     const adopted = (s2.tasks || []).find((t) => t.title === "AI候補タスク_v133");
     check("採用したタスクがstate.tasksへ作成される", !!adopted, JSON.stringify(adopted));
     check("採用したタスクのdueDateは今日", !!adopted && adopted.dueDate === TODAY, JSON.stringify(adopted));
     check("採用後は候補配列から消える", !(s2.journalMeta?.[YEST]?.aiTaskCandidates || []).includes("AI候補タスク_v133"), JSON.stringify(s2.journalMeta?.[YEST]));
-    check("チップも画面から消える", await page.locator('[data-action="ai-task-adopt"]').count() === 0);
+    check("採用UIは画面へ復活しない", await page.locator('[data-action="ai-task-adopt"]').count() === 0);
 
-    console.log("[3] チップの「×」タップでは候補が消えるだけでタスクは作られない");
+    console.log("[3] 残存却下action本体では候補が消えるだけでタスクは作られない");
     feedbackFixture = {};  // 以降のseed()のreloadでtest[1]のfixtureが再ingestされないようクリア
     await seed({
       tasks: [], projects: [], view: "today",
       journalMeta: { [YEST]: { aiMitCandidates: [], aiImported: false, ideal: "", aiTaskCandidates: ["却下候補_v133"] } }
     });
-    check("却下前: チップが表示されている", await page.locator('[data-action="ai-task-dismiss"][data-index="0"]').count() === 1);
-    await page.click('[data-action="ai-task-dismiss"][data-index="0"]');
+    check("却下前も候補UIは表示しない", await page.locator('[data-action="ai-task-dismiss"]').count() === 0);
+    await dispatchRegisteredAction(page, "ai-task-dismiss", { index: "0" });
     await page.waitForTimeout(300);
     const s3 = await readState();
     check("却下してもタスクは作られない", !(s3.tasks || []).some((t) => t.title === "却下候補_v133"), JSON.stringify(s3.tasks));
     check("候補配列からも消える", !(s3.journalMeta?.[YEST]?.aiTaskCandidates || []).includes("却下候補_v133"), JSON.stringify(s3.journalMeta?.[YEST]));
-    check("チップも消える", await page.locator('[data-action="ai-task-dismiss"]').count() === 0);
+    check("却下UIは画面へ復活しない", await page.locator('[data-action="ai-task-dismiss"]').count() === 0);
 
     // ============================================================
     // 修正2(a): makeTask() — Wish配下は明示的なdueDate引数も無視して常に空にする

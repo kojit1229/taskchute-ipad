@@ -123,8 +123,8 @@ function check(name, cond, extra = "") {
       && !moreDataViews.includes("tasks") && !moreDataViews.includes("timeline"), JSON.stringify(moreDataViews));
 
     // v230: home描画コードごと撤去。移設先のない折りたたみ/縮退UIは不存在を固定し、
-    // 現行同等の統合起点(TOWER/ATIS)が描画されることを肯定検証する。
-    console.log("[2] v230: home専用ゾーン・縮退バナーは描画されず、TOWER/ATISへ一本化される");
+    // 現行の統合起点(TOWER)が描画されることを肯定検証する。
+    console.log("[2] home専用ゾーン・縮退バナーは描画されず、TOWERへ一本化される");
     await seed({ blocks: [planBlock({ id: "flow-now", title: "現行便", startMin: 9 * 60 })], view: "today" });
     check("削除済みhomeナビが無い", await page.locator('[data-action="nav"][data-view="home"]').count() === 0);
     check("homeタブバーが無い", await page.locator(".home-tabbar").count() === 0);
@@ -132,7 +132,7 @@ function check(name, cond, extra = "") {
       await page.locator('[data-fold-id="zone2"], [data-fold-id="zone2-degraded"], #homezone-1').count() === 0);
     check("縮退モードバナーが無い", await page.locator(".cond-degraded-banner").count() === 0);
     check("現行todayはTOWERを描画する", await page.locator(".today-tower").count() === 1);
-    check("AI導線の移設先ATISを描画する", await page.locator(".sec-atis").count() === 1);
+    check("右カラムにJOURNALを描画する", await page.locator(".tower-col-right > .sec-journal").count() === 1);
 
     console.log(failures === 0 ? "\n✅ v82 ALL PASS" : `\n❌ v82: ${failures} 件失敗`);
   } finally {

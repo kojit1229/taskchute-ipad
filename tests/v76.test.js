@@ -107,21 +107,19 @@ function check(name, cond, extra = "") {
     // v149(UI改善計画Phase4a): 「AIから」(home-ai-feedback-readを含む)はホームの2タブ分割で
     // ホームタブへ移動した(既定は今日タブ)。reload/seedのたびにタブは既定へ戻るため、
     // ホームを見る箇所ごとに切り替える。
-    const gotoHomeTab = async () => { // v230: feedback表示はtoday/TOWERのATISへ移設
+    const gotoHomeTab = async () => {
       if (await page.locator('#app[data-view="today"]').count() === 0) await page.click('[data-action="nav"][data-view="today"]');
       await page.waitForTimeout(150);
     };
 
-    console.log("[1] ホーム『AIから』で、実際のAIフィードバック_*.mdと同じ見出し構造の前日本文が読める(回帰)");
+    console.log("[1] 実データと同じ見出し構造の前日フィードバックを取得・自動取り込みする");
     await seed({ view: "home" });
     check("api.github.comへ前日分のfetchが実際に飛んでいる", feedbackApiRequests.some((p) => p.endsWith(`AIフィードバック_${PREV}.md`)), JSON.stringify(feedbackApiRequests));
     await gotoHomeTab();
-    const detailsCount = await page.locator(".tower-atis-feedback").count();
-    check("「AIフィードバックを読む」detailsが1つ表示される", detailsCount === 1);
-    const openAttr = await page.locator(".tower-atis-feedback").getAttribute("open").catch(() => null);
-    check("既定closed", openAttr === null, String(openAttr));
-    const homeText = await page.locator("main").textContent();
-    check("前日フィードバックの本文(実データ構造)が読める", homeText.includes("提案1_v76") && homeText.includes("提案2_v76"), homeText.slice(0, 300));
+    const feedbackCandidates = await page.evaluate(({ KEY, PREV }) => JSON.parse(localStorage.getItem(KEY)).journalMeta?.[PREV]?.aiTaskCandidates || [], { KEY, PREV });
+    check("実データ構造の提案2件を候補stateへ自動取り込み", feedbackCandidates.includes("提案1_v76") && feedbackCandidates.includes("提案2_v76"), JSON.stringify(feedbackCandidates));
+    check("候補stateは実データ由来の2件だけ", feedbackCandidates.length === 2, JSON.stringify(feedbackCandidates));
+    check("旧ATISフィードバック要素をtodayへ戻さない", await page.locator(".tower-atis-feedback, .tower-atis-summary").count() === 0);
 
     // v85メモ: 「各タブは基本的に今日を表示」導入で起動時(reload)は必ずselectedDate=今日に
     // 強制される。2日前を見ている状態は、reload後にセッション中の日付ピッカー操作で再現する
@@ -137,10 +135,9 @@ function check(name, cond, extra = "") {
     }, PREV2);
     await page.waitForTimeout(300);
     await gotoHomeTab();
-    const homeDetailsCountPastDay = await page.locator(".tower-atis-feedback").count();
-    const homeTextPastDay = await page.locator("main").textContent();
-    check("selectedDateが2日前でも、実際の今日から見た前日フィードバックが読める(selectedDate依存バグの回帰)",
-      homeDetailsCountPastDay === 1 && homeTextPastDay.includes("提案1_v76"), homeTextPastDay.slice(0, 300));
+    check("selectedDateが2日前でも今日基準の前日だけを取得する(selectedDate依存バグの回帰)",
+      feedbackApiRequests.some((p) => p.endsWith(`AIフィードバック_${PREV}.md`))
+      && !feedbackApiRequests.some((p) => p.endsWith(`AIフィードバック_${PREV2}.md`)), JSON.stringify(feedbackApiRequests));
     await seed({ view: "home" });  // 以降の検証のため selectedDate を今日へ戻す
 
     // ============================================================
@@ -158,8 +155,7 @@ function check(name, cond, extra = "") {
     feedbackFixture = {};  // 全部404
     await seed({ view: "home" });
     await gotoHomeTab();
-    const detailsCount404 = await page.locator(".tower-atis-feedback").count();
-    check("ホーム: 前日分が無ければdetails自体が出ない(フェイルソフト)", detailsCount404 === 0);
+    check("前日分が無くてもtoday/TOWERを描画する(フェイルソフト)", await page.locator(".today-tower").count() === 1);
     check("404が続いてもクラッシュしていない(pageerror無し。ここまで到達していれば正常)", true);
 
     // ============================================================
@@ -168,12 +164,12 @@ function check(name, cond, extra = "") {
     // ============================================================
     console.log("[4] 404直後に前日分が用意されても、次回起動時には再fetchされて読める(失敗を永続キャッシュしていない)");
     feedbackFixture = { [PREV]: REAL_SHAPED_FEEDBACK };  // ここで初めて用意する
+    const recoveryRequestsBefore = feedbackApiRequests.filter((p) => p.endsWith(`AIフィードバック_${PREV}.md`)).length;
     await seed({ view: "home" });
     await gotoHomeTab();
-    const homeTextAfterRecover = await page.locator("main").textContent();
-    const detailsCountRecover = await page.locator(".tower-atis-feedback").count();
-    check("直前は404だったが、ファイルが用意された後の再起動では正しく取得・表示される(失敗の永続キャッシュなし)",
-      detailsCountRecover === 1 && homeTextAfterRecover.includes("提案1_v76"), homeTextAfterRecover.slice(0, 300));
+    const recoveryRequestsAfter = feedbackApiRequests.filter((p) => p.endsWith(`AIフィードバック_${PREV}.md`)).length;
+    check("直前は404でも、ファイル用意後の再起動で同じ前日分を再取得する(失敗の永続キャッシュなし)",
+      recoveryRequestsAfter > recoveryRequestsBefore, `${recoveryRequestsBefore} -> ${recoveryRequestsAfter}`);
 
     // ============================================================
     // (5) 日報push(pushFileToGitHub)のPUT先URLパスに %2F が含まれず、taskchute/日報_*.md

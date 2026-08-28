@@ -239,8 +239,8 @@ function check(name, cond, extra = "") {
       morningEnergyLog: { [TODAY]: 7 }
     });
     check("縮退バナーは出ない", await page.locator(".cond-degraded-banner").count() === 0);
-    check("home専用AI hubは無く、移設先ATISが1つだけ出る",
-      await page.locator(".home-ai-hub").count() === 0 && await page.locator(".sec-atis").count() === 1);
+    check("home専用AI hubは無く、現行today/TOWERだけが出る",
+      await page.locator(".home-ai-hub").count() === 0 && await page.locator(".today-tower").count() === 1);
 
     // ============================================================
     // (g) normalizeState 後方互換

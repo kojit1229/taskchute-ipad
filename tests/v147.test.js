@@ -112,7 +112,7 @@ function check(name, cond, extra = "") {
       view: "home"
     });
     check("旧home viewはtodayへフォールバックしTOWERを表示する",
-      await page.locator('#app[data-view="today"] .sec-atis').count() === 1);
+      await page.locator('#app[data-view="today"] .today-tower').count() === 1);
 
     // (4) AAコントラストトークン + 10px→11.5pxラベル
     // ============================================================

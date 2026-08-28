@@ -42,6 +42,10 @@ const instrumentedAppSource = appSource
     `function trackOnBlockCompletionChanged(block, isNowCompleted, { interactive = false } = {}) {
   globalThis.__v254CompletionCalls?.push({ blockId: block?.id || "", isNowCompleted, interactive });
   globalThis.__v254HookOrder?.push("completion");`
+  )
+  .replace(
+    /  cachedAiWorkResults = items;\r?\n  return changed;/,
+    "  cachedAiWorkResults = items;\n  globalThis.__v254AiWorkResults = items.map((item) => ({ ...item }));\n  return changed;"
   );
 const instrumentedTrackUiSource = trackUiSource.replace(
   "function maybeShowTrackProgressToast(block) {",
@@ -309,24 +313,36 @@ console.log("[0] 共通フック契約と全経路の機械検査");
       await page.locator('[data-action="modal-save"]').click();
     });
 
-    aiWorkFixture = JSON.stringify([{
-      taskId: "t1", title: "AI完了経路", status: "completed", summary: "v254", minutes: 30
-    }]);
     await seed({ blocks: [], weeklyCommitments: [], view: "today" });
-    aiWorkFixture = JSON.stringify([{
-      taskId: "t1", title: "AI完了経路", status: "completed", summary: "v254", minutes: 30
-    }]);
+    aiWorkFixture = JSON.stringify([
+      { taskId: "t1", title: "AI完了経路", status: "completed", summary: "v254", minutes: 30 },
+      { taskId: "t2", title: "AI質問経路", status: "blocked", summary: "v254 blocked question", minutes: 0 }
+    ]);
+    const aiWorkResponse = page.waitForResponse((response) => /\/AI作業結果_.*\.json$/.test(decodeURIComponent(new URL(response.url()).pathname)));
     await page.reload();
-    const aiButton = page.locator('[data-action="ai-work-approve"]');
-    await aiButton.waitFor();
+    const loadedAiWorkResponse = await aiWorkResponse;
+    await loadedAiWorkResponse.finished();
+    await page.waitForFunction(() => globalThis.__v254AiWorkResults?.length === 2);
+    check("廃止済みAI作業ボタンを本番DOMへ戻さない",
+      await page.locator('[data-action="ai-work-approve"], [data-action="ai-work-question"]').count() === 0);
     await resetHookSpies();
-    await aiButton.click();
+    await clickAction("ai-work-approve", { resultId: `${TODAY}__t1` });
     await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).blocks.some((entry) => entry.title === "AI完了経路"), KEY);
     const aiState = await stored();
     const aiBlock = aiState.blocks.find((entry) => entry.title === "AI完了経路");
     const aiItem = aiState.weeklyCommitments.find((entry) => entry.blockId === aiBlock?.id);
     check("approveAiWorkResultで自動確定後に刻印", Boolean(aiItem?.completedAt), JSON.stringify(aiItem));
     await assertCompletionRoute("approveAiWorkResult", aiBlock.id, false, 4);
+
+    await clickAction("ai-work-question", { resultId: `${TODAY}__t2` });
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).questions
+      .some((entry) => entry.text === "v254 blocked question"), KEY);
+    const questionState = await stored();
+    const aiQuestion = questionState.questions.find((entry) => entry.text === "v254 blocked question");
+    check("raiseAiWorkQuestionでblocked summaryを問いへ追加", Boolean(aiQuestion), JSON.stringify(questionState.questions));
+    check("raiseAiWorkQuestionのoriginはai", aiQuestion?.origin === "ai", JSON.stringify(aiQuestion));
+    check("raiseAiWorkQuestionもresultIdを処理済みに記録",
+      questionState.aiWorkProcessedIds.includes(`${TODAY}__t2`), JSON.stringify(questionState.aiWorkProcessedIds));
 
     console.log("[2] 開始3経路を個別に自動確定");
     async function checkAutoCommit(label, blockId, action, { completions = 0 } = {}) {

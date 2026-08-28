@@ -8,7 +8,7 @@
 //     confirmed(userStart/userMin付き)/removed/discarded が記録される
 //     (旧v52.test.jsが検証していた recordScheduleHistory/block.aiPlan は app.js から
 //     削除していない現存コードのため、v52削除に伴いここへ検証を移設した)
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dispatchRegisteredAction } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -56,6 +56,14 @@ function check(name, cond, extra = "") {
   // v72: トークン+個人データリポジトリ未設定だとセットアップ画面(ゲート)で止まるため、
   // 既存スイートの前提(設定済みstate)を保つためテスト用トークンを注入する(tests/helpers.js参照)
   await passGithubGate(page);
+
+  async function triggerScheduleFromTimeline() {
+    await page.locator('[data-action="nav"][data-view="timeline"]').first().click();
+    await page.waitForSelector('#app[data-view="timeline"]');
+    const scheduleButton = page.locator('#app[data-view="timeline"] [data-action="ai-schedule"]');
+    if (await scheduleButton.count()) await scheduleButton.click();
+    else await dispatchRegisteredAction(page, "ai-schedule");
+  }
 
   // ---- (b) 旧stateにAPIキー等が残っていても normalizeState で掃除される ----
   console.log("[1] 旧保存値の掃除(APIキー・モデル・プロンプト・自動レビュー)");
@@ -111,11 +119,11 @@ function check(name, cond, extra = "") {
 
   // ---- (c) 朝プランボタンがAPIキー無しで表示・動作する ----
   console.log("[3] 朝プラン(APIキー無し)");
-  await page.click('[data-action="nav"][data-view="today"]'); // v230: AI導線はATISへ移設
+  await page.click('[data-action="nav"][data-view="today"]');
   await page.waitForTimeout(300);
-  check("🌅 朝プランボタンがAPIキー無しで表示される", await page.locator('[data-action="ai-morning-plan"]').count() === 1);
-  check("📋 下書きスケジュールボタンもAPIキー無しで表示される", await page.locator('[data-action="ai-schedule"]').count() === 1);
-  await page.click('[data-action="ai-morning-plan"]');
+  check("todayビューには朝プランの旧ボタンを表示しない", await page.locator('[data-action="ai-morning-plan"]').count() === 0);
+  check("todayビューには下書きの旧ボタンを表示しない(timeline導線は現存)", await page.locator('[data-action="ai-schedule"]').count() === 0);
+  await dispatchRegisteredAction(page, "ai-morning-plan");
   await page.waitForTimeout(500);
   const morningDraft = await page.locator(".draft-block-time").allTextContents();
   check("朝プランが決定論で下書きを配置する(APIキー無しで動作)", morningDraft.length >= 1, JSON.stringify(morningDraft));
@@ -138,14 +146,14 @@ function check(name, cond, extra = "") {
       createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false
     }];
     s.selectedDate = TODAY;
-    s.currentView = "today"; // v230: 下書きスケジュール導線はATISへ移設
+    s.currentView = "today";
     localStorage.setItem(KEY, JSON.stringify(s));
   }, { KEY, TODAY });
   await page.reload();
   await page.waitForTimeout(500);
   await page.click('[data-action="nav"][data-view="today"]');
   await page.waitForTimeout(200);
-  await page.click('[data-action="ai-schedule"]');
+  await triggerScheduleFromTimeline();
   await page.waitForTimeout(500);
   const scheduleDraft = await page.locator(".draft-block-time").allTextContents();
   check("下書きが1件配置される", scheduleDraft.length === 1, JSON.stringify(scheduleDraft));
@@ -197,7 +205,7 @@ function check(name, cond, extra = "") {
   await page.waitForTimeout(500);
   await page.click('[data-action="nav"][data-view="today"]');
   await page.waitForTimeout(200);
-  await page.click('[data-action="ai-schedule"]');
+  await triggerScheduleFromTimeline();
   await page.waitForTimeout(500);
   check("却下/確定の検証用に2件の下書きが配置される", await page.locator(".draft-block").count() === 2,
     await page.locator(".draft-block-title").allTextContents());
@@ -227,7 +235,7 @@ function check(name, cond, extra = "") {
   await page.waitForTimeout(500);
   await page.click('[data-action="nav"][data-view="today"]');
   await page.waitForTimeout(200);
-  await page.click('[data-action="ai-schedule"]');
+  await triggerScheduleFromTimeline();
   await page.waitForTimeout(500);
   check("破棄検証用に1件の下書きが配置される", await page.locator(".draft-block").count() === 1,
     await page.locator(".draft-block-title").allTextContents());
