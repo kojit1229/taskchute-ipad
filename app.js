@@ -6698,7 +6698,8 @@ async function importSleepCsv(file) {
 
 // v92: =========================================================
 //  AIレポートビューア — AIフィードバック・コンテンツ総括・自己分析・週次レビュー・
-//  英語表現集等を「その他 > AIレポート」タブから横断閲覧する。生成は自宅PCのloop側バッチが担い、
+//  英語表現集・FABLE FUND日誌・朝の投資ブリーフ等を「その他 > AIレポート」タブから横断閲覧する。
+//  生成は自宅PCのloop側バッチが担い、
 //  アプリ側はpersonal-dataリポジトリ(taskchute/直下)のContents API一覧+本文取得のみ。
 //  (アプリ内Claude API呼び出しはv60で全廃済み。ここでも新規に増やさない — SKILL.md参照)
 // =========================================================
@@ -6725,7 +6726,11 @@ const AI_REPORT_TYPES = [
   //       (K依頼2026-07-27)。この機能はホーム導線を作らず、既存のAIレポートタブに
   //       相乗りするのみ(K発注仕様「淡々と」)。
   { id: "excuse", label: "言い訳レポート", prefix: "言い訳レポート_",
-    guide: "毎週、未完了だったタスクのコメントからパターンを淡々とまとめます。しばらく実行されていない場合は生成されません" }
+    guide: "毎週、未完了だったタスクのコメントからパターンを淡々とまとめます。しばらく実行されていない場合は生成されません" },
+  { id: "fundJournal", label: "FABLE FUND日誌", prefix: "FABLE FUND日誌_",
+    guide: "FABLE FUND模擬運用のAI投資判断日誌。平日朝夜バッチが生成します" },
+  { id: "market", label: "朝の投資ブリーフ", prefix: "朝の投資ブリーフ_",
+    guide: "前夜の米国市場と当日の注目材料を寄り付き前にまとめます" }
 ];
 
 // _aiReportDirCache(taskchute/直下の一覧)から、種類のprefixに合致する.mdファイルを
@@ -6814,7 +6819,7 @@ async function fetchReportIndex() {
 // v283: 通知対象は既知のAIレポートだけを白名単で数える。indexが取れない・壊れている間は0件へ静かに縮退する。
 function aiReportUnreadCount() {
   if (!Array.isArray(_aiReportNotifyFiles)) return 0;
-  const notifyKinds = new Set(["feedback", "content", "self", "weekly", "letter", "excuse"]);
+  const notifyKinds = new Set(["feedback", "content", "self", "weekly", "letter", "excuse", "fundJournal", "market"]);
   const cutoff = addDays(todayISO(), -(AI_REPORT_NOTIFY_WINDOW_DAYS - 1));
   const readIds = new Set(Array.isArray(state.aiReportReadIds) ? state.aiReportReadIds : []);
   return _aiReportNotifyFiles.filter((entry) => {

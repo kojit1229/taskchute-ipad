@@ -1,0 +1,61 @@
+{
+  "version": 286,
+  "date": "2026-08-28",
+  "title": "投資AIレポート2kind追加",
+  "summary": "AIレポートへFABLE FUND日誌と朝の投資ブリーフを追加し、v283の14日窓・既読同期・アプリ内バッジ機構へ白名単で相乗りさせる。",
+  "changedFiles": [
+    "CHANGES_v286.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v286.json",
+    "scripts/test-manifest.js",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/v286.test.js"
+  ],
+  "intent": [
+    "FABLE FUND模擬運用の日誌を既存FUNDビューと混同しないfundJournal kindで履歴閲覧できるようにする。",
+    "前夜の米国市場と当日の注目材料をまとめる朝ブリーフをmarket kindで同じAIレポートビューアへ載せる。",
+    "新2kindを既存の未読白名単へ追加し、通知本体・14日窓・既読state・同期・バッジDOMを変えずに新着へ気づけるようにする。"
+  ],
+  "changes": [
+    "AI_REPORT_TYPES末尾へfundJournal/FABLE FUND日誌とmarket/朝の投資ブリーフを設計確定のprefix・guideで追加した。",
+    "aiReportUnreadCountのnotifyKindsへfundJournalとmarketだけを追加し、既存6kindとenglish除外、未知kind除外を維持した。",
+    "新2kindは既存のprefix一致一覧、日付降順、本文fetch、render後既読化、aiReportReadIds保存・同期経路へ変更なしで相乗りさせた。",
+    "v286スイートで8kind混在と両kind単独件数、14日境界、既存タブ順序、english/unknown除外、両kind本文・既読化・no-op、空本文、index 404/壊れJSON/48h超過、実ファイル0件縮退をroute隔離fixtureで検証した。",
+    "test manifestへv286をcontent-ai/ui-responsiveとして明示登録し、code index・suite manifest・impact mapを再生成した。",
+    "Service WorkerのCACHE_NAMEをtaskchute-journal-pwa-v286へ更新した。"
+  ],
+  "uncertainties": [
+    "loop側バッチは別発注のため、実際のFABLE FUND日誌・朝ブリーフファイル到着後の実データ表示は監督者側で確認が必要。",
+    "390px Chromeで自動検証したが、iPhone/iPad Safari PWAで9セグメントの横スクロール操作性とService Worker更新は実機確認が必要。"
+  ],
+  "reviewFocus": [
+    "AI_REPORT_TYPESの既存7エントリと既定feedbackが不変で、新2エントリが末尾に設計確定値どおり追加されているか。",
+    "通知白名単が既存6kind+fundJournal+marketの8種だけで、english・journal・unknownが数えられないか。",
+    "通知判定式、AI_REPORT_NOTIFY_WINDOW_DAYS、markAiReportRead/maybeMarkAiReportRead、aiReportReadIds同期、バッジDOM、mobileNav配列へ変更が無いか。",
+    "両kindのYYYY-MM-DDが14日窓で文字列比較され、prefix一致一覧・本文成功/空本文・既読済み再訪の各経路が既存挙動を保つか。",
+    "index 404/壊れJSON/48h超過と新kindファイル未到着時に未読0・空一覧またはContents APIフォールバックへ無害縮退するか。",
+    "FUNDビュー、fund.json、src/sync/github.js、loop側、mobileNav、artifacts/pngへ本件の変更が無いか。"
+  ],
+  "verification": [
+    "CHROME_PATHにGoogle Chromeを指定してnode tests/v286.test.jsを実行し、27 assertion signalsを全件成功(market既読済み再訪no-opはレビュー指摘で追補)。",
+    "node tests/run-all.js v71 v82 v278 today-core v283 v160を無改修で実行し、mobileNav 4スイート・v283通知基盤・v160既存レポートタブを全件成功。",
+    "初回release-gate --finalのcoreでv50起動時にnet::ERR_EMPTY_RESPONSEが1回発生したが、v50単独は即時全件成功し、別ポート帯のnpm.cmd run test:coreも直近5版+横断5本を全件成功。",
+    "release-gate --final再実行は構文・APP_SHELL・生成物・release-record・影響回帰を再度通過し、core実行中に外側の15分上限へ到達。個別coreは全件成功済みで、final exit 0の最終着地は監督者作業として残した。",
+    "node --checkでapp.js、sw.js、tests/v286.test.jsの構文を確認した。",
+    "npm.cmd run code:index:writeとnpm.cmd run test:manifest:writeを実行し、code index 621関数・test manifest 166スイートへ更新後、両生成物の--checkに成功した。"
+  ],
+  "notes": [
+    "実行コード変更はAI_REPORT_TYPES・notifyKinds・CACHE_NAMEの小差分だけで200行上限内。通知機構本体と同期コードは無変更。",
+    "Playwright同梱Chromiumはサンドボックスでspawn EPERMだったため、既存CHROME_PATH対応を使ってシステムGoogle Chromeで検証した。",
+    "run-allの既存sourceHash警告はCRLFを正規化するtest-manifest生成側とraw bytesをhashするrunner側の差で出るが、test-manifest --check自体はPASSしているため本リリースでは便乗修正していない。",
+    "作業開始前から変更済みのartifacts/v275 PNG 4件は本リリース対象外として保持した。"
+  ],
+  "knownLimitations": [
+    "サンドボックス境界により../taskchute-notes/handoff.md本体は更新せず、一時コピーでrelease-recordのwrite/checkを検証する。監督者が公式handoffへ生成反映する必要がある。",
+    "コミット・push・deploy、CI全量、iOS Safari実機PWA確認は監督者側の最終作業。"
+  ]
+}

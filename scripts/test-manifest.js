@@ -122,6 +122,7 @@ const explicitDomains = {
   "v283.test.js": ["content-ai", "sync-storage", "ui-responsive"],
   "v284.test.js": ["sync-storage", "journal-health", "planning-execution", "ui-responsive"],
   "v285.test.js": ["content-ai", "sync-storage", "planning-execution", "ui-responsive"],
+  "v286.test.js": ["content-ai", "ui-responsive"],
   "track-crud-core.test.js": ["planning-execution", "sync-storage"]
 };
 
