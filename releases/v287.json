@@ -1,0 +1,72 @@
+{
+  "version": 287,
+  "date": "2026-08-28",
+  "title": "AIレポート未読一覧とタスクシュート未着手バッジ",
+  "summary": "AIレポートタブ冒頭で未読レポートを選んで既存の本文表示・既読化へ進める一覧を追加し、今日のタスクシュートに見える未着手Block件数をサイドバーと下部ナビへ表示する。",
+  "changedFiles": [
+    "CHANGES_v287.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v287.json",
+    "scripts/test-manifest.js",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/v278.test.js",
+    "tests/v283.test.js",
+    "tests/v287.test.js"
+  ],
+  "intent": [
+    "AIレポートの未読件数だけでなくkind・日付・ファイル名を一覧化し、目的のレポートへ1タップで到達できるようにする。",
+    "一覧と既存ナビバッジを同じ未読エントリ関数から算出し、件数不一致を構造的に防ぐ。",
+    "過去日閲覧中も今日の実行残を把握できるよう、タスクシュートで実際に描画される母集団の未着手件数を両ナビへ表示する。"
+  ],
+  "changes": [
+    "v283の8kind白名単・14日窓・aiReportReadIds除外・fail-quiet判定をaiReportUnreadEntriesへ移し、有効日付降順かつ同日ファイル名昇順で返すようにした。aiReportUnreadCountは同配列のlengthだけを返す。",
+    "AIレポートヘッダー直後へ未読一覧を追加し、kindラベル・index日付・ファイル名をescapeHTMLした44px以上のdata-actionボタンで表示する。0件時はセクションDOMを生成しない。",
+    "未読行タップではkindの白名単確認後、ファイル名のprefixと.mdを剥がした日付を選択し、persistLocalNoScheduleとrenderで既存の本文取得成功後既読化フローへ渡す。",
+    "未読行の日付がセッション内の_aiReportDirCacheに無い場合はキャッシュを破棄し、新着行タップが古いfiles[0]へフォールバックして別レポートを既読化しないようにした。",
+    "未読一覧の更新をpatchAiReportUnreadListへ共通化し、markAiReportReadでは既存セクションをouterHTML置換、hydrateStaticMarkdownではAIレポート表示中だけ既存セクションの置換またはsegmented直前への挿入を行う。全体renderは呼ばない。",
+    "未読一覧の同日ファイル名昇順タイブレークへlocaleCompareのjaロケールを明示した。",
+    "tasksViewRenderedBlocks(todayISO())のうち未完了かつactualStartAt無しの件数を導出し、サイドバーtasksと下部ナビ実行へ既存nav-badge意匠・99+上限で表示する。",
+    "v287 E2Eで同日別kindのname昇順、不正kind除外、kind・日付・ファイル名DOMの個別完全一致、必須タブ、hydrate差分更新、古いdir cache下の新着行タップを固定した。未着手母集団はoneTap・taskId無しを対象、recurrenceGroupId・Project未紐づけを非対象として境界検証した。",
+    "tasksバッジとの共存で旧テストが別用途のnav-badgeまで数えないよう、v283の未読0件セレクタを未読3導線へ限定し、v278のmobileNav検証をid・先頭ラベルの5組厳密比較へ強化した。",
+    "action-registry-coreのapp.js登録actionと全click actionのゴールデンリストへai-report-open-unreadを追加し、data-actionデリゲーションの保存則を維持した。",
+    "test manifestへv287をcontent-ai・planning-execution・ui-responsiveとして明示登録し、code index・suite manifest・impact mapを再生成した。",
+    "Service WorkerのCACHE_NAMEをtaskchute-journal-pwa-v287へ更新した。"
+  ],
+  "uncertainties": [
+    "未読一覧が実運用上限に近い件数になった場合の縦スクロール量は自動テストでは評価していない。",
+    "iPhone/iPad Safari PWAでの未読行タップ感とサイドバー・下部ナビのバッジ視認性は実機確認が必要。"
+  ],
+  "reviewFocus": [
+    "aiReportUnreadEntriesがv283の8kind白名単・14日窓・既読除外・index取得不能時0件を変えず、一覧と既存3箇所の未読バッジを単一ソース化しているか。",
+    "未読一覧の全動的出力がescapeHTMLされ、各行がdata-actionレジストリ経由かつ44px以上で、0件時にセクションDOMが残らないか。",
+    "openUnreadAiReportの日付がindex.dateではなくファイル名から導出され、dataModifiedAtを汚さず既存maybeMarkAiReportReadへ相乗りしているか。",
+    "openUnreadAiReportが新着日付を持たない古い_aiReportDirCacheを破棄し、正しい本文取得後にだけ対象ファイルを既読化するか。",
+    "markAiReportReadとhydrateStaticMarkdownが全体renderを呼ばず一覧だけを差分更新し、本文失敗時は既読化も一覧削除も起きないか。",
+    "taskchuteUnstartedCountがtodayISOとtasksViewRenderedBlocksだけを母集団にし、actualStartAt・completedを正しく除外してeverStartedAtやselectedDateを参照しないか。",
+    "mobileNav・navItems・moreItems・renderMore・normalizeState・src/sync/github.js・timerTicker・既存artifacts/pngへ本件の変更が無いか。"
+  ],
+  "verification": [
+    "CHROME_PATHにGoogle Chromeを指定してnode tests/v287.test.jsを実行し、未読一覧・hydrate差分更新・新着行タップ・負例・未着手バッジの全assertionを成功した。",
+    "CHROME_PATHにGoogle Chromeを指定してtoday-core・v71・v82・v278・v283・v286を実行し、全件成功した。tasksバッジとの共存に合わせてv278のラベル検証とv283の未読バッジセレクタは対象を厳密化した。",
+    "追加のnpm.cmd run test:coreはv283が全assertion成功ログ後に180秒タイムアウト扱い、v72がEADDRINUSE後のinfra再試行で全件成功となり、ランナー全体はexit 1だった。機能assertionの失敗は無く、coreは規約どおり1回のみ実行した。",
+    "node --checkでapp.jsとtests/v287.test.jsの構文を確認し、git diff --checkにも成功した。",
+    "node tests/action-registry-core.test.jsを実行し、app.js直接登録193件・全click action 230件の完全一致を含め全件成功した。",
+    "npm.cmd run code:index:writeとnpm.cmd run test:manifest:writeを実行し、code index 626関数・test manifest 167スイートへ更新した。",
+    "通常のnode scripts/release-gate.js --version 287を実行し、schema・APP_SHELL・manifest・code index・構文・impact regressionを含む全ゲートがexit 0（PASS: release gate）で完了した。--finalは実行していない。"
+  ],
+  "notes": [
+    "実行コード差分はapp.js 57追加/6削除、scripts/test-manifest.js 1追加、styles.css 10追加、sw.js 2追加/1削除の計77変更行で200行上限内。tests・release記録・生成物は数値対象外。",
+    "新規stateは追加せず、既存aiReportReadIdsと描画時導出値だけを使用する。"
+  ],
+  "knownLimitations": [
+    "サンドボックス境界により../taskchute-notes/handoff.md本体は更新せず、一時コピーでrelease-recordのwrite/checkを検証する。監督者が公式handoffへ生成反映する必要がある。",
+    "コミット・push・release-gate --final・CI全量・iOS Safari実機PWA確認は監督者側の最終作業。",
+    "作業開始前から変更済みのartifacts/v275 PNG 4件は本リリース対象外として保持した。"
+  ]
+}

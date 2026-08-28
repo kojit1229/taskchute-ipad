@@ -13,6 +13,8 @@ const TODAY = "2026-08-27";
 const FEEDBACK_OLD_DATE = "2026-08-25";
 const WEEKLY_DATE = "2026-08-24";
 const FRESH_GENERATED_AT = "2026-08-27T01:00:00Z";
+// v287: tasksにも同じnav-badgeが共存するため、v283の未読0件検証は未読導線だけを対象にする。
+const UNREAD_BADGES = '#sidebar [data-view="ai-reports"] .nav-badge, #bottomNav [data-view="more"] .nav-badge, .more-tower-item[data-view="ai-reports"] .nav-badge';
 
 let failures = 0;
 function check(name, cond, extra = "") {
@@ -194,7 +196,7 @@ async function verifyMainFlow(browser) {
     await page.click('[data-action="ai-report-type"][data-type="weekly"]');
     await page.waitForFunction(() => document.querySelector(".md-render")?.textContent.includes("週次本文_v283"));
     await page.waitForFunction((name) => JSON.parse(localStorage.getItem("taskchute-journal-pwa-state-v1")).aiReportReadIds.includes(name), `週次レビュー_${WEEKLY_DATE}.md`);
-    check("種類切替で本文を既読化し0件時はバッジDOMを消す", await page.locator(".nav-badge").count() === 0);
+    check("種類切替で本文を既読化し0件時はバッジDOMを消す", await page.locator(UNREAD_BADGES).count() === 0);
 
     const persisted = await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), STATE_KEY);
     const beforeReloadModifiedAt = persisted.dataModifiedAt;
@@ -204,7 +206,7 @@ async function verifyMainFlow(browser) {
     await page.clock.setFixedTime(new Date(FIXED_NOW.getTime() + 5 * 60 * 1000));
     await page.reload();
     await page.waitForSelector('.md-render[data-report-loaded="1"]');
-    await page.waitForFunction(() => document.querySelectorAll(".nav-badge").length === 0);
+    await page.waitForFunction((selector) => document.querySelectorAll(selector).length === 0, UNREAD_BADGES);
     const afterReload = await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), STATE_KEY);
     check("reload後も既読が残りバッジは増えない", JSON.stringify(afterReload.aiReportReadIds) === JSON.stringify(persisted.aiReportReadIds));
     check("既読済み再訪はsaveState不発火(dataModifiedAt不変)", afterReload.dataModifiedAt === beforeReloadModifiedAt, `${beforeReloadModifiedAt} -> ${afterReload.dataModifiedAt}`);
@@ -337,7 +339,7 @@ async function verifyNegativeCases(browser) {
     const { context, page } = await gatedPage(browser, zeroFixture);
     try {
       await page.click('#bottomNav [data-view="more"]');
-      check("english/journal/healthと15日目以前は未読件数に入らずバッジDOM 0件", await page.locator(".nav-badge").count() === 0);
+      check("english/journal/healthと15日目以前は未読件数に入らずバッジDOM 0件", await page.locator(UNREAD_BADGES).count() === 0);
       await page.click('.more-tower-item[data-view="ai-reports"]');
       await page.click('[data-action="ai-report-type"][data-type="english"]');
       await page.waitForFunction(() => document.querySelector(".md-render")?.textContent.includes("readable v283"));
@@ -362,7 +364,7 @@ async function verifyNegativeCases(browser) {
     };
     const { context, page, pageErrors, consoleErrors } = await gatedPage(browser, fixture);
     try {
-      check(`${variant.name}: バッジ非表示`, await page.locator(".nav-badge").count() === 0);
+      check(`${variant.name}: バッジ非表示`, await page.locator(UNREAD_BADGES).count() === 0);
       await page.evaluate((KEY) => {
         const s = JSON.parse(localStorage.getItem(KEY));
         s.currentView = "ai-reports";
@@ -404,7 +406,7 @@ async function verifyHydrateRefresh(browser) {
   const fixture = { index: { generatedAt: FRESH_GENERATED_AT, files: [] }, bodies: {} };
   const { context, page } = await gatedPage(browser, fixture);
   try {
-    check("初回indexが空ならバッジDOMなし", await page.locator(".nav-badge").count() === 0);
+    check("初回indexが空ならバッジDOMなし", await page.locator(UNREAD_BADGES).count() === 0);
     fixture.index = { generatedAt: FRESH_GENERATED_AT, files: [{ name: `AIフィードバック_${TODAY}.md`, date: TODAY, kind: "feedback" }] };
     await page.clock.setFixedTime(new Date(FIXED_NOW.getTime() + 61 * 1000));
     const refreshed = page.waitForResponse((res) => /\/contents\/taskchute\/report-index\.json$/.test(decodeURIComponent(new URL(res.url()).pathname)));

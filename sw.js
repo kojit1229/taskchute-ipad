@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v286";
+const CACHE_NAME = "taskchute-journal-pwa-v287";
+// v287: AIレポート未読一覧とタスクシュート未着手バッジを追加した(APP_SHELL変更なし)。
 // v286: AIレポートへFABLE FUND日誌と朝の投資ブリーフの2kindを追加した(APP_SHELL変更なし)。
 // v285: ATISパネルとFOCUS AIチップを削除しJOURNALを右カラムへ集約した(APP_SHELL変更なし)。
 // v284: IRON LOGセットID移行・tombstone・id無し互換マージで同期時の消失と削除復活を防止した(APP_SHELL変更なし)。

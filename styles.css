@@ -337,6 +337,16 @@ button {
 
 .more-tower-item .nav-badge { top: 6px; right: 18px; }
 
+/* v287: AIレポート冒頭の未読一覧。ナビ用badgeとは分離する。 */
+.ai-report-unread-rows { display: grid; gap: 6px; }
+.ai-report-unread-rows button {
+  min-height: 44px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel); color: var(--text); text-align: left; cursor: pointer;
+  display: grid; grid-template-columns: max-content 1fr; gap: 3px 8px; align-items: center;
+}
+.ai-report-unread-kind { font-weight: 700; color: var(--accent); }
+.ai-report-unread-rows small { grid-column: 1 / -1; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+
 .nav-button {
   width: 100%;
   min-height: 38px;

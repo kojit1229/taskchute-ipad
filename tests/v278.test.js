@@ -63,8 +63,14 @@ const block = (id, ruleId, title = "朝の読書") => ({
     const navLabels = await page.locator(".nav-list .nav-label").allTextContents();
     // v281: FUNDタブがIRON LOGの後へ常設されたため期待列を追従(INSTRUMENTS→IRON LOGの隣接と0秒思考〜その他の位置関係は維持して検証)。
     check("zeroとmoreの間にINSTRUMENTS→IRON LOG(→FUND)", navLabels.slice(-6).join("|") === "0秒思考|INSTRUMENTS|IRON LOG|FUND|その他|設定", JSON.stringify(navLabels));
+    const mobileItems = await page.$$eval("#bottomNav button", (elements) => elements.map((element) => ({
+      id: element.dataset.view, label: element.childNodes[0].textContent
+    })));
     check("mobileNavは今日/ジャーナル/実行/時間/その他の5枠を維持",
-      (await page.locator("#bottomNav button").allTextContents()).join("|") === "今日|ジャーナル|実行|時間|その他");
+      JSON.stringify(mobileItems) === JSON.stringify([
+        { id: "today", label: "今日" }, { id: "journal", label: "ジャーナル" },
+        { id: "tasks", label: "実行" }, { id: "timeline", label: "時間" }, { id: "more", label: "その他" }
+      ]), JSON.stringify(mobileItems));
     await page.locator('.nav-button[data-view="instruments"]').click();
     await page.waitForSelector('.instr-view');
     check("INSTRUMENTSクリックでビュー遷移", await page.locator('#app[data-view="instruments"] .instr-view').count() === 1);

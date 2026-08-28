@@ -501,6 +501,7 @@ registerActions({
   "open-questions": () => { state.settings.zeroTab = "question"; persistLocalNoSchedule(); setView("zero"); },
   // --- その他: 日報/AIレポート/AI連携/マイグレーション儀式/朝夜detailsトグル ---
   "ai-report-type": ({ target }) => setAiReportType(target.dataset.type),
+  "ai-report-open-unread": ({ target }) => openUnreadAiReport(target.dataset.kind, target.dataset.file),
   "ai-report-refresh": () => refreshAiReports(),
   "open-future-letter": () => {
     state.settings.aiReportType = "letter";
@@ -2808,6 +2809,7 @@ function renderSidebar() {
   // v265: サイドバー直接項目に無いビュー(instruments/iron-log等「その他」配下)では「その他」をactiveにする(renderBottomNavと同型)
   const sidebarActiveId = navItems.some((item) => item.id === state.currentView) ? state.currentView : "more";
   const unreadCount = aiReportUnreadCount();
+  const unstartedCount = taskchuteUnstartedCount();
   sidebar.innerHTML = `
     <div class="brand">
       <div class="brand-title">${collapsed ? "TJ" : "TaskChute Journal"}<span class="sync-dot ${syncDotClass()}" title="同期状態"></span></div>
@@ -2818,7 +2820,7 @@ function renderSidebar() {
       ${navItems.map((item) => `
         <button class="nav-button ${sidebarActiveId === item.id ? "active" : ""}" data-action="nav" data-view="${item.id}" title="${item.label}">
           <span class="nav-mark">${item.mark}</span>
-          <span class="nav-label">${item.label}</span>${item.id === "ai-reports" && unreadCount > 0 ? `<span class="nav-badge">${unreadCount > 99 ? "99+" : unreadCount}</span>` : ""}
+          <span class="nav-label">${item.label}</span>${item.id === "ai-reports" && unreadCount > 0 ? `<span class="nav-badge">${unreadCount > 99 ? "99+" : unreadCount}</span>` : ""}${item.id === "tasks" && unstartedCount > 0 ? `<span class="nav-badge">${unstartedCount > 99 ? "99+" : unstartedCount}</span>` : ""}
         </button>
       `).join("")}
     </div>
@@ -2828,8 +2830,9 @@ function renderSidebar() {
 function renderBottomNav() {
   const active = mobileNav.some((item) => item.id === state.currentView) ? state.currentView : "more";
   const unreadCount = aiReportUnreadCount();
+  const unstartedCount = taskchuteUnstartedCount();
   bottomNav.innerHTML = mobileNav.map((item) => `
-    <button class="${active === item.id ? "active" : ""}" data-action="nav" data-view="${item.id}">${item.label}${item.id === "more" && unreadCount > 0 ? `<span class="nav-badge">${unreadCount > 99 ? "99+" : unreadCount}</span>` : ""}</button>
+    <button class="${active === item.id ? "active" : ""}" data-action="nav" data-view="${item.id}">${item.label}${item.id === "more" && unreadCount > 0 ? `<span class="nav-badge">${unreadCount > 99 ? "99+" : unreadCount}</span>` : ""}${item.id === "tasks" && unstartedCount > 0 ? `<span class="nav-badge">${unstartedCount > 99 ? "99+" : unstartedCount}</span>` : ""}</button>
   `).join("");
 }
 
@@ -3120,6 +3123,11 @@ function taskchuteStartRate(blocks) {
   const list = taskchuteBlocks(blocks);
   const done = list.filter((b) => b.completed || b.actualStartAt).length;
   return { done, total: list.length, pct: list.length ? Math.round((done / list.length) * 100) : 0 };
+}
+
+// v287: タスクシュートタブで実際に見える「今日の未着手」だけをナビバッジへ出す。
+function taskchuteUnstartedCount() {
+  return tasksViewRenderedBlocks(todayISO()).filter((b) => !b.completed && !b.actualStartAt).length;
 }
 
 // --- ひと目スコアボード── v33 ---
@@ -6816,9 +6824,9 @@ async function fetchReportIndex() {
   return files.length > 0 ? files : null;
 }
 
-// v283: 通知対象は既知のAIレポートだけを白名単で数える。indexが取れない・壊れている間は0件へ静かに縮退する。
-function aiReportUnreadCount() {
-  if (!Array.isArray(_aiReportNotifyFiles)) return 0;
+// v287: v283の未読判定を一覧とバッジの単一ソースにする。index取得不能時は空配列へ静かに縮退する。
+function aiReportUnreadEntries() {
+  if (!Array.isArray(_aiReportNotifyFiles)) return [];
   const notifyKinds = new Set(["feedback", "content", "self", "weekly", "letter", "excuse", "fundJournal", "market"]);
   const cutoff = addDays(todayISO(), -(AI_REPORT_NOTIFY_WINDOW_DAYS - 1));
   const readIds = new Set(Array.isArray(state.aiReportReadIds) ? state.aiReportReadIds : []);
@@ -6828,7 +6836,33 @@ function aiReportUnreadCount() {
       ? `${entry.date}-01`
       : (/^\d{4}-\d{2}-\d{2}$/.test(entry.date) ? entry.date : "");
     return effectiveDate >= cutoff && typeof entry.name === "string" && entry.name && !readIds.has(entry.name);
-  }).length;
+  }).map((entry) => ({ name: entry.name, kind: entry.kind, date: entry.date,
+    effectiveDate: /^\d{4}-\d{2}$/.test(entry.date) ? `${entry.date}-01` : entry.date }))
+    .sort((a, b) => b.effectiveDate.localeCompare(a.effectiveDate) || a.name.localeCompare(b.name, "ja"));
+}
+
+function aiReportUnreadCount() {
+  return aiReportUnreadEntries().length;
+}
+
+function renderAiReportUnreadList() {
+  const entries = aiReportUnreadEntries();
+  if (!entries.length) return "";
+  return `<section class="panel ai-report-unread" data-ai-report-unread-list>
+    <h2>未読 ${entries.length}件</h2>
+    <div class="ai-report-unread-rows">${entries.map((entry) => {
+      const label = AI_REPORT_TYPES.find((type) => type.id === entry.kind)?.label || entry.kind;
+      return `<button type="button" data-action="ai-report-open-unread" data-kind="${escapeHTML(entry.kind)}" data-file="${escapeHTML(entry.name)}"><span class="ai-report-unread-kind">${escapeHTML(label)}</span><span>${escapeHTML(entry.date)}</span><small>${escapeHTML(entry.name)}</small></button>`;
+    }).join("")}</div>
+  </section>`;
+}
+
+function patchAiReportUnreadList() {
+  if (state.currentView !== "ai-reports") return;
+  const html = renderAiReportUnreadList();
+  const listEl = main.querySelector("[data-ai-report-unread-list]");
+  if (listEl) listEl.outerHTML = html;
+  else if (html) main.querySelector(".segmented")?.insertAdjacentHTML("beforebegin", html);
 }
 
 function markAiReportRead(fileName) {
@@ -6839,6 +6873,7 @@ function markAiReportRead(fileName) {
   saveState();
   renderSidebar();
   renderBottomNav();
+  patchAiReportUnreadList();
 }
 
 function maybeMarkAiReportRead() {
@@ -6984,6 +7019,7 @@ function renderAiReports() {
   const refreshBtn = `<button class="btn ghost" data-action="ai-report-refresh">🔄 一覧を更新</button>`;
   return `
     ${renderHeader("AIが書いた振り返りをまとめて読む", "AIレポート", refreshBtn)}
+    ${renderAiReportUnreadList()}
     <div class="segmented">
       ${AI_REPORT_TYPES.map((t) => `
         <button class="${t.id === activeId ? "active" : ""}" data-action="ai-report-type" data-type="${t.id}">${escapeHTML(t.label)}</button>
@@ -11629,6 +11665,7 @@ async function hydrateStaticMarkdown() {
   if (personalDataReady(state.settings.github)) {
     renderSidebar();
     renderBottomNav();
+    patchAiReportUnreadList();
   }
   let changed = false;
   if (visionText && visionText !== cachedVisionMd) {
@@ -11951,6 +11988,20 @@ function setVisionBoardIndex(index) {
 function setAiReportType(typeId) {
   if (!AI_REPORT_TYPES.some((t) => t.id === typeId)) return;
   state.settings.aiReportType = typeId;
+  persistLocalNoSchedule();
+  render();
+}
+
+// v287: 未読行から種類とファイル名由来の日付を選び、既存の本文表示→既読化フローへ渡す。
+function openUnreadAiReport(kind, fileName) {
+  const type = AI_REPORT_TYPES.find((item) => item.id === kind);
+  if (!type) return;
+  if (typeof fileName === "string" && fileName.startsWith(type.prefix) && fileName.endsWith(".md")) {
+    const selectedDate = fileName.slice(type.prefix.length, -3);
+    _aiReportSelectedDate[kind] = selectedDate;
+    if (Array.isArray(_aiReportDirCache) && !aiReportFilesForType(type.prefix).some((file) => file.date === selectedDate)) _aiReportDirCache = null;
+  }
+  state.settings.aiReportType = kind;
   persistLocalNoSchedule();
   render();
 }
