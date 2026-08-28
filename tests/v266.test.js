@@ -56,8 +56,10 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
     && !/\sid=/.test(scoreRendererSource) && !/new Date\s*\(/.test(scoreRendererSource));
   check(".t-state 5+1は既存定義を再利用", countMatches(stylesSource, /^\.t-state\.s-/gm) === 6
     && stylesSource.includes(".t-state.s-ahead, .t-state.s-done"));
-  check("R3送りのATIS専用縦予算CSSは本リリースで不変", /\.tower-atis-body\s*\{[^}]*max-height:\s*60vh;[^}]*overflow-y:\s*auto;/.test(stylesSource)
-    && /\.tower-atis-feedback-body \.readonly-md\s*\{\s*min-height:\s*0;\s*\}/.test(stylesSource));
+  // v289(R3-1)追随: v266時点で「R3送りにつき不変」と固定していたATIS専用CSSはR3実施で削除された。
+  // 検証意図(ATIS CSSの状態が意図どおりであること)は削除済みの確認へ反転して継承する。
+  check("ATIS専用CSSはv289(R3-1)で削除済み(v266時点のR3送りが実施された)", !/\.tower-atis-/.test(stylesSource)
+    && !/\.atis-(?:divider|chip|btn)\b/.test(stylesSource) && !/\.sec-atis\b/.test(stylesSource));
   check("TOWER赤トークンと40pxタップ標的を正本で定義", /\.today-tower, \.tower-skin\s*\{[^}]*--tower-red:\s*#ff6d7f;/.test(stylesSource)
     && /\.twy-score-signal\s*\{[^}]*display:\s*inline-flex;[^}]*align-items:\s*center;[^}]*min-height:\s*40px;/.test(stylesSource));
   check("TRACKS pace/meta CSSは行内へスコープ", !/^\.t-(?:pace|meta)\b/m.test(stylesSource)
