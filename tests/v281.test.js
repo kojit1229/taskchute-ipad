@@ -171,7 +171,15 @@ const FUND_FIXTURE = {
     await page.evaluate(() => { Storage.prototype.setItem = window.__fundOriginalSetItem; });
 
     check("FUNDビューへ遷移", await page.locator('#app[data-view="fund"]').count() === 1);
-    check("mobileNavは5項目のままFUNDを含まない", JSON.stringify(await page.locator("#bottomNav button").allTextContents()) === JSON.stringify(["今日", "ジャーナル", "実行", "時間", "その他"]));
+    // v287: 実行ボタンへ未着手バッジが共存するためテキスト全量でなくid+先頭ラベルの厳密比較(v278と同型)
+    const mobileItems = await page.$$eval("#bottomNav button", (elements) => elements.map((element) => ({
+      id: element.dataset.view, label: element.childNodes[0].textContent
+    })));
+    check("mobileNavは5項目のままFUNDを含まない",
+      JSON.stringify(mobileItems) === JSON.stringify([
+        { id: "today", label: "今日" }, { id: "journal", label: "ジャーナル" },
+        { id: "tasks", label: "実行" }, { id: "timeline", label: "時間" }, { id: "more", label: "その他" }
+      ]), JSON.stringify(mobileItems));
     check("PCサイドバーにはFUNDを追加", (await page.locator('.nav-list [data-view="fund"]').count()) === 1);
     const summaryText = await page.locator(".fund-summary").textContent();
     check("ヘッダ指標はラベル・NAV・比率・整形時刻を表示", ["NAV", "¥20,292,650", "起点比", "+1.46%", "対日経", "+1.58%", "対S&P", "-0.87%", "現金比率", "71.86%", "生成時刻", "2026-08-27 18:35"].every((marker) => summaryText.includes(marker)), summaryText);

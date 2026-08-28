@@ -19,6 +19,7 @@ AIレポートタブ冒頭で未読レポートを選んで既存の本文表示
 - tests/action-registry-core.test.js
 - tests/suite-manifest.json
 - tests/v278.test.js
+- tests/v281.test.js
 - tests/v283.test.js
 - tests/v287.test.js
 

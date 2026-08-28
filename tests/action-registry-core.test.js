@@ -116,7 +116,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "lev-judge",
   "vision-section", "open-vision-board", "vision-board-tab", "vision-board-load",
   "vision-board-load-images", "vision-board-retry-images",
-  "open-md-in-github", "reload-md", "ai-report-type", "ai-report-refresh",
+  "open-md-in-github", "reload-md", "ai-report-type", "ai-report-open-unread", "ai-report-refresh",
   "open-future-letter", "ai-work-approve", "ai-work-question",
   "experiment-add", "edit-experiment", "experiment-keep", "experiment-drop",
   "experiment-copy-conclusion",
@@ -225,7 +225,7 @@ const APP_JS_REGISTERED_ACTIONS = [
   "question-bridge", "question-bridge-submit", "question-delete",
   "entry-to-question", "open-questions",
   // --- v177: その他(日報/AIレポート/AI連携/朝夜detailsトグル) ---
-  "ai-report-type", "ai-report-refresh", "open-future-letter",
+  "ai-report-type", "ai-report-open-unread", "ai-report-refresh", "open-future-letter",
   "ai-work-approve", "ai-work-question",
   "ai-task-adopt", "ai-task-dismiss",
   "report-copy-ai", "report-share-ai",
