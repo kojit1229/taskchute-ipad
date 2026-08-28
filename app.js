@@ -568,6 +568,8 @@ registerActions({
   "delete-task": ({ id }) => deleteTask(id),
   "toggle-project-collapse": ({ id }) => toggleProjectCollapse(id),
   "toggle-task-collapse": ({ id }) => toggleTaskCollapse(id),
+  "wbs-search-input": () => {},  // inputイベント側で差分更新。click時は意図的no-op
+  "wbs-search-jump": ({ target }) => jumpToWbsSearchResult(target.dataset.kind, target.dataset.id),
   "suspend-project": ({ id }) => suspendProject(id),
   "resume-project": ({ id }) => resumeProject(id),
   "suspend-task": ({ id }) => suspendTask(id),
@@ -1387,6 +1389,15 @@ document.addEventListener("input", (event) => {
     _searchTimer = setTimeout(() => {
       const box = document.querySelector("#cross-search-results");
       if (box) box.innerHTML = crossSearchResultsHTML(query);
+    }, 150);
+  }
+  // v288: WBS検索も結果コンテナだけを差し替え、入力フォーカスと日本語IMEを維持する。
+  if (target.matches("#wbs-search-input")) {
+    clearTimeout(_searchTimer);
+    const query = target.value;
+    _searchTimer = setTimeout(() => {
+      const box = document.querySelector("#wbs-search-results");
+      if (box) box.innerHTML = wbsSearchResultsHTML(query);
     }, 150);
   }
   // === v9: カテゴリ編集 ===
@@ -4708,6 +4719,78 @@ function crossSearchResultsHTML(query) {
   `;
 }
 
+// v288: WBS内のProject/Task名だけを対象にする軽量検索。12WY/週次実行計画メタは参照しない。
+function wbsSearchHits(query) {
+  const q = query.trim().toLowerCase();
+  if (q.length < 2) return null;
+  const projects = state.projects.filter((project) => !project.deleted);
+  const projectById = new Map(projects.map((project) => [project.id, project]));
+  const hits = [];
+  projects.forEach((project) => {
+    if ((project.title || "").toLowerCase().indexOf(q) !== -1) {
+      hits.push({ type: "project", id: project.id, projectId: project.id, title: project.title || "", categoryLabel: project.category || "未分類" });
+    }
+  });
+  state.tasks.filter((task) => !task.deleted).forEach((task) => {
+    const project = projectById.get(task.projectId);
+    if (project && (task.title || "").toLowerCase().indexOf(q) !== -1) {
+      hits.push({ type: "task", id: task.id, projectId: project.id, title: task.title || "", categoryLabel: project.category || "未分類" });
+    }
+  });
+  return hits;
+}
+
+function wbsSearchResultsHTML(query) {
+  const hits = wbsSearchHits(query);
+  if (hits === null) return `<div class="muted" style="font-size:12px">2文字以上で検索します。</div>`;
+  if (!hits.length) return `<div class="muted" style="font-size:12px">「${escapeHTML(query.trim())}」に一致するものはありません。</div>`;
+  const shown = hits.slice(0, SEARCH_MAX_RESULTS);
+  return `
+    <div class="muted" style="font-size:11.5px; margin-bottom:6px">${hits.length}件${hits.length > shown.length ? `(上位${shown.length}件を表示)` : ""}</div>
+    ${shown.map((hit) => `
+      <button type="button" class="search-hit" style="min-height:44px" data-action="wbs-search-jump"
+        data-kind="${escapeHTML(hit.type)}" data-id="${escapeHTML(hit.id)}">
+        <span class="search-kind">${escapeHTML(hit.type === "project" ? "Project" : "Task")}</span>
+        <span class="search-date">${escapeHTML(hit.categoryLabel)}</span>
+        <span class="search-snippet">${escapeHTML(hit.title)}</span>
+      </button>`).join("")}
+  `;
+}
+
+function jumpToWbsSearchResult(kind, id) {
+  if (kind !== "project" && kind !== "task") return;
+  const task = kind === "task" ? state.tasks.find((item) => item.id === id && !item.deleted) : null;
+  const projectId = kind === "project" ? id : task?.projectId;
+  const project = state.projects.find((item) => item.id === projectId && !item.deleted);
+  if (!project || (kind === "task" && !task)) return;
+
+  const ancestorIds = new Set();
+  let parentId = task?.parentTaskId || "";
+  while (parentId && !ancestorIds.has(parentId)) {
+    const parent = state.tasks.find((item) => item.id === parentId && !item.deleted);
+    if (!parent) break;
+    ancestorIds.add(parent.id);
+    parentId = parent.parentTaskId || "";
+  }
+  state.projects = state.projects.map((item) => item.id === project.id ? { ...item, collapsed: false } : item);
+  if (ancestorIds.size) {
+    state.tasks = state.tasks.map((item) => ancestorIds.has(item.id) ? { ...item, collapsed: false } : item);
+  }
+  const projectCategory = project.category || "未分類";
+  if (state.settings.wbsCategoryFilter && state.settings.wbsCategoryFilter !== projectCategory) {
+    state.settings.wbsCategoryFilter = "";
+  }
+  const suspendedAncestor = [...ancestorIds].some((ancestorId) =>
+    isTaskSuspended(state.tasks.find((item) => item.id === ancestorId)));
+  if (!state.settings.showSuspended
+    && (isProjectSuspended(project) || isTaskSuspended(task) || suspendedAncestor)) {
+    state.settings.showSuspended = true;
+  }
+  saveAndRender();
+  setTimeout(() => document.querySelector(`[data-wbs-row-id="${CSS.escape(id)}"]`)
+    ?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
+}
+
 // v46: =========================================================
 //  未完了ブロックの繰り越し(先送り)。migratedTo を活用。
 //  昨日分のみ提示 = バックログ化しない(CONCEPT §5.1)。判断は人間、搬送だけ自動。
@@ -5152,6 +5235,13 @@ function renderWBS() {
     </select>`;
   const wbsTools = `
     <div class="row" style="gap:8px; flex-wrap:wrap; align-items:center">
+      <div style="flex:1 1 280px; min-width:0; max-width:520px">
+        <input id="wbs-search-input" class="input" type="search" autocomplete="off"
+          placeholder="Project/Task名で検索" data-action="wbs-search-input">
+        <div id="wbs-search-results" class="search-results" style="max-height:240px">
+          <div class="muted" style="font-size:12px">2文字以上で検索します。</div>
+        </div>
+      </div>
       ${categorySelect}
       ${state.settings.twelveWeekStartDate ? '<button class="btn ghost twy-commit-open" data-action="twy-open-commit">今週を確定</button>' : ""}
       <button class="btn ${editMode ? "primary" : "ghost"}" data-action="toggle-wbs-edit">${editMode ? "✏️ 編集モード中" : "✏️ 編集モード"}</button>
@@ -5939,7 +6029,7 @@ function renderProjectTree(project) {
   const doneCount = liveTasks.filter((t) => t.status === "completed").length;
   const projDue = project.dueDate ? ` ・ 期限 ${project.dueDate.slice(5).replace("-", "/")}` : "";
   return `
-    <div class="item${suspended ? " is-suspended" : ""}">
+    <div class="item${suspended ? " is-suspended" : ""}" data-wbs-row-id="${escapeHTML(project.id)}">
       <div class="row">
         <div class="title-line">
           <button class="wbs-caret" data-action="toggle-project-collapse" data-id="${project.id}" aria-label="${collapsed ? "展開" : "折りたたむ"}">${collapsed ? "▸" : "▾"}</button>
@@ -5990,7 +6080,7 @@ function renderTaskTree(task, allTasksOfProject, depth, hideProgress = false) {
   const indent = depth * 18;
   const collapsed = Boolean(task.collapsed);  // v33: 折りたたみ
   return `
-    <div style="margin-left:${indent}px">
+    <div style="margin-left:${indent}px" data-wbs-row-id="${escapeHTML(task.id)}">
       ${renderTaskRow(task, depth, children.length > 0, collapsed, hideProgress)}
       ${children.length && !collapsed
         ? children.map((c) => renderTaskTree(c, allTasksOfProject, depth + 1, hideProgress)).join("")
@@ -9022,6 +9112,7 @@ function addProject() {
     category: "",
     status: "active",
     priority: "中",  // v63: WIP上限アラート(提案2)
+    collapsed: true,  // v288: 新規Projectは既定で閉じ、WBS初期表示の探索ノイズを抑える
     twelveWeekStartDate: kind === "normal" ? state.settings.twelveWeekStartDate || "" : "",
     createdAt: nowDateTime(),
     updatedAt: nowDateTime(),

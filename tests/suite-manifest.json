@@ -15,7 +15,7 @@
       ],
       "assertionSignals": 34,
       "assertionHash": "f841e3459002f00f",
-      "sourceHash": "da0fe9debd616280",
+      "sourceHash": "0bb143a5cf83b8cd",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3000,6 +3000,31 @@
         "server": true,
         "fileWrite": true,
         "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v288.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution",
+        "ui-responsive"
+      ],
+      "assertionSignals": 29,
+      "assertionHash": "f3bb05a6a4c42355",
+      "sourceHash": "6761c40ebd35a88d",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
         "clock": true
       }
     },

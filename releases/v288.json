@@ -1,0 +1,64 @@
+{
+  "version": 288,
+  "date": "2026-08-28",
+  "title": "WBS内検索と新規Projectの既定折りたたみ",
+  "summary": "WBSタブでProject/Task名をインクリメンタル検索して対象行へ展開・スクロールできるようにし、新規Projectは作成直後から折りたたむ。",
+  "changedFiles": [
+    "CHANGES_v288.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v288.json",
+    "scripts/test-manifest.js",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/v288.test.js"
+  ],
+  "intent": [
+    "Project/Taskが多いWBSで、カテゴリ選択と目視スクロールに依存せず編集対象へ到達できるようにする。",
+    "検索入力中は結果コンテナだけを差分更新し、iOS Safariのフォーカスと日本語IMEを維持する。",
+    "新規Projectの初期ノイズを抑えつつ、既存Projectのcollapsed後方互換は変えない。"
+  ],
+  "changes": [
+    "2文字以上のProject/Task名部分一致を行うwbsSearchHitsと、50件上限・escapeHTML付き結果一覧を追加した。削除済みProject/Taskと削除Project配下Taskは除外する。",
+    "WBSヘッダーへ16px検索inputと44px以上の結果ボタンを追加し、150msデバウンス後もrenderWBS全体を呼ばず結果DOMだけ更新する。",
+    "検索結果ジャンプで対象ProjectとTask祖先をまとめて展開し、必要時だけカテゴリ絞り込み解除・中断表示ONを行い、saveAndRenderを1回だけ通して対象行へsmooth/centerスクロールする。",
+    "検索ジャンプによるcollapsed変更ではProject/TaskのupdatedAtを変えず、v135の折りたたみ契約を継承した。",
+    "Project/Task行へdata-wbs-row-idを追加し、検索結果からのスクロール先を明示した。",
+    "addProjectが作成する新規Projectへcollapsed:trueを追加した。normalizeStateと他のProject生成経路は変更していない。",
+    "wbs-search-inputとwbs-search-jumpをactionレジストリへ登録し、action-registry-coreの2つのゴールデンリストへ追随した。",
+    "v288 E2Eで検索基本・削除/XSS/50件上限・フォーカス維持、Project/Task depth 0/1/2、絞り込み・中断、保存とupdatedAt不変、12WY/週次実行計画不変、新規Project、390pxを固定した。",
+    "test manifestへv288をsync-storage・planning-execution・ui-responsiveとして明示登録し、code index・suite manifest・impact mapを再生成した。",
+    "Service WorkerのCACHE_NAMEをtaskchute-journal-pwa-v288へ更新した。"
+  ],
+  "uncertainties": [
+    "実データ359件規模での検索結果の体感速度と、iPhone/iPad Safari PWAでの日本語IME変換中の操作感は実機確認が必要。",
+    "検索結果はProject順の後にTask順で表示し、スコアリングやハイライトは第1弾の非目標として実装していない。"
+  ],
+  "reviewFocus": [
+    "wbsSearchHitsがWBSで到達可能な非削除Project/Taskだけを対象にし、12WYトラック・週次実行計画メタを検索母集団へ混ぜていないか。",
+    "入力イベントが150msデバウンス後に結果コンテナだけを更新し、renderWBS/renderを呼んでいないか。",
+    "jumpToWbsSearchResultがProject・全祖先Taskを展開し、カテゴリ不一致・中断で対象が隠れない状態を作ってsaveAndRenderを1回だけ呼ぶか。",
+    "検索ジャンプでProject/TaskのupdatedAtが変わらず、dataModifiedAtとcollapsedだけが永続化されるか。",
+    "全動的検索出力がescapeHTMLされ、input 16px・結果44px・390px横スクロールなしを満たすか。",
+    "addProject以外のProject生成経路とnormalizeStateの既存collapsed動作が無改変か。"
+  ],
+  "verification": [
+    "CHROME_PATHにGoogle Chromeを指定してnode tests/v288.test.jsを実行し、§8-1の検索・ジャンプ・保存・負例・退行・390px assertionを全件成功した。",
+    "CHROME_PATHにGoogle Chromeを指定してaction-registry-core・v55・v107・v109・v118・v126・v135・v194・v195・v196・v198・v260・v261・v288の関連14スイートを実行し、全件成功した。",
+    "node tests/action-registry-core.test.jsを実行し、app.js直接登録195件・全click action 232件の完全一致を含め全件成功した。",
+    "node --checkでapp.jsとtests/v288.test.jsの構文を確認し、git diff --checkにも成功した。",
+    "npm.cmd run code:index:writeとnpm.cmd run test:manifest:writeを実行し、code index 629関数・test manifest 168スイートへ更新した。",
+    "CHROME_PATHにGoogle Chromeを指定して非finalのnode scripts/release-gate.js releases/v288.jsonを実行し、自動選定7スイートを含めexit 0（PASS: release gate）で完了した。"
+  ],
+  "notes": [
+    "実行コード差分はapp.js 93追加/2削除、scripts/test-manifest.js 1追加、sw.js 2追加/1削除の計99変更行で200行上限内。tests・release記録・生成物は数値対象外。",
+    "既存のstyles.css .input/.search-hit/.search-resultsを流用し、新規CSSは追加していない。"
+  ],
+  "knownLimitations": [
+    "コミット・push・release-gate --final・CI全量・iOS Safari実機PWA確認は監督者側の最終作業。",
+    "作業開始前から変更済みのartifacts/v275 PNG 4件は本リリース対象外として保持した。"
+  ]
+}

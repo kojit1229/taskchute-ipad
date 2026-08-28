@@ -75,6 +75,8 @@ function check(name, cond, extra = "") {
 // 増減・リネームがあれば、それが意図した変更(action追加/削除/移行)かどうかを必ず確認すること。
 // v235: set-sleepは主観睡眠の入力経路廃止に伴う意図的削除。
 // v270: departures-open-tomorrowはDEPARTURES削除に伴う意図的削除。
+// v288: wbs-search-inputはinputイベント用のno-op登録(app.js:571)だが、data-actionの保存則を
+// 同じgolden listで検証するため、click専用前提のこの配列へ意図的に含める。
 const GOLDEN_CLICK_ACTIONS = [
   "nav", "open-iron-log", "instruments-open-iron-log", "today-replan", "save-tower-journal",
   "focus-toggle-gate", "focus-toggle-journal", "focus-mode",
@@ -86,6 +88,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "add-project", "delete-project", "add-task", "toggle-task", "toggle-criteria-request",
   "task-today", "delete-task",
   "toggle-project-collapse", "toggle-task-collapse",
+  "wbs-search-input", "wbs-search-jump",
   "suspend-project", "resume-project", "suspend-task", "resume-task",
   "toggle-show-suspended", "toggle-wbs-hide-done", "toggle-tasks-show-future",
   "toggle-wbs-edit", "wbs-collapse-all",
@@ -235,6 +238,7 @@ const APP_JS_REGISTERED_ACTIONS = [
   // --- v178: WBS/Project/Task CRUD(18) ---
   "add-project", "delete-project", "add-task", "toggle-task", "delete-task",
   "toggle-project-collapse", "toggle-task-collapse",
+  "wbs-search-input", "wbs-search-jump",
   "suspend-project", "resume-project", "suspend-task", "resume-task",
   "add-task-to-project", "add-subtask",
   "toggle-plan-owner", "move-plan-step", "add-plan-step-below",  // v195: 実行計画UI
