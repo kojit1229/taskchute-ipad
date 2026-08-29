@@ -23,7 +23,7 @@
 // このコンフリクトは依頼書からは読み取れず(「抜け道」という表現からは意図的な機能とは
 // 認識されていないように見える)、勝手に判断して機能を壊すのは危険と判断し、(a)=makeTask()の
 // 修正のみを実装して(b)(c)は保留した。詳細は完了報告を参照。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dispatchRegisteredAction } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -112,7 +112,8 @@ function check(name, cond, extra = "") {
     await passGithubGate(page);
 
     // ============================================================
-    // 修正1(a): autoIngestFeedback → 候補state化。残存action本体による採用・却下も維持する
+    // 修正1(a): autoIngestFeedback → 候補state化(採用・却下action本体はR3(v290)で
+    // 削除済み。K裁定2026-08-27=ATIS6機能の完全廃止の最終段階)
     // ============================================================
     console.log("[1] AIフィードバックの「明日への提案」は候補stateへ入り、直接state.tasksには入らない");
     feedbackFixture = { [YEST]: "# AIフィードバック本文_v133\n\n## 明日への提案\n\n- [ ] AI候補タスク_v133: 理由の説明\n" };
@@ -125,29 +126,14 @@ function check(name, cond, extra = "") {
     check("候補の採用・却下UIは描画しない",
       await page.locator('[data-action="ai-task-adopt"], [data-action="ai-task-dismiss"]').count() === 0);
 
-    console.log("[2] 残存採用action本体でタスクが作成され(dueDate=今日)、候補が消える");
-    await dispatchRegisteredAction(page, "ai-task-adopt", { index: "0" });
-    await page.waitForTimeout(300);
-    const s2 = await readState();
-    const adopted = (s2.tasks || []).find((t) => t.title === "AI候補タスク_v133");
-    check("採用したタスクがstate.tasksへ作成される", !!adopted, JSON.stringify(adopted));
-    check("採用したタスクのdueDateは今日", !!adopted && adopted.dueDate === TODAY, JSON.stringify(adopted));
-    check("採用後は候補配列から消える", !(s2.journalMeta?.[YEST]?.aiTaskCandidates || []).includes("AI候補タスク_v133"), JSON.stringify(s2.journalMeta?.[YEST]));
-    check("採用UIは画面へ復活しない", await page.locator('[data-action="ai-task-adopt"]').count() === 0);
-
-    console.log("[3] 残存却下action本体では候補が消えるだけでタスクは作られない");
     feedbackFixture = {};  // 以降のseed()のreloadでtest[1]のfixtureが再ingestされないようクリア
-    await seed({
-      tasks: [], projects: [], view: "today",
-      journalMeta: { [YEST]: { aiMitCandidates: [], aiImported: false, ideal: "", aiTaskCandidates: ["却下候補_v133"] } }
-    });
-    check("却下前も候補UIは表示しない", await page.locator('[data-action="ai-task-dismiss"]').count() === 0);
-    await dispatchRegisteredAction(page, "ai-task-dismiss", { index: "0" });
-    await page.waitForTimeout(300);
-    const s3 = await readState();
-    check("却下してもタスクは作られない", !(s3.tasks || []).some((t) => t.title === "却下候補_v133"), JSON.stringify(s3.tasks));
-    check("候補配列からも消える", !(s3.journalMeta?.[YEST]?.aiTaskCandidates || []).includes("却下候補_v133"), JSON.stringify(s3.journalMeta?.[YEST]));
-    check("却下UIは画面へ復活しない", await page.locator('[data-action="ai-task-dismiss"]').count() === 0);
+
+    // Test-Reduction: 旧[2][3]区間(dispatchRegisteredAction経由でai-task-adopt/ai-task-dismissを
+    // 発火し、adoptAiTaskCandidate/dismissAiTaskCandidateの実装〈タスク生成・候補配列からの除去〉
+    // を直接検証していた)は、R3(本コミット)で対象関数そのものを削除
+    // (K裁定2026-08-27=ATIS6機能の完全廃止の最終段階)したため削除。移行先の同等検証は無い
+    // (機能自体の廃止のため)。[1]の候補UI非描画・候補stateへの取り込み検証(否定アサーション+
+    // journalMeta検証)は無改修で残り、廃止の事実は引き続き検証される。
 
     // ============================================================
     // 修正2(a): makeTask() — Wish配下は明示的なdueDate引数も無視して常に空にする

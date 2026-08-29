@@ -273,7 +273,9 @@ class FakeToast {
 
     const completionRoutes = {
       bulkApproveAsPlanned: false, saveActualEntryFromModal: false,
-      saveBlockFromModal: false, approveAiWorkResult: false
+      saveBlockFromModal: false
+      // Test-Reduction: approveAiWorkResultはR3(v290)で関数本体ごと削除
+      // (K裁定2026-08-27=ATIS6機能の完全廃止の最終段階)したため、この経路網羅チェックからも撤去。
     };
     for (const [name, interactive] of Object.entries(completionRoutes)) {
       const source = sourceOf(name);

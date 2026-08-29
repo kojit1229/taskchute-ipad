@@ -36,11 +36,11 @@
 //       registerModalHandler/dispatchModalSave/dispatchModalDelete、重複登録ガード、
 //       未登録時のfalseフォールバック)。
 //   [2] app.jsのclick dispatcher("event:click"、data-action分岐)から`action === "..."`を
-//       静的抽出する(削除済み機能のactionを除く234件のゴールデンリストを維持したまま、
+//       静的抽出する(削除済み機能のactionを除く228件(v290でATIS孤児action4件=ai-work-approve/ai-work-question/ai-task-adopt/ai-task-dismissを削除)のゴールデンリストを維持したまま、
 //       段階5-2/5-3で移行済みの分だけif連鎖から消えている前提)。
 //   [3] 「if連鎖側の残存分岐リスト」(§2で静的抽出)と「レジストリ側の登録済みリスト」
 //       (4featureのconfigureXxxを空depsで呼ぶ動的実測 + app.js自身のregisterActions呼び出しの
-//       静的抽出)の**和集合が234件のゴールデンリストと完全一致・重複ゼロ**であることを検証する
+//       静的抽出)の**和集合が228件(v290でATIS孤児action4件=ai-work-approve/ai-work-question/ai-task-adopt/ai-task-dismissを削除)のゴールデンリストと完全一致・重複ゼロ**であることを検証する
 //       (総数と名前一覧の保存則。段階5以降でさらに分岐を移行する際もこの形式を維持する)。
 const fs = require("fs");
 const path = require("path");
@@ -120,7 +120,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "vision-section", "open-vision-board", "vision-board-tab", "vision-board-load",
   "vision-board-load-images", "vision-board-retry-images",
   "open-md-in-github", "reload-md", "ai-report-type", "ai-report-open-unread", "ai-report-refresh",
-  "open-future-letter", "ai-work-approve", "ai-work-question",
+  "open-future-letter",
   "experiment-add", "edit-experiment", "experiment-keep", "experiment-drop",
   "experiment-copy-conclusion",
   "push-report", "add-task-to-project", "add-subtask",
@@ -147,7 +147,6 @@ const GOLDEN_CLICK_ACTIONS = [
   "question-bridge", "question-bridge-submit", "question-delete",
   "entry-to-question", "open-questions",
   "report-copy-ai", "report-share-ai",
-  "ai-task-adopt", "ai-task-dismiss",
   "ai-schedule", "ai-morning-plan",
   "zerosec-theme-add", "zerosec-theme-skip",
   "draft-confirm", "draft-discard", "draft-remove", "draft-undo",
@@ -229,8 +228,6 @@ const APP_JS_REGISTERED_ACTIONS = [
   "entry-to-question", "open-questions",
   // --- v177: その他(日報/AIレポート/AI連携/朝夜detailsトグル) ---
   "ai-report-type", "ai-report-open-unread", "ai-report-refresh", "open-future-letter",
-  "ai-work-approve", "ai-work-question",
-  "ai-task-adopt", "ai-task-dismiss",
   "report-copy-ai", "report-share-ai",
   "generate-report", "download-report", "download-data",
   "carry-over", "migration-ritual-choice", "ideal-retry",

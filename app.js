@@ -508,10 +508,6 @@ registerActions({
     persistLocalNoSchedule();
     setView("ai-reports");
   },
-  "ai-work-approve": ({ target }) => approveAiWorkResult(target.dataset.resultId),
-  "ai-work-question": ({ target }) => raiseAiWorkQuestion(target.dataset.resultId),
-  "ai-task-adopt": ({ target }) => adoptAiTaskCandidate(Number(target.dataset.index)),
-  "ai-task-dismiss": ({ target }) => dismissAiTaskCandidate(Number(target.dataset.index)),
   "report-copy-ai": () => copyReportToClipboard(),
   "report-share-ai": () => shareReport(),
   "generate-report": () => {
@@ -1077,8 +1073,6 @@ const cachedFutureLetterMd = {};  // { 'YYYY-MM': '...手紙本文...' | undefin
 let cachedAiInsightsJson = { fetchedAt: 0, data: undefined };
 const AI_INSIGHTS_STALE_MS = 26 * 60 * 60 * 1000;
 const AI_INSIGHTS_GENERATED_AT_RE = /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/;
-// v67: AI作業結果_<today>.json のパース済み配列(非永続、当日分のみ)。二重登録防止のIDは state.aiWorkProcessedIds 側で永続化する。
-let cachedAiWorkResults = null;
 // v92/v283: AIレポートビューア(AIフィードバック・コンテンツ総括・自己分析・週次レビュー等を横断閲覧)。
 // taskchute/直下の一覧を取得し、種類ごとにファイル名prefixでローカルにフィルタする
 // (セッションキャッシュ、手動更新ボタンでのみ再取得。自動ポーリングはしない)。
@@ -1276,8 +1270,9 @@ document.addEventListener("click", (event) => {
   // registerActionsへ移行した。
   if (action === "open-md-in-github") openMdInGithub(target.dataset.path);
   if (action === "reload-md") reloadStaticMarkdown();
-  // v177: ai-report-type/ai-report-refresh/open-future-letter/ai-work-approve/ai-work-questionは
-  // app.js内のregisterActionsへ移行した。
+  // v177: ai-report-type/ai-report-refresh/open-future-letterはapp.js内のregisterActionsへ移行した。
+  // ai-work-approve/ai-work-questionも同じくv177で移行したが、v290(R3)でATIS6機能の完全廃止に
+  // 伴い関数本体ごと削除した(K裁定2026-08-27)。
   // v179: experiment-add〜experiment-copy-conclusion(実験ログ5)はapp.js内の
   // registerActionsへ移行した。
   // v181: timeline-new-block/complete-block-with-actual/tl-zoom/tl-energy-modeは
@@ -1290,9 +1285,9 @@ document.addEventListener("click", (event) => {
   // v174: toggle-settings-sync/toggle-sidebarはapp.js内のregisterActionsへ移行した。
   // v173: Wish CRUDはsrc/features/wish.jsのregisterActionsへ移行した。
   // v176: zt-*/zero-tab/zerosec-theme-*(0秒思考)はapp.js内のregisterActionsへ移行した。
-  // v177: question-*/open-questions/entry-to-question(問い)・report-copy-ai/report-share-ai/
-  // ai-task-adopt/ai-task-dismiss(AI連携)はapp.js内のregisterActionsへ移行した
-  // (段階5-6b)。
+  // v177: question-*/open-questions/entry-to-question(問い)・report-copy-ai/report-share-ai(AI連携)は
+  // app.js内のregisterActionsへ移行した(段階5-6b)。ai-task-adopt/ai-task-dismissも同じくv177で
+  // 移行したが、v290(R3)でATIS6機能の完全廃止に伴い関数本体ごと削除した(K裁定2026-08-27)。
   // v143: journal-import-ai(手動貼り付け取込ボタン)はv141でジャーナルのAIフィードバック列
   // 自体を撤去した際に到達不能になっていたため、ハンドラごと削除した(openAiImportModal一式・
   // ai-import-submitも同様。CHANGES_v143.md参照)。
@@ -3601,24 +3596,6 @@ async function shareReport() {
   const report = state.reports[state.selectedDate];
   if (!report) return showToast("先に日報を生成してください");
   try { await navigator.share({ text: report }); } catch { /* キャンセル等は無視 */ }
-}
-
-function adoptAiTaskCandidate(index) {
-  const prev = addDays(todayISO(), -1);
-  const meta = state.journalMeta[prev];
-  const title = meta?.aiTaskCandidates?.[index];
-  if (!title) return;
-  const task = makeTask({ title, dueDate: todayISO() });
-  state.tasks.push(task);
-  meta.aiTaskCandidates.splice(index, 1);  // 採用したら候補から外す
-  saveAndRender("✚ タスクに追加しました");
-}
-function dismissAiTaskCandidate(index) {
-  const prev = addDays(todayISO(), -1);
-  const meta = state.journalMeta[prev];
-  if (!meta?.aiTaskCandidates?.[index]) return;
-  meta.aiTaskCandidates.splice(index, 1);  // 採用せず候補から外す
-  saveAndRender("");
 }
 
 // v60: =========================================================
@@ -11908,9 +11885,6 @@ async function hydrateStaticMarkdown() {
   // v67: 鮮度シグナルはユーザー操作を経ないため、autoSyncのpush対象(saveState)にはせず
   //      ローカル保存のみで足す(端末をまたいだ鮮度比較は現状不要。過剰なpushを避ける)。
   if (freshnessDirty) persistLocalNoSchedule();
-  // v67: AI作業結果_<今日>.json(柱2・実績還流)。当日分のみ、network-first(sw.jsのjson扱いを流用)。
-  const gotAiWork = await hydrateAiWorkResults();
-  if (gotAiWork) changed = true;
   // v37: state.view というプロパティは存在しない(正しくは currentView)。
   //      このタイポのせいで、ビジョン画面を開いたまま読み込みが終わっても再描画されなかった。
   // v86 should-fix: "zero"(0秒思考タブ)を追加。autoIngestFeedbackがテーマを自動追加しても、
@@ -11947,103 +11921,6 @@ async function reloadStaticMarkdown() {
   await hydrateStaticMarkdown();
   render();
   showToast("最新を読み込みました");
-}
-
-// v67: =========================================================
-//  AI作業ワーカー連携(柱2・実績還流) — AI作業結果_YYYY-MM-DD.json の取り込み表示
-//  スキーマ(権威): [{taskId,title,status:"completed"|"blocked"|"queued",summary,outputPath,minutes}]
-//  当日分のみ同一オリジンfetch(AIプラン_*.jsonと同じ流儀)。アプリ側は自動登録せず、
-//  completedはワンタップ承認(実績Block化)、blockedは既存state.questionsへ橋渡し、
-//  queuedは表示のみ(K指示「最終判断はK」)。
-// =========================================================
-
-// 当日の AI作業結果_<today>.json を取得・検証し cachedAiWorkResults を更新する。
-// resultId は taskId(無ければ配列index)+日付で合成し、二重登録防止の照合キーにする。
-async function hydrateAiWorkResults() {
-  const date = todayISO();
-  const raw = await fetchGitHubRawText(`AI作業結果_${date}.json`);
-  if (!raw) { cachedAiWorkResults = null; return false; }
-  let data;
-  try { data = JSON.parse(raw); } catch { cachedAiWorkResults = null; return false; }
-  if (!Array.isArray(data)) { cachedAiWorkResults = null; return false; }
-  const VALID_STATUS = ["completed", "blocked", "queued"];
-  const items = [];
-  data.forEach((r, idx) => {
-    if (!r || typeof r !== "object") return;
-    if (!VALID_STATUS.includes(r.status)) return;
-    const taskId = typeof r.taskId === "string" ? r.taskId : "";
-    items.push({
-      resultId: `${date}__${taskId || `idx${idx}`}`,
-      taskId,
-      title: typeof r.title === "string" ? r.title : "",
-      status: r.status,
-      summary: typeof r.summary === "string" ? r.summary : "",
-      outputPath: typeof r.outputPath === "string" ? r.outputPath : "",
-      minutes: Number.isFinite(r.minutes) ? r.minutes : 0
-    });
-  });
-  const changed = JSON.stringify(items) !== JSON.stringify(cachedAiWorkResults);
-  cachedAiWorkResults = items;
-  return changed;
-}
-
-function markAiWorkResultProcessed(resultId) {
-  if (!Array.isArray(state.aiWorkProcessedIds)) state.aiWorkProcessedIds = [];
-  if (!state.aiWorkProcessedIds.includes(resultId)) state.aiWorkProcessedIds.push(resultId);
-}
-
-// completed: ワンタップで実績Blockとして承認登録する(自動登録はしない — 最終判断はK)。
-// カテゴリ"AI作業"、所要minutes分。空き時間があればそこへ、無ければ現在時刻付近の適当な枠でよい
-// (設計注記どおり厳密な衝突検知はしない)。紐づくtaskIdがあればTaskも完了化する。
-function approveAiWorkResult(resultId) {
-  const r = (cachedAiWorkResults || []).find((x) => x.resultId === resultId);
-  if (!r) return;
-  markAiWorkResultProcessed(resultId);
-  const date = todayISO();
-  const minutes = clamp(Math.round(r.minutes || 30), 1, 24 * 60);
-  const gaps = computeFreeGaps(date).filter(([s, e]) => e - s >= minutes);
-  let start;
-  if (gaps.length) {
-    start = gaps[0][0];
-  } else {
-    const now = new Date();
-    start = clamp(now.getHours() * 60 + now.getMinutes(), 0, 24 * 60 - minutes);
-  }
-  const block = makeBlock({
-    date,
-    title: r.title || "AI作業",
-    taskId: r.taskId || "",
-    category: "AI作業",
-    plannedStartAt: `${date}T${minToHHMM(start)}`,
-    plannedEndAt: `${date}T${minToHHMM(start + minutes)}`,
-    actualStartAt: `${date}T${minToHHMM(start)}`,
-    actualEndAt: `${date}T${minToHHMM(start + minutes)}`,
-    estimateMin: minutes,
-    completed: true,
-    comment: r.summary || ""
-  });
-  state.blocks.push(block);
-  if (r.taskId) {
-    // v107: ここも「statusをcompletedにする経路」の一つ。saveTaskFromModalと同じくv95連動漏れがあったため統一
-    // v198(第3弾3e): maybeQueueNextAiStepは意図的に配線しない。旧・第1弾AI作業ワーカーの承認経路
-    // であり、phase3-design.md §1が「絶対に呼ばない」と名指ししている(実装設計書B節参照)。
-    state.tasks = state.tasks.map((t) => (t.id === r.taskId && !t.deleted)
-      ? { ...t, status: "completed", progressNum: fillProgressOnComplete(t), updatedAt: nowDateTime() }
-      : t);
-  }
-  saveState();
-  trackOnBlockCompletionChanged(block, true, { interactive: false });
-  saveAndRender("AIの作業実績を登録しました");
-}
-
-// blocked: 既存の問い(state.questions)機構へ橋渡しする(v39のmakeQuestionをそのまま使う)
-function raiseAiWorkQuestion(resultId) {
-  const r = (cachedAiWorkResults || []).find((x) => x.resultId === resultId);
-  if (!r) return;
-  markAiWorkResultProcessed(resultId);
-  const q = makeQuestion({ text: r.summary || r.title || "AIからの質問", origin: "ai" });
-  state.questions.push(q);
-  saveAndRender("AIからの質問を「問い」に積みました");
 }
 
 // v72レビュー対応: Vision/Affirmationの実体は個人データリポジトリの taskchute/content/ 配下に

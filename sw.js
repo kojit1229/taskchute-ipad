@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v289";
+const CACHE_NAME = "taskchute-journal-pwa-v290";
+// v290: 孤児action本体2クラスタ(AI作業結果承認/質問、AIタスク候補チップの採用/却下)を削除した(APP_SHELL変更なし)。
 // v288: WBS内検索と新規Project既定closed化を追加した(APP_SHELL変更なし)。
 // v287: AIレポート未読一覧とタスクシュート未着手バッジを追加した(APP_SHELL変更なし)。
 // v286: AIレポートへFABLE FUND日誌と朝の投資ブリーフの2kindを追加した(APP_SHELL変更なし)。

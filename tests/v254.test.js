@@ -42,11 +42,11 @@ const instrumentedAppSource = appSource
     `function trackOnBlockCompletionChanged(block, isNowCompleted, { interactive = false } = {}) {
   globalThis.__v254CompletionCalls?.push({ blockId: block?.id || "", isNowCompleted, interactive });
   globalThis.__v254HookOrder?.push("completion");`
-  )
-  .replace(
-    /  cachedAiWorkResults = items;\r?\n  return changed;/,
-    "  cachedAiWorkResults = items;\n  globalThis.__v254AiWorkResults = items.map((item) => ({ ...item }));\n  return changed;"
   );
+// Test-Reduction: hydrateAiWorkResults内のcachedAiWorkResults代入行を計測フック付きへ差し替える
+// .replace()(旧8つ目の完了経路=approveAiWorkResultの検証専用)は、R3(v290)で
+// hydrateAiWorkResults/approveAiWorkResult/raiseAiWorkQuestion本体を削除したため削除
+// (K裁定2026-08-27=ATIS6機能の完全廃止の最終段階)。
 const instrumentedTrackUiSource = trackUiSource.replace(
   "function maybeShowTrackProgressToast(block) {",
   `function maybeShowTrackProgressToast(block) {
@@ -90,8 +90,9 @@ console.log("[0] 共通フック契約と全経路の機械検査");
     finishBlockFromBreak: true,
     bulkApproveAsPlanned: false,
     saveActualEntryFromModal: false,
-    saveBlockFromModal: false,
-    approveAiWorkResult: false
+    saveBlockFromModal: false
+    // Test-Reduction: approveAiWorkResult(旧8つ目の完了経路)はR3(v290)で関数本体ごと削除
+    // (K裁定2026-08-27=ATIS6機能の完全廃止の最終段階)したため、この経路網羅チェックからも撤去。
   };
   for (const [name, interactive] of Object.entries(completionRoutes)) {
     const source = functionSource(name);
@@ -119,12 +120,6 @@ console.log("[0] 共通フック契約と全経路の機械検査");
   await page.route((url) => url.pathname.endsWith("/src/features/track-ui.js"), (route) => route.fulfill({
     status: 200, contentType: "text/javascript", body: instrumentedTrackUiSource
   }));
-
-  let aiWorkFixture = null;
-  await page.route((url) => /\/AI作業結果_.*\.json$/.test(decodeURIComponent(url.pathname)), (route) => {
-    if (aiWorkFixture === null) return route.fulfill({ status: 404, body: "not found (v254 fixture)" });
-    return route.fulfill({ status: 200, contentType: "application/json", body: aiWorkFixture });
-  });
 
   const now = new Date();
   now.setHours(10, 0, 0, 0);
@@ -179,7 +174,6 @@ console.log("[0] 共通フック契約と全経路の機械検査");
     blocks = [], tasks = [task()], projects = [project()], weeklyCommitments = [], recurrences = [],
     settings = {}, pomodoro = null, view = "timeline"
   } = {}) {
-    aiWorkFixture = null;
     await page.goto(`http://localhost:${PORT}/styles.css`);
     await page.evaluate(({ KEY, blocks, tasks, projects, weeklyCommitments, recurrences, settings, pomodoro, view, TODAY, CYCLE_START, OLD }) => {
       const state = JSON.parse(localStorage.getItem(KEY));
@@ -281,7 +275,7 @@ console.log("[0] 共通フック契約と全経路の機械検査");
     await page.goto(`http://localhost:${PORT}/`);
     await passGithubGate(page);
 
-    console.log("[1] 完了8経路を個別に刻印");
+    console.log("[1] 完了7経路を個別に刻印");
     await runCommittedCompletion("toggleBlock", "toggle", true, 4,
       () => clickAction("toggle-block", { id: "toggle" }));
     await clickAction("toggle-block", { id: "toggle" });
@@ -313,36 +307,16 @@ console.log("[0] 共通フック契約と全経路の機械検査");
       await page.locator('[data-action="modal-save"]').click();
     });
 
-    await seed({ blocks: [], weeklyCommitments: [], view: "today" });
-    aiWorkFixture = JSON.stringify([
-      { taskId: "t1", title: "AI完了経路", status: "completed", summary: "v254", minutes: 30 },
-      { taskId: "t2", title: "AI質問経路", status: "blocked", summary: "v254 blocked question", minutes: 0 }
-    ]);
-    const aiWorkResponse = page.waitForResponse((response) => /\/AI作業結果_.*\.json$/.test(decodeURIComponent(new URL(response.url()).pathname)));
-    await page.reload();
-    const loadedAiWorkResponse = await aiWorkResponse;
-    await loadedAiWorkResponse.finished();
-    await page.waitForFunction(() => globalThis.__v254AiWorkResults?.length === 2);
     check("廃止済みAI作業ボタンを本番DOMへ戻さない",
       await page.locator('[data-action="ai-work-approve"], [data-action="ai-work-question"]').count() === 0);
-    await resetHookSpies();
-    await clickAction("ai-work-approve", { resultId: `${TODAY}__t1` });
-    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).blocks.some((entry) => entry.title === "AI完了経路"), KEY);
-    const aiState = await stored();
-    const aiBlock = aiState.blocks.find((entry) => entry.title === "AI完了経路");
-    const aiItem = aiState.weeklyCommitments.find((entry) => entry.blockId === aiBlock?.id);
-    check("approveAiWorkResultで自動確定後に刻印", Boolean(aiItem?.completedAt), JSON.stringify(aiItem));
-    await assertCompletionRoute("approveAiWorkResult", aiBlock.id, false, 4);
 
-    await clickAction("ai-work-question", { resultId: `${TODAY}__t2` });
-    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).questions
-      .some((entry) => entry.text === "v254 blocked question"), KEY);
-    const questionState = await stored();
-    const aiQuestion = questionState.questions.find((entry) => entry.text === "v254 blocked question");
-    check("raiseAiWorkQuestionでblocked summaryを問いへ追加", Boolean(aiQuestion), JSON.stringify(questionState.questions));
-    check("raiseAiWorkQuestionのoriginはai", aiQuestion?.origin === "ai", JSON.stringify(aiQuestion));
-    check("raiseAiWorkQuestionもresultIdを処理済みに記録",
-      questionState.aiWorkProcessedIds.includes(`${TODAY}__t2`), JSON.stringify(questionState.aiWorkProcessedIds));
+    // Test-Reduction: AI作業結果_<today>.json のhydrate→ai-work-approve/ai-work-question発火
+    // (旧8つ目の完了経路=approveAiWorkResultの週次コミット刻印検証+raiseAiWorkQuestionの
+    // 問い生成検証)は、R3(v290)でhydrateAiWorkResults/approveAiWorkResult/raiseAiWorkQuestion
+    // 本体を削除したため削除(K裁定2026-08-27=ATIS6機能の完全廃止の最終段階)。
+    // H1の趣旨は「まだ存在する機能の検証を落とすな」であり、機能自体を削除する本コミットには
+    // 適用されない。DOM不在の否定アサーション(count()===0系)は他スイート(v67等)でも無改修のまま
+    // 残り、廃止の事実は引き続き検証される。
 
     console.log("[2] 開始3経路を個別に自動確定");
     async function checkAutoCommit(label, blockId, action, { completions = 0 } = {}) {

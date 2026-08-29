@@ -7,7 +7,9 @@
 // [1] 6経路それぞれの発火テスト
 // [2] 発火条件6つそれぞれの否定ケース
 // [3] リモートマージ経由のcompleted化では発火しないこと(構造的保証の回帰)
-// [4] §Bの既知の対象外2件(approveAiWorkResult/realizeWish)は発火しないこと+addWish()のparentTaskId空
+// [4] §Bの既知の対象外1件(realizeWish)は発火しないこと+addWish()のparentTaskId空
+//     (approveAiWorkResultは旧・第1弾AI作業ワーカーの承認経路。R3(v290)で関数本体ごと削除済み
+//     =対象外リストからも撤去。Test-Reduction: K裁定2026-08-27=ATIS6機能の完全廃止の最終段階)
 // [5] 「あとで」はaiStatusをnoneのままにする
 // [6] 「AIに渡す」→送信スタブが即座に補償する(aiStatus=error/aiStepRequestId=null/dismissedIds追加)
 // [7] レビューR2→堅牢性レビュー修正4: シート表示中の同期pullで前提が崩れたら送信を取りやめる
@@ -44,12 +46,11 @@ function check(name, cond, extra = "") {
     // toggleWishSubtaskの3つ。残る3経路(WBSインライン編集→updateTaskField/タスク編集モーダル保存
     // →fields.status/WBS進捗編集→deriveStatusFromProgress)はいずれも変数を経由するためこの
     // 正規表現では検出できない(汎用setter・パラメータ渡しであり、新しい「隠れ完了経路」を
-    // 作る類の変更ではないため対象外)。加えて意図的な対象外2件を許可リストに含める
+    // 作る類の変更ではないため対象外)。加えて意図的な対象外1件を許可リストに含める
     // (実装設計書H節の監督者裁定・§B「呼んではいけない場所」)。
     const ALLOWED = {
       toggleTask: "app.js(完了6経路#1)",
       toggleTaskCompleteFromBlock: "app.js(完了6経路#2)",
-      approveAiWorkResult: "app.js(意図的な対象外: 旧・第1弾AI作業ワーカーの承認経路)",
       toggleWishSubtask: "wish.js(完了6経路#6)",
       realizeWish: "wish.js(意図的な対象外: Wishは常にparentTaskId空で条件2が構造的に不成立)"
     };
@@ -385,7 +386,7 @@ function check(name, cond, extra = "") {
     }
 
     // ============================================================
-    // [4] §Bの既知の対象外2件は発火しない + addWish()のparentTaskId空
+    // [4] §Bの既知の対象外1件は発火しない + addWish()のparentTaskId空
     // ============================================================
     console.log("[4-1] addWish()が作るタスクのparentTaskIdは空(realizeWishが対象外になる前提)");
     {
@@ -411,9 +412,11 @@ function check(name, cond, extra = "") {
       check("Wish本体はcompletedになる(realizeWish自体は正常動作)", s.find((t) => t.id === wish.id)?.status === "completed");
     }
 
-    console.log("[4-3] approveAiWorkResult()は意図的に配線しない(コード上の確認は[0]の静的検査で固定済み)");
-    check("approveAiWorkResultは静的検査[0]で対象外リストに含まれている(動的E2Eは同フローがcachedAiWorkResults前提で"
-      + "本テストのfixtureと独立のため、配線されていないことの一次確認は[0]に委ねる)", true);
+    // Test-Reduction: [4-3](approveAiWorkResult()は意図的に配線しない、を確認するダミーcheck)は、
+    // R3(v290)で対象関数approveAiWorkResultそのものを削除したため削除
+    // (K裁定2026-08-27=ATIS6機能の完全廃止の最終段階)。[0]のALLOWED許可リストからも同時に
+    // 撤去済みで、静的検査[0]は現物のapp.js/src/features配下に同関数の"completed"リテラルが
+    // 存在しないことを引き続き機械検証する。
 
     // ============================================================
     // [5] 「あとで」はaiStatusをnoneのままにする

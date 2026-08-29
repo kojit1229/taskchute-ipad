@@ -73,8 +73,11 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
   check("birthDate未設定ならtopbandは寿命2セルを描画しない", countMatches(noBirthHTML, /class="life-sig(?: |")/g) === 2
     && !noBirthHTML.includes("45歳まで") && !noBirthHTML.includes("80歳まで"));
 
+  // Test-Reduction: cachedAiWorkResultsへ直接注入するwindow.__v266SetAiWorkResults計測フック
+  // (旧AI作業結果_<today>.json hydrationの残留防止リセット専用。本ファイル自体は同fixtureを
+  // 一度も設定しないため元々no-op実質だった)は、R3(v290)でcachedAiWorkResults/
+  // hydrateAiWorkResults本体を削除したため撤去(K裁定2026-08-27=ATIS6機能の完全廃止の最終段階)。
   const instrumentedApp = appSource
-    .replace("let cachedAiWorkResults = null;", "let cachedAiWorkResults = null; window.__v266SetAiWorkResults = (items) => { cachedAiWorkResults = items; };")
     .replace("function saveState() {", "function saveState() { window.__v266SaveCalls = (window.__v266SaveCalls || 0) + 1;")
     .replace("function render() {", "function render() { window.__v266RenderCalls = (window.__v266RenderCalls || 0) + 1;")
     .replace("function generateReport(dateArg, { quiet = false } = {}) {",
@@ -158,7 +161,6 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
     }, { key: STATE_KEY, fixture, today: TODAY });
     await page.reload();
     await page.waitForSelector(".life-band");
-    await page.evaluate(() => window.__v266SetAiWorkResults?.([]));
     await resetCounters();
   }
 
