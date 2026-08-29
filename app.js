@@ -79,7 +79,7 @@ import {
 // v175: app.js分割・段階4-6(タイムライン抽出・段階B: 描画系)。prep-stage4-timeline.md §7
 //   「段階B」①renderTimelineCard②renderEnergyGraph③renderTimeline/renderTimelineView/
 //   renderTimelineRail/setTimelineMode。src/features/timeline.jsはstateをimportするが
-//   app.js自身はimportしない(循環import回避)。draftBarHTML/zeroSecThemeBarHTML/
+//   app.js自身はimportしない(循環import回避)。draftBarHTML/
 //   draftRejectReasonPickerHTML/renderDraftLayer(下書きスケジュール機能、別関心事のため
 //   app.js残留)・render・blocksForDate・formatDisplayDate等はconfigureTimeline(deps)で注入する
 //   (src/features/timeline.js冒頭コメントの契約参照)。_scheduleDraftはモジュールプライベート
@@ -319,12 +319,11 @@ configureTimeline({
   minutesOf, todayISO, pad2, clamp, formatDisplayDate, computeProjectedEnd, resolveEstimateMin,
   renderHeader, renderDateBar,
   defaultBatterySettings, batteryCurvePoints, conditionBudget,
-  draftBarHTML, zeroSecThemeBarHTML, draftRejectReasonPickerHTML, renderDraftLayer,
+  draftBarHTML, draftRejectReasonPickerHTML, renderDraftLayer,
   scheduleDraftActive, render, blocksForDate, postponeBlockToNextDay,
   makeBlock, getOtherTask, openBlockEditor, saveState, isStaleBlock,
   timelineRailEl: timelineRail, appRootEl: app
 });
-// v222: 設定へ残したAI再プランactionもapp.js側のレジストリで管理する。
 // v174: app.js分割・段階5-3(残ドメインのaction相乗り移行)。settings(12)+sync(8)+core/nav(1)の
 // 計20分岐を、click dispatcherのif連鎖からregisterActions経由のレジストリへ移行した
 // (prep-stage5-dispatcher.md §4の相乗り方式。この20件はまだsrc/features/へ抽出されていない
@@ -445,7 +444,7 @@ registerActions({
 // 機械的な移動のみで無改変。問い(10)+その他(19)の計29分岐は、実行コード差分を200行以下に
 // 収めるため次リリース(段階5-6b)へ分割し、今回はif連鎖に残したまま。
 registerActions({
-  // --- 0秒思考(22): zt-*/zero-tab/zerosec-theme-* ---
+  // --- 0秒思考(20): zt-*/zero-tab ---
   "zt-add-toggle": () => {
     ztAddOpen = !ztAddOpen;
     render();
@@ -474,8 +473,6 @@ registerActions({
     persistLocalNoSchedule();
     render();
   },
-  "zerosec-theme-add": ({ target }) => decideZeroSecTheme(Number(target.dataset.idx), "added"),
-  "zerosec-theme-skip": ({ target }) => decideZeroSecTheme(Number(target.dataset.idx), "skipped"),
   // v217: 週次提案の1件登録はAIレポートへ移設して継続する。
   "weekly-suggest-add": ({ target }) => addWeeklySuggestedTask(target.dataset.week, Number(target.dataset.index))
 });
@@ -1286,7 +1283,7 @@ document.addEventListener("click", (event) => {
   // v177: toggle-journal-segmentはapp.js内のregisterActionsへ移行した。
   // v174: toggle-settings-sync/toggle-sidebarはapp.js内のregisterActionsへ移行した。
   // v173: Wish CRUDはsrc/features/wish.jsのregisterActionsへ移行した。
-  // v176: zt-*/zero-tab/zerosec-theme-*(0秒思考)はapp.js内のregisterActionsへ移行した。
+  // v176: zt-*/zero-tab(0秒思考)はapp.js内のregisterActionsへ移行した。
   // v177: question-*/entry-to-question(問い)・report-copy-ai/report-share-ai(AI連携)は
   // app.js内のregisterActionsへ移行した(段階5-6b)。open-questionsも同じくv177で移行したが、
   // v230のHome撤去で導線を失い到達不能になっていたため、v291の孤児掃除でaction登録ごと
@@ -1298,7 +1295,6 @@ document.addEventListener("click", (event) => {
   // v179: ai-schedule/draft-confirm/draft-discard/draft-remove/draft-undo/
   // draft-remove-reason/draft-remove-reason-dismiss(AIスケジュール下書き8)はapp.js内の
   // registerActionsへ移行した。
-  // v176: zerosec-theme-add/zerosec-theme-skipはapp.js内のregisterActionsへ移行した。
   // v217: weekly-suggest-addはAIレポートの週次レビューから呼ぶ。
   // v174: open-backup-list/restore-backup/run-archiveはapp.js内のregisterActionsへ移行した。
   // v179: open-search/search-jump(検索2)はapp.js内のregisterActionsへ移行した。
@@ -3599,7 +3595,6 @@ let _draftDrag = null;      // ドラッグ中の一時情報 非永続
 let _draftUndo = null;      // v62: 下書きレイヤ操作(×削除・ドラッグ)の直前スナップショット(1段Undo)非永続
 let _draftUndoHistoryEntry = null;  // v62(m2): _draftUndoが削除操作由来なら、その時記録したaiScheduleHistoryエントリの参照(Undoで取り消す)
 let _pendingRejectReason = null;  // v62: ×直後の却下理由ワンタップ選択(任意・非ブロッキング)非永続 { title, entry }
-let _zeroSecThemeDraft = null;  // v75: AIプラン_*.jsonのzeroSecThemes提案(0秒思考テーマ)。{ date, items:[{theme,reason}] } 非永続(_scheduleDraftと同じ思想)
 
 // v175: renderTimelineView(src/features/timeline.js側)は「下書きが1件も無い時だけ
 // "下書きスケジュール"ボタンを出す」判定に_scheduleDraftの有無だけを見る。変数自体を
@@ -3903,47 +3898,6 @@ function draftBarHTML() {
     </div>` : ""}`;
 }
 
-// v75: 朝の一括プランニング(runAiMorningPlan)が取得したAIプラン_*.jsonの zeroSecThemes を、
-//      下書きスケジュールバー(draftBarHTML)と同じタイムライン最上部に表示する。
-//      スケジュール下書きの有無とは独立(_scheduleDraftがnullでも出す)。ワンタップで
-//      「0秒思考リストに追加」または「見送り」を選べ、選ぶとカードから消える(新タブは作らない)。
-function zeroSecThemeBarHTML() {
-  if (!_zeroSecThemeDraft || _zeroSecThemeDraft.date !== state.selectedDate || !_zeroSecThemeDraft.items.length) return "";
-  return `
-    <div class="draft-bar" style="flex-direction:column; align-items:stretch; gap:6px">
-      <span>🧠 0秒思考のテーマ提案</span>
-      ${_zeroSecThemeDraft.items.map((t, i) => `
-        <div class="check-row" style="flex-wrap:wrap">
-          <div style="flex:1; min-width:180px">
-            <div class="check-row-name">${escapeHTML(t.theme)}</div>
-            ${t.reason ? `<div class="muted" style="font-size:11px">${escapeHTML(t.reason)}</div>` : ""}
-          </div>
-          <button class="btn ghost" style="font-size:11px; padding:5px 9px" data-action="zerosec-theme-add" data-idx="${i}">＋ 0秒思考リストに追加</button>
-          <button class="btn ghost" style="font-size:11px; padding:5px 9px" data-action="zerosec-theme-skip" data-idx="${i}">見送り</button>
-        </div>`).join("")}
-    </div>`;
-}
-
-// v75: 上のカードの「追加」「見送り」ボタンの実処理。採否は zeroSecThemeLog へ記録し
-//      (aiPlanSkippedLogと同じ学習ループの型)、対象は下書きから外す(再表示しない)。
-function decideZeroSecTheme(idx, outcome) {
-  if (!_zeroSecThemeDraft) return;
-  const item = _zeroSecThemeDraft.items[idx];
-  if (!item) return;
-  if (outcome === "added") {
-    const existing = new Set(state.zeroThinking.themes.map((t) => t.text));
-    if (!existing.has(item.theme)) {
-      state.zeroThinking.themes.push({ id: crypto.randomUUID(), text: item.theme, fav: false, questionId: null, createdAt: nowDateTime() });
-    }
-  }
-  state.zeroSecThemeLog.push({ date: _zeroSecThemeDraft.date, theme: item.theme, reason: item.reason || "", outcome, at: nowDateTime() });
-  if (state.zeroSecThemeLog.length > ZERO_SEC_THEME_LOG_MAX) {
-    state.zeroSecThemeLog = state.zeroSecThemeLog.slice(-ZERO_SEC_THEME_LOG_MAX);
-  }
-  _zeroSecThemeDraft.items = _zeroSecThemeDraft.items.filter((_, i) => i !== idx);
-  if (!_zeroSecThemeDraft.items.length) _zeroSecThemeDraft = null;
-  saveAndRender(outcome === "added" ? "🧠 0秒思考リストに追加しました" : "見送りました");
-}
 const ZERO_SEC_THEME_LOG_MAX = 300;
 
 // v62: 下書きレイヤ操作(×削除・ドラッグ移動/リサイズ)の直前状態を退避する(1段Undo)。
@@ -4240,31 +4194,12 @@ async function fetchAiPlanFreshnessDate(date) {
   }
 }
 
-// v75: AIプラン_<date>.json トップレベルの zeroSecThemes([{theme,reason}])を取得する。
-//      存在しない日もある(後方互換必須)ので、無い/壊れている場合は静かに null を返す。
-//      tryFetchAiPlan(スケジュール項目の検証)とは独立: plan/skippedが空でzeroSecThemesだけの
-//      日でも拾えるよう、専用に軽量fetchする。
-async function fetchZeroSecThemes(date) {
-  const raw = await fetchGitHubRawText(`AIプラン_${date}.json`);
-  if (!raw) return null;
-  let data;
-  try { data = JSON.parse(raw); } catch { return null; }
-  if (!data || typeof data !== "object" || data.date !== date) return null;
-  if (!Array.isArray(data.zeroSecThemes)) return null;
-  const items = data.zeroSecThemes
-    .filter((t) => t && typeof t.theme === "string" && t.theme.trim())
-    .map((t) => ({ theme: t.theme.trim(), reason: typeof t.reason === "string" ? t.reason.trim() : "" }));
-  return items.length ? items : null;
-}
-
 // v77: AIフィードバック_<date>.md 本文の「## 0秒思考テーマ」見出し(- [ ] テーマ: 理由 形式、
 //      「## 明日への提案」と同じチェックボックス書式)から0秒思考テーマ候補を抽出する。
 //      extractMITCandidatesFromReportと同じ頑健化パターン(見出し直後の空行スキップ・
 //      コロン分割・全角:対応)を踏襲。存在しない/旧形式のFB(見出し自体が無い)では
 //      空配列を返す(呼び出し側で length===0 を「該当なし」として扱えば後方互換になる)。
-// v86: 呼び出し元は hydrateStaticMarkdown 内の autoIngestFeedback に一本化した(旧
-//      fetchZeroSecThemesFromFeedback は同じ.mdの二重fetchになっていたため削除。
-//      CHANGES_v86.md参照)。この抽出関数自体は変更していない。
+// v86: 呼び出し元は hydrateStaticMarkdown 内の autoIngestFeedback に一本化した。
 function extractZeroSecThemesFromReport(reportText) {
   if (!reportText) return [];
   const lines = reportText.split("\n");
@@ -4286,18 +4221,6 @@ function extractZeroSecThemesFromReport(reportText) {
     sawContent = true;
   }
   return items.slice(0, 3);
-}
-
-// v75 should-fix: スケジュール側(繰越・WBS候補や空き時間)が0件で下書きを置けない日でも、
-// zeroSecThemesの提案が残っていれば「何も起きなかった」ように見せず、タイムラインへ案内する。
-// _zeroSecThemeDraftが無い/対象日と不一致/空なら何もせずfalseを返す(呼び出し元は従来どおりの
-// 「候補なし」トーストを出す)。
-function showZeroSecThemesOnlyIfAny(date, auto) {
-  if (!_zeroSecThemeDraft || _zeroSecThemeDraft.date !== date || !_zeroSecThemeDraft.items.length) return false;
-  if (!auto) { state.timelineMode = "planned"; setView("timeline"); }
-  showToast("🧠 0秒思考のテーマ提案があります — タイムラインでご確認ください");
-  render();
-  return true;
 }
 
 // D&D(Pointer Events = iPadタッチ / マウス両対応)。15分スナップ。

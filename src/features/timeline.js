@@ -15,7 +15,7 @@
 //      直接importする(routine.jsがsrc/storage/local.jsのpersistLocalNoScheduleを直接importする
 //      のと同じ「stateを持たない葉モジュールは直接importしてよい」パターン。circular importなし)。
 //   4. persistLocalNoScheduleも同じ理由でsrc/storage/local.jsから直接importする。
-//   5. draftBarHTML/zeroSecThemeBarHTML/draftRejectReasonPickerHTML/renderDraftLayerは
+//   5. draftBarHTML/draftRejectReasonPickerHTML/renderDraftLayerは
 //      _scheduleDraft/_draftDrag(下書きスケジュール機能。prep-stage4-timeline.md §5により
 //      今回の抽出範囲外の別関心事)を直接読むapp.js残留関数のため、参照だけをdeps注入で渡す
 //      (renderDraftLayerの移動はしない、routine.jsのanchorCandidateOptions等と同型)。
@@ -52,7 +52,7 @@ let escapeHTML, getCategoryColor, migrationBadgeHTML, leverageTypeMarkHTML;
 let minutesOf, todayISO, pad2, clamp, formatDisplayDate, computeProjectedEnd, resolveEstimateMin;
 let renderHeader, renderDateBar;
 let defaultBatterySettings, batteryCurvePoints, conditionBudget;
-let draftBarHTML, zeroSecThemeBarHTML, draftRejectReasonPickerHTML, renderDraftLayer;
+let draftBarHTML, draftRejectReasonPickerHTML, renderDraftLayer;
 let scheduleDraftActive, render, blocksForDate, postponeBlockToNextDay;
 let makeBlock, getOtherTask, openBlockEditor, saveState, isStaleBlock;
 let timelineRailEl, appRootEl;
@@ -63,7 +63,7 @@ function configureTimeline(deps) {
     minutesOf, todayISO, pad2, clamp, formatDisplayDate, computeProjectedEnd, resolveEstimateMin,
     renderHeader, renderDateBar,
     defaultBatterySettings, batteryCurvePoints, conditionBudget,
-    draftBarHTML, zeroSecThemeBarHTML, draftRejectReasonPickerHTML, renderDraftLayer,
+    draftBarHTML, draftRejectReasonPickerHTML, renderDraftLayer,
     scheduleDraftActive, render, blocksForDate, postponeBlockToNextDay,
     makeBlock, getOtherTask, openBlockEditor, saveState, isStaleBlock,
     timelineRailEl, appRootEl
@@ -112,7 +112,7 @@ function renderTimelineView() {
   // TOWER意匠化(第3弾先行分): タブ全体を .tower-skin.timeline-tower でラップし、
   // 日付バーとタイムライン本体(グリッド)だけを新設のパネル枠(.tl-datebar-panel/
   // .tl-radar-panel/.tl-radar-body)で囲む。囲まれる各関数(renderHeader/renderDateBar/
-  // draftBarHTML/zeroSecThemeBarHTML/draftRejectReasonPickerHTML/driftPanelHTML/
+  // draftBarHTML/draftRejectReasonPickerHTML/driftPanelHTML/
   // timeCombHTML/renderTimeline)の呼び出し・引数・返り値は一切変更していない
   // (見た目はcss-timeline-tower.cssの子孫セレクタだけで変わる)。
   return `
@@ -133,7 +133,6 @@ function renderTimelineView() {
         <span class="muted" style="font-size:12px">空き時間タップで追加 / ○タップで完了登録 / ▶いま開始・■いま終了でワンタップ実績 / カードタップで編集 / 赤線は現在時刻</span>
       </div>
       ${draftBarHTML()}
-      ${zeroSecThemeBarHTML()}
       ${draftRejectReasonPickerHTML()}
       ${driftPanelHTML()}
       ${timeCombHTML()}
