@@ -2040,13 +2040,7 @@ function normalizeState(value) {
   // v152: 仕分けモード(先送りBlock+Wishバックログの三択トリアージ)の選択ログ。
   //      migrationRitualLogと同じ軽量append-only配列の思想(上限はSWIPE_TRIAGE_LOG_MAX)。
   if (!Array.isArray(value.swipeTriageLog)) value.swipeTriageLog = [];
-  // v65(v64設計§3残余): AIプラン自身が「配置しない」と判断した候補のログ({date,title,reason,at}、上限300件)。
-  //      migrationRitualLog/aiScheduleHistoryと同じ軽量配列の思想。v62でAIプラン取り込みは実装済みだったが
-  //      skippedのkind:"ai"分は永続化されておらず、v64設計§3の「AIプランのskipped理由」学習シグナルが
-  //      アプリ側で欠けていたため今回吸収する。
-  if (!Array.isArray(value.aiPlanSkippedLog)) value.aiPlanSkippedLog = [];
-  // v75: AIプラン_*.json の zeroSecThemes(0秒思考テーマ提案)に対する採否ログ。
-  //      aiPlanSkippedLog/migrationRitualLogと同じ軽量配列の思想(学習ループ用データ)。
+  // 0秒思考テーマの自動取り込み・登録済みテーマ削除に対する監査ログ。
   if (!Array.isArray(value.zeroSecThemeLog)) value.zeroSecThemeLog = [];
   // v86: AIフィードバック自動取り込み(autoIngestFeedback)の冪等マーカー。取り込み済みの
   //      フィードバック日付("YYYY-MM-DD")を記録し、同じ.mdからの二重登録を防ぐ。
@@ -2107,7 +2101,7 @@ function normalizeState(value) {
     ...q
   }));
   // v68: 人生実験カード。1件のみ「実験中(running)」を推奨する軽量ログ
-  //      (migrationRitualLog/aiPlanSkippedLogと同じ思想。判定は結論欄にKが書く=機構は集計まで)。
+  //      (migrationRitualLogと同じ思想。判定は結論欄にKが書く=機構は集計まで)。
   if (!Array.isArray(value.experiments)) value.experiments = [];
   value.experiments = value.experiments.map((e) => ({
     hypothesis: "",
@@ -3867,10 +3861,7 @@ function rearrangeSkipMessage(skipped) {
 function draftBarHTML() {
   if (!_scheduleDraft || _scheduleDraft.date !== state.selectedDate) return "";
   const skipped = _scheduleDraft.skipped || [];  // v59: 朝プランで「配置しない」と判断した候補
-  // v62: AI由来(自宅PCバッチ生成のAIプラン)か決定論配置由来かを小さく区別表示する
-  const sourceLabel = _scheduleDraft.source === "ai-plan" ? "🤖 AIプラン由来"
-    : _scheduleDraft.source === "ai-replan" ? "🤖 AI再プラン由来"
-    : "⚙ 決定論配置";
+  const sourceLabel = "⚙ 決定論配置";
   // v199(4b・中3修正): 再配置で入り切らなかったBlockが1件以上あれば警告行を出す(トーストと同旨・
   //   理由別文言はrearrangeSkipMessageで共通化)。中2修正: 色は#c0392bのハードコードをやめ、
   //   ダーク実測運用済みの既存トークン--red(styles.css)に揃える(旧色は--panel上コントラスト比
@@ -3889,12 +3880,7 @@ function draftBarHTML() {
       ${escapeHTML(rearrangeSkipMsg)}
     </div>` : ""}
     ${skipped.length ? `<div class="draft-skipped-list muted" style="font-size:11.5px; line-height:1.6; margin:-4px 0 8px">
-      ${skipped.map((s) => {
-        // v62(M1レビュー対応): kind="expired" は空き時間との不整合で個別ドロップされた項目
-        // (判断の透明化のため「見送り」とは別ラベルで表示する)
-        const label = s.kind === "expired" ? "時間切れで除外" : "見送り";
-        return `${label}: ${escapeHTML(s.title)}${s.reason ? `(${escapeHTML(s.reason)})` : ""}`;
-      }).join(" ／ ")}
+      ${skipped.map((s) => `見送り: ${escapeHTML(s.title)}${s.reason ? `(${escapeHTML(s.reason)})` : ""}`).join(" ／ ")}
     </div>` : ""}`;
 }
 
@@ -4110,79 +4096,8 @@ function fallbackMorningPlan(candidates, freeGaps) {
   return { items: items.slice(0, 15), skipped };
 }
 
-// v62: 自宅PCバッチ生成の AIプラン_YYYY-MM-DD.json(plan-daily-validate.py が権威スキーマ。
-// date/generatedAt/plan[]/skipped[]、plan項目はtitle/taskId/blockId/start/minutes/category/reason/carryFromId)
-// を当日限定でfetchし、構造検証+現在状態との整合性(二重繰越参照・空き時間との重複)を確認する。
-// 構造が壊れている(パース不能・日付不一致・型不正)場合はプラン全体を null にして決定論配置へ
-// フォールバックするが、空き時間との不整合(過去時刻・既存Blockと衝突)は項目単位でドロップし、
-// 採用可能な項目が1件も無い場合のみ null にする(M1レビュー対応: 一部だけ古くても全体を
-// 捨てない)。
-async function tryFetchAiPlan(date, freeGaps, providedData = null) {
-  const raw = providedData ? JSON.stringify(providedData) : await fetchGitHubRawText(`AIプラン_${date}.json`);
-  if (!raw) return null;  // 取得失敗(404含む。fetchTextは404で空文字を返す)
-  let data;
-  try { data = JSON.parse(raw); } catch { return null; }  // 不正JSON
-  if (!data || typeof data !== "object") return null;
-  if (data.date !== date) return null;  // 当日分でない(古い/取り違え)
-  if (!Array.isArray(data.plan) || !Array.isArray(data.skipped)) return null;
-
-  const START_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
-  const items = [];
-  for (const p of data.plan) {
-    if (!p || typeof p !== "object") return null;
-    if (typeof p.title !== "string" || !p.title.trim()) return null;
-    if (typeof p.start !== "string" || !START_RE.test(p.start)) return null;
-    if (typeof p.minutes !== "number" || !Number.isInteger(p.minutes) || p.minutes < 1 || p.minutes > 600) return null;
-    const carryFromId = typeof p.carryFromId === "string" ? p.carryFromId : "";
-    // v61の二重繰越防止セマンティクス(migratedTo)をAIプラン経由でも維持: 参照先が既に
-    // 繰り越し済み/削除済み/存在しなければ、この項目だけ不採用にする(プラン全体は活かす)
-    if (carryFromId) {
-      const src = blockById(carryFromId);
-      if (!src || src.deleted || src.migratedTo) continue;
-    }
-    const taskId = typeof p.taskId === "string" ? p.taskId : "";
-    if (taskId) {
-      const t = state.tasks.find((x) => x.id === taskId);
-      if (!t || t.deleted || t.status === "completed") continue;  // 生成後に完了/削除済みなら不採用
-    }
-    const start = minutesOf(p.start);
-    // v65レビュー対応: leverageType検出は元のtitle(プレフィックス付き)に対して行い、
-    // 下書き・確定Blockのtitleにはプレフィックスを残さない(⚙資産マークと二重表示になるため)。
-    const detectedLev = detectLeverageTypeFromTitle(p.title);
-    items.push({
-      id: crypto.randomUUID(),
-      title: p.title.replace(/^\[資産\]\s*/, ""),
-      taskId,
-      category: typeof p.category === "string" ? p.category : "",
-      start, minutes: p.minutes, aiStart: start, aiMinutes: p.minutes,
-      carryFromId,
-      reason: typeof p.reason === "string" ? p.reason : "",  // v62: 下書きバー/ツールチップで見せる
-      leverageType: detectedLev  // v65: title先頭「[資産]」→ leverageType=asset を自動付与
-    });
-  }
-  const skipped = [];
-  for (const s of data.skipped) {
-    if (!s || typeof s !== "object" || typeof s.title !== "string") return null;
-    skipped.push({ title: s.title, reason: typeof s.reason === "string" ? s.reason : "", kind: "ai" });  // v62: AI自身が「配置しない」と判断した候補
-  }
-  if (!items.length) return null;  // 採用できる項目が無ければ決定論へフォールバック
-  // v62(M1レビュー対応): 空き時間との整合性を項目単位で確認する。バッチ生成(05:00)から
-  // fetch(数時間後もありうる)までの間に過去時刻になった・既存Blockと衝突した項目だけを
-  // 個別にドロップし(プラン全体は活かす)、除外理由が見えるようskippedと同じ形で
-  // 「時間切れで除外」として表示する(判断の透明化)。採用可能な項目が1件も残らない場合のみ
-  // 決定論へフォールバックする。
-  const fittingItems = [];
-  for (const it of items) {
-    const fits = freeGaps.some(([s, e]) => it.start >= s && it.start + it.minutes <= e);
-    if (fits) fittingItems.push(it);
-    else skipped.push({ title: it.title, reason: "", kind: "expired" });
-  }
-  if (!fittingItems.length) return null;  // 採用可能な項目が0件なら決定論へフォールバック
-  return { items: fittingItems, skipped };
-}
-
-// v67: AIプラン_<date>.json の存在確認のみ(下書きへの適用はtryFetchAiPlan/runAiMorningPlanの専管)。
-//      state.aiLinkFreshness.planAt 更新用の軽量シグナル。厳密な項目検証はしない(存在=鮮度の証拠で足りる)。
+// v67: AIプラン_<date>.json の存在確認のみ。v299で下書きへの適用経路は削除したため、
+//      state.aiLinkFreshness.planAt更新用の軽量シグナルとしてだけ残す。厳密な項目検証はしない。
 async function fetchAiPlanFreshnessDate(date) {
   const raw = await fetchGitHubRawText(`AIプラン_${date}.json`);
   if (!raw) return null;
@@ -4518,16 +4433,6 @@ function leverageJudgeHelperHTML(currentType) {
     </details>
   `;
 }
-// v65: AIプラン(自宅PCバッチ生成)側で付けた「[資産]」プレフィックスの検出(設計書2-3)。
-// loop/plan/daily-plan.md に既に10x判定3問が入っており、AIがtitle先頭にこの印を付けたときだけ
-// アプリ側がleverageType=assetを自動付与する(アプリ内AI呼び出しはしない。v60方針)。
-const ASSET_TITLE_PREFIX = "[資産]";
-function detectLeverageTypeFromTitle(title) {
-  return (title || "").startsWith(ASSET_TITLE_PREFIX) ? "asset" : "";
-}
-// v65(v64設計§3残余): AIプランのskipped(kind:"ai")ログの上限。migrationRitualLogと同じ思想。
-const AI_PLAN_SKIPPED_LOG_MAX = 300;
-
 // v61: マイグレーション儀式(提案1)==============================
 // 繰り越し回数(carryCount)を積み上げ、2回目以降は視覚マーク、3回目の繰り越しでは
 // 即座に繰り越さず一呼吸置く確認モーダルを挟む。「書き写す手間が価値の審査になる」
@@ -7983,7 +7888,7 @@ function entryToQuestion(entryId) {
 // v68: =========================================================
 //  人生実験カード(state.experiments)
 //  仮説を1つだけ走らせ、期限で「続ける(kept)/手放す(dropped)」を判定する軽量ログ。
-//  同時に複数走らせない思想(migrationRitualLog/aiPlanSkippedLogと同じ軽量配列の型見本を踏襲)。
+//  同時に複数走らせない思想(migrationRitualLogと同じ軽量配列の型見本を踏襲)。
 //  判定材料の自動集計はバッチ(weekly-extract.py)側。結論はKが書く(機構は集計まで=v39問いと同じ分業)。
 // =========================================================
 function makeExperiment({ hypothesis = "", metric = "", startDate = "", endDate = "" } = {}) {
@@ -11330,7 +11235,7 @@ function autoIngestFeedback(date, text) {
   }
   return { addedTasks, addedThemes };
 }
-const FEEDBACK_INGESTED_DATES_MAX = 300;  // aiPlanSkippedLog/zeroSecThemeLogと同じ軽量上限の思想
+const FEEDBACK_INGESTED_DATES_MAX = 300;  // zeroSecThemeLogと同じ軽量上限の思想
 
 // v190: ai-insights.jsonはバッチ出力を信用境界の外として扱う。トップレベルが正しいJSON
 // オブジェクトでも、4フィールドは互いに独立して検証し、壊れたフィールドだけを捨てる。
@@ -11551,8 +11456,8 @@ async function hydrateStaticMarkdown() {
     cachedAiInsightsJson = { fetchedAt: Date.now(), data: parsedAiInsights || previous };
     if (parsedAiInsights && JSON.stringify(previous) !== JSON.stringify(parsedAiInsights)) changed = true;
   }
-  // v67: AIプラン_<今日>.json の存在確認(下書きへの適用はrunAiMorningPlan側の専管で、
-  //      ここでは鮮度シグナル専用の軽量fetch)。既に今日分を確認済みなら再fetchしない。
+  // v67: AIプラン_<今日>.json は鮮度シグナル専用に存在確認する。v299で下書きへの
+  //      適用経路は削除済み。既に今日分を確認済みなら再fetchしない。
   if (!state.aiLinkFreshness.planAt || state.aiLinkFreshness.planAt < realToday) {
     const planDate = await fetchAiPlanFreshnessDate(realToday);
     if (planDate) {
