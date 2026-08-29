@@ -158,22 +158,12 @@ const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
 const ZT_SUGGESTION_PENDING_TTL_MS = 3 * 24 * 60 * 60 * 1000;   // pending: 3日(72時間)
 const ZT_SUGGESTION_RESOLVED_TTL_MS = 7 * 24 * 60 * 60 * 1000;  // adopted/dismissed: 7日
 
-// v193: オンデマンド再プランはセッション限定のメールボックス監視。永続stateを増やさず、
-// requestId一致の応答だけを最長15分・60秒間隔で受け取る。
-const REPLAN_POLL_MS = 60 * 1000;
-const REPLAN_TIMEOUT_MS = 15 * 60 * 1000;
-let _replanPending = null;
-let _replanPollTimer = null;
-let _replanPollBusy = false;
-// v269: statusのdata-kindへ未知値を流さず、既存warn系の見た目へ安全にフォールバックする。
-const REPLAN_UI_KINDS = new Set(["idle", "sending", "pending", "error", "success", "limit", "timeout"]);
-let _replanUi = { kind: "idle", message: "残り時間の計画をAIへ依頼できます" };
 // v229: GATE編集モードは画面状態だけなので永続stateへ混ぜず、セッション内だけ保持する。
 let _towerGateEditMode = false;
 
 // v196: 実行計画の叩き台をAIに作らせる(第2弾b)。ファイル契約はplan-request.json/
-// plan-response.json(personal-data taskchute/requests/配下)。ポーリング機構はv193再プランと
-// 同じ作法(即時1回はしない・60秒間隔・最長15分)をそのまま流用する。承認までapp-state.jsonは
+// plan-response.json(personal-data taskchute/requests/配下)。ポーリングは即時取得せず、
+// 60秒間隔・最長15分とする。承認までapp-state.jsonは
 // 一切書かない(下書きはセッション限定・非永続)。
 const PLAN_STEP_POLL_MS = 60 * 1000;
 const PLAN_STEP_TIMEOUT_MS = 15 * 60 * 1000;
@@ -343,7 +333,6 @@ configureTimeline({
 registerActions({
   "nav": ({ target }) => setView(target.dataset.view),
   "open-iron-log": () => setView("iron-log"),
-  "today-replan": () => requestReplan(),
   "save-tower-journal": ({ target }) => {
     const date = target.dataset.date || todayISO();
     const free = document.getElementById("towerJournalFree");
@@ -382,7 +371,7 @@ registerActions({
       : item);
     saveAndRender(streakEdit.value ? "ルーティンを固定化しました" : "ルーティンの固定化を解除しました");
   },
-  // --- settings(12): サイドバー/WBS表示設定/カテゴリ・休憩メッセージ管理・AI再プラン ---
+  // --- settings(11): サイドバー/WBS表示設定/カテゴリ・休憩メッセージ管理 ---
   "toggle-show-suspended": () => {
     state.settings.showSuspended = !state.settings.showSuspended;
     saveAndRender();
@@ -2848,7 +2837,6 @@ function renderGate() {
           </label>
         </form>
         <button class="btn primary" data-action="gate-continue">設定してはじめる</button>
-        <div class="muted" data-replan-guide style="font-size:12px">GitHubトークンを設定すると再プランを依頼できます</div>
         ${_personalDataAuthError ? `<div class="muted" style="color:var(--red); font-size:12px; margin-top:6px">⚠ ${escapeHTML(_personalDataAuthError)}</div>` : ""}
       </div>
     </div>
@@ -4243,130 +4231,6 @@ async function tryFetchAiPlan(date, freeGaps, providedData = null) {
   return { items: fittingItems, skipped };
 }
 
-function setReplanUi(kind, message) {
-  _replanUi = { kind: REPLAN_UI_KINDS.has(kind) ? kind : "idle", message };
-  if (app?.dataset.view === "today" || app?.dataset.view === "settings") renderDeferringForFocus();
-}
-
-function stopReplanPolling() {
-  if (_replanPollTimer !== null) clearTimeout(_replanPollTimer);
-  _replanPollTimer = null;
-}
-
-function finishReplan(kind, message) {
-  stopReplanPolling();
-  _replanPending = null;
-  setReplanUi(kind, message);
-}
-
-async function requestReplan() {
-  if (!personalDataReady(state.settings.github)) {
-    setReplanUi("error", "GitHubトークンを設定すると再プランを依頼できます");
-    return;
-  }
-  if (_morningPlanInFlight || _scheduleDraft) {
-    setReplanUi("error", _morningPlanInFlight
-      ? "朝プランを作成中です。完了後に再度お試しください"
-      : "未確定の下書きがあります。タイムラインで確認してください");
-    return;
-  }
-  // v196: 実行計画の叩き台(plan-step)の下書きと同時に走らせない(既存排他機構に倣う)。
-  if (_planStepPending || _planStepDraft) {
-    setReplanUi("error", "実行計画の依頼を処理中です。完了後に再度お試しください");
-    return;
-  }
-  stopReplanPolling();
-  const now = new Date();
-  const request = {
-    requestId: `${now.getTime()}-${crypto.randomUUID().slice(0, 8)}`,
-    date: todayISO(),
-    requestedAt: now.toISOString(),
-    fromTime: `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`
-  };
-  _replanPending = { ...request, startedAtMs: now.getTime() };
-  setReplanUi("sending", "再プラン依頼を送信中");
-  try {
-    await pushGitHubPath("requests/replan-request.json", `${JSON.stringify(request, null, 2)}\n`, "");
-    setReplanUi("pending", "依頼受付済み・数分後に反映");
-    scheduleReplanPoll();
-  } catch {
-    finishReplan("error", "依頼の送信に失敗しました");
-  }
-}
-
-function scheduleReplanPoll() {
-  stopReplanPolling();
-  if (!_replanPending) return;
-  _replanPollTimer = setTimeout(pollReplanResponse, REPLAN_POLL_MS);
-}
-
-async function pollReplanResponse() {
-  if (!_replanPending || _replanPollBusy) return;
-  _replanPollBusy = true;
-  try {
-    const result = await fetchGitHubRawResult("requests/replan-response.json", "text", { cache: "no-store" });
-    if (result.ok) {
-      let response;
-      try { response = JSON.parse(result.text); } catch {
-        finishReplan("error", "再プランの取得に失敗しました(応答形式を確認してください)");
-        return;
-      }
-      if (response?.requestId === _replanPending.requestId) {
-        if (_replanPending.date !== todayISO()) {
-          finishReplan("error", "日付が変わったため前日の再プランを破棄しました");
-          return;
-        }
-        if (response.status === "budget_exceeded" || response.status === "limit_exceeded") {
-          finishReplan("limit", "本日の再プラン上限");
-          return;
-        }
-        if (response.status === "error") {
-          const reason = typeof response.reason === "string"
-            ? response.reason.trim().replace(/\s+/g, " ").slice(0, 60) : "";
-          finishReplan("error", `再プランの生成に失敗しました${reason ? `: ${reason}` : ""}`);
-          return;
-        }
-        if (response.status !== "ok") {
-          finishReplan("error", "再プランの取得に失敗しました(応答形式を確認してください)");
-          return;
-        }
-        const now = new Date();
-        const nowFloor = Math.min(23 * 60, Math.ceil((now.getHours() * 60 + now.getMinutes()) / 15) * 15);
-        const freeGaps = computeFreeGaps(_replanPending.date, 5 * 60, 23 * 60)
-          .map(([s, e]) => [Math.max(s, nowFloor), e]).filter(([s, e]) => e - s >= 15);
-        const aiPlan = freeGaps.length ? await tryFetchAiPlan(_replanPending.date, freeGaps, response) : null;
-        if (!aiPlan) {
-          finishReplan("error", "再プランの取得に失敗しました(内容を確認してください)");
-          return;
-        }
-        if (_morningPlanInFlight || _scheduleDraft) {
-          finishReplan("error", "既存の下書きがあります。タイムラインで確認してから再度依頼してください");
-          return;
-        }
-        _scheduleDraft = { date: _replanPending.date, items: aiPlan.items, skipped: aiPlan.skipped, source: "ai-replan" };
-        _draftUndo = null; _draftUndoHistoryEntry = null;
-        finishReplan("success", "下書きが届きました。タイムラインで確認してください");
-        showToast("🤖 下書きが届きました。タイムラインで確認してください");
-        return;
-      }
-    } else if (result.status === 401 || result.status === 403) {
-      finishReplan("error", "再プランの取得に失敗しました(GitHub権限を確認してください)");
-      return;
-    }
-  } catch (error) {
-    console.warn("再プラン応答の取得を次回再試行します:", error?.message || error);
-  } finally {
-    _replanPollBusy = false;
-    if (_replanPending) {
-      if (Date.now() - _replanPending.startedAtMs >= REPLAN_TIMEOUT_MS) {
-        finishReplan("timeout", "届いていません(PC起動を確認)");
-      } else {
-        scheduleReplanPoll();
-      }
-    }
-  }
-}
-
 // v67: AIプラン_<date>.json の存在確認のみ(下書きへの適用はtryFetchAiPlan/runAiMorningPlanの専管)。
 //      state.aiLinkFreshness.planAt 更新用の軽量シグナル。厳密な項目検証はしない(存在=鮮度の証拠で足りる)。
 async function fetchAiPlanFreshnessDate(date) {
@@ -4444,11 +4308,6 @@ function showZeroSecThemesOnlyIfAny(date, auto) {
 // v62: 自宅PCバッチ生成のAIプランJSONを優先採用し、取得/検証に失敗した場合のみ決定論配置へ
 //      フォールバックする(v60の経路は無傷で維持)。
 async function runAiMorningPlan({ auto = false } = {}) {
-  // 再プラン応答も同じ_scheduleDraftへ届くため、依頼中は朝プランを並走させない。
-  if (_replanPending) {
-    if (!auto) showToast("再プラン依頼中です。応答後に朝プランを実行してください");
-    return;
-  }
   // 完了(どの早期returnでもfinallyで確実に)までフラグを立て、手動の多重実行で
   // _scheduleDraftを取り合わないようにする。
   _morningPlanInFlight = true;
@@ -5331,7 +5190,7 @@ function maybeQueueNextAiStep(stepTaskId, prevStatus) {
   if (!next || next.owner !== "ai") return;       // 条件4
   if (next.aiStatus !== "none" && next.aiStatus !== "error") return;  // 条件5
   if (!personalDataReady()) return;               // 条件6
-  if (_replanPending || _scheduleDraft || _morningPlanInFlight || _planStepPending) return;
+  if (_scheduleDraft || _morningPlanInFlight || _planStepPending) return;
   if (_aiStepPending) {
     // 誤発火・多重発火の遮断(design§1): 一気に複数完了しても発火は同時に1件だけ
     showToast("AIステップは1件ずつ実行します");
@@ -5395,7 +5254,7 @@ function resolveAiStepConfirmSend() {
     && srcStep.owner === "k"  // 条件3
     && recomputedNext && recomputedNext.id === nextStepTaskId && recomputedNext.owner === "ai"  // 条件4
     && (recomputedNext.aiStatus === "none" || recomputedNext.aiStatus === "error")  // 条件5
-    && personalDataReady() && !(_replanPending || _scheduleDraft || _morningPlanInFlight || _planStepPending);  // 条件6
+    && personalDataReady() && !(_scheduleDraft || _morningPlanInFlight || _planStepPending);  // 条件6
   if (!stillValid) {
     closeModal();
     showToast("状況が変わったため送信を取りやめました");
@@ -5577,8 +5436,8 @@ async function requestPlanStep(taskId) {
     setPlanStepUi("error", "GitHubトークンを設定すると実行計画をAIに依頼できます", taskId);
     return;
   }
-  // v196: 再プラン・朝プランの下書きと同時に走らせない(既存排他機構に倣う)。
-  if (_replanPending || _scheduleDraft || _morningPlanInFlight) {
+  // v196: 朝プランの下書きと同時に走らせない。
+  if (_scheduleDraft || _morningPlanInFlight) {
     setPlanStepUi("error", "既存の下書き処理が進行中です。完了後に再度お試しください", taskId);
     return;
   }
@@ -5728,14 +5587,14 @@ function renderPlanStepSectionHTML(task) {
     </div>`;
   }
   const notReady = !personalDataReady(state.settings.github);
-  // v196: 再プラン/朝プランの下書き処理中も相互排他でボタンを止める(既存排他機構に倣う)。
-  const otherFlowBusy = !notReady && Boolean(_replanPending || _scheduleDraft || _morningPlanInFlight);
+  // v196: 朝プランの下書き処理中も相互排他でボタンを止める。
+  const otherFlowBusy = !notReady && Boolean(_scheduleDraft || _morningPlanInFlight);
   const busyOther = !notReady && !otherFlowBusy
     && ((_planStepPending && _planStepPending.taskId !== task.id) || (_planStepDraft && _planStepDraft.taskId !== task.id));
   const busySelf = !notReady && !otherFlowBusy && !busyOther && _planStepPending && _planStepPending.taskId === task.id;
   let hint = "";
   if (notReady) hint = "GitHubトークンを設定すると実行計画をAIに依頼できます";
-  else if (otherFlowBusy) hint = "再プラン等の下書き処理中です";
+  else if (otherFlowBusy) hint = "朝プランの下書き処理中です";
   else if (busyOther) hint = "他タスクの実行計画を処理中です";
   else if (busySelf) hint = _planStepUi.message || "依頼を処理中です";
   else if (_planStepUi.taskId === task.id && ["error", "limit", "timeout"].includes(_planStepUi.kind)) hint = _planStepUi.message;
@@ -14338,13 +14197,7 @@ setTimeout(maybeAutoArchive, 8000);
 // v41/v43: 復帰時。自動同期 ON なら pull(内部で日次オープン)、OFF なら日次オープンのみ。
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
-  // PUT直後の復帰でも初回60秒待機は守る。1分経過後はiOSの停止タイマーを復帰時照合で補う。
-  if (_replanPending && !_replanPollBusy
-    && Date.now() - _replanPending.startedAtMs >= REPLAN_POLL_MS) {
-    stopReplanPolling();
-    pollReplanResponse();
-  }
-  // v196: 実行計画(plan-step)も再プランと同じ復帰時即照合を行う。
+  // v196: 実行計画(plan-step)は復帰時即照合を行う。
   if (_planStepPending && !_planStepPollBusy
     && Date.now() - _planStepPending.startedAtMs >= PLAN_STEP_POLL_MS) {
     stopPlanStepPolling();
