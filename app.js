@@ -840,9 +840,8 @@ registerActions({
   "experiment-keep": ({ id }) => keepExperiment(id),
   "experiment-drop": ({ id }) => dropExperiment(id),
   "experiment-copy-conclusion": ({ id }) => copyExperimentConclusion(id),
-  // --- AIスケジュール下書き(8) ---
+  // --- スケジュール下書き(7) ---
   "ai-schedule": () => runAiSchedule(),
-  "ai-morning-plan": () => runAiMorningPlan(),
   "draft-confirm": () => confirmScheduleDraft(),
   "draft-discard": () => {
     if (!_scheduleDraft) return;
@@ -1296,7 +1295,7 @@ document.addEventListener("click", (event) => {
   // v143: journal-import-ai(手動貼り付け取込ボタン)はv141でジャーナルのAIフィードバック列
   // 自体を撤去した際に到達不能になっていたため、ハンドラごと削除した(openAiImportModal一式・
   // ai-import-submitも同様。CHANGES_v143.md参照)。
-  // v179: ai-schedule/ai-morning-plan/draft-confirm/draft-discard/draft-remove/draft-undo/
+  // v179: ai-schedule/draft-confirm/draft-discard/draft-remove/draft-undo/
   // draft-remove-reason/draft-remove-reason-dismiss(AIスケジュール下書き8)はapp.js内の
   // registerActionsへ移行した。
   // v176: zerosec-theme-add/zerosec-theme-skipはapp.js内のregisterActionsへ移行した。
@@ -1739,7 +1738,7 @@ function normalizeState(value) {
   delete value.settings.ai.model;
   delete value.settings.ai.prompts;
   delete value.settings.ai.autoMorningReview;
-  // v214: 朝プランの自動実行設定を廃止。手動実行と下書き機構は維持する。
+  // v214: 旧・朝プランの自動実行設定を廃止。下書きスケジュール機構は維持する。
   delete value.settings.ai.autoMorningPlan;
   // v52: スケジュール実績ログ(決定論配置の元値に対するユーザの採否・修正を記録)。
   if (!Array.isArray(value.aiScheduleHistory)) value.aiScheduleHistory = [];
@@ -3600,9 +3599,6 @@ let _draftDrag = null;      // ドラッグ中の一時情報 非永続
 let _draftUndo = null;      // v62: 下書きレイヤ操作(×削除・ドラッグ)の直前スナップショット(1段Undo)非永続
 let _draftUndoHistoryEntry = null;  // v62(m2): _draftUndoが削除操作由来なら、その時記録したaiScheduleHistoryエントリの参照(Undoで取り消す)
 let _pendingRejectReason = null;  // v62: ×直後の却下理由ワンタップ選択(任意・非ブロッキング)非永続 { title, entry }
-// runAiMorningPlanの非同期処理(AIプランJSONのfetch等)が完了するまでtrue。
-// 朝プラン処理中かどうかを、手動実行の多重起動防止と再プラン競合回避に使う。
-let _morningPlanInFlight = false;
 let _zeroSecThemeDraft = null;  // v75: AIプラン_*.jsonのzeroSecThemes提案(0秒思考テーマ)。{ date, items:[{theme,reason}] } 非永続(_scheduleDraftと同じ思想)
 
 // v175: renderTimelineView(src/features/timeline.js側)は「下書きが1件も無い時だけ
@@ -4304,101 +4300,6 @@ function showZeroSecThemesOnlyIfAny(date, auto) {
   return true;
 }
 
-// v60: 決定論配置(fallbackMorningPlan)を正規経路に昇格。Claude API 呼び出しは全廃。
-// v62: 自宅PCバッチ生成のAIプランJSONを優先採用し、取得/検証に失敗した場合のみ決定論配置へ
-//      フォールバックする(v60の経路は無傷で維持)。
-async function runAiMorningPlan({ auto = false } = {}) {
-  // 完了(どの早期returnでもfinallyで確実に)までフラグを立て、手動の多重実行で
-  // _scheduleDraftを取り合わないようにする。
-  _morningPlanInFlight = true;
-  try {
-  const date = todayISO();
-  const DAY_START = 5 * 60, DAY_END = 23 * 60;
-  const now = new Date();
-  const nowMin = now.getHours() * 60 + now.getMinutes();
-  // 今日の当日プランなので、現在時刻より前は「空き」から除く(15分単位に切り上げ)
-  const nowFloor = Math.min(DAY_END, Math.ceil(nowMin / 15) * 15);
-  const freeGaps = computeFreeGaps(date, DAY_START, DAY_END)
-    .map(([s, e]) => [Math.max(s, nowFloor), e])
-    .filter(([s, e]) => e - s >= 15);
-
-  // v75: zeroSecThemes はスケジュール配置(freeGaps/candidates)の成否と無関係に独立して取得する
-  //      (下の早期returnより前で確定させ、配置できる候補が無い日でもテーマ提案だけは出す)。
-  //      同日に既に採否判断済み(state.zeroSecThemeLog)のテーマは再提示しない。
-  // v86: AIフィードバック_*.md内「## 0秒思考テーマ」見出し由来分は、hydrateStaticMarkdown側の
-  //      autoIngestFeedbackが自動的にzeroThinking.themesへ直接登録するようになったため、ここでの
-  //      取得・選定UIへの合流はやめた(v77で足したfetchZeroSecThemesFromFeedbackとのマージは削除)。
-  //      AIプラン_*.json由来(fetchZeroSecThemes)だけを引き続きこの「追加/見送り」選定カードで
-  //      扱う(JSON側は自動登録の対象にしていない、まだ人の判断を挟む設計のため)。
-  //      取得失敗/zeroSecThemesキー無しなら null → 従来どおり _zeroSecThemeDraft は触らない
-  //      (前回セッションの状態を保持)。既にzeroThinking.themesへ入っている(=自動取り込み済み)
-  //      テーマ文字列は候補から除く(二重提示防止)。
-  const planZeroSecThemes = await fetchZeroSecThemes(date);
-  if (planZeroSecThemes) {
-    const decided = new Set(state.zeroSecThemeLog.filter((l) => l.date === date).map((l) => l.theme));
-    const existingThemeTexts = new Set(state.zeroThinking.themes.map((t) => t.text));
-    const pending = planZeroSecThemes.filter((t) => !decided.has(t.theme) && !existingThemeTexts.has(t.theme));
-    _zeroSecThemeDraft = pending.length ? { date, items: pending } : null;
-  }
-
-  const aiPlan = freeGaps.length ? await tryFetchAiPlan(date, freeGaps) : null;
-  if (aiPlan) {
-    _scheduleDraft = { date, items: aiPlan.items, skipped: aiPlan.skipped, source: "ai-plan" };
-    _draftUndo = null; _draftUndoHistoryEntry = null;  // v62: 新規下書きでは前セッションのUndoを持ち越さない
-    // v65(v64設計§3残余): AI自身が「配置しない」と判断した候補(kind:"ai")を永続ログへ記録。
-    //      "expired"(空き時間との不整合で機械的に除外)は対象外 — AIの判断そのものではないため。
-    const aiSkipped = aiPlan.skipped.filter((s) => s.kind === "ai");
-    if (aiSkipped.length) {
-      aiSkipped.forEach((s) => {
-        state.aiPlanSkippedLog.push({ date, title: s.title, reason: s.reason || "", at: nowDateTime() });
-      });
-      if (state.aiPlanSkippedLog.length > AI_PLAN_SKIPPED_LOG_MAX) {
-        state.aiPlanSkippedLog = state.aiPlanSkippedLog.slice(-AI_PLAN_SKIPPED_LOG_MAX);
-      }
-      saveState();
-    }
-    // v126: v122追補で足していた「今週のやりたいこと」のAIプラン合流ブロックは撤去した
-    //       (state.weeklyWishesの週次選定ルートそのものを廃止。CHANGES_v126.md参照)。
-    if (!auto) { state.timelineMode = "planned"; setView("timeline"); }
-    showToast(auto
-      ? "🌅 AIプランの下書きを置きました。タイムラインで調整→確定してください"
-      : "🌅 AIプランを下書きに置きました — 確認して「確定」してください");
-    render();
-    return;
-  }
-
-  const candidates = aiMorningPlanCandidates(date);
-  if (!candidates.length) {
-    if (showZeroSecThemesOnlyIfAny(date, auto)) return;
-    if (!auto) showToast("配置できる候補がありません(繰越・WBS未完了が対象です)");
-    return;
-  }
-  if (!freeGaps.length) {
-    if (showZeroSecThemesOnlyIfAny(date, auto)) return;
-    if (!auto) showToast("今日は空き時間がありません(予定が埋まっています)");
-    return;
-  }
-
-  const { items, skipped } = fallbackMorningPlan(candidates, freeGaps);
-  if (!items.length) {
-    if (showZeroSecThemesOnlyIfAny(date, auto)) return;
-    render();
-    if (!auto) showToast("空き時間に配置できる候補がありませんでした");
-    return;
-  }
-
-  _scheduleDraft = { date, items, skipped, source: "deterministic" };
-  _draftUndo = null; _draftUndoHistoryEntry = null;  // v62: 新規下書きでは前セッションのUndoを持ち越さない
-  if (!auto) { state.timelineMode = "planned"; setView("timeline"); }
-  showToast(auto
-    ? "🌅 今日の下書きプランを置きました。タイムラインで調整→確定してください"
-    : "🌅 空き時間へ自動配置しました — 確認して「確定」してください");
-  render();
-  } finally {
-    _morningPlanInFlight = false;
-  }
-}
-
 // D&D(Pointer Events = iPadタッチ / マウス両対応)。15分スナップ。
 // ドラッグ中は該当要素の style だけ更新し、pointerup で正規化再描画(フォーカス・スクロール保護)。
 document.addEventListener("pointerdown", (event) => {
@@ -4707,7 +4608,7 @@ const AI_PLAN_SKIPPED_LOG_MAX = 300;
 // v61: マイグレーション儀式(提案1)==============================
 // 繰り越し回数(carryCount)を積み上げ、2回目以降は視覚マーク、3回目の繰り越しでは
 // 即座に繰り越さず一呼吸置く確認モーダルを挟む。「書き写す手間が価値の審査になる」
-// というバレットジャーナルの思想を、既存の carryOverBlock / 朝プラン確定(confirmScheduleDraft)
+// というバレットジャーナルの思想を、既存の carryOverBlock / 下書き確定(confirmScheduleDraft)
 // の両経路に対して同じルールで適用する。
 const MIGRATION_RITUAL_THRESHOLD = 3;
 const MIGRATION_RITUAL_LOG_MAX = 300;
@@ -5190,7 +5091,7 @@ function maybeQueueNextAiStep(stepTaskId, prevStatus) {
   if (!next || next.owner !== "ai") return;       // 条件4
   if (next.aiStatus !== "none" && next.aiStatus !== "error") return;  // 条件5
   if (!personalDataReady()) return;               // 条件6
-  if (_scheduleDraft || _morningPlanInFlight || _planStepPending) return;
+  if (_scheduleDraft || _planStepPending) return;
   if (_aiStepPending) {
     // 誤発火・多重発火の遮断(design§1): 一気に複数完了しても発火は同時に1件だけ
     showToast("AIステップは1件ずつ実行します");
@@ -5254,7 +5155,7 @@ function resolveAiStepConfirmSend() {
     && srcStep.owner === "k"  // 条件3
     && recomputedNext && recomputedNext.id === nextStepTaskId && recomputedNext.owner === "ai"  // 条件4
     && (recomputedNext.aiStatus === "none" || recomputedNext.aiStatus === "error")  // 条件5
-    && personalDataReady() && !(_scheduleDraft || _morningPlanInFlight || _planStepPending);  // 条件6
+    && personalDataReady() && !(_scheduleDraft || _planStepPending);  // 条件6
   if (!stillValid) {
     closeModal();
     showToast("状況が変わったため送信を取りやめました");
@@ -5436,8 +5337,8 @@ async function requestPlanStep(taskId) {
     setPlanStepUi("error", "GitHubトークンを設定すると実行計画をAIに依頼できます", taskId);
     return;
   }
-  // v196: 朝プランの下書きと同時に走らせない。
-  if (_scheduleDraft || _morningPlanInFlight) {
+  // スケジュール下書きと同時に走らせない。
+  if (_scheduleDraft) {
     setPlanStepUi("error", "既存の下書き処理が進行中です。完了後に再度お試しください", taskId);
     return;
   }
@@ -5587,14 +5488,14 @@ function renderPlanStepSectionHTML(task) {
     </div>`;
   }
   const notReady = !personalDataReady(state.settings.github);
-  // v196: 朝プランの下書き処理中も相互排他でボタンを止める。
-  const otherFlowBusy = !notReady && Boolean(_scheduleDraft || _morningPlanInFlight);
+  // スケジュール下書き処理中も相互排他でボタンを止める。
+  const otherFlowBusy = !notReady && Boolean(_scheduleDraft);
   const busyOther = !notReady && !otherFlowBusy
     && ((_planStepPending && _planStepPending.taskId !== task.id) || (_planStepDraft && _planStepDraft.taskId !== task.id));
   const busySelf = !notReady && !otherFlowBusy && !busyOther && _planStepPending && _planStepPending.taskId === task.id;
   let hint = "";
   if (notReady) hint = "GitHubトークンを設定すると実行計画をAIに依頼できます";
-  else if (otherFlowBusy) hint = "朝プランの下書き処理中です";
+  else if (otherFlowBusy) hint = "スケジュール下書き処理中です";
   else if (busyOther) hint = "他タスクの実行計画を処理中です";
   else if (busySelf) hint = _planStepUi.message || "依頼を処理中です";
   else if (_planStepUi.taskId === task.id && ["error", "limit", "timeout"].includes(_planStepUi.kind)) hint = _planStepUi.message;
@@ -7650,13 +7551,12 @@ function renderSettingsCloudPanel(github) {
   `;
 }
 
-function renderSettingsMorningPlanPanel() {
+function renderSettingsDraftSchedulePanel() {
   return `
-    <h3>朝の一括プランニング</h3>
+    <h3>下書きスケジュール</h3>
     <div class="muted" style="font-size:12px; line-height:1.6">
-      v60でアプリ内からのClaude API直接呼び出しは廃止しました(コスト理由)。「📋 下書きスケジュール」
-      「🌅 朝プラン」は、繰越・WBS・MIT候補を空き時間へ機械的に前詰め配置する決定論ロジックで動作します
-      (APIキーは不要)。今日タブからの操作ボタンと候補チップは現在提供していません。
+      「📋 下書きスケジュール」は、当日の未着手Blockを空き時間へ機械的に再配置する
+      決定論ロジックです(APIキーは不要)。タイムラインから実行し、確認後に確定できます。
     </div>
   `;
 }
@@ -7768,8 +7668,8 @@ function renderSettings() {
   const github = state.settings.github || defaultGitHubSettings();
   const groups = [
     {
-      id: "settings-daily", label: "日々の使い方(バッファ・電池・朝プラン・実行)",
-      body: [renderSettingsBufferPanel(), renderSettingsBatteryPanel(), renderSettingsMorningPlanPanel(), renderSettingsExecPanel()]
+      id: "settings-daily", label: "日々の使い方(バッファ・電池・下書き・実行)",
+      body: [renderSettingsBufferPanel(), renderSettingsBatteryPanel(), renderSettingsDraftSchedulePanel(), renderSettingsExecPanel()]
     },
     {
       id: "settings-display", label: "表示・タイマー(テーマ・ガイド付きアクセス)",
