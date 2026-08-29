@@ -9,7 +9,7 @@
 //   (d)    「記録せず閉じる」はそのまま(×/フッターとも1アクションで到達可能になった)
 // (e) 日報生成: 当日分のbodyScansがあれば`### 身体スキャン`表(回復列を含む)が出る/0件の日は節ごと省略
 // (f) normalizeStateの後方互換: bodyScansフィールドが無い旧stateでも起動できる
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, generateReportThroughGate } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -171,7 +171,7 @@ function check(name, cond, extra = "") {
       { id: "bs-other-day", dateTime: `${YEST}T10:00:00`, fatigue: 5, recovery: 1, part: "頭", pomodoroBlockId: "blk-z" }
     ];
     await seed({ blocks: [], bodyScans: scans, view: "journal" });
-    await page.click('[data-action="generate-report"]');
+    await generateReportThroughGate(page);
     await page.waitForTimeout(400);
     const reportText1 = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
     check("`### 身体スキャン`見出しが出る", reportText1.includes("### 身体スキャン"), reportText1.slice(0, 600));
@@ -183,7 +183,7 @@ function check(name, cond, extra = "") {
 
     console.log("[8] 日報生成: 当日分のbodyScansが0件なら`### 身体スキャン`節は省略される");
     await seed({ blocks: [], bodyScans: [], view: "journal" });
-    await page.click('[data-action="generate-report"]');
+    await generateReportThroughGate(page);
     await page.waitForTimeout(400);
     const reportText2 = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
     check("`### 身体スキャン`見出しが出ない", !reportText2.includes("### 身体スキャン"), reportText2.slice(0, 400));

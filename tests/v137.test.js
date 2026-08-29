@@ -13,7 +13,7 @@
 // [3] review.md:30 — Wish詳細textarea(.wish-detail .textarea)のcomputed font-sizeが16px以上。
 // [5] review.md:39 — conditionBudgetがsleepHに数値文字列(非正規state)を渡されてもTypeErrorに
 //     ならず、Number()経由で正しく判定する(hr/hrvの暗黙変換との非対称を解消)。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, generateReportThroughGate } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -248,7 +248,7 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(300);
     await page.evaluate((KEY) => { const s = JSON.parse(localStorage.getItem(KEY)); s.blocks = []; localStorage.setItem(KEY, JSON.stringify(s)); }, KEY);
     await page.click('[data-action="nav"][data-view="journal"]');
-    await page.click('[data-action="generate-report"]');
+    await generateReportThroughGate(page);
     await page.waitForTimeout(300);
     const chipText = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
     check("pageerror(TypeError)が発生していない", pageErrorCount === pageErrorsBefore4, `(発生件数: ${pageErrorCount - pageErrorsBefore4})`);
@@ -261,7 +261,7 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(300);
     await page.evaluate((KEY) => { const s = JSON.parse(localStorage.getItem(KEY)); s.blocks = []; localStorage.setItem(KEY, JSON.stringify(s)); }, KEY);
     await page.click('[data-action="nav"][data-view="journal"]');
-    await page.click('[data-action="generate-report"]');
+    await generateReportThroughGate(page);
     await page.waitForTimeout(300);
     const chipText2 = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
     check("数値型のsleepHでも従来どおり通常判定される", !!chipText2 && chipText2.includes("通常"), chipText2);

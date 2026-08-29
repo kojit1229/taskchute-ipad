@@ -1,0 +1,83 @@
+{
+  "version": 296,
+  "date": "2026-08-30",
+  "title": "「書く瞑想」R1b(候補チップ+dailyCloseゲート+JOURNAL_PROMPTS文言整理)",
+  "summary": "K承認済みの充放電ログ改善計画 第1弾R1b(v294=R1aの後半)。書く瞑想パネルの放電/充電チップ欄へ、当日の身体スキャン(疲労/回復3以上)+完了Block名+夜のひとこと(充電のみ)を候補チップとして帯表示し、タップで既存の追加口へ振り分ける(重複は無害にスキップ)。「日報を生成」押下時、当日を見ていて当日のwriteMeditationsが未保存なら未完了理由チップの後段に「先にやりますか?」の軽いdailyCloseゲートを挟む(K裁定案A=仕様どおり実装し、既存の直接クリックテスト計30箇所(generateReportThroughGateへの置換26箇所+v162.test.jsのdismissWriteMeditationGateIfOpen追加4箇所)はtests/helpers.jsの共有ヘルパーgenerateReportThroughGate/dismissWriteMeditationGateIfOpenで機械追随)。あわせてFREE LOGのJOURNAL_PROMPTS(感謝/ハイライト/気付き・学び)を書く瞑想パネルへの誘導文へ差し替えた。候補チップの閾値は当初案の4以上からK裁定2026-08-30で3以上へ変更。",
+  "changedFiles": [
+    "CHANGES_v296.md",
+    "releases/v296.json",
+    "app.js",
+    "sw.js",
+    "src/features/journal.js",
+    "tests/v296.test.js",
+    "tests/v294.test.js",
+    "tests/v162.test.js",
+    "tests/v117.test.js",
+    "tests/v128.test.js",
+    "tests/v129.test.js",
+    "tests/v131.test.js",
+    "tests/v137.test.js",
+    "tests/v231.test.js",
+    "tests/v295.test.js",
+    "tests/v61.test.js",
+    "tests/v68.test.js",
+    "tests/v81.test.js",
+    "tests/v91.test.js",
+    "tests/helpers.js",
+    "tests/action-registry-core.test.js",
+    "docs/code-index.generated.md",
+    "docs/code-index.generated.json",
+    "docs/test-impact-map.generated.md",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "improvement-plan.md第1弾のR1bスコープ(項目3=候補チップ連携/5=dailyCloseゲート/6=JOURNAL_PROMPTS文言整理)を実装する。R1a(v294)が置いた独立state(state.writeMeditations)・パネル・日報出力の基盤はそのまま利用し、追加/変更しない。",
+    "dailyCloseゲートは未完了理由チップ(v162)と同じ「強制しない」設計に揃える: 未保存なら1回だけ尋ね、スキップしたら同日は再度尋ねない(セッション内フラグのみ、stateへは一切書かない)。",
+    "候補チップの重複追加(同一テキストの候補タップ・手入力)は無害にスキップし、二重チップを作らない。"
+  ],
+  "changes": [
+    "src/features/journal.js: writeMeditationCandidates(kind, date)を新設。当日の身体スキャン(fatigue/recovery 3以上=K裁定2026-08-30、当初案の4以上から変更)から`疲労N: Block名`/`回復N: Block名`を、当日の完了Blockから`Block名`を、充電側のみ夜のひとこと(state.condition.logs[date].eveningNote)を候補として返す。writeMeditationCandidateChipsHTML()でチップ帯を描画し(候補0件なら空文字=帯ごと非表示)、タップは新規action`km-chip-candidate`→既存のaddWriteMeditationChip()と同じ入口へ流し込む。",
+    "src/features/journal.js addWriteMeditationChip(): 同一テキストが既にそのkindのリストにあれば無害にスキップするガードを追加(候補チップの「使用済みは薄表示(pointer-events:none)」表示とあわせて、手入力での重複追加も防ぐ)。patchWriteMeditationPanel()の差分パッチへ候補帯の再描画(#km-${kind}-candidates-wrap)を追加(既存のパネル全体・render()全体を呼ばない方式は無改修)。",
+    "src/features/journal.js JOURNAL_PROMPTS: 「🙏 感謝(3 つ)」「✨ 今日のハイライト」「💡 気付き・学び」の3つのヒント文言を、書く瞑想パネル(上)への誘導文へ差し替えた。見出し自体・「📝 自由記述」「依頼」の文言は無改修。",
+    "app.js: dailyCloseゲート(maybeGateWriteMeditationThenGenerateReport/buildWriteMeditationGateModal/writeMeditationGateDoIt/writeMeditationGateSkip)を新設。「日報を生成」action・openIncompleteReasonModalの空queue分岐・advanceIncompleteReasonQueueのdailyClose完了分岐の3箇所で、直接generateReport()を呼んでいた箇所をこのゲート判定へ差し替えた(未完了理由チップの後段に位置する)。「やる」はモーダルを閉じ書く瞑想segmentを開いてスクロール、「スキップして生成」・背景タップはセッション内フラグ(_writeMeditationGateSkippedDate、stateへは書かない)を立てて生成続行する。renderModal()の背景クリック分岐へwriteMeditationGate typeのskip経路を追加(bodyScan/incompleteReasonと同じ扱い)。click dispatcherへkm-gate-do-it/km-gate-skipの2action、journal.jsからwriteMeditationForをimportして未保存判定に使う。",
+    "sw.js: CACHE_NAMEをtaskchute-journal-pwa-v296へ更新(APP_SHELL変更なし、新規src/*.jsファイルは追加していないため)。",
+    "tests/helpers.js: dismissWriteMeditationGateIfOpen(page)/generateReportThroughGate(page)を新設(dismissBodyScanIfOpenと同じ思想。ゲートが出ていなければno-op)。K裁定案A(2026-08-29)の「既存テストはヘルパーで機械追随」を実現する共有部品。",
+    "tests/v296.test.js新規: §8-1(a)〜(d)網羅(候補チップの閾値境界=疲労3/回復3で出る・2で出ない、完了Block/夜のひとこと候補、前日日付の身体スキャン・完了Blockが当日候補に出ない日付境界の負例、タップ追加+使用済み薄表示+重複無害スキップ、候補0件で帯非表示、JOURNAL_PROMPTS誘導文化(感謝/ハイライト/気付き・学びを見出しごとに区間切り出しして個別assert)、ゲートが出る/「やる」でパネルへ/「スキップ」で生成続行+同日再ゲートなし+state直下キー集合不変・settings/journalMeta/journals/writeMeditations深い比較不変(reports更新のみを期待差分として除く)/保存済みなら非表示/選択日が今日でなければ対象外、未完了理由チップ→書く瞑想ゲートの順序、390px)。固定wait(waitForTimeout)は使用していない。全48チェック。",
+    "tests/v296.test.js Codexレビュー(テスト妥当性)指摘6点への追加修正(実装コードapp.js/src/features/journal.jsは変更なし=Claude系レビューPASS済みのため): (1)major=候補チップに前日日付の強い値(疲労5/回復5等)を混ぜ、当日候補に出ないことをassertする日付境界の負例を追加。(2)major=ゲート「スキップ」前後のセッションフラグ非漏出検証を、state直下のキー集合不変+settings/journalMeta/journals/writeMeditationsの深い比較不変(reports更新のみを期待差分として除く)へ強化。(3)major=JOURNAL_PROMPTSのハイライト・気付き・学びも感謝と同様、見出しごとに区間を切り出して「誘導文になっている」「旧文言が残っていない」を個別assert。(4)minor=回復側の正境界を回復5→回復3の実際の閾値境界へ修正(回復2は出ないと合わせ境界3/2を独立検出)。",
+    "tests/v294.test.js: [7](b)続きの2箇所のgenerate-reportクリックをgenerateReportThroughGate(page)へ機械置換(検証意図=「未記入日は節が出ない/記入があれば節が出る」は不変。1箇所目は当日writeMeditations未保存のためゲートが実際に挟まる=ヘルパーのスキップ経路を初めて実地で通す)。",
+    "tests/v162.test.js: 8箇所のgenerate-reportクリックをgenerateReportThroughGate(page)へ機械置換。加えて、キュー最後の1件となるincomplete-reason-chip/incomplete-reason-skipクリック4箇所(このスイートはwriteMeditations未保存のまま運用するため、dailyClose完了後に書く瞑想ゲートが新たに挟まる)の直後へdismissWriteMeditationGateIfOpen(page)を追加し、既存の「モーダルが閉じている」「generateReport()が走る」等の検証意図を維持したまま成立させた。",
+    "tests/v117/v128/v129/v131/v137/v231/v295/v61/v68/v81/v91.test.js: generate-reportの直接クリック(計18箇所)をgenerateReportThroughGate(page)へ機械置換(いずれもwriteMeditations未設定=未保存のためゲートが実際に挟まりスキップ経路を通るが、各スイートの検証意図・アサーションは無改修)。",
+    "tests/action-registry-core.test.js: 新規registerActions 3件(km-chip-candidate/km-gate-do-it/km-gate-skip)をGOLDEN_CLICK_ACTIONS/MIGRATED_TO_REGISTRY_ACTIONS/APP_JS_REGISTERED_ACTIONSのgolden listへ追加(223→226件、既存の増減履歴と同じ形式で追記)。"
+  ],
+  "skipped": [
+    "候補チップ連携・dailyCloseゲート・JOURNAL_PROMPTS文言整理以外(数値会計への後付け導線=第2弾、月次インパクト図=第3弾)は非目標のまま。",
+    "loop/scripts/daily-report-fallback.py・loop/FORMAT_CONTRACT.mdへの追随は不要(R1bは日報の出力フォーマット=節構成を変えていないため。R1a時のような契約追随の対象外)。"
+  ],
+  "uncertainties": [
+    "候補チップの重複判定はテキスト完全一致(entry[kind].some(c => c.text === trimmed))で行っており、同じ完了Block名が偶然2つ存在する等で候補テキストが一致した場合は2件目のタップも無害にスキップされる(意図した挙動だが、稀に「別のBlockのつもりでタップしたのに追加されない」という体験になりうる)。",
+    "実機iOS Safari PWAでの候補チップタップ・ゲートモーダルの操作感(押しやすさ・スクロール位置)は監督者判断でK承認後に確認する。"
+  ],
+  "reviewFocus": [
+    "dailyCloseゲートの発火が「未完了理由チップの後段」に正しく位置していること(v296.test.js [11]・v162.test.jsの機械追随テストで検証)。",
+    "generateReportThroughGate/dismissWriteMeditationGateIfOpenへの機械置換が、既存13テストスイート(v294・v162+11本、計30箇所)の検証意図(何を確認しているか)を一切変えずに成立していること(単なる置換ではなくv162の4箇所はdismiss呼び出しの追加も伴う)。",
+    "候補チップの重複追加ガードが手入力・候補タップの両経路で同じロジック(addWriteMeditationChip)を通っており、二重実装になっていないこと。",
+    "_writeMeditationGateSkippedDateがモジュール変数(セッション内のみ)でありstate配下のどこにも書き込まれないこと(v296.test.js [7]でjournalMeta不変を確認)。"
+  ],
+  "verification": [
+    "node --check app.js / node --check src/features/journal.js / node --check sw.js / node --check tests/v296.test.js / node --check tests/helpers.js / node --check tests/action-registry-core.test.js / 機械置換した11+2スイート全てで構文確認。",
+    "node tests/v296.test.js で新規§8-1網羅(全12ブロック48チェック。Codexレビュー指摘6点反映後の実数)がALL PASS(固定wait0件)。",
+    "node tests/v294.test.js / node tests/journal-core.test.js / node tests/v162.test.js / node tests/v117.test.js / node tests/v128.test.js / node tests/v129.test.js / node tests/v131.test.js / node tests/v137.test.js / node tests/v231.test.js / node tests/v295.test.js / node tests/v61.test.js / node tests/v68.test.js / node tests/v81.test.js / node tests/v91.test.js / node tests/action-registry-core.test.js を実行し、いずれも無改修の検証意図のままALL PASS(action-registry-coreのみgolden list追記後にPASS)であることを確認した。",
+    "npm run test:core(直近5件v296/v295/v294/v293/v288+固定横断5件v72/v59/v67/v50/v70)で全10スイートALL PASSを確認した。",
+    "node scripts/code-index.js --write / node scripts/test-manifest.js --write を実行済み。"
+  ],
+  "notes": [
+    "実行コード差分(tests/**・docs/**・releases/**・*.md除く、add+del合計)はapp.js 71+4=75行・src/features/journal.js 53+3=56行の合計131行で、原則200行の目標内に収まった。tests/helpers.jsの共有ヘルパー追加(K裁定案Aの機械追随に必要な部品)・14スイートへの機械置換はテストのため数値対象外。",
+    "コミット・push・release-gate --finalは監督者がK承認後に実施する。",
+    "候補チップ閾値は実装時にK裁定(2026-08-30)で4以上から3以上へ変更された(当初のwriteMeditationCandidates実装・v296.test.jsの境界値検証とも3/2へ追随済み)。",
+    "Codexレビュー(テスト妥当性)指摘6点はtests/v296.test.js・本記録・CHANGES_v296.mdのみで反映した(実装コードapp.js/src/features/journal.jsは無改修=Claude系レビューPASS済みのため対象外)。修正後のv296.test.jsは全48チェック(修正前30チェックから、日付境界負例3件・セッション非漏出検証の強化(2件→5件)・JOURNAL_PROMPTS個別assert(1件→6件)の純増)。"
+  ],
+  "knownLimitations": [
+    "コミット・push・release-gate --final・CI全量・iOS Safari実機PWA確認は監督者がK承認後に実施する。",
+    "作業開始前から変更済みのartifacts/v275 PNG 4件は本リリース対象外として保持した。"
+  ]
+}

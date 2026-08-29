@@ -4,7 +4,7 @@
 // (b) 睡眠時間のみでの3段階判定(通常/低予算/赤字。ベースライン無し=サンプル不足でも判定できる)
 // (c) HRVベースラインを反映した判定(7日分以上のサンプルがあれば心拍系も判定に使う)
 // (d) 日報生成: `体力予算: ...`行がサマリの達成率表の後に出る/データなし日は行ごと省略
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, generateReportThroughGate } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -64,7 +64,7 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(400);
   }
   async function generatedReport() {
-    await page.click('[data-action="generate-report"]');
+    await generateReportThroughGate(page);
     await page.waitForFunction(({ KEY, TODAY }) => Boolean(JSON.parse(localStorage.getItem(KEY)).reports[TODAY]), { KEY, TODAY });
     return page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
   }

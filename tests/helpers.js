@@ -221,6 +221,28 @@ async function dismissBodyScanIfOpen(page) {
   ).catch(() => {});
 }
 
+// v296(R1b追随): 書く瞑想dailyCloseゲート(K裁定2026-08-29=案A、当日writeMeditations未保存で
+// 「日報を生成」到達時に割り込む)を、dismissBodyScanIfOpenと同じ思想で機械的に片付けるヘルパー。
+// ゲートが出ていなければno-op(既存テストの「即時生成される」検証意図は変えない・弱体化ではない)。
+async function dismissWriteMeditationGateIfOpen(page) {
+  const skipBtn = page.locator('[data-action="km-gate-skip"]');
+  if ((await skipBtn.count()) === 0) return;
+  if (!(await skipBtn.first().isVisible().catch(() => false))) return;
+  await skipBtn.first().click();
+  await page.waitForFunction(
+    () => !document.querySelector("#modalRoot")?.classList.contains("open"),
+    { timeout: 5000 }
+  ).catch(() => {});
+}
+
+// 「日報を生成」ボタンのクリック+書く瞑想ゲート片付けをまとめた置き換え口。既存テストの
+// `await page.click('[data-action="generate-report"]');` をこの呼び出しへ機械置換する
+// (検証意図は不変。ゲートが出ない状況では従来どおりクリックのみ)。
+async function generateReportThroughGate(page) {
+  await page.click('[data-action="generate-report"]');
+  await dismissWriteMeditationGateIfOpen(page);
+}
+
 function randomPort(min = 20000, max = 40000) {
   const idx = process.env.TEST_PORT_INDEX;
   if (idx !== undefined && idx !== "") {
@@ -238,5 +260,6 @@ function randomPort(min = 20000, max = 40000) {
 module.exports = {
   chromium, ROOT, launchOptions, startServer,
   blockGithubApiByDefault, passGithubGate, GITHUB_API_HOST, STATE_KEY, randomPort,
-  openSettingsGroup, dispatchRegisteredAction, dismissBodyScanIfOpen
+  openSettingsGroup, dispatchRegisteredAction, dismissBodyScanIfOpen,
+  dismissWriteMeditationGateIfOpen, generateReportThroughGate
 };

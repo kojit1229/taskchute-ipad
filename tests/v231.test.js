@@ -1,10 +1,8 @@
 // v231: 日報の「12週 今週の進捗」へ、topband.jsを単一正本とするWeek n/12を追加。
 const path = require("path");
 const { pathToFileURL } = require("url");
-const {
-  chromium, launchOptions, startServer, blockGithubApiByDefault,
-  passGithubGate, randomPort, STATE_KEY
-} = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault,
+  passGithubGate, randomPort, STATE_KEY, generateReportThroughGate } = require("./helpers");
 
 const PORT = randomPort();
 const REPORT_DATE = "2026-08-22";
@@ -53,7 +51,7 @@ function check(name, cond, extra = "") {
     }, { key: STATE_KEY, reportDate: REPORT_DATE, startDate });
     await page.reload();
     await page.waitForSelector('[data-action="generate-report"]');
-    await page.click('[data-action="generate-report"]');
+    await generateReportThroughGate(page);
     await page.waitForFunction(({ key, reportDate }) => {
       const state = JSON.parse(localStorage.getItem(key));
       return Boolean(state.reports?.[reportDate]);

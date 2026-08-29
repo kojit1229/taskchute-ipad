@@ -19,7 +19,10 @@
 //  [11] 日次締めでスキップしたBlockは同セッション内で再質問されない(推奨4)。
 //  必須3(state.questions.push直後のsaveState())・推奨6(incompleteReason.atのString()正規化)は
 //  コード変更のみで専用のUIテストは追加していない。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const {
+  chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort,
+  generateReportThroughGate, dismissWriteMeditationGateIfOpen
+} = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -117,7 +120,7 @@ const mkTodayBlock = (id, title, extra = {}) => ({
     // ============================================================
     console.log("[2] 日次締め: 理由未記録の未完了Blockが残っていると「日報を生成」で直接は生成されず理由チップモーダルが開く");
     await seed({ blocks: [mkTodayBlock("blk-close-1", "未完了A"), mkTodayBlock("blk-close-2", "未完了B", { completed: true })], view: "journal" });
-    await page.click('[data-action="generate-report"]');
+    await generateReportThroughGate(page);
     await page.waitForTimeout(300);
     const s2 = await stateNow();
     check("reports[TODAY]はまだ生成されない", !s2.reports[TODAY]);
@@ -129,6 +132,10 @@ const mkTodayBlock = (id, title, extra = {}) => ({
     await page.fill("[data-incomplete-reason-note]", "会議が長引いた");
     await page.click('[data-action="incomplete-reason-chip"][data-chip="時間切れ"]');
     await page.waitForTimeout(300);
+    // v296(R1b)追随: このチップがキュー最後の1件のため、直後にdailyClose完了経路(generateReport
+    // 手前)へ進む。当日の書く瞑想は未保存(このスイートは対象外)なのでゲートが挟まる。
+    // 「モーダルが閉じている」検証意図(次のcheck)を成立させるため片付けてから読む。
+    await dismissWriteMeditationGateIfOpen(page);
     const s3 = await stateNow();
     const recorded = s3.blocks.find((b) => b.id === "blk-close-1");
     check("チップとひと言がincompleteReasonへ記録される",
@@ -138,7 +145,7 @@ const mkTodayBlock = (id, title, extra = {}) => ({
 
     console.log("[4] 全件スキップでもgenerateReport()は最終的に実行される(理由は記録されない)");
     await seed({ blocks: [mkTodayBlock("blk-skip-1", "スキップ対象A"), mkTodayBlock("blk-skip-2", "スキップ対象B")], view: "journal" });
-    await page.click('[data-action="generate-report"]');
+    await generateReportThroughGate(page);
     await page.waitForTimeout(300);
     check("(準備)モーダルが開く", await page.locator(".modal-root.open").count() === 1);
     await page.click('[data-action="incomplete-reason-skip"]');
@@ -146,6 +153,8 @@ const mkTodayBlock = (id, title, extra = {}) => ({
     check("(準備)2件目のモーダルへ進む(まだ閉じない)", await page.locator(".modal-root.open").count() === 1);
     await page.click('[data-action="incomplete-reason-skip"]');
     await page.waitForTimeout(300);
+    // v296(R1b)追随: 2件目(キュー最後)のスキップでdailyClose完了経路→書く瞑想ゲートが挟まる。
+    await dismissWriteMeditationGateIfOpen(page);
     const s4 = await stateNow();
     check("全件スキップ後にgenerateReport()が走る", !!s4.reports[TODAY]);
     check("理由は記録されない(incompleteReasonはnullのまま)",
@@ -161,12 +170,15 @@ const mkTodayBlock = (id, title, extra = {}) => ({
       ],
       view: "journal"
     });
-    await page.click('[data-action="generate-report"]');
+    await generateReportThroughGate(page);
     await page.waitForTimeout(300);
     check("モーダル本文には理由未記録のBlockだけが出る", (await page.locator(".modal-body").textContent()).includes("理由未記録"));
     check("既に理由が付いているBlockは出ない", !(await page.locator(".modal-body").textContent()).includes("既に理由記録済み"));
     await page.click('[data-action="incomplete-reason-skip"]');
     await page.waitForTimeout(300);
+    // v296(R1b)追随: キュー最後のスキップでdailyClose完了経路→書く瞑想ゲートが挟まる。
+    // 後続は次のseed()でページごとreloadするため必須ではないが、モーダルを残さず片付ける。
+    await dismissWriteMeditationGateIfOpen(page);
 
     // ============================================================
     // [6] 日報出力
@@ -182,7 +194,7 @@ const mkTodayBlock = (id, title, extra = {}) => ({
       ],
       view: "journal"
     });
-    await page.click('[data-action="generate-report"]');
+    await generateReportThroughGate(page);
     await page.waitForTimeout(300);
     const s6 = await stateNow();
     const report6 = s6.reports[TODAY] || "";
@@ -193,7 +205,7 @@ const mkTodayBlock = (id, title, extra = {}) => ({
 
     console.log("[6b] 日報出力: 理由が1件も無い日は「## 未完了理由」節ごと省略される");
     await seed({ blocks: [mkTodayBlock("blk-noreason", "理由なし未完了")], view: "journal" });
-    await page.click('[data-action="generate-report"]');
+    await generateReportThroughGate(page);
     await page.waitForTimeout(300);
     const s6b = await stateNow();
     check("節ごと省略される", !(s6b.reports[TODAY] || "").includes("## 未完了理由"));
@@ -206,7 +218,7 @@ const mkTodayBlock = (id, title, extra = {}) => ({
       ],
       view: "journal"
     });
-    await page.click('[data-action="generate-report"]');
+    await generateReportThroughGate(page);
     await page.waitForTimeout(300);
     const s6c = await stateNow();
     const report6c = s6c.reports[TODAY] || "";
@@ -222,14 +234,17 @@ const mkTodayBlock = (id, title, extra = {}) => ({
     // ============================================================
     console.log("[11] 日次締め: スキップしたBlockは同セッション内で「日報を生成」を再度押しても再質問されない(2系統レビュー対応・推奨4)");
     await seed({ blocks: [mkTodayBlock("blk-skip-remember", "スキップ記憶対象")], view: "journal" });
-    await page.click('[data-action="generate-report"]');
+    await generateReportThroughGate(page);
     await page.waitForTimeout(300);
     check("(準備)1回目はモーダルが開く", await page.locator(".modal-root.open").count() === 1);
     await page.click('[data-action="incomplete-reason-skip"]');
     await page.waitForTimeout(300);
+    // v296(R1b)追随: キュー最後のスキップでdailyClose完了経路→書く瞑想ゲートが挟まる。
+    // 「スキップ後にgenerateReport()が走る」検証意図を成立させるため片付けてから読む。
+    await dismissWriteMeditationGateIfOpen(page);
     const s11a = await stateNow();
     check("(準備)スキップ後にgenerateReport()が走る", !!s11a.reports[TODAY]);
-    await page.click('[data-action="generate-report"]');
+    await generateReportThroughGate(page);
     await page.waitForTimeout(300);
     check("2回目はモーダルが開かない(同セッション内でスキップ済みBlockは再質問されない)",
       await page.locator(".modal-root.open").count() === 0);

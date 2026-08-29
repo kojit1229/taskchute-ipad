@@ -16,7 +16,7 @@ const path = require("path");
 const { pathToFileURL } = require("url");
 const {
   chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate,
-  randomPort, STATE_KEY
+  randomPort, STATE_KEY, generateReportThroughGate
 } = require("./helpers");
 
 const ROOT = path.join(__dirname, "..");
@@ -312,8 +312,10 @@ async function verifyBrowserPanel() {
       sAfterEmptySave.journals[TODAY] === journalBeforeEmptySave);
 
     console.log("[7](b) 続き: 日報生成→空のままは`## 書く瞑想`節が出ない / 記入(放電・充電とも)があれば節が出る");
+    // v296(R1b)追随: 当日writeMeditationsが未保存のためdailyCloseゲートが挟まる。
+    // 「スキップして生成」経由で片付けてから生成完了を待つ(検証意図=節が出ないこと、は不変)。
     const reportBeforeEmpty = (await stateNow()).reports?.[TODAY] ?? null;
-    await page.click('[data-action="generate-report"]');
+    await generateReportThroughGate(page);
     await page.waitForFunction(({ KEY, TODAY, prev }) => {
       const r = JSON.parse(localStorage.getItem(KEY)).reports?.[TODAY] ?? null;
       return r !== prev;
@@ -330,7 +332,8 @@ async function verifyBrowserPanel() {
     await page.waitForFunction(() => document.querySelectorAll("#km-charge-list [data-action=\"km-chip-remove\"]").length === 1);
     await page.click('[data-action="km-save"]');
     await page.waitForFunction(() => document.querySelector("#toast")?.textContent === "書く瞑想を保存しました");
-    await page.click('[data-action="generate-report"]');
+    // 保存済みなのでゲートは出ない想定(generateReportThroughGate内はno-op)。
+    await generateReportThroughGate(page);
     await page.waitForFunction(({ KEY, TODAY, prev }) => {
       const r = JSON.parse(localStorage.getItem(KEY)).reports?.[TODAY] ?? null;
       return r !== prev;

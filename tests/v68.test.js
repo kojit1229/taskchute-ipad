@@ -20,7 +20,7 @@
 // 方針: v62/v65/v67と同じく、app.js は type="module" のため内部関数はwindowに露出しない。
 // ブラウザ操作 + localStorage 状態の直接注入で観測する。AIプラン/AIフィードバック/週次レビューの
 // 実ファイルfetchはpage.routeで常に404隔離し、リポジトリの実ファイル有無に結果が左右されないようにする。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, generateReportThroughGate } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -160,7 +160,7 @@ function check(name, cond, extra = "") {
         makeQuestionSeed("originがmanualの問い(出ないはず)", "manual", "open")
       ]
     });
-    await page.click('[data-action="generate-report"]');
+    await generateReportThroughGate(page);
     await page.waitForTimeout(300);
     const s2 = await stateNow();
     const report2 = s2.reports[TODAY] || "";
@@ -172,7 +172,7 @@ function check(name, cond, extra = "") {
 
     console.log("[3] generateReport(): origin:userの未解決質問が無ければ「## AIへの質問」節ごと省略される");
     await seed({ view: "journal", questions: [makeQuestionSeed("manualの問い", "manual", "open")] });
-    await page.click('[data-action="generate-report"]');
+    await generateReportThroughGate(page);
     await page.waitForTimeout(300);
     const s3 = await stateNow();
     check("該当質問が無い日は見出しが出ない", !(s3.reports[TODAY] || "").includes("## AIへの質問"));

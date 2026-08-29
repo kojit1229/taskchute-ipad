@@ -7,7 +7,7 @@
 //      Block.commentへ反映する(空のままなら既存commentは変更しない=空文字で上書きしない)。
 // §8-1(a)〜(d)を網羅する。v293(手動完了5導線の接続点)・v129(モーダル本体の起源)は
 // 別ファイルで2軸UIへ追随済み(このファイルはモーダル自体の新規挙動に専念する)。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, generateReportThroughGate } = require("./helpers");
 const path = require("path");
 const { pathToFileURL } = require("url");
 
@@ -292,7 +292,7 @@ function check(name, cond, extra = "") {
     await scanTitle(page).waitFor({ state: "detached" });
     await clickReal(page, '[data-action="nav"][data-view="journal"]');
     await page.waitForSelector('#app[data-view="journal"]');
-    await page.click('[data-action="generate-report"]');
+    await generateReportThroughGate(page);
     const reportText = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
     check("`### 身体スキャン`表に回復列を含めて出る(疲労3・回復2)", /\| 3 \| 2 \| —/.test(reportText), reportText.slice(0, 800));
     check("既存の「## 7. Block 内のコメント」節にBlock.commentが乗る(新設節ではない)",

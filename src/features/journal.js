@@ -89,6 +89,8 @@ function configureJournal(deps) {
     // renderJournal()全体は再描画しない(WBS検索v288と同じ禁則。フォーカス/IME保護)。
     "km-chip-add": (ctx) => addWriteMeditationChipFromInput(ctx.target.dataset.kind, ctx.target.dataset.date),
     "km-chip-remove": (ctx) => removeWriteMeditationChip(ctx.target.dataset.kind, ctx.target.dataset.date, ctx.id),
+    // v296(R1b): 候補チップタップ→同じ追加口(addWriteMeditationChip)。フォーカス移動はしない。
+    "km-chip-candidate": (ctx) => addWriteMeditationChip(ctx.target.dataset.kind, ctx.target.dataset.date, ctx.target.dataset.text),
     "km-save": (ctx) => saveWriteMeditationEntry(ctx.target.dataset.date)
   });
 }
@@ -422,6 +424,45 @@ function writeMeditationOnelinerText(date) {
   return `放電${d}件・充電${c}件・${d || c ? "保存済み" : "未保存"}`;
 }
 
+// v296(R1b): 候補チップ(疲労/回復3以上の身体スキャン+当日の完了Block名+夜のひとこと)。
+// タップでaddWriteMeditationChip経由の同じ入口へ流し込む(重複追加は下記のガードで無害にスキップ)。
+// 候補一覧自体は当日データから毎回再計算するだけの読み取り専用関数(状態を持たない)。
+// 閾値3以上はK裁定2026-08-30(当初案の4以上から変更)。
+function writeMeditationCandidates(kind, date) {
+  const candidates = [];
+  const scanField = kind === "discharge" ? "fatigue" : "recovery";
+  const scanLabel = kind === "discharge" ? "疲労" : "回復";
+  (state.bodyScans || [])
+    .filter((s) => (s.dateTime || "").startsWith(date) && Number(s[scanField]) >= 3)
+    .forEach((s) => {
+      const blockTitle = (state.blocks || []).find((b) => b.id === s.pomodoroBlockId && !b.deleted)?.title;
+      if (blockTitle) candidates.push({ text: `${scanLabel}${s[scanField]}: ${blockTitle}`, tag: "身体スキャン" });
+    });
+  (state.blocks || [])
+    .filter((b) => !b.deleted && b.date === date && b.completed && b.title)
+    .forEach((b) => candidates.push({ text: b.title, tag: "完了Block" }));
+  if (kind === "charge") {
+    const eveningNote = (state.condition?.logs?.[date]?.eveningNote || "").trim();
+    if (eveningNote) candidates.push({ text: eveningNote, tag: "今日の記録" });
+  }
+  return candidates;
+}
+
+function writeMeditationCandidateChipsHTML(kind, date) {
+  const candidates = writeMeditationCandidates(kind, date);
+  if (!candidates.length) return "";
+  const usedTexts = new Set((writeMeditationFor(date)?.[kind] || []).map((c) => c.text));
+  return `
+    <div class="muted" style="font-size:11px; margin-bottom:4px">💡 候補から選ぶ(タップで追加)</div>
+    <div class="row" style="gap:6px; flex-wrap:wrap; margin-bottom:8px">
+      ${candidates.map((c) => {
+        const used = usedTexts.has(c.text);
+        return `<button class="btn ghost" style="font-size:11px; padding:5px 9px; ${used ? "opacity:.35; pointer-events:none" : ""}"
+          data-action="km-chip-candidate" data-kind="${kind}" data-date="${date}" data-text="${escapeHTML(c.text)}">${escapeHTML(c.text)} <span class="muted" style="font-size:9px">${c.tag}</span></button>`;
+      }).join("")}
+    </div>`;
+}
+
 // チップ追加/削除/保存の直後、パネル内の該当DOMだけを差し替える(renderJournal()全体は呼ばない)。
 function patchWriteMeditationPanel(date) {
   ["discharge", "charge"].forEach((kind) => {
@@ -429,15 +470,20 @@ function patchWriteMeditationPanel(date) {
     if (list) list.innerHTML = writeMeditationChipListHTML(kind, date);
     const count = document.querySelector(`#km-${kind}-count`);
     if (count) count.textContent = `${(writeMeditationFor(date)?.[kind] || []).length} / 5件(目安)`;
+    const candWrap = document.querySelector(`#km-${kind}-candidates-wrap`);
+    if (candWrap) candWrap.innerHTML = writeMeditationCandidateChipsHTML(kind, date);
   });
   const oneliner = document.querySelector("#km-oneliner");
   if (oneliner) oneliner.textContent = writeMeditationOnelinerText(date);
 }
 
+// 手入力(km-chip-add)・候補チップ(km-chip-candidate)共通の追加口。同一テキストが既にリストに
+// あれば無害にスキップする(候補チップの「使用済みは薄表示」もこの重複判定と一致させる)。
 function addWriteMeditationChip(kind, date, rawText) {
   const trimmed = String(rawText || "").trim().slice(0, 80);
   if (!trimmed) return;
   const entry = ensureWriteMeditationEntry(date);
+  if (entry[kind].some((c) => c.text === trimmed)) return;
   entry[kind] = [...entry[kind], { id: crypto.randomUUID(), text: trimmed }];
   entry.updatedAt = nowDateTime();
   saveState();
@@ -488,6 +534,7 @@ function writeMeditationChipInputHTML(kind, date, label) {
         <span style="font-size:12.5px; font-weight:700">${label}</span>
         <span class="muted" id="km-${kind}-count" style="font-size:11px">${(writeMeditationFor(date)?.[kind] || []).length} / 5件(目安)</span>
       </div>
+      <div id="km-${kind}-candidates-wrap">${writeMeditationCandidateChipsHTML(kind, date)}</div>
       <div class="row" style="gap:6px; margin-bottom:8px">
         <input type="text" id="km-${kind}-input" class="input" style="flex:1; font-size:16px" maxlength="80" placeholder="自由入力して追加…">
         <button class="btn primary small" data-action="km-chip-add" data-kind="${kind}" data-date="${date}">追加</button>
@@ -569,9 +616,12 @@ function renderSleepCard(date) {
 // v17: 各セクションの思考プロンプト(画面表示用、Markdown 出力時は省く)
 const JOURNAL_PROMPTS = {
   // v105: 「🛏 睡眠」はテンプレ廃止(実測は睡眠CSV取込に一本化)に伴い削除
-  "🙏 感謝(3 つ)": "当たり前すぎて忘れがちな何か。誰・何に対して?(例:朝のコーヒー、子の笑顔)",
-  "✨ 今日のハイライト": "今日いちばん心が動いた瞬間は? 嬉しい・面白い・誇らしい、どれでも。",
-  "💡 気付き・学び": "うまくいった/いかなかった理由は? 自分・他人・状況について、次に活かせること。",
+  // v296(R1b): 感謝/ハイライト/気付き・学びの3つは「書く瞑想」パネル(上)へ役割を移した。
+  // 見出し自体は後方互換のため残し、ヒント文言だけを誘導文に差し替える(v73責め語彙禁止=
+  // 「未記入」ではなく「上へ」という事実案内のみ)。
+  "🙏 感謝(3 つ)": "「書く瞑想」パネル(上)の②充電へ移りました。良かったこと・感謝したいことはそちらへどうぞ。",
+  "✨ 今日のハイライト": "同じく「書く瞑想」パネル(上)の②充電へ。候補チップから完了Blockを選ぶと早いです。",
+  "💡 気付き・学び": "「書く瞑想」パネル(上)③の深掘り(放電/充電セルフトーク)へ移りました。うまくいった/いかなかった理由はそこで言語化できます。",
   "📝 自由記述": "・いまなに考えてる?\n・言葉にならない違和感を、まず雑に書き出す。コントロールできないことは手放してOK。\n・夢・思いつき・心配ごと・読書メモ・なんでも。",
   // v91: 「### 依頼」見出し配下のヒント(JOURNAL_REQUEST_SECTIONの見出しテキストと対応させる)
   "依頼": "AIにやってほしいことがあれば、1行1件でここに書く(例:「相場帳のバグを直して」)。翌朝のバッチが読み取り、タスク登録・0秒思考テーマ登録・Wish追加などをホワイトリスト操作として試みます。"

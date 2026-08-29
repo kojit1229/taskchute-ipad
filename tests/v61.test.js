@@ -9,7 +9,7 @@
 //
 // 方針: 既存スイート(v59/v60)と同じく、app.js は type="module" のため内部関数は window に
 // 露出しない。ブラウザ操作 + localStorage 状態の直接注入で観測する。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dispatchRegisteredAction } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dispatchRegisteredAction, generateReportThroughGate } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -310,7 +310,7 @@ function check(name, cond, extra = "") {
 
   console.log("[16] 今日の理想: 日報生成(generateReport)への反映");
   await seed({ journalMeta: { [TODAY]: { aiMitCandidates: [], aiImported: false, ideal: "日報反映テストの理想" } }, view: "journal" });
-  await page.click('[data-action="generate-report"]');
+  await generateReportThroughGate(page);
   await page.waitForTimeout(400);
   const reportText = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
   check("日報に今日の理想が出力される", reportText.includes("日報反映テストの理想"), reportText.slice(0, 300));

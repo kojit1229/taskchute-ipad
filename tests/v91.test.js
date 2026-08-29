@@ -9,7 +9,7 @@
 // ③既存契約「## 8. ジャーナル」見出し自体が壊れていない
 // ④normalizeState 後方互換: 既存端末のjournalTemplateに「### 依頼」が無ければ追記され、
 //   既に持っている場合は二重に追記されない
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, generateReportThroughGate } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -98,7 +98,7 @@ function check(name, cond, extra = "") {
     await page.reload();
     await page.waitForTimeout(500);
 
-    await page.click('[data-action="generate-report"]');
+    await generateReportThroughGate(page);
     await page.waitForTimeout(300);
     const s2 = await stateNow();
     const report2 = s2.reports[TODAY] || "";

@@ -112,7 +112,10 @@ const GOLDEN_CLICK_ACTIONS = [
   "body-scan-fatigue", "body-scan-recovery", "body-scan-part", "body-scan-record", "body-scan-discard",
   "start-pomodoro", "stop-pomodoro", "interrupt-reason", "interrupt-reason-cancel",
   "complete-pomodoro", "declare-confirm", "declare-skip", "report-outcome", "report-skip",
-  "incomplete-reason-chip", "incomplete-reason-skip", "guided-access-dismiss",
+  "incomplete-reason-chip", "incomplete-reason-skip",
+  // v296: 書く瞑想dailyCloseゲート(充放電ログ改善R1b、K裁定2026-08-29=案A)。
+  "km-gate-do-it", "km-gate-skip",
+  "guided-access-dismiss",
   "go-break", "end-break",
   "edit-project", "edit-task", "edit-block",
   "twy-kind-numeric", "twy-kind-milestone", "twy-kind-none", "twy-ms-add", "twy-ms-del",
@@ -168,7 +171,8 @@ const GOLDEN_CLICK_ACTIONS = [
   "carry-over", "migration-ritual-choice",
   "energy-open-category",
   "timeline-clear-cat",
-  "km-chip-add", "km-chip-remove", "km-save"  // v294: 「書く瞑想」パネルの意図的追加
+  "km-chip-add", "km-chip-remove", "km-save",  // v294: 「書く瞑想」パネルの意図的追加
+  "km-chip-candidate"  // v296: 「書く瞑想」候補チップ(充放電ログ改善R1b)の意図的追加
 ];
 
 // v173: 段階5-2で抽出済みfeatureの分岐をregisterActions経由のレジストリへ移行した
@@ -187,6 +191,8 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
   "store-visit-add", "store-visit-edit", "store-visit-delete", "store-visit-year",
   // v294: 「書く瞑想」パネル(充放電ログ改善R1a)のチップ追加/削除/保存。
   "km-chip-add", "km-chip-remove", "km-save",
+  // v296: 「書く瞑想」候補チップ(充放電ログ改善R1b)。
+  "km-chip-candidate",
   // v181: src/features/timeline.js(configureTimeline)。ハンドラ実体(setTimelineMode)が
   // このファイルに既に存在するため、timeline系の中で唯一この動的実測方式で検証する。
   "timeline-mode",
@@ -300,7 +306,10 @@ const APP_JS_REGISTERED_ACTIONS = [
   //     =低優先度棚卸しK裁定2026-08-29) ---
   "start-pomodoro", "stop-pomodoro", "interrupt-reason", "interrupt-reason-cancel",
   "complete-pomodoro", "declare-confirm", "declare-skip", "report-outcome", "report-skip",
-  "incomplete-reason-chip", "incomplete-reason-skip", "guided-access-dismiss",
+  "incomplete-reason-chip", "incomplete-reason-skip",
+  // v296: 書く瞑想dailyCloseゲート(充放電ログ改善R1b、K裁定2026-08-29=案A)。
+  "km-gate-do-it", "km-gate-skip",
+  "guided-access-dismiss",
   "go-break", "end-break",
   // --- v181: 日付ナビ(3) ---
   "date-prev", "date-next", "today",

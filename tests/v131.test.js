@@ -5,7 +5,7 @@
 // (b) 前日のみ(2日前まで遡ってフォールバック): 睡眠カード・チップ・日報行に「M/D朝」ラベル
 // (c) 2日前のみ: 同上(境界値maxAgeDays=2)
 // (d) 3日以上前しかない/1件も無い: 赤警告+「データなし」(フォールバック対象外)
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, generateReportThroughGate } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -71,7 +71,7 @@ function check(name, cond, extra = "") {
       await page.click('[data-action="nav"][data-view="journal"]');
       await page.waitForTimeout(150);
     }
-    await page.click('[data-action="generate-report"]');
+    await generateReportThroughGate(page);
     await page.waitForTimeout(250);
     const report = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
     return report.split("\n").find((line) => line.startsWith("体力予算:")) || "";
@@ -107,7 +107,7 @@ function check(name, cond, extra = "") {
 
     console.log("[3] 日報生成: 前日分をフォールバックした体力予算行に日付ラベルが付く");
     await seed({ sleepLogs: { [YEST]: sleepLog({ sleepH: 6.0 }) }, view: "journal" });
-    await page.click('[data-action="generate-report"]');
+    await generateReportThroughGate(page);
     await page.waitForTimeout(400);
     const reportText1 = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
     check(`日報に「体力予算: 低予算(${shortDate(YEST)}朝: 睡眠6.0h)」が出る`,

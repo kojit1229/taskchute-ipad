@@ -58,7 +58,9 @@ import {
   // v294: 「書く瞑想」パネル(充放電ログ改善R1a)。setWriteMeditationTalkはinput dispatcher
   // (data-km-talk分岐、data-journal-dateと同じ全体再描画なしパターン)、
   // addWriteMeditationChipFromInputはkeydown dispatcher(Enterキー追加)から呼ぶ。
-  setWriteMeditationTalk, addWriteMeditationChipFromInput
+  // v296(R1b): writeMeditationForはdailyCloseゲート(maybeGateWriteMeditationThenGenerateReport)
+  // が当日の未保存判定に使う。
+  setWriteMeditationTalk, addWriteMeditationChipFromInput, writeMeditationFor
 } from "./src/features/journal.js";
 import {
   configureRecurrence,
@@ -528,7 +530,7 @@ registerActions({
     if (pendingReasonIds.length) {
       openIncompleteReasonModal(pendingReasonIds, "dailyClose");
     } else {
-      generateReport();
+      maybeGateWriteMeditationThenGenerateReport();
     }
   },
   "download-report": () => downloadReport(),
@@ -975,6 +977,9 @@ registerActions({
   "report-skip": () => finishReport("", ""),
   "incomplete-reason-chip": ({ target }) => recordIncompleteReasonChip(target.dataset.chip || ""),
   "incomplete-reason-skip": () => skipIncompleteReasonModal(),
+  // v296(R1b): 書く瞑想dailyCloseゲート(「やる」=パネルへ/「スキップして生成」=生成続行)。
+  "km-gate-do-it": () => writeMeditationGateDoIt(),
+  "km-gate-skip": () => writeMeditationGateSkip(),
   "guided-access-dismiss": () => {
     if (modalRoot.querySelector("[data-guided-access-suppress]")?.checked) {
       state.settings.pomoGuidedAccessHint = false;
@@ -11097,13 +11102,72 @@ function hasIncompleteReason(block) {
 function openIncompleteReasonModal(blockIds, mode) {
   const queue = (blockIds || []).filter((bid) => blockById(bid));
   if (!queue.length) {
-    if (mode === "dailyClose") generateReport();
+    if (mode === "dailyClose") maybeGateWriteMeditationThenGenerateReport();
     return;
   }
   _pendingIncompleteReasonCtx = { queue, mode };
   const first = blockById(queue[0]);
   state.modal = { type: "incompleteReason", id: queue[0] };
   renderModal(buildIncompleteReasonModal(first, queue.length));
+}
+
+// ============================================================
+// v296(R1b): 書く瞑想dailyCloseゲート(charge-log改善計画 第1弾項目5、K裁定2026-08-29=案A)。
+// 未完了理由チップ(上記)の後段に挟む。「日報を生成」押下時、当日を見ていて当日の書く瞑想が
+// 未保存(レコード無し/放電・充電とも0件)なら「先にやりますか?」を1回だけ尋ねる。
+// 強制しない: 「スキップして生成」を押すとセッション内フラグ(_writeMeditationGateSkippedDate、
+// stateへは一切書かない)にその日の日付を積み、同日中は再ゲートしない(リロードで自然リセット)。
+// ============================================================
+let _writeMeditationGateSkippedDate = ""; // セッション内のみ。todayISO()の値 or ""
+
+function writeMeditationUnsavedToday(date) {
+  const entry = writeMeditationFor(date);
+  return !entry || (entry.discharge.length === 0 && entry.charge.length === 0);
+}
+
+function maybeGateWriteMeditationThenGenerateReport() {
+  const date = todayISO();
+  if (state.selectedDate === date && writeMeditationUnsavedToday(date) && _writeMeditationGateSkippedDate !== date) {
+    state.modal = { type: "writeMeditationGate" };
+    renderModal(buildWriteMeditationGateModal());
+    return;
+  }
+  generateReport();
+}
+
+function buildWriteMeditationGateModal() {
+  return `
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">🌗 書く瞑想が未保存です</h3>
+      </div>
+      <div class="modal-body">
+        <p class="muted" style="font-size:13px; text-align:center; line-height:1.6">先にやりますか?(放電→充電の順で、今日を書いて手放します)</p>
+      </div>
+      <div class="modal-footer" style="flex-direction:column; gap:8px">
+        <button class="btn primary" style="width:100%" data-action="km-gate-do-it">やる</button>
+        <button class="btn ghost" style="width:100%" data-action="km-gate-skip">スキップして生成</button>
+      </div>
+    </div>`;
+}
+
+// 「やる」: モーダルを閉じ、書く瞑想segmentを開いてスクロールする(_journalSegmentOverrideは
+// toggle-journal-segmentクリック時と同じ「開閉オーバーライドを記録」パターンに揃える)。
+function writeMeditationGateDoIt() {
+  closeModal();
+  _journalSegmentOverride.writeMeditation = true;
+  const seg = document.querySelector(".journal-segment-writeMeditation");
+  if (seg) {
+    seg.open = true;
+    seg.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
+// 「スキップして生成」/背景タップ共通: 記録せず、その日はもう聞かずに生成続行する。
+function writeMeditationGateSkip() {
+  _writeMeditationGateSkippedDate = todayISO();
+  closeModal();
+  generateReport();
 }
 
 function buildIncompleteReasonModal(block, remaining) {
@@ -11167,7 +11231,7 @@ function advanceIncompleteReasonQueue() {
   const mode = _pendingIncompleteReasonCtx.mode;
   _pendingIncompleteReasonCtx = null;
   closeModal();
-  if (mode === "dailyClose") generateReport();
+  if (mode === "dailyClose") maybeGateWriteMeditationThenGenerateReport();
   else render();
 }
 
@@ -12724,6 +12788,9 @@ function renderModal(innerHTML) {
     // v162: 未完了理由モーダルも同じ理由(_pendingIncompleteReasonCtxが残ったまま
     // dailyCloseモードのgenerateReport()が呼ばれなくなる事故を防ぐ)でskip経路へ揃える。
     if (state.modal && state.modal.type === "incompleteReason") { skipIncompleteReasonModal(); return; }
+    // v296(R1b): 書く瞑想ゲートの背景タップも「スキップして生成」と同じ扱い(強制しない・
+    // 記録せず軽く抜けられる)。
+    if (state.modal && state.modal.type === "writeMeditationGate") { writeMeditationGateSkip(); return; }
     closeModal();
   };
 }

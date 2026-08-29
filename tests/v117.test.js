@@ -7,7 +7,7 @@
 //     未入力時は「(未入力)」)
 // (c) effectiveDueDate: 既定(selfDueOff false)でdueDateの2日前倒し・selfDueOff=trueで無効化・
 //     WBS行の期限切れ判定/締切ラベル併記(前倒しが効く時だけ「実 M/D」を併記)への反映
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, generateReportThroughGate } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -108,7 +108,7 @@ function check(name, cond, extra = "") {
     // ============================================================
     console.log("[3] 日報生成: 今日の宣言が入力済みなら本文がそのまま出る");
     await seed({ dailyDeclarations: { [TODAY]: { text: "日報反映テストの宣言", updatedAt: `${TODAY}T07:00:00` } }, view: "journal" });
-    await page.click('[data-action="generate-report"]');
+    await generateReportThroughGate(page);
     await page.waitForTimeout(400);
     const reportText1 = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
     check("`## 📣 今日の宣言`見出しが出力される", reportText1.includes("## 📣 今日の宣言"), reportText1.slice(0, 200));
@@ -116,7 +116,7 @@ function check(name, cond, extra = "") {
 
     console.log("[4] 日報生成: 未入力日は節自体は出て本文が「(未入力)」になる");
     await seed({ dailyDeclarations: {}, view: "journal" });
-    await page.click('[data-action="generate-report"]');
+    await generateReportThroughGate(page);
     await page.waitForTimeout(400);
     const reportText2 = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
     check("見出しは省略されない(未入力でも節自体は常に出る)", reportText2.includes("## 📣 今日の宣言"), reportText2.slice(0, 200));
