@@ -417,7 +417,9 @@ function writeMeditationOnelinerText(date) {
   const entry = writeMeditationFor(date);
   const d = entry?.discharge.length || 0;
   const c = entry?.charge.length || 0;
-  return `放電${d}件・充電${c}件・${d || c ? "保存済み" : "未記入"}`;
+  // v294追従: 「未記入」はv73の裁かない文言契約(責める表現の禁止語)に抵触するため、
+  // 人ではなくデータの状態を指す「未保存」を使う。
+  return `放電${d}件・充電${c}件・${d || c ? "保存済み" : "未保存"}`;
 }
 
 // チップ追加/削除/保存の直後、パネル内の該当DOMだけを差し替える(renderJournal()全体は呼ばない)。
