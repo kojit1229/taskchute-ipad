@@ -36,13 +36,13 @@
 //       registerModalHandler/dispatchModalSave/dispatchModalDelete、重複登録ガード、
 //       未登録時のfalseフォールバック)。
 //   [2] app.jsのclick dispatcher("event:click"、data-action分岐)から`action === "..."`を
-//       静的抽出する(削除済み機能のactionを除く224件(v290でATIS孤児action4件=ai-work-approve/ai-work-question/ai-task-adopt/ai-task-dismissを削除、
+//       静的抽出する(削除済み機能のactionを除く218件(v290でATIS孤児action4件=ai-work-approve/ai-work-question/ai-task-adopt/ai-task-dismissを削除、
 //       v291でHome撤去(v230)後片付け孤児3件=open-questions/open-future-letter/open-vision-board
 //       +重複登録1件=delete-blockを削除)のゴールデンリストを維持したまま、
 //       段階5-2/5-3で移行済みの分だけif連鎖から消えている前提)。
 //   [3] 「if連鎖側の残存分岐リスト」(§2で静的抽出)と「レジストリ側の登録済みリスト」
 //       (4featureのconfigureXxxを空depsで呼ぶ動的実測 + app.js自身のregisterActions呼び出しの
-//       静的抽出)の**和集合が224件(v290でATIS孤児action4件=ai-work-approve/ai-work-question/ai-task-adopt/ai-task-dismissを削除、
+//       静的抽出)の**和集合が218件(v290でATIS孤児action4件=ai-work-approve/ai-work-question/ai-task-adopt/ai-task-dismissを削除、
 //       v291でHome撤去(v230)後片付け孤児3件=open-questions/open-future-letter/open-vision-board
 //       +重複登録1件=delete-blockを削除)のゴールデンリストと完全一致・重複ゼロ**であることを検証する
 //       (総数と名前一覧の保存則。段階5以降でさらに分岐を移行する際もこの形式を維持する)。
@@ -75,12 +75,16 @@ function check(name, cond, extra = "") {
   else { failures++; console.log(`  ❌ ${name} ${extra}`); }
 }
 
-// §6-1: click dispatcherから確定させたゴールデンリスト(削除済み機能のactionを除く224件)。
+// §6-1: click dispatcherから確定させたゴールデンリスト(削除済み機能のactionを除く218件)。
 // 増減・リネームがあれば、それが意図した変更(action追加/削除/移行)かどうかを必ず確認すること。
 // v235: set-sleepは主観睡眠の入力経路廃止に伴う意図的削除。
 // v270: departures-open-tomorrowはDEPARTURES削除に伴う意図的削除。
 // v288: wbs-search-inputはinputイベント用のno-op登録(app.js:571)だが、data-actionの保存則を
 // 同じgolden listで検証するため、click専用前提のこの配列へ意図的に含める。
+// v292: now-mode-open/now-mode-close/now-conveyor-skip/continue-focus/finish-block/ideal-retryは
+// 低優先度棚卸し孤児掃除で削除(224→218)。now-conveyor-completeはsrc/features/today-tower.js
+// (TOWER UI)から現役で発行されているため残置。complete-pomodoroもv129/v132の合成data-action
+// 起点+completePomodoro()の唯一の呼び出し元として残置(K裁定2026-08-29)。
 const GOLDEN_CLICK_ACTIONS = [
   "nav", "open-iron-log", "instruments-open-iron-log", "today-replan", "save-tower-journal",
   "focus-toggle-gate", "focus-toggle-journal", "focus-mode",
@@ -97,8 +101,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "toggle-show-suspended", "toggle-wbs-hide-done", "toggle-tasks-show-future",
   "toggle-wbs-edit", "wbs-collapse-all",
   "add-block", "toggle-block", "toggle-task-complete", "now-start", "now-end",
-  "bulk-approve-planned", "now-mode-open", "now-mode-close",
-  "now-conveyor-complete", "now-conveyor-skip",
+  "bulk-approve-planned", "now-conveyor-complete",
   "generate-report", "download-report", "download-data", "save-github", "load-github",
   "gate-continue", "reset-demo",
   "toggle-mit",
@@ -106,7 +109,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "start-pomodoro", "stop-pomodoro", "interrupt-reason", "interrupt-reason-cancel",
   "complete-pomodoro", "declare-confirm", "declare-skip", "report-outcome", "report-skip",
   "incomplete-reason-chip", "incomplete-reason-skip", "guided-access-dismiss",
-  "go-break", "end-break", "continue-focus", "finish-block",
+  "go-break", "end-break",
   "edit-project", "edit-task", "edit-block",
   "twy-kind-numeric", "twy-kind-milestone", "twy-kind-none", "twy-ms-add", "twy-ms-del",
   "twy-open-editor", "twy-close-editor", "twy-save-measurement", "twy-ms-toggle-done", "twy-ms-edit-date",
@@ -158,7 +161,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "open-backup-list", "restore-backup",
   "run-archive",
   "open-search", "search-jump",
-  "carry-over", "migration-ritual-choice", "ideal-retry",
+  "carry-over", "migration-ritual-choice",
   "energy-open-category",
   "timeline-clear-cat"
 ];
@@ -235,7 +238,9 @@ const APP_JS_REGISTERED_ACTIONS = [
   "ai-report-type", "ai-report-open-unread", "ai-report-refresh",
   "report-copy-ai", "report-share-ai",
   "generate-report", "download-report", "download-data",
-  "carry-over", "migration-ritual-choice", "ideal-retry",
+  "carry-over", "migration-ritual-choice",
+  // ideal-retryはv230のHome撤去で描画元を失い到達不能化、v292孤児掃除で
+  // resolveIdealRetry/idealActiveEntryごと削除(低優先度棚卸しK裁定2026-08-29)。
   "toggle-journal-segment",
   // --- v178: WBS/Project/Task CRUD(17。delete-blockの重複登録はv291孤児掃除で削除) ---
   "add-project", "delete-project", "add-task", "toggle-task", "delete-task",
@@ -276,14 +281,20 @@ const APP_JS_REGISTERED_ACTIONS = [
   "open-search", "search-jump",
   // --- v180: Block作成(WBSからの「今日へ追加」) ---
   "task-today",
-  // --- v180: Block/Now(9) ---
+  // --- v180: Block/Now(6。now-mode-open/now-mode-close/now-conveyor-skipはv87でUI導線を
+  //     撤去して以来到達不能化、v292孤児掃除で削除。now-conveyor-completeはsrc/features/
+  //     today-tower.js(TOWER UI)から現役で発行されるため残置=低優先度棚卸しK裁定2026-08-29) ---
   "toggle-block", "toggle-task-complete", "now-start", "now-end", "bulk-approve-planned",
-  "now-mode-open", "now-mode-close", "now-conveyor-complete", "now-conveyor-skip",
-  // --- v180: ポモドーロ(16) ---
+  "now-conveyor-complete",
+  // --- v180: ポモドーロ(14。continue-focus/finish-blockはend-break単独UIへの統一で孤立、
+  //     v292孤児掃除でcontinueFocusPomodoro/finishBlockFromBreakごと削除。complete-pomodoroは
+  //     data-action経由の到達導線が無いが、v129身体スキャンモーダルの唯一の呼び出し元
+  //     completePomodoro()をテスト(v129/v132)が合成data-action注入で使い続けているため残置
+  //     =低優先度棚卸しK裁定2026-08-29) ---
   "start-pomodoro", "stop-pomodoro", "interrupt-reason", "interrupt-reason-cancel",
   "complete-pomodoro", "declare-confirm", "declare-skip", "report-outcome", "report-skip",
   "incomplete-reason-chip", "incomplete-reason-skip", "guided-access-dismiss",
-  "go-break", "end-break", "continue-focus", "finish-block",
+  "go-break", "end-break",
   // --- v181: 日付ナビ(3) ---
   "date-prev", "date-next", "today",
   // --- v181: タイムライン設定/カテゴリフィルタ(9) ---

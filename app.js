@@ -531,7 +531,8 @@ registerActions({
   "download-data": () => downloadData(),
   "carry-over": ({ id }) => requestCarryOver(id),
   "migration-ritual-choice": ({ target }) => resolveMigrationRitual(target.dataset.choice),
-  "ideal-retry": ({ target }) => resolveIdealRetry(target.dataset.choice),
+  // ideal-retry: v230のHome撤去で到達不能化、v292孤児掃除でresolveIdealRetry/idealActiveEntry
+  // ごと削除(K裁定2026-08-29。journalMeta[date].idealは保持)。
   "toggle-journal-segment": ({ target }) => {
     const seg = target.dataset.segment;
     const parent = target.closest("details");
@@ -927,17 +928,18 @@ registerActions({
 registerActions({
   // --- Block作成(WBSからの「今日へ追加」) ---
   "task-today": ({ id }) => createBlockFromTask(id),
-  // --- Block/Now(9) ---
+  // --- Block/Now(6。now-mode-open/now-mode-close/now-conveyor-skipはv87で到達不能化、
+  //     v292孤児掃除で削除(K裁定2026-08-29)。now-conveyor-completeはsrc/features/
+  //     today-tower.js(TOWER UI)から現役で発行されるため残置=監査の見落としを現物確認で訂正) ---
   "toggle-block": ({ id }) => toggleBlock(id),
   "toggle-task-complete": ({ id }) => toggleTaskCompleteFromBlock(id),
   "now-start": ({ id }) => openDeclareModal(id, "block"),
   "now-end": ({ id }) => openReportModal(id, "block"),
   "bulk-approve-planned": () => bulkApproveAsPlanned(),
-  "now-mode-open": () => openNowMode(),
-  "now-mode-close": () => closeNowMode(),
   "now-conveyor-complete": ({ id }) => nowConveyorComplete(id),
-  "now-conveyor-skip": ({ id }) => { _nowSkippedIds.add(id); render(); },
-  // --- ポモドーロ(16) ---
+  // --- ポモドーロ(14。continue-focus/finish-blockはend-break単独UIへの統一で孤立、v292孤児掃除で
+  //     削除(K裁定2026-08-29)。complete-pomodoroは到達導線が無いが、completePomodoro()が
+  //     v129身体スキャンモーダルの唯一の呼び出し元でテスト(v129/v132)が依存するため残置) ---
   "start-pomodoro": ({ target }) => {
     const blockId = target.dataset.blockId || "";
     openDeclareModal(blockId, "pomodoro");
@@ -977,9 +979,7 @@ registerActions({
     closeModal();
   },
   "go-break": () => goBreakPomodoro(),
-  "end-break": () => endBreakPomodoro(),
-  "continue-focus": () => continueFocusPomodoro(),
-  "finish-block": () => finishBlockFromBreak()
+  "end-break": () => endBreakPomodoro()
 });
 // v181: app.js分割・段階5-8(timeline系dispatcher分岐の移行・後半)。日付ナビ3+タイムライン設定/
 // カテゴリフィルタ9の計12分岐を相乗りregisterActionsへ移行した(prep-stage5-dispatcher.md §4)。
@@ -1158,9 +1158,7 @@ let ztTimerLeft = 60;
 let ztEditId = null;           // v102: 回答済みentryの追記編集対象entry id / null=非編集
 let ztWriteStartedAt = null;   // v104: 書く画面を開いた時刻(Date.now())。durationSec計測の起点 / null=非計測中
 
-// v70: Now画面(実行コンベア)— 画面内の一時状態(永続化しない。normalizeStateは不要)
-let nowMode = false;             // trueの間、renderMain()は通常ビューの代わりに全画面コンベアを描く
-let _nowSkippedIds = new Set();  // このNowセッション中に「スキップ」したBlock id(セッションを抜けるとクリア)
+// v70: nowMode/_nowSkippedIds(Now画面の一時状態)はv87で到達不能化、v292孤児掃除で削除。
 // v261: 開いているWBSトラックエディタ。表示専用の非永続状態。
 let _twyOpenEditorIds = new Set();
 // v263: 週次確定シートの選択・展開状態。stateへ保存しないためnormalizeState不要。
@@ -1231,8 +1229,9 @@ document.addEventListener("click", (event) => {
   // v178: delete-task/toggle-project-collapse/toggle-task-collapse/suspend-project/resume-project/
   // suspend-task/resume-task/add-blockはapp.js内のregisterActionsへ移行した。
   // v174: toggle-show-suspended〜wbs-collapse-allはapp.js内のregisterActionsへ移行した。
-  // v180: toggle-block/toggle-task-complete/now-start/now-end/bulk-approve-planned/now-mode-open/
-  // now-mode-close/now-conveyor-complete/now-conveyor-skipはapp.js内のregisterActionsへ移行した。
+  // v180: toggle-block/toggle-task-complete/now-start/now-end/bulk-approve-planned/
+  // now-conveyor-completeはapp.js内のregisterActionsへ移行した。now-mode-open/now-mode-close/
+  // now-conveyor-skipは同じくv180で移行後、v292孤児掃除で削除した(K裁定2026-08-29)。
   // v177: generate-report/download-report/download-dataはapp.js内のregisterActionsへ移行した。
   // v174: save-github/load-github/gate-continue/reset-demoはapp.js内のregisterActionsへ移行した。
   // v17: MIT(今日の主役)の切替(最大3個)
@@ -1244,7 +1243,8 @@ document.addEventListener("click", (event) => {
   // v180: start-pomodoro/stop-pomodoro/interrupt-reason/interrupt-reason-cancel/complete-pomodoro/
   // declare-confirm/declare-skip/report-outcome/report-skip/incomplete-reason-chip/
   // incomplete-reason-skip/guided-access-dismiss/go-break/end-break/continue-focus/finish-block
-  // はapp.js内のregisterActionsへ移行した。
+  // はapp.js内のregisterActionsへ移行した。continue-focus/finish-blockは同UIの孤立に伴い
+  // v292孤児掃除で削除した(K裁定2026-08-29。complete-pomodoroはv129/v132テストが依存するため残置)。
   // === v2: 編集モーダル ===
   // v178: edit-project/edit-task/edit-block/modal-close/modal-delete/lev-judgeはapp.js内の
   // registerActionsへ移行した。modal-saveは過去判定どおりreturn意味論(disable連動のearly
@@ -1298,7 +1298,8 @@ document.addEventListener("click", (event) => {
   // v217: weekly-suggest-addはAIレポートの週次レビューから呼ぶ。
   // v174: open-backup-list/restore-backup/run-archiveはapp.js内のregisterActionsへ移行した。
   // v179: open-search/search-jump(検索2)はapp.js内のregisterActionsへ移行した。
-  // v177: carry-over/migration-ritual-choice/ideal-retryはapp.js内のregisterActionsへ移行した。
+  // v177: carry-over/migration-ritual-choiceはapp.js内のregisterActionsへ移行した。ideal-retryは
+  // 同じくv177で移行後、v230のHome撤去で到達不能化しv292孤児掃除で削除(K裁定2026-08-29)。
   // v181: energy-open-category/timeline-clear-catはapp.js内のregisterActionsへ移行した。
 });
 
@@ -2843,8 +2844,7 @@ function renderBottomNav() {
 }
 
 // v146(UI改善計画Phase1-2): タスクシュートの「着手中(無ければ次の未着手)Block」を求める。
-// nowConveyorTargetと同じ抽出ロジック(現在時刻に該当する未完了Block、無ければ
-// 次の未着手)を使うが、対象はrenderTasks()が実際に描画するBlock集合に限定する
+// 旧nowConveyorTarget(v292で削除)と同じ抽出ロジックを使うが、対象はrenderTasks()が実際に描画するBlock集合に限定する
 // (renderTasks()は単発Block・ルーティン・timeline由来・Project未紐づけTaskのBlock等を
 // 描画しないため、それらを選ぶと自動スクロールが無言で不発になる。レビュー指摘対応)。
 function tasksViewRenderedBlocks(dateISO) {
@@ -2881,11 +2881,6 @@ let _lastScrollDate = null;
 
 
 function renderMain() {
-  // v70: Now画面(実行コンベア)は全ビューに優先する全画面オーバーレイ(閉じるまで通常UIへ戻らない)
-  if (nowMode) {
-    main.innerHTML = renderNowConveyor();
-    return;
-  }
   const view = state.currentView;
   // v146レビュー対応: フォーカスガードはmain.innerHTMLを差し替える「前」に評価する(差し替え後は
   // 旧main内のフォーカス要素がDOMごと消えてbodyへ戻ってしまい、判定が構造的に効かなくなるため)。
@@ -2954,24 +2949,8 @@ function plannedRange(b) {
   return `${s} – ${e}`;
 }
 
-// v61: =========================================================
-//  「今日の理想」ワンライナー + 3日リトライ(提案8)
-//  朝イチで書く軽量版の理想(長期のVision/Affirmationとは別粒度)。
-//  journalMeta[date].ideal に保存し、書いた日から3日間ホームに残す。3日目には
-//  達成/未達を問わず「続けるか手放すか」だけを一言で尋ね、翌日以降も見えるようにする。
-// =========================================================
-const IDEAL_RETRY_WINDOW_DAYS = 3;
-
-// 今日を起点に直近3日以内で最後に「今日の理想」が書かれた日を探す(今日→昨日→一昨日の順)。
-// dayNum: 1=書いた当日 / 2=翌日 / 3=3日目(続ける/手放すを問う日)
-function idealActiveEntry(today) {
-  for (let offset = 0; offset < IDEAL_RETRY_WINDOW_DAYS; offset++) {
-    const d = addDays(today, -offset);
-    const text = state.journalMeta[d]?.ideal;
-    if (text) return { date: d, text, dayNum: offset + 1 };
-  }
-  return null;
-}
+// v61: 「今日の理想」3日リトライバナー(idealActiveEntry/resolveIdealRetry)はv230のHome撤去で
+// 到達不能化、v292孤児掃除で削除(journalMeta[date].idealは保持)。
 
 // v144: エネルギーバッテリーチップ。computeBatteryLevel()の現在残量を数値+簡易バーで表示する
 // だけの受け身の表示(点滅・バッジ・通知は一切なし=静かな計器の最低線を守る)。当日の完了Block
@@ -2979,23 +2958,6 @@ function idealActiveEntry(today) {
 // 時間経過(減衰)はupdateBatteryTick()(startTimerTicker経由、約1分間隔)が差分更新する。
 // レビュー対応(監督者裁定): 既定パラメタでは過去日は構造的に残量0(≒毎回赤ゲージ)になり
 // 「裁かない」思想に反するため、当日限定で表示する。
-// 3日目の「続ける/手放す」選択を解決する
-function resolveIdealRetry(choice) {
-  const today = todayISO();
-  const active = idealActiveEntry(today);
-  if (!active || active.dayNum < IDEAL_RETRY_WINDOW_DAYS) return;
-  if (choice === "continue") {
-    // 今日を起点に新しい3日間サイクルを始める(同じ理想のまま継続)
-    const meta = (state.journalMeta[today] ||= { aiMitCandidates: [], aiImported: false, ideal: "", aiTaskCandidates: [], aiRequest: "" });
-    meta.ideal = active.text;
-    saveAndRender("理想を続けます");
-  } else {
-    // 手放す: 元の理想を空にして3日間の表示窓を閉じる(否定ではなく次への区切り)
-    const meta = state.journalMeta[active.date];
-    if (meta) meta.ideal = "";
-    saveAndRender("また次の理想を見つけましょう");
-  }
-}
 
 // personal-data内の任意パスへ書き込む共通gateway。
 async function pushGitHubPath(relPath, content, label) {
@@ -9641,42 +9603,9 @@ function bulkApproveAsPlanned() {
   saveAndRender(`${targets.length}件を予定通り完了にしました`);
 }
 
-// =============================================================
-// v70: Now画面(実行コンベア)— 「今のBlock 1個」+ 開始/完了/スキップの3ボタンのみ。
-// 新しい状態は nowMode(全画面フラグ)と _nowSkippedIds(このセッション中のスキップ集合)だけで、
-// どちらも非永続のモジュール変数(normalizeStateへの補完は不要)。
-// =============================================================
-function openNowMode() {
-  nowMode = true;
-  _nowSkippedIds = new Set();
-  if (state.selectedDate !== todayISO()) {
-    setSelectedDate(todayISO());  // 内部でrender()まで行う
-  } else {
-    render();
-  }
-}
-
-function closeNowMode() {
-  nowMode = false;
-  _nowSkippedIds = new Set();
-  render();
-}
-
-// 「現在時刻に該当するBlock、無ければ次(未着手優先)」の抽出ロジックに
-// スキップ集合の除外を加えたもの。当日固定(Nowモードに入る時点でselectedDateは今日に揃えている)。
-function nowConveyorTarget() {
-  const today = todayISO();
-  const tl = blocksForDate(today)
-    .filter((b) => b.category !== "ルーティン" && b.plannedStartAt && !b.completed &&
-      !isStaleBlock(b) && !_nowSkippedIds.has(b.id))
-    .sort((a, b) => minutesOf(a.plannedStartAt) - minutesOf(b.plannedStartAt));
-  if (!tl.length) return null;
-  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
-  const current = tl.find((b) =>
-    minutesOf(b.plannedStartAt) <= nowMin && nowMin < minutesOf(b.plannedEndAt || b.plannedStartAt));
-  return current || tl.find((b) => !b.actualStartAt) || tl[0];
-}
-
+// v70: Now画面(実行コンベア)のopenNowMode/closeNowMode/nowConveyorTarget/renderNowConveyorは
+// v87でUI導線を撤去して以来到達不能だったため、v292孤児掃除で削除した。nowConveyorComplete()は
+// src/features/today-tower.js(TOWER UI)から現役で発行されるため残置する。
 // v70: Now画面の「完了」。フォーカスタイマーがこのBlockで動いていれば completePomodoro() に委ね
 // (pomodoroCount加算・タイマー状態の後始末まで一致させる)、動いていなければ toggleBlock で完了化する。
 function nowConveyorComplete(id) {
@@ -9685,37 +9614,6 @@ function nowConveyorComplete(id) {
   } else {
     toggleBlock(id);
   }
-}
-
-function renderNowConveyor() {
-  const target = nowConveyorTarget();
-  const closeBtn = `<button class="now-fullscreen-close" data-action="now-mode-close" aria-label="閉じる" title="閉じる">✕</button>`;
-  if (!target) {
-    return `
-      <div class="now-fullscreen" id="nowFullscreen">
-        ${closeBtn}
-        <div class="now-fullscreen-content">
-          <div class="now-eyebrow">▶ Now</div>
-          <div class="now-empty">今日のBlockはすべて片づきました。</div>
-        </div>
-      </div>`;
-  }
-  const started = Boolean(target.actualStartAt);
-  return `
-    <div class="now-fullscreen" id="nowFullscreen">
-      ${closeBtn}
-      <div class="now-fullscreen-content">
-        <div class="now-eyebrow">いまのBlock</div>
-        <div class="now-title">${escapeHTML(target.title)}</div>
-        <div class="now-meta">予定 ${plannedRange(target)}${target.category ? `<span class="now-cat">${escapeHTML(target.category)}</span>` : ""}</div>
-        ${started ? `<div class="now-status">着手中 ${timeFromDateTime(target.actualStartAt)}〜</div>` : ""}
-        <div class="now-actions">
-          <button class="btn orange now-btn" data-action="now-start" data-id="${target.id}" ${started ? "disabled" : ""}>▶ 開始</button>
-          <button class="btn green now-btn" data-action="now-conveyor-complete" data-id="${target.id}">✓ 完了</button>
-          <button class="btn now-btn" data-action="now-conveyor-skip" data-id="${target.id}">→ スキップ</button>
-        </div>
-      </div>
-    </div>`;
 }
 
 function updateBlockField(id, field, value) {
@@ -11392,46 +11290,8 @@ function endBreakPomodoro() {
   saveAndRender("休憩を終了しました");
 }
 
-// v19: 休憩中「🔁 同じBlockで続ける」: 休憩を打ち切り、同じBlockで新セッション開始
-function continueFocusPomodoro() {
-  const lastBlockId = state.pomodoro.lastFocusBlockId;
-  if (!lastBlockId) return showToast("直前のBlock情報が見つかりません");
-  forceResetPomodoroSession();
-  startPomodoro(lastBlockId);
-}
-
-// v19: 休憩中「✅ ここで完了する」: Blockに完了フラグ + 実績終了時刻(=休憩開始時刻)を記録
-function finishBlockFromBreak() {
-  const lastBlockId = state.pomodoro.lastFocusBlockId;
-  const wasCompleted = Boolean(lastBlockId && blockById(lastBlockId)?.completed);
-  const breakStartedAt = state.pomodoro.startedAt;  // 休憩開始時刻 = 直前セッションの終了時刻
-  if (lastBlockId) {
-    state.blocks = state.blocks.map((b) => b.id === lastBlockId
-      ? {
-          ...b,
-          completed: true,
-          actualEndAt: breakStartedAt || b.actualEndAt || nowDateTime(),
-          updatedAt: nowDateTime()
-        }
-      : b);
-    syncHabitStreakForBlock(state.blocks.find((b) => b.id === lastBlockId));
-    transferIronLogToCompletedBlock(lastBlockId);
-  }
-  // タイマーを終了状態に
-  state.pomodoro = {
-    running: false,
-    blockId: "",
-    startedAt: "",
-    endsAt: "",
-    mode: "focus"
-  };
-  const completedBlock = lastBlockId ? blockById(lastBlockId) : null;
-  if (!wasCompleted && completedBlock?.completed) {
-    saveState();
-    trackOnBlockCompletionChanged(completedBlock, true, { interactive: true });
-  }
-  saveAndRender("✅ Block を完了しました(実績終了時刻を記録)");
-}
+// v19: continueFocusPomodoro/finishBlockFromBreak(休憩中の続ける/完了する選択)は
+// end-break単独UIへの統一で孤立、v292孤児掃除で削除。
 
 // タイマー表示の差分更新。独立タブ削除後は共有のToday表示だけを更新する。
 function updatePomodoroTick() {

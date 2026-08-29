@@ -87,12 +87,14 @@ console.log("[0] 共通フック契約と全経路の機械検査");
     toggleBlock: true,
     toggleTaskCompleteFromBlock: true,
     completePomodoro: true,
-    finishBlockFromBreak: true,
     bulkApproveAsPlanned: false,
     saveActualEntryFromModal: false,
     saveBlockFromModal: false
     // Test-Reduction: approveAiWorkResult(旧8つ目の完了経路)はR3(v290)で関数本体ごと削除
     // (K裁定2026-08-27=ATIS6機能の完全廃止の最終段階)したため、この経路網羅チェックからも撤去。
+    // Test-Reduction: finishBlockFromBreak(休憩中「✅ ここで完了する」経路)は、end-break単独UIへの
+    // 統一で選択分岐自体が孤立し関数本体ごと削除したため、この経路網羅チェックからも撤去した
+    // (v292孤児掃除・低優先度棚卸しK裁定2026-08-29)。検証対象自体が消滅しており移行先はない。
   };
   for (const [name, interactive] of Object.entries(completionRoutes)) {
     const source = functionSource(name);
@@ -275,7 +277,7 @@ console.log("[0] 共通フック契約と全経路の機械検査");
     await page.goto(`http://localhost:${PORT}/`);
     await passGithubGate(page);
 
-    console.log("[1] 完了7経路を個別に刻印");
+    console.log("[1] 完了6経路を個別に刻印");
     await runCommittedCompletion("toggleBlock", "toggle", true, 4,
       () => clickAction("toggle-block", { id: "toggle" }));
     await clickAction("toggle-block", { id: "toggle" });
@@ -289,10 +291,9 @@ console.log("[0] 共通フック契約と全経路の機械検査");
       await clickAction("complete-pomodoro");
       await page.locator('[data-action="report-skip"]').click();
     }, { pomodoro: { running: true, blockId: "pomo-route", startedAt: `${TODAY}T10:00:00`, endsAt: `${TODAY}T10:50:00`, mode: "focus" } });
-    await runCommittedCompletion("finishBlockFromBreak", "break-route", true, 3,
-      () => clickAction("finish-block"), {
-        pomodoro: { running: true, blockId: "", lastFocusBlockId: "break-route", startedAt: `${TODAY}T10:00:00`, endsAt: `${TODAY}T10:05:00`, mode: "break" }
-      });
+    // Test-Reduction: finishBlockFromBreak(休憩中「✅ ここで完了する」経路)の週次刻印検証は、
+    // end-break単独UIへの統一で選択分岐自体が孤立し関数本体ごと削除したため削除した
+    // (v292孤児掃除・低優先度棚卸しK裁定2026-08-29)。検証対象自体が消滅しており移行先はない。
     await runCommittedCompletion("bulkApproveAsPlanned", "bulk-route", false, 4, async () => {
       page.once("dialog", (dialog) => dialog.accept());
       await clickAction("bulk-approve-planned");

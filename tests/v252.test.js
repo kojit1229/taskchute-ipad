@@ -182,7 +182,7 @@ function check(name, cond, extra = "") {
     await page.waitForFunction(({ KEY, TODAY }) => !JSON.parse(localStorage.getItem(KEY)).habitStreaks?.habit?.logs?.[TODAY], { KEY, TODAY });
     check("完了取消で当日ログが消える", true);
 
-    console.log("[6] 残る6完了経路もそれぞれ当日ログを書き込む");
+    console.log("[6] 残る5完了経路もそれぞれ当日ログを書き込む");
     const habitRule = () => [rule("habit", "daily", TODAY)];
 
     await seed(habitRule(), [{ ...block("task-block", "habit", "タスク完了"), taskId: "habit-task" }], {}, {
@@ -210,14 +210,9 @@ function check(name, cond, extra = "") {
     await page.locator('[data-action="report-skip"]').click();
     await checkCompletionLog("completePomodoro");
 
-    await seed(habitRule(), [block("break-block", "habit", "休憩から完了")], {}, {
-      pomodoro: {
-        running: true, blockId: "", lastFocusBlockId: "break-block",
-        startedAt: `${TODAY}T09:50:00`, endsAt: `${TODAY}T09:55:00`, mode: "break"
-      }
-    });
-    await clickSyntheticAction("finish-block");
-    await checkCompletionLog("finishBlockFromBreak");
+    // Test-Reduction: finishBlockFromBreak(休憩中「✅ ここで完了する」)の当日ログ検証は、
+    // end-break単独UIへの統一で選択分岐自体が孤立し関数本体ごと削除したため削除した
+    // (v292孤児掃除・低優先度棚卸しK裁定2026-08-29)。検証対象自体が消滅しており移行先はない。
 
     await seed(habitRule(), [block("modal-block", "habit", "編集保存で完了")]);
     await page.locator('[data-action="edit-block"][data-id="modal-block"]').evaluate((element) => element.click());

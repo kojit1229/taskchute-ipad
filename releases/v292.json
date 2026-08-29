@@ -1,0 +1,54 @@
+{
+  "version": 292,
+  "date": "2026-08-29",
+  "title": "大物孤児掃除(low棚卸し#6〜#8)",
+  "summary": "孤児全量監査(2026-08-29)とlow棚卸しで「消す」と裁定された大物3クラスタ(Now全画面コンベア・Pomodoro休憩後の継続/終了選択分岐・「理想の一日」リトライバナー)を削除した。着手前の現物grep再確認で、監査が見落としていた共有関数(now-conveyor-complete/completePomodoro)を発見し、当初見積りから縮退して削除した。",
+  "changedFiles": [
+    "CHANGES_v292.md",
+    "releases/v292.json",
+    "app.js",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/v252.test.js",
+    "tests/v254.test.js"
+  ],
+  "intent": [
+    "Now全画面コンベア(now-mode)クラスタのうち、v87でUI導線を撤去して以来到達不能な部分(openNowMode/closeNowMode/nowConveyorTarget/renderNowConveyor/nowMode/_nowSkippedIds/now-mode-open/now-mode-close/now-conveyor-skip)を削除する。",
+    "Pomodoro休憩後の「継続/終了」選択分岐(continueFocusPomodoro/finishBlockFromBreak/continue-focus/finish-block)を削除する(end-break単独UIへの統一で孤立)。",
+    "「理想の一日」リトライバナー(idealActiveEntry/resolveIdealRetry/IDEAL_RETRY_WINDOW_DAYS/ideal-retry)を削除する(v230のHome撤去で描画元を失い到達不能)。",
+    "現役のPomodoro本体(開始・終了・end-break経路)・タイマー機構、journalMeta[date].idealフィールド自体、normalizeStateには一切触れない。"
+  ],
+  "changes": [
+    "app.jsからopenNowMode()/closeNowMode()/nowConveyorTarget()/renderNowConveyor()と、nowMode/_nowSkippedIdsモジュール変数、renderMain()のnowMode分岐ゲート、now-mode-open/now-mode-close/now-conveyor-skipの3action登録を削除した。",
+    "app.jsからcontinueFocusPomodoro()/finishBlockFromBreak()と、continue-focus/finish-blockの2action登録を削除した。",
+    "app.jsからidealActiveEntry()/resolveIdealRetry()/IDEAL_RETRY_WINDOW_DAYS定数と、ideal-retryのaction登録を削除した。",
+    "【監査からの訂正】now-conveyor-complete(action登録+nowConveyorComplete()関数)は当初cluster1に含めて削除したが、着手前の現物grepでsrc/features/today-tower.js(TOWER UI、NOW LANDING HUDの「▶ 次へ」+通常GATEの完了ボタン)から現役でdata-action=\"now-conveyor-complete\"が発行されていることを発見し、削除を取り消して残置した(監査はapp.js単体のリテラルgrepのみでsrc/features側の発行元を見落としていたと判明。tower-core.test.js/v276.test.jsで検証済みの現行TOWER UI機構と共有していたため)。",
+    "【監査からの訂正】complete-pomodoro(action登録)とcompletePomodoro()本体は、data-action経由の実UI到達導線こそ無いが、着手前の判別でcompletePomodoro()がv129身体スキャンモーダル(K承認済み機能、openBodyScanModal()の唯一の呼び出し元)への唯一の経路であり、テスト(tests/v129.test.js/tests/v132.test.js)が合成data-action注入の起点として現役で依存していることを確認したため、削除を取り消して残置した(発注文の指示どおり、現物確認の結果を監査より優先した)。",
+    "tests/action-registry-core.test.jsのゴールデンリスト(GOLDEN_CLICK_ACTIONS/APP_JS_REGISTERED_ACTIONS)から削除対象6action(now-mode-open/now-mode-close/now-conveyor-skip/continue-focus/finish-block/ideal-retry)を外し、実数218件(224→218)へ追随させた。件数コメント・区分別内訳コメントも実態へ追随させた。",
+    "Service WorkerのCACHE_NAMEをtaskchute-journal-pwa-v292へ更新した。"
+  ],
+  "skipped": [],
+  "uncertainties": [
+    "今回の現物確認で、孤児全量監査(audit.md)がsrc/features/*.jsを見落としてapp.js単体のリテラルgrepのみで「確実」と判定していたことが判明した(now-conveyor-complete/completePomodoro)。今後の孤児監査ではsrc/features/配下も対象に含める必要がある(次回棚卸し実施者への申し送り)。",
+    "v129身体スキャンモーダル(K承認済み機能)は、completePomodoro()自体が実UIから到達不能なため、現状は合成data-action注入を使うテスト経路以外では実質発火しない状態にある。これは本リリースが作った状態ではなく、v87でNow画面撤去・v230のend-break統一が完了した時点から既にそうなっていた(completePomodoro()の唯一の実UI呼び出し元だったnowConveyorComplete()経由の到達も、そのnowConveyorCompleteが今回同様の理由でTOWER UI用に残るだけで、TOWER UI側のpomodoro実行中「▶ 次へ」タップ時のみ到達する)。ユーザー影響の要否は次回棚卸しでK判断が必要。"
+  ],
+  "reviewFocus": [
+    "app.js/testsでopenNowMode/closeNowMode/nowConveyorTarget/renderNowConveyor/nowMode/_nowSkippedIds/continueFocusPomodoro/finishBlockFromBreak/idealActiveEntry/resolveIdealRetry/IDEAL_RETRY_WINDOW_DAYSがgrep 0件であること。",
+    "action registryにnow-mode-open/now-mode-close/now-conveyor-skip/continue-focus/finish-block/ideal-retryが残っていないこと(now-conveyor-complete/complete-pomodoroは意図的に残置)。",
+    "現役Pomodoro経路(開始→完了・end-break)・TOWER UI(now-conveyor-complete経由のGATE/NOW LANDING完了)・v129身体スキャンモーダルが無改修で通過すること。",
+    "journalMeta[date].ideal・normalizeState・src/sync/github.jsに一切変更が無いこと。"
+  ],
+  "verification": [
+    "grep -rn でapp.js/src/tests配下の削除対象シンボルが0件であることを確認した(now-conveyor-complete/completePomodoroは意図的残置につき対象外)。",
+    "node --check で変更した全JSファイル(app.js・sw.js・tests/action-registry-core.test.js・tests/v252.test.js・tests/v254.test.js)の構文を確認した。",
+    "node tests/action-registry-core.test.js / node tests/v129.test.js / node tests/v132.test.js / node tests/v252.test.js / node tests/v254.test.js / node tests/v87.test.js / node tests/v61.test.js / node tests/v70.test.js / node tests/tower-core.test.js / node tests/v276.test.js を個別実行しすべてALL PASSを確認した。"
+  ],
+  "notes": [
+    "実行コード差分はapp.js 25行追加/165行削除・sw.js 1行追加/1行削除(合計192行、200行上限内)。当初見積り(約175行)を超過した主因はnow-conveyor-complete/completePomodoro残置に伴う縮退分の説明コメント。",
+    "code:index:write / test:manifest:write は実施済み。release-gate --final・コミット・pushは監督者がK承認後に実施する。"
+  ],
+  "knownLimitations": [
+    "コミット・push・release-gate --final・CI全量・iOS Safari実機PWA確認は監督者がK承認後に実施する。",
+    "作業開始前から変更済みのartifacts/v275 PNG 4件は本リリース対象外として保持した。"
+  ]
+}

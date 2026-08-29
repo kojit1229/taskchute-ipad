@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v291";  // v291: JS孤児掃除第2弾(low棚卸し#1〜#5)
+const CACHE_NAME = "taskchute-journal-pwa-v292";  // v292: 大物孤児掃除(low棚卸し#6〜#8。now-conveyor-completeはTOWER UI現役につき残置)
 // v290: 孤児action本体2クラスタ(AI作業結果承認/質問、AIタスク候補チップの採用/却下)を削除した(APP_SHELL変更なし)。
 // v288: WBS内検索と新規Project既定closed化を追加した(APP_SHELL変更なし)。
 // v287: AIレポート未読一覧とタスクシュート未着手バッジを追加した(APP_SHELL変更なし)。
