@@ -143,12 +143,18 @@ function check(name, cond, extra = "") {
   async function clickReal(selector) {
     await page.locator(selector).evaluate((el) => el.click());
   }
-  const bodyScanOpen = () => page.locator(".modal-title", { hasText: "いまの疲労感は?" }).count();
+  // v295(2026-08-29、身体スキャン2軸化): 2ステップ(疲労→部位)モーダルが1シート
+  // (疲労+回復+部位チップ+コメント欄)へ再構成されたため、モーダルタイトルは
+  // 常に「身体スキャン」1つになった(ステップごとのタイトル遷移は無くなった)。
+  const bodyScanOpen = () => page.locator(".modal-title", { hasText: "身体スキャン" }).count();
   async function recordBodyScan(fatigue, part) {
     await page.click(`[data-action="body-scan-fatigue"][data-value="${fatigue}"]`);
-    await page.locator(".modal-title", { hasText: "どこが疲れていますか" }).waitFor();
-    await page.click(`[data-action="body-scan-part"][data-part="${part}"]`);
-    await page.locator(".modal-title", { hasText: "どこが疲れていますか" }).waitFor({ state: "detached" });
+    if (part) {
+      await page.locator(`[data-action="body-scan-part"][data-part="${part}"]`).waitFor();
+      await page.click(`[data-action="body-scan-part"][data-part="${part}"]`);
+    }
+    await page.click('[data-action="body-scan-record"]');
+    await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor({ state: "detached" });
   }
 
   try {
@@ -165,7 +171,7 @@ function check(name, cond, extra = "") {
     console.log("[1] toggleBlock(完了チェック)で身体スキャンモーダルが開き記録される");
     await seed({ blocks: [makeBlock({ id: "r1", title: "対象1", startMin: 9 * 60 })] });
     await clickReal('[data-action="toggle-block"][data-id="r1"]');
-    await page.locator(".modal-title", { hasText: "いまの疲労感は?" }).waitFor();
+    await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor();
     check("身体スキャンモーダルが開く", await bodyScanOpen() === 1);
     await recordBodyScan(3, "肩");
     let s = await stateNow();
@@ -181,7 +187,7 @@ function check(name, cond, extra = "") {
     await clickAction("edit-block", { id: "r2" });  // モーダルを開く導線自体はこの接続点の対象外
     await page.locator('[data-action="toggle-task-complete"][data-id="r2"]').waitFor();
     await clickReal('[data-action="toggle-task-complete"][data-id="r2"]');
-    await page.locator(".modal-title", { hasText: "いまの疲労感は?" }).waitFor();
+    await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor();
     check("身体スキャンモーダルが開く", await bodyScanOpen() === 1);
     await recordBodyScan(1, "");
     s = await stateNow();
@@ -195,7 +201,7 @@ function check(name, cond, extra = "") {
     await page.locator('[data-modal-field="completed"]').waitFor();
     await page.locator('[data-modal-field="completed"]').check();
     await page.locator('[data-action="modal-save"]').click();
-    await page.locator(".modal-title", { hasText: "いまの疲労感は?" }).waitFor();
+    await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor();
     check("Block編集モーダルは閉じている", await page.locator(".modal-title", { hasText: "対象3" }).count() === 0);
     check("身体スキャンモーダルが開く", await bodyScanOpen() === 1);
     await recordBodyScan(5, "頭");
@@ -209,18 +215,18 @@ function check(name, cond, extra = "") {
     await clickAction("complete-block-with-actual", { id: "r4" });  // TOWER実行中GATE限定のため合成注入を維持
     await page.locator(".modal-title", { hasText: "実績を登録" }).waitFor();
     await page.locator('[data-action="modal-save"]').click();
-    await page.locator(".modal-title", { hasText: "いまの疲労感は?" }).waitFor();
+    await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor();
     check("身体スキャンモーダルが開く", await bodyScanOpen() === 1);
-    await recordBodyScan(2, "目");
+    await recordBodyScan(3, "目");  // v295: 部位チップは疲労3以上のみ表示されるため2→3に変更
     s = await stateNow();
-    check("bodyScansに1件、fatigue=2・part=目・pomodoroBlockId=r4で記録される",
-      s.bodyScans.length === 1 && s.bodyScans[0].pomodoroBlockId === "r4" && s.bodyScans[0].fatigue === 2 && s.bodyScans[0].part === "目",
+    check("bodyScansに1件、fatigue=3・part=目・pomodoroBlockId=r4で記録される",
+      s.bodyScans.length === 1 && s.bodyScans[0].pomodoroBlockId === "r4" && s.bodyScans[0].fatigue === 3 && s.bodyScans[0].part === "目",
       JSON.stringify(s.bodyScans));
 
     console.log("[5] now-conveyor-complete(TOWER GATE「▶ 次へ」・ポモドーロ非実行)はtoggleBlockへ委譲され開く");
     await seed({ blocks: [makeBlock({ id: "r5", title: "対象5", startMin: 13 * 60 })] });
     await clickAction("now-conveyor-complete", { id: "r5" });  // TOWER GATE選定条件のため合成注入を維持
-    await page.locator(".modal-title", { hasText: "いまの疲労感は?" }).waitFor();
+    await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor();
     check("身体スキャンモーダルが開く", await bodyScanOpen() === 1);
     await recordBodyScan(4, "");
     s = await stateNow();
@@ -234,9 +240,9 @@ function check(name, cond, extra = "") {
     console.log("[6] 完了取り消し(toggleBlockで完了→再度toggleBlockで解除)では発火しない");
     await seed({ blocks: [makeBlock({ id: "r6", title: "対象6", startMin: 14 * 60 })] });
     await clickReal('[data-action="toggle-block"][data-id="r6"]');
-    await page.locator(".modal-title", { hasText: "いまの疲労感は?" }).waitFor();
+    await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor();
     await page.click('.modal-footer [data-action="body-scan-discard"]');  // 完了自体は記録せず閉じる
-    await page.locator(".modal-title", { hasText: "いまの疲労感は?" }).waitFor({ state: "detached" });
+    await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor({ state: "detached" });
     // 完了解除(2回目のtoggle)。timeline(予定モード)は完了済みBlockを表示対象から除外する
     // (renderTimeline: !b.completedフィルタ、実績モードでもcompleteBtnHTMLは常に非表示)ため、
     // 完了直後の同じチェックボックスへ実クリックで再到達する経路はこのview構成では存在しない
@@ -319,23 +325,23 @@ function check(name, cond, extra = "") {
     console.log("[9] discard(×/「記録せず閉じる」/背景タップ)はいずれもbodyScansに追加されない(3経路個別)");
     await seed({ blocks: [makeBlock({ id: "r9a", title: "対象9a", startMin: 17 * 60 })] });
     await clickReal('[data-action="toggle-block"][data-id="r9a"]');
-    await page.locator(".modal-title", { hasText: "いまの疲労感は?" }).waitFor();
+    await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor();
     await page.click('.modal-close[data-action="body-scan-discard"]');  // ×
-    await page.locator(".modal-title", { hasText: "いまの疲労感は?" }).waitFor({ state: "detached" });
+    await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor({ state: "detached" });
     check("×(modal-close)discardでは記録されない", (await stateNow()).bodyScans.length === 0);
 
     await seed({ blocks: [makeBlock({ id: "r9b", title: "対象9b", startMin: 17 * 60 + 20 })] });
     await clickReal('[data-action="toggle-block"][data-id="r9b"]');
-    await page.locator(".modal-title", { hasText: "いまの疲労感は?" }).waitFor();
+    await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor();
     await page.click('.modal-footer [data-action="body-scan-discard"]');  // 記録せず閉じる
-    await page.locator(".modal-title", { hasText: "いまの疲労感は?" }).waitFor({ state: "detached" });
+    await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor({ state: "detached" });
     check("「記録せず閉じる」(footer)discardでは記録されない", (await stateNow()).bodyScans.length === 0);
 
     await seed({ blocks: [makeBlock({ id: "r9c", title: "対象9c", startMin: 17 * 60 + 40 })] });
     await clickReal('[data-action="toggle-block"][data-id="r9c"]');
-    await page.locator(".modal-title", { hasText: "いまの疲労感は?" }).waitFor();
+    await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor();
     await page.locator("#modalRoot").click({ position: { x: 5, y: 5 } });  // 背景タップ(v132と同じ手法)
-    await page.locator(".modal-title", { hasText: "いまの疲労感は?" }).waitFor({ state: "detached" });
+    await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor({ state: "detached" });
     check("背景タップdiscardでは記録されない", (await stateNow()).bodyScans.length === 0);
 
     // ============================================================
@@ -344,7 +350,7 @@ function check(name, cond, extra = "") {
     console.log("[10] 記録がsaveState経由でdataModifiedAtを更新する(toggle-block自身の保存とは分離)");
     await seed({ blocks: [makeBlock({ id: "r10", title: "対象10", startMin: 18 * 60 })] });
     await clickReal('[data-action="toggle-block"][data-id="r10"]');
-    await page.locator(".modal-title", { hasText: "いまの疲労感は?" }).waitFor();
+    await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor();
     // 比較基準はBlock完了後・身体スキャン記録前(toggle-block自身のsaveStateで偽陽性にしないため)。
     const before = (await stateNow()).dataModifiedAt;
     // 固定時刻(page.clock)のままだとnowDateTime()が変化せず「更新された」ことを検出できないため、
@@ -383,18 +389,19 @@ function check(name, cond, extra = "") {
     await narrowPage.reload();
     await narrowPage.waitForSelector('#app[data-view="timeline"]');
     await narrowPage.locator('[data-action="toggle-block"][data-id="r11"]').evaluate((el) => el.click());
-    await narrowPage.locator(".modal-title", { hasText: "いまの疲労感は?" }).waitFor();
+    await narrowPage.locator(".modal-title", { hasText: "身体スキャン" }).waitFor();
     check("390px幅でも身体スキャンモーダル(疲労)が開く",
-      await narrowPage.locator(".modal-title", { hasText: "いまの疲労感は?" }).count() === 1);
+      await narrowPage.locator(".modal-title", { hasText: "身体スキャン" }).count() === 1);
     const box = await narrowPage.locator(".modal-card").boundingBox();
     check("390px幅でモーダルが画面幅からはみ出さない", Boolean(box) && box.x >= 0 && box.x + box.width <= 390 + 1,
       JSON.stringify(box));
-    await narrowPage.click('[data-action="body-scan-fatigue"][data-value="2"]');
-    await narrowPage.locator(".modal-title", { hasText: "どこが疲れていますか" }).waitFor();
+    await narrowPage.click('[data-action="body-scan-fatigue"][data-value="3"]');
+    await narrowPage.locator('[data-action="body-scan-part"][data-part="肩"]').waitFor();
     await narrowPage.click('[data-action="body-scan-part"][data-part="肩"]');
-    await narrowPage.locator(".modal-title", { hasText: "どこが疲れていますか" }).waitFor({ state: "detached" });
+    await narrowPage.click('[data-action="body-scan-record"]');
+    await narrowPage.locator(".modal-title", { hasText: "身体スキャン" }).waitFor({ state: "detached" });
     const narrowState = await narrowPage.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
-    check("390px幅でも2タップで記録できる",
+    check("390px幅でも疲労/部位選択→記録で記録できる",
       narrowState.bodyScans.length === 1 && narrowState.bodyScans[0].pomodoroBlockId === "r11",
       JSON.stringify(narrowState.bodyScans));
     await narrowCtx.close();

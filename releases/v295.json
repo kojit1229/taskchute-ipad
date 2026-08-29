@@ -1,0 +1,73 @@
+{
+  "version": 295,
+  "date": "2026-08-29",
+  "title": "身体スキャン2軸化 第1弾(疲労+回復+Blockコメント欄)",
+  "summary": "K承認済みの発注文(モックbodyscan-2axis-mock.html確定+追加裁定2点、2026-08-29)に基づき、v129/v293の身体スキャンモーダル(疲労のみ・2ステップ)を、疲労(身体)0-5+回復(ココロ)0-5の1シート+Blockコメント欄へ拡張した。両軸ともデフォルト0で「記録」ボタンが最初から活性(0/0=「疲労なし・回復なし」も有効な記録として保存できる)。モーダル内にそのBlockの既存コメントを初期表示するtextareaを併設し、保存時にBlock.commentへ反映する(空のままなら既存commentは変更しない)。日報「### 身体スキャン」表へ回復列を追加し、loop側daily-report-fallback.py・FORMAT_CONTRACT.mdへ同じ契約を追随させた。TOWER統合画面のBODY/MINDウィジェット・週推移(第2弾)、書く瞑想との候補チップ連携、charge/dischargeへの自動ブリッジは今回の非目標。",
+  "changedFiles": [
+    "CHANGES_v295.md",
+    "releases/v295.json",
+    "app.js",
+    "sw.js",
+    "tests/v295.test.js",
+    "tests/v129.test.js",
+    "tests/v132.test.js",
+    "tests/v293.test.js",
+    "tests/action-registry-core.test.js",
+    "docs/code-index.generated.md",
+    "docs/code-index.generated.json",
+    "docs/test-impact-map.generated.md",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "K裁定2点を満たす: (1)両軸ともデフォルト0で最初から「記録」ボタンを活性にし、0/0も有効な記録として保存できるようにする。(2)モーダル内にそのBlockのコメント入力欄を併設し、既存のBlock.commentフィールドへ保存して日報の既存「Blockコメント」節にそのまま乗せる。",
+    "state.bodyScans[]のスキーマはrecoveryの追加のみとし、part(部位)は既存どおり単一文字列フィールドのまま変更しない(モックが示す複数選択チップは、選択した部位名を「・」区切りで1つの文字列へ結合して保存する。schema変更は発注文item1の範囲=recovery追加のみに限定した)。",
+    "src/sync/github.js・computeSyncMergeへは一切触れない(bodyScansはフィールド追加であってもmergeByIdが要素ごと丸ごと比較するため無改修で流れる。これを確認する静的テストを書いた)。",
+    "TOWER統合画面のBODY/MINDウィジェット・週推移(第2弾)、書く瞑想との候補チップ連携(R1b側)、charge/dischargeへの自動ブリッジは非目標として着手しない。"
+  ],
+  "changes": [
+    "app.js normalizeState(): state.bodyScans[]要素へrecovery(0-5の数値。持たない旧レコードはnullで補完)を追加した。fatigueは既存の`...s`スプレッド順序により0はv129時点から既に保持できていたため実装変更は不要だった(コメントで明記)。",
+    "app.js: openBodyScanModal/buildBodyScanStep1Modal/buildBodyScanStep2Modal/bodyScanRecordFatigue/bodyScanRecordPartを、単一のopenBodyScanModal/buildBodyScanModal/bodyScanSelectFatigue/bodyScanSelectRecovery/bodyScanTogglePart/bodyScanRecordへ再構成した。openBodyScanModalは完了BlockのcommentをctxへプリロードしBODY_SCAN_PARTS等の状態(fatigue/recovery/parts/commentすべて)を1つの_pendingBodyScanCtxで管理する。選択操作のたびにbodyScanSyncCommentFromDom()でtextareaの未確定入力をctxへ退避してから再描画し、typed中のコメントが選択操作をまたいで消えないようにした。",
+    "app.js bodyScanRecord(): bodyScansへエントリを追加(fatigue/recovery/part(複数選択は「・」結合)/pomodoroBlockId)し、コメント欄が空でなければ該当BlockのcommentとupdatedAtを更新する(空のままなら書き込まない=既存コメントを空文字で上書きしない)。",
+    "app.js: click dispatcherへbody-scan-recovery/body-scan-recordの2action(body-scan-fatigue/body-scan-part/body-scan-discardは既存名を維持し実装のみ差し替え)を配線した。×ボタンのdata-action/クラス(.modal-close[data-action=\"body-scan-discard\"])は変更していないため、tests/helpers.jsのdismissBodyScanIfOpen(9スイートが依存)は無改修のまま機能する。",
+    "app.js generateReport(): 「### 身体スキャン」表へ回復列を追加(時刻・疲労・回復・部位)。recovery未保有の過去レコードは「—」表示。",
+    "sw.js: CACHE_NAMEをtaskchute-journal-pwa-v295へ更新(APP_SHELL変更なし、新規src/*.jsファイルは追加していないため)。",
+    "tests/v295.test.js新規: §8-1(a)〜(d)網羅(0/0既定記録・疲労3+回復4+部位2件+コメント記録・片軸のみ変更・discard3経路でbodyScans/Block.comment不変・空コメントで既存comment保持・0値のreload後保持・updatedAt挙動・旧レコードのnormalizeState後方互換・mergeById無改修の静的確認・日報の回復列と既存Blockコメント節への統合・390px+モーダル内スクロール)。固定wait(waitForTimeout)は使用していない。",
+    "tests/v129.test.js・tests/v132.test.js・tests/v293.test.js: 2ステップモーダル(疲労→部位、タイトル「いまの疲労感は?」/「どこが疲れていますか」)を前提にしていた箇所を、1シートモーダル(タイトル「身体スキャン」・明示的な「記録」ボタンクリックが必要)へ検証意図を維持したまま追随させた(疲労2の部位選択を伴うケースは疲労3以上へ変更、他は挙動そのまま)。",
+    "tests/action-registry-core.test.js: GOLDEN_CLICK_ACTIONSへbody-scan-recovery/body-scan-recordを追加(221→223件、既存の増減履歴と同じ形式で追記)。",
+    "loop/scripts/daily-report-fallback.py・loop/FORMAT_CONTRACT.mdへ同じ回復列追加を追随実装(taskchute-ipad配下ではなくloop側リポジトリ、監督者が別途反映)。"
+  ],
+  "skipped": [
+    "TOWER統合画面のBODY/MINDウィジェット・週推移(第2弾)。",
+    "書く瞑想との候補チップ連携(R1b側で2軸対応として実装)。",
+    "charge/dischargeへの自動ブリッジ。",
+    "state.bodyScans[].partを配列スキーマへ変更すること(発注文item1の範囲外のため、複数選択は文字列結合のまま維持)。"
+  ],
+  "uncertainties": [
+    "部位の複数選択を「・」区切り文字列へ結合する実装は、発注文のモック(複数選択可チップ)とK裁定item1(recovery追加のみ)を両立させるための実装判断であり、日報表示・将来の集計での扱い(区切り文字での分割前提が必要になる場合)はK確認事項として残る可能性がある。",
+    "実機iOS Safari PWAでの新モーダル(スクロール・textarea日本語IME)確認は監督者判断でK承認後に実施する。"
+  ],
+  "reviewFocus": [
+    "×ボタンのdata-action/クラスが変更されておらず、tests/helpers.jsのdismissBodyScanIfOpen依存9スイート(tests/v150.test.js/tower-core.test.js/v262/v267/v198/v276/v252/v112/v107)が無改修のまま機能すること。",
+    "bodyScanRecord()の「コメント欄が空なら既存Block.commentへ書き込まない」分岐が、discard経路・0/0既定記録経路の両方で正しく効いていること(空文字上書き事故の防止)。",
+    "normalizeStateのrecovery補完が既存レコード(recoveryキー無し)をnullで補完し、明示的なrecovery:0と区別できていること。",
+    "src/sync/github.js・computeSyncMergeに一切差分が無いこと(mergeByIdが要素丸ごと比較するためフィールド追加のみで同期に組み込まれる)。"
+  ],
+  "verification": [
+    "node --check app.js / node --check sw.js / node --check tests/v295.test.js / node --check tests/v129.test.js / node --check tests/v132.test.js / node --check tests/v293.test.js / node --check tests/action-registry-core.test.js で構文確認。",
+    "python -m py_compile loop/scripts/daily-report-fallback.py で構文確認。",
+    "node tests/v295.test.js で新規§8-1網羅(全12ブロック)がALL PASS(固定wait0件)。",
+    "node tests/v129.test.js / node tests/v132.test.js / node tests/v293.test.js / node tests/action-registry-core.test.js を実行し、2軸UIへの追随後もいずれもALL PASSであることを確認した。",
+    "dismissBodyScanIfOpen依存9スイートの代表3本(tests/tower-core.test.js / tests/v150.test.js / tests/v107.test.js)を個別実行し、いずれも無改修のままALL PASSであることを確認した。",
+    "tests/v198.test.js(.modal-close[data-action=\"body-scan-discard\"]セレクタを直接使用)を個別実行し、ALL PASSであることを確認した。"
+  ],
+  "notes": [
+    "実行コード差分(tests/**・docs/**・releases/**・*.md除く、add+del合計)はapp.js 105+45=150行・sw.js 1+1=2行の合計152行で、原則200行の目標内に収まった。",
+    "code:index:write / test:manifest:write は実施予定(release-gate実行時)。コミット・push・release-gate --finalは監督者がK承認後に実施する。"
+  ],
+  "knownLimitations": [
+    "コミット・push・release-gate --final・CI全量・iOS Safari実機PWA確認は監督者がK承認後に実施する。",
+    "loop/scripts/daily-report-fallback.py・loop/FORMAT_CONTRACT.mdの追随は本リリース記録の対象外(taskchute-ipadリポジトリの外)。別途反映状況を確認すること。",
+    "作業開始前から変更済みのartifacts/v275 PNG 4件は本リリース対象外として保持した。",
+    "dismissBodyScanIfOpen依存9スイートのうち代表3本+v198のみ個別実行で確認した(残り5本(v262/v267/v276/v252/v112)は未実行。CI全量実行時に検証される)。"
+  ]
+}

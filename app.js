@@ -1240,9 +1240,11 @@ document.addEventListener("click", (event) => {
   // v174: save-github/load-github/gate-continue/reset-demoはapp.js内のregisterActionsへ移行した。
   // v17: MIT(今日の主役)の切替(最大3個)
   if (action === "toggle-mit") toggleMIT(id);
-  // body-scan-*(ポモドーロ身体スキャン)はapp.jsに残す。
-  if (action === "body-scan-fatigue") bodyScanRecordFatigue(Number(target.dataset.value));
-  if (action === "body-scan-part") bodyScanRecordPart(target.dataset.part || "");
+  // body-scan-*(身体スキャン)はapp.jsに残す。
+  if (action === "body-scan-fatigue") bodyScanSelectFatigue(Number(target.dataset.value));
+  if (action === "body-scan-recovery") bodyScanSelectRecovery(Number(target.dataset.value));
+  if (action === "body-scan-part") bodyScanTogglePart(target.dataset.part || "");
+  if (action === "body-scan-record") bodyScanRecord();
   if (action === "body-scan-discard") bodyScanDiscard();
   // v180: start-pomodoro/stop-pomodoro/interrupt-reason/interrupt-reason-cancel/complete-pomodoro/
   // declare-confirm/declare-skip/report-outcome/report-skip/incomplete-reason-chip/
@@ -2242,15 +2244,20 @@ function normalizeState(value) {
     resultNote: d.resultNote || "",
     ...d
   }));
-  // v129: ポモドーロ身体スキャン(50分ごとのポモドーロ完了時に疲労1-5+任意部位を強制サンプリング)。
+  // v129: 身体スキャン(Block完了時に疲労0-5+任意部位を強制サンプリング)。
   // v106系のマージ可能コレクションとしてmergeById(idキー和集合)で扱う(0秒思考entriesと
   // 同じパターン。computeSyncMerge/applySyncMergeToLocal/applySyncMergeToRemote参照)。上限は
   // 設けない(zeroThinking.entriesと同じ思想)。
+  // v295: 2軸化(K裁定2026-08-29)。recovery(0-5、ココロの回復)を追加。既存レコードは
+  // recovery未保有のためnull(=未記録)で補完し、0(明示的に記録された「回復なし」)とは
+  // 区別する。fatigueは0(疲労なし)も許容(...sのスプレッドが後段で上書きするため
+  // 既存の`s.fatigue || null`のままでも0は保持される。recoveryも同じ順序で揃える)。
   if (!Array.isArray(value.bodyScans)) value.bodyScans = [];
   value.bodyScans = value.bodyScans.map((s) => ({
     id: s.id || crypto.randomUUID(),
     dateTime: s.dateTime || "",
     fatigue: s.fatigue || null,
+    recovery: (typeof s.recovery === "number") ? s.recovery : null,
     part: s.part || "",
     pomodoroBlockId: s.pomodoroBlockId || "",
     ...s
@@ -9926,17 +9933,18 @@ function generateReport(dateArg, { quiet = false } = {}) {
   });
   lines.push("");
 
-  // v129: 当日分の身体スキャン(ポモドーロ完了時の疲労1-5+任意部位)。時刻順。1件も無い日は節ごと省略。
+  // v129/v295: 当日分の身体スキャン(Block完了時の疲労0-5+回復0-5+任意部位)。時刻順。
+  // 1件も無い日は節ごと省略。recoveryが無い過去レコード(v295以前)は「—」表示(0と区別)。
   const bodyScansToday = (state.bodyScans || [])
     .filter((s) => (s.dateTime || "").startsWith(date))
     .sort((a, b) => (a.dateTime || "").localeCompare(b.dateTime || ""));
   if (bodyScansToday.length > 0) {
     lines.push("### 身体スキャン");
-    lines.push("| 時刻 | 疲労 | 部位 |");
-    lines.push("|---|---|---|");
+    lines.push("| 時刻 | 疲労 | 回復 | 部位 |");
+    lines.push("|---|---|---|---|");
     bodyScansToday.forEach((s) => {
       const time = s.dateTime ? timeFromDateTime(s.dateTime) : "—";
-      lines.push(`| ${time} | ${s.fatigue ?? "—"} | ${s.part || "—"} |`);
+      lines.push(`| ${time} | ${s.fatigue ?? "—"} | ${s.recovery ?? "—"} | ${s.part || "—"} |`);
     });
     lines.push("");
   }
@@ -10923,80 +10931,139 @@ function completePomodoro() {
   openBodyScanModal(blockId);
 }
 
-// v129: ポモドーロ身体スキャン ====================================================
-// 没入中に身体信号が届かない特性への対策。50分ごとに必ず手が止まるポモドーロ完了時を
-// 強制サンプリングポイントにし、疲労1-5→任意で部位、の2タップで記録する。摩擦最小のため
-// どのステップでも「記録せず閉じる」で抜けられる(スキップを強制しない)。
+// v129/v295: 身体スキャン ====================================================
+// 没入中に身体信号が届かない特性への対策。手が止まるBlock完了時を強制サンプリング
+// ポイントにし、疲労(身体)0-5+回復(ココロ)0-5を1シートで記録する(v295でK裁定
+// 2026-08-29により2軸化。両軸ともデフォルト0で「記録」ボタンは常時活性=0/0も
+// 「疲労なし・回復なし」という有効な記録として保存できる)。摩擦最小のため
+// 「記録せず閉じる」(×/背景タップ/フッター)でいつでも抜けられる(スキップを強制しない)。
 // 順序: 身体スキャン→閉じた後にv117(C)過集中ゲート判定(既存の90分ガードはそのまま)。
 // =============================================================
 let _pendingBodyScanCtx = null;
 const BODY_SCAN_PARTS = ["目", "肩", "胃", "頭"];
 
 function openBodyScanModal(pomodoroBlockId) {
-  _pendingBodyScanCtx = { pomodoroBlockId: pomodoroBlockId || "", fatigue: null };
+  const block = pomodoroBlockId ? state.blocks.find((b) => b.id === pomodoroBlockId) : null;
+  _pendingBodyScanCtx = {
+    pomodoroBlockId: pomodoroBlockId || "",
+    fatigue: 0,
+    recovery: 0,
+    parts: [],
+    comment: block?.comment || ""
+  };
   state.modal = { type: "bodyScan" };
-  renderModal(buildBodyScanStep1Modal());
+  renderModal(buildBodyScanModal());
 }
 
-function buildBodyScanStep1Modal() {
+// 選択ボタン再描画のたびにモーダルHTMLを丸ごと差し替えるため、コメントtextareaの
+// 未確定入力をDOMから_pendingBodyScanCtxへ退避してから再描画する(消えないように)。
+function bodyScanSyncCommentFromDom() {
+  const el = document.getElementById("bodyScanComment");
+  if (el && _pendingBodyScanCtx) _pendingBodyScanCtx.comment = el.value;
+}
+
+function bodyScanScaleRow(action, current, endpoints) {
+  return `
+    <div class="row" style="gap:6px; flex-wrap:wrap">
+      ${[0, 1, 2, 3, 4, 5].map((n) => `<button class="btn ${n === current ? "primary" : "ghost"}" style="font-size:17px; min-width:44px; min-height:44px" data-action="${action}" data-value="${n}">${n}</button>`).join("")}
+    </div>
+    <div class="muted" style="font-size:11px; margin-top:4px">${endpoints[0]} 〜 ${endpoints[1]}</div>`;
+}
+
+function buildBodyScanModal() {
+  const ctx = _pendingBodyScanCtx;
+  if (!ctx) return "";
+  const showParts = ctx.fatigue >= 3;
   return `
     <div class="modal-card" role="dialog" aria-modal="true">
       <div class="modal-header">
-        <h3 class="modal-title">🧘 いまの疲労感は?</h3>
+        <h3 class="modal-title">🧘 身体スキャン</h3>
         <button class="modal-close" data-action="body-scan-discard" aria-label="閉じる">×</button>
       </div>
       <div class="modal-body">
-        <div class="row" style="gap:8px; justify-content:center; flex-wrap:wrap">
-          ${[1, 2, 3, 4, 5].map((n) => `<button class="btn" style="font-size:20px; min-width:52px; min-height:52px" data-action="body-scan-fatigue" data-value="${n}">${n}</button>`).join("")}
+        <div class="field">
+          <label class="field-label" style="color:var(--red)">🏋️ 身体の疲労</label>
+          ${bodyScanScaleRow("body-scan-fatigue", ctx.fatigue, ["0=疲労なし", "5=かなり疲れた"])}
         </div>
-        <div class="muted" style="font-size:11px; text-align:center; margin-top:8px">1=元気 〜 5=かなり疲れた</div>
+        ${showParts ? `
+        <div class="field">
+          <label class="field-label" style="font-size:11px">どこが疲れていますか?(任意・複数選択可)</label>
+          <div class="row" style="gap:6px; flex-wrap:wrap">
+            ${BODY_SCAN_PARTS.map((p) => `<button class="btn ${ctx.parts.includes(p) ? "primary" : "ghost"}" style="font-size:14px; padding:8px 14px" data-action="body-scan-part" data-part="${p}">${p}</button>`).join("")}
+          </div>
+        </div>` : ""}
+        <div class="field">
+          <label class="field-label" style="color:var(--teal)">🧠 ココロの回復</label>
+          ${bodyScanScaleRow("body-scan-recovery", ctx.recovery, ["0=回復なし", "5=とても回復した"])}
+        </div>
+        <div class="field">
+          <label class="field-label">コメント(任意・このBlockの既存コメントに反映されます)</label>
+          <textarea class="textarea" id="bodyScanComment" style="min-height:70px" placeholder="補足があれば">${escapeHTML(ctx.comment || "")}</textarea>
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn ghost" data-action="body-scan-discard">記録せず閉じる</button>
+        <button class="btn primary" data-action="body-scan-record">記録</button>
       </div>
     </div>`;
 }
 
-function buildBodyScanStep2Modal() {
-  return `
-    <div class="modal-card" role="dialog" aria-modal="true">
-      <div class="modal-header">
-        <h3 class="modal-title">どこが疲れていますか?(任意)</h3>
-        <button class="modal-close" data-action="body-scan-discard" aria-label="閉じる">×</button>
-      </div>
-      <div class="modal-body">
-        <div class="row" style="gap:8px; flex-wrap:wrap; justify-content:center">
-          ${BODY_SCAN_PARTS.map((p) => `<button class="btn" style="font-size:16px; padding:10px 16px" data-action="body-scan-part" data-part="${p}">${p}</button>`).join("")}
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn ghost" data-action="body-scan-part" data-part="">スキップして記録</button>
-      </div>
-    </div>`;
-}
-
-// 1タップ目: 疲労1-5を選び、2タップ目(部位)へ進む
-function bodyScanRecordFatigue(value) {
+function bodyScanSelectFatigue(value) {
   if (!_pendingBodyScanCtx) return;
+  bodyScanSyncCommentFromDom();
   _pendingBodyScanCtx.fatigue = value;
-  renderModal(buildBodyScanStep2Modal());
+  if (value < 3) _pendingBodyScanCtx.parts = [];  // 部位チップは疲労3以上でのみ表示(非表示時は選択も破棄)
+  renderModal(buildBodyScanModal());
 }
 
-// 2タップ目: 部位を選ぶ(""ならスキップして記録)。エントリを保存して閉じる。
-function bodyScanRecordPart(part) {
-  if (!_pendingBodyScanCtx || !_pendingBodyScanCtx.fatigue) return;
+function bodyScanSelectRecovery(value) {
+  if (!_pendingBodyScanCtx) return;
+  bodyScanSyncCommentFromDom();
+  _pendingBodyScanCtx.recovery = value;
+  renderModal(buildBodyScanModal());
+}
+
+function bodyScanTogglePart(part) {
+  if (!_pendingBodyScanCtx || !part) return;
+  bodyScanSyncCommentFromDom();
+  const idx = _pendingBodyScanCtx.parts.indexOf(part);
+  if (idx >= 0) _pendingBodyScanCtx.parts.splice(idx, 1);
+  else _pendingBodyScanCtx.parts.push(part);
+  renderModal(buildBodyScanModal());
+}
+
+// 「記録」: 疲労・回復とも既定0のまま押しても有効な記録として保存する。コメント欄が
+// 空(または空白のみ)なら既存のBlock.commentは変更しない(=空文字で上書きしない)。
+function bodyScanRecord() {
+  const ctx = _pendingBodyScanCtx;
+  if (!ctx) return;
+  bodyScanSyncCommentFromDom();
   const entry = {
     id: crypto.randomUUID(),
     dateTime: nowDateTime(),
-    fatigue: _pendingBodyScanCtx.fatigue,
-    part: part || "",
-    pomodoroBlockId: _pendingBodyScanCtx.pomodoroBlockId || ""
+    fatigue: ctx.fatigue,
+    recovery: ctx.recovery,
+    part: ctx.parts.join("・"),
+    pomodoroBlockId: ctx.pomodoroBlockId || ""
   };
   state.bodyScans = [...state.bodyScans, entry];
+  const commentText = ctx.comment || "";
+  const trimmedComment = commentText.trim();
+  if (trimmedComment && ctx.pomodoroBlockId) {
+    const targetBlock = state.blocks.find((b) => b.id === ctx.pomodoroBlockId);
+    // 無変更の再保存はcomment/updatedAtとも一切書かない(transferIronLogToCompletedBlockと
+    // 同じ「変更があるときだけ書く」パターン。無変更再保存が他端末のBlock編集をmergeByIdで
+    // 負かす経路を断つ)。
+    if (targetBlock && trimmedComment !== String(targetBlock.comment || "")) {
+      state.blocks = state.blocks.map((b) => b.id === ctx.pomodoroBlockId
+        ? { ...b, comment: commentText, updatedAt: nowDateTime() }
+        : b);
+    }
+  }
   closeBodyScanFlow(true);
 }
 
-// 「記録せず閉じる」: どのステップからでも呼べる(強制しない)
+// 「記録せず閉じる」: どこからでも呼べる(強制しない)。bodyScans/Block.commentとも不変。
 function bodyScanDiscard() {
   closeBodyScanFlow(false);
 }

@@ -1,8 +1,13 @@
 // v132 検証: 身体スキャンモーダルの背景タップがdiscard扱いになることの回帰検証。
+// v295(2026-08-29、身体スキャン2軸化)で2ステップ(疲労→部位)モーダルが1シート
+// (疲労+回復+部位チップ+コメント欄)へ再構成されたため、ステップ1/2という区別が
+// なくなった。検証意図(「背景タップは常にdiscard扱いになる」「明示ボタン経路は不変」)は
+// 維持したまま、(a)(b)を「初期状態(0/0)での背景タップ」「疲労選択済み(部位チップ表示中)での
+// 背景タップ」の2ケースへ読み替えた。
 //
-// (a) ステップ1(疲労選択)表示中の背景タップ → discard扱い(bodyScansは0件のまま)
-// (b) ステップ2(部位選択)表示中の背景タップも同様
-// (c) 回帰: 明示ボタン(body-scan-discard/body-scan-part)経路の挙動は不変
+// (a) 初期状態(疲労0/回復0)表示中の背景タップ → discard扱い(bodyScansは0件のまま)
+// (b) 疲労選択済み(部位チップ表示中)での背景タップも同様
+// (c) 回帰: 明示ボタン(body-scan-part/body-scan-record)経路の挙動は不変
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
@@ -79,6 +84,7 @@ function check(name, cond, extra = "") {
     running: true, blockId,
     startedAt: `${TODAY}T09:50:00`, endsAt: `${TODAY}T10:25:00`, mode: "focus"
   });
+  const bodyScanOpen = () => page.locator(".modal-title", { hasText: "身体スキャン" }).count();
   // 背景(modalRoot自身)へのクリック。position:fixedで画面全体を覆うため、モーダルカードの
   // 外側の座標を狙う(左上隅付近)。
   const clickModalBackground = () => page.locator("#modalRoot").click({ position: { x: 5, y: 5 } });
@@ -90,25 +96,25 @@ function check(name, cond, extra = "") {
     await passGithubGate(page);
 
     // ============================================================
-    // (a) ステップ1(疲労選択)での背景タップ
+    // (a) 初期状態(疲労0/回復0)での背景タップ
     // ============================================================
-    console.log("[1] ステップ1(疲労選択)表示中に背景タップ → discard扱いで閉じる");
+    console.log("[1] 初期状態(疲労0/回復0)表示中に背景タップ → discard扱いで閉じる");
     await seed({
       blocks: [makeBlock({ id: "blk-1", title: "対象1", startMin: 9 * 60 + 50 })],
       bodyScans: [], pomodoro: runningPomodoro("blk-1")
     });
     await completeActivePomodoro();
-    check("(準備)身体スキャンモーダル(疲労)が開く", await page.locator(".modal-title", { hasText: "いまの疲労感は?" }).count() === 1);
+    check("(準備)身体スキャンモーダルが開く", await bodyScanOpen() === 1);
     await clickModalBackground();
     await page.waitForTimeout(300);
-    check("身体スキャンモーダルが閉じる", await page.locator(".modal-title", { hasText: "いまの疲労感は?" }).count() === 0);
+    check("身体スキャンモーダルが閉じる", await bodyScanOpen() === 0);
     const s1 = await stateNow();
-    check("bodyScansには記録されない(discard扱い)", (s1.bodyScans || []).length === 0, JSON.stringify(s1.bodyScans));
+    check("bodyScansには記録されない(discard扱い。0/0の既定値でも保存しない)", (s1.bodyScans || []).length === 0, JSON.stringify(s1.bodyScans));
 
     // ============================================================
-    // (b) ステップ2(部位選択)での背景タップ
+    // (b) 疲労選択済み(部位チップ表示中)での背景タップ
     // ============================================================
-    console.log("[2] ステップ2(部位選択)表示中に背景タップ → discard扱いで閉じる(疲労選択済みでも記録されない)");
+    console.log("[2] 疲労選択済み(部位チップ表示中)で背景タップ → discard扱いで閉じる(選択済みでも記録されない)");
     await seed({
       blocks: [makeBlock({ id: "blk-2", title: "対象2", startMin: 10 * 60 })],
       bodyScans: [], pomodoro: runningPomodoro("blk-2")
@@ -116,17 +122,17 @@ function check(name, cond, extra = "") {
     await completeActivePomodoro();
     await page.click('[data-action="body-scan-fatigue"][data-value="3"]');
     await page.waitForTimeout(150);
-    check("(準備)部位選択モーダルへ遷移する", await page.locator(".modal-title", { hasText: "どこが疲れていますか" }).count() === 1);
+    check("(準備)部位チップが表示される(疲労3以上)", await page.locator('[data-action="body-scan-part"]').count() === 4);
     await clickModalBackground();
     await page.waitForTimeout(300);
-    check("身体スキャンモーダルが閉じる", await page.locator(".modal-title", { hasText: "どこが疲れていますか" }).count() === 0);
+    check("身体スキャンモーダルが閉じる", await bodyScanOpen() === 0);
     const s2 = await stateNow();
     check("疲労を選んでいてもbodyScansには記録されない(discard扱い)", (s2.bodyScans || []).length === 0, JSON.stringify(s2.bodyScans));
 
     // ============================================================
     // (c) 回帰: 明示ボタン経路の挙動は不変
     // ============================================================
-    console.log("[3] 回帰: 明示ボタンで記録した場合は保存して閉じる");
+    console.log("[3] 回帰: 「記録」ボタンで記録した場合は保存して閉じる");
     await seed({
       blocks: [makeBlock({ id: "blk-3", title: "対象3", startMin: 11 * 60 })],
       bodyScans: [], pomodoro: runningPomodoro("blk-3")
@@ -135,11 +141,12 @@ function check(name, cond, extra = "") {
     await page.click('[data-action="body-scan-fatigue"][data-value="4"]');
     await page.waitForTimeout(150);
     await page.click('[data-action="body-scan-part"][data-part="肩"]');
+    await page.locator('[data-action="body-scan-part"][data-part="肩"].primary').waitFor();
+    await page.click('[data-action="body-scan-record"]');
     await page.waitForTimeout(300);
     check("bodyScansに1件記録される(明示ボタン経路は不変)",
       (await stateNow()).bodyScans.length === 1);
-    check("記録後に身体スキャンモーダルが閉じる",
-      await page.locator(".modal-title", { hasText: "どこが疲れていますか" }).count() === 0);
+    check("記録後に身体スキャンモーダルが閉じる", await bodyScanOpen() === 0);
   } finally {
     await browser.close();
     server.close();

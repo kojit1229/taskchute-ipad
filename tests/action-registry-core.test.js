@@ -87,6 +87,7 @@ function check(name, cond, extra = "") {
 // 低優先度棚卸し孤児掃除で削除(224→218)。now-conveyor-completeはsrc/features/today-tower.js
 // (TOWER UI)から現役で発行されているため残置。complete-pomodoroもv129/v132の合成data-action
 // 起点+completePomodoro()の唯一の呼び出し元として残置(K裁定2026-08-29)。
+// v295: 身体スキャン2軸化でbody-scan-recovery/body-scan-recordを意図的に追加(221→223)。
 const GOLDEN_CLICK_ACTIONS = [
   "nav", "open-iron-log", "instruments-open-iron-log", "today-replan", "save-tower-journal",
   "focus-toggle-gate", "focus-toggle-journal", "focus-mode",
@@ -107,7 +108,8 @@ const GOLDEN_CLICK_ACTIONS = [
   "generate-report", "download-report", "download-data", "save-github", "load-github",
   "gate-continue", "reset-demo",
   "toggle-mit",
-  "body-scan-fatigue", "body-scan-part", "body-scan-discard",
+  // v295: 身体スキャン2軸化(K裁定2026-08-29)でbody-scan-recovery/body-scan-recordを意図的に追加。
+  "body-scan-fatigue", "body-scan-recovery", "body-scan-part", "body-scan-record", "body-scan-discard",
   "start-pomodoro", "stop-pomodoro", "interrupt-reason", "interrupt-reason-cancel",
   "complete-pomodoro", "declare-confirm", "declare-skip", "report-outcome", "report-skip",
   "incomplete-reason-chip", "incomplete-reason-skip", "guided-access-dismiss",

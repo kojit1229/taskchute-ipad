@@ -1,11 +1,13 @@
-// v129 検証: ポモドーロ身体スキャン(完了時に疲労1-5+任意部位を2タップで記録)。
-// K承認済み案件(2026-07-18)。
-//
-// (a) ポモドーロ完了直後に身体スキャンモーダル(ステップ1: 疲労)が開く
-// (b) 疲労選択→部位選択(ステップ2)へ遷移し、部位タップでstate.bodyScansに記録・モーダルが閉じる
-// (c) 「スキップして記録」ではpart=""で記録される
-// (d) 「記録せず閉じる」ではどのステップからでもbodyScansに何も追加されない
-// (e) 日報生成: 当日分のbodyScansがあれば`### 身体スキャン`表が出る/0件の日は節ごと省略
+// v129 検証: 身体スキャン(完了時に疲労0-5+任意部位を記録)。K承認済み案件(2026-07-18)。
+// v295(2026-08-29、身体スキャン2軸化・K裁定)で2ステップ(疲労→部位)モーダルが1シート
+// (疲労+回復+部位チップ+コメント欄、両軸ともデフォルト0で「記録」ボタン常時活性)へ
+// 再構成された。検証意図は維持したまま、以下のように読み替えた:
+//   (a)(b) 「ステップ1が開く」→「単一シートが開き疲労/回復スケールが6ボタンずつ出る」、
+//          「部位選択(ステップ2)へ遷移」→「疲労3以上で部位チップが表示される」、
+//          「部位タップで記録・閉じる」→「部位タップ後に明示的に『記録』ボタンを押して記録・閉じる」
+//   (c)    「スキップして記録」→「部位チップ非表示のまま(疲労2以下)『記録』を押すとpart=""」
+//   (d)    「記録せず閉じる」はそのまま(×/フッターとも1アクションで到達可能になった)
+// (e) 日報生成: 当日分のbodyScansがあれば`### 身体スキャン`表(回復列を含む)が出る/0件の日は節ごと省略
 // (f) normalizeStateの後方互換: bodyScansフィールドが無い旧stateでも起動できる
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
@@ -84,6 +86,7 @@ function check(name, cond, extra = "") {
     running: true, blockId,
     startedAt: `${TODAY}T09:50:00`, endsAt: `${TODAY}T10:25:00`, mode: "focus"
   });
+  const bodyScanOpen = () => page.locator(".modal-title", { hasText: "身体スキャン" }).count();
 
   try {
     await page.clock.setFixedTime(now0);
@@ -92,39 +95,45 @@ function check(name, cond, extra = "") {
     await passGithubGate(page);
 
     // ============================================================
-    // (a)(b) 身体スキャンモーダルが開き、疲労→部位の2タップで記録される
+    // (a)(b) 身体スキャンモーダルが開き、疲労4選択→部位チップ表示→「肩」タップ→「記録」で記録される
     // ============================================================
-    console.log("[1] ポモドーロ完了直後に身体スキャンモーダル(疲労)が開く");
+    console.log("[1] Block完了直後に身体スキャンモーダル(単一シート)が開く");
     await seed({ blocks: [makeBlock({ id: "blk-1", title: "対象1", startMin: 9 * 60 + 50 })], pomodoro: runningPomodoro("blk-1") });
     await completeActivePomodoro();
-    check("身体スキャンモーダル(疲労)が開く", await page.locator(".modal-title", { hasText: "いまの疲労感は?" }).count() === 1);
-    check("1〜5のボタンが5個出る", await page.locator('[data-action="body-scan-fatigue"]').count() === 5);
+    check("身体スキャンモーダルが開く", await bodyScanOpen() === 1);
+    check("疲労0〜5の6ボタンが出る", await page.locator('[data-action="body-scan-fatigue"]').count() === 6);
+    check("回復0〜5の6ボタンが出る", await page.locator('[data-action="body-scan-recovery"]').count() === 6);
+    check("初期状態では部位チップが出ない(疲労0<3)", await page.locator('[data-action="body-scan-part"]').count() === 0);
+    check("初期状態から「記録」ボタンが活性(0/0も有効な記録)", await page.locator('[data-action="body-scan-record"]').isEnabled());
 
-    console.log("[2] 疲労4をタップ→部位選択(ステップ2)へ遷移。部位タップで記録・モーダルが閉じる");
+    console.log("[2] 疲労4をタップ→部位チップが表示される。部位「肩」タップ→「記録」で記録・モーダルが閉じる");
     await page.click('[data-action="body-scan-fatigue"][data-value="4"]');
     await page.waitForTimeout(150);
-    check("部位選択モーダルへ遷移する", await page.locator(".modal-title", { hasText: "どこが疲れていますか" }).count() === 1);
-    check("部位ボタンが4個(目/肩/胃/頭)出る", await page.locator('[data-action="body-scan-part"]:not([data-part=""])').count() === 4);
+    check("部位チップが4個(目/肩/胃/頭)表示される", await page.locator('[data-action="body-scan-part"]').count() === 4);
     await page.click('[data-action="body-scan-part"][data-part="肩"]');
+    await page.locator('[data-action="body-scan-part"][data-part="肩"].primary').waitFor();
+    await page.click('[data-action="body-scan-record"]');
     await page.waitForTimeout(300);
-    check("モーダルが閉じる", await page.locator(".modal-title", { hasText: "どこが疲れていますか" }).count() === 0);
+    check("モーダルが閉じる", await bodyScanOpen() === 0);
     const s2 = await stateNow();
     check("bodyScansに1件記録される", (s2.bodyScans || []).length === 1, JSON.stringify(s2.bodyScans));
     const scan1 = (s2.bodyScans || [])[0];
     check("fatigue=4が記録される", scan1?.fatigue === 4, JSON.stringify(scan1));
     check("part=肩が記録される", scan1?.part === "肩", JSON.stringify(scan1));
+    check("recovery=0(未変更のまま)が記録される", scan1?.recovery === 0, JSON.stringify(scan1));
     check("pomodoroBlockIdが記録される", scan1?.pomodoroBlockId === "blk-1", JSON.stringify(scan1));
     check("idとdateTimeが記録される", !!scan1?.id && !!scan1?.dateTime, JSON.stringify(scan1));
 
     // ============================================================
-    // (c) 「スキップして記録」ではpart=""で記録される
+    // (c) 疲労2以下(部位チップ非表示)のまま「記録」を押すとpart=""で記録される
     // ============================================================
-    console.log("[3] 部位選択で「スキップして記録」を押すとpart=\"\"で記録される");
+    console.log("[3] 疲労2(部位チップ非表示)のまま「記録」を押すとpart=\"\"で記録される");
     await seed({ blocks: [makeBlock({ id: "blk-2", title: "対象2", startMin: 11 * 60 })], bodyScans: [], pomodoro: runningPomodoro("blk-2") });
     await completeActivePomodoro();
     await page.click('[data-action="body-scan-fatigue"][data-value="2"]');
     await page.waitForTimeout(150);
-    await page.click('[data-action="body-scan-part"][data-part=""]');
+    check("部位チップは出ない(疲労2<3)", await page.locator('[data-action="body-scan-part"]').count() === 0);
+    await page.click('[data-action="body-scan-record"]');
     await page.waitForTimeout(300);
     const s3 = await stateNow();
     check("bodyScansに1件、part=\"\"で記録される",
@@ -132,9 +141,9 @@ function check(name, cond, extra = "") {
       JSON.stringify(s3.bodyScans));
 
     // ============================================================
-    // (d) 「記録せず閉じる」ではどのステップからでも記録されない
+    // (d) 「記録せず閉じる」ではどこからでも記録されない
     // ============================================================
-    console.log("[4] ステップ1で「記録せず閉じる」→bodyScansに追加されない");
+    console.log("[4] 初期状態で「記録せず閉じる」→bodyScansに追加されない");
     await seed({ blocks: [makeBlock({ id: "blk-3", title: "対象3", startMin: 12 * 60 })], bodyScans: [], pomodoro: runningPomodoro("blk-3") });
     await completeActivePomodoro();
     await page.click('[data-action="body-scan-discard"]');
@@ -142,31 +151,35 @@ function check(name, cond, extra = "") {
     const s4 = await stateNow();
     check("bodyScansは0件のまま", (s4.bodyScans || []).length === 0, JSON.stringify(s4.bodyScans));
 
-    console.log("[5] ステップ2(部位選択中)で×閉じ→疲労を選んでいてもbodyScansに追加されない");
+    console.log("[5] 疲労5選択・部位選択中に×閉じ→選んでいてもbodyScansに追加されない");
     await seed({ blocks: [makeBlock({ id: "blk-4", title: "対象4", startMin: 13 * 60 })], bodyScans: [], pomodoro: runningPomodoro("blk-4") });
     await completeActivePomodoro();
     await page.click('[data-action="body-scan-fatigue"][data-value="5"]');
     await page.waitForTimeout(150);
+    await page.click('[data-action="body-scan-part"][data-part="頭"]');
+    await page.locator('[data-action="body-scan-part"][data-part="頭"].primary').waitFor();
     await page.click('.modal-close[data-action="body-scan-discard"]');
     await page.waitForTimeout(300);
     const s5 = await stateNow();
-    check("疲労を選んでいてもdiscardならbodyScansに追加されない", (s5.bodyScans || []).length === 0, JSON.stringify(s5.bodyScans));
+    check("疲労・部位を選んでいてもdiscardならbodyScansに追加されない", (s5.bodyScans || []).length === 0, JSON.stringify(s5.bodyScans));
 
     // ============================================================
-    console.log("[7] 日報生成: 当日分のbodyScansがあれば`### 身体スキャン`表が出る");
+    console.log("[7] 日報生成: 当日分のbodyScansがあれば`### 身体スキャン`表(回復列を含む)が出る");
     const scans = [
-      { id: "bs-a", dateTime: `${TODAY}T10:30:00`, fatigue: 4, part: "肩", pomodoroBlockId: "blk-x" },
-      { id: "bs-b", dateTime: `${TODAY}T09:15:00`, fatigue: 2, part: "", pomodoroBlockId: "blk-y" },
-      { id: "bs-other-day", dateTime: `${YEST}T10:00:00`, fatigue: 5, part: "頭", pomodoroBlockId: "blk-z" }
+      { id: "bs-a", dateTime: `${TODAY}T10:30:00`, fatigue: 4, recovery: 3, part: "肩", pomodoroBlockId: "blk-x" },
+      { id: "bs-b", dateTime: `${TODAY}T09:15:00`, fatigue: 2, part: "", pomodoroBlockId: "blk-y" },  // recovery未保有(旧形式)
+      { id: "bs-other-day", dateTime: `${YEST}T10:00:00`, fatigue: 5, recovery: 1, part: "頭", pomodoroBlockId: "blk-z" }
     ];
     await seed({ blocks: [], bodyScans: scans, view: "journal" });
     await page.click('[data-action="generate-report"]');
     await page.waitForTimeout(400);
     const reportText1 = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
     check("`### 身体スキャン`見出しが出る", reportText1.includes("### 身体スキャン"), reportText1.slice(0, 600));
+    check("表ヘッダに回復列がある", reportText1.includes("| 時刻 | 疲労 | 回復 | 部位 |"), reportText1);
     check("時刻昇順で出る(09:15が10:30より前)", reportText1.indexOf("09:15") < reportText1.indexOf("10:30"), reportText1);
     check("他日分は含まれない(該当エントリのpart「頭」が出ない)", !reportText1.includes("頭"), reportText1);
-    check("部位が空の行は「—」になる", /09:15 \| 2 \| —/.test(reportText1), reportText1);
+    check("recovery未保有(旧形式)の行は回復列が「—」になる", /09:15 \| 2 \| — \| —/.test(reportText1), reportText1);
+    check("recoveryを持つ行はその値が出る(疲労4/回復3/肩)", /10:30 \| 4 \| 3 \| 肩/.test(reportText1), reportText1);
 
     console.log("[8] 日報生成: 当日分のbodyScansが0件なら`### 身体スキャン`節は省略される");
     await seed({ blocks: [], bodyScans: [], view: "journal" });
