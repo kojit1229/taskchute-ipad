@@ -3349,27 +3349,26 @@
     },
     {
       "file": "v59.test.js",
-      "kind": "node",
+      "kind": "e2e",
       "tier": "smoke",
       "domains": [
-        "sync-storage",
         "planning-execution",
         "content-ai"
       ],
-      "assertionSignals": 11,
-      "assertionHash": "2b407762b4a17b31",
-      "sourceHash": "49314a08186397f9",
+      "assertionSignals": 22,
+      "assertionHash": "967e985b311d4279",
+      "sourceHash": "55d91dca4e2b10b8",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
         "unresolvedCount": 0
       },
       "sideEffects": {
-        "browser": false,
-        "server": false,
+        "browser": true,
+        "server": true,
         "fileWrite": false,
-        "networkMock": false,
-        "clock": false
+        "networkMock": true,
+        "clock": true
       }
     },
     {
