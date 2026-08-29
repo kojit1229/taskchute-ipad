@@ -75,7 +75,7 @@ function check(name, cond, extra = "") {
   else { failures++; console.log(`  ❌ ${name} ${extra}`); }
 }
 
-// §6-1: click dispatcherから確定させたゴールデンリスト(削除済み機能のactionを除く221件)。
+// §6-1: click dispatcherから確定させたゴールデンリスト(削除済み機能のactionを除く219件)。
 // 増減・リネームがあれば、それが意図した変更(action追加/削除/移行)かどうかを必ず確認すること。
 // v294: 「書く瞑想」パネル(充放電ログ改善R1a)のkm-chip-add/km-chip-remove/km-saveを
 // 意図的に追加(218→221)。
@@ -88,8 +88,10 @@ function check(name, cond, extra = "") {
 // (TOWER UI)から現役で発行されているため残置。complete-pomodoroもv129/v132の合成data-action
 // 起点+completePomodoro()の唯一の呼び出し元として残置(K裁定2026-08-29)。
 // v295: 身体スキャン2軸化でbody-scan-recovery/body-scan-recordを意図的に追加(221→223)。
+// v299: グループA削除でtoday-replan/ai-morning-plan/zerosec-theme-add/
+// zerosec-theme-skipを意図的に削除(223→219)。
 const GOLDEN_CLICK_ACTIONS = [
-  "nav", "open-iron-log", "instruments-open-iron-log", "today-replan", "save-tower-journal",
+  "nav", "open-iron-log", "instruments-open-iron-log", "save-tower-journal",
   "focus-toggle-gate", "focus-toggle-journal", "focus-mode",
   "early-bird-check", "tower-gate-edit-toggle", "tower-bodymind-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move", "tower-gate-streak-toggle",
   "date-prev", "date-next", "today",
@@ -160,8 +162,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "question-bridge", "question-bridge-submit", "question-delete",
   "entry-to-question",
   "report-copy-ai", "report-share-ai",
-  "ai-schedule", "ai-morning-plan",
-  "zerosec-theme-add", "zerosec-theme-skip",
+  "ai-schedule",
   "draft-confirm", "draft-discard", "draft-remove", "draft-undo",
   "draft-remove-reason", "draft-remove-reason-dismiss",
   "weekly-suggest-add",
@@ -224,7 +225,7 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
   // で確信が持てない)、body-scan-*(ポモドーロ完了時トリガー)、
 // は従来どおり移行せず、if連鎖に残した(下のEXPECTED_REMAINING_IF_CHAINに含まれる)。
 const APP_JS_REGISTERED_ACTIONS = [
-  "nav", "open-iron-log", "instruments-open-iron-log", "today-replan", "save-tower-journal",
+  "nav", "open-iron-log", "instruments-open-iron-log", "save-tower-journal",
   "early-bird-check", "tower-gate-edit-toggle", "tower-bodymind-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move", "tower-gate-streak-toggle",
   "toggle-show-suspended", "toggle-wbs-hide-done", "toggle-tasks-show-future",
   "toggle-wbs-edit", "wbs-collapse-all",
@@ -233,13 +234,13 @@ const APP_JS_REGISTERED_ACTIONS = [
   "toggle-sidebar", "toggle-settings-sync",
   "save-github", "load-github", "gate-continue", "reset-demo", "push-report",
   "open-backup-list", "restore-backup", "run-archive",
-  // --- v176: 0秒思考(22) ---
+  // --- v176: 0秒思考(20。テーマ提案選定2actionはv299で削除) ---
   "zt-add-toggle", "zt-add-cancel", "zt-add-submit", "zt-tab",
   "zt-fav-toggle", "zt-importance-toggle", "zt-theme-delete",
   "zt-suggestion-adopt", "zt-suggestion-dismiss",
   "zt-group-add", "zt-group-rename", "zt-group-delete", "zt-group-toggle",
   "zt-write", "zt-save", "zt-discard", "zt-entry-open", "zt-edit-close", "zt-edit-save",
-  "zero-tab", "zerosec-theme-add", "zerosec-theme-skip",
+  "zero-tab",
   "weekly-suggest-add",
   // --- v177: 問い(9。open-questionsはv230のHome撤去で到達不能化、v291孤児掃除で削除
   //     =低優先度棚卸しK裁定2026-08-29) ---
@@ -287,8 +288,8 @@ const APP_JS_REGISTERED_ACTIONS = [
   // --- v179: 実験ログ(5) ---
   "experiment-add", "edit-experiment", "experiment-keep", "experiment-drop",
   "experiment-copy-conclusion",
-  // --- v179: AIスケジュール下書き(8) ---
-  "ai-schedule", "ai-morning-plan", "draft-confirm", "draft-discard", "draft-remove",
+  // --- v179: スケジュール下書き(7。ai-morning-planはv299で削除) ---
+  "ai-schedule", "draft-confirm", "draft-discard", "draft-remove",
   "draft-undo", "draft-remove-reason", "draft-remove-reason-dismiss",
   // --- v179: 検索(2) ---
   "open-search", "search-jump",

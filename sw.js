@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v298";  // v298: low棚卸し掃除リリース(CSS残骸+保護ルーティン縮退版の編集経路+AI Coach食事集計/削除UI+v117過集中ゲート文書参照撤去。APP_SHELL変更なし)
+const CACHE_NAME = "taskchute-journal-pwa-v299";  // v299: AI関連機能整理グループA(朝プラン/再プラン/AIプラン適用/0秒思考テーマ選定UI/aiPlanSkippedLogを削除。APP_SHELL変更なし)
 // v293: 身体スキャン復活(K裁定2026-08-29。手動Block完了時のみ追加)
 // v290: 孤児action本体2クラスタ(AI作業結果承認/質問、AIタスク候補チップの採用/却下)を削除した(APP_SHELL変更なし)。
 // v288: WBS内検索と新規Project既定closed化を追加した(APP_SHELL変更なし)。
@@ -81,7 +81,7 @@ const CACHE_NAME = "taskchute-journal-pwa-v298";  // v298: low棚卸し掃除リ
 // v199: 「📋 下書きスケジュール」を、当日タスクシュート登録済みBlock(未着手のみ)の空き時間への
 //   決定論再配置に変更(旧: WBS未Block化タスクの新規配置案)。配置ウィンドウ(仕事=平日9-18/
 //   プライベート=8-21)・タスク過多時のskipped+警告行を追加。confirmScheduleDraftはblockId付き
-//   項目で既存Blockの時刻だけ更新する(makeBlockしない)。朝プラン(runAiMorningPlan)は無改修。
+//   項目で既存Blockの時刻だけ更新する(makeBlockしない)。
 // v198: AI秘書化第3弾3e(完了トリガー+引き継ぎシート)。Kの完了操作6経路を
 //   maybeQueueNextAiStepへ集約し、発火条件6つを満たしたときだけ確認シートを開く。
 //   「AIに渡す」は3f+3gまでは必ず失敗する送信スタブ(putAiStepRequest)を経由してC-3補償に落ちる。

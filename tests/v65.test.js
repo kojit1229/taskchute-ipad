@@ -1,25 +1,25 @@
 // v65 検証: 10x機構の最小構成(designs/10x-mechanism.md v65節)。
 //
-// (a) normalizeState 後方互換: 旧Task/旧Block(leverageTypeフィールド無し)に ""(未設定) が
-//     補完される。旧state(aiPlanSkippedLogフィールド自体が無い)にも [] が補完される
+// (a) normalizeState 後方互換: 旧Task/旧Block(leverageTypeフィールド無し)に ""(未設定) が補完される
 // (b) Task/Block編集モーダルで leverageType を選択→保存できる(select保存)
 // (c) 10秒判定ヘルパー: 3問中2問以上チェック→「判定結果を反映」でselectが asset になる。
 //     1問だけなら未設定のままになる(強制しない・保存前はstate未変更)
 // (d) 一覧(タスクシュート/WBS)・タイムラインに leverageType の控えめマークが出る
 //     (asset=⚙資産・eliminate=✂削減。oneoffは視覚ノイズ回避のため無表示)
-// (e) AIプランのtitle先頭「[資産]」検出 → 下書き段階でマーク表示 → 確定後のBlockに
-//     leverageType=asset が自動付与される(プレフィックス無しの項目は影響を受けない)
-// (f) v64設計§3残余: AIプラン自身のskipped(kind:"ai")が state.aiPlanSkippedLog に記録される
+// (e)(f) v299で削除したAIプラン専用leverage検出・aiPlanSkippedLogの不在を固定する
 //
 // 方針: 既存スイート(v61/v62/v63)と同じく、app.js は type="module" のため内部関数は window に
 // 露出しない。ブラウザ操作 + localStorage 状態の直接注入で観測する。AIプランのfetchは
 // v70でv62.test.jsと同じくpage.route(実ファイル不使用)によるモックへ書き換えた(理由はv62.test.js参照)。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dispatchRegisteredAction } = require("./helpers");
+const fs = require("fs");
+const path = require("path");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 
 let failures = 0;
+const appSource = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
 function check(name, cond, extra = "") {
   if (cond) console.log(`  ✅ ${name}`);
   else { failures++; console.log(`  ❌ ${name} ${extra}`); }
@@ -42,10 +42,6 @@ function check(name, cond, extra = "") {
   const TODAY = isoDate(now0);
 
   const hhmm = (min) => `${pad2(Math.floor(min / 60))}:${pad2(min % 60)}`;
-
-  // v70: 実ファイルを書く代わりに、この変数をfetchのモック応答として使う(null=404)。
-  //      page.route登録後は、シナリオごとにこの変数を書き換えるだけで良い(実ファイル操作なし)。
-  let aiPlanFixture = null;
 
   function makeBlockFixture({ id, date = TODAY, title, startMin = 9 * 60, minutes = 30, category = "",
     taskId = "", completed = false, leverageType, includeLeverageField = true }) {
@@ -93,21 +89,7 @@ function check(name, cond, extra = "") {
   async function stateNow() {
     return page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
   }
-  async function draftTitles() {
-    return page.locator(".draft-block-title").allTextContents();
-  }
-
   try {
-    // v70: AIプラン_<TODAY>.json のfetchを常にモックする(実ファイル不使用)。
-    // v72: 個人データはGitHub Contents API(personal-data リポジトリの taskchute/ 配下)経由に
-    //      なったため、判定を同一オリジンの絶対パスから api.github.com のcontents URL末尾一致に更新。
-    await page.route((url) =>
-      url.hostname === "api.github.com" && decodeURIComponent(url.pathname).endsWith(`/taskchute/AIプラン_${TODAY}.json`),
-    (route) => {
-      if (aiPlanFixture === null) return route.fulfill({ status: 404, body: "not found (test-fixture)" });
-      route.fulfill({ status: 200, contentType: "application/json", body: aiPlanFixture });
-    });
-
     await page.clock.setFixedTime(now0);  // goto前に固定してアプリ起動時のnew Date()から一貫させる
     await page.goto(`http://localhost:${PORT}/`);
     await page.waitForTimeout(500);
@@ -118,7 +100,7 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (a) normalizeState 後方互換
     // ============================================================
-    console.log("[1] normalizeState 後方互換: 旧Task/旧Block(leverageType無し)→\"\"補完、aiPlanSkippedLog無し→[]補完");
+    console.log("[1] normalizeState 後方互換: 旧Task/旧Block(leverageType無し)→\"\"補完、削除stateは再生成しない");
     await page.evaluate(({ KEY, TODAY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.tasks = [{
@@ -150,7 +132,7 @@ function check(name, cond, extra = "") {
     const legacyBlock = (normalized1.blocks || []).find((b) => b.id === "legacy-block");
     check("旧Taskにleverageの補完される", !!legacyTask && legacyTask.leverageType === "", JSON.stringify(legacyTask));
     check("旧Blockにleverageの補完される", !!legacyBlock && legacyBlock.leverageType === "", JSON.stringify(legacyBlock));
-    check("aiPlanSkippedLogが配列として補完される", Array.isArray(normalized1.aiPlanSkippedLog) && normalized1.aiPlanSkippedLog.length === 0, JSON.stringify(normalized1.aiPlanSkippedLog));
+    check("aiPlanSkippedLogはnormalizeStateで再生成されない", !("aiPlanSkippedLog" in normalized1), JSON.stringify(normalized1.aiPlanSkippedLog));
     check("既存データはクラッシュせず表示できる(pageerror無し)", true);
 
     // ============================================================
@@ -252,55 +234,14 @@ function check(name, cond, extra = "") {
     check("タイムラインカードにも⚙資産/✂削減マークが出る", timelineText.includes("⚙資産") && timelineText.includes("✂削減"), "");
 
     // ============================================================
-    // (e) AIプランのtitle先頭「[資産]」検出 + (f) aiPlanSkippedLogへの記録
+    // (e)(f) v299: AIプラン専用leverage検出とskippedログを削除。
+    // Test-Reduction: 手動leverageの保存・表示は[2]〜[6]で同等以上に固定する。
     // ============================================================
-    console.log("[7] AIプランのtitle先頭「[資産]」検出 → 下書きマーク表示 → 確定後Blockにleverage=assetが付与される");
-    aiPlanFixture = JSON.stringify({
-      date: TODAY,
-      generatedAt: `${TODAY}T05:00`,
-      plan: [
-        { title: "[資産] 自動化コードを書く", taskId: null, blockId: null, start: "10:30", minutes: 30, category: "", reason: "資産化候補", carryFromId: null },
-        { title: "普通の単発タスク", taskId: null, blockId: null, start: "11:30", minutes: 30, category: "", reason: "", carryFromId: null }
-      ],
-      skipped: [
-        { title: "AIが見送ったタスク", reason: "時間帯が合わない" }
-      ]
-    }, null, 2);
-    await seed({ tasks: [], projects: [] });
-    await page.click('[data-action="nav"][data-view="today"]');
-    await page.waitForTimeout(150);
-    const morningPlanButton = page.locator('[data-action="ai-morning-plan"]');
-    if (await morningPlanButton.count()) await morningPlanButton.click();
-    else await dispatchRegisteredAction(page, "ai-morning-plan");
-    await page.waitForTimeout(700);
-    const titles7 = await draftTitles();
-    check("[資産]プレフィックス項目・通常項目とも下書きに採用される",
-      titles7.some((t) => t.includes("自動化コードを書く")) && titles7.some((t) => t.includes("普通の単発タスク")),
-      JSON.stringify(titles7));
-    // v65レビュー対応(必須1): [資産]プレフィックスは検出後にtitleから除去され、
-    // ⚙資産マークと二重表示にならないことを確認する
-    check("下書きタイトルに[資産]プレフィックスが残らない(二重表示防止)",
-      !titles7.some((t) => t.includes("[資産]")), JSON.stringify(titles7));
-    const assetDraftHTML = await page.locator('.draft-block:has-text("自動化コードを書く")').innerHTML();
-    check("[資産]項目は下書き段階で⚙資産マークが出る", assetDraftHTML.includes("⚙資産"), assetDraftHTML);
-    check("[資産]項目の下書きタイトル自体には[資産]の生プレフィックスが残らない",
-      !assetDraftHTML.includes("[資産] 自動化コードを書く"), assetDraftHTML);
-    const plainDraftHTML = await page.locator('.draft-block:has-text("普通の単発タスク")').innerHTML();
-    check("プレフィックス無し項目には⚙資産マークが出ない", !plainDraftHTML.includes("⚙資産"), plainDraftHTML);
-
-    await page.click('[data-action="draft-confirm"]');
-    await page.waitForTimeout(400);
-    const s7 = await stateNow();
-    const assetBlock = (s7.blocks || []).find((b) => b.title.includes("自動化コードを書く"));
-    const plainBlock = (s7.blocks || []).find((b) => b.title.includes("普通の単発タスク"));
-    check("[資産]検出項目はBlock確定時にleverageType=assetが付く", !!assetBlock && assetBlock.leverageType === "asset", JSON.stringify(assetBlock));
-    check("確定後のBlockタイトルにも[資産]プレフィックスが残らない(二重表示防止)",
-      !!assetBlock && assetBlock.title === "自動化コードを書く" && !assetBlock.title.includes("[資産]"), JSON.stringify(assetBlock));
-    check("プレフィックス無し項目はleverageTypeが未設定のまま", !!plainBlock && (plainBlock.leverageType || "") === "", JSON.stringify(plainBlock));
-
-    console.log("[8] v64設計§3残余: AIプラン自身のskipped(kind:ai)がaiPlanSkippedLogへ記録される");
-    const skippedLog = (s7.aiPlanSkippedLog || []).find((e) => e.title === "AIが見送ったタスク");
-    check("aiPlanSkippedLogにAIの見送り理由が記録される", !!skippedLog && skippedLog.reason === "時間帯が合わない" && skippedLog.date === TODAY, JSON.stringify(skippedLog));
+    console.log("[7-8] v299: AIプラン専用leverage検出・skippedログを削除");
+    check("detectLeverageTypeFromTitle本体が存在しない", !/\bfunction\s+detectLeverageTypeFromTitle\b/.test(appSource));
+    check("ASSET_TITLE_PREFIXが存在しない", !appSource.includes("ASSET_TITLE_PREFIX"));
+    check("aiPlanSkippedLog参照が存在しない", !appSource.includes("aiPlanSkippedLog"));
+    check("AI_PLAN_SKIPPED_LOG_MAXが存在しない", !appSource.includes("AI_PLAN_SKIPPED_LOG_MAX"));
 
   } finally {
     // v70: page.routeでモックしているため、実ファイルの後始末は不要(何も書いていない)。

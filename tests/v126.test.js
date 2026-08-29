@@ -10,7 +10,11 @@
 //     data-action="delete-project"を直接発火させても関数側のガードで拒否される
 // (f追補・v127レビュー対応) WBSのWish Project配下で新規タスクを作成すると期日が空のまま
 //     (addWish/addWishSubtaskと同じ挙動。ユーザーが明示入力しない限り当日日付を補完しない)
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dispatchRegisteredAction } = require("./helpers");
+const fs = require("fs");
+const path = require("path");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+
+const appSource = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -92,10 +96,6 @@ function check(name, cond, extra = "") {
   async function stateNow() {
     return page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
   }
-  async function draftTitles() {
-    return page.locator(".draft-block-title").allTextContents();
-  }
-
   try {
     await page.clock.setFixedTime(now0);
     await page.goto(`http://localhost:${PORT}/`);
@@ -180,36 +180,13 @@ function check(name, cond, extra = "") {
       newWishTask && newWishTask.dueDate === "", JSON.stringify(newWishTask));
     check("作成されたタスクのprojectIdはWish Project", newWishTask && newWishTask.projectId === "wish-1", JSON.stringify(newWishTask));
 
-    // ============================================================
-    // (b)(c) 朝の一括プランニング候補: 期日付きWishは通常WBSタスクと同列で候補に入り配置される。
-    //         期日なしWishは候補に入らない。
-    // ============================================================
-    console.log("[2] 朝の一括プランニング候補: 期日付きWishのみ候補に入る");
-    const DUE_WISH_TITLE = "資格試験に合格する";
-    const NO_DUE_WISH_TITLE = "書籍を出版する";
-    const WBS_TITLE_B = "見積書を作成する";
-    await seed({
-      tasks: [
-        makeWish({ id: "w-2", title: DUE_WISH_TITLE, dueDate: TODAY }),
-        makeWish({ id: "w-3", title: NO_DUE_WISH_TITLE, dueDate: "" }),
-        wbsTask("wbs-2", WBS_TITLE_B, TODAY)
-      ],
-      projects: [wishProject(), testProject()],
-      view: "tasks"
-    });
-    await page.click('[data-action="nav"][data-view="today"]');
-    await page.waitForTimeout(150);
-    await dispatchRegisteredAction(page, "ai-morning-plan");
-    await page.waitForTimeout(600);
-
-    const titlesB = await draftTitles();
-    const titlesBJoined = titlesB.join(" / ");
-    check("期日付きWishが下書きに配置される", titlesBJoined.includes(DUE_WISH_TITLE), titlesBJoined);
-    check("通常WBSタスクも引き続き下書きに配置される", titlesBJoined.includes(WBS_TITLE_B), titlesBJoined);
-    check("期日なしWishは候補に入らない(下書きに現れない)", !titlesBJoined.includes(NO_DUE_WISH_TITLE), titlesBJoined);
-
-    await page.click('[data-action="draft-discard"]');
-    await page.waitForTimeout(200);
+    // v299 Test-Reduction: この配置を担っていた朝プラン本体の削除に合わせ、
+    // 旧actionを発火するテストではなく対象コードの不存在を固定する。
+    console.log("[2] v299: 朝の一括プランニング経路はソースから削除済み");
+    check("ai-morning-plan actionが存在しない", !appSource.includes('"ai-morning-plan"'));
+    check("runAiMorningPlanが存在しない", !appSource.includes("runAiMorningPlan"));
+    check("aiScheduleCandidatesが存在しない", !appSource.includes("aiScheduleCandidates"));
+    check("D側ai-schedule actionは維持", appSource.includes('"ai-schedule": () => runAiSchedule()'));
 
     // ============================================================
     // ============================================================

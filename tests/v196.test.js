@@ -1,8 +1,8 @@
 // v196: 実行計画の叩き台をAIに作らせる(第2弾b)。タスク編集モーダルの依頼ボタン→
-// plan-request.json/plan-response.jsonのポーリング(v193再プランと同じ作法)→下書き承認→
+// plan-request.json/plan-response.jsonのポーリング→下書き承認→
 // サブタスク生成までを固定する。応答の型不正・件数超過は下書き全体を不採用にすることも固定する。
 const path = require("path");
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY, dispatchRegisteredAction } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY } = require("./helpers");
 
 const PORT = randomPort();
 let failures = 0;
@@ -18,12 +18,6 @@ function check(name, cond, extra = "") {
   const page = await context.newPage();
   page.on("pageerror", (error) => { failures++; console.log("  ❌ pageerror:", error.message); });
   await blockGithubApiByDefault(page);
-  let replanRequestCount = 0;
-  await page.route((url) => url.pathname.endsWith("/contents/taskchute/requests/replan-request.json"), async (route) => {
-    replanRequestCount += 1;
-    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ content: { sha: "unexpected" } }) });
-  });
-
   const now = new Date();
   now.setHours(10, 0, 0, 0);
 
@@ -131,7 +125,7 @@ function check(name, cond, extra = "") {
 
   try {
     const appSource = require("fs").readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
-    check("ポーリング間隔・上限がv193再プランと同じ値", /PLAN_STEP_POLL_MS\s*=\s*60\s*\*\s*1000/.test(appSource)
+    check("実行計画ポーリング間隔・上限を維持", /PLAN_STEP_POLL_MS\s*=\s*60\s*\*\s*1000/.test(appSource)
       && /PLAN_STEP_TIMEOUT_MS\s*=\s*15\s*\*\s*60\s*\*\s*1000/.test(appSource));
 
     await page.clock.setFixedTime(now);
@@ -185,14 +179,13 @@ function check(name, cond, extra = "") {
     await page.waitForFunction(() => (document.querySelector(".plan-step-draft .field-label")?.textContent || "").includes("AIが3個のステップを提案しています"));
     check("応答到着後もWBSビューから強制遷移しない", await page.locator("#app[data-view='wbs']").count() === 1);
 
-    console.log("[1b] 承認中は相互排他で再プラン依頼を拒む(既存排他機構に倣う)");
+    console.log("[1b] v299: 削除済み再プラン経路のソース不存在");
     await page.locator('[data-action="modal-close"]').first().click();
     await page.locator('#sidebar [data-action="nav"][data-view="today"]').click();
     await page.waitForSelector(".today-tower");
-    check("再プラン操作ボタンを本番DOMへ描画しない", await page.locator('[data-action="today-replan"]').count() === 0);
-    await dispatchRegisteredAction(page, "today-replan");
-    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve())));
-    check("実行計画の下書き未決定中は再プランrequestを送らない", replanRequestCount === 0, String(replanRequestCount));
+    check("today-replan actionが存在しない", !appSource.includes('"today-replan"'));
+    check("requestReplan本体が存在しない", !appSource.includes("requestReplan"));
+    check("実行計画のpending stateは維持", appSource.includes("_planStepPending"));
     await page.locator('#sidebar [data-action="nav"][data-view="wbs"]').click();
     await page.waitForSelector('#app[data-view="wbs"]');
 
@@ -316,7 +309,7 @@ function check(name, cond, extra = "") {
       localStorage.setItem(key, JSON.stringify(state));
     }, STATE_KEY);
     await page.reload();
-    await page.waitForSelector("[data-replan-guide]");
+    await page.waitForSelector('[data-action="gate-continue"]');
     check("未設定ゲートには実行計画ボタンを表示しない", await page.locator('[data-action="plan-step-request"]').count() === 0);
   } finally {
     await browser.close();

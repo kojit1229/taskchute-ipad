@@ -1,11 +1,7 @@
-// v62 検証: バッチ生成物のアプリ側着地(AIプラン・AIレポート週次レビュー) + 下書きUndo/Redo・却下理由メモ
+// v62 検証: AIレポート週次レビュー + 下書きUndo/Redo・却下理由メモ
 //           + ホーム信条の実データ化。
 //
-// (a) 朝プラン(runAiMorningPlan)が当日の AIプラン_YYYY-MM-DD.json を同一オリジンfetchし、
-//     正常なら下書き採用(source="ai-plan"、reasonをツールチップ/バーで表示、skippedも表示)
-// (b) 取得失敗(不正JSON)・日付不一致(古い)・空き時間との不整合(状態ズレ)・
-//     carryFromIdの二重繰越参照 の各ケースで決定論配置(source="deterministic")へフォールバックする
-// (c) 確定時の aiScheduleHistory に source(ai-plan/deterministic)が記録される
+// (a)-(c) v299で削除したAIプランJSON→朝プラン経路は、対象コードの不在契約へ更新する
 // (d) 週次レビュー_*.md(直近土曜)をアプリ内表示し、「来週のタスク提案」の行ごとに
 //     「+登録」でWBSタスクを1件ずつ登録できる(一括登録はしない)。無ければセクション非表示
 // (e) 下書きレイヤ操作(×削除)の直前状態へ1段Undo、却下理由のワンタップ選択が
@@ -19,11 +15,14 @@
 // ため、実行日によってはテスト終了後に実ファイルが一時的に消える環境依存の副作用があった
 // (v67 CHANGES参照)。v70でこれを恒久修正し、実ファイルには一切触れない。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dispatchRegisteredAction } = require("./helpers");
+const fs = require("fs");
+const path = require("path");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 
 let failures = 0;
+const appSource = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
 function check(name, cond, extra = "") {
   if (cond) console.log(`  ✅ ${name}`);
   else { failures++; console.log(`  ❌ ${name} ${extra}`); }
@@ -56,9 +55,7 @@ function check(name, cond, extra = "") {
   }
   const WEEK = weekStartOf(TODAY);
 
-  // v70: 実ファイルを書く代わりに、この2変数をfetchのモック応答として使う(null=404)。
-  //      page.route登録後は、シナリオごとにこの変数を書き換えるだけで良い(実ファイル操作なし)。
-  let aiPlanFixture = null;
+  // v70: 実ファイルを書く代わりに、週次レビュー応答をfixtureで差し替える(null=404)。
   let weeklyReviewFixture = null;
 
   function planBlock({ id, date, title, startMin, endMin, taskId = "", category = "", migratedTo = "" }) {
@@ -107,15 +104,6 @@ function check(name, cond, extra = "") {
     return page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
   }
 
-  async function runMorningPlan() {
-    await page.click('[data-action="nav"][data-view="today"]');
-    await page.waitForTimeout(150);
-    const morningPlanButton = page.locator('[data-action="ai-morning-plan"]');
-    if (await morningPlanButton.count()) await morningPlanButton.click();
-    else await dispatchRegisteredAction(page, "ai-morning-plan");
-    await page.waitForTimeout(700);
-  }
-
   async function runScheduleFromTimeline() {
     await page.click('[data-action="nav"][data-view="timeline"]');
     await page.waitForSelector('#app[data-view="timeline"]');
@@ -132,16 +120,10 @@ function check(name, cond, extra = "") {
   }
 
   try {
-    // v70: AIプラン_<TODAY>.json / 週次レビュー_<WEEK>.md のfetchを常にモックする(実ファイル不使用)。
-    //      aiPlanFixture/weeklyReviewFixtureがnullなら404、文字列ならその内容で200を返す。
+    // v70: 週次レビュー_<WEEK>.md のfetchを常にモックする(実ファイル不使用)。
+    //      weeklyReviewFixtureがnullなら404、文字列ならその内容で200を返す。
     // v72: 個人データはGitHub Contents API(personal-data リポジトリの taskchute/ 配下)経由に
     //      なったため、判定を同一オリジンの絶対パスから api.github.com のcontents URL末尾一致に更新。
-    await page.route((url) =>
-      url.hostname === "api.github.com" && decodeURIComponent(url.pathname).endsWith(`/taskchute/AIプラン_${TODAY}.json`),
-    (route) => {
-      if (aiPlanFixture === null) return route.fulfill({ status: 404, body: "not found (test-fixture)" });
-      route.fulfill({ status: 200, contentType: "application/json", body: aiPlanFixture });
-    });
     await page.route((url) =>
       url.hostname === "api.github.com" && decodeURIComponent(url.pathname).endsWith("/taskchute/report-index.json"),
     (route) => route.fulfill({
@@ -193,144 +175,20 @@ function check(name, cond, extra = "") {
     check("既存データはクラッシュせず表示できる(pageerror無し)", true);
 
     // ============================================================
-    // (a) AIプラン正常fetch → 下書きにAI由来として反映
+    // (a)-(c) v299: AIプランJSON適用経路を削除。旧挙動テストを実体不在へ追随する。
+    // Test-Reduction: 下書きUndo/理由/確定は[6]以降、AIレポートは[8]以降で独立検証する。
     // ============================================================
-    console.log("[1] AIプランJSON正常fetch → 下書き採用(source=ai-plan・reason表示・skipped表示)");
-    aiPlanFixture = JSON.stringify({
-      date: TODAY,
-      generatedAt: `${TODAY}T05:00`,
-      plan: [
-        { title: "AIプラン採用タスク", taskId: null, blockId: null, start: "10:30", minutes: 30, category: "開発", reason: "午前中に集中できるため", carryFromId: null }
-      ],
-      skipped: [
-        { title: "AIプラン見送りタスク", reason: "時間帯が合わない" }
-      ]
-    }, null, 2);
-    await seed({ tasks: [], projects: [] });
-    await runMorningPlan();
-    const titles1 = await draftTitles();
-    check("AIプランの項目が下書きとして採用される", titles1.some((t) => t.includes("AIプラン採用タスク")), JSON.stringify(titles1));
-    const bar1 = await draftBarText();
-    check("下書きバーにAI由来のラベルが出る(🤖 AIプラン由来)", (bar1 || "").includes("🤖 AIプラン由来"), bar1);
-    const mainText1 = await page.locator("main").textContent();
-    check("skippedが「見送り」として表示される", mainText1.includes("見送り") && mainText1.includes("AIプラン見送りタスク"), mainText1.slice(0, 400));
-    const reasonAttr = await page.locator('.draft-block:has-text("AIプラン採用タスク")').getAttribute("title").catch(() => "");
-    check("reasonがツールチップ(title属性)で見える", (reasonAttr || "").includes("午前中に集中できるため"), reasonAttr);
-    const reasonText = await page.locator(".draft-block-reason").first().textContent().catch(() => "");
-    check("reasonが下書きBlock内にも小さく表示される", (reasonText || "").includes("午前中に集中できるため"), reasonText);
-
-    console.log("[1b] 確定時、aiScheduleHistoryにsource='ai-plan'で記録される");
-    await page.click('[data-action="draft-confirm"]');
-    await page.waitForTimeout(400);
-    const s1 = await stateNow();
-    const confirmedAi = (s1.aiScheduleHistory || []).find((h) => h.title === "AIプラン採用タスク" && h.outcome === "confirmed");
-    check("aiScheduleHistoryにconfirmed(source=ai-plan)が記録される", !!confirmedAi && confirmedAi.source === "ai-plan", JSON.stringify(confirmedAi));
-    const newBlock1 = (s1.blocks || []).find((b) => b.title === "AIプラン採用タスク" && b.date === TODAY);
-    check("AIプラン由来のBlockが10:30〜11:00で登録される", !!newBlock1 && newBlock1.plannedStartAt.endsWith("T10:30") && newBlock1.plannedEndAt.endsWith("T11:00"), JSON.stringify(newBlock1));
-
-    // ============================================================
-    // (b) 不正JSON → 決定論配置へフォールバック
-    // ============================================================
-    console.log("[2] 不正JSON(パース不能) → 決定論配置へフォールバック");
-    aiPlanFixture = "{ これはJSONとして壊れている ,,, ";
-    await seed({ tasks: [wbsTask("task-fb1", "決定論フォールバックA")], projects: [testProject()] });
-    await runMorningPlan();
-    const titles2 = await draftTitles();
-    check("不正JSON時は決定論配置の候補が使われる", titles2.some((t) => t.includes("決定論フォールバックA")), JSON.stringify(titles2));
-    const bar2 = await draftBarText();
-    check("下書きバーが決定論配置のラベルになる(⚙ 決定論配置)", (bar2 || "").includes("⚙ 決定論配置"), bar2);
-    await page.click('[data-action="draft-confirm"]');
-    await page.waitForTimeout(400);
-    const s2 = await stateNow();
-    const confirmedDet = (s2.aiScheduleHistory || []).find((h) => h.title === "決定論フォールバックA" && h.outcome === "confirmed");
-    check("aiScheduleHistoryにconfirmed(source=deterministic)が記録される", !!confirmedDet && confirmedDet.source === "deterministic", JSON.stringify(confirmedDet));
-
-    // ============================================================
-    // (b) 日付不一致(古いプラン) → フォールバック
-    // ============================================================
-    console.log("[3] AIプランのdateが当日と不一致(古いプラン) → フォールバック");
-    aiPlanFixture = JSON.stringify({
-      date: YEST,  // 当日ではない
-      generatedAt: `${YEST}T05:00`,
-      plan: [{ title: "古いプランのタスク", taskId: null, blockId: null, start: "10:30", minutes: 30, category: "", reason: "古い", carryFromId: null }],
-      skipped: []
-    });
-    await seed({ tasks: [wbsTask("task-fb2", "決定論フォールバックB")], projects: [testProject()] });
-    await runMorningPlan();
-    const titles3 = await draftTitles();
-    check("古い日付のプランは採用されない", !titles3.some((t) => t.includes("古いプランのタスク")), JSON.stringify(titles3));
-    check("決定論配置にフォールバックする", titles3.some((t) => t.includes("決定論フォールバックB")), JSON.stringify(titles3));
-
-    // ============================================================
-    // (b) 空き時間との不整合(既存Blockと衝突=状態が生成時から動いた) → フォールバック
-    // ============================================================
-    console.log("[4] AIプランの配置先が既存Blockと衝突(状態がズレている) → フォールバック");
-    aiPlanFixture = JSON.stringify({
-      date: TODAY,
-      generatedAt: `${TODAY}T05:00`,
-      plan: [{ title: "衝突するプランのタスク", taskId: null, blockId: null, start: "10:30", minutes: 30, category: "", reason: "衝突", carryFromId: null }],
-      skipped: []
-    });
-    await seed({
-      blocks: [planBlock({ id: "occ-1", date: TODAY, title: "既存の予定", startMin: 10 * 60 + 30, endMin: 11 * 60 })],
-      tasks: [wbsTask("task-fb3", "決定論フォールバックC")],
-      projects: [testProject()]
-    });
-    await runMorningPlan();
-    const titles4 = await draftTitles();
-    check("既存Blockと衝突するプランは採用されない", !titles4.some((t) => t.includes("衝突するプランのタスク")), JSON.stringify(titles4));
-    check("決定論配置にフォールバックする", titles4.some((t) => t.includes("決定論フォールバックC")), JSON.stringify(titles4));
-
-    // ============================================================
-    // (b) carryFromIdが既に繰り越し済み(二重繰越防止) → 該当項目は不採用 → 他に無ければフォールバック
-    // ============================================================
-    console.log("[5] carryFromIdが既に繰り越し済みBlockを参照 → 不採用 → フォールバック(二重繰越防止の維持)");
-    aiPlanFixture = JSON.stringify({
-      date: TODAY,
-      generatedAt: `${TODAY}T05:00`,
-      plan: [{ title: "二重繰越になるはずのタスク", taskId: null, blockId: null, start: "10:30", minutes: 30, category: "", reason: "繰越", carryFromId: "already-migrated" }],
-      skipped: []
-    });
-    await seed({
-      blocks: [planBlock({ id: "already-migrated", date: YEST, title: "既に繰り越し済みの元Block", startMin: 10 * 60, endMin: 10 * 60 + 30, migratedTo: "some-existing-block" })],
-      tasks: [wbsTask("task-fb4", "決定論フォールバックD")],
-      projects: [testProject()]
-    });
-    await runMorningPlan();
-    const titles5 = await draftTitles();
-    check("既に繰り越し済みの項目は採用されない(二重繰越防止)", !titles5.some((t) => t.includes("二重繰越になるはずのタスク")), JSON.stringify(titles5));
-    check("決定論配置にフォールバックする", titles5.some((t) => t.includes("決定論フォールバックD")), JSON.stringify(titles5));
-
-    // ============================================================
-    // (M1レビュー対応) 一部項目のみ空き時間と不整合(過去時刻) → その項目だけ個別ドロップされ、
-    // 残りの項目は採用される(プラン全体を不採用にしない)
-    // ============================================================
-    console.log("[5b] AIプランの一部項目のみ過去時刻 → その項目だけ「時間切れで除外」、残りは採用される");
-    aiPlanFixture = JSON.stringify({
-      date: TODAY,
-      generatedAt: `${TODAY}T05:00`,
-      plan: [
-        { title: "過去時刻タスク(除外される)", taskId: null, blockId: null, start: "05:30", minutes: 30, category: "", reason: "朝イチ想定だった", carryFromId: null },
-        { title: "採用されるタスク", taskId: null, blockId: null, start: "11:00", minutes: 30, category: "", reason: "午前中OK", carryFromId: null }
-      ],
-      skipped: []
-    });
-    await seed({ tasks: [], projects: [] });
-    await runMorningPlan();
-    const titles5b = await draftTitles();
-    check("過去時刻の項目は下書きに採用されない", !titles5b.some((t) => t.includes("過去時刻タスク")), JSON.stringify(titles5b));
-    check("残りの有効な項目は採用される", titles5b.some((t) => t.includes("採用されるタスク")), JSON.stringify(titles5b));
-    const bar5b = await draftBarText();
-    check("一部だけ落ちてもsourceはai-planのまま(全体フォールバックしない)", (bar5b || "").includes("🤖 AIプラン由来"), bar5b);
-    const mainText5b = await page.locator("main").textContent();
-    check("除外された項目が「時間切れで除外」として表示される(見送りとは別ラベル)",
-      mainText5b.includes("時間切れで除外") && mainText5b.includes("過去時刻タスク"), mainText5b.slice(0, 500));
+    console.log("[1-5] v299: AIプランJSONの適用・検証・朝プラン経路を削除");
+    check("tryFetchAiPlan本体が存在しない", !/\basync\s+function\s+tryFetchAiPlan\b/.test(appSource));
+    check("runAiMorningPlan本体が存在しない", !/\basync\s+function\s+runAiMorningPlan\b/.test(appSource));
+    check("ai-morning-plan actionが存在しない", !appSource.includes('"ai-morning-plan"'));
+    check("aiScheduleCandidates本体が存在しない", !/\bfunction\s+aiScheduleCandidates\b/.test(appSource));
+    check("ai-schedule actionは維持", appSource.includes('"ai-schedule": () => runAiSchedule()'));
 
     // ============================================================
     // (e) 下書きUndo・却下理由ワンタップ選択
     // ============================================================
     console.log("[6] 下書きUndo: ×で削除 → 「元に戻す」で直前状態へ復元");
-    aiPlanFixture = null;  // 以降のシナリオはAIプラン非依存(ai-scheduleを使う)
     // v199: ai-scheduleの候補源が「WBS未Block化タスク」から「当日登録済みの未着手Block」へ
     //   変更されたため、各taskに対応する当日Block(30分)を合わせて登録する。
     await seed({

@@ -1,0 +1,75 @@
+{
+  "version": 299,
+  "date": "2026-08-30",
+  "title": "AI関連機能整理グループA(朝プラン・再プラン・AIプラン適用・0秒思考テーマ選定UIを削除)",
+  "summary": "AI機能棚卸しのグループA(A-1〜A-5)だけを削除するリリース。ai-morning-plan/runAiMorningPlanと決定論候補生成、today-replan/requestReplanと専用ポーリング、AIプランJSONのschema検証・下書き適用、同JSON由来の0秒思考テーマ選定UI、aiPlanSkippedLogを撤去した。維持対象の📋下書きスケジュール(runAiSchedule/_scheduleDraft/ai-schedule)、AIフィードバック自動取り込み、AIレポート、実行計画(plan-step)、B-3の処理済みID集合とpending復活防止には触れていない。",
+  "changedFiles": [
+    "CHANGES_v299.md",
+    "releases/v299.json",
+    "app.js",
+    "src/features/timeline.js",
+    "sw.js",
+    "tests/v299.test.js",
+    "tests/action-registry-core.test.js",
+    "tests/timeline-render-core.test.js",
+    "tests/tower-core.test.js",
+    "tests/v59.test.js",
+    "tests/v60.test.js",
+    "tests/v61.test.js",
+    "tests/v62.test.js",
+    "tests/v65.test.js",
+    "tests/v75.test.js",
+    "tests/v77.test.js",
+    "tests/v122.test.js",
+    "tests/v126.test.js",
+    "tests/v193.test.js",
+    "tests/v196.test.js",
+    "tests/v199.test.js",
+    "tests/v266.test.js",
+    "docs/code-index.generated.md",
+    "docs/code-index.generated.json",
+    "docs/test-impact-map.generated.md",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "workbench/out/2026-08-28-app-evaluation/ai-feature-inventory.mdのグループA(A-1〜A-5)を完全削除する。前回強制終了後の未コミット差分をリセットせず、そのまま再監査して完成させる。",
+    "v299はグループAだけに限定する。グループB・Cは次リリースへ分割し、グループD・Eは生きた機能として維持する。B-3(aiWorkProcessedIds/aiStepProcessedIds)は同期時の集合和とaiStepPendingRequestsの復活防止に使われるため明示的に対象外とする。",
+    "旧機能を肯定的に実行するテストは削除対象のソース不存在を固定する静的契約へ更新し、同居していたスコープ外の実動作テストは維持する。"
+  ],
+  "changes": [
+    "A-1: app.jsからai-morning-plan action、runAiMorningPlan、fallbackMorningPlan、aiScheduleCandidates、AI朝プラン候補生成・多重起動フラグを削除した。削除により定義のみとなったAIプラン専用leverage検出も撤去した。",
+    "A-2: app.jsからtoday-replan action、requestReplan、replan-request/replan-responseの送受信・60秒ポーリング・15分timeout・visibilitychange復帰照合・専用UI/stateを削除した。実行計画(plan-step)固有のポーリングは維持した。",
+    "A-3: app.jsとsrc/features/timeline.jsからzeroSecThemeBarHTML、zerosec-theme-add/skip action、AIプラン由来テーマ下書きstateと描画注入を削除した。AIフィードバック本文からテーマを自動取り込みするextractZeroSecThemesFromReport/autoIngestFeedbackとzeroSecThemeLogは維持した。",
+    "A-4: normalizeStateのaiPlanSkippedLog補完、AIプランskipped書き込み、AI_PLAN_SKIPPED_LOG_MAXを削除した。",
+    "A-5: AIプランJSONのschema検証・plan配列を下書きへ適用するtryFetchAiPlanを削除した。AI連携鮮度表示用のfetchAiPlanFreshnessDateは存在確認だけを行う別機能として維持した。",
+    "app.jsの削除済みtryFetchAiPlan/runAiMorningPlanを専管とする古いコメントを、AIプランは鮮度シグナル専用で下書き適用経路はv299で削除済みという実態へ更新した。設定の説明も維持対象の下書きスケジュールだけを説明する内容へ更新した。",
+    "旧actionを発火していたv59/v60/v61/v62/v65/v75/v77/v122/v126/v193/v196等のテストを、A本体・action・一時stateのソース不存在を確認する契約へ更新した。v75/v77のAIフィードバック自動取得・自動取り込み、v122/v126のWish/WBS、v196のplan-step等の同居するスコープ外検証は維持した。v299.test.jsでA-1〜A-5の不存在とD/E/B-3の維持を一括固定した。"
+  ],
+  "skipped": [
+    "グループB・Cはv300へ分割する方針のため変更していない。特にB-3のaiWorkProcessedIds/aiStepProcessedIds/aiStepPendingRequestsとsrc/sync/github.jsのmerge/apply契約は無改修。",
+    "グループDのAIレポート、📋下書きスケジュール(runAiSchedule/_scheduleDraft/ai-schedule)、plan-step、AI作業依頼と、グループEの週次レビュー・AIフィードバック自動取り込みは維持した。",
+    "artifacts/v275配下のPNG4件は本タスク開始前から存在する別作業の未コミット差分であり、本リリースでは触れていない。"
+  ],
+  "uncertainties": [
+    "v59/v60/v61/v62/v65/v75/v77/v122/v126/v193/v196/v199/v266等、多数の既存テストをソース不存在検証へ書き換えた。各ファイルの同居するスコープ外検証(AIフィードバック自動取り込み・Wish/WBS・plan-step等)は維持したと報告されているが、書き換え範囲が広いため、レビューで実際の検証意図の劣化がないか重点的に確認する必要がある。"
+  ],
+  "reviewFocus": [
+    "A-1〜A-5の削除シンボルがapp.js/src/features/timeline.js/sw.jsに残っていないこと。",
+    "runAiSchedule/_scheduleDraft/ai-scheduleとAIフィードバック自動取り込み、plan-step、B-3同期契約が削除差分へ巻き込まれていないこと。",
+    "旧A actionを実際に発火する時限固定テストが残らず、ソース不存在テストへ置き換わっていること。"
+  ],
+  "verification": [
+    "node --check app.js / src/features/timeline.js / sw.js / 変更したtests/*.test.js。",
+    "A-1〜A-5削除対象とstale commentをapp.js/src/index.html/styles.css/sw.jsへ横断grepし実行コード0件。旧actionをdispatch/clickするtests参照も横断grepで0件。",
+    "関連スイートをCHROME_PATH指定で個別実行し、test:coreも実行する。",
+    "node scripts/code-index.js --write / node scripts/test-manifest.js --write。",
+    "node scripts/release-record.js releases/v299.json --write / --check。"
+  ],
+  "notes": [
+    "グループAだけで実行コード差分が200行を超えるため、前回タスクでv299=グループA、v300=グループB(B-3除く)+Cへ分割済み。本リリースはその方針を維持する。",
+    "コミット・push・release-gate --finalは監督者が2系統レビュー後に実施する。"
+  ],
+  "knownLimitations": [
+    "コミット・push・release-gate --final・CI全量・iOS Safari実機PWA確認は監督者が実施する。"
+  ]
+}

@@ -1,7 +1,6 @@
 // v61 検証: ROADMAP フェーズ1(繰り越しの無自覚化と継続の自己否定を止める)。
 //
-// (a) carryCount が繰越経路(carryOverBlock=タスクシュート画面の「→ 今日へ」)と
-//     朝プラン確定経路(confirmScheduleDraft)の両方で増える
+// (a) carryCount が繰越経路(carryOverBlock=タスクシュート画面の「→ 今日へ」)で増える
 // (b) 3回目の繰り越しで儀式モーダルが出る・各選択肢(今日やる/分解する/手放す/それでも繰り越す)の効果
 // (c) 「今日の理想」ワンライナーの保存・3日間のホーム表示(1〜3日目)・3日目のリトライ(続ける/手放す)・
 //     日報生成(generateReport)への反映
@@ -10,11 +9,14 @@
 // 方針: 既存スイート(v59/v60)と同じく、app.js は type="module" のため内部関数は window に
 // 露出しない。ブラウザ操作 + localStorage 状態の直接注入で観測する。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dispatchRegisteredAction, generateReportThroughGate } = require("./helpers");
+const fs = require("fs");
+const path = require("path");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 
 let failures = 0;
+const appSource = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
 function check(name, cond, extra = "") {
   if (cond) console.log(`  ✅ ${name}`);
   else { failures++; console.log(`  ❌ ${name} ${extra}`); }
@@ -33,10 +35,7 @@ function check(name, cond, extra = "") {
   const isoDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
   const hhmm = (min) => `${pad2(Math.floor(min / 60))}:${pad2(min % 60)}`;
   const now0 = new Date();
-  // コーディネーター指摘(2026-07-09, v61レビュー、v50/v59/v60への指摘を本スイートにも適用):
-  // [9][10]は🌅朝プラン(内部でcomputeFreeGapsが「現在時刻〜23:00」の空き枠に依存)を実行するため、
-  // 深夜23:00付近に実行すると空き枠が消えてフレーキーになり得る。page.clock でページ内の
-  // 現在時刻を日中(10:00)に固定し、実行時刻に依存しないようにする(アプリ本体は無改修)。
+  // page.clockでページ内の現在時刻を日中(10:00)に固定し、日付依存の既存検証を安定させる。
   now0.setHours(10, 0, 0, 0);
   const TODAY = isoDate(now0);
   const YEST = isoDate(new Date(now0.getTime() - 24 * 60 * 60 * 1000));
@@ -252,45 +251,14 @@ function check(name, cond, extra = "") {
   check("選択ログに'carry'が記録される", (sCarry.migrationRitualLog || []).some((l) => l.choice === "carry" && l.blockId === "cb-carry"));
 
   // ============================================================
-  // (a)(b) 朝プラン確定(confirmScheduleDraft)経路でも carryCount が増える・3回目で儀式
+  // v299: 削除した朝プラン経路を、実体不在の静的契約へ置き換える。
+  // Test-Reduction: carryOverBlock経路のcarryCount/儀式は[2]〜[8]が同等以上に固定する。
   // ============================================================
-  async function runMorningPlan() {
-    await page.click('[data-action="nav"][data-view="today"]');
-    await page.waitForTimeout(150);
-    await dispatchRegisteredAction(page, "ai-morning-plan");
-    await page.waitForTimeout(600);
-  }
-  console.log("[9] 朝プラン確定経路: carryCountが0→1になる(儀式は発火しない)");
-  await seed({
-    blocks: [planBlock({ id: "mp-a", date: YEST, title: "朝プラン繰越A", startMin: 14 * 60, endMin: 14 * 60 + 30, carryCount: 0 })]
-  });
-  await runMorningPlan();
-  check("繰越候補が下書きに載る", (await page.locator(".draft-block-title").first().textContent().catch(() => "")).includes("朝プラン繰越A"));
-  await page.click('[data-action="draft-confirm"]');
-  await page.waitForTimeout(400);
-  const s9 = await stateNow();
-  const newMpA = (s9.blocks || []).find((b) => b.date === TODAY && b.title === "朝プラン繰越A");
-  check("確定でcarryCountが1になる", !!newMpA && newMpA.carryCount === 1, JSON.stringify(newMpA));
-  check("儀式モーダルは出ない(1回目)", await page.locator(".migration-ritual-modal").count() === 0);
-
-  console.log("[10] 朝プラン確定経路: carryCount=2 → 下書きにバッジ表示 → 確定で儀式(3回目)発火 → 解決後に確定完了");
-  await seed({
-    blocks: [planBlock({ id: "mp-b", date: YEST, title: "朝プラン繰越B", startMin: 14 * 60, endMin: 14 * 60 + 30, carryCount: 2 })]
-  });
-  await runMorningPlan();
-  // 下書きのバッジは「確定するとこの回数の繰り越しになる」という予告(nextCount=carryCount+1=3)を示す
-  const draftBadgeText = await page.locator('.draft-block:has-text("朝プラン繰越B") .migration-badge').textContent().catch(() => "");
-  check("下書きに「↻3」の予告バッジが出る(確定すると3回目になる)", (draftBadgeText || "").includes("3"), draftBadgeText);
-  await page.click('[data-action="draft-confirm"]');
-  await page.waitForTimeout(300);
-  check("確定操作で儀式モーダルが先に出る(一括確定は保留される)", await page.locator(".migration-ritual-modal").count() === 1);
-  await page.click('.migration-ritual-modal [data-action="migration-ritual-choice"][data-choice="carry"]');
-  await page.waitForTimeout(400);
-  const s10 = await stateNow();
-  const newMpB = (s10.blocks || []).find((b) => b.date === TODAY && b.title === "朝プラン繰越B");
-  const srcMpB = (s10.blocks || []).find((b) => b.id === "mp-b");
-  check("儀式解決後、確定処理が自動で完了しcarryCountが3になる", !!newMpB && newMpB.carryCount === 3, JSON.stringify(newMpB));
-  check("元Blockにmigratedtoが付く(儀式解決を挟んでも二重繰越防止は維持)", !!srcMpB && srcMpB.migratedTo === newMpB.id);
+  console.log("[9-10] v299: 朝プラン経路は削除済み、既存の繰越儀式は独立維持");
+  check("ai-morning-plan actionが存在しない", !appSource.includes('"ai-morning-plan"'));
+  check("runAiMorningPlan本体が存在しない", !/\bfunction\s+runAiMorningPlan\b/.test(appSource));
+  check("carryOverBlock本体は維持", /\bfunction\s+carryOverBlock\b/.test(appSource));
+  check("migration-ritual-choice actionは維持", appSource.includes('"migration-ritual-choice"'));
 
   // ============================================================
   // (c) 今日の理想ワンライナー: 保存・3日表示・3日目リトライ・日報反映

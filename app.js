@@ -3670,46 +3670,12 @@ function computeFreeGaps(date, dayStartMin = 5 * 60, dayEndMin = 23 * 60, exclud
   return gaps;
 }
 
-// 配置候補: 昨日のMIT候補 + WBSの未完了タスク(中断/今日Block化済みを除く、期限順)
-// v77: 詰め込み防止の第一段 — dueDateが対象日より後(翌日以降)のタスクは候補から除外する。
-//      期限なし(dueDate未設定)のタスクは対象に残す(wbsTaskCompareが "9999" 扱いで
-//      最後尾ソートするため、期限付きタスクを圧迫せず、空いた枠があれば埋める filler として働く)。
-//      期限が対象日以前(=期日超過・当日締切)のタスクは当然対象。
-// v126: 「やりたいこと」もWBSのTaskとして扱い、期日を持つWishは通常タスクと全く同じ条件
-//      (effectiveDueDate/wbsTaskCompare/15件cap)に乗せる。特別なrank・noteは付けない。
-//      ただし「期日なし=filler」という通常WBSタスクのルールはWishには適用しない
-//      (60件超のWishが未着手のまま溜まる運用のため、期日なしWishまでfillerとして
-//      朝プランに溢れさせると収拾がつかなくなる。期日なしWishは候補から除外する)。
-function aiScheduleCandidates(date) {
-  const out = [];
-  const prev = addDays(date, -1);
-  (state.journalMeta[prev]?.aiMitCandidates || []).forEach((t, i) =>
-    out.push({ id: `mit-${i}`, title: t, taskId: "", category: "", note: "MIT候補" }));
-  const wishIds = new Set(state.projects.filter((p) => p.kind === "wish").map((p) => p.id));
-  state.tasks
-    .filter((t) => !t.deleted && (t.status === "todo" || t.status === "doing") && t.projectId)
-    // v126: 期日なしWishのみ除外(期日付きWishは以降の通常フィルタへそのまま乗る)
-    .filter((t) => !wishIds.has(t.projectId) || Boolean(t.dueDate))
-    .filter((t) => !isTaskSuspended(t))
-    // v77: 翌日以降が期限のタスクは今日の下書きに詰め込まない。v117(B): 自己締切前倒しを反映
-    .filter((t) => !t.dueDate || effectiveDueDate(t) <= date)
-    .filter((t) => !state.blocks.some((b) => !b.deleted && b.taskId === t.id && b.date === date))
-    .sort(wbsTaskCompare)
-    .slice(0, 15)
-    .forEach((t) => out.push({
-      id: t.id, title: t.title, taskId: t.id, category: t.category || "",
-      note: t.dueDate ? `期限 ${t.dueDate}` : "",
-      estimateMin: t.estimateMin || null  // v60: 決定論配置の見積分数(未設定なら fallbackMorningPlan が既定30分を使う)
-    }));
-  return out;
-}
-
 // v199: 再配置の配置ウィンドウ(2026-08-10 K指示。空いていても早朝・深夜に詰め込まない)。
 //   仕事Block(category==="仕事")は平日9-18のみ、それ以外(プライベート)は8-21のみ。
 //   ウィンドウは定数で実装する(設定化は非目標)。
 const AI_REARRANGE_WORK_WINDOW = [9 * 60, 18 * 60];
 const AI_REARRANGE_PRIVATE_WINDOW = [8 * 60, 21 * 60];
-const AI_REARRANGE_BUFFER_MIN = 10;  // fallbackMorningPlanのMORNING_PLAN_BUFFER_MINと同じ思想(項目間バッファ)
+const AI_REARRANGE_BUFFER_MIN = 10;  // 項目間バッファ
 // v199: skipped理由の2種。runAiSchedule/draftBarHTML/rearrangeSkipMessageで共用し、
 //   朝プラン/AIプラン由来のskipped理由とは無関係に保つ。
 const AI_REARRANGE_SKIP_REASONS_CAPACITY = "空き時間不足(タスク過多)";
@@ -3730,7 +3696,7 @@ function aiRearrangeWindowFor(block, date) {
 // v199(3): 可動Blockの長さ(分)。plannedStartAt/EndAtの現予定長、日跨ぎ(end<start)は
 //   (24:00−start)+end、いずれも無効ならclamp(estimateMin||30,15,240)。
 //   算出方法によらず最終的に15〜240へクランプする(2026-08-11裁定: 巨大Blockが空き枠を
-//   独占するのを防ぐ。fallbackMorningPlanの既存クランプ運用と揃える)。
+//   独占するのを防ぐ)。
 function movableBlockMinutes(b) {
   let raw = 0;
   if (b.plannedStartAt && b.plannedEndAt) {
@@ -3741,8 +3707,7 @@ function movableBlockMinutes(b) {
 }
 
 // v199: 「📋 下書きスケジュール」を、当日のタスクシュート登録済みBlock(未着手のみ)を空き時間へ
-//   重複なく再配置する機能へ変更(旧: WBS未Block化タスクの新規配置案。aiScheduleCandidates/
-//   fallbackMorningPlanは朝プラン(runAiMorningPlan)専用として維持し、こちらは呼ばない)。
+//   重複なく再配置する機能へ変更(旧: WBS未Block化タスクの新規配置案)。
 //   可動Block = taskchuteBlocks条件を満たす当日Blockのうち !completed && !actualStartAt。
 //   それ以外の当日Block(ルーティン・timeline由来・完了済み・着手済み・単発Task由来)は
 //   computeFreeGapsの占有計算にそのまま残す(可動Blockだけを占有から除外する)。
@@ -3793,7 +3758,7 @@ function runAiSchedule() {
         id: crypto.randomUUID(), blockId: b.id, title: b.title, taskId: b.taskId || "",
         category: b.category || "", start, minutes, aiStart: start, aiMinutes: minutes
       });
-      // +10分バッファを空けてgapsプールから消費(fallbackMorningPlanと同じ思想)
+      // +10分バッファを空けてgapsプールから消費
       gaps = subtractOccupiedIntervals(gaps, [[start, start + minutes + AI_REARRANGE_BUFFER_MIN]])
         .filter(([s, e]) => e - s >= 15);
     }
@@ -4022,78 +3987,6 @@ function confirmScheduleDraft() {
   if (updatedCount) confirmParts.push(`${updatedCount}件の時刻を更新`);
   if (createdCount) confirmParts.push(`${createdCount}件を登録`);
   saveAndRender(confirmParts.length ? `📋 ${confirmParts.join("・")}しました` : "対象のBlockが見つからず、確定できませんでした");
-}
-
-// v59: =========================================================
-//  朝の一括プランニング(繰越+WBS+MIT候補 → 空き時間へ仮配置 → 既存の下書きUIで確定)
-//  ②のAIスケジュール下書きを「1日ぶん全部」に拡張したもの。既存の draft 機構をそのまま使い、
-//  新規UIは最小限(ホームAI行のボタン1つ + skipped の一覧表示)に留める。
-// =========================================================
-
-// 候補合成: 繰越(carryableBlocks)+ aiScheduleCandidates(MIT候補+WBS)。
-// 同taskId/同titleが両方に居る場合は繰越側を優先して1本化する(繰越は既に実体Blockがあり、
-// 二重に別候補として提案すると確定時に同じ作業が2件登録されてしまうため)。
-function aiMorningPlanCandidates(date) {
-  const carryList = carryableBlocks().map((b) => ({
-    id: `carry-${b.id}`,
-    title: b.title,
-    taskId: b.taskId || "",
-    category: b.category || "",
-    note: b.plannedStartAt ? `昨日未完了・元は${timeFromDateTime(b.plannedStartAt)}` : "昨日未完了",
-    carryFromId: b.id,
-    estimateMin: resolveEstimateMin(b)
-  }));
-  const carriedTaskIds = new Set(carryList.filter((c) => c.taskId).map((c) => c.taskId));
-  const carriedTitles = new Set(carryList.map((c) => c.title));
-  const rest = aiScheduleCandidates(date).filter((c) =>
-    !(c.taskId && carriedTaskIds.has(c.taskId)) && !carriedTitles.has(c.title));
-  return [...carryList, ...rest];
-}
-
-// v60: 決定論配置(唯一の配置経路。旧称フォールバックのまま維持): MIT候補 → 繰越 → WBS(期日付き
-// Wishも同列で含む。v126で「今週のやりたいこと」専用段は撤去した)の順に、
-// 各候補の見積分数(estimateMin、無ければ30分)で空き枠へ前詰め配置する。
-// 空き枠に入り切らない候補は skipped(理由: 空き枠なし)に回す。
-// v77: 詰め込み防止の第二段 — (a) ブロック長は見積分数(estimateMin)にそのまま一致させる
-//      (旧実装は15分刻みに丸めており、見積表示とズレていた)。(b) 空き時間合計の
-//      CAPACITY_RATIO(65%。60-70%目安の中央値)を配置上限とし、超える候補は「配置しない」
-//      (切り詰めない)。ただし1日の残り時間がもともと少ない(例: 終業間際で残り45分)日まで
-//      機械的に締め出すと既存の「入り切る分は素直に置く」挙動を壊すため、
-//      CAPACITY_MIN_FLOOR(60分)を下限として必ず確保する(実質、空き時間が短い日は
-//      比率の影響を受けない。安全枠が効くのは空き時間が十分にある日のみ)。
-//      (c) ブロック間に BUFFER_MIN(10分)の余白を残し、隙間なく連続配置しない。
-//      いずれも既存の「入り切らなければ配置しない」方針(items.slice等での切り詰めはしない)を維持する。
-const MORNING_PLAN_CAPACITY_RATIO = 0.65;
-const MORNING_PLAN_CAPACITY_MIN_FLOOR = 60;
-const MORNING_PLAN_BUFFER_MIN = 10;
-function fallbackMorningPlan(candidates, freeGaps) {
-  // v126: v122で追加した「今週のやりたいこと」専用rank(2段目)は撤去。期日付きWishは
-  //       aiScheduleCandidates側で通常WBSタスクと同列に扱われるため、優先度は
-  //       MIT=0 → 繰越=1 → WBS(Wish含む)=2 の3段階に戻す。
-  const rank = (c) => (c.carryFromId ? 1 : (String(c.id).startsWith("mit-") ? 0 : 2));
-  const ordered = [...candidates].sort((a, b) => rank(a) - rank(b));
-  const gaps = freeGaps.map(([s, e]) => [s, e]);  // 前詰めで消費するのでコピーして破壊的に使う
-  const totalFreeMin = gaps.reduce((sum, [s, e]) => sum + (e - s), 0);
-  // v77: 空き時間を全部埋めない安全枠(空き時間が短い日は下限floorが優先され実質無効化される)
-  const capacityMin = Math.max(MORNING_PLAN_CAPACITY_MIN_FLOOR, Math.floor(totalFreeMin * MORNING_PLAN_CAPACITY_RATIO));
-  const items = [];
-  const skipped = [];
-  let placedMin = 0;
-  ordered.forEach((c) => {
-    const minutes = clamp(Math.round(c.estimateMin || 30), 15, 240);  // v77: 見積分数そのまま(15分丸め廃止)
-    if (placedMin + minutes > capacityMin) { skipped.push({ title: c.title, reason: "安全枠超過(空き時間を埋め過ぎない)" }); return; }
-    const gapIdx = gaps.findIndex((g) => g[1] - g[0] >= minutes);
-    if (gapIdx === -1) { skipped.push({ title: c.title, reason: "空き枠なし" }); return; }
-    const start = gaps[gapIdx][0];
-    items.push({
-      id: crypto.randomUUID(), title: c.title, taskId: c.taskId || "", category: c.category || "",
-      start, minutes, aiStart: start, aiMinutes: minutes, carryFromId: c.carryFromId || ""
-    });
-    placedMin += minutes;
-    gaps[gapIdx][0] += minutes + MORNING_PLAN_BUFFER_MIN;  // v77: ブロック間バッファ
-    if (gaps[gapIdx][1] - gaps[gapIdx][0] < 15) gaps.splice(gapIdx, 1);  // 15分未満の端数はもう空き扱いしない
-  });
-  return { items: items.slice(0, 15), skipped };
 }
 
 // v67: AIプラン_<date>.json の存在確認のみ。v299で下書きへの適用経路は削除したため、
@@ -4855,7 +4748,7 @@ function midpointOrder(beforeOrder, afterOrder) {
 // v194: 実行計画の並び順 — **同一親の兄弟だけを並べる配列専用**の比較。両方に order が
 // 入っているときだけ order 昇順を使い、それ以外は従来の wbsTaskCompare へ完全に委ねる
 // (片方だけ order を持つ混在期に「完了は下に沈む」不変条件を壊さないため)。
-// 親を跨ぐ配列(aiScheduleCandidates 等)へは使わない。推移律が壊れるため。
+// 親を跨ぐ配列へは使わない。推移律が壊れるため。
 function siblingTaskCompare(a, b) {
   if (Number.isFinite(a.order) && Number.isFinite(b.order) && a.order !== b.order) {
     return a.order - b.order;
@@ -13824,7 +13717,7 @@ function bufferMeterLevel(percent) {
 // v116(K追加要件、2026-07-16・計画過積載ガード): 「積む余裕なくタスクを詰め込んだら
 // バッファの意味がない」ため、バッファメーター(実行中の消化率の見える化)とは別に、
 // 計画段階で1日を見積もりで埋め尽くしていないかを検出する。自動でタスクの削除・移動・
-// 並べ替えは一切しない(検出して知らせるだけ。既存の朝プラン・下書き機構の挙動も変えない)。
+// 並べ替えは一切しない(検出して知らせるだけ。既存の下書き機構の挙動も変えない)。
 // 可処分枠 = 「1日の締め時刻」(state.settings.dayCloseHours、既定24=24:00) −
 // 「その日最初に予定時刻を持つBlockの開始時刻」(予定時刻を持つBlockが無ければ0時=
 // 丸1日を可処分枠として扱う)。見積合計はresolveEstimateMin(手入力優先、無ければ過去

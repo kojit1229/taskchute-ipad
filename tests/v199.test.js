@@ -1,7 +1,7 @@
 // v199 検証: 「📋 下書きスケジュール」(runAiSchedule)を、当日タスクシュート登録済みBlock
 //   (未着手のみ)の空き時間への決定論的な重複なし再配置へ変更したことの検証。
-//   旧仕様(WBS未Block化タスクの新規配置案)はv62までのAIプラン/朝プラン(runAiMorningPlan)側で
-//   引き続き成立するため、本スイートはrunAiSchedule(data-action="ai-schedule")だけを対象にする。
+//   WBS未Block化タスクの新規配置案はv299で削除済み。本スイートは維持対象の
+//   runAiSchedule(data-action="ai-schedule")だけを対象にする。
 //
 // (a) 可動/固定の選別: ルーティン・完了済み・着手済み・timeline由来のBlockは動かない
 //     (軽微7も同居: 配置済み項目が固定Blockと重ならないことを直接assertion化)

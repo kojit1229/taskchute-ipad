@@ -1,19 +1,22 @@
 // v60 検証: Claude API 直接呼び出しの全廃。
 //
-// (a) 起動〜朝プラン確定までの全経路で api.anthropic.com への fetch が一切発生しない
+// (a) 起動〜下書き確定までの全経路で api.anthropic.com への fetch が一切発生しない
 // (b) 設定画面に APIキー入力欄・モデル選択・プロンプト編集欄が無い(旧state保存値も消える)
-// (c) 「🌅 朝プラン」ボタンがAPIキー無しで表示・動作する(aiEnabled()ゲート廃止)
+// (c) v299で削除した「🌅 朝プラン」のaction・本体がソースに存在しない
 // (d) 「📋 下書きスケジュール」が決定論配置で動く(WBSタスクの estimateMin を見積分数として使う)
 // (e) 決定論配置でも確定Blockに aiPlan(元提案)が残り、aiScheduleHistory に
 //     confirmed(userStart/userMin付き)/removed/discarded が記録される
 //     (旧v52.test.jsが検証していた recordScheduleHistory/block.aiPlan は app.js から
 //     削除していない現存コードのため、v52削除に伴いここへ検証を移設した)
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dispatchRegisteredAction } = require("./helpers");
+const fs = require("fs");
+const path = require("path");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 
 let failures = 0;
+const appSource = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
 function check(name, cond, extra = "") {
   if (cond) console.log(`  ✅ ${name}`);
   else { failures++; console.log(`  ❌ ${name} ${extra}`); }
@@ -31,7 +34,7 @@ function check(name, cond, extra = "") {
   const pad2 = (n) => String(n).padStart(2, "0");
   const isoDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
   const now0 = new Date();
-  // コーディネーター指摘(2026-07-09, v61レビュー): 本スイートは朝プラン/下書きスケジュールを
+  // コーディネーター指摘(2026-07-09, v61レビュー): 本スイートは下書きスケジュールを
   // 実行するため、内部の computeFreeGaps が「現在時刻〜23:00」の空き枠に依存する。深夜23:00
   // 付近に実行すると見積45分のタスクが入り切らずフレーキーになっていたため、page.clock で
   // ページ内の現在時刻を日中(10:00)に固定する(アプリ本体のロジックは無改修)。
@@ -82,9 +85,7 @@ function check(name, cond, extra = "") {
     s.projects = (s.projects || []).filter((p) => p.kind !== "normal");
     s.projects.push({ id: "proj-60", kind: "normal", title: "v60案件", category: "", status: "active", description: "", dueDate: "", twelveWeekStartDate: "", createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false, collapsed: false });
     s.tasks = [];
-    // estimateMin=45 の候補(決定論配置が既定30分固定にならないことの確認用)。
-    // v199対応: [3]の朝プラン(ai-morning-plan)はaiScheduleCandidates経由でWBS未Block化タスクを
-    // 候補にするため、ここではまだBlockを与えない([4]のai-schedule検証直前で別途Block登録する)。
+    // estimateMin=45 の候補(下書き確定後も元の見積が保持されることの確認用)。
     s.tasks.push({ id: "task-60a", projectId: "proj-60", parentTaskId: "", title: "v60見積付きタスク", category: "", status: "todo", dueDate: "", description: "", estimateMin: 45, createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false });
     s.blocks = [];
     s.journalMeta = s.journalMeta || {};
@@ -117,24 +118,19 @@ function check(name, cond, extra = "") {
   check("設定画面に Anthropic の文言が残っていない", !settingsText.includes("Anthropic"));
   check("朝の一括プランニング自動実行トグルが無い", await page.locator("[data-ai-automorningplan]").count() === 0);
 
-  // ---- (c) 朝プランボタンがAPIキー無しで表示・動作する ----
-  console.log("[3] 朝プラン(APIキー無し)");
+  // ---- (c) v299で削除した朝プランの不在契約 ----
+  console.log("[3] v299: 朝プランaction・本体を削除し、下書きスケジュールを維持");
   await page.click('[data-action="nav"][data-view="today"]');
   await page.waitForTimeout(300);
-  check("todayビューには朝プランの旧ボタンを表示しない", await page.locator('[data-action="ai-morning-plan"]').count() === 0);
   check("todayビューには下書きの旧ボタンを表示しない(timeline導線は現存)", await page.locator('[data-action="ai-schedule"]').count() === 0);
-  await dispatchRegisteredAction(page, "ai-morning-plan");
-  await page.waitForTimeout(500);
-  const morningDraft = await page.locator(".draft-block-time").allTextContents();
-  check("朝プランが決定論で下書きを配置する(APIキー無しで動作)", morningDraft.length >= 1, JSON.stringify(morningDraft));
-  await page.click('[data-action="draft-discard"]');
-  await page.waitForTimeout(300);
+  check("ai-morning-plan actionがソースに存在しない", !appSource.includes('"ai-morning-plan"'));
+  check("runAiMorningPlan本体がソースに存在しない", !/\bfunction\s+runAiMorningPlan\b/.test(appSource));
+  check("ai-schedule actionは維持", appSource.includes('"ai-schedule": () => runAiSchedule()'));
 
   // ---- (d) 下書きスケジュールが決定論配置で動く(Blockの現予定長を見積分数として使う) ----
   console.log("[4] 下書きスケジュール(決定論配置・見積反映)");
   // v199対応: 「📋 下書きスケジュール」(ai-schedule)の候補源がWBS未Block化タスクから
   // 当日登録済みBlockへ変わったため、task-60aに紐づく当日Block(45分幅)をここで登録する
-  // ([3]の朝プラン検証はWBS未Block化のtask-60aに依存するため、そちらより後で行う)。
   // estimateMin:45もBlock側に残す(blockId確定パスはestimateMinを更新しないため、確定後もそのまま残る)。
   await page.evaluate(({ KEY, TODAY }) => {
     const s = JSON.parse(localStorage.getItem(KEY));

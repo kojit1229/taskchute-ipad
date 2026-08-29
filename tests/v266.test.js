@@ -430,8 +430,10 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
     await page.waitForSelector(".tower-col-right > .sec-journal");
     check("右カラムはJOURNALだけを描画", await page.locator(".tower-col-right > .sec-journal").count() === 1);
     check("右カラム直下要素はJOURNAL 1個だけ", await page.locator(".tower-col-right > *").count() === 1);
-    check("廃止済みAI操作・候補・鮮度UIを描画しない",
-      await page.locator('[data-action="ai-morning-plan"], [data-action="ai-schedule"], [data-action="today-replan"], .ai-freshness-line, .ai-work-row').count() === 0);
+    check("v299削除済み朝プラン・再プランactionがソースに存在しない",
+      !appSource.includes('"ai-morning-plan"') && !appSource.includes('"today-replan"'));
+    check("維持対象の下書き操作と廃止済み候補・鮮度UIをtodayへ重複描画しない",
+      await page.locator('[data-action="ai-schedule"], .ai-freshness-line, .ai-work-row').count() === 0);
 
     await seed({ weeklyCommitments: scoredCommitments(1, 1), projects: [project("p-wbs")],
       tracks: [numericTrack("same-status", "p-wbs")], trackMeasurements: [measurement("same-status", 0)] });

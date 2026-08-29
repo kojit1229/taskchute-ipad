@@ -1,9 +1,12 @@
 // tests/tower-core.test.js — v228 JOURNAL/FLIGHT LOG・日報再生成と1秒ticker契約E2E。
 // today-core.test.jsと同じく、localStorage seed + 既存nav + Playwright clockで検証する。
+const fs = require("fs");
+const path = require("path");
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY, dismissBodyScanIfOpen } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = STATE_KEY;
+const appSource = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
 let failures = 0;
 
 function check(name, cond, extra = "") {
@@ -88,7 +91,7 @@ function check(name, cond, extra = "") {
     await seedSkin("cockpit", "settings");
     check("todaySkinの設定selectが存在しない", await page.locator('select[data-setting-field="todaySkin"]').count() === 0);
     await page.evaluate(() => { const fold = document.querySelector('details[data-fold-id="settings-daily"]'); if (fold) fold.open = true; });
-    check("設定にAI再プランボタンが残っていない", await page.locator('[data-action="today-replan"]').count() === 0);
+    check("削除済みtoday-replan actionがソースに存在しない", !appSource.includes('"today-replan"'));
     await page.evaluate(({ KEY, yesterday }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.journalMeta[yesterday] = { ...(s.journalMeta[yesterday] || {}), aiMitCandidates: ["旧MIT候補"], aiTaskCandidates: ["旧タスク候補"] };
@@ -98,14 +101,15 @@ function check(name, cond, extra = "") {
     await page.waitForSelector('#app[data-view="settings"]');
     await page.locator('#sidebar [data-action="nav"][data-view="today"]').click();
     await page.waitForSelector(".sec-journal");
-    check("todayに朝プラン/下書きスケジュール/AI再プランのボタンを描画しない",
-      await page.locator('[data-action="ai-morning-plan"], [data-action="ai-schedule"], [data-action="today-replan"]').count() === 0);
+    check("削除済み朝プランactionがソースに存在しない", !appSource.includes('"ai-morning-plan"'));
+    check("todayに維持対象の下書きスケジュールボタンを重複描画しない",
+      await page.locator('[data-action="ai-schedule"]').count() === 0);
     check("旧候補stateが残っていてもMIT/タスク候補UIを描画しない",
       await page.locator('[data-action="ai-mit-adopt"], [data-action="mit-candidate-add"], [data-action="ai-task-adopt"], [data-action="ai-task-dismiss"]').count() === 0);
     await page.locator('#sidebar [data-action="nav"][data-view="tasks"]').click();
     await page.waitForSelector('#app[data-view="tasks"]');
-    check("tasks側にAI操作ボタン・候補チップの重複がない",
-      await page.locator('[data-action="ai-morning-plan"], [data-action="ai-schedule"], .ai-mit-chips, .ai-task-chips').count() === 0);
+    check("tasks側に維持対象の下書き操作・候補チップの重複がない",
+      await page.locator('[data-action="ai-schedule"], .ai-mit-chips, .ai-task-chips').count() === 0);
     await page.locator('#sidebar [data-action="nav"][data-view="today"]').click();
     await page.waitForSelector(".today-tower");
     check("今日タブは常に.today-towerを描画する", await page.locator(".today-tower").count() === 1);
