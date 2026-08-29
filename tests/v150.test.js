@@ -24,7 +24,7 @@
 //   レビュー対応(項目6、監督者裁定): 分割対象は実所要20分未満のBlockに限定する。
 //     連続する30分Block同士は全幅のまま(D3)——20分以上の数px食い込みはv149以前からの
 //     既存挙動として許容する。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dismissBodyScanIfOpen } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -133,7 +133,11 @@ function check(name, cond, extra = "") {
     const plannedStartAtNormalized = (await stateNow()).blocks.find((x) => x.id === "block-hd").plannedStartAt;
     await page.locator('.checkbox-button[data-action="toggle-block"][data-id="block-hd"]').click();
     await page.waitForTimeout(200);
-    check("モーダルは開かない(即完了)", await page.locator(".modal-card").count() === 0);
+    // v293追随: 「モーダルを介さない」というR3当時の設計は、K裁定済みの身体スキャン復活
+    // (releases/v293.json)により手動完了直後だけ例外的に上書きされた。検証意図(完了操作自体は
+    // 即座に確定し、途中で確認ステップを挟まない)は維持しつつ、v293後の正しい期待
+    // (身体スキャンモーダルが完了直後に開く)へ反転して継承する。
+    check("完了直後は身体スキャンモーダルが開く(v293)", await page.locator(".modal-card").count() === 1);
     let st = await stateNow();
     let b = st.blocks.find((x) => x.id === "block-hd");
     check("即完了でcompletedになる", b.completed === true);
@@ -148,6 +152,9 @@ function check(name, cond, extra = "") {
     check("完了直後のトーストに「実績を編集」ボタンが出る",
       await page.locator('.toast-action[data-action="complete-block-with-actual"][data-id="block-hd"]').count() === 1);
     check(".toastにhas-actionクラスが付く", await page.locator("#toast.has-action").count() === 1);
+    // v293追随: 身体スキャンモーダルの片付けはA1自身の検証(トーストのhas-action等)を
+    // 済ませた後に行う(discardはrender()を伴い、先に片付けるとA1自身のトースト検証を乱すため)。
+    await dismissBodyScanIfOpen(page);
 
     console.log("[A2] ホーム今日タブ: ながれのチェック(home-dot)も同様に即完了する");
     await page.locator('.checkbox-button[data-action="toggle-block"][data-id="block-flow"]').click();
@@ -169,9 +176,11 @@ function check(name, cond, extra = "") {
     st = await stateNow();
     b = st.blocks.find((x) => x.id === "block-tc");
     check("タスクシュートの✓も即完了する", b.completed === true);
-    check("モーダルは開かない(タスクシュート✓)", await page.locator(".modal-card").count() === 0);
+    // v293追随: A1と同じ理由で反転して継承する(検証意図=完了操作は即座に確定する)。
+    check("完了直後は身体スキャンモーダルが開く(タスクシュート、v293)", await page.locator(".modal-card").count() === 1);
     check("完了直後のトーストに「実績を編集」ボタンが出る(タスクシュート)",
       await page.locator('.toast-action[data-action="complete-block-with-actual"][data-id="block-tc"]').count() === 1);
+    await dismissBodyScanIfOpen(page);
 
     console.log("[A4] タイムライン(予定モード): ○(tl-complete-btn)も同様に即完了する");
     await seed({
@@ -183,7 +192,11 @@ function check(name, cond, extra = "") {
     st = await stateNow();
     b = st.blocks.find((x) => x.id === "block-tl");
     check("タイムラインの○も即完了する", b.completed === true);
-    check("モーダルは開かない(タイムライン○)", await page.locator(".modal-card").count() === 0);
+    // v293追随: A1/A3と同じ理由で反転して継承する。A5がこのトーストの「実績を編集」を
+    // クリックするため、A5に入る前に身体スキャンモーダルを片付ける(そのままではA5のクリックが
+    // #modalRootに遮られる)。
+    check("完了直後は身体スキャンモーダルが開く(タイムライン○、v293)", await page.locator(".modal-card").count() === 1);
+    await dismissBodyScanIfOpen(page);
 
     console.log("[A5] トーストの「実績を編集」から既存の実績登録モーダルが開き、保存できる");
     await page.click('.toast-action[data-action="complete-block-with-actual"]');
@@ -224,6 +237,8 @@ function check(name, cond, extra = "") {
     });
     await page.locator('.checkbox-button[data-action="toggle-block"][data-id="block-energy"]').click();
     await page.waitForTimeout(200);
+    // v293追随: 新規完了のため身体スキャンモーダルが開く。次のseed()前に片付ける。
+    await dismissBodyScanIfOpen(page);
     st = await stateNow();
     b = st.blocks.find((x) => x.id === "block-energy");
     check("充電がprefillEnergyの中央値(4)で補完される(0のまま残らない)", b.charge === 4, String(b.charge));
@@ -236,6 +251,8 @@ function check(name, cond, extra = "") {
     });
     await page.locator('.checkbox-button[data-action="toggle-block"][data-id="block-future"]').click();
     await page.waitForTimeout(200);
+    // v293追随: 新規完了のため身体スキャンモーダルが開く。次のseed()前に片付ける。
+    await dismissBodyScanIfOpen(page);
     st = await stateNow();
     b = st.blocks.find((x) => x.id === "block-future");
     check("実績終了時刻は現在時刻(18:xx)で記録される", (b.actualEndAt || "").startsWith(`${TODAY}T18:`), b.actualEndAt);
@@ -258,6 +275,8 @@ function check(name, cond, extra = "") {
     });
     await page.locator('.checkbox-button[data-action="toggle-block"][data-id="block-manual-energy"]').click();
     await page.waitForTimeout(200);
+    // v293追随: 新規完了のため身体スキャンモーダルが開く。次のseed()前に片付ける。
+    await dismissBodyScanIfOpen(page);
     st = await stateNow();
     b = st.blocks.find((x) => x.id === "block-manual-energy");
     check("手入力の充電(2)がprefillEnergyの中央値(4)で上書きされない", b.charge === 2, String(b.charge));
@@ -279,6 +298,9 @@ function check(name, cond, extra = "") {
     st = await stateNow();
     b = st.blocks.find((x) => x.id === "block-snap");
     check("(準備)即完了で実績・充放電が自動記録される", b.completed === true && !!b.actualStartAt && !!b.actualEndAt && b.charge === 5 && b.discharge === 2);
+    // v293追随: 直前の完了は新規完了のため身体スキャンモーダルが開いたまま。次の完了解除
+    // クリックがこれに遮られるため先に片付ける(完了解除方向は身体スキャンを開かない)。
+    await dismissBodyScanIfOpen(page);
     // 同セッション内で完了解除する(toggle-block再クリック)
     await page.locator('.checkbox-button[data-action="toggle-block"][data-id="block-snap"]').click();
     await page.waitForTimeout(200);
@@ -298,6 +320,10 @@ function check(name, cond, extra = "") {
     });
     await page.locator('.checkbox-button[data-action="toggle-block"][data-id="block-toastcheck"]').click();
     await page.waitForTimeout(200);
+    // v293追随: 新規完了のため身体スキャンモーダルが開く。以降はトースト単体の当たり判定
+    // (elementFromPoint)を検証する箇所であり、モーダルの全画面オーバーレイが残ったままだと
+    // 別要因で判定が狂うため、この節の検証対象に入る前に片付ける。
+    await dismissBodyScanIfOpen(page);
     check("完了直後はhas-actionが付く(前提)", await page.locator("#toast.has-action").count() === 1);
     // トーストは画面下部中央に固定表示されるため、5個並ぶボトムナビの中央付近(index2、
     // 「実行」ボタン)を狙う——指摘原文の「ボトムナビ中央3ボタン」と同じ位置関係にするため、

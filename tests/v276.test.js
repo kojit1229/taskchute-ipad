@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 const { pathToFileURL } = require("url");
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dismissBodyScanIfOpen } = require("./helpers");
 
 const ROOT = path.join(__dirname, "..");
 const APP_PATH = path.join(ROOT, "app.js");
@@ -141,6 +141,10 @@ check("丸めヘルパーにnew Dateが混入しない", !/new\s+Date\s*\(/.test
     check("既存実績開始が予定より優先され10:10", actualDefaults[0] === `${TODAY}T10:10`, JSON.stringify(actualDefaults));
     check("既存実績終了が予定より優先され10:45", actualDefaults[1] === `${TODAY}T10:45`, JSON.stringify(actualDefaults));
     await page.locator('[data-action="modal-save"]').click();
+    // v293追随: 新規完了(actual-modalはexisting.completed=false→true)のため、実績登録
+    // モーダルはcloseModal()直後にopenBodyScanModal()で身体スキャンモーダルへ置き換わる
+    // (どちらも.modal-cardを持つため、素の"detached"待ちは成立しない)。先に片付ける。
+    await dismissBodyScanIfOpen(page);
     await page.locator(".modal-card").waitFor({ state: "detached" });
     let saved = await storedBlock("actual-modal");
     check("丸め後の既存実績値がlocalStorageへ保存", saved.actualStartAt === `${TODAY}T10:10:00`

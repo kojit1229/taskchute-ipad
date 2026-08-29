@@ -1,7 +1,7 @@
 // v252: 習慣ストリーク弾1(固定化・ログ・純関数・移行・上限・取消)。
 const path = require("path");
 const { pathToFileURL } = require("url");
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dismissBodyScanIfOpen } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -174,6 +174,9 @@ function check(name, cond, extra = "") {
     await page.waitForFunction(({ KEY, TODAY }) => Boolean(JSON.parse(localStorage.getItem(KEY)).habitStreaks?.habit?.logs?.[TODAY]), { KEY, TODAY });
     const doneLog = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).habitStreaks.habit.logs[TODAY], { KEY, TODAY });
     check("toggleBlockで当日ログを生成しdoneAtを持つ", /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(doneLog.doneAt), JSON.stringify(doneLog));
+    // v293追随: 直前のtoggleBlockは新規完了(justCompleted)のため身体スキャンモーダルが
+    // 開いたままになっている。実績モード切替ボタンがこれに遮られるため先に片付ける。
+    await dismissBodyScanIfOpen(page);
     await page.locator('[data-action="timeline-mode"][data-mode="actual"]').click();
     await page.waitForSelector('[data-action="edit-block"][data-id="habit-block"]');
     await page.locator('[data-action="edit-block"][data-id="habit-block"]').evaluate((element) => element.click());

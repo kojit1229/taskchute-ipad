@@ -5,7 +5,7 @@ const vm = require("vm");
 const { pathToFileURL } = require("url");
 const {
   chromium, launchOptions, startServer, blockGithubApiByDefault,
-  passGithubGate, randomPort, STATE_KEY
+  passGithubGate, randomPort, STATE_KEY, dismissBodyScanIfOpen
 } = require("./helpers");
 
 const ROOT = path.join(__dirname, "..");
@@ -408,6 +408,9 @@ class FakeToast {
     check("interactive完了で専用トーストが実DOM表示", (await page.locator("#trackToast").innerText()).includes("12章まで進んだ"));
     check("既存#toastと#trackToastが同時表示して内容を保持", (await page.locator("#toast").innerText()).trim().length > 0
       && (await page.locator("#trackToast").innerText()).includes("TRACK"));
+    // v293追随: 直前のtoggle-blockは新規完了(justCompleted)のため身体スキャンモーダルが
+    // 開いたままになっている。#trackToastのボタンクリックがこれに遮られるため先に片付ける。
+    await dismissBodyScanIfOpen(page);
     const inc = page.locator('#trackToast [data-action="twy-toast-inc"]');
     check("実ブラウザでもトーストボタンのタップ領域44px以上", await inc.evaluate((el) => {
       const rect = el.getBoundingClientRect();

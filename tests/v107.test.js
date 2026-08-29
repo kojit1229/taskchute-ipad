@@ -28,7 +28,7 @@
 // (j) 8日後以降の折りたたみ(v97)と期日昇順ソートが共存する
 //
 // 方針: v95.test.js/v97.test.jsと同じくブラウザ操作 + localStorage状態注入で観測する。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dismissBodyScanIfOpen } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -168,7 +168,10 @@ function check(name, cond, extra = "") {
     check("同じTaskの他のBlock(B2)は完了にならない", bB2?.completed === false, JSON.stringify(bB2));
     check("BlockからTask完了にした直後に日報が再生成される",
       s2.reports[TODAY] !== "STALE_TASK_COMPLETE_FROM_BLOCK" && s2.reports[TODAY].includes("セッション1"), s2.reports[TODAY]);
-    await page.click('[data-action="modal-close"]');
+    // v293追随: この完了は新規完了(justCompleted)のため、編集モーダルは
+    // openBodyScanModal()によって身体スキャンモーダルへ置き換わっている(modal-closeボタンは
+    // もう存在しない)。旧来の「モーダルを閉じる」操作は身体スキャンの記録せず閉じるで代替する。
+    await dismissBodyScanIfOpen(page);
     await page.waitForTimeout(150);
     check("未完了タスク一覧から消える", await page.locator('.item [data-action="task-today"][data-id="task-B"]').count() === 0);
 

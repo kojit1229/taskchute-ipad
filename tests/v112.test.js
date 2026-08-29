@@ -25,7 +25,7 @@
 // (f) ホームタブ「未完了タスク」パネル: 当日登録済み・未完了のタスクでも「＋今日に追加」ボタンが
 //     disabledにならず押せる状態を維持する(v112でdisabled解除)
 // (g) 同じくホームタブで、もう一度クリックすると2件目のBlockが作られ、バッジが更新される
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dismissBodyScanIfOpen } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -147,7 +147,9 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(200);
     await page.click(`.modal-card [data-action="toggle-task-complete"][data-id="${blocksForA2[0].id}"]`);
     await page.waitForTimeout(300);
-    await page.click('[data-action="modal-close"]');
+    // v293追随: 新規完了(justCompleted)のため編集モーダルは身体スキャンモーダルへ
+    // 置き換わっている(modal-closeボタンはもう存在しない)。記録せず閉じるで代替する。
+    await dismissBodyScanIfOpen(page);
     await page.waitForTimeout(150);
     const s3 = await stateNow();
     const tA3 = s3.tasks.find((t) => t.id === "task-A");

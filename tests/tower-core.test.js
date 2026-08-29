@@ -1,6 +1,6 @@
 // tests/tower-core.test.js — v228 JOURNAL/FLIGHT LOG・日報再生成と1秒ticker契約E2E。
 // today-core.test.jsと同じく、localStorage seed + 既存nav + Playwright clockで検証する。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY, dismissBodyScanIfOpen } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = STATE_KEY;
@@ -679,12 +679,18 @@ function check(name, cond, extra = "") {
       && getComputedStyle(el).animationName === "tower-board-flip")
       && await latestLog.locator(".tower-touchdown").count() === 1);
     // K判断(2026-08-17): 就航済みゲートの再タップは確認なしの完了取消(既存toggleBlockのトグル)を仕様として維持する。
+    // v293追随: 直前のタップは新規完了(justCompleted)のため身体スキャンモーダルが開いたまま
+    // になっている。次のタップがこれに遮られるため先に片付ける(完了取消方向は身体スキャンを
+    // 開かないため、以降のタップは対象外)。
+    await dismissBodyScanIfOpen(page);
     await page.locator('.tower-gate[data-id="gate-open"]').click();
     await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).blocks.find((b) => b.id === "gate-open")?.completed !== true, KEY);
     check("就航済み再タップで取消される(トグル仕様)", await page.locator('.tower-gate[data-id="gate-open"][data-docked="0"]').count() === 1
       && (await page.locator("#towerGateCount").textContent()) === "1/3便 就航");
     await page.locator('.tower-gate[data-id="gate-open"]').click();
     await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).blocks.find((b) => b.id === "gate-open")?.completed === true, KEY);
+    // v293追随: 直前のタップは再び新規完了(justCompleted)のため身体スキャンモーダルが開く。
+    await dismissBodyScanIfOpen(page);
 
     console.log("[21-b] ☀早起きゲートはEARLY BIRD正本へローカル時刻を書き、遅チェックを警告する");
     await page.locator('.tower-gate-fixed[data-action="early-bird-check"]').click();

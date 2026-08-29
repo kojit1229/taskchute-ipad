@@ -4,7 +4,8 @@ const path = require("path");
 const { pathToFileURL } = require("url");
 const { isDeepStrictEqual } = require("util");
 const {
-  chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY
+  chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY,
+  dismissBodyScanIfOpen
 } = require("./helpers");
 
 const ROOT = path.join(__dirname, "..");
@@ -152,6 +153,9 @@ function configureSync(syncMod) {
     check("条件2 完了刻印は同秒tie契約・既存4保存", completedItem?.completedAt === NOW
       && completedItem.completedChangedAt === NOW && completedItem.updatedAt === NOW && await saveCalls() === 4,
     JSON.stringify({ completedItem, saves: await saveCalls() }));
+    // v293追随: この完了(toggle-block、新規完了)は身体スキャンモーダルを開く。以降のnavクリック等が
+    // 遮られるため、後続操作の前に片付ける(検証意図=完了刻印・保存回数は上のcheckで既に確定済み)。
+    await dismissBodyScanIfOpen(page);
     await page.locator('.nav-button[data-view="today"]').click();
     const signal = await openScoreDetail();
     check("条件2 LIFE BAND実行率は1/2=50%・low色", (await page.locator(".life-band .twy-score-detail").textContent()).includes("50% (1/2)")

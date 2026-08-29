@@ -16,7 +16,7 @@
 //     (発火条件6つ全部を再検証する。条件2/3/5が単独で崩れる3ケースを固定)
 const fs = require("fs");
 const path = require("path");
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, GITHUB_API_HOST, STATE_KEY } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, GITHUB_API_HOST, STATE_KEY, dismissBodyScanIfOpen } = require("./helpers");
 
 const ROOT = path.join(__dirname, "..");
 const PORT = randomPort();
@@ -188,9 +188,16 @@ function check(name, cond, extra = "") {
       await resetState({ tasks: [parent, kStep, aiStep], blocks: [block], view: "tasks" });
       await page.click(`[data-action="edit-block"][data-id="${block.id}"]`);
       await page.click(`.modal-card [data-action="toggle-task-complete"][data-id="${block.id}"]`);
-      await page.waitForSelector(".ai-step-confirm-modal");
-      check("経路#2でも引き継ぎシートが開く", true);
-      await page.click('[data-action="ai-step-confirm-later"]');
+      // v293追随: toggleTaskCompleteFromBlock内ではmaybeQueueNextAiStep()(引き継ぎシートを開く)
+      // →openBodyScanModal()(身体スキャンを開く)の順に同期呼び出しされる。どちらもrenderModal()で
+      // 同じ#modalRootへ描画するため、引き継ぎシートは1フレームも可視化されずopenBodyScanModal()の
+      // 描画に即座に上書きされる(closeModal()を経由しないためstate.modal.typeの直接差し替え)。
+      // 検証意図(経路#2の完了操作)は維持しつつ、v293後の正しい期待(身体スキャンモーダルが
+      // 優先表示され、引き継ぎシートはDOM上に一切現れない)へ反転して継承する。
+      await page.waitForSelector('.modal-close[data-action="body-scan-discard"]');
+      check("経路#2は身体スキャンモーダルに上書きされ、引き継ぎシートはDOM上に現れない(v293)",
+        await page.locator(".ai-step-confirm-modal").count() === 0);
+      await dismissBodyScanIfOpen(page);
     }
 
     console.log("[1-3] 経路#3 WBSインライン status セレクト(updateTaskField)");

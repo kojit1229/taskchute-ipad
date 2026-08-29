@@ -200,6 +200,27 @@ async function dispatchRegisteredAction(page, action, dataset = {}) {
   }, { actionName: action, actionData: dataset });
 }
 
+// v293追随: 手動Block完了操作(toggleBlock/toggleTaskCompleteFromBlock/saveBlockFromModal/
+// saveActualEntryFromModal/now-conveyor-complete委譲)の直後に身体スキャンモーダル(v129)が
+// 新規発火するようになった(K裁定済みUX、releases/v293.json)。完了操作を段取りとして使う
+// 既存テストの後続クリックがこのモーダル(#modalRoot)に遮られてタイムアウトするため、
+// 完了操作直後に本ヘルパーを挟んで「記録せず閉じる」(body-scan-discard、×と同じ経路)で
+// 片付けてから後続操作へ進む。モーダルが開いていなければ何もしない(no-op)。
+// 検証の弱体化ではなく、後続操作を成立させるための操作追加であることに注意。
+async function dismissBodyScanIfOpen(page) {
+  const discardBtn = page.locator('.modal-close[data-action="body-scan-discard"]');
+  if ((await discardBtn.count()) === 0) return;
+  if (!(await discardBtn.first().isVisible().catch(() => false))) return;
+  await discardBtn.first().click();
+  // 閉じた#modalRootはaria-hidden=trueで非表示になるため、waitForSelectorの既定state("visible")
+  // では永遠に条件成立せずtimeoutまで浪費する(実害: 閉じるまでの間にtoastの自動消滅タイマー等
+  // 他の時限UIが実時間で進行してしまう)。openクラスの有無を直接見るwaitForFunctionを使う。
+  await page.waitForFunction(
+    () => !document.querySelector("#modalRoot")?.classList.contains("open"),
+    { timeout: 5000 }
+  ).catch(() => {});
+}
+
 function randomPort(min = 20000, max = 40000) {
   const idx = process.env.TEST_PORT_INDEX;
   if (idx !== undefined && idx !== "") {
@@ -217,5 +238,5 @@ function randomPort(min = 20000, max = 40000) {
 module.exports = {
   chromium, ROOT, launchOptions, startServer,
   blockGithubApiByDefault, passGithubGate, GITHUB_API_HOST, STATE_KEY, randomPort,
-  openSettingsGroup, dispatchRegisteredAction
+  openSettingsGroup, dispatchRegisteredAction, dismissBodyScanIfOpen
 };
