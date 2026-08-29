@@ -9410,6 +9410,8 @@ function toggleBlock(id) {
     const celebrateMsg = getRandomCelebrate();
     triggerCompletionEffect(celebrateMsg, completedBlock.isMIT);
   }
+  // v293: 身体スキャン復活(ユーザーの手動完了操作のみ発火。完了取り消し・演出の後に出す)。
+  if (justCompleted && completedBlock) openBodyScanModal(completedBlock.id);
 }
 
 // v107: タスクシュートのBlock行「タスク完了」チェック(K指示 2026-07-15)。
@@ -9462,6 +9464,9 @@ function toggleTaskCompleteFromBlock(blockId) {
   if (state.modal && state.modal.type === "block" && state.modal.id === blockId) {
     rerenderActiveModal(["completed"]);
   }
+  // v293: 身体スキャン復活。Block編集モーダルが再描画されていてもここで上書きして表示する
+  // (モーダルは1枚だけ=直前のrerenderActiveModalより後に呼ぶ)。
+  if (!wasBlockCompleted && changedBlock?.completed) openBodyScanModal(changedBlock.id);
 }
 
 // v17: MIT(今日の主役)の切り替え。1日最大3個
@@ -13356,6 +13361,7 @@ function saveBlockFromModal(id, fields) {
   //       (以下、本体のインデントは変更なし=差分最小化のため)
   if (_blockSaveInFlight) return;
   _blockSaveInFlight = true;
+  let _bodyScanBlockId = "";  // v293: 分岐(6箇所)が合流するfinallyでまとめて1回だけ開く
   try {
   const existing = state.blocks.find((b) => b.id === id);
   const isNew = !existing;
@@ -13401,6 +13407,8 @@ function saveBlockFromModal(id, fields) {
     if (!existing?.actualStartAt && savedBlock?.actualStartAt) trackOnBlockStarted(savedBlock);
     if (Boolean(existing?.completed) !== Boolean(savedBlock?.completed)) {
       trackOnBlockCompletionChanged(savedBlock, Boolean(savedBlock?.completed), { interactive: false });
+      // v293: 身体スキャン復活。完了取り消し方向(existing.completed=true→false)では立てない。
+      if (!existing?.completed && savedBlock?.completed) _bodyScanBlockId = savedBlock.id;
     }
   };
   // v29: 予定の開始・終了日時は必須。空のままでは登録/保存させない。
@@ -13585,6 +13593,8 @@ function saveBlockFromModal(id, fields) {
   }
   } finally {
     _blockSaveInFlight = false;
+    // v293: 身体スキャン復活。closeModal()/saveAndRender()より後(=編集モーダルは閉じ済み)に開く。
+    if (_bodyScanBlockId) openBodyScanModal(_bodyScanBlockId);
   }
 }
 
@@ -13888,6 +13898,8 @@ function saveActualEntryFromModal(blockId, fields) {
     trackOnBlockCompletionChanged(block, true, { interactive: false });
   }
   saveAndRender("✅ 実績を登録しました");
+  // v293: 身体スキャン復活(実績登録モーダルは保存前に既にcloseModal済みのため直接開いてよい)。
+  if (!wasCompleted && block?.completed) openBodyScanModal(block.id);
 }
 
 // ============================================================
