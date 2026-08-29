@@ -74,7 +74,6 @@ function batteryCurvePoints() { return batteryCurvePointsStub; }
 
 let draftBarHTMLCalls = 0;
 function draftBarHTML() { draftBarHTMLCalls++; return "<div class=\"stub-draftbar\"></div>"; }
-function draftRejectReasonPickerHTML() { return ""; }
 function renderDraftLayer() { return "<div class=\"stub-draftlayer\"></div>"; }
 let scheduleDraftActiveValue = false;
 function scheduleDraftActive() { return scheduleDraftActiveValue; }
@@ -112,7 +111,7 @@ async function loadModule() {
     minutesOf, todayISO, pad2, clamp, formatDisplayDate,
     renderHeader, renderDateBar,
     defaultBatterySettings, batteryCurvePoints, conditionBudget,
-    draftBarHTML, draftRejectReasonPickerHTML, renderDraftLayer,
+    draftBarHTML, renderDraftLayer,
     scheduleDraftActive, render,
     timelineRailEl: { style: {}, innerHTML: "" },
     appRootEl: { style: {} }

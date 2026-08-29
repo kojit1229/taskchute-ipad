@@ -75,7 +75,7 @@ function check(name, cond, extra = "") {
   else { failures++; console.log(`  ❌ ${name} ${extra}`); }
 }
 
-// §6-1: click dispatcherから確定させたゴールデンリスト(削除済み機能のactionを除く219件)。
+// §6-1: click dispatcherから確定させたゴールデンリスト(削除済み機能のactionを除く221件)。
 // 増減・リネームがあれば、それが意図した変更(action追加/削除/移行)かどうかを必ず確認すること。
 // v294: 「書く瞑想」パネル(充放電ログ改善R1a)のkm-chip-add/km-chip-remove/km-saveを
 // 意図的に追加(218→221)。
@@ -90,6 +90,7 @@ function check(name, cond, extra = "") {
 // v295: 身体スキャン2軸化でbody-scan-recovery/body-scan-recordを意図的に追加(221→223)。
 // v299: グループA削除でtoday-replan/ai-morning-plan/zerosec-theme-add/
 // zerosec-theme-skipを意図的に削除(223→219)。
+// v300: 永久に空だった却下理由UIのaction 2件を意図的に削除(223→221)。
 const GOLDEN_CLICK_ACTIONS = [
   "nav", "open-iron-log", "instruments-open-iron-log", "save-tower-journal",
   "focus-toggle-gate", "focus-toggle-journal", "focus-mode",
@@ -164,7 +165,6 @@ const GOLDEN_CLICK_ACTIONS = [
   "report-copy-ai", "report-share-ai",
   "ai-schedule",
   "draft-confirm", "draft-discard", "draft-remove", "draft-undo",
-  "draft-remove-reason", "draft-remove-reason-dismiss",
   "weekly-suggest-add",
   "open-backup-list", "restore-backup",
   "run-archive",
@@ -288,9 +288,9 @@ const APP_JS_REGISTERED_ACTIONS = [
   // --- v179: 実験ログ(5) ---
   "experiment-add", "edit-experiment", "experiment-keep", "experiment-drop",
   "experiment-copy-conclusion",
-  // --- v179: スケジュール下書き(7。ai-morning-planはv299で削除) ---
+  // --- v179: スケジュール下書き(5。ai-morning-planはv299、却下理由UI 2件はv300で削除) ---
   "ai-schedule", "draft-confirm", "draft-discard", "draft-remove",
-  "draft-undo", "draft-remove-reason", "draft-remove-reason-dismiss",
+  "draft-undo",
   // --- v179: 検索(2) ---
   "open-search", "search-jump",
   // --- v180: Block作成(WBSからの「今日へ追加」) ---

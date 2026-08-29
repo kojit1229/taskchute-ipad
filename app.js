@@ -79,8 +79,8 @@ import {
 // v175: app.js分割・段階4-6(タイムライン抽出・段階B: 描画系)。prep-stage4-timeline.md §7
 //   「段階B」①renderTimelineCard②renderEnergyGraph③renderTimeline/renderTimelineView/
 //   renderTimelineRail/setTimelineMode。src/features/timeline.jsはstateをimportするが
-//   app.js自身はimportしない(循環import回避)。draftBarHTML/
-//   draftRejectReasonPickerHTML/renderDraftLayer(下書きスケジュール機能、別関心事のため
+//   app.js自身はimportしない(循環import回避)。draftBarHTML/renderDraftLayer
+//   (下書きスケジュール機能、別関心事のため
 //   app.js残留)・render・blocksForDate・formatDisplayDate等はconfigureTimeline(deps)で注入する
 //   (src/features/timeline.js冒頭コメントの契約参照)。_scheduleDraftはモジュールプライベート
 //   変数を露出させず新設のscheduleDraftActive()経由でDIする。updateBatteryTick(app.js残留)からの
@@ -319,7 +319,7 @@ configureTimeline({
   minutesOf, todayISO, pad2, clamp, formatDisplayDate, computeProjectedEnd, resolveEstimateMin,
   renderHeader, renderDateBar,
   defaultBatterySettings, batteryCurvePoints, conditionBudget,
-  draftBarHTML, draftRejectReasonPickerHTML, renderDraftLayer,
+  draftBarHTML, renderDraftLayer,
   scheduleDraftActive, render, blocksForDate, postponeBlockToNextDay,
   makeBlock, getOtherTask, openBlockEditor, saveState, isStaleBlock,
   timelineRailEl: timelineRail, appRootEl: app
@@ -819,9 +819,9 @@ registerModalHandler("storeVisit", {
   save: (id, fields) => saveStoreVisitFromModal(id, fields),  // v141: 今日行ったお店ログ
   delete: (id) => deleteStoreVisit(id)  // v141
 });
-// v179: 段階5-7b(モーダル系dispatcher移行・後半)。ビジョンボード6+実験ログ5+AIスケジュール
-// 下書き8+検索2、計21分岐を相乗りregisterActionsへ移行(prep-stage5-dispatcher.md §4)。
-// 下書き系4件の`&&<guard>`条件はハンドラ内early returnへ機械的に変換(guard偽時は何もしない
+// v179: 段階5-7b(モーダル系dispatcher移行・後半)。ビジョンボード5+実験ログ5+AIスケジュール
+// 下書き5+検索2、計17分岐を相乗りregisterActionsへ移行(prep-stage5-dispatcher.md §4)。
+// 下書き系3件の`&&<guard>`条件はハンドラ内early returnへ機械的に変換(guard偽時は何もしない
 // fallthroughと等価)。ロジック無改変。
 registerActions({
   // --- ビジョンボード(5。open-vision-boardはv291孤児掃除でopenVisionBoard()ごと削除。
@@ -837,35 +837,23 @@ registerActions({
   "experiment-keep": ({ id }) => keepExperiment(id),
   "experiment-drop": ({ id }) => dropExperiment(id),
   "experiment-copy-conclusion": ({ id }) => copyExperimentConclusion(id),
-  // --- スケジュール下書き(7) ---
+  // --- スケジュール下書き(5) ---
   "ai-schedule": () => runAiSchedule(),
   "draft-confirm": () => confirmScheduleDraft(),
   "draft-discard": () => {
     if (!_scheduleDraft) return;
-    // v52: 破棄も「この提案は不要だった」という学習シグナルとして記録(v62: source区別も記録)
-    // 複数sourceの項目が合流した下書きでも、
-    // 学習ログには項目ごとの出どころ(it.source)を優先して残す(無ければ従来どおり下書き全体のsource)。
-    _scheduleDraft.items.forEach((it) => recordScheduleHistory(it, "discarded", _scheduleDraft.date, it.source || _scheduleDraft.source || "deterministic"));
     _scheduleDraft = null;
     _draftUndo = null;  // v62: 破棄はUndo対象外(下書き自体が消える)
-    _draftUndoHistoryEntry = null;
     saveState();
     render();
     showToast("下書きを破棄しました");
   },
   "draft-remove": ({ id }) => {
     if (!_scheduleDraft) return;
-    const removed = _scheduleDraft.items.find((x) => x.id === id);
-    let removedHistoryEntry = null;
-    // item.source優先(合流下書きでの出どころ誤ラベル防止。draft-discardと同じ方針)
-    if (removed) removedHistoryEntry = recordScheduleHistory(removed, "removed", _scheduleDraft.date, removed.source || _scheduleDraft.source || "deterministic");  // v52: 却下シグナル
-    // v62(m2): 削除直前の下書き状態を1段Undoとして退避。このremovedエントリも一緒に退避し、
-    //          Undoで取り消せるようにする(Undo→再確定でremoved/confirmedが二重計上されないため)。
-    snapshotDraftForUndo(removedHistoryEntry);
+    // v62: 削除直前の下書き状態を1段Undoとして退避する。
+    snapshotDraftForUndo();
     _scheduleDraft.items = _scheduleDraft.items.filter((x) => x.id !== id);
     if (!_scheduleDraft.items.length) _scheduleDraft = null;
-    // v62: 却下理由をワンタップで選べる軽量ピッカーを出す(任意・非ブロッキング。選ばなくても削除は既に完了している)
-    if (removed && removedHistoryEntry) _pendingRejectReason = { title: removed.title, entry: removedHistoryEntry };
     saveState();
     render();
   },
@@ -874,31 +862,9 @@ registerActions({
     // v62: 下書きレイヤ操作(×削除・ドラッグ移動/リサイズ)の直前状態へ1段だけ戻す
     _scheduleDraft = _draftUndo;
     _draftUndo = null;
-    // v62(m2): 削除操作のUndoなら、その削除で積んだremovedエントリも取り消す(aiScheduleHistoryの
-    //          二重計上防止。ドラッグ操作由来のUndoでは_draftUndoHistoryEntryがnullなので何もしない)
-    if (_draftUndoHistoryEntry) {
-      const idx = state.aiScheduleHistory.indexOf(_draftUndoHistoryEntry);
-      if (idx !== -1) state.aiScheduleHistory.splice(idx, 1);
-      if (_pendingRejectReason && _pendingRejectReason.entry === _draftUndoHistoryEntry) {
-        _pendingRejectReason = null;  // 取り消したentryを参照していた却下理由ピッカーも畳む
-      }
-      _draftUndoHistoryEntry = null;
-    }
     saveState();
     render();
     showToast("元に戻しました");
-  },
-  "draft-remove-reason": ({ target }) => {
-    if (!_pendingRejectReason) return;
-    // v62: 却下理由のワンタップ選択(今日は無理/価値が薄い/時間帯が合わない/その他)。aiScheduleHistoryへ追記する
-    _pendingRejectReason.entry.reason = target.dataset.reason || "";
-    _pendingRejectReason = null;
-    saveState();
-    render();
-  },
-  "draft-remove-reason-dismiss": () => {
-    _pendingRejectReason = null;
-    render();
   },
   // --- 検索(2) ---
   "open-search": () => openSearchModal(),
@@ -1292,9 +1258,8 @@ document.addEventListener("click", (event) => {
   // v143: journal-import-ai(手動貼り付け取込ボタン)はv141でジャーナルのAIフィードバック列
   // 自体を撤去した際に到達不能になっていたため、ハンドラごと削除した(openAiImportModal一式・
   // ai-import-submitも同様。CHANGES_v143.md参照)。
-  // v179: ai-schedule/draft-confirm/draft-discard/draft-remove/draft-undo/
-  // draft-remove-reason/draft-remove-reason-dismiss(AIスケジュール下書き8)はapp.js内の
-  // registerActionsへ移行した。
+  // v179: ai-schedule/draft-confirm/draft-discard/draft-remove/draft-undo
+  // (AIスケジュール下書き5)はapp.js内のregisterActionsへ移行した。
   // v217: weekly-suggest-addはAIレポートの週次レビューから呼ぶ。
   // v174: open-backup-list/restore-backup/run-archiveはapp.js内のregisterActionsへ移行した。
   // v179: open-search/search-jump(検索2)はapp.js内のregisterActionsへ移行した。
@@ -3587,8 +3552,6 @@ async function shareReport() {
 let _scheduleDraft = null;  // { date, items:[{id,title,taskId,category,start(分),minutes}], skipped:[{title,reason}], source } 非永続(v59でskippedを追加、v62でsourceを追加)
 let _draftDrag = null;      // ドラッグ中の一時情報 非永続
 let _draftUndo = null;      // v62: 下書きレイヤ操作(×削除・ドラッグ)の直前スナップショット(1段Undo)非永続
-let _draftUndoHistoryEntry = null;  // v62(m2): _draftUndoが削除操作由来なら、その時記録したaiScheduleHistoryエントリの参照(Undoで取り消す)
-let _pendingRejectReason = null;  // v62: ×直後の却下理由ワンタップ選択(任意・非ブロッキング)非永続 { title, entry }
 
 // v175: renderTimelineView(src/features/timeline.js側)は「下書きが1件も無い時だけ
 // "下書きスケジュール"ボタンを出す」判定に_scheduleDraftの有無だけを見る。変数自体を
@@ -3772,7 +3735,7 @@ function runAiSchedule() {
     .filter((b) => skipSet.has(b.id))
     .map((b) => ({ title: b.title, reason: skipReasonById.get(b.id) }));
   _scheduleDraft = { date, items: finalItems, skipped, source: "deterministic" };  // v62: source区別
-  _draftUndo = null; _draftUndoHistoryEntry = null;  // v62: 新規下書きでは前セッションのUndoを持ち越さない
+  _draftUndo = null;  // v62: 新規下書きでは前セッションのUndoを持ち越さない
   state.timelineMode = "planned";
   setView("timeline");
   // v199(4b・中3修正): 入り切らないBlockが1件以上あれば、成功トーストの代わりに理由別の
@@ -3853,38 +3816,11 @@ const ZERO_SEC_THEME_LOG_MAX = 300;
 
 // v62: 下書きレイヤ操作(×削除・ドラッグ移動/リサイズ)の直前状態を退避する(1段Undo)。
 // _scheduleDraft は非永続のため、ここでの退避もモジュール変数のディープコピーで完結する。
-// historyEntry: 削除操作由来のUndoなら、その削除で記録したaiScheduleHistoryエントリを渡す。
-// ドラッグ操作由来のUndo(履歴レコードを伴わない)では省略する。
-function snapshotDraftForUndo(historyEntry = null) {
+function snapshotDraftForUndo() {
   if (!_scheduleDraft) return;
   _draftUndo = JSON.parse(JSON.stringify(_scheduleDraft));
-  _draftUndoHistoryEntry = historyEntry;
 }
 
-const DRAFT_REJECT_REASONS = ["今日は無理", "価値が薄い", "時間帯が合わない", "その他"];
-
-// v62: ×で外した直後だけ出す軽量な却下理由ピッカー(任意・非ブロッキング)。
-// モーダルにはしない(即座に削除は完了しており、理由選択はあとから追加できる情報)。
-// aiScheduleHistory の該当entryへ直接reasonを書き込む(v64の学習データ)。
-function draftRejectReasonPickerHTML() {
-  if (!_pendingRejectReason) return "";
-  return `
-    <div class="draft-reject-picker">
-      <span>「${escapeHTML(_pendingRejectReason.title)}」を外しました。理由(任意):</span>
-      <span class="row" style="gap:6px; flex-wrap:wrap">
-        ${DRAFT_REJECT_REASONS.map((r) => `<button class="btn ghost" data-action="draft-remove-reason" data-reason="${escapeHTML(r)}">${escapeHTML(r)}</button>`).join("")}
-        <button class="btn ghost" data-action="draft-remove-reason-dismiss">閉じる</button>
-      </span>
-    </div>`;
-}
-
-// v60(旧v52): スケジュール実績ログ。決定論配置の元値(aiStart/aiMinutes、フィールド名は
-//  互換のため維持)・ユーザ確定・却下を aiScheduleHistory に記録する。かつては
-//  buildScheduleLearningDigest() がこれを集計してAIプロンプトへ注入していたが、
-//  Claude API呼び出しの全廃に伴いその注入経路は削除した(digest生成自体が呼び出し元を
-//  失ったため同時に削除)。ここでの記録自体は「配置提案に対する採否」の実データとして
-//  引き続き蓄積する(将来、自宅PCバッチでの分析に使える可能性があるため残置)。
-const AI_SCHED_HISTORY_MAX = 300;
 // v53: 計器盤(統計)の時間帯×曜日ヒートマップでも使う(削除しないこと)
 const SCHED_BANDS = [
   [5, 9, "早朝(5-9時)"],
@@ -3894,33 +3830,9 @@ const SCHED_BANDS = [
   [18, 23, "夜(18-23時)"]
 ];
 
-// 採用/却下を1件記録(採用時は確定値も)。v62: source(ai-plan/deterministic)・reason(却下理由)を追加し、
-// 呼び出し元が却下理由をあとから紐付けられるよう push した entry 自体を返す(v64の学習データ)。
-function recordScheduleHistory(item, outcome, date, source = "deterministic", reason = "") {
-  const entry = {
-    date,
-    title: item.title,
-    category: item.category || "",
-    aiStart: minToHHMM(item.aiStart ?? item.start),
-    aiMin: item.aiMinutes ?? item.minutes,
-    outcome,  // 'confirmed' | 'removed' | 'discarded'
-    source,   // v62: 'ai-plan' | 'deterministic' — 提案の出どころ
-    reason: reason || "",  // v62: 却下理由(removed時のみ、ワンタップ選択・任意)
-    userStart: outcome === "confirmed" ? minToHHMM(item.start) : null,
-    userMin: outcome === "confirmed" ? item.minutes : null,
-    at: nowDateTime()
-  };
-  state.aiScheduleHistory.push(entry);
-  if (state.aiScheduleHistory.length > AI_SCHED_HISTORY_MAX) {
-    state.aiScheduleHistory = state.aiScheduleHistory.slice(-AI_SCHED_HISTORY_MAX);
-  }
-  return entry;
-}
-
 function confirmScheduleDraft() {
   if (!_scheduleDraft || !_scheduleDraft.items.length) return;
   const { date, items } = _scheduleDraft;
-  const draftSource = _scheduleDraft.source || "deterministic";  // v62: 確定記録にも出どころを残す
   // v61: マイグレーション儀式 — 繰越由来(carryFromId)の項目が3回目の繰り越しになる場合は、
   //      一括確定の前に一呼吸置く。既に選択済み(_ritualResolved)の項目はスキップする。
   const ritualItem = items.find((it) =>
@@ -3936,7 +3848,6 @@ function confirmScheduleDraft() {
     //   makeBlockしない=新規Block化しない。migratedTo/carryCount系(繰越専用)も通さない。
     if (it.blockId) {
       // v199(軽微4): 下書き作成後に対象Blockが消えていた場合(削除等)は空振りさせない。
-      //   状態変更なし・aiScheduleHistoryへも記録しない(「確定」と偽装しない)。
       if (!state.blocks.some((b) => b.id === it.blockId)) return;
       state.blocks = state.blocks.map((b) => b.id === it.blockId ? {
         ...b,
@@ -3944,7 +3855,6 @@ function confirmScheduleDraft() {
         plannedEndAt: `${date}T${minToHHMM(it.start + it.minutes)}`,
         updatedAt: nowDateTime()  // v135以降のid+updatedAtマージ対策
       } : b);
-      recordScheduleHistory(it, "confirmed", date, it.source || draftSource);
       updatedCount += 1;
       return;
     }
@@ -3971,8 +3881,6 @@ function confirmScheduleDraft() {
       block.carryCount = (src?.carryCount || 0) + 1;  // v61: 繰り越し回数を1つ積み上げる
     }
     state.blocks.push(block);
-    // item.source優先(合流下書きでの出どころ誤ラベル防止。draft-discard/removeと同じ方針)
-    recordScheduleHistory(it, "confirmed", date, it.source || draftSource);
     // v59: 繰り越し由来の下書きは元Blockに migratedTo を設定(carryOverBlockと同じ二重繰越防止セマンティクス)
     if (it.carryFromId) {
       state.blocks = state.blocks.map((b) => b.id === it.carryFromId ? { ...b, migratedTo: block.id, updatedAt: nowDateTime() } : b);
@@ -3980,7 +3888,7 @@ function confirmScheduleDraft() {
     createdCount += 1;
   });
   _scheduleDraft = null;
-  _draftUndo = null; _draftUndoHistoryEntry = null;  // v62: 確定済みの下書きへのUndoは意味を持たない
+  _draftUndo = null;  // v62: 確定済みの下書きへのUndoは意味を持たない
   // v199(軽微3): blockId分岐は「登録」ではなく「時刻更新」のため、件数に応じて文言を書き分ける
   //   (旧文言「📋 N件のBlockを登録しました」を再配置フローにそのまま流用していたのは不正確だった)
   const confirmParts = [];
@@ -4044,7 +3952,7 @@ document.addEventListener("pointerdown", (event) => {
   const el = resizeEl ? resizeEl.closest(".draft-block") : blockEl;
   if (!item || !el) return;
   const rowHeight = Number(el.dataset.rowHeight) || 60;
-  snapshotDraftForUndo();  // v62: ドラッグ開始前の状態を1段Undoとして退避(historyEntryなし)
+  snapshotDraftForUndo();  // v62: ドラッグ開始前の状態を1段Undoとして退避
   _draftDrag = { id, mode: resizeEl ? "resize" : "move", startY: event.clientY, origStart: item.start, origMinutes: item.minutes, rowHeight, el };
   el.classList.add("is-dragging");
   event.preventDefault();

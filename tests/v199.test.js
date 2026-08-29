@@ -247,8 +247,8 @@ function check(name, cond, extra = "") {
     check("updatedAtがbumpされる(旧タイムスタンプのままではない)", !!bD && bD.updatedAt !== OLD_UPDATED_AT, JSON.stringify(bD));
     check("migratedTo/carryCountは不変(軽微8・繰越専用パス非経由の直接確認)",
       !!bD && bD.migratedTo === "dummy-migrated-to" && bD.carryCount === 2, JSON.stringify(bD));
-    const histD = (afterConfirm.aiScheduleHistory || []).find((h) => h.title === "確定検証タスク" && h.outcome === "confirmed");
-    check("aiScheduleHistoryにconfirmed(source=deterministic)が記録される", !!histD && histD.source === "deterministic", JSON.stringify(histD));
+    check("確定してもaiScheduleHistoryへ新規記録しない",
+      (afterConfirm.aiScheduleHistory || []).length === 0, JSON.stringify(afterConfirm.aiScheduleHistory));
 
     // ============================================================
     // (e) 配置ウィンドウ: 仕事=平日9-18のみ / プライベート=8-21のみ

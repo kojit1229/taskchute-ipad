@@ -1,11 +1,10 @@
-// v62 検証: AIレポート週次レビュー + 下書きUndo/Redo・却下理由メモ
+// v62 検証: AIレポート週次レビュー + 下書きUndo
 //           + ホーム信条の実データ化。
 //
 // (a)-(c) v299で削除したAIプランJSON→朝プラン経路は、対象コードの不在契約へ更新する
 // (d) 週次レビュー_*.md(直近土曜)をアプリ内表示し、「来週のタスク提案」の行ごとに
 //     「+登録」でWBSタスクを1件ずつ登録できる(一括登録はしない)。無ければセクション非表示
-// (e) 下書きレイヤ操作(×削除)の直前状態へ1段Undo、却下理由のワンタップ選択が
-//     aiScheduleHistoryのreasonに反映される
+// (e) 下書きレイヤ操作(×削除)の直前状態へ1段Undoし、履歴は新規記録しない
 // (f) ホーム信条(homeCreed)がKの実データ裏付け型の文言に更新されている
 //
 // 方針: app.js は type="module" で内部関数を window に露出しないため、既存スイート(v49〜v61)と
@@ -210,7 +209,7 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(300);
     const afterRemove = await draftTitles();
     check("×で1件削除される", afterRemove.length === 1 && !afterRemove.some((t) => t.includes("Undo検証タスクA")), JSON.stringify(afterRemove));
-    check("却下理由ピッカーが表示される", await page.locator(".draft-reject-picker").count() === 1);
+    check("履歴書き込み廃止後は却下理由ピッカーを表示しない", await page.locator(".draft-reject-picker").count() === 0);
     check("Undoボタンが出る(削除操作あり)", await page.locator('[data-action="draft-undo"]').count() === 1);
     await page.click('[data-action="draft-undo"]');
     await page.waitForTimeout(300);
@@ -218,10 +217,9 @@ function check(name, cond, extra = "") {
     check("Undoで2件とも復元される", afterUndo.length === 2 && afterUndo.some((t) => t.includes("Undo検証タスクA")), JSON.stringify(afterUndo));
     check("Undo後はUndoボタンが消える(1段のみ)", await page.locator('[data-action="draft-undo"]').count() === 0);
     const s6 = await stateNow();
-    const removedAfterUndo = (s6.aiScheduleHistory || []).filter((h) => h.title === "Undo検証タスクA" && h.outcome === "removed");
-    check("m2: Undoで直前のremovedエントリがaiScheduleHistoryから取り消される", removedAfterUndo.length === 0, JSON.stringify(removedAfterUndo));
+    check("削除→UndoでもaiScheduleHistoryへ新規記録しない", (s6.aiScheduleHistory || []).length === 0, JSON.stringify(s6.aiScheduleHistory));
 
-    console.log("[6b] m2: 削除→Undo→確定 でaiScheduleHistoryにremoved/confirmedが二重計上されない");
+    console.log("[6b] 削除→Undo→確定の実操作を維持し、aiScheduleHistoryへ書かない");
     await seed({
       tasks: [wbsTask("task-dd1", "二重計上検証タスクA", { estimateMin: 30 }), wbsTask("task-dd2", "二重計上検証タスクB", { estimateMin: 30 })],
       blocks: [
@@ -235,25 +233,22 @@ function check(name, cond, extra = "") {
     await page.locator('.draft-block:has-text("二重計上検証タスクA") .draft-remove').click();
     await page.waitForTimeout(300);
     const sMidDd = await stateNow();
-    const removedBeforeUndoDd = (sMidDd.aiScheduleHistory || []).filter((h) => h.title === "二重計上検証タスクA" && h.outcome === "removed");
-    check("削除直後はremovedが1件記録される", removedBeforeUndoDd.length === 1, JSON.stringify(removedBeforeUndoDd));
+    check("削除直後も履歴は空のまま", (sMidDd.aiScheduleHistory || []).length === 0, JSON.stringify(sMidDd.aiScheduleHistory));
     await page.click('[data-action="draft-undo"]');
     await page.waitForTimeout(300);
-    check("Undo後は却下理由ピッカーが出ない(取り消されたentryを参照していたため畳まれる)",
+    check("Undo後も却下理由ピッカーは出ない",
       await page.locator(".draft-reject-picker").count() === 0);
     const sAfterUndoDd = await stateNow();
-    const removedAfterUndoDd = (sAfterUndoDd.aiScheduleHistory || []).filter((h) => h.title === "二重計上検証タスクA" && h.outcome === "removed");
-    check("Undoでremovedエントリが取り消される(0件)", removedAfterUndoDd.length === 0, JSON.stringify(removedAfterUndoDd));
+    check("Undo後も履歴は空のまま", (sAfterUndoDd.aiScheduleHistory || []).length === 0, JSON.stringify(sAfterUndoDd.aiScheduleHistory));
     await page.click('[data-action="draft-confirm"]');
     await page.waitForTimeout(400);
     const sFinalDd = await stateNow();
-    const confirmedFinalDd = (sFinalDd.aiScheduleHistory || []).filter((h) => h.title === "二重計上検証タスクA" && h.outcome === "confirmed");
-    const removedFinalDd = (sFinalDd.aiScheduleHistory || []).filter((h) => h.title === "二重計上検証タスクA" && h.outcome === "removed");
-    check("確定後はconfirmedのみ1件・removedは0件のまま(二重計上なし)",
-      confirmedFinalDd.length === 1 && removedFinalDd.length === 0,
-      JSON.stringify({ confirmedFinalDd, removedFinalDd }));
+    check("確定後も履歴は空のまま", (sFinalDd.aiScheduleHistory || []).length === 0, JSON.stringify(sFinalDd.aiScheduleHistory));
+    check("Undo復元後の確定で2件の既存Blockが維持される",
+      (sFinalDd.blocks || []).filter((b) => b.id === "blk-dd1" || b.id === "blk-dd2").length === 2,
+      JSON.stringify(sFinalDd.blocks));
 
-    console.log("[7] 却下理由: ワンタップ選択がaiScheduleHistoryのreasonに反映される");
+    console.log("[7] 個別削除後に却下理由UIを出さず、履歴へ書かない");
     await seed({
       tasks: [wbsTask("task-reason1", "却下理由ワンタップ検証タスク", { estimateMin: 30 })],
       blocks: [planBlock({ id: "blk-reason1", date: TODAY, title: "却下理由ワンタップ検証タスク", taskId: "task-reason1", startMin: 9 * 60, endMin: 9 * 60 + 30 })],
@@ -263,16 +258,11 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(500);
     await page.locator('.draft-block:has-text("却下理由ワンタップ検証タスク") .draft-remove').click();
     await page.waitForTimeout(300);
-    check("却下理由ピッカーが表示される", await page.locator(".draft-reject-picker").count() === 1);
-    await page.click('.draft-reject-picker [data-action="draft-remove-reason"][data-reason="価値が薄い"]');
-    await page.waitForTimeout(300);
-    check("理由選択後はピッカーが閉じる", await page.locator(".draft-reject-picker").count() === 0);
+    check("却下理由ピッカーを表示しない", await page.locator(".draft-reject-picker").count() === 0);
     const s7 = await stateNow();
-    const histReason = (s7.aiScheduleHistory || []).find((h) => h.title === "却下理由ワンタップ検証タスク" && h.outcome === "removed");
-    check("aiScheduleHistoryのreasonに選択した理由が入る", !!histReason && histReason.reason === "価値が薄い", JSON.stringify(histReason));
-    check("aiScheduleHistoryのsourceはdeterministic(ai-scheduleは決定論配置のみ)", !!histReason && histReason.source === "deterministic", JSON.stringify(histReason));
+    check("個別削除でもaiScheduleHistoryへ新規記録しない", (s7.aiScheduleHistory || []).length === 0, JSON.stringify(s7.aiScheduleHistory));
 
-    console.log("[7b] 却下理由: 「閉じる」を選ぶと理由なし(空文字)のまま");
+    console.log("[7b] 別の個別削除でも履歴を書かない");
     await seed({
       tasks: [wbsTask("task-u3", "却下理由検証タスク", { estimateMin: 30 })],
       blocks: [planBlock({ id: "blk-u3", date: TODAY, title: "却下理由検証タスク", taskId: "task-u3", startMin: 9 * 60, endMin: 9 * 60 + 30 })],
@@ -282,12 +272,9 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(500);
     await page.locator('.draft-block:has-text("却下理由検証タスク") .draft-remove').click();
     await page.waitForTimeout(300);
-    await page.click('[data-action="draft-remove-reason-dismiss"]');
-    await page.waitForTimeout(200);
-    check("「閉じる」でピッカーが閉じる", await page.locator(".draft-reject-picker").count() === 0);
+    check("別の削除でも却下理由ピッカーを表示しない", await page.locator(".draft-reject-picker").count() === 0);
     const s7b = await stateNow();
-    const histNoReason = (s7b.aiScheduleHistory || []).find((h) => h.title === "却下理由検証タスク" && h.outcome === "removed");
-    check("理由を選ばなければreasonは空文字のまま", !!histNoReason && histNoReason.reason === "", JSON.stringify(histNoReason));
+    check("別の個別削除でもaiScheduleHistoryへ新規記録しない", (s7b.aiScheduleHistory || []).length === 0, JSON.stringify(s7b.aiScheduleHistory));
 
     // ============================================================
     // (d) AIレポートの週次レビュー表示(無い場合は提案非表示 → ある場合は表示+登録)

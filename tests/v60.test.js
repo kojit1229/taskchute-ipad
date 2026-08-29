@@ -4,10 +4,7 @@
 // (b) 設定画面に APIキー入力欄・モデル選択・プロンプト編集欄が無い(旧state保存値も消える)
 // (c) v299で削除した「🌅 朝プラン」のaction・本体がソースに存在しない
 // (d) 「📋 下書きスケジュール」が決定論配置で動く(WBSタスクの estimateMin を見積分数として使う)
-// (e) 決定論配置でも確定Blockに aiPlan(元提案)が残り、aiScheduleHistory に
-//     confirmed(userStart/userMin付き)/removed/discarded が記録される
-//     (旧v52.test.jsが検証していた recordScheduleHistory/block.aiPlan は app.js から
-//     削除していない現存コードのため、v52削除に伴いここへ検証を移設した)
+// (e) 確定・個別削除・破棄の実操作は維持しつつ、aiScheduleHistoryへ新規記録しない
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dispatchRegisteredAction } = require("./helpers");
 const fs = require("fs");
 const path = require("path");
@@ -88,6 +85,7 @@ function check(name, cond, extra = "") {
     // estimateMin=45 の候補(下書き確定後も元の見積が保持されることの確認用)。
     s.tasks.push({ id: "task-60a", projectId: "proj-60", parentTaskId: "", title: "v60見積付きタスク", category: "", status: "todo", dueDate: "", description: "", estimateMin: 45, createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false });
     s.blocks = [];
+    s.aiScheduleHistory = [];
     s.journalMeta = s.journalMeta || {};
     delete s.journalMeta[YEST];  // 昨日のMIT候補(あれば)を候補一覧から除いて件数を決定的にする
     s.selectedDate = TODAY;
@@ -163,21 +161,14 @@ function check(name, cond, extra = "") {
   check("確定で既存Blockの時刻が更新される(見積45分は元のまま)", confirmedBlock && confirmedBlock.estimateMin === 45, JSON.stringify(confirmedBlock));
   // v199対応(design.md仕様6): blockId分岐はplannedStartAt/plannedEndAt/updatedAtだけを更新し、
   // aiPlanは設定しない(makeBlock非経由のため)。旧assertion「aiPlanに元値が残る」は
-  // blockId確定パスには適用できないためここでは検証しない — 同じ「提案値vs確定値」の監査証跡は
-  // 直後のaiScheduleHistory(aiMin/userStart/userMin)で引き続き検証する(検証意図は維持)。
+  // blockId確定パスには適用できないためここでは検証しない。
   check("blockId確定パスはaiPlanを設定しない(design.md仕様6の明示スコープどおり)",
     !!confirmedBlock && !confirmedBlock.aiPlan, JSON.stringify(confirmedBlock && confirmedBlock.aiPlan));
-  const histConfirmed1 = await page.evaluate((KEY) => {
-    const s = JSON.parse(localStorage.getItem(KEY));
-    return (s.aiScheduleHistory || []).find((h) => h.title === "v60見積付きタスク" && h.outcome === "confirmed");
-  }, KEY);
-  check("aiScheduleHistoryにconfirmedが記録される(userStart/userMin付き)",
-    !!histConfirmed1 && histConfirmed1.userStart && histConfirmed1.userMin === 45 && histConfirmed1.aiMin === 45,
-    JSON.stringify(histConfirmed1));
+  const historyAfterConfirm = await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).aiScheduleHistory || [], KEY);
+  check("確定してもaiScheduleHistoryへ新規記録しない", historyAfterConfirm.length === 0, JSON.stringify(historyAfterConfirm));
 
-  // ---- (e) 却下(×)・破棄も aiScheduleHistory に removed / discarded として記録される ----
-  // (旧v52.test.jsの[2][3]セクションが検証していた内容の移設)
-  console.log("[4b] 却下(×)がaiScheduleHistoryにremovedとして記録される");
+  // ---- (e) 個別削除(×)・破棄も実操作は維持し、履歴だけを書かない ----
+  console.log("[4b] 個別削除は下書きだけを更新し、aiScheduleHistoryへ書かない");
   await page.evaluate(({ KEY, TODAY }) => {
     const s = JSON.parse(localStorage.getItem(KEY));
     s.projects = (s.projects || []).filter((p) => p.kind !== "normal");
@@ -207,14 +198,15 @@ function check(name, cond, extra = "") {
     await page.locator(".draft-block-title").allTextContents());
   await page.locator('.draft-block:has-text("却下用タスク") .draft-remove').click();
   await page.waitForTimeout(300);
-  const histRemoved = await page.evaluate((KEY) => {
+  const removedResult = await page.evaluate((KEY) => {
     const s = JSON.parse(localStorage.getItem(KEY));
-    return (s.aiScheduleHistory || []).find((h) => h.title === "却下用タスク" && h.outcome === "removed");
+    return { history: s.aiScheduleHistory || [] };
   }, KEY);
-  check("aiScheduleHistoryにremovedが記録される(userStart/userMinはnull)",
-    !!histRemoved && histRemoved.userStart === null && histRemoved.userMin === null, JSON.stringify(histRemoved));
+  check("×で対象だけが下書きから外れる", await page.locator(".draft-block").count() === 1,
+    await page.locator(".draft-block-title").allTextContents());
+  check("個別削除でもaiScheduleHistoryへ新規記録しない", removedResult.history.length === 0, JSON.stringify(removedResult));
 
-  console.log("[4c] 破棄がaiScheduleHistoryにdiscardedとして記録される");
+  console.log("[4c] 破棄は下書きを閉じ、aiScheduleHistoryへ書かない");
   await page.click('[data-action="draft-confirm"]');  // 残った「確定用タスク2」を確定して片付ける
   await page.waitForTimeout(400);
   await page.evaluate(({ KEY, TODAY }) => {
@@ -237,11 +229,12 @@ function check(name, cond, extra = "") {
     await page.locator(".draft-block-title").allTextContents());
   await page.click('[data-action="draft-discard"]');
   await page.waitForTimeout(300);
-  const histDiscarded = await page.evaluate((KEY) => {
+  const discardedResult = await page.evaluate((KEY) => {
     const s = JSON.parse(localStorage.getItem(KEY));
-    return (s.aiScheduleHistory || []).find((h) => h.title === "破棄用タスク" && h.outcome === "discarded");
+    return { history: s.aiScheduleHistory || [] };
   }, KEY);
-  check("aiScheduleHistoryにdiscardedが記録される", !!histDiscarded, JSON.stringify(histDiscarded));
+  check("破棄で下書きレイヤが閉じる", await page.locator(".draft-block").count() === 0);
+  check("破棄でもaiScheduleHistoryへ新規記録しない", discardedResult.history.length === 0, JSON.stringify(discardedResult));
 
   // ---- (a) ここまでの全経路で api.anthropic.com への fetch が一切発生していない ----
   console.log("[5] api.anthropic.com への fetch が皆無であることの最終確認");

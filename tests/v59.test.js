@@ -51,7 +51,6 @@ window.__v59Test = {
   setScheduleDraft(draft) {
     _scheduleDraft = draft;
     _draftUndo = null;
-    _draftUndoHistoryEntry = null;
     state.timelineMode = "planned";
     setView("timeline");
     render();
