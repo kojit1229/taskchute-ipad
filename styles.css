@@ -3084,6 +3084,7 @@ h3 {
 .sec-gates { order: 3; }
 .sec-log { order: 4; }
 .today-tower > .today-pomodoro { order: 4; }
+.sec-bodymind { order: 5; }
 .sec-journal { order: 6; }
 .today-focus-bar {
   display: flex;
@@ -3347,6 +3348,40 @@ h3 {
   color: var(--tower-cyan); font-size: 11px; letter-spacing: .18em;
 }
 .tower-panel-box h2 span { float: right; color: var(--tower-text); font-size: 10px; font-weight: 400; letter-spacing: .08em; opacity: .6; }
+
+/* ============ BODY/MIND(v297: 2軸身体スキャンの日次積み上げ+週推移。表示専用) ============ */
+.bm-toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 0; margin: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.bm-toggle span { flex: 1; margin-left: 4px; color: var(--tower-text); font-size: 10px; font-weight: 400; letter-spacing: .08em; opacity: .6; }
+.bm-toggle:focus-visible { outline: 2px solid var(--tower-green); outline-offset: -2px; }
+.bm-chev { flex-shrink: 0; transition: transform .2s ease; }
+.bm-chev.open { transform: rotate(90deg); }
+.bm-empty { padding: 14px 10px; color: var(--tower-text); font-size: 11px; text-align: center; opacity: .6; }
+.bm-bars { display: flex; flex-direction: column; gap: 8px; padding: 10px; }
+.bm-row { display: flex; align-items: center; gap: 8px; }
+.bm-label { width: 92px; flex-shrink: 0; font-size: 10px; color: var(--tower-text); opacity: .8; }
+.bm-track { flex: 1; height: 10px; border-radius: 999px; overflow: hidden; background: rgba(255, 255, 255, .08); }
+.bm-fill { display: block; height: 100%; border-radius: 999px; }
+.bm-fill.fat { background: var(--tower-red); }
+.bm-fill.rec { background: var(--tower-cyan); }
+.bm-val { width: 34px; flex-shrink: 0; text-align: right; font-size: 10px; color: var(--tower-text); font-variant-numeric: tabular-nums; }
+.bm-net { margin: 0 10px 8px; padding: 6px 8px; border-radius: 8px; background: rgba(255, 255, 255, .05); color: var(--tower-text); font-size: 10px; opacity: .85; }
+.bm-net strong { opacity: 1; }
+.bm-list { display: flex; flex-direction: column; gap: 4px; padding: 0 10px 10px; }
+.bm-item { display: flex; align-items: center; gap: 6px; padding: 5px 7px; border: 1px solid var(--tower-line); border-radius: 6px; color: var(--tower-text); font-size: 10px; opacity: .85; }
+.bm-item-time { flex-shrink: 0; opacity: .6; }
+.bm-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bm-item-tag.fat { color: var(--tower-red); }
+.bm-item-tag.rec { color: var(--tower-cyan); }
+.bm-weekly { padding: 8px 10px 10px; border-top: 1px solid var(--tower-line); }
+.bm-weekly-title { margin-bottom: 6px; color: var(--tower-text); font-size: 10px; opacity: .6; }
+.bm-spark { display: flex; align-items: flex-end; gap: 4px; height: 60px; }
+.bm-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; height: 100%; }
+.bm-col-bars { flex: 1; display: flex; align-items: flex-end; gap: 2px; }
+.bm-sbar { width: 5px; border-radius: 2px 2px 0 0; }
+.bm-sbar.fat { background: var(--tower-red); opacity: .85; }
+.bm-sbar.rec { background: var(--tower-cyan); opacity: .85; }
+.bm-col span { color: var(--tower-text); font-size: 8px; opacity: .55; }
+.bm-col.is-today span { color: var(--tower-amber); font-weight: 700; opacity: 1; }
 
 .tower-journal-body { display: grid; gap: 6px; padding: 10px; }
 .tower-journal-label { color: var(--tower-cyan); font-size: 9.5px; font-weight: 700; letter-spacing: .14em; }

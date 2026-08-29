@@ -105,6 +105,7 @@ function configureToday(deps) {
     earlyBirdLogForDate: (date) => state.earlyBird?.logs?.[date] || null,
     earlyRiseTarget: () => state.settings.earlyRiseTarget,
     linkedGymBlock: (blocks, nowMinutes) => linkedGymBlock({ settings: state.settings, blocks }, nowMinutes),
+    bodyScansForDate: (date) => (state.bodyScans || []).filter((s) => String(s.dateTime || "").startsWith(date)),
     scheduledTasksForDate: (date, blocks) => {
       const blockedTaskIds = new Set((blocks || []).map((block) => block.taskId).filter(Boolean));
       return (state.tasks || []).filter((task) => {

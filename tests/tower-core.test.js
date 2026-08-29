@@ -296,7 +296,7 @@ function check(name, cond, extra = "") {
       await page.locator('.tower-departures, [data-action="departures-open-tomorrow"], .tower-board :text("明日8時半")').count() === 0);
     const leftSectionOrder = await page.locator(".tower-col-left > section").evaluateAll((sections) =>
       sections.map((section) => [...section.classList].find((name) => name.startsWith("sec-"))));
-    check("左列はNOW LANDING→ARRIVALS→FLIGHT LOG順を維持", JSON.stringify(leftSectionOrder) === JSON.stringify(["sec-rwy", "sec-arrivals", "sec-log"]),
+    check("左列はNOW LANDING→ARRIVALS→FLIGHT LOG順を維持", JSON.stringify(leftSectionOrder) === JSON.stringify(["sec-rwy", "sec-arrivals", "sec-log", "sec-bodymind"]),
       JSON.stringify(leftSectionOrder));
     check("ARRIVALSとGATEは引き続き表示", await page.locator(".sec-arrivals .tower-arrivals").count() === 1
       && await page.locator(".sec-gates").count() === 1);

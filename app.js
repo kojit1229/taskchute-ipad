@@ -27,7 +27,7 @@ import { configureInstruments, renderInstruments } from "./src/features/instrume
 import { configureTrackUi, maybeShowTrackProgressToast } from "./src/features/track-ui.js";
 // v182: 新トップレベル「今日」コックピット。既存featureと同じ依存注入型で循環importを避ける。
 import { configureToday, renderToday } from "./src/features/today.js";
-import { isRoutineGateBlock, setTowerArrivalSelection } from "./src/features/today-tower.js";
+import { isRoutineGateBlock, setTowerArrivalSelection, toggleTowerBodyMindWeekly } from "./src/features/today-tower.js";
 // v168: app.js分割・段階4-2(WishタブTier1のCRUD・描画を抽出)。src/features/wish.js
 //   はstateをimportするがapp.js自身はimportしない(循環import回避)。
 //   getWishProjectはapp.js側の週次Wish選定からも共有importする。
@@ -358,6 +358,11 @@ registerActions({
   "early-bird-check": () => toggleEarlyBird(),
   "tower-gate-edit-toggle": () => {
     _towerGateEditMode = !_towerGateEditMode;
+    render();
+  },
+  // v297: BODY/MINDウィジェットの週推移開閉(表示専用トグル。stateには触れない)。
+  "tower-bodymind-toggle": () => {
+    toggleTowerBodyMindWeekly();
     render();
   },
   "tower-gate-add": () => addTowerGate(),

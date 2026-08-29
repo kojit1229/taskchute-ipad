@@ -12,6 +12,8 @@ let todayFocusVisibility, renderTodayFocusBar;
 let journalForDate;
 let gateRules, earlyBirdLogForDate, earlyRiseTarget, linkedGymBlock, gateEditMode;
 let scheduledTasksForDate;
+let bodyScansForDate;
+let _bmWeeklyOpen = false;  // v297: BODY/MINDウィジェットの週推移開閉(表示専用・stateへは書かない)
 let flipListenerBound = false;
 // undefined=セッション初回(未観測)。復元描画では接地の瞬間ではないためフラッシュを出さない
 // (起動時同期404後の全体render()と競合して非決定にもなる)。null=実行中なしを観測済み。
@@ -37,7 +39,8 @@ function configureTodayTower(deps) {
     escapeHTML, todayISO, syncAlertBanner, blocksForDate, towerFlights,
     runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp, isStaleBlock,
     towerMotionSetting, renderTodayPomodoro, todayFocusVisibility, renderTodayFocusBar, journalForDate,
-    gateRules, earlyBirdLogForDate, earlyRiseTarget, linkedGymBlock, scheduledTasksForDate, gateEditMode
+    gateRules, earlyBirdLogForDate, earlyRiseTarget, linkedGymBlock, scheduledTasksForDate, gateEditMode,
+    bodyScansForDate
   } = deps);
   if (!flipListenerBound && typeof document !== "undefined") {
     document.addEventListener("animationend", (event) => {
@@ -368,6 +371,89 @@ function renderTowerGates(blocks) {
   </section>`;
 }
 
+// v297: BODY/MINDウィジェット(2軸身体スキャンの日次積み上げ+週推移。表示専用・stateへ書かない)。
+// 日付演算はtopband.jsのaddDaysLocalと同じ思想で自己完結させる(新規depsを増やさない)。
+function bmAddDays(iso, delta) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const date = new Date(y, m - 1, d + delta);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+// recovery=nullは「未記録」であり「回復0」ではないため、Σ回復にも件数にも算入しない。
+function bmSummary(scans) {
+  let fatigue = 0, recovery = 0, recoveryCount = 0;
+  scans.forEach((s) => {
+    fatigue += Number(s.fatigue) || 0;
+    if (typeof s.recovery === "number") { recovery += s.recovery; recoveryCount += 1; }
+  });
+  return { fatigue, recovery, recoveryCount, total: scans.length };
+}
+
+function bmNetLine({ fatigue, recovery, recoveryCount, total }) {
+  const net = recovery - fatigue;
+  const tilt = recoveryCount === 0 ? "回復の記録はありません"
+    : net > 0 ? "回復が疲労を上回っています" : net < 0 ? "疲労が回復を上回っています" : "疲労と回復が拮抗しています";
+  const note = recoveryCount < total ? `(回復記録 ${recoveryCount}/${total}件)` : "";
+  return `差引（回復−疲労） <strong>${net > 0 ? "+" : ""}${net}</strong>・${tilt}${note}`;
+}
+
+function bmListHTML(scans, blocks) {
+  const byId = new Map(blocks.map((block) => [String(block.id), block]));
+  const recent = [...scans].sort((a, b) => String(b.dateTime).localeCompare(String(a.dateTime))).slice(0, 3);
+  return recent.map((s) => {
+    const title = byId.get(String(s.pomodoroBlockId))?.title || "—";
+    const recoveryText = typeof s.recovery === "number" ? String(s.recovery) : "—";
+    const fatigueText = String(Number.isFinite(s.fatigue) ? s.fatigue : 0);
+    return `<div class="bm-item">
+      <span class="bm-item-time">${escapeHTML(timeFromDateTime(s.dateTime) || "--:--")}</span>
+      <span class="bm-item-name">${escapeHTML(title)}${escapeHTML(s.part ? `（${s.part}）` : "")}</span>
+      <span class="bm-item-tag fat">疲労${escapeHTML(fatigueText)}</span>
+      <span class="bm-item-tag rec">回復${escapeHTML(recoveryText)}</span>
+    </div>`;
+  }).join("");
+}
+
+function bmWeeklyHTML(today) {
+  const days = [];
+  for (let i = 6; i >= 0; i--) days.push(bmAddDays(today, -i));
+  const sums = days.map((date) => ({ date, ...bmSummary(bodyScansForDate(date)) }));
+  const max = Math.max(1, ...sums.map((d) => Math.max(d.fatigue, d.recovery)));
+  const cols = sums.map((d) => `<div class="bm-col${d.date === today ? " is-today" : ""}" data-date="${escapeHTML(d.date)}" data-fat="${d.fatigue}" data-rec="${d.recovery}">
+      <div class="bm-col-bars"><i class="bm-sbar fat" style="height:${Math.round(d.fatigue / max * 100)}%"></i><i class="bm-sbar rec" style="height:${Math.round(d.recovery / max * 100)}%"></i></div>
+      <span>${escapeHTML(d.date.slice(5))}</span>
+    </div>`).join("");
+  return `<div class="bm-weekly"><div class="bm-weekly-title">週の推移（日別 Σ疲労 / Σ回復）</div><div class="bm-spark">${cols}</div></div>`;
+}
+
+function renderTowerBodyMind(today, blocks) {
+  const scans = bodyScansForDate(today);
+  if (!scans.length) {
+    return `<section class="tower-panel-box sec-bodymind">
+      <h2>BODY / MIND <span>今日の積み上げ</span></h2>
+      <div class="bm-empty">今日の記録はまだありません</div>
+    </section>`;
+  }
+  const summary = bmSummary(scans);
+  const max = Math.max(1, summary.fatigue, summary.recovery);
+  const open = _bmWeeklyOpen;
+  return `<section class="tower-panel-box sec-bodymind">
+    <h2><button type="button" class="bm-toggle" data-action="tower-bodymind-toggle" aria-expanded="${open ? "true" : "false"}">BODY / MIND<span>今日の積み上げ・タップで週推移</span><i class="bm-chev${open ? " open" : ""}" aria-hidden="true">▸</i></button></h2>
+    <div class="bm-bars">
+      <div class="bm-row"><span class="bm-label">🏋️ 身体の疲労</span><span class="bm-track"><i class="bm-fill fat" style="width:${Math.round(summary.fatigue / max * 100)}%"></i></span><span class="bm-val">Σ${summary.fatigue}</span></div>
+      <div class="bm-row"><span class="bm-label">🧠 ココロの回復</span><span class="bm-track"><i class="bm-fill rec" style="width:${Math.round(summary.recovery / max * 100)}%"></i></span><span class="bm-val">Σ${summary.recovery}</span></div>
+    </div>
+    <div class="bm-net">${bmNetLine(summary)}</div>
+    <div class="bm-list">${bmListHTML(scans, blocks)}</div>
+    ${open ? bmWeeklyHTML(today) : ""}
+  </section>`;
+}
+
+// app.jsのregisterActions("tower-bodymind-toggle")から呼ぶ(today-tower.jsはaction登録自体を持たない
+// 既存方針=tower-gate-edit-toggle等と同じ「トグルはexport、登録はapp.js側」の分業を踏襲)。
+function toggleTowerBodyMindWeekly() {
+  _bmWeeklyOpen = !_bmWeeklyOpen;
+}
+
 function renderTodayTower() {
   const now = new Date();
   const today = todayISO();
@@ -388,6 +474,7 @@ function renderTodayTower() {
       ${renderTowerRunway(now, blocks, flights)}
       ${renderTowerBoard(flights)}
       ${renderFlightLog(today, blocks)}
+      ${renderTowerBodyMind(today, blocks)}
     </div>
     <div class="tower-col-center">${focusVisibility.gate ? renderTowerGates(blocks) : ""}</div>
     <div class="tower-col-right">${focusVisibility.journal ? renderTowerJournal(today) : ""}</div>
@@ -509,4 +596,7 @@ function updateTodayTowerTick() {
   });
 }
 
-export { configureTodayTower, renderTodayTower, runwayArrivalSelection, setTowerArrivalSelection, updateTodayTowerTick };
+export {
+  configureTodayTower, renderTodayTower, runwayArrivalSelection, setTowerArrivalSelection, updateTodayTowerTick,
+  toggleTowerBodyMindWeekly
+};

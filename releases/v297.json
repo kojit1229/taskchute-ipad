@@ -1,0 +1,64 @@
+{
+  "version": 297,
+  "date": "2026-08-29",
+  "title": "TOWER統合画面へBODY/MINDウィジェット(2軸身体スキャンの日次積み上げ+週推移)を追加",
+  "summary": "K要望2026-08-29「この数値の積み上げ状況を統合画面に表示したい」に基づき、v295で導入した2軸身体スキャン(疲労0-5/回復0-5)の記録を、TOWER(今日タブ)へ表示専用ウィジェットとして積み上げ表示する。当日のΣ疲労(暖色バー)・Σ回復(寒色バー)・差引ネット+傾きひとこと(裁かない事実表現)・直近3件の内訳ミニリストを常時表示し、見出しタップで直近7日間の日別Σ疲労/Σ回復スパークライン(週推移)を展開する。recovery=nullの過去形式レコード(v295以前)は回復Σへ算入せず、算入件数を注記する。当日スキャン0件の日はコンパクトな空状態表示に切り替わる。stateへの書き込みは一切なく、週推移の開閉もモジュール内のUI状態のみで完結する(モック workbench/out/2026-08-29-bodyscan-2axis/bodyscan-2axis-mock.html 画面2・画面3 承認済み)。",
+  "changedFiles": [
+    "CHANGES_v297.md",
+    "releases/v297.json",
+    "app.js",
+    "sw.js",
+    "styles.css",
+    "src/features/today-tower.js",
+    "src/features/today.js",
+    "tests/v297.test.js",
+    "docs/code-index.generated.md",
+    "docs/code-index.generated.json",
+    "docs/test-impact-map.generated.md",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "v295で保存基盤(state.bodyScans[].fatigue/recovery)が既に稼働しているため、本弾はTOWER側の表示専用ウィジェットのみを追加する(bodyScansスキーマ・保存導線・normalizeState・sync/mergeByIdには一切触れない)。",
+    "疲労=暖色/回復=寒色というモックの配色を、TOWER意匠の既存CSS変数(--tower-red/--tower-cyan)へそのままマッピングする(独自色を新設しない・警告や達成度の色分けではなく事実表現としての色分け)。",
+    "既存TOWER節(NOW LANDING/ARRIVALS/FLIGHT LOG/GATE ROUTINE/JOURNAL)の描画・action配線には一切触れず、新設セクションを挿入するだけに留める(orderスロット5=FLIGHT LOGの後・JOURNALの前の空き番を使用)。"
+  ],
+  "changes": [
+    "src/features/today-tower.js: bmSummary()でΣ疲労/Σ回復/回復記録件数/総件数を集計(recovery=nullは未記録として回復Σにも件数にも算入しない=0と区別)。bmNetLine()で差引ネット+傾きひとこと(「回復が疲労を上回っています」等の裁かない事実表現。回復記録が1件も無い日は「回復の記録はありません」、一部の日のみ「(回復記録n/m件)」を注記)。bmListHTML()で直近3件の内訳(時刻・Block名・部位・疲労/回復値、回復未記録は「—」)。bmWeeklyHTML()で直近7日(今日含む)の日別Σ疲労/Σ回復スパークライン(検証用にdata-date/data-fat/data-rec属性を各列へ付与)。日付演算はtopband.jsのaddDaysLocalと同じ思想で自己完結させた(新規depsを増やさずbmAddDays()をfeature内に閉じた)。renderTowerBodyMind()が当日スキャン0件ならコンパクトな空状態(バー・内訳リストなし)を返し、1件以上ならウィジェット全体(見出しの週推移トグル込み)を返す。renderTodayTower()のtower-col-left内、renderFlightLog()の直後へ挿入。週推移の開閉はモジュール内の_bmWeeklyOpen(UI状態のみ、stateへは一切書かない)で管理し、既存のtower-gate-edit-toggle等と同じ「トグル関数をexport・action登録はapp.js側」という分業を踏襲してtoggleTowerBodyMindWeekly()をexportした(today-tower.js自体は引き続きaction登録を持たない既存方針を維持)。configureTodayTower()のdepsへbodyScansForDateを追加。",
+    "src/features/today.js: configureTodayTower()へ渡すdepsにbodyScansForDate(date)を追加(state.bodyScansを日付でフィルタするだけの薄い委譲。journalForDate等の既存depsと同じパターン)。",
+    "app.js: today-tower.jsからtoggleTowerBodyMindWeeklyをimportし、既存のregisterActionsブロックへ`tower-bodymind-toggle`(トグル呼び出し+render())を1件追加(tower-gate-edit-toggleの直後、同じ形式)。",
+    "styles.css: .sec-bodymind { order: 5; }をorderスロット定義へ追加(FLIGHT LOG/today-pomodoroのorder:4とJOURNALのorder:6の間の空き番)。.tower-panel-box(既存カード意匠)を土台に、.bm-toggle(見出し全体をタップ領域化するbutton。フォーカスリング付き)/.bm-bars・.bm-row・.bm-track・.bm-fill(暖色=var(--tower-red)/寒色=var(--tower-cyan)の2段バー)/.bm-net/.bm-list・.bm-item(内訳ミニリスト)/.bm-weekly・.bm-spark・.bm-col(週推移スパークライン、当日列は--tower-amberでハイライト)/.bm-empty(空状態)を新設した。既存クラスの再定義は無い。",
+    "sw.js: CACHE_NAMEをtaskchute-journal-pwa-v297へ更新(APP_SHELL変更なし、新規src/*.jsファイルは追加していないため)。",
+    "tests/v297.test.js新規: §8-1(a)〜(d)網羅。(a)当日スキャン4件でΣ疲労/Σ回復/差引(拮抗ケース)/内訳3件(直近優先で最古1件は含まれない・部位付き表示)の値が正しいこと、見出しタップで週推移が展開しaria-expanded/7日分のdata-date/data-fat/data-rec(recovery=null仕込み日はΣ回復に未算入)が正しいこと。(b)当日スキャン0件は空状態(トグル自体が存在しない)、recovery無し過去形式レコード混在時にΣ回復へ算入されず件数注記が出て内訳の回復タグが「—」になること、週推移トグルの開閉前後でlocalStorage上のstate文字列が1バイトも変化しないこと(表示専用の直接検証)。(d)既存TOWER節(NOW LANDING/ARRIVALS/FLIGHT LOG/GATE ROUTINE)がBODY/MIND追加後も無改修で描画されCSS orderで正しい位置に入ること、390px幅で横スクロールが発生しないこと。固定waitは使用していない。全27チェック。"
+  ],
+  "skipped": [
+    "bodyScansスキーマ・保存導線・normalizeState・sync/mergeByIdへの変更(v295で完結済み・本弾は表示専用のため対象外)。",
+    "書く瞑想との候補チップ連携・charge/dischargeへの自動ブリッジ(v295発注時点の非目標のまま次リリース以降)。",
+    "週推移の展開状態を永続化すること(あえてUI状態のみに留めた。永続化が必要であれば別途K確認)。"
+  ],
+  "uncertainties": [
+    "recovery記録が一部日のみ欠けている(過去形式レコードと新形式レコードが同日に混在する)ケースの件数注記の文言・粒度は今回新規に設計したもので、K確認前の暫定表現。",
+    "週推移スパークラインのバー高さは7日間の最大値を基準にした相対比率(モックと同じ方式)であり、極端に低い日の視認性はK確認後に調整の余地がある。"
+  ],
+  "reviewFocus": [
+    "recovery=nullが「回復0」と混同されず、Σ回復にも件数にも算入されないこと(v297.test.js [1]の対象外レコード確認・[4]・[2]の3日前列で直接検証)。",
+    "表示専用の契約(週推移トグルを含め、いかなる操作でもlocalStorageのstate文字列が変化しない)が実際に成立していること(v297.test.js [5])。",
+    "既存TOWER節(FLIGHT LOG等)の描画・action配線に副作用が及んでいないこと(v297.test.js [6]・today-core.test.js全量no-pageerror)。",
+    "colorの用途(暖色/寒色は事実表現であり警告・達成度の色分けではない)がCSS上も閾値クラス(is-low等)を伴わない単純な塗り分けに留まっていること。"
+  ],
+  "verification": [
+    "node --check app.js / node --check sw.js / node --check src/features/today-tower.js / node --check src/features/today.js / node --check tests/v297.test.js",
+    "node tests/v297.test.js で新規§8-1網羅(全27チェック)がALL PASS(固定wait0件)。",
+    "node tests/today-core.test.js を実行し、TOWER全節(NOW LANDING/ARRIVALS/FLIGHT LOG/GATE/JOURNAL/ticker/テーマ巡回)が無改修でALL PASS。",
+    "node scripts/code-index.js --write / node scripts/test-manifest.js --write を実行済み。",
+    "npm run test:core(直近5件v297/v296/v295/v294/v293+固定横断5件v72/v59/v67/v50/v70。v293〜v295はmanifest上直近5件から外れたため実行対象外)で全10スイートALL PASSを確認した。"
+  ],
+  "notes": [
+    "実行コード差分(tests/**・docs/**・releases/**・*.md除く、add+del合計)はapp.js 7行・sw.js 2行・src/features/today-tower.js 94行・src/features/today.js 1行・styles.css 35行の合計139行で、原則200行の目標内に収まった(git diff --stat実測)。",
+    "コミット・push・release-gate --finalは監督者がK承認後に実施する(本記録は監督者からの委譲に基づく実装作業)。",
+    "artifacts/v275配下のPNG4件は本セッション開始前から作業ディレクトリ上で変更されていたものであり、本弾の変更対象ではない(バイナリのためcommit-size-gateの行数判定には影響しない)。"
+  ],
+  "knownLimitations": [
+    "コミット・push・release-gate --final・CI全量・iOS Safari実機PWA確認は監督者がK承認後に実施する。",
+    "npm test(全量、tests/*.test.js 173スイート)はローカルでは未実行(test:core+today-core.test.jsの重点実行に留めた)。push時のCI(GitHub Actions 4シャード)が唯一の完全な安全網である旨、CLAUDE.mdの既存方針どおり。"
+  ]
+}
