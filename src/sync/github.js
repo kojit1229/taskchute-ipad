@@ -721,6 +721,9 @@ function computeSyncMerge(remoteNorm, tieWinner) {
     const weeklyWishes = mergeWeeklyWishMaps(state.weeklyWishes, remoteNorm.weeklyWishes);
     // v129: ポモドーロ身体スキャンもidキー和集合マージ(blocks/zeroThinking entriesと同じ扱い)
     const bodyScans = mergeById(state.bodyScans, remoteNorm.bodyScans);
+    // v294: 書く瞑想(充放電ログ改善R1a)もbodyScansと同じmergeById(idキー和集合、updatedAtが
+    // 新しい方が勝つ)。1日1レコード(id=`wm_${date}`)のため日単位の編集競合はこれで解決する。
+    const writeMeditations = mergeById(state.writeMeditations, remoteNorm.writeMeditations);
     // v135: tasks/projectsもidキー和集合マージ(updatedAtの新しい方)。
     // v136: シングルトン(wish/other Project、other Task)の重複はここでガードする
     // (reconcileSingletonDuplicates)。other Task統合に伴うBlock.taskid付け替えもあるため
@@ -783,6 +786,11 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       jsonChanged(weeklyWishes, state.weeklyWishes) ||
       !sameArrayByReference(blocks, state.blocks) ||
       !sameArrayByReference(bodyScans, state.bodyScans) ||
+      // v294: bodyScansと違い || [] で両側防御する(tracks等のv243と同じ理由。既存の
+      // Node特性テスト群がbodyScansのように全fixtureへ本フィールドを追記済みではないため、
+      // normalizeState未通過のstateでも例外化しないようにする。mergeByIdのロジック自体は
+      // bodyScansと完全に同一で、この防御はfail-close側の安全弁にすぎない)。
+      !sameArrayByReference(writeMeditations, state.writeMeditations || []) ||
       !sameArrayByReference(tasks, state.tasks) ||
       !sameArrayByReference(projects, state.projects) ||
       !sameArrayByReference(storeVisits, state.storeVisits) ||
@@ -808,6 +816,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       jsonChanged(weeklyWishes, remoteNorm.weeklyWishes) ||
       !sameArrayByReference(blocks, remoteNorm.blocks || []) ||
       !sameArrayByReference(bodyScans, remoteNorm.bodyScans || []) ||
+      !sameArrayByReference(writeMeditations, remoteNorm.writeMeditations || []) ||
       !sameArrayByReference(tasks, remoteNorm.tasks || []) ||
       !sameArrayByReference(projects, remoteNorm.projects || []) ||
       !sameArrayByReference(storeVisits, remoteNorm.storeVisits || []) ||
@@ -823,7 +832,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(aiStepPendingRequests, remoteNorm.aiStepPendingRequests || []) ||
       (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, remoteNorm.zeroThinking) : false);
     return {
-      values: { journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans, tasks, projects, storeVisits, tracks, trackMeasurements, weeklyCommitments, swipeTriageLog, gardenLog, coachMeals, aiStepProcessedIds, aiStepDismissedIds, aiReportReadIds, aiStepPendingRequests },
+      values: { journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans, writeMeditations, tasks, projects, storeVisits, tracks, trackMeasurements, weeklyCommitments, swipeTriageLog, gardenLog, coachMeals, aiStepProcessedIds, aiStepDismissedIds, aiReportReadIds, aiStepPendingRequests },
       changedVsLocal, changedVsRemote
     };
   } catch (error) {
@@ -846,6 +855,7 @@ function applySyncMergeToLocal(merged) {
   state.dailyDeclarations = v.dailyDeclarations;  // v117(A)
   state.weeklyWishes = v.weeklyWishes;  // v121
   state.bodyScans = v.bodyScans;  // v129
+  state.writeMeditations = v.writeMeditations;  // v294
   state.tasks = v.tasks;  // v135
   state.projects = v.projects;  // v135
   state.storeVisits = v.storeVisits;  // v141
@@ -884,6 +894,7 @@ function applySyncMergeToRemote(merged, remoteNorm) {
   remoteNorm.dailyDeclarations = v.dailyDeclarations;  // v117(A)
   remoteNorm.weeklyWishes = v.weeklyWishes;  // v121
   remoteNorm.bodyScans = v.bodyScans;  // v129
+  remoteNorm.writeMeditations = v.writeMeditations;  // v294
   remoteNorm.tasks = v.tasks;  // v135
   remoteNorm.projects = v.projects;  // v135
   remoteNorm.storeVisits = v.storeVisits;  // v141

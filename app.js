@@ -54,7 +54,11 @@ import {
   setMorningEnergy, toggleConditionMeds, setConditionCapacity, setEveningMood,
   addGymEntry, deleteGymEntry,
   openStoreVisitEditor, openStoreVisitsYearModal, deleteStoreVisitWithConfirm,
-  saveStoreVisitFromModal, deleteStoreVisit
+  saveStoreVisitFromModal, deleteStoreVisit,
+  // v294: 「書く瞑想」パネル(充放電ログ改善R1a)。setWriteMeditationTalkはinput dispatcher
+  // (data-km-talk分岐、data-journal-dateと同じ全体再描画なしパターン)、
+  // addWriteMeditationChipFromInputはkeydown dispatcher(Enterキー追加)から呼ぶ。
+  setWriteMeditationTalk, addWriteMeditationChipFromInput
 } from "./src/features/journal.js";
 import {
   configureRecurrence,
@@ -304,7 +308,7 @@ configureFund({ escapeHTML, renderHeader, personalDataReady, fetchGitHubRawText 
 // 「呼ぶだけで実体は移さない」をdeps注入で満たす)。
 configureJournal({
   escapeHTML, renderHeader, renderDateBar, renderMarkdown, renderModal, closeModal,
-  addDays, todayISO, weekRange, weekDays, showToast, nowDateTime, saveAndRender,
+  addDays, todayISO, weekRange, weekDays, showToast, nowDateTime, saveAndRender, saveState,
   personalDataReady, latestSleepLogWithin, shortSleepDate, upsertMorningLine,
   renderExperimentSection, JOURNAL_REQUEST_SECTION
 });
@@ -1407,6 +1411,11 @@ document.addEventListener("input", (event) => {
 
 document.addEventListener("change", (event) => {
   const target = event.target;
+  // v294: 「書く瞑想」の深掘りセルフトーク。changeイベント=blur時かつ値が変わった場合のみ発火
+  // するため、発注文の「textareaはblur時保存」をそのまま満たす(全体再描画はしない)。
+  if (target.matches("[data-km-talk]")) {
+    setWriteMeditationTalk(target.dataset.kmTalk, target.dataset.date, target.value);
+  }
   if (target.matches("[data-tower-arrival-select]")) {
     setTowerArrivalSelection(target.value);
     render();
@@ -2246,6 +2255,27 @@ function normalizeState(value) {
     pomodoroBlockId: s.pomodoroBlockId || "",
     ...s
   }));
+  // v294: 「書く瞑想」(充放電ログ改善R1a)。1日1レコード(id=`wm_${date}`)のmergeById同期
+  // コレクション(bodyScansと同じパターン。日単位の編集競合はupdatedAtの新しい方が勝つ。
+  // computeSyncMerge/applySyncMergeToLocal/applySyncMergeToRemote参照)。state.journals[date]
+  // (自由記述文字列)へは一切書き込まない独立領域(journal-anatomy.md §3のFREE NOTE二重上書き
+  // リスクを構造的に回避する設計。improvement-plan.md第1弾R1a)。
+  if (!Array.isArray(value.writeMeditations)) value.writeMeditations = [];
+  value.writeMeditations = value.writeMeditations.map((entry) => {
+    const w = entry || {};
+    const normChips = (list) => (Array.isArray(list) ? list : [])
+      .filter((c) => c && typeof c === "object")
+      .map((c) => ({ id: c.id || crypto.randomUUID(), text: String(c.text || "") }));
+    return {
+      dischargeTalk: "", chargeTalk: "", deleted: false,
+      ...w,
+      id: w.id || `wm_${w.date || ""}`,
+      date: w.date || "",
+      discharge: normChips(w.discharge),
+      charge: normChips(w.charge),
+      updatedAt: w.updatedAt || ""
+    };
+  });
   // v141: 「今日行ったお店」ログ(ジャーナルタブから店名/URL/感想を記録、年間一覧で振り返る)。
   // 1日に複数件登録・編集・削除(tombstone)できるため、tasks/projectsと同じ
   // mergeByIdPreferNewer(updatedAt優先マージ)で多端末同期する(computeSyncMerge参照)。
@@ -9942,6 +9972,30 @@ function generateReport(dateArg, { quiet = false } = {}) {
     lines.push("");
   }
 
+  // v294: 書く瞑想(充放電ログ改善R1a)。独立state(state.writeMeditations)を出力するだけで、
+  // state.journals[date]には一切書き込まない(journal-anatomy.md §3のFREE NOTE二重上書き
+  // リスクを回避する設計)。当日レコードが無い/全空の日は節ごと省略(bodyScans節と同じ作法)。
+  const writeMeditationEntry = (state.writeMeditations || []).find((w) => w.date === date && !w.deleted);
+  const wmDischarge = writeMeditationEntry?.discharge || [];
+  const wmCharge = writeMeditationEntry?.charge || [];
+  const wmDischargeTalk = (writeMeditationEntry?.dischargeTalk || "").trim();
+  const wmChargeTalk = (writeMeditationEntry?.chargeTalk || "").trim();
+  if (wmDischarge.length > 0 || wmCharge.length > 0 || wmDischargeTalk || wmChargeTalk) {
+    lines.push("## 書く瞑想");
+    if (wmDischarge.length > 0) {
+      lines.push("### 放電");
+      wmDischarge.forEach((c) => lines.push(`- ${c.text}`));
+      lines.push("");
+    }
+    if (wmCharge.length > 0) {
+      lines.push("### 充電");
+      wmCharge.forEach((c) => lines.push(`- ${c.text}`));
+      lines.push("");
+    }
+    if (wmDischargeTalk) lines.push("### 深掘り(放電)", wmDischargeTalk, "");
+    if (wmChargeTalk) lines.push("### 深掘り(充電)", wmChargeTalk, "");
+  }
+
   // ジャーナル
   lines.push("## 8. ジャーナル");
   lines.push(state.journals[date] || "(ジャーナル記載なし)");
@@ -13685,6 +13739,13 @@ document.addEventListener("keydown", (event) => {
     if (_imeComposing || event.isComposing) return;
     event.preventDefault();
     addBlock();
+    return;
+  }
+  // v294: 「書く瞑想」チップ入力欄でのEnter追加(km-chip-addボタンと同じ入口を共有する)。
+  if (event.key === "Enter" && (event.target?.id === "km-discharge-input" || event.target?.id === "km-charge-input")) {
+    if (_imeComposing || event.isComposing) return;
+    event.preventDefault();
+    addWriteMeditationChipFromInput(event.target.id === "km-discharge-input" ? "discharge" : "charge", state.selectedDate);
     return;
   }
   if (event.key === "Escape" && state.modal) {

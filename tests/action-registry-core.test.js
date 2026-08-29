@@ -36,16 +36,16 @@
 //       registerModalHandler/dispatchModalSave/dispatchModalDelete、重複登録ガード、
 //       未登録時のfalseフォールバック)。
 //   [2] app.jsのclick dispatcher("event:click"、data-action分岐)から`action === "..."`を
-//       静的抽出する(削除済み機能のactionを除く218件(v290でATIS孤児action4件=ai-work-approve/ai-work-question/ai-task-adopt/ai-task-dismissを削除、
+//       静的抽出する(削除済み機能のactionを除く221件(v290でATIS孤児action4件=ai-work-approve/ai-work-question/ai-task-adopt/ai-task-dismissを削除、
 //       v291でHome撤去(v230)後片付け孤児3件=open-questions/open-future-letter/open-vision-board
-//       +重複登録1件=delete-blockを削除)のゴールデンリストを維持したまま、
-//       段階5-2/5-3で移行済みの分だけif連鎖から消えている前提)。
+//       +重複登録1件=delete-blockを削除、v294で「書く瞑想」パネル3件=km-chip-add/km-chip-remove/
+//       km-saveを追加)のゴールデンリストを維持したまま、段階5-2/5-3で移行済みの分だけif連鎖から
+//       消えている前提)。
 //   [3] 「if連鎖側の残存分岐リスト」(§2で静的抽出)と「レジストリ側の登録済みリスト」
 //       (4featureのconfigureXxxを空depsで呼ぶ動的実測 + app.js自身のregisterActions呼び出しの
-//       静的抽出)の**和集合が218件(v290でATIS孤児action4件=ai-work-approve/ai-work-question/ai-task-adopt/ai-task-dismissを削除、
-//       v291でHome撤去(v230)後片付け孤児3件=open-questions/open-future-letter/open-vision-board
-//       +重複登録1件=delete-blockを削除)のゴールデンリストと完全一致・重複ゼロ**であることを検証する
-//       (総数と名前一覧の保存則。段階5以降でさらに分岐を移行する際もこの形式を維持する)。
+//       静的抽出)の**和集合が221件(上記[2]と同じ増減履歴)のゴールデンリストと完全一致・
+//       重複ゼロ**であることを検証する(総数と名前一覧の保存則。段階5以降でさらに分岐を
+//       移行する際もこの形式を維持する)。
 const fs = require("fs");
 const path = require("path");
 const { pathToFileURL } = require("url");
@@ -75,8 +75,10 @@ function check(name, cond, extra = "") {
   else { failures++; console.log(`  ❌ ${name} ${extra}`); }
 }
 
-// §6-1: click dispatcherから確定させたゴールデンリスト(削除済み機能のactionを除く218件)。
+// §6-1: click dispatcherから確定させたゴールデンリスト(削除済み機能のactionを除く221件)。
 // 増減・リネームがあれば、それが意図した変更(action追加/削除/移行)かどうかを必ず確認すること。
+// v294: 「書く瞑想」パネル(充放電ログ改善R1a)のkm-chip-add/km-chip-remove/km-saveを
+// 意図的に追加(218→221)。
 // v235: set-sleepは主観睡眠の入力経路廃止に伴う意図的削除。
 // v270: departures-open-tomorrowはDEPARTURES削除に伴う意図的削除。
 // v288: wbs-search-inputはinputイベント用のno-op登録(app.js:571)だが、data-actionの保存則を
@@ -163,7 +165,8 @@ const GOLDEN_CLICK_ACTIONS = [
   "open-search", "search-jump",
   "carry-over", "migration-ritual-choice",
   "energy-open-category",
-  "timeline-clear-cat"
+  "timeline-clear-cat",
+  "km-chip-add", "km-chip-remove", "km-save"  // v294: 「書く瞑想」パネルの意図的追加
 ];
 
 // v173: 段階5-2で抽出済みfeatureの分岐をregisterActions経由のレジストリへ移行した
@@ -180,6 +183,8 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
   "set-morning", "toggle-meds", "set-capacity", "set-evening-mood",
   "add-gym-entry", "delete-gym-entry",
   "store-visit-add", "store-visit-edit", "store-visit-delete", "store-visit-year",
+  // v294: 「書く瞑想」パネル(充放電ログ改善R1a)のチップ追加/削除/保存。
+  "km-chip-add", "km-chip-remove", "km-save",
   // v181: src/features/timeline.js(configureTimeline)。ハンドラ実体(setTimelineMode)が
   // このファイルに既に存在するため、timeline系の中で唯一この動的実測方式で検証する。
   "timeline-mode",

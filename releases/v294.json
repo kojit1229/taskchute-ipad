@@ -1,0 +1,66 @@
+{
+  "version": 294,
+  "date": "2026-08-29",
+  "title": "「書く瞑想」パネル(充放電ログ改善R1a)",
+  "summary": "K承認済みの統合改善計画(改訂版kaku-meisou-mock-v2.html準拠)のR1aスコープ。ジャーナルタブへNIGHT BRIEFとFREE LOGの間に新details「書く瞑想」を追加し、放電→充電の固定順チップ入力+任意の深掘りセルフトーク(放電/充電それぞれ1本)を独立state(state.writeMeditations、bodyScansと同型のmergeById同期コレクション、1日1レコード)へ保存する。state.journals[date]には一切書き込まず、Homeタワー経由の全文上書きリスク(journal-anatomy.md §3)を構造的に回避する設計。日報「## 8. ジャーナル」節の直前に新節「## 書く瞑想」を出力し、loop側daily-report-fallback.py・FORMAT_CONTRACT.mdへ同じ契約を追随させた。",
+  "changedFiles": [
+    "CHANGES_v294.md",
+    "releases/v294.json",
+    "app.js",
+    "sw.js",
+    "src/features/journal.js",
+    "src/sync/github.js",
+    "tests/v294.test.js",
+    "tests/action-registry-core.test.js",
+    "docs/code-index.generated.md",
+    "docs/code-index.generated.json",
+    "docs/test-impact-map.generated.md",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "書籍『書く瞑想』の日次内省フロー(放電→充電の箇条書き+セルフトーク)を、既存のBlock単位0-5数値会計(charge/discharge)とは別の独立state領域として、ジャーナルタブの当日編集内へ統合する。",
+    "候補チップ連携(完了Block/身体スキャン/夜のひとこと)・dailyCloseゲート・JOURNAL_PROMPTS文言整理はR1bスコープとし、今回は着手しない。",
+    "同期組み込みはbodyScans(v129)のmergeByIdパターンを忠実に踏襲し、独自のmerge戦略を発明しない。"
+  ],
+  "changes": [
+    "app.js normalizeState(): state.writeMeditations[]を新設(1日1レコード、id=`wm_${date}`。discharge/chargeチップ配列・dischargeTalk/chargeTalk・updatedAt・deletedの後方互換補完)。",
+    "src/sync/github.js: computeSyncMerge/applySyncMergeToLocal/applySyncMergeToRemoteへwriteMeditationsをbodyScansと同じmergeById(idキー和集合、updatedAt新しい方が勝つ)で組み込んだ。localの比較のみbodyScansと異なり`|| []`で防御し、normalizeState未通過のstate(既存のNode特性テスト群のfixture)でも例外化しないようにした(mergeByIdのロジック自体はbodyScansと完全に同一)。",
+    "src/features/journal.js: NIGHT BRIEFの`</details>`直後・FREE LOG前に新details「書く瞑想」を追加。放電/充電チップ入力(text+追加ボタン+削除+5件目安カウンタ)・深掘り折りたたみtextarea(放電/充電各1、blur時保存)・保存ボタン+節見出し一行要約を実装した。チップ追加/削除/保存はいずれもsaveState()のみでrenderJournal()全体は再描画せず、該当DOM(#km-discharge-list等)だけを差分パッチする(WBS検索v288と同じ禁則、フォーカス/IME保護)。開閉既定は夜(18時以降)=開・それ以外=閉とし、_journalSegmentOverride基盤へ相乗りした。",
+    "app.js: click dispatcherへkm-chip-add/km-chip-remove/km-saveの3action(journal.js側registerActions経由)、changeイベントへ[data-km-talk]分岐(blur時保存)、keydownイベントへ#km-discharge-input/#km-charge-inputでのEnter追加を配線した。",
+    "app.js generateReport(): 新節「## 書く瞑想」を「## 8. ジャーナル」の直前(「## 未完了理由」の後)に追加。`### 放電`/`### 充電`(チップ箇条書き)+`### 深掘り(放電|充電)`(セルフトーク本文、記入があれば)。当日レコードが無い/全空の日は節ごと省略。",
+    "sw.js: CACHE_NAMEをtaskchute-journal-pwa-v294へ更新(APP_SHELL変更なし、新規src/*.jsファイルは追加していないため)。",
+    "tests/action-registry-core.test.js: 新規registerActions 3件(km-chip-add/km-chip-remove/km-save)をGOLDEN_CLICK_ACTIONS/MIGRATED_TO_REGISTRY_ACTIONSのgolden listへ追加(218→221件、既存の増減履歴と同じ形式で追記)。",
+    "loop/scripts/daily-report-fallback.py・loop/FORMAT_CONTRACT.mdへ同じ節・同じ書式を追随実装(taskchute-ipad配下ではなくloop側リポジトリ、監督者が別途反映)。"
+  ],
+  "skipped": [
+    "候補チップ(完了Block/身体スキャン/夜のひとこと)連携(R1b)。",
+    "「日報を生成」時のdailyCloseゲート(未記入なら先にやりますかの軽い確認)(R1b)。",
+    "FREE LOGのJOURNAL_PROMPTS文言整理(感謝/ハイライト/気付きを書く瞑想への誘導文言へ変更)(R1b)。",
+    "数値会計(charge/discharge)への後付け導線(第2弾)、月次インパクト図(第3弾)。"
+  ],
+  "uncertainties": [
+    "実機iOS Safari PWAでの深掘りtextarea(blur保存)・チップ入力のIME確認は監督者判断でK承認後に実施する。",
+    "「保存済み」バッジ・一行要約の表現(発注文モックの独自コピーとの完全一致ではなく、実データ駆動の簡略表現にした)はK確認事項として残る可能性がある。"
+  ],
+  "reviewFocus": [
+    "state.journals[date]へ書く瞑想パネルの操作が一切波及しないこと(FREE NOTE/Homeタワー二重上書きリスクの回避が実際に効いているか)。",
+    "チップ追加/削除がsaveState()のみでrenderJournal()全体を再呼びしていないこと(差分パッチの範囲・フォーカス/IME保護)。",
+    "computeSyncMerge/applySyncMergeToLocal/applySyncMergeToRemoteのwriteMeditations組み込みがbodyScansパターンと同型で、既存の同期系テスト(store-core/track-sync-characterization等)を無改修で通過すること。",
+    "generateReport()の新節が「## 8. ジャーナル」直前・「## 未完了理由」直後に正しく挿入され、既存節の出力順・内容に影響していないこと。"
+  ],
+  "verification": [
+    "node --check app.js / node --check src/features/journal.js / node --check src/sync/github.js / node --check sw.js / node --check tests/v294.test.js / node --check tests/action-registry-core.test.js で構文確認。",
+    "node tests/v294.test.js で新規§8-1網羅(sync-1〜3のNode ESM直import + browser E2E 10ケース)がALL PASS。",
+    "node tests/journal-core.test.js / node tests/store-core.test.js / node tests/track-sync-characterization.test.js / node tests/v197.test.js / node tests/v282.test.js / node tests/v283.test.js / node tests/v284.test.js / node tests/action-registry-core.test.js / node tests/v129.test.js / node tests/v132.test.js を実行し、いずれも無改修のままALL PASS(action-registry-coreのみgolden list追記後にPASS)であることを確認した。",
+    "node scripts/code-index.js --write / node scripts/test-manifest.js --write を実行し、--checkで再生成不要を確認した。"
+  ],
+  "notes": [
+    "実行コード差分(tests/**・docs/**・releases/**・*.md除く、add+del合計)はapp.js 65行・src/features/journal.js 162行・src/sync/github.js 13行・sw.js 3行の合計243行で、原則200行の目標を上回る。state正規化・UI(パネル+チップCRUD+差分パッチ)・sync組み込み(computeSyncMerge/applySyncMergeToLocal/applySyncMergeToRemote 3箇所)・日報出力が単一機能の入出力として密結合しており(state形状を変えるとUI・sync・日報すべてが同時に追随を要する)、機械的な途中状態への分割は避けた。監督者判断でSize-Exempt適用または2コミット分割(state/sync/report基盤 約90行 + UIパネル+配線 約155行)のいずれかを選択されたい。",
+    "コミット・push・release-gate --finalは監督者がK承認後に実施する。"
+  ],
+  "knownLimitations": [
+    "コミット・push・release-gate --final・CI全量・iOS Safari実機PWA確認は監督者がK承認後に実施する。",
+    "loop/scripts/daily-report-fallback.py・loop/FORMAT_CONTRACT.mdの追随は本リリース記録の対象外(taskchute-ipadリポジトリの外)。別途反映状況を確認すること。",
+    "作業開始前から変更済みのartifacts/v275 PNG 4件は本リリース対象外として保持した。"
+  ]
+}

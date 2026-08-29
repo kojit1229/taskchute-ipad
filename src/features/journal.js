@@ -58,14 +58,14 @@ import { registerActions } from "../ui/actions.js";
 
 // ---- 依存注入(configureJournal) ----
 let escapeHTML, renderHeader, renderDateBar, renderMarkdown, renderModal, closeModal;
-let addDays, todayISO, weekRange, weekDays, showToast, nowDateTime, saveAndRender;
+let addDays, todayISO, weekRange, weekDays, showToast, nowDateTime, saveAndRender, saveState;
 let personalDataReady, latestSleepLogWithin, shortSleepDate, upsertMorningLine;
 let renderExperimentSection, JOURNAL_REQUEST_SECTION;
 
 function configureJournal(deps) {
   ({
     escapeHTML, renderHeader, renderDateBar, renderMarkdown, renderModal, closeModal,
-    addDays, todayISO, weekRange, weekDays, showToast, nowDateTime, saveAndRender,
+    addDays, todayISO, weekRange, weekDays, showToast, nowDateTime, saveAndRender, saveState,
     personalDataReady, latestSleepLogWithin, shortSleepDate, upsertMorningLine,
     renderExperimentSection, JOURNAL_REQUEST_SECTION
   } = deps);
@@ -84,7 +84,12 @@ function configureJournal(deps) {
     "store-visit-add": (ctx) => openStoreVisitEditor("", ctx.target.dataset.date || state.selectedDate),
     "store-visit-edit": (ctx) => openStoreVisitEditor(ctx.id),
     "store-visit-delete": (ctx) => deleteStoreVisitWithConfirm(ctx.id),
-    "store-visit-year": () => openStoreVisitsYearModal()
+    "store-visit-year": () => openStoreVisitsYearModal(),
+    // v294: 「書く瞑想」パネル(充放電ログ改善R1a)。チップ追加/削除は差分パッチのみで、
+    // renderJournal()全体は再描画しない(WBS検索v288と同じ禁則。フォーカス/IME保護)。
+    "km-chip-add": (ctx) => addWriteMeditationChipFromInput(ctx.target.dataset.kind, ctx.target.dataset.date),
+    "km-chip-remove": (ctx) => removeWriteMeditationChip(ctx.target.dataset.kind, ctx.target.dataset.date, ctx.id),
+    "km-save": (ctx) => saveWriteMeditationEntry(ctx.target.dataset.date)
   });
 }
 
@@ -376,6 +381,144 @@ function buildStoreVisitsYearModal(year) {
 }
 // ========================================================================
 
+// v294: 「書く瞑想」パネル =========================================================
+// 充放電ログ改善計画R1a(K承認済み)。放電→充電の固定順チップ入力+任意の深掘りセルフトーク
+// (放電/充電それぞれ1本のフリーテキスト)。独立state(state.writeMeditations、bodyScansと
+// 同型のmergeById同期コレクション、1日1レコード=id:`wm_${date}`)へ保存し、state.journals[date]
+// (FREE LOGの自由記述文字列。Homeタワーからも編集される既知の全文上書きリスクを持つ)には
+// 一切書き込まない(journal-anatomy.md §3)。チップ追加/削除/保存はいずれもsaveState()のみ
+// (renderJournal()全体は呼ばない。WBS検索v288と同じ「差分パッチでフォーカス/IMEを保護」禁則)。
+function writeMeditationFor(date) {
+  return (state.writeMeditations || []).find((w) => w.id === `wm_${date}` && !w.deleted) || null;
+}
+
+function ensureWriteMeditationEntry(date) {
+  const existing = state.writeMeditations.find((w) => w.id === `wm_${date}`);
+  if (existing) {
+    if (existing.deleted) existing.deleted = false;
+    return existing;
+  }
+  const entry = { id: `wm_${date}`, date, discharge: [], charge: [], dischargeTalk: "", chargeTalk: "", updatedAt: "", deleted: false };
+  state.writeMeditations = [...state.writeMeditations, entry];
+  return entry;
+}
+
+function writeMeditationChipListHTML(kind, date) {
+  const items = writeMeditationFor(date)?.[kind] || [];
+  if (!items.length) return `<div class="muted" style="font-size:11px; text-align:center; padding:6px 0">まだ何も追加されていません</div>`;
+  return items.map((c) => `
+    <div class="row" style="align-items:center; gap:8px; background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:9px 10px; font-size:13px; margin-bottom:6px">
+      <span style="flex:1">${escapeHTML(c.text)}</span>
+      <button class="btn ghost" style="font-size:11px; padding:4px 8px" data-action="km-chip-remove" data-kind="${kind}" data-date="${date}" data-id="${c.id}">×</button>
+    </div>`).join("");
+}
+
+function writeMeditationOnelinerText(date) {
+  const entry = writeMeditationFor(date);
+  const d = entry?.discharge.length || 0;
+  const c = entry?.charge.length || 0;
+  return `放電${d}件・充電${c}件・${d || c ? "保存済み" : "未記入"}`;
+}
+
+// チップ追加/削除/保存の直後、パネル内の該当DOMだけを差し替える(renderJournal()全体は呼ばない)。
+function patchWriteMeditationPanel(date) {
+  ["discharge", "charge"].forEach((kind) => {
+    const list = document.querySelector(`#km-${kind}-list`);
+    if (list) list.innerHTML = writeMeditationChipListHTML(kind, date);
+    const count = document.querySelector(`#km-${kind}-count`);
+    if (count) count.textContent = `${(writeMeditationFor(date)?.[kind] || []).length} / 5件(目安)`;
+  });
+  const oneliner = document.querySelector("#km-oneliner");
+  if (oneliner) oneliner.textContent = writeMeditationOnelinerText(date);
+}
+
+function addWriteMeditationChip(kind, date, rawText) {
+  const trimmed = String(rawText || "").trim().slice(0, 80);
+  if (!trimmed) return;
+  const entry = ensureWriteMeditationEntry(date);
+  entry[kind] = [...entry[kind], { id: crypto.randomUUID(), text: trimmed }];
+  entry.updatedAt = nowDateTime();
+  saveState();
+  patchWriteMeditationPanel(date);
+}
+
+// クリック(km-chip-add)・Enterキー(app.js側keydown dispatcher)の両方から呼ばれる共通入口。
+function addWriteMeditationChipFromInput(kind, date) {
+  const input = document.querySelector(`#km-${kind}-input`);
+  addWriteMeditationChip(kind, date, input?.value || "");
+  if (input) { input.value = ""; input.focus(); }
+}
+
+function removeWriteMeditationChip(kind, date, chipId) {
+  const entry = writeMeditationFor(date);
+  if (!entry) return;
+  entry[kind] = entry[kind].filter((c) => c.id !== chipId);
+  entry.updatedAt = nowDateTime();
+  saveState();
+  patchWriteMeditationPanel(date);
+}
+
+// app.js側のinputイベントdispatcher([data-km-talk]分岐、data-journal-dateと同じ全体再描画なし
+// パターン)から呼ばれる。textareaはchangeイベント(=blur時、値が変わった場合のみ)で保存する。
+function setWriteMeditationTalk(kind, date, text) {
+  const entry = ensureWriteMeditationEntry(date);
+  entry[kind === "discharge" ? "dischargeTalk" : "chargeTalk"] = String(text || "");
+  entry.updatedAt = nowDateTime();
+  saveState();
+}
+
+function saveWriteMeditationEntry(date) {
+  const entry = writeMeditationFor(date);
+  if (!entry || (entry.discharge.length === 0 && entry.charge.length === 0)) {
+    showToast("放電・充電のいずれかを1件以上入力してください");
+    return;
+  }
+  entry.updatedAt = nowDateTime();
+  saveState();
+  patchWriteMeditationPanel(date);
+  showToast("書く瞑想を保存しました");
+}
+
+function writeMeditationChipInputHTML(kind, date, label) {
+  return `
+    <div style="background:var(--panel-soft); border-radius:10px; padding:10px; margin-bottom:8px">
+      <div class="row" style="justify-content:space-between; margin-bottom:6px">
+        <span style="font-size:12.5px; font-weight:700">${label}</span>
+        <span class="muted" id="km-${kind}-count" style="font-size:11px">${(writeMeditationFor(date)?.[kind] || []).length} / 5件(目安)</span>
+      </div>
+      <div class="row" style="gap:6px; margin-bottom:8px">
+        <input type="text" id="km-${kind}-input" class="input" style="flex:1; font-size:16px" maxlength="80" placeholder="自由入力して追加…">
+        <button class="btn primary small" data-action="km-chip-add" data-kind="${kind}" data-date="${date}">追加</button>
+      </div>
+      <div id="km-${kind}-list">${writeMeditationChipListHTML(kind, date)}</div>
+    </div>`;
+}
+
+function renderWriteMeditationPanel(date) {
+  const entry = writeMeditationFor(date);
+  return `
+    <p class="muted" style="font-size:12.5px; line-height:1.6; margin:0 0 10px">放電(消耗)を出し切ってから、充電(良かったこと)で締めくくります。</p>
+    ${writeMeditationChipInputHTML("discharge", date, "① 放電(気分・エネルギーを下げたもの)")}
+    ${writeMeditationChipInputHTML("charge", date, "② 充電(良かったこと・ささやかな回復)")}
+    <details class="fold" style="margin-bottom:8px">
+      <summary class="fold-summary" style="font-size:12.5px"><span class="fold-chevron">▶</span>🔴 放電を深掘りする(任意)</summary>
+      <div class="fold-body">
+        <textarea class="textarea" style="min-height:100px; font-size:16px" data-km-talk="discharge" data-date="${date}"
+          placeholder="なぜ引っかかったんだろう…(検閲されません)">${escapeHTML(entry?.dischargeTalk || "")}</textarea>
+      </div>
+    </details>
+    <details class="fold" style="margin-bottom:10px">
+      <summary class="fold-summary" style="font-size:12.5px"><span class="fold-chevron">▶</span>🟢 充電を深掘りする(任意)</summary>
+      <div class="fold-body">
+        <textarea class="textarea" style="min-height:100px; font-size:16px" data-km-talk="charge" data-date="${date}"
+          placeholder="どんな瞬間が良かった?">${escapeHTML(entry?.chargeTalk || "")}</textarea>
+      </div>
+    </details>
+    <button class="btn primary" style="width:100%" data-action="km-save" data-date="${date}">今日の書く瞑想を保存</button>
+  `;
+}
+// ========================================================================
+
 function hoursLabel(v) {
   if (v == null) return "–";
   return `${Math.floor(v)}h${String(Math.round((v % 1) * 60)).padStart(2, "0")}m`;
@@ -492,6 +635,10 @@ function renderJournal() {
   const morningOpen = "morning" in _journalSegmentOverride ? _journalSegmentOverride.morning : isMorning;
   const eveningOpen = "evening" in _journalSegmentOverride ? _journalSegmentOverride.evening : !isMorning;
   const bodyOpen = "body" in _journalSegmentOverride ? _journalSegmentOverride.body : true;
+  // v294: 「書く瞑想」の既定開閉は夜(18時以降)=開・それ以外=閉(発注文の指定閾値。
+  // MORNING/NIGHT BRIEFの14時判定とは独立の値)。_journalSegmentOverride基盤へ相乗りする。
+  const isEveningForKm = nowMin >= 18 * 60;
+  const kakuMeisouOpen = "writeMeditation" in _journalSegmentOverride ? _journalSegmentOverride.writeMeditation : isEveningForKm;
   return `
     <div class="tower-skin journal-tower">
       ${renderHeader("過去の自分・今の自分・外部視点", "ジャーナル")}
@@ -527,6 +674,12 @@ function renderJournal() {
               ${renderEveningConditionCard(date)}
               ${renderGymLogCard(date)}
               ${renderStoreVisitsCard(date)}
+            </div>
+          </details>
+          <details class="fold journal-segment journal-segment-writeMeditation" ${kakuMeisouOpen ? "open" : ""}>
+            <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="writeMeditation"><span class="fold-chevron">▶</span>🌗 書く瞑想 <span id="km-oneliner">${escapeHTML(writeMeditationOnelinerText(date))}</span></summary>
+            <div class="fold-body">
+              ${renderWriteMeditationPanel(date)}
             </div>
           </details>
           <details class="fold journal-segment journal-segment-body" ${bodyOpen ? "open" : ""}>
@@ -645,5 +798,6 @@ export {
   ensureJournal, defaultJournal, renderJournal,
   setMorningEnergy, ensureConditionLog, conditionRecordedCountThisWeek,
   toggleConditionMeds, setConditionCapacity, setEveningMood,
-  addGymEntry, deleteGymEntry
+  addGymEntry, deleteGymEntry,
+  writeMeditationFor, setWriteMeditationTalk, addWriteMeditationChipFromInput
 };
