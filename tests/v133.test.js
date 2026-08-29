@@ -1,10 +1,7 @@
 // v133 検証: 2つの独立した小修正(K承認済み、2026-07-21)。CHANGES_v133.md参照。
 //
-// 修正1: AI提案タスクの自動登録を廃止し、追加ボタン式(候補+ワンタップ採用)に戻す。
-//   autoIngestFeedback は「明日への提案」からのタスク候補をもう state.tasks へ直接pushしない。
-//   aiMitChips/adoptAiMit と同じ設計思想(journalMeta[date].aiTaskCandidates へ溜めておき、
-//   タスクシュート上部のチップの「＋」タップで初めて実体化)へ回帰した。既存挙動との回帰確認は
-//   tests/v86.test.js を更新して行っている(本ファイルはチップUI自体の動作確認に専念する)。
+// 修正1: AI提案タスクの自動登録を廃止。v300では採用UI廃止後も残っていた
+//   journalMeta[date].aiTaskCandidatesへの書き込みも停止する。
 //
 // 修正2: Wishプロジェクト配下タスクの期日を常にNULLにする。
 //   makeTask() の「呼び出し元が明示的にdueDateを渡した場合はそれを尊重してしまう」抜け道
@@ -112,17 +109,16 @@ function check(name, cond, extra = "") {
     await passGithubGate(page);
 
     // ============================================================
-    // 修正1(a): autoIngestFeedback → 候補state化(採用・却下action本体はR3(v290)で
-    // 削除済み。K裁定2026-08-27=ATIS6機能の完全廃止の最終段階)
+    // 修正1(a): autoIngestFeedbackは廃止済み候補stateへ書き込まない
     // ============================================================
-    console.log("[1] AIフィードバックの「明日への提案」は候補stateへ入り、直接state.tasksには入らない");
+    console.log("[1] AIフィードバックの「明日への提案」はtasksにも候補stateにも入らない");
     feedbackFixture = { [YEST]: "# AIフィードバック本文_v133\n\n## 明日への提案\n\n- [ ] AI候補タスク_v133: 理由の説明\n" };
     await seed({ tasks: [], projects: [], view: "today" });
     const s1 = await readState();
     check("state.tasksへ直接登録されない", !(s1.tasks || []).some((t) => t.title === "AI候補タスク_v133"), JSON.stringify(s1.tasks));
-    check("journalMeta[前日].aiTaskCandidatesへ候補として登録される",
-      (s1.journalMeta?.[YEST]?.aiTaskCandidates || []).includes("AI候補タスク_v133"), JSON.stringify(s1.journalMeta?.[YEST]));
-    check("候補stateはfixture由来の1件だけ", (s1.journalMeta?.[YEST]?.aiTaskCandidates || []).length === 1, JSON.stringify(s1.journalMeta?.[YEST]));
+    check("journalMeta[前日].aiTaskCandidatesへ登録されない",
+      !(s1.journalMeta?.[YEST]?.aiTaskCandidates || []).includes("AI候補タスク_v133"), JSON.stringify(s1.journalMeta?.[YEST]));
+    check("候補stateは空のまま", (s1.journalMeta?.[YEST]?.aiTaskCandidates || []).length === 0, JSON.stringify(s1.journalMeta?.[YEST]));
     check("候補の採用・却下UIは描画しない",
       await page.locator('[data-action="ai-task-adopt"], [data-action="ai-task-dismiss"]').count() === 0);
 

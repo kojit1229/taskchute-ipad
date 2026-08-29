@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v299";  // v299: AI関連機能整理グループA(朝プラン/再プラン/AIプラン適用/0秒思考テーマ選定UI/aiPlanSkippedLogを削除。APP_SHELL変更なし)
+const CACHE_NAME = "taskchute-journal-pwa-v300";  // v300: AI関連機能整理グループB(B-3除外)+C(aiTaskCandidates書き込み停止。APP_SHELL変更なし)
 // v293: 身体スキャン復活(K裁定2026-08-29。手動Block完了時のみ追加)
 // v290: 孤児action本体2クラスタ(AI作業結果承認/質問、AIタスク候補チップの採用/却下)を削除した(APP_SHELL変更なし)。
 // v288: WBS内検索と新規Project既定closed化を追加した(APP_SHELL変更なし)。

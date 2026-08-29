@@ -4,7 +4,7 @@
 // 調査結果(詳細はCHANGES_v76.md): ホーム側の不具合は v75(同日, f7e90f6)の
 // homeAiFeedbackReadHTML() 追加により既に修正済みで、本スイートでは
 // (1) 実際の personal-data/taskchute/AIフィードバック_*.md と同じ見出し構造(「## 明日への提案」)
-//     を使った回帰確認、(4) fetch失敗を「以後ずっと再fetchしない」形でキャッシュしていないことの検証
+//     を取得しても廃止済み候補stateへ書かない回帰確認、(4) fetch失敗を「以後ずっと再fetchしない」形でキャッシュしていないことの検証
 // を行う。(3) フィードバックファイルが404でもクラッシュしない(フェイルソフト)ことを検証する。
 // (5) pushFileToGitHub(日報push等)のURL組み立てをpushGitHubPathと同じセグメント単位encodeに
 //     統一したことの回帰(PUT先パスに%2Fが混入しないこと)。
@@ -112,13 +112,12 @@ function check(name, cond, extra = "") {
       await page.waitForTimeout(150);
     };
 
-    console.log("[1] 実データと同じ見出し構造の前日フィードバックを取得・自動取り込みする");
+    console.log("[1] 実データと同じ見出し構造の前日フィードバックを取得し、候補stateへは書かない");
     await seed({ view: "home" });
     check("api.github.comへ前日分のfetchが実際に飛んでいる", feedbackApiRequests.some((p) => p.endsWith(`AIフィードバック_${PREV}.md`)), JSON.stringify(feedbackApiRequests));
     await gotoHomeTab();
     const feedbackCandidates = await page.evaluate(({ KEY, PREV }) => JSON.parse(localStorage.getItem(KEY)).journalMeta?.[PREV]?.aiTaskCandidates || [], { KEY, PREV });
-    check("実データ構造の提案2件を候補stateへ自動取り込み", feedbackCandidates.includes("提案1_v76") && feedbackCandidates.includes("提案2_v76"), JSON.stringify(feedbackCandidates));
-    check("候補stateは実データ由来の2件だけ", feedbackCandidates.length === 2, JSON.stringify(feedbackCandidates));
+    check("実データ構造の提案2件を候補stateへ書き込まない", feedbackCandidates.length === 0, JSON.stringify(feedbackCandidates));
     check("旧ATISフィードバック要素をtodayへ戻さない", await page.locator(".tower-atis-feedback, .tower-atis-summary").count() === 0);
 
     // v85メモ: 「各タブは基本的に今日を表示」導入で起動時(reload)は必ずselectedDate=今日に

@@ -84,8 +84,7 @@ check("tower-coreの負方向・現行モバイル順序を維持", towerTestSou
     check("FOCUSバーは本体+gate/journalの3操作だけ", JSON.stringify(focusActions) === JSON.stringify(["focus-mode", "focus-toggle-gate", "focus-toggle-journal"]), JSON.stringify(focusActions));
     check("FOCUSバーにAIラベルが無い", !(await page.locator(".today-focus-bar").textContent()).includes("AI"));
     const normalizedState = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), STATE_KEY);
-    check("旧同期stateを削除せず保持", normalizedState.aiLinkFreshness?.feedbackAt === "2026-08-27"
-      && normalizedState.aiWorkProcessedIds?.[0] === "legacy-result"
+    check("B-3の旧同期stateを削除せず保持", normalizedState.aiWorkProcessedIds?.[0] === "legacy-result"
       && normalizedState.journalMeta?.["2026-08-27"]?.aiTaskCandidates?.[0] === "legacy-candidate", JSON.stringify(normalizedState));
 
     console.log("[5] 現行FOCUSトグルは退行せず、旧action名は発火しない");

@@ -1,4 +1,4 @@
-// v240由来回帰: MIT/タスク候補UIを撤去し、残存action本体と旧state互換は維持する。
+// v240由来回帰: MIT/タスク候補UIを撤去し、v300でMIT候補の初期化残骸も掃除する。
 const fs = require("fs");
 const path = require("path");
 
@@ -25,7 +25,7 @@ check("タスク候補rendererが無い", !/function\s+aiTaskChips\b/.test(appSo
 // adoptAiTaskCandidate/dismissAiTaskCandidateごとaction登録を削除したため削除
 // (K裁定2026-08-27=ATIS6機能の完全廃止の最終段階)。移行先の同等検証は無い(機能自体の廃止のため)。
 check("タスク候補コンテナを描画しない", !appSource.includes("data-task-candidates"));
-check("journalMeta.aiMitCandidates互換データが残る", appSource.includes("aiMitCandidates"));
+check("journalMeta.aiMitCandidates初期化コードが残らない", !appSource.includes("aiMitCandidates"));
 
 if (failures) {
   console.error(`\n❌ v240: ${failures}件失敗`);

@@ -156,7 +156,6 @@ function check(name, cond, extra = "") {
     const s5 = await stateNow();
     const added = (s5.blocks || []).find((b) => b.title === "テスト候補タスクX");
     check("旧フィードバックstateを保持し、MITブロックを自動追加しない", !added && (s5.feedback?.[YESTERDAY] || "").includes("テスト候補タスクX"), JSON.stringify(s5.feedback));
-    check("旧鮮度stateを正規化後も保持", s5.aiLinkFreshness?.feedbackAt === YESTERDAY && s5.aiLinkFreshness?.planAt === null, JSON.stringify(s5.aiLinkFreshness));
     check("旧フィードバック本文をstateから削除しない", (s5.feedback?.[YESTERDAY] || "").includes("テスト候補タスクY"), JSON.stringify(s5.feedback));
     check("MIT候補UIのAIラベルをtodayへ戻さない", !(await page.locator(".today-tower").textContent()).includes("明日のMIT候補"));
     check("廃止済みMIT候補actionを描画しない", await page.locator('[data-action="mit-candidate-add"], [data-action="ai-mit-adopt"]').count() === 0);

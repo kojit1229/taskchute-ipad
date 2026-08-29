@@ -338,7 +338,7 @@ registerActions({
     const ai = document.getElementById("towerJournalAi");
     if (!free || !ai) return;
     state.journals[date] = free.value;
-    const meta = (state.journalMeta[date] ||= { aiMitCandidates: [], aiImported: false, ideal: "", aiTaskCandidates: [], aiRequest: "" });
+    const meta = (state.journalMeta[date] ||= { aiImported: false, ideal: "", aiTaskCandidates: [], aiRequest: "" });
     meta.aiRequest = ai.value;
     meta.textUpdatedAt = nowDateTime();
     saveAndRender("ジャーナルを保存しました");
@@ -1304,14 +1304,14 @@ document.addEventListener("input", (event) => {
     const d = target.dataset.journalDate;
     state.journals[d] = target.value;
     // v106: 本文の編集時刻を記録(端末間マージの新旧判定に使用)
-    const meta = (state.journalMeta[d] ||= { aiMitCandidates: [], aiImported: false, ideal: "", aiTaskCandidates: [], aiRequest: "" });
+    const meta = (state.journalMeta[d] ||= { aiImported: false, ideal: "", aiTaskCandidates: [], aiRequest: "" });
     meta.textUpdatedAt = nowDateTime();
     saveState();
   }
   // v61: 今日の理想ワンライナー(入力中も保存。全再描画しないのでフォーカスは維持される)
   if (target.matches("[data-ideal-date]")) {
     const d = target.dataset.idealDate;
-    const meta = (state.journalMeta[d] ||= { aiMitCandidates: [], aiImported: false, ideal: "", aiTaskCandidates: [], aiRequest: "" });
+    const meta = (state.journalMeta[d] ||= { aiImported: false, ideal: "", aiTaskCandidates: [], aiRequest: "" });
     meta.ideal = target.value;
     saveState();
   }
@@ -1980,12 +1980,10 @@ function normalizeState(value) {
   // v42: 日ごとのメタ(AIフィードバック取り込み由来。journals は文字列なので別ストア)
   value.journalMeta ||= {};
   Object.values(value.journalMeta).forEach((j) => {
-    if (!Array.isArray(j.aiMitCandidates)) j.aiMitCandidates = [];
     if (!("aiImported" in j)) j.aiImported = false;
     if (!("ideal" in j)) j.ideal = "";  // v61: 今日の理想ワンライナー(提案8)
     if (!("textUpdatedAt" in j)) j.textUpdatedAt = "";  // v106: 本文編集時刻(同期マージの新旧判定)
-    // v133: AIフィードバックから抽出したタスク候補(aiMitCandidatesと同じ「溜めて＋で採用」方式へ回帰。
-    //       詳細はautoIngestFeedbackのコメント参照)
+    // v133: AIフィードバックから抽出したタスク候補の旧stateは後方互換のため保持する。
     if (!Array.isArray(j.aiTaskCandidates)) j.aiTaskCandidates = [];
     if (typeof j.aiRequest !== "string") j.aiRequest = "";  // v228: TOWER JOURNALのAI依頼枠
   });
@@ -2010,11 +2008,6 @@ function normalizeState(value) {
   // v86: AIフィードバック自動取り込み(autoIngestFeedback)の冪等マーカー。取り込み済みの
   //      フィードバック日付("YYYY-MM-DD")を記録し、同じ.mdからの二重登録を防ぐ。
   if (!Array.isArray(value.feedbackIngestedDates)) value.feedbackIngestedDates = [];
-  // v67: AI連携の鮮度インジケータ(柱1b)。最後に取得成功した AIフィードバック_*.md /
-  //      AIプラン_*.json の日付("YYYY-MM-DD")。取得成功のたびに前進のみさせる(後退させない)。
-  if (!value.aiLinkFreshness || typeof value.aiLinkFreshness !== "object") value.aiLinkFreshness = {};
-  if (!("feedbackAt" in value.aiLinkFreshness)) value.aiLinkFreshness.feedbackAt = null;
-  if (!("planAt" in value.aiLinkFreshness)) value.aiLinkFreshness.planAt = null;
   // v67: AI作業結果_*.json の処理済みresultId(taskId+dateから合成)。二重登録防止用。
   if (!Array.isArray(value.aiWorkProcessedIds)) value.aiWorkProcessedIds = [];
   // v197(第3弾3d, S-3): AIステップの処理済み/取消済みrequestId集合(aiWorkProcessedIdsと同型)。
@@ -3897,23 +3890,10 @@ function confirmScheduleDraft() {
   saveAndRender(confirmParts.length ? `📋 ${confirmParts.join("・")}しました` : "対象のBlockが見つからず、確定できませんでした");
 }
 
-// v67: AIプラン_<date>.json の存在確認のみ。v299で下書きへの適用経路は削除したため、
-//      state.aiLinkFreshness.planAt更新用の軽量シグナルとしてだけ残す。厳密な項目検証はしない。
-async function fetchAiPlanFreshnessDate(date) {
-  const raw = await fetchGitHubRawText(`AIプラン_${date}.json`);
-  if (!raw) return null;
-  try {
-    const data = JSON.parse(raw);
-    return (data && typeof data === "object" && data.date === date) ? date : null;
-  } catch {
-    return null;
-  }
-}
-
 // v77: AIフィードバック_<date>.md 本文の「## 0秒思考テーマ」見出し(- [ ] テーマ: 理由 形式、
 //      「## 明日への提案」と同じチェックボックス書式)から0秒思考テーマ候補を抽出する。
-//      extractMITCandidatesFromReportと同じ頑健化パターン(見出し直後の空行スキップ・
-//      コロン分割・全角:対応)を踏襲。存在しない/旧形式のFB(見出し自体が無い)では
+//      見出し直後の空行スキップ・コロン分割・全角:対応を行う。存在しない/旧形式のFB
+//      (見出し自体が無い)では
 //      空配列を返す(呼び出し側で length===0 を「該当なし」として扱えば後方互換になる)。
 // v86: 呼び出し元は hydrateStaticMarkdown 内の autoIngestFeedback に一本化した。
 function extractZeroSecThemesFromReport(reportText) {
@@ -4432,44 +4412,6 @@ function resolveMigrationRitual(choice) {
   } else {
     closeModal();
   }
-}
-
-function extractMITCandidatesFromReport(reportText) {
-  if (!reportText) return [];
-  // 「明日の MIT 候補:」の行から数行抽出(箇条書きまたは1行)
-  // v75: loop/coach-daily.sh の実出力は「## 明日への提案」見出し + "- [ ] " チェックボックス箇条書き
-  //      (「MIT候補」の文言は使われていない)ため、この見出しにも対応する(現物のAIフィードバック_*.mdで確認)。
-  const lines = reportText.split("\n");
-  const idx = lines.findIndex((line) => /(?:明日の)?\s*MIT\s*候補|明日への提案/i.test(line));  // v42: "## MIT候補" 固定フォーマットにも対応
-  if (idx < 0) return [];
-  const candidates = [];
-  // 同じ行に「: 内容」がある場合
-  const sameLine = lines[idx].split(/:|:/).slice(1).join(":").trim();
-  if (sameLine) candidates.push(sameLine);
-  // 次の数行が「- 」「・」始まりなら抽出(v75: 先頭の "[ ] "/"[x] " チェックボックス表記は候補文言から除く)
-  // v75 should-fix2 対応中に判明: coach-daily.sh の実出力は見出しの直後に空行(Markdownの段落区切り)
-  // を挟んでから箇条書きが始まる(例: "## 明日への提案\n\n- [ ] ...")。以前は最初の空行で即break
-  // していたため、この見出し形式では候補抽出が常に0件だった。見出し直後の空行はスキップし、
-  // 本文(箇条書き)が始まった後の空行でのみ終端するよう修正した。
-  let sawContent = false;
-  for (let i = idx + 1; i < Math.min(idx + 8, lines.length); i++) {
-    const l = lines[i].trim();
-    if (!l) { if (sawContent) break; else continue; }
-    if (l.startsWith("##") || l.startsWith("#")) break;
-    const m = l.match(/^[-・•*]\s*(.+)$/);
-    if (m) {
-      const raw = m[1].replace(/^\[[ xX]\]\s*/, "").trim();
-      // v75 should-fix1: 「タスク名: 理由」形式(coach-daily.shの「明日への提案」実出力)は
-      // 先頭コロン(半角:/全角:)より前のタスク名部分だけを候補にする。コロンが無ければ
-      // 全文を候補にする(コロン無しの旧フォーマット互換)。
-      const colonIdx = raw.search(/[:：]/);
-      candidates.push((colonIdx >= 0 ? raw.slice(0, colonIdx) : raw).trim());
-    } else if (!sawContent) {
-      candidates.push(l);
-    }
-    sawContent = true;
-  }
-  return candidates.filter(Boolean).slice(0, 3);
 }
 
 // v168: WishタブTier1(CRUD・リスト描画)はsrc/features/wish.jsへ移動した
@@ -10971,50 +10913,22 @@ function saveAndRender(message, toastOpts) {
   }
 }
 
-// v86: AIフィードバック_<date>.md の新着本文から「## 明日への提案」→当日の未完了タスク、
-//      「## 0秒思考テーマ」→0秒思考テーマ一覧、へ自動登録する(K指示: v75の「選んでから追加」
-//      UIに代わり、確認なしで確定登録する方針へ転換)。
+// v300: AIフィードバック_<date>.md の新着本文から「## 0秒思考テーマ」だけを
+//      0秒思考テーマ一覧へ自動登録する。「## 明日への提案」は採用UI廃止に伴いstateへ書き込まない。
 //      冪等性: state.feedbackIngestedDates にこのフィードバック自身の日付("YYYY-MM-DD"。
 //      today/prevどちらの枠から呼ばれたかは問わない)を記録し、同じ日付からの取り込みは1回のみ
 //      行う。hydrateStaticMarkdownはcachedFeedbackがセッション(ページ再読込)毎にリセットされる
 //      ため同じ.mdを複数セッションに跨いで何度も再fetchしうるが、ここが唯一の冪等ゲートになる。
-//      重複排除: タスクは現在生きている未完了(todo/doing)タスクに同名があればスキップする
-//      (前日以前から残っている繰越タスクとの重複も防ぐ)。テーマは zeroThinking.themes の
-//      既存テキストと同名ならスキップする(themesは日付を持たず永続なので、前日から残っている
-//      ものも自然に対象になる)。
+//      テーマは zeroThinking.themes の既存テキストと同名ならスキップする(themesは日付を持たず
+//      永続なので、前日から残っているものも自然に対象になる)。
 //      テーマには source:"ai-feedback" を付け、手動追加(source:null)と区別する。ワンタップ削除
 //      (deleteZtTheme)がAI由来かどうかを判定し、AI由来ならzeroSecThemeLogへ不採用記録する。
-// v133: タスク側のみ方針転換(K指示)。v86で「確認なしで直接state.tasksへpush」に自動化した
-//      挙動を撤回し、「候補として溜めておき、チップの＋タップで初めて実体化」方式に戻す。
-//      テーマ側(0秒思考)の
-//      自動追加は今回のスコープ外で変更しない(上のコメント・下のthemeCandidates節は従来どおり)。
-//      候補は後方互換のためjournalMeta[date].aiTaskCandidatesへ格納する。採用・却下UIは廃止済み
-//      だが、既存stateと取り込み契約は維持する。addedTasksの意味は「タスクとして直接追加した件数」から
-//      「候補として追加した件数」に変わった(変数名はそのまま流用)。
 function autoIngestFeedback(date, text) {
   if (!text) return null;
   if (!Array.isArray(state.feedbackIngestedDates)) state.feedbackIngestedDates = [];
   if (state.feedbackIngestedDates.includes(date)) return null;  // 冪等: 同じ日付は1回のみ
 
-  let addedTasks = 0, addedThemes = 0;
-
-  const mitCandidates = extractMITCandidatesFromReport(text);
-  if (mitCandidates.length) {
-    const meta = (state.journalMeta[date] ||= { aiMitCandidates: [], aiImported: false, ideal: "", aiTaskCandidates: [], aiRequest: "" });
-    if (!Array.isArray(meta.aiTaskCandidates)) meta.aiTaskCandidates = [];
-    // v133: 重複排除対象は「現在生きている(todo/doing)タスクのtitle」に加え、
-    //       「既にaiTaskCandidatesに入っているtitle」も含める(日をまたいだ重複チップ防止)。
-    const liveTitles = new Set(state.tasks
-      .filter((t) => !t.deleted && (t.status === "todo" || t.status === "doing"))
-      .map((t) => t.title));
-    meta.aiTaskCandidates.forEach((t) => liveTitles.add(t));
-    mitCandidates.forEach((title) => {
-      if (liveTitles.has(title)) return;  // 重複排除(繰越・既存候補含む)
-      meta.aiTaskCandidates.push(title);
-      liveTitles.add(title);
-      addedTasks++;
-    });
-  }
+  let addedThemes = 0;
 
   const themeCandidates = extractZeroSecThemesFromReport(text);
   if (themeCandidates.length) {
@@ -11034,7 +10948,7 @@ function autoIngestFeedback(date, text) {
   if (state.feedbackIngestedDates.length > FEEDBACK_INGESTED_DATES_MAX) {
     state.feedbackIngestedDates = state.feedbackIngestedDates.slice(-FEEDBACK_INGESTED_DATES_MAX);
   }
-  return { addedTasks, addedThemes };
+  return { addedThemes };
 }
 const FEEDBACK_INGESTED_DATES_MAX = 300;  // zeroSecThemeLogと同じ軽量上限の思想
 
@@ -11161,23 +11075,7 @@ async function hydrateStaticMarkdown() {
     // v57: 直push検知した前日分は、以後の起動時fetchが正規ルートに乗るよう記録する
     if (!files.includes(prev)) recordFeedbackFile(prev);
   }
-  // v67: AI連携の鮮度インジケータ(柱1b)。todayFbは selectedDate 連動の fetch なので「今日」を
-  //      見ているときの結果のみ鮮度シグナルに採用する(過去日ブラウズ中のfetchはその日の閲覧目的
-  //      であり、パイプライン鮮度とは無関係)。前進のみ(後退させない)。
-  //      v76: prevFbは上記のとおり selectedDate に依らず常に実際の昨日分なので、この鮮度判定も
-  //      selectedDateに関わらず反映してよい(todayとprevで判定を分離)。
   const realToday = todayISO();
-  let freshnessDirty = false;
-  if (today === realToday) {
-    if (todayFb && (!state.aiLinkFreshness.feedbackAt || state.aiLinkFreshness.feedbackAt < today)) {
-      state.aiLinkFreshness.feedbackAt = today;
-      freshnessDirty = true;
-    }
-  }
-  if (prevFb && (!state.aiLinkFreshness.feedbackAt || state.aiLinkFreshness.feedbackAt < prev)) {
-    state.aiLinkFreshness.feedbackAt = prev;
-    freshnessDirty = true;
-  }
   // v86: 新着フィードバックの自動取り込み(K指示: 「選んでから追加」を廃し自動追加へ方針転換)。
   //      冪等判定はautoIngestFeedback内部(state.feedbackIngestedDates)で行うため、ここでは
   //      新着本文(todayFb/prevFb)があるときに渡すだけでよい(cachedFeedbackはセッション毎に
@@ -11185,29 +11083,23 @@ async function hydrateStaticMarkdown() {
   //      実際の登録は日付ごとに1回だけ発生する)。
   // v86 should-fix: today枠は state.selectedDate 連動のfetchのため、過去日を閲覧中にその日の
   //      FBがまだキャッシュされていないと todayFb に過去日のフィードバックが入ることがある。
-  //      それをそのまま自動登録すると「過去日を見ているだけ」で過去FBの提案候補が
-  //      journalMeta[過去日]へ紐付いてしまう(v133でタスクは候補化したため実タスクの誤注入は
-  //      なくなったが、候補チップはjournalMeta[実今日の前日]しか見ないため、実今日以外への
-  //      登録はどのみち二度と表示されず宙に浮く。取り込み自体をtoday===realTodayに限定して防ぐ)。
+  //      それをそのまま自動登録すると「過去日を見ているだけ」で過去FBのテーマが実今日の
+  //      テーマとして注入されるため、取り込み自体をtoday===realTodayに限定して防ぐ。
   //      today === realToday(実際の今日を閲覧中)のときだけ取り込む。prev枠は selectedDateに
   //      依らず常に実際の昨日固定のフェッチなので、この制限は不要(現状のままでよい)。
-  let ingestedTasksTotal = 0, ingestedThemesTotal = 0;
+  let ingestedThemesTotal = 0;
   if (todayFb && today === realToday) {
     const r = autoIngestFeedback(today, todayFb);
-    if (r) { ingestedTasksTotal += r.addedTasks; ingestedThemesTotal += r.addedThemes; }
+    if (r) ingestedThemesTotal += r.addedThemes;
   }
   if (prevFb) {
     const r = autoIngestFeedback(prev, prevFb);
-    if (r) { ingestedTasksTotal += r.addedTasks; ingestedThemesTotal += r.addedThemes; }
+    if (r) ingestedThemesTotal += r.addedThemes;
   }
-  if (ingestedTasksTotal || ingestedThemesTotal) {
+  if (ingestedThemesTotal) {
     changed = true;
     saveState();
-    // v133: タスクは直接追加ではなく候補チップ化したため、テーマのみの文言と分けて案内する
-    const parts = [];
-    if (ingestedTasksTotal) parts.push(`🤖 AIの提案でタスク候補${ingestedTasksTotal}件が届きました(タスクシュート上部から追加できます)`);
-    if (ingestedThemesTotal) parts.push(`テーマ${ingestedThemesTotal}件を追加しました`);
-    showToast(parts.join("・"));
+    showToast(`テーマ${ingestedThemesTotal}件を追加しました`);
   }
   // v159: 「未来からの手紙」は月次ファイルのため、判定キーは日付ではなく当月(YYYY-MM)。
   //      実際の当月分だけを、1セッション1回取得する。
@@ -11257,19 +11149,6 @@ async function hydrateStaticMarkdown() {
     cachedAiInsightsJson = { fetchedAt: Date.now(), data: parsedAiInsights || previous };
     if (parsedAiInsights && JSON.stringify(previous) !== JSON.stringify(parsedAiInsights)) changed = true;
   }
-  // v67: AIプラン_<今日>.json は鮮度シグナル専用に存在確認する。v299で下書きへの
-  //      適用経路は削除済み。既に今日分を確認済みなら再fetchしない。
-  if (!state.aiLinkFreshness.planAt || state.aiLinkFreshness.planAt < realToday) {
-    const planDate = await fetchAiPlanFreshnessDate(realToday);
-    if (planDate) {
-      state.aiLinkFreshness.planAt = planDate;
-      freshnessDirty = true;
-      changed = true;
-    }
-  }
-  // v67: 鮮度シグナルはユーザー操作を経ないため、autoSyncのpush対象(saveState)にはせず
-  //      ローカル保存のみで足す(端末をまたいだ鮮度比較は現状不要。過剰なpushを避ける)。
-  if (freshnessDirty) persistLocalNoSchedule();
   // v37: state.view というプロパティは存在しない(正しくは currentView)。
   //      このタイポのせいで、ビジョン画面を開いたまま読み込みが終わっても再描画されなかった。
   // v86 should-fix: "zero"(0秒思考タブ)を追加。autoIngestFeedbackがテーマを自動追加しても、

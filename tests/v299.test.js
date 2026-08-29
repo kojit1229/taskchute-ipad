@@ -59,7 +59,8 @@ check("aiStepProcessedIds集合和とpending剪定を維持",
   syncSource.includes("aiStepSettledIds"));
 
 console.log("[release] Service Worker");
-check("CACHE_NAMEがv299", /CACHE_NAME\s*=\s*"taskchute-journal-pwa-v299"/.test(swSource));
+const cacheVersion = swSource.match(/CACHE_NAME\s*=\s*"taskchute-journal-pwa-v(\d+)"/);
+check("CACHE_NAMEがv299以上", cacheVersion && Number(cacheVersion[1]) >= 299);
 
 if (failures) {
   console.error(`\n${failures} failure(s)`);

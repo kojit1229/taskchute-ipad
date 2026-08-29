@@ -1,5 +1,5 @@
 // v75回帰 + v299 Test-Reduction:
-// v75のpersonal-data API経路と「明日への提案」自動取り込みは維持する。
+// v75のpersonal-data API経路を維持し、「明日への提案」は候補stateへ書き込まない。
 // v299で削除したAIプランの0秒思考テーマUIは、実行シナリオではなくソース不存在を固定する。
 const fs = require("fs");
 const path = require("path");
@@ -119,16 +119,17 @@ function check(name, cond, extra = "") {
     check("前日をapi.github.com経由で取得", feedbackApiRequests.some((p) => p.endsWith(`AIフィードバック_${PREV}.md`)), JSON.stringify(feedbackApiRequests));
     check("公開Pages同一オリジンへの個人データfetchなし", sameOriginPersonalRequests.length === 0, JSON.stringify(sameOriginPersonalRequests));
 
-    console.log("[7] 『タスク名: 理由』形式の明日への提案をタスク名だけ保存");
+    console.log("[7] 『明日への提案』を取得しても廃止済み候補stateへ書き込まない");
     FEEDBACK_FIXTURE[PREV] = "## 明日への提案\n\n- タスクA_v75: 理由A_v75の説明\n- タスクB_v75\n";
     await seed({ feedbackFiles: [], resetFeedbackIngest: true });
     await page.waitForFunction(({ key, prev }) => {
-      return (JSON.parse(localStorage.getItem(key)).journalMeta?.[prev]?.aiTaskCandidates || []).length === 2;
+      return (JSON.parse(localStorage.getItem(key)).feedbackFiles || []).includes(prev);
     }, { key: KEY, prev: PREV });
     const candidateState = await stateNow();
     const candidateTexts = candidateState.journalMeta?.[PREV]?.aiTaskCandidates || [];
-    check("コロン付き候補は理由を除いたタスク名だけ保存", candidateTexts.includes("タスクA_v75") && !candidateTexts.some((text) => text.includes("理由A_v75")), JSON.stringify(candidateTexts));
-    check("コロンなし候補は全文を保存", candidateTexts.includes("タスクB_v75"), JSON.stringify(candidateTexts));
+    check("コロン付き・なしの提案をaiTaskCandidatesへ保存しない", candidateTexts.length === 0, JSON.stringify(candidateTexts));
+    const toastText = await page.locator("#toast").textContent().catch(() => "");
+    check("存在しない候補UIへ誘導するトーストを出さない", !(toastText || "").includes("タスク候補"), toastText);
     check("廃止済み採用ボタンを描画しない", await page.locator('[data-action="ai-task-adopt"]').count() === 0);
   } finally {
     await browser.close();

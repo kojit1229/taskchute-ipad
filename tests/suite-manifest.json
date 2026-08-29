@@ -15,7 +15,7 @@
       ],
       "assertionSignals": 34,
       "assertionHash": "f841e3459002f00f",
-      "sourceHash": "6365306139206cb1",
+      "sourceHash": "eb54fceefd187150",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -514,7 +514,7 @@
       ],
       "assertionSignals": 41,
       "assertionHash": "47415f0e134d1198",
-      "sourceHash": "c188c8826c86c674",
+      "sourceHash": "6007791b9b8a2457",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -1546,8 +1546,8 @@
         "content-ai"
       ],
       "assertionSignals": 12,
-      "assertionHash": "b594af87a85cf6c0",
-      "sourceHash": "083af484b8c82bb8",
+      "assertionHash": "2e6d3c8b4bd819ae",
+      "sourceHash": "63761b5fc3ae463e",
       "waits": {
         "fixedCount": 8,
         "numericMilliseconds": 2700,
@@ -2145,8 +2145,8 @@
         "content-ai"
       ],
       "assertionSignals": 46,
-      "assertionHash": "fc84b56c540a579a",
-      "sourceHash": "5b01d71ab4eb30a6",
+      "assertionHash": "1cd9f02247d0ac12",
+      "sourceHash": "6b93a44b851de20c",
       "waits": {
         "fixedCount": 9,
         "numericMilliseconds": 3300,
@@ -2214,8 +2214,8 @@
         "planning-execution"
       ],
       "assertionSignals": 10,
-      "assertionHash": "038883f4e9369ba6",
-      "sourceHash": "08b74d3599a426f7",
+      "assertionHash": "aa8dcdd2fad2b880",
+      "sourceHash": "32d73eea84879c9f",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2941,8 +2941,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 26,
-      "assertionHash": "e2cc4bb164a76da0",
-      "sourceHash": "a298244677c78ecc",
+      "assertionHash": "a8ed291425ef4286",
+      "sourceHash": "a11b60a69fe7def6",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3165,8 +3165,31 @@
         "content-ai"
       ],
       "assertionSignals": 29,
-      "assertionHash": "020ee765aa38495b",
-      "sourceHash": "2eb4aff4d67cc410",
+      "assertionHash": "0fa4c409768f1907",
+      "sourceHash": "d014d87165c1421b",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "v300.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 18,
+      "assertionHash": "8e2faff1ab528e96",
+      "sourceHash": "565b28c8aa09b639",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3357,7 +3380,7 @@
       ],
       "assertionSignals": 22,
       "assertionHash": "967e985b311d4279",
-      "sourceHash": "55d91dca4e2b10b8",
+      "sourceHash": "188a6e2823fc8437",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3379,9 +3402,9 @@
         "content-ai",
         "security-offline"
       ],
-      "assertionSignals": 30,
-      "assertionHash": "0f60e2453b636057",
-      "sourceHash": "dada0b21166bd592",
+      "assertionSignals": 32,
+      "assertionHash": "09df6b0cc8e7d348",
+      "sourceHash": "1806af229f6b0646",
       "waits": {
         "fixedCount": 19,
         "numericMilliseconds": 7300,
@@ -3426,12 +3449,12 @@
         "journal-health",
         "content-ai"
       ],
-      "assertionSignals": 39,
-      "assertionHash": "d1bca9d8cc9cf183",
-      "sourceHash": "3670920892d1e068",
+      "assertionSignals": 38,
+      "assertionHash": "32a6e76502a93aa5",
+      "sourceHash": "4d40d2bf12128ba6",
       "waits": {
-        "fixedCount": 21,
-        "numericMilliseconds": 8150,
+        "fixedCount": 19,
+        "numericMilliseconds": 7650,
         "unresolvedCount": 0
       },
       "sideEffects": {
@@ -3497,8 +3520,8 @@
         "content-ai"
       ],
       "assertionSignals": 17,
-      "assertionHash": "0544df7996859945",
-      "sourceHash": "90b7c6c55d5c06d3",
+      "assertionHash": "4c98d6d4e4eba335",
+      "sourceHash": "a833226deeab9e7e",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3568,9 +3591,9 @@
         "content-ai",
         "ui-responsive"
       ],
-      "assertionSignals": 22,
-      "assertionHash": "86e57c3030181282",
-      "sourceHash": "b07ffa3d3cc2c3a5",
+      "assertionSignals": 21,
+      "assertionHash": "ac542c238673132c",
+      "sourceHash": "34bb0a8b259c9f24",
       "waits": {
         "fixedCount": 2,
         "numericMilliseconds": 1000,
@@ -3639,8 +3662,8 @@
         "content-ai"
       ],
       "assertionSignals": 17,
-      "assertionHash": "78f55577388714fa",
-      "sourceHash": "5af6968a1ea07f7c",
+      "assertionHash": "6ae410bf43b0236d",
+      "sourceHash": "6cfe74903f07e0a1",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3662,9 +3685,9 @@
         "journal-health",
         "content-ai"
       ],
-      "assertionSignals": 15,
-      "assertionHash": "c579993ea3f51534",
-      "sourceHash": "027221a884a3252a",
+      "assertionSignals": 14,
+      "assertionHash": "cb5c3e64a55980bf",
+      "sourceHash": "2fce1d82322d81f7",
       "waits": {
         "fixedCount": 7,
         "numericMilliseconds": 3200,
@@ -3686,8 +3709,8 @@
         "content-ai"
       ],
       "assertionSignals": 20,
-      "assertionHash": "f0cad87a17cc5944",
-      "sourceHash": "ee01e1cd0e3d13b6",
+      "assertionHash": "b3f8ab81b8a314df",
+      "sourceHash": "436484dc1ca08890",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3862,8 +3885,8 @@
         "content-ai"
       ],
       "assertionSignals": 29,
-      "assertionHash": "56dd2e0d3a418ed7",
-      "sourceHash": "5657ff1db96383c4",
+      "assertionHash": "4a69bbbb6eb60b00",
+      "sourceHash": "d949b3bc595cd8d7",
       "waits": {
         "fixedCount": 11,
         "numericMilliseconds": 4350,

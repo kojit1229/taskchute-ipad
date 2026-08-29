@@ -53,7 +53,7 @@ function check(name, cond, extra = "") {
     const legacyTask = normalized.tasks.find((task) => task.id === "legacy-task");
     check("旧TaskにaiWork:falseを補完", legacyTask?.aiWork === false, JSON.stringify(legacyTask));
     check("旧TaskにaiWorkBrief空文字を補完", legacyTask?.aiWorkBrief === "", JSON.stringify(legacyTask));
-    check("旧stateにaiLinkFreshness既定値を補完", normalized.aiLinkFreshness?.feedbackAt === null && normalized.aiLinkFreshness?.planAt === null, JSON.stringify(normalized.aiLinkFreshness));
+    check("aiLinkFreshnessを持たない旧stateへ鮮度フィールドを補完しない", !("aiLinkFreshness" in normalized), JSON.stringify(normalized.aiLinkFreshness));
     check("旧stateにaiWorkProcessedIds空配列を補完", Array.isArray(normalized.aiWorkProcessedIds) && normalized.aiWorkProcessedIds.length === 0);
     check("旧journalMetaの依頼・候補stateを保持", normalized.journalMeta[TODAY]?.aiRequest === "旧依頼"
       && normalized.journalMeta[TODAY]?.aiTaskCandidates?.[0] === "旧候補", JSON.stringify(normalized.journalMeta[TODAY]));

@@ -1,5 +1,5 @@
 // v86 検証: AIフィードバック自動取り込み + 0秒思考テーマのワンタップ削除。CHANGES_v86.md参照。
-// v133でタスク側の挙動を再度変更(下記参照。テーマ側の自動追加はv86のまま無変更)。
+// v300でタスク候補stateへの書き込みを停止。テーマ側の自動追加はv86のまま無変更。
 //
 // K指示(2026-07-13):
 //   1. 「フィードバックの内容をタスクシュートの未完了タスク、0秒思考のテーマ一覧に
@@ -9,13 +9,9 @@
 //      ワンタップ削除ボタンを追加。AI由来テーマ(自動取り込み分)の削除はzeroSecThemeLogへ
 //      「不採用(outcome:"skipped")」として記録し、v75由来の学習ループに接続する。
 //
-// K指示(2026-07-21、v133): 「タスクシュートの未完了タスクへの自動登録」は撤回し、
-//   aiMitChips/adoptAiMitと同じ「候補チップを溜めて＋タップで採用」方式に戻す(tests/v133.test.js
-//   参照)。本ファイルはその方針転換を反映して更新した — タスクは state.tasks へ直接pushされず
-//   journalMeta[date].aiTaskCandidates に候補として溜まる。テーマ側の自動追加は無変更。
-//
-// ①新着FBで自動取り込み(routeモック、タスクは候補チップ化) ②冪等(2回hydrateで二重登録なし)
-// ③重複スキップ ④テーマ削除+AI由来の不採用記録 ⑤旧形式FB(セクション無し)で何も起きない
+// v300: 採用UIが既に無いため、タスク側はstate.tasksにもjournalMeta.aiTaskCandidatesにも書かない。
+// ①新着FBでテーマだけ自動取り込み(routeモック) ②冪等(2回hydrateで二重登録なし)
+// ③テーマ重複スキップ ④テーマ削除+AI由来の不採用記録 ⑤旧形式FB(セクション無し)で何も起きない
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
@@ -101,27 +97,25 @@ function check(name, cond, extra = "") {
     await passGithubGate(page);
 
     // ============================================================
-    // [1] 新着FBで自動取り込み(タスク+テーマ+トースト)
+    // [1] 新着FBでテーマだけ自動取り込み
     // ============================================================
-    console.log("[1] 新着フィードバックから「明日への提案」→未完了タスク、「0秒思考テーマ」→テーマ一覧、へ自動登録される");
+    console.log("[1] 新着フィードバックから0秒思考テーマだけを自動登録する");
     feedbackFixture = {
       [YEST]: "# AIフィードバック本文_v86\n\n## 0秒思考テーマ\n\n- [ ] 新規テーマ1_v86: 理由1_v86\n\n## 明日への提案\n\n- [ ] 新規タスク1_v86: 理由A_v86\n"
     };
     await seed({ tasks: [] });
     const s1 = await readState();
-    // v133: 「明日への提案」はもう state.tasks へ直接登録されない(journalMeta[前日].aiTaskCandidates
-    // へ候補として溜まるだけ)。実タスク化されないことと、候補配列に入ることの両方を確認する。
     const task1 = (s1.tasks || []).find((t) => t.title === "新規タスク1_v86");
-    check("「明日への提案」はもうstate.tasksへ直接登録されない(v133)", !task1, JSON.stringify(task1));
-    check("「明日への提案」がjournalMeta[前日].aiTaskCandidatesへ候補として登録される",
-      (s1.journalMeta?.[YEST]?.aiTaskCandidates || []).includes("新規タスク1_v86"), JSON.stringify(s1.journalMeta?.[YEST]));
+    check("「明日への提案」はstate.tasksへ直接登録されない", !task1, JSON.stringify(task1));
+    check("「明日への提案」はjournalMeta[前日].aiTaskCandidatesにも登録されない",
+      !(s1.journalMeta?.[YEST]?.aiTaskCandidates || []).includes("新規タスク1_v86"), JSON.stringify(s1.journalMeta?.[YEST]));
     const theme1 = (s1.zeroThinking?.themes || []).find((t) => t.text === "新規テーマ1_v86");
     check("「0秒思考テーマ」がzeroThinking.themesへ登録される", !!theme1, JSON.stringify(s1.zeroThinking));
     check("自動登録テーマにはsource:\"ai-feedback\"が付く(手動追加と区別するマーカー)", theme1 && theme1.source === "ai-feedback", JSON.stringify(theme1));
     check("取り込み済みマーカーにフィードバック自身の日付(前日)が記録される", (s1.feedbackIngestedDates || []).includes(YEST), JSON.stringify(s1.feedbackIngestedDates));
     const toastText1 = await page.locator("#toast").textContent().catch(() => "");
-    check("取り込み件数がトーストで通知される(タスク候補1件・テーマ1件、v133で文言変更)",
-      (toastText1 || "").includes("タスク候補1件") && (toastText1 || "").includes("テーマ1件"), toastText1);
+    check("テーマ件数だけをトースト通知し、存在しない候補UIへ誘導しない",
+      !(toastText1 || "").includes("タスク候補") && (toastText1 || "").includes("テーマ1件"), toastText1);
 
     // ============================================================
     // [2] 冪等性: 同じ日付のフィードバックは、visibilitychange等で2回hydrateされても二重登録しない
@@ -135,7 +129,7 @@ function check(name, cond, extra = "") {
     const s2 = await readState();
     const matchesTask2 = (s2.journalMeta?.[YEST]?.aiTaskCandidates || []).filter((t) => t === "新規タスク1_v86");
     const matchesTheme2 = (s2.zeroThinking?.themes || []).filter((t) => t.text === "新規テーマ1_v86");
-    check("2回目のhydrateでタスク候補が二重登録されない", matchesTask2.length === 1, JSON.stringify(matchesTask2));
+    check("2回目のhydrateでもタスク候補は登録されない", matchesTask2.length === 0, JSON.stringify(matchesTask2));
     check("2回目のhydrateでテーマが二重登録されない", matchesTheme2.length === 1, JSON.stringify(matchesTheme2));
     check("api.github.comへは複数回fetchが飛んでいる(裏取り: 冪等ゲートはfetch側でなく登録側)",
       feedbackApiRequests.filter((p) => p.endsWith(`AIフィードバック_${YEST}.md`)).length >= 2, JSON.stringify(feedbackApiRequests));
@@ -155,9 +149,9 @@ function check(name, cond, extra = "") {
       !(s2b.zeroThinking?.themes || []).some((t) => t.text === "別のテーマ_v86"), JSON.stringify(s2b.zeroThinking));
 
     // ============================================================
-    // [3] 重複スキップ: 既存の同名タスク・同文テーマがあれば追加しない
+    // [3] 既存タスクは維持し、同文テーマがあれば追加しない
     // ============================================================
-    console.log("[3] 既存の同名タスク・同文テーマ(前日から残っているもの含む)は重複登録しない");
+    console.log("[3] 既存タスクは維持し、同文テーマ(前日から残っているもの含む)は重複登録しない");
     feedbackFixture = {
       [YEST]: "# AIフィードバック本文_v86\n\n## 0秒思考テーマ\n\n- [ ] 既存テーマ_v86: 理由\n\n## 明日への提案\n\n- [ ] 既存タスク_v86: 理由\n"
     };
@@ -170,7 +164,7 @@ function check(name, cond, extra = "") {
     const candidateMatches3 = (s3.journalMeta?.[YEST]?.aiTaskCandidates || []).filter((t) => t === "既存タスク_v86");
     const themeMatches3 = (s3.zeroThinking?.themes || []).filter((t) => t.text === "既存テーマ_v86");
     check("同名の未完了タスクが既にあれば増えない(繰越タスクとの重複防止)", taskMatches3.length === 1, JSON.stringify(taskMatches3));
-    check("同名の未完了タスクが既にあれば候補チップにも追加されない(v133)", candidateMatches3.length === 0, JSON.stringify(candidateMatches3));
+    check("既存タスクの有無にかかわらず候補stateへ追加しない", candidateMatches3.length === 0, JSON.stringify(candidateMatches3));
     check("同文のテーマが既にあれば増えない", themeMatches3.length === 1, JSON.stringify(themeMatches3));
 
     // ============================================================

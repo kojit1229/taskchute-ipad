@@ -1,6 +1,6 @@
 // v77回帰 + v299 Test-Reduction:
 // 削除された朝プラン決定論エンジンの配置テストはソース不存在へ更新する。
-// visibilitychange再取得とAIフィードバック自動取り込み(E)は実動作で維持する。
+// visibilitychange再取得とAIフィードバックの0秒思考テーマ自動取り込み(E)は実動作で維持する。
 const fs = require("fs");
 const path = require("path");
 const {
@@ -90,7 +90,7 @@ function check(name, cond, extra = "") {
     await page.goto(`http://localhost:${PORT}/`);
     await passGithubGate(page);
 
-    console.log("[4] visibilitychangeで前日フィードバックを再取得・自動取り込み");
+    console.log("[4] visibilitychangeで前日フィードバックを再取得してもタスク候補へ書かない");
     delete feedbackFixture[YEST];
     await seed();
     const beforeCandidates = await page.evaluate(({ key, yest }) => {
@@ -105,15 +105,15 @@ function check(name, cond, extra = "") {
       document.dispatchEvent(new Event("visibilitychange"));
     });
     await page.waitForFunction(({ key, yest }) => {
-      return (JSON.parse(localStorage.getItem(key)).journalMeta?.[yest]?.aiTaskCandidates || []).includes("新着提案_v77");
+      return (JSON.parse(localStorage.getItem(key)).feedbackFiles || []).includes(yest);
     }, { key: KEY, yest: YEST });
     const afterCandidates = await page.evaluate(({ key, yest }) => {
       return JSON.parse(localStorage.getItem(key)).journalMeta?.[yest]?.aiTaskCandidates || [];
     }, { key: KEY, yest: YEST });
-    check("復帰時に前日候補へ反映", afterCandidates.includes("新着提案_v77"), JSON.stringify(afterCandidates));
+    check("復帰時も前日候補へ書き込まない", !afterCandidates.includes("新着提案_v77"), JSON.stringify(afterCandidates));
     check("api.github.comへ前日分を再fetch", feedbackApiRequests.filter((p) => p.endsWith(`AIフィードバック_${YEST}.md`)).length >= 2, JSON.stringify(feedbackApiRequests));
 
-    console.log("[6a] フィードバックの0秒思考テーマと明日への提案を自動取り込み");
+    console.log("[6a] 0秒思考テーマだけを自動取り込み、明日への提案は書き込まない");
     await page.clock.setFixedTime(now0);
     feedbackFixture = {
       [YEST]: "# AIフィードバック本文YEST_v77\n\n## 0秒思考テーマ\n\n- [ ] テーマFB1_v77: 理由FB1_v77\n- [ ] テーマFB2_v77: 理由FB2_v77\n\n## 明日への提案\n\n- [ ] 提案1_v77\n"
@@ -121,8 +121,7 @@ function check(name, cond, extra = "") {
     await seed();
     await page.waitForFunction(({ key, yest }) => {
       const state = JSON.parse(localStorage.getItem(key));
-      return (state.zeroThinking?.themes || []).some((theme) => theme.text === "テーマFB2_v77") &&
-        (state.journalMeta?.[yest]?.aiTaskCandidates || []).includes("提案1_v77");
+      return (state.zeroThinking?.themes || []).some((theme) => theme.text === "テーマFB2_v77");
     }, { key: KEY, yest: YEST });
     const state6a = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), KEY);
     check("FB由来テーマ2件を自動登録",
@@ -130,7 +129,7 @@ function check(name, cond, extra = "") {
       state6a.zeroThinking.themes.some((theme) => theme.text === "テーマFB2_v77" && theme.source === "ai-feedback"),
       JSON.stringify(state6a.zeroThinking));
     check("明日への提案をtasksへ直接登録しない", !(state6a.tasks || []).some((task) => task.title === "提案1_v77"));
-    check("明日への提案を前日の候補へ登録", (state6a.journalMeta?.[YEST]?.aiTaskCandidates || []).includes("提案1_v77"));
+    check("明日への提案を前日の候補へ登録しない", !(state6a.journalMeta?.[YEST]?.aiTaskCandidates || []).includes("提案1_v77"));
     check("取り込み済み日付を記録", (state6a.feedbackIngestedDates || []).includes(YEST));
 
     console.log("[6c] 見出しのない旧形式フィードバックはフェイルソフト");

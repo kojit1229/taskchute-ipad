@@ -1,0 +1,80 @@
+{
+  "version": 300,
+  "date": "2026-08-30",
+  "title": "AI関連機能整理グループB(B-3除外)+C",
+  "summary": "AI機能棚卸しのグループBからB-1(aiScheduleHistory新規書き込みと到達不能な却下理由UI)、B-2(aiLinkFreshness補完・更新)、B-4(aiMitCandidates初期化残骸)を削除し、グループCのK承認案(b)としてautoIngestFeedbackによるaiTaskCandidates書き込みと存在しない候補UIへの誘導トーストを停止した。あわせて呼び出し元の無いMIT候補抽出関数を削除した。生存する下書きスケジュール、0秒思考テーマ自動取り込み、AIレポート、plan-step、B-3同期契約は維持した。",
+  "changedFiles": [
+    "CHANGES_v300.md",
+    "releases/v300.json",
+    "app.js",
+    "src/features/timeline.js",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/timeline-render-core.test.js",
+    "tests/v59.test.js",
+    "tests/v71.test.js",
+    "tests/v285.test.js",
+    "tests/v300.test.js",
+    "tests/v299.test.js",
+    "tests/v60.test.js",
+    "tests/v62.test.js",
+    "tests/v67.test.js",
+    "tests/v75.test.js",
+    "tests/v76.test.js",
+    "tests/v77.test.js",
+    "tests/v86.test.js",
+    "tests/v133.test.js",
+    "tests/v199.test.js",
+    "tests/v240.test.js",
+    "docs/code-index.generated.md",
+    "docs/code-index.generated.json",
+    "docs/test-impact-map.generated.md",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "B-1はaiScheduleHistoryへの新規書き込みと、非null値が一度も設定されない却下理由UI・Undo履歴参照だけを削除する。旧履歴のnormalize互換と、維持対象のai-schedule/runAiSchedule/_scheduleDraft/確定・削除・破棄・Undo実操作は残す。",
+    "B-2は表示先の無いaiLinkFreshness(feedbackAt/planAt)のnormalize補完・取得成功時更新・AIプラン鮮度専用fetchを削除する。",
+    "B-4はv240でUI/action撤去済みのjournalMeta.aiMitCandidates初期化だけを削除する。",
+    "CはK承認案(b)どおりautoIngestFeedbackからaiTaskCandidatesへの書き込みを除き、0秒思考テーマ自動取り込み経路には触れない。呼び出し元を失ったextractMITCandidatesFromReportも削除する。"
+  ],
+  "changes": [
+    "app.js: draft-confirm/draft-remove/draft-discard/draft-undoからaiScheduleHistoryのpush/splice連動を除き、呼び出し元を失ったrecordScheduleHistoryと上限定数を削除した。aiScheduleHistoryの旧state補完は残した。",
+    "app.js/src/features/timeline.js: 常に空だった却下理由ピッカーのstate・定数・renderer・action 2件・DIを削除し、Undoスナップショットを引数なしの下書きコピーへ簡素化した。",
+    "app.js: normalizeStateのaiLinkFreshness/feedbackAt/planAt補完、フィードバック取得時のfeedbackAt更新、AIプラン存在確認によるplanAt更新、fetchAiPlanFreshnessDateを削除した。",
+    "app.js: journalMeta作成時4箇所とnormalizeStateからaiMitCandidates初期化を削除した。",
+    "app.js: autoIngestFeedbackの明日への提案→aiTaskCandidates書き込みブロックと候補件数トーストを削除し、0秒思考テーマ抽出・重複排除・追加・監査ログ経路を維持した。",
+    "app.js: 呼び出し元の無いextractMITCandidatesFromReportを削除し、autoIngestFeedbackの説明を0秒思考テーマだけを自動取り込みする現行動作へ更新した。",
+    "tests: v71/v285から廃止済みaiLinkFreshnessの保持期待だけを除き、v285のB-3保持assertionは維持した。action golden listは却下理由action 2件を除いた221件へ更新し、v59/timeline-render-coreの不要なテスト依存も追従した。",
+    "tests: v60/v62/v199はai-scheduleを発火するreal-browser E2Eのまま確定・削除・破棄・Undo・Block更新と履歴非書き込みを検証し、v75/v76/v77/v86/v133は候補非書き込みとテーマ自動取り込み維持へ追随した。v67/v240は対象初期化の不存在へ追随し、v300境界契約を追加した。",
+    "sw.js: CACHE_NAMEをv299からv300へ更新した。"
+  ],
+  "skipped": [
+    "B-3(aiWorkProcessedIds/aiStepProcessedIds/aiStepPendingRequestsとsrc/sync/github.jsの集合和・pending復活防止)は人間承認が必要な別スコープのため無改修。",
+    "グループDのAIレポート、ai-schedule/runAiSchedule/_scheduleDraft、plan-step-request、putAiStepRequest、aiInsightsPanelと、グループEの週次レビュー登録・0秒思考テーマ自動取り込みは無改修。"
+  ],
+  "uncertainties": [
+    "aiScheduleHistoryとjournalMeta.aiTaskCandidatesの旧state正規化・既存保存値はmigrationを行わず残しているため、過去データはlocalStorage/同期state内に残るが、新規書き込みも表示導線も無い。これは今回の『書き込み/初期化だけを削除』という狭いスコープに従ったもの。"
+  ],
+  "reviewFocus": [
+    "app.jsにrecordScheduleHistory、aiScheduleHistoryへのpush/splice、aiLinkFreshness/feedbackAt/planAt、fetchAiPlanFreshnessDate、aiMitCandidates、aiTaskCandidates.push、候補UI誘導トーストが残っていないこと。",
+    "却下理由UIのstate・定数・renderer・action・timeline DIとextractMITCandidatesFromReportが現行コード/テストに残っていないこと。",
+    "ai-schedule/runAiSchedule/_scheduleDraft/computeFreeGaps/confirmScheduleDraftの実導線を静的チェックへ劣化させず、v60/v62/v199がreal-browser E2Eのまま通ること。",
+    "autoIngestFeedback内の0秒思考テーマ抽出・重複排除・state.zeroThinking.themes.push・zeroSecThemeLog経路が変更されていないこと。",
+    "src/sync/github.jsとB-3のaiWorkProcessedIds/aiStepProcessedIds/aiStepPendingRequestsに差分が無いこと。"
+  ],
+  "verification": [
+    "CHROME_PATH指定のnode scripts/release-gate.js releases/v300.json --final --suite=v60,v62,v67,v75,v76,v77,v86,v133,v199,v240 は、影響回帰28 suitesとcore 10 suitesを含めPASS（329.5秒）。",
+    "npm.cmd run test:core は初回にv299の旧CACHE_NAME固定期待、再試行時にv50の一過性ERR_EMPTY_RESPONSEを検出した。v299を履歴リリースとしてv299以上の単調増加検証へ修正し、v299単体とv50単体をPASS後、core 10 suitesを再実行してALL PASS（94.5秒）。",
+    "node --check app.js/sw.jsと変更したtests 11本+新規v300の計13ファイルがPASS。",
+    "CHROME_PATH指定の直接影響11スイート(v60/v62/v199、v67/v240/v300、v75/v76/v77/v86/v133)を3群で単独実行し、全スイートALL PASS。",
+    "npm.cmd run code:index:writeでcode index 599 functions、npm.cmd run test:manifest:writeで175 suitesを生成。",
+    "追加レビュー対象9スイート(action-registry-core/v59/timeline-render-core/v60/v62/v67/v71/v285/v299)を個別実行し、すべてPASS。",
+    "現在のv300作業ツリー全体の実行コード差分はapp.js 281行+src/features/timeline.js 9行+sw.js 2行=292行(追加39/削除253、net -214行)。標準ゲートのchurn上限200行を超えるため、監督者の選択的コミット時に分割が必要。"
+  ],
+  "notes": [
+    "既存テスト書き換え前にapp.js全体をgrepし、computeFreeGaps/runAiSchedule/confirmScheduleDraft/normalizeState/autoIngestFeedbackが生存機能から到達することを確認したため、対象E2Eは静的存在チェックへ落とさず実ブラウザ経路を維持した。"
+  ],
+  "knownLimitations": [
+    "コミット・push・release-gate --final・CI全量・iOS Safari実機PWA確認・独立レビューは別の監督レビュー工程で実施する。"
+  ]
+}
