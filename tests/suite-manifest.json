@@ -15,7 +15,7 @@
       ],
       "assertionSignals": 34,
       "assertionHash": "f841e3459002f00f",
-      "sourceHash": "c0365df26f757cc5",
+      "sourceHash": "6365306139206cb1",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -514,7 +514,7 @@
       ],
       "assertionSignals": 41,
       "assertionHash": "47415f0e134d1198",
-      "sourceHash": "7b08c277d904631e",
+      "sourceHash": "c188c8826c86c674",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -612,9 +612,9 @@
         "journal-health",
         "ui-responsive"
       ],
-      "assertionSignals": 158,
-      "assertionHash": "cc1e900c1787feef",
-      "sourceHash": "20a15070407e9a61",
+      "assertionSignals": 159,
+      "assertionHash": "ecc8ee4e82b1882e",
+      "sourceHash": "8458c6de583f872f",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -1281,23 +1281,23 @@
       "kind": "e2e",
       "tier": "full",
       "domains": [
-        "planning-execution",
         "journal-health",
-        "content-ai"
+        "content-ai",
+        "ui-responsive"
       ],
-      "assertionSignals": 12,
-      "assertionHash": "e88525d03361861d",
-      "sourceHash": "48b4040da3596586",
+      "assertionSignals": 11,
+      "assertionHash": "d5a838949f3e5de4",
+      "sourceHash": "07f7277e296a07da",
       "waits": {
-        "fixedCount": 7,
-        "numericMilliseconds": 2700,
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
         "unresolvedCount": 0
       },
       "sideEffects": {
         "browser": true,
         "server": true,
         "fileWrite": false,
-        "networkMock": true,
+        "networkMock": false,
         "clock": true
       }
     },
@@ -1380,12 +1380,12 @@
         "planning-execution",
         "journal-health"
       ],
-      "assertionSignals": 20,
-      "assertionHash": "aa62f1cec7c6329d",
-      "sourceHash": "728e795cf18a0896",
+      "assertionSignals": 21,
+      "assertionHash": "01d42c4fe4b05f69",
+      "sourceHash": "481eb5418683c186",
       "waits": {
-        "fixedCount": 12,
-        "numericMilliseconds": 3650,
+        "fixedCount": 9,
+        "numericMilliseconds": 2700,
         "unresolvedCount": 0
       },
       "sideEffects": {
@@ -1992,7 +1992,7 @@
     },
     {
       "file": "v193.test.js",
-      "kind": "e2e",
+      "kind": "node",
       "tier": "full",
       "domains": [
         "content-ai",
@@ -2000,20 +2000,20 @@
         "planning-execution",
         "ui-responsive"
       ],
-      "assertionSignals": 34,
-      "assertionHash": "6087a1be807c3e03",
-      "sourceHash": "c19d61529b273043",
+      "assertionSignals": 12,
+      "assertionHash": "6903f02405ed7075",
+      "sourceHash": "8ce28ffe63d1c0c8",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
         "unresolvedCount": 0
       },
       "sideEffects": {
-        "browser": true,
-        "server": true,
+        "browser": false,
+        "server": false,
         "fileWrite": false,
-        "networkMock": true,
-        "clock": true
+        "networkMock": false,
+        "clock": false
       }
     },
     {
@@ -2072,9 +2072,9 @@
         "planning-execution",
         "content-ai"
       ],
-      "assertionSignals": 28,
-      "assertionHash": "f94d8b7afe6e9b84",
-      "sourceHash": "0a671c2032e837de",
+      "assertionSignals": 29,
+      "assertionHash": "98423fdf6625911e",
+      "sourceHash": "034f3f049bd2aa15",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2146,7 +2146,7 @@
       ],
       "assertionSignals": 46,
       "assertionHash": "fc84b56c540a579a",
-      "sourceHash": "c4c5a82c71e9873d",
+      "sourceHash": "5b01d71ab4eb30a6",
       "waits": {
         "fixedCount": 9,
         "numericMilliseconds": 3300,
@@ -2601,9 +2601,9 @@
         "sync-storage",
         "ui-responsive"
       ],
-      "assertionSignals": 59,
-      "assertionHash": "9c94fffbf3d02121",
-      "sourceHash": "d9218bdf59f38cb9",
+      "assertionSignals": 60,
+      "assertionHash": "8685513bcd64d7e7",
+      "sourceHash": "4a82772d644164f6",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3157,6 +3157,30 @@
       }
     },
     {
+      "file": "v299.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "content-ai"
+      ],
+      "assertionSignals": 29,
+      "assertionHash": "020ee765aa38495b",
+      "sourceHash": "2eb4aff4d67cc410",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
       "file": "v49.test.js",
       "kind": "e2e",
       "tier": "full",
@@ -3325,25 +3349,27 @@
     },
     {
       "file": "v59.test.js",
-      "kind": "e2e",
+      "kind": "node",
       "tier": "smoke",
       "domains": [
-        "planning-execution"
+        "sync-storage",
+        "planning-execution",
+        "content-ai"
       ],
-      "assertionSignals": 19,
-      "assertionHash": "df3cb80e418bd2d7",
-      "sourceHash": "c56a668cfde0cd2a",
+      "assertionSignals": 11,
+      "assertionHash": "2b407762b4a17b31",
+      "sourceHash": "49314a08186397f9",
       "waits": {
-        "fixedCount": 7,
-        "numericMilliseconds": 2600,
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
         "unresolvedCount": 0
       },
       "sideEffects": {
-        "browser": true,
-        "server": true,
+        "browser": false,
+        "server": false,
         "fileWrite": false,
         "networkMock": false,
-        "clock": true
+        "clock": false
       }
     },
     {
@@ -3354,12 +3380,12 @@
         "content-ai",
         "security-offline"
       ],
-      "assertionSignals": 29,
-      "assertionHash": "81389e9fdb6cb777",
-      "sourceHash": "b6e5977cdabf9bf3",
+      "assertionSignals": 30,
+      "assertionHash": "0f60e2453b636057",
+      "sourceHash": "dada0b21166bd592",
       "waits": {
-        "fixedCount": 21,
-        "numericMilliseconds": 8100,
+        "fixedCount": 19,
+        "numericMilliseconds": 7300,
         "unresolvedCount": 0
       },
       "sideEffects": {
@@ -3377,12 +3403,12 @@
       "domains": [
         "planning-execution"
       ],
-      "assertionSignals": 43,
-      "assertionHash": "972dc7448f071589",
-      "sourceHash": "82d989fee13ce77a",
+      "assertionSignals": 40,
+      "assertionHash": "cfbf4214697ebfb9",
+      "sourceHash": "ae28414991c11a3d",
       "waits": {
-        "fixedCount": 24,
-        "numericMilliseconds": 7450,
+        "fixedCount": 19,
+        "numericMilliseconds": 5600,
         "unresolvedCount": 0
       },
       "sideEffects": {
@@ -3401,12 +3427,12 @@
         "journal-health",
         "content-ai"
       ],
-      "assertionSignals": 54,
-      "assertionHash": "5036b8b22b69d76c",
-      "sourceHash": "4486713f43522213",
+      "assertionSignals": 39,
+      "assertionHash": "d1bca9d8cc9cf183",
+      "sourceHash": "3670920892d1e068",
       "waits": {
-        "fixedCount": 25,
-        "numericMilliseconds": 9800,
+        "fixedCount": 21,
+        "numericMilliseconds": 8150,
         "unresolvedCount": 0
       },
       "sideEffects": {
@@ -3447,12 +3473,12 @@
       "domains": [
         "planning-execution"
       ],
-      "assertionSignals": 32,
-      "assertionHash": "e1402c17c252a70f",
-      "sourceHash": "e83655a1e0044a8d",
+      "assertionSignals": 27,
+      "assertionHash": "68879b652c2c9fb7",
+      "sourceHash": "8d94f1cdddd61039",
       "waits": {
-        "fixedCount": 18,
-        "numericMilliseconds": 5250,
+        "fixedCount": 15,
+        "numericMilliseconds": 4000,
         "unresolvedCount": 0
       },
       "sideEffects": {
@@ -3610,15 +3636,15 @@
       "kind": "e2e",
       "tier": "full",
       "domains": [
-        "content-ai",
-        "ui-responsive"
+        "planning-execution",
+        "content-ai"
       ],
-      "assertionSignals": 31,
-      "assertionHash": "58de46223f601190",
-      "sourceHash": "25b3100aa2aa1d62",
+      "assertionSignals": 17,
+      "assertionHash": "78f55577388714fa",
+      "sourceHash": "5af6968a1ea07f7c",
       "waits": {
-        "fixedCount": 8,
-        "numericMilliseconds": 4050,
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
         "unresolvedCount": 0
       },
       "sideEffects": {
@@ -3658,16 +3684,14 @@
       "kind": "e2e",
       "tier": "full",
       "domains": [
-        "planning-execution",
-        "content-ai",
-        "ui-responsive"
+        "content-ai"
       ],
-      "assertionSignals": 33,
-      "assertionHash": "deb1a81aa69a97bc",
-      "sourceHash": "1914b03ddeec988d",
+      "assertionSignals": 20,
+      "assertionHash": "f0cad87a17cc5944",
+      "sourceHash": "ee01e1cd0e3d13b6",
       "waits": {
-        "fixedCount": 6,
-        "numericMilliseconds": 2850,
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
         "unresolvedCount": 0
       },
       "sideEffects": {
