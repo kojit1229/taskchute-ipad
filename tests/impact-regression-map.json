@@ -87,7 +87,7 @@
         "^src/features/(?:today(?:-tower)?|coach)\\.js$"
       ],
       "patterns": [
-        "renderToday|renderTodayTower|towerFlights|todaySkin|coachSummaryForDate|QUICK_MEALS"
+        "renderToday|renderTodayTower|towerFlights|todaySkin|QUICK_MEALS"
       ],
       "suites": [
         "today-core",

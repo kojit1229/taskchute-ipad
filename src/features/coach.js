@@ -32,15 +32,6 @@ function trimCoachMeals(meals, anchorDate, keepDays = COACH_MEAL_KEEP_DAYS, maxM
   return recentMeals.slice(-maxMeals);
 }
 
-function coachSummaryForDate(meals, date, dailyKcal = 2278) {
-  const entries = (Array.isArray(meals) ? meals : []).filter((meal) =>
-    meal && meal.date === date && !meal.deleted);
-  const total = entries.reduce((sum, meal) =>
-    sum + (Number.isFinite(Number(meal.quickKcal)) ? Math.max(0, Number(meal.quickKcal)) : 0), 0);
-  const budget = Number.isFinite(Number(dailyKcal)) && Number(dailyKcal) > 0 ? Number(dailyKcal) : 2278;
-  return { entries, total, dailyKcal: budget, remaining: budget - total };
-}
-
 function markCoachMealDeleted(meals, id) {
   const updatedAt = new Date().toISOString();
   return (Array.isArray(meals) ? meals : []).map((meal) =>
@@ -56,12 +47,6 @@ function appendQuickMeal(label, kcal) {
     time: `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`,
     kind: "quick", quickKcal: kcal, label, updatedAt: now.toISOString()
   }], date);
-  saveState();
-}
-
-function deleteMeal(id) {
-  if (!state.coachLog.meals.some((meal) => meal?.id === id && !meal.deleted)) return;
-  state.coachLog.meals = markCoachMealDeleted(state.coachLog.meals, id);
   saveState();
 }
 
@@ -106,12 +91,11 @@ function configureCoach(deps) {
       const key = `${target.dataset.label}|${target.dataset.kcal}`;
       if (key === suppressedQuickKey && Date.now() < suppressQuickUntil) return;
       appendQuickMeal(target.dataset.label, Number(target.dataset.kcal));
-    },
-    "coach-delete-meal": ({ id }) => deleteMeal(id)
+    }
   });
   installLongPressDelegation();
 }
 
 export {
-  configureCoach, coachSummaryForDate, trimCoachMeals, markCoachMealDeleted, QUICK_MEALS
+  configureCoach, trimCoachMeals, markCoachMealDeleted, QUICK_MEALS
 };

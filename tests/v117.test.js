@@ -52,8 +52,8 @@ function check(name, cond, extra = "") {
     };
   }
 
-  async function seed({ blocks = [], tasks = [], projects = [], recurrences = [], dailyDeclarations = {}, view = "home", pomodoro = null } = {}) {
-    await page.evaluate(({ KEY, blocks, tasks, projects, recurrences, dailyDeclarations, TODAY, view, pomodoro }) => {
+  async function seed({ blocks = [], tasks = [], projects = [], recurrences = [], dailyDeclarations = {}, view = "home" } = {}) {
+    await page.evaluate(({ KEY, blocks, tasks, projects, recurrences, dailyDeclarations, TODAY, view }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.blocks = blocks;
       s.tasks = tasks;
@@ -62,10 +62,8 @@ function check(name, cond, extra = "") {
       s.dailyDeclarations = dailyDeclarations;
       s.selectedDate = TODAY;
       s.currentView = view;
-      // v117(C)追補: ポモドーロ完了経路のゲートトリガー検証用(未指定なら既存どおり無変更)
-      if (pomodoro) s.pomodoro = { ...(s.pomodoro || {}), ...pomodoro };
       localStorage.setItem(KEY, JSON.stringify(s));
-    }, { KEY, blocks, tasks, projects, recurrences, dailyDeclarations, TODAY, view, pomodoro });
+    }, { KEY, blocks, tasks, projects, recurrences, dailyDeclarations, TODAY, view });
     await page.reload();
     await page.waitForTimeout(400);
   }

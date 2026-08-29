@@ -1,0 +1,63 @@
+{
+  "version": 298,
+  "date": "2026-08-30",
+  "title": "low棚卸し掃除リリース(CSS残骸+保護ルーティン縮退版の編集経路+AI Coach食事集計/削除UI+v117過集中ゲート文書参照撤去)",
+  "summary": "K裁定2026-08-29(low棚卸し初回実施)に基づく残り5クラスタの掃除リリース。#9 styles.cssのcockpitテーマ用ゾーン配色(.z-amber等8ルール)/.tl-time/.ai-freshness-*系を削除、#15 保護ルーティン縮退版(fallbackTitle/fallbackMinutes)の到達不能な編集経路をapp.jsから削除(stateフィールド・normalizeState/createRecurrenceRuleの既定生成はmigration回避のため残置)、#16 AI Coach食事集計(coachSummaryForDate)・削除UI(coach-delete-meal/deleteMeal)を削除(coachLog.mealsフィールド・trimCoachMeals・markCoachMealDeleted・appendQuickMeal等は#15と同基準で残置)、#17 settings.routineDayFilterを再精査(normalizeStateの初期化1行のみで読み手0件を再確認。削除すべき別途の孤児コードは無いためフィールドのみ残置・追加削除なし)、#18 撤去済みのv117(C)過集中ゲート(maybeOpenHyperfocusGate、v219で撤去済み)への文書参照をapp.jsコメント3箇所とCHANGES_v129.mdの追記で現状に追随させた。",
+  "changedFiles": [
+    "CHANGES_v298.md",
+    "releases/v298.json",
+    "app.js",
+    "sw.js",
+    "styles.css",
+    "src/features/coach.js",
+    "CHANGES_v129.md",
+    "tests/coach-core.test.js",
+    "docs/code-index.generated.md",
+    "docs/code-index.generated.json",
+    "docs/test-impact-map.generated.md",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "workbench/out/2026-08-29-orphan-audit/low-triage-plan.md #9・#15・#16・#17・#18のK裁定(2026-08-29「消す」)を実装する。各クラスタとも着手前にaudit.mdの記載(v289時点で古い)を現物grepで再確認したうえで削除対象を確定した。",
+    "#15/#16とも、stateフィールド自体とnormalizeState/createRecurrenceRule側の既定生成はmigration回避のため残置し、実行導線が消失済みの編集コード(関数・action・fields参照)だけを削除する(発注文の残置方針どおり)。",
+    "#18は実体(関数)ではなく文書参照のみの修正。app.js側は現状に合わせて書き換え、CHANGES_v129.md(v163以前の手書き形式のため生成対象外)は歴史的記述を書き換えず、末尾に追記として現状を注記した。"
+  ],
+  "changes": [
+    "styles.css(#9、前回セッションで実装済み・本リリースで確定): :root[data-theme=\"cockpit\"] .z-amber/.z-teal/.z-blue/.z-green(+.panel派生、計8ルール)、.timeline-card[style*=\"border-left:4px solid\"] .tl-time、.ai-freshness-line/.ai-freshness-dot(.ok/.warn込み)/.ai-freshness-bannerを削除。JS/HTML全文で対応クラスの参照が0件であることを確認済み。",
+    "app.js(#15): openBlockEditor保存処理内、繰り返しルールのkind変更時rewriteオブジェクトからfallbackTitle/fallbackMinutesの明示上書き(fields.fallbackTitle/fields.fallbackMinutesを参照する三項演算子)を削除した。オブジェクトは`...r`を先頭に展開しているため、明示キーを削っても既存値はそのまま引き継がれ挙動は無改変。kind変更を伴わない編集時の独立ブロック(fields.fallbackTitle/fields.fallbackMinutesが渡っていれば更新する、という到達不能なif節)を丸ごと削除した(UI側にdata-modal-field=\"fallbackTitle\"等が存在せず、fieldsに値が入ることが無いため常にno-opだった)。protection/anchorの同型パターンは今回の裁定対象外のため無改修で残した。",
+    "src/core/recurrence.js: 変更なし(createRecurrenceRule内のfallbackTitle/fallbackMinutes既定生成、normalizeStateの既定生成(app.js:2198)はいずれも#15の残置対象としてそのまま維持)。",
+    "src/features/coach.js(#16): coachSummaryForDate()(食事集計。呼び出し元はtests/coach-core.test.jsのみで描画側の呼び出し元が0件)を削除。deleteMeal()と対応するaction登録\"coach-delete-meal\"(削除UIの入口。data-action=\"coach-delete-meal\"がどこにも描画されておらず常時到達不能)を削除。exportからcoachSummaryForDateを外した。appendQuickMeal/QUICK_MEALS/trimCoachMeals/markCoachMealDeleted/configureCoach/installLongPressDelegationは今回の裁定対象外のため無改修で残した(coach.js自体がapp.jsからimportされていない=未配線という別の大きめの論点を確認済みだが、これは#16の指示範囲(集計・削除UIのみ)を超えるため今回は着手せず、監督者への完了報告で別途フラグする)。",
+    "tests/coach-core.test.js: 削除したcoachSummaryForDate依存の検証([1]今日の合計/[2]残りkcal/[4]削除後の再計算)を除去し、trimCoachMeals・markCoachMealDeletedの検証は維持したまま[1][2]へ振り直した(Test-Reduction: 対応する本体関数coachSummaryForDateを削除したための追随。削除UIに依存しないtrimCoachMeals/markCoachMealDeletedの検証は同等以上のまま維持している)。",
+    "app.js(#18): completePomodoro()末尾のコメント、身体スキャンセクション見出しコメント、renderModal()背景タップハンドラのコメントの計3箇所で、撤去済みのmaybeOpenHyperfocusGate()/v117(C)過集中ゲートへの言及を実態(v219で撤去済み、身体スキャンは単体表示のみ)に合わせて書き換えた。ロジックは無改変。",
+    "CHANGES_v129.md(#18): 本文(v129当時の設計判断の記録)は書き換えず、末尾に「## 追記(v298、2026-08-30)」を新設し、当時前提としていたmaybeOpenHyperfocusGate()がv219で撤去済みで現行app.jsに対応する呼び出しが無い旨を注記した。",
+    "#17: settings.routineDayFilterはapp.js:2176のnormalizeState初期化1行以外に読み手・書き手が無いことを現物grepで再確認した(audit.md時点から変化なし)。この1行自体がフィールド定義そのものであり、削除すべき別建ての「孤児コード」は存在しないため、フィールドを残置し追加のコード削除は行っていない。"
+  ],
+  "skipped": [
+    "protection(v114保護系ルーティンの連続欠落表示)とanchor(v115アンカー/習慣スタッキング)の同型の到達不能編集コード(app.js内、fields.protection/fields.anchorを参照する分岐)は、今回の発注文#15が「縮退版(fallbackTitle/fallbackMinutes)」に限定して裁定しているため対象外とした。protectionは実行率集計から除外する読み手(src/core/recurrence.js:51、app.js側の集計除外)がありデータとして生きている。anchorはtriggerAnchorPlacements(recurrence.js)が読む生きた機能。編集UI自体が無いのは同じだが、削除するかどうかは別途K裁定が必要と考え今回は触れていない。",
+    "src/features/coach.jsがapp.jsからどこからもimportされておらず、configureCoach()自体が一度も呼ばれていない(=QUICK_MEALS/appendQuickMeal/coach-quick-add含むモジュール全体が実行時に到達しない)ことを再確認時に発見した。これは#16の指示範囲(集計・削除UIのみ)より大きい論点のため、今回はcoachSummaryForDate/deleteMeal/coach-delete-mealの削除に留め、モジュール全体の要否は次回棚卸しでのK裁定に委ねる。"
+  ],
+  "uncertainties": [
+    "coach.js全体が未配線(app.jsからimportされていない)という発見が#16の当初想定より大きいため、次回棚卸し対象としてどう扱うか(モジュールごと削除/配線復活/正式放置)はK確認が必要。"
+  ],
+  "reviewFocus": [
+    "app.js #15の削除により、繰り返しルールのkind変更時にfallbackTitle/fallbackMinutesの既存値が意図せず失われていないこと(`...r`展開で引き継がれる設計を確認済みだが、独立レビューでも再確認)。",
+    "src/features/coach.js #16の削除後もappendQuickMeal(食事追加)経路・coachLog.meals(state)には触れていないこと。",
+    "CHANGES_v129.mdの追記が既存の本文を書き換えていないこと(履歴の改ざんにならない形での追随)。"
+  ],
+  "verification": [
+    "node --check app.js / node --check sw.js / node --check src/features/coach.js / node --check tests/coach-core.test.js",
+    "削除確認grep: fields.fallbackTitle/fields.fallbackMinutes(app.js)、coachSummaryForDate/coach-delete-meal/deleteMeal(全体)、.z-amber等/.tl-time/.ai-freshness-*(styles.css)、maybeOpenHyperfocusGate(app.js)は実行コード0件・実行テスト依存0件(コメント等の言及を除く。coachSummaryForDateはtests/coach-core.test.jsの説明コメントに1件残る)。",
+    "node tests/coach-core.test.js / node tests/recurrence-core.test.js / node tests/action-registry-core.test.js を個別実行しALL PASS。",
+    "node scripts/code-index.js --write / node scripts/test-manifest.js --write を実行済み。",
+    "node scripts/release-record.js releases/v298.json --write / --check"
+  ],
+  "notes": [
+    "実行コード差分(tests/**・docs/**・releases/**・*.md除く、add+del合計)はstyles.css 45行(#9、前回セッションから引き継ぎ)+app.js 30行(#15+#18)+sw.js 1行(CACHE_NAME)+src/features/coach.js 20行(#16)=96行で、原則200行の上限内。",
+    "コミット・push・release-gate --finalは監督者がK承認後に実施する(本記録は監督者からの委譲に基づく実装作業)。",
+    "artifacts/v275配下のPNG4件は本セッション開始前から作業ディレクトリ上で変更されていたものであり、本弾の変更対象ではない(バイナリのためcommit-size-gateの行数判定には影響しない)。"
+  ],
+  "knownLimitations": [
+    "コミット・push・release-gate --final・CI全量・iOS Safari実機PWA確認は監督者がK承認後に実施する。",
+    "npm test(全量)はローカルでは未実行(関連スイート個別実行+test:coreに留めた)。push時のCI(GitHub Actions 4シャード)が唯一の完全な安全網である旨、CLAUDE.mdの既存方針どおり。"
+  ]
+}

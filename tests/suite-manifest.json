@@ -34,11 +34,13 @@
       "kind": "node",
       "tier": "full",
       "domains": [
-        "content-ai"
+        "sync-storage",
+        "content-ai",
+        "ui-responsive"
       ],
-      "assertionSignals": 12,
-      "assertionHash": "19b9da2b76c56c07",
-      "sourceHash": "f2c242dd3cdf29f9",
+      "assertionSignals": 7,
+      "assertionHash": "35e0e9232bc9fc47",
+      "sourceHash": "4550ef69a72b3f0f",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -1163,7 +1165,7 @@
       ],
       "assertionSignals": 18,
       "assertionHash": "61d6d6139e6eb6f5",
-      "sourceHash": "e16d5bc4d9428bfa",
+      "sourceHash": "687174cdacb8f5ec",
       "waits": {
         "fixedCount": 6,
         "numericMilliseconds": 2200,

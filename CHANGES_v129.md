@@ -47,6 +47,14 @@
 - `tests/v87.test.js`(宣言→終了報告ループ)は完走を確認済み(身体スキャンモーダルが割り込んでも
   toast・state・z-index検証のいずれにも影響しない)。
 
+## 追記(v298、2026-08-30)
+
+上記「v117(C)過集中ゲートとの順序」節が前提としていた`maybeOpenHyperfocusGate()`は、
+本リリース後のv219(routineタブUI削除)でroutine.jsごと撤去済み。`tests/v117.test.js`も
+v219で過集中ゲート関連の検証を含めて整理されている。本節はv129当時の設計判断の記録として
+そのまま残すが、現行app.jsに対応する呼び出しは存在しない(app.js側のコメントはv298で
+実態に合わせて更新した。orphan-audit#18)。
+
 ## 検証手順
 
 1. `node --check app.js` / `node --check sw.js`

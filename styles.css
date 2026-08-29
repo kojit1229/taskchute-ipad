@@ -2066,8 +2066,7 @@ h3 {
 }
 
 /* タイムラインカードがカテゴリ色を持つ時、テキスト色は背景に対して可読に保つ */
-.timeline-card[style*="border-left:4px solid"] strong,
-.timeline-card[style*="border-left:4px solid"] .tl-time {
+.timeline-card[style*="border-left:4px solid"] strong {
   color: inherit;
 }
 .timeline-card.completed[style*="border-left"] {
@@ -2521,18 +2520,6 @@ h3 {
    「push/pullが無警告で長時間止まっている」という見落とし厳禁の異常系のため、意図的に赤で
    ホーム最上部に出す。 */
 .sync-alert-banner { background: var(--red-soft); border: 1px solid var(--red); color: var(--red); font-size: 12.5px; font-weight: 700; padding: 10px 14px; border-radius: 10px; margin-bottom: 14px; cursor: pointer; }
-
-/* v67: AI連携の鮮度インジケータ(柱1b)。sync-dot/sync-banner と同じ見た目の思想を、
-   別のクラス名(ai-freshness-*)で複製する(git同期とAI連携は別の鮮度シグナルのため)。 */
-.ai-freshness-line { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); margin: 6px 2px 0; }
-.ai-freshness-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; flex: none; }
-.ai-freshness-dot.ok { background: var(--green); opacity: .7; }
-.ai-freshness-dot.warn { background: var(--orange); opacity: 1; }
-.ai-freshness-banner {
-  background: rgba(255,149,0,.12); border: 1px solid rgba(255,149,0,.35); color: var(--text);
-  font-size: 12.5px; font-weight: 700; padding: 10px 14px; border-radius: 10px;
-  margin: 8px 0 0; cursor: pointer;
-}
 
 /* v67: AI作業ワーカー連携(柱2) — WBS行の🤝マーク + ホームの「AIが処理した作業」カード */
 .ai-work-flag { margin-left: 6px; font-size: 12px; opacity: .85; }
@@ -3775,36 +3762,6 @@ h3 {
     linear-gradient(var(--grid-line) 1px, transparent 1px),
     linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
   background-size: 100% 100%, 36px 36px, 36px 36px;
-}
-
-:root[data-theme="cockpit"] .z-amber {
-  --zb: rgba(255, 182, 72, 0.08);
-  --zl: rgba(255, 182, 72, 0.28);
-}
-:root[data-theme="cockpit"] .z-teal {
-  --zb: rgba(63, 208, 255, 0.07);
-  --zl: rgba(63, 208, 255, 0.25);
-}
-:root[data-theme="cockpit"] .z-blue {
-  --zb: rgba(106, 141, 255, 0.07);
-  --zl: rgba(106, 141, 255, 0.24);
-}
-:root[data-theme="cockpit"] .z-green {
-  --zb: rgba(74, 222, 154, 0.07);
-  --zl: rgba(74, 222, 154, 0.24);
-}
-
-:root[data-theme="cockpit"] .z-amber .panel {
-  background: linear-gradient(0deg, rgba(255, 182, 72, 0.045), rgba(255, 182, 72, 0.045)), var(--panel);
-}
-:root[data-theme="cockpit"] .z-teal .panel {
-  background: linear-gradient(0deg, rgba(63, 208, 255, 0.045), rgba(63, 208, 255, 0.045)), var(--panel);
-}
-:root[data-theme="cockpit"] .z-blue .panel {
-  background: linear-gradient(0deg, rgba(106, 141, 255, 0.04), rgba(106, 141, 255, 0.04)), var(--panel);
-}
-:root[data-theme="cockpit"] .z-green .panel {
-  background: linear-gradient(0deg, rgba(74, 222, 154, 0.045), rgba(74, 222, 154, 0.045)), var(--panel);
 }
 
 /* v190: バッチ生成AI所見の閲覧専用パネル。全テーマで紫をAIアクセントとして共有する。 */

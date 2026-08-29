@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v297";  // v297: TOWER BODY/MINDウィジェット(2軸身体スキャンの日次積み上げ+週推移。表示専用。APP_SHELL変更なし)
+const CACHE_NAME = "taskchute-journal-pwa-v298";  // v298: low棚卸し掃除リリース(CSS残骸+保護ルーティン縮退版の編集経路+AI Coach食事集計/削除UI+v117過集中ゲート文書参照撤去。APP_SHELL変更なし)
 // v293: 身体スキャン復活(K裁定2026-08-29。手動Block完了時のみ追加)
 // v290: 孤児action本体2クラスタ(AI作業結果承認/質問、AIタスク候補チップの採用/却下)を削除した(APP_SHELL変更なし)。
 // v288: WBS内検索と新規Project既定closed化を追加した(APP_SHELL変更なし)。

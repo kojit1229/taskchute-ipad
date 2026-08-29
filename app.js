@@ -10936,8 +10936,9 @@ function completePomodoro() {
     trackOnBlockCompletionChanged(completedBlock, true, { interactive: true });
   }
   saveAndRender("ポモドーロを完了しました(Blockに完了チェック)");
-  // v129: 身体スキャン(強制サンプリング)を先に見せ、閉じた後に過集中ゲート判定を行う
-  // (モーダルは1枚ずつしか出せないため。ゲート自体はv117(C)のまま、blockId必須の条件も維持)。
+  // v129: 身体スキャン(強制サンプリング)をポモドーロ完了直後に見せる
+  // (v117(C)過集中ゲートはv219のroutine.js削除で撤去済み。当時の「閉じた後にゲート判定」
+  // という順序前提は現在は対応する呼び出し先が無く、身体スキャン単体の表示のみが残る)。
   openBodyScanModal(blockId);
 }
 
@@ -10947,7 +10948,7 @@ function completePomodoro() {
 // 2026-08-29により2軸化。両軸ともデフォルト0で「記録」ボタンは常時活性=0/0も
 // 「疲労なし・回復なし」という有効な記録として保存できる)。摩擦最小のため
 // 「記録せず閉じる」(×/背景タップ/フッター)でいつでも抜けられる(スキップを強制しない)。
-// 順序: 身体スキャン→閉じた後にv117(C)過集中ゲート判定(既存の90分ガードはそのまま)。
+// v117(C)過集中ゲートはv219で撤去済み(routine.jsごと削除)。身体スキャンは単体表示のみ。
 // =============================================================
 let _pendingBodyScanCtx = null;
 const BODY_SCAN_PARTS = ["目", "肩", "胃", "頭"];
@@ -12787,8 +12788,8 @@ function renderModal(innerHTML) {
   modalRoot.onclick = (event) => {
     if (event.target !== modalRoot) return;
     // v132(Codexレビュー[med]対応): 身体スキャン表示中の背景タップはcloseModal()を直接
-    // 呼ぶと_pendingBodyScanCtxが破棄されるだけでcloseBodyScanFlow()(ゲート判定を呼ぶ)を
-    // 経由しない。明示ボタン(body-scan-discard等)と同じ「記録せず閉じる」経路へ揃える。
+    // 呼ぶと_pendingBodyScanCtxが破棄されるだけでcloseBodyScanFlow()を経由しない。
+    // 明示ボタン(body-scan-discard等)と同じ「記録せず閉じる」経路へ揃える。
     if (state.modal && state.modal.type === "bodyScan") { bodyScanDiscard(); return; }
     // v162: 未完了理由モーダルも同じ理由(_pendingIncompleteReasonCtxが残ったまま
     // dailyCloseモードのgenerateReport()が呼ばれなくなる事故を防ぐ)でskip経路へ揃える。
@@ -13693,10 +13694,6 @@ function saveBlockFromModal(id, fields) {
                 // v114: 保護系ルーティン。チェックボックス自体はliveRule前提の表示なので
                 // fields.protectionが来ていればそれを使い、来ていなければ既存値を維持する。
                 protection: fields.protection !== undefined ? Boolean(fields.protection) : (r.protection || false),
-                // v115: 縮退版(提案G①)。protection欄と同じくフィールドがliveRule.protection前提の
-                // 表示なので、来ていなければ既存値を維持する。
-                fallbackTitle: fields.fallbackTitle !== undefined ? (fields.fallbackTitle || "").trim() : (r.fallbackTitle || ""),
-                fallbackMinutes: fields.fallbackMinutes !== undefined ? fields.fallbackMinutes : (r.fallbackMinutes ?? null),
                 // v115: アンカー(提案G③)。同じくliveRule.protection前提の表示なので、
                 // 来ていなければ既存値を維持する。
                 anchor: fields.anchor !== undefined ? (fields.anchor || "") : (r.anchor || ""),
@@ -13752,21 +13749,6 @@ function saveBlockFromModal(id, fields) {
         state.recurrences = state.recurrences.map((r) => r.id === rule.id
           ? { ...r, protection: Boolean(fields.protection), updatedAt: nowDateTime() }
           : r);
-      }
-    }
-    // v115: 縮退版(fallbackTitle/fallbackMinutes)の変更をルールへ反映(kind変更を伴わない編集のみ。
-    //      kind変更時は上のrewriteで既に反映済みのためここには来ない=return済み)
-    if (existing.recurrenceGroupId && (fields.fallbackTitle !== undefined || fields.fallbackMinutes !== undefined)) {
-      const rule = (state.recurrences || []).find(
-        (r) => r.id === existing.recurrenceGroupId && !r.deleted);
-      if (rule) {
-        const nextTitle = fields.fallbackTitle !== undefined ? (fields.fallbackTitle || "").trim() : (rule.fallbackTitle || "");
-        const nextMinutes = fields.fallbackMinutes !== undefined ? fields.fallbackMinutes : (rule.fallbackMinutes ?? null);
-        if ((rule.fallbackTitle || "") !== nextTitle || (rule.fallbackMinutes ?? null) !== nextMinutes) {
-          state.recurrences = state.recurrences.map((r) => r.id === rule.id
-            ? { ...r, fallbackTitle: nextTitle, fallbackMinutes: nextMinutes, updatedAt: nowDateTime() }
-            : r);
-        }
       }
     }
     // v115: アンカー(anchor)の変更をルールへ反映(kind変更を伴わない編集のみ。
