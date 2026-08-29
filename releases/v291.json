@@ -1,0 +1,57 @@
+{
+  "version": 291,
+  "date": "2026-08-29",
+  "title": "JS孤児掃除第2弾(low棚卸し#1〜#5)",
+  "summary": "孤児全量監査(2026-08-29)とlow棚卸しで「消す」と裁定された小粒のJS残骸のうち、着手前の現物grep再確認で到達性が確認できた3クラスタ(Home撤去(v230)後片付け漏れ5点・parseAiStepIsoToMs・delete-blockの重複action登録)を削除した。監査結果と現物が食い違った2クラスタ(aiMitChips/adoptAiMit・putAiStepRequest)とdelete-projectの重複登録はスキップし、理由を記録した。",
+  "changedFiles": [
+    "CHANGES_v291.md",
+    "releases/v291.json",
+    "app.js",
+    "sw.js",
+    "tests/v197.test.js",
+    "tests/action-registry-core.test.js"
+  ],
+  "intent": [
+    "Home撤去(v230)の後片付け漏れ5点(open-questions/open-future-letter/open-vision-board/computeHomeBatteryInfo/isConditionDegraded)を削除する。",
+    "呼び出し元が無い純粋関数parseAiStepIsoToMs(v197時点で自己申告済み)を削除する。",
+    "delete-project/delete-blockの重複action登録のうち、実際に到達不能な側だけを削除する。",
+    "journalMeta[].aiMitCandidatesフィールド自体・normalizeState・plan-step本体機構(runAiSchedule/_scheduleDraft/AI引き継ぎシート)には一切触れない。"
+  ],
+  "changes": [
+    "app.jsからcomputeHomeBatteryInfo()・isConditionDegraded()/CONDITION_DEGRADED_THRESHOLD・openVisionBoard()の3関数(+関連定数)と、open-questions/open-future-letter/open-vision-boardの3action登録を削除した。",
+    "app.jsからparseAiStepIsoToMs()を削除した(実装から2バージョン以上経過しても呼び出し元が付かなかった純粋関数)。",
+    "app.jsのregisterActionsからdelete-blockの重複action登録1行を削除した(deleteBlock本体はblockモーダルの汎用削除導線から生存)。delete-projectの重複登録はtests/v126.test.js([1b])がWish Project削除ガードの防御的検証(合成data-action注入)に使っているため意図的に残置した。",
+    "Service WorkerのCACHE_NAMEをtaskchute-journal-pwa-v291へ更新した。",
+    "tests/v197.test.jsのParent 0(parseAiStepIsoToMs専用テスト区間: ヘルパー関数vm評価+14件の直接参照アサーション(正常系3・拒否系11))をTest-Reductionで削除した(検証対象自体が消滅・移行先なし)。",
+    "tests/action-registry-core.test.jsのゴールデンリスト(GOLDEN_CLICK_ACTIONS/APP_JS_REGISTERED_ACTIONS)から削除対象4action(open-questions/open-future-letter/open-vision-board/delete-block)を外し、実数224件へ追随させた。件数コメント(228→224)・区分別内訳コメントも実態へ追随させた。"
+  ],
+  "skipped": [
+    "aiMitChips/adoptAiMit: 監査対象の関数・action登録が現行app.jsに存在しない(v240+v241=3ea6005で既に完全撤去済み、コミット文言「死にチップaiMitChips/adoptAiMitを完全撤去」で自己確認)。監査(2026-08-29作成)が古い状態を参照した誤りと判断しスキップした。journalMeta[].aiMitCandidatesフィールド自体は生存中(aiScheduleCandidatesが読む。触れていない)。",
+    "putAiStepRequest: 監査は「常に補償失敗するスタブ」=orphanと分類していたが、実際はresolveAiStepConfirmSend()から呼ばれ、これは data-action=\"ai-step-confirm-send\" の生きたボタン(maybeQueueNextAiStepが開くAI引き継ぎシート、6経路のタスク完了トリガーから到達)に配線済み。tests/v198.test.jsが[6]でスタブの補償動作・[7-2/7-3/7-5]で3種の競合取消を専用検証しており、到達可能かつ計画的な段階実装(コード内コメント「3f+3gがこの中身を...差し替える」)と確認できたため削除しなかった。削除するには入口ボタン・resolveAiStepConfirmSendという plan-step本体機構自体を変更する必要があり、発注文の「plan-step本体機構は触れない」制約に抵触するためスキップした。",
+    "delete-projectの重複action登録: 上記changes参照。deleteProject関数側の防御ガードそのものをv126テストが直接検証する経路として使われており、削除するとテストの前提(合成ボタンでdelete-projectを直接発火→トースト拒否を確認)が成立しなくなるためスキップした。"
+  ],
+  "uncertainties": [
+    "putAiStepRequestを含む「AIに渡す」フロー全体は依然として常に補償失敗するスタブのままであり、今後の3f/3g実装まではユーザー向けには機能しない(本リリースでは変更なし、現状維持)。",
+    "delete-projectの重複登録を残したことで、次回の孤児監査でも同じ指摘が再度上がる可能性がある。恒久対応(v126テストをmodal-delete経路のテストへ作り直す等)はスコープ外。"
+  ],
+  "reviewFocus": [
+    "app.js/testsでcomputeHomeBatteryInfo/isConditionDegraded/CONDITION_DEGRADED_THRESHOLD/openVisionBoard/parseAiStepIsoToMsがgrep 0件であること。",
+    "action registryにopen-questions/open-future-letter/open-vision-board/delete-blockが残っていないこと(delete-projectは意図的に残置)。",
+    "journalMeta[].aiMitCandidates・normalizeState・aiScheduleCandidates・runAiSchedule/_scheduleDraft・resolveAiStepConfirmSend/putAiStepRequest/maybeQueueNextAiStepに一切変更が無いこと。",
+    "tests/v197.test.jsの削除区間がTest-Reductionトレーラー付きで、否定アサーションを含まない(検証対象自体が消滅した肯定アサーションのみ)こと。",
+    "tests/v126.test.js([1b])・tests/v159.test.js(count===0系)・tests/v198.test.js(putAiStepRequestフロー一式)が無改修で通過すること。"
+  ],
+  "verification": [
+    "grep -rn でapp.js/src配下の削除対象シンボルが0件であることを確認した。",
+    "node --check で変更した全JSファイル(app.js・sw.js・tests/v197.test.js・tests/action-registry-core.test.js)の構文を確認した。",
+    "node tests/action-registry-core.test.js / node tests/v197.test.js / node tests/v126.test.js / node tests/v159.test.js / node tests/v198.test.js を個別実行しすべてALL PASSを確認した。"
+  ],
+  "notes": [
+    "実行コード差分はapp.js 15行追加/74行削除・sw.js 1行追加/1行削除(合計91行、200行上限内)。",
+    "code:index:write / test:manifest:write / release-record.js --write --check / release-gate --final・コミット・pushは監督者がK承認後に実施する。"
+  ],
+  "knownLimitations": [
+    "コミット・push・release-gate --final・CI全量・iOS Safari実機PWA確認は監督者がK承認後に実施する。",
+    "作業開始前から変更済みのartifacts/v275 PNG 4件は本リリース対象外として保持した。"
+  ]
+}

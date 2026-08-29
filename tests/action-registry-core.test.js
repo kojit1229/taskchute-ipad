@@ -36,11 +36,15 @@
 //       registerModalHandler/dispatchModalSave/dispatchModalDelete、重複登録ガード、
 //       未登録時のfalseフォールバック)。
 //   [2] app.jsのclick dispatcher("event:click"、data-action分岐)から`action === "..."`を
-//       静的抽出する(削除済み機能のactionを除く228件(v290でATIS孤児action4件=ai-work-approve/ai-work-question/ai-task-adopt/ai-task-dismissを削除)のゴールデンリストを維持したまま、
+//       静的抽出する(削除済み機能のactionを除く224件(v290でATIS孤児action4件=ai-work-approve/ai-work-question/ai-task-adopt/ai-task-dismissを削除、
+//       v291でHome撤去(v230)後片付け孤児3件=open-questions/open-future-letter/open-vision-board
+//       +重複登録1件=delete-blockを削除)のゴールデンリストを維持したまま、
 //       段階5-2/5-3で移行済みの分だけif連鎖から消えている前提)。
 //   [3] 「if連鎖側の残存分岐リスト」(§2で静的抽出)と「レジストリ側の登録済みリスト」
 //       (4featureのconfigureXxxを空depsで呼ぶ動的実測 + app.js自身のregisterActions呼び出しの
-//       静的抽出)の**和集合が228件(v290でATIS孤児action4件=ai-work-approve/ai-work-question/ai-task-adopt/ai-task-dismissを削除)のゴールデンリストと完全一致・重複ゼロ**であることを検証する
+//       静的抽出)の**和集合が224件(v290でATIS孤児action4件=ai-work-approve/ai-work-question/ai-task-adopt/ai-task-dismissを削除、
+//       v291でHome撤去(v230)後片付け孤児3件=open-questions/open-future-letter/open-vision-board
+//       +重複登録1件=delete-blockを削除)のゴールデンリストと完全一致・重複ゼロ**であることを検証する
 //       (総数と名前一覧の保存則。段階5以降でさらに分岐を移行する際もこの形式を維持する)。
 const fs = require("fs");
 const path = require("path");
@@ -71,7 +75,7 @@ function check(name, cond, extra = "") {
   else { failures++; console.log(`  ❌ ${name} ${extra}`); }
 }
 
-// §6-1: click dispatcherから確定させたゴールデンリスト(削除済み機能のactionを除く208件)。
+// §6-1: click dispatcherから確定させたゴールデンリスト(削除済み機能のactionを除く224件)。
 // 増減・リネームがあれば、それが意図した変更(action追加/削除/移行)かどうかを必ず確認すること。
 // v235: set-sleepは主観睡眠の入力経路廃止に伴う意図的削除。
 // v270: departures-open-tomorrowはDEPARTURES削除に伴う意図的削除。
@@ -92,7 +96,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "suspend-project", "resume-project", "suspend-task", "resume-task",
   "toggle-show-suspended", "toggle-wbs-hide-done", "toggle-tasks-show-future",
   "toggle-wbs-edit", "wbs-collapse-all",
-  "add-block", "toggle-block", "toggle-task-complete", "now-start", "now-end", "delete-block",
+  "add-block", "toggle-block", "toggle-task-complete", "now-start", "now-end",
   "bulk-approve-planned", "now-mode-open", "now-mode-close",
   "now-conveyor-complete", "now-conveyor-skip",
   "generate-report", "download-report", "download-data", "save-github", "load-github",
@@ -117,10 +121,9 @@ const GOLDEN_CLICK_ACTIONS = [
   "twy-add-item", "twy-add-item-confirm", "twy-add-item-cancel",
   "modal-close", "modal-save", "modal-delete",
   "lev-judge",
-  "vision-section", "open-vision-board", "vision-board-tab", "vision-board-load",
+  "vision-section", "vision-board-tab", "vision-board-load",
   "vision-board-load-images", "vision-board-retry-images",
   "open-md-in-github", "reload-md", "ai-report-type", "ai-report-open-unread", "ai-report-refresh",
-  "open-future-letter",
   "experiment-add", "edit-experiment", "experiment-keep", "experiment-drop",
   "experiment-copy-conclusion",
   "push-report", "add-task-to-project", "add-subtask",
@@ -145,7 +148,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "zero-tab",
   "question-add", "question-edit", "question-to-theme", "question-settle", "question-reopen",
   "question-bridge", "question-bridge-submit", "question-delete",
-  "entry-to-question", "open-questions",
+  "entry-to-question",
   "report-copy-ai", "report-share-ai",
   "ai-schedule", "ai-morning-plan",
   "zerosec-theme-add", "zerosec-theme-skip",
@@ -222,17 +225,19 @@ const APP_JS_REGISTERED_ACTIONS = [
   "zt-write", "zt-save", "zt-discard", "zt-entry-open", "zt-edit-close", "zt-edit-save",
   "zero-tab", "zerosec-theme-add", "zerosec-theme-skip",
   "weekly-suggest-add",
-  // --- v177: 問い(10) ---
+  // --- v177: 問い(9。open-questionsはv230のHome撤去で到達不能化、v291孤児掃除で削除
+  //     =低優先度棚卸しK裁定2026-08-29) ---
   "question-add", "question-edit", "question-to-theme", "question-settle", "question-reopen",
   "question-bridge", "question-bridge-submit", "question-delete",
-  "entry-to-question", "open-questions",
-  // --- v177: その他(日報/AIレポート/AI連携/朝夜detailsトグル) ---
-  "ai-report-type", "ai-report-open-unread", "ai-report-refresh", "open-future-letter",
+  "entry-to-question",
+  // --- v177: その他(日報/AIレポート/AI連携/朝夜detailsトグル。open-future-letterは同じ理由で
+  //     v291孤児掃除で削除) ---
+  "ai-report-type", "ai-report-open-unread", "ai-report-refresh",
   "report-copy-ai", "report-share-ai",
   "generate-report", "download-report", "download-data",
   "carry-over", "migration-ritual-choice", "ideal-retry",
   "toggle-journal-segment",
-  // --- v178: WBS/Project/Task CRUD(18) ---
+  // --- v178: WBS/Project/Task CRUD(17。delete-blockの重複登録はv291孤児掃除で削除) ---
   "add-project", "delete-project", "add-task", "toggle-task", "delete-task",
   "toggle-project-collapse", "toggle-task-collapse",
   "wbs-search-input", "wbs-search-jump",
@@ -241,7 +246,7 @@ const APP_JS_REGISTERED_ACTIONS = [
   "toggle-plan-owner", "move-plan-step", "add-plan-step-below",  // v195: 実行計画UI
   "plan-step-request", "plan-step-approve", "plan-step-discard",  // v196: 実行計画の叩き台をAIに依頼
   "ai-step-confirm-send", "ai-step-confirm-later",  // v198: 完了トリガー→引き継ぎシート
-  "add-block", "delete-block",
+  "add-block",
   "edit-project", "edit-task", "edit-block",
   // --- v258: 12WYトラックフォームのDOM局所操作(5) ---
   "twy-kind-numeric", "twy-kind-milestone", "twy-kind-none", "twy-ms-add", "twy-ms-del",
@@ -258,8 +263,8 @@ const APP_JS_REGISTERED_ACTIONS = [
   "twy-add-item", "twy-add-item-confirm", "twy-add-item-cancel",
   // --- v178: モーダル起動系(3、modal-saveはreturn意味論のためif連鎖に残置) ---
   "modal-close", "modal-delete", "lev-judge",
-  // --- v179: ビジョンボード(6) ---
-  "vision-section", "open-vision-board", "vision-board-tab", "vision-board-load",
+  // --- v179: ビジョンボード(5。open-vision-boardはv291孤児掃除で削除) ---
+  "vision-section", "vision-board-tab", "vision-board-load",
   "vision-board-load-images", "vision-board-retry-images",
   // --- v179: 実験ログ(5) ---
   "experiment-add", "edit-experiment", "experiment-keep", "experiment-drop",

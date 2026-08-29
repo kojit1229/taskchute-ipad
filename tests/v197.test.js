@@ -2,27 +2,24 @@
 // 対象: makeTaskの新フィールド既定値(aiSummary/aiQuestion/aiStepRequestId/aiStepRequestedAt)、
 // normalizeStateのstate直下3コレクション(aiStepProcessedIds/aiStepDismissedIds/
 // aiStepPendingRequests)の型正規化+決定論剪定、computeSyncMergeへのこの3コレクションの
-// マージ追随(集合和/requestIdキー和集合)、時刻パーサparseAiStepIsoToMs(C-9)。
+// マージ追随(集合和/requestIdキー和集合)。
 // トリガー・送受信UI・引き継ぎシートは後続単位(3e/3f+3g)のため本テストの対象外。
+// v291孤児掃除(低優先度棚卸しK裁定2026-08-29): 時刻パーサparseAiStepIsoToMsは実装から
+// 2バージョン以上経過しても呼び出し元が付かなかったため(本人のテストコメントが
+// 「まだ呼び出し元が無い純粋関数」と自己申告済み)、旧Part 0の専用テスト区間ごとapp.js側の
+// 関数本体を削除した(Test-Reduction: 検証対象自体が消滅したための削減、移行先はない)。
 //
-// Part 0: parseAiStepIsoToMs(app.js resident、まだ呼び出し元が無い純粋関数)。
-//   抽出前の関数本体をvmで直接評価する(v163.test.js:1-28が踏襲していたsourceBetween+vm
-//   パターンと同じ手法。抽出後の関数がsrc/**へ移った現行スイートはdynamic importへ
-//   差し替え済みだが、この関数はapp.js resident=3dの範囲のためこの手法が適合する)。
 // Part A: makeTask新フィールドの既定値(null)。
 // Part B: normalizeStateの型正規化(配列でなければ[]/要素の形が不正なら捨てる)+
 //   保留台帳の決定論剪定(processed/dismissedに入ったrequestIdは消える)。
 // Part C: computeSyncMergeへの3コレクションのマージ追随(C-5回帰: タスク等は完全に同一で
 //   この3コレクションだけに差がある入力でも、changedVsLocal/changedVsRemoteが正しく立ち、
 //   マージ結果がローカルへ適用されること)+ 和集合マージで剪定済みエントリが復活しないこと。
-const fs = require("fs");
 const path = require("path");
-const vm = require("vm");
 const { pathToFileURL } = require("url");
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, GITHUB_API_HOST, STATE_KEY } = require("./helpers");
 
 const ROOT = path.join(__dirname, "..");
-const appSource = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
 const PORT = randomPort();
 const OWNER = "kojit1229";
 const REPO = "personal-data";
@@ -33,46 +30,7 @@ function check(name, cond, extra = "") {
   else { failures++; console.log(`  ❌ ${name} ${extra}`); }
 }
 
-function sourceBetween(start, end) {
-  const from = appSource.indexOf(start);
-  const to = appSource.indexOf(end, from + start.length);
-  if (from < 0 || to < 0) throw new Error(`source marker missing: ${start} ... ${end}`);
-  return appSource.slice(from, to);
-}
-
-function loadParseAiStepIsoToMs() {
-  const src = sourceBetween("function parseAiStepIsoToMs(s) {", "// v138(review.md:31)");
-  const sandbox = {};
-  vm.createContext(sandbox);
-  vm.runInContext(src, sandbox);
-  return sandbox.parseAiStepIsoToMs;
-}
-
 (async () => {
-  // ============================================================
-  // Part 0: parseAiStepIsoToMs(C-9)
-  // ============================================================
-  console.log("[0] parseAiStepIsoToMs: ミリ秒付き/無しの正常系とパース不能系");
-  {
-    const f = loadParseAiStepIsoToMs();
-    check("ミリ秒3桁付きUTC", f("2026-08-07T12:34:56.789Z") === Date.UTC(2026, 7, 7, 12, 34, 56, 789));
-    check("ミリ秒1桁付きUTC(桁埋め)", f("2026-08-07T12:34:56.7Z") === Date.UTC(2026, 7, 7, 12, 34, 56, 700));
-    check("ミリ秒無しUTC", f("2026-08-07T12:34:56Z") === Date.UTC(2026, 7, 7, 12, 34, 56, 0));
-    check("Zサフィックス無しはnull(ローカル日時と誤認しない)", f("2026-08-07T12:34:56") === null);
-    check("タイムゾーンオフセット表記はnull", f("2026-08-07T12:34:56+09:00") === null);
-    check("日付のみはnull", f("2026-08-07") === null);
-    check("不正文字列はnull", f("not-a-date") === null);
-    check("nullはnull", f(null) === null);
-    check("空文字はnull", f("") === null);
-    check("undefinedはnull", f(undefined) === null);
-    check("数値型はnull(型不正)", f(20260807) === null);
-    // 堅牢性レビュー修正5: Date.UTC()の桁上がりで存在しない日付が別の有効日時へ正規化される
-    // 欠陥の回帰(loop/scripts/ai-step-validate.pyの同種修正と対応)。
-    check("月13は存在しない日付でnull", f("2026-13-01T00:00:00.000Z") === null);
-    check("2月30日は存在しない日付でnull", f("2026-02-30T00:00:00.000Z") === null);
-    check("時25時は存在しない時刻でnull", f("2026-08-07T25:00:00.000Z") === null);
-  }
-
   // ============================================================
   // Part E(堅牢性レビュー修正1・2): mergeAiStepPendingRequestsの決定論タイブレーク +
   // computeSyncMerge時点での即時剪定。ブラウザ不要のNode直接import(store-core.test.jsと同じ

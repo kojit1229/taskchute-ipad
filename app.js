@@ -498,16 +498,10 @@ registerActions({
   "question-bridge-submit": () => submitQuestionBridge(),
   "question-delete": ({ id }) => deleteQuestion(id),
   "entry-to-question": ({ id }) => entryToQuestion(id),
-  "open-questions": () => { state.settings.zeroTab = "question"; persistLocalNoSchedule(); setView("zero"); },
   // --- その他: 日報/AIレポート/AI連携/マイグレーション儀式/朝夜detailsトグル ---
   "ai-report-type": ({ target }) => setAiReportType(target.dataset.type),
   "ai-report-open-unread": ({ target }) => openUnreadAiReport(target.dataset.kind, target.dataset.file),
   "ai-report-refresh": () => refreshAiReports(),
-  "open-future-letter": () => {
-    state.settings.aiReportType = "letter";
-    persistLocalNoSchedule();
-    setView("ai-reports");
-  },
   "report-copy-ai": () => copyReportToClipboard(),
   "report-share-ai": () => shareReport(),
   "generate-report": () => {
@@ -556,7 +550,10 @@ function twyEditorCommitted(message) {
 }
 
 registerActions({
-  // --- WBS/Project/Task CRUD(18) ---
+  // --- WBS/Project/Task CRUD(17。delete-blockの重複action登録はv291孤児掃除で削除
+  //     =deleteBlock本体はblockモーダルの汎用削除導線(下方のregisterModalHandler呼び出し)
+  //     から生存。delete-projectは重複だがv126テストの防御ガード直接検証(合成data-action
+  //     注入)が依存するため意図的に残置=低優先度棚卸しK裁定2026-08-29) ---
   "add-project": () => addProject(),
   "delete-project": ({ id }) => deleteProject(id),
   "add-task": () => addTask(),
@@ -581,7 +578,6 @@ registerActions({
   "ai-step-confirm-later": () => closeModal(),                // v198: 引き継ぎシート「あとで」
   "plan-step-discard": () => discardPlanStepDraft(),     // v196: 下書き破棄
   "add-block": () => addBlock(),
-  "delete-block": ({ id }) => deleteBlock(id),
   "edit-project": ({ id }) => openProjectEditor(id),
   "edit-task": ({ id }) => openTaskEditor(id),
   "edit-block": ({ id }) => openBlockEditor(id),
@@ -830,9 +826,9 @@ registerModalHandler("storeVisit", {
 // 下書き系4件の`&&<guard>`条件はハンドラ内early returnへ機械的に変換(guard偽時は何もしない
 // fallthroughと等価)。ロジック無改変。
 registerActions({
-  // --- ビジョンボード(6) ---
+  // --- ビジョンボード(5。open-vision-boardはv291孤児掃除でopenVisionBoard()ごと削除。
+  //     vision-board-tab(data-index版)に統一済み=低優先度棚卸しK裁定2026-08-29) ---
   "vision-section": ({ target }) => setVisionSection(target.dataset.section),
-  "open-vision-board": ({ target }) => openVisionBoard(Number(target.dataset.index) || 0),
   "vision-board-tab": ({ target }) => setVisionBoardIndex(Number(target.dataset.index)),
   "vision-board-load": ({ target }) => loadVisionBoardPdf(target.dataset.file),
   "vision-board-load-images": ({ target }) => loadVisionBoardImages(target.dataset.file),
@@ -1270,7 +1266,9 @@ document.addEventListener("click", (event) => {
   // registerActionsへ移行した。
   if (action === "open-md-in-github") openMdInGithub(target.dataset.path);
   if (action === "reload-md") reloadStaticMarkdown();
-  // v177: ai-report-type/ai-report-refresh/open-future-letterはapp.js内のregisterActionsへ移行した。
+  // v177: ai-report-type/ai-report-refreshはapp.js内のregisterActionsへ移行した。open-future-letter
+  // も同じくv177で移行したが、v230のHome撤去で導線を失い到達不能になっていたため、v291の
+  // 孤児掃除でaction登録ごと削除した(低優先度棚卸しK裁定2026-08-29)。
   // ai-work-approve/ai-work-questionも同じくv177で移行したが、v290(R3)でATIS6機能の完全廃止に
   // 伴い関数本体ごと削除した(K裁定2026-08-27)。
   // v179: experiment-add〜experiment-copy-conclusion(実験ログ5)はapp.js内の
@@ -1285,8 +1283,10 @@ document.addEventListener("click", (event) => {
   // v174: toggle-settings-sync/toggle-sidebarはapp.js内のregisterActionsへ移行した。
   // v173: Wish CRUDはsrc/features/wish.jsのregisterActionsへ移行した。
   // v176: zt-*/zero-tab/zerosec-theme-*(0秒思考)はapp.js内のregisterActionsへ移行した。
-  // v177: question-*/open-questions/entry-to-question(問い)・report-copy-ai/report-share-ai(AI連携)は
-  // app.js内のregisterActionsへ移行した(段階5-6b)。ai-task-adopt/ai-task-dismissも同じくv177で
+  // v177: question-*/entry-to-question(問い)・report-copy-ai/report-share-ai(AI連携)は
+  // app.js内のregisterActionsへ移行した(段階5-6b)。open-questionsも同じくv177で移行したが、
+  // v230のHome撤去で導線を失い到達不能になっていたため、v291の孤児掃除でaction登録ごと
+  // 削除した(低優先度棚卸しK裁定2026-08-29)。ai-task-adopt/ai-task-dismissも同じくv177で
   // 移行したが、v290(R3)でATIS6機能の完全廃止に伴い関数本体ごと削除した(K裁定2026-08-27)。
   // v143: journal-import-ai(手動貼り付け取込ボタン)はv141でジャーナルのAIフィードバック列
   // 自体を撤去した際に到達不能になっていたため、ハンドラごと削除した(openAiImportModal一式・
@@ -2971,18 +2971,6 @@ function idealActiveEntry(today) {
     if (text) return { date: d, text, dayNum: offset + 1 };
   }
   return null;
-}
-
-// ホームの「いま、これ」の上に表示する軽量カード。未入力日はUIを邪魔しない(空なら非表示に近い最小表示)。
-function computeHomeBatteryInfo(date) {
-  const def = defaultBatterySettings();
-  const cfg = state.settings.battery || def;
-  const max = Number.isFinite(cfg.max) ? cfg.max : def.max;
-  const now = new Date();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const level = computeBatteryLevel(date, nowMinutes);
-  const pct = max > 0 ? clamp((level / max) * 100, 0, 100) : 0;
-  return { level, max, pct, ok: pct >= BATTERY_OK_PCT };
 }
 
 // v144: エネルギーバッテリーチップ。computeBatteryLevel()の現在残量を数値+簡易バーで表示する
@@ -5409,7 +5397,7 @@ function resolveAiStepConfirmSend() {
   const handoffNote = (noteEl?.value || "").trim();
   const now = new Date();
   const requestId = `${now.getTime()}-${crypto.randomUUID().slice(0, 8)}`;
-  const requestedAt = now.toISOString();  // C-9: ミリ秒付きUTC(parseAiStepIsoToMs専用形式)
+  const requestedAt = now.toISOString();  // C-9: ミリ秒付きUTC形式
   const changedAt = nowDateTime();
   state.tasks = state.tasks.map((t) => t.id === nextStepTaskId
     ? { ...t, handoffNote, aiStatus: "queued", aiStepRequestId: requestId, aiStepRequestedAt: requestedAt, updatedAt: changedAt }
@@ -6828,34 +6816,6 @@ function parseUtcIsoToMs(s) {
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})Z$/.exec(s);
   if (!m) return 0;
   return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6]));
-}
-
-// v197(第3弾3d, C-9): aiStepRequestedAt等(toISOString()が返すミリ秒付きUTC、
-// "YYYY-MM-DDTHH:mm:ss.sssZ")をmsへ変換する。parseUtcIsoToMs(直上、ミリ秒付きを拒否)・
-// localDateTimeToMs(ローカル時刻専用でZサフィックスを無視し9時間ズレる)のどちらも
-// この用途には使えないため新設する。new Date(文字列)は経由しない(AGENTS.md規約、
-// iOS Safariのnew Date(string)誤解釈対策と同じ方針。Date.UTCの数値コンストラクタなら曖昧さが無い)。
-// パース不能な値はnullを返す(呼び出し側は経過時間判定をスキップし、表示を安全側へ倒す)。
-function parseAiStepIsoToMs(s) {
-  if (!s || typeof s !== "string") return null;
-  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?Z$/.exec(s);
-  if (!m) return null;
-  const year = Number(m[1]), month = Number(m[2]), day = Number(m[3]);
-  const hour = Number(m[4]), minute = Number(m[5]), second = Number(m[6]);
-  const millis = m[7] ? Number(m[7].padEnd(3, "0")) : 0;
-  const ms = Date.UTC(year, month - 1, day, hour, minute, second, millis);
-  // v198(堅牢性レビュー修正5): Date.UTC()は月13・2月30日等の桁上がりをそのまま採用し、
-  // 別の有効な日時へ正規化してしまう(new Date(文字列)と同種の危険)。作った値(数値msから
-  // 構築するnew Date、文字列パースではないためAGENTS.md規約に抵触しない)から各要素を
-  // 取り出し、入力値と完全一致するときだけ採用する(検証器loop/scripts/ai-step-validate.py
-  // の同種修正と対応させる)。
-  const check = new Date(ms);
-  if (
-    check.getUTCFullYear() !== year || check.getUTCMonth() !== month - 1 || check.getUTCDate() !== day
-    || check.getUTCHours() !== hour || check.getUTCMinutes() !== minute || check.getUTCSeconds() !== second
-    || check.getUTCMilliseconds() !== millis
-  ) return null;
-  return ms;
 }
 
 // v138(review.md:31): AIレポート履歴一覧の第1段。loop側 report-index-build.py が生成する
@@ -9785,17 +9745,7 @@ function deleteBlock(id) {
 // toggleConditionMeds/setConditionCapacity/setEveningMood/addGymEntry/
 // deleteGymEntryはsrc/features/journal.jsへ移動した(app.js分割・段階4-3)。ensureConditionLogは
 // inputイベントdispatcher(data-condition-note-date分岐)からも呼ばれるため冒頭でimportして
-// 参照を切り替えた。isConditionDegraded/CONDITION_DEGRADED_THRESHOLD(Home縮退モード表示が
-// 参照)はジャーナル専用ではないためapp.js側に残した。
-// v73: 縮退モードの閾値。SPEC(condition-os/SPEC.md)は「体調1〜10・4以下」だが、既存の朝の
-// 体調ピッカーは離散5段階(悪い0/少し悪い3/普通5/少し良い7/良い10)であり、二重のピッカーを
-// 増やさずこの離散値へ読み替えた: 下位2段(悪い・少し悪い = 3以下)を縮退トリガーとする
-// (CHANGES_v73.md参照)。
-const CONDITION_DEGRADED_THRESHOLD = 3;
-function isConditionDegraded(date) {
-  const v = state.settings.morningEnergyLog[date];
-  return typeof v === "number" && v <= CONDITION_DEGRADED_THRESHOLD;
-}
+// 参照を切り替えた。
 
 // v51: dateArg で任意日を生成可能に(朝イチ自動レビュー・今日のタスク提案が昨日分を使う)。
 //      quiet = 画面遷移・トーストなしで生成だけ行う(バックグラウンド用)。
@@ -11551,15 +11501,6 @@ function setView(view = "today") {
   //      永続化のみ行い、更新時刻スタンプと自動保存はしない。
   persistLocalNoSchedule();
   renderDeferringForFocus();  // v256: JOURNAL等のIME未確定入力をタブ切替の全renderから守る
-}
-
-// v149レビュー対応(必須3): ホーム「80歳ビジョン」カードから、ビジョン画面のビジョンボード
-// (該当ページ)へ直接遷移する。setVisionSection/setVisionBoardIndexと同じフィールドを
-// 使い回すため、状態の実体は1つだけ(ビジョンタブ側の選択状態を上書きするだけで複製しない)。
-function openVisionBoard(index) {
-  state.settings.visionSection = "board";
-  state.settings.visionBoardIndex = index;
-  setView("vision");
 }
 
 function setSelectedDate(date) {
