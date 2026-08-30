@@ -1,0 +1,51 @@
+{
+  "version": 305,
+  "date": "2026-08-30",
+  "title": "実行中Blockカードのインラインメモ",
+  "summary": "タスクシュートタブの着手中Blockカードへメモ欄を追加し、入力後のblurで既存のblock.commentへ全文上書き保存する。未開始・完了済み・終了済みのカード、タイムラインタブ、今日タブには表示しない。",
+  "changedFiles": [
+    "CHANGES_v305.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v305.json",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/v305.test.js"
+  ],
+  "intent": [
+    "作業中の気づきをBlock編集モーダルまで移動せず、実行中カード上で入力してblurする1操作で記録できるようにする。",
+    "既存のdata-block-field change dispatcherとupdateBlockFieldを再利用し、保存経路を増やさない。",
+    "編集モーダルと同じblock.commentを単純上書きし、空文字による明示クリアも保持する。"
+  ],
+  "changes": [
+    "renderBlockItemでdoingが真のBlockだけ、title-lineとblock-metaの間にdata-block-field=commentのtextareaを描画するようにした。",
+    "textareaへmin-height 56pxとfont-size 16pxを指定し、iOS Safariの自動ズームを防ぎつつカード内へ収めた。",
+    "tests/v305.test.jsで正例、未開始・完了済み・終了済みの負例、空文字、localStorage永続化、blur後render、画面遷移、編集モーダル整合、入力中DOM同一性、3画面幅を検証する。",
+    "Service WorkerのCACHE_NAMEをv305へ更新する。"
+  ],
+  "uncertainties": [
+    "既存change dispatcherはblur保存直後に画面全体を同期renderする。テストではblur完了後に編集ボタンへ移動してモーダルの最新値を確認している。",
+    "iOS Safari PWA実機での日本語IME入力、blur保存、390pxカード表示はK確認が必要である。"
+  ],
+  "reviewFocus": [
+    "インライン欄がrenderBlockItemのdoing=trueだけに現れ、タイムラインと今日の描画へ混入していないこと。",
+    "data-block-field=commentが既存change dispatcherとupdateBlockFieldだけを通り、新規関数・イベント・追記ロジックが無いこと。",
+    "blur後の全体renderでも直前の入力値を失わず、編集モーダルとlocalStorageが同じblock.commentを示すこと。",
+    "font-size 16pxと390px・768px・1024px幅でiOS向けレイアウト条件を満たすこと。"
+  ],
+  "verification": [
+    "node scripts/release-record.js releases/v305.json --write と --checkで生成物の整合を確認する。",
+    "npm run code:index:write と npm run test:manifest:writeで生成索引とテストマニフェストを更新する。",
+    "node scripts/release-gate.js releases/v305.jsonを非finalで実行しPASSを確認する。",
+    "tests/v305.test.jsを単独実行しALL PASSを確認する。",
+    "v95、v112、v146、v147、v287、today-core、tower-core、v141、iron-log-e2eを再実行し全件PASSを確認する。",
+    "node --check、git diff --check、実行コード差分200行ゲートを確認する。"
+  ],
+  "knownLimitations": [
+    "編集モーダル自体、タイムラインタブ、今日タブ、身体スキャン、完了フローは変更しない。",
+    "commentの追記・重複排除は行わず、既存の手動編集経路と同じ全文置換だけを行う。",
+    "単発・ルーティン・タイムライン由来などrenderBlockItemの既存フィルタを通らないBlockには表示しない。"
+  ]
+}

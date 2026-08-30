@@ -1442,6 +1442,11 @@ document.addEventListener("change", (event) => {
     updateTaskProgress(target.dataset.id, field, target.value);
     render();
   }
+  // v305修正: blurを伴うボタンクリックをDOM再生成で奪わないよう、メモだけ描画を次タスクへ送る。
+  if (target.matches("[data-block-comment]")) {
+    updateBlockField(target.dataset.id, "comment", target.value);
+    setTimeout(() => render(), 0);
+  }
   if (target.matches("[data-block-field]")) {
     updateBlockField(target.dataset.id, target.dataset.blockField, target.value);
     render();  // v33: 充電/放電などの変更を画面に即反映
@@ -5695,6 +5700,7 @@ function renderBlockItem(block) {
   const isMigrated = Boolean(block.migratedTo);
   const migratedBadgeHTML = isMigrated
     ? `<span class="migrated-badge" title="明日へ送りました">→送済</span>` : "";
+  // v305: 実行中カードだけ、専用change経路で保存するインラインメモを表示。
   return `
     <div class="item block-row ${isMIT ? "is-mit" : ""}${doing ? " is-doing" : ""}${justStarted}${isMigrated ? " is-migrated" : ""}" ${leftBorder ? `style="${leftBorder}"` : ""}>
       <div class="block-checks">
@@ -5711,6 +5717,10 @@ function renderBlockItem(block) {
           ${leverageTypeMarkHTML(block.leverageType)}
           ${migratedBadgeHTML}
         </div>
+        ${doing ? `
+        <textarea class="textarea block-inline-memo" style="min-height:56px; font-size:16px"
+          data-block-comment data-id="${block.id}"
+          placeholder="実行中のメモ…">${escapeHTML(block.comment || "")}</textarea>` : ""}
         <div class="block-meta">
           <label>充電
             <select class="mini-select" data-block-field="charge" data-id="${block.id}">

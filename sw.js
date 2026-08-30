@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v304";  // v304: 終了報告の一言をBlockコメントへ追記(APP_SHELL変更なし)
+const CACHE_NAME = "taskchute-journal-pwa-v305";  // v305: 実行中Blockカードのインラインメモ(APP_SHELL変更なし)
 // v293: 身体スキャン復活(K裁定2026-08-29。手動Block完了時のみ追加)
 // v290: 孤児action本体2クラスタ(AI作業結果承認/質問、AIタスク候補チップの採用/却下)を削除した(APP_SHELL変更なし)。
 // v288: WBS内検索と新規Project既定closed化を追加した(APP_SHELL変更なし)。
