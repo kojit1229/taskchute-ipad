@@ -4883,6 +4883,7 @@ h3 {
 /* v279: FABLE FUND閲覧タブ。既存の全体grid定義には干渉しないview固有スタイル。 */
 .fund-view { display: grid; gap: 14px; }
 .fund-summary { padding: 14px; }
+.fund-stale-badge { display: inline-block; margin: 0 0 10px; padding: 4px 9px; border-radius: 999px; background: var(--red-soft); color: var(--red); font-size: 12px; font-weight: 700; }
 .fund-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .fund-metric { min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 12px; }
 .fund-metric span { display: block; margin-bottom: 4px; color: var(--muted); font-size: 12px; }
@@ -4896,6 +4897,20 @@ h3 {
 .fund-note, .fund-card details p { margin: 10px 0 0; color: var(--muted); line-height: 1.65; white-space: pre-wrap; }
 .fund-card summary { margin-top: 10px; color: var(--accent); cursor: pointer; }
 .fund-empty, .fund-loading { margin: 0; padding: 18px; color: var(--muted); text-align: center; }
+.fund-chart { min-width: 0; padding: 14px; overflow: hidden; }
+.fund-chart-head, .fund-chart-dates { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.fund-chart h2, .fund-journal h2 { margin: 0; font-size: 16px; }
+.fund-chart-legend { display: flex; flex-wrap: wrap; gap: 6px 10px; color: var(--muted); font-size: 11px; }
+.fund-chart-key::before { content: ""; display: inline-block; width: 14px; margin-right: 4px; border-top: 2px solid currentColor; vertical-align: middle; }
+.fund-chart svg { display: block; width: 100%; height: auto; margin-top: 8px; }
+.fund-chart-baseline { stroke: var(--line); stroke-width: 1; stroke-dasharray: 4 4; }
+.fund-chart-line { fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.fund-chart-line.is-nav, .fund-chart-dot.is-nav, .fund-chart-key.is-nav { stroke: var(--accent); color: var(--accent); fill: var(--accent); }
+.fund-chart-line.is-n225, .fund-chart-dot.is-n225, .fund-chart-key.is-n225 { stroke: var(--red); color: var(--red); fill: var(--red); }
+.fund-chart-line.is-spx, .fund-chart-dot.is-spx, .fund-chart-key.is-spx { stroke: var(--green-text); color: var(--green-text); fill: var(--green-text); }
+.fund-chart-dates { margin: 0; color: var(--muted); font-size: 11px; }
+.fund-journal { padding: 14px; }
+.fund-journal .md-render { margin-top: 10px; }
 .fund-view .is-positive { color: var(--green-text); }
 .fund-view .is-negative { color: var(--red); }
 @media (min-width: 720px) { .fund-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); } }

@@ -294,7 +294,8 @@ configureWish({
   aiInsightsPanelHTML,
   maybeQueueNextAiStep  // v198(第3弾3e): 完了6経路#6(Wish詳細のサブタスクチェックボックス)
 });
-configureFund({ escapeHTML, renderHeader, personalDataReady, fetchGitHubRawText });
+// v301: FUND日誌も既存のsanitize済みMarkdown描画経路へ結線する。
+configureFund({ escapeHTML, renderHeader, renderMarkdown, personalDataReady, fetchGitHubRawText });
 // v169: src/features/journal.jsも同じ理由(循環import回避)で依存注入する。renderExperimentSection
 // (週次レビューと共有、app.js残留)はここで注入する(prep-stage4-journal.md §0/§4/§9 Must級、
 // 「呼ぶだけで実体は移さない」をdeps注入で満たす)。

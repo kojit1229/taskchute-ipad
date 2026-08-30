@@ -57,7 +57,8 @@ check("B-3の処理済みIDとpending復活防止を維持",
   && syncSource.includes("mergeAiStepPendingRequests(state.aiStepPendingRequests"));
 
 console.log("[release] Service Worker");
-check("CACHE_NAMEがv300", /CACHE_NAME\s*=\s*"taskchute-journal-pwa-v300"/.test(swSource));
+const cacheVersion = Number(/CACHE_NAME\s*=\s*"taskchute-journal-pwa-v(\d+)"/.exec(swSource)?.[1]);
+check("CACHE_NAMEがv300以上へ単調増加", cacheVersion >= 300, String(cacheVersion));
 
 if (failures) {
   console.error(`\n${failures} failure(s)`);
