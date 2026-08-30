@@ -65,7 +65,7 @@ let showToast, maintainRecurrences, render, runDailyOpen, saveState;
 let requireGitHubConfig, fetchGitHubFileSHA, personalDataReady, personalDataFileConfig;
 let gitHubContentsURL, githubHeaders, gitHubErrorMessage, fromBase64, toBase64;
 let sanitizedStateForGitHub, maybeWriteBackupSnapshot, updateAutoSaveStatus, updateSyncDot;
-let renderSyncBanner, pruneExpiredSuggestedThemes;
+let renderSyncBanner, clearPersonalDataAuthError, pruneExpiredSuggestedThemes;
 let _startupDataModifiedAt;
 
 function configureGithubSync(deps) {
@@ -76,7 +76,7 @@ function configureGithubSync(deps) {
     requireGitHubConfig, fetchGitHubFileSHA, personalDataReady, personalDataFileConfig,
     gitHubContentsURL, githubHeaders, gitHubErrorMessage, fromBase64, toBase64,
     sanitizedStateForGitHub, maybeWriteBackupSnapshot, updateAutoSaveStatus, updateSyncDot,
-    renderSyncBanner, pruneExpiredSuggestedThemes,
+    renderSyncBanner, clearPersonalDataAuthError, pruneExpiredSuggestedThemes,
     _startupDataModifiedAt
   } = deps);
 }
@@ -203,6 +203,10 @@ async function saveToGitHub(silent = false) {
 
     if (!response.ok) {
       throw new Error(await gitHubErrorMessage(response));
+    }
+    const currentToken = requireGitHubConfig().token;
+    if (!/[^\x00-\xFF]/.test(String(currentToken || "").trim())) {
+      clearPersonalDataAuthError();  // v303: 現在のtokenが正常なpush成功時だけ過去の認証バナーを解除する
     }
 
     // 保存後のファイルSHAを記録(次回の競合判定に使う)
@@ -1031,6 +1035,10 @@ async function downloadGitHubStateText(config) {
     jsonText = fromBase64(blob.content || "");
   }
   if (!jsonText.trim()) throw new Error("ファイルが空です");
+  const currentToken = requireGitHubConfig().token;
+  if (!/[^\x00-\xFF]/.test(String(currentToken || "").trim())) {
+    clearPersonalDataAuthError();  // v303: 現在のtokenが正常なpull成功時だけ解除する
+  }
   return { text: jsonText, sha: payload.sha || "" };
 }
 

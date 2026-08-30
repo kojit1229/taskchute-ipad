@@ -252,7 +252,7 @@ configureGithubSync({
   requireGitHubConfig, fetchGitHubFileSHA, personalDataReady, personalDataFileConfig,
   gitHubContentsURL, githubHeaders, gitHubErrorMessage, fromBase64, toBase64,
   sanitizedStateForGitHub, maybeWriteBackupSnapshot, updateAutoSaveStatus, updateSyncDot,
-  renderSyncBanner, pruneExpiredSuggestedThemes,
+  renderSyncBanner, clearPersonalDataAuthError, pruneExpiredSuggestedThemes,
   _startupDataModifiedAt
 });
 configureToday({
@@ -9753,7 +9753,10 @@ function githubHeaders(token) {
   // HTTPヘッダーに使えない非 Latin-1 文字が混じっていたら分かりやすく弾く。
   const clean = String(token || "").trim();
   if (/[^\x00-\xFF]/.test(clean)) {
-    throw new Error("トークンに使用できない文字が含まれています。設定画面でトークンを貼り直してください");
+    // v303: fetch前の文字検証エラーも既存の認証バナーでユーザーへ知らせる。
+    const message = "GitHubトークンに使用できない文字が含まれています。設定画面で貼り直してください";
+    setPersonalDataAuthError(message);
+    throw new Error(message);
   }
   return {
     "Accept": "application/vnd.github+json",

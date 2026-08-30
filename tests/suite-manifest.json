@@ -3235,9 +3235,9 @@
         "planning-execution",
         "ui-responsive"
       ],
-      "assertionSignals": 42,
-      "assertionHash": "1cccfb1b8c5bd426",
-      "sourceHash": "81e3b9c0eae84bfc",
+      "assertionSignals": 43,
+      "assertionHash": "45b37adb57f39254",
+      "sourceHash": "0fb18812391e8f7d",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3248,6 +3248,29 @@
         "server": true,
         "fileWrite": false,
         "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v303.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage"
+      ],
+      "assertionSignals": 38,
+      "assertionHash": "a837103f73c26a99",
+      "sourceHash": "84ed973070d202f8",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
         "clock": true
       }
     },
