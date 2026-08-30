@@ -63,6 +63,8 @@ function check(name, cond, extra = "") {
       s.blocks = [];
       s.selectedDate = TODAY;
       s.currentView = view;
+      // v302: 本スイートは進捗↔status連動を固定するため、完了Projectフィルタは明示OFF。
+      s.settings.wbsHideDoneProjects = false;
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, tasks, projects, TODAY, view });
     await page.reload();

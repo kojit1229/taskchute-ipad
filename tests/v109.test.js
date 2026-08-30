@@ -74,6 +74,8 @@ function check(name, cond, extra = "") {
       s.blocks = [];
       s.selectedDate = TODAY;
       s.currentView = "wbs";
+      // v302: 本スイートはカテゴリ絞り込みの到達性を固定するため、完了Projectフィルタは明示OFF。
+      s.settings.wbsHideDoneProjects = false;
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, projects, tasks, TODAY });
     await page.reload();

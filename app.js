@@ -381,6 +381,25 @@ registerActions({
     persistLocalNoSchedule();
     render();
   },
+  // v302: WBSのProject絞り込み/コンパクト表示は、既存のwbsHideCompletedと同じ
+  // localStorage専用のUI設定として保存し、実データの更新時刻は動かさない。
+  "toggle-wbs-hide-done-projects": () => {
+    state.settings.wbsHideDoneProjects = !state.settings.wbsHideDoneProjects;
+    persistLocalNoSchedule();
+    render();
+  },
+  "toggle-wbs-active-only": () => {
+    const activeOnly = !state.settings.showSuspended && state.settings.wbsHideDoneProjects;
+    state.settings.showSuspended = activeOnly;
+    state.settings.wbsHideDoneProjects = !activeOnly;
+    persistLocalNoSchedule();
+    render();
+  },
+  "toggle-wbs-compact": () => {
+    state.settings.wbsCompactMode = !state.settings.wbsCompactMode;
+    persistLocalNoSchedule();
+    render();
+  },
   "toggle-tasks-show-future": () => {
     state.settings.tasksShowFuture = !state.settings.tasksShowFuture;
     persistLocalNoSchedule();
@@ -392,11 +411,12 @@ registerActions({
     render();
   },
   "wbs-collapse-all": () => {
-    // v126: WishもWBS一覧に表示されるため、一括開閉の対象からWishだけ除く理由がなくなった
-    const targets = state.projects.filter((p) => !p.deleted);
+    // v302修正: ラベルと同じ絞り込み後Projectだけを一括開閉し、非表示Projectは触らない。
+    const targets = wbsFilteredProjects();
+    const targetIds = new Set(targets.map((project) => project.id));
     const collapse = !targets.every((p) => p.collapsed);  // 全閉なら開く、そうでなければ閉じる
     state.projects = state.projects.map((p) =>
-      !p.deleted ? { ...p, collapsed: collapse } : p);
+      targetIds.has(p.id) ? { ...p, collapsed: collapse } : p);
     saveAndRender();
   },
   "add-category": () => addCategory(),
@@ -2115,6 +2135,9 @@ function normalizeState(value) {
   value.settings.lastOpenedDate ||= "";
   // v47: WBS の完了タスク非表示(UI状態、既定は表示)
   if (typeof value.settings.wbsHideCompleted !== "boolean") value.settings.wbsHideCompleted = false;
+  // v302: 完了Projectは既定非表示。コンパクト表示は既存の情報量を保つため既定OFF。
+  if (typeof value.settings.wbsHideDoneProjects !== "boolean") value.settings.wbsHideDoneProjects = true;
+  if (typeof value.settings.wbsCompactMode !== "boolean") value.settings.wbsCompactMode = false;
   // v97: タスクシュート画面「未完了タスク」の表示範囲(当日〜7日後+期日超過が既定。
   //      8日後以降は折りたたみ。UI状態、既定OFF=畳んだまま)
   if (typeof value.settings.tasksShowFuture !== "boolean") value.settings.tasksShowFuture = false;
@@ -4140,6 +4163,10 @@ function jumpToWbsSearchResult(kind, id) {
     && (isProjectSuspended(project) || isTaskSuspended(task) || suspendedAncestor)) {
     state.settings.showSuspended = true;
   }
+  // v302: 検索結果は完了Projectフィルタより優先し、ジャンプ先を必ず可視化する。
+  if (state.settings.wbsHideDoneProjects && isWbsProjectDone(project)) {
+    state.settings.wbsHideDoneProjects = false;
+  }
   saveAndRender();
   setTimeout(() => document.querySelector(`[data-wbs-row-id="${CSS.escape(id)}"]`)
     ?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
@@ -4479,7 +4506,8 @@ function toggleCriteriaRequest(id) {
 //      実行率で裁く色(赤系)ではなく、情報を渡すだけのアクセントトーンにする。
 function renderWipBanner() {
   const activeNormal = state.projects.filter((p) =>
-    !p.deleted && p.kind === "normal" && (p.status || "active") === "active");
+    !p.deleted && p.kind === "normal" && (p.status || "active") === "active"
+      && !isWbsProjectDone(p));
   if (activeNormal.length < 4) return "";
   return `
     <div class="wip-banner">
@@ -4510,6 +4538,27 @@ function wbsCategoryOptions(projects) {
   return sorted;
 }
 
+// v302: 進捗バッジと同じcountable Taskが1件以上あり、その全件が完了したProjectだけを完了扱いにする。
+// 0/0の空Projectは新規入力先として残すため、every()の空配列trueを明示的に防ぐ。
+function isWbsProjectDone(project) {
+  const liveTasks = state.tasks.filter((task) =>
+    !task.deleted && task.projectId === project.id && isTaskCountable(task));
+  return liveTasks.length > 0 && liveTasks.every((task) => task.status === "completed");
+}
+
+// v302修正: 描画と一括開閉で、showSuspended/category/完了Projectの対象集合を共有する。
+function wbsFilteredProjects() {
+  const showSuspended = Boolean(state.settings.showSuspended);
+  const categoryFilter = state.settings.wbsCategoryFilter || "";
+  const hideDoneProjects = Boolean(state.settings.wbsHideDoneProjects);
+  return state.projects
+    .filter((project) => !project.deleted)
+    .filter((project) => showSuspended || !isProjectSuspended(project))
+    .filter((project) => !categoryFilter || (project.category || "未分類") === categoryFilter)
+    .filter((project) => !hideDoneProjects || !isWbsProjectDone(project))
+    .sort((a, b) => a.title.localeCompare(b.title, "ja"));
+}
+
 function renderWBS() {
   // v126: 「やりたいこと」もWBSのProject+Taskとして扱う(v16のWish除外を撤去。
   //       期日設定→WBS期日駆動フローでタスクシュート候補に載せられるようにする)。
@@ -4522,18 +4571,22 @@ function renderWBS() {
   // v126: Wish配下タスクも一覧に表示されるようになったため、中断カウントも他Projectと同様に含める
   const suspCount = activeProjects.filter(isProjectSuspended).length
     + state.tasks.filter((t) => !t.deleted && t.kind !== "other" && isTaskSuspended(t)).length;
-  const visibleProjects = sorted.filter((p) => showSusp || !isProjectSuspended(p));
   const toggleBtn = (suspCount > 0 || showSusp)
     ? `<button class="btn ${showSusp ? "primary" : "ghost"}" data-action="toggle-show-suspended">${showSusp ? "中断を隠す" : `中断を表示 (${suspCount})`}</button>`
     : "";
   // v47: 完了タスクの表示トグル + 全プロジェクトの一括開閉
   const hideDone = Boolean(state.settings.wbsHideCompleted);
-  const allCollapsed = visibleProjects.length > 0 && visibleProjects.every((p) => p.collapsed);
+  // v302: 完了Project非表示はTask単位のwbsHideCompletedと独立させる。
+  const hideDoneProjects = Boolean(state.settings.wbsHideDoneProjects);
+  const activeOnly = !showSusp && hideDoneProjects;
+  const compactMode = Boolean(state.settings.wbsCompactMode);
   // v55: インライン編集モード
   const editMode = Boolean(state.settings.wbsEditMode);
   // v109: カテゴリ絞り込み(既定「すべて」)。未分類は category未設定のProjectを指す。
   const categoryFilter = state.settings.wbsCategoryFilter || "";
   const categoryNames = wbsCategoryOptions(activeProjects);
+  const filteredProjects = wbsFilteredProjects();
+  const allCollapsed = filteredProjects.length > 0 && filteredProjects.every((p) => p.collapsed);
   const categorySelect = `
     <select class="select" data-action="wbs-category-filter" aria-label="カテゴリで絞り込み" style="width:auto; min-width:140px; font-size:16px">
       <option value="" ${!categoryFilter ? "selected" : ""}>すべて</option>
@@ -4552,14 +4605,12 @@ function renderWBS() {
       ${state.settings.twelveWeekStartDate ? '<button class="btn ghost twy-commit-open" data-action="twy-open-commit">今週を確定</button>' : ""}
       <button class="btn ${editMode ? "primary" : "ghost"}" data-action="toggle-wbs-edit">${editMode ? "✏️ 編集モード中" : "✏️ 編集モード"}</button>
       <button class="btn ${hideDone ? "primary" : "ghost"}" data-action="toggle-wbs-hide-done">${hideDone ? "完了を表示" : "完了を隠す"}</button>
+      <button class="btn ${hideDoneProjects ? "primary" : "ghost"}" data-action="toggle-wbs-hide-done-projects" aria-pressed="${hideDoneProjects}">${hideDoneProjects ? "完了Projectを表示" : "完了Projectを隠す"}</button>
+      <button class="btn ${activeOnly ? "primary" : "ghost"}" data-action="toggle-wbs-active-only" aria-pressed="${activeOnly}">アクティブのみ</button>
+      <button class="btn ${compactMode ? "primary" : "ghost"}" data-action="toggle-wbs-compact" aria-pressed="${compactMode}">${compactMode ? "コンパクト中" : "コンパクト表示"}</button>
       <button class="btn ghost" data-action="wbs-collapse-all">${allCollapsed ? "すべて展開" : "すべて折りたたむ"}</button>
       ${toggleBtn}
     </div>`;
-
-  // v109: カテゴリ絞り込みの適用(未分類はcategory未設定のProjectを指す)
-  const filteredProjects = categoryFilter
-    ? visibleProjects.filter((p) => (p.category || "未分類") === categoryFilter)
-    : visibleProjects;
 
   return `
     ${renderHeader("ビジョンを実行へ落とす", "WBS", wbsTools)}
@@ -5387,7 +5438,7 @@ function renderTaskTree(task, allTasksOfProject, depth, hideProgress = false) {
   const collapsed = Boolean(task.collapsed);  // v33: 折りたたみ
   return `
     <div style="margin-left:${indent}px" data-wbs-row-id="${escapeHTML(task.id)}">
-      ${renderTaskRow(task, depth, children.length > 0, collapsed, hideProgress)}
+      ${renderTaskRow(task, depth, children.length > 0, collapsed, hideProgress, Boolean(state.settings.wbsCompactMode))}
       ${children.length && !collapsed
         ? children.map((c) => renderTaskTree(c, allTasksOfProject, depth + 1, hideProgress)).join("")
         : ""}
@@ -5395,8 +5446,11 @@ function renderTaskTree(task, allTasksOfProject, depth, hideProgress = false) {
   `;
 }
 
-function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false, hideProgress = false) {
+function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false, hideProgress = false, compactMode = false) {
   const canAddSub = depth < 2;  // 最大 3 階層(0,1,2)、depth=2 の子はもう作らない
+  const planParent = planParentFor(task);
+  // v302: 12WY週次実行計画Stepは担当・並べ替え・追加操作を保護し、通常Taskだけを圧縮する。
+  const compact = Boolean(compactMode) && !planParent;
   // v33: 子を持つタスクには折りたたみキャレット、無ければ位置合わせのスペーサー
   const caret = hasChildren
     ? `<button class="wbs-caret" data-action="toggle-task-collapse" data-id="${task.id}" aria-label="${collapsed ? "展開" : "折りたたむ"}">${collapsed ? "▸" : "▾"}</button>`
@@ -5411,7 +5465,7 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false, 
     ? `${effDue.slice(5).replace("-", "/")}(実 ${task.dueDate.slice(5).replace("-", "/")})`
     : (task.dueDate ? task.dueDate.slice(5).replace("-", "/") : "");
   const dueHTML = task.dueDate
-    ? `<span class="${overdue ? "wbs-overdue" : "muted"}" style="font-size:11px">期限 ${dueLabel}${overdue ? "!" : ""}</span>`
+    ? `<span class="wbs-due ${overdue ? "wbs-overdue" : "muted"}" style="font-size:11px">期限 ${dueLabel}${overdue ? "!" : ""}</span>`
     : "";
   const scheduledToday = state.blocks.some((b) => !b.deleted && b.taskId === task.id && b.date === todayISO());
   // v48: 子タスクの進捗(2/5)と、この Task に費やした実績(回数・累計時間)
@@ -5446,7 +5500,6 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false, 
       <div class="progress wbs-progress-bar"><span style="width:${progressPct}%"></span></div>
       <span class="muted" style="font-size:11px">${progressPct}%</span>
     </div>`;
-  const planParent = planParentFor(task);
   const planSiblings = planParent ? planStepVisibleSiblings(task) : [];  // v195: 活性判定も可視兄弟基準
   const planIndex = planSiblings.findIndex((t) => t.id === task.id);
   const aiStatus = aiStepStatusLabel(task.aiStatus);
@@ -5459,7 +5512,7 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false, 
         <button class="btn ghost plan-move" data-action="move-plan-step" data-id="${task.id}" data-direction="1" aria-label="1つ下へ" ${planIndex < 0 || planIndex >= planSiblings.length - 1 ? "disabled" : ""}>↓</button>
         <button class="btn ghost" data-action="add-plan-step-below" data-id="${task.id}">＋ 下に追加</button>` : "";
   return `
-    <div class="row${suspended ? " is-suspended" : ""}" style="border-top:1px solid var(--line-soft); padding-top:8px">
+    <div class="row wbs-task-row${compact ? " is-compact" : ""}${suspended ? " is-suspended" : ""}" style="border-top:1px solid var(--line-soft); padding-top:8px">
       <div class="title-line">
         ${depth > 0 ? `<span class="muted" style="font-size:11px">${"└".padStart(depth, "　")}</span>` : ""}
         ${caret}
@@ -5468,18 +5521,18 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false, 
           aria-pressed="${task.criteriaRequest ? "true" : "false"}"
           aria-label="${task.criteriaRequest ? "AI設定依頼中(タップで取消)" : "翌朝のAI設定を依頼"}"
           title="チェックすると翌朝の日次バッチが完了条件/スモールステップを自動設定(またはサブタスク生成)します。処理後は自動でOFFに戻ります">🤖</button>
-        <span data-action="edit-task" data-id="${task.id}" style="cursor:pointer">${escapeHTML(task.title)}</span>
+        <span class="wbs-task-title" data-action="edit-task" data-id="${task.id}" style="cursor:pointer">${escapeHTML(task.title)}</span>
         ${planMetaHTML}
-        ${editMode ? inlineEdit : `
-        <span class="badge ${suspended ? "gray" : ""}">${taskStatusLabel(task.status)}</span>
-        ${kids.length ? `<span class="badge">子 ${kidsDone}/${kids.length}</span>` : ""}
-        ${scheduledToday ? `<span class="badge green">今日✓</span>` : ""}
-        ${task.category ? `<span class="cat-chip" style="background:${getCategoryColor(task.category)}1f; color:${getCategoryColor(task.category)}; border:1px solid ${getCategoryColor(task.category)}66">${escapeHTML(task.category)}</span>` : ""}
-        ${leverageTypeMarkHTML(task.leverageType)}
-        ${task.aiWork ? `<span class="ai-work-flag" title="AIに作業依頼中${task.aiWorkBrief ? ": " + escapeHTML(task.aiWorkBrief) : ""}">🤝</span>` : ""}
-        ${task.criteriaRequest ? `<span class="badge blue wbs-criteria-badge">🤖 AI設定待ち</span>` : ""}
+        ${editMode && !compact ? inlineEdit : `
+        <span class="badge wbs-status-badge ${suspended ? "gray" : ""}">${taskStatusLabel(task.status)}</span>
+        ${kids.length ? `<span class="badge wbs-compact-detail">子 ${kidsDone}/${kids.length}</span>` : ""}
+        ${scheduledToday ? `<span class="badge green wbs-compact-detail">今日✓</span>` : ""}
+        ${task.category ? `<span class="cat-chip wbs-compact-detail" style="background:${getCategoryColor(task.category)}1f; color:${getCategoryColor(task.category)}; border:1px solid ${getCategoryColor(task.category)}66">${escapeHTML(task.category)}</span>` : ""}
+        <span class="wbs-compact-detail">${leverageTypeMarkHTML(task.leverageType)}</span>
+        ${task.aiWork ? `<span class="ai-work-flag wbs-compact-detail" title="AIに作業依頼中${task.aiWorkBrief ? ": " + escapeHTML(task.aiWorkBrief) : ""}">🤝</span>` : ""}
+        ${task.criteriaRequest ? `<span class="badge blue wbs-criteria-badge wbs-compact-detail">🤖 AI設定待ち</span>` : ""}
         ${dueHTML}
-        ${stats.count ? `<span class="muted" style="font-size:11px">⏱ ${stats.count}回${stats.minutes ? `・${fmtMinShort(stats.minutes)}` : ""}</span>` : ""}`}
+        ${stats.count ? `<span class="muted wbs-task-stats" style="font-size:11px">⏱ ${stats.count}回${stats.minutes ? `・${fmtMinShort(stats.minutes)}` : ""}</span>` : ""}`}
       </div>
       ${hideProgress ? "" : progressHTML}
       <div class="row wbs-actions">

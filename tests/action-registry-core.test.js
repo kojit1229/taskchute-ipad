@@ -104,7 +104,8 @@ const GOLDEN_CLICK_ACTIONS = [
   "toggle-project-collapse", "toggle-task-collapse",
   "wbs-search-input", "wbs-search-jump",
   "suspend-project", "resume-project", "suspend-task", "resume-task",
-  "toggle-show-suspended", "toggle-wbs-hide-done", "toggle-tasks-show-future",
+  "toggle-show-suspended", "toggle-wbs-hide-done", "toggle-wbs-hide-done-projects",
+  "toggle-wbs-active-only", "toggle-wbs-compact", "toggle-tasks-show-future",
   "toggle-wbs-edit", "wbs-collapse-all",
   "add-block", "toggle-block", "toggle-task-complete", "now-start", "now-end",
   "bulk-approve-planned", "now-conveyor-complete",
@@ -227,7 +228,8 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
 const APP_JS_REGISTERED_ACTIONS = [
   "nav", "open-iron-log", "instruments-open-iron-log", "save-tower-journal",
   "early-bird-check", "tower-gate-edit-toggle", "tower-bodymind-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move", "tower-gate-streak-toggle",
-  "toggle-show-suspended", "toggle-wbs-hide-done", "toggle-tasks-show-future",
+  "toggle-show-suspended", "toggle-wbs-hide-done", "toggle-wbs-hide-done-projects",
+  "toggle-wbs-active-only", "toggle-wbs-compact", "toggle-tasks-show-future",
   "toggle-wbs-edit", "wbs-collapse-all",
   "add-category", "delete-category",
   "toggle-vision-direct-category", "vision-open-direct-settings",  // v189: F7 直結カテゴリ選択+誘導(設定ビュー)

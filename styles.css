@@ -2619,6 +2619,18 @@ h3 {
 .wbs-progress-agg { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 .wbs-progress-agg .progress { flex: 1; }
 
+/* v302: 通常Taskだけを1行へ圧縮する。12WY実行計画Stepにはis-compactを付けない。 */
+.wbs-task-row.is-compact { padding-top: 4px !important; gap: 6px; }
+.wbs-task-row.is-compact .title-line { width: 100%; gap: 6px; flex-wrap: nowrap; overflow: hidden; }
+.wbs-task-row.is-compact .wbs-task-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wbs-task-row.is-compact .wbs-status-badge,
+.wbs-task-row.is-compact .wbs-due { flex: none; }
+.wbs-task-row.is-compact .wbs-criteria-btn,
+.wbs-task-row.is-compact .wbs-compact-detail,
+.wbs-task-row.is-compact .wbs-task-stats,
+.wbs-task-row.is-compact .wbs-progress-row,
+.wbs-task-row.is-compact .wbs-actions { display: none; }
+
 /* v260: 12WY WBS成果トラック行。色は全テーマ共通トークンへ割り当てる。 */
 .twy-row { margin-top: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-soft); }
 .twy-row-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

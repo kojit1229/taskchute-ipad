@@ -15,7 +15,7 @@
       ],
       "assertionSignals": 34,
       "assertionHash": "f841e3459002f00f",
-      "sourceHash": "eb54fceefd187150",
+      "sourceHash": "8bd7138aa1489e0b",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -1020,7 +1020,7 @@
       ],
       "assertionSignals": 24,
       "assertionHash": "e1d81d8367383f8c",
-      "sourceHash": "f559bc1602be344f",
+      "sourceHash": "12da491c7eac347b",
       "waits": {
         "fixedCount": 12,
         "numericMilliseconds": 3900,
@@ -3228,6 +3228,30 @@
       }
     },
     {
+      "file": "v302.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "ui-responsive"
+      ],
+      "assertionSignals": 42,
+      "assertionHash": "1cccfb1b8c5bd426",
+      "sourceHash": "81e3b9c0eae84bfc",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
       "file": "v49.test.js",
       "kind": "e2e",
       "tier": "full",
@@ -4074,7 +4098,7 @@
       ],
       "assertionSignals": 29,
       "assertionHash": "e9d018fb0a4f4e7f",
-      "sourceHash": "4a1d03a1d504085a",
+      "sourceHash": "43ec8be9f564936c",
       "waits": {
         "fixedCount": 11,
         "numericMilliseconds": 3200,
