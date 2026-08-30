@@ -2,7 +2,7 @@
   "version": 302,
   "date": "2026-08-30",
   "title": "WBS一覧性改善 第2弾",
-  "summary": "WBSへ、Taskが1件以上あり全件完了したProjectの既定非表示、既存の中断非表示と完了Project非表示を束ねるアクティブのみトグル、通常Task行のコンパクト表示を追加した。12WY週次実行計画StepとWBS検索ジャンプは従来の操作性を維持する。",
+  "summary": "WBSへ、Taskが1件以上あり全件完了したProjectを任意で隠すトグル、既存の中断非表示と完了Project非表示を束ねるアクティブのみトグル、通常Task行のコンパクト表示を追加した。完了Projectは既定で表示し、12WY週次実行計画StepとWBS検索ジャンプは従来の操作性を維持する。",
   "changedFiles": [
     "CHANGES_v302.md",
     "app.js",
@@ -19,20 +19,21 @@
     "tests/v302.test.js"
   ],
   "intent": [
-    "完了済みProjectを既定で一覧から外しつつ、Task未登録の0/0 Projectは新規入力先として残す。",
+    "完了済みProjectは既定で表示し、必要な場合だけトグルで一覧から外すオプトイン方式とする。フィルタON時もTask未登録の0/0 Projectは新規入力先として残す。",
     "アクティブのみを独立stateにせず、showSuspended=falseとwbsHideDoneProjects=trueの導出ショートカットとして提供する。",
     "通常Taskは探索時に必要なタイトル・状態・期限・caret・完了操作へ絞り、12WY週次実行計画Stepの担当・並べ替え・追加操作は常時維持する。"
   ],
   "changes": [
-    "normalizeStateへwbsHideDoneProjects=trueとwbsCompactMode=falseの後方互換補完を追加し、3トグルをdata-actionレジストリとlocalStorage専用UI設定の保存経路へ登録した。",
+    "normalizeStateへwbsHideDoneProjects=falseとwbsCompactMode=falseの後方互換補完を追加し、完了Project非表示を他のWBSトグルと同じオプトインにした。3トグルはdata-actionレジストリとlocalStorage専用UI設定の保存経路へ登録した。",
     "isWbsProjectDoneをProject進捗バッジと同じisTaskCountable基準へ統一し、cancelled/suspendedを除外したcountable Taskが1件以上かつ全件completedのProjectを完了扱いにした。検索ジャンプ時は完了Projectフィルタを解除して対象を可視化する。",
     "wbsFilteredProjectsでshowSuspended・category・完了Projectの絞り込み条件をrenderWBSとwbs-collapse-allハンドラに共有し、一括開閉で非表示Projectのcollapsed状態を変更しないようにした。",
     "renderWipBannerはisWbsProjectDoneが真の実質完了Projectを表示設定に関係なくWIP件数と保留候補から除外するようにした。",
     "renderTaskRowへcompactMode引数とis-compactクラスを追加し、CSSで進捗・数値入力・アクション・実績・補助情報を非表示にした。planParentFor(task)が真の行はis-compact対象外とした。",
-    "tests/v302.test.jsでD/E/Fの全操作経路、0/0・cancelledのみ・未完了復帰の負例、countable完了判定、絞り込み後collapse-allと全件対象回帰、WIPの完了除外と未完了カウント、日時不変、既存WBSフィルタ・検索のON/OFF回帰を固定した。v95/v109は各スイート本来の進捗・カテゴリ経路へ到達し続けるよう、新しいProjectフィルタをfixtureで明示OFFにした。"
+    "tests/v302.test.jsで既定OFFと明示ONを含むD/E/Fの全操作経路、0/0・cancelledのみ・未完了復帰の負例、countable完了判定、絞り込み後collapse-allと全件対象回帰、WIPの完了除外と未完了カウント、日時不変、既存WBSフィルタ・検索のON/OFF回帰を固定した。v95/v109は各スイート本来の進捗・カテゴリ経路へ到達し続けるよう、新しいProjectフィルタをfixtureで明示OFFにした。"
   ],
   "uncertainties": [
-    "CSSの1行省略とツールバー折返しはChromiumの390px/1100pxで検証するが、iPad Safari PWA上の実際の文字幅と長い日本語Task名の可読性はK実機確認が必要。"
+    "CSSの1行省略とツールバー折返しはChromiumの390px/1100pxで検証するが、iPad Safari PWA上の実際の文字幅と長い日本語Task名の可読性はK実機確認が必要。",
+    "初回push後のCIで既定ONが単一Project+単一完了Taskの共通fixtureを非表示にしてv107/v99をタイムアウトさせたため、既定をOFFへ戻し、非表示経路はトグルを明示ONにして検証するよう修正した。"
   ],
   "reviewFocus": [
     "完了Project判定がisTaskCountable適用後のTask 1件以上を必須とし、0/0・cancelledのみ・未完了Taskを含むProjectを隠さないこと。",

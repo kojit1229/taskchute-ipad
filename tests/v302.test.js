@@ -59,7 +59,7 @@ async function seed(page, values = {}) {
       ...state.settings,
       showSuspended: false,
       wbsHideCompleted: false,
-      wbsHideDoneProjects: true,
+      wbsHideDoneProjects: false,
       wbsCompactMode: false,
       wbsCategoryFilter: "",
       wbsEditMode: false,
@@ -111,10 +111,17 @@ async function verifyMigrationAndDoneProjectToggle(page) {
     deleteSettings: ["wbsHideDoneProjects", "wbsCompactMode"]
   });
   let state = await stateNow(page);
-  check("旧stateはwbsHideDoneProjects=true / wbsCompactMode=falseへ移行",
-    state.settings.wbsHideDoneProjects === true && state.settings.wbsCompactMode === false,
+  check("旧stateはwbsHideDoneProjects=false / wbsCompactMode=falseへ移行",
+    state.settings.wbsHideDoneProjects === false && state.settings.wbsCompactMode === false,
     JSON.stringify(state.settings));
-  check("既定ONで全Task完了Projectだけ非表示",
+  check("既定OFFで全Task完了Projectも表示",
+    await page.locator('[data-wbs-row-id="p-done"]').count() === 1
+      && await page.locator('[data-wbs-row-id="p-active"]').count() === 1);
+
+  await installWriteSpy(page);
+  await page.locator('[data-action="toggle-wbs-hide-done-projects"]').click();
+  await waitSetting(page, { wbsHideDoneProjects: true });
+  check("Dを明示ONにすると全Task完了Projectだけ非表示",
     await page.locator('[data-wbs-row-id="p-done"]').count() === 0
       && await page.locator('[data-wbs-row-id="p-active"]').count() === 1);
   check("Task 0件Projectは0/0完了扱いにせず表示", await page.locator('[data-wbs-row-id="p-empty"]').count() === 1);
@@ -123,17 +130,16 @@ async function verifyMigrationAndDoneProjectToggle(page) {
   check("cancelledだけでcountable Taskが0件のProjectは完了扱いにしない",
     await page.locator('[data-wbs-row-id="p-cancelled-only"]').count() === 1);
 
-  await installWriteSpy(page);
-  await page.locator('[data-action="toggle-wbs-hide-done-projects"]').click();
-  await waitSetting(page, { wbsHideDoneProjects: false });
-  check("D表示経路で完了Projectが戻る", await page.locator('[data-wbs-row-id="p-done"]').count() === 1);
   state = await stateNow(page);
   check("DはlocalStorageへ1回保存しdataModifiedAtを動かさない",
     await page.evaluate(() => window.__v302StateWrites) === 1 && state.dataModifiedAt === OLD_MODIFIED);
   await page.reload();
-  await page.waitForSelector('[data-wbs-row-id="p-done"]');
-  check("D設定はリロード後もfalseを復元", (await stateNow(page)).settings.wbsHideDoneProjects === false);
+  await page.waitForSelector('[data-action="toggle-wbs-hide-done-projects"][aria-pressed="true"]');
+  check("D設定はリロード後もtrueを復元", (await stateNow(page)).settings.wbsHideDoneProjects === true);
 
+  await page.locator('[data-action="toggle-wbs-hide-done-projects"]').click();
+  await waitSetting(page, { wbsHideDoneProjects: false });
+  check("D表示経路で完了Projectが戻る", await page.locator('[data-wbs-row-id="p-done"]').count() === 1);
   await page.locator('[data-action="toggle-wbs-hide-done-projects"]').click();
   await waitSetting(page, { wbsHideDoneProjects: true });
   check("D再非表示経路で完了Projectを再び隠す", await page.locator('[data-wbs-row-id="p-done"]').count() === 0);
@@ -204,7 +210,7 @@ async function verifyWipExcludesDoneProjects(page) {
   const beforeRender = await stateNow(page);
   check("実質完了1件を除いた3件ではWIP超過バナーを表示しない", await page.locator(".wip-banner").count() === 0);
   await page.locator('[data-action="toggle-wbs-hide-done-projects"]').click();
-  await waitSetting(page, { wbsHideDoneProjects: false });
+  await waitSetting(page, { wbsHideDoneProjects: true });
   let state = await stateNow(page);
   check("WIP/完了判定の描画だけではdataModifiedAt/updatedAtを変更しない",
     state.dataModifiedAt === beforeRender.dataModifiedAt
@@ -396,8 +402,10 @@ async function verifyExistingFiltersAndSearch(page) {
   const doneTask = task("t-search-done", doneProject.id, "完了検索ヒット", { status: "completed" });
   await seed(page, {
     projects: [doneProject], tasks: [doneTask],
-    settings: { wbsHideDoneProjects: true, wbsCompactMode: true }
+    settings: { wbsCompactMode: true }
   });
+  await page.locator('[data-action="toggle-wbs-hide-done-projects"]').click();
+  await waitSetting(page, { wbsHideDoneProjects: true });
   check("検索前は完了Project非表示", await page.locator('[data-wbs-row-id="p-search-done"]').count() === 0);
   await page.locator("#wbs-search-input").fill("完了検索");
   await page.waitForSelector('[data-action="wbs-search-jump"][data-id="t-search-done"]');

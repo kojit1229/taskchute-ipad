@@ -2135,8 +2135,9 @@ function normalizeState(value) {
   value.settings.lastOpenedDate ||= "";
   // v47: WBS の完了タスク非表示(UI状態、既定は表示)
   if (typeof value.settings.wbsHideCompleted !== "boolean") value.settings.wbsHideCompleted = false;
-  // v302: 完了Projectは既定非表示。コンパクト表示は既存の情報量を保つため既定OFF。
-  if (typeof value.settings.wbsHideDoneProjects !== "boolean") value.settings.wbsHideDoneProjects = true;
+  // v302: 完了Project非表示はトグルで切り替え可能(既定は表示。他のWBSトグルと同じオプトイン方式)。
+  // コンパクト表示は既存の情報量を保つため既定OFF。
+  if (typeof value.settings.wbsHideDoneProjects !== "boolean") value.settings.wbsHideDoneProjects = false;
   if (typeof value.settings.wbsCompactMode !== "boolean") value.settings.wbsCompactMode = false;
   // v97: タスクシュート画面「未完了タスク」の表示範囲(当日〜7日後+期日超過が既定。
   //      8日後以降は折りたたみ。UI状態、既定OFF=畳んだまま)
