@@ -1,4 +1,5 @@
-// v306: 充電/放電selectの連続変更で後発操作がDOM再生成に巻き込まれないことを検証する。
+// v306: タスクシュートのBlockカードにある充電/放電selectを連続操作しても、
+// DOM再生成(render)で後発操作が巻き込まれないことを検証する。
 const fs = require("fs");
 const {
   chromium, launchOptions, startServer, blockGithubApiByDefault,

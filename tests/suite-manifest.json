@@ -3325,11 +3325,12 @@
       "kind": "e2e",
       "tier": "full",
       "domains": [
-        "legacy-crosscutting"
+        "planning-execution",
+        "ui-responsive"
       ],
       "assertionSignals": 18,
       "assertionHash": "9900995d13518795",
-      "sourceHash": "76d8f8eba51b4b86",
+      "sourceHash": "f33d9a83892c05fc",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
