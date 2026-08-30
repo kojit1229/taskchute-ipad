@@ -10672,6 +10672,16 @@ function logDeclaration(blockId, note, estimateMin) {
 // 「宣言なしの終了報告」として新規エントリを作る(宣言・報告いずれも独立して任意のため)。
 function reportForBlock(blockId, outcome, resultNote) {
   const today = todayISO();
+  const trimmedNote = String(resultNote || "").trim();
+  // v304: 終了報告の一言は既存コメントを保ち、同じ行が無いときだけ追記する。
+  if (trimmedNote) {
+    state.blocks = state.blocks.map((block) => {
+      if (block.id !== blockId) return block;
+      const comment = String(block.comment || "");
+      if (comment.split(/\r?\n/).includes(trimmedNote)) return block;
+      return { ...block, comment: comment ? `${comment}${comment.endsWith("\n") ? "" : "\n"}${trimmedNote}` : trimmedNote };
+    });
+  }
   const list = state.declarations || [];
   let idx = -1;
   for (let i = list.length - 1; i >= 0; i--) {
@@ -10689,12 +10699,12 @@ function reportForBlock(blockId, outcome, resultNote) {
       declaredAt: "",
       reportedAt: nowDateTime(),
       outcome: outcome || "",
-      resultNote: (resultNote || "").trim()
+      resultNote: trimmedNote
     };
     state.declarations = [...list, entry].slice(-300);
     return entry;
   }
-  const updated = { ...list[idx], reportedAt: nowDateTime(), outcome: outcome || "", resultNote: (resultNote || "").trim() };
+  const updated = { ...list[idx], reportedAt: nowDateTime(), outcome: outcome || "", resultNote: trimmedNote };
   state.declarations = [...list.slice(0, idx), updated, ...list.slice(idx + 1)];
   return updated;
 }

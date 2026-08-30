@@ -1,0 +1,50 @@
+{
+  "version": 304,
+  "date": "2026-08-30",
+  "title": "終了報告の一言をBlockコメントへ追記",
+  "summary": "終了報告で入力した一言を宣言ログだけでなく対象Blockのcommentへも追記する。既存コメントを保持し、trim後の同一行が既にある場合は重複追記しない。できた・一部できた・脱線したの全結果を対象とし、完了状態の処理は変更しない。",
+  "changedFiles": [
+    "CHANGES_v304.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v304.json",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/v304.test.js"
+  ],
+  "intent": [
+    "終了報告の一言をstate.declarations[].resultNoteとBlockのcommentの双方に残し、日常のBlock記録から参照できるようにする。",
+    "既存のIRON LOG転記と同じ行単位重複チェック付き追記を使い、手書きの既存コメントを上書きしない。",
+    "outcomeの値には依存させず、done・partial・derailedの全経路で同じcomment追記契約を適用する。"
+  ],
+  "changes": [
+    "reportForBlockでresultNoteをtrimし、非空かつ同じ行がcomment内に無い場合だけ対象Blockへ改行区切りで追記するようにした。",
+    "declarationへ保存するresultNoteとcommentへ追記する文言で同じtrim済み値を共有するようにした。",
+    "tests/v304.test.jsで全3 outcome、空欄、既存コメント保持、同一文言の2回報告、saveStateとreload後の永続性、completed不変を検証する。",
+    "Service WorkerのCACHE_NAMEをv304へ更新した。"
+  ],
+  "uncertainties": [
+    "同じ文言でも前後以外の内部空白や表記が異なる場合は別行として追記される。行の完全一致を重複条件とする既存IRON LOG方式に合わせた意図的な境界である。",
+    "iOS Safari PWAで終了報告後にBlock編集画面へ一言が表示される実機導線はK確認が必要である。"
+  ],
+  "reviewFocus": [
+    "comment追記がdoneだけに限定されずpartial・derailedでも動作し、空欄ではBlockを変更しないこと。",
+    "既存commentを保持し、CRLF/LFの行分割による完全一致で同じ一言の重複だけを抑止すること。",
+    "outcomeがdoneの場合を含めcompletedや身体スキャンなどitem #1の完了処理へ一切変更が無いこと。",
+    "reportForBlock後の既存saveState経路でcommentとdeclarationが同じ書き込みに永続化されること。"
+  ],
+  "verification": [
+    "release-record --write/--check、code:index:write、test:manifest:writeを実行し、生成物の整合を確認する。",
+    "tests/v304.test.jsを単独実行し、全3 outcome・負例・重複抑止・永続化・completed不変がALL PASSすることを確認する。",
+    "tests/v87.test.js、tests/store-core.test.js、tests/v282.test.jsを実行し、終了報告フローとdeclarations fixtureの退行が無いことを確認する。",
+    "非final release-gateを実行し、v304と実行差分から選定された回帰束がPASSすることを確認する。",
+    "node --check、git diff --check、実行コード差分200行ゲートを確認する。"
+  ],
+  "knownLimitations": [
+    "宣言開始時の一言をBlockコメントへ転記する変更は対象外であり、終了報告のresultNoteだけを扱う。",
+    "Block編集モーダルと実績登録モーダルの既存comment上書き保存方式は変更しない。",
+    "outcomeがdoneの場合のcompleted提案・確定や身体スキャン発火はitem #1の別発注であり、本変更には含めない。"
+  ]
+}

@@ -3275,6 +3275,29 @@
       }
     },
     {
+      "file": "v304.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 13,
+      "assertionHash": "6ae691256b61b1c3",
+      "sourceHash": "3e9ae76235e595c9",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
       "file": "v49.test.js",
       "kind": "e2e",
       "tier": "full",
