@@ -1449,7 +1449,9 @@ document.addEventListener("change", (event) => {
   }
   if (target.matches("[data-block-field]")) {
     updateBlockField(target.dataset.id, target.dataset.blockField, target.value);
-    render();  // v33: 充電/放電などの変更を画面に即反映
+    // v306修正: block-row自体は再描画せずstale参照を避けつつ、charge/discharge由来の
+    // タスクタブ右エネルギーレール(#timelineRail)だけ最新化する(Codexレビュー指摘)。
+    renderTimelineRail();
   }
   if (target.matches("[data-setting-field]")) {
     state.settings[target.dataset.settingField] = target.value;

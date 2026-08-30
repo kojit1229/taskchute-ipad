@@ -3321,6 +3321,29 @@
       }
     },
     {
+      "file": "v306.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "legacy-crosscutting"
+      ],
+      "assertionSignals": 18,
+      "assertionHash": "9900995d13518795",
+      "sourceHash": "76d8f8eba51b4b86",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
       "file": "v49.test.js",
       "kind": "e2e",
       "tier": "full",

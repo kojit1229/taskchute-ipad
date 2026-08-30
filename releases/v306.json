@@ -1,0 +1,56 @@
+{
+  "version": 306,
+  "date": "2026-08-30",
+  "title": "充電/放電セレクトの連続操作を確実に反映",
+  "summary": "実行中Blockカードの充電/放電セレクト変更時に呼んでいた同期renderを取りやめ、連続してcharge→dischargeを操作しても2つ目の選択がDOM置換で失われないようにした。",
+  "changedFiles": [
+    "CHANGES_v306.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v306.json",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/v306.test.js"
+  ],
+  "intent": [
+    "charge/discharge変更のたびに画面全体を同期renderしていたことが、連続選択操作(特に自動操作の事前取得ElementHandle)で2つ目の要素をDOM置換ごと失わせる原因だったため、render呼び出し自体を取りやめる。",
+    "select自身の表示値はブラウザのネイティブ挙動で選択直後に反映されるため、render省略でも視覚的な破綻はない。",
+    "render呼び出しに依存していた可能性のあったエネルギーバッテリーチップ(computeBatteryLevel)は、grepで呼び出し元0件を確認したため、影響なく省略できると判断した。"
+  ],
+  "changes": [
+    "documentのchangeディスパッチャ内、[data-block-field]ハンドラ(charge/dischargeの唯一の利用者)からrender()呼び出しを削除した。",
+    "renderBlockItem・updateBlockFieldは無改修。",
+    "tests/v306.test.jsで、fresh locatorでのcharge→discharge/discharge→chargeの連続変更、および charge変更前に取得したdischarge ElementHandleを待機なしで操作するstale handleケースを検証する。",
+    "Service WorkerのCACHE_NAMEをv306へ更新する。",
+    "Codexレビュー指摘(P2)対応: render()削除により、タスクタブが1020px超で表示する右エネルギーレール(#timelineRail、renderTimelineRail経由でrenderEnergyGraphがcharge/discharge由来のカーブを描く)がcharge/discharge編集後に更新されなくなっていたため、[data-block-field]ハンドラからrenderTimelineRail()だけを呼ぶよう追加した(main側のblock-rowはrender()しないためstale ElementHandle問題は再発しない)。tests/v306.test.jsへ1020px超・完了Blockでのエネルギーレール鮮度テストを追加した。"
+  ],
+  "uncertainties": [
+    "1回目の修正案(setTimeout(...,0)による遅延)では、Playwrightの次操作がタイマーより先に実行されるため不十分だった。今回はrender()自体を省略する方式へ切り替えた。",
+    "computeBatteryLevelの呼び出し元0件はgrepによる静的確認であり、動的プロパティアクセス経由の見落としが絶対にないとは断定できない。",
+    "iOS Safariネイティブpickerの実機固有挙動(render省略後のvisualなちらつき等)はK実機確認が必要である。",
+    "renderTimelineRail()の追加呼び出しはCodexサンドボックスの書き込み拒否により、監督者(Claude)が直接実装した(Codexへの再発注は環境障害で不可能だったため)。"
+  ],
+  "reviewFocus": [
+    "render()の削除がcharge/discharge以外のUI(バッテリーチップ等)へ悪影響を与えていないこと。",
+    "stale ElementHandleでの連続操作でもcharge/dischargeが両方とも正しく永続化されること。",
+    "既存のupdateBlockFieldのNumber変換仕様が無改修であること。",
+    "renderBlockItemのマークアップ自体は変更されていないこと。",
+    "renderTimelineRail()の追加呼び出しが#timelineRailだけを更新し、main側のblock-row(charge/discharge select)を再生成しないこと(stale ElementHandle問題の再発防止)。",
+    "renderTimelineRail()追加後もstate.currentView !== \"tasks\"での早期returnが機能し、他タブで誤動作しないこと。"
+  ],
+  "verification": [
+    "node scripts/release-record.js releases/v306.json --write と --checkで生成物の整合を確認する。",
+    "npm run code:index:write と npm run test:manifest:writeで生成索引とテストマニフェストを更新する。",
+    "node scripts/release-gate.js releases/v306.jsonを非finalで実行しPASSを確認する。",
+    "tests/v306.test.jsを単独実行しALL PASS(stale ElementHandleケース・エネルギーレール鮮度ケース含む)を確認する。",
+    "today-core、v95、v112、v144、v146、v147、v148、v287、v305、timeline-render-core、timeline-tick-wiringを再実行し全件PASSを確認する。",
+    "node --check、git diff --check、実行コード差分200行ゲートを確認する。"
+  ],
+  "knownLimitations": [
+    "編集モーダル側のcharge/discharge selectは別経路のため無改修。",
+    "エネルギーバッテリーチップ機能自体の削除(死んだコードの正式な整理)は本リリースのスコープ外。",
+    "charge/discharge以外のフィールドを[data-block-field]へ追加する場合は、本リリースの前提(render省略)が成立しなくなるため改めて検討が必要。"
+  ]
+}
