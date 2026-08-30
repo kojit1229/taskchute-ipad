@@ -2901,6 +2901,16 @@ function renderMain() {
   // 自作ガードではなく既存のisFocusInEditableElement(input/textarea/contenteditable判定)を使う。
   const isNewViewOrDate = view !== _lastScrollView || state.selectedDate !== _lastScrollDate;
   const shouldAutoScroll = isNewViewOrDate && state.selectedDate === todayISO() && !isFocusInEditableElement();
+  // v307: タブ切替(viewのみの変化。日付切替は対象外)で直前のスクロール位置が引き継がれ、
+  // 新しいタブの上部に空白が見える不具合(dogfooding#4)への対策。main.innerHTML差し替えは
+  // scrollTopを保持してしまうためview切替時にトップへ戻す。.app-shellはmin-height:100dvhの
+  // 可変グリッドで#main自身は幅を問わず内部スクロールコンテナにならず(scrollHeight===
+  // clientHeightのまま)、実際にスクロールしているのは常にページ側(document.scrollingElement)
+  // のため、main.scrollTop(将来のレイアウト変更への保険)と合わせてこちらもリセットする。
+  if (view !== _lastScrollView) {
+    main.scrollTop = 0;
+    if (document.scrollingElement) document.scrollingElement.scrollTop = 0;
+  }
   _lastScrollView = view;
   _lastScrollDate = state.selectedDate;
 
