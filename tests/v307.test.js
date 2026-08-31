@@ -1,5 +1,5 @@
-// v307: タブ(ビュー)切替でスクロール位置が引き継がれ、新しいタブの上部に空白が見える
-// 不具合(dogfooding#4)の回帰テスト。
+// v307: タスクシュート⇔タイムライン等のタブ(ビュー)切替でスクロール位置が引き継がれ、
+// 新しいタブの表示上部に空白が見える不具合(dogfooding#4)の回帰テスト。
 //
 // 実機調査で判明した事実: .app-shellはmin-height:100dvh(固定heightではない)のグリッドで、
 // .main-pane(#main)にoverflow:autoが付いていても、コンテンツが長いと.app-shell自体が
@@ -194,6 +194,12 @@ async function runScenario(browser, { width, height, navContainer }) {
     after = await clickAndReadImmediately(page, "#v307-search-jump-probe");
     check(`${width}px: search-jump経路でもpageスクロールが0にリセットされる(setView()を経由しない切替の網羅)`,
       after.page === 0 && after.view === "timeline", JSON.stringify(after));
+
+    // search-jump後も今日表示中なので既存自動スクロール(v146)が50ms後に発火する。
+    // context.close()より前にこのタイマーを消化しておかないと、close後にコールバックが
+    // 破棄済みページへアクセスして例外になり、テストプロセス全体が不安定終了しうるため
+    // (条件待ちで消化する。固定sleepではない)。
+    await page.waitForFunction(() => document.scrollingElement.scrollTop > 0, null, { timeout: 2000 });
 
     check(`${width}px: 一連の操作でpageerrorなし`, pageErrors.length === 0, JSON.stringify(pageErrors));
   } finally {

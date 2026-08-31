@@ -3349,11 +3349,12 @@
       "kind": "e2e",
       "tier": "full",
       "domains": [
-        "legacy-crosscutting"
+        "planning-execution",
+        "ui-responsive"
       ],
       "assertionSignals": 14,
       "assertionHash": "8d7b6699c32b2e80",
-      "sourceHash": "98f7181cb874d1ef",
+      "sourceHash": "a0ed8f929aa5ec18",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
