@@ -91,6 +91,7 @@ function check(name, cond, extra = "") {
 // v299: グループA削除でtoday-replan/ai-morning-plan/zerosec-theme-add/
 // zerosec-theme-skipを意図的に削除(223→219)。
 // v300: 永久に空だった却下理由UIのaction 2件を意図的に削除(223→221)。
+// v311: CABIN TIMERのLINK FLIGHT選択・一時停止・再開4actionを意図的に追加。
 const GOLDEN_CLICK_ACTIONS = [
   "nav", "open-iron-log", "instruments-open-iron-log", "save-tower-journal",
   "focus-toggle-gate", "focus-toggle-journal", "focus-mode",
@@ -114,7 +115,8 @@ const GOLDEN_CLICK_ACTIONS = [
   "toggle-mit",
   // v295: 身体スキャン2軸化(K裁定2026-08-29)でbody-scan-recovery/body-scan-recordを意図的に追加。
   "body-scan-fatigue", "body-scan-recovery", "body-scan-part", "body-scan-record", "body-scan-discard",
-  "start-pomodoro", "stop-pomodoro", "interrupt-reason", "interrupt-reason-cancel",
+  "start-pomodoro", "open-pomodoro-link", "pomodoro-link-select", "pause-pomodoro", "resume-pomodoro",
+  "stop-pomodoro", "interrupt-reason", "interrupt-reason-cancel",
   "complete-pomodoro", "declare-confirm", "declare-skip", "report-outcome", "report-skip",
   "incomplete-reason-chip", "incomplete-reason-skip",
   // v296: 書く瞑想dailyCloseゲート(充放電ログ改善R1b、K裁定2026-08-29=案A)。
@@ -307,7 +309,8 @@ const APP_JS_REGISTERED_ACTIONS = [
   //     data-action経由の到達導線が無いが、v129身体スキャンモーダルの唯一の呼び出し元
   //     completePomodoro()をテスト(v129/v132)が合成data-action注入で使い続けているため残置
   //     =低優先度棚卸しK裁定2026-08-29) ---
-  "start-pomodoro", "stop-pomodoro", "interrupt-reason", "interrupt-reason-cancel",
+  "start-pomodoro", "open-pomodoro-link", "pomodoro-link-select", "pause-pomodoro", "resume-pomodoro",
+  "stop-pomodoro", "interrupt-reason", "interrupt-reason-cancel",
   "complete-pomodoro", "declare-confirm", "declare-skip", "report-outcome", "report-skip",
   "incomplete-reason-chip", "incomplete-reason-skip",
   // v296: 書く瞑想dailyCloseゲート(充放電ログ改善R1b、K裁定2026-08-29=案A)。

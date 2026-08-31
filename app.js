@@ -27,7 +27,9 @@ import { configureInstruments, renderInstruments } from "./src/features/instrume
 import { configureTrackUi, maybeShowTrackProgressToast } from "./src/features/track-ui.js";
 // v182: 新トップレベル「今日」コックピット。既存featureと同じ依存注入型で循環importを避ける。
 import { configureToday, renderToday } from "./src/features/today.js";
-import { isRoutineGateBlock, setTowerArrivalSelection, toggleTowerBodyMindWeekly } from "./src/features/today-tower.js";
+import {
+  isRoutineGateBlock, pomodoroLinkFlights, setTowerArrivalSelection, toggleTowerBodyMindWeekly
+} from "./src/features/today-tower.js";
 // v168: app.js分割・段階4-2(WishタブTier1のCRUD・描画を抽出)。src/features/wish.js
 //   はstateをimportするがapp.js自身はimportしない(循環import回避)。
 //   getWishProjectはapp.js側の週次Wish選定からも共有importする。
@@ -927,6 +929,14 @@ registerActions({
     const blockId = target.dataset.blockId || "";
     openDeclareModal(blockId, "pomodoro");
   },
+  "open-pomodoro-link": () => openPomodoroLinkModal(),
+  "pomodoro-link-select": ({ target }) => {
+    const blockId = target.dataset.blockId || "";
+    closeModal();
+    startPomodoro(blockId);
+  },
+  "pause-pomodoro": () => pausePomodoro(),
+  "resume-pomodoro": () => resumePomodoro(),
   "stop-pomodoro": () => {
     if (state.pomodoro.blockId) {
       _pendingInterruptBlockId = state.pomodoro.blockId;
@@ -1667,7 +1677,19 @@ function normalizeState(value) {
   value.settings.staticFilesLoaded ||= { vision: false, affirmation: false };
   // v37: インポート/同期で欠けていると描画がクラッシュするキーを補完
   value.settings.morningEnergyLog ||= {};
-  value.pomodoro ||= { running: false, blockId: "", startedAt: "", endsAt: "", mode: "focus" };
+  const actualPomodoro = value.pomodoro && typeof value.pomodoro === "object" && !Array.isArray(value.pomodoro)
+    ? value.pomodoro : {};
+  value.pomodoro = {
+    running: false, blockId: "", startedAt: "", endsAt: "", mode: "focus",
+    paused: false, pausedRemainMs: 0, ...actualPomodoro
+  };
+  // v311レビュー(Codex)で発見: 型を緩く見ると壊れたpaused状態がすり抜けるため厳密検査する。
+  const pausedRemainMs = Number(value.pomodoro.pausedRemainMs);
+  const validPause = value.pomodoro.running === true && value.pomodoro.mode === "focus"
+    && value.pomodoro.paused === true && Number.isFinite(pausedRemainMs)
+    && pausedRemainMs >= 0 && pausedRemainMs <= 25 * 60 * 1000;
+  value.pomodoro.paused = validPause;
+  value.pomodoro.pausedRemainMs = validPause ? pausedRemainMs : 0;
   // v229: EARLY BIRDの正本。旧stateと壊れた形状は空ログへ後方互換正規化する。
   if (!value.earlyBird || typeof value.earlyBird !== "object" || Array.isArray(value.earlyBird)) value.earlyBird = {};
   if (!value.earlyBird.logs || typeof value.earlyBird.logs !== "object" || Array.isArray(value.earlyBird.logs)) value.earlyBird.logs = {};
@@ -2707,7 +2729,9 @@ function seedState() {
       blockId: "",
       startedAt: "",
       endsAt: "",
-      mode: "focus"
+      mode: "focus",
+      paused: false,
+      pausedRemainMs: 0
     }
   };
 }
@@ -8981,7 +9005,9 @@ function resetPomodoroForBlock(blockId) {
     blockId: "",
     startedAt: "",
     endsAt: "",
-    mode: "focus"
+    mode: "focus",
+    paused: false,
+    pausedRemainMs: 0
   };
 }
 
@@ -10225,9 +10251,10 @@ function buildGuidedAccessHintModal() {
 }
 
 function startPomodoro(blockId) {
-  if (!blockId) return showToast("Blockを選んでください");
+  blockId = blockId || "";
+  if (blockId && !blockById(blockId)) return showToast("Blockが見つかりません");
   const wasStarted = Boolean(blockById(blockId)?.actualStartAt);
-  autoCloseStaleRoutineRuns(blockId);  // v215: 旧prepareTimeswitchForTaskStartのタブ非依存部
+  if (blockId) autoCloseStaleRoutineRuns(blockId);  // v215: 旧prepareTimeswitchForTaskStartのタブ非依存部
   // v14: state.pomodoro を完全再構築(spread を使わず、必要なフィールドだけ明示的に作成)
   // これで以前のセッションの endsAt/startedAt/mode が確実にリセットされる
   const now = Date.now();
@@ -10236,13 +10263,15 @@ function startPomodoro(blockId) {
     blockId,
     startedAt: dateToLocalDateTime(new Date(now)),
     endsAt: dateToLocalDateTime(new Date(now + 25 * 60 * 1000)),
-    mode: "focus"
+    mode: "focus",
+    paused: false,
+    pausedRemainMs: 0
   };
   // v13: ポモドーロ開始時、Blockの実績開始時間を自動記録(既存値があれば維持)
-  updateBlockField(blockId, "actualStartAt", blockById(blockId)?.actualStartAt || nowDateTime());
+  if (blockId) updateBlockField(blockId, "actualStartAt", blockById(blockId)?.actualStartAt || nowDateTime());
   const startedBlock = blockById(blockId);
   if (!wasStarted && startedBlock?.actualStartAt) trackOnBlockStarted(startedBlock);
-  saveAndRender("ポモドーロを開始しました(50:00 から)");
+  saveAndRender(`ポモドーロを開始しました(50:00 から${blockId ? "" : "・連動なし"})`);
   // v111: タイマー開始後(非ブロッキング)にiOSガイド付きアクセスのリマインドを出す。
   //       modalRootはrender()と独立したDOMルートのため、直前のsaveAndRenderの再描画で
   //       消えることはない。
@@ -10257,8 +10286,54 @@ function forceResetPomodoroSession() {
     blockId: "",
     startedAt: "",
     endsAt: "",
-    mode: "focus"
+    mode: "focus",
+    paused: false,
+    pausedRemainMs: 0
   };
+}
+
+// v311: paused中もrunning=trueを維持し、既存のrunning+blockId分岐でBlock連動着陸させる。
+function pausePomodoro() {
+  if (!state.pomodoro.running || state.pomodoro.mode !== "focus" || state.pomodoro.paused) return;
+  const pausedRemainMs = Math.max(0, localDateTimeToMs(state.pomodoro.endsAt) - Date.now());
+  state.pomodoro = { ...state.pomodoro, paused: true, pausedRemainMs };
+  saveAndRender("ポモドーロを一時停止しました");
+}
+
+function resumePomodoro() {
+  if (!state.pomodoro.running || state.pomodoro.mode !== "focus" || !state.pomodoro.paused) return;
+  const durationMs = 25 * 60 * 1000;
+  const pausedRemainMs = Math.min(durationMs, Math.max(0, Number(state.pomodoro.pausedRemainMs) || 0));
+  const now = Date.now();
+  state.pomodoro = {
+    ...state.pomodoro,
+    startedAt: dateToLocalDateTime(new Date(now - (durationMs - pausedRemainMs))),
+    endsAt: dateToLocalDateTime(new Date(now + pausedRemainMs)),
+    paused: false,
+    pausedRemainMs: 0
+  };
+  saveAndRender("ポモドーロを再開しました");
+}
+
+function pomodoroFlightTime(minute) {
+  if (!Number.isFinite(minute)) return "--:--";
+  return `${pad2(Math.floor(minute / 60) % 24)}:${pad2(minute % 60)}`;
+}
+
+function openPomodoroLinkModal() {
+  if (state.pomodoro.running) return;
+  const { nowFlight, arrivals } = pomodoroLinkFlights();
+  state.modal = { type: "pomodoroLink" };
+  const option = (flight, className = "") => `<button type="button" class="btn pomodoro-link-option ${className}" data-action="pomodoro-link-select" data-block-id="${escapeHTML(String(flight.id))}">
+    <small>${escapeHTML(pomodoroFlightTime(flight.plannedMin))}</small><span>${escapeHTML(flight.title)}</span>
+  </button>`;
+  renderModal(`${modalHeaderHTML("LINK FLIGHT ▸ 連動する便を選択", "link-modal")}
+      <div class="pomodoro-link-options">
+        ${nowFlight ? option(nowFlight, "now-opt") : ""}
+        ${arrivals.map((flight) => option(flight)).join("") || '<p class="pomodoro-link-empty">ARRIVALSに未完了便はありません</p>'}
+        <button type="button" class="btn pomodoro-link-option no-link" data-action="pomodoro-link-select" data-block-id=""><span>連動なしで開始</span></button>
+      </div>
+    </div><div class="modal-footer"><button class="btn" data-action="modal-close">キャンセル</button></div></div>`);
 }
 
 // v70: フォーカスタイマー「中断」時のチョコ停記録。中断そのもの(actualStartAtのクリア等)は
@@ -10274,7 +10349,7 @@ function recordBlockInterruption(blockId, reason) {
   saveState();
 }
 
-// 「中断」ボタン押下直後だけ出す軽量な理由ピッカー(v62の却下理由ピッカーと同じ思想)。
+// 「終了」ボタン押下直後だけ出す軽量な理由ピッカー(v62の却下理由ピッカーと同じ思想)。
 // キャンセルすればタイマーは止まらない(理由選択がトラップにならないよう退路を残す)。
 function interruptReasonPickerHTML() {
   return `
@@ -10297,7 +10372,7 @@ function renderPomodoroInterruptControls(defaultHTML) {
 }
 
 function stopPomodoro() {
-  // v13: 中断時、紐づくBlockの actualStartAt を消す(再開で改めて記録するため)
+  // v13/v311: 終了時、紐づくBlockの actualStartAt を消す(旧「中断」の完全停止挙動を温存)
   const blockId = state.pomodoro.blockId;
   if (blockId) {
     state.blocks = state.blocks.map((block) => block.id === blockId
@@ -10310,12 +10385,16 @@ function stopPomodoro() {
     blockId: "",
     startedAt: "",
     endsAt: "",
-    mode: "focus"
+    mode: "focus",
+    paused: false,
+    pausedRemainMs: 0
   };
-  saveAndRender("ポモドーロを中断しました(実績開始時刻をクリア)");
+  saveAndRender("ポモドーロを終了しました(実績開始時刻をクリア)");
 }
 
-function completePomodoro() {
+// v311レビュー(Codex)で発見: 旧actualEndAt残置Blockの再ポモ連動で古い時刻を誤再利用する実害
+// があったため、saveActualEntryFromModal(入力済み終了時刻を尊重)だけがtrueを渡す。
+function completePomodoro({ preserveActualEndAt = false } = {}) {
   const blockId = state.pomodoro.blockId;
   const wasCompleted = Boolean(blockId && blockById(blockId)?.completed);
   if (blockId) {
@@ -10324,7 +10403,7 @@ function completePomodoro() {
       ? {
           ...block,
           pomodoroCount: Number(block.pomodoroCount || 0) + 1,
-          actualEndAt: nowDateTime(),
+          actualEndAt: preserveActualEndAt ? (block.actualEndAt || nowDateTime()) : nowDateTime(),
           completed: true,
           updatedAt: nowDateTime()
         }
@@ -10334,12 +10413,15 @@ function completePomodoro() {
   }
   const completedBlock = blockId ? state.blocks.find((block) => block.id === blockId) : null;
   if (completedBlock) generateReport(completedBlock.date, { quiet: true });
+  _pendingInterruptBlockId = null;
   state.pomodoro = {
     running: false,
     blockId: "",
     startedAt: "",
     endsAt: "",
-    mode: "focus"
+    mode: "focus",
+    paused: false,
+    pausedRemainMs: 0
   };
   if (!wasCompleted && completedBlock?.completed) {
     saveState();
@@ -10888,7 +10970,9 @@ function goBreakPomodoro() {
     lastFocusBlockId: blockId || "",  // v19
     startedAt: dateToLocalDateTime(new Date(now)),
     endsAt: dateToLocalDateTime(new Date(now + 5 * 60 * 1000)),
-    mode: "break"
+    mode: "break",
+    paused: false,
+    pausedRemainMs: 0
   };
   saveAndRender("休憩を開始しました");
 }
@@ -10901,7 +10985,9 @@ function endBreakPomodoro() {
     blockId: "",
     startedAt: "",
     endsAt: "",
-    mode: "focus"
+    mode: "focus",
+    paused: false,
+    pausedRemainMs: 0
   };
   saveAndRender("休憩を終了しました");
 }
@@ -10919,12 +11005,15 @@ function updatePomodoroTick() {
   const radius = 90;
   const circumference = 2 * Math.PI * radius;
   const endsAtMs = localDateTimeToMs(state.pomodoro.endsAt);
-  const remainingMs = Math.max(0, endsAtMs - Date.now());
+  const remainingMs = state.pomodoro.paused
+    ? Math.max(0, Number(state.pomodoro.pausedRemainMs) || 0)
+    : Math.max(0, endsAtMs - Date.now());
   const isBreak = state.pomodoro.mode === "break";
   const startedAtMs = localDateTimeToMs(state.pomodoro.startedAt);
   const totalMs = isBreak ? 5 * 60 * 1000 : Math.max(1, endsAtMs - startedAtMs);
   const progress = 1 - remainingMs / totalMs;
-  overlay.textContent = isBreak ? remainingTextNormal(remainingMs) : remainingText(state.pomodoro.endsAt, true);
+  overlay.textContent = isBreak ? remainingTextNormal(remainingMs)
+    : state.pomodoro.paused ? remainingTextNormal(remainingMs * 2) : remainingText(state.pomodoro.endsAt, true);
   circle.style.stroke = isBreak ? "var(--orange)" : "var(--accent)";
   circle.style.strokeDasharray = String(circumference);
   circle.style.strokeDashoffset = String(circumference * (1 - clamp(progress, 0, 1)));
@@ -10935,7 +11024,7 @@ function startTimerTicker() {
   timerTicker = setInterval(() => {
     // 任意タイマー
     if (state.pomodoro.running) {
-      if (localDateTimeToMs(state.pomodoro.endsAt) <= Date.now()) {
+      if (!state.pomodoro.paused && localDateTimeToMs(state.pomodoro.endsAt) <= Date.now()) {
         // 時間切れ: focus → 自動で break に、break → セッション終了
         if (state.pomodoro.mode === "break") {
           endBreakPomodoro();
@@ -13428,6 +13517,7 @@ function saveActualEntryFromModal(blockId, fields) {
     );
   }
   if (block) generateReport(block.date, { quiet: true });
+  if (state.pomodoro.running && state.pomodoro.blockId === blockId) completePomodoro({ preserveActualEndAt: true });
   closeModal();
   // 実績モードに切り替えて表示
   state.timelineMode = "actual";

@@ -139,13 +139,15 @@ function panelHeading(en, ja, source) {
 function todayPomodoroDisplay(nowMs = Date.now()) {
   const pomodoro = state.pomodoro || {};
   if (!pomodoro.running) {
-    return { running: false, mode: "focus", progress: 0, text: "50:00", color: "var(--faint)", label: "待機中" };
+    return { running: false, paused: false, mode: "focus", progress: 0, text: "50:00", color: "var(--faint)", label: "待機中" };
   }
   const endsAtMs = localDateTimeToMs(pomodoro.endsAt);
-  const remainingMs = Math.max(0, endsAtMs - nowMs);
+  const remainingMs = pomodoro.paused
+    ? Math.max(0, Number(pomodoro.pausedRemainMs) || 0)
+    : Math.max(0, endsAtMs - nowMs);
   if (pomodoro.mode === "break") {
     return {
-      running: true,
+      running: true, paused: false,
       mode: "break",
       progress: 1 - remainingMs / (5 * 60 * 1000),
       text: remainingTextNormal(remainingMs),
@@ -157,11 +159,12 @@ function todayPomodoroDisplay(nowMs = Date.now()) {
   const totalMs = Math.max(1, endsAtMs - startedAtMs);
   return {
     running: true,
+    paused: pomodoro.paused === true,
     mode: "focus",
     progress: 1 - remainingMs / totalMs,
-    text: remainingText(pomodoro.endsAt, true),
+    text: pomodoro.paused ? remainingTextNormal(remainingMs * 2) : remainingText(pomodoro.endsAt, true),
     color: "var(--accent)",
-    label: "作業中"
+    label: pomodoro.paused ? "中断中" : "作業中"
   };
 }
 
@@ -173,21 +176,26 @@ function renderTodayPomodoro(blocks, queue) {
   const isRoutinePomodoro = Boolean(block && block.category === "ルーティン");
   const startTarget = runningBlockOf(blocks) || queue[0] || null;
   let controls;
-  if (display.running && display.mode === "focus") {
+  if (display.paused) {
     controls = renderPomodoroInterruptControls(`
       <div class="today-pomodoro-actions">
-        <button class="btn danger" data-action="stop-pomodoro">中断</button>
+        <button class="btn primary" data-action="resume-pomodoro">▶ 再開</button>
+        <button class="btn" data-action="stop-pomodoro">■ 終了</button>
+      </div>`);
+  } else if (display.running && display.mode === "focus") {
+    controls = renderPomodoroInterruptControls(`
+      <div class="today-pomodoro-actions">
+        <button class="btn" data-action="pause-pomodoro">⏸ 中断</button>
+        <button class="btn" data-action="stop-pomodoro">■ 終了</button>
       </div>`);
   } else if (display.running) {
     controls = `<div class="today-pomodoro-actions">
       <button class="btn" data-action="end-break">休憩を終了</button>
     </div>`;
-  } else if (startTarget) {
-    controls = `<div class="today-pomodoro-actions">
-      <button class="btn primary" data-action="start-pomodoro" data-block-id="${escapeHTML(startTarget.id)}">▶ 開始</button>
-    </div>`;
   } else {
-    controls = `<div class="today-empty">未着手Blockをキューに追加すると開始できます</div>`;
+    controls = `<div class="today-pomodoro-actions">
+      <button class="btn primary" data-action="open-pomodoro-link">▶ 開始</button>
+    </div>`;
   }
   return `<section class="today-panel today-pomodoro today-span-2 pomo">
     ${panelHeading("CABIN TIMER", "NOW FOCUS連動 — 50:00を2倍速表示", display.running ? "LIVE" : "READY")}
@@ -195,7 +203,7 @@ function renderTodayPomodoro(blocks, queue) {
       ${renderCircularProgress(display.progress, display.text, display.color)}
       <div class="today-pomodoro-info">
         <strong id="todayPomodoroMode">${display.mode === "break" ? "BREAK" : "POMODORO"} — ${display.label}</strong>
-        <span>${block ? (isRoutinePomodoro ? "ルーティン実行中" : escapeHTML(block.title)) : startTarget ? `開始候補: ${escapeHTML(startTarget.title)}` : "対象Blockなし"}</span>
+        <span>${block ? (isRoutinePomodoro ? "ルーティン実行中" : escapeHTML(block.title)) : display.mode === "break" ? "休憩中" : display.running ? "連動なし" : startTarget ? `開始候補: ${escapeHTML(startTarget.title)}` : "対象Blockなし"}</span>
         ${controls}
       </div>
     </div>

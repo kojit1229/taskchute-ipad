@@ -4965,6 +4965,24 @@ h3 {
 #app[data-view="today"] .today-tower .pomo .today-pomodoro-actions { justify-content: center; }
 #app[data-view="today"] .today-tower[data-view-life="0"] .pomo { --tower-pomo-ring: 156px; }
 
+.modal-card.link-modal { --link-cyan: var(--accent); --link-amber: var(--orange); max-width: 440px; border: 1px solid color-mix(in srgb, var(--link-cyan) 72%, transparent); border-radius: 4px; background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 88%, transparent), var(--panel)); box-shadow: 0 0 32px color-mix(in srgb, var(--link-cyan) 22%, transparent), 0 18px 48px rgba(0, 0, 0, .4); }
+.link-modal .modal-header { border-bottom-color: color-mix(in srgb, var(--link-cyan) 35%, transparent); }
+.link-modal .modal-title { color: var(--link-cyan); font-size: 12px; letter-spacing: .14em; }
+.pomodoro-link-options { display: grid; gap: 8px; }
+.pomodoro-link-option {
+  display: grid; grid-template-columns: 48px minmax(0, 1fr); align-items: center;
+  width: 100%; min-height: 44px; text-align: left;
+}
+.pomodoro-link-option small { color: var(--link-cyan); font-variant-numeric: tabular-nums; }
+.pomodoro-link-option span { min-width: 0; overflow-wrap: anywhere; }
+.pomodoro-link-option.now-opt { border-color: var(--link-amber); box-shadow: inset 3px 0 0 var(--link-amber); }
+.pomodoro-link-option.now-opt::before {
+  grid-column: 1 / -1; color: var(--link-amber); content: "✈ NOW LANDING";
+  font-size: 10px; letter-spacing: .1em;
+}
+.pomodoro-link-option.no-link { grid-template-columns: 1fr; }
+.pomodoro-link-empty { margin: 0; padding: 8px 4px; color: var(--muted); font-size: 12px; }
+
 /* v279: FABLE FUND閲覧タブ。既存の全体grid定義には干渉しないview固有スタイル。 */
 .fund-view { display: grid; gap: 14px; }
 .fund-summary { padding: 14px; }

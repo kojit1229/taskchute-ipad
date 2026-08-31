@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v310";  // v310: TOWER上帯2へNOW LANDING/CABIN TIMERを統合(APP_SHELL変更なし)
+const CACHE_NAME = "taskchute-journal-pwa-v311";  // v311: CABIN TIMERのLINK FLIGHT・一時停止/再開・Block連動着陸
 // v293: 身体スキャン復活(K裁定2026-08-29。手動Block完了時のみ追加)
 // v290: 孤児action本体2クラスタ(AI作業結果承認/質問、AIタスク候補チップの採用/却下)を削除した(APP_SHELL変更なし)。
 // v288: WBS内検索と新規Project既定closed化を追加した(APP_SHELL変更なし)。

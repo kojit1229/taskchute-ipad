@@ -96,6 +96,21 @@ function boardFlights(blocks, nowMin, tasks = []) {
   return [...blockFlights, ...taskFlights];
 }
 
+// v311: ARRIVALSのBlock便を再利用し、NOW LANDING便だけを先頭の強調枠へ分離する。
+function pomodoroLinkFlights() {
+  const now = new Date();
+  const blocks = blocksForDate(todayISO());
+  const flights = boardFlights(blocks, now.getHours() * 60 + now.getMinutes());
+  const running = runningBlockOf(blocks);
+  const nowFlight = running ? flights.find((flight) => String(flight.id) === String(running.id)) || {
+    ...running, plannedMin: minutesOf(running.plannedStartAt || running.actualStartAt)
+  } : null;
+  return {
+    nowFlight,
+    arrivals: flights.filter((flight) => !nowFlight || String(flight.id) !== String(nowFlight.id))
+  };
+}
+
 function arrivalWindow(flights) {
   if (!flights.length) return { rows: [], omitted: 0 };
   let center = flights.findIndex((flight) => flight.status === "landing");
@@ -599,5 +614,5 @@ function updateTodayTowerTick() {
 
 export {
   configureTodayTower, renderTodayTower, runwayArrivalSelection, setTowerArrivalSelection, updateTodayTowerTick,
-  toggleTowerBodyMindWeekly
+  toggleTowerBodyMindWeekly, pomodoroLinkFlights
 };
