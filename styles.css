@@ -3097,6 +3097,10 @@ h3 {
    7fr/3fr列が入れ替わっていた。band2内ではDOM順どおりに固定する。 */
 .tower-band2 > .tower-runway,
 .tower-band2 > .today-pomodoro { order: 0; }
+/* v310レビュー(Codex)で発見: 1280px未満(単一列のband2)でも.today-span-2(grid-column: span 2、
+   Todayタブ本来の2列パネル用)がtoday-pomodoroへ適用され続け、暗黙の第2列(0px)が生成されて
+   いた(721〜1279pxで実測確認)。メディアクエリの内外を問わずband2直下では常にautoへ戻す。 */
+.tower-band2 > .today-pomodoro.today-span-2 { grid-column: auto; }
 .today-focus-bar { order: 1; }
 .sec-rwy { order: 1; }
 .sec-arrivals { order: 2; }
@@ -3470,10 +3474,6 @@ h3 {
   .today-tower > .tower-band1 { grid-area: life; }
   .today-tower > .so-row { grid-area: so; }
   .today-tower > .tower-band2 { grid-area: band2; grid-template-columns: minmax(0, 7fr) minmax(0, 3fr); }
-  /* v310実測で発見: .today-pomodoroが持つ.today-span-2(grid-column: span 2、Todayタブ本来の
-     2列パネル用)がband2の2列コンテキストにも適用され、CABIN TIMERが2列分を要求して次の行へ
-     折り返され70/30の横並びが崩れていた。band2直下では単一列(auto)へ明示的に戻す。 */
-  .today-tower > .tower-band2 > .today-pomodoro.today-span-2 { grid-column: auto; }
   .today-tower .today-focus-bar { grid-area: focus; }
   .today-tower .tower-col-left { display: block; grid-area: left; min-width: 0; }
   .today-tower .tower-col-center { display: block; grid-area: center; min-width: 0; }

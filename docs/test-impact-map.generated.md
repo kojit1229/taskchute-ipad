@@ -145,7 +145,7 @@
 | v307.test.js | e2e | full | planning-execution, ui-responsive | 14 | 0 | 0 |
 | v308.test.js | e2e | full | planning-execution, ui-responsive | 16 | 0 | 0 |
 | v309.test.js | e2e | full | planning-execution, ui-responsive | 22 | 0 | 0 |
-| v310.test.js | e2e | full | planning-execution, ui-responsive | 15 | 0 | 0 |
+| v310.test.js | e2e | full | planning-execution, ui-responsive | 16 | 0 | 0 |
 | v49.test.js | e2e | full | sync-storage, content-ai | 19 | 16 | 7900 |
 | v50.test.js | e2e | smoke | planning-execution, ui-responsive | 16 | 12 | 4200 |
 | v53.test.js | e2e | full | sync-storage, journal-health | 17 | 14 | 7500 |

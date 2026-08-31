@@ -79,6 +79,15 @@ function runningBlock() {
       const remain = hero.querySelector("#towerNowRemain");
       const ring = document.querySelector(".pomo-circle-wrap");
       const progress = ring.querySelector(".pomo-progress-circle");
+      // --tower-purpleの実際の解決色を、progressStrokeとの厳密一致検証に使う
+      // (「none以外」という緩い検証では、cyanや旧色へ戻る回帰を検出できないため)。
+      // --tower-purpleは.today-towerスコープ内でのみ定義されるため、documentの
+      // ルートではなくhero配下(同じカスケード内)へプローブを差し込む。
+      const probe = document.createElement("span");
+      probe.style.cssText = "position:absolute; visibility:hidden; color: var(--tower-purple);";
+      hero.appendChild(probe);
+      const purpleColor = getComputedStyle(probe).color;
+      probe.remove();
       return {
         heroBorder: getComputedStyle(hero).borderTopColor,
         heroShadow: getComputedStyle(hero).boxShadow,
@@ -88,17 +97,37 @@ function runningBlock() {
         remainSize: parseFloat(getComputedStyle(remain).fontSize),
         ringWidth: ring.getBoundingClientRect().width,
         ringTag: ring.querySelector("svg")?.tagName,
-        progressStroke: getComputedStyle(progress).stroke
+        progressStroke: getComputedStyle(progress).stroke,
+        purpleColor
       };
     });
     check("amber縁・発光・明るめ地・上端アクセントラインを持つ",
       visual.heroBorder !== "rgba(0, 0, 0, 0)" && visual.heroShadow !== "none"
       && visual.heroBackground.includes("gradient") && visual.accentLine.includes("gradient"), JSON.stringify(visual));
     check("PCのタスク名22px・残り時間26px", visual.titleSize === 22 && visual.remainSize === 26, JSON.stringify(visual));
-    check("CABIN TIMER見出し・112px SVG円弧・GLASS strokeを使う",
+    check("CABIN TIMER見出し・112px SVG円弧・--tower-purpleと厳密一致するstrokeを使う",
       (await page.locator(".today-pomodoro .today-panel-title").textContent()).includes("CABIN TIMER")
-      && Math.abs(visual.ringWidth - 112) < 0.5 && visual.ringTag === "svg" && visual.progressStroke !== "none",
-      JSON.stringify(visual));
+      && Math.abs(visual.ringWidth - 112) < 0.5 && visual.ringTag === "svg"
+      && visual.progressStroke === visual.purpleColor, JSON.stringify(visual));
+
+    console.log('[2b] data-glass-blur="off"でもNOW LANDINGヒーローはGLASS縮退契約の半透明白背景を保つ');
+    // v310レビュー(Codex)で発見: .now-heroのbackground-imageだけの検証では、`background`
+    // ショートハンド(v274のGLASS縮退契約=.tower-runwayのbackground-colorを暗黙にtransparent
+    // へ上書きする回帰)を検出できない。実際にblur-off状態を再現しbackgroundColorを直接見る。
+    const BLUR_KEY = "taskchute-journal-glass-blur-off";
+    await page.evaluate((key) => localStorage.setItem(key, "1"), BLUR_KEY);
+    await page.reload();
+    await page.waitForSelector('.today-tower[data-glass-blur="off"]');
+    const blurOff = await page.locator(".now-hero").evaluate((hero) => ({
+      backdropFilter: getComputedStyle(hero).backdropFilter,
+      backgroundColor: getComputedStyle(hero).backgroundColor
+    }));
+    check("blur-off時もNOW LANDINGヒーローはv274のGLASS半透明白背景(rgba(255,255,255,0.07))を維持",
+      blurOff.backdropFilter === "none" && blurOff.backgroundColor === "rgba(255, 255, 255, 0.07)",
+      JSON.stringify(blurOff));
+    await page.evaluate((key) => localStorage.removeItem(key), BLUR_KEY);
+    await page.reload();
+    await page.waitForSelector('.today-tower:not([data-glass-blur="off"])');
 
     console.log('[3] data-view-life="0"フックでリングだけ156pxへ拡大する');
     const expanded = await page.evaluate(() => {

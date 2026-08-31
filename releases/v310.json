@@ -32,7 +32,8 @@
     "NOW LANDINGへamber縁、上端ライン、発光シャドウ、明るめのGLASS地、PC 22pxタスク名、26px残り時間を適用した。",
     "CABIN TIMERはrenderCircularProgressのSVG円弧方式を維持し、既定112px、data-view-life=0時156px、GLASS purple単色strokeへCSSで調整した。",
     "【監督者が実機テストで発見・修正した3件の実害】(a) 既存.today-span-2(grid-column:span 2、Todayタブ本来の2列パネル用)がband2の2列コンテキストにも適用され、CABIN TIMERが2列分を要求して次の行へ折り返され70/30の横並びが崩れていた→band2直下だけgrid-column:autoへ明示的に戻した。(b) 無関係な既存.sec-rwy{order:1}(狭幅時のトップレベル並び替え専用)がband2内の子2要素にも適用され、today-pomodoro(order既定0)がグリッド配置でtower-runwayより先に処理されて7fr/3fr列が入れ替わっていた→band2直下の両子要素にorder:0を明示した。(c) .now-heroの`background: linear-gradient(...)`ショートハンドが、v274の既存契約(data-glass-blur=\"off\"時の.tower-runway半透明白背景)を暗黙にtransparentへ上書きしていた→background-imageプロパティに限定して基底のbackground-colorを保持した。3件ともv308/v309の教訓どおり、監督者が自らブラウザ実測(node tests/v310.test.js・tests/tower-core.test.js・tests/v274.test.js)して発見し、Codexの完了報告(gate --final未達)を鵜呑みにしなかったことで着地前に検出できた。",
-    "tests/v310.test.jsを追加し、上帯2のDOM・70/30比率・強調意匠・SVGリング寸法・empty分岐・旧退避コード不存在を固定した。tests/v241/v275/v285とtower-coreの旧直下/timer/right-area・表示順契約を新しいband2固定契約へ追従した。",
+    "【Codexレビューで発見・修正した3件の追加指摘】(a) [major] v310.test.jsのヒーロー背景検証がbackground-imageの存在しか見ておらず、(c)のbackground-color回帰(v274契約)を再発検出できなかった→data-glass-blur=\"off\"を実際に再現しbackgroundColorを直接検証するケースを追加した。(b) [minor] .today-span-2のgrid-column:auto上書きが1280px以上のメディアクエリ内限定だったため、721〜1279px(単一列band2)でも暗黙の第2列(0px)が生成されていた(実測で確認、視覚的破綻は未確認だが単一列契約とは不一致)→メディアクエリ外の基底ルールへ移し全幅で一貫させた。(c) [minor] CABIN TIMERのstroke検証が'none以外'という緩い条件だったため、cyanや旧色への回帰を検出できなかった→--tower-purpleの実解決値とprogressStrokeの厳密一致検証へ強化した。",
+    "tests/v310.test.jsを追加し、上帯2のDOM・70/30比率・強調意匠・SVGリング寸法(--tower-purpleとの厳密一致含む)・blur-off時のGLASS背景契約・empty分岐・旧退避コード不存在を固定した。tests/v241/v275/v285とtower-coreの旧直下/timer/right-area・表示順契約を新しいband2固定契約へ追従した。",
     "Service WorkerのCACHE_NAMEをv310へ更新した。"
   ],
   "uncertainties": [
@@ -52,7 +53,7 @@
     "npm run code:index:writeとnpm run test:manifest:writeで生成索引・テストマニフェストを更新する。",
     "node --check src/features/today-tower.js、node --check src/features/today.js、node --check sw.js、node --check tests/tower-core.test.js、node --check tests/v241.test.js、node --check tests/v275.test.js、node --check tests/v285.test.js、node --check tests/v310.test.jsで変更対象JavaScriptを明示的に構文確認する。",
     "node tests/v310.test.jsで上帯2配置、70/30、NOW強調、112px/156px SVGリング、empty分岐、旧コード不存在を確認する。",
-    "node tests/run-all.js v241 v297 tower-core today-core topband-core v310で既存FOCUS・TOWER・ポモドーロ・上帯・左列回帰を確認する。",
+    "node tests/run-all.js v241 v274 v297 tower-core today-core topband-core v310で既存FOCUS・GLASS縮退・TOWER・ポモドーロ・上帯・左列回帰を確認する(v274はCodexレビュー指摘によりGLASS縮退契約の回帰検出に必須のため明示的に含める)。",
     "node scripts/release-record.js releases/v310.json --writeと--checkでCHANGES_v310.mdとhandoffを生成・検査する。",
     "node scripts/release-gate.js releases/v310.json --finalでrelease記録、生成物、関連回帰、coreを確認する。",
     "git diff --checkで空白エラーが無いことを確認する。"
