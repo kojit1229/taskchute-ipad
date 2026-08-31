@@ -5721,7 +5721,7 @@ function renderBlockItem(block) {
       <div class="stack">
         <div class="title-line">
           ${isMIT ? `<span class="mit-star" title="今日の主役" style="color:#F5A623; font-weight:700">★</span>` : ""}
-          <strong data-action="edit-block" data-id="${block.id}" style="cursor:pointer">${escapeHTML(block.title)}</strong>
+          <strong data-action="edit-block" data-id="${block.id}" title="${escapeHTML(block.title)}" style="cursor:pointer">${escapeHTML(block.title)}</strong>
           <span class="badge ${block.completed ? "green" : "blue"}">${start}${end ? `-${end}` : ""}</span>
           ${doing ? `<span class="badge orange">着手中 ${timeFromDateTime(block.actualStartAt)}〜</span>` : ""}
           ${task ? `<span class="badge">${escapeHTML(projectName(task.projectId))}</span>` : `<span class="badge orange">単発</span>`}

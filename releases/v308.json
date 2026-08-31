@@ -1,0 +1,50 @@
+{
+  "version": 308,
+  "date": "2026-08-31",
+  "title": "中間幅でBlockカードのタイトルが縦に折れる不具合を修正",
+  "summary": "1024px前後・745pxの中間幅でタスクシュートタブのBlockカードタイトルが1文字ずつ縦に折れる不具合(ドッグフーディング#9)を、Blockカードだけに限定した1行末尾省略表示へ変更して解消した。",
+  "changedFiles": [
+    "CHANGES_v308.md",
+    "app.js",
+    "docs/test-impact-map.generated.md",
+    "releases/v308.json",
+    "styles.css",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/v308.test.js"
+  ],
+  "intent": [
+    "共通の.title-line strongにあるoverflow-wrap:anywhereがflexアイテムの自動最小サイズを文字1つ分まで許容していたため、Blockカード配下だけでmin-width:4chとflex伸縮を明示し、タイトルを構造的に1行へ固定する(実装当初はmin-width:0で試したが、同じ.title-line内の複数バッジと場所を奪い合いタイトルの実幅が完全に0まで潰れて消える回帰を実測で発見したため、常に数文字分は読める最低幅4chへ変更した)。",
+    "WBSプロジェクト行も同じ.title-line strongを使うが今回は非目標なので、セレクタを.block-row .title-line strongへ限定し、従来の複数行表示を維持する。",
+    "省略された全文をポインタ操作で確認できるよう、既存のedit-block要素へescapeHTML済みのtitle属性を追加する。"
+  ],
+  "changes": [
+    "styles.cssに.block-row .title-line strong専用のmin-width:4ch、flex:1 1 auto、overflow:hidden、white-space:nowrap、text-overflow:ellipsisを追加した。",
+    "renderBlockItem()のstrong[data-action=edit-block]へtitle属性を追加し、属性値にも既存escapeHTMLヘルパーを使用した。本文側のエスケープ処理は変更していない。",
+    "tests/v308.test.jsを新規追加し、1024px・745pxで長いBlockタイトルが実際にoverflowする条件でも1行高に収まりellipsisのcomputed styleが有効なこと、title属性が特殊文字を含む全文を保持することを検証する。",
+    "同テストで745pxのWBSプロジェクトタイトルが従来どおりnormal/visible/anywhereの折り返し表示であり、Block専用指定が波及しないことを検証する。",
+    "Service WorkerのCACHE_NAMEをv308へ更新する。"
+  ],
+  "uncertainties": [
+    "title属性によるネイティブtooltipはマウスポインタ環境では全文確認に使えるが、iOS Safariの長押しで同等に表示されることは保証されない。",
+    "iPad実機のSplit Viewを含む最終的な視覚品質はK実機確認が必要。Playwrightでは1024px・745pxのレイアウト寸法とcomputed styleを検証する。"
+  ],
+  "reviewFocus": [
+    "ellipsis指定のセレクタが.block-row .title-line strongに限定され、共通.title-line strongやWBSプロジェクト行の折り返し挙動を変えていないこと。",
+    "min-width:4ch(0ではない)とflex:1 1 autoによりタイトルが可変列内で縮みつつ実幅0まで潰れて消えないこと、overflow:hidden、white-space:nowrap、text-overflow:ellipsisの組み合わせが揃っていること。",
+    "title属性にescapeHTML(block.title)を使用し、引用符やアンパサンドを含むタイトルでも属性を壊さず、本文側を二重エスケープしていないこと。",
+    "1024px・745pxの両方でテスト対象タイトルが実際にclientWidthを超えたうえで、offsetHeightが1行分に収まること。"
+  ],
+  "verification": [
+    "node scripts/release-record.js releases/v308.json --write と --checkで生成物の整合を確認する。",
+    "npm run code:index:write と npm run test:manifest:writeで生成索引とテストマニフェストを更新する。",
+    "node tests/v308.test.jsで1024px・745pxのBlockタイトル1行省略、title属性、WBS非干渉を確認する。",
+    "既存WBS回帰スイートtests/v302.test.jsを実行し、WBS表示・操作が維持されることを確認する。",
+    "node scripts/release-gate.js releases/v308.json --final、node --check app.js、node --check sw.js、node --check tests/v308.test.js、git diff --checkを実行してPASSを確認する。"
+  ],
+  "knownLimitations": [
+    "WBSプロジェクト行の同種の潜在的な縦折れは今回の非目標であり、従来挙動のまま残す。",
+    "iOS Safariでtitle属性のtooltipを確実に開く専用UIは追加していない。",
+    "min-width:4chという固定値は現行フォントサイズでの実測に基づく。バッジ数が現状より大幅に増える将来の改修では再度実測確認が必要。"
+  ]
+}

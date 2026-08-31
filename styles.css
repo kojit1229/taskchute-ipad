@@ -695,6 +695,18 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+/* v308: 中間幅でもBlockタイトルを1行に保ち、WBSプロジェクト行には波及させない。
+   min-width:0だけだと、同じ.title-line内の複数バッジ(時刻・着手中・カテゴリ)と
+   場所を奪い合った際にタイトルの実幅が0まで潰れて完全に見えなくなる実害が
+   実測で確認できたため、常に数文字分は読める最低幅を確保する。 */
+.block-row .title-line strong {
+  min-width: 4ch;
+  flex: 1 1 auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;
