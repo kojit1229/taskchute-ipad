@@ -1,0 +1,42 @@
+{
+  "version": 309,
+  "date": "2026-08-31",
+  "title": "DRIFT候補なし時の文言を受け止めやすい表現へ変更",
+  "summary": "タイムラインのDRIFTパネルで1件だけでは収まる候補が無い場合、否定だけで終わる文言を複数件の繰り越しで縮められると伝える表現へ変更し、DRIFT値が1件も動かさなかった場合の見込みであることも常設ノートに追記した。",
+  "changedFiles": [
+    "docs/test-impact-map.generated.md",
+    "releases/v309.json",
+    "src/features/timeline.js",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/v309.test.js"
+  ],
+  "intent": [
+    "候補選出のグリーディ方式や候補あり時の操作を変えず、候補なし時だけにある突き放したトーンを文字列リテラルの変更で整える(Codexレビュー指摘により、候補プールが0件・1件の場合でも成立しない断定表現「複数件を送ると縮まります」は避け、常に成立する表現へ調整した)。",
+    "DRIFT値が今日の全Blockを1件も動かさなかった場合の見込みであることを、候補の有無に関わらず常設ノートで伝える。",
+    "CSS、DOM構造、関数シグネチャ、data-action名には触れず、既存の描画・操作契約を維持する。"
+  ],
+  "changes": [
+    "候補なしかつDRIFTが正の場合の表示を「1件では収まりません。予定を見直すとDRIFTを縮められる場合があります。」へ変更した(候補プールの件数に関わらず常に成立する表現)。",
+    ".drift-noteへ「1件も動かさなかった場合の見込みです。」を追記した。",
+    "tests/v309.test.jsを追加し、朝一・実績ゼロ・最大候補見積よりDRIFTが大きい候補なしケース、1件でDRIFT以上を縮められる候補ありケース、item.minutes===driftの境界(>=の等号側)が候補ありとして扱われるケースの3パターンを実ブラウザで固定した。",
+    "Service WorkerのCACHE_NAMEをv309へ更新した。"
+  ],
+  "uncertainties": [
+    "複数件を送った場合にどの組み合わせが最適かは現行UIでは提示しない。今回も候補選出ロジックは変更していない。",
+    "390px幅のPlaywrightで表示内容を検証するが、iOS実機PWAでの最終的な読みやすさはK実機確認が必要。"
+  ],
+  "reviewFocus": [
+    "src/features/timeline.jsの変更がdrift-noteと候補なし側の文字列リテラルだけで、三項演算子、DOM構造、クラス名、data-actionを変えていないこと。",
+    "候補あり時の「取り戻す案」、候補タイトル・分数、「明日へ送る」ボタンとdata-idが従来どおりであること。",
+    "tests/v309.test.jsの候補なしフィクスチャが08:00時点の残見積90分・計画最終08:30によりDRIFT60分を作り、全候補の最大見積30分を明示的に上回っていること。",
+    "DRIFTパネル、提案要素、候補ありボタンの件数検査によりPlaywright strict locatorの曖昧一致が無いこと。"
+  ],
+  "verification": [
+    "npm run code:index:write と npm run test:manifest:writeで生成索引とテストマニフェストを更新する。",
+    "node tests/v309.test.jsで候補なしの新文言、候補ありの従来表示・ボタン、両ケースのdrift-noteを確認する。",
+    "node --check src/features/timeline.js、node --check sw.js、node --check tests/v309.test.jsで変更対象JavaScriptの構文を確認する。",
+    "node scripts/release-gate.js releases/v309.json --finalでrelease記録、生成物、関連回帰、coreを確認する。",
+    "git diff --checkで空白エラーが無いことを確認する。"
+  ]
+}

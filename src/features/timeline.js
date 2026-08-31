@@ -192,11 +192,11 @@ function driftPanelHTML() {
   return `<section class="panel drift-panel">
     <div class="panel-label">DRIFT</div>
     <div class="drift-value">${driftLabel}</div>
-    <div class="muted drift-note">今日の全Block(ルーティン・タイムライン由来を含む)で、着地予定と計画上の最終終了を比較。</div>
+    <div class="muted drift-note">今日の全Block(ルーティン・タイムライン由来を含む)で、着地予定と計画上の最終終了を比較。1件も動かさなかった場合の見込みです。</div>
     ${candidate ? `<div class="drift-suggestion">
       <span>取り戻す案: ${escapeHTML(candidate.block.title)} (${candidate.minutes}分)</span>
       <button class="btn ghost" data-action="drift-postpone" data-id="${candidate.block.id}">明日へ送る</button>
-    </div>` : `<div class="muted drift-suggestion">${drift > 0 ? "1件送るだけで収まる案はありません。" : "計画の範囲に収まっています。"}</div>`}
+    </div>` : `<div class="muted drift-suggestion">${drift > 0 ? "1件では収まりません。予定を見直すとDRIFTを縮められる場合があります。" : "計画の範囲に収まっています。"}</div>`}
   </section>`;
 }
 
