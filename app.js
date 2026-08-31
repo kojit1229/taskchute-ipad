@@ -10394,7 +10394,7 @@ function stopPomodoro() {
 
 // v311レビュー(Codex)で発見: 旧actualEndAt残置Blockの再ポモ連動で古い時刻を誤再利用する実害
 // があったため、saveActualEntryFromModal(入力済み終了時刻を尊重)だけがtrueを渡す。
-function completePomodoro({ preserveActualEndAt = false } = {}) {
+function completePomodoro(preserveActualEndAt = false) {
   const blockId = state.pomodoro.blockId;
   const wasCompleted = Boolean(blockId && blockById(blockId)?.completed);
   if (blockId) {
@@ -13517,7 +13517,7 @@ function saveActualEntryFromModal(blockId, fields) {
     );
   }
   if (block) generateReport(block.date, { quiet: true });
-  if (state.pomodoro.running && state.pomodoro.blockId === blockId) completePomodoro({ preserveActualEndAt: true });
+  if (state.pomodoro.running && state.pomodoro.blockId === blockId) completePomodoro(true);
   closeModal();
   // 実績モードに切り替えて表示
   state.timelineMode = "actual";

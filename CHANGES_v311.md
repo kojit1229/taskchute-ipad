@@ -29,7 +29,8 @@ CABIN TIMERを開始時のLINK FLIGHT選択、非破壊の一時停止・再開�
 - CABIN TIMER操作を待機=▶開始、実行中=⏸中断/■終了、一時停止中=▶再開/■終了へ変更した。⏸中断は非破壊pause、■終了は既存stopPomodoroとチョコ停理由ピッカーを引き継ぐ。
 - startTimerTickerと差分tickはpaused中の自動満了と減算を止め、snapshotを50:00系2倍速表示へ変換する。resume時は実時間25分の進捗分母を保つようstartedAtも経過分へ再基準化する。
 - nowConveyorCompleteはpaused中もrunning=trueとなる内部表現により既存分岐のまま連動着陸する。saveActualEntryFromModalへ同じrunning+blockId一致分岐を追加した。
-- 【Codexレビューで発見・修正した1件のmajor実害】completePomodoro()の当初実装(`block.actualEndAt || nowDateTime()`)は、autoCloseStaleRoutineRuns等の既存経路で未完了のまま古いactualEndAtだけが残ったBlock(Block card個別の「25分」ボタン経由で再度ポモ連動されうる)を、通常のポモ完了経路で完了させた際、古い時刻を「今完了した」時刻として誤って再利用してしまう実害があった→completePomodoro({preserveActualEndAt})という明示的なオプション引数を追加し、既定はfalse(常に現在時刻で上書き)、saveActualEntryFromModal経由(実績モーダルでユーザーが入力した終了時刻を尊重すべき唯一の経路)だけがtrueを渡す設計へ変更した。再発防止の回帰テスト(stale-endフィクスチャ)を追加。
+- 【Codexレビューで発見・修正した1件のmajor実害】completePomodoro()の当初実装(`block.actualEndAt || nowDateTime()`)は、autoCloseStaleRoutineRuns等の既存経路で未完了のまま古いactualEndAtだけが残ったBlock(Block card個別の「25分」ボタン経由で再度ポモ連動されうる)を、通常のポモ完了経路で完了させた際、古い時刻を「今完了した」時刻として誤って再利用してしまう実害があった→completePomodoro(preserveActualEndAt)という明示的なboolean引数を追加し、既定はfalse(常に現在時刻で上書き)、saveActualEntryFromModal経由(実績モーダルでユーザーが入力した終了時刻を尊重すべき唯一の経路)だけがtrueを渡す設計へ変更した。再発防止の回帰テスト(stale-endフィクスチャ)を追加。
+- 【push後のCI赤で発見・修正した実害】上記引数を当初`{ preserveActualEndAt = false } = {}`という分割代入で実装したところ、tests/v254.test.jsの`functionSource()`ヘルパー(関数本体を波括弧の深度で静的抽出する仕組み)が、引数リスト内の`{`を関数本体の開始と誤認識し、抽出範囲が異常に短くなって`trackOnBlockCompletionChanged`呼び出しの検出に失敗する回帰を引き起こした→シグネチャを`completePomodoro(preserveActualEndAt = false)`という波括弧を含まない単純なboolean引数へ変更し、呼び出し側も`completePomodoro(true)`という単純呼び出しへ揃えた。CIの4シャード並列実行で初めて顕在化した(ローカルのgate --finalではimpact-regression選定にv254が含まれていなかったため検出できなかった)。
 - 【Codexレビューのminor指摘2件も反映】(a) normalizeStateのvalidPause判定がrunning/pausedの型を緩く見ており(truthyな非boolean値がすり抜ける)、pausedRemainMsの範囲検証(0〜25分)も無かった→running===true厳密比較と25分上限チェックを追加。(b) パニックにはならないが、pause中に元の締切(FIXED_NOWの25分後)を跨いでもタイマー満了扱いにならないことのテストカバレッジが弱い、という指摘は現行の`!state.pomodoro.paused && localDateTimeToMs(...)<=Date.now()`ガード実装自体は正しいため、リリースブロックとはせず次回のテスト拡充時に反映する。
 - tests/v311.test.jsを追加し、3開始経路、モーダル空/キャンセル、pause/resume/終了、保存回数、paused永続化、連動なしのBlock非変更、3つのBlock完了着陸経路(古いactualEndAtの非再利用を含む)を固定した。action-registry-coreの保存則へ新規4 actionも追加した。
 - Service WorkerのCACHE_NAMEをv311へ更新した。
@@ -46,7 +47,7 @@ CABIN TIMERを開始時のLINK FLIGHT選択、非破壊の一時停止・再開�
 - npm run code:index:writeとnpm run test:manifest:writeで生成索引・影響マップ・テストマニフェストを更新する。
 - node --check app.js、node --check src/features/today-tower.js、node --check src/features/today.js、node --check sw.js、node --check tests/action-registry-core.test.js、node --check tests/v311.test.jsで変更対象JavaScriptを明示的に構文確認する。
 - node tests/v311.test.jsでLINK FLIGHT 3経路、一時停止・再開・終了、空状態、保存、Block連動着陸を確認する。
-- node tests/run-all.js v58 v70 v111 v129 v132 v146 v241 today-core tower-core v310 v311でiOS日時パース、既存ポモ、身体スキャン、Today/TOWER配置の回帰を確認する。
+- node tests/run-all.js v58 v70 v111 v129 v132 v146 v241 v254 today-core tower-core v310 v311でiOS日時パース、既存ポモ、身体スキャン、12WY共通フック結線、Today/TOWER配置の回帰を確認する(v254はCI赤で発見した関数シグネチャ静的解析の罠のため明示追加)。
 - node scripts/release-record.js releases/v311.json --writeと--checkでCHANGES_v311.mdとhandoffを生成・検査する。
 - node scripts/release-gate.js releases/v311.json --finalでrelease記録、生成物、関連回帰、coreを確認する。
 - git diff --checkと実行コード差分200行以下の集計で空白・コミットサイズ契約を確認する。
