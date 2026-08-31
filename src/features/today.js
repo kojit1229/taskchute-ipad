@@ -189,8 +189,8 @@ function renderTodayPomodoro(blocks, queue) {
   } else {
     controls = `<div class="today-empty">未着手Blockをキューに追加すると開始できます</div>`;
   }
-  return `<section class="today-panel today-pomodoro today-span-2">
-    ${panelHeading("POMODORO", "NOW FOCUS連動 — 50:00を2倍速表示", display.running ? "LIVE" : "READY")}
+  return `<section class="today-panel today-pomodoro today-span-2 pomo">
+    ${panelHeading("CABIN TIMER", "NOW FOCUS連動 — 50:00を2倍速表示", display.running ? "LIVE" : "READY")}
     <div class="today-pomodoro-stage">
       ${renderCircularProgress(display.progress, display.text, display.color)}
       <div class="today-pomodoro-info">

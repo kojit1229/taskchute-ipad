@@ -170,7 +170,7 @@ function renderTowerRunway(now, blocks, flights) {
   const touchdown = running && lastLandingId !== undefined && running.id !== lastLandingId
     ? `<i class="tower-touchdown" aria-hidden="true" style="--tower-plane-x:${metrics.x}%"></i>` : "";
   lastLandingId = running ? running.id : null;
-  let hud = '<div class="tower-nowhud" data-status="empty">本日の着陸予定はありません</div>';
+  let hud = '<div class="tower-nowhud" data-status="empty">滑走路オープン ─ 次の便を選んで開始できます</div>';
   if (running) {
     const id = escapeHTML(running.id);
     const ironLink = typeof linkedGymBlock === "function"
@@ -195,7 +195,7 @@ function renderTowerRunway(now, blocks, flights) {
       <button type="button" class="btn primary" data-action="now-start" data-id="${id}">▶ 開始</button>
     </div>`;
   }
-  return `<section class="tower-runway sec-rwy">
+  return `<section class="tower-runway sec-rwy now-hero">
     <h2>NOW LANDING <span>滑走路</span></h2>
     <div class="tower-runway-strip">
       <i id="towerPlane" aria-hidden="true" style="--tower-plane-x:${metrics.x}%">✈</i>${touchdown}
@@ -462,23 +462,24 @@ function renderTodayTower() {
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const flights = boardFlights(blocks, nowMin, scheduledTasksForDate(today, blocks));
   const focusVisibility = todayFocusVisibility();
-  const pomodoroRight = !focusVisibility.journal;
   const weekday = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
-  return `<div class="today-tower" data-motion="${escapeHTML(towerMotionSetting())}" data-night="${isNightHour(now.getHours()) ? 1 : 0}" data-paused="${document.hidden ? 1 : 0}" data-focus-mode="${Object.values(focusVisibility).some(Boolean) ? 0 : 1}" data-focus-pomodoro-right="${pomodoroRight ? 1 : 0}"${glassBlurOff() ? ' data-glass-blur="off"' : ""}>
+  return `<div class="today-tower" data-motion="${escapeHTML(towerMotionSetting())}" data-night="${isNightHour(now.getHours()) ? 1 : 0}" data-paused="${document.hidden ? 1 : 0}" data-focus-mode="${Object.values(focusVisibility).some(Boolean) ? 0 : 1}"${glassBlurOff() ? ' data-glass-blur="off"' : ""}>
     ${syncAlertBanner()}
     <div class="tower-band1 band1">${renderLifeBand()}<section class="tower-glass-panel clock-box" aria-label="現在時刻"><time id="towerClock">${clockText(now)}</time><span id="towerDate">${date} (${weekday})</span><strong class="dayleft" id="towerDayLeft">${dayLeftText(now)}</strong><span>本日残り</span></section>
     </div>
     ${renderStandingOrders()}
+    <div class="tower-band2 band2" aria-label="NOW LANDING と CABIN TIMER">
+      ${renderTowerRunway(now, blocks, flights)}
+      ${renderTodayPomodoro(blocks, queueBlocksOf(blocks))}
+    </div>
     ${renderTodayFocusBar(focusVisibility)}
     <div class="tower-col-left">
-      ${renderTowerRunway(now, blocks, flights)}
       ${renderTowerBoard(flights)}
       ${renderFlightLog(today, blocks)}
       ${renderTowerBodyMind(today, blocks)}
     </div>
     <div class="tower-col-center">${focusVisibility.gate ? renderTowerGates(blocks) : ""}</div>
     <div class="tower-col-right">${focusVisibility.journal ? renderTowerJournal(today) : ""}</div>
-    ${renderTodayPomodoro(blocks, queueBlocksOf(blocks)).replace(">POMODORO<span>", ">CABIN TIMER<span>")}
   </div>`;
 }
 

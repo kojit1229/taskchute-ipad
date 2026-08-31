@@ -613,8 +613,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 159,
-      "assertionHash": "ecc8ee4e82b1882e",
-      "sourceHash": "8458c6de583f872f",
+      "assertionHash": "ced498aa4a4622a0",
+      "sourceHash": "140fffe8513afd1b",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2236,9 +2236,9 @@
       "domains": [
         "ui-responsive"
       ],
-      "assertionSignals": 23,
-      "assertionHash": "1bfad0f6a3d0febe",
-      "sourceHash": "c4324b2902169f62",
+      "assertionSignals": 20,
+      "assertionHash": "746baf1118e55599",
+      "sourceHash": "3378e2fe6d5a5537",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2720,8 +2720,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 32,
-      "assertionHash": "6478bfdc4a7adbe0",
-      "sourceHash": "e203a85dbe8a4e52",
+      "assertionHash": "61e05d1dd3f63015",
+      "sourceHash": "6e4fd64c306f880a",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2941,8 +2941,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 26,
-      "assertionHash": "a8ed291425ef4286",
-      "sourceHash": "a11b60a69fe7def6",
+      "assertionHash": "7a6fd55a4dfa6938",
+      "sourceHash": "1c798dffd39edfdc",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3403,6 +3403,30 @@
       "assertionSignals": 22,
       "assertionHash": "61662a987a179a54",
       "sourceHash": "b0627875fa671c19",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v310.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "ui-responsive"
+      ],
+      "assertionSignals": 15,
+      "assertionHash": "48c67ac137e240dd",
+      "sourceHash": "424e76dc79ba62e8",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

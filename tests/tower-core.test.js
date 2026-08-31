@@ -300,7 +300,9 @@ function check(name, cond, extra = "") {
       await page.locator('.tower-departures, [data-action="departures-open-tomorrow"], .tower-board :text("明日8時半")').count() === 0);
     const leftSectionOrder = await page.locator(".tower-col-left > section").evaluateAll((sections) =>
       sections.map((section) => [...section.classList].find((name) => name.startsWith("sec-"))));
-    check("左列はNOW LANDING→ARRIVALS→FLIGHT LOG順を維持", JSON.stringify(leftSectionOrder) === JSON.stringify(["sec-rwy", "sec-arrivals", "sec-log", "sec-bodymind"]),
+    // v310: NOW LANDING(sec-rwy)は上帯2(tower-band2)へ移設されたため、左列はARRIVALS開始になる。
+    check("左列はARRIVALS→FLIGHT LOG→BODY/MIND順を維持(NOW LANDINGはv310で上帯2へ移設)",
+      JSON.stringify(leftSectionOrder) === JSON.stringify(["sec-arrivals", "sec-log", "sec-bodymind"]),
       JSON.stringify(leftSectionOrder));
     check("ARRIVALSとGATEは引き続き表示", await page.locator(".sec-arrivals .tower-arrivals").count() === 1
       && await page.locator(".sec-gates").count() === 1);
@@ -596,8 +598,9 @@ function check(name, cond, extra = "") {
     check("estimateMin:0の機体は0%固定", parseFloat(await page.locator("#towerPlane").evaluate((el) => el.style.getPropertyValue("--tower-plane-x"))) === 0);
     check("estimateMin:0は見積なし", (await page.locator("#towerNowRemain").textContent()) === "見積なし");
     await seedT5([]);
+    // v310: spec-freeze.md §3のNOW LANDING強調仕様により空表示文言を更新。
     check("Block 0件はempty空状態", await page.locator('.tower-nowhud[data-status="empty"]').count() === 1
-      && (await page.locator(".tower-nowhud").textContent())?.trim() === "本日の着陸予定はありません");
+      && (await page.locator(".tower-nowhud").textContent())?.trim() === "滑走路オープン ─ 次の便を選んで開始できます");
     check("候補0件ではARRIVALS選択プルダウンを描画しない", await page.locator("[data-tower-arrival-select]").count() === 0);
     check("Block 0件でもDEPARTURESは復活しない", await page.locator('.tower-departures, [data-action="departures-open-tomorrow"]').count() === 0);
 
@@ -840,7 +843,7 @@ function check(name, cond, extra = "") {
     await page.locator('[data-action="tower-gate-edit-toggle"]').click();
     await page.waitForSelector('.tower-gate[data-action="now-conveyor-complete"]');
 
-    console.log("[33] 1440pxでLIFE BAND 70%+時計30%・SO全幅と340px/320px/可変の3列骨格");
+    console.log("[33] 1440pxで上帯1/上帯2の70%+30%・SO全幅と340px/320px/可変の3列骨格");
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.waitForLoadState("networkidle");
     const desktopLayout = await page.evaluate(() => {
@@ -851,16 +854,17 @@ function check(name, cond, extra = "") {
       };
       return {
         columns: getComputedStyle(root).gridTemplateColumns,
-        board: rect(".tower-board"), runway: rect(".tower-runway"), gates: rect(".tower-gates"),
+        board: rect(".tower-board"), runway: rect(".tower-runway"), timer: rect(".today-pomodoro"), gates: rect(".tower-gates"),
         log: rect(".sec-log"), journal: rect(".sec-journal"),
         right: rect(".tower-col-right"), life: rect(".life-band"), clock: rect(".clock-box"), so: rect(".so-row"), root: rect(".today-tower")
       };
     });
     const columnParts = desktopLayout.columns.trim().split(/\s+/);
     check("grid列は340px/320px/可変の順", columnParts.length === 3 && columnParts[0] === "340px" && columnParts[1] === "320px" && parseFloat(columnParts[2]) > 0, desktopLayout.columns);
-    check("NOW LANDINGとARRIVALSは左、GATEは中央、右列はその右", Math.abs(desktopLayout.board.x - desktopLayout.runway.x) < 1
-      && Math.abs(desktopLayout.log.x - desktopLayout.runway.x) < 1
-      && desktopLayout.runway.x < desktopLayout.gates.x && desktopLayout.gates.x < desktopLayout.right.x
+    check("NOW/CABINは上帯2の70%/30%、ARRIVALS/LOGは左、GATEは中央、右列はその右",
+      desktopLayout.runway.x < desktopLayout.timer.x && desktopLayout.runway.width > desktopLayout.timer.width
+      && Math.abs(desktopLayout.board.x - desktopLayout.log.x) < 1
+      && desktopLayout.board.x < desktopLayout.gates.x && desktopLayout.gates.x < desktopLayout.right.x
        && Math.abs(desktopLayout.journal.x - desktopLayout.right.x) < 1,
       JSON.stringify(desktopLayout));
     const bandRatio = desktopLayout.life.width / (desktopLayout.life.width + 12 + desktopLayout.clock.width);
@@ -891,15 +895,16 @@ function check(name, cond, extra = "") {
         const standing = document.querySelector(".so-row").getBoundingClientRect();
         const focus = document.querySelector(".today-focus-bar").getBoundingClientRect();
         const timer = document.querySelector(".today-pomodoro").getBoundingClientRect();
+        const bodyMind = document.querySelector(".sec-bodymind").getBoundingClientRect();
         return {
           boardX: board.x, runwayX: runway.x, scrollWidth: document.scrollingElement.scrollWidth, innerWidth,
           panelX: [life.x, clock.x, standing.x],
-          order: [life.top, clock.top, standing.top, focus.top, runway.top, board.top, gates.top, log.top, timer.top, journal.top]
+          order: [life.top, clock.top, standing.top, runway.top, timer.top, focus.top, board.top, gates.top, log.top, bodyMind.top, journal.top]
         };
       });
       check(`${viewport.width}pxはboard/runwayが縦積み`, Math.abs(mobileLayout.boardX - mobileLayout.runwayX) < 1, JSON.stringify(mobileLayout));
       check(`${viewport.width}pxは横はみ出しなし`, mobileLayout.scrollWidth <= mobileLayout.innerWidth, JSON.stringify(mobileLayout));
-      check(`${viewport.width}pxはLIFE→時計→SO→FOCUS→NOW→ARRIVALS→GATE→LOG→TIMER→JOURNAL順`, mobileLayout.order.every((top, index, list) => index === 0 || list[index - 1] < top), JSON.stringify(mobileLayout));
+      check(`${viewport.width}pxはLIFE→時計→SO→NOW→TIMER→FOCUS→ARRIVALS→GATE→LOG→BODY/MIND→JOURNAL順`, mobileLayout.order.every((top, index, list) => index === 0 || list[index - 1] < top), JSON.stringify(mobileLayout));
       check(`${viewport.width}pxは上帯3パネルも同じ左端`, mobileLayout.panelX.every((x) => Math.abs(x - mobileLayout.runwayX) < 1), JSON.stringify(mobileLayout));
     }
 

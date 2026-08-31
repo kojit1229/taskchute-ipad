@@ -31,9 +31,9 @@ function check(name, condition, extra = "") {
   check("旧二重DOMクラスは実行コード/CSSから消滅", !/sec-(?:life|creed)(?:-pc)?|tower-topband-pc/.test(`${topbandSource}\n${towerSource}\n${stylesSource}`));
   check("LIFE BANDはGLASS共通クラス・ビーコン・12WY内訳を含む", /tower-glass-panel life-band/.test(topbandSource)
     && /tower-beacon/.test(topbandSource) && /twyScoreHTML\(digest\).*twyCommitBannerHTML\(digest\)/s.test(topbandSource));
-  check("PC上帯は7:3、SOは3列、外側grid順はlife→so→focus", /grid-template-columns:\s*minmax\(0, 7fr\) minmax\(0, 3fr\)/.test(stylesSource)
+  check("PC上帯は7:3、SOは3列、外側grid順はlife→so→band2→focus", /grid-template-columns:\s*minmax\(0, 7fr\) minmax\(0, 3fr\)/.test(stylesSource)
     && /\.so-grid\s*\{\s*grid-template-columns:\s*repeat\(3/.test(stylesSource)
-    && /"life\s+life\s+life"\s*\n\s*"so\s+so\s+so"\s*\n\s*"focus\s+focus\s+focus"/.test(stylesSource));
+    && /"life\s+life\s+life"\s*\n\s*"so\s+so\s+so"\s*\n\s*"band2\s+band2\s+band2"\s*\n\s*"focus\s+focus\s+focus"/.test(stylesSource));
   check("新3パネルは角丸内の罫線をoverflow hiddenでクリップ", /\.so-row\s*\{[^}]*overflow:\s*hidden/.test(stylesSource)
     && /\.life-band\s*\{[^}]*overflow:\s*hidden/.test(stylesSource)
     && /\.clock-box\s*\{[^}]*overflow:\s*hidden/.test(stylesSource));
@@ -167,7 +167,7 @@ function check(name, condition, extra = "") {
       check(`${width}pxはSOが上帯全幅で直下`, Math.abs(pc.so.x - pc.life.x) < 1
         && Math.abs(pc.so.width - (pc.life.width + 12 + pc.clock.width)) < 1 && pc.so.top > pc.life.bottom, JSON.stringify(pc));
     }
-    const expectedAreas = '"alert alert alert" "life life life" "so so so" "focus focus focus" "left center right" "timer timer timer"';
+    const expectedAreas = '"alert alert alert" "life life life" "so so so" "band2 band2 band2" "focus focus focus" "left center right"';
     check("1280px境界の外側grid全順序を固定", boundaryPc.gridAreas.replace(/\s+/g, " ") === expectedAreas, boundaryPc.gridAreas);
     check("PCは信条横3列・新3パネル各1件", pc.soColumns.trim().split(/\s+/).length === 3
       && pc.sigs === 4 && pc.soItems === 3 && pc.duplicateCount === 3, JSON.stringify(pc));

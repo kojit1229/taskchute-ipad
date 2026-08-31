@@ -3089,12 +3089,19 @@ h3 {
 .tower-col-center,
 .tower-col-right { display: contents; }
 .tower-band1, .so-row { order: 0; }
+.tower-band2 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; order: 1; margin-top: 12px; }
+.tower-band2 > .tower-runway,
+.tower-band2 > .today-pomodoro { margin-top: 0; }
+/* v310実測で発見: .sec-rwy{order:1}(狭幅時のトップレベル並び替え専用)がband2内の子2要素にも
+   適用され、today-pomodoro(order既定0)がグリッド配置でtower-runwayより先に処理されて
+   7fr/3fr列が入れ替わっていた。band2内ではDOM順どおりに固定する。 */
+.tower-band2 > .tower-runway,
+.tower-band2 > .today-pomodoro { order: 0; }
 .today-focus-bar { order: 1; }
 .sec-rwy { order: 1; }
 .sec-arrivals { order: 2; }
 .sec-gates { order: 3; }
 .sec-log { order: 4; }
-.today-tower > .today-pomodoro { order: 4; }
 .sec-bodymind { order: 5; }
 .sec-journal { order: 6; }
 .today-focus-bar {
@@ -3328,13 +3335,6 @@ h3 {
   .today-span-2 { grid-column: span 1; }
   .today-pomodoro-stage { align-items: stretch; gap: 14px; flex-direction: column; }
   .today-pomodoro .pomo-circle-wrap { margin: 0 auto; }
-  /* v248: FOCUS中だけCABIN TIMERを遠目でも読める大きさへ広げる。 */
-  .today-tower[data-focus-mode="1"] .today-pomodoro-stage { min-height: clamp(420px, 62dvh, 520px); }
-  .today-tower[data-focus-mode="1"] .today-pomodoro .pomo-circle-wrap {
-    width: min(82vw, 320px);
-    height: min(82vw, 320px);
-  }
-  .today-tower[data-focus-mode="1"] .today-pomodoro .pomo-time-overlay { font-size: clamp(60px, 18vw, 74px); }
 }
 
 /* v275: mockup-tower-v5.htmlの単一DOM上帯へ更新済み。
@@ -3456,9 +3456,9 @@ h3 {
       "alert alert  alert"
       "life  life   life"
       "so    so     so"
+      "band2 band2  band2"
       "focus focus  focus"
-      "left  center right"
-      "timer timer  timer";
+      "left  center right";
     column-gap: 12px;
     row-gap: 0;
     align-items: start;
@@ -3469,26 +3469,15 @@ h3 {
   .today-tower > .sync-alert-banner { grid-area: alert; }
   .today-tower > .tower-band1 { grid-area: life; }
   .today-tower > .so-row { grid-area: so; }
+  .today-tower > .tower-band2 { grid-area: band2; grid-template-columns: minmax(0, 7fr) minmax(0, 3fr); }
+  /* v310実測で発見: .today-pomodoroが持つ.today-span-2(grid-column: span 2、Todayタブ本来の
+     2列パネル用)がband2の2列コンテキストにも適用され、CABIN TIMERが2列分を要求して次の行へ
+     折り返され70/30の横並びが崩れていた。band2直下では単一列(auto)へ明示的に戻す。 */
+  .today-tower > .tower-band2 > .today-pomodoro.today-span-2 { grid-column: auto; }
   .today-tower .today-focus-bar { grid-area: focus; }
   .today-tower .tower-col-left { display: block; grid-area: left; min-width: 0; }
   .today-tower .tower-col-center { display: block; grid-area: center; min-width: 0; }
   .today-tower .tower-col-right { display: block; grid-area: right; min-width: 0; }
-  .today-tower > .today-pomodoro { grid-area: timer; margin-top: 12px; }
-  .today-tower[data-focus-pomodoro-right="1"] > .today-pomodoro { grid-area: right; margin-top: 0; }
-  .today-tower[data-focus-mode="1"] .today-pomodoro-stage {
-    min-height: clamp(480px, 70vh, 680px);
-    flex-direction: column;
-  }
-  .today-tower[data-focus-mode="1"] .today-pomodoro .pomo-circle-wrap {
-    width: clamp(330px, 32vw, 430px);
-    height: clamp(330px, 32vw, 430px);
-  }
-  .today-tower[data-focus-mode="1"] .today-pomodoro .pomo-time-overlay { font-size: clamp(81px, 8vw, 108px); }
-  .tower-col-left .sec-rwy .tower-nowhud { grid-template-columns: 1fr; gap: 3px; padding: 4px 10px 8px; }
-  .tower-col-left .sec-rwy .tower-now-title { white-space: normal; overflow: visible; text-overflow: clip; }
-  .tower-col-left .sec-rwy .tower-now-pct,
-  .tower-col-left .sec-rwy #towerNowRemain,
-  .tower-col-left .sec-rwy .tower-now-actions { justify-self: start; }
   .tower-col-center #towerGateStrip { flex-wrap: wrap; overflow-x: visible; }
   .tower-col-center .tower-gate { min-width: 0; flex: 1 1 46%; }
 }
@@ -4903,6 +4892,78 @@ h3 {
   background: var(--tower-amber);
   box-shadow: 0 0 6px var(--tower-amber);
 }
+
+/* v310: 上帯2へNOW LANDING(70%)+CABIN TIMER(30%)を固定配置する。 */
+#app[data-view="today"] .today-tower .tower-band2 { align-items: stretch; }
+#app[data-view="today"] .today-tower .now-hero {
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--tower-amber) 68%, transparent);
+  /* v274のGLASS縮退契約(data-glass-blur="off"時の半透明白背景)を`background`ショートハンドで
+     暗黙にtransparentへ上書きしないよう、background-imageだけを追加する(background-colorは
+     基底の.tower-runway/GLASSパネル定義のまま維持する)。実測でv274の回帰を検出・修正した。 */
+  background-image: linear-gradient(180deg, rgba(240, 198, 116, .13), rgba(255, 255, 255, .07));
+  box-shadow: 0 0 26px rgba(240, 198, 116, .18), 0 8px 24px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(255, 255, 255, .16);
+}
+#app[data-view="today"] .today-tower .now-hero::before {
+  position: absolute;
+  z-index: 2;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--tower-amber), transparent);
+  content: "";
+  pointer-events: none;
+}
+#app[data-view="today"] .today-tower .now-hero h2 {
+  border-bottom-color: color-mix(in srgb, var(--tower-amber) 38%, transparent);
+  color: var(--tower-amber);
+  text-shadow: 0 0 8px rgba(240, 198, 116, .35);
+}
+#app[data-view="today"] .today-tower .now-hero .tower-runway-strip { height: 44px; }
+#app[data-view="today"] .today-tower .now-hero .tower-now-title {
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
+  text-shadow: 0 0 14px rgba(138, 182, 255, .25);
+}
+#app[data-view="today"] .today-tower .now-hero #towerNowRemain {
+  font-size: 26px;
+  text-shadow: 0 0 12px rgba(110, 231, 200, .35);
+}
+#app[data-view="today"] .today-tower .now-hero .tower-now-pct { font-size: 12px; }
+#app[data-view="today"] .today-tower .now-hero .tower-nowhud[data-status="empty"] {
+  padding: 14px 12px;
+  font-size: 14px;
+  opacity: .75;
+}
+
+#app[data-view="today"] .today-tower .pomo {
+  --tower-pomo-ring: 112px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 12px 10px;
+}
+#app[data-view="today"] .today-tower .pomo .today-panel-title { width: 100%; }
+#app[data-view="today"] .today-tower .pomo .today-pomodoro-stage {
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+#app[data-view="today"] .today-tower .pomo .pomo-circle-wrap {
+  width: var(--tower-pomo-ring);
+  height: var(--tower-pomo-ring);
+  margin: 0 auto;
+  transition: width .25s ease, height .25s ease;
+}
+#app[data-view="today"] .today-tower .pomo .pomo-progress-circle { stroke: var(--tower-purple) !important; }
+#app[data-view="today"] .today-tower .pomo .pomo-time-overlay { font-size: calc(var(--tower-pomo-ring) * .2); }
+#app[data-view="today"] .today-tower .pomo .today-pomodoro-info {
+  justify-items: center;
+  min-width: 0;
+  text-align: center;
+}
+#app[data-view="today"] .today-tower .pomo .today-pomodoro-actions { justify-content: center; }
+#app[data-view="today"] .today-tower[data-view-life="0"] .pomo { --tower-pomo-ring: 156px; }
 
 /* v279: FABLE FUND閲覧タブ。既存の全体grid定義には干渉しないview固有スタイル。 */
 .fund-view { display: grid; gap: 14px; }

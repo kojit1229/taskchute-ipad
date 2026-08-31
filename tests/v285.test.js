@@ -29,7 +29,11 @@ check("旧UI専用helper定義・参照が無い", removedHelpers.every((name) =
 check("実行コードに旧DOMセレクタ文字列が無い", !/sec-atis|data-atis|tower-atis/.test(`${appSource}\n${todaySource}\n${towerSource}`));
 check("today-towerの右カラムはJOURNALだけを条件描画", towerSource.includes('${focusVisibility.journal ? renderTowerJournal(today) : ""}')
   && !towerSource.includes("focusVisibility.atis"));
-check("CABIN TIMER右寄せ条件はJOURNALだけで決まる", towerSource.includes("const pomodoroRight = !focusVisibility.journal;"));
+const legacyPomoVariable = ["pomodoro", "Right"].join("");
+check("CABIN TIMERは旧JOURNAL連動右寄せを持たずband2へ固定",
+  !towerSource.includes(legacyPomoVariable)
+  && towerSource.includes('<div class="tower-band2 band2"')
+  && towerSource.includes("${renderTodayPomodoro(blocks, queueBlocksOf(blocks))}"));
 
 console.log("[2] FOCUSはgate/journalだけを正規化・描画・登録する");
 check("既定/正規化stateに旧atisキーを持たない", !/\batis\s*:/.test(todaySource));
@@ -46,7 +50,7 @@ check("ARRIVALS・FLIGHT LOG・GATEの描画呼び出しを維持", towerSource.
   && towerSource.includes("${renderFlightLog(today, blocks)}") && towerSource.includes("renderTowerGates(blocks)"));
 check("tower-coreの負方向・現行モバイル順序を維持", towerTestSource.includes("DEPARTURES要素・旧action・明日便タイトルを描画しない")
   && towerTestSource.includes("Block 0件でもDEPARTURESは復活しない")
-  && towerTestSource.includes("LIFE→時計→SO→FOCUS→NOW→ARRIVALS→GATE→LOG→TIMER→JOURNAL順"));
+  && towerTestSource.includes("LIFE→時計→SO→NOW→TIMER→FOCUS→ARRIVALS→GATE→LOG→BODY/MIND→JOURNAL順"));
 
 (async () => {
   const server = startServer(PORT);
