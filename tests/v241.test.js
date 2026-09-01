@@ -1,4 +1,4 @@
-// v241: Todayフォーカスモードの個別表示・端末ローカル保持・CABIN TIMER固定配置・ticker継続。
+// v241/v313: Today VIEWの個別表示・端末ローカル保持・CABIN TIMER固定配置・ticker継続。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
@@ -34,9 +34,10 @@ function check(name, cond, extra = "") {
     await page.reload();
     await page.waitForSelector(".today-tower");
 
-    console.log("[1] 専用キー未設定の既定は全表示で、既存パネルDOM構造を維持する");
-    check("専用キー未設定では現行2セクションを描画",
-      await page.locator(".tower-col-center > .sec-gates").count() === 1
+    console.log("[1] 専用キー未設定の既定は全表示で、固定GATEを含む既存DOM構造を維持する");
+    check("専用キー未設定では3系統と固定GATEを描画",
+      await page.locator(".tower-col-left > *").count() === 3
+      && await page.locator(".tower-col-center > .sec-gates").count() === 1
       && await page.locator(".tower-col-right > .sec-journal").count() === 1);
     check("右カラム直下はJOURNAL 1個だけ", await page.locator(".tower-col-right > *").count() === 1);
     check("CABIN TIMERはNOW LANDINGと同じ上帯2直下",
@@ -45,8 +46,9 @@ function check(name, cond, extra = "") {
     check("既定値の読取だけでは専用キーを書かない", await page.evaluate((key) => localStorage.getItem(key) === null, FOCUS_KEY));
     const focusButtonSelectors = [
       '[data-action="focus-mode"]',
-      '[data-action="focus-toggle-gate"]',
-      '[data-action="focus-toggle-journal"]'
+      '[data-action="focus-toggle-side"]',
+      '[data-action="focus-toggle-journal"]',
+      '[data-action="focus-toggle-life"]'
     ];
     let focusWaitError = "";
     await page.waitForFunction((selectors) => selectors.every((selector) => {
@@ -61,32 +63,36 @@ function check(name, cond, extra = "") {
       const rect = button.getBoundingClientRect();
       return { selector, x: rect.x, y: rect.y, width: rect.width, height: rect.height };
     }), focusButtonSelectors);
-    check("FOCUSと2チップはすべて44px以上",
-      !focusWaitError && tapRects.length === 3 && tapRects.every(({ width, height }) => width >= 44 && height >= 44),
+    check("FOCUSと3チップはすべて44px以上",
+      !focusWaitError && tapRects.length === 4 && tapRects.every(({ width, height }) => width >= 44 && height >= 44),
       JSON.stringify({ focusWaitError, tapRects }));
 
     console.log("[2] 個別トグルはDOM生成を省略し、状態をリロード後も維持する");
-    await page.click('[data-action="focus-toggle-gate"]');
-    await page.waitForSelector(".sec-gates", { state: "detached" });
-    check("ルーティンだけ消え、JOURNALは残る",
-      await page.locator(".sec-gates").count() === 0 && await page.locator(".sec-journal").count() === 1);
+    await page.click('[data-action="focus-toggle-side"]');
+    await page.waitForSelector('.today-tower[data-view-side="0"]');
+    check("左列だけ消え、固定GATEとJOURNALは残る",
+      await page.locator(".tower-col-left > *").count() === 0
+      && await page.locator(".sec-gates").count() === 1 && await page.locator(".sec-journal").count() === 1);
     await page.reload();
     await page.waitForSelector(".today-tower");
-    check("ルーティン非表示はリロード後も維持", await page.locator(".sec-gates").count() === 0);
-    await page.click('[data-action="focus-toggle-gate"]');
-    await page.waitForSelector(".sec-gates");
+    check("左列非表示はリロード後も維持", await page.locator(".tower-col-left > *").count() === 0);
+    await page.click('[data-action="focus-toggle-side"]');
+    await page.waitForSelector('.today-tower[data-view-side="1"]');
     await page.click('[data-action="focus-toggle-journal"]');
     await page.waitForSelector(".sec-journal", { state: "detached" });
-    check("ジャーナルチップでJOURNALだけ消える", await page.locator(".sec-gates").count() === 1);
+    check("ジャーナルチップでJOURNALだけ消え、GATEは残る", await page.locator(".sec-gates").count() === 1);
 
-    console.log("[3] FOCUSは2つを一括非表示にし、直前の個別状態へ復元する");
+    console.log("[3] FOCUSは3系統を一括非表示にし、直前の個別状態へ復元する");
     await page.click('[data-action="focus-mode"]');
     await page.waitForSelector('.today-tower[data-focus-mode="1"]');
-    check("FOCUSで2セクションのDOMがすべて無い", await page.locator(".sec-gates, .sec-journal").count() === 0);
+    check("FOCUSで3系統のDOMがすべて無く固定GATEだけ残る",
+      await page.locator(".tower-col-left > *, .sec-journal, .tower-band1, .so-row").count() === 0
+      && await page.locator(".sec-gates").count() === 1);
     await page.click('[data-action="focus-mode"]');
     await page.waitForSelector('.today-tower[data-focus-mode="0"]');
-    check("解除で直前状態(gate表示・journal非表示)へ復元",
-      await page.locator(".sec-gates").count() === 1 && await page.locator(".sec-journal").count() === 0);
+    check("解除で直前状態(side/life表示・journal非表示)へ復元",
+      await page.locator(".tower-col-left > *").count() === 3 && await page.locator(".tower-band1, .so-row").count() === 2
+      && await page.locator(".sec-gates").count() === 1 && await page.locator(".sec-journal").count() === 0);
     await page.click('[data-action="focus-toggle-journal"]');
     await page.waitForSelector(".sec-journal");
 
@@ -116,11 +122,11 @@ function check(name, cond, extra = "") {
       return { timerX: rect.x, timerWidth: rect.width, ringWidth: ring.width,
         inBand2: timer.parentElement.classList.contains("tower-band2"), legacyAttr: tower.hasAttribute(legacyAttr) };
     });
-    check("PCフォーカス時もCABIN TIMERは上帯2の同じ位置・幅・112pxリングを維持",
+    check("PCフォーカス時もCABIN TIMERは上帯2の同じ位置・幅を維持し、life OFFで156pxリング",
       desktopFocusLayout.inBand2 && !desktopFocusLayout.legacyAttr
       && Math.abs(desktopFocusLayout.timerX - desktopNormalLayout.timerX) < 1
       && Math.abs(desktopFocusLayout.timerWidth - desktopNormalLayout.timerWidth) < 1
-      && Math.abs(desktopFocusLayout.ringWidth - 112) < 0.5, JSON.stringify(desktopFocusLayout));
+      && Math.abs(desktopFocusLayout.ringWidth - 156) < 0.5, JSON.stringify(desktopFocusLayout));
     await page.click('[data-action="focus-mode"]');
     await page.waitForSelector(".sec-journal");
 
@@ -148,8 +154,8 @@ function check(name, cond, extra = "") {
       return { inBand2: timer.parentElement.classList.contains("tower-band2"), timerTop: timerRect.top,
         timerWidth: timerRect.width, ringWidth: timer.querySelector(".pomo-circle-wrap").getBoundingClientRect().width };
     });
-    check("iPhoneフォーカス時も上帯2内・112pxリングを維持",
-      mobileLayout.inBand2 && Math.abs(mobileLayout.ringWidth - 112) < 0.5,
+    check("iPhoneフォーカス時も上帯2内・life OFFの156pxリングを維持",
+      mobileLayout.inBand2 && Math.abs(mobileLayout.ringWidth - 156) < 0.5,
       JSON.stringify(mobileLayout));
     await page.click('[data-action="focus-mode"]');
     await page.waitForSelector(".sec-journal");

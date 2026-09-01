@@ -35,7 +35,7 @@ check("CABIN TIMERは旧JOURNAL連動右寄せを持たずband2へ固定",
   && towerSource.includes('<div class="tower-band2 band2"')
   && towerSource.includes("${renderTodayPomodoro(blocks, queueBlocksOf(blocks))}"));
 
-console.log("[2] FOCUSはgate/journalだけを正規化・描画・登録する");
+console.log("[2] VIEWはside/journal/lifeだけを正規化・描画・登録する");
 check("既定/正規化stateに旧atisキーを持たない", !/\batis\s*:/.test(todaySource));
 check("FOCUS AIチップと旧action登録が無い", !todaySource.includes('chip("atis", "AI")') && !todaySource.includes('"focus-toggle-atis"'));
 check("actionゴールデンから旧actionを除去", !actionTestSource.includes("focus-toggle-atis"));
@@ -46,8 +46,11 @@ check("app/CSS/actionゴールデンにも旧導線が無い", !appSource.includ
   && !stylesSource.includes("tower-departures") && !actionTestSource.includes("departures-open-tomorrow"));
 const boardFlightsReferences = towerSource.match(/\bboardFlights\b/g) || [];
 check("共有boardFlightsは定義とARRIVALS描画・ticker参照を維持", boardFlightsReferences.length >= 3, `references=${boardFlightsReferences.length}`);
-check("ARRIVALS・FLIGHT LOG・GATEの描画呼び出しを維持", towerSource.includes("${renderTowerBoard(flights)}")
-  && towerSource.includes("${renderFlightLog(today, blocks)}") && towerSource.includes("renderTowerGates(blocks)"));
+check("ARRIVALS・FLIGHT LOGはsideでガードし、GATEの描画呼び出しを常時維持",
+  towerSource.includes('focusVisibility.side ? renderTowerBoard(flights) : ""')
+  && towerSource.includes('focusVisibility.side ? renderFlightLog(today, blocks) : ""')
+  && towerSource.includes('focusVisibility.side ? renderTowerBodyMind(today, blocks) : ""')
+  && towerSource.includes('<div class="tower-col-center">${renderTowerGates(blocks)}</div>'));
 check("tower-coreの負方向・現行モバイル順序を維持", towerTestSource.includes("DEPARTURES要素・旧action・明日便タイトルを描画しない")
   && towerTestSource.includes("Block 0件でもDEPARTURESは復活しない")
   && towerTestSource.includes("LIFE→時計→SO→NOW→TIMER→FOCUS→ARRIVALS→GATE→LOG→BODY/MIND→JOURNAL順"));
@@ -85,21 +88,23 @@ check("tower-coreの負方向・現行モバイル順序を維持", towerTestSou
     check("右カラムはJOURNALだけ", await page.locator(".tower-col-right > .sec-journal").count() === 1);
     check("右カラム直下要素はJOURNAL 1個だけ", await page.locator(".tower-col-right > *").count() === 1);
     const focusActions = await page.$$eval(".today-focus-bar [data-action]", (nodes) => nodes.map((node) => node.dataset.action));
-    check("FOCUSバーは本体+gate/journalの3操作だけ", JSON.stringify(focusActions) === JSON.stringify(["focus-mode", "focus-toggle-gate", "focus-toggle-journal"]), JSON.stringify(focusActions));
+    check("VIEWバーは本体+side/journal/lifeの4操作だけ", JSON.stringify(focusActions) === JSON.stringify(["focus-mode", "focus-toggle-side", "focus-toggle-journal", "focus-toggle-life"]), JSON.stringify(focusActions));
     check("FOCUSバーにAIラベルが無い", !(await page.locator(".today-focus-bar").textContent()).includes("AI"));
     const normalizedState = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), STATE_KEY);
     check("B-3の旧同期stateを削除せず保持", normalizedState.aiWorkProcessedIds?.[0] === "legacy-result"
       && normalizedState.journalMeta?.["2026-08-27"]?.aiTaskCandidates?.[0] === "legacy-candidate", JSON.stringify(normalizedState));
 
-    console.log("[5] 現行FOCUSトグルは退行せず、旧action名は発火しない");
-    await page.click('[data-action="focus-toggle-gate"]');
-    await page.waitForSelector(".sec-gates", { state: "detached" });
-    check("gateだけを非表示にしてJOURNALを維持", await page.locator(".sec-journal").count() === 1);
+    console.log("[5] 現行VIEWトグルは退行せず、旧action名は発火しない");
+    await page.click('[data-action="focus-toggle-side"]');
+    await page.waitForSelector('.today-tower[data-view-side="0"]');
+    check("sideだけを非表示にして固定GATE/JOURNALを維持",
+      await page.locator(".tower-col-left > *").count() === 0
+      && await page.locator(".sec-gates").count() === 1 && await page.locator(".sec-journal").count() === 1);
     const persistedFocus = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), FOCUS_KEY);
-    check("FOCUS sections実測キーはgate/journalだけ",
-      JSON.stringify(Object.keys(persistedFocus.sections).sort()) === JSON.stringify(["gate", "journal"]), JSON.stringify(persistedFocus));
-    check("FOCUS restore実測キーもgate/journalだけ",
-      JSON.stringify(Object.keys(persistedFocus.restore).sort()) === JSON.stringify(["gate", "journal"]), JSON.stringify(persistedFocus));
+    check("VIEW sections実測キーはside/journal/lifeだけ",
+      JSON.stringify(Object.keys(persistedFocus.sections).sort()) === JSON.stringify(["journal", "life", "side"]), JSON.stringify(persistedFocus));
+    check("VIEW restore実測キーもside/journal/lifeだけ",
+      JSON.stringify(Object.keys(persistedFocus.restore).sort()) === JSON.stringify(["journal", "life", "side"]), JSON.stringify(persistedFocus));
     const beforeLegacyClick = await page.evaluate((key) => localStorage.getItem(key), FOCUS_KEY);
     await page.evaluate(() => {
       const button = document.createElement("button");

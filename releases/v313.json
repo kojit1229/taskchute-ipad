@@ -1,0 +1,65 @@
+{
+  "version": 313,
+  "date": "2026-09-01",
+  "title": "TOWER VIEWチップ3系統と固定中央列リフロー",
+  "summary": "Todayの端末ローカル表示切替をside/journal/lifeの3系統へ移行し、GATE ROUTINEを中央固定のまま、左右列と上帯1の非表示領域を畳んで中央列を拡張するようにした。",
+  "changedFiles": [
+    "CHANGES_v313.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v313.json",
+    "src/features/today-tower.js",
+    "src/features/today.js",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/v241.test.js",
+    "tests/v285.test.js",
+    "tests/v313.test.js"
+  ],
+  "intent": [
+    "R1〜R4着地後の左=ARRIVALS系・中央=GATE ROUTINE・右=JOURNALという列構成を一切組み替えず、表示領域だけを独立制御する。",
+    "廃止済みATISを復活させず、VIEW状態を同期stateではなく既存の端末ローカルlocalStorageだけへ保存する。",
+    "旧gate設定は意味を失うため破棄し、journalだけを引き継ぎながらside/lifeを安全な既定表示へ補完する。"
+  ],
+  "changes": [
+    "DEFAULT_FOCUS_SECTIONSと正規化をside/journal/lifeへ変更し、FOCUS一括ON/OFF・action登録・チップ描画を3キー対応にした。",
+    "左列チップを『運航・体調』、右列を『ジャーナル』、上帯1を『LIFE BAND』として表示し、旧focus-toggle-gateを削除した。",
+    "renderTodayTowerへdata-view-side/data-view-journal/data-view-lifeを出力し、左列と上帯1を条件描画、JOURNALを従来どおり条件描画、中央GATEを無条件描画にした。",
+    "PCグリッドのnamed lineを利用し、side OFFで中央列の開始線を左端へ、journal OFFで終了線を右端へ伸ばし、両方OFFでは中央列を全幅にした。1280px未満は条件描画により該当区画だけを省略する。",
+    "life OFF時にR3のdata-view-life=0フックを実際に発動させ、CABIN TIMERリングを112pxから156pxへ拡大する経路を接続した。",
+    "時計DOMを省略したlife OFFでもNOW LANDING・GATE・ARRIVALSの1秒tickerが止まらないよう、時計テキスト更新だけを存在チェック内へ限定した。",
+    "tests/v313.test.jsを追加し、旧2キー移行、3チップ、各単体OFF、左右同時OFF、LIFE縮小、永続化、state非書込、FOCUS復元、390px表示をgetBoundingClientRectで固定した。【Codexレビュー指摘で追加】side/journal/lifeの8通り全組み合わせ(表駆動)でGATE常時表示・横スクロールなしを検証、旧localStorageの部分データ・不正な非boolean値混入・sectionsキー欠落の3ケースが安全な既定値へ正規化されることも固定した。",
+    "既存v241/v285/action registryテストを3キー契約へ追従し、Service WorkerのCACHE_NAMEをv313へ更新した。",
+    "【監督者が実機テストで発見・修正した実害】.today-towerに明示的なalign-contentが無く既定(stretch相当)のままだったため、life OFFでalert/life/so行の中身が空になると、その余剰高さが空行3つへ均等配分され、band2(NOW LANDING/CABIN TIMER)が上に詰まらず逆に下がる実害があった→.today-towerへalign-content:startを追加し、空行が実測どおり0pxへ収束してband2が正しく上詰めされることを確認した。あわせてv313.test.jsのside/journal単体・同時OFFの位置検証が、today-towerのpaddingを考慮せずroot要素のborder-box座標と直接比較していたため常に誤検出していた(実装は最初から正しかった)テスト側の不具合も修正した(比較対象をpadding後のコンテンツ境界=base.left.x/base.right.rightへ変更)。"
+  ],
+  "uncertainties": [
+    "このサンドボックスではPlaywright Chromiumの起動がspawn EPERMとなり、アプリ内ブラウザも利用可能な実体が0件だったため、getBoundingClientRectによる実測E2Eは監督者環境で再実行が必要。",
+    "サンドボックス外の隣接taskchute-notes/handoff.mdは書き込み対象外のため、監督者環境でrelease-record --writeを再実行する必要がある。"
+  ],
+  "reviewFocus": [
+    "旧localStorageのgate値がsideへ流用されず、journalだけを維持してside/life=trueへ補完されるか。",
+    "side/journalの単体OFFと同時OFFで、列内容や順序を変えず中央GATEだけが左・右・全幅へ正しく拡張するか。",
+    "life OFFでLIFE BAND・時計・STANDING ORDERSだけが消え、NOW LANDING/CABIN TIMER/FOCUSは維持されてリングが156pxになるか。",
+    "3チップとFOCUSの全操作でGATE ROUTINEが常時表示され、VIEW状態が同期stateへ混入しないか。",
+    "ATISキー・チップ・action・移行処理が実行コードへ再導入されていないか。"
+  ],
+  "verification": [
+    "npm run code:index:writeとnpm run test:manifest:writeで生成索引・影響マップ・テストマニフェストを更新する。",
+    "node --check src/features/today.js、node --check src/features/today-tower.js、node --check sw.js、node --check tests/action-registry-core.test.js、node --check tests/v241.test.js、node --check tests/v285.test.js、node --check tests/v310.test.js、node --check tests/v313.test.jsで変更・関連JavaScriptを明示的に構文確認する。",
+    "node tests/action-registry-core.test.jsで3系統actionの登録保存則を確認する。",
+    "node tests/v313.test.jsで旧2キー移行、3系統リフロー、固定GATE、localStorage永続化、state非書込、PC実幅、390px縦積みを確認する。",
+    "node tests/run-all.js v241 v285 v310 v313で既存FOCUS/ATIS廃止/CABIN TIMER契約と新VIEW契約を確認する。",
+    "node scripts/release-record.js releases/v313.json --writeと--checkでCHANGES_v313.mdとhandoffを生成・検査する。",
+    "node scripts/release-gate.js releases/v313.json --finalでrelease記録、生成物、関連回帰、coreを確認する。",
+    "git diff --checkと実行コード差分200行以下の集計で空白・コミットサイズ契約を確認する。"
+  ],
+  "notes": [
+    "左列ラベルはARRIVALS/FLIGHT LOGだけでなくBODY/MINDも含むため、内容を過不足なく示す『運航・体調』を採用した。",
+    "GATE ROUTINEは固定中央列のためVIEWキーを持たず、FOCUS全消灯時にも表示を維持する。",
+    "実行コード差分はsrc/features/today.js、src/features/today-tower.js、styles.css、sw.jsの合計49変更行(git diff --numstat実測)で200行以下。"
+  ],
+  "knownLimitations": [
+    "ブラウザ実測はサンドボックスの起動制約により未完了で、監督者環境またはCIでのv241/v285/v310/v313実行が必要。"
+  ]
+}

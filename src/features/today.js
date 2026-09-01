@@ -22,12 +22,14 @@ let todayRenderedDateISO = null;
 let todayFocusUi = null;
 
 const TODAY_FOCUS_STORAGE_KEY = "taskchute-journal-today-focus-v1";
-const DEFAULT_FOCUS_SECTIONS = Object.freeze({ gate: true, journal: true });
+// v313: GATEを固定列へ戻し、端末ローカルVIEWを左列/JOURNAL/上帯1の3系統へ移行する。
+const DEFAULT_FOCUS_SECTIONS = Object.freeze({ side: true, journal: true, life: true });
 
 function normalizedFocusSections(value) {
   return {
-    gate: typeof value?.gate === "boolean" ? value.gate : true,
-    journal: typeof value?.journal === "boolean" ? value.journal : true
+    side: typeof value?.side === "boolean" ? value.side : true,
+    journal: typeof value?.journal === "boolean" ? value.journal : true,
+    life: typeof value?.life === "boolean" ? value.life : true
   };
 }
 
@@ -67,7 +69,7 @@ function toggleTodayFocusMode() {
   const restore = normalizedFocusSections(current.restore);
   persistTodayFocusUi(focused
     ? { sections: Object.values(restore).some(Boolean) ? restore : { ...DEFAULT_FOCUS_SECTIONS }, restore }
-    : { sections: { gate: false, journal: false }, restore: { ...current.sections } });
+    : { sections: { side: false, journal: false, life: false }, restore: { ...current.sections } });
 }
 
 function renderTodayFocusBar(visibility = todayFocusUiState().sections) {
@@ -76,7 +78,7 @@ function renderTodayFocusBar(visibility = todayFocusUiState().sections) {
   return `<nav class="today-focus-bar" aria-label="Today表示切替">
     <button type="button" class="today-focus-main${focused ? " is-active" : ""}" data-action="focus-mode" aria-pressed="${focused}">🎯 FOCUS</button>
     <div class="today-focus-chips" role="group" aria-label="セクション表示">
-      ${chip("gate", "ルーティン")}${chip("journal", "ジャーナル")}
+      ${chip("side", "運航・体調")}${chip("journal", "ジャーナル")}${chip("life", "LIFE BAND")}
     </div>
   </nav>`;
 }
@@ -118,8 +120,9 @@ function configureToday(deps) {
     gateEditMode
   });
   registerActions({
-    "focus-toggle-gate": () => toggleTodayFocusSection("gate"),
+    "focus-toggle-side": () => toggleTodayFocusSection("side"),
     "focus-toggle-journal": () => toggleTodayFocusSection("journal"),
+    "focus-toggle-life": () => toggleTodayFocusSection("life"),
     "focus-mode": () => toggleTodayFocusMode()
   });
 }

@@ -478,22 +478,22 @@ function renderTodayTower() {
   const flights = boardFlights(blocks, nowMin, scheduledTasksForDate(today, blocks));
   const focusVisibility = todayFocusVisibility();
   const weekday = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
-  return `<div class="today-tower" data-motion="${escapeHTML(towerMotionSetting())}" data-night="${isNightHour(now.getHours()) ? 1 : 0}" data-paused="${document.hidden ? 1 : 0}" data-focus-mode="${Object.values(focusVisibility).some(Boolean) ? 0 : 1}"${glassBlurOff() ? ' data-glass-blur="off"' : ""}>
+  return `<div class="today-tower" data-motion="${escapeHTML(towerMotionSetting())}" data-night="${isNightHour(now.getHours()) ? 1 : 0}" data-paused="${document.hidden ? 1 : 0}" data-focus-mode="${Object.values(focusVisibility).some(Boolean) ? 0 : 1}" data-view-side="${focusVisibility.side ? 1 : 0}" data-view-journal="${focusVisibility.journal ? 1 : 0}" data-view-life="${focusVisibility.life ? 1 : 0}"${glassBlurOff() ? ' data-glass-blur="off"' : ""}>
     ${syncAlertBanner()}
-    <div class="tower-band1 band1">${renderLifeBand()}<section class="tower-glass-panel clock-box" aria-label="現在時刻"><time id="towerClock">${clockText(now)}</time><span id="towerDate">${date} (${weekday})</span><strong class="dayleft" id="towerDayLeft">${dayLeftText(now)}</strong><span>本日残り</span></section>
-    </div>
-    ${renderStandingOrders()}
+    ${focusVisibility.life ? `<div class="tower-band1 band1">${renderLifeBand()}<section class="tower-glass-panel clock-box" aria-label="現在時刻"><time id="towerClock">${clockText(now)}</time><span id="towerDate">${date} (${weekday})</span><strong class="dayleft" id="towerDayLeft">${dayLeftText(now)}</strong><span>本日残り</span></section>
+    </div>` : ""}
+    ${focusVisibility.life ? renderStandingOrders() : ""}
     <div class="tower-band2 band2" aria-label="NOW LANDING と CABIN TIMER">
       ${renderTowerRunway(now, blocks, flights)}
       ${renderTodayPomodoro(blocks, queueBlocksOf(blocks))}
     </div>
     ${renderTodayFocusBar(focusVisibility)}
     <div class="tower-col-left">
-      ${renderTowerBoard(flights)}
-      ${renderFlightLog(today, blocks)}
-      ${renderTowerBodyMind(today, blocks)}
+      ${focusVisibility.side ? renderTowerBoard(flights) : ""}
+      ${focusVisibility.side ? renderFlightLog(today, blocks) : ""}
+      ${focusVisibility.side ? renderTowerBodyMind(today, blocks) : ""}
     </div>
-    <div class="tower-col-center">${focusVisibility.gate ? renderTowerGates(blocks) : ""}</div>
+    <div class="tower-col-center">${renderTowerGates(blocks)}</div>
     <div class="tower-col-right">${focusVisibility.journal ? renderTowerJournal(today) : ""}</div>
   </div>`;
 }
@@ -574,10 +574,11 @@ function updateTodayTowerTick() {
   const blocks = blocksForDate(todayISO());
   const clock = document.getElementById("towerClock");
   const dayLeft = document.getElementById("towerDayLeft");
-  if (!clock || !dayLeft) return;
   const nowMin = now.getHours() * 60 + now.getMinutes();
-  clock.textContent = clockText(now);
-  dayLeft.textContent = dayLeftText(now);
+  if (clock && dayLeft) {
+    clock.textContent = clockText(now);
+    dayLeft.textContent = dayLeftText(now);
+  }
   updateTowerRunway(now, blocks);
   updateTowerGates(blocks);
   const flights = boardFlights(blocks, nowMin, scheduledTasksForDate(todayISO(), blocks));

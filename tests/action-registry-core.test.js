@@ -94,7 +94,7 @@ function check(name, cond, extra = "") {
 // v311: CABIN TIMERのLINK FLIGHT選択・一時停止・再開4actionを意図的に追加。
 const GOLDEN_CLICK_ACTIONS = [
   "nav", "open-iron-log", "instruments-open-iron-log", "save-tower-journal",
-  "focus-toggle-gate", "focus-toggle-journal", "focus-mode",
+  "focus-toggle-side", "focus-toggle-journal", "focus-toggle-life", "focus-mode",
   "early-bird-check", "tower-gate-edit-toggle", "tower-bodymind-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move", "tower-gate-streak-toggle",
   "date-prev", "date-next", "today",
   "set-morning", "toggle-meds", "set-capacity", "set-evening-mood",
@@ -202,8 +202,8 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
   "timeline-mode",
   // v186: F2でtimeline.jsのregisterActionsへ意図的に追加(DRIFT送り+TIME COMB隙間補完)
   "drift-postpone", "time-comb-fill",
-  // v241: src/features/today.jsの端末ローカル表示切替
-  "focus-toggle-gate", "focus-toggle-journal", "focus-mode",
+  // v241/v313: src/features/today.jsの端末ローカル表示切替
+  "focus-toggle-side", "focus-toggle-journal", "focus-toggle-life", "focus-mode",
   // v262: src/features/track-ui.jsの12WY進捗トースト
   "twy-toast-inc", "twy-toast-same", "twy-toast-other", "twy-toast-other-confirm", "twy-toast-later"
 ];
