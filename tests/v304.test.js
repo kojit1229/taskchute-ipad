@@ -83,7 +83,7 @@ function block(id, comment = "") {
       check(`${label}: declaration.resultNoteと永続commentが一致`,
         declaration?.outcome === outcome && declaration?.resultNote === note && savedBlock.comment.split(/\r?\n/).includes(declaration.resultNote),
         JSON.stringify({ savedBlock, declaration }));
-      check(`${label}: #1のcompleted処理は混入しない`, savedBlock.completed === false, JSON.stringify(savedBlock));
+      check(`${label}: completedはdoneだけtrueになる`, savedBlock.completed === (outcome === "done"), JSON.stringify(savedBlock));
     }
 
     console.log("[2] 空の一言は空commentを汚さない");

@@ -10943,9 +10943,21 @@ function finishReport(outcome, note) {
   closeModal();
   const entry = outcome ? reportForBlock(ctx.blockId, outcome, note) : null;
   resumeLifecycleFinish(ctx);
+  // v312: 「できた」報告は既存の完了手続きを再利用する。toggle関数なので未完了時だけ呼ぶ。
+  // toggleBlock自体が出す完了トースト(「実績を編集」アクション付き)は、直後のフィードバック
+  // トースト(showToastは単一表示で直前の内容を上書きする)に消されてしまうため、
+  // 実際にこの経路で完了させた場合はblockIdを引き継いでフィードバックトースト側へ統合する。
+  let autoCompletedBlockId = "";
+  if (outcome === "done" && ctx.blockId) {
+    const block = blockById(ctx.blockId);
+    if (block && !block.completed) {
+      toggleBlock(ctx.blockId);
+      autoCompletedBlockId = ctx.blockId;
+    }
+  }
   if (entry) {
     const feedback = buildDeclareFeedback(entry);
-    if (feedback) showToast(feedback);
+    if (feedback) showToast(feedback, autoCompletedBlockId ? { blockId: autoCompletedBlockId } : undefined);
   }
 }
 
