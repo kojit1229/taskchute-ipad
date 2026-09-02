@@ -30,9 +30,7 @@ function configureIronLog(deps) {
   registerActions({
     "iron-add-set": () => addSetFromForm(),
     "iron-delete-set": (ctx) => deleteSet(ctx),
-    // 種目セレクトの変更自体はstateを変えない(追加時にDOMから直接読み取るため)。
-    // data-actionとして登録だけしておく(界面凍結・action registry方式に合わせるため)。
-    "iron-exercise-select": () => {},
+    "iron-exercise-select": (ctx) => prefillSetInputs(ctx),
     // v272: IRON LOG内で種目メニューを管理し、LOAD SETの選択肢と同じ配列を使う。
     "iron-menu-add": () => addExercise(),
     "iron-menu-delete": (ctx) => deleteExercise(ctx),
@@ -108,6 +106,44 @@ function gymSetsForDate(state, iso) {
   if (!Array.isArray(list)) return [];
   return list.filter((s) => !s?.deleted)
     .map((s) => ({ ...s, kg: (Number(s.weight) || 0) * (Number(s.reps) || 0) }));
+}
+
+// 指定日以前の記録日を新しい順で最大365日ぶん返す(日付キーはISO文字列比較)。
+function recentGymDates(state, beforeIso) {
+  return Object.keys(state?.condition?.logs || {})
+    .filter((date) => date <= beforeIso)
+    .sort((a, b) => b.localeCompare(a))
+    .slice(0, 365);
+}
+
+// 指定種目の直近セット。当日はat降順で最新を選び、tombstoneは除外する。
+function lastSetForExercise(state, exercise, beforeIso) {
+  if (!exercise) return null;
+  for (const date of recentGymDates(state, beforeIso)) {
+    const list = state?.condition?.logs?.[date]?.gym;
+    if (!Array.isArray(list)) continue;
+    const latest = list.filter((s) => !s?.deleted && s?.exercise === exercise)
+      .sort((a, b) => String(b?.at || "").localeCompare(String(a?.at || "")))[0];
+    if (latest) return latest;
+  }
+  return null;
+}
+
+// 指定時刻より前に記録された同種目の最大重量。比較対象が無ければnull。
+function bestWeightForExercise(state, exercise, beforeAt) {
+  if (!exercise || !beforeAt) return null;
+  let best = null;
+  for (const date of recentGymDates(state, String(beforeAt).slice(0, 10))) {
+    const list = state?.condition?.logs?.[date]?.gym;
+    if (!Array.isArray(list)) continue;
+    for (const set of list) {
+      const at = typeof set?.at === "string" ? set.at : "";
+      const weight = Number(set?.weight);
+      if (!set?.deleted && set?.exercise === exercise && at && at < beforeAt
+        && Number.isFinite(weight) && (best === null || weight > best)) best = weight;
+    }
+  }
+  return best;
 }
 
 // 当日総重量kg
@@ -229,6 +265,22 @@ function runIronImport(state) {
 
 // ---- data-actionハンドラ(configureIronLog経由。DOM/getStateに依存) ----
 
+function prefillSetInputs(ctx) {
+  if (ctx?.event?.type !== "change") return;
+  const exercise = ctx?.target?.value || document.querySelector("#ironFormExercise")?.value || "";
+  const previous = lastSetForExercise(getState(), exercise, todayISO());
+  const weightInput = document.querySelector("#ironFormWeight");
+  const repsInput = document.querySelector("#ironFormReps");
+  const replacePrefill = (input, value) => {
+    if (!input || (input.value !== "" && input.dataset.prefilled !== "1")) return;
+    input.value = value ?? "";
+    if (value == null || value === "") delete input.dataset.prefilled;
+    else input.dataset.prefilled = "1";
+  };
+  replacePrefill(weightInput, previous?.weight);
+  replacePrefill(repsInput, previous?.reps);
+}
+
 function addSetFromForm() {
   const state = getState();
   const exercise = document.querySelector("#ironFormExercise")?.value || "";
@@ -238,6 +290,8 @@ function addSetFromForm() {
 
   const iso = todayISO();
   const timestamp = `${iso}T${nowTimeString()}`;
+  const previousBest = bestWeightForExercise(state, exercise, timestamp);
+  const isPersonalBest = previousBest !== null && weight > previousBest;
   const set = { id: crypto.randomUUID(), exercise, weight, reps, at: timestamp, createdAt: timestamp, updatedAt: timestamp };
   const linked = linkedGymBlock(state, nowMinutesFromClock());
   if (linked?.block?.id) set.blockId = linked.block.id;
@@ -247,7 +301,7 @@ function addSetFromForm() {
   state.condition.logs[iso] = state.condition.logs[iso] || {};
   state.condition.logs[iso].gym = state.condition.logs[iso].gym || [];
   state.condition.logs[iso].gym.push(set);
-  saveAndRender("セットを追加しました");
+  saveAndRender(isPersonalBest ? "セットを追加しました(自己ベスト)" : "セットを追加しました");
 }
 
 // ctx.id には当日gym[]配列内でのindex(文字列)を渡す想定。
@@ -331,10 +385,20 @@ function renderIronLog() {
   const settings = state?.settings || {};
   const target = Number(settings.ironDailyTarget) || DEFAULT_TARGET_KG;
   const exercises = exerciseList(state);
+  const selectedExercise = exercises[0] || "";
+  const previousSet = lastSetForExercise(state, selectedExercise, iso);
 
   const rawList = Array.isArray(state?.condition?.logs?.[iso]?.gym) ? state.condition.logs[iso].gym : [];
   const activeList = rawList
-    .map((s, idx) => ({ ...s, kg: (Number(s.weight) || 0) * (Number(s.reps) || 0), idx }))
+    .map((s, idx) => {
+      const previousBest = bestWeightForExercise(state, s.exercise, s.at);
+      return {
+        ...s,
+        kg: (Number(s.weight) || 0) * (Number(s.reps) || 0),
+        isPersonalBest: previousBest !== null && Number(s.weight) > previousBest,
+        idx
+      };
+    })
     .filter((s) => !s.deleted);
   const rows = activeList
     .slice()
@@ -385,7 +449,7 @@ function renderIronLog() {
     : rows.map((s) => `
         <div class="iron-set-row">
           <time>${escapeHTML((s.at || "").slice(11, 16))}</time>
-          <span class="iron-set-name">${escapeHTML(s.exercise || "")}</span>
+          <span class="iron-set-name">${escapeHTML(s.exercise || "")}${s.isPersonalBest ? '<span class="iron-pr">PR</span>' : ""}</span>
           <span class="iron-set-detail">${fmtNum(s.weight)}kg × ${fmtNum(s.reps)}</span>
           <span class="iron-set-kg">+${fmtNum(s.kg)}</span>
           <button type="button" class="iron-set-del" data-action="iron-delete-set" data-id="${s.idx}" aria-label="削除">✕</button>
@@ -424,8 +488,8 @@ function renderIronLog() {
           <select id="ironFormExercise" data-action="iron-exercise-select">
             ${exercises.map((ex) => `<option value="${escapeHTML(ex)}">${escapeHTML(ex)}</option>`).join("")}
           </select>
-          <input id="ironFormWeight" type="number" value="60" min="0" step="2.5">
-          <input id="ironFormReps" type="number" value="10" min="1" step="1">
+          <input id="ironFormWeight" type="number" value="${escapeHTML(previousSet?.weight ?? "")}"${previousSet?.weight != null && previousSet.weight !== "" ? ' data-prefilled="1"' : ""} min="0" step="2.5">
+          <input id="ironFormReps" type="number" value="${escapeHTML(previousSet?.reps ?? "")}"${previousSet?.reps != null && previousSet.reps !== "" ? ' data-prefilled="1"' : ""} min="1" step="1">
           <button type="button" data-action="iron-add-set">+ 追加</button>
         </div>
       </section>
@@ -454,6 +518,8 @@ export {
   configureIronLog,
   renderIronLog,
   gymSetsForDate,
+  lastSetForExercise,
+  bestWeightForExercise,
   ironDailyTotal,
   ironTotals,
   linkedGymBlock,

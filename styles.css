@@ -4410,6 +4410,11 @@ h3 {
   font-family: system-ui, sans-serif; padding: 0 6px; overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap;
 }
+.iron-pr {
+  display: inline-block; margin-left: 5px; padding: 1px 4px;
+  border: 1px solid var(--tower-amber); color: var(--tower-amber);
+  font-size: 8px; font-weight: 700; line-height: 1.2; letter-spacing: .08em;
+}
 .iron-set-detail { text-align: right; opacity: .75; font-variant-numeric: tabular-nums; }
 .iron-set-kg {
   justify-self: end; padding-right: 8px; color: var(--tower-green);

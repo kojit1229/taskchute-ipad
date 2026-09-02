@@ -1334,6 +1334,8 @@ document.addEventListener("focusout", () => {
 
 document.addEventListener("input", (event) => {
   const target = event.target;
+  // v315: ユーザーが編集したIRON LOG入力はプリフィル所有権を外す。
+  if (target.matches("#ironFormWeight, #ironFormReps")) delete target.dataset.prefilled;
   if (target.closest("[data-twy-track]")) refreshTrackForm();
   if (target.matches("[data-journal-date]")) {
     const d = target.dataset.journalDate;
@@ -1407,6 +1409,9 @@ document.addEventListener("input", (event) => {
 
 document.addEventListener("change", (event) => {
   const target = event.target;
+  // v315: selectの登録済みdata-actionはchangeでもレジストリ経由で処理する。
+  if (target.matches("select[data-action]")
+    && dispatchAction(target.dataset.action, { event, target, id: target.dataset.id })) return;
   // v294: 「書く瞑想」の深掘りセルフトーク。changeイベント=blur時かつ値が変わった場合のみ発火
   // するため、発注文の「textareaはblur時保存」をそのまま満たす(全体再描画はしない)。
   if (target.matches("[data-km-talk]")) {

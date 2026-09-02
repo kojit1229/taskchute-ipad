@@ -100,9 +100,14 @@ function check(name, cond, extra = "") {
     await seed({ gym: [] });
     check("初期状態は0kg・0%", (await page.locator(".iron-total span").textContent()) === "0"
       && (await page.locator(".iron-bar").getAttribute("style") || "").includes("width:0%"));
+    check("前回記録が無ければ重量・回数は空欄",
+      (await page.locator("#ironFormWeight").inputValue()) === ""
+        && (await page.locator("#ironFormReps").inputValue()) === "");
+    await page.locator("#ironFormWeight").fill("60");
+    await page.locator("#ironFormReps").fill("10");
     await page.locator('[data-action="iron-add-set"]').click();
     await page.waitForFunction(() => document.querySelector(".iron-total span")?.textContent !== "0");
-    check("既定値(ベンチプレス60kg×10)追加で600kgへ更新", (await page.locator(".iron-total span").textContent()) === "600");
+    check("ベンチプレス60kg×10追加で600kgへ更新", (await page.locator(".iron-total span").textContent()) === "600");
     check("ゲージ幅が30%へ更新", (await page.locator(".iron-bar").getAttribute("style") || "").includes("width:30%"));
     const afterAdd = await readState();
     const addedSet = afterAdd.condition.logs[today].gym[0];
@@ -127,6 +132,8 @@ function check(name, cond, extra = "") {
     check("連動タスク名を表示", (await page.locator(".iron-linked-name").textContent()) === "本日の筋トレ");
     const linkedTime = await page.locator(".iron-linked-time").textContent();
     check("開始時刻09:00と経過00:30を表示", /09:00 開始/.test(linkedTime || "") && /00:30/.test(linkedTime || ""), linkedTime);
+    await page.locator("#ironFormWeight").fill("60");
+    await page.locator("#ironFormReps").fill("10");
     await page.locator('[data-action="iron-add-set"]').click();
     await page.waitForFunction(() => document.querySelectorAll(".iron-set-row").length === 1);
     const linkedState = await readState();
