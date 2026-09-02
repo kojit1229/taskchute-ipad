@@ -1,6 +1,7 @@
 // v164: app.js分割・段階1(最初の抽出)。純粋関数はsrc/core/**へ抽出し、依存グラフの葉として
 //   importする(src/core/**はstateを一切参照しない。claude-review-result.md §7の契約)。
 import { mergeById, mergeByIdPreferNewer, normalizeGymSetIds } from "./src/core/merge.js";
+import { LIFE_EXPORT_COLUMNS, exportRows, toCSV } from "./src/core/life-export.js";
 import {
   activeTrackForProject, dateParts, isProjectInCurrentCycle, latestMeasurement, numericGoalReached,
   milestoneProgressRatio, normalizeMilestoneProgress, paceMilestone, paceNumeric, trackStatus,
@@ -553,6 +554,7 @@ registerActions({
   },
   "download-report": () => downloadReport(),
   "download-data": () => downloadData(),
+  "life-export": ({ target }) => downloadLifeData(target.dataset.kind),
   "carry-over": ({ id }) => requestCarryOver(id),
   "migration-ritual-choice": ({ target }) => resolveMigrationRitual(target.dataset.choice),
   // ideal-retry: v230のHome撤去で到達不能化、v292孤児掃除でresolveIdealRetry/idealActiveEntry
@@ -7140,6 +7142,13 @@ function renderSettingsDataPanel() {
   return `
     <h3>データ</h3>
     <button class="btn primary" data-action="download-data">JSONエクスポート</button>
+    <div class="row" style="justify-content:flex-start; gap:6px; flex-wrap:wrap">
+      <span class="muted" style="font-size:12px">生活記録を種別で書き出す:</span>
+      ${[
+        ["gym", "筋トレ CSV"], ["sleep", "睡眠 CSV"], ["condition", "体調 CSV"],
+        ["store", "お店 CSV"], ["bodyScan", "身体スキャン CSV"], ["writeMeditation", "書く瞑想 JSON"]
+      ].map(([kind, label]) => `<button class="btn" data-action="life-export" data-kind="${kind}">${label}</button>`).join("")}
+    </div>
     <label class="btn" style="text-align:center">
       JSONインポート
       <input id="importData" type="file" accept="application/json" hidden>
@@ -9533,6 +9542,27 @@ function downloadData() {
   // v37: バックアップにトークンを含めない(共有・保管されるファイルに秘密情報を残さない)。
   //      GitHub保存(sanitizedStateForGitHub)と同じ方針。
   downloadText(`taskchute_journal_backup_${todayISO()}.json`, JSON.stringify(sanitizedStateForGitHub(), null, 2), "application/json");
+}
+
+// v316: stateへ書かず、生活記録の対象種別だけを既存downloadText経由で書き出す。
+const LIFE_EXPORT_META = Object.freeze({
+  gym: { label: "筋トレ", extension: "csv", type: "text/csv;charset=utf-8" },
+  sleep: { label: "睡眠", extension: "csv", type: "text/csv;charset=utf-8" },
+  condition: { label: "体調", extension: "csv", type: "text/csv;charset=utf-8" },
+  store: { label: "お店", extension: "csv", type: "text/csv;charset=utf-8" },
+  bodyScan: { label: "身体スキャン", extension: "csv", type: "text/csv;charset=utf-8" },
+  writeMeditation: { label: "書く瞑想", extension: "json", type: "application/json" }
+});
+
+function downloadLifeData(kind) {
+  const meta = LIFE_EXPORT_META[kind];
+  if (!meta) return;
+  const rows = exportRows(state, kind);
+  if (!rows.length) return showToast(`${meta.label}の記録はありません`);
+  const text = meta.extension === "json"
+    ? JSON.stringify(rows, null, 2)
+    : toCSV(rows, LIFE_EXPORT_COLUMNS[kind]);
+  downloadText(`taskchute_${kind}_${todayISO()}.${meta.extension}`, text, meta.type);
 }
 
 function importData(file) {

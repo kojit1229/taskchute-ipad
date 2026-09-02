@@ -15,7 +15,7 @@
       ],
       "assertionSignals": 34,
       "assertionHash": "f841e3459002f00f",
-      "sourceHash": "0b76ca0aaf211d9c",
+      "sourceHash": "3333b90aeb7ad4dc",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -257,6 +257,30 @@
       "assertionSignals": 42,
       "assertionHash": "ff8f1f6eba1bb3bf",
       "sourceHash": "0c1816e9a0bf205c",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "life-export-core.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "journal-health"
+      ],
+      "assertionSignals": 21,
+      "assertionHash": "8bde57f5f3742cf2",
+      "sourceHash": "ac944306de971dd4",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3547,6 +3571,30 @@
       "assertionSignals": 17,
       "assertionHash": "029c7733e28d7bf3",
       "sourceHash": "ba74154e0e8545e5",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v316.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "journal-health"
+      ],
+      "assertionSignals": 15,
+      "assertionHash": "8f33dad8d1ea64c2",
+      "sourceHash": "c48c5bc6f22c68a5",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

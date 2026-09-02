@@ -92,6 +92,7 @@ function check(name, cond, extra = "") {
 // zerosec-theme-skipを意図的に削除(223→219)。
 // v300: 永久に空だった却下理由UIのaction 2件を意図的に削除(223→221)。
 // v311: CABIN TIMERのLINK FLIGHT選択・一時停止・再開4actionを意図的に追加。
+// v316: 生活記録6ボタン共通のlife-export actionを意図的に追加。
 const GOLDEN_CLICK_ACTIONS = [
   "nav", "open-iron-log", "instruments-open-iron-log", "save-tower-journal",
   "focus-toggle-side", "focus-toggle-journal", "focus-toggle-life", "focus-mode",
@@ -110,7 +111,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "toggle-wbs-edit", "wbs-collapse-all",
   "add-block", "toggle-block", "toggle-task-complete", "now-start", "now-end",
   "bulk-approve-planned", "now-conveyor-complete",
-  "generate-report", "download-report", "download-data", "save-github", "load-github",
+  "generate-report", "download-report", "download-data", "life-export", "save-github", "load-github",
   "gate-continue", "reset-demo",
   "toggle-mit",
   // v295: 身体スキャン2軸化(K裁定2026-08-29)でbody-scan-recovery/body-scan-recordを意図的に追加。
@@ -255,7 +256,7 @@ const APP_JS_REGISTERED_ACTIONS = [
   //     v291孤児掃除で削除) ---
   "ai-report-type", "ai-report-open-unread", "ai-report-refresh",
   "report-copy-ai", "report-share-ai",
-  "generate-report", "download-report", "download-data",
+  "generate-report", "download-report", "download-data", "life-export",
   "carry-over", "migration-ritual-choice",
   // ideal-retryはv230のHome撤去で描画元を失い到達不能化、v292孤児掃除で
   // resolveIdealRetry/idealActiveEntryごと削除(低優先度棚卸しK裁定2026-08-29)。

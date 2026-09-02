@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v315";  // v315: IRON LOG前回値プリフィルと自己ベスト表示
+const CACHE_NAME = "taskchute-journal-pwa-v316";  // v316: 生活記録の種別単位エクスポート
 // v293: 身体スキャン復活(K裁定2026-08-29。手動Block完了時のみ追加)
 // v290: 孤児action本体2クラスタ(AI作業結果承認/質問、AIタスク候補チップの採用/却下)を削除した(APP_SHELL変更なし)。
 // v288: WBS内検索と新規Project既定closed化を追加した(APP_SHELL変更なし)。
@@ -315,6 +315,7 @@ const APP_SHELL = [
   "./manifest.webmanifest",
   "./assets/icon.svg",
   "./src/core/merge.js",
+  "./src/core/life-export.js",
   "./src/core/habit-streak.js",
   "./src/core/recurrence.js",
   "./src/core/track.js",
