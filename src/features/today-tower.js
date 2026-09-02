@@ -326,13 +326,17 @@ function renderFlightLog(date, blocks) {
 
 function renderTowerJournal(date) {
   const journal = journalForDate(date);
-  return `<section class="tower-panel-box sec-journal">
+  const aiOpen = String(journal.aiRequest || "").trim() ? " open" : "";
+  return `<section class="tower-panel-box sec-journal tower-journal">
     <h2>ジャーナル <span>本日</span></h2>
     <div class="tower-journal-body">
       <label class="tower-journal-label" for="towerJournalFree">自由記述</label>
-      <textarea id="towerJournalFree" placeholder="気づき・所感をそのまま書く">${escapeHTML(journal.free)}</textarea>
-      <label class="tower-journal-label" for="towerJournalAi">AIに依頼すること</label>
-      <textarea id="towerJournalAi" placeholder="夜のAIバッチへの依頼・質問">${escapeHTML(journal.aiRequest)}</textarea>
+      <textarea id="towerJournalFree" class="tower-journal-free" placeholder="気づき・所感をそのまま書く">${escapeHTML(journal.free)}</textarea>
+      <details class="tower-journal-ai-fold"${aiOpen}>
+        <summary>AIに依頼すること <span>夜のバッチ向け</span></summary>
+        <label class="tower-journal-label tower-journal-ai-label" for="towerJournalAi">AIに依頼すること</label>
+        <textarea id="towerJournalAi" class="tower-journal-ai" rows="2" placeholder="夜のAIバッチへの依頼・質問">${escapeHTML(journal.aiRequest)}</textarea>
+      </details>
       <button type="button" class="tower-journal-save" data-action="save-tower-journal" data-date="${escapeHTML(date)}">SAVE 記録</button>
     </div>
   </section>`;

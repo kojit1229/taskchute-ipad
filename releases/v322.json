@@ -1,0 +1,48 @@
+{
+  "version": 322,
+  "date": "2026-09-03",
+  "title": "ジャーナルのAI依頼欄を縮小・自由記述を拡大",
+  "summary": "Today TOWERとジャーナルタブで自由記述を主領域へ拡大し、AI依頼欄を2行の折りたたみにする。",
+  "changedFiles": [
+    "CHANGES_v322.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v322.json",
+    "src/features/journal.js",
+    "src/features/today-tower.js",
+    "styles.css",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/v322.test.js"
+  ],
+  "intent": [
+    "日々の自由記述へ十分な初期高さを与え、AI依頼欄は必要なときだけ展開できるようにする。",
+    "既存のjournalsとjournalMeta.aiRequest、save-tower-journal保存契約を変更せず両画面で共有する。"
+  ],
+  "changes": [
+    "Today TOWERの自由記述へ専用classを付け、モバイル40vh・PC右列の残り高さいっぱいへ拡大した。",
+    "両画面のAI依頼欄を既定閉・当日入力ありなら開く2行detailsへ変更した。",
+    "ジャーナルタブ本文をモバイル40vh・PC 320px以上へ拡大し、既存の入力時保存とフォーカス維持を温存した。",
+    "Service WorkerのCACHE_NAMEをv322へ更新した。"
+  ],
+  "uncertainties": [
+    "PC右列の残り高さは同じグリッド行にある左・中央列の内容量に応じて伸びるため、iPad実機の文字レンダリング差を最終確認したい。",
+    "ジャーナルタブのAI依頼の入力時保存は既存のTOWER保存と同じく journalMeta.textUpdatedAt を更新する。同期は本文とjournalMetaを textUpdatedAt 単位で一括採用するため(v106/v228以来の粒度)、別端末で本文とAI依頼を独立編集すると片方が負ける既知の限界が残る(同期層の変更はK承認要)"
+  ],
+  "reviewFocus": [
+    "TodayとジャーナルのAI依頼が空なら閉じ、既存値があれば開くか。",
+    "本文入力中に全再描画が走らず、SAVEがjournalsとjournalMeta.aiRequestを従来どおり保存するか。",
+    "390pxで横スクロールがなく、全入力欄が16px以上か。"
+  ],
+  "verification": [
+    "node --checkで変更したJavaScriptと新規テストの構文を確認する。",
+    "npm.cmd run test:manifest:writeでsuite-manifestとテスト影響表を更新する。",
+    "Google Chrome指定でv322、v321、v320、v319、v313、v297、v317、journal-core、iron-log-e2eを実行する。"
+  ],
+  "notes": [
+    "発注指定によりrelease-record.js、コミット、push、taskchute-notes書込は実行しない。"
+  ],
+  "knownLimitations": []
+}

@@ -3441,6 +3441,15 @@ h3 {
 .tower-journal-label { color: var(--tower-cyan); font-size: 11px; font-weight: 700; letter-spacing: .14em; }
 .tower-journal-label span { margin-left: 6px; color: var(--tower-text); font-weight: 400; letter-spacing: .06em; opacity: .7; }
 .tower-journal-body textarea { min-height: 130px; padding: 8px 10px; resize: vertical; border: 1px solid var(--tower-line); border-radius: 0; color: var(--tower-text); background: var(--tower-bg); font-family: system-ui, sans-serif; font-size: 16px; line-height: 1.6; }
+.tower-journal-body .tower-journal-free { min-height: 40vh; }
+.tower-journal-ai-fold { border-top: 1px solid var(--tower-line); }
+.tower-journal-ai-fold > summary { min-height: 44px; padding: 8px 0; color: var(--tower-cyan); font-size: 11px; font-weight: 700; letter-spacing: .14em; cursor: pointer; list-style: none; }
+.tower-journal-ai-fold > summary::-webkit-details-marker { display: none; }
+.tower-journal-ai-fold > summary::before { display: inline-block; margin-right: 6px; content: "▶"; transition: transform .15s ease; }
+.tower-journal-ai-fold[open] > summary::before { transform: rotate(90deg); }
+.tower-journal-ai-fold > summary span { float: right; color: var(--tower-text); font-weight: 400; letter-spacing: .06em; opacity: .7; }
+.tower-journal-ai-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.tower-journal-body .tower-journal-ai { width: 100%; min-height: 44px; font-size: 16px; }
 .tower-journal-body textarea:focus-visible { outline: 2px solid var(--tower-amber); outline-offset: -2px; }
 .tower-journal-save { justify-self: end; min-width: 44px; min-height: 44px; margin-top: 2px; padding: 4px 16px; border: 1px solid var(--tower-green); color: var(--tower-green); background: transparent; font: inherit; font-size: 11px; letter-spacing: .14em; }
 
@@ -3522,7 +3531,10 @@ h3 {
   .today-tower .today-focus-bar { grid-area: focus; }
   .today-tower .tower-col-left { display: block; grid-area: left; min-width: 0; }
   .today-tower .tower-col-center { display: block; grid-area: center; min-width: 0; }
-  .today-tower .tower-col-right { display: block; grid-area: right; min-width: 0; }
+  .today-tower .tower-col-right { display: flex; grid-area: right; min-width: 0; flex-direction: column; align-self: stretch; }
+  .today-tower .tower-journal { display: flex; flex: 1; flex-direction: column; }
+  .today-tower .tower-journal-body { display: flex; flex: 1; flex-direction: column; }
+  .today-tower .tower-journal-free { flex: 1; min-height: 240px; }
   /* v313: 列の中身と順序は固定し、非表示側の既存幅だけを中央GATEへ吸収させる。 */
   .today-tower[data-view-side="0"] .tower-col-left,
   .today-tower[data-view-journal="0"] .tower-col-right { display: none; }
@@ -4184,6 +4196,16 @@ h3 {
 .journal-tower textarea:focus-visible,
 .journal-tower input:focus-visible { outline: 2px solid var(--tower-amber); outline-offset: -2px; }
 .journal-tower .muted { color: var(--tower-text); opacity: .7; }
+.journal-tower textarea.journal-free { min-height: 320px; }
+.journal-tower .journal-request-fold { margin-top: 10px; border: 1px solid var(--tower-line); }
+.journal-tower .journal-request-fold > .fold-body { display: grid; gap: 8px; }
+.journal-tower .journal-request-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.journal-tower textarea.journal-ai { min-height: 44px; }
+.journal-tower .journal-request-save { justify-self: end; }
+
+@media (max-width: 720px) {
+  .journal-tower textarea.journal-free { min-height: 40vh; }
+}
 
 /* ============ コンディションOS(cond-row/cond-btn-row/cond-gym-card等) ============ */
 .journal-tower .cond-row { color: var(--tower-text); }
