@@ -1,0 +1,47 @@
+{
+  "version": 321,
+  "date": "2026-09-03",
+  "title": "MITカード新設・LIFE BANDをMIT直下へ・次の予定を増量・MIT★復元・空状態文言",
+  "summary": "Today TOWER最上部へ表示専用MITカードを追加し、予定窓を端末幅別に拡張してMIT表示と空状態文言を整える。",
+  "changedFiles": [
+    "CHANGES_v321.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v321.json",
+    "src/features/today-tower.js",
+    "styles.css",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/tower-core.test.js",
+    "tests/v321.test.js"
+  ],
+  "intent": [
+    "MITをLIFE BANDの表示設定から独立した最上部カードとして常時確認できるようにする。",
+    "ARRIVALSを中心便の1件前からモバイル6件・PC 8件表示し、全体件数との差を明示する。",
+    "MITの識別と空状態文言を表示だけで改善し、同期stateや操作導線を増やさない。"
+  ],
+  "changes": [
+    "当日MITを最大3件、時刻順・状態付きで表示するアンバー枠カードをLIFE BAND直前へ追加した。",
+    "ARRIVALS窓を1280px未満6件・1280px以上8件へ変更し、超過表示を『さらにN件』へ統一した。",
+    "次の予定、やったこと、NOW LANDINGのMITタイトルへ既存の星印を復元した。",
+    "健康行の有無と予定0件を区別する事実ベースの空状態文言へ更新した。",
+    "Service WorkerのCACHE_NAMEをv321へ更新した。"
+  ],
+  "uncertainties": [
+    "MITカードの1行レイアウトと6/8件の縦寸法はChromeで検証するが、iOS Safari実機での最終的な読みやすさ確認が必要。"
+  ],
+  "reviewFocus": [
+    "MITカードがLIFE BAND OFFでも残り、MIT切替用の新規actionやstate書込を持たないか。",
+    "中心便選定を維持したまま1件前から6/8件を切り出し、tick差分更新でも星と要約が一致するか。",
+    "390pxで横スクロールが発生せず、PCグリッドの既存3列とLIFE BAND・STANDING ORDERS順を壊していないか。"
+  ],
+  "verification": [
+    "node --checkで変更したJavaScriptとテストの構文を確認する。",
+    "npm.cmd run test:manifest:writeでsuite-manifestとテスト影響表を更新する。",
+    "Google Chrome指定でv321、v320、v319、v313、v297、v317、journal-core、iron-log-e2e、tower-core、today-core、v274、v276を実行する。",
+    "v321でMITカード、LIFE BAND OFF、6/8件、3箇所のMIT星、健康・予定空状態、390px横幅、pageerror、state非書込を確認する。"
+  ],
+  "notes": [
+    "発注指定によりrelease-record.js、コミット、push、taskchute-notes書込は実行しない。"
+  ],
+  "knownLimitations": []
+}

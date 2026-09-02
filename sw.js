@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v320";  // v320: ルーティン2列×4行・完了非表示・枠内スクロール
+const CACHE_NAME = "taskchute-journal-pwa-v321";  // v321: MITカード・予定件数増量・MIT星・空状態文言
 // v293: 身体スキャン復活(K裁定2026-08-29。手動Block完了時のみ追加)
 // v290: 孤児action本体2クラスタ(AI作業結果承認/質問、AIタスク候補チップの採用/却下)を削除した(APP_SHELL変更なし)。
 // v288: WBS内検索と新規Project既定closed化を追加した(APP_SHELL変更なし)。

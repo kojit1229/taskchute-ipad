@@ -637,8 +637,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 160,
-      "assertionHash": "21ef3ad46d7c2c86",
-      "sourceHash": "0fc50d59f86ba6c4",
+      "assertionHash": "4cce0ceb0f249d28",
+      "sourceHash": "d0301786e651c679",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3700,6 +3700,29 @@
         "server": true,
         "fileWrite": false,
         "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v321.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "legacy-crosscutting"
+      ],
+      "assertionSignals": 21,
+      "assertionHash": "53482ed3d0953047",
+      "sourceHash": "3252b73c44ec589f",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
         "clock": true
       }
     },

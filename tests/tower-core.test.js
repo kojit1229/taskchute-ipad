@@ -172,10 +172,10 @@ function check(name, cond, extra = "") {
     check("日跨ぎで#towerDayLeftがほぼ丸一日へ戻る", /^23:59:/.test((await page.locator("#towerDayLeft").textContent()) || ""),
       await page.locator("#towerDayLeft").textContent());
 
-    console.log("[7] ARRIVALSは本日便の現在前後5便だけを表示する");
+    console.log("[7] ARRIVALSは中心便の1件前からモバイル上限6便を表示する");
     await page.clock.setFixedTime(fixedTime(0));
     const arrivals = Array.from({ length: 13 }, (_, index) =>
-      block(`arr-${index}`, `本日便${index + 1}`, today, 9 * 60 + 30 + index * 30, { estimateMin: index === 0 ? 45 : null }));
+      block(`arr-${index}`, `本日便${index + 1}`, today, 9 * 60 + 30 + index * 30, { estimateMin: index === 4 ? 45 : null }));
     arrivals.push(block("routine-hidden", "除外ルーティン", today, 11 * 60, { category: "ルーティン" }));
     arrivals.push(block("onetap-hidden", "除外ワンタップ", today, 11 * 60 + 15, { oneTap: true }));
     arrivals.push(block("arr-completed", "完了済み便", today, 8 * 60, {
@@ -186,8 +186,8 @@ function check(name, cond, extra = "") {
       block("dep-third", "明日13時", tomorrow, 13 * 60), block("dep-second", "明日10時", tomorrow, 10 * 60)
     ];
     await seedBoard([...arrivals, ...tomorrowBlocks]);
-    check("ARRIVALSは最大11行", await page.locator(".tower-arrival-row").count() === 11);
-    check("窓外2便を数字だけで要約する", (await page.locator(".tower-flight-summary").textContent())?.trim() === "他 2 便");
+    check("1280px未満のARRIVALSは最大6行", await page.locator(".tower-arrival-row").count() === 6);
+    check("窓外7件を指定文言で要約する", (await page.locator(".tower-flight-summary").textContent())?.trim() === "さらに7件");
     check("callsign列は存在しない", await page.locator(".tower-arrival-row .tower-callsign").count() === 0);
     const arrivalEstimates = await page.locator(".tower-arrival-row .tower-flight-est").allTextContents();
     check("見積列は手入力45分とresolveEstimateMin既定30分を表示", arrivalEstimates[0] === "45分" && arrivalEstimates.slice(1).every((text) => text === "30分"), JSON.stringify(arrivalEstimates));
@@ -244,7 +244,7 @@ function check(name, cond, extra = "") {
       && savedJournal.ai === "明日の計画に運動を入れて" && !!savedJournal.updatedAt, JSON.stringify(savedJournal));
 
     console.log("[8] ARRIVALSのタスク名タップは既存Blockモーダルを開く");
-    await page.locator('.tower-arrival-row[data-flight-id="arr-0"] .tower-flight-title').click();
+    await page.locator('.tower-arrival-row[data-flight-id="arr-4"] .tower-flight-title').click();
     await page.waitForSelector(".modal-card", { state: "attached" });
     check("既存Block編集モーダルが開く", await page.locator(".modal-card").count() === 1);
     check("buildBlockModalのフルスペックを流用", await page.locator('[data-modal-field="plannedStartAt"]').count() === 1
@@ -325,44 +325,44 @@ function check(name, cond, extra = "") {
     check("遷移した状態セルにis-flipが付与されflipアニメが適用される",
       await statusHandle.evaluate((el) => el.classList.contains("is-flip") && getComputedStyle(el).animationName === "tower-board-flip"));
 
-    console.log("[11] 11便超の日は時間経過の窓ずれをtickが追従する(フォーカス中は保留)");
+    console.log("[11] 6便超の日は時間経過の窓ずれをtickが追従する(フォーカス中は保留)");
     const many = Array.from({ length: 13 }, (_, i) => block(`w${i}`, `便${i}`, today, 9 * 60 + i * 30));
     await page.clock.setFixedTime(new Date(base.getFullYear(), base.getMonth(), base.getDate(), 12, 0, 30, 0));
     await seedBoard(many);
     await page.waitForLoadState("networkidle");
-    check("12:00時点の窓は w1..w11", (await page.locator(".tower-arrival-row").first().getAttribute("data-flight-id")) === "w1");
+    check("12:00時点の窓は w5..w10", (await page.locator(".tower-arrival-row").first().getAttribute("data-flight-id")) === "w5");
     check("既定queue先頭が窓外でもselectを保ち、表示候補はARRIVALS窓と一致",
       await page.locator("[data-tower-arrival-select]").inputValue() === "w0"
       && JSON.stringify(await page.locator("[data-tower-arrival-select] option:not([hidden])").evaluateAll((options) => options.map((option) => option.value)))
-        === JSON.stringify(Array.from({ length: 11 }, (_, index) => `w${index + 1}`)));
+        === JSON.stringify(Array.from({ length: 6 }, (_, index) => `w${index + 5}`)));
     await page.locator("[data-tower-arrival-select]").focus();
-    await page.locator("[data-tower-arrival-select]").selectOption("w1");
+    await page.locator("[data-tower-arrival-select]").selectOption("w5");
     await page.evaluate(() => document.activeElement.blur());
-    await page.waitForFunction(() => document.querySelector("[data-tower-arrival-select]")?.value === "w1");
+    await page.waitForFunction(() => document.querySelector("[data-tower-arrival-select]")?.value === "w5");
     await page.locator('.tower-arrival-row[data-flight-id="w6"] .tower-flight-title').focus();
     await page.clock.setFixedTime(new Date(base.getFullYear(), base.getMonth(), base.getDate(), 12, 30, 30, 0));
     await page.waitForFunction(() => document.getElementById("towerClock")?.textContent === "12:30:30");
-    check("フォーカス中は行を作り直さない(先頭はw1のまま)", (await page.locator(".tower-arrival-row").first().getAttribute("data-flight-id")) === "w1");
+    check("フォーカス中は行を作り直さない(先頭はw5のまま)", (await page.locator(".tower-arrival-row").first().getAttribute("data-flight-id")) === "w5");
     check("フォーカスは失われない", await page.evaluate(() => document.activeElement?.closest?.('[data-flight-id="w6"]') !== null));
     await page.evaluate(() => document.activeElement.blur());
-    await page.waitForFunction(() => document.querySelector(".tower-arrival-row")?.dataset.flightId === "w2"
+    await page.waitForFunction(() => document.querySelector(".tower-arrival-row")?.dataset.flightId === "w6"
       && document.querySelector("[data-tower-arrival-select]")?.value === "w0");
-    check("フォーカス解除後のtickで窓がw2..w12へずれる", (await page.locator(".tower-arrival-row").first().getAttribute("data-flight-id")) === "w2");
-    check("tick窓移動でselectもw2..w12へ追従し、窓外選択w1はqueue先頭w0へ戻る",
+    check("フォーカス解除後のtickで窓がw6..w11へずれる", (await page.locator(".tower-arrival-row").first().getAttribute("data-flight-id")) === "w6");
+    check("tick窓移動でselectもw6..w11へ追従し、窓外選択w5はqueue先頭w0へ戻る",
       JSON.stringify(await page.locator("[data-tower-arrival-select] option:not([hidden])").evaluateAll((options) => options.map((option) => option.value)))
-        === JSON.stringify(Array.from({ length: 11 }, (_, index) => `w${index + 2}`)));
-    check("窓ずれ後も他 n 便のサマリが正しい", ((await page.locator("#towerArrivalSummary").textContent()) || "").trim() === "他 2 便");
+        === JSON.stringify(Array.from({ length: 6 }, (_, index) => `w${index + 6}`)));
+    check("窓ずれ後もさらにN件のサマリが正しい", ((await page.locator("#towerArrivalSummary").textContent()) || "").trim() === "さらに7件");
     const focusedSelect = page.locator("[data-tower-arrival-select]");
     const focusedSelectHandle = await focusedSelect.elementHandle();
     await focusedSelect.focus();
     await page.clock.setFixedTime(new Date(base.getFullYear(), base.getMonth(), base.getDate(), 13, 0, 30, 0));
-    await page.waitForFunction(() => document.querySelector(".tower-arrival-row")?.dataset.flightId === "w3");
+    await page.waitForFunction(() => document.querySelector(".tower-arrival-row")?.dataset.flightId === "w7");
     check("selectフォーカス中はtick候補更新を保留してpicker要素を維持", await focusedSelectHandle.evaluate((el) =>
-      el.isConnected && document.activeElement === el && el.querySelector('option:not([hidden])')?.value === "w2"));
+      el.isConnected && document.activeElement === el && el.querySelector('option:not([hidden])')?.value === "w6"));
     await page.evaluate(() => document.activeElement.blur());
-    await page.waitForFunction(() => document.querySelector('[data-tower-arrival-select] option:not([hidden])')?.value === "w3");
-    check("selectのblur後の次tickで保留候補をw3..w12へ反映",
-      (await page.locator("[data-tower-arrival-select] option:not([hidden])").first().getAttribute("value")) === "w3");
+    await page.waitForFunction(() => document.querySelector('[data-tower-arrival-select] option:not([hidden])')?.value === "w7");
+    check("selectのblur後の次tickで保留候補をw7..w12へ反映",
+      (await page.locator("[data-tower-arrival-select] option:not([hidden])").first().getAttribute("value")) === "w7");
 
     console.log("[12] 実行中BlockをRWYとNOW LANDINGへ表示する");
     await page.clock.setFixedTime(fixedTime(0));
@@ -600,7 +600,7 @@ function check(name, cond, extra = "") {
     await seedT5([]);
     // v310: spec-freeze.md §3のNOW LANDING強調仕様により空表示文言を更新。
     check("Block 0件はempty空状態", await page.locator('.tower-nowhud[data-status="empty"]').count() === 1
-      && (await page.locator(".tower-nowhud").textContent())?.trim() === "滑走路オープン ─ 次の便を選んで開始できます");
+      && (await page.locator(".tower-nowhud").textContent())?.trim() === "本日の予定はありません ─ タイムラインで追加できます");
     check("候補0件ではARRIVALS選択プルダウンを描画しない", await page.locator("[data-tower-arrival-select]").count() === 0);
     check("Block 0件でもDEPARTURESは復活しない", await page.locator('.tower-departures, [data-action="departures-open-tomorrow"]').count() === 0);
 

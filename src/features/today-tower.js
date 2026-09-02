@@ -103,7 +103,8 @@ function boardFlights(blocks, nowMin, tasks = []) {
   const candidates = blocks.filter((block) => !block.completed && !block.actualEndAt && block.category !== "ルーティン" && !block.oneTap);
   const byId = new Map(candidates.map((block) => [String(block.id), block]));
   const blockFlights = towerFlights(candidates, nowMin).map((flight) => ({
-    ...flight, estimateMin: resolveEstimateMin(byId.get(String(flight.id)))
+    ...flight, estimateMin: resolveEstimateMin(byId.get(String(flight.id))),
+    isMIT: byId.get(String(flight.id))?.isMIT === true
   }));
   const taskFlights = tasks.map((task) => ({
     id: `task:${task.id}`, taskId: task.id, kind: "task-plan", title: task.title,
@@ -136,13 +137,32 @@ function arrivalWindow(flights) {
   if (center < 0) center = flights.findIndex((flight) => flight.status === "holding");
   if (center < 0) center = flights.findIndex((flight) => flight.status === "scheduled");
   if (center < 0) center = flights.length - 1;
-  const rows = flights.slice(Math.max(0, center - 5), center + 6);
+  const limit = typeof window !== "undefined" && window.matchMedia?.("(min-width:1280px)").matches ? 8 : 6;
+  const start = clamp(center - 1, 0, Math.max(0, flights.length - limit));
+  const rows = flights.slice(start, start + limit);
   return { rows, omitted: flights.length - rows.length };
 }
 
 function flightTime(minute) {
   if (minute === null) return "--:--";
   return `${String(Math.floor(minute / 60) % 24).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
+}
+
+function mitStarHTML(block) {
+  return block?.isMIT === true ? '<span class="mit-star" aria-label="MIT">★</span>' : "";
+}
+
+function renderTowerMIT(blocks) {
+  const mitBlocks = blocks.filter((block) => block.isMIT === true && !block.deleted).slice(0, 3);
+  const rows = mitBlocks.map((block) => {
+    const start = timeFromDateTime(block.plannedStartAt) || "--:--";
+    const end = timeFromDateTime(block.plannedEndAt) || "--:--";
+    const status = block.completed || block.actualEndAt ? "完了" : block.actualStartAt ? "進行中" : "未着手";
+    return `<div class="tower-mit-row">${mitStarHTML(block)}<span class="tower-mit-title">${escapeHTML(block.title)}</span><span class="tower-mit-meta">/ ${start}–${end}・${escapeHTML(resolveEstimateMin(block))}分・${status}</span></div>`;
+  }).join("");
+  return `<section class="tower-mit sec-mit"><h2>★ MIT <span>本日の一つ</span></h2>
+    ${rows || '<div class="tower-mit-empty">MITは未設定(タイムラインの☆で指定)</div>'}
+  </section>`;
 }
 
 function flightSetKey(flights) {
@@ -201,14 +221,16 @@ function renderTowerRunway(now, blocks, flights) {
   const touchdown = running && lastLandingId !== undefined && running.id !== lastLandingId
     ? `<i class="tower-touchdown" aria-hidden="true" style="--tower-plane-x:${metrics.x}%"></i>` : "";
   lastLandingId = running ? running.id : null;
-  let hud = '<div class="tower-nowhud" data-status="empty">滑走路オープン ─ 次の便を選んで開始できます</div>';
+  let hud = `<div class="tower-nowhud" data-status="empty">${flights.length
+    ? "滑走路オープン ─ 次の便を選んで開始できます"
+    : "本日の予定はありません ─ タイムラインで追加できます"}</div>`;
   if (running) {
     const id = escapeHTML(running.id);
     const ironLink = typeof linkedGymBlock === "function"
       && linkedGymBlock(blocks, now.getHours() * 60 + now.getMinutes())
       ? '<button class="tower-ironlog-link" data-action="open-iron-log">▶ IRON LOG</button>' : "";
     hud = `<div class="tower-nowhud" data-status="${metrics.over ? "long" : "landing"}">
-      <button type="button" class="tower-now-title" data-action="edit-block" data-id="${id}">${escapeHTML(running.title)}</button>
+      <button type="button" class="tower-now-title" data-action="edit-block" data-id="${id}">${mitStarHTML(running)}${escapeHTML(running.title)}</button>
       <span class="tower-now-pct" id="towerNowPct">進捗 ${metrics.pct}%</span>
       <strong id="towerNowRemain">${metrics.remain}</strong>
       <div class="tower-now-actions">
@@ -221,7 +243,7 @@ function renderTowerRunway(now, blocks, flights) {
     const id = escapeHTML(next.id);
     const candidateOptions = towerArrivalOptions(selection);
     hud = `<div class="tower-nowhud" data-status="ready">
-      <button type="button" class="tower-now-title" data-action="edit-block" data-id="${id}">${escapeHTML(next.title)}</button>
+      <button type="button" class="tower-now-title" data-action="edit-block" data-id="${id}">${mitStarHTML(next)}${escapeHTML(next.title)}</button>
       ${candidateOptions ? `<select class="tower-arrival-select" data-tower-arrival-select data-arrival-set="${escapeHTML(towerArrivalSelectionKey(selection))}" aria-label="開始するARRIVALS便">${candidateOptions}</select>` : ""}
       <button type="button" class="btn primary" data-action="now-start" data-id="${id}">▶ 開始</button>
     </div>`;
@@ -247,7 +269,7 @@ function flightRow(flight) {
   }
   return `<div class="tower-flight-row tower-arrival-row" data-flight-id="${escapeHTML(flight.id)}" data-status="${escapeHTML(flight.status)}">
     <time>${flightTime(flight.plannedMin)}</time>
-    <button type="button" class="tower-flight-title" data-action="edit-block" data-id="${escapeHTML(flight.id)}">${escapeHTML(flight.title)}</button>
+    <button type="button" class="tower-flight-title" data-action="edit-block" data-id="${escapeHTML(flight.id)}">${mitStarHTML(flight)}${escapeHTML(flight.title)}</button>
     <span class="tower-flight-est">${escapeHTML(flight.estimateMin)}分</span>${status}
   </div>`;
 }
@@ -257,7 +279,7 @@ function renderTowerBoard(arrivalFlights) {
   return `<section class="tower-board sec-arrivals">
     <div class="tower-arrivals"><h2>次の予定 <span>本日</span></h2>
       <div id="towerArrivalRows" data-flight-set="${flightSetKey(arrivalFlights)}">${arrivals.rows.map((flight) => flightRow(flight)).join("")}</div>
-      <div class="tower-flight-summary" id="towerArrivalSummary">${arrivals.omitted ? `他 ${arrivals.omitted} 便` : ""}</div>
+      <div class="tower-flight-summary" id="towerArrivalSummary">${arrivals.omitted ? `さらに${arrivals.omitted}件` : ""}</div>
     </div>
   </section>`;
 }
@@ -289,7 +311,7 @@ function renderFlightLog(date, blocks) {
     const start = timeFromDateTime(block.actualStartAt) || "--:--";
     const end = timeFromDateTime(block.actualEndAt) || "--:--";
     return `<button type="button" class="tower-log-row${isLatest ? " is-flip" : ""}" data-flight-id="${escapeHTML(block.id)}" data-action="edit-block" data-id="${escapeHTML(block.id)}">
-      <time>${start}-${end}</time><span class="tower-log-title">${escapeHTML(block.title)}</span>
+      <time>${start}-${end}</time><span class="tower-log-title">${mitStarHTML(block)}${escapeHTML(block.title)}</span>
       <span class="tower-log-dur">${flightLogDuration(block)}</span>
       <span class="tower-log-state" data-state="${block.completed ? "completed" : "ended"}">${block.completed ? "完了" : "終了"}</span>
       ${isLatest ? '<i class="tower-touchdown" aria-hidden="true" style="--tower-plane-x:50%"></i>' : ""}
@@ -491,10 +513,11 @@ function renderTowerBodyMind(today, blocks) {
   const scans = bodyScansForDate(today);
   const health = healthSummaryHTML(today);
   if (!scans.length) {
+    const hasHealthRow = Boolean(health) && !health.includes("健康データ 未取得");
     return `<section class="tower-panel-box sec-bodymind">
       <h2>からだのきろく <span>今日の積み上げ</span></h2>
       ${health}
-      <div class="bm-empty">今日の記録はまだありません</div>
+      <div class="bm-empty">${hasHealthRow ? "身体スキャンは Block 完了時に記録" : "今日の記録はまだありません"}</div>
     </section>`;
   }
   const summary = bmSummary(scans);
@@ -530,6 +553,7 @@ function renderTodayTower() {
   const weekday = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
   return `<div class="today-tower" data-motion="${escapeHTML(towerMotionSetting())}" data-night="${isNightHour(now.getHours()) ? 1 : 0}" data-paused="${document.hidden ? 1 : 0}" data-focus-mode="${Object.values(focusVisibility).some(Boolean) ? 0 : 1}" data-view-side="${focusVisibility.side ? 1 : 0}" data-view-journal="${focusVisibility.journal ? 1 : 0}" data-view-life="${focusVisibility.life ? 1 : 0}"${glassBlurOff() ? ' data-glass-blur="off"' : ""}>
     ${syncAlertBanner()}
+    ${renderTowerMIT(blocks)}
     ${focusVisibility.life ? `<div class="tower-band1 band1">${renderLifeBand()}<section class="tower-glass-panel clock-box" aria-label="現在時刻"><time id="towerClock">${clockText(now)}</time><span id="towerDate">${date} (${weekday})</span><strong class="dayleft" id="towerDayLeft">${dayLeftText(now)}</strong><span>本日残り</span></section>
     </div>` : ""}
     ${focusVisibility.life ? renderStandingOrders() : ""}
@@ -598,7 +622,7 @@ function updateTowerArrivalSelection(blocks, flights, userSelection = false) {
   if (!next) return;
   const title = hud.querySelector(".tower-now-title");
   const start = hud.querySelector('[data-action="now-start"]');
-  if (title) { title.dataset.id = String(next.id); title.textContent = next.title; }
+  if (title) { title.dataset.id = String(next.id); title.innerHTML = `${mitStarHTML(next)}${escapeHTML(next.title)}`; }
   if (start) start.dataset.id = String(next.id);
   if (select === document.activeElement) return;
   const options = towerArrivalOptions(selection);
@@ -647,7 +671,7 @@ function updateTodayTowerTick() {
       container.querySelector(`[data-flight-id="${CSS.escape(id)}"] .tower-status`)?.classList.add("is-flip");
     });
     const summary = document.getElementById("towerArrivalSummary");
-    if (summary) summary.textContent = flights.length > current.length ? `他 ${flights.length - current.length} 便` : "";
+    if (summary) summary.textContent = flights.length > current.length ? `さらに${flights.length - current.length}件` : "";
     return;
   }
   rows.forEach((row, index) => {
