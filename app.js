@@ -17,6 +17,9 @@ import { loadState, persistLocalNoSchedule, _lastSaveError } from "./src/storage
 // (src/state/feedback-cache.js冒頭コメント参照)。
 import { cachedFeedback } from "./src/state/feedback-cache.js";
 import { configureFund, hydrateFundData, renderFund } from "./src/features/fund.js";
+import {
+  HEALTH_REFRESH_INTERVAL_MS, configureHealth, hydrateHealthData, latestHealthWithin, healthSummaryHTML
+} from "./src/features/health.js";
 // v223: TOWER上帯(STANDING ORDERS/COUNTDOWN)は自己完結featureへ依存注入する。
 import { configureTopband, cycleWeekForDate, toggleTwyScoreExpanded } from "./src/features/topband.js";
 // v233: P4第2弾。v232で配置済みのIRON LOG/INSTRUMENTSを画面結線する。
@@ -263,7 +266,7 @@ configureToday({
   clamp, isStaleBlock, isTaskDead, renderDeferringForFocus,
   renderCircularProgress, remainingText, remainingTextNormal,
   renderPomodoroInterruptControls,
-  syncAlertBanner,
+  syncAlertBanner, healthSummaryHTML,
   gateEditMode: () => _towerGateEditMode
 });
 configureTopband({
@@ -298,6 +301,7 @@ configureWish({
 });
 // v301: FUND日誌も既存のsanitize済みMarkdown描画経路へ結線する。
 configureFund({ escapeHTML, renderHeader, renderMarkdown, personalDataReady, fetchGitHubRawText });
+configureHealth({ escapeHTML, personalDataReady: () => personalDataReady(state.settings.github), fetchGitHubRawText });
 // v169: src/features/journal.jsも同じ理由(循環import回避)で依存注入する。renderExperimentSection
 // (週次レビューと共有、app.js残留)はここで注入する(prep-stage4-journal.md §0/§4/§9 Must級、
 // 「呼ぶだけで実体は移さない」をdeps注入で満たす)。
@@ -11306,12 +11310,14 @@ async function hydrateStaticMarkdown() {
   const realCurrentMonth = realToday.slice(0, 7);
   const wantFutureLetterFetch = ghReady && !(realCurrentMonth in cachedFutureLetterMd);
   const wantAiInsightsFetch = ghReady && (Date.now() - cachedAiInsightsJson.fetchedAt >= FEEDBACK_REFRESH_INTERVAL_MS);
-  const [futureLetterMd, aiInsightsRaw, fundChanged] = await Promise.all([
+  const [futureLetterMd, aiInsightsRaw, fundChanged, healthChanged] = await Promise.all([
     wantFutureLetterFetch ? fetchGitHubRawText(`未来からの手紙_${realCurrentMonth}.md`) : Promise.resolve(undefined),
     wantAiInsightsFetch ? fetchGitHubRawText("ai-insights.json").catch(() => undefined) : Promise.resolve(undefined),
     hydrateFundData(FEEDBACK_REFRESH_INTERVAL_MS),
+    hydrateHealthData(HEALTH_REFRESH_INTERVAL_MS),
   ]);
   if (fundChanged) changed = true;
+  if (healthChanged) changed = true;
   if (wantFutureLetterFetch) {
     cachedFutureLetterMd[realCurrentMonth] = futureLetterMd || undefined;
     if (futureLetterMd) {

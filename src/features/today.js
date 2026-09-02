@@ -17,6 +17,7 @@ let renderCircularProgress, remainingText, remainingTextNormal;
 let renderPomodoroInterruptControls;
 let syncAlertBanner;
 let gateEditMode;
+let healthSummaryHTML;
 let todayTickerId = null;
 let todayRenderedDateISO = null;
 let todayFocusUi = null;
@@ -90,7 +91,7 @@ function configureToday(deps) {
     clamp, isStaleBlock, isTaskDead, renderDeferringForFocus,
     renderCircularProgress, remainingText, remainingTextNormal,
     renderPomodoroInterruptControls,
-    syncAlertBanner, gateEditMode
+    syncAlertBanner, gateEditMode, healthSummaryHTML
   } = deps);
   configureTodayTower({
     escapeHTML, todayISO, syncAlertBanner, blocksForDate, towerFlights,
@@ -108,6 +109,7 @@ function configureToday(deps) {
     earlyRiseTarget: () => state.settings.earlyRiseTarget,
     linkedGymBlock: (blocks, nowMinutes) => linkedGymBlock({ settings: state.settings, blocks }, nowMinutes),
     bodyScansForDate: (date) => (state.bodyScans || []).filter((s) => String(s.dateTime || "").startsWith(date)),
+    healthSummaryHTML,
     scheduledTasksForDate: (date, blocks) => {
       const blockedTaskIds = new Set((blocks || []).map((block) => block.taskId).filter(Boolean));
       return (state.tasks || []).filter((task) => {

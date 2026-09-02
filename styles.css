@@ -3371,6 +3371,8 @@ h3 {
 .bm-chev { flex-shrink: 0; transition: transform .2s ease; }
 .bm-chev.open { transform: rotate(90deg); }
 .bm-empty { padding: 14px 10px; color: var(--tower-text); font-size: 11px; text-align: center; opacity: .6; }
+.bm-health { margin: 8px 10px 0; color: var(--tower-text); font-size: 10px; line-height: 1.5; }
+.bm-health-src { font-size: 10px; opacity: .55; }
 .bm-bars { display: flex; flex-direction: column; gap: 8px; padding: 10px; }
 .bm-row { display: flex; align-items: center; gap: 8px; }
 .bm-label { width: 92px; flex-shrink: 0; font-size: 10px; color: var(--tower-text); opacity: .8; }

@@ -13,6 +13,7 @@ let journalForDate;
 let gateRules, earlyBirdLogForDate, earlyRiseTarget, linkedGymBlock, gateEditMode;
 let scheduledTasksForDate;
 let bodyScansForDate;
+let healthSummaryHTML;
 let _bmWeeklyOpen = false;  // v297: BODY/MINDウィジェットの週推移開閉(表示専用・stateへは書かない)
 let flipListenerBound = false;
 // undefined=セッション初回(未観測)。復元描画では接地の瞬間ではないためフラッシュを出さない
@@ -40,7 +41,7 @@ function configureTodayTower(deps) {
     runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp, isStaleBlock,
     towerMotionSetting, renderTodayPomodoro, todayFocusVisibility, renderTodayFocusBar, journalForDate,
     gateRules, earlyBirdLogForDate, earlyRiseTarget, linkedGymBlock, scheduledTasksForDate, gateEditMode,
-    bodyScansForDate
+    bodyScansForDate, healthSummaryHTML
   } = deps);
   if (!flipListenerBound && typeof document !== "undefined") {
     document.addEventListener("animationend", (event) => {
@@ -442,9 +443,11 @@ function bmWeeklyHTML(today) {
 
 function renderTowerBodyMind(today, blocks) {
   const scans = bodyScansForDate(today);
+  const health = healthSummaryHTML(today);
   if (!scans.length) {
     return `<section class="tower-panel-box sec-bodymind">
       <h2>BODY / MIND <span>今日の積み上げ</span></h2>
+      ${health}
       <div class="bm-empty">今日の記録はまだありません</div>
     </section>`;
   }
@@ -453,6 +456,7 @@ function renderTowerBodyMind(today, blocks) {
   const open = _bmWeeklyOpen;
   return `<section class="tower-panel-box sec-bodymind">
     <h2><button type="button" class="bm-toggle" data-action="tower-bodymind-toggle" aria-expanded="${open ? "true" : "false"}">BODY / MIND<span>今日の積み上げ・タップで週推移</span><i class="bm-chev${open ? " open" : ""}" aria-hidden="true">▸</i></button></h2>
+    ${health}
     <div class="bm-bars">
       <div class="bm-row"><span class="bm-label">🏋️ 身体の疲労</span><span class="bm-track"><i class="bm-fill fat" style="width:${Math.round(summary.fatigue / max * 100)}%"></i></span><span class="bm-val">Σ${summary.fatigue}</span></div>
       <div class="bm-row"><span class="bm-label">🧠 ココロの回復</span><span class="bm-track"><i class="bm-fill rec" style="width:${Math.round(summary.recovery / max * 100)}%"></i></span><span class="bm-val">Σ${summary.recovery}</span></div>
