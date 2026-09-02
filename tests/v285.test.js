@@ -53,7 +53,7 @@ check("ARRIVALS・FLIGHT LOGはsideでガードし、GATEの描画呼び出し�
   && towerSource.includes('<div class="tower-col-center">${renderTowerGates(blocks)}</div>'));
 check("tower-coreの負方向・現行モバイル順序を維持", towerTestSource.includes("DEPARTURES要素・旧action・明日便タイトルを描画しない")
   && towerTestSource.includes("Block 0件でもDEPARTURESは復活しない")
-  && towerTestSource.includes("LIFE→時計→SO→NOW→TIMER→FOCUS→ARRIVALS→GATE→LOG→BODY/MIND→JOURNAL順"));
+  && towerTestSource.includes("LIFE→時計→SO→NOW LANDING(いま)→ポモドーロ→FOCUS→次の予定→ルーティン→やったこと→からだのきろく→ジャーナル順"));
 
 (async () => {
   const server = startServer(PORT);

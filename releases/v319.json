@@ -1,0 +1,52 @@
+{
+  "version": 319,
+  "date": "2026-09-03",
+  "title": "TOWER見出しの日本語化・文字下限11px・二次ラベルopacity.7",
+  "summary": "Today TOWERとジャーナルの主要見出しを日本語化し、TOWER内の小さい文字と二次ラベルを可読域へ引き上げる。",
+  "changedFiles": [
+    "CHANGES_v319.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v319.json",
+    "src/features/journal.js",
+    "src/features/today-tower.js",
+    "src/features/today.js",
+    "styles.css",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/tower-core.test.js",
+    "tests/v271.test.js",
+    "tests/v285.test.js",
+    "tests/v310.test.js",
+    "tests/v319.test.js"
+  ],
+  "intent": [
+    "Today TOWERとジャーナルの日常的な区画名を、日本語で素早く認識できる表示へ揃える。",
+    "TOWER系画面のテキストを11px以上、入力欄を16px以上に保ち、iOSでの可読性と入力時の安定性を守る。",
+    "二次テキストの透明度を.7以上へ揃えつつ、無効・状態表現・装飾アニメーションの意図的な減光は維持する。"
+  ],
+  "changes": [
+    "Today TOWERの次の予定・やったこと・ルーティン・からだのきろく・ジャーナル・自由記述・AI依頼・ポモドーロを日本語表示へ変更した。",
+    "ジャーナルタブの前日・けさ・よる・自由記述の見出しを日本語表示へ変更した。",
+    "指定されたToday TOWERとジャーナルTOWERのCSS範囲で11px未満のpx指定を11pxへ引き上げ、対象の二次テキストopacityを.7へ変更した。",
+    "390pxの横スクロール、文字・入力欄サイズ、旧英語見出し不在、pageerror、描画時state非書込をv319 E2Eで固定した。",
+    "Service WorkerのCACHE_NAMEをv319へ更新した。"
+  ],
+  "uncertainties": [
+    "到着済み行、値なし状態、無効ボタン、装飾アニメーションのopacityは意図的な状態表現として対象外にした。可読性との釣り合いはiOS Safari実機で最終確認が必要。"
+  ],
+  "reviewFocus": [
+    "日本語化後も390px幅で見出し・ボタン・LIFE BANDが横にはみ出さず、入力欄が16px以上を維持しているか。",
+    "Today TOWERとジャーナルタブの表示だけで同期対象stateへ書き込みが発生しないか。",
+    "無効・値なし・到着済み・アニメーションの減光を維持しながら、通常の二次ラベルだけがopacity .7以上になっているか。"
+  ],
+  "verification": [
+    "node --checkで変更したJavaScriptとテストの構文を確認する。",
+    "Google Chrome指定でv319と指定された既存回帰スイートを実行する。",
+    "v319で日本語見出し、11px/16px下限、390px横スクロールなし、pageerror 0、描画時state非書込を確認する。",
+    "npm.cmd run test:manifest:writeでsuite-manifestを更新する。"
+  ],
+  "notes": [
+    "発注指定によりrelease-record.js --write/--check、コミット、push、taskchute-notes書込は実行しない。"
+  ],
+  "knownLimitations": []
+}

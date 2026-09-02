@@ -280,7 +280,7 @@ function check(name, cond, extra = "") {
     await page.locator('.modal-card [data-action="modal-close"]').first().click();
     await page.locator('.tower-log-row[data-flight-id="completed-actual"]').click();
     await page.waitForSelector(".modal-card", { state: "attached" });
-    check("完了済みFLIGHT LOG行タップでも対象Block編集モーダルを開く",
+    check("完了済み「やったこと」行タップでも対象Block編集モーダルを開く",
       await page.locator('[data-modal-field="title"]').inputValue() === "完了実績便");
     await page.locator('.modal-card [data-action="modal-close"]').first().click();
     const runwayReadyId = await page.locator('.tower-nowhud[data-status="ready"] [data-action="now-start"]').getAttribute("data-id");
@@ -904,7 +904,7 @@ function check(name, cond, extra = "") {
       });
       check(`${viewport.width}pxはboard/runwayが縦積み`, Math.abs(mobileLayout.boardX - mobileLayout.runwayX) < 1, JSON.stringify(mobileLayout));
       check(`${viewport.width}pxは横はみ出しなし`, mobileLayout.scrollWidth <= mobileLayout.innerWidth, JSON.stringify(mobileLayout));
-      check(`${viewport.width}pxはLIFE→時計→SO→NOW→TIMER→FOCUS→ARRIVALS→GATE→LOG→BODY/MIND→JOURNAL順`, mobileLayout.order.every((top, index, list) => index === 0 || list[index - 1] < top), JSON.stringify(mobileLayout));
+      check(`${viewport.width}pxはLIFE→時計→SO→NOW LANDING(いま)→ポモドーロ→FOCUS→次の予定→ルーティン→やったこと→からだのきろく→ジャーナル順`, mobileLayout.order.every((top, index, list) => index === 0 || list[index - 1] < top), JSON.stringify(mobileLayout));
       check(`${viewport.width}pxは上帯3パネルも同じ左端`, mobileLayout.panelX.every((x) => Math.abs(x - mobileLayout.runwayX) < 1), JSON.stringify(mobileLayout));
     }
 

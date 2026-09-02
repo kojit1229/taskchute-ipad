@@ -1,4 +1,4 @@
-// v310 tower/pomodoro/render表示: NOW LANDINGとCABIN TIMERを上帯2へ統合するcharacterization test。
+// v310/v319 tower/pomodoro/render表示: NOW LANDINGとポモドーロを上帯2へ統合するcharacterization test。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY } = require("./helpers");
 const fs = require("fs");
 const path = require("path");
@@ -52,9 +52,9 @@ function runningBlock() {
     await page.goto(`http://localhost:${PORT}/`);
     await passGithubGate(page);
 
-    console.log("[1] NOW LANDING 70% + CABIN TIMER 30%を上帯2へ固定配置する");
+    console.log("[1] NOW LANDING 70% + ポモドーロ 30%を上帯2へ固定配置する");
     await seed([runningBlock()]);
-    check("上帯2直下にNOW LANDINGとCABIN TIMERを各1つ描画",
+    check("上帯2直下にNOW LANDINGとポモドーロを各1つ描画",
       await page.locator(".tower-band2 > .tower-runway.now-hero").count() === 1
       && await page.locator(".tower-band2 > .today-pomodoro.pomo").count() === 1);
     check("左列からNOW LANDINGを除去し、ARRIVALS/FLIGHT LOG/BODY-MINDの3パネルを残す",
@@ -72,7 +72,7 @@ function runningBlock() {
       layout.areas.includes("band2 band2 band2") && !layout.areas.includes("timer"), layout.areas);
     check("上帯2の実測比率は約70%/30%", nowShare > 0.69 && nowShare < 0.71, JSON.stringify({ ...layout, nowShare }));
 
-    console.log("[2] NOWヒーロー強調とCABIN TIMER 112px SVGリングを適用する");
+    console.log("[2] NOWヒーロー強調とポモドーロ 112px SVGリングを適用する");
     const visual = await page.evaluate(() => {
       const hero = document.querySelector(".now-hero");
       const title = hero.querySelector(".tower-now-title");
@@ -105,8 +105,8 @@ function runningBlock() {
       visual.heroBorder !== "rgba(0, 0, 0, 0)" && visual.heroShadow !== "none"
       && visual.heroBackground.includes("gradient") && visual.accentLine.includes("gradient"), JSON.stringify(visual));
     check("PCのタスク名22px・残り時間26px", visual.titleSize === 22 && visual.remainSize === 26, JSON.stringify(visual));
-    check("CABIN TIMER見出し・112px SVG円弧・--tower-purpleと厳密一致するstrokeを使う",
-      (await page.locator(".today-pomodoro .today-panel-title").textContent()).includes("CABIN TIMER")
+    check("ポモドーロ見出し・112px SVG円弧・--tower-purpleと厳密一致するstrokeを使う",
+      (await page.locator(".today-pomodoro .today-panel-title").textContent()).includes("ポモドーロ")
       && Math.abs(visual.ringWidth - 112) < 0.5 && visual.ringTag === "svg"
       && visual.progressStroke === visual.purpleColor, JSON.stringify(visual));
 

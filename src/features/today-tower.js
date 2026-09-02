@@ -212,7 +212,7 @@ function renderTowerRunway(now, blocks, flights) {
     </div>`;
   }
   return `<section class="tower-runway sec-rwy now-hero">
-    <h2>NOW LANDING <span>滑走路</span></h2>
+    <h2>NOW LANDING <span>いま</span></h2>
     <div class="tower-runway-strip">
       <i id="towerPlane" aria-hidden="true" style="--tower-plane-x:${metrics.x}%">✈</i>${touchdown}
       ${running ? `<span class="tower-rwy-mark start">${escapeHTML(metrics.start)} 開始</span>
@@ -240,7 +240,7 @@ function flightRow(flight) {
 function renderTowerBoard(arrivalFlights) {
   const arrivals = arrivalWindow(arrivalFlights);
   return `<section class="tower-board sec-arrivals">
-    <div class="tower-arrivals"><h2>ARRIVALS <span>本日</span></h2>
+    <div class="tower-arrivals"><h2>次の予定 <span>本日</span></h2>
       <div id="towerArrivalRows" data-flight-set="${flightSetKey(arrivalFlights)}">${arrivals.rows.map((flight) => flightRow(flight)).join("")}</div>
       <div class="tower-flight-summary" id="towerArrivalSummary">${arrivals.omitted ? `他 ${arrivals.omitted} 便` : ""}</div>
     </div>
@@ -281,7 +281,7 @@ function renderFlightLog(date, blocks) {
     </button>`;
   }).join("");
   return `<section class="tower-panel-box sec-log">
-    <h2>FLIGHT LOG <span>本日の航跡・終了実績</span></h2>
+    <h2>やったこと <span>本日の終了実績</span></h2>
     <div id="towerFlightLog">${rows || '<div class="tower-log-empty">終了実績はまだありません</div>'}</div>
     <div class="tower-log-foot">終了実績を時系列で表示</div>
   </section>`;
@@ -290,11 +290,11 @@ function renderFlightLog(date, blocks) {
 function renderTowerJournal(date) {
   const journal = journalForDate(date);
   return `<section class="tower-panel-box sec-journal">
-    <h2>JOURNAL <span>ジャーナル</span></h2>
+    <h2>ジャーナル <span>本日</span></h2>
     <div class="tower-journal-body">
-      <label class="tower-journal-label" for="towerJournalFree">FREE NOTE <span>自由記述</span></label>
+      <label class="tower-journal-label" for="towerJournalFree">自由記述</label>
       <textarea id="towerJournalFree" placeholder="気づき・所感をそのまま書く">${escapeHTML(journal.free)}</textarea>
-      <label class="tower-journal-label" for="towerJournalAi">AI DISPATCH <span>AIに依頼すること</span></label>
+      <label class="tower-journal-label" for="towerJournalAi">AIに依頼すること</label>
       <textarea id="towerJournalAi" placeholder="夜のAIバッチへの依頼・質問">${escapeHTML(journal.aiRequest)}</textarea>
       <button type="button" class="tower-journal-save" data-action="save-tower-journal" data-date="${escapeHTML(date)}">SAVE 記録</button>
     </div>
@@ -385,7 +385,7 @@ function renderTowerGates(blocks) {
   lastGateDocked = docked;
   lastGateFull = full;
   return `<section class="tower-gates sec-gates${full ? " is-full" : ""}${fullFlash ? " is-full-flash" : ""}">
-    <h2>GATE ROUTINE <button type="button" class="tower-gate-edit" data-action="tower-gate-edit-toggle">${gateEditMode() ? "DONE 完了" : "EDIT 編集"}</button></h2>
+    <h2>ルーティン <button type="button" class="tower-gate-edit" data-action="tower-gate-edit-toggle">${gateEditMode() ? "DONE 完了" : "EDIT 編集"}</button></h2>
     <div id="towerGateStrip" data-gate-set="${gateSet}">${gateEditMode() ? gateEditorHTML(early) : `${earlyBirdHTML(early, earlyDocking)}${buttons}`}</div>
     ${early.late ? `<div class="tower-gate-warning">⚠ ${escapeHTML(early.checkedTime)}打刻 — 目標${escapeHTML(early.target)}より遅いチェックです</div>` : ""}
     <div id="towerGateCount">${done}/${total}便 就航</div>
@@ -451,7 +451,7 @@ function renderTowerBodyMind(today, blocks) {
   const health = healthSummaryHTML(today);
   if (!scans.length) {
     return `<section class="tower-panel-box sec-bodymind">
-      <h2>BODY / MIND <span>今日の積み上げ</span></h2>
+      <h2>からだのきろく <span>今日の積み上げ</span></h2>
       ${health}
       <div class="bm-empty">今日の記録はまだありません</div>
     </section>`;
@@ -460,7 +460,7 @@ function renderTowerBodyMind(today, blocks) {
   const max = Math.max(1, summary.fatigue, summary.recovery);
   const open = _bmWeeklyOpen;
   return `<section class="tower-panel-box sec-bodymind">
-    <h2><button type="button" class="bm-toggle" data-action="tower-bodymind-toggle" aria-expanded="${open ? "true" : "false"}">BODY / MIND<span>今日の積み上げ・タップで週推移</span><i class="bm-chev${open ? " open" : ""}" aria-hidden="true">▸</i></button></h2>
+    <h2><button type="button" class="bm-toggle" data-action="tower-bodymind-toggle" aria-expanded="${open ? "true" : "false"}">からだのきろく<span>今日の積み上げ・タップで週推移</span><i class="bm-chev${open ? " open" : ""}" aria-hidden="true">▸</i></button></h2>
     ${health}
     <div class="bm-bars">
       <div class="bm-row"><span class="bm-label">🏋️ 身体の疲労</span><span class="bm-track"><i class="bm-fill fat" style="width:${Math.round(summary.fatigue / max * 100)}%"></i></span><span class="bm-val">Σ${summary.fatigue}</span></div>
@@ -492,7 +492,7 @@ function renderTodayTower() {
     ${focusVisibility.life ? `<div class="tower-band1 band1">${renderLifeBand()}<section class="tower-glass-panel clock-box" aria-label="現在時刻"><time id="towerClock">${clockText(now)}</time><span id="towerDate">${date} (${weekday})</span><strong class="dayleft" id="towerDayLeft">${dayLeftText(now)}</strong><span>本日残り</span></section>
     </div>` : ""}
     ${focusVisibility.life ? renderStandingOrders() : ""}
-    <div class="tower-band2 band2" aria-label="NOW LANDING と CABIN TIMER">
+    <div class="tower-band2 band2" aria-label="NOW LANDING とポモドーロ">
       ${renderTowerRunway(now, blocks, flights)}
       ${renderTodayPomodoro(blocks, queueBlocksOf(blocks))}
     </div>

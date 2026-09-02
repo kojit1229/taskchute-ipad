@@ -739,13 +739,13 @@ function renderJournal() {
       ${renderExperimentSection()}
       <section class="journal-grid">
         <details class="panel fold journal-panel-prev">
-          <summary class="fold-summary"><span class="fold-chevron">▶</span>LOG PREV <span>前日 (${previous})</span></summary>
+          <summary class="fold-summary"><span class="fold-chevron">▶</span>前日 <span>(${previous})</span></summary>
           <div class="fold-body"><div class="md-render readonly-md">${renderMarkdown(state.journals[previous] || "記載なし")}</div></div>
         </details>
         <div class="panel journal-panel-today">
           <div class="journal-daysummary">着手率 ${rate.pct}%・完了 ${completedCount} Block・充放電 ${energyNet > 0 ? "+" : ""}${energyNet}</div>
           <details class="fold journal-segment journal-segment-morning" data-journal-section="morning" ${morningOpen ? "open" : ""}>
-            <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="morning"><span class="fold-chevron">▶</span>MORNING BRIEF <span>朝(前夜の睡眠・体調・睡眠時間・服薬・余力)</span></summary>
+            <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="morning"><span class="fold-chevron">▶</span>けさ <span>朝(前夜の睡眠・体調・睡眠時間・服薬・余力)</span></summary>
             <div class="fold-body">
               ${renderSleepCard(date)}
               ${journalHealthHTML(date)}
@@ -772,7 +772,7 @@ function renderJournal() {
                 <div class="fold-body">${renderWriteMeditationPanel(date)}</div>
               </details>
               <details class="fold journal-segment journal-segment-evening" ${eveningOpen ? "open" : ""}>
-                <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="evening"><span class="fold-chevron">▶</span>NIGHT BRIEF <span>夜の体調・ひとこと</span></summary>
+                <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="evening"><span class="fold-chevron">▶</span>よる <span>夜の体調・ひとこと</span></summary>
                 <div class="fold-body">${renderEveningConditionCard(date)}</div>
               </details>
             </div>
@@ -786,7 +786,7 @@ function renderJournal() {
             <div class="fold-body">${escapeHTML(fundSummary)}</div>
           </details>` : ""}
           <details class="fold journal-segment journal-segment-body" data-journal-section="journal" ${bodyOpen ? "open" : ""}>
-            <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="body"><span class="fold-chevron">▶</span>JOURNAL LOG <span>本文</span></summary>
+            <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="body"><span class="fold-chevron">▶</span>自由記述 <span>本文</span></summary>
             <div class="fold-body">
               <div class="row" style="margin-bottom:10px; flex-wrap:wrap">
                 <button class="btn primary" data-action="generate-report">📊 日報を生成</button>

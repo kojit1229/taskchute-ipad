@@ -203,7 +203,7 @@ function renderTodayPomodoro(blocks, queue) {
     </div>`;
   }
   return `<section class="today-panel today-pomodoro today-span-2 pomo">
-    ${panelHeading("CABIN TIMER", "NOW FOCUS連動 — 50:00を2倍速表示", display.running ? "LIVE" : "READY")}
+    ${panelHeading("ポモドーロ", "NOW FOCUS連動 — 50:00を2倍速表示", display.running ? "LIVE" : "READY")}
     <div class="today-pomodoro-stage">
       ${renderCircularProgress(display.progress, display.text, display.color)}
       <div class="today-pomodoro-info">

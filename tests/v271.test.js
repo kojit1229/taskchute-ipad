@@ -46,7 +46,7 @@ check("tower-coreは選択・保存0回・フォールバック・行タップ�
   && towerTestSource.includes("declare-confirm後のactualStartAtは選択Blockだけに付く")
   && towerTestSource.includes("tick窓移動でselectもw2..w12へ追従")
   && towerTestSource.includes("選択候補が削除されたら既定の次便へフォールバック")
-  && towerTestSource.includes("完了済みFLIGHT LOG行タップでも対象Block編集モーダルを開く"));
+  && towerTestSource.includes("完了済み「やったこと」行タップでも対象Block編集モーダルを開く"));
 check(`CACHE_NAMEはreleases最大版v${maxRelease}`, new RegExp(
   `^const CACHE_NAME = "taskchute-journal-pwa-v${maxRelease}";`, "m").test(swSource));
 
