@@ -1,10 +1,10 @@
 // v105 検証: ジャーナルタブの睡眠CSV取込(AutoSleep書き出し)
-// (a) 今日を開いていて未取込 → 赤帯警告 + dangerボタン
+// (a) 今日を開いていて未取込 → 中立の未記録表示 + upload導線
 // (b) CSVアップロード → state.sleep.logs に起床日キーで保存、カードがサマリ表示に変わる
 // (c) 同日複数セッション行は睡眠が長い方を採用、複数日を一括取込できる
 // (d) normalizeState 後方互換: 旧stateに sleep が補完され、journalTemplate から
 //     未記入の睡眠セクションが除去される(新規ジャーナルにも睡眠欄が出ない)
-// (e) 過去日で未取込のときは赤帯ではなく控えめ表示
+// (e) 過去日で未取込のときも同じ中立表示
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
@@ -68,10 +68,12 @@ function fixtureCsv(today, yesterday) {
     check("テンプレの感謝セクションは残る", migrated.settings.journalTemplate.includes("## 🙏 感謝"));
     check("新規ジャーナル本文にも睡眠欄が無い", !(migrated.journals[TODAY] || "").includes("🛏 睡眠"));
 
-    console.log("[2] 未取込 + 今日 → 赤帯警告");
-    const warn = page.locator("text=前夜の睡眠CSVが未アップロードです");
-    check("赤帯警告が表示される", await warn.count() === 1);
-    check("アップロードボタンがdanger", await page.locator("label.btn.danger:has-text('睡眠CSV')").count() === 1);
+    console.log("[2] 未取込 + 今日 → 中立の未記録表示");
+    const empty = page.locator(".sleep-card-empty");
+    check("未記録の説明が表示される", await empty.filter({ hasText: "前夜の睡眠: 未記録" }).count() === 1);
+    check("アップロード導線を維持しdangerを外す", await empty.locator("input[data-sleep-csv-upload]").count() === 1
+      && await empty.locator("label.btn.ghost:has-text('睡眠CSV')").count() === 1
+      && await empty.locator(".danger").count() === 0);
 
     console.log("[3] CSVアップロード → 取込 + サマリ表示");
     await page.setInputFiles("input[data-sleep-csv-upload]", {
@@ -87,10 +89,10 @@ function fixtureCsv(today, yesterday) {
     check("睡眠時間が時間換算される", todayLog && Math.abs(todayLog.sleepH - (7 + 20 / 60)) < 0.01);
     check("効率・深さ・HR/HRVが数値で入る", todayLog && todayLog.eff === 97.4 && todayLog.hrvSleep === 61);
     check("昼寝セッションより夜の睡眠が勝つ", todayLog && todayLog.sleepH > 2);
-    check("赤帯警告が消える", await warn.count() === 0);
+    check("未記録表示が消える", await empty.count() === 0);
     check("サマリカードが表示される", await page.locator("text=前夜の睡眠").count() >= 1);
 
-    console.log("[4] 過去日で未取込 → 控えめ表示(赤帯なし)");
+    console.log("[4] 過去日で未取込 → 同じ中立表示");
     // 起動時は selectedDate が必ず今日に戻る(app.js末尾)ため、日付バーの「前日」で遷移する
     await page.evaluate(({ KEY, YESTERDAY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
@@ -102,8 +104,9 @@ function fixtureCsv(today, yesterday) {
     await page.waitForTimeout(600);
     await page.locator('[data-action="date-prev"]').first().click();
     await page.waitForTimeout(400);
-    check("過去日は控えめ表示", await page.locator("text=この日の睡眠ログはありません").count() === 1);
-    check("過去日では赤帯を出さない", await page.locator("text=前夜の睡眠CSVが未アップロードです").count() === 0);
+    check("過去日も未記録の説明と導線を表示", await page.locator(".sleep-card-empty:has-text('前夜の睡眠: 未記録')").count() === 1
+      && await page.locator(".sleep-card-empty input[data-sleep-csv-upload]").count() === 1);
+    check("過去日も赤系クラスを出さない", await page.locator(".sleep-card-empty .danger").count() === 0);
   } catch (e) {
     failures++;
     console.log("  ❌ 実行エラー:", e.message);

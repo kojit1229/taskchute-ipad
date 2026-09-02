@@ -618,8 +618,8 @@ h3 {
 }
 
 .btn {
-  min-height: 36px;
-  padding: 8px 14px;
+  min-height: 44px;
+  padding: 4px 14px;
   /* v127: 角丸をカード類(--radius:12px)と同系統に(ボタンはカードより一段小さく) */
   border-radius: 10px;
   background: var(--panel-soft);
@@ -637,8 +637,8 @@ h3 {
 
 /* v127: primaryはfilled+わずかに大きめにして視覚階層を強調する(ボタンの階層明確化) */
 .btn.primary {
-  min-height: 40px;
-  padding: 10px 18px;
+  min-height: 44px;
+  padding: 6px 18px;
   background: var(--accent);
   color: white;
   font-weight: 800;
@@ -773,12 +773,16 @@ h3 {
   flex: 0 0 auto;
   position: relative;
 }
-/* v146(UI改善計画Phase1-3): 見た目は30pxのまま、::beforeで当たり判定だけ44px相当に拡張
-   (既存の当たり判定拡張パターンを流用)。誤タップ対策。 */
+/* v146(UI改善計画Phase1-3), v318レビュー修正: 見た目は30pxのまま、縦の当たり判定を
+   44pxへ拡張する。横は隣接ボタンと重ならないよう各辺4pxまでに留める。 */
 .checkbox-button::before {
   content: "";
   position: absolute;
-  inset: -7px;
+  top: 50%;
+  right: -4px;
+  left: -4px;
+  height: 44px;
+  transform: translateY(-50%);
 }
 
 .checkbox-button.done {
@@ -801,6 +805,17 @@ h3 {
   font-size: 15px;
   flex: 0 0 auto;
   opacity: .5;
+  position: relative;
+}
+
+.wbs-criteria-btn::before, .wbs-caret::before, .plan-owner-badge::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -4px;
+  left: -4px;
+  height: 44px;
+  transform: translateY(-50%);
 }
 
 .wbs-criteria-btn.on {
@@ -2317,6 +2332,7 @@ h3 {
 
 /* v33: WBS 折りたたみキャレット */
 .wbs-caret {
+  position: relative;
   border: none; background: transparent; cursor: pointer;
   color: var(--muted); font-size: 11px; line-height: 1;
   padding: 3px 4px; border-radius: 4px; flex: none;
@@ -2526,7 +2542,11 @@ h3 {
 .sync-dot.off { background: var(--muted); opacity: .35; }
 .sync-dot.ok { background: var(--green); opacity: .7; }
 .sync-dot.pending { background: var(--orange); opacity: 1; }
-.sync-banner { background: rgba(255,149,0,.12); border: 1px solid rgba(255,149,0,.35); color: var(--text); font-size: 12.5px; font-weight: 700; padding: 10px 14px; border-radius: 10px; margin-bottom: 14px; cursor: pointer; }
+.sync-banner { background: rgba(255,149,0,.12); border: 1px solid rgba(255,149,0,.35); color: var(--text); font-size: 12.5px; font-weight: 700; padding: 6px 8px 6px 14px; border-radius: 10px; margin-bottom: 14px; }
+.sync-error-banner { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sync-banner-message { min-width: 0; line-height: 1.45; }
+.sync-banner-message button { padding: 0; color: var(--accent); font: inherit; background: transparent; cursor: pointer; }
+.sync-banner-dismiss { flex: none; min-width: 44px; min-height: 44px; padding: 0 4px; color: var(--muted); font: inherit; background: transparent; cursor: pointer; }
 
 /* v134: 同期停止アラート。sync-bannerが「競合、判断を仰ぐ」橙トーンなのに対し、こちらは
    「push/pullが無警告で長時間止まっている」という見落とし厳禁の異常系のため、意図的に赤で
@@ -2543,7 +2563,7 @@ h3 {
 .ai-work-summary { font-size: 12.5px; color: var(--muted); margin-top: 2px; line-height: 1.5; }
 
 /* v195: 実行計画ステップの担当・状態・並べ替え。小画面でもネイティブD&Dを使わずボタン操作に限定。 */
-.plan-owner-badge { min-width: 30px; min-height: 28px; padding: 2px 7px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-soft); color: var(--text); font: 800 11px/1 system-ui, sans-serif; cursor: pointer; }
+.plan-owner-badge { position: relative; min-width: 30px; min-height: 28px; padding: 2px 7px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-soft); color: var(--text); font: 800 11px/1 system-ui, sans-serif; cursor: pointer; }
 .plan-owner-badge.ai { border-color: rgba(175,82,222,.45); background: rgba(175,82,222,.12); color: var(--text); }
 .plan-owner-badge.k { border-color: rgba(0,122,255,.38); background: rgba(0,122,255,.09); color: var(--accent); }
 .plan-status { font-size: 10.5px; }
@@ -3208,8 +3228,8 @@ h3 {
 
 /* v207: TOWER T6。GATE定期便。 */
 .tower-gates { margin-top: 12px; border: 1px solid var(--tower-line); background: var(--tower-panel); }
-.tower-gates h2 { margin: 0; padding: 8px 10px; border-bottom: 1px solid var(--tower-line); color: var(--tower-cyan); font-size: 11px; letter-spacing: .18em; }
-.tower-gate-edit { float: right; margin-top: -2px; padding: 2px 10px; border: 1px solid var(--tower-line); color: var(--tower-cyan); font: inherit; font-size: 9px; letter-spacing: .14em; background: transparent; }
+.tower-gates h2 { display: flex; align-items: center; justify-content: space-between; margin: 0; min-height: 44px; padding: 0 10px; border-bottom: 1px solid var(--tower-line); color: var(--tower-cyan); font-size: 11px; letter-spacing: .18em; }
+.tower-gate-edit { float: right; min-width: 44px; min-height: 44px; margin-top: -2px; padding: 2px 10px; border: 1px solid var(--tower-line); color: var(--tower-cyan); font: inherit; font-size: 9px; letter-spacing: .14em; background: transparent; }
 .tower-gate-edit:hover { border-color: var(--tower-cyan); }
 #towerGateStrip { display: flex; align-items: stretch; gap: 8px; min-height: 44px; padding: 8px; overflow-x: auto; }
 .tower-gate { display: grid; grid-template-columns: auto minmax(72px, 1fr) 10px; align-items: center; gap: 7px; min-width: 132px; min-height: 48px; padding: 6px 8px; border: 1px solid var(--tower-line); border-radius: 4px; color: var(--tower-text); font: inherit; background: var(--tower-bg); }
@@ -3226,15 +3246,15 @@ h3 {
 .tower-gate-fixed.is-late { box-shadow: inset 0 0 0 1px var(--tower-amber); }
 .tower-gate-warning { padding: 0 10px 6px; color: var(--tower-amber); font-size: 10px; }
 .tower-gate-editor { display: grid; flex: 1 0 270px; gap: 6px; min-width: 270px; }
-.tower-gate-edit-row { display: grid; grid-template-columns: 34px minmax(70px, 1fr) 48px 24px 32px 32px auto; align-items: center; gap: 4px; min-height: 40px; padding: 4px 6px; border: 1px solid var(--tower-line); }
+.tower-gate-edit-row { display: grid; grid-template-columns: 30px minmax(48px, 1fr) 40px 44px 44px 44px auto; align-items: center; gap: 2px; min-height: 44px; padding: 4px; border: 1px solid var(--tower-line); }
 .tower-gate-edit-row > span { color: var(--tower-cyan); font-size: 10px; }
 .tower-gate-edit-row > strong { overflow: hidden; font-family: system-ui, sans-serif; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .tower-gate-edit-row > time { opacity: .65; }
-.tower-gate-streak-toggle { display: grid; place-items: center; cursor: pointer; }
+.tower-gate-streak-toggle { display: grid; min-width: 44px; min-height: 44px; place-items: center; cursor: pointer; }
 .tower-gate-streak-toggle input { width: 18px; height: 18px; margin: 0; }
 .tower-gate-streak-toggle span { font-size: 11px; line-height: 1; }
 .tower-gate-edit-row button,
-.tower-gate-add button { min-height: 32px; border: 1px solid var(--tower-line); color: var(--tower-cyan); font: inherit; background: transparent; }
+.tower-gate-add button { min-width: 44px; min-height: 44px; border: 1px solid var(--tower-line); color: var(--tower-cyan); font: inherit; background: transparent; }
 .tower-gate-edit-row button.danger { color: var(--danger); }
 .tower-gate-edit-row button:disabled { opacity: .3; }
 .tower-gate-add { display: grid; grid-template-columns: minmax(110px, 1fr) 100px auto; gap: 6px; }
@@ -3405,7 +3425,7 @@ h3 {
 .tower-journal-label span { margin-left: 6px; color: var(--tower-text); font-weight: 400; letter-spacing: .06em; opacity: .6; }
 .tower-journal-body textarea { min-height: 130px; padding: 8px 10px; resize: vertical; border: 1px solid var(--tower-line); border-radius: 0; color: var(--tower-text); background: var(--tower-bg); font-family: system-ui, sans-serif; font-size: 16px; line-height: 1.6; }
 .tower-journal-body textarea:focus-visible { outline: 2px solid var(--tower-amber); outline-offset: -2px; }
-.tower-journal-save { justify-self: end; min-height: 32px; margin-top: 2px; padding: 4px 16px; border: 1px solid var(--tower-green); color: var(--tower-green); background: transparent; font: inherit; font-size: 10px; letter-spacing: .14em; }
+.tower-journal-save { justify-self: end; min-width: 44px; min-height: 44px; margin-top: 2px; padding: 4px 16px; border: 1px solid var(--tower-green); color: var(--tower-green); background: transparent; font: inherit; font-size: 10px; letter-spacing: .14em; }
 
 /* ============ STANDING ORDERS(三つの信条) ============ */
 .so-row { margin-top: 12px; overflow: hidden; } .so-grid { display: grid; gap: 0; } .so-item { display: flex; align-items: center; gap: 10px; padding: 12px 10px; border-bottom: 1px solid var(--tower-line); } .so-item:last-child { border-bottom: 0; }
@@ -4406,8 +4426,8 @@ h3 {
 /* TODAY'S SETS */
 .iron-empty { padding: 14px; text-align: center; color: var(--tower-text); opacity: .5; font-size: 11px; }
 .iron-set-row {
-  display: grid; grid-template-columns: 56px minmax(0, 1fr) 110px 80px 28px;
-  align-items: center; min-height: 38px; border-bottom: 1px solid var(--tower-line); font-size: 11px;
+  display: grid; grid-template-columns: 56px minmax(0, 1fr) 110px 80px 44px;
+  align-items: center; min-height: 44px; border-bottom: 1px solid var(--tower-line); font-size: 11px;
 }
 .iron-set-row:last-child { border-bottom: 0; }
 .iron-set-row time { padding-left: 8px; font-variant-numeric: tabular-nums; opacity: .6; }
@@ -4426,6 +4446,7 @@ h3 {
   font-weight: 700; font-variant-numeric: tabular-nums;
 }
 .iron-set-del {
+  min-width: 44px; min-height: 44px;
   background: transparent; border: 0; color: var(--tower-text); opacity: .5;
   font-size: 13px; cursor: pointer; padding: 4px;
 }
@@ -4731,7 +4752,8 @@ h3 {
 .instr-open-btn {
   display: block;
   width: 100%;
-  padding: 10px 12px;
+  min-height: 44px;
+  padding: 4px 12px;
   background: transparent;
   border: 0;
   border-top: 0;

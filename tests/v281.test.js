@@ -70,7 +70,7 @@ const FUND_FIXTURE = {
     check("成功後30分未満は再取得しない", !(await fund.hydrateFundData(REFRESH_INTERVAL_MS)) && fetches === firstFetches && fundCache.data === firstNormal);
     now += 1;
     fetchResult = new Error("404");
-    check("30分境界で再取得し、404でも前回正常値を保持", !(await fund.hydrateFundData(REFRESH_INTERVAL_MS)) && fetches === firstFetches + 1 && fundCache.data === firstNormal && fundCache.fetchedAt === now);
+    check("30分境界で再取得し、404でも前回正常値を保持して再描画対象", await fund.hydrateFundData(REFRESH_INTERVAL_MS) && fetches === firstFetches + 1 && fundCache.data === firstNormal && fundCache.fetchedAt === now);
 
     for (const [label, invalidRaw] of [
       ["必須キー欠損", JSON.stringify({ version: 1 })],
@@ -82,15 +82,15 @@ const FUND_FIXTURE = {
     ]) {
       now += 1;
       fetchResult = invalidRaw;
-      check(`${label}は失敗扱いで前回正常値保持`, !(await fund.hydrateFundData(0)) && fundCache.data === firstNormal && fundCache.fetchedAt === now);
+      check(`${label}は失敗扱いで前回正常値保持・再描画対象`, await fund.hydrateFundData(0) && fundCache.data === firstNormal && fundCache.fetchedAt === now);
     }
 
     now += 1;
     fetchResult = "";
-    check("空文字も失敗扱いで前回正常値保持", !(await fund.hydrateFundData(0)) && fundCache.data === firstNormal && fundCache.fetchedAt === now);
+    check("空文字も失敗扱いで前回正常値保持・再描画対象", await fund.hydrateFundData(0) && fundCache.data === firstNormal && fundCache.fetchedAt === now);
     now += 1;
     fetchResult = "{broken";
-    check("壊れJSONも失敗扱いで前回正常値保持", !(await fund.hydrateFundData(0)) && fundCache.data === firstNormal && fundCache.fetchedAt === now);
+    check("壊れJSONも失敗扱いで前回正常値保持・再描画対象", await fund.hydrateFundData(0) && fundCache.data === firstNormal && fundCache.fetchedAt === now);
 
     now += REFRESH_INTERVAL_MS;
     fetchResult = JSON.stringify({ ...FUND_FIXTURE, generatedAt: "2026-08-27T19:05:00+09:00" });

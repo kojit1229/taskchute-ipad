@@ -63,7 +63,7 @@ let addDays, todayISO, weekRange, weekDays, showToast, nowDateTime, saveAndRende
 let personalDataReady, latestSleepLogWithin, shortSleepDate, upsertMorningLine;
 let renderExperimentSection, JOURNAL_REQUEST_SECTION, blocksForDate, taskchuteStartRate;
 let timeFromDateTime, flightLogBlocks, bodyScansForDate, bmSummary;
-let healthForDate, healthSummaryHTML, fundJournalSummaryForDate;
+let healthForDate, latestHealthWithin, healthSummaryHTML, fundJournalSummaryForDate;
 
 function configureJournal(deps) {
   ({
@@ -72,7 +72,7 @@ function configureJournal(deps) {
     personalDataReady, latestSleepLogWithin, shortSleepDate, upsertMorningLine,
     renderExperimentSection, JOURNAL_REQUEST_SECTION, blocksForDate, taskchuteStartRate,
     timeFromDateTime, flightLogBlocks, bodyScansForDate, bmSummary,
-    healthForDate, healthSummaryHTML, fundJournalSummaryForDate
+    healthForDate, latestHealthWithin, healthSummaryHTML, fundJournalSummaryForDate
   } = deps);
   // v173: app.js分割・段階5-2(prep-stage5-dispatcher.md案A)。click dispatcherのコンディションOS
   // (朝/夜の体調・服薬・余力)+運動記録+お店ログの分岐をレジストリへ移行する
@@ -594,21 +594,23 @@ function hoursLabel(v) {
 // v131: AutoSleepは前夜分を21:00にしか確定しないため、朝の時点ではdateキーの当日分が
 // まだ無いのが通常運転(実データ解析で確認済み)。latestSleepLogWithin()で直近2日以内に
 // フォールバックし、フォールバックした日はヘッダに「M/D朝のデータ」と明示する
-// (黙って当日扱いしない)。赤警告は2日以内に1件も無い場合のみ出す。
+// (黙って当日扱いしない)。2日以内に1件も無ければ中立の未記録表示にする。
 function renderSleepCard(date) {
   const found = latestSleepLogWithin(date);
-  const uploadBtn = (danger) => `
-    <label class="btn ${danger ? "danger" : "ghost"}" style="font-size:12px; padding:6px 10px; cursor:pointer; white-space:nowrap">
+  const uploadBtn = () => `
+    <label class="btn ghost" style="font-size:12px; padding:6px 10px; cursor:pointer; white-space:nowrap">
       📤 睡眠CSV
       <input type="file" accept=".csv,text/csv" data-sleep-csv-upload hidden>
     </label>`;
   if (!found) {
-    // 2日以内に1件もログが無い: 今日を開いている時は赤帯で警告(毎朝アップする運用)。過去日は控えめに。
-    const isToday = date === todayISO();
+    const health = latestHealthWithin(date);
+    const healthSleep = health?.date === date && Number.isFinite(health.sleep_min)
+      ? `Apple Health: 睡眠 ${Math.floor(health.sleep_min / 60)}h${String(health.sleep_min % 60).padStart(2, "0")}m${health.bed_time || health.wake_time ? ` (${health.bed_time || "—"}→${health.wake_time || "—"})` : ""}`
+      : "";
     return `
-      <div class="row" style="margin-bottom:10px; padding:10px 12px; border-radius:10px; justify-content:space-between; align-items:center; ${isToday ? "background:var(--red-soft); border:1.5px solid var(--red)" : "background:var(--panel-soft)"}">
-        <span style="font-size:13px; font-weight:700; ${isToday ? "color:var(--red)" : "color:var(--muted)"}">${isToday ? "⚠️ 前夜の睡眠CSVが未アップロードです" : "💤 この日の睡眠ログはありません"}</span>
-        ${uploadBtn(isToday)}
+      <div class="row sleep-card-empty" style="margin-bottom:10px; padding:10px 12px; border-radius:10px; justify-content:space-between; align-items:center; background:var(--panel-soft)">
+        <span class="muted" style="font-size:13px"><span>前夜の睡眠: 未記録(AutoSleep CSV をアップロードすると表示)</span>${healthSleep ? `<small style="display:block; margin-top:3px">${escapeHTML(healthSleep)}</small>` : ""}</span>
+        ${uploadBtn()}
       </div>`;
   }
   const { log, logDate, ageDays } = found;
@@ -627,7 +629,7 @@ function renderSleepCard(date) {
         ${log.hrSleep != null ? chip("HR", Math.round(log.hrSleep)) : ""}
         ${log.hrvSleep != null ? chip("HRV", Math.round(log.hrvSleep)) : ""}
       </span>
-      ${uploadBtn(false)}
+      ${uploadBtn()}
     </div>`;
 }
 

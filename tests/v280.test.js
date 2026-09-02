@@ -220,9 +220,12 @@ function contentsBodyFor(jsonText, sha) {
     syncFixtures.remoteJson = JSON.stringify(remote);
     syncFixtures.sha = "remote-sha-auto-pull-v280";
     await page.evaluate(async () => (await import("./src/sync/github.js")).runAutoSyncPull());
-    const autoPullBanner = await page.locator(".sync-banner").textContent().catch(() => "");
-    check("自動pullの未push競合経路は履歴差分を自動和集合しない", autoPullBanner.includes("ローカルにも未push"), autoPullBanner);
+    await page.locator('.sync-banner-message [data-view="settings"]').click();
+    const autoPullBanner = await page.locator(".sync-error-detail").textContent();
+    check("自動pullの未push競合経路は履歴差分を自動和集合しない", autoPullBanner.includes("ローカルにも未push")
+      && await page.locator(".sync-error-banner").count() === 1, autoPullBanner);
     check("自動pull中止後もローカル履歴を保持", JSON.stringify((await liveState()).habitPinHistory) === JSON.stringify(localHistory));
+    await page.locator('[data-action="nav"][data-view="today"]:visible').click();
 
     await setLiveSyncState(localHistory, {
       autoSync: false, dataModifiedAt: "2026-08-27T14:00:00", lastPushedAt: "2026-08-27T14:00:00"
@@ -245,10 +248,14 @@ function contentsBodyFor(jsonText, sha) {
     });
     syncFixtures.holdGet = false;
     syncFixtures.releaseGet?.();
-    await page.waitForFunction(() => document.querySelector(".sync-banner")?.textContent.includes("編集中に取得したため"));
-    const startupBanner = await page.locator(".sync-banner").textContent();
-    check("起動時pullの編集中競合経路も履歴差分で自動取込を中止", startupBanner.includes("自動取込を中止"), startupBanner);
+    await page.waitForSelector(".sync-error-banner");
+    await page.locator('.sync-banner-message [data-view="settings"]').click();
+    await page.waitForFunction(() => document.querySelector(".sync-error-detail")?.textContent.includes("編集中に取得したため"));
+    const startupBanner = await page.locator(".sync-error-detail").textContent();
+    check("起動時pullの編集中競合経路も履歴差分で自動取込を中止", startupBanner.includes("自動取込を中止")
+      && await page.locator(".sync-error-banner").count() === 1, startupBanner);
     check("起動時pull中止後もローカル履歴を保持", JSON.stringify((await liveState()).habitPinHistory) === JSON.stringify(localHistory));
+    await page.locator('[data-action="nav"][data-view="today"]:visible').click();
     syncFixtures.remoteJson = null;
     await page.evaluate(async () => {
       const { state } = await import("./src/state/store.js");
@@ -328,6 +335,7 @@ function contentsBodyFor(jsonText, sha) {
       blocks: [block("modal-block", "modal", "モーダル習慣")], view: "timeline"
     });
     await page.locator('[data-action="edit-block"][data-id="modal-block"]').evaluate((element) => element.click());
+    await page.waitForSelector('[data-modal-field="streakFixed"]');
     await page.locator('[data-modal-field="streakFixed"]').uncheck();
     await page.locator('[data-action="modal-save"]').click();
     await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).habitPinHistory?.modal?.length === 1, KEY);

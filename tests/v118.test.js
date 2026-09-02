@@ -174,8 +174,9 @@ function check(name, cond, extra = "") {
       JSON.stringify(sA2.projects.map((p) => p.title)));
     check("[1b] questions(マージ未対応)が分岐しているため競合バナーは出る",
       await page.locator(".sync-banner").count() === 1);
-    const bannerText2 = await page.locator(".sync-banner").textContent().catch(() => "");
-    check("[1b] バナー文言に「編集中に取得したため」の案内が含まれる", bannerText2.includes("編集中に取得したため"), bannerText2);
+    await page.locator('.sync-banner-message [data-view="settings"]').click();
+    const bannerText2 = await page.locator(".sync-error-detail").textContent();
+    check("[1b] 設定の詳細エラーに「編集中に取得したため」の案内が含まれる", bannerText2.includes("編集中に取得したため"), bannerText2);
 
     // ============================================================
     // (b) 編集が無い正常ケース → remoteをベースに採用するが、v135以降はProjectもマージ可能なので

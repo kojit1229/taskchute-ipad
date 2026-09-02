@@ -94,7 +94,7 @@ function check(name, cond, extra = "") {
 // v311: CABIN TIMERのLINK FLIGHT選択・一時停止・再開4actionを意図的に追加。
 // v316: 生活記録6ボタン共通のlife-export actionを意図的に追加。
 const GOLDEN_CLICK_ACTIONS = [
-  "nav", "open-iron-log", "instruments-open-iron-log", "save-tower-journal",
+  "nav", "sync-banner-dismiss", "open-iron-log", "instruments-open-iron-log", "save-tower-journal",
   "focus-toggle-side", "focus-toggle-journal", "focus-toggle-life", "focus-mode",
   "early-bird-check", "tower-gate-edit-toggle", "tower-bodymind-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move", "tower-gate-streak-toggle",
   "date-prev", "date-next", "today",
@@ -229,7 +229,7 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
   // で確信が持てない)、body-scan-*(ポモドーロ完了時トリガー)、
 // は従来どおり移行せず、if連鎖に残した(下のEXPECTED_REMAINING_IF_CHAINに含まれる)。
 const APP_JS_REGISTERED_ACTIONS = [
-  "nav", "open-iron-log", "instruments-open-iron-log", "save-tower-journal",
+  "nav", "sync-banner-dismiss", "open-iron-log", "instruments-open-iron-log", "save-tower-journal",
   "early-bird-check", "tower-gate-edit-toggle", "tower-bodymind-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move", "tower-gate-streak-toggle",
   "toggle-show-suspended", "toggle-wbs-hide-done", "toggle-wbs-hide-done-projects",
   "toggle-wbs-active-only", "toggle-wbs-compact", "toggle-tasks-show-future",

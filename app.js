@@ -259,7 +259,7 @@ configureGithubSync({
   requireGitHubConfig, fetchGitHubFileSHA, personalDataReady, personalDataFileConfig,
   gitHubContentsURL, githubHeaders, gitHubErrorMessage, fromBase64, toBase64,
   sanitizedStateForGitHub, maybeWriteBackupSnapshot, updateAutoSaveStatus, updateSyncDot,
-  renderSyncBanner, clearPersonalDataAuthError, pruneExpiredSuggestedThemes,
+  renderSyncBanner, clearSyncBannerDismissal, clearPersonalDataAuthError, pruneExpiredSuggestedThemes,
   _startupDataModifiedAt
 });
 configureToday({
@@ -314,7 +314,7 @@ configureJournal({
   renderExperimentSection, JOURNAL_REQUEST_SECTION, blocksForDate, taskchuteStartRate,
   timeFromDateTime, flightLogBlocks,
   bodyScansForDate: (date) => (state.bodyScans || []).filter((scan) => String(scan.dateTime || "").startsWith(date)),
-  bmSummary, healthForDate, healthSummaryHTML, fundJournalSummaryForDate
+  bmSummary, healthForDate, latestHealthWithin, healthSummaryHTML, fundJournalSummaryForDate
 });
 // v218: getStateでstore.jsのstate再代入後も最新のlive bindingへ追従させる。
 configureRecurrence({
@@ -343,6 +343,7 @@ configureTimeline({
 // if連鎖からの機械的な移動のみで無改変)。
 registerActions({
   "nav": ({ target }) => setView(target.dataset.view),
+  "sync-banner-dismiss": () => dismissSyncBanner(),
   "open-iron-log": () => setView("iron-log"),
   "save-tower-journal": ({ target }) => {
     const date = target.dataset.date || todayISO();
@@ -7241,6 +7242,7 @@ function renderSettingsCloudPanel(github) {
       この端末: ${getLastSyncPushAt() ? `push成功 ${getLastSyncPushAt().replace("T", " ").slice(0, 16)}` : "push成功 記録なし"}
       ・ ${getLastSyncPullAt() ? `pull成功 ${getLastSyncPullAt().replace("T", " ").slice(0, 16)}` : "pull成功 記録なし"}
     </div>
+    <div data-sync-error-detail-slot>${syncErrorDetailHTML()}</div>
     <div class="row">
       <button class="btn primary" data-action="save-github">今すぐGitHubへ保存</button>
       <button class="btn" data-action="load-github">GitHubから読込</button>
@@ -7404,7 +7406,7 @@ function renderSettingsSyncGroup(github) {
   // v148レビュー対応(項目5): 認証エラーバナー(pd-auth-banner、personalDataAuthError)からの
   // 設定遷移でもこの群を自動openにし、トークン再入力欄に直行できるようにする
   // (syncAlertMessage()と同じ「異常」の意味合いで扱う)。
-  const dynamicOpen = Boolean(syncAlertMessage()) || Boolean(_personalDataAuthError);
+  const dynamicOpen = Boolean(syncAlertMessage()) || Boolean(_personalDataAuthError) || Boolean(_syncBanner);
   const open = dynamicOpen || Boolean(_settingsSyncOpenOverride);
   const body = [renderSettingsDataPanel(), renderSettingsCloudPanel(github), renderSettingsPagesPanel()].join("");
   return `
@@ -9649,12 +9651,52 @@ function syncAlertBanner() {
 // src/sync/github.js へ抽出済み(v166)。冒頭のimportとsrc/sync/github.js冒頭コメントの
 // configureGithubSync契約を参照。ロジックは一切変更していない(移動+依存注入化のみ)。
 
+const SYNC_BANNER_DISMISS_KEY = "taskchute-sync-banner-dismissed";
+
+function syncBannerHash(message) {
+  let hash = 2166136261;
+  for (const char of String(message || "")) {
+    hash ^= char.codePointAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function dismissedSyncBanner() {
+  try { return JSON.parse(localStorage.getItem(SYNC_BANNER_DISMISS_KEY) || "null"); }
+  catch { return null; }
+}
+
+function dismissSyncBanner() {
+  if (!_syncBanner) return;
+  try {
+    localStorage.setItem(SYNC_BANNER_DISMISS_KEY, JSON.stringify({
+      hash: syncBannerHash(_syncBanner), date: todayISO()
+    }));
+  } catch { /* localStorage不可でも現在のDOMだけは閉じる */ }
+  document.querySelector(".sync-error-banner")?.remove();
+}
+
+function clearSyncBannerDismissal() {
+  try { localStorage.removeItem(SYNC_BANNER_DISMISS_KEY); } catch { /* noop */ }
+}
+
+function syncErrorDetailHTML() {
+  return _syncBanner ? `<div class="muted sync-error-detail" style="font-size:11px; line-height:1.7">同期エラー詳細: ${escapeHTML(_syncBanner)}</div>` : "";
+}
+
 function renderSyncBanner() {
-  const existing = document.querySelector(".sync-banner");
+  const detailSlot = document.querySelector("[data-sync-error-detail-slot]");
+  if (detailSlot) detailSlot.innerHTML = syncErrorDetailHTML();
+  const existing = document.querySelector(".sync-error-banner");
   if (existing) existing.remove();
-  // モーダルで作業を止めず、#main 先頭に静かなバナー(タップで設定へ)
-  if (_syncBanner && main) main.insertAdjacentHTML("afterbegin",
-    `<div class="sync-banner" data-action="nav" data-view="settings">⚠ ${escapeHTML(_syncBanner)} — 設定へ</div>`);
+  if (!_syncBanner) return;
+  const dismissed = dismissedSyncBanner();
+  if (dismissed?.date === todayISO() && dismissed.hash === syncBannerHash(_syncBanner)) return;
+  if (main) main.insertAdjacentHTML("afterbegin", `<div class="sync-banner sync-error-banner" role="status">
+    <span class="sync-banner-message">同期できませんでした。<button type="button" data-action="nav" data-view="settings">設定へ</button></span>
+    <button type="button" class="sync-banner-dismiss" data-action="sync-banner-dismiss">閉じる</button>
+  </div>`);
 }
 function syncDotClass() {
   if (!state.settings.autoSync) return "off";

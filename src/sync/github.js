@@ -65,7 +65,7 @@ let showToast, maintainRecurrences, render, runDailyOpen, saveState;
 let requireGitHubConfig, fetchGitHubFileSHA, personalDataReady, personalDataFileConfig;
 let gitHubContentsURL, githubHeaders, gitHubErrorMessage, fromBase64, toBase64;
 let sanitizedStateForGitHub, maybeWriteBackupSnapshot, updateAutoSaveStatus, updateSyncDot;
-let renderSyncBanner, clearPersonalDataAuthError, pruneExpiredSuggestedThemes;
+let renderSyncBanner, clearSyncBannerDismissal, clearPersonalDataAuthError, pruneExpiredSuggestedThemes;
 let _startupDataModifiedAt;
 
 function configureGithubSync(deps) {
@@ -76,7 +76,7 @@ function configureGithubSync(deps) {
     requireGitHubConfig, fetchGitHubFileSHA, personalDataReady, personalDataFileConfig,
     gitHubContentsURL, githubHeaders, gitHubErrorMessage, fromBase64, toBase64,
     sanitizedStateForGitHub, maybeWriteBackupSnapshot, updateAutoSaveStatus, updateSyncDot,
-    renderSyncBanner, clearPersonalDataAuthError, pruneExpiredSuggestedThemes,
+    renderSyncBanner, clearSyncBannerDismissal, clearPersonalDataAuthError, pruneExpiredSuggestedThemes,
     _startupDataModifiedAt
   } = deps);
 }
@@ -224,7 +224,7 @@ async function saveToGitHub(silent = false) {
     // 個別更新と重複するが害はない)。
     state.settings.lastPushedAt = state.dataModifiedAt;
     state.settings.github.lastSavedAt = nowDateTime();
-    clearSyncBanner();  // v136: fail-closed等で出したバナーが残っていれば、成功したので消す
+    clearSyncBanner({ clearDismissal: true });  // v136: fail-closed等で出したバナーが残っていれば、成功したので消す
     persistLocalNoSchedule();  // v25: 自動保存タイマーを再セットしない(無限保存ループ防止)
     if (!silent) showToast("GitHubへ保存しました");
     if (silent) updateAutoSaveStatus();
@@ -315,7 +315,7 @@ async function runAutoSyncPush() {
       // 変数に控えておく旧実装だと、saveToGitHub内部のv135マージでdataModifiedAtが
       // さらに進んだ場合に古い値をlastPushedAtへ記録してしまい、未push判定が消えなくなる)。
       state.settings.lastPushedAt = state.dataModifiedAt;
-      clearSyncBanner();
+      clearSyncBanner({ clearDismissal: true });
       persistLocalNoSchedule();
     }
     updateSyncDot();
@@ -961,7 +961,7 @@ async function runAutoSyncPull() {
         state.dataModifiedAt = nowDateTime();    // 和集合を次のpushで届ける
         persistLocalNoSchedule();
         scheduleAutoSync();
-        clearSyncBanner();
+        clearSyncBanner({ clearDismissal: true });
         runDailyOpen();
         render();
         showToast("他端末の記録を取り込みました");
@@ -998,7 +998,7 @@ async function runAutoSyncPull() {
     setLastSyncedSha(sha);
     maintainRecurrences({ purge: true });
     runDailyOpen();  // §2: pull 後に日次オープン(古いstate展開→pullで消える事故を防ぐ)
-    clearSyncBanner();
+    clearSyncBanner({ clearDismissal: true });
     if (addedLocal) {
       // 合流分はリモートの元スナップショットに無かった変更 → 次回pushで届くようにする
       // (lastPushedAtより新しいdataModifiedAtにして「未push」を成立させる)。
@@ -1013,7 +1013,12 @@ async function runAutoSyncPull() {
 }
 
 function setSyncBanner(msg) { _syncBanner = msg; renderSyncBanner(); updateSyncDot(); }
-function clearSyncBanner() { _syncBanner = null; renderSyncBanner(); updateSyncDot(); }
+function clearSyncBanner({ clearDismissal = false } = {}) {
+  _syncBanner = null;
+  if (clearDismissal) clearSyncBannerDismissal?.();
+  renderSyncBanner();
+  updateSyncDot();
+}
 
 // GitHub から app-state を取得し { text, sha } を返す(1MB 超は Blob API 経由)
 async function downloadGitHubStateText(config) {
@@ -1138,7 +1143,7 @@ async function syncFromGitHubOnStartup() {
           setLastSyncedSha(sha);
           state.dataModifiedAt = nowDateTime();
           persistLocalNoSchedule();
-          clearSyncBanner();
+          clearSyncBanner({ clearDismissal: true });
           render();
           showToast("他端末の記録を取り込みました");
           return;

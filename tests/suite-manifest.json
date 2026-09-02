@@ -15,7 +15,7 @@
       ],
       "assertionSignals": 34,
       "assertionHash": "f841e3459002f00f",
-      "sourceHash": "3333b90aeb7ad4dc",
+      "sourceHash": "827539a0662c843f",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -256,7 +256,7 @@
       ],
       "assertionSignals": 42,
       "assertionHash": "ff8f1f6eba1bb3bf",
-      "sourceHash": "39a02c42bad070a4",
+      "sourceHash": "c215bd5a2b77e1ce",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -947,8 +947,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 20,
-      "assertionHash": "494b99de712b3e96",
-      "sourceHash": "c53aafc489556514",
+      "assertionHash": "6c7823d9a006f896",
+      "sourceHash": "66e7fd8a4803d806",
       "waits": {
         "fixedCount": 5,
         "numericMilliseconds": 2900,
@@ -1213,8 +1213,8 @@
         "content-ai"
       ],
       "assertionSignals": 14,
-      "assertionHash": "2fd8ffa425b4eb85",
-      "sourceHash": "9e81d0abe5f6db41",
+      "assertionHash": "881c8a3f1717d7b1",
+      "sourceHash": "e8f36edced876790",
       "waits": {
         "fixedCount": 3,
         "numericMilliseconds": 2100,
@@ -1645,8 +1645,8 @@
         "content-ai"
       ],
       "assertionSignals": 16,
-      "assertionHash": "d5999bc33e324901",
-      "sourceHash": "fc5eed49ad8d003c",
+      "assertionHash": "618054d8cab16397",
+      "sourceHash": "b2c5944da574f1c2",
       "waits": {
         "fixedCount": 12,
         "numericMilliseconds": 7600,
@@ -2839,8 +2839,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 42,
-      "assertionHash": "390ec97fe8f86ece",
-      "sourceHash": "c603d7e60f344404",
+      "assertionHash": "854daa32dbaffc61",
+      "sourceHash": "e23d9f3d8f57d0ac",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2865,8 +2865,8 @@
         "security-offline"
       ],
       "assertionSignals": 37,
-      "assertionHash": "a1224b2ad6efef25",
-      "sourceHash": "b06906abbd7e471a",
+      "assertionHash": "616948a33d9ecc54",
+      "sourceHash": "c86aa01b672d59d1",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3627,6 +3627,31 @@
         "browser": true,
         "server": true,
         "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "v318.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "journal-health",
+        "ui-responsive"
+      ],
+      "assertionSignals": 37,
+      "assertionHash": "840ce9d9af6a9ed5",
+      "sourceHash": "fe19f9561a7e5e41",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": true,
         "networkMock": true,
         "clock": true
       }

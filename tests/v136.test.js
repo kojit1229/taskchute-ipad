@@ -132,8 +132,10 @@ function hoursAgoIso(h) { return isoLocal(new Date(Date.now() - h * 3600000)); }
     const s1 = await stateNow();
     check("[1] ローカルのタスクは変わらず残る", s1.tasks.find((t) => t.id === "t-1")?.title === "ローカルのタスク(温存されるべき)",
       JSON.stringify(s1.tasks.find((t) => t.id === "t-1")));
-    const banner1 = await page.locator(".sync-banner").textContent().catch(() => "");
-    check("[1] 「取得できなかった」旨のバナーが出る", banner1.includes("取得できなかった"), banner1);
+    await page.locator('.sync-banner-message [data-view="settings"]').click();
+    const banner1 = await page.locator(".sync-error-detail").textContent();
+    check("[1] 設定に「取得できなかった」旨の詳細エラーと短縮バナーが出る",
+      banner1.includes("取得できなかった") && await page.locator(".sync-error-banner").count() === 1, banner1);
 
     // ============================================================
     // [7] Med-7: remote SHAが空(404、ファイル消失)でも初回セットアップと区別し保存を中止する

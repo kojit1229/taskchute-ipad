@@ -57,16 +57,20 @@ async function hydrateFundData(refreshIntervalMs) {
   if (!personalDataReady(state.settings.github)) return false;
   if (Date.now() - fundCache.fetchedAt < refreshIntervalMs) return false;
   let next;
+  let error = "";
   try {
     const raw = await fetchGitHubRawText("dashboard/fund.json");
     const parsed = raw ? JSON.parse(raw) : null;
     if (fundSchema(parsed)) next = parsed;
-  } catch (_) {
-    // 壊れたJSON・取得失敗は前回正常データを維持し、次の定期更新へ任せる。
+    else error = "FUNDデータの形式が正しくありません";
+  } catch (cause) {
+    error = cause instanceof Error ? cause.message : String(cause || "FUNDデータを取得できませんでした");
   }
   const previous = fundCache.data;
-  fundCache.fetchedAt = Date.now();
-  if (!next) return false;
+  fundCache.lastAttemptAt = Date.now();
+  fundCache.fetchedAt = fundCache.lastAttemptAt;
+  fundCache.lastError = next ? "" : error || "FUNDデータを取得できませんでした";
+  if (!next) return true; // 失敗表示へ更新する。前回正常データは維持する。
   fundCache.data = next;
   return JSON.stringify(previous) !== JSON.stringify(next);
 }
@@ -82,6 +86,10 @@ const generatedAtText = (value) => string(value)
 const side = (value) => value === "buy" ? "買" : value === "sell" ? "売" : text(value) || "—";
 const type = (value) => value === "stop" ? "逆指値" : value === "limit" ? "指値" : text(value) || "—";
 const empty = (label) => `<p class="fund-empty">${label}</p>`;
+const localTimeText = (timestamp) => {
+  const date = new Date(timestamp);
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+};
 
 // generatedAtはoffset付きISO。文字列をDateへ直接渡さず、数値とoffsetからUTC msを組み立てる。
 function isoTimestampMs(value) {
@@ -162,7 +170,15 @@ function renderTrade(trade) {
 
 function renderFund() {
   const data = fundCache.data;
-  if (!data) return `<div class="fund-view">${renderHeader("PAPER TRADE", "FABLE FUND")}<section class="panel fund-loading">FUNDデータを読み込んでいます</section></div>`;
+  if (!data) {
+    let status = "FUNDデータを読み込んでいます";
+    if (!personalDataReady(state.settings.github)) {
+      status = "設定で個人データリポジトリを接続すると表示されます";
+    } else if (fundCache.lastError && fundCache.lastAttemptAt) {
+      status = `FUNDデータを取得できませんでした(最終試行 ${localTimeText(fundCache.lastAttemptAt)})。30分後に再試行します`;
+    }
+    return `<div class="fund-view">${renderHeader("PAPER TRADE", "FABLE FUND")}<section class="panel fund-loading fund-status">${status}</section></div>`;
+  }
   const nav = data.nav || {};
   const benchmark = data.benchmark || {};
   const cashRatio = finite(data.cash) && finite(nav.current) && nav.current !== 0 ? data.cash / nav.current * 100 : null;

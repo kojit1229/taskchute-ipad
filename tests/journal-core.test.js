@@ -101,7 +101,8 @@ async function loadModules() {
     flightLogBlocks: (blocks) => blocks.filter((block) => block.actualEndAt),
     bodyScansForDate: (date) => (storeMod.state.bodyScans || []).filter((scan) => String(scan.dateTime || "").startsWith(date)),
     bmSummary: (scans) => ({ fatigue: scans.reduce((sum, scan) => sum + Number(scan.fatigue || 0), 0), recovery: 0, total: scans.length }),
-    healthForDate: () => null, healthSummaryHTML: () => "<div>健康</div>", fundJournalSummaryForDate: () => ""
+    healthForDate: () => null, latestHealthWithin: () => null,
+    healthSummaryHTML: () => "<div>健康</div>", fundJournalSummaryForDate: () => ""
   });
 
   function setBaseState(extra = {}) {
