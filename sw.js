@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v319";  // v319: TOWER見出し日本語化・文字下限11px・二次ラベルopacity.7
+const CACHE_NAME = "taskchute-journal-pwa-v320";  // v320: ルーティン2列×4行・完了非表示・枠内スクロール
 // v293: 身体スキャン復活(K裁定2026-08-29。手動Block完了時のみ追加)
 // v290: 孤児action本体2クラスタ(AI作業結果承認/質問、AIタスク候補チップの採用/却下)を削除した(APP_SHELL変更なし)。
 // v288: WBS内検索と新規Project既定closed化を追加した(APP_SHELL変更なし)。

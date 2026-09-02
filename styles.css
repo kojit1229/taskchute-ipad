@@ -3226,15 +3226,18 @@ h3 {
 @keyframes tower-touchdown { 0% { opacity: 1; transform: translate(-50%, -50%) scale(.4); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(3); } }
 @media (max-width: 720px) { .tower-nowhud { grid-template-columns: minmax(0, 1fr) auto; } .tower-now-title { grid-column: 1 / -1; } .tower-now-actions { flex-wrap: wrap; } }
 
-/* v207: TOWER T6。GATE定期便。 */
+/* v320: ルーティンは未完了だけを2列×4行で表示し、超過分は枠内スクロールする。 */
 .tower-gates { margin-top: 12px; border: 1px solid var(--tower-line); background: var(--tower-panel); }
 .tower-gates h2 { display: flex; align-items: center; justify-content: space-between; margin: 0; min-height: 44px; padding: 0 10px; border-bottom: 1px solid var(--tower-line); color: var(--tower-cyan); font-size: 11px; letter-spacing: .18em; }
 .tower-gate-edit { float: right; min-width: 44px; min-height: 44px; margin-top: -2px; padding: 2px 10px; border: 1px solid var(--tower-line); color: var(--tower-cyan); font: inherit; font-size: 11px; letter-spacing: .14em; background: transparent; }
 .tower-gate-edit:hover { border-color: var(--tower-cyan); }
-#towerGateStrip { display: flex; align-items: stretch; gap: 8px; min-height: 44px; padding: 8px; overflow-x: auto; }
-.tower-gate { display: grid; grid-template-columns: auto minmax(72px, 1fr) 10px; align-items: center; gap: 7px; min-width: 132px; min-height: 48px; padding: 6px 8px; border: 1px solid var(--tower-line); border-radius: 4px; color: var(--tower-text); font: inherit; background: var(--tower-bg); }
+#towerGateStrip { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 50px; align-items: stretch; gap: 8px; min-height: 44px; max-height: 240px; padding: 8px; overflow-x: hidden; overflow-y: auto; }
+#towerGateStrip:has(.tower-gate-editor) { grid-template-columns: minmax(0, 1fr); grid-auto-rows: auto; max-height: none; overflow-x: visible; overflow-y: visible; }
+#towerGateStrip:has(.tower-gate-editor) > .tower-gate-fixed,
+#towerGateStrip:has(.tower-gate-editor) > .tower-gate-editor { grid-column: 1 / -1; }
+.tower-gate { display: grid; grid-template-columns: auto minmax(0, 1fr) 10px; align-items: center; gap: 7px; min-width: 0; min-height: 44px; padding: 6px 8px; border: 1px solid var(--tower-line); border-radius: 4px; color: var(--tower-text); font: inherit; background: var(--tower-bg); }
 .tower-gate span { color: var(--tower-cyan); font-size: 11px; }
-.tower-gate strong { overflow: hidden; font-family: system-ui, sans-serif; font-size: 11px; font-weight: 500; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.tower-gate strong { min-width: 0; overflow: hidden; font-family: system-ui, sans-serif; font-size: 11px; font-weight: 500; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
 .tower-gate i { width: 8px; height: 8px; border-radius: 50%; background: var(--tower-line); }
 .tower-gate[data-docked="1"] strong { opacity: .7; }
 .tower-gate[data-docked="1"] i { background: var(--tower-green); box-shadow: 0 0 8px var(--tower-green); }
@@ -3246,7 +3249,7 @@ h3 {
 .tower-gate-fixed.is-late { box-shadow: inset 0 0 0 1px var(--tower-amber); }
 .tower-gate-warning { padding: 0 10px 6px; color: var(--tower-amber); font-size: 11px; }
 .tower-gate-editor { display: grid; flex: 1 0 270px; gap: 6px; min-width: 270px; }
-.tower-gate-edit-row { display: grid; grid-template-columns: 30px minmax(48px, 1fr) 40px 44px 44px 44px auto; align-items: center; gap: 2px; min-height: 44px; padding: 4px; border: 1px solid var(--tower-line); }
+.tower-gate-edit-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) 36px repeat(4, 44px); align-items: center; gap: 2px; min-height: 44px; padding: 4px; border: 1px solid var(--tower-line); }
 .tower-gate-edit-row > span { color: var(--tower-cyan); font-size: 11px; }
 .tower-gate-edit-row > strong { overflow: hidden; font-family: system-ui, sans-serif; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .tower-gate-edit-row > time { opacity: .7; }
@@ -3260,12 +3263,11 @@ h3 {
 .tower-gate-add { display: grid; grid-template-columns: minmax(110px, 1fr) 100px auto; gap: 6px; }
 .tower-gate-add input { min-width: 0; min-height: 44px; padding: 6px 8px; border: 1px solid var(--tower-line); color: var(--tower-text); font-size: 16px; background: var(--tower-bg); }
 .tower-gate-edit-empty { padding: 10px; border: 1px dashed var(--tower-line); opacity: .7; }
+.tower-gate-alldone { display: grid; grid-column: 1 / -1; min-height: 44px; place-items: center; color: var(--tower-text); font-size: 11px; opacity: .7; }
 #towerGateCount { padding: 0 10px 8px; color: var(--tower-green); font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; }
+.tower-gate-showdone { min-height: 44px; padding: 4px 8px; border: 1px solid var(--tower-line); color: var(--tower-green); font: inherit; font-size: 11px; background: transparent; }
 @media (max-width: 720px) {
-  #towerGateStrip:has(.tower-gate-editor) { flex-wrap: wrap; overflow-x: visible; }
-  #towerGateStrip:has(.tower-gate-editor) > .tower-gate-fixed { flex: 1 1 100%; }
-  .tower-gate-editor { flex: 1 1 100%; width: 100%; min-width: 0; }
-  .tower-gate-edit-row { grid-template-columns: 24px minmax(48px, 1fr) 40px repeat(4, 44px); }
+  .tower-gate-editor { width: 100%; min-width: 0; }
 }
 .tower-gates.is-full { border-color: var(--tower-green); }
 .tower-gates.is-full-flash { animation: tower-gates-full 900ms ease-out 1; }
@@ -3515,8 +3517,6 @@ h3 {
   .today-tower[data-view-journal="0"] .tower-col-right { display: none; }
   .today-tower[data-view-side="0"] .tower-col-center { grid-column-start: left-start; }
   .today-tower[data-view-journal="0"] .tower-col-center { grid-column-end: right-end; }
-  .tower-col-center #towerGateStrip { flex-wrap: wrap; overflow-x: visible; }
-  .tower-col-center .tower-gate { min-width: 0; flex: 1 1 46%; }
 }
 
 /* v210: TOWER T9。可視性停止・夜間色温度・モーション強度3段。 */

@@ -1,0 +1,51 @@
+{
+  "version": 320,
+  "date": "2026-09-03",
+  "title": "ルーティン欄を2列×4行・完了非表示で繰り上げ・超過は枠内スクロール",
+  "summary": "Today TOWER中央列のルーティン欄を、未完了だけが2列×4行で並び、超過分へ枠内スクロールで到達できる表示へ変更する。",
+  "changedFiles": [
+    "CHANGES_v320.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v320.json",
+    "src/features/today-tower.js",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/tower-core.test.js",
+    "tests/v320.test.js"
+  ],
+  "intent": [
+    "完了したルーティンをその場から除き、次の未完了ルーティンが同じ枠内へ繰り上がるようにする。",
+    "最大8タイルを一望できる2列×4行に固定し、9件目以降も縦スクロールで操作可能にする。",
+    "編集モード、既存の完了・取消action、state構造を変えずに表示ロジックとCSSだけを更新する。"
+  ],
+  "changes": [
+    "非編集モードのルーティンタイルを未完了Blockだけに絞り、早起き固定席もチェック済みなら非表示にした。",
+    "件数表示を未完了件数と非表示の完了件数へ変更し、全完了時は中立色の『ルーティン完了』1行を表示するようにした。",
+    "ルーティン枠を2列・50px行高・最大4行・縦スクロールへ変更し、390pxとPC幅の横スクロールを防いだ。",
+    "初期描画と1秒tickerの差分更新で同じ絞り込み・件数文言を使うように揃えた。",
+    "Service WorkerのCACHE_NAMEをv320へ更新した。"
+  ],
+  "uncertainties": [
+    "50px固定行高と4行スクロール枠の指操作感はChromeで検証するが、iOS Safari実機での最終確認が必要。"
+  ],
+  "reviewFocus": [
+    "完了操作直後に対象タイルが消え、次の未完了タイルが順序を保って繰り上がるか。",
+    "早起き済みを含む全完了時も既存is-full・is-full-flash判定と遅延警告が維持されるか。",
+    "390pxと1280pxで2列×4行、縦スクロール可、横スクロールなしを満たし、編集モードの全件表示を壊していないか。"
+  ],
+  "verification": [
+    "node --checkで変更したJavaScriptとテストの構文を確認する。",
+    "npm.cmd run test:manifest:writeでsuite-manifestとテスト影響表を更新する。",
+    "Google Chrome指定でv320、v319、v313、v297、v317、journal-core、iron-log-e2e、tower-core、today-coreを実行する。",
+    "v320で未完了だけの表示、2列×4行、390px・1280pxのスクロール、完了直後の繰り上げ、全完了、編集モード、pageerror、state非書込を確認する。"
+  ],
+  "notes": [
+    "発注指定によりrelease-record.js --write/--check、コミット、push、taskchute-notes書込は実行しない。"
+  ],
+  "knownLimitations": []
+}

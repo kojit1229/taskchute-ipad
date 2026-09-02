@@ -96,7 +96,7 @@ function check(name, cond, extra = "") {
 const GOLDEN_CLICK_ACTIONS = [
   "nav", "sync-banner-dismiss", "open-iron-log", "instruments-open-iron-log", "save-tower-journal",
   "focus-toggle-side", "focus-toggle-journal", "focus-toggle-life", "focus-mode",
-  "early-bird-check", "tower-gate-edit-toggle", "tower-bodymind-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move", "tower-gate-streak-toggle",
+  "early-bird-check", "tower-gate-edit-toggle", "tower-gate-showdone-toggle", "tower-bodymind-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move", "tower-gate-streak-toggle",
   "date-prev", "date-next", "today",
   "set-morning", "toggle-meds", "set-capacity", "set-evening-mood",
   "add-gym-entry", "delete-gym-entry",
@@ -230,7 +230,7 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
 // は従来どおり移行せず、if連鎖に残した(下のEXPECTED_REMAINING_IF_CHAINに含まれる)。
 const APP_JS_REGISTERED_ACTIONS = [
   "nav", "sync-banner-dismiss", "open-iron-log", "instruments-open-iron-log", "save-tower-journal",
-  "early-bird-check", "tower-gate-edit-toggle", "tower-bodymind-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move", "tower-gate-streak-toggle",
+  "early-bird-check", "tower-gate-edit-toggle", "tower-gate-showdone-toggle", "tower-bodymind-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move", "tower-gate-streak-toggle",
   "toggle-show-suspended", "toggle-wbs-hide-done", "toggle-wbs-hide-done-projects",
   "toggle-wbs-active-only", "toggle-wbs-compact", "toggle-tasks-show-future",
   "toggle-wbs-edit", "wbs-collapse-all",

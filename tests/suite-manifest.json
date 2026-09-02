@@ -15,7 +15,7 @@
       ],
       "assertionSignals": 34,
       "assertionHash": "f841e3459002f00f",
-      "sourceHash": "827539a0662c843f",
+      "sourceHash": "f0551f3d0bf7911f",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -636,9 +636,9 @@
         "journal-health",
         "ui-responsive"
       ],
-      "assertionSignals": 159,
-      "assertionHash": "e4b71c03b21684e9",
-      "sourceHash": "307384cef571a5db",
+      "assertionSignals": 160,
+      "assertionHash": "21ef3ad46d7c2c86",
+      "sourceHash": "0fc50d59f86ba6c4",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3666,6 +3666,30 @@
       "assertionSignals": 17,
       "assertionHash": "b1d6669cdc115139",
       "sourceHash": "fcf56b4e4d721f1e",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v320.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "ui-responsive"
+      ],
+      "assertionSignals": 27,
+      "assertionHash": "d9b71f75f520580d",
+      "sourceHash": "5c829f4b1d4851e8",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

@@ -33,7 +33,7 @@ import { configureTrackUi, maybeShowTrackProgressToast } from "./src/features/tr
 import { configureToday, renderToday } from "./src/features/today.js";
 import {
   isRoutineGateBlock, pomodoroLinkFlights, setTowerArrivalSelection, toggleTowerBodyMindWeekly,
-  flightLogBlocks, bmSummary
+  toggleTowerGateShowDone, flightLogBlocks, bmSummary
 } from "./src/features/today-tower.js";
 // v168: app.js分割・段階4-2(WishタブTier1のCRUD・描画を抽出)。src/features/wish.js
 //   はstateをimportするがapp.js自身はimportしない(循環import回避)。
@@ -359,6 +359,10 @@ registerActions({
   "early-bird-check": () => toggleEarlyBird(),
   "tower-gate-edit-toggle": () => {
     _towerGateEditMode = !_towerGateEditMode;
+    render();
+  },
+  "tower-gate-showdone-toggle": () => {
+    toggleTowerGateShowDone();
     render();
   },
   // v297: BODY/MINDウィジェットの週推移開閉(表示専用トグル。stateには触れない)。
