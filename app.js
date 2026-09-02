@@ -19,7 +19,7 @@ import { loadState, persistLocalNoSchedule, _lastSaveError } from "./src/storage
 import { cachedFeedback } from "./src/state/feedback-cache.js";
 import { configureFund, hydrateFundData, renderFund } from "./src/features/fund.js";
 import {
-  HEALTH_REFRESH_INTERVAL_MS, configureHealth, hydrateHealthData, latestHealthWithin, healthSummaryHTML
+  HEALTH_REFRESH_INTERVAL_MS, configureHealth, hydrateHealthData, latestHealthWithin, healthForDate, healthSummaryHTML
 } from "./src/features/health.js";
 // v223: TOWER上帯(STANDING ORDERS/COUNTDOWN)は自己完結featureへ依存注入する。
 import { configureTopband, cycleWeekForDate, toggleTwyScoreExpanded } from "./src/features/topband.js";
@@ -32,7 +32,8 @@ import { configureTrackUi, maybeShowTrackProgressToast } from "./src/features/tr
 // v182: 新トップレベル「今日」コックピット。既存featureと同じ依存注入型で循環importを避ける。
 import { configureToday, renderToday } from "./src/features/today.js";
 import {
-  isRoutineGateBlock, pomodoroLinkFlights, setTowerArrivalSelection, toggleTowerBodyMindWeekly
+  isRoutineGateBlock, pomodoroLinkFlights, setTowerArrivalSelection, toggleTowerBodyMindWeekly,
+  flightLogBlocks, bmSummary
 } from "./src/features/today-tower.js";
 // v168: app.js分割・段階4-2(WishタブTier1のCRUD・描画を抽出)。src/features/wish.js
 //   はstateをimportするがapp.js自身はimportしない(循環import回避)。
@@ -310,7 +311,10 @@ configureJournal({
   escapeHTML, renderHeader, renderDateBar, renderMarkdown, renderModal, closeModal,
   addDays, todayISO, weekRange, weekDays, showToast, nowDateTime, saveAndRender, saveState,
   personalDataReady, latestSleepLogWithin, shortSleepDate, upsertMorningLine,
-  renderExperimentSection, JOURNAL_REQUEST_SECTION
+  renderExperimentSection, JOURNAL_REQUEST_SECTION, blocksForDate, taskchuteStartRate,
+  timeFromDateTime, flightLogBlocks,
+  bodyScansForDate: (date) => (state.bodyScans || []).filter((scan) => String(scan.dateTime || "").startsWith(date)),
+  bmSummary, healthForDate, healthSummaryHTML, fundJournalSummaryForDate
 });
 // v218: getStateでstore.jsのstate再代入後も最新のlive bindingへ追従させる。
 configureRecurrence({
@@ -6258,6 +6262,15 @@ function aiReportFilesForType(prefix) {
     .sort((a, b) => b.date.localeCompare(a.date));
 }
 
+// v317: AIレポート画面で取得済みのFUND日誌本文だけを、ジャーナルへ表示専用の1行として渡す。
+function fundJournalSummaryForDate(date) {
+  const fileName = `FABLE FUND日誌_${date}.md`;
+  const body = _aiReportBodyCache[fileName];
+  if (typeof body !== "string") return "";
+  const line = body.split(/\r?\n/).map((item) => item.trim()).find(Boolean) || "";
+  return line.replace(/^#{1,6}\s*/, "").slice(0, 60);
+}
+
 // v140: report-index.jsonのgeneratedAt("YYYY-MM-DDTHH:mm:ssZ"、UTC)をmsへ変換する。
 // localDateTimeToMs(ローカル時刻文字列専用、Zサフィックス無し)とは別に用意する理由:
 // あちらはUTC文字列にそのまま使うとローカルタイムゾーン分(日本なら9時間)ズレる。
@@ -10693,8 +10706,11 @@ function buildWriteMeditationGateModal() {
 function writeMeditationGateDoIt() {
   closeModal();
   _journalSegmentOverride.writeMeditation = true;
+  _journalSegmentOverride.evening = true;
   const seg = document.querySelector(".journal-segment-writeMeditation");
   if (seg) {
+    const mind = seg.closest(".journal-segment-evening");
+    if (mind) mind.open = true;
     seg.open = true;
     seg.scrollIntoView({ behavior: "smooth", block: "start" });
   }

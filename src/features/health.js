@@ -56,8 +56,13 @@ function latestHealthWithin(todayIso, maxAgeDays = 7) {
   return null;
 }
 
-function healthSummaryHTML(todayIso) {
-  const row = personalDataReady() ? latestHealthWithin(todayIso) : null;
+function healthForDate(iso) {
+  const days = healthCache.data?.days;
+  return Array.isArray(days) ? days.find((row) => row.date === iso) || null : null;
+}
+
+function healthSummaryHTML(todayIso, exact = false) {
+  const row = personalDataReady() ? (exact ? healthForDate(todayIso) : latestHealthWithin(todayIso)) : null;
   if (!row) return `<div class="bm-health"><div class="bm-health-src">${escapeHTML("健康データ 未取得")}</div></div>`;
   const finite = (value) => typeof value === "number" && Number.isFinite(value);
   const value = (item) => finite(item) ? item.toLocaleString("ja-JP") : "—";
@@ -72,5 +77,5 @@ function healthSummaryHTML(todayIso) {
 }
 
 export {
-  HEALTH_REFRESH_INTERVAL_MS, configureHealth, hydrateHealthData, latestHealthWithin, healthSummaryHTML
+  HEALTH_REFRESH_INTERVAL_MS, configureHealth, hydrateHealthData, latestHealthWithin, healthForDate, healthSummaryHTML
 };

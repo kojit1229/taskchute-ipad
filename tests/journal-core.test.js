@@ -92,9 +92,16 @@ async function loadModules() {
 
   journalMod.configureJournal({
     escapeHTML, renderHeader, renderDateBar, renderMarkdown, renderModal, closeModal,
-    addDays, todayISO, weekRange, weekDays, showToast, nowDateTime, saveAndRender,
+    addDays, todayISO, weekRange, weekDays, showToast, nowDateTime, saveAndRender, saveState: () => {},
     personalDataReady, latestSleepLogWithin, shortSleepDate, upsertMorningLine,
-    renderExperimentSection, JOURNAL_REQUEST_SECTION
+    renderExperimentSection, JOURNAL_REQUEST_SECTION,
+    blocksForDate: (date) => (storeMod.state.blocks || []).filter((block) => block.date === date && !block.deleted),
+    taskchuteStartRate: () => ({ done: 0, total: 0, pct: 0 }),
+    timeFromDateTime: (value) => /T(\d{2}:\d{2})/.exec(value || "")?.[1] || "",
+    flightLogBlocks: (blocks) => blocks.filter((block) => block.actualEndAt),
+    bodyScansForDate: (date) => (storeMod.state.bodyScans || []).filter((scan) => String(scan.dateTime || "").startsWith(date)),
+    bmSummary: (scans) => ({ fatigue: scans.reduce((sum, scan) => sum + Number(scan.fatigue || 0), 0), recovery: 0, total: scans.length }),
+    healthForDate: () => null, healthSummaryHTML: () => "<div>健康</div>", fundJournalSummaryForDate: () => ""
   });
 
   function setBaseState(extra = {}) {
@@ -106,6 +113,7 @@ async function loadModules() {
       condition: { logs: {} },
       storeVisits: [],
       sleep: { logs: {} },
+      blocks: [], bodyScans: [], writeMeditations: [],
       modal: null,
       ...extra
     });

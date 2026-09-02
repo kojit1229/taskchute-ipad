@@ -176,7 +176,7 @@ async function verifyBrowserPanel() {
   }
   async function openKmSegment() {
     const seg = page.locator(".journal-segment-writeMeditation");
-    if (!(await seg.evaluate((el) => el.open))) await seg.locator("summary").click();
+    if (!(await seg.evaluate((el) => el.open))) await seg.locator(":scope > summary").click();
     await page.waitForFunction(() => document.querySelector(".journal-segment-writeMeditation")?.open === true);
   }
 

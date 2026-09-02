@@ -72,7 +72,7 @@ function check(name, cond, extra = "") {
     const el = page.locator(".journal-segment-evening");
     if ((await el.count()) === 0) return;
     const isOpen = await el.evaluate((e) => e.open);
-    if (!isOpen) await el.locator("summary").click();
+    if (!isOpen) await el.locator(":scope > summary").click();
     await page.waitForTimeout(150);
   }
 

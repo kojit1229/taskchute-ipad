@@ -71,6 +71,8 @@ function fixtureDays(dates) {
     result = new Error("404");
     check("取得失敗でも前回値を維持", !(await health.hydrateHealthData(health.HEALTH_REFRESH_INTERVAL_MS)) && health.healthSummaryHTML("2026-09-02") === normal);
     check("7日以内は採用、8日前は採用しない", health.latestHealthWithin("2026-09-09")?.date === "2026-09-02" && health.latestHealthWithin("2026-09-10") === null);
+    check("日付完全一致APIは同日行だけを返す", health.healthForDate("2026-09-02")?.date === "2026-09-02" && health.healthForDate("2026-09-03") === null);
+    check("exact表示は直前日の行へフォールバックしない", health.healthSummaryHTML("2026-09-03", true).includes("健康データ 未取得"));
 
     console.log("[1b] 日付・保持件数・再取得間隔の境界");
     const dateCases = [

@@ -4085,7 +4085,7 @@ h3 {
 /* 前日パネル(details.journal-panel-prev)の見出し行 = summary。TOWER意匠のパネル見出し語彙
    (英語見出し+<span>日本語</span>)はjournal.js側の文言変更で対応済み。ここでは配色のみ。 */
 .journal-tower .journal-panel-prev > .fold-summary,
-.journal-tower .journal-segment > summary.fold-summary {
+.journal-tower .journal-segment > .fold-summary {
   padding: 8px 10px;
   border-bottom: 1px solid var(--tower-line);
   color: var(--tower-cyan);
@@ -4117,6 +4117,11 @@ h3 {
 /* 朝/夜/本文の3segment。他パネルと区別するため上部にアクセント罫線。 */
 .journal-tower .journal-segment { border-top: 1px solid var(--tower-line); }
 .journal-tower .journal-segment-morning { border-top: 0; }
+.journal-daysummary { padding: 0 10px 10px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.journal-flight-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; padding: 7px 0; font-size: 11px; border-bottom: 1px solid var(--tower-line); }
+.journal-flight-row:last-child { border-bottom: 0; }
+.journal-flight-row span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
+.journal-bodyscan { padding: 8px 10px; font-size: 12px; background: var(--tower-bg); border: 1px solid var(--tower-line); }
 
 /* 思考のヒント(ネストしたdetails)もパネル内トーンに合わせる。 */
 .journal-tower .journal-prompts { border: 1px solid var(--tower-line) !important; background: var(--tower-bg) !important; }

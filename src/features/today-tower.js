@@ -253,10 +253,15 @@ function flightLogDuration(block) {
   return `${minutes}分`;
 }
 
-function renderFlightLog(date, blocks) {
-  const completed = blocks
+// v317: 「今日」TOWERとジャーナルの日付ページで、終了実績の母集団を共有する。
+function flightLogBlocks(blocks) {
+  return blocks
     .filter((block) => block.actualEndAt)
     .sort((a, b) => String(a.actualEndAt).localeCompare(String(b.actualEndAt)));
+}
+
+function renderFlightLog(date, blocks) {
+  const completed = flightLogBlocks(blocks);
   const keys = new Set(completed.map((block) => `${block.id}:${block.actualEndAt}`));
   const latest = completed[completed.length - 1];
   const latestKey = latest ? `${latest.id}:${latest.actualEndAt}` : "";
@@ -619,5 +624,5 @@ function updateTodayTowerTick() {
 
 export {
   configureTodayTower, renderTodayTower, runwayArrivalSelection, setTowerArrivalSelection, updateTodayTowerTick,
-  toggleTowerBodyMindWeekly, pomodoroLinkFlights
+  toggleTowerBodyMindWeekly, pomodoroLinkFlights, flightLogBlocks, bmSummary
 };

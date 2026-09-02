@@ -54,20 +54,25 @@
 
 import { state } from "../state/store.js";
 import { _journalSegmentOverride } from "../state/journal-fold.js";
+import { _lastSaveError } from "../storage/local.js";
 import { registerActions } from "../ui/actions.js";
 
 // ---- 依存注入(configureJournal) ----
 let escapeHTML, renderHeader, renderDateBar, renderMarkdown, renderModal, closeModal;
 let addDays, todayISO, weekRange, weekDays, showToast, nowDateTime, saveAndRender, saveState;
 let personalDataReady, latestSleepLogWithin, shortSleepDate, upsertMorningLine;
-let renderExperimentSection, JOURNAL_REQUEST_SECTION;
+let renderExperimentSection, JOURNAL_REQUEST_SECTION, blocksForDate, taskchuteStartRate;
+let timeFromDateTime, flightLogBlocks, bodyScansForDate, bmSummary;
+let healthForDate, healthSummaryHTML, fundJournalSummaryForDate;
 
 function configureJournal(deps) {
   ({
     escapeHTML, renderHeader, renderDateBar, renderMarkdown, renderModal, closeModal,
     addDays, todayISO, weekRange, weekDays, showToast, nowDateTime, saveAndRender, saveState,
     personalDataReady, latestSleepLogWithin, shortSleepDate, upsertMorningLine,
-    renderExperimentSection, JOURNAL_REQUEST_SECTION
+    renderExperimentSection, JOURNAL_REQUEST_SECTION, blocksForDate, taskchuteStartRate,
+    timeFromDateTime, flightLogBlocks, bodyScansForDate, bmSummary,
+    healthForDate, healthSummaryHTML, fundJournalSummaryForDate
   } = deps);
   // v173: app.js分割・段階5-2(prep-stage5-dispatcher.md案A)。click dispatcherのコンディションOS
   // (朝/夜の体調・服薬・余力)+運動記録+お店ログの分岐をレジストリへ移行する
@@ -234,7 +239,7 @@ function storeVisitsForDate(date) {
 function renderStoreVisitsCard(date) {
   const visits = storeVisitsForDate(date);
   return `
-    <div class="store-visit-card" style="margin-bottom:10px; padding:10px 12px; background:var(--panel-soft); border-radius:8px">
+    <div class="store-visit-card" data-store-visits-date="${date}" style="margin-bottom:10px; padding:10px 12px; background:var(--panel-soft); border-radius:8px">
       <div class="row" style="margin-bottom:6px">
         <span class="muted" style="font-size:12.5px; font-weight:700">🏪 今日行ったお店</span>
         <div class="row" style="gap:6px">
@@ -260,6 +265,18 @@ function renderStoreVisitsCard(date) {
       }).join("") : `<div class="muted" style="font-size:11px">まだ記録がありません</div>`}
     </div>
   `;
+}
+
+// v317: LIFE再配置後もジャーナル全体を再描画せず、本文textareaとIMEを守る。
+function patchStoreVisitsCard(date) {
+  const card = document.querySelector(`.store-visit-card[data-store-visits-date="${date}"]`);
+  if (card) card.outerHTML = renderStoreVisitsCard(date);
+}
+
+function saveAndPatchStoreVisits(date, message) {
+  saveState();
+  patchStoreVisitsCard(date);
+  if (!_lastSaveError) showToast(message);
 }
 
 function openStoreVisitEditor(id, date) {
@@ -310,7 +327,7 @@ function saveStoreVisitFromModal(id, fields) {
       ? { ...v, name, url, comment, updatedAt: nowDateTime() }
       : v);
     closeModal();
-    saveAndRender("お店の記録を更新しました");
+    saveAndPatchStoreVisits(date, "お店の記録を更新しました");
     return;
   }
   state.storeVisits.push({
@@ -318,15 +335,16 @@ function saveStoreVisitFromModal(id, fields) {
     createdAt: nowDateTime(), updatedAt: nowDateTime(), deleted: false
   });
   closeModal();
-  saveAndRender("お店を記録しました");
+  saveAndPatchStoreVisits(date, "お店を記録しました");
 }
 
 // deleteFromModal()側(モーダル内「削除」ボタン経由)・カード上の×(即時)の両方から呼ばれる。
 // どちらの経路も呼び出し前に確認ダイアログを通す(仕様: 既存件の削除は確認つき)。
 function deleteStoreVisit(id) {
+  const date = state.storeVisits.find((v) => v.id === id)?.date || state.selectedDate;
   state.storeVisits = state.storeVisits.map((v) => v.id === id
     ? { ...v, deleted: true, updatedAt: nowDateTime() } : v);
-  saveAndRender("お店の記録を削除しました");
+  saveAndPatchStoreVisits(date, "お店の記録を削除しました");
 }
 
 function deleteStoreVisitWithConfirm(id) {
@@ -662,11 +680,21 @@ function defaultJournal(date) {
   ].join("\n");
 }
 
-// 【tower-restyle】renderJournal()のみ改装。ロジック(ensureJournal/日付計算/segment開閉判定)は
-// 完全に無改変。変更は (a) 全体を<div class="tower-skin journal-tower">でラップ、
-// (b) パネル見出し・summaryの文言をTOWER意匠の英語+日本語併記に変更、の2点のみ。
-// class/data-action/data-*/id・DOM階層・タグ種別は既存のまま(tests/journal-core.test.js・
-// tests/v146.test.js等の参照セレクタと完全一致を維持)。
+function journalHealthHTML(date) {
+  const exact = date !== todayISO();
+  return exact && !healthForDate(date) ? "" : healthSummaryHTML(date, exact);
+}
+
+function journalFlightRows(blocks) {
+  return blocks.map((block) => {
+    const start = timeFromDateTime(block.actualStartAt) || "--:--";
+    const end = timeFromDateTime(block.actualEndAt) || "--:--";
+    const net = Number(block.charge || 0) - Number(block.discharge || 0);
+    return `<div class="journal-flight-row"><time>${start}-${end}</time><span>${escapeHTML(block.title || "—")}</span><span>充放電 ${net > 0 ? "+" : ""}${net}</span></div>`;
+  }).join("");
+}
+
+// v317: 生活記録を同じ日付の一ページへ、朝→身体→行動→心→暮らし→お金の順で束ねる。
 function renderJournal() {
   ensureJournal(state.selectedDate);
   const previous = addDays(state.selectedDate, -1);
@@ -687,10 +715,21 @@ function renderJournal() {
   const morningOpen = "morning" in _journalSegmentOverride ? _journalSegmentOverride.morning : isMorning;
   const eveningOpen = "evening" in _journalSegmentOverride ? _journalSegmentOverride.evening : !isMorning;
   const bodyOpen = "body" in _journalSegmentOverride ? _journalSegmentOverride.body : true;
+  const bodyLogOpen = "bodyLog" in _journalSegmentOverride ? _journalSegmentOverride.bodyLog : true;
+  const flightLogOpen = "flightLog" in _journalSegmentOverride ? _journalSegmentOverride.flightLog : true;
+  const moneyOpen = "money" in _journalSegmentOverride ? _journalSegmentOverride.money : true;
   // v294: 「書く瞑想」の既定開閉は夜(18時以降)=開・それ以外=閉(発注文の指定閾値。
   // MORNING/NIGHT BRIEFの14時判定とは独立の値)。_journalSegmentOverride基盤へ相乗りする。
   const isEveningForKm = nowMin >= 18 * 60;
   const kakuMeisouOpen = "writeMeditation" in _journalSegmentOverride ? _journalSegmentOverride.writeMeditation : isEveningForKm;
+  const blocks = blocksForDate(date);
+  const flightBlocks = flightLogBlocks(blocks);
+  const rate = taskchuteStartRate(blocks);
+  const completedCount = flightBlocks.length;
+  const energyNet = flightBlocks.reduce((sum, block) => sum + Number(block.charge || 0) - Number(block.discharge || 0), 0);
+  const scans = bodyScansForDate(date);
+  const scanSummary = scans.length ? bmSummary(scans) : null;
+  const fundSummary = fundJournalSummaryForDate(date);
   return `
     <div class="tower-skin journal-tower">
       ${renderHeader("過去の自分・今の自分・外部視点", "ジャーナル")}
@@ -702,41 +741,58 @@ function renderJournal() {
           <div class="fold-body"><div class="md-render readonly-md">${renderMarkdown(state.journals[previous] || "記載なし")}</div></div>
         </details>
         <div class="panel journal-panel-today">
-          <div class="row" style="margin-bottom:10px">
-            <h2>JOURNAL LOG <span>当日編集</span></h2>
-            <div class="row">
-              <button class="btn primary" data-action="generate-report">📊 日報を生成</button>
-              ${report ? `<button class="btn" data-action="report-copy-ai">📋 AI用にコピー</button>` : ""}
-              ${report && typeof navigator !== "undefined" && navigator.share ? `<button class="btn" data-action="report-share-ai">↗ 共有</button>` : ""}
-              <button class="btn" data-action="download-report">Markdown保存</button>
-              ${personalDataReady(state.settings.github) ? `<button class="btn" data-action="push-report">📤 GitHubに日報push</button>` : ""}
-            </div>
-          </div>
-          <details class="fold journal-segment journal-segment-morning" ${morningOpen ? "open" : ""}>
+          <div class="journal-daysummary">着手率 ${rate.pct}%・完了 ${completedCount} Block・充放電 ${energyNet > 0 ? "+" : ""}${energyNet}</div>
+          <details class="fold journal-segment journal-segment-morning" data-journal-section="morning" ${morningOpen ? "open" : ""}>
             <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="morning"><span class="fold-chevron">▶</span>MORNING BRIEF <span>朝(前夜の睡眠・体調・睡眠時間・服薬・余力)</span></summary>
             <div class="fold-body">
               ${renderSleepCard(date)}
+              ${journalHealthHTML(date)}
               ${renderMorningEnergyPicker(date)}
               ${renderConditionMorningExtra(date)}
             </div>
           </details>
-          <details class="fold journal-segment journal-segment-evening" ${eveningOpen ? "open" : ""}>
-            <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="evening"><span class="fold-chevron">▶</span>NIGHT BRIEF <span>夜(体調・メモ・運動・お店ログ)</span></summary>
+          <details class="fold journal-segment" data-journal-section="body" ${bodyLogOpen ? "open" : ""}>
+            <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="bodyLog"><span class="fold-chevron">▶</span>BODY <span>筋トレ・身体スキャン</span></summary>
             <div class="fold-body">
-              ${renderEveningConditionCard(date)}
               ${renderGymLogCard(date)}
-              ${renderStoreVisitsCard(date)}
+              ${scanSummary ? `<div class="journal-bodyscan">身体スキャン　疲労Σ${scanSummary.fatigue}・回復Σ${scanSummary.recovery}・${scanSummary.total}件</div>` : ""}
             </div>
           </details>
-          <details class="fold journal-segment journal-segment-writeMeditation" ${kakuMeisouOpen ? "open" : ""}>
-            <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="writeMeditation"><span class="fold-chevron">▶</span>🌗 書く瞑想 <span id="km-oneliner">${escapeHTML(writeMeditationOnelinerText(date))}</span></summary>
+          ${flightBlocks.length ? `<details class="fold journal-segment" data-journal-section="flight" ${flightLogOpen ? "open" : ""}>
+            <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="flightLog"><span class="fold-chevron">▶</span>FLIGHT LOG <span>完了Block</span></summary>
+            <div class="fold-body">${journalFlightRows(flightBlocks)}</div>
+          </details>` : ""}
+          <section class="fold journal-segment" data-journal-section="mind">
+            <div class="fold-summary">MIND <span>書く瞑想・夜の体調</span></div>
             <div class="fold-body">
-              ${renderWriteMeditationPanel(date)}
+              <details class="fold journal-segment journal-segment-writeMeditation" ${kakuMeisouOpen ? "open" : ""}>
+                <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="writeMeditation"><span class="fold-chevron">▶</span>🌗 書く瞑想 <span id="km-oneliner">${escapeHTML(writeMeditationOnelinerText(date))}</span></summary>
+                <div class="fold-body">${renderWriteMeditationPanel(date)}</div>
+              </details>
+              <details class="fold journal-segment journal-segment-evening" ${eveningOpen ? "open" : ""}>
+                <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="evening"><span class="fold-chevron">▶</span>NIGHT BRIEF <span>夜の体調・ひとこと</span></summary>
+                <div class="fold-body">${renderEveningConditionCard(date)}</div>
+              </details>
             </div>
-          </details>
-          <details class="fold journal-segment journal-segment-body" ${bodyOpen ? "open" : ""}>
-            <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="body"><span class="fold-chevron">▶</span>FREE LOG <span>本文</span></summary>
+          </section>
+          <section class="fold journal-segment" data-journal-section="life">
+            <div class="fold-summary">LIFE <span>今日行ったお店</span></div>
+            <div class="fold-body">${renderStoreVisitsCard(date)}</div>
+          </section>
+          ${fundSummary ? `<details class="fold journal-segment" data-journal-section="money" ${moneyOpen ? "open" : ""}>
+            <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="money"><span class="fold-chevron">▶</span>MONEY <span>FABLE FUND日誌</span></summary>
+            <div class="fold-body">${escapeHTML(fundSummary)}</div>
+          </details>` : ""}
+          <details class="fold journal-segment journal-segment-body" data-journal-section="journal" ${bodyOpen ? "open" : ""}>
+            <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="body"><span class="fold-chevron">▶</span>JOURNAL LOG <span>本文</span></summary>
             <div class="fold-body">
+              <div class="row" style="margin-bottom:10px; flex-wrap:wrap">
+                <button class="btn primary" data-action="generate-report">📊 日報を生成</button>
+                ${report ? `<button class="btn" data-action="report-copy-ai">📋 AI用にコピー</button>` : ""}
+                ${report && typeof navigator !== "undefined" && navigator.share ? `<button class="btn" data-action="report-share-ai">↗ 共有</button>` : ""}
+                <button class="btn" data-action="download-report">Markdown保存</button>
+                ${personalDataReady(state.settings.github) ? `<button class="btn" data-action="push-report">📤 GitHubに日報push</button>` : ""}
+              </div>
               <details class="journal-prompts" style="margin-bottom:10px; padding:8px 12px; background:var(--panel-soft); border-radius:8px">
                 <summary style="cursor:pointer; font-size:13px; color:var(--muted); font-weight:600">💡 思考のヒント(クリックで開閉)</summary>
                 <div style="margin-top:10px; display:grid; gap:10px; font-size:12px">
