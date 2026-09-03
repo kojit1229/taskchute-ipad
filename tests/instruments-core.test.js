@@ -7,14 +7,14 @@
 // カバー対象(依頼書の完了条件どおり):
 //   earlyBirdStats: 連続日数の基本 / 欠損日での切断 / 当日未チェックは切断しない(進行中扱い)/
 //                   自己ベスト / 累計 / 直近28日窓の境界
-//   ironSummary:    当日0kg・目標既定2000・累計
+//   habitStreakStats: 当日未完了を実施率の分母から除外
 
 const assert = require("node:assert/strict");
 const path = require("path");
 const { pathToFileURL } = require("url");
 
 const MODULE_PATH = path.join(__dirname, "..", "src", "features", "instruments.js");
-const IRON_LOG_MODULE_PATH = path.join(__dirname, "..", "src", "features", "iron-log.js");
+const HABIT_STREAK_MODULE_PATH = path.join(__dirname, "..", "src", "core", "habit-streak.js");
 
 let failures = 0;
 function check(name, cond, extra = "") {
@@ -64,8 +64,8 @@ function logsFor(dates) {
 
 (async () => {
   const mod = await import(pathToFileURL(MODULE_PATH).href);
-  const { ironTotals } = await import(pathToFileURL(IRON_LOG_MODULE_PATH).href);
-  const { configureInstruments, renderInstruments, earlyBirdStats, ironSummary } = mod;
+  const { habitStreakStats } = await import(pathToFileURL(HABIT_STREAK_MODULE_PATH).href);
+  const { configureInstruments, renderInstruments, earlyBirdStats } = mod;
 
   let registeredActions = null;
   configureInstruments({
@@ -188,62 +188,18 @@ function logsFor(dates) {
     check("last28の長さは28", s.last28.length === 28);
   }
 
-  console.log("[8] ironSummary: 当日0kg・目標既定2000・累計0(データなし)");
+  console.log("[8] habitStreakStats: 当日未完了は実施率の分母から除外し、完了済みなら含む");
   {
-    const s = ironSummary({}, TODAY);
-    check("todayKg=0", s.todayKg === 0, `got ${s.todayKg}`);
-    check("targetKg=2000(既定値)", s.targetKg === 2000, `got ${s.targetKg}`);
-    check("lifetimeKg=0", s.lifetimeKg === 0, `got ${s.lifetimeKg}`);
+    const rule = { kind: "daily", streakSince: "2026-08-21" };
+    const yesterdayOnly = habitStreakStats(rule, { logs: { "2026-08-21": { doneAt: "2026-08-21T09:00" } } }, TODAY);
+    const todayOnly = habitStreakStats(rule, { logs: { [TODAY]: { doneAt: "2026-08-22T09:00" } } }, TODAY);
+    check("昨日1回・今日未完了は現在1日連続・実施率100%", yesterdayOnly.currentStreak === 1
+      && yesterdayOnly.successRate === 100, JSON.stringify(yesterdayOnly));
+    check("今日完了済みは当日も分母に含み、昨日未完了なら実施率50%", todayOnly.successRate === 50,
+      JSON.stringify(todayOnly));
   }
 
-  console.log("[9] ironSummary: 当日セットの総重量(Σ weight×reps)と累計・目標設定値");
-  {
-    const state = {
-      settings: { ironDailyTarget: 1500 },
-      condition: {
-        logs: {
-          "2026-08-20": { gym: [{ exercise: "ベンチプレス", weight: 60, reps: 10 }] }, // 600kg
-          [TODAY]: {
-            gym: [
-              { exercise: "ベンチプレス", weight: 60, reps: 10 }, // 600kg
-              { exercise: "ショルダープレス", weight: 30, reps: 8 } // 240kg
-            ]
-          }
-        }
-      }
-    };
-    const s = ironSummary(state, TODAY);
-    check("todayKg=840", s.todayKg === 840, `got ${s.todayKg}`);
-    check("targetKg=1500(settings.ironDailyTarget反映)", s.targetKg === 1500, `got ${s.targetKg}`);
-    check("lifetimeKg=1440(当日840+過去600)", s.lifetimeKg === 1440, `got ${s.lifetimeKg}`);
-  }
-
-  console.log("[10] ironSummary: settings.ironManualBaseKgが累計の初期値に加算される");
-  {
-    const state = {
-      settings: { ironManualBaseKg: 5000 },
-      condition: { logs: {} }
-    };
-    const s = ironSummary(state, TODAY);
-    check("lifetimeKg=5000(手動加算のみ、当日データなし)", s.lifetimeKg === 5000, `got ${s.lifetimeKg}`);
-    check("todayKg=0", s.todayKg === 0);
-  }
-
-  console.log("[11] ironSummary: 過去コメント移行分を含むIRON LOG詳細の累計と一致する");
-  {
-    const state = {
-      settings: { ironManualBaseKg: 100 },
-      ironImport: { importedTotalKg: 700 },
-      condition: { logs: { [TODAY]: { gym: [{ exercise: "ベンチプレス", weight: 60, reps: 10 }] } } }
-    };
-    const summary = ironSummary(state, TODAY);
-    const totals = ironTotals(state);
-    check("計器盤とIRON LOG詳細のlifetimeKgが一致する", summary.lifetimeKg === totals.lifetimeKg,
-      `summary=${summary.lifetimeKg}, totals=${totals.lifetimeKg}`);
-    check("累計は構造化600+手動100+移行700=1400", summary.lifetimeKg === 1400, `got ${summary.lifetimeKg}`);
-  }
-
-  console.log("[12] renderInstruments: 表示要素(現在ストリーク/自己ベスト/累計回数/ドットカレンダー/IRON LOGサマリ)を含む");
+  console.log("[9] renderInstruments: 表示要素(現在ストリーク/自己ベスト/累計回数/ドットカレンダー/IRON LOGサマリ)を含む");
   {
     const state = {
       earlyBird: { logs: logsFor(["2026-08-21", "2026-08-22"]) },
@@ -259,8 +215,8 @@ function logsFor(dates) {
       registerActions: () => {}
     });
     const html = renderInstruments();
-    check("EARLY BIRDパネル見出しを含む", html.includes("EARLY BIRD"));
-    check("現在ストリーク(2)の大表示を含む", html.includes(">2</strong>"), html);
+    check("継続の記録パネル見出しを含む", html.includes("継続の記録"));
+    check("現在ストリーク(2)の大表示を含む", html.includes(">2<small>日連続</small></strong>"), html);
     check("自己ベスト欄を含む", html.includes("自己ベスト"));
     check("累計回数欄を含む", html.includes("累計"));
     // "instr-dots"(ラッパー)自体も部分一致してしまうため、class="instr-dot(空白かis-checked)"に絞る。

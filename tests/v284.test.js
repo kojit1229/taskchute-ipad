@@ -134,9 +134,17 @@ async function verifyPureMergeAndSync() {
     deletedLR.length === 1 && deletedLR[0].deleted && deletedRL[0].deleted && deletedVsLegacy[0].deleted,
     json({ deletedLR, deletedRL, deletedVsLegacy }));
   const aggregateState = { condition: { logs: { [TODAY]: { gym: [regular, tombstone] } } } };
+  instrumentsMod.configureInstruments({
+    weekRange: (date) => ({ weekStart: date, weekEnd: date }),
+    addDays: (date, delta) => {
+      const [year, month, day] = date.split("-").map(Number);
+      const shifted = new Date(year, month - 1, day + delta);
+      return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, "0")}-${String(shifted.getDate()).padStart(2, "0")}`;
+    }
+  });
   check("tombstoneはIRON LOGと計器盤の集計から除外",
     ironMod.ironTotals(aggregateState).lifetimeKg === 160
-      && instrumentsMod.ironSummary(aggregateState, TODAY).todayKg === 160);
+      && instrumentsMod.ironPeriodStats(aggregateState, TODAY).weekKg === 160);
 
   console.log("[4] computeSyncMerge実配線とlocal/remote適用");
   const noop = () => {};

@@ -29,19 +29,22 @@ function appliesOn(rule, iso) {
 function habitStreakStats(rule, habit, todayIso) {
   const since = rule?.streakSince;
   if (!dateParts(since) || !dateParts(todayIso) || since > todayIso || !["daily", "weekdays"].includes(rule?.kind)) {
-    return { currentStreak: 0, bestStreak: 0, totalCount: 0, challengeDay: 0, last28: [] };
+    return { currentStreak: 0, bestStreak: 0, totalCount: 0, challengeDay: 0, successRate: 0, last28: [] };
   }
   const logs = habit?.logs && typeof habit.logs === "object" ? habit.logs : {};
   let currentStreak = 0;
   let bestStreak = 0;
   let totalCount = 0;
+  let applicableCount = 0;
   let challengeDay = 0;
   let cursor = since;
   let guard = 0;
   while (cursor && cursor <= todayIso && guard++ < 20000) {
     challengeDay++;
     if (appliesOn(rule, cursor)) {
-      if (logs[cursor]) {
+      const checked = !!logs[cursor];
+      if (checked || cursor !== todayIso) applicableCount++;
+      if (checked) {
         currentStreak++;
         totalCount++;
       }
@@ -57,7 +60,8 @@ function habitStreakStats(rule, habit, todayIso) {
     last28.push({ date: cursor, applicable, checked: applicable && !!logs[cursor] });
     cursor = shiftDate(cursor, 1);
   }
-  return { currentStreak, bestStreak, totalCount, challengeDay, last28 };
+  return { currentStreak, bestStreak, totalCount, challengeDay,
+    successRate: applicableCount ? Math.round((totalCount / applicableCount) * 100) : 0, last28 };
 }
 
 // v280: 固定化解除済みの閉区間だけを集計する。期間外ログは参照せず、非該当曜日は分母から除く。

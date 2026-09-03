@@ -1,0 +1,50 @@
+{
+  "version": 326,
+  "date": "2026-09-04",
+  "title": "計器盤A-1: 継続の記録を4指標で強調・空パネルと目標バーを撤去・TOWER意匠",
+  "summary": "計器盤の長期記録を日本語見出しへ統合し、早起きと固定化ルーティンを4指標で比較できる表示へ改める。",
+  "changedFiles": [
+    "CHANGES_v326.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v326.json",
+    "src/core/habit-streak.js",
+    "src/features/instruments.js",
+    "styles.css",
+    "sw.js",
+    "tests/instruments-core.test.js",
+    "tests/instruments-e2e.test.js",
+    "tests/suite-manifest.json",
+    "tests/v253.test.js",
+    "tests/v284.test.js",
+    "tests/v326.test.js"
+  ],
+  "intent": [
+    "継続が切れても罰や警告にせず、いま・自己ベスト・累計・期間実施率という事実を残す。",
+    "筋トレから目標線と達成色を外し、週の内訳と自己ベストを表示する。"
+  ],
+  "changes": [
+    "早起きと最大3件の固定化ルーティンをアンバー枠の継続の記録へ統合した。",
+    "筋トレを今週重量・今年重量・今週回数、種目別内訳、自己ベストの表示へ変更した。",
+    "月別グラフへ直近2か月合計と0月の薄い線を追加し、TOWER配色・11px・44pxへ揃えた。",
+    "Service WorkerのCACHE_NAMEをv326へ更新した。"
+  ],
+  "uncertainties": [
+    "今週の回数はセット数ではなく、構造化セットが1件以上ある日数として集計している。",
+    "実行コード差分が313行(うち削除185行は旧EARLY BIRD/HABIT/IRON目標バーのCSSと死蔵ironSummaryの撤去)で200行を超える。新規描画とそのCSS撤去は密結合のため分割せず、2系統の独立レビューを通した"
+  ],
+  "reviewFocus": [
+    "固定化後の実施率がdailyとweekdaysの該当日だけを分母にしていること。",
+    "1280pxの左列予約がv327の直近7日追加時にそのまま使えること。",
+    "目標値・達成色・週ストリークが計器盤DOMへ残っていないこと。"
+  ],
+  "verification": [
+    "node --checkとv326/v325/v260/v318/v313を実行する。",
+    "390px・768px・1280pxの横スクロール、pageerror、state非書込を検証する。"
+  ],
+  "notes": [
+    "発注指定によりrelease-recordとCHANGES_v326.md生成、notes書込、commit、pushは行わない。"
+  ],
+  "knownLimitations": [
+    "からだ今日と直近7日はv327で追加予定。"
+  ]
+}

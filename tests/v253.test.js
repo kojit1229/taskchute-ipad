@@ -63,7 +63,7 @@ function check(name, cond, extra = "") {
     await page.reload();
     const primary = page.locator(".instr-habit-panel.is-primary");
     check("固定化1枠目を主役パネルで表示", await primary.count() === 1);
-    check("現在ストリーク2", (await primary.locator(".instr-streak-hero strong").textContent()) === "2");
+    check("現在ストリーク2", (await primary.locator(".instr-streak-hero strong").textContent()) === "2日連続");
     check("2/30日目", (await primary.locator(".instr-habit-challenge strong").textContent()) === "2/30日目");
 
     console.log("[2] weekdaysは土日をスキップし、未完了日は現在値だけリセット");
@@ -81,9 +81,9 @@ function check(name, cond, extra = "") {
     const panels = page.locator(".instr-habit-panel");
     check("固定化3件を順番どおり表示", await panels.count() === 3);
     check("2・3枠目はsecondary", await page.locator(".instr-habit-panel.is-secondary").count() === 2);
-    check("weekdaysの金曜→月曜は2連続", (await panels.nth(1).locator(".instr-streak-hero strong").textContent()) === "2");
-    check("土日はスキップ意匠", await panels.nth(1).locator('.instr-dot[title^="2026-08-22"].is-skipped, .instr-dot[title^="2026-08-23"].is-skipped').count() === 2);
-    check("未完了日後は現在1・自己ベスト2", (await panels.nth(2).locator(".instr-streak-hero strong").textContent()) === "1"
+    check("weekdaysの金曜→月曜は2連続", (await panels.nth(1).locator(".instr-streak-hero strong").textContent()) === "2日連続");
+    check("weekdays実施率は土日を分母から除外", (await panels.nth(1).locator(".instr-stat-cell strong").nth(2).textContent()) === "100%");
+    check("未完了日後は現在1・自己ベスト2", (await panels.nth(2).locator(".instr-streak-hero strong").textContent()) === "1日連続"
       && (await panels.nth(2).locator(".instr-stat-cell strong").first().textContent()) === "2日");
 
     console.log("[3] 固定化0件・解除・削除済みルールは非表示");
@@ -94,7 +94,7 @@ function check(name, cond, extra = "") {
     const earlyBird = { "2026-08-22": {}, "2026-08-23": {}, [TODAY]: {} };
     const gym = [{ exercise: "ベンチプレス", weight: 60, reps: 10, at: `${TODAY}T09:00` }];
     await seed({ earlyBird, gym });
-    check("EARLY BIRDは3日連続・自己ベスト3・累計3・28ドット", (await page.locator(".instr-early-bird .instr-streak-hero strong").textContent()) === "3"
+    check("早起きは3日連続・自己ベスト3・累計3・28ドット", (await page.locator(".instr-early-bird .instr-streak-hero strong").textContent()) === "3日連続"
       && (await page.locator(".instr-early-bird .instr-stat-cell strong").allTextContents()).join("|") === "3日|3回|3回"
       && await page.locator(".instr-early-bird .instr-dot").count() === 28);
     check("IRONは600kg・既存actionを維持", (await page.locator(".instr-iron-today strong").textContent()).includes("600")

@@ -101,32 +101,6 @@ function earlyBirdStats(state, todayIso) {
   return { currentStreak, bestStreak, totalCount, yearCount, last28 };
 }
 
-// 1日分のジムセット配列から総重量kg(Σ weight × reps)を計算する。
-function gymSetsTotalKg(sets) {
-  if (!Array.isArray(sets)) return 0;
-  return sets.reduce((sum, set) => set?.deleted
-    ? sum
-    : sum + (Number(set?.weight) || 0) * (Number(set?.reps) || 0), 0);
-}
-
-// IRON LOGサマリ(p4-interface.md §3で凍結された返り値の形)。
-// state.condition.logs が未定義でも落ちない。
-function ironSummary(state, todayIso) {
-  const conditionLogs = (state && state.condition && state.condition.logs) || {};
-  const targetKg = Number(state?.settings?.ironDailyTarget) || 2000;
-  const manualBaseKg = Number(state?.settings?.ironManualBaseKg) || 0;
-  const importedTotalKg = Number(state?.ironImport?.importedTotalKg) || 0;
-
-  const todayKg = gymSetsTotalKg(conditionLogs[todayIso]?.gym);
-
-  let lifetimeKg = manualBaseKg + importedTotalKg;
-  for (const date of Object.keys(conditionLogs)) {
-    lifetimeKg += gymSetsTotalKg(conditionLogs[date]?.gym);
-  }
-
-  return { todayKg, targetKg, lifetimeKg };
-}
-
 const GRAPH_COLORS = [
   "var(--tower-amber)", "var(--tower-green)", "var(--tower-cyan)", "var(--tower-purple)",
   "color-mix(in srgb, var(--tower-amber) 65%, var(--tower-purple))",
@@ -146,7 +120,10 @@ function ironPeriodStats(state, todayIso) {
   }));
   const currentWeek = weekRange(todayIso);
   const activeWeeks = new Set();
+  const weekDates = new Set();
+  const weekByExercise = Object.create(null);
   const exercises = new Set();
+  let bestSet = null;
   let weekKg = 0;
   let yearKg = 0;
 
@@ -157,11 +134,20 @@ function ironPeriodStats(state, todayIso) {
       const date = match?.[1] || "";
       if (!date || date > todayIso) continue;
       const kg = (Number(set?.weight) || 0) * (Number(set?.reps) || 0);
+      const exercise = String(set?.exercise || "その他");
       activeWeeks.add(weekRange(date).weekStart);
-      if (date >= currentWeek.weekStart && date <= currentWeek.weekEnd) weekKg += kg;
+      if (date >= currentWeek.weekStart && date <= currentWeek.weekEnd) {
+        weekKg += kg;
+        weekDates.add(date);
+        weekByExercise[exercise] = (weekByExercise[exercise] || 0) + kg;
+      }
+      const weight = Number(set?.weight) || 0;
+      const reps = Number(set?.reps) || 0;
+      if (!bestSet || weight > bestSet.weight || (weight === bestSet.weight && reps > bestSet.reps)) {
+        bestSet = { exercise, weight, reps, date };
+      }
       if (date < yearStart) continue;
       yearKg += kg;
-      const exercise = String(set?.exercise || "その他");
       exercises.add(exercise);
       const month = months[Number(date.slice(5, 7)) - 1];
       if (month) {
@@ -177,7 +163,8 @@ function ironPeriodStats(state, todayIso) {
     gymStreakWeeks++;
     cursor = addDays(cursor, -7);
   }
-  return { gymStreakWeeks, weekKg, yearKg, months, exercises: [...exercises].sort((a, b) => a.localeCompare(b, "ja")) };
+  return { gymStreakWeeks, weekKg, weekCount: weekDates.size, weekByExercise, bestSet,
+    yearKg, months, exercises: [...exercises].sort((a, b) => a.localeCompare(b, "ja")) };
 }
 
 // ---- 描画 ----
@@ -188,37 +175,31 @@ function streakDotsHTML(last28) {
     .join("");
 }
 
-function streakPanelHTML({ className, title, subtitle, stats, cells, dotsLabel, foot }) {
-  return `<section class="instr-panel-box ${className}">
-        <h2>${title} <span>${subtitle}</span></h2>
-        <div class="instr-streak-hero"><strong>${stats.currentStreak}</strong><span>日連続</span></div>
-        <div class="instr-stats-row">${cells.map((cell) => `
-          <div class="instr-stat-cell${cell.className ? ` ${cell.className}` : ""}">
-            <span>${cell.label}</span><strong>${cell.value}<small>${cell.unit}</small></strong>
-          </div>`).join("")}
-        </div>
-        <div class="instr-dots" aria-label="${dotsLabel}">${streakDotsHTML(stats.last28)}</div>
-        <div class="instr-panel-foot">${foot}</div>
-      </section>`;
+function streakPanelHTML({ className, name, meta, stats, cells, dotsLabel = "" }) {
+  const metrics = cells.map((cell) => `<div class="instr-stat-cell instr-metric"><span>${cell.label}</span><strong>${cell.value}<small>${cell.unit}</small></strong></div>`).join("");
+  return `<article class="instr-record-row ${className}">
+    <div class="instr-record-label"><strong>${name}</strong><span>${meta}</span></div>
+    <div class="instr-stats-row"><div class="instr-streak-hero instr-metric${stats.currentStreak ? "" : " is-zero"}"><span>いま</span><strong>${stats.currentStreak}<small>日連続</small></strong></div>${metrics}</div>
+    ${dotsLabel ? `<div class="instr-dots" aria-label="${dotsLabel}">${streakDotsHTML(stats.last28)}</div>` : ""}
+  </article>`;
 }
 
 function habitPanelsHTML(state, todayIso) {
-  return (state.recurrences || []).filter((rule) => !rule?.deleted && rule.streakSince)
-    .slice(0, 3).map((rule, index) => {
+  const rules = (state.recurrences || []).filter((rule) => !rule?.deleted && rule.streakSince).slice(0, 3);
+  if (!rules.length) return '<div class="instr-empty-row">固定化したルーティンはありません(ルーティンタブで固定化すると連続記録がここに出ます)</div>';
+  return rules
+    .map((rule, index) => {
       const stats = habitStreakStats(rule, state.habitStreaks?.[rule.id], todayIso);
-      const challenge = stats.challengeDay <= 30
-        ? { value: `${stats.challengeDay}/30`, unit: "日目" }
-        : { value: "達成済み", unit: `(${stats.challengeDay}日目)` };
+      const challenge = stats.challengeDay <= 30 ? `${stats.challengeDay}/30日目` : `達成済み(${stats.challengeDay}日目)`;
       return streakPanelHTML({
         className: `instr-habit-panel ${index === 0 ? "is-primary" : "is-secondary"}`,
-        title: `HABIT ${index + 1}`, subtitle: escapeHTML(rule.title || "固定化ルーティン"), stats,
+        name: escapeHTML(rule.title || "固定化ルーティン"), stats,
+        meta: `固定化 ${Number(rule.streakSince.slice(5, 7))}/${Number(rule.streakSince.slice(8, 10))}〜 ・ 30日チャレンジ <span class="instr-habit-challenge"><strong>${challenge}</strong></span>`,
         cells: [
           { label: "自己ベスト", value: stats.bestStreak, unit: "日" },
           { label: "累計", value: stats.totalCount, unit: "回" },
-          { label: "30日チャレンジ", ...challenge, className: "instr-habit-challenge" }
-        ],
-        dotsLabel: `${escapeHTML(rule.title || "固定化ルーティン")}の直近28日`,
-        foot: "直近4週(28日) — ● 達成・－ 非該当日"
+          { label: "固定化後の実施率", value: stats.successRate, unit: "%" }
+        ]
       });
     }).join("");
 }
@@ -250,8 +231,8 @@ function pinArchiveHTML(state) {
       </div>
     </article>`;
   }).join("");
-  return `<section class="instr-panel-box instr-pin-archive" aria-label="PIN ARCHIVE">
-    <h2>PIN ARCHIVE <span>固定化履歴</span></h2>
+  return `<section class="instr-panel-box instr-pin-archive" aria-label="固定化の履歴">
+    <h2>固定化の履歴</h2>
     <div class="instr-pin-archive-list">${cards}</div>
   </section>`;
 }
@@ -259,14 +240,15 @@ function pinArchiveHTML(state) {
 function ironChartHTML(stats) {
   const maxKg = Math.max(1, ...stats.months.map((month) => month.totalKg));
   const bars = stats.months.map((month) => `<div class="instr-chart-month" data-month="${month.key}">
-    <div class="instr-chart-bar" title="${month.label} ${month.totalKg.toLocaleString()}kg">${stats.exercises.map((exercise, index) => {
+    <div class="instr-chart-bar${month.totalKg ? "" : " is-empty"}" title="${month.label} ${month.totalKg.toLocaleString()}kg">${stats.exercises.map((exercise, index) => {
       const kg = month.byExercise[exercise] || 0;
       return `<span data-exercise="${escapeHTML(exercise)}" style="height:${(kg / maxKg) * 100}%;background:${GRAPH_COLORS[index % GRAPH_COLORS.length]}" title="${escapeHTML(exercise)} ${kg.toLocaleString()}kg"></span>`;
     }).join("")}</div><small>${month.label}</small></div>`).join("");
   const legend = stats.exercises.length ? stats.exercises.map((exercise, index) =>
     `<span class="instr-chart-legend-item"><i style="background:${GRAPH_COLORS[index % GRAPH_COLORS.length]}"></i>${escapeHTML(exercise)}</span>`
   ).join("") : '<span class="instr-chart-empty">構造化セットの記録はまだありません</span>';
-  return `<div class="instr-chart-scroll"><div class="instr-chart">${bars}</div></div><div class="instr-chart-legend">${legend}</div>`;
+  const recent = stats.months.slice(-2).map((month) => `${month.label} ${(month.totalKg / 1000).toFixed(1)}t`).join(" ・ ");
+  return `<div class="instr-chart-scroll"><div class="instr-chart">${bars}</div></div><div class="instr-chart-legend"><span>${legend}</span><span class="instr-chart-recent">${recent}</span></div>`;
 }
 
 // 新計器盤(EARLY BIRD + IRON LOGサマリ + 年間PAYLOADグラフ)。
@@ -277,54 +259,51 @@ function renderInstruments() {
   const state = getState();
   const todayIso = todayISO();
   const eb = earlyBirdStats(state, todayIso);
-  const iron = ironSummary(state, todayIso);
   const period = ironPeriodStats(state, todayIso);
-  const targetPct = iron.targetKg > 0 ? Math.min(100, Math.round((iron.todayKg / iron.targetKg) * 100)) : 0;
+  const archivePanel = pinArchiveHTML(state);
   const earlyBirdPanel = streakPanelHTML({
-    className: "instr-early-bird", title: "EARLY BIRD", subtitle: "早起き", stats: eb,
+    className: "instr-early-bird", name: "早起き(06:00まで)", meta: "直近28日", stats: eb,
     cells: [
       { label: "自己ベスト", value: eb.bestStreak, unit: "日" },
-      { label: "累計", value: eb.totalCount, unit: "回" },
-      { label: "今年", value: eb.yearCount, unit: "回" }
+      { label: "今年", value: eb.yearCount, unit: "回" },
+      { label: "累計", value: eb.totalCount, unit: "回" }
     ],
-    dotsLabel: "直近4週の達成カレンダー", foot: "直近4週(28日) — ● は早起きゲート達成日"
+    dotsLabel: "早起きの直近28日"
   });
+  const breakdown = Object.entries(period.weekByExercise).map(([name, kg]) => `${escapeHTML(name)} ${kg.toLocaleString()}kg`).join(" ・ ") || "今週の記録なし";
+  const best = period.bestSet;
+  const bestText = best ? `${escapeHTML(best.exercise)} ${best.weight.toLocaleString()}kg×${best.reps} (${Number(best.date.slice(5, 7))}/${Number(best.date.slice(8, 10))})` : "記録なし";
 
   return `
-    <div class="today-tower instr-view">
+    <div class="today-tower instr-view${archivePanel ? " has-pin-archive" : ""}">
       ${renderHeader("計器盤", "INSTRUMENTS")}
 
-      ${earlyBirdPanel}
-      ${habitPanelsHTML(state, todayIso)}
+      <section class="instr-panel-box instr-continuation">
+        <h2>継続の記録 <span>早起き ・ 固定化ルーティン ・ 累計</span></h2>
+        ${earlyBirdPanel}${habitPanelsHTML(state, todayIso)}
+      </section>
 
       <section class="instr-panel-box instr-iron-log" data-action="instruments-open-iron-log">
-        <h2>IRON LOG <span>筋トレサマリ</span></h2>
-        <div class="instr-iron-today">
-          <strong>${iron.todayKg.toLocaleString()}<small>kg</small></strong>
-          <span>/ 目標 ${iron.targetKg.toLocaleString()}kg</span>
-        </div>
-        <div class="instr-iron-bar"><span style="width:${targetPct}%"></span></div>
+        <h2>筋トレの記録 <span>IRON LOG</span></h2>
         <div class="instr-stats-row instr-iron-stats">
-          <div class="instr-stat-cell"><span>週ストリーク</span><strong>${period.gymStreakWeeks}<small>週</small></strong></div>
-          <div class="instr-stat-cell"><span>今週</span><strong>${period.weekKg.toLocaleString()}<small>kg</small></strong></div>
-          <div class="instr-stat-cell"><span>今年</span><strong>${period.yearKg.toLocaleString()}<small>kg</small></strong></div>
+          <div class="instr-stat-cell instr-iron-today"><span>今週</span><strong>${period.weekKg.toLocaleString()}<small>kg</small></strong></div>
+          <div class="instr-stat-cell"><span>今年</span><strong>${(period.yearKg / 1000).toFixed(1)}<small>t</small></strong></div>
+          <div class="instr-stat-cell"><span>今週の回数</span><strong>${period.weekCount}<small>回</small></strong></div>
         </div>
-        <div class="instr-iron-lifetime">
-          <span>累計</span>
-          <strong>${(iron.lifetimeKg / 1000).toFixed(1)}<small>t</small></strong>
-        </div>
-        <button type="button" class="instr-open-btn" data-action="instruments-open-iron-log">IRON LOGを開く ▶</button>
+        <div class="instr-fact-row"><span>内訳</span><strong>${breakdown}</strong></div>
+        <div class="instr-fact-row"><span>自己ベスト</span><strong>${bestText}</strong></div>
+        <button type="button" class="instr-open-btn" data-action="instruments-open-iron-log">IRON LOG を開く ›</button>
       </section>
 
       <section class="instr-panel-box instr-iron-chart">
-        <h2>ANNUAL PAYLOAD <span>月別 × 種目別</span></h2>
+        <h2>月別の積み上げ <span>今年 ・ 種目別</span></h2>
         ${ironChartHTML(period)}
         <div class="instr-panel-foot">今年の構造化セット(at基準)のみ。日付のない過去コメント移行分は含みません</div>
       </section>
 
-      ${pinArchiveHTML(state)}
+      ${archivePanel}
     </div>
   `;
 }
 
-export { configureInstruments, renderInstruments, earlyBirdStats, ironSummary, ironPeriodStats };
+export { configureInstruments, renderInstruments, earlyBirdStats, ironPeriodStats };

@@ -4567,13 +4567,21 @@ h3 {
 
 /* ============ 計器盤ぜんたいのレイアウト ============ */
 .instr-view {
+  --tower-panel: #0a1422;
+  --tower-line: #25384d;
+  --tower-cyan: #55d9e8;
+  --tower-text: #9fb3c6;
+  --tower-amber: #f2b84b;
   display: flex;
   flex-direction: column;
   gap: 12px;
   max-width: 760px;
   margin: 0 auto;
   padding: 12px 12px 40px;
+  color: var(--tower-text);
+  font-size: 11px;
 }
+.instr-view * { font-size: max(11px, 1em); }
 
 /* ============ パネル共通(tower-panel-boxと同形) ============ */
 .instr-panel-box {
@@ -4591,15 +4599,15 @@ h3 {
 .instr-panel-box h2 span {
   float: right;
   color: var(--tower-text);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 400;
   letter-spacing: .08em;
-  opacity: .6;
+  opacity: .7;
 }
 .instr-panel-foot {
   padding: 6px 10px;
   color: var(--tower-cyan);
-  font-size: 9.5px;
+  font-size: 11px;
   letter-spacing: .06em;
   opacity: .8;
 }
@@ -4637,7 +4645,7 @@ h3 {
 .instr-stat-cell + .instr-stat-cell { border-left: 1px solid var(--tower-line); }
 .instr-stat-cell span {
   color: var(--tower-cyan);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: .08em;
 }
 .instr-stat-cell strong {
@@ -4650,7 +4658,7 @@ h3 {
   color: var(--tower-text);
   font-size: 11px;
   font-weight: 400;
-  opacity: .6;
+  opacity: .7;
 }
 
 .instr-dots {
@@ -4674,99 +4682,18 @@ h3 {
 .instr-dot.is-skipped {
   border-radius: 2px;
   background: repeating-linear-gradient(135deg, transparent 0 3px, var(--tower-line) 3px 5px);
-  opacity: .55;
+  opacity: .7;
 }
 
-/* ============ 固定化ルーティン(1枠目を主役、2・3枠目は静かな補助計器) ============ */
+/* ============ 固定化ルーティン ============ */
 .instr-habit-panel { min-width: 0; }
-.instr-habit-panel h2 { color: var(--tower-green); }
-.instr-habit-panel h2 span {
-  max-width: 68%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.instr-habit-panel.is-primary {
-  border-color: color-mix(in srgb, var(--tower-green) 70%, var(--tower-line));
-  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--tower-green) 75%, transparent);
-}
-.instr-habit-panel.is-primary .instr-streak-hero strong { font-size: 50px; }
-.instr-habit-panel.is-secondary { opacity: .82; }
-.instr-habit-panel.is-secondary .instr-streak-hero { padding-top: 11px; }
-.instr-habit-panel.is-secondary .instr-streak-hero strong { font-size: 30px; }
 .instr-habit-panel .instr-stat-cell { padding-inline: 8px; }
-.instr-habit-panel .instr-stat-cell strong { font-size: 18px; }
 .instr-habit-challenge strong { font-size: 15px; white-space: nowrap; }
 
 /* ============ IRON LOGサマリ(専用画面IRON LOGへの遷移カード) ============ */
 .instr-iron-log {
   cursor: pointer;
 }
-.instr-iron-today {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 16px 12px 6px;
-  flex-wrap: wrap;
-}
-.instr-iron-today strong {
-  color: var(--tower-green);
-  font-size: 36px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-}
-.instr-iron-today strong small {
-  color: var(--tower-text);
-  font-size: 14px;
-  font-weight: 400;
-  opacity: .7;
-  margin-left: 2px;
-}
-.instr-iron-today span {
-  color: var(--tower-text);
-  font-size: 12px;
-  opacity: .7;
-}
-
-.instr-iron-bar {
-  height: 6px;
-  margin: 0 12px 12px;
-  background: var(--tower-line);
-  overflow: hidden;
-}
-.instr-iron-bar span {
-  display: block;
-  height: 100%;
-  background: var(--tower-amber);
-  box-shadow: 0 0 6px var(--tower-amber);
-}
-
-.instr-iron-lifetime {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 0 12px 12px;
-  border-bottom: 1px solid var(--tower-line);
-}
-.instr-iron-lifetime span {
-  color: var(--tower-cyan);
-  font-size: 10px;
-  letter-spacing: .08em;
-}
-.instr-iron-lifetime strong {
-  color: var(--tower-purple);
-  font-size: 16px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-.instr-iron-lifetime strong small {
-  color: var(--tower-text);
-  font-size: 11px;
-  font-weight: 400;
-  opacity: .6;
-}
-
 .instr-open-btn {
   display: block;
   width: 100%;
@@ -4783,10 +4710,10 @@ h3 {
   cursor: pointer;
 }
 .instr-open-btn:hover {
-  color: var(--tower-green);
+  color: var(--tower-amber);
 }
 
-.instr-iron-stats strong { font-size: 16px; overflow-wrap: anywhere; }
+.instr-iron-stats strong { overflow-wrap: anywhere; }
 .instr-iron-chart { min-width: 0; }
 .instr-pin-archive { min-width: 0; }
 .instr-pin-archive-list {
@@ -4824,7 +4751,7 @@ h3 {
   padding: 16px 12px 0;
 }
 .instr-chart-month { display: grid; flex: 1; gap: 5px; min-width: 30px; height: 100%; text-align: center; }
-.instr-chart-month small { color: var(--tower-text); font-size: 9px; opacity: .7; }
+.instr-chart-month small { color: var(--tower-text); font-size: 11px; opacity: .7; }
 .instr-chart-bar {
   display: flex;
   flex-direction: column-reverse;
@@ -4834,21 +4761,58 @@ h3 {
   border-bottom: 1px solid var(--tower-line);
 }
 .instr-chart-bar span { display: block; min-height: 0; }
-.instr-chart-legend { display: flex; flex-wrap: wrap; gap: 6px 12px; padding: 10px 12px; }
-.instr-chart-legend-item { display: inline-flex; align-items: center; gap: 5px; color: var(--tower-text); font-size: 10px; }
+.instr-chart-bar.is-empty { border-bottom-color: #0e1b2c; }
+.instr-chart-legend { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px 12px; padding: 10px 12px; }
+.instr-chart-legend-item { display: inline-flex; align-items: center; gap: 5px; color: var(--tower-text); font-size: 11px; }
 .instr-chart-legend-item i { width: 8px; height: 8px; }
-.instr-chart-empty { color: var(--tower-text); font-size: 10px; opacity: .6; }
+.instr-chart-empty { color: var(--tower-text); font-size: 11px; opacity: .7; }
+
+/* v326: 継続を1枚へ統合し、目標ではなく事実を読む計器盤にする。 */
+.instr-continuation { border-color: #6b5322; }
+.instr-record-row { min-height: 44px; border-bottom: 1px solid var(--tower-line); }
+.instr-record-row:last-child { border-bottom: 0; }
+.instr-record-label { display: flex; justify-content: space-between; gap: 8px; padding: 9px 10px; }
+.instr-record-label > strong { color: #dce8f2; font-size: 13px; }
+.instr-record-label > span { color: var(--tower-text); text-align: right; }
+.instr-record-row .instr-stats-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.instr-record-row .instr-streak-hero { display: grid; align-items: initial; gap: 4px; padding: 8px 10px; }
+.instr-record-row .instr-streak-hero > span,
+.instr-record-row .instr-stat-cell > span { color: var(--tower-text); letter-spacing: 0; }
+.instr-record-row .instr-streak-hero strong,
+.instr-record-row .instr-stat-cell strong { color: #dce8f2; font-size: 24px; }
+.instr-record-row .instr-streak-hero strong small,
+.instr-record-row .instr-stat-cell strong small { margin-left: 2px; color: var(--tower-text); font-weight: 400; }
+.instr-record-row .instr-stat-cell { padding: 8px 10px; }
+.instr-dots { grid-template-columns: repeat(28, 9px); gap: 3px; padding: 8px 10px; }
+.instr-dot { width: 9px; height: 9px; border-radius: 0; background: #1a2a3b; }
+.instr-dot.is-checked { background: #f2b84b; box-shadow: none; }
+.instr-empty-row { min-height: 44px; padding: 12px 10px; color: var(--tower-text); }
+.instr-fact-row { display: grid; grid-template-columns: 112px minmax(0, 1fr); align-items: center; min-height: 44px; padding: 8px 12px; border-top: 1px solid var(--tower-line); }
+.instr-fact-row span { color: var(--tower-text); }
+.instr-fact-row strong { color: #dce8f2; font-weight: 500; overflow-wrap: anywhere; }
+.instr-stat-cell.instr-iron-today { display: grid; padding: 8px 12px; }
+.instr-iron-stats .instr-stat-cell strong,
+.instr-iron-today strong { color: #dce8f2; font-size: 20px; }
+.instr-chart-recent { margin-left: auto; color: var(--tower-text); }
 
 /* ============ タブレット・PC幅(タスクシュートの他TOWER画面と同じブレークポイント) ============ */
 @media (min-width: 768px) {
   .instr-view {
     display: grid;
     grid-template-columns: 1fr 1fr;
+    grid-template-areas: "header header" "continuation continuation" "iron iron" "monthly monthly";
     align-items: start;
     max-width: 1000px;
   }
-  .instr-iron-chart { grid-column: 1 / -1; }
-  .instr-pin-archive { grid-column: 1 / -1; }
+  /* v327で「からだ/直近7日」を追加するときにPC構成を再検討する。 */
+  .instr-view.has-pin-archive {
+    grid-template-areas: "header header" "continuation continuation" "iron archive" "monthly monthly";
+  }
+  .instr-view > .view-header { grid-area: header; }
+  .instr-continuation { grid-area: continuation; }
+  .instr-iron-log { grid-area: iron; }
+  .instr-iron-chart { grid-area: monthly; }
+  .instr-pin-archive { grid-area: archive; }
   .instr-pin-archive-list { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
 }
 
@@ -4861,10 +4825,6 @@ h3 {
   .more-tower-grid { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
   /* Project編集だけを広げ、既存のfield/twy 2・3列グリッドへ幅を渡す。 */
   .project-modal { max-width: 960px; }
-}
-
-@media (min-width: 1280px) {
-  .instr-view { grid-template-columns: 1fr 1fr 1fr; }
 }
 
 /* v274: Today統合画面だけをS2 GLASSへ完全移行する。計器盤など.tower-skin系の現行意匠は維持。 */

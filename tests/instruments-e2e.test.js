@@ -71,30 +71,32 @@ function check(name, cond, extra = "") {
     console.log("[1] 当日未チェックはストリーク進行中扱いで前日以前を数える(凍結ストリーク定義)");
     const logsCase1 = {
       [iso(-1)]: checkedLog(-1), [iso(-2)]: checkedLog(-2), [iso(-3)]: checkedLog(-3), // 3連続(直近)
-      [iso(-5)]: checkedLog(-5), [iso(-6)]: checkedLog(-6) // 2連続(過去、-4は欠損で切断)
+      [iso(-5)]: checkedLog(-5), [iso(-6)]: checkedLog(-6), // 2連続(過去、-4は欠損で切断)
+      "2025-01-01": { checkedAt: "2025-01-01T06:00" }
     };
     await seed({ earlyBirdLogs: logsCase1 });
     check("ヘッダは計器盤/INSTRUMENTS", (await page.locator(".eyebrow").textContent()) === "計器盤"
       && (await page.locator(".view-header h1").textContent()) === "INSTRUMENTS");
-    check("当日未チェックの現在ストリークは3(前日以前の連続)", (await page.locator(".instr-streak-hero strong").textContent()) === "3");
+    check("当日未チェックの現在ストリークは3(前日以前の連続)", (await page.locator(".instr-streak-hero strong").textContent()) === "3日連続");
     const stats1 = await page.locator(".instr-stat-cell strong").allTextContents();
-    check("自己ベストは3・累計は5", stats1[0] === "3日" && stats1[1] === "5回", JSON.stringify(stats1));
+    check("自己ベストは3・今年5・累計6", stats1[0] === "3日" && stats1[1] === "5回" && stats1[2] === "6回", JSON.stringify(stats1));
 
     console.log("[2] 当日チェック済みは当日を含めて連続日数を数える");
     const logsCase2 = { [today]: checkedLog(0), [iso(-1)]: checkedLog(-1), [iso(-2)]: checkedLog(-2) };
     await seed({ earlyBirdLogs: logsCase2 });
-    check("当日込みで現在ストリーク3", (await page.locator(".instr-streak-hero strong").textContent()) === "3");
+    check("当日込みで現在ストリーク3", (await page.locator(".instr-streak-hero strong").textContent()) === "3日連続");
     const stats2 = await page.locator(".instr-stat-cell strong").allTextContents();
     check("自己ベストも3(進行中ストリークが最長)", stats2[0] === "3日", stats2[0]);
 
     console.log("[3] 過去の最長ランが現在ストリークを上回れば自己ベストとして残る");
     const logsCase3 = {};
     for (let i = 5; i <= 9; i++) logsCase3[iso(-i)] = checkedLog(-i); // 5連続(-9〜-5)、直近は欠損
+    logsCase3["2025-01-01"] = { checkedAt: "2025-01-01T06:00" };
     await seed({ earlyBirdLogs: logsCase3 });
-    check("当日・前日とも未チェックで現在ストリーク0", (await page.locator(".instr-streak-hero strong").textContent()) === "0");
+    check("当日・前日とも未チェックで現在ストリーク0", (await page.locator(".instr-streak-hero strong").textContent()) === "0日連続");
     const stats3 = await page.locator(".instr-stat-cell strong").allTextContents();
     check("自己ベストは過去の5連続を維持", stats3[0] === "5日", stats3[0]);
-    check("累計は5回", stats3[1] === "5回", stats3[1]);
+    check("今年5回・累計6回", stats3[1] === "5回" && stats3[2] === "6回", JSON.stringify(stats3));
 
     console.log("[4] 直近28日ドットは達成日にis-checkedが付く");
     await seed({ earlyBirdLogs: logsCase1 });
@@ -105,16 +107,16 @@ function check(name, cond, extra = "") {
     check("当日(未チェック)のドットはis-checkedなし", await page.locator(`.instr-dot[title="${today}"]`).evaluate((el) => !el.classList.contains("is-checked")));
     check("欠損日(-4)のドットはis-checkedなし", await page.locator(`.instr-dot[title="${iso(-4)}"]`).evaluate((el) => !el.classList.contains("is-checked")));
 
-    console.log("[5] IRON LOGサマリは当日総重量・目標比・累計トン表記を表示する");
+    console.log("[5] 筋トレの記録は今週総重量・今年トン表記・週回数を表示する");
     const gymSets = [
       { exercise: "ベンチプレス", weight: 125, reps: 10, at: atMinute(today, 9 * 60) },
       { exercise: "ベンチプレス", weight: 125, reps: 10, at: atMinute(today, 9 * 60 + 10) }
     ]; // 2,500kg(既定目標2,000kg超過)
     await seed({ earlyBirdLogs: {}, gym: gymSets });
     check("当日総重量2,500kgを表示", ((await page.locator(".instr-iron-today strong").textContent()) || "").includes("2,500"));
-    check("既定目標2,000kgを表示", ((await page.locator(".instr-iron-today span").textContent()) || "").includes("2,000kg"));
-    check("目標超過時のバーは100%キャップ", (await page.locator(".instr-iron-bar span").getAttribute("style") || "").includes("width:100%"));
-    check("累計はトン表記(2.5t)", ((await page.locator(".instr-iron-lifetime strong").textContent()) || "").includes("2.5"));
+    check("今年はトン表記(2.5t)", ((await page.locator(".instr-iron-stats .instr-stat-cell").nth(1).textContent()) || "").includes("2.5t"));
+    check("目標バーを撤去", await page.locator(".instr-iron-bar,.instr-iron-goal").count() === 0);
+    check("同日の2セットを今週1回として表示", ((await page.locator(".instr-iron-stats .instr-stat-cell").nth(2).textContent()) || "").includes("1回"));
 
     console.log("[6] ☀早起きゲートのチェック(既存v229実装)が翌描画でストリークに反映される");
     await seed({ view: "today", earlyBirdLogs: {} });
@@ -128,7 +130,7 @@ function check(name, cond, extra = "") {
     }, { KEY });
     await page.reload();
     await page.waitForSelector('#app[data-view="instruments"]', { state: "attached" });
-    check("GATEチェック直後の計器盤で現在ストリーク1", (await page.locator(".instr-streak-hero strong").textContent()) === "1");
+    check("GATEチェック直後の計器盤で現在ストリーク1", (await page.locator(".instr-streak-hero strong").textContent()) === "1日連続");
     check("当日ドットがis-checkedへ切り替わる", await page.locator(`.instr-dot[title="${today}"]`).evaluate((el) => el.classList.contains("is-checked")));
 
     console.log("[7] IRON LOGサマリ枠タップでinstruments-open-iron-log遷移する");
