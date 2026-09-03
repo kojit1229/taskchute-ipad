@@ -1,12 +1,13 @@
 // v314: personal-dataの健康日次を閲覧専用で取得する。キャッシュはstateへ混ぜず、このモジュール内だけに保持する。
-let personalDataReady, fetchGitHubRawText, escapeHTML;
-let healthCache = { fetchedAt: 0, data: undefined };
+let personalDataReady, fetchGitHubRawText, escapeHTML, addDays, conditionThresholds, todayISO;
+// v325: 6時間キャッシュ中でも日を跨いだら当日データを取り直せるよう、取得日を別に保持する。
+let healthCache = { fetchedAt: 0, fetchedFor: "", data: undefined };
 
 const HEALTH_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const HEALTH_CACHE_DAYS = 60;
 
 function configureHealth(deps) {
-  ({ personalDataReady, fetchGitHubRawText, escapeHTML } = deps);
+  ({ personalDataReady, fetchGitHubRawText, escapeHTML, addDays, conditionThresholds, todayISO } = deps);
 }
 
 function validHealthData(value) {
@@ -17,7 +18,8 @@ function validHealthData(value) {
 
 async function hydrateHealthData(refreshIntervalMs) {
   if (!personalDataReady()) return false;
-  if (Date.now() - healthCache.fetchedAt < refreshIntervalMs) return false;
+  const fetchedFor = todayISO();
+  if (healthCache.fetchedFor === fetchedFor && Date.now() - healthCache.fetchedAt < refreshIntervalMs) return false;
   let next;
   try {
     const raw = await fetchGitHubRawText("karada/health-daily.json");
@@ -28,9 +30,14 @@ async function hydrateHealthData(refreshIntervalMs) {
   }
   const previous = healthCache.data;
   healthCache.fetchedAt = Date.now();
+  healthCache.fetchedFor = fetchedFor;
   if (!next) return false;
   healthCache.data = next;
   return JSON.stringify(previous) !== JSON.stringify(next);
+}
+
+function invalidateHealthCache() {
+  healthCache.fetchedAt = 0;
 }
 
 function localDateMs(iso) {
@@ -61,6 +68,100 @@ function healthForDate(iso) {
   return Array.isArray(days) ? days.find((row) => row.date === iso) || null : null;
 }
 
+function healthMedian(values) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function healthNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function sleepText(minutes) {
+  return Number.isFinite(minutes)
+    ? `${Math.floor(minutes / 60)}h${String(Math.round(minutes % 60)).padStart(2, "0")}m` : "—";
+}
+
+function conditionFromHealth(days, todayIso) {
+  const row = Array.isArray(days) ? days.find((day) => day?.date === todayIso) : null;
+  const empty = {
+    level: "unknown", sleepMin: null, bedTime: null, wakeTime: null, restingHr: null, hrv: null,
+    ySteps: null, yExerciseMin: null, yActiveKcal: null, stepsAvg7: null, reasons: []
+  };
+  if (!row) return empty;
+  const thresholds = conditionThresholds();
+  const yesterday = addDays(todayIso, -1);
+  const yesterdayRow = days.find((day) => day?.date === yesterday) || {};
+  const baselineFrom = addDays(todayIso, -thresholds.baselineLookbackDays);
+  const baselineRows = days.filter((day) => day?.date >= baselineFrom && day.date < todayIso);
+  const baseline = (key) => {
+    const values = baselineRows.map((day) => healthNumber(day[key])).filter((value) => value !== null);
+    return values.length >= thresholds.baselineMinSamples ? healthMedian(values) : null;
+  };
+  const sleepMin = healthNumber(row.sleep_min);
+  const restingHr = healthNumber(row.resting_hr);
+  const hrv = healthNumber(row.hrv_sdnn);
+  const factors = [];
+  if (sleepMin !== null) {
+    if (sleepMin < thresholds.sleepDeficitH * 60) factors.push({ level: "deficit", text: `睡眠 ${sleepText(sleepMin)}` });
+    else if (sleepMin < thresholds.sleepLowH * 60) factors.push({ level: "low", text: `睡眠 ${sleepText(sleepMin)}` });
+  }
+  const hrvBaseline = baseline("hrv_sdnn");
+  if (hrvBaseline > 0 && hrv !== null) {
+    const pct = (hrv - hrvBaseline) / hrvBaseline * 100;
+    if (pct <= thresholds.hrvDeficitPct) factors.push({ level: "deficit", text: `HRV ${Math.round(pct)}%`.replace("-", "−") });
+    else if (pct <= thresholds.hrvLowPct) factors.push({ level: "low", text: `HRV ${Math.round(pct)}%`.replace("-", "−") });
+  }
+  const hrBaseline = baseline("resting_hr");
+  if (hrBaseline !== null && restingHr !== null) {
+    const diff = restingHr - hrBaseline;
+    if (diff >= thresholds.hrDeficitBpm) factors.push({ level: "deficit", text: `HR +${Math.round(diff)}bpm` });
+    else if (diff >= thresholds.hrLowBpm) factors.push({ level: "low", text: `HR +${Math.round(diff)}bpm` });
+  }
+  const stepFrom = addDays(todayIso, -7);
+  const stepValues = days.filter((day) => day?.date >= stepFrom && day.date < todayIso)
+    .map((day) => healthNumber(day.steps)).filter((value) => value !== null);
+  const reasons = [...factors.filter((factor) => factor.level === "deficit"), ...factors.filter((factor) => factor.level === "low")]
+    .map((factor) => factor.text);
+  return {
+    level: factors.some((factor) => factor.level === "deficit") ? "deficit" : factors.length ? "low" : "normal",
+    sleepMin, bedTime: typeof row.bed_time === "string" ? row.bed_time : null,
+    wakeTime: typeof row.wake_time === "string" ? row.wake_time : null, restingHr, hrv,
+    ySteps: healthNumber(yesterdayRow.steps), yExerciseMin: healthNumber(yesterdayRow.exercise_min),
+    yActiveKcal: healthNumber(yesterdayRow.active_kcal),
+    stepsAvg7: stepValues.length ? stepValues.reduce((sum, value) => sum + value, 0) / stepValues.length : null,
+    reasons
+  };
+}
+
+function conditionFromCachedHealth(todayIso) {
+  const days = personalDataReady() ? healthCache.data?.days : null;
+  return conditionFromHealth(Array.isArray(days) ? days : [], todayIso);
+}
+
+function conditionCommentText(cond) {
+  if (cond?.level === "unknown") return "今朝の睡眠データはまだありません";
+  const steps = healthNumber(cond?.ySteps);
+  const average = healthNumber(cond?.stepsAvg7);
+  const gymKg = healthNumber(cond?.yGymKg);
+  const gym = gymKg > 0 ? `・筋トレ ${gymKg.toLocaleString("ja-JP")}kg` : "";
+  let activity = "";
+  if (steps !== null && average > 0 && steps >= average * 1.3) {
+    activity = `昨日は歩数 ${steps.toLocaleString("ja-JP")}${gym} と活動量が多め ─ `;
+  } else if (steps !== null && average > 0 && steps <= average * 0.7) {
+    activity = `昨日の活動は控えめ(歩数 ${steps.toLocaleString("ja-JP")}${gym}) ─ `;
+  }
+  const hasSleep = Number.isFinite(cond?.sleepMin);
+  const sleep = sleepText(cond?.sleepMin);
+  const reasonSentence = (reason) => `${reason} ${reason.startsWith("HRV ") ? "が低めです。" : reason.startsWith("HR ") ? "が高めです。" : "と短めです。"}`;
+  if (cond.level === "deficit") {
+    return `${reasonSentence(cond.reasons?.[0] || "体調データ")}${activity}今日は重要なこと1つに絞り、午後に15分の休憩を入れましょう`;
+  }
+  if (cond.level === "low") return `${hasSleep ? `睡眠 ${sleep}。` : reasonSentence(cond.reasons?.[0] || "体調データ")}${activity}今日は詰め込まず MIT を優先しましょう`;
+  return `${hasSleep ? `睡眠 ${sleep} で十分。` : "今朝の睡眠データは未取得。"}${activity}今日は集中の山を1つ作る日に`;
+}
+
 function healthSummaryHTML(todayIso, exact = false) {
   const row = personalDataReady() ? (exact ? healthForDate(todayIso) : latestHealthWithin(todayIso)) : null;
   if (!row) return `<div class="bm-health"><div class="bm-health-src">${escapeHTML("健康データ 未取得")}</div></div>`;
@@ -77,5 +178,7 @@ function healthSummaryHTML(todayIso, exact = false) {
 }
 
 export {
-  HEALTH_REFRESH_INTERVAL_MS, configureHealth, hydrateHealthData, latestHealthWithin, healthForDate, healthSummaryHTML
+  HEALTH_REFRESH_INTERVAL_MS, configureHealth, hydrateHealthData, invalidateHealthCache,
+  latestHealthWithin, healthForDate, healthSummaryHTML,
+  conditionFromHealth, conditionFromCachedHealth, conditionCommentText
 };

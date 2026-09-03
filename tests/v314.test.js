@@ -44,6 +44,7 @@ function fixtureDays(dates) {
   let result = JSON.stringify(fixture());
   health.configureHealth({
     escapeHTML, personalDataReady: () => ready,
+    todayISO: () => "2026-09-02",
     fetchGitHubRawText: async (name) => {
       fetches++;
       check("取得先はkarada/health-daily.json", name === "karada/health-daily.json", name);

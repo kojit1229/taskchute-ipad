@@ -1,0 +1,49 @@
+{
+  "version": 325,
+  "date": "2026-09-04",
+  "title": "トップ画面に体調コメント(決定論・体力予算と同じ閾値)",
+  "summary": "Today TOWERのMIT直下に、健康日次の当日睡眠と昨日の活動量から決定論で作る静かな体調コメントを常設する。",
+  "changedFiles": [
+    "CHANGES_v325.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v325.json",
+    "src/features/health.js",
+    "src/features/today-tower.js",
+    "src/features/today.js",
+    "styles.css",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/v314.test.js",
+    "tests/v325.test.js"
+  ],
+  "intent": [
+    "既存の体力予算と同じ閾値を再利用し、診断や警告ではなく当日の使い方を1つだけ提示する。",
+    "健康日次キャッシュと既存stateを読み取るだけにし、体調コメントのための保存・同期フィールドを増やさない。"
+  ],
+  "changes": [
+    "health.jsへ当日睡眠・HRV・安静時HRの3段階判定と、昨日の活動量を添える文言生成を追加した。",
+    "Today TOWERのMIT直下へ体調コメントを常設し、モバイル2行・PC1行で表示するようにした。",
+    "日跨ぎ時に健康キャッシュの取得時刻を無効化し、次の既存hydrate経路で再取得するようにした。",
+    "Service WorkerのCACHE_NAMEをv325へ更新した。"
+  ],
+  "uncertainties": [
+    "健康日次の生成時刻が当日睡眠に間に合わない日は unknown になる(バッチ時刻の変更はK承認待ち)"
+  ],
+  "reviewFocus": [
+    "体力予算の既存定数がDIで共有され、health.jsへ同値の閾値を複製していないか。",
+    "当日行なし・取得失敗・未設定時に静かなunknown文言だけとなり、stateへ書き込まないか。",
+    "MIT直後・LIFE BAND前の順序、モバイル2行、PC1行、390px横スクロールなしを満たすか。"
+  ],
+  "verification": [
+    "node --checkで変更したJavaScriptとテストの構文を確認する。",
+    "npm.cmd run test:manifest:writeとnpm.cmd run code:index:writeで生成物を更新する。",
+    "Google Chrome指定でv325、v321、v314、v313、tower-core、today-coreを実行する。"
+  ],
+  "notes": [
+    "発注指定によりrelease-record.js、CHANGES_v325.md生成、コミット、push、taskchute-notes書込は実行しない。"
+  ],
+  "knownLimitations": []
+}

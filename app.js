@@ -19,7 +19,9 @@ import { loadState, persistLocalNoSchedule, _lastSaveError } from "./src/storage
 import { cachedFeedback } from "./src/state/feedback-cache.js";
 import { configureFund, hydrateFundData, renderFund } from "./src/features/fund.js";
 import {
-  HEALTH_REFRESH_INTERVAL_MS, configureHealth, hydrateHealthData, latestHealthWithin, healthForDate, healthSummaryHTML
+  HEALTH_REFRESH_INTERVAL_MS, configureHealth, hydrateHealthData, invalidateHealthCache,
+  latestHealthWithin, healthForDate, healthSummaryHTML,
+  conditionFromCachedHealth, conditionCommentText
 } from "./src/features/health.js";
 // v223: TOWER上帯(STANDING ORDERS/COUNTDOWN)は自己完結featureへ依存注入する。
 import { configureTopband, cycleWeekForDate, toggleTwyScoreExpanded } from "./src/features/topband.js";
@@ -263,12 +265,12 @@ configureGithubSync({
   _startupDataModifiedAt
 });
 configureToday({
-  escapeHTML, todayISO, blocksForDate, minutesOf, timeFromDateTime,
+  escapeHTML, todayISO, addDays, blocksForDate, minutesOf, timeFromDateTime,
   localDateTimeToMs, resolveEstimateMin,
   clamp, isStaleBlock, isTaskDead, renderDeferringForFocus,
   renderCircularProgress, remainingText, remainingTextNormal,
   renderPomodoroInterruptControls,
-  syncAlertBanner, healthSummaryHTML,
+  syncAlertBanner, healthSummaryHTML, conditionFromCachedHealth, conditionCommentText,
   gateEditMode: () => _towerGateEditMode
 });
 configureTopband({
@@ -303,7 +305,17 @@ configureWish({
 });
 // v301: FUND日誌も既存のsanitize済みMarkdown描画経路へ結線する。
 configureFund({ escapeHTML, renderHeader, renderMarkdown, personalDataReady, fetchGitHubRawText });
-configureHealth({ escapeHTML, personalDataReady: () => personalDataReady(state.settings.github), fetchGitHubRawText });
+configureHealth({
+  escapeHTML, personalDataReady: () => personalDataReady(state.settings.github), fetchGitHubRawText, addDays,
+  todayISO,
+  conditionThresholds: () => ({
+    baselineLookbackDays: CONDITION_BUDGET_BASELINE_LOOKBACK_DAYS,
+    baselineMinSamples: CONDITION_BUDGET_BASELINE_MIN_SAMPLES,
+    hrvDeficitPct: CONDITION_BUDGET_HRV_DEFICIT_PCT, hrvLowPct: CONDITION_BUDGET_HRV_LOW_PCT,
+    hrDeficitBpm: CONDITION_BUDGET_HR_DEFICIT_BPM, hrLowBpm: CONDITION_BUDGET_HR_LOW_BPM,
+    sleepDeficitH: CONDITION_BUDGET_SLEEP_DEFICIT_H, sleepLowH: CONDITION_BUDGET_SLEEP_LOW_H
+  })
+});
 // v169: src/features/journal.jsも同じ理由(循環import回避)で依存注入する。renderExperimentSection
 // (週次レビューと共有、app.js残留)はここで注入する(prep-stage4-journal.md §0/§4/§9 Must級、
 // 「呼ぶだけで実体は移さない」をdeps注入で満たす)。
@@ -13661,6 +13673,7 @@ function runDailyOpen({ force = false } = {}) {
   maintainRecurrences({ purge: true });  // 既存の展開ロジックを流用
   if (isNewDay) {
     state.settings.lastOpenedDate = today;
+    invalidateHealthCache();
     // v85: 日をまたいでの復帰(前回操作日から暦日が変わった)は、閲覧中の日付を「今日」へ戻す。
     // ここはvisibilitychange復帰時にも通る唯一の日跨ぎ検知ポイントなので、起動時リセット(モジュール
     // 末尾)と合わせてこの1箇所だけで「各タブは基本的に今日を表示」の(a)(b)を満たす。

@@ -3117,6 +3117,10 @@ h3 {
 .tower-mit-title { min-width: 0; overflow: hidden; font-family: system-ui, sans-serif; text-overflow: ellipsis; white-space: nowrap; }
 .tower-mit-meta { margin-left: 8px; color: var(--tower-cyan); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tower-mit-empty { display: flex; align-items: center; min-height: 44px; padding: 0 10px; color: var(--tower-red); font-size: 11px; }
+.tower-condition { display: grid; grid-template-areas: "label meta" "text text"; grid-template-columns: auto minmax(0, 1fr); align-items: center; min-height: 44px; margin-bottom: 12px; padding: 8px 10px; border: 1px solid #1f5560; background: var(--tower-panel); }
+.tower-condition-label { grid-area: label; color: var(--tower-cyan); font-size: 13px; letter-spacing: .08em; }
+.tower-condition-text { grid-area: text; margin-top: 5px; font-family: system-ui, sans-serif; font-size: 13px; line-height: 1.5; }
+.tower-condition-meta { grid-area: meta; min-width: 0; overflow: hidden; color: var(--tower-text); font-size: 11px; opacity: .75; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
 .today-tower .mit-star { color: var(--tower-amber); font-weight: 700; }
 .tower-band2 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; order: 1; margin-top: 12px; }
 .tower-band2 > .tower-runway,
@@ -3485,6 +3489,7 @@ h3 {
     grid-template-columns: 340px 320px minmax(0, 1fr);
     grid-template-areas:
       "mit   mit    mit"
+      "cond  cond   cond"
       "alert alert  alert"
       "life  life   so"
       "band2 band2  band2"
@@ -3502,6 +3507,8 @@ h3 {
     padding: 12px 16px 40px;
   }
   .today-tower > .tower-mit { grid-area: mit; }
+  .today-tower > .tower-condition { grid-area: cond; grid-template-areas: "label text meta"; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 18px; }
+  .today-tower > .tower-condition .tower-condition-text { margin-top: 0; }
   .today-tower > .sync-alert-banner { grid-area: alert; }
   .today-tower > .tower-band1 { grid-area: life; }
   .today-tower > .so-row { grid-area: so; }
@@ -4905,6 +4912,7 @@ h3 {
 
 #app[data-view="today"] .today-tower .tower-glass-panel,
 #app[data-view="today"] .today-tower .tower-mit,
+#app[data-view="today"] .today-tower .tower-condition,
 #app[data-view="today"] .today-tower .today-focus-bar,
 #app[data-view="today"] .today-tower .tower-panel-box,
 #app[data-view="today"] .today-tower .tower-runway,
@@ -4922,6 +4930,7 @@ h3 {
 }
 
 #app[data-view="today"] .today-tower .tower-mit { border-color: var(--tower-amber); }
+#app[data-view="today"] .today-tower .tower-condition { border-color: #1f5560; }
 
 #app[data-view="today"] .today-tower[data-glass-blur="off"] { --tower-glass-blur: none; }
 

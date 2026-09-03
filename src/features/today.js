@@ -10,14 +10,14 @@ import {
   towerFlights as coreTowerFlights
 } from "../core/today-model.js";
 
-let escapeHTML, todayISO, blocksForDate, minutesOf, timeFromDateTime;
+let escapeHTML, todayISO, addDays, blocksForDate, minutesOf, timeFromDateTime;
 let localDateTimeToMs, resolveEstimateMin;
 let clamp, isStaleBlock, isTaskDead, renderDeferringForFocus;
 let renderCircularProgress, remainingText, remainingTextNormal;
 let renderPomodoroInterruptControls;
 let syncAlertBanner;
 let gateEditMode;
-let healthSummaryHTML;
+let healthSummaryHTML, conditionFromCachedHealth, conditionCommentText;
 let todayTickerId = null;
 let todayRenderedDateISO = null;
 let todayFocusUi = null;
@@ -86,12 +86,12 @@ function renderTodayFocusBar(visibility = todayFocusUiState().sections) {
 
 function configureToday(deps) {
   ({
-    escapeHTML, todayISO, blocksForDate, minutesOf, timeFromDateTime,
+    escapeHTML, todayISO, addDays, blocksForDate, minutesOf, timeFromDateTime,
     localDateTimeToMs, resolveEstimateMin,
     clamp, isStaleBlock, isTaskDead, renderDeferringForFocus,
     renderCircularProgress, remainingText, remainingTextNormal,
     renderPomodoroInterruptControls,
-    syncAlertBanner, gateEditMode, healthSummaryHTML
+    syncAlertBanner, gateEditMode, healthSummaryHTML, conditionFromCachedHealth, conditionCommentText
   } = deps);
   configureTodayTower({
     escapeHTML, todayISO, syncAlertBanner, blocksForDate, towerFlights,
@@ -109,7 +109,9 @@ function configureToday(deps) {
     earlyRiseTarget: () => state.settings.earlyRiseTarget,
     linkedGymBlock: (blocks, nowMinutes) => linkedGymBlock({ settings: state.settings, blocks }, nowMinutes),
     bodyScansForDate: (date) => (state.bodyScans || []).filter((s) => String(s.dateTime || "").startsWith(date)),
-    healthSummaryHTML,
+    healthSummaryHTML, conditionFromCachedHealth, conditionCommentText,
+    yesterdayGymKg: (today) => (state.condition?.logs?.[addDays(today, -1)]?.gym || []).reduce((sum, set) =>
+      set?.deleted ? sum : sum + (Number(set?.weight) || 0) * (Number(set?.reps) || 0), 0),
     scheduledTasksForDate: (date, blocks) => {
       const blockedTaskIds = new Set((blocks || []).map((block) => block.taskId).filter(Boolean));
       return (state.tasks || []).filter((task) => {

@@ -13,7 +13,7 @@ let journalForDate;
 let gateRules, earlyBirdLogForDate, earlyRiseTarget, linkedGymBlock, gateEditMode;
 let scheduledTasksForDate;
 let bodyScansForDate;
-let healthSummaryHTML;
+let healthSummaryHTML, conditionFromCachedHealth, conditionCommentText, yesterdayGymKg;
 let _bmWeeklyOpen = false;  // v297: BODY/MINDウィジェットの週推移開閉(表示専用・stateへは書かない)
 let flipListenerBound = false;
 // undefined=セッション初回(未観測)。復元描画では接地の瞬間ではないためフラッシュを出さない
@@ -54,7 +54,7 @@ function configureTodayTower(deps) {
     runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp, isStaleBlock,
     towerMotionSetting, renderTodayPomodoro, todayFocusVisibility, renderTodayFocusBar, journalForDate,
     gateRules, earlyBirdLogForDate, earlyRiseTarget, linkedGymBlock, scheduledTasksForDate, gateEditMode,
-    bodyScansForDate, healthSummaryHTML
+    bodyScansForDate, healthSummaryHTML, conditionFromCachedHealth, conditionCommentText, yesterdayGymKg
   } = deps);
   if (!flipListenerBound && typeof document !== "undefined") {
     document.addEventListener("animationend", (event) => {
@@ -160,6 +160,18 @@ function renderTowerMIT(blocks) {
   return `<section class="tower-mit sec-mit"><h2>★ MIT <span>本日の一つ</span></h2>
     ${rows || '<div class="tower-mit-empty">MITは未設定(タイムラインの☆で指定)</div>'}
   </section>`;
+}
+
+function renderTowerCondition(today) {
+  const cond = conditionFromCachedHealth(today);
+  const withGym = { ...cond, yGymKg: yesterdayGymKg(today) };
+  const meta = cond.level === "unknown" ? "" : [
+    Number.isFinite(cond.sleepMin) ? `睡眠 ${Math.floor(cond.sleepMin / 60)}h${String(Math.round(cond.sleepMin % 60)).padStart(2, "0")}m` : "",
+    Number.isFinite(cond.restingHr) ? `HR ${cond.restingHr.toLocaleString("ja-JP")}` : "",
+    Number.isFinite(cond.hrv) ? `HRV ${cond.hrv.toLocaleString("ja-JP")}ms` : "",
+    Number.isFinite(cond.ySteps) ? `昨日 ${cond.ySteps.toLocaleString("ja-JP")}歩` : ""
+  ].filter(Boolean).join(" ・ ");
+  return `<section class="tower-condition sec-condition"><span class="tower-condition-label">からだ ─ 今日</span><span class="tower-condition-text">${escapeHTML(conditionCommentText(withGym))}</span>${meta ? `<span class="tower-condition-meta">${escapeHTML(meta)}</span>` : ""}</section>`;
 }
 
 function flightSetKey(flights) {
@@ -542,6 +554,7 @@ function renderTodayTower() {
   return `<div class="today-tower" data-motion="${escapeHTML(towerMotionSetting())}" data-night="${isNightHour(now.getHours()) ? 1 : 0}" data-paused="${document.hidden ? 1 : 0}" data-focus-mode="${Object.values(focusVisibility).some(Boolean) ? 0 : 1}" data-view-side="${focusVisibility.side ? 1 : 0}" data-view-journal="${focusVisibility.journal ? 1 : 0}" data-view-life="${focusVisibility.life ? 1 : 0}"${glassBlurOff() ? ' data-glass-blur="off"' : ""}>
     ${syncAlertBanner()}
     ${renderTowerMIT(blocks)}
+    ${renderTowerCondition(today)}
     ${focusVisibility.life ? `<div class="tower-band1 band1">${renderLifeBand()}<section class="tower-glass-panel clock-box" aria-label="現在時刻"><time id="towerClock">${clockText(now)}</time><span id="towerDate">${date} (${weekday})</span><strong class="dayleft" id="towerDayLeft">${dayLeftText(now)}</strong><span>本日残り</span></section>
     </div>` : ""}
     ${focusVisibility.life ? renderStandingOrders() : ""}
