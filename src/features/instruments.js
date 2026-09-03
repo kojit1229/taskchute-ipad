@@ -17,7 +17,7 @@
 //    切断しない(進行中扱い)」。当日未チェックの場合は当日をカウントに含めないが、
 //    前日以前の連続はそのまま(切断せず)遡って数える。
 //
-// 日時のnew Date("文字列")パース禁止(iOS Safari。p4-interface.md §6)。日付の加減算は
+// iOS Safariでずれる日時文字列のDateパースは禁止(p4-interface.md §6)。日付の加減算は
 // すべてdeps.addDays(app.js本体版は数値コンストラクタnew Date(y,m,d)を使うためTZ安全)を
 // 経由し、このモジュール自身では日時文字列をパースしない。
 //
@@ -32,6 +32,8 @@
 // characterization test: instruments-core.test.js(同ディレクトリ、ブラウザ不要)。
 
 import { habitStreakPeriodStats, habitStreakStats } from "../core/habit-streak.js";
+import { cachedHealthData, conditionCommentText, conditionFromHealth } from "./health.js";
+import { bmSummary } from "./today-tower.js";
 
 // ---- 依存注入(configureInstruments) ----
 // 呼び出し前のフォールバック(単体で読み込んだだけでは壊れないようにするための最小スタブ。
@@ -106,6 +108,105 @@ const GRAPH_COLORS = [
   "color-mix(in srgb, var(--tower-amber) 65%, var(--tower-purple))",
   "color-mix(in srgb, var(--tower-green) 65%, var(--tower-cyan))"
 ];
+
+const finiteNumber = (value) => typeof value === "number" && Number.isFinite(value) ? value : null;
+function shiftIso(iso, delta) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
+  if (!match) return "";
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + delta);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+function gymKgForDate(state, date) {
+  return (state?.condition?.logs?.[date]?.gym || []).reduce((sum, set) => set?.deleted
+    ? sum : sum + (Number(set?.weight) || 0) * (Number(set?.reps) || 0), 0);
+}
+function weekSummary(days, state, todayIso) {
+  const dates = Array.from({ length: 7 }, (_, index) => shiftIso(todayIso, index - 6));
+  const byDate = new Map((Array.isArray(days) ? days : []).map((day) => [day?.date, day]));
+  const series = (key) => dates.map((date) => ({ date, value: finiteNumber(byDate.get(date)?.[key]) }));
+  const values = (points) => points.filter((point) => point.value !== null);
+  const average = (points) => {
+    const present = values(points);
+    return present.length ? present.reduce((sum, point) => sum + point.value, 0) / present.length : null;
+  };
+  const sleep = series("sleep_min"), steps = series("steps"), hrv = series("hrv_sdnn");
+  const hrvValues = values(hrv);
+  const gym = dates.map((date) => ({ date, value: gymKgForDate(state, date) || null }));
+  const scans = Array.isArray(state?.bodyScans) ? state.bodyScans : [];
+  const bodyScans = dates.map((date) => {
+    const daily = scans.filter((scan) => !scan?.deleted && String(scan?.dateTime || "").startsWith(date)
+      && finiteNumber(scan?.fatigue) !== null);
+    return { date, value: daily.length ? bmSummary(daily).fatigue / daily.length : null };
+  });
+  const gymValues = values(gym), bodyValues = values(bodyScans);
+  const gymMax = gymValues.reduce((best, point) => !best || point.value > best.value ? point : best, null);
+  return {
+    dates, from: dates[0], to: dates[6],
+    sleep: { points: sleep, average: average(sleep), missing: 7 - values(sleep).length },
+    steps: { points: steps, average: average(steps), yesterday: steps[5]?.value ?? null },
+    hrv: { points: hrv, first: hrvValues[0]?.value ?? null,
+      middle: hrvValues[Math.floor(hrvValues.length / 2)]?.value ?? null, last: hrvValues.at(-1)?.value ?? null },
+    gym: { points: gym, count: gymValues.length, maxKg: gymMax?.value ?? null, maxDate: gymMax?.date ?? null },
+    bodyScans: { points: bodyScans, average: average(bodyScans),
+      max: bodyValues.length ? Math.max(...bodyValues.map((point) => point.value)) : null }
+  };
+}
+
+function durationText(minutes) {
+  if (minutes === null) return "—";
+  const rounded = Math.round(minutes);
+  return `${Math.floor(rounded / 60)}h${String(rounded % 60).padStart(2, "0")}m`;
+}
+function shortDate(iso) { return iso ? `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}` : "—"; }
+function generatedTime(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(value || ""));
+  return match ? `${Number(match[2])}/${Number(match[3])} ${match[4]}:${match[5]}` : "未取得";
+}
+function metricHTML(label, value, detail, wide = false) {
+  return `<div class="instr-kpi${wide ? " instr-kpi-wide" : ""}"><strong>${escapeHTML(value)}</strong><span>${label}</span><small>${escapeHTML(detail)}</small></div>`;
+}
+function todayPanelHTML(state, todayIso, health) {
+  const days = Array.isArray(health?.days) ? health.days : [];
+  const row = days.find((day) => day?.date === todayIso);
+  const heading = `<h2>からだ ─ 今日 <span>Apple Health ${escapeHTML(generatedTime(health?.generated_at))}</span></h2>`;
+  if (!row) return `<section class="instr-panel-box instr-today">${heading}<div class="instr-today-empty">今朝の睡眠データはまだありません</div></section>`;
+  const cond = conditionFromHealth(days, todayIso);
+  const detail = (value, text) => value === null ? "未記録" : text;
+  const kpis = [
+    metricHTML("睡眠", durationText(cond.sleepMin), detail(cond.sleepMin, cond.bedTime && cond.wakeTime ? `${cond.bedTime}→${cond.wakeTime}` : "未記録")),
+    metricHTML("安静時HR", cond.restingHr?.toLocaleString("ja-JP") ?? "—", detail(cond.restingHr, "bpm")),
+    metricHTML("HRV", cond.hrv?.toLocaleString("ja-JP") ?? "—", detail(cond.hrv, "ms")),
+    metricHTML("昨日の歩数", cond.ySteps?.toLocaleString("ja-JP") ?? "—", detail(cond.ySteps, "歩")),
+    metricHTML("昨日の運動", cond.yExerciseMin?.toLocaleString("ja-JP") ?? "—", detail(cond.yExerciseMin, "分"), true),
+    metricHTML("昨日の活動", cond.yActiveKcal?.toLocaleString("ja-JP") ?? "—", detail(cond.yActiveKcal, "kcal"), true)
+  ].join("");
+  const comment = conditionCommentText({ ...cond, yGymKg: gymKgForDate(state, shiftIso(todayIso, -1)) });
+  return `<section class="instr-panel-box instr-today">${heading}<div class="instr-kpis">${kpis}</div><div class="instr-condition-text">${escapeHTML(comment)}</div></section>`;
+}
+function sparklineHTML(points, type, color, highlightDate = "") {
+  const present = points.map((point, index) => ({ ...point, index })).filter((point) => point.value !== null);
+  const max = Math.max(1, ...present.map((point) => point.value));
+  const min = type === "line" ? Math.min(...present.map((point) => point.value), max) : 0;
+  const coords = present.map((point) => ({ ...point, x: point.index / 6 * 100,
+    y: type === "line" ? (max === min ? 14 : 25 - (point.value - min) / (max - min) * 22) : 27 - point.value / max * 24 }));
+  const marks = type === "line"
+    ? `<polyline fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke" points="${coords.map((p) => `${p.x},${p.y}`).join(" ")}"/>${coords.map((p) => `<circle class="instr-spark-point" data-date="${p.date}" cx="${p.x}" cy="${p.y}" r=".8" fill="${color}"/>`).join("")}`
+    : coords.map((p) => `<rect class="instr-spark-point" data-date="${p.date}" x="${p.index / 7 * 100 + 2.8}" y="${p.y}" width="8.7" height="${27 - p.y}" fill="${p.date === highlightDate ? "#55d9e8" : color}"/>`).join("");
+  return `<svg class="instr-spark" preserveAspectRatio="none" viewBox="0 0 100 28" width="100%" height="28" aria-hidden="true">${marks}</svg>`;
+}
+function weekPanelHTML(summary) {
+  const number = (value) => value === null ? "—" : Math.round(value).toLocaleString("ja-JP");
+  const bodySummary = summary.bodyScans.average === null ? "未記録"
+    : `疲労 平均 ${summary.bodyScans.average.toFixed(1)}(最大 ${number(summary.bodyScans.max)})`;
+  const line = (key, label, graph, value, extra = "") => `<div class="instr-week-row ${extra}" data-series="${key}"><span>${label}</span>${graph}<strong>${value}</strong></div>`;
+  return `<section class="instr-panel-box instr-week"><h2>直近7日 <span>${shortDate(summary.from)} – ${shortDate(summary.to)} ・ 平均</span></h2>
+    ${line("sleep", "睡眠", sparklineHTML(summary.sleep.points, "line", "#55d9e8"), `平均 ${durationText(summary.sleep.average)} ・ 欠測 ${summary.sleep.missing}日`)}
+    ${line("steps", "歩数", sparklineHTML(summary.steps.points, "bar", "#25384d", shiftIso(summary.to, -1)), `平均 ${number(summary.steps.average)} ・ 昨日 ${number(summary.steps.yesterday)}`)}
+    ${line("hrv", "HRV", sparklineHTML(summary.hrv.points, "line", "#55d9e8"), `${number(summary.hrv.first)} → ${number(summary.hrv.middle)} → ${number(summary.hrv.last)}ms`)}
+    ${line("gym", "筋トレ", sparklineHTML(summary.gym.points, "bar", "#f2b84b"), `${summary.gym.count}回 ・ ${number(summary.gym.maxKg)}kg(${shortDate(summary.gym.maxDate)})`)}
+    ${line("body", "身体スキャン", sparklineHTML(summary.bodyScans.points, "bar", "#25384d"), bodySummary, "instr-week-body")}
+  </section>`;
+}
 
 // 期間統計は構造化セットのatだけを正本とする。日付を持たないironImport.importedTotalKgと
 // ironManualBaseKgはIRON LOGの累計には残すが、週・年・月別へ配賦できないため含めない。
@@ -258,6 +359,8 @@ function ironChartHTML(stats) {
 function renderInstruments() {
   const state = getState();
   const todayIso = todayISO();
+  const health = cachedHealthData();
+  const weekly = weekSummary(health?.days, state, todayIso);
   const eb = earlyBirdStats(state, todayIso);
   const period = ironPeriodStats(state, todayIso);
   const archivePanel = pinArchiveHTML(state);
@@ -277,6 +380,10 @@ function renderInstruments() {
   return `
     <div class="today-tower instr-view${archivePanel ? " has-pin-archive" : ""}">
       ${renderHeader("計器盤", "INSTRUMENTS")}
+
+      ${todayPanelHTML(state, todayIso, health)}
+
+      ${weekPanelHTML(weekly)}
 
       <section class="instr-panel-box instr-continuation">
         <h2>継続の記録 <span>早起き ・ 固定化ルーティン ・ 累計</span></h2>
@@ -306,4 +413,4 @@ function renderInstruments() {
   `;
 }
 
-export { configureInstruments, renderInstruments, earlyBirdStats, ironPeriodStats };
+export { configureInstruments, renderInstruments, earlyBirdStats, ironPeriodStats, weekSummary };

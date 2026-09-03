@@ -91,7 +91,7 @@ function conditionLog(gym) {
     const renderedState = await seed(fixture);
 
     const headings = await page.locator(".instr-panel-box > h2").evaluateAll((nodes) => nodes.map((node) => node.childNodes[0].textContent.trim()));
-    check("日本語見出しを指定順で表示", JSON.stringify(headings.slice(0, 3)) === JSON.stringify(["継続の記録", "筋トレの記録", "月別の積み上げ"]), JSON.stringify(headings));
+    check("日本語見出しを指定順で表示", JSON.stringify(headings.slice(0, 5)) === JSON.stringify(["からだ ─ 今日", "直近7日", "継続の記録", "筋トレの記録", "月別の積み上げ"]), JSON.stringify(headings));
     check("旧英語コードネームを主見出しにしない", !headings.some((text) => /^(EARLY BIRD|HABIT|IRON LOG|ANNUAL PAYLOAD)$/.test(text)));
     check("旧目標バーCSSを撤去", !CSS.includes(".instr-iron-bar"));
 
@@ -136,13 +136,15 @@ function conditionLog(gym) {
         const root = document.querySelector(".instr-view");
         const rootStyle = getComputedStyle(root);
         const contentWidth = root.clientWidth - parseFloat(rootStyle.paddingLeft) - parseFloat(rootStyle.paddingRight);
-        const panelWidths = [...root.querySelectorAll(":scope > .instr-continuation, :scope > .instr-iron-log, :scope > .instr-iron-chart")]
-          .map((panel) => panel.getBoundingClientRect().width);
+        const panelWidths = Object.fromEntries(["instr-today", "instr-week", "instr-continuation", "instr-iron-log", "instr-iron-chart"]
+          .map((className) => [className, root.querySelector(`:scope > .${className}`).getBoundingClientRect().width]));
         return { scroll: document.documentElement.scrollWidth, inner: window.innerWidth, contentWidth, panelWidths };
       });
       check(`${width}pxで横スクロールなし`, size.scroll <= size.inner + 1, JSON.stringify(size));
-      if (width >= 768) check(`${width}pxで履歴なしの各パネルは親の全幅`, size.panelWidths.length === 3
-        && size.panelWidths.every((panelWidth) => Math.abs(panelWidth - size.contentWidth) <= 1), JSON.stringify(size));
+      const full = (name) => Math.abs(size.panelWidths[name] - size.contentWidth) <= 1;
+      if (width < 1280) check(`${width}pxで各パネルは親の全幅`, Object.keys(size.panelWidths).every(full), JSON.stringify(size));
+      else check("1280pxで今日・月別は全幅、直近7日・継続・筋トレは半幅", full("instr-today") && full("instr-iron-chart")
+        && ["instr-week", "instr-continuation", "instr-iron-log"].every((name) => size.panelWidths[name] < size.contentWidth * .55), JSON.stringify(size));
     }
     const expectedState = JSON.parse(renderedState.expected);
     const actualState = JSON.parse(renderedState.actual);

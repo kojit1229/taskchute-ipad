@@ -1,0 +1,47 @@
+{
+  "version": 327,
+  "date": "2026-09-04",
+  "title": "計器盤A-2: からだ(今日)と直近7日スパークラインを新設",
+  "summary": "計器盤の先頭に当日の健康KPI・既存体調コメントと、健康・筋トレ・身体スキャンの直近7日推移を読み取り専用で追加する。",
+  "changedFiles": [
+    "CHANGES_v327.md",
+    "app.js",
+    "docs/test-impact-map.generated.md",
+    "releases/v327.json",
+    "src/features/health.js",
+    "src/features/instruments.js",
+    "styles.css",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/v326.test.js",
+    "tests/v327.test.js"
+  ],
+  "intent": [
+    "計器盤を今日、直近7日、記録の順に並べ、体調と生活記録の現在地を移動せず読めるようにする。",
+    "healthキャッシュと既存stateを表示時に集計するだけとし、健康由来の値をapp stateへ保存しない。"
+  ],
+  "changes": [
+    "からだ ─ 今日に4件のモバイルKPIとPC専用2件、v325と同じ体調コメントを追加した。",
+    "直近7日に睡眠・歩数・HRV・筋トレ・身体スキャンの欠測非描画スパークラインと事実集計を追加した。",
+    "1280px以上で今日を全幅、直近7日を左列、継続と筋トレを右列、月別を全幅に配置した。",
+    "Service WorkerのCACHE_NAMEをv327へ更新した。"
+  ],
+  "uncertainties": [
+    "health-dailyのgenerated_atは現行のISO形式から月日と時分を文字列抽出しており、タイムゾーン変換は行わない。"
+  ],
+  "reviewFocus": [
+    "欠測日のSVG点・棒が生成されず、昨日の歩数棒だけがシアンであること。",
+    "当日health行がない場合にKPIを残さず指定文言1行だけになること。",
+    "表示・再描画でapp stateへの書き込みが発生しないこと。"
+  ],
+  "verification": [
+    "node --checkとv327/v326/v325/v260/v313を実行する。",
+    "390pxと1280pxで横スクロール、KPI件数、身体スキャン行、pageerrorを確認する。"
+  ],
+  "notes": [
+    "発注指定によりrelease-record、CHANGES_v327.md生成、notes書込、commit、pushは行わない。"
+  ],
+  "knownLimitations": [
+    "身体スキャン行は1280px以上でのみ表示する。"
+  ]
+}

@@ -3829,9 +3829,9 @@
       "domains": [
         "ui-responsive"
       ],
-      "assertionSignals": 17,
-      "assertionHash": "eedafbfa84147f2a",
-      "sourceHash": "f22c5aab0a793706",
+      "assertionSignals": 18,
+      "assertionHash": "ebc66913d9f4a0f2",
+      "sourceHash": "186cb0796e677b22",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3842,6 +3842,29 @@
         "server": true,
         "fileWrite": false,
         "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v327.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "ui-responsive"
+      ],
+      "assertionSignals": 22,
+      "assertionHash": "7b50c1005d2981ab",
+      "sourceHash": "3384090598da7692",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
         "clock": true
       }
     },

@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v326";  // v326: 計器盤A-1を日本語見出し・4指標の継続記録へ更新
+const CACHE_NAME = "taskchute-journal-pwa-v327";  // v327: 計器盤A-2「からだ ─ 今日」と直近7日を追加
 // v293: 身体スキャン復活(K裁定2026-08-29。手動Block完了時のみ追加)
 // v290: 孤児action本体2クラスタ(AI作業結果承認/質問、AIタスク候補チップの採用/却下)を削除した(APP_SHELL変更なし)。
 // v288: WBS内検索と新規Project既定closed化を追加した(APP_SHELL変更なし)。

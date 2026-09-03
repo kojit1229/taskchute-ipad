@@ -4795,25 +4795,54 @@ h3 {
 .instr-iron-today strong { color: #dce8f2; font-size: 20px; }
 .instr-chart-recent { margin-left: auto; color: var(--tower-text); }
 
+/* v327: health daily cache and app-state records, display only. */
+.instr-today { border-color: #1f5560; }
+.instr-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.instr-kpi { display: grid; align-content: center; min-width: 0; min-height: 70px; padding: 8px 10px; border-right: 1px solid var(--tower-line); }
+.instr-kpi:nth-child(4) { border-right: 0; }
+.instr-kpi strong { color: #dce8f2; font-size: 21px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.instr-kpi span { color: var(--tower-text); font-size: 11px; }
+.instr-kpi small { min-height: 1em; color: var(--tower-text); font-size: 11px; opacity: .75; white-space: nowrap; }
+.instr-kpi-wide { display: none; }
+.instr-condition-text,
+.instr-today-empty { min-height: 44px; padding: 11px 10px; border-top: 1px solid var(--tower-line); color: #dce8f2; font-size: 13px; line-height: 1.55; }
+.instr-today-empty { border-top: 0; }
+.instr-week-row { display: grid; grid-template-columns: 76px minmax(50px, 1fr) minmax(0, auto); align-items: center; gap: 10px; min-height: 44px; padding: 7px 10px; border-bottom: 1px solid var(--tower-line); }
+.instr-week-row:last-child { border-bottom: 0; }
+.instr-week-row > span { color: var(--tower-text); font-size: 12px; opacity: .8; }
+.instr-week-row > strong { min-width: 0; color: var(--tower-text); font-size: 11px; font-weight: 400; text-align: right; overflow-wrap: anywhere; }
+.instr-spark { display: block; min-width: 0; overflow: visible; }
+.instr-week-body { display: none; }
+
 /* ============ タブレット・PC幅(タスクシュートの他TOWER画面と同じブレークポイント) ============ */
 @media (min-width: 768px) {
   .instr-view {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    grid-template-areas: "header header" "continuation continuation" "iron iron" "monthly monthly";
+    grid-template-areas: "header header" "today today" "week week" "continuation continuation" "iron iron" "monthly monthly" "archive archive";
     align-items: start;
     max-width: 1000px;
   }
-  /* v327で「からだ/直近7日」を追加するときにPC構成を再検討する。 */
-  .instr-view.has-pin-archive {
-    grid-template-areas: "header header" "continuation continuation" "iron archive" "monthly monthly";
-  }
   .instr-view > .view-header { grid-area: header; }
+  .instr-today { grid-area: today; }
+  .instr-week { grid-area: week; }
   .instr-continuation { grid-area: continuation; }
   .instr-iron-log { grid-area: iron; }
   .instr-iron-chart { grid-area: monthly; }
   .instr-pin-archive { grid-area: archive; }
   .instr-pin-archive-list { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+}
+
+@media (min-width: 1280px) {
+  .instr-view {
+    grid-template-areas: "header header" "today today" "week continuation" "week iron" "monthly monthly" "archive archive";
+    align-items: stretch;
+  }
+  .instr-kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .instr-kpi:nth-child(4) { border-right: 1px solid var(--tower-line); }
+  .instr-kpi:nth-child(6) { border-right: 0; }
+  .instr-kpi-wide { display: grid; }
+  .instr-week-body { display: grid; }
 }
 
 /* v277: PCではサイドバー以外の主領域を活用する。1024px以下とTodayの3面卓は従来契約を維持。 */

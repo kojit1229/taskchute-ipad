@@ -140,6 +140,10 @@ function conditionFromCachedHealth(todayIso) {
   return conditionFromHealth(Array.isArray(days) ? days : [], todayIso);
 }
 
+function cachedHealthData() {
+  return typeof personalDataReady === "function" && personalDataReady() ? healthCache.data : undefined;
+}
+
 function conditionCommentText(cond) {
   if (cond?.level === "unknown") return "今朝の睡眠データはまだありません";
   const steps = healthNumber(cond?.ySteps);
@@ -180,5 +184,5 @@ function healthSummaryHTML(todayIso, exact = false) {
 export {
   HEALTH_REFRESH_INTERVAL_MS, configureHealth, hydrateHealthData, invalidateHealthCache,
   latestHealthWithin, healthForDate, healthSummaryHTML,
-  conditionFromHealth, conditionFromCachedHealth, conditionCommentText
+  cachedHealthData, conditionFromHealth, conditionFromCachedHealth, conditionCommentText
 };

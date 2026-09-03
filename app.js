@@ -11463,7 +11463,7 @@ async function hydrateStaticMarkdown() {
   // v137: 入力中/IME変換中は即renderせず保留する(review.md:28。renderDeferringForFocus参照)。
   // v161: "stats"(計器盤)を追加。エネルギーカーブの新着fetchが完了してもこの画面を開いた
   //       ままだと再描画されず節が出ないままになる不具合を防ぐ(他view追加時と同じ理由)。
-  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "today" || state.currentView === "timeline" || state.currentView === "wish" || state.currentView === "zero" || state.currentView === "tasks" || state.currentView === "fund")) {
+  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "today" || state.currentView === "timeline" || state.currentView === "wish" || state.currentView === "zero" || state.currentView === "tasks" || state.currentView === "fund" || state.currentView === "instruments")) {
     renderDeferringForFocus();
   }
 }
