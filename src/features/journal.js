@@ -720,15 +720,6 @@ function renderJournal() {
   const bodyLogOpen = "bodyLog" in _journalSegmentOverride ? _journalSegmentOverride.bodyLog : true;
   const flightLogOpen = "flightLog" in _journalSegmentOverride ? _journalSegmentOverride.flightLog : true;
   const moneyOpen = "money" in _journalSegmentOverride ? _journalSegmentOverride.money : true;
-  const journalRequest = String(state.journalMeta?.[date]?.aiRequest || "");
-  const requestOverrideApplies = _journalSegmentOverride.requestDate === date
-    && "request" in _journalSegmentOverride;
-  if ("request" in _journalSegmentOverride && !requestOverrideApplies) {
-    delete _journalSegmentOverride.request;
-    delete _journalSegmentOverride.requestDate;
-  }
-  const requestOpen = requestOverrideApplies
-    ? _journalSegmentOverride.request : Boolean(journalRequest.trim());
   // v294: 「書く瞑想」の既定開閉は夜(18時以降)=開・それ以外=閉(発注文の指定閾値。
   // MORNING/NIGHT BRIEFの14時判定とは独立の値)。_journalSegmentOverride基盤へ相乗りする。
   const isEveningForKm = nowMin >= 18 * 60;
@@ -815,14 +806,7 @@ function renderJournal() {
                   `).join("")}
                 </div>
               </details>
-              <textarea id="journalFreeText" class="textarea journal-free" data-journal-date="${date}">${escapeHTML(state.journals[date])}</textarea>
-              <details class="fold journal-request-fold" ${requestOpen ? "open" : ""}>
-                <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="request"><span class="fold-chevron">▶</span>AIに依頼すること <span>夜のバッチ向け</span></summary>
-                <div class="fold-body">
-                  <label class="journal-request-label" for="journalAiRequest">AIに依頼すること</label>
-                  <textarea id="journalAiRequest" class="textarea journal-ai" rows="2" data-journal-ai-date="${escapeHTML(date)}" placeholder="夜のAIバッチへの依頼・質問">${escapeHTML(journalRequest)}</textarea>
-                </div>
-              </details>
+              <textarea id="journalFreeText" class="textarea journal-free" data-journal-date="${date}" placeholder="気づき・所感をそのまま書く&#10;AIへの依頼は本文の『### 依頼』見出しの下に書く">${escapeHTML(state.journals[date])}</textarea>
             </div>
           </details>
         </div>

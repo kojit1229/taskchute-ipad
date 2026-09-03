@@ -207,18 +207,17 @@ function check(name, cond, extra = "") {
     check("復元描画の最新完了行はフラッシュしない", await completedLog.evaluate((el) => !el.classList.contains("is-flip"))
       && await page.locator('.sec-log .tower-touchdown').count() === 0);
 
-    console.log("[7-b] JOURNALは既存単一文字列を自由記述として読み、2枠をsaveAndRender保存する");
+    console.log("[7-b] JOURNALは既存単一文字列を自由記述として読み、本文だけをsaveAndRender保存する");
     await page.evaluate(({ KEY, today }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.journals[today] = "既存の自由記述";
-      s.journalMeta[today] = { aiMitCandidates: [], aiImported: false, ideal: "", aiTaskCandidates: [] };
+      s.journalMeta[today] = { aiMitCandidates: [], aiImported: false, ideal: "", aiTaskCandidates: [], aiRequest: "既存依頼" };
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, today });
     await page.reload();
     await page.waitForSelector("#towerJournalFree");
-    check("既存文字列はFREE NOTEへ表示されAI依頼は空で正規化", await page.locator("#towerJournalFree").inputValue() === "既存の自由記述"
-      && await page.locator("#towerJournalAi").inputValue() === ""
-      && await page.evaluate(({ KEY, today }) => JSON.parse(localStorage.getItem(KEY)).journalMeta[today]?.aiRequest === "", { KEY, today }));
+    check("既存文字列はFREE NOTEへ表示されAI依頼欄はDOMにない", await page.locator("#towerJournalFree").inputValue() === "既存の自由記述"
+      && await page.locator("#towerJournalAi, .tower-journal-ai-fold").count() === 0);
     // v229: locator解決後の再描画detachでcomputed styleがnullになる競合の恒久対策(v123と同型)。
     // 評価時点でquerySelectorし直し、数値の成立自体を待ってから同じassertを行う。
     const journalStyle = await page.waitForFunction(() => {
@@ -230,19 +229,17 @@ function check(name, cond, extra = "") {
     }, null, { timeout: 10000 }).then((h) => h.jsonValue());
     check("JOURNAL textareaは130px以上・16px以上", journalStyle.minHeight >= 130 && journalStyle.fontSize >= 16, JSON.stringify(journalStyle));
     await page.locator("#towerJournalFree").fill("更新した自由記述");
-    await page.locator(".tower-journal-ai-fold > summary").click();
-    await page.locator("#towerJournalAi").fill("明日の計画に運動を入れて");
     await page.locator('[data-action="save-tower-journal"]').click();
     await page.waitForFunction(({ KEY, today }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
-      return s.journals[today] === "更新した自由記述" && s.journalMeta[today]?.aiRequest === "明日の計画に運動を入れて";
+      return s.journals[today] === "更新した自由記述" && s.journalMeta[today]?.aiRequest === "既存依頼";
     }, { KEY, today });
     const savedJournal = await page.evaluate(({ KEY, today }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       return { free: s.journals[today], ai: s.journalMeta[today].aiRequest, updatedAt: s.journalMeta[today].textUpdatedAt };
     }, { KEY, today });
-    check("SAVEでjournals/dateとjournalMeta.aiRequestを保存", savedJournal.free === "更新した自由記述"
-      && savedJournal.ai === "明日の計画に運動を入れて" && !!savedJournal.updatedAt, JSON.stringify(savedJournal));
+    check("SAVEで本文と更新時刻だけを変更しaiRequestを保持", savedJournal.free === "更新した自由記述"
+      && savedJournal.ai === "既存依頼" && !!savedJournal.updatedAt, JSON.stringify(savedJournal));
 
     console.log("[8] ARRIVALSのタスク名タップは既存Blockモーダルを開く");
     await page.locator('.tower-arrival-row[data-flight-id="arr-4"] .tower-flight-title').click();

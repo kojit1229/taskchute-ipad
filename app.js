@@ -348,11 +348,9 @@ registerActions({
   "save-tower-journal": ({ target }) => {
     const date = target.dataset.date || todayISO();
     const free = document.getElementById("towerJournalFree");
-    const ai = document.getElementById("towerJournalAi");
-    if (!free || !ai) return;
+    if (!free) return;
     state.journals[date] = free.value;
     const meta = (state.journalMeta[date] ||= { aiImported: false, ideal: "", aiTaskCandidates: [], aiRequest: "" });
-    meta.aiRequest = ai.value;
     meta.textUpdatedAt = nowDateTime();
     saveAndRender("ジャーナルを保存しました");
   },
@@ -573,8 +571,6 @@ registerActions({
     const parent = target.closest("details");
     if (seg && parent) {
       _journalSegmentOverride[seg] = !parent.open;  // クリック時点ではまだ未反映のため反転
-      // v322: AI依頼欄の手動開閉は閲覧中の日付だけに限定する。
-      if (seg === "request") _journalSegmentOverride.requestDate = state.selectedDate;
     }
   },
 });
@@ -1357,14 +1353,6 @@ document.addEventListener("input", (event) => {
     state.journals[d] = target.value;
     // v106: 本文の編集時刻を記録(端末間マージの新旧判定に使用)
     const meta = (state.journalMeta[d] ||= { aiImported: false, ideal: "", aiTaskCandidates: [], aiRequest: "" });
-    meta.textUpdatedAt = nowDateTime();
-    saveState();
-  }
-  // v322: 折りたたみ内でもAI依頼を入力時保存する。再描画せずIME・フォーカスを維持する。
-  if (target.matches("[data-journal-ai-date]")) {
-    const d = target.dataset.journalAiDate;
-    const meta = (state.journalMeta[d] ||= { aiImported: false, ideal: "", aiTaskCandidates: [], aiRequest: "" });
-    meta.aiRequest = target.value;
     meta.textUpdatedAt = nowDateTime();
     saveState();
   }

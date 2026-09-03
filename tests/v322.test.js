@@ -1,4 +1,4 @@
-// v322: ジャーナル自由記述の拡大とAI依頼欄の折りたたみ・既存保存契約を固定する。
+// v322: ジャーナル自由記述の拡大と本文保存契約を固定する(v324でAI依頼欄を撤去)。
 const {
   chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY
 } = require("./helpers");
@@ -74,39 +74,31 @@ function check(name, condition, extra = "") {
     await page.goto(`http://localhost:${PORT}/`);
     await passGithubGate(page);
 
-    console.log("[1] Today 390px: 自由記述40vh・AI依頼は空なら閉じる");
-    await seed("today");
+    console.log("[1] Today 390px: 自由記述40vh・AI依頼欄なし");
+    await seed("today", "既存のAI依頼");
     const todayMobile = await page.evaluate(() => ({
       height: document.querySelector(".tower-journal-free").getBoundingClientRect().height,
       viewport: innerHeight,
-      open: document.querySelector(".tower-journal-ai-fold").open,
-      summary: document.querySelector(".tower-journal-ai-fold > summary").textContent.trim(),
-      rows: document.querySelector(".tower-journal-ai").rows,
-      aiMinHeight: parseFloat(getComputedStyle(document.querySelector(".tower-journal-ai")).minHeight)
+      placeholder: document.querySelector(".tower-journal-free").placeholder
     }));
     check("自由記述は表示高の38%以上", todayMobile.height >= todayMobile.viewport * .38, JSON.stringify(todayMobile));
-    check("AI依頼はsummary表示・空なら閉・2行44px", !todayMobile.open
-      && todayMobile.summary.includes("AIに依頼すること") && todayMobile.summary.includes("夜のバッチ向け")
-      && todayMobile.rows === 2 && todayMobile.aiMinHeight >= 44, JSON.stringify(todayMobile));
+    check("TodayのAI依頼欄はDOMにない", await page.locator("#towerJournalAi, .tower-journal-ai-fold").count() === 0);
+    check("Today自由記述のplaceholderが### 依頼へ案内", todayMobile.placeholder.includes("『### 依頼』見出しの下"), todayMobile.placeholder);
     const todayFonts = await inputSizes(".today-tower");
     check("Todayのinput/textareaは16px以上", todayFonts.every(({ size }) => size >= 16), JSON.stringify(todayFonts));
 
-    console.log("[2] Today: AI依頼ありなら開き、既存SAVEで2値を保存する");
-    await page.locator(".tower-journal-ai-fold > summary").click();
+    console.log("[2] Today: SAVEで本文だけを保存し、既存AI依頼を保持する");
     await page.locator("#towerJournalFree").fill("更新した自由記述");
-    await page.locator("#towerJournalAi").fill("夜のバッチへ依頼");
     await page.locator('[data-action="save-tower-journal"]').click();
     await page.waitForFunction(({ key, today }) => {
       const state = JSON.parse(localStorage.getItem(key));
       return state.journals[today] === "更新した自由記述"
-        && state.journalMeta[today]?.aiRequest === "夜のバッチへ依頼";
+        && state.journalMeta[today]?.aiRequest === "既存のAI依頼"
+        && Boolean(state.journalMeta[today]?.textUpdatedAt);
     }, { key: STATE_KEY, today: TODAY });
-    check("Today保存後はAI依頼あり規則で開く", await page.locator(".tower-journal-ai-fold").evaluate((node) => node.open));
-    await seed("today", "既存のAI依頼");
-    check("当日AI依頼ありの初期描画は開く", await page.locator(".tower-journal-ai-fold").evaluate((node) => node.open));
 
     console.log("[3] Today 1280px: 右列の過半を自由記述へ割り当てる");
-    await seed("today");
+    await seed("today", "既存のAI依頼");
     await page.setViewportSize({ width: 1280, height: 900 });
     const todayPc = await page.evaluate(() => ({
       free: document.querySelector(".tower-journal-free").getBoundingClientRect().height,
@@ -119,19 +111,17 @@ function check(name, condition, extra = "") {
     }));
     check("PC自由記述は右列高の過半", todayPc.free > todayPc.right / 2, JSON.stringify(todayPc));
 
-    console.log("[4] ジャーナル 390px: 本文40vh・AI依頼2行・入力フォーカス維持");
+    console.log("[4] ジャーナル 390px: 本文40vh・AI依頼欄なし・入力時保存");
     await page.setViewportSize({ width: 390, height: 844 });
-    await seed("journal");
+    await seed("journal", "既存のAI依頼");
     const journalMobile = await page.evaluate(() => ({
       height: document.querySelector(".journal-free").getBoundingClientRect().height,
       viewport: innerHeight,
-      open: document.querySelector(".journal-request-fold").open,
-      rows: document.querySelector(".journal-ai").rows,
-      aiMinHeight: parseFloat(getComputedStyle(document.querySelector(".journal-ai")).minHeight)
+      placeholder: document.querySelector(".journal-free").placeholder
     }));
     check("ジャーナル本文は表示高の38%以上", journalMobile.height >= journalMobile.viewport * .38, JSON.stringify(journalMobile));
-    check("ジャーナルAI依頼は空なら閉・2行44px", !journalMobile.open
-      && journalMobile.rows === 2 && journalMobile.aiMinHeight >= 44, JSON.stringify(journalMobile));
+    check("ジャーナルのAI依頼欄はDOMにない", await page.locator("#journalAiRequest, .journal-request-fold").count() === 0);
+    check("ジャーナル本文のplaceholderが### 依頼へ案内", journalMobile.placeholder.includes("『### 依頼』見出しの下"), journalMobile.placeholder);
     const journalFonts = await inputSizes(".journal-tower");
     check("ジャーナルのinput/textareaは16px以上", journalFonts.every(({ size }) => size >= 16), JSON.stringify(journalFonts));
     await page.locator(".journal-free").evaluate((node) => { window.__v322JournalNode = node; });
@@ -139,53 +129,23 @@ function check(name, condition, extra = "") {
     await page.locator(".journal-free").fill(editedJournal);
     const patchState = await page.evaluate(() => ({
       same: window.__v322JournalNode === document.querySelector(".journal-free"),
-      focused: document.activeElement === document.querySelector(".journal-free")
+      focused: document.activeElement === document.querySelector(".journal-free"),
+      state: JSON.parse(localStorage.getItem("taskchute-journal-pwa-state-v1"))
     }));
     check("本文入力中は全再描画せずnodeとfocusを維持", patchState.same && patchState.focused, JSON.stringify(patchState));
+    check("ジャーナル本文は入力時保存", patchState.state.journals[TODAY] === editedJournal);
+    check("本文入力は既存AI依頼を変更しない", patchState.state.journalMeta[TODAY]?.aiRequest === "既存のAI依頼");
     check("ジャーナル側IDはToday TOWERと重複しない", await page.locator("#journalFreeText").count() === 1
-      && await page.locator("#journalAiRequest").count() === 1
       && await page.locator(".journal-tower #towerJournalFree, .journal-tower #towerJournalAi").count() === 0);
 
-    console.log("[5] ジャーナルAI依頼は閉じたまま入力時保存し、値あり規則で再描画後に開く");
-    check("ジャーナルAI依頼に専用SAVEボタンを出さない",
-      await page.locator('.journal-tower [data-action="save-tower-journal"]').count() === 0);
-    await page.locator(".journal-ai").evaluate((node) => {
-      node.value = "ジャーナルタブから依頼";
-      node.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: node.value }));
-    });
-    await page.waitForFunction(({ key, today }) => {
-      const state = JSON.parse(localStorage.getItem(key));
-      return state.journalMeta[today]?.aiRequest === "ジャーナルタブから依頼";
-    }, { key: STATE_KEY, today: TODAY });
-    check("detailsを閉じたままAI依頼を保存", !(await page.locator(".journal-request-fold").evaluate((node) => node.open)));
-    await switchView("today");
-    await switchView("journal");
-    check("再描画後はAI依頼あり規則で開く", await page.locator(".journal-request-fold").evaluate((node) => node.open));
-    check("再描画後もAI依頼値を復元", await page.locator(".journal-ai").inputValue() === "ジャーナルタブから依頼");
-
-    console.log("[6] AI依頼を空に戻すと閉じ、手動overrideは日付移動でリセットする");
-    await page.locator(".journal-ai").fill("");
-    await page.waitForFunction(({ key, today }) =>
-      JSON.parse(localStorage.getItem(key)).journalMeta[today]?.aiRequest === "", { key: STATE_KEY, today: TODAY });
-    await switchView("today");
-    await switchView("journal");
-    check("空へ戻したAI依頼は再描画後に閉じる", !(await page.locator(".journal-request-fold").evaluate((node) => node.open)));
-    await page.locator(".journal-request-fold > summary").click();
-    check("同一日付では手動openが有効", await page.locator(".journal-request-fold").evaluate((node) => node.open));
-    await page.locator('[data-action="date-next"]').click();
-    check("翌日では前日の手動overrideを無視して閉じる", !(await page.locator(".journal-request-fold").evaluate((node) => node.open)));
-    await page.locator('[data-action="date-prev"]').click();
-    check("元の日付へ戻っても古いoverrideは復活しない", !(await page.locator(".journal-request-fold").evaluate((node) => node.open)));
-
+    console.log("[5] 本文の### 依頼節・390px横スクロール・pageerror");
     const savedChannels = await page.evaluate(({ key, today }) => {
       const state = JSON.parse(localStorage.getItem(key));
       return { journal: state.journals[today], aiRequest: state.journalMeta[today]?.aiRequest };
     }, { key: STATE_KEY, today: TODAY });
     check("本文の### 依頼節は従来どおりstate.journalsに残る",
       savedChannels.journal.includes(JOURNAL_REQUEST_SECTION), savedChannels.journal);
-    check("journalMeta.aiRequestは本文と別チャネルのまま", savedChannels.aiRequest === "");
-
-    console.log("[7] 390px横スクロール・pageerror");
+    check("journalMeta.aiRequestの既存値を保持", savedChannels.aiRequest === "既存のAI依頼");
     const widths = await page.evaluate(() => ({
       scrollWidth: document.documentElement.scrollWidth, viewportWidth: innerWidth
     }));

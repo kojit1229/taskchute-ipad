@@ -1,0 +1,50 @@
+{
+  "version": 324,
+  "date": "2026-09-03",
+  "title": "AI依頼欄を削除しジャーナル本文の『### 依頼』節へ一本化",
+  "summary": "Today TOWERとジャーナルタブからjournalMeta.aiRequestの編集UIを削除し、AI依頼の入力先をジャーナル本文へ一本化する。",
+  "changedFiles": [
+    "CHANGES_v324.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v324.json",
+    "src/features/journal.js",
+    "src/features/today-tower.js",
+    "styles.css",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/tower-core.test.js",
+    "tests/v319.test.js",
+    "tests/v322.test.js",
+    "tests/v324.test.js"
+  ],
+  "intent": [
+    "AI依頼の唯一の入力先を、日報と抽出バッチが実際に読むジャーナル本文の『### 依頼』節にする。",
+    "journalMeta.aiRequestの既存データ・正規化・同期契約を維持し、UI削除でデータを破壊しない。"
+  ],
+  "changes": [
+    "Today TOWERとジャーナルタブからAI依頼用details・textarea・関連CSSを削除した。",
+    "TOWER保存とジャーナル入力時保存を本文専用にし、既存のjournalMeta.aiRequestは変更しないようにした。",
+    "自由記述のplaceholderから本文の『### 依頼』見出しへ案内するようにした。",
+    "Service WorkerのCACHE_NAMEをv324へ更新した。"
+  ],
+  "uncertainties": [
+    "journalMeta.aiRequestは後方互換のため残るが編集UIは無いため、既存値は同期され続けても画面から確認・変更できない。"
+  ],
+  "reviewFocus": [
+    "Todayとジャーナルの両方で旧AI依頼UIがDOMから消え、本文textareaと保存導線が残っているか。",
+    "TOWER保存・ジャーナル本文入力・画面再描画のいずれでも既存journalMeta.aiRequestが変化しないか。",
+    "既定テンプレの『### 依頼』節が日報の『## 8. ジャーナル』へそのまま掲載されるか。"
+  ],
+  "verification": [
+    "node --checkで変更したJavaScriptとテストの構文を確認する。",
+    "npm.cmd run test:manifest:writeでsuite-manifestとテスト影響表を更新する。",
+    "Google Chrome指定でv324、v322、v321、v319、v317、journal-core、v313、action-registry-coreを実行する。"
+  ],
+  "notes": [
+    "発注指定によりrelease-record.js、CHANGES_v324.md生成、コミット、push、taskchute-notes書込は実行しない。"
+  ],
+  "knownLimitations": []
+}

@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v323";  // v323: 達成色・警告灯を中立化しSTANDING ORDERSをPCでLIFE BAND行へ集約
+const CACHE_NAME = "taskchute-journal-pwa-v324";  // v324: AI依頼欄を削除しジャーナル本文の「### 依頼」節へ一本化
 // v293: 身体スキャン復活(K裁定2026-08-29。手動Block完了時のみ追加)
 // v290: 孤児action本体2クラスタ(AI作業結果承認/質問、AIタスク候補チップの採用/却下)を削除した(APP_SHELL変更なし)。
 // v288: WBS内検索と新規Project既定closed化を追加した(APP_SHELL変更なし)。

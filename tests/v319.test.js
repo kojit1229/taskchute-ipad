@@ -144,7 +144,7 @@ function check(name, condition, extra = "") {
       body: root.querySelector(".sec-bodymind h2")?.textContent.trim() || "",
       journal: root.querySelector(".sec-journal h2")?.textContent.trim() || "",
       free: root.querySelector('label[for="towerJournalFree"]')?.textContent.trim() || "",
-      ai: root.querySelector('label[for="towerJournalAi"]')?.textContent.trim() || "",
+      aiCount: root.querySelectorAll('#towerJournalAi, .tower-journal-ai-fold').length,
       timer: root.querySelector(".today-pomodoro .today-panel-title")?.textContent.trim() || "",
       all: root.textContent
     }));
@@ -154,7 +154,7 @@ function check(name, condition, extra = "") {
       && todayHeadings.log.includes("やったこと") && todayHeadings.log.includes("本日の終了実績")
       && todayHeadings.gate.includes("ルーティン") && todayHeadings.body.includes("からだのきろく")
       && todayHeadings.journal.includes("ジャーナル") && todayHeadings.journal.includes("本日")
-      && todayHeadings.free === "自由記述" && todayHeadings.ai === "AIに依頼すること"
+      && todayHeadings.free === "自由記述" && todayHeadings.aiCount === 0
       && todayHeadings.timer.includes("ポモドーロ"), JSON.stringify(todayHeadings));
     check("Today DOMに旧英語見出しが残らない",
       !/ARRIVALS|FLIGHT LOG|GATE ROUTINE|BODY \/ MIND|CABIN TIMER/.test(todayHeadings.all));
