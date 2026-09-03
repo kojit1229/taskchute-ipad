@@ -46,8 +46,8 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
 
 (async () => {
   console.log("[1] 静的契約・import実測・iOS/SW/CSSガード");
-  check("weeklyScore importは既存1件だけで、selectTrackFooterを1件追加", countMatches(appSource.slice(0, 600), /\bweeklyScore\b/g) === 1
-    && countMatches(appSource.slice(0, 600), /\bselectTrackFooter\b/g) === 1);
+  check("weeklyScore importは既存1件だけで、selectTrackFooterを1件追加", countMatches(appSource.slice(0, 800), /\bweeklyScore\b/g) === 1
+    && countMatches(appSource.slice(0, 800), /\bselectTrackFooter\b/g) === 1);
   check("toggleTwyScoreExpanded import/呼出とaction登録は重複なし", countMatches(appSource, /\btoggleTwyScoreExpanded\b/g) === 2
     && countMatches(appSource, /"twy-score-toggle"\s*:/g) === 1);
   check("表示トグルはsaveState/generateReportを呼ばずrenderだけ", /"twy-score-toggle"\s*:\s*\(\)\s*=>\s*\{\s*toggleTwyScoreExpanded\(\);\s*render\(\);\s*\}/.test(appSource));
@@ -63,7 +63,7 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
   check("TOWER赤トークンと40pxタップ標的を正本で定義", /\.today-tower, \.tower-skin\s*\{[^}]*--tower-red:\s*#ff6d7f;/.test(stylesSource)
     && /\.twy-score-signal\s*\{[^}]*display:\s*inline-flex;[^}]*align-items:\s*center;[^}]*min-height:\s*40px;/.test(stylesSource));
   check("TRACKS pace/meta CSSは行内へスコープ", !/^\.t-(?:pace|meta)\b/m.test(stylesSource)
-    && countMatches(stylesSource, /^\.twy-track-line \.t-(?:pace|meta)\b/gm) === 4);
+    && countMatches(stylesSource, /^\.twy-track-line \.t-(?:pace|meta)\b/gm) === 3);
   check(`CACHE_NAMEはreleases最大版v${maxRelease}`, new RegExp(
     `^const CACHE_NAME = "taskchute-journal-pwa-v${maxRelease}";`, "m").test(swSource));
   const topband = await import(pathToFileURL(path.join(ROOT, "src", "features", "topband.js")).href);
@@ -204,21 +204,26 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
     let probe = await counters();
     check("初期・折りたたみの無関係renderはsave/report 0回", probe.save === 0 && probe.report === 0
       && await signal().getAttribute("aria-expanded") === "false", JSON.stringify(probe));
-    check("B-6 #5 scored>=目安はdone/total・軌道内 is-goodの1行", (await signalText()).includes("6/6・軌道内")
-      && await signal().evaluate((el) => el.classList.contains("is-good"))
+    check("B-6 #5 100%はdone/total・実行率だけの中立表示", (await signalText()).includes("6/6・実行率 100%")
+      && await signal().evaluate((el) => !el.matches(".is-good,.is-mid,.is-low"))
       && await mobile().locator(".twy-score-detail").count() === 0);
+    const highColor = await signal().evaluate((el) => getComputedStyle(el).color);
     await seed({ weeklyCommitments: scoredCommitments(4, 5) });
-    check("B-6 #6 70<=pct<目安は要注意 is-mid", (await signalText()).includes("4/5・要注意")
-      && await signal().evaluate((el) => el.classList.contains("is-mid")));
+    const midColor = await signal().evaluate((el) => getComputedStyle(el).color);
+    check("B-6 #6 80%も判定語・達成classなしの中立表示", (await signalText()).includes("4/5・実行率 80%")
+      && !(await signalText()).includes("要注意") && midColor === highColor
+      && await signal().evaluate((el) => !el.matches(".is-good,.is-mid,.is-low")));
     await seed({ weeklyCommitments: scoredCommitments(1, 2) });
-    check("B-6 #7 pct<70は遅延 is-low", (await signalText()).includes("1/2・遅延")
-      && await signal().evaluate((el) => el.classList.contains("is-low")));
+    const lowColor = await signal().evaluate((el) => getComputedStyle(el).color);
+    check("B-6 #7 50%も遅延語・達成classなしの中立表示", (await signalText()).includes("1/2・実行率 50%")
+      && !(await signalText()).includes("遅延") && lowColor === highColor
+      && await signal().evaluate((el) => !el.matches(".is-good,.is-mid,.is-low")));
     await signal().click();
     const lowStyles = await signal().evaluate((el) => ({
       color: getComputedStyle(el).color,
-      amberColor: (() => {
+      textColor: (() => {
         const probe = document.createElement("span");
-        probe.style.color = "var(--tower-amber)";
+        probe.style.color = "var(--tower-text)";
         el.closest(".today-tower").appendChild(probe);
         const color = getComputedStyle(probe).color;
         probe.remove();
@@ -230,20 +235,22 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
       alignItems: getComputedStyle(el).alignItems,
       height: el.getBoundingClientRect().height
     }));
-    const lowBarStyles = await mobile().locator(".twy-score-bar.is-low > span").evaluate((el) => ({
+    const lowBarStyles = await mobile().locator(".twy-score-bar > span").evaluate((el) => ({
       background: getComputedStyle(el).backgroundColor,
       shadow: getComputedStyle(el).boxShadow
     }));
-    check("is-lowは--tower-amber実効色で暗パネル比4.5:1以上", lowStyles.color === lowStyles.amberColor
-      && lowBarStyles.background === lowStyles.amberColor && lowBarStyles.shadow.includes(lowStyles.amberColor)
+    check("低実行率も文字・バーは--tower-text相当の単一中立色", lowStyles.color === lowStyles.textColor
+      && lowBarStyles.background === lowStyles.textColor && lowBarStyles.shadow === "none"
       && contrastRatio(lowStyles.color, lowStyles.panelBackground, lowStyles.rootBackground) >= 4.5,
       JSON.stringify({ ...lowStyles, lowBarStyles, ratio: contrastRatio(lowStyles.color, lowStyles.panelBackground, lowStyles.rootBackground) }));
     check("スコア信号はinline-flex中央揃え・実測40px以上", lowStyles.display === "inline-flex"
       && lowStyles.alignItems === "center" && lowStyles.height >= 40, JSON.stringify(lowStyles));
     await seed({ weeklyCommitments: scoredCommitments(7, 10), scoreTarget: 70 });
-    check("B-6 #8 目安70ではis-midが出ず70%はis-good", await signal().evaluate((el) => el.classList.contains("is-good") && !el.classList.contains("is-mid")));
+    check("B-6 #8 目安70でも達成class・判定語を出さない", await signal().evaluate((el) => !el.matches(".is-good,.is-mid,.is-low"))
+      && (await signalText()).includes("実行率 70%"));
     await seed({ weeklyCommitments: scoredCommitments(2, 3), scoreTarget: 70 });
-    check("目安70でもpct<70はis-lowでis-mid不在", await signal().evaluate((el) => el.classList.contains("is-low") && !el.classList.contains("is-mid")));
+    check("目安未満でも達成class・判定語を出さない", await signal().evaluate((el) => !el.matches(".is-good,.is-mid,.is-low"))
+      && !(await signalText()).includes("遅延"));
     const excused = scoredCommitments(0, 2).map((record) => record.recordType === "item" ? { ...record, excused: true } : record);
     await seed({ weeklyCommitments: excused });
     check("B-6 #9 全免除はN/A・免除", (await signalText()).includes("N/A・免除"));
@@ -251,13 +258,13 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
     check("B-6 #10 meta存在・対象0は確定0・対象0でバナーなし", (await signalText()).includes("確定0・対象0")
       && await page.locator(".twy-commit-banner").count() === 0);
     const isNaColor = await signal().evaluate((el) => getComputedStyle(el).color);
-    check("is-low computed colorはis-naと異なる", lowStyles.color !== isNaColor, JSON.stringify({ low: lowStyles.color, na: isNaColor }));
+    check("N/Aも実行率表示と同じ中立色", lowStyles.color === isNaColor, JSON.stringify({ low: lowStyles.color, na: isNaColor }));
 
     console.log("[3] B-6 #11〜#19: 展開機械・TRACKS・二重描画・#12結線");
     await seed({ weeklyCommitments: scoredCommitments(4, 5) });
     await signal().click();
-    check("B-6 #11 タップ展開でdetail/bar/目安・aria/caret", await mobile().locator(".twy-score-detail .twy-score-bar").count() === 1
-      && (await mobile().locator(".twy-score-target").textContent()) === "目安85"
+    check("B-6 #11 タップ展開でdetail/barを表示し、目安線は撤去", await mobile().locator(".twy-score-detail .twy-score-bar").count() === 1
+      && await mobile().locator(".twy-score-target, .twy-score-bar > i").count() === 0
       && await signal().getAttribute("aria-expanded") === "true" && (await signal().textContent()).includes("▾"));
     probe = await counters();
     check("展開トグルはsave/report 0回・render 1回", probe.save === 0 && probe.report === 0 && probe.render === 1, JSON.stringify(probe));
@@ -290,9 +297,12 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
       trackMeasurements: mixedMeasurements });
     await signal().click();
     const mixedRows = await mobile().locator(".twy-track-line").allTextContents();
-    check("B-6 #15 severity混在は期限超過→要注意の最大2件", mixedRows.length === 2
-      && mixedRows[0].includes("期限超過") && mixedRows[1].includes("要注意"), JSON.stringify(mixedRows));
-    check("期限超過だけs-overdueへ変換", await mobile().locator(".twy-track-line").first().locator(".t-state.s-overdue").count() === 1);
+    check("B-6 #15 severity選定後は期限超過だけを事実ラベルとして残す", mixedRows.length === 2
+      && mixedRows[0].includes("期限超過") && !mixedRows[1].includes("要注意")
+      && await mobile().locator(".twy-track-line .t-fact", { hasText: "期限超過" }).count() === 1, JSON.stringify(mixedRows));
+    check("期限超過は達成色classを持たない中立色", await mobile().locator(".twy-track-line .t-fact").evaluate((el) =>
+      getComputedStyle(el).color === getComputedStyle(el.closest(".twy-score-detail")).color
+      && !el.matches(".s-overdue,.s-warn,.is-good,.is-mid,.is-low")));
     check("B-6 #16 toggle actionは単一LIFE BANDに1件だけ", await page.locator('.life-band [data-action="twy-score-toggle"]').count() === 1
       && await page.locator('[data-action="twy-score-toggle"]').count() === 1);
     await seed({ ...candidateFixture() });
@@ -342,13 +352,16 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
     check("measurement 0件で8日以上なら具体paceを出さず未更新表示", baselineText.includes("未更新")
       && baselineText.includes("不明") && !baselineText.includes("-22章")
       && baselineText.includes("0/100章"), baselineText);
+    check("未更新は中立色", await mobile().locator(".twy-track-line .t-fact", { hasText: "未更新" }).evaluate((el) =>
+      getComputedStyle(el).color === getComputedStyle(el.closest(".twy-score-detail")).color));
 
     await seed({ weeklyCommitments: scoredCommitments(1, 1), projects: [project("p-tolerance")],
       tracks: [numericTrack("within-tolerance", "p-tolerance")], trackMeasurements: [measurement("within-tolerance", 20)] });
     await signal().click();
-    check("tolerance内の遅れは状態語と同じ順調色", (await mobile().locator(".twy-track-line .t-state").textContent()) === "順調"
+    check("tolerance内でも状態語を省略しpaceを中立色で表示", await mobile().locator(".twy-track-line .t-state").count() === 0
       && await mobile().locator(".twy-track-line .t-pace.pos").count() === 1
-      && await mobile().locator(".twy-track-line .t-pace.neg").count() === 0);
+      && await mobile().locator(".twy-track-line .t-pace").evaluate((el) => getComputedStyle(el).color
+        === getComputedStyle(el.closest(".twy-score-detail")).color));
 
     await page.clock.setFixedTime(new Date(2026, 7, 22, 10, 0, 0));
     await seed({ weeklyCommitments: scoredCommitments(1, 1) });
@@ -438,11 +451,11 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
     await seed({ weeklyCommitments: scoredCommitments(1, 1), projects: [project("p-wbs")],
       tracks: [numericTrack("same-status", "p-wbs")], trackMeasurements: [measurement("same-status", 0)] });
     await signal().click();
-    const countdownStatus = await mobile().locator(".twy-track-line .t-state").textContent();
+    const countdownStatusCount = await mobile().locator(".twy-track-line .t-state").count();
     await page.locator('.nav-button[data-view="wbs"]').click();
     await page.waitForSelector('.twy-row[data-twy-track-id="same-status"]');
     const wbsStatus = await page.locator('.twy-row[data-twy-track-id="same-status"] .t-state').textContent();
-    check("#9 WBSとLIFE BANDが同じtrackStatus結果", countdownStatus === wbsStatus && countdownStatus === "要注意");
+    check("#9 WBSの管理判定は維持し、LIFE BANDだけ判定ラベルを省略", countdownStatusCount === 0 && wbsStatus === "要注意");
   } catch (error) {
     failures++;
     console.log("  ❌ 例外:", error.stack || error.message);

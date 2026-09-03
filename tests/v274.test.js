@@ -154,18 +154,17 @@ function check(name, condition, extra = "") {
       && defaultStorage.writesAfterBlurRead.length === 0, JSON.stringify(defaultStorage));
 
     const gateFull = await page.locator(".tower-gates").evaluate((gate) => {
+      const before = getComputedStyle(gate);
+      const baseline = { border: before.borderColor, background: before.backgroundColor, animation: before.animationName };
       gate.classList.add("is-full");
-      const probe = document.createElement("span");
-      probe.style.color = "var(--tower-green)";
-      gate.appendChild(probe);
-      const result = { border: getComputedStyle(gate).borderColor, green: getComputedStyle(probe).color };
-      probe.remove();
-      return result;
+      const after = getComputedStyle(gate);
+      return { baseline, border: after.borderColor, background: after.backgroundColor, animation: after.animationName };
     });
-    check("GATE満灯の定常枠は--tower-green実効色", gateFull.border === gateFull.green, JSON.stringify(gateFull));
+    check("互換is-fullを付けてもGATEの枠・背景は変わらずアニメなし", gateFull.border === gateFull.baseline.border
+      && gateFull.background === gateFull.baseline.background && gateFull.animation === "none", JSON.stringify(gateFull));
     await page.emulateMedia({ reducedMotion: "reduce" });
-    check("reduced-motionのGATE満灯は影を消す",
-      await page.locator(".tower-gates.is-full").evaluate((gate) => getComputedStyle(gate).boxShadow) === "none");
+    check("reduced-motionでも互換is-fullはアニメなし",
+      await page.locator(".tower-gates.is-full").evaluate((gate) => getComputedStyle(gate).animationName) === "none");
 
     await page.evaluate((key) => localStorage.setItem(key, "1"), BLUR_KEY);
     await page.reload();

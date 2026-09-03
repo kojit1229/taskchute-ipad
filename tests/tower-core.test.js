@@ -230,6 +230,7 @@ function check(name, cond, extra = "") {
     }, null, { timeout: 10000 }).then((h) => h.jsonValue());
     check("JOURNAL textareaは130px以上・16px以上", journalStyle.minHeight >= 130 && journalStyle.fontSize >= 16, JSON.stringify(journalStyle));
     await page.locator("#towerJournalFree").fill("更新した自由記述");
+    await page.locator(".tower-journal-ai-fold > summary").click();
     await page.locator("#towerJournalAi").fill("明日の計画に運動を入れて");
     await page.locator('[data-action="save-tower-journal"]').click();
     await page.waitForFunction(({ KEY, today }) => {
@@ -700,33 +701,29 @@ function check(name, cond, extra = "") {
     await page.locator('[data-action="tower-gate-showdone-toggle"]').click();
     await page.waitForFunction(() => !document.querySelector('.tower-gate[data-id="gate-open"]'));
 
-    console.log("[21-b] ☀早起きゲートはEARLY BIRD正本へローカル時刻を書き、遅チェックを警告する");
+    console.log("[21-b] ☀早起きゲートはEARLY BIRD正本へローカル時刻を書き、遅チェックも中立表示にする");
     check("G01☀は二重罫線の固定枠で削除UIを持たない", await page.locator('.tower-gate-fixed .tower-gate-lock', { hasText: "固定枠(削除不可)" }).count() === 1
       && await page.locator('.tower-gate-fixed [data-action="tower-gate-delete"]').count() === 0);
     await page.locator('.tower-gate-fixed[data-action="early-bird-check"]').click();
     await page.waitForFunction(({ KEY, today }) => Boolean(JSON.parse(localStorage.getItem(KEY)).earlyBird?.logs?.[today]), { KEY, today });
     const earlyBird = await page.evaluate(({ KEY, today }) => JSON.parse(localStorage.getItem(KEY)).earlyBird.logs[today], { KEY, today });
     check("state.earlyBird.logs[当日].checkedAtへ書き込む", /^\d{4}-\d{2}-\d{2}T12:00:\d{2}$/.test(earlyBird.checkedAt), JSON.stringify(earlyBird));
-    check("06:00より遅い12:00チェックも有効のまま、固定席は消えて警告を表示", await page.locator('.tower-gate-fixed').count() === 0
-      && await page.locator('.tower-gate-warning', { hasText: "目標06:00より遅い" }).count() === 1
+    check("06:00より遅い12:00チェックも有効のまま、警告DOM・記号は表示しない", await page.locator('.tower-gate-fixed').count() === 0
+      && await page.locator('.tower-gate-warning').count() === 0
+      && !(await page.locator('.tower-gates').textContent()).includes("⚠")
       && (await page.locator("#towerGateCount").textContent()) === "未完了0件・完了3件を表示");
 
-    console.log("[22] 全就航だけis-fullになり、満灯フラッシュは遷移の瞬間だけ");
-    check("全就航ではis-full", await page.locator(".tower-gates.is-full").count() === 1);
-    check("就航遷移の瞬間はis-full-flashが付く", await page.locator(".tower-gates.is-full-flash").count() === 1);
+    console.log("[22] 全就航でも満灯class・色変化・フラッシュを出さない");
+    check("全就航でもis-full/is-full-flashなし", await page.locator(".tower-gates.is-full, .tower-gates.is-full-flash").count() === 0);
+    check("全就航のGATE animation-nameはnone", await page.locator(".tower-gates").evaluate((section) => getComputedStyle(section).animationName) === "none");
     await page.addInitScript(() => {
       const observation = { classHistory: [], tickerCycles: 0 };
       window.__towerGateRestoreObservation = observation;
       const hasTowerGatesClass = (className) => String(className || "").split(/\s+/).includes("tower-gates");
       const recordAddedSections = (node) => {
         if (!(node instanceof Element)) return;
-        const sections = [node, ...node.querySelectorAll(".tower-gates")];
-        sections.filter((el) => el.matches(".tower-gates")).forEach((el) => {
-          observation.classHistory.push({
-            phase: "added",
-            className: el.getAttribute("class") || "",
-            atMs: Math.round(performance.now())
-          });
+        [node, ...node.querySelectorAll(".tower-gates")].filter((el) => el.matches(".tower-gates")).forEach((el) => {
+          observation.classHistory.push({ phase: "added", className: el.getAttribute("class") || "" });
         });
       };
       new MutationObserver((mutations) => {
@@ -736,7 +733,6 @@ function check(name, cond, extra = "") {
             mutation.addedNodes.forEach(recordAddedSections);
             return;
           }
-          if (mutation.type !== "attributes") return;
           const currentClass = mutation.target.getAttribute("class") || "";
           if (!hasTowerGatesClass(mutation.oldValue) && !hasTowerGatesClass(currentClass)) return;
           const nextMutation = mutations.slice(index + 1)
@@ -744,23 +740,14 @@ function check(name, cond, extra = "") {
           observation.classHistory.push({
             phase: "class-change",
             oldClassName: mutation.oldValue || "",
-            className: nextMutation ? (nextMutation.oldValue || "") : currentClass,
-            atMs: Math.round(performance.now())
+            className: nextMutation ? (nextMutation.oldValue || "") : currentClass
           });
         });
-      }).observe(document, {
-        subtree: true,
-        childList: true,
-        attributes: true,
-        attributeFilter: ["class"],
-        attributeOldValue: true
-      });
+      }).observe(document, { subtree: true, childList: true, attributes: true,
+        attributeFilter: ["class"], attributeOldValue: true });
     });
     await page.reload();
     await page.waitForSelector(".tower-gates");
-    check("復元描画はis-fullのみでフラッシュを出さない", await page.locator(".tower-gates.is-full").count() === 1
-      && await page.locator(".tower-gates.is-full-flash").count() === 0
-      && await page.locator(".tower-gate-alldone", { hasText: "ルーティン完了" }).count() === 1);
     await page.waitForFunction(() => window.__towerGateRestoreObservation?.tickerCycles >= 2);
     const restoredFullObservation = await page.evaluate(() => {
       const section = document.querySelector(".tower-gates");
@@ -768,21 +755,23 @@ function check(name, cond, extra = "") {
       return {
         classHistory: observation?.classHistory || [],
         tickerCycles: observation?.tickerCycles || 0,
-        isFull: section?.classList.contains("is-full") || false,
+        className: section?.getAttribute("class") || "<missing>",
         animationName: section ? getComputedStyle(section).animationName : "<missing>"
       };
     });
-    const restoredFlashHistory = restoredFullObservation.classHistory.filter((entry) =>
-      String(entry.oldClassName || "").split(/\s+/).includes("is-full-flash")
-      || String(entry.className || "").split(/\s+/).includes("is-full-flash"));
-    check("復元描画のis-fullは満灯アニメが走らない",
-      restoredFullObservation.isFull && restoredFlashHistory.length === 0 && restoredFullObservation.animationName === "none",
+    const restoredForbiddenHistory = restoredFullObservation.classHistory.filter((entry) =>
+      /(?:^|\s)is-full(?:-flash)?(?:\s|$)/.test(`${entry.oldClassName || ""} ${entry.className || ""}`));
+    check("復元後2 ticker周期も満灯class・アニメなしで完了事実だけを表示",
+      restoredForbiddenHistory.length === 0
+      && !/(?:^|\s)is-full(?:-flash)?(?:\s|$)/.test(restoredFullObservation.className)
+      && restoredFullObservation.animationName === "none"
+      && await page.locator(".tower-gate-alldone", { hasText: "ルーティン完了" }).count() === 1,
       `classHistory=${JSON.stringify(restoredFullObservation.classHistory)} animationName=${restoredFullObservation.animationName} tickerCycles=${restoredFullObservation.tickerCycles}`);
     await page.locator('[data-action="tower-gate-edit-toggle"]').click();
     await page.waitForSelector('.tower-gate-fixed[data-action="early-bird-check"][data-docked="1"]');
     await page.locator('.tower-gate-fixed[data-action="early-bird-check"]').click();
     await page.waitForFunction(({ KEY, today }) => !JSON.parse(localStorage.getItem(KEY)).earlyBird?.logs?.[today], { KEY, today });
-    check("編集モードの固定席から早起き記録を取り消し警告も消える", await page.locator('.tower-gate-fixed[data-docked="0"]').count() === 1
+    check("編集モードの固定席から早起き記録を取り消しても警告DOMは無い", await page.locator('.tower-gate-fixed[data-docked="0"]').count() === 1
       && await page.locator('.tower-gate-warning').count() === 0);
     await seedT6(gateSeed);
     check("部分就航ではis-fullなし", await page.locator(".tower-gates.is-full").count() === 0);
@@ -856,7 +845,7 @@ function check(name, cond, extra = "") {
       const root = document.querySelector(".today-tower");
       const rect = (selector) => {
         const box = document.querySelector(selector).getBoundingClientRect();
-        return { x: box.x, width: box.width };
+        return { x: box.x, top: box.top, bottom: box.bottom, width: box.width };
       };
       return {
         columns: getComputedStyle(root).gridTemplateColumns,
@@ -873,10 +862,10 @@ function check(name, cond, extra = "") {
       && desktopLayout.board.x < desktopLayout.gates.x && desktopLayout.gates.x < desktopLayout.right.x
        && Math.abs(desktopLayout.journal.x - desktopLayout.right.x) < 1,
       JSON.stringify(desktopLayout));
-    const bandRatio = desktopLayout.life.width / (desktopLayout.life.width + 12 + desktopLayout.clock.width);
+    const bandRatio = desktopLayout.life.width / (desktopLayout.life.width + desktopLayout.clock.width);
     check("PC上帯はLIFE BAND 70%+時計30%", Math.abs(bandRatio - 0.7) < 0.01 && desktopLayout.life.x < desktopLayout.clock.x, JSON.stringify(desktopLayout));
-    check("STANDING ORDERSは上帯コンテンツ全幅", Math.abs(desktopLayout.so.x - desktopLayout.life.x) < 1
-      && Math.abs(desktopLayout.so.width - (desktopLayout.life.width + 12 + desktopLayout.clock.width)) < 1, JSON.stringify(desktopLayout));
+    check("STANDING ORDERSはPCでLIFE BANDと同じ行の右列", desktopLayout.so.x > desktopLayout.clock.x
+      && Math.abs(desktopLayout.so.top - desktopLayout.life.top) < 1, JSON.stringify(desktopLayout));
     check("PCでもLIFE BAND/SOは各1マークアップ", await page.locator(".life-band").count() === 1
       && await page.locator(".so-row").count() === 1 && await page.locator(".so-item").count() === 3);
     // 下限境界1280px(最も中央列が潰れやすい点)でも3面卓が成立し中央列が実用幅を持つこと(レビューm1)。

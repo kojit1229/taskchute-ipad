@@ -1,0 +1,48 @@
+{
+  "version": 323,
+  "date": "2026-09-03",
+  "title": "達成色・警告灯の中立化(CONCEPT §6)・STANDING ORDERS をPCでLIFE BAND行へ",
+  "summary": "Today TOWERの達成色と警告表現を中立化し、PCではSTANDING ORDERSをLIFE BANDと同じ行へ集約する。",
+  "changedFiles": [
+    "CHANGES_v323.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v323.json",
+    "src/features/today-tower.js",
+    "src/features/topband.js",
+    "styles.css",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/tower-core.test.js",
+    "tests/v266.test.js",
+    "tests/v267.test.js",
+    "tests/v274.test.js",
+    "tests/v323.test.js"
+  ],
+  "intent": [
+    "CONCEPT §3-2と§6に合わせ、実行率や完了状態を評価色・警告灯へ変換せず事実として表示する。",
+    "モバイルの縦積みとLIFE BAND表示チップ契約を保ちつつ、PC上帯の縦幅を圧縮する。"
+  ],
+  "changes": [
+    "早起きの遅い打刻警告とGATE全完了時の満灯class・フラッシュを撤去した。",
+    "12WYの達成判定語・達成色・目安線を撤去し、実行数と実行率を単一の中立色で表示した。",
+    "1280px以上のTodayグリッドでSTANDING ORDERSをLIFE BAND行の右列へ配置した。",
+    "Service WorkerのCACHE_NAMEをv323へ更新した。"
+  ],
+  "uncertainties": [
+    "1280px境界ではSTANDING ORDERSの英字副題が列内で折り返すため、iPad実機とPCのフォント差で行高が増えないか最終確認したい。"
+  ],
+  "reviewFocus": [
+    "早起き遅延・全完了・12WY低実行率のいずれにも警告記号、達成色、フラッシュが残っていないか。",
+    "1280px以上だけLIFE BANDとSTANDING ORDERSが同じ行になり、390pxでは従来どおり縦積みか。",
+    "LIFE BAND OFFでtower-band1とso-rowの両方がDOMから消え、同期stateへ書き込まないか。"
+  ],
+  "verification": [
+    "node --checkで変更したJavaScriptと新規テストの構文を確認する。",
+    "npm.cmd run test:manifest:writeでsuite-manifestとテスト影響表を更新する。",
+    "Google Chrome指定でv323、v322、v321、v320、v319、v313、v297、tower-core、today-coreを実行する。"
+  ],
+  "notes": [
+    "発注指定によりrelease-record.js、CHANGES_v323.md生成、コミット、push、taskchute-notes書込は実行しない。"
+  ],
+  "knownLimitations": []
+}

@@ -158,8 +158,9 @@ function configureSync(syncMod) {
     await dismissBodyScanIfOpen(page);
     await page.locator('.nav-button[data-view="today"]').click();
     const signal = await openScoreDetail();
-    check("条件2 LIFE BAND実行率は1/2=50%・low色", (await page.locator(".life-band .twy-score-detail").textContent()).includes("50% (1/2)")
-      && await signal.evaluate((element) => element.classList.contains("is-low")));
+    check("条件2 LIFE BAND実行率は1/2=50%・達成classなし", (await page.locator(".life-band .twy-score-detail").textContent()).includes("50% (1/2)")
+      && (await signal.textContent()).includes("1/2・実行率 50%")
+      && await signal.evaluate((element) => !element.matches(".is-good,.is-mid,.is-low")));
 
     await resetSaveProbe(); await page.locator('#trackToast [data-action="twy-toast-inc"]').click();
     await page.waitForFunction(() => document.querySelector("#trackToast")?.hidden === true); state = await savedState();
@@ -182,7 +183,7 @@ function configureSync(syncMod) {
     await page.locator('[data-action="modal-close"]').click();
     await page.locator('.nav-button[data-view="today"]').click();
     const reducedSignal = await openScoreDetail();
-    check("条件2 LIFE BAND信号/展開内訳も1/1へ減る", (await reducedSignal.textContent()).includes("1/1・軌道内")
+    check("条件2 LIFE BAND信号/展開内訳も1/1へ減る", (await reducedSignal.textContent()).includes("1/1・実行率 100%")
       && (await page.locator(".life-band .twy-score-detail").textContent()).includes("100% (1/1)"));
 
     await page.locator('.nav-button[data-view="tasks"]').click();

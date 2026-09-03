@@ -3255,8 +3255,6 @@ h3 {
 .tower-gate-fixed { border: 3px double var(--tower-amber); }
 .tower-gate-fixed > span:first-child { color: var(--tower-amber); }
 .tower-gate-lock { grid-column: 1 / -1; color: var(--tower-amber) !important; font-size: 11px !important; letter-spacing: .04em; opacity: .85; }
-.tower-gate-fixed.is-late { box-shadow: inset 0 0 0 1px var(--tower-amber); }
-.tower-gate-warning { padding: 0 10px 6px; color: var(--tower-amber); font-size: 11px; }
 .tower-gate-editor { display: grid; flex: 1 0 270px; gap: 6px; min-width: 270px; }
 .tower-gate-edit-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) 36px repeat(4, 44px); align-items: center; gap: 2px; min-height: 44px; padding: 4px; border: 1px solid var(--tower-line); }
 .tower-gate-edit-row > span { color: var(--tower-cyan); font-size: 11px; }
@@ -3278,10 +3276,7 @@ h3 {
 @media (max-width: 720px) {
   .tower-gate-editor { width: 100%; min-width: 0; }
 }
-.tower-gates.is-full { border-color: var(--tower-green); }
-.tower-gates.is-full-flash { animation: tower-gates-full 900ms ease-out 1; }
 @keyframes tower-gate-docking { 0% { transform: translateY(-8px); box-shadow: 0 0 0 var(--tower-amber); } 100% { transform: translateY(0); box-shadow: 0 0 12px var(--tower-green); } }
-@keyframes tower-gates-full { 0% { box-shadow: 0 0 0 var(--tower-amber); } 100% { box-shadow: 0 0 18px var(--tower-green); } }
 
 .today-span-2 { grid-column: span 2; }
 .today-panel {
@@ -3460,7 +3455,7 @@ h3 {
 /* ============ v275 LIFE BAND(12週サイクル+寿命)+時計 ============ */
 .band1 { display: grid; grid-template-columns: 1fr; gap: 12px; } .life-band { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 10px 14px; overflow: hidden; } .life-title { color: var(--tower-amber); font-size: 11px; font-weight: 700; letter-spacing: .18em; }
 .life-sigs { display: flex; flex: 1 1 100%; flex-wrap: wrap; min-width: 0; } .life-sig { display: grid; flex: 1 1 calc(50% - 1px); gap: 1px; min-width: 0; padding: 0 16px; border-left: 1px solid var(--tower-line); } .life-sig.wy:has(.twy-score.is-open), .life-sig.wy:has(.twy-commit-banner) { flex-basis: 100%; } .life-sig:first-child { border-left: 0; } .life-sig > span { color: var(--tower-cyan); font-size: 11px; letter-spacing: .1em; }
-.life-sig > strong { color: var(--tower-amber); font-size: 22px; line-height: 1.1; } .life-sig > strong em { font-style: normal; font-size: 11px; opacity: .7; } .life-sig.wy > strong { color: var(--tower-green); } .life-bar { position: relative; height: 3px; margin-top: 3px; overflow: hidden; background: var(--tower-line); } .life-bar i { position: absolute; inset: 0 auto 0 0; background: var(--tower-amber); } .life-sig.wy .life-bar i { background: var(--tower-green); }
+.life-sig > strong { color: var(--tower-amber); font-size: 22px; line-height: 1.1; } .life-sig > strong em { font-style: normal; font-size: 11px; opacity: .7; } .life-sig.wy > strong { color: var(--tower-text); opacity: .7; } .life-bar { position: relative; height: 3px; margin-top: 3px; overflow: hidden; background: var(--tower-line); } .life-bar i { position: absolute; inset: 0 auto 0 0; background: var(--tower-amber); } .life-sig.wy .life-bar i { background: var(--tower-text); opacity: .55; }
 .clock-box { display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 8px 2px 0; overflow: hidden; text-align: left; } .clock-box time { color: var(--tower-green); font-size: 30px; font-weight: 700; letter-spacing: .08em; } .clock-box span { color: var(--tower-cyan); font-size: 11px; letter-spacing: .1em; } .clock-box .dayleft { color: var(--tower-amber); font-size: 18px; letter-spacing: .08em; }
 
 /* v266: 12WY週次スコアは既定1行、内訳とTRACKSはタップ時だけ展開する。 */
@@ -3471,31 +3466,23 @@ h3 {
 .twy-score-val { min-width: 0; overflow: hidden; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
 .twy-score-val small { margin-left: 3px; font-size: 11px; font-weight: 400; opacity: .7; }
 .twy-score-caret { flex: none; margin-left: auto; font-size: 11px; opacity: .7; }
-.twy-score-signal.is-good, .twy-score-val.is-good { color: var(--tower-green); }
-.twy-score-signal.is-mid, .twy-score-val.is-mid { color: var(--tower-amber); }
-.twy-score-signal.is-low, .twy-score-val.is-low { color: var(--tower-red); }
 .twy-score.is-na, .twy-score-signal.is-na, .twy-score-val.is-na { color: var(--tower-text); opacity: .65; }
 .twy-score-detail { margin-top: 6px; }
 .twy-score-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 3px; }
 .twy-score-bar { position: relative; height: 4px; background: var(--tower-line); overflow: visible; }
-.twy-score-bar > span { display: block; height: 100%; }
-.twy-score-bar.is-good > span { background: var(--tower-green); box-shadow: 0 0 6px var(--tower-green); }
-.twy-score-bar.is-mid > span { background: var(--tower-amber); box-shadow: 0 0 6px var(--tower-amber); }
-.twy-score-bar.is-low > span { background: var(--tower-red); box-shadow: 0 0 6px var(--tower-red); }
-.twy-score-bar > i { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--tower-text); opacity: .75; }
-.twy-score-target { display: block; margin-top: 3px; color: var(--tower-text); font-size: 11px; text-align: right; opacity: .7; }
+.twy-score-bar > span { display: block; height: 100%; background: var(--tower-text); opacity: .55; }
 .twy-tracks-foot { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--tower-line); }
 .twy-track-line { display: flex; align-items: center; gap: 8px; min-height: 22px; font-size: 11px; }
+.twy-track-line .t-fact { flex: none; color: var(--tower-text); opacity: .7; }
 .twy-track-line .t-name { min-width: 0; overflow: hidden; font-family: system-ui, sans-serif; text-overflow: ellipsis; white-space: nowrap; }
 .twy-track-line .t-pace { flex: none; font-variant-numeric: tabular-nums; }
-.twy-track-line .t-pace.neg { color: var(--tower-amber); }
-.twy-track-line .t-pace.pos { color: var(--tower-green); }
+.twy-track-line .t-pace { color: var(--tower-text); opacity: .7; }
 .twy-track-line .t-meta { flex: none; margin-left: auto; font-size: 11px; opacity: .7; }
-.twy-commit-banner { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-top: 1px dashed var(--tower-amber); color: var(--tower-amber); font-size: 11px; }
-.twy-commit-banner button { min-height: 32px; margin-left: auto; padding: 4px 12px; border: 1px solid var(--tower-amber); color: var(--tower-amber); background: transparent; font: inherit; font-size: 11px; letter-spacing: .12em; cursor: pointer; }
+.twy-commit-banner { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-top: 1px dashed var(--tower-line); color: var(--tower-text); font-size: 11px; opacity: .75; }
+.twy-commit-banner button { min-height: 32px; margin-left: auto; padding: 4px 12px; border: 1px solid var(--tower-line); color: var(--tower-text); background: transparent; font: inherit; font-size: 11px; letter-spacing: .12em; cursor: pointer; }
 
 @media (min-width: 1280px) {
-  .band1 { grid-template-columns: minmax(0, 7fr) minmax(0, 3fr); } .life-sigs { flex: 1; } .life-sig { flex-basis: 120px; } .clock-box { padding: 10px 14px; text-align: right; } .so-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .so-item { padding: 10px 14px; border-bottom: 0; border-left: 1px solid var(--tower-line); } .so-item:first-child { border-left: 0; }
+  .band1 { grid-template-columns: minmax(0, 7fr) minmax(0, 3fr); } .life-sigs { flex: 1; } .life-sig { flex-basis: 120px; } .clock-box { padding: 10px 14px; text-align: right; } .so-row { align-self: stretch; margin-top: 0; } .so-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); height: 100%; } .so-item { min-width: 0; padding: 10px 8px; border-bottom: 0; border-left: 1px solid var(--tower-line); } .so-item:first-child { border-left: 0; }
 }
 
 
@@ -3507,8 +3494,7 @@ h3 {
     grid-template-areas:
       "mit   mit    mit"
       "alert alert  alert"
-      "life  life   life"
-      "so    so     so"
+      "life  life   so"
       "band2 band2  band2"
       "focus focus  focus"
       "left  center right";
@@ -3566,7 +3552,6 @@ h3 {
   .tower-beacon i { animation: none; }
   .tower-status.is-flip { animation: none; }
   .tower-gate.is-docking,
-  .tower-gates.is-full { animation: none; box-shadow: none; }
   /* 接地フラッシュはanimationendで自己削除するため、animation停止だと発光リングが残留する。フラッシュ自体を出さない(2系統レビューM1)。 */
   .tower-touchdown { display: none; }
   #towerPlane { transition: none; }
@@ -4951,14 +4936,6 @@ h3 {
 
 #app[data-view="today"] .today-tower .tower-mit { border-color: var(--tower-amber); }
 
-#app[data-view="today"] .today-tower .tower-gates.is-full {
-  border-color: var(--tower-green);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  #app[data-view="today"] .today-tower .tower-gates.is-full { box-shadow: none; }
-}
-
 #app[data-view="today"] .today-tower[data-glass-blur="off"] { --tower-glass-blur: none; }
 
 /* 既存の夜間低色温度契約はGLASS配色内で維持する。 */
@@ -4968,14 +4945,6 @@ h3 {
   --tower-green: #63cfb4;
   --tower-cyan: #7ca4e6;
   --tower-purple: #b0a2e3;
-}
-
-/* 赤禁止契約: 既存--tower-redは互換用に維持し、Todayの低調信号はamberで表す。 */
-#app[data-view="today"] .today-tower .twy-score-signal.is-low,
-#app[data-view="today"] .today-tower .twy-score-val.is-low { color: var(--tower-amber); }
-#app[data-view="today"] .today-tower .twy-score-bar.is-low > span {
-  background: var(--tower-amber);
-  box-shadow: 0 0 6px var(--tower-amber);
 }
 
 /* v310: 上帯2へNOW LANDING(70%)+CABIN TIMER(30%)を固定配置する。 */

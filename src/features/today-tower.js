@@ -20,8 +20,6 @@ let flipListenerBound = false;
 // (起動時同期404後の全体render()と競合して非決定にもなる)。null=実行中なしを観測済み。
 let lastLandingId;
 let lastGateDocked;
-// undefined=未観測。復元描画では満灯フラッシュを出さない(lastLandingIdと同じ意味論)。
-let lastGateFull;
 let lastFlightLogDate;
 let lastFlightLogKeys;
 let _towerArrivalSelectedId = null;
@@ -64,7 +62,6 @@ function configureTodayTower(deps) {
       else if (event.target.classList?.contains("tower-status")) event.target.classList.remove("is-flip");
       else if (event.target.classList?.contains("tower-log-row")) event.target.classList.remove("is-flip");
       else if (event.target.classList?.contains("tower-gate")) event.target.classList.remove("is-docking");
-      else if (event.target.classList?.contains("tower-gates")) event.target.classList.remove("is-full-flash");
     });
     document.addEventListener("visibilitychange", () => {
       const root = document.querySelector(".today-tower");
@@ -441,20 +438,13 @@ function renderTowerGates(blocks) {
   const model = gateViewModel(blocks);
   const docked = new Set([...(model.early.checked ? ["__early_bird__"] : []), ...model.completedEntries.map(({ block }) => String(block.id))]);
   const firstRender = lastGateDocked === undefined;
-  const total = model.gates.length + 1;
-  const full = model.done === total;
   const gateContent = model.incomplete === 0 && !model.showDone
     ? '<div class="tower-gate-alldone">ルーティン完了</div>'
     : gateTilesHTML(model, lastGateDocked || new Set(), !firstRender);
-  // レビューM2反映: フラッシュは「満灯へ遷移した瞬間」だけ(is-dockingと同じ意味論)。
-  // 復元描画(lastGateFull===undefined)では定常is-fullのみでアニメを走らせない。
-  const fullFlash = full && lastGateFull === false;
   lastGateDocked = docked;
-  lastGateFull = full;
-  return `<section class="tower-gates sec-gates${full ? " is-full" : ""}${fullFlash ? " is-full-flash" : ""}">
+  return `<section class="tower-gates sec-gates">
     <h2>ルーティン <button type="button" class="tower-gate-edit" data-action="tower-gate-edit-toggle">${gateEditMode() ? "DONE 完了" : "EDIT 編集"}</button></h2>
     <div id="towerGateStrip" data-gate-set="${model.gateSet}">${gateEditMode() ? gateEditorHTML(model.early) : gateContent}</div>
-    ${model.early.late ? `<div class="tower-gate-warning">⚠ ${escapeHTML(model.early.checkedTime)}打刻 — 目標${escapeHTML(model.early.target)}より遅いチェックです</div>` : ""}
     <div id="towerGateCount">${gateCountHTML(model.incomplete, model.done, model.showDone)}</div>
   </section>`;
 }
@@ -597,20 +587,10 @@ function updateTowerGates(blocks) {
   const container = document.getElementById("towerGateStrip");
   if (!container || container.dataset.gateSet === model.gateSet || container.contains(document.activeElement)) return;
   const previous = new Set([...container.querySelectorAll('[data-docked="1"]')].map((gate) => gate.dataset.id));
-  const total = model.gates.length + 1;
   container.innerHTML = model.incomplete === 0 && !model.showDone
     ? '<div class="tower-gate-alldone">ルーティン完了</div>'
     : gateTilesHTML(model, previous, true);
   container.dataset.gateSet = model.gateSet;
-  const full = model.done === total;
-  const section = container.closest(".tower-gates");
-  if (section) {
-    // レビューM2反映: フラッシュは「満灯へ遷移した瞬間」だけ。復元・再構築では光らせない。
-    if (full && lastGateFull === false) section.classList.add("is-full-flash");
-    section.classList.toggle("is-full", full);
-    if (!full) section.classList.remove("is-full-flash");
-  }
-  lastGateFull = full;
   const count = document.getElementById("towerGateCount");
   if (count) count.innerHTML = gateCountHTML(model.incomplete, model.done, model.showDone);
   lastGateDocked = new Set([...(model.early.checked ? ["__early_bird__"] : []), ...model.completedEntries.map(({ block }) => String(block.id))]);

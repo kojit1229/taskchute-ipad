@@ -151,44 +151,30 @@ function lifeCellHTML({ label, pctLabel, remaining, progress, isCycle, extraHTML
     </div>`;
 }
 
-function twyScoreSignalClass(digest) {
-  const { hasMeta, score, scoreTarget } = digest;
-  if (!hasMeta || score.status === "na" || score.status === "uncommitted") return "is-na";
-  return score.pct >= scoreTarget ? "is-good" : score.pct >= 70 ? "is-mid" : "is-low";
-}
-
-function twyScoreSignalWord(cls, digest) {
-  if (cls === "is-good") return "軌道内";
-  if (cls === "is-mid") return "要注意";
-  if (cls === "is-low") return "遅延";
-  if (digest.score.status === "na") return "免除";
-  if (digest.score.status === "uncommitted") return "対象0";
-  return "未確定";
-}
-
 function twyTracksFootHTML(tracksFootLines) {
   if (!tracksFootLines.length) return "";
-  const rows = tracksFootLines.map(({ track, status, paceLabel, metaLabel }) => `
+  const rows = tracksFootLines.map(({ track, status, paceLabel, metaLabel }) => {
+    const factLabel = status?.label === "未更新" || status?.label === "期限超過" ? status.label : "";
+    return `
     <div class="twy-track-line">
-      <span class="t-state s-${status.state === "warn" && status.label === "期限超過" ? "overdue" : status.state}">${escapeHTML(status.label)}</span>
+      ${factLabel ? `<span class="t-fact">${escapeHTML(factLabel)}</span>` : ""}
       <span class="t-name">${escapeHTML(track.name)}</span>
       <span class="t-pace ${paceLabel.sign}">${escapeHTML(paceLabel.text)}</span>
       <span class="t-meta">${escapeHTML(metaLabel)}</span>
-    </div>`).join("");
+    </div>`;
+  }).join("");
   return `<div class="twy-tracks-foot">${rows}</div>`;
 }
 
-function twyScoreDetailHTML(digest, cls) {
-  const { score, scoreTarget, tracksFootLines } = digest;
+function twyScoreDetailHTML(digest) {
+  const { score, tracksFootLines } = digest;
   const barPct = score.status === "scored" ? clampLocal(score.pct, 0, 100) : 0;
   const detailValue = score.status === "scored" ? `${score.pct}<small>% (${score.done}/${score.total})</small>`
     : score.status === "na" ? "N/A<small>(免除)</small>" : "確定<small>(対象0コマ)</small>";
-  const barCls = cls === "is-good" || cls === "is-mid" || cls === "is-low" ? cls : "";
   return `
     <div class="twy-score-detail">
-      <div class="twy-score-top"><span class="twy-score-label">今週 実行</span><span class="twy-score-val ${cls}">${detailValue}</span></div>
-      <div class="twy-score-bar ${barCls}"><span style="width:${barPct}%"></span><i style="left:${clampLocal(scoreTarget, 0, 100)}%"></i></div>
-      <span class="twy-score-target">目安${scoreTarget}</span>
+      <div class="twy-score-top"><span class="twy-score-label">今週 実行</span><span class="twy-score-val">${detailValue}</span></div>
+      <div class="twy-score-bar"><span style="width:${barPct}%"></span></div>
       ${twyTracksFootHTML(tracksFootLines)}
     </div>`;
 }
@@ -198,24 +184,23 @@ function twyScoreHTML(digest) {
     const prevText = digest.prevScore !== null ? `<small>・先週${digest.prevScore}%</small>` : "";
     return `<div class="twy-score is-na"><span class="twy-score-label">12WY</span><span class="twy-score-val">未確定${prevText}</span></div>`;
   }
-  const cls = twyScoreSignalClass(digest);
-  const word = twyScoreSignalWord(cls, digest);
-  const valueText = digest.score.status === "scored" ? `${digest.score.done}/${digest.score.total}`
-    : digest.score.status === "na" ? "N/A" : "確定0";
+  const valueText = digest.score.status === "scored"
+    ? `${digest.score.done}/${digest.score.total}・実行率 ${digest.score.pct}%`
+    : digest.score.status === "na" ? "N/A・免除" : "確定0・対象0";
   return `
     <div class="twy-score${_twyScoreExpanded ? " is-open" : ""}">
-      <button type="button" class="twy-score-signal ${cls}" data-action="twy-score-toggle" aria-expanded="${_twyScoreExpanded ? "true" : "false"}">
+      <button type="button" class="twy-score-signal" data-action="twy-score-toggle" aria-expanded="${_twyScoreExpanded ? "true" : "false"}">
         <span class="twy-score-label">12WY</span>
-        <span class="twy-score-val">${escapeHTML(valueText)}<small>・${escapeHTML(word)}</small></span>
+        <span class="twy-score-val">${escapeHTML(valueText)}</span>
         <span class="twy-score-caret">${_twyScoreExpanded ? "▾" : "▸"}</span>
       </button>
-      ${_twyScoreExpanded ? twyScoreDetailHTML(digest, cls) : ""}
+      ${_twyScoreExpanded ? twyScoreDetailHTML(digest) : ""}
     </div>`;
 }
 
 function twyCommitBannerHTML(digest) {
   if (digest.hasMeta || !digest.candidateCount) return "";
-  return `<div class="twy-commit-banner"><span>⚠ 今週の週次コミットが未確定です(候補 ${digest.candidateCount}件)</span>
+  return `<div class="twy-commit-banner"><span>今週の週次コミットは未確定です(候補 ${digest.candidateCount}件)</span>
     <button type="button" data-action="twy-open-commit">今週を確定</button></div>`;
 }
 
