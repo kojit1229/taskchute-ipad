@@ -8,7 +8,8 @@ const {
 const PORT = randomPort();
 const FIXED_NOW = new Date(2026, 8, 2, 10, 0, 0, 0);
 const HEALTH_PATH = path.join(__dirname, "..", "src", "features", "health.js");
-const HEALTH_URL_FRAGMENT = "/contents/taskchute/karada/health-daily.json";
+// v334修正(単位13・S-K2): 実配置はpersonal-dataリポジトリ直下(taskchute/配下ではない)。
+const HEALTH_URL_FRAGMENT = "/contents/karada/health-daily.json";
 let failures = 0;
 
 function check(name, condition, extra = "") {
@@ -45,7 +46,7 @@ function fixtureDays(dates) {
   health.configureHealth({
     escapeHTML, personalDataReady: () => ready,
     todayISO: () => "2026-09-02",
-    fetchGitHubRawText: async (name) => {
+    fetchGitHubRawTextAtRoot: async (name) => {
       fetches++;
       check("取得先はkarada/health-daily.json", name === "karada/health-daily.json", name);
       if (result instanceof Error) throw result;
@@ -156,7 +157,7 @@ function fixtureDays(dates) {
   let releaseHealth;
   await page.route((url) => url.hostname === "api.github.com", async (route) => {
     const pathname = decodeURIComponent(new URL(route.request().url()).pathname);
-    if (pathname.endsWith("/contents/taskchute/karada/health-daily.json")) {
+    if (pathname.endsWith("/contents/karada/health-daily.json")) {
       if (holdHealth) await new Promise((resolve) => { releaseHealth = resolve; });
       return route.fulfill({ status: healthStatus, contentType: "application/json", body: healthBody });
     }

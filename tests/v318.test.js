@@ -95,7 +95,7 @@ const HEALTH_FIXTURE = {
       if (fundMode === "404") return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
       return route.fulfill({ status: 200, contentType: "application/json", body: fundMode === "broken" ? "{broken" : JSON.stringify(FUND_FIXTURE) });
     }
-    if (pathname.endsWith("/contents/taskchute/karada/health-daily.json")) {
+    if (pathname.endsWith("/contents/karada/health-daily.json")) {
       if (healthMode === "404") return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(HEALTH_FIXTURE) });
     }

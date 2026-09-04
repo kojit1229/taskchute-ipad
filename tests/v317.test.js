@@ -44,7 +44,7 @@ function block(id, date, start, end, completed, charge = 0, discharge = 0) {
   };
   await page.route((url) => url.hostname === "api.github.com", (route) => {
     const path = decodeURIComponent(new URL(route.request().url()).pathname);
-    if (path.endsWith("/contents/taskchute/karada/health-daily.json")) {
+    if (path.endsWith("/contents/karada/health-daily.json")) {
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(health) });
     }
     if (path.endsWith("/contents/taskchute/report-index.json")) {

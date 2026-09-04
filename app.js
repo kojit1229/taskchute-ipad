@@ -309,7 +309,10 @@ configureWish({
 // v301: FUND日誌も既存のsanitize済みMarkdown描画経路へ結線する。
 configureFund({ escapeHTML, renderHeader, renderMarkdown, personalDataReady, fetchGitHubRawText });
 configureHealth({
-  escapeHTML, personalDataReady: () => personalDataReady(state.settings.github), fetchGitHubRawText, addDays,
+  escapeHTML, personalDataReady: () => personalDataReady(state.settings.github),
+  // v334修正(単位13・S-K2): health-daily.jsonはpersonal-dataリポジトリ直下にあるため
+  // taskchute/前置なしのfetchGitHubRawTextAtRootを渡す(fetchGitHubRawTextを渡すと404で無音失敗する)。
+  fetchGitHubRawTextAtRoot, addDays,
   todayISO,
   conditionThresholds: () => ({
     baselineLookbackDays: CONDITION_BUDGET_BASELINE_LOOKBACK_DAYS,
@@ -10101,12 +10104,16 @@ function personalDataFileConfig(rawCfg, name) {
 // GitHubのContents APIで1〜100MBのファイルに対してもraw bytesを返す(1MB以下限定ではない)ため、
 // response.text() の代わりに response.blob() を使えばテキストと同じ経路で画像・PDFも読める。
 // 既存呼び出し元(fetchGitHubRawText経由、kind省略=text)の挙動は一切変えていない。
-async function fetchGitHubRawResult(name, kind = "text", fetchOptions = {}) {
+// v334修正(単位13・S-K2): atRoot=trueの呼び出し元(fetchGitHubRawTextAtRoot)は
+// personalDataPath()のtaskchute/自動前置を経由しない。karada/health-daily.jsonは
+// personal-dataリポジトリ直下(taskchute/配下ではない)に配置される(loop/karada-daily.sh、
+// standing-flows.md白名単(b)節)ため、この専用経路が必要。
+async function fetchGitHubRawResult(name, kind = "text", fetchOptions = {}, atRoot = false) {
   const cfg = state.settings.github || {};
   if (!personalDataReady(cfg)) return { ok: false, status: 0, text: "", blob: null };
   const conn = personalDataConn(cfg);
   try {
-    const path = personalDataPath(name).split("/").map(encodeURIComponent).join("/");
+    const path = (atRoot ? name : personalDataPath(name)).split("/").map(encodeURIComponent).join("/");
     const url = `https://api.github.com/repos/${encodeURIComponent(conn.owner)}/${encodeURIComponent(conn.repo)}/contents/${path}?ref=${encodeURIComponent(conn.branch)}`;
     const response = await fetch(url, {
       headers: { ...githubHeaders(conn.token), "Accept": "application/vnd.github.raw+json" },
@@ -10127,6 +10134,13 @@ async function fetchGitHubRawResult(name, kind = "text", fetchOptions = {}) {
 
 async function fetchGitHubRawText(name) {
   const result = await fetchGitHubRawResult(name);
+  return result.ok ? result.text : "";
+}
+
+// v334修正(単位13・S-K2): personal-dataリポジトリ直下(taskchute/配下ではない)の
+// 閲覧専用パス用。現状の利用者はkarada/health-daily.jsonのみ(health.js経由)。
+async function fetchGitHubRawTextAtRoot(name) {
+  const result = await fetchGitHubRawResult(name, "text", {}, true);
   return result.ok ? result.text : "";
 }
 
@@ -11740,7 +11754,8 @@ async function hydrateStaticMarkdown() {
   const wantAiInsightsFetch = ghReady && (Date.now() - cachedAiInsightsJson.fetchedAt >= FEEDBACK_REFRESH_INTERVAL_MS);
   const [futureLetterMd, aiInsightsRaw, fundChanged, healthChanged] = await Promise.all([
     wantFutureLetterFetch ? fetchGitHubRawText(`未来からの手紙_${realCurrentMonth}.md`) : Promise.resolve(undefined),
-    wantAiInsightsFetch ? fetchGitHubRawText("ai-insights.json").catch(() => undefined) : Promise.resolve(undefined),
+    // v334修正(単位13・S-K2): 実配置はtaskchute/dashboard/ai-insights.json(loop/taskchute-insights.sh)。
+    wantAiInsightsFetch ? fetchGitHubRawText("dashboard/ai-insights.json").catch(() => undefined) : Promise.resolve(undefined),
     hydrateFundData(FEEDBACK_REFRESH_INTERVAL_MS),
     hydrateHealthData(HEALTH_REFRESH_INTERVAL_MS),
   ]);

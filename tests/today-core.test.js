@@ -980,7 +980,7 @@ function check(name, cond, extra = "") {
     // 実装(別担当が並行作業中)より先に仕様から書いた。前提が実装と食い違った場合は
     // テストを弱めるのではなく、前提の側を実装と突合して直すこと:
     //   前提B7-1: ai-insights.json は kindle highlights と同じ Contents API 経路
-    //            (パス末尾 /contents/taskchute/ai-insights.json)で取得され、hydrateStaticMarkdown
+    //            (パス末尾 /contents/taskchute/dashboard/ai-insights.json)で取得され、hydrateStaticMarkdown
     //            相乗せの energy-curve型TTL30分方式により起動(reload)ごとに毎回fetchされる
     //            (キャッシュはメモリのみ。同一セッション内のビュー往復では再fetchしない)。
     //            同名の別スキーマとはパスで区別する(§12 F8「同名紛らわしいが別物」。
@@ -1015,7 +1015,7 @@ function check(name, cond, extra = "") {
     const aiInsightsFx = { status: 200, body: null };  // body=null なら B7_AI_OK を返す
     await page.route((url) => url.hostname === "api.github.com", (route) => {
       const p = decodeURIComponent(new URL(route.request().url()).pathname);
-      if (p.endsWith("/contents/taskchute/ai-insights.json")) {
+      if (p.endsWith("/contents/taskchute/dashboard/ai-insights.json")) {
         if (aiInsightsFx.status !== 200) return route.fulfill({ status: aiInsightsFx.status, body: "not found" });
         if (aiInsightsFx.body != null) return route.fulfill({ status: 200, contentType: "application/json", body: aiInsightsFx.body });
         return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(B7_AI_OK) });
@@ -1024,7 +1024,7 @@ function check(name, cond, extra = "") {
     });
     const aiPanelSel = (kind) => `.ai-insights[data-insight="${kind}"]`;
     const b7WaitAiResponse = () =>
-      page.waitForResponse((r) => r.url().includes("/contents/taskchute/ai-insights.json"));
+      page.waitForResponse((r) => r.url().includes("/contents/taskchute/dashboard/ai-insights.json"));
     // 不在断定の前にfetch応答後の描画反映猶予としてマクロタスクを2周回す([45b]/[30c]と同手法)
     const b7FlushMacrotasks = async () => {
       await page.evaluate(() => new Promise((r) => setTimeout(r, 0)));

@@ -50,7 +50,7 @@ function healthDays({ today = TODAY, sleepMin = 442, yesterdaySteps = 7000, othe
   let healthToday = TODAY;
   health.configureHealth({
     personalDataReady: () => true,
-    fetchGitHubRawText: async () => { healthFetches++; return JSON.stringify({ schema: 1, days: healthDays() }); },
+    fetchGitHubRawTextAtRoot: async () => { healthFetches++; return JSON.stringify({ schema: 1, days: healthDays() }); },
     escapeHTML: String,
     addDays: addDaysSafe, conditionThresholds: () => THRESHOLDS, todayISO: () => healthToday
   });
@@ -99,7 +99,7 @@ function healthDays({ today = TODAY, sleepMin = 442, yesterdaySteps = 7000, othe
   await blockGithubApiByDefault(page);
   await page.route((url) => url.hostname === "api.github.com", (route) => {
     const pathname = decodeURIComponent(new URL(route.request().url()).pathname);
-    if (!pathname.endsWith("/contents/taskchute/karada/health-daily.json")) return route.fallback();
+    if (!pathname.endsWith("/contents/karada/health-daily.json")) return route.fallback();
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ schema: 1, days: currentDays }) });
   });
 
@@ -224,7 +224,7 @@ function healthDays({ today = TODAY, sleepMin = 442, yesterdaySteps = 7000, othe
         resumePullRequests++;
         return route.fallback();
       }
-      if (!pathname.endsWith("/contents/taskchute/karada/health-daily.json")) return route.fallback();
+      if (!pathname.endsWith("/contents/karada/health-daily.json")) return route.fallback();
       resumeHealthRequests++;
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ schema: 1, days: resumeDays }) });
     });

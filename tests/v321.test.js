@@ -38,7 +38,7 @@ function block(id, title, start, end, extra = {}) {
   await blockGithubApiByDefault(page);
   await page.route((url) => url.hostname === "api.github.com", (route) => {
     const path = decodeURIComponent(new URL(route.request().url()).pathname);
-    if (!path.endsWith("/contents/taskchute/karada/health-daily.json")) return route.fallback();
+    if (!path.endsWith("/contents/karada/health-daily.json")) return route.fallback();
     const days = healthReady ? [{
       date: TODAY, sleep_min: 425, bed_time: "23:45", wake_time: "06:50",
       steps: 8000, resting_hr: 58, hrv_sdnn: 41, weight_kg: 60

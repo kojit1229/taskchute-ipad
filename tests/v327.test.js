@@ -65,7 +65,7 @@ const stateFixture = {
   await blockGithubApiByDefault(page);
   await page.route((url) => url.hostname === "api.github.com", (route) => {
     const pathname = decodeURIComponent(new URL(route.request().url()).pathname);
-    if (!pathname.endsWith("/contents/taskchute/karada/health-daily.json")) return route.fallback();
+    if (!pathname.endsWith("/contents/karada/health-daily.json")) return route.fallback();
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(healthBody) });
   });
   const seedAndReload = async (view, fixture = stateFixture) => {

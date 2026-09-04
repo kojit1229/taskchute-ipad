@@ -1,5 +1,8 @@
 // v314: personal-dataの健康日次を閲覧専用で取得する。キャッシュはstateへ混ぜず、このモジュール内だけに保持する。
-let personalDataReady, fetchGitHubRawText, escapeHTML, addDays, conditionThresholds, todayISO;
+// v334修正(単位13・S-K2): karada/health-daily.jsonはpersonal-dataリポジトリ直下(taskchute/配下
+// ではない)にあるため、taskchute/前置なしのfetchGitHubRawTextAtRootを使う(旧fetchGitHubRawTextでは
+// 実要求URLがtaskchute/karada/health-daily.jsonとなり404を無音で握りつぶしていた)。
+let personalDataReady, fetchGitHubRawTextAtRoot, escapeHTML, addDays, conditionThresholds, todayISO;
 // v325: 6時間キャッシュ中でも日を跨いだら当日データを取り直せるよう、取得日を別に保持する。
 let healthCache = { fetchedAt: 0, fetchedFor: "", data: undefined };
 
@@ -7,7 +10,7 @@ const HEALTH_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const HEALTH_CACHE_DAYS = 60;
 
 function configureHealth(deps) {
-  ({ personalDataReady, fetchGitHubRawText, escapeHTML, addDays, conditionThresholds, todayISO } = deps);
+  ({ personalDataReady, fetchGitHubRawTextAtRoot, escapeHTML, addDays, conditionThresholds, todayISO } = deps);
 }
 
 function validHealthData(value) {
@@ -22,7 +25,7 @@ async function hydrateHealthData(refreshIntervalMs) {
   if (healthCache.fetchedFor === fetchedFor && Date.now() - healthCache.fetchedAt < refreshIntervalMs) return false;
   let next;
   try {
-    const raw = await fetchGitHubRawText("karada/health-daily.json");
+    const raw = await fetchGitHubRawTextAtRoot("karada/health-daily.json");
     const parsed = raw ? JSON.parse(raw) : null;
     if (validHealthData(parsed)) next = { ...parsed, days: parsed.days.slice(-HEALTH_CACHE_DAYS) };
   } catch (_) {
