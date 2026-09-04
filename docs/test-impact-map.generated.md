@@ -10,7 +10,7 @@
 | day-cross-ticker.test.js | e2e | full | sync-storage, planning-execution, content-ai | 20 | 8 | 7600 |
 | github-state-blob-fallback.test.js | e2e | full | sync-storage, planning-execution | 12 | 5 | 2200 |
 | github-vision-pdf-fallback.test.js | e2e | full | sync-storage, content-ai | 6 | 4 | 1600 |
-| instruments-core.test.js | node | full | legacy-crosscutting | 38 | 0 | 0 |
+| instruments-core.test.js | node | full | legacy-crosscutting | 43 | 0 | 0 |
 | instruments-e2e.test.js | e2e | full | content-ai, ui-responsive | 38 | 0 | 0 |
 | iron-log-core.test.js | node | full | sync-storage, planning-execution, content-ai, ui-responsive | 78 | 0 | 0 |
 | iron-log-e2e.test.js | e2e | full | planning-execution, ui-responsive | 52 | 0 | 0 |

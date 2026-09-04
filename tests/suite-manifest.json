@@ -180,9 +180,9 @@
       "domains": [
         "legacy-crosscutting"
       ],
-      "assertionSignals": 38,
-      "assertionHash": "5283319dfa31ce98",
-      "sourceHash": "2aae413aefbcd0b5",
+      "assertionSignals": 43,
+      "assertionHash": "fe8970e6d4de85f7",
+      "sourceHash": "14965efbb395d4e2",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

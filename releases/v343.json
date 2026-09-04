@@ -1,0 +1,38 @@
+{
+  "version": 343,
+  "date": "2026-09-05",
+  "title": "修正フェーズ 単位12: instruments.js escapeHTML既定値を安全側(実エスケープ)へ",
+  "summary": "第1回コードレビューの指摘に対応した。src/features/instruments.jsのescapeHTMLはconfigureInstruments(deps)から実体を注入される設計だが、注入前のフォールバック既定値が`String(value ?? \"\")`という素通しの非エスケープ実装になっていた。単体でこのモジュールを読み込んだ場合や、注入タイミングの不備で既定値のまま描画関数が呼ばれた場合にXSSベクタとなりうるため、既定値自体を実エスケープ(&/</>/\"/')する実装へ変更した。",
+  "changedFiles": [
+    "releases/v343.json",
+    "src/features/instruments.js",
+    "sw.js",
+    "tests/instruments-core.test.js"
+  ],
+  "intent": [
+    "instruments.jsのescapeHTMLフォールバック既定値を、実際にエスケープを行う安全な実装に変更し、依存注入前・注入不備時でもXSS耐性を持たせる。"
+  ],
+  "changes": [
+    "src/features/instruments.js: `let escapeHTML = (value) => String(value ?? \"\");`を`&`/`<`/`>`/`\"`/`'`を実エスケープする実装へ変更した(5行)。"
+  ],
+  "uncertainties": [
+    "実装・レビューはremediation/unit12ブランチ上で完結済み(implementer+reviewer単系統、Codex利用上限のため)。reviewer(Claude)独立レビューPASS(handoff.md表参照)。",
+    "handoff.mdの別単位候補メモ: topband.js:34の同型既定値+instruments.jsの未エスケープ属性3箇所(sparklineHTML data-date / ironChartHTML data-month, title)+テストの照合先をapp.js実体抽出へ、は本版の範囲外(別単位候補として残る)。"
+  ],
+  "reviewFocus": [
+    "configureInstruments(deps)が呼ばれる前の状態でescapeHTMLが呼ばれても、危険なマークアップがエスケープされること。",
+    "通常の依存注入後の挙動(実体のescapeHTML)に影響がないこと(フォールバックの置き換えのみ)。"
+  ],
+  "verification": [
+    "node --check src/features/instruments.js は成功。",
+    "実行コード差分: src/features/instruments.js 6行(200行以内)。",
+    "npm run code:index:write → npm run test:manifest:write の順で実行し、node scripts/test-manifest.js --check はPASS。",
+    "node scripts/release-gate.js releases/v343.json をフォアグラウンド(timeout 600000、出力ファイルへリダイレクト)で実行、結果を別コマンドで確認。"
+  ],
+  "notes": [
+    "単位12(修正フェーズ第1段)。実装・レビューはCodex利用上限のためimplementer+reviewer(Claude)単系統。"
+  ],
+  "knownLimitations": [
+    "topband.js:34の同型既定値、instruments.jsの未エスケープ属性3箇所(sparklineHTML/ironChartHTML)は本版の範囲外。"
+  ]
+}
