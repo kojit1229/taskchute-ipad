@@ -388,6 +388,29 @@
       }
     },
     {
+      "file": "reset-demo-confirm.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "ui-responsive"
+      ],
+      "assertionSignals": 9,
+      "assertionHash": "f01ca8a46b6ef0bc",
+      "sourceHash": "76f9852d0b2c3bc2",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
       "file": "run-all-options.test.js",
       "kind": "node",
       "tier": "full",

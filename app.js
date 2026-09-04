@@ -10613,6 +10613,7 @@ async function loadArchiveForSearch() {
 }
 
 function resetDemoData() {
+  if (!window.confirm("この端末の全データ(Block・ジャーナル・0秒思考・IRON LOG等)をデモデータへ置き換えます。取り消せません。よろしいですか?")) return;
   setState(normalizeState(seedState()));
   saveAndRender("デモデータに戻しました");
 }
