@@ -217,10 +217,27 @@ button {
 }
 
 .app-shell {
+  /* remediation/css-rail: 列数の唯一の真実。「railを出すか」はJS側(renderTimelineRail)が
+     appRootEl.dataset.rail(data-rail="on"/"off")として1か所で判断し、CSSはそれだけを見る。
+     サイドバー幅は --sidebar-w カスタムプロパティに一本化(以前はJSがinline style.gridTemplateColumns
+     を毎render書いていたため、この@mediaブロックが常に上書きされ一度も効いていなかった)。 */
+  --sidebar-w: 216px;
   min-height: 100dvh;
   display: grid;
-  grid-template-columns: 216px minmax(0, 1fr) 360px;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
   background: var(--bg);
+}
+
+.app-shell[data-rail="on"] {
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr) 360px;
+}
+
+.app-shell:not([data-rail="on"]) > .timeline-rail {
+  display: none;
+}
+
+.app-shell:has(> .sidebar.collapsed) {
+  --sidebar-w: 56px;
 }
 
 .sidebar {
@@ -1221,7 +1238,11 @@ h3 {
 
 @media (max-width: 1020px) {
   .app-shell {
-    grid-template-columns: 184px minmax(0, 1fr);
+    --sidebar-w: 184px;
+  }
+
+  .app-shell[data-rail="on"] {
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
   }
 
   .timeline-rail {

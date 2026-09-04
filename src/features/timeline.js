@@ -82,8 +82,6 @@ function configureTimeline(deps) {
 // ---- ここから抽出したコード本体(app.js:v174時点から移動。ロジック無改変) ----
 
 function renderTimelineRail() {
-  // v11: サイドバーの幅(折りたたみ時 56px、通常 216px)
-  const sbWidth = state.settings?.sidebarCollapsed ? "56px" : "216px";
   // v10: タスクシュート(tasks)時のみ右タイムライン rail を表示
   // v335(§C)検討メモ: PCサイドバーの「タスクシュート」は「実行」へ統合され、execの計画モードでも
   // 表示する案を試したが、execの一覧(execTargetBlocks絞り込み)とrailの簡易タイムライン
@@ -92,13 +90,16 @@ function renderTimelineRail() {
   // 変更」に抵触するリスクも含め、rail自体は今回のスコープ外として現行のまま維持する)。
   // 旧tasksビュー自体は内部に残るため、直接setViewされた場合(テストのseedによる直接注入)は
   // 従来どおりrailが表示される。
+  // remediation/css-rail: 「railを出すか」の判断はここ1か所に一本化し、appRootEl.dataset.rail
+  // (data-rail="on"/"off")だけを立てる。列幅・サイドバー幅・折りたたみ・1020px以下の縮小は
+  // すべてstyles.css側がdata-rail/[data-view]/.collapsedを見て決める(inline styleは書かない)。
   if (state.currentView !== "tasks") {
     timelineRailEl.style.display = "none";
-    appRootEl.style.gridTemplateColumns = `${sbWidth} minmax(0, 1fr)`;
+    appRootEl.dataset.rail = "off";
     return;
   }
   timelineRailEl.style.display = "";
-  appRootEl.style.gridTemplateColumns = `${sbWidth} minmax(0, 1fr) 360px`;
+  appRootEl.dataset.rail = "on";
   const mode = state.timelineMode || "planned";
   timelineRailEl.innerHTML = `
     <div class="row" style="margin-bottom:10px">
