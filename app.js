@@ -963,6 +963,8 @@ registerActions({
   "now-end": ({ id }) => openReportModal(id, "block"),
   "bulk-approve-planned": () => bulkApproveAsPlanned(),
   "now-conveyor-complete": ({ id }) => nowConveyorComplete(id),
+  // v331: 実行タブA-1a「これから」行の展開トグル(表示専用、state非書込)。
+  "block-row-toggle": ({ id }) => { _execExpandedBlockId = _execExpandedBlockId === id ? "" : id; render(); },
   // --- ポモドーロ(14。continue-focus/finish-blockはend-break単独UIへの統一で孤立、v292孤児掃除で
   //     削除(K裁定2026-08-29)。complete-pomodoroは到達導線が無いが、completePomodoro()が
   //     v129身体スキャンモーダルの唯一の呼び出し元でテスト(v129/v132)が依存するため残置) ---
@@ -1206,6 +1208,8 @@ let _twyExcuseOpenItemId = null;
 let _twyAddPanelOpen = false;
 // v330: PC WBSの選択Project。表示専用でstate/localStorageへは保存しない。
 let _wbsSelectedProjectId = "";
+// v331: 実行タブ「これから」行の展開状態(1行だけ開く)。表示専用でstate/localStorageへは保存しない。
+let _execExpandedBlockId = "";
 // v70: フォーカスタイマー「中断」の理由ワンタップピッカー(チョコ停記録)。非永続。
 let _pendingInterruptBlockId = null;
 // v87: 宣言/終了報告モーダルが解決するまでの一時コンテキスト。非永続。
@@ -5553,7 +5557,7 @@ function renderProjectTree(project) {
     <div class="item${suspended ? " is-suspended" : ""}" data-wbs-row-id="${escapeHTML(project.id)}">
       <div class="wbs-project-head">
         <button class="wbs-caret" data-action="toggle-project-collapse" data-id="${project.id}" aria-label="${collapsed ? "展開" : "折りたたむ"}">${collapsed ? "▸" : "▾"}</button>
-        <div class="wbs-project-copy"><strong data-id="${project.id}">${escapeHTML(project.title)}</strong>
+        <div class="wbs-project-copy"><strong data-action="edit-project" data-id="${project.id}">${escapeHTML(project.title)}</strong>
           <div class="wbs-project-meta">${renderWbsProjectMeta(project, model)}</div>
         </div>
         ${is12WY ? `<button class="btn ghost twy-commit-open" data-action="twy-open-commit">今週を確定</button>` : ""}
@@ -5686,9 +5690,38 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false, 
   `;
 }
 
+// v331: A-1a「いま/これから」の対象母集団(Project紐づきBlock。旧renderTasksのfilterを再利用)。
+function execTargetBlocks() {
+  return blocksForDate(state.selectedDate).filter((b) => {
+    // v15: タイムライン由来は除外
+    if (b.source === "timeline") return false;
+    // v19: カテゴリ「ルーティン」は専用ルーティンタブで表示
+    if (b.category === "ルーティン") return false;
+    // v19: 繰り返し系列(recurrenceGroupId 持ち)もルーティンタブへ
+    if (b.recurrenceGroupId) return false;
+    // taskId 無しの単発 Block は除外
+    if (!b.taskId) return false;
+    // v48: 中断/中止/削除タスクの未完了 Block は表示しない(実績は残す)
+    if (isStaleBlock(b)) return false;
+    // 紐づく Task に Project がなければ単発 → 除外
+    const task = state.tasks.find((t) => t.id === b.taskId);
+    if (!task || !task.projectId) return false;
+    return true;
+  });
+}
+
 function renderTasks() {
+  const targets = execTargetBlocks();
+  // v331: 実行中=開始済み・未終了・未完了(旧renderBlockItemのdoing判定と同じ条件)。
+  //       最大1件を想定するが、複数あっても取りこぼさない。それ以外の未完了は「これから」へ
+  //       (実績時刻はあるが未完了登録、のような境界状態も取りこぼさず「これから」で拾う)。
+  const isExecDoing = (b) => !b.completed && Boolean(b.actualStartAt) && !b.actualEndAt;
+  const doing = targets.filter(isExecDoing);
+  const upcoming = targets
+    .filter((b) => !b.completed && !isExecDoing(b))
+    .sort((a, b) => (a.plannedStartAt || "").localeCompare(b.plannedStartAt || ""));
   return `
-    ${renderHeader("今日の実行リスト", "タスクシュート", projectedEndBadge())}
+    ${renderHeader("TOWER / タスクシュート", "タスクシュート", projectedEndBadge())}
     ${renderDateBar()}
     ${carryOverPanel()}
     <section class="form-strip">
@@ -5700,29 +5733,83 @@ function renderTasks() {
       <button class="btn primary" data-action="add-block">Block追加</button>
     </section>
 
-    <section class="section grid">
-      ${blocksForDate(state.selectedDate).filter((b) => {
-        // v15: タイムライン由来は除外
-        if (b.source === "timeline") return false;
-        // v19: カテゴリ「ルーティン」は専用ルーティンタブで表示
-        if (b.category === "ルーティン") return false;
-        // v19: 繰り返し系列(recurrenceGroupId 持ち)もルーティンタブへ
-        if (b.recurrenceGroupId) return false;
-        // taskId 無しの単発 Block は除外
-        if (!b.taskId) return false;
-        // v48: 中断/中止/削除タスクの未完了 Block は表示しない(実績は残す)
-        if (isStaleBlock(b)) return false;
-        // 紐づく Task に Project がなければ単発 → 除外
-        const task = state.tasks.find((t) => t.id === b.taskId);
-        if (!task || !task.projectId) return false;
-        return true;
-      }).map(renderBlockItem).join("") || emptyPanel("この日のBlockはまだありません(Projectに紐づくTaskがここに表示されます。ルーティンは「ルーティン」タブへ)")}
+    ${doing.length ? `
+    <section class="section exec-panel exec-amber">
+      <h2>いま</h2>
+      <div class="grid">${doing.map(renderExecNowRow).join("")}</div>
+    </section>` : ""}
+
+    <section class="section">
+      <h2>これから</h2>
+      <div class="grid">${upcoming.length ? upcoming.map(renderExecUpcomingRow).join("") : emptyPanel("未着手のBlockはありません")}</div>
     </section>
 
     <section class="section">
       <h2>未完了タスク</h2>
       ${renderOpenTasks()}
     </section>
+  `;
+}
+
+// v331修正: 「いま」行(実行中Block1件)。常時要素は☐(toggle-block)・タイトル+meta・
+// 完了(toggle-block再掲)・終了報告(now-end)のみ。充放電select・実行中メモtextareaは
+// meta部タップ(block-row-toggle、これから行と共通の_execExpandedBlockId)で開く展開行へ。
+function renderExecNowRow(block) {
+  const isMIT = block.isMIT === true;
+  const start = block.actualStartAt ? timeFromDateTime(block.actualStartAt) : (block.plannedStartAt ? timeFromDateTime(block.plannedStartAt) : "");
+  const end = block.plannedEndAt ? timeFromDateTime(block.plannedEndAt) : "";
+  const estimateMin = estimateMinutesForBlock(block, "block");
+  const metaHTML = `${start}${end ? `–${end}` : ""}${estimateMin ? ` ・ 見積${estimateMin}分` : ""}${block.category ? ` ・ ${escapeHTML(block.category)}` : ""}`;
+  const expanded = _execExpandedBlockId === block.id;
+  return `
+    <div class="item exec-row exec-row-now${expanded ? " is-expanded" : ""}">
+      <button class="checkbox-button" data-action="toggle-block" data-id="${block.id}" title="Block完了" aria-label="Block完了">✓</button>
+      <div class="exec-row-copy">
+        <strong data-action="edit-block" data-id="${block.id}" title="${escapeHTML(block.title)}">${isMIT ? `<span class="mit-star" style="color:#F5A623">★</span> ` : ""}${escapeHTML(block.title)}</strong>
+        <div class="exec-row-meta" data-action="block-row-toggle" data-id="${block.id}">${metaHTML}</div>
+      </div>
+      <div class="exec-row-actions">
+        <button class="btn green" data-action="toggle-block" data-id="${block.id}">完了</button>
+        <button class="btn" data-action="now-end" data-id="${block.id}">終了報告</button>
+      </div>
+      ${expanded ? `
+      <div class="exec-row-expand">
+        <label>充電<select class="mini-select" data-block-field="charge" data-id="${block.id}">${rangeOptions(0, 5, block.charge)}</select></label>
+        <label>放電<select class="mini-select" data-block-field="discharge" data-id="${block.id}">${rangeOptions(0, 5, block.discharge)}</select></label>
+        <textarea class="textarea block-inline-memo" style="min-height:56px; font-size:16px"
+          data-block-comment data-id="${block.id}"
+          placeholder="実行中のメモ…">${escapeHTML(block.comment || "")}</textarea>
+      </div>` : ""}
+    </div>
+  `;
+}
+
+// v331: 「これから」行。常時表示は☐/タイトル+meta/▶開始のみ。行タップ(exec-row-copy)で
+// 充放電・25分・編集・☆を展開する(非永続の_execExpandedBlockIdで1行だけ開く)。
+function renderExecUpcomingRow(block) {
+  const task = block.taskId ? state.tasks.find((t) => t.id === block.taskId) : null;
+  const isMIT = block.isMIT === true;
+  const start = block.plannedStartAt ? timeFromDateTime(block.plannedStartAt) : "未定";
+  const estimateMin = estimateMinutesForBlock(block, "block");
+  const expanded = _execExpandedBlockId === block.id;
+  const metaHTML = `${start}${estimateMin ? ` ・ 見積${estimateMin}分` : ""}${block.category ? ` ・ ${escapeHTML(block.category)}` : ""}${task ? ` ・ ${escapeHTML(projectName(task.projectId))}` : ""}`;
+  return `
+    <div class="item exec-row exec-row-upcoming${expanded ? " is-expanded" : ""}">
+      <button class="checkbox-button" data-action="toggle-block" data-id="${block.id}" title="Block完了" aria-label="Block完了">✓</button>
+      <div class="exec-row-copy" data-action="block-row-toggle" data-id="${block.id}">
+        <strong title="${escapeHTML(block.title)}">${isMIT ? `<span class="mit-star" style="color:#F5A623">★</span> ` : ""}${escapeHTML(block.title)}</strong>
+        <div class="exec-row-meta">${metaHTML}</div>
+      </div>
+      <button class="btn exec-start-btn" data-action="now-start" data-id="${block.id}">▶開始</button>
+      ${expanded ? `
+      <div class="exec-row-expand">
+        <label>充電<select class="mini-select" data-block-field="charge" data-id="${block.id}">${rangeOptions(0, 5, block.charge)}</select></label>
+        <label>放電<select class="mini-select" data-block-field="discharge" data-id="${block.id}">${rangeOptions(0, 5, block.discharge)}</select></label>
+        <button class="btn orange" data-action="start-pomodoro" data-block-id="${block.id}">25分</button>
+        <button class="btn ${isMIT ? "" : "ghost"}" data-action="toggle-mit" data-id="${block.id}">${isMIT ? "★" : "☆"}</button>
+        <button class="btn" data-action="edit-block" data-id="${block.id}">編集</button>
+      </div>` : ""}
+    </div>
   `;
 }
 
@@ -5805,6 +5892,9 @@ function renderOpenTasks() {
   `;
 }
 
+// v331修正の自信がない箇所: renderBlockItemは呼び出し元ゼロ(renderExecNowRow/
+// renderExecUpcomingRowへ置換済み)だが、削除すると本修正の実行コード差分が200行を超えるため
+// 本バージョンでは残置し次バージョンで削除する(order-v331 の A-1a/A-1b 分割と同じ考え方)。
 function renderBlockItem(block) {
   const start = block.plannedStartAt ? timeFromDateTime(block.plannedStartAt) : "未定";
   const end = block.plannedEndAt ? timeFromDateTime(block.plannedEndAt) : "";

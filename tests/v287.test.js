@@ -326,10 +326,10 @@ async function verifyTaskBadges(browser) {
     });
     const boundary = {
       badge: await badgeText(page, "#sidebar", "tasks"),
-      oneTap: await page.locator('.block-row [data-action="now-start"][data-id="one-tap-block"]').count(),
-      taskless: await page.locator('.block-row [data-action="now-start"][data-id="taskless-block"]').count(),
-      recurrence: await page.locator('.block-row [data-action="now-start"][data-id="recurrence-block"]').count(),
-      unlinked: await page.locator('.block-row [data-action="now-start"][data-id="unlinked-block"]').count()
+      oneTap: await page.locator('.exec-row [data-action="now-start"][data-id="one-tap-block"]').count(),
+      taskless: await page.locator('.exec-row [data-action="now-start"][data-id="taskless-block"]').count(),
+      recurrence: await page.locator('.exec-row [data-action="now-start"][data-id="recurrence-block"]').count(),
+      unlinked: await page.locator('.exec-row [data-action="now-start"][data-id="unlinked-block"]').count()
     };
     check("母集団境界はoneTap・taskId無しが対象、recurrence・Project未紐づけは非対象", boundary.badge === "2"
       && boundary.oneTap === 1 && boundary.taskless === 1 && boundary.recurrence === 0 && boundary.unlinked === 0, JSON.stringify(boundary));
@@ -339,10 +339,10 @@ async function verifyTaskBadges(browser) {
       ...base, currentView: "tasks", selectedDate: TODAY,
       settings: { lastOpenedDate: TODAY, focusTimerAuto: false }
     });
-    await page.waitForSelector('.block-row [data-action="now-start"][data-id="valid-start-block"]');
+    await page.waitForSelector('.exec-row [data-action="now-start"][data-id="valid-start-block"]');
     check("開始済み・完了・削除・昨日・timeline・routine・staleを除外し未着手2件", await badgeText(page, "#sidebar", "tasks") === "2"
       && await badgeText(page, "#bottomNav", "tasks") === "2");
-    check("バッジ件数はタスクシュートに見える未着手行数と一致", await page.locator('.block-row [data-action="now-start"]').count() === 2);
+    check("バッジ件数はタスクシュートに見える未着手行数と一致", await page.locator('.exec-row [data-action="now-start"]').count() === 2);
 
     const mobileItems = await page.$$eval("#bottomNav button", (elements) => elements.map((element) => ({
       id: element.dataset.view, label: element.childNodes[0].textContent
@@ -353,13 +353,13 @@ async function verifyTaskBadges(browser) {
     ];
     check("mobileNavは5項目・id・ラベル不変", JSON.stringify(mobileItems) === JSON.stringify(expectedMobileItems), JSON.stringify(mobileItems));
 
-    await page.locator('.block-row [data-action="now-start"][data-id="valid-start-block"]').click();
+    await page.locator('.exec-row [data-action="now-start"][data-id="valid-start-block"]').click();
     await page.locator('[data-action="declare-skip"]').click();
     await page.waitForFunction(() => document.querySelector('#bottomNav [data-view="tasks"] .nav-badge')?.textContent === "1");
     check("開始操作でサイドバー・下部ナビとも即時1減", await badgeText(page, "#sidebar", "tasks") === "1"
       && await badgeText(page, "#bottomNav", "tasks") === "1");
 
-    await page.locator('.block-row [data-action="toggle-block"][data-id="valid-complete-block"]').click();
+    await page.locator('.exec-row [data-action="toggle-block"][data-id="valid-complete-block"]').click();
     await page.waitForFunction(() => !document.querySelector('#bottomNav [data-view="tasks"] .nav-badge'));
     check("完了操作で0件になりtasksバッジDOM自体が両方から消える", await badgeText(page, "#sidebar", "tasks") === null
       && await badgeText(page, "#bottomNav", "tasks") === null);
@@ -373,7 +373,7 @@ async function verifyTaskBadges(browser) {
     const pastSnapshot = {
       sidebar: await badgeText(page, "#sidebar", "tasks"),
       bottom: await badgeText(page, "#bottomNav", "tasks"),
-      rows: await page.locator(".block-row").count(),
+      rows: await page.locator(".exec-row").count(),
       selectedDate: await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).selectedDate, STATE_KEY)
     };
     check("過去日閲覧中もバッジは今日基準の2件で不変", pastSnapshot.sidebar === "2"

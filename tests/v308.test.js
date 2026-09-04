@@ -70,7 +70,10 @@ async function openSeededPage(browser, width) {
   return { context, page, pageErrors };
 }
 
-async function blockTitleMetrics(page, selector = `.block-row strong[data-action="edit-block"][data-id="${BLOCK_ID}"]`) {
+// v331 A-1a: 実行タブのカードmarkupが.block-rowから.exec-rowへ変わった。「これから」行の
+// タイトルstrongはdata-action/data-idを持たず、親の.exec-row-copy(data-action="block-row-toggle")
+// 側にdata-idがあるため、そちら経由で選ぶ(「いま」行のstrongはedit-block/data-idを従来どおり持つ)。
+async function blockTitleMetrics(page, selector = `.exec-row-copy[data-id="${BLOCK_ID}"] strong`) {
   return page.locator(selector).evaluate((element) => {
     const style = getComputedStyle(element);
     // line-heightが"normal"だとparseFloatがNaNになるため、font-sizeから1行分の上限目安を作る。
@@ -104,11 +107,12 @@ async function checkBlockWidth(browser, width) {
     check(`${width}px: Blockタイトルの高さは1行分以内`,
       Number.isFinite(metrics.lineHeight) && metrics.offsetHeight <= metrics.lineHeight + 1, JSON.stringify(metrics));
     check(`${width}px: Block専用ellipsisのcomputed styleが有効(min-widthが宣言どおり4chと一致)`,
-      // min-width:0だと同じ.title-line内の他バッジと場所を奪い合いタイトルが実幅0まで潰れて
+      // min-width:0だと同じ行内の他バッジと場所を奪い合いタイトルが実幅0まで潰れて
       // 完全に見えなくなる実害があったため、常に数文字分(4ch)は読める最低幅を確保している。
       // 緩いレンジ(0<x<60)だけだと1pxや1chへの回帰も検出できないため、実測4ch幅そのものと突き合わせる。
+      // v331 A-1a: 行レイアウトがflexからCSS grid(.exec-row)へ変わったため、flexGrow/flexShrinkの
+      // 代わりに実効挙動(min-width一致・overflow hidden・折り返しなし・ellipsis)で判定する。
       Math.abs(parseFloat(metrics.minWidth) - metrics.fourChPx) < 1
-        && metrics.flexGrow === "1" && metrics.flexShrink === "1"
         && metrics.overflowX === "hidden" && metrics.whiteSpace === "nowrap"
         && metrics.textOverflow === "ellipsis", JSON.stringify(metrics));
     check(`${width}px: Blockタイトルは常に最低4ch分の表示幅を確保(実幅0で完全消失しない)`,
@@ -170,8 +174,10 @@ async function checkDoingBadgesWidth(browser, width) {
     }, { key: STATE_KEY, itemsValue: items, today: TODAY });
     await page.reload();
     await page.locator('#app[data-view="tasks"]').waitFor();
+    // v331 A-1a: 実行中(doing)Blockは「いま」行に描画され、タイトルstrongは従来どおり
+    // data-action="edit-block"を持つ。
     const metrics = await blockTitleMetrics(
-      page, `.block-row strong[data-action="edit-block"][data-id="${DOING_BLOCK_ID}"]`
+      page, `.exec-row-now strong[data-action="edit-block"][data-id="${DOING_BLOCK_ID}"]`
     );
     const overflow = await page.evaluate(() => ({
       scrollWidth: document.documentElement.scrollWidth, innerWidth: window.innerWidth
@@ -209,7 +215,8 @@ async function checkWbsUnchanged(browser) {
     check("745px: WBSプロジェクトタイトルは従来どおり複数行へ折り返す",
       Number.isFinite(metrics.lineHeight) && metrics.offsetHeight > metrics.lineHeight + 1, JSON.stringify(metrics));
     check("745px: Block専用ellipsis指定がWBSプロジェクト行へ波及しない",
-      metrics.minWidth === "auto" && metrics.flexGrow === "0" && metrics.overflowX === "visible"
+      // v328でWBS見出しがgridセル内の display:block になり、min-width:auto の算出値は "0px" になる(Block専用の4chではない)。
+      (metrics.minWidth === "auto" || metrics.minWidth === "0px") && metrics.flexGrow === "0" && metrics.overflowX === "visible"
         && metrics.overflowWrap === "anywhere" && metrics.whiteSpace === "normal"
         && metrics.textOverflow === "clip", JSON.stringify(metrics));
     check("745px WBS表示: pageerrorなし", current.pageErrors.length === 0, JSON.stringify(current.pageErrors));
@@ -224,8 +231,10 @@ async function checkWbsUnchanged(browser) {
   check("先頭コメントがplanning-executionとui-responsiveのdomain語を含む",
     /block|task/i.test(source.split(/\r?\n/).slice(0, 2).join(" "))
       && /render|表示/i.test(source.split(/\r?\n/).slice(0, 2).join(" ")));
-  check("ellipsisセレクタは.block-row配下だけにスコープされる",
-    /\.block-row\s+\.title-line\s+strong\s*\{[^}]*white-space:\s*nowrap;[^}]*text-overflow:\s*ellipsis;/s.test(css));
+  // v331 A-1a: ellipsisセレクタが.block-row .title-line strongから.exec-row-copy strong
+  // (実行タブ.exec-row系markupのタイトル要素)へ移った。
+  check("ellipsisセレクタは.exec-row-copy配下だけにスコープされる",
+    /\.exec-row-copy\s+strong\s*\{[^}]*white-space:\s*nowrap;[^}]*text-overflow:\s*ellipsis;/s.test(css));
 
   const server = startServer(PORT);
   const browser = await chromium.launch(launchOptions());

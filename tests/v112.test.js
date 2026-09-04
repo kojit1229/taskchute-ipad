@@ -129,11 +129,10 @@ function check(name, cond, extra = "") {
     check("2回目クリック後も一覧に残る", await openItem("task-A").count() === 1);
     check("「本日 2 件 Block 追加済み」バッジに更新される", (await openItem("task-A").textContent())?.includes("本日 2 件 Block 追加済み"),
       await openItem("task-A").textContent());
-    // タスクシュート画面のBlock一覧(.block-rowカード)にも2件のBlockが実際に描画されていること
-    // (Block化自体のUI確認。.block-row内には複数のdata-action="edit-block"要素があるため、
-    // カード単位=.block-rowで数える)
+    // タスクシュート画面のBlock一覧(v331 A-1a: .exec-rowカード)にも2件のBlockが実際に
+    // 描画されていること(Block化自体のUI確認)
     const blockCardCount = await page.locator(
-      `.block-row:has([data-action="edit-block"][data-id="${blocksForA2[0].id}"]), .block-row:has([data-action="edit-block"][data-id="${blocksForA2[1].id}"])`
+      `.exec-row:has([data-action="toggle-block"][data-id="${blocksForA2[0].id}"]), .exec-row:has([data-action="toggle-block"][data-id="${blocksForA2[1].id}"])`
     ).count();
     check("タスクシュートのBlock一覧に2件描画される", blockCardCount === 2, `blockCardCount=${blockCardCount}`);
 
@@ -143,6 +142,9 @@ function check(name, cond, extra = "") {
     console.log("[3] タスクを完了にすると一覧から消える(v107回帰の維持確認)");
     // v146でBlockシュート行から🏁(toggle-task-complete)がBlock編集モーダルへ移設されたため、
     // 行内の直接クリックではなくモーダルを開いてから操作する(tests/v107.test.jsと同じパターン)。
+    // v331 A-1a: 「これから」行の編集ボタンは展開後(block-row-toggle)にしか出ない。
+    await page.click(`[data-action="block-row-toggle"][data-id="${blocksForA2[0].id}"]`);
+    await page.waitForSelector(`[data-action="edit-block"][data-id="${blocksForA2[0].id}"]`);
     await page.click(`[data-action="edit-block"][data-id="${blocksForA2[0].id}"]`);
     await page.waitForTimeout(200);
     await page.click(`.modal-card [data-action="toggle-task-complete"][data-id="${blocksForA2[0].id}"]`);

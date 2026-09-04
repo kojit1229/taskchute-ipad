@@ -111,6 +111,8 @@ const GOLDEN_CLICK_ACTIONS = [
   "toggle-wbs-edit", "wbs-collapse-all",
   "add-block", "toggle-block", "toggle-task-complete", "now-start", "now-end",
   "bulk-approve-planned", "now-conveyor-complete",
+  // v331: 実行タブA-1a「これから」行の展開トグル(表示専用、state非書込)を意図的に追加。
+  "block-row-toggle",
   "generate-report", "download-report", "download-data", "life-export", "save-github", "load-github",
   "gate-continue", "reset-demo",
   "toggle-mit",
@@ -305,6 +307,8 @@ const APP_JS_REGISTERED_ACTIONS = [
   //     today-tower.js(TOWER UI)から現役で発行されるため残置=低優先度棚卸しK裁定2026-08-29) ---
   "toggle-block", "toggle-task-complete", "now-start", "now-end", "bulk-approve-planned",
   "now-conveyor-complete",
+  // --- v331: 実行タブA-1a「これから」行の展開トグル(表示専用、state非書込) ---
+  "block-row-toggle",
   // --- v180: ポモドーロ(14。continue-focus/finish-blockはend-break単独UIへの統一で孤立、
   //     v292孤児掃除でcontinueFocusPomodoro/finishBlockFromBreakごと削除。complete-pomodoroは
   //     data-action経由の到達導線が無いが、v129身体スキャンモーダルの唯一の呼び出し元

@@ -1,0 +1,59 @@
+{
+  "version": 331,
+  "date": "2026-09-04",
+  "title": "実行タブA-1a: Block行の1段化・いま/これから・展開行(タスク一覧+ヘッダ統合はA-1bへ持ち越し)",
+  "summary": "タスクシュートタブのBlock一覧を「いま(実行中)」「これから(未着手)」の2段へ再編し、これから行はタップで充放電/25分/編集/☆を展開する。「やったこと」(完了Block)はこのタブに出さない。タスク一覧+ヘッダ統合(A-1b)は実行コード差分200行の都合で本バージョンでは対象外。",
+  "changedFiles": [
+    "CHANGES_v331.md",
+    "app.js",
+    "docs/test-impact-map.generated.md",
+    "releases/v331.json",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/today-core.test.js",
+    "tests/v107.test.js",
+    "tests/v112.test.js",
+    "tests/v287.test.js",
+    "tests/v305.test.js",
+    "tests/v306.test.js",
+    "tests/v308.test.js",
+    "tests/v331.test.js"
+  ],
+  "intent": [
+    "Block行を「☐・タイトル+meta・▶開始」の1段に圧縮し、充放電・25分・編集・☆はタップ展開へ畳んで縦スクロール量を減らす。",
+    "実行中Blockを「いま」として最上段に固定し、完了済みBlock(やったこと)はこのタブから外して実績はタイムラインで見る導線に一本化する。"
+  ],
+  "changes": [
+    "renderTasksをexecTargetBlocks(母集団)+いま(実行中: 開始済み・未終了・未完了)+これから(それ以外の未完了)の2段構成へ再編し、完了Blockは描画対象から除外した。",
+    "「これから」行はrenderExecUpcomingRowで常時要素(☐/タイトル+meta/▶開始)のみを描画し、行タップ(新規data-action=\"block-row-toggle\"、非永続の_execExpandedBlockIdで1行だけ開閉・state非書込)で充放電select・25分・編集・☆を展開する。",
+    "「いま」行はrenderExecNowRowで常時要素(☐・タイトル+meta・完了・終了報告)のみを描画し、充放電selectと実行中メモ(既存block-inline-memo)はmeta部タップ(block-row-toggle)の展開行へ移した(旧renderBlockItemの実行中カード相当の機能は維持)。",
+    "TOWERトークン(#050a14/#0a1422/#25384d/#55d9e8/#9fb3c6/#f2b84b/#6b5322)で.exec-*新クラスを追加し、既存.block-rowは上書きしていない。sw.jsのCACHE_NAMEをv331へ更新した。",
+    "v330で失われていたWBSプロジェクト見出し(strong)のdata-action=\"edit-project\"(タップで編集)を復元した。"
+  ],
+  "uncertainties": [
+    "A-1b(タスク一覧の母集団再編+ヘッダの見込み終了/バッファ1行化+＋Blockフォーム折りたたみ)は実行コード差分200行に収める都合で本バージョンでは未実装。renderOpenTasksは無改修のまま「未完了タスク」の見出しで残置している。",
+    "「実行中(actualStartAtあり・actualEndAtなし・未完了)」に該当しない境界状態(実績時刻はあるが未完了のまま、等)は「これから」側へ含めて表示を維持しているが、この境界ケースの表示位置がUXとして適切かはK確認余地がある。",
+    "既存テスト(v107/v112/v287/v305/v306/v308)は新markup(.exec-row系)・完了Blockの非表示契約に追随し、v306の完了Blockcharge編集検証はタイムライン(実績モード)経由の編集モーダルへ経路を置き換えた(元の実行タブ即時反映は「やったこと」非表示契約と両立しないため)。",
+    "Codex利用上限のため修正フェーズはimplementer(Claude)で実装。閉塞確認はClaude reviewerで代替",
+    "v107/v308の失敗はv328のWBS TOWER化(完了表示が.badge→.wbs-task-done、見出しstrongがgridセル内display:blockでmin-width算出値0px)へのテスト追随漏れで、v331とは無関係。本版でセレクタ/判定を追随(assert削除・緩和なし)。",
+    "renderBlockItemは呼び出し元ゼロの死コードだが、実行コード差分200行の都合で残置(次版で削除)。「いま」行はタイトル=編集・meta部=展開の使い分けにしたためUXはK確認余地あり。"
+  ],
+  "reviewFocus": [
+    "完了Blockが実行タブのDOMに一切現れないこと(いま・これからのどちらにも混入しない)。",
+    "「これから」行の展開/折りたたみがstate・localStorageへ一切書き込まないこと(_execExpandedBlockIdの非永続性)。",
+    "「いま」行の充放電・メモ・完了・終了報告が旧renderBlockItemの実行中カードと同等に機能すること(既存data-action・data-block-field・data-block-commentの契約温存)。",
+    "390px/1280pxで横スクロールが発生せず、可視文字が11px以上・タップ要素が44px以上であること。"
+  ],
+  "verification": [
+    "npm.cmd run test:manifest:write後、node tests/run-all.js v331 v305 v306 v308 today-core action-registry-core v107 v112 v287 v313 を実装者2回+監督者1回実行し全件成功(v107/v308は追随後)。v305は単体3回連続成功。",
+    "node --check、390px/1280px横スクロールなし、pageerror 0、展開トグルのstate非書込、実行コード差分167行(200行以内)を確認した。"
+  ],
+  "notes": [
+    "Codex利用上限(9/7まで)のため実装・修正はimplementer(Claude)、レビューはClaude reviewer 2体で代替。"
+  ],
+  "knownLimitations": [
+    "タスク一覧+ヘッダ統合(A-1b)は未着手。renderOpenTasksは既存の「未完了タスク」(母集団=期日あり・当日〜7日後+超過)のまま。"
+  ]
+}

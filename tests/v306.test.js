@@ -45,7 +45,9 @@ async function storedBlock(page) {
 }
 
 function fieldSelector(field) {
-  return `.block-row:has([data-action="edit-block"][data-id="${BLOCK_ID}"]) [data-block-field="${field}"]`;
+  // v331修正: 充放電selectは「いま」行の展開行(block-row-toggle)へ移り常時表示ではなくなった。
+  // openSeededPageでmeta部タップ済みの前提でこのセレクタを使う。
+  return `.exec-row:has([data-action="edit-block"][data-id="${BLOCK_ID}"]) [data-block-field="${field}"]`;
 }
 
 async function openSeededPage(browser) {
@@ -72,6 +74,9 @@ async function openSeededPage(browser) {
   }, { key: STATE_KEY, itemsValue: items, today: TODAY });
   await page.reload();
   await page.locator('#app[data-view="tasks"]').waitFor();
+  // v331修正: 充放電selectは「いま」行の展開行へ移動したため、meta部タップで先に展開する。
+  await page.locator(`.exec-row-now .exec-row-meta[data-action="block-row-toggle"][data-id="${BLOCK_ID}"]`).click();
+  await page.locator(fieldSelector("charge")).waitFor();
   return { context, page, pageErrors };
 }
 
@@ -136,6 +141,10 @@ async function openWideCompletedPage(browser) {
   return { context, page, pageErrors };
 }
 
+// v331 A-1a: 完了Blockは実行タブ(タスクシュート)から消え(「やったこと」非表示の契約)、
+// 充放電selectも実行タブのdata-block-field即時反映経路からは到達できなくなった。完了Blockの
+// charge編集は「実績はタイムラインで見る」契約どおりタイムライン(実績モード)→編集モーダルへ
+// 置き換える(検証意図=完了Blockのcharge編集が永続化されエネルギーレールに反映される、を維持)。
 async function checkEnergyRailFreshness(browser) {
   const current = await openWideCompletedPage(browser);
   try {
@@ -144,16 +153,24 @@ async function checkEnergyRailFreshness(browser) {
     const before = await rail.innerHTML();
     check("1020px超でタスクタブのエネルギーレールが表示される", before.trim().length > 0);
 
-    const chargeHandle = await current.page.locator(fieldSelector("charge")).elementHandle();
-    await current.page.locator(fieldSelector("charge")).selectOption("5");
+    await current.page.click('[data-action="nav"][data-view="timeline"]');
+    await current.page.click('[data-action="timeline-mode"][data-mode="actual"]');
+    await current.page.click(`[data-action="edit-block"][data-id="${BLOCK_ID}"]`);
+    const modalCharge = current.page.locator('.modal-card [data-modal-field="charge"]');
+    const modalChargeHandle = await modalCharge.elementHandle();
+    await modalCharge.selectOption("5");
+    // v331修正(M3): 実行タブ即時反映selectの「stale化しない」検証の代替として、モーダル内
+    // charge selectのElementHandleがselectOption後・modal-save前もDOMへ接続維持していることを確認する。
+    check("完了Blockのcharge編集(モーダル): selectOption後もselectノードを維持(stale化しない)",
+      await modalChargeHandle.evaluate((element) => element.isConnected));
+    await current.page.click('[data-action="modal-save"]');
+    await current.page.click('[data-action="nav"][data-view="tasks"]');
 
     const after = await rail.innerHTML();
-    check("charge変更後にエネルギーレールの表示内容が更新される", after !== before);
-    check("エネルギーレール更新後もcharge selectノードを維持(stale化しない)",
-      await chargeHandle.evaluate((element) => element.isConnected));
+    check("完了Blockのcharge編集(タイムライン経由)後にエネルギーレールの表示内容が更新される", after !== before);
 
     const stored = await storedBlock(current.page);
-    check("エネルギーレール検証中もcharge永続化は退行しない", stored.charge === 5);
+    check("完了Blockのcharge編集が永続化される(タイムライン経由)", stored.charge === 5);
     check("エネルギーレール経路でpageerrorなし",
       current.pageErrors.length === 0, JSON.stringify(current.pageErrors));
   } finally {

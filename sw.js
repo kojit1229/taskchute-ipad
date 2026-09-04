@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v330";  // v330: WBS 今週パネル・PC 2ペイン
+const CACHE_NAME = "taskchute-journal-pwa-v331";  // v331: 実行タブA-1a いま/これから 1段化・展開行
+// v330: WBS 今週パネル・PC 2ペイン
 // v293: 身体スキャン復活(K裁定2026-08-29。手動Block完了時のみ追加)
 // v290: 孤児action本体2クラスタ(AI作業結果承認/質問、AIタスク候補チップの採用/却下)を削除した(APP_SHELL変更なし)。
 // v288: WBS内検索と新規Project既定closed化を追加した(APP_SHELL変更なし)。

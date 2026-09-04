@@ -476,7 +476,8 @@ function check(name, cond, extra = "") {
       !!added?.taskId && !!addedTask && addedTask.kind === "other" && !!addedTask.projectId,
       JSON.stringify({ taskId: added?.taskId, task: addedTask }));
     check("追加Blockが実行ビューの一覧(既存フィルタ通過後)に表示される",
-      await page.locator(".block-row", { hasText: "QUICKADD-Enter追加" }).count() === 1);
+      // v331 A-1a: renderTasksのBlock一覧markupが.block-rowから.exec-row(いま/これから)へ変わった。
+      await page.locator(".exec-row", { hasText: "QUICKADD-Enter追加" }).count() === 1);
     check("追加後は #blockTitle が空に戻る(再描画で入力欄がリセットされる)",
       (await page.locator("#blockTitle").inputValue()) === "");
 

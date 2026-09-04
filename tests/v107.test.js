@@ -104,7 +104,8 @@ function check(name, cond, extra = "") {
   }
 
   function wbsBadge(taskId) {
-    return page.locator(`.row:has([data-action="edit-task"][data-id="${taskId}"]) .badge`).first();
+    // v328 WBS TOWER化で完了表示は .badge から .wbs-task-done(「完了」)へ移った(表示契約は同じ)。
+    return page.locator(`.row:has([data-action="edit-task"][data-id="${taskId}"]) .wbs-task-done, .row:has([data-action="edit-task"][data-id="${taskId}"]) .badge`).first();
   }
 
   try {
@@ -152,6 +153,9 @@ function check(name, cond, extra = "") {
     });
     check("タスク完了トグルは行内には無い(v146で誤タップ対策のため撤去)",
       await page.locator('[data-action="toggle-task-complete"][data-id="block-B1"]').count() === 0);
+    // v331 A-1a: 「これから」行の編集ボタンは展開後(block-row-toggle)にしか出ない。
+    await page.click('[data-action="block-row-toggle"][data-id="block-B1"]');
+    await page.waitForSelector('[data-action="edit-block"][data-id="block-B1"]');
     await page.click('[data-action="edit-block"][data-id="block-B1"]');
     await page.waitForTimeout(200);
     const modalTaskCheck1 = page.locator('.modal-card [data-action="toggle-task-complete"][data-id="block-B1"]');
@@ -179,6 +183,21 @@ function check(name, cond, extra = "") {
     // (c) タスク完了チェックを外す→Taskの完了だけ解除、Blockは完了のまま
     // ============================================================
     console.log("[3] タスク完了チェックを外す(モーダル内)→Taskの完了だけ解除される(Block側は完了のまま維持)");
+    // v331 A-1a: block-B1は既に完了済みのため実行タブ(タスクシュート)の一覧からは消えている
+    // (「やったこと」非表示の契約)。完了Blockが見えるタイムラインタブ(実績モード)から編集
+    // モーダルを開く。ただし🏁完了(toggleTaskCompleteFromBlock)はactualEndAtしか埋めないため、
+    // 実績モード表示に必要なactualStartAtを実測相当の値で補う(開始/完了ロジック自体は不変)。
+    await page.evaluate((KEY) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.blocks = s.blocks.map((b) => b.id === "block-B1" && !b.actualStartAt
+        ? { ...b, actualStartAt: b.plannedStartAt } : b);
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, KEY);
+    await page.reload();
+    await page.waitForTimeout(300);
+    await page.click('[data-action="nav"][data-view="timeline"]');
+    await page.click('[data-action="timeline-mode"][data-mode="actual"]');
+    await page.waitForSelector('[data-action="edit-block"][data-id="block-B1"]');
     await page.click('[data-action="edit-block"][data-id="block-B1"]');
     await page.waitForTimeout(200);
     await page.click('.modal-card [data-action="toggle-task-complete"][data-id="block-B1"]');
@@ -194,15 +213,27 @@ function check(name, cond, extra = "") {
       (await page.locator('.modal-card [data-action="toggle-task-complete"][data-id="block-B1"]').textContent())?.includes("紐づくTaskも完了にする"));
     await page.click('[data-action="modal-close"]');
     await page.waitForTimeout(150);
+    await page.click('[data-action="nav"][data-view="tasks"]');
+    await page.waitForTimeout(150);
     check("未完了タスク一覧へ戻る", await page.locator('.item [data-action="task-today"][data-id="task-B"]').count() === 1);
 
     // ============================================================
     // (d) 🏁はBlock行から編集モーダルへ移設されている(v146 誤タップ対策)
     // ============================================================
     console.log("[4] Block完了チェック(✓)は行に残り、タスク完了チェック(🏁)は編集モーダルへ移設されている");
-    const blockCheck = page.locator('[data-action="toggle-block"][data-id="block-B1"]');
+    // v331 A-1a: block-B1はBlock自体が完了済みで実行タブ・タイムライン(予定/実績どちらも
+    // completeBtnHTMLは非表示)から行の完了チェックには到達できなくなった。行の完了チェック自体は
+    // 未完了のblock-B2(実行タブ「これから」に残る)で確認する(検証意図=チェックボタンの
+    // class/アイコンは変わっていない、を維持)。
+    await page.click('[data-action="nav"][data-view="tasks"]');
+    await page.waitForSelector('[data-action="toggle-block"][data-id="block-B2"]');
+    const blockCheck = page.locator('[data-action="toggle-block"][data-id="block-B2"]');
     check("Block完了チェックは.checkbox-buttonクラス", await blockCheck.evaluate((el) => el.classList.contains("checkbox-button")));
     check("Block完了チェックのアイコンは✓", (await blockCheck.textContent())?.trim() === "✓");
+    // block-B1(完了済み)は実績モードのタイムラインから編集モーダルを開いてタスク完了ボタンを確認する。
+    await page.click('[data-action="nav"][data-view="timeline"]');
+    await page.click('[data-action="timeline-mode"][data-mode="actual"]');
+    await page.waitForSelector('[data-action="edit-block"][data-id="block-B1"]');
     await page.click('[data-action="edit-block"][data-id="block-B1"]');
     await page.waitForTimeout(200);
     const modalTaskCheck2 = page.locator('.modal-card [data-action="toggle-task-complete"][data-id="block-B1"]');
@@ -288,7 +319,10 @@ function check(name, cond, extra = "") {
       `scrollWidth=${metricsMobile.scrollWidth} clientWidth=${metricsMobile.clientWidth}`);
     // v146レビュー対応(item9): モーダルへ移設した🏁が390px幅でも実際に到達可能(可視)であることを
     // 明示的に確認する(行から消えたことの確認だけでは、モーダル側で見えなくなっていないかは分からない)。
-    await pageMobile.click('[data-action="edit-block"][data-id="block-M"]');
+    // v331 A-1a: 「これから」行の編集ボタンは展開後(block-row-toggle)にしか出ない。
+    await pageMobile.click('[data-action="block-row-toggle"][data-id="block-M"]');
+    await pageMobile.waitForSelector('.exec-row-upcoming [data-action="edit-block"][data-id="block-M"]');
+    await pageMobile.click('.exec-row-upcoming [data-action="edit-block"][data-id="block-M"]');
     await pageMobile.waitForTimeout(200);
     const modalTaskCheckMobile = pageMobile.locator('.modal-card [data-action="toggle-task-complete"][data-id="block-M"]');
     check("390px幅でBlock編集モーダルを開くと🏁ボタンが可視状態である", await modalTaskCheckMobile.isVisible());

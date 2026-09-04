@@ -889,6 +889,42 @@ h3 {
   align-items: center;
 }
 
+/* v331: 実行タブ A-1a(いま/これから)。TOWERトークンで統一する新マークアップ(.exec-*)。
+   既存.block-rowは温存し上書きしない。 */
+.exec-panel.exec-amber {
+  border: 1px solid #6b5322;
+  border-radius: 4px;
+  padding: 8px;
+  background: var(--tower-panel, var(--panel));
+}
+.exec-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+.exec-row-copy { min-width: 0; cursor: pointer; }
+.exec-row-copy strong { display: block; min-width: 4ch; font-size: 14px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.exec-row-meta { font-size: 11px; opacity: .75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.exec-row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.exec-start-btn { min-width: 44px; min-height: 44px; border-color: #6b5322; color: var(--tower-amber, var(--orange-text)); }
+.exec-row-expand {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--tower-line, var(--line));
+}
+.exec-row-expand .mini-select { font-size: 16px; }
+.exec-row-now .block-inline-memo { grid-column: 1 / -1; margin-top: 6px; }
+@media (max-width: 390px) {
+  .exec-row-meta { white-space: normal; }
+}
+
 .block-meta {
   display: flex;
   flex-wrap: wrap;
