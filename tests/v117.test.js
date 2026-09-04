@@ -3,8 +3,9 @@
 //
 // (a) 今日の宣言カード: 表示・change時の保存・赤警告の出現(今日・未入力)/消灯(入力後)。
 //     過去日を見ている時は未入力でも警告が出ない
-// (b) 日報生成: `## 📣 今日の宣言`節が常に出力される(理想ワンライナーと異なり省略しない。
-//     未入力時は「(未入力)」)
+// (b) 日報生成: 修正フェーズ単位11(2026-09-04、S-K9裁定)で`## 📣 今日の宣言`節を撤去した。
+//     dailyDeclarationsに値があってもなくても節が出力されないことを固定する(仕様反転)。
+//     state.dailyDeclarations自体のデータ構造・保存は変更していない(読み手が減っただけ)。
 // (c) effectiveDueDate: 既定(selfDueOff false)でdueDateの2日前倒し・selfDueOff=trueで無効化・
 //     WBS行の期限切れ判定/締切ラベル併記(前倒しが効く時だけ「実 M/D」を併記)への反映
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, generateReportThroughGate } = require("./helpers");
@@ -104,21 +105,20 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (b) 日報生成
     // ============================================================
-    console.log("[3] 日報生成: 今日の宣言が入力済みなら本文がそのまま出る");
+    console.log("[3] 日報生成: 宣言が入力済みでも「## 📣 今日の宣言」節は出ない(撤去済み)");
     await seed({ dailyDeclarations: { [TODAY]: { text: "日報反映テストの宣言", updatedAt: `${TODAY}T07:00:00` } }, view: "journal" });
     await generateReportThroughGate(page);
     await page.waitForTimeout(400);
     const reportText1 = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
-    check("`## 📣 今日の宣言`見出しが出力される", reportText1.includes("## 📣 今日の宣言"), reportText1.slice(0, 200));
-    check("宣言本文が出力される", reportText1.includes("日報反映テストの宣言"), reportText1.slice(0, 300));
+    check("`## 📣 今日の宣言`見出しは出ない", !reportText1.includes("## 📣 今日の宣言"), reportText1.slice(0, 200));
+    check("宣言本文も出ない", !reportText1.includes("日報反映テストの宣言"), reportText1.slice(0, 300));
 
-    console.log("[4] 日報生成: 未入力日は節自体は出て本文が「(未入力)」になる");
+    console.log("[4] 日報生成: 未入力日も同様に節が出ない");
     await seed({ dailyDeclarations: {}, view: "journal" });
     await generateReportThroughGate(page);
     await page.waitForTimeout(400);
     const reportText2 = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
-    check("見出しは省略されない(未入力でも節自体は常に出る)", reportText2.includes("## 📣 今日の宣言"), reportText2.slice(0, 200));
-    check("本文は「(未入力)」になる", /## 📣 今日の宣言\s*\n\s*\(未入力\)/.test(reportText2), reportText2.slice(0, 200));
+    check("見出しは出ない(撤去済み)", !reportText2.includes("## 📣 今日の宣言"), reportText2.slice(0, 200));
 
     // ============================================================
     // (c) 自己締切の自動前倒し(effectiveDueDate)

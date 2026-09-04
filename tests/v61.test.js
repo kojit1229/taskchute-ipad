@@ -282,7 +282,10 @@ function check(name, cond, extra = "") {
   await page.waitForTimeout(400);
   const reportText = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY] || "", { KEY, TODAY });
   check("日報に今日の理想が出力される", reportText.includes("日報反映テストの理想"), reportText.slice(0, 300));
-  check("翌日以降も見える旨(3日リトライ)が明日への接続に記載される", reportText.includes("明日・明後日もホームに小さく残ります"), reportText);
+  // 修正フェーズ単位11(2026-09-04、2-H1裁定): 「明日・明後日もホームに小さく残ります…3日目に
+  // 続けるか手放すか」の文言は、v230のHome撤去で当該UI(3日リトライ)自体が消えて以来の
+  // 虚偽記述だったため削除した。出ないことを検証する(仕様反転)。
+  check("3日リトライの虚偽文言は出ない(撤去済み)", !reportText.includes("明日・明後日もホームに小さく残ります"), reportText);
   check("達成/未達の自己申告文言は含まない", !reportText.includes("達成できましたか"));
 
   await browser.close();

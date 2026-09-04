@@ -1,8 +1,9 @@
-// v68 検証: 非同期AI対話(日報の「AIへの質問」→ origin:"user" 問い) +
+// v68 検証: 非同期AI対話(日報の「AIへの質問」節、修正フェーズ単位11で撤去) +
 //           人生実験機構(state.experiments、1件のみ推奨のカードUI)。
 //
-// (a) generateReport(): origin:"user"かつ未解決の問いがあれば「## AIへの質問」節が出る。
-//     無ければ節ごと省略される。
+// (a) generateReport(): 修正フェーズ単位11(2026-09-04、K6裁定)で「## AIへの質問」節と
+//     #reportAskInput 入力欄を撤去した。origin:"user"の未解決質問があっても節は出力
+//     されないことを固定する(仕様反転。旧仕様=節が出ることを検証していた)。
 // (b) 実験カード(state.experiments): 「+ 実験を始める」→モーダルで仮説/判定材料/開始日/終了日
 //     (既定14日後)を入力して保存 → running として1件作られる。
 // (c) 2件目の抑制: 実験中に「別の実験を試したい」を押してもモーダルは開かず
@@ -91,17 +92,6 @@ function check(name, cond, extra = "") {
     return page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
   }
 
-  // "## 見出し" から次の "## " 見出し(または末尾)までを切り出す。
-  // 日報には既存v39の「いま持ち続けている「問い」:」節(origin不問で全open/deepening問いを列挙)が
-  // 別にあるため、「## AIへの質問」の origin フィルタ検証はこの節の中だけを見て行う。
-  function extractSection(md, heading) {
-    const idx = md.indexOf(heading);
-    if (idx === -1) return null;
-    const rest = md.slice(idx + heading.length);
-    const next = rest.search(/\n##\s/);
-    return next === -1 ? rest : rest.slice(0, next);
-  }
-
   try {
     await page.clock.setFixedTime(now0);
     await page.goto(`http://localhost:${PORT}/`);
@@ -149,33 +139,33 @@ function check(name, cond, extra = "") {
     check("仮説テキストは保持される(既存値優先)", legacyExp?.hypothesis === "睡眠を7時間確保する");
 
     // ============================================================
-    // (a) 「AIへの質問」節: origin:"user"かつ未解決のみ拾う。空なら省略
+    // (a) 「AIへの質問」節: 修正フェーズ単位11で撤去済み。origin:"user"の未解決問いが
+    //     あっても節は出力されないことを固定する(仕様反転)。
     // ============================================================
-    console.log("[2] generateReport(): origin:user & status!=settled の問いだけ「## AIへの質問」節に出る");
+    console.log("[2] generateReport(): origin:user & status!=settled の問いがあっても「## AIへの質問」節は出ない(撤去済み)");
     await seed({
       view: "journal",
       questions: [
         makeQuestionSeed("来週の12WY目標、このペースで間に合いそう?", "user", "open"),
-        makeQuestionSeed("結論済みのuser質問(出ないはず)", "user", "settled"),
-        makeQuestionSeed("originがmanualの問い(出ないはず)", "manual", "open")
+        makeQuestionSeed("結論済みのuser質問", "user", "settled"),
+        makeQuestionSeed("originがmanualの問い", "manual", "open")
       ]
     });
     await generateReportThroughGate(page);
     await page.waitForTimeout(300);
     const s2 = await stateNow();
     const report2 = s2.reports[TODAY] || "";
-    check("「## AIへの質問」見出しが出る", report2.includes("## AIへの質問"), report2.slice(0, 400));
-    const askSection2 = extractSection(report2, "## AIへの質問") || "";
-    check("未解決のuser質問本文が「## AIへの質問」節に出る", askSection2.includes("来週の12WY目標、このペースで間に合いそう?"), askSection2);
-    check("settled済みのuser質問は「## AIへの質問」節に出ない", !askSection2.includes("結論済みのuser質問"), askSection2);
-    check("origin:manualの問いは「## AIへの質問」節に出ない(既存v39の「いま持ち続けている問い」節とは別)", !askSection2.includes("originがmanualの問い"), askSection2);
+    // 注意: origin:user質問の本文自体は、既存v39の「いま持ち続けている「問い」:」節
+    // (origin不問で全open/deepening問いをAIコピペ用プロンプト内に列挙する別機能)には
+    // 引き続き出る。ここで検証するのは「## AIへの質問」見出しが出ないことのみ。
+    check("「## AIへの質問」見出しは出ない(撤去済み)", !report2.includes("## AIへの質問"), report2.slice(0, 400));
 
-    console.log("[3] generateReport(): origin:userの未解決質問が無ければ「## AIへの質問」節ごと省略される");
+    console.log("[3] generateReport(): 問いが無い日も同様に「## AIへの質問」節は出ない");
     await seed({ view: "journal", questions: [makeQuestionSeed("manualの問い", "manual", "open")] });
     await generateReportThroughGate(page);
     await page.waitForTimeout(300);
     const s3 = await stateNow();
-    check("該当質問が無い日は見出しが出ない", !(s3.reports[TODAY] || "").includes("## AIへの質問"));
+    check("見出しが出ない", !(s3.reports[TODAY] || "").includes("## AIへの質問"));
 
     // (b) 実験カード: 新規作成
     // ============================================================

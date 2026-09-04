@@ -559,16 +559,9 @@ registerActions({
   "report-copy-ai": () => copyReportToClipboard(),
   "report-share-ai": () => shareReport(),
   "generate-report": () => {
-    const askInput = document.querySelector("#reportAskInput");
-    const askText = (askInput?.value || "").trim();
-    if (askText) {
-      state.questions.push(makeQuestion({ text: askText, origin: "user" }));
-      askInput.value = "";
-      // v162 2系統レビュー対応(必須3): モーダルキュー(理由チップ)が続けて開き、その間に
-      // PWAがkillされる/リモート側の状態が先に同期採用される等が起きると、ここで積んだ
-      // 問いが保存されないまま消える窓があった。即座にsaveState()して閉じる。
-      saveState();
-    }
+    // 修正フェーズ単位11(2026-09-04): #reportAskInput はv214でDOMから撤去済みで
+    // querySelectorが常にnullを返す到達不能コードだった(生成された問いも
+    // 「## AIへの質問」節ごと恒久的に空だったため撤去。K6裁定=入力欄は復元しない)。
     // v162: 日次締め導線。今日を見ている時、理由未記録かつ未スキップの未完了Blockが残っていれば
     // 先に理由チップ(スキップ可)を1件ずつ挟んでから日報を生成する(既に理由が付いたBlock・
     // 同セッション内で既にスキップ済みのBlockは再質問しない — 2系統レビュー対応・推奨4)。
@@ -9625,10 +9618,6 @@ function generateReport(dateArg, { quiet = false } = {}) {
   const incompleteReasons = state.blocks.filter((b) =>
     hasIncompleteReason(b) && !b.completed && (b.date === date || incompleteReasonAtDate(b) === date));
 
-  // v117(A): 今日の宣言。未入力日も節自体は常に出す(バッチが未記載を検知するための契約。
-  //          FORMAT_CONTRACT.md参照)。理想ワンライナーとは違い省略しない。
-  const declarationText = (state.dailyDeclarations[date]?.text || "").trim();
-
   // v128: 体力予算。当日ログがある日のみ達成率表の後に1行出力する(データなし日は省略)。
   const conditionBudgetToday = conditionBudget(date);
 
@@ -9637,10 +9626,6 @@ function generateReport(dateArg, { quiet = false } = {}) {
     "",
     // v61: 今日の理想ワンライナー(未入力日は行ごと出さない)
     ...(idealText ? [`> 🌱 今日の理想: ${idealText}`, ""] : []),
-    "## 📣 今日の宣言",
-    "",
-    declarationText || "(未入力)",
-    "",
     "## 1. サマリ",
     "| 指標 | 値 |",
     "|---|---|",
@@ -9665,16 +9650,8 @@ function generateReport(dateArg, { quiet = false } = {}) {
       : []),
   ];
 
-  // v68: 非同期AI対話 — origin:"user"の未解決質問を
-  //      「## AIへの質問」節として出す。空(該当なし)なら節ごと省略。coach-daily.sh は日報全文を
-  //      そのまま読むため、この節を追加するだけで翌朝のAIコーチングが応答できる(バッチ側改修不要)。
-  const userQuestions = (state.questions || []).filter((q) =>
-    !q.deleted && q.origin === "user" && q.status !== "settled");
-  if (userQuestions.length) {
-    lines.push("## AIへの質問");
-    userQuestions.forEach((q) => lines.push(`- ${q.text}`));
-    lines.push("");
-  }
+  // 修正フェーズ単位11(2026-09-04): v68の「## AIへの質問」節はK6裁定で撤去(#reportAskInput
+  // 入力欄がv214で失われて以来、origin:"user"の問いが積まれる経路が無く節は永久に空だった)。
 
   // v34/v39: 0秒思考(その日に書いたもの、書いた順)。v39 で問い別にグルーピング。
   const ztToday = (state.zeroThinking?.entries || [])
@@ -9832,11 +9809,9 @@ function generateReport(dateArg, { quiet = false } = {}) {
 
   // 明日への接続
   lines.push("## 9. 明日への接続");
-  // v61: 達成/未達を自己申告させるのではなく、翌日以降もこの理想が見えることだけを示す(3日リトライ)
-  if (idealText) {
-    lines.push(`理想「${idealText}」は、明日・明後日もホームに小さく残ります。達成できたかどうかは問いません。3日目に続けるか手放すかだけ選びます。`);
-    lines.push("");
-  }
+  // 修正フェーズ単位11(2026-09-04): 「明日・明後日もホームに小さく残ります…3日目に続けるか
+  // 手放すか」の文言はv230のHome撤去で当該UI(3日リトライ)自体が無くなり虚偽記述と化していたため
+  // 削除(2-H1裁定)。理想ワンライナー自体は冒頭`> 🌱 今日の理想:`行で引き続き表示する。
   lines.push("明日への一言:");
   lines.push("");
   lines.push("明日の MIT 候補:");
@@ -9858,7 +9833,7 @@ function generateReport(dateArg, { quiet = false } = {}) {
   lines.push("4. この日報を踏まえ、明日「0秒思考」で思考を深めるべきテーマ(2〜3個)");
   lines.push("   ※ 各テーマは1分で書き出せる問い形式で示すこと");
   lines.push("5. 明日の MIT 候補(最大3つ)");
-  lines.push("   ※ 「明日のMIT候補」という見出しの下に「- 」の箇条書きで示すこと(アプリが読み取ります)");
+  lines.push("   ※ 「明日のMIT候補」という見出しの下に「- 」の箇条書きで示すこと");
   // v39: 開いている問い(10x)を提示し、問いを一段深める明日のテーマを求める
   const openQuestions = (state.questions || []).filter((q) => !q.deleted && q.status !== "settled");
   if (openQuestions.length) {
