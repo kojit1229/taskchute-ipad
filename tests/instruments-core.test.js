@@ -8,8 +8,11 @@
 //   earlyBirdStats: 連続日数の基本 / 欠損日での切断 / 当日未チェックは切断しない(進行中扱い)/
 //                   自己ベスト / 累計 / 直近28日窓の境界
 //   habitStreakStats: 当日未完了を実施率の分母から除外
+//   escapeHTML既定値(修正フェーズ単位12・S2-11): configureInstruments未呼び出し時の
+//   フォールバックが実際にエスケープすること / app.js本体版と同じ出力になること
 
 const assert = require("node:assert/strict");
+const fs = require("fs");
 const path = require("path");
 const { pathToFileURL } = require("url");
 
@@ -66,6 +69,45 @@ function logsFor(dates) {
   const mod = await import(pathToFileURL(MODULE_PATH).href);
   const { habitStreakStats } = await import(pathToFileURL(HABIT_STREAK_MODULE_PATH).href);
   const { configureInstruments, renderInstruments, earlyBirdStats } = mod;
+
+  console.log("[escape-default] escapeHTMLの既定値(configureInstruments未呼び出し時のフォールバック)が安全側であること");
+  {
+    // configureInstruments呼び出し前(=deps未注入)のescapeHTMLは、instruments.js冒頭の
+    // `let escapeHTML = (value) => ...` の初期値そのもの。ここではエクスポートされていない
+    // モジュール内部変数を直接は参照できないため、ソースからその定義式だけを抽出してevalし、
+    // 「未注入時に実際に呼ばれる関数」の挙動を固定する(app.jsやrenderInstruments経由の
+    // 間接テストでは、configureInstruments呼び出しでescapeHTMLが上書きされてしまい
+    // 未注入状態を再現できないため)。
+    const source = fs.readFileSync(MODULE_PATH, "utf8");
+    const match = /let escapeHTML = \(value\) => String\(value \?\? ""\)([\s\S]*?);\r?\n/.exec(source);
+    check("instruments.js内にescapeHTMLの既定値定義が見つかる", !!match, "定義式のパターンが変わっていないか確認");
+    const defaultEscapeHTML = match
+      ? new Function("value", `return String(value ?? "")${match[1]};`)
+      : (value) => String(value ?? "");
+
+    check(
+      "未注入時: <img onerror=...> がエスケープされる(素通ししない)",
+      defaultEscapeHTML('<img src=x onerror="alert(1)">')
+        === "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;",
+      defaultEscapeHTML('<img src=x onerror="alert(1)">')
+    );
+    check(
+      "未注入時: <script> タグがエスケープされる",
+      defaultEscapeHTML("<script>alert(1)</script>")
+        === "&lt;script&gt;alert(1)&lt;/script&gt;",
+      defaultEscapeHTML("<script>alert(1)</script>")
+    );
+
+    // app.js本体版escapeHTMLと同一入出力になること(代表5ケース: &, <, >, ", ')。
+    const cases = ["&", "<", ">", '"', "'", `<a href="x">&'test'</a>`];
+    for (const input of cases) {
+      check(
+        `既定値とapp.js版escapeHTMLが同じ出力(入力: ${JSON.stringify(input)})`,
+        defaultEscapeHTML(input) === escapeHTML(input),
+        `default=${JSON.stringify(defaultEscapeHTML(input))} app.js=${JSON.stringify(escapeHTML(input))}`
+      );
+    }
+  }
 
   let registeredActions = null;
   configureInstruments({
@@ -204,7 +246,13 @@ function logsFor(dates) {
     const state = {
       earlyBird: { logs: logsFor(["2026-08-21", "2026-08-22"]) },
       settings: { ironDailyTarget: 2000 },
-      condition: { logs: { [TODAY]: { gym: [{ exercise: "ベンチプレス", weight: 60, reps: 10 }] } } }
+      condition: {
+        logs: {
+          [TODAY]: {
+            gym: [{ exercise: '<img src=x onerror="alert(1)">', weight: 60, reps: 10, at: `${TODAY}T10:00` }]
+          }
+        }
+      }
     };
     configureInstruments({
       getState: () => state,
@@ -224,6 +272,11 @@ function logsFor(dates) {
     check("IRON LOGサマリ見出しを含む", html.includes("IRON LOG"));
     check("IRON LOG遷移導線data-action=instruments-open-iron-logを含む", html.includes('data-action="instruments-open-iron-log"'));
     check("旧計器盤の分析グラフ用語(ヒートマップ/相関/ドーナツ)を持ち込んでいない", !/ヒートマップ|相関|ドーナツ/.test(html));
+    check(
+      "注入時: 種目名に含まれるHTMLがエスケープされて出力される(生タグが残らない)",
+      !html.includes('<img src=x onerror="alert(1)">') && html.includes("&lt;img src=x onerror=&quot;alert(1)&quot;&gt;"),
+      html
+    );
   }
 
   console.log(failures === 0 ? "\ninstruments-core: 全件成功" : `\ninstruments-core: ${failures}件失敗`);

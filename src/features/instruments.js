@@ -39,7 +39,12 @@ import { bmSummary } from "./today-tower.js";
 // 呼び出し前のフォールバック(単体で読み込んだだけでは壊れないようにするための最小スタブ。
 // 実際の描画・ロジック検証はconfigureInstruments(deps)呼び出し後の値を使う)。
 let getState = () => ({});
-let escapeHTML = (value) => String(value ?? "");
+let escapeHTML = (value) => String(value ?? "")
+  .replaceAll("&", "&amp;")
+  .replaceAll("<", "&lt;")
+  .replaceAll(">", "&gt;")
+  .replaceAll('"', "&quot;")
+  .replaceAll("'", "&#039;");
 let todayISO = () => "";
 let addDays = (date) => date;
 let weekRange = (date) => ({ weekStart: date, weekEnd: date });
