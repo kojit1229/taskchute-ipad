@@ -79,7 +79,11 @@ function baseState(extra) {
     dailyDeclarations: {}, weeklyWishes: {}, bodyScans: [], tasks: [], projects: [], storeVisits: [],
     swipeTriageLog: [], gardenLog: {},
     recurrences: ["r1"], declarations: ["d1"], questions: ["q1"], experiments: ["e1"],
-    // unit14: SYNC_CORE_COMPARE_KEYSへ追加したstate直下9キーの既定値
+    // unit14: SYNC_CORE_COMPARE_KEYSに残るaiScheduleHistory(fail-close比較)の既定値。
+    // reports/chainRuns/feedbackFiles/feedbackIngestedDates/migrationRitualLog/
+    // zeroSecThemeLog/aiWorkProcessedIdsはunit14bで和集合マージ対象へ移ったため比較対象では
+    // ないが、computeSyncMergeの新しいマージ処理(B-6)が参照するため既定値は引き続き必要。
+    // ironImportは比較対象からもマージ対象からも外れた端末ローカルな派生状態(既定値のみ残す)。
     reports: {}, chainRuns: [], aiScheduleHistory: [], feedbackFiles: [], feedbackIngestedDates: [],
     migrationRitualLog: [], zeroSecThemeLog: [], aiWorkProcessedIds: [], ironImport: {},
     dataModifiedAt: "2026-07-28T10:00:00",
@@ -288,20 +292,16 @@ async function loadModules() {
     );
   }
 
-  // ===================== [B-4] unit14: 21キー行列(1キーだけ違えばfail-close) =====================
-  // SYNC_CORE_COMPARE_KEYSへ追加したstate直下9キー+settings一次データ12キー=計21キー。
+  // ===================== [B-4] unit14+unit14b: 13キー行列(1キーだけ違えばfail-close) =====================
+  // unit14でSYNC_CORE_COMPARE_KEYSへ追加したaiScheduleHistory+settings一次データ12キー=計13キー。
   // それぞれについて、そのキーだけがlocal/remoteで異なればsyncCoreEqualがfalseを返すこと
   // (=「変更なし」の誤判定をやめてバナーへ落とす)を1キーずつ固定する。
+  // unit14b(独立レビュー2026-09-04、A1-M1拡大の救済): reports/chainRuns/feedbackFiles/
+  // feedbackIngestedDates/migrationRitualLog/zeroSecThemeLog/aiWorkProcessedIdsの7キーは
+  // 和集合マージ対象へ昇格したためこの行列から外した(下のB-6で「不一致でもマージされ両方残る」
+  // 側として検証する)。ironImportは端末ローカルな派生状態のため比較対象からも外した。
   const UNIT14_COMPARE_KEYS = [
-    { path: "reports", a: { "2026-07-01": "ローカルの日報" }, b: { "2026-07-01": "リモートの日報" } },
-    { path: "chainRuns", a: [{ id: "runA", chainId: "chainA" }], b: [{ id: "runB", chainId: "chainB" }] },
     { path: "aiScheduleHistory", a: [{ source: "local", reason: "" }], b: [{ source: "remote", reason: "" }] },
-    { path: "feedbackFiles", a: ["2026-07-01.md"], b: ["2026-07-02.md"] },
-    { path: "feedbackIngestedDates", a: ["2026-07-01"], b: ["2026-07-02"] },
-    { path: "migrationRitualLog", a: [{ at: "2026-07-01T00:00:00" }], b: [{ at: "2026-07-02T00:00:00" }] },
-    { path: "zeroSecThemeLog", a: [{ theme: "ローカルの気分転換" }], b: [{ theme: "リモートの気分転換" }] },
-    { path: "aiWorkProcessedIds", a: ["reqA"], b: ["reqB"] },
-    { path: "ironImport", a: { done: true, importedTotalKg: 100 }, b: { done: false, importedTotalKg: 0 } },
     { path: "settings.avoidList", a: ["酒"], b: ["糖質"] },
     { path: "settings.categories", a: [{ id: "c1", name: "仕事" }], b: [{ id: "c2", name: "私用" }] },
     { path: "settings.lifeAreas", a: [{ id: "l1", name: "健康" }], b: [{ id: "l2", name: "家族" }] },
@@ -315,9 +315,9 @@ async function loadModules() {
     { path: "settings.gymExerciseList", a: ["スクワット"], b: ["デッドリフト"] },
     { path: "settings.visionDirectCategories", a: ["c1"], b: ["c2"] }
   ];
-  check(`unit14行列の対象キー数は21`, UNIT14_COMPARE_KEYS.length === 21, String(UNIT14_COMPARE_KEYS.length));
+  check(`unit14行列の対象キー数は13`, UNIT14_COMPARE_KEYS.length === 13, String(UNIT14_COMPARE_KEYS.length));
 
-  console.log("[B-4] unit14: 21キーそれぞれ「そのキーだけ違えば不一致」を固定");
+  console.log("[B-4] unit14: 13キーそれぞれ「そのキーだけ違えば不一致」を固定");
   for (const { path: dotted, a, b } of UNIT14_COMPARE_KEYS) {
     const local = makeLocalWithPrimaryData();
     setByPath(local, dotted, a);
@@ -345,6 +345,169 @@ async function loadModules() {
       "UI状態キー(currentView/selectedDate)だけの差分ではsyncCoreEqualはtrueのまま",
       syncMod.syncCoreEqual(remoteNorm) === true
     );
+  }
+
+  // ===================== [B-6] unit14b: 8キーの和集合マージ(独立追記が両方残る) =====================
+  // 独立レビュー2026-09-04指摘: 単位14のfail-close化だけだと、2端末で独立に追記される
+  // reports/chainRuns/zeroSecThemeLog/migrationRitualLog/feedbackFiles/feedbackIngestedDates/
+  // aiWorkProcessedIds(+zeroThinking.groups)が毎日「不一致」となり自動保存・自動pullが止まる
+  // (A1-M1の拡大)。computeSyncMergeへ和集合マージを実装したので、
+  //   (1) そのキーだけの差分ではsyncCoreEqualがtrueのまま(比較対象外=自動解決経路に入る)
+  //   (2) 両端末で独立追記した内容が、マージ後・採用後とも両方残る
+  //   (3) 同一id/日付/複合キーは重複排除されて1件になる
+  // の3点を、実際のデータ形状(日付マップ/id+updatedAt配列/id非保持の複合キーログ/文字列集合)
+  // ごとに固定する。
+
+  console.log("[B-6a] reports(日付キーの和集合マージ): 両日とも残る");
+  {
+    const local = makeLocalWithPrimaryData();
+    local.reports = { "2026-07-01": "ローカル限定の日報" };
+    storeMod.setState(local);
+    const remoteNorm = makeRemoteDiffOnlyInJournals();
+    remoteNorm.reports = { "2026-07-02": "リモート限定の日報" };
+    check("reportsだけの差分でもsyncCoreEqualはtrue(マージ対象=比較対象外)", syncMod.syncCoreEqual(remoteNorm) === true);
+    const merged = syncMod.computeSyncMerge(remoteNorm, "remote");
+    check(
+      "マージ結果に両日の日報が残る",
+      merged.values.reports["2026-07-01"] === "ローカル限定の日報" && merged.values.reports["2026-07-02"] === "リモート限定の日報",
+      JSON.stringify(merged.values.reports)
+    );
+    syncMod.applySyncMergeToRemote(merged, remoteNorm);
+    check(
+      "リモート採用後も両日の日報が残る(採用で消えない)",
+      remoteNorm.reports["2026-07-01"] === "ローカル限定の日報" && remoteNorm.reports["2026-07-02"] === "リモート限定の日報",
+      JSON.stringify(remoteNorm.reports)
+    );
+  }
+
+  console.log("[B-6b] id+updatedAt配列(chainRuns/zeroThinking.groups): 和集合+同一idは新しい方1件");
+  {
+    const idArraySpecs = [
+      {
+        label: "chainRuns", stateKey: "chainRuns", valuesKey: "chainRuns",
+        localOnly: { id: "chainA_2026-07-01", chainId: "chainA", date: "2026-07-01", currentIndex: 0, updatedAt: "2026-07-01T08:00:00" },
+        remoteOnly: { id: "chainB_2026-07-03", chainId: "chainB", date: "2026-07-03", currentIndex: 0, updatedAt: "2026-07-03T08:00:00" },
+        sharedLocal: { id: "shared_2026-07-02", chainId: "shared", date: "2026-07-02", currentIndex: 1, updatedAt: "2026-07-02T08:00:00" },
+        sharedRemote: { id: "shared_2026-07-02", chainId: "shared", date: "2026-07-02", currentIndex: 3, updatedAt: "2026-07-02T09:00:00" },
+        winnerField: "currentIndex", winnerValue: 3
+      },
+      {
+        label: "zeroThinking.groups", stateKey: null, valuesKey: "zeroThinkingGroups",
+        localOnly: { id: "g-local", title: "ローカル限定大テーマ", order: 0, createdAt: "2026-07-01T08:00:00" },
+        remoteOnly: { id: "g-remote", title: "リモート限定大テーマ", order: 0, createdAt: "2026-07-03T08:00:00" },
+        sharedLocal: { id: "g-shared", title: "旧タイトル", order: 0, createdAt: "2026-07-02T08:00:00", updatedAt: "2026-07-02T08:00:00" },
+        sharedRemote: { id: "g-shared", title: "リネーム後タイトル", order: 0, createdAt: "2026-07-02T08:00:00", updatedAt: "2026-07-02T09:00:00" },
+        winnerField: "title", winnerValue: "リネーム後タイトル"
+      }
+    ];
+    for (const spec of idArraySpecs) {
+      const local = makeLocalWithPrimaryData();
+      const remoteNorm = makeRemoteDiffOnlyInJournals();
+      if (spec.stateKey) {
+        local[spec.stateKey] = [spec.localOnly, spec.sharedLocal];
+        remoteNorm[spec.stateKey] = [spec.remoteOnly, spec.sharedRemote];
+      } else {
+        local.zeroThinking = { entries: [], suggestedThemes: [], groups: [spec.localOnly, spec.sharedLocal] };
+        remoteNorm.zeroThinking = { entries: [], suggestedThemes: [], groups: [spec.remoteOnly, spec.sharedRemote] };
+      }
+      storeMod.setState(local);
+      check(`${spec.label}だけの差分でもsyncCoreEqualはtrue`, syncMod.syncCoreEqual(remoteNorm) === true);
+      const merged = syncMod.computeSyncMerge(remoteNorm, "remote");
+      const list = merged.values[spec.valuesKey];
+      const ids = list.map((x) => x.id).sort();
+      check(
+        `${spec.label}: 両端末限定のidが両方残る(和集合)`,
+        ids.includes(spec.localOnly.id) && ids.includes(spec.remoteOnly.id), JSON.stringify(ids)
+      );
+      check(
+        `${spec.label}: 同一idは重複排除され1件`,
+        list.filter((x) => x.id === spec.sharedLocal.id).length === 1, JSON.stringify(list)
+      );
+      const shared = list.find((x) => x.id === spec.sharedLocal.id);
+      check(
+        `${spec.label}: 同一idはupdatedAtが新しい方(リモート)が勝つ`,
+        shared[spec.winnerField] === spec.winnerValue, JSON.stringify(shared)
+      );
+    }
+  }
+
+  console.log("[B-6c] id非保持の複合キーログ(zeroSecThemeLog/migrationRitualLog): 和集合+同一キーは重複排除");
+  {
+    const logSpecs = [
+      {
+        label: "zeroSecThemeLog", stateKey: "zeroSecThemeLog", valuesKey: "zeroSecThemeLog",
+        dupKeyField: "theme",
+        localItems: [
+          { date: "2026-07-01", theme: "共通の重複キー", at: "2026-07-01T08:00:00", reason: "", outcome: "skipped" },
+          { date: "2026-07-01", theme: "ローカル限定", at: "2026-07-01T09:00:00", reason: "", outcome: "skipped" }
+        ],
+        remoteItems: [
+          { date: "2026-07-01", theme: "共通の重複キー", at: "2026-07-01T08:00:00", reason: "", outcome: "skipped" },  // localと同一キー
+          { date: "2026-07-02", theme: "リモート限定", at: "2026-07-02T08:00:00", reason: "", outcome: "skipped" }
+        ]
+      },
+      {
+        label: "migrationRitualLog", stateKey: "migrationRitualLog", valuesKey: "migrationRitualLog",
+        dupKeyField: "choice",
+        localItems: [
+          { blockId: "b1", title: "共通ブロック", carryCount: 1, choice: "carry", at: "2026-07-01T08:00:00" },
+          { blockId: "b2", title: "ローカル限定ブロック", carryCount: 1, choice: "release", at: "2026-07-01T09:00:00" }
+        ],
+        remoteItems: [
+          { blockId: "b1", title: "共通ブロック", carryCount: 1, choice: "carry", at: "2026-07-01T08:00:00" },  // localと同一キー
+          { blockId: "b3", title: "リモート限定ブロック", carryCount: 1, choice: "decompose", at: "2026-07-02T08:00:00" }
+        ]
+      }
+    ];
+    for (const spec of logSpecs) {
+      const local = makeLocalWithPrimaryData();
+      local[spec.stateKey] = spec.localItems;
+      storeMod.setState(local);
+      const remoteNorm = makeRemoteDiffOnlyInJournals();
+      remoteNorm[spec.stateKey] = spec.remoteItems;
+      check(`${spec.label}だけの差分でもsyncCoreEqualはtrue`, syncMod.syncCoreEqual(remoteNorm) === true);
+      const merged = syncMod.computeSyncMerge(remoteNorm, "remote");
+      const list = merged.values[spec.valuesKey];
+      const localOnlyLabel = spec.localItems[1][spec.dupKeyField];
+      const remoteOnlyLabel = spec.remoteItems[1][spec.dupKeyField];
+      const dupLabel = spec.localItems[0][spec.dupKeyField];
+      check(
+        `${spec.label}: 両端末限定のログが両方残る`,
+        list.some((e) => e[spec.dupKeyField] === localOnlyLabel) && list.some((e) => e[spec.dupKeyField] === remoteOnlyLabel),
+        JSON.stringify(list)
+      );
+      check(
+        `${spec.label}: 同一の複合キー(at+主要フィールド)は重複排除され1件`,
+        list.filter((e) => e[spec.dupKeyField] === dupLabel).length === 1, JSON.stringify(list)
+      );
+    }
+  }
+
+  console.log("[B-6d] 文字列集合(feedbackFiles/feedbackIngestedDates/aiWorkProcessedIds): 和集合+重複排除");
+  {
+    const setSpecs = [
+      { label: "feedbackFiles", stateKey: "feedbackFiles", localOnly: "2026-07-01", remoteOnly: "2026-07-02", dup: "2026-06-30" },
+      { label: "feedbackIngestedDates", stateKey: "feedbackIngestedDates", localOnly: "2026-07-01", remoteOnly: "2026-07-02", dup: "2026-06-30" },
+      { label: "aiWorkProcessedIds", stateKey: "aiWorkProcessedIds", localOnly: "reqLocal", remoteOnly: "reqRemote", dup: "reqShared" }
+    ];
+    for (const spec of setSpecs) {
+      const local = makeLocalWithPrimaryData();
+      local[spec.stateKey] = [spec.dup, spec.localOnly];
+      storeMod.setState(local);
+      const remoteNorm = makeRemoteDiffOnlyInJournals();
+      remoteNorm[spec.stateKey] = [spec.dup, spec.remoteOnly];
+      check(`${spec.label}だけの差分でもsyncCoreEqualはtrue`, syncMod.syncCoreEqual(remoteNorm) === true);
+      const merged = syncMod.computeSyncMerge(remoteNorm, "remote");
+      const list = merged.values[spec.stateKey];
+      check(
+        `${spec.label}: 両端末限定の値が両方残る`,
+        list.includes(spec.localOnly) && list.includes(spec.remoteOnly), JSON.stringify(list)
+      );
+      check(
+        `${spec.label}: 重複する値は1件に集約される`,
+        list.filter((x) => x === spec.dup).length === 1, JSON.stringify(list)
+      );
+    }
   }
 
   console.log(failures === 0 ? "\nstore-core: 全件成功" : `\nstore-core: ${failures}件失敗`);

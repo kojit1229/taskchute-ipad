@@ -148,12 +148,14 @@ async function runPartA() {
       `lastPushedAt=${storeMod.state.settings.lastPushedAt} dataModifiedAt=${storeMod.state.dataModifiedAt}`);
   }
 
-  // diff>0の共通フィクスチャ(reportsだけ差をつける。マージ対象コレクションは完全一致のまま
-  // 保つことで、後続のOKテストでもaddedLocal=falseになりlastPushedAt検証を併用できる)。
+  // diff>0の共通フィクスチャ(aiScheduleHistoryだけ差をつける。unit14bでreports/chainRuns等7キー
+  // が和集合マージ対象へ移りSYNC_CORE_COMPARE_KEYSから外れたため、fail-close比較のまま残る
+  // aiScheduleHistoryを使う。マージ対象コレクションは完全一致のまま保つことで、後続のOKテストでも
+  // addedLocal=falseになりlastPushedAt検証を併用できる)。
   function makeDiffFixtures() {
-    const local = baseState({ reports: { "2026-07-01": "ローカルの内容" } });
+    const local = baseState({ aiScheduleHistory: [{ source: "local", reason: "" }] });
     const remoteObj = JSON.parse(JSON.stringify(local));
-    remoteObj.reports = { "2026-07-01": "リモートの内容" };  // SYNC_CORE_COMPARE_KEYSの1キーだけ差分
+    remoteObj.aiScheduleHistory = [{ source: "remote", reason: "" }];  // SYNC_CORE_COMPARE_KEYSの1キーだけ差分
     remoteObj.dataModifiedAt = "2026-09-05T00:00:00";
     return { local, remoteObj };
   }
@@ -166,8 +168,8 @@ async function runPartA() {
     const calls = installNodeStubs(syncMod, { remoteBodyText: JSON.stringify(remoteObj), confirmReturn: false });
     await syncMod.loadFromGitHub();
     check("confirmが呼ばれている", calls.confirm.length === 1, JSON.stringify(calls.confirm));
-    check("キャンセル後もstate.reportsはローカルのまま(state不変)",
-      storeMod.state.reports["2026-07-01"] === "ローカルの内容", JSON.stringify(storeMod.state.reports));
+    check("キャンセル後もstate.aiScheduleHistoryはローカルのまま(state不変)",
+      storeMod.state.aiScheduleHistory[0].source === "local", JSON.stringify(storeMod.state.aiScheduleHistory));
     check("キャンセル後はスナップショット関数を呼ばない", calls.snapshotCalls === 0, String(calls.snapshotCalls));
     check("中止トースト", calls.toast.some((t) => t.includes("中止")), JSON.stringify(calls.toast));
   }
@@ -180,8 +182,8 @@ async function runPartA() {
     const calls = installNodeStubs(syncMod, { remoteBodyText: JSON.stringify(remoteObj), confirmReturn: true });
     await syncMod.loadFromGitHub();
     check("スナップショット関数が1回呼ばれる", calls.snapshotCalls === 1, String(calls.snapshotCalls));
-    check("OK後は採用される(state.reportsがリモートの内容)",
-      storeMod.state.reports["2026-07-01"] === "リモートの内容", JSON.stringify(storeMod.state.reports));
+    check("OK後は採用される(state.aiScheduleHistoryがリモートの内容)",
+      storeMod.state.aiScheduleHistory[0].source === "remote", JSON.stringify(storeMod.state.aiScheduleHistory));
     check("(d) 採用後lastPushedAtがdataModifiedAtに揃う",
       storeMod.state.settings.lastPushedAt === storeMod.state.dataModifiedAt,
       `lastPushedAt=${storeMod.state.settings.lastPushedAt} dataModifiedAt=${storeMod.state.dataModifiedAt}`);
@@ -198,8 +200,8 @@ async function runPartA() {
     });
     await syncMod.loadFromGitHub();
     check("スナップショット関数は呼ばれた(=PUTは試みられた)", calls.snapshotCalls === 1, String(calls.snapshotCalls));
-    check("失敗後もstate.reportsはローカルのまま(state不変)",
-      storeMod.state.reports["2026-07-01"] === "ローカルの内容", JSON.stringify(storeMod.state.reports));
+    check("失敗後もstate.aiScheduleHistoryはローカルのまま(state不変)",
+      storeMod.state.aiScheduleHistory[0].source === "local", JSON.stringify(storeMod.state.aiScheduleHistory));
     check("控えを保存できなかった旨のトースト", calls.toast.some((t) => t.includes("控えを保存できなかった")), JSON.stringify(calls.toast));
   }
 
@@ -214,8 +216,8 @@ async function runPartA() {
     });
     await syncMod.loadFromGitHub();
     check("スナップショット関数は呼ばれた", calls.snapshotCalls === 1, String(calls.snapshotCalls));
-    check("失敗後もstate.reportsはローカルのまま(state不変)",
-      storeMod.state.reports["2026-07-01"] === "ローカルの内容", JSON.stringify(storeMod.state.reports));
+    check("失敗後もstate.aiScheduleHistoryはローカルのまま(state不変)",
+      storeMod.state.aiScheduleHistory[0].source === "local", JSON.stringify(storeMod.state.aiScheduleHistory));
     check("控えを保存できなかった旨のトースト", calls.toast.some((t) => t.includes("控えを保存できなかった")), JSON.stringify(calls.toast));
   }
 
@@ -235,7 +237,9 @@ async function runPartB() {
 
   const REMOTE_MARKER = "リモート編集_v15Btest";
 
-  function remoteStateJSON(dataModifiedAt, todayForOpen, reportsText) {
+  // aiScheduleHistoryを差分ドライバに使う(unit14bでreports/chainRuns等7キーは和集合マージ対象へ
+  // 移りSYNC_CORE_COMPARE_KEYSから外れたため、fail-close比較のまま残るaiScheduleHistoryを使う)。
+  function remoteStateJSON(dataModifiedAt, todayForOpen, aiScheduleReason) {
     return JSON.stringify({
       dataModifiedAt, currentView: "settings", selectedDate: "2026-07-28",
       blocks: [{
@@ -245,7 +249,7 @@ async function runPartB() {
         pomodoroCount: 0, migratedTo: "", carryCount: 0, orderIndex: 0,
         createdAt: dataModifiedAt, updatedAt: dataModifiedAt, deleted: false
       }],
-      reports: { "2026-07-01": reportsText },
+      aiScheduleHistory: [{ source: "remote", reason: aiScheduleReason }],
       projects: [], tasks: [], settings: { lastOpenedDate: todayForOpen }
     });
   }
@@ -270,12 +274,13 @@ async function runPartB() {
     return page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
   }
 
-  // diffCount>0を作るため、ローカルのreportsをリモートと変えておく(unit14でreportsは比較対象キー)。
+  // diffCount>0を作るため、ローカルのaiScheduleHistoryをリモートと変えておく
+  // (unit14bでreportsは和集合マージ対象へ移りSYNC_CORE_COMPARE_KEYSから外れたため、
+  // fail-close比較のまま残るaiScheduleHistoryを使う)。
   async function seedLocalDiff() {
     await page.evaluate(({ KEY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
-      s.reports = s.reports || {};
-      s.reports["2026-07-01"] = "ローカルの日報_v15Btest";
+      s.aiScheduleHistory = [{ source: "local", reason: "ローカルの選択_v15Btest" }];
       s.currentView = "settings";
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY });

@@ -435,17 +435,21 @@ function mergeZeroThinkingIntoLocal(remoteZt) {
 // ===============================================================
 
 // v280: habitPinHistoryはid+updatedAtでマージできない追記専用ツリーのため、earlyBird/habitStreaksと同じfail-close比較に置く。
-// unit14(D-1): マージ対象外のまま「変更なし」と誤判定されていたstate直下9キー
-// (reports/chainRuns/aiScheduleHistory/feedbackFiles/feedbackIngestedDates/
-// migrationRitualLog/zeroSecThemeLog/aiWorkProcessedIds/ironImport)と、
-// settingsの一次データ12キー(avoidList/categories/lifeAreas/vision/affirmation/
-// journalTemplate/twelveWeekStartDate/twelveWeekScoreTarget/birthDate/battery/
-// gymExerciseList/visionDirectCategories)を追加。settings.*はドット区切りパスで
-// 指定し、getByPathで解決する(UI状態キーはD-K7により対象外のまま)。
+// unit14(D-1): マージ対象外のまま「変更なし」と誤判定されていたstate直下9キーのうち、
+// aiScheduleHistoryはfail-close比較のまま残し、settingsの一次データ12キー
+// (avoidList/categories/lifeAreas/vision/affirmation/journalTemplate/twelveWeekStartDate/
+// twelveWeekScoreTarget/birthDate/battery/gymExerciseList/visionDirectCategories)を追加した。
+// settings.*はドット区切りパスで指定し、getByPathで解決する(UI状態キーはD-K7により対象外)。
+// unit14b(独立レビュー2026-09-04、A1-M1拡大の救済): 2端末で独立に追記されるだけの
+// reports/chainRuns/zeroSecThemeLog/migrationRitualLog/feedbackFiles/feedbackIngestedDates/
+// aiWorkProcessedIds(+zeroThinking.groups)は、fail-close比較のままだと日常的な追記だけで
+// 毎日「不一致」になり自動保存・自動pullが止まる。computeSyncMergeの和集合マージ対象へ
+// 昇格させたため、ここからは外した(下記computeSyncMerge内のunit14bコメント参照)。
+// ironImportはIRON LOG移行の一度きりの端末ローカルな進捗マーカー(派生状態。他端末の値を
+// 持ち込む意味が無い)のため、比較対象からも和集合マージ対象からも外した(unit14b)。
 const SYNC_CORE_COMPARE_KEYS = [
   "recurrences", "declarations", "questions", "experiments", "earlyBird", "habitStreaks", "habitPinHistory",
-  "reports", "chainRuns", "aiScheduleHistory", "feedbackFiles", "feedbackIngestedDates",
-  "migrationRitualLog", "zeroSecThemeLog", "aiWorkProcessedIds", "ironImport",
+  "aiScheduleHistory",
   "settings.avoidList", "settings.categories", "settings.lifeAreas", "settings.vision",
   "settings.affirmation", "settings.journalTemplate", "settings.twelveWeekStartDate",
   "settings.twelveWeekScoreTarget", "settings.birthDate", "settings.battery",
@@ -798,6 +802,32 @@ function computeSyncMerge(remoteNorm, tieWinner) {
     const aiStepSettledIds = new Set([...aiStepProcessedIds, ...aiStepDismissedIds]);
     const aiStepPendingRequests = mergeAiStepPendingRequests(state.aiStepPendingRequests, remoteNorm.aiStepPendingRequests)
       .filter((entry) => !aiStepSettledIds.has(entry.requestId));
+    // unit14b(独立レビュー2026-09-04、A1-M1拡大の救済): 単位14でfail-close比較に入れた
+    // state直下キーのうち、2端末で独立に追記されるだけの7キー+zeroThinking.groupsを
+    // 和集合マージへ昇格させる(fail-closeのままだと日常的な追記だけで毎日「不一致」になり
+    // 自動保存・自動pullが止まる、D-1指摘)。
+    //   reports: 日付キーのMarkdown本文 → journals/feedbackと同じmergeDateStringMap
+    //   chainRuns: id(`${chainId}_${date}`)+updatedAtを持つ → 他コレクションと同じmergeById
+    //   zeroSecThemeLog/migrationRitualLog: idを持たない追記専用ログ → 複合キー重複排除の
+    //     mergeAppendOnlyLogByKey(swipeTriageLogと同じ思想)
+    //   feedbackFiles/feedbackIngestedDates/aiWorkProcessedIds: 文字列idの集合
+    //     → aiStepProcessedIds等と同じmergeStringIdSet
+    //   zeroThinking.groups: id+createdAtを持つ小テーマ → mergeById(entries/suggestedThemes
+    //     とは別のmergeZeroThinkingListsの外で個別に計算し、値だけzeroThinkingGroupsとして返す)
+    const reports = mergeDateStringMap(state.reports, remoteNorm.reports, () => "");
+    const chainRuns = mergeById(state.chainRuns, remoteNorm.chainRuns);
+    const zeroSecThemeLog = mergeAppendOnlyLogByKey(
+      state.zeroSecThemeLog, remoteNorm.zeroSecThemeLog,
+      (e) => `${e.at || ""}|${e.date || ""}|${e.theme || ""}`
+    );
+    const migrationRitualLog = mergeAppendOnlyLogByKey(
+      state.migrationRitualLog, remoteNorm.migrationRitualLog,
+      (e) => `${e.at || ""}|${e.blockId || ""}|${e.choice || ""}`
+    );
+    const feedbackFiles = mergeStringIdSet(state.feedbackFiles, remoteNorm.feedbackFiles);
+    const feedbackIngestedDates = mergeStringIdSet(state.feedbackIngestedDates, remoteNorm.feedbackIngestedDates);
+    const aiWorkProcessedIds = mergeStringIdSet(state.aiWorkProcessedIds, remoteNorm.aiWorkProcessedIds);
+    const zeroThinkingGroups = mergeById(state.zeroThinking?.groups, remoteNorm.zeroThinking?.groups);
     const jsonChanged = (obj, base) => JSON.stringify(obj) !== JSON.stringify(base || {});
     const changedVsLocal =
       journals.changedVsLocal ||
@@ -828,7 +858,16 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(aiStepDismissedIds, state.aiStepDismissedIds) ||
       !sameArrayByReference(aiReportReadIds, state.aiReportReadIds || []) ||
       !sameArrayByReference(aiStepPendingRequests, state.aiStepPendingRequests) ||
-      (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, state.zeroThinking) : false);
+      (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, state.zeroThinking) : false) ||
+      // unit14b追加分
+      reports.changedVsLocal ||
+      !sameArrayByReference(chainRuns, state.chainRuns || []) ||
+      !sameArrayByReference(zeroSecThemeLog, state.zeroSecThemeLog || []) ||
+      !sameArrayByReference(migrationRitualLog, state.migrationRitualLog || []) ||
+      !sameArrayByReference(feedbackFiles, state.feedbackFiles || []) ||
+      !sameArrayByReference(feedbackIngestedDates, state.feedbackIngestedDates || []) ||
+      !sameArrayByReference(aiWorkProcessedIds, state.aiWorkProcessedIds || []) ||
+      !sameArrayByReference(zeroThinkingGroups, state.zeroThinking?.groups || []);
     const changedVsRemote =
       journals.changedVsRemote ||
       jsonChanged(journalMeta, remoteNorm.journalMeta) ||
@@ -854,9 +893,22 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(aiStepDismissedIds, remoteNorm.aiStepDismissedIds || []) ||
       !sameArrayByReference(aiReportReadIds, remoteNorm.aiReportReadIds || []) ||
       !sameArrayByReference(aiStepPendingRequests, remoteNorm.aiStepPendingRequests || []) ||
-      (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, remoteNorm.zeroThinking) : false);
+      (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, remoteNorm.zeroThinking) : false) ||
+      // unit14b追加分
+      reports.changedVsRemote ||
+      !sameArrayByReference(chainRuns, remoteNorm.chainRuns || []) ||
+      !sameArrayByReference(zeroSecThemeLog, remoteNorm.zeroSecThemeLog || []) ||
+      !sameArrayByReference(migrationRitualLog, remoteNorm.migrationRitualLog || []) ||
+      !sameArrayByReference(feedbackFiles, remoteNorm.feedbackFiles || []) ||
+      !sameArrayByReference(feedbackIngestedDates, remoteNorm.feedbackIngestedDates || []) ||
+      !sameArrayByReference(aiWorkProcessedIds, remoteNorm.aiWorkProcessedIds || []) ||
+      !sameArrayByReference(zeroThinkingGroups, remoteNorm.zeroThinking?.groups || []);
     return {
-      values: { journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans, writeMeditations, tasks, projects, storeVisits, tracks, trackMeasurements, weeklyCommitments, swipeTriageLog, gardenLog, coachMeals, aiStepProcessedIds, aiStepDismissedIds, aiReportReadIds, aiStepPendingRequests },
+      values: {
+        journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans, writeMeditations, tasks, projects, storeVisits, tracks, trackMeasurements, weeklyCommitments, swipeTriageLog, gardenLog, coachMeals, aiStepProcessedIds, aiStepDismissedIds, aiReportReadIds, aiStepPendingRequests,
+        // unit14b追加分
+        reports: reports.map, chainRuns, zeroSecThemeLog, migrationRitualLog, feedbackFiles, feedbackIngestedDates, aiWorkProcessedIds, zeroThinkingGroups
+      },
       changedVsLocal, changedVsRemote
     };
   } catch (error) {
@@ -899,6 +951,15 @@ function applySyncMergeToLocal(merged) {
     state.zeroThinking.entries = v.zeroThinking.entries;
     state.zeroThinking.suggestedThemes = pruneExpiredSuggestedThemes(v.zeroThinking.suggestedThemes);
   }
+  // unit14b(独立レビュー2026-09-04): 和集合マージへ昇格させたstate直下7キー+zeroThinking.groups
+  state.reports = v.reports;
+  state.chainRuns = v.chainRuns;
+  state.zeroSecThemeLog = v.zeroSecThemeLog;
+  state.migrationRitualLog = v.migrationRitualLog;
+  state.feedbackFiles = v.feedbackFiles;
+  state.feedbackIngestedDates = v.feedbackIngestedDates;
+  state.aiWorkProcessedIds = v.aiWorkProcessedIds;
+  state.zeroThinking.groups = v.zeroThinkingGroups;
   return true;
 }
 
@@ -937,6 +998,15 @@ function applySyncMergeToRemote(merged, remoteNorm) {
     remoteNorm.zeroThinking.entries = v.zeroThinking.entries;
     remoteNorm.zeroThinking.suggestedThemes = pruneExpiredSuggestedThemes(v.zeroThinking.suggestedThemes);
   }
+  // unit14b(独立レビュー2026-09-04): 和集合マージへ昇格させたstate直下7キー+zeroThinking.groups
+  remoteNorm.reports = v.reports;
+  remoteNorm.chainRuns = v.chainRuns;
+  remoteNorm.zeroSecThemeLog = v.zeroSecThemeLog;
+  remoteNorm.migrationRitualLog = v.migrationRitualLog;
+  remoteNorm.feedbackFiles = v.feedbackFiles;
+  remoteNorm.feedbackIngestedDates = v.feedbackIngestedDates;
+  remoteNorm.aiWorkProcessedIds = v.aiWorkProcessedIds;
+  remoteNorm.zeroThinking.groups = v.zeroThinkingGroups;
   return true;
 }
 
