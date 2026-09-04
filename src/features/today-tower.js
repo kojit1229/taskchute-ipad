@@ -158,7 +158,7 @@ function renderTowerMIT(blocks) {
     return `<div class="tower-mit-row">${mitStarHTML(block)}<span class="tower-mit-title">${escapeHTML(block.title)}</span><span class="tower-mit-meta">/ ${start}–${end}・${escapeHTML(resolveEstimateMin(block))}分・${status}</span></div>`;
   }).join("");
   return `<section class="tower-mit sec-mit"><h2>★ MIT <span>本日の一つ</span></h2>
-    ${rows || '<div class="tower-mit-empty">MITは未設定(タイムラインの☆で指定)</div>'}
+    ${rows || '<div class="tower-mit-empty">MITは未設定(実行タブで行を開いて☆)</div>'}
   </section>`;
 }
 

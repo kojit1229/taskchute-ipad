@@ -109,7 +109,7 @@ function block(id, title, start, end, extra = {}) {
       && mitLayout.borderColor !== "rgba(0, 0, 0, 0)", JSON.stringify(mitLayout));
     await seed([block("plain", "通常予定", "11:00", "11:30")]);
     check("MIT 0件は指定の空文言1行", await page.locator(".tower-mit-row").count() === 0
-      && (await page.locator(".tower-mit-empty").textContent()).trim() === "MITは未設定(タイムラインの☆で指定)");
+      && (await page.locator(".tower-mit-empty").textContent()).trim() === "MITは未設定(実行タブで行を開いて☆)");
     const mitPopulation = [
       block("mit-fourth", "当日4", "13:00", "13:30", { isMIT: true }),
       block("mit-other-day", "別日", "08:00", "08:30", { isMIT: true, date: "2026-09-02" }),
