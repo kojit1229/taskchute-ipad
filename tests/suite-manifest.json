@@ -109,12 +109,12 @@
         "planning-execution",
         "content-ai"
       ],
-      "assertionSignals": 11,
-      "assertionHash": "f3c737546fd1aa78",
-      "sourceHash": "f7042eabf72410b1",
+      "assertionSignals": 20,
+      "assertionHash": "011f890a9600249c",
+      "sourceHash": "95a284578fe0cc4d",
       "waits": {
-        "fixedCount": 4,
-        "numericMilliseconds": 3900,
+        "fixedCount": 8,
+        "numericMilliseconds": 7600,
         "unresolvedCount": 0
       },
       "sideEffects": {
