@@ -31,6 +31,7 @@ function check(name, cond, extra = "") {
   now0.setHours(10, 0, 0, 0);
   const TODAY = isoDate(now0);
   const YEST = isoDate(new Date(now0.getTime() - 24 * 60 * 60 * 1000));
+  const TOMORROW = isoDate(new Date(now0.getTime() + 24 * 60 * 60 * 1000));
 
   // 全フィールドを埋めたBlock(繰越元)。実績系も敢えて埋め、消えることを確認する。
   function fullBlock(id, title) {
@@ -158,6 +159,80 @@ function check(name, cond, extra = "") {
   const dst4 = (s4.blocks || []).find((b) => b.date === TODAY && b.title === "満杯時の繰越Block");
   check("当日MIT3個で上限のため新BlockはisMIT=falseのまま(既存の上限ルール維持)", dst4?.isMIT !== true, dst4?.isMIT);
   check("comment等の他フィールドは上限とは独立して引き継がれる", dst4?.comment === "元Blockのメモ(引き継がれるべき)", dst4?.comment);
+
+  // ============================================================
+  // [5] postponeBlockToNextDay(DRIFT「明日へ送る」)経由でも引き継ぎが成立する
+  // carryOverBlockを共有呼び出しするだけの薄いラッパーだが、実際にDRIFTパネルのUI経路を
+  // 通して確認する(app.js側のtoDate計算・呼び出し経路そのものに問題がないことの検証)。
+  // ============================================================
+  console.log("[5] postponeBlockToNextDay(DRIFT「明日へ送る」)経由でも comment/leverageType/isMIT が引き継がれる");
+  // today-core.test.js [31]と同じ選出ロジック(computeDriftInfo)の最小構成:
+  // d-run(実行中・残り時間がドリフト未満で候補から外れる)+ d-target(単独でドリフトを吸収できる候補)。
+  const driftNow = new Date(now0.getFullYear(), now0.getMonth(), now0.getDate(), 12, 0, 0, 0);
+  await page.clock.setFixedTime(driftNow);
+  function driftBlock(id, extra) {
+    return {
+      id, taskId: "", date: TODAY, title: id, category: "",
+      plannedStartAt: "", plannedEndAt: "", actualStartAt: "", everStartedAt: "", actualEndAt: "",
+      completed: false, charge: 0, discharge: 0, expectedCharge: "", expectedDischarge: "",
+      estimateMin: 30, comment: "", recurrenceGroupId: "", pomodoroCount: 0,
+      migratedTo: "", carryCount: 0, leverageType: "", interruptions: [], incompleteReason: null,
+      isMIT: false, orderIndex: 0, source: "",
+      createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false,
+      ...extra
+    };
+  }
+  await seed({
+    blocks: [
+      driftBlock("d-run", {
+        title: "DRIFT-実行中", actualStartAt: `${TODAY}T11:00`, everStartedAt: `${TODAY}T11:00`,
+        plannedStartAt: `${TODAY}T11:00`, plannedEndAt: `${TODAY}T12:00`, estimateMin: 120
+      }),
+      driftBlock("d-target", {
+        title: "DRIFT送付対象(全フィールド)", plannedStartAt: `${TODAY}T12:30`, plannedEndAt: `${TODAY}T13:15`, estimateMin: 90,
+        comment: "DRIFT対象のメモ(引き継がれるべき)", leverageType: "asset",
+        expectedCharge: 2, expectedDischarge: 1, isMIT: true
+      })
+    ],
+    view: "timeline"
+  });
+  await page.waitForSelector(".drift-panel", { state: "attached" });
+  await page.locator(".drift-panel button", { hasText: "送る" }).first().click();
+  await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).blocks.some((b) => b.migratedTo), KEY);
+  const s5 = await stateNow();
+  const src5 = (s5.blocks || []).find((b) => b.migratedTo);
+  const dst5 = (s5.blocks || []).find((b) => b.id === src5?.migratedTo);
+  check("DRIFTの送る対象として d-target が選ばれる(d-runは残り時間不足で候補から外れる)", src5?.id === "d-target", src5?.id);
+  check("翌日(TOMORROW)へ送られる", dst5?.date === TOMORROW, dst5?.date);
+  check("comment が postponeBlockToNextDay 経由でも引き継がれる", dst5?.comment === "DRIFT対象のメモ(引き継がれるべき)", dst5?.comment);
+  check("leverageType が postponeBlockToNextDay 経由でも引き継がれる", dst5?.leverageType === "asset", dst5?.leverageType);
+  check("expectedCharge/expectedDischarge が postponeBlockToNextDay 経由でも引き継がれる",
+    dst5?.expectedCharge === 2 && dst5?.expectedDischarge === 1, JSON.stringify({ c: dst5?.expectedCharge, d: dst5?.expectedDischarge }));
+  // 儀式の carry 選択でも元MITは維持される(K裁定待ち: 2択の意味が重なる点)。
+  // postponeBlockToNextDayはforceMITを渡さないため、ここで isMIT が引き継がれるのは
+  // 儀式のforceMIT経路ではなくcarryOverBlock内の「src.isMIT」経路(独立したOR条件)だけが効いている。
+  check("isMIT が postponeBlockToNextDay 経由でも引き継がれる(forceMITとは独立した経路)", dst5?.isMIT === true, dst5?.isMIT);
+
+  // ============================================================
+  // [6] carryCount>=1 の元Blockからの2回目繰越でも引き継ぎが維持される
+  // ============================================================
+  console.log("[6] carryOverBlock: carryCount=1(既に1回繰越済み)からの2回目繰越でも comment 等が維持される");
+  // 儀式(3回目以降)には触れず、通常の繰越経路(nextCount=2 < MIGRATION_RITUAL_THRESHOLD)で検証する。
+  await page.clock.setFixedTime(now0);
+  const secondHopSrc = fullBlock("cb-second", "2回目繰越Block");
+  secondHopSrc.carryCount = 1;  // 既に1回繰り越し済みの状態を模す
+  await seed({ blocks: [secondHopSrc] });
+  await page.click('[data-action="carry-over"][data-id="cb-second"]');
+  await page.waitForTimeout(300);
+  const s6 = await stateNow();
+  const dst6 = (s6.blocks || []).find((b) => b.date === TODAY && b.title === "2回目繰越Block");
+  check("儀式モーダルは出ない(nextCount=2は閾値未満)", await page.locator(".migration-ritual-modal").count() === 0);
+  check("carryCountが1→2になる(2回目の繰越)", dst6?.carryCount === 2, dst6?.carryCount);
+  check("2回目繰越でも comment が引き継がれる", dst6?.comment === "元Blockのメモ(引き継がれるべき)", dst6?.comment);
+  check("2回目繰越でも leverageType が引き継がれる", dst6?.leverageType === "asset", dst6?.leverageType);
+  check("2回目繰越でも expectedCharge/expectedDischarge が引き継がれる",
+    dst6?.expectedCharge === 2 && dst6?.expectedDischarge === 1, JSON.stringify({ c: dst6?.expectedCharge, d: dst6?.expectedDischarge }));
+  check("2回目繰越でも isMIT が引き継がれる(最大3個ルール内)", dst6?.isMIT === true, dst6?.isMIT);
 
   await browser.close();
   server.close();

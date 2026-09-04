@@ -895,12 +895,12 @@
       "domains": [
         "planning-execution"
       ],
-      "assertionSignals": 28,
-      "assertionHash": "9842a7cf042f3564",
-      "sourceHash": "b15caffe718499ea",
+      "assertionSignals": 40,
+      "assertionHash": "1615fd5011407bc0",
+      "sourceHash": "15e039826370fd52",
       "waits": {
-        "fixedCount": 4,
-        "numericMilliseconds": 1500,
+        "fixedCount": 5,
+        "numericMilliseconds": 1800,
         "unresolvedCount": 0
       },
       "sideEffects": {
