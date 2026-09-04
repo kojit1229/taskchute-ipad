@@ -49,15 +49,22 @@ function planBlock({ id, date, startMin, minutes = 20, completed = true, actualS
   };
 }
 
-// 各日付: 完了済み40件(06:00〜19:00台、20分刻み) + 未完了1件(20:00、plannedStartAt最遅)。
-// 40件はページ全体(document.scrollingElement)を確実にスクロール可能な高さにする。
-// 未完了1件はcurrentOrNextTaskchuteBlockIdの対象(次の未着手Block)になる。
+// 各日付: 開始済み・終了報告済みだが未完了(completed:false)の40件(06:00〜19:00台、20分刻み)
+// + 未着手1件(20:00、plannedStartAt最遅)。
+// v331以降、完了Blockは実行タブに描画されない(実績はタイムライン)ため、旧fixtureの完了40件では
+// 対象Blockが先頭に来て自動スクロール量が0になる。40件は「これから」に描画される未完了Blockとして
+// ページ全体(document.scrollingElement)を確実にスクロール可能な高さにする(意図は不変)。
+// 実体(レビュー指摘): FIXED_NOW=10:00固定のため、currentOrNextTaskchuteBlockIdの
+// current分岐が10:00〜10:20台の未完了Block(b12)を拾う。20:00の未着手1件(-target)は
+// 「次の未着手Block」候補ではあるが、既にcurrent(進行時間帯に該当するb12)が先に
+// マッチするため実際のスクロール対象にはならない。検査したいのは「自動スクロールが
+// 発火しスクロール量が0でない」ことであり、対象が-targetでもb12でもこの検査は成立する。
 function blocksForDate(date) {
   const blocks = [];
   for (let i = 0; i < 40; i++) {
     const startMin = 6 * 60 + i * 20;
     blocks.push(planBlock({
-      id: `${date}-b${i}`, date, startMin, completed: true,
+      id: `${date}-b${i}`, date, startMin, completed: false,
       actualStartAt: `${date}T${hhmm(startMin)}`, actualEndAt: `${date}T${hhmm(startMin + 20)}`
     }));
   }
@@ -80,7 +87,10 @@ function seedItems() {
   };
 }
 
-async function seedPage(context) {
+// v333: 実行タブ統合でモバイル下部ナビの「タイムライン」単独項目が無くなったため、
+// このスイートのモバイルシナリオはexec(実行ラッパー)⇔todayでも同じ観点(view切替時の
+// スクロールリセット・既存自動スクロールとの共存)を検証できるようinitialViewを可変にする。
+async function seedPage(context, initialView = "tasks") {
   const page = await context.newPage();
   const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
@@ -89,20 +99,26 @@ async function seedPage(context) {
   await page.goto(`http://localhost:${PORT}/`);
   await passGithubGate(page);
   const items = seedItems();
-  await page.evaluate(({ key, itemsValue, today }) => {
+  await page.evaluate(({ key, itemsValue, today, view }) => {
     const state = JSON.parse(localStorage.getItem(key));
     Object.assign(state, {
       blocks: itemsValue.blocks, tasks: [itemsValue.task], projects: [itemsValue.project],
-      recurrences: [], selectedDate: today, currentView: "tasks"
+      recurrences: [], selectedDate: today, currentView: view
     });
     state.settings.focusTimerAuto = false;
     state.settings.autoSync = false;
     localStorage.setItem(key, JSON.stringify(state));
-  }, { key: STATE_KEY, itemsValue: items, today: TODAY });
+  }, { key: STATE_KEY, itemsValue: items, today: TODAY, view: initialView });
   await page.reload();
-  await page.locator('#app[data-view="tasks"]').waitFor();
+  await page.locator(`#app[data-view="${initialView}"]`).waitFor();
   return { page, pageErrors };
 }
+
+// v333: v146(既存自動スクロール)の配線があるビューだけがtransition後にscrollTop>0を
+// 生む対象。"today"のようにこの配線が無いビューへの着地を「まだ発火していないタイマーを
+// 消化する待機」の対象にすると、発火しないまま2秒でタイムアウトし例外になる
+// (search-jump経路のstep[4]参照)。
+const VIEWS_WITH_AUTOSCROLL = new Set(["tasks", "timeline", "exec"]);
 
 async function scrollPos(page) {
   return page.evaluate(() => ({
@@ -131,39 +147,44 @@ async function clickAndReadImmediately(page, selector) {
   }, selector);
 }
 
-async function runScenario(browser, { width, height, navContainer }) {
-  console.log(`\n=== 幅${width}px(${navContainer}) ===`);
+// v333: viewA/viewBを外側から渡せるようパラメタ化(デスクトップ=tasks⇄timeline、
+// モバイル=exec⇄today。#sidebarはtasks/timelineを内部的に残しているためデスクトップは無改修、
+// #bottomNavは実行1項目(exec)のみになったためモバイルは別のview組で同じ観点を検証する)。
+async function runScenario(browser, { width, height, navContainer, viewA, viewB }) {
+  console.log(`\n=== 幅${width}px(${navContainer}、${viewA}⇄${viewB}) ===`);
   const context = await browser.newContext({ serviceWorkers: "block", viewport: { width, height } });
-  const { page, pageErrors } = await seedPage(context);
+  const { page, pageErrors } = await seedPage(context, viewA);
   try {
     const scrollable = await page.evaluate(() => document.scrollingElement.scrollHeight > window.innerHeight);
     check(`${width}px: ページ全体がスクロール可能な高さになる(コンテンツ40件超)`, scrollable);
 
-    // [1] タスクシュート→タイムライン: nav経路でのリセット(クリックと同時に読み取る)
+    // [1] viewA→viewB: nav経路でのリセット(クリックと同時に読み取る)
     await setScrollPos(page, 500);
     let before = await scrollPos(page);
     check(`${width}px: 切替前にdocument.scrollingElement.scrollTopが実際に動く`, before.page > 100, JSON.stringify(before));
 
-    let after = await clickAndReadImmediately(page, `${navContainer} [data-action="nav"][data-view="timeline"]`);
-    check(`${width}px: タスクシュート→タイムライン切替直後にpageスクロールが0にリセットされる`,
-      after.page === 0 && after.view === "timeline", JSON.stringify(after));
+    let after = await clickAndReadImmediately(page, `${navContainer} [data-action="nav"][data-view="${viewB}"]`);
+    check(`${width}px: ${viewA}→${viewB}切替直後にpageスクロールが0にリセットされる`,
+      after.page === 0 && after.view === viewB, JSON.stringify(after));
     check(`${width}px: 同時にmain.scrollTopも0のまま(内部スクロールは発生しない前提の確認)`,
       after.main === 0, JSON.stringify(after));
 
-    // [2] タイムライン→タスクシュート: 逆方向
+    // [2] viewB→viewA: 逆方向
     await setScrollPos(page, 400);
     before = await scrollPos(page);
-    check(`${width}px: タイムライン側でも切替前にpageスクロールが動く`, before.page > 100, JSON.stringify(before));
+    check(`${width}px: ${viewB}側でも切替前にpageスクロールが動く`, before.page > 100, JSON.stringify(before));
 
-    after = await clickAndReadImmediately(page, `${navContainer} [data-action="nav"][data-view="tasks"]`);
-    check(`${width}px: タイムライン→タスクシュート切替直後にpageスクロールが0にリセットされる(逆方向)`,
-      after.page === 0 && after.view === "tasks", JSON.stringify(after));
+    after = await clickAndReadImmediately(page, `${navContainer} [data-action="nav"][data-view="${viewA}"]`);
+    check(`${width}px: ${viewB}→${viewA}切替直後にpageスクロールが0にリセットされる(逆方向)`,
+      after.page === 0 && after.view === viewA, JSON.stringify(after));
 
-    // 既存自動スクロール(v146)との共存確認: 今日表示中は次の未着手Blockへ50ms後にscrollIntoViewする。
-    // リセット(0)の直後にこの既存挙動が上書きされずに発火し続けることを確認する(条件待ち、固定sleepなし)。
+    // 既存自動スクロール(v146)との共存確認: 今日表示中は次の未着手Blockへ(またはタイムライン/exec実績
+    // モードなら現在時刻ラインへ)50ms後にscrollIntoViewする。リセット(0)の直後にこの既存挙動が
+    // 上書きされずに発火し続けることを確認する(条件待ち、固定sleepなし)。viewAは両シナリオとも
+    // この配線を持つビュー(tasks/exec)を使う。
     await page.waitForFunction(() => document.scrollingElement.scrollTop > 0, null, { timeout: 2000 });
     const afterAutoScroll = await scrollPos(page);
-    check(`${width}px: リセット後も既存の「次の未着手Blockへ自動スクロール」(v146)が従来どおり発火する`,
+    check(`${width}px: リセット後も既存の自動スクロール(v146)が従来どおり発火する`,
       afterAutoScroll.page > 0, JSON.stringify(afterAutoScroll));
 
     // [3] 同一ビュー内の日付だけの切替では、リセットが発火しない(スコープを超えない回帰防止)
@@ -184,22 +205,26 @@ async function runScenario(browser, { width, height, navContainer }) {
 
     // [4] search-jump経路(setView()を経由しないもう一つのview切替入口)でもリセットされる
     await setScrollPos(page, 350);
-    await page.evaluate(() => {
+    await page.evaluate((view) => {
       const btn = document.createElement("button");
       btn.id = "v307-search-jump-probe";
       btn.dataset.action = "search-jump";
-      btn.dataset.view = "timeline";
+      btn.dataset.view = view;
       document.body.appendChild(btn);
-    });
+    }, viewB);
     after = await clickAndReadImmediately(page, "#v307-search-jump-probe");
     check(`${width}px: search-jump経路でもpageスクロールが0にリセットされる(setView()を経由しない切替の網羅)`,
-      after.page === 0 && after.view === "timeline", JSON.stringify(after));
+      after.page === 0 && after.view === viewB, JSON.stringify(after));
 
-    // search-jump後も今日表示中なので既存自動スクロール(v146)が50ms後に発火する。
-    // context.close()より前にこのタイマーを消化しておかないと、close後にコールバックが
-    // 破棄済みページへアクセスして例外になり、テストプロセス全体が不安定終了しうるため
-    // (条件待ちで消化する。固定sleepではない)。
-    await page.waitForFunction(() => document.scrollingElement.scrollTop > 0, null, { timeout: 2000 });
+    // search-jump後、着地したviewBがv146配線を持つビュー(tasks/timeline/exec)なら今日表示中に
+    // 50ms後の既存自動スクロールが発火する。context.close()より前にこのタイマーを消化して
+    // おかないと、close後にコールバックが破棄済みページへアクセスして例外になり、テスト
+    // プロセス全体が不安定終了しうるため(条件待ちで消化する。固定sleepではない)。
+    // viewBがv146配線を持たない(例: today)場合はタイマー自体が存在しないため待たない
+    // (待つと発火せずタイムアウト例外になる)。
+    if (VIEWS_WITH_AUTOSCROLL.has(viewB)) {
+      await page.waitForFunction(() => document.scrollingElement.scrollTop > 0, null, { timeout: 2000 });
+    }
 
     check(`${width}px: 一連の操作でpageerrorなし`, pageErrors.length === 0, JSON.stringify(pageErrors));
   } finally {
@@ -214,11 +239,12 @@ async function runScenario(browser, { width, height, navContainer }) {
   const server = startServer(PORT);
   const browser = await chromium.launch(launchOptions());
   try {
-    console.log("[1] デスクトップ幅(1280x900、サイドバーnav)");
-    await runScenario(browser, { width: 1280, height: 900, navContainer: "#sidebar" });
+    console.log("[1] デスクトップ幅(1280x900、サイドバーnav。#sidebarはtasks/timelineを維持)");
+    await runScenario(browser, { width: 1280, height: 900, navContainer: "#sidebar", viewA: "tasks", viewB: "timeline" });
 
-    console.log("\n[2] モバイル幅(390x844、720px未満・ボトムnav)");
-    await runScenario(browser, { width: 390, height: 844, navContainer: "#bottomNav" });
+    // v333: #bottomNavは実行1項目(exec)のみになったため、モバイルはexec⇄todayで同じ観点を検証する。
+    console.log("\n[2] モバイル幅(390x844、720px未満・ボトムnav。exec⇄today)");
+    await runScenario(browser, { width: 390, height: 844, navContainer: "#bottomNav", viewA: "exec", viewB: "today" });
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));

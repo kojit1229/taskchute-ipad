@@ -96,7 +96,7 @@ function renderTimelineRail() {
   timelineRailEl.innerHTML = `
     <div class="row" style="margin-bottom:10px">
       <h3>${formatDisplayDate(state.selectedDate)}</h3>
-      <button class="btn ghost" data-action="nav" data-view="timeline">開く</button>
+      <button class="btn ghost" data-action="nav" data-view="exec" data-mode="actual">開く</button>
     </div>
     <div class="segmented" style="margin-bottom:10px">
       <button class="${mode === "planned" ? "active" : ""}" data-action="timeline-mode" data-mode="planned">予定</button>
@@ -106,7 +106,28 @@ function renderTimelineRail() {
   `;
 }
 
-function renderTimelineView() {
+// v333: 実行ラッパーからの埋め込み呼び出し(opts.embedded)向け。DRIFT/TIME COMBを
+// 既定閉の<details>へ包む(実行ラッパーのモバイル最下段の位置)。埋め込み無しの
+// renderTimelineView本体側の出力・data-actionは一切変更していない。
+// v333レビュー(B-M analysisFold)対応: DRIFT/gapが0件・対象外日でもfold自体は常に出す
+// (見出しは「DRIFT — ・ TIME COMB 0件」等になる)。driftLabelはdriftPanelHTML()が返す
+// HTML文字列を正規表現で読み直すのではなく、computeDriftInfo()の返り値から直接組み立てる
+// (レビュー指摘L-1: 二重エスケープ・マークアップ変更への追従漏れの回避)。
+function analysisFoldHTML() {
+  const driftInfo = computeDriftInfo();
+  const driftLabel = driftInfo ? `${driftInfo.drift > 0 ? "+" : ""}${driftInfo.drift}分` : "—";
+  const gapCount = actualGaps(blocksForDate(state.selectedDate)).length;
+  return `
+    <details class="exec-analysis-fold">
+      <summary>分析(DRIFT ${escapeHTML(driftLabel)} ・ TIME COMB ${gapCount}件)</summary>
+      ${driftPanelHTML()}
+      ${timeCombHTML()}
+    </details>
+  `;
+}
+
+function renderTimelineView(opts = {}) {
+  const embedded = opts.embedded === true;
   const nowMinute = (new Date().getHours() + 1) * 60;
   const mode = state.timelineMode || "planned";
   // TOWER意匠化(第3弾先行分): タブ全体を .tower-skin.timeline-tower でラップし、
@@ -115,26 +136,25 @@ function renderTimelineView() {
   // draftBarHTML/driftPanelHTML/
   // timeCombHTML/renderTimeline)の呼び出し・引数・返り値は一切変更していない
   // (見た目はcss-timeline-tower.cssの子孫セレクタだけで変わる)。
-  return `
-    <div class="tower-skin timeline-tower">
-      ${renderHeader("時間軸とエネルギー", "タイムライン")}
-      <div class="tl-datebar-panel">
-        ${renderDateBar()}
-      </div>
+  // v333: embedded(execラッパー実績モード)では、モードセグメント(予定/実績)と
+  // 「下書きスケジュール」ボタンをexec側ヘッダへ集約したため、本体側では重複させない
+  // (A-M6対応。data-action・ハンドラは変更していない。クリック委譲のため置き場所を
+  // 変えても挙動は同じ)。それ以外(+新規Block/一括承認/操作説明)は従来どおり本体に残す。
+  const body = `
+      ${embedded ? "" : `
       <div class="segmented" style="margin-bottom:10px">
         <button class="${mode === "planned" ? "active" : ""}" data-action="timeline-mode" data-mode="planned">📅 予定</button>
         <button class="${mode === "actual" ? "active" : ""}" data-action="timeline-mode" data-mode="actual">✅ 実績</button>
-      </div>
+      </div>`}
       <div class="row" style="margin-bottom:10px; gap:8px; flex-wrap:wrap">
         <button class="btn primary" data-action="timeline-new-block" data-minute="${nowMinute}">+ 新規Block</button>
-        ${!scheduleDraftActive() ? `<button class="btn" data-action="ai-schedule">📋 下書きスケジュール</button>` : ""}
+        ${embedded ? "" : (!scheduleDraftActive() ? `<button class="btn" data-action="ai-schedule">📋 下書きスケジュール</button>` : "")}
         ${mode === "planned" && state.selectedDate === todayISO()
           ? `<button class="btn" data-action="bulk-approve-planned">✅ 予定通りだった(一括承認)</button>` : ""}
         <span class="muted" style="font-size:12px">空き時間タップで追加 / ○タップで完了登録 / ▶いま開始・■いま終了でワンタップ実績 / カードタップで編集 / 赤線は現在時刻</span>
       </div>
       ${draftBarHTML()}
-      ${driftPanelHTML()}
-      ${timeCombHTML()}
+      ${embedded ? analysisFoldHTML() : `${driftPanelHTML()}${timeCombHTML()}`}
       ${state.settings.timelineCategoryFilter ? `<div class="row" style="margin-bottom:10px; gap:8px; align-items:center">
         <span class="cat-chip" style="background:${getCategoryColor(state.settings.timelineCategoryFilter)}1f; color:${getCategoryColor(state.settings.timelineCategoryFilter)}; border:1px solid ${getCategoryColor(state.settings.timelineCategoryFilter)}66">カテゴリ: ${escapeHTML(state.settings.timelineCategoryFilter)}</span>
         <button class="btn ghost" data-action="timeline-clear-cat" style="font-size:12px">フィルタ解除 ✕</button>
@@ -145,6 +165,15 @@ function renderTimelineView() {
           ${renderTimeline({ compact: false, mode })}
         </div>
       </section>
+  `;
+  if (embedded) return body;
+  return `
+    <div class="tower-skin timeline-tower">
+      ${renderHeader("時間軸とエネルギー", "タイムライン")}
+      <div class="tl-datebar-panel">
+        ${renderDateBar()}
+      </div>
+      ${body}
     </div>
   `;
 }
@@ -155,15 +184,18 @@ function activeEstimateMinutes(block, nowMinute) {
   return Math.max(0, estimate - Math.max(0, nowMinute - minutesOf(block.actualStartAt)));
 }
 
-function driftPanelHTML() {
+// v333: analysisFoldHTML()(embedded折りたたみ見出し)がHTML文字列の正規表現抽出に頼らず
+// DRIFT分数を直接得られるよう、計算部分をdriftPanelHTML()から切り出した(B-M analysisFold対応)。
+// 返り値はnull(=DRIFTパネル自体を出さない既存3条件のどれかに該当)か{ drift, candidate }。
+function computeDriftInfo() {
   const today = todayISO();
-  if (state.selectedDate !== today) return "";
+  if (state.selectedDate !== today) return null;
   const allBlocks = blocksForDate(today);
   // v186レビュー(M-3): 当日Blockに終了予定(plannedEndAt)を持つものが1件も無ければ、
   // 「計画上の最終終了」自体が存在しないためDRIFTパネル自体を出さない。
-  if (!allBlocks.some((b) => b.plannedEndAt)) return "";
+  if (!allBlocks.some((b) => b.plannedEndAt)) return null;
   const remaining = allBlocks.filter((b) => !b.completed && !b.migratedTo);
-  if (!remaining.length) return "";
+  if (!remaining.length) return null;
   // v186レビュー(H-1): 「明日へ送る」候補選出の母集合だけを、既存carryableBlocks(app.js)と
   // 同じ3条件(ルーティン除外・繰り返し系列除外・中断/中止/削除タスクのBlock除外)へ絞る。
   // ズレ計算(下のplannedEnd/projectedEnd/drift)の母集合(allBlocks)自体は変えない。
@@ -188,6 +220,13 @@ function driftPanelHTML() {
           || (a.block.plannedStartAt || "").localeCompare(b.block.plannedStartAt || "")
           || a.block.id.localeCompare(b.block.id))[0]
     : null;
+  return { drift, candidate };
+}
+
+function driftPanelHTML() {
+  const info = computeDriftInfo();
+  if (!info) return "";
+  const { drift, candidate } = info;
   const driftLabel = `${drift > 0 ? "+" : ""}${drift}分`;
   return `<section class="panel drift-panel">
     <div class="panel-label">DRIFT</div>

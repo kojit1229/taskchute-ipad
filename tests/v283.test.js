@@ -164,11 +164,12 @@ async function verifyMainFlow(browser) {
   try {
     await page.waitForFunction(() => document.querySelector('#bottomNav [data-view="more"] .nav-badge')?.textContent === "3");
     const mobileItems = await page.$$eval("#bottomNav button", (els) => els.map((el) => ({ id: el.dataset.view, label: el.childNodes[0].textContent })));
+    // v333: 実行タブ統合で4項目化(「時間」廃止)。仕様変更としてセレクタ追随。
     const expectedMobileItems = [
       { id: "today", label: "今日" }, { id: "journal", label: "ジャーナル" },
-      { id: "tasks", label: "実行" }, { id: "timeline", label: "時間" }, { id: "more", label: "その他" }
+      { id: "exec", label: "実行" }, { id: "more", label: "その他" }
     ];
-    check("mobileNavは5項目・id/ラベルの組が不変", JSON.stringify(mobileItems) === JSON.stringify(expectedMobileItems), JSON.stringify(mobileItems));
+    check("mobileNavは4項目・id/ラベルの組", JSON.stringify(mobileItems) === JSON.stringify(expectedMobileItems), JSON.stringify(mobileItems));
     const moreHeight = await page.locator('#bottomNav [data-view="more"]').evaluate((el) => el.getBoundingClientRect().height);
     check("バッジを内包してもその他ボタンのタップ標的は44px以上", moreHeight >= 44, String(moreHeight));
 

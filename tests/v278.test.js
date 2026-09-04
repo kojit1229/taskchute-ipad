@@ -66,10 +66,12 @@ const block = (id, ruleId, title = "朝の読書") => ({
     const mobileItems = await page.$$eval("#bottomNav button", (elements) => elements.map((element) => ({
       id: element.dataset.view, label: element.childNodes[0].textContent
     })));
-    check("mobileNavは今日/ジャーナル/実行/時間/その他の5枠を維持",
+    // v333: 実行タブ統合(タスクシュート+タイムライン=exec)でモバイル下部ナビは
+    // 今日/ジャーナル/実行/その他の4枠へ変わった(「時間」廃止)。仕様変更としてセレクタ追随。
+    check("mobileNavは今日/ジャーナル/実行/その他の4枠",
       JSON.stringify(mobileItems) === JSON.stringify([
         { id: "today", label: "今日" }, { id: "journal", label: "ジャーナル" },
-        { id: "tasks", label: "実行" }, { id: "timeline", label: "時間" }, { id: "more", label: "その他" }
+        { id: "exec", label: "実行" }, { id: "more", label: "その他" }
       ]), JSON.stringify(mobileItems));
     await page.locator('.nav-button[data-view="instruments"]').click();
     await page.waitForSelector('.instr-view');

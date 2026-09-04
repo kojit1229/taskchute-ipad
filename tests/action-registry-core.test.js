@@ -115,6 +115,8 @@ const GOLDEN_CLICK_ACTIONS = [
   "block-row-toggle",
   // v332: 実行タブA-1b「タスク」行の展開トグル(中断/編集、表示専用、state非書込)を意図的に追加。
   "task-row-toggle",
+  // v333: 実行ラッパーの計画/実績切替(表示専用、state非書込)を意図的に追加。
+  "exec-mode-toggle",
   "generate-report", "download-report", "download-data", "life-export", "save-github", "load-github",
   "gate-continue", "reset-demo",
   "toggle-mit",
@@ -313,6 +315,8 @@ const APP_JS_REGISTERED_ACTIONS = [
   "block-row-toggle",
   // --- v332: 実行タブA-1b「タスク」行の展開トグル(中断/編集、表示専用、state非書込) ---
   "task-row-toggle",
+  // --- v333: 実行ラッパーの計画/実績切替(表示専用、state非書込) ---
+  "exec-mode-toggle",
   // --- v180: ポモドーロ(14。continue-focus/finish-blockはend-break単独UIへの統一で孤立、
   //     v292孤児掃除でcontinueFocusPomodoro/finishBlockFromBreakごと削除。complete-pomodoroは
   //     data-action経由の到達導線が無いが、v129身体スキャンモーダルの唯一の呼び出し元

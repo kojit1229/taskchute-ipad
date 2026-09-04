@@ -222,11 +222,12 @@ const navItems = [
 // v82: UX監査B1 — 日課動線(朝: ホーム→ジャーナルで体調記録)を1タップにするため、
 //      不定期にしか触らないWBSを「その他」へ降ろし、ジャーナルをbottom-navへ昇格した。
 //      WBSはrenderMore(その他グリッド)の受け皿に含まれる(除外リストから外すだけで自動的に出る)。
+// v333: 実行ラッパー(タスクシュート+タイムライン統合)。モバイル下部ナビは「実行」1項目に
+//       まとめ、「時間」を廃止する(PCサイドバー統合はv333b。navItemsは今回無改修)。
 const mobileNav = [
   { id: "today", label: "今日" },
   { id: "journal", label: "ジャーナル" },
-  { id: "tasks", label: "実行" },
-  { id: "timeline", label: "時間" },
+  { id: "exec", label: "実行" },
   { id: "more", label: "その他" }
 ];
 
@@ -354,7 +355,14 @@ configureTimeline({
 // ため、ハンドラは既存のapp.js関数・module変数をそのまま参照する形で登録する。ロジック自体は
 // if連鎖からの機械的な移動のみで無改変)。
 registerActions({
-  "nav": ({ target }) => setView(target.dataset.view),
+  // v333: data-mode付きnav(タイムラインrail「開く」等)は遷移と同時に実行ラッパーの
+  // モードも合わせる(非永続の表示専用状態、dataModifiedAtは汚さない)。
+  "nav": ({ target }) => {
+    if (target.dataset.view === "exec" && target.dataset.mode) {
+      _execMode = target.dataset.mode === "actual" ? "actual" : "plan";
+    }
+    setView(target.dataset.view);
+  },
   "sync-banner-dismiss": () => dismissSyncBanner(),
   "open-iron-log": () => setView("iron-log"),
   "save-tower-journal": ({ target }) => {
@@ -966,6 +974,8 @@ registerActions({
   // v331: 実行タブA-1a「これから」行の展開トグル(表示専用、state非書込)。
   "block-row-toggle": ({ id }) => { _execExpandedBlockId = _execExpandedBlockId === id ? "" : id; render(); },
   "task-row-toggle": ({ id }) => { _execExpandedTaskId = _execExpandedTaskId === id ? "" : id; render(); },  // v332: タスク行展開(表示専用)
+  // v333: 実行ラッパーの計画/実績切替(表示専用、state/localStorage非書込)。
+  "exec-mode-toggle": ({ target }) => { _execMode = target.dataset.mode === "actual" ? "actual" : "plan"; render(); },
   // --- ポモドーロ(14。continue-focus/finish-blockはend-break単独UIへの統一で孤立、v292孤児掃除で
   //     削除(K裁定2026-08-29)。complete-pomodoroは到達導線が無いが、completePomodoro()が
   //     v129身体スキャンモーダルの唯一の呼び出し元でテスト(v129/v132)が依存するため残置) ---
@@ -1212,6 +1222,9 @@ let _wbsSelectedProjectId = "";
 // v331: 実行タブ「これから」行の展開状態(1行だけ開く)。表示専用でstate/localStorageへは保存しない。
 let _execExpandedBlockId = "";
 let _execExpandedTaskId = "";  // v332: 「タスク」行の展開状態(1行だけ開く。非永続)
+// v333: 実行ラッパーの表示モード("plan"=計画/タスクシュート、"actual"=実績/タイムライン)。
+// 表示専用でstate/localStorageへは保存しない(タブを離れて戻ると"plan"に戻る仕様)。
+let _execMode = "plan";
 // v70: フォーカスタイマー「中断」の理由ワンタップピッカー(チョコ停記録)。非永続。
 let _pendingInterruptBlockId = null;
 // v87: 宣言/終了報告モーダルが解決するまでの一時コンテキスト。非永続。
@@ -1721,7 +1734,7 @@ function normalizeState(value) {
   };
   // v230: home撤去後も旧state・未知viewで白画面にしないため、todayへ縮退する。
   const allowedViews = new Set([
-    "today", "wbs", "wish", "tasks", "timeline",
+    "today", "wbs", "wish", "tasks", "timeline", "exec",
     "journal", "zero", "vision", "ai-reports", "settings", "more",
     "iron-log", "instruments", "fund"
   ]);
@@ -2931,7 +2944,7 @@ function renderBottomNav() {
   const unreadCount = aiReportUnreadCount();
   const unstartedCount = taskchuteUnstartedCount();
   bottomNav.innerHTML = mobileNav.map((item) => `
-    <button class="${active === item.id ? "active" : ""}" data-action="nav" data-view="${item.id}">${item.label}${item.id === "more" && unreadCount > 0 ? `<span class="nav-badge">${unreadCount > 99 ? "99+" : unreadCount}</span>` : ""}${item.id === "tasks" && unstartedCount > 0 ? `<span class="nav-badge">${unstartedCount > 99 ? "99+" : unstartedCount}</span>` : ""}</button>
+    <button class="${active === item.id ? "active" : ""}" data-action="nav" data-view="${item.id}">${item.label}${item.id === "more" && unreadCount > 0 ? `<span class="nav-badge">${unreadCount > 99 ? "99+" : unreadCount}</span>` : ""}${item.id === "exec" && unstartedCount > 0 ? `<span class="nav-badge">${unstartedCount > 99 ? "99+" : unstartedCount}</span>` : ""}</button>
   `).join("");
 }
 
@@ -3002,7 +3015,7 @@ function renderMain() {
     if (shouldAutoScroll) {
       const targetId = currentOrNextTaskchuteBlockId(state.selectedDate);
       if (targetId) {
-        setTimeout(() => document.querySelector(`strong[data-action="edit-block"][data-id="${targetId}"]`)?.scrollIntoView({ block: "center" }), 50);
+        setTimeout(() => document.querySelector(`[data-action="block-row-toggle"][data-id="${targetId}"]`)?.scrollIntoView({ block: "center" }) /* v333: v331の行1段化でstrong[edit-block]が無くなったため行の展開トリガを目印にする */, 50);
       }
     }
   }
@@ -3011,6 +3024,18 @@ function renderMain() {
     // v47: 今日を表示中なら現在時刻ラインへ自動スクロール(探す手間をなくす)
     if (state.selectedDate === todayISO()) {
       setTimeout(() => document.querySelector(".now-line")?.scrollIntoView({ block: "center" }), 50);
+    }
+  }
+  if (view === "exec") {
+    main.innerHTML = renderExecView();
+    // v333: 計画=タスクシュートと同じ自動スクロール、実績=タイムラインと同じ現在時刻ライン
+    if (_execMode === "actual" && state.selectedDate === todayISO()) {
+      setTimeout(() => document.querySelector(".now-line")?.scrollIntoView({ block: "center" }), 50);
+    } else if (shouldAutoScroll) {
+      const targetId = currentOrNextTaskchuteBlockId(state.selectedDate);
+      if (targetId) {
+        setTimeout(() => document.querySelector(`[data-action="block-row-toggle"][data-id="${targetId}"]`)?.scrollIntoView({ block: "center" }) /* v333: v331の行1段化でstrong[edit-block]が無くなったため行の展開トリガを目印にする */, 50);
+      }
     }
   }
   if (view === "journal") main.innerHTML = renderJournal();
@@ -5712,30 +5737,83 @@ function execTargetBlocks() {
   });
 }
 
+// v333: execHeaderHTML()とrenderExecView()共通の「＋ Block」details(既定閉)。
+// id/data-actionは温存(#blockTitle/#blockCategory/add-block)。
+function execBlockAddHTML() {
+  const categoryOptionsHTML = `${getCategoryNames().map((n) => `<option value="${escapeHTML(n)}">${escapeHTML(n)}</option>`).join("")}<option value="">(カテゴリなし)</option>`;
+  return `
+    <details class="exec-add">
+      <summary class="exec-add-summary">＋ Block</summary>
+      <div class="form-strip exec-add-body">
+        <input id="blockTitle" class="input" placeholder="Block名">
+        <select id="blockCategory" class="select">${categoryOptionsHTML}</select>
+        <button class="btn primary" data-action="add-block">Block追加</button>
+      </div>
+    </details>
+  `;
+}
+
 // v332: ヘッダ1行化+＋Block(details既定閉)。id/data-actionは温存(#blockTitle等)。
+// v333時点でも呼び出し元は残る(旧tasksビューへ直接遷移した場合の内部残置分、execHeaderHTMLの
+// 呼び出し元はrenderTasks()のembedded=false経路のみ)。
 function execHeaderHTML() {
   const endText = projectedEndText() || "見込み終了 —";
   const bufferInfo = computeBufferRemaining(state.selectedDate);
   const bufferText = (state.selectedDate === todayISO() && bufferInfo.hasBuffer)
     ? `余白 ${bufferInfo.remainingMin}分` : "余白 —";
-  const categoryOptionsHTML = `${getCategoryNames().map((n) => `<option value="${escapeHTML(n)}">${escapeHTML(n)}</option>`).join("")}<option value="">(カテゴリなし)</option>`;
   return `
     <div class="view-header exec-header">
       <div class="exec-header-line"><span class="exec-header-title">TOWER / タスクシュート</span> ・ <span id="projected-end" class="projected-end">${endText}</span> ・ <span>${bufferText}</span></div>
-      <details class="exec-add">
-        <summary class="exec-add-summary">＋ Block</summary>
-        <div class="form-strip exec-add-body">
-          <input id="blockTitle" class="input" placeholder="Block名">
-          <select id="blockCategory" class="select">${categoryOptionsHTML}</select>
-          <button class="btn primary" data-action="add-block">Block追加</button>
-        </div>
-      </details>
+      ${execBlockAddHTML()}
     </div>
     ${bufferMeterHTML()}
   `;
 }
 
-function renderTasks() {
+// v333: 「実行」ラッパー。計画(タスクシュート)/実績(タイムライン)をセグメントで切替える。
+// 既存renderTasks()/renderTimelineView()は本体をそのまま呼ぶ(ロジック・data-action無改変)。
+// モードは_execMode(非永続モジュール変数)のみで管理し、state/localStorageへは書かない。
+// レビュー指摘(A-H1/B-H2/A-M6)対応: ＋Blockはモード共通・計画モードは見込み終了/余白/
+// バッファ帯を維持・実績モードはタイムライン固有の操作(下書きスケジュール・予定/実績
+// セグメント)をヘッダへ集約し、本体側(embedded)の重複するセグメント/ボタン行を省く。
+function renderExecView() {
+  const isActual = _execMode === "actual";
+  const endText = projectedEndText() || "見込み終了 —";
+  const bufferInfo = computeBufferRemaining(state.selectedDate);
+  const bufferText = (state.selectedDate === todayISO() && bufferInfo.hasBuffer)
+    ? `余白 ${bufferInfo.remainingMin}分` : "余白 —";
+  const timelineMode = state.timelineMode || "planned";
+  return `
+    <div class="view-header exec-header">
+      <div class="exec-header-line">
+        <span class="exec-header-title">TOWER / 実行</span>${!isActual
+          ? ` ・ <span id="projected-end" class="projected-end">${endText}</span> ・ <span>${bufferText}</span>` : ""}
+      </div>
+      <div class="segmented exec-mode-segmented">
+        <button class="${isActual ? "" : "active"}" data-action="exec-mode-toggle" data-mode="plan">計画(タスクシュート)</button>
+        <button class="${isActual ? "active" : ""}" data-action="exec-mode-toggle" data-mode="actual">実績(タイムライン)</button>
+      </div>
+      <div class="row exec-header-actions">
+        ${execBlockAddHTML()}
+        ${isActual ? `
+          <div class="segmented" style="margin:0">
+            <button class="${timelineMode === "planned" ? "active" : ""}" data-action="timeline-mode" data-mode="planned">📅 予定</button>
+            <button class="${timelineMode === "actual" ? "active" : ""}" data-action="timeline-mode" data-mode="actual">✅ 実績</button>
+          </div>
+          ${!scheduleDraftActive() ? `<button class="btn" data-action="ai-schedule">📋 下書きスケジュール</button>` : ""}
+        ` : ""}
+      </div>
+    </div>
+    ${!isActual ? bufferMeterHTML() : ""}
+    ${renderDateBar()}
+    ${isActual
+      ? `<div class="tower-skin timeline-tower">${renderTimelineView({ embedded: true })}</div>`
+      : renderTasks({ embedded: true })}
+  `;
+}
+
+function renderTasks(opts = {}) {
+  const embedded = opts.embedded === true;
   const targets = execTargetBlocks();
   // v331: 実行中=開始済み・未終了・未完了(旧renderBlockItemのdoing判定と同じ条件)。
   //       最大1件を想定するが、複数あっても取りこぼさない。それ以外の未完了は「これから」へ
@@ -5746,8 +5824,8 @@ function renderTasks() {
     .filter((b) => !b.completed && !isExecDoing(b))
     .sort((a, b) => (a.plannedStartAt || "").localeCompare(b.plannedStartAt || ""));
   return `
-    ${execHeaderHTML()}
-    ${renderDateBar()}
+    ${embedded ? "" : execHeaderHTML()}
+    ${embedded ? "" : renderDateBar()}
     ${carryOverPanel()}
 
     ${doing.length ? `
@@ -5763,6 +5841,7 @@ function renderTasks() {
       </section>
       <section class="section exec-panel exec-amber exec-tasks-section">${renderOpenTasks()}</section>
     </div>
+    ${embedded ? `<div class="exec-switch-footer"><button class="btn ghost" data-action="exec-mode-toggle" data-mode="actual">実績を見る ›</button></div>` : ""}
   `;
 }
 
@@ -11338,6 +11417,12 @@ function setView(view = "today") {
     ztCurrent = null;
     ztWriteStartedAt = null;  // v104
   }
+  // v333: execラッパーのモード(計画/実績)は非永続の表示専用状態。タブを離れたら
+  // 「計画」に戻す仕様(発注§A)。exec内部のモード切替(exec-mode-toggle)はsetView()を
+  // 経由しないため、ここでは「execから他ビューへ移った」場合だけリセットする。
+  if (state.currentView === "exec" && view !== "exec") {
+    _execMode = "plan";
+  }
   state.currentView = view;
   // v37: 画面切替は「データの変更」ではない。dataModifiedAt を汚すと
   //      端末間の新旧比較が壊れる(タブを触っただけの古い端末が「最新」扱いになる)ため、
@@ -11616,7 +11701,10 @@ async function hydrateStaticMarkdown() {
   // v137: 入力中/IME変換中は即renderせず保留する(review.md:28。renderDeferringForFocus参照)。
   // v161: "stats"(計器盤)を追加。エネルギーカーブの新着fetchが完了してもこの画面を開いた
   //       ままだと再描画されず節が出ないままになる不具合を防ぐ(他view追加時と同じ理由)。
-  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "today" || state.currentView === "timeline" || state.currentView === "wish" || state.currentView === "zero" || state.currentView === "tasks" || state.currentView === "fund" || state.currentView === "instruments")) {
+  // v333: execラッパー(実績モードでタイムライン本体を埋め込み表示)を開いたまま
+  // 同期・AI取込が完了しても一覧がライブ更新されない旧来の不具合(v37/v86/v133/v161と同型)
+  // を防ぐため、"exec" もここに加える。
+  if (changed && (state.currentView === "vision" || state.currentView === "journal" || state.currentView === "today" || state.currentView === "timeline" || state.currentView === "wish" || state.currentView === "zero" || state.currentView === "tasks" || state.currentView === "fund" || state.currentView === "instruments" || state.currentView === "exec")) {
     renderDeferringForFocus();
   }
 }
@@ -13918,7 +14006,9 @@ function updateBatteryTick() {
   if (Date.now() - _lastBatteryTickAt < BATTERY_TICK_INTERVAL_MS) return;
   _lastBatteryTickAt = Date.now();
   if (state.selectedDate !== todayISO()) return;
-  if (state.currentView === "timeline") {
+  // v333: execラッパーの実績モード(タイムライン本体を埋め込み表示)でも同じエネルギー
+  // グラフ要素が描画されるため、ここで凍らせないようガードへ加える(v144レビュー対応と同じ理由)。
+  if (state.currentView === "timeline" || (state.currentView === "exec" && _execMode === "actual")) {
     const layer = document.querySelector(".energy-graph-overlay");
     if (layer) {
       const allBlocks = blocksForDate(state.selectedDate);
@@ -13995,7 +14085,8 @@ function computeDailyOverload(dateISO) {
 
 // v146(UI改善計画Phase1-4): バッファ残量帯は「今日を扱う」画面だけに限定する(UX監査N3。
 // 設定・計器盤・その他等の無関係画面から常時26px帯を消す)。
-const BUFFER_METER_VIEWS = ["tasks", "timeline", "journal"];
+// v333: exec(実行ラッパー)計画モードでもバッファ帯を表示するため追加。
+const BUFFER_METER_VIEWS = ["tasks", "timeline", "journal", "exec"];
 function bufferMeterHTML() {
   if (!BUFFER_METER_VIEWS.includes(state.currentView)) return "";
   if (state.selectedDate !== todayISO()) return "";

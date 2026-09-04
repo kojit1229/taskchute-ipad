@@ -196,16 +196,22 @@ async function checkDirectClickAfterMemoInput(browser, action) {
       await expandNowRow(page);
       check("reload後もlocalStorageのcommentを保持", await page.locator('.block-inline-memo[data-id="doing"]').inputValue() === "入力中のメモ_v305");
 
+      // v333: モバイル下部ナビの「タイムライン」単独項目は実行タブ(exec)の実績モードへ
+      // 統合された。exec→実績モードへ切替えて同じ観点(インライン欄を追加しない)を検証する。
       console.log("[2] 画面遷移と編集モーダルの同一comment");
-      await page.locator('#bottomNav [data-action="nav"][data-view="timeline"]').click();
-      await page.locator('#app[data-view="timeline"]').waitFor();
-      check("タイムラインタブにはインライン欄を追加しない", await page.locator(".block-inline-memo").count() === 0);
+      await page.locator('#bottomNav [data-action="nav"][data-view="exec"]').click();
+      await page.locator('#app[data-view="exec"]').waitFor();
+      // v333: 計画モードの末尾フッタ「実績を見る ›」も同じdata-action/data-modeを持つため、
+      // セグメント側(.exec-mode-segmented内)を明示して一意化する。
+      await page.locator('.exec-mode-segmented [data-action="exec-mode-toggle"][data-mode="actual"]').click();
+      await page.waitForSelector(".tl-radar-panel");
+      check("タイムライン(exec実績モード)にはインライン欄を追加しない", await page.locator(".block-inline-memo").count() === 0);
       await page.locator('#bottomNav [data-action="nav"][data-view="today"]').click();
       await page.locator('#app[data-view="today"]').waitFor();
       check("今日タブにはインライン欄を追加しない", await page.locator(".block-inline-memo").count() === 0);
-      await page.locator('#bottomNav [data-action="nav"][data-view="tasks"]').click();
-      await page.locator('#app[data-view="tasks"]').waitFor();
-      check("他画面から戻っても値を保持", await page.locator('.block-inline-memo[data-id="doing"]').inputValue() === "入力中のメモ_v305");
+      await page.locator('#bottomNav [data-action="nav"][data-view="exec"]').click();
+      await page.locator('#app[data-view="exec"]').waitFor();
+      check("他画面から戻っても値を保持(execは離脱で計画モードへ戻る)", await page.locator('.block-inline-memo[data-id="doing"]').inputValue() === "入力中のメモ_v305");
 
       const latestMemo = page.locator('.block-inline-memo[data-id="doing"]');
       await latestMemo.fill("モーダルにも出る最新値_v305");

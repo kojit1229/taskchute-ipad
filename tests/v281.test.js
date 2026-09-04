@@ -175,10 +175,11 @@ const FUND_FIXTURE = {
     const mobileItems = await page.$$eval("#bottomNav button", (elements) => elements.map((element) => ({
       id: element.dataset.view, label: element.childNodes[0].textContent
     })));
-    check("mobileNavは5項目のままFUNDを含まない",
+    // v333: 実行タブ統合で4項目化(「時間」廃止)。仕様変更としてセレクタ追随。
+    check("mobileNavは4項目のままFUNDを含まない",
       JSON.stringify(mobileItems) === JSON.stringify([
         { id: "today", label: "今日" }, { id: "journal", label: "ジャーナル" },
-        { id: "tasks", label: "実行" }, { id: "timeline", label: "時間" }, { id: "more", label: "その他" }
+        { id: "exec", label: "実行" }, { id: "more", label: "その他" }
       ]), JSON.stringify(mobileItems));
     check("PCサイドバーにはFUNDを追加", (await page.locator('.nav-list [data-view="fund"]').count()) === 1);
     const summaryText = await page.locator(".fund-summary").textContent();

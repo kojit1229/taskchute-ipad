@@ -953,6 +953,16 @@ h3 {
   .exec-lower .exec-tasks-section { grid-column: 1 / -1; }
 }
 
+/* v333: 実行ラッパー(計画/実績切替)。既存.segmentedをそのまま使い、専用CSSは最小限。 */
+.exec-mode-segmented { margin-top: 8px; }
+/* レビュー対応(A-H1/A-M6): ヘッダ内の＋Block/予定実績セグメント/下書きスケジュールを
+   横並び・折返し可能にする(既定の.rowはjustify-content:space-betweenで2要素専用のため上書き)。 */
+.exec-header-actions { justify-content: flex-start; flex-wrap: wrap; margin-top: 8px; gap: 8px; }
+.exec-switch-footer { margin-top: 12px; text-align: right; }
+.exec-analysis-fold { margin-top: 12px; }
+.exec-analysis-fold summary { list-style: none; cursor: pointer; min-height: 44px; display: flex; align-items: center; font-size: 12px; color: var(--muted); }
+.exec-analysis-fold summary::-webkit-details-marker { display: none; }
+
 .block-meta {
   display: flex;
   flex-wrap: wrap;
