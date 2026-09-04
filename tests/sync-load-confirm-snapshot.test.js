@@ -1,21 +1,31 @@
-// sync-load-confirm-snapshot.test.js — unit15(A2-H4/D-K6)回帰テスト。
+// sync-load-confirm-snapshot.test.js — unit15(A2-H4/D-K6)+差し戻し(独立レビュー2026-09-04)回帰テスト。
 //
-// loadFromGitHub()(src/sync/github.js)は「GitHubから読込」ボタンでリモートを無条件に採用し、
-// この端末にしか無い未push編集(dataModifiedAt !== settings.lastPushedAt)を確認なしに破棄していた
-// (第1回コードレビュー area-2-freshness-conflict.md A2-H4)。K裁定D-K6により、
-// (1) 未push編集があるときはwindow.confirmで破棄内容(コア差分件数・最終編集時刻)を示し、
-// (2) キャンセルならstateを一切変更せず中断し、
-// (3) OKなら採用直前に既存の世代バックアップ機構(backups/app-state-YYYY-MM-DD.json、
-//     restoreBackupから復元可能)へ強制スナップショットを書く、
-// という3点を固定する。
+// [PART A] loadFromGitHub()(src/sync/github.js)の制御フローをNode直接importで検証する
+// (store-core.test.jsと同じ手法。configureGithubSync(deps)でapp.js側依存を注入するため、
+// ブラウザ・fetch実物・localStorageが無いNode環境でも本物のloadFromGitHubを直接動かせる)。
+//   (b) diffCount(SYNC_CORE_COMPARE_KEYS基準)が0ならconfirmもスナップショットも出さない。
+//   confirmキャンセルならstateを一切変更せず中断する。
+//   confirmでOKなら、writeBackupSnapshotBeforeLoad(注入された依存)を呼んでから採用する。
+//   (c) writeBackupSnapshotBeforeLoadが失敗(例外 or false)ならfail-close(採用せず中断)。
+//     PUT 403相当(例外)とpersonalDataReady=false相当(false復帰)の両方を、github.js側の
+//     契約(注入関数の成否だけで分岐する)として検証する。実際のPUT/personalDataReadyの
+//     判定そのもの(2つの失敗モードの違い)はPART Bでapp.js実物を使って検証する。
+//   (d) 採用成功時にsettings.lastPushedAtを採用したdataModifiedAtに揃える。
 //
-// state操作の注意: localStorageを直接書き換えても、既に起動済みのページのin-memory `state`
-// には反映されない(app.jsはstateを起動時に一度だけlocalStorageから読む)。そのためlocalStorage
-// を書き換えるたびに page.reload() で反映させる(v49/v93等の既存スイートと同じ作法)。
+// [PART B] app.js実物 + ブラウザ + fetchモックで、PART Aでは検証できないapp.js側の実装
+// (writeBackupSnapshotBeforeLoadの実体)を検証する。
+//   (a) 採用直前の控えは通常の日次世代とは別名(app-state-YYYY-MM-DD-preload-HHMMSS.json)。
+//       同日に2回OKで読み込むと、2つの別ファイルとして残る(1回目を上書きしない)。
+//       restoreBackupの一覧(listBackups)からも両方拾えることを確認する。
+//   (c) 実際のPUT失敗(403)と、personalDataReady=false(ダウンロード待ち中に設定が
+//       クリアされる競合)の両方が、fail-closeで読込を中止しstateを変えないことを確認する。
+const path = require("path");
+const { pathToFileURL } = require("url");
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, openSettingsGroup } = require("./helpers");
 
-const PORT = randomPort();
-const KEY = "taskchute-journal-pwa-state-v1";
+const ROOT = path.join(__dirname, "..");
+const STORE_PATH = path.join(ROOT, "src", "state", "store.js");
+const SYNC_PATH = path.join(ROOT, "src", "sync", "github.js");
 
 let failures = 0;
 function check(name, cond, extra = "") {
@@ -23,7 +33,199 @@ function check(name, cond, extra = "") {
   else { failures++; console.log(`  ❌ ${name} ${extra}`); }
 }
 
-(async () => {
+// ===================== PART A: Node直接import(制御フロー) =====================
+function noop() {}
+
+// store-core.test.jsのbaseState()と同じ形(SYNC_CORE_COMPARE_KEYSの21キー+マージ対象
+// コレクションを一式そろえた最小state)。local/remoteをこの関数からクローンして作ることで、
+// 「どのキーを変えたか」だけで差分を制御できる。
+function baseState(extra) {
+  return {
+    journalMeta: {},
+    settings: {
+      journalTemplate: "", morningEnergyLog: {}, github: { token: "t", dataOwner: "o", dataRepo: "r" },
+      avoidList: [], categories: [], lifeAreas: [], vision: "", affirmation: "",
+      twelveWeekStartDate: "", twelveWeekScoreTarget: 85, birthDate: "", battery: {},
+      gymExerciseList: [], visionDirectCategories: [], lastPushedAt: ""
+    },
+    journals: {}, feedback: {}, condition: { logs: {} }, sleep: { logs: {} },
+    blocks: [], zeroThinking: { entries: [], suggestedThemes: [] },
+    dailyDeclarations: {}, weeklyWishes: {}, bodyScans: [], tasks: [], projects: [], storeVisits: [],
+    swipeTriageLog: [], gardenLog: {},
+    // computeSyncMerge()が参照する残りのマージ対象コレクション(欠けているとmergeById等が
+    // 例外を投げ、computeSyncMergeが内部でフォールバック=nullへ倒れる。動作自体は
+    // フォールバック経路でも壊れないが、実際のマージ経路を通す方が本番挙動に忠実なため揃える)。
+    writeMeditations: [], aiStepProcessedIds: [], aiStepDismissedIds: [], aiReportReadIds: [],
+    aiStepPendingRequests: [], coachLog: { meals: [] }, tracks: [], trackMeasurements: [], weeklyCommitments: [],
+    recurrences: ["r1"], declarations: ["d1"], questions: ["q1"], experiments: ["e1"],
+    earlyBird: {}, habitStreaks: {}, habitPinHistory: {},
+    reports: {}, chainRuns: [], aiScheduleHistory: [], feedbackFiles: [], feedbackIngestedDates: [],
+    migrationRitualLog: [], zeroSecThemeLog: [], aiWorkProcessedIds: [], ironImport: {},
+    dataModifiedAt: "2026-07-28T08:00:00",
+    ...extra
+  };
+}
+
+async function loadModules() {
+  const storeMod = await import(pathToFileURL(STORE_PATH).href);
+  const syncMod = await import(pathToFileURL(SYNC_PATH).href);
+  return { storeMod, syncMod };
+}
+
+// downloadGitHubStateText()が読む本文(remoteObj)をfromBase64=identityスタブ前提でそのまま返す
+// fetchスタブ。writeBackupSnapshotBeforeLoad自体はconfigureGithubSyncの注入関数として
+// 差し替えるため、このfetchスタブはメインファイルのGETだけ相手にすればよい。
+// persistLocalNoSchedule/setLastSyncedSha等がlocalStorage.setItem/getItemを呼ぶ
+// (いずれもtry/catchで安全に無視される設計だが、テスト出力のノイズを減らすため
+// 簡易的なメモリ内polyfillを与えておく)。
+function installMemoryLocalStorage() {
+  const store = {};
+  global.localStorage = {
+    getItem: (k) => (k in store ? store[k] : null),
+    setItem: (k, v) => { store[k] = String(v); },
+    removeItem: (k) => { delete store[k]; }
+  };
+}
+
+function installNodeStubs(syncMod, { remoteBodyText, confirmReturn = true, snapshotImpl }) {
+  installMemoryLocalStorage();
+  const calls = { confirm: [], toast: [], snapshotCalls: 0 };
+  global.window = global.window || {};
+  global.window.confirm = (msg) => { calls.confirm.push(msg); return confirmReturn; };
+  global.fetch = async () => ({
+    ok: true,
+    json: async () => ({ content: remoteBodyText, encoding: "base64", sha: "sha-remote-1" })
+  });
+  syncMod.configureGithubSync({
+    normalizeState: (x) => x,
+    nowDateTime: () => "2026-09-04T23:00:00",
+    todayISO: () => "2026-09-04",
+    addDays: (d) => d,
+    isTouchedBlock: () => false,
+    RECURRENCE_KEEP_PAST_DAYS: 7,
+    RECURRENCE_FUTURE_DAYS: 31,
+    SWIPE_TRIAGE_LOG_MAX: 200,
+    showToast: (msg) => calls.toast.push(msg),
+    maintainRecurrences: noop, render: noop, runDailyOpen: () => false, saveState: noop,
+    requireGitHubConfig: () => ({ owner: "o", repo: "r", branch: "main", token: "t" }),
+    fetchGitHubFileSHA: async () => "sha", personalDataReady: () => true,
+    personalDataFileConfig: (c) => c,
+    gitHubContentsURL: () => "https://api.github.com/fake/contents", githubHeaders: () => ({}),
+    gitHubErrorMessage: async (r) => `HTTP ${r.status}`,
+    fromBase64: (x) => x, toBase64: (x) => x,
+    sanitizedStateForGitHub: () => ({}), maybeWriteBackupSnapshot: async () => {},
+    writeBackupSnapshotBeforeLoad: async (...args) => {
+      calls.snapshotCalls++;
+      if (snapshotImpl) return snapshotImpl(...args);
+      return true;
+    },
+    updateAutoSaveStatus: noop, updateSyncDot: noop,
+    renderSyncBanner: noop, clearSyncBannerDismissal: noop, clearPersonalDataAuthError: noop,
+    pruneExpiredSuggestedThemes: (x) => x,
+    _startupDataModifiedAt: ""
+  });
+  return calls;
+}
+
+async function runPartA() {
+  const { storeMod, syncMod } = await loadModules();
+
+  // ---- (b)+(d): diffCount===0 → confirmもスナップショットも出さず、採用後lastPushedAtが揃う ----
+  console.log("[A-1] diffCount0(コア一致): confirmを出さず読み込み、採用後lastPushedAt===dataModifiedAt");
+  {
+    const local = baseState({ reports: { "2026-07-01": "同じ内容" } });
+    storeMod.setState(local);
+    const remoteObj = JSON.parse(JSON.stringify(local));  // ディープクローン: コア・マージ対象とも完全一致
+    remoteObj.dataModifiedAt = "2026-09-05T00:00:00";       // 新しさの違いだけ
+    const calls = installNodeStubs(syncMod, { remoteBodyText: JSON.stringify(remoteObj) });
+    await syncMod.loadFromGitHub();
+    check("diffCount0のときconfirmは呼ばれない", calls.confirm.length === 0, JSON.stringify(calls.confirm));
+    check("diffCount0のときスナップショットも呼ばれない", calls.snapshotCalls === 0, String(calls.snapshotCalls));
+    check("採用は従来どおり行われる(dataModifiedAtがリモートの値)",
+      storeMod.state.dataModifiedAt === "2026-09-05T00:00:00", storeMod.state.dataModifiedAt);
+    check("(d) 採用後lastPushedAtがdataModifiedAtに揃う(addedLocalが無いクリーンな採用のため)",
+      storeMod.state.settings.lastPushedAt === storeMod.state.dataModifiedAt,
+      `lastPushedAt=${storeMod.state.settings.lastPushedAt} dataModifiedAt=${storeMod.state.dataModifiedAt}`);
+  }
+
+  // diff>0の共通フィクスチャ(reportsだけ差をつける。マージ対象コレクションは完全一致のまま
+  // 保つことで、後続のOKテストでもaddedLocal=falseになりlastPushedAt検証を併用できる)。
+  function makeDiffFixtures() {
+    const local = baseState({ reports: { "2026-07-01": "ローカルの内容" } });
+    const remoteObj = JSON.parse(JSON.stringify(local));
+    remoteObj.reports = { "2026-07-01": "リモートの内容" };  // SYNC_CORE_COMPARE_KEYSの1キーだけ差分
+    remoteObj.dataModifiedAt = "2026-09-05T00:00:00";
+    return { local, remoteObj };
+  }
+
+  // ---- confirmキャンセル: state不変 ----
+  console.log("[A-2] diffCount>0 + confirmキャンセル: stateを一切変更せず中断する");
+  {
+    const { local, remoteObj } = makeDiffFixtures();
+    storeMod.setState(local);
+    const calls = installNodeStubs(syncMod, { remoteBodyText: JSON.stringify(remoteObj), confirmReturn: false });
+    await syncMod.loadFromGitHub();
+    check("confirmが呼ばれている", calls.confirm.length === 1, JSON.stringify(calls.confirm));
+    check("キャンセル後もstate.reportsはローカルのまま(state不変)",
+      storeMod.state.reports["2026-07-01"] === "ローカルの内容", JSON.stringify(storeMod.state.reports));
+    check("キャンセル後はスナップショット関数を呼ばない", calls.snapshotCalls === 0, String(calls.snapshotCalls));
+    check("中止トースト", calls.toast.some((t) => t.includes("中止")), JSON.stringify(calls.toast));
+  }
+
+  // ---- confirm OK: スナップショットを呼んでから採用し、lastPushedAtも揃う ----
+  console.log("[A-3] diffCount>0 + confirmでOK: スナップショット関数を呼んでから採用する");
+  {
+    const { local, remoteObj } = makeDiffFixtures();
+    storeMod.setState(local);
+    const calls = installNodeStubs(syncMod, { remoteBodyText: JSON.stringify(remoteObj), confirmReturn: true });
+    await syncMod.loadFromGitHub();
+    check("スナップショット関数が1回呼ばれる", calls.snapshotCalls === 1, String(calls.snapshotCalls));
+    check("OK後は採用される(state.reportsがリモートの内容)",
+      storeMod.state.reports["2026-07-01"] === "リモートの内容", JSON.stringify(storeMod.state.reports));
+    check("(d) 採用後lastPushedAtがdataModifiedAtに揃う",
+      storeMod.state.settings.lastPushedAt === storeMod.state.dataModifiedAt,
+      `lastPushedAt=${storeMod.state.settings.lastPushedAt} dataModifiedAt=${storeMod.state.dataModifiedAt}`);
+  }
+
+  // ---- (c) スナップショット関数が例外(PUT 403相当) → fail-close ----
+  console.log("[A-4] スナップショット失敗(例外・PUT 403相当): 採用せず中断しstateは不変");
+  {
+    const { local, remoteObj } = makeDiffFixtures();
+    storeMod.setState(local);
+    const calls = installNodeStubs(syncMod, {
+      remoteBodyText: JSON.stringify(remoteObj), confirmReturn: true,
+      snapshotImpl: async () => { throw new Error("HTTP 403"); }
+    });
+    await syncMod.loadFromGitHub();
+    check("スナップショット関数は呼ばれた(=PUTは試みられた)", calls.snapshotCalls === 1, String(calls.snapshotCalls));
+    check("失敗後もstate.reportsはローカルのまま(state不変)",
+      storeMod.state.reports["2026-07-01"] === "ローカルの内容", JSON.stringify(storeMod.state.reports));
+    check("控えを保存できなかった旨のトースト", calls.toast.some((t) => t.includes("控えを保存できなかった")), JSON.stringify(calls.toast));
+  }
+
+  // ---- (c) スナップショット関数がfalseを返す(personalDataReady=false相当) → fail-close ----
+  console.log("[A-5] スナップショット不可(false復帰・personalDataReady=false相当): 採用せず中断しstateは不変");
+  {
+    const { local, remoteObj } = makeDiffFixtures();
+    storeMod.setState(local);
+    const calls = installNodeStubs(syncMod, {
+      remoteBodyText: JSON.stringify(remoteObj), confirmReturn: true,
+      snapshotImpl: async () => false
+    });
+    await syncMod.loadFromGitHub();
+    check("スナップショット関数は呼ばれた", calls.snapshotCalls === 1, String(calls.snapshotCalls));
+    check("失敗後もstate.reportsはローカルのまま(state不変)",
+      storeMod.state.reports["2026-07-01"] === "ローカルの内容", JSON.stringify(storeMod.state.reports));
+    check("控えを保存できなかった旨のトースト", calls.toast.some((t) => t.includes("控えを保存できなかった")), JSON.stringify(calls.toast));
+  }
+
+  console.log(failures === 0 ? "\n[PART A] 全件成功" : `\n[PART A] ${failures}件失敗`);
+}
+
+// ===================== PART B: ブラウザ + app.js実物(writeBackupSnapshotBeforeLoad本体) =====================
+async function runPartB() {
+  const PORT = randomPort();
+  const KEY = "taskchute-journal-pwa-state-v1";
   const server = startServer(PORT);
   const browser = await chromium.launch(launchOptions());
   const ctx = await browser.newContext({ serviceWorkers: "block" });
@@ -31,47 +233,32 @@ function check(name, cond, extra = "") {
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
   await blockGithubApiByDefault(page);
 
-  const LOCAL_MARKER = "ローカル未push編集_v15test";
-  const REMOTE_MARKER = "リモート編集_v15test";
+  const REMOTE_MARKER = "リモート編集_v15Btest";
 
-  function remoteStateJSON(dataModifiedAt, todayForOpen) {
-    // currentViewは"settings"のまま(採用でsettings画面から遷移しないようにし、
-    // 次の操作でも[data-action="load-github"]がそのまま押せるようにする)。
-    // settings.lastOpenedDateは実行環境の実日付を入れておく(空だとrunDailyOpen()の
-    // 日跨ぎ処理が誤って走り、ensureJournal+saveState()でdataModifiedAtが実時刻へ
-    // 上書きされてしまい、後続テストの前提が崩れるため)。
+  function remoteStateJSON(dataModifiedAt, todayForOpen, reportsText) {
     return JSON.stringify({
       dataModifiedAt, currentView: "settings", selectedDate: "2026-07-28",
       blocks: [{
-        id: "remote-block-v15", taskId: "", date: "2026-07-28", title: REMOTE_MARKER, category: "",
+        id: "remote-block-v15b", taskId: "", date: "2026-07-28", title: REMOTE_MARKER, category: "",
         plannedStartAt: "2026-07-28T09:00:00", plannedEndAt: "2026-07-28T09:30:00",
         actualStartAt: "", actualEndAt: "", completed: false, charge: 0, discharge: 0,
         pomodoroCount: 0, migratedTo: "", carryCount: 0, orderIndex: 0,
         createdAt: dataModifiedAt, updatedAt: dataModifiedAt, deleted: false
       }],
+      reports: { "2026-07-01": reportsText },
       projects: [], tasks: [], settings: { lastOpenedDate: todayForOpen }
     });
   }
 
-  async function setLocalState({ withLocalMarker, dataModifiedAt, lastPushedAt }) {
-    await page.evaluate(({ KEY, LOCAL_MARKER, withLocalMarker, dataModifiedAt, lastPushedAt }) => {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      s.blocks = (s.blocks || []).filter((b) => b.title !== LOCAL_MARKER);
-      if (withLocalMarker) {
-        s.blocks.push({
-          id: "local-block-v15", taskId: "", date: "2026-07-28", title: LOCAL_MARKER, category: "",
-          plannedStartAt: "2026-07-28T08:00:00", plannedEndAt: "2026-07-28T08:30:00",
-          actualStartAt: "", actualEndAt: "", completed: false, charge: 0, discharge: 0,
-          pomodoroCount: 0, migratedTo: "", carryCount: 0, orderIndex: 0,
-          createdAt: "2026-07-28T08:00:00", updatedAt: "2026-07-28T08:00:00", deleted: false
-        });
-      }
-      s.currentView = "settings";
-      s.dataModifiedAt = dataModifiedAt;
-      s.settings.lastPushedAt = lastPushedAt;
-      localStorage.setItem(KEY, JSON.stringify(s));
-    }, { KEY, LOCAL_MARKER, withLocalMarker, dataModifiedAt, lastPushedAt });
-    // localStorageの書き換えを起動中ページのin-memory stateへ反映させるため再読込する。
+  async function todayForOpen() {
+    return page.evaluate(() => {
+      const d = new Date();
+      const p = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    });
+  }
+
+  async function gotoSettings() {
     await page.reload();
     await page.waitForSelector('[data-action="nav"]', { state: "attached" });
     await page.click('[data-action="nav"][data-view="settings"]');
@@ -83,115 +270,176 @@ function check(name, cond, extra = "") {
     return page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
   }
 
-  async function installFetchMock({ remoteDataModifiedAt }) {
-    const todayForOpen = await page.evaluate(() => {
-      const d = new Date();
-      const p = (n) => String(n).padStart(2, "0");
-      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-    });
-    const remoteBody = remoteStateJSON(remoteDataModifiedAt, todayForOpen);
-    await page.evaluate(({ remoteBody }) => {
-      window.__ghCalls = [];
-      window.__confirmCalls = [];
-      window.__confirmReturn = true;
-      window.confirm = (msg) => { window.__confirmCalls.push(msg); return window.__confirmReturn; };
-      window.fetch = (url, opts = {}) => {
-        const u = String(url); const method = opts.method || "GET";
-        window.__ghCalls.push({ url: u, method, body: opts.body || "" });
-        if (u.includes("/contents/taskchute/app-state.json") && method === "GET") {
-          const content = btoa(unescape(encodeURIComponent(remoteBody)));
-          return Promise.resolve(new Response(JSON.stringify({ sha: "sha-remote-1", content, encoding: "base64" }), { status: 200 }));
-        }
-        if (u.includes("/contents/taskchute/backups/app-state-") && method === "GET") {
-          // 今日の世代スナップショットはまだ無い(sha確認は404)
-          return Promise.resolve(new Response(JSON.stringify({ message: "Not Found" }), { status: 404 }));
-        }
-        if (u.includes("/contents/taskchute/backups/app-state-") && method === "PUT") {
-          return Promise.resolve(new Response(JSON.stringify({ content: { sha: "sha-bk-1" } }), { status: 200 }));
-        }
-        if (u.match(/\/contents\/taskchute\/backups\?/) && method === "GET") {
-          return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
-        }
-        return Promise.resolve(new Response("{}", { status: 200 }));
-      };
-    }, { remoteBody });
+  // diffCount>0を作るため、ローカルのreportsをリモートと変えておく(unit14でreportsは比較対象キー)。
+  async function seedLocalDiff() {
+    await page.evaluate(({ KEY }) => {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      s.reports = s.reports || {};
+      s.reports["2026-07-01"] = "ローカルの日報_v15Btest";
+      s.currentView = "settings";
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY });
+    await gotoSettings();
   }
 
   try {
     await page.goto(`http://localhost:${PORT}/`);
     await page.waitForTimeout(400);
     await passGithubGate(page);
+    await seedLocalDiff();
 
-    // ===================== [1] 未push編集あり + confirmキャンセル =====================
-    console.log("[1] 未push編集があり、confirmをキャンセルするとstateが一切変わらない");
-    await setLocalState({ withLocalMarker: true, dataModifiedAt: "2026-07-28T08:00:00", lastPushedAt: "2026-07-27T00:00:00" });
-    await installFetchMock({ remoteDataModifiedAt: "2026-07-29T00:00:00" });
-    await page.evaluate(() => { window.__confirmReturn = false; });
-    const beforeCancel = await stateNow();
-    await page.click('[data-action="load-github"]');
-    await page.waitForTimeout(500);
-    const afterCancel = await stateNow();
-    const callsAfterCancel = await page.evaluate(() => window.__ghCalls);
-    const confirmCallsAfterCancel = await page.evaluate(() => window.__confirmCalls);
+    // ===================== [B-1] PUT 403(実際のバックアップPUT失敗) =====================
+    console.log("[B-1] backups PUTが403: 読込を中止しstateは不変(app.js実物のwriteBackupSnapshotBeforeLoad)");
+    {
+      const today = await todayForOpen();
+      const remoteBody = remoteStateJSON("2026-09-05T00:00:00", today, "リモートの日報_v15Btest");
+      await page.evaluate(({ remoteBody }) => {
+        window.__ghCalls = [];
+        window.confirm = () => true;
+        window.fetch = (url, opts = {}) => {
+          const u = String(url); const method = opts.method || "GET";
+          window.__ghCalls.push({ url: u, method });
+          if (u.includes("/contents/taskchute/app-state.json") && method === "GET") {
+            const content = btoa(unescape(encodeURIComponent(remoteBody)));
+            return Promise.resolve(new Response(JSON.stringify({ sha: "sha-remote-1", content, encoding: "base64" }), { status: 200 }));
+          }
+          if (u.includes("/contents/taskchute/backups/app-state-") && method === "PUT") {
+            return Promise.resolve(new Response(JSON.stringify({ message: "Forbidden" }), { status: 403 }));
+          }
+          return Promise.resolve(new Response("{}", { status: 200 }));
+        };
+      }, { remoteBody });
+      const before = await stateNow();
+      await page.click('[data-action="load-github"]');
+      await page.waitForTimeout(600);
+      const after = await stateNow();
+      const calls = await page.evaluate(() => window.__ghCalls);
+      check("バックアップPUTは実際に試みられた(403で失敗)",
+        calls.some((c) => c.method === "PUT" && c.url.includes("/contents/taskchute/backups/")), JSON.stringify(calls));
+      check("403失敗後もリモートのBlockは取り込まれていない(採用せず中止)",
+        !after.blocks.some((b) => b.title === REMOTE_MARKER), JSON.stringify((after.blocks || []).map((b) => b.title)));
+      check("403失敗後もdataModifiedAtは変化しない(state不変)", after.dataModifiedAt === before.dataModifiedAt,
+        `${before.dataModifiedAt} -> ${after.dataModifiedAt}`);
+    }
 
-    check("confirmが呼ばれている", confirmCallsAfterCancel.length === 1, JSON.stringify(confirmCallsAfterCancel));
-    check("confirm文言に最終編集時刻が含まれる", confirmCallsAfterCancel[0]?.includes("2026-07-28T08:00:00"), confirmCallsAfterCancel[0]);
-    check("confirm文言に件数(コア項目N件)が含まれる", /コア項目\s*\d+件/.test(confirmCallsAfterCancel[0] || ""), confirmCallsAfterCancel[0]);
-    check("キャンセル後もローカルのBlockが残る(state不変)",
-      Array.isArray(afterCancel.blocks) && afterCancel.blocks.some((b) => b.title === LOCAL_MARKER),
-      JSON.stringify((afterCancel.blocks || []).map((b) => b.title)));
-    check("キャンセル後、リモートのBlockは取り込まれていない",
-      !afterCancel.blocks.some((b) => b.title === REMOTE_MARKER), JSON.stringify((afterCancel.blocks || []).map((b) => b.title)));
-    check("キャンセル後、dataModifiedAtは変化しない(state不変)", afterCancel.dataModifiedAt === beforeCancel.dataModifiedAt,
-      `${beforeCancel.dataModifiedAt} -> ${afterCancel.dataModifiedAt}`);
-    check("キャンセル時はバックアップPUTを書かない",
-      !callsAfterCancel.some((c) => c.method === "PUT" && c.url.includes("/contents/taskchute/backups/")),
-      JSON.stringify(callsAfterCancel.map((c) => `${c.method} ${c.url}`)));
+    // ===================== [B-2] personalDataReady=false(ダウンロード待ち中に設定がクリアされる) =====================
+    console.log("[B-2] ダウンロード待ち中にtokenが空になる(personalDataReady=false相当): PUTを試みずに中止する");
+    await seedLocalDiff();
+    {
+      const today = await todayForOpen();
+      const remoteBody = remoteStateJSON("2026-09-05T00:00:00", today, "リモートの日報_v15Btest");
+      await page.evaluate(({ remoteBody }) => {
+        window.__ghCalls = [];
+        window.confirm = () => true;
+        // ダウンロードのGETはこのgateが解放されるまで待つ(Nodeから明示的に解放する)。
+        window.__downloadGate = new Promise((resolve) => { window.__releaseDownload = resolve; });
+        window.fetch = (url, opts = {}) => {
+          const u = String(url); const method = opts.method || "GET";
+          window.__ghCalls.push({ url: u, method });
+          if (u.includes("/contents/taskchute/app-state.json") && method === "GET") {
+            const content = btoa(unescape(encodeURIComponent(remoteBody)));
+            return window.__downloadGate.then(() =>
+              new Response(JSON.stringify({ sha: "sha-remote-1", content, encoding: "base64" }), { status: 200 }));
+          }
+          return Promise.resolve(new Response("{}", { status: 200 }));
+        };
+      }, { remoteBody });
+      // クリック(requireGitHubConfig()がDOMのtoken欄を読むのはこの時点。まだ有効な値のまま)。
+      await page.click('[data-action="load-github"]');
+      await page.waitForTimeout(150);
+      // ダウンロード待ち(gate未解放)の間に、設定画面のtoken欄を空にする
+      // (input/changeハンドラでstate.settings.github.tokenが即座に空へ更新される)。
+      await page.fill('[data-github-field="token"]', "");
+      await page.waitForTimeout(100);
+      // ここでダウンロードを解放し、writeBackupSnapshotBeforeLoadに到達させる。
+      await page.evaluate(() => window.__releaseDownload());
+      await page.waitForTimeout(600);
+      const after = await stateNow();
+      const calls = await page.evaluate(() => window.__ghCalls);
+      check("token空(personalDataReady=false)のときバックアップPUTは試みられない(早期return)",
+        !calls.some((c) => c.method === "PUT" && c.url.includes("/contents/taskchute/backups/")), JSON.stringify(calls));
+      check("personalDataReady=false後もリモートのBlockは取り込まれていない",
+        !after.blocks.some((b) => b.title === REMOTE_MARKER), JSON.stringify((after.blocks || []).map((b) => b.title)));
+      // 後続テストのためtoken欄を戻す
+      await page.fill('[data-github-field="token"]', "test-token-v72");
+      await page.waitForTimeout(200);
+    }
 
-    // ===================== [2] 未push編集あり + confirmでOK =====================
-    console.log("[2] 未push編集があり、confirmでOKするとスナップショットを書いてからリモートを採用する");
-    await installFetchMock({ remoteDataModifiedAt: "2026-07-29T00:00:00" });
-    await page.evaluate(() => { window.__confirmReturn = true; });
-    await page.click('[data-action="load-github"]');
-    await page.waitForTimeout(700);
-    const afterAdopt = await stateNow();
-    const callsAfterAdopt = await page.evaluate(() => window.__ghCalls);
+    // ===================== [B-3] 同日2回のOK読込 → 別ファイルとして両方残る =====================
+    console.log("[B-3] 同日2回OKで読み込むと、控えが別名(preload-HHMMSS)で2件とも残る(restoreBackupの一覧からも拾える)");
+    {
+      // 各回のPUT URLはNode側配列で集計する(window変数はokLoadOnce内のreload/seedLocalDiffで
+      // 消えるため、ページ側の状態には依存しない)。
+      const putUrls = [];
+      async function okLoadOnce(reportsSuffix) {
+        await seedLocalDiff();
+        const today = await todayForOpen();
+        const remoteBody = remoteStateJSON("2026-09-05T00:00:00", today, `リモートの日報_${reportsSuffix}`);
+        await page.evaluate(({ remoteBody }) => {
+          window.confirm = () => true;
+          window.__lastPutUrl = "";
+          window.fetch = (url, opts = {}) => {
+            const u = String(url); const method = opts.method || "GET";
+            if (u.includes("/contents/taskchute/app-state.json") && method === "GET") {
+              const content = btoa(unescape(encodeURIComponent(remoteBody)));
+              return Promise.resolve(new Response(JSON.stringify({ sha: "sha-remote-1", content, encoding: "base64" }), { status: 200 }));
+            }
+            if (u.includes("/contents/taskchute/backups/app-state-") && method === "PUT") {
+              window.__lastPutUrl = u;
+              return Promise.resolve(new Response(JSON.stringify({ content: { sha: "sha-bk" } }), { status: 200 }));
+            }
+            return Promise.resolve(new Response("{}", { status: 200 }));
+          };
+        }, { remoteBody });
+        await page.click('[data-action="load-github"]');
+        await page.waitForTimeout(600);
+        const putUrl = await page.evaluate(() => window.__lastPutUrl);
+        if (putUrl) putUrls.push(putUrl);
+      }
 
-    const snapshotPut = callsAfterAdopt.find((c) => c.method === "PUT" && c.url.includes("/contents/taskchute/backups/app-state-"));
-    check("OK後にバックアップPUTが1件ある(既存の世代バックアップ機構=restoreBackupから復元可能な保存先)",
-      !!snapshotPut, JSON.stringify(callsAfterAdopt.map((c) => `${c.method} ${c.url}`)));
-    const snapshotBody = snapshotPut ? JSON.parse(snapshotPut.body) : null;
-    const snapshotStateText = snapshotBody
-      ? decodeURIComponent(escape(atob(snapshotBody.content)))
-      : "";
-    check("スナップショットの中身は採用直前(=破棄される側)のローカルstate",
-      snapshotStateText.includes(LOCAL_MARKER) && !snapshotStateText.includes(REMOTE_MARKER),
-      snapshotStateText.slice(0, 300));
-    const snapshotPutIndex = callsAfterAdopt.indexOf(snapshotPut);
-    const remoteGetIndex = callsAfterAdopt.findIndex((c) => c.url.includes("/contents/taskchute/app-state.json") && c.method === "GET");
-    check("スナップショットPUTはリモート採用より前に発生する(採用直前の保存)",
-      snapshotPutIndex > remoteGetIndex, `snapshot@${snapshotPutIndex} remoteGet@${remoteGetIndex}`);
-    check("OK後はリモートのBlockが取り込まれている(採用そのものは従来どおり実行される)",
-      Array.isArray(afterAdopt.blocks) && afterAdopt.blocks.some((b) => b.title === REMOTE_MARKER),
-      JSON.stringify((afterAdopt.blocks || []).map((b) => b.title)));
+      await okLoadOnce("A");
+      // 同一秒でのファイル名衝突を避けるため1.2秒あける(writeBackupSnapshotBeforeLoadは
+      // 実時刻のHHMMSSでファイル名を作るため)。
+      await page.waitForTimeout(1200);
+      await okLoadOnce("B");
 
-    // ===================== [3] 未push編集なし =====================
-    console.log("[3] 未push編集がなければconfirmを出さずに従来どおり読み込む");
-    await setLocalState({ withLocalMarker: false, dataModifiedAt: "2026-07-27T00:00:00", lastPushedAt: "2026-07-27T00:00:00" });
-    await installFetchMock({ remoteDataModifiedAt: "2026-07-30T00:00:00" });
-    await page.click('[data-action="load-github"]');
-    await page.waitForTimeout(700);
-    const confirmCallsNoUnpushed = await page.evaluate(() => window.__confirmCalls);
-    check("未push編集なしのときconfirmは呼ばれない", confirmCallsNoUnpushed.length === 0, JSON.stringify(confirmCallsNoUnpushed));
-    const callsNoUnpushed = await page.evaluate(() => window.__ghCalls);
-    check("未push編集なしのときスナップショットPUTも書かない(既存挙動どおり)",
-      !callsNoUnpushed.some((c) => c.method === "PUT" && c.url.includes("/contents/taskchute/backups/")),
-      JSON.stringify(callsNoUnpushed.map((c) => `${c.method} ${c.url}`)));
+      check("2回とも別々のPUT URL(=別ファイル)になる", putUrls.length === 2 && putUrls[0] !== putUrls[1], JSON.stringify(putUrls));
+      check("両方ともpreload-HHMMSSサフィックス付きのファイル名", putUrls.every((u) => /-preload-\d{6}\.json/.test(u)), JSON.stringify(putUrls));
+
+      // restoreBackupの一覧(openBackupListModal→listBackups)からも両方拾えることを確認する
+      // (2回分のPUT URLから、実際にwriteBackupSnapshotBeforeLoadが書いたファイル名を再構成して
+      // ディレクトリ一覧のfixtureにする)。
+      const backupFiles = putUrls.map((u, i) => ({
+        name: decodeURIComponent(u.split("/contents/taskchute/backups/")[1]),
+        sha: `sha-bk-${i}`
+      }));
+      await page.evaluate((backupFiles) => {
+        window.fetch = (url, opts = {}) => {
+          const u = String(url); const method = opts.method || "GET";
+          if (u.match(/\/contents\/taskchute\/backups\?/) && method === "GET") {
+            return Promise.resolve(new Response(JSON.stringify(backupFiles), { status: 200 }));
+          }
+          return Promise.resolve(new Response("{}", { status: 200 }));
+        };
+      }, backupFiles);
+      await openSettingsGroup(page, "settings-sync");
+      await page.click('[data-action="open-backup-list"]');
+      await page.waitForTimeout(500);
+      const rowCount = await page.locator(".backup-row").count();
+      check("バックアップ一覧モーダルに2件表示される(preload控えも一覧から拾える)", rowCount === 2, String(rowCount));
+      await page.evaluate(() => document.querySelector('[data-action="modal-close"]')?.click());
+    }
   } finally {
     await browser.close();
     server.close();
   }
 
+  console.log(failures === 0 ? "\n[PART B] 全件成功" : `\n[PART B] ${failures}件失敗`);
+}
+
+(async () => {
+  await runPartA();
+  await runPartB();
   console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURES`);
   process.exit(failures === 0 ? 0 : 1);
 })().catch((e) => { console.error(e); process.exit(1); });

@@ -263,7 +263,7 @@ configureGithubSync({
   showToast, maintainRecurrences, render, runDailyOpen, saveState,
   requireGitHubConfig, fetchGitHubFileSHA, personalDataReady, personalDataFileConfig,
   gitHubContentsURL, githubHeaders, gitHubErrorMessage, fromBase64, toBase64,
-  sanitizedStateForGitHub, maybeWriteBackupSnapshot, writeBackupSnapshotNow, updateAutoSaveStatus, updateSyncDot,
+  sanitizedStateForGitHub, maybeWriteBackupSnapshot, writeBackupSnapshotBeforeLoad, updateAutoSaveStatus, updateSyncDot,
   renderSyncBanner, clearSyncBannerDismissal, clearPersonalDataAuthError, pruneExpiredSuggestedThemes,
   _startupDataModifiedAt
 });
@@ -492,7 +492,7 @@ registerActions({
   "reset-demo": () => resetDemoData(),
   "push-report": () => pushReportToGitHub(),
   "open-backup-list": () => openBackupListModal(),
-  "restore-backup": ({ target }) => restoreBackup(target.dataset.date),
+  "restore-backup": ({ target }) => restoreBackup(target.dataset.name),
   "run-archive": () => runArchive({ manual: true })
 });
 // v176: app.js分割・段階5-6a(journal系dispatcher分岐の移行・前半)。設計書§7どおり、
@@ -10362,6 +10362,36 @@ async function maybeWriteBackupSnapshot() {
   }
 }
 
+// unit15差し戻し(独立レビュー2026-09-04): loadFromGitHub()の採用直前の控えは、通常の日次世代
+// (app-state-YYYY-MM-DD.json)とは別名(app-state-YYYY-MM-DD-preload-HHMMSS.json)に書く。
+// 同名にすると当日2回目の読込で1回目の控え(破棄したローカル編集の唯一の復元手段)を
+// 上書きしてしまう事故になるため。BACKUP_LAST_DATE_KEYには触れない(通常の1日1回
+// スナップショットを止めないため)。失敗時は例外を投げる(呼び出し元loadFromGitHubが
+// fail-closeで読込そのものを中止する)。personalDataReady=falseならfalseを返す
+// (呼び出し元はこれもfail-close扱いにする)。
+async function writeBackupSnapshotBeforeLoad() {
+  const raw = state.settings.github || {};
+  if (!personalDataReady(raw)) return false;
+  const cfg = personalDataConn(raw);  // v72: owner/repoは個人データリポジトリのものを使う
+  const today = todayISO();
+  const now = new Date();
+  const hhmmss = [now.getHours(), now.getMinutes(), now.getSeconds()]
+    .map((n) => String(n).padStart(2, "0")).join("");
+  const name = `app-state-${today}-preload-${hhmmss}.json`;
+  const url = gitHubBackupURL(cfg, name);
+  const put = await fetch(url, {
+    method: "PUT",
+    headers: githubHeaders(cfg.token),
+    body: JSON.stringify({
+      message: `backup: pre-load snapshot ${today} ${hhmmss}`,
+      content: toBase64(JSON.stringify(sanitizedStateForGitHub(), null, 2)),
+      branch: cfg.branch
+    })
+  });
+  if (!put.ok) throw new Error(await gitHubErrorMessage(put));
+  return true;
+}
+
 async function listBackups(cfg) {
   const resp = await fetch(`${gitHubBackupURL(cfg)}?ref=${encodeURIComponent(cfg.branch)}`, {
     headers: githubHeaders(cfg.token)
@@ -10369,13 +10399,16 @@ async function listBackups(cfg) {
   if (resp.status === 404) return [];  // まだバックアップなし
   if (!resp.ok) throw new Error(await gitHubErrorMessage(resp));
   const items = await resp.json();
+  // unit15差し戻し: 通常の日次世代(app-state-YYYY-MM-DD.json)に加え、loadFromGitHub採用直前の
+  // 控え(app-state-YYYY-MM-DD-preload-HHMMSS.json、writeBackupSnapshotBeforeLoad参照)も
+  // restoreBackupの一覧に拾えるようにする。preloadTimeがあれば読込前の控えとして表示を分ける。
   return (Array.isArray(items) ? items : [])
     .map((it) => {
-      const m = String(it.name || "").match(/^app-state-(\d{4}-\d{2}-\d{2})\.json$/);
-      return m ? { date: m[1], name: it.name, sha: it.sha || "" } : null;
+      const m = String(it.name || "").match(/^app-state-(\d{4}-\d{2}-\d{2})(?:-preload-(\d{6}))?\.json$/);
+      return m ? { date: m[1], name: it.name, sha: it.sha || "", preloadTime: m[2] || null } : null;
     })
     .filter(Boolean)
-    .sort((a, b) => b.date.localeCompare(a.date));  // 新しい順
+    .sort((a, b) => b.name.localeCompare(a.name));  // 新しい順(同日はpreloadの時刻順も安定させる)
 }
 
 async function pruneOldBackups(cfg, today) {
@@ -10417,8 +10450,8 @@ function buildBackupListModal(backups) {
         </div>
         ${backups.map((b) => `
           <div class="backup-row">
-            <span class="backup-date">📦 ${b.date}</span>
-            <button class="btn" data-action="restore-backup" data-date="${b.date}">この時点に復元</button>
+            <span class="backup-date">📦 ${b.date}${b.preloadTime ? `(読込前の控え ${b.preloadTime.slice(0, 2)}:${b.preloadTime.slice(2, 4)}:${b.preloadTime.slice(4, 6)})` : ""}</span>
+            <button class="btn" data-action="restore-backup" data-name="${b.name}">この時点に復元</button>
           </div>`).join("")}
       </div>
       <div class="modal-footer">
@@ -10427,14 +10460,18 @@ function buildBackupListModal(backups) {
     </div>`;
 }
 
-async function restoreBackup(date) {
+async function restoreBackup(name) {
+  // unit15差し戻し: 引数を「日付」から「ファイル名」へ変更(preload控えはファイル名に
+  // -preload-HHMMSSが付くため、日付から機械的に再構成できない)。表示用の日付ラベルは
+  // ファイル名先頭から抽出する。
+  const dateLabel = (String(name).match(/^app-state-(\d{4}-\d{2}-\d{2})/) || [])[1] || name;
   const ok = window.confirm(
-    `${date} 時点のバックアップに復元しますか?\n\n現在のデータは置き換わり、次回の保存/自動同期で GitHub にも反映されます。`
+    `${dateLabel} 時点のバックアップに復元しますか?\n\n現在のデータは置き換わり、次回の保存/自動同期で GitHub にも反映されます。`
   );
   if (!ok) return;
   try {
     const cfg = requireGitHubConfig();
-    const resp = await fetch(`${gitHubBackupURL(cfg, `app-state-${date}.json`)}?ref=${encodeURIComponent(cfg.branch)}`, {
+    const resp = await fetch(`${gitHubBackupURL(cfg, name)}?ref=${encodeURIComponent(cfg.branch)}`, {
       headers: githubHeaders(cfg.token)
     });
     if (!resp.ok) throw new Error(await gitHubErrorMessage(resp));
@@ -10454,7 +10491,7 @@ async function restoreBackup(date) {
     closeModal();
     // saveState = dataModifiedAt を今に更新。「復元」をこの端末発の最新変更として扱うことで、
     // 直後の自動 pull がリモート(誤同期後の状態)で復元を黙って上書きするのを防ぐ。
-    saveAndRender(`📦 ${date} 時点に復元しました。内容を確認してください`);
+    saveAndRender(`📦 ${dateLabel} 時点に復元しました。内容を確認してください`);
   } catch (error) {
     showToast(`復元失敗: ${error.message}`);
   }

@@ -606,12 +606,12 @@
       "domains": [
         "sync-storage"
       ],
-      "assertionSignals": 16,
-      "assertionHash": "af1b62ef9e2e1cbf",
-      "sourceHash": "d3a619b157e13bc5",
+      "assertionSignals": 29,
+      "assertionHash": "11ebcbbc073beab4",
+      "sourceHash": "57904e017963c05c",
       "waits": {
-        "fixedCount": 5,
-        "numericMilliseconds": 2500,
+        "fixedCount": 10,
+        "numericMilliseconds": 4550,
         "unresolvedCount": 0
       },
       "sideEffects": {

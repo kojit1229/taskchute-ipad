@@ -64,7 +64,7 @@ let RECURRENCE_KEEP_PAST_DAYS, RECURRENCE_FUTURE_DAYS, SWIPE_TRIAGE_LOG_MAX;
 let showToast, maintainRecurrences, render, runDailyOpen, saveState;
 let requireGitHubConfig, fetchGitHubFileSHA, personalDataReady, personalDataFileConfig;
 let gitHubContentsURL, githubHeaders, gitHubErrorMessage, fromBase64, toBase64;
-let sanitizedStateForGitHub, maybeWriteBackupSnapshot, writeBackupSnapshotNow, updateAutoSaveStatus, updateSyncDot;
+let sanitizedStateForGitHub, maybeWriteBackupSnapshot, writeBackupSnapshotBeforeLoad, updateAutoSaveStatus, updateSyncDot;
 let renderSyncBanner, clearSyncBannerDismissal, clearPersonalDataAuthError, pruneExpiredSuggestedThemes;
 let _startupDataModifiedAt;
 
@@ -75,7 +75,7 @@ function configureGithubSync(deps) {
     showToast, maintainRecurrences, render, runDailyOpen, saveState,
     requireGitHubConfig, fetchGitHubFileSHA, personalDataReady, personalDataFileConfig,
     gitHubContentsURL, githubHeaders, gitHubErrorMessage, fromBase64, toBase64,
-    sanitizedStateForGitHub, maybeWriteBackupSnapshot, writeBackupSnapshotNow, updateAutoSaveStatus, updateSyncDot,
+    sanitizedStateForGitHub, maybeWriteBackupSnapshot, writeBackupSnapshotBeforeLoad, updateAutoSaveStatus, updateSyncDot,
     renderSyncBanner, clearSyncBannerDismissal, clearPersonalDataAuthError, pruneExpiredSuggestedThemes,
     _startupDataModifiedAt
   } = deps);
@@ -1088,27 +1088,34 @@ async function loadFromGitHub() {
     // 合流させる(採用でローカル限定の記録を消さないため)。
     // tieWinner="remote": この関数は常にremoteを採用する経路(applySyncMergeToRemote)。
     const remoteNorm = normalizedRemoteCopy(text);
-    // unit15(A2-H4/D-K6): この端末に未pushの変更(dataModifiedAt !== lastPushedAt)があるまま
-    // リモートを無確認で採用すると、その変更が無警告で破棄される。破棄されるコア差分の件数
-    // (SYNC_CORE_COMPARE_KEYS基準)と最終編集時刻をconfirmで示し、キャンセルならstateを
-    // 一切変更せず中断する(新しいUIは作らない。restoreBackupと同じwindow.confirmの流儀)。
-    const hasUnpushed = (state.dataModifiedAt || "") !== (state.settings.lastPushedAt || "");
-    if (hasUnpushed) {
-      const diffCount = remoteNorm
-        ? SYNC_CORE_COMPARE_KEYS.filter((k) =>
-            JSON.stringify(getByPath(remoteNorm, k) ?? null) !== JSON.stringify(getByPath(state, k) ?? null)
-          ).length
-        : 0;
+    // unit15差し戻し(独立レビュー2026-09-04、A2-M11の偽警告根治とセット):
+    // 「未pushフラグ」(dataModifiedAt !== lastPushedAt)だけでconfirmを出すと、実際には
+    // コア(SYNC_CORE_COMPARE_KEYS)が一致しているのに毎回警告する偽陽性が起きる
+    // (旧実装はloadFromGitHubがlastPushedAtを更新しなかったため特に起きやすかった。(d)参照)。
+    // ここでは実際に破棄されるコア差分の件数(diffCount)を先に数え、0件なら確認もスナップショットも
+    // 出さず従来どおり読み込む。
+    const diffCount = remoteNorm
+      ? SYNC_CORE_COMPARE_KEYS.filter((k) =>
+          JSON.stringify(getByPath(remoteNorm, k) ?? null) !== JSON.stringify(getByPath(state, k) ?? null)
+        ).length
+      : 0;
+    if (diffCount > 0) {
       const lastEdited = state.dataModifiedAt || "不明";
       const ok = window.confirm(
         `この端末には未pushの変更があります(最終編集: ${lastEdited}、GitHub側と異なるコア項目 ${diffCount}件)。\n` +
         `GitHubの内容で読み込むと、これらのローカル変更は破棄されます。読み込みますか?`
       );
       if (!ok) { showToast("読み込みを中止しました(ローカルの変更は保持されています)"); return; }
-      // 採用直前の自動スナップショット(既存の世代バックアップ機構=backups/app-state-YYYY-MM-DD.json
-      // を強制発火。1日1回ガードは経由しない。restoreBackupからこの時点へ復元できる)。
-      try { await writeBackupSnapshotNow(); }
+      // 採用直前の自動スナップショット(既存の世代バックアップ機構=backups/を再利用。ファイル名は
+      // 通常の日次世代とは別名にして1回目の控えを上書きしない。writeBackupSnapshotBeforeLoad参照)。
+      // fail-close: 控えを保存できなければ採用せず読込そのものを中止する(無音のfail-openにしない)。
+      let snapshotOk = false;
+      try { snapshotOk = await writeBackupSnapshotBeforeLoad(); }
       catch (error) { console.warn("読込前スナップショットに失敗:", error.message); }
+      if (!snapshotOk) {
+        showToast("控えを保存できなかったため読込を中止しました(ローカルの変更は保持されています)");
+        return;
+      }
     }
     const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm, "remote") : null;
     let addedLocal = false;
@@ -1126,6 +1133,13 @@ async function loadFromGitHub() {
     }
     setState(adopted);
     state.settings.github = { ...rawSettings };
+    // unit15差し戻し(d): runAutoSyncPullの自動採用経路と同じパターンで、採用した内容の
+    // dataModifiedAtにlastPushedAtを揃える。これをしないと採用直後もhasUnpushed相当の状態が
+    // 残り続け、実際にはコアが一致しているのに次の読込でも偽の「未push警告」が出る
+    // (独立レビュー指摘のA2-M11偽警告の根治)。addedLocal(ローカル限定データの合流)がある
+    // 場合は直後にdataModifiedAtがnowへ進むため、その分だけは正しく「未push」のまま残る
+    // (合流分を次回pushで届けるため。runAutoSyncPullと同じ考え方、下記参照)。
+    state.settings.lastPushedAt = adopted.dataModifiedAt || "";
     maintainRecurrences({ purge: true });
     if (addedLocal) {
       // 合流で内容がリモートの元スナップショットから乖離した場合だけ例外的にdataModifiedAtを
