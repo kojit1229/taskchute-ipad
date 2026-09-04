@@ -396,9 +396,9 @@
       "domains": [
         "legacy-crosscutting"
       ],
-      "assertionSignals": 9,
-      "assertionHash": "945c48d6b919e6a4",
-      "sourceHash": "2465f2fd11b5561b",
+      "assertionSignals": 19,
+      "assertionHash": "34be891c4367dfa9",
+      "sourceHash": "c002a1dbb2c9e951",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -407,7 +407,7 @@
       "sideEffects": {
         "browser": false,
         "server": false,
-        "fileWrite": false,
+        "fileWrite": true,
         "networkMock": false,
         "clock": false
       }

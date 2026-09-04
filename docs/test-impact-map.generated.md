@@ -19,7 +19,7 @@
 | merge-core.test.js | node | full | sync-storage | 23 | 0 | 0 |
 | normalize-null-defense.test.js | e2e | full | sync-storage | 20 | 0 | 0 |
 | recurrence-core.test.js | node | full | sync-storage, planning-execution | 58 | 0 | 0 |
-| release-gate.test.js | node | full | legacy-crosscutting | 9 | 0 | 0 |
+| release-gate.test.js | node | full | legacy-crosscutting | 19 | 0 | 0 |
 | release-record.test.js | node | full | legacy-crosscutting | 11 | 0 | 0 |
 | reset-demo-confirm.test.js | node | full | ui-responsive | 9 | 0 | 0 |
 | run-all-options.test.js | node | full | legacy-crosscutting | 21 | 0 | 0 |

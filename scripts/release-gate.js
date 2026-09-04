@@ -5,6 +5,7 @@ const path = require("path");
 const fs = require("fs");
 const { collectRepositoryImpact, validateConfig } = require("./impact-regression");
 const { getCoreSuites } = require("../tests/core-suites");
+const { checkCacheNameIncrement } = require("./cache-name-gate");
 
 const repoRoot = path.resolve(__dirname, "..");
 const args = process.argv.slice(2);
@@ -146,6 +147,18 @@ console.log(
     ? `PASS: app-shell-precache (src/ ${appShellCheck.srcFiles.length}件すべてAPP_SHELLに列挙済み)`
     : "PASS: app-shell-precache (src/ 未使用のため自明にpass)"
 );
+
+console.log("\n=== cache-name-increment ===");
+const cacheNameCheck = checkCacheNameIncrement({
+  repoRoot,
+  manifestPath: manifest,
+  hasRuntimeDiff: impact.files.length > 0
+});
+if (!cacheNameCheck.ok) {
+  console.error(`FAIL: ${cacheNameCheck.message}`);
+  process.exit(1);
+}
+console.log(`PASS: ${cacheNameCheck.message}`);
 
 for (const step of commands) {
   console.log(`\n=== ${step.label} ===`);

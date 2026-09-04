@@ -2,7 +2,10 @@
 
 const assert = require("assert");
 const { spawnSync } = require("child_process");
+const fs = require("fs");
+const os = require("os");
 const path = require("path");
+const { checkCacheNameIncrement } = require("../scripts/cache-name-gate");
 
 const root = path.resolve(__dirname, "..");
 const gate = path.join(root, "scripts", "release-gate.js");
@@ -34,3 +37,89 @@ assert(plan.stdout.includes("impact-selection"), "release gateが差分影響選
 assert(plan.stdout.includes("related+impact-regression"), "関連suiteと自動回帰束を一本化する");
 
 console.log("PASS: release gate argument/schema guards");
+
+// --- unit6: cache-name-increment（sw.jsのCACHE_NAME増分）フィクスチャテスト ---
+// 一時ディレクトリにミニgitリポジトリを作り、sw.js/releases/vN.jsonのコピーだけを置いて
+// checkCacheNameIncrement()を直接呼ぶ。git HEADが「直前リリース」の役を果たす。
+function git(cwd, ...args) {
+  const result = spawnSync("git", args, { cwd, encoding: "utf8" });
+  assert.strictEqual(result.status, 0, `git ${args.join(" ")} failed: ${result.stderr}`);
+  return result.stdout;
+}
+
+function writeSw(dir, version) {
+  fs.writeFileSync(path.join(dir, "sw.js"), `const CACHE_NAME = "taskchute-journal-pwa-v${version}";\n`);
+}
+
+function writeRelease(dir, version) {
+  fs.mkdirSync(path.join(dir, "releases"), { recursive: true });
+  fs.writeFileSync(path.join(dir, "releases", `v${version}.json`), JSON.stringify({ version }));
+}
+
+function createFixtureRepo(initialVersion) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cache-name-gate-"));
+  git(dir, "init", "-q");
+  git(dir, "config", "user.email", "test@example.com");
+  git(dir, "config", "user.name", "test");
+  writeSw(dir, initialVersion);
+  writeRelease(dir, initialVersion);
+  git(dir, "add", "-A");
+  git(dir, "commit", "-q", "-m", `v${initialVersion}`);
+  return dir;
+}
+
+// (a) 一致+1でPASS
+{
+  const dir = createFixtureRepo(1);
+  writeSw(dir, 2);
+  writeRelease(dir, 2);
+  const result = checkCacheNameIncrement({ repoRoot: dir, manifestPath: `releases/v2.json`, hasRuntimeDiff: true });
+  assert.strictEqual(result.ok, true, `(a) +1でPASSするはず: ${result.message}`);
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+// (b) CACHE_NAME据え置きでFAIL（実行差分ありなのに増分していない）
+{
+  const dir = createFixtureRepo(1);
+  // sw.js/release記録は据え置き（N===Mは保ったまま）。実行差分だけ発生している想定。
+  const result = checkCacheNameIncrement({ repoRoot: dir, manifestPath: `releases/v1.json`, hasRuntimeDiff: true });
+  assert.strictEqual(result.ok, false, "(b) 据え置きはFAILするはず");
+  assert(result.message.includes("増分していません"), `(b) 増分不足メッセージのはず: ${result.message}`);
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+// (c) +2飛びの扱い: 「>直前値」であれば増分要件自体は満たすためPASS（警告メッセージ付き）とした。
+// 根拠: area-4-ios-sw-css.md 修正1が要求するのは「M > M0」(厳密+1ではない)。
+// CLAUDE.md/SKILLの「必ずv+1」は運用上の推奨であり、複数版をまとめてbumpするリリースを
+// 誤ってFAILさせない方が実害が小さいと判断した（過検知よりは警告に留める）。
+{
+  const dir = createFixtureRepo(1);
+  writeSw(dir, 3);
+  writeRelease(dir, 3);
+  const result = checkCacheNameIncrement({ repoRoot: dir, manifestPath: `releases/v3.json`, hasRuntimeDiff: true });
+  assert.strictEqual(result.ok, true, `(c) +2飛びはPASS(警告)扱いのはず: ${result.message}`);
+  assert(result.message.includes("+1超"), `(c) 飛び幅の注記が出るはず: ${result.message}`);
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+// (d) release記録のversionとCACHE_NAMEが不一致ならFAIL（実行差分がある通常のリリース想定）
+{
+  const dir = createFixtureRepo(1);
+  writeSw(dir, 2);
+  writeRelease(dir, 5);
+  const result = checkCacheNameIncrement({ repoRoot: dir, manifestPath: `releases/v5.json`, hasRuntimeDiff: true });
+  assert.strictEqual(result.ok, false, "(d) version不一致はFAILするはず");
+  assert(result.message.includes("不一致"), `(d) 不一致メッセージのはず: ${result.message}`);
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+// (3) 実行差分なしならCACHE_NAME不問でPASS（app.js等に変更が無ければ増分チェック自体をskip）
+{
+  const dir = createFixtureRepo(1);
+  const result = checkCacheNameIncrement({ repoRoot: dir, manifestPath: `releases/v1.json`, hasRuntimeDiff: false });
+  assert.strictEqual(result.ok, true, `(3) 差分なしはPASSするはず: ${result.message}`);
+  assert(result.message.includes("不問"), `(3) 不問メッセージのはず: ${result.message}`);
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+console.log("PASS: cache-name-increment fixtures (a)+1 / (b)据え置き / (c)+2飛び / (d)version不一致 / (3)差分なし");
