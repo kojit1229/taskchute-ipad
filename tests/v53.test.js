@@ -132,18 +132,30 @@ const b64ToObj = (b64) => JSON.parse(Buffer.from(b64, "base64").toString("utf8")
   check("前年の日報もPUTされる", inAny((a) => Object.values(a.reports || {}).includes("# 大昔の日報400")));
   const after = await page.evaluate(({ KEY }) => {
     const s = JSON.parse(localStorage.getItem(KEY));
+    const oldBlock = s.blocks.find((b) => b.id === "old-block");
+    const midBlock = s.blocks.find((b) => b.id === "mid-block");
     return {
       reports: Object.values(s.reports || {}),
       journalsOld: Object.values(s.journals || {}).filter((t) => String(t).includes("古いジャーナル100")).length,
-      hasOldBlock: s.blocks.some((b) => b.id === "old-block"),
-      hasMidBlock: s.blocks.some((b) => b.id === "mid-block"),
+      oldBlock,
+      hasMidBlock: !!midBlock && midBlock.deleted !== true,
+      archivedDates: s.archivedDates || [],
       last: s.settings.lastArchivedAt
     };
   }, { KEY });
   check("古い日報が消え、最近の日報は残る", !after.reports.includes("# 古い日報100") && after.reports.includes("# 最近の日報10"));
   check("古いジャーナルが消える", after.journalsOld === 0);
-  check("180日超Blockは消え、100日Blockは残る", !after.hasOldBlock && after.hasMidBlock);
+  // 単位16: 180日超のBlockは物理削除せず、id/date/deletedだけ残るtombstoneへ縮める
+  // (本文相当のフィールドは落として同期での復活を防ぐ。100日Blockは対象外でそのまま残る)。
+  check("180日超Blockはtombstone化(id/dateは残り本文は消える)",
+    !!after.oldBlock && after.oldBlock.deleted === true
+    && after.oldBlock.date && !("title" in after.oldBlock),
+    JSON.stringify(after.oldBlock));
+  check("100日Blockはtombstone化されず残る", after.hasMidBlock);
   check("lastArchivedAt が記録される", Boolean(after.last));
+  check("archivedDates に退避した日付が記録される",
+    after.archivedDates.includes(daysAgo(100)) && after.archivedDates.length > 0,
+    JSON.stringify(after.archivedDates));
 
   // マージ(既存sha)と失敗時の安全性
   await page.evaluate(({ KEY, oldDate }) => {

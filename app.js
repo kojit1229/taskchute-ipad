@@ -2180,6 +2180,13 @@ function normalizeState(value) {
     && !_aiStepSettledIds.has(entry.requestId));
   value.feedback ||= {};
   value.reports ||= {};
+  // 単位16: runArchiveが退避した日付の集合(文字列配列、常にソート済み)。同期マージ側
+  // (computeSyncMerge)がこの集合に含まれる日付キーをjournals/feedback/reportsから除外し、
+  // アーカイブ済み端末と未アーカイブ端末が同期しても古いデータが復活しないようにする。
+  if (!Array.isArray(value.archivedDates)) value.archivedDates = [];
+  value.archivedDates = Array.from(new Set(
+    value.archivedDates.filter((d) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d))
+  )).sort();
   // v56: GitHub に push 済みの AIフィードバック_*.md の日付を記録する集合。
   //      起動時の optional fetch を「存在が判っている日付」に限定し、404ノイズを出さない。
   if (!Array.isArray(value.feedbackFiles)) value.feedbackFiles = [];
@@ -10621,13 +10628,28 @@ async function runArchive({ manual = false } = {}) {
       if (!put.ok) throw new Error(await gitHubErrorMessage(put));
     }
     // ここまで到達 = 全ての年の書き込みに成功。初めてローカルから削除する。
+    // 単位16: 日付キー(reports/feedback/journals)はここでローカルから消してよいが、
+    // 同期マージ(mergeDateStringMap)は片側にしか無いキーを無条件で合流させるため、
+    // 「この日付は退避済み」を state.archivedDates(和集合マージ対象)に記録し、
+    // マージ時にこの集合に含まれる日付を除外してもらう(古いデータの復活を防ぐ)。
     let removed = 0;
-    for (const d of Object.keys(state.reports || {})) if (d < textCut) { delete state.reports[d]; removed++; }
-    for (const d of Object.keys(state.feedback || {})) if (d < textCut) { delete state.feedback[d]; removed++; }
-    for (const d of Object.keys(state.journals || {})) if (d < textCut) { delete state.journals[d]; removed++; }
-    const before = state.blocks.length;
-    state.blocks = state.blocks.filter((b) => !(b.date && b.date < blockCut));  // 削除済み(tombstone)も古ければ落とす
-    removed += before - state.blocks.length;
+    const archivedToday = new Set();
+    for (const d of Object.keys(state.reports || {})) if (d < textCut) { delete state.reports[d]; archivedToday.add(d); removed++; }
+    for (const d of Object.keys(state.feedback || {})) if (d < textCut) { delete state.feedback[d]; archivedToday.add(d); removed++; }
+    for (const d of Object.keys(state.journals || {})) if (d < textCut) { delete state.journals[d]; archivedToday.add(d); removed++; }
+    if (archivedToday.size) {
+      state.archivedDates = Array.from(new Set([...(state.archivedDates || []), ...archivedToday])).sort();
+    }
+    // Blockは物理削除しない(tombstone化)。既存のdeleted:trueの意味論をそのまま使い、
+    // 本文相当のフィールドは落として{id, date, deleted:true, archivedAt, updatedAt}まで縮める
+    // (中身はarchive/archive-<年>.jsonへ既に退避済みなのでローカルに残す必要がない)。
+    // 既にtombstone化済み(deleted:true)のBlockは触らない(GCは本単位のスコープ外)。
+    const archivedAt = nowDateTime();
+    state.blocks = state.blocks.map((b) => {
+      if (b.deleted || !b.date || !(b.date < blockCut)) return b;
+      removed++;
+      return { id: b.id, date: b.date, deleted: true, archivedAt, updatedAt: archivedAt };
+    });
     state.settings.lastArchivedAt = nowDateTime();
     _archiveCache = null;  // 検索キャッシュは次回読み直し
     saveState();

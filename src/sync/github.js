@@ -501,12 +501,23 @@ function syncCoreEqual(remoteNorm) {
 // 日付キー文字列マップの和集合。競合時の優先順: ①未記入テンプレでない方(pristineOf指定時。
 // ensureJournalが当日分のテンプレを自動生成するため、「テンプレ vs 書かれた本文」の競合は
 // 日常的に発生する) → ②tsOf(side, date)の新しい方 → ③長い方。
-function mergeDateStringMap(localMap, remoteMap, tsOf, pristineOf) {
+// 単位16: archivedSet(Set<string>、mergeStringIdSetで求めたarchivedDatesの和集合)を渡すと、
+// その日付キーは無条件で除外する(runArchiveが退避済みの日付。片側にしか無いキーが
+// 無条件で合流する従来の和集合仕様のままだと、アーカイブ済み端末と未アーカイブ端末が
+// 同期するたびに削除済みデータが復活してしまう)。
+function mergeDateStringMap(localMap, remoteMap, tsOf, pristineOf, archivedSet) {
   const out = {};
   const winners = {};
   let changedVsLocal = false, changedVsRemote = false;
   const dates = new Set([...Object.keys(localMap || {}), ...Object.keys(remoteMap || {})]);
   for (const d of dates) {
+    if (archivedSet && archivedSet.has(d)) {
+      // アーカイブ済み日付は結果から除外する。どちらかにまだ残っていれば「変化あり」として
+      // 扱い、次のsaveStateでその端末からも剪定される(archivedDatesが伝播した時点で収束する)。
+      if (localMap && Object.prototype.hasOwnProperty.call(localMap, d)) changedVsLocal = true;
+      if (remoteMap && Object.prototype.hasOwnProperty.call(remoteMap, d)) changedVsRemote = true;
+      continue;
+    }
     const l = (localMap || {})[d];
     const r = (remoteMap || {})[d];
     let win;
@@ -749,6 +760,11 @@ function reconcileSingletonDuplicates(mergedTasks, mergedProjects, mergedBlocks)
 // 同値のレガシーデータで採用ブランチと逆側の内容が紛れ込む)。
 function computeSyncMerge(remoteNorm, tieWinner) {
   try {
+    // 単位16: archivedDates自体は文字列集合の和集合(mergeStringIdSetを再利用)。この和集合が
+    // 「退避済み日付」の全体像になるため、journals/feedback(reportsを合流させる際も同様)の
+    // 日付キーマージより先に計算し、Setとして各mergeDateStringMap呼び出しへ渡す。
+    const archivedDates = mergeStringIdSet(state.archivedDates, remoteNorm.archivedDates);
+    const archivedDateSet = new Set(archivedDates);
     const jt = (side, d) => side === "L"
       ? ((state.journalMeta[d] || {}).textUpdatedAt || "")
       : (((remoteNorm.journalMeta || {})[d] || {}).textUpdatedAt || "");
@@ -759,9 +775,9 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       const t = String(text || "").trim();
       return t === "" || t === journalTemplateTextFor(tplL, d) || t === journalTemplateTextFor(tplR, d);
     };
-    const journals = mergeDateStringMap(state.journals, remoteNorm.journals, jt, journalPristine);
+    const journals = mergeDateStringMap(state.journals, remoteNorm.journals, jt, journalPristine, archivedDateSet);
     const journalMeta = mergeJournalMetaByWinners(state.journalMeta, remoteNorm.journalMeta, journals.winners);
-    const feedback = mergeDateStringMap(state.feedback, remoteNorm.feedback, () => "");
+    const feedback = mergeDateStringMap(state.feedback, remoteNorm.feedback, () => "", null, archivedDateSet);
     const conditionLogs = mergeConditionLogMaps(state.condition.logs, (remoteNorm.condition || {}).logs);
     const sleepLogs = mergeSleepLogMaps(state.sleep.logs, (remoteNorm.sleep || {}).logs);
     const morningEnergyLog = mergeMorningEnergyLogs(state.settings.morningEnergyLog, (remoteNorm.settings || {}).morningEnergyLog);
@@ -838,7 +854,9 @@ function computeSyncMerge(remoteNorm, tieWinner) {
     //     → aiStepProcessedIds等と同じmergeStringIdSet
     //   zeroThinking.groups: id+createdAtを持つ小テーマ → mergeById(entries/suggestedThemes
     //     とは別のmergeZeroThinkingListsの外で個別に計算し、値だけzeroThinkingGroupsとして返す)
-    const reports = mergeDateStringMap(state.reports, remoteNorm.reports, () => "");
+    // 単位16着地時の手直し: reportsもjournals/feedbackと同じくarchivedDateSetを渡し、
+    // 退避済み日付の日報が復活しないようにする。
+    const reports = mergeDateStringMap(state.reports, remoteNorm.reports, () => "", null, archivedDateSet);
     const chainRuns = mergeById(state.chainRuns, remoteNorm.chainRuns);
     const zeroSecThemeLog = mergeAppendOnlyLogByKey(
       state.zeroSecThemeLog, remoteNorm.zeroSecThemeLog,
@@ -883,6 +901,8 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(aiReportReadIds, state.aiReportReadIds || []) ||
       !sameArrayByReference(aiStepPendingRequests, state.aiStepPendingRequests) ||
       (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, state.zeroThinking) : false) ||
+      // 単位16: runArchive由来のarchivedDates(退避済み日付の和集合)
+      !sameArrayByReference(archivedDates, state.archivedDates || []) ||
       // unit14b追加分
       reports.changedVsLocal ||
       !sameArrayByReference(chainRuns, state.chainRuns || []) ||
@@ -918,6 +938,8 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(aiReportReadIds, remoteNorm.aiReportReadIds || []) ||
       !sameArrayByReference(aiStepPendingRequests, remoteNorm.aiStepPendingRequests || []) ||
       (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, remoteNorm.zeroThinking) : false) ||
+      // 単位16: runArchive由来のarchivedDates(退避済み日付の和集合)
+      !sameArrayByReference(archivedDates, remoteNorm.archivedDates || []) ||
       // unit14b追加分
       reports.changedVsRemote ||
       !sameArrayByReference(chainRuns, remoteNorm.chainRuns || []) ||
@@ -930,6 +952,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
     return {
       values: {
         journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans, writeMeditations, tasks, projects, storeVisits, tracks, trackMeasurements, weeklyCommitments, swipeTriageLog, gardenLog, coachMeals, aiStepProcessedIds, aiStepDismissedIds, aiReportReadIds, aiStepPendingRequests,
+        archivedDates,  // 単位16
         // unit14b追加分
         reports: reports.map, chainRuns, zeroSecThemeLog, migrationRitualLog, feedbackFiles, feedbackIngestedDates, aiWorkProcessedIds, zeroThinkingGroups
       },
@@ -971,6 +994,7 @@ function applySyncMergeToLocal(merged) {
   state.aiStepDismissedIds = v.aiStepDismissedIds;  // v197
   state.aiReportReadIds = v.aiReportReadIds;  // v283
   state.aiStepPendingRequests = v.aiStepPendingRequests;  // v197
+  state.archivedDates = v.archivedDates;  // 単位16
   if (v.zeroThinking) {
     state.zeroThinking.entries = v.zeroThinking.entries;
     state.zeroThinking.suggestedThemes = pruneExpiredSuggestedThemes(v.zeroThinking.suggestedThemes);
@@ -1018,6 +1042,7 @@ function applySyncMergeToRemote(merged, remoteNorm) {
   remoteNorm.aiStepDismissedIds = v.aiStepDismissedIds;  // v197
   remoteNorm.aiReportReadIds = v.aiReportReadIds;  // v283
   remoteNorm.aiStepPendingRequests = v.aiStepPendingRequests;  // v197
+  remoteNorm.archivedDates = v.archivedDates;  // 単位16
   if (v.zeroThinking) {
     remoteNorm.zeroThinking.entries = v.zeroThinking.entries;
     remoteNorm.zeroThinking.suggestedThemes = pruneExpiredSuggestedThemes(v.zeroThinking.suggestedThemes);
