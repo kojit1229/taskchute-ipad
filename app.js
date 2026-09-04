@@ -263,7 +263,7 @@ configureGithubSync({
   showToast, maintainRecurrences, render, runDailyOpen, saveState,
   requireGitHubConfig, fetchGitHubFileSHA, personalDataReady, personalDataFileConfig,
   gitHubContentsURL, githubHeaders, gitHubErrorMessage, fromBase64, toBase64,
-  sanitizedStateForGitHub, maybeWriteBackupSnapshot, updateAutoSaveStatus, updateSyncDot,
+  sanitizedStateForGitHub, maybeWriteBackupSnapshot, writeBackupSnapshotNow, updateAutoSaveStatus, updateSyncDot,
   renderSyncBanner, clearSyncBannerDismissal, clearPersonalDataAuthError, pruneExpiredSuggestedThemes,
   _startupDataModifiedAt
 });
@@ -10316,36 +10316,47 @@ function gitHubBackupURL(cfg, name) {
   return name ? `${base}/${encodeURIComponent(name)}` : base;
 }
 
+// unit15(A2-H4/D-K6): maybeWriteBackupSnapshotの実PUT処理部分を切り出したもの。1日1回ガードを
+// 経由せず常に今日の世代スナップショットを(強制的に)書く。loadFromGitHub()が採用直前に
+// 呼ぶ用途(既存の世代バックアップ機構をそのまま再利用し、restoreBackupから復元可能にする)。
+async function writeBackupSnapshotNow() {
+  const raw = state.settings.github || {};
+  if (!personalDataReady(raw)) return false;
+  const cfg = personalDataConn(raw);  // v72: owner/repoは個人データリポジトリのものを使う
+  const today = todayISO();
+  const name = `app-state-${today}.json`;
+  const url = gitHubBackupURL(cfg, name);
+  // 同日ファイルが既にあれば sha を取得して上書き(別端末が先に書いた場合・当日2回目の強制書きなど)
+  let sha = "";
+  const head = await fetch(`${url}?ref=${encodeURIComponent(cfg.branch)}`, { headers: githubHeaders(cfg.token) });
+  if (head.ok) {
+    try { sha = (await head.json()).sha || ""; } catch { /* sha 不明なら新規作成として試す */ }
+  }
+  const put = await fetch(url, {
+    method: "PUT",
+    headers: githubHeaders(cfg.token),
+    body: JSON.stringify({
+      message: `backup: app-state snapshot ${today}`,
+      content: toBase64(JSON.stringify(sanitizedStateForGitHub(), null, 2)),
+      branch: cfg.branch,
+      ...(sha ? { sha } : {})
+    })
+  });
+  if (!put.ok) throw new Error(await gitHubErrorMessage(put));
+  try { localStorage.setItem(BACKUP_LAST_DATE_KEY, today); } catch { /* 記録できなくても致命的ではない */ }
+  pruneOldBackups(cfg, today);  // await しない(整理の失敗は本体に影響させない)
+  return true;
+}
+
 async function maybeWriteBackupSnapshot() {
   const raw = state.settings.github || {};
   if (!personalDataReady(raw)) return;
-  const cfg = personalDataConn(raw);  // v72: owner/repoは個人データリポジトリのものを使う
   const today = todayISO();
   try {
     if (localStorage.getItem(BACKUP_LAST_DATE_KEY) === today) return;  // 1日1回
   } catch { /* localStorage 不可でも続行(同日再PUTになるだけ) */ }
   try {
-    const name = `app-state-${today}.json`;
-    const url = gitHubBackupURL(cfg, name);
-    // 同日ファイルが既にあれば sha を取得して上書き(別端末が先に書いた場合など)
-    let sha = "";
-    const head = await fetch(`${url}?ref=${encodeURIComponent(cfg.branch)}`, { headers: githubHeaders(cfg.token) });
-    if (head.ok) {
-      try { sha = (await head.json()).sha || ""; } catch { /* sha 不明なら新規作成として試す */ }
-    }
-    const put = await fetch(url, {
-      method: "PUT",
-      headers: githubHeaders(cfg.token),
-      body: JSON.stringify({
-        message: `backup: app-state snapshot ${today}`,
-        content: toBase64(JSON.stringify(sanitizedStateForGitHub(), null, 2)),
-        branch: cfg.branch,
-        ...(sha ? { sha } : {})
-      })
-    });
-    if (!put.ok) throw new Error(await gitHubErrorMessage(put));
-    try { localStorage.setItem(BACKUP_LAST_DATE_KEY, today); } catch { /* 記録できなくても致命的ではない */ }
-    pruneOldBackups(cfg, today);  // await しない(整理の失敗は本体に影響させない)
+    await writeBackupSnapshotNow();
   } catch (error) {
     console.warn("世代バックアップをスキップ:", error.message);
   }

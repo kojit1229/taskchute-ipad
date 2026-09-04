@@ -64,7 +64,7 @@ let RECURRENCE_KEEP_PAST_DAYS, RECURRENCE_FUTURE_DAYS, SWIPE_TRIAGE_LOG_MAX;
 let showToast, maintainRecurrences, render, runDailyOpen, saveState;
 let requireGitHubConfig, fetchGitHubFileSHA, personalDataReady, personalDataFileConfig;
 let gitHubContentsURL, githubHeaders, gitHubErrorMessage, fromBase64, toBase64;
-let sanitizedStateForGitHub, maybeWriteBackupSnapshot, updateAutoSaveStatus, updateSyncDot;
+let sanitizedStateForGitHub, maybeWriteBackupSnapshot, writeBackupSnapshotNow, updateAutoSaveStatus, updateSyncDot;
 let renderSyncBanner, clearSyncBannerDismissal, clearPersonalDataAuthError, pruneExpiredSuggestedThemes;
 let _startupDataModifiedAt;
 
@@ -75,7 +75,7 @@ function configureGithubSync(deps) {
     showToast, maintainRecurrences, render, runDailyOpen, saveState,
     requireGitHubConfig, fetchGitHubFileSHA, personalDataReady, personalDataFileConfig,
     gitHubContentsURL, githubHeaders, gitHubErrorMessage, fromBase64, toBase64,
-    sanitizedStateForGitHub, maybeWriteBackupSnapshot, updateAutoSaveStatus, updateSyncDot,
+    sanitizedStateForGitHub, maybeWriteBackupSnapshot, writeBackupSnapshotNow, updateAutoSaveStatus, updateSyncDot,
     renderSyncBanner, clearSyncBannerDismissal, clearPersonalDataAuthError, pruneExpiredSuggestedThemes,
     _startupDataModifiedAt
   } = deps);
@@ -1088,6 +1088,28 @@ async function loadFromGitHub() {
     // 合流させる(採用でローカル限定の記録を消さないため)。
     // tieWinner="remote": この関数は常にremoteを採用する経路(applySyncMergeToRemote)。
     const remoteNorm = normalizedRemoteCopy(text);
+    // unit15(A2-H4/D-K6): この端末に未pushの変更(dataModifiedAt !== lastPushedAt)があるまま
+    // リモートを無確認で採用すると、その変更が無警告で破棄される。破棄されるコア差分の件数
+    // (SYNC_CORE_COMPARE_KEYS基準)と最終編集時刻をconfirmで示し、キャンセルならstateを
+    // 一切変更せず中断する(新しいUIは作らない。restoreBackupと同じwindow.confirmの流儀)。
+    const hasUnpushed = (state.dataModifiedAt || "") !== (state.settings.lastPushedAt || "");
+    if (hasUnpushed) {
+      const diffCount = remoteNorm
+        ? SYNC_CORE_COMPARE_KEYS.filter((k) =>
+            JSON.stringify(getByPath(remoteNorm, k) ?? null) !== JSON.stringify(getByPath(state, k) ?? null)
+          ).length
+        : 0;
+      const lastEdited = state.dataModifiedAt || "不明";
+      const ok = window.confirm(
+        `この端末には未pushの変更があります(最終編集: ${lastEdited}、GitHub側と異なるコア項目 ${diffCount}件)。\n` +
+        `GitHubの内容で読み込むと、これらのローカル変更は破棄されます。読み込みますか?`
+      );
+      if (!ok) { showToast("読み込みを中止しました(ローカルの変更は保持されています)"); return; }
+      // 採用直前の自動スナップショット(既存の世代バックアップ機構=backups/app-state-YYYY-MM-DD.json
+      // を強制発火。1日1回ガードは経由しない。restoreBackupからこの時点へ復元できる)。
+      try { await writeBackupSnapshotNow(); }
+      catch (error) { console.warn("読込前スナップショットに失敗:", error.message); }
+    }
     const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm, "remote") : null;
     let addedLocal = false;
     let adopted;

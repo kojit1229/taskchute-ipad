@@ -513,9 +513,9 @@
         "planning-execution",
         "content-ai"
       ],
-      "assertionSignals": 23,
-      "assertionHash": "008d7fb095214844",
-      "sourceHash": "5ea496f6338a8164",
+      "assertionSignals": 24,
+      "assertionHash": "d6d7d617446615c4",
+      "sourceHash": "051b3611527fecf2",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -596,6 +596,29 @@
         "server": true,
         "fileWrite": false,
         "networkMock": true,
+        "clock": false
+      }
+    },
+    {
+      "file": "sync-load-confirm-snapshot.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage"
+      ],
+      "assertionSignals": 16,
+      "assertionHash": "af1b62ef9e2e1cbf",
+      "sourceHash": "d3a619b157e13bc5",
+      "waits": {
+        "fixedCount": 5,
+        "numericMilliseconds": 2500,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
         "clock": false
       }
     },
