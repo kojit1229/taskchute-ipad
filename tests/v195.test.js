@@ -47,7 +47,7 @@ function check(name, cond, extra = "") {
     return page.evaluate(({ key, id }) => JSON.parse(localStorage.getItem(key)).tasks.find((t) => t.id === id), { key: STATE_KEY, id });
   }
   async function siblingOrder(ids) {
-    return page.locator('.wbs-task-title[data-id]').evaluateAll((els, wanted) => {
+    return page.locator('.wbs-projects .wbs-task-title[data-id]').evaluateAll((els, wanted) => {
       const set = new Set(wanted);
       return els.map((el) => el.dataset.id).filter((id) => set.has(id));
     }, ids);
@@ -55,7 +55,7 @@ function check(name, cond, extra = "") {
   async function waitForOrder(ids, expected) {
     await page.waitForFunction(({ ids, expected }) => {
       const wanted = new Set(ids);
-      const actual = Array.from(document.querySelectorAll('.wbs-task-title[data-id]'))
+      const actual = Array.from(document.querySelectorAll('.wbs-projects .wbs-task-title[data-id]'))
         .map((el) => el.dataset.id).filter((id) => wanted.has(id));
       return JSON.stringify(actual) === JSON.stringify(expected);
     }, { ids, expected });
@@ -160,7 +160,7 @@ function check(name, cond, extra = "") {
     await page.locator('[data-action="add-plan-step-below"][data-id="step-a"]').click();
     await page.locator('[data-modal-field="title"]').fill("途中に追加したステップ");
     await page.locator('[data-action="modal-save"]').click();
-    await page.waitForFunction(() => Array.from(document.querySelectorAll('.wbs-task-title')).some((el) => el.textContent === "途中に追加したステップ"));
+    await page.waitForFunction(() => Array.from(document.querySelectorAll('.wbs-projects .wbs-task-title')).some((el) => el.textContent === "途中に追加したステップ"));
     const inserted = await page.evaluate(({ key }) => JSON.parse(localStorage.getItem(key)).tasks.find((t) => t.title === "途中に追加したステップ"), { key: STATE_KEY });
     check("同じ親へ2000と3000の中間で追加", inserted.parentTaskId === "plan-parent" && inserted.order === 2500 && Boolean(inserted.updatedAt), JSON.stringify(inserted));
     const finalIds = ["step-b", "step-a", inserted.id, "step-c"];
@@ -224,7 +224,7 @@ process.on("beforeExit", async () => {
     return page.evaluate(({ key, id }) => JSON.parse(localStorage.getItem(key)).tasks.find((t) => t.id === id), { key: STATE_KEY, id });
   }
   async function regressionSiblingOrder(page, ids) {
-    return page.locator('.wbs-task-title[data-id]').evaluateAll((els, wanted) => {
+    return page.locator('.wbs-projects .wbs-task-title[data-id]').evaluateAll((els, wanted) => {
       const set = new Set(wanted);
       return els.map((el) => el.dataset.id).filter((id) => set.has(id));
     }, ids);
@@ -232,7 +232,7 @@ process.on("beforeExit", async () => {
   async function waitForRegressionOrder(page, ids, expected) {
     await page.waitForFunction(({ ids, expected }) => {
       const wanted = new Set(ids);
-      const actual = Array.from(document.querySelectorAll('.wbs-task-title[data-id]'))
+      const actual = Array.from(document.querySelectorAll('.wbs-projects .wbs-task-title[data-id]'))
         .map((el) => el.dataset.id).filter((id) => wanted.has(id));
       return JSON.stringify(actual) === JSON.stringify(expected);
     }, { ids, expected });
@@ -271,7 +271,7 @@ process.on("beforeExit", async () => {
     const addedB = await addRegressionSubtask("通常サブB");
     check("planTarget=false親の+サブ2件はorder=null", addedA.order === null && addedB.order === null,
       JSON.stringify({ a: addedA.order, b: addedB.order }));
-    await page.locator(`[data-action="toggle-task"][data-id="${addedA.id}"]`).click();
+    await page.locator(`.wbs-projects [data-action="toggle-task"][data-id="${addedA.id}"]`).click();
     await page.waitForFunction(({ key, id }) => JSON.parse(localStorage.getItem(key)).tasks.find((task) => task.id === id)?.status === "completed",
       { key: STATE_KEY, id: addedA.id });
     await waitForRegressionOrder(page, [addedA.id, addedB.id], [addedB.id, addedA.id]);
@@ -306,9 +306,9 @@ process.on("beforeExit", async () => {
     const stepHiddenB = regressionTask("reg-c-b", projectC.id, "非表示B", { parentTaskId: parentC.id, order: 2000, status: "completed" });
     const stepVisibleC = regressionTask("reg-c-c", projectC.id, "可視C", { parentTaskId: parentC.id, order: 3000 });
     await loadWbsState(page, projectC, [parentC, stepVisibleA, stepHiddenB, stepVisibleC], { wbsHideCompleted: true });
-    await page.waitForSelector('.wbs-task-title[data-id="reg-c-a"]');
-    await page.waitForSelector('.wbs-task-title[data-id="reg-c-c"]');
-    check("完了Bは非表示でA/Cだけ表示", await page.locator('.wbs-task-title[data-id="reg-c-b"]').count() === 0
+    await page.waitForSelector('.wbs-projects .wbs-task-title[data-id="reg-c-a"]');
+    await page.waitForSelector('.wbs-projects .wbs-task-title[data-id="reg-c-c"]');
+    check("完了Bは非表示でA/Cだけ表示", await page.locator('.wbs-projects .wbs-task-title[data-id="reg-c-b"]').count() === 0
       && JSON.stringify(await regressionSiblingOrder(page, [stepVisibleA.id, stepHiddenB.id, stepVisibleC.id])) === JSON.stringify([stepVisibleA.id, stepVisibleC.id]));
     await openRegressionMenu(page, "reg-c-a");
     await page.locator('[data-action="move-plan-step"][data-id="reg-c-a"][data-direction="1"]').click();

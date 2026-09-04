@@ -55,13 +55,13 @@ function check(name, cond, extra = "") {
     await page.reload();
     await page.waitForFunction((ids) => {
       if (!document.querySelector('#app[data-view="wbs"]')) return false;
-      const renderedIds = new Set(Array.from(document.querySelectorAll('.wbs-task-title[data-id]'), (el) => el.dataset.id));
+      const renderedIds = new Set(Array.from(document.querySelectorAll('.wbs-projects .wbs-task-title[data-id]'), (el) => el.dataset.id));
       return ids.every((id) => renderedIds.has(id));
     }, tasks.map((task) => task.id));
   }
 
   async function wbsSiblingOrder(ids) {
-    return page.locator('.wbs-task-title[data-id]').evaluateAll((elements, wantedIds) => {
+    return page.locator('.wbs-projects .wbs-task-title[data-id]').evaluateAll((elements, wantedIds) => {
       const wanted = new Set(wantedIds);
       return elements.map((el) => el.dataset.id).filter((id) => wanted.has(id));
     }, ids);

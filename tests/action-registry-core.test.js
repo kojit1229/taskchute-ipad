@@ -104,7 +104,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "add-project", "delete-project", "add-task", "toggle-task", "toggle-criteria-request",
   "task-today", "delete-task",
   "toggle-project-collapse", "toggle-task-collapse",
-  "wbs-view-menu-toggle", "wbs-row-menu-toggle", "wbs-search-input", "wbs-search-jump",
+  "wbs-view-menu-toggle", "wbs-row-menu-toggle", "wbs-search-input", "wbs-search-jump", "wbs-select-project",
   "suspend-project", "resume-project", "suspend-task", "resume-task",
   "toggle-show-suspended", "toggle-wbs-hide-done", "toggle-wbs-hide-done-projects",
   "toggle-wbs-active-only", "toggle-wbs-compact", "toggle-tasks-show-future",
@@ -264,7 +264,7 @@ const APP_JS_REGISTERED_ACTIONS = [
   // --- v178: WBS/Project/Task CRUD(17。delete-blockの重複登録はv291孤児掃除で削除) ---
   "add-project", "delete-project", "add-task", "toggle-task", "delete-task",
   "toggle-project-collapse", "toggle-task-collapse",
-  "wbs-view-menu-toggle", "wbs-row-menu-toggle", "wbs-search-input", "wbs-search-jump",
+  "wbs-view-menu-toggle", "wbs-row-menu-toggle", "wbs-search-input", "wbs-search-jump", "wbs-select-project",
   "suspend-project", "resume-project", "suspend-task", "resume-task",
   "add-task-to-project", "add-subtask",
   "toggle-plan-owner", "move-plan-step", "add-plan-step-below",  // v195: 実行計画UI

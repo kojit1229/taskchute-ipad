@@ -624,6 +624,7 @@ registerActions({
   },
   "wbs-search-input": () => {},  // inputイベント側で差分更新。click時は意図的no-op
   "wbs-search-jump": ({ target }) => jumpToWbsSearchResult(target.dataset.kind, target.dataset.id),
+  "wbs-select-project": ({ id }) => { _wbsSelectedProjectId = id; render(); },
   "suspend-project": ({ id }) => suspendProject(id),
   "resume-project": ({ id }) => resumeProject(id),
   "suspend-task": ({ id }) => suspendTask(id),
@@ -1203,6 +1204,8 @@ let _twyCommitOpenGroupIds = new Set();
 let _twyAddCandidateSelectedIds = new Set();
 let _twyExcuseOpenItemId = null;
 let _twyAddPanelOpen = false;
+// v330: PC WBSの選択Project。表示専用でstate/localStorageへは保存しない。
+let _wbsSelectedProjectId = "";
 // v70: フォーカスタイマー「中断」の理由ワンタップピッカー(チョコ停記録)。非永続。
 let _pendingInterruptBlockId = null;
 // v87: 宣言/終了報告モーダルが解決するまでの一時コンテキスト。非永続。
@@ -4254,6 +4257,7 @@ function jumpToWbsSearchResult(kind, id) {
   if (state.settings.wbsHideDoneProjects && isWbsProjectDone(project)) {
     state.settings.wbsHideDoneProjects = false;
   }
+  _wbsSelectedProjectId = project.id;  // v330: PCでは対象Projectの右ペインを先に選ぶ(非永続)
   saveAndRender();
   setTimeout(() => document.querySelector(`[data-wbs-row-id="${CSS.escape(id)}"]`)
     ?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
@@ -4646,6 +4650,56 @@ function wbsFilteredProjects() {
     .sort((a, b) => a.title.localeCompare(b.title, "ja"));
 }
 
+// v330: WBSの「今週」は月曜〜日曜。12WYコミット自体の既存週キーはweekRange()を維持する。
+function wbsWeekRange(dateISO) {
+  const day = parseDate(dateISO).getDay();
+  const weekStart = addDays(dateISO, -((day + 6) % 7));
+  return { weekStart, weekEnd: addDays(weekStart, 6) };
+}
+
+// v330修正: WBS母集団のProject(Wish除外)を1箇所に集約し、パネルと詳細ペインの
+// 独自定義を無くす。
+function wbsThisWeekProjects() {
+  return new Map(state.projects.filter((project) => !project.deleted && project.kind !== "wish")
+    .map((project) => [project.id, project]));
+}
+
+function wbsThisWeekTasks() {
+  const today = todayISO(), dueWeek = wbsWeekRange(today), commitWeekStart = weekRange(today).weekStart;
+  const projects = wbsThisWeekProjects();
+  // v330修正: 確定シート(twyCommitPostHTML)と同じscoredWeeklyCommitmentItemsForWeek()を
+  // 使い、「今週を確定」で確定したStepの母集団定義を二重化しない(レビュー指摘対応)。
+  const committedTaskIds = new Set(scoredWeeklyCommitmentItemsForWeek(commitWeekStart).scoreItems
+    .map((item) => item.taskId));
+  return state.tasks.filter((task) => {
+    if (task.deleted || !projects.has(task.projectId)) return false;
+    const due = effectiveDueDate(task);
+    return committedTaskIds.has(task.id) || (due && due >= dueWeek.weekStart && due <= dueWeek.weekEnd);
+  }).sort((a, b) => {
+    const statusOrder = Number(a.status === "completed") - Number(b.status === "completed");
+    if (statusOrder) return statusOrder;
+    const dueOrder = (effectiveDueDate(a) || "9999").localeCompare(effectiveDueDate(b) || "9999");
+    if (dueOrder) return dueOrder;
+    const projectOrder = projects.get(a.projectId).title.localeCompare(projects.get(b.projectId).title, "ja");
+    return projectOrder || wbsTaskCompare(a, b);
+  });
+}
+
+function renderWbsThisWeek() {
+  const tasks = wbsThisWeekTasks(), today = todayISO();
+  const projects = wbsThisWeekProjects();
+  const completed = tasks.filter((task) => task.status === "completed").length;
+  const overdue = tasks.filter((task) => {
+    const due = effectiveDueDate(task);
+    return task.status !== "completed" && due && due < today;
+  }).length;
+  const has12WY = [...projects.values()].some((project) => project.kind === "normal" && project.twelveWeekStartDate);
+  return `<section class="wbs-week-panel"><header><h2>今週やること <span>確定 ${tasks.length}件 ・ 完了 ${completed} ・ 期限超過 ${overdue}</span></h2>
+    ${has12WY ? `<button data-action="twy-open-commit">来週分を確定 ›</button>` : ""}</header>
+    <div class="wbs-week-list">${tasks.length ? tasks.map((task) => `<div data-wbs-week-row-id="${escapeHTML(task.id)}">${renderTaskRow(task, 0, false, false, false, false, projects.get(task.projectId)?.title || "")}</div>`).join("")
+      : `<div class="wbs-week-empty">今週の確定 Step と期限が今週のタスクはありません(12WY の「今週を確定」で追加)</div>`}</div></section>`;
+}
+
 function renderWBS() {
   // v126: 「やりたいこと」もWBSのProject+Taskとして扱う(v16のWish除外を撤去。
   //       期日設定→WBS期日駆動フローでタスクシュート候補に載せられるようにする)。
@@ -4671,6 +4725,7 @@ function renderWBS() {
   const categoryFilter = state.settings.wbsCategoryFilter || "";
   const categoryNames = wbsCategoryOptions(activeProjects);
   const filteredProjects = wbsFilteredProjects();
+  const desktop = Boolean(window.matchMedia?.("(min-width: 1280px)").matches);
   const allCollapsed = filteredProjects.length > 0 && filteredProjects.every((p) => p.collapsed);
   const categorySelect = `
     <select class="select" data-action="wbs-category-filter" aria-label="カテゴリで絞り込み" style="width:auto; min-width:140px; font-size:16px">
@@ -4705,8 +4760,9 @@ function renderWBS() {
   return `
     <div class="tower-skin wbs-tower"><header class="view-header wbs-header"><div class="wbs-heading"><h1>TOWER / WBS</h1><span>${cycleMeta}</span></div>${wbsTools}</header>
     ${renderWipBanner()}
-    <section class="section grid">
-      ${filteredProjects.length > 0 ? filteredProjects.map(renderProjectTree).join("")
+    ${renderWbsThisWeek()}
+    <section class="section grid wbs-projects${desktop ? " is-desktop" : ""}">
+      ${filteredProjects.length > 0 ? (desktop ? renderWbsDesktopProjects(filteredProjects) : filteredProjects.map(renderProjectTree).join(""))
         : `<div class="muted" style="padding:12px; text-align:center">このカテゴリのProjectはありません</div>`}
     </section></div>
   `;
@@ -5439,17 +5495,9 @@ function renderTwyTrackRow(track) {
   </div>`;
 }
 
-function renderProjectTree(project) {
+function wbsProjectTaskModel(project) {
   const allTasksOfProject = state.tasks.filter((task) => !task.deleted && task.projectId === project.id);
-  const progress = taskProgress(allTasksOfProject);
-  const is12WY = Boolean(project.twelveWeekStartDate);
-  const hideOldProgress = is12WY && project.status === "active"
-    && isProjectInCurrentCycle(project, state.settings.twelveWeekStartDate);
-  const collapsed = Boolean(project.collapsed);  // v33: 折りたたみ
-  // v35: 中断
-  const showSusp = Boolean(state.settings.showSuspended);
-  const suspended = isProjectSuspended(project);
-  let visibleTasks = allTasksOfProject.filter((t) => showSusp || !isTaskSuspended(t));
+  let visibleTasks = allTasksOfProject.filter((task) => state.settings.showSuspended || !isTaskSuspended(task));
   // v47: 完了を隠す(未完了の子孫を持つ完了タスクは、子を迷子にしないため残す)
   if (state.settings.wbsHideCompleted) {
     const hasOpenDescendant = (task) => allTasksOfProject.some((t) =>
@@ -5461,13 +5509,52 @@ function renderProjectTree(project) {
   const liveTasks = allTasksOfProject.filter(isTaskCountable);
   const doneCount = liveTasks.filter((t) => t.status === "completed").length;
   const agg = projectProgressAgg(liveTasks);
+  return { allTasksOfProject, visibleTasks, rootTasks, liveTasks, doneCount, agg };
+}
+
+function renderWbsProjectMeta(project, model) {
   const projDue = project.dueDate ? ` ・ 期限 ${project.dueDate.slice(5).replace("-", "/")}` : "";
+  return `${project.kind === "wish" ? `<span>[Wish]</span>` : ""}${project.twelveWeekStartDate ? `<span>[12WY]</span>` : ""}${project.category ? `<span>[${escapeHTML(project.category)}]</span>` : ""} 進捗 ${model.agg.num}/${model.agg.den} ・ ${model.agg.pct}% ・ 完了 ${model.doneCount}/${model.liveTasks.length}${projDue}${isProjectSuspended(project) ? " ・ 中断" : ""}`;
+}
+
+function renderWbsDesktopProjects(projects) {
+  const preferred = [...projects].sort((a, b) => Number(Boolean(b.twelveWeekStartDate)) - Number(Boolean(a.twelveWeekStartDate)));
+  let selected = projects.find((project) => project.id === _wbsSelectedProjectId);
+  if (!selected) selected = preferred.find((project) => !isWbsProjectDone(project)) || preferred[0];
+  _wbsSelectedProjectId = selected?.id || "";
+  const list = projects.map((project) => {
+    const model = wbsProjectTaskModel(project);
+    return `<button class="wbs-project-choice${project.id === selected?.id ? " selected" : ""}" data-action="wbs-select-project" data-id="${escapeHTML(project.id)}" data-wbs-row-id="${escapeHTML(project.id)}"><strong>${escapeHTML(project.title)}</strong><span class="wbs-project-meta">${renderWbsProjectMeta(project, model)}</span></button>`;
+  }).join("");
+  return `<div class="wbs-project-list"><header>プロジェクト <span>${projects.length}件</span></header>${list}</div>${selected ? renderWbsProjectDetail(selected) : ""}`;
+}
+
+function renderWbsProjectDetail(project) {
+  const model = wbsProjectTaskModel(project), is12WY = Boolean(project.twelveWeekStartDate);
+  const hideOldProgress = is12WY && project.status === "active" && isProjectInCurrentCycle(project, state.settings.twelveWeekStartDate);
+  const overdue = model.allTasksOfProject.filter((task) => {
+    const due = effectiveDueDate(task);
+    return task.status !== "completed" && due && due < todayISO();
+  }).length;
+  return `<div class="wbs-project-detail" data-wbs-detail-id="${escapeHTML(project.id)}"><header><h2>${escapeHTML(project.title)} <span>${is12WY ? `12WY 第${cycleWeekForDate(todayISO())}週 ・ ` : ""}進捗 ${model.agg.num}/${model.agg.den}(${model.agg.pct}%)・ 期限超過 ${overdue}</span></h2></header>
+    <div class="wbs-detail-actions"><button data-action="add-task-to-project" data-id="${escapeHTML(project.id)}">＋ タスク</button><button data-action="edit-project" data-id="${escapeHTML(project.id)}">編集</button>${isProjectSuspended(project) ? `<button data-action="resume-project" data-id="${escapeHTML(project.id)}">再開</button>` : `<button data-action="suspend-project" data-id="${escapeHTML(project.id)}">中断</button>`}${is12WY ? `<button data-action="twy-open-commit">来週分を確定</button>` : ""}</div>
+    ${renderTwyTrackBlock(project)}${project.showProgress && !hideOldProgress ? renderProjectProgressAgg(model.liveTasks) : ""}
+    <div class="stack">${model.rootTasks.length ? model.rootTasks.map((task) => renderTaskTree(task, model.visibleTasks, 0, hideOldProgress)).join("") : `<div class="muted">Task未登録</div>`}</div></div>`;
+}
+
+function renderProjectTree(project) {
+  const model = wbsProjectTaskModel(project);
+  const is12WY = Boolean(project.twelveWeekStartDate);
+  const hideOldProgress = is12WY && project.status === "active"
+    && isProjectInCurrentCycle(project, state.settings.twelveWeekStartDate);
+  const collapsed = Boolean(project.collapsed);  // v33: 折りたたみ
+  const suspended = isProjectSuspended(project);
   return `
     <div class="item${suspended ? " is-suspended" : ""}" data-wbs-row-id="${escapeHTML(project.id)}">
       <div class="wbs-project-head">
         <button class="wbs-caret" data-action="toggle-project-collapse" data-id="${project.id}" aria-label="${collapsed ? "展開" : "折りたたむ"}">${collapsed ? "▸" : "▾"}</button>
         <div class="wbs-project-copy"><strong data-id="${project.id}">${escapeHTML(project.title)}</strong>
-          <div class="wbs-project-meta">${project.kind === "wish" ? `<span>[Wish]</span>` : ""}${is12WY ? `<span>[12WY]</span>` : ""}${project.category ? `<span>[${escapeHTML(project.category)}]</span>` : ""} 進捗 ${agg.num}/${agg.den} ・ ${agg.pct}% ・ 完了 ${doneCount}/${liveTasks.length}${projDue}${suspended ? " ・ 中断" : ""}</div>
+          <div class="wbs-project-meta">${renderWbsProjectMeta(project, model)}</div>
         </div>
         ${is12WY ? `<button class="btn ghost twy-commit-open" data-action="twy-open-commit">今週を確定</button>` : ""}
         <button class="wbs-row-menu-toggle" data-action="wbs-row-menu-toggle" aria-expanded="false" aria-label="${escapeHTML(project.title)}の副操作">…</button>
@@ -5478,12 +5565,12 @@ function renderProjectTree(project) {
         </div>
       </div>
       ${renderTwyTrackBlock(project)}
-      ${project.showProgress && !hideOldProgress ? renderProjectProgressAgg(liveTasks) : ""}
+      ${project.showProgress && !hideOldProgress ? renderProjectProgressAgg(model.liveTasks) : ""}
       ${collapsed
-        ? `<div class="muted" style="font-size:12px; margin-top:6px">${rootTasks.length ? `${visibleTasks.length}件のタスク(折りたたみ中)` : "Task未登録"}</div>`
+        ? `<div class="muted" style="font-size:12px; margin-top:6px">${model.rootTasks.length ? `${model.visibleTasks.length}件のタスク(折りたたみ中)` : "Task未登録"}</div>`
         : `<div class="stack">
-            ${rootTasks.length
-              ? rootTasks.map((t) => renderTaskTree(t, visibleTasks, 0, hideOldProgress)).join("")
+            ${model.rootTasks.length
+              ? model.rootTasks.map((t) => renderTaskTree(t, model.visibleTasks, 0, hideOldProgress)).join("")
               : `<div class="muted">Task未登録</div>`}
           </div>`}
     </div>
@@ -5516,7 +5603,7 @@ function renderTaskTree(task, allTasksOfProject, depth, hideProgress = false) {
   `;
 }
 
-function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false, hideProgress = false, compactMode = false) {
+function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false, hideProgress = false, compactMode = false, projectTitle = "") {
   const canAddSub = depth < 2;  // 最大 3 階層(0,1,2)、depth=2 の子はもう作らない
   const planParent = planParentFor(task);
   // v302: 12WY週次実行計画Stepは担当・並べ替え・追加操作を保護し、通常Taskだけを圧縮する。
@@ -5581,7 +5668,7 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false, 
         <button class="btn ghost plan-move" data-action="move-plan-step" data-id="${task.id}" data-direction="-1" aria-label="1つ上へ" ${planIndex <= 0 ? "disabled" : ""}>↑</button>
         <button class="btn ghost plan-move" data-action="move-plan-step" data-id="${task.id}" data-direction="1" aria-label="1つ下へ" ${planIndex < 0 || planIndex >= planSiblings.length - 1 ? "disabled" : ""}>↓</button>
         <button class="btn ghost" data-action="add-plan-step-below" data-id="${task.id}">＋ 下に追加</button>` : "";
-  const metaHTML = `<div class="wbs-task-meta"><span>進捗 ${progressNum}/${progressDen}</span>${dueHTML}${stats.count ? `<span>実績 ${stats.count}回 ${fmtMinShort(stats.minutes) || "0m"}</span>` : `<span>実績 0回 0m</span>`}</div>`;
+  const metaHTML = `<div class="wbs-task-meta">${projectTitle ? `<span>${escapeHTML(projectTitle)}</span>` : ""}<span>進捗 ${progressNum}/${progressDen}</span>${dueHTML}${stats.count ? `<span>実績 ${stats.count}回 ${fmtMinShort(stats.minutes) || "0m"}</span>` : `<span>実績 0回 0m</span>`}</div>`;
   return `
     <div class="row wbs-task-row${compact ? " is-compact" : ""}${suspended ? " is-suspended" : ""}${task.status === "completed" ? " is-completed" : ""}">
       <div class="wbs-task-check">${depth > 0 ? `<span class="wbs-branch">└</span>` : ""}${caret}<button class="checkbox-button ${task.status === "completed" ? "done" : ""}" data-action="toggle-task" data-id="${task.id}">✓</button></div>
@@ -12172,16 +12259,24 @@ function twyCommitCountLabel(total) {
   return `選択中 ${_twyCommitSelectedBlockIds.size}コマ / 候補 ${total}コマ(Block単位で保存)`;
 }
 
-function twyCommitPostHTML(weekStart) {
+// v330修正: 「今週を確定」で確定されスコア対象になるitemの判定をここへ集約する。
+// 確定シート(twyCommitPostHTML)とWBS「今週やること」パネル(wbsThisWeekTasks)の
+// 両方がこの関数を呼ぶ(以前はwbsThisWeekTasksがlane条件を落として独自に複製していた)。
+function scoredWeeklyCommitmentItemsForWeek(weekStart) {
   const meta = twyCommittedWeekMeta(weekStart);
   const items = (state.weeklyCommitments || []).filter((record) =>
-    record.recordType === "item" && record.weekStart === weekStart && !record.deleted)
-    .sort((a, b) => (a.plannedDate || "").localeCompare(b.plannedDate || ""));
+    record.recordType === "item" && record.weekStart === weekStart && !record.deleted);
   const selected = new Set(meta?.selectedBlockIds || []);
   const scoreItems = items.filter((item) => item.lane === "cycle"
     && (meta?.committedVia !== "manual" || selected.has(item.blockId) || item.source === "added"));
+  return { meta, items, scoreItems };
+}
+
+function twyCommitPostHTML(weekStart) {
+  const { meta, items, scoreItems } = scoredWeeklyCommitmentItemsForWeek(weekStart);
+  const sortedItems = items.slice().sort((a, b) => (a.plannedDate || "").localeCompare(b.plannedDate || ""));
   const scoreItemIds = new Set(scoreItems.map((item) => item.id));
-  const rows = items.map((item) => twyCommitItemRowHTML(item, scoreItemIds.has(item.id))).join("");
+  const rows = sortedItems.map((item) => twyCommitItemRowHTML(item, scoreItemIds.has(item.id))).join("");
   return `<div class="twy-commit-meta">確定済 ${escapeHTML((meta?.committedAt || "").replace("T", " ").slice(0, 16))}</div>
     <div data-twy-commit-list>${rows || `<div class="twy-commit-meta">確定itemがありません。</div>`}</div>
     <div class="twy-commit-foot"><span class="twy-commit-count">${twyCommitScoreLabel(weeklyScore(state.weeklyCommitments || [], weekStart), Boolean(meta), scoreItems.filter((item) => item.excused).length)}</span>
@@ -13875,6 +13970,10 @@ if (window.matchMedia) {
   const _onOsThemeChange = () => { if (state.settings.theme === "auto") applyTheme(); };
   if (_themeMediaQuery.addEventListener) _themeMediaQuery.addEventListener("change", _onOsThemeChange);
   else if (_themeMediaQuery.addListener) _themeMediaQuery.addListener(_onOsThemeChange);
+  const _wbsDesktopMediaQuery = window.matchMedia("(min-width: 1280px)");
+  const _onWbsLayoutChange = () => { if (state.currentView === "wbs") render(); };
+  if (_wbsDesktopMediaQuery.addEventListener) _wbsDesktopMediaQuery.addEventListener("change", _onWbsLayoutChange);
+  else if (_wbsDesktopMediaQuery.addListener) _wbsDesktopMediaQuery.addListener(_onWbsLayoutChange);
 }
 // v23/v41: 起動時に繰り返し Block を実体化(期間外・未編集は破棄)+ 日次オープン記録
 runDailyOpen({ force: true });

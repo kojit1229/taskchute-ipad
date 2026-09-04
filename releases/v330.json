@@ -1,0 +1,51 @@
+{
+  "version": 330,
+  "date": "2026-09-04",
+  "title": "WBS A-2: 今週やることパネル・PC 2ペイン",
+  "summary": "WBS先頭に今週の確定Stepと今週期限Taskを集約し、PCではProject一覧と選択Project詳細を2ペイン表示する。",
+  "changedFiles": [
+    "CHANGES_v330.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v330.json",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/v194.test.js",
+    "tests/v195.test.js",
+    "tests/v328.test.js",
+    "tests/v330.test.js"
+  ],
+  "intent": [
+    "今週に実行するTaskをProject横断で1枚に集め、今日のBlockへ送る導線を短くする。",
+    "1280px以上ではProject一覧を保ったまま選択ProjectのTaskと操作を確認できるようにする。"
+  ],
+  "changes": [
+    "12WY週次コミットの確定済みTaskと有効期限が月曜〜日曜に入る非Wish Taskを重複排除して表示した。",
+    "既存Task行を再利用し、所属Project・進捗・期限・今日へ・副操作を今週パネルへ表示した。",
+    "PC WBSを380pxのProject一覧と選択Project詳細へ分け、選択を非永続モジュール変数で管理した。",
+    "wbs-select-projectをactionレジストリへ追加し、Service WorkerのCACHE_NAMEをv330へ更新した。"
+  ],
+  "uncertainties": [
+    "来週分を確定の文言は発注どおり既存twy-open-commitへ接続しており、既存シート側の当週基準表示との文言差は実機確認余地がある。",
+    "Codex 利用上限のため修正フェーズは implementer(Claude)で実装。閉塞確認は Claude reviewer で代替"
+  ],
+  "reviewFocus": [
+    "週次コミットの手動選択スコープと期限Taskの和集合だけが表示され、Wish・来週分・削除済みが混入しないこと。",
+    "日跨ぎ復帰で月曜週と12WYコミット週を再計算し、週を跨いだ母集団が残留しないこと。",
+    "PC Project選択・ブレークポイント変更がstate/localStorageへ書き込まず、1279px以下は既存アコーディオンのままであること。"
+  ],
+  "verification": [
+    "npm.cmd run test:manifest:write後、node tests/run-all.js v330 v328 v302 v194 v195 v196 v288 v318 v313を実行する。",
+    "node --check、390px/1280px横スクロール、pageerror、非永続選択、実行コード差分200行以内を確認する。"
+  ],
+  "notes": [
+    "発注指定によりrelease-record、CHANGES_v330.md生成、notes書込、commit、pushは行わない。"
+  ],
+  "knownLimitations": [
+    "選択Projectはセッション内だけ保持し、リロード後は未完了12WY Project優先で再選択する。"
+  ]
+}

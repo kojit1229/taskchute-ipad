@@ -130,7 +130,7 @@ function task(id, projectId, title, extra = {}) {
       const buttons = [...document.querySelectorAll(".wbs-toolbar summary")].map((el) => el.getBoundingClientRect().height);
       return { bg: getComputedStyle(root).backgroundColor, noOverflow: doc.scrollWidth <= innerWidth + 1, buttons };
     });
-    const overdueColor = await page.locator(".wbs-overdue").evaluate((el) => getComputedStyle(el).color);
+    const overdueColor = await page.locator(".wbs-projects .wbs-overdue").first().evaluate((el) => getComputedStyle(el).color);
     check("390pxでTOWER背景・アンバー期限超過・横スクロールなし", mobile.bg === "rgb(5, 10, 20)"
       && overdueColor === "rgb(242, 184, 75)" && mobile.noOverflow);
     check("常時ボタンは44px以上", mobile.buttons.every((height) => height >= 44), JSON.stringify(mobile.buttons));

@@ -2734,6 +2734,30 @@ h3 {
 @media (min-width: 1280px) { .wbs-header { flex-wrap: wrap; } .wbs-toolbar { flex-basis: 100%; } .wbs-view-menu > .wbs-view-popover { display: grid !important; grid-template-columns: minmax(0, 1fr); width: 100%; } .wbs-view-options { min-width: 360px; } }
 @media (max-width: 480px) { .wbs-project-head { grid-template-columns: 44px minmax(0, 1fr) auto 44px; } .twy-commit-open { padding: 4px 6px; font-size: 11px; } .wbs-row-menu-panel { padding-left: 0; } }
 
+/* v330: 今週やることパネルと1280px以上のProject 2ペイン。 */
+.wbs-week-panel { border: 1px solid #6b5322; color: var(--tower-text); background: var(--tower-panel); }
+.wbs-week-panel > header, .wbs-project-list > header, .wbs-project-detail > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 6px 12px; border-bottom: 1px solid var(--tower-line); }
+.wbs-week-panel h2, .wbs-project-detail h2 { margin: 0; color: var(--tower-amber); font-size: 14px; }
+.wbs-week-panel h2 span, .wbs-project-detail h2 span, .wbs-project-list > header span { color: var(--tower-text); font-size: 11px; font-weight: 400; opacity: .7; }
+.wbs-week-panel > header button, .wbs-detail-actions button { min-width: 44px; min-height: 44px; border: 1px solid var(--tower-line); color: var(--tower-cyan); background: transparent; font-size: 11px; }
+.wbs-week-list > [data-wbs-week-row-id] { padding: 0 8px; }
+.wbs-week-list > [data-wbs-week-row-id]:first-child .wbs-task-row { border-top: 0; }
+.wbs-week-empty { min-height: 48px; padding: 14px 12px; color: var(--tower-text); font-size: 11px; opacity: .7; }
+@media (min-width: 1280px) {
+  .wbs-projects.is-desktop { display: grid; grid-template-columns: 380px minmax(0, 1fr); align-items: stretch; }
+  .wbs-project-list { min-width: 0; border-right: 1px solid var(--tower-line); background: var(--tower-panel); }
+  .wbs-project-list > header { color: var(--tower-cyan); font-size: 14px; }
+  .wbs-project-choice { display: block; width: 100%; min-height: 56px; padding: 7px 10px 7px 14px; border: 0; border-bottom: 1px solid var(--tower-line); color: var(--tower-text); background: var(--tower-panel); text-align: left; }
+  .wbs-project-choice.selected { border-left: 3px solid var(--tower-amber); padding-left: 11px; background: #0e1b2c; }
+  .wbs-project-choice strong { display: block; overflow-wrap: anywhere; font-size: 14px; }
+  .wbs-project-choice .wbs-project-meta { display: block; font-weight: 400; }
+  .wbs-project-detail { min-width: 0; background: var(--tower-panel); }
+  .wbs-project-detail h2 { color: var(--tower-cyan); }
+  .wbs-detail-actions { display: flex; gap: 8px; flex-wrap: wrap; padding: 8px; border-bottom: 1px solid var(--tower-line); }
+  .wbs-detail-actions button:first-child { border-color: #6b5322; color: var(--tower-amber); }
+  .wbs-project-detail > .stack > [data-wbs-row-id] { padding-inline: 8px; }
+}
+
 /* v260: 12WY WBS成果トラック行。v328でTOWERトークンへ統一。 */
 .twy-row { margin-top: 8px; padding: 8px; border: 1px solid var(--tower-line, var(--line)); border-radius: 8px; background: var(--tower-bg, var(--panel-soft)); }
 .twy-row-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
