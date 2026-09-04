@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v344";  // v344: health-daily.json/ai-insights.jsonパス実配置修正+データ契約ゲート(修正フェーズ単位13)
+const CACHE_NAME = "taskchute-journal-pwa-v345";  // v345: 同期比較キー拡張+loadFromGitHub confirm+追記型マージ(修正フェーズ単位14/15/14b)
 // v334: 実行タブPC 2ペイン(§B。ナビ統合§Cは持ち越し)
 // v333: 実行ラッパー(計画/実績切替)・モバイルナビ4項目
 // v332: 実行タブA-1b ヘッダ1行化・タスク一覧再編・死コード削除

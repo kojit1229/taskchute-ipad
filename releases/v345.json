@@ -1,0 +1,54 @@
+{
+  "version": 345,
+  "date": "2026-09-05",
+  "title": "修正フェーズ 単位14/15/14b: 同期比較キー拡張 + loadFromGitHub confirm+スナップショット + 追記型マージ",
+  "summary": "2026-09-04の第1回コードレビュー(D-1、A2-H4/D-K6、A1-M1拡大の独立レビュー救済)に対応した3つの密結合な同期修正を1版にまとめて着地した。(単位14)SYNC_CORE_COMPARE_KEYSに、これまで比較対象外で「変更なし」と誤判定されていたstate直下の一次データ(aiScheduleHistory)とsettingsの一次データ12キー(avoidList/categories/lifeAreas/vision/affirmation/journalTemplate/twelveWeekStartDate/twelveWeekScoreTarget/birthDate/battery/gymExerciseList/visionDirectCategories)を追加した。(単位15)loadFromGitHub()に、実際に破棄されるコア差分がある場合のみconfirmを出し、採用直前に別名(-preload-HHMMSS)のスナップショットを自動保存する機構を追加した(独立レビュー差し戻しでスナップショット別名化・fail-close・偽警告根治を追補)。(単位14b)単位14で比較対象に入れた項目のうち、2端末で独立に追記されるだけの7キー(reports/chainRuns/zeroSecThemeLog/migrationRitualLog/feedbackFiles/feedbackIngestedDates/aiWorkProcessedIds)とzeroThinking.groupsは、fail-close比較のままだと日常的な追記だけで自動保存・自動pullが止まるため、computeSyncMergeの和集合マージ対象へ昇格させた(独立レビュー救済)。",
+  "changedFiles": [
+    "app.js",
+    "docs/test-impact-map.generated.md",
+    "releases/v345.json",
+    "src/sync/github.js",
+    "sw.js",
+    "tests/store-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/sync-load-confirm-snapshot.test.js"
+  ],
+  "intent": [
+    "同期時に静かに巻き戻っていたstate直下・settings一次データの変更を検知できるようにする。",
+    "loadFromGitHub()実行時に実際にデータが失われるケースだけ確認を求め、かつ直前状態を復元可能にする。",
+    "頻繁に追記されるだけのログ・カウンタ類はfail-close比較ではなく和集合マージへ回し、日常的な自動保存・自動pullの停止を防ぐ。"
+  ],
+  "changes": [
+    "src/sync/github.js: SYNC_CORE_COMPARE_KEYSにaiScheduleHistory+settings.*12キーを追加。getByPath()を新設しドット区切りパスでネスト値を解決するようsyncCoreEqual()を変更。",
+    "src/sync/github.js: LOSS_RISK_KEYS(SYNC_CORE_COMPARE_KEYS+routineChains/weeklyReviews/cycleReviews)を新設。loadFromGitHub()のconfirm発火判定はこちらを使い、fail-close比較対象(自動解決可否)自体は広げない。",
+    "src/sync/github.js: computeSyncMerge()に7キー+zeroThinking.groupsの和集合マージ(mergeDateStringMap/mergeById/mergeAppendOnlyLogByKey/mergeStringIdSet)を追加し、applySyncMergeToLocal/Remoteにも反映を追加。",
+    "app.js: writeBackupSnapshotBeforeLoad()を新設(loadFromGitHub採用直前に別名app-state-YYYY-MM-DD-preload-HHMMSS.jsonで保存、通常の日次世代とは別名管理でBACKUP_LAST_DATE_KEYには触れない)。",
+    "app.js: restoreBackup()の引数を「日付」から「ファイル名」へ変更(preload控えは日付から機械的に再構成できないため)。listBackups()の正規表現・ソート順・buildBackupListModal()の表示も追随。",
+    "app.js: ztGroupRename()で改名時にupdatedAtを進めるよう変更(mergeByIdが改名を検知できるようにするため、独立レビュー差し戻し)。"
+  ],
+  "uncertainties": [
+    "実装・レビューはremediation/unit14ブランチ上で完結済み(implementer+reviewer単系統、Codex利用上限のため)。14=PASS/15=PASS(再判定)/14b=PASS(条件3点は87952daで対応済み: groups改名のupdatedAt bump・applySyncMergeToLocalテスト(mutation2件赤化)・LOSS_RISK_KEYSゲート)。",
+    "K確認事項(handoff.md記載、監督者の前提=そのまま進める): reportsの和集合マージはD-K4まで既存のrunArchive剪定を巻き戻す(journals/feedback/blocksは既に同状態のため整合)。",
+    "5コミット(d915893/711eeb3/8fda2aa/19e260a/405312d)はいずれも個別にcheck-commit-size.sh基準を満たす(実行コード24〜105行、200行以内)。密結合のため1版にまとめたが、git履歴上は分割済みのコミットとして残す。",
+    "unit16(runArchive tombstone)着地時に、本版がcomputeSyncMergeへ追加したreportsのmergeDateStringMap呼び出しへarchivedDateSet除外を追加する手直しが必要(監督者から別途指示、unit16着地時に対応予定)。"
+  ],
+  "reviewFocus": [
+    "settings一次データ(vision/avoidList等)の他端末での変更が同期時に正しく検知されること。",
+    "loadFromGitHub()実行時、実際にコア差分がある場合のみconfirmが出て、控えスナップショットが別名(-preload-)で保存されること(通常の日次世代を上書きしないこと)。",
+    "reports/chainRuns等7キー+zeroThinking.groupsが和集合マージされ、日常的な追記だけでは同期停止バナーが出ないこと。",
+    "restoreBackup()がファイル名ベースの引数で正しく動作すること(UIのdata-name属性含む)。"
+  ],
+  "verification": [
+    "node --check app.js / src/sync/github.js は成功。",
+    "実行コード差分は5コミットそれぞれcheck-commit-size.sh基準内(合計約278行、個別コミット単位では200行以内)。",
+    "npm run code:index:write → npm run test:manifest:write の順で実行し、node scripts/test-manifest.js --check はPASS。",
+    "node scripts/release-gate.js releases/v345.json をフォアグラウンド(timeout 600000、出力ファイルへリダイレクト)で実行、結果を別コマンドで確認。"
+  ],
+  "notes": [
+    "単位14+15+14b(修正フェーズ第2段=同期)。実装・レビューはCodex利用上限のためimplementer+reviewer(Claude)単系統。密結合な変更のため単位間で機械分割せず1版として着地。"
+  ],
+  "knownLimitations": [
+    "routineChains/weeklyReviews/cycleReviewsはcomputeSyncMergeのマージ対象に入っておらず、リモート採用で無警告に消えうる既知リスクが残る(tests/store-core.test.js [B-2][B-3])。LOSS_RISK_KEYSでconfirm判定には含めたが、マージ対象への昇格は本版の範囲外。",
+    "unit16(runArchive tombstone)着地時、本版のreportsマージにarchivedDateSet除外を追加する手直しが必要(未実施)。"
+  ]
+}
