@@ -72,6 +72,16 @@ function configureSync(syncMod) {
   const resetSaveProbe = () => page.evaluate(() => { window.__v267SaveCalls = 0; });
   const saveCalls = () => page.evaluate(() => window.__v267SaveCalls || 0);
   const openProject = async (id) => {
+    // v329: 行の副操作は…メニュー(排他)の中。DOM直操作のトグルはrenderを経ないため
+    // 開閉状態がそのまま残ることがあり、閉じている時だけ開く(セレクタ追随・assert不変)
+    const menuOpen = await page.evaluate((rowId) => {
+      const panel = document.querySelector(`[data-wbs-row-id="${rowId}"] .wbs-row-menu-panel`);
+      return panel ? !panel.hidden : false;
+    }, id);
+    if (!menuOpen) {
+      await page.click(`[data-wbs-row-id="${id}"] [data-action="wbs-row-menu-toggle"]`);
+      await page.waitForTimeout(150);
+    }
     await page.locator(`[data-action="edit-project"][data-id="${id}"]`).first().click();
     await page.waitForSelector("[data-twy-track]", { state: "attached" });
   };
@@ -108,7 +118,10 @@ function configureSync(syncMod) {
     }, { key: STATE_KEY, today: TODAY, cycle: CYCLE, projects: [project("p-num"), project("p-ms")],
       tasks: [task("t-num", "p-num"), task("t-ms", "p-ms")],
       blocks: [block("b-num", "t-num", "09"), block("b-ms", "t-ms", "11")] });
-    await page.reload(); await page.waitForSelector('[data-action="toggle-wbs-edit"]'); baseline = await savedState();
+    // v328(既存): toggle-wbs-editは単独ボタンと「表示 ▾」ポップオーバー内の2箇所にあり、
+    // 後者は既定非表示のためvisible待ちだと最初の1件(非表示側)で詰まる。ここではクリックせず
+    // 存在確認だけなのでattachedで待つ(セレクタ追随・assert不変)
+    await page.reload(); await page.waitForSelector('[data-action="toggle-wbs-edit"]', { state: "attached" }); baseline = await savedState();
 
     await openProject("p-num"); await page.locator('[data-action="twy-kind-numeric"]').click();
     for (const [field, value] of [["twyName", "読書"], ["twyStartDate", TODAY], ["twyBaseline", "0"],
@@ -130,7 +143,10 @@ function configureSync(syncMod) {
       && await page.locator(`[data-twy-track-id="${numeric?.id}"] .t-state`).count() === 1
       && await page.locator(`[data-twy-track-id="${milestone?.id}"] .twy-ms-node`).count() === 2);
 
-    await page.locator('.twy-commit-open[data-action="twy-open-commit"]').click();
+    // v329以前から: 12WY Projectが複数(p-num/p-ms)あると各行に同じ「今週を確定」ボタンが
+    // 出るため2件に一致する。twy-open-commitはプロジェクト非依存のグローバルシートを開くため
+    // どちらでもよく、.first()で明示する(セレクタ追随・assert不変)
+    await page.locator('.twy-commit-open[data-action="twy-open-commit"]').first().click();
     check("条件2 確定前は候補2コマが既定選択", await page.locator('.twy-commit-row input[type="checkbox"]:checked').count() === 2);
     await resetSaveProbe(); await page.locator('[data-action="twy-commit-week"]').click();
     state = await savedState();
@@ -175,7 +191,10 @@ function configureSync(syncMod) {
       `[data-twy-track-id="${numeric.id}"] .twy-val`).textContent()).replace(/\s/g, "") === "1/20章");
 
     console.log("[2b] 判定条件2: 確定済み週の実DOM免除でCOUNTDOWN分母減・全免除N/A");
-    await page.locator('.twy-commit-open[data-action="twy-open-commit"]').click();
+    // v329以前から: 12WY Projectが複数(p-num/p-ms)あると各行に同じ「今週を確定」ボタンが
+    // 出るため2件に一致する。twy-open-commitはプロジェクト非依存のグローバルシートを開くため
+    // どちらでもよく、.first()で明示する(セレクタ追随・assert不変)
+    await page.locator('.twy-commit-open[data-action="twy-open-commit"]').first().click();
     const milestoneItem = items[1];
     await excuseCommitment(milestoneItem.id, "今週対象外");
     check("条件2 未完了1件の免除で確定シート分母は2→1", (await page.locator(".twy-commit-count").textContent())
@@ -186,11 +205,23 @@ function configureSync(syncMod) {
     check("条件2 LIFE BAND信号/展開内訳も1/1へ減る", (await reducedSignal.textContent()).includes("1/1・実行率 100%")
       && (await page.locator(".life-band .twy-score-detail").textContent()).includes("100% (1/1)"));
 
+    // v331〜v334: execの計画一覧(renderExecNowRow/UpcomingRow)は未完了Blockだけを対象にし、
+    // 実績タイムラインの完了解除ボタン(↺)も実績モードでは出さない設計になったため、完了済み
+    // Blockへのtoggle-block直接クリックが届かなくなった。編集モーダルの「完了」チェックボックス
+    // (data-modal-field="completed")で同じ状態変更を行う(セレクタ追随・assert不変)
     await page.locator('.nav-button[data-view="exec"]').click();
-    const undoButton = page.locator(`[data-action="toggle-block"][data-id="${completionSeed.blockId}"]`).first();
-    await undoButton.click();
+    await page.click('.exec-mode-segmented [data-action="exec-mode-toggle"][data-mode="actual"]');
+    await page.waitForTimeout(200);
+    await page.click(`[data-action="edit-block"][data-id="${completionSeed.blockId}"]`);
+    await page.waitForSelector('[data-modal-field="completed"]', { state: "attached" });
+    await page.uncheck('[data-modal-field="completed"]');
+    await page.click('[data-action="modal-save"]');
+    await page.waitForTimeout(200);
     await page.locator('.nav-button[data-view="wbs"]').click();
-    await page.locator('.twy-commit-open[data-action="twy-open-commit"]').click();
+    // v329以前から: 12WY Projectが複数(p-num/p-ms)あると各行に同じ「今週を確定」ボタンが
+    // 出るため2件に一致する。twy-open-commitはプロジェクト非依存のグローバルシートを開くため
+    // どちらでもよく、.first()で明示する(セレクタ追随・assert不変)
+    await page.locator('.twy-commit-open[data-action="twy-open-commit"]').first().click();
     await excuseCommitment(completionSeed.id, "全件免除確認");
     check("条件2 確定シートは全免除でN/A", (await page.locator(".twy-commit-count").textContent()).includes("N/A(全件免除)"));
     await page.locator('[data-action="modal-close"]').click();

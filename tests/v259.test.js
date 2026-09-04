@@ -173,6 +173,11 @@ function sourceBetween(source, startMarker, endMarker) {
       localStorage.setItem(key, JSON.stringify(state));
     }, { key: STATE_KEY, today: TODAY, projectCycle, settingCycle, tracks, measurements, title });
     await page.reload();
+    // v329: 行の副操作は…メニュー(排他)の中。reload直後は必ず閉じているため先に開く
+    // (セレクタ追随・assert不変)
+    await page.waitForSelector('[data-wbs-row-id="p259"] [data-action="wbs-row-menu-toggle"]');
+    await page.locator('[data-wbs-row-id="p259"] [data-action="wbs-row-menu-toggle"]').first().click();
+    await page.waitForTimeout(150);
     await page.waitForSelector('[data-action="edit-project"][data-id="p259"]');
     await page.locator('[data-action="edit-project"][data-id="p259"]').first().click();
     await page.waitForSelector("[data-twy-track]", { state: "attached" });

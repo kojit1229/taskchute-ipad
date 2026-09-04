@@ -114,14 +114,23 @@ function check(name, cond, extra = "") {
       view: "wbs"
     });
 
-    check("WishのProjectカード(badge)がWBSに表示される", await page.locator(".badge.purple", { hasText: "Wish" }).count() === 1);
+    // v329: Project見出しがタグ・進捗・完了数中心の2行構成へ変更され、Wishは.wbs-project-meta内の
+    // テキスト[Wish]で示される(badge purpleは廃止。セレクタ追随・assert不変)
+    check("WishのProjectカード(badge)がWBSに表示される", await page.locator(".wbs-project-meta", { hasText: "[Wish]" }).count() === 1);
+    // v329: Task行のタイトルはdata-action="edit-task"を持たなくなり.wbs-task-titleで表示のみを担う
+    // (編集は…メニュー内のedit-taskボタンに分離。表示検証はタイトル要素で行う・assert不変)
     check("Wish配下のTaskタイトルがWBSに表示される",
-      await page.locator('span[data-action="edit-task"]', { hasText: WISH_TITLE_A }).count() === 1);
+      await page.locator('.wbs-task-title', { hasText: WISH_TITLE_A }).count() === 1);
     check("通常ProjectのTaskタイトルも引き続き表示される",
-      await page.locator('span[data-action="edit-task"]', { hasText: WBS_TITLE_A }).count() === 1);
+      await page.locator('.wbs-task-title', { hasText: WBS_TITLE_A }).count() === 1);
 
     // インライン編集モードで、Wishタスクの期限を直接編集できる(既存のwbs-edit機構がそのまま効くこと)
-    await page.click('[data-action="toggle-wbs-edit"]');
+    // v328(既存): 1279px以下は単独ボタン(.wbs-edit-toggle)がdisplay:noneになり、
+    // 「表示 ▾」ポップオーバー(.wbs-view-menu)内の.wbs-menu-edit-toggleを使う設計。
+    // 本テストのviewportは1100pxのため先にポップオーバーを開く(セレクタ追随・assert不変)
+    await page.click('[data-action="wbs-view-menu-toggle"]');
+    await page.waitForTimeout(150);
+    await page.click('button.wbs-menu-edit-toggle[data-action="toggle-wbs-edit"]');
     await page.waitForTimeout(300);
     const wishDueInput = page.locator('input[data-wbs-edit="dueDate"][data-id="w-1"]');
     check("Wishタスクにも期限のインライン入力が出る", await wishDueInput.count() === 1);
@@ -136,6 +145,9 @@ function check(name, cond, extra = "") {
     // (e追補) WBS上のWish Projectは削除ボタンが出ない/削除アクションが拒否される
     // ============================================================
     console.log("[1b] Wish Projectの削除ボタン非表示 + 削除ガード + 種別ロック");
+    // v329: 行の副操作は…メニュー(排他)の中。先に開く(セレクタ追随・assert不変)
+    await page.click('[data-wbs-row-id="wish-1"] [data-action="wbs-row-menu-toggle"]');
+    await page.waitForTimeout(150);
     await page.click('button[data-action="edit-project"][data-id="wish-1"]');
     await page.waitForTimeout(200);
     check("Wish Projectの編集モーダルに削除ボタンが出ない", await page.locator('[data-action="modal-delete"]').count() === 0);
@@ -166,6 +178,17 @@ function check(name, cond, extra = "") {
     // (f追補) WBSのWish Project配下の新規タスク作成は期日が既定で空になる
     // ============================================================
     console.log("[1c] Wish Project配下の新規タスク作成では期日が既定で空になる");
+    // v329: 行の副操作は…メニュー(排他)の中。[1b]でwish-1の…メニューを開いたまま(DOM直操作の
+    // トグルはrenderを経ないため開閉状態がそのまま残る)なので、閉じている時だけ開く
+    // (セレクタ追随・assert不変)
+    const wish1MenuOpen = await page.evaluate(() => {
+      const panel = document.querySelector('[data-wbs-row-id="wish-1"] .wbs-row-menu-panel');
+      return panel ? !panel.hidden : false;
+    });
+    if (!wish1MenuOpen) {
+      await page.click('[data-wbs-row-id="wish-1"] [data-action="wbs-row-menu-toggle"]');
+      await page.waitForTimeout(150);
+    }
     await page.click('button[data-action="add-task-to-project"][data-id="wish-1"]');
     await page.waitForTimeout(200);
     const newTaskDueInput = page.locator('input[data-modal-field="dueDate"]');

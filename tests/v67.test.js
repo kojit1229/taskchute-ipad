@@ -78,13 +78,17 @@ function check(name, cond, extra = "") {
       localStorage.setItem(key, JSON.stringify(state));
     }, { key: KEY, today: TODAY });
     await page.reload();
-    await page.waitForSelector('[data-action="edit-task"][data-id="task-ai1"]');
+    await page.waitForSelector('[data-wbs-row-id="task-ai1"] [data-action="wbs-row-menu-toggle"]');
     check("保存前はWBS一覧に🤝マーク無し", await page.locator(".ai-work-flag").count() === 0);
+    // v329: 行の副操作は…メニュー(排他)の中。先に開く(セレクタ追随・assert不変)
+    await page.click('[data-wbs-row-id="task-ai1"] [data-action="wbs-row-menu-toggle"]');
+    await page.waitForTimeout(150);
     await page.click('[data-action="edit-task"][data-id="task-ai1"]');
     await page.check('[data-modal-field="aiWork"]');
     await page.fill('[data-modal-field="aiWorkBrief"]', "候補3社を比較してまとめてほしい");
     await page.click('[data-action="modal-save"]');
-    await page.waitForSelector(".ai-work-flag");
+    // v329: 🤝マークは…メニュー(既定非表示)の中。表示検証はcountで行うためattachedで待つ
+    await page.waitForSelector(".ai-work-flag", { state: "attached" });
     const saved = (await readState()).tasks.find((task) => task.id === "task-ai1");
     check("aiWorkをtrueで保存", saved?.aiWork === true, JSON.stringify(saved));
     check("aiWorkBriefを保存", saved?.aiWorkBrief === "候補3社を比較してまとめてほしい", JSON.stringify(saved));

@@ -359,6 +359,15 @@ for (const name of ["twy-excuse", "twy-excuse-cancel", "twy-add-item", "twy-add-
     check("pre-commit見積表示spanにpointerが出ない", await page.locator('.twy-commit-sub .c-when').first()
       .evaluate((el) => getComputedStyle(el).cursor !== "pointer"));
     await page.locator('[data-action="modal-close"]').click();
+    // v329: 行の副操作は…メニュー(排他)の中。閉じている時だけ開く(セレクタ追随・assert不変)
+    const p1MenuOpen = await page.evaluate(() => {
+      const panel = document.querySelector('[data-wbs-row-id="p1"] .wbs-row-menu-panel');
+      return panel ? !panel.hidden : false;
+    });
+    if (!p1MenuOpen) {
+      await page.click('[data-wbs-row-id="p1"] [data-action="wbs-row-menu-toggle"]');
+      await page.waitForTimeout(150);
+    }
     await page.locator('[data-action="edit-project"][data-id="p1"]').first().click();
     await page.locator('[data-modal-field="title"]').fill("Project saved"); await page.locator('[data-action="modal-save"]').click();
     check("既存projectモーダル保存に退行なし", (await savedState()).projects.find((entry) => entry.id === "p1").title === "Project saved");

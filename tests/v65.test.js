@@ -144,6 +144,9 @@ function check(name, cond, extra = "") {
       projects: [testProject()],
       view: "wbs"
     });
+    // v329: 行の副操作は…メニュー(排他)の中。先に開く(セレクタ追随・assert不変)
+    await page.click('[data-wbs-row-id="task-lev1"] [data-action="wbs-row-menu-toggle"]');
+    await page.waitForTimeout(150);
     await page.click('[data-action="edit-task"][data-id="task-lev1"]');
     await page.waitForTimeout(200);
     check("Task編集モーダルにレバレッジselectがある", await page.locator('[data-modal-field="leverageType"]').count() === 1);
@@ -178,6 +181,9 @@ function check(name, cond, extra = "") {
       projects: [testProject()],
       view: "wbs"
     });
+    // v329: 行の副操作は…メニュー(排他)の中。先に開く(セレクタ追随・assert不変)
+    await page.click('[data-wbs-row-id="task-lev2"] [data-action="wbs-row-menu-toggle"]');
+    await page.waitForTimeout(150);
     await page.click('[data-action="edit-task"][data-id="task-lev2"]');
     await page.waitForTimeout(200);
     check("10秒判定ヘルプ(details)がある", await page.locator(".lev-helper").count() === 1);
@@ -190,6 +196,16 @@ function check(name, cond, extra = "") {
     check("2問以上Yesでselectがassetになる", selVal1 === "asset", selVal1);
     await page.click('[data-action="modal-close"]');  // 保存せずキャンセル
     await page.waitForTimeout(150);
+    // v329: 直前に開いた…メニューがDOM直操作(render非経由)のため開いたまま残ることがある。
+    // 閉じている時だけ開く(セレクタ追随・assert不変)
+    const task_lev2MenuOpen = await page.evaluate(() => {
+      const panel = document.querySelector('[data-wbs-row-id="task-lev2"] .wbs-row-menu-panel');
+      return panel ? !panel.hidden : false;
+    });
+    if (!task_lev2MenuOpen) {
+      await page.click('[data-wbs-row-id="task-lev2"] [data-action="wbs-row-menu-toggle"]');
+      await page.waitForTimeout(150);
+    }
     await page.click('[data-action="edit-task"][data-id="task-lev2"]');  // 開き直す
     await page.waitForTimeout(150);
     const selValAfterCancel = await page.locator('[data-modal-field="leverageType"]').inputValue();

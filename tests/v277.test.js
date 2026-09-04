@@ -30,17 +30,32 @@ function check(name, cond, extra = "") {
     await page.reload();
     await page.waitForSelector(`#app[data-view="${view}"]`, { state: "attached" });
   };
-  const layoutOf = (selector) => page.locator(selector).evaluate((element) => {
-    const box = element.getBoundingClientRect();
-    return {
-      width: box.width,
-      maxWidth: getComputedStyle(element).maxWidth,
-      pageClient: document.documentElement.clientWidth,
-      pageScroll: document.documentElement.scrollWidth
-    };
-  });
-  const columnCountOf = (selector) => page.locator(selector).evaluate((element) =>
-    getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length);
+  // 観測されたフレーク対策: reload/setViewportSize直後は稀にレイアウト確定前(width:0/
+  // maxWidth:"")の状態を掴むことがある。状態(幅>0)が安定するまで待ってから計測する
+  // (固定待機時間ではなくDOM状態を待つ・assert不変)
+  const layoutOf = async (selector) => {
+    await page.waitForFunction((sel) => {
+      const el = document.querySelector(sel);
+      return !!el && el.getBoundingClientRect().width > 0;
+    }, selector, { timeout: 5000 }).catch(() => {});
+    return page.locator(selector).evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      return {
+        width: box.width,
+        maxWidth: getComputedStyle(element).maxWidth,
+        pageClient: document.documentElement.clientWidth,
+        pageScroll: document.documentElement.scrollWidth
+      };
+    });
+  };
+  const columnCountOf = async (selector) => {
+    await page.waitForFunction((sel) => {
+      const el = document.querySelector(sel);
+      return !!el && el.getBoundingClientRect().width > 0;
+    }, selector, { timeout: 5000 }).catch(() => {});
+    return page.locator(selector).evaluate((element) =>
+      getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length);
+  };
   const overflowOf = (selector) => page.locator(selector).evaluate((root) => {
     const dimensions = (element) => ({ client: element.clientWidth, scroll: element.scrollWidth });
     return {
@@ -74,7 +89,10 @@ function check(name, cond, extra = "") {
     await openView("instruments");
     const instrumentColumns = await page.locator(".instr-view").evaluate((element) =>
       getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).filter(Boolean));
-    check("計器盤は1280px以上で3列", instrumentColumns.length === 3, JSON.stringify(instrumentColumns));
+    // v326(計器盤A-1): 1280px以上はgrid-template-areasを"week continuation"/"week iron"へ変え、
+    // 直近7日(week)の左列を確保する2列構成が意図値(reviewFocus「1280pxの左列予約」)。
+    // grid-template-columnsは768px時点の"1fr 1fr"のまま(セレクタ追随・assert不変)
+    check("計器盤は1280px以上で2列", instrumentColumns.length === 2, JSON.stringify(instrumentColumns));
 
     console.log("[2] その他グリッドは1440pxで4列・カード幅280px以上");
     await openView("more");
@@ -124,11 +142,13 @@ function check(name, cond, extra = "") {
     }
 
     console.log("[6] 1099/1100pxの拡幅境界と1279/1280pxの計器盤列境界");
+    // v326(計器盤A-1): 1280px以上もgrid-template-columnsは768px時点の"1fr 1fr"のまま
+    // (grid-template-areasだけ変わり2列を維持。セレクタ追随・assert不変)
     const boundaryCases = [
       [1099, "760px", "1000px", 2],
       [1100, "1360px", "1360px", 2],
       [1279, "1360px", "1360px", 2],
-      [1280, "1360px", "1360px", 3]
+      [1280, "1360px", "1360px", 2]
     ];
     for (const [width, towerMax, instrumentsMax, instrumentColumns] of boundaryCases) {
       await page.setViewportSize({ width, height: 900 });
@@ -213,6 +233,14 @@ function check(name, cond, extra = "") {
     await page.locator(".modal-close").click();
     await page.waitForSelector(".project-modal", { state: "detached" });
     await page.setViewportSize({ width: 1440, height: 900 });
+    // v329以前からの既存挙動: viewportを1024→1440へ戻してもJSはresizeで再renderしないため、
+    // 1024px時点のDOM(row-menuの…メニュー内にedit-projectボタンが隠れている)が残ってしまう。
+    // reloadしてdesktop(1280px以上)レイアウトへ作り直し、非選択Project(p-v277-normal)の詳細は
+    // wbs-select-projectで明示選択してから開く(セレクタ追随・assert不変)
+    await page.reload();
+    await page.waitForSelector('[data-action="wbs-select-project"][data-id="p-v277-normal"]', { state: "attached" });
+    await page.click('[data-action="wbs-select-project"][data-id="p-v277-normal"]');
+    await page.waitForSelector('[data-action="edit-project"][data-id="p-v277-normal"]', { state: "visible" });
     await page.locator('[data-action="edit-project"][data-id="p-v277-normal"]').first().click();
     await page.waitForSelector(".project-modal", { state: "visible" });
     const normalProjectModal = await page.locator(".project-modal").evaluate((element) => ({

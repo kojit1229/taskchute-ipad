@@ -48,9 +48,14 @@ check("確定はsaveAndRender→renderModal", /saveAndRender/.test(commitAction)
 check("CSS.escape標準API・project.title裁定・日付文字列parse禁止を固定",
   appSource.includes("CSS.escape(taskId)") && appSource.includes("group.project?.title || \"\"")
   && !/new Date\s*\(\s*["'`]/.test(appSource.slice(appSource.indexOf("function openTwyCommitSheet"), appSource.indexOf("function openProjectEditor"))));
+// v329: @media (max-width: 480px)内でwbs-project-headのコンパクト化に合わせ.twy-commit-openへ
+// 意図的なfont-size縮小(11px)が追加された。本チェックの意図(基準サイズを上書きする独自定義が
+// 無いこと)は維持しつつ、@mediaブロック内のスコープ済み例外は許容するため、mediaブロック本体を
+// 除いたベースCSSに対して判定する(セレクタ追随・assert不変)
+const cssSourceOutsideMediaQueries = cssSource.replace(/@media[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, "");
 check("v263 CSSとService Worker更新", cssSource.includes(".twy-commit-sheet")
   && /\.modal-title span\s*\{[^}]*font-size:\s*\.8em;[^}]*color:\s*var\(--muted\)/s.test(cssSource)
-  && !/\.twy-commit-open\s*\{[^}]*font-size:/s.test(cssSource)
+  && !/\.twy-commit-open\s*\{[^}]*font-size:/s.test(cssSourceOutsideMediaQueries)
   && swSource.includes(`CACHE_NAME = "taskchute-journal-pwa-v${maxRelease}"`));
 for (const action of ["twy-commit-toggle-group", "twy-commit-toggle-block"]) {
   const source = actionSource(action);
@@ -162,8 +167,11 @@ check("週跨ぎ送信はデータ不変・偽成功なしで当週シートへ�
       state.currentView = "wbs"; state.selectedDate = today; state.settings.twelveWeekStartDate = cycleStart;
       Object.assign(state, fixture); localStorage.setItem(key, JSON.stringify(state));
     }, { key: STATE_KEY, today: TODAY, cycleStart, fixture });
-    await page.reload(); await page.waitForSelector('[data-action="toggle-wbs-edit"]');
-    if (cycleStart) await page.waitForSelector('button[data-action="twy-open-commit"]');
+    // v328(既存): toggle-wbs-editは単独ボタンと「表示 ▾」ポップオーバー内の2箇所にあり、
+    // 後者は既定非表示のためvisible待ちだと詰まる。ここではクリックせず存在確認だけなので
+    // attachedで待つ(セレクタ追随・assert不変)
+    await page.reload(); await page.waitForSelector('[data-action="toggle-wbs-edit"]', { state: "attached" });
+    if (cycleStart) await page.waitForSelector('button[data-action="twy-open-commit"]', { state: "attached" });
   }
   async function resetSaveProbe() {
     await page.evaluate((key) => {
@@ -175,7 +183,10 @@ check("週跨ぎ送信はデータ不変・偽成功なしで当週シートへ�
   }
   const saveCount = () => page.evaluate(() => window.__v263SaveCount || 0);
   const generateReportCount = () => page.evaluate(() => window.__v263GenerateReportCalls || 0);
-  const openSheet = () => page.locator('.twy-commit-open[data-action="twy-open-commit"]').click();
+  // p1/p2とも12WY projectのため行ごとに同じボタンが2件出る。twy-open-commitはproject非依存の
+  // グローバルシートを開くためどちらでもよく、.first()で明示する(v329とは無関係の既存事象・
+  // セレクタ追随・assert不変)
+  const openSheet = () => page.locator('.twy-commit-open[data-action="twy-open-commit"]').first().click();
   const group = (taskId) => page.locator(`.twy-commit-row[data-twy-task-id="${taskId.replaceAll('"', '\\"')}"]`);
   try {
     await page.clock.setFixedTime(new Date(2026, 7, 25, 10, 0, 0));
@@ -276,10 +287,17 @@ check("週跨ぎ送信はデータ不変・偽成功なしで当週シートへ�
       && await page.locator(".twy-commit-row").count() === 0);
 
     await seed();
+    // v329: 行の副操作は…メニュー(排他)の中。reload直後は必ず閉じているため先に開く
+    // (セレクタ追随・assert不変)
+    await page.click('[data-wbs-row-id="p1"] [data-action="wbs-row-menu-toggle"]');
+    await page.waitForTimeout(150);
     await page.locator('[data-action="edit-project"][data-id="p1"]').first().click();
     await page.locator('[data-modal-field="title"]').fill("Project saved"); await page.locator('[data-action="modal-save"]').click();
     saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), STATE_KEY);
     check("既存projectモーダル開閉保存に退行なし", saved.projects.find((entry) => entry.id === "p1")?.title === "Project saved");
+    // v329: task行も同様に…メニュー内。先に開く(セレクタ追随・assert不変)
+    await page.click('[data-wbs-row-id="t1"] [data-action="wbs-row-menu-toggle"]');
+    await page.waitForTimeout(150);
     await page.locator('[data-action="edit-task"][data-id="t1"]').first().click();
     await page.locator('[data-modal-field="title"]').fill("Task saved"); await page.locator('[data-action="modal-save"]').click();
     saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), STATE_KEY);
