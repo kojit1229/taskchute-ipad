@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v345";  // v345: 同期比較キー拡張+loadFromGitHub confirm+追記型マージ(修正フェーズ単位14/15/14b)
+const CACHE_NAME = "taskchute-journal-pwa-v346";  // v346: sanitizeHTMLにTEMPLATE/SMIL遮断(修正フェーズ単位17)
 // v334: 実行タブPC 2ペイン(§B。ナビ統合§Cは持ち越し)
 // v333: 実行ラッパー(計画/実績切替)・モバイルナビ4項目
 // v332: 実行タブA-1b ヘッダ1行化・タスク一覧再編・死コード削除
