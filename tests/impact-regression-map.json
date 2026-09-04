@@ -33,7 +33,8 @@
         "^app\\.js$"
       ],
       "suites": [
-        "action-registry-core", "track-crud-core"
+        "action-registry-core",
+        "track-crud-core"
       ]
     },
     "navigation-view": {
@@ -242,7 +243,9 @@
         "v318",
         "v321",
         "v325",
-        "v327"
+        "v327",
+        "instruments-core",
+        "v326"
       ]
     },
     "instruments-feature": {
