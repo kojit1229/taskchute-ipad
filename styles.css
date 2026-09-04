@@ -962,6 +962,14 @@ h3 {
 .exec-analysis-fold { margin-top: 12px; }
 .exec-analysis-fold summary { list-style: none; cursor: pointer; min-height: 44px; display: flex; align-items: center; font-size: 12px; color: var(--muted); }
 .exec-analysis-fold summary::-webkit-details-marker { display: none; }
+/* v334(§B): PC 2ペイン(1280px以上、JS側window.matchMediaで構造分岐。wbs-projects.is-desktop
+   と同じ二重ガードとしてCSS側も1280px未満では効かないようメディアクエリ内に限定する)。 */
+@media (min-width: 1280px) {
+  .exec-two-pane { display: grid; grid-template-columns: minmax(360px, 600px) minmax(0, 1fr); align-items: start; gap: 16px; }
+  .exec-pane-left, .exec-pane-right { min-width: 0; }
+}
+.exec-row-done .checkbox-button.done { display: inline-flex; align-items: center; justify-content: center; width: 44px; min-width: 44px; height: 44px; color: var(--green-text); background: none; border: 0; }
+.exec-done-section { margin-top: 12px; }
 
 .block-meta {
   display: flex;

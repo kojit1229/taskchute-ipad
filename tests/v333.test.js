@@ -224,8 +224,12 @@ async function seed(page, values) {
     console.log("[8] レビュー対応(A-H2/A-M6/M-5): 実績モードで下書きスケジュール・空き時間タップ(timeline-new-block)・TOWERトークン・RADAR可視。execを離れるとモードが計画へ戻る");
     check("実績モードのヘッダに下書きスケジュールボタンが出る(重複なし1件)",
       await page.locator('[data-action="ai-schedule"]').count() === 1);
-    check("実績モードのヘッダに予定/実績セグメントが出る(本体側の重複は無い)",
-      await page.locator('.exec-header-actions [data-action="timeline-mode"]').count() === 2);
+    // v334レビュー(A-H1/B-H2)対応: 右列を_execModeに連動させたため、実績モードは
+    // renderTimelineView({mode:"actual"})で固定表示しstate.timelineModeを読み書きしない
+    // 設計へ変更した。予定/実績セグメントは計画モード側(state.timelineModeの切替UI)へ移動し、
+    // 実績モードのヘッダには出さない(tests/v334.test.js[2][3]で新しい配置を検証済み)。
+    check("実績モードのヘッダに予定/実績セグメントは出ない(v334でstate.timelineMode非依存の固定表示へ変更)",
+      await page.locator('.exec-header-actions [data-action="timeline-mode"]').count() === 0);
     const towerVar = await page.locator(".tl-radar-panel").evaluate((el) => getComputedStyle(el.closest(".tower-skin.timeline-tower")).getPropertyValue("--tower-bg").trim());
     check("実績モードで--tower-bgトークンが定義されている(H-2)", towerVar.length > 0, towerVar);
     const radarBox = await page.locator(".tl-radar-panel").boundingBox();

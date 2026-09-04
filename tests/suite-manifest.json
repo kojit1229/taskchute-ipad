@@ -3995,11 +3995,35 @@
         "planning-execution"
       ],
       "assertionSignals": 47,
-      "assertionHash": "07e090f2f88b9503",
-      "sourceHash": "16b770249f8f93be",
+      "assertionHash": "3f5c19e60e0e2a0a",
+      "sourceHash": "19eb8701eb230530",
       "waits": {
         "fixedCount": 3,
         "numericMilliseconds": 150,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v334.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "ui-responsive"
+      ],
+      "assertionSignals": 45,
+      "assertionHash": "8713dc6b0042d49d",
+      "sourceHash": "d26ea75e88ce8c83",
+      "waits": {
+        "fixedCount": 6,
+        "numericMilliseconds": 2100,
         "unresolvedCount": 0
       },
       "sideEffects": {

@@ -5770,19 +5770,74 @@ function execHeaderHTML() {
   `;
 }
 
+// v334: 実績モードのPC 2ペイン左列(§B)専用。「やったこと」=選択日の完了Block全件
+// (v334レビューA-M2対応: execTargetBlocksのルーティン/単発/非Project紐づけ除外は適用しない)。
+// 行= ☐(完了済み表示・非活性)/ タイトル+meta(実績HH:MM–HH:MM・充放電)/
+// 編集(既存edit-block、ロジック無改変)。
+function renderExecDoneRow(block) {
+  const start = block.actualStartAt ? timeFromDateTime(block.actualStartAt) : "";
+  const end = block.actualEndAt ? timeFromDateTime(block.actualEndAt) : "";
+  const chargeInfo = (block.charge != null || block.discharge != null)
+    ? ` ・ 充${block.charge ?? "-"}/放${block.discharge ?? "-"}` : "";
+  const metaHTML = `${start}${end ? `–${end}` : ""}${chargeInfo}${block.category ? ` ・ ${escapeHTML(block.category)}` : ""}`;
+  return `
+    <div class="item exec-row exec-row-done">
+      <span class="checkbox-button done" aria-hidden="true">✓</span>
+      <div class="exec-row-copy">
+        <strong data-action="edit-block" data-id="${block.id}" title="${escapeHTML(block.title)}">${escapeHTML(block.title)}</strong>
+        <div class="exec-row-meta">${metaHTML}</div>
+      </div>
+      <button class="btn" data-action="edit-block" data-id="${block.id}">編集</button>
+    </div>
+  `;
+}
+
+function execDoneListHTML() {
+  // v334レビュー(A-M2)対応: 母集団は発注文言どおり「選択日の完了Block全件」とし、
+  // execTargetBlocks()のルーティン/単発/非Project紐づけ除外は適用しない
+  // (isStaleBlockは完了Blockに対して常にfalseを返すため、blocksForDateからの
+  // 直接フィルタで足りる)。
+  const done = blocksForDate(state.selectedDate).filter((b) => b.completed)
+    .sort((a, b) => (a.actualStartAt || "").localeCompare(b.actualStartAt || ""));
+  return `
+    <section class="section exec-panel exec-amber exec-done-section">
+      <h2>やったこと</h2>
+      <div class="grid">${done.length ? done.map(renderExecDoneRow).join("") : emptyPanel("この日の完了Blockはまだありません")}</div>
+    </section>
+  `;
+}
+
 // v333: 「実行」ラッパー。計画(タスクシュート)/実績(タイムライン)をセグメントで切替える。
 // 既存renderTasks()/renderTimelineView()は本体をそのまま呼ぶ(ロジック・data-action無改変)。
 // モードは_execMode(非永続モジュール変数)のみで管理し、state/localStorageへは書かない。
 // レビュー指摘(A-H1/B-H2/A-M6)対応: ＋Blockはモード共通・計画モードは見込み終了/余白/
 // バッファ帯を維持・実績モードはタイムライン固有の操作(下書きスケジュール・予定/実績
 // セグメント)をヘッダへ集約し、本体側(embedded)の重複するセグメント/ボタン行を省く。
+// v334(§B): 1280px以上は左=一覧(計画=renderTasks本体/実績=やったこと一覧)・右=時間軸を
+// 並べる(desktop判定はrenderWbsDesktopProjects等と同じwindow.matchMediaパターンを踏襲)。
+// v334レビュー(A-H1/B-H2)対応: 右列は_execModeへ連動させた。実績モードは
+// renderTimelineView({embedded:true, mode:"actual"})で実績のみ固定しstate.timelineModeを
+// 読み書きしない。計画モードは既存の予定/実績セグメント(state.timelineMode、既定「予定」)を
+// ヘッダに出し、renderTimelineViewへmode引数として渡す(配置計算・Blockロジックは無改変)。
+// 計画モードでの「実績(実線)+計画(破線)の重ね描画」は、配置計算(renderTimeline)へ
+// 触れずに実現する安全な手段が無かったため今回は見送り、右列はセグメントで選んだ単一モードを
+// 表示するフォールバック(発注書§B「無理なら右列は実績のみ+計画は破線に切替可、と報告」に該当)。
 function renderExecView() {
   const isActual = _execMode === "actual";
+  const desktop = Boolean(window.matchMedia?.("(min-width: 1280px)").matches);
   const endText = projectedEndText() || "見込み終了 —";
   const bufferInfo = computeBufferRemaining(state.selectedDate);
   const bufferText = (state.selectedDate === todayISO() && bufferInfo.hasBuffer)
     ? `余白 ${bufferInfo.remainingMin}分` : "余白 —";
+  // v334レビュー(A-H1/B-H2)対応: 右列は_execModeに連動させる。実績モードは
+  // renderTimelineView({mode:"actual"})で実績のみ固定しstate.timelineModeを読み書きしない。
+  // 計画モードは既存timelineMode切替UI(📅予定/✅実績)をそのまま出す(既定「予定」)。
   const timelineMode = state.timelineMode || "planned";
+  const timelineHTML = `<div class="tower-skin timeline-tower">${renderTimelineView({ embedded: true, mode: isActual ? "actual" : timelineMode })}</div>`;
+  const listHTML = isActual ? execDoneListHTML() : renderTasks({ embedded: true });
+  const bodyHTML = desktop
+    ? `<div class="exec-two-pane"><div class="exec-pane-left">${listHTML}</div><div class="exec-pane-right">${timelineHTML}</div></div>`
+    : (isActual ? timelineHTML : listHTML);
   return `
     <div class="view-header exec-header">
       <div class="exec-header-line">
@@ -5795,20 +5850,18 @@ function renderExecView() {
       </div>
       <div class="row exec-header-actions">
         ${execBlockAddHTML()}
-        ${isActual ? `
+        ${!isActual ? `
           <div class="segmented" style="margin:0">
             <button class="${timelineMode === "planned" ? "active" : ""}" data-action="timeline-mode" data-mode="planned">📅 予定</button>
             <button class="${timelineMode === "actual" ? "active" : ""}" data-action="timeline-mode" data-mode="actual">✅ 実績</button>
           </div>
-          ${!scheduleDraftActive() ? `<button class="btn" data-action="ai-schedule">📋 下書きスケジュール</button>` : ""}
         ` : ""}
+        ${isActual && !scheduleDraftActive() ? `<button class="btn" data-action="ai-schedule">📋 下書きスケジュール</button>` : ""}
       </div>
     </div>
     ${!isActual ? bufferMeterHTML() : ""}
     ${renderDateBar()}
-    ${isActual
-      ? `<div class="tower-skin timeline-tower">${renderTimelineView({ embedded: true })}</div>`
-      : renderTasks({ embedded: true })}
+    ${bodyHTML}
   `;
 }
 
@@ -14006,9 +14059,12 @@ function updateBatteryTick() {
   if (Date.now() - _lastBatteryTickAt < BATTERY_TICK_INTERVAL_MS) return;
   _lastBatteryTickAt = Date.now();
   if (state.selectedDate !== todayISO()) return;
-  // v333: execラッパーの実績モード(タイムライン本体を埋め込み表示)でも同じエネルギー
-  // グラフ要素が描画されるため、ここで凍らせないようガードへ加える(v144レビュー対応と同じ理由)。
-  if (state.currentView === "timeline" || (state.currentView === "exec" && _execMode === "actual")) {
+  // v333: execラッパー(タイムライン本体を埋め込み表示)でも同じエネルギーグラフ要素が
+  // 描画されるため、ここで凍らせないようガードへ加える(v144レビュー対応と同じ理由)。
+  // v334レビュー(A-H2)対応: v334でexecの計画モードでも右列に時間軸(=.energy-graph-overlay)
+  // が出るようになったため、_execModeでの絞り込みをやめモード不問にする(要素の有無は
+  // 直後のquerySelectorが担保、非表示時は何もしない)。
+  if (state.currentView === "timeline" || state.currentView === "exec") {
     const layer = document.querySelector(".energy-graph-overlay");
     if (layer) {
       const allBlocks = blocksForDate(state.selectedDate);
@@ -14147,7 +14203,9 @@ if (window.matchMedia) {
   if (_themeMediaQuery.addEventListener) _themeMediaQuery.addEventListener("change", _onOsThemeChange);
   else if (_themeMediaQuery.addListener) _themeMediaQuery.addListener(_onOsThemeChange);
   const _wbsDesktopMediaQuery = window.matchMedia("(min-width: 1280px)");
-  const _onWbsLayoutChange = () => { if (state.currentView === "wbs") render(); };
+  // v334レビュー(A-M1/B-H1)対応: execも1280px境界でdesktop判定を評価するため、
+  // wbsと同じ幅またぎリスナへexecを追加する(1列⇄2列がリサイズだけで自動追随する)。
+  const _onWbsLayoutChange = () => { if (state.currentView === "wbs" || state.currentView === "exec") render(); };
   if (_wbsDesktopMediaQuery.addEventListener) _wbsDesktopMediaQuery.addEventListener("change", _onWbsLayoutChange);
   else if (_wbsDesktopMediaQuery.addListener) _wbsDesktopMediaQuery.addListener(_onWbsLayoutChange);
 }

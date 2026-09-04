@@ -129,7 +129,10 @@ function analysisFoldHTML() {
 function renderTimelineView(opts = {}) {
   const embedded = opts.embedded === true;
   const nowMinute = (new Date().getHours() + 1) * 60;
-  const mode = state.timelineMode || "planned";
+  // v334レビュー(A-H1/B-H2)対応: opts.modeが渡されればそれを優先する(execラッパーの
+  // 実績モードでstate.timelineModeを読まず「実績」に固定表示するための引数)。未指定時は
+  // 従来どおりstate.timelineMode(非embedded呼び出し・execの計画モード)を見る。
+  const mode = opts.mode || state.timelineMode || "planned";
   // TOWER意匠化(第3弾先行分): タブ全体を .tower-skin.timeline-tower でラップし、
   // 日付バーとタイムライン本体(グリッド)だけを新設のパネル枠(.tl-datebar-panel/
   // .tl-radar-panel/.tl-radar-body)で囲む。囲まれる各関数(renderHeader/renderDateBar/
@@ -154,7 +157,7 @@ function renderTimelineView(opts = {}) {
         <span class="muted" style="font-size:12px">空き時間タップで追加 / ○タップで完了登録 / ▶いま開始・■いま終了でワンタップ実績 / カードタップで編集 / 赤線は現在時刻</span>
       </div>
       ${draftBarHTML()}
-      ${embedded ? analysisFoldHTML() : `${driftPanelHTML()}${timeCombHTML()}`}
+      ${embedded ? "" : `${driftPanelHTML()}${timeCombHTML()}`}
       ${state.settings.timelineCategoryFilter ? `<div class="row" style="margin-bottom:10px; gap:8px; align-items:center">
         <span class="cat-chip" style="background:${getCategoryColor(state.settings.timelineCategoryFilter)}1f; color:${getCategoryColor(state.settings.timelineCategoryFilter)}; border:1px solid ${getCategoryColor(state.settings.timelineCategoryFilter)}66">カテゴリ: ${escapeHTML(state.settings.timelineCategoryFilter)}</span>
         <button class="btn ghost" data-action="timeline-clear-cat" style="font-size:12px">フィルタ解除 ✕</button>
@@ -165,6 +168,7 @@ function renderTimelineView(opts = {}) {
           ${renderTimeline({ compact: false, mode })}
         </div>
       </section>
+      ${embedded ? analysisFoldHTML() : ""}
   `;
   if (embedded) return body;
   return `

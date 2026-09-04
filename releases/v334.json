@@ -1,0 +1,63 @@
+{
+  "version": 334,
+  "date": "2026-09-04",
+  "title": "実行タブ: PC 2ペイン(§B)。サイドバー統合・旧ビュー呼び出しのexec寄せ(§C)はv334bへ持ち越し",
+  "summary": "1280px以上のexecビュー(renderExecView)を2ペイン化した。左列=一覧(計画モードはrenderTasks({embedded:true})本体、実績モードは選択日の完了Block全件「やったこと」)、右列=時間軸(renderTimelineView({embedded:true})本体)。desktop判定はrenderWbsDesktopProjects等と同じwindow.matchMedia(\"(min-width: 1280px)\")パターンをrenderExecView()内で踏襲し、1279px以下はv333aのまま単一列。レビュー修正(A-H1/B-H2)により右列は_execModeに連動する: 実績モードはrenderTimelineView({embedded:true, mode:\"actual\"})で実績のみ固定表示し、state.timelineModeを読み書きしない。計画モードは既存の📅予定/✅実績セグメント(state.timelineMode、既定「予定」)をヘッダに出し右列へmode引数として渡す。計画モードの右列を「実績(実線)+計画(破線)の重ね描き」にする発注書§B仕様は、配置計算(renderTimeline)へ触れずに実現する安全な手段が見当たらなかったため見送ったままで、計画モードの右列はセグメントで選んだ単一モードのみを表示するフォールバックのまま(発注書§Bが明示的に許容する代替、uncertainties(a)参照)。§C(PCサイドバーのタスクシュート/タイムライン統合、旧setView(\\\"tasks\\\"/\\\"timeline\\\")呼び出し元のexec寄せ)は本バージョンでは実装せず、order-v335-exec-nav.mdへ持ち越した(uncertainties(b)参照)。",
+  "changedFiles": [
+    "CHANGES_v334.md",
+    "app.js",
+    "docs/test-impact-map.generated.md",
+    "releases/v334.json",
+    "src/features/timeline.js",
+    "styles.css",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/v333.test.js",
+    "tests/v334.test.js"
+  ],
+  "intent": [
+    "1280px以上の広い画面で「計画の一覧」と「時間軸」を同時に見比べられるようにし、モード切替のタップ往復を無くす。",
+    "既存のrenderTasks()/renderTimelineView()本体・data-action・配置計算ロジックには一切触れず、renderExecView()側のレイアウト分岐だけで2ペイン化する。"
+  ],
+  "changes": [
+    "app.jsのrenderExecView()に1280px以上判定(window.matchMedia)を追加。desktop=trueのとき、既存のlistHTML(計画=renderTasks({embedded:true})本体/実績=新設execDoneListHTML())とtimelineHTML(renderTimelineView({embedded:true})をtower-skinで包んだもの)を.exec-two-pane(.exec-pane-left/.exec-pane-right)へ並べて返す。1279px以下は従来どおり単一列(isActualで出し分け、v333aから無改変)。",
+    "新設execDoneListHTML()/renderExecDoneRow(block): 実績モードのPC左ペイン専用。レビュー修正(A-M2)対応: blocksForDate(state.selectedDate)からcompleted===trueのみを抽出し(execTargetBlocks()のルーティン/単発/非Project紐づけ除外は適用しない=選択日の完了Block全件)、actualStartAt昇順で並べる。行は☐(完了済み表示・非活性の.checkbox-button.done)/タイトル+meta(実績HH:MM–HH:MM・充放電・カテゴリ)/編集ボタン(既存data-action=\"edit-block\"、openBlockEditor()をそのまま呼ぶ。ロジック無改変)。0件時はemptyPanel()で「この日の完了Blockはまだありません」を出す。",
+    "styles.cssへ@media (min-width: 1280px)内に.exec-two-pane(grid-template-columns: minmax(360px, 600px) minmax(0, 1fr))・.exec-pane-left/.exec-pane-rightを追加(WBSの.wbs-projects.is-desktopと同じ「JS側で構造分岐+CSS側もメディアクエリで二重ガード」方式)。.exec-row-done/.exec-done-sectionは既存.exec-row/.exec-panel系パターンを再利用する最小限の追加。",
+    "sw.jsのCACHE_NAMEをv334へ更新。",
+    "レビュー修正(A-H1/B-H2): renderExecView()のtimelineHTML生成でrenderTimelineView({embedded:true, mode:...})へmode引数を明示的に渡すようにした(実績モード=\"actual\"固定、計画モード=state.timelineMode||\"planned\")。src/features/timeline.jsのrenderTimelineView()はopts.modeを最優先で読むよう1行変更(mode = opts.mode || state.timelineMode || \"planned\"、renderTimeline()自体・配置計算・Blockロジックは無改変)。ヘッダの📅予定/✅実績セグメント(data-action=\"timeline-mode\")は実績モードでは出さず(state.timelineModeを触らせない)、計画モードでのみ出すよう条件を反転した。",
+    "レビュー修正(A-H2): updateBatteryTick()のガード(app.js)から_execMode===\"actual\"の絞り込みを外し、state.currentView===\"exec\"であればモード不問で.energy-graph-overlayを更新するようにした(計画モードの2ペインでもエネルギーカーブが凍らない)。",
+    "レビュー修正(A-M1/B-H1): 起動時に登録するwindow.matchMedia(\"(min-width: 1280px)\")のchangeリスナ(_onWbsLayoutChange)の再描画条件へstate.currentView===\"exec\"を追加(従来はwbsのみ)。クリック等の再描画を挟まなくても、ウィンドウ幅が1280px境界を跨いだ瞬間に1列⇄2列が自動追随する。",
+    "レビュー修正(A-M3): src/features/timeline.jsのanalysisFoldHTML()(DRIFT/TIME COMB折りたたみ)の埋め込み時の出力位置を、時間軸グリッド(.tl-radar-panel)より前から後ろへ移動した(発注§B「DRIFT/TIME COMBは右列下」)。",
+    "tests/v334.test.jsを更新(1280px以上での左右ペイン可視・並び順、計画モードの左=renderTasks本体/右=時間軸=既定「予定」、実績モードの左=やったこと(完了Block全件・ルーティン/単発含む3件で件数一致・実績時刻表示)/右=実績のみ(予定Blockは出ない)、計画モードのセグメントで予定⇔実績を切替できること、やったこと行の編集ボタンから既存Block編集モーダルが開くこと、1280⇔1279pxをsetViewportSizeだけ(クリックなし)で1列⇄2列が切り替わること、1280px境界の横スクロールなしを計画・実績両モードで検証、モード切替がstate/localStorageを書き換えないこと、計画モードの2ペインでもエネルギーカーブがtickで更新されること、pageerror 0)。"
+  ],
+  "uncertainties": [
+    "(a) 発注書§Bの「計画モードは右の時間軸に実績(実線)+計画(破線)を重ねる」は未実装のまま。現行のrenderTimeline({mode})は予定/実績を排他フィルタで描く設計で、重ね描きには新規の合成ロジック(2回描画して重ねる、または既存カードへ2系統目の破線レイヤーを足す)が要る。これは発注書「やらないこと: タイムライン配置計算・Blockロジックの変更」に抵触しうると判断し、計画モードの右列はヘッダの📅予定/✅実績セグメント(state.timelineMode、既定「予定」)で選んだ単一モードのみを表示するフォールバックのまま(発注書§B「無理なら右列は実績のみ+計画は破線で『予定』フィルタに切替可、と報告」に該当する代替)。実績モード自体は_execModeに連動する固定表示(state.timelineMode非依存)へレビュー修正済み。重ね描きの実装方式(2回描画オーバーレイ案の妥当性検証を含む)はorder-v335-exec-nav.md以降でK/監督者の裁定を仰ぎたい。",
+    "(b) §C(PCサイドバーの「タスクシュート」「タイムライン」を「実行」1項目へ統合、旧setView(\"tasks\")/setView(\"timeline\")呼び出し元(app.js:1065 energy-open-category、app.js:3878 AI下書きスケジュール確定)のexec寄せ)は本バージョンでも実装していない。実行コード差分自体はB単独+レビュー修正分でも200行以内に収まっており行数超過が理由ではなく、grep(setView(\"tasks\"|setView(\"timeline\"|data-view=\"tasks\"|data-view=\"timeline\")で列挙した既存テスト25本超(tower-core/today-core/v50/v307等)がPCサイドバー(#sidebar [data-view=\"tasks\"/\"timeline\"])を直接クリックして旧ビューへ到達する前提でseed・検証しており、v333→v334で2版連続で同じ理由(既存E2E追随の作業量。テストの改修自体が既存assertionの意味を保ったまま一本ずつ書き換える必要がある密結合な作業で、本バージョンの検証時間内では安全に終えられないと判断)により持ち越した。回収先はorder-v335-exec-nav.md(既に存在)を前提とする。2版連続の持ち越しである事実はK/監督者へ明示すべき事項として本レビュー対応の完了報告にも記載する。",
+    "(c) 本バージョンはCodex/Claude計3系統のレビュー指摘(A-H1/A-H2/A-M1/A-M2/A-M3、B-H1/B-H2)への対応版。修正した4点: ①右列を_execModeに連動(実績=実績固定・state.timelineMode非依存、計画=既存セグメントで切替・既定予定)、②updateBatteryTickのガードを計画モードの2ペインでも動くようモード不問化、③1280px境界のmatchMediaリスナへexecを追加しリサイズだけで1列⇄2列が追随、④DRIFT/TIME COMBの折りたたみを右列の時間軸の下へ移動。M-2(やったことの母集団)は発注文言どおり完了Block全件に広げた(execTargetBlocksの除外を適用しない)。M-4(changedFilesにCHANGES_v334.md追加)も対応済み。§Cの扱い(uncertainties(b))と「充0/放0」表記(下記)はK裁定事項として残る。",
+    "Codex利用上限のため実装はimplementer(Claude)。独立検証(fresh contextでのDONE段階2)は本セッションでは未実施(次段でreviewer相当の再突合が必要)。",
+    "「やったこと」行のcharge/discharge表示(「充3/放2」形式)はモックTcUnifiedPC.pngの意匠指定に明記がないため、既存の実行タブ展開行(renderExecNowRow等)のラベル慣習に合わせて今回新規に決めた表記。未記録(0/0)でも表示されるため冗長との指摘(L-1)あり。K確認推奨。"
+  ],
+  "reviewFocus": [
+    "1280px以上でexec-two-paneの左右ペインが実際に横並びになり(boundingBox)、1279px以下では2ペイン化しないこと。",
+    "renderTimeline()・renderTimelineCard()・assignBlocksToLanes()・adjustLaneTopPositions()等の配置計算・Blockロジックが一切変更されていないこと(git diffでsrc/features/timeline.jsの差分がrenderTimelineView()のmode引数対応とanalysisFoldHTML()の位置移動のみであること)。",
+    "実績モードの「やったこと」一覧が選択日の完了Block全件(ルーティン・単発・非Project紐づけ含む)と一致し、編集ボタンが既存のopenBlockEditor()をそのまま呼ぶこと(新規モーダル実装をしていないこと)。",
+    "右列が_execModeに連動していること(実績モードで予定Blockが出ない・計画モードでセグメントが機能すること)。",
+    "モード切替・画面幅変更がstate/localStorageへ一切書き込まないこと(既存の非永続契約の継続)。"
+  ],
+  "verification": [
+    "node --check app.js / src/features/timeline.js / sw.js はいずれも成功。",
+    "npm.cmd run test:manifest:write、node scripts/test-manifest.js --check PASS。",
+    "CHROME_PATH指定でnode tests/run-all.js v334 v333 v332 v331 today-core tower-core v50 v307 action-registry-core v313 timeline-render-core timeline-tick-wiring をフォアグラウンド(timeout 600000)で2回実行。",
+    "実行コード差分(git diff --numstat -- app.js styles.css sw.js src): app.js 67+/9- ・ src/features/timeline.js 6+/2- ・ styles.css 8+/0- ・ sw.js 2+/1- の合計95行(200行以内)。src/storage・src/sync・normalizeState・Blockロジックは無変更。",
+    "git status --shortは変更ファイル一覧(app.js/src/features/timeline.js/styles.css/sw.js/tests/v333.test.js(既存assertion更新)/tests/v334.test.js/生成物2点)と一致し、範囲外の変更はない。"
+  ],
+  "notes": [
+    "Codex 利用上限のため実装・修正は implementer(Claude)、レビューは Claude reviewer 2体で代替。"
+  ],
+  "knownLimitations": [
+    "§B「計画モードで実績(実線)+計画(破線)を重ねる」は未実装。計画モードの右列はセグメントで選んだ単一モードのフィルタ表示のみ(uncertainties(a)参照)。",
+    "§C(PCサイドバー統合・旧setView寄せ)は未実装のまま。PCサイドバーには従来どおり「タスクシュート」「タイムライン」の2項目が残る(uncertainties(b)参照、2版連続の持ち越し)。v333由来のenergy-open-category・AI下書きスケジュール確定のsetView(\"timeline\")直行も未解消。",
+    "「やったこと」行の充放電表記は未記録(0/0)でも「充0/放0」と出る(uncertainties末尾参照、K確認推奨)。",
+    "v333由来の既知の限界(tests/v287.test.jsの過去日閲覧中rows数の既存不具合)は本バージョンでも未修正のまま(対象外)。"
+  ]
+}
