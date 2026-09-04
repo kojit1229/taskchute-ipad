@@ -126,7 +126,7 @@
 | v277.test.js | e2e | full | ui-responsive | 27 | 0 | 0 |
 | v278.test.js | e2e | full | planning-execution, ui-responsive | 26 | 0 | 0 |
 | v280.test.js | e2e | full | planning-execution, ui-responsive | 42 | 0 | 0 |
-| v281.test.js | e2e | full | sync-storage, content-ai, ui-responsive, security-offline | 37 | 0 | 0 |
+| v281.test.js | e2e | full | sync-storage, content-ai, ui-responsive, security-offline | 44 | 0 | 0 |
 | v282.test.js | e2e | full | planning-execution | 47 | 0 | 0 |
 | v283.test.js | e2e | full | content-ai, sync-storage, ui-responsive | 42 | 0 | 0 |
 | v284.test.js | e2e | full | sync-storage, journal-health, planning-execution, ui-responsive | 29 | 0 | 0 |
