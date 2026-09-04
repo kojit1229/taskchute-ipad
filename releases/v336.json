@@ -1,0 +1,38 @@
+{
+  "version": 336,
+  "date": "2026-09-05",
+  "title": "修正フェーズ 単位1: resetDemoData() に confirm を追加",
+  "summary": "2026-09-04の3回レビュー(S4-1、第3回統合サマリ第1段#1・Critical唯一)の指摘に対応した。resetDemoData()はデモデータへの全置換(GitHub同期設定を含む端末データの完全消去)を無確認で実行しており、他の破壊操作16箇所(カテゴリ削除・0秒思考削除・Wish削除・restoreBackup等)が全てwindow.confirmを持つ中で唯一の例外だった。resetDemoData()冒頭にwindow.confirmを追加し、影響範囲(Block・ジャーナル・0秒思考・IRON LOG等)とGitHub同期設定(トークン)も初期化される旨・取り消せない旨を明記した。",
+  "changedFiles": [
+    "app.js",
+    "docs/test-impact-map.generated.md",
+    "tests/reset-demo-confirm.test.js",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "resetDemoData()に他の破壊操作と同様のwindow.confirmガードを追加し、誤操作による端末全データ消去を防ぐ。",
+    "confirm文言にGitHub同期設定(トークン)の初期化も含まれることを明記し、影響範囲を過小に見せない。"
+  ],
+  "changes": [
+    "app.js: resetDemoData()冒頭に`if (!window.confirm(...)) return;`を追加(1行)。文言は「この端末の全データ(Block・ジャーナル・0秒思考・IRON LOG等)をデモデータへ置き換えます。GitHub同期設定(トークン)も初期化され、取り消せません。よろしいですか?」。",
+    "tests/reset-demo-confirm.test.js: 新規。confirm=falseで何も変化しないこと・confirm=trueで従来どおりデモデータへ置換されることの2ケースを追加(Playwrightのdialogハンドラで自動dismiss/accept)。"
+  ],
+  "uncertainties": [
+    "実装は元セッション(2026-09-04、implementerフォールバック。Codex利用上限のため)。reviewer(Claude)独立レビューPASS済み(handoff.md表参照、文言にGitHub設定初期化を追記済みの版でPASS)。Codexレビューは利用上限のため未実施(復旧2026-09-07 17:16後に別途)。",
+    "本版はv335(main)へのcherry-pick着地作業(監督セッション)。実装・レビューはremediation/unit1ブランチ上で完結済みのため、本版のverificationはcherry-pick後のgate結果を記載する。"
+  ],
+  "reviewFocus": [
+    "resetDemoData()実行前に必ずconfirmダイアログが出ること、キャンセル時にstateが変化しないこと。",
+    "confirm文言がGitHub同期設定の初期化にも言及していること。"
+  ],
+  "verification": [
+    "node --check app.js は成功。",
+    "実行コード差分: app.js 1行のみ(200行以内)。",
+    "npm run test:manifest:write / node scripts/test-manifest.js --check はPASS。",
+    "node scripts/release-gate.js releases/v336.json をフォアグラウンド(timeout 600000)で実行。"
+  ],
+  "notes": [
+    "単位1(全19単位中、修正フェーズ第1段の最優先項目)。実装・レビューはCodex利用上限のためimplementer+reviewer(Claude)単系統。"
+  ],
+  "knownLimitations": []
+}
