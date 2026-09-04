@@ -2865,6 +2865,7 @@ h3 {
 .twy-bar.s-warn > span { background: var(--tower-amber, var(--orange-text)); box-shadow: 0 0 6px var(--tower-amber, var(--orange-text)); }
 .twy-bar.s-ahead > span { background: var(--tower-green, var(--green-text)); box-shadow: 0 0 6px var(--tower-green, var(--green-text)); }
 .twy-bar > i { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--tower-text, var(--text)); opacity: .8; }
+.twy-bar > i::after { content: "今日の理想"; position: absolute; top: -12px; left: -18px; color: var(--tower-text, var(--muted)); font-size: 11px; font-style: normal; white-space: nowrap; opacity: .7; }
 .twy-bar-scale { display: flex; justify-content: space-between; margin-top: 3px; color: var(--tower-text, var(--muted)); font-size: 11px; font-variant-numeric: tabular-nums; opacity: .7; }
 .twy-ms { display: flex; align-items: flex-start; margin-top: 8px; padding-bottom: 2px; overflow-x: auto; }
 .twy-ms-node { position: relative; flex: 1 1 0; min-width: 74px; text-align: center; }

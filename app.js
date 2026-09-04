@@ -9513,7 +9513,7 @@ function generateReport(dateArg, { quiet = false } = {}) {
   const morning = state.settings.morningEnergyLog[date] ?? 5;
   const net = morning + charge - discharge;
 
-  // v61: 今日の理想ワンライナー(提案8)。達成/未達は判定せず、翌日以降も見えることだけを添える。
+  // v61: 今日の理想ワンライナー(提案8)。達成/未達は判定しない(「翌日以降も残る」旨の文言は v230 のHome撤去で虚偽化したため単位11で削除)。
   const idealText = state.journalMeta[date]?.ideal || "";
 
   // v17: MIT(今日の主役)
