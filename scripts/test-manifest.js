@@ -125,7 +125,12 @@ const explicitDomains = {
   "v286.test.js": ["content-ai", "ui-responsive"],
   "v287.test.js": ["content-ai", "planning-execution", "ui-responsive"],
   "v288.test.js": ["sync-storage", "planning-execution", "ui-responsive"],
-  "track-crud-core.test.js": ["planning-execution", "sync-storage"]
+  "track-crud-core.test.js": ["planning-execution", "sync-storage"],
+  // A3-H1修正フェーズ単位2レビューFAIL是正: 先頭要約コメントの2行目が空スペーサー行のため
+  // domainRules正規表現が本文(backup/localStorage等)まで届かず自動分類がlegacy-crosscuttingへ
+  // 落ちていた(suite-manifest.test.js:34の「製品E2Eは明示domainへ分類」に違反)。normalizeState/
+  // local.jsのstorage層を対象とするtrack-normalize.test.jsと同じ語彙(sync-storage)を明示指定する。
+  "normalize-null-defense.test.js": ["sync-storage"]
 };
 
 function countMatches(source, pattern) {

@@ -1,14 +1,20 @@
 // A3-H1(2026-09-04コードレビュー修正、修正フェーズ単位2)のブラウザcharacterization test。
 //
 // 対象: app.js normalizeState() の要素側null/非オブジェクト防御(compactArr/compactMap)と
-// src/storage/local.js loadState() の退避経路(-corrupt-backup)でのsettings.autoSync=false化。
+// src/storage/local.js loadState() の退避経路(-corrupt-backup)。
 //
 // 背景(area-3-date-boundary-import.md A3-H1): 修正前は tasks/blocks/projects/declarations/
 // bodyScans/storeVisits/zeroThinking.themes/zeroThinking.entries/journalMeta の9箇所が
 // 「コンテナ(配列/オブジェクト自体)は守るが要素は守らない」実装で、要素にnullが混ざると
 // `Cannot use 'in' operator ...` 等の例外を投げ、local.jsのcatchが全stateを-corrupt-backupへ
-// 退避してseedState(デモデータ)で起動していた。退避時にsettings.github.autoSaveは落としていたが
-// settings.autoSyncは残るため、autoSync ON端末ではデモデータがリモートへpushされうる欠陥があった。
+// 退避してseedState(デモデータ)で起動していた。レビュー原文はここで「退避時settings.autoSyncが
+// falseに落ちないため、autoSync ON端末ではデモデータがリモートへpushされうる」と指摘していたが、
+// 実装フェーズの独立レビュー(単位2)で現行コードを再確認した結果、normalizeState()は
+// settings.autoSyncが真偽値でなければ既定falseへ正規化する実装が既にあり、seedState()自体は
+// autoSyncを設定しないため、この被害筋書きは**現行コードでは元々成立しない**(local.jsの
+// `seeded.settings.autoSync = false` は多重防御であり、単体では挙動を変えないno-op)。
+// 本テストは (a) [1] compactArr/compactMapの要素側防御が例外なく機能すること、
+// (b) [2] 退避経路でautoSave/autoSyncが共にfalseになる現状の挙動(の回帰)を固定するに留める。
 //
 // [1] null注入行列: 12コレクション(9件の修正対象+既に保護済みの3件=questions/condition.logs/
 //     sleep.logs)へ {null, "str"(文字列), 42(数値), {}(空オブジェクト)} を注入する。
@@ -17,7 +23,7 @@
 //     compactArr/compactMap自体も `x && typeof x === "object"` でnull/undefinedを同一に扱う
 //     ため、undefinedはnullで代表させる(コード側の一次情報: app.js compactArr/compactMap定義)。
 // [2] loadState退避経路: 生のlocalStorage値をJSONとして壊し、catch経由の退避で
-//     settings.github.autoSave/settings.autoSyncの両方がfalseになることを検証する
+//     settings.github.autoSave/settings.autoSyncの両方がfalseになる現状挙動の回帰確認
 //     (正常ロード時にautoSyncが勝手にfalseへ倒されないことも合わせて確認)。
 const {
   chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate,
@@ -147,7 +153,7 @@ function check(name, cond, extra = "") {
     check("sleep.logs(既存保護)は引き続き例外なく有効要素を保持",
       normalized.sleep.logs["2026-09-04"].hours === 7, JSON.stringify(normalized.sleep.logs));
 
-    console.log("[normalize-null-2] loadStateの退避経路でsettings.autoSyncがfalseになる");
+    console.log("[normalize-null-2] loadStateの退避経路でsettings.autoSave/autoSyncがfalseになる(現状挙動の回帰確認)");
     // 正の対照: 正常なJSONを一旦autoSync=trueで保存→reloadしても退避しないこと(負例)
     await page.evaluate((key) => {
       const s = JSON.parse(localStorage.getItem(key));
@@ -179,7 +185,12 @@ function check(name, cond, extra = "") {
     check("壊れたJSONは-corrupt-backupへ退避される", backup === "{this is not valid json");
     check("退避後settings.github.autoSaveはfalse(既存挙動の回帰確認)",
       recovered.settings.github.autoSave === false);
-    check("退避後settings.autoSyncもfalse(本修正の主目的)", recovered.settings.autoSync === false);
+    // 注意: normalizeState()はsettings.autoSyncが真偽値でなければ既定falseへ正規化し、
+    // seedState()はautoSyncを設定しないため、local.js側の`seeded.settings.autoSync = false`を
+    // 外してもこのチェックは通る(恒真)。ここはseed既定値の回帰確認(多重防御。単体では挙動を
+    // 変えない)であり、「autoSync=falseによりpush拡散を防いだ」ことの証明ではない。
+    check("退避後settings.autoSyncはfalse(seed既定値の回帰確認。多重防御・単体では挙動を変えない)",
+      recovered.settings.autoSync === false);
   } finally {
     await browser.close();
     server.close();

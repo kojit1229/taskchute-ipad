@@ -322,11 +322,11 @@
       "kind": "e2e",
       "tier": "full",
       "domains": [
-        "legacy-crosscutting"
+        "sync-storage"
       ],
       "assertionSignals": 20,
-      "assertionHash": "940a87afb498ae32",
-      "sourceHash": "9a4b8d1d9cf78741",
+      "assertionHash": "157f3024fefa0dd2",
+      "sourceHash": "5fcb46f791093aa8",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

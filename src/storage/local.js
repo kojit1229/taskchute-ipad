@@ -39,9 +39,13 @@ function loadState(normalizeState, seedState) {
     console.error("保存データが壊れていたため初期状態で起動します(-corrupt-backup に退避済み)");
     const seeded = normalizeState(seedState());
     seeded.settings.github.autoSave = false;  // 事故防止: 自動保存は手動で入れ直してもらう
-    // A3-H1(2026-09-04コードレビュー修正): autoSyncを残したままだと、デモデータで起動した
-    // 直後の保存がscheduleAutoSync()経由でリモートへpushされ、壊れる前のGitHub側データを
-    // デモデータで上書きしかねない。autoSaveと同様に事故防止でOFFへ倒す。
+    // A3-H1(2026-09-04コードレビュー修正、修正フェーズ単位2独立レビューで是正): 現行の
+    // normalizeState()はsettings.autoSyncが真偽値でなければ既定falseへ正規化する(app.js
+    // 該当行参照)。seedState()はautoSyncを一切設定しないため、直後のnormalizeState(seedState())
+    // が既にfalseへ倒しており、この1行は現状の挙動を変えないno-op(多重防御として残す。
+    // 将来seedState()やnormalizeState()の既定値が変わってautoSync=trueが素通りするように
+    // なった場合の保険)。「autoSync=falseでpush拡散を防いだ」という主張はしない
+    // (現行コードでは元々起きえないシナリオのため、A3-H1後半の被害筋書きは現状成立しない)。
     seeded.settings.autoSync = false;
     return seeded;
   }
