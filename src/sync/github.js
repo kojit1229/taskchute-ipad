@@ -472,6 +472,8 @@ const LOSS_RISK_KEYS = [...SYNC_CORE_COMPARE_KEYS, "routineChains", "weeklyRevie
 // "2026-09-04" < "2026-09-04T00:00:00" が真になり同日のアプリ書込より常に「古い」と
 // 誤判定される。10文字なら当日の最終時刻とみなして19文字へ揃える。19文字はそのまま、
 // 空・不正値(それ以外の長さ)は従来どおり素通しする(比較側で「無い」扱いのまま)。
+// loop側はD-K1(a)で秒精度(T12:00:00相当)化済み。ここはアプリ側の保険として、
+// 秒精度化されていない古いデータ・他の外部書き込みに備え当日末尾T23:59:59を補う。
 function normalizeDataStamp(value) {
   const v = value || "";
   if (v.length === 10) return `${v}T23:59:59`;

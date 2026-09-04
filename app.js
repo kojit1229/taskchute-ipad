@@ -1922,6 +1922,11 @@ function normalizeState(value) {
   // 19文字のnowDateTime()との辞書順比較で常に「古い」と誤判定されるのを防ぐため、
   // normalizeStateを通る経路(ローカル起動時読込・リモート全量採用)でも一律19文字へ揃える。
   value.dataModifiedAt = normalizeDataStamp(value.dataModifiedAt || "");
+  // 単位18追補: lastPushedAt/lastPulledAtも同じく10文字のまま永続化されていると、
+  // 次回起動時にdataModifiedAt(正規化済み19文字)との比較で「まだpushしていない」扱いに
+  // なり、実際は不要なフル push が1回走る(非対称)。既存永続値もここで揃える。
+  if (value.settings.lastPushedAt) value.settings.lastPushedAt = normalizeDataStamp(value.settings.lastPushedAt);
+  if (value.settings.lastPulledAt) value.settings.lastPulledAt = normalizeDataStamp(value.settings.lastPulledAt);
   // v35: WBS で中断中の項目を表示するかどうか(既定は非表示)
   if (typeof value.settings.showSuspended !== "boolean") {
     value.settings.showSuspended = false;

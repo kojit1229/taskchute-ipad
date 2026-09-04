@@ -9,11 +9,24 @@
 // normalizeState(app.js、value.dataModifiedAt)の双方から同じ実装を参照している前提で、
 // 完了条件1のシナリオ(10文字dataModifiedAtが19文字lastPushedAtより新しいと判定される)を
 // 比較演算子レベルで固定する([B])。
+const fs = require("fs");
 const path = require("path");
 const { pathToFileURL } = require("url");
 
 const ROOT = path.join(__dirname, "..");
 const SYNC_PATH = path.join(ROOT, "src", "sync", "github.js");
+
+// [C] 静的検査で使うヘルパー(tests/code-index.test.jsと同じく、ビルド成果物ではなく
+// ソース文字列を直接検査する手法)。runAutoSyncPush/runAutoSyncPull/syncFromGitHubOnStartupの
+// 3コールサイトはいずれも `const remoteT = ...;` の形で生JSONからdataModifiedAtを抽出する
+// (github.js実装を参照)。この行が必ずnormalizeDataStamp(...)を経由しているかを見る。
+function findRemoteTAssignmentLines(src) {
+  return src.split("\n").filter((line) => /const remoteT\s*=/.test(line));
+}
+function allRemoteTLinesNormalized(src) {
+  const lines = findRemoteTAssignmentLines(src);
+  return lines.length > 0 && lines.every((line) => line.includes("normalizeDataStamp("));
+}
 
 let failures = 0;
 function check(name, cond, extra = "") {
@@ -62,6 +75,28 @@ function check(name, cond, extra = "") {
     const adoptedDataModifiedAt = normalizeDataStamp(rawRemoteDataModifiedAt || "");
     check("normalizeState経由で採用したstate.dataModifiedAtもlastPushedAtより新しい",
       adoptedDataModifiedAt > lastPushedAt, adoptedDataModifiedAt);
+  }
+
+  console.log("[C] 静的検査: 3コールサイトがremote.dataModifiedAtを生で比較に使っていない");
+  {
+    const githubSrc = fs.readFileSync(SYNC_PATH, "utf8");
+    const remoteTLines = findRemoteTAssignmentLines(githubSrc);
+    check("remoteT抽出コールサイトを3箇所検出(runAutoSyncPush/runAutoSyncPull/syncFromGitHubOnStartup)",
+      remoteTLines.length === 3, JSON.stringify(remoteTLines));
+    check("3箇所すべてnormalizeDataStamp(...)を経由している",
+      allRemoteTLinesNormalized(githubSrc), JSON.stringify(remoteTLines));
+
+    // mutation-check: normalizeDataStamp(...)のラップだけを剥がした「生に戻した」コピーで
+    // 同じ検査が確実に落ちることを確認する(検査自体が空振りしていないことの確認)。
+    const rawCopy = githubSrc
+      .replace(/normalizeDataStamp\(\(JSON\.parse\(remoteText\)\.dataModifiedAt\) \|\| ""\)/g, '(JSON.parse(remoteText).dataModifiedAt) || ""')
+      .replace(/normalizeDataStamp\(remote\.dataModifiedAt \|\| ""\)/g, 'remote.dataModifiedAt || ""');
+    const rawLines = findRemoteTAssignmentLines(rawCopy);
+    check("生に戻したコピーは3箇所とも検出されるがラップは失われている(前提の健全性確認)",
+      rawLines.length === 3 && rawLines.every((line) => !line.includes("normalizeDataStamp(")),
+      JSON.stringify(rawLines));
+    check("生に戻したコピーは静的検査に落ちる",
+      !allRemoteTLinesNormalized(rawCopy), JSON.stringify(rawLines));
   }
 
   console.log(failures ? `❌ ${failures} 件失敗` : "✅ All checks passed");
