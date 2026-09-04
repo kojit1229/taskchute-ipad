@@ -22,7 +22,7 @@
 | release-gate.test.js | node | full | legacy-crosscutting | 9 | 0 | 0 |
 | release-record.test.js | node | full | legacy-crosscutting | 11 | 0 | 0 |
 | reset-demo-confirm.test.js | node | full | ui-responsive | 9 | 0 | 0 |
-| run-all-options.test.js | node | full | legacy-crosscutting | 13 | 0 | 0 |
+| run-all-options.test.js | node | full | legacy-crosscutting | 21 | 0 | 0 |
 | store-core.test.js | node | full | sync-storage, planning-execution, content-ai | 23 | 0 | 0 |
 | suite-manifest.test.js | node | full | legacy-crosscutting | 9 | 0 | 0 |
 | sw-integration.test.js | e2e | smoke | planning-execution, security-offline | 15 | 2 | 3500 |
