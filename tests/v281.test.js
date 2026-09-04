@@ -104,22 +104,39 @@ const FUND_FIXTURE = {
       ...FUND_FIXTURE,
       nav: { ...FUND_FIXTURE.nav, series: [{ date: "2026-08-07", nav: 20000000, n225: 64000, spx: 7500, ...overrides }] }
     });
+    // レビュー指摘(独立レビューFAIL分): hydrateFundDataは失敗時もtrue(要再描画)を返すため、
+    // 返り値の真偽だけでは受理/拒否を判定できない(mutation: navPointSchemaをfiniteへ戻しても
+    // 恒真になっていた)。fundCache.data/lastErrorという状態そのものを検証する。
     now += REFRESH_INTERVAL_MS;
     fetchResult = JSON.stringify(navSeriesWith({ n225: null, spx: null }));
-    check("navPoint: n225/spxがnullでもスキーマを通り採用される", await fund.hydrateFundData(REFRESH_INTERVAL_MS));
+    await fund.hydrateFundData(REFRESH_INTERVAL_MS);
+    check("navPoint: n225/spxがnullでもスキーマを通り採用される",
+      fundCache.lastError === "" && fundCache.data.nav.series[0].n225 === null && fundCache.data.nav.series[0].spx === null,
+      JSON.stringify({ lastError: fundCache.lastError, point: fundCache.data?.nav?.series?.[0] }));
+
     now += REFRESH_INTERVAL_MS;
     fetchResult = JSON.stringify(navSeriesWith({ n225: null }));
-    check("navPoint: n225のみnullでもスキーマを通り採用される(spxは正常値)", await fund.hydrateFundData(REFRESH_INTERVAL_MS));
+    await fund.hydrateFundData(REFRESH_INTERVAL_MS);
+    check("navPoint: n225のみnullでもスキーマを通り採用される(spxは正常値)",
+      fundCache.lastError === "" && fundCache.data.nav.series[0].n225 === null && fundCache.data.nav.series[0].spx === 7500,
+      JSON.stringify({ lastError: fundCache.lastError, point: fundCache.data?.nav?.series?.[0] }));
+
     now += REFRESH_INTERVAL_MS;
     const missingKeyFixture = navSeriesWith({});
     delete missingKeyFixture.nav.series[0].n225;
     fetchResult = JSON.stringify(missingKeyFixture);
     const beforeMissingKey = fundCache.data;
+    await fund.hydrateFundData(REFRESH_INTERVAL_MS);
     check("navPoint: n225キー自体の欠落は失敗扱い(nullableはnull値のみ許容・キー欠落は拒否)",
-      await fund.hydrateFundData(REFRESH_INTERVAL_MS) && fundCache.data === beforeMissingKey && fundCache.fetchedAt === now);
+      fundCache.lastError !== "" && fundCache.data === beforeMissingKey,
+      JSON.stringify({ lastError: fundCache.lastError, dataUnchanged: fundCache.data === beforeMissingKey }));
+
     now += REFRESH_INTERVAL_MS;
     fetchResult = JSON.stringify(navSeriesWith({}));
-    check("navPoint: n225/spxが正常値でも従来どおり採用される", await fund.hydrateFundData(REFRESH_INTERVAL_MS));
+    await fund.hydrateFundData(REFRESH_INTERVAL_MS);
+    check("navPoint: n225/spxが正常値でも従来どおり採用される",
+      fundCache.lastError === "" && fundCache.data.nav.series[0].n225 === 64000 && fundCache.data.nav.series[0].spx === 7500,
+      JSON.stringify({ lastError: fundCache.lastError, point: fundCache.data?.nav?.series?.[0] }));
   } finally {
     Date.now = realDateNow;
   }
@@ -153,12 +170,18 @@ const FUND_FIXTURE = {
   check("欠損点(n225/spxがnull)は折れ線から除外され、完全な2点分のみ描画", (chartHtml.match(/<path class="fund-chart-line/g) || []).length === 3
     && (chartHtml.match(/<circle class="fund-chart-dot/g) || []).length === 0);
 
+  // 現行挙動の記録(仕様として固定するものではない): fundNavChartSVGは
+  // nav/n225/spxの3値すべてfiniteな点だけを描画対象にするため、全日でn225/spxが
+  // nullだとNAV自体の折れ線も一緒に落ちて空表示になる。指数だけ欠損でもNAVは
+  // 描画したい、という挙動変更は本単位(5-H1: navPointSchemaのnullable化)の
+  // スコープ外とし、別単位(系列別に欠損を扱う描画変更)で扱う。
   fundCache.data = {
     ...FUND_FIXTURE,
     nav: { ...FUND_FIXTURE.nav, series: [{ date: "2026-08-07", nav: 20000000, n225: null, spx: null }] }
   };
   const allMissingHtml = fund.renderFund();
-  check("全点が欠損なら推移データ不足の空表示", allMissingHtml.includes("推移データが不足しています") || allMissingHtml.includes("推移データがありません"));
+  check("[現行挙動の記録] 全点でn225/spxが欠損だとNAVも道連れで空表示になる(将来変更しうる)",
+    allMissingHtml.includes("推移データが不足しています") || allMissingHtml.includes("推移データがありません"));
 
   console.log("[3] 取得中表示→再描画、読み取り専用、実DOMの4領域、導線を固定する");
   const server = startServer(PORT);
