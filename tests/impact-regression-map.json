@@ -203,6 +203,93 @@
       "suites": [
         "track-core"
       ]
+    },
+    "habit-streak-core": {
+      "paths": [
+        "^src/core/habit-streak\\.js$"
+      ],
+      "suites": [
+        "instruments-core",
+        "v252",
+        "v253",
+        "v280"
+      ]
+    },
+    "life-export-core-feature": {
+      "paths": [
+        "^src/core/life-export\\.js$"
+      ],
+      "suites": [
+        "life-export-core",
+        "v316"
+      ]
+    },
+    "today-model-core": {
+      "paths": [
+        "^src/core/today-model\\.js$"
+      ],
+      "suites": [
+        "tower-model-core"
+      ]
+    },
+    "health-feature": {
+      "paths": [
+        "^src/features/health\\.js$"
+      ],
+      "suites": [
+        "v314",
+        "v317",
+        "v318",
+        "v321",
+        "v325",
+        "v327"
+      ]
+    },
+    "instruments-feature": {
+      "paths": [
+        "^src/features/instruments\\.js$"
+      ],
+      "suites": [
+        "instruments-core",
+        "instruments-e2e",
+        "v247",
+        "v284",
+        "v326",
+        "v327"
+      ]
+    },
+    "iron-log-feature": {
+      "paths": [
+        "^src/features/iron-log\\.js$"
+      ],
+      "suites": [
+        "iron-log-core",
+        "iron-log-e2e",
+        "v284",
+        "v315"
+      ]
+    },
+    "topband-feature": {
+      "paths": [
+        "^src/features/topband\\.js$"
+      ],
+      "suites": [
+        "topband-core",
+        "v231",
+        "v266",
+        "v275"
+      ]
+    },
+    "track-ui-feature": {
+      "paths": [
+        "^src/features/track-ui\\.js$"
+      ],
+      "suites": [
+        "action-registry-core",
+        "v254",
+        "v262",
+        "v267"
+      ]
     }
   }
 }
