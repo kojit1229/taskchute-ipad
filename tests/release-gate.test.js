@@ -122,4 +122,31 @@ function createFixtureRepo(initialVersion) {
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
-console.log("PASS: cache-name-increment fixtures (a)+1 / (b)据え置き / (c)+2飛び / (d)version不一致 / (3)差分なし");
+// (e) baseRef切替: unit6差し戻し#1の再発防止。「直前値」の比較元をHEAD固定ではなく
+// baseRefパラメータで切り替えられることを確認する。同一の作業ツリー状態(v2据え置き)でも、
+// baseRef=HEAD（直前コミットがv2）ならFAIL、baseRef=1つ前のコミット（v1）ならPASSになる
+// ことを両方確認し、比較元を呼び出し側から選べることを保証する。
+{
+  const dir = createFixtureRepo(1); // コミット1: v1
+  const firstCommit = git(dir, "rev-parse", "HEAD").trim();
+  writeSw(dir, 2);
+  writeRelease(dir, 2);
+  git(dir, "add", "-A");
+  git(dir, "commit", "-q", "-m", "v2"); // コミット2: v2（これがHEAD）
+  // 作業ツリー/release記録はv2のまま据え置き（実運用の「bumpとリリース記録を同一コミットに
+  // 含めた直後の再実行」を模す。HEAD:sw.jsも既にv2のため、HEAD比較だと必ずFAILする）。
+  const viaHead = checkCacheNameIncrement({ repoRoot: dir, manifestPath: "releases/v2.json", hasRuntimeDiff: true });
+  assert.strictEqual(viaHead.ok, false, `(e) baseRef=HEAD(既定)は据え置き扱いでFAILするはず: ${viaHead.message}`);
+
+  const viaFirstCommit = checkCacheNameIncrement({
+    repoRoot: dir,
+    manifestPath: "releases/v2.json",
+    hasRuntimeDiff: true,
+    baseRef: firstCommit
+  });
+  assert.strictEqual(viaFirstCommit.ok, true,
+    `(e) baseRef=1つ前のコミット(v1)ならv2は増分ありでPASSするはず: ${viaFirstCommit.message}`);
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+console.log("PASS: cache-name-increment fixtures (a)+1 / (b)据え置き / (c)+2飛び / (d)version不一致 / (3)差分なし / (e)baseRef切替");

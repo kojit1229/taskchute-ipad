@@ -23,11 +23,15 @@ function readManifestVersion(repoRoot, manifestPath) {
   return Number(data.version);
 }
 
-// 「直前値」はreleases/内の最大既存版ではなく、git HEAD時点のsw.js実体から取る。
-// コミット前の作業ツリー(release-gateはpush前に走る)でもHEADが1つ前のリリースになるため、
-// これが最も正確な比較元になる。gitが使えない/HEADにsw.jsが無い場合は増分チェックのみskipする。
-function previousCacheVersion(repoRoot) {
-  const result = spawnSync("git", ["show", "HEAD:sw.js"], { cwd: repoRoot, encoding: "utf8" });
+// 「直前値」の比較元は呼び出し側(release-gate.js)がimpact-regression.jsのresolveBaseRef()と
+// 揃えて渡すbaseRef(既定"HEAD")から取る。
+// unit6差し戻し#1: 以前はHEAD固定だったため、bumpとリリース記録を同一コミットに含めるこのリポでは
+// コミット直後の再実行時にHEAD:sw.js=作業ツリー=最新版となり、増分チェックが常にFAILしていた
+// (実証: release-gate.js releases/v334.json --dry-run --impact-base=origin/main)。
+// 影響選定と同じ比較元(--impact-base → @{upstream} → origin/main、最後はHEAD)を渡すことで解消する。
+// gitが使えない/baseRefにsw.jsが無い場合は増分チェックのみskipする。
+function previousCacheVersion(repoRoot, baseRef = "HEAD") {
+  const result = spawnSync("git", ["show", `${baseRef}:sw.js`], { cwd: repoRoot, encoding: "utf8" });
   if (result.status !== 0 || !result.stdout) return { available: false, version: null };
   return { available: true, version: extractCacheVersion(result.stdout) };
 }
@@ -37,9 +41,10 @@ function previousCacheVersion(repoRoot) {
  * @param {string} options.repoRoot
  * @param {string} options.manifestPath - release-gateに渡されたreleases/vNNN.jsonのパス
  * @param {boolean} options.hasRuntimeDiff - app.js/sw.js/src配下/styles.css/index.html等に実行差分があるか
+ * @param {string} [options.baseRef] - 直前値の比較元ref(release-gate.jsがimpact選定と揃えて渡す。既定HEAD)
  * @returns {{ ok: boolean, message: string }}
  */
-function checkCacheNameIncrement({ repoRoot, manifestPath, hasRuntimeDiff }) {
+function checkCacheNameIncrement({ repoRoot, manifestPath, hasRuntimeDiff, baseRef = "HEAD" }) {
   // app.js/sw.js/src配下/styles.css/index.html等に実行差分が無ければ、このリリースで
   // PWAキャッシュを配り直す理由自体が無いため検査対象外とする(「差分なし→CACHE_NAME不問」)。
   // これによりCLIの引数プランだけを見る既存のdry-runテストが、実際のCACHE_NAMEとは無関係な
@@ -71,17 +76,17 @@ function checkCacheNameIncrement({ repoRoot, manifestPath, hasRuntimeDiff }) {
     };
   }
 
-  const prev = previousCacheVersion(repoRoot);
+  const prev = previousCacheVersion(repoRoot, baseRef);
   if (!prev.available) {
-    return { ok: true, message: "cache-name-increment (git HEADのsw.jsを取得できないため増分チェックをskip)" };
+    return { ok: true, message: `cache-name-increment (比較元${baseRef}のsw.jsを取得できないため増分チェックをskip)` };
   }
   if (prev.version === null) {
-    return { ok: true, message: "cache-name-increment (直前sw.jsからCACHE_NAMEを検出できないため増分チェックをskip)" };
+    return { ok: true, message: `cache-name-increment (比較元${baseRef}のsw.jsからCACHE_NAMEを検出できないため増分チェックをskip)` };
   }
   if (cacheVersion <= prev.version) {
     return {
       ok: false,
-      message: `CACHE_NAME(v${cacheVersion})が直前コミット(v${prev.version})から増分していません`
+      message: `CACHE_NAME(v${cacheVersion})が比較元${baseRef}(v${prev.version})から増分していません`
         + `(実行差分ありのため+1以上が必須)`
     };
   }

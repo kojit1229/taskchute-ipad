@@ -1,9 +1,13 @@
 "use strict";
 
+// 注意: --dry-run はコマンドプランを表示するだけで実テストは実行しないが、
+// release-record-schema検証・impact map検証・app-shell-precache・cache-name-increment
+// の各静的チェックは --dry-run でも実行され、不正があれば exit 1 する(コマンド実行だけをskipする)。
+
 const { spawnSync } = require("child_process");
 const path = require("path");
 const fs = require("fs");
-const { collectRepositoryImpact, validateConfig } = require("./impact-regression");
+const { collectRepositoryImpact, resolveBaseRef, validateConfig } = require("./impact-regression");
 const { getCoreSuites } = require("../tests/core-suites");
 const { checkCacheNameIncrement } = require("./cache-name-gate");
 
@@ -20,7 +24,12 @@ const dryRun = args.includes("--dry-run");
 const impactBase = args.find((arg) => arg.startsWith("--impact-base="))?.slice("--impact-base=".length);
 
 if (!manifest) {
-  console.error("使い方: node scripts/release-gate.js releases/vNNN.json [--suite=追加対象] [--final] [--dry-run]");
+  console.error(
+    "使い方: node scripts/release-gate.js releases/vNNN.json [--suite=追加対象] [--final] "
+      + "[--impact-base=<ref>] [--dry-run]\n"
+      + "  --dry-run はテスト実行のみskipする。schema/impact map/app-shell-precache/"
+      + "cache-name-incrementの各静的チェックは--dry-runでも実行され、不正があればexit 1する。"
+  );
   process.exit(1);
 }
 console.log("\n=== release-record-schema ===");
@@ -35,7 +44,10 @@ if (unknownImpactSuites.length) {
   console.error(`impact mapの検証エラー: ${unknownImpactSuites.join(", ")}`);
   process.exit(1);
 }
-const impact = collectRepositoryImpact({ cwd: repoRoot, base: impactBase, final: finalMode });
+// unit6差し戻し#1: impact選定とcache-name-incrementの比較元を同じ解決結果に揃える
+// (--impact-base → @{upstream} → origin/main、いずれも無ければ最後にHEAD)。
+const baseRef = resolveBaseRef(repoRoot, impactBase) || "HEAD";
+const impact = collectRepositoryImpact({ cwd: repoRoot, base: baseRef, final: finalMode });
 const releaseSuite = path.basename(manifest, path.extname(manifest));
 const releaseTestExists = fs.existsSync(path.join(repoRoot, "tests", `${releaseSuite}.test.js`));
 const selectedSuites = [...new Set([
@@ -152,7 +164,8 @@ console.log("\n=== cache-name-increment ===");
 const cacheNameCheck = checkCacheNameIncrement({
   repoRoot,
   manifestPath: manifest,
-  hasRuntimeDiff: impact.files.length > 0
+  hasRuntimeDiff: impact.files.length > 0,
+  baseRef
 });
 if (!cacheNameCheck.ok) {
   console.error(`FAIL: ${cacheNameCheck.message}`);

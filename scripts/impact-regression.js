@@ -58,13 +58,23 @@ function runGit(args, cwd, optional = false) {
   throw new Error(`git ${args.join(" ")} failed in ${cwd}: ${(result.stderr || result.stdout).trim()}`);
 }
 
+// unit6差し戻し#1: 影響範囲選定(impact-regression)とCACHE_NAME増分チェック(cache-name-gate)が
+// それぞれ独自に比較元refを決めていると、両者がズレて偽FAIL/偽PASSを生む(実例:
+// cache-name-gateがHEAD固定のため、bumpとリリース記録を同一コミットに含めるこのリポでは
+// コミット後の再実行で常にFAILしていた)。比較元の決定ロジックをここに一本化し、
+// release-gate.js から両チェックへ同じ解決結果を渡す。
+function resolveBaseRef(cwd = repoRoot, base) {
+  const resolved = base || runGit(
+    ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"], cwd, true
+  ).trim() || runGit(["rev-parse", "--verify", "--quiet", "origin/main"], cwd, true).trim();
+  return resolved || null;
+}
+
 function repositoryDiff(cwd = repoRoot, base) {
   const targets = [...config.runtimePaths.filter((item) => !item.endsWith("/")),
     ...config.runtimePaths.filter((item) => item.endsWith("/")).map((item) => item.slice(0, -1))];
   const worktree = runGit(["diff", "--unified=0", "HEAD", "--", ...targets], cwd);
-  const upstream = base || runGit(
-    ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"], cwd, true
-  ).trim() || runGit(["rev-parse", "--verify", "--quiet", "origin/main"], cwd, true).trim();
+  const upstream = resolveBaseRef(cwd, base);
   if (!upstream) {
     throw new Error("比較元を特定できません。--base=<ref>（release gateは--impact-base=<ref>）を指定してください");
   }
@@ -119,4 +129,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { analyzeDiff, collectRepositoryImpact, repositoryDiff, validateConfig };
+module.exports = { analyzeDiff, collectRepositoryImpact, repositoryDiff, resolveBaseRef, validateConfig };
