@@ -67,7 +67,9 @@ async function seed(page, values) {
       currentView: "tasks", selectedDate: TODAY,
       projects: [project()], tasks, blocks: [doing, upA, upB, done]
     });
-    const rowIds = await page.$$eval(".exec-row", (els) => els.map((el) => {
+    // v332: renderOpenTasksの新マークアップ(.exec-task-row)も.exec-rowを共有するため、
+    // Block行(いま/これから)だけに絞る(セレクタ追随。assertionは無改変)。
+    const rowIds = await page.$$eval(".exec-row-now, .exec-row-upcoming", (els) => els.map((el) => {
       const checkbox = el.querySelector("[data-action='toggle-block']");
       return checkbox ? checkbox.getAttribute("data-id") : null;
     }));

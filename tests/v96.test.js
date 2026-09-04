@@ -110,6 +110,9 @@ function check(name, cond, extra = "") {
     // ============================================================
     console.log("[2] Task編集モーダルに doneCriteria/firstStep テキストエリアがあり、ガイド文言・16px以上");
     await seed({ tasks: [task("task-A", "テストTask")], projects: [testProject()] });
+    // v332: 「タスク」行の編集ボタンは行タップ展開(task-row-toggle)後にしか出ない(セレクタ追随)。
+    await page.click('[data-action="task-row-toggle"][data-id="task-A"]');
+    await page.waitForSelector('[data-action="edit-task"][data-id="task-A"]');
     await page.click('[data-action="edit-task"][data-id="task-A"]');
     await page.waitForTimeout(200);
     check("完了条件のテキストエリアがある", await page.locator('[data-modal-field="doneCriteria"]').count() === 1);

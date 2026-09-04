@@ -965,6 +965,7 @@ registerActions({
   "now-conveyor-complete": ({ id }) => nowConveyorComplete(id),
   // v331: 実行タブA-1a「これから」行の展開トグル(表示専用、state非書込)。
   "block-row-toggle": ({ id }) => { _execExpandedBlockId = _execExpandedBlockId === id ? "" : id; render(); },
+  "task-row-toggle": ({ id }) => { _execExpandedTaskId = _execExpandedTaskId === id ? "" : id; render(); },  // v332: タスク行展開(表示専用)
   // --- ポモドーロ(14。continue-focus/finish-blockはend-break単独UIへの統一で孤立、v292孤児掃除で
   //     削除(K裁定2026-08-29)。complete-pomodoroは到達導線が無いが、completePomodoro()が
   //     v129身体スキャンモーダルの唯一の呼び出し元でテスト(v129/v132)が依存するため残置) ---
@@ -1210,6 +1211,7 @@ let _twyAddPanelOpen = false;
 let _wbsSelectedProjectId = "";
 // v331: 実行タブ「これから」行の展開状態(1行だけ開く)。表示専用でstate/localStorageへは保存しない。
 let _execExpandedBlockId = "";
+let _execExpandedTaskId = "";  // v332: 「タスク」行の展開状態(1行だけ開く。非永続)
 // v70: フォーカスタイマー「中断」の理由ワンタップピッカー(チョコ停記録)。非永続。
 let _pendingInterruptBlockId = null;
 // v87: 宣言/終了報告モーダルが解決するまでの一時コンテキスト。非永続。
@@ -5557,7 +5559,7 @@ function renderProjectTree(project) {
     <div class="item${suspended ? " is-suspended" : ""}" data-wbs-row-id="${escapeHTML(project.id)}">
       <div class="wbs-project-head">
         <button class="wbs-caret" data-action="toggle-project-collapse" data-id="${project.id}" aria-label="${collapsed ? "展開" : "折りたたむ"}">${collapsed ? "▸" : "▾"}</button>
-        <div class="wbs-project-copy"><strong data-action="edit-project" data-id="${project.id}">${escapeHTML(project.title)}</strong>
+        <div class="wbs-project-copy"><strong data-id="${project.id}">${escapeHTML(project.title)}</strong>
           <div class="wbs-project-meta">${renderWbsProjectMeta(project, model)}</div>
         </div>
         ${is12WY ? `<button class="btn ghost twy-commit-open" data-action="twy-open-commit">今週を確定</button>` : ""}
@@ -5710,6 +5712,29 @@ function execTargetBlocks() {
   });
 }
 
+// v332: ヘッダ1行化+＋Block(details既定閉)。id/data-actionは温存(#blockTitle等)。
+function execHeaderHTML() {
+  const endText = projectedEndText() || "見込み終了 —";
+  const bufferInfo = computeBufferRemaining(state.selectedDate);
+  const bufferText = (state.selectedDate === todayISO() && bufferInfo.hasBuffer)
+    ? `余白 ${bufferInfo.remainingMin}分` : "余白 —";
+  const categoryOptionsHTML = `${getCategoryNames().map((n) => `<option value="${escapeHTML(n)}">${escapeHTML(n)}</option>`).join("")}<option value="">(カテゴリなし)</option>`;
+  return `
+    <div class="view-header exec-header">
+      <div class="exec-header-line"><span class="exec-header-title">TOWER / タスクシュート</span> ・ <span id="projected-end" class="projected-end">${endText}</span> ・ <span>${bufferText}</span></div>
+      <details class="exec-add">
+        <summary class="exec-add-summary">＋ Block</summary>
+        <div class="form-strip exec-add-body">
+          <input id="blockTitle" class="input" placeholder="Block名">
+          <select id="blockCategory" class="select">${categoryOptionsHTML}</select>
+          <button class="btn primary" data-action="add-block">Block追加</button>
+        </div>
+      </details>
+    </div>
+    ${bufferMeterHTML()}
+  `;
+}
+
 function renderTasks() {
   const targets = execTargetBlocks();
   // v331: 実行中=開始済み・未終了・未完了(旧renderBlockItemのdoing判定と同じ条件)。
@@ -5721,17 +5746,9 @@ function renderTasks() {
     .filter((b) => !b.completed && !isExecDoing(b))
     .sort((a, b) => (a.plannedStartAt || "").localeCompare(b.plannedStartAt || ""));
   return `
-    ${renderHeader("TOWER / タスクシュート", "タスクシュート", projectedEndBadge())}
+    ${execHeaderHTML()}
     ${renderDateBar()}
     ${carryOverPanel()}
-    <section class="form-strip">
-      <input id="blockTitle" class="input" placeholder="Block名">
-      <select id="blockCategory" class="select">
-        ${getCategoryNames().map((n) => `<option value="${escapeHTML(n)}">${escapeHTML(n)}</option>`).join("")}
-        <option value="">(カテゴリなし)</option>
-      </select>
-      <button class="btn primary" data-action="add-block">Block追加</button>
-    </section>
 
     ${doing.length ? `
     <section class="section exec-panel exec-amber">
@@ -5739,15 +5756,13 @@ function renderTasks() {
       <div class="grid">${doing.map(renderExecNowRow).join("")}</div>
     </section>` : ""}
 
-    <section class="section">
-      <h2>これから</h2>
-      <div class="grid">${upcoming.length ? upcoming.map(renderExecUpcomingRow).join("") : emptyPanel("未着手のBlockはありません")}</div>
-    </section>
-
-    <section class="section">
-      <h2>未完了タスク</h2>
-      ${renderOpenTasks()}
-    </section>
+    <div class="exec-lower">
+      <section class="section exec-upcoming-section">
+        <h2>これから</h2>
+        <div class="grid">${upcoming.length ? upcoming.map(renderExecUpcomingRow).join("") : emptyPanel("未着手のBlockはありません")}</div>
+      </section>
+      <section class="section exec-panel exec-amber exec-tasks-section">${renderOpenTasks()}</section>
+    </div>
   `;
 }
 
@@ -5814,80 +5829,64 @@ function renderExecUpcomingRow(block) {
 }
 
 function renderOpenTasks() {
-  // v19: 今日に既に Block 化されていても表示し続ける(1日に複数回追加することもあるため)
-  // v28: 「その他」受け皿 Task は実体のあるタスクではないので未完了リストから除外
-  // v35: 中断・中止したタスクは未完了リストから外す(途中でやめたものを残さない)
-  // v126: v37で入れたWish Project除外を撤去。「期日付きWishはタスクと同じ」の原則により、
-  //       このリストは元々dueDate必須(下のBoolean(task.dueDate))なので、期日を持つWishだけが
-  //       通常タスクと同列に表示される(期日なしWishは従来どおり出てこない)。
-  // v107: K指示により期日未設定Taskは一覧から除外する(v97時点は「期日未設定は常に表示」
-  //       だったが、期日昇順ソートの導入とあわせて廃止。データは消さない=期日を設定すれば表示される)。
-  const open = state.tasks.filter((task) => !task.deleted && !isTaskDead(task) && task.kind !== "other"
-    && Boolean(task.dueDate));
-  if (!open.length) return emptyPanel("未完了のTaskはありません");
-  // v107: 期日昇順(期日超過が最上位)。同一期日はタイトルのja比較で安定ソート(renderWBSの
-  //       Project一覧ソートと同じ流儀)
-  open.sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.title.localeCompare(b.title, "ja"));
+  // v332: 母集団再編(空 or 今日+7日以内・Wish除く)。期限昇順→期限なし末尾。8日後以降の
+  //       折りたたみ(v97〜v107)はWBS導線へ一本化し廃止。
+  const today = state.selectedDate;
+  const limit = addDays(today, 7);
+  const isWishTask = (task) => Boolean(state.projects.find((p) => p.id === task.projectId)?.kind === "wish");
+  const open = state.tasks.filter((task) => !task.deleted && !isTaskDead(task) && task.kind !== "other" && !isWishTask(task))
+    .filter((task) => { const due = effectiveDueDate(task); return !due || due <= limit; });
+  open.sort((a, b) => {
+    const da = effectiveDueDate(a), db = effectiveDueDate(b);
+    if (da === db) return projectName(a.projectId).localeCompare(projectName(b.projectId), "ja") || a.title.localeCompare(b.title, "ja");
+    return !da ? 1 : (!db ? -1 : da.localeCompare(db));
+  });
   // 今日 Block 化済みのカウント(参考表示用)
   const blockCountByTaskId = {};
-  state.blocks
-    .filter((b) => !b.deleted && b.date === state.selectedDate)
-    .forEach((b) => {
-      if (b.taskId) blockCountByTaskId[b.taskId] = (blockCountByTaskId[b.taskId] || 0) + 1;
-    });
-  // v97: 既定表示は「当日(=選択中の日付)〜7日後 + 期日超過」まで。
-  //      それより先(8日後以降)は畳み、トグルで表示する(データは消さない)。
-  //      アンカーは既存の isOverdue と同じ state.selectedDate に揃える(選択日を進めれば
-  //      窓もスライドする一貫した挙動にする)。
-  const futureLimit = addDays(state.selectedDate, 7);
-  const isFarFuture = (task) => Boolean(task.dueDate) && task.dueDate > futureLimit;
-  const visible = open.filter((task) => !isFarFuture(task));
-  const folded = open.filter(isFarFuture);
-  const showFuture = Boolean(state.settings.tasksShowFuture);
-
-  const renderItem = (task) => {
-    const dueLabel = task.dueDate ? ` / 期限 ${task.dueDate}` : "";
-    const isOverdue = task.dueDate && task.dueDate < state.selectedDate;
-    const todayCount = blockCountByTaskId[task.id] || 0;
-    // v96: 完了条件・スモールステップは空欄なら何も出さない(行を開かずに見える行内サブテキスト)
-    const doneCriteriaHTML = task.doneCriteria
-      ? `<div class="muted task-done-criteria" style="font-size:11.5px; margin-top:2px">🎯 ${escapeHTML(task.doneCriteria)}</div>` : "";
-    const firstStepHTML = task.firstStep
-      ? `<div class="muted task-first-step" style="font-size:11.5px; margin-top:2px">👣 ${escapeHTML(task.firstStep)}</div>` : "";
-    return `
-      <div class="item" ${isOverdue ? 'style="background:var(--red-soft)"' : ""}>
-        <div class="row">
-          <div style="min-width:0; flex:1">
-            <strong>${escapeHTML(task.title)}</strong>
-            <div class="muted" style="font-size:12px">${escapeHTML(projectName(task.projectId))} / ${escapeHTML(task.category || "カテゴリなし")}${dueLabel}${todayCount > 0 ? ` <span style="color:var(--green-text); font-weight:600">/ 本日 ${todayCount} 件 Block 追加済み</span>` : ""}</div>
-            ${doneCriteriaHTML}
-            ${firstStepHTML}
-          </div>
-          <div class="row">
-            <button class="btn" data-action="task-today" data-id="${task.id}">今日へ追加</button>
-            <button class="btn ghost" data-action="suspend-task" data-id="${task.id}">中断</button>
-            <button class="btn" data-action="edit-task" data-id="${task.id}">編集</button>
-          </div>
-        </div>
-      </div>
-    `;
-  };
-
-  const toggleHTML = folded.length
-    ? `<div class="row" style="margin-bottom:8px">
-        <button class="btn ${showFuture ? "primary" : "ghost"}" data-action="toggle-tasks-show-future">${showFuture ? "8日後以降を隠す" : `8日後以降を表示 (${folded.length}件)`}</button>
-      </div>`
-    : "";
-  const emptyVisibleHTML = (!visible.length && !(showFuture && folded.length))
-    ? emptyPanel("表示範囲(当日〜7日後・期日超過)に未完了のTaskはありません")
-    : "";
-
+  state.blocks.filter((b) => !b.deleted && b.date === today).forEach((b) => {
+    if (b.taskId) blockCountByTaskId[b.taskId] = (blockCountByTaskId[b.taskId] || 0) + 1;
+  });
+  const heading = `<h2>タスク <span class="exec-tasks-sub">未完了 ・ 期限が1週間以内 ・ ${open.length}件 ・ 期限順</span></h2>`;
+  const wbsLinkHTML = `<button type="button" class="exec-wbs-link" data-action="nav" data-view="wbs">WBSで全部見る ›</button>`;
+  // v332修正: 0件時もWBS導線を残す(0件時こそWBSへ誘導する価値がある)。
+  if (!open.length) return `${heading}${emptyPanel("期限が近いタスクはありません")}<div class="exec-tasks-footer muted">${wbsLinkHTML}</div>`;
+  const rows = open.map((task) => renderExecTaskRow(task, blockCountByTaskId[task.id] || 0)).join("");
   return `
-    ${toggleHTML}
-    <div class="grid">
-      ${visible.map(renderItem).join("")}
-      ${showFuture ? folded.map(renderItem).join("") : ""}
-      ${emptyVisibleHTML}
+    ${heading}
+    <div class="grid">${rows}</div>
+    <div class="exec-tasks-footer muted">「今日へ」で今日のBlockになり「これから」に入ります ・ ${wbsLinkHTML}</div>
+  `;
+}
+
+// v332: 「タスク」行。常時=☐/タイトル+meta/今日へ。行タップ(task-row-toggle)で中断/編集を
+// 展開する(_execExpandedTaskIdで1行だけ開く。非永続)。
+function renderExecTaskRow(task, todayCount) {
+  const today = state.selectedDate;
+  const due = effectiveDueDate(task);
+  const isOverdue = Boolean(due) && due < today;
+  // v332修正: WBS(app.js renderWbsTaskRow付近)と同じ「M/D(実 M/D)」併記に揃える
+  // (effectiveDueDateだけを出すと前倒しタスクの実期日が実行タブから読めなくなるため)。
+  const dueMD = due ? (due !== task.dueDate ? `${mdFmt(due)}(実 ${mdFmt(task.dueDate)})` : mdFmt(due)) : "";
+  const dueLabel = due ? `期限 ${dueMD}${due === today ? "(今日)" : (isOverdue ? " 超過" : "")}` : "";
+  const progressNum = Number.isFinite(task.progressNum) ? task.progressNum : 0;
+  const progressDen = Number.isFinite(task.progressDen) ? task.progressDen : 10;
+  const metaParts = [escapeHTML(projectName(task.projectId)), dueLabel, `進捗 ${progressNum}/${progressDen}`].filter(Boolean);
+  const addedHTML = todayCount > 0 ? ` ・ <span class="exec-task-added">本日 ${todayCount} 件 Block 追加済み</span>` : "";
+  const expanded = _execExpandedTaskId === task.id;
+  // v96: 完了条件・スモールステップは空欄なら何も出さない(行を開かずに見える行内サブテキスト)
+  const doneCriteriaHTML = task.doneCriteria ? `<div class="muted task-done-criteria" style="font-size:11.5px; margin-top:2px">🎯 ${escapeHTML(task.doneCriteria)}</div>` : "";
+  const firstStepHTML = task.firstStep ? `<div class="muted task-first-step" style="font-size:11.5px; margin-top:2px">👣 ${escapeHTML(task.firstStep)}</div>` : "";
+  const expandHTML = expanded ? `<div class="exec-row-expand"><button class="btn ghost" data-action="suspend-task" data-id="${task.id}">中断</button><button class="btn" data-action="edit-task" data-id="${task.id}">編集</button></div>` : "";
+  return `
+    <div class="item exec-row exec-task-row${expanded ? " is-expanded" : ""}">
+      <button class="checkbox-button" data-action="toggle-task" data-id="${task.id}" title="完了" aria-label="完了">✓</button>
+      <div class="exec-row-copy" data-action="task-row-toggle" data-id="${task.id}">
+        <strong title="${escapeHTML(task.title)}">${escapeHTML(task.title)}</strong>
+        <div class="exec-row-meta${isOverdue ? " exec-task-overdue" : ""}">${metaParts.join(" ・ ")}${addedHTML}</div>
+        ${doneCriteriaHTML}${firstStepHTML}
+      </div>
+      <button class="btn exec-start-btn" data-action="task-today" data-id="${task.id}">今日へ</button>
+      ${expandHTML}
     </div>
   `;
 }
@@ -13902,15 +13901,11 @@ function projectedEndText() {
   const over = end >= 1440 ? "翌" : "";
   return `見込み終了 ${over}${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
 }
-// 表示要素(色分け・警告なし。有限性を時刻で見せるだけ。CONCEPT §4.8）
-function projectedEndBadge() {
-  const t = projectedEndText();
-  return t ? `<span class="projected-end" id="projected-end">${t}</span>` : `<span class="projected-end" id="projected-end"></span>`;
-}
+// v332: projectedEndBadge()は呼び出し元ゼロ(execHeaderHTMLへ統合)のため削除した。
 // 毎分ティックで該当 span のみ差し替え(全再描画しない=入力フォーカス破壊防止)
 function updateProjectedEndTick() {
   const el = document.getElementById("projected-end");
-  if (el) el.textContent = projectedEndText();
+  if (el) el.textContent = projectedEndText() || "見込み終了 —";
 }
 
 // v144レビュー対応: エネルギーバッテリーは時間経過(減衰)だけで値が変わるため、render()の

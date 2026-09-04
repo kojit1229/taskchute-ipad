@@ -1,0 +1,72 @@
+{
+  "version": 332,
+  "date": "2026-09-04",
+  "title": "実行タブA-1b: タスク一覧の母集団再編・ヘッダ1行化・＋Block折りたたみ",
+  "summary": "タスクシュート(実行)タブのヘッダを「TOWER / タスクシュート ・ 見込み終了 HH:MM ・ 余白 N分」の1行にまとめ、Block追加フォームをdetails折りたたみ(既定閉)にした。下部「タスク」一覧はrenderOpenTasksを再編し、母集団を「!deleted・todo/doing・Wish除外・effectiveDueDateが空 or 今日+7日以内」へ変更(期日未設定は非表示→末尾表示、8日後以降の折りたたみtoggle-tasks-show-futureはWBS導線へ一本化して廃止)。renderBlockItem(死コード)の削除は実行コード差分200行の都合で本バージョンでは対象外にし、次バージョンへ持ち越した。",
+  "changedFiles": [
+    "app.js",
+    "docs/test-impact-map.generated.md",
+    "releases/v332.json",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/today-core.test.js",
+    "tests/v96.test.js",
+    "tests/v97.test.js",
+    "tests/v98.test.js",
+    "tests/v107.test.js",
+    "tests/v112.test.js",
+    "tests/v133.test.js",
+    "tests/v308.test.js",
+    "tests/v331.test.js",
+    "tests/v332.test.js"
+  ],
+  "intent": [
+    "ヘッダの見込み終了・バッファ表示とBlock追加フォームを1行+折りたたみへ圧縮し、下部までの縦スクロール量を減らす。",
+    "「タスク」一覧の母集団を仕様どおり(空 or 今日+7日以内・Wish除外)へ再編し、8日後以降はWBSで見る導線へ一本化して重複UIを減らす。"
+  ],
+  "changes": [
+    "execHeaderHTML()を新設し、renderHeader+projectedEndBadge+独立form-stripだったヘッダを「TOWER / タスクシュート ・ 見込み終了 HH:MM ・ 余白 N分」の1行+右の<details class=\"exec-add\">(＋Block、既定閉)へ再構成した。id=#blockTitle/#blockCategory・data-action=\"add-block\"は温存。projectedEndBadge()は呼び出し元ゼロになったため削除し、updateProjectedEndTick()のフォールバック文言を「見込み終了 —」に統一した。",
+    "renderOpenTasks()を母集団再編: !deleted・isTaskDead()でtodo/doing限定・kind!==\"other\"・Wish(所属Projectのkind===\"wish\")除外・effectiveDueDateが空 or 今日+7日以内。並びは期限昇順(超過先頭)→期限なし末尾→同一期限内はプロジェクト名昇順。8日後以降の折りたたみ(state.settings.tasksShowFuture・toggle-tasks-show-future)は撤去し、末尾に「WBSで全部見る」導線(data-action=\"nav\" data-view=\"wbs\")を追加した。",
+    "renderExecTaskRow()を新設: 常時要素は☐(toggle-task)/タイトル+meta(プロジェクト名・期限M/D[(今日)|超過]・進捗x/y・当日Block追加済みバッジ)/今日へ(task-today、既存)。行タップ(exec-row-copy、新規data-action=\"task-row-toggle\")で中断/編集を展開する(非永続の_execExpandedTaskIdで1行だけ開閉、block-row-toggleと同方式)。doneCriteria/firstStepの行内サブテキスト(v96契約)は維持。",
+    ".exec-header/.exec-add/.exec-task-row系のCSSを追加(TOWERトークン、超過はアンバー文字で赤は使わない)。PC(1280px以上)は「これから」を左列・「タスク」を下段全幅にする.exec-lowerグリッドを追加。sw.jsのCACHE_NAMEをv332へ更新した。",
+    "renderBlockItem(呼び出し元ゼロの死コード、v331から持ち越し)の削除は実行コード差分200行の都合で本バージョンでも対象外にし、コメントで次バージョン持ち越しを明記して残置した(発注v332の完了条件どおり「死コード削除だけを外して報告」)。",
+    "【独立レビュー指摘対応】execHeaderHTML()の末尾に${bufferMeterHTML()}を1行復元した。ヘッダ1行化でv146のバッファ残量帯(緑/黄/赤)と第4状態の警告「計画時点でバッファ未確保(N分不足)」+提案文が無言で消えていたため(独立レビューH1指摘)。",
+    "【独立レビュー指摘対応】renderExecTaskRow()の期限表示をWBS(renderWbsTaskRow付近)と同じ「期限 M/D(実 M/D)」併記に揃えた。effectiveDueDate(自己締切2日前倒し)だけを表示すると実期日がWBSと食い違って読めなくなっていたため(独立レビューM1指摘)。population判定(effectiveDueDate基準)自体は変更していない。",
+    "【独立レビュー指摘対応】.exec-row .checkbox-button / .exec-task-row .exec-row-copy をWBS(.wbs-task-row)と同じ方式で44x44px以上に上書きした。実行タブの☐・展開トリガーが30px相当のままタップ領域44pxに届いていなかったため(独立レビューM3指摘)。",
+    "【WBSプロジェクト見出しstrongのdata-action=\"edit-project\"除去(監督者変更、本バージョンに同梱)】app.js:5562。v331は誤ってこの属性を復元しており(v330で失われていたものをv331が復元したと記録)、その結果tests/v329.test.js:161のセレクタがstrong/行メニューの2要素にマッチしstrict mode違反で赤くなっていた。v329(3afa55f)の設計は「編集は…メニュー経由に一本化」であり、strongへのdata-action復元自体が誤りだったため本バージョンで再度除去し、v329の意図へ戻した。編集導線は詳細パネルの「編集」・行メニューの「編集」の2経路で維持される。tests/v308.test.js:205のセレクタもこの属性除去に追随した(K承認事項)。",
+    "【tests/v98.test.jsの期待値訂正(監督者変更、本バージョンに同梱)】.btnのmin-height期待値を36px→44pxへ訂正し、対象セレクタを.btn:not(.primary)へ変更した。styles.cssの.btn基底ルールはmin-height:44px(760px以上の圧縮規則でも33px止まり)であり、36pxを与える規則はCSS上どこにも存在しない(v318のタップ44px化以降ずっと赤だったステールな期待値)。＋Blockボタン(.btn.primary、44px固定)がヘッダ先頭のDOM順に来たため.btnセレクタの対象を除外する必要も生じ、2箇所を同時に直した(K承認事項)。",
+    "【tests/v133.test.jsの…メニュー開閉ステップ追加(監督者変更、本バージョンに同梱)】v329以降、add-task-to-projectはhiddenの.wbs-row-menu-panel内にしか存在せず、事前にwbs-row-menu-toggleを開かないとテストが到達できず赤かった。v332とは無関係にv329起因で赤かったテストの修理を本バージョンへ同梱した(K承認事項)。",
+    "【独立レビュー指摘対応(low)】0件時(「期限が近いタスクはありません」)にも末尾の「WBSで全部見る ›」導線を出すようにした。見込み終了表示の#projected-endへclass=\"projected-end\"を戻し(styles.cssの太字・tabular-nums表示が効くように)、毎分ティックでの数字の横揺れを解消した。",
+    "【独立レビュー指摘対応(M2/M3)】tests/v332.test.jsへ selfDueOff:false(自己締切前倒し2日)の境界fixture(dueDate+9日→実効+7日で表示/dueDate+10日→実効+8日で表示されない)と、期限表示の「期限 M/D(実 M/D)」併記の検証を追加した。タスク行の☐・「今日へ」・展開トリガーのboundingBoxが44px以上であることの検証も追加した。",
+    "【独立レビュー指摘対応(M4)】tests/v332.test.jsのPC(1280px)レイアウト検証をcount()による存在確認からboundingBoxによる幾何検証(「これから」が全幅の約半分以下・「タスク」のtopが「これから」のbottom以上かつ全幅)へ差し替えた。",
+    "【独立レビュー指摘対応(B-M5)】tests/v332.test.jsのstate非書込検証を、fixture値どおりの文字列比較に加えて「内容変更を伴うlocalStorage.setItemの呼び出し回数0回」の計測(page.addInitScriptでStorage.prototype.setItemを計装)へ拡張した。"
+  ],
+  "uncertainties": [
+    "(a) WBSプロジェクト見出しstrongからdata-action=\"edit-project\"を外した理由: v329の設計は「編集は…メニューの『編集』経由に一本化」だったが、v331がこれを誤って復元したと記録していた(v331.json/CHANGES_v331.mdの「復元した」記載は本バージョンで取り消す)。復元状態のままだとtests/v329.test.js:161のセレクタがstrong/行メニューの2要素にマッチしstrict mode違反で赤くなるため、v332で再度除去してv329の意図へ巻き戻した。編集導線自体は詳細パネル・行メニューの2経路で維持される。範囲外(WBS側描画)の変更だが、v329の赤テスト解消に必要な訂正としてK承認のうえ本バージョンへ同梱した。",
+    "(b) tests/v98.test.jsの期待値訂正(36px→44px)とtests/v133.test.jsの…メニュー開閉ステップ追加は、いずれもv332とは無関係にv318/v329時点から赤だった既存不具合の修理であり、赤いテストの内容を機能コミットへ同梱している。v98の36pxはCSS上どこにも根拠がないステールな期待値(styles.cssの.btn基底は44px)であることを裏取り済み。v133はv329以降add-task-to-projectがhiddenの.wbs-row-menu-panel内にしか無くなったための到達手順追加。いずれもK承認事項として本バージョンへ同梱した(単独の別バージョンには分けていない)。",
+    "(c) 実行コード差分(app.js/styles.css/sw.js)は本バージョンの独立レビュー対応後で200行を超過している(git diff --numstat実測は本releaseのverificationを参照)。密結合な修正(バッファメーター復元・期限表示統一・44pxタップ領域・edit-project除去は同一ファイルapp.js内で分割できない)のため、分割せず`Size-Exempt: 独立レビュー2系統(H1バッファメーター喪失・M1期限表示・M3タップ領域・edit-project記録整合)の指摘が同一app.js/styles.css箇所に集中し、動かない途中状態への機械分割ができないため`のトレーラーでコミット時に届け出ること(本バージョンはコミットしていないため、実際のトレーラー付与は次のコミット時に行う)。",
+    "(d) renderBlockItem(呼び出し元ゼロの死コード)とtoggle-tasks-show-future(state.settings.tasksShowFuture、UIから到達不能な孤児action)は本バージョンでも残置した。前者は実行コード差分200行の都合、後者はv332の「やらないこと: state新規キーの追加なし」の範囲では削除必須ではないと判断したため。いずれも次バージョンでの掃除対象としてknownLimitationsに記録する。",
+    "「今日へ」ボタンでBlockを追加した直後もTask行はタスク一覧に残る契約(v112)を維持しているが、Wishタスク・suspendedタスクを「今日へ」経由でBlock化した場合の表示整合はこの発注のスコープ外(既存createBlockFromTask/task-todayのロジックは無改修)。",
+    "tests/v107.test.jsのSORT_TASKS fixtureに追加したselfDueOff:trueは、単に前倒しケースを避けるためではなく外せない: 既定(selfDueOff:false)だとeffectiveDueDate=dueDate-2日になり、fixtureが検証している境界値(+7日=含む/+8日=含まない)が実際には+5日/+6日にずれてしまい、テストが意図した境界を検証できなくなる。前倒し(selfDueOff:false)経路の境界検証はtests/v332.test.js側に新規追加した(上記changes参照)ため、v107側はraw dueDateベースの境界検証として現状維持が妥当と判断した。",
+    "Codex利用上限のため実装はimplementer(Claude)。閉塞確認はClaude reviewerで代替。"
+  ],
+  "reviewFocus": [
+    "「タスク」一覧の母集団条件(Wish除外・+8日以降が出ない・期日未設定は末尾に出る)が仕様どおりであること。",
+    "行タップ展開(task-row-toggle)がstate・localStorageへ一切書き込まないこと(_execExpandedTaskIdの非永続性)。",
+    "＋Block detailsが既定閉で、開いて#blockTitle+Enterで従来どおりBlockが追加されること。",
+    "390px/1280pxで横スクロールが発生せず、可視文字が11px以上・タップ要素が44px以上であること。PC(1280px以上)で「これから」が左列・「タスク」が下段全幅になること。"
+  ],
+  "verification": [
+    "レビュー修正後: npm.cmd run test:manifest:write(208 suites書き出し)後、node tests/run-all.js v332 v331 v112 v107 v133 v308 v329 v98 v96 v97 today-core action-registry-core v313 を2回実行し、いずれも❌0件・全件成功を確認した(v329を含め、既存不具合の再現は無い)。",
+    "node --check app.js は成功。",
+    "実行コード差分(git diff --numstat、レビュー修正後の実測): app.js 90+/95- ・ styles.css 28+/0- ・ sw.js 2+/1- の合計216行で、200行を超過している(独立レビュー2系統の指摘に対応した結果。内訳: H1バッファメーター復元1行・M1期限表示のWBS併記化・M3タップ領域44px化のCSS追加・edit-project除去に伴う整合。分割不能なapp.js/styles.cssの密結合修正のため、コミット時にSize-Exemptトレーラーでの届出が必要(uncertainties(c)参照)。本バージョンは未コミットのため実際のトレーラー付与はコミット時に行うこと)。"
+  ],
+  "notes": [
+    "Codex利用上限のため実装はimplementer(Claude)、レビューはClaude reviewerで代替。"
+  ],
+  "knownLimitations": [
+    "renderBlockItem(死コード)は本バージョンでも未削除。次バージョンで対応すること。"
+  ]
+}

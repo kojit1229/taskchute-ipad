@@ -1,14 +1,17 @@
-// v97 検証: タスクシュート画面「未完了タスク」の表示範囲を当日〜7日後+期日超過に絞り、
-// 8日後以降はトグルで折りたたむ(データは消さない)。
+// v97 検証(v332で仕様変更に追随): タスクシュート画面「タスク」一覧の表示範囲。
 //
-// (a) 既定表示(tasksShowFuture=false)は当日〜7日後(境界含む)+期日超過+期日未設定のみ。
-//     8日後以降は行が出ない
-// (b) 折りたたみ件数がトグルボタンに表示される
-// (c) トグルを押すと8日後以降のタスクも表示され、ボタン文言が切り替わる。state.tasksは
-//     一切減っていない(データは消えていない)
-// (d) トグル状態(state.settings.tasksShowFuture)はpersistLocalNoScheduleで永続化され、
-//     リロード後も保持される
-// (e) 期日超過タスクは既定表示に含まれ、赤系背景(var(--red-soft))が付く
+// 旧仕様(v97〜v107): 当日〜7日後(境界含む)+期日超過のみ表示、期日未設定は非表示、
+// 8日後以降はtoggle-tasks-show-futureで折りたたみ/展開(データは消さない)。
+//
+// v332仕様(発注v332 §B、母集団再編): effectiveDueDateが「空(期日未設定) or 今日+7日以内」を
+// 表示し、期日未設定は末尾に表示(非表示から変更)。8日後以降はトグルで展開する仕組みを廃止し、
+// 「WBSで全部見る」導線へ一本化した(toggle-tasks-show-future UIは撤去)。
+// 本ファイルはv97由来の回帰確認の意図(境界値・データ非消失・視覚表現)を新仕様へ置き換えて維持する。
+//
+// (a) 既定表示は当日〜7日後(境界含む)+期日超過+期日未設定(末尾)。8日後以降は表示されない
+// (b) 8日後以降を表示するトグルUIはもう存在しない(WBSへの導線のみ)
+// (c) 母集団から外れたTask(8日後)もstate.tasksからは消えない(データは消えていない)
+// (d) 期日超過タスクはアンバー表示(.exec-task-overdue、赤系背景ではない)になる
 //
 // 方針: v96.test.jsと同じくブラウザ操作 + localStorage状態注入で観測する。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
@@ -36,9 +39,6 @@ function check(name, cond, extra = "") {
 
   const pad2 = (n) => String(n).padStart(2, "0");
   // v108: 実時刻依存フレーク対策 — TODAYをハードコードせず実行時の「今日」10:00に固定する
-  //       (v89/v90と同じ流儀)。app.js起動時にstate.selectedDate=todayISO()(実時計)へ強制される
-  //       ため、TODAYがハードコード日付のままだと実行日によって選択日とフィクスチャの期日計算が
-  //       ズレて「8日後」等の境界判定が壊れる(2026-07-16のCI赤で顕在化)。
   const now0 = new Date();
   now0.setHours(10, 0, 0, 0);
   const TODAY = `${now0.getFullYear()}-${pad2(now0.getMonth() + 1)}-${pad2(now0.getDate())}`;
@@ -46,7 +46,7 @@ function check(name, cond, extra = "") {
     return {
       id, projectId: "test-proj", parentTaskId: "", title, category: "", status: "todo", dueDate,
       description: "", createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`, deleted: false,
-      doneCriteria: "", firstStep: "", ...extra
+      doneCriteria: "", firstStep: "", selfDueOff: true, ...extra
     };
   }
   // v108: TODAY相対の期日をnow0からのDateオブジェクト演算で求める(文字列固定日ではズレる)
@@ -64,22 +64,21 @@ function check(name, cond, extra = "") {
   const TASKS = [
     task("task-today", "当日期日Task", TODAY),
     task("task-7days", "境界(7日後)Task", addDaysStr(7)),
-    task("task-8days", "8日後Task(折りたたみ対象)", addDaysStr(8)),
+    task("task-8days", "8日後Task(母集団外)", addDaysStr(8)),
     task("task-overdue", "期日超過Task", addDaysStr(-5)),
     task("task-nodue", "期日未設定Task", "")
   ];
 
-  async function seed({ tasks = [], projects = [], view = "tasks", tasksShowFuture } = {}) {
-    await page.evaluate(({ KEY, tasks, projects, TODAY, view, tasksShowFuture }) => {
+  async function seed({ tasks = [], projects = [], view = "tasks" } = {}) {
+    await page.evaluate(({ KEY, tasks, projects, TODAY, view }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.tasks = tasks;
       s.projects = projects;
       s.blocks = [];
       s.selectedDate = TODAY;
       s.currentView = view;
-      if (typeof tasksShowFuture === "boolean") s.settings.tasksShowFuture = tasksShowFuture;
       localStorage.setItem(KEY, JSON.stringify(s));
-    }, { KEY, tasks, projects, TODAY, view, tasksShowFuture });
+    }, { KEY, tasks, projects, TODAY, view });
     await page.reload();
     await page.waitForTimeout(400);
   }
@@ -99,83 +98,63 @@ function check(name, cond, extra = "") {
     await passGithubGate(page);
 
     // ============================================================
-    // (a) 既定表示(tasksShowFuture=false): 当日〜7日後(境界含む)+期日超過+期日未設定のみ
+    // (a) 既定表示: 当日〜7日後(境界含む)+期日超過+期日未設定(末尾)。8日後以降は出ない
     // ============================================================
-    console.log("[1] 既定表示は当日〜7日後(境界含む)+期日超過+期日未設定のみ。8日後以降は出ない");
-    await seed({ tasks: TASKS, projects: [testProject()], view: "tasks", tasksShowFuture: false });
+    console.log("[1] 既定表示は当日〜7日後(境界含む)+期日超過+期日未設定(末尾)。8日後以降は出ない(v332で仕様変更・追随)");
+    await seed({ tasks: TASKS, projects: [testProject()], view: "tasks" });
     check("当日期日Taskが表示される", await taskTodayBtn("task-today").count() === 1);
     check("境界(7日後)Taskが表示される", await taskTodayBtn("task-7days").count() === 1);
     check("期日超過Taskが表示される", await taskTodayBtn("task-overdue").count() === 1);
-    // v107: K指示(2026-07-15)によりv97の「期日未設定は常に表示」を廃止。期日未設定Taskは
-    //       一覧から除外される(tests/v107.test.jsで新仕様の主検証、ここは回帰確認のみ更新)
-    check("期日未設定Taskは表示されない(v107でK指示により廃止)", await taskTodayBtn("task-nodue").count() === 0);
-    check("8日後Taskは既定では表示されない", await taskTodayBtn("task-8days").count() === 0);
+    // v332: 母集団再編(effectiveDueDateが空 or 7日以内)により、期日未設定Taskは
+    // 「表示しない」(v107)から「末尾に表示する」へ再度仕様変更された。
+    check("期日未設定Taskは末尾に表示される(v332で表示へ変更)", await taskTodayBtn("task-nodue").count() === 1);
+    check("8日後Taskは表示されない(母集団外)", await taskTodayBtn("task-8days").count() === 0);
+    const idsInOrder = await page.locator('.item [data-action="task-today"]').evaluateAll((els) => els.map((el) => el.dataset.id));
+    check("期日昇順: 超過→当日→7日後(境界)→期日なし(末尾)",
+      JSON.stringify(idsInOrder) === JSON.stringify(["task-overdue", "task-today", "task-7days", "task-nodue"]),
+      JSON.stringify(idsInOrder));
 
     // ============================================================
-    // (b) 折りたたみ件数がトグルボタンに表示される
+    // (b) 8日後以降を表示するトグルUIはもう存在しない(WBS導線へ一本化。発注v332 §B)
     // ============================================================
-    console.log("[2] トグルボタンに折りたたみ件数(1件)が表示される");
-    const toggleBtn = page.locator('[data-action="toggle-tasks-show-future"]');
-    check("トグルボタンが1個存在する", await toggleBtn.count() === 1);
-    check("ボタン文言に「8日後以降を表示 (1件)」が含まれる", (await toggleBtn.textContent())?.includes("8日後以降を表示 (1件)"),
-      await toggleBtn.textContent());
+    console.log("[2] 8日後以降を表示するトグル(toggle-tasks-show-future)はもう出ない。WBSへの導線がある");
+    check("toggle-tasks-show-futureボタンは出ない(v332でWBS導線へ一本化・廃止)",
+      await page.locator('[data-action="toggle-tasks-show-future"]').count() === 0);
+    check("「WBSで全部見る」導線がある", await page.locator('[data-action="nav"][data-view="wbs"]').filter({ hasText: "WBSで全部見る" }).count() === 1);
 
     // ============================================================
-    // (c) トグルを押すと8日後以降も表示され、文言が切り替わる。データは消えていない
+    // (c) 母集団から外れたTask(8日後)もstate.tasksからは消えない(データは消えていない)
     // ============================================================
-    console.log("[3] トグルを押すと8日後以降のTaskも表示され、文言が切り替わる。stateのTask件数は不変");
-    // v28自動生成の「その他」受け皿Taskがnormalize時に1件追加されるため、seed直後の総数を
-    // 基準に前後比較する(絶対値5固定ではなく差分ゼロで検証)
-    const beforeToggleState = await stateNow();
-    const beforeCount = (beforeToggleState.tasks || []).length;
+    console.log("[3] 母集団から外れたTask(8日後)もstate.tasksには残る(データは消えていない)");
+    const s = await stateNow();
     const seededIds = TASKS.map((t) => t.id);
-    check("トグル前: seedした5件がすべて存在する",
-      seededIds.every((id) => (beforeToggleState.tasks || []).some((t) => t.id === id)));
-    await toggleBtn.click();
+    check("seedした5件がすべてstate.tasksに存在する(8日後Taskも含む)",
+      seededIds.every((id) => (s.tasks || []).some((t) => t.id === id)));
+    check("8日後Taskのdue Dateは変わっていない",
+      (s.tasks || []).find((t) => t.id === "task-8days")?.dueDate === addDaysStr(8));
+    // WBSタブへ移動すれば8日後Taskも見える(導線の実証)
+    await page.click('[data-action="nav"][data-view="wbs"]');
     await page.waitForTimeout(200);
-    check("8日後Taskがトグル後に表示される", await taskTodayBtn("task-8days").count() === 1);
-    const toggleBtnAfter = page.locator('[data-action="toggle-tasks-show-future"]');
-    check("ボタン文言が「8日後以降を隠す」に切り替わる", (await toggleBtnAfter.textContent())?.includes("8日後以降を隠す"),
-      await toggleBtnAfter.textContent());
-    const afterToggleState = await stateNow();
-    check("トグル後もTask総数は不変(データは消えていない)", (afterToggleState.tasks || []).length === beforeCount,
-      `before=${beforeCount} after=${(afterToggleState.tasks || []).length}`);
-    check("トグル後もseedした5件がすべて存在する",
-      seededIds.every((id) => (afterToggleState.tasks || []).some((t) => t.id === id)));
-    check("トグル後もtask-8daysのdueDateは変わらず残っている",
-      (afterToggleState.tasks || []).find((t) => t.id === "task-8days")?.dueDate === addDaysStr(8));
+    check("WBSタブでは8日後Taskが見える(表示から消えただけでデータは健在)",
+      (await page.textContent("body"))?.includes("8日後Task(母集団外)"));
+    await page.click('[data-action="nav"][data-view="tasks"]');
+    await page.waitForTimeout(200);
 
     // ============================================================
-    // (d) トグル状態はpersistLocalNoScheduleで永続化され、リロード後も保持される
+    // (d) 期日超過タスクはアンバー表示(.exec-task-overdue)になる(赤系背景ではない)
     // ============================================================
-    console.log("[4] トグル状態(tasksShowFuture=true)がリロード後も保持される");
-    check("state.settings.tasksShowFutureがtrueになっている", afterToggleState.settings?.tasksShowFuture === true);
-    await page.reload();
-    await page.waitForTimeout(500);
-    check("リロード後も8日後Taskが表示されたまま(トグル状態が保持)", await taskTodayBtn("task-8days").count() === 1);
+    console.log("[4] 期日超過Taskは.exec-task-overdue(アンバー)で表示され、赤系背景ではない");
+    const overdueRow = page.locator('.exec-task-row', { has: page.locator('[data-action="task-today"][data-id="task-overdue"]') }).first();
+    check("期日超過Taskの行に.exec-task-overdue(アンバー)クラスが付く",
+      ((await overdueRow.locator(".exec-row-meta").getAttribute("class")) || "").includes("exec-task-overdue"));
+    const overdueRowStyle = await overdueRow.evaluate((el) => el.getAttribute("style") || "");
+    check("期日超過Taskの行に赤系背景(var(--red-soft))は付かない(v332でアンバー表現へ統一)",
+      !overdueRowStyle.includes("var(--red-soft)"), overdueRowStyle);
 
     // ============================================================
-    // (e) 期日超過タスクは既定表示に含まれ、赤系背景(var(--red-soft))が付く
+    // (e) 390px幅のスクリーンショット(既定表示・タスク行タップ展開の2枚)
     // ============================================================
-    console.log("[5] 期日超過Taskには赤系背景(var(--red-soft))が付く");
-    const overdueItemStyle = await page.locator('.item', { has: page.locator('[data-action="task-today"][data-id="task-overdue"]') }).first()
-      .evaluate((el) => el.getAttribute("style") || "");
-    check("期日超過Taskの行にvar(--red-soft)背景が付く", overdueItemStyle.includes("var(--red-soft)"), overdueItemStyle);
-
-    // ============================================================
-    // (f) 8日後以降のTaskが1件も無いときはトグルボタンが出ない(回帰: 誤って常時表示しない)
-    // ============================================================
-    console.log("[6] 8日後以降のTaskが0件のときはトグルボタンが出ない");
-    await seed({
-      tasks: [task("task-only-today", "当日のみTask", TODAY)],
-      projects: [testProject()], view: "tasks", tasksShowFuture: false
-    });
-    check("折りたたみ対象が無いときはトグルボタンが出ない", await page.locator('[data-action="toggle-tasks-show-future"]').count() === 0);
-
-    // ============================================================
-    // (g) 390px幅のスクリーンショット(既定=折りたたみ、トグル後=展開)
-    // ============================================================
-    console.log("[7] 390px幅のスクリーンショット取得(既定折りたたみ / トグル展開)");
+    console.log("[5] 390px幅のスクリーンショット取得(既定表示 / タスク行タップ展開)");
     const ctxMobile = await browser.newContext({ serviceWorkers: "block", viewport: { width: 390, height: 844 } });
     const pageMobile = await ctxMobile.newPage();
     pageMobile.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror(mobile):", e.message); });
@@ -185,30 +164,29 @@ function check(name, cond, extra = "") {
     await pageMobile.waitForTimeout(500);
     await passGithubGate(pageMobile);
     await pageMobile.evaluate(({ KEY, TASKS, TODAY }) => {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      s.tasks = TASKS;
-      s.projects = [{
+      const s2 = JSON.parse(localStorage.getItem(KEY));
+      s2.tasks = TASKS;
+      s2.projects = [{
         id: "test-proj", kind: "normal", title: "テスト案件", category: "", status: "active",
         description: "", dueDate: "", twelveWeekStartDate: "", createdAt: `${TODAY}T00:00`, updatedAt: `${TODAY}T00:00`,
         deleted: false, collapsed: false
       }];
-      s.blocks = [];
-      s.selectedDate = TODAY;
-      s.currentView = "tasks";
-      s.settings.tasksShowFuture = false;
-      localStorage.setItem(KEY, JSON.stringify(s));
+      s2.blocks = [];
+      s2.selectedDate = TODAY;
+      s2.currentView = "tasks";
+      localStorage.setItem(KEY, JSON.stringify(s2));
     }, { KEY, TASKS, TODAY });
     await pageMobile.reload();
     await pageMobile.waitForTimeout(500);
     screenshotDir = fs.mkdtempSync(path.join(os.tmpdir(), "taskchute-v97-"));
-    const collapsedPath = path.join(screenshotDir, "v97-taskchute-390px-collapsed.png");
-    const expandedPath = path.join(screenshotDir, "v97-taskchute-390px-expanded.png");
-    await pageMobile.screenshot({ path: collapsedPath, fullPage: true });
-    await pageMobile.click('[data-action="toggle-tasks-show-future"]');
+    const defaultPath = path.join(screenshotDir, "v97-taskchute-390px-default.png");
+    const expandedPath = path.join(screenshotDir, "v97-taskchute-390px-row-expanded.png");
+    await pageMobile.screenshot({ path: defaultPath, fullPage: true });
+    await pageMobile.click('[data-action="task-row-toggle"][data-id="task-overdue"]');
     await pageMobile.waitForTimeout(200);
     await pageMobile.screenshot({ path: expandedPath, fullPage: true });
     check("スクショ2枚が生成された",
-      fs.existsSync(collapsedPath) && fs.existsSync(expandedPath));
+      fs.existsSync(defaultPath) && fs.existsSync(expandedPath));
     await ctxMobile.close();
   } finally {
     if (screenshotDir) fs.rmSync(screenshotDir, { recursive: true, force: true });

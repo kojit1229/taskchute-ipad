@@ -445,6 +445,8 @@ function check(name, cond, extra = "") {
     await page.clock.setFixedTime(fixedTime(12, 0, 0));
     await seedB5({ view: "tasks", blocks: [] });
     await page.waitForSelector("#blockTitle", { state: "attached" });
+    // v332: ＋Blockフォームはdetails折りたたみ(既定閉)になったため、操作前に開く(セレクタ追随)。
+    await page.click("details.exec-add summary");
     const defaultCategory = await page.locator("#blockCategory").inputValue();  // カテゴリ既定値(先頭option)
     await page.locator("#blockTitle").click();
     await page.keyboard.type("QUICKADD-Enter追加");
@@ -488,6 +490,7 @@ function check(name, cond, extra = "") {
     await page.clock.setFixedTime(fixedTime(12, 0, 0));
     await seedB5({ view: "tasks", selectedDate: YESTERDAY, blocks: [] });
     await page.waitForSelector("#blockTitle", { state: "attached" });
+    await page.click("details.exec-add summary");  // v332: ＋Blockフォームはdetails既定閉(セレクタ追随)
     await page.locator("#blockTitle").click();
     await page.keyboard.type("QUICKADD-昨日画面から");
     await page.keyboard.press("Enter");
@@ -526,6 +529,7 @@ function check(name, cond, extra = "") {
     await seedB5({ view: "tasks", blocks: [] });
     await heldReq;  // リクエスト到達=保留成立(この時点でhydrateは未完了のまま待っている)
     await page.waitForSelector("#blockTitle", { state: "attached" });
+    await page.click("details.exec-add summary");  // v332: ＋Blockフォームはdetails既定閉(セレクタ追随)
     await page.locator("#blockTitle").click();
     await page.keyboard.type("PROTECT-入力保持");
     // 全再描画で消えるプローブを差しておく(延期中は生存・flushで消える)

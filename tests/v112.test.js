@@ -161,7 +161,9 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (d) 期日なしTaskは表示されない/期日昇順(v97/v107回帰の維持確認)
     // ============================================================
-    console.log("[4] 期日なしTaskは表示されない/未完了一覧は期日昇順で表示される(v97/v107回帰の維持確認)");
+    // v332: 母集団再編(effectiveDueDateが空 or 今日+7日以内)により、期日未設定Taskは
+    // 「表示しない」から「一覧の末尾に表示する」へ仕様変更された(発注v332 §B)。
+    console.log("[4] 期日なしTaskは一覧の末尾に表示される/未完了一覧は期日昇順で表示される(v97/v107から仕様変更・v332で追随)");
     await seed({
       tasks: [
         wbsTask("task-nodue", "期日未設定Task", { dueDate: "" }),
@@ -173,10 +175,10 @@ function check(name, cond, extra = "") {
       projects: [testProject()],
       view: "tasks"
     });
-    check("期日未設定Taskは表示されない", await openItem("task-nodue").count() === 0);
+    check("期日未設定Taskは一覧に表示される(v332で末尾表示へ変更)", await openItem("task-nodue").count() === 1);
     const idsInOrder = await page.locator('.item [data-action="task-today"]').evaluateAll((els) => els.map((el) => el.dataset.id));
-    check("期日昇順(超過→当日→翌日)で表示される",
-      JSON.stringify(idsInOrder) === JSON.stringify(["task-overdue", "task-today2", "task-tomorrow"]),
+    check("期日昇順(超過→当日→翌日→期日なしは末尾)で表示される",
+      JSON.stringify(idsInOrder) === JSON.stringify(["task-overdue", "task-today2", "task-tomorrow", "task-nodue"]),
       JSON.stringify(idsInOrder));
 
     // ============================================================
@@ -187,7 +189,7 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(300);
     const idsInOrder2 = await page.locator('.item [data-action="task-today"]').evaluateAll((els) => els.map((el) => el.dataset.id));
     check("Block登録後も期日昇順の並びは変わらない",
-      JSON.stringify(idsInOrder2) === JSON.stringify(["task-overdue", "task-today2", "task-tomorrow"]),
+      JSON.stringify(idsInOrder2) === JSON.stringify(["task-overdue", "task-today2", "task-tomorrow", "task-nodue"]),
       JSON.stringify(idsInOrder2));
     check("Block登録したタスクは一覧に残ったまま", await openItem("task-today2").count() === 1);
 

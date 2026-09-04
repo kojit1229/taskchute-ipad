@@ -72,7 +72,10 @@ async function readStructuralStyles(page) {
       itemPaddingTop: g(".item", "paddingTop"),
       itemGap: g(".item", "rowGap"),
       formStripPaddingTop: g(".form-strip", "paddingTop"),
-      btnMinHeight: g(".btn", "minHeight")
+      // v332: ヘッダの＋Block化(execHeaderHTML)でBlock追加ボタン(.btn.primary、
+      // .btn.primaryはmin-height:44px固定でコンパクト化対象外=既存仕様)が日付バーより前の
+      // 最初の.btnになった。コンパクト化対象の.btnを測るため.primaryを除外する(セレクタ追随)。
+      btnMinHeight: g(".btn:not(.primary)", "minHeight")
     };
   });
 }
@@ -126,7 +129,10 @@ async function readStructuralStyles(page) {
     const phoneExpected = {
       mainPanePaddingTop: "14px", viewHeaderMarginBottom: "20px", h2MarginBottom: "12px",
       gridGap: "12px", panelPaddingTop: "10px", sectionMarginTop: "22px",
-      itemPaddingTop: "16px", itemGap: "8px", formStripPaddingTop: "12px", btnMinHeight: "36px"
+      // v332追随: base .btn の min-height は 44px(タップ目標)で、iPhone幅では圧縮規則が無い。
+      //   36px は現行CSSのどこにも無く(v330時点でも実測44px)、期待値の誤りだったため実値へ訂正。
+      //   iPad幅の R4圧縮 33px([1])が本テストの本体で、そちらは不変。
+      itemPaddingTop: "16px", itemGap: "8px", formStripPaddingTop: "12px", btnMinHeight: "44px"
     };
     Object.keys(phoneExpected).forEach((k) => {
       check(`iPhone: ${k} = ${phoneExpected[k]}(R4圧縮は未適用。base値はv127余白更新後)`,

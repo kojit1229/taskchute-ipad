@@ -341,6 +341,9 @@ function check(name, cond, extra = "") {
       view: "tasks"
     });
     check("保存前は未完了タスク一覧に出る", await page.locator('.item [data-action="task-today"][data-id="task-C"]').count() === 1);
+    // v332: 「タスク」行の編集ボタンは行タップ展開(task-row-toggle)後にしか出ない(セレクタ追随)。
+    await page.click('[data-action="task-row-toggle"][data-id="task-C"]');
+    await page.waitForSelector('[data-action="edit-task"][data-id="task-C"]');
     await page.click('[data-action="edit-task"][data-id="task-C"]');
     await page.waitForTimeout(200);
     await page.selectOption('[data-modal-field="status"]', "completed");
@@ -378,39 +381,39 @@ function check(name, cond, extra = "") {
     check("WBS完了後、タスクシュートの未完了一覧から消える", await page.locator('.item [data-action="task-today"][data-id="task-D"]').count() === 0);
 
     // ============================================================
-    // (h) 期日未設定Taskは未完了一覧に表示されない(K指示、v97仕様変更)
+    // (h) 期日未設定Taskは未完了一覧の末尾に表示される(v332で母集団再編。v97「常に表示」廃止→
+    //     v107「期日未設定は非表示」だったが、v332で「空 or 7日以内」へ再度仕様変更・末尾表示に追随)
     // ============================================================
-    console.log("[8] 期日未設定Taskは未完了タスク一覧に表示されない(v97の「常に表示」をK指示で廃止)");
+    console.log("[8] 期日未設定Taskは未完了タスク一覧の末尾に表示される(v332で仕様変更・追随)");
     await seed({
       tasks: [wbsTask("task-nodue", "期日未設定Task", { dueDate: "" })],
       blocks: [],
       projects: [testProject()],
       view: "tasks"
     });
-    check("期日未設定Taskは表示されない", await page.locator('.item [data-action="task-today"][data-id="task-nodue"]').count() === 0);
+    check("期日未設定Taskは表示される(v332で末尾表示へ変更)", await page.locator('.item [data-action="task-today"][data-id="task-nodue"]').count() === 1);
 
     // ============================================================
-    // (i)(j) 未完了一覧は期日昇順(超過が最上位)。8日後以降の折りたたみと共存する
+    // (i)(j) 未完了一覧は期日昇順(超過が最上位・期日なしは末尾)。v332で母集団は「空 or 今日+7日
+    //     以内」に再編され、8日後以降の折りたたみ・toggle-tasks-show-future(v97)はWBS導線へ
+    //     一本化し廃止された(発注v332 §B)。selfDueOff:trueで自己締切前倒し(-2日)を無効化し、
+    //     dueDateがそのままeffectiveDueDateになる状態で境界(+7日=含む/+8日=含まない)を検証する。
     // ============================================================
-    console.log("[9][10] 未完了一覧は期日昇順で表示され、8日後以降の折りたたみ(v97)と共存する");
+    console.log("[9][10] 未完了一覧は期日昇順(超過→当日→翌日→3日後→期日なし)で表示され、+8日は表示されない(v332で仕様変更・追随)");
     const SORT_TASKS = [
-      wbsTask("task-in3days", "3日後Task", { dueDate: addDaysStr(3) }),
-      wbsTask("task-overdue", "期日超過Task", { dueDate: addDaysStr(-6) }),
-      wbsTask("task-today2", "当日Task", { dueDate: TODAY }),
-      wbsTask("task-tomorrow", "翌日Task", { dueDate: addDaysStr(1) }),
-      wbsTask("task-8days", "8日後Task(折りたたみ対象)", { dueDate: addDaysStr(9) })
+      wbsTask("task-in3days", "3日後Task", { dueDate: addDaysStr(3), selfDueOff: true }),
+      wbsTask("task-overdue", "期日超過Task", { dueDate: addDaysStr(-6), selfDueOff: true }),
+      wbsTask("task-today2", "当日Task", { dueDate: TODAY, selfDueOff: true }),
+      wbsTask("task-tomorrow", "翌日Task", { dueDate: addDaysStr(1), selfDueOff: true }),
+      wbsTask("task-in7days", "7日後Task(境界=含む)", { dueDate: addDaysStr(7), selfDueOff: true }),
+      wbsTask("task-8days", "8日後Task(境界超=含まない)", { dueDate: addDaysStr(8), selfDueOff: true }),
+      wbsTask("task-nodue2", "期日未設定Task(末尾)", { dueDate: "" })
     ];
     await seed({ tasks: SORT_TASKS, blocks: [], projects: [testProject()], view: "tasks" });
     const idsInOrder = await page.locator('.item [data-action="task-today"]').evaluateAll((els) => els.map((el) => el.dataset.id));
-    check("既定表示(8日後以降は畳む)は期日昇順: 超過→当日→翌日→3日後",
-      JSON.stringify(idsInOrder) === JSON.stringify(["task-overdue", "task-today2", "task-tomorrow", "task-in3days"]),
+    check("期日昇順: 超過→当日→翌日→3日後→7日後(境界)→期日なし(末尾)。8日後は出ない",
+      JSON.stringify(idsInOrder) === JSON.stringify(["task-overdue", "task-today2", "task-tomorrow", "task-in3days", "task-in7days", "task-nodue2"]),
       JSON.stringify(idsInOrder));
-    await page.click('[data-action="toggle-tasks-show-future"]');
-    await page.waitForTimeout(200);
-    const idsInOrderExpanded = await page.locator('.item [data-action="task-today"]').evaluateAll((els) => els.map((el) => el.dataset.id));
-    check("8日後以降を展開しても期日昇順のまま末尾に追加される",
-      JSON.stringify(idsInOrderExpanded) === JSON.stringify(["task-overdue", "task-today2", "task-tomorrow", "task-in3days", "task-8days"]),
-      JSON.stringify(idsInOrderExpanded));
   } finally {
     await browser.close();
     server.close();
