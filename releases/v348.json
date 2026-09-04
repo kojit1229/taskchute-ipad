@@ -1,0 +1,40 @@
+{
+  "version": 348,
+  "date": "2026-09-05",
+  "title": "修正フェーズ 単位8: taskchuteBlocks/computeFreeGapsからmigratedTo除外",
+  "summary": "第1回コードレビュー(1-H1)の指摘に対応した。翌日へ繰り越し済み(migratedTo設定済み)のBlockは今日の実行対象ではなくなっているが、taskchuteBlocks()のフィルタにmigratedTo除外が無く、今日のタスクシュート表に残り続けていた。K裁定(K16、2026-09-05回答=送済Blockはcomputeフリーギャップでも占有から外す)に従い、taskchuteBlocks()に加えcomputeFreeGaps()の占有判定からもmigratedTo済みBlockを除外した。",
+  "changedFiles": [
+    "app.js",
+    "docs/test-impact-map.generated.md",
+    "releases/v348.json",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/today-core.test.js"
+  ],
+  "intent": [
+    "翌日へ繰り越し済みのBlockが今日のタスクシュート表・空き時間計算の両方から正しく除外されるようにする。"
+  ],
+  "changes": [
+    "app.js: taskchuteBlocks()のフィルタに`if (b.migratedTo) return false;`を追加した(1-H1)。",
+    "app.js: computeFreeGaps()の占有Block抽出に`.filter((b) => !b.migratedTo)`を追加した(K16裁定=送済Blockは空き時間計算でも占有から外す、と整合)。"
+  ],
+  "uncertainties": [
+    "handoff.mdに記載のK未回答事項だった「computeFreeGapsでも送済Blockを外すか」は2026-09-05にK16として回答済み(推奨どおり=外す)。本版はその回答を反映した最終形。",
+    "実装・レビューはremediation/unit8ブランチ上で完結済み(implementer+reviewer単系統、Codex利用上限のため)。着地順は本タスクの追加指示によりunit18の後・unit16の前に配置。"
+  ],
+  "reviewFocus": [
+    "migratedTo設定済みのBlockが今日のタスクシュート表(taskchuteBlocks)に表示されないこと。",
+    "migratedTo設定済みのBlockがcomputeFreeGapsの占有判定から除外され、その時間帯が空きとして計算されること。",
+    "migratedTo未設定の通常Blockの挙動が変わらないこと。"
+  ],
+  "verification": [
+    "node --check app.js は成功。",
+    "実行コード差分: app.js 2行(200行以内)。",
+    "npm run code:index:write → npm run test:manifest:write の順で実行し、node scripts/test-manifest.js --check はPASS。",
+    "node scripts/release-gate.js releases/v348.json をフォアグラウンド(timeout 600000、出力ファイルへリダイレクト)で実行、結果を別コマンドで確認。"
+  ],
+  "notes": [
+    "単位8(修正フェーズ第1段、K16回答待ちのため他単位より後に着地)。実装・レビューはCodex利用上限のためimplementer+reviewer(Claude)単系統。"
+  ],
+  "knownLimitations": []
+}

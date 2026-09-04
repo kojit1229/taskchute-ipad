@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v347";  // v347: dataModifiedAt/lastPushedAt/lastPulledAtの10文字日付防御(修正フェーズ単位18)
+const CACHE_NAME = "taskchute-journal-pwa-v348";  // v348: taskchuteBlocks/computeFreeGapsからmigratedTo除外(修正フェーズ単位8)
 // v334: 実行タブPC 2ペイン(§B。ナビ統合§Cは持ち越し)
 // v333: 実行ラッパー(計画/実績切替)・モバイルナビ4項目
 // v332: 実行タブA-1b ヘッダ1行化・タスク一覧再編・死コード削除

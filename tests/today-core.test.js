@@ -1319,7 +1319,12 @@ function check(name, cond, extra = "") {
         block("h1-cand", { title: "H1-配置候補", taskId: "h1-t-cand" })
       ]
     });
-    await page.click('[data-action="nav"][data-view="timeline"]');
+    // v335(§C追随): runAiSchedule自身がtimelineMode="planned"+_execMode="plan"+
+    // setView("exec")を行うため、事前ナビは不要(旧nav[data-view="timeline"]クリックを削除)。
+    // v334(§B)により計画モードの時間軸(draft-block等)はデスクトップ2ペイン(1280px以上)の
+    // 右列でしか描画されない(1279px以下の計画モードはexec-pane-left=一覧のみ)ため、
+    // このcheckの間だけ1280px以上へリサイズする。
+    await page.setViewportSize({ width: 1280, height: 900 });
     await page.waitForTimeout(150);
     await dispatchRegisteredAction(page, "ai-schedule");
     await page.waitForTimeout(500);
