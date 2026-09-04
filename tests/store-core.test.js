@@ -13,10 +13,16 @@
 //     resetDemoDataのような単純な全置換、runAutoSyncPull/loadFromGitHub/
 //     syncFromGitHubOnStartupのような同期採用後の置換)で固定する。
 // [B] Must-1(claude-review-result.md §3、prep-stage3-gateway.md §7-2): computeSyncMerge/
-//     syncCoreEqualのマージ・比較対象に入っていないキー(routineChains/chainRuns/
-//     weeklyReviews/cycleReviews)が、自動解決の経路によって保全されるか消えるかを実測する。
+//     syncCoreEqualのマージ・比較対象に入っていないキー(routineChains/weeklyReviews/
+//     cycleReviews)が、自動解決の経路によって保全されるか消えるかを実測する。
 //     「こうあるべき」ではなく現状の実装が実際にどう振る舞うかを固定する(§9: stage3では
 //     挙動を変更しない。fail-close化は次タスク)。
+//     unit14(D-1)でchainRunsはSYNC_CORE_COMPARE_KEYSへ移った(=もう「消える」側の例には
+//     使えない)ため、既知リスクの例からは外し、B-4で「不一致ならfail-closeする」側として検証する。
+// [B-4] unit14(D-1): SYNC_CORE_COMPARE_KEYSへ追加したstate直下9キー+settings一次データ12キー
+//     (計21キー)の行列。各キーだけが異なればsyncCoreEqualがfalseになること(=fail-closeで
+//     バナーへ落ちる)を1キーずつ固定する。UI状態キー(比較対象外)だけが異なる場合は
+//     従来どおりtrueのままであることもB-5で固定する。
 const path = require("path");
 const { pathToFileURL } = require("url");
 
@@ -59,15 +65,37 @@ function configureMinimalStubs(syncMod) {
 // 状況を作る)。
 function baseState(extra) {
   return {
-    journalMeta: {}, settings: { journalTemplate: "", morningEnergyLog: {}, github: {} },
+    journalMeta: {},
+    settings: {
+      journalTemplate: "", morningEnergyLog: {}, github: {},
+      // unit14: SYNC_CORE_COMPARE_KEYSへ追加したsettings一次データ12キーの既定値
+      // (local/remoteとも同じ既定値から出発させ、行列テストで1キーずつ差し替える)。
+      avoidList: [], categories: [], lifeAreas: [], vision: "", affirmation: "",
+      twelveWeekStartDate: "", twelveWeekScoreTarget: 85, birthDate: "", battery: {},
+      gymExerciseList: [], visionDirectCategories: []
+    },
     journals: {}, feedback: {}, condition: { logs: {} }, sleep: { logs: {} },
     blocks: [], zeroThinking: { entries: [], suggestedThemes: [] },
     dailyDeclarations: {}, weeklyWishes: {}, bodyScans: [], tasks: [], projects: [], storeVisits: [],
     swipeTriageLog: [], gardenLog: {},
     recurrences: ["r1"], declarations: ["d1"], questions: ["q1"], experiments: ["e1"],
+    // unit14: SYNC_CORE_COMPARE_KEYSへ追加したstate直下9キーの既定値
+    reports: {}, chainRuns: [], aiScheduleHistory: [], feedbackFiles: [], feedbackIngestedDates: [],
+    migrationRitualLog: [], zeroSecThemeLog: [], aiWorkProcessedIds: [], ironImport: {},
     dataModifiedAt: "2026-07-28T10:00:00",
     ...extra
   };
+}
+
+// ドット区切りパスへ値を設定する(SYNC_CORE_COMPARE_KEYSの"settings.xxx"形式に対応するテスト用ヘルパー)。
+function setByPath(obj, dotted, value) {
+  const parts = dotted.split(".");
+  let cur = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    cur[parts[i]] = cur[parts[i]] || {};
+    cur = cur[parts[i]];
+  }
+  cur[parts[parts.length - 1]] = value;
 }
 
 async function loadModules() {
@@ -120,15 +148,16 @@ async function loadModules() {
     }
   }
 
-  // ===================== [B] Must-1: 一次データ4キーの自動解決前後保全 =====================
-  // 端末AがローカルにroutineChains/chainRuns/weeklyReviews/cycleReviewsのエントリを持ち、
-  // 端末Bはjournalsだけが異なる状態を想定する(SYNC_CORE_COMPARE_KEYSの4キーは一致させ、
-  // syncCoreEqual()がtrueを返す=「両方に未反映の変更を人間判断なしで自動解消してよい」
-  // 経路に入るようにする)。
+  // ===================== [B] Must-1: 一次データ3キーの自動解決前後保全 =====================
+  // 端末AがローカルにroutineChains/weeklyReviews/cycleReviewsのエントリを持ち、
+  // 端末Bはjournalsだけが異なる状態を想定する(baseState()の既定値により残る21キーは
+  // 一致するので、syncCoreEqual()がtrueを返す=「両方に未反映の変更を人間判断なしで
+  // 自動解消してよい」経路に入るようにする)。
+  // unit14でchainRunsはSYNC_CORE_COMPARE_KEYSへ移動したため、ここには含めない
+  // (含めるとsyncCoreEqualがfalseになり本セクションの前提が崩れる。B-4で別途検証する)。
   function makeLocalWithPrimaryData() {
     return baseState({
       routineChains: [{ id: "chainA", name: "朝ルーティン" }],
-      chainRuns: [{ id: "runA", chainId: "chainA" }],
       weeklyReviews: { "2026-W30": { text: "順調" } },
       cycleReviews: { cycle1: { text: "12週レビュー" } }
     });
@@ -220,11 +249,6 @@ async function loadModules() {
       JSON.stringify(storeMod.state.routineChains)
     );
     check(
-      "state.chainRunsのローカルエントリが残る",
-      Array.isArray(storeMod.state.chainRuns) && storeMod.state.chainRuns.length === 1,
-      JSON.stringify(storeMod.state.chainRuns)
-    );
-    check(
       "state.weeklyReviewsのローカルエントリが残る",
       storeMod.state.weeklyReviews && storeMod.state.weeklyReviews["2026-W30"] != null,
       JSON.stringify(storeMod.state.weeklyReviews)
@@ -253,11 +277,6 @@ async function loadModules() {
       JSON.stringify(storeMod.state.routineChains)
     );
     check(
-      "【既知のリスク】state.chainRunsのローカルエントリも消える(undefined)",
-      storeMod.state.chainRuns === undefined,
-      JSON.stringify(storeMod.state.chainRuns)
-    );
-    check(
       "【既知のリスク】state.weeklyReviewsのローカルエントリも消える(undefined)",
       storeMod.state.weeklyReviews === undefined,
       JSON.stringify(storeMod.state.weeklyReviews)
@@ -266,6 +285,65 @@ async function loadModules() {
       "【既知のリスク】state.cycleReviewsのローカルエントリも消える(undefined)",
       storeMod.state.cycleReviews === undefined,
       JSON.stringify(storeMod.state.cycleReviews)
+    );
+  }
+
+  // ===================== [B-4] unit14: 21キー行列(1キーだけ違えばfail-close) =====================
+  // SYNC_CORE_COMPARE_KEYSへ追加したstate直下9キー+settings一次データ12キー=計21キー。
+  // それぞれについて、そのキーだけがlocal/remoteで異なればsyncCoreEqualがfalseを返すこと
+  // (=「変更なし」の誤判定をやめてバナーへ落とす)を1キーずつ固定する。
+  const UNIT14_COMPARE_KEYS = [
+    { path: "reports", a: { "2026-07-01": "ローカルの日報" }, b: { "2026-07-01": "リモートの日報" } },
+    { path: "chainRuns", a: [{ id: "runA", chainId: "chainA" }], b: [{ id: "runB", chainId: "chainB" }] },
+    { path: "aiScheduleHistory", a: [{ source: "local", reason: "" }], b: [{ source: "remote", reason: "" }] },
+    { path: "feedbackFiles", a: ["2026-07-01.md"], b: ["2026-07-02.md"] },
+    { path: "feedbackIngestedDates", a: ["2026-07-01"], b: ["2026-07-02"] },
+    { path: "migrationRitualLog", a: [{ at: "2026-07-01T00:00:00" }], b: [{ at: "2026-07-02T00:00:00" }] },
+    { path: "zeroSecThemeLog", a: [{ theme: "ローカルの気分転換" }], b: [{ theme: "リモートの気分転換" }] },
+    { path: "aiWorkProcessedIds", a: ["reqA"], b: ["reqB"] },
+    { path: "ironImport", a: { done: true, importedTotalKg: 100 }, b: { done: false, importedTotalKg: 0 } },
+    { path: "settings.avoidList", a: ["酒"], b: ["糖質"] },
+    { path: "settings.categories", a: [{ id: "c1", name: "仕事" }], b: [{ id: "c2", name: "私用" }] },
+    { path: "settings.lifeAreas", a: [{ id: "l1", name: "健康" }], b: [{ id: "l2", name: "家族" }] },
+    { path: "settings.vision", a: "ローカルのVision", b: "リモートのVision" },
+    { path: "settings.affirmation", a: "ローカルのAffirmation", b: "リモートのAffirmation" },
+    { path: "settings.journalTemplate", a: "# ローカルテンプレ", b: "# リモートテンプレ" },
+    { path: "settings.twelveWeekStartDate", a: "2026-01-01", b: "2026-04-01" },
+    { path: "settings.twelveWeekScoreTarget", a: 85, b: 90 },
+    { path: "settings.birthDate", a: "1990-01-01", b: "1991-01-01" },
+    { path: "settings.battery", a: { start: { hh: 7, mm: 0 } }, b: { start: { hh: 8, mm: 0 } } },
+    { path: "settings.gymExerciseList", a: ["スクワット"], b: ["デッドリフト"] },
+    { path: "settings.visionDirectCategories", a: ["c1"], b: ["c2"] }
+  ];
+  check(`unit14行列の対象キー数は21`, UNIT14_COMPARE_KEYS.length === 21, String(UNIT14_COMPARE_KEYS.length));
+
+  console.log("[B-4] unit14: 21キーそれぞれ「そのキーだけ違えば不一致」を固定");
+  for (const { path: dotted, a, b } of UNIT14_COMPARE_KEYS) {
+    const local = makeLocalWithPrimaryData();
+    setByPath(local, dotted, a);
+    storeMod.setState(local);
+    const remoteNorm = makeRemoteDiffOnlyInJournals();
+    setByPath(remoteNorm, dotted, b);
+    check(
+      `${dotted}だけ違えばsyncCoreEqualはfalse`,
+      syncMod.syncCoreEqual(remoteNorm) === false
+    );
+  }
+
+  console.log("[B-5] UI状態キー(比較対象外)だけ違えばsyncCoreEqualは従来どおりtrue");
+  {
+    // currentView/selectedDateはSYNC_CORE_COMPARE_KEYSに入らないUI状態キーの代表例
+    // (画面表示上の状態であり、端末間で異なっていても同期の競合として扱わない)。
+    const local = makeLocalWithPrimaryData();
+    local.currentView = "timeline";
+    local.selectedDate = "2026-07-28";
+    storeMod.setState(local);
+    const remoteNorm = makeRemoteDiffOnlyInJournals();
+    remoteNorm.currentView = "settings";
+    remoteNorm.selectedDate = "2026-07-27";
+    check(
+      "UI状態キー(currentView/selectedDate)だけの差分ではsyncCoreEqualはtrueのまま",
+      syncMod.syncCoreEqual(remoteNorm) === true
     );
   }
 

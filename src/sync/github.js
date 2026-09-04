@@ -435,18 +435,38 @@ function mergeZeroThinkingIntoLocal(remoteZt) {
 // ===============================================================
 
 // v280: habitPinHistoryはid+updatedAtでマージできない追記専用ツリーのため、earlyBird/habitStreaksと同じfail-close比較に置く。
-const SYNC_CORE_COMPARE_KEYS = ["recurrences", "declarations", "questions", "experiments", "earlyBird", "habitStreaks", "habitPinHistory"];
+// unit14(D-1): マージ対象外のまま「変更なし」と誤判定されていたstate直下9キー
+// (reports/chainRuns/aiScheduleHistory/feedbackFiles/feedbackIngestedDates/
+// migrationRitualLog/zeroSecThemeLog/aiWorkProcessedIds/ironImport)と、
+// settingsの一次データ12キー(avoidList/categories/lifeAreas/vision/affirmation/
+// journalTemplate/twelveWeekStartDate/twelveWeekScoreTarget/birthDate/battery/
+// gymExerciseList/visionDirectCategories)を追加。settings.*はドット区切りパスで
+// 指定し、getByPathで解決する(UI状態キーはD-K7により対象外のまま)。
+const SYNC_CORE_COMPARE_KEYS = [
+  "recurrences", "declarations", "questions", "experiments", "earlyBird", "habitStreaks", "habitPinHistory",
+  "reports", "chainRuns", "aiScheduleHistory", "feedbackFiles", "feedbackIngestedDates",
+  "migrationRitualLog", "zeroSecThemeLog", "aiWorkProcessedIds", "ironImport",
+  "settings.avoidList", "settings.categories", "settings.lifeAreas", "settings.vision",
+  "settings.affirmation", "settings.journalTemplate", "settings.twelveWeekStartDate",
+  "settings.twelveWeekScoreTarget", "settings.birthDate", "settings.battery",
+  "settings.gymExerciseList", "settings.visionDirectCategories"
+];
 
 // リモート生テキストからマージ・比較用のnormalize済みコピーを作る(失敗はnullで従来動作へ)
 function normalizedRemoteCopy(text) {
   try { return normalizeState(JSON.parse(text)); } catch { return null; }
 }
 
+// ドット区切りパスでネストした値を取り出す(SYNC_CORE_COMPARE_KEYSの"settings.xxx"用)。
+function getByPath(obj, path) {
+  return path.split(".").reduce((o, k) => (o == null ? undefined : o[k]), obj);
+}
+
 function syncCoreEqual(remoteNorm) {
   if (!remoteNorm) return false;
   try {
     return SYNC_CORE_COMPARE_KEYS.every((k) =>
-      JSON.stringify(remoteNorm[k] ?? null) === JSON.stringify(state[k] ?? null));
+      JSON.stringify(getByPath(remoteNorm, k) ?? null) === JSON.stringify(getByPath(state, k) ?? null));
   } catch { return false; }
 }
 
