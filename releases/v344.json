@@ -1,0 +1,58 @@
+{
+  "version": 344,
+  "date": "2026-09-05",
+  "title": "修正フェーズ 単位13: health-daily.json/ai-insights.jsonのパスをアプリ側で実配置へ修正+データ契約ゲート新設",
+  "summary": "第1回コードレビュー(S-K2)の指摘に対応した。karada/health-daily.jsonはpersonal-dataリポジトリ直下(taskchute/配下ではない、loop/karada-daily.sh・standing-flows.md白名単(b)節が定める実配置)に置かれるが、health.js経由のfetchGitHubRawTextはtaskchute/前置パスを組み立てるため実要求URLがtaskchute/karada/health-daily.jsonとなり常に404を無音で握りつぶしていた(健康データがアプリに一切反映されない不具合)。taskchute/前置なしでpersonal-dataリポジトリ直下を取得するfetchGitHubRawTextAtRootを新設し、health.jsをこちらへ切り替えた。同様にai-insights.jsonの実配置(taskchute/dashboard/ai-insights.json、loop/taskchute-insights.sh)にもfetchGitHubRawText呼び出し先を追随させた。あわせて、アプリ側が期待するデータ形状とloop/personal-data側の実際の出力形状のズレを機械検知するscripts/data-contract-gate.jsを新設した(loop/personal-data未clone環境ではスキップ、consumerソース側の検査も追加)。",
+  "changedFiles": [
+    "app.js",
+    "docs/test-impact-map.generated.md",
+    "releases/v344.json",
+    "scripts/data-contract-gate.js",
+    "src/features/health.js",
+    "sw.js",
+    "tests/data-contract-gate.test.js",
+    "tests/suite-manifest.json",
+    "tests/today-core.test.js",
+    "tests/v314.test.js",
+    "tests/v317.test.js",
+    "tests/v318.test.js",
+    "tests/v321.test.js",
+    "tests/v325.test.js",
+    "tests/v327.test.js"
+  ],
+  "intent": [
+    "health-daily.jsonの実配置(personal-dataリポジトリ直下)に合わせてfetch経路を修正し、健康データが実際にアプリへ反映されるようにする。",
+    "ai-insights.jsonの実配置(taskchute/dashboard/配下)にもfetch経路を追随させる。",
+    "アプリ側の期待データ形状とloop/personal-data側の実出力形状のズレを機械検知し、同様のパス不一致による無音失敗を再発防止する。"
+  ],
+  "changes": [
+    "app.js: fetchGitHubRawResult()にatRootパラメータ(既定false)を追加し、trueの場合はpersonalDataPath()のtaskchute/自動前置を経由しないようにした。",
+    "app.js: fetchGitHubRawTextAtRoot()を新設(personal-dataリポジトリ直下のファイル閲覧専用)。",
+    "app.js: configureHealth()に渡すfetchGitHubRawTextをfetchGitHubRawTextAtRootへ変更した。",
+    "app.js: hydrateStaticMarkdown()のai-insights.json取得パスを`ai-insights.json`から`dashboard/ai-insights.json`へ変更した(実配置に追随)。",
+    "src/features/health.js: configureHealth()の依存注入をfetchGitHubRawTextからfetchGitHubRawTextAtRootへ変更し、hydrateHealthData()の呼び出しも追随させた。",
+    "scripts/data-contract-gate.js: 新設。loop/karada-daily.sh・loop/taskchute-insights.shが書き出すJSON形状と、アプリ側(health.js/app.js)が期待するJSON形状の対応を検証する。loop/personal-data未clone環境ではスキップ。consumerソース側(実際にどのフィールドを読んでいるか)の静的検査も追加(独立レビュー指摘への追補、8984843)。",
+    "package.json/CLAUDE.md相当: `npm run gate:data-contract`として実行できるようにした(詳細はscripts/data-contract-gate.js参照)。"
+  ],
+  "uncertainties": [
+    "実装・レビューはremediation/unit13ブランチ上で完結済み(implementer+reviewer単系統、Codex利用上限のため)。reviewer(Claude)独立レビューPASS(handoff.md表参照。追補: (c)consumer検査・loop/personal-data不在時スキップ・npm run gate:data-contract・CLAUDE.mdに実行タイミングを記載)。",
+    "本版のcherry-pick時、docs/test-impact-map.generated.md・tests/suite-manifest.jsonで競合が発生(いずれも生成物)。--oursを採用しコミット後にnpm run code:index:write→npm run test:manifest:writeで再生成した。",
+    "data-contract-gate.jsはloop/personal-dataリポジトリの実ファイルを読む前提のため、本タスク(taskchute-ipad単体でのローカルgate実行)ではloop/personal-data未clone環境相当でスキップされる可能性がある(実行結果に明記)。"
+  ],
+  "reviewFocus": [
+    "karada/health-daily.jsonがpersonal-dataリポジトリ直下から正しく取得され、健康データがアプリに反映されること。",
+    "ai-insights.jsonがtaskchute/dashboard/配下から正しく取得されること。",
+    "fetchGitHubRawTextAtRootの追加が既存のfetchGitHubRawText呼び出し元(taskchute/前置が必要な他のファイル)に影響しないこと。",
+    "data-contract-gate.jsがloop/personal-data未clone環境で安全にスキップされること。"
+  ],
+  "verification": [
+    "node --check app.js / src/features/health.js / scripts/data-contract-gate.js はいずれも成功。",
+    "実行コード差分(app.js + src/features/health.js + scripts/data-contract-gate.js): 約167行(200行以内)。",
+    "npm run code:index:write → npm run test:manifest:write の順で実行し、node scripts/test-manifest.js --check はPASS。",
+    "node scripts/release-gate.js releases/v344.json をフォアグラウンド(timeout 600000、出力ファイルへリダイレクト)で実行、結果を別コマンドで確認。"
+  ],
+  "notes": [
+    "単位13(修正フェーズ第2段=データ契約)。実装・レビューはCodex利用上限のためimplementer+reviewer(Claude)単系統。"
+  ],
+  "knownLimitations": []
+}

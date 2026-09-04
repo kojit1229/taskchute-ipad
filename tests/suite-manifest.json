@@ -101,6 +101,29 @@
       }
     },
     {
+      "file": "data-contract-gate.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 20,
+      "assertionHash": "8974709bb8f9e296",
+      "sourceHash": "91e430b665c29e82",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": true,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
       "file": "day-cross-ticker.test.js",
       "kind": "e2e",
       "tier": "full",
@@ -659,7 +682,7 @@
       ],
       "assertionSignals": 139,
       "assertionHash": "5e0af328f85cfa30",
-      "sourceHash": "d956418a6bdb7ea1",
+      "sourceHash": "fa2a57093bd7a67b",
       "waits": {
         "fixedCount": 2,
         "numericMilliseconds": 3600,
@@ -3641,7 +3664,7 @@
       ],
       "assertionSignals": 27,
       "assertionHash": "1e247db146e475e2",
-      "sourceHash": "2579d628659a6022",
+      "sourceHash": "3a5faf36e0dbaa71",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3711,7 +3734,7 @@
       ],
       "assertionSignals": 23,
       "assertionHash": "65e4dc0138c5e66a",
-      "sourceHash": "b989203a9ffcb7a5",
+      "sourceHash": "ef2c62bd827a2785",
       "waits": {
         "fixedCount": 1,
         "numericMilliseconds": 200,
@@ -3736,7 +3759,7 @@
       ],
       "assertionSignals": 37,
       "assertionHash": "9a59aa655c25aa92",
-      "sourceHash": "e496fdd37c06d15c",
+      "sourceHash": "87480372756bf3d8",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3806,7 +3829,7 @@
       ],
       "assertionSignals": 21,
       "assertionHash": "53482ed3d0953047",
-      "sourceHash": "34d2d8d79a316b56",
+      "sourceHash": "45f3a5305b7016a2",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3902,7 +3925,7 @@
       ],
       "assertionSignals": 24,
       "assertionHash": "3939b298d2a02854",
-      "sourceHash": "4b7bd6f9645381d5",
+      "sourceHash": "7fbab5029fa966c0",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3948,7 +3971,7 @@
       ],
       "assertionSignals": 22,
       "assertionHash": "7b50c1005d2981ab",
-      "sourceHash": "3384090598da7692",
+      "sourceHash": "3859429ea05503f2",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
