@@ -11477,7 +11477,7 @@ function startTimerTicker() {
     // 文字列比較1回なのでスロットル不要。runDailyOpen自身もlastOpenedDateで冪等なので、
     // 起動時・visibilitychange側の呼び出しと同時に走っても二重処理にはならない。
     if (state.settings.lastOpenedDate !== todayISO()) {
-      if (runDailyOpen()) render();
+      if (runDailyOpen()) renderDeferringForFocus();
     }
     // 任意タイマー
     if (state.pomodoro.running) {
@@ -14277,7 +14277,7 @@ document.addEventListener("visibilitychange", () => {
     pollPlanStepResponse();
   }
   if (state.settings.autoSync) runAutoSyncPull();
-  else if (runDailyOpen()) render();
+  else if (runDailyOpen()) renderDeferringForFocus();
   setTimeout(maybeAutoArchive, 8000);        // v53: 同上
   maybeRefreshFeedback();                    // v77: フォアグラウンド復帰時にAIフィードバック等を再fetch
 });
