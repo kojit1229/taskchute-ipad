@@ -1724,6 +1724,24 @@ function applyTheme() {
   return resolved;
 }
 
+// A3-H1(2026-09-04コードレビュー修正): normalizeStateはコンテナ(配列/オブジェクト自体)の
+// 欠損は補完してきたが、要素側(配列の各エントリ・日付マップの各値)にnull/非オブジェクトが
+// 混ざると `"x" in null` 等で即例外を投げ、local.jsのloadState catchが全stateを
+// -corrupt-backupへ退避してseedState(デモデータ)で起動していた(外部バッチのapp-state.json
+// 直接編集で現実的に発生)。compactArr/compactMapは後続の.map()/forEach()より前に置き、
+// 不正要素を無条件除外して残りの正常要素を保持する(要素側の型防御)。
+function compactArr(a) {
+  return (Array.isArray(a) ? a : []).filter((x) => x && typeof x === "object" && !Array.isArray(x));
+}
+function compactMap(o) {
+  const out = {};
+  if (!o || typeof o !== "object" || Array.isArray(o)) return out;
+  for (const [k, v] of Object.entries(o)) {
+    if (v && typeof v === "object" && !Array.isArray(v)) out[k] = v;
+  }
+  return out;
+}
+
 function normalizeState(value) {
   const actualSettings = value.settings && typeof value.settings === "object" && !Array.isArray(value.settings)
     ? value.settings
@@ -1938,8 +1956,8 @@ function normalizeState(value) {
       ...it,
       violations: Array.isArray(it.violations) ? it.violations : []
     }));
-  value.projects ||= [];
-  value.tasks ||= [];
+  value.projects = compactArr(value.projects);  // A3-H1: null/非オブジェクト要素を除外
+  value.tasks = compactArr(value.tasks);  // A3-H1: null/非オブジェクト要素を除外
   // v16/v18: 既存 Task にWish + ルーティン連携 用フィールドのデフォルト値を補完(後方互換)
   value.tasks = value.tasks.map((task) => {
     // v18: 古い trigger/celebrate フィールドは削除(あれば)
@@ -1989,7 +2007,7 @@ function normalizeState(value) {
       aiWork
     };
   });
-  value.blocks ||= [];
+  value.blocks = compactArr(value.blocks);  // A3-H1: null/非オブジェクト要素を除外
   // v17: 既存 Block に isMIT のデフォルト値を補完(後方互換)
   // v18: 壊れた時刻データを修復(text化で不正形式になった可能性に対応)
   const fixDateTime = (val) => {
@@ -2099,7 +2117,7 @@ function normalizeState(value) {
   // {taskIds: string[], updatedAt} の週次マップ。dailyDeclarationsと同じ後方互換パターン。
   if (!value.weeklyWishes || typeof value.weeklyWishes !== "object") value.weeklyWishes = {};
   // v42: 日ごとのメタ(AIフィードバック取り込み由来。journals は文字列なので別ストア)
-  value.journalMeta ||= {};
+  value.journalMeta = compactMap(value.journalMeta);  // A3-H1: null/非オブジェクト値を除外
   Object.values(value.journalMeta).forEach((j) => {
     if (!("aiImported" in j)) j.aiImported = false;
     if (!("ideal" in j)) j.ideal = "";  // v61: 今日の理想ワンライナー(提案8)
@@ -2162,8 +2180,8 @@ function normalizeState(value) {
   if (!Array.isArray(value.feedbackFiles)) value.feedbackFiles = [];
   // v34: 0秒思考(未知フィールドはデフォルトに足すだけで既存データを壊さない)
   value.zeroThinking ||= { themes: [], entries: [] };
-  if (!Array.isArray(value.zeroThinking.themes)) value.zeroThinking.themes = [];
-  if (!Array.isArray(value.zeroThinking.entries)) value.zeroThinking.entries = [];
+  value.zeroThinking.themes = compactArr(value.zeroThinking.themes);  // A3-H1
+  value.zeroThinking.entries = compactArr(value.zeroThinking.entries);  // A3-H1
   // v90: 大テーマ(グループ)。WBSのProjectと同じ「大枠→中身」の階層をテーマ一覧に持たせる。
   //      groups自体が欠損している旧端末データでもここで[]補完されるため消えない。
   if (!Array.isArray(value.zeroThinking.groups)) value.zeroThinking.groups = [];
@@ -2301,7 +2319,7 @@ function normalizeState(value) {
     }])
   );
   // v87: 宣言→終了報告ログ(ROADMAP v91)。上限300件で永続化肥大化を防ぐ(既存値優先で補完)。
-  if (!Array.isArray(value.declarations)) value.declarations = [];
+  value.declarations = compactArr(value.declarations);  // A3-H1: null/非オブジェクト要素を除外
   value.declarations = value.declarations.slice(-300).map((d) => ({
     id: d.id || crypto.randomUUID(),
     blockId: d.blockId || "",
@@ -2323,7 +2341,7 @@ function normalizeState(value) {
   // recovery未保有のためnull(=未記録)で補完し、0(明示的に記録された「回復なし」)とは
   // 区別する。fatigueは0(疲労なし)も許容(...sのスプレッドが後段で上書きするため
   // 既存の`s.fatigue || null`のままでも0は保持される。recoveryも同じ順序で揃える)。
-  if (!Array.isArray(value.bodyScans)) value.bodyScans = [];
+  value.bodyScans = compactArr(value.bodyScans);  // A3-H1: null/非オブジェクト要素を除外
   value.bodyScans = value.bodyScans.map((s) => ({
     id: s.id || crypto.randomUUID(),
     dateTime: s.dateTime || "",
@@ -2357,7 +2375,7 @@ function normalizeState(value) {
   // v141: 「今日行ったお店」ログ(ジャーナルタブから店名/URL/感想を記録、年間一覧で振り返る)。
   // 1日に複数件登録・編集・削除(tombstone)できるため、tasks/projectsと同じ
   // mergeByIdPreferNewer(updatedAt優先マージ)で多端末同期する(computeSyncMerge参照)。
-  if (!Array.isArray(value.storeVisits)) value.storeVisits = [];
+  value.storeVisits = compactArr(value.storeVisits);  // A3-H1: null/非オブジェクト要素を除外
   value.storeVisits = value.storeVisits.map((sv) => ({
     id: sv.id || crypto.randomUUID(),
     date: sv.date || "",

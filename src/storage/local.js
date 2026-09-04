@@ -39,6 +39,10 @@ function loadState(normalizeState, seedState) {
     console.error("保存データが壊れていたため初期状態で起動します(-corrupt-backup に退避済み)");
     const seeded = normalizeState(seedState());
     seeded.settings.github.autoSave = false;  // 事故防止: 自動保存は手動で入れ直してもらう
+    // A3-H1(2026-09-04コードレビュー修正): autoSyncを残したままだと、デモデータで起動した
+    // 直後の保存がscheduleAutoSync()経由でリモートへpushされ、壊れる前のGitHub側データを
+    // デモデータで上書きしかねない。autoSaveと同様に事故防止でOFFへ倒す。
+    seeded.settings.autoSync = false;
     return seeded;
   }
 }

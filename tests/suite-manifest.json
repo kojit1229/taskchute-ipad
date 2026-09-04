@@ -318,6 +318,29 @@
       }
     },
     {
+      "file": "normalize-null-defense.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "legacy-crosscutting"
+      ],
+      "assertionSignals": 20,
+      "assertionHash": "940a87afb498ae32",
+      "sourceHash": "9a4b8d1d9cf78741",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
       "file": "recurrence-core.test.js",
       "kind": "node",
       "tier": "full",
