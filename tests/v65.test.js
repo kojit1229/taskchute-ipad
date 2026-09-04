@@ -220,30 +220,63 @@ async function openWbsRowMenuIfClosed(page, taskTitle) {
     // ============================================================
     // (d) 一覧・タイムラインの控えめマーク
     // ============================================================
-    console.log("[6] タスクシュート一覧・WBS一覧・タイムラインにleverageTypeの控えめマークが出る");
+    console.log("[6] タスクシュート一覧(いま/これから/タスク)・WBS一覧・タイムラインにleverageTypeの控えめマークが出る");
+    // レビュー対応(M-1): 「いま」行(renderExecNowRow)を描画させるため、actualStartAtありで
+    // 未完了(=isExecDoing)のBlockを1件足す。makeBlockFixtureはcompleted:falseだとactualStartAtを
+    // 常に""にするため、生成後にactualStartAtだけ上書きする。
+    const doingBlockFixture = {
+      ...makeBlockFixture({ id: "block-mark0", title: "いま検証Block", leverageType: "asset", startMin: 8 * 60 }),
+      actualStartAt: `${TODAY}T08:00`
+    };
     await seed({
       tasks: [wbsTask("task-mark1", "資産マーク検証Task", { leverageType: "asset" })],
       blocks: [
+        doingBlockFixture,
         makeBlockFixture({ id: "block-mark1", title: "資産マーク検証Block", leverageType: "asset", startMin: 9 * 60 }),
         makeBlockFixture({ id: "block-mark2", title: "削減マーク検証Block", leverageType: "eliminate", startMin: 11 * 60 }),
         makeBlockFixture({ id: "block-mark3", title: "単発マーク非表示検証Block", leverageType: "oneoff", startMin: 13 * 60 }),
-        // v336追加: 実績(actual)タイムラインは実行済み(actualStartAt/actualEndAt あり)のBlockしか
-        // 描画しないため、上記3件(未着手のまま=exec「これから」検証用)とは別に完了Blockを足す。
+        // 実績(actual)タイムラインは実行済み(actualStartAt/actualEndAt あり)のBlockしか
+        // 描画しないため、上記(exec「いま」「これから」検証用)とは別に完了Blockを足す。
         makeBlockFixture({ id: "block-mark4", title: "資産マーク検証Block(実績)", leverageType: "asset", startMin: 15 * 60, completed: true }),
         makeBlockFixture({ id: "block-mark5", title: "削減マーク検証Block(実績)", leverageType: "eliminate", startMin: 17 * 60, completed: true })
       ],
       projects: [testProject()],
       view: "tasks"
     });
-    const tasksViewText = await page.locator("main").innerHTML();
-    check("タスクシュート一覧に⚙資産マークが出る(asset)", tasksViewText.includes("⚙資産") && tasksViewText.includes("lev-asset"), "");
-    check("タスクシュート一覧に✂削減マークが出る(eliminate)", tasksViewText.includes("✂削減") && tasksViewText.includes("lev-eliminate"), "");
-    check("oneoffは視覚ノイズ回避のためマーク非表示", !tasksViewText.includes(">単発<"), "");
+
+    // レビュー対応(M-1): main.innerHTML全体へのincludesではなく、4レンダラ(いま/これから/タスク/
+    // WBS行)それぞれの行スコープで.lev-markの個数を数える(同一画面に複数leverageType付き行が
+    // 同居するため、includesだけでは「どのレンダラが出したか」を区別できない)。
+    const nowMarks = page.locator('.exec-row-now:has([data-action="block-row-toggle"][data-id="block-mark0"]) .lev-mark');
+    check("「いま」行(renderExecNowRow)に⚙資産マークが1件出る", await nowMarks.count() === 1);
+    check("「いま」行のマークはlev-asset", (await nowMarks.first().getAttribute("class")) === "lev-mark lev-asset");
+
+    const upcomingAssetMarks = page.locator('.exec-row-upcoming:has([data-action="block-row-toggle"][data-id="block-mark1"]) .lev-mark');
+    check("「これから」行(renderExecUpcomingRow)に⚙資産マークが1件出る", await upcomingAssetMarks.count() === 1);
+
+    const upcomingEliminateMarks = page.locator('.exec-row-upcoming:has([data-action="block-row-toggle"][data-id="block-mark2"]) .lev-mark');
+    check("「これから」行に✂削減マークが1件出る", await upcomingEliminateMarks.count() === 1);
+
+    // レビュー対応(M-3): 「未設定/oneoffなら何も出ない」を、oneoff行の.lev-mark個数=0で直接検証する
+    // (旧`>単発<`の否定チェックは、その根拠だった旧renderBlockItemの単発バッジ自体が削除されて
+    // いたため常に真になる空振り検査だった)。
+    const upcomingOneoffMarks = page.locator('.exec-row-upcoming:has([data-action="block-row-toggle"][data-id="block-mark3"]) .lev-mark');
+    check("oneoff行は.lev-markが0件(視覚ノイズ回避)", await upcomingOneoffMarks.count() === 0);
+
+    const taskMarks = page.locator('.exec-task-row:has([data-action="toggle-task"][data-id="task-mark1"]) .lev-mark');
+    check("「タスク」行(renderExecTaskRow)に⚙資産マークが1件出る", await taskMarks.count() === 1);
+
+    const nowMarkFontSize = await nowMarks.first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    check("「いま」行の.lev-markは11px以上", nowMarkFontSize >= 11, String(nowMarkFontSize));
+    const taskMarkFontSize = await taskMarks.first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    check("「タスク」行の.lev-markは11px以上", taskMarkFontSize >= 11, String(taskMarkFontSize));
 
     await page.click('[data-action="nav"][data-view="wbs"]');
     await page.waitForTimeout(300);
-    const wbsViewText = await page.locator("main").innerHTML();
-    check("WBS一覧のTaskにも⚙資産マークが出る", wbsViewText.includes("⚙資産"), "");
+    const wbsMarks = page.locator('.wbs-task-row:has([data-action="toggle-task"][data-id="task-mark1"]) .lev-mark');
+    check("WBS一覧のTask行(renderTaskRow)に⚙資産マークが1件出る", await wbsMarks.count() === 1);
+    const wbsMarkFontSize = await wbsMarks.first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    check("WBS行の.lev-markは11px以上", wbsMarkFontSize >= 11, String(wbsMarkFontSize));
 
     // v335(§C追随): 旧timelineへの直接navは無くなったため、execへ遷移して実績モードへ切替える。
     await page.click('[data-action="nav"][data-view="exec"]');

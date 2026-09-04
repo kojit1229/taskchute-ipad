@@ -5971,14 +5971,14 @@ function renderExecNowRow(block) {
   const start = block.actualStartAt ? timeFromDateTime(block.actualStartAt) : (block.plannedStartAt ? timeFromDateTime(block.plannedStartAt) : "");
   const end = block.plannedEndAt ? timeFromDateTime(block.plannedEndAt) : "";
   const estimateMin = estimateMinutesForBlock(block, "block");
-  const metaHTML = `${start}${end ? `–${end}` : ""}${estimateMin ? ` ・ 見積${estimateMin}分` : ""}${block.category ? ` ・ ${escapeHTML(block.category)}` : ""}${leverageTypeMarkHTML(block.leverageType)}`;
+  const metaHTML = `${start}${end ? `–${end}` : ""}${estimateMin ? ` ・ 見積${estimateMin}分` : ""}${block.category ? ` ・ ${escapeHTML(block.category)}` : ""}`;
   const expanded = _execExpandedBlockId === block.id;
   return `
     <div class="item exec-row exec-row-now${expanded ? " is-expanded" : ""}">
       <button class="checkbox-button" data-action="toggle-block" data-id="${block.id}" title="Block完了" aria-label="Block完了">✓</button>
       <div class="exec-row-copy">
         <strong data-action="edit-block" data-id="${block.id}" title="${escapeHTML(block.title)}">${isMIT ? `<span class="mit-star" style="color:#F5A623">★</span> ` : ""}${escapeHTML(block.title)}</strong>
-        <div class="exec-row-meta" data-action="block-row-toggle" data-id="${block.id}">${metaHTML}</div>
+        <div class="exec-row-meta" data-action="block-row-toggle" data-id="${block.id}"><span class="exec-row-meta-text">${metaHTML}</span>${leverageTypeMarkHTML(block.leverageType)}</div>
       </div>
       <div class="exec-row-actions">
         <button class="btn green" data-action="toggle-block" data-id="${block.id}">完了</button>
@@ -6004,13 +6004,13 @@ function renderExecUpcomingRow(block) {
   const start = block.plannedStartAt ? timeFromDateTime(block.plannedStartAt) : "未定";
   const estimateMin = estimateMinutesForBlock(block, "block");
   const expanded = _execExpandedBlockId === block.id;
-  const metaHTML = `${start}${estimateMin ? ` ・ 見積${estimateMin}分` : ""}${block.category ? ` ・ ${escapeHTML(block.category)}` : ""}${task ? ` ・ ${escapeHTML(projectName(task.projectId))}` : ""}${leverageTypeMarkHTML(block.leverageType)}`;
+  const metaHTML = `${start}${estimateMin ? ` ・ 見積${estimateMin}分` : ""}${block.category ? ` ・ ${escapeHTML(block.category)}` : ""}${task ? ` ・ ${escapeHTML(projectName(task.projectId))}` : ""}`;
   return `
     <div class="item exec-row exec-row-upcoming${expanded ? " is-expanded" : ""}">
       <button class="checkbox-button" data-action="toggle-block" data-id="${block.id}" title="Block完了" aria-label="Block完了">✓</button>
       <div class="exec-row-copy" data-action="block-row-toggle" data-id="${block.id}">
         <strong title="${escapeHTML(block.title)}">${isMIT ? `<span class="mit-star" style="color:#F5A623">★</span> ` : ""}${escapeHTML(block.title)}</strong>
-        <div class="exec-row-meta">${metaHTML}</div>
+        <div class="exec-row-meta"><span class="exec-row-meta-text">${metaHTML}</span>${leverageTypeMarkHTML(block.leverageType)}</div>
       </div>
       <button class="btn exec-start-btn" data-action="now-start" data-id="${block.id}">▶開始</button>
       ${expanded ? `
@@ -6079,7 +6079,7 @@ function renderExecTaskRow(task, todayCount) {
       <button class="checkbox-button" data-action="toggle-task" data-id="${task.id}" title="完了" aria-label="完了">✓</button>
       <div class="exec-row-copy" data-action="task-row-toggle" data-id="${task.id}">
         <strong title="${escapeHTML(task.title)}">${escapeHTML(task.title)}</strong>
-        <div class="exec-row-meta${isOverdue ? " exec-task-overdue" : ""}">${metaParts.join(" ・ ")}${addedHTML}${leverageTypeMarkHTML(task.leverageType)}</div>
+        <div class="exec-row-meta${isOverdue ? " exec-task-overdue" : ""}"><span class="exec-row-meta-text">${metaParts.join(" ・ ")}${addedHTML}</span>${leverageTypeMarkHTML(task.leverageType)}</div>
         ${doneCriteriaHTML}${firstStepHTML}
       </div>
       <button class="btn exec-start-btn" data-action="task-today" data-id="${task.id}">今日へ</button>

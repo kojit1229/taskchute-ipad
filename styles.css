@@ -895,7 +895,11 @@ h3 {
 }
 .exec-row-copy { min-width: 0; cursor: pointer; }
 .exec-row-copy strong { display: block; min-width: 4ch; font-size: 14px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.exec-row-meta { font-size: 11px; opacity: .75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* レビュー対応(M-2): マーク(.lev-mark)をmeta文字列へ連結せず独立要素にし、nowrap/ellipsisの
+   切り詰め対象からは.exec-row-meta-text側だけを対象にする(旧title-line独立要素と同等の視認性)。 */
+.exec-row-meta { display: flex; align-items: center; gap: 4px; min-width: 0; font-size: 11px; opacity: .75; }
+.exec-row-meta-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1 1 auto; }
+.exec-row-meta .lev-mark { flex: 0 0 auto; }
 .exec-row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .exec-start-btn { min-width: 44px; min-height: 44px; border-color: #6b5322; color: var(--tower-amber, var(--orange-text)); }
 .exec-row-expand {
@@ -911,7 +915,7 @@ h3 {
 .exec-row-expand .mini-select { font-size: 16px; }
 .exec-row-now .block-inline-memo { grid-column: 1 / -1; margin-top: 6px; }
 @media (max-width: 390px) {
-  .exec-row-meta { white-space: normal; }
+  .exec-row-meta-text { white-space: normal; }
 }
 
 /* v332: 実行タブA-1b(ヘッダ1行化・＋Block折りたたみ・タスク一覧の母集団再編)。 */
@@ -922,7 +926,7 @@ h3 {
 .exec-add summary::-webkit-details-marker { display: none; }
 .exec-add-summary { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 0 14px; border: 1px solid #6b5322; border-radius: 6px; color: var(--tower-amber, var(--orange-text)); background: transparent; }
 .exec-add-body { margin-top: 8px; }
-.exec-task-row .exec-row-meta { white-space: normal; }
+.exec-task-row .exec-row-meta-text { white-space: normal; }
 .exec-task-overdue { color: var(--tower-amber, var(--orange-text)); opacity: .9; }
 .exec-task-added { color: var(--green-text); font-weight: 600; }
 .exec-tasks-sub { font-size: 11px; opacity: .75; font-weight: 400; }
