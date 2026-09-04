@@ -1,0 +1,41 @@
+{
+  "version": 338,
+  "date": "2026-09-05",
+  "title": "修正フェーズ 単位3: startTimerTickerに日跨ぎ検知を追加",
+  "summary": "2026-09-04の第1回コードレビュー(A3-H2、第1回統合サマリN-6)の指摘に対応した。PWAを前面に置いたまま日を跨ぐと、visibilitychange等の明示的な復帰イベントが発火しない限りrunDailyOpen()が呼ばれず、state.selectedDate/settings.lastOpenedDateが前日のまま固定され、深夜に追加したBlockが前日付けで記録される不具合があった。startTimerTicker()の500ms周期ティック内でlastOpenedDateとtodayISO()を比較し、日付が変わっていればrunDailyOpen()を呼ぶよう変更した。再描画はIME入力中・フォーカス中の保護のためrender()ではなくrenderDeferringForFocus()を使う(独立レビュー指摘で修正、visibilitychangeハンドラ側の既存呼び出しも同じ関数へ揃えた)。",
+  "changedFiles": [
+    "app.js",
+    "docs/test-impact-map.generated.md",
+    "releases/v338.json",
+    "sw.js",
+    "tests/day-cross-ticker.test.js",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "PWAを前面に置いたまま日付が変わっても、次のティック(最大500ms)以内にrunDailyOpen()が走り、selectedDate等が当日へ追従するようにする。",
+    "日跨ぎ時の再描画がIME変換中・入力フォーカス中の作業を壊さないよう、既存のrenderDeferringForFocus()機構に揃える。"
+  ],
+  "changes": [
+    "app.js: startTimerTicker()のsetInterval内先頭に`if (state.settings.lastOpenedDate !== todayISO()) { if (runDailyOpen()) renderDeferringForFocus(); }`を追加(runDailyOpen()自身がlastOpenedDateで冪等なため、起動時・visibilitychange側の呼び出しと同時に走っても二重処理にはならない)。",
+    "app.js: visibilitychangeハンドラ内の`else if (runDailyOpen()) render();`を`renderDeferringForFocus()`へ統一した(レビュー指摘。日跨ぎ再描画の一貫性)。"
+  ],
+  "uncertainties": [
+    "実装・レビューはremediation/unit3ブランチ上で完結済み(implementer+reviewer単系統、Codex利用上限のため)。reviewer(Claude)独立レビューPASS(handoff.md表参照。テスト強化を含む再判定でもPASS)。",
+    "新規テスト(tests/day-cross-ticker.test.js)は偽クロックで+36h進め、visibilitychangeを発火させずに1.5秒待機してselectedDateが追従することを確認する。第2回レビュー指摘対応で「空振り2件修正+2日跨ぎ+hidden中跨ぎ」のケースを追加し、ガードを外したコピーで7件失敗することを実証済み(検出力確認)。"
+  ],
+  "reviewFocus": [
+    "日を跨いだ状態でアプリを前面に置き続けても、次のティック以内にselectedDate/lastOpenedDateが当日へ追従すること。",
+    "日跨ぎ再描画がIME変換中の入力を壊さないこと(renderDeferringForFocus経由)。",
+    "runDailyOpen()の冪等性により、visibilitychange側の呼び出しと重複しても害がないこと。"
+  ],
+  "verification": [
+    "node --check app.js は成功。",
+    "実行コード差分: app.js 12行(200行以内)。",
+    "npm run code:index:write → npm run test:manifest:write の順で実行し、node scripts/test-manifest.js --check はPASS。",
+    "node scripts/release-gate.js releases/v338.json をフォアグラウンド(timeout 600000、出力ファイルへリダイレクト)で実行、結果を別コマンドで確認。"
+  ],
+  "notes": [
+    "単位3(修正フェーズ第1段)。実装・レビューはCodex利用上限のためimplementer+reviewer(Claude)単系統。"
+  ],
+  "knownLimitations": []
+}

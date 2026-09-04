@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v337";  // v337: normalizeState要素null防御+退避時autoSync=false(修正フェーズ単位2)
+const CACHE_NAME = "taskchute-journal-pwa-v338";  // v338: startTimerTickerに日跨ぎ検知(修正フェーズ単位3)
 // v334: 実行タブPC 2ペイン(§B。ナビ統合§Cは持ち越し)
 // v333: 実行ラッパー(計画/実績切替)・モバイルナビ4項目
 // v332: 実行タブA-1b ヘッダ1行化・タスク一覧再編・死コード削除
