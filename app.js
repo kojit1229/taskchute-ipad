@@ -8672,12 +8672,19 @@ function ztGroupAdd() {
   saveAndRender(`大テーマ「${title}」を追加しました`);
 }
 
+// unit14b差し戻し(独立レビュー2026-09-05): 改名時にupdatedAtを進めないと、unit14bで追加した
+// zeroThinking.groupsのmergeById(id+updatedAt優先)が改名を検知できず、他端末へ改名が伝わらない
+// 退行になる(旧タイトルのまま残る・タイブレークでupdatedAt無し側が負けて改名が消える等)。
+// 削除の復活防止(tombstone化)はD-K5待ちのスコープ外(現状はfilterで物理削除のまま。
+// mergeByIdはtombstoneを持たないため、削除後に他端末の古いgroupsが復活しうる既知の制約は
+// unit16/D-K4系と同じ構造で、本差し戻しでは対応しない)。
 function ztGroupRename(id) {
   const g = (state.zeroThinking.groups || []).find((x) => x.id === id);
   if (!g) return;
   const title = (window.prompt("大テーマ名を変更", g.title) || "").trim();
   if (!title || title === g.title) return;
-  state.zeroThinking.groups = state.zeroThinking.groups.map((x) => x.id === id ? { ...x, title } : x);
+  state.zeroThinking.groups = state.zeroThinking.groups.map((x) =>
+    x.id === id ? { ...x, title, updatedAt: nowDateTime() } : x);
   saveAndRender("大テーマ名を変更しました");
 }
 

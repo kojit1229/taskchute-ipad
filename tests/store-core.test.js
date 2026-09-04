@@ -378,6 +378,14 @@ async function loadModules() {
       remoteNorm.reports["2026-07-01"] === "ローカル限定の日報" && remoteNorm.reports["2026-07-02"] === "リモート限定の日報",
       JSON.stringify(remoteNorm.reports)
     );
+    // unit14b差し戻し(独立レビュー2026-09-05): applySyncMergeToLocal(state.reportsへの反映)も
+    // 同じ観点で固定する(applySyncMergeToRemoteだけでなくローカル基準経路も回帰対象にする)。
+    syncMod.applySyncMergeToLocal(merged);
+    check(
+      "ローカル採用後も両日の日報が残る(state.reportsへ反映される)",
+      storeMod.state.reports["2026-07-01"] === "ローカル限定の日報" && storeMod.state.reports["2026-07-02"] === "リモート限定の日報",
+      JSON.stringify(storeMod.state.reports)
+    );
   }
 
   console.log("[B-6b] id+updatedAt配列(chainRuns/zeroThinking.groups): 和集合+同一idは新しい方1件");
@@ -427,6 +435,20 @@ async function loadModules() {
       check(
         `${spec.label}: 同一idはupdatedAtが新しい方(リモート)が勝つ`,
         shared[spec.winnerField] === spec.winnerValue, JSON.stringify(shared)
+      );
+      // unit14b差し戻し(独立レビュー2026-09-05): applySyncMergeToLocalでもstate側
+      // (state.chainRuns / state.zeroThinking.groups)へ同じ内容が反映されることを固定する。
+      syncMod.applySyncMergeToLocal(merged);
+      const localList = spec.stateKey ? storeMod.state[spec.stateKey] : storeMod.state.zeroThinking.groups;
+      const localIds = localList.map((x) => x.id).sort();
+      check(
+        `${spec.label}: applySyncMergeToLocal後も両端末限定のidが両方state側に反映される`,
+        localIds.includes(spec.localOnly.id) && localIds.includes(spec.remoteOnly.id), JSON.stringify(localIds)
+      );
+      const localShared = localList.find((x) => x.id === spec.sharedLocal.id);
+      check(
+        `${spec.label}: applySyncMergeToLocal後も同一idはupdatedAtが新しい方(リモート)が勝つ`,
+        localShared && localShared[spec.winnerField] === spec.winnerValue, JSON.stringify(localShared)
       );
     }
   }
@@ -480,6 +502,19 @@ async function loadModules() {
         `${spec.label}: 同一の複合キー(at+主要フィールド)は重複排除され1件`,
         list.filter((e) => e[spec.dupKeyField] === dupLabel).length === 1, JSON.stringify(list)
       );
+      // unit14b差し戻し(独立レビュー2026-09-05): applySyncMergeToLocalでもstate側へ
+      // 同じ内容(両端末分の残存+重複排除)が反映されることを固定する。
+      syncMod.applySyncMergeToLocal(merged);
+      const localList = storeMod.state[spec.stateKey];
+      check(
+        `${spec.label}: applySyncMergeToLocal後も両端末限定のログがstate側に両方残る`,
+        localList.some((e) => e[spec.dupKeyField] === localOnlyLabel) && localList.some((e) => e[spec.dupKeyField] === remoteOnlyLabel),
+        JSON.stringify(localList)
+      );
+      check(
+        `${spec.label}: applySyncMergeToLocal後も同一の複合キーはstate側で1件に集約される`,
+        localList.filter((e) => e[spec.dupKeyField] === dupLabel).length === 1, JSON.stringify(localList)
+      );
     }
   }
 
@@ -506,6 +541,18 @@ async function loadModules() {
       check(
         `${spec.label}: 重複する値は1件に集約される`,
         list.filter((x) => x === spec.dup).length === 1, JSON.stringify(list)
+      );
+      // unit14b差し戻し(独立レビュー2026-09-05): applySyncMergeToLocalでもstate側へ
+      // 同じ内容(両端末分の残存+重複排除)が反映されることを固定する。
+      syncMod.applySyncMergeToLocal(merged);
+      const localList = storeMod.state[spec.stateKey];
+      check(
+        `${spec.label}: applySyncMergeToLocal後も両端末限定の値がstate側に両方残る`,
+        localList.includes(spec.localOnly) && localList.includes(spec.remoteOnly), JSON.stringify(localList)
+      );
+      check(
+        `${spec.label}: applySyncMergeToLocal後も重複する値はstate側で1件に集約される`,
+        localList.filter((x) => x === spec.dup).length === 1, JSON.stringify(localList)
       );
     }
   }

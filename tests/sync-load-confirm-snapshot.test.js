@@ -221,6 +221,30 @@ async function runPartA() {
     check("控えを保存できなかった旨のトースト", calls.toast.some((t) => t.includes("控えを保存できなかった")), JSON.stringify(calls.toast));
   }
 
+  // ---- unit14b差し戻し: LOSS_RISK_KEYS(SYNC_CORE_COMPARE_KEYS + routineChains/weeklyReviews/
+  // cycleReviews)基準のdiffCount。routineChains/weeklyReviews/cycleReviewsはcomputeSyncMergeの
+  // マージ対象外(store-core.test.js [B-2][B-3]の既知リスク)でリモート採用時に無警告に消えうるが、
+  // SYNC_CORE_COMPARE_KEYS(fail-close比較)自体には入っていないため、これらの3キーだけの差分では
+  // syncCoreEqualはtrueのまま(=単位14/14bの自動解決経路の頻度は変えない)。それでも
+  // loadFromGitHubのconfirmはLOSS_RISK_KEYSで広く見ているため、weeklyReviewsだけの差分でも
+  // 確認ダイアログが出ることを固定する。
+  console.log("[A-6] weeklyReviewsだけの差分でもLOSS_RISK_KEYS基準でconfirmが出る(SYNC_CORE_COMPARE_KEYSは増やさない)");
+  {
+    const local = baseState({ weeklyReviews: { "2026-W30": { text: "ローカルのレビュー" } } });
+    storeMod.setState(local);
+    const remoteObj = JSON.parse(JSON.stringify(local));
+    remoteObj.weeklyReviews = { "2026-W30": { text: "リモートのレビュー" } };  // LOSS_RISK_KEYSの1キーだけ差分
+    remoteObj.dataModifiedAt = "2026-09-05T00:00:00";
+    check(
+      "前提: syncCoreEqual(SYNC_CORE_COMPARE_KEYS基準)はweeklyReviewsを見ないのでtrueのまま",
+      syncMod.syncCoreEqual(remoteObj) === true
+    );
+    const calls = installNodeStubs(syncMod, { remoteBodyText: JSON.stringify(remoteObj), confirmReturn: true });
+    await syncMod.loadFromGitHub();
+    check("weeklyReviewsだけの差分でもconfirmが呼ばれる(LOSS_RISK_KEYS基準)", calls.confirm.length === 1, JSON.stringify(calls.confirm));
+    check("confirm文言のコア項目件数は1件以上(LOSS_RISK_KEYS差分を検出)", /コア項目\s*[1-9]\d*件/.test(calls.confirm[0] || ""), calls.confirm[0]);
+  }
+
   console.log(failures === 0 ? "\n[PART A] 全件成功" : `\n[PART A] ${failures}件失敗`);
 }
 

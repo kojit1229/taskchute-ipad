@@ -513,9 +513,9 @@
         "planning-execution",
         "content-ai"
       ],
-      "assertionSignals": 37,
-      "assertionHash": "b78f347e4a795daf",
-      "sourceHash": "c6d20538b014f599",
+      "assertionSignals": 44,
+      "assertionHash": "114390837d425af9",
+      "sourceHash": "fcc1781a7f552976",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -606,9 +606,9 @@
       "domains": [
         "sync-storage"
       ],
-      "assertionSignals": 29,
-      "assertionHash": "cde61e14f18bf5da",
-      "sourceHash": "38677749d4822c9f",
+      "assertionSignals": 32,
+      "assertionHash": "313b4bd463f41b1d",
+      "sourceHash": "f8e45f49740c01bf",
       "waits": {
         "fixedCount": 10,
         "numericMilliseconds": 4550,

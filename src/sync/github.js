@@ -456,6 +456,16 @@ const SYNC_CORE_COMPARE_KEYS = [
   "settings.gymExerciseList", "settings.visionDirectCategories"
 ];
 
+// unit14b差し戻し(独立レビュー2026-09-05): loadFromGitHub()のconfirm/スナップショット発火判定
+// (「破棄されるコア差分」の件数)だけは、SYNC_CORE_COMPARE_KEYS(fail-close比較=自動解決可否の
+// 判定基準)より広く見る。routineChains/weeklyReviews/cycleReviewsはcomputeSyncMergeのマージ
+// 対象に入っておらず(tests/store-core.test.js [B-2][B-3]の既知リスク)、リモート採用で無警告に
+// 消えうるが、これらをSYNC_CORE_COMPARE_KEYSへ足すとsyncCoreEqualの自動解決経路そのものが
+// (この3キーが少しでも異なるだけで)fail-closeになり、日常的な差分でバナーが増発する
+// (単位14/14bが避けようとした問題を再発させる)。そこで比較対象(fail-close)は増やさず、
+// 「確認ダイアログを出すかどうか」の判定だけLOSS_RISK_KEYSで広げる。
+const LOSS_RISK_KEYS = [...SYNC_CORE_COMPARE_KEYS, "routineChains", "weeklyReviews", "cycleReviews"];
+
 // リモート生テキストからマージ・比較用のnormalize済みコピーを作る(失敗はnullで従来動作へ)
 function normalizedRemoteCopy(text) {
   try { return normalizeState(JSON.parse(text)); } catch { return null; }
@@ -1164,8 +1174,13 @@ async function loadFromGitHub() {
     // (旧実装はloadFromGitHubがlastPushedAtを更新しなかったため特に起きやすかった。(d)参照)。
     // ここでは実際に破棄されるコア差分の件数(diffCount)を先に数え、0件なら確認もスナップショットも
     // 出さず従来どおり読み込む。
+    // unit14b差し戻し(独立レビュー2026-09-05): diffCountの判定基準はSYNC_CORE_COMPARE_KEYS
+    // ではなくLOSS_RISK_KEYS(fail-close比較の対象に、マージ対象外で無警告に消えうる
+    // routineChains/weeklyReviews/cycleReviewsを加えたもの)を使う。fail-close比較の対象自体
+    // (SYNC_CORE_COMPARE_KEYS)は増やさない=これらの3キーだけの差分でsyncCoreEqualが
+    // falseになることはない(自動解決経路の頻度は変えない)。
     const diffCount = remoteNorm
-      ? SYNC_CORE_COMPARE_KEYS.filter((k) =>
+      ? LOSS_RISK_KEYS.filter((k) =>
           JSON.stringify(getByPath(remoteNorm, k) ?? null) !== JSON.stringify(getByPath(state, k) ?? null)
         ).length
       : 0;
