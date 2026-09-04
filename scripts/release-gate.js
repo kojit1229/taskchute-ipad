@@ -45,8 +45,10 @@ if (unknownImpactSuites.length) {
   process.exit(1);
 }
 // unit6差し戻し#1: impact選定とcache-name-incrementの比較元を同じ解決結果に揃える
-// (--impact-base → @{upstream} → origin/main、いずれも無ければ最後にHEAD)。
-const baseRef = resolveBaseRef(repoRoot, impactBase) || "HEAD";
+// (--impact-base → @{upstream} → origin/main。いずれも無ければ fail-close)。
+// baseRef が解決できない(上流も origin/main も無い)場合は HEAD へ落とさず、従来どおり
+// collectRepositoryImpact 側の throw(--impact-base を指定してください)で fail-close にする。
+const baseRef = resolveBaseRef(repoRoot, impactBase);
 const impact = collectRepositoryImpact({ cwd: repoRoot, base: baseRef, final: finalMode });
 const releaseSuite = path.basename(manifest, path.extname(manifest));
 const releaseTestExists = fs.existsSync(path.join(repoRoot, "tests", `${releaseSuite}.test.js`));
@@ -165,7 +167,7 @@ const cacheNameCheck = checkCacheNameIncrement({
   repoRoot,
   manifestPath: manifest,
   hasRuntimeDiff: impact.files.length > 0,
-  baseRef
+  baseRef: baseRef || "HEAD"
 });
 if (!cacheNameCheck.ok) {
   console.error(`FAIL: ${cacheNameCheck.message}`);
