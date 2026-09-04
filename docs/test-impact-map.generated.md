@@ -219,7 +219,7 @@
 | v98.test.js | e2e | full | ui-responsive | 9 | 7 | 3100 |
 | v99.test.js | e2e | full | sync-storage, planning-execution, content-ai, ui-responsive | 21 | 12 | 4100 |
 | wish-core.test.js | node | full | content-ai, ui-responsive | 33 | 0 | 0 |
-| xss-sanitizer.test.js | e2e | smoke | content-ai, security-offline | 24 | 2 | 1000 |
+| xss-sanitizer.test.js | e2e | smoke | content-ai, security-offline | 41 | 2 | 1000 |
 
 ## Area → suite map (code-index area ⇔ test-manifest domain)
 

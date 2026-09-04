@@ -106,6 +106,8 @@ function check(name, cond, extra = "") {
 <svg><animateTransform attributeName="transform" type="rotate" values="javascript:window.__xss11=true"></animateTransform></svg>
 
 <svg><animateMotion values="javascript:window.__xss12=true"></animateMotion></svg>
+
+<svg><a><animateColor attributeName="href" values="javascript:window.__xss13=true"/></a></svg>
 `;
 
   async function seedJournal(text) {
@@ -145,7 +147,8 @@ function check(name, cond, extra = "") {
       xss9b: window.__xss9b === true,
       xss10: window.__xss10 === true,
       xss11: window.__xss11 === true,
-      xss12: window.__xss12 === true
+      xss12: window.__xss12 === true,
+      xss13: window.__xss13 === true
     }));
     check("<script>タグが実行されない", !flags.xss1, JSON.stringify(flags));
     check("onerror属性が実行されない", !flags.xss2, JSON.stringify(flags));
@@ -162,6 +165,7 @@ function check(name, cond, extra = "") {
     check("A5-M2: <set>のto経由javascript:が実行されない", !flags.xss10, JSON.stringify(flags));
     check("A5-M2: <animateTransform>のvalues経由javascript:が実行されない", !flags.xss11, JSON.stringify(flags));
     check("A5-M2: <animateMotion>のvalues経由javascript:が実行されない", !flags.xss12, JSON.stringify(flags));
+    check("A5-M2(属性検査単独): BLOCKED_TAGS未収載の<animateColor>でもvalues経由javascript:が実行されない", !flags.xss13, JSON.stringify(flags));
     check("pageerrorが発生していない", pageErrors === 0, `(件数: ${pageErrors})`);
     check("dialog(alert等)が発生していない", dialogs.length === 0, JSON.stringify(dialogs));
 
@@ -177,10 +181,12 @@ function check(name, cond, extra = "") {
     check("v140 Low-6: src経由のdata:image/svg+xmlは拒否される", !lower.includes("data:image/svg+xml"), renderedHTML.slice(0, 400));
     check("A5-M1: <template が残っていない(中身ごと除去)", !lower.includes("<template"), renderedHTML.slice(0, 400));
     check("A5-M1: onerror= が残っていない(template除去の副作用込みで再確認)", !lower.includes("onerror"), renderedHTML.slice(0, 400));
-    check("A5-M2: <animate が残っていない", !lower.includes("<animate"), renderedHTML.slice(0, 400));
+    check("A5-M2: <animate(BLOCKED_TAGS対象=animate/animatetransform/animatemotion)が残っていない", !/<animate(?!color)/.test(lower), renderedHTML.slice(0, 400));
     check("A5-M2: <set が残っていない", !lower.includes("<set"), renderedHTML.slice(0, 400));
     check("A5-M2: values=\"javascript: が残っていない", !lower.includes('values="javascript:'), renderedHTML.slice(0, 400));
     check("A5-M2: to=\"javascript: が残っていない", !lower.includes('to="javascript:'), renderedHTML.slice(0, 400));
+    check("A5-M2(属性検査単独): <animatecolor タグ自体はBLOCKED_TAGS対象外のため残る(前提の確認)", lower.includes("<animatecolor"), renderedHTML.slice(0, 400));
+    check("A5-M2(属性検査単独): <animatecolor>のvalues=\"javascript: がSANITIZE_URL_ATTRS拡張で除去される", !lower.includes('<animatecolor') || !lower.slice(lower.indexOf("<animatecolor"), lower.indexOf("<animatecolor") + 200).includes('javascript:'), renderedHTML.slice(0, 600));
 
     console.log("[3] 正常なMarkdownは引き続き問題なく描画される(サニタイザ強化の過剰検知が無いことの回帰確認)");
     check("見出しが描画される", renderedHTML.includes("見出し"));
