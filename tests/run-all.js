@@ -9,6 +9,8 @@
 //   node tests/run-all.js --group=fast-node → ブラウザ不要の高速スイート
 //   node tests/run-all.js --group=smoke → 重要導線の固定スモーク
 //   node tests/run-all.js --workers=2 → 2スイートを並列実行
+//   node tests/run-all.js v50 --shard=2/4 --allow-empty → 絞り込み+シャードで対象0本
+//     でも明示的に許容してexit 0にする(通常は0本ならexit 1、S3-4/H-4)
 //
 // v137(review.md:34): 親プロセス(このrun-all.js)がtimeout/Ctrl+C等で中断された際、
 // spawnSyncの直接killだけでは各スイートが起動したChromiumの孫プロセスが残留していた。
@@ -49,8 +51,10 @@ const listOnly = args.includes("--list");
 const shardArg = args.find((arg) => arg.startsWith("--shard="));
 const groupArg = args.find((arg) => arg.startsWith("--group="));
 const workersArg = args.find((arg) => arg.startsWith("--workers="));
+const allowEmpty = args.includes("--allow-empty");
 const filters = args.filter((arg) =>
   arg !== "--list"
+  && arg !== "--allow-empty"
   && !arg.startsWith("--shard=")
   && !arg.startsWith("--group=")
   && !arg.startsWith("--workers=")
@@ -149,6 +153,21 @@ if (shard) console.log(`実行対象(シャード ${shard.index}/${shard.total})
 if (listOnly) {
   suites.forEach((suite) => console.log(suite));
   process.exit(0);
+}
+
+// S3-4/H-4: filtered(絞り込み後)は非0でも、--shardの適用でsuitesが0件になる経路には
+// ガードが無く、実行本数0のまま"✅ All suites passed"でexit 0になっていた(例:
+// `node tests/run-all.js v50 --shard=2/4` → 0/1 suites → exit 0)。CIの実運用では
+// --shard=N/4は絞り込み無しの全量に対してのみ使い、シャードだけで0件になることは
+// 通常起こらない(スイート総数がシャード数を大きく上回るため)ので、空実行を安全側の
+// 既定にする: --allow-emptyを明示しない限りexit 1にする。
+if (!suites.length) {
+  if (allowEmpty) {
+    console.log("⚠ 実行対象のsuiteが0件ですが、--allow-emptyが指定されているため続行します(exit 0)");
+  } else {
+    console.log("実行対象のsuiteが0件です(絞り込み・--group・--shardの組み合わせを確認してください)。意図した空実行なら --allow-empty を指定してください。");
+    process.exit(1);
+  }
 }
 
 // 1スイートあたりの上限。通常は数十秒〜1分程度で終わる想定のため、ハングしたスイートを
@@ -262,6 +281,6 @@ console.log(`並列数: ${Math.min(workers, Math.max(suites.length, 1))}`);
     console.error(`\n⚠ FLAKY-INFRA再実行が発生したsuite(${flakyInfraRetries.length}件): ${flakyInfraRetries.join(", ")}`);
     console.error("  接続系クラッシュのみ対象。恒久対策(startServerのlistening待ち等)の実施状況を確認すること。");
   }
-  console.log(failed ? `\n❌ ${failed} suite(s) failed` : "\n✅ All suites passed");
+  console.log(failed ? `\n❌ ${failed} suite(s) failed` : `\n✅ All suites passed (${suites.length} suites)`);
   process.exit(failed ? 1 : 0);
 })();
