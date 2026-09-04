@@ -1,0 +1,50 @@
+{
+  "version": 328,
+  "date": "2026-09-04",
+  "title": "WBS A-1: TOWER意匠・ツールバー集約・追加フォーム折りたたみ・行の副操作を…へ",
+  "summary": "実行コード200行制約に従うA-1aとして、WBSのTOWER意匠、表示メニュー集約、追加フォーム折りたたみを実装する。",
+  "changedFiles": [
+    "CHANGES_v328.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v328.json",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/v109.test.js",
+    "tests/v288.test.js",
+    "tests/v302.test.js",
+    "tests/v328.test.js"
+  ],
+  "intent": [
+    "モバイルの常時ツールバーを表示と追加に絞り、Project一覧へ早く到達できるようにする。",
+    "検索入力の差分DOM更新と既存WBS actionを維持し、開閉状態をstateへ保存しない。"
+  ],
+  "changes": [
+    "TOWER / WBS見出し、12WY週番号と週範囲、TOWER配色のProject領域へ更新した。",
+    "既存の表示設定を44px行とON/OFF表示を持つ表示メニューへ集約した。",
+    "Project/Task追加フォームを＋追加details内へ移し、今週を確定を12WY Project行へ移した。",
+    "Service WorkerのCACHE_NAMEをv328へ更新した。"
+  ],
+  "uncertainties": [
+    "1280px未満の横長iPadでは検索と編集モードを常時表示せず、表示メニュー経由とするかは実機確認余地がある。"
+  ],
+  "reviewFocus": [
+    "390pxで表示メニューと追加パネルを開いても横スクロールせず、入力が16px、操作が44px以上であること。",
+    "検索中の入力DOMが置換されず、日本語IMEとフォーカスが維持されること。",
+    "details開閉だけではapp stateとlocalStorageへ書き込まないこと。"
+  ],
+  "verification": [
+    "node --checkとv328/v318/v288/v302/v194/v195/v196/v109/v99/v260/v313を実行する。",
+    "390pxと1280pxで横スクロール、TOWER色、検索・編集モードの表示条件、pageerrorを確認する。"
+  ],
+  "notes": [
+    "発注指定によりrelease-record、CHANGES_v328.md生成、notes書込、commit、pushは行わない。"
+  ],
+  "knownLimitations": [
+    "A-1bのタスク行再構成と副操作の…メニュー化は、実行コード200行制約により次の委譲へ分割した。"
+  ]
+}

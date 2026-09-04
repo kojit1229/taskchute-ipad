@@ -89,6 +89,11 @@ function check(name, cond, extra = "") {
   function projectTitleLocator(page_) {
     return page_.locator('.item strong[data-action="edit-project"]');
   }
+  async function openViewMenu(page_) {
+    if (!await page_.locator(".wbs-view-menu").evaluate((element) => element.open)) {
+      await page_.locator(".wbs-view-menu > summary").click();
+    }
+  }
 
   try {
     await page.clock.setFixedTime(now0);
@@ -99,6 +104,7 @@ function check(name, cond, extra = "") {
     await seed();
     await page.click('[data-action="nav"][data-view="wbs"]');
     await page.waitForTimeout(200);
+    await openViewMenu(page);
 
     // ============================================================
     // 選択肢の動的生成 & 既定値の確認
@@ -136,6 +142,7 @@ function check(name, cond, extra = "") {
     // (b) 「すべて」で全件表示に戻る
     // ============================================================
     console.log("[2] 「すべて」を選択→全Projectが表示される");
+    await openViewMenu(page);
     await filterSelect.selectOption("");
     await page.waitForTimeout(200);
     check("「すべて」選択時は全5件表示(v126でWish Project追加)", await projectTitleLocator(page).count() === 5);
@@ -145,6 +152,7 @@ function check(name, cond, extra = "") {
     // (c) 未分類の扱い(category未設定のProjectに加え、自動生成の「その他」Projectも含む)
     // ============================================================
     console.log("[3] 「未分類」を選択→category未設定のProject(「未分類プロジェクト」と自動生成「その他」)のみ表示される");
+    await openViewMenu(page);
     await filterSelect.selectOption("未分類");
     await page.waitForTimeout(200);
     const titlesNone = await projectTitleLocator(page).allTextContents();
@@ -162,6 +170,7 @@ function check(name, cond, extra = "") {
     check("完了操作後も未分類の2件のみ表示のまま", await projectTitleLocator(page).count() === 2);
 
     // 完了を隠すトグルで一覧から消えるため、進捗入力の検証は別カテゴリの未完了タスクで行う
+    await openViewMenu(page);
     await filterSelect.selectOption("仕事");
     await page.waitForTimeout(200);
     const numInput = page.locator('input[data-wbs-progress="num"][data-id="task-work"]');
@@ -196,6 +205,7 @@ function check(name, cond, extra = "") {
     }, { KEY, projects: PROJECTS, tasks: TASKS, TODAY });
     await pageMobile.reload();
     await pageMobile.waitForTimeout(500);
+    await openViewMenu(pageMobile);
     const filterSelectMobile = pageMobile.locator('select[data-action="wbs-category-filter"]');
     check("390px幅でプルダウンが表示される", await filterSelectMobile.count() === 1);
     check("390px幅でも絞り込みが効いている(学びプロジェクトのみ)", await projectTitleLocator(pageMobile).count() === 1);

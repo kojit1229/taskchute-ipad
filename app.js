@@ -609,6 +609,7 @@ registerActions({
   "delete-task": ({ id }) => deleteTask(id),
   "toggle-project-collapse": ({ id }) => toggleProjectCollapse(id),
   "toggle-task-collapse": ({ id }) => toggleTaskCollapse(id),
+  "wbs-view-menu-toggle": () => {},  // v328: detailsのネイティブ開閉に任せ、stateへ書き込まない
   "wbs-search-input": () => {},  // inputイベント側で差分更新。click時は意図的no-op
   "wbs-search-jump": ({ target }) => jumpToWbsSearchResult(target.dataset.kind, target.dataset.id),
   "suspend-project": ({ id }) => suspendProject(id),
@@ -4645,9 +4646,7 @@ function renderWBS() {
   // v126: Wish配下タスクも一覧に表示されるようになったため、中断カウントも他Projectと同様に含める
   const suspCount = activeProjects.filter(isProjectSuspended).length
     + state.tasks.filter((t) => !t.deleted && t.kind !== "other" && isTaskSuspended(t)).length;
-  const toggleBtn = (suspCount > 0 || showSusp)
-    ? `<button class="btn ${showSusp ? "primary" : "ghost"}" data-action="toggle-show-suspended">${showSusp ? "中断を隠す" : `中断を表示 (${suspCount})`}</button>`
-    : "";
+  const toggleBtn = `<button class="btn ghost wbs-view-option" data-action="toggle-show-suspended"><span>中断を表示${suspCount ? ` (${suspCount})` : ""}</span><b>${showSusp ? "ON" : "OFF"}</b></button>`;
   // v47: 完了タスクの表示トグル + 全プロジェクトの一括開閉
   const hideDone = Boolean(state.settings.wbsHideCompleted);
   // v302: 完了Project非表示はTask単位のwbsHideCompletedと独立させる。
@@ -4666,47 +4665,38 @@ function renderWBS() {
       <option value="" ${!categoryFilter ? "selected" : ""}>すべて</option>
       ${categoryNames.map((n) => `<option value="${escapeHTML(n)}" ${categoryFilter === n ? "selected" : ""}>${escapeHTML(n)}</option>`).join("")}
     </select>`;
-  const wbsTools = `
-    <div class="row" style="gap:8px; flex-wrap:wrap; align-items:center">
-      <div style="flex:1 1 280px; min-width:0; max-width:520px">
-        <input id="wbs-search-input" class="input" type="search" autocomplete="off"
-          placeholder="Project/Task名で検索" data-action="wbs-search-input">
-        <div id="wbs-search-results" class="search-results" style="max-height:240px">
-          <div class="muted" style="font-size:12px">2文字以上で検索します。</div>
-        </div>
-      </div>
-      ${categorySelect}
-      ${state.settings.twelveWeekStartDate ? '<button class="btn ghost twy-commit-open" data-action="twy-open-commit">今週を確定</button>' : ""}
-      <button class="btn ${editMode ? "primary" : "ghost"}" data-action="toggle-wbs-edit">${editMode ? "✏️ 編集モード中" : "✏️ 編集モード"}</button>
-      <button class="btn ${hideDone ? "primary" : "ghost"}" data-action="toggle-wbs-hide-done">${hideDone ? "完了を表示" : "完了を隠す"}</button>
-      <button class="btn ${hideDoneProjects ? "primary" : "ghost"}" data-action="toggle-wbs-hide-done-projects" aria-pressed="${hideDoneProjects}">${hideDoneProjects ? "完了Projectを表示" : "完了Projectを隠す"}</button>
-      <button class="btn ${activeOnly ? "primary" : "ghost"}" data-action="toggle-wbs-active-only" aria-pressed="${activeOnly}">アクティブのみ</button>
-      <button class="btn ${compactMode ? "primary" : "ghost"}" data-action="toggle-wbs-compact" aria-pressed="${compactMode}">${compactMode ? "コンパクト中" : "コンパクト表示"}</button>
-      <button class="btn ghost" data-action="wbs-collapse-all">${allCollapsed ? "すべて展開" : "すべて折りたたむ"}</button>
-      ${toggleBtn}
-    </div>`;
+  const viewOption = (action, label, on, className = "") => `<button class="btn ghost wbs-view-option${className ? ` ${className}` : ""}" data-action="${action}" aria-pressed="${on}"><span>${label}</span><b>${on ? "ON" : "OFF"}</b></button>`;
+  const week = weekRange(todayISO());
+  const cycleMeta = `${state.settings.twelveWeekStartDate ? `12WY 第${cycleWeekForDate(todayISO())}週 ・ ` : ""}${mdFmt(week.weekStart)} – ${mdFmt(week.weekEnd)}`;
+  const wbsTools = `<div class="wbs-toolbar">
+    <details class="wbs-view-menu"><summary class="btn ghost" data-action="wbs-view-menu-toggle">表示 ▾</summary>
+      <div class="wbs-view-popover"><div class="wbs-search-shell">
+        <input id="wbs-search-input" class="input" type="search" autocomplete="off" placeholder="Project / Task を検索" data-action="wbs-search-input">
+        <div id="wbs-search-results" class="search-results"><div class="muted">2文字以上で検索します。</div></div>
+      </div><div class="wbs-view-options">
+        <label class="wbs-view-filter"><span>カテゴリ絞り込み</span>${categorySelect}</label>
+        ${viewOption("toggle-wbs-hide-done", "完了を隠す", hideDone)}
+        ${viewOption("toggle-wbs-hide-done-projects", "完了Projectを隠す", hideDoneProjects)}
+        ${viewOption("toggle-wbs-active-only", "アクティブのみ", activeOnly)}
+        ${viewOption("toggle-wbs-compact", "コンパクト表示", compactMode)}
+        ${viewOption("toggle-wbs-edit", "編集モード", editMode, "wbs-menu-edit-toggle")}
+        ${viewOption("wbs-collapse-all", "すべて折りたたむ", allCollapsed)}${toggleBtn}
+      </div></div>
+    </details>
+    <button class="btn ghost wbs-edit-toggle" data-action="toggle-wbs-edit" aria-pressed="${editMode}">編集モード</button>
+    <details class="wbs-add-menu"><summary class="btn wbs-add-trigger">＋ 追加</summary><div class="wbs-add-panel">
+      <div class="form-strip"><input id="projectTitle" class="input" placeholder="Project名"><button class="btn primary" data-action="add-project">Project を追加</button></div>
+      <div class="form-strip"><input id="taskTitle" class="input" placeholder="Task名"><select id="taskProject" class="select">${sorted.map((project) => `<option value="${project.id}">${escapeHTML(project.title)}</option>`).join("")}<option value="">単発Task</option></select><button class="btn primary" data-action="add-task">Task を追加</button></div>
+    </div></details>
+  </div>`;
 
   return `
-    ${renderHeader("ビジョンを実行へ落とす", "WBS", wbsTools)}
+    <div class="tower-skin wbs-tower"><header class="view-header wbs-header"><div class="wbs-heading"><h1>TOWER / WBS</h1><span>${cycleMeta}</span></div>${wbsTools}</header>
     ${renderWipBanner()}
-    <section class="form-strip">
-      <input id="projectTitle" class="input" placeholder="Project名">
-      <button class="btn primary" data-action="add-project">Project追加</button>
-    </section>
-
-    <section class="section form-strip">
-      <input id="taskTitle" class="input" placeholder="Task名">
-      <select id="taskProject" class="select">
-        ${sorted.map((project) => `<option value="${project.id}">${escapeHTML(project.title)}</option>`).join("")}
-        <option value="">単発Task</option>
-      </select>
-      <button class="btn primary" data-action="add-task">Task追加</button>
-    </section>
-
     <section class="section grid">
       ${filteredProjects.length > 0 ? filteredProjects.map(renderProjectTree).join("")
         : `<div class="muted" style="padding:12px; text-align:center">このカテゴリのProjectはありません</div>`}
-    </section>
+    </section></div>
   `;
 }
 
@@ -5469,6 +5459,7 @@ function renderProjectTree(project) {
           ${suspended ? `<span class="badge gray">中断</span>` : ""}
           <strong data-action="edit-project" data-id="${project.id}" style="cursor:pointer">${escapeHTML(project.title)}</strong>
           ${project.category ? `<span class="cat-chip" style="background:${getCategoryColor(project.category)}1f; color:${getCategoryColor(project.category)}; border:1px solid ${getCategoryColor(project.category)}66">${escapeHTML(project.category)}</span>` : ""}
+          ${is12WY ? `<button class="btn ghost twy-commit-open" data-action="twy-open-commit">今週を確定</button>` : ""}
         </div>
         <div class="row">
           <button class="btn" data-action="add-task-to-project" data-id="${project.id}">+ タスク</button>

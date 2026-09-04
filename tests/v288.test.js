@@ -53,6 +53,7 @@ async function seed(page, values = {}) {
     localStorage.setItem(key, JSON.stringify(state));
   }, { key: STATE_KEY, values, today: TODAY, oldModified: OLD_MODIFIED });
   await page.reload();
+  await page.locator('.wbs-view-menu > summary').click();
   await page.waitForSelector('#app[data-view="wbs"] #wbs-search-input');
 }
 
@@ -252,6 +253,7 @@ async function verifyRegressionAndProjectDefault(page) {
   await page.locator('#bottomNav [data-action="nav"][data-view="more"]').click();
   await page.waitForSelector('#app[data-view="more"]');
   await page.locator('.more-tower-grid [data-action="nav"][data-view="wbs"]').click();
+  await page.locator('.wbs-view-menu > summary').click();
   await page.waitForSelector('#app[data-view="wbs"] #wbs-search-input');
   const rerenderedWbsTreeSnapshot = await page.locator('#app[data-view="wbs"] section.section.grid')
     .evaluate((tree) => tree.innerHTML);
@@ -293,6 +295,7 @@ async function verifyRegressionAndProjectDefault(page) {
   console.log("[6] 新規Projectは既定collapsed=trueで保存・再読込後も折りたたみ");
   await seed(page, { projects: [] });
   await installSpies(page);
+  await page.locator('.wbs-add-menu > summary').click();
   await page.locator("#projectTitle").fill("新規closed案件");
   await page.locator('[data-action="add-project"]').click();
   await page.waitForFunction((key) => JSON.parse(localStorage.getItem(key)).projects.some((item) => item.title === "新規closed案件"), STATE_KEY);

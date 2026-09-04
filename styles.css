@@ -797,14 +797,15 @@ h3 {
   height: 30px;
   min-width: 30px;
   border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--panel);
+  border: 1px solid var(--tower-line, var(--line));
+  color: var(--tower-text, var(--text));
+  background: var(--tower-panel, var(--panel));
   cursor: pointer;
   display: inline-grid;
   place-items: center;
   font-size: 15px;
   flex: 0 0 auto;
-  opacity: .5;
+  opacity: .7;
   position: relative;
 }
 
@@ -819,8 +820,9 @@ h3 {
 }
 
 .wbs-criteria-btn.on {
-  background: var(--accent-soft);
-  border-color: var(--accent);
+  border-color: var(--tower-cyan, var(--accent));
+  color: var(--tower-cyan, var(--accent));
+  background: color-mix(in srgb, var(--tower-cyan, var(--accent)) 12%, transparent);
   opacity: 1;
 }
 
@@ -2566,7 +2568,7 @@ h3 {
 .plan-owner-badge { position: relative; min-width: 30px; min-height: 28px; padding: 2px 7px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-soft); color: var(--text); font: 800 11px/1 system-ui, sans-serif; cursor: pointer; }
 .plan-owner-badge.ai { border-color: rgba(175,82,222,.45); background: rgba(175,82,222,.12); color: var(--text); }
 .plan-owner-badge.k { border-color: rgba(0,122,255,.38); background: rgba(0,122,255,.09); color: var(--accent); }
-.plan-status { font-size: 10.5px; }
+.plan-status { font-size: 11px; }
 .plan-move { min-width: 34px; }
 .plan-move:disabled { opacity: .35; cursor: default; }
 
@@ -2580,7 +2582,7 @@ h3 {
 .carryover-title { font-size: 13.5px; font-weight: 600; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 /* v47: UI/UX 改善 — WBS・タスクシュートの痒いところ */
-.wbs-overdue { color: var(--red); font-weight: 800; }
+.wbs-overdue { color: var(--tower-amber, var(--orange-text)); font-weight: 800; }
 .block-row.is-doing { box-shadow: inset 0 0 0 1px rgba(47,185,109,.35); }
 /* モバイル: 行アクションのボタンを圧縮して折り返しを減らす */
 @media (max-width: 720px) {
@@ -2596,7 +2598,7 @@ h3 {
 .search-results { margin-top: 10px; max-height: 58vh; overflow-y: auto; display: grid; gap: 6px; }
 .search-hit { display: grid; grid-template-columns: auto auto 1fr; align-items: baseline; gap: 8px; width: 100%; text-align: left; padding: 8px 10px; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; color: var(--text); font: inherit; }
 .search-hit:hover { border-color: var(--accent); }
-.search-kind { font-size: 10.5px; font-weight: 800; padding: 2px 7px; border-radius: 8px; white-space: nowrap; background: rgba(0,122,255,.1); color: var(--accent); }
+.search-kind { font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 8px; white-space: nowrap; background: rgba(0,122,255,.1); color: var(--accent); }
 .search-kind-zero { background: rgba(47,185,109,.12); color: var(--green-text); }
 .search-kind-question { background: rgba(255,149,0,.12); color: var(--orange-text); }
 /* v151レビュー対応(推奨6): 生値#af52deはダーク実測2.96:1でAA未達だったため、
@@ -2663,51 +2665,98 @@ h3 {
 .wbs-task-row.is-compact .wbs-progress-row,
 .wbs-task-row.is-compact .wbs-actions { display: none; }
 
-/* v260: 12WY WBS成果トラック行。色は全テーマ共通トークンへ割り当てる。 */
-.twy-row { margin-top: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-soft); }
+/* v328: WBS A-1a。TOWER見出し・集約ツールバー・非永続details追加パネル。 */
+.wbs-tower { max-width: none; padding: 0 0 40px; background: var(--tower-bg); }
+.wbs-header { position: relative; z-index: 20; gap: 12px; margin-bottom: 12px; padding: 12px; border: 1px solid var(--tower-line); background: var(--tower-panel); box-shadow: none; }
+.wbs-heading { display: flex; align-items: baseline; gap: 14px; min-width: max-content; }
+.wbs-heading h1 { margin: 0; color: var(--tower-cyan); font-size: 14px; letter-spacing: .16em; }
+.wbs-heading span { color: var(--tower-text); font-size: 11px; opacity: .7; white-space: nowrap; }
+.wbs-toolbar { position: relative; display: flex; flex: 1; align-items: flex-start; justify-content: flex-end; gap: 8px; min-width: 0; }
+.wbs-toolbar details > summary { min-height: 44px; list-style: none; }
+.wbs-toolbar details > summary::-webkit-details-marker { display: none; }
+.wbs-toolbar .input, .wbs-toolbar .select, .wbs-toolbar button { min-height: 44px; font-size: 16px; }
+.wbs-view-menu, .wbs-view-popover { display: contents; }
+.wbs-search-shell { order: -1; flex: 1 1 280px; min-width: 180px; max-width: 520px; }
+.wbs-search-shell .search-results { position: absolute; z-index: 12; width: min(520px, 100%); max-height: 240px; margin-top: 4px; background: var(--tower-panel); }
+.wbs-view-options { position: absolute; z-index: 14; top: calc(100% + 4px); right: 112px; display: none; width: min(340px, calc(100vw - 32px)); padding: 8px; border: 1px solid var(--tower-line); background: var(--tower-panel); }
+.wbs-view-menu[open] .wbs-view-options { display: grid; gap: 4px; }
+.wbs-view-option, .wbs-view-filter { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; width: 100%; color: var(--tower-text); font-size: 12px; text-align: left; }
+.wbs-view-option b { color: var(--tower-cyan); font-size: 11px; }
+.wbs-view-filter .select { width: auto; min-width: 140px; font-size: 16px; }
+.wbs-add-menu { position: relative; }
+.wbs-add-trigger { min-height: 44px; border-color: var(--tower-amber); color: var(--tower-amber); background: transparent; }
+.wbs-add-panel { position: absolute; z-index: 15; top: calc(100% + 4px); right: 0; width: min(560px, calc(100vw - 32px)); padding: 8px; border: 1px solid #6b5322; background: var(--tower-panel); }
+.wbs-add-panel .form-strip { grid-template-columns: minmax(0, 1fr) 150px auto; padding: 6px; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.wbs-tower > .grid { gap: 0; margin-top: 12px; border: 1px solid var(--tower-line); }
+.wbs-tower .item { min-height: 48px; border: 0; border-bottom: 1px solid var(--tower-line); border-radius: 0; color: var(--tower-text); background: var(--tower-panel); box-shadow: none; }
+.wbs-tower .wip-banner { border-color: #6b5322; border-radius: 0; background: transparent; }
+.wbs-tower .wip-banner-msg { color: var(--tower-text); }
+.wbs-tower .progress > span { background: var(--tower-cyan); }
+.wbs-tower .cat-chip { font-size: 11px; } .wbs-tower .search-hit { border-color: var(--tower-line); color: var(--tower-text); background: var(--tower-bg); } .wbs-tower .search-kind { color: var(--tower-cyan); background: color-mix(in srgb, var(--tower-cyan) 12%, transparent); }
+@media (min-width: 1280px) {
+  .wbs-toolbar { flex-wrap: wrap; } .wbs-view-menu { display: flex; flex: 1 1 640px; min-width: 0; }
+  .wbs-view-menu > summary { display: none; } .wbs-view-menu > .wbs-view-popover { display: flex !important; flex: 1; flex-wrap: wrap; gap: 8px; min-width: 0; }
+  .wbs-search-shell { order: 0; max-width: none; } .wbs-view-options { position: static; order: 1; display: grid !important; flex: 1 1 100%; grid-template-columns: repeat(4, minmax(0, 1fr)); width: 100%; }
+  .wbs-menu-edit-toggle { display: none; }
+}
+@media (max-width: 1279px) {
+  .wbs-header { display: block; } .wbs-heading { justify-content: space-between; min-width: 0; margin-bottom: 10px; }
+  .wbs-heading span { overflow: hidden; text-overflow: ellipsis; } .wbs-toolbar { display: grid; grid-template-columns: 1fr 1fr; }
+  .wbs-edit-toggle { display: none; } .wbs-view-menu, .wbs-view-popover { display: block; }
+  .wbs-view-menu { position: relative; } .wbs-view-menu > summary, .wbs-add-menu > summary { width: 100%; }
+  .wbs-view-popover { position: absolute; z-index: 14; top: calc(100% + 4px); left: 0; display: none; width: calc(200% + 8px); padding: 8px; border: 1px solid var(--tower-line); background: var(--tower-panel); }
+  .wbs-view-menu[open] .wbs-view-popover { display: block; }
+  .wbs-search-shell { min-width: 0; max-width: none; } .wbs-search-shell .search-results { position: static; width: 100%; }
+  .wbs-view-options { position: static; width: 100%; padding: 4px 0 0; border: 0; }
+  .wbs-add-panel { width: calc(200% + 8px); } .wbs-add-panel .form-strip { grid-template-columns: 1fr; }
+}
+
+/* v260: 12WY WBS成果トラック行。v328でTOWERトークンへ統一。 */
+.twy-row { margin-top: 8px; padding: 8px; border: 1px solid var(--tower-line, var(--line)); border-radius: 8px; background: var(--tower-bg, var(--panel-soft)); }
 .twy-row-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.t-state { flex: none; padding: 1px 7px; border: 1px solid; border-radius: 3px; font-size: 10px; font-weight: 700; letter-spacing: .08em; }
-.t-state.s-ahead, .t-state.s-done { color: var(--green-text); border-color: var(--green-text); }
-.t-state.s-ontrack { color: var(--accent-text); border-color: var(--accent); }
-.t-state.s-warn { color: var(--orange-text); border-color: var(--orange-text); }
-.t-state.s-overdue { color: var(--red); border-color: var(--red); }
-.t-state.s-stale { color: var(--muted); border-color: var(--line); }
+.t-state { flex: none; padding: 1px 7px; border: 1px solid; border-radius: 3px; font-size: 11px; font-weight: 700; letter-spacing: .08em; }
+.t-state.s-ahead, .t-state.s-done { color: var(--tower-green, var(--green-text)); border-color: var(--tower-green, var(--green-text)); }
+.t-state.s-ontrack { color: var(--tower-cyan, var(--accent-text)); border-color: var(--tower-cyan, var(--accent)); }
+.t-state.s-warn { color: var(--tower-amber, var(--orange-text)); border-color: var(--tower-amber, var(--orange-text)); }
+.t-state.s-overdue { color: var(--tower-red, var(--red)); border-color: var(--tower-red, var(--red)); }
+.t-state.s-stale { color: var(--tower-text, var(--muted)); border-color: var(--tower-line, var(--line)); }
 .t-state.s-done, .twy-correct { opacity: .7; }
-.twy-val { color: var(--text); font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.twy-val small { font-size: 10px; font-weight: 400; opacity: .65; }
+.twy-val { color: var(--tower-text, var(--text)); font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.twy-val small { font-size: 11px; font-weight: 400; opacity: .7; }
 .twy-pace { font-size: 11px; font-variant-numeric: tabular-nums; }
-.twy-pace.pos { color: var(--green-text); }
-.twy-pace.neg { color: var(--orange-text); }
-.twy-meta { margin-left: auto; color: var(--muted); font-size: 10px; flex: none; }
-.twy-update-btn { flex: none; padding: 3px 10px; border: 1px solid var(--accent); border-radius: 4px; color: var(--accent-text); background: transparent; font: inherit; font-size: 10px; letter-spacing: .08em; cursor: pointer; }
-.twy-update-btn:hover { background: var(--accent-soft); }
-.twy-row.s-stale .twy-val, .twy-row.s-stale .twy-pace, .twy-row.s-stale .twy-bar { opacity: .55; }
-.twy-bar { position: relative; height: 6px; margin-top: 7px; background: var(--line); overflow: visible; }
-.twy-bar > span { display: block; height: 100%; background: var(--accent); box-shadow: 0 0 6px var(--accent); }
-.twy-bar.s-warn > span { background: var(--orange-text); box-shadow: 0 0 6px var(--orange-text); }
-.twy-bar.s-ahead > span { background: var(--green-text); box-shadow: 0 0 6px var(--green-text); }
-.twy-bar > i { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text); opacity: .8; }
-.twy-bar > i::after { content: "今日の理想"; position: absolute; top: -12px; left: -18px; color: var(--muted); font-size: 8px; font-style: normal; white-space: nowrap; }
-.twy-bar-scale { display: flex; justify-content: space-between; margin-top: 3px; color: var(--muted); font-size: 9px; font-variant-numeric: tabular-nums; }
+.twy-pace.pos { color: var(--tower-green, var(--green-text)); }
+.twy-pace.neg { color: var(--tower-amber, var(--orange-text)); }
+.twy-meta { margin-left: auto; color: var(--tower-text, var(--muted)); font-size: 11px; flex: none; opacity: .7; }
+.twy-update-btn { flex: none; padding: 3px 10px; border: 1px solid var(--tower-cyan, var(--accent)); border-radius: 4px; color: var(--tower-cyan, var(--accent-text)); background: transparent; font: inherit; font-size: 11px; letter-spacing: .08em; cursor: pointer; }
+.twy-update-btn:hover { background: color-mix(in srgb, var(--tower-cyan, var(--accent)) 12%, transparent); }
+.twy-row.s-stale .twy-val, .twy-row.s-stale .twy-pace, .twy-row.s-stale .twy-bar { opacity: .7; }
+.twy-row.s-stale .twy-val small { opacity: 1; }
+.twy-bar { position: relative; height: 6px; margin-top: 7px; background: var(--tower-line, var(--line)); overflow: visible; }
+.twy-bar > span { display: block; height: 100%; background: var(--tower-cyan, var(--accent)); box-shadow: 0 0 6px var(--tower-cyan, var(--accent)); }
+.twy-bar.s-warn > span { background: var(--tower-amber, var(--orange-text)); box-shadow: 0 0 6px var(--tower-amber, var(--orange-text)); }
+.twy-bar.s-ahead > span { background: var(--tower-green, var(--green-text)); box-shadow: 0 0 6px var(--tower-green, var(--green-text)); }
+.twy-bar > i { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--tower-text, var(--text)); opacity: .8; }
+.twy-bar > i::after { content: "今日の理想"; position: absolute; top: -12px; left: -18px; color: var(--tower-text, var(--muted)); font-size: 11px; font-style: normal; white-space: nowrap; opacity: .7; }
+.twy-bar-scale { display: flex; justify-content: space-between; margin-top: 3px; color: var(--tower-text, var(--muted)); font-size: 11px; font-variant-numeric: tabular-nums; opacity: .7; }
 .twy-ms { display: flex; align-items: flex-start; margin-top: 8px; padding-bottom: 2px; overflow-x: auto; }
 .twy-ms-node { position: relative; flex: 1 1 0; min-width: 74px; text-align: center; }
 .twy-ms-node::before { content: ""; position: absolute; top: 7px; left: -50%; width: 100%; height: 2px; background: var(--line); }
 .twy-ms-node:first-child::before { display: none; }
 .twy-ms-node.done::before { background: var(--green-text); }
-.twy-ms-dot { position: relative; z-index: 1; display: inline-grid; place-items: center; width: 16px; height: 16px; border: 2px solid var(--line); border-radius: 50%; color: var(--text); background: var(--panel-soft); font-size: 9px; }
+.twy-ms-dot { position: relative; z-index: 1; display: inline-grid; place-items: center; width: 16px; height: 16px; border: 2px solid var(--tower-line, var(--line)); border-radius: 50%; color: var(--tower-text, var(--text)); background: var(--tower-bg, var(--panel-soft)); font-size: 11px; }
 .twy-ms-node.done .twy-ms-dot { color: var(--green-text); border-color: var(--green-text); }
 .twy-ms-node.next .twy-ms-dot { border-color: var(--orange-text); box-shadow: 0 0 8px var(--orange-soft); }
 .twy-ms-node.late .twy-ms-dot, .twy-ms-node.late .twy-ms-date { color: var(--red); border-color: var(--red); }
 .twy-ms-label, .twy-ms-date { display: block; line-height: 1.3; }
-.twy-ms-label { margin-top: 4px; font-size: 10px; }
-.twy-ms-date { color: var(--muted); font-size: 9px; font-variant-numeric: tabular-nums; }
-.twy-ms-date del { margin-right: 3px; opacity: .6; }
-.twy-ms-progress { display: grid; gap: 2px; margin-top: 3px; color: var(--accent-text); font-size: 10px; font-variant-numeric: tabular-nums; }
+.twy-ms-label { margin-top: 4px; font-size: 11px; }
+.twy-ms-date { color: var(--tower-text, var(--muted)); font-size: 11px; font-variant-numeric: tabular-nums; opacity: .7; }
+.twy-ms-date del { margin-right: 3px; opacity: 1; }
+.twy-ms-progress { display: grid; gap: 2px; margin-top: 3px; color: var(--tower-cyan, var(--accent-text)); font-size: 11px; font-variant-numeric: tabular-nums; }
 .twy-ms-progress-bar { display: block; width: 100%; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
-.twy-ms-progress-bar > i { display: block; height: 100%; background: var(--accent); }
-.twy-ms-node.late .twy-ms-progress { color: var(--red); }
-.twy-ms-node.late .twy-ms-progress-bar > i { background: var(--red); }
-.twy-stale-note { margin-top: 8px; padding: 7px 9px; border: 1px dashed var(--orange-text); border-radius: 6px; color: var(--orange-text); background: var(--orange-soft); font-size: 11px; cursor: pointer; }
+.twy-ms-progress-bar > i { display: block; height: 100%; background: var(--tower-cyan, var(--accent)); }
+.twy-ms-node.late .twy-ms-progress { color: var(--tower-red, var(--red)); }
+.twy-ms-node.late .twy-ms-progress-bar > i { background: var(--tower-red, var(--red)); }
+.twy-stale-note { margin-top: 8px; padding: 7px 9px; border: 1px solid var(--tower-amber, var(--orange-text)); border-radius: 0; color: var(--tower-text, var(--text)); background: transparent; font-size: 11px; cursor: pointer; }
 /* v261: WBSトラック行インラインエディタ。 */
 .twy-editor { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-top: 8px; padding: 8px; border-top: 1px solid var(--line); color: var(--text); background: var(--panel); }
 .twy-editor label { display: flex; align-items: center; gap: 6px; min-width: 0; }
@@ -2725,7 +2774,7 @@ h3 {
 .twy-ms-edit-item .checkbox-line { overflow-wrap: anywhere; }
 .twy-ms-progress-editor { grid-column: 1 / -1; display: flex; align-items: end; flex-wrap: wrap; gap: 7px; padding: 7px; border: 1px dashed var(--line); }
 .twy-ms-progress-editor[hidden] { display: none; }
-.twy-ms-progress-editor label { display: grid; gap: 3px; color: var(--muted); font-size: 10px; }
+.twy-ms-progress-editor label { display: grid; gap: 3px; color: var(--muted); font-size: 11px; }
 @media (max-width: 560px) {
   .twy-meta { margin-left: 0; }
   .twy-update-btn { margin-left: auto; }

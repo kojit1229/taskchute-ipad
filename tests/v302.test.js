@@ -70,7 +70,14 @@ async function seed(page, values = {}) {
     localStorage.setItem(key, JSON.stringify(state));
   }, { key: STATE_KEY, values, today: TODAY, modified: OLD_MODIFIED });
   await page.reload();
+  await page.locator(".wbs-view-menu > summary").click();
   await page.waitForSelector('#app[data-view="wbs"] #wbs-search-input');
+}
+
+async function openViewMenu(page) {
+  if (!await page.locator(".wbs-view-menu").evaluate((element) => element.open)) {
+    await page.locator(".wbs-view-menu > summary").click();
+  }
 }
 
 async function installWriteSpy(page) {
@@ -134,12 +141,14 @@ async function verifyMigrationAndDoneProjectToggle(page) {
   check("DはlocalStorageへ1回保存しdataModifiedAtを動かさない",
     await page.evaluate(() => window.__v302StateWrites) === 1 && state.dataModifiedAt === OLD_MODIFIED);
   await page.reload();
+  await openViewMenu(page);
   await page.waitForSelector('[data-action="toggle-wbs-hide-done-projects"][aria-pressed="true"]');
   check("D設定はリロード後もtrueを復元", (await stateNow(page)).settings.wbsHideDoneProjects === true);
 
   await page.locator('[data-action="toggle-wbs-hide-done-projects"]').click();
   await waitSetting(page, { wbsHideDoneProjects: false });
   check("D表示経路で完了Projectが戻る", await page.locator('[data-wbs-row-id="p-done"]').count() === 1);
+  await openViewMenu(page);
   await page.locator('[data-action="toggle-wbs-hide-done-projects"]').click();
   await waitSetting(page, { wbsHideDoneProjects: true });
   check("D再非表示経路で完了Projectを再び隠す", await page.locator('[data-wbs-row-id="p-done"]').count() === 0);
@@ -167,7 +176,7 @@ async function verifyFilteredCollapseAll(page) {
   });
   const collapseAll = page.locator('[data-action="wbs-collapse-all"]');
   const beforeCollapse = await stateNow(page);
-  check("絞り込み後の表示Project基準でラベルを計算", await collapseAll.textContent() === "すべて折りたたむ");
+  check("絞り込み後の表示Project基準でラベルを計算", await collapseAll.locator("span").textContent() === "すべて折りたたむ");
   await collapseAll.click();
   await page.waitForFunction((key) => JSON.parse(localStorage.getItem(key)).projects
     .find((item) => item.id === "p-collapse-visible")?.collapsed === true, STATE_KEY);
@@ -261,6 +270,7 @@ async function verifyActiveOnly(page) {
       && await activeButton.getAttribute("aria-pressed") === "true"
       && state.dataModifiedAt === OLD_MODIFIED);
   await page.reload();
+  await openViewMenu(page);
   await page.waitForSelector('[data-action="toggle-wbs-active-only"][aria-pressed="true"]');
   state = await stateNow(page);
   check("Eの2設定はリロード後も個別に復元", state.settings.showSuspended === false && state.settings.wbsHideDoneProjects === true);
@@ -270,6 +280,7 @@ async function verifyActiveOnly(page) {
   check("E OFFは中断表示+完了Project表示", await activeButton.getAttribute("aria-pressed") === "false"
     && await page.locator('[data-wbs-row-id="p-e-paused"]').count() === 1
     && await page.locator('[data-wbs-row-id="p-e-done"]').count() === 1);
+  await openViewMenu(page);
   await page.locator('[data-action="toggle-wbs-hide-done-projects"]').click();
   await waitSetting(page, { showSuspended: true, wbsHideDoneProjects: true });
   check("片側だけ手動変更したtrue/trueはアクティブ扱いにしない",
@@ -320,6 +331,7 @@ async function verifyCompactAndPlanProtection(page) {
   await page.reload();
   await page.waitForSelector('[data-wbs-row-id="t-f"] > .wbs-task-row.is-compact');
   check("F設定はリロード後もtrueを復元", (await stateNow(page)).settings.wbsCompactMode === true);
+  await openViewMenu(page);
   await page.locator('[data-action="toggle-wbs-compact"]').click();
   await waitSetting(page, { wbsCompactMode: false });
   check("F OFFで通常表示を復元", await row.locator(".wbs-progress-row").isVisible()
@@ -375,14 +387,17 @@ async function verifyExistingFiltersAndSearch(page) {
     check(`${mode.name}: wbsHideCompletedはProject設定と独立して完了Taskだけ隠す`,
       await page.locator(`[data-wbs-row-id="${doneTask.id}"]`).count() === 0
         && (await stateNow(page)).settings.wbsHideDoneProjects === mode.hide);
+    await openViewMenu(page);
     await page.locator('[data-action="toggle-show-suspended"]').click();
     await waitSetting(page, { showSuspended: true });
     check(`${mode.name}: showSuspendedで中断Taskを表示`, await page.locator(`[data-wbs-row-id="${suspendedTask.id}"]`).count() === 1);
+    await openViewMenu(page);
     await page.locator('[data-action="wbs-category-filter"]').selectOption("学び");
     await waitSetting(page, { wbsCategoryFilter: "学び" });
     check(`${mode.name}: category絞り込みを維持`, await page.locator(`[data-wbs-row-id="${learn.id}"]`).count() === 1
       && await page.locator(`[data-wbs-row-id="${work.id}"]`).count() === 0);
 
+    await openViewMenu(page);
     const input = page.locator("#wbs-search-input");
     await input.fill("検索対象");
     await page.waitForFunction((id) => document.querySelector(`[data-action="wbs-search-jump"][data-id="${id}"]`), openTask.id);
@@ -407,6 +422,7 @@ async function verifyExistingFiltersAndSearch(page) {
   await page.locator('[data-action="toggle-wbs-hide-done-projects"]').click();
   await waitSetting(page, { wbsHideDoneProjects: true });
   check("検索前は完了Project非表示", await page.locator('[data-wbs-row-id="p-search-done"]').count() === 0);
+  await openViewMenu(page);
   await page.locator("#wbs-search-input").fill("完了検索");
   await page.waitForSelector('[data-action="wbs-search-jump"][data-id="t-search-done"]');
   await page.evaluate(() => {
