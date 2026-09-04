@@ -1,0 +1,55 @@
+{
+  "version": 329,
+  "date": "2026-09-04",
+  "title": "WBS A-1b: 行の再構成と副操作の…メニュー化",
+  "summary": "WBSのProject/Task行を主情報中心へ再構成し、既存の副操作を排他的な行メニューへ集約する。",
+  "changedFiles": [
+    "CHANGES_v329.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v329.json",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/v109.test.js",
+    "tests/v194.test.js",
+    "tests/v195.test.js",
+    "tests/v196.test.js",
+    "tests/v260.test.js",
+    "tests/v302.test.js",
+    "tests/v318.test.js",
+    "tests/v329.test.js",
+    "tests/v99.test.js"
+  ],
+  "intent": [
+    "Task行の常時表示を完了・名前・meta・今日へに絞り、操作判断に必要な情報を一読できるようにする。",
+    "既存actionとstateを変えず、副操作を行ごとの…メニューから利用できるようにする。"
+  ],
+  "changes": [
+    "Project見出しをタグ・進捗・完了数中心の2行構成へ変更し、副操作を…メニューへ移した。",
+    "Task行を名前とmeta中心のgridへ変更し、完了・期限超過・編集モードの表現を整理した。",
+    "wbs-row-menu-toggleをactionレジストリへ追加し、開いている行をDOM内だけで1件に限定した。",
+    "Service WorkerのCACHE_NAMEをv329へ更新した。"
+  ],
+  "uncertainties": [
+    "長いProject名と今週を確定が同居する390px実機で、タイトル折り返し量は追加の実機確認余地がある。"
+  ],
+  "reviewFocus": [
+    "行メニューの開閉でstate/localStorageへ書き込まず、別行を開いたときだけ前の行が閉じること。",
+    "390pxで深いサブタスクと副操作を開いても横スクロールせず、操作対象が44px以上であること。",
+    "完了条件依頼・担当切替・Step並べ替えなど既存actionの意味論が変わっていないこと。"
+  ],
+  "verification": [
+    "node --checkとv329/v328/v318/v302/v194/v195/v196/v109/v99/v260/action-registry-core/v313を実行する。",
+    "390pxと1280pxで横スクロール、文字サイズ、操作領域、pageerror、非永続開閉を確認する。"
+  ],
+  "notes": [
+    "発注指定によりrelease-record、CHANGES_v329.md生成、notes書込、commit、pushは行わない。"
+  ],
+  "knownLimitations": [
+    "今週やることパネルとPC 2ペインはv330の別件とし、本変更には含めない。"
+  ]
+}

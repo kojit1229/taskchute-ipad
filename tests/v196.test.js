@@ -122,6 +122,10 @@ function check(name, cond, extra = "") {
   async function storedTasks() {
     return page.evaluate(({ key }) => JSON.parse(localStorage.getItem(key)).tasks, { key: STATE_KEY });
   }
+  async function openTaskEditor(id) {
+    await page.locator(`[data-wbs-row-id="${id}"] > .wbs-task-row > .wbs-row-menu-toggle`).click();
+    await page.locator(`[data-action="edit-task"][data-id="${id}"]`).click();
+  }
 
   try {
     const appSource = require("fs").readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
@@ -145,7 +149,7 @@ function check(name, cond, extra = "") {
       { title: "レビューを依頼する", owner: "k" }
     ];
     await resetState([mainTask, existingSub], {}, "hold-ok", okSteps);
-    await page.locator('span[data-action="edit-task"][data-id="task-plan"]').click();
+    await openTaskEditor("task-plan");
     await page.waitForSelector('[data-action="plan-step-request"]');
     // レビュー必須1対応: 依頼ボタンは押下直後にモーダルを再描画する。退避なしで再描画すると
     // 「説明を書いてから📋を押す」で未保存入力が消える(実測済み)。rerenderActiveModal 経由を固定する。
@@ -190,7 +194,7 @@ function check(name, cond, extra = "") {
     await page.waitForSelector('#app[data-view="wbs"]');
 
     console.log("[1c] 承認でサブタスク作成、既存サブタスクは不変");
-    await page.locator('span[data-action="edit-task"][data-id="task-plan"]').click();
+    await openTaskEditor("task-plan");
     await page.waitForFunction(() => (document.querySelector(".plan-step-draft .field-label")?.textContent || "").includes("AIが3個のステップを提案しています"));
     await page.locator('[data-action="plan-step-approve"]').click();
     await page.waitForFunction(({ key }) =>
@@ -225,7 +229,7 @@ function check(name, cond, extra = "") {
     console.log("[2] 破棄では何も作らない");
     const discardTask = makeFixtureTask("task-discard", "破棄用タスク");
     await resetState([discardTask], {}, "hold-ok", okSteps);
-    await page.locator('span[data-action="edit-task"][data-id="task-discard"]').click();
+    await openTaskEditor("task-discard");
     await page.locator('[data-action="plan-step-request"]').click();
     // レース対策: request-PUT(plan-request.json)の完了を待たずにadvanceAndPollすると、
     // responseモックがrequestPayload未設定のままrequestId/taskId不一致のresponseを
@@ -252,7 +256,7 @@ function check(name, cond, extra = "") {
     for (const [i, invalidCase] of invalidCases.entries()) {
       const task = makeFixtureTask(`task-invalid-${i}`, `不正応答${i}`);
       await resetState([task], {}, "hold-invalid", invalidCase.steps);
-      await page.locator(`span[data-action="edit-task"][data-id="task-invalid-${i}"]`).click();
+      await openTaskEditor(`task-invalid-${i}`);
       await page.locator('[data-action="plan-step-request"]').click();
       // レース対策: 上の[2]と同じ理由でpush完了を待ってから進める。
       await page.waitForFunction(() => (document.querySelector(".plan-step-request .muted")?.textContent || "").includes("依頼受付済み・数分後に反映"));
@@ -269,7 +273,7 @@ function check(name, cond, extra = "") {
     for (const mode of ["budget_exceeded", "limit_exceeded"]) {
       const task = makeFixtureTask(`task-${mode}`, mode);
       await resetState([task], {}, mode);
-      await page.locator(`span[data-action="edit-task"][data-id="task-${mode}"]`).click();
+      await openTaskEditor(`task-${mode}`);
       await page.locator('[data-action="plan-step-request"]').click();
       // レース対策: 上の[2]と同じ理由でpush完了を待ってから進める。
       await page.waitForFunction(() => (document.querySelector(".plan-step-request .muted")?.textContent || "").includes("依頼受付済み・数分後に反映"));
@@ -279,7 +283,7 @@ function check(name, cond, extra = "") {
     }
     const errorTask = makeFixtureTask("task-error", "error用タスク");
     await resetState([errorTask], {}, "error");
-    await page.locator('span[data-action="edit-task"][data-id="task-error"]').click();
+    await openTaskEditor("task-error");
     await page.locator('[data-action="plan-step-request"]').click();
     // レース対策: 上の[2]と同じ理由でpush完了を待ってから進める。
     await page.waitForFunction(() => (document.querySelector(".plan-step-request .muted")?.textContent || "").includes("依頼受付済み・数分後に反映"));
@@ -290,7 +294,7 @@ function check(name, cond, extra = "") {
     console.log("[5] 15分無応答でPC起動確認を表示");
     const missingTask = makeFixtureTask("task-missing", "無応答用タスク");
     await resetState([missingTask], {}, "missing");
-    await page.locator('span[data-action="edit-task"][data-id="task-missing"]').click();
+    await openTaskEditor("task-missing");
     await page.locator('[data-action="plan-step-request"]').click();
     // レース対策: 上の[2]と同じ理由でpush完了を待ってから進める。
     await page.waitForFunction(() => (document.querySelector(".plan-step-request .muted")?.textContent || "").includes("依頼受付済み・数分後に反映"));

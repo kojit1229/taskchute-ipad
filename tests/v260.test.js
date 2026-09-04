@@ -249,9 +249,9 @@ function sourceBetween(source, startMarker, endMarker) {
     check("B-6 #17 closed track", await projectCard("p17").locator(".twy-row,.twy-stale-note").count() === 0);
     check("B-6 #18 現サイクルactive 12WYの第三の進捗非表示", await projectCard("p18").locator(".wbs-progress-row").count() === 0
       && await projectCard("p18").locator(".wbs-progress-agg").count() === 0
-      && await projectCard("p18").locator(".badge.green", { hasText: "12WY" }).count() === 1);
+      && (await projectCard("p18").locator(".wbs-project-meta").textContent()).includes("[12WY]"));
     check("B-6 #19 対象外Task/Project進捗は維持", (await Promise.all(["p19-past", "p19-non", "p19-inactive", "p19-future"].map(async (id) =>
-      await projectCard(id).locator(".wbs-progress-row").count() === 1 && await projectCard(id).locator(".wbs-progress-agg").count() === 1))).every(Boolean));
+      await projectCard(id).locator(".wbs-task-meta").count() === 1 && await projectCard(id).locator(".wbs-progress-agg").count() === 1))).every(Boolean));
 
     check("STALE_DAYS 7/8日境界", await stateCheck("b-stale7", "順調", "s-ontrack")
       && await stateCheck("b-stale8", "未更新", "s-stale"));
@@ -306,11 +306,12 @@ function sourceBetween(source, startMarker, endMarker) {
     await seed({ projects: [project("p-unset", { twelveWeekStartDate: OLD_CYCLE, showProgress: true })],
       tasks: [task("t-unset", "p-unset")], settingCycle: "" });
     check("12WY未設定では前サイクル注記を出さない", await projectCard("p-unset").locator(".twy-stale-note").count() === 0
-      && await projectCard("p-unset").locator(".wbs-progress-row,.wbs-progress-agg").count() === 2);
+      && await projectCard("p-unset").locator(".wbs-task-meta,.wbs-progress-agg").count() === 2);
 
     console.log("[3] E2E条件1: フォーム登録→WBS状態表示");
     async function openProjectEditor(projectId) {
-      await page.locator(`[data-action="edit-project"][data-id="${projectId}"]`).first().click();
+      await page.locator(`[data-wbs-row-id="${projectId}"] > .wbs-project-head > .wbs-row-menu-toggle`).click();
+      await page.locator(`[data-action="edit-project"][data-id="${projectId}"]`).click();
       await page.waitForSelector("[data-twy-track]", { state: "attached" });
     }
     await seed({ projects: [project("p-form-numeric")], tasks: [task("t-form-num", "p-form-numeric")] });

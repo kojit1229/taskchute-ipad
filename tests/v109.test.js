@@ -87,7 +87,7 @@ function check(name, cond, extra = "") {
   }
 
   function projectTitleLocator(page_) {
-    return page_.locator('.item strong[data-action="edit-project"]');
+    return page_.locator('.wbs-project-copy strong[data-id]');
   }
   async function openViewMenu(page_) {
     if (!await page_.locator(".wbs-view-menu").evaluate((element) => element.open)) {
@@ -173,6 +173,8 @@ function check(name, cond, extra = "") {
     await openViewMenu(page);
     await filterSelect.selectOption("仕事");
     await page.waitForTimeout(200);
+    await openViewMenu(page);
+    await page.locator('[data-action="toggle-wbs-edit"].wbs-menu-edit-toggle').click();
     const numInput = page.locator('input[data-wbs-progress="num"][data-id="task-work"]');
     await numInput.fill("7");
     await numInput.dispatchEvent("change");

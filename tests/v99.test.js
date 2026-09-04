@@ -57,6 +57,13 @@ function check(name, cond, extra = "") {
   async function stateNow() {
     return page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
   }
+  async function openTaskMenu(id) {
+    await page.locator(`[data-wbs-row-id="${id}"] > .wbs-task-row > .wbs-row-menu-toggle`).click();
+  }
+  async function enableEditMode() {
+    await page.locator(".wbs-view-menu > summary").click();
+    await page.locator('[data-action="toggle-wbs-edit"].wbs-menu-edit-toggle').click();
+  }
 
   try {
     await page.clock.setFixedTime(now0);
@@ -100,19 +107,23 @@ function check(name, cond, extra = "") {
 
     // (a)(c) トグルON→保存→再描画で保持 + 視覚表示
     console.log("[3] トグルをタップ→ONになり保存される→再読込後も保持・視覚表示される");
+    await openTaskMenu("task-A");
     await btnA.click();
     await page.waitForTimeout(250);
     const taskOn = (await stateNow()).tasks.find((t) => t.id === "task-A");
     check("state.criteriaRequestがtrueになる", taskOn?.criteriaRequest === true, JSON.stringify(taskOn));
     check("トグルボタンに.onが付く", await btnA.evaluate((el) => el.classList.contains("on")));
     check("aria-pressed=trueになる", await btnA.getAttribute("aria-pressed") === "true");
-    check("行内にAI設定待ちバッジが出る", (await page.locator(".wbs-criteria-badge").allTextContents())
-      .some((t) => t.includes("AI設定待ち")));
+    await openTaskMenu("task-A");
+    check("メニュー内のAI依頼ボタンがON表示になる", await btnA.isVisible()
+      && await btnA.evaluate((el) => el.classList.contains("on"))
+      && await btnA.getAttribute("aria-pressed") === "true");
     await page.reload();
     await page.waitForTimeout(500);
     const btnAReload = page.locator('[data-action="toggle-criteria-request"][data-id="task-A"]');
     check("再読込後もONが保持される(.on)", await btnAReload.evaluate((el) => el.classList.contains("on")));
     check("再読込後もstate上criteriaRequest=true", (await stateNow()).tasks.find((t) => t.id === "task-A")?.criteriaRequest === true);
+    await openTaskMenu("task-A");
     await btnAReload.click();  // バッチの自動解除と同じUIパスで、再タップでOFFに戻せることも確認
     await page.waitForTimeout(250);
     check("再タップでOFFに戻る", (await stateNow()).tasks.find((t) => t.id === "task-A")?.criteriaRequest === false);
@@ -121,6 +132,7 @@ function check(name, cond, extra = "") {
     console.log("[4] 完了チェック・進捗入力と双方向に独立して動作する(互いの値を書き換えない)");
     await seed({ tasks: [task("task-B", "独立性確認Task", { progressNum: 3, progressDen: 10, status: "doing" })], projects: [testProject()] });
     const btnB = page.locator('[data-action="toggle-criteria-request"][data-id="task-B"]');
+    await openTaskMenu("task-B");
     await btnB.click();
     await page.waitForTimeout(200);
     let taskB = (await stateNow()).tasks.find((t) => t.id === "task-B");
@@ -129,6 +141,7 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(200);
     taskB = (await stateNow()).tasks.find((t) => t.id === "task-B");
     check("完了チェック操作後もcriteriaRequest=trueを維持", taskB?.criteriaRequest === true && taskB?.status === "completed", JSON.stringify(taskB));
+    await enableEditMode();
     await page.fill('[data-wbs-progress="den"][data-id="task-B"]', "20");
     await page.locator('[data-wbs-progress="den"][data-id="task-B"]').dispatchEvent("change");
     await page.waitForTimeout(200);

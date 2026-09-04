@@ -161,28 +161,25 @@ const HEALTH_FIXTURE = {
         { id: "step-v318", projectId: "project-v318", parentTaskId: "task-v318", title: "担当ボタン確認", status: "todo", kind: "normal", owner: "k", deleted: false, updatedAt: `${TODAY}T09:00:00` }
       ]
     });
-    await page.waitForSelector(".wbs-actions .btn");
-    const wbsButtons = await page.locator(".wbs-actions .btn").evaluateAll((elements) => elements.map((element) => {
+    await page.locator('[data-wbs-row-id="step-v318"] .wbs-row-menu-toggle').click();
+    await page.waitForSelector('[data-wbs-row-id="step-v318"] .wbs-row-menu-panel:not([hidden])');
+    const wbsButtons = await page.locator('[data-wbs-row-id="step-v318"] .wbs-row-menu-panel > button').evaluateAll((elements) => elements.map((element) => {
       const box = element.getBoundingClientRect();
       return { width: box.width, height: box.height, left: box.left, right: box.right };
     }));
     check("WBS行内ボタンは全て高さ44px以上で画面内", wbsButtons.length >= 4
       && wbsButtons.every((box) => box.height >= 44 && box.left >= 0 && box.right <= 391), JSON.stringify(wbsButtons));
-    const wbsInlineTargets = await page.locator(".checkbox-button, .wbs-criteria-btn, .wbs-caret, .plan-owner-badge").evaluateAll((elements) => elements.map((element) => {
+    const wbsInlineTargets = await page.locator(".checkbox-button, .wbs-criteria-btn, .wbs-caret, .plan-owner-badge, .wbs-row-menu-toggle").evaluateAll((elements) => elements.map((element) => {
       const box = element.getBoundingClientRect();
-      const pseudo = getComputedStyle(element, "::before");
-      return { className: element.className, elementWidth: box.width,
-        width: parseFloat(pseudo.width), height: parseFloat(pseudo.height),
-        left: parseFloat(pseudo.left), right: parseFloat(pseudo.right) };
+      return { className: element.className, width: box.width, height: box.height, left: box.left, right: box.right };
     }));
-    check("WBSの完了・条件・キャレット・担当ボタンは縦44pxかつ横拡張4px以内", ["checkbox-button", "wbs-criteria-btn", "wbs-caret", "plan-owner-badge"].every((name) =>
-      wbsInlineTargets.some((target) => target.className.includes(name) && target.height >= 44
-        && target.width <= target.elementWidth + 8.1 && target.left >= -4 && target.right >= -4)), JSON.stringify(wbsInlineTargets));
+    check("WBSの完了・条件・キャレット・担当・メニューボタンは実体が44px以上", ["checkbox-button", "wbs-criteria-btn", "wbs-caret", "plan-owner-badge", "wbs-row-menu-toggle"].every((name) =>
+      wbsInlineTargets.some((target) => target.className.includes(name) && target.height >= 44 && target.width >= 44)), JSON.stringify(wbsInlineTargets));
     const taskCaret = page.locator('.wbs-caret[data-id="task-v318"]');
     await taskCaret.evaluate((caret) => caret.closest(".wbs-task-row").scrollIntoView({ block: "center" }));
     const wbsHitTargets = await taskCaret.evaluate((caret) => {
       const row = caret.closest(".wbs-task-row");
-      const buttons = [caret, row.querySelector(".checkbox-button"), row.querySelector(".wbs-criteria-btn")];
+      const buttons = [caret, row.querySelector(".checkbox-button"), row.querySelector(".wbs-row-menu-toggle")];
       const boxes = buttons.map((button) => button.getBoundingClientRect());
       const hitButton = (x, y) => document.elementFromPoint(x, y)?.closest("button");
       const centers = buttons.map((button, index) => {
@@ -199,7 +196,7 @@ const HEALTH_FIXTURE = {
       });
       return { centers, gaps };
     });
-    check("WBS隣接ボタンのgap中央は同じ行に属し、各中心は自ボタンへ到達",
+    check("WBS主操作3ボタンの各中心は自ボタンへ到達し、間隔は同じ行内",
       wbsHitTargets.centers.length === 3 && wbsHitTargets.centers.every(Boolean)
       && wbsHitTargets.gaps.length === 2 && wbsHitTargets.gaps.every((gap) => gap.width >= 0 && gap.hitInRow),
       JSON.stringify(wbsHitTargets));

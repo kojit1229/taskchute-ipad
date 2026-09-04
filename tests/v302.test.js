@@ -297,30 +297,31 @@ async function verifyCompactAndPlanProtection(page) {
   await seed(page, { projects: [normal], tasks: [detailed, child], blocks: [block("b-f", detailed.id)] });
   const row = page.locator('[data-wbs-row-id="t-f"] > .wbs-task-row');
   const beforeHeight = await row.evaluate((element) => element.getBoundingClientRect().height);
-  check("F OFFは進捗・アクション・実績を表示", await row.locator(".wbs-progress-row").isVisible()
-    && await row.locator(".wbs-actions").isVisible() && await row.locator(".wbs-task-stats").isVisible());
+  check("F OFFは進捗・実績と行メニュー導線を表示", await row.locator(".wbs-task-meta").isVisible()
+    && (await row.locator(".wbs-task-meta").textContent()).includes("進捗")
+    && (await row.locator(".wbs-task-meta").textContent()).includes("実績") && await row.locator(".wbs-row-menu-toggle").isVisible());
   await installWriteSpy(page);
   await page.locator('[data-action="toggle-wbs-compact"]').click();
   await waitSetting(page, { wbsCompactMode: true });
   const compactMetrics = await row.evaluate((element) => ({
     compact: element.classList.contains("is-compact"),
     height: element.getBoundingClientRect().height,
-    progress: getComputedStyle(element.querySelector(".wbs-progress-row")).display,
-    actions: getComputedStyle(element.querySelector(".wbs-actions")).display,
-    stats: getComputedStyle(element.querySelector(".wbs-task-stats")).display,
-    criteria: getComputedStyle(element.querySelector(".wbs-criteria-btn")).display,
-    details: [...element.querySelectorAll(".wbs-compact-detail")].every((item) => getComputedStyle(item).display === "none"),
-    status: getComputedStyle(element.querySelector(".wbs-status-badge")).display,
-    due: getComputedStyle(element.querySelector(".wbs-due")).display,
-    overdue: element.querySelector(".wbs-due")?.classList.contains("wbs-overdue")
+    layout: ((style) => ({ minHeight: style.minHeight, paddingBlock: `${style.paddingTop}/${style.paddingBottom}`,
+      borderBlock: `${style.borderTopWidth}/${style.borderBottomWidth}`, boxSizing: style.boxSizing }))(getComputedStyle(element)),
+    childHeights: [...element.children].filter((child) => child.getClientRects().length)
+      .map((child) => `${child.className}:${child.getBoundingClientRect().height}`),
+    meta: element.querySelector(".wbs-task-meta").getClientRects().length,
+    menu: element.querySelector(".wbs-row-menu-toggle").getClientRects().length,
+    today: element.querySelector(".wbs-today-btn").getClientRects().length,
+    criteria: element.querySelector(".wbs-criteria-btn").getClientRects().length,
+    due: element.querySelector(".wbs-due")?.textContent || ""
   }));
-  check("F ONは通常Taskの進捗/数値入力/アクション/実績/補助情報を非表示",
-    compactMetrics.compact && compactMetrics.progress === "none" && compactMetrics.actions === "none"
-      && compactMetrics.stats === "none" && compactMetrics.criteria === "none" && compactMetrics.details,
+  check("F ONは通常Taskのmeta/副操作/今日へを非表示",
+    compactMetrics.compact && compactMetrics.meta === 0 && compactMetrics.menu === 0
+      && compactMetrics.today === 0 && compactMetrics.criteria === 0,
     JSON.stringify(compactMetrics));
-  check("F ONでもタイトル+status+超過期限+caret+完了checkboxを1行に維持",
-    compactMetrics.status !== "none" && compactMetrics.due !== "none" && compactMetrics.overdue
-      && await row.locator(".wbs-task-title").isVisible()
+  check("F ONでもタイトル+caret+完了checkboxを1行に維持",
+    compactMetrics.due.includes("超過") && await row.locator(".wbs-task-title").isVisible()
       && await row.locator(".wbs-caret").isVisible()
       && await row.locator(".checkbox-button").isVisible()
       && compactMetrics.height < beforeHeight,
@@ -334,8 +335,8 @@ async function verifyCompactAndPlanProtection(page) {
   await openViewMenu(page);
   await page.locator('[data-action="toggle-wbs-compact"]').click();
   await waitSetting(page, { wbsCompactMode: false });
-  check("F OFFで通常表示を復元", await row.locator(".wbs-progress-row").isVisible()
-    && await row.locator(".wbs-actions").isVisible() && !await row.evaluate((element) => element.classList.contains("is-compact")));
+  check("F OFFで通常表示を復元", await row.locator(".wbs-task-meta").isVisible()
+    && await row.locator(".wbs-row-menu-toggle").isVisible() && !await row.evaluate((element) => element.classList.contains("is-compact")));
 
   const planProject = project("p-plan", "12WY案件", { twelveWeekStartDate: "2026-08-15" });
   const parent = task("t-plan-parent", planProject.id, "実行計画親", { planTarget: true });
@@ -349,12 +350,16 @@ async function verifyCompactAndPlanProtection(page) {
   });
   const planRow = page.locator('[data-wbs-row-id="t-plan-a"] > .wbs-task-row');
   check("planParentFor真の行にはis-compactを付けない", !await planRow.evaluate((element) => element.classList.contains("is-compact")));
-  check("12WY担当badge・上下移動・下に追加・進捗・通常actionを常時表示",
+  if (await page.locator(".wbs-view-menu").evaluate((element) => element.open)) {
+    await page.locator(".wbs-view-menu > summary").click();
+  }
+  await planRow.locator(".wbs-row-menu-toggle").click();
+  check("12WY担当badge・上下移動・下に追加をメニューから操作可能で、進捗も表示",
     await planRow.locator('[data-action="toggle-plan-owner"]').isVisible()
       && await planRow.locator('[data-action="move-plan-step"]').count() === 2
       && await planRow.locator('[data-action="add-plan-step-below"]').isVisible()
-      && await planRow.locator(".wbs-progress-row").isVisible()
-      && await planRow.locator(".wbs-actions").isVisible());
+      && await planRow.locator(".wbs-task-meta").isVisible()
+      && await planRow.locator(".wbs-row-menu-panel").isVisible());
 }
 
 async function verifyExistingFiltersAndSearch(page) {

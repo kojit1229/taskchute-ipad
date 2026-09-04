@@ -826,8 +826,6 @@ h3 {
   opacity: 1;
 }
 
-.wbs-criteria-badge { margin-left: 2px; }
-
 /* v107: block-rowのグリッド列構成(3列)を崩さないための1列目wrapper(従来のcheckbox-button
    単体と同じ扱い)。v146: 🏁(タスク完了)はBlock編集モーダルへ移設したため、現在は✓のみ内包する。 */
 .block-checks {
@@ -2654,7 +2652,7 @@ h3 {
 .wbs-progress-agg .progress { flex: 1; }
 
 /* v302: 通常Taskだけを1行へ圧縮する。12WY実行計画Stepにはis-compactを付けない。 */
-.wbs-task-row.is-compact { padding-top: 4px !important; gap: 6px; }
+.wbs-task-row.is-compact { padding-block: 0 !important; gap: 6px; }
 .wbs-task-row.is-compact .title-line { width: 100%; gap: 6px; flex-wrap: nowrap; overflow: hidden; }
 .wbs-task-row.is-compact .wbs-task-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wbs-task-row.is-compact .wbs-status-badge,
@@ -2710,6 +2708,31 @@ h3 {
   .wbs-view-options { position: static; width: 100%; padding: 4px 0 0; border: 0; }
   .wbs-add-panel { width: calc(200% + 8px); } .wbs-add-panel .form-strip { grid-template-columns: 1fr; }
 }
+
+/* v329: WBS A-1b。主情報を固定gridへ、副操作を行直下の非永続メニューへ集約。 */
+.wbs-project-head { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto 44px; align-items: center; gap: 6px; min-height: 48px; }
+.wbs-project-copy, .wbs-task-copy { min-width: 0; } .wbs-project-copy strong, .wbs-task-title { display: block; overflow-wrap: anywhere; font-size: 14px; }
+.wbs-project-meta, .wbs-task-meta { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 3px; color: var(--tower-text); font-size: 11px; line-height: 1.35; opacity: .7; }
+.wbs-project-meta span { color: var(--tower-cyan); } .wbs-task-meta span + span::before { content: "・ "; color: var(--tower-text); }
+.wbs-task-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto 44px; align-items: center; gap: 6px; min-height: 48px; padding: 2px 0; border-top: 1px solid var(--tower-line); }
+.wbs-task-check { display: flex; align-items: center; gap: 2px; } .wbs-branch { color: var(--tower-text); font-size: 11px; opacity: .7; }
+.wbs-task-row .checkbox-button, .wbs-task-row .wbs-caret, .wbs-project-head > .wbs-caret { width: 44px; min-width: 44px; height: 44px; padding: 0; }
+.wbs-task-row .checkbox-button::before, .wbs-task-row .wbs-caret::before, .wbs-project-head > .wbs-caret::before, .wbs-row-menu-panel .wbs-criteria-btn::before, .wbs-row-menu-panel .plan-owner-badge::before { content: none; }
+.wbs-row-menu-toggle { width: 44px; height: 44px; padding: 0; border: 1px solid var(--tower-line); color: var(--tower-text); background: transparent; font-size: 20px; cursor: pointer; }
+.wbs-project-head > .wbs-row-menu-toggle { grid-column: 4; }
+.wbs-row-menu-toggle[aria-expanded="true"] { border-color: var(--tower-amber); color: var(--tower-amber); }
+.wbs-row-menu-panel { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 4px 0 6px 50px; border-top: 1px solid var(--tower-line); }
+.wbs-row-menu-panel[hidden] { display: none; } .wbs-row-menu-panel > button { min-width: 44px; min-height: 44px; font-size: 12px; }
+.wbs-row-menu-panel .wbs-criteria-btn, .wbs-row-menu-panel .plan-owner-badge { width: auto; height: 44px; padding: 4px 10px; }
+.wbs-tower button { min-height: 44px; }
+.wbs-today-btn { min-width: 60px; border: 1px solid #6b5322; color: var(--tower-amber); background: transparent; } .wbs-task-done { min-width: 60px; color: var(--tower-text); font-size: 11px; text-align: center; opacity: .7; }
+.wbs-task-row.is-completed .wbs-task-title { color: var(--tower-text); text-decoration: line-through; opacity: .7; }
+.wbs-tower .is-suspended { opacity: 1; } .wbs-task-row.is-suspended .wbs-task-title { text-decoration: line-through; text-decoration-color: rgba(142, 142, 147, .6); }
+.wbs-task-row .wbs-inline, .wbs-task-row .wbs-progress-row { grid-column: 1 / -1; margin-top: 5px; } .wbs-task-row .wbs-inline-input { min-height: 44px; } .wbs-task-row.is-compact { grid-template-columns: auto minmax(0, 1fr); }
+.wbs-tower .wbs-task-row.is-compact { min-height: 44px; padding-block: 0; }
+.wbs-task-row.is-compact .wbs-task-meta, .wbs-task-row.is-compact .wbs-inline, .wbs-task-row.is-compact .wbs-progress-row, .wbs-task-row.is-compact .wbs-today-btn, .wbs-task-row.is-compact .wbs-task-done, .wbs-task-row.is-compact .wbs-row-menu-toggle { display: none; }
+@media (min-width: 1280px) { .wbs-header { flex-wrap: wrap; } .wbs-toolbar { flex-basis: 100%; } .wbs-view-menu > .wbs-view-popover { display: grid !important; grid-template-columns: minmax(0, 1fr); width: 100%; } .wbs-view-options { min-width: 360px; } }
+@media (max-width: 480px) { .wbs-project-head { grid-template-columns: 44px minmax(0, 1fr) auto 44px; } .twy-commit-open { padding: 4px 6px; font-size: 11px; } .wbs-row-menu-panel { padding-left: 0; } }
 
 /* v260: 12WY WBS成果トラック行。v328でTOWERトークンへ統一。 */
 .twy-row { margin-top: 8px; padding: 8px; border: 1px solid var(--tower-line, var(--line)); border-radius: 8px; background: var(--tower-bg, var(--panel-soft)); }

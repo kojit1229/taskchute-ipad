@@ -610,6 +610,18 @@ registerActions({
   "toggle-project-collapse": ({ id }) => toggleProjectCollapse(id),
   "toggle-task-collapse": ({ id }) => toggleTaskCollapse(id),
   "wbs-view-menu-toggle": () => {},  // v328: detailsのネイティブ開閉に任せ、stateへ書き込まない
+  "wbs-row-menu-toggle": ({ target }) => {  // v329: DOM内だけで排他的に開閉する
+    const row = target.closest(".wbs-project-head, .wbs-task-row");
+    const panel = row?.querySelector(":scope > .wbs-row-menu-panel");
+    if (!panel) return;
+    const opening = panel.hidden;
+    document.querySelectorAll(".wbs-row-menu-panel:not([hidden])").forEach((openPanel) => {
+      openPanel.hidden = true;
+      openPanel.parentElement?.querySelector(":scope > .wbs-row-menu-toggle")?.setAttribute("aria-expanded", "false");
+    });
+    panel.hidden = !opening;
+    target.setAttribute("aria-expanded", String(opening));
+  },
   "wbs-search-input": () => {},  // inputイベント側で差分更新。click時は意図的no-op
   "wbs-search-jump": ({ target }) => jumpToWbsSearchResult(target.dataset.kind, target.dataset.id),
   "suspend-project": ({ id }) => suspendProject(id),
@@ -5448,30 +5460,23 @@ function renderProjectTree(project) {
   // v48: プロジェクトの数値サマリ(進捗バーだけでは規模が見えない)
   const liveTasks = allTasksOfProject.filter(isTaskCountable);
   const doneCount = liveTasks.filter((t) => t.status === "completed").length;
+  const agg = projectProgressAgg(liveTasks);
   const projDue = project.dueDate ? ` ・ 期限 ${project.dueDate.slice(5).replace("-", "/")}` : "";
   return `
     <div class="item${suspended ? " is-suspended" : ""}" data-wbs-row-id="${escapeHTML(project.id)}">
-      <div class="row">
-        <div class="title-line">
-          <button class="wbs-caret" data-action="toggle-project-collapse" data-id="${project.id}" aria-label="${collapsed ? "展開" : "折りたたむ"}">${collapsed ? "▸" : "▾"}</button>
-          <span class="badge ${project.kind === "wish" ? "purple" : "blue"}">${project.kind === "wish" ? "Wish" : "Project"}</span>
-          ${is12WY ? `<span class="badge green">12WY</span>` : ""}
-          ${suspended ? `<span class="badge gray">中断</span>` : ""}
-          <strong data-action="edit-project" data-id="${project.id}" style="cursor:pointer">${escapeHTML(project.title)}</strong>
-          ${project.category ? `<span class="cat-chip" style="background:${getCategoryColor(project.category)}1f; color:${getCategoryColor(project.category)}; border:1px solid ${getCategoryColor(project.category)}66">${escapeHTML(project.category)}</span>` : ""}
-          ${is12WY ? `<button class="btn ghost twy-commit-open" data-action="twy-open-commit">今週を確定</button>` : ""}
+      <div class="wbs-project-head">
+        <button class="wbs-caret" data-action="toggle-project-collapse" data-id="${project.id}" aria-label="${collapsed ? "展開" : "折りたたむ"}">${collapsed ? "▸" : "▾"}</button>
+        <div class="wbs-project-copy"><strong data-id="${project.id}">${escapeHTML(project.title)}</strong>
+          <div class="wbs-project-meta">${project.kind === "wish" ? `<span>[Wish]</span>` : ""}${is12WY ? `<span>[12WY]</span>` : ""}${project.category ? `<span>[${escapeHTML(project.category)}]</span>` : ""} 進捗 ${agg.num}/${agg.den} ・ ${agg.pct}% ・ 完了 ${doneCount}/${liveTasks.length}${projDue}${suspended ? " ・ 中断" : ""}</div>
         </div>
-        <div class="row">
-          <button class="btn" data-action="add-task-to-project" data-id="${project.id}">+ タスク</button>
-          ${suspended
-            ? `<button class="btn" data-action="resume-project" data-id="${project.id}">再開</button>`
-            : `<button class="btn ghost" data-action="suspend-project" data-id="${project.id}">中断</button>`}
-          <button class="btn" data-action="edit-project" data-id="${project.id}">編集</button>
+        ${is12WY ? `<button class="btn ghost twy-commit-open" data-action="twy-open-commit">今週を確定</button>` : ""}
+        <button class="wbs-row-menu-toggle" data-action="wbs-row-menu-toggle" aria-expanded="false" aria-label="${escapeHTML(project.title)}の副操作">…</button>
+        <div class="wbs-row-menu-panel" hidden>
+          <button class="btn" data-action="add-task-to-project" data-id="${project.id}">＋ タスク</button>
+          <button class="btn ghost" data-action="edit-project" data-id="${project.id}">編集</button>
+          ${suspended ? `<button class="btn" data-action="resume-project" data-id="${project.id}">再開</button>` : `<button class="btn ghost" data-action="suspend-project" data-id="${project.id}">中断</button>`}
         </div>
       </div>
-      ${project.description ? `<div class="muted" style="font-size:12px">${escapeHTML(project.description)}</div>` : ""}
-      <div class="progress"><span style="width:${progress}%"></span></div>
-      <div class="muted wbs-proj-meta">${doneCount} / ${liveTasks.length} 完了${projDue}</div>
       ${renderTwyTrackBlock(project)}
       ${project.showProgress && !hideOldProgress ? renderProjectProgressAgg(liveTasks) : ""}
       ${collapsed
@@ -5499,7 +5504,7 @@ function toggleTaskCollapse(id) {
 
 function renderTaskTree(task, allTasksOfProject, depth, hideProgress = false) {
   const children = allTasksOfProject.filter((t) => t.parentTaskId === task.id).sort(siblingTaskCompare);  // v48 / v194: order優先
-  const indent = depth * 18;
+  const indent = depth * 28;
   const collapsed = Boolean(task.collapsed);  // v33: 折りたたみ
   return `
     <div style="margin-left:${indent}px" data-wbs-row-id="${escapeHTML(task.id)}">
@@ -5521,16 +5526,16 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false, 
     ? `<button class="wbs-caret" data-action="toggle-task-collapse" data-id="${task.id}" aria-label="${collapsed ? "展開" : "折りたたむ"}">${collapsed ? "▸" : "▾"}</button>`
     : `<span class="wbs-caret-spacer"></span>`;
   const suspended = isTaskSuspended(task);  // v35
-  // v47: 期限切れは赤く、今日 Block 化済みならチップで示す(押した結果が見える)
+  // v329: 期限超過はTOWERアンバーで示す。今日 Block 化済みでも主操作のラベルは固定する。
   // v117(B): 自己締切の自動前倒し(effectiveDueDate)を期限切れ判定・表示に反映。
   //          前倒しが効いている時は「期限 M/D(実 M/D)」で自己締切・実期日を併記する。
   const effDue = effectiveDueDate(task);
   const overdue = task.dueDate && effDue < todayISO() && task.status !== "completed";
   const dueLabel = effDue && effDue !== task.dueDate
-    ? `${effDue.slice(5).replace("-", "/")}(実 ${task.dueDate.slice(5).replace("-", "/")})`
-    : (task.dueDate ? task.dueDate.slice(5).replace("-", "/") : "");
+    ? `${mdFmt(effDue)}(実 ${mdFmt(task.dueDate)})`
+    : mdFmt(task.dueDate);
   const dueHTML = task.dueDate
-    ? `<span class="wbs-due ${overdue ? "wbs-overdue" : "muted"}" style="font-size:11px">期限 ${dueLabel}${overdue ? "!" : ""}</span>`
+    ? `<span class="wbs-due ${overdue ? "wbs-overdue" : ""}">期限 ${dueLabel}${overdue ? " 超過" : ""}</span>`
     : "";
   const scheduledToday = state.blocks.some((b) => !b.deleted && b.taskId === task.id && b.date === todayISO());
   // v48: 子タスクの進捗(2/5)と、この Task に費やした実績(回数・累計時間)
@@ -5555,7 +5560,7 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false, 
   const progressNum = Number.isFinite(task.progressNum) ? task.progressNum : 0;
   const progressDen = Number.isFinite(task.progressDen) ? task.progressDen : 10;
   const progressPct = taskProgressPct(task);
-  const progressHTML = `
+  const progressHTML = editMode ? `
     <div class="wbs-progress-row">
       <input class="wbs-inline-input wbs-progress-input" type="number" inputmode="numeric" min="0" step="1"
         data-wbs-progress="num" data-id="${task.id}" value="${progressNum}" aria-label="進捗 分子">
@@ -5564,7 +5569,7 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false, 
         data-wbs-progress="den" data-id="${task.id}" value="${progressDen}" aria-label="進捗 分母">
       <div class="progress wbs-progress-bar"><span style="width:${progressPct}%"></span></div>
       <span class="muted" style="font-size:11px">${progressPct}%</span>
-    </div>`;
+    </div>` : "";
   const planSiblings = planParent ? planStepVisibleSiblings(task) : [];  // v195: 活性判定も可視兄弟基準
   const planIndex = planSiblings.findIndex((t) => t.id === task.id);
   const aiStatus = aiStepStatusLabel(task.aiStatus);
@@ -5576,38 +5581,19 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false, 
         <button class="btn ghost plan-move" data-action="move-plan-step" data-id="${task.id}" data-direction="-1" aria-label="1つ上へ" ${planIndex <= 0 ? "disabled" : ""}>↑</button>
         <button class="btn ghost plan-move" data-action="move-plan-step" data-id="${task.id}" data-direction="1" aria-label="1つ下へ" ${planIndex < 0 || planIndex >= planSiblings.length - 1 ? "disabled" : ""}>↓</button>
         <button class="btn ghost" data-action="add-plan-step-below" data-id="${task.id}">＋ 下に追加</button>` : "";
+  const metaHTML = `<div class="wbs-task-meta"><span>進捗 ${progressNum}/${progressDen}</span>${dueHTML}${stats.count ? `<span>実績 ${stats.count}回 ${fmtMinShort(stats.minutes) || "0m"}</span>` : `<span>実績 0回 0m</span>`}</div>`;
   return `
-    <div class="row wbs-task-row${compact ? " is-compact" : ""}${suspended ? " is-suspended" : ""}" style="border-top:1px solid var(--line-soft); padding-top:8px">
-      <div class="title-line">
-        ${depth > 0 ? `<span class="muted" style="font-size:11px">${"└".padStart(depth, "　")}</span>` : ""}
-        ${caret}
-        <button class="checkbox-button ${task.status === "completed" ? "done" : ""}" data-action="toggle-task" data-id="${task.id}">✓</button>
-        <button class="wbs-criteria-btn${task.criteriaRequest ? " on" : ""}" data-action="toggle-criteria-request" data-id="${task.id}"
-          aria-pressed="${task.criteriaRequest ? "true" : "false"}"
-          aria-label="${task.criteriaRequest ? "AI設定依頼中(タップで取消)" : "翌朝のAI設定を依頼"}"
-          title="チェックすると翌朝の日次バッチが完了条件/スモールステップを自動設定(またはサブタスク生成)します。処理後は自動でOFFに戻ります">🤖</button>
-        <span class="wbs-task-title" data-action="edit-task" data-id="${task.id}" style="cursor:pointer">${escapeHTML(task.title)}</span>
-        ${planMetaHTML}
-        ${editMode && !compact ? inlineEdit : `
-        <span class="badge wbs-status-badge ${suspended ? "gray" : ""}">${taskStatusLabel(task.status)}</span>
-        ${kids.length ? `<span class="badge wbs-compact-detail">子 ${kidsDone}/${kids.length}</span>` : ""}
-        ${scheduledToday ? `<span class="badge green wbs-compact-detail">今日✓</span>` : ""}
-        ${task.category ? `<span class="cat-chip wbs-compact-detail" style="background:${getCategoryColor(task.category)}1f; color:${getCategoryColor(task.category)}; border:1px solid ${getCategoryColor(task.category)}66">${escapeHTML(task.category)}</span>` : ""}
-        <span class="wbs-compact-detail">${leverageTypeMarkHTML(task.leverageType)}</span>
-        ${task.aiWork ? `<span class="ai-work-flag wbs-compact-detail" title="AIに作業依頼中${task.aiWorkBrief ? ": " + escapeHTML(task.aiWorkBrief) : ""}">🤝</span>` : ""}
-        ${task.criteriaRequest ? `<span class="badge blue wbs-criteria-badge wbs-compact-detail">🤖 AI設定待ち</span>` : ""}
-        ${dueHTML}
-        ${stats.count ? `<span class="muted wbs-task-stats" style="font-size:11px">⏱ ${stats.count}回${stats.minutes ? `・${fmtMinShort(stats.minutes)}` : ""}</span>` : ""}`}
-      </div>
-      ${hideProgress ? "" : progressHTML}
-      <div class="row wbs-actions">
-        ${planActionsHTML}
-        <button class="btn" data-action="task-today" data-id="${task.id}">${scheduledToday ? "＋もう一度" : "今日へ"}</button>
-        ${canAddSub ? `<button class="btn ghost" data-action="add-subtask" data-parent-task="${task.id}">+ サブ</button>` : ""}
-        ${suspended
-          ? `<button class="btn" data-action="resume-task" data-id="${task.id}">再開</button>`
-          : `<button class="btn ghost" data-action="suspend-task" data-id="${task.id}">中断</button>`}
+    <div class="row wbs-task-row${compact ? " is-compact" : ""}${suspended ? " is-suspended" : ""}${task.status === "completed" ? " is-completed" : ""}">
+      <div class="wbs-task-check">${depth > 0 ? `<span class="wbs-branch">└</span>` : ""}${caret}<button class="checkbox-button ${task.status === "completed" ? "done" : ""}" data-action="toggle-task" data-id="${task.id}">✓</button></div>
+      <div class="wbs-task-copy"><span class="wbs-task-title" data-id="${task.id}">${escapeHTML(task.title)}</span>${metaHTML}${editMode && !compact ? `${inlineEdit}${progressHTML}` : ""}</div>
+      ${task.status === "completed" ? `<span class="wbs-task-done">完了</span>` : `<button class="btn wbs-today-btn" data-action="task-today" data-id="${task.id}">今日へ</button>`}
+      <button class="wbs-row-menu-toggle" data-action="wbs-row-menu-toggle" aria-expanded="false" aria-label="${escapeHTML(task.title)}の副操作">…</button>
+      <div class="wbs-row-menu-panel" hidden>
+        ${planMetaHTML}${task.aiWork ? `<span class="ai-work-flag" title="AIに作業依頼中">🤝</span>` : ""}${planActionsHTML}
+        ${canAddSub ? `<button class="btn ghost" data-action="add-subtask" data-parent-task="${task.id}">＋ サブ</button>` : ""}
+        ${suspended ? `<button class="btn" data-action="resume-task" data-id="${task.id}">再開</button>` : `<button class="btn ghost" data-action="suspend-task" data-id="${task.id}">中断</button>`}
         <button class="btn ghost" data-action="edit-task" data-id="${task.id}">編集</button>
+        <button class="wbs-criteria-btn${task.criteriaRequest ? " on" : ""}" data-action="toggle-criteria-request" data-id="${task.id}" aria-pressed="${task.criteriaRequest ? "true" : "false"}" aria-label="${task.criteriaRequest ? "AI設定依頼中(タップで取消)" : "完了条件をAIに依頼"}">🤖 完了条件</button>
       </div>
     </div>
   `;
