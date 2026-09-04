@@ -121,6 +121,8 @@ workspace CLAUDE.md NEVER 1に従い、1コミットの**実行コード差分**
 - **CI(GitHub Actions)では4シャードの和集合で必ず全量**(`npm test -- --shard=N/4`)。
   これが唯一の完全な安全網。push後は必ずGitHub ActionsのCI成功を確認すること
   (test:coreは範囲を絞ったローカル既定であり、全量の代替ではない)。
+- personal-dataのレイアウト変更時・health/fund/insights系改修時は`npm run gate:data-contract`
+  を実行する(personal-data内パスの契約表とloop出力先/実ファイル/consumerソースを突合。CIには載せない)。
 - `npm run test:quick -- vNN` でも同じ絞り込みができる(`--` の後にスイート名を渡す)。
 - `npm run test:fast`はブラウザ不要の高速Nodeテスト、`npm run test:smoke`は重要導線、
   `npm run test:e2e`は全ブラウザE2Eを実行する。fast-nodeとdomain-e2eの和集合は

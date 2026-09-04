@@ -15,7 +15,8 @@
     "test:e2e": "node tests/run-all.js --group=domain-e2e",
     "test:smoke": "node tests/run-all.js --group=smoke",
     "test:quick": "node tests/run-all.js",
-    "test:core": "node tests/run-core.js"
+    "test:core": "node tests/run-core.js",
+    "gate:data-contract": "node scripts/data-contract-gate.js"
   },
   "devDependencies": {
     "acorn": "^8.18.0",
