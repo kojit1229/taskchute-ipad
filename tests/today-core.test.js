@@ -3,7 +3,7 @@
 // 日時はISO文字列を組み立て、文字列をnew Dateへ渡さない。
 const fs = require("fs");
 const path = require("path");
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY, dispatchRegisteredAction } = require("./helpers");
 
 const ROOT = path.join(__dirname, "..");
 const PORT = randomPort();
@@ -1257,6 +1257,77 @@ function check(name, cond, extra = "") {
     const nfTextAfterBreak = await panelText(".tower-nowhud");
     check("自動休憩遷移後もNOW LANDINGに実行中Blockが残り続ける",
       (nfTextAfterBreak || "").includes("C1-POMO-満了タスク"), nfTextAfterBreak);
+    // ============================================================
+    // [74] 1-H1(修正フェーズ 単位8): taskchuteBlocks/computeFreeGaps の migratedTo 除外
+    //   K16「送済Blockは今日の占有として残さない」+2026-09-05 K回答「computeFreeGapsでも外す」
+    // ============================================================
+    console.log("[74] 1-H1: 送済(migratedTo付き)Blockが着手率の分母と空き時間占有から除外される");
+    const H1_PROJECT = {
+      id: "h1-proj", kind: "normal", title: "1-H1テスト案件", category: "", status: "active",
+      description: "", dueDate: "", twelveWeekStartDate: "", createdAt: at("00:00"),
+      updatedAt: at("00:00"), deleted: false, collapsed: false
+    };
+    const h1Task = (id, title) => ({
+      id, projectId: "h1-proj", parentTaskId: "", title, category: "", status: "todo", dueDate: "",
+      description: "", createdAt: at("00:00"), updatedAt: at("00:00"), deleted: false
+    });
+
+    // --- (a)(b) taskchuteStartRate(ジャーナルタブ「着手率」)の分母から送済Blockが外れる ---
+    await page.clock.setFixedTime(fixedTime(12, 0, 0));
+    await seedB5({
+      view: "journal",
+      projects: [H1_PROJECT],
+      tasks: [h1Task("h1-t-open", "H1-未着手"), h1Task("h1-t-done", "H1-完了済"), h1Task("h1-t-sent", "H1-送済")],
+      blocks: [
+        block("h1-open", { title: "H1-未着手", taskId: "h1-t-open", plannedStartAt: at("09:00"), plannedEndAt: at("09:30") }),
+        block("h1-done", {
+          title: "H1-完了済", taskId: "h1-t-done", completed: true,
+          plannedStartAt: at("10:00"), plannedEndAt: at("10:30"), actualStartAt: at("10:00"), actualEndAt: at("10:30")
+        }),
+        // 修正前は分母に含まれ着手率を歪める(1-H1指摘: DRIFTで送るほど着手率が下がる逆インセンティブ)
+        block("h1-sent", {
+          title: "H1-送済", taskId: "h1-t-sent",
+          plannedStartAt: at("11:00"), plannedEndAt: at("11:30"), migratedTo: "dummy-sent-target"
+        })
+      ]
+    });
+    await waitView("journal");
+    const daysummaryText = await panelText(".journal-daysummary");
+    // 分母 = open+done の2件(sentを除く)。done = h1-done の1件 → 50%。
+    // 修正前(sent込み3件・done1件)なら33%になり、この期待値と食い違う。
+    check("送済Blockが taskchuteStartRate の分母から除外される(2件中1件着手済=50%)",
+      (daysummaryText || "").includes("着手率 50%"), daysummaryText);
+    check("誤って送済Block込みの旧分母(3件・33%)が出ていない",
+      !(daysummaryText || "").includes("着手率 33%"), daysummaryText);
+
+    // --- (c) computeFreeGaps: 送済Blockは占有から外れ、その時間帯へAI再配置が候補を置ける ---
+    await page.clock.setFixedTime(fixedTime(6, 0, 0));
+    await seedB5({
+      view: "tasks",
+      projects: [H1_PROJECT],
+      tasks: [h1Task("h1-t-cand", "H1-配置候補")],
+      blocks: [
+        // 05:00〜10:00・10:30〜23:00 を固定占有で埋め、10:00〜10:30の30分だけを空きにする
+        block("h1-fixed-a", { title: "H1-固定A", plannedStartAt: at("05:00"), plannedEndAt: at("10:00") }),
+        block("h1-fixed-b", { title: "H1-固定B", plannedStartAt: at("10:30"), plannedEndAt: at("23:00") }),
+        // 唯一の空き枠(10:00〜10:30)に送済Block(migratedTo付き)が居座っている状態を再現。
+        // 修正前はこれも占有として残るため配置候補が入れず「空き時間不足」でskipされる。
+        block("h1-fixed-sent", {
+          title: "H1-送済占有", plannedStartAt: at("10:00"), plannedEndAt: at("10:30"), migratedTo: "dummy-sent-target-2"
+        }),
+        // 配置候補(プライベート窓8-21内・estimateMin既定30分・taskchuteBlocks対象)
+        block("h1-cand", { title: "H1-配置候補", taskId: "h1-t-cand" })
+      ]
+    });
+    await page.click('[data-action="nav"][data-view="timeline"]');
+    await page.waitForTimeout(150);
+    await dispatchRegisteredAction(page, "ai-schedule");
+    await page.waitForTimeout(500);
+    const h1DraftTitles = await page.locator(".draft-block-title").allTextContents();
+    const h1DraftTimeTexts = await page.locator(".draft-block-time").allTextContents();
+    check("送済Blockに占有されていた10:00〜10:30がcomputeFreeGapsで空きとして扱われ、配置候補がそこへ入る",
+      h1DraftTitles.some((t) => t.includes("H1-配置候補")) && h1DraftTimeTexts.some((t) => t.includes("10:00〜10:30")),
+      JSON.stringify({ h1DraftTitles, h1DraftTimeTexts }));
   } finally {
     await browser.close();
     server.close();

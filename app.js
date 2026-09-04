@@ -3193,6 +3193,7 @@ function taskchuteBlocks(blocks) {
     if (b.category === "ルーティン") return false;
     if (b.recurrenceGroupId) return false;
     if (!b.taskId) return false;
+    if (b.migratedTo) return false;  // 1-H1: 翌日へ送済のBlockは今日の占有として残さない(K16)
     if (isStaleBlock(b)) return false;  // v48: 中断/中止/削除タスクの未完了分は分母から外す
     const task = state.tasks.find((t) => t.id === b.taskId);
     if (!task || !task.projectId) return false;
@@ -3786,6 +3787,7 @@ function computeFreeGaps(date, dayStartMin = 5 * 60, dayEndMin = 23 * 60, exclud
   if (dayEndMin <= dayStartMin) return [];
   const occupied = blocksForDate(date)
     .filter((b) => !excludeBlockIds || !excludeBlockIds.has(b.id))
+    .filter((b) => !b.migratedTo)  // 1-H1+K16(2026-09-05回答): 送済Blockは空き時間計算でも占有から外す
     .map((b) => blockOccupiedRange(b, dayStartMin, dayEndMin))
     .filter(Boolean)
     .sort((a, b) => a[0] - b[0]);

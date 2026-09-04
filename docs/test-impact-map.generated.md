@@ -33,7 +33,7 @@
 | timeline-layout-core.test.js | node | full | planning-execution | 25 | 0 | 0 |
 | timeline-render-core.test.js | node | full | planning-execution, ui-responsive | 41 | 0 | 0 |
 | timeline-tick-wiring.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 16 | 8 | 4500 |
-| today-core.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 139 | 2 | 3600 |
+| today-core.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 142 | 4 | 4250 |
 | topband-core.test.js | node | full | sync-storage, planning-execution, journal-health | 49 | 0 | 0 |
 | tower-core.test.js | e2e | full | sync-storage, journal-health, ui-responsive | 159 | 0 | 0 |
 | tower-model-core.test.js | node | full | legacy-crosscutting | 7 | 0 | 0 |
