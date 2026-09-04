@@ -109,7 +109,8 @@ import {
   scheduleAutoSave, scheduleAutoSync,
   clearSyncBanner, _syncBanner,
   autoSaveTimer, _autoSyncTimer,
-  getLastSyncPushAt, getLastSyncPullAt
+  getLastSyncPushAt, getLastSyncPullAt,
+  normalizeDataStamp
 } from "./src/sync/github.js";
 // v172: app.js分割・段階5-1(event dispatcherのレジストリ基盤導入)。src/ui/actions.jsは
 //   click dispatcher/submitModal/deleteFromModalへ「登録済みactionはレジストリ経由・未登録は
@@ -1917,7 +1918,10 @@ function normalizeState(value) {
   if (!("lastPushedAt" in value.settings)) value.settings.lastPushedAt = null;
   if (!("lastPulledAt" in value.settings)) value.settings.lastPulledAt = null;
   // v25: データ最終更新時刻(端末間で「新しい方が勝つ」判定に使用)
-  value.dataModifiedAt ||= "";
+  // 修正フェーズ単位18(A2-H3): 10文字(YYYY-MM-DD)の日付のみで書かれていた場合、
+  // 19文字のnowDateTime()との辞書順比較で常に「古い」と誤判定されるのを防ぐため、
+  // normalizeStateを通る経路(ローカル起動時読込・リモート全量採用)でも一律19文字へ揃える。
+  value.dataModifiedAt = normalizeDataStamp(value.dataModifiedAt || "");
   // v35: WBS で中断中の項目を表示するかどうか(既定は非表示)
   if (typeof value.settings.showSuspended !== "boolean") {
     value.settings.showSuspended = false;

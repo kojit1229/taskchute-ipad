@@ -286,7 +286,7 @@ async function runAutoSyncPush() {
   try {
     // push前ガード: remote の dataModifiedAt を確認(別端末が進めていたら中止)
     const remoteText = (await downloadGitHubStateText(personalDataFileConfig(cfg))).text;
-    const remoteT = (JSON.parse(remoteText).dataModifiedAt) || "";
+    const remoteT = normalizeDataStamp((JSON.parse(remoteText).dataModifiedAt) || "");
     if (remoteT && remoteT > (state.settings.lastPushedAt || "")) {
       // v106: コア(tasks等)が両端末で一致していれば、リモートの進み分はマージ可能
       // コレクションだけ。合流させてそのままpushする(バナー待ちでiPhone分が届かない事故対策)。
@@ -465,6 +465,18 @@ const SYNC_CORE_COMPARE_KEYS = [
 // (単位14/14bが避けようとした問題を再発させる)。そこで比較対象(fail-close)は増やさず、
 // 「確認ダイアログを出すかどうか」の判定だけLOSS_RISK_KEYSで広げる。
 const LOSS_RISK_KEYS = [...SYNC_CORE_COMPARE_KEYS, "routineChains", "weeklyReviews", "cycleReviews"];
+
+// 修正フェーズ単位18(A2-H3): 外部バッチ(loop apply.py)がdataModifiedAtに日付のみ
+// (YYYY-MM-DD、10文字)を書くケースへの防御。アプリ側nowDateTime()は19文字
+// (YYYY-MM-DDTHH:mm:ss)で全比較が辞書順文字列比較のため、10文字のままだと
+// "2026-09-04" < "2026-09-04T00:00:00" が真になり同日のアプリ書込より常に「古い」と
+// 誤判定される。10文字なら当日の最終時刻とみなして19文字へ揃える。19文字はそのまま、
+// 空・不正値(それ以外の長さ)は従来どおり素通しする(比較側で「無い」扱いのまま)。
+function normalizeDataStamp(value) {
+  const v = value || "";
+  if (v.length === 10) return `${v}T23:59:59`;
+  return v;
+}
 
 // リモート生テキストからマージ・比較用のnormalize済みコピーを作る(失敗はnullで従来動作へ)
 function normalizedRemoteCopy(text) {
@@ -1031,7 +1043,7 @@ async function runAutoSyncPull() {
     const { text, sha } = await downloadGitHubStateText(personalDataFileConfig(cfg));
     recordSyncPullSuccess();  // v134: この端末の最終pull成功時刻(localStorage、state非経由)
     const remote = JSON.parse(text);
-    const remoteT = remote.dataModifiedAt || "";
+    const remoteT = normalizeDataStamp(remote.dataModifiedAt || "");
     const localT = state.dataModifiedAt || "";
     // v106: マージ計算はnormalize済みの別コピーで行う(remoteは採用フォールバック用に生のまま)
     // v136(High-2): computeSyncMergeは分岐ごとに(適用先に応じたtieWinnerで)個別に呼ぶ
@@ -1262,7 +1274,7 @@ async function syncFromGitHubOnStartup() {
     //      fetch中にユーザーがタブを触るなどして saveState が走ると localT が進み、
     //      本来取り込むべき新しいリモートを永遠に取りこぼす問題への対策。
     const localT = _startupDataModifiedAt || "";
-    const remoteT = remote.dataModifiedAt || "";
+    const remoteT = normalizeDataStamp(remote.dataModifiedAt || "");
     // リモートが新しいときだけ採用(ISO 文字列なので辞書順比較でよい)
     // v106: どちらの分岐でもマージ可能コレクション(ジャーナル/blocks/体調/睡眠/0秒思考)は
     // 和集合で合流させる(iPhone分がPC起動pullで見えなくなる事故対策の一般化)。
@@ -1349,7 +1361,7 @@ export {
   configureGithubSync,
   saveToGitHub, runAutoSyncPush, runAutoSyncPull, loadFromGitHub, syncFromGitHubOnStartup,
   scheduleAutoSave, scheduleAutoSync, autoSyncReady,
-  computeSyncMerge, syncCoreEqual, normalizedRemoteCopy,
+  computeSyncMerge, syncCoreEqual, normalizedRemoteCopy, normalizeDataStamp,
   applySyncMergeToLocal, applySyncMergeToRemote,
   setSyncBanner, clearSyncBanner, _syncBanner,
   autoSaveTimer, _autoSyncTimer,
