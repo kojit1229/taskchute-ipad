@@ -43,19 +43,27 @@ function dedupeById(records) {
   return [...byId.values()];
 }
 
-function weeklyScore(weeklyCommitments, weekStart) {
+// v336: weeklyScore/taskWeekTriple(plan.js)が共有する「その週の採点対象item」抽出。
+// 週メタ無し・lane==="cycle"のitemが無い週は[]。committedVia==="manual"週はselectedBlockIds
+// 経由 or source==="added"のitemだけへスコープを絞る(手動確定週の採点分母をここで一本化)。
+function weeklyCommittedItems(weeklyCommitments, weekStart) {
   const records = dedupeById(weeklyCommitments);
   const meta = records.find((record) => record.recordType === "week" && record.weekStart === weekStart && !record.deleted);
-  if (!meta) return { status: "uncommitted" };
+  if (!meta) return [];
   const laneItems = records.filter((record) => record.recordType === "item" && record.weekStart === weekStart
     && !record.deleted && record.lane === "cycle");
-  if (!laneItems.length) return { status: "uncommitted" };
+  if (!laneItems.length) return [];
   const selected = new Set(Array.isArray(meta.selectedBlockIds) ? meta.selectedBlockIds : []);
-  const scope = meta.committedVia === "manual"
+  return meta.committedVia === "manual"
     ? laneItems.filter((item) => selected.has(item.blockId) || item.source === "added")
     : laneItems;
+}
+
+function weeklyScore(weeklyCommitments, weekStart) {
+  const scope = weeklyCommittedItems(weeklyCommitments, weekStart);
+  if (!scope.length) return { status: "uncommitted" };
   const active = scope.filter((item) => !item.excused);
-  if (!active.length) return { status: scope.length ? "na" : "uncommitted" };
+  if (!active.length) return { status: "na" };
   const done = active.filter((item) => item.completedAt).length;
   return { status: "scored", done, total: active.length, pct: Math.round(done / active.length * 100) };
 }
@@ -219,7 +227,7 @@ function trackDefinitionChanged(existing, kind, fields = {}) {
 
 export {
   PACE_TOLERANCE_DAYS, STALE_DAYS, dateParts, daysBetween, isProjectInCurrentCycle, numericGoalReached,
-  weeklyScore, latestMeasurement,
+  weeklyScore, weeklyCommittedItems, latestMeasurement,
   paceNumeric, paceMilestone, normalizeMilestoneProgress, milestoneProgressRatio,
   trackStatus, forwardTracksForWeek, selectTrackFooter, activeTrackForProject,
   validateTrackDraft, trackDefinitionChanged

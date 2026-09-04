@@ -460,6 +460,55 @@
       }
     },
     {
+      "file": "plan-core.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "journal-health"
+      ],
+      "assertionSignals": 62,
+      "assertionHash": "1a64a78b79d3527e",
+      "sourceHash": "52cedc69e03197f8",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "r0-twyplan.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution",
+        "journal-health"
+      ],
+      "assertionSignals": 37,
+      "assertionHash": "48f522756d9138e6",
+      "sourceHash": "95a972352f83cd3b",
+      "waits": {
+        "fixedCount": 1,
+        "numericMilliseconds": 1100,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
       "file": "recurrence-core.test.js",
       "kind": "node",
       "tier": "full",

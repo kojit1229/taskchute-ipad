@@ -8,6 +8,9 @@ import {
   daysBetween as trackDaysBetween,
   validateTrackDraft, trackDefinitionChanged, weeklyScore, selectTrackFooter
 } from "./src/core/track.js";
+// v336: 12WY週次目安(task.twyPlan)の正規化純関数。plan.jsもstate/store.js/app.jsを
+// importしない葉モジュール(track.jsと同じ契約)。
+import { normalizeTwyPlan } from "./src/core/plan.js";
 // v166: app.js分割・段階3(state store + storage/sync gateway)。stateの再代入はsetState()
 //   経由のみ(claude-review-result.md §2 Blocker-1)。store.jsは何もimportしない真の葉。
 import { state, setState } from "./src/state/store.js";
@@ -2009,7 +2012,9 @@ function normalizeState(value) {
       updatedAt: "",  // v135: 同期マージ用。既存値優先で補完(空="不明"のまま扱う。回復不能なので推測しない)
       ...rest,
       owner,
-      aiWork
+      aiWork,
+      // v336: 12WY週次目安。normalizeTwyPlan側で既定値補完+clampを行う(既存値優先・updatedAtは進めない)。
+      twyPlan: normalizeTwyPlan(rest.twyPlan)
     };
   });
   value.blocks = compactArr(value.blocks);  // A3-H1: null/非オブジェクト要素を除外
@@ -13142,6 +13147,50 @@ function saveProjectFromModal(id, fields) {
 
 // ---------- Task モーダル ----------
 
+// v336: 週セレクト(1〜12)のoption一覧。12週プラン区画の対象週(開始/終了)で共用する。
+function twyWeekOptionsHTML(selectedWeek) {
+  let html = "";
+  for (let week = 1; week <= 12; week++) {
+    html += `<option value="${week}" ${week === selectedWeek ? "selected" : ""}>W${week}</option>`;
+  }
+  return html;
+}
+
+// v336: 12WYプロジェクト配下のTaskだけ「週次目安/対象週/★要となる行動」の3項目を出す
+// (§2.0 連動設計。12週プラン区画そのものをDOMに置かない=非12WYでは何も生成しない)。
+function twyPlanSectionHTML(task) {
+  const parentProject = state.projects.find((p) => p.id === task.projectId);
+  if (!parentProject?.twelveWeekStartDate) return "";
+  const plan = normalizeTwyPlan(task.twyPlan);
+  return `
+        <div class="field twy-plan-section">
+          <label class="field-label">12週プラン</label>
+          <div class="field-row">
+            <div class="field">
+              <label class="field-label">週次目安(回)</label>
+              <input class="input" type="number" min="0" step="1" style="font-size:16px"
+                data-modal-field="twyPerWeek" data-modal-kind="number" value="${plan.perWeek}">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label class="field-label">対象週(開始)</label>
+              <select class="select" style="font-size:16px" data-modal-field="twyFromWeek">${twyWeekOptionsHTML(plan.fromWeek)}</select>
+            </div>
+            <div class="field">
+              <label class="field-label">対象週(終了)</label>
+              <select class="select" style="font-size:16px" data-modal-field="twyToWeek">${twyWeekOptionsHTML(plan.toWeek)}</select>
+            </div>
+          </div>
+          <div class="field">
+            <label class="checkbox-line">
+              <input type="checkbox" data-modal-field="twyKeystone" ${plan.keystone ? "checked" : ""}>
+              ★ 要となる行動
+            </label>
+          </div>
+        </div>`;
+}
+
 function buildTaskModal(task) {
   const status = task.status || "todo";
   const projectOptions = [
@@ -13234,6 +13283,7 @@ function buildTaskModal(task) {
           <label class="field-label">AI指示文(実行計画のステップ用)</label>
           <textarea class="textarea" data-modal-field="aiBrief" style="min-height:72px; font-size:16px" placeholder="このステップでAIにしてほしいこと">${escapeHTML(task.aiBrief || "")}</textarea>
         </div>` : ""}
+        ${twyPlanSectionHTML(task)}
         <div class="field">
           <label class="field-label">説明 / メモ</label>
           <textarea class="textarea" data-modal-field="description" style="min-height:120px">${escapeHTML(task.description || "")}</textarea>
@@ -13258,6 +13308,19 @@ function isDescendantOf(candidate, ancestorId) {
     safety++;
   }
   return false;
+}
+
+// v336: 12週プラン区画が描画されていた場合だけfieldsから正規化する。非12WYで区画が無い
+// (twyPerWeek等が未定義)ときは既存のtwyPlanをnormalizeTwyPlan経由でそのまま維持する
+// (open時に描画されなかった区画をsave時に上書き・消去しない)。
+function twyPlanFromFields(fields, existingPlan) {
+  if (fields.twyPerWeek === undefined && fields.twyFromWeek === undefined
+    && fields.twyToWeek === undefined && fields.twyKeystone === undefined) {
+    return normalizeTwyPlan(existingPlan);
+  }
+  return normalizeTwyPlan({
+    perWeek: fields.twyPerWeek, fromWeek: fields.twyFromWeek, toWeek: fields.twyToWeek, keystone: fields.twyKeystone
+  });
 }
 
 function saveTaskFromModal(id, fields) {
@@ -13292,6 +13355,7 @@ function saveTaskFromModal(id, fields) {
     // (selfDueOffは既定false=ON。data-modal-field自体を反転名にはしていない=readModalFields
     // は素直にchecked値を渡すだけの共通関数のため、ここで意味を戻す)。
     task.selfDueOff = fields.selfDueEnabled !== undefined ? !fields.selfDueEnabled : false;
+    task.twyPlan = twyPlanFromFields(fields, task.twyPlan);  // v336: 12週プラン(週次目安/対象週/keystone)
     state.tasks.push(task);
     closeModal();
     saveAndRender("Taskを追加しました");
@@ -13330,6 +13394,7 @@ function saveTaskFromModal(id, fields) {
       // v37: モーダルに nextRoutineId の入力欄はないため、undefined なら既存値を保持
       //      (以前は保存のたびに "" で消えていた)
       nextRoutineId: fields.nextRoutineId !== undefined ? fields.nextRoutineId : (t.nextRoutineId || ""),
+      twyPlan: twyPlanFromFields(fields, t.twyPlan),  // v336: 12週プラン(週次目安/対象週/keystone)
       updatedAt: changedAt
     };
   });
