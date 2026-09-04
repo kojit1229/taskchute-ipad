@@ -98,6 +98,28 @@ const FUND_FIXTURE = {
     const afterSuccessFetches = fetches;
     now += REFRESH_INTERVAL_MS - 1;
     check("再成功後も30分未満は再取得しない", !(await fund.hydrateFundData(REFRESH_INTERVAL_MS)) && fetches === afterSuccessFetches);
+
+    // 単位10(5-H1): navPointSchemaのn225/spxはnullable。null・キー欠落・正常値の3形を検証する。
+    const navSeriesWith = (overrides) => ({
+      ...FUND_FIXTURE,
+      nav: { ...FUND_FIXTURE.nav, series: [{ date: "2026-08-07", nav: 20000000, n225: 64000, spx: 7500, ...overrides }] }
+    });
+    now += REFRESH_INTERVAL_MS;
+    fetchResult = JSON.stringify(navSeriesWith({ n225: null, spx: null }));
+    check("navPoint: n225/spxがnullでもスキーマを通り採用される", await fund.hydrateFundData(REFRESH_INTERVAL_MS));
+    now += REFRESH_INTERVAL_MS;
+    fetchResult = JSON.stringify(navSeriesWith({ n225: null }));
+    check("navPoint: n225のみnullでもスキーマを通り採用される(spxは正常値)", await fund.hydrateFundData(REFRESH_INTERVAL_MS));
+    now += REFRESH_INTERVAL_MS;
+    const missingKeyFixture = navSeriesWith({});
+    delete missingKeyFixture.nav.series[0].n225;
+    fetchResult = JSON.stringify(missingKeyFixture);
+    const beforeMissingKey = fundCache.data;
+    check("navPoint: n225キー自体の欠落は失敗扱い(nullableはnull値のみ許容・キー欠落は拒否)",
+      await fund.hydrateFundData(REFRESH_INTERVAL_MS) && fundCache.data === beforeMissingKey && fundCache.fetchedAt === now);
+    now += REFRESH_INTERVAL_MS;
+    fetchResult = JSON.stringify(navSeriesWith({}));
+    check("navPoint: n225/spxが正常値でも従来どおり採用される", await fund.hydrateFundData(REFRESH_INTERVAL_MS));
   } finally {
     Date.now = realDateNow;
   }
@@ -113,6 +135,30 @@ const FUND_FIXTURE = {
   check("nullable値からNaN/undefinedを描画しない", !emptyHtml.includes("NaN") && !emptyHtml.includes("undefined"));
   fundCache.data = { ...FUND_FIXTURE, positions: [null], openOrders: ["broken"], recentTrades: [null] };
   check("防御的描画でも不正配列要素から例外を出さない", fund.renderFund().includes("保有ポジションはありません"));
+
+  // 単位10(5-H1): NAV推移チャートはn225/spxがnullの点を欠損として除外し、0やNaNとして描画しない。
+  fundCache.data = {
+    ...FUND_FIXTURE,
+    nav: {
+      ...FUND_FIXTURE.nav,
+      series: [
+        { date: "2026-08-05", nav: 19800000, n225: 63500, spx: 7400 },
+        { date: "2026-08-06", nav: 19900000, n225: null, spx: null },
+        { date: "2026-08-07", nav: 20000000, n225: 64000, spx: 7500 }
+      ]
+    }
+  };
+  const chartHtml = fund.renderFund();
+  check("欠損点を含んでもNaN/undefinedを描画しない", !chartHtml.includes("NaN") && !chartHtml.includes("undefined"));
+  check("欠損点(n225/spxがnull)は折れ線から除外され、完全な2点分のみ描画", (chartHtml.match(/<path class="fund-chart-line/g) || []).length === 3
+    && (chartHtml.match(/<circle class="fund-chart-dot/g) || []).length === 0);
+
+  fundCache.data = {
+    ...FUND_FIXTURE,
+    nav: { ...FUND_FIXTURE.nav, series: [{ date: "2026-08-07", nav: 20000000, n225: null, spx: null }] }
+  };
+  const allMissingHtml = fund.renderFund();
+  check("全点が欠損なら推移データ不足の空表示", allMissingHtml.includes("推移データが不足しています") || allMissingHtml.includes("推移データがありません"));
 
   console.log("[3] 取得中表示→再描画、読み取り専用、実DOMの4領域、導線を固定する");
   const server = startServer(PORT);

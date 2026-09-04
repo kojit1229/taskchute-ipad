@@ -17,7 +17,7 @@ const arrayOf = (validate) => (value) => Array.isArray(value) && value.every(val
 const shape = (schema) => (value) => record(value) && Object.entries(schema)
   .every(([key, validate]) => Object.prototype.hasOwnProperty.call(value, key) && validate(value[key]));
 
-const navPointSchema = shape({ date: string, nav: finite, n225: finite, spx: finite });
+const navPointSchema = shape({ date: string, nav: finite, n225: nullable(finite), spx: nullable(finite) });
 const positionSchema = shape({
   code: string, name: string, shares: finite, avgCost: finite,
   lastClose: nullable(finite), marketValue: nullable(finite), pnlPct: nullable(finite),
