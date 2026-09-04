@@ -11471,6 +11471,14 @@ function updatePomodoroTick() {
 function startTimerTicker() {
   clearInterval(timerTicker);
   timerTicker = setInterval(() => {
+    // レビュー対応(A3-H2): アプリを前面に置いたまま日付が変わると、visibilitychange等の
+    // 明示的な復帰イベントが無い限り runDailyOpen が呼ばれず selectedDate/lastOpenedDate が
+    // 前日のまま固定されていた(深夜に追加したBlockが前日付けで記録される等)。500msごとの
+    // 文字列比較1回なのでスロットル不要。runDailyOpen自身もlastOpenedDateで冪等なので、
+    // 起動時・visibilitychange側の呼び出しと同時に走っても二重処理にはならない。
+    if (state.settings.lastOpenedDate !== todayISO()) {
+      if (runDailyOpen()) render();
+    }
     // 任意タイマー
     if (state.pomodoro.running) {
       if (!state.pomodoro.paused && localDateTimeToMs(state.pomodoro.endsAt) <= Date.now()) {

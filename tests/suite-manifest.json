@@ -101,6 +101,31 @@
       }
     },
     {
+      "file": "day-cross-ticker.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution",
+        "content-ai"
+      ],
+      "assertionSignals": 11,
+      "assertionHash": "f3c737546fd1aa78",
+      "sourceHash": "f7042eabf72410b1",
+      "waits": {
+        "fixedCount": 4,
+        "numericMilliseconds": 3900,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
       "file": "github-state-blob-fallback.test.js",
       "kind": "e2e",
       "tier": "full",
