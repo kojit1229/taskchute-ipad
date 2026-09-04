@@ -146,7 +146,8 @@ function check(name, cond, extra = "") {
     check("再起動後、localStorageのselectedDateは永続値(過去日)ではなく今日に強制されている",
       afterRestart.selectedDate === TODAY, afterRestart.selectedDate);
     // v230: home撤去後もrenderDateBar契約はtasksで検証できる。
-    await page.click('[data-action="nav"][data-view="tasks"]');
+    // v335(§C追随): 旧「タスクシュート」navは「実行」へ統合。
+    await page.click('[data-action="nav"][data-view="exec"]');
     await page.waitForTimeout(150);
     const todayBtnCount = await page.locator('.datebar [data-action="today"]').count();
     check("再起動後の画面も日付バーの『今日へ』ボタンが出ない(=今日を見ている)", todayBtnCount === 0);
@@ -160,10 +161,12 @@ function check(name, cond, extra = "") {
     let picked = await page.locator("[data-date-picker]").inputValue();
     check("日付ピッカー操作直後、selectedDateが過去日になっている", picked === PAST, picked);
 
-    // 別タブへ切り替えて戻ってくる(setViewはselectedDateに触らないことの確認)
-    await page.click('[data-action="nav"][data-view="timeline"]');
+    // 別タブへ切り替えて戻ってくる(setViewはselectedDateに触らないことの確認)。
+    // v335(§C追随): 「タスクシュート」「タイムライン」は「実行」1項目に統合され同一viewになった
+    // ため、wbsを経由してexecへ戻る形で「別タブへの切替→復帰」という検証意図を維持する。
+    await page.click('[data-action="nav"][data-view="wbs"]');
     await page.waitForTimeout(150);
-    await page.click('[data-action="nav"][data-view="tasks"]');
+    await page.click('[data-action="nav"][data-view="exec"]');
     await page.waitForTimeout(150);
     picked = await page.locator("[data-date-picker]").inputValue();
     check("タブを行き来しても、意図的に選んだ過去日がリセットされずに維持される(セッション中は尊重)",

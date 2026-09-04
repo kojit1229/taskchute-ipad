@@ -153,8 +153,10 @@ async function checkEnergyRailFreshness(browser) {
     const before = await rail.innerHTML();
     check("1020px超でタスクタブのエネルギーレールが表示される", before.trim().length > 0);
 
-    await current.page.click('[data-action="nav"][data-view="timeline"]');
-    await current.page.click('[data-action="timeline-mode"][data-mode="actual"]');
+    // v335(§C追随): 旧「timelineへnav→timeline-mode実績切替」の2手はexecの「開く」(rail自体の
+    // ボタン、data-view="exec" data-mode="actual")1手に統合済み(実績モード固定で着地するため
+    // timeline-mode切替は不要)。
+    await current.page.click('#timelineRail [data-action="nav"][data-view="exec"]');
     await current.page.click(`[data-action="edit-block"][data-id="${BLOCK_ID}"]`);
     const modalCharge = current.page.locator('.modal-card [data-modal-field="charge"]');
     const modalChargeHandle = await modalCharge.elementHandle();
@@ -164,7 +166,20 @@ async function checkEnergyRailFreshness(browser) {
     check("完了Blockのcharge編集(モーダル): selectOption後もselectノードを維持(stale化しない)",
       await modalChargeHandle.evaluate((element) => element.isConnected));
     await current.page.click('[data-action="modal-save"]');
-    await current.page.click('[data-action="nav"][data-view="tasks"]');
+    // v335(§C追随): renderTimelineRail()はexecの計画モードでは表示しない方針のまま維持した
+    // (execの一覧とrailの簡易タイムラインが同じdata-id/data-actionを別クラスで重複描画し、
+    // 既存E2Eのdata-id一意セレクタ前提を広く壊す副作用が判明したため。releases/v335.jsonの
+    // uncertainties(b)参照)。そのためrail(#timelineRail)はcurrentView==="tasks"のときだけ
+    // 再描画される。旧「タスクシュートへ戻る」nav(data-view="tasks")の代わりに、直接
+    // localStorageへcurrentView="tasks"を書いてreloadする(旧ビューはrender()の分岐に残っており
+    // 直接setViewしても壊れない、という契約に沿った検証方法)。
+    await current.page.evaluate((key) => {
+      const s = JSON.parse(localStorage.getItem(key));
+      s.currentView = "tasks";
+      localStorage.setItem(key, JSON.stringify(s));
+    }, STATE_KEY);
+    await current.page.reload();
+    await current.page.locator('#app[data-view="tasks"]').waitFor();
 
     const after = await rail.innerHTML();
     check("完了Blockのcharge編集(タイムライン経由)後にエネルギーレールの表示内容が更新される", after !== before);

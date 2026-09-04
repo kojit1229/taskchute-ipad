@@ -228,7 +228,9 @@ function check(name, cond, extra = "") {
     const wbsViewText = await page.locator("main").innerHTML();
     check("WBS一覧のTaskにも⚙資産マークが出る", wbsViewText.includes("⚙資産"), "");
 
-    await page.click('[data-action="nav"][data-view="timeline"]');
+    // v335(§C追随): 旧timelineへの直接navは無くなったため、execへ遷移して実績モードへ切替える。
+    await page.click('[data-action="nav"][data-view="exec"]');
+    await page.click('.exec-mode-segmented [data-action="exec-mode-toggle"][data-mode="actual"]');
     await page.waitForTimeout(300);
     const timelineText = await page.locator("main").innerHTML();
     check("タイムラインカードにも⚙資産/✂削減マークが出る", timelineText.includes("⚙資産") && timelineText.includes("✂削減"), "");

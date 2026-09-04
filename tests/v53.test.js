@@ -215,7 +215,7 @@ const b64ToObj = (b64) => JSON.parse(Buffer.from(b64, "base64").toString("utf8")
     window.__gh.dirList = [{ name: `archive-${year}.json` }];
     window.__gh.existing2026 = { reports: {}, feedback: {}, journals: { "2026-01-05": "アーカイブされた昔のギター日記" }, blocks: [] };
   }, { year: TODAY.slice(0, 4) });
-  await page.click('[data-action="nav"][data-view="tasks"]');  // 🔍 は日付バー(設定ビューには無い)
+  await page.click('[data-action="nav"][data-view="exec"]');  // 🔍 は日付バー(設定ビューには無い)
   await page.waitForTimeout(300);
   await page.locator('[data-action="open-search"]').first().click();
   await page.waitForTimeout(300);

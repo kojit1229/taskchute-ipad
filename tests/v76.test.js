@@ -125,7 +125,7 @@ function check(name, cond, extra = "") {
     // (以前のように selectedDate をlocalStorageへ仕込んでreloadでは今日に上書きされてしまう)。
     console.log("[1b] 根本原因の回帰: Home で state.selectedDate が『今日』以外(=セッション中に過去日へ移動した状態)でも読める");
     await seed({ view: "home" });
-    await page.click('[data-action="nav"][data-view="tasks"]'); // v230: 日付ピッカーの現行配置
+    await page.click('[data-action="nav"][data-view="exec"]'); // v230: 日付ピッカーの現行配置
     await page.waitForTimeout(150);
     await page.evaluate((d) => {
       const el = document.querySelector("[data-date-picker]");

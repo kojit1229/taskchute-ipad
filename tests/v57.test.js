@@ -101,7 +101,7 @@ function check(name, cond, extra = "") {
     await page.reload();
     await page.waitForTimeout(700);
     // 統合画面には日付ピッカーが無いため、タスク画面へ移動して日付変更する。
-    await page.click('.nav-button[data-view="tasks"]');
+    await page.click('.nav-button[data-view="exec"]');
     await page.waitForTimeout(300);
     await page.evaluate(({ KEY, PAST }) => {
       const s = JSON.parse(localStorage.getItem(KEY));

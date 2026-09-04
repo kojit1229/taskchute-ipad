@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v334";  // v334: 実行タブPC 2ペイン(§B。ナビ統合§Cは持ち越し)
+const CACHE_NAME = "taskchute-journal-pwa-v335";  // v335: 実行タブ§C PCサイドバー統合・旧setView寄せ
+// v334: 実行タブPC 2ペイン(§B。ナビ統合§Cは持ち越し)
 // v333: 実行ラッパー(計画/実績切替)・モバイルナビ4項目
 // v332: 実行タブA-1b ヘッダ1行化・タスク一覧再編・死コード削除
 // v331: 実行タブA-1a いま/これから 1段化・展開行

@@ -27,7 +27,13 @@ function check(name, cond, extra = "") {
 (async () => {
   const server = startServer(PORT);
   const browser = await chromium.launch(launchOptions());
-  const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
+  // v335(§C追随): 旧timelineビューへの直接navが無くなったため、execの1280px以上2ペイン
+  // (右列=renderTimelineView、計画モード既定で常時表示)経由でリモート/ローカルの
+  // Block(未着手・非タスク紐づけの単発Block)を検証する。1100pxのままだと計画モードは
+  // タスク一覧(未タスク紐づけBlockを描画しない)だけになり、実績モードもactualStartAt無しの
+  // 計画中Blockを描画しないため、この回帰テストの検証対象(sync直後のBlock可視化)が
+  // どちらの1カラム表示でも観測できなくなる。
+  const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
 
@@ -118,7 +124,9 @@ function check(name, cond, extra = "") {
       Array.isArray(afterPull.blocks) && afterPull.blocks.some((b) => b.title === REMOTE_MARKER),
       JSON.stringify((afterPull.blocks || []).map((b) => b.title)));
 
-    await page.click('[data-action="nav"][data-view="timeline"]');
+    // v335(§C追随): 旧timelineビューへの直接navは無くなったため、execへ遷移する
+    // (1280px以上の2ペインなら右列に計画モードのtimelineが常時出るためモード切替は不要)。
+    await page.click('[data-action="nav"][data-view="exec"]');
     await page.waitForTimeout(200);
     const timelineText = await page.locator("main").textContent();
     check("タイムライン画面にリモートから取り込んだタスクのタイトルが表示される",
@@ -158,7 +166,9 @@ function check(name, cond, extra = "") {
     check("Blob API失敗時はリモートのタスクが取り込まれない(失敗=何もしないが正しい挙動)",
       !afterFail.blocks.some((b) => b.title === REMOTE_MARKER), JSON.stringify((afterFail.blocks || []).map((b) => b.title)));
 
-    await page.click('[data-action="nav"][data-view="timeline"]');
+    // v335(§C追随): 旧timelineビューへの直接navは無くなったため、execへ遷移する
+    // (1280px以上の2ペインなら右列に計画モードのtimelineが常時出るためモード切替は不要)。
+    await page.click('[data-action="nav"][data-view="exec"]');
     await page.waitForTimeout(200);
     const timelineTextAfterFail = await page.locator("main").textContent();
     check("Blob API失敗後もタイムライン画面にローカルの既存タスクが表示され続ける",

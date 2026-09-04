@@ -73,21 +73,21 @@ function check(name, cond, extra = "") {
     console.log("[1] todaySkinの旧stateは値にかかわらずtowerへ正規化される");
     await seedSkin("__missing__");
     check("未設定では.today-towerが描画される", await page.locator(".today-tower").count() === 1);
-    await page.locator('#sidebar [data-action="nav"][data-view="tasks"]').click();
-    await page.waitForSelector('#app[data-view="tasks"]');
+    await page.locator('#sidebar [data-action="nav"][data-view="exec"]').click();
+    await page.waitForSelector('#app[data-view="exec"]');
     check("未設定値は保存時にtowerへ正規化される", await storedSkin() === "tower", await storedSkin());
 
     await seedSkin("unknown-skin");
     check("不正値でも.today-towerが描画される", await page.locator(".today-tower").count() === 1);
-    await page.locator('#sidebar [data-action="nav"][data-view="tasks"]').click();
-    await page.waitForSelector('#app[data-view="tasks"]');
+    await page.locator('#sidebar [data-action="nav"][data-view="exec"]').click();
+    await page.waitForSelector('#app[data-view="exec"]');
     check("不正値は保存時にtowerへ正規化される", await storedSkin() === "tower", await storedSkin());
 
     await seedSkin("cockpit");
     check("旧cockpit値でも.today-towerが描画される", await page.locator(".today-tower").count() === 1);
     check("旧cockpit値はtowerへ固定正規化される", await storedSkin() === "tower", await storedSkin());
 
-    console.log("[2] 廃止したAI集約UIを設定・today・tasksのどこにも戻さない");
+    console.log("[2] 廃止したAI集約UIを設定・today・execのどこにも戻さない");
     await seedSkin("cockpit", "settings");
     check("todaySkinの設定selectが存在しない", await page.locator('select[data-setting-field="todaySkin"]').count() === 0);
     await page.evaluate(() => { const fold = document.querySelector('details[data-fold-id="settings-daily"]'); if (fold) fold.open = true; });
@@ -106,9 +106,9 @@ function check(name, cond, extra = "") {
       await page.locator('[data-action="ai-schedule"]').count() === 0);
     check("旧候補stateが残っていてもMIT/タスク候補UIを描画しない",
       await page.locator('[data-action="ai-mit-adopt"], [data-action="mit-candidate-add"], [data-action="ai-task-adopt"], [data-action="ai-task-dismiss"]').count() === 0);
-    await page.locator('#sidebar [data-action="nav"][data-view="tasks"]').click();
-    await page.waitForSelector('#app[data-view="tasks"]');
-    check("tasks側に維持対象の下書き操作・候補チップの重複がない",
+    await page.locator('#sidebar [data-action="nav"][data-view="exec"]').click();
+    await page.waitForSelector('#app[data-view="exec"]');
+    check("exec側に維持対象の下書き操作・候補チップの重複がない",
       await page.locator('[data-action="ai-schedule"], .ai-mit-chips, .ai-task-chips').count() === 0);
     await page.locator('#sidebar [data-action="nav"][data-view="today"]').click();
     await page.waitForSelector(".today-tower");
@@ -445,8 +445,8 @@ function check(name, cond, extra = "") {
     await page.evaluate(() => document.activeElement.blur());
     await page.waitForFunction(() => document.querySelector("[data-tower-arrival-select]")?.value === "rwy-second");
     await page.evaluate(() => { Storage.prototype.setItem = window.__towerOriginalSetItem; });
-    await page.locator('#sidebar [data-action="nav"][data-view="tasks"]').click();
-    await page.waitForSelector('#app[data-view="tasks"]');
+    await page.locator('#sidebar [data-action="nav"][data-view="exec"]').click();
+    await page.waitForSelector('#app[data-view="exec"]');
     await page.locator('#sidebar [data-action="nav"][data-view="today"]').click();
     await page.waitForSelector("[data-tower-arrival-select]");
     check("有効選択は無関係の全体renderをもう1回跨いでも保持",

@@ -137,7 +137,7 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(200);
     check("WBSタブでは8日後Taskが見える(表示から消えただけでデータは健在)",
       (await page.textContent("body"))?.includes("8日後Task(母集団外)"));
-    await page.click('[data-action="nav"][data-view="tasks"]');
+    await page.click('[data-action="nav"][data-view="exec"]');
     await page.waitForTimeout(200);
 
     // ============================================================

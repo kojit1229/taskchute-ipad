@@ -182,8 +182,8 @@ function check(name, cond, extra = "") {
     // [7] ビューを離れると ticker が停止する + 再入場で再開する
     // ============================================================
     console.log("[7] today を離れると ticker が停止し(おとり#towerClockが書き換えられない)、再入場で再開する");
-    await page.locator('#sidebar .nav-button[data-action="nav"][data-view="tasks"]').click();
-    await waitView("tasks");
+    await page.locator('#sidebar .nav-button[data-action="nav"][data-view="exec"]').click();
+    await waitView("exec");
     check("ビュー離脱で #towerClock がDOMから消える(時計はtodayビュー内のみ)",
       await page.locator("#towerClock").count() === 0);
     // 離脱直後のtickが自分でclearIntervalする猶予として、まずticker 1周期分を実時間で待つ
@@ -257,8 +257,8 @@ function check(name, cond, extra = "") {
     check("リロード後も html[data-theme='cockpit'] が維持される(§6-3/6-6。漏れるとdarkへ戻る)", true);
     // 保存契機(setView)を踏んで localStorage へ書き戻させ、normalizeStateが値を
     // 黙って "dark" に矯正していないことを突合する([21]と同じ保存契機の踏み方)
-    await page.locator('#sidebar .nav-button[data-action="nav"][data-view="tasks"]').click();
-    await waitView("tasks");
+    await page.locator('#sidebar .nav-button[data-action="nav"][data-view="exec"]').click();
+    await waitView("exec");
     await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).settings.theme === "cockpit", KEY);
     check("保存(setView契機)後も localStorage の settings.theme が 'cockpit' のまま(A2の本体=正規化での矯正が無い)", true);
     // 再リロード(seedし直さない=保存済みstateそのままの起動)でも維持される
@@ -311,8 +311,8 @@ function check(name, cond, extra = "") {
       await page.evaluate(() => document.getElementById("main").innerHTML.trim().length > 0));
     check("フォールバック後もTOWERが描画される", await page.locator(".today-tower").count() === 1);
     // 保存契機を踏むと不正値がstorage上も既定値へ正規化される(不正値の永続化を許さない)
-    await page.locator('#sidebar .nav-button[data-action="nav"][data-view="tasks"]').click();
-    await waitView("tasks");
+    await page.locator('#sidebar .nav-button[data-action="nav"][data-view="exec"]').click();
+    await waitView("exec");
     await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).settings.theme === "dark", KEY);
     check("保存後は settings.theme が既定 'dark' に正規化される('neon'が残らない)", true);
     check("[26]区間の描画でpageerrorが発生しない", failures === failuresBeforeNeon);
@@ -335,7 +335,9 @@ function check(name, cond, extra = "") {
     // ============================================================
     // [28] P11: cockpitテーマで主要ビューを巡回して pageerror ゼロ・#main非空
     // ============================================================
-    console.log("[28] P11: cockpitテーマで today/tasks/timeline/settings を巡回し、pageerrorゼロ・#main非空");
+    // v335(§C追随): サイドバーの「タスクシュート」「タイムライン」は「実行」1項目へ統合されたため、
+    // 巡回対象をtasks/timelineからexecへ差し替える(旧ビュー自体は内部に残るが直接nav不可のため)。
+    console.log("[28] P11: cockpitテーマで today/exec/settings を巡回し、pageerrorゼロ・#main非空");
     const failuresBeforeTour = failures;  // 巡回区間のpageerror検出用(page.on('pageerror')が加算する)
     await page.clock.setFixedTime(fixedTime(12, 0, 0));
     await seed({
@@ -349,7 +351,7 @@ function check(name, cond, extra = "") {
       ]
     });
     await page.waitForSelector('html[data-theme="cockpit"]', { state: "attached" });
-    for (const view of ["today", "tasks", "timeline", "settings"]) {
+    for (const view of ["today", "exec", "settings"]) {
       await page.locator(`#sidebar .nav-button[data-action="nav"][data-view="${view}"]`).click();
       await waitView(view);
       check(`cockpitテーマで ${view} ビューの #main が空でない`,
@@ -768,8 +770,8 @@ function check(name, cond, extra = "") {
     console.log("[34c] F5: wishビューの表示・再訪を跨いでも tasks/projects のJSONが変化しない(表示のみの検証)");
     // 保存契機(setView)を踏んでlocalStorageへ書き戻させてからスナップショットを取り、
     // wish再訪→再び保存契機、の前後で突合する(初回ロード時のnormalize補完分を比較から除くための手順)
-    await page.locator('#sidebar .nav-button[data-action="nav"][data-view="tasks"]').click();
-    await waitView("tasks");
+    await page.locator('#sidebar .nav-button[data-action="nav"][data-view="exec"]').click();
+    await waitView("exec");
     const wishSnapA = await page.evaluate((KEY) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       return JSON.stringify({ tasks: s.tasks, projects: s.projects });
@@ -777,8 +779,8 @@ function check(name, cond, extra = "") {
     await page.locator('#sidebar .nav-button[data-action="nav"][data-view="wish"]').click();
     await waitView("wish");
     await page.waitForSelector(".wish-card", { state: "attached" });
-    await page.locator('#sidebar .nav-button[data-action="nav"][data-view="tasks"]').click();
-    await waitView("tasks");
+    await page.locator('#sidebar .nav-button[data-action="nav"][data-view="exec"]').click();
+    await waitView("exec");
     const wishSnapB = await page.evaluate((KEY) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       return JSON.stringify({ tasks: s.tasks, projects: s.projects });
@@ -823,18 +825,18 @@ function check(name, cond, extra = "") {
     await page.clock.setFixedTime(fixedTime(12, 0, 0));
     await seedB6({ view: "vision", visionDirectCats: null });  // null = キー自体を削除してseed(旧state再現)
     await waitView("vision");
-    await w1GoView("tasks");  // 保存契機(setView)で書き戻し([21]・前提B6-5)
+    await w1GoView("exec");  // 保存契機(setView)で書き戻し([21]・前提B6-5)
     await page.waitForFunction((KEY) => {
       const s = JSON.parse(localStorage.getItem(KEY));
-      return s.currentView === "tasks" && Array.isArray(s.settings.visionDirectCategories);
+      return s.currentView === "exec" && Array.isArray(s.settings.visionDirectCategories);
     }, KEY);
     const vdcMigrated = (await stateNow()).settings.visionDirectCategories;
     check("キー無しの旧stateに [] が補完される(§12 F7 migration)",
       Array.isArray(vdcMigrated) && vdcMigrated.length === 0, JSON.stringify(vdcMigrated));
     await seedB6({ view: "vision", visionDirectCats: ["仕事"] });  // マスタ外の名前でも値はそのまま保持される想定
     await waitView("vision");
-    await w1GoView("tasks");
-    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).currentView === "tasks", KEY);
+    await w1GoView("exec");
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).currentView === "exec", KEY);
     const vdcKept = (await stateNow()).settings.visionDirectCategories;
     check("既存値 ['仕事'] は上書きされない(既存優先)",
       JSON.stringify(vdcKept) === JSON.stringify(["仕事"]), JSON.stringify(vdcKept));
@@ -891,7 +893,7 @@ function check(name, cond, extra = "") {
       const input = el?.matches?.('input[type="checkbox"]') ? el : (el?.querySelector?.('input[type="checkbox"]') || el);
       input.click();
     });
-    await w1GoView("tasks");  // 保存契機(setView)。チェック時点で即保存する実装でもこの後の突合は同じ
+    await w1GoView("exec");  // 保存契機(setView)。チェック時点で即保存する実装でもこの後の突合は同じ
     await page.waitForFunction((KEY) =>
       (JSON.parse(localStorage.getItem(KEY)).settings.visionDirectCategories || []).includes("開発"), KEY);
     check("チェックで settings.visionDirectCategories に '開発' が入り永続化される(前提B6-6)", true);
@@ -1200,8 +1202,8 @@ function check(name, cond, extra = "") {
     await seedB7({ view: "wish" });
     await page.waitForSelector(aiPanelSel("wish"), { state: "attached" });
     // 保存契機(setView)を踏んで初回normalize補完分をlocalStorageへ書き戻させてから基準を取る([34c]と同手順)
-    await w1GoView("tasks");
-    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).currentView === "tasks", KEY);
+    await w1GoView("exec");
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).currentView === "exec", KEY);
     const b7SnapA = await page.evaluate((KEY) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       return JSON.stringify({ tasks: s.tasks, blocks: s.blocks, settings: s.settings });
@@ -1212,8 +1214,8 @@ function check(name, cond, extra = "") {
       await w1GoView(v);
       await page.waitForSelector(aiPanelSel(v), { state: "attached" });
     }
-    await w1GoView("tasks");  // 再び保存契機を踏んで書き戻し後に突合
-    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).currentView === "tasks", KEY);
+    await w1GoView("exec");  // 再び保存契機を踏んで書き戻し後に突合
+    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).currentView === "exec", KEY);
     const b7SnapB = await page.evaluate((KEY) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       return JSON.stringify({ tasks: s.tasks, blocks: s.blocks, settings: s.settings });

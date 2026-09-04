@@ -34,7 +34,11 @@ function check(name, cond, extra = "") {
 (async () => {
   const server = startServer(PORT);
   const browser = await chromium.launch(launchOptions());
-  const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
+  // v335(§C追随): 旧timeline/tasksへの直接navが無くなったため、execの1280px以上2ペイン
+  // (右列=renderTimelineView、計画モード=state.timelineMode連動)経由で下書き
+  // (.draft-block-title等)を可視化する。1100pxのままだと計画モード単一列はタスク一覧のみで
+  // 下書きが乗るタイムライングリッドが出ない。
+  const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
   await blockGithubApiByDefault(page);
@@ -91,8 +95,9 @@ function check(name, cond, extra = "") {
     }, { KEY, blocks, tasks, projects });
     await page.reload();
     await page.waitForTimeout(500);
-    await page.click('[data-action="nav"][data-view="tasks"]');
-    await page.waitForTimeout(150);
+    // v335(§C追随): currentViewは直接seedで既に"tasks"(旧ビューはrender()の分岐に残っている
+    // ため直接setViewしても壊れない)なので、この時点で追加のnavクリックは不要(旧「タスク
+    // シュート」nav項目はサイドバーから撤去済み)。
     if (date !== TODAY) {
       await page.fill('[data-date-picker]', date);
       await page.waitForTimeout(300);
@@ -101,7 +106,9 @@ function check(name, cond, extra = "") {
 
   async function runAiSchedule() {
     // v285: 本番UIは廃止済み。残存actionの内部契約をテスト専用delegation入口から検証する。
-    await page.click('[data-action="nav"][data-view="timeline"]');
+    // v335(§C追随): action本体側がsetView("exec")(計画モード)へ寄せるため、事前navは
+    // execで十分(旧timeline直行navは撤去済み)。
+    await page.click('[data-action="nav"][data-view="exec"]');
     await page.waitForTimeout(150);
     await dispatchRegisteredAction(page, "ai-schedule");
     await page.waitForTimeout(500);

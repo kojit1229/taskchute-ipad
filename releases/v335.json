@@ -1,0 +1,81 @@
+{
+  "version": 335,
+  "date": "2026-09-04",
+  "title": "実行タブ: PCサイドバー/その他メニュー統合・旧ビュー呼び出しのexec寄せ",
+  "summary": "v333/v334で2版連続持ち越しだった§C(review-v333-claude-a.md M-4)を回収した。PCサイドバー(navItems)の「タスクシュート」「タイムライン」2項目を「実行」1項目へ統合した(「その他」メニューのmoreItemsには元々この2項目が単独では含まれていなかったため対応不要と確認済み)。app.js内に残っていた最後の2箇所のsetView(\"timeline\")呼び出し(energy-open-category、AI下書きスケジュール確定)をsetView(\"exec\")+_execModeへ寄せた。旧tasks/timelineビュー自体はrender()の分岐に残し、直接setViewしても壊れない(ナビの「実行」がactiveになるようrenderSidebar/renderBottomNavのフォールバックを追加)。既存E2E(today-core/tower-core/v107/v108/v144/v199/v267/v306/v307/v50/v53/v57/v60/v62/v65/v76/v85/v86/v97/v98/github-state-blob-fallback)のうちPCサイドバー経由で旧ビューへ到達していた箇所をexec+モード指定へ全件セレクタ追随した。",
+  "changedFiles": [
+    "CHANGES_v335.md",
+    "app.js",
+    "docs/test-impact-map.generated.md",
+    "releases/v335.json",
+    "src/features/timeline.js",
+    "sw.js",
+    "tests/github-state-blob-fallback.test.js",
+    "tests/suite-manifest.json",
+    "tests/today-core.test.js",
+    "tests/tower-core.test.js",
+    "tests/v107.test.js",
+    "tests/v108.test.js",
+    "tests/v144.test.js",
+    "tests/v199.test.js",
+    "tests/v267.test.js",
+    "tests/v306.test.js",
+    "tests/v307.test.js",
+    "tests/v335.test.js",
+    "tests/v50.test.js",
+    "tests/v53.test.js",
+    "tests/v57.test.js",
+    "tests/v60.test.js",
+    "tests/v62.test.js",
+    "tests/v65.test.js",
+    "tests/v76.test.js",
+    "tests/v85.test.js",
+    "tests/v86.test.js",
+    "tests/v97.test.js",
+    "tests/v98.test.js"
+  ],
+  "intent": [
+    "PCサイドバー・「その他」メニューのナビ語彙を実行(exec)へ完全に一本化し、旧2ビューへの直接導線を消す。",
+    "コード内に残っていた最後のsetView(\"timeline\")呼び出し2箇所をexecへ寄せ、v333で新設したexecラッパーを唯一の到達経路にする。",
+    "既存E2Eの改修を先送りせず全件追随し、v333/v334から2版連続だった持ち越しを解消する。"
+  ],
+  "changes": [
+    "app.js: navItems配列から{id:\"tasks\"}{id:\"timeline\"}を削除し、{id:\"exec\", label:\"実行\", mark:\"E\"}を今日の直後へ追加した。renderSidebar()の未着手バッジ条件をitem.id===\"tasks\"からitem.id===\"exec\"へ変更した。",
+    "app.js: 「energy-open-category」ハンドラ(app.js:1064付近)のsetView(\"timeline\")をsetView(\"exec\")+_execMode=\"actual\"へ変更した(元々実績時間帯のカテゴリフィルタ用途のため実績モードに寄せた)。",
+    "app.js: 「AI下書きスケジュール確定」(runAiSchedule内、app.js:3890付近)のsetView(\"timeline\")をsetView(\"exec\")+_execMode=\"plan\"へ変更した(直前でstate.timelineMode=\"planned\"にしており、実績モード固定だとrenderTimelineViewのmodeが強制的に\"actual\"へ上書きされ下書きのドラッグ調整UI(renderDraftLayerはmode===\"planned\"限定)が見えなくなるため、energy-open-categoryとは異なり計画モードへ寄せた。uncertainties参照)。",
+    "app.js: renderSidebar()/renderBottomNav()のactive判定を「navItems/mobileNavに無いビューは常に『その他』」から「旧tasks/timeline滞在中は『実行』をactiveにし、それ以外の未知ビューだけ『その他』」へ変更した(review-v333-claude-a.md M-4「どのボタンもアクティブでない画面を作らない」への対応)。",
+    "sw.jsのCACHE_NAMEをv335へ更新。",
+    "src/features/timeline.js: renderTimelineRail()をexecの計画モードでも表示する変更を試みたが(execTargetBlocksで絞り込まれた一覧と、railの簡易タイムラインが同じdata-id・data-actionを別クラスで重複描画し、既存E2Eのdata-id一意セレクタ前提を広く壊す副作用が判明したため)撤回し、現状(state.currentView===\"tasks\"のときのみ表示)を維持した。コメントで検討経緯と却下理由を記録した(uncertainties参照)。"
+  ],
+  "uncertainties": [
+    "(a) 【要K確認】作業開始時点で、リポジトリ未コミットのstyles.cssに本発注と無関係な変更が既に存在していた(.app-shellのgrid-template-columnsをinline style上書き方式からdata-view=\"tasks\"限定のCSSセレクタ方式へ変更するWIP、16行程度)。git stashで検証したところ直近コミットv334(d8d5f4b)には含まれておらず、本セッションの開始前から作業ツリーに存在していた(タイムスタンプ・内容から他セッション/Kの並行作業と推定)。本バージョンの実装中に一時的にこのCSSへexec計画モード対応を追加したが、後述(b)の理由で該当対応自体を撤回したため、現在は元の(本発注と無関係な)状態のまま変更せずに残している。git statusには引き続きこの16行が本バージョンの差分として現れるが、実行コード差分200行の判定・レビューでは本バージョンの意図した変更に含めないでほしい。コミット前にKの側でこの変更の由来を確認することを推奨する。",
+    "(b) renderTimelineRail()(タスクシュート時のみ表示する右カラムの簡易タイムライン)をexecの計画モードでも表示する変更を実装・検証したところ、tests/v107.test.js([4]Block完了チェックのセレクタ)で「同じdata-id・data-actionだが異なるclassの要素が2件マッチする」衝突が発生した(execの一覧はexecTargetBlocksで絞り込まれるが、rail側は絞り込みなしの簡易タイムラインで同じBlockを別レンダリングするため)。加えてrenderTimelineRail()は非表示時にinnerHTMLをクリアしないため、以前一度でも literal \"tasks\" を経由していると、execへ切り替えた後も rail が古い内容を保持したままDOMに残り続け、テスト側のセレクタが意図せずrail側の要素を拾ってしまう問題も判明した。この変更はPCサイドバー統合(§C)の直接要求ではなく、電池レール(#timelineRail)がexec単独ナビ後に到達不能になる副作用への対処として試みたものだったため、\"やらないこと: タイムライン配置計算・Blockロジックの変更\"に抵触するリスクとレビュー時間を考慮し撤回した。結果として、PC(1020px超)で#timelineRail(エネルギーレール等)を見る手段は、旧tasksビューへ直接setViewする経路(テストのseed等)以外では現状無い。実運用でこのレールを使うユーザー体験の要否はK/監督者の裁定を仰ぎたい。",
+    "(c) energy-open-category/AI下書きスケジュール確定を寄せるモード(実績/計画)は発注文の一般則「setView(\\\"tasks\\\") → exec(計画)、setView(\\\"timeline\\\") → exec(実績モード)」と字面上一致しない(AI下書きスケジュール確定は\"timeline\"由来だが計画モードへ寄せた)。上記changesに書いたとおり、直前でstate.timelineMode=\"planned\"にしている実装意図(下書きを予定タブで見せる)を汲んだ判断。tests/v335.test.js [2]で明示的に検証し、報告にも明記する。",
+    "(d) tests/v267.test.js([2]判定条件1〜4、\"[data-action=\\\"toggle-wbs-edit\\\"]\"が2要素にマッチしタイムアウト)とtests/v277.test.js([6]計器盤1280pxの列数、[10]12WY Project詳細のedit-project待ち)は、git stashでv334コミット(d8d5f4b、本バージョン着手前)へ戻して再実行しても同じ理由で失敗することを確認した既存不具合であり、本バージョン(v335)のPCナビ統合・setView寄せとは無関係。両ファイルとも§Cに関連する行(v267のみ、旧tasks nav 2箇所)はセレクタ追随済みだが、上記の既存不具合自体は本発注の範囲外として未修正のまま残した。",
+    "(e) tests/v65.test.js([2]Task編集モーダルのedit-taskボタンがWBS一覧で\"resolved but not visible\")も同様にgit stashでv334へ戻して再現する既存不具合(本バージョン非起因)であることを確認した。§Cに関連する行(タイムラインカードの資産/削減マーク確認、1箇所)はセレクタ追随済み。",
+    "Codex利用上限のため実装はimplementer(Claude)。",
+    "監督者検証: 指定+改修31スイートのうち v277(計器盤3列=v326 追随漏れ)・v267・v65 は v334 時点でも赤の既存失敗で、別発注(order-test-followup-v326-v329.md)で追随する。tower-core/today-core の1回目失敗は同時実行の負荷起因で単独再実行では成功。",
+    "src/features/timeline.js の renderTimelineRail は別セッション由来の inline gridTemplateColumns 撤去を v334 の状態に戻して収録(styles.css の同セッション差分は未コミットのまま除外)。"
+  ],
+  "reviewFocus": [
+    "PCサイドバー・「その他」メニューに「タスクシュート」「タイムライン」の単独項目が一切残っていないこと。",
+    "旧tasks/timelineビューへ直接setViewしても(テストのseed等で)壊れず描画され、ナビの「実行」がactiveになること(M-4対応)。",
+    "energy-open-category・AI下書きスケジュール確定がそれぞれ意図したモード(実績/計画)でexecへ着地すること、特に後者はドラッグ調整UIが引き続き機能すること。",
+    "styles.cssの16行差分がこのバージョンの意図した変更に含まれておらず、由来不明の既存WIPであること(uncertainties(a))。"
+  ],
+  "verification": [
+    "node --check app.js / src/features/timeline.js / sw.js はいずれも成功。",
+    "実行コード差分(git diff --numstat -- app.js sw.js src。styles.cssはuncertainties(a)の理由で本バージョンの意図した変更に含めない): app.js 27+/7- ・ src/features/timeline.js 11+/4- ・ sw.js 2+/1- の合計47行(200行以内)。",
+    "npm.cmd run test:manifest:write / node scripts/test-manifest.js --check はPASS。",
+    "CHROME_PATH指定でnode tests/run-all.js v335 v334 v333 v332 v331 today-core tower-core v50 v307 action-registry-core v313 timeline-render-core timeline-tick-wiring + 今回セレクタ追随した全スイート(github-state-blob-fallback/v107/v108/v144/v199/v267/v306/v53/v57/v60/v62/v65/v76/v85/v86/v97/v98)をフォアグラウンド(timeout 600000)で2回実行。詳細な結果は impl-v335-report.md参照。",
+    "git status --shortは変更ファイル一覧(app.js/sw.js/src/features/timeline.js/上記テストファイル/生成物・release記録)と一致。styles.cssの差分は本バージョン着手前から存在していた由来不明のWIP(uncertainties(a))で、この版では手を加えていない(元の状態のまま)。"
+  ],
+  "notes": [
+    "Codex 利用上限のため実装は implementer(Claude)、レビューは Claude reviewer 2体で代替(本版は監督者テストのみ・レビューは次版前に実施)。"
+  ],
+  "knownLimitations": [
+    "renderTimelineRail()(#timelineRailのエネルギーレール等)はexecの計画モードでは表示されない(uncertainties(b))。旧tasksビューへ直接到達する経路(テストのseed等)以外でこのUIを見る手段は現状無い。",
+    "tests/v267.test.js・tests/v277.test.js・tests/v65.test.jsに本バージョン非起因の既存不具合が残る(uncertainties(d)(e)参照、対象外として未修正)。",
+    "styles.cssに由来不明の既存WIP(16行)が残っている(uncertainties(a)参照、K確認推奨)。"
+  ]
+}

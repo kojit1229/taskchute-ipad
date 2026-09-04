@@ -141,7 +141,7 @@ function configureSync(syncMod) {
       && new Set(items.map((item) => item.id)).size === 2 && items.every((item) => item.id === `wci_${WEEK}_${item.blockId}`)
       && await saveCalls() === 2, JSON.stringify({ items, saves: await saveCalls() }));
     await page.locator('[data-action="modal-close"]').click();
-    await page.locator('.nav-button[data-view="tasks"]').click();
+    await page.locator('.nav-button[data-view="exec"]').click();
 
     const completionButton = page.locator(
       `[data-action="toggle-block"][data-id="${completionSeed?.blockId || ""}"]`).first();
@@ -186,7 +186,7 @@ function configureSync(syncMod) {
     check("条件2 LIFE BAND信号/展開内訳も1/1へ減る", (await reducedSignal.textContent()).includes("1/1・実行率 100%")
       && (await page.locator(".life-band .twy-score-detail").textContent()).includes("100% (1/1)"));
 
-    await page.locator('.nav-button[data-view="tasks"]').click();
+    await page.locator('.nav-button[data-view="exec"]').click();
     const undoButton = page.locator(`[data-action="toggle-block"][data-id="${completionSeed.blockId}"]`).first();
     await undoButton.click();
     await page.locator('.nav-button[data-view="wbs"]').click();

@@ -35,7 +35,10 @@ function check(name, cond, extra = "") {
 (async () => {
   const server = startServer(PORT);
   const browser = await chromium.launch(launchOptions());
-  const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
+  // v335(§C追随): 旧timelineビューへの直接navが無くなったため、execの1280px以上2ペイン
+  // (右列=renderTimelineView、計画モード=state.timelineMode連動)経由で操作する。
+  // 1100pxのままだと計画モード単一列はタスク一覧のみでタイムライングリッドが出ないため幅を広げた。
+  const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
   await blockGithubApiByDefault(page);
@@ -71,7 +74,9 @@ function check(name, cond, extra = "") {
   // タイムラインの指定時刻の行をクリックして新規Block作成モーダルを開く。
   // .timeline-cards-area(left:60px〜)が.time-rowの上に重なるため、重ならない左端(x=20)を狙う。
   async function openNewBlockModal(minute) {
-    await page.click('.sidebar .nav-button[data-action="nav"][data-view="timeline"]');
+    // v335(§C追随): 旧timelineへの直接navは無くなったため、execへ遷移する(1280px以上なら
+    // 計画モード=state.timelineMode="planned"のまま右列に計画中タイムラインが常時出る)。
+    await page.click('.sidebar .nav-button[data-action="nav"][data-view="exec"]');
     await page.waitForTimeout(200);
     await page.click(`.time-row[data-action="timeline-new-block"][data-minute="${minute}"]`, { position: { x: 20, y: 15 } });
     await page.waitForTimeout(200);

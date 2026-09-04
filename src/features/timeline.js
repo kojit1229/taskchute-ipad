@@ -85,6 +85,13 @@ function renderTimelineRail() {
   // v11: サイドバーの幅(折りたたみ時 56px、通常 216px)
   const sbWidth = state.settings?.sidebarCollapsed ? "56px" : "216px";
   // v10: タスクシュート(tasks)時のみ右タイムライン rail を表示
+  // v335(§C)検討メモ: PCサイドバーの「タスクシュート」は「実行」へ統合され、execの計画モードでも
+  // 表示する案を試したが、execの一覧(execTargetBlocks絞り込み)とrailの簡易タイムライン
+  // (絞り込み無し)が同じBlock IDを別々に描画し、既存テストのdata-id一意セレクタ前提を
+  // 広く壊す副作用が見つかったため見送った(やらないこと「タイムライン配置計算・Blockロジックの
+  // 変更」に抵触するリスクも含め、rail自体は今回のスコープ外として現行のまま維持する)。
+  // 旧tasksビュー自体は内部に残るため、直接setViewされた場合(テストのseedによる直接注入)は
+  // 従来どおりrailが表示される。
   if (state.currentView !== "tasks") {
     timelineRailEl.style.display = "none";
     appRootEl.style.gridTemplateColumns = `${sbWidth} minmax(0, 1fr)`;

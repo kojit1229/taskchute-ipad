@@ -202,10 +202,12 @@ function pruneExpiredSuggestedThemes(list) {
 }
 
 // v217: 振り返り系の専用3ビューを削除し、週次レビューはAIレポートに集約。
+// v335: PCサイドバーの「タスクシュート」「タイムライン」を「実行」1項目へ統合した
+// (§C。exec自体はv333で新設済み・navItemsは今回まで無改修だった)。旧2項目のバッジ
+// (未着手件数)はそのままexecへ引き継ぐ(renderSidebarのバッジ条件をitem.id==="exec"へ変更)。
 const navItems = [
   { id: "today", label: "今日", mark: "▶" },
-  { id: "tasks", label: "タスクシュート", mark: "T" },
-  { id: "timeline", label: "タイムライン", mark: "L" },
+  { id: "exec", label: "実行", mark: "E" },
   { id: "wbs", label: "WBS", mark: "W" },
   { id: "journal", label: "ジャーナル", mark: "J" },
   { id: "ai-reports", label: "AIレポート", mark: "A" },  // v92: コンテンツ総括・自己分析等の月次/不定期AIレポートビューア
@@ -1062,7 +1064,9 @@ registerActions({
   "energy-open-category": ({ target }) => {
     state.settings.timelineCategoryFilter = target.dataset.cat || "";
     persistLocalNoSchedule();
-    setView("timeline");
+    // v335: 旧timelineビューへの直行をexecの実績モードへ寄せる(§C)。
+    _execMode = "actual";
+    setView("exec");
   },
   "timeline-clear-cat": () => {
     state.settings.timelineCategoryFilter = "";
@@ -2919,7 +2923,13 @@ function renderSidebar() {
   if (collapsed) sidebar.classList.add("collapsed");
   else sidebar.classList.remove("collapsed");
   // v265: サイドバー直接項目に無いビュー(instruments/iron-log等「その他」配下)では「その他」をactiveにする(renderBottomNavと同型)
-  const sidebarActiveId = navItems.some((item) => item.id === state.currentView) ? state.currentView : "more";
+  // v335: 旧tasks/timelineビューへ直接setViewしても(内部の分岐は残しているため)壊れないが、
+  //       navItemsから項目を消したためそのままだと「その他」がactiveになりどのボタンも
+  //       実行タブを指さない画面になる(review-v333-claude-a.md M-4)。旧ビュー滞在中は
+  //       「実行」をactiveにする(§C「どのボタンもアクティブでない画面を作らない」)。
+  const sidebarActiveId = navItems.some((item) => item.id === state.currentView)
+    ? state.currentView
+    : (state.currentView === "tasks" || state.currentView === "timeline") ? "exec" : "more";
   const unreadCount = aiReportUnreadCount();
   const unstartedCount = taskchuteUnstartedCount();
   sidebar.innerHTML = `
@@ -2932,7 +2942,7 @@ function renderSidebar() {
       ${navItems.map((item) => `
         <button class="nav-button ${sidebarActiveId === item.id ? "active" : ""}" data-action="nav" data-view="${item.id}" title="${item.label}">
           <span class="nav-mark">${item.mark}</span>
-          <span class="nav-label">${item.label}</span>${item.id === "ai-reports" && unreadCount > 0 ? `<span class="nav-badge">${unreadCount > 99 ? "99+" : unreadCount}</span>` : ""}${item.id === "tasks" && unstartedCount > 0 ? `<span class="nav-badge">${unstartedCount > 99 ? "99+" : unstartedCount}</span>` : ""}
+          <span class="nav-label">${item.label}</span>${item.id === "ai-reports" && unreadCount > 0 ? `<span class="nav-badge">${unreadCount > 99 ? "99+" : unreadCount}</span>` : ""}${item.id === "exec" && unstartedCount > 0 ? `<span class="nav-badge">${unstartedCount > 99 ? "99+" : unstartedCount}</span>` : ""}
         </button>
       `).join("")}
     </div>
@@ -2940,7 +2950,10 @@ function renderSidebar() {
 }
 
 function renderBottomNav() {
-  const active = mobileNav.some((item) => item.id === state.currentView) ? state.currentView : "more";
+  // v335: サイドバーと同じ理由(M-4)で、旧tasks/timeline滞在中は「実行」をactiveにする。
+  const active = mobileNav.some((item) => item.id === state.currentView)
+    ? state.currentView
+    : (state.currentView === "tasks" || state.currentView === "timeline") ? "exec" : "more";
   const unreadCount = aiReportUnreadCount();
   const unstartedCount = taskchuteUnstartedCount();
   bottomNav.innerHTML = mobileNav.map((item) => `
@@ -3875,7 +3888,14 @@ function runAiSchedule() {
   _scheduleDraft = { date, items: finalItems, skipped, source: "deterministic" };  // v62: source区別
   _draftUndo = null;  // v62: 新規下書きでは前セッションのUndoを持ち越さない
   state.timelineMode = "planned";
-  setView("timeline");
+  // v335(§C): 旧timelineビュー直行をexecへ寄せる。energy-open-categoryと異なり、この呼び出しは
+  // 直前でstate.timelineMode="planned"にしており「下書きを予定タブで見せる」意図が明確なため、
+  // _execModeは"actual"固定にせず"plan"にする(exec実績モードだとrenderTimelineViewのmodeが
+  // "actual"へ強制上書きされ、renderDraftLayerがmode==="planned"でしか描かれず下書きの
+  // ドラッグ調整UIが見えなくなるため)。デスクトップ2ペインの右列はtimelineMode="planned"に
+  // 連動して下書きが従来どおり見える。
+  _execMode = "plan";
+  setView("exec");
   // v199(4b・中3修正): 入り切らないBlockが1件以上あれば、成功トーストの代わりに理由別の
   //   通知を出す(draftBarHTML側の警告行と同旨・rearrangeSkipMessageで文言を共通化)。
   const skipMsg = rearrangeSkipMessage(skipped);

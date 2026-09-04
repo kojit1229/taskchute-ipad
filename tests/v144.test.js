@@ -24,7 +24,7 @@
 //      decayStartMinutesのtype="time"入力
 // (12) normalizeStateマイグレーション: 個別プロパティ比較(新規補完/旧decayStartHourからの
 //      分単位移行/既存値の再クランプ)
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, openSettingsGroup } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, openSettingsGroup, dispatchRegisteredAction } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -40,7 +40,11 @@ function check(name, cond, extra = "") {
 (async () => {
   const server = startServer(PORT);
   const browser = await chromium.launch(launchOptions());
-  const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 1400 } });
+  // v335(§C追随): 旧timelineへの直接navが無くなったため、execの1280px以上2ペイン(右列=
+  // renderTimelineView)経由で操作する箇所がある(計画モードの完了解除ボタンは実績モードでは
+  // 描画されない=isActual時はcompleteBtnHTMLが空文字のため、planned modeのタイムラインが
+  // 必要)。1100pxのままだと計画モード単一列はタスク一覧のみでタイムラインが出ない。
+  const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1280, height: 1400 } });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
   await blockGithubApiByDefault(page);
@@ -67,10 +71,26 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(500);
   }
 
+  // v335(§C追随): 旧「タスクシュート」「タイムライン」nav(データ属性tasks/timeline)を
+  // exec(計画/実績モード)へ寄せる共通ヘルパー。明示的にモードを揃える(既にexecにいる場合の
+  // nav再クリックはno-opで意図したモードへ切り替わらないため)。
+  async function gotoExecPlan() {
+    await page.click('[data-action="nav"][data-view="exec"]');
+    await page.click('[data-action="exec-mode-toggle"][data-mode="plan"]');
+  }
+  async function gotoExecActual() {
+    await page.click('[data-action="nav"][data-view="exec"]');
+    await page.click('[data-action="exec-mode-toggle"][data-mode="actual"]');
+  }
+
   async function batteryChipText() {
     // v230: home電池チップは撤去。現行の同等表示はタイムラインのbattery-curve-label。
-    if (await page.locator('#app[data-view="timeline"]').count() === 0) {
-      await page.click('[data-action="nav"][data-view="timeline"]');
+    // v335(§C追随): 旧timelineへの直接navは無くなったため、execへ遷移してから実績モードへ
+    // 切替える(1100px幅の単一列では実績モードでないとタイムライン本体が出ない)。
+    if (await page.locator(".battery-curve-label").count() === 0) {
+      await page.click('[data-action="nav"][data-view="exec"]');
+      await page.waitForTimeout(100);
+      await page.click('[data-action="exec-mode-toggle"][data-mode="actual"]');
       await page.waitForTimeout(250);
     }
     const mode = page.locator('[data-action="tl-energy-mode"][data-mode="battery"]');
@@ -213,9 +233,14 @@ function check(name, cond, extra = "") {
       }]
     });
     check("編集前: 電池チップに残量45(50-9+net4)", (await batteryChipText())?.includes("残量 45"), await batteryChipText());
-    await page.click('[data-action="nav"][data-view="tasks"]');
+    // v331以降、完了Blockは実行タブの一覧(renderTasks)には描画されない(「やったこと」撤去済み)。
+    // タイムラインカード側の完了解除ボタン(tl-complete-btn.done)も30分Block(isShort)だと
+    // 描画されない。本checkの主眼は「toggle-block後にreload無しで電池チップが再描画されるか」で
+    // ボタンの置き場所ではないため、登録済みactionを直接dispatchして同じロジック
+    // (toggleBlock)を検証する(既存スイートのrunAiSchedule等と同じdelegation方式)。
+    await gotoExecPlan();
     await page.waitForTimeout(150);
-    await page.click('.checkbox-button[data-action="toggle-block"][data-id="b-mit"]');
+    await dispatchRegisteredAction(page, "toggle-block", { id: "b-mit" });
     await page.waitForTimeout(200);
     check("toggle-block後: reload無しで電池チップが残量41(50-9、completed解除でnet分が抜ける)に再描画される",
       (await batteryChipText())?.includes("残量 41"), await batteryChipText());
@@ -233,7 +258,7 @@ function check(name, cond, extra = "") {
         completed: true, charge: 5, discharge: 1, estimateMin: 0, deleted: false
       }]
     });
-    await page.click('[data-action="nav"][data-view="timeline"]');
+    await gotoExecActual();
     await page.waitForTimeout(400);
     // v148(UI改善計画Phase3-5)以降、エネルギー/バッテリーは同じSVGへの重ね描きをやめ切替式に
     // なった(既定"energy")。battery-curveを見るテストなので「バッテリー」へ切り替える
@@ -243,14 +268,14 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(200);
     check("当日はbattery-curveのpolylineが1本出る", await page.locator(".battery-curve").count() === 1);
 
-    await page.click('[data-action="nav"][data-view="tasks"]'); // v230: 日付バーの現行配置
+    await gotoExecPlan();
     await page.waitForTimeout(300);
     await page.click('[data-action="date-prev"]');
     await page.waitForTimeout(300);
-    await page.click('[data-action="nav"][data-view="timeline"]');
+    await gotoExecActual();
     await page.waitForTimeout(400);
     check("当日以外の日付ではbattery-curveが出ない", await page.locator(".battery-curve").count() === 0);
-    await page.click('[data-action="nav"][data-view="tasks"]');
+    await gotoExecPlan();
     await page.waitForTimeout(200);
     await page.click('[data-action="today"]');
     await page.waitForTimeout(300);
@@ -278,7 +303,7 @@ function check(name, cond, extra = "") {
     check("チップ: 日またぎBlockも時刻フィルタなしで合算される(残量36)",
       (await batteryChipText())?.includes("残量 36"), await batteryChipText());
 
-    await page.click('[data-action="nav"][data-view="timeline"]');
+    await gotoExecActual();
     await page.waitForTimeout(400);
     const pointsAttr = await page.locator(".battery-curve").getAttribute("points");
     const pts = parsePoints(pointsAttr);

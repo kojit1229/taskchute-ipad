@@ -189,7 +189,7 @@ function check(name, cond, extra = "") {
     await seed({ tasks: [], feedbackFiles: [PASTDATE] });
     feedbackApiRequests.length = 0;  // 起動時hydrateぶんの記録はリセットし、日付移動時のfetchだけを見る
     // v230: home撤去後、日付ピッカーはタスクシュート画面の現行導線を使う。
-    await page.click('[data-action="nav"][data-view="tasks"]');
+    await page.click('[data-action="nav"][data-view="exec"]');
     await page.waitForTimeout(150);
     await page.evaluate((PAST) => {
       const el = document.querySelector("[data-date-picker]");

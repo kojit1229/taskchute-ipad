@@ -195,8 +195,8 @@ function check(name, cond, extra = "") {
     }, KEY);
     await page.reload();
     await page.waitForTimeout(300);
-    await page.click('[data-action="nav"][data-view="timeline"]');
-    await page.click('[data-action="timeline-mode"][data-mode="actual"]');
+    await page.click('[data-action="nav"][data-view="exec"]');
+    await page.click('[data-action="exec-mode-toggle"][data-mode="actual"]');
     await page.waitForSelector('[data-action="edit-block"][data-id="block-B1"]');
     await page.click('[data-action="edit-block"][data-id="block-B1"]');
     await page.waitForTimeout(200);
@@ -213,7 +213,10 @@ function check(name, cond, extra = "") {
       (await page.locator('.modal-card [data-action="toggle-task-complete"][data-id="block-B1"]').textContent())?.includes("紐づくTaskも完了にする"));
     await page.click('[data-action="modal-close"]');
     await page.waitForTimeout(150);
-    await page.click('[data-action="nav"][data-view="tasks"]');
+    // v335(§C追随): 既にexec(実績モード)にいるため、nav[data-view="exec"]の再クリックはno-op
+    // (setViewは同一ビューへの遷移では_execModeをリセットしない)。未完了タスク一覧(計画モード)
+    // へ戻るにはヘッダのセグメントで明示的に計画へ切り替える。
+    await page.click('[data-action="exec-mode-toggle"][data-mode="plan"]');
     await page.waitForTimeout(150);
     check("未完了タスク一覧へ戻る", await page.locator('.item [data-action="task-today"][data-id="task-B"]').count() === 1);
 
@@ -225,14 +228,18 @@ function check(name, cond, extra = "") {
     // completeBtnHTMLは非表示)から行の完了チェックには到達できなくなった。行の完了チェック自体は
     // 未完了のblock-B2(実行タブ「これから」に残る)で確認する(検証意図=チェックボタンの
     // class/アイコンは変わっていない、を維持)。
-    await page.click('[data-action="nav"][data-view="tasks"]');
-    await page.waitForSelector('[data-action="toggle-block"][data-id="block-B2"]');
-    const blockCheck = page.locator('[data-action="toggle-block"][data-id="block-B2"]');
+    await page.click('[data-action="nav"][data-view="exec"]');
+    await page.waitForSelector('#main [data-action="toggle-block"][data-id="block-B2"]');
+    // v335(§C追随): #timelineRailは「タスクシュート」(旧view)専用のまま(§C対応の対象外。
+    // 詳細はsrc/features/timeline.jsのrenderTimelineRail()コメント参照)で、直前に一度でも
+    // literal "tasks" を経由していると非表示後もinnerHTMLが更新されず残留するため、
+    // #mainへ明示的にスコープしてrail側の同一data-idボタン(class違い)との衝突を避ける。
+    const blockCheck = page.locator('#main [data-action="toggle-block"][data-id="block-B2"]');
     check("Block完了チェックは.checkbox-buttonクラス", await blockCheck.evaluate((el) => el.classList.contains("checkbox-button")));
     check("Block完了チェックのアイコンは✓", (await blockCheck.textContent())?.trim() === "✓");
     // block-B1(完了済み)は実績モードのタイムラインから編集モーダルを開いてタスク完了ボタンを確認する。
-    await page.click('[data-action="nav"][data-view="timeline"]');
-    await page.click('[data-action="timeline-mode"][data-mode="actual"]');
+    await page.click('[data-action="nav"][data-view="exec"]');
+    await page.click('[data-action="exec-mode-toggle"][data-mode="actual"]');
     await page.waitForSelector('[data-action="edit-block"][data-id="block-B1"]');
     await page.click('[data-action="edit-block"][data-id="block-B1"]');
     await page.waitForTimeout(200);
@@ -376,7 +383,7 @@ function check(name, cond, extra = "") {
     const s7 = await stateNow();
     const t7 = s7.tasks.find((t) => t.id === "task-D");
     check("WBSチェックで分子が分母に揃う(既存v95連動)", t7?.progressNum === 10, JSON.stringify(t7));
-    await page.click('[data-action="nav"][data-view="tasks"]');
+    await page.click('[data-action="nav"][data-view="exec"]');
     await page.waitForTimeout(200);
     check("WBS完了後、タスクシュートの未完了一覧から消える", await page.locator('.item [data-action="task-today"][data-id="task-D"]').count() === 0);
 

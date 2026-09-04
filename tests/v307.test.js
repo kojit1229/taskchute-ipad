@@ -148,8 +148,11 @@ async function clickAndReadImmediately(page, selector) {
 }
 
 // v333: viewA/viewBを外側から渡せるようパラメタ化(デスクトップ=tasks⇄timeline、
-// モバイル=exec⇄today。#sidebarはtasks/timelineを内部的に残しているためデスクトップは無改修、
-// #bottomNavは実行1項目(exec)のみになったためモバイルは別のview組で同じ観点を検証する)。
+// モバイル=exec⇄today)。
+// v335(§C追随): #sidebarも「タスクシュート」「タイムライン」を「実行」1項目へ統合したため、
+// tasks/timelineは直接クリックできる導線が無くなった(内部の分岐render()自体は残っており
+// 直接setViewしても壊れない旨は他スイートで別途検証する)。デスクトップも#bottomNavと同じ
+// exec⇄別ビューの組で「view切替でのスクロールリセット」という本テストの観点自体は維持する。
 async function runScenario(browser, { width, height, navContainer, viewA, viewB }) {
   console.log(`\n=== 幅${width}px(${navContainer}、${viewA}⇄${viewB}) ===`);
   const context = await browser.newContext({ serviceWorkers: "block", viewport: { width, height } });
@@ -239,8 +242,12 @@ async function runScenario(browser, { width, height, navContainer, viewA, viewB 
   const server = startServer(PORT);
   const browser = await chromium.launch(launchOptions());
   try {
-    console.log("[1] デスクトップ幅(1280x900、サイドバーnav。#sidebarはtasks/timelineを維持)");
-    await runScenario(browser, { width: 1280, height: 900, navContainer: "#sidebar", viewA: "tasks", viewB: "timeline" });
+    // v335: #sidebarは「実行」1項目のみになったため、tasks⇄timelineの代わりにexec⇄todayで検証する
+    // (viewA=execはVIEWS_WITH_AUTOSCROLLに含まれ、リセット後の既存自動スクロール共存確認も従来どおり効く。
+    // viewB=wbsは本テストのフィクスチャでは十分な高さが出ずscrollTop>100を満たせなかったため、
+    // モバイルと同じtodayに揃えた)。
+    console.log("[1] デスクトップ幅(1280x900、サイドバーnav。#sidebarは実行1項目に統合済み)");
+    await runScenario(browser, { width: 1280, height: 900, navContainer: "#sidebar", viewA: "exec", viewB: "today" });
 
     // v333: #bottomNavは実行1項目(exec)のみになったため、モバイルはexec⇄todayで同じ観点を検証する。
     console.log("\n[2] モバイル幅(390x844、720px未満・ボトムnav。exec⇄today)");

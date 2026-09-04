@@ -30,7 +30,9 @@ function check(name, cond, extra = "") {
 (async () => {
   const server = startServer(PORT);
   const browser = await chromium.launch(launchOptions());
-  const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
+  // v335(§C追随): execの実績モードヘッダで「📋 下書きスケジュール」を押すと計画モードへ自動遷移する。
+  // 下書きレイヤはmode==="planned"のタイムラインにしか乗らないため、1280px以上の2ペインが必要。
+  const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
   // v72: api.github.com への実ネットワーク呼び出しを既定404で塞ぐ(個人データAPI化に伴う対策。tests/helpers.js参照)
@@ -104,9 +106,12 @@ function check(name, cond, extra = "") {
   }
 
   async function runScheduleFromTimeline() {
-    await page.click('[data-action="nav"][data-view="timeline"]');
-    await page.waitForSelector('#app[data-view="timeline"]');
-    const scheduleButton = page.locator('#app[data-view="timeline"] [data-action="ai-schedule"]');
+    // v335(§C追随): 旧timelineへの直接navは無くなった。execの実績モードヘッダに
+    // 「📋 下書きスケジュール」が出る(isActual時のみ。renderExecView参照)。
+    await page.click('[data-action="nav"][data-view="exec"]');
+    await page.click('.exec-mode-segmented [data-action="exec-mode-toggle"][data-mode="actual"]');
+    await page.waitForSelector('#app[data-view="exec"]');
+    const scheduleButton = page.locator('#app[data-view="exec"] [data-action="ai-schedule"]');
     if (await scheduleButton.count()) await scheduleButton.click();
     else await dispatchRegisteredAction(page, "ai-schedule");
   }

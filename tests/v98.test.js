@@ -157,12 +157,16 @@ async function readStructuralStyles(page) {
     console.log("[4] .timeline-card の絶対配置(position: absolute)がiPad幅・iPhone幅とも変わっていない");
     // ここで初めてBlockを1件追加する(タイムラインに.timeline-cardを出すため。
     // [1]〜[3]はblocksを空のままにして測定対象を単純化していた)
+    // v335(§C追随): 旧「タイムライン」navはexecの実績モードへ寄せる(§C)。実績モードの
+    // タイムラインはactualStartAt付きBlockのみ描画するため、plannedStartAtだけのfixtureへ
+    // actualStartAtを補う(検証意図=.timeline-cardのposition:absolute回帰確認であり、
+    // 予定/実績どちらのBlockかは無関係)。
     const addBlock = (page) => page.evaluate(({ KEY, TODAY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.blocks = [{
         id: "b1", taskId: "t1", title: "測定用Block", category: "", date: TODAY,
         plannedStartAt: `${TODAY}T09:00`, plannedEndAt: `${TODAY}T09:30`,
-        actualStartAt: "", actualEndAt: "", completed: false, deleted: false, source: "", charge: 0, discharge: 0
+        actualStartAt: `${TODAY}T09:00`, actualEndAt: "", completed: false, deleted: false, source: "", charge: 0, discharge: 0
       }];
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, TODAY });
@@ -175,14 +179,17 @@ async function readStructuralStyles(page) {
     await pagePhone.waitForTimeout(500);
     // サイドバー(iPad用)とbottom-nav(iPhone用)は両方DOMに存在し同じdata-action/data-viewを
     // 持つため、非表示側もヒットしないよう表示側のコンテナで絞り込む
-    await pageIpad.click('.sidebar .nav-button[data-action="nav"][data-view="timeline"]');
+    // v335(§C追随): 旧「タイムライン」navは無くなった。execへ遷移して実績モードへ切替える。
+    await pageIpad.click('.sidebar .nav-button[data-action="nav"][data-view="exec"]');
+    await pageIpad.click('.exec-mode-segmented [data-action="exec-mode-toggle"][data-mode="actual"]');
     await pageIpad.waitForTimeout(300);
     const posIpad = await pageIpad.evaluate(() => {
       const el = document.querySelector(".timeline-card");
       return el ? getComputedStyle(el).position : null;
     });
     check("iPad幅: .timeline-cardがposition:absolute", posIpad === "absolute", `actual=${posIpad}`);
-    await pagePhone.click('.bottom-nav button[data-action="nav"][data-view="timeline"]');
+    await pagePhone.click('.bottom-nav button[data-action="nav"][data-view="exec"]');
+    await pagePhone.click('.exec-mode-segmented [data-action="exec-mode-toggle"][data-mode="actual"]');
     await pagePhone.waitForTimeout(300);
     const posPhone = await pagePhone.evaluate(() => {
       const el = document.querySelector(".timeline-card");

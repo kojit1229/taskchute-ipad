@@ -25,7 +25,12 @@ function check(name, cond, extra = "") {
   const server = startServer(PORT);
 
   const browser = await chromium.launch(launchOptions());
-  const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
+  // v335(§C追随): 旧timelineへの直接navが無くなったため、execの実績モード(ヘッダの
+  // 「📋 下書きスケジュール」ボタンはisActual時のみ表示)経由でD&Dを検証する。action実行後は
+  // 計画モードへ自動遷移する(_execMode="plan"、state.timelineMode="planned")ため、下書きの
+  // 描画(.draft-block等はmode==="planned"のタイムラインのみ)を見るには1280px以上の2ペインが
+  // 要る。1100pxのままだと計画モード単一列はタスク一覧のみで下書きレイヤが乗るグリッドが出ない。
+  const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
   // v72: api.github.com への実ネットワーク呼び出しを既定404で塞ぐ(個人データAPI化に伴う対策。tests/helpers.js参照)
@@ -91,12 +96,15 @@ function check(name, cond, extra = "") {
   await page.click('[data-action="nav"][data-view="today"]');
   await page.waitForTimeout(300);
   check("todayビューには旧下書きボタンを戻さない", await page.locator('[data-action="ai-schedule"]').count() === 0);
-  await page.click('[data-action="nav"][data-view="timeline"]');
-  await page.waitForSelector('#app[data-view="timeline"] [data-action="ai-schedule"]');
-  check("timelineの現行下書き導線を維持", await page.locator('#app[data-view="timeline"] [data-action="ai-schedule"]').count() === 1);
-  await page.click('#app[data-view="timeline"] [data-action="ai-schedule"]');
+  // v335(§C追随): 旧timelineへの直接navは無くなった。execの実績モードヘッダに
+  // 「📋 下書きスケジュール」ボタンが出る(isActual時のみ。renderExecView参照)。
+  await page.click('[data-action="nav"][data-view="exec"]');
+  await page.click('[data-action="exec-mode-toggle"][data-mode="actual"]');
+  await page.waitForSelector('#app[data-view="exec"] [data-action="ai-schedule"]');
+  check("execの現行下書き導線を維持", await page.locator('#app[data-view="exec"] [data-action="ai-schedule"]').count() === 1);
+  await page.click('#app[data-view="exec"] [data-action="ai-schedule"]');
   await page.waitForTimeout(500);
-  check("タイムラインへ自動遷移", await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).currentView, KEY) === "timeline");
+  check("execへ自動遷移", await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).currentView, KEY) === "exec");
   check("下書きブロックが表示される", await page.locator(".draft-block").count() === 1);
   check("下書きバー(確定/破棄)", await page.locator('[data-action="draft-confirm"]').count() === 1);
   let label = await page.locator(".draft-block-time").textContent();
@@ -146,8 +154,9 @@ function check(name, cond, extra = "") {
   //   候補の有無どちらでも安全に倒れるよう両分岐を維持する)
   await page.click('[data-action="nav"][data-view="today"]');
   await page.waitForTimeout(200);
-  await page.click('[data-action="nav"][data-view="timeline"]');
-  const scheduleButton = page.locator('#app[data-view="timeline"] [data-action="ai-schedule"]');
+  await page.click('[data-action="nav"][data-view="exec"]');
+  await page.click('[data-action="exec-mode-toggle"][data-mode="actual"]');
+  const scheduleButton = page.locator('#app[data-view="exec"] [data-action="ai-schedule"]');
   if (await scheduleButton.count()) {
     await scheduleButton.click();
   } else {
