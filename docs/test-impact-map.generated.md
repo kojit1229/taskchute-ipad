@@ -193,7 +193,7 @@
 | v61.test.js | e2e | full | planning-execution | 40 | 19 | 5600 |
 | v62.test.js | e2e | full | journal-health, content-ai | 38 | 19 | 7650 |
 | v63.test.js | e2e | full | ui-responsive | 15 | 8 | 2450 |
-| v65.test.js | e2e | full | planning-execution | 27 | 18 | 4450 |
+| v65.test.js | e2e | full | planning-execution | 27 | 16 | 4150 |
 | v67.test.js | e2e | smoke | planning-execution, content-ai | 17 | 1 | 150 |
 | v68.test.js | e2e | full | sync-storage, journal-health, content-ai | 44 | 18 | 5500 |
 | v70.test.js | e2e | smoke | planning-execution | 41 | 16 | 4850 |

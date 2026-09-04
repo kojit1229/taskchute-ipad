@@ -5764,7 +5764,7 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false, 
         <button class="btn ghost plan-move" data-action="move-plan-step" data-id="${task.id}" data-direction="-1" aria-label="1つ上へ" ${planIndex <= 0 ? "disabled" : ""}>↑</button>
         <button class="btn ghost plan-move" data-action="move-plan-step" data-id="${task.id}" data-direction="1" aria-label="1つ下へ" ${planIndex < 0 || planIndex >= planSiblings.length - 1 ? "disabled" : ""}>↓</button>
         <button class="btn ghost" data-action="add-plan-step-below" data-id="${task.id}">＋ 下に追加</button>` : "";
-  const metaHTML = `<div class="wbs-task-meta">${projectTitle ? `<span>${escapeHTML(projectTitle)}</span>` : ""}<span>進捗 ${progressNum}/${progressDen}</span>${dueHTML}${stats.count ? `<span>実績 ${stats.count}回 ${fmtMinShort(stats.minutes) || "0m"}</span>` : `<span>実績 0回 0m</span>`}</div>`;
+  const metaHTML = `<div class="wbs-task-meta">${projectTitle ? `<span>${escapeHTML(projectTitle)}</span>` : ""}<span>進捗 ${progressNum}/${progressDen}</span>${dueHTML}${stats.count ? `<span>実績 ${stats.count}回 ${fmtMinShort(stats.minutes) || "0m"}</span>` : `<span>実績 0回 0m</span>`}${leverageTypeMarkHTML(task.leverageType)}</div>`;
   return `
     <div class="row wbs-task-row${compact ? " is-compact" : ""}${suspended ? " is-suspended" : ""}${task.status === "completed" ? " is-completed" : ""}">
       <div class="wbs-task-check">${depth > 0 ? `<span class="wbs-branch">└</span>` : ""}${caret}<button class="checkbox-button ${task.status === "completed" ? "done" : ""}" data-action="toggle-task" data-id="${task.id}">✓</button></div>
@@ -5971,7 +5971,7 @@ function renderExecNowRow(block) {
   const start = block.actualStartAt ? timeFromDateTime(block.actualStartAt) : (block.plannedStartAt ? timeFromDateTime(block.plannedStartAt) : "");
   const end = block.plannedEndAt ? timeFromDateTime(block.plannedEndAt) : "";
   const estimateMin = estimateMinutesForBlock(block, "block");
-  const metaHTML = `${start}${end ? `–${end}` : ""}${estimateMin ? ` ・ 見積${estimateMin}分` : ""}${block.category ? ` ・ ${escapeHTML(block.category)}` : ""}`;
+  const metaHTML = `${start}${end ? `–${end}` : ""}${estimateMin ? ` ・ 見積${estimateMin}分` : ""}${block.category ? ` ・ ${escapeHTML(block.category)}` : ""}${leverageTypeMarkHTML(block.leverageType)}`;
   const expanded = _execExpandedBlockId === block.id;
   return `
     <div class="item exec-row exec-row-now${expanded ? " is-expanded" : ""}">
@@ -6004,7 +6004,7 @@ function renderExecUpcomingRow(block) {
   const start = block.plannedStartAt ? timeFromDateTime(block.plannedStartAt) : "未定";
   const estimateMin = estimateMinutesForBlock(block, "block");
   const expanded = _execExpandedBlockId === block.id;
-  const metaHTML = `${start}${estimateMin ? ` ・ 見積${estimateMin}分` : ""}${block.category ? ` ・ ${escapeHTML(block.category)}` : ""}${task ? ` ・ ${escapeHTML(projectName(task.projectId))}` : ""}`;
+  const metaHTML = `${start}${estimateMin ? ` ・ 見積${estimateMin}分` : ""}${block.category ? ` ・ ${escapeHTML(block.category)}` : ""}${task ? ` ・ ${escapeHTML(projectName(task.projectId))}` : ""}${leverageTypeMarkHTML(block.leverageType)}`;
   return `
     <div class="item exec-row exec-row-upcoming${expanded ? " is-expanded" : ""}">
       <button class="checkbox-button" data-action="toggle-block" data-id="${block.id}" title="Block完了" aria-label="Block完了">✓</button>
@@ -6079,85 +6079,11 @@ function renderExecTaskRow(task, todayCount) {
       <button class="checkbox-button" data-action="toggle-task" data-id="${task.id}" title="完了" aria-label="完了">✓</button>
       <div class="exec-row-copy" data-action="task-row-toggle" data-id="${task.id}">
         <strong title="${escapeHTML(task.title)}">${escapeHTML(task.title)}</strong>
-        <div class="exec-row-meta${isOverdue ? " exec-task-overdue" : ""}">${metaParts.join(" ・ ")}${addedHTML}</div>
+        <div class="exec-row-meta${isOverdue ? " exec-task-overdue" : ""}">${metaParts.join(" ・ ")}${addedHTML}${leverageTypeMarkHTML(task.leverageType)}</div>
         ${doneCriteriaHTML}${firstStepHTML}
       </div>
       <button class="btn exec-start-btn" data-action="task-today" data-id="${task.id}">今日へ</button>
       ${expandHTML}
-    </div>
-  `;
-}
-
-// v331修正の自信がない箇所: renderBlockItemは呼び出し元ゼロ(renderExecNowRow/
-// renderExecUpcomingRowへ置換済み)だが、削除すると本修正の実行コード差分が200行を超えるため
-// 本バージョンでは残置し次バージョンで削除する(order-v331 の A-1a/A-1b 分割と同じ考え方)。
-function renderBlockItem(block) {
-  const start = block.plannedStartAt ? timeFromDateTime(block.plannedStartAt) : "未定";
-  const end = block.plannedEndAt ? timeFromDateTime(block.plannedEndAt) : "";
-  const task = block.taskId ? state.tasks.find((item) => item.id === block.taskId) : null;
-  const catColor = block.category ? getCategoryColor(block.category) : null;
-  // v17: MIT(今日の主役)
-  const isMIT = block.isMIT === true;
-  // MIT なら金色の左ボーダーを優先
-  const leftBorder = isMIT
-    ? `border-left:4px solid var(--gold, #FFD60A); background:linear-gradient(90deg, rgba(255,214,10,0.06), transparent 30%)`
-    : (catColor ? `border-left:3px solid ${catColor}` : "");
-  const justStarted = block.id === state._justStartedBlockId ? " just-started" : "";  // v40: 着手ジュース
-  // v47: 開始/終了は状態に応じて片方だけ(常時両方はボタン過多で迷う)
-  const started = Boolean(block.actualStartAt);
-  const doing = started && !block.completed && !block.actualEndAt;
-  const startEndBtn = block.completed
-    ? ""
-    : (!started
-      ? `<button class="btn" data-action="now-start" data-id="${block.id}">▶ 開始</button>`
-      : (doing
-        ? `<button class="btn green" data-action="now-end" data-id="${block.id}">■ 終了</button>`
-        : ""));
-  // v186レビュー(M-1): migratedTo付きBlock(翌日へ送済)は実行ビューからも消さず、控えめな
-  // バッジ+減光で「送済」と分かるようにする(最小実装。タイムラインカードと同じ意匠)。
-  const isMigrated = Boolean(block.migratedTo);
-  const migratedBadgeHTML = isMigrated
-    ? `<span class="migrated-badge" title="明日へ送りました">→送済</span>` : "";
-  // v305: 実行中カードだけ、専用change経路で保存するインラインメモを表示。
-  return `
-    <div class="item block-row ${isMIT ? "is-mit" : ""}${doing ? " is-doing" : ""}${justStarted}${isMigrated ? " is-migrated" : ""}" ${leftBorder ? `style="${leftBorder}"` : ""}>
-      <div class="block-checks">
-        <button class="checkbox-button ${block.completed ? "done" : ""}" data-action="toggle-block" data-id="${block.id}" title="Block完了" aria-label="Block完了">✓</button>
-      </div>
-      <div class="stack">
-        <div class="title-line">
-          ${isMIT ? `<span class="mit-star" title="今日の主役" style="color:#F5A623; font-weight:700">★</span>` : ""}
-          <strong data-action="edit-block" data-id="${block.id}" title="${escapeHTML(block.title)}" style="cursor:pointer">${escapeHTML(block.title)}</strong>
-          <span class="badge ${block.completed ? "green" : "blue"}">${start}${end ? `-${end}` : ""}</span>
-          ${doing ? `<span class="badge orange">着手中 ${timeFromDateTime(block.actualStartAt)}〜</span>` : ""}
-          ${task ? `<span class="badge">${escapeHTML(projectName(task.projectId))}</span>` : `<span class="badge orange">単発</span>`}
-          ${block.category ? `<span class="cat-chip" style="background:${catColor}1f; color:${catColor}; border:1px solid ${catColor}66">${escapeHTML(block.category)}</span>` : ""}
-          ${leverageTypeMarkHTML(block.leverageType)}
-          ${migratedBadgeHTML}
-        </div>
-        ${doing ? `
-        <textarea class="textarea block-inline-memo" style="min-height:56px; font-size:16px"
-          data-block-comment data-id="${block.id}"
-          placeholder="実行中のメモ…">${escapeHTML(block.comment || "")}</textarea>` : ""}
-        <div class="block-meta">
-          <label>充電
-            <select class="mini-select" data-block-field="charge" data-id="${block.id}">
-              ${rangeOptions(0, 5, block.charge)}
-            </select>
-          </label>
-          <label>放電
-            <select class="mini-select" data-block-field="discharge" data-id="${block.id}">
-              ${rangeOptions(0, 5, block.discharge)}
-            </select>
-          </label>
-        </div>
-      </div>
-      <div class="row block-actions">
-        <button class="btn ${isMIT ? "" : "ghost"}" data-action="toggle-mit" data-id="${block.id}" title="${isMIT ? "今日の主役から外す" : "今日の主役にする(最大3個)"}" style="${isMIT ? "color:#F5A623; font-weight:700" : ""}">${isMIT ? "★" : "☆"}</button>
-        ${startEndBtn}
-        ${block.completed ? "" : `<button class="btn orange" data-action="start-pomodoro" data-block-id="${block.id}">25分</button>`}
-        <button class="btn" data-action="edit-block" data-id="${block.id}">編集</button>
-      </div>
     </div>
   `;
 }

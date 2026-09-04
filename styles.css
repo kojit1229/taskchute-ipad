@@ -712,18 +712,6 @@ h3 {
   overflow-wrap: anywhere;
 }
 
-/* v308: 中間幅でもBlockタイトルを1行に保ち、WBSプロジェクト行には波及させない。
-   min-width:0だけだと、同じ.title-line内の複数バッジ(時刻・着手中・カテゴリ)と
-   場所を奪い合った際にタイトルの実幅が0まで潰れて完全に見えなくなる実害が
-   実測で確認できたため、常に数文字分は読める最低幅を確保する。 */
-.block-row .title-line strong {
-  min-width: 4ch;
-  flex: 1 1 auto;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
 .badge {
   display: inline-flex;
   align-items: center;
@@ -843,16 +831,6 @@ h3 {
   opacity: 1;
 }
 
-/* v107: block-rowのグリッド列構成(3列)を崩さないための1列目wrapper(従来のcheckbox-button
-   単体と同じ扱い)。v146: 🏁(タスク完了)はBlock編集モーダルへ移設したため、現在は✓のみ内包する。 */
-.block-checks {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  flex: 0 0 auto;
-}
-
 .datebar {
   display: flex;
   align-items: center;
@@ -901,13 +879,7 @@ h3 {
      ここから下は影響範囲がホームのみに限定される)。 */
 }
 
-.block-row {
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-}
-
-/* v331: 実行タブ A-1a(いま/これから)。TOWERトークンで統一する新マークアップ(.exec-*)。
-   既存.block-rowは温存し上書きしない。 */
+/* v331: 実行タブ A-1a(いま/これから)。TOWERトークンで統一する新マークアップ(.exec-*)。*/
 .exec-panel.exec-amber {
   border: 1px solid #6b5322;
   border-radius: 4px;
@@ -987,13 +959,6 @@ h3 {
 }
 .exec-row-done .checkbox-button.done { display: inline-flex; align-items: center; justify-content: center; width: 44px; min-width: 44px; height: 44px; color: var(--green-text); background: none; border: 0; }
 .exec-done-section { margin-top: 12px; }
-
-.block-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
 
 .mini-select {
   max-width: 74px;
@@ -1423,21 +1388,6 @@ h3 {
     font-size: 10px !important;
     white-space: pre-wrap;
     word-break: break-all;
-  }
-
-  /* ========= block-row のレイアウト ========= */
-  .block-row {
-    grid-template-columns: auto minmax(0, 1fr);
-    grid-template-rows: auto auto;
-  }
-  .block-row > .row {
-    grid-column: 1 / -1;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-  .block-row .btn {
-    flex: 1 1 calc(50% - 6px);
-    min-width: 0;
   }
 
   /* ========= タイムラインの行高さを少し詰める ========= */
@@ -2352,9 +2302,6 @@ h3 {
 }
 
 /* === v17: MIT 強調表示 === */
-.block-row.is-mit strong {
-  color: var(--text);
-}
 .mit-star {
   margin-right: 4px;
 }
@@ -2684,10 +2631,9 @@ h3 {
 
 /* v47: UI/UX 改善 — WBS・タスクシュートの痒いところ */
 .wbs-overdue { color: var(--tower-amber, var(--orange-text)); font-weight: 800; }
-.block-row.is-doing { box-shadow: inset 0 0 0 1px rgba(47,185,109,.35); }
 /* モバイル: 行アクションのボタンを圧縮して折り返しを減らす */
 @media (max-width: 720px) {
-  .block-actions .btn, .wbs-actions .btn { padding: 6px 9px; font-size: 12px; }
+  .wbs-actions .btn { padding: 6px 9px; font-size: 12px; }
   .datebar { flex-wrap: wrap; }
 }
 
@@ -2950,7 +2896,7 @@ h3 {
 .migration-ritual-choices { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
 .migration-ritual-choices .btn { width: 100%; text-align: left; padding: 11px 14px; }
 /* v186レビュー(M-1): migratedTo付きBlock(翌日へ送済)の控えめなバッジ。一覧からは消さず
-   減光(.timeline-card.is-migrated / .block-row.is-migrated)と併用する。 */
+   減光(.timeline-card.is-migrated)と併用する。 */
 .migrated-badge {
   display: inline-block;
   margin-left: 6px;
@@ -2963,8 +2909,7 @@ h3 {
   vertical-align: middle;
   white-space: nowrap;
 }
-.timeline-card.is-migrated,
-.block-row.is-migrated {
+.timeline-card.is-migrated {
   opacity: 0.55;
 }
 /* v65: 10x機構 — leverageType の控えめマーク + 10秒判定ヘルプの折りたたみ */

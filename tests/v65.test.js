@@ -25,6 +25,15 @@ function check(name, cond, extra = "") {
   else { failures++; console.log(`  ❌ ${name} ${extra}`); }
 }
 
+// v329で導入された行メニュー化(wbs-row-menu-toggle)に追随: WBS行の副操作(edit-task等)は
+// 「…」トグルで開く<details>相当のパネル配下にある。既に開いている場合は再クリックで閉じて
+// しまうため、aria-expandedを見てから必要な時だけ開く。他行(WBSの「全部見る」導線等)にも
+// 同名トグルがあるため、対象タスクのタイトルを含むaria-labelで一意に絞り込む。
+async function openWbsRowMenuIfClosed(page, taskTitle) {
+  const toggle = page.locator(`.wbs-row-menu-toggle[aria-label="${taskTitle}の副操作"]`);
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+}
+
 (async () => {
   const server = startServer(PORT);
   const browser = await chromium.launch(launchOptions());
@@ -144,9 +153,7 @@ function check(name, cond, extra = "") {
       projects: [testProject()],
       view: "wbs"
     });
-    // v329: 行の副操作は…メニュー(排他)の中。先に開く(セレクタ追随・assert不変)
-    await page.click('[data-wbs-row-id="task-lev1"] [data-action="wbs-row-menu-toggle"]');
-    await page.waitForTimeout(150);
+    await openWbsRowMenuIfClosed(page, "leverageType保存検証Task");  // v329: 行メニュー(…)を開いてからedit-task
     await page.click('[data-action="edit-task"][data-id="task-lev1"]');
     await page.waitForTimeout(200);
     check("Task編集モーダルにレバレッジselectがある", await page.locator('[data-modal-field="leverageType"]').count() === 1);
@@ -162,6 +169,8 @@ function check(name, cond, extra = "") {
       blocks: [makeBlockFixture({ id: "block-lev1", title: "leverageType保存検証Block" })],
       view: "tasks"
     });
+    await page.click('[data-action="block-row-toggle"][data-id="block-lev1"]');  // v331: 展開してからedit-block
+    await page.waitForTimeout(150);
     await page.click('[data-action="edit-block"][data-id="block-lev1"]');
     await page.waitForTimeout(200);
     check("Block編集モーダルにレバレッジselectがある", await page.locator('[data-modal-field="leverageType"]').count() === 1);
@@ -181,9 +190,7 @@ function check(name, cond, extra = "") {
       projects: [testProject()],
       view: "wbs"
     });
-    // v329: 行の副操作は…メニュー(排他)の中。先に開く(セレクタ追随・assert不変)
-    await page.click('[data-wbs-row-id="task-lev2"] [data-action="wbs-row-menu-toggle"]');
-    await page.waitForTimeout(150);
+    await openWbsRowMenuIfClosed(page, "10秒判定検証Task");  // v329: 行メニュー(…)を開いてからedit-task
     await page.click('[data-action="edit-task"][data-id="task-lev2"]');
     await page.waitForTimeout(200);
     check("10秒判定ヘルプ(details)がある", await page.locator(".lev-helper").count() === 1);
@@ -196,16 +203,6 @@ function check(name, cond, extra = "") {
     check("2問以上Yesでselectがassetになる", selVal1 === "asset", selVal1);
     await page.click('[data-action="modal-close"]');  // 保存せずキャンセル
     await page.waitForTimeout(150);
-    // v329: 直前に開いた…メニューがDOM直操作(render非経由)のため開いたまま残ることがある。
-    // 閉じている時だけ開く(セレクタ追随・assert不変)
-    const task_lev2MenuOpen = await page.evaluate(() => {
-      const panel = document.querySelector('[data-wbs-row-id="task-lev2"] .wbs-row-menu-panel');
-      return panel ? !panel.hidden : false;
-    });
-    if (!task_lev2MenuOpen) {
-      await page.click('[data-wbs-row-id="task-lev2"] [data-action="wbs-row-menu-toggle"]');
-      await page.waitForTimeout(150);
-    }
     await page.click('[data-action="edit-task"][data-id="task-lev2"]');  // 開き直す
     await page.waitForTimeout(150);
     const selValAfterCancel = await page.locator('[data-modal-field="leverageType"]').inputValue();
@@ -229,7 +226,11 @@ function check(name, cond, extra = "") {
       blocks: [
         makeBlockFixture({ id: "block-mark1", title: "資産マーク検証Block", leverageType: "asset", startMin: 9 * 60 }),
         makeBlockFixture({ id: "block-mark2", title: "削減マーク検証Block", leverageType: "eliminate", startMin: 11 * 60 }),
-        makeBlockFixture({ id: "block-mark3", title: "単発マーク非表示検証Block", leverageType: "oneoff", startMin: 13 * 60 })
+        makeBlockFixture({ id: "block-mark3", title: "単発マーク非表示検証Block", leverageType: "oneoff", startMin: 13 * 60 }),
+        // v336追加: 実績(actual)タイムラインは実行済み(actualStartAt/actualEndAt あり)のBlockしか
+        // 描画しないため、上記3件(未着手のまま=exec「これから」検証用)とは別に完了Blockを足す。
+        makeBlockFixture({ id: "block-mark4", title: "資産マーク検証Block(実績)", leverageType: "asset", startMin: 15 * 60, completed: true }),
+        makeBlockFixture({ id: "block-mark5", title: "削減マーク検証Block(実績)", leverageType: "eliminate", startMin: 17 * 60, completed: true })
       ],
       projects: [testProject()],
       view: "tasks"
