@@ -4445,12 +4445,18 @@ function carryOverBlock(id, { forceMIT = false, toDate = todayISO(), toastMessag
   const block = makeBlock({
     taskId: src.taskId, date: toDate, title: src.title, category: src.category,
     plannedStartAt: shift(src.plannedStartAt), plannedEndAt: shift(src.plannedEndAt),
-    estimateMin: src.estimateMin
+    estimateMin: src.estimateMin,
+    // 修正フェーズ 単位9(1-H3): comment/leverageType/expectedCharge/expectedDischargeは
+    // 実績ではなく計画・メモ情報なので、confirmScheduleDraftのleverageType引き継ぎと同様に復元する。
+    comment: src.comment, leverageType: src.leverageType,
+    expectedCharge: src.expectedCharge, expectedDischarge: src.expectedDischarge
   });
   block.source = src.source || "";
   block.carryCount = (src.carryCount || 0) + 1;  // v61: 繰り越し回数を1つ積み上げる
-  if (forceMIT) {
-    // v61: 儀式で「今日やる」を選んだ場合はMIT化(既存の最大3個ルールは尊重する)
+  // v61由来のforceMIT(儀式「今日やる」)に加え、単位9(1-H3)で元Blockが既にMITだった場合も
+  // 「今日の主役」を引き継ぐ(実績系のcompleted/charge等とは異なり計画上の重要度は繰越で消えないべき)。
+  // 既存の最大3個ルールはどちらの経路でも尊重する。
+  if (forceMIT || src.isMIT) {
     const sameDayMITs = state.blocks.filter((b) => !b.deleted && b.date === toDate && b.isMIT);
     if (sameDayMITs.length < 3) block.isMIT = true;
   }

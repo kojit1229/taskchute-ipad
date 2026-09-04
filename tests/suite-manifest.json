@@ -889,6 +889,29 @@
       }
     },
     {
+      "file": "unit9-carryover-fields.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 28,
+      "assertionHash": "9842a7cf042f3564",
+      "sourceHash": "b15caffe718499ea",
+      "waits": {
+        "fixedCount": 4,
+        "numericMilliseconds": 1500,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
       "file": "v100.test.js",
       "kind": "e2e",
       "tier": "full",
