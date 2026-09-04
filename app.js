@@ -7347,12 +7347,28 @@ function loadVisionBoardImages(file) {
 //     (data:text/htmlのようなナビゲーション用途はここにしか出てこない)。srcはdata:image/
 //     (png|jpeg|gif|webp)のみ許可し、それ以外(data:image/svg+xml等。SVG内に<script>を
 //     埋め込めるため個別に拒否)は拒否する。
-const SANITIZE_URL_ATTRS = new Set(["href", "src", "xlink:href", "action", "formaction"]);
+// v335(review A5-M1/M2): 2つの穴を塞いだ。
+//   M-1: <template>の中身はHTMLTemplateElement.content(別DocumentFragment)に入るため
+//     querySelectorAll("*")が一切辿らず、危険な子要素・on*属性がそのまま出力されていた。
+//     TEMPLATEをBLOCKED_TAGSに追加し要素ごとremoveすることでcontentごと除去する
+//     (walk側の再帰は不要=中身を見る前に親を消すため安全)。
+//   M-2: SVG SMILの<animate>/<set>/<animateTransform>/<animateMotion>はBLOCKED_TAGSに
+//     無く、attributeNameでhref等を間接指定してvalues/to/from/byにjavascript:を仕込む
+//     経路がjavascript:検知の対象外(URL系属性のみ検査)だった。該当タグをBLOCKED_TAGSへ
+//     追加(要素ごと除去)した上で、attributeName/values/to/from/byをjavascript:/data:
+//     検査の対象に含め、将来同種のSMIL要素が追加された場合の保険とする。
+const SANITIZE_URL_ATTRS = new Set([
+  "href", "src", "xlink:href", "action", "formaction",
+  "attributename", "values", "to", "from", "by",
+]);
 const SANITIZE_SAFE_DATA_IMAGE_RE = /^data:image\/(png|jpeg|gif|webp)[;,]/;
 function sanitizeHTML(html) {
   const template = document.createElement("template");
   template.innerHTML = html;
-  const BLOCKED_TAGS = ["SCRIPT", "IFRAME", "OBJECT", "EMBED", "STYLE", "LINK", "META", "FORM", "BASE"];
+  const BLOCKED_TAGS = [
+    "SCRIPT", "IFRAME", "OBJECT", "EMBED", "STYLE", "LINK", "META", "FORM", "BASE",
+    "TEMPLATE", "ANIMATE", "SET", "ANIMATETRANSFORM", "ANIMATEMOTION",
+  ];
   const walk = (node) => {
     for (const el of [...node.querySelectorAll("*")]) {
       if (BLOCKED_TAGS.includes(el.tagName.toUpperCase())) { el.remove(); continue; }

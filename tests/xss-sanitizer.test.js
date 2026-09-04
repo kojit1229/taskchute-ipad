@@ -21,6 +21,12 @@
 //   Low-6: data:スキームの扱いを属性ごとに分けた。href/xlink:hrefはdata:を全面拒否、
 //     srcはdata:image/(png|jpeg|gif|webp)のみ許可(data:image/svg+xml等は拒否。SVG内に
 //     <script>を埋め込めるため)。本テストにdata:関連のケースを追加。
+// v335(review A5-M1/M2、修正フェーズ単位17): sanitizeHTMLが<template>の中身
+//   (HTMLTemplateElement.content=別DocumentFragment)を素通しする穴と、SVG SMIL
+//   (<animate>/<set>/<animateTransform>/<animateMotion>)がBLOCKED_TAGSに無く
+//   attributeName/values/to/from/byでのjavascript:混入がjavascript:検知の対象外
+//   だった穴を検証する。TEMPLATE/ANIMATE/SETをBLOCKED_TAGSへ追加して要素ごと除去する
+//   修正の回帰テスト。大文字小文字違い(<TEMPLATE>/<Animate>)と入れ子templateの境界も見る。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
@@ -84,6 +90,22 @@ function check(name, cond, extra = "") {
 <img src="data:image/png;base64,AAAA" alt="safe-data-image">
 
 <img src="data:image/svg+xml;base64,AAAA" alt="unsafe-data-image">
+
+<template><img src="x" onerror="window.__xss8 = true;"></template>
+
+<TEMPLATE><img src="x" onerror="window.__xss8b = true;"></TEMPLATE>
+
+<template><template><img src="x" onerror="window.__xss8c = true;"></template></template>
+
+<svg><a><animate attributeName="href" values="javascript:window.__xss9=true" /><text x="10" y="20">svg-animate</text></a></svg>
+
+<svg><Animate attributeName="href" values="javascript:window.__xss9b=true" /></svg>
+
+<svg><set attributeName="onload" to="window.__xss10=true"></set></svg>
+
+<svg><animateTransform attributeName="transform" type="rotate" values="javascript:window.__xss11=true"></animateTransform></svg>
+
+<svg><animateMotion values="javascript:window.__xss12=true"></animateMotion></svg>
 `;
 
   async function seedJournal(text) {
@@ -115,7 +137,15 @@ function check(name, cond, extra = "") {
       xss4: window.__xss4 === true,
       xss5: window.__xss5 === true,
       xss6: window.__xss6 === true,
-      xss7: window.__xss7 === true
+      xss7: window.__xss7 === true,
+      xss8: window.__xss8 === true,
+      xss8b: window.__xss8b === true,
+      xss8c: window.__xss8c === true,
+      xss9: window.__xss9 === true,
+      xss9b: window.__xss9b === true,
+      xss10: window.__xss10 === true,
+      xss11: window.__xss11 === true,
+      xss12: window.__xss12 === true
     }));
     check("<script>タグが実行されない", !flags.xss1, JSON.stringify(flags));
     check("onerror属性が実行されない", !flags.xss2, JSON.stringify(flags));
@@ -124,6 +154,14 @@ function check(name, cond, extra = "") {
     check("SVGのonload属性が実行されない", !flags.xss5, JSON.stringify(flags));
     check("style内のurl(javascript:)が実行されない", !flags.xss6, JSON.stringify(flags));
     check("iframeのjavascript:srcが実行されない", !flags.xss7, JSON.stringify(flags));
+    check("A5-M1: <template>内onerrorが実行されない", !flags.xss8, JSON.stringify(flags));
+    check("A5-M1: <TEMPLATE>(大文字)内onerrorが実行されない", !flags.xss8b, JSON.stringify(flags));
+    check("A5-M1: 入れ子<template><template>内onerrorが実行されない", !flags.xss8c, JSON.stringify(flags));
+    check("A5-M2: <animate>のvalues経由javascript:が実行されない", !flags.xss9, JSON.stringify(flags));
+    check("A5-M2: <Animate>(大文字小文字混在)のvalues経由javascript:が実行されない", !flags.xss9b, JSON.stringify(flags));
+    check("A5-M2: <set>のto経由javascript:が実行されない", !flags.xss10, JSON.stringify(flags));
+    check("A5-M2: <animateTransform>のvalues経由javascript:が実行されない", !flags.xss11, JSON.stringify(flags));
+    check("A5-M2: <animateMotion>のvalues経由javascript:が実行されない", !flags.xss12, JSON.stringify(flags));
     check("pageerrorが発生していない", pageErrors === 0, `(件数: ${pageErrors})`);
     check("dialog(alert等)が発生していない", dialogs.length === 0, JSON.stringify(dialogs));
 
@@ -137,6 +175,12 @@ function check(name, cond, extra = "") {
     check("<iframe が残っていない", !lower.includes("<iframe"), renderedHTML.slice(0, 400));
     check("v140 Low-6: href経由のdata:は全面拒否される", !lower.includes("data:text/html"), renderedHTML.slice(0, 400));
     check("v140 Low-6: src経由のdata:image/svg+xmlは拒否される", !lower.includes("data:image/svg+xml"), renderedHTML.slice(0, 400));
+    check("A5-M1: <template が残っていない(中身ごと除去)", !lower.includes("<template"), renderedHTML.slice(0, 400));
+    check("A5-M1: onerror= が残っていない(template除去の副作用込みで再確認)", !lower.includes("onerror"), renderedHTML.slice(0, 400));
+    check("A5-M2: <animate が残っていない", !lower.includes("<animate"), renderedHTML.slice(0, 400));
+    check("A5-M2: <set が残っていない", !lower.includes("<set"), renderedHTML.slice(0, 400));
+    check("A5-M2: values=\"javascript: が残っていない", !lower.includes('values="javascript:'), renderedHTML.slice(0, 400));
+    check("A5-M2: to=\"javascript: が残っていない", !lower.includes('to="javascript:'), renderedHTML.slice(0, 400));
 
     console.log("[3] 正常なMarkdownは引き続き問題なく描画される(サニタイザ強化の過剰検知が無いことの回帰確認)");
     check("見出しが描画される", renderedHTML.includes("見出し"));
