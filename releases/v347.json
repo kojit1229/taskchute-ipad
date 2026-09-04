@@ -1,0 +1,48 @@
+{
+  "version": 347,
+  "date": "2026-09-05",
+  "title": "修正フェーズ 単位18: dataModifiedAt/lastPushedAt/lastPulledAtの10文字日付防御",
+  "summary": "第1回コードレビュー(A2-H3)の指摘に対応した。外部バッチ(loop apply.py)がdataModifiedAtに日付のみ(YYYY-MM-DD、10文字)を書くケースがあり、アプリ側nowDateTime()は19文字(YYYY-MM-DDTHH:mm:ss)で全比較が辞書順文字列比較のため、10文字のままだと\"2026-09-04\" < \"2026-09-04T00:00:00\"が真になり同日のアプリ書込より常に「古い」と誤判定されていた(push/pull判定・同期マージのtieWinner計算に波及)。normalizeDataStamp()を新設し、10文字の値は当日の最終時刻とみなしT23:59:59を補って19文字へ揃える(19文字はそのまま、空・不正値は素通し)。dataModifiedAtの比較箇所(runAutoSyncPush/runAutoSyncPull/syncFromGitHubOnStartup)と、normalizeState()経由でlastPushedAt/lastPulledAtの既存永続値にも同じ正規化を適用した(独立レビュー追補: 未正規化のまま残ると次回起動時に「まだpushしていない」扱いになり不要なフルpushが1回走る非対称が生じるため)。",
+  "changedFiles": [
+    "app.js",
+    "docs/test-impact-map.generated.md",
+    "releases/v347.json",
+    "src/sync/github.js",
+    "sw.js",
+    "tests/data-stamp-normalize.test.js",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "外部バッチが10文字の日付のみでdataModifiedAtを書いても、アプリ側の同期判定が誤って「古い」と扱わないようにする。",
+    "永続化済みのlastPushedAt/lastPulledAtが10文字のまま残っているケースでも、次回起動時の比較で不要なフルpushが走らないようにする。"
+  ],
+  "changes": [
+    "src/sync/github.js: normalizeDataStamp(value)を新設(10文字ならT23:59:59を補い19文字化、それ以外は素通し)。export済みシンボルに追加。",
+    "src/sync/github.js: runAutoSyncPush()/runAutoSyncPull()/syncFromGitHubOnStartup()のremoteT算出をnormalizeDataStamp()経由に変更した。",
+    "app.js: normalizeState()内でvalue.dataModifiedAtをnormalizeDataStamp()経由で正規化するよう変更した(||=から代入に変更)。",
+    "app.js: normalizeState()内でsettings.lastPushedAt/lastPulledAtの既存値(truthyな場合)にもnormalizeDataStamp()を適用した(独立レビュー追補、b354357)。"
+  ],
+  "uncertainties": [
+    "実装・レビューはremediation/unit18ブランチ上で完結済み(implementer+reviewer単系統、Codex利用上限のため)。reviewer(Claude)独立レビューPASS(handoff.md表参照。追補: lastPushedAt/lastPulledAtも正規化・コールサイト静的検査)。",
+    "loop側(root repo)はD-K1(a)で秒精度(T12:00:00相当)化済み(本タスク対象外リポジトリで別途対応済み、08bd514)。本版はアプリ側の保険として、秒精度化されていない古いデータ・他の外部書き込みに備える。",
+    "handoff.mdの別単位候補メモ: syncFromGitHubOnStartupにhasUnpushed判定が無い(同日ケースへ露出拡大の可能性)は本版の範囲外(D-K6/D-K7と順序を決める必要がある別単位候補)。",
+    "cherry-pick時にdocs/test-impact-map.generated.md・tests/suite-manifest.json(いずれも生成物)で競合が発生。--oursを採用後に再生成した。"
+  ],
+  "reviewFocus": [
+    "10文字のdataModifiedAt(外部バッチ書込み相当)が同日のアプリ内比較で「古い」と誤判定されないこと。",
+    "19文字の通常値・空値・不正値の挙動が変わらないこと(素通し)。",
+    "永続化済みの10文字lastPushedAt/lastPulledAtが起動時に正規化され、不要なフルpushが走らないこと。"
+  ],
+  "verification": [
+    "node --check app.js / src/sync/github.js は成功。",
+    "実行コード差分(app.js + src/sync/github.js): 35行(200行以内)。",
+    "npm run code:index:write → npm run test:manifest:write の順で実行し、node scripts/test-manifest.js --check はPASS。",
+    "node scripts/release-gate.js releases/v347.json をフォアグラウンド(timeout 600000、出力ファイルへリダイレクト)で実行、結果を別コマンドで確認。"
+  ],
+  "notes": [
+    "単位18(修正フェーズ第2段=同期)。実装・レビューはCodex利用上限のためimplementer+reviewer(Claude)単系統。"
+  ],
+  "knownLimitations": [
+    "syncFromGitHubOnStartupのhasUnpushed判定欠如(同日ケースへの露出拡大)は本版の範囲外。"
+  ]
+}
