@@ -93,13 +93,17 @@ function renderTimelineRail() {
   // remediation/css-rail: 「railを出すか」の判断はここ1か所に一本化し、appRootEl.dataset.rail
   // (data-rail="on"/"off")だけを立てる。列幅・サイドバー幅・折りたたみ・1020px以下の縮小は
   // すべてstyles.css側がdata-rail/[data-view]/.collapsedを見て決める(inline styleは書かない)。
+  // 独立レビュー指摘対応: dataset.railへの書き込みは毎render発生する(renderTimelineRailは
+  // render()のたびに呼ばれる)。値が変わらない場合でも代入するとスタイル再計算が誘発され、
+  // today-tower.jsの500msティック側のフォーカス保持(container.contains(document.activeElement)
+  // 判定)とレースしてtower-core [11]が再現100%で退行した。値が変わる時だけ代入する。
   if (state.currentView !== "tasks") {
     timelineRailEl.style.display = "none";
-    appRootEl.dataset.rail = "off";
+    if (appRootEl.dataset.rail !== "off") appRootEl.dataset.rail = "off";
     return;
   }
   timelineRailEl.style.display = "";
-  appRootEl.dataset.rail = "on";
+  if (appRootEl.dataset.rail !== "on") appRootEl.dataset.rail = "on";
   const mode = state.timelineMode || "planned";
   timelineRailEl.innerHTML = `
     <div class="row" style="margin-bottom:10px">

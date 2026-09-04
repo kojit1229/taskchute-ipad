@@ -109,14 +109,14 @@ function block(id, taskId, extra = {}) {
     // コメント参照)は本変更単位では復活させない(関心事1つ・Blockロジック不変)。
     // execはcurrentView !== "tasks"のため計画/実績いずれのモードでも常に2列・rail非表示。
     await setState({ currentView: "exec", timelineMode: "planned" });
-    await page.click('.exec-mode-segmented [data-action="exec-mode-toggle"][data-mode="plan"]').catch(() => {});
+    await page.click('.exec-mode-segmented [data-action="exec-mode-toggle"][data-mode="plan"]');
     await page.waitForTimeout(150);
     let L = await layoutOf();
     check("exec+計画: data-rail=off", L.dataRail === "off", JSON.stringify(L));
     check("exec+計画: 2列", L.columns.length === 2, JSON.stringify(L));
     check("exec+計画: railが非表示", L.railDisplay === "none", JSON.stringify(L));
 
-    await page.click('.exec-mode-segmented [data-action="exec-mode-toggle"][data-mode="actual"]').catch(() => {});
+    await page.click('.exec-mode-segmented [data-action="exec-mode-toggle"][data-mode="actual"]');
     await page.waitForTimeout(150);
     L = await layoutOf();
     check("exec+実績: data-rail=off", L.dataRail === "off", JSON.stringify(L));
@@ -143,8 +143,8 @@ function block(id, taskId, extra = {}) {
     L = await layoutOf();
     check("旧tasksビュー直接: data-rail=on", L.dataRail === "on", JSON.stringify(L));
     check("旧tasksビュー直接: 3列(rail 360px)", L.columns.length === 3 && L.columns[2] === "360px", JSON.stringify(L));
-    check("旧tasksビュー直接: railが折り返さず#mainと同じ行(y一致)", L.railY !== null && Math.abs(L.railY - L.mainY) < 2, JSON.stringify(L));
-    check("旧tasksビュー直接: railが可視", L.railDisplay !== "none", JSON.stringify(L));
+    check("旧tasksビュー直接: railが可視かつ#mainと同じ行(display!=none かつ y一致、折り返し無しの複合条件)",
+      L.railDisplay !== "none" && L.railY !== null && Math.abs(L.railY - L.mainY) < 2, JSON.stringify(L));
 
     // ============================================================
     console.log("[2] 1000px/768px: 全ビュー2列・サイドバー184px・本文幅=ビューポート-184");
@@ -165,7 +165,7 @@ function block(id, taskId, extra = {}) {
     console.log("[3] 折りたたみ(.sidebar.collapsed): 1400pxで56px、1000pxでも56px");
     // ============================================================
     await page.setViewportSize({ width: 1400, height: 900 });
-    await setState({ currentView: "exec", "settings.sidebarCollapsed": undefined });
+    await setState({ currentView: "exec" });
     await page.evaluate((KEY) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.settings.sidebarCollapsed = true;
