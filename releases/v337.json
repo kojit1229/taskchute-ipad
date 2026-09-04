@@ -1,0 +1,43 @@
+{
+  "version": 337,
+  "date": "2026-09-05",
+  "title": "修正フェーズ 単位2: normalizeState要素null防御 + 退避時autoSync=false",
+  "summary": "2026-09-04の第1回コードレビュー(A3-H1、第1回統合サマリN-3)の指摘に対応した。normalizeState()はコンテナ(配列/オブジェクト自体)の欠損は補完してきたが要素側(配列の各エントリ・日付マップの各値)にnull/非オブジェクトが混ざると即例外を投げ、src/storage/local.jsのloadState catchが全stateを-corrupt-backupへ退避してseedState(デモデータ)で起動していた。compactArr/compactMapを新設し、tasks/projects/blocks/journalMeta/zeroThinking.themes/entries/declarations/bodyScans/storeVisitsの9箇所で要素側のnull/非オブジェクトを除外するよう変更した。あわせてlocal.jsの退避処理にseeded.settings.autoSync=falseを追加した(現行のnormalizeStateはautoSyncを真偽値でなければfalseへ既定化するため実質no-opの多重防御)。",
+  "changedFiles": [
+    "app.js",
+    "docs/test-impact-map.generated.md",
+    "releases/v337.json",
+    "src/storage/local.js",
+    "sw.js",
+    "tests/normalize-null-defense.test.js",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "外部バッチ等によるapp-state.json直接編集で要素側にnullが混入しても、normalizeState()が例外化せず不正要素だけを除外して起動を継続できるようにする。",
+    "-corrupt-backup退避時のsettings.autoSyncをfalseへ倒す多重防御を追加し、将来の既定値変更に備える。"
+  ],
+  "changes": [
+    "app.js: compactArr(a)(配列要素からnull/非オブジェクト/配列を除去)・compactMap(o)(オブジェクトの値からnull/非オブジェクト/配列を除去)を新設し、tasks/projects/blocks/journalMeta/zeroThinking.themes/zeroThinking.entries/declarations/bodyScans/storeVisitsの正規化前段に適用した(9箇所、いずれも既存の`||= []`/`if (!Array.isArray...)`パターンを置き換え)。",
+    "src/storage/local.js: loadState()のcatch節(-corrupt-backup退避)で`seeded.settings.autoSync = false`を追加した。現行normalizeStateは既にautoSyncをfalseへ倒すためno-opだが、将来の既定値変更に対する多重防御として残す(独立レビュー是正でこの1行の効果範囲を正確化した)。"
+  ],
+  "uncertainties": [
+    "独立レビューで1回FAIL(domain分類・autoSync主張の過大表現)があり、a7b0ebaで是正済み(コメントを「autoSync=falseでpush拡散を防いだ」という過大な主張から「現行コードではno-opの多重防御」へ訂正)。reviewer(Claude)再レビューでPASS(handoff.md表参照)。",
+    "実装・レビューはremediation/unit2ブランチ上で完結済み(implementer+reviewer単系統、Codex利用上限のため)。本版は監督セッションによるv337へのcherry-pick着地。",
+    "compactArr/compactMapは配列要素・オブジェクト値がnull/非オブジェクト/配列そのものである場合のみ除外する(有効なオブジェクトの中身までは検査しない、意図的にスコープを要素の型防御のみに限定)。"
+  ],
+  "reviewFocus": [
+    "12コレクション(9箇所+関連)へのnull要素注入で例外化せず正常要素が残ること(tests/normalize-null-defense.test.js)。",
+    "既存の正常なstateデータに対してcompactArr/compactMap適用前後で内容が変わらないこと(回帰なし)。",
+    "-corrupt-backup退避時にsettings.autoSyncがfalseになること。"
+  ],
+  "verification": [
+    "node --check app.js / src/storage/local.js / sw.js はいずれも成功。",
+    "実行コード差分(app.js + src/storage/local.js): 約55行(200行以内)。",
+    "npm run test:manifest:write / node scripts/test-manifest.js --check はPASS。",
+    "node scripts/release-gate.js releases/v337.json をフォアグラウンド(timeout 600000、出力ファイルへリダイレクト)で実行、結果を別コマンドで確認。"
+  ],
+  "notes": [
+    "単位2(修正フェーズ第1段)。実装・レビューはCodex利用上限のためimplementer+reviewer(Claude)単系統。"
+  ],
+  "knownLimitations": []
+}
