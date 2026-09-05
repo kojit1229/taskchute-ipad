@@ -2,13 +2,13 @@
 // fund.js/topband.jsと同じ依存注入型feature(app.js側の未export関数はconfigureTwelveWeek(deps)で受け取る)。
 import { state } from "../state/store.js";
 import { activeTrackForProject, isProjectInCurrentCycle } from "../core/track.js";
-import { taskWeekTriple } from "../core/plan.js";
+import { taskWeekTriple, cycleWeeksSummary } from "../core/plan.js";
 import { registerActions } from "../ui/actions.js";
 
-let escapeHTML, renderHeader, todayISO, weekRange, renderTwyTrackReadOnly, modalHeaderHTML, renderModal, saveAndRender, closeModal;
+let escapeHTML, renderHeader, todayISO, weekRange, renderTwyTrackReadOnly, modalHeaderHTML, renderModal, saveAndRender, closeModal, twyTrackIsDone;
 
 function configureTwelveWeek(deps) {
-  ({ escapeHTML, renderHeader, todayISO, weekRange, renderTwyTrackReadOnly, modalHeaderHTML, renderModal, saveAndRender, closeModal } = deps);
+  ({ escapeHTML, renderHeader, todayISO, weekRange, renderTwyTrackReadOnly, modalHeaderHTML, renderModal, saveAndRender, closeModal, twyTrackIsDone } = deps);
 }
 
 // 上部チップ(CYCLE|PLAN|WEEK|REVIEW)。R1aはCYCLEのみ有効・面切替は非永続(design §A)。
@@ -72,7 +72,22 @@ function twyGoalCardHTML(project, index, weekStart) {
   </article>`;
 }
 
-function twyGoalsPanelHTML(cycleStart, weekStart) {
+// inReview(第13週が当週)のときだけ達成トラック数を1行足す。done判定はHTML文字列マッチではなく
+// twyTrackIsDone(deps注入、trackStatus()の戻り値をboolean化したもの)を使う(B-H1)。
+function twyReviewNoteHTML(eligible) {
+  const done = eligible.filter((project) => {
+    const track = activeTrackForProject(state.tracks || [], project.id);
+    return track && twyTrackIsDone(track);
+  }).length;
+  return `<p class="twy-goal-review">達成トラック <b>${done}</b> / ${eligible.length}</p>`;
+}
+
+// order-r1-cycle.md §B: 「今週を確定」導線は既存openTwyCommitSheet(WBS側と文言統一)。
+function twyCommitLinkHTML() {
+  return `<button type="button" class="btn ghost twy-commit-open" data-action="twy-open-commit">今週を確定 ›</button>`;
+}
+
+function twyGoalsPanelHTML(cycleStart, weekStart, inReview) {
   const eligible = twyGoalCandidates(cycleStart);
   const shown = eligible.slice(0, 3);
   const warn = eligible.length > 3
@@ -82,7 +97,63 @@ function twyGoalsPanelHTML(cycleStart, weekStart) {
     : `<p class="twy-goal-empty">対象の12WYプロジェクトがありません</p>`;
   return `<section class="panel tower-panel-box twy-goals-panel">
     <h2>12WY GOALS<span>${shown.length} / 最大3</span></h2>
-    <div class="twy-goal-grid">${body}</div>${warn}
+    ${twyCommitLinkHTML()}
+    <div class="twy-goal-grid">${body}</div>${warn}${inReview && eligible.length ? twyReviewNoteHTML(eligible) : ""}
+  </section>`;
+}
+
+// review-r1-claude-a2.md H1: .twy-week(グリッド行=122px)は.twy-week-pct(実行率ラベル、
+// styles.css .twy-week-pct = line-height 15px + margin-bottom 2px = 17px固定)と
+// .twy-week-col(バー本体)をflexカラムで縦積みする。design §2.1「バー高=pct%×(グラフ高−
+// 上下ラベル高)」どおり、バーの可用域はラベル高を差し引いた105px(=122-17)であって
+// 行高122pxそのものではない。旧実装は122pxを基準にしていたため、pct86%以上でインライン
+// heightがflex-shrinkにより105pxへ強制的に縮められ、86〜100%が同じ高さに潰れていた
+// (100%バー上端が85%目標線と重なる実害)。TWY_WEEKS_BAR_HはCSS側の可用域(105px)と
+// 一致させ、ラベル高が変わる場合は両ファイルを同時に直す(styles.css .twy-week-pctのコメント参照)。
+const TWY_WEEKS_LABEL_H = 17;
+const TWY_WEEKS_ROW_H = 122;
+const TWY_WEEKS_BAR_H = TWY_WEEKS_ROW_H - TWY_WEEKS_LABEL_H;
+function twyWeekBarPx(pct) {
+  return Math.max(0, Math.round((Number(pct) || 0) / 100 * TWY_WEEKS_BAR_H));
+}
+
+// M1: weekStart〜weekEndの実スパンをtitle属性(ネイティブツールチップ)で見せる。非土曜開始の
+// cycleStartDateでは暦週とweekNo判定(cycleWeekForDate基準)が最大6日ずれうるため、バー側にも
+// 実際の日付範囲を出して利用者が確認できるようにする(plan.js側コメント参照)。
+function twyWeekSpanText(week) {
+  return `W${week.weekNo}(${week.weekStart}〜${week.weekEnd}` + (week.isCurrent ? "・今週" : "") + `)`;
+}
+
+function twyWeekColHTML(week) {
+  const label = week.status === "scored" ? String(week.pct) : week.status === "na" ? "—" : "·";
+  const barStyle = week.status === "scored" ? ` style="height:${twyWeekBarPx(week.pct)}px"` : "";
+  return `<div class="twy-week" data-status="${escapeHTML(week.status)}"${week.isCurrent ? ` data-current="1"` : ""}${week.isReviewWeek ? ` data-review="1"` : ""} title="${escapeHTML(twyWeekSpanText(week))}">
+    <span class="twy-week-pct">${escapeHTML(label)}</span>
+    <div class="twy-week-col"${barStyle}></div>
+  </div>`;
+}
+
+function twyWeekLabelHTML(week) {
+  return `<span class="twy-week-lab"${week.isCurrent ? ` data-current="1"` : ""} title="${escapeHTML(twyWeekSpanText(week))}">W${week.weekNo}</span>`;
+}
+
+function twyWeeksBarHTML(summary) {
+  if (!summary.weeks.length) return "";
+  const cols = summary.weeks.map(twyWeekColHTML).join("");
+  const labels = summary.weeks.map(twyWeekLabelHTML).join("");
+  const avgText = summary.avg12 === null ? "12週平均 —" : `12週平均 <b>${summary.avg12}%</b>`;
+  const refText = summary.avgWithReview !== null
+    ? `参考: 振り返り週込み <b>${summary.avgWithReview}%</b>`
+    : `振り返り週: 確定${summary.reviewWeek.committedCount}件(参考算入なし)`;
+  return `<section class="panel tower-panel-box twy-weeks-panel"><h2>13 WEEKS</h2>
+    <div class="twy-weeks-wrap">
+      <div class="twy-weeks">
+        <div class="twy-weeks-line" style="bottom:${twyWeekBarPx(summary.target)}px"><span>${summary.target}%</span></div>
+        ${cols}
+      </div>
+      <div class="twy-weeks-labels">${labels}</div>
+    </div>
+    <div class="twy-weeks-foot"><span>${avgText}</span><span>${refText}</span><span>残 <b>${summary.remainingDays}日</b></span></div>
   </section>`;
 }
 
@@ -90,14 +161,20 @@ function renderTwelveWeek() {
   const settings = state.settings || {};
   const cycleStart = settings.twelveWeekStartDate || "";
   const weekStart = weekRange(todayISO()).weekStart;
-  const goalsHTML = cycleStart ? twyGoalsPanelHTML(cycleStart, weekStart)
+  const summary = cycleStart ? cycleWeeksSummary(state.weeklyCommitments || [], settings, cycleStart, todayISO()) : null;
+  const inReview = Boolean(summary?.weeks[12]?.isCurrent);
+  const ended = Boolean(summary?.cycleEnded); // A-M1: W13末を過ぎたら「サイクル総括(終了)」にする。
+  const headline = ended ? "サイクル総括(終了)" : inReview ? "サイクル総括" : "12週間実行サイクル";
+  const goalsHTML = cycleStart ? twyGoalsPanelHTML(cycleStart, weekStart, inReview)
     : `<section class="panel tower-panel-box twy-goals-panel"><h2>12WY GOALS</h2>
       <p class="twy-goal-empty">12WYサイクルが未設定です(設定 › サイクル開始日)</p></section>`;
+  const weeksHTML = summary ? twyWeeksBarHTML(summary) : "";
   return `<div class="today-tower twy-tower" data-twy-face="cycle">
-    ${renderHeader("12週間実行サイクル", "12WY")}
+    ${renderHeader(headline, "12WY")}
     ${twyFaceChipsHTML()}
     <section class="panel tower-panel-box twy-vision-panel"><h2>VISION</h2>${twyVisionBandHTML(settings)}</section>
     ${goalsHTML}
+    ${weeksHTML}
   </div>`;
 }
 

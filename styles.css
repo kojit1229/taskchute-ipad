@@ -5325,7 +5325,7 @@ details.settings-row > .fold-summary.settings-row-summary {
 .twy-tower .twy-face-segmented { margin-top: 10px; border: 1px solid var(--tower-line); background: var(--tower-panel); }
 .twy-tower .twy-face-segmented button { color: var(--tower-text); opacity: .55; }
 .twy-tower .twy-face-segmented button.active { color: var(--tower-cyan); opacity: 1; background: var(--tower-bg); }
-.twy-tower .twy-face-segmented small { display: block; font-size: 10px; opacity: .75; }
+.twy-tower .twy-face-segmented small { display: block; font-size: 11px; opacity: .75; }
 
 /* v357レビュー対応(A-M1): 未設定時(誘導1行だけ)でもタップ標的が44px下限を割らないようにする。 */
 .twy-vision-band { display: flex; flex-direction: column; justify-content: center; width: 100%; min-height: 44px; padding: 0; border: 0; background: none; text-align: left; color: inherit; font: inherit; cursor: pointer; }
@@ -5335,12 +5335,39 @@ details.settings-row > .fold-summary.settings-row-summary {
 .twy-vision-empty, .twy-vision-guide { color: var(--tower-text); opacity: .6; }
 .twy-vision-guide { margin: 0; font-size: 13px; }
 
+/* v357レビュー対応(B-M6): GOALSパネルの「今週を確定」導線(既存openTwyCommitSheet)。 */
+.twy-goals-panel .twy-commit-open { margin-top: 8px; }
 .twy-goal-grid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 8px; }
 @media (min-width: 900px) { .twy-goal-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .twy-goal { padding: 10px; border: 1px solid var(--tower-line); border-radius: 10px; background: var(--tower-bg); }
 .twy-goal-title { display: flex; align-items: center; gap: 6px; font-family: system-ui, sans-serif; font-size: 13px; font-weight: 700; }
-.twy-goal-num { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 1px solid var(--tower-line); border-radius: 50%; font-size: 10px; opacity: .8; }
+.twy-goal-num { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 1px solid var(--tower-line); border-radius: 50%; font-size: 11px; opacity: .8; }
 .twy-goal-no-track { margin: 8px 0 0; color: var(--tower-text); font-size: 11px; opacity: .6; }
 .twy-goal-foot { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; font-size: 11px; opacity: .85; flex-wrap: wrap; }
 .twy-goal-warn { margin: 8px 0 0; color: var(--tower-amber); font-size: 11px; }
 .twy-goal-empty { margin: 8px 0 0; color: var(--tower-text); opacity: .6; font-size: 11px; }
+.twy-goal-review { margin: 8px 0 0; color: var(--tower-text); opacity: .8; font-size: 11px; }
+
+/* v357(A-H1/A-H2): 週ラベルをバー描画域(.twy-weeks)の外の別グリッド(.twy-weeks-labels)へ
+   分離。.twy-weeksはバー+目標線専用の固定高(grid-template-rows。height指定なし=
+   *{box-sizing:border-box}下でheightを付けるとpadding-top分だけ行がはみ出すため)にして、
+   両者が同じ0点(padding-box下端)を共有し、目標線とバーのずれ(A-H1)も縦クリップ(A-H2)も起きない。 */
+.twy-weeks-wrap { overflow-x: auto; }
+.twy-weeks { position: relative; display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); grid-template-rows: 122px; align-items: end; gap: 4px; min-width: 480px; padding-top: 18px; }
+.twy-weeks-line { position: absolute; right: 0; left: 0; bottom: 0; border-top: 1px dashed var(--tower-amber); font-size: 11px; color: var(--tower-amber); opacity: .8; }
+.twy-weeks-line span { position: absolute; top: -14px; right: 0; }
+.twy-week { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; font-size: 11px; color: var(--tower-text); opacity: .75; }
+/* review-r1-claude-a2.md H1: line-heightを明示指定してラベル高(15px+margin-bottom 2px=17px)を
+   ブラウザ・フォントに依存させず固定する(twelve-week.js TWY_WEEKS_LABEL_Hと一致させる基準)。 */
+.twy-week-pct { flex: 0 0 15px; line-height: 15px; margin-bottom: 2px; font-variant-numeric: tabular-nums; }
+.twy-week-col { flex: 0 0 auto; width: 100%; min-height: 2px; border-radius: 4px 4px 1px 1px; background: linear-gradient(180deg, var(--tower-cyan), var(--tower-purple)); }
+.twy-week[data-status="uncommitted"] .twy-week-col { min-height: 100%; background: transparent; border: 1px dashed var(--tower-line); }
+.twy-week[data-status="na"] .twy-week-col { min-height: 6px; background: var(--tower-line); }
+.twy-week[data-status="future"] .twy-week-col { min-height: 6px; background: rgba(255, 255, 255, .08); }
+.twy-week[data-current="1"] .twy-week-col { outline: 2px solid #fff; outline-offset: 1px; }
+.twy-week[data-review="1"] .twy-week-col { background-image: repeating-linear-gradient(45deg, rgba(255, 255, 255, .14) 0 4px, transparent 4px 8px); }
+.twy-weeks-labels { display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: 4px; min-width: 480px; margin-top: 4px; }
+.twy-week-lab { text-align: center; font-size: 11px; color: var(--tower-text); opacity: .75; }
+.twy-week-lab[data-current="1"] { color: #fff; font-weight: 700; opacity: 1; }
+.twy-weeks-foot { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; font-size: 11px; color: var(--tower-text); opacity: .75; }
+.twy-weeks-foot b { opacity: 1; }

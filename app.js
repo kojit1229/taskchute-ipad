@@ -316,9 +316,10 @@ configureWish({
 // v301: FUND日誌も既存のsanitize済みMarkdown描画経路へ結線する。
 configureFund({ escapeHTML, renderHeader, renderMarkdown, personalDataReady, fetchGitHubRawText, render });
 // v356: 12WYタブ。GOALSカードは編集不可のrenderTwyTrackReadOnlyを渡す(renderTwyTrackRowはWBS専用)。
+// v357: 達成トラック数判定用にtwyTrackIsDoneを追加注入(B-H1)。
 configureTwelveWeek({
   escapeHTML, renderHeader, todayISO, weekRange, renderTwyTrackReadOnly,
-  modalHeaderHTML, renderModal, saveAndRender, closeModal
+  modalHeaderHTML, renderModal, saveAndRender, closeModal, twyTrackIsDone
 });
 configureHealth({
   escapeHTML, personalDataReady: () => personalDataReady(state.settings.github),
@@ -1777,6 +1778,7 @@ function normalizeState(value) {
     gymBlockKeywords: ["ジム", "筋トレ"],
     twelveWeekVision: "", twelveWeekFocus: "",  // v356: 12WYタブ CYCLE面のVISION帯(design.md §3)
     twelveWeekScoreTarget: 85,
+    twelveWeekReviewWeekMinItems: 3,  // v357: 13 WEEKSバーの振り返り週(W13)参考平均の閾値(design.md §2.1裁定7)
     ...actualSettings
   };
   // v230: home撤去後も旧state・未知viewで白画面にしないため、todayへ縮退する。
@@ -5646,6 +5648,17 @@ function renderTwyTrackReadOnly(track) {
     </div>
     ${track.kind === "numeric" ? twyBarHTML(track, latestValue, pace, status) : twyMilestoneChainHTML(milestones, today)}
   </div>`;
+}
+
+// v357(B-H1): 達成トラック数判定用。renderTwyTrackReadOnlyのHTML文字列マッチではなく
+// trackStatus()の戻り値(status.state)を直接boolean化する(表示マークアップの変更に強くする)。
+function twyTrackIsDone(track) {
+  const today = todayISO();
+  const measurement = latestMeasurement(state.trackMeasurements || [], track.id);
+  const latestValue = track.kind === "numeric" ? (measurement ? Number(measurement.value) : Number(track.baselineValue)) : undefined;
+  const lastObservedISO = measurement ? String(measurement.observedAt || "").slice(0, 10) : track.startDate;
+  const pace = track.kind === "numeric" ? paceNumeric(track, latestValue, today) : paceMilestone(track, today);
+  return trackStatus(track, pace, latestValue, lastObservedISO, today).state === "done";
 }
 
 function wbsProjectTaskModel(project) {

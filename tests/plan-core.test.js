@@ -35,7 +35,7 @@ function weekMeta(weekStart, extra = {}) {
 
 (async () => {
   const mod = await import(pathToFileURL(MODULE_PATH).href);
-  const { normalizeTwyPlan, planTargetForWeek, taskWeekTriple, taskPlanGrid, remainingTarget } = mod;
+  const { normalizeTwyPlan, planTargetForWeek, taskWeekTriple, taskPlanGrid, remainingTarget, cycleWeeksSummary } = mod;
 
   console.log("[0] 依存ゼロ契約");
   const source = fs.readFileSync(MODULE_PATH, "utf8");
@@ -246,6 +246,113 @@ function weekMeta(weekStart, extra = {}) {
   const remTaskCopy = JSON.stringify(remTaskInput);
   remainingTarget(remTaskInput, 3);
   check("remainingTargetは入力taskを変更しない", JSON.stringify(remTaskInput) === remTaskCopy);
+
+  console.log("[12] cycleWeeksSummary(R1b): 13 WEEKSバー集計");
+  const CYCLE_START = "2026-07-11"; // 土曜(week1Startの基準日。7/11が土曜であることをfixtureで前提とする)
+  const settings85 = { twelveWeekScoreTarget: 85, twelveWeekReviewWeekMinItems: 3 };
+  // W1〜W13のweekStart(土曜起点7日刻み): 07-11/18・25・08-01・08・15・22・29・09-05・12・19・26・10-03
+  const W = ["2026-07-11", "2026-07-18", "2026-07-25", "2026-08-01", "2026-08-08", "2026-08-15",
+    "2026-08-22", "2026-08-29", "2026-09-05", "2026-09-12", "2026-09-19", "2026-09-26", "2026-10-03"];
+  function scoredWeek(weekStart, doneCount, totalCount, extraItems = []) {
+    const items = [];
+    for (let i = 0; i < totalCount; i++) {
+      items.push(item(`${weekStart}-i${i}`, "t1", weekStart, { completedAt: i < doneCount ? `${weekStart}T09:00:00` : "" }));
+    }
+    return [weekMeta(weekStart), ...items, ...extraItems];
+  }
+  // 当週=W8(today=2026-09-04)。W2=週メタ無し(uncommitted)・W3=全免除(na)・W9〜W13は未来(future)。
+  const commitmentsA = [
+    ...scoredWeek(W[0], 1, 2),                                            // W1: 1/2=50%
+    // W2: 週メタなし(uncommitted)
+    weekMeta(W[2]), item("w3a", "t1", W[2], { excused: true }), item("w3b", "t1", W[2], { excused: true }), // W3: na
+    ...scoredWeek(W[3], 2, 2),                                            // W4: 100%
+    ...scoredWeek(W[4], 1, 1),                                            // W5: 100%
+    ...scoredWeek(W[5], 0, 1),                                            // W6: 0%
+    ...scoredWeek(W[6], 2, 2),                                            // W7: 100%
+    ...scoredWeek(W[7], 1, 1)                                             // W8(当週): 100%
+  ];
+  const summaryA = cycleWeeksSummary(commitmentsA, settings85, CYCLE_START, "2026-09-04");
+  check("weeksは13件", summaryA.weeks.length === 13);
+  check("W1はscored・50%", summaryA.weeks[0].status === "scored" && summaryA.weeks[0].pct === 50, JSON.stringify(summaryA.weeks[0]));
+  check("W2(週メタ無し)はuncommitted", summaryA.weeks[1].status === "uncommitted", JSON.stringify(summaryA.weeks[1]));
+  check("W3(全免除)はna", summaryA.weeks[2].status === "na", JSON.stringify(summaryA.weeks[2]));
+  check("W8(当週)はisCurrent", summaryA.weeks[7].isCurrent === true && summaryA.weeks.filter((w) => w.isCurrent).length === 1);
+  check("W9〜W13(未到達)はfuture", summaryA.weeks.slice(8).every((w) => w.status === "future"), JSON.stringify(summaryA.weeks.slice(8)));
+  check("W13はisReviewWeek", summaryA.weeks[12].isReviewWeek === true && summaryA.weeks.slice(0, 12).every((w) => !w.isReviewWeek));
+  check("12週平均はscored週(W1,4,5,6,7,8)だけの平均=75%・W13は含まない",
+    summaryA.avg12 === 75, JSON.stringify(summaryA.avg12));
+  check("W13データ無し・未到達はreviewWeek.eligible=false・avgWithReview=null",
+    summaryA.reviewWeek.eligible === false && summaryA.avgWithReview === null, JSON.stringify(summaryA.reviewWeek));
+  check("remainingDaysはcycleStartDateから83日目までの残日数=28", summaryA.remainingDays === 28, summaryA.remainingDays);
+  check("targetはsettings.twelveWeekScoreTargetをそのまま使う", summaryA.target === 85);
+  check("サイクル進行中はcycleEnded=false", summaryA.cycleEnded === false);
+
+  console.log("[12b] cycleWeeksSummary: W13到達時のeligible/avgWithReview閾値");
+  const commitmentsBase = W.slice(0, 12).flatMap((weekStart) => scoredWeek(weekStart, 1, 1)); // W1〜W12全部100%
+  const commitmentsEligible = [...commitmentsBase, ...scoredWeek(W[12], 3, 3)]; // W13: 確定3件・完了3件(閾値ちょうど)
+  const summaryEligible = cycleWeeksSummary(commitmentsEligible, settings85, CYCLE_START, "2026-10-05");
+  check("W13到達(currentWeekNo=13)", summaryEligible.weeks[12].isCurrent === true);
+  check("12週平均はW1〜W12の100%のまま(W13を混ぜない)", summaryEligible.avg12 === 100, summaryEligible.avg12);
+  check("確定3件(閾値ちょうど)でeligible=true", summaryEligible.reviewWeek.eligible === true, JSON.stringify(summaryEligible.reviewWeek));
+  check("avgWithReviewが出る((1200+100)/13=100)", summaryEligible.avgWithReview === 100, summaryEligible.avgWithReview);
+
+  const commitmentsBelow = [...commitmentsBase, ...scoredWeek(W[12], 1, 2)]; // W13: 確定2件(閾値未満)
+  const summaryBelow = cycleWeeksSummary(commitmentsBelow, settings85, CYCLE_START, "2026-10-05");
+  check("確定2件(閾値未満)でeligible=false", summaryBelow.reviewWeek.eligible === false, JSON.stringify(summaryBelow.reviewWeek));
+  check("閾値未満はavgWithReview=null(W13がscoredでも参考平均は出さない)",
+    summaryBelow.avgWithReview === null && summaryBelow.weeks[12].status === "scored", JSON.stringify(summaryBelow));
+  check("today到達後はremainingDaysが0でclampされる", summaryBelow.remainingDays === 0, summaryBelow.remainingDays);
+
+  // review-r1-claude-a2.md M2: today<cycleStartDate(elapsed<0)だと83-elapsedが83を超えて
+  // 発散していた(未clamp)。上限も83にclampする。
+  const summaryFuture = cycleWeeksSummary([], settings85, CYCLE_START, "2026-06-01");
+  check("today<cycleStartDateでもremainingDaysは83で上限clampされる(発散しない)",
+    summaryFuture.remainingDays === 83, summaryFuture.remainingDays);
+
+  // review-r1-claude-a2.md L3: countScored=0(avg12=null)のときはeligibleでもavgWithReviewを
+  // 出さない(平均のない週にreviewWeek単独値だけの「参考平均」が出るのは紛らわしい)。
+  const summaryNoScored = cycleWeeksSummary(scoredWeek(W[12], 3, 3), settings85, CYCLE_START, "2026-10-05");
+  check("countScored=0のときはeligibleでもavgWithReview=null", summaryNoScored.avg12 === null
+    && summaryNoScored.reviewWeek.eligible === true && summaryNoScored.avgWithReview === null,
+    JSON.stringify(summaryNoScored));
+
+  console.log("[12c] cycleWeeksSummary: cycleStartDate変更で週が追随・入力不変・不正入力");
+  const summaryShifted = cycleWeeksSummary(commitmentsA, settings85, "2026-07-18", "2026-09-04");
+  check("cycleStartDateを1週ずらすとweeks[0].weekStartも1週ずれる", summaryShifted.weeks[0].weekStart === "2026-07-18", summaryShifted.weeks[0].weekStart);
+
+  const commitmentsCopyA = JSON.stringify(commitmentsA);
+  const settingsCopyA = JSON.stringify(settings85);
+  cycleWeeksSummary(commitmentsA, settings85, CYCLE_START, "2026-09-04");
+  check("cycleWeeksSummaryはweeklyCommitments/settingsを変更しない",
+    JSON.stringify(commitmentsA) === commitmentsCopyA && JSON.stringify(settings85) === settingsCopyA);
+
+  check("cycleStartDate=\"\"は例外なし・空の戻り", (() => {
+    const r = cycleWeeksSummary(null, null, "", "");
+    return r.weeks.length === 0 && r.avg12 === null && r.avgWithReview === null && r.reviewWeek.eligible === false && r.target === 85;
+  })());
+  check("cycleStartDateが不正な文字列でも例外なし", cycleWeeksSummary([], {}, "invalid-date", "2026-09-04").weeks.length === 0);
+  check("todayISOが不正な文字列でも例外なし", cycleWeeksSummary([], {}, CYCLE_START, "not-a-date").weeks.length === 0);
+  check("weeklyCommitments=nullでも例外なし", cycleWeeksSummary(null, settings85, CYCLE_START, "2026-09-04").weeks.length === 13);
+
+  console.log("[12d] cycleWeeksSummary(A-M1/A-M2レビュー対応): 非土曜開始の週番号・サイクル終了後のisCurrent");
+  // A-M2: 週番号の正本はtopband.js cycleWeekForDate()と同じ意味(cycleStartDateからの
+  // 経過日数÷7+1)。cycleStartDateが土曜以外(2026-07-15=水曜)でもこの式で数える。
+  const CYCLE_START_WED = "2026-07-15";
+  // elapsed=10日(2026-07-25まで)→floor(10/7)+1=2週目のはず(week1Start基準の日数では
+  // 週がずれていたのが旧実装のバグ=review-r1-claude-a.md M2)。
+  const summaryWed = cycleWeeksSummary([], settings85, CYCLE_START_WED, "2026-07-25");
+  check("非土曜開始でもcurrentWeekNoは経過日数÷7+1で数える(2週目)",
+    summaryWed.weeks.findIndex((w) => w.isCurrent) === 1, JSON.stringify(summaryWed.weeks.map((w) => w.isCurrent)));
+  // weekStart自体は土曜スナップのまま(weeklyScoreのキーと一致させるため)なので変わらない。
+  check("weekStartは引き続き土曜にスナップされる", /^\d{4}-\d{2}-\d{2}$/.test(summaryWed.weeks[0].weekStart)
+    && new Date(`${summaryWed.weeks[0].weekStart}T00:00:00Z`).getUTCDay() === 6, summaryWed.weeks[0].weekStart);
+
+  // A-M1: W13末(cycleStartDate+90日)を過ぎたらisCurrentは全部falseになり、cycleEnded=trueを返す。
+  const summaryEnded = cycleWeeksSummary(commitmentsEligible, settings85, CYCLE_START, "2026-12-31");
+  check("サイクル終了後はisCurrentが1件も無い", summaryEnded.weeks.every((w) => !w.isCurrent), JSON.stringify(summaryEnded.weeks.map((w) => w.isCurrent)));
+  check("サイクル終了後はcycleEnded=trueを返す", summaryEnded.cycleEnded === true);
+  check("サイクル終了後も過去週の実データ(W1〜W13)はscoredのまま維持される",
+    summaryEnded.weeks.every((w) => w.status === "scored"), JSON.stringify(summaryEnded.weeks.map((w) => w.status)));
 
   console.log(failures === 0 ? "\nplan-core: 全件成功" : `\nplan-core: ${failures}件失敗`);
   process.exit(failures === 0 ? 0 : 1);
