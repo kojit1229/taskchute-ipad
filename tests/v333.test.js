@@ -243,15 +243,17 @@ async function seed(page, values) {
     check("実績モードでTIMELINE RADARパネルが可視(boundingBox)", !!radarBox && radarBox.width > 0 && radarBox.height > 0, JSON.stringify(radarBox));
 
     const blocksBeforeGapTap = await page.evaluate(() => JSON.parse(localStorage.getItem("taskchute-journal-pwa-state-v1")).blocks.length);
-    // v108と同じ理由: .timeline-cards-area(left:60px〜)が.time-rowに重なるため、重ならない
-    // 左端(x=20)を、既存Blockの無い23時台(data-minute=1380)で狙う。
-    await page.click('.time-row[data-action="timeline-new-block"][data-minute="1380"]', { position: { x: 20, y: 15 } });
-    await page.waitForSelector('.modal-card [data-modal-field="title"]');
-    check("空き時間タップ(.time-row)で新規Block作成モーダルが開く(従来どおり、状態はまだ増えない)",
-      await page.locator('.modal-card [data-modal-field="title"]').count() === 1
+    // v357追随(§1): exec内(embedded)の空き時間タップはfill-gap-openへ配線が変わったため、
+    // 旧timeline-new-block直行の挙動はexec内では起きなくなった(旧timelineビュー単体は
+    // tests/v108.test.jsのままtimeline-new-blockを検証)。v333時点の「従来どおり」は
+    // 意図的な仕様変更で置き換える。既存Blockの無い23時台(data-minute=1380相当)で狙う。
+    await page.click('.time-row[data-action="fill-gap-open"][data-start="23:00"]', { position: { x: 20, y: 15 } });
+    await page.waitForSelector(".fill-gap-sheet");
+    check("空き時間タップ(.time-row)がfill-gap-openへ配線され「空き時間を補う」シートが開く(v357、状態はまだ増えない)",
+      await page.locator(".fill-gap-sheet").count() === 1
       && await page.evaluate(() => JSON.parse(localStorage.getItem("taskchute-journal-pwa-state-v1")).blocks.length) === blocksBeforeGapTap);
-    await page.click('.modal-card .modal-footer [data-action="modal-close"]');
-    await page.waitForSelector(".modal-card", { state: "detached" });
+    await page.click(".fill-gap-sheet .modal-close");
+    await page.waitForSelector(".fill-gap-sheet", { state: "detached" });
 
     await page.click('#bottomNav [data-action="nav"][data-view="today"]');
     await page.waitForSelector('#app[data-view="today"]');

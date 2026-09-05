@@ -179,7 +179,7 @@ function renderTimelineView(opts = {}) {
       <section class="tl-radar-panel">
         <h2>TIMELINE RADAR <span>タイムライン</span></h2>
         <div class="tl-radar-body">
-          ${renderTimeline({ compact: false, mode })}
+          ${renderTimeline({ compact: false, mode, embedded })}
         </div>
       </section>
       ${embedded ? analysisFoldHTML() : ""}
@@ -305,7 +305,60 @@ function setTimelineMode(mode) {
   render();
 }
 
-function renderTimeline({ compact, mode = "planned" }) {
+// v357修正(A-M1/B-H1レビュー対応): 旧execRowGapEndは「行頭固定・次Block開始 or 行末」の
+// 近似だったため、行頭ちょうどに始まるBlockがある行(例: 09:00開始の実績)を丸ごと空きとして
+// 提示してしまっていた。区間を統合してから判定する共通ヘルパー(実績/計画どちらのフィールドにも
+// 使える。actualGaps/computeFreeGaps自体は無改変・呼び出してもいない)。
+function mergedIntervalsFor(blocks, startField, endField) {
+  const intervals = blocks.filter((b) => b[startField] && b[endField])
+    .map((b) => {
+      const start = minutesOf(b[startField]);
+      let end = minutesOf(b[endField]);
+      if (end < start) end += 1440;
+      return [start, end];
+    })
+    .filter(([s, e]) => e > s)
+    .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const merged = [];
+  intervals.forEach(([s, e]) => {
+    const last = merged[merged.length - 1];
+    if (last && s <= last[1]) last[1] = Math.max(last[1], e);
+    else merged.push([s, e]);
+  });
+  return merged;
+}
+
+// v357(§1): exec内(embedded)の.time-rowタップの隙間算出。当初はTIME COMBのactualGaps()を
+// そのまま行区間と交差させる案を試したが、actualGaps()は「記録どうしの間」だけを隙間とする設計
+// (最初の実績より前・最後の実績より後は対象外)のため、実際にはその日まだ何も無い23時台のような
+// 行まで「空きではない」扱いになりtests/v333.test.js[8](23:00行タップ)を壊した。ここで直したい
+// バグは「行頭ちょうどに始まるBlockがある行を丸ごと空きと誤認する」ことだけなので、行頭が
+// 既存Blockに占有されているかだけを見て、占有されていなければ従来どおり「行頭〜次のBlock開始
+// or 行末」を返す(占有されていれば何もしない=null)。
+function execRowFreeRange(rowStart, rowEnd, mode) {
+  const field = mode === "actual" ? ["actualStartAt", "actualEndAt"] : ["plannedStartAt", "plannedEndAt"];
+  const merged = mergedIntervalsFor(blocksForDate(state.selectedDate), field[0], field[1]);
+  if (merged.some(([s, e]) => s <= rowStart && rowStart < e)) return null;
+  const nextStart = merged.map(([s]) => s).filter((s) => s > rowStart && s < rowEnd).sort((a, b) => a - b)[0];
+  const end = nextStart !== undefined ? nextStart : rowEnd;
+  return end > rowStart ? [rowStart, end] : null;
+}
+
+// v357(§3): PC(1280px以上)でexec左列がシートへ差し替わっている間、右の時間軸に
+// 選択中の空き時間をアンバー破線+「← 選択中」で示す(既存の配置計算・カード描画には触れない)。
+function fillGapSelectedOverlayHTML(modal, rowHeight, startHour) {
+  const startMin = minutesOf(modal.start);
+  const endMin = minutesOf(modal.end);
+  const durMin = Math.max(0, endMin - startMin);
+  const top = ((startMin / 60) - startHour) * rowHeight;
+  const height = Math.max(4, (durMin / 60) * rowHeight);
+  return `
+    <div class="fill-gap-selected" style="top:${top}px;height:${height}px">
+      <span>${escapeHTML(modal.start)}–${escapeHTML(modal.end)} ・ ${durMin}分 ← 選択中</span>
+    </div>`;
+}
+
+function renderTimeline({ compact, mode = "planned", embedded = false }) {
   const allBlocks = blocksForDate(state.selectedDate);
   // モードに応じてフィルタリングと表示位置決定
   let blocksToRender;
@@ -360,17 +413,46 @@ function renderTimeline({ compact, mode = "planned" }) {
     </div>
   ` : "";
 
+  // v357修正(監督裁定A-H1): exec内(embedded)は実績・計画どちらのモードでも.time-rowを
+  // fill-gap-openへ配線する(K確定モックTcFillSheetPCの計画モード右列タップと一致させる)。
+  // 旧tasks/timelineビュー単体(embedded=false)は無改変(timeline-new-blockのまま、
+  // v333/v355の契約を維持)。v108のヘルパーはexec計画モード右列ではなく旧timelineビュー
+  // 直行に差し替えたため、この配線変更と衝突しない(tests/v108.test.js参照)。
+  // v357修正(M-1): 行の隙間はexecRowFreeRange(行頭が既存Blockに占有されていないか判定した
+  // うえで「行頭〜次のBlock開始 or 行末」を返す)で求める。行頭ちょうどに始まるBlock等で
+  // 行頭自体が占有されている場合はfill-gap-open自体を配線せず、タップしても何も起きない
+  // プレーンな行にする。
+  const rowsHTML = rows.map((hour) => {
+    const rowStart = hour * 60;
+    const top = (hour - startHour) * rowHeight;
+    if (!embedded) {
+      return `<div class="time-row" data-action="timeline-new-block" data-minute="${rowStart}"
+             style="top:${top}px;height:${rowHeight}px; cursor:pointer;">${String(hour).padStart(2, "0")}:00</div>`;
+    }
+    const free = execRowFreeRange(rowStart, Math.min(rowStart + 60, 1440), mode);
+    if (!free) {
+      return `<div class="time-row" data-minute="${rowStart}"
+             style="top:${top}px;height:${rowHeight}px;">${String(hour).padStart(2, "0")}:00</div>`;
+    }
+    const s = `${pad2(Math.floor(free[0] / 60))}:${pad2(free[0] % 60)}`;
+    const e = `${pad2(Math.floor(free[1] / 60))}:${pad2(free[1] % 60)}`;
+    return `<div class="time-row" data-action="fill-gap-open" data-start="${s}" data-end="${e}" data-date="${state.selectedDate}" data-minute="${rowStart}"
+             style="top:${top}px;height:${rowHeight}px; cursor:pointer;">${String(hour).padStart(2, "0")}:00</div>`;
+  }).join("");
+
+  const fillGapSelected = (embedded && state.modal?.type === "fillGap" && state.modal.date === state.selectedDate
+    && Boolean(typeof window !== "undefined" && window.matchMedia?.("(min-width: 1280px)").matches))
+    ? fillGapSelectedOverlayHTML(state.modal, rowHeight, startHour) : "";
+
   return `
     ${timelineControls}
     <div class="timeline" style="position:relative; min-height:${rowHeight * (endHour - startHour + 1)}px">
-      ${rows.map((hour) => `
-        <div class="time-row" data-action="timeline-new-block" data-minute="${hour * 60}"
-             style="top:${(hour - startHour) * rowHeight}px;height:${rowHeight}px; cursor:pointer;">${String(hour).padStart(2, "0")}:00</div>
-      `).join("")}
+      ${rowsHTML}
       <div class="timeline-cards-area" style="position:absolute; top:0; left:60px; right:100px; height:100%;">
         ${positioned.map((a) => renderTimelineCard(a, mode, maxLanes)).join("")}
       </div>
       ${nowLine}
+      ${fillGapSelected}
       ${!compact && mode === "planned" ? renderDraftLayer(rowHeight, startHour) : ""}
       ${renderEnergyGraph(allBlocks, rowHeight, startHour, endHour, compact)}
     </div>

@@ -847,7 +847,7 @@ registerActions({
   },
   "twy-carry-confirm": () => confirmCarryProjectCycle(),
   // --- モーダル起動系(3、modal-saveは残置) ---
-  "modal-close": () => closeModal(),
+  "modal-close": () => closeFillGapAware(),
   "modal-delete": () => deleteFromModal(),
   "lev-judge": ({ target }) => {
     const card = target.closest(".modal-card");
@@ -969,6 +969,7 @@ registerActions({
   "fill-gap-open": ({ target }) => openFillGapSheet(target.dataset.start, target.dataset.end, target.dataset.date || state.selectedDate),
   "fill-gap-place": ({ target, id }) => fillGapPlace(id, target.dataset.split === "1"),
   "fill-gap-create": () => fillGapCreate(),
+  "fill-gap-prefill": ({ target }) => fillGapPrefillFromRoutine(target.value),
   // --- Block/Now(6。now-mode-open/now-mode-close/now-conveyor-skipはv87で到達不能化、
   //     v292孤児掃除で削除(K裁定2026-08-29)。now-conveyor-completeはsrc/features/
   //     today-tower.js(TOWER UI)から現役で発行されるため残置=監査の見落としを現物確認で訂正) ---
@@ -5916,6 +5917,10 @@ function renderExecView() {
   const draftActiveHere = Boolean(_scheduleDraft) && _scheduleDraft.date === state.selectedDate;
   const timelineHTML = `<div class="tower-skin timeline-tower">${renderTimelineView({ embedded: true, mode: draftActiveHere ? "planned" : (isActual ? "actual" : timelineMode) })}</div>`;
   const listHTML = isActual ? execDoneListHTML() : renderTasks({ embedded: true });
+  // v357(§3): PC(1280px以上)で「空き時間を補うシート」が開いている間は、左列を一覧ではなく
+  // シート本体に差し替える(閉じる/置く/作るで一覧に戻る。右の時間軸は動かさない)。
+  const fillGapDesktopActive = desktop && state.modal?.type === "fillGap" && state.modal.date === state.selectedDate;
+  const leftHTML = fillGapDesktopActive ? buildFillGapModal(state.modal) : listHTML;
   // v355(退行修正): 1280px未満はrunAiSchedule()後もisActual===falseのままのため、
   // 従来はlistHTML(一覧)しか描かれずrenderTimelineView自体が呼ばれず.draft-blockが
   // 出なかった(下書きが操作不能)。下書き有効(draftActiveHere、選択日一致まで見る)は
@@ -5923,7 +5928,7 @@ function renderExecView() {
   // 下書きレイヤへ到達できるようにする(日付を移せば従来どおり一覧に戻る)。
   // Block/配置ロジックには触れない。
   const bodyHTML = desktop
-    ? `<div class="exec-two-pane"><div class="exec-pane-left">${listHTML}</div><div class="exec-pane-right">${timelineHTML}</div></div>`
+    ? `<div class="exec-two-pane"><div class="exec-pane-left">${leftHTML}</div><div class="exec-pane-right">${timelineHTML}</div></div>`
     : ((isActual || draftActiveHere) ? timelineHTML : listHTML);
   return `
     <div class="view-header exec-header">
@@ -9117,9 +9122,25 @@ function fillGapSortCompare(a, b) {
   return fillGapDueCompare(a, b);
 }
 
+// v357(§3): PC(1280px以上)のexecタブでは、シートをモーダルではなく左列(一覧の位置)に
+// 差し替える(閉じると一覧に戻る)。1279px以下・execタブ以外(TIME COMBは旧timelineビューにも
+// あるため)は従来どおりオーバーレイモーダルのまま。
+function fillGapExecDesktop() {
+  return state.currentView === "exec" && Boolean(window.matchMedia?.("(min-width: 1280px)").matches);
+}
+
 function openFillGapSheet(start, end, date) {
   state.modal = { type: "fillGap", start, end, date: date || state.selectedDate };
+  if (fillGapExecDesktop()) { render(); return; }
   renderModal(buildFillGapModal(state.modal));
+}
+
+// v357修正: モーダル(×)/Escapeで閉じた際、PC左列差し替え中だった場合だけ一覧へ戻す再描画を足す
+// (通常のオーバーレイモーダルはmodalRootの消去だけで足りるため、既存の挙動は変えない)。
+function closeFillGapAware() {
+  const needsExecRerender = fillGapExecDesktop() && state.modal?.type === "fillGap";
+  closeModal();
+  if (needsExecRerender) render();
 }
 
 function fillGapRowHTML(task, split) {
@@ -9135,12 +9156,29 @@ function fillGapRowHTML(task, split) {
     </div>`;
 }
 
-// H-1/H-2対応: 「新しいBlockを作る」最小パネル(Block名+長さ+カテゴリ+作る)。
-// Project select・ルーティン雛形プリフィルはv354bへ持ち越す(このパネル自体は
-// タイムライン描画・PC CSS差し替えに触れないため持ち越す理由が無いと判断=独立レビュー指摘反映)。
+// v357修正(A-H2レビュー対応): 「Project」selectはBlock作成のたびに受け皿Taskを新規生成して
+// いた(makeTask()の既定=当日期限・todoの未完了Taskが積み上がる非冪等な副作用)。Blockは
+// taskId経由でしかProjectと結びつかない(projectId相当のフィールドを持たない)ため、
+// 代わりに「そのProjectのtodo/doingTaskから選ぶ」select(なし可)へ変え、既存Taskの選択だけで
+// 完結させる(Task作成・変更は一切しない)。
+function fillGapProjectTaskOptionsHTML() {
+  const activeProjects = state.projects.filter((p) => !p.deleted && p.kind === "normal" && (p.status || "active") === "active");
+  const groupsHTML = activeProjects.map((p) => {
+    const candidates = state.tasks.filter((t) => !t.deleted && t.projectId === p.id && (t.status === "todo" || t.status === "doing"));
+    if (!candidates.length) return "";
+    return `<optgroup label="${escapeHTML(p.title)}">${candidates.map((t) => `<option value="${t.id}">${escapeHTML(t.title)}</option>`).join("")}</optgroup>`;
+  }).join("");
+  return `<option value="">Project/Task: なし</option>${groupsHTML}`;
+}
+
+// H-1/H-2対応: 「新しいBlockを作る」最小パネル(Block名+長さ+カテゴリ+Project/Task+ルーティンから+作る)。
+// v357(§2): Project/Task select(既存todo/doing Taskから選ぶ、なし可)・ルーティンから select
+// (選ぶとタイトル・カテゴリ・長さをプリフィル、編集可)を追加した。
 function fillGapNewBlockHTML(durMin) {
   const categoryOptionsHTML = `${getCategoryNames().map((n) => `<option value="${escapeHTML(n)}">${escapeHTML(n)}</option>`).join("")}<option value="">(カテゴリなし)</option>`;
   const lengthOptions = [15, 25, 30, 45, 60].map((m) => `<option value="${m}">${m}分</option>`).join("");
+  const routineRules = (state.recurrences || []).filter((r) => !r.deleted);
+  const routineOptionsHTML = `<option value="">ルーティンから: 選ぶ</option>${routineRules.map((r) => `<option value="${r.id}">${escapeHTML(r.title)}</option>`).join("")}`;
   return `
     <div class="fill-gap-new">
       <div class="panel-label">新しい Block を作る</div>
@@ -9148,9 +9186,31 @@ function fillGapNewBlockHTML(durMin) {
         <input id="fillGapTitle" class="input" placeholder="Block名">
         <select id="fillGapLength" class="select">${lengthOptions}<option value="full" selected>空き時間まで(${durMin}分)</option></select>
         <select id="fillGapCategory" class="select">${categoryOptionsHTML}</select>
+        <select id="fillGapProject" class="select">${fillGapProjectTaskOptionsHTML()}</select>
+        <select id="fillGapRoutine" class="select" data-action="fill-gap-prefill">${routineOptionsHTML}</select>
         <button class="btn primary" data-action="fill-gap-create">作る</button>
       </div>
     </div>`;
+}
+
+// v357(§2): 「ルーティンから」選択時のプリフィル。既存要素へ直接値を入れるだけで
+// (再描画は伴わない)、ユーザーはその後自由に編集できる。
+function fillGapPrefillFromRoutine(ruleId) {
+  if (!ruleId) return;
+  const rule = (state.recurrences || []).find((r) => r.id === ruleId && !r.deleted);
+  if (!rule) return;
+  const titleEl = document.querySelector("#fillGapTitle");
+  const categoryEl = document.querySelector("#fillGapCategory");
+  const lengthEl = document.querySelector("#fillGapLength");
+  if (titleEl) titleEl.value = rule.title || "";
+  if (categoryEl && rule.category && Array.from(categoryEl.options).some((o) => o.value === rule.category)) {
+    categoryEl.value = rule.category;
+  }
+  if (lengthEl && rule.startTime && rule.endTime) {
+    const dur = minuteFromHHMM(rule.endTime) - minuteFromHHMM(rule.startTime);
+    const match = Array.from(lengthEl.options).find((o) => Number(o.value) === dur);
+    if (match) lengthEl.value = String(dur);
+  }
 }
 
 function buildFillGapModal(modal) {
@@ -9166,7 +9226,7 @@ function buildFillGapModal(modal) {
   return modalHeaderHTML(title, "fill-gap-sheet") + `
       <div class="fill-gap-list">${listHTML}</div>
       ${fillGapNewBlockHTML(durMin)}
-      <div class="muted fill-gap-hint">TIME COMB の「補う」/ ＋Block から同じシートが開きます。</div>
+      <div class="muted fill-gap-hint">タイムラインの空き時間タップ / TIME COMB の「補う」/ ＋Block から同じシートが開きます。</div>
     </div></div>`;
 }
 
@@ -9182,7 +9242,15 @@ function fillGapPlace(taskId, split) {
   if (!task) return;
   const plannedStartAt = `${date}T${start}:00`;
   const existing = state.blocks.find((b) => !b.deleted && b.taskId === taskId && b.date === date && b.plannedStartAt === plannedStartAt);
-  if (existing) { openBlockEditor(existing.id); return; }
+  if (existing) {
+    // v357修正(A-M2レビュー対応): PC左列差し替え中にBlock編集モーダルへ抜けると、
+    // openBlockEditor()はrenderModal()だけでrender()を呼ばないため左列に死んだfillGapシートの
+    // DOMが残り、以後×/Escapeで閉じてもcloseFillGapAware()の判定(state.modal.type==="fillGap")
+    // がfalseになり一覧へ戻れなくなっていた。左列を先に一覧へ戻してから編集モーダルを開く。
+    if (fillGapExecDesktop()) { state.modal = null; render(); }
+    openBlockEditor(existing.id);
+    return;
+  }
   const estimateMin = split ? durMin : fillGapTaskEstimate(task);
   createBlockFromTask(taskId, { plannedStartAt, estimateMin, silent: true });
   closeModal();
@@ -9201,13 +9269,22 @@ function fillGapCreate() {
   const lengthVal = document.querySelector("#fillGapLength")?.value || "full";
   const estimateMin = lengthVal === "full" ? durMin : Number(lengthVal);
   const category = document.querySelector("#fillGapCategory")?.value || "";
+  // v357修正(A-H2レビュー対応): Project/Task selectは既存todo/doing Taskのidをそのまま持つ
+  // (fillGapProjectTaskOptionsHTML参照)。ここでTaskを新規作成することは絶対にしない
+  // (Block作成のたびにTask台帳が積み上がる非冪等な副作用を防ぐ)。未選択時は従来どおり
+  // 「その他」Task(pre-v357から変えていない既定)。
+  const selectedTaskId = document.querySelector("#fillGapProject")?.value || "";
   const plannedStartAt = `${date}T${start}:00`;
-  const otherTask = getOtherTask();
+  let linkTaskId = selectedTaskId;
+  if (!linkTaskId) {
+    const otherTask = getOtherTask();
+    linkTaskId = otherTask ? otherTask.id : "";
+  }
   state.blocks.push(makeBlock({
     date,
     title,
     category,
-    taskId: otherTask ? otherTask.id : "",
+    taskId: linkTaskId,
     plannedStartAt,
     plannedEndAt: plannedEndFromStart(plannedStartAt, estimateMin),
     estimateMin
@@ -14105,7 +14182,7 @@ document.addEventListener("keydown", (event) => {
     return;
   }
   if (event.key === "Escape" && state.modal) {
-    closeModal();
+    closeFillGapAware();
   }
 });
 
@@ -14565,7 +14642,23 @@ if (window.matchMedia) {
   const _wbsDesktopMediaQuery = window.matchMedia("(min-width: 1280px)");
   // v334レビュー(A-M1/B-H1)対応: execも1280px境界でdesktop判定を評価するため、
   // wbsと同じ幅またぎリスナへexecを追加する(1列⇄2列がリサイズだけで自動追随する)。
-  const _onWbsLayoutChange = () => { if (state.currentView === "wbs" || state.currentView === "exec") render(); };
+  // v357(§3): execで「空き時間を補うシート」が開いたまま1280px境界を跨いだ場合、
+  // オーバーレイ⇔左列差し替えの表示形態を切り替える(state.modal自体はどちらでも同じ)。
+  const _onWbsLayoutChange = () => {
+    if (state.currentView === "exec" && state.modal?.type === "fillGap") {
+      const activeModal = state.modal;
+      if (fillGapExecDesktop()) {
+        // 左列へ差し替えるので、オーバーレイ側だけ畳む(closeModal()はstate.modalもnullにするため使わない)
+        modalRoot.classList.remove("open");
+        modalRoot.setAttribute("aria-hidden", "true");
+        modalRoot.innerHTML = "";
+        modalRoot.onclick = null;
+      } else {
+        renderModal(buildFillGapModal(activeModal));
+      }
+    }
+    if (state.currentView === "wbs" || state.currentView === "exec") render();
+  };
   if (_wbsDesktopMediaQuery.addEventListener) _wbsDesktopMediaQuery.addEventListener("change", _onWbsLayoutChange);
   else if (_wbsDesktopMediaQuery.addListener) _wbsDesktopMediaQuery.addListener(_onWbsLayoutChange);
 }

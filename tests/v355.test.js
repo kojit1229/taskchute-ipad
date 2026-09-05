@@ -261,7 +261,9 @@ async function stateNow(page) {
     await page.click(".time-comb-gap");
     await page.waitForSelector(".fill-gap-sheet");
     const hintText = await page.textContent(".fill-gap-hint");
-    check("ヒントに未実装の「タイムラインの空き時間タップ」が含まれない", !hintText.includes("タイムラインの空き時間タップ"), hintText);
+    // v357追随: タイムラインの空き時間タップ(exec内)をfill-gap-openへ配線したため、
+    // v355時点の「未実装なので載せない」という前提が変わった。ヒントは3導線すべてを案内する。
+    check("ヒントはタイムラインの空き時間タップの案内を含む(v357で実装)", hintText.includes("タイムラインの空き時間タップ"), hintText);
     check("ヒントは実装済みのTIME COMB/＋Blockの案内を残す", hintText.includes("TIME COMB") && hintText.includes("＋Block"), hintText);
 
     console.log("[4d] M-3対応: 1280px(PC)でもシート表示中に横スクロールが発生しない");

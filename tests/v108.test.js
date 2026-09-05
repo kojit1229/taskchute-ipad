@@ -35,9 +35,12 @@ function check(name, cond, extra = "") {
 (async () => {
   const server = startServer(PORT);
   const browser = await chromium.launch(launchOptions());
-  // v335(§C追随): 旧timelineビューへの直接navが無くなったため、execの1280px以上2ペイン
-  // (右列=renderTimelineView、計画モード=state.timelineMode連動)経由で操作する。
-  // 1100pxのままだと計画モード単一列はタスク一覧のみでタイムライングリッドが出ないため幅を広げた。
+  // v357修正(A-H1レビュー対応): exec内(embedded)は実績・計画どちらのモードでも.time-rowが
+  // fill-gap-openへ配線されるようになったため、v335時点のワークアラウンド(execの1280px2ペイン
+  // 右列=embedded&&mode="planned"経由でtimeline-new-blockを踏む)はもう使えない。本テストが
+  // 検証したいのは保存モーダルの二重送信ガード自体(タイムラインの空き時間タップ配線ではない)
+  // ため、旧timelineビュー(embedded=false、seed()時点で既にcurrentView="timeline")へ
+  // 直接setViewする方式(tests/v357.test.js[1b]と同方式)へ戻した。
   const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
@@ -73,11 +76,18 @@ function check(name, cond, extra = "") {
 
   // タイムラインの指定時刻の行をクリックして新規Block作成モーダルを開く。
   // .timeline-cards-area(left:60px〜)が.time-rowの上に重なるため、重ならない左端(x=20)を狙う。
+  // v357修正(A-H1レビュー対応): seed()がcurrentView="timeline"のままreloadするため、
+  // execへナビゲートし直さず旧timelineビュー(embedded=false)の.time-rowをそのまま使う
+  // (execの右列は本バージョンからembedded&&計画モードでもfill-gap-openへ配線されるため、
+  // ここでtimeline-new-blockを踏むには旧ビュー単体のままにする必要がある)。
+  // 旧フローはexecへのnavクリック(persistLocalNoSchedule()を伴う)が副次的に、起動時
+  // maintainRecurrences()がメモリ上にだけ実体化した繰り返しBlock群をlocalStorageへ反映していた
+  // (stateNow()はlocalStorageを直接読むため、これが無いと[2]の「新しい系列は増えない」検証が
+  // 見かけ上0件になる)。同じ役割を、同一ビューに留まったまま持てるtl-zoomボタン
+  // (persistLocalNoSchedule()を呼ぶだけの無害な操作)で代替する。
   async function openNewBlockModal(minute) {
-    // v335(§C追随): 旧timelineへの直接navは無くなったため、execへ遷移する(1280px以上なら
-    // 計画モード=state.timelineMode="planned"のまま右列に計画中タイムラインが常時出る)。
-    await page.click('.sidebar .nav-button[data-action="nav"][data-view="exec"]');
-    await page.waitForTimeout(200);
+    await page.click('[data-action="tl-zoom"][data-zoom="1"]');
+    await page.waitForTimeout(100);
     await page.click(`.time-row[data-action="timeline-new-block"][data-minute="${minute}"]`, { position: { x: 20, y: 15 } });
     await page.waitForTimeout(200);
   }

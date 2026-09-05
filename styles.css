@@ -930,7 +930,32 @@ h3 {
 .fill-gap-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 .fill-gap-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
 .fill-gap-new { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+/* v357(§2): Project/ルーティン選択が増えた分、幅に応じて折り返す(390pxで横スクロールしない)。 */
+.fill-gap-new .form-strip { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
 .fill-gap-hint { font-size: 11px; margin-top: 10px; }
+/* v357(§3): PC左列差し替え時、シートは.exec-pane-leftの幅いっぱいに広げる(モーダル既定の
+   max-width:560pxを解除)。 */
+.exec-pane-left .fill-gap-sheet { max-width: none; }
+/* v357(§3): 右の時間軸に選択中の空き時間をアンバー破線+「← 選択中」で示す。
+   配置計算(.timeline-cards-area等)には触れず、同じ絶対配置座標系に重ねるだけ。 */
+.fill-gap-selected {
+  position: absolute;
+  left: 60px;
+  right: 100px;
+  z-index: 4;
+  border: 2px dashed var(--tower-amber, var(--orange));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--tower-amber, var(--orange)) 10%, transparent);
+  pointer-events: none;
+}
+.fill-gap-selected span {
+  position: absolute;
+  top: 4px;
+  left: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--tower-amber, var(--orange-text));
+}
 .exec-task-row .exec-row-meta-text { white-space: normal; }
 .exec-task-overdue { color: var(--tower-amber, var(--orange-text)); opacity: .9; }
 .exec-task-added { color: var(--green-text); font-weight: 600; }
