@@ -25,6 +25,25 @@ const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithu
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
 const API_HOST = "api.github.com";
+// remediation ci-followup(単位15手直し): app-state本体の保存先はこの1本のみ(正規化後の
+// 唯一の保存先)。saveToGitHub成功後、maybeWriteBackupSnapshot()が1日1回の世代スナップショット
+// (taskchute/backups/app-state-YYYY-MM-DD.json、実PUTはwriteBackupSnapshotNow)をawaitせず
+// 発火する(src/sync/github.js:231)。この非同期チェーン(既存backupのGET確認→PUT→
+// pruneOldBackupsの一覧GET)は素朴な requestLog.find(r=>r.method==="PUT") では区別できず、
+// CI環境が遅く着地が遅延すると後続ステップのrequestLogリセット後に紛れ込み、
+// 「PUT先は単一 taskchute/app-state.json」の前提を壊す(実際にローカルでも1500ms待ちで
+// 混入を確認済み)。PUT先の検証はapp-state本体のPUTだけを対象にし、backups/へのPUTが
+// 紛れても誤検知しないようにする。
+const APP_STATE_PUT_PATH = "/repos/kojit1229/personal-data/contents/taskchute/app-state.json";
+function findAppStatePut(log) {
+  return log.find((r) => r.method === "PUT" && r.path === APP_STATE_PUT_PATH);
+}
+// 世代スナップショットのPUT(日次backups/app-state-YYYY-MM-DD.json、または
+// loadFromGitHub採用直前のwriteBackupSnapshotBeforeLoadが書くapp-state-YYYY-MM-DD-preload-
+// HHMMSS.json)を区別して数える。
+function backupSnapshotPuts(log) {
+  return log.filter((r) => r.method === "PUT" && /\/contents\/taskchute\/backups\/app-state-\d{4}-\d{2}-\d{2}(?:-preload-\d{6})?\.json$/.test(r.path));
+}
 
 let failures = 0;
 function check(name, cond, extra = "") {
@@ -127,12 +146,22 @@ function check(name, cond, extra = "") {
     check("reload直後(normalizeState通過後)にlocalStorage上のpathも剥がれている",
       healedAfterLoad1.settings.github.path === "app-state.json", healedAfterLoad1.settings.github.path);
     await clickSaveGithub();
-    const put1 = requestLog.find((r) => r.method === "PUT");
+    const put1 = findAppStatePut(requestLog);
     check("PUT先が単一 taskchute/app-state.json になる(二重prefixではない)",
-      !!put1 && put1.path === "/repos/kojit1229/personal-data/contents/taskchute/app-state.json",
-      JSON.stringify(requestLog));
+      !!put1, JSON.stringify(requestLog));
     check("taskchute/taskchute/ への二重プレフィックスリクエストは発生していない",
       !requestLog.some((r) => r.path.includes("taskchute/taskchute")), JSON.stringify(requestLog));
+
+    // remediation ci-followup: このテストで初めて成功する保存のため、maybeWriteBackupSnapshot()の
+    // 1日1回世代スナップショット(taskchute/backups/app-state-<today>.json)が非同期(await無し)で
+    // 発火する(GET確認→PUT→pruneOldBackupsの一覧GET、の3リクエスト連鎖)。ここで着地を待ち切って
+    // からstep[2]以降へ進み、後続ステップのrequestLogリセット後にこの非同期PUTが紛れ込んで
+    // 「PUT先は単一」判定を壊す競合(CI環境が遅いと発生。ローカルでも1500ms待ちで再現確認済み)を
+    // 起こさないようにする。スナップショット自体が実際に1件書かれたことも検証する。
+    await page.waitForTimeout(1200);
+    const dailySnapshotPuts = backupSnapshotPuts(requestLog);
+    check("初回保存後に日次世代スナップショット(backups/)へのPUTが1件書かれている(BACKUP_LAST_DATE_KEY未設定のため)",
+      dailySnapshotPuts.length === 1, JSON.stringify(requestLog));
 
     // ============================================================
     // [2] path="taskchute/taskchute/app-state.json"(二重混入)も同様に復旧する
@@ -143,10 +172,9 @@ function check(name, cond, extra = "") {
     check("二重混入もlocalStorage上で app-state.json まで剥がれている",
       healedAfterLoad2.settings.github.path === "app-state.json", healedAfterLoad2.settings.github.path);
     await clickSaveGithub();
-    const put2 = requestLog.find((r) => r.method === "PUT");
+    const put2 = findAppStatePut(requestLog);
     check("PUT先が単一 taskchute/app-state.json になる(二重混入からの復旧)",
-      !!put2 && put2.path === "/repos/kojit1229/personal-data/contents/taskchute/app-state.json",
-      JSON.stringify(requestLog));
+      !!put2, JSON.stringify(requestLog));
 
     // 大文字小文字混在の混入も剥がれることを軽く確認(TaskChute/表記)
     await setDirtyPath("TaskChute/app-state.json");
@@ -162,10 +190,9 @@ function check(name, cond, extra = "") {
     const healedNormal = await stateNow();
     check("正常値は書き換わらない", healedNormal.settings.github.path === "app-state.json", healedNormal.settings.github.path);
     await clickSaveGithub();
-    const put3 = requestLog.find((r) => r.method === "PUT");
+    const put3 = findAppStatePut(requestLog);
     check("正常値でもPUT先は従来どおり taskchute/app-state.json",
-      !!put3 && put3.path === "/repos/kojit1229/personal-data/contents/taskchute/app-state.json",
-      JSON.stringify(requestLog));
+      !!put3, JSON.stringify(requestLog));
 
     // ============================================================
     // [4] 混入経路の再現: 「GitHubから読込」を押しても settings.github が壊れない
@@ -216,10 +243,15 @@ function check(name, cond, extra = "") {
     requestLog.length = 0;
     await page.click('[data-action="save-github"]');
     await page.waitForTimeout(400);
-    const put4 = requestLog.find((r) => r.method === "PUT");
+    // remediation ci-followup: この[4]シナリオのremoteStateはLOSS_RISK_KEYS(settings一次データ等)を
+    // ローカルと一致させてあるため(v351の手直し済み)diffCount===0でconfirm/writeBackupSnapshot
+    // BeforeLoad(preload控え)は発火しない。また日次世代スナップショットも[1]の初回保存で
+    // 1日1回分を使い切っている(BACKUP_LAST_DATE_KEY設定済み)ため、ここでbackups/へのPUTは
+    // 想定していない。findAppStatePutはapp-state本体のPUTだけを見るため、万一何らかの理由で
+    // backups/へのPUTが紛れてもこの検証は正しくapp-state本体のPUTだけを判定する。
+    const put4 = findAppStatePut(requestLog);
     check("load-github直後の保存でもPUT先は単一 taskchute/app-state.json のまま",
-      !!put4 && put4.path === "/repos/kojit1229/personal-data/contents/taskchute/app-state.json",
-      JSON.stringify(requestLog));
+      !!put4, JSON.stringify(requestLog));
   } finally {
     await browser.close();
     server.close();

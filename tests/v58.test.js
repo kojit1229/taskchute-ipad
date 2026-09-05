@@ -22,7 +22,16 @@ function check(name, cond, extra = "") {
 (async () => {
   const server = startServer(PORT);
   const browser = await chromium.launch(launchOptions());
-  const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
+  // remediation ci-followup(単位8とは無関係の原因判明): v335(ナビ統合)でrenderExecView()が
+  // 1280px以上/未満でレンダリング内容を分岐するようになった(app.js renderExecView:
+  // `desktop ? 二カラム(一覧+タイムライン) : (isActual ? タイムライン : 一覧)`)。
+  // runAiSchedule()はexec画面をplanモード(計画=タスクシュート一覧)に固定するため(v335コメント
+  // 参照)、1280px未満ではrenderTimelineView自体が描かれず.draft-blockが1件もDOMに現れない
+  // (_scheduleDraftは正しく1件生成されている。DEBUG計測で確認済み)。1100pxだった本テストの
+  // 元のviewportは1280px境界の導入前からの値で他意図は無く、[1]〜[3]の検証(Wish/Pomodoro表示)は
+  // 幅に依存しないため、二カラムが出る1300pxへ広げてrunAiSchedule/renderDraftLayer自体には
+  // 手を入れずに検証対象(下書きBlockの表示・削除)を成立させる。
+  const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1300, height: 900 } });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
   // v72: api.github.com への実ネットワーク呼び出しを既定404で塞ぐ(個人データAPI化に伴う対策。tests/helpers.js参照)

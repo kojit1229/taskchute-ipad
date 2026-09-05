@@ -217,7 +217,7 @@
 | v91.test.js | e2e | full | journal-health | 12 | 6 | 2800 |
 | v92.test.js | e2e | full | planning-execution, journal-health, content-ai | 16 | 5 | 1800 |
 | v93.test.js | e2e | full | ui-responsive | 10 | 3 | 1500 |
-| v94.test.js | e2e | full | sync-storage, planning-execution | 15 | 8 | 2800 |
+| v94.test.js | e2e | full | sync-storage, planning-execution | 16 | 9 | 4000 |
 | v95.test.js | e2e | full | planning-execution | 29 | 11 | 3200 |
 | v96.test.js | e2e | full | planning-execution | 22 | 9 | 3500 |
 | v97.test.js | e2e | full | planning-execution, ui-responsive | 18 | 7 | 2500 |
