@@ -30,6 +30,29 @@
       }
     },
     {
+      "file": "archive-tombstone-sync.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "sync-storage"
+      ],
+      "assertionSignals": 10,
+      "assertionHash": "c6f3f42e4984fa50",
+      "sourceHash": "0cdfa5aa48c72cc7",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
       "file": "coach-core.test.js",
       "kind": "node",
       "tier": "full",
@@ -4278,9 +4301,9 @@
         "sync-storage",
         "journal-health"
       ],
-      "assertionSignals": 17,
-      "assertionHash": "671ba6c04606026c",
-      "sourceHash": "0541ecbc6b3f2ed1",
+      "assertionSignals": 19,
+      "assertionHash": "363c96ed9839c527",
+      "sourceHash": "c82900f42c55f109",
       "waits": {
         "fixedCount": 14,
         "numericMilliseconds": 7500,

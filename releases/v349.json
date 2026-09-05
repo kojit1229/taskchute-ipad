@@ -1,0 +1,49 @@
+{
+  "version": 349,
+  "date": "2026-09-05",
+  "title": "修正フェーズ 単位16: runArchiveをarchivedDates+blocks tombstone化",
+  "summary": "第1回コードレビュー(A1-H2)の指摘に対応した。runArchive()は古い日付のreports/feedback/journalsをローカルから物理削除し、blocksも配列から丸ごと除去(filter)していたが、同期マージ(mergeDateStringMap/mergeBlockLists)は片側にしか無いキー・要素を無条件で合流させる設計のため、アーカイブ済み端末と未アーカイブ端末が同期すると削除したはずの古いデータが復活する退行があった。archivedDates(退避済み日付の文字列配列、和集合マージ対象)を新設し、runArchive()が削除した日付をここへ記録、computeSyncMergeのjournals/feedback/reportsマージにarchivedDateSetを渡して除外するようにした。Blockは配列からの物理削除ではなく、既存のtombstone(deleted:true)方式で{id, date, deleted:true, archivedAt, updatedAt}まで縮めて残すよう変更した(本文相当のフィールドはarchive/archive-<年>.jsonへ既に退避済みのためローカルに残す必要がない)。",
+  "changedFiles": [
+    "app.js",
+    "docs/test-impact-map.generated.md",
+    "releases/v349.json",
+    "src/sync/github.js",
+    "sw.js",
+    "tests/archive-tombstone-sync.test.js",
+    "tests/suite-manifest.json",
+    "tests/v53.test.js"
+  ],
+  "intent": [
+    "runArchiveで古い日付のreports/feedback/journalsを削除しても、同期マージによって別端末から古いデータが復活しないようにする。",
+    "runArchiveでBlockを配列から物理削除する代わりにtombstone化し、同期マージ(mergeBlockLists)の既存tombstone処理と整合させる。"
+  ],
+  "changes": [
+    "app.js: normalizeState()にvalue.archivedDates(YYYY-MM-DD形式の文字列配列、重複排除・ソート済み)を追加した。",
+    "app.js: runArchive()でreports/feedback/journalsを削除した日付をarchivedTodayに集め、state.archivedDatesへ和集合で追記するよう変更した。",
+    "app.js: runArchive()のBlock削除をstate.blocks配列からのfilter除去から、{id, date, deleted:true, archivedAt, updatedAt}へ縮めるtombstone化へ変更した(既にdeleted:trueのBlockは触らない)。",
+    "src/sync/github.js: computeSyncMerge()にarchivedDates(mergeStringIdSetで求めた和集合)とarchivedDateSetを追加し、journals/feedback/reportsのmergeDateStringMap呼び出しへ渡して該当日付を除外するようにした。",
+    "src/sync/github.js: applySyncMergeToLocal/RemoteにarchivedDatesの反映を追加した。"
+  ],
+  "uncertainties": [
+    "実装・レビューはremediation/unit16ブランチ上で完結済み(implementer+reviewer単系統、Codex利用上限のため)。着地は監督者の追加指示によりunit18の後・css-railの前に配置。",
+    "cherry-pick時、単位14b(v345)が追加したcomputeSyncMergeのreportsマージ(archivedDateSetを渡していなかった)とunit16の変更がsrc/sync/github.jsの同一関数内で競合した。監督者の指示に従い、changedVsLocal/changedVsRemote末尾・values末尾の両方の追記(archivedDates関連+unit14b追加分)を両方残し、あわせてreportsのmergeDateStringMap呼び出しへarchivedDateSetを追加する手直しを本版で実施した(v345時点では未対応だった既知の手直し予定を解消)。",
+    "K確認事項(handoff.md記載、監督者の前提=そのまま進める): reportsの和集合マージはD-K4まで既存のrunArchive剪定を巻き戻す(journals/feedback/blocksは既に同状態のため本版で整合)。"
+  ],
+  "reviewFocus": [
+    "runArchiveで古い日付を削除した後、別端末との同期でその日付のreports/feedback/journalsが復活しないこと(archivedDateSetでの除外)。",
+    "runArchiveでBlockが配列から消えず、tombstone(deleted:true、最小フィールドのみ)として残ること。",
+    "本版で追加したreportsマージへのarchivedDateSet適用により、通常の(アーカイブされていない)日報同期には影響が無いこと。"
+  ],
+  "verification": [
+    "node --check app.js / src/sync/github.js は成功。",
+    "実行コード差分(app.js + src/sync/github.js): 57行(200行以内)。",
+    "npm run code:index:write → npm run test:manifest:write の順で実行し、node scripts/test-manifest.js --check はPASS。",
+    "node scripts/release-gate.js releases/v349.json をフォアグラウンド(timeout 600000、出力ファイルへリダイレクト)で実行、結果を別コマンドで確認。"
+  ],
+  "notes": [
+    "単位16(修正フェーズ第1段)。実装・レビューはCodex利用上限のためimplementer+reviewer(Claude)単系統。着地時にv345(単位14b)のreportsマージへarchivedDateSet除外を追加する手直しを実施済み。"
+  ],
+  "knownLimitations": [
+    "既にtombstone化済み(deleted:true)Blockの古いレコードのガベージコレクションは本単位のスコープ外。"
+  ]
+}
