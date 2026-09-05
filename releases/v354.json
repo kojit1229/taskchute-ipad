@@ -1,0 +1,39 @@
+{
+  "version": 354,
+  "date": "2026-09-05",
+  "title": "AI 下書きスケジュール確定後、1280px 未満でも下書きレイヤに到達できるようにする(v335 退行修正)",
+  "summary": "v335 で runAiSchedule の遷移先を exec 計画モードへ寄せたが、1280px 未満の renderExecView は計画モードで一覧だけを描くため renderTimelineView/renderDraftLayer が呼ばれず .draft-block が出なかった(iPad 横以下で AI 下書きが見えない・操作できない)。下書きが選択日で有効な間は narrow 幅でも timelineHTML(mode planned)を優先して描く。",
+  "changedFiles": [
+    "CHANGES_v354.md",
+    "app.js",
+    "docs/test-impact-map.generated.md",
+    "releases/v354.json",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/v58.test.js"
+  ],
+  "intent": [
+    "AI 下書きスケジュールの確定/取消がすべての幅で到達可能であること(v58 の契約)。"
+  ],
+  "changes": [
+    "renderExecView の narrow 分岐: `_scheduleDraft` が選択日で有効なら計画モードでも timelineHTML を描く(日付を移すと一覧に戻る)。下書き中は表示 mode を planned に固定し state.timelineMode は書き換えない。",
+    "tests/v58 を viewport 1100px に戻し(修正フェーズ ci-followup の 1300px 回避を取り消し)、1100/1300 両幅で .draft-block・draft-confirm/discard の存在・確定後の Block 時刻更新と .draft-block 消滅・日付移動で一覧復帰・実績切替でも下書き維持を検証。"
+  ],
+  "uncertainties": [
+    "発注の「1280px 未満は exec 実績モードへ」からは逸脱し、計画モードのまま本体だけ timeline に差し替えた(実績モードは renderDraftLayer を描かないため)。",
+    "真因は修正フェーズ(tc-review-remediation)の ci-followup が特定(v58 の失敗=単位8ではなく v335 のナビ統合)。",
+    "Codex 利用上限のため implementer(Claude)で実装、Claude reviewer(要修正 high1/medium3 → 対応済み)。"
+  ],
+  "reviewFocus": [
+    "下書き確定/取消が 1100px と 1300px の両方で到達可能。",
+    "下書き中に日付を移す/実績へ切り替えると一覧・下書きの表示が破綻しない。"
+  ],
+  "verification": [
+    "node tests/run-all.js v58 v59 v335 v50 today-core v266 を worktree で2回全件成功、main 取り込み後に v58 v335 v59 成功。",
+    "実行コード差分 16行(app.js)。"
+  ],
+  "notes": [
+    "Codex 利用上限のため実装は implementer(Claude)、レビューは Claude reviewer で代替。"
+  ],
+  "knownLimitations": []
+}

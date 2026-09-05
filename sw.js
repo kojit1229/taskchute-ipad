@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v353";  // v353: 12WY R0 task.twyPlan のデータ契約+plan.js 純関数+Task編集モーダル3項目
+const CACHE_NAME = "taskchute-journal-pwa-v354";  // v354: AI下書きスケジュール確定後に1280px未満でも下書きレイヤへ到達(v335退行修正)
 // v334: 実行タブPC 2ペイン(§B。ナビ統合§Cは持ち越し)
 // v333: 実行ラッパー(計画/実績切替)・モバイルナビ4項目
 // v332: 実行タブA-1b ヘッダ1行化・タスク一覧再編・死コード削除
