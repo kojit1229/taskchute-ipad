@@ -275,9 +275,10 @@ function check(name, cond, extra = "") {
     await page.clock.setFixedTime(fixedTime(12, 0, 0));
     await seed({ view: "settings", settings: { theme: "dark" } });
     await page.waitForSelector('select[data-setting-field="theme"]', { state: "attached" });
-    // テーマselectは折りたたみ群「表示・タイマー」(details[data-fold-id="settings-display"]、既定閉)の
+    // テーマselectは折りたたみ群「表示・タイマー」(details[data-legacy-fold="settings-display"]、既定閉。
+    // v358でdata-fold-id→data-legacy-foldへ改名。グローバルtoggleリスナーの対象外にするため)の
     // 中にあるため、selectOption(可視要素必須)の前にフォールドを開く
-    await page.evaluate(() => { const d = document.querySelector('details[data-fold-id="settings-display"]'); if (d) d.open = true; });
+    await page.evaluate(() => { const d = document.querySelector('details[data-legacy-fold="settings-display"]'); if (d) d.open = true; });
     check("テーマselectに option[value='cockpit'] がある(§6-5)",
       await page.locator('select[data-setting-field="theme"] option[value="cockpit"]').count() === 1);
     check("cockpit選択肢の表示名に「コックピット」を含む(前提B4-2)",

@@ -164,7 +164,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "add-category", "delete-category",
   "toggle-vision-direct-category", "vision-open-direct-settings",  // v189: F7 直結カテゴリ選択+誘導(設定ビュー)
   "tl-zoom", "tl-energy-mode",
-  "toggle-journal-segment", "toggle-settings-sync",
+  "toggle-journal-segment", "toggle-settings-sync", "settings-row-toggle",  // v358: 設定一覧の行展開
   "toggle-sidebar",
   "add-wish", "open-wish", "add-wish-subtask", "toggle-wish-subtask",
   "wish-subtask-to-tasks", "wish-realize", "wish-unrealize", "delete-wish",
@@ -253,7 +253,7 @@ const APP_JS_REGISTERED_ACTIONS = [
   "toggle-wbs-edit", "wbs-collapse-all",
   "add-category", "delete-category",
   "toggle-vision-direct-category", "vision-open-direct-settings",  // v189: F7 直結カテゴリ選択+誘導(設定ビュー)
-  "toggle-sidebar", "toggle-settings-sync",
+  "toggle-sidebar", "toggle-settings-sync", "settings-row-toggle",  // v358: 設定一覧の行展開
   "save-github", "load-github", "gate-continue", "reset-demo", "push-report",
   "open-backup-list", "restore-backup", "run-archive",
   // --- v176: 0秒思考(20。テーマ提案選定2actionはv299で削除) ---

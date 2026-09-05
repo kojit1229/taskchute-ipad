@@ -90,7 +90,7 @@ function check(name, cond, extra = "") {
     console.log("[2] 廃止したAI集約UIを設定・today・execのどこにも戻さない");
     await seedSkin("cockpit", "settings");
     check("todaySkinの設定selectが存在しない", await page.locator('select[data-setting-field="todaySkin"]').count() === 0);
-    await page.evaluate(() => { const fold = document.querySelector('details[data-fold-id="settings-daily"]'); if (fold) fold.open = true; });
+    await page.evaluate(() => { const fold = document.querySelector('details[data-legacy-fold="settings-daily"]'); if (fold) fold.open = true; });
     check("削除済みtoday-replan actionがソースに存在しない", !appSource.includes('"today-replan"'));
     await page.evaluate(({ KEY, yesterday }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
@@ -985,7 +985,7 @@ function check(name, cond, extra = "") {
     check("towerMotion未定義はnormalへ正規化", await page.locator(".today-tower").getAttribute("data-motion") === "normal");
     await page.locator('#sidebar [data-action="nav"][data-view="settings"]').click();
     await page.waitForSelector('#app[data-view="settings"]');
-    await page.evaluate(() => { const fold = document.querySelector('details[data-fold-id="settings-display"]'); if (fold) fold.open = true; });
+    await page.evaluate(() => { const fold = document.querySelector('details[data-legacy-fold="settings-display"]'); if (fold) fold.open = true; });
     const motionSelect = page.locator('select[data-setting-field="towerMotion"]');
     check("towerMotion selectは3択", await motionSelect.locator("option").count() === 3);
     await motionSelect.selectOption("off");
@@ -1007,7 +1007,7 @@ function check(name, cond, extra = "") {
     check("offでも時計の数字は更新される", await page.locator("#towerClock").textContent() !== offClockBefore);
     await page.locator('#sidebar [data-action="nav"][data-view="settings"]').click();
     await page.waitForSelector('#app[data-view="settings"]');
-    await page.evaluate(() => { const fold = document.querySelector('details[data-fold-id="settings-display"]'); if (fold) fold.open = true; });
+    await page.evaluate(() => { const fold = document.querySelector('details[data-legacy-fold="settings-display"]'); if (fold) fold.open = true; });
     await page.locator('select[data-setting-field="towerMotion"]').selectOption("calm");
     await seedT6([block("calm-event", "イベント演出確認", today, 13 * 60)]);
     await page.waitForSelector('.today-tower[data-motion="calm"]');

@@ -111,19 +111,24 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (3) 設定の4群アコーディオン(既定全閉。同期停止時のみ「データと同期」が初期open)
     // ============================================================
-    console.log("[3] 設定は4群(通常3群+データと同期1群)のdetailsで、既定は全群閉");
+    console.log("[3] v358: 設定は一覧型(接続と保存トップ+群ごとの行)。レガシー2行(battery/theme)"
+      + "+「接続の詳細」1件のアコーディオンは既定閉のまま(セレクタは.settings-grid配下の子孫へ緩和)");
     await seed({ view: "settings" });
-    // 「データと同期」群だけdata-fold-id属性を意図的に持たない(グローバルのtoggleリスナーが
-    // data-fold-idを見て拾ってしまい、動的openが誤って永続化されるのを避けるため。
-    // app.js renderSettingsSyncGroupのコメント参照)。マーカーはdata-settings-sync。
-    const foldGroups = page.locator('.settings-grid > details[data-fold-id^="settings-"]');
-    const syncGroupLoc = page.locator('.settings-grid > details[data-settings-sync]');
-    check("設定は4群のdetailsで構成される(通常3群+データと同期1群)",
-      await foldGroups.count() === 3 && await syncGroupLoc.count() === 1,
+    // 「接続の詳細」(旧データと同期)はdata-fold-id/data-legacy-foldのどちらも持たない
+    // (グローバルのtoggleリスナーがdata-fold-idを見て拾ってしまい、動的openが誤って永続化される
+    // のを避けるため。app.js renderSettingsSyncGroupのコメント参照)。マーカーはdata-settings-sync。
+    // v358修正(A-H2/B-H1): battery/theme行は後方互換セレクタとして`data-legacy-fold`(旧
+    // `data-fold-id`から改名。グローバルtoggleリスナーの対象外にするため)を持つ。renderSettingsConnectPanel
+    // や群divの中にネストされ.settings-gridの直下ではなくなったため直下(>)条件を子孫条件へ緩和した
+    // (件数は2件=電池/テーマ行のみ)。
+    const foldGroups = page.locator('.settings-grid details[data-legacy-fold^="settings-"]');
+    const syncGroupLoc = page.locator('.settings-grid details[data-settings-sync]');
+    check("設定はレガシー2行(電池/テーマ)+接続の詳細1件で構成される",
+      await foldGroups.count() === 2 && await syncGroupLoc.count() === 1,
       `fold=${await foldGroups.count()} sync=${await syncGroupLoc.count()}`);
     const openFlags = await foldGroups.evaluateAll((els) => els.map((el) => el.open));
     const syncOpenInitial = await syncGroupLoc.evaluate((el) => el.open);
-    check("同期異常が無い状態では4群とも既定closed",
+    check("同期異常が無い状態では電池/テーマ行・接続の詳細とも既定closed",
       openFlags.every((o) => o === false) && syncOpenInitial === false,
       JSON.stringify({ openFlags, syncOpenInitial }));
     // パネルは各群のdetails内に格納されているだけで、消えてはいない(格納するだけの原則)

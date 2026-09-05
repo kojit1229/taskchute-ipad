@@ -2,7 +2,7 @@
 const fs = require("fs");
 const {
   chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate,
-  randomPort, STATE_KEY, openSettingsGroup
+  randomPort, STATE_KEY
 } = require("./helpers");
 
 const PORT = randomPort();
@@ -50,7 +50,12 @@ function check(name, cond, extra = "") {
     }, STATE_KEY);
     await page.reload();
     await page.waitForSelector('.nav-button[data-view="settings"].active');
-    await openSettingsGroup(page, "settings-sync");
+    // v358で生活記録CSVのlife-exportボタンは「データ」群の「書き出し」行(行タップで展開する
+    // 一覧行、_settingsExpandedRowId管理・非永続)へ移設された。openSettingsGroup("settings-sync")
+    // は無関係になったため、該当行を直接タップして開く。
+    const exportRow = page.locator('[data-settings-row="data-export"]');
+    await exportRow.locator("summary").click();
+    await page.waitForFunction(() => document.querySelector('[data-settings-row="data-export"]')?.open === true);
     const stateBefore = await page.evaluate((key) => localStorage.getItem(key), STATE_KEY);
 
     console.log("[1] 設定画面に共通actionの6ボタンが表示される");

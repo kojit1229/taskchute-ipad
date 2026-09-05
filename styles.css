@@ -2385,6 +2385,40 @@ h3 {
 }
 .fold-body { margin-top: 10px; }
 
+/* v358: 設定タブ一覧型ラッパー(接続と保存トップ+群ごとの行リスト)。
+   既存.fold/.fold-summary/.fold-chevronの見た目はそのまま流用し、
+   行固有のレイアウト(ラベル/いまの値/スイッチ)だけを追加する。 */
+/* v358修正(B-M9): 720px超では.settings-gridが2列になるため、grid-column指定なしだと
+   「接続と保存」が最上段フルバンドではなく2列の1セルに落ちてしまう(iPad幅も含む)。 */
+.settings-connect { grid-column: 1 / -1; margin-bottom: 4px; }
+.settings-connect-sub { margin: 2px 0 10px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.settings-connect > .checkbox-line { margin-top: 8px; }
+.settings-connect > .row { margin-top: 10px; }
+.settings-connect > details.settings-group { margin-top: 12px; }
+.settings-group-flat { margin-top: var(--space-3); }
+.settings-group-flat-head {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  padding: 4px 2px; border-bottom: 1px solid var(--line); margin-bottom: 6px;
+}
+.settings-group-flat-label { font-weight: 700; font-size: 13.5px; }
+.settings-group-flat-subtitle { font-size: 11px; }
+.settings-rows { display: flex; flex-direction: column; gap: 6px; }
+.settings-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  min-height: 44px; padding: 6px 4px;
+}
+details.settings-row { display: block; padding: 0; }
+details.settings-row > .fold-summary.settings-row-summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  min-height: 44px; padding: 6px 4px;
+}
+.settings-row-label { font-size: 13.5px; }
+.settings-row-value { font-size: 11.5px; text-align: right; }
+.settings-row-toggle .settings-row-value,
+.settings-row-static .settings-row-value { flex: 1; text-align: right; }
+.settings-row-toggle input[type="checkbox"],
+.settings-row-static input[type="checkbox"] { width: 24px; height: 24px; }
+
 .check-row {
   display: flex;
   align-items: center;

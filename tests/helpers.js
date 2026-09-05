@@ -144,13 +144,18 @@ async function passGithubGate(page, keyName = STATE_KEY) {
 // 注意: 本ヘルパーは既定closed(defaultOpen=false)の群を前提にしている。defaultOpen=trueの
 // 群(未永続でもopenが正常系)へ使うと、初回3秒待ち+一度閉じる副作用が出るため設計を見直すこと。
 async function openSettingsGroup(page, groupId) {
-  const sel = groupId === "settings-sync" ? "[data-settings-sync]" : `[data-fold-id="${groupId}"]`;
+  const sel = groupId === "settings-sync" ? "[data-settings-sync]" : `[data-legacy-fold="${groupId}"]`;
   const el = page.locator(sel);
   if ((await el.count()) === 0) return;
   const FOLD_KEY = "taskchute-journal-home-fold-v1";
-  // settings-syncはFOLD_KEYを使わない設計(in-memoryオーバーライド。app.jsの
-  // renderSettingsSyncGroup参照)のため、DOMのopenのみ待つ(リトライの恩恵だけ受ける)。
-  const needsPersist = groupId !== "settings-sync";
+  // v358修正(B-H1/M7): settings-sync/settings-daily/settings-displayはFOLD_KEYへ書き込まれない
+  // 設計。settings-syncはdata-settings-sync(app.jsのグローバルtoggleリスナーが見る
+  // data-fold-idを最初から持たない)。settings-daily/settings-displayは設定一覧の行展開
+  // (_settingsExpandedRowIdのin-memory管理)で、後方互換のためだけに`data-legacy-fold`属性を
+  // 持つが、これはグローバルtoggleリスナーが見る`data-fold-id`とは別名の属性なので拾われない
+  // (以前は同じdata-fold-id属性を共用しており、「render()がtoggleイベントより先にdetachする」
+  // というタイミング依存の偶然でのみ非永続を保っていた。属性名を分けて設計上の保証にした)。
+  const needsPersist = !["settings-sync", "settings-daily", "settings-display"].includes(groupId);
   let lastError = null;
   for (let attempt = 0; attempt < 5; attempt++) {
     const isOpen = await el.evaluate((e) => e.open);

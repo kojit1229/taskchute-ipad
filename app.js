@@ -482,6 +482,15 @@ registerActions({
     const parent = target.closest("details");
     if (parent) _settingsSyncOpenOverride = !parent.open;  // クリック時点ではまだ未反映のため反転
   },
+  // v358: 設定一覧の行タップ展開(1行だけ開く・非永続)。クリック時点で.openは未反映のため反転する。
+  "settings-row-toggle": ({ target }) => {
+    const summary = target.closest("summary");
+    const details = summary?.closest("details");
+    const row = summary?.dataset.row;
+    if (!details || !row) return;
+    _settingsExpandedRowId = details.open ? null : row;
+    render();
+  },
   // --- sync(8): GitHub保存/読込/バックアップ/アーカイブ/デモリセット ---
   "save-github": () => saveToGitHub(),
   "load-github": () => loadFromGitHub(),
@@ -1097,6 +1106,8 @@ const BATTERY_TICK_INTERVAL_MS = 60000;
 // v169: _journalSegmentOverrideはsrc/state/journal-fold.jsへ切り出し、冒頭でimportした
 // (app.js分割・段階4-3。click dispatcherのtoggle-journal-segment分岐とrenderJournalの共有)。
 let _settingsSyncOpenOverride = null;  // null=未操作、true/false=ユーザーが実際にクリックした最新状態
+// v358: 設定一覧の行展開状態(1つだけ開く)。_settingsSyncOpenOverrideと同じ理由でFOLD_KEY未使用。
+let _settingsExpandedRowId = null;
 let cachedVisionMd = "";
 let cachedAffirmationMd = "";
 // v85: ビジョンボード(45/80/nowの各PDF)はpersonal-dataリポジトリのtaskchute/content/配下にあり、
@@ -7487,9 +7498,12 @@ function renderSettingsBatteryPanel() {
   `;
 }
 
-function renderSettingsDataPanel() {
-  return `
-    <h3>データ</h3>
+// v358修正(M3): 「データ」はモックどおり一覧のトップレベル群として出す(「接続の詳細」の
+// 2階層下に埋没させない)。中身(JSONエクスポート/生活記録CSV/JSONインポート/自動アーカイブ/
+// デモリセット)は既存のdata-action/data-setting-*をそのまま行として再配置しただけで、
+// 保存ロジック・アクション名は無改変。
+function renderSettingsDataGroupRows() {
+  const exportBody = `
     <button class="btn primary" data-action="download-data">JSONエクスポート</button>
     <div class="row" style="justify-content:flex-start; gap:6px; flex-wrap:wrap">
       <span class="muted" style="font-size:12px">生活記録を種別で書き出す:</span>
@@ -7498,26 +7512,33 @@ function renderSettingsDataPanel() {
         ["store", "お店 CSV"], ["bodyScan", "身体スキャン CSV"], ["writeMeditation", "書く瞑想 JSON"]
       ].map(([kind, label]) => `<button class="btn" data-action="life-export" data-kind="${kind}">${label}</button>`).join("")}
     </div>
+  `;
+  const importBody = `
     <label class="btn" style="text-align:center">
       JSONインポート
       <input id="importData" type="file" accept="application/json" hidden>
     </label>
-    <button class="btn danger" data-action="reset-demo">デモデータに戻す</button>
-    <div style="border-top:1px solid var(--line); padding-top:10px">
-      <div style="font-weight:700; font-size:13.5px; margin-bottom:6px">📦 アーカイブ(容量対策)</div>
-      <div class="muted" style="font-size:11.5px; line-height:1.7">
-        端末内データ: <b>${stateSizeLabel()}</b>(localStorage の目安上限 約5MB)<br>
-        ${ARCHIVE_TEXT_KEEP_DAYS}日より古い日報・AIフィードバック・ジャーナルと、${ARCHIVE_BLOCK_KEEP_DAYS}日より古いBlockを
-        <code>archive/archive-年.json</code> へ退避して本体を軽く保ちます。退避分は横断検索の「アーカイブも検索」から読めます。
-        ${state.settings.lastArchivedAt ? `<br>最終アーカイブ: ${state.settings.lastArchivedAt.replace("T", " ")}` : ""}
-      </div>
-      <label class="checkbox-line">
-        <input type="checkbox" data-setting-autoarchive ${state.settings.autoArchive ? "checked" : ""}>
-        自動アーカイブ(1日1回、GitHub保存の書き込み成功後にのみ削除)
-      </label>
-      <button class="btn" data-action="run-archive" style="margin-top:6px">今すぐアーカイブ</button>
-    </div>
   `;
+  const archiveDetail = `
+    <div style="font-weight:700; font-size:13.5px; margin-bottom:6px">📦 アーカイブ(容量対策)</div>
+    <div class="muted" style="font-size:11.5px; line-height:1.7">
+      端末内データ: <b>${stateSizeLabel()}</b>(localStorage の目安上限 約5MB)<br>
+      ${ARCHIVE_TEXT_KEEP_DAYS}日より古い日報・AIフィードバック・ジャーナルと、${ARCHIVE_BLOCK_KEEP_DAYS}日より古いBlockを
+      <code>archive/archive-年.json</code> へ退避して本体を軽く保ちます。退避分は横断検索の「アーカイブも検索」から読めます。
+    </div>
+    <button class="btn" data-action="run-archive" style="margin-top:6px">今すぐアーカイブ</button>
+  `;
+  const archiveDesc = `1日1回、GitHub保存の書き込み成功後にのみ削除${state.settings.lastArchivedAt ? `・最終 ${state.settings.lastArchivedAt.replace("T", " ").slice(0, 16)}` : "・最終 未実行"}`;
+  return [
+    settingsExpandRow("data-export", "書き出し", "", exportBody, undefined, "全体JSON・種別CSV(筋トレ/睡眠/体調/お店/身体スキャン/書く瞑想)"),
+    settingsExpandRow("data-import", "読み込み(JSON)", "", importBody, undefined, "エクスポートしたJSONから復元"),
+    // v53/v316の既存テストがrun-archive/life-export等を直接クリックする経路のため、
+    // このボタンだけは折りたたみに入れず常時表示にする(fullDetailHTML=折りたたみは
+    // render()のたびに閉じ直る一時的なUI状態しか持たないため、クリック直後の再renderで
+    // 再び隠れてしまい既存テストの連続クリックが壊れる)。
+    settingsToggleRow("自動アーカイブ", archiveDesc, `<input type="checkbox" data-setting-autoarchive ${state.settings.autoArchive ? "checked" : ""}>`) + archiveDetail,
+    settingsExpandRow("data-reset", "デモデータに戻す", "", `<button class="btn danger" data-action="reset-demo">デモデータに戻す</button>`, undefined, "全部消えます。確認2回")
+  ].join("");
 }
 
 function renderSettingsCloudPanel(github) {
@@ -7556,32 +7577,12 @@ function renderSettingsCloudPanel(github) {
         (トークンは端末内の安全な保管庫にのみ保存され、GitHub には送られません)。
       </div>
     </form>
-    <label class="checkbox-line">
-      <input type="checkbox" data-github-field="autoSave" ${github.autoSave ? "checked" : ""}>
-      自動保存を有効にする(変更後 30 秒のデバウンス)
-    </label>
-    <div class="muted" data-auto-save-status style="font-size:12px">
-      ${github.lastSavedAt ? `最終保存: ${github.lastSavedAt.replace("T", " ")}` : (github.autoSave ? "自動保存: 有効(まだ保存していません)" : "自動保存: 無効")}
-    </div>
-    <label class="checkbox-line">
-      <input type="checkbox" data-setting-autosync ${state.settings.autoSync ? "checked" : ""}>
-      🔄 自動同期(push 3分デバウンス + 起動/復帰時に pull)
-    </label>
-    <div class="muted" style="font-size:11px; line-height:1.7">
-      ${state.settings.autoSync ? `<span class="sync-dot ${syncDotClass()}"></span> 有効` : "無効(既定)"}
-      ${state.settings.github.lastSavedAt ? ` ・ 最終push: ${state.settings.github.lastSavedAt.replace("T", " ")}` : ""}
-      ${state.settings.lastPulledAt ? ` ・ 最終pull: ${state.settings.lastPulledAt.replace("T", " ")}` : ""}
-      <br>競合(両方に未反映の変更)時は自動適用せず、手動判断に委ねます。
-    </div>
+    <!-- v358: 自動保存/自動同期トグルと保存/読込ボタンはrenderSettingsConnectPanelへ移設済み -->
     <div class="muted" style="font-size:11px; line-height:1.7">
       この端末: ${getLastSyncPushAt() ? `push成功 ${getLastSyncPushAt().replace("T", " ").slice(0, 16)}` : "push成功 記録なし"}
       ・ ${getLastSyncPullAt() ? `pull成功 ${getLastSyncPullAt().replace("T", " ").slice(0, 16)}` : "pull成功 記録なし"}
     </div>
     <div data-sync-error-detail-slot>${syncErrorDetailHTML()}</div>
-    <div class="row">
-      <button class="btn primary" data-action="save-github">今すぐGitHubへ保存</button>
-      <button class="btn" data-action="load-github">GitHubから読込</button>
-    </div>
     <div class="muted" style="font-size:11px">TokenはGitHubへ保存しません。この端末のブラウザ内(＋任意でiOSキーチェーン)だけに保持します。</div>
     <button class="btn" data-action="open-backup-list">📦 バックアップ世代から復元</button>
     <div class="muted" style="font-size:11px; line-height:1.6">
@@ -7598,35 +7599,6 @@ function renderSettingsDraftSchedulePanel() {
       「📋 下書きスケジュール」は、当日の未着手Blockを空き時間へ機械的に再配置する
       決定論ロジックです(APIキーは不要)。タイムラインから実行し、確認後に確定できます。
     </div>
-  `;
-}
-
-function renderSettingsExecPanel() {
-  return `
-    <h3>実行</h3>
-    <div class="muted" style="font-size:12px; line-height:1.6">
-      Blockを開始する(▶いま開始/いま着手する/Now画面の開始)と、既存のポモドーロUIを流用した
-      フォーカスタイマー(25分)を自動で起動します。既に別のタイマーが動いている場合は乗っ取りません。
-    </div>
-    <label class="checkbox-line">
-      <input type="checkbox" data-setting-focustimerauto ${state.settings.focusTimerAuto ? "checked" : ""}>
-      ⏱ Block開始でフォーカスタイマーを自動起動
-    </label>
-  `;
-}
-
-function renderSettingsGuidedAccessPanel() {
-  return `
-    <h3>🔒 ガイド付きアクセス案内</h3>
-    <div class="muted" style="font-size:12px; line-height:1.6">
-      iPad/iPhoneでポモドーロタイマーを開始すると、ガイド付きアクセス(画面ロック)の
-      操作方法を案内するポップアップを出します。PWAから自動でロックすることはiOSの制約上
-      できないため、手動操作の案内のみです。ポップアップの「今後表示しない」でもOFFにできます。
-    </div>
-    <label class="checkbox-line">
-      <input type="checkbox" data-setting-pomoguidedaccesshint ${state.settings.pomoGuidedAccessHint ? "checked" : ""}>
-      🔒 ポモドーロ開始時にガイド付きアクセスを案内(iPad/iPhoneのみ)
-    </label>
   `;
 }
 
@@ -7704,49 +7676,161 @@ function renderSettingsPagesPanel() {
   `;
 }
 
+// v358: 設定一覧の行。expandは行タップで既存パネルを下に展開(既存panel本体は無改変)、
+// toggleは行右のスイッチで既存change経路のまま即切替。
+// v358修正(H2): legacyFoldIdは後方互換のテスト用セレクタとしてのみ使う`data-legacy-fold`に
+// 出す(旧`data-fold-id`は廃止)。app.js冒頭のグローバルtoggleリスナー(1387行付近)は
+// `dataset.foldId`しか見ないため、この行の開閉はFOLD_KEYへ一切書き込まれない
+// (「render()がtoggleイベントより先にdetachする」という偶然のタイミング依存だった旧実装を、
+// 属性名を分けることで設計として保証する形に直した)。
+// v358修正(M2): descは行の副題(1行要約)。長い説明文はここではなくbodyHTML側(展開内)に置く。
+function settingsExpandRow(id, label, value, bodyHTML, legacyFoldId, desc) {
+  const open = _settingsExpandedRowId === id;
+  return `
+    <details class="fold panel settings-row" data-settings-row="${id}" ${legacyFoldId ? `data-legacy-fold="${legacyFoldId}"` : ""} ${open ? "open" : ""}>
+      <summary class="fold-summary settings-row-summary" data-action="settings-row-toggle" data-row="${id}">
+        <span><span class="settings-row-label">${escapeHTML(label)}</span>${desc ? `<br><span class="muted settings-row-desc">${escapeHTML(desc)}</span>` : ""}</span>
+        <span class="settings-row-value muted">${escapeHTML(value)}</span>
+        <span class="fold-chevron">▶</span>
+      </summary>
+      <div class="fold-body">${bodyHTML}</div>
+    </details>
+  `;
+}
+
+// v358修正(A-H1): 行全体(<label>)をタップ対象にする(以前はinput本体24pxだけがヒットしていた)。
+// v358修正(M2): fullDetailHTMLがあれば、行の下に「詳しく」展開(既存の長い説明文を消さず
+// ここへ全文残す)。省略時は従来どおりトグルのみの1行。
+function settingsToggleRow(label, desc, checkboxHTML, fullDetailHTML) {
+  return `
+    <label class="settings-row settings-row-toggle">
+      <span><span class="settings-row-label">${escapeHTML(label)}</span><br><span class="muted settings-row-desc">${escapeHTML(desc)}</span></span>
+      ${checkboxHTML}
+    </label>
+    ${fullDetailHTML ? `
+      <details class="fold settings-row-detail">
+        <summary class="fold-summary muted" style="font-size:11px">詳しく</summary>
+        <div class="fold-body muted" style="font-size:12px; line-height:1.6">${fullDetailHTML}</div>
+      </details>
+    ` : ""}
+  `;
+}
+
 function renderSettings() {
   const github = state.settings.github || defaultGitHubSettings();
+  const battery = state.settings.battery || defaultBatterySettings();
+  const bufferValue = `${Number.isFinite(state.settings.dailyBufferMin) && state.settings.dailyBufferMin > 0 ? `${state.settings.dailyBufferMin}分` : "未設定"}・${Number.isFinite(state.settings.dayCloseHours) ? state.settings.dayCloseHours : 24}時`;
+  const batteryValue = `${battery.start.deficit}/${battery.start.low}/${battery.start.normal}・${battery.decayPerHour}/h・${minutesToTimeInputValue(battery.decayStartMinutes)}`;
+  const themeLabelMap = { dark: "ダーク", light: "ライト", cockpit: "コックピット", auto: "OS追従" };
+  const motionLabelMap = { normal: "通常", calm: "控えめ", off: "なし" };
+  const themeValue = `${themeLabelMap[state.settings.theme] || "ダーク"}・${motionLabelMap[state.settings.towerMotion] || "通常"}`;
+  const profileValue = `${state.settings.birthDate || "未設定"}・12WY ${state.settings.twelveWeekStartDate || todayISO()}`;
+  const categoryValue = `${(state.settings.categories || []).length}件`;
   const groups = [
     {
-      id: "settings-daily", label: "日々の使い方(バッファ・電池・下書き・実行)",
-      body: [renderSettingsBufferPanel(), renderSettingsBatteryPanel(), renderSettingsDraftSchedulePanel(), renderSettingsExecPanel()]
+      label: "日々の使い方", subtitle: "いまの値をそのまま表示",
+      rows: [
+        settingsExpandRow("buffer", "バッファ", bufferValue, renderSettingsBufferPanel()),
+        settingsExpandRow("battery", "電池", batteryValue, renderSettingsBatteryPanel(), "settings-daily"),
+        settingsToggleRow("フォーカスタイマーの自動起動", "Block開始で自動起動", `<input type="checkbox" data-setting-focustimerauto ${state.settings.focusTimerAuto ? "checked" : ""}>`,
+          "Blockを開始する(▶いま開始/いま着手する/Now画面の開始)と、既存のポモドーロUIを流用した" +
+          "フォーカスタイマー(25分)を自動で起動します。既に別のタイマーが動いている場合は乗っ取りません。"),
+        settingsExpandRow("draft", "下書きスケジュール", "説明のみ", renderSettingsDraftSchedulePanel())
+      ]
     },
     {
-      id: "settings-display", label: "表示・タイマー(テーマ・ガイド付きアクセス)",
-      body: [renderSettingsThemePanel(), renderSettingsGuidedAccessPanel()]
+      label: "表示", subtitle: "テーマ・動き",
+      rows: [
+        settingsExpandRow("theme", "テーマ", themeValue, renderSettingsThemePanel(), "settings-display"),
+        settingsToggleRow("ガイド付きアクセスの案内", "ポモドーロ開始時に案内", `<input type="checkbox" data-setting-pomoguidedaccesshint ${state.settings.pomoGuidedAccessHint ? "checked" : ""}>`,
+          "iPad/iPhoneでポモドーロタイマーを開始すると、ガイド付きアクセス(画面ロック)の" +
+          "操作方法を案内するポップアップを出します。PWAから自動でロックすることはiOSの制約上" +
+          "できないため、手動操作の案内のみです。ポップアップの「今後表示しない」でもOFFにできます。")
+      ]
     },
     {
-      id: "settings-master", label: "マスタ・詳細(プロフィール・カテゴリ管理・ファイル構成)",
-      body: [renderSettingsProfilePanel(), renderSettingsCategoryPanel(), renderSettingsFileStructurePanel()]
+      label: "プロフィールとマスタ", subtitle: "12WY・カテゴリ",
+      rows: [
+        settingsExpandRow("profile", "プロフィール(生年月日・12WY)", profileValue, renderSettingsProfilePanel()),
+        settingsExpandRow("category", "カテゴリ管理", categoryValue, renderSettingsCategoryPanel())
+      ]
+    },
+    {
+      label: "データ", subtitle: "持ち出し・復元",
+      rows: [renderSettingsDataGroupRows()]
+    },
+    {
+      label: "その他", subtitle: "モックにない既存設定",
+      rows: [renderSettingsFileStructurePanel()]
     }
   ];
   return `
-    ${renderHeader("Web版の保存と公開", "設定")}
+    ${renderHeader("接続・日々の使い方・表示・データをまとめて確認", "設定")}
     <section class="settings-grid">
-      ${foldSection(groups[0].id, false, "settings-group", "settings-group-summary", groups[0].label,
-        `<div class="stack" style="gap:16px">${groups[0].body.join("")}</div>`)}
-      ${foldSection(groups[1].id, false, "settings-group", "settings-group-summary", groups[1].label,
-        `<div class="stack" style="gap:16px">${groups[1].body.join("")}</div>`)}
-      ${renderSettingsSyncGroup(github)}
-      ${foldSection(groups[2].id, false, "settings-group", "settings-group-summary", groups[2].label,
-        `<div class="stack" style="gap:16px">${groups[2].body.join("")}</div>`)}
+      ${renderSettingsConnectPanel(github)}
+      ${groups.map((g) => `
+        <div class="settings-group-flat">
+          <div class="settings-group-flat-head">
+            <span class="settings-group-flat-label">${escapeHTML(g.label)}</span>
+            <span class="settings-group-flat-subtitle muted">${escapeHTML(g.subtitle)}</span>
+          </div>
+          <div class="settings-rows">${g.rows.join("")}</div>
+        </div>
+      `).join("")}
     </section>
   `;
 }
 
-// v148レビュー対応(2系統レビューFAIL項目2): 「データと同期」群だけ、他3群と違って
-// foldSection(localStorage記憶)を使わない専用実装にする(_settingsSyncOpenOverrideの
-// 宣言・経緯コメントはファイル冒頭のモジュール変数群を参照)。
+// v358: 最上段「接続と保存」。同期状態・最終保存/読込・トグル・保存/読込ボタンを常時表示にし、
+// リポジトリ・トークン等の既存フォームは「接続の詳細」(旧renderSettingsSyncGroup)へ折りたたむ。
+function renderSettingsConnectPanel(github) {
+  const ready = personalDataReady(github);
+  const abnormal = Boolean(_personalDataAuthError) || Boolean(syncAlertMessage());
+  const statusLabel = !ready ? "未接続" : (abnormal ? "異常あり" : "接続済み");
+  return `
+    <section class="panel settings-connect">
+      <h3>接続と保存</h3>
+      <div class="muted settings-connect-sub" style="font-size:12px">
+        ${ready ? `個人データ: ${escapeHTML(github.dataOwner || "")}/${escapeHTML(github.dataRepo || "")} ・ ` : ""}${statusLabel}
+        <span class="sync-dot ${syncDotClass()}" title="同期状態"></span>
+      </div>
+      <div class="settings-row settings-row-static">
+        <span class="settings-row-label">最後の保存 / 読込</span>
+        <span class="settings-row-value muted">
+          <span data-auto-save-status>${github.lastSavedAt ? `保存 ${github.lastSavedAt.replace("T", " ").slice(0, 16)}` : (github.autoSave ? "自動保存: 有効(まだ保存していません)" : "自動保存: 無効")}</span>
+          ・ ${state.settings.lastPulledAt ? `読込 ${state.settings.lastPulledAt.replace("T", " ").slice(0, 16)}` : "読込 記録なし"}
+        </span>
+      </div>
+      <label class="checkbox-line">
+        <input type="checkbox" data-github-field="autoSave" ${github.autoSave ? "checked" : ""}>
+        自動保存(変更から30秒後にGitHubへ)
+      </label>
+      <label class="checkbox-line">
+        <input type="checkbox" data-setting-autosync ${state.settings.autoSync ? "checked" : ""}>
+        🔄 自動同期(開いたとき・復帰時に読み込む)
+      </label>
+      <div class="row" style="gap:8px">
+        <button class="btn primary" data-action="save-github">いま保存</button>
+        <button class="btn" data-action="load-github">いま読込</button>
+      </div>
+      ${renderSettingsSyncGroup(github)}
+    </section>
+  `;
+}
+
+// v148レビュー対応(2系統レビューFAIL項目2): foldSection(localStorage記憶)を使わない専用実装
+// (_settingsSyncOpenOverrideの宣言・経緯コメントはファイル冒頭を参照)。v358でsummary文言と
+// 内包パネル(自動保存/同期トグル・保存/読込ボタンはrenderSettingsConnectPanelへ移設)を変更。
 function renderSettingsSyncGroup(github) {
   // v148レビュー対応(項目5): 認証エラーバナー(pd-auth-banner、personalDataAuthError)からの
   // 設定遷移でもこの群を自動openにし、トークン再入力欄に直行できるようにする
   // (syncAlertMessage()と同じ「異常」の意味合いで扱う)。
   const dynamicOpen = Boolean(syncAlertMessage()) || Boolean(_personalDataAuthError) || Boolean(_syncBanner);
   const open = dynamicOpen || Boolean(_settingsSyncOpenOverride);
-  const body = [renderSettingsDataPanel(), renderSettingsCloudPanel(github), renderSettingsPagesPanel()].join("");
+  const body = [renderSettingsCloudPanel(github), renderSettingsPagesPanel()].join("");
   return `
     <details class="fold panel settings-group" data-settings-sync ${open ? "open" : ""}>
-      <summary class="fold-summary settings-group-summary" data-action="toggle-settings-sync"><span class="fold-chevron">▶</span>データと同期(データ管理・クラウド保存・GitHub Pages)</summary>
+      <summary class="fold-summary settings-group-summary" data-action="toggle-settings-sync"><span class="fold-chevron">▶</span>接続の詳細(データ管理・クラウド保存・GitHub Pages)</summary>
       <div class="fold-body"><div class="stack" style="gap:16px">${body}</div></div>
     </details>
   `;
@@ -10299,7 +10383,9 @@ function updateAutoSaveStatus(text) {
   const cfg = state.settings.github || {};
   if (text) { el.textContent = text; return; }
   if (cfg.lastSavedAt) {
-    el.textContent = `最終保存: ${cfg.lastSavedAt.replace("T", " ")}`;
+    // v358修正(M6): 設置場所を最上段「接続と保存」へ移設した際の初期描画(renderSettingsConnectPanel)
+    // と書式を揃える(旧「最終保存: 秒まで」のまま上書きすると保存直後だけ書式・長さが変わっていた)。
+    el.textContent = `保存 ${cfg.lastSavedAt.replace("T", " ").slice(0, 16)}`;
   } else {
     el.textContent = cfg.autoSave ? "自動保存: 有効(まだ保存していません)" : "自動保存: 無効";
   }
