@@ -46,5 +46,9 @@
     "renderVisionAlignment()のdirectSeconds/directBlockCount/avg7dSecondsの計算式が、直結カテゴリに属さないBlockや実績のない(actualStartAt無し)Blockを正しく除外していること(tests/today-core.test.js [51b]・tests/v362.test.js [2]の手計算と一致)。",
     "hydrateStaticMarkdown()のvisionMdFetchStatus更新とrenderDeferringForFocusの発火条件が、既存のAIフィードバック・FUND・健康データの同時fetchロジックに影響していないこと(fetchGitHubRawText→fetchGitHubRawResultへの切替はVision/Affirmationの2箇所のみ)。",
     "reloadStaticMarkdown()の事前クリア廃止が、他の呼び出し経路(該当なし、vision専用)や既存テスト([30c]等)に副作用を与えていないこと。"
+  ],
+  "verification": [
+    "node tests/run-all.js v361 today-core v72 v137 r1-twelveweek action-registry-core 全件成功(main 取り込み後)。worktree で v362(旧名) today-core v72 v85 v137 action-registry-core / v101 v125 v140 github-vision-pdf-fallback v313 を各2回全件成功。",
+    "node --check、test-manifest --check、code-index --check PASS。実行コード244行(Size-Exempt)。"
   ]
 }
