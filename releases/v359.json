@@ -1,0 +1,62 @@
+{
+  "version": 359,
+  "date": "2026-09-05",
+  "title": "Block 編集シート: 5節固定+共通 .tower-sheet",
+  "summary": "発注(order-v359-block-edit-sheet.md)どおり、Block編集モーダル(buildBlockModal)を基本(タイトル・カテゴリ・Task/Project・MIT ★・レバレッジ)→時間(日付・予定/実績・見積・完了済み(Block)・🏁タスク完了トグル)→エネルギー(充電/放電)→繰り返し(既存条件のまま)→メモの5節へ再編し、共通CSS「.tower-sheet」(節見出し・区切り線)を新設した(Blockモーダルにだけ.tower-sheetクラスを付け、既存.modal-cardの見た目は変えていない)。MITは新設のdata-modal-field=\"isMIT\"チェックボックスで表示し、保存時にsaveBlockFromModal側で既存toggleMIT()と同じ1日3件までの上限ガードを適用して反映する(上限超過時は既存toggleMIT()と同様にトーストのみ出して保存自体を中断し、モーダルは閉じず他フィールドも書き込まない。2026-09-05独立レビュー2系統[review-v359-claude-a.md A-M1/review-v359-claude-b.md B-M5]の指摘を受け監督者裁定で修正)。data-modal-fieldの名前・意味・保存ロジック・繰り返し生成ロジックは無変更(節分けとDOM順序のみ変更)。実装差分が実行コード200行予算を超えたため、発注文の分割指示に従い今回は「5節組み替え」だけを実施し、見積チップ(15/25/40/60)・「明日へ」「来週へ」日付シフト・「詳細 ›」折りたたみ(レバレッジ種別・タスク完了トグル・シリーズ設定)は未実装(後続バージョンへ持ち越し)。Codex利用上限のためimplementer(Claude)で実装した(初回実装+レビュー反映修正とも)。",
+  "changedFiles": [
+    "CHANGES_v359.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v359.json",
+    "styles.css",
+    "tests/suite-manifest.json",
+    "tests/v359.test.js"
+  ],
+  "intent": [
+    "K確定モック(mockups/instr/png/BlockEditSheet.png)と発注文(order-v360-block-edit-sheet.md)どおり、頻度の高い項目(タイトル・カテゴリ・Task/Project・MIT・時刻・見積・充放電)と頻度の低い項目(レバレッジ種別・タスク完了トグル・シリーズ設定)が同列に並んでいたBlock編集モーダルを5節へ整理し、MITをモーダル内から直接操作できるようにする(従来はタイムライン行の★のみ)。",
+    "共通CSS「.tower-sheet」(節見出し11px muted・区切り線)を新設し、v361以降のProject/Task編集シートでも流用できる形にする(既存.modal-card/.modal-body/.modal-footerの構造・下部固定ボタンはそのまま使う)。"
+  ],
+  "changes": [
+    "app.js: buildBlockModal()を全面的に節分け再構成。基本(title/category/taskId/isMIT/leverageType)→時間(date/plannedStartAt/plannedEndAt/estimateMin/actualStartAt/actualEndAt/completed/taskCompleteHTML)→エネルギー(charge/discharge)→繰り返し(recurrenceKind他、既存の分岐ロジック・条件式は1文字も変えず<section>で囲んだだけ)→メモ(comment)の順の<section class=\"tower-section\">に組み替えた。modalHeaderHTML()呼び出しに\"tower-sheet\"クラスを追加。",
+    "app.js: 基本節にMIT用<input type=\"checkbox\" data-modal-field=\"isMIT\">を新設(表示は.checkbox-line流用、★ラベル付き)。",
+    "app.js: saveBlockFromModal()にfields.isMITの反映ロジックを追加。既存isMITがtrueのまま維持/falseへ変更は無条件反映、falseからtrueへの新規設定時だけ同日内のisMIT件数(自分以外)が3件未満かを確認し、3件以上なら既存toggleMIT()と同様にトーストのみ出して`return`し保存自体を中断する(モーダルは閉じない・他フィールドも書き込まない)。",
+    "app.js(レビュー反映): 「完了済み(Block)」チェックボックスと🏁タスク完了トグル(taskCompleteHTML)をエネルギー節から時間節の末尾(実績の下)へ移設した(2026-09-05独立レビュー[A-M2]。エネルギー節は充放電0-5のみに整理)。",
+    "styles.css: .tower-sheet .tower-section(節間の区切り線・gap)・.tower-sheet .tower-section-title(11px muted見出し)を追加。既存.modal-card系のCSSは変更していない。",
+    "tests/v360.test.js: 新規スイート。節ごとのdata-modal-field所属pin(category込み)・MIT4パターン(false→true/true→false/上限超過で保存中断/既存MIT維持)・.tower-sheetのBlock限定付与・全input/select/textarea(checkbox除く)16px走査・waitForTimeout 0件化を含む(内容は下記テスト参照)。"
+  ],
+  "uncertainties": [
+    "スコープ縮小(持ち越し): 実行コード差分(app.js+styles.css、git diff --numstat合計)が当初実装で332行(224+108)となりCLAUDE.md NEVER 1の200行を超えたため、発注文の分割指示『5節組み替え / 詳細折りたたみ+チップに分割し前者だけ』に従い、以下3件は実装していない(後続バージョンへ持ち越し)。(1)見積チップ(15/25/40/60への一発入力)、(2)「明日へ」「来週へ」の日付+1日/+7日ボタン、(3)「詳細 ›」折りたたみ(レバレッジ種別・タスク完了トグル・シリーズ設定を既定閉にする)。現状はレバレッジ種別が基本節末尾、完了済み(Block)チェック・タスク完了トグルが時間節末尾に折りたたまず表示されている(モックの最終形とは異なる中間状態。v361で解消予定)。最終差分は174行(app.js 95+60・styles.css 19+0、レビュー反映後の実測)。",
+    "繰り返し節の『毎日/平日のときだけ固定化・既定充放電・アンカーを出す』条件は、既存コードのうち固定化(streakFixed)はkind条件のみ・既定充放電/アンカーはさらにblock.category===\"ルーティン\"が必要という元の二重条件をそのまま保持した。この二重条件そのものの妥当性(発注文の書きぶりだと両方ともdaily/weekdaysだけで出るように読める)はK確定モックの原案(proposal-other-tabs.md)にも明記が無く、今回は既存ロジック無変更の原則を優先して手を付けていない。",
+    "MITの1日3件ガードはトースト文言・条件とも既存toggleMIT()を踏襲したが、toggleMIT()自身(タイムライン行の★)とsaveBlockFromModal内の新ロジックは別実装(コード重複)。共通化はスコープ外として見送った。",
+    "tests/v359.test.js[6]で繰り返し条件を検証する際、category=\"ルーティン\"のBlockはexecTargetBlocks()/timeline.jsの除外条件により実行系/タイムライン系の画面から到達できず、安定して開けるUI導線を実装中に見つけられなかった。そのためexpectedCharge/expectedDischarge/anchor(block.category===\"ルーティン\"条件の枝)はブラウザ操作でのE2E検証ができておらず、静的検査(関数本体に既存コードがそのまま残っていること)と目視レビューのみで担保している。",
+    "v198は既存の既知不具合(pre-existing): [1-4]タスク編集モーダルのspan[data-action=\"edit-task\"][data-id=\"r4-k\"]セレクタ待ちで30秒タイムアウトする。本バージョンの起点コミット0e356bc(v359変更を含まないgit stash状態)へ一時的に戻して単独実行し、同一箇所・同一メッセージで再現することを実測で確認した(stash pop後に作業ツリーへ復元済み)。buildBlockModal/saveBlockFromModal/.tower-sheet CSSしか変更していない本差分とは因果関係が無い。",
+    "390px幅での「保存ボタンが44px以上」assertionは、run-all経由の連続実行時にごく稀に43.44px前後(閾値43.5px未満)を1回だけ観測した(単独実行・別セット実行では複数回とも安定してPASS)。既存の.btn{min-height:44px}のサブピクセル丸め由来と見られ、v359で新設したコードではなくレイアウト・フォント描画のタイミング依存の既知傾向(元テストの43.5px許容コメントが示す既存事象)。監督者への完了報告に必要な2回連続run-allでは2回ともPASSしているが、まれなflakeとして報告する。",
+    "版番号: 取り込み順のため Block 編集シートは v359(12WY R1 は v360 へ)。テストは tests/v359.test.js。保存ボタンの44px検証はモーダル入場アニメーション中の transform 縮小を避けるため offsetHeight で測る。"
+  ],
+  "reviewFocus": [
+    "buildBlockModal()の5節への並び替えで、既存data-modal-fieldの属性(value/checked/selectedの初期値算出式)が1つも変わっていないこと(節をまたいだコピペミスがないか)。",
+    "saveBlockFromModal()の新設isMIT反映ロジックが、MIT解除(true→false)・維持(true→true)・新規3件未満設定(false→true)・新規3件以上設定(false→trueを試みて保存自体を中断)の4パターンで意図どおり動くこと(上限超過時にモーダルが閉じず他フィールドも書き込まれないことを含む)。",
+    "繰り返し節(daily/weekdays条件、category===\"ルーティン\"条件)のHTML文字列が、節に囲んだこと以外は元コードと完全に一致していること(diffで確認)。",
+    "「完了済み(Block)」🏁タスク完了トグルの時間節末尾への移設(A-M2)が、v107のモーダル内タスク完了契約([data-action=\"toggle-task-complete\"])のセレクタに影響していないこと。"
+  ],
+  "verification": [
+    "worktree: node --check app.js / tests/v360.test.js はエラーなし。",
+    "node tests/v360.test.js を単独実行(静的検査+ブラウザE2E)で全チェック成功(複数回実行で再現)。",
+    "node tests/run-all.js v360 v107 v112 v147 tower-core action-registry-core を2回実行、いずれも6スイート全件PASS。",
+    "node tests/run-all.js v276 v293 v305 v306 v107 v198 を2回実行、v198以外は全件PASS。v198は[1-4]タスク編集モーダルの`edit-task`セレクタ待ちでタイムアウトする既知の失敗があり、起点コミット0e356bc(git stash)で単独実行して同一箇所・同一失敗の再現を実測確認済み(本バージョンの変更とは無関係のpre-existing不具合)。",
+    "npm run test:manifest:write → npm run test:manifest(--check): 226 suites PASS。npm run code:index:write: 657 functions。",
+    "実行コード差分174行(app.js 95+60・styles.css 19+0、git diff --numstat)。200行以内。",
+    "release-record.js(CHANGES_v360.md生成)・sw.js CACHE_NAME更新・commit/pushは監督者が行う(本worktreeでは未実施、指示どおり)。"
+  ],
+  "notes": [
+    "Codex 利用上限のため実装は implementer(Claude)。初回実装(2026-09-04)と、2系統独立レビュー(review-v360-claude-a.md/review-v360-claude-b.md)反映のレビュー修正(2026-09-05)ともimplementer(Claude)が担当。",
+    "コミット不要・push禁止の指示どおり、本worktreeでは変更を作業ツリーに留めている。"
+  ],
+  "knownLimitations": [
+    "見積チップ(15/25/40/60)・「明日へ」「来週へ」日付シフト・「詳細 ›」折りたたみは未実装(uncertainties参照、後続バージョンで対応)。レバレッジ種別・完了済み(Block)・タスク完了トグルは折りたたまれず、それぞれ基本節末尾・時間節末尾に露出したままの中間状態。",
+    "繰り返し節のexpectedCharge/expectedDischarge/anchor(category===\"ルーティン\"限定)はブラウザE2Eで未検証(静的検査のみ)。",
+    "v198のタスク編集モーダル[1-4]は起点コミット時点から既知の失敗(pre-existing)。本バージョンの対応範囲外。"
+  ]
+}

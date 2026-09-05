@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v358";  // v358: 設定タブ(A) 一覧型+接続と保存
+const CACHE_NAME = "taskchute-journal-pwa-v359";  // v359: Block 編集シート 5節固定(基本→時間→エネルギー→繰り返し→メモ)+MIT+共通 .tower-sheet
 // v353: 12WY R0 task.twyPlan のデータ契約+plan.js 純関数+Task編集モーダル3項目
 // v334: 実行タブPC 2ペイン(§B。ナビ統合§Cは持ち越し)
 // v333: 実行ラッパー(計画/実績切替)・モバイルナビ4項目

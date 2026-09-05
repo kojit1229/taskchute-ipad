@@ -1686,6 +1686,27 @@ h3 {
   height: 18px;
 }
 
+/* v359: Block編集シート共通型「.tower-sheet」。節見出し・行・入力16px・44px・下部固定ボタンは
+   既存.modal-card/.modal-body/.modal-footerの構造をそのまま使い、節の区切りだけをここで足す
+   (Project/Task編集シート等v361以降でも流用予定)。既存.modal-cardの見た目は変えない。 */
+.tower-sheet .tower-section {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 14px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.tower-sheet .tower-section:last-of-type { border-bottom: none; padding-bottom: 0; }
+/* v359: 下部固定バーのボタンはサブピクセル丸めでも44pxを割らない */
+.modal-card.tower-sheet .modal-footer .btn { min-height: 44px; box-sizing: border-box; line-height: 1.2; }
+.tower-sheet .tower-section-title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  color: var(--muted);
+}
+
 /* v258: Projectモーダル内12WYトラック登録フォーム。 */
 .twy-track-section { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
 .twy-track-section[hidden], .twy-track-section [hidden] { display: none; }

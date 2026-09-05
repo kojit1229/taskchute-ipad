@@ -13775,6 +13775,10 @@ function saveTaskFromModal(id, fields) {
 
 // ---------- Block モーダル ----------
 
+// v359(スコープ縮小版。差分200行予算超過のため発注文の分割指示どおり「5節組み替え」のみを
+// 実施し、「詳細折りたたみ+見積チップ/日付シフト」はやらないことにして後続へ送る):
+// Block編集シートを基本→時間→エネルギー→繰り返し→メモの5節へ再編。
+// data-modal-field の名前・意味・保存ロジックは不変(節分けとDOM順序のみ変更)。
 function buildBlockModal(block) {
   const taskOptions = [
     `<option value="" ${!block.taskId ? "selected" : ""}>単発(Task紐づけなし)</option>`,
@@ -13793,83 +13797,92 @@ function buildBlockModal(block) {
           </button>
         </div>` : "";
   return `
-    ${modalHeaderHTML("Block を編集")}
-        <div class="field">
-          <label class="field-label">タイトル</label>
-          <input class="input" data-modal-field="title" value="${escapeHTML(block.title || "")}">
-        </div>
-        <div class="field-row">
+    ${modalHeaderHTML("Block を編集", "tower-sheet")}
+        <section class="tower-section">
+          <h4 class="tower-section-title">基本</h4>
           <div class="field">
-            <label class="field-label">日付</label>
-            <input class="input" type="date" data-modal-field="date" value="${block.date || todayISO()}">
+            <label class="field-label">タイトル</label>
+            <input class="input" data-modal-field="title" value="${escapeHTML(block.title || "")}">
           </div>
           <div class="field">
             <label class="field-label">カテゴリ</label>
             ${renderCategorySelect(block.category || "")}
           </div>
-        </div>
-        <div class="field">
-          <label class="field-label">紐づくTask</label>
-          <select class="select" data-modal-field="taskId">${taskOptions}</select>
-        </div>
-        <div class="field">
-          <label class="field-label">レバレッジ(10x機構・任意)</label>
-          <select class="select" data-modal-field="leverageType">
-            ${leverageTypeOptionsHTML(block.leverageType || "")}
-          </select>
-          ${leverageJudgeHelperHTML(block.leverageType)}
-        </div>
-        <div class="field-row">
           <div class="field">
-            <label class="field-label">予定開始</label>
-            <input class="input" type="datetime-local" step="300" data-modal-field="plannedStartAt" value="${toLocalInput(block.plannedStartAt)}">
+            <label class="field-label">Task / Project</label>
+            <select class="select" data-modal-field="taskId">${taskOptions}</select>
           </div>
           <div class="field">
-            <label class="field-label">予定終了</label>
-            <input class="input" type="datetime-local" step="300" data-modal-field="plannedEndAt" value="${toLocalInput(block.plannedEndAt)}">
-          </div>
-        </div>
-        <div class="field-row">
-          <div class="field">
-            <label class="field-label">実績開始</label>
-            <input class="input" type="datetime-local" step="300" data-modal-field="actualStartAt" value="${toLocalInput(block.actualStartAt)}">
+            <label class="checkbox-line">
+              <input type="checkbox" data-modal-field="isMIT" ${block.isMIT ? "checked" : ""}>
+              ★ 今日の主役(MIT)
+            </label>
           </div>
           <div class="field">
-            <label class="field-label">実績終了</label>
-            <input class="input" type="datetime-local" step="300" data-modal-field="actualEndAt" value="${toLocalInput(block.actualEndAt)}">
-          </div>
-        </div>
-        <div class="field">
-          <label class="field-label">見積時間(分・任意)</label>
-          <input class="input" type="number" min="0" step="5" data-modal-field="estimateMin" data-modal-kind="number" value="${block.estimateMin ?? ""}" placeholder="空欄なら過去実績/30分で自動">
-        </div>
-        <div class="field-row">
-          <div class="field">
-            <label class="field-label">充電 (0-5)</label>
-            <select class="select" data-modal-field="charge" data-modal-kind="number">
-              ${rangeOptions(0, 5, block.charge || 0)}
+            <label class="field-label">レバレッジ(10x機構・任意)</label>
+            <select class="select" data-modal-field="leverageType">
+              ${leverageTypeOptionsHTML(block.leverageType || "")}
             </select>
+            ${leverageJudgeHelperHTML(block.leverageType)}
+          </div>
+        </section>
+        <section class="tower-section">
+          <h4 class="tower-section-title">時間</h4>
+          <div class="field">
+            <label class="field-label">日付</label>
+            <input class="input" type="date" data-modal-field="date" value="${block.date || todayISO()}">
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label class="field-label">予定開始</label>
+              <input class="input" type="datetime-local" step="300" data-modal-field="plannedStartAt" value="${toLocalInput(block.plannedStartAt)}">
+            </div>
+            <div class="field">
+              <label class="field-label">予定終了</label>
+              <input class="input" type="datetime-local" step="300" data-modal-field="plannedEndAt" value="${toLocalInput(block.plannedEndAt)}">
+            </div>
           </div>
           <div class="field">
-            <label class="field-label">放電 (0-5)</label>
-            <select class="select" data-modal-field="discharge" data-modal-kind="number">
-              ${rangeOptions(0, 5, block.discharge || 0)}
-            </select>
+            <label class="field-label">見積時間(分・任意)</label>
+            <input class="input" type="number" min="0" step="5" data-modal-field="estimateMin" data-modal-kind="number" value="${block.estimateMin ?? ""}" placeholder="空欄なら過去実績/30分で自動">
           </div>
-        </div>
-        <div class="field">
-          <label class="checkbox-line">
-            <input type="checkbox" data-modal-field="completed" ${block.completed ? "checked" : ""}>
-            完了済み(Block)
-          </label>
-        </div>
-        ${taskCompleteHTML}
-        <div class="field">
-          <label class="field-label">コメント</label>
-          <textarea class="textarea" data-modal-field="comment" style="min-height:100px">${escapeHTML(block.comment || "")}</textarea>
-        </div>
-        <div class="field" style="background:var(--accent-soft); padding:10px; border-radius:8px">
-          <label class="field-label" style="color:var(--accent); font-weight:700">🔁 繰り返し設定</label>
+          <div class="field-row">
+            <div class="field">
+              <label class="field-label">実績開始</label>
+              <input class="input" type="datetime-local" step="300" data-modal-field="actualStartAt" value="${toLocalInput(block.actualStartAt)}">
+            </div>
+            <div class="field">
+              <label class="field-label">実績終了</label>
+              <input class="input" type="datetime-local" step="300" data-modal-field="actualEndAt" value="${toLocalInput(block.actualEndAt)}">
+            </div>
+          </div>
+          <div class="field">
+            <label class="checkbox-line">
+              <input type="checkbox" data-modal-field="completed" ${block.completed ? "checked" : ""}>
+              完了済み(Block)
+            </label>
+          </div>
+          ${taskCompleteHTML}
+        </section>
+        <section class="tower-section">
+          <h4 class="tower-section-title">エネルギー</h4>
+          <div class="field-row">
+            <div class="field">
+              <label class="field-label">充電 (0-5)</label>
+              <select class="select" data-modal-field="charge" data-modal-kind="number">
+                ${rangeOptions(0, 5, block.charge || 0)}
+              </select>
+            </div>
+            <div class="field">
+              <label class="field-label">放電 (0-5)</label>
+              <select class="select" data-modal-field="discharge" data-modal-kind="number">
+                ${rangeOptions(0, 5, block.discharge || 0)}
+              </select>
+            </div>
+          </div>
+        </section>
+        <section class="tower-section" style="background:var(--accent-soft); padding:10px; border-radius:8px">
+          <h4 class="tower-section-title" style="color:var(--accent)">🔁 繰り返し</h4>
           ${(() => {
             const liveRule = block.recurrenceGroupId
               ? (state.recurrences || []).find((r) => r.id === block.recurrenceGroupId && !r.deleted)
@@ -13928,7 +13941,14 @@ function buildBlockModal(block) {
               <div class="muted" style="font-size:11px; margin-top:6px">繰り返しはルールとして保存され、表示は直近${RECURRENCE_KEEP_PAST_DAYS + RECURRENCE_FUTURE_DAYS}日分のみ実体化されます。</div>
             `;
           })()}
-        </div>
+        </section>
+        <section class="tower-section">
+          <h4 class="tower-section-title">メモ</h4>
+          <div class="field">
+            <label class="field-label">コメント</label>
+            <textarea class="textarea" data-modal-field="comment" style="min-height:100px">${escapeHTML(block.comment || "")}</textarea>
+          </div>
+        </section>
       </div>
       <div class="modal-footer">
         <button class="btn danger" data-action="modal-delete" style="margin-right:auto">削除</button>
@@ -13985,6 +14005,21 @@ function saveBlockFromModal(id, fields) {
     updatedAt: nowDateTime(),
     deleted: false
   };
+  // v359: MIT(今日の主役)はBlock編集シート内の★トグルから、保存時にまとめて反映する
+  // (即時state書込のtoggleMIT()とは別経路。1日3件までの上限は同じルールを踏襲する)。
+  // レビュー反映(A-M1/B-M5): 上限超過時は既存toggleMIT()と同様に保存自体を中断する
+  // (トーストだけ出してreturnし、モーダルは開いたまま・他フィールドも書き込まない)。
+  const requestedMIT = Boolean(fields.isMIT);
+  if (!requestedMIT || existing?.isMIT) {
+    updated.isMIT = requestedMIT;
+  } else {
+    const sameDayMITs = state.blocks.filter((b) => !b.deleted && b.id !== id && b.date === updated.date && b.isMIT);
+    if (sameDayMITs.length >= 3) {
+      showToast("今日の主役は最大3個まで。先に他を外してください");
+      return;
+    }
+    updated.isMIT = true;
+  }
   const trackSavedBlockTransitions = () => {
     const savedBlock = state.blocks.find((block) => block.id === id);
     saveState();
