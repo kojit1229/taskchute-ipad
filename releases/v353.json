@@ -1,0 +1,53 @@
+{
+  "version": 353,
+  "date": "2026-09-05",
+  "title": "12WY R0: task.twyPlan のデータ契約+タスク×週の3数を返す純関数(src/core/plan.js)+Task編集モーダルの3項目",
+  "summary": "12WY 専用タブ新設の土台。WBS タスク(=戦術)に週次目安 task.twyPlan { perWeek, fromWeek, toWeek, keystone } を追加し(normalizeState 補完・同期/エクスポートは Task 丸ごと扱いで自動追随)、タスク×週の目安n・確定m・完了k を返す純関数群を src/core/plan.js に置き、Task 編集モーダルに親 Project が 12WY のときだけ3項目を表示・保存する。タブ本体・PLAN 面・目安からの Block 自動生成は範囲外(R1〜)。",
+  "changedFiles": [
+    "CHANGES_v353.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v353.json",
+    "src/core/plan.js",
+    "src/core/track.js",
+    "sw.js",
+    "tests/plan-core.test.js",
+    "tests/r0-twyplan.test.js",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "原典の「戦術」を別実体にせず WBS タスクの属性(週次目安)として持ち、既存の Block/週次コミット/weeklyScore と3数で突き合わせる(design §2.0)。",
+    "過去週の採点分母は確定のまま(目安は不足検出と残量表示だけに使う)。"
+  ],
+  "changes": [
+    "normalizeState: task.twyPlan を { perWeek:0, fromWeek:1, toWeek:12, keystone:false } で補完(既存値優先・updatedAt 不変・perWeek は0以上の整数・from/to は1〜12に clamp・from<=to)。",
+    "src/core/plan.js(新規): planTargetForWeek / taskWeekTriple / taskPlanGrid / remainingTarget。state 非 import・Date 非生成・入力不変・例外なし。past の落ち量は max(目安,確定)−完了。",
+    "src/core/track.js: weeklyScore の週 item 絞り込み(lane/週メタ/manual の selectedBlockIds/免除)を weeklyCommittedItems として共有(weeklyScore の結果は不変)。",
+    "Task 編集モーダル: 親 Project の twelveWeekStartDate が非空のときだけ「週次目安 n回 / 対象週 W1〜W12 / ★要となる行動」を表示・保存(既存慣行どおり updatedAt/dataModifiedAt を bump)。",
+    "sw.js: APP_SHELL に ./src/core/plan.js を追加、CACHE_NAME v353。",
+    "テスト: tests/plan-core.test.js(純関数)/ tests/r0-twyplan.test.js(補完・clamp・UI 表示条件・保存・16px・390px)。"
+  ],
+  "uncertainties": [
+    "同期/エクスポートは変更不要(src/sync/github.js の mergeTaskArrays→mergeByIdPreferNewer が Task をレコード単位で扱い、sanitizedStateForGitHub が structuredClone、受信側は normalizeState を通す)。life-export の CSV に Task 列は無い。",
+    "保存時の bump は既存の saveTaskFromModal の「常に bump」慣行に合わせた(発注の「変更時のみ」は既存慣行を優先)。",
+    "taskPlanGrid はセルごとに全 weeklyCommitments を走査する(R1/R2 で PLAN 面を描く前に週ごとの scope 共有へ)。",
+    "Codex 利用上限のため implementer(Claude)で実装、独立検証は Claude reviewer(review-r0-claude-a/b → 修正 → a2 で PASS)。DONE 1 は verify.sh exit 0(76検査)。"
+  ],
+  "reviewFocus": [
+    "normalizeState が updatedAt を進めないこと、clamp 規則。",
+    "taskWeekTriple の絞り込みが weeklyScore と同一で、weeklyScore の結果が不変であること(track-core)。",
+    "非12WY の Task 編集モーダルに区画が DOM ごと出ないこと。"
+  ],
+  "verification": [
+    "worktree: plan-core r0-twyplan track-core track-normalize track-sync-characterization action-registry-core 全件成功、npm run test:core は v67(既存赤、v352 で追随)以外成功。main 取り込み後に再実行。",
+    "実行コード差分 200行(app.js 67・plan.js 113・track.js 20)。sw.js は本コミット(Size-Exempt 対象外の別コミット)。"
+  ],
+  "notes": [
+    "Codex 利用上限のため実装は implementer(Claude)、レビューは Claude reviewer で代替。"
+  ],
+  "knownLimitations": [
+    "12WY タブ本体・PLAN 面・weeklyReviews・settings.twelveWeekVision は R1 以降。"
+  ]
+}
