@@ -1,0 +1,45 @@
+{
+  "version": 363,
+  "date": "2026-09-05",
+  "title": "IRON LOG 中立化: 目標線・進捗バー・達成バッジ・グロー撤去、事実表示(日付付き前回)、削除×44px、全文11px以上",
+  "summary": "発注v363-iron-logに基づき、IRON LOGタブ(src/features/iron-log.js renderIronLog())をCONCEPT §6(達成色分け・目標線・派手なゲーミフィケーションを付けない)とK確定モックに合わせて中立化した。v323(Today TOWER/LIFE BANDの中立化)と同じパターンの横展開。独立レビュー(review-v363-claude.md)のmedium指摘4件のうちM1〜M3を本版で対応した(差し戻し1回)。DAILY TARGET目標線(iron-goal-line)・進捗バー(iron-bar-wrap/iron-bar/iron-bar-ticks、M1でモック非搭載・v326先例に合わせ追加撤去)・「◆ TARGET ACHIEVED ◆」達成バッジ(1.6s無限パルス)・達成時の緑グロー(text-shadow/box-shadow)をDOM/CSSから撤去し、「今日N kg・今月N kg・前回M/D・N kg」(M2で前回に記録日を追加)の事実表示と「目標N kgに対し今日N kg」の色なし文言へ置き換えた。ironDailyTargetの設定・保存ロジック・同期層・削除ロジックは一切変えていない。セット削除×ボタンは元からCSS上min-width/min-height 44pxが指定済みで、実測(boundingBox)でも44px以上であることをテストで確認した(コード変更は不要)。M3対応で航空用語ラベルの副題(10px→11px)に加え、レビューでは名指しされていなかったが同タブ内に残っていた9.5px/8px/10pxの3箇所(.iron-form-labels span、.iron-pr、.iron-totals-cell span)もすべて11pxへ統一し、v363.test.jsのフォント検査をIRON LOGタブ配下(#ironRoot)の全テキストノード走査(11px未満0件)に拡張した。M4(CHANGES_v363.md未作成)は発注どおり監督者担当のため対応不要。",
+  "changedFiles": [
+    "CHANGES_v363.md",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v363.json",
+    "src/features/iron-log.js",
+    "styles.css",
+    "tests/iron-log-core.test.js",
+    "tests/iron-log-e2e.test.js",
+    "tests/suite-manifest.json",
+    "tests/v363.test.js"
+  ],
+  "intent": [
+    "renderIronLog()のPAYLOAD節から目標線(iron-goal-line)・進捗バー(iron-bar-wrap/iron-bar/iron-bar-ticks)・達成バッジ(iron-achieved)・達成時グロー/パルスを撤去し、CONCEPT §6の『達成色分け・目標線・ストリーク罰・派手なゲーミフィケーションを付けない』へ合わせる(K確定モックTabIronLog.pngにバーが無いこと、v326の計器盤側先例と揃える差し戻し対応M1)。",
+    "ironDailyTargetの設定自体は残し、表示は『今日/今月/前回(記録日付き)』の事実値と『目標N kgに対し今日N kg』の色なし・muted文言のみにする(達成/未達の語や色を使わない。差し戻し対応M2で前回に記録日を追加)。",
+    "セット削除×ボタンのヒット領域44px、IRON LOGタブ配下の全テキストが11px以上であることを確認・整備する(差し戻し対応M3)。",
+    "保存・同期層・IRON LOGのデータ(セットの記録・削除ロジック)・ironDailyTargetの意味は変えず、表示のみを変更する。"
+  ],
+  "changes": [
+    "src/features/iron-log.js: 新規純粋関数ironPreviousDayTotal(state, iso)を追加(iso未満で直近に記録がある日の合計kgを{date, kg}で返す。既存のrecentGymDates/gymSetsForDateを再利用)。新規純粋関数formatMonthDayFromISO(iso)を追加(\"YYYY-MM-DD\"から\"M/D\"をnew Date()を経由せず正規表現で抽出、iOS Safari対策の既存規約に合わせた)。両方をexportに追加しテストから直接呼べるようにした。",
+    "src/features/iron-log.js: renderIronLog()から goalHit / percentベースの達成判定変数と remainHTML(『あと◯kg』『目標超過+◯kg』のセット数換算ヒント込み)を撤去。代わりにfactHTML(『今月N kg ・ 前回M/D ・ N kg』、記録が無い日は日付を省き『前回N kg』)とtargetHTML(『目標N kgに対し今日N kg』、target>0のときのみ)を組み立てる。",
+    "src/features/iron-log.js(差し戻し対応M1): PAYLOAD節のテンプレートから<div class=\"iron-bar-wrap\">(進捗バー本体+目盛)一式も削除した(前版は写像表に明記が無いとして維持していたが、モック非搭載・v326先例・レビュー指摘により撤去へ変更)。<div class=\"iron-goal-line\">(DAILY TARGET行)・<div class=\"iron-achieved\">(TARGET ACHIEVEDバッジ)・ルートdivの`${goalHit ? \" goal-hit\" : \"\"}`は前版どおり撤去済み(`class=\"iron\"`固定)。",
+    "styles.css: `.iron.goal-hit .iron-total`(緑色文字+text-shadow)、`.iron-goal-line`、`.iron.goal-hit .iron-bar`(緑色+box-shadow)、`@keyframes iron-achieved-pulse`、`.iron-achieved`、`.iron.goal-hit .iron-achieved`を全削除(前版)。差し戻し対応M1で`.iron-bar-wrap`/`.iron-bar`/`.iron-bar-ticks`も全削除(無条件amber box-shadow含む)。",
+    "styles.css: `.iron-remain`/`.iron-remain b`/`.iron-remain .hint`を削除し、新設`.iron-fact`(今月/前回の事実行、tower-text色で強調なし)・`.iron-target-note`(目標文言、opacity .6のmuted表示)へ置き換えた(前版)。",
+    "styles.css(差し戻し対応M3): `.iron-box h2 span`(副題)を10px→11pxへ(前版済み)。加えて`.iron-form-labels span`(9.5px→11px)・`.iron-pr`(8px→11px)・`.iron-linked-foot`(9.5px→11px)・`.iron-totals-cell span`(10px→11px)を11pxへ統一。後2者はレビューで名指しされていなかったが、タブ全体走査テストの新設に合わせて発見・修正した(発注の『11px』制約をタブ全体で満たす判断)。",
+    "tests/iron-log-core.test.js: [7]のrenderIronLog検証を、DAILY TARGET/TARGET ACHIEVEDの文言・goal-hitクラスが『出ない』契約へ全面置換。今月/前回(日付+kg)の事実表示がironTotals()/ironPreviousDayTotal()/formatMonthDayFromISO()の計算値と一致すること、目標設定時の文言、達成条件(今日≥目標)のfixtureでも色・バッジが出ないことを追加検証した。",
+    "tests/iron-log-e2e.test.js: [1]のDAILY TARGET/ゲージ残量チェックを事実表示(iron-fact/iron-target-note)+進捗バー不在(差し戻し対応M1)の検証へ置換。[2]の『ゲージ幅0%/30%へ更新』assertを『進捗バーが常にDOMに存在しない』契約へ置換(assert数は減らさずbar不在チェックを分割・追加)。[3]は『TARGET ACHIEVEDバナー点灯』から『達成条件でも色・バッジ・パルス・進捗バー自体が一切出ない』契約へ全面書き直し(getComputedStyleでの文字色同一性検証は維持)。",
+    "tests/v367.test.js: 未達成/達成2fixtureでDOM/CSSからgoal-hit系クラスとiron-goal-line/iron-achieved/iron-bar系要素が完全に無いことを検証(差し戻し対応M1でバー関連assertを追加)。事実表示3値(今日/今月/前回)の数値一致に加え、前回の記録日(M/D)一致を検証(差し戻し対応M2)。削除×ボタンのboundingBox実測44px以上、削除動作(tombstone化)の従来契約維持は前版どおり。差し戻し対応M3で[5]にIRON LOGタブ配下(#ironRoot)の全テキストノードをTreeWalkerで走査し、computed font-sizeが11px未満のものが0件であることを検証するassertを追加(個別ラベルの11px検証は維持したまま網羅性を拡張)。390/1280px横スクロールなし、setItemフックによる閲覧時state非書込、pageerror 0件は前版どおり。"
+  ],
+  "uncertainties": [
+    "セット削除×ボタン(.iron-set-del)は着手前の時点で既にCSS上min-width/min-height 44pxが指定済みで、grid-template-columnsの列幅も44pxに一致していた。実測(Playwright boundingBox)でも44px以上を確認できたため、コード変更は行っていない。発注文の症状表(d)『既存指摘、44px未達』が指す時点のコードとは既に乖離している可能性があり、見た目上の小ささ(font-size 13px・padding 4pxでヒット領域より視覚サイズが小さく見える点)が『小さい』という指摘の実体だった可能性がある。実機での見え方の確認は監督者判断に委ねる。",
+    "『前回』はironPreviousDayTotal()により当日より前で直近に記録がある日の合計kgとした(発注文『前回(直近の記録日)N kg』の解釈)。1レコード=1セット単位ではなく1日単位の合計とした点、日付書式を『M/D』(ゼロ埋めなし、年省略)とした点は監督者裁定を仰いでいない。",
+    "差し戻し対応M3で、レビューが名指ししていなかった`.iron-linked-foot`(9.5px)と`.iron-totals-cell span`(10px)も11pxへ変更した。発注文・レビューのどちらも明示的にこの2箇所を指摘していないため、タブ全体走査テストを新設した結果として実装者判断で追加修正した(範囲拡大)。見た目のバランス(TOTALSラベルとstrong数値の相対サイズ等)に変化が出るため、モック突き合わせは未実施。",
+    "版番号: 取り込み順のため IRON LOG 中立化は v363(発注時 v367)。テストは tests/v363.test.js。"
+  ],
+  "verification": [
+    "node tests/run-all.js v363(旧v367) iron-log-core iron-log-e2e today-core action-registry-core v313 を worktree で2回全件成功。実行コード107行。"
+  ]
+}

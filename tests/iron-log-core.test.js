@@ -54,8 +54,8 @@ async function loadModule() {
 (async () => {
   const mod = await loadModule();
   const {
-    configureIronLog, renderIronLog, gymSetsForDate, ironDailyTotal, ironTotals,
-    linkedGymBlock, gymCommentSummary, parseIronComment, runIronImport
+    configureIronLog, renderIronLog, gymSetsForDate, ironDailyTotal, ironTotals, ironPreviousDayTotal,
+    formatMonthDayFromISO, linkedGymBlock, gymCommentSummary, parseIronComment, runIronImport
   } = mod;
 
   console.log("[1] gymSetsForDate / ironDailyTotal(空日・複数セット)");
@@ -199,13 +199,19 @@ async function loadModule() {
     check("Blockが無ければnull", linkedGymBlock({ settings: {}, blocks: [] }, 700) === null);
   }
 
-  console.log("[7] renderIronLog(主要要素・goal-hit切替)");
+  console.log("[7] renderIronLog(主要要素・v363事実表示への置換)");
   {
+    // 実行時の実月を使う(ironTotals.monthKgはcurrentYearMonth()=実時計基準のため、
+    // 固定日付だと実行日によってmonthKgが0になり検証できない。日は22/21に固定して月をまたがせない)。
+    const ymNow = ymStr(currentYM());
+    const isoToday = `${ymNow}-22`;
+    const isoYesterday = `${ymNow}-21`;
+
     let currentState = null;
     configureIronLog({
       getState: () => currentState,
       escapeHTML,
-      todayISO: () => "2026-08-22",
+      todayISO: () => isoToday,
       renderHeader,
       saveAndRender: () => {},
       registerActions: () => {}
@@ -213,7 +219,10 @@ async function loadModule() {
 
     currentState = {
       settings: { ironDailyTarget: 1000 },
-      condition: { logs: { "2026-08-22": { gym: [{ exercise: "ベンチプレス", weight: 60, reps: 10 }] } } }, // 600kg < 1000
+      condition: { logs: {
+        [isoYesterday]: { gym: [{ exercise: "ベンチプレス", weight: 50, reps: 10 }] }, // 前回500kg
+        [isoToday]: { gym: [{ exercise: "ベンチプレス", weight: 60, reps: 10 }] } // 600kg < 1000
+      } },
       blocks: [],
       ironImport: { done: true, importedTotalKg: 0, importedDays: 0 }
     };
@@ -224,15 +233,23 @@ async function loadModule() {
       && htmlUnhit.includes('id="ironFormExercise"') && htmlUnhit.includes('id="ironFormWeight"')
       && htmlUnhit.includes('id="ironFormReps"') && htmlUnhit.includes('data-action="iron-add-set"'));
     check("当日総重量の大数字(600)を含む", htmlUnhit.includes(">600<"), htmlUnhit);
-    check("2,000kg等の目標ゲージ行(DAILY TARGET)を含む", htmlUnhit.includes("DAILY TARGET"));
-    check("未達成時はgoal-hitクラスが付かない", htmlUnhit.includes('<div class="iron" id="ironRoot">'));
-    check("TARGET ACHIEVEDの文言はマークアップに常に含まれる(表示はCSS側のgoal-hit制御)", htmlUnhit.includes("TARGET ACHIEVED"));
+    check("目標線(DAILY TARGET)・達成バッジ(TARGET ACHIEVED)は撤去済み", !htmlUnhit.includes("DAILY TARGET") && !htmlUnhit.includes("TARGET ACHIEVED"));
+    check("goal-hitクラスは撤去済み(未達成/達成いずれもiron単体クラス)", htmlUnhit.includes('<div class="iron" id="ironRoot">') && !htmlUnhit.includes("goal-hit"));
+    const expectedMonthKg = ironTotals(currentState).monthKg;
+    const expectedPrev = ironPreviousDayTotal(currentState, isoToday);
+    const expectedPrevMD = formatMonthDayFromISO(expectedPrev.date);
+    const fmt = (n) => Math.round(Number(n) || 0).toLocaleString("ja-JP");
+    // 差し戻し対応M2: 「前回」に記録日(M/D)を添える書式(前回 M/D ・ N kg)。
+    check(`事実表示: 今月${expectedMonthKg}kg(=ironTotals().monthKgのfixture計算値と一致)・前回${expectedPrevMD}・${expectedPrev.kg}kg(=前日500kgと一致)を含む`,
+      htmlUnhit.includes(`今月 <b>${fmt(expectedMonthKg)} kg</b> ・ 前回 ${expectedPrevMD} ・ <b>${fmt(expectedPrev.kg)} kg</b>`)
+        && expectedMonthKg === 1100 && expectedPrev.kg === 500 && expectedPrev.date === isoYesterday, htmlUnhit);
+    check("目標設定時の文言(目標1,000kgに対し今日600kg)を含む", htmlUnhit.includes("目標 1,000 kg に対し今日 600 kg"), htmlUnhit);
     check("TODAY'S SETSを含む", htmlUnhit.includes("TODAY'S SETS"));
     check("TOTALSを含む", htmlUnhit.includes("TOTALS"));
 
     currentState = {
       settings: { ironDailyTarget: 1000 },
-      condition: { logs: { "2026-08-22": { gym: [
+      condition: { logs: { [isoToday]: { gym: [
         { exercise: "ベンチプレス", weight: 60, reps: 10 },
         { exercise: "ベンチプレス", weight: 60, reps: 10 },
         { exercise: "デッドリフト", weight: 100, reps: 8 }
@@ -241,7 +258,8 @@ async function loadModule() {
       ironImport: { done: true, importedTotalKg: 0, importedDays: 0 }
     };
     const htmlHit = renderIronLog();
-    check("達成時はgoal-hitクラスが付く", htmlHit.includes('<div class="iron goal-hit" id="ironRoot">'));
+    check("達成条件(今日≥目標)でもgoal-hitクラス・達成バッジ・色分けは出ない", htmlHit.includes('<div class="iron" id="ironRoot">')
+      && !htmlHit.includes("goal-hit") && !htmlHit.includes("TARGET ACHIEVED"));
     check("3セット分のdata-id(0,1,2)を含む(削除用index)", ["0", "1", "2"].every((i) => htmlHit.includes(`data-id="${i}"`)));
     check("セット件数(3 セット)を表示", htmlHit.includes("3 セット"));
   }

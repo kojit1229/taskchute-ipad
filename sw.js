@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v362";  // v362: 設定タブ(A2) PC 2列=左 群一覧・右 全群(スクロール+ハイライト)
+const CACHE_NAME = "taskchute-journal-pwa-v363";  // v363: IRON LOG 中立化(目標線・達成バッジ・進捗バー・グロー撤去、事実表示、11px)
 // v353: 12WY R0 task.twyPlan のデータ契約+plan.js 純関数+Task編集モーダル3項目
 // v334: 実行タブPC 2ペイン(§B。ナビ統合§Cは持ち越し)
 // v333: 実行ラッパー(計画/実績切替)・モバイルナビ4項目

@@ -4635,7 +4635,7 @@ details.settings-row > .fold-summary.settings-row-summary {
   color: var(--tower-cyan); font-size: 11px; letter-spacing: .18em;
 }
 .iron-box h2 span {
-  float: right; color: var(--tower-text); font-size: 10px;
+  float: right; color: var(--tower-text); font-size: 11px;
   font-weight: 400; letter-spacing: .08em; opacity: .6;
 }
 
@@ -4652,7 +4652,7 @@ details.settings-row > .fold-summary.settings-row-summary {
   font-variant-numeric: tabular-nums;
 }
 .iron-linked-foot {
-  padding: 0 10px 8px; color: var(--tower-cyan); font-size: 9.5px;
+  padding: 0 10px 8px; color: var(--tower-cyan); font-size: 11px;
   letter-spacing: .06em; opacity: .8; line-height: 1.7;
 }
 
@@ -4664,38 +4664,14 @@ details.settings-row > .fold-summary.settings-row-summary {
   text-shadow: 0 0 18px rgba(242, 184, 75, .35);
 }
 .iron-total small { font-size: 18px; font-weight: 400; color: var(--tower-text); opacity: .7; }
-.iron.goal-hit .iron-total { color: var(--tower-green); text-shadow: 0 0 22px rgba(82, 214, 138, .5); }
-.iron-goal-line { margin-top: 4px; font-size: 11px; color: var(--tower-cyan); letter-spacing: .1em; }
-.iron-bar-wrap {
-  position: relative; height: 16px; margin: 14px 4px 6px;
-  border: 1px solid var(--tower-line); background: var(--tower-bg);
+/* v363: 目標線・達成バッジ・目標比ゲージ・パルス/グローを撤去し、事実表示のみにする(CONCEPT §6。
+   差し戻し対応M1: 進捗バー.iron-bar-wrap/.iron-bar/.iron-bar-ticksも撤去。v326の計器盤側と同じ判断)。 */
+.iron-fact { font-size: 12px; margin-top: 8px; }
+.iron-fact b { color: var(--tower-text); font-variant-numeric: tabular-nums; }
+.iron-target-note {
+  margin-top: 6px; font-size: 11px; color: var(--tower-text); opacity: .6;
+  letter-spacing: .04em;
 }
-.iron-bar {
-  height: 100%; width: 0%; background: var(--tower-amber);
-  box-shadow: 0 0 12px var(--tower-amber); transition: width .6s cubic-bezier(.34, 1.2, .64, 1);
-}
-.iron.goal-hit .iron-bar { background: var(--tower-green); box-shadow: 0 0 14px var(--tower-green); }
-.iron-bar-ticks {
-  position: absolute; inset: 0; pointer-events: none;
-  background: repeating-linear-gradient(90deg, transparent 0 calc(25% - 1px), var(--tower-line) calc(25% - 1px) 25%);
-}
-.iron-remain { font-size: 12px; margin-top: 8px; }
-.iron-remain b { color: var(--tower-amber); font-variant-numeric: tabular-nums; }
-.iron-remain .hint {
-  display: block; margin-top: 3px; font-size: 10px; opacity: .6;
-  font-family: system-ui, sans-serif;
-}
-@keyframes iron-achieved-pulse {
-  0%, 100% { box-shadow: 0 0 10px rgba(82, 214, 138, .3); }
-  50% { box-shadow: 0 0 26px rgba(82, 214, 138, .7); }
-}
-.iron-achieved {
-  display: none; margin: 12px 4px 0; padding: 10px; text-align: center;
-  border: 1px solid var(--tower-green); color: var(--tower-green);
-  font-size: 13px; font-weight: 700; letter-spacing: .18em;
-  animation: iron-achieved-pulse 1.6s ease-in-out infinite;
-}
-.iron.goal-hit .iron-achieved { display: block; }
 
 /* LOAD SET: 1行フォーム(font-size 16px以上でiOSズーム防止) */
 .iron-form {
@@ -4720,7 +4696,7 @@ details.settings-row > .fold-summary.settings-row-summary {
   display: grid; grid-template-columns: minmax(0, 1.4fr) 1fr 1fr auto;
   gap: 8px; padding: 10px 10px 0;
 }
-.iron-form-labels span { color: var(--tower-cyan); font-size: 9.5px; font-weight: 700; letter-spacing: .14em; }
+.iron-form-labels span { color: var(--tower-cyan); font-size: 11px; font-weight: 700; letter-spacing: .14em; }
 
 /* TODAY'S SETS */
 .iron-empty { padding: 14px; text-align: center; color: var(--tower-text); opacity: .5; font-size: 11px; }
@@ -4737,7 +4713,7 @@ details.settings-row > .fold-summary.settings-row-summary {
 .iron-pr {
   display: inline-block; margin-left: 5px; padding: 1px 4px;
   border: 1px solid var(--tower-amber); color: var(--tower-amber);
-  font-size: 8px; font-weight: 700; line-height: 1.2; letter-spacing: .08em;
+  font-size: 11px; font-weight: 700; line-height: 1.2; letter-spacing: .08em;
 }
 .iron-set-detail { text-align: right; opacity: .75; font-variant-numeric: tabular-nums; }
 .iron-set-kg {
@@ -4833,7 +4809,7 @@ details.settings-row > .fold-summary.settings-row-summary {
 .iron-totals { display: grid; grid-template-columns: 1fr 1fr 1fr; }
 .iron-totals-cell { padding: 12px 10px; border-right: 1px solid var(--tower-line); }
 .iron-totals-cell:last-child { border-right: 0; }
-.iron-totals-cell span { color: var(--tower-cyan); font-size: 10px; letter-spacing: .12em; display: block; }
+.iron-totals-cell span { color: var(--tower-cyan); font-size: 11px; letter-spacing: .12em; display: block; }
 .iron-totals-cell strong {
   color: var(--tower-text); font-size: 18px; font-weight: 700;
   font-variant-numeric: tabular-nums;

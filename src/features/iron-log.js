@@ -116,6 +116,22 @@ function recentGymDates(state, beforeIso) {
     .slice(0, 365);
 }
 
+// "YYYY-MM-DD" から "M/D"(ゼロ埋めなし)を抽出。不能なら"". new Date()を経由しない(iOS Safari対策と同じ理由)。
+function formatMonthDayFromISO(iso) {
+  const m = /^\d{4}-(\d{2})-(\d{2})/.exec(String(iso || ""));
+  return m ? `${Number(m[1])}/${Number(m[2])}` : "";
+}
+
+// isoより前で直近に記録がある日の合計kg({date, kg})。無ければ{date:"", kg:0}。
+function ironPreviousDayTotal(state, iso) {
+  const dates = recentGymDates(state, iso).filter((date) => date < iso);
+  for (const date of dates) {
+    const sets = gymSetsForDate(state, date);
+    if (sets.length > 0) return { date, kg: sets.reduce((sum, s) => sum + s.kg, 0) };
+  }
+  return { date: "", kg: 0 };
+}
+
 // 指定種目の直近セット。当日はat降順で最新を選び、tombstoneは除外する。
 function lastSetForExercise(state, exercise, beforeIso) {
   if (!exercise) return null;
@@ -406,25 +422,17 @@ function renderIronLog() {
 
   const total = ironDailyTotal(state, iso);
   const totals = ironTotals(state);
-  const goalHit = total >= target;
-  const percent = Math.min(100, target > 0 ? (total / target) * 100 : 0);
+  const previousDay = ironPreviousDayTotal(state, iso);
 
-  let remainHTML;
-  if (goalHit) {
-    remainHTML = `目標超過 <b>+${fmtNum(total - target)} kg</b>`;
-  } else {
-    const remain = target - total;
-    const last = activeList[activeList.length - 1];
-    const w = Number(last?.weight) || 0;
-    const r = Number(last?.reps) || 0;
-    if (w > 0 && r > 0) {
-      const setsNeeded = Math.ceil(remain / (w * r));
-      remainHTML = `あと <b>${fmtNum(remain)} kg</b>`
-        + `<span class="hint">&asymp; ${fmtNum(w)}kg×${r}回 をあと ${setsNeeded} セット</span>`;
-    } else {
-      remainHTML = `あと <b>${fmtNum(remain)} kg</b>`;
-    }
-  }
+  // v363: 達成/未達の語や色を使わず、値をそのまま並べる事実表示のみ(CONCEPT §6)。
+  // (差し戻し対応M2): 「前回」に記録日(M/D)を添える。記録が無ければ日付は省く。
+  const prevHTML = previousDay.date
+    ? `前回 ${formatMonthDayFromISO(previousDay.date)} ・ <b>${fmtNum(previousDay.kg)} kg</b>`
+    : `前回 <b>${fmtNum(previousDay.kg)} kg</b>`;
+  const factHTML = `今月 <b>${fmtNum(totals.monthKg)} kg</b> ・ ${prevHTML}`;
+  const targetHTML = target > 0
+    ? `<div class="iron-target-note">目標 ${fmtNum(target)} kg に対し今日 ${fmtNum(total)} kg</div>`
+    : "";
 
   const linked = linkedGymBlock(state, nowMinutesFromClock());
   const linkedHTML = linked
@@ -458,7 +466,7 @@ function renderIronLog() {
 
   return `
     ${renderHeader("IRON LOG", "筋トレ")}
-    <div class="iron${goalHit ? " goal-hit" : ""}" id="ironRoot">
+    <div class="iron" id="ironRoot">
 
       <section class="iron-box">
         <h2>LINKED FLIGHT <span>連動中のタスク</span></h2>
@@ -469,13 +477,8 @@ function renderIronLog() {
         <h2>PAYLOAD <span>今日の総重量</span></h2>
         <div class="iron-payload">
           <div class="iron-total"><span>${fmtNum(total)}</span><small> kg</small></div>
-          <div class="iron-goal-line">DAILY TARGET ${fmtNum(target)} kg</div>
-          <div class="iron-bar-wrap">
-            <div class="iron-bar" style="width:${percent}%"></div>
-            <div class="iron-bar-ticks"></div>
-          </div>
-          <div class="iron-remain">${remainHTML}</div>
-          <div class="iron-achieved">◆ TARGET ACHIEVED — ${fmtNum(target)}kg 達成 ◆</div>
+          <div class="iron-fact">${factHTML}</div>
+          ${targetHTML}
         </div>
       </section>
 
@@ -522,6 +525,8 @@ export {
   bestWeightForExercise,
   ironDailyTotal,
   ironTotals,
+  ironPreviousDayTotal,
+  formatMonthDayFromISO,
   linkedGymBlock,
   gymCommentSummary,
   parseIronComment,

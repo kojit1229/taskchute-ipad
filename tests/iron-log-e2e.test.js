@@ -79,12 +79,14 @@ function check(name, cond, extra = "") {
     check("ヘッダはIRON LOG/筋トレ", (await page.locator(".eyebrow").textContent()) === "IRON LOG"
       && (await page.locator(".view-header h1").textContent()) === "筋トレ");
     check("PAYLOADは合計1,000kgを表示", (await page.locator(".iron-total span").textContent()) === "1,000");
-    check("DAILY TARGETは既定2,000kg", ((await page.locator(".iron-goal-line").textContent()) || "").includes("2,000 kg"));
-    check("ゲージ幅は目標比50%", (await page.locator(".iron-bar").getAttribute("style") || "").includes("width:50%"));
-    check("未達成時はgoal-hitクラスなし", await page.locator(".iron.goal-hit").count() === 0);
-    const remain = await page.locator(".iron-remain").textContent();
-    check("残量とセット換算ヒントを表示(直近セット80kg×5であと3セット)", /あと\s*1,000\s*kg/.test(remain || "")
-      && /80kg×5回 をあと 3 セット/.test(remain || ""), remain);
+    check("v363: 目標線(DAILY TARGET)・達成バッジ・goal-hitクラスは撤去済み", await page.locator(".iron-goal-line").count() === 0
+      && await page.locator(".iron-achieved").count() === 0 && await page.locator(".iron.goal-hit").count() === 0);
+    check("目標比ゲージ(.iron-bar)はDOMに存在しない(差し戻し対応M1: 目標比ゲージも撤去)", await page.locator(".iron-bar").count() === 0);
+    const factRow = await page.locator(".iron-fact").textContent();
+    check("事実表示(今月/前回)を色なしで表示", /今月\s*1,000\s*kg/.test(factRow || "") && /前回\s*0\s*kg/.test(factRow || ""), factRow);
+    const targetNote = await page.locator(".iron-target-note").textContent();
+    check("目標設定時の文言(目標2,000kgに対し今日1,000kg)を表示", /目標\s*2,000\s*kg\s*に対し今日\s*1,000\s*kg/.test(targetNote || ""), targetNote);
+    const unhitTotalColor = await page.locator(".iron-total").evaluate((el) => getComputedStyle(el).color);
     const rows = page.locator(".iron-set-row");
     check("TODAY'S SETSは新しいセットが先頭(新→旧)", await rows.count() === 2
       && (await rows.nth(0).locator(".iron-set-name").textContent()) === "スクワット"
@@ -98,8 +100,8 @@ function check(name, cond, extra = "") {
 
     console.log("[2] 1行フォームでセット追加→当日総重量とゲージが即時更新");
     await seed({ gym: [] });
-    check("初期状態は0kg・0%", (await page.locator(".iron-total span").textContent()) === "0"
-      && (await page.locator(".iron-bar").getAttribute("style") || "").includes("width:0%"));
+    check("初期状態は0kg", (await page.locator(".iron-total span").textContent()) === "0");
+    check("初期状態でも目標比ゲージ(.iron-bar)はDOMに存在しない", await page.locator(".iron-bar").count() === 0);
     check("前回記録が無ければ重量・回数は空欄",
       (await page.locator("#ironFormWeight").inputValue()) === ""
         && (await page.locator("#ironFormReps").inputValue()) === "");
@@ -108,20 +110,23 @@ function check(name, cond, extra = "") {
     await page.locator('[data-action="iron-add-set"]').click();
     await page.waitForFunction(() => document.querySelector(".iron-total span")?.textContent !== "0");
     check("ベンチプレス60kg×10追加で600kgへ更新", (await page.locator(".iron-total span").textContent()) === "600");
-    check("ゲージ幅が30%へ更新", (await page.locator(".iron-bar").getAttribute("style") || "").includes("width:30%"));
+    check("セット追加後も目標比ゲージ(.iron-bar)はDOMに存在しない", await page.locator(".iron-bar").count() === 0);
     const afterAdd = await readState();
     const addedSet = afterAdd.condition.logs[today].gym[0];
     check("state.condition.logs[当日].gymへ1件追加される", afterAdd.condition.logs[today].gym.length === 1
       && addedSet.exercise === "ベンチプレス" && addedSet.weight === 60 && addedSet.reps === 10, JSON.stringify(addedSet));
 
-    console.log("[3] 2,000kg目標達成でTARGET ACHIEVEDバナーが点灯する");
+    console.log("[3] 目標2,000kg到達(2,200kg)でも達成色・バッジ・パルスは出ない(v363中立化)");
     await seed({ gym: [set("ベンチプレス", 110, 10, 9 * 60), set("ベンチプレス", 110, 10, 9 * 60 + 10)] }); // 2,200kg
-    check("合計2,200kgでgoal-hitクラスが付く", await page.locator(".iron.goal-hit").count() === 1);
-    const achievedDisplay = await page.locator(".iron-achieved").evaluate((el) => getComputedStyle(el).display);
-    check("TARGET ACHIEVEDバナーが表示状態(display!=none)", achievedDisplay !== "none", achievedDisplay);
-    check("TARGET ACHIEVEDの文言を表示", ((await page.locator(".iron-achieved").textContent()) || "").includes("TARGET ACHIEVED"));
-    check("達成時は目標超過表示に切替", ((await page.locator(".iron-remain").textContent()) || "").includes("目標超過")
-      && ((await page.locator(".iron-remain").textContent()) || "").includes("+200"));
+    check("達成条件でもgoal-hitクラスは付かない", await page.locator(".iron.goal-hit").count() === 0);
+    check("TARGET ACHIEVEDバナー自体がDOMに存在しない", await page.locator(".iron-achieved").count() === 0);
+    const hitTotalColor = await page.locator(".iron-total").evaluate((el) => getComputedStyle(el).color);
+    check("達成時も総重量の文字色は未達成時[1]と同一(色分けなし)", hitTotalColor === unhitTotalColor, `${hitTotalColor} / ${unhitTotalColor}`);
+    check("達成時も目標比ゲージ(.iron-bar)はDOMに存在しない(パルス・グロー用の器自体が無い)", await page.locator(".iron-bar").count() === 0);
+    const achievedTargetNote = await page.locator(".iron-target-note").textContent();
+    check("達成時も「目標2,000kgに対し今日2,200kg」の中立文言のまま(達成/超過の語なし)",
+      /目標\s*2,000\s*kg\s*に対し今日\s*2,200\s*kg/.test(achievedTargetNote || "")
+        && !/達成|超過/.test(achievedTargetNote || ""), achievedTargetNote);
 
     console.log("[4] 実行中ジムBlockはLINKED FLIGHTに表示され、追加セットがblockIdで紐づく");
     const running = gymBlock("gym-running", "本日の筋トレ", 9 * 60, { actualStartAt: atMinute(today, 9 * 60) });
