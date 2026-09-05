@@ -1,0 +1,47 @@
+{
+  "version": 352,
+  "date": "2026-09-05",
+  "title": "実行タブ/WBS 行に leverageType マーク(⚙資産/✂削減)を復帰・renderBlockItem 死コード削除",
+  "summary": "v328(WBS TOWER 化)と v331/v332(実行タブの行再実装)で行レンダラから消えていた leverageType マーク(v65)の描画を、いま/これから/タスク/WBS 行の4レンダラの meta 横に独立要素として復帰する。呼び出し元ゼロになっていた renderBlockItem と .block-row 系 CSS を削除する。",
+  "changedFiles": [
+    "CHANGES_v352.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v352.json",
+    "styles.css",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/v65.test.js"
+  ],
+  "intent": [
+    "v65 で導入した ⚙資産/✂削減 マークを実行タブと WBS で再び見えるようにする(退行修正)。",
+    "死コードを消して行レンダラの正本を exec-* 系に一本化する。"
+  ],
+  "changes": [
+    "renderExecNowRow / renderExecUpcomingRow / renderExecTaskRow / renderTaskRow の meta 末尾に leverageTypeMarkHTML() を復帰(未設定なら何も出さない)。",
+    "マークは meta 文字列の連結ではなく独立要素(.exec-row-meta を flex 化・.lev-mark は flex:0 0 auto)にして nowrap/ellipsis で切られないようにした。",
+    "renderBlockItem(呼び出し元ゼロ)と他画面で未使用の .block-row 系 CSS を削除(.migrated-badge 等の現役クラスは温存)。",
+    "tests/v65 を v329 の…メニュー/展開行へ追随し、fixture に実行中 Block と完了 Block を追加して4レンダラの行スコープで .lev-mark 個数と 11px 以上を検証。あわせて v326〜v335 の意図した仕様変更への既存テスト追随(v67/v126/v258/v259/v65/v267/v277/v263/v264/v63)を同梱。"
+  ],
+  "uncertainties": [
+    "Codex 利用上限のため implementer(Claude)で実装、レビューは Claude reviewer(条件付き PASS→medium 3件対応済み)。",
+    "v263 の2件は v263 初期からの設計不整合(is12WY が project 単位でグローバル設定と無関係)で未対応。v117 のナビ統合追随は修正フェーズ着地との重なりで未実施。",
+    "レビューの low 6件(review-exec-leverage-claude.md)は未対応。"
+  ],
+  "reviewFocus": [
+    "4レンダラでマークが旧実装と同じクラス・文言で出ること、未設定で出ないこと。",
+    "renderBlockItem/.block-row 系削除で他画面が壊れないこと(.migrated-badge/.block-inline-memo/.mit-star 温存)。"
+  ],
+  "verification": [
+    "node tests/run-all.js v65 v67 v277 v331 v332 v335 全件成功(main 取り込み後)。worktree 上で v65 v331 v332 v333 v334 v328 v329 v335 を2回以上全件成功。",
+    "実行コード差分 155行(200行以内)。test-manifest --check / code-index --check PASS。"
+  ],
+  "notes": [
+    "Codex 利用上限のため実装は implementer(Claude)、レビューは Claude reviewer で代替。"
+  ],
+  "knownLimitations": [
+    "v263 2件・v117 追随は未対応(別途)。"
+  ]
+}
