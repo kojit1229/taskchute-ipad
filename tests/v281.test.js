@@ -148,10 +148,11 @@ const FUND_FIXTURE = {
     positions: [], openOrders: [], recentTrades: []
   };
   const emptyHtml = fund.renderFund();
-  check("3セクションの空表示が揃う", ["保有ポジションはありません", "有効な注文はありません", "約定履歴はありません"].every((label) => emptyHtml.includes(label)));
+  // v356: 保有0・注文0・約定0が揃うと2セクションを「まだ取引記録がありません」1枚へ統合する。
+  check("保有0・注文0・約定0は1枚の統合空表示", emptyHtml.includes("まだ取引記録がありません"));
   check("nullable値からNaN/undefinedを描画しない", !emptyHtml.includes("NaN") && !emptyHtml.includes("undefined"));
   fundCache.data = { ...FUND_FIXTURE, positions: [null], openOrders: ["broken"], recentTrades: [null] };
-  check("防御的描画でも不正配列要素から例外を出さない", fund.renderFund().includes("保有ポジションはありません"));
+  check("防御的描画でも不正配列要素から例外を出さない", fund.renderFund().includes("まだ取引記録がありません"));
 
   // 単位10(5-H1): NAV推移チャートはn225/spxがnullの点を欠損として除外し、0やNaNとして描画しない。
   fundCache.data = {
@@ -256,15 +257,19 @@ const FUND_FIXTURE = {
     check("現金比率には損益用のプラス符号を付けない", !summaryText.includes("+71.86%"), summaryText);
 
     const sections = page.locator(".fund-section");
-    check("保有・注文・約定の3セクション順を固定", JSON.stringify(await sections.locator("h2").allTextContents()) === JSON.stringify(["保有ポジション", "当日有効注文", "直近の約定"]));
+    // v356: 注文と約定が「今日の注文と約定」1セクションへ統合され2セクション構成になった。
+    check("保有・注文と約定の2セクション順を固定", JSON.stringify(await sections.locator("h2").allTextContents()) === JSON.stringify(["保有ポジション", "今日の注文と約定"]));
     const positionText = await sections.nth(0).textContent();
-    check("保有カードは銘柄・株数・建値・現値・STOPを表示", ["9432", "NTT", "17,000株", "建値 ¥166.5", "現値 —", "158円で撤退"].every((marker) => positionText.includes(marker)), positionText);
-    const orderText = await sections.nth(1).textContent();
-    check("注文カードはside/type/価格/株数・銘柄を表示", ["5401", "日本製鉄", "買・逆指値", "¥710", "3,500株"].every((marker) => orderText.includes(marker)), orderText);
-    check("注文の根拠とストップ計画を正しいdetailsへ格納", JSON.stringify(await sections.nth(1).locator("details summary").allTextContents()) === JSON.stringify(["根拠", "ストップ計画"]) && (await sections.nth(1).locator("details").nth(0).textContent()).includes("高値更新") && (await sections.nth(1).locator("details").nth(1).textContent()).includes("直近安値割れ"));
-    const tradeText = await sections.nth(2).textContent();
-    check("約定カードは日付・銘柄・side/type/価格/株数・損益を表示", ["2026-08-24", "8306", "三菱UFJ FG", "売・逆指値", "¥3,489.5 × 700株", "実現 -¥7,350"].every((marker) => tradeText.includes(marker)), tradeText);
-    check("約定の根拠を約定セクションのdetailsへ格納", (await sections.nth(2).locator("details summary").textContent()) === "根拠" && (await sections.nth(2).locator("details").textContent()).includes("予定どおり撤退"));
+    check("保有カードは銘柄・株数・建値・現値・買った理由・利確損切り・根拠を表示",
+      ["9432", "NTT", "17,000株", "建値 ¥166.5", "現値 —", "買った理由: —", "利確 指値 —", "損切り 逆指値 —", "158円で撤退"].every((marker) => positionText.includes(marker)), positionText);
+    const activityText = await sections.nth(1).textContent();
+    // v356レビュー対応(B-M2): v281で持っていた「注文の根拠とストップ計画を正しいdetailsへ格納」
+    // assertは統合セクション化で失われたため、ストップ計画(stopPlan)の表示自体を等価に検証する
+    // markerとして復帰させる(assert数を減らさない)。あわせてM6の「有効」ラベルも確認する。
+    check("注文カードはside/type/価格/株数・銘柄・なぜ理由・ストップ計画・有効ラベルを表示",
+      ["5401", "日本製鉄", "買・逆指値", "¥710", "3,500株", "なぜ: 高値更新", "ストップ計画: 直近安値割れ", "有効"].every((marker) => activityText.includes(marker)), activityText);
+    check("約定カードは日付・銘柄・side/type/価格/株数・損益・なぜ理由・約定ラベルを表示",
+      ["2026-08-24", "8306", "三菱UFJ FG", "売・逆指値", "¥3,489.5 × 700株", "実現 -¥7,350", "なぜ: 予定どおり撤退", "約定"].every((marker) => activityText.includes(marker)), activityText);
     check("fund.jsonは起動中1回だけ取得", fundRequests === 1, String(fundRequests));
     check("390pxで横スクロールなし", await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth));
 

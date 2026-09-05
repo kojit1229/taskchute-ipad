@@ -312,7 +312,7 @@ configureWish({
   maybeQueueNextAiStep  // v198(第3弾3e): 完了6経路#6(Wish詳細のサブタスクチェックボックス)
 });
 // v301: FUND日誌も既存のsanitize済みMarkdown描画経路へ結線する。
-configureFund({ escapeHTML, renderHeader, renderMarkdown, personalDataReady, fetchGitHubRawText });
+configureFund({ escapeHTML, renderHeader, renderMarkdown, personalDataReady, fetchGitHubRawText, render });
 configureHealth({
   escapeHTML, personalDataReady: () => personalDataReady(state.settings.github),
   // v334修正(単位13・S-K2): health-daily.jsonはpersonal-dataリポジトリ直下にあるため

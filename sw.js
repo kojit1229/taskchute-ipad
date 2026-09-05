@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v355";  // v355: 空き時間を補うシート(TIME COMB 補う/＋Block → タスクから置く・分割して置く・新しいBlock)
+const CACHE_NAME = "taskchute-journal-pwa-v356";  // v356: FUND 保有理由・利確/損切り・注文の理由・起点100の3系列・平易版日誌・再取得
 // v353: 12WY R0 task.twyPlan のデータ契約+plan.js 純関数+Task編集モーダル3項目
 // v334: 実行タブPC 2ペイン(§B。ナビ統合§Cは持ち越し)
 // v333: 実行ラッパー(計画/実績切替)・モバイルナビ4項目

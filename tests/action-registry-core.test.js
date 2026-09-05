@@ -60,7 +60,10 @@ const FEATURE_MODULE_PATHS = [
   // 空depsで呼んでも、registerActions呼び出し自体はdepsを参照しないため安全に実測できる)。
   path.join(ROOT, "src", "features", "timeline.js"),
   path.join(ROOT, "src", "features", "today.js"),
-  path.join(ROOT, "src", "features", "track-ui.js")
+  path.join(ROOT, "src", "features", "track-ui.js"),
+  // v356: FUNDタブの再取得(fund-refresh)。fund.jsはモジュール読み込み時点で
+  // トップレベルのregisterActions({...})を1回呼ぶため、importするだけで登録が実測できる。
+  path.join(ROOT, "src", "features", "fund.js")
 ];
 
 // wish.jsはモジュール読み込み時にdocument.addEventListener(pointerdown/move/up/cancel、月間ボード
@@ -93,6 +96,7 @@ function check(name, cond, extra = "") {
 // v300: 永久に空だった却下理由UIのaction 2件を意図的に削除(223→221)。
 // v311: CABIN TIMERのLINK FLIGHT選択・一時停止・再開4actionを意図的に追加。
 // v316: 生活記録6ボタン共通のlife-export actionを意図的に追加。
+// v356: FUNDタブのヘッダ「再取得」ボタン(fund-refresh)を意図的に追加(221→222)。
 const GOLDEN_CLICK_ACTIONS = [
   "nav", "sync-banner-dismiss", "open-iron-log", "instruments-open-iron-log", "save-tower-journal",
   "focus-toggle-side", "focus-toggle-journal", "focus-toggle-life", "focus-mode",
@@ -184,7 +188,8 @@ const GOLDEN_CLICK_ACTIONS = [
   "energy-open-category",
   "timeline-clear-cat",
   "km-chip-add", "km-chip-remove", "km-save",  // v294: 「書く瞑想」パネルの意図的追加
-  "km-chip-candidate"  // v296: 「書く瞑想」候補チップ(充放電ログ改善R1b)の意図的追加
+  "km-chip-candidate",  // v296: 「書く瞑想」候補チップ(充放電ログ改善R1b)の意図的追加
+  "fund-refresh"  // v356: FUNDタブの手動再取得ボタンの意図的追加
 ];
 
 // v173: 段階5-2で抽出済みfeatureの分岐をregisterActions経由のレジストリへ移行した
@@ -215,7 +220,10 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
   // v241/v313: src/features/today.jsの端末ローカル表示切替
   "focus-toggle-side", "focus-toggle-journal", "focus-toggle-life", "focus-mode",
   // v262: src/features/track-ui.jsの12WY進捗トースト
-  "twy-toast-inc", "twy-toast-same", "twy-toast-other", "twy-toast-other-confirm", "twy-toast-later"
+  "twy-toast-inc", "twy-toast-same", "twy-toast-other", "twy-toast-other-confirm", "twy-toast-later",
+  // v356: src/features/fund.js。モジュールtop-levelでregisterActionsを呼ぶ(configureFund内では
+  // ない)ため、importするだけで登録される。
+  "fund-refresh"
 ];
 
 // v174: 段階5-3で以下20件(settings 11 + sync 8 + core/nav 1)を、app.js自身が呼ぶ
@@ -483,21 +491,22 @@ function extractModalHandlerTypes() {
   check("if連鎖側の残存action名に重複がない",
     new Set(extracted).size === extracted.length);
 
-  console.log("[3-b] 5feature(wish/journal/timeline/today/track-ui)のconfigureXxxを"
-    + "空depsで呼び、registerActionsが実際に登録するaction名がMIGRATED_TO_REGISTRY_ACTIONSと"
-    + "一致するか");
+  console.log("[3-b] 5feature(wish/journal/timeline/today/track-ui)のconfigureXxxを空depsで呼び"
+    + "+fund.js(import時点でtop-level registerActions済み)を合わせ、レジストリに実際に登録される"
+    + "action名がMIGRATED_TO_REGISTRY_ACTIONSと一致するか");
   // configureXxx本体はdestructuring代入+registerActions呼び出しのみで、渡されたdepsの中身は
   // ハンドラのクロージャ内で遅延参照されるだけ(登録時には呼ばれない)ため、空depsで安全に呼べる
   // (src/features/*.js側のconfigureXxx実装を参照。design doc §6-1の重複登録ガード確認も兼ねる)。
   const featureMods = await Promise.all(
     FEATURE_MODULE_PATHS.map((p) => import(pathToFileURL(p).href))
   );
-  const [wishMod, journalMod, timelineMod, todayMod, trackUiMod] = featureMods;
+  const [wishMod, journalMod, timelineMod, todayMod, trackUiMod, fundMod] = featureMods;
   wishMod.configureWish({});
   journalMod.configureJournal({});
   timelineMod.configureTimeline({});
   todayMod.configureToday({});
   trackUiMod.configureTrackUi({});
+  void fundMod; // fund.jsはimport時点(モジュールtop-level)でfund-refreshを登録済み。呼び出し不要。
   const registered = actionsMod.__debugActionNames().filter((name) => !name.startsWith("__test"));
   check(`レジストリ側の登録件数は期待どおり${MIGRATED_TO_REGISTRY_ACTIONS.length}件`,
     registered.length === MIGRATED_TO_REGISTRY_ACTIONS.length,

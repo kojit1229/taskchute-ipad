@@ -5203,9 +5203,35 @@ h3 {
 .fund-chart-line.is-nav, .fund-chart-dot.is-nav, .fund-chart-key.is-nav { stroke: var(--accent); color: var(--accent); fill: var(--accent); }
 .fund-chart-line.is-n225, .fund-chart-dot.is-n225, .fund-chart-key.is-n225 { stroke: var(--red); color: var(--red); fill: var(--red); }
 .fund-chart-line.is-spx, .fund-chart-dot.is-spx, .fund-chart-key.is-spx { stroke: var(--green-text); color: var(--green-text); fill: var(--green-text); }
+/* v356: 日経=破線・S&P500=点線で3系列を線種でも区別する(色だけに頼らない)。 */
+.fund-chart-line.is-n225 { stroke-dasharray: 7 4; }
+.fund-chart-line.is-spx { stroke-dasharray: 1.5 4.5; }
+.fund-chart-key.is-n225::before { border-top-style: dashed; }
+.fund-chart-key.is-spx::before { border-top-style: dotted; }
 .fund-chart-dates { margin: 0; color: var(--muted); font-size: 11px; }
 .fund-journal { padding: 14px; }
 .fund-journal .md-render { margin-top: 10px; }
+.fund-journal-plain { font-size: 16px; line-height: 1.6; }
+.fund-status-line { margin: -6px 2px 0; color: var(--muted); font-size: 12px; }
+.fund-status-tag { display: inline-block; margin-right: 8px; padding: 2px 8px; border-radius: 999px; background: var(--panel-soft, rgba(255,255,255,.08)); color: var(--muted); font-size: 11px; font-weight: 700; vertical-align: middle; }
+.fund-status-tag.is-filled { background: var(--green-soft, rgba(0,180,120,.15)); color: var(--green-text); }
 .fund-view .is-positive { color: var(--green-text); }
 .fund-view .is-negative { color: var(--red); }
 @media (min-width: 720px) { .fund-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+/* v356レビュー対応(A-H1/B-M4): TabFundPC.png準拠(左=NAV+保有+今日の注文と約定、
+   右=NAV推移+日誌。NAVと推移は1行目に横並び)。ヘッダ+取得状態行を明示areaにして
+   最上段へ固定する(未指定areaのまま自動配置に流れ、最下段へ落ちていた不具合の修正)。 */
+@media (min-width: 1024px) {
+  .fund-view {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas: "header header" "status status" "summary chart" "holdings journal" "activity journal";
+    align-items: start;
+  }
+  .fund-view > .view-header { grid-area: header; }
+  .fund-status-line { grid-area: status; }
+  .fund-summary { grid-area: summary; }
+  .fund-chart { grid-area: chart; }
+  .fund-holdings { grid-area: holdings; }
+  .fund-journal { grid-area: journal; }
+  .fund-activity { grid-area: activity; }
+}

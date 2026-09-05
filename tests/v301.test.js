@@ -64,8 +64,9 @@ const FUND_FIXTURE = {
     check("3本の起点座標は同じ=起点100正規化", new Set(paths.map((value) => value.split("L")[0])).size === 1, JSON.stringify(paths));
     check("journal.markdownを既存rendererへそのまま渡す", markdownInput === FUND_FIXTURE.journal.markdown && html.includes("<strong>既存Markdown経路</strong>"));
     check("120時間以内は鮮度バッジ非表示", !html.includes("fund-stale-badge"));
-    const order = ["fund-summary", "fund-chart", "保有ポジション", "当日有効注文", "直近の約定", "fund-journal"].map((marker) => html.indexOf(marker));
-    check("ヘッダ→チャート→保有→注文→約定→日誌の順", order.every((value, index) => value >= 0 && (!index || value > order[index - 1])), JSON.stringify(order));
+    // v357: FUND_FIXTUREは保有0・注文0・約定0のため2セクションが1枚の統合空表示へ変わる。
+    const order = ["fund-summary", "fund-chart", "まだ取引記録がありません", "fund-journal"].map((marker) => html.indexOf(marker));
+    check("ヘッダ→チャート→保有活動(統合空表示)→日誌の順", order.every((value, index) => value >= 0 && (!index || value > order[index - 1])), JSON.stringify(order));
 
     console.log("[2] 負例: series 1点・journal null/undefined/キー欠損・鮮度境界");
     const onePoint = { ...FUND_FIXTURE, nav: { ...FUND_FIXTURE.nav, series: FUND_FIXTURE.nav.series.slice(0, 1) } };
