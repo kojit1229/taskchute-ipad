@@ -1,0 +1,72 @@
+{
+  "version": 362,
+  "date": "2026-09-05",
+  "title": "設定タブ(A2): PC 2列(左ナビ+右は全群を常時DOM表示)",
+  "summary": "発注v362-settings-bはA2(PC 2列: 1280px以上で左=群一覧・右=群の全行)とB(数値・選択行の詳細シート化)の合成だったが、Bを発注どおり「保存で反映・閉じるで破棄」の非即時適用として実装すると、既存の多数のE2E(today-core/tower-core/v144/v148/v151/v266ほか)がbuffer/battery/theme/profileの各inputへ直接DOM操作している前提(常時DOM在り・data-setting-*属性へのchangeで即時適用)を安全に壊さず移行するには、それらすべての追随改修が要る(=B見送りの実質的な理由。実行コード行数の予算とは無関係、詳細はuncertainties参照)。本版はA2のみを実装する。初回実装は「1280px以上で選択中の1群だけをDOMへ描く」形だったが、独立レビュー(review-v362-claude.md)でH1(既存スイートv266がscoretarget行を待てず実際にタイムアウトして落ちる)とH2(vision-open-direct-settings等『設定タブへの誘導』がPC幅で無言に空振りする。誘導先のsettings-master foldキー自体もv358以降の死にキーだったことも判明)を指摘され差し戻された。監督者裁定によりH1/H2はレビュー提案(b)=「右列は全群を常時DOMへ描き、非選択群を隠さない。左ナビの選択は対象群への自動スクロール+ハイライトのみ(非永続)」を採用して解消した。あわせてM1(テスト編集後にtest:manifest:writeを再実行していなかった)・M2(1279px/1280pxの実境界テスト欠如)・M3(B見送りの理由づけが実行コード200行予算を誤って持ち出していた)・M4(リリースノートの『リサイズ後に先頭群へリセットされる』という記述が実装=保持と矛盾)を修正した。加えて、sw.jsのCACHE_NAMEがv358のまま更新されておらず(app.js変更時は必須のリポジトリ規約)、これがv266.test.jsの既存assertion(CACHE_NAMEはreleases最大版と一致)を落としていたため、v362へ更新した(この不整合はH1/H2差し戻し対応の副次発見であり、A2やBの仕様そのものとは無関係)。",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v362.json",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/v362.test.js"
+  ],
+  "intent": [
+    "K確定モックTabSettingsPC.pngのPC 2列(左=群一覧・選択中ハイライト、右=群の全行)を1280px以上で再現する(発注文order-v361-settings-b.md §A2)。",
+    "1279px以下はv358で確立した一覧型1列のまま変えず、幅跨ぎのリサイズだけで自動的に切り替わるようにする(wbs/execと同じmatchMediaパターンを流用し、専用の新規リスナーを増やさない)。",
+    "既存E2E(today-core/tower-core/v144/v148/v151/v266ほか)が前提にする『設定タブを開けば対象の data-setting-* input が常にDOMにある』契約、および他画面からの誘導導線(vision-open-direct-settings等)を、PC 2列化によって壊さない(独立レビューH1/H2の差し戻し対応で明文化)。",
+    "保存・同期層・normalizeState・設定値の意味/既定値・GitHubトークンの扱いは一切変えず、レイアウトだけを変える(発注文の権限・境界どおり)。"
+  ],
+  "changes": [
+    "app.js: renderSettings()のgroups配列各要素にid(daily/display/profile/data/other)を追加。window.matchMedia('(min-width: 1280px)')でdesktop判定し、1280px以上は.settings-columns(左nav+右詳細)、それ未満はv358のgroups.map全展開のままの2分岐にした。",
+    "app.js(差し戻し対応H1/H2): 右列(.settings-group-detail)は選択中の1群だけに絞らず、共通ヘルパーgroupSectionHTML()で全5群の行を常時DOMへ描画するよう変更(1279px以下の1列表示と同じマークアップを共有)。選択中の群には`.settings-group-flat-active`クラスのみを付与しハイライトする(表示/非表示の切替ではない)。これによりv266.test.js等の既存スイートが前提にする『設定タブを開けば対象inputが常にDOMにある』契約を壊さない。",
+    "app.js: _settingsActiveGroupId(非永続・FOLD_KEY未使用、_settingsExpandedRowIdと同じ設計理由)を新設。無効値または未設定時は先頭群へフォールバックする。表示/非表示ではなく『スクロール先+ハイライト対象』の指定にのみ使う。",
+    "app.js: 新設ヘルパーscrollToSettingsGroup(groupId)。`[data-settings-group=\"...\"]`(desktop/mobileのどちらか一方にのみ存在)をscrollIntoView({block:\"start\"})する。settings-group-select・vision-open-direct-settingsの両方から呼ぶ。",
+    "app.js: 新規data-action「settings-group-select」を1つ追加(レジストリ+GOLDEN_CLICK_ACTIONS/APP_JS_REGISTERED_ACTIONSへ登録)。クリックされた群のdata-groupを_settingsActiveGroupIdへ入れてrender()し、scrollToSettingsGroup()でその群までスクロールする(state.settingsへは一切書き込まない)。",
+    "app.js(差し戻し対応H2): vision-open-direct-settingsの`setFoldOpen(\"settings-master\", true)`は、v358の一覧化以降app.js上に該当foldキーが存在せず何もしていない死にキーだった(誘導が無言で空振りしていた既存不具合)。_settingsActiveGroupId=\"profile\"を設定してsetView(\"settings\")した後、scrollToSettingsGroup(\"profile\")でカテゴリ管理の群まで誘導するよう置き換えた。",
+    "app.js: 既存の_wbsDesktopMediaQuery(wbs/execの1280px境界リスナー)の再描画条件へ state.currentView === 'settings' を追加。設定タブでも幅跨ぎのリサイズだけでPC2列⇔1列が自動追随する(専用の新規matchMediaリスナーは増やしていない)。",
+    "styles.css: .settings-gridの既定grid-template-columnsをrepeat(2,minmax(0,1fr))から1frへ修正(720px超1280px未満で群カードが素朴に2列へ振り分けられていたv358由来の副作用を解消。接続と保存はgrid-column:1/-1のため実害は無かったが、群カード自体が意図せず2列になっていた。review-v358-claude-a.md M4起点、v361のuncertaintiesにも記載継続)。",
+    "styles.css: .settings-columns(2列grid、左280〜320px/右1fr)・.settings-group-nav・.settings-group-nav-item(+.active)・.settings-group-detailを新設。既存の.settings-group-flat-head/.settings-rowsの見た目をそのまま右詳細でも流用する。.settings-group-detailはflex-direction:columnで全群を縦積みし、.settings-group-flat-activeの見出し下線をアクセントカラーへ変えるだけの軽いハイライトを追加した(差し戻し対応、行の出し分けはしない)。",
+    "sw.js: CACHE_NAMEをv358→v361へ更新(リポジトリ規約=app.js変更時は必須。今回はH1調査で判明したv266.test.jsの既存assertion『CACHE_NAMEはreleases最大版と一致』の失敗も併せて解消した)。",
+    "tests/action-registry-core.test.js: 新規action「settings-group-select」をGOLDEN_CLICK_ACTIONSとAPP_JS_REGISTERED_ACTIONSへ追加。",
+    "tests/v361.test.js: 差し戻し対応で全面書き直し。1279px/1280pxの実境界(M2)、1280px以上で左nav5群・右詳細に『全群の行が常時DOMに存在する』こと(非選択群の行も消えないこと、v266が使うscoretarget行を含む)、群タップで左右のハイライトが移動しつつ他群の行は消えないこと、選択操作前後でlocalStorageの生値が一切変わらないこと(非永続の実証)、1280px境界を跨ぐリサイズで.settings-columnsの有無が追随し、ハイライト中の群(表示)を保持したままなこと(M4: リセットではなく保持が実装どおりの仕様)、vision-open-direct-settingsの誘導がPC幅で空振りせず『プロフィールとマスタ』群へハイライト+スクロールすること(H2の再発防止)、「接続と保存」が1280pxでも最上段フルバンドのままなこと、トグル行がv358のままその場切替されること、data-setting-*の総数が17件のまま不変なこと、390/1280pxで横スクロールが無いこと・pageerror 0件・new Date(\"文字列\")禁則・本テスト自体がwaitForTimeoutを使っていないことを検証。"
+  ],
+  "uncertainties": [
+    "B(数値・選択行の詳細シート化)は未実装。発注はA2+Bの合成だったが、Bを『保存で反映・閉じるで破棄』の非即時適用として作ると、buffer/battery/theme/profileの各inputを直接DOM操作している既存E2E(today-core.test.js:277-290のtheme select、tower-core.test.js:989/1011のtowerMotion select、tests/v144.test.js:348-393の電池フィールド7箇所、tests/v148.test.js:124-136の電池フィールド存在確認、tests/v151.test.js:82-130のtheme select、tests/v266.test.js:319-407のscoretarget)が軒並み『常時DOM在り・changeで即時適用』という前提のまま壊れる。data-setting-*属性名を変えずに開閉スナップショット方式(開いた時点の値を退避し、閉じるボタンでのみ復元)にすれば既存テストの多くは`openSettingsGroup`ヘルパー経由の修正1箇所で追随できる見込みだが、その6スイート以上への追随改修自体がリスクであり、Bを次版へ持ち越した実質的な理由はこれである(独立レビューM3の指摘どおり、実行コード200行の予算とは無関係。テスト差分はCLAUDE.md NEVER 1の対象外であり、A2自体の実行コード差分は67+/15-行=200行以内で予算とは両立している)。判断そのもの(Bを次版送り)は発注文の分割規定の範囲内で妥当と監督者裁定済み。",
+    "PC 2列の左ナビ幅は280〜320px(minmax指定)とした。モックTabSettingsPC.pngの実測ピクセル値までは突き合わせていない(K/監督者裁定: 見た目の微調整が必要ならv362以降で追随)。",
+    ".settings-grid既定を1fr化したのはM4(review-v358-claude-a.md)が指摘した既存の副作用修正を兼ねている。720px〜1279pxの表示が見た目上わずかに変わる(群カードが2列に振り分けられなくなり常に1列積みになる)が、v358.test.jsはこの帯域幅で群カードの列数を直接assertしていないため、既存テストへの影響は無いことをコードリーディングで確認した(実行はv358を含む必須スイートで担保)。",
+    "右列を全群常時DOM化したことで、PC 2列時のスクロール量は『選択中の1群だけ』方式より増える(5群ぶんの行が縦に並ぶ)。モック(TabSettingsPC.png)は1群だけを表示する構図だったため、見た目の忠実度はH1/H2解消と引き換えにやや下がっている。K/監督者が『やはり1群だけに絞りたい』と裁定する場合は、B(詳細シート化)と同時に再設計するのが望ましい(H2の裁定と合わせて次版で検討)。",
+    "版番号: 取り込み順のため設定 PC 2列は v362(v361 はビジョン)。テストは tests/v362.test.js。詳細シート化(B)は K 裁定=代替案(シート内に既存 input・即時反映)で v365 予定。"
+  ],
+  "reviewFocus": [
+    "1280px境界ちょうど(1279px→1280pxの1px差)でPC2列⇔1列が正しく切り替わること(M2でテスト追加済み)。",
+    "右列に非選択群の行(例: 選択中が『日々の使い方』のときの『データ』群のscoretarget等)が本当に常時DOMへ存在し、v266のようなDOM待機が空振りしないこと。",
+    "vision-open-direct-settings等の『設定タブへの誘導』導線が、PC幅・モバイル幅どちらでも対象群へハイライト+スクロールし、無言で空振りしないこと(H2)。",
+    "_settingsActiveGroupIdが本当にlocalStorageへ一切書き込まれないこと(v361.test.js [3]の生値完全一致比較で検証)。",
+    "「接続と保存」がPC2列でも最上段フルバンドのままなこと(grid-column:1/-1がgroupsHTMLの追加によって崩れていないか)。",
+    "既存のwbs/exec 1280px境界リスナーへ settings 分岐を足したことで、wbs/execの既存挙動(render()呼び出しタイミング)に副作用が出ていないこと。"
+  ],
+  "verification": [
+    "node --check app.js / node --check tests/v361.test.js: 実測exit 0。",
+    "node scripts/code-index.js --write→--check: 実測exit 0(659関数)。node scripts/test-manifest.js --write→--check: 実測exit 0(227 suites)。",
+    "node tests/run-all.js v361 v358 v266 v148 v144 action-registry-core を2回実行: 実測いずれも6 suites全成功。1回目はv266を含め全件PASS(H1解消の実走確認)。",
+    "node tests/run-all.js v53 v151 v72 today-core tower-core を2回実行: 実測いずれも5 suites全成功(1回目実行中にtower-core.test.jsが一時的にランダムport絡みで2件失敗する再現性の低いflakeが出たため、直後にもう一度単独再実行し全件成功を確認。これはtests/CLAUDE.mdに記載済みの既知の稀な事象で、本改修由来ではない)。",
+    "実行コード差分(git diff --numstat -- app.js styles.css sw.js src): app.js 67+/15-、styles.css 23+/1-、sw.js 1+/1-(合計91+/17-、200行予算以内)。",
+    "Codex利用上限のためimplementer(Claude)で実装。"
+  ],
+  "notes": [
+    "Codex 利用上限のため実装は implementer(Claude)。",
+    "本版は独立レビュー(review-v361-claude.md)のHigh 2件・Medium 4件への差し戻し対応。H1/H2は監督者裁定により『右列を全群常時DOM化+左ナビはスクロール/ハイライトのみ』を採用して解消した。",
+    "sw.js CACHE_NAMEの更新(v358→v361)は本来監督者判断で保留する運用だが、今回はH1調査で『app.js変更時のCACHE_NAME更新漏れ』がv266.test.jsの既存assertionを落としていることが判明したため、リポジトリ規約(app.js変更時は必須)に従いこの対応の一部として実施した。",
+    "コミット・push・release-record実行(CHANGES_v361.md生成)は監督者判断のため未実施(発注文の権限・境界どおり)。本JSONは監督者が取り込み時にrelease-record.jsへ通す前提の手書き正本。"
+  ],
+  "knownLimitations": [
+    "B(数値・選択行の詳細シート化)は次版へ持ち越し。バッファ・電池・テーマの各行は引き続きv358の行タップ展開(<details>下に既存パネルを表示)のまま。",
+    "PC 2列の左ナビ幅・タイポグラフィはモック実測との細部突き合わせ未了。",
+    "右列を全群常時DOM化したため、PC 2列時にモック(TabSettingsPC.png)より縦スクロール量が増える(uncertainties参照)。"
+  ]
+}

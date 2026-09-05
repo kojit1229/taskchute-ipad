@@ -473,10 +473,14 @@ registerActions({
   },
   "add-category": () => addCategory(),
   "delete-category": ({ target }) => deleteCategory(target.dataset.catId),
-  // v189レビューL4: ALIGNMENT誘導→設定のマスタ群(既定閉・localStorage記憶)を開いて着地させる
+  // v189レビューL4: ALIGNMENT誘導→設定のカテゴリ管理(群「プロフィールとマスタ」)へ着地させる。
+  // v362レビュー差し戻しH2対応: 旧 setFoldOpen("settings-master", true) はv358の一覧化以降
+  // 死にキーだった(該当foldキーがapp.js上に存在せず何もしていなかった)。右列は全群を常時
+  // DOMへ描く(H1対応)ため、対象群までスクロール+ハイライトする方式に置き換える。
   "vision-open-direct-settings": () => {
-    setFoldOpen("settings-master", true);
+    _settingsActiveGroupId = "profile";
     setView("settings");
+    scrollToSettingsGroup("profile");
   },
   "toggle-vision-direct-category": ({ target }) => {
     toggleVisionDirectCategory(target.dataset.category || "", target.checked);
@@ -498,6 +502,15 @@ registerActions({
     if (!details || !row) return;
     _settingsExpandedRowId = details.open ? null : row;
     render();
+  },
+  // v362(A2): PC 2列の左ナビ選択(非永続・state非書込)。右列は全群を常時描画済みなので、
+  // ここでは対象群までスクロール+ハイライトするだけ(H1/H2差し戻し対応、行のDOM在否は変えない)。
+  "settings-group-select": ({ target }) => {
+    const btn = target.closest("[data-group]");
+    if (!btn) return;
+    _settingsActiveGroupId = btn.dataset.group;
+    render();
+    scrollToSettingsGroup(_settingsActiveGroupId);
   },
   // --- sync(8): GitHub保存/読込/バックアップ/アーカイブ/デモリセット ---
   "save-github": () => saveToGitHub(),
@@ -1116,6 +1129,18 @@ const BATTERY_TICK_INTERVAL_MS = 60000;
 let _settingsSyncOpenOverride = null;  // null=未操作、true/false=ユーザーが実際にクリックした最新状態
 // v358: 設定一覧の行展開状態(1つだけ開く)。_settingsSyncOpenOverrideと同じ理由でFOLD_KEY未使用。
 let _settingsExpandedRowId = null;
+// v362(A2): PC 2列(左=群一覧/右=詳細)での選択中(ハイライト)の群。非永続(セッション内のみ、
+// FOLD_KEY未使用)。差し戻し対応後は行の表示/非表示を左右せず、スクロール先の指定にのみ使う。
+let _settingsActiveGroupId = null;
+// v362レビュー差し戻し(H1/H2)対応: 右列は全群を常時DOMへ描くため、左ナビや
+// vision-open-direct-settings等の「対象群へ誘導」導線は、フィルタではなくスクロール+
+// ハイライトに一本化する。render()直後(同期)に呼ぶ前提。対象が無ければ何もしない。
+function scrollToSettingsGroup(groupId) {
+  // desktop(.settings-group-detail配下)/mobile(.settings-grid直下)のどちらか一方しか
+  // 描画されないため、data-settings-group属性だけで一意に引ける。
+  const el = document.querySelector(`[data-settings-group="${groupId}"]`);
+  el?.scrollIntoView({ block: "start" });
+}
 let cachedVisionMd = "";
 let cachedAffirmationMd = "";
 // v361: Vision/Affirmation本文の3状態(読み込み中/未接続/取得失敗)判定用。
@@ -7859,7 +7884,7 @@ function renderSettings() {
   const categoryValue = `${(state.settings.categories || []).length}件`;
   const groups = [
     {
-      label: "日々の使い方", subtitle: "いまの値をそのまま表示",
+      id: "daily", label: "日々の使い方", subtitle: "いまの値をそのまま表示",
       rows: [
         settingsExpandRow("buffer", "バッファ", bufferValue, renderSettingsBufferPanel()),
         settingsExpandRow("battery", "電池", batteryValue, renderSettingsBatteryPanel(), "settings-daily"),
@@ -7870,7 +7895,7 @@ function renderSettings() {
       ]
     },
     {
-      label: "表示", subtitle: "テーマ・動き",
+      id: "display", label: "表示", subtitle: "テーマ・動き",
       rows: [
         settingsExpandRow("theme", "テーマ", themeValue, renderSettingsThemePanel(), "settings-display"),
         settingsToggleRow("ガイド付きアクセスの案内", "ポモドーロ開始時に案内", `<input type="checkbox" data-setting-pomoguidedaccesshint ${state.settings.pomoGuidedAccessHint ? "checked" : ""}>`,
@@ -7880,34 +7905,60 @@ function renderSettings() {
       ]
     },
     {
-      label: "プロフィールとマスタ", subtitle: "12WY・カテゴリ",
+      id: "profile", label: "プロフィールとマスタ", subtitle: "12WY・カテゴリ",
       rows: [
         settingsExpandRow("profile", "プロフィール(生年月日・12WY)", profileValue, renderSettingsProfilePanel()),
         settingsExpandRow("category", "カテゴリ管理", categoryValue, renderSettingsCategoryPanel())
       ]
     },
     {
-      label: "データ", subtitle: "持ち出し・復元",
+      id: "data", label: "データ", subtitle: "持ち出し・復元",
       rows: [renderSettingsDataGroupRows()]
     },
     {
-      label: "その他", subtitle: "モックにない既存設定",
+      id: "other", label: "その他", subtitle: "モックにない既存設定",
       rows: [renderSettingsFileStructurePanel()]
     }
   ];
-  return `
-    ${renderHeader("接続・日々の使い方・表示・データをまとめて確認", "設定")}
-    <section class="settings-grid">
-      ${renderSettingsConnectPanel(github)}
-      ${groups.map((g) => `
-        <div class="settings-group-flat">
+  // v362(A2、レビュー差し戻し対応): 1280px以上はPC 2列(左=群一覧・右=全群)。1279px以下は
+  // v358の1列のまま(groups.map全展開)。幅跨ぎの再描画はwbsと同じ_wbsDesktopMediaQueryの
+  // リスナーに乗る。
+  // H1/H2差し戻し: 右列は「選択中の1群だけ」に絞らず全群を常にDOMへ描く(v266等の既存E2Eが
+  // 前提にする「設定タブを開けば対象inputがDOMにある」契約と、他画面からの誘導導線を守るため)。
+  // 左ナビの選択は「対象群までスクロール+ハイライト」だけを行い、非選択群を隠さない
+  // (選択自体は_settingsActiveGroupIdのみ・非永続でstate非書込は従来どおり)。
+  const desktop = Boolean(window.matchMedia?.("(min-width: 1280px)").matches);
+  if (!groups.some((g) => g.id === _settingsActiveGroupId)) _settingsActiveGroupId = groups[0].id;
+  const groupSectionHTML = (g, highlighted) => `
+        <div class="settings-group-flat ${highlighted ? "settings-group-flat-active" : ""}" data-settings-group="${g.id}">
           <div class="settings-group-flat-head">
             <span class="settings-group-flat-label">${escapeHTML(g.label)}</span>
             <span class="settings-group-flat-subtitle muted">${escapeHTML(g.subtitle)}</span>
           </div>
           <div class="settings-rows">${g.rows.join("")}</div>
         </div>
-      `).join("")}
+      `;
+  const groupsHTML = desktop ? `
+      <div class="settings-columns">
+        <nav class="settings-group-nav">
+          ${groups.map((g) => `
+            <button type="button" class="settings-group-nav-item ${g.id === _settingsActiveGroupId ? "active" : ""}"
+              data-action="settings-group-select" data-group="${g.id}">
+              <span class="settings-group-nav-label">${escapeHTML(g.label)}</span>
+              <span class="muted settings-group-nav-subtitle">${escapeHTML(g.subtitle)}</span>
+            </button>
+          `).join("")}
+        </nav>
+        <div class="settings-group-detail">
+          ${groups.map((g) => groupSectionHTML(g, g.id === _settingsActiveGroupId)).join("")}
+        </div>
+      </div>
+    ` : groups.map((g) => groupSectionHTML(g, false)).join("");
+  return `
+    ${renderHeader("接続・日々の使い方・表示・データをまとめて確認", "設定")}
+    <section class="settings-grid">
+      ${renderSettingsConnectPanel(github)}
+      ${groupsHTML}
     </section>
   `;
 }
@@ -14927,7 +14978,8 @@ if (window.matchMedia) {
         renderModal(buildFillGapModal(activeModal));
       }
     }
-    if (state.currentView === "wbs" || state.currentView === "exec") render();
+    // v362(A2): 設定タブもPC 2列⇔1列がこの1280px境界で切り替わるため、幅跨ぎで再描画に乗せる。
+    if (state.currentView === "wbs" || state.currentView === "exec" || state.currentView === "settings") render();
   };
   if (_wbsDesktopMediaQuery.addEventListener) _wbsDesktopMediaQuery.addEventListener("change", _onWbsLayoutChange);
   else if (_wbsDesktopMediaQuery.addListener) _wbsDesktopMediaQuery.addListener(_onWbsLayoutChange);
