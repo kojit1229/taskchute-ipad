@@ -1,0 +1,44 @@
+{
+  "version": 351,
+  "date": "2026-09-05",
+  "title": "単位14手直し: defaultCategories/defaultLifeAreasのID非決定性を修正",
+  "summary": "GitHub Actions CI全量(4シャード)をv348で初めて回した際にtests/v94.test.jsが新規失敗し、原因を切り分けたところv345(修正フェーズ単位14)のSYNC_CORE_COMPARE_KEYS拡張が誘発した潜在バグを発見した。defaultCategories()/defaultLifeAreas()は各カテゴリのidをcrypto.randomUUID()で生成しており、normalizeState()が呼ばれるたびに(=まだカスタマイズしていない端末が起動するたびに)新しいランダムidが振られていた。単位14がsettings.categories/settings.lifeAreasを同期比較対象に追加したことで、2端末が独立にデフォルト初期化されただけで(内容は同一なのに)常に「不一致」と判定され、「GitHub側にこの端末とは別の変更があります」の同期停止バナーが恒久的に出続ける実害のあるバグだった。defaultCategories()/defaultLifeAreas()のidを固定文字列(cat-dev等/life-health等)へ変更し、未カスタマイズの2端末は常に同一内容として比較できるようにした(ユーザーが追加・改名・削除すれば別idを持つ実データに置き換わり、通常どおり同期差分として検知される)。あわせてtests/v94.test.js [4]の合成remoteフィクスチャがsettings:{}のままローカルの実settings(既定Vision本文等)と乖離していた本来無関係な差分も、ローカルsettingsを複製する形で解消した。",
+  "changedFiles": [
+    "app.js",
+    "docs/test-impact-map.generated.md",
+    "releases/v351.json",
+    "sw.js",
+    "tests/suite-manifest.json",
+    "tests/v94.test.js"
+  ],
+  "intent": [
+    "settings.categories/settings.lifeAreasの同期比較が、未カスタマイズの2端末間で恒久的な偽陽性(常時不一致)を起こさないようにする。",
+    "tests/v94.test.jsの合成remoteフィクスチャを、本来の検証対象(path正規化)に無関係な設定差分が紛れ込まないよう是正する。"
+  ],
+  "changes": [
+    "app.js: defaultCategories()の6件のidをcrypto.randomUUID()から固定文字列(cat-dev/cat-introspection/cat-sales/cat-study/cat-rest/cat-recovery)へ変更した。",
+    "app.js: defaultLifeAreas()の8件のidをcrypto.randomUUID()から固定文字列(life-health/life-work/life-family/life-hobby/life-travel/life-learning/life-experience/life-belongings)へ変更した。",
+    "tests/v94.test.js: [4]の合成remoteState.settingsを空オブジェクトからローカルの現在のsettingsスナップショットの複製へ変更し、path正規化の検証と無関係なsettings.vision等の差分が生じないようにした。"
+  ],
+  "uncertainties": [
+    "本バグはCI全量(GitHub Actions、4シャード)が数週間ぶりに走った際に初めて表面化した(release-gateのimpact-selectionはv94.test.jsを対象に含めていなかったため、ローカルgateでは検出できなかった)。v345(単位14)着地時点では未検出だったが、v345自体のコミットは既にpush済みのため、本版で新規に手直しした(v345の内容自体は変更しない)。",
+    "同様のcrypto.randomUUID()デフォルト値パターンが他のsettings.*キー(gymExerciseList/vision/affirmation等)には無いことをgrepで確認済み(いずれも静的なデフォルト値か[]/null既定のため非決定性は無い)。",
+    "実装はimplementer(監督セッション自身、CI失敗の切り分け〜修正〜検証まで一貫)。Codex利用上限のため。"
+  ],
+  "reviewFocus": [
+    "2つの独立した端末(いずれも未カスタマイズ)がdefaultCategories/defaultLifeAreasを生成しても、同一idのため同期比較で一致すること。",
+    "既存の(defaultCategories/defaultLifeAreasを参照する)機能に、id文字列化けによる副作用が無いこと(カテゴリ選択・削除・改名等)。",
+    "tests/v94.test.js全件PASS(特に[4]のload-github直後save-github)。"
+  ],
+  "verification": [
+    "node --check app.js は成功。",
+    "実行コード差分: app.js 14行(200行以内)。",
+    "node tests/v94.test.js 単体実行でALL PASS(修正前は[4]の最終checkのみ失敗を再現確認済み)。",
+    "npm run code:index:write → npm run test:manifest:write の順で実行し、node scripts/test-manifest.js --check はPASS。",
+    "node scripts/release-gate.js releases/v351.json をフォアグラウンド(timeout 600000、出力ファイルへリダイレクト)で実行、結果を別コマンドで確認。"
+  ],
+  "notes": [
+    "GitHub Actions CI全量実行で発見された新規バグの緊急手直し。v345(修正フェーズ単位14)着地後に判明したため独立版として着地。"
+  ],
+  "knownLimitations": []
+}

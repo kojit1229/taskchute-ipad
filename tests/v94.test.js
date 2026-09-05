@@ -174,9 +174,15 @@ function check(name, cond, extra = "") {
     // ============================================================
     console.log("[4] 「GitHubから読込」後も dataOwner/dataRepo が保持され、path も taskchute/ で汚染されない");
     await setDirtyPath("app-state.json");  // クリーンな状態から開始
+    // 修正フェーズ単位14手直し(2026-09-05): settings:{}のままだと、単位14でSYNC_CORE_COMPARE_KEYSに
+    // 追加したsettings.vision等がローカルの実データ(seedStateの既定Vision本文等)と食い違い、
+    // syncCoreEqualがfalseになって「GitHub側に別の変更があります」でsave-githubがPUTせず中断する
+    // (このテストの本来の検証対象であるpath正規化とは無関係な差分)。本ステップの目的はpath汚染の
+    // 再現に限定されるため、settingsはローカルの現在値をそのまま複製し、無関係な差分を作らない。
+    const localSettingsSnapshot = (await stateNow()).settings;
     const remoteState = {
       dataModifiedAt: `${TODAY}T23:59:59`, currentView: "timeline", selectedDate: TODAY,
-      blocks: [], projects: [], tasks: [], settings: {}
+      blocks: [], projects: [], tasks: [], settings: { ...localSettingsSnapshot }
     };
     const remoteJSON = JSON.stringify(remoteState);
     const remoteB64 = Buffer.from(remoteJSON, "utf-8").toString("base64");

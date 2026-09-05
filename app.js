@@ -2486,28 +2486,35 @@ function normalizeState(value) {
 }
 
 // v9: カテゴリーマスタのデフォルト
+// 修正フェーズ単位14手直し(2026-09-05): 以前はcrypto.randomUUID()で毎回異なるidを
+// 生成していたため、2端末が独立に(まだカスタマイズせず)デフォルト初期化すると、
+// 単位14でSYNC_CORE_COMPARE_KEYSに追加したsettings.categories/lifeAreasの比較が
+// 常に「不一致」判定になり、実際には同一内容でも同期停止バナーが出続けるバグがあった
+// (tests/v94.test.jsで発覚)。固定idにして、未カスタマイズの2端末は常に同一内容として
+// 比較できるようにする(ユーザーが追加・改名・削除すれば別idを持つ実データに置き換わり、
+// 通常どおり同期差分として検知される)。
 function defaultCategories() {
   return [
-    { id: crypto.randomUUID(), name: "開発", color: "#007AFF" },
-    { id: crypto.randomUUID(), name: "内省", color: "#34C759" },
-    { id: crypto.randomUUID(), name: "営業", color: "#FF9500" },
-    { id: crypto.randomUUID(), name: "学習", color: "#AF52DE" },
-    { id: crypto.randomUUID(), name: "休息", color: "#8E8E93" },
-    { id: crypto.randomUUID(), name: "回復", color: "#5AC8FA" }
+    { id: "cat-dev", name: "開発", color: "#007AFF" },
+    { id: "cat-introspection", name: "内省", color: "#34C759" },
+    { id: "cat-sales", name: "営業", color: "#FF9500" },
+    { id: "cat-study", name: "学習", color: "#AF52DE" },
+    { id: "cat-rest", name: "休息", color: "#8E8E93" },
+    { id: "cat-recovery", name: "回復", color: "#5AC8FA" }
   ];
 }
 
-// v16: 人生領域マスタ(やりたいことリストのカテゴリ)
+// v16: 人生領域マスタ(やりたいことリストのカテゴリ)。id固定化の理由はdefaultCategories参照。
 function defaultLifeAreas() {
   return [
-    { id: crypto.randomUUID(), name: "健康", color: "#34C759" },
-    { id: crypto.randomUUID(), name: "仕事", color: "#007AFF" },
-    { id: crypto.randomUUID(), name: "家族", color: "#FF2D55" },
-    { id: crypto.randomUUID(), name: "趣味", color: "#FF9500" },
-    { id: crypto.randomUUID(), name: "旅",   color: "#5AC8FA" },
-    { id: crypto.randomUUID(), name: "学び", color: "#AF52DE" },
-    { id: crypto.randomUUID(), name: "経験", color: "#FFCC00" },
-    { id: crypto.randomUUID(), name: "持物", color: "#8E8E93" }
+    { id: "life-health", name: "健康", color: "#34C759" },
+    { id: "life-work", name: "仕事", color: "#007AFF" },
+    { id: "life-family", name: "家族", color: "#FF2D55" },
+    { id: "life-hobby", name: "趣味", color: "#FF9500" },
+    { id: "life-travel", name: "旅",   color: "#5AC8FA" },
+    { id: "life-learning", name: "学び", color: "#AF52DE" },
+    { id: "life-experience", name: "経験", color: "#FFCC00" },
+    { id: "life-belongings", name: "持物", color: "#8E8E93" }
   ];
 }
 
