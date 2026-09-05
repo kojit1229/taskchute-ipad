@@ -5903,11 +5903,23 @@ function renderExecView() {
   // renderTimelineView({mode:"actual"})で実績のみ固定しstate.timelineModeを読み書きしない。
   // 計画モードは既存timelineMode切替UI(📅予定/✅実績)をそのまま出す(既定「予定」)。
   const timelineMode = state.timelineMode || "planned";
-  const timelineHTML = `<div class="tower-skin timeline-tower">${renderTimelineView({ embedded: true, mode: isActual ? "actual" : timelineMode })}</div>`;
+  // v355 review(M-1/M-2)対応: 「下書き有効」は選択中の日付一致まで見る
+  // (draftBarHTML/renderDraftLayerと同じゲート。日付を移した後まで有効扱いにしない)。
+  // 下書き有効時はexec実績タブ(isActual)や✅実績トグル(timelineMode)に関わらず
+  // timelineHTMLをmode="planned"へ固定する(renderDraftLayerがmode==="planned"限定のため、
+  // 「✅実績」へ切替えても下書きが消えないようにする)。state.timelineModeは書き換えない。
+  const draftActiveHere = Boolean(_scheduleDraft) && _scheduleDraft.date === state.selectedDate;
+  const timelineHTML = `<div class="tower-skin timeline-tower">${renderTimelineView({ embedded: true, mode: draftActiveHere ? "planned" : (isActual ? "actual" : timelineMode) })}</div>`;
   const listHTML = isActual ? execDoneListHTML() : renderTasks({ embedded: true });
+  // v355(退行修正): 1280px未満はrunAiSchedule()後もisActual===falseのままのため、
+  // 従来はlistHTML(一覧)しか描かれずrenderTimelineView自体が呼ばれず.draft-blockが
+  // 出なかった(下書きが操作不能)。下書き有効(draftActiveHere、選択日一致まで見る)は
+  // timelineHTML(mode="planned"でrenderDraftLayerが乗る)を優先してnarrow幅でも
+  // 下書きレイヤへ到達できるようにする(日付を移せば従来どおり一覧に戻る)。
+  // Block/配置ロジックには触れない。
   const bodyHTML = desktop
     ? `<div class="exec-two-pane"><div class="exec-pane-left">${listHTML}</div><div class="exec-pane-right">${timelineHTML}</div></div>`
-    : (isActual ? timelineHTML : listHTML);
+    : ((isActual || draftActiveHere) ? timelineHTML : listHTML);
   return `
     <div class="view-header exec-header">
       <div class="exec-header-line">

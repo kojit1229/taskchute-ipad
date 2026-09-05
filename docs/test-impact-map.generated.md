@@ -189,7 +189,7 @@
 | v55.test.js | e2e | full | planning-execution | 13 | 9 | 3200 |
 | v56.test.js | e2e | full | content-ai | 18 | 8 | 3320 |
 | v57.test.js | e2e | full | sync-storage, content-ai | 8 | 5 | 3000 |
-| v58.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 13 | 7 | 3200 |
+| v58.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 34 | 25 | 11300 |
 | v59.test.js | e2e | smoke | planning-execution, content-ai | 22 | 0 | 0 |
 | v60.test.js | e2e | full | content-ai, security-offline | 32 | 19 | 7300 |
 | v61.test.js | e2e | full | planning-execution | 40 | 19 | 5600 |
