@@ -5090,7 +5090,9 @@ details.settings-row > .fold-summary.settings-row-summary {
 }
 
 /* v274: Today統合画面だけをS2 GLASSへ完全移行する。計器盤など.tower-skin系の現行意匠は維持。 */
-#app[data-view="today"] .today-tower {
+/* v356: 12WYタブ(R1a)へS2 GLASSを拡張(design.md §2.1裁定5)。使うルールだけ拡張対象にする。 */
+#app[data-view="today"] .today-tower,
+#app[data-view="twelveweek"] .today-tower {
   --tower-bg: #0b0d1c;
   --tower-panel: rgba(255, 255, 255, .07);
   --tower-line: rgba(255, 255, 255, .14);
@@ -5117,7 +5119,8 @@ details.settings-row > .fold-summary.settings-row-summary {
   font-variant-numeric: tabular-nums;
 }
 
-#app[data-view="today"] .today-tower::before {
+#app[data-view="today"] .today-tower::before,
+#app[data-view="twelveweek"] .today-tower::before {
   position: absolute;
   z-index: 0;
   inset: 0;
@@ -5130,7 +5133,8 @@ details.settings-row > .fold-summary.settings-row-summary {
 }
 
 /* display:contents の列ラッパーではなく、実ボックスを持つ子と共通パネル側で前景化する。 */
-#app[data-view="today"] .today-tower > * { position: relative; z-index: 1; }
+#app[data-view="today"] .today-tower > *,
+#app[data-view="twelveweek"] .today-tower > * { position: relative; z-index: 1; }
 
 #app[data-view="today"] .today-tower .tower-glass-panel,
 #app[data-view="today"] .today-tower .tower-mit,
@@ -5140,7 +5144,8 @@ details.settings-row > .fold-summary.settings-row-summary {
 #app[data-view="today"] .today-tower .tower-runway,
 #app[data-view="today"] .today-tower .tower-gates,
 #app[data-view="today"] .today-tower .tower-arrivals,
-#app[data-view="today"] .today-tower .today-panel {
+#app[data-view="today"] .today-tower .today-panel,
+#app[data-view="twelveweek"] .today-tower .tower-panel-box {
   position: relative;
   z-index: 1;
   border: 1px solid var(--tower-line);
@@ -5315,3 +5320,27 @@ details.settings-row > .fold-summary.settings-row-summary {
   .fund-journal { grid-area: journal; }
   .fund-activity { grid-area: activity; }
 }
+
+/* v356: 12WYタブ R1a専用クラス(既存.segmented/.tower-panel-box/.twy-row等は無改変で再利用)。 */
+.twy-tower .twy-face-segmented { margin-top: 10px; border: 1px solid var(--tower-line); background: var(--tower-panel); }
+.twy-tower .twy-face-segmented button { color: var(--tower-text); opacity: .55; }
+.twy-tower .twy-face-segmented button.active { color: var(--tower-cyan); opacity: 1; background: var(--tower-bg); }
+.twy-tower .twy-face-segmented small { display: block; font-size: 10px; opacity: .75; }
+
+/* v357レビュー対応(A-M1): 未設定時(誘導1行だけ)でもタップ標的が44px下限を割らないようにする。 */
+.twy-vision-band { display: flex; flex-direction: column; justify-content: center; width: 100%; min-height: 44px; padding: 0; border: 0; background: none; text-align: left; color: inherit; font: inherit; cursor: pointer; }
+.twy-vision-row + .twy-vision-row { margin-top: 8px; }
+.twy-vision-row small { display: block; color: var(--tower-cyan); font-size: 11px; letter-spacing: .06em; }
+.twy-vision-row p { margin: 3px 0 0; font-family: system-ui, sans-serif; font-size: 14px; line-height: 1.5; }
+.twy-vision-empty, .twy-vision-guide { color: var(--tower-text); opacity: .6; }
+.twy-vision-guide { margin: 0; font-size: 13px; }
+
+.twy-goal-grid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 8px; }
+@media (min-width: 900px) { .twy-goal-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.twy-goal { padding: 10px; border: 1px solid var(--tower-line); border-radius: 10px; background: var(--tower-bg); }
+.twy-goal-title { display: flex; align-items: center; gap: 6px; font-family: system-ui, sans-serif; font-size: 13px; font-weight: 700; }
+.twy-goal-num { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 1px solid var(--tower-line); border-radius: 50%; font-size: 10px; opacity: .8; }
+.twy-goal-no-track { margin: 8px 0 0; color: var(--tower-text); font-size: 11px; opacity: .6; }
+.twy-goal-foot { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; font-size: 11px; opacity: .85; flex-wrap: wrap; }
+.twy-goal-warn { margin: 8px 0 0; color: var(--tower-amber); font-size: 11px; }
+.twy-goal-empty { margin: 8px 0 0; color: var(--tower-text); opacity: .6; font-size: 11px; }

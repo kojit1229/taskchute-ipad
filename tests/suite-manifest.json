@@ -509,6 +509,33 @@
       }
     },
     {
+      "file": "r1-twelveweek.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution",
+        "journal-health",
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 38,
+      "assertionHash": "4bb2d78e2be97041",
+      "sourceHash": "57e02d60d9620109",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
       "file": "recurrence-core.test.js",
       "kind": "node",
       "tier": "full",
@@ -2117,8 +2144,8 @@
         "planning-execution"
       ],
       "assertionSignals": 51,
-      "assertionHash": "dd6f9aa626b970db",
-      "sourceHash": "3cb8b67e7869bab5",
+      "assertionHash": "5885b4b96c6c52a1",
+      "sourceHash": "35f7cbdcd3f6ab32",
       "waits": {
         "fixedCount": 21,
         "numericMilliseconds": 6350,
@@ -4829,7 +4856,7 @@
       ],
       "assertionSignals": 21,
       "assertionHash": "ac542c238673132c",
-      "sourceHash": "34bb0a8b259c9f24",
+      "sourceHash": "2871bfc5a835434e",
       "waits": {
         "fixedCount": 2,
         "numericMilliseconds": 1000,
@@ -5046,8 +5073,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 16,
-      "assertionHash": "67183134634ac4b2",
-      "sourceHash": "b3c021208f44aed9",
+      "assertionHash": "7249c71161aeb4d9",
+      "sourceHash": "3f063e4afd38f276",
       "waits": {
         "fixedCount": 3,
         "numericMilliseconds": 1300,

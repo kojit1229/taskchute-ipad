@@ -21,6 +21,7 @@ import { loadState, persistLocalNoSchedule, _lastSaveError } from "./src/storage
 // (src/state/feedback-cache.js冒頭コメント参照)。
 import { cachedFeedback } from "./src/state/feedback-cache.js";
 import { configureFund, hydrateFundData, renderFund } from "./src/features/fund.js";
+import { configureTwelveWeek, renderTwelveWeek } from "./src/features/twelve-week.js"; // v356: 12WYタブR1a(fund.js方式のfeature)
 import {
   HEALTH_REFRESH_INTERVAL_MS, configureHealth, hydrateHealthData, invalidateHealthCache,
   latestHealthWithin, healthForDate, healthSummaryHTML,
@@ -222,6 +223,7 @@ const navItems = [
   { id: "instruments", label: "INSTRUMENTS", mark: "◉" },
   { id: "iron-log", label: "IRON LOG", mark: "▰" },
   { id: "fund", label: "FUND", mark: "📈" },
+  { id: "twelveweek", label: "12WY", mark: "🎯" },  // v356: 12WYタブ(R1a)
   { id: "more", label: "その他", mark: "…" },  // v265: PCサイドバーに「その他」が無くinstruments/iron-logへ721px以上で到達不能だった導線欠落の修正
   { id: "settings", label: "設定", mark: "S" }
 ];
@@ -313,6 +315,11 @@ configureWish({
 });
 // v301: FUND日誌も既存のsanitize済みMarkdown描画経路へ結線する。
 configureFund({ escapeHTML, renderHeader, renderMarkdown, personalDataReady, fetchGitHubRawText, render });
+// v356: 12WYタブ。GOALSカードは編集不可のrenderTwyTrackReadOnlyを渡す(renderTwyTrackRowはWBS専用)。
+configureTwelveWeek({
+  escapeHTML, renderHeader, todayISO, weekRange, renderTwyTrackReadOnly,
+  modalHeaderHTML, renderModal, saveAndRender, closeModal
+});
 configureHealth({
   escapeHTML, personalDataReady: () => personalDataReady(state.settings.github),
   // v334修正(単位13・S-K2): health-daily.jsonはpersonal-dataリポジトリ直下にあるため
@@ -1768,6 +1775,7 @@ function normalizeState(value) {
     ironDailyTarget: 2000,
     ironManualBaseKg: 0,
     gymBlockKeywords: ["ジム", "筋トレ"],
+    twelveWeekVision: "", twelveWeekFocus: "",  // v356: 12WYタブ CYCLE面のVISION帯(design.md §3)
     twelveWeekScoreTarget: 85,
     ...actualSettings
   };
@@ -1775,7 +1783,7 @@ function normalizeState(value) {
   const allowedViews = new Set([
     "today", "wbs", "wish", "tasks", "timeline", "exec",
     "journal", "zero", "vision", "ai-reports", "settings", "more",
-    "iron-log", "instruments", "fund"
+    "iron-log", "instruments", "fund", "twelveweek"
   ]);
   if (!allowedViews.has(value.currentView)) value.currentView = "today";
   // v31: 残り時間表示用の生年月日(未設定なら補完)
@@ -3081,6 +3089,7 @@ function renderMain() {
   if (view === "wbs") main.innerHTML = renderWBS();
   if (view === "wish") main.innerHTML = renderWish();
   if (view === "fund") main.innerHTML = renderFund();
+  if (view === "twelveweek") main.innerHTML = renderTwelveWeek();
   if (view === "tasks") {
     main.innerHTML = renderTasks();
     // v146: タスクシュートも着手中(無ければ次の未着手)Blockへ自動スクロール
@@ -5613,6 +5622,32 @@ function renderTwyTrackRow(track) {
   </div>`;
 }
 
+// v356: GOALSカード専用の読み取り専用行(更新ボタン無し)。判定はrenderTwyTrackRowと同じtrackStatus()を再利用する。
+function renderTwyTrackReadOnly(track) {
+  const today = todayISO();
+  const measurement = latestMeasurement(state.trackMeasurements || [], track.id);
+  const latestValue = track.kind === "numeric" ? (measurement ? Number(measurement.value) : Number(track.baselineValue)) : undefined;
+  const lastObservedISO = measurement ? String(measurement.observedAt || "").slice(0, 10) : track.startDate;
+  const pace = track.kind === "numeric" ? paceNumeric(track, latestValue, today) : paceMilestone(track, today);
+  const status = trackStatus(track, pace, latestValue, lastObservedISO, today);
+  const stateClass = status.label === "期限超過" ? "s-overdue" : `s-${status.state}`;
+  const milestones = track.kind === "milestone" ? (track.milestones || []).filter((item) => !item.deleted)
+    .slice().sort((a, b) => String(a.plannedDate || "").localeCompare(String(b.plannedDate || ""))) : [];
+  const valueHTML = track.kind === "numeric"
+    ? twyNumericValueHTML(track, latestValue, pace, status, lastObservedISO)
+    : twyMilestoneValueHTML(pace, status, milestones, today);
+  const metaHTML = track.kind === "numeric"
+    ? (status.state === "done" ? `期限 ${mdFmt(track.deadline)}`
+      : `最終 ${mdFmt(lastObservedISO)}${status.state === "stale" ? `・${trackDaysBetween(lastObservedISO, today)}日前` : ""}`)
+    : `期限 ${mdFmt(pace.deadline)}${status.label === "期限超過" ? " 超過" : ""}`;
+  return `<div class="twy-row s-${status.state}" data-twy-track-id="${escapeHTML(track.id)}">
+    <div class="twy-row-top"><span class="t-state ${stateClass}">${escapeHTML(status.label)}</span>${valueHTML}
+      <span class="twy-meta">${escapeHTML(metaHTML)}</span>
+    </div>
+    ${track.kind === "numeric" ? twyBarHTML(track, latestValue, pace, status) : twyMilestoneChainHTML(milestones, today)}
+  </div>`;
+}
+
 function wbsProjectTaskModel(project) {
   const allTasksOfProject = state.tasks.filter((task) => !task.deleted && task.projectId === project.id);
   let visibleTasks = allTasksOfProject.filter((task) => state.settings.showSuspended || !isTaskSuspended(task));
@@ -7868,6 +7903,7 @@ const moreItems = [
   { id: "wbs", label: "WBS", mark: "🧩", group: "計画" },
   { id: "wish", label: "やりたい", mark: "✦", group: "計画" },
   { id: "vision", label: "ビジョン", mark: "🧭", group: "計画" },
+  { id: "twelveweek", label: "12WY", mark: "🎯", group: "計画" },  // v356: 12WYタブ(R1a)
   { id: "zero", label: "0秒思考", mark: "💡", group: "思考" },
   { id: "ai-reports", label: "AIレポート", mark: "🤖", group: "振り返り" },
   { id: "fund", label: "FUND", mark: "📈", group: "振り返り" },

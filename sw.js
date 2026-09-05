@@ -339,6 +339,7 @@ const APP_SHELL = [
   "./src/features/track-ui.js",
   "./src/features/wish.js",
   "./src/features/fund.js",
+  "./src/features/twelve-week.js",
   "./src/features/health.js",
   "./src/state/feedback-cache.js",
   "./src/state/fund-cache.js",

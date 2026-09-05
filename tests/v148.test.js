@@ -84,11 +84,11 @@ function check(name, cond, extra = "") {
     const moreNavButtons = await page.locator('.more-tower-grid [data-action="nav"]').evaluateAll(
       (els) => els.map((el) => el.dataset.view)
     );
-    // v279: FUNDを追加し、単一グリッドは9項目になった。
-    check("その他グリッドは9項目(homeを除外)",
-      moreNavButtons.length === 9, JSON.stringify(moreNavButtons));
-    check("フラットな項目順がv279仕様どおり",
-      moreNavButtons.join(",") === "wbs,wish,vision,zero,ai-reports,fund,instruments,iron-log,settings", JSON.stringify(moreNavButtons));
+    // v279: FUNDを追加し、単一グリッドは9項目になった。v356: 12WYタブ(R1a)を追加し10項目になった。
+    check("その他グリッドは10項目(homeを除外)",
+      moreNavButtons.length === 10, JSON.stringify(moreNavButtons));
+    check("フラットな項目順がv356仕様どおり",
+      moreNavButtons.join(",") === "wbs,wish,vision,twelveweek,zero,ai-reports,fund,instruments,iron-log,settings", JSON.stringify(moreNavButtons));
     // 頭文字1字アイコン(W/R/A等)ではなく絵文字になっていることを確認(codex-ui-review N4対応)
     const badgeTexts = await page.locator('.more-tower-grid [data-action="nav"] .more-tower-mark').allTextContents();
     check("バッジが1文字のアルファベットではない(絵文字化)",

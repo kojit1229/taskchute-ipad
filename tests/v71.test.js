@@ -116,7 +116,7 @@ function check(name, cond, extra = "") {
     const expectedOrder = [
       "今日", "タスクシュート", "タイムライン", "WBS",
       "ジャーナル", "AIレポート", "やりたい", "ビジョン", "0秒思考",
-      "INSTRUMENTS", "IRON LOG", "FUND", "その他", "設定"
+      "INSTRUMENTS", "IRON LOG", "FUND", "12WY", "その他", "設定"
     ];
     check("navItemsの並びが期待どおり", JSON.stringify(navLabels) === JSON.stringify(expectedOrder), JSON.stringify(navLabels));
 
