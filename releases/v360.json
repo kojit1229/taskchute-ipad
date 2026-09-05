@@ -1,0 +1,58 @@
+{
+  "version": 360,
+  "date": "2026-09-05",
+  "title": "12WY タブ R1: 骨格+CYCLE 面(VISION 帯・GOALS・13 WEEKS バー、振り返り週は案A)",
+  "summary": "「12WY」タブを新設(内部ビュー twelveweek、PC サイドバー/その他から到達、S2 GLASS 意匠)。CYCLE 面=VISION 帯(settings.twelveWeekVision/Focus、帯タップの小シートで編集)、12WY GOALS(最大3件+超過警告、読み取り専用のトラック状態行・★Keystone・今週コマ数・「今週を確定」導線)、13 WEEKS バー(W1〜W12 の実行率+W13 振り返り週。12週平均は W1〜W12 のみ、W13 は確定コマ数が閾値(既定3)以上のとき参考平均を併記。目標線=設定値 既定85)。PLAN/WEEK/REVIEW は準備中チップ。",
+  "changedFiles": [
+    "CHANGES_v360.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v360.json",
+    "src/core/plan.js",
+    "src/features/twelve-week.js",
+    "styles.css",
+    "sw.js",
+    "tests/plan-core.test.js",
+    "tests/r1-twelveweek.test.js",
+    "tests/suite-manifest.json",
+    "tests/v148.test.js",
+    "tests/v71.test.js",
+    "tests/v82.test.js"
+  ],
+  "intent": [
+    "12週間プログラム(12WY)の週次儀式を1タブで回すための土台(R1)。R0 の task.twyPlan と weeklyScore を読み取り専用で突き合わせる。",
+    "裁定7(振り返り週の実行率)は案A: 正本の12週平均を汚さず、別枠+閾値付き参考値で見せる。"
+  ],
+  "changes": [
+    "src/features/twelve-week.js(新規、fund.js 方式の依存注入)。allowedViews/renderMain/navItems(PC)/moreItems に twelveweek を追加。sw.js APP_SHELL に登録。",
+    "VISION 帯: settings.twelveWeekVision/twelveWeekFocus(normalizeState で \"\" 補完・updatedAt 不変)。編集は modal 小シート(16px)、未設定時のタップ標的は 44px。",
+    "GOALS: twelveWeekStartDate 非空+active の Project を最大3件、4件目以降は警告1行。状態チップは既存 trackStatus/buildTrackDigest の語のまま(renderTwyTrackReadOnly)。",
+    "src/core/plan.js に cycleWeeksSummary(weeklyCommitments, settings, cycleStartDate, todayISO): 週番号は cycleWeekForDate の7日スパン、採点キーは weeklyScore の土曜週(2基準併存を明記)。avg12 は W1〜W12 の scored のみ、avgWithReview は W13 の確定コマ数 ≥ settings.twelveWeekReviewWeekMinItems(既定3)のときだけ。remainingDays は 0〜83 に clamp。",
+    "13 WEEKS バー: scored=バー / uncommitted=点線枠 / na=灰「—」/ 未来=薄枠 / W13=斜線。バー高と目標線は同じ基準(行高−ラベル高)。第13週中は見出し「サイクル総括」、終了後は当週ハイライトなし。",
+    "S2 GLASS のセレクタを [data-view=\"twelveweek\"] へ拡張(既存規則の拡張のみ)。"
+  ],
+  "uncertainties": [
+    "非土曜開始の cycleStartDate では W の7日スパンと採点週(土〜金)がずれ、「今週」のスパンに今日が入らない表示になりうる(K 裁定余地: サイクル開始日を土曜へ丸めるか。R2 着手前に決める)。",
+    "GOALS の状態チップは読み取り専用行に差し替え済み(WBS の renderTwyTrackRow とは別関数)。",
+    "CONCEPT §6(目標線・達成色なし)は実行タブ向け規約。12WY 面は K 確定モックに従い目標線85と緑/黄/赤を使う。",
+    "R1a 211行・R1b 231行はそれぞれ Size-Exempt(レビュー対応の amend 畳み込みで分割すると壊れた中間状態になるため)。独立検証は3回(review-r1a-claude-a/b, review-r1-claude-a/b, a2, a3)で最終 PASS。",
+    "Codex 利用上限のため implementer(Claude)で実装、レビューは Claude reviewer で代替。v71/v82 はナビ統合(v335)由来の既存赤。"
+  ],
+  "reviewFocus": [
+    "avg12 が W13 を含まないこと、参考平均が閾値未満で出ないこと。",
+    "weeklyScore の結果が不変(track-core)。",
+    "目標線とバーが同じ基準で描かれ、100% が頭打ちしないこと。"
+  ],
+  "verification": [
+    "node tests/run-all.js plan-core r1-twelveweek today-core action-registry-core track-core v148 全件成功(main 取り込み後)。worktree で v82 v71 v335 v313 も実行(v71/v82 は既存赤)。",
+    "verify.sh(ルート)exit 0。"
+  ],
+  "notes": [
+    "Codex 利用上限のため実装は implementer(Claude)、レビューは Claude reviewer で代替。"
+  ],
+  "knownLimitations": [
+    "PLAN/WEEK/REVIEW/TIME 面は R2 以降。次サイクル移行は R7。"
+  ]
+}
