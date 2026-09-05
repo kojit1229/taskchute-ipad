@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v360";  // v360: 12WY タブ R1(骨格+CYCLE: VISION帯・GOALS・13週バー、裁定7=案A)
+const CACHE_NAME = "taskchute-journal-pwa-v361";  // v361: ビジョン 読む画面主役・ALIGNMENT 事実表示・3状態
 // v353: 12WY R0 task.twyPlan のデータ契約+plan.js 純関数+Task編集モーダル3項目
 // v334: 実行タブPC 2ペイン(§B。ナビ統合§Cは持ち越し)
 // v333: 実行ラッパー(計画/実績切替)・モバイルナビ4項目
@@ -339,7 +339,6 @@ const APP_SHELL = [
   "./src/features/track-ui.js",
   "./src/features/wish.js",
   "./src/features/fund.js",
-  "./src/features/twelve-week.js",
   "./src/features/health.js",
   "./src/state/feedback-cache.js",
   "./src/state/fund-cache.js",

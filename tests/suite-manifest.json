@@ -850,9 +850,9 @@
         "content-ai",
         "ui-responsive"
       ],
-      "assertionSignals": 147,
-      "assertionHash": "639169eeff090bb5",
-      "sourceHash": "80f4569f00f10c2d",
+      "assertionSignals": 150,
+      "assertionHash": "e575f22288ea4a5a",
+      "sourceHash": "7dcfcd57ad81785b",
       "waits": {
         "fixedCount": 4,
         "numericMilliseconds": 4250,
@@ -4463,6 +4463,31 @@
         "server": true,
         "fileWrite": false,
         "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "v361.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 38,
+      "assertionHash": "869cd585e9186b82",
+      "sourceHash": "d682c2f2f6662f18",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
         "clock": true
       }
     },

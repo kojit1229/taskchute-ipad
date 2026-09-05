@@ -1869,34 +1869,30 @@ h3 {
   margin: 0;
 }
 
-.vision-alignment-value {
-  color: var(--green-text);
-  font-size: 36px;
+/* v361(ビジョン案1+3+2): %・達成色・目標線を廃し、事実(時間・件数)のみを並べる3メトリクス */
+.vision-alignment-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.vision-alignment-metric {
+  display: grid;
+  gap: 2px;
+}
+
+.vision-alignment-metric strong {
+  font-size: 20px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
-  line-height: 1;
+  color: var(--text);
 }
 
-.vision-alignment-value small {
-  font-size: var(--text-md);
-  margin-left: var(--space-1);
+.vision-alignment-metric span {
+  font-size: var(--text-sm);
+  color: var(--muted);
 }
 
-.vision-alignment-gauge {
-  height: 8px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--panel-soft);
-}
-
-.vision-alignment-gauge span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--green);
-}
-
-.vision-alignment-detail,
 .vision-alignment-categories,
 .vision-direct-note {
   font-size: var(--text-sm);
@@ -1928,6 +1924,36 @@ h3 {
 
 .vision-stage {
   margin-top: 14px;
+}
+
+/* v361-fix(M-1): exec-two-pane(左=固定〜600px上限・右=可変)の再利用は、モックTabVisionPC.png
+   (左=本文が広く伸び、右=ALIGNMENTが狭い)と1920px以上で逆転する(独立レビューM-1/B-M4)。
+   読む画面を主役にする本ビュー専用のgridへ差し替える: 左(本文)=可変1fr・右(ALIGNMENT)=
+   320〜360px固定。exec-two-pane/他タブへの影響はない(専用クラス名)。 */
+@media (min-width: 1280px) {
+  .vision-two-pane { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 360px); align-items: start; gap: 16px; }
+}
+
+/* v361: 読む画面を主役に(本文16px/行間1.85・68chで折る)。左ペインは.vision-two-paneで
+   可変幅になったため、実効の折り返し幅はこのmax-width:68ch自体が決める。 */
+.vision-read .md-render {
+  max-width: 68ch;
+  font-size: var(--text-md);
+  line-height: 1.85;
+}
+
+.vision-status {
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.vision-stale-badge {
+  font-size: var(--text-sm);
+  color: var(--muted);
 }
 
 .vision-pdf-tabs {

@@ -1118,6 +1118,15 @@ let _settingsSyncOpenOverride = null;  // null=未操作、true/false=ユーザ�
 let _settingsExpandedRowId = null;
 let cachedVisionMd = "";
 let cachedAffirmationMd = "";
+// v361: Vision/Affirmation本文の3状態(読み込み中/未接続/取得失敗)判定用。
+// ok: null=未試行・true=直近成功・false=直近失敗(cachedXxxが残っていれば「時点(古い)」表示に使う)。
+// status: v361-fix(B-H1)で追加。HTTPステータス(401は「未接続」と同じ扱いにするため区別する)。
+let visionMdFetchStatus = {
+  vision: { attemptedAt: 0, ok: null, status: 0 },
+  affirmation: { attemptedAt: 0, ok: null, status: 0 }
+};
+// v361注記: 「この画面で編集」(4)は実行コード差分200行予算のため本バージョンでは未着手
+// (読む画面主役化+ALIGNMENT事実表示+3状態=(1)(2)(3)のみ実装。分割方針は発注文どおり)。
 // v85: ビジョンボード(45/80/nowの各PDF)はpersonal-dataリポジトリのtaskchute/content/配下にあり、
 // GitHub Pages(このアプリの同一オリジン)にはv72移行時から存在しない。Contents APIから認証ヘッダ付きで
 // バイナリ取得し、Blob URL化してから<object>に埋め込む(取得できるまでは埋め込まない=公開URLへの
@@ -7015,19 +7024,56 @@ function addWeeklySuggestedTask(week, idx) {
   saveAndRender(`「${title}」をWBSに登録しました`);
 }
 
+// v361-fix(H-1): 過去日の集計に「止め忘れ」Block(actualStartAtはあるがactualEndAtが無い)を
+// 含めると、statsTimeLogData()が終端をnowMs(=常に翌日以降)で打ち切れずdayEndMs(24:00)まで
+// 張り付かせてしまい、7日平均が過大になる(独立レビューH-1)。generateReport()のactualMinutes
+// 集計が「完了(=actualEndAtが確定した)Blockのみを対象にする」既存方針(app.js内
+// reportDurationMinutes/`blocks.filter((b) => b.completed)`、日報側の確立挙動)に合わせ、
+// 過去日はactualEndAtが無いBlockを集計から除外する。当日だけは「実行中=今この瞬間まで」を
+// 維持する(既存の計器盤挙動を壊さない)。あわせてstatsTimeLogData(全カテゴリ18時間分の
+// Mapを毎回組む)を経由せず直結カテゴリだけを直接積算し、L-1(1回のALIGNMENT描画で8回
+// 呼ばれる重複計算)も解消する。
+function visionDirectSecondsOfDate(date, direct, nowMs) {
+  const isToday = date === todayISO();
+  const dayStartMs = localDateTimeToMs(`${date}T00:00:00`);
+  const dayEndMs = localDateTimeToMs(`${addDays(date, 1)}T00:00:00`);
+  let seconds = 0;
+  state.blocks.forEach((b) => {
+    if (b.deleted || b.date !== date || !b.actualStartAt) return;
+    if (!direct.has(b.category || "未分類")) return;
+    if (!b.actualEndAt && !isToday) return;  // 止め忘れは過去日から除外(当日は実行中として数える)
+    const rawStartMs = localDateTimeToMs(b.actualStartAt);
+    const rawEndMs = b.actualEndAt ? localDateTimeToMs(b.actualEndAt) : nowMs;
+    const startMs = Math.max(dayStartMs, rawStartMs);
+    const endMs = Math.min(dayEndMs, rawEndMs);
+    if (!rawStartMs || endMs <= startMs) return;
+    seconds += (endMs - startMs) / 1000;
+  });
+  return seconds;
+}
+
+// v361(ビジョン案1+3+2): %・達成色・目標線を廃し、事実(時間・件数)のみを返す。
+// 今日の直結時間・直結Block数に加え、直近7日平均(当日含む7日)も事実表示のため算出する。
+// v361-fix(M-3): 直結Block数はモック(4/9)どおり分母(当日の実績Block総数=カテゴリ不問で
+// actualStartAtがあるBlock数)も返す。
 function visionAlignmentData(date, directCategories, nowMs = Date.now()) {
   const direct = new Set(Array.isArray(directCategories) ? directCategories : []);
-  const timeLog = statsTimeLogData(date, nowMs);
-  const directSeconds = timeLog.categories
-    .filter((item) => direct.has(item.category))
-    .reduce((sum, item) => sum + item.seconds, 0);
-  return {
-    directSeconds,
-    totalSeconds: timeLog.totalSeconds,
-    percent: timeLog.totalSeconds > 0
-      ? Math.round(directSeconds / timeLog.totalSeconds * 100)
-      : 0
-  };
+  const directSecondsOf = (d) => visionDirectSecondsOfDate(d, direct, nowMs);
+  const directSeconds = directSecondsOf(date);
+  const directBlockCount = state.blocks.filter((b) =>
+    !b.deleted && b.date === date && b.actualStartAt && direct.has(b.category || "未分類")
+  ).length;
+  const totalBlockCount = state.blocks.filter((b) =>
+    !b.deleted && b.date === date && b.actualStartAt
+  ).length;
+  const last7Days = Array.from({ length: 7 }, (_, i) => addDays(date, -i));
+  const avg7dSeconds = last7Days.reduce((sum, d) => sum + directSecondsOf(d), 0) / 7;
+  return { directSeconds, directBlockCount, totalBlockCount, avg7dSeconds };
+}
+
+function visionHMText(seconds) {
+  const totalMin = Math.round(Math.max(0, seconds || 0) / 60);
+  return `${Math.floor(totalMin / 60)}h${pad2(totalMin % 60)}m`;
 }
 
 function renderVisionAlignment() {
@@ -7037,59 +7083,96 @@ function renderVisionAlignment() {
   if (directCategories.length === 0) {
     return `
       <section class="panel vision-alignment">
-        <h2>ALIGNMENT <span class="muted">今日のビジョン直結率</span></h2>
+        <h2>ALIGNMENT <span class="muted">今日との接続</span></h2>
         <button class="btn primary" data-action="vision-open-direct-settings">直結カテゴリを設定</button>
       </section>
     `;
   }
-  const alignment = visionAlignmentData(todayISO(), directCategories);
+  const a = visionAlignmentData(todayISO(), directCategories);
   return `
     <section class="panel vision-alignment">
-      <h2>ALIGNMENT <span class="muted">今日のビジョン直結率</span></h2>
-      <div class="vision-alignment-value">${alignment.percent}<small>%</small></div>
-      <div class="vision-alignment-gauge" aria-label="ビジョン直結率 ${alignment.percent}%">
-        <span style="width:${alignment.percent}%"></span>
+      <h2>ALIGNMENT <span class="muted">今日との接続(事実のみ)</span></h2>
+      <div class="vision-alignment-metrics">
+        <div class="vision-alignment-metric"><strong data-vision-metric="today">${visionHMText(a.directSeconds)}</strong><span>今日の直結時間</span></div>
+        <div class="vision-alignment-metric"><strong data-vision-metric="blocks">${a.directBlockCount} / ${a.totalBlockCount}</strong><span>直結Block</span></div>
+        <div class="vision-alignment-metric"><strong data-vision-metric="avg7d">${visionHMText(a.avg7dSeconds)}/日</strong><span>7日平均</span></div>
       </div>
-      <div class="muted vision-alignment-detail">
-        実績のみ(ワンタップ計時を含む) ${statsHMS(alignment.directSeconds)} / ${statsHMS(alignment.totalSeconds)}
+      <div class="muted vision-alignment-categories">直結: ${directCategories.map(escapeHTML).join("・")}
+        <button class="btn ghost" data-action="vision-open-direct-settings">直結カテゴリを変える ›</button>
       </div>
-      <div class="muted vision-alignment-categories">直結: ${directCategories.map(escapeHTML).join("・")}</div>
     </section>
   `;
 }
 
+// v361(ビジョン案1+3+2): 読む画面を主役にするため、ALIGNMENTはsegmented・本文の後ろへ移した
+// (旧: ALIGNMENT→segmented→本文。[51]のDOM順序assertも新順に更新済み)。PC(1280px以上)は
+// v361-fix(M-1)で専用の.vision-two-pane(左=本文1fr・右=ALIGNMENT 320〜360px固定、
+// styles.css既存のmin-width:1280pxで完結するためJS側の分岐は不要)で左=本文・右=ALIGNMENTの
+// 2ペインにする(当初の.exec-two-pane再利用は左右比率がモックTabVisionPC.pngと逆で、
+// 1920px以上で本文より広いALIGNMENTになっていた。独立レビューM-1/B-M4)。
 function renderVision() {
   const section = state.settings.visionSection || "vision";
   return `
     ${renderHeader("方向性を見失わないための場所", "ビジョン")}
-    ${renderVisionAlignment()}
     <div class="segmented">
       <button class="${section === "vision" ? "active" : ""}" data-action="vision-section" data-section="vision">ビジョン</button>
       <button class="${section === "affirmation" ? "active" : ""}" data-action="vision-section" data-section="affirmation">アファメーション</button>
       <button class="${section === "board" ? "active" : ""}" data-action="vision-section" data-section="board">ビジョンボード</button>
     </div>
-    <div class="vision-stage">
-      ${section === "vision" ? renderVisionMd("vision") : ""}
-      ${section === "affirmation" ? renderVisionMd("affirmation") : ""}
-      ${section === "board" ? renderVisionBoard() : ""}
+    <div class="vision-stage vision-two-pane">
+      <div class="exec-pane-left">
+        ${section === "vision" ? renderVisionMd("vision") : ""}
+        ${section === "affirmation" ? renderVisionMd("affirmation") : ""}
+        ${section === "board" ? renderVisionBoard() : ""}
+      </div>
+      <div class="exec-pane-right">${renderVisionAlignment()}</div>
     </div>
   `;
 }
 
+// v361: 未接続/読み込み中/取得失敗の3状態(FUND/AIレポートと同型)を1行で出す。取得失敗でも
+// 前回本文(cached)が残っていればそれを「時点(古い)」バッジ付きで表示し続ける(空白落ちを防ぐ)。
+function visionMdStatusLine(status) {
+  return `<div class="panel vision-status">${escapeHTML(status)} <button class="btn ghost" data-action="reload-md">再試行</button></div>`;
+}
+
+// v361-fix(B-H1): 401(トークンにpersonal-data権限が無い)はトークン未設定と同じ「未接続」
+// 状態として扱う(監督裁定)。fetchGitHubRawResultは401時に別途setPersonalDataAuthError()で
+// 全体バナーも出すため、このパネル内は文言を揃えるだけでよい。
+const VISION_MD_DISCONNECTED_TEXT = "個人データ未接続のため表示できません(設定へ)";
+
 function renderVisionMd(kind) {
   const path = kind === "vision" ? "Vision.md" : "Daily_Affirmation.md";
   const cached = kind === "vision" ? cachedVisionMd : cachedAffirmationMd;
-  const rendered = renderMarkdown(cached || "（読み込み中...)");
+  const fetchStatus = visionMdFetchStatus[kind];
+  if (!cached) {
+    if (!personalDataReady(state.settings.github)) return visionMdStatusLine(VISION_MD_DISCONNECTED_TEXT);
+    if (!fetchStatus.attemptedAt) return visionMdStatusLine("読み込んでいます");
+    if (fetchStatus.status === 401) return visionMdStatusLine(VISION_MD_DISCONNECTED_TEXT);
+    if (!fetchStatus.ok) return visionMdStatusLine(`取得できませんでした(最終試行 ${visionTimeOfDay(fetchStatus.attemptedAt)})`);
+    // v361-fix(M-2): 200で取得できたが本文が空文字の場合。3状態のどれでもないため
+    // 素通りしてrenderMarkdown("")の白紙パネルになっていた(独立レビューM-2/B-M1)。
+    // 催促文言を避けた誘導1行を出す。
+    return `<div class="panel vision-status">まだ本文がありません</div>`;
+  }
+  const staleBadge = (cached && !fetchStatus.ok && fetchStatus.attemptedAt)
+    ? `<span class="vision-stale-badge">${visionTimeOfDay(fetchStatus.attemptedAt)}時点(古い)</span>` : "";
+  const rendered = renderMarkdown(cached || "");
   return `
     <div class="vision-actions">
-      <span class="vision-source">📄 <code>${path}</code></span>
+      <span class="vision-source">📄 <code>${path}</code></span>${staleBadge}
       <button class="btn" data-action="reload-md">最新を取得</button>
-      <button class="btn ghost" data-action="open-md-in-github" data-path="${path}">GitHubで編集</button>
+      <button class="btn ghost" data-action="open-md-in-github" data-path="${path}">GitHubで編集(上級)</button>
     </div>
-    <div class="panel">
+    <div class="panel vision-read">
       <div class="md-render">${rendered}</div>
     </div>
   `;
+}
+
+function visionTimeOfDay(ms) {
+  const d = new Date(ms);
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
 // v85: ビジョンボードPDF(45/80/now)は個人データリポジトリ(taskchute/content/配下)にあり、
@@ -12121,10 +12204,12 @@ function aiInsightsPanelHTML(kind, taskId = "") {
 
 async function hydrateStaticMarkdown() {
   // v72: 個人データリポジトリ(taskchute/content/配下)からのGitHub API取得に切替(同一オリジンfetch廃止)
-  const visionPromise = fetchGitHubRawText("content/Vision.md");
-  const affirmPromise = fetchGitHubRawText("content/Daily_Affirmation.md");
+  // v361: 3状態(読み込み中/未接続/取得失敗)判定のためok/statusも要るので、
+  //       fetchGitHubRawText(本文のみ)ではなくfetchGitHubRawResultへ切替える。
+  const visionPromise = fetchGitHubRawResult("content/Vision.md");
+  const affirmPromise = fetchGitHubRawResult("content/Daily_Affirmation.md");
   const reportIndexPromise = fetchReportIndex();
-  const [visionText, affirmText, reportIndexFiles] = await Promise.all([visionPromise, affirmPromise, reportIndexPromise]);
+  const [visionResult, affirmResult, reportIndexFiles] = await Promise.all([visionPromise, affirmPromise, reportIndexPromise]);
   _aiReportNotifyFiles = reportIndexFiles;
   // v283: ゲート中はrenderGate()が空にしたナビを復活させない。接続済み時だけ通知を即時反映する。
   if (personalDataReady(state.settings.github)) {
@@ -12133,12 +12218,22 @@ async function hydrateStaticMarkdown() {
     patchAiReportUnreadList();
   }
   let changed = false;
-  if (visionText && visionText !== cachedVisionMd) {
-    cachedVisionMd = visionText;
+  const prevVisionOk = visionMdFetchStatus.vision.ok;
+  const prevAffirmOk = visionMdFetchStatus.affirmation.ok;
+  visionMdFetchStatus = {
+    vision: { attemptedAt: Date.now(), ok: visionResult.ok, status: visionResult.status },
+    affirmation: { attemptedAt: Date.now(), ok: affirmResult.ok, status: affirmResult.status }
+  };
+  if (visionResult.ok && visionResult.text && visionResult.text !== cachedVisionMd) {
+    cachedVisionMd = visionResult.text;
     changed = true;
+  } else if (visionResult.ok !== prevVisionOk) {
+    changed = true;  // 3状態の表示切替(読み込み中→失敗/成功)を反映する
   }
-  if (affirmText && affirmText !== cachedAffirmationMd) {
-    cachedAffirmationMd = affirmText;
+  if (affirmResult.ok && affirmResult.text && affirmResult.text !== cachedAffirmationMd) {
+    cachedAffirmationMd = affirmResult.text;
+    changed = true;
+  } else if (affirmResult.ok !== prevAffirmOk) {
     changed = true;
   }
   // AI フィードバック: 当日と前日を取得
@@ -12283,12 +12378,17 @@ function maybeRefreshFeedback() {
 }
 
 async function reloadStaticMarkdown() {
-  cachedVisionMd = "";
-  cachedAffirmationMd = "";
+  // v361: 事前にcachedXxxを空にしない(取得失敗時に前回本文を「時点(古い)」表示のまま残すため。
+  // hydrateStaticMarkdown側がok/失敗を見て更新するかどうかを判定する)。
   showToast("最新を取得中...");
   await hydrateStaticMarkdown();
   render();
-  showToast("最新を読み込みました");
+  // v361-fix(M-5): 取得失敗でも「最新を読み込みました」の成功トーストが出ていた
+  // (画面は失敗を示すのにトーストは成功を告げる矛盾。独立レビューM-5)。reload-mdは
+  // vision/affirmationの各パネルにのみ出るボタンのため、現在表示中のセクションの
+  // 直近fetch結果を見て文言を分ける。
+  const kind = state.settings.visionSection === "affirmation" ? "affirmation" : "vision";
+  showToast(visionMdFetchStatus[kind]?.ok ? "最新を読み込みました" : "取得に失敗しました");
 }
 
 // v72レビュー対応: Vision/Affirmationの実体は個人データリポジトリの taskchute/content/ 配下に

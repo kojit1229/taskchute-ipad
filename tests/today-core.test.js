@@ -910,11 +910,14 @@ function check(name, cond, extra = "") {
       !/[0-9]\s*%/.test(vaUnset || ""), vaUnset);
     check("未設定では設定への誘導文言(「設定」または「直結」を含む)が出る(§12 F7: vision側は導線のみ)",
       /設定|直結/.test(vaUnset || ""), vaUnset);
-    check("パネルは3タブsegmentedの上(共通領域)に置かれる(§12 F7・DOM順で先行する)",
+    // v361(ビジョン案1+3+2): 読む画面を主役にするためALIGNMENTをsegmented・本文の後ろへ移した
+    // (旧: ALIGNMENT→segmented→本文。事実表示への置換に伴うDOM順序の仕様変更、同等以上の検証として
+    // 「segmentedの後ろに置かれる」へ更新する)。
+    check("パネルは3タブsegmentedの後ろ(読む画面の隣)に置かれる(§12 F7→v361で順序変更)",
       await page.evaluate(() => {
         const a = document.querySelector(".vision-alignment");
         const s = document.querySelector("#main .segmented");
-        return !!a && !!s && !!(a.compareDocumentPosition(s) & Node.DOCUMENT_POSITION_FOLLOWING);
+        return !!a && !!s && !!(s.compareDocumentPosition(a) & Node.DOCUMENT_POSITION_FOLLOWING);
       }));
 
     // ============================================================
@@ -950,11 +953,21 @@ function check(name, cond, extra = "") {
     check("チェックで settings.visionDirectCategories に '開発' が入り永続化される(前提B6-6)", true);
     await w1GoView("vision");
     await page.waitForSelector(".vision-alignment", { state: "attached" });
+    // v361(ビジョン案1+3+2): %・達成色を廃し事実(時間・件数)のみを表示する。手計算:
+    //   直結=開発。今日の直結時間=開発60分(va-dev、実績あり)のみ(回復30分は直結外、
+    //   計画のみ45分は実績が無いため含まない)→ 1h00m。直結Block数=1件(va-devのみ)。
+    //   7日平均はこの1日分(今日)しか実績が無いため 60分/7 ≈ 8.57分 → 四捨五入で9分 → 0h09m。
     const vaSet = await panelText(".vision-alignment");
-    const vaPctM = /([0-9]+(?:\.[0-9]+)?)\s*%/.exec(vaSet || "");
-    const vaPct = vaPctM ? parseFloat(vaPctM[1]) : null;
-    check("当日実績比率が手計算と一致(60/90 = 66.7% → 66〜67.5%の表示を一致とみなす。前提B6-8)",
-      vaPct !== null && vaPct >= 66 && vaPct <= 67.5, JSON.stringify({ pct: vaPct, text: vaSet }));
+    check("ALIGNMENTは事実のみ(%を一切含まない。前提B6-8→v361で事実表示化)",
+      !/[0-9]\s*%/.test(vaSet || ""), vaSet);
+    const vaToday = await panelText('[data-vision-metric="today"]');
+    const vaBlocks = await panelText('[data-vision-metric="blocks"]');
+    const vaAvg7d = await panelText('[data-vision-metric="avg7d"]');
+    check("今日の直結時間が手計算と一致(開発60分のみ=1h00m。回復30分・計画のみ45分は含まない)",
+      vaToday === "1h00m", vaToday);
+    check("直結Block件数が手計算と一致(実績ありの開発Blockは1件 / 当日の実績Block総数2件[va-dev・va-rec]。M-3: モックどおり分母つき)",
+      vaBlocks === "1 / 2", vaBlocks);
+    check("7日平均が手計算と一致(60分/7≈8.57分→四捨五入9分=0h09m)", vaAvg7d === "0h09m/日", vaAvg7d);
 
     // ============================================================
     // [51c] F7: 実績ゼロ日(計画のみ)でも崩れない(NaN非表示・pageerrorゼロ)
