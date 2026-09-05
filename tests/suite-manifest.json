@@ -373,9 +373,9 @@
         "content-ai",
         "ui-responsive"
       ],
-      "assertionSignals": 22,
-      "assertionHash": "304a81c6fc643b23",
-      "sourceHash": "c9b0c7faf4408502",
+      "assertionSignals": 21,
+      "assertionHash": "2e103b08e6f98b9d",
+      "sourceHash": "919e5319cd5231fd",
       "waits": {
         "fixedCount": 4,
         "numericMilliseconds": 500,

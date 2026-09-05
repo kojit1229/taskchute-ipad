@@ -1,0 +1,47 @@
+{
+  "version": 350,
+  "date": "2026-09-05",
+  "title": "1020px CSS修正: railを出すかの判断をdata-rail方式で一本化",
+  "summary": "2026-09-04のレビュー(css-1020-review.md)で発見された1020px以下でのタイムラインrail折り返し不具合に対応した。真因は、renderTimelineRail()(JS側)がrenderのたびにappRootEl.style.gridTemplateColumnsをinlineで直接書き込んでおり、styles.css側の@media (max-width: 1020px)ブロックの列数指定を常に上書きしていたため、1020px以下でも360px分の列が確保され続けレイアウトが崩れていたこと。「railを出すか」の判断をrenderTimelineRail() 1か所に一本化し、appRootEl.dataset.rail(data-rail=\"on\"/\"off\")だけを立てるよう変更した。列幅・サイドバー幅・折りたたみ・1020px以下の縮小はすべてstyles.css側がdata-rail/[data-view]/.collapsedを見て決める(inline styleを書かない)。独立レビュー指摘対応として、dataset.railへの書き込みは値が変わる時だけ代入するよう変更した(毎render代入するとスタイル再計算が誘発され、today-tower.jsの500msティック側のフォーカス保持判定とレースしてtower-core[11]が再現100%で退行したため)。",
+  "changedFiles": [
+    "docs/test-impact-map.generated.md",
+    "releases/v350.json",
+    "src/features/timeline.js",
+    "styles.css",
+    "sw.js",
+    "tests/layout-rail-columns.test.js",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "1020px以下でタイムラインrailの列(360px)が誤って確保され続けレイアウトが崩れる不具合を、JS側のinline style書き込みを廃してCSS側へ列数決定を一本化することで修正する。",
+    "data-rail属性の書き込みを差分書き込みにし、無駄な再描画によるtower-coreのフォーカス保持退行を防ぐ。"
+  ],
+  "changes": [
+    "src/features/timeline.js: renderTimelineRail()から`appRootEl.style.gridTemplateColumns`の直接書き込みを削除し、`appRootEl.dataset.rail = \"on\"/\"off\"`のみを立てるよう変更した(値が変わる時だけ代入)。",
+    "styles.css: `.app-shell`に`--sidebar-w`カスタムプロパティを導入し、`grid-template-columns`の基本形を`var(--sidebar-w) minmax(0, 1fr)`に変更。`.app-shell[data-rail=\"on\"]`でrail列(360px)を追加する形に一本化した。",
+    "styles.css: `.app-shell:not([data-rail=\"on\"]) > .timeline-rail { display: none; }`を追加(JS側のtimelineRailEl.style.display書き込みと二重化した安全弁)。",
+    "styles.css: サイドバー折りたたみ幅を`.app-shell:has(> .sidebar.collapsed) { --sidebar-w: 56px; }`へ変更(以前はJSのinline styleが上書きしていたため実質未使用だった)。",
+    "styles.css: `@media (max-width: 1020px)`ブロックで`--sidebar-w: 184px`を設定し、rail列の有無は`.app-shell[data-rail=\"on\"]`側の`grid-template-columns`で決めるよう変更した(これが今回の主要な修正)。"
+  ],
+  "uncertainties": [
+    "実装・レビューはremediation/css-railブランチ上で完結済み(implementer+reviewer単系統、Codex利用上限のため)。v335 HEAD起点のブランチのため他単位との競合は生成物(test-impact-map.generated.md)のみで、app.js/styles.css/timeline.js本体は無競合でcherry-pickできた。",
+    "2コミット目(9935e24、dataset.rail差分書き込み化)は独立レビューでtower-core[11]のフォーカス保持退行(100%再現)を検出した後の修正。tower-coreは現状も既知フレーク(handoff.md記載)が残るが、本版のdata-rail差分書き込み化によって「render毎に確実に退行する」経路は解消済み。",
+    "handoff.mdの記録(css-1020-review.md)によれば、当初はtimeline.jsの撤去のみが検討されていたが、styles.css側も含めた「両方セットでdata-rail方式」が最終案として採用された。"
+  ],
+  "reviewFocus": [
+    "1020px以下でタイムラインrailの列が確保されず(rail非表示時)、本文が正しく横幅いっぱいに広がること。",
+    "1020px超でタスクシュート表示時にrailが正しく表示され360px列が確保されること。",
+    "サイドバー折りたたみ時の幅(56px)が正しく反映されること。",
+    "dataset.railへの書き込みが値変化時のみであること(tower-coreのフォーカス保持退行が再発しないこと)。"
+  ],
+  "verification": [
+    "node --check src/features/timeline.js は成功。",
+    "実行コード差分(src/features/timeline.js + styles.css): 32行(200行以内)。",
+    "npm run code:index:write → npm run test:manifest:write の順で実行し、node scripts/test-manifest.js --check はPASS。",
+    "node scripts/release-gate.js releases/v350.json をフォアグラウンド(timeout 600000、出力ファイルへリダイレクト)で実行、結果を別コマンドで確認。"
+  ],
+  "notes": [
+    "1020px CSS修正(修正フェーズとは別件、css-1020-review.md由来)。実装・レビューはCodex利用上限のためimplementer+reviewer(Claude)単系統。"
+  ],
+  "knownLimitations": []
+}
