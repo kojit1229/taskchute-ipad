@@ -674,25 +674,75 @@ function check(name, cond, extra = "") {
       combGaps.some((g) => combMin(g.start) === 600 && combMin(g.end) === 630), JSON.stringify(combGaps));
     check("15分未満の隙間(11:30→11:35)は列挙されない(全gapが15分以上)",
       combGaps.length >= 1 && combGaps.every((g) => combMin(g.end) - combMin(g.start) >= 15), JSON.stringify(combGaps));
-    // タップ → 「先にBlockを作ってから」編集モーダルが開く(§12 F2・前提B5-6)
+    // v354(仕様変更): タップで直接Blockを作る旧挙動(前提B5-6)から、「空き時間を補う」シートを
+    // 開く方式へ変更した(TIME COMB「補う」/実行ヘッダ「＋Block」と同じ導線への統一。
+    // シートの「タスクから選ぶ」/「分割して置く」を押すまではBlockは増えない)。
     const gapIdx = combGaps.findIndex((g) => combMin(g.start) === 600 && combMin(g.end) === 630);
-    const combSeededIds = new Set(combBlocks.map((b) => b.id));
+    const blocksBeforeGapTap = combBlocks.length;
     await page.locator(".time-comb-gap").nth(gapIdx).click();
-    await page.waitForSelector(".modal-card", { state: "attached" });
-    await page.waitForFunction(({ KEY, n }) => JSON.parse(localStorage.getItem(KEY)).blocks.length === n + 1, { KEY, n: combBlocks.length });
+    await page.waitForSelector(".fill-gap-sheet", { state: "attached" });
+    const gapSheetHeading = await page.textContent(".fill-gap-sheet .modal-title");
+    check("タップで「空き時間を補う」シートが開く(v354: TIME COMB「補う」と同じfill-gap-open)",
+      gapSheetHeading.includes("空き時間を補う") && gapSheetHeading.includes("10:00") && gapSheetHeading.includes("10:30"),
+      gapSheetHeading);
     const stAfterGapTap = await stateNow();
-    const gapBlock = stAfterGapTap.blocks.find((b) => !combSeededIds.has(b.id));
-    check("タップで新規Blockが作成される(seed 4件 → 5件)", !!gapBlock, JSON.stringify(stAfterGapTap.blocks.map((b) => b.id)));
-    check("新規Blockが隙間の時間帯(10:00-10:30)を予定時刻に持つ",
-      (gapBlock?.plannedStartAt || "").includes("T10:00") && (gapBlock?.plannedEndAt || "").includes("T10:30"),
-      JSON.stringify({ start: gapBlock?.plannedStartAt, end: gapBlock?.plannedEndAt }));
-    check("新規Blockは当日日付+「その他」Task紐づけ(makeBlock({taskId: getOtherTask()?.id})の契約)",
-      gapBlock?.date === TODAY && !!gapBlock?.taskId &&
-      stAfterGapTap.tasks.find((t) => t.id === gapBlock?.taskId)?.kind === "other",
-      JSON.stringify({ date: gapBlock?.date, taskId: gapBlock?.taskId }));
-    check("既存のBlock編集モーダルが開いている", await page.locator(".modal-card").count() === 1);
-    await page.locator('.modal-card [data-action="modal-close"]').first().click();
-    await page.waitForSelector(".modal-card", { state: "detached" });
+    check("シートを開いただけではBlockは増えない(「置く」まで無変更)",
+      stAfterGapTap.blocks.length === blocksBeforeGapTap, `${stAfterGapTap.blocks.length} vs ${blocksBeforeGapTap}`);
+    await page.locator('.fill-gap-sheet [data-action="modal-close"]').first().click();
+    await page.waitForSelector(".fill-gap-sheet", { state: "detached" });
+
+    // v354修正: 独立レビュー指摘(旧createBlockForActualGapの4アサート削除への代替が必要)対応。
+    // 削除した「タップで新規Block作成/隙間の時間帯を予定時刻に持つ/その他Task紐づけ/編集モーダルが
+    // 開く」の4契約を、新シート経由の同等到達点(a: 候補0件でも「新しいBlockを作る」でBlockが
+    // でき編集モーダル/トーストに至る、b: 同じ空き時間に同じTaskを2回置いても1件のまま=v186
+    // M-2冪等化の復元)で置き換える(assert数は減らさない)。
+    console.log("[32b] v354: 候補0件でも「新しいBlockを作る」でBlockができる(旧: タップで即Block作成の代替)");
+    await seedB5({ view: "timeline", blocks: combBlocks, tasks: [] });
+    await page.waitForSelector(".time-comb-gap");
+    await page.click(".time-comb-gap");
+    await page.waitForSelector(".fill-gap-sheet", { state: "attached" });
+    check("Task候補0件は「候補タスクがありません」表示になる(母集団が空の行き止まりを検証する前提)",
+      (await page.textContent(".fill-gap-list")).includes("候補タスクがありません"));
+    const blocksBeforeCreate = (await stateNow()).blocks.length;
+    await page.fill("#fillGapTitle", "COMB-新規Block");
+    await page.click('[data-action="fill-gap-create"]');
+    await page.waitForSelector(".fill-gap-sheet", { state: "detached" });
+    const stAfterCreate = await stateNow();
+    check("「新しいBlockを作る」でBlockが1件増える(旧createBlockForActualGapの機能をシート経由で代替)",
+      stAfterCreate.blocks.length === blocksBeforeCreate + 1, `${stAfterCreate.blocks.length} vs ${blocksBeforeCreate}`);
+    const createdCombBlock = stAfterCreate.blocks.find((b) => b.title === "COMB-新規Block");
+    check("作ったBlockは隙間の頭(10:00開始)の計画Block(旧: 隙間の時間帯を予定時刻に持つ、の代替)",
+      (createdCombBlock?.plannedStartAt || "").includes("T10:00"), createdCombBlock?.plannedStartAt);
+    check("トーストに開始時刻が入る(旧: 編集モーダルが開く、の代替=編集モーダル/トーストのいずれかに至ることを検証)",
+      (await page.locator(".toast").last().textContent().catch(() => "")).includes("10:00"));
+
+    console.log("[32c] v354(M-2復元): 同じ空き時間に同じTaskを2回「ここに置く」してもBlockは1件のまま(重複防止)");
+    const dupTask = { id: "comb-dup-task", projectId: "", title: "COMB-重複防止Task", kind: "normal", status: "todo",
+      deleted: false, selfDueOff: true, dueDate: "", estimateMin: 15,
+      createdAt: at("00:00"), updatedAt: at("00:00") };
+    await seedB5({ view: "timeline", blocks: combBlocks, tasks: [dupTask] });
+    await page.waitForSelector(".time-comb-gap");
+    await page.click(".time-comb-gap");
+    await page.waitForSelector(".fill-gap-sheet", { state: "attached" });
+    await page.click('.fill-gap-row:has-text("COMB-重複防止Task") [data-action="fill-gap-place"]');
+    await page.waitForSelector(".fill-gap-sheet", { state: "detached" });
+    const stAfterFirstDupPlace = await stateNow();
+    const dupBlocksAfterFirst = stAfterFirstDupPlace.blocks.filter((b) => b.taskId === "comb-dup-task").length;
+    check("1回目の「ここに置く」でBlockが1件できる", dupBlocksAfterFirst === 1, dupBlocksAfterFirst);
+    await page.click(".time-comb-gap");
+    await page.waitForSelector(".fill-gap-sheet", { state: "attached" });
+    await page.click('.fill-gap-row:has-text("COMB-重複防止Task") [data-action="fill-gap-place"]');
+    await page.waitForSelector(".fill-gap-sheet", { state: "detached" });
+    const stAfterSecondDupPlace = await stateNow();
+    const dupBlocksAfterSecond = stAfterSecondDupPlace.blocks.filter((b) => b.taskId === "comb-dup-task").length;
+    check("同じ空き時間に同じTaskを2回置いてもBlockは1件のまま(v186 M-2冪等化の復元)",
+      dupBlocksAfterSecond === 1, dupBlocksAfterSecond);
+    // state.modalはUI一時状態でsaveState()を経由しないと即座にlocalStorageへ反映されないため、
+    // DOM側(Block編集モーダル特有の見出し文言)で「新規作成せず既存Blockを開いた」ことを判定する。
+    const dupModalTitle = await page.evaluate(() => document.querySelector(".modal-title")?.textContent || "");
+    check("2回目は新規作成せず既存Blockの編集モーダルを開く", dupModalTitle.includes("Block を編集"), dupModalTitle);
+    await page.evaluate(() => document.querySelector('[data-action="modal-close"]')?.click());
+    await page.waitForSelector(".modal-title", { state: "detached" }).catch(() => {});
 
     // ============================================================
 

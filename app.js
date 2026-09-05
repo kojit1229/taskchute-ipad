@@ -101,7 +101,8 @@ import {
 import {
   configureTimeline,
   renderTimelineRail, renderTimelineView, setTimelineMode, renderTimeline,
-  renderTimelineCard, renderEnergyGraph
+  renderTimelineCard, renderEnergyGraph,
+  actualGaps
 } from "./src/features/timeline.js";
 // computeSyncMerge/syncCoreEqual/5フロー(saveToGitHub/runAutoSyncPush/runAutoSyncPull/
 // loadFromGitHub/syncFromGitHubOnStartup)等はsrc/sync/github.jsへ抽出済み。src/sync/github.js
@@ -964,6 +965,10 @@ registerActions({
 registerActions({
   // --- Block作成(WBSからの「今日へ追加」) ---
   "task-today": ({ id }) => createBlockFromTask(id),
+  // --- v354: 「空き時間を補う」シート(TIME COMB「補う」・実行ヘッダ「＋Block」の2導線から開く) ---
+  "fill-gap-open": ({ target }) => openFillGapSheet(target.dataset.start, target.dataset.end, target.dataset.date || state.selectedDate),
+  "fill-gap-place": ({ target, id }) => fillGapPlace(id, target.dataset.split === "1"),
+  "fill-gap-create": () => fillGapCreate(),
   // --- Block/Now(6。now-mode-open/now-mode-close/now-conveyor-skipはv87で到達不能化、
   //     v292孤児掃除で削除(K裁定2026-08-29)。now-conveyor-completeはsrc/features/
   //     today-tower.js(TOWER UI)から現役で発行されるため残置=監査の見落としを現物確認で訂正) ---
@@ -5931,7 +5936,7 @@ function renderExecView() {
         <button class="${isActual ? "active" : ""}" data-action="exec-mode-toggle" data-mode="actual">実績(タイムライン)</button>
       </div>
       <div class="row exec-header-actions">
-        ${execBlockAddHTML()}
+        ${execFillGapAddButtonHTML()}
         ${!isActual ? `
           <div class="segmented" style="margin:0">
             <button class="${timelineMode === "planned" ? "active" : ""}" data-action="timeline-mode" data-mode="planned">📅 予定</button>
@@ -9024,20 +9029,210 @@ function deleteTask(id) {
   saveAndRender("Taskを削除しました");
 }
 
-function createBlockFromTask(taskId) {
+// v354(§A): opts.plannedStartAtを渡すと、その開始時刻+opts.estimateMin(既定60分)から
+// plannedEndAtを算出する(fillGapPlace/fillGapCreateからの呼び出し用)。opts省略時は従来どおり
+// defaultPlannedTimes()(v29の現在時刻切り捨て枠)を使い、挙動は無改変。
+function plannedEndFromStart(plannedStartAt, estimateMin) {
+  const startMin = minutesOf(plannedStartAt);
+  const durMin = Number.isFinite(estimateMin) && estimateMin > 0 ? estimateMin : 60;
+  const endMin = Math.min(startMin + durMin, 23 * 60 + 59);
+  return `${plannedStartAt.slice(0, 10)}T${pad2(Math.floor(endMin / 60))}:${pad2(endMin % 60)}:00`;
+}
+
+function createBlockFromTask(taskId, opts = {}) {
   const task = state.tasks.find((item) => item.id === taskId);
-  if (!task) return;
-  // v29: 予定の開始/終了日時をデフォルトで入れる
-  const { plannedStartAt, plannedEndAt } = defaultPlannedTimes();
-  state.blocks.push(makeBlock({
+  if (!task) return null;
+  let plannedStartAt = opts.plannedStartAt;
+  let plannedEndAt = opts.plannedEndAt;
+  if (plannedStartAt) {
+    if (!plannedEndAt) plannedEndAt = plannedEndFromStart(plannedStartAt, opts.estimateMin);
+  } else {
+    ({ plannedStartAt, plannedEndAt } = defaultPlannedTimes());
+  }
+  const block = makeBlock({
     taskId,
     date: state.selectedDate,
     title: task.title,
     category: task.category || projectName(task.projectId),
     plannedStartAt,
-    plannedEndAt
+    plannedEndAt,
+    estimateMin: opts.estimateMin ?? null
+  });
+  state.blocks.push(block);
+  if (!opts.silent) saveAndRender("今日のBlockに追加しました");
+  return block;
+}
+
+// ============================================================
+// v354(§A/§B): 「空き時間を補う」シート。タイムライン/TIME COMBのそれぞれ独自の
+// Block作成導線を、既存createBlockFromTask()へ委譲する1本の下書き置き場へ寄せる。
+// 空き時間算出(computeFreeGaps/actualGaps)・Blockロジック・タイムライン配置計算には
+// 一切触れない(やらないこと。actualGapsはtimeline.jsからの公開importで再利用するだけで
+// 中身は無改変)。v354a時点ではタイムラインの空き時間タップ(新規オーバーレイ描画)・
+// PC左列差し替えのみv354bへ持ち越す(v354a→v354修正でH-1/H-2対応として「新しい Block を
+// 作る」パネルはこのシートに戻した。Project select・ルーティン雛形プリフィルはv354bのまま)。
+// ============================================================
+function hhmmFromMinute(min) {
+  return `${pad2(Math.floor(min / 60))}:${pad2(min % 60)}`;
+}
+
+function minuteFromHHMM(hhmm) {
+  const m = /^(\d{1,2}):(\d{2})/.exec(String(hhmm || ""));
+  return m ? Number(m[1]) * 60 + Number(m[2]) : 0;
+}
+
+// v331のrenderOpenTasksと同じ母集団(未完了・その他Task除外・Wish除外・期限<=+7日 or なし)。
+function fillGapTaskPool(date) {
+  const limit = addDays(date, 7);
+  const isWishTask = (task) => Boolean(state.projects.find((p) => p.id === task.projectId)?.kind === "wish");
+  return state.tasks.filter((task) => !task.deleted && !isTaskDead(task) && task.kind !== "other" && !isWishTask(task))
+    .filter((task) => { const due = effectiveDueDate(task); return !due || due <= limit; });
+}
+
+// 見積の並べ替え/収まる判定用の内部既定値(未設定は30分とみなす)。表示にはこの値を
+// そのまま出さず、fillGapEstimateLabel()で「見積なし」に分けて表示する(M-4対応)。
+function fillGapTaskEstimate(task) {
+  return Number.isFinite(task.estimateMin) && task.estimateMin > 0 ? task.estimateMin : 30;
+}
+
+function fillGapHasEstimate(task) {
+  return Number.isFinite(task.estimateMin) && task.estimateMin > 0;
+}
+
+function fillGapEstimateLabel(task) {
+  return fillGapHasEstimate(task) ? `見積 ${fillGapTaskEstimate(task)}分` : "見積なし";
+}
+
+function fillGapDueCompare(a, b) {
+  const da = effectiveDueDate(a), db = effectiveDueDate(b);
+  if (da === db) return a.title.localeCompare(b.title, "ja");
+  return !da ? 1 : (!db ? -1 : da.localeCompare(db));
+}
+
+// M-4対応: 見積未設定のタスクは、期限がどれだけ近くても「収まる」側の末尾へ回す
+// (見積が無いことを事実として扱い、期限順の看做し30分と同列には並べない)。
+function fillGapSortCompare(a, b) {
+  const ua = fillGapHasEstimate(a) ? 0 : 1, ub = fillGapHasEstimate(b) ? 0 : 1;
+  if (ua !== ub) return ua - ub;
+  return fillGapDueCompare(a, b);
+}
+
+function openFillGapSheet(start, end, date) {
+  state.modal = { type: "fillGap", start, end, date: date || state.selectedDate };
+  renderModal(buildFillGapModal(state.modal));
+}
+
+function fillGapRowHTML(task, split) {
+  const due = effectiveDueDate(task);
+  const metaParts = [escapeHTML(projectName(task.projectId)), due ? `期限 ${mdFmt(due)}${due < todayISO() ? " 超過" : ""}` : "期限なし", fillGapEstimateLabel(task)];
+  return `
+    <div class="item fill-gap-row">
+      <div class="exec-row-copy">
+        <strong>${escapeHTML(task.title)}</strong>
+        <div class="exec-row-meta">${metaParts.join(" ・ ")}</div>
+      </div>
+      <button class="btn ${split ? "" : "primary"}" data-action="fill-gap-place" data-id="${task.id}" data-split="${split ? "1" : "0"}">${split ? "分割して置く" : "ここに置く"}</button>
+    </div>`;
+}
+
+// H-1/H-2対応: 「新しいBlockを作る」最小パネル(Block名+長さ+カテゴリ+作る)。
+// Project select・ルーティン雛形プリフィルはv354bへ持ち越す(このパネル自体は
+// タイムライン描画・PC CSS差し替えに触れないため持ち越す理由が無いと判断=独立レビュー指摘反映)。
+function fillGapNewBlockHTML(durMin) {
+  const categoryOptionsHTML = `${getCategoryNames().map((n) => `<option value="${escapeHTML(n)}">${escapeHTML(n)}</option>`).join("")}<option value="">(カテゴリなし)</option>`;
+  const lengthOptions = [15, 25, 30, 45, 60].map((m) => `<option value="${m}">${m}分</option>`).join("");
+  return `
+    <div class="fill-gap-new">
+      <div class="panel-label">新しい Block を作る</div>
+      <div class="form-strip">
+        <input id="fillGapTitle" class="input" placeholder="Block名">
+        <select id="fillGapLength" class="select">${lengthOptions}<option value="full" selected>空き時間まで(${durMin}分)</option></select>
+        <select id="fillGapCategory" class="select">${categoryOptionsHTML}</select>
+        <button class="btn primary" data-action="fill-gap-create">作る</button>
+      </div>
+    </div>`;
+}
+
+function buildFillGapModal(modal) {
+  const { start, end, date } = modal;
+  const durMin = Math.max(0, minuteFromHHMM(end) - minuteFromHHMM(start));
+  const pool = fillGapTaskPool(date);
+  const fits = pool.filter((t) => fillGapTaskEstimate(t) <= durMin).sort(fillGapSortCompare);
+  const overflow = pool.filter((t) => fillGapTaskEstimate(t) > durMin).sort(fillGapDueCompare);
+  const listHTML = pool.length
+    ? `${fits.map((t) => fillGapRowHTML(t, false)).join("")}${overflow.map((t) => fillGapRowHTML(t, true)).join("")}`
+    : `<div class="muted">候補タスクがありません。</div>`;
+  const title = `空き時間を補う <span>${escapeHTML(start)} – ${escapeHTML(end)} ・ ${durMin}分 ・ 置くと ${escapeHTML(start)} 開始の Block(計画)になる</span>`;
+  return modalHeaderHTML(title, "fill-gap-sheet") + `
+      <div class="fill-gap-list">${listHTML}</div>
+      ${fillGapNewBlockHTML(durMin)}
+      <div class="muted fill-gap-hint">TIME COMB の「補う」/ ＋Block から同じシートが開きます。</div>
+    </div></div>`;
+}
+
+// M-2復元: v186レビューM-2(旧createBlockForActualGap)の重複防止を踏襲する。
+// 同じ日付・同じ計画開始時刻に同じTaskのBlockが既にあれば新規作成せず、その編集モーダルを開く
+// (2回押しても2件できない=冪等)。
+function fillGapPlace(taskId, split) {
+  const modal = state.modal;
+  if (!modal || modal.type !== "fillGap") return;
+  const { start, end, date } = modal;
+  const durMin = Math.max(0, minuteFromHHMM(end) - minuteFromHHMM(start));
+  const task = state.tasks.find((t) => t.id === taskId);
+  if (!task) return;
+  const plannedStartAt = `${date}T${start}:00`;
+  const existing = state.blocks.find((b) => !b.deleted && b.taskId === taskId && b.date === date && b.plannedStartAt === plannedStartAt);
+  if (existing) { openBlockEditor(existing.id); return; }
+  const estimateMin = split ? durMin : fillGapTaskEstimate(task);
+  createBlockFromTask(taskId, { plannedStartAt, estimateMin, silent: true });
+  closeModal();
+  saveAndRender(`${start} に置きました`);
+}
+
+// H-1/H-2対応: シート内「新しいBlockを作る」。既存addBlock()と同様「その他」Task紐づけ+
+// makeBlock()に委譲するだけで、開始時刻=空き時間の頭・長さ=選択値(既定は空き時間まで)を渡す。
+function fillGapCreate() {
+  const modal = state.modal;
+  if (!modal || modal.type !== "fillGap") return;
+  const { start, end, date } = modal;
+  const durMin = Math.max(0, minuteFromHHMM(end) - minuteFromHHMM(start));
+  const title = document.querySelector("#fillGapTitle")?.value.trim();
+  if (!title) return showToast("Block名を入力してください");
+  const lengthVal = document.querySelector("#fillGapLength")?.value || "full";
+  const estimateMin = lengthVal === "full" ? durMin : Number(lengthVal);
+  const category = document.querySelector("#fillGapCategory")?.value || "";
+  const plannedStartAt = `${date}T${start}:00`;
+  const otherTask = getOtherTask();
+  state.blocks.push(makeBlock({
+    date,
+    title,
+    category,
+    taskId: otherTask ? otherTask.id : "",
+    plannedStartAt,
+    plannedEndAt: plannedEndFromStart(plannedStartAt, estimateMin),
+    estimateMin
   }));
-  saveAndRender("今日のBlockに追加しました");
+  closeModal();
+  saveAndRender(`${start} に置きました`);
+}
+
+// v354修正(M-2対応): 実行ヘッダ「＋Block」も、TIME COMBと同じ「実績間の空き時間」定義
+// (actualGaps)を使う。従来のcomputeFreeGaps(計画ベース・05:00-23:00の広い既定窓)のままだと
+// 実績のみの日に780分のような事実に反する枠でシートが開き、「分割して置く」判定も無効化
+// されていたため揃えた(computeFreeGaps自体は他の呼び出し元があるため変更しない)。
+// 「いま」以降の最初の空き時間、無ければ現在時刻の直後30分。
+function nextFillGapWindow(date) {
+  const nowMin = date === todayISO() ? (new Date().getHours() * 60 + new Date().getMinutes()) : 0;
+  const gaps = actualGaps(blocksForDate(date)).filter(([, gapEnd]) => gapEnd > nowMin);
+  if (gaps.length) return [Math.max(gaps[0][0], nowMin), gaps[0][1]];
+  const fallbackStart = Math.min(nowMin, 23 * 60 + 29);
+  return [fallbackStart, Math.min(fallbackStart + 30, 23 * 60 + 59)];
+}
+
+function execFillGapAddButtonHTML() {
+  const date = state.selectedDate;
+  const [s, e] = nextFillGapWindow(date);
+  return `<button class="btn primary" data-action="fill-gap-open" data-start="${hhmmFromMinute(s)}" data-end="${hhmmFromMinute(e)}" data-date="${date}">＋ Block</button>`;
 }
 
 // v28: 「その他」Project 直下の受け皿 Task を取得
@@ -13892,6 +14087,14 @@ document.addEventListener("keydown", (event) => {
     if (_imeComposing || event.isComposing) return;
     event.preventDefault();
     addBlock();
+    return;
+  }
+  // v354修正: 「空き時間を補う」シートの「新しいBlockを作る」欄も#blockTitleと同じ
+  // Enter確定にする(SKILL.mdの新規data-action/入力欄の慣行に合わせる)。
+  if (event.key === "Enter" && event.target?.id === "fillGapTitle") {
+    if (_imeComposing || event.isComposing) return;
+    event.preventDefault();
+    fillGapCreate();
     return;
   }
   // v294: 「書く瞑想」チップ入力欄でのEnter追加(km-chip-addボタンと同じ入口を共有する)。

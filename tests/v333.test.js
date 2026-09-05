@@ -179,7 +179,12 @@ async function seed(page, values) {
     check("計画モードで見込み終了が出る", (await page.textContent("#projected-end")).includes("見込み終了"));
     check("計画モードで余白が出る", (await page.textContent(".exec-header-line")).includes("余白"));
     check("計画モードでバッファ帯(buffer-meter)が出る", await page.locator(".buffer-meter").count() === 1);
-    check("計画モードで＋Block(details)が出る", await page.locator(".exec-add #blockTitle").count() === 1);
+    // v354: exec-header-actionsの＋Blockはdetails+#blockTitleの手動追加フォームから、
+    // 「空き時間を補う」シートを開く単一ボタン(fill-gap-open)へ置き換えた
+    // (旧tasksビュー側のexecHeaderHTML/execBlockAddHTML自体は無改変=下のtoday-core.test.js
+    // [30]系がそちらを引き続き検証する)。
+    check("計画モードのヘッダに「＋Block」ボタン(fill-gap-open)が出る",
+      await page.locator('.exec-header-actions [data-action="fill-gap-open"]').count() === 1);
 
     check("今日へ(繰越パネル)が出る", await page.locator('[data-action="carry-over"][data-id="b-carry"]').count() === 1);
     await page.click('[data-action="carry-over"][data-id="b-carry"]');
@@ -206,13 +211,15 @@ async function seed(page, values) {
       await page.waitForSelector('[data-action="body-scan-discard"]', { state: "detached" });
     }
 
-    const blocksBeforeAdd = await page.evaluate(() => JSON.parse(localStorage.getItem("taskchute-journal-pwa-state-v1")).blocks.length);
-    await page.click(".exec-add summary");
-    await page.fill("#blockTitle", "v333手動追加Block");
-    await page.locator("#blockTitle").press("Enter");
-    await page.waitForFunction((before) => JSON.parse(localStorage.getItem("taskchute-journal-pwa-state-v1")).blocks.length > before, blocksBeforeAdd);
-    check("＋Block(details開いて#blockTitle+Enter)でBlockが増える",
-      await page.evaluate(() => JSON.parse(localStorage.getItem("taskchute-journal-pwa-state-v1")).blocks.some((b) => b.title === "v333手動追加Block")));
+    // v354: ＋Blockは「空き時間を補う」シートを開くボタンになった(tests/v354.test.jsが
+    // シート自体の詳細=タスクから選ぶ/分割して置く/見出し内容を検証する)。ここでは
+    // execヘッダから同シートが開くことだけ従来位置(exec-header-actions)で確認する。
+    await page.click('.exec-header-actions [data-action="fill-gap-open"]');
+    await page.waitForSelector(".fill-gap-sheet");
+    check("＋Blockクリックで「空き時間を補う」シートが開く",
+      (await page.textContent(".fill-gap-sheet .modal-title")).includes("空き時間を補う"));
+    await page.click('.fill-gap-sheet [data-action="modal-close"]');
+    await page.waitForSelector(".fill-gap-sheet", { state: "detached" });
 
     check("計画モード末尾に「実績を見る ›」フッタが出る",
       await page.locator('.exec-switch-footer [data-action="exec-mode-toggle"][data-mode="actual"]').count() === 1);

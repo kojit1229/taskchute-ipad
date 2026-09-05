@@ -154,7 +154,8 @@ const GOLDEN_CLICK_ACTIONS = [
   "plan-step-request", "plan-step-approve", "plan-step-discard",  // v196: 実行計画の叩き台をAIに依頼
   "ai-step-confirm-send", "ai-step-confirm-later",  // v198: 完了トリガー→引き継ぎシート
   "timeline-new-block", "timeline-mode", "complete-block-with-actual",
-  "drift-postpone", "time-comb-fill",  // v186: F2 DRIFT(明日へ送る)+TIME COMB(隙間補完)の意図的追加
+  "drift-postpone",  // v186: F2 DRIFT(明日へ送る)の意図的追加
+  "fill-gap-open", "fill-gap-place", "fill-gap-create",  // v354: 「空き時間を補う」シート(旧time-comb-fillを統合・置換)
 
   "add-category", "delete-category",
   "toggle-vision-direct-category", "vision-open-direct-settings",  // v189: F7 直結カテゴリ選択+誘導(設定ビュー)
@@ -207,8 +208,10 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
   // v181: src/features/timeline.js(configureTimeline)。ハンドラ実体(setTimelineMode)が
   // このファイルに既に存在するため、timeline系の中で唯一この動的実測方式で検証する。
   "timeline-mode",
-  // v186: F2でtimeline.jsのregisterActionsへ意図的に追加(DRIFT送り+TIME COMB隙間補完)
-  "drift-postpone", "time-comb-fill",
+  // v186: F2でtimeline.jsのregisterActionsへ意図的に追加(DRIFT送り)。
+  // v354: 同居していたtime-comb-fillはfill-gap-open(app.js側の直接registerActions)へ
+  // 統合・置換したためここから削除した(下のAPP_JS_REGISTERED_ACTIONS側で検証する)。
+  "drift-postpone",
   // v241/v313: src/features/today.jsの端末ローカル表示切替
   "focus-toggle-side", "focus-toggle-journal", "focus-toggle-life", "focus-mode",
   // v262: src/features/track-ui.jsの12WY進捗トースト
@@ -306,6 +309,9 @@ const APP_JS_REGISTERED_ACTIONS = [
   "open-search", "search-jump",
   // --- v180: Block作成(WBSからの「今日へ追加」) ---
   "task-today",
+  // --- v354: 「空き時間を補う」シート(TIME COMB「補う」+実行ヘッダ「＋Block」から開く。
+  //     旧time-comb-fillを統合・置換) ---
+  "fill-gap-open", "fill-gap-place", "fill-gap-create",
   // --- v180: Block/Now(6。now-mode-open/now-mode-close/now-conveyor-skipはv87でUI導線を
   //     撤去して以来到達不能化、v292孤児掃除で削除。now-conveyor-completeはsrc/features/
   //     today-tower.js(TOWER UI)から現役で発行されるため残置=低優先度棚卸しK裁定2026-08-29) ---

@@ -926,6 +926,11 @@ h3 {
 .exec-add summary::-webkit-details-marker { display: none; }
 .exec-add-summary { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 0 14px; border: 1px solid #6b5322; border-radius: 6px; color: var(--tower-amber, var(--orange-text)); background: transparent; }
 .exec-add-body { margin-top: 8px; }
+/* v354: 「空き時間を補う」シート(TIME COMB「補う」/実行ヘッダ「＋Block」から開く)。 */
+.fill-gap-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.fill-gap-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+.fill-gap-new { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+.fill-gap-hint { font-size: 11px; margin-top: 10px; }
 .exec-task-row .exec-row-meta-text { white-space: normal; }
 .exec-task-overdue { color: var(--tower-amber, var(--orange-text)); opacity: .9; }
 .exec-task-added { color: var(--green-text); font-weight: 600; }

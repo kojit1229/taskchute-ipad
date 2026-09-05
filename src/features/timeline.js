@@ -74,8 +74,10 @@ function configureTimeline(deps) {
   // app.js自身が呼ぶregisterActions({...})(v174方式、v180/v181で分割移行)へ移行した。
   registerActions({
     "timeline-mode": ({ target }) => setTimelineMode(target.dataset.mode),
-    "drift-postpone": ({ id }) => postponeBlockToNextDay(id),
-    "time-comb-fill": ({ target }) => createBlockForActualGap(target)
+    "drift-postpone": ({ id }) => postponeBlockToNextDay(id)
+    // v354: TIME COMB「補う」はfill-gap-open(app.js側でグローバル登録)へ統一した
+    // (旧time-comb-fill/createBlockForActualGapは廃止。「空き時間を補う」シートを開くだけで、
+    // タイムライン配置計算・空き時間算出には触れていない)。
   });
 }
 
@@ -281,50 +283,20 @@ function actualGaps(blocks) {
     .filter(([start, end]) => start < 1440 && end - start >= 15);
 }
 
+// v354: 「補う」ボタンはfill-gap-open(app.js側でグローバル登録、「空き時間を補う」シートを開く)
+// へ統一した。data-start/data-endはstate.modalの契約に合わせHH:MM文字列で持たせる
+// (旧time-comb-fill/createBlockForActualGapは廃止。gaps自体の算出=actualGapsは無改変)。
 function timeCombHTML() {
   const gaps = actualGaps(blocksForDate(state.selectedDate));
   return `<section class="panel time-comb">
     <div class="panel-label">TIME COMB</div>
     <div class="muted time-comb-note">実績記録どうしの15分以上の隙間を表示します。</div>
     <div class="time-comb-list">${gaps.length ? gaps.map(([start, end]) => `
-      <button type="button" class="time-comb-gap" data-action="time-comb-fill" data-start="${start}" data-end="${end}">
+      <button type="button" class="time-comb-gap" data-action="fill-gap-open" data-start="${pad2(Math.floor(start / 60))}:${pad2(start % 60)}" data-end="${pad2(Math.floor(end / 60))}:${pad2(end % 60)}" data-date="${state.selectedDate}">
         <span>${pad2(Math.floor(start / 60))}:${pad2(start % 60)}–${pad2(Math.floor(end / 60))}:${pad2(end % 60)}</span>
         <strong>${end - start}分を補う</strong>
       </button>`).join("") : `<span class="muted">補う隙間はありません。</span>`}</div>
   </section>`;
-}
-
-function createBlockForActualGap(target) {
-  const start = Number(target.dataset.start);
-  const end = Number(target.dataset.end);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return;
-  const date = state.selectedDate;
-  const toDateTime = (minute) => `${date}T${pad2(Math.floor(minute / 60))}:${pad2(minute % 60)}:00`;
-  const plannedStartAt = toDateTime(start);
-  const plannedEndAt = toDateTime(end);
-  // v186レビュー(M-2): 同じ隙間時間帯にplanned一致の既存Blockが既にあれば新規作成せず、
-  // それをそのまま開く(連打・二重タップでの重複Block生成を防ぐ冪等化)。
-  const existing = state.blocks.find((b) =>
-    !b.deleted && b.date === date && b.plannedStartAt === plannedStartAt && b.plannedEndAt === plannedEndAt);
-  if (existing) {
-    render();
-    openBlockEditor(existing.id);
-    return;
-  }
-  const block = makeBlock({
-    date,
-    plannedStartAt,
-    plannedEndAt,
-    taskId: getOtherTask()?.id
-  });
-  state.blocks.push(block);
-  // v186レビュー: 生成した時点で永続化する(addBlockと同じ契約。保存しないと
-  // モーダルを保存せず閉じた場合や再読込でBlockが消える)
-  saveState();
-  // v186レビュー(M-2): 保存直後にrender()を呼び、モーダル背後のTIME COMB/タイムラインを
-  // 新Block反映済みの状態にしてからエディタを開く。
-  render();
-  openBlockEditor(block.id);
 }
 
 function setTimelineMode(mode) {
@@ -594,5 +566,8 @@ function renderEnergyGraph(allBlocks, rowHeight, startHour, endHour, compact = f
 export {
   configureTimeline,
   renderTimelineRail, renderTimelineView, setTimelineMode, renderTimeline,
-  renderTimelineCard, renderEnergyGraph
+  renderTimelineCard, renderEnergyGraph,
+  // v354修正: 実行ヘッダ「＋Block」(nextFillGapWindow)がTIME COMBと同じ「実績間の空き時間」
+  // 定義を使うための公開(算出ロジック自体=actualGapsの中身は無改変。exportを増やすだけ)。
+  actualGaps
 };
