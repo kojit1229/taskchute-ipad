@@ -70,6 +70,9 @@ function functionBlock(source, name, nextName) {
   const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
   const page = await ctx.newPage();
   page.on("pageerror", (error) => { failures++; console.log("  ❌ pageerror:", error.message); });
+  // unit15追従: 手動読込はローカルに未push差分があると確認ダイアログ(window.confirm)を出す。
+  // Playwrightの既定はdismiss(=中止)なので、実ユーザーと同じく「読み込む」を選ぶ。
+  page.on("dialog", (dialog) => dialog.accept());
 
   const api = { mode: "not-found", requests: [], pullGate: null };
   function remoteContentsBody() {
@@ -89,6 +92,12 @@ function functionBlock(source, name, nextName) {
     api.requests.push({ method: request.method(), path: decodedPath, mode: api.mode });
     if (request.method() === "PUT" && api.mode === "push-success") {
       return route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ content: { sha: "sha-pushed-v303" } }) });
+    }
+    // unit15追従: 確認OK後の読込前スナップショット(backups/app-state-*-preload-*.json への PUT)は
+    // fail-close(失敗なら読込中止)なので、pull成功モードでは成功させる。
+    if (request.method() === "PUT" && decodedPath.includes("/contents/taskchute/backups/")
+      && (api.mode === "pull-success" || api.mode === "pull-pending")) {
+      return route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ content: { sha: "sha-preload-v303" } }) });
     }
     if (decodedPath.endsWith("/contents/taskchute/app-state.json")) {
       if (request.method() === "GET" && api.mode === "pull-success") {

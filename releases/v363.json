@@ -41,5 +41,9 @@
   ],
   "verification": [
     "node tests/run-all.js v363(旧v367) iron-log-core iron-log-e2e today-core action-registry-core v313 を worktree で2回全件成功。実行コード107行。"
+  ],
+  "reviewFocus": [
+    "達成条件(今日≥目標)の fixture でも色・バッジ・ゲージが出ないこと。",
+    "記録・削除ロジックが不変で、削除×が 44px であること。"
   ]
 }
