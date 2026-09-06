@@ -32,7 +32,9 @@ function loadState(normalizeState, seedState) {
   if (!raw) return normalizeState(seedState());
   try {
     return normalizeState({ ...seedState(), ...JSON.parse(raw) });
-  } catch {
+  } catch (error) {
+    // 型不正は元rawと既存の退避を保持し、書込前に起動を止める。
+    if (error?.name === "StateContainerError") throw error;
     // v37: 壊れたデータを黙って捨てない。復旧用に退避してから初期状態で起動する。
     //      (そのまま自動保存が走ると、壊れる前のGitHub側データまで初期状態で上書きしかねない)
     try { localStorage.setItem(`${STORAGE_KEY}-corrupt-backup`, raw); } catch { /* 退避失敗はやむなし */ }
@@ -68,4 +70,10 @@ function persistLocalNoSchedule() {
   }
 }
 
-export { loadState, persistLocalNoSchedule, _lastSaveError };
+function readStoredStateForFeedback() { return localStorage.getItem(STORAGE_KEY); }
+function restoreStoredStateForFeedback(raw) {
+  if (raw === null) localStorage.removeItem(STORAGE_KEY);
+  else if (typeof raw === "string") localStorage.setItem(STORAGE_KEY, raw);
+  else throw Error("invalid_storage_snapshot");
+}
+export { loadState, persistLocalNoSchedule, _lastSaveError, readStoredStateForFeedback, restoreStoredStateForFeedback };

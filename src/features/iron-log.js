@@ -19,6 +19,7 @@
 
 // ---- 依存注入(configureIronLog) ----
 let getState, escapeHTML, todayISO, renderHeader, saveAndRender, registerActions;
+let isLocalSaveSuccessful = () => false;
 
 const DEFAULT_TARGET_KG = 2000;
 const DEFAULT_MANUAL_BASE_KG = 0;
@@ -27,6 +28,8 @@ const DEFAULT_EXERCISES = ["ベンチプレス", "スクワット", "デッド�
 
 function configureIronLog(deps) {
   ({ getState, escapeHTML, todayISO, renderHeader, saveAndRender, registerActions } = deps);
+  isLocalSaveSuccessful = typeof deps.isLocalSaveSuccessful === "function" ? deps.isLocalSaveSuccessful : () => false;
+  ironSetDraft = null;
   registerActions({
     "iron-add-set": () => addSetFromForm(),
     "iron-delete-set": (ctx) => deleteSet(ctx),
@@ -279,6 +282,37 @@ function runIronImport(state) {
   return state;
 }
 
+// vNext: 表示専用の下書き。保存stateへ混入せず、日付境界を越えても入力を保持する。
+let ironSetDraft = null;
+function captureIronSetDraft({ preserveDate = false } = {}) {
+  const exercise = document.querySelector("#ironFormExercise");
+  const weight = document.querySelector("#ironFormWeight");
+  const reps = document.querySelector("#ironFormReps");
+  if (!exercise || !weight || !reps) return;
+  ironSetDraft = { date: preserveDate && ironSetDraft ? ironSetDraft.date : todayISO(), exercise: exercise.value, weight: weight.value,
+    reps: reps.value, weightPrefilled: weight.dataset?.prefilled === "1",
+    repsPrefilled: reps.dataset?.prefilled === "1", errors: {} };
+}
+function validateIronSet(exercise, weightText, repsText) {
+  const errors = {};
+  const weight = Number(weightText), reps = Number(repsText);
+  if (!String(exercise || "").trim()) errors.exercise = "種目を選択してください";
+  if (!String(weightText ?? "").trim()) errors.weight = "重量を入力してください";
+  else if (!Number.isFinite(weight) || weight <= 0) errors.weight = "0より大きい有限の重量を入力してください";
+  if (!String(repsText ?? "").trim()) errors.reps = "回数を入力してください";
+  else if (!Number.isSafeInteger(reps) || reps <= 0) errors.reps = "回数は1以上の整数で入力してください";
+  if (!errors.weight && !errors.reps && !Number.isFinite(weight * reps)) errors.weight = "総重量が大きすぎます";
+  return { errors, weight, reps, valid: Object.keys(errors).length === 0 };
+}
+function showIronSetErrors(errors) {
+  for (const [key, suffix] of [["exercise", "Exercise"], ["weight", "Weight"], ["reps", "Reps"]]) {
+    const input = document.querySelector(`#ironForm${suffix}`);
+    const message = document.querySelector(`#ironError${suffix}`);
+    input?.setAttribute?.("aria-invalid", errors[key] ? "true" : "false");
+    if (message) message.textContent = errors[key] || "";
+  }
+}
+
 // ---- data-actionハンドラ(configureIronLog経由。DOM/getStateに依存) ----
 
 function prefillSetInputs(ctx) {
@@ -295,16 +329,23 @@ function prefillSetInputs(ctx) {
   };
   replacePrefill(weightInput, previous?.weight);
   replacePrefill(repsInput, previous?.reps);
+  captureIronSetDraft();
+  showIronSetErrors({});
 }
 
 function addSetFromForm() {
   const state = getState();
   const exercise = document.querySelector("#ironFormExercise")?.value || "";
-  const weight = Number(document.querySelector("#ironFormWeight")?.value);
-  const reps = Number(document.querySelector("#ironFormReps")?.value);
-  if (!exercise || !weight || !reps) return;
+  captureIronSetDraft({ preserveDate: true });
+  const result = validateIronSet(exercise, document.querySelector("#ironFormWeight")?.value,
+    document.querySelector("#ironFormReps")?.value);
+  if (ironSetDraft) ironSetDraft.errors = result.errors;
+  showIronSetErrors(result.errors);
+  if (!result.valid) return;
+  const { weight, reps } = result;
 
   const iso = todayISO();
+  if (ironSetDraft) ironSetDraft.date = iso;
   const timestamp = `${iso}T${nowTimeString()}`;
   const previousBest = bestWeightForExercise(state, exercise, timestamp);
   const isPersonalBest = previousBest !== null && weight > previousBest;
@@ -318,6 +359,17 @@ function addSetFromForm() {
   state.condition.logs[iso].gym = state.condition.logs[iso].gym || [];
   state.condition.logs[iso].gym.push(set);
   saveAndRender(isPersonalBest ? "セットを追加しました(自己ベスト)" : "セットを追加しました");
+  // A confirmed stored set keeps its values, but no longer owns a manual edit.
+  if (isLocalSaveSuccessful() === true && ironSetDraft?.exercise === exercise
+      && Number(ironSetDraft.weight) === weight && Number(ironSetDraft.reps) === reps) {
+    for (const [suffix, value, flag] of [["Weight", ironSetDraft.weight, "weightPrefilled"], ["Reps", ironSetDraft.reps, "repsPrefilled"]]) {
+      const input = document.querySelector(`#ironForm${suffix}`);
+      if (input?.value === value) {
+        input.dataset.prefilled = "1";
+        ironSetDraft[flag] = true;
+      }
+    }
+  }
 }
 
 // ctx.id には当日gym[]配列内でのindex(文字列)を渡す想定。
@@ -401,8 +453,14 @@ function renderIronLog() {
   const settings = state?.settings || {};
   const target = Number(settings.ironDailyTarget) || DEFAULT_TARGET_KG;
   const exercises = exerciseList(state);
-  const selectedExercise = exercises[0] || "";
+  const selectedExercise = ironSetDraft?.exercise ?? exercises[0] ?? "";
   const previousSet = lastSetForExercise(state, selectedExercise, iso);
+  const form = ironSetDraft || { exercise: selectedExercise, weight: previousSet?.weight ?? "",
+    reps: previousSet?.reps ?? "", weightPrefilled: previousSet?.weight != null,
+    repsPrefilled: previousSet?.reps != null, errors: {} };
+  const optionList = exercises.includes(selectedExercise) || !selectedExercise
+    ? exercises : [selectedExercise, ...exercises];
+  const fieldError = (key, suffix) => `<span id="ironError${suffix}" role="status" style="display:block">${escapeHTML(form.errors[key] || "")}</span>`;
 
   const rawList = Array.isArray(state?.condition?.logs?.[iso]?.gym) ? state.condition.logs[iso].gym : [];
   const activeList = rawList
@@ -439,6 +497,7 @@ function renderIronLog() {
     ? `<div class="iron-linked">
          <span class="iron-linked-status">● 実行中</span>
          <span class="iron-linked-name">${escapeHTML(linked.block.title || "")}</span>
+         ${linked.block.id ? `<button type="button" class="btn" style="min-height:44px" data-action="edit-block" data-id="${escapeHTML(linked.block.id)}">連動中のBlockを開く</button>` : ""}
          <span class="iron-linked-time">${hhmmFromDateTimeString(linked.block.actualStartAt)?.h != null
             ? `${String(hhmmFromDateTimeString(linked.block.actualStartAt).h).padStart(2, "0")}:${String(hhmmFromDateTimeString(linked.block.actualStartAt).min).padStart(2, "0")} 開始`
             : ""} — 実行中 ${linked.elapsedMinutes != null
@@ -484,16 +543,20 @@ function renderIronLog() {
 
       <section class="iron-box">
         <h2>LOAD SET <span>セットを追加</span></h2>
+        ${form.date && form.date !== iso ? `<p class="iron-draft-date" role="status">${escapeHTML(form.date)}からの入力です。追加すると今日（${escapeHTML(iso)}）に記録します。</p>` : ""}
         <div class="iron-form-labels">
           <span>種目</span><span>重量 kg</span><span>回数</span><span></span>
         </div>
         <div class="iron-form">
-          <select id="ironFormExercise" data-action="iron-exercise-select">
-            ${exercises.map((ex) => `<option value="${escapeHTML(ex)}">${escapeHTML(ex)}</option>`).join("")}
+          <select id="ironFormExercise" aria-describedby="ironErrorExercise" aria-invalid="${Boolean(form.errors.exercise)}" data-action="iron-exercise-select">
+            ${optionList.map((ex) => `<option value="${escapeHTML(ex)}"${ex === selectedExercise ? " selected" : ""}>${escapeHTML(ex)}</option>`).join("")}
           </select>
-          <input id="ironFormWeight" type="number" value="${escapeHTML(previousSet?.weight ?? "")}"${previousSet?.weight != null && previousSet.weight !== "" ? ' data-prefilled="1"' : ""} min="0" step="2.5">
-          <input id="ironFormReps" type="number" value="${escapeHTML(previousSet?.reps ?? "")}"${previousSet?.reps != null && previousSet.reps !== "" ? ' data-prefilled="1"' : ""} min="1" step="1">
+          <input id="ironFormWeight" aria-describedby="ironErrorWeight" aria-invalid="${Boolean(form.errors.weight)}" type="number" value="${escapeHTML(form.weight)}"${form.weightPrefilled ? ' data-prefilled="1"' : ""} min="0" step="2.5">
+          <input id="ironFormReps" aria-describedby="ironErrorReps" aria-invalid="${Boolean(form.errors.reps)}" type="number" value="${escapeHTML(form.reps)}"${form.repsPrefilled ? ' data-prefilled="1"' : ""} min="1" step="1">
           <button type="button" data-action="iron-add-set">+ 追加</button>
+        </div>
+        <div class="iron-form-errors" aria-live="polite">
+          ${fieldError("exercise", "Exercise")}${fieldError("weight", "Weight")}${fieldError("reps", "Reps")}
         </div>
       </section>
 
@@ -518,6 +581,8 @@ function renderIronLog() {
 }
 
 export {
+  captureIronSetDraft,
+  validateIronSet,
   configureIronLog,
   renderIronLog,
   gymSetsForDate,

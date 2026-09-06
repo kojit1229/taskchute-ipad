@@ -34,7 +34,7 @@
 // 1/22以下(基底が偶然一致した場合のみ)に下がり、それでも衝突すればstartServer()の
 // EADDRINUSEリトライ(v137で追加済み)で自己回復する。単一run内の衝突は従来どおり
 // (同じbaseを共有する限り)数学的にゼロのまま。
-const { spawn, spawnSync } = require("child_process");
+const { spawn } = require("child_process");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
@@ -83,7 +83,7 @@ const removedSuites = [...suiteMetadata.keys()].filter((file) => !all.includes(f
 const staleSuites = all.filter((file) => {
   if (!suiteMetadata.has(file)) return false;
   const currentHash = crypto.createHash("sha256")
-    .update(fs.readFileSync(path.join(__dirname, file), "utf8"))
+    .update(fs.readFileSync(path.join(__dirname, file), "utf8").replace(/\r\n/g, "\n"))
     .digest("hex")
     .slice(0, 16);
   return suiteMetadata.get(file).sourceHash !== currentHash;
@@ -178,23 +178,33 @@ const SUITE_TIMEOUT_MS = 3 * 60 * 1000;
 // POSIX: spawn時にdetached:trueでプロセスグループのリーダーにしておき、負のpidを
 //        killすることでグループ全体(=孫プロセス含む)へシグナルを送る。
 // Windows: taskkill /T がプロセスツリーを辿って終了させる(detachedである必要はない)。
-function killProcessTree(pid) {
-  if (!pid) return;
+const CLEANUP_TIMEOUT_MS = 15000;
+async function killProcessTree(pid) {
+  if (!pid) return { ok: false, detail: "no pid" };
   if (process.platform === "win32") {
-    spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" });
+    return new Promise((resolve) => {
+      const killer = spawn("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore", timeout: CLEANUP_TIMEOUT_MS });
+      let settled = false;
+      const finish = result => { if (settled) return; settled = true; clearTimeout(deadline); resolve(result); };
+      const deadline = setTimeout(() => { killer.kill?.(); finish({ ok: false, detail: "taskkill completion timeout" }); }, CLEANUP_TIMEOUT_MS);
+      killer.once("error", error => finish({ ok: false, detail: error.code || "taskkill error" }));
+      killer.once("close", (code, signal) => finish({ ok: code === 0 && !signal, detail: `status ${code}, signal ${signal || "none"}` }));
+    });
   } else {
-    try { process.kill(-pid, "SIGKILL"); } catch {}
-    try { process.kill(pid, "SIGKILL"); } catch {}
+    try { process.kill(-pid, "SIGKILL"); return { ok: true, detail: "group signalled" }; }
+    catch (error) { return { ok: false, detail: error.code || "group kill failed" }; }
   }
 }
 
 const activeChildren = new Set();
+let cleanupBlocked = false;
 
 // run-all.js自体がCtrl+Cや外部のtimeoutラッパーで中断された場合も、実行中の子(と
 // そのChromium孫)を道連れにしてから終了する(残留防止)。
 ["SIGINT", "SIGTERM"].forEach((sig) => {
-  process.on(sig, () => {
-    for (const child of activeChildren) killProcessTree(child.pid);
+  process.on(sig, async () => {
+    cleanupBlocked = true;
+    await Promise.all([...activeChildren].map(child => killProcessTree(child.pid)));
     process.exit(1);
   });
 });
@@ -209,26 +219,66 @@ function runSuite(file, index, portBase) {
       env: { ...process.env, TEST_PORT_INDEX: String(index), TEST_PORT_BASE: String(portBase) }
     });
     let outputTail = "";
+    let assertionFailed = false;
     const capture = (chunk, stream) => {
-      stream.write(chunk);
-      outputTail = (outputTail + chunk.toString()).slice(-8192);
+      stream.write(timedOut ? `[${file} pid=${child.pid} cleanup] ${chunk}` : chunk);
+      const output = outputTail + chunk.toString();
+      assertionFailed ||= /AssertionError|ERR_ASSERTION/.test(output);
+      outputTail = output.slice(-8192);
     };
     child.stdout.on("data", (chunk) => capture(chunk, process.stdout));
     child.stderr.on("data", (chunk) => capture(chunk, process.stderr));
     activeChildren.add(child);
     let timedOut = false;
-    const timer = setTimeout(() => {
+    let drainTimer;
+    let killResult, killPromise;
+    let closedResult;
+    let drainExpired = false;
+    const timer = setTimeout(async () => {
       timedOut = true;
       console.log(`\n⏱ ${file} が${SUITE_TIMEOUT_MS / 1000}秒でタイムアウトしたため、プロセスツリーを強制終了します`);
-      killProcessTree(child.pid);
+      clearTimeout(drainTimer);
+      drainTimer = setTimeout(async () => { await killPromise; finish(null, null, null, true); }, CLEANUP_TIMEOUT_MS);
+      killResult = await (killPromise = killProcessTree(child.pid));
+      if (!killResult.ok) cleanupBlocked = true;
+      console.error(`[${file} pid=${child.pid}] cleanup ${killResult.detail}`);
+      if (closedResult) finish(...closedResult);
     }, SUITE_TIMEOUT_MS);
-    const finish = (status) => {
+    let finished = false;
+    const finish = (code, signal, error, drainTimedOut = drainExpired) => {
+      if (finished) return;
+      finished = true;
       clearTimeout(timer);
-      activeChildren.delete(child);
-      resolve({ status: timedOut ? 1 : status, output: outputTail });
+      clearTimeout(drainTimer);
+      const cleanupFailed = drainTimedOut || (timedOut && !killResult?.ok);
+      if (cleanupFailed) cleanupBlocked = true;
+      else activeChildren.delete(child);
+      child.stdout.removeAllListeners("data");
+      child.stderr.removeAllListeners("data");
+      const reason = timedOut ? "timeout"
+        : drainTimedOut ? `stdio drain timeout (exit: ${code}, signal: ${signal || "none"})`
+        : error ? `spawn error: ${error.code || error.message}`
+        : signal ? `signal: ${signal}` : `exit: ${code}`;
+      resolve({ status: !timedOut && !drainTimedOut && !error && !signal && code === 0 ? 0 : 1,
+        output: outputTail, reason, cleanupFailed, assertionFailed });
     };
-    child.on("exit", (code) => finish(code === 0 ? 0 : 1));
-    child.on("error", () => finish(1));
+    // close waits for stdout/stderr to drain, retaining the final crash signature.
+    // A grandchild may retain a pipe after exit; bound that wait and fail closed.
+    child.on("exit", (code, signal) => {
+      if (finished || timedOut) return;
+      clearTimeout(timer);
+      drainTimer = setTimeout(async () => {
+        drainExpired = true;
+        cleanupBlocked = true;
+        killResult = await (killPromise = killProcessTree(child.pid));
+        finish(code, signal, null, true);
+      }, 1000);
+    });
+    child.on("close", (code, signal) => {
+      closedResult = [code, signal];
+      if ((!timedOut && !drainExpired) || killResult) finish(code, signal);
+    });
+    child.on("error", (error) => finish(null, null, error));
   });
 }
 
@@ -255,14 +305,15 @@ console.log(`並列数: ${Math.min(workers, Math.max(suites.length, 1))}`);
 
 (async () => {
   let failed = 0;
+  const failedSuites = [];
   let nextIndex = 0;
   async function runWorker() {
-    while (nextIndex < suites.length) {
+    while (!cleanupBlocked && nextIndex < suites.length) {
       const index = nextIndex++;
       const file = suites[index];
       console.log(`\n===== ${file} =====`);
       let result = await runSuite(file, index, runPortBase);
-      if (result.status !== 0 && INFRA_CRASH_SIGNATURE.test(result.output)) {
+      if (!cleanupBlocked && !result.assertionFailed && result.status !== 0 && /^exit: [1-9]/.test(result.reason) && INFRA_CRASH_SIGNATURE.test(result.output)) {
         const retryBase = freshPortBase(runPortBase);
         console.error(`\n⚠ FLAKY-INFRA: ${file} が接続系クラッシュ(ERR_CONNECTION_REFUSED/EADDRINUSE)で失敗。` +
           `ポート帯を${runPortBase}→${retryBase}へ引き直して1回だけ再実行します(assertion失敗は再試行しない)`);
@@ -270,17 +321,26 @@ console.log(`並列数: ${Math.min(workers, Math.max(suites.length, 1))}`);
         console.log(`\n===== ${file}(FLAKY-INFRA retry) =====`);
         result = await runSuite(file, index, retryBase);
       }
-      if (result.status !== 0) failed++;
+      if (result.status !== 0) {
+        failed++;
+        failedSuites.push({ file, reason: result.reason });
+      }
     }
   }
   await Promise.all(Array.from(
     { length: Math.min(workers, suites.length) },
     () => runWorker()
   ));
+  if (cleanupBlocked) console.error(`PROCESS CLEANUP FAILED: runner stopped; ${suites.length - nextIndex} suite(s) not started; owned pids: ${[...activeChildren].map(child => child.pid).join(",")}`);
   if (flakyInfraRetries.length) {
     console.error(`\n⚠ FLAKY-INFRA再実行が発生したsuite(${flakyInfraRetries.length}件): ${flakyInfraRetries.join(", ")}`);
     console.error("  接続系クラッシュのみ対象。恒久対策(startServerのlistening待ち等)の実施状況を確認すること。");
   }
-  console.log(failed ? `\n❌ ${failed} suite(s) failed` : `\n✅ All suites passed (${suites.length} suites)`);
-  process.exit(failed ? 1 : 0);
+  console.log(failed || cleanupBlocked ? `\n❌ ${failed} suite(s) failed${cleanupBlocked ? "; runner stopped before clean completion" : ""}` : `\n✅ All suites passed (${suites.length} suites)`);
+  for (const result of failedSuites.sort((a, b) => a.file.localeCompare(b.file))) {
+    console.log(`  FAIL: ${result.file} (${result.reason})`);
+  }
+  process.exit(failed || cleanupBlocked ? 1 : 0);
 })();
+
+

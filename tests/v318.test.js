@@ -37,45 +37,35 @@ const HEALTH_FIXTURE = {
 
 (async () => {
   console.log("[1] FUNDの未設定・404・壊れJSON・前回正常値保持を非永続キャッシュで表す");
-  const fund = await import(pathToFileURL(path.join(ROOT, "src/features/fund.js")).href);
-  const store = await import(pathToFileURL(path.join(ROOT, "src/state/store.js")).href);
-  const { fundCache } = await import(pathToFileURL(path.join(ROOT, "src/state/fund-cache.js")).href);
-  const escapeHTML = (value) => String(value).replace(/[&<>"']/g, (char) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-  })[char]);
-  let ready = false;
-  let result = "";
-  fund.configureFund({
-    escapeHTML, renderHeader: () => "<header>FUND</header>", renderMarkdown: (value) => value,
-    personalDataReady: () => ready,
-    fetchGitHubRawText: async () => {
-      if (result instanceof Error) throw result;
-      return result;
-    }
-  });
-  store.setState({ settings: { github: {} } });
-  Object.assign(fundCache, { fetchedAt: 0, data: undefined, lastError: "", lastAttemptAt: 0 });
-  check("personal-data未設定は接続案内", fund.renderFund().includes("設定で個人データリポジトリを接続すると表示されます"));
-  ready = true;
-  check("試行前は取得中表示", fund.renderFund().includes("FUNDデータを読み込んでいます"));
-  result = new Error("404");
-  const failureChanged = await fund.hydrateFundData(0);
-  const unavailable = fund.renderFund();
-  check("失敗メタデータ更新は再描画対象", failureChanged === true);
-  check("404は最終試行時刻と30分後の再試行を表示", unavailable.includes("FUNDデータを取得できませんでした")
-    && /最終試行 \d{2}:\d{2}/.test(unavailable) && unavailable.includes("30分後に再試行します"));
-  check("失敗表示に赤・警告クラスを使わない", !/class="[^"]*(?:danger|error|warning|red)/i.test(unavailable));
-  Object.assign(fundCache, { fetchedAt: 0, data: undefined, lastError: "", lastAttemptAt: 0 });
-  result = "{broken";
-  await fund.hydrateFundData(0);
-  check("壊れたJSONも取得失敗表示", fund.renderFund().includes("FUNDデータを取得できませんでした") && fundCache.lastError.length > 0);
-  result = JSON.stringify(FUND_FIXTURE);
-  await fund.hydrateFundData(0);
-  const previous = fundCache.data;
-  result = new Error("404 after success");
-  await fund.hydrateFundData(0);
-  check("前回成功後の失敗は従来データとstale判定経路を維持", fundCache.data === previous
-    && fund.renderFund().includes("fund-summary") && !fund.renderFund().includes("FUNDデータを取得できませんでした"));
+  // Seven original Node guarantees use the installed workspace/gateway, not removed global cache.
+  // The old generic 404/30-minute wording maps to explicit not_created + attemptedAt + manual retry.
+  const { createFundWorkspace } = await import(pathToFileURL(path.join(ROOT, "src/features/fund/workspace.js")).href);
+  const escapeHTML = value => String(value).replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[char]);
+  let ready=false,result={ok:false,status:404},clock=1000,updates=0,hold=null;
+  const fund=createFundWorkspace({transport:{captureConnection:()=>({ready,revision:1}),read:async source=>{
+    if(hold)await hold;
+    return source==='dashboard/fund.json'?result:{ok:false,status:404};
+  }},escapeHTML,renderHeader:(_label,title,controls)=>'<header>'+title+controls+'</header>',renderMarkdown:escapeHTML,registerActions:()=>{},now:()=>clock,onUpdate:()=>updates++});
+  try {
+    fund.select('fable');
+    check("personal-data未設定は接続案内", fund.snapshot('fable').state==='disconnected' && fund.render().includes('接続設定が必要です'));
+    ready=true;let release;hold=new Promise(resolve=>release=resolve);const pending=fund.load({force:true});
+    check("試行前は取得中表示", fund.snapshot('fable').loading && fund.render().includes('成績：読み込み中'));
+    const beforeUpdates=updates;release();await pending;hold=null;
+    const unavailable=fund.render(),failure=fund.snapshot('fable');
+    check("失敗メタデータ更新は再描画対象", updates>beforeUpdates && failure.attemptId===1 && failure.lastAttemptAt===1000);
+    check("404は最終試行時刻と再取得導線を表示", failure.state==='not_created' && unavailable.includes('まだ作成されていません')
+      && unavailable.includes('今回の取得試行（UTC）：1970-01-01T00:00:01.000Z') && unavailable.includes('data-action="fund-refresh"'));
+    check("失敗表示に赤・警告クラスを使わない", !/class="[^"]*(?:danger|error|warning|red)/i.test(unavailable));
+    result={ok:true,status:200,text:'{broken'};clock=2000;await fund.load({force:true});
+    check("壊れたJSONも取得失敗表示", fund.snapshot('fable').state==='invalid' && fund.snapshot('fable').error==='invalid_json'
+      && fund.render().includes('データの形式を確認できません'));
+    result={ok:true,status:200,text:JSON.stringify(FUND_FIXTURE)};clock=3000;await fund.load({force:true});const previous=fund.snapshot('fable');
+    result={ok:false,status:404};clock=4000;await fund.load({force:true});const stale=fund.snapshot('fable');
+    check("前回成功後の失敗は従来データとstale判定経路を維持", stale.data===previous.data && stale.state==='not_created'
+      && stale.lastSuccessAt===3000 && stale.lastAttemptAt===4000 && fund.render().includes('fund-summary')
+      && fund.render().includes('前回正常に取得した成績を表示しています'));
+  } finally {fund.dispose();}
 
   console.log("[2] 390pxの実DOMで操作領域・横スクロール・睡眠カード・同期バナーを確認");
   const server = startServer(PORT);
@@ -218,22 +208,27 @@ const HEALTH_FIXTURE = {
 
     await page.locator('#bottomNav [data-action="nav"][data-view="more"]').click();
     await page.locator('.more-tower-item[data-view="fund"]').click();
-    await page.waitForSelector(".fund-summary");
-    fundMode = "404";
-    healthMode = "404";
-    await page.evaluate(async () => (await import("./src/features/fund.js")).hydrateFundData(0));
-    await page.locator('#bottomNav [data-action="nav"][data-view="more"]').click();
-    await page.locator('.more-tower-item[data-view="fund"]').click();
-    check("FUNDは前回成功後の404でも従来データを表示", await page.locator(".fund-summary").count() === 1
-      && await page.locator(".fund-status").count() === 0);
-    await page.reload();
-    await page.waitForFunction(() => document.querySelector(".fund-status")?.textContent.includes("FUNDデータを取得できませんでした"));
-    check("キャッシュ無し404は中立の失敗表示", (await page.locator(".fund-status").textContent()).includes("FUNDデータを取得できませんでした")
-      && await page.locator(".fund-status.danger, .fund-status.error, .fund-status.warning").count() === 0);
-    fundMode = "broken";
-    await page.reload();
-    await page.waitForFunction(() => document.querySelector(".fund-status")?.textContent.includes("30分後に再試行します"));
-    check("キャッシュ無し壊れJSONも中立の失敗表示", (await page.locator(".fund-status").textContent()).includes("30分後に再試行します"));
+    await page.waitForSelector('.fund-source-states');
+    check("FUND比較は両者の取得状態を分ける", (await page.locator('.fund-source-states').textContent()).includes('FABLE FUND')
+      && (await page.locator('.fund-source-states').textContent()).includes('CODEX FUND'));
+    const selectFable=async()=>{await page.locator('.fund-switches [data-action="fund-select"][data-engine="fable"]').click();};
+    await selectFable();await page.waitForSelector('.fund-summary');
+    fundMode = "404";healthMode = "404";
+    await page.locator('[data-action="fund-refresh"]').click();
+    await page.waitForFunction(()=>document.querySelector('.fund-status-line')?.textContent.includes('前回正常に取得した成績'));
+    check("FUNDは前回成功後の404でも従来データを表示", await page.locator('.fund-summary').count()===1
+      && (await page.locator('.fund-status-line').textContent()).includes('まだ作成されていません')
+      && (await page.locator('.fund-status').textContent()).includes('今回の取得試行（UTC）：2026-09-02'));
+    await page.reload();await page.waitForSelector('.fund-switches');await selectFable();
+    await page.waitForFunction(()=>document.querySelector('.fund-status-line')?.textContent.includes('まだ作成されていません'));
+    check("キャッシュ無し404は中立の失敗表示", await page.locator('.fund-summary').count()===0
+      && (await page.locator('.fund-loading').textContent()).includes('表示できる成績がまだありません')
+      && await page.locator('.fund-status.danger, .fund-status.error, .fund-status.warning').count()===0);
+    fundMode = "broken";await page.reload();await page.waitForSelector('.fund-switches');await selectFable();
+    await page.waitForFunction(()=>document.querySelector('.fund-status-line')?.textContent.includes('データの形式を確認できません'));
+    check("キャッシュ無し壊れJSONも中立の失敗表示", await page.locator('.fund-summary').count()===0
+      && (await page.locator('.fund-status').textContent()).includes('今回の取得試行（UTC）：2026-09-02')
+      && await page.locator('.fund-status.danger, .fund-status.error, .fund-status.warning').count()===0);
 
     await page.evaluate(async () => (await import("./src/sync/github.js")).setSyncBanner("同期エラーA: 詳細メッセージ"));
     await page.waitForSelector(".sync-error-banner");

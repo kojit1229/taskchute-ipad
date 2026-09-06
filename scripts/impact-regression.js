@@ -93,7 +93,21 @@ function collectRepositoryImpact(options = {}) {
   return analyzeDiff(repositoryDiff(options.cwd || repoRoot, options.base), config, options);
 }
 
-function validateConfig(rules = config, suiteManifest = manifest) {
+function collectRuntimeFiles(cwd = repoRoot, rules = config) {
+  const files = [];
+  const visit = (relative) => {
+    const fullPath = path.join(cwd, relative);
+    if (!fs.existsSync(fullPath)) return;
+    const stat = fs.statSync(fullPath);
+    if (stat.isDirectory()) {
+      for (const name of fs.readdirSync(fullPath)) visit(path.join(relative, name));
+    } else if (stat.isFile()) files.push(normalize(relative));
+  };
+  rules.runtimePaths.forEach(visit);
+  return unique(files).sort();
+}
+
+function validateConfig(rules = config, suiteManifest = manifest, runtimeFiles = collectRuntimeFiles(repoRoot, rules)) {
   const known = new Set(suiteManifest.suites.map((suite) => suite.file.replace(/\.test\.js$/, "")));
   const configured = unique([
     ...rules.baseline,
@@ -106,6 +120,11 @@ function validateConfig(rules = config, suiteManifest = manifest) {
     .map((suite) => suite.file.replace(/\.test\.js$/, ""));
   errors.push(...smoke.filter((suite) => !rules.finalBaseline.includes(suite))
     .map((suite) => `${suite}(final baseline smoke未登録)`));
+  // Baseline/content keywords do not prove coverage of a newly added module.
+  const uncovered = unique(runtimeFiles.map(normalize)).filter((file) => runtimeFile(file, rules)
+    && !Object.values(rules.areas).some((area) => area.suites.length > 0
+      && (area.paths || []).some((pattern) => new RegExp(pattern, "i").test(file))));
+  errors.push(...uncovered.map((file) => `${file}(runtime path未分類)`));
   return errors;
 }
 
@@ -129,4 +148,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { analyzeDiff, collectRepositoryImpact, repositoryDiff, resolveBaseRef, validateConfig };
+module.exports = { analyzeDiff, collectRepositoryImpact, repositoryDiff, resolveBaseRef, validateConfig, collectRuntimeFiles };

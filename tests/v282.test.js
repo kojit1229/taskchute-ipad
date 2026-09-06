@@ -252,9 +252,14 @@ function syncState(extra = {}) {
     const row = page.locator('.twy-row[data-twy-track-id="t1"]');
     await row.waitFor();
     check("壊れたprogressはnormalize後に非表示", await row.locator(".twy-ms-progress").count() === 0);
-    const projectProgress = page.locator('.item:has([data-action="edit-project"][data-id="p1"])').first()
-      .locator(":scope > .progress > span");
-    const projectWidthBefore = await projectProgress.getAttribute("style");
+    const projectProgress = page.locator('[data-wbs-row-id="p1"] > .wbs-project-head .wbs-project-meta');
+    async function readProjectProgress() {
+      const text = await projectProgress.textContent();
+      const progress = /進捗\s+(\d+)\/(\d+)\s+・\s+(\d+)%/.exec(text || "");
+      if (!progress) throw new Error("Project進捗の分子/分母/率を読めません: " + text);
+      return progress.slice(1).join("/");
+    }
+    const projectWidthBefore = await readProjectProgress();
     await row.locator('[data-action="twy-open-editor"]').click();
 
     async function openProgress() {
@@ -279,12 +284,12 @@ function syncState(extra = {}) {
     await firstPanel.locator("[data-twy-progress-unit]").fill("章");
     await firstPanel.locator('[data-action="twy-ms-save-progress"]').click();
     await row.locator(".twy-ms-node .twy-ms-progress-text", { hasText: "3/10章" }).waitFor();
-    const projectWidthAt30 = await projectProgress.getAttribute("style");
+    const projectWidthAt30 = await readProjectProgress();
     check("count保存後にchainとeditor一覧へ再描画", await row.locator(".twy-ms-progress-text", { hasText: "3/10章" }).count() === 2);
 
     await saveProgress("count", "10", "10", "", "章");
     const reachedState = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).tracks[0], STATE_KEY);
-    const projectWidthAtTarget = await projectProgress.getAttribute("style");
+    const projectWidthAtTarget = await readProjectProgress();
     check("target到達でもdoneAt・二値節目数は不変", reachedState.milestones[0].doneAt === ""
       && (await row.locator(".twy-val").textContent()).includes("0/1節目")
       && (await row.locator(".t-state").textContent()) !== "完了");
@@ -376,7 +381,7 @@ function syncState(extra = {}) {
       localStorage.setItem(key, JSON.stringify(state));
     }, { key: STATE_KEY, progress: carryProgress });
     await page.reload();
-    await page.locator('[data-action="edit-project"][data-id="p1"]').first().click();
+    await page.locator('[data-work-list="wbs"] [data-action="edit-project"][data-id="p1"]').click();
     await page.locator('[data-action="twy-carry-cycle"]').click();
     await page.locator("[data-twy-carry-ms-date]").fill("2026-11-07");
     await page.locator('[data-action="twy-carry-confirm"]').click();

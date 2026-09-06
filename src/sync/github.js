@@ -49,6 +49,7 @@
 //
 // characterization test: tests/store-core.test.js。
 
+import { createArchiveProtection, archiveConflict } from "../features/archive-date-protection.js";
 import { state, setState } from "../state/store.js";
 import {
   mergeById, mergeByIdPreferNewer, mergeGymSets, mergeTracksPreferNewer, mergeWeeklyCommitments
@@ -66,7 +67,17 @@ let requireGitHubConfig, fetchGitHubFileSHA, personalDataReady, personalDataFile
 let gitHubContentsURL, githubHeaders, gitHubErrorMessage, fromBase64, toBase64;
 let sanitizedStateForGitHub, maybeWriteBackupSnapshot, writeBackupSnapshotBeforeLoad, updateAutoSaveStatus, updateSyncDot;
 let renderSyncBanner, clearSyncBannerDismissal, clearPersonalDataAuthError, pruneExpiredSuggestedThemes;
-let _startupDataModifiedAt;
+let _startupDataModifiedAt, readArchiveForSync;
+const archiveProof = createArchiveProtection({ getState: () => state,
+  getConnection: () => personalDataFileConfig(state.settings.github || {}),
+  readArchive: (year, config) => readArchiveForSync(year, config) });
+const archiveMergeGuards = new WeakMap();
+const archiveConnectionKey = () => JSON.stringify(personalDataFileConfig(state.settings.github || {}));
+export async function prepareArchiveMerge(remoteNorm, expectedConnection = archiveConnectionKey()) {
+  if (archiveConnectionKey() !== expectedConnection) throw archiveConflict();
+  await archiveProof.prepare(remoteNorm);
+  if (archiveConnectionKey() !== expectedConnection) throw archiveConflict();
+}
 
 function configureGithubSync(deps) {
   ({
@@ -77,7 +88,7 @@ function configureGithubSync(deps) {
     gitHubContentsURL, githubHeaders, gitHubErrorMessage, fromBase64, toBase64,
     sanitizedStateForGitHub, maybeWriteBackupSnapshot, writeBackupSnapshotBeforeLoad, updateAutoSaveStatus, updateSyncDot,
     renderSyncBanner, clearSyncBannerDismissal, clearPersonalDataAuthError, pruneExpiredSuggestedThemes,
-    _startupDataModifiedAt
+    _startupDataModifiedAt, readArchiveForSync
   } = deps);
 }
 
@@ -115,17 +126,21 @@ function recordSyncPullSuccess() {
 // v37: 保存の同時実行ガード(自動保存と手動保存が同じSHAでPUTして409になるのを防ぐ)
 let _githubSaveInFlight = false;
 
-async function saveToGitHub(silent = false) {
+async function saveToGitHub(silent = false, captureProof = null) {
+  const archiveConnection = archiveConnectionKey();
+  const syncStart = capturePrimarySyncState();
   if (_githubSaveInFlight) {
     if (!silent) showToast("GitHub保存が進行中です。少し待ってください");
     return;
   }
+  if (captureProof && (typeof captureProof.expectedContent !== "string" || typeof captureProof.isCurrent !== "function" || captureProof.isCurrent() !== true)) return;
   _githubSaveInFlight = true;
   // 手動・自動どちらでも、これから保存するのだから待機中の自動保存は不要
   clearTimeout(autoSaveTimer);
   try {
     const config = requireGitHubConfig();
     const sha = await fetchGitHubFileSHA(config);
+    if (captureProof && captureProof.isCurrent() !== true) return;
     const lastSynced = getLastSyncedSha();
 
     // v37: リモートが「この端末が最後に同期した状態」から進んでいる場合の保護。
@@ -163,11 +178,15 @@ async function saveToGitHub(silent = false) {
         let fetchFailed = false;
         try {
           remoteText = (await downloadGitHubStateText(config)).text;
+    if (captureProof && captureProof.isCurrent() !== true) return;
         } catch { fetchFailed = true; }
         const remoteNorm = (!fetchFailed && remoteText) ? normalizedRemoteCopy(remoteText) : null;
+        if (remoteNorm) await prepareArchiveMerge(remoteNorm, archiveConnection);
+    if (captureProof && captureProof.isCurrent() !== true) return;
+        if (remoteNorm) assertPrimarySettingsSafe(remoteNorm, syncStart);
         // tieWinner="local": この経路は「ローカルを基準に残してpushする」経路のため、
         // updatedAt同値の場合はローカル優先(Codexレビュー High-2対応)。
-        const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm, "local") : null;
+        const syncMerge = remoteNorm ? requireSyncMerge(remoteNorm, "local") : null;
         if (fetchFailed || !remoteText || !remoteNorm || !syncMerge) {
           const msg = "リモートの変更を取得できなかったため保存を保留しました。次回保存で再試行します";
           setSyncBanner(msg);
@@ -189,9 +208,14 @@ async function saveToGitHub(silent = false) {
       }
     }
 
+    await prepareArchiveMerge(null, archiveConnection);
+    if (captureProof && captureProof.isCurrent() !== true) return;
+    archiveProof.assert(null);
     const content = JSON.stringify(sanitizedStateForGitHub(), null, 2);
+    if (captureProof && (captureProof.isCurrent() !== true || content !== captureProof.expectedContent)) return;
     const response = await fetch(gitHubContentsURL(config), {
       method: "PUT",
+      ...(captureProof?.signal ? { signal: captureProof.signal } : {}),
       headers: githubHeaders(config.token),
       body: JSON.stringify({
         message: `chore: update app state ${new Date().toISOString()}`,
@@ -204,6 +228,7 @@ async function saveToGitHub(silent = false) {
     if (!response.ok) {
       throw new Error(await gitHubErrorMessage(response));
     }
+    if (captureProof && captureProof.isCurrent() !== true) return;
     const currentToken = requireGitHubConfig().token;
     if (!/[^\x00-\xFF]/.test(String(currentToken || "").trim())) {
       clearPersonalDataAuthError();  // v303: 現在のtokenが正常なpush成功時だけ過去の認証バナーを解除する
@@ -212,9 +237,11 @@ async function saveToGitHub(silent = false) {
     // 保存後のファイルSHAを記録(次回の競合判定に使う)
     try {
       const result = await response.json();
+      if (captureProof && captureProof.isCurrent() !== true) return;
       if (result.content?.sha) setLastSyncedSha(result.content.sha);
     } catch { /* SHAが取れなくても次回の保存前チェックで補正される */ }
 
+    if (captureProof && captureProof.isCurrent() !== true) return;
     recordSyncPushSuccess();  // v134: この端末の最終push成功時刻(localStorage、state非経由)
     // v136(Med-6、Codexレビュー指摘): 手動保存・legacy 30秒自動保存(autoSync=false)経路では
     // 従来lastPushedAtを更新していなかった。v134の同期停止アラート判定
@@ -228,8 +255,10 @@ async function saveToGitHub(silent = false) {
     persistLocalNoSchedule();  // v25: 自動保存タイマーを再セットしない(無限保存ループ防止)
     if (!silent) showToast("GitHubへ保存しました");
     if (silent) updateAutoSaveStatus();
-    maybeWriteBackupSnapshot();  // v49: 保存成功後、1日1回の世代スナップショット(await しない)
+    maybeWriteBackupSnapshot();
+    if (captureProof && captureProof.isCurrent() === true) return { ok: true, content };  // v49: 保存成功後、1日1回の世代スナップショット(await しない)
   } catch (error) {
+    if (["PrimarySettingsConflict", "ArchiveTextConflict"].includes(error?.name)) setSyncBanner(error.message);
     if (!silent) showToast(`GitHub保存失敗: ${error.message}`);
     else updateAutoSaveStatus(`失敗: ${error.message}`);
   } finally {
@@ -280,21 +309,27 @@ function scheduleAutoSync() {
   _autoSyncTimer = setTimeout(runAutoSyncPush, AUTO_SYNC_PUSH_MS);
 }
 async function runAutoSyncPush() {
+  const archiveConnection = archiveConnectionKey();
+  const syncStart = capturePrimarySyncState();
   if (!autoSyncReady()) return;
   const cfg = state.settings.github;
-  if (!(state.dataModifiedAt && state.dataModifiedAt > (state.settings.lastPushedAt || ""))) return;  // 未変更
+  if (!(normalizeDataStamp(state.dataModifiedAt || "") > normalizeDataStamp(state.settings.lastPushedAt || ""))) return;  // 未変更
   try {
     // push前ガード: remote の dataModifiedAt を確認(別端末が進めていたら中止)
     const { text: remoteText, sha: remoteSha } = await downloadGitHubStateText(personalDataFileConfig(cfg));
+    const remoteNorm = normalizedRemoteCopy(remoteText);
+    await prepareArchiveMerge(remoteNorm, archiveConnection);
+    const unchangedRemote = remoteShaUnchanged(remoteSha, syncStart);
+    if (!unchangedRemote) assertPrimarySettingsSafe(remoteNorm, syncStart);
+    requireSyncMerge(remoteNorm, "local");
     const remoteT = normalizeDataStamp((JSON.parse(remoteText).dataModifiedAt) || "");
-    if (remoteT && remoteT > (state.settings.lastPushedAt || "")) {
+    if (!unchangedRemote && remoteT && remoteT > (state.settings.lastPushedAt || "")) {
       // v106: コア(tasks等)が両端末で一致していれば、リモートの進み分はマージ可能
       // コレクションだけ。合流させてそのままpushする(バナー待ちでiPhone分が届かない事故対策)。
       let resolved = false;
-      const remoteNorm = normalizedRemoteCopy(remoteText);
       if (remoteNorm && syncCoreEqual(remoteNorm)) {
         // tieWinner="local": ここもapplySyncMergeToLocal(ローカルを基準に残す)経路。
-        const syncMerge = computeSyncMerge(remoteNorm, "local");
+        const syncMerge = requireSyncMerge(remoteNorm, "local");
         if (syncMerge) {
           applySyncMergeToLocal(syncMerge);
           state.settings.lastPushedAt = remoteT;   // リモート分は取り込み済み
@@ -304,7 +339,7 @@ async function runAutoSyncPush() {
         }
       }
       // v364: コア不一致でも自動マージを試みる(K指示2026-09-06)。成功したら続けてpushへ進む。
-      if (!resolved && remoteNorm) resolved = await autoMergeRemote(remoteNorm, remoteT, remoteSha, { origin: "push", renderFn: renderDeferringForFocus });
+      if (!resolved && remoteNorm) resolved = await autoMergeRemote(remoteNorm, remoteT, remoteSha, { origin: "push", rejectInvalid: true, renderFn: renderDeferringForFocus });
       if (!resolved) {
         setSyncBanner("リモートに新しいデータがあります。設定から pull を確認してください");
         return;
@@ -321,7 +356,10 @@ async function runAutoSyncPush() {
       persistLocalNoSchedule();
     }
     updateSyncDot();
-  } catch { /* オフライン/APIエラー: 次のデバウンスで再試行(演出なし) */ }
+  } catch (error) {
+    if (["InvalidRemoteStateError", "PrimarySettingsConflict", "ArchiveTextConflict"].includes(error?.name)) setSyncBanner(error.message);
+    // オフライン/APIエラーは次のデバウンスで再試行する。
+  }
 }
 
 // v103: ===============================================================
@@ -449,14 +487,44 @@ function mergeZeroThinkingIntoLocal(remoteZt) {
 // 昇格させたため、ここからは外した(下記computeSyncMerge内のunit14bコメント参照)。
 // ironImportはIRON LOG移行の一度きりの端末ローカルな進捗マーカー(派生状態。他端末の値を
 // 持ち込む意味が無い)のため、比較対象からも和集合マージ対象からも外した(unit14b)。
-const SYNC_CORE_COMPARE_KEYS = [
-  "recurrences", "declarations", "questions", "experiments", "earlyBird", "habitStreaks", "habitPinHistory",
-  "aiScheduleHistory",
+const PRIMARY_SETTINGS_COMPARE_KEYS = [
   "settings.avoidList", "settings.categories", "settings.lifeAreas", "settings.vision",
   "settings.affirmation", "settings.journalTemplate", "settings.twelveWeekStartDate",
   "settings.twelveWeekScoreTarget", "settings.birthDate", "settings.battery",
-  "settings.gymExerciseList", "settings.visionDirectCategories"
+  "settings.gymExerciseList", "settings.visionDirectCategories",
+  "settings.twelveWeekVision", "settings.twelveWeekFocus", "settings.twelveWeekReviewWeekMinItems",
+  "settings.ironManualBaseKg", "settings.ironDailyTarget", "settings.earlyRiseTarget",
+  "settings.dailyBufferMin", "settings.dayCloseHours", "settings.gymBlockKeywords"
 ];
+const SYNC_CORE_COMPARE_KEYS = [
+  "recurrences", "declarations", "questions", "experiments", "earlyBird", "habitStreaks", "habitPinHistory",
+  "aiScheduleHistory", ...PRIMARY_SETTINGS_COMPARE_KEYS
+];
+
+function primarySettingsSnapshot(value) {
+  return JSON.stringify(PRIMARY_SETTINGS_COMPARE_KEYS.map(key => getByPath(value, key) ?? null));
+}
+function capturePrimarySyncState() {
+  const modified = normalizeDataStamp(state.dataModifiedAt || "");
+  return { modified, sha: getLastSyncedSha(), primary: primarySettingsSnapshot(state),
+    pending: modified !== normalizeDataStamp(state.settings.lastPushedAt || "") };
+}
+function primarySettingsConflict() {
+  const error = new Error("未送信の一次設定がGitHub側と異なるため、自動同期を停止しました。設定から手動で読み込み内容を確認してください");
+  error.name = "PrimarySettingsConflict";
+  return error;
+}
+function primarySettingsDifferWhilePending(remoteNorm, before) {
+  const current = capturePrimarySyncState();
+  const changedDuringWait = before && (current.modified !== before.modified || current.primary !== before.primary);
+  return (current.pending || before?.pending || changedDuringWait) && current.primary !== primarySettingsSnapshot(remoteNorm);
+}
+function remoteShaUnchanged(sha, before) {
+  return !!sha && sha === before?.sha && sha === getLastSyncedSha();
+}
+function assertPrimarySettingsSafe(remoteNorm, before) {
+  if (primarySettingsDifferWhilePending(remoteNorm, before)) throw primarySettingsConflict();
+}
 
 // unit14b差し戻し(独立レビュー2026-09-05): loadFromGitHub()のconfirm/スナップショット発火判定
 // (「破棄されるコア差分」の件数)だけは、SYNC_CORE_COMPARE_KEYS(fail-close比較=自動解決可否の
@@ -482,9 +550,28 @@ function normalizeDataStamp(value) {
   return v;
 }
 
-// リモート生テキストからマージ・比較用のnormalize済みコピーを作る(失敗はnullで従来動作へ)
+// リモートの検証に失敗したら、部分採用せず呼出元で処理を停止する。
+function invalidRemoteState() {
+  const error = new Error("リモートデータの形式を確認できないため、取り込みと保存を中止しました");
+  error.name = "InvalidRemoteStateError";
+  return error;
+}
+
 function normalizedRemoteCopy(text) {
-  try { return normalizeState(JSON.parse(text)); } catch { return null; }
+  try {
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw invalidRemoteState();
+    const normalized = normalizeState(parsed);
+    if (!normalized || typeof normalized !== "object" || Array.isArray(normalized)) throw invalidRemoteState();
+    return normalized;
+  } catch { throw invalidRemoteState(); }
+}
+
+// 部分データだけのfallbackへ進まず、採用前に同期全体の計算成立を求める。
+function requireSyncMerge(remoteNorm, tieWinner) {
+  const merged = computeSyncMerge(remoteNorm, tieWinner);
+  if (!merged) throw invalidRemoteState();
+  return merged;
 }
 
 // ドット区切りパスでネストした値を取り出す(SYNC_CORE_COMPARE_KEYSの"settings.xxx"用)。
@@ -762,6 +849,7 @@ function reconcileSingletonDuplicates(mergedTasks, mergedProjects, mergedBlocks)
 // 同値のレガシーデータで採用ブランチと逆側の内容が紛れ込む)。
 function computeSyncMerge(remoteNorm, tieWinner) {
   try {
+    archiveProof.assert(remoteNorm);
     // 単位16: archivedDates自体は文字列集合の和集合(mergeStringIdSetを再利用)。この和集合が
     // 「退避済み日付」の全体像になるため、journals/feedback(reportsを合流させる際も同様)の
     // 日付キーマージより先に計算し、Setとして各mergeDateStringMap呼び出しへ渡す。
@@ -951,7 +1039,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(feedbackIngestedDates, remoteNorm.feedbackIngestedDates || []) ||
       !sameArrayByReference(aiWorkProcessedIds, remoteNorm.aiWorkProcessedIds || []) ||
       !sameArrayByReference(zeroThinkingGroups, remoteNorm.zeroThinking?.groups || []);
-    return {
+    const merged = {
       values: {
         journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans, writeMeditations, tasks, projects, storeVisits, tracks, trackMeasurements, weeklyCommitments, swipeTriageLog, gardenLog, coachMeals, aiStepProcessedIds, aiStepDismissedIds, aiReportReadIds, aiStepPendingRequests,
         archivedDates,  // 単位16
@@ -960,7 +1048,10 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       },
       changedVsLocal, changedVsRemote
     };
+    archiveMergeGuards.set(merged, () => archiveProof.assert(remoteNorm));
+    return merged;
   } catch (error) {
+    if (error?.name === "ArchiveTextConflict") throw error;
     console.warn("同期マージをスキップ:", error.message);
     return null;
   }
@@ -968,7 +1059,11 @@ function computeSyncMerge(remoteNorm, tieWinner) {
 
 // マージ結果をローカルstateへ適用(「ローカルを基準に残す」経路用)。変化があればtrue。
 function applySyncMergeToLocal(merged) {
-  if (!merged || !merged.changedVsLocal) return false;
+  if (!merged) return false;
+  const archiveGuard = archiveMergeGuards.get(merged);
+  if (!archiveGuard) throw archiveConflict();
+  archiveGuard();
+  if (!merged.changedVsLocal) return false;
   const v = merged.values;
   state.journals = v.journals;
   state.journalMeta = v.journalMeta;
@@ -1017,7 +1112,11 @@ function applySyncMergeToLocal(merged) {
 // ローカル限定の記録が採用で消えないようにする。remoteNormから乖離があればtrue
 // (呼び出し側はdataModifiedAtを進めて次回pushで和集合を届ける)。
 function applySyncMergeToRemote(merged, remoteNorm) {
-  if (!merged || !merged.changedVsRemote) return false;
+  if (!merged) return false;
+  const archiveGuard = archiveMergeGuards.get(merged);
+  if (!archiveGuard) throw archiveConflict();
+  archiveGuard();
+  if (!merged.changedVsRemote) return false;
   const v = merged.values;
   remoteNorm.journals = v.journals;
   remoteNorm.journalMeta = v.journalMeta;
@@ -1104,16 +1203,19 @@ function setByPath(obj, path, value) {
 }
 
 // v364: Compute before backup, roll back failed adoption, isolate post-adoption effects.
-async function autoMergeRemote(remoteNorm, remoteT, sha, { origin, renderFn } = {}) {
+async function autoMergeRemote(remoteNorm, remoteT, sha, { origin, renderFn, rejectInvalid = false } = {}) {
   let before;
   try {
     if (!remoteNorm) return false;
-    let syncMerge = computeSyncMerge(remoteNorm, "local");
+    const beforeBackup = capturePrimarySyncState();
+    if (rejectInvalid) assertPrimarySettingsSafe(remoteNorm, beforeBackup);
+    let syncMerge = requireSyncMerge(remoteNorm, "local");
     if (!syncMerge) return false;
     let coreValues = mergeCoreKeys(remoteNorm, remoteT);
     if (!await writeBackupSnapshotBeforeLoad()) return false;
+    if (rejectInvalid) assertPrimarySettingsSafe(remoteNorm, beforeBackup);
     // v364: 同一秒の編集も含め、控え待機後のstateから無条件で再計算する。
-    syncMerge = computeSyncMerge(remoteNorm, "local");
+    syncMerge = requireSyncMerge(remoteNorm, "local");
     if (!syncMerge) return false;
     coreValues = mergeCoreKeys(remoteNorm, remoteT);
     before = JSON.parse(JSON.stringify(state));
@@ -1129,9 +1231,14 @@ async function autoMergeRemote(remoteNorm, remoteT, sha, { origin, renderFn } = 
   } catch (error) {
     if (before) setState(before);
     console.warn("autoMergeRemote failed:", error.message, origin);
+    if (rejectInvalid) {
+      if (["PrimarySettingsConflict", "ArchiveTextConflict"].includes(error?.name)) throw error;
+      throw invalidRemoteState();
+    }
     return false;
   }
   const effects = [
+    () => { if (origin === "pull" || origin === "startup") recordSyncPullSuccess(); },
     () => { if (origin !== "push") scheduleAutoSync(); },
     () => clearSyncBanner({ clearDismissal: true }),
     () => runDailyOpen(), () => (renderFn || render)(),
@@ -1144,6 +1251,8 @@ async function autoMergeRemote(remoteNorm, remoteT, sha, { origin, renderFn } = 
 }
 
 async function runAutoSyncPull() {
+  const archiveConnection = archiveConnectionKey();
+  const syncStart = capturePrimarySyncState();
   if (!autoSyncReady()) return;
   const now = Date.now();
   if (now - _lastPullCheckAt < AUTO_SYNC_PULL_THROTTLE_MS) return;
@@ -1151,22 +1260,28 @@ async function runAutoSyncPull() {
   const cfg = state.settings.github;
   try {
     const { text, sha } = await downloadGitHubStateText(personalDataFileConfig(cfg));
-    recordSyncPullSuccess();  // v134: この端末の最終pull成功時刻(localStorage、state非経由)
+    const remoteNorm = normalizedRemoteCopy(text);
+    await prepareArchiveMerge(remoteNorm, archiveConnection);
+    if (remoteShaUnchanged(sha, syncStart) && primarySettingsDifferWhilePending(remoteNorm, syncStart)) {
+      requireSyncMerge(remoteNorm, "local");
+      return; // The known remote cannot replace this device's pending primary edit.
+    }
+    assertPrimarySettingsSafe(remoteNorm, syncStart);
     const remote = JSON.parse(text);
     const remoteT = normalizeDataStamp(remote.dataModifiedAt || "");
     const localT = state.dataModifiedAt || "";
     // v106: マージ計算はnormalize済みの別コピーで行う(remoteは採用フォールバック用に生のまま)
     // v136(High-2): computeSyncMergeは分岐ごとに(適用先に応じたtieWinnerで)個別に呼ぶ
     // (以前は1回だけ計算した結果を全分岐で使い回しており、tieWinnerを分岐ごとに変えられなかった)。
-    const remoteNorm = normalizedRemoteCopy(text);
     if (!remoteT || remoteT <= localT) {
       // remote 古い/同じ。それでもリモート限定の記録は合流させる(v103の0秒思考対策を
       // v106でジャーナル/blocks/体調/睡眠へ一般化。PC側が新しくてもiPhone分が見える)。
       // tieWinner="local": ローカルを基準に残す経路。
-      const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm, "local") : null;
+      const syncMerge = remoteNorm ? requireSyncMerge(remoteNorm, "local") : null;
       const changed = syncMerge ? applySyncMergeToLocal(syncMerge) : mergeZeroThinkingIntoLocal(remote.zeroThinking);
       if (changed) saveState();
       if (changed || runDailyOpen()) render();
+      recordSyncPullSuccess();
       return;
     }
     const hasUnpushed = localT !== (state.settings.lastPushedAt || "");
@@ -1175,10 +1290,11 @@ async function runAutoSyncPull() {
       // v106: コア(tasks等)が両端末で一致していれば差分はマージ済み分だけなので、
       // 人間判断を待たず「和集合を正」として自動解消する(push見送りも解除)。
       // tieWinner="local": ここもapplySyncMergeToLocal(ローカルを基準に残す)経路。
-      const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm, "local") : null;
+      const syncMerge = remoteNorm ? requireSyncMerge(remoteNorm, "local") : null;
       if (syncMerge && syncCoreEqual(remoteNorm)) {
         applySyncMergeToLocal(syncMerge);
         state.settings.lastPushedAt = remoteT;   // リモート分は取り込み済み
+        recordSyncPullSuccess();
         setLastSyncedSha(sha);
         state.dataModifiedAt = nowDateTime();    // 和集合を次のpushで届ける
         persistLocalNoSchedule();
@@ -1190,17 +1306,18 @@ async function runAutoSyncPull() {
         return;
       }
       // v364: コアが不一致でも、レコード単位の新しい方勝ち和集合で自動解消する(K指示2026-09-06)。
-      if (remoteNorm && await autoMergeRemote(remoteNorm, remoteT, sha, { origin: "pull", renderFn: renderDeferringForFocus })) return;
-      const fallbackMerge = remoteNorm ? computeSyncMerge(remoteNorm, "local") : null;
+      if (remoteNorm && await autoMergeRemote(remoteNorm, remoteT, sha, { origin: "pull", rejectInvalid: true, renderFn: renderDeferringForFocus })) return;
+      const fallbackMerge = remoteNorm ? requireSyncMerge(remoteNorm, "local") : null;
       const changed = fallbackMerge ? applySyncMergeToLocal(fallbackMerge) : mergeZeroThinkingIntoLocal(remote.zeroThinking);
       if (changed) saveState();
       setSyncBanner("リモートに新しいデータ。ローカルにも未pushの変更があります。設定から手動で確認してください");
       if (changed || runDailyOpen()) render();
+      recordSyncPullSuccess();
       return;
     }
     // 自動適用(ローカルに未push変更なし & remote が新しい)。tieWinner="remote": リモートを
     // 基準に採用する経路(applySyncMergeToRemote)。
-    const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm, "remote") : null;
+    const syncMerge = remoteNorm ? requireSyncMerge(remoteNorm, "remote") : null;
     clearTimeout(autoSaveTimer);
     const token = cfg.token;
     // 採用前に、ローカルにしか無い記録を採用予定のリモートへ合流させる(採用で消さないため)。
@@ -1221,6 +1338,7 @@ async function runAutoSyncPull() {
     state.settings.github = { ...cfg, token };
     state.settings.lastPushedAt = remoteT;   // 取り込んだ = リモートと一致
     state.settings.lastPulledAt = nowDateTime();
+    recordSyncPullSuccess();
     setLastSyncedSha(sha);
     maintainRecurrences({ purge: true });
     runDailyOpen();  // §2: pull 後に日次オープン(古いstate展開→pullで消える事故を防ぐ)
@@ -1235,7 +1353,10 @@ async function runAutoSyncPull() {
     persistLocalNoSchedule();
     render();
     showToast("最新データを取り込みました");
-  } catch { if (runDailyOpen()) render(); }
+  } catch (error) {
+    if (["InvalidRemoteStateError", "PrimarySettingsConflict", "ArchiveTextConflict"].includes(error?.name)) { setSyncBanner(error.message); return; }
+    if (runDailyOpen()) render();
+  }
 }
 
 function setSyncBanner(msg) { _syncBanner = msg; renderSyncBanner(); updateSyncDot(); }
@@ -1275,10 +1396,13 @@ async function downloadGitHubStateText(config) {
 
 // 手動「GitHubから読込」: リモートを採用(dataModifiedAt はリモートの値を維持)
 async function loadFromGitHub() {
+  const archiveConnection = archiveConnectionKey();
   try {
     const config = requireGitHubConfig();
     const { text, sha } = await downloadGitHubStateText(config);
-    recordSyncPullSuccess();  // v134: この端末の最終pull成功時刻(localStorage、state非経由)
+    const remoteNorm = normalizedRemoteCopy(text);
+    await prepareArchiveMerge(remoteNorm, archiveConnection);
+    requireSyncMerge(remoteNorm, "local");
     const loaded = JSON.parse(text);
     // v37: 読込前の編集で予約された自動保存を取り消す(読込直後の無意味なpush防止)
     clearTimeout(autoSaveTimer);
@@ -1293,7 +1417,6 @@ async function loadFromGitHub() {
     // v103→v106: リモート採用前に、ローカルにしか無い記録(0秒思考/ジャーナル/blocks/体調/睡眠)を
     // 合流させる(採用でローカル限定の記録を消さないため)。
     // tieWinner="remote": この関数は常にremoteを採用する経路(applySyncMergeToRemote)。
-    const remoteNorm = normalizedRemoteCopy(text);
     // unit15差し戻し(独立レビュー2026-09-04、A2-M11の偽警告根治とセット):
     // 「未pushフラグ」(dataModifiedAt !== lastPushedAt)だけでconfirmを出すと、実際には
     // コア(SYNC_CORE_COMPARE_KEYS)が一致しているのに毎回警告する偽陽性が起きる
@@ -1320,6 +1443,7 @@ async function loadFromGitHub() {
       // 採用直前の自動スナップショット(既存の世代バックアップ機構=backups/を再利用。ファイル名は
       // 通常の日次世代とは別名にして1回目の控えを上書きしない。writeBackupSnapshotBeforeLoad参照)。
       // fail-close: 控えを保存できなければ採用せず読込そのものを中止する(無音のfail-openにしない)。
+      const confirmedPrimary = primarySettingsSnapshot(state);
       let snapshotOk = false;
       try { snapshotOk = await writeBackupSnapshotBeforeLoad(); }
       catch (error) { console.warn("読込前スナップショットに失敗:", error.message); }
@@ -1327,8 +1451,9 @@ async function loadFromGitHub() {
         showToast("控えを保存できなかったため読込を中止しました(ローカルの変更は保持されています)");
         return;
       }
+      if (primarySettingsSnapshot(state) !== confirmedPrimary) throw primarySettingsConflict();
     }
-    const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm, "remote") : null;
+    const syncMerge = remoteNorm ? requireSyncMerge(remoteNorm, "remote") : null;
     let addedLocal = false;
     let adopted;
     if (remoteNorm && syncMerge) {
@@ -1361,6 +1486,7 @@ async function loadFromGitHub() {
       scheduleAutoSync();
     }
     persistLocalNoSchedule();  // 採用のため dataModifiedAt は更新しない(合流時を除く。上記参照)
+    recordSyncPullSuccess();
     setLastSyncedSha(sha);     // v37: この端末はこのリモート状態と同期済み
     render();
     showToast("GitHubから読み込みました");
@@ -1372,6 +1498,8 @@ async function loadFromGitHub() {
 // v25: 起動時、GitHub 側がローカルより新しければ取り込む(ローカルファースト)。
 // ローカルを即描画した後にバックグラウンドで実行される。
 async function syncFromGitHubOnStartup() {
+  const archiveConnection = archiveConnectionKey();
+  const syncStart = capturePrimarySyncState();
   const cfg = state.settings.github || {};
   if (!personalDataReady(cfg)) return;  // 未設定なら何もしない
   // v118: 下のGET(await)を待つ間にユーザーが編集すると、_startupDataModifiedAt(起動時点の
@@ -1382,7 +1510,13 @@ async function syncFromGitHubOnStartup() {
   const preFetchDataModifiedAt = state.dataModifiedAt || "";
   try {
     const { text, sha } = await downloadGitHubStateText(personalDataFileConfig(cfg));
-    recordSyncPullSuccess();  // v134: この端末の最終pull成功時刻(localStorage、state非経由)
+    const remoteNorm = normalizedRemoteCopy(text);
+    await prepareArchiveMerge(remoteNorm, archiveConnection);
+    if (remoteShaUnchanged(sha, syncStart) && primarySettingsDifferWhilePending(remoteNorm, syncStart)) {
+      requireSyncMerge(remoteNorm, "local");
+      return; // The known remote cannot replace this device's pending primary edit.
+    }
+    assertPrimarySettingsSafe(remoteNorm, syncStart);
     const remote = JSON.parse(text);
     // v37: 比較は「起動時点のローカル更新時刻」と行う。
     //      fetch中にユーザーがタブを触るなどして saveState が走ると localT が進み、
@@ -1394,19 +1528,19 @@ async function syncFromGitHubOnStartup() {
     // 和集合で合流させる(iPhone分がPC起動pullで見えなくなる事故対策の一般化)。
     // v136(High-2): computeSyncMergeは分岐ごとに(適用先に応じたtieWinnerで)個別に呼ぶ
     // (以前は1回だけ計算した結果を全分岐で使い回しており、tieWinnerを分岐ごとに変えられなかった)。
-    const remoteNorm = normalizedRemoteCopy(text);
     if (remoteT && remoteT > localT) {
       // v118: 採用直前の不変確認。GET待ち中に編集されていたら、remote全量採用は中止し
       // runAutoSyncPull()のhasUnpushed分岐(既存の競合バナー/自動和集合解消フロー)と
       // 同じ考え方で処理する — マージ可能コレクションだけ先に合流させ、コア(tasks等)まで
       // 一致していれば人間判断なしで解消、そうでなければ既存の競合バナーへ送る
       // (新しいUIは作らない・ローカルの編集を破棄しない)。
-      if ((state.dataModifiedAt || "") !== preFetchDataModifiedAt) {
+      if ((state.dataModifiedAt || "") !== preFetchDataModifiedAt || syncStart.pending || capturePrimarySyncState().pending) {
         // tieWinner="local": ここはapplySyncMergeToLocal(ローカルを基準に残す)経路。
-        const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm, "local") : null;
+        const syncMerge = remoteNorm ? requireSyncMerge(remoteNorm, "local") : null;
         if (syncMerge && syncCoreEqual(remoteNorm)) {
           applySyncMergeToLocal(syncMerge);
           state.settings.lastPushedAt = remoteT;
+          recordSyncPullSuccess();
           setLastSyncedSha(sha);
           state.dataModifiedAt = nowDateTime();
           persistLocalNoSchedule();
@@ -1417,8 +1551,8 @@ async function syncFromGitHubOnStartup() {
         }
         // v364: コア不一致でも自動マージで解消する(K指示2026-09-06)。編集中の入力は
         // renderDeferringForFocus経由(IME/フォーカス保護)で守る。
-        if (remoteNorm && await autoMergeRemote(remoteNorm, remoteT, sha, { origin: "startup", renderFn: renderDeferringForFocus })) return;
-        const fallbackMerge = remoteNorm ? computeSyncMerge(remoteNorm, "local") : null;
+        if (remoteNorm && await autoMergeRemote(remoteNorm, remoteT, sha, { origin: "startup", rejectInvalid: true, renderFn: renderDeferringForFocus })) return;
+        const fallbackMerge = remoteNorm ? requireSyncMerge(remoteNorm, "local") : null;
         const changed = fallbackMerge ? applySyncMergeToLocal(fallbackMerge) : mergeZeroThinkingIntoLocal(remote.zeroThinking);
         if (changed) { saveState(); renderDeferringForFocus(); }
         setSyncBanner("リモートに新しいデータがあります。編集中に取得したため自動取込を中止しました。設定から手動で確認してください");
@@ -1427,7 +1561,7 @@ async function syncFromGitHubOnStartup() {
       clearTimeout(autoSaveTimer);
       const token = state.settings.github.token;
       // tieWinner="remote": ここはapplySyncMergeToRemote(リモートを基準に採用する)経路。
-      const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm, "remote") : null;
+      const syncMerge = remoteNorm ? requireSyncMerge(remoteNorm, "remote") : null;
       // リモート採用前に、ローカルにしか無い記録を合流させてから採用する(採用で消さないため)。
       let addedLocal = false;
       let adopted;
@@ -1452,6 +1586,7 @@ async function syncFromGitHubOnStartup() {
         scheduleAutoSync();
       }
       persistLocalNoSchedule();
+      recordSyncPullSuccess();
       setLastSyncedSha(sha);   // v37: この端末はこのリモート状態と同期済み
       render();
       showToast("最新データを取り込みました");
@@ -1463,13 +1598,15 @@ async function syncFromGitHubOnStartup() {
       // v103→v106: リモートにしか無い記録(0秒思考に加えジャーナル/blocks/体調/睡眠)を
       // ローカルへ合流させる(iPhoneで書いた記録がPC起動pullで見えなくなる事故対策)。
       // tieWinner="local": ここもapplySyncMergeToLocal(ローカルを基準に残す)経路。
-      const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm, "local") : null;
+      const syncMerge = remoteNorm ? requireSyncMerge(remoteNorm, "local") : null;
       const changed = syncMerge ? applySyncMergeToLocal(syncMerge) : mergeZeroThinkingIntoLocal(remote.zeroThinking);
       if (changed) { saveState(); render(); }
+      recordSyncPullSuccess();
       setLastSyncedSha(sha);
     }
   } catch (error) {
     // 起動時の同期失敗は致命的でない(ローカルで動作継続)
+    if (["InvalidRemoteStateError", "PrimarySettingsConflict", "ArchiveTextConflict"].includes(error?.name)) setSyncBanner(error.message);
     console.warn("起動時の GitHub 同期をスキップ:", error.message);
   }
 }

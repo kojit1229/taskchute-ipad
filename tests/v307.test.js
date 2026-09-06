@@ -147,6 +147,39 @@ async function clickAndReadImmediately(page, selector) {
   }, selector);
 }
 
+// Isolate browser anchoring from the view-change reset contract. Wrappers observe, never suppress, writes.
+async function clickDateAndObserveScroll(page) {
+  return page.evaluate(() => {
+    const writes = [], restore = [], root = document.scrollingElement, main = document.querySelector("#main");
+    const targets = new Set([root, main]);
+    const describe = node => node === root ? "page" : node === main ? "main" : node.tagName;
+    const descriptor = Object.getOwnPropertyDescriptor(Element.prototype, "scrollTop");
+    if (!descriptor?.get || !descriptor?.set || !descriptor.configurable) throw Error("scrollTop observer unavailable");
+    Object.defineProperty(Element.prototype, "scrollTop", { ...descriptor,
+      set(value) { if (targets.has(this)) writes.push({ api: "scrollTop", target: describe(this), value }); return descriptor.set.call(this, value); }
+    });
+    restore.push(() => Object.defineProperty(Element.prototype, "scrollTop", descriptor));
+    function observe(owner, key) {
+      const own = Object.getOwnPropertyDescriptor(owner, key), original = owner[key];
+      if (typeof original !== "function") throw Error("scroll observer unavailable: " + key);
+      Object.defineProperty(owner, key, { configurable: true, writable: true, value: function(...args) {
+        writes.push({ api: key, target: this === window ? "window" : describe(this), args });
+        return Reflect.apply(original, this, args);
+      }});
+      restore.push(() => own ? Object.defineProperty(owner, key, own) : delete owner[key]);
+    }
+    try {
+      for (const key of ["scroll", "scrollTo", "scrollBy"]) { observe(window, key); observe(Element.prototype, key); }
+      observe(Element.prototype, "scrollIntoView");
+      const before = root.scrollTop;
+      document.querySelector('[data-action="date-next"]').click();
+      return { before, page: root.scrollTop, main: main.scrollTop, view: document.querySelector("#app").dataset.view,
+        writes, anchor: getComputedStyle(root).overflowAnchor,
+        viewport: window.innerHeight, scrollHeight: root.scrollHeight };
+    } finally { restore.reverse().forEach(fn => fn()); }
+  });
+}
+
 // v333: viewA/viewBを外側から渡せるようパラメタ化(デスクトップ=tasks⇄timeline、
 // モバイル=exec⇄today)。
 // v335(§C追随): #sidebarも「タスクシュート」「タイムライン」を「実行」1項目へ統合したため、
@@ -191,13 +224,18 @@ async function runScenario(browser, { width, height, navContainer, viewA, viewB 
       afterAutoScroll.page > 0, JSON.stringify(afterAutoScroll));
 
     // [3] 同一ビュー内の日付だけの切替では、リセットが発火しない(スコープを超えない回帰防止)
+    const anchoringStyle = await page.addStyleTag({ content: "html, body, #app, #main { overflow-anchor: none !important; }" });
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     await setScrollPos(page, 300);
     before = await scrollPos(page);
     check(`${width}px: 日付切替前にpageスクロールを300へ設定できる`, before.page === 300, JSON.stringify(before));
 
-    after = await clickAndReadImmediately(page, '[data-action="date-next"]');
+    after = await clickDateAndObserveScroll(page);
     check(`${width}px: view不変・日付のみ変化ではpageスクロールが0へ強制リセットされない`,
-      after.page === 300, JSON.stringify(after));
+      after.page === 300 && after.view === viewA && after.writes.length === 0, JSON.stringify(after));
+    check(`${width}px: 日付切替観測中はscroll anchoringを明示無効化`, after.anchor === "none", JSON.stringify(after));
+    console.log("  v307 date observation", JSON.stringify(after));
+    await anchoringStyle.evaluate(node => node.remove());
     await page.waitForFunction((tomorrow) =>
       document.querySelector('[data-date-picker]')?.value === tomorrow, TOMORROW, { timeout: 2000 });
 

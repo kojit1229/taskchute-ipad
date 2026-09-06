@@ -1,3 +1,4 @@
+import { karadaImportHTML } from "./karada-import.js";
 // src/features/instruments.js(予定パス)— TaskChute Journal スリム化P4・レーンC(新計器盤)。
 //
 // 契約(p4-interface.md §3。dashboard.js/wish.js と同じ configureXxx(deps) DIパターンだが、
@@ -173,7 +174,7 @@ function metricHTML(label, value, detail, wide = false) {
 function todayPanelHTML(state, todayIso, health) {
   const days = Array.isArray(health?.days) ? health.days : [];
   const row = days.find((day) => day?.date === todayIso);
-  const heading = `<h2>からだ ─ 今日 <span>Apple Health ${escapeHTML(generatedTime(health?.generated_at))}</span></h2>`;
+  const heading = `<h2>からだ ─ 今日 <span>Apple Health ${escapeHTML(generatedTime(health?.generated_at))}</span></h2>${karadaImportHTML()}`;
   if (!row) return `<section class="instr-panel-box instr-today">${heading}<div class="instr-today-empty">今朝の睡眠データはまだありません</div></section>`;
   const cond = conditionFromHealth(days, todayIso);
   const detail = (value, text) => value === null ? "未記録" : text;

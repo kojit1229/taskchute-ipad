@@ -186,9 +186,14 @@ function extractBlockBody(css, headerRe) {
       localStorage.setItem(KEY, JSON.stringify(s));
     }, KEY);
     await page.reload();
-    await page.waitForTimeout(400);
-    const journalTextareaFont = await page.locator("textarea[data-journal-date]").first()
-      .evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    const journalFontHandle = await page.waitForFunction(() => {
+      const element = document.querySelector('textarea[data-journal-date]');
+      if (!element?.isConnected) return false;
+      return getComputedStyle(element).fontSize || false;
+    });
+    const journalFontRaw = await journalFontHandle.jsonValue();
+    await journalFontHandle.dispose();
+    const journalTextareaFont = parseFloat(journalFontRaw);
     check("ジャーナルtextareaのfont-sizeは16px以上", journalTextareaFont >= 16, `fontSize=${journalTextareaFont}`);
 
     // ============================================================

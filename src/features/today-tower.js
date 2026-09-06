@@ -1,7 +1,10 @@
+import { karadaImportHTML } from "./karada-import.js";
+import { ARCHIVED_READONLY_MESSAGE } from "./archive-date-protection.js";
 // src/features/today-tower.js — v229: ARRIVALS見積列・GATE編集・早起きゲートを統合。
 // state・保存・action登録には触れず、時刻・便状態・信条は既存1秒tickerから差分更新する。
 
 import { renderLifeBand, renderStandingOrders } from "./topband.js";
+import { renderWorkList, updateWorkLists } from "./work-list.js";
 
 let escapeHTML, todayISO, syncAlertBanner, blocksForDate, towerFlights;
 let runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp;
@@ -171,7 +174,7 @@ function renderTowerCondition(today) {
     Number.isFinite(cond.hrv) ? `HRV ${cond.hrv.toLocaleString("ja-JP")}ms` : "",
     Number.isFinite(cond.ySteps) ? `昨日 ${cond.ySteps.toLocaleString("ja-JP")}歩` : ""
   ].filter(Boolean).join(" ・ ");
-  return `<section class="tower-condition sec-condition"><span class="tower-condition-label">からだ ─ 今日</span><span class="tower-condition-text">${escapeHTML(conditionCommentText(withGym))}</span>${meta ? `<span class="tower-condition-meta">${escapeHTML(meta)}</span>` : ""}</section>`;
+  return `<section class="tower-condition sec-condition"><span class="tower-condition-label">からだ ─ 今日</span><span class="tower-condition-text">${escapeHTML(conditionCommentText(withGym))}</span>${meta ? `<span class="tower-condition-meta">${escapeHTML(meta)}</span>` : ""}${karadaImportHTML()}</section>`;
 }
 
 function flightSetKey(flights) {
@@ -232,7 +235,7 @@ function renderTowerRunway(now, blocks, flights) {
   lastLandingId = running ? running.id : null;
   let hud = `<div class="tower-nowhud" data-status="empty">${flights.length
     ? "滑走路オープン ─ 次の便を選んで開始できます"
-    : "本日の予定はありません ─ タイムラインで追加できます"}</div>`;
+    : '本日の予定はありません ─ タイムラインで追加できます <button type="button" class="btn" data-action="nav" data-view="exec">実行で予定を追加</button>'}</div>`;
   if (running) {
     const id = escapeHTML(running.id);
     const ironLink = typeof linkedGymBlock === "function"
@@ -339,8 +342,9 @@ function renderTowerJournal(date) {
     <h2>ジャーナル <span>本日</span></h2>
     <div class="tower-journal-body">
       <label class="tower-journal-label" for="towerJournalFree">自由記述</label>
-      <textarea id="towerJournalFree" class="tower-journal-free" placeholder="気づき・所感をそのまま書く&#10;AIへの依頼は本文の『### 依頼』見出しの下に書く">${escapeHTML(journal.free)}</textarea>
-      <button type="button" class="tower-journal-save" data-action="save-tower-journal" data-date="${escapeHTML(date)}">SAVE 記録</button>
+      ${journal.archived ? `<p role="status">${ARCHIVED_READONLY_MESSAGE}</p>` : ""}
+      <textarea ${journal.archived ? "readonly" : ""} id="towerJournalFree" class="tower-journal-free" placeholder="気づき・所感をそのまま書く&#10;AIへの依頼は本文の『### 依頼』見出しの下に書く">${escapeHTML(journal.free)}</textarea>
+      <button type="button" class="tower-journal-save" ${journal.archived ? "disabled" : ""} data-action="save-tower-journal" data-date="${escapeHTML(date)}">SAVE 記録</button>
     </div>
   </section>`;
 }
@@ -551,24 +555,26 @@ function renderTodayTower() {
   const flights = boardFlights(blocks, nowMin, scheduledTasksForDate(today, blocks));
   const focusVisibility = todayFocusVisibility();
   const weekday = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
+  const wide = window.matchMedia("(min-width: 1280px)").matches;
+  const band2 = `<div class="tower-band2 band2" aria-label="NOW LANDING とポモドーロ">
+      ${renderTowerRunway(now, blocks, flights)}
+      ${renderTodayPomodoro(blocks, queueBlocksOf(blocks))}
+    </div>`;
   return `<div class="today-tower" data-motion="${escapeHTML(towerMotionSetting())}" data-night="${isNightHour(now.getHours()) ? 1 : 0}" data-paused="${document.hidden ? 1 : 0}" data-focus-mode="${Object.values(focusVisibility).some(Boolean) ? 0 : 1}" data-view-side="${focusVisibility.side ? 1 : 0}" data-view-journal="${focusVisibility.journal ? 1 : 0}" data-view-life="${focusVisibility.life ? 1 : 0}"${glassBlurOff() ? ' data-glass-blur="off"' : ""}>
+    ${wide ? "" : band2}
     ${syncAlertBanner()}
     ${renderTowerMIT(blocks)}
     ${renderTowerCondition(today)}
     ${focusVisibility.life ? `<div class="tower-band1 band1">${renderLifeBand()}<section class="tower-glass-panel clock-box" aria-label="現在時刻"><time id="towerClock">${clockText(now)}</time><span id="towerDate">${date} (${weekday})</span><strong class="dayleft" id="towerDayLeft">${dayLeftText(now)}</strong><span>本日残り</span></section>
     </div>` : ""}
     ${focusVisibility.life ? renderStandingOrders() : ""}
-    <div class="tower-band2 band2" aria-label="NOW LANDING とポモドーロ">
-      ${renderTowerRunway(now, blocks, flights)}
-      ${renderTodayPomodoro(blocks, queueBlocksOf(blocks))}
-    </div>
+    ${wide ? band2 : ""}
     ${renderTodayFocusBar(focusVisibility)}
     <div class="tower-col-left">
-      ${focusVisibility.side ? renderTowerBoard(flights) : ""}
+      ${focusVisibility.side ? renderWorkList("today") : ""}
       ${focusVisibility.side ? renderFlightLog(today, blocks) : ""}
-      ${focusVisibility.side ? renderTowerBodyMind(today, blocks) : ""}
     </div>
-    <div class="tower-col-center">${renderTowerGates(blocks)}</div>
+    <div class="tower-col-center">${renderTowerGates(blocks)}${focusVisibility.side ? renderTowerBodyMind(today, blocks) : ""}</div>
     <div class="tower-col-right">${focusVisibility.journal ? renderTowerJournal(today) : ""}</div>
   </div>`;
 }
@@ -628,9 +634,22 @@ function updateTowerArrivalSelection(blocks, flights, userSelection = false) {
 }
 
 function updateTodayTowerTick() {
+  updateWorkLists();
   const now = new Date();
   const root = document.querySelector(".today-tower");
   if (root) {
+    // UI-A: resize時も既存ノードを移し、視覚上位順と読み上げ順を揃える。
+    const band = root.querySelector(".tower-band2");
+    const anchor = window.matchMedia("(min-width: 1280px)").matches
+      ? root.querySelector(".today-focus-bar") : root.firstElementChild;
+    if (band && anchor && band !== anchor && band.nextElementSibling !== anchor) {
+      const focused = document.activeElement;
+      const scroll = document.getElementById("app");
+      const top = scroll?.scrollTop;
+      root.insertBefore(band, anchor);
+      if (band.contains(focused)) focused.focus({ preventScroll: true });
+      if (scroll) scroll.scrollTop = top;
+    }
     const night = isNightHour(now.getHours()) ? "1" : "0";
     if (root.dataset.night !== night) root.dataset.night = night;
   }

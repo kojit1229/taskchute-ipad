@@ -8,19 +8,64 @@ const path = require("path");
 const { checkCacheNameIncrement } = require("../scripts/cache-name-gate");
 
 const root = path.resolve(__dirname, "..");
-const gate = path.join(root, "scripts", "release-gate.js");
+// Gate command plans must not depend on the checkout's current release or SW.
+const planRoot = createFixtureRepo(163);
+for (const file of ["scripts/release-gate.js", "scripts/impact-regression.js",
+  "scripts/cache-name-gate.js", "scripts/release-record.js", "tests/core-suites.js"]) {
+  fs.mkdirSync(path.dirname(path.join(planRoot, file)), { recursive: true });
+  fs.copyFileSync(path.join(root, file), path.join(planRoot, file));
+}
+const fixtureSuites = ["v50", "v54", "v160", "v161", "v162", "v163", "v164"];
+for (const suite of fixtureSuites) fs.writeFileSync(path.join(planRoot, "tests", `${suite}.test.js`), "");
+fs.writeFileSync(path.join(planRoot, "tests/suite-manifest.json"), JSON.stringify({
+  suites: fixtureSuites.map((suite) => ({ file: `${suite}.test.js`, tier: suite === "v50" ? "smoke" : "full" }))
+}));
+fs.writeFileSync(path.join(planRoot, "tests/impact-regression-map.json"), JSON.stringify({
+  runtimePaths: ["app.js", "sw.js", "src/"], baseline: ["v50"], finalBaseline: ["v50", "v54"],
+  areas: {
+    "fixture-shell": { paths: ["^sw\\.js$"], suites: ["v164"] },
+    "fixture-module": { paths: ["^src/uncached\\.js$"], suites: ["v164"] }
+  }
+}));
+writeSw(planRoot, 164);
+fs.appendFileSync(path.join(planRoot, "sw.js"), "const APP_SHELL = [];\n");
+fs.writeFileSync(path.join(planRoot, "releases/v164.json"), JSON.stringify({
+  version: 164, date: "2026-01-01", title: "fixture", summary: "fixture",
+  changedFiles: ["sw.js"], intent: ["fixture"], changes: ["fixture"],
+  uncertainties: ["none"], reviewFocus: ["fixture"], verification: ["fixture"]
+}));
+const gate = path.join(planRoot, "scripts", "release-gate.js");
 
 function run(...args) {
   return spawnSync(process.execPath, [gate, ...args], {
-    cwd: root,
-    encoding: "utf8"
+    cwd: planRoot,
+    encoding: "utf8",
+    timeout: 30000
   });
 }
 
+try {
+const schema = spawnSync(process.execPath, ["scripts/release-record.js", "releases/v164.json", "--validate"],
+  { cwd: planRoot, encoding: "utf8", timeout: 30000 });
+assert.strictEqual(schema.status, 0, schema.stderr);
 const missing = run("releases/does-not-exist.json", "--suite=v163");
 assert.notStrictEqual(missing.status, 0, "存在しないrelease記録を通常gateが拒否する");
 assert(`${missing.stdout}\n${missing.stderr}`.includes("release記録がありません"),
   "release schema検証で早期失敗する");
+
+const validRecord = fs.readFileSync(path.join(planRoot, "releases/v164.json"), "utf8");
+for (const [label, content] of [["invalid JSON", "{"], ["missing title", JSON.stringify({ ...JSON.parse(validRecord), title: "" })]]) {
+  fs.writeFileSync(path.join(planRoot, "releases/v164.json"), content);
+  for (const mode of [[], ["--dry-run"]]) {
+    const invalid = run("releases/v164.json", "--suite=v164", "--impact-base=HEAD", ...mode);
+    assert.strictEqual(invalid.status, 1, `${label} must fail ${mode.join(" ")}: ${invalid.stderr}`);
+    assert(!invalid.stdout.includes("=== impact-selection ==="), "schema error must stop before impact selection");
+  }
+}
+fs.writeFileSync(path.join(planRoot, "releases/v164.json"), validRecord);
+const missingDry = run("releases/does-not-exist.json", "--suite=v163", "--dry-run", "--impact-base=HEAD");
+assert.strictEqual(missingDry.status, 1);
+assert(missingDry.stderr.includes("release記録がありません"));
 
 const finalPlan = run("releases/v164.json", "--suite=v54", "--final", "--dry-run", "--impact-base=HEAD");
 assert.strictEqual(finalPlan.status, 0, finalPlan.stderr);
@@ -36,7 +81,21 @@ assert.strictEqual(plan.status, 0, plan.stderr);
 assert(plan.stdout.includes("impact-selection"), "release gateが差分影響選定を表示する");
 assert(plan.stdout.includes("related+impact-regression"), "関連suiteと自動回帰束を一本化する");
 
+fs.mkdirSync(path.join(planRoot, "src"));
+fs.writeFileSync(path.join(planRoot, "src/uncached.js"), "export const value = 1;\n");
+const uncached = run("releases/v164.json", "--suite=v164", "--dry-run", "--impact-base=HEAD");
+assert.strictEqual(uncached.status, 1, "新規runtimeがAPP_SHELLに無ければ拒否する");
+assert(uncached.stderr.includes("app-shell-precache") && uncached.stderr.includes("./src/uncached.js"),
+  "欠落したruntimeの名前を報告する");
+const shell = fs.readFileSync(path.join(planRoot, "sw.js"), "utf8").replace("APP_SHELL = []", 'APP_SHELL = ["./src/uncached.js"]');
+fs.writeFileSync(path.join(planRoot, "sw.js"), shell);
+const cached = run("releases/v164.json", "--suite=v164", "--dry-run", "--impact-base=HEAD");
+assert.strictEqual(cached.status, 0, cached.stderr);
+console.log("PASS: isolated gate plan and precache negative/positive fixtures");
 console.log("PASS: release gate argument/schema guards");
+} finally {
+  removeFixture(planRoot);
+}
 
 // --- unit6: cache-name-increment（sw.jsのCACHE_NAME増分）フィクスチャテスト ---
 // 一時ディレクトリにミニgitリポジトリを作り、sw.js/releases/vN.jsonのコピーだけを置いて
@@ -68,6 +127,12 @@ function createFixtureRepo(initialVersion) {
   return dir;
 }
 
+function removeFixture(dir) {
+  assert.strictEqual(path.dirname(path.resolve(dir)), path.resolve(os.tmpdir()));
+  assert(path.basename(dir).startsWith("cache-name-gate-"));
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
 // (a) 一致+1でPASS
 {
   const dir = createFixtureRepo(1);
@@ -75,7 +140,7 @@ function createFixtureRepo(initialVersion) {
   writeRelease(dir, 2);
   const result = checkCacheNameIncrement({ repoRoot: dir, manifestPath: `releases/v2.json`, hasRuntimeDiff: true });
   assert.strictEqual(result.ok, true, `(a) +1でPASSするはず: ${result.message}`);
-  fs.rmSync(dir, { recursive: true, force: true });
+  removeFixture(dir);
 }
 
 // (b) CACHE_NAME据え置きでFAIL（実行差分ありなのに増分していない）
@@ -85,7 +150,7 @@ function createFixtureRepo(initialVersion) {
   const result = checkCacheNameIncrement({ repoRoot: dir, manifestPath: `releases/v1.json`, hasRuntimeDiff: true });
   assert.strictEqual(result.ok, false, "(b) 据え置きはFAILするはず");
   assert(result.message.includes("増分していません"), `(b) 増分不足メッセージのはず: ${result.message}`);
-  fs.rmSync(dir, { recursive: true, force: true });
+  removeFixture(dir);
 }
 
 // (c) +2飛びの扱い: 「>直前値」であれば増分要件自体は満たすためPASS（警告メッセージ付き）とした。
@@ -99,7 +164,7 @@ function createFixtureRepo(initialVersion) {
   const result = checkCacheNameIncrement({ repoRoot: dir, manifestPath: `releases/v3.json`, hasRuntimeDiff: true });
   assert.strictEqual(result.ok, true, `(c) +2飛びはPASS(警告)扱いのはず: ${result.message}`);
   assert(result.message.includes("+1超"), `(c) 飛び幅の注記が出るはず: ${result.message}`);
-  fs.rmSync(dir, { recursive: true, force: true });
+  removeFixture(dir);
 }
 
 // (d) release記録のversionとCACHE_NAMEが不一致ならFAIL（実行差分がある通常のリリース想定）
@@ -110,7 +175,7 @@ function createFixtureRepo(initialVersion) {
   const result = checkCacheNameIncrement({ repoRoot: dir, manifestPath: `releases/v5.json`, hasRuntimeDiff: true });
   assert.strictEqual(result.ok, false, "(d) version不一致はFAILするはず");
   assert(result.message.includes("不一致"), `(d) 不一致メッセージのはず: ${result.message}`);
-  fs.rmSync(dir, { recursive: true, force: true });
+  removeFixture(dir);
 }
 
 // (3) 実行差分なしならCACHE_NAME不問でPASS（app.js等に変更が無ければ増分チェック自体をskip）
@@ -119,7 +184,7 @@ function createFixtureRepo(initialVersion) {
   const result = checkCacheNameIncrement({ repoRoot: dir, manifestPath: `releases/v1.json`, hasRuntimeDiff: false });
   assert.strictEqual(result.ok, true, `(3) 差分なしはPASSするはず: ${result.message}`);
   assert(result.message.includes("不問"), `(3) 不問メッセージのはず: ${result.message}`);
-  fs.rmSync(dir, { recursive: true, force: true });
+  removeFixture(dir);
 }
 
 // (e) baseRef切替: unit6差し戻し#1の再発防止。「直前値」の比較元をHEAD固定ではなく
@@ -146,7 +211,7 @@ function createFixtureRepo(initialVersion) {
   });
   assert.strictEqual(viaFirstCommit.ok, true,
     `(e) baseRef=1つ前のコミット(v1)ならv2は増分ありでPASSするはず: ${viaFirstCommit.message}`);
-  fs.rmSync(dir, { recursive: true, force: true });
+  removeFixture(dir);
 }
 
 console.log("PASS: cache-name-increment fixtures (a)+1 / (b)据え置き / (c)+2飛び / (d)version不一致 / (3)差分なし / (e)baseRef切替");

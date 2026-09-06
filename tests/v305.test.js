@@ -125,7 +125,7 @@ async function checkDirectClickAfterMemoInput(browser, action) {
     await memo.fill(value);
     // v331 A-1a: 実行タブのいま行はedit-blockがタイトル(strong)側、now-endがexec-row-actions側にある。
     const button = action === "edit-block"
-      ? current.page.locator('.exec-row-now strong[data-action="edit-block"][data-id="doing"]')
+      ? current.page.locator('.exec-row-now .exec-row-copy > button[data-action="edit-block"][data-id="doing"]')
       : current.page.locator('.exec-row-now .exec-row-actions [data-action="now-end"][data-id="doing"]');
     await button.click();
 
@@ -218,7 +218,7 @@ async function checkDirectClickAfterMemoInput(browser, action) {
       await latestMemo.blur();
       await page.waitForFunction((key) => JSON.parse(localStorage.getItem(key)).blocks.find((item) => item.id === "doing")?.comment === "モーダルにも出る最新値_v305", STATE_KEY);
       // v331 A-1a: いま行のedit-blockはタイトル(strong)側にある。
-      await page.locator('.exec-row-now strong[data-action="edit-block"][data-id="doing"]').click();
+      await page.locator('.exec-row-now .exec-row-copy > button[data-action="edit-block"][data-id="doing"]').click();
       await page.locator('.modal-card [data-modal-field="comment"]').waitFor();
       check("blur保存後に編集モーダルへfocus遷移", (await storedState(page)).blocks.find((item) => item.id === "doing").comment === "モーダルにも出る最新値_v305");
       check("編集モーダルに同じ最新commentを事前表示", await page.locator('.modal-card [data-modal-field="comment"]').inputValue() === "モーダルにも出る最新値_v305");

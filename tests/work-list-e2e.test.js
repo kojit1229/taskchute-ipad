@@ -1,0 +1,130 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const {chromium,launchOptions,startServer,randomPort,STATE_KEY,passGithubGate}=require('./helpers');
+const DAY='2026-09-06';
+const checked={workflows:0,layouts:0};
+(async()=>{
+ let server,browser;
+ try {
+  server=startServer(randomPort());browser=await chromium.launch(launchOptions());
+  const page=await browser.newPage({viewport:{width:1280,height:844},serviceWorkers:'block'}),errors=[];
+  page.on('pageerror',e=>{errors.push(e.message);console.error('PAGEERROR: '+e.message);});
+  await page.route('**/*',r=>new URL(r.request().url()).hostname==='localhost'?r.continue():r.abort());
+  await page.clock.setFixedTime(new Date(2026,8,6,10,30));
+  await page.goto('http://localhost:'+server.address().port+'/');await passGithubGate(page);
+  await page.evaluate(({key,day})=>{
+   const s=JSON.parse(localStorage.getItem(key));
+   s.currentView='today';s.selectedDate=day;s.settings.lastOpenedDate=day;s.settings.autoSync=false;s.settings.github.autoSave=false;
+   s.projects=[{id:'fixture-project',title:'隔離Project',kind:'project',status:'active',category:'作業',deleted:false}];
+   s.tasks=Array.from({length:300},(_,i)=>({id:'task-'+i,title:'対象Task '+String(i).padStart(3,'0'),projectId:'fixture-project',parentTaskId:'',status:i===0?'completed':'active',deleted:false,kind:'task',estimateMin:15,dueDate:day,description:i===299?'最後の固有メモ':'通常のメモ',doneCriteria:i===298?'特別な完了条件':'',order:i*1000,progressNum:0,progressDen:10}));
+   s.blocks=s.tasks.map((t,i)=>({id:'block-'+i,taskId:t.id,title:t.title,date:day,plannedStartAt:day+'T'+String(Math.floor(i/60)).padStart(2,'0')+':'+String(i%60).padStart(2,'0'),plannedEndAt:'',actualStartAt:i===0?day+'T00:00':'',actualEndAt:i===0?day+'T00:15':'',completed:i===0,deleted:false,category:'作業',estimateMin:15,charge:0,discharge:0,comment:''}));
+   s.blocks.push({id:'future-done',title:'未来完了',date:'2026-09-07',completed:true,deleted:false,category:'生活'});
+   Object.assign(s.blocks[1],{actualStartAt:day+'T00:01',actualEndAt:day+'T00:16'});
+   s.recurrences=[];s.journals[day]='架空の本文';s.settings.wbsHideCompleted=false;
+   localStorage.setItem(key,JSON.stringify(s));localStorage.removeItem('taskchute-journal-today-focus-v1');
+  },{key:STATE_KEY,day:DAY});
+  await page.reload();await page.locator('[data-work-list="today"]').waitFor();await page.waitForLoadState('networkidle');
+  for(const scope of (process.env.WORK_LIST_SCOPES ?? 'today,exec,wbs').split(',').filter(Boolean)) {
+   if(scope!=='today') {await page.locator(`#sidebar [data-action="nav"][data-view="${scope}"]`).click();await page.locator(`[data-work-list="${scope}"]`).waitFor();}
+   const root=page.locator(`[data-work-list="${scope}"]`),rows=root.locator('[data-work-list-rows]'),query=root.locator('[data-work-filter="query"]');
+   const total=scope==='wbs'?await page.evaluate(key=>{const s=JSON.parse(localStorage.getItem(key));return s.tasks.filter(x=>!x.deleted).length+s.projects.filter(x=>!x.deleted).length;},STATE_KEY):300;
+   assert.equal(await rows.locator('[data-work-key]').count(),total,scope+' all rows');
+   if(scope==='wbs')assert.equal(await rows.locator('[data-work-key^="task:task-"]').count(),300,'all 300 fixture Tasks plus normalized system Projects');
+   await query.fill('最後の固有メモ');assert.equal(await rows.locator('[data-work-key]').count(),1);
+   assert((await rows.textContent()).includes('299'));
+   await query.fill('特別な完了条件');assert.equal(await rows.locator('[data-work-key]').count(),1);
+   await query.fill('存在しない');assert.equal(await rows.locator('[data-work-key]').count(),0);
+   await root.locator('[data-action="work-list-clear"]').click();
+   await query.fill('対象');
+   const beforeComposition=await rows.locator('[data-work-key]').count();
+   await query.evaluate(el=>{el.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}));el.value='最後の固有メモ';el.dispatchEvent(new InputEvent('input',{bubbles:true,isComposing:true}));});
+   assert.equal(await rows.locator('[data-work-key]').count(),beforeComposition,'composition defers result rendering');
+   await query.evaluate(el=>el.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true})));
+   assert.equal(await rows.locator('[data-work-key]').count(),1,'composition commits result');
+   await query.fill('対象');
+   await query.evaluate(el=>{window.__listInput=el;el.setSelectionRange(1,2);el.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true,data:'にほんご'}));});
+   await page.clock.runFor(1100);
+   assert(await query.evaluate(el=>el===window.__listInput&&document.activeElement===el&&el.selectionStart===1&&el.selectionEnd===2),'tick preserves '+scope+' IME input');
+   await query.evaluate(el=>el.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true})));
+   await rows.evaluate(el=>el.scrollTop=el.scrollHeight);
+   const scrolledTop=await rows.evaluate(el=>el.scrollTop);
+   await query.evaluate(el=>el.dispatchEvent(new Event('change',{bubbles:true})));
+   assert.equal(await rows.evaluate(el=>el.scrollTop),scrolledTop,'unchanged native change must not reset scroll');
+   const last=rows.locator(`[data-work-key="${scope==='wbs'?'task':'block'}:${scope==='wbs'?'task':'block'}-299"]`);
+   const reachable=await last.evaluate(el=>{const r=el.getBoundingClientRect(),p=el.closest('[data-work-list-rows]').getBoundingClientRect();return r.top<p.bottom&&r.bottom>p.top;});
+   assert(reachable,'last row scroll reachable '+scope);
+   if(scope==='wbs') {
+    const top=await rows.evaluate(el=>el.scrollTop);
+    await page.evaluate(()=>{window.__searchClicks=[];document.addEventListener('click',e=>window.__searchClicks.push({action:e.target.closest('[data-action]')?.dataset.action,id:e.target.closest('[data-action]')?.dataset.id}),true);});
+    await last.locator('[data-action="edit-task"]').click();
+    console.log('WBS EDIT SNAPSHOT '+JSON.stringify(await page.evaluate(async()=>({clicks:window.__searchClicks,modal:(await import('/src/state/store.js')).state.modal,html:document.querySelector('#modalRoot').innerHTML.slice(0,180),active:document.activeElement?.outerHTML.slice(0,180)}))));
+    assert.deepEqual(errors,[],'edit must not throw');
+    await page.locator('[data-modal-field="title"]').fill('対象Task 299 編集後');
+    await page.locator('[data-action="modal-save"]').click();
+    await page.waitForFunction(()=>document.querySelector('#modalRoot')&&!document.querySelector('#modalRoot').classList.contains('open'));
+    assert.equal(await query.inputValue(),'対象');
+    assert(Math.abs((await rows.evaluate(el=>el.scrollTop))-top)<3,'save restores WBS list scroll');
+    await last.locator('[data-action="edit-task"]').click();await page.locator('[data-action="modal-close"]').first().click();
+    await page.waitForFunction(()=>document.activeElement?.closest('[data-work-key]')?.dataset.workKey==='task:task-299');
+    assert.equal(await query.inputValue(),'対象');
+    assert(Math.abs((await rows.evaluate(el=>el.scrollTop))-top)<3,'cancel keeps WBS scroll');
+   }
+   await root.locator('[data-action="work-list-clear"]').click();
+   await root.locator('[data-work-filter="status"]').selectOption('completed');
+   assert.equal(await rows.locator('[data-work-key]').count(),1,scope+' completed only');
+   await root.locator('[data-action="work-list-clear"]').click();
+   if(scope==='exec') {
+    const ended=rows.locator('[data-work-key="block:block-1"]');
+    assert((await ended.textContent()).includes('終了・未完了'));
+    assert.equal(await ended.locator('[data-action="now-start"]').count(),0,'ended row cannot restart its actual time');
+    const endedTitle=ended.locator('button[data-action="edit-block"]').first();
+    await endedTitle.click(); await page.locator('[data-action="modal-close"]').first().click();
+    await page.waitForFunction(()=>document.activeElement?.closest('[data-work-key]')?.dataset.workKey==='block:block-1');
+    assert(await endedTitle.evaluate(el=>el===document.activeElement),'ended title regains keyboard focus');
+    await root.locator('[data-work-filter="mode"]').selectOption('upcoming');
+    assert.equal(await rows.locator('[data-work-key]').count(),300);
+    assert.equal(await rows.locator('[data-work-key="block:future-done"]').count(),1,'future completed kept');
+    assert.equal(await rows.locator('[data-work-key="block:block-0"]').count(),0,'today completed excluded from upcoming');
+    await page.locator('[data-action="exec-mode-toggle"][data-mode="actual"]').first().click();
+    assert.equal(await page.locator('.exec-row-done').count(),2,'actual keeps ended but incomplete');
+    assert((await page.locator('.exec-pane-left').textContent()).includes('終了・未完了'));
+    await page.locator('[data-action="exec-mode-toggle"][data-mode="plan"]').first().click();
+   }
+   console.log('PASS '+scope+' all/search/zero/IME/scroll/filter');
+   checked.workflows++;
+  }
+  // The selected timeline date must not redefine Today or Upcoming.
+  await page.evaluate(async()=>{(await import('/src/state/store.js')).state.selectedDate='2026-09-05';});
+  for(const scope of ['today','exec']) {
+   await page.locator(`#sidebar [data-action="nav"][data-view="${scope}"]`).evaluate(el=>el.click());
+   const root=page.locator(`[data-work-list="${scope}"]`);
+   if(scope==='exec') await root.locator('[data-work-filter="mode"]').selectOption('today');
+   await root.locator('[data-action="work-list-clear"]').click();
+   assert.equal(await root.locator('[data-work-key]').count(),300,scope+' uses real today when timeline date differs');
+  }
+  await page.evaluate(async()=>{(await import('/src/state/store.js')).state.selectedDate= '2026-09-06';});
+  const output=process.env.WORK_LIST_EVIDENCE_DIR;if(output)fs.mkdirSync(output,{recursive:true});
+  for(const width of (process.env.WORK_LIST_WIDTHS??'390,768,1024,1280').split(',').filter(Boolean).map(Number)) {
+   await page.setViewportSize({width,height:width===1024?768:844});
+   for(const scope of ['today','exec','wbs']) {
+    await page.locator(`#sidebar [data-action="nav"][data-view="${scope}"]`).evaluate(el=>el.click());
+    await page.locator(`[data-work-list="${scope}"]`).waitFor();
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no overflow '+scope+' '+width);
+    if(width===1024&&scope==='today') {
+     const columns=await page.evaluate(()=>{const a=document.querySelector('.tower-col-left').getBoundingClientRect(),b=document.querySelector('.tower-col-center').getBoundingClientRect();return b.x>a.x&&Math.abs(a.y-b.y)<2;});
+     assert(columns,'1024 landscape Today two columns');
+    }
+    if(scope==='today'&&width<1280) assert(await page.evaluate(()=>document.querySelector('.today-focus-bar').getBoundingClientRect().top<document.querySelector('[data-work-list="today"]').getBoundingClientRect().top),'focus controls precede Today list');
+    if(width===1024&&scope==='exec') assert(await page.locator('.exec-pane-right').isVisible(),'1024 execution timeline accessible');
+    if(output)await page.screenshot({path:path.join(output,`${scope}-${width}.png`),fullPage:true});
+    checked.layouts++;
+   }
+  }
+  assert.deepEqual(errors,[],'no pageerror');
+  console.log(`PASS work-list E2E: ${checked.workflows} workflows, ${checked.layouts} layout screens; desktop emulation only`);
+ } finally {
+  try {if(browser)await browser.close();}
+  finally {if(server)await new Promise(resolve=>server.close(resolve));}
+ }
+})().catch(e=>{console.error(e);process.exitCode=1;});

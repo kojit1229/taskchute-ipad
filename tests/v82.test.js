@@ -1,7 +1,7 @@
 // v82 検証: UX監査(workbench/out/2026-07-12-ux-audit/findings.md)の「B. K判断が必要」のうち
 // K承認済みの B1/B2/B3 に対応。CHANGES_v82.md参照。
-//   B1: bottom-nav(mobileNav)の入替。WBSを「その他」へ降ろし、ジャーナルを5枠に昇格
-//       (ホーム/ジャーナル/実行/時間/その他)。朝の体調記録(ホーム→ジャーナル)を1タップにする。
+//   B1: bottom-nav(mobileNav)の入替。現在はv333の4枠(今日/ジャーナル/実行/その他)。
+//       時間軸は実行内の実績切替へ統合。朝の体調記録→ジャーナルの1タップは維持。
 //   B2: 「今日のリズム」ゾーン(ながれ)を折りたたみにし、集計値
 //       (ながれ完了数)をsummary行に要約表示する。v73縮退モードの
 //       zone2-degradedとは独立foldId(zone2 / zone2-degraded)で共存させる。
@@ -95,11 +95,11 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (a) B1: bottom-navの入替
     // ============================================================
-    console.log("[1] B1: bottom-navが 今日/ジャーナル/実行/時間/その他 の並びになっている");
+    console.log("[1] B1: bottom-navが 今日/ジャーナル/実行/その他 の並びになっている");
     await seed({ blocks: [], view: "home" });
     const bottomLabels = await page.locator("#bottomNav button").allTextContents();
-    // v182 D2: mobileNav先頭差替え/moreGroups計画群へhome追加
-    check("bottom-navの並びがv182仕様", JSON.stringify(bottomLabels) === JSON.stringify(["今日", "ジャーナル", "実行", "時間", "その他"]), JSON.stringify(bottomLabels));
+    // v333: 4枠へ統合。実行内の実績タイムラインはv333.test.jsで別途維持。
+    check("bottom-navの並びがv333の4項目仕様", JSON.stringify(bottomLabels) === JSON.stringify(["今日", "ジャーナル", "実行", "その他"]), JSON.stringify(bottomLabels));
 
     console.log("[1b] ホームからジャーナルへ1タップで遷移できる(朝の体調記録の日課動線)");
     await page.click('#bottomNav button[data-view="journal"]');

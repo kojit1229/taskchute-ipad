@@ -27,14 +27,24 @@ function check(name, condition, extra = "") {
   else { failures++; console.log(`  ❌ ${name} ${extra}`); }
 }
 
-async function observedContext(browser, { blockUntilGuard = false } = {}) {
+async function observedContext(browser, { blockUntilGuard = false, concurrentRepair = false } = {}) {
   const logs = { deleted: [], unregistered: [], registered: [], errors: [], appLoads: [], events: [] };
   const ctx = await browser.newContext({ viewport: { width: 1100, height: 900 } });
+  const participants = new Set();
+  let releaseRepair, rejectRepair, repairTimer;
+  const repairBarrier = new Promise((resolve, reject) => { releaseRepair = resolve; rejectRepair = reject; });
+  repairBarrier.catch(() => {});
+  await ctx.exposeBinding("__tcjCleanupBarrier", ({ page }) => {
+    participants.add(page);
+    if (!repairTimer && participants.size < 2) repairTimer = setTimeout(() => rejectRepair(new Error("two cleanup participants missing")), 10000);
+    if (participants.size === 2) { clearTimeout(repairTimer); releaseRepair(); }
+    return repairBarrier;
+  });
   await ctx.exposeBinding("__tcjObserve", (_source, event) => {
     logs[event.type].push(event.value);
     logs.events.push({ type: event.type, value: event.value });
   });
-  await ctx.addInitScript(({ flag, block }) => {
+  await ctx.addInitScript(({ flag, block, concurrent }) => {
     window.addEventListener("error", (event) => window.__tcjObserve({
       type: "errors",
       value: {
@@ -62,6 +72,7 @@ async function observedContext(browser, { blockUntilGuard = false } = {}) {
     };
     const nativeDelete = caches.delete.bind(caches);
     caches.delete = async (name) => {
+      if (concurrent && new URL(location.href).searchParams.get("self-heal") === "two-tabs" && name.startsWith("taskchute-journal-pwa-")) await window.__tcjCleanupBarrier();
       const result = await nativeDelete(name);
       await window.__tcjObserve({ type: "deleted", value: { name, result } });
       return result;
@@ -69,16 +80,17 @@ async function observedContext(browser, { blockUntilGuard = false } = {}) {
     const nativeUnregister = ServiceWorkerRegistration.prototype.unregister;
     ServiceWorkerRegistration.prototype.unregister = async function () {
       const scope = this.scope;
+      if (concurrent && new URL(location.href).searchParams.get("self-heal") === "two-tabs" && scope === new URL("./", location.href).href) await window.__tcjCleanupBarrier();
       const result = await nativeUnregister.call(this);
       await window.__tcjObserve({ type: "unregistered", value: { scope, result } });
       return result;
     };
-  }, { flag: FLAG, block: blockUntilGuard });
-  return { ctx, logs };
+  }, { flag: FLAG, block: blockUntilGuard, concurrent: concurrentRepair });
+  return { ctx, logs, repairParticipants: () => participants.size };
 }
 
 async function installScenario(browser, pageCount = 1) {
-  const observed = await observedContext(browser, { blockUntilGuard: true });
+  const observed = await observedContext(browser, { blockUntilGuard: true, concurrentRepair: pageCount === 2 });
   const { ctx, logs } = observed;
   const pages = [];
   const setupPage = await ctx.newPage();
@@ -86,19 +98,31 @@ async function installScenario(browser, pageCount = 1) {
   await setupPage.goto(`${ORIGIN}/`);
   await passGithubGate(setupPage);
   await setupPage.waitForSelector('[data-action="nav"]');
-  await setupPage.evaluate(async ({ otherScope }) => {
-    const own = await window.__tcjTestNativeRegister("./sw.js");
-    const other = await window.__tcjTestNativeRegister("/tests/fixtures/dummy-sw.js", { scope: otherScope });
-    await Promise.all([own, other].map((registration) => {
-      if (registration.active) return Promise.resolve();
-      const worker = registration.installing || registration.waiting;
-      if (!worker) return Promise.resolve();
-      return new Promise((resolve) => worker.addEventListener("statechange", () => {
-        if (worker.state === "activated") resolve();
+  // Registration must outlive the app page's real controllerchange reload.
+  // Use a same-origin page outside APP_SCOPE; never suppress product listeners.
+  const setupNavigations = countNavigations(setupPage);
+  const setupLoads = logs.appLoads.length;
+  const registrationPage = await ctx.newPage();
+  await registrationPage.route(HOST + '/__sw_setup_fixture__', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>synthetic SW setup</title>' }));
+  try {
+    await registrationPage.goto(HOST + '/__sw_setup_fixture__');
+    await registrationPage.evaluate(async ({ appScope, otherScope }) => {
+      const own = await window.__tcjTestNativeRegister(appScope + 'sw.js', { scope: appScope });
+      const other = await window.__tcjTestNativeRegister('/tests/fixtures/dummy-sw.js', { scope: otherScope });
+      await Promise.all([own, other].map(registration => {
+        const worker = registration.active || registration.installing || registration.waiting;
+        if (!worker) throw new Error('test registration has no worker');
+        if (worker.state === 'activated') return;
+        return new Promise(resolve => worker.addEventListener('statechange', () => {
+          if (worker.state === 'activated') resolve();
+        }));
       }));
-    }));
-  }, { otherScope: OTHER_SCOPE });
-  await setupPage.waitForFunction(() => !!navigator.serviceWorker.controller);
+    }, { appScope: APP_SCOPE, otherScope: OTHER_SCOPE });
+    await waitForNavigationCount(setupNavigations, 1);
+    await waitForObservedCount(() => logs.appLoads.length, setupLoads + 1, 'setup appEntry load');
+    await setupPage.waitForFunction(() => !!navigator.serviceWorker.controller);
+    console.log('SETUP-READY', JSON.stringify({ navigations: setupNavigations(), moduleLoads: logs.appLoads.length - setupLoads }));
+  } finally { await registrationPage.close(); }
   for (let i = 0; i < pageCount; i++) {
     const page = await ctx.newPage();
     const cdp = await ctx.newCDPSession(page);
@@ -124,7 +148,7 @@ async function installScenario(browser, pageCount = 1) {
   logs.unregistered.length = 0;
   logs.registered.length = 0;
   logs.events.length = 0;
-  return { ctx, pages, logs };
+  return { ctx, pages, logs, repairParticipants: observed.repairParticipants };
 }
 
 function countNavigations(page) {
@@ -149,6 +173,61 @@ async function pageState(page) {
       expected
     };
   }, { flag: FLAG, expected: EXPECTED_CACHE, otherCache: OTHER_CACHE, appScope: APP_SCOPE, otherScope: OTHER_SCOPE });
+}
+
+// 復旧で許容されるreload中だけ観測を取り直す。回数・時間超過や別の例外は失敗。
+async function readAcrossNavigation(read, navigationCounts, timeoutMs = 15000) {
+  const deadline = Date.now() + timeoutMs;
+  let timer, closed = false;
+  const assertBounds = () => {
+    if (navigationCounts().some(count => count > 4)) throw new Error("state read exceeded 4 navigations");
+    if (closed || Date.now() >= deadline) throw new Error("state read deadline exceeded");
+  };
+  try {
+    return await Promise.race([
+      (async () => {
+        for (;;) {
+          assertBounds();
+          try {
+            const value = await read();
+            assertBounds();
+            return value;
+          } catch (error) {
+            if (!String(error?.message).includes("Execution context was destroyed, most likely because of a navigation")) throw error;
+            assertBounds();
+            // 固定sleepは追加せず、deadline timerとnavigation eventを処理させる。
+            await new Promise(resolve => setImmediate(resolve));
+          }
+        }
+      })(),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => { closed = true; reject(new Error("state read deadline exceeded")); }, timeoutMs);
+      })
+    ]);
+  } finally { closed = true; clearTimeout(timer); }
+}
+
+async function verifyNavigationReadBounds() {
+  console.log("[境界fixture] navigation再取得は時間・回数を制限し、別の例外を隠さない");
+  let attempts = 0;
+  const recovered = await readAcrossNavigation(async () => {
+    if (++attempts === 1) throw new Error("page.evaluate: Execution context was destroyed, most likely because of a navigation.");
+    return "healthy";
+  }, () => [2, 3]);
+  check("context破棄の後だけ再取得し成功する", recovered === "healthy" && attempts === 2);
+  check("4navigationちょうどは許容する", await readAcrossNavigation(async () => true, () => [4]) === true);
+  const rejection = async operation => { try { await operation(); return null; } catch (error) { return error; } };
+  const timedOut = await rejection(() => readAcrossNavigation(() => new Promise(() => {}), () => [2], 10));
+  check("未完了readもdeadlineで明示失敗する", timedOut?.message === "state read deadline exceeded");
+  let reads = 0;
+  const tooMany = await rejection(() => readAcrossNavigation(async () => { reads++; return true; }, () => [5]));
+  check("5navigationではread前に失敗しループを隠さない", tooMany?.message === "state read exceeded 4 navigations" && reads === 0);
+  let count = 4;
+  const afterRead = await rejection(() => readAcrossNavigation(async () => { count = 5; return true; }, () => [count]));
+  check("read待ち中の5navigation化も拒否する", afterRead?.message === "state read exceeded 4 navigations");
+  const other = new Error("fixture non-navigation failure");
+  const unrelated = await rejection(() => readAcrossNavigation(async () => { reads++; throw other; }, () => [2]));
+  check("navigation以外は同じ例外を再throwし再試行しない", unrelated === other && reads === 1);
 }
 
 async function waitHealthy(page) {
@@ -242,6 +321,7 @@ async function settleVm() {
   const server = startServer(PORT, MOUNT);
   const browser = await chromium.launch(launchOptions());
   try {
+    await verifyNavigationReadBounds();
     check("bootstrap sourceを抽出できる", !!bootstrapSource);
     check("sw.jsからCACHE_NAMEを抽出できる", !!EXPECTED_CACHE, EXPECTED_CACHE);
 
@@ -377,7 +457,12 @@ async function settleVm() {
       const page = await ctx.newPage();
       await blockGithubApiByDefault(page);
       const started = Date.now();
+      const normalNavigations = countNavigations(page);
       await page.goto(`${ORIGIN}/`);
+      // Fresh installation claims the page and reloads it once. Seed the test
+      // connection only after that actual navigation and module load complete.
+      await waitForNavigationCount(normalNavigations, 2);
+      await waitForObservedCount(() => logs.appLoads.length, 2, "normal appEntry load");
       await passGithubGate(page);
       await page.waitForSelector('[data-action="nav"]');
       await waitHealthy(page);
@@ -402,7 +487,7 @@ async function settleVm() {
 
     console.log("[9] 2タブ同時版ズレは有限回で収束し、データと他アプリを保つ");
     {
-      const { ctx, pages, logs } = await installScenario(browser, 2);
+      const { ctx, pages, logs, repairParticipants } = await installScenario(browser, 2);
       const counts = pages.map((page) => countNavigations(page));
       await Promise.all(pages.map((page) => page.goto(`${ORIGIN}/?self-heal=two-tabs`, { waitUntil: "domcontentloaded" }).catch(() => {})));
       // 先に復旧したタブのSWがclaim済みになってから遅いタブがreloadすると、遅い側は
@@ -410,9 +495,12 @@ async function settleVm() {
       // 各reloadは各タブのcleanup完了後に起きるので、両方のreload後に最後の再登録を待てば
       // 遅いタブのcleanupが先行タブの新registrationを解除する競合も取り切れる。
       await Promise.all(counts.map((count) => waitForNavigationCount(count, 2)));
+      check("異なる両タブが自己修復を開始してから削除と登録解除を解放する", repairParticipants() === 2);
       await waitForPostCleanupRegistration(logs);
+      const stateDeadline = Date.now() + 15000;
       await Promise.all(pages.map((page) => waitHealthy(page)));
-      const states = await Promise.all(pages.map((page) => pageState(page)));
+      const states = await Promise.all(pages.map((page) => readAcrossNavigation(
+        () => pageState(page), () => counts.map(count => count()), Math.max(0, stateDeadline - Date.now()))));
       check("両タブが有限回で復旧する", counts.every((count) => count() >= 2 && count() <= 4) && states.every((state) => state.ownHealthy), JSON.stringify({ counts: counts.map((x) => x()), states }));
       check("localStorageデータと他アプリは競合後も無害", states.every((state) => state.sentinel === "preserved" && state.otherAlive), JSON.stringify(states));
       check("同時修復の破壊対象もTaskChute内だけ", logs.deleted.every((x) => x.name.startsWith(CACHE_PREFIX)) && logs.unregistered.every((x) => x.scope.startsWith(APP_SCOPE)), JSON.stringify(logs));

@@ -77,9 +77,9 @@ function task(id, projectId, title, extra = {}) {
     console.log("[1] モバイルの常時ツールバーと非永続の表示メニュー");
     check("TOWER / WBSと12WY週・日付範囲を表示", /TOWER \/ WBS/.test(await page.locator(".wbs-heading").textContent())
       && (await page.locator(".wbs-heading").textContent()).includes("12WY 第3週 ・ 8/29 – 9/4"));
-    check("閉時の常時操作は表示と追加だけ", await page.locator(".wbs-view-menu > summary").isVisible()
+    check("検索は常設し、閉時のツールバー操作は表示と追加を保持", await page.locator(".wbs-view-menu > summary").isVisible()
       && await page.locator(".wbs-add-menu > summary").isVisible()
-      && !await page.locator("#wbs-search-input").isVisible() && !await page.locator(".wbs-edit-toggle").isVisible());
+      && await page.locator('[data-work-list="wbs"] #wbs-search-input').isVisible() && !await page.locator(".wbs-edit-toggle").isVisible());
     const stateBeforeMenus = await page.evaluate((key) => localStorage.getItem(key), STATE_KEY);
     await page.locator(".wbs-view-menu > summary").click();
     check("表示メニュー内に検索と編集を含む8操作、ON/OFFを表示", await page.locator("#wbs-search-input").isVisible()
@@ -123,7 +123,7 @@ function task(id, projectId, title, extra = {}) {
     console.log("[3] TOWER色・44px・390/1280pxレスポンシブ");
     await page.locator(".wbs-view-menu > summary").click();
     await page.locator("#wbs-search-input").fill("Task");
-    await page.waitForSelector(".wbs-search-shell .search-kind");
+    await page.waitForSelector('[data-work-list="wbs"] .search-kind');
     const mobile = await page.evaluate(() => {
       const root = document.querySelector(".wbs-tower");
       const doc = document.scrollingElement || document.documentElement;
@@ -158,7 +158,7 @@ function task(id, projectId, title, extra = {}) {
       JSON.stringify(accessibilityViolations.slice(0, 12)));
     const towerTokens = await page.evaluate(() => ({
       criteria: getComputedStyle(document.querySelector(".wbs-criteria-btn.on")).borderColor,
-      searchKind: getComputedStyle(document.querySelector(".wbs-search-shell .search-kind")).color,
+      searchKind: getComputedStyle(document.querySelector('[data-work-list="wbs"] .search-kind')).color,
       track: getComputedStyle(document.querySelector(".twy-row")).backgroundColor
     }));
     check("検索種別・条件ボタン・12WYトラックはTOWERトークン配色",

@@ -373,9 +373,10 @@ function check(name, cond, extra = "") {
     // state.currentView直接指定+reloadでジャーナル画面へ遷移する(nav操作の検証はこのテストの
     // 主眼ではないため)。
     await seed({ view: "journal", blocks: [] });
-    // v247でTOWERスキンのコメント破損が直り、意図された見出し指定が再び有効になった。
+    // 現行journalはh2を廃止し朝/BODY/MIND/LIFE等の区分見出しへ移行。実CSSの11px/cyanを全区分で確認。
     const journalH2Style = await page.evaluate(() => {
-      const el = document.querySelector(".journal-grid h2");
+      const headings = [...document.querySelectorAll(".journal-tower .journal-panel-today > .journal-segment > .fold-summary")];
+      const el = headings[0];
       if (!el) return null;
       const style = getComputedStyle(el);
       const tower = el.closest(".journal-tower");
@@ -385,11 +386,15 @@ function check(name, cond, extra = "") {
       document.body.appendChild(probe);
       const resolvedTowerCyan = getComputedStyle(probe).color;
       probe.remove();
-      return { fontSize: style.fontSize, color: style.color, towerCyan, resolvedTowerCyan };
+      return { fontSize: style.fontSize, color: style.color, towerCyan, resolvedTowerCyan,
+        headings: headings.map(node => { const css = getComputedStyle(node), rect = node.getBoundingClientRect();
+          return { fontSize: css.fontSize, color: css.color, width: rect.width, height: rect.height }; }) };
     });
-    check(".journal-grid h2(390px幅)にTOWER見出しデザイン(13px・var(--tower-cyan))が適用される",
-      journalH2Style?.fontSize === "13px" && !!journalH2Style.towerCyan
-        && journalH2Style.color === journalH2Style.resolvedTowerCyan,
+    check(".journal-panel-todayの現行区分見出し(390px幅)にTOWERデザイン(11px・var(--tower-cyan))が適用される",
+      journalH2Style?.fontSize === "11px" && !!journalH2Style.towerCyan
+        && journalH2Style.color === journalH2Style.resolvedTowerCyan
+        && journalH2Style.headings.length >= 4
+        && journalH2Style.headings.every(h => h.fontSize === "11px" && h.color === journalH2Style.resolvedTowerCyan && h.width > 0 && h.height > 0),
       JSON.stringify(journalH2Style));
     await page.setViewportSize({ width: 1100, height: 1400 });
 

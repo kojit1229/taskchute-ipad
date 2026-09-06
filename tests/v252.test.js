@@ -174,6 +174,11 @@ function check(name, cond, extra = "") {
     const refused = await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).recurrences.find((item) => item.id === "candidate"), KEY);
     check("4件目を保存せずstreakSince nullのまま", refused.streakSince === null, JSON.stringify(refused));
     await page.locator('.modal-footer [data-action="modal-close"]').click();
+    await page.waitForSelector('.draft-leave-dialog[open]');
+    check("上限拒否後の閉じるは入力を保持した破棄確認になる", await page.locator('[data-modal-field="streakFixed"]').isChecked());
+    await page.locator('.draft-leave-dialog [data-action="draft-leave-discard"]').click();
+    check("明示破棄後も4件目のルーティンは変更しない", JSON.stringify(await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).recurrences.find(item => item.id === "candidate"), KEY)) === JSON.stringify(refused));
+
     await page.locator('[data-action="edit-block"][data-id="monthly-block"]').evaluate((element) => element.click());
     check("monthlyには固定化トグルを出さない", await page.locator('[data-modal-field="streakFixed"]').count() === 0);
     await page.locator('.modal-footer [data-action="modal-close"]').click();

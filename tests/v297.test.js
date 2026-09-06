@@ -180,7 +180,9 @@ function check(name, cond, extra = "") {
       bodyScans: [{ id: "s-r1", dateTime: at(TODAY, "07:15"), fatigue: 1, recovery: 4, part: "", pomodoroBlockId: "r1" }]
     });
     check("NOW LANDING(滑走路)節が生存", await page.locator(".tower-runway").count() === 1);
-    check("ARRIVALS節が生存", await page.locator(".tower-board").count() === 1);
+    check("旧ARRIVALSの役割を全件一覧へ移し実績Blockも保持", await page.locator('.tower-col-left > [data-work-list="today"]').count() === 1
+      && await page.locator('[data-work-list="today"] [data-work-key="block:r1"] [data-action="edit-block"][data-id="r1"]').count() === 1
+      && (await page.locator('[data-work-list="today"]').textContent()).includes("実績1"));
     check("FLIGHT LOG節が生存し実績1件を含む", (await page.locator(".sec-log").textContent()).includes("実績1"));
     check("GATE ROUTINE節が生存", await page.locator(".tower-gates").count() === 1);
     check("BODY/MINDはFLIGHT LOGの後・JOURNALより前の順で描画される(order:5)",
@@ -197,6 +199,16 @@ function check(name, cond, extra = "") {
     const widths = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }));
     check("390px幅で横スクロールが発生しない(scrollWidth<=clientWidth+1)",
       widths.scrollWidth <= widths.clientWidth + 1, JSON.stringify(widths));
+    check("390pxは実績→身体→ジャーナルが重ならず、身体は中央列のGATE後に保持",
+      await page.evaluate(() => {
+        const log = document.querySelector(".sec-log"), body = document.querySelector(".sec-bodymind");
+        const gate = document.querySelector(".sec-gates"), journal = document.querySelector(".sec-journal");
+        if (!log || !body || !gate || !journal) return false;
+        const l = log.getBoundingClientRect(), b = body.getBoundingClientRect(), j = journal.getBoundingClientRect();
+        return body.parentElement.classList.contains("tower-col-center") && gate.parentElement === body.parentElement
+          && Boolean(gate.compareDocumentPosition(body) & Node.DOCUMENT_POSITION_FOLLOWING)
+          && b.width > 0 && b.height > 0 && l.bottom <= b.top && b.bottom <= j.top;
+      }));
     await page.setViewportSize({ width: 1100, height: 1400 });
   } finally {
     await browser.close();

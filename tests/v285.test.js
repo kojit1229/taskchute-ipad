@@ -46,14 +46,14 @@ check("app/CSS/actionゴールデンにも旧導線が無い", !appSource.includ
   && !stylesSource.includes("tower-departures") && !actionTestSource.includes("departures-open-tomorrow"));
 const boardFlightsReferences = towerSource.match(/\bboardFlights\b/g) || [];
 check("共有boardFlightsは定義とARRIVALS描画・ticker参照を維持", boardFlightsReferences.length >= 3, `references=${boardFlightsReferences.length}`);
-check("ARRIVALS・FLIGHT LOGはsideでガードし、GATEの描画呼び出しを常時維持",
-  towerSource.includes('focusVisibility.side ? renderTowerBoard(flights) : ""')
+check("今日一覧・FLIGHT LOG・中央身体はsideでガードし、GATEは常時維持",
+  towerSource.includes('focusVisibility.side ? renderWorkList("today") : ""')
   && towerSource.includes('focusVisibility.side ? renderFlightLog(today, blocks) : ""')
   && towerSource.includes('focusVisibility.side ? renderTowerBodyMind(today, blocks) : ""')
-  && towerSource.includes('<div class="tower-col-center">${renderTowerGates(blocks)}</div>'));
+  && towerSource.includes('<div class="tower-col-center">${renderTowerGates(blocks)}${focusVisibility.side ? renderTowerBodyMind(today, blocks) : ""}</div>'));
 check("tower-coreの負方向・現行モバイル順序を維持", towerTestSource.includes("DEPARTURES要素・旧action・明日便タイトルを描画しない")
   && towerTestSource.includes("Block 0件でもDEPARTURESは復活しない")
-  && towerTestSource.includes("LIFE→時計→SO→NOW LANDING(いま)→ポモドーロ→FOCUS→次の予定→ルーティン→やったこと→からだのきろく→ジャーナル順"));
+  && towerTestSource.includes("pxはNOW先頭の保持順と幅別下段配置"));
 
 (async () => {
   const server = startServer(PORT);
@@ -98,7 +98,7 @@ check("tower-coreの負方向・現行モバイル順序を維持", towerTestSou
     await page.click('[data-action="focus-toggle-side"]');
     await page.waitForSelector('.today-tower[data-view-side="0"]');
     check("sideだけを非表示にして固定GATE/JOURNALを維持",
-      await page.locator(".tower-col-left > *").count() === 0
+      await page.locator(".tower-col-left > *, .sec-bodymind").count() === 0
       && await page.locator(".sec-gates").count() === 1 && await page.locator(".sec-journal").count() === 1);
     const persistedFocus = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), FOCUS_KEY);
     check("VIEW sections実測キーはside/journal/lifeだけ",

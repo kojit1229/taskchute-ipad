@@ -104,15 +104,25 @@ function check(name, cond, extra = "") {
     check("その他カードは全て280px以上", moreGrid.cardWidths.length > 0
       && moreGrid.cardWidths.every((width) => width >= 280), JSON.stringify(moreGrid));
 
-    console.log("[3] Todayの既存3面卓は拡幅ルールの対象外");
-    await openView("today");
-    const today = await page.locator(".today-tower").evaluate((element) => ({
-      maxWidth: getComputedStyle(element).maxWidth,
-      columns: getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).filter(Boolean)
-    }));
-    check("Todayは既存max-width 1280px", today.maxWidth === "1280px", JSON.stringify(today));
-    check("Todayは340px/320px/可変の3面卓", today.columns.length === 3
-      && today.columns[0] === "340px" && today.columns[1] === "320px", JSON.stringify(today));
+    console.log("[3] UI-A Todayは1280px境界で38:29:33の3面卓へ切替");
+    for (const width of [1279, 1280, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      await openView("today");
+      const today = await page.locator(".today-tower").evaluate((element) => ({
+        maxWidth: getComputedStyle(element).maxWidth,
+        columns: getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).filter(Boolean).map(parseFloat),
+        overflow: document.scrollingElement.scrollWidth > innerWidth
+      }));
+      if (width < 1280) {
+        check("1279pxではPC3面卓と拡幅を適用せず横溢れなし", today.maxWidth !== "1600px"
+          && today.columns.length !== 3 && !today.overflow, JSON.stringify(today));
+      } else {
+        check(`${width}px Todayの上限はUI-Aの1600pxで横溢れなし`, today.maxWidth === "1600px" && !today.overflow, JSON.stringify(today));
+        const total = today.columns.reduce((sum, value) => sum + value, 0);
+        check(`${width}px Todayは38:29:33の3面卓`, today.columns.length === 3 && total > 0
+          && today.columns.every((value, index) => Math.abs(value / total - [0.38, 0.29, 0.33][index]) < 0.002), JSON.stringify(today));
+      }
+    }
 
     console.log("[4] 390/768/1024pxでは従来max-width・横スクロールなし");
     const negativeViews = [

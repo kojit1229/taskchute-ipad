@@ -154,7 +154,7 @@ async function openWbsRowMenuIfClosed(page, taskTitle) {
       view: "wbs"
     });
     await openWbsRowMenuIfClosed(page, "leverageType保存検証Task");  // v329: 行メニュー(…)を開いてからedit-task
-    await page.click('[data-action="edit-task"][data-id="task-lev1"]');
+    await page.click('[data-work-list="wbs"] [data-action="edit-task"][data-id="task-lev1"]');
     await page.waitForTimeout(200);
     check("Task編集モーダルにレバレッジselectがある", await page.locator('[data-modal-field="leverageType"]').count() === 1);
     await page.selectOption('[data-modal-field="leverageType"]', "asset");
@@ -193,7 +193,7 @@ async function openWbsRowMenuIfClosed(page, taskTitle) {
       view: "wbs"
     });
     await openWbsRowMenuIfClosed(page, "10秒判定検証Task");  // v329: 行メニュー(…)を開いてからedit-task
-    await page.click('[data-action="edit-task"][data-id="task-lev2"]');
+    await page.click('[data-work-list="wbs"] [data-action="edit-task"][data-id="task-lev2"]');
     await page.waitForTimeout(200);
     check("10秒判定ヘルプ(details)がある", await page.locator(".lev-helper").count() === 1);
     await page.click(".lev-helper summary");  // 開く(details既定は閉じているため)
@@ -204,8 +204,10 @@ async function openWbsRowMenuIfClosed(page, taskTitle) {
     const selVal1 = await page.locator('[data-modal-field="leverageType"]').inputValue();
     check("2問以上Yesでselectがassetになる", selVal1 === "asset", selVal1);
     await page.click('[data-action="modal-close"]');  // 保存せずキャンセル
+    await page.locator('dialog[open] [data-action="draft-leave-discard"]').click();
+    await page.waitForSelector('dialog[open]', { state: "detached" });
     await page.waitForTimeout(150);
-    await page.click('[data-action="edit-task"][data-id="task-lev2"]');  // 開き直す
+    await page.click('[data-work-list="wbs"] [data-action="edit-task"][data-id="task-lev2"]');  // 開き直す
     await page.waitForTimeout(150);
     const selValAfterCancel = await page.locator('[data-modal-field="leverageType"]').inputValue();
     check("保存せずキャンセルすると判定結果は反映されない(強制しない)", selValAfterCancel === "", selValAfterCancel);

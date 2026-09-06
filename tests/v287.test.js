@@ -174,7 +174,7 @@ async function verifyUnreadList(browser) {
     check("未読moreと未着手tasksバッジを取り違えず同時表示", await badgeText(page, "#bottomNav", "more") === "4"
       && await badgeText(page, "#bottomNav", "exec") === "1"
       && await badgeText(page, "#sidebar", "ai-reports") === "4"
-      && await badgeText(page, "#sidebar", "tasks") === "1");
+      && await badgeText(page, "#sidebar", "exec") === "1");
 
     await page.locator(`[data-action="ai-report-open-unread"][data-file="${feedbackName}"]`).click();
     await page.waitForSelector('[data-action="ai-report-type"][data-type="feedback"].active');
@@ -325,7 +325,7 @@ async function verifyTaskBadges(browser) {
       currentView: "tasks", selectedDate: TODAY, settings: { lastOpenedDate: TODAY, focusTimerAuto: false }
     });
     const boundary = {
-      badge: await badgeText(page, "#sidebar", "tasks"),
+      badge: await badgeText(page, "#sidebar", "exec"),
       oneTap: await page.locator('.exec-row [data-action="now-start"][data-id="one-tap-block"]').count(),
       taskless: await page.locator('.exec-row [data-action="now-start"][data-id="taskless-block"]').count(),
       recurrence: await page.locator('.exec-row [data-action="now-start"][data-id="recurrence-block"]').count(),
@@ -340,7 +340,7 @@ async function verifyTaskBadges(browser) {
       settings: { lastOpenedDate: TODAY, focusTimerAuto: false }
     });
     await page.waitForSelector('.exec-row [data-action="now-start"][data-id="valid-start-block"]');
-    check("開始済み・完了・削除・昨日・timeline・routine・staleを除外し未着手2件", await badgeText(page, "#sidebar", "tasks") === "2"
+    check("開始済み・完了・削除・昨日・timeline・routine・staleを除外し未着手2件", await badgeText(page, "#sidebar", "exec") === "2"
       && await badgeText(page, "#bottomNav", "exec") === "2");
     check("バッジ件数はタスクシュートに見える未着手行数と一致", await page.locator('.exec-row [data-action="now-start"]').count() === 2);
 
@@ -357,13 +357,18 @@ async function verifyTaskBadges(browser) {
     await page.locator('.exec-row [data-action="now-start"][data-id="valid-start-block"]').click();
     await page.locator('[data-action="declare-skip"]').click();
     await page.waitForFunction(() => document.querySelector('#bottomNav [data-view="exec"] .nav-badge')?.textContent === "1");
-    check("開始操作でサイドバー・下部ナビとも即時1減", await badgeText(page, "#sidebar", "tasks") === "1"
+    check("開始操作でサイドバー・下部ナビとも即時1減", await badgeText(page, "#sidebar", "exec") === "1"
       && await badgeText(page, "#bottomNav", "exec") === "1");
 
     await page.locator('.exec-row [data-action="toggle-block"][data-id="valid-complete-block"]').click();
     await page.waitForFunction(() => !document.querySelector('#bottomNav [data-view="exec"] .nav-badge'));
-    check("完了操作で0件になりtasksバッジDOM自体が両方から消える", await badgeText(page, "#sidebar", "tasks") === null
+    await page.setViewportSize({ width: 1280, height: 844 });
+    check("0件でもPCサイドバーの実行ボタンが1個あり表示される",
+      await page.locator('#sidebar [data-action="nav"][data-view="exec"]').count() === 1
+      && await page.locator('#sidebar [data-action="nav"][data-view="exec"]').isVisible());
+    check("完了操作で0件になりtasksバッジDOM自体が両方から消える", await badgeText(page, "#sidebar", "exec") === null
       && await badgeText(page, "#bottomNav", "exec") === null);
+    await page.setViewportSize({ width: 390, height: 844 });
 
     await seed(page, {
       ...base, currentView: "tasks", selectedDate: TODAY,
@@ -372,7 +377,7 @@ async function verifyTaskBadges(browser) {
     await page.locator('[data-action="date-prev"]').click();
     await page.waitForFunction((key) => JSON.parse(localStorage.getItem(key)).selectedDate === "2026-08-27", STATE_KEY);
     const pastSnapshot = {
-      sidebar: await badgeText(page, "#sidebar", "tasks"),
+      sidebar: await badgeText(page, "#sidebar", "exec"),
       bottom: await badgeText(page, "#bottomNav", "exec"),
       // v332追随: タスク一覧の行(.exec-task-row)も .exec-row を共有するため、Block行だけを数える
       rows: await page.locator(".exec-row-now, .exec-row-upcoming").count(),
@@ -389,7 +394,7 @@ async function verifyTaskBadges(browser) {
       projects: [project()], tasks: [task("many-task")], blocks: manyBlocks,
       currentView: "today", selectedDate: TODAY, settings: { lastOpenedDate: TODAY, focusTimerAuto: false }
     });
-    check("100件超はサイドバー・下部ナビとも99+", await badgeText(page, "#sidebar", "tasks") === "99+"
+    check("100件超はサイドバー・下部ナビとも99+", await badgeText(page, "#sidebar", "exec") === "99+"
       && await badgeText(page, "#bottomNav", "exec") === "99+");
 
     await page.clock.setFixedTime(new Date(2026, 7, 28, 23, 59, 0));
@@ -403,7 +408,7 @@ async function verifyTaskBadges(browser) {
     await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
     await page.waitForFunction(() => document.querySelector('#bottomNav [data-view="exec"] .nav-badge')?.textContent === "2");
     const crossed = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), STATE_KEY);
-    check("visibilitychange日跨ぎで新しい今日の2件へ再計算", await badgeText(page, "#sidebar", "tasks") === "2"
+    check("visibilitychange日跨ぎで新しい今日の2件へ再計算", await badgeText(page, "#sidebar", "exec") === "2"
       && crossed.selectedDate === TOMORROW && crossed.settings.lastOpenedDate === TOMORROW);
     check("未着手バッジ主要経路でpageerror/console errorなし", pageErrors.length === 0 && consoleErrors.length === 0,
       JSON.stringify({ pageErrors, consoleErrors }));

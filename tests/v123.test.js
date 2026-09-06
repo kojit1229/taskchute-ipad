@@ -61,7 +61,7 @@ function check(name, cond, extra = "") {
     console.log("[1] ボトムナビのマテリアル(半透明+blur)と視認性");
     await page.evaluate((KEY) => {
       const s = JSON.parse(localStorage.getItem(KEY));
-      s.currentView = "home";
+      s.currentView = "today";
       localStorage.setItem(KEY, JSON.stringify(s));
     }, KEY);
     await page.reload();
@@ -93,6 +93,8 @@ function check(name, cond, extra = "") {
         const cs = getComputedStyle(btn);
         const rect = btn.getBoundingClientRect();
         return {
+          id: btn.dataset.view,
+          label: Array.from(btn.childNodes).filter(n => n.nodeType === Node.TEXT_NODE).map(n => n.textContent).join("").trim(),
           text: btn.innerText.trim(),
           color: cs.color,
           opacity: parseFloat(cs.opacity),
@@ -102,13 +104,44 @@ function check(name, cond, extra = "") {
         };
       });
     });
-    check("ボトムナビにボタンが5つある", navButtons.length === 5, JSON.stringify(navButtons.map((b) => b.text)));
+    // v333の統合仕様: 廃止された時間項目を復活させず、順序・表示名・全遷移を固定する。
+    check("下部ナビは今日/ジャーナル/実行/その他の4項目がこの順序で重複なく並ぶ",
+      JSON.stringify(navButtons.map(b => [b.id, b.label])) === JSON.stringify([
+        ["today", "今日"], ["journal", "ジャーナル"], ["exec", "実行"], ["more", "その他"]]), JSON.stringify(navButtons));
     check("すべてのボタンにラベルテキストがある", navButtons.every((b) => b.text.length > 0), JSON.stringify(navButtons));
     check("すべてのボタンが可視(opacity>0・visibility:visible・サイズ>0)",
       navButtons.every((b) => b.opacity > 0 && b.visibility === "visible" && b.width > 0 && b.height > 0),
       JSON.stringify(navButtons));
     check("すべてのボタンの文字色が完全透明でない",
       navButtons.every((b) => !/rgba\([^)]*,\s*0\)/.test(b.color)), JSON.stringify(navButtons));
+
+    const primaryData = () => page.evaluate(key => {
+      const s = JSON.parse(localStorage.getItem(key));
+      return JSON.stringify({ projects: s.projects, tasks: s.tasks, blocks: s.blocks });
+    }, KEY);
+    const beforeNavigation = await primaryData();
+    for (const view of ["journal", "exec", "more", "today"]) {
+      await page.locator(`#bottomNav [data-view="${view}"]`).click();
+      await page.waitForSelector(`#app[data-view="${view}"]`);
+      check(`${view}: 遷移先・active項目・保存された現在地が一致する`,
+        await page.locator("#bottomNav button.active").getAttribute("data-view") === view
+        && await page.evaluate(({KEY, view}) => JSON.parse(localStorage.getItem(KEY)).currentView === view, {KEY, view}));
+      if (view === "exec") {
+        for (const mode of ["actual", "plan"]) {
+          await page.locator(`.exec-mode-segmented [data-mode="${mode}"]`).click();
+          check(`実行内の${mode}切替でも実行ナビと画面を保持する`,
+            await page.locator(`.exec-mode-segmented [data-mode="${mode}"].active`).count() === 1
+            && await page.locator('#bottomNav [data-view="exec"].active').count() === 1);
+        }
+      }
+    }
+    await page.locator('#bottomNav [data-view="more"]').click();
+    await page.locator('.more-tower-grid [data-view="wbs"]').click();
+    await page.waitForSelector('#app[data-view="wbs"]');
+    check("下部ナビにないWBSはその他から到達し、その他がactiveになる",
+      await page.locator('#bottomNav [data-view="more"].active').count() === 1);
+    check("ナビ全遷移と実行内切替でProject/Task/Blockの保存内容を変えない",
+      await primaryData() === beforeNavigation);
 
     // ============================================================
     // (b) input/select/textarea のfont-sizeが16px以上のまま(代表数箇所)

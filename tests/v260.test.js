@@ -311,7 +311,7 @@ function sourceBetween(source, startMarker, endMarker) {
     console.log("[3] E2E条件1: フォーム登録→WBS状態表示");
     async function openProjectEditor(projectId) {
       await page.locator(`[data-wbs-row-id="${projectId}"] > .wbs-project-head > .wbs-row-menu-toggle`).click();
-      await page.locator(`[data-action="edit-project"][data-id="${projectId}"]`).click();
+      await page.locator(`[data-wbs-row-id="${projectId}"] > .wbs-project-head > .wbs-row-menu-panel [data-action="edit-project"][data-id="${projectId}"]`).click();
       await page.waitForSelector("[data-twy-track]", { state: "attached" });
     }
     await seed({ projects: [project("p-form-numeric")], tasks: [task("t-form-num", "p-form-numeric")] });

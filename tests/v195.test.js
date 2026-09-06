@@ -65,7 +65,7 @@ function check(name, cond, extra = "") {
   }
   async function openTaskEditor(id) {
     await openTaskMenu(id);
-    await page.locator(`[data-action="edit-task"][data-id="${id}"]`).click();
+    await page.locator(`.wbs-row-menu-panel [data-action="edit-task"][data-id="${id}"]`).click();
   }
 
   try {

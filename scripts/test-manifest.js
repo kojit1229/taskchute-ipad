@@ -87,6 +87,47 @@ function generateAreaSuiteMap(suites) {
 }
 
 const explicitDomains = {
+  "exec-layout-media.test.js": ["planning-execution", "ui-responsive"],
+  "fill-gap-layout-inputs-e2e.test.js": ["planning-execution", "ui-responsive", "sync-storage"],
+  "feedback-readonly-scroll.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "feedback-date-contract.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "feedback-canonical-e2e.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "feedback-recovery-e2e.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "feedback-lifecycle-e2e.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "feedback-input-e2e.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "feedback-canonical-wiring.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "feedback-canonical.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "feedback-refresh-guard.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "feedback-busy-coordinator.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "feedback-busy-boundary.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "feedback-http-entry.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "feedback-save-proof.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "feedback-ui-core.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "vision-connection-e2e.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "vision-connection.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "vision-overview.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "iron-log-core.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "iron-input-safety-e2e.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "iron-log-input-core.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "placement-e2e.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "placement-core.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "karada-import-e2e.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "karada-import-core.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "v356.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "v301.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "v281.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "fund-integration-e2e.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
+  "today-detail-integration-e2e.test.js": ["sync-storage", "planning-execution", "journal-health", "ui-responsive"],
+  "work-list-e2e.test.js": ["planning-execution", "ui-responsive"],
+  "ui-a-layout.test.js": ["planning-execution", "journal-health", "ui-responsive"],
+  "detail-draft-e2e.test.js": ["sync-storage", "planning-execution", "ui-responsive"],
+  "zero-draft-e2e.test.js": ["sync-storage", "content-ai", "ui-responsive"],
+  "archive-date-protection-e2e.test.js": ["sync-storage", "journal-health", "ui-responsive"],
+  "state-container-recovery-e2e.test.js": ["sync-storage"],
+  "r2-twelveweek-plan.test.js": ["planning-execution", "ui-responsive"],
+  "v319.test.js": ["ui-responsive"],
+  "v321.test.js": ["planning-execution", "ui-responsive"],
+  "v323.test.js": ["ui-responsive"],
   "v49.test.js": ["sync-storage", "content-ai"],
   "v53.test.js": ["sync-storage", "journal-health"],
   "v54.test.js": ["journal-health", "ui-responsive"],
@@ -173,7 +214,7 @@ function classify(file) {
 
   return {
     file,
-    kind: /launchChromium|playwright-core|chromium\.launch/.test(source) ? "e2e" : "node",
+    kind: (["feedback-input-e2e.test.js", "feedback-lifecycle-e2e.test.js", "feedback-recovery-e2e.test.js", "feedback-canonical-e2e.test.js"].includes(file) || /launchChromium|playwright-core|chromium\.launch/.test(source)) ? "e2e" : "node",
     tier: smoke.has(file) ? "smoke" : "full",
     domains,
     assertionSignals: assertionLines.length,
@@ -185,7 +226,7 @@ function classify(file) {
       unresolvedCount: waitArgs.length - numericWaits.length
     },
     sideEffects: {
-      browser: /launchChromium|playwright-core|chromium\.launch/.test(source),
+      browser: ["feedback-input-e2e.test.js", "feedback-lifecycle-e2e.test.js", "feedback-recovery-e2e.test.js", "feedback-canonical-e2e.test.js"].includes(file) || /launchChromium|playwright-core|chromium\.launch/.test(source),
       server: /\bstartServer\(/.test(source),
       fileWrite: /writeFile|appendFile|unlink|rmSync|renameSync|screenshot\s*\(\s*\{\s*path/.test(source),
       networkMock: /\.route\(/.test(source),
@@ -206,6 +247,13 @@ const manifest = {
   generatedBy: "scripts/test-manifest.js",
   suites: files.map(classify)
 };
+// Reject invalid classification before either checking or writing generated artifacts.
+const unclassifiedE2E = manifest.suites.filter((suite) =>
+  suite.kind === "e2e" && suite.domains.includes("legacy-crosscutting"));
+if (unclassifiedE2E.length) {
+  console.error(`INVALID: 製品E2Eは明示domainへ分類: ${unclassifiedE2E.map((suite) => suite.file).join(", ")}`);
+  process.exit(1);
+}
 const manifestText = `${JSON.stringify(manifest, null, 2)}\n`;
 const impactRows = manifest.suites.map((suite) =>
   `| ${suite.file} | ${suite.kind} | ${suite.tier} | ${suite.domains.join(", ")} | ${suite.assertionSignals} | ${suite.waits.fixedCount} | ${suite.waits.numericMilliseconds} |`

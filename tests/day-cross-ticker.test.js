@@ -81,7 +81,7 @@ function check(name, cond, extra = "") {
 
     // 「今日へ」ボタン(.datebar [data-action=\"today\"])はtoday/execビューには存在しないため、
     // .datebarが実際に出るtimelineビューへ切り替えてから以降の検証を行う。
-    await page.click('[data-action="nav"][data-view="timeline"]');
+    await page.click('.sidebar [data-action="nav"][data-view="exec"]');
     await page.waitForTimeout(300);
     check("前提: timelineビューに.datebarが実際に描画される", (await page.locator(".datebar").count()) === 1);
 

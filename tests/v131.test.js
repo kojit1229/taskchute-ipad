@@ -130,8 +130,15 @@ function check(name, cond, extra = "") {
     check("対象ログが無ければ日報に体力予算行を出さない", (await chipText()) === "", await chipText());
 
     await seed({ sleepLogs: { [THREE_AGO]: sleepLog({ sleepH: 5.0 }) }, view: "journal" });
-    check("睡眠カードは赤警告のまま(3日前は対象外)",
-      await page.locator(".row", { hasText: "⚠️ 前夜の睡眠CSVが未アップロードです" }).count() === 1);
+    const emptyCard = page.locator("#main .sleep-card-empty");
+    check("睡眠カードは中立の未記録案内になる(3日前は対象外)",
+      await emptyCard.count() === 1
+      && (await emptyCard.textContent()).includes("前夜の睡眠: 未記録(AutoSleep CSV をアップロードすると表示)")
+      && await emptyCard.locator("[data-sleep-csv-upload]").count() === 1);
+    check("3日前の睡眠を実績表示せず赤警告も出さない",
+      await emptyCard.count() === 1 && !/5h00m|⚠|未アップロード/.test(await emptyCard.textContent())
+      && !/danger|error|warning|red/i.test((await emptyCard.getAttribute("class")) || "")
+      && !/--red/.test((await emptyCard.getAttribute("style")) || ""));
   } finally {
     await browser.close();
     server.close();

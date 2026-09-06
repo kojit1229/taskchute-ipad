@@ -51,7 +51,7 @@ const task = (id, projectId, extra = {}) => ({
 
   async function openTaskMenu(taskId) {
     await page.locator(`[data-wbs-row-id="${taskId}"] .wbs-row-menu-toggle`).click();
-    await page.locator(`[data-action="edit-task"][data-id="${taskId}"]`).click();
+    await page.locator(`.wbs-row-menu-panel [data-action="edit-task"][data-id="${taskId}"]`).click();
     await page.waitForSelector('[data-action="modal-save"]', { state: "visible" });
   }
 
@@ -324,7 +324,7 @@ const task = (id, projectId, extra = {}) => ({
     await pageMobile.reload();
     await pageMobile.waitForSelector("main");
     await pageMobile.locator('[data-wbs-row-id="t-mobile"] .wbs-row-menu-toggle').click();
-    await pageMobile.locator('[data-action="edit-task"][data-id="t-mobile"]').click();
+    await pageMobile.locator('.wbs-row-menu-panel [data-action="edit-task"][data-id="t-mobile"]').click();
     await pageMobile.waitForSelector('[data-action="modal-save"]', { state: "visible" });
     check("モバイルでも12週プラン区画が出る", await pageMobile.locator('[data-modal-field="twyPerWeek"]').count() === 1);
     const metrics = await pageMobile.evaluate(() => {

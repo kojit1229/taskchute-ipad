@@ -29,6 +29,11 @@ function sourceBetween(source, startMarker, endMarker) {
   function makeSandbox(confirmResult) {
     const sandbox = {
       calls: [],
+      invalidateFeedbackConnection: () => { sandbox.calls.push(["invalidateFeedbackConnection"]); },
+      invalidateKaradaConnection: () => { sandbox.calls.push(["invalidateKaradaConnection"]); },
+      invalidateFundConnection: () => { sandbox.calls.push(["invalidateFundConnection"]); },
+      invalidateVisionConnection: () => { sandbox.calls.push(["invalidateVisionConnection"]); },
+
       confirmResult,
       window: { confirm: (message) => { sandbox.calls.push(["confirm", message]); return sandbox.confirmResult; } },
       normalizeState: (value) => { sandbox.calls.push(["normalizeState", value]); return { normalized: true, from: value }; },
@@ -53,8 +58,8 @@ function sourceBetween(source, startMarker, endMarker) {
   const confirmed = makeSandbox(true);
   confirmed.resetDemoData();
   const order = confirmed.calls.map((call) => call[0]);
-  check("confirm=trueは confirm → seedState → normalizeState → setState → saveAndRender の順で呼ばれる",
-    JSON.stringify(order) === JSON.stringify(["confirm", "seedState", "normalizeState", "setState", "saveAndRender"]),
+  check("confirm=trueは confirm → seedState → normalizeState → setState → 4接続無効化 → saveAndRender の順で呼ばれる",
+    JSON.stringify(order) === JSON.stringify(["confirm", "seedState", "normalizeState", "setState", "invalidateFeedbackConnection", "invalidateKaradaConnection", "invalidateFundConnection", "invalidateVisionConnection", "saveAndRender"]),
     JSON.stringify(order));
   const setStateCall = confirmed.calls.find((call) => call[0] === "setState");
   check("setStateにはnormalizeState(seedState())の戻り値がそのまま渡る",

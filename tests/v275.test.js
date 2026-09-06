@@ -31,9 +31,9 @@ function check(name, condition, extra = "") {
   check("旧二重DOMクラスは実行コード/CSSから消滅", !/sec-(?:life|creed)(?:-pc)?|tower-topband-pc/.test(`${topbandSource}\n${towerSource}\n${stylesSource}`));
   check("LIFE BANDはGLASS共通クラス・ビーコン・12WY内訳を含む", /tower-glass-panel life-band/.test(topbandSource)
     && /tower-beacon/.test(topbandSource) && /twyScoreHTML\(digest\).*twyCommitBannerHTML\(digest\)/s.test(topbandSource));
-  check("PC上帯は7:3、SOは3列、外側grid順はlife→so→band2→focus", /grid-template-columns:\s*minmax\(0, 7fr\) minmax\(0, 3fr\)/.test(stylesSource)
+  check("NOW/タイマー7:3、SO3列、外側gridはMIT/時計→条件→life→so→band2→focus", /grid-template-columns:\s*minmax\(0, 7fr\) minmax\(0, 3fr\)/.test(stylesSource)
     && /\.so-grid\s*\{\s*grid-template-columns:\s*repeat\(3/.test(stylesSource)
-    && /"life\s+life\s+life"\s*\n\s*"so\s+so\s+so"\s*\n\s*"band2\s+band2\s+band2"\s*\n\s*"focus\s+focus\s+focus"/.test(stylesSource));
+    && /"mit mit clock"\s*"cond cond cond"\s*"alert alert alert"\s*"life life life"\s*"so so so"\s*"band2 band2 band2"\s*"focus focus focus"\s*"left center right"/.test(stylesSource));
   check("新3パネルは角丸内の罫線をoverflow hiddenでクリップ", /\.so-row\s*\{[^}]*overflow:\s*hidden/.test(stylesSource)
     && /\.life-band\s*\{[^}]*overflow:\s*hidden/.test(stylesSource)
     && /\.clock-box\s*\{[^}]*overflow:\s*hidden/.test(stylesSource));
@@ -106,7 +106,7 @@ function check(name, condition, extra = "") {
           return { x: box.x, right: box.right, top: box.top, bottom: box.bottom, width: box.width, height: box.height }; };
         const root = document.querySelector(".today-tower");
         const sigRows = [...new Set([...document.querySelectorAll(".life-band .life-sig")].map((el) => Math.round(el.getBoundingClientRect().top)))];
-        return { root: rect(".today-tower"), band: rect(".tower-band1"), life: rect(".life-band"), clock: rect(".clock-box"), so: rect(".so-row"), focus: rect(".today-focus-bar"),
+        return { root: rect(".today-tower"), band: rect(".tower-band1"), life: rect(".life-band"), clock: rect(".clock-box"), mit: rect(".tower-mit"), so: rect(".so-row"), focus: rect(".today-focus-bar"),
           sigs: document.querySelectorAll(".life-band .life-sig").length, soItems: document.querySelectorAll(".so-row .so-item").length,
           score: document.querySelectorAll(".life-band .twy-score").length,
           duplicateCount: document.querySelectorAll(".life-band, .clock-box, .so-row").length,
@@ -161,13 +161,15 @@ function check(name, condition, extra = "") {
       await page.setViewportSize({ width, height: 900 });
       pc = await layout();
       if (width === 1280) boundaryPc = pc;
-      const ratio = pc.life.width / (pc.life.width + 12 + pc.clock.width);
-      check(`${width}pxはLIFE 70%+時計30%・横溢れなし`, Math.abs(ratio - 0.7) < 0.01
-        && Math.abs(pc.life.top - pc.clock.top) < 1 && pc.scrollWidth <= pc.innerWidth, JSON.stringify(pc));
-      check(`${width}pxはSOが上帯全幅で直下`, Math.abs(pc.so.x - pc.life.x) < 1
-        && Math.abs(pc.so.width - (pc.life.width + 12 + pc.clock.width)) < 1 && pc.so.top > pc.life.bottom, JSON.stringify(pc));
+      check(`${width}pxは上段MITと右時計、人生指標は次の全幅帯・横溢れなし`,
+        pc.mit.width > 0 && pc.clock.width > 0 && Math.abs(pc.mit.top - pc.clock.top) < 1
+        && pc.mit.right <= pc.clock.x && pc.clock.bottom <= pc.life.top
+        && Math.abs(pc.life.right - pc.clock.right) < 1 && Math.abs(pc.life.x - pc.mit.x) < 1
+        && pc.scrollWidth <= pc.innerWidth, JSON.stringify(pc));
+      check(`${width}pxはSOが人生指標の全幅で直下`, Math.abs(pc.so.x - pc.life.x) < 1
+        && Math.abs(pc.so.width - pc.life.width) < 1 && pc.so.top > pc.life.bottom, JSON.stringify(pc));
     }
-    const expectedAreas = '"alert alert alert" "life life life" "so so so" "band2 band2 band2" "focus focus focus" "left center right"';
+    const expectedAreas = '"mit mit clock" "cond cond cond" "alert alert alert" "life life life" "so so so" "band2 band2 band2" "focus focus focus" "left center right"';
     check("1280px境界の外側grid全順序を固定", boundaryPc.gridAreas.replace(/\s+/g, " ") === expectedAreas, boundaryPc.gridAreas);
     check("PCは信条横3列・新3パネル各1件", pc.soColumns.trim().split(/\s+/).length === 3
       && pc.sigs === 4 && pc.soItems === 3 && pc.duplicateCount === 3, JSON.stringify(pc));
@@ -177,9 +179,9 @@ function check(name, condition, extra = "") {
         numFlex: getComputedStyle(num).flexShrink, numFont: getComputedStyle(num).fontSize,
         emFont: getComputedStyle(em).fontSize, smallFont: getComputedStyle(small).fontSize, smallFamily: getComputedStyle(small).fontFamily };
     });
-    check("SOタイポグラフィはmock v5寸法・非monospace", soType.numWidth === 30 && soType.numHeight === 30
+    check("SOは番号/本文寸法とv319英文11px・非monospace", soType.numWidth === 30 && soType.numHeight === 30
       && soType.numFlex === "0" && soType.numFont === "13px" && soType.emFont === "12.5px"
-      && soType.smallFont === "8.5px" && !/mono|consolas/i.test(soType.smallFamily), JSON.stringify(soType));
+      && soType.smallFont === "11px" && !/mono|consolas/i.test(soType.smallFamily), JSON.stringify(soType));
     await page.screenshot({ path: path.join(ARTIFACTS, "tower-r2-pc.png"), fullPage: true });
     const geometry = (selectors) => page.evaluate((items) => {
       const life = document.querySelector(".life-band").getBoundingClientRect(), so = document.querySelector(".so-row").getBoundingClientRect();

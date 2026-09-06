@@ -66,6 +66,8 @@ function check(name, cond, extra = "") {
     await page.evaluate((KEY) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.currentView = "ai-reports";
+      // Shared-viewer request counting starts on content; feedback now has its own canonical reader.
+      s.settings.aiReportType = "content";
       localStorage.setItem(KEY, JSON.stringify(s));
     }, KEY);
     await page.reload();

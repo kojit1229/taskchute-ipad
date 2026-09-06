@@ -195,11 +195,13 @@ const project = (id, title, extra = {}) => ({
       const s = JSON.parse(localStorage.getItem(KEY));
       s.tasks = [...s.tasks, t];
       s.dataModifiedAt = "2026-04-01T00:00:00";
+      s.settings.lastPushedAt = s.dataModifiedAt; // [d] 同期済み・未編集という採用前提
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, t: task("t-d", "ローカルのレガシータスク", { updatedAt: "" }) });
     {
       const base = await stateNow();
       const remote = JSON.parse(JSON.stringify(base));
+      check("[d] fixtureは同期済み", base.settings.lastPushedAt === base.dataModifiedAt);
       remote.dataModifiedAt = "2026-04-02T00:00:00";
       remote.tasks = remote.tasks.map((t) => t.id === "t-d"
         ? { ...t, title: "リモートのレガシータスク", updatedAt: "" }  // 両方空
@@ -209,10 +211,30 @@ const project = (id, title, extra = {}) => ({
     }
     await page.reload();
     await page.waitForTimeout(1000);
+    await page.waitForFunction(({ KEY }) => JSON.parse(localStorage.getItem(KEY)).tasks.some(t => t.id === "t-d" && t.title === "リモートのレガシータスク"), { KEY });
     const sD = await stateNow();
     check("[d] updatedAt両方空はremote側の値が採用される(従来のremote全量採用と一致)",
       sD.tasks.find((t) => t.id === "t-d")?.title === "リモートのレガシータスク",
       JSON.stringify(sD.tasks.find((t) => t.id === "t-d")));
+
+    console.log("[d2] pendingありのlegacy同値はlocal保持、remote限定Taskは合流");
+    await page.evaluate(({ KEY, t }) => {
+      const s = JSON.parse(localStorage.getItem(KEY)); s.tasks.push(t);
+      s.dataModifiedAt = "2026-04-03T00:00:00"; s.settings.lastPushedAt = "2026-04-02T00:00:00";
+      localStorage.setItem(KEY, JSON.stringify(s));
+    }, { KEY, t: task("t-d2", "pending-local", { updatedAt: "" }) });
+    const pendingBase = await stateNow();
+    check("[d2] fixtureは未送信あり", pendingBase.dataModifiedAt !== pendingBase.settings.lastPushedAt);
+    const pendingRemote = JSON.parse(JSON.stringify(pendingBase));
+    pendingRemote.dataModifiedAt = "2026-04-04T00:00:00";
+    pendingRemote.tasks.find(t => t.id === "t-d2").title = "pending-remote";
+    pendingRemote.tasks.push(task("t-d2-remote", "remote-only"));
+    fixtures.remoteJson = JSON.stringify(pendingRemote); fixtures.remoteSha = "sha-d2";
+    await page.reload();
+    await page.waitForFunction(KEY => JSON.parse(localStorage.getItem(KEY)).tasks.some(t => t.id === "t-d2-remote"), KEY);
+    const pendingAfter = await stateNow();
+    check("[d2] 同値legacyのlocal編集を保持", pendingAfter.tasks.find(t => t.id === "t-d2").title === "pending-local");
+    check("[d2] remote限定Taskを一度だけ合流", pendingAfter.tasks.filter(t => t.id === "t-d2-remote").length === 1);
 
     // ============================================================
     // (e) wishシングルトンの重複防止: 両端末が別々にWish Projectを作っていた場合、

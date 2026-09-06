@@ -134,7 +134,7 @@ async function seedSettingsPatch(page, patch) {
     check("左ペインが右ペインより左にある(2ペインが横に並ぶ・重なりなし)",
       leftBox.x + leftBox.width <= rightBox.x, JSON.stringify({ leftBox, rightBox }));
     check("左右ペインのY方向も重なる(同じ行に並ぶ)", leftBox.y < rightBox.y + rightBox.height && rightBox.y < leftBox.y + leftBox.height);
-    check("計画モードの左ペインにrenderTasks本体(exec-lower)が出る", await page.locator(".exec-pane-left .exec-lower").count() === 1);
+    check("計画モードの左ペインにrenderTasks本体(exec-lower)が出る", await page.locator(".exec-pane-left .work-list[data-work-list=exec]").count() === 1);
     check("計画モードの右ペインに時間軸(TIMELINE RADAR)が出る", await page.locator(".exec-pane-right .tl-radar-panel").count() === 1);
     check("右ペインの時間軸に開始済みBlockが表示される(既存Block描画は無改変・既定=予定モード)",
       await page.locator(".exec-pane-right .timeline-card[data-id=\"b-up-a\"]").count() === 1);
@@ -149,15 +149,15 @@ async function seedSettingsPatch(page, patch) {
     check("実績モードの左ペインに「やったこと」見出しが出る", (await page.textContent(".exec-pane-left .exec-done-section h2")).includes("やったこと"));
     const doneRows = await page.locator(".exec-pane-left .exec-row-done").count();
     check("「やったこと」の行数が完了Block数(3件: 通常/ルーティン/単発)と一致する", doneRows === 3, doneRows);
-    const doneIds = await page.locator(".exec-pane-left .exec-row-done .exec-row-copy strong")
+    const doneIds = await page.locator(".exec-pane-left .exec-row-done .exec-row-copy [data-action=edit-block]")
       .evaluateAll((els) => els.map((el) => el.getAttribute("data-id")));
     check("やったことにルーティン完了Blockが含まれる(execTargetBlocksの除外を適用しない)",
       doneIds.includes("b-done-routine"), JSON.stringify(doneIds));
     check("やったことに単発(taskId無し)完了Blockが含まれる", doneIds.includes("b-done-noproj"), JSON.stringify(doneIds));
     check("未完了Blockはやったことに出ない", !doneIds.includes("b-incomplete-1") && !doneIds.includes("b-incomplete-2"), JSON.stringify(doneIds));
     check("「やったこと」行(b-done-1)に実績時刻(08:02–08:28)が出る(3件中の該当行を特定して検査)",
-      (await page.locator('.exec-pane-left .exec-row-done:has(strong[data-id="b-done-1"]) .exec-row-meta').textContent()).includes("08:02–08:28"));
-    check("実績モードでも左ペインに計画一覧(exec-lower)は出ない", await page.locator(".exec-pane-left .exec-lower").count() === 0);
+      (await page.locator('.exec-pane-left .exec-row-done:has([data-action="edit-block"][data-id="b-done-1"]) .exec-row-meta').textContent()).includes("08:02–08:28"));
+    check("実績モードでも左ペインに計画一覧(exec-lower)は出ない", await page.locator(".exec-pane-left .work-list[data-work-list=exec]").count() === 0);
     check("実績モードの右ペインに時間軸(TIMELINE RADAR)が出る", await page.locator(".exec-pane-right .tl-radar-panel").count() === 1);
     check("実績モードの右ペインは実績のみ(予定だけのBlock b-up-a のカードは出ない)",
       await page.locator(".exec-pane-right .timeline-card[data-id=\"b-up-a\"]").count() === 0);
@@ -173,7 +173,7 @@ async function seedSettingsPatch(page, patch) {
 
     console.log("[3] 計画モード: 右ペインに📅予定/✅実績セグメントが出て切替できる(既定は予定)");
     await page.click('[data-action="exec-mode-toggle"][data-mode="plan"]');
-    await page.waitForSelector(".exec-lower");
+    await page.waitForSelector(".work-list[data-work-list=exec]");
     check("計画モードのヘッダに予定/実績セグメントが出る", await page.locator(".exec-header-actions .segmented").count() === 1);
     check("既定(未操作時)は予定が選択されている", await page.locator('.exec-header-actions [data-action="timeline-mode"][data-mode="planned"].active').count() === 1);
     check("計画モードの右ペインは既定で予定表示(b-up-aのカードが出る)",
@@ -183,7 +183,7 @@ async function seedSettingsPatch(page, patch) {
     check("計画モードのセグメントで実績へ切替できる(右ペインが実績のみへ変わる)",
       await page.locator(".exec-pane-right .timeline-card[data-id=\"b-up-a\"]").count() === 0);
     check("計画モードのままなので左ペインは一覧(exec-lower)のまま(_execModeは変化しない)",
-      await page.locator(".exec-pane-left .exec-lower").count() === 1);
+      await page.locator(".exec-pane-left .work-list[data-work-list=exec]").count() === 1);
     await page.click('.exec-header-actions [data-action="timeline-mode"][data-mode="planned"]');
     await page.waitForSelector('.exec-header-actions [data-action="timeline-mode"][data-mode="planned"].active');
     check("計画モードのセグメントで予定へ戻せる", await page.locator(".exec-pane-right .timeline-card[data-id=\"b-up-a\"]").count() === 1);
@@ -191,7 +191,7 @@ async function seedSettingsPatch(page, patch) {
     console.log("[4] 「やったこと」行の編集導線(既存edit-block、data-actionは無改変)");
     await page.click('[data-action="exec-mode-toggle"][data-mode="actual"]');
     await page.waitForSelector(".exec-pane-left .exec-done-section");
-    await page.click('.exec-pane-left .exec-row-done button[data-action="edit-block"]');
+    await page.locator('.exec-pane-left .exec-row-done:has([data-id="b-done-1"]) > button[data-action="edit-block"]').click();
     await page.waitForSelector('.modal-card [data-modal-field="title"]');
     check("「やったこと」行の編集ボタンで既存のBlock編集モーダルが開く(既存edit-block、ロジック無改変)",
       await page.locator('.modal-card [data-modal-field="title"]').count() === 1);
@@ -207,7 +207,7 @@ async function seedSettingsPatch(page, patch) {
     await page.waitForTimeout(150);
     check("1280pxへ戻すとexec-two-paneが復活する(クリック無し)", await page.locator(".exec-two-pane").count() === 1);
     await page.click('[data-action="exec-mode-toggle"][data-mode="plan"]');
-    await page.waitForSelector(".exec-lower");
+    await page.waitForSelector(".work-list[data-work-list=exec]");
     await page.setViewportSize({ width: 1279, height: 900 });
     await page.waitForTimeout(150);
     check("計画モードでも1279pxでexec-two-paneが消える(resizeだけで反映)", await page.locator(".exec-two-pane").count() === 0);

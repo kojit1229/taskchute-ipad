@@ -118,6 +118,18 @@ async function loadModules() {
     defaultPlannedTimes, showToast, nowDateTime, saveAndRender, render, updateTaskField
   });
 
+  const placement = await import(pathToFileURL(path.join(ROOT, 'src/features/placement.js')).href);
+  let placementHTML = '';
+  placement.configurePlacement({
+    requestLeave: () => false, todayISO, nowDateTime, escapeHTML, makeBlock,
+    projectName: () => '検査', showToast, modalHeaderHTML: () => '<div>',
+    renderModal: html => { placementHTML = html; },
+    closeModal: () => { storeMod.state.modal = null; },
+    setView: view => { storeMod.state.currentView = view; },
+    commit: candidate => placement.commitPlacement(storeMod.state, candidate, {
+      stamp: nowDateTime(), persist: () => true, schedule: () => {}
+    })
+  });
   const WISH_PROJECT_ID = "proj-wish";
   function setBaseState(extra = {}) {
     storeMod.setState({
@@ -257,6 +269,9 @@ async function loadModules() {
       selectedDate: "2026-01-01"  // state.selectedDateに依存しないことの確認(v152修正の再発防止)
     });
     wishMod.wishSubtaskToTasks("s2");
+    check("配置確定前はBlockもTaskも変更しない", storeMod.state.blocks.length === 0 && storeMod.state.tasks[0].status !== 'doing');
+    check("閲覧中の過去日でなく今日を配置確認に表示", placementHTML.includes('2026-07-28') && !placementHTML.includes('2026-01-01'));
+    check("実配置保存経路で時刻を確定できる", placement.savePlacementDraft({ time: '09:00', duration: '30' }) === true);
     const newBlock = storeMod.state.blocks[0];
     check("新規BlockはtodayISO()基準の日付(2026-07-28)で作られる(selectedDateの2026-01-01ではない)",
       newBlock?.date === "2026-07-28", newBlock?.date);

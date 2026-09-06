@@ -217,7 +217,7 @@ function check(name, cond, extra = "") {
     {
       const { parent, kStep, aiStep } = triple("r4");
       await resetState({ tasks: [parent, kStep, aiStep], view: "wbs" });
-      await page.click(`span[data-action="edit-task"][data-id="${kStep.id}"]`);
+      await page.click(`[data-work-list="wbs"] [data-action="edit-task"][data-id="${kStep.id}"]`);
       await page.selectOption('[data-modal-field="status"]', "completed");
       await page.click('[data-action="modal-save"]');
       await page.waitForSelector(".ai-step-confirm-modal");
@@ -254,7 +254,7 @@ function check(name, cond, extra = "") {
     {
       const { parent, kStep, aiStep } = triple("c1", { k: { status: "completed", progressNum: 10 } });
       await resetState({ tasks: [parent, kStep, aiStep], view: "wbs" });
-      await page.click(`span[data-action="edit-task"][data-id="${kStep.id}"]`);
+      await page.click(`[data-work-list="wbs"] [data-action="edit-task"][data-id="${kStep.id}"]`);
       await page.click('[data-action="modal-save"]');  // statusは触らず「completed」のまま保存
       await page.waitForTimeout(300);
       check("再保存では発火しない", await sheetVisible() === 0);

@@ -35,10 +35,8 @@ if (!manifest) {
 console.log("\n=== release-record-schema ===");
 const schemaArgs = [path.join(repoRoot, "scripts", "release-record.js"), manifest, "--validate"];
 console.log([process.execPath, ...schemaArgs].join(" "));
-if (!dryRun) {
-  const schema = spawnSync(process.execPath, schemaArgs, { cwd: repoRoot, stdio: "inherit" });
-  if (schema.status !== 0) process.exit(schema.status ?? 1);
-}
+const schema = spawnSync(process.execPath, schemaArgs, { cwd: repoRoot, stdio: "inherit" });
+if (schema.status !== 0) process.exit(schema.status ?? 1);
 const unknownImpactSuites = validateConfig();
 if (unknownImpactSuites.length) {
   console.error(`impact mapの検証エラー: ${unknownImpactSuites.join(", ")}`);

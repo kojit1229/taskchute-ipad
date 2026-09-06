@@ -29,7 +29,8 @@ function configureMinimalStubs(syncMod) {
     todayISO: () => "2026-09-05", addDays: (d) => d, isTouchedBlock: () => false,
     RECURRENCE_KEEP_PAST_DAYS: 7, RECURRENCE_FUTURE_DAYS: 31, SWIPE_TRIAGE_LOG_MAX: 200,
     showToast: noop, maintainRecurrences: noop, render: noop, runDailyOpen: () => false, saveState: noop,
-    requireGitHubConfig: noop, fetchGitHubFileSHA: noop, personalDataReady: () => true, personalDataFileConfig: noop,
+    requireGitHubConfig: noop, fetchGitHubFileSHA: noop, personalDataReady: () => true, personalDataFileConfig: () => ({ owner: "fixture", repo: "archive", branch: "main", token: "synthetic" }),
+    readArchiveForSync: async () => ({ journals: { "2026-01-05": "古いジャーナル本文" }, feedback: { "2026-01-05": "古いフィードバック本文" }, reports: {} }),
     gitHubContentsURL: noop, githubHeaders: noop, gitHubErrorMessage: noop, fromBase64: noop, toBase64: noop,
     sanitizedStateForGitHub: noop, maybeWriteBackupSnapshot: noop, updateAutoSaveStatus: noop, updateSyncDot: noop,
     renderSyncBanner: noop, pruneExpiredSuggestedThemes: (x) => x, _startupDataModifiedAt: ""
@@ -70,6 +71,7 @@ function baseState(extra = {}) {
       archivedDates: []
     });
     storeMod.setState(local);
+    await syncMod.prepareArchiveMerge(remote); // Prove the archived copy before pruning stale device text.
     const merged = syncMod.computeSyncMerge(remote, "local");
     check("journalsが復活しない", !("2026-01-05" in merged.values.journals), JSON.stringify(merged.values.journals));
     check("feedbackが復活しない", !("2026-01-05" in merged.values.feedback), JSON.stringify(merged.values.feedback));
@@ -85,6 +87,7 @@ function baseState(extra = {}) {
     const local = baseState({ archivedDates: ["2026-01-05"] });
     const remote = baseState({ archivedDates: ["2026-02-10"] });
     storeMod.setState(local);
+    await syncMod.prepareArchiveMerge(remote); // Prove the archived copy before pruning stale device text.
     const merged = syncMod.computeSyncMerge(remote, "local");
     check("両日とも含まれる",
       merged.values.archivedDates.includes("2026-01-05") && merged.values.archivedDates.includes("2026-02-10")
@@ -97,6 +100,7 @@ function baseState(extra = {}) {
     const local = baseState({ journals: { "2026-09-01": "ローカルの新しい日記" }, archivedDates: [] });
     const remote = baseState({ journals: { "2026-09-02": "リモート限定の日記" }, archivedDates: [] });
     storeMod.setState(local);
+    await syncMod.prepareArchiveMerge(remote); // Prove the archived copy before pruning stale device text.
     const merged = syncMod.computeSyncMerge(remote, "local");
     check("片側にしか無いキーは合流する",
       merged.values.journals["2026-09-01"] === "ローカルの新しい日記"
@@ -115,6 +119,7 @@ function baseState(extra = {}) {
       blocks: [{ id: "b-old", date: "2025-01-05", title: "古いBlock", deleted: false, updatedAt: "2025-01-05T09:00:00" }]
     });
     storeMod.setState(local);
+    await syncMod.prepareArchiveMerge(remote); // Prove the archived copy before pruning stale device text.
     const merged = syncMod.computeSyncMerge(remote, "local");
     const result = merged.values.blocks.find((b) => b.id === "b-old");
     check("tombstone(deleted:true)が勝つ・本文は蘇らない",

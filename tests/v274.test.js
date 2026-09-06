@@ -20,7 +20,17 @@ function check(name, condition, extra = "") {
 
 (async () => {
   console.log("[1] S2 GLASS静的契約");
-  const glassRoot = (stylesSource.match(/#app\[data-view="today"\] \.today-tower \{([\s\S]*?)\n\}/) || [])[1] || "";
+  // v360: shared selectors are intentional; accept only the exact approved scopes.
+  const cssRules = [...stylesSource.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((match) => ({
+    selectors: match[1].replace(/\/\*[\s\S]*?\*\//g, "").trim().split(",").map((value) => value.trim()),
+    body: match[2]
+  }));
+  const exactRule = (selectors) => {
+    const matches = cssRules.filter((rule) => rule.selectors.length === selectors.length
+      && selectors.every((selector) => rule.selectors.includes(selector)));
+    return matches.length === 1 ? matches[0].body : "";
+  };
+  const glassRoot = exactRule(['#app[data-view="today"] .today-tower', '#app[data-view="twelveweek"] .today-tower']);
   const expectedTokens = {
     "--tower-bg": "#0b0d1c", "--tower-panel": "rgba(255, 255, 255, .07)",
     "--tower-line": "rgba(255, 255, 255, .14)", "--tower-text": "#eef0ff",
@@ -33,16 +43,14 @@ function check(name, condition, extra = "") {
     !glassRoot.includes("--tower-red") && (stylesSource.match(/--tower-red:\s*#ff6d7f;/g) || []).length === 1);
   check("オーロラはToday本体内・全面・非操作で3灯", /\.today-tower::before\s*\{[^}]*position:\s*absolute;[^}]*z-index:\s*0;[^}]*inset:\s*0;[\s\S]*pointer-events:\s*none;/.test(stylesSource)
     && ((stylesSource.match(/radial-gradient\(/g) || []).length >= 3));
-  const panelMatch = stylesSource.match(/(#app\[data-view="today"\] \.today-tower \.tower-glass-panel,[\s\S]*?#app\[data-view="today"\] \.today-tower \.today-panel) \{([\s\S]*?)\n\}/) || [];
-  const panelSelectors = panelMatch[1] || "";
-  const panelRule = panelMatch[2] || "";
+  const todayPanelNames = ["tower-glass-panel", "tower-mit", "tower-condition", "today-focus-bar",
+    "tower-panel-box", "tower-runway", "tower-gates", "tower-arrivals", "today-panel"];
+  const panelRule = exactRule([...todayPanelNames.map((name) => '#app[data-view="today"] .today-tower .' + name),
+    '#app[data-view="twelveweek"] .today-tower .tower-panel-box']);
   check("現行全パネルと将来用共通クラスを単一GLASSルールへ集約",
-    ["tower-glass-panel", "today-focus-bar", "tower-panel-box", "tower-runway", "tower-gates", "tower-arrivals", "today-panel"]
-      .every((name) => panelSelectors.includes(`.today-tower .${name}`))
-    && !panelSelectors.includes(".today-tower .tower-header")
-    && panelRule.includes("border-radius: 18px;")
-    && panelRule.includes("-webkit-backdrop-filter: var(--tower-glass-blur);")
-    && panelRule.includes("backdrop-filter: var(--tower-glass-blur);"));
+    panelRule.split(";").map((value) => value.trim()).includes("border-radius: 18px")
+    && panelRule.split(";").map((value) => value.trim()).includes("-webkit-backdrop-filter: var(--tower-glass-blur)")
+    && panelRule.split(";").map((value) => value.trim()).includes("backdrop-filter: var(--tower-glass-blur)"));
   check("手動縮退helperは専用localStorage読取で属性を切替", towerSource.includes(`getItem("${BLUR_KEY}") === "1"`)
     && towerSource.includes("data-glass-blur=\"off\""));
   // v285: CACHE_NAME期待値をreleases最大版から動的導出へ統一(v255/v262と同方式。リリースごとの追従漏れでCIが割れるクラスの根絶。+1契約の検証内容は不変)。
@@ -88,7 +96,7 @@ function check(name, condition, extra = "") {
     await page.reload();
     await page.waitForFunction(() => [
       ".life-band", ".clock-box", ".so-row", ".today-focus-bar", ".tower-panel-box", ".tower-runway",
-      ".tower-gates", ".tower-arrivals", ".today-panel"
+      ".tower-gates", '[data-work-list="today"].tower-panel-box', ".today-panel"
     ].every((selector) => document.querySelector(selector)));
 
     const visual = await page.evaluate(() => {
@@ -96,11 +104,17 @@ function check(name, condition, extra = "") {
       const generic = document.createElement("section");
       generic.className = "tower-glass-panel";
       root.appendChild(generic);
+      // Legacy ARRIVALS CSS remains covered separately from the adopted real work-list.
+      const legacyArrivals = document.createElement("section");
+      legacyArrivals.className = "tower-arrivals";
+      legacyArrivals.dataset.v274Synthetic = "arrivals";
+      root.appendChild(legacyArrivals);
       const rootStyle = getComputedStyle(root);
       const aurora = getComputedStyle(root, "::before");
       const panelStyles = [
         ["LIFE BAND", ".life-band"], ["clock", ".clock-box"], ["STANDING ORDERS", ".so-row"], ["FOCUS", ".today-focus-bar"],
-        ["GATE", ".tower-gates"], ["ARRIVALS", ".tower-arrivals"],
+        ["GATE", ".tower-gates"], ["legacy ARRIVALS CSS fixture", '[data-v274-synthetic="arrivals"]'],
+        ["今日の予定・実績 実DOM", '[data-work-list="today"].tower-panel-box'],
         ["CABIN TIMER", ".today-panel"], ["tower-glass-panel", ".tower-glass-panel"]
       ].map(([name, selector]) => {
         const style = getComputedStyle(document.querySelector(selector));
@@ -126,6 +140,7 @@ function check(name, condition, extra = "") {
         towerStartsAfterSidebar: rootRect.left >= sidebarRect.right
       };
       generic.remove();
+      legacyArrivals.remove();
       return result;
     });
     const panelsOk = visual.panels.every((panel) => panel.radius === "18px"
@@ -137,9 +152,9 @@ function check(name, condition, extra = "") {
       && panel.boxShadow.includes("rgba(0, 0, 0, 0.35)")
       && panel.boxShadow.includes("rgba(255, 255, 255, 0.12)")
       && panel.boxShadow.includes("inset") && panel.zIndex === "1");
-    check("未設定は主要8種すべてGLASS実効値・両blur・枠・影・z-order", visual.blurAttr === null
+    check("未設定は旧8種CSSと新一覧実DOMの9種にGLASS実効値・両blur・枠・影・z-order", visual.blurAttr === null
       && visual.tokens.join("|") === "#0b0d1c|rgba(255, 255, 255, .07)|rgba(255, 255, 255, .14)|#eef0ff|#f0c674|#6ee7c8|#8ab6ff|#c4b5fd"
-      && visual.font.includes("Segoe UI") && visual.isolation === "isolate" && panelsOk,
+      && visual.font.includes("Segoe UI") && visual.isolation === "isolate" && visual.panels.length === 9 && panelsOk,
       JSON.stringify(visual));
     check("オーロラはToday本体の包含矩形に閉じサイドバーへ流出しない", visual.rootPosition === "relative"
       && visual.auroraPosition === "absolute" && visual.auroraZ === "0" && visual.auroraInset === "0px"

@@ -190,7 +190,7 @@ check("週跨ぎ送信はデータ不変・偽成功なしで当週シートへ�
   const group = (taskId) => page.locator(`.twy-commit-row[data-twy-task-id="${taskId.replaceAll('"', '\\"')}"]`);
   try {
     await page.clock.setFixedTime(new Date(2026, 7, 25, 10, 0, 0));
-    await page.goto(`http://localhost:${PORT}/`); await passGithubGate(page); await seed({}, "");
+    await page.goto(`http://localhost:${PORT}/`); await passGithubGate(page); await seed({ projects: base().projects.map((entry) => ({ ...entry, twelveWeekStartDate: "" })) }, "");
     check("12WY未設定ならWBS入口を表示しない", await page.locator('[data-action="twy-open-commit"]').count() === 0);
     await seed();
 
@@ -265,7 +265,9 @@ check("週跨ぎ送信はデータ不変・偽成功なしで当週シートへ�
     check("確定後はrenderModalでC'へ切替", (await page.locator(".twy-commit-meta").textContent()).includes("確定済")
       && await page.locator('[data-twy-commit-item]').count() === 2
       && await page.locator('[data-action="twy-commit-week"]').count() === 0);
-    check("saveAndRender後もWBS表示・入口に退行なし", await page.locator('.twy-commit-open[data-action="twy-open-commit"]').count() === 1);
+    check("saveAndRender後も各12WY ProjectのWBS入口に退行なし",
+      await page.locator('[data-wbs-row-id="p1"] > .wbs-project-head > .twy-commit-open[data-action="twy-open-commit"]').count() === 1
+      && await page.locator('[data-wbs-row-id="p2"] > .wbs-project-head > .twy-commit-open[data-action="twy-open-commit"]').count() === 1);
 
     await seed(); await openSheet();
     for (const checkbox of await page.locator('.twy-commit-row input[data-action="twy-commit-toggle-group"]').all()) await checkbox.click();

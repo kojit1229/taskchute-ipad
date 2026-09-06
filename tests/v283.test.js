@@ -72,17 +72,27 @@ async function verifySyncMerge() {
   check("localのみの既読がリモート採用側へ反映される", JSON.stringify(remoteApplied.aiReportReadIds) === JSON.stringify(expected), JSON.stringify(remoteApplied.aiReportReadIds));
 }
 
+
+// Contents API representations follow the request's Accept header.
+function fulfillContents(route, text) {
+  const raw = (route.request().headers().accept || "").includes("raw");
+  return route.fulfill({ status: 200, contentType: raw ? "text/plain" : "application/json",
+    body: raw ? text : JSON.stringify({ encoding: "base64", sha: "a".repeat(40), content: Buffer.from(text, "utf8").toString("base64") }) });
+}
+
 async function installRoutes(page, fixture) {
   await blockGithubApiByDefault(page);
   await page.route((url) => url.hostname === GITHUB_API_HOST, (route) => {
     const pathname = decodeURIComponent(new URL(route.request().url()).pathname);
+    if (route.request().method() !== "GET") return route.fulfill({ status: 405, body: "{}" });
+    if (pathname.includes("/contents/taskchute/requests/")) return route.fulfill({ status: 404, body: "{}" });
     if (/\/contents\/taskchute\/report-index\.json$/.test(pathname)) {
       fixture.reportRequests = (fixture.reportRequests || 0) + 1;
       if (fixture.indexRaw !== undefined) {
-        return route.fulfill({ status: 200, contentType: "application/json", body: fixture.indexRaw });
+        return fulfillContents(route, fixture.indexRaw);
       }
       if (fixture.index === null) return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
-      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(fixture.index) });
+      return fulfillContents(route, JSON.stringify(fixture.index));
     }
     if (/\/contents\/taskchute$/.test(pathname)) {
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(fixture.dir || []) });
@@ -90,8 +100,8 @@ async function installRoutes(page, fixture) {
     const md = pathname.match(/\/contents\/taskchute\/([^/]+\.md)$/);
     if (md) {
       const body = fixture.bodies?.[md[1]];
-      if (body !== undefined) return route.fulfill({ status: 200, contentType: "text/markdown", body });
-      return route.fulfill({ status: 200, contentType: "text/markdown", body: "" });
+      if (body !== undefined) return fulfillContents(route, body);
+      return fulfillContents(route, "");
     }
     return route.fulfill({ status: 200, contentType: "text/plain", body: "" });
   });
@@ -184,12 +194,18 @@ async function verifyMainFlow(browser) {
     check("feedbackが先頭かつ既定active", tabs[0]?.id === "feedback" && tabs[0]?.label === "AIフィードバック" && tabs[0]?.active, JSON.stringify(tabs));
     check("health/batchセグメントは非表示", !tabs.some((tab) => tab.id === "health" || tab.id === "batch"), JSON.stringify(tabs));
     check("既存kindはすべて維持", ["content", "self", "weekly", "english", "letter", "excuse"].every((id) => tabs.some((tab) => tab.id === id)), JSON.stringify(tabs));
-    const dates = await page.$$eval('[data-ai-report-date] option', (els) => els.map((el) => el.value));
+    const fundKinds = ["fundJournal", "fundJournalCodex", "marketCodex", "market"];
+    check("FABLE/CODEXの日誌・朝ブリーフ4系統の表示名と順序を維持",
+      JSON.stringify(tabs.filter(tab => fundKinds.includes(tab.id)).map(tab => [tab.id, tab.label])) === JSON.stringify([
+        ["fundJournal", "FABLE FUND日誌"], ["fundJournalCodex", "CODEX FUND日誌"],
+        ["marketCodex", "朝の投資ブリーフ CODEX"], ["market", "朝の投資ブリーフ FABLE"]
+      ]));
+    const dates = await page.$$eval('[data-feedback-report-overlay] [data-action="feedback-report-date"]', (els) => els.map((el) => el.dataset.feedbackDate));
     check("feedback一覧は日付降順", JSON.stringify(dates) === JSON.stringify([TODAY, FEEDBACK_OLD_DATE]), JSON.stringify(dates));
     check("新形式フィードバック本文を全文表示", (await page.locator(".md-render").textContent()).includes("新形式全文詳細_v283"));
     await page.waitForFunction(() => document.querySelector('#bottomNav [data-view="more"] .nav-badge')?.textContent === "2");
 
-    await page.selectOption("[data-ai-report-date]", FEEDBACK_OLD_DATE);
+    await page.locator(`[data-action="feedback-report-date"][data-feedback-date="${FEEDBACK_OLD_DATE}"]`).click();
     await page.waitForFunction(() => document.querySelector(".md-render")?.textContent.includes("旧形式全文_v283"));
     await page.waitForFunction((name) => JSON.parse(localStorage.getItem("taskchute-journal-pwa-state-v1")).aiReportReadIds.includes(name), `AIフィードバック_${FEEDBACK_OLD_DATE}.md`);
     check("日付切替で旧形式本文を既読化しバッジを1件へ減らす", await page.locator('#bottomNav [data-view="more"] .nav-badge').textContent() === "1");
@@ -254,6 +270,9 @@ async function verifyLargeBadgesAndSidebar(browser) {
     date: TODAY,
     kind: "feedback"
   }));
+  // Keep the 101-entry badge stress fixture, but read one authorized canonical name.
+  // The other synthetic notification entries are not requested as canonical bodies.
+  files[100].name = `AIフィードバック_${TODAY}.md`;
   const initiallyRead = files[0].name;
   const openedName = files[100].name;
   const fixture = {
@@ -394,7 +413,10 @@ async function verifyNegativeCases(browser) {
         const s = JSON.parse(localStorage.getItem(KEY)); s.currentView = "ai-reports"; localStorage.setItem(KEY, JSON.stringify(s));
       }, STATE_KEY);
       await page.reload();
-      await page.waitForSelector('.md-render[data-report-loaded="0"]');
+      await page.waitForFunction(() => {
+        const body = document.querySelector('[data-feedback-report-overlay] .feedback-version-body');
+        return body && body.textContent.trim() === "" && !body.hasAttribute("data-report-loaded") && !body.hasAttribute("data-report-file");
+      });
       const state = await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), STATE_KEY);
       check("空本文は既読化しない", !state.aiReportReadIds.includes(`AIフィードバック_${TODAY}.md`), JSON.stringify(state.aiReportReadIds));
       check("空本文では未読1件バッジを維持", await page.locator('#bottomNav [data-view="more"] .nav-badge').textContent() === "1");

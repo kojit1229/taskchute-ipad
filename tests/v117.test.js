@@ -76,8 +76,7 @@ function check(name, cond, extra = "") {
   // (row.wbs-actions内)の2箇所にあるため、.first()でタイトル側に絞ってから
   // 最も近い祖先div.rowを辿る(=タイトル・期限バッジ等を含む本体行)。
   async function taskRowInfo(taskId) {
-    const titleEl = page.locator(`[data-action="edit-task"][data-id="${taskId}"]`).first();
-    const row = titleEl.locator("xpath=ancestor::div[contains(@class,'row')][1]");
+    const row = page.locator(`.wbs-projects [data-wbs-row-id="${taskId}"] > .wbs-task-row`);
     return { text: await row.innerText(), overdueCount: await row.locator(".wbs-overdue").count() };
   }
 
@@ -132,8 +131,8 @@ function check(name, cond, extra = "") {
       view: "wbs"
     });
     const rowAuto = await taskRowInfo("t-auto");
-    check("締切ラベルに前倒し後の日付が出る", rowAuto.text.includes(effOf5.slice(5).replace("-", "/")), rowAuto.text);
-    check("実期日も併記される(前倒しが効いている時だけ)", rowAuto.text.includes(`実 ${dueIn5.slice(5).replace("-", "/")}`), rowAuto.text);
+    check("締切ラベルに前倒し後の日付が出る", rowAuto.text.includes(effOf5.slice(5).split("-").map(Number).join("/")), rowAuto.text);
+    check("実期日も併記される(前倒しが効いている時だけ)", rowAuto.text.includes(`実 ${dueIn5.slice(5).split("-").map(Number).join("/")}`), rowAuto.text);
     check("期限切れ(wbs-overdue)にはならない(3日後はまだ先)", rowAuto.overdueCount === 0);
 
     console.log("[6] effectiveDueDate: 前倒しにより「まだ実期日前だが有効締切は過ぎている」タスクが期限切れ表示になる");

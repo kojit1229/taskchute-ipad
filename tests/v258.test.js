@@ -213,8 +213,8 @@ function sourceBetween(source, startMarker, endMarker) {
     await page.locator('[data-action="modal-save"]').click();
     state = await savedState();
     active = state.tracks.find((track) => track.status === "active");
-    check("開始日未設定の初回12WY化は同じfallbackをProjectとtrackへ保存", active?.cycleStartDate === TODAY
-      && state.projects[0].twelveWeekStartDate === TODAY && state.settings.twelveWeekStartDate === TODAY,
+    check("開始日未設定の初回12WY化は直前土曜をProjectとtrackと設定へ保存", active?.cycleStartDate === "2026-08-22"
+      && state.projects[0].twelveWeekStartDate === "2026-08-22" && state.settings.twelveWeekStartDate === "2026-08-22",
     JSON.stringify({ track: active?.cycleStartDate, project: state.projects[0].twelveWeekStartDate,
       setting: state.settings.twelveWeekStartDate }));
 

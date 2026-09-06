@@ -52,9 +52,9 @@ function check(name, cond, extra = "") {
 
   // ---- [1] インライン編集モード ----
   console.log("[1] インライン編集モード");
-  check("編集モードトグルがある", await page.locator('[data-action="toggle-wbs-edit"]').count() === 1);
+  check("編集モードトグルがある", await page.locator('.wbs-edit-toggle[data-action="toggle-wbs-edit"]').count() === 1);
   check("通常時はインライン入力が出ない", await page.locator('[data-wbs-edit]').count() === 0);
-  await page.click('[data-action="toggle-wbs-edit"]');
+  await page.click('.wbs-edit-toggle[data-action="toggle-wbs-edit"]');
   await page.waitForTimeout(300);
   check("編集モードで各タスクに3項目(状態/期限/カテゴリ)の行内フォーム",
     await page.locator('[data-wbs-edit][data-id="task-A"]').count() === 3
@@ -78,7 +78,7 @@ function check(name, cond, extra = "") {
   check("カテゴリがその場で保存される", await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).tasks.find((t) => t.id === "task-C").category, KEY) === "開発");
   check("dataModifiedAtが更新される(実データ変更)", await page.evaluate((KEY) => !!JSON.parse(localStorage.getItem(KEY)).dataModifiedAt, KEY));
   // 編集モードOFFで通常表示に戻る(中断表示のため中断を表示に)
-  await page.click('[data-action="toggle-wbs-edit"]');
+  await page.click('.wbs-edit-toggle[data-action="toggle-wbs-edit"]');
   await page.waitForTimeout(300);
   check("編集モードOFFでフォームが消える", await page.locator('[data-wbs-edit]').count() === 0);
 
