@@ -267,7 +267,7 @@ const _startupDataModifiedAt = state.dataModifiedAt || "";
 configureGithubSync({
   normalizeState, nowDateTime, todayISO, addDays, isTouchedBlock,
   RECURRENCE_KEEP_PAST_DAYS, RECURRENCE_FUTURE_DAYS, SWIPE_TRIAGE_LOG_MAX,
-  showToast, maintainRecurrences, render, runDailyOpen, saveState,
+  showToast, maintainRecurrences, render, runDailyOpen, saveState, renderDeferringForFocus,
   requireGitHubConfig, fetchGitHubFileSHA, personalDataReady, personalDataFileConfig,
   gitHubContentsURL, githubHeaders, gitHubErrorMessage, fromBase64, toBase64,
   sanitizedStateForGitHub, maybeWriteBackupSnapshot, writeBackupSnapshotBeforeLoad, updateAutoSaveStatus, updateSyncDot,

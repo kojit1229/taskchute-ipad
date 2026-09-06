@@ -61,7 +61,7 @@ import { persistLocalNoSchedule } from "../storage/local.js";
 // (`normalizeState(...)` 等はそのままの形でこれらのモジュールスコープ変数を参照する)。
 let normalizeState, nowDateTime, todayISO, addDays, isTouchedBlock;
 let RECURRENCE_KEEP_PAST_DAYS, RECURRENCE_FUTURE_DAYS, SWIPE_TRIAGE_LOG_MAX;
-let showToast, maintainRecurrences, render, runDailyOpen, saveState;
+let showToast, maintainRecurrences, render, runDailyOpen, saveState, renderDeferringForFocus;
 let requireGitHubConfig, fetchGitHubFileSHA, personalDataReady, personalDataFileConfig;
 let gitHubContentsURL, githubHeaders, gitHubErrorMessage, fromBase64, toBase64;
 let sanitizedStateForGitHub, maybeWriteBackupSnapshot, writeBackupSnapshotBeforeLoad, updateAutoSaveStatus, updateSyncDot;
@@ -72,7 +72,7 @@ function configureGithubSync(deps) {
   ({
     normalizeState, nowDateTime, todayISO, addDays, isTouchedBlock,
     RECURRENCE_KEEP_PAST_DAYS, RECURRENCE_FUTURE_DAYS, SWIPE_TRIAGE_LOG_MAX,
-    showToast, maintainRecurrences, render, runDailyOpen, saveState,
+    showToast, maintainRecurrences, render, runDailyOpen, saveState, renderDeferringForFocus,
     requireGitHubConfig, fetchGitHubFileSHA, personalDataReady, personalDataFileConfig,
     gitHubContentsURL, githubHeaders, gitHubErrorMessage, fromBase64, toBase64,
     sanitizedStateForGitHub, maybeWriteBackupSnapshot, writeBackupSnapshotBeforeLoad, updateAutoSaveStatus, updateSyncDot,
@@ -285,7 +285,7 @@ async function runAutoSyncPush() {
   if (!(state.dataModifiedAt && state.dataModifiedAt > (state.settings.lastPushedAt || ""))) return;  // 未変更
   try {
     // push前ガード: remote の dataModifiedAt を確認(別端末が進めていたら中止)
-    const remoteText = (await downloadGitHubStateText(personalDataFileConfig(cfg))).text;
+    const { text: remoteText, sha: remoteSha } = await downloadGitHubStateText(personalDataFileConfig(cfg));
     const remoteT = normalizeDataStamp((JSON.parse(remoteText).dataModifiedAt) || "");
     if (remoteT && remoteT > (state.settings.lastPushedAt || "")) {
       // v106: コア(tasks等)が両端末で一致していれば、リモートの進み分はマージ可能
@@ -303,6 +303,8 @@ async function runAutoSyncPush() {
           resolved = true;
         }
       }
+      // v364: コア不一致でも自動マージを試みる(K指示2026-09-06)。成功したら続けてpushへ進む。
+      if (!resolved && remoteNorm) resolved = await autoMergeRemote(remoteNorm, remoteT, remoteSha, { origin: "push", renderFn: renderDeferringForFocus });
       if (!resolved) {
         setSyncBanner("リモートに新しいデータがあります。設定から pull を確認してください");
         return;
@@ -1059,7 +1061,88 @@ function applySyncMergeToRemote(merged, remoteNorm) {
   return true;
 }
 
-// 自動 pull(起動 + visibilitychange、60秒スロットル)
+// v364: K rules 2026-09-06: id union in the newer state's order; whole-key replacement otherwise.
+// Physical deletions without tombstones can reappear through the id union.
+function mergeCoreKeys(remoteNorm, remoteT) {
+  const remoteNewer = normalizeDataStamp(state.dataModifiedAt || "") <= normalizeDataStamp(remoteT || "");
+  const out = {};
+  const idArray = (value) => Array.isArray(value) && value.every((item) =>
+    item && typeof item === "object" && !Array.isArray(item) && item.id);
+  for (const key of SYNC_CORE_COMPARE_KEYS) {
+    const localVal = getByPath(state, key), remoteVal = getByPath(remoteNorm, key);
+    const first = remoteNewer ? remoteVal : localVal;
+    const second = remoteNewer ? localVal : remoteVal;
+    if (idArray(first) && idArray(second)) {
+      const records = new Map();
+      for (const item of [...first, ...second]) {
+        const current = records.get(item.id);
+        // Deduplicate within each side too; retain newer-side order and tombstone precedence.
+        const missingOnOneSide = current && !!current.updatedAt !== !!item.updatedAt;
+        records.set(item.id, !current ? item : missingOnOneSide ? current
+          : mergeByIdPreferNewer([current], [item], "local")[0]);
+      }
+      out[key] = [...records.values()];
+      // The capped history must retain the same newest 300 records on both devices.
+      if (key === "declarations") out[key].sort((a, b) => {
+        const at = a.declaredAt || "", bt = b.declaredAt || "";
+        return at < bt ? -1 : at > bt ? 1 : String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0;
+      });
+    } else out[key] = first;
+    if (out[key] !== undefined) out[key] = JSON.parse(JSON.stringify(out[key]));
+  }
+  return out;
+}
+
+function setByPath(obj, path, value) {
+  const parts = path.split(".");
+  let cur = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (cur[parts[i]] == null || typeof cur[parts[i]] !== "object") cur[parts[i]] = {};
+    cur = cur[parts[i]];
+  }
+  cur[parts[parts.length - 1]] = value;
+}
+
+// v364: Compute before backup, roll back failed adoption, isolate post-adoption effects.
+async function autoMergeRemote(remoteNorm, remoteT, sha, { origin, renderFn } = {}) {
+  let before;
+  try {
+    if (!remoteNorm) return false;
+    let syncMerge = computeSyncMerge(remoteNorm, "local");
+    if (!syncMerge) return false;
+    let coreValues = mergeCoreKeys(remoteNorm, remoteT);
+    if (!await writeBackupSnapshotBeforeLoad()) return false;
+    // v364: 同一秒の編集も含め、控え待機後のstateから無条件で再計算する。
+    syncMerge = computeSyncMerge(remoteNorm, "local");
+    if (!syncMerge) return false;
+    coreValues = mergeCoreKeys(remoteNorm, remoteT);
+    before = JSON.parse(JSON.stringify(state));
+    applySyncMergeToLocal(syncMerge);
+    // normalizeState mutates its input: normalize the detached candidate before adopting core values.
+    const candidate = JSON.parse(JSON.stringify(state));
+    for (const key of SYNC_CORE_COMPARE_KEYS) setByPath(candidate, key, coreValues[key]);
+    setState(normalizeState(candidate));
+    state.settings.lastPushedAt = remoteT;
+    setLastSyncedSha(sha);
+    state.dataModifiedAt = nowDateTime();
+    persistLocalNoSchedule();
+  } catch (error) {
+    if (before) setState(before);
+    console.warn("autoMergeRemote failed:", error.message, origin);
+    return false;
+  }
+  const effects = [
+    () => { if (origin !== "push") scheduleAutoSync(); },
+    () => clearSyncBanner({ clearDismissal: true }),
+    () => runDailyOpen(), () => (renderFn || render)(),
+    () => { showToast("他端末の記録を取り込みました(自動マージ)"); }
+  ];
+  for (const effect of effects) {
+    try { effect(); } catch (error) { console.warn("autoMergeRemote effect failed:", error.message); }
+  }
+  return true;
+}
+
 async function runAutoSyncPull() {
   if (!autoSyncReady()) return;
   const now = Date.now();
@@ -1093,8 +1176,8 @@ async function runAutoSyncPull() {
       // 人間判断を待たず「和集合を正」として自動解消する(push見送りも解除)。
       // tieWinner="local": ここもapplySyncMergeToLocal(ローカルを基準に残す)経路。
       const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm, "local") : null;
-      const changed = syncMerge ? applySyncMergeToLocal(syncMerge) : mergeZeroThinkingIntoLocal(remote.zeroThinking);
       if (syncMerge && syncCoreEqual(remoteNorm)) {
+        applySyncMergeToLocal(syncMerge);
         state.settings.lastPushedAt = remoteT;   // リモート分は取り込み済み
         setLastSyncedSha(sha);
         state.dataModifiedAt = nowDateTime();    // 和集合を次のpushで届ける
@@ -1106,6 +1189,10 @@ async function runAutoSyncPull() {
         showToast("他端末の記録を取り込みました");
         return;
       }
+      // v364: コアが不一致でも、レコード単位の新しい方勝ち和集合で自動解消する(K指示2026-09-06)。
+      if (remoteNorm && await autoMergeRemote(remoteNorm, remoteT, sha, { origin: "pull", renderFn: renderDeferringForFocus })) return;
+      const fallbackMerge = remoteNorm ? computeSyncMerge(remoteNorm, "local") : null;
+      const changed = fallbackMerge ? applySyncMergeToLocal(fallbackMerge) : mergeZeroThinkingIntoLocal(remote.zeroThinking);
       if (changed) saveState();
       setSyncBanner("リモートに新しいデータ。ローカルにも未pushの変更があります。設定から手動で確認してください");
       if (changed || runDailyOpen()) render();
@@ -1317,18 +1404,23 @@ async function syncFromGitHubOnStartup() {
       if ((state.dataModifiedAt || "") !== preFetchDataModifiedAt) {
         // tieWinner="local": ここはapplySyncMergeToLocal(ローカルを基準に残す)経路。
         const syncMerge = remoteNorm ? computeSyncMerge(remoteNorm, "local") : null;
-        const changed = syncMerge ? applySyncMergeToLocal(syncMerge) : mergeZeroThinkingIntoLocal(remote.zeroThinking);
         if (syncMerge && syncCoreEqual(remoteNorm)) {
+          applySyncMergeToLocal(syncMerge);
           state.settings.lastPushedAt = remoteT;
           setLastSyncedSha(sha);
           state.dataModifiedAt = nowDateTime();
           persistLocalNoSchedule();
           clearSyncBanner({ clearDismissal: true });
-          render();
+          renderDeferringForFocus();
           showToast("他端末の記録を取り込みました");
           return;
         }
-        if (changed) { saveState(); render(); }
+        // v364: コア不一致でも自動マージで解消する(K指示2026-09-06)。編集中の入力は
+        // renderDeferringForFocus経由(IME/フォーカス保護)で守る。
+        if (remoteNorm && await autoMergeRemote(remoteNorm, remoteT, sha, { origin: "startup", renderFn: renderDeferringForFocus })) return;
+        const fallbackMerge = remoteNorm ? computeSyncMerge(remoteNorm, "local") : null;
+        const changed = fallbackMerge ? applySyncMergeToLocal(fallbackMerge) : mergeZeroThinkingIntoLocal(remote.zeroThinking);
+        if (changed) { saveState(); renderDeferringForFocus(); }
         setSyncBanner("リモートに新しいデータがあります。編集中に取得したため自動取込を中止しました。設定から手動で確認してください");
         return;
       }
@@ -1388,7 +1480,7 @@ export {
   configureGithubSync,
   saveToGitHub, runAutoSyncPush, runAutoSyncPull, loadFromGitHub, syncFromGitHubOnStartup,
   scheduleAutoSave, scheduleAutoSync, autoSyncReady,
-  computeSyncMerge, syncCoreEqual, normalizedRemoteCopy, normalizeDataStamp,
+  computeSyncMerge, syncCoreEqual, normalizedRemoteCopy, normalizeDataStamp, autoMergeRemote,
   applySyncMergeToLocal, applySyncMergeToRemote,
   setSyncBanner, clearSyncBanner, _syncBanner,
   autoSaveTimer, _autoSyncTimer,

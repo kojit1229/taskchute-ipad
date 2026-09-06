@@ -1,0 +1,52 @@
+{
+  "version": 364,
+  "date": "2026-09-06",
+  "title": "同期: 競合をレコード単位の新しい方勝ちで自動解消し、自動取込・自動保存を止めない",
+  "summary": "形によるコアマージ、控え待機中の編集保持、宣言の時系列順と最新300件の保持、push時の入力フォーカス保護。",
+  "changedFiles": [
+    "app.js",
+    "src/sync/github.js",
+    "tests/v364.test.js",
+    "tests/suite-manifest.json",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v364.json",
+    "CHANGES_v364.md",
+    "sw.js"
+  ],
+  "intent": [
+    "同期競合を新しい側の順序・値で解消し2端末間で収束させる。",
+    "控え失敗・適用例外時に部分的なstate変更を残さない。"
+  ],
+  "changes": [
+    "全SYNC_CORE_COMPARE_KEYSを形でマージ。id配列の片側updatedAt欠損は新しい側を採用。同値・両側欠損の既存tombstone規則を維持。dataModifiedAt/remoteTは両側normalizeDataStamp経由で比較し、同時刻はremote。その他はキー全体を採用し、コア候補はディープコピー。",
+    "候補計算成功後に控え1回。控え成功後はdataModifiedAtの比較なしにsyncMerge/coreValuesを無条件再計算し、同一秒の待機中編集も含める。再計算がnull/例外ならstate不変でfalse。復元用コピーは適用直前に取得し、適用例外時は待機中編集を含めて復元する。",
+    "declarationsはid和集合をdeclaredAt昇順・同値はid昇順にソート後、normalizeStateのslice(-300)で最新300件を保持。他のid配列は新しい側の順序を維持。",
+    "pullはコア不一致時に先にautoMergeRemoteを試す。pull/startupともfalse後のフォールバックは現在のstateからcomputeSyncMerge(remoteNorm, \"local\")を再計算して適用し、待機前の候補を再利用しない。remoteNormが無い場合は従来の0秒思考マージ。pushは追加予約せず、push/startupはrenderDeferringForFocus経由。",
+    "2端末往復では未反映ジャーナルの最終pull取込と予約pushの実PUTを検証。異なる300件ずつの宣言、控え待機中編集の成功・例外、参照共有、updatedAt片側欠損も検証。fix3ではpull/startup各経路で同一秒の控え待機中編集と控えfalse/normalize例外の4通り、およびpull成功時の同一秒編集保持を検証。"
+  ],
+  "verification": [
+    "監督者(2026-09-06 fix3版): node --check app.js / src/sync/github.js 成功。node tests/v364.test.js 全チェック通過。",
+    "監督者: node tests/run-all.js v364 track-sync-characterization sync-load-confirm-snapshot v106 v135 v136 → 初回 v135 のみ失敗(負荷flake)、v135 単独2回通過。v136/v313 は fix2/fix3 の実装ログで180秒タイムアウトが各1回あり、再実行で通過(flake扱い)。",
+    "監督者: node tests/run-all.js normalize-null-defense store-core merge-core action-registry-core v313(track-merge-core 含む6本)→ 初回1本失敗(ログ欠落)、再実行で6本全通過。",
+    "レビュー: Claude reviewer 4回(review-v364-claude{,2,3,4}.md)、Codex 4回(review-v364-codex{,2,3,4}.md)。第4回=両系統とも条件付き合格(medium: pull 経路の renderFn 未指定→監督者が1行修正、release 記録の検証欄→本欄で更新)。",
+    "test-manifest --check / code-index --check 成功。実行コード差分 112行(+pull renderFn 1行)。v118 は main でも失敗する既存赤のため対象外。"
+  ],
+  "reviewFocus": [
+    "R1/R2の採用値・配列順序とR3の2端末往復収束。",
+    "R4の控え前計算、適用例外時のstate全体復元、副作用例外、R5のfallback順序。",
+    "iOS実機の入力・IME維持、完全なnormalizeStateと自動マージの相互作用は監督者の独立検証が必要。"
+  ],
+  "uncertainties": [
+    "同期マージ規則の変更(K 指示 2026-09-06)",
+    "夜間バッチがサーバー側 tasks を更新することが競合の恒常要因",
+    "tombstone を持たない settings 配列(categories 等)は片側削除が和集合で復活しうる",
+    "発注は19キーと記載しているが定義は20キー。定義を変えず全20キーに適用。",
+    "収束は同期中に追加の競合編集がなく、取得・控え・適用・送信が成功する往復を前提とする。継続編集や通信失敗まで含む無条件の収束保証ではない。",
+    "declarationsはdeclaredAt昇順・同値はid昇順。declaredAt欠損は空文字として先頭側に並び、上限超過分は切り捨てる。",
+    "控え待機中編集の保持はdataModifiedAt更新・秒精度の検知に依存しない。控え成功後とpull/startupの失敗後フォールバックで無条件再計算する。控え自体は待機開始時点の1回のみで、待機中編集は採用候補と例外時の復元対象へ含める。",
+    "sw.js / CHANGES_v364.md / release-record --writeは監督者担当で本作業では変更・生成しない。",
+    "Nodeテストはapp.jsの関連normalizeState処理を抽出して実行。完全なnormalizeState・DOM入力フォーカス・iOS実機での自動マージ統合は未検証。"
+  ]
+}
