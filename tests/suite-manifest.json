@@ -15,7 +15,7 @@
       ],
       "assertionSignals": 34,
       "assertionHash": "f841e3459002f00f",
-      "sourceHash": "975dcdab4dafe5ee",
+      "sourceHash": "6fb5aabd6364d12a",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -467,9 +467,9 @@
         "planning-execution",
         "journal-health"
       ],
-      "assertionSignals": 94,
-      "assertionHash": "039608e997b64cfe",
-      "sourceHash": "dc17c967c068bb05",
+      "assertionSignals": 103,
+      "assertionHash": "f38727c82ac5b6c4",
+      "sourceHash": "f5ee3141eedfd6b8",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -519,9 +519,32 @@
         "content-ai",
         "ui-responsive"
       ],
-      "assertionSignals": 74,
-      "assertionHash": "63187f67851c87be",
-      "sourceHash": "c2f28f67cb3f11a2",
+      "assertionSignals": 82,
+      "assertionHash": "fbc2bb59368b27f7",
+      "sourceHash": "b261998553fd9e97",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "r2-twelveweek-plan.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "legacy-crosscutting"
+      ],
+      "assertionSignals": 79,
+      "assertionHash": "17321cd0321a8b97",
+      "sourceHash": "e3d8f9adf2d6e4fe",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

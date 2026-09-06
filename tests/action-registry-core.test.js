@@ -63,7 +63,11 @@ const FEATURE_MODULE_PATHS = [
   path.join(ROOT, "src", "features", "track-ui.js"),
   // v356: FUNDタブの再取得(fund-refresh)。fund.jsはモジュール読み込み時点で
   // トップレベルのregisterActions({...})を1回呼ぶため、importするだけで登録が実測できる。
-  path.join(ROOT, "src", "features", "fund.js")
+  path.join(ROOT, "src", "features", "fund.js"),
+  // review-r2-claude-a L4: twelve-week.js(R1のtwy-vision-open/-save+R2のtwy-face-select)が
+  // FEATURE_MODULE_PATHSに未登録のまま保存則テストの対象外だった穴を塞ぐ。fund.jsと同じく
+  // モジュールtop-levelでregisterActionsを呼ぶため、importするだけで登録が実測できる。
+  path.join(ROOT, "src", "features", "twelve-week.js")
 ];
 
 // wish.jsはモジュール読み込み時にdocument.addEventListener(pointerdown/move/up/cancel、月間ボード
@@ -190,7 +194,9 @@ const GOLDEN_CLICK_ACTIONS = [
   "timeline-clear-cat",
   "km-chip-add", "km-chip-remove", "km-save",  // v294: 「書く瞑想」パネルの意図的追加
   "km-chip-candidate",  // v296: 「書く瞑想」候補チップ(充放電ログ改善R1b)の意図的追加
-  "fund-refresh"  // v356: FUNDタブの手動再取得ボタンの意図的追加
+  "fund-refresh",  // v356: FUNDタブの手動再取得ボタンの意図的追加
+  // v360(R1/R2、review-r2-claude-a L4): 12WYタブ VISION編集+PLAN/CYCLE面切替の意図的追加
+  "twy-vision-open", "twy-vision-save", "twy-face-select"
 ];
 
 // v173: 段階5-2で抽出済みfeatureの分岐をregisterActions経由のレジストリへ移行した
@@ -224,7 +230,10 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
   "twy-toast-inc", "twy-toast-same", "twy-toast-other", "twy-toast-other-confirm", "twy-toast-later",
   // v356: src/features/fund.js。モジュールtop-levelでregisterActionsを呼ぶ(configureFund内では
   // ない)ため、importするだけで登録される。
-  "fund-refresh"
+  "fund-refresh",
+  // v360(R1/R2、review-r2-claude-a L4): src/features/twelve-week.js。fund.jsと同じくtop-level
+  // registerActionsのため、importするだけで登録される。
+  "twy-vision-open", "twy-vision-save", "twy-face-select"
 ];
 
 // v174: 段階5-3で以下20件(settings 11 + sync 8 + core/nav 1)を、app.js自身が呼ぶ
@@ -502,13 +511,15 @@ function extractModalHandlerTypes() {
   const featureMods = await Promise.all(
     FEATURE_MODULE_PATHS.map((p) => import(pathToFileURL(p).href))
   );
-  const [wishMod, journalMod, timelineMod, todayMod, trackUiMod, fundMod] = featureMods;
+  const [wishMod, journalMod, timelineMod, todayMod, trackUiMod, fundMod, twelveWeekMod] = featureMods;
   wishMod.configureWish({});
   journalMod.configureJournal({});
   timelineMod.configureTimeline({});
   todayMod.configureToday({});
   trackUiMod.configureTrackUi({});
-  void fundMod; // fund.jsはimport時点(モジュールtop-level)でfund-refreshを登録済み。呼び出し不要。
+  // fund.js/twelve-week.jsはimport時点(モジュールtop-level)でそれぞれ登録済み。呼び出し不要。
+  void fundMod;
+  void twelveWeekMod;
   const registered = actionsMod.__debugActionNames().filter((name) => !name.startsWith("__test"));
   check(`レジストリ側の登録件数は期待どおり${MIGRATED_TO_REGISTRY_ACTIONS.length}件`,
     registered.length === MIGRATED_TO_REGISTRY_ACTIONS.length,

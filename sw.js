@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v364";  // v364: 同期競合の自動マージ(レコード単位の新しい方勝ち和集合、控え→原子適用、自動取込/自動保存を止めない)
+const CACHE_NAME = "taskchute-journal-pwa-v365";  // v365: 12WY タブ R2(PLAN 面: 連動図5ノード+12週グリッド、土曜丸め、開始前は当週なし)
 // v353: 12WY R0 task.twyPlan のデータ契約+plan.js 純関数+Task編集モーダル3項目
 // v334: 実行タブPC 2ペイン(§B。ナビ統合§Cは持ち越し)
 // v333: 実行ラッパー(計画/実績切替)・モバイルナビ4項目
@@ -339,6 +339,7 @@ const APP_SHELL = [
   "./src/features/track-ui.js",
   "./src/features/wish.js",
   "./src/features/fund.js",
+  "./src/features/twelve-week.js",
   "./src/features/health.js",
   "./src/state/feedback-cache.js",
   "./src/state/fund-cache.js",

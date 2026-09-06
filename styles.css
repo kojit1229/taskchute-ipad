@@ -5395,3 +5395,34 @@ details.settings-row > .fold-summary.settings-row-summary {
 .twy-week-lab[data-current="1"] { color: #fff; font-weight: 700; opacity: 1; }
 .twy-weeks-foot { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; font-size: 11px; color: var(--tower-text); opacity: .75; }
 .twy-weeks-foot b { opacity: 1; }
+
+/* v360(R2): PLAN面(連動図LINK+12-WEEK PLANグリッド)。既存.tower-panel-box等を再利用する。 */
+.twy-plan-link-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px; margin-top: 8px; }
+.twy-plan-link-node { display: flex; flex: 1 1 120px; flex-direction: column; gap: 4px; min-width: 120px; }
+.twy-plan-link-label { color: var(--tower-text); font-size: 11px; opacity: .85; }
+.twy-plan-link-edit { min-height: 44px; padding: 4px 8px; border: 1px solid var(--tower-line); border-radius: 6px; color: var(--tower-cyan); background: transparent; font: inherit; font-size: 11px; text-align: left; cursor: pointer; }
+.twy-plan-link-arrow { align-self: center; color: var(--tower-text); opacity: .5; }
+.twy-plan-guide { margin: 8px 0 0; color: var(--tower-text); font-size: 11px; opacity: .6; }
+.twy-plan-grid-wrap { overflow-x: auto; margin-top: 8px; }
+.twy-plan-grid { min-width: 720px; border-collapse: collapse; font-size: 11px; }
+.twy-plan-grid th, .twy-plan-grid td { min-width: 44px; padding: 4px 6px; border: 1px solid var(--tower-line); color: var(--tower-text); text-align: center; }
+.twy-plan-grid th { color: var(--tower-cyan); font-weight: 400; }
+.twy-plan-grid th[data-current="1"] { color: #fff; }
+.twy-plan-th-task, .twy-plan-task-name { min-width: 140px; text-align: left; }
+.twy-plan-project-head { padding: 6px; color: var(--tower-amber); background: var(--tower-panel); text-align: left; font-weight: 700; }
+.twy-plan-cell[data-status="met"] { background: color-mix(in srgb, var(--tower-green) 22%, transparent); color: var(--tower-green); }
+.twy-plan-cell[data-status="missed-1-2"] { background: color-mix(in srgb, var(--tower-amber) 22%, transparent); color: var(--tower-amber); }
+.twy-plan-cell[data-status="missed-3+"] { background: color-mix(in srgb, var(--tower-red) 24%, transparent); color: var(--tower-red); }
+.twy-plan-cell[data-status="current"] { outline: 2px solid #fff; outline-offset: -2px; }
+/* review-r2-claude-b M1: design/order「未来週=目安(plannedは薄)」用のスタイルが未実装だった。 */
+.twy-plan-cell[data-status="planned"] { color: var(--tower-text); opacity: .55; }
+.twy-plan-cell[data-status="short"], .twy-plan-cell[data-status="unplanned"]:not([data-uncreated="1"]) { border-style: dashed; color: var(--tower-amber); }
+.twy-plan-cell[data-uncreated="1"] { color: var(--tower-text); opacity: .5; }
+.twy-plan-cell[data-status="none"] { color: var(--tower-text); opacity: .3; }
+.twy-plan-total { text-align: right; }
+.twy-plan-total-km { display: block; }
+.twy-plan-remaining { display: block; color: var(--tower-text); opacity: .7; }
+.twy-plan-none-list { display: grid; gap: 6px; margin-top: 8px; }
+.twy-plan-none-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 0 4px; border-bottom: 1px solid var(--tower-line); }
+.twy-plan-none-empty { color: var(--tower-text); font-size: 11px; opacity: .6; }
+@media (max-width: 600px) { .twy-plan-link-row { flex-direction: column; } .twy-plan-link-arrow { display: none; } }

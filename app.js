@@ -319,7 +319,8 @@ configureFund({ escapeHTML, renderHeader, renderMarkdown, personalDataReady, fet
 // v357: 達成トラック数判定用にtwyTrackIsDoneを追加注入(B-H1)。
 configureTwelveWeek({
   escapeHTML, renderHeader, todayISO, weekRange, renderTwyTrackReadOnly,
-  modalHeaderHTML, renderModal, saveAndRender, closeModal, twyTrackIsDone
+  modalHeaderHTML, renderModal, saveAndRender, closeModal, twyTrackIsDone,
+  render  // v360(R2): PLAN面切替(非永続)の再描画用
 });
 configureHealth({
   escapeHTML, personalDataReady: () => personalDataReady(state.settings.github),
@@ -1594,7 +1595,12 @@ document.addEventListener("change", (event) => {
     renderTimelineRail();
   }
   if (target.matches("[data-setting-field]")) {
-    state.settings[target.dataset.settingField] = target.value;
+    const field = target.dataset.settingField;
+    // K裁定2026-09-05(review-r2-claude-a H2): 12WY開始日は設定画面の主経路でも直前の土曜へ
+    // 丸めて保存する(seedState/saveProjectFromModalの2箇所と揃える)。他のsetting-fieldは
+    // 従来どおり入力値をそのまま保存する。
+    state.settings[field] = field === "twelveWeekStartDate" && target.value
+      ? weekRange(target.value).weekStart : target.value;
     saveState();
     render();
   }
@@ -2818,7 +2824,9 @@ function seedState() {
     zeroThinking: { themes: [], entries: [], groups: [], suggestedThemes: [] },  // v90: groups=大テーマ / v100: suggestedThemes=AI提案お題キュー
     settings: {
       birthDate: "",
-      twelveWeekStartDate: today,
+      // K裁定2026-09-05: 12WYサイクル開始日は直前の土曜(weekRange週頭)へ丸めて保存する
+      // (週番号=cycleWeekForDate系の経過日数基準と、weeklyScoreの土曜キー基準を一致させるため)。
+      twelveWeekStartDate: weekRange(today).weekStart,
       twelveWeekScoreTarget: 85,
       morningEnergyLog: {},
       journalTemplate: defaultJournal(today),
@@ -2846,7 +2854,8 @@ function seedState() {
         title: "Web版 TaskChute Journal を育てる",
         category: "開発",
         status: "active",
-        twelveWeekStartDate: today,
+        // review-r2-claude-a L3: settings.twelveWeekStartDateと同じ丸め(直前の土曜)に揃える。
+        twelveWeekStartDate: weekRange(today).weekStart,
         createdAt: nowDateTime(),
         updatedAt: nowDateTime(),
         deleted: false
@@ -13681,8 +13690,10 @@ function buildProjectModal(project) {
 function saveProjectFromModal(id, fields) {
   const existing = state.projects.find((project) => project.id === id);
   const previousCycleStartDate = state.settings.twelveWeekStartDate || "";
+  // K裁定2026-09-05: 新規サイクル開始(previousCycleStartDate/既存Projectの値がどちらも
+  // 無い=初めて12WYを付ける瞬間)だけtodayを直前の土曜へ丸める。既存値の丸め直しはしない。
   let twelveWeekStartDate = fields.is12WY
-    ? (previousCycleStartDate || existing?.twelveWeekStartDate || todayISO()) : "";
+    ? (previousCycleStartDate || existing?.twelveWeekStartDate || weekRange(todayISO()).weekStart) : "";
   if (fields.is12WY && !previousCycleStartDate) state.settings.twelveWeekStartDate = twelveWeekStartDate;
   if (!saveProjectTrackFromModal(id, fields)) {
     state.settings.twelveWeekStartDate = previousCycleStartDate;

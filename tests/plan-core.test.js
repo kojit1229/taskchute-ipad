@@ -309,6 +309,17 @@ function weekMeta(weekStart, extra = {}) {
   check("today<cycleStartDateでもremainingDaysは83で上限clampされる(発散しない)",
     summaryFuture.remainingDays === 83, summaryFuture.remainingDays);
 
+  for (const day of ["2026-06-01", "2026-07-10"]) {
+    const before = cycleWeeksSummary(scoredWeek(W[0], 2, 2), settings85, CYCLE_START, day);
+    check(`${day}: 開始前は全13週future・当週なし・採点なし`, before.weeks.length === 13
+      && before.weeks.every((w) => w.status === "future" && !w.isCurrent && w.pct === null));
+    check(`${day}: 開始前のW1完了データは平均に含めない`, before.avg12 === null
+      && before.avgWithReview === null && before.cycleEnded === false);
+  }
+  const startDay = cycleWeeksSummary(scoredWeek(W[0], 2, 2), settings85, CYCLE_START, CYCLE_START);
+  check("開始当日はW1だけが当週で採点対象", startDay.weeks[0].isCurrent
+    && startDay.weeks.filter((w) => w.isCurrent).length === 1 && startDay.avg12 === 100);
+
   // review-r1-claude-a2.md L3: countScored=0(avg12=null)のときはeligibleでもavgWithReviewを
   // 出さない(平均のない週にreviewWeek単独値だけの「参考平均」が出るのは紛らわしい)。
   const summaryNoScored = cycleWeeksSummary(scoredWeek(W[12], 3, 3), settings85, CYCLE_START, "2026-10-05");
@@ -353,6 +364,37 @@ function weekMeta(weekStart, extra = {}) {
   check("サイクル終了後はcycleEnded=trueを返す", summaryEnded.cycleEnded === true);
   check("サイクル終了後も過去週の実データ(W1〜W13)はscoredのまま維持される",
     summaryEnded.weeks.every((w) => w.status === "scored"), JSON.stringify(summaryEnded.weeks.map((w) => w.status)));
+
+  console.log("[13] taskPlanGrid: order-r2-plan.md PLAN面fixtureのstatus表を純関数側でも再確認");
+  // review-r2-claude-b M6: order-r2-plan.mdのテスト節1項目め(taskPlanGridのstatus表を
+  // PLAN面fixtureで再確認)が未実施だった。tests/r2-twelveweek-plan.test.jsのt1と同じ数値
+  // (W1〜W6)を、ブラウザを使わないfast-nodeテストとして純関数呼び出しで裏取りする。
+  const planFixtureWeeks = ["2026-07-11", "2026-07-18", "2026-07-25", "2026-08-01", "2026-08-08", "2026-08-15"];
+  function planFixtureItems(weekStart, taskId, prefix, doneCount, totalCount) {
+    const items = [];
+    for (let i = 0; i < totalCount; i++) {
+      items.push(item(`${prefix}${i}`, taskId, weekStart, { completedAt: i < doneCount ? `${weekStart}T09:00:00` : "" }));
+    }
+    return items;
+  }
+  const planFixtureTask = { id: "pt1", twyPlan: { perWeek: 2, fromWeek: 1, toWeek: 12, keystone: true } };
+  const planFixtureCommitments = [
+    weekMeta(planFixtureWeeks[0]), ...planFixtureItems(planFixtureWeeks[0], "pt1", "pw1-", 2, 2),
+    weekMeta(planFixtureWeeks[1]), ...planFixtureItems(planFixtureWeeks[1], "pt1", "pw2-", 1, 3),
+    weekMeta(planFixtureWeeks[2]), ...planFixtureItems(planFixtureWeeks[2], "pt1", "pw3-", 1, 1),
+    weekMeta(planFixtureWeeks[3]), ...planFixtureItems(planFixtureWeeks[3], "pt1", "pw4-", 0, 2),
+    weekMeta(planFixtureWeeks[4]), ...planFixtureItems(planFixtureWeeks[4], "pt1", "pw5-", 0, 1)
+  ];
+  const planFixtureGrid = taskPlanGrid([planFixtureTask], planFixtureCommitments, "2026-07-11", planFixtureWeeks, 3);
+  check("PLAN面fixture W1: met・2/2", planFixtureGrid[0].status === "met"
+    && planFixtureGrid[0].done === 2 && planFixtureGrid[0].confirmed === 2, JSON.stringify(planFixtureGrid[0]));
+  check("PLAN面fixture W2: missed-1-2・1/3", planFixtureGrid[1].status === "missed-1-2"
+    && planFixtureGrid[1].done === 1 && planFixtureGrid[1].confirmed === 3, JSON.stringify(planFixtureGrid[1]));
+  check("PLAN面fixture W3(当週): current", planFixtureGrid[2].status === "current", JSON.stringify(planFixtureGrid[2]));
+  check("PLAN面fixture W4: planned・目安2", planFixtureGrid[3].status === "planned" && planFixtureGrid[3].target === 2, JSON.stringify(planFixtureGrid[3]));
+  check("PLAN面fixture W5: short・確定1<目安2", planFixtureGrid[4].status === "short"
+    && planFixtureGrid[4].confirmed === 1 && planFixtureGrid[4].target === 2, JSON.stringify(planFixtureGrid[4]));
+  check("PLAN面fixture W6: unplanned・確定0", planFixtureGrid[5].status === "unplanned" && planFixtureGrid[5].confirmed === 0, JSON.stringify(planFixtureGrid[5]));
 
   console.log(failures === 0 ? "\nplan-core: 全件成功" : `\nplan-core: ${failures}件失敗`);
   process.exit(failures === 0 ? 0 : 1);

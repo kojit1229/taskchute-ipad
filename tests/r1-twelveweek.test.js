@@ -232,9 +232,10 @@ async function seed(page, values) {
     await page.waitForFunction((w) => window.innerWidth === w, 1280);
     await seed(page, { currentView: "twelveweek" });
 
-    // LOW-1: 面チップはCYCLEだけactive・他3つはdisabled(design §A)。
+    // LOW-1(R1)+R2でPLANを有効化: 初期表示はCYCLEだけactive・PLANは有効(disabledでない)・
+    // WEEK/REVIEWの2つがdisabledのまま(design §A・§2.1b)。
     check("面チップ: activeは1件(CYCLE)", await page.locator(".twy-face-segmented button.active").count() === 1);
-    check("面チップ: disabledは3件(PLAN/WEEK/REVIEW)", await page.locator(".twy-face-segmented button:disabled").count() === 3);
+    check("面チップ: disabledは2件(WEEK/REVIEW。PLANはR2で有効化)", await page.locator(".twy-face-segmented button:disabled").count() === 2);
 
     // ============================================================
     // [2] S2 GLASSがcomputedで効く
@@ -586,11 +587,15 @@ async function seed(page, values) {
       await page.locator(".twy-goal-review").textContent());
 
     // ============================================================
-    // [9] A-M2: 非土曜開始でも週番号は経過日数基準/ A-M1: サイクル終了後はハイライト消滅
+    // [9] K裁定2026-09-05: 非土曜開始は表示側で直前の土曜へ丸める(M1の2基準併存を解消)/
+    // A-M1: サイクル終了後はハイライト消滅
     // ============================================================
-    console.log("[9] A-M2非土曜開始の当週ハイライト・A-M1サイクル終了後の見出し「(終了)」");
-    const CYCLE_START_WED = "2026-07-15"; // 水曜(非土曜)開始
-    await page.clock.setFixedTime(new Date(2026, 6, 25, 10, 0, 0)); // elapsed=10日→2週目のはず
+    console.log("[9] 非土曜開始の土曜丸め当週ハイライト・A-M1サイクル終了後の見出し「(終了)」");
+    const CYCLE_START_WED = "2026-07-15"; // 水曜(非土曜)開始。直前の土曜=2026-07-11。
+    // 丸め後(2026-07-11)からの経過日数=14日→floor(14/7)+1=3週目(today 07-25は
+    // 丸め後W3=07-25〜07-31の実スパンに実際に含まれる。丸め前の基準だとW2=07-18〜07-24を
+    // 指し今日を含まない不整合があった=review-r1-claude-a3.md M1)。
+    await page.clock.setFixedTime(new Date(2026, 6, 25, 10, 0, 0));
     await seed(page, {
       settings: { twelveWeekStartDate: CYCLE_START_WED, twelveWeekScoreTarget: 85 },
       weeklyCommitments: [],
@@ -598,9 +603,51 @@ async function seed(page, values) {
       currentView: "twelveweek"
     });
     await page.waitForFunction(() => document.querySelectorAll(".twy-week").length === 13);
-    check("A-M2: 非土曜開始でも当週ハイライトは経過日数÷7+1(cycleWeekForDateと同じ式)でW2になる",
+    check("K裁定2026-09-05: 非土曜開始は土曜丸め後の経過日数基準でW3になる(今日を含む週と一致)",
       await page.locator(".twy-week[data-current=\"1\"]").count() === 1
-      && await page.locator(".twy-week").nth(1).getAttribute("data-current") === "1");
+      && await page.locator(".twy-week").nth(2).getAttribute("data-current") === "1");
+    check("K裁定2026-09-05: W1のweekStartは丸め後の土曜(2026-07-11)",
+      (await page.locator(".twy-week").nth(0).getAttribute("title")).includes("2026-07-11"));
+    // K裁定2026-09-05(3): 表示側の丸めは既存Projectのupdated Atを進めない(読み取り専用の
+    // 変換であり書き込みを一切しないことを、非土曜開始のProjectで確認する)。
+    const pWed = project("pwed", { twelveWeekStartDate: CYCLE_START_WED, updatedAt: "2026-07-11T00:00:00" });
+    // review-r2-claude-b M2/M4: PLAN面での非土曜開始の当週判定はCYCLE面(13WEEKSバー)と別経路
+    // (twyPlanFaceHTMLがsummary.weeksのisCurrentから再導出する)ため未検証だった。目安付きタスクを
+    // 1件足してPLANグリッドの当週列・当週セルも確認する。またwaitForFunctionの待機条件が
+    // .twy-plan-link-panel(cycleStart未設定時でも必ず出る)だとグリッド描画完了を保証しないため、
+    // .twy-plan-task-row(タスク行が描画された後にしか出ない)を待つよう変更する。
+    const tWed = task("twed", "pwed", {
+      status: "todo", title: "非土曜開始タスク", twyPlan: { perWeek: 1, fromWeek: 1, toWeek: 12, keystone: false }
+    });
+    await seed(page, { projects: [pWed], tasks: [tWed], currentView: "twelveweek" });
+    const wedStateBefore = await page.evaluate(async () => JSON.stringify((await import("/src/state/store.js")).state));
+    await page.click('.twy-face-segmented button[data-face="plan"]');
+    await page.waitForSelector(".twy-plan-task-row");
+    check("M2: PLAN面でも非土曜開始は丸め後の経過日数基準でW3が当週列になる",
+      await page.locator(".twy-plan-grid thead th[data-current=\"1\"]").count() === 1
+      && await page.locator(".twy-plan-grid thead th").nth(3).getAttribute("data-current") === "1");
+    const wedCurrentStatus = await page.locator('.twy-plan-task-row[data-task-id="twed"] .twy-plan-cell').nth(2).getAttribute("data-status");
+    check("M2: PLAN面の当週セルもcurrent status", wedCurrentStatus === "current", wedCurrentStatus);
+    check("Non-Saturday PLAN render preserves full memory state", await page.evaluate(async () => JSON.stringify((await import("/src/state/store.js")).state)) === wedStateBefore);
+    const pWedUpdatedAt = await page.evaluate((KEY) =>
+      JSON.parse(localStorage.getItem(KEY)).projects.find((p) => p.id === "pwed")?.updatedAt, STATE_KEY);
+    check("K裁定2026-09-05: 非土曜開始のProjectのupdatedAtが丸め表示で進まない",
+      pWedUpdatedAt === "2026-07-11T00:00:00", pWedUpdatedAt);
+    await seed(page, { projects: [p1, wishProject, oldCycleProject], currentView: "twelveweek" });
+
+    // fix3 M1: CYCLEの13 WEEKSも開始前は当週なし、開始当日はW1のみ当週。
+    for (const day of [10, 11]) {
+      await page.clock.setFixedTime(new Date(2026, 6, day, 10, 0, 0));
+      await seed(page, { settings: { twelveWeekStartDate: CYCLE_START },
+        weeklyCommitments: [], currentView: "twelveweek" });
+      await page.waitForFunction(() => document.querySelectorAll(".twy-week").length === 13);
+      check(`CYCLE 07-${day}: 当週ハイライト数`,
+        await page.locator('.twy-week[data-current="1"]').count() === (day === 11 ? 1 : 0));
+      check(`CYCLE 07-${day}: W1当週判定`,
+        await page.locator('.twy-week').first().getAttribute("data-current") === (day === 11 ? "1" : null));
+      if (day === 10) check("CYCLE開始前: 全13週future",
+        await page.locator('.twy-week[data-status="future"]').count() === 13);
+    }
 
     // A-M1: today > cycleStartDate+90日(サイクル終了後)はisCurrentが1件も無く、
     // 見出しは「サイクル総括(終了)」になる。

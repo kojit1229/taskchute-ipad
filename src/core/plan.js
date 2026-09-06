@@ -157,14 +157,15 @@ function cycleWeeksSummary(weeklyCommitments, settings, cycleStartDate, todayISO
   // A-M1: W13末(cycleStartDate+90日)を過ぎたらisCurrentを全falseにする(過去週の実データ
   // 描画自体は維持=effectiveWeekNoは13にclampしたまま各週を評価する)。
   const cycleEnded = elapsed > 90;
-  const currentWeekNo = cycleEnded ? null : effectiveWeekNo;
+  // R2 fix3 M1: 開始前は当週も採点済み週も無い。未来の確定データを平均へ混ぜない。
+  const currentWeekNo = elapsed < 0 || cycleEnded ? null : effectiveWeekNo;
   const weeks = [];
   let sumPct = 0, countScored = 0;
   for (let weekNo = 1; weekNo <= 13; weekNo++) {
     const weekStart = addDaysISO(week1Start, (weekNo - 1) * 7);
     const isReviewWeek = weekNo === 13;
     let status = "future", pct = null;
-    if (weekNo <= effectiveWeekNo) {
+    if (elapsed >= 0 && weekNo <= effectiveWeekNo) {
       const score = weeklyScore(weeklyCommitments, weekStart);
       status = score.status;
       if (status === "scored") pct = score.pct;
@@ -195,5 +196,5 @@ function cycleWeeksSummary(weeklyCommitments, settings, cycleStartDate, todayISO
 }
 
 export {
-  normalizeTwyPlan, planTargetForWeek, taskWeekTriple, taskPlanGrid, remainingTarget, cycleWeeksSummary
+  normalizeTwyPlan, planTargetForWeek, taskWeekTriple, taskPlanGrid, remainingTarget, cycleWeeksSummary, weekStartOfISO
 };
