@@ -4,39 +4,80 @@
 // 実要求URLがtaskchute/karada/health-daily.jsonとなり404を無音で握りつぶしていた)。
 let personalDataReady, fetchGitHubRawTextAtRoot, escapeHTML, addDays, conditionThresholds, todayISO;
 // v325: 6時間キャッシュ中でも日を跨いだら当日データを取り直せるよう、取得日を別に保持する。
+let connectionIdentity, fetchHealthText, cacheIdentity, requestGeneration = 0;
 let healthCache = { fetchedAt: 0, fetchedFor: "", data: undefined };
 
 const HEALTH_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const HEALTH_CACHE_DAYS = 60;
 
 function configureHealth(deps) {
-  ({ personalDataReady, fetchGitHubRawTextAtRoot, escapeHTML, addDays, conditionThresholds, todayISO } = deps);
+  ({ personalDataReady, fetchGitHubRawTextAtRoot, escapeHTML, addDays, conditionThresholds, todayISO, connectionIdentity, fetchHealthText } = deps);
 }
 
-function validHealthData(value) {
+function validForcedHealthData(value) {
+  const ranges = { sleep_min: [0, 1440], steps: [0, Infinity], resting_hr: [20, 150],
+    hrv_sdnn: [0, Infinity], active_kcal: [0, Infinity], exercise_min: [0, 1440],
+    weight_kg: [20, 300], body_fat_pct: [1, 75] };
   return value !== null && typeof value === "object" && value.schema === 1
     && Array.isArray(value.days)
-    && value.days.every((day) => day !== null && typeof day === "object" && typeof day.date === "string");
+    && value.days.every((day, index) => day !== null && typeof day === "object" && typeof day.date === "string"
+      && (!index || value.days[index - 1].date < day.date)
+      && Object.entries(ranges).every(([key, [min, max]]) => day[key] == null
+        || typeof day[key] === "number" && Number.isFinite(day[key]) && day[key] >= min && day[key] <= max
+          && (key !== "steps" || Number.isInteger(day[key])))
+      && ["bed_time", "wake_time"].every(key => day[key] == null || /^([01]\d|2[0-3]):[0-5]\d$/.test(day[key]))
+      && (day.sleep_source == null || typeof day.sleep_source === "string"));
+}
+function validHealthData(value) {
+  return value !== null && typeof value === "object" && value.schema === 1 && Array.isArray(value.days)
+    && value.days.every(day => day !== null && typeof day === "object" && typeof day.date === "string");
+}
+
+function currentHealthIdentity() {
+  const identity = connectionIdentity ? connectionIdentity() : (typeof personalDataReady === "function" && personalDataReady() ? "legacy" : null);
+  if (identity !== cacheIdentity) {
+    cacheIdentity = identity;
+    requestGeneration++;
+    healthCache = { fetchedAt: 0, fetchedFor: "", data: undefined };
+  }
+  return identity;
+}
+
+async function fetchHealthData({ force = false, refreshIntervalMs = HEALTH_REFRESH_INTERVAL_MS, expectedHashes } = {}) {
+  const identity = currentHealthIdentity();
+  if (identity === null || !personalDataReady()) return { ok: false, reason: "not_connected" };
+  const fetchedFor = todayISO();
+  if (!force && healthCache.fetchedFor === fetchedFor && Date.now() - healthCache.fetchedAt < refreshIntervalMs)
+    return { ok: true, changed: false, skipped: true };
+  const generation = ++requestGeneration;
+  const current = () => currentHealthIdentity() === identity && requestGeneration === generation;
+  try {
+    const result = fetchHealthText ? await fetchHealthText() : { ok: true, text: await fetchGitHubRawTextAtRoot("karada/health-daily.json") };
+    if (!current()) return { ok: false, reason: "superseded" };
+    if (!result.ok || result.missing) return { ok: false, reason: result.reason || "missing" };
+    const parsed = JSON.parse(result.text);
+    if (!validHealthData(parsed) || force && (!validForcedHealthData(parsed) || !parsed.days.length
+      || parsed.days.some(row => !Number.isFinite(localDateMs(row.date)))))
+      return { ok: false, reason: "invalid_health" };
+    let sha256;
+    if (expectedHashes) {
+      const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(result.text));
+      sha256 = Array.from(new Uint8Array(digest), n => n.toString(16).padStart(2, "0")).join("");
+      if (!current()) return { ok: false, reason: "superseded" };
+      if (!expectedHashes.includes(sha256)) return { ok: false, reason: "hash_mismatch" };
+    }
+    const next = { ...parsed, days: parsed.days.slice(-HEALTH_CACHE_DAYS) };
+    const changed = JSON.stringify(healthCache.data) !== JSON.stringify(next);
+    healthCache = { fetchedAt: Date.now(), fetchedFor, data: next };
+    return { ok: true, changed, sha256, generatedAt: parsed.generated_at, dataThrough: next.days.at(-1)?.date };
+  } catch { return { ok: false, reason: current() ? "invalid_health" : "superseded" }; }
 }
 
 async function hydrateHealthData(refreshIntervalMs) {
-  if (!personalDataReady()) return false;
-  const fetchedFor = todayISO();
-  if (healthCache.fetchedFor === fetchedFor && Date.now() - healthCache.fetchedAt < refreshIntervalMs) return false;
-  let next;
-  try {
-    const raw = await fetchGitHubRawTextAtRoot("karada/health-daily.json");
-    const parsed = raw ? JSON.parse(raw) : null;
-    if (validHealthData(parsed)) next = { ...parsed, days: parsed.days.slice(-HEALTH_CACHE_DAYS) };
-  } catch (_) {
-    // 壊れたJSON・取得失敗は前回正常データを維持し、次の定期更新へ任せる。
-  }
-  const previous = healthCache.data;
-  healthCache.fetchedAt = Date.now();
-  healthCache.fetchedFor = fetchedFor;
-  if (!next) return false;
-  healthCache.data = next;
-  return JSON.stringify(previous) !== JSON.stringify(next);
+  return (await fetchHealthData({ refreshIntervalMs })).changed === true;
+}
+function forceHealthData(expectedHashes) {
+  return fetchHealthData({ force: true, expectedHashes });
 }
 
 function invalidateHealthCache() {
@@ -52,6 +93,7 @@ function localDateMs(iso) {
 }
 
 function latestHealthWithin(todayIso, maxAgeDays = 7) {
+  currentHealthIdentity();
   const todayMs = localDateMs(todayIso);
   if (!Number.isFinite(todayMs)) return null;
   const days = healthCache.data?.days;
@@ -67,6 +109,7 @@ function latestHealthWithin(todayIso, maxAgeDays = 7) {
 }
 
 function healthForDate(iso) {
+  currentHealthIdentity();
   const days = healthCache.data?.days;
   return Array.isArray(days) ? days.find((row) => row.date === iso) || null : null;
 }
@@ -139,11 +182,13 @@ function conditionFromHealth(days, todayIso) {
 }
 
 function conditionFromCachedHealth(todayIso) {
+  currentHealthIdentity();
   const days = personalDataReady() ? healthCache.data?.days : null;
   return conditionFromHealth(Array.isArray(days) ? days : [], todayIso);
 }
 
 function cachedHealthData() {
+  currentHealthIdentity();
   return typeof personalDataReady === "function" && personalDataReady() ? healthCache.data : undefined;
 }
 
@@ -185,7 +230,7 @@ function healthSummaryHTML(todayIso, exact = false) {
 }
 
 export {
-  HEALTH_REFRESH_INTERVAL_MS, configureHealth, hydrateHealthData, invalidateHealthCache,
+  HEALTH_REFRESH_INTERVAL_MS, configureHealth, hydrateHealthData, invalidateHealthCache, forceHealthData,
   latestHealthWithin, healthForDate, healthSummaryHTML,
   cachedHealthData, conditionFromHealth, conditionFromCachedHealth, conditionCommentText
 };

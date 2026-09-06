@@ -1,4 +1,4 @@
-// v323: Today TOWERの達成色・警告灯を中立化し、PCでSTANDING ORDERSをLIFE BAND行へ畳む。
+// v323: Today TOWERの達成色・警告灯を中立化し、採用UIに沿ってLIFE BANDの下へSTANDING ORDERSを置く。
 const {
   chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY
 } = require("./helpers");
@@ -164,22 +164,29 @@ function scoreRecords(done, total) {
     check("30/70/100%の文字色・バー色は単一で発光なし", scoreStyles.every((style) =>
       style.signal === scoreStyles[0].signal && style.bar === scoreStyles[0].bar && style.shadow === "none"), JSON.stringify(scoreStyles));
 
-    console.log("[3] PCだけLIFE BANDとSTANDING ORDERSを同じ行に畳む");
+    console.log("[3] PCでLIFE BANDとSTANDING ORDERSを全幅の別行に置く");
     await page.setViewportSize({ width: 1280, height: 900 });
     const desktop = await page.evaluate(() => {
-      const life = document.querySelector(".tower-band1").getBoundingClientRect();
+      const life = document.querySelector(".tower-band1 > .life-band").getBoundingClientRect();
       const standing = document.querySelector(".so-row").getBoundingClientRect();
-      return { life: { top: life.top, bottom: life.bottom }, standing: { top: standing.top, bottom: standing.bottom } };
+      const parentElement = document.querySelector(".today-tower");
+      const parent = parentElement.getBoundingClientRect(), style = getComputedStyle(parentElement);
+      return { parent: { left: parent.left + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft), right: parent.right - parseFloat(style.borderRightWidth) - parseFloat(style.paddingRight) }, life: { top: life.top, bottom: life.bottom, left: life.left, right: life.right, width: life.width, height: life.height }, standing: { top: standing.top, bottom: standing.bottom, left: standing.left, right: standing.right, width: standing.width, height: standing.height } };
     });
-    check("1280pxでは両領域の縦範囲が重なる", desktop.life.top < desktop.standing.bottom
-      && desktop.standing.top < desktop.life.bottom && Math.abs(desktop.life.top - desktop.standing.top) < 1, JSON.stringify(desktop));
+    check("1280pxでは実LIFEと信条が正の寸法で全幅を揃え上下に並ぶ", desktop.life.width > 0 && desktop.life.height > 0
+      && desktop.standing.width > 0 && desktop.standing.height > 0
+      && desktop.life.bottom <= desktop.standing.top
+      && Math.abs(desktop.life.left - desktop.parent.left) < 1
+      && Math.abs(desktop.life.right - desktop.parent.right) < 1
+      && Math.abs(desktop.life.left - desktop.standing.left) < 1
+      && Math.abs(desktop.life.right - desktop.standing.right) < 1, JSON.stringify(desktop));
     await page.setViewportSize({ width: 390, height: 844 });
     const mobile = await page.evaluate(() => {
-      const life = document.querySelector(".tower-band1").getBoundingClientRect();
+      const life = document.querySelector(".tower-band1 > .life-band").getBoundingClientRect();
       const standing = document.querySelector(".so-row").getBoundingClientRect();
-      return { lifeBottom: life.bottom, standingTop: standing.top, scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth };
+      return { lifeBottom: life.bottom, lifeWidth: life.width, lifeHeight: life.height, standingWidth: standing.width, standingHeight: standing.height, standingTop: standing.top, scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth };
     });
-    check("390pxではSTANDING ORDERSがLIFE BANDの下の別行", mobile.standingTop > mobile.lifeBottom, JSON.stringify(mobile));
+    check("390pxではSTANDING ORDERSがLIFE BANDの下の別行", mobile.lifeWidth > 0 && mobile.lifeHeight > 0 && mobile.standingWidth > 0 && mobile.standingHeight > 0 && mobile.standingTop > mobile.lifeBottom, JSON.stringify(mobile));
     check("390pxで横スクロールなし", mobile.scrollWidth <= mobile.clientWidth + 1, JSON.stringify(mobile));
 
     console.log("[4] LIFE BAND OFF契約・pageerror・state非書込");

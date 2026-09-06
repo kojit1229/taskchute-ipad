@@ -246,14 +246,14 @@ async function dataSnapshot(page) {
     await page.waitForSelector(".exec-pane-left .fill-gap-sheet", { state: "detached" });
     check("閉じると左列が一覧に戻る(.fill-gap-sheetが消える)", await page.locator(".exec-pane-left .fill-gap-sheet").count() === 0);
     check("右の時間軸の選択中破線も消える", await page.locator(".fill-gap-selected").count() === 0);
-    check("閉じると左列に一覧の中身(実際のリスト、B-M4)が戻る", await page.locator(".exec-pane-left .exec-upcoming-section").count() === 1);
+    check("閉じると左列に一覧の中身(実際のリスト、B-M4)が戻る", await page.locator(".exec-pane-left [data-work-list=exec]").count() === 1);
 
     console.log("[3c] PC左列: 「置く」でも左列が一覧に戻る(B-M4)");
     await page.click('.exec-header-actions [data-action="fill-gap-open"]');
     await page.waitForSelector(".exec-pane-left .fill-gap-sheet");
     await page.click(".exec-pane-left .fill-gap-list [data-action='fill-gap-place']");
     await page.waitForSelector(".exec-pane-left .fill-gap-sheet", { state: "detached" });
-    check("「ここに置く」後も左列が一覧に戻る", await page.locator(".exec-pane-left .exec-upcoming-section").count() === 1);
+    check("「ここに置く」後も左列が一覧に戻る", await page.locator(".exec-pane-left [data-work-list=exec]").count() === 1);
     check("「ここに置く」後、右の時間軸の選択中破線も消える", await page.locator(".fill-gap-selected").count() === 0);
 
     console.log("[3d] PC左列: 重複ガードでBlock編集モーダルへ抜けても、閉じると左列は一覧のまま残る(A-M2)");
@@ -268,12 +268,12 @@ async function dataSnapshot(page) {
     check("Block編集モーダル表示中、左列は死んだfillGapシートを残していない(A-M2)",
       await page.locator(".exec-pane-left .fill-gap-sheet").count() === 0);
     check("Block編集モーダル表示中、左列には一覧が(先に)戻っている(A-M2)",
-      await page.locator(".exec-pane-left .exec-upcoming-section").count() === 1);
+      await page.locator(".exec-pane-left [data-work-list=exec]").count() === 1);
     await page.click("#modalRoot .modal-card .modal-close");
     await page.waitForSelector("#modalRoot.open", { state: "detached" }).catch(() => {});
     check("Block編集モーダルを閉じた後も左列は一覧のまま(壊れたfillGapシートが残留しない、A-M2)",
       await page.locator(".exec-pane-left .fill-gap-sheet").count() === 0);
-    check("Block編集モーダルを閉じた後、左列に一覧の中身が見える", await page.locator(".exec-pane-left .exec-upcoming-section").count() === 1);
+    check("Block編集モーダルを閉じた後、左列に一覧の中身が見える", await page.locator(".exec-pane-left [data-work-list=exec]").count() === 1);
 
     console.log("[3e] PC左列⇔オーバーレイ: 1280px⇔1279pxの幅またぎで表示形態が切り替わる(選択中のstate.modalは維持、B-M5)");
     await seedFixture();
@@ -285,10 +285,10 @@ async function dataSnapshot(page) {
     await page.setViewportSize({ width: 1279, height: 900 });
     await page.waitForSelector("#modalRoot.open .fill-gap-sheet");
     check("1280→1279へ幅を跨ぐと左列からオーバーレイモーダルへ切り替わる(B-M5)",
-      await page.locator(".exec-pane-left").count() === 0 && await page.locator("#modalRoot.open .fill-gap-sheet").count() === 1);
+      await page.locator(".exec-pane-left [data-work-list=exec]").count() === 1 && await page.locator(".exec-pane-left .fill-gap-sheet").count() === 0 && await page.locator("#modalRoot.open .fill-gap-sheet").count() === 1);
     check("幅を跨いでも選択中の隙間(state.modal)は維持される", JSON.stringify((await stateNow(page)).modal) === JSON.stringify(modalBeforeCross));
     await page.setViewportSize({ width: 1280, height: 900 });
-    await page.waitForSelector(".exec-pane-left .fill-gap-sheet");
+    await page.waitForFunction(() => document.querySelector(".exec-pane-left .fill-gap-sheet") && !document.querySelector("#modalRoot.open"));
     check("1279→1280へ戻すとオーバーレイから左列へ戻る(B-M5)",
       await page.evaluate(() => !document.querySelector("#modalRoot")?.classList.contains("open")) && await page.locator(".exec-pane-left .fill-gap-sheet").count() === 1);
     await page.click(".exec-pane-left .fill-gap-sheet .modal-close");
@@ -299,11 +299,11 @@ async function dataSnapshot(page) {
     await page.setViewportSize({ width: 1279, height: 900 });
     // v357修正(B-M1レビュー対応): 固定waitではなくv334矩形リスナの再描画完了(.exec-two-pane
     // が消える=1280px境界のmatchMediaリスナがrender()を終えた)をDOM状態で待つ。
-    await page.waitForFunction(() => !document.querySelector(".exec-two-pane"));
+    await page.waitForSelector(".exec-pane-left [data-work-list=exec]");
     await page.click('.exec-header-actions [data-action="fill-gap-open"]');
     await page.waitForSelector("#modalRoot.open .fill-gap-sheet");
     check("1279pxではオーバーレイモーダルとして開く", await page.locator("#modalRoot.open .fill-gap-sheet").count() === 1);
-    check("1279pxではexec-pane-left自体が存在しない(PC2ペイン外)", await page.locator(".exec-pane-left").count() === 0);
+    check("1279px横向きは実一覧を保持し補完シートは左列へ重複しない", await page.locator(".exec-pane-left [data-work-list=exec]").count() === 1 && await page.locator(".exec-pane-left .fill-gap-sheet").count() === 0);
     await page.click(".fill-gap-sheet .modal-close");
     await page.waitForSelector(".fill-gap-sheet", { state: "detached" });
     await page.setViewportSize({ width: 390, height: 844 });

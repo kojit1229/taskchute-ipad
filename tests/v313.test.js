@@ -57,6 +57,14 @@ function check(name, cond, extra = "") {
     await page.reload();
     await page.waitForSelector('.today-tower[data-view-side="1"][data-view-journal="1"][data-view-life="1"]');
 
+    async function sidePanelsMatch(visible) {
+      const expected = visible ? 1 : 0;
+      return await page.locator('.tower-col-left > *').count() === expected * 2
+        && await page.locator('.tower-col-left > [data-work-list="today"]').count() === expected
+        && await page.locator('.tower-col-left > .sec-log').count() === expected
+        && await page.locator('.tower-col-center > .sec-bodymind').count() === expected
+        && await page.locator('.tower-col-left > .sec-bodymind').count() === 0;
+    }
     console.log("[1] 旧gate値を捨て、side/journal/lifeの3チップへ移行する");
     const actions = await page.$$eval(".today-focus-bar [data-action]", (nodes) => nodes.map((node) => ({
       action: node.dataset.action, text: node.textContent.trim(), pressed: node.getAttribute("aria-pressed")
@@ -67,7 +75,7 @@ function check(name, cond, extra = "") {
       ]) && actions[1].text === "運航・体調" && actions[2].text === "ジャーナル" && actions[3].text === "LIFE BAND",
       JSON.stringify(actions));
     check("旧gate=falseを無視して左列・GATE・JOURNAL・上帯1を全表示",
-      await page.locator(".tower-col-left > *").count() === 3
+      await sidePanelsMatch(true)
       && await page.locator(".tower-col-center > .sec-gates").count() === 1
       && await page.locator(".tower-col-right > .sec-journal").count() === 1
       && await page.locator(".tower-band1, .so-row").count() === 2);
@@ -84,7 +92,7 @@ function check(name, cond, extra = "") {
     await page.waitForSelector('.today-tower[data-view-side="0"]');
     const sideOff = await desktopLayout();
     check("左列DOMを省略してGATE/JOURNALを維持",
-      await page.locator(".tower-col-left > *").count() === 0
+      await sidePanelsMatch(false)
       && await page.locator(".sec-gates").count() === 1 && await page.locator(".sec-journal").count() === 1);
     // root.xはtoday-tower自体のborder-box起点でpaddingを含まないため、コンテンツ領域の
     // 左端はbase.left.x(padding後の実開始位置)と比較する(root.xとの直接比較はpadding分の
@@ -100,7 +108,7 @@ function check(name, cond, extra = "") {
     const journalOff = await desktopLayout();
     check("JOURNAL DOMを省略して左列/GATEを維持",
       await page.locator(".tower-col-right > *").count() === 0
-      && await page.locator(".tower-col-left > *").count() === 3 && await page.locator(".sec-gates").count() === 1);
+      && await sidePanelsMatch(true) && await page.locator(".sec-gates").count() === 1);
     check("中央列が右端(padding後のコンテンツ終端位置)まで拡張",
       Math.abs(journalOff.center.x - base.center.x) < 1
       && Math.abs(journalOff.center.right - base.right.right) < 1
@@ -139,7 +147,7 @@ function check(name, cond, extra = "") {
     await page.click('[data-action="focus-mode"]');
     await page.waitForSelector('.today-tower[data-view-life="1"][data-focus-mode="0"]');
     check("直前の個別状態(side/journal OFF・life ON)へ復元",
-      await page.locator(".tower-col-left > *, .tower-col-right > *").count() === 0
+      await page.locator(".tower-col-left > *, .sec-bodymind, .tower-col-right > *").count() === 0
       && await page.locator(".tower-band1, .so-row").count() === 2 && await page.locator(".sec-gates").count() === 1);
     await page.click('[data-action="focus-mode"]');
     await page.waitForSelector('.today-tower[data-focus-mode="1"]');
@@ -147,13 +155,13 @@ function check(name, cond, extra = "") {
     await page.reload();
     await page.waitForSelector('.today-tower[data-view-side="0"][data-view-journal="0"][data-view-life="0"]');
     check("3キー状態はリロード後も維持", await page.locator(".sec-gates").count() === 1
-      && await page.locator(".tower-col-left > *, .tower-col-right > *, .tower-band1, .so-row").count() === 0);
+      && await page.locator(".tower-col-left > *, .sec-bodymind, .tower-col-right > *, .tower-band1, .so-row").count() === 0);
 
     console.log("[7] 390px縦積みでもOFF区画だけが消え、GATEは表示される");
     await page.setViewportSize({ width: 390, height: 844 });
     const mobileGate = await page.locator(".sec-gates").evaluate((node) => node.getBoundingClientRect().width);
     check("狭幅でも非表示区画は復活せずGATEは実幅を持つ", mobileGate > 0
-      && await page.locator(".tower-col-left > *, .tower-col-right > *, .tower-band1, .so-row").count() === 0,
+      && await page.locator(".tower-col-left > *, .sec-bodymind, .tower-col-right > *, .tower-band1, .so-row").count() === 0,
       `${mobileGate}px`);
     check("pageerrorなし", pageErrors.length === 0, JSON.stringify(pageErrors));
     await page.setViewportSize({ width: 1440, height: 1100 });
@@ -176,7 +184,7 @@ function check(name, cond, extra = "") {
       }));
       check(`side=${side} journal=${journal} life=${life}: GATE常時表示・左右列とLIFE行がキーどおり・横スクロールなし`,
         await page.locator(".sec-gates").count() === 1
-        && await page.locator(".tower-col-left > *").count() === (side ? 3 : 0)
+        && await sidePanelsMatch(side)
         && await page.locator(".tower-col-right > *").count() === (journal ? 1 : 0)
         && await page.locator(".tower-band1, .so-row").count() === (life ? 2 : 0)
         && overflow.scrollWidth <= overflow.innerWidth + 1,

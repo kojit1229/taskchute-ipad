@@ -264,7 +264,11 @@ function staticChecks() {
     check("4件目のtitleも書き込まれない(他フィールドも保存されない)", s2.blocks.find((b) => b.id === "m4")?.title === "Block m4", JSON.stringify(s2.blocks.find((b) => b.id === "m4")));
     check("既存3件のisMITは変化しない", ["m1", "m2", "m3"].every((id) => s2.blocks.find((b) => b.id === id)?.isMIT === true));
     await page.click('[data-action="modal-close"]');
+    await page.waitForSelector('.draft-leave-dialog[open]');
+    check("上限拒否後の閉じるは保存できなかった入力を保持する", await page.locator('[data-modal-field="title"]').inputValue() === "m4 renamed(保存されないはず)" && await page.locator('[data-modal-field="isMIT"]').isChecked());
+    await page.locator('.draft-leave-dialog [data-action="draft-leave-discard"]').click();
     await waitForModalClosed(page);
+    check("明示破棄後も全Blockは拒否時の状態のまま", JSON.stringify((await stateNow()).blocks) === JSON.stringify(s2.blocks));
 
     // ============================================================
     // (4) 充電/放電セレクトの保存反映(回帰)

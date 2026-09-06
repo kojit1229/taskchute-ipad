@@ -57,9 +57,12 @@ function runningBlock() {
     check("上帯2直下にNOW LANDINGとポモドーロを各1つ描画",
       await page.locator(".tower-band2 > .tower-runway.now-hero").count() === 1
       && await page.locator(".tower-band2 > .today-pomodoro.pomo").count() === 1);
-    check("左列からNOW LANDINGを除去し、ARRIVALS/FLIGHT LOG/BODY-MINDの3パネルを残す",
+    check("左列は全件一覧/FLIGHT LOG、身体は中央へ移しNOWは上帯に保持",
       await page.locator(".tower-col-left > .tower-runway").count() === 0
-      && await page.locator(".tower-col-left > .tower-board, .tower-col-left > .sec-log, .tower-col-left > .sec-bodymind").count() === 3);
+      && await page.locator('.tower-col-left > [data-work-list="today"]').count() === 1
+      && await page.locator('.tower-col-left > .sec-log').count() === 1
+      && await page.locator('.tower-col-center > .sec-bodymind').count() === 1
+      && await page.locator('.tower-col-left > *').count() === 2);
     const layout = await page.evaluate(() => {
       const tower = document.querySelector(".today-tower");
       const band = document.querySelector(".tower-band2");
@@ -142,7 +145,15 @@ function runningBlock() {
     await seed([]);
     const empty = page.locator('.tower-band2 .tower-nowhud[data-status="empty"]');
     check("empty HUDが上帯2内に1つ", await empty.count() === 1);
-    check("空表示は滑走路オープン案内", (await empty.textContent()).includes("次の便を選んで開始できます"));
+    check("未計画の空表示は追加案内、開始操作は無い", (await empty.textContent()).includes("本日の予定はありません")
+      && await empty.locator('[data-action="nav"][data-view="exec"]').count() === 1
+      && await empty.locator('[data-action="now-start"]').count() === 0);
+    await empty.locator('[data-action="nav"][data-view="exec"]').click();
+    await page.waitForSelector('#app[data-view="exec"]');
+    check("空状態の追加導線で実行へ移動しても予定を自動作成しない", await page.evaluate((key) => {
+      const value = JSON.parse(localStorage.getItem(key));
+      return value.blocks.length === 0 && value.tasks.length === 0;
+    }, STATE_KEY));
 
     console.log("[5] 旧POMODORO右列退避コードと文字列replaceハックを残さない");
     const towerSource = fs.readFileSync(path.join(__dirname, "../src/features/today-tower.js"), "utf8");

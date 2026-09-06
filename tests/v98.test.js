@@ -57,12 +57,18 @@ async function seedTasksView(page) {
 
 async function readStructuralStyles(page) {
   return page.evaluate(() => {
+    // Synthetic legacy structure: preserve common CSS independently of adopted UI.
+    const fixture = document.createElement("div");
+    fixture.dataset.v98Fixture = "legacy-structure";
+    fixture.style.cssText = "position:fixed;left:-10000px;top:0;visibility:hidden;pointer-events:none";
+    fixture.innerHTML = '<main class="main-pane"><header class="view-header"><h2>見出し</h2></header><div class="grid"><section class="panel">枠</section></div><section class="section"><div class="item">行</div></section><div class="form-strip"><button class="btn">操作</button></div></main>';
+    document.body.appendChild(fixture);
     const g = (sel, prop) => {
-      const el = document.querySelector(sel);
+      const el = fixture.querySelector(sel);
       if (!el) return null;
       return getComputedStyle(el)[prop];
     };
-    return {
+    const result = {
       mainPanePaddingTop: g(".main-pane", "paddingTop"),
       viewHeaderMarginBottom: g(".view-header", "marginBottom"),
       h2MarginBottom: g("h2", "marginBottom"),
@@ -77,7 +83,29 @@ async function readStructuralStyles(page) {
       // 最初の.btnになった。コンパクト化対象の.btnを測るため.primaryを除外する(セレクタ追随)。
       btnMinHeight: g(".btn:not(.primary)", "minHeight")
     };
+    fixture.remove();
+    return result;
   });
+}
+
+async function checkCurrentExecUI(page, label) {
+  const live = await page.evaluate(() => {
+    const root = document.querySelector('[data-work-list="exec"]');
+    const input = root?.querySelector('[data-work-filter="query"]');
+    const wbs = root?.querySelector('[data-action="nav"][data-view="wbs"]');
+    if (!root || !input || !wbs) return { missing: true };
+    const r = root.getBoundingClientRect(), i = input.getBoundingClientRect(), b = wbs.getBoundingClientRect();
+    return { width: r.width, height: r.height, inputHeight: i.height, buttonHeight: b.height,
+      inputFont: parseFloat(getComputedStyle(input).fontSize),
+      empty: root.querySelectorAll('.work-list-empty').length,
+      rows: root.querySelectorAll('[data-work-key]').length,
+      within: i.left >= r.left && i.right <= r.right && b.left >= r.left && b.right <= r.right,
+      overflow: document.scrollingElement.scrollWidth > innerWidth };
+  });
+  check(`${label}: 実行の空一覧・WBS導線・検索入力の可視寸法と横溢れなし`,
+    !live.missing && live.width > 0 && live.height > 0 && live.empty === 1 && live.rows === 0
+    && live.inputHeight >= 44 && live.buttonHeight >= 44 && live.inputFont >= 16 && live.within && !live.overflow,
+    JSON.stringify(live));
 }
 
 (async () => {
@@ -98,6 +126,7 @@ async function readStructuralStyles(page) {
     await pageIpad.waitForTimeout(500);
     await passGithubGate(pageIpad);
     await seedTasksView(pageIpad);
+    await checkCurrentExecUI(pageIpad, "iPad");
     const ipadStyles = await readStructuralStyles(pageIpad);
     const ipadExpected = {
       mainPanePaddingTop: "16px", viewHeaderMarginBottom: "12px", h2MarginBottom: "8px",
@@ -122,6 +151,7 @@ async function readStructuralStyles(page) {
     await pagePhone.waitForTimeout(500);
     await passGithubGate(pagePhone);
     await seedTasksView(pagePhone);
+    await checkCurrentExecUI(pagePhone, "iPhone");
     const phoneStyles = await readStructuralStyles(pagePhone);
     // v127: apple-design全体適用(K指示)でbase値の余白リズムを一段ゆったりへ更新。
     //       iPhone幅はbase値が効くため4項目が変化(CHANGES_v127.md)。iPad幅(>=760px)の

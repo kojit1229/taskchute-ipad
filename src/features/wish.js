@@ -1,3 +1,4 @@
+import { openTaskPlacement } from "./placement.js";
 // src/features/wish.js — app.js分割・段階4-2(WishタブのリストCRUD・描画を抽出)。
 //
 // 契約(prep-stage4-wish.md §7、既存featureと同じconfigureXxx(deps)パターン):
@@ -431,33 +432,7 @@ function toggleWishSubtask(id) {
 
 // Wish のサブタスクを今日のタスクシュート(Block)に登録
 function wishSubtaskToTasks(taskId) {
-  const task = state.tasks.find((t) => t.id === taskId);
-  if (!task) return showToast("タスクが見つかりません");
-  // v152レビュー対応(両系統一致): 「今日のタスクシュートに登録」は文言どおり常に実時計の今日
-  // (todayISO())基準であるべきで、閲覧中の日付(state.selectedDate)に依存させない
-  // (carryOverBlockと同じ基準に統一。過去日を閲覧した直後にこの経路を使うと過去日にBlockが
-  // 作られてしまう既存の潜在バグだった)。
-  const today = todayISO();
-  // 既に今日の Block 化されていないか
-  const exists = state.blocks.find((b) => !b.deleted && b.taskId === taskId && b.date === today);
-  if (exists) return showToast("既に今日のタスクシュートにあります");
-  // 新規 Block を作成。expectedCharge: 4(やりたいこと=充電源)を推奨値として
-  // v29: 予定の開始/終了日時をデフォルトで入れる(v152: 日付部分もtoday基準に統一)
-  const { plannedStartAt, plannedEndAt } = defaultPlannedTimes(today);
-  const block = makeBlock({
-    date: today,
-    title: task.title,
-    category: task.category || "回復",
-    taskId: task.id,
-    expectedCharge: 4,
-    expectedDischarge: 1,
-    plannedStartAt,
-    plannedEndAt
-  });
-  state.blocks.push(block);
-  // Task の status を "doing" に
-  state.tasks = state.tasks.map((t) => t.id === taskId ? { ...t, status: "doing", updatedAt: nowDateTime() } : t);
-  saveAndRender("今日のタスクシュートに登録しました");
+  openTaskPlacement(taskId, "wish");
 }
 
 function realizeWish(id) {

@@ -24,7 +24,9 @@ const EXPECTED_TYPES = [
   ["letter", "未来からの手紙", "未来からの手紙_"],
   ["excuse", "言い訳レポート", "言い訳レポート_"],
   ["fundJournal", "FABLE FUND日誌", "FABLE FUND日誌_"],
-  ["market", "朝の投資ブリーフ", "朝の投資ブリーフ_"]
+  ["fundJournalCodex", "CODEX FUND日誌", "CODEX FUND日誌_"],
+  ["marketCodex", "朝の投資ブリーフ CODEX", "朝の投資ブリーフ_CODEX_"],
+  ["market", "朝の投資ブリーフ FABLE", "朝の投資ブリーフ_"]
 ];
 
 let failures = 0;
@@ -39,7 +41,7 @@ function verifySourceContracts() {
   const block = /const AI_REPORT_TYPES = \[([\s\S]*?)\n\];/.exec(source)?.[1] || "";
   const actualTypes = [...block.matchAll(/\{ id: "([^"]+)", label: "([^"]+)", prefix: "([^"]+)"/g)]
     .map((match) => match.slice(1));
-  check("既存7kindのid/label/prefix/順序と既定feedbackを保ち、新2kindを末尾追加",
+  check("既存7kindのid/label/prefix/順序と既定feedbackを保ち、FABLE/CODEXの4kindを表示",
     JSON.stringify(actualTypes) === JSON.stringify(EXPECTED_TYPES), JSON.stringify(actualTypes));
   check("FUNDビューidと紛れないfundJournalを使用", actualTypes[7]?.[0] === "fundJournal");
   check("新2kindのguideは設計確定文言",
@@ -47,8 +49,8 @@ function verifySourceContracts() {
       && block.includes('guide: "前夜の米国市場と当日の注目材料を寄り付き前にまとめます"'));
   const notify = /const notifyKinds = new Set\(\[([^\]]+)\]\)/.exec(source)?.[1]
     ?.match(/"[^"]+"/g)?.map((value) => value.slice(1, -1)) || [];
-  check("通知白名単は既存6kind+fundJournal+marketの8種だけ",
-    JSON.stringify(notify) === JSON.stringify(["feedback", "content", "self", "weekly", "letter", "excuse", "fundJournal", "market"]),
+  check("通知白名単は既存6kindとFABLE/CODEXの4kindだけ",
+    JSON.stringify(notify) === JSON.stringify(["feedback", "content", "self", "weekly", "letter", "excuse", "fundJournal", "fundJournalCodex", "market", "marketCodex"]),
     JSON.stringify(notify));
 }
 
@@ -104,6 +106,11 @@ async function openAiType(page, typeId) {
   await page.waitForSelector(`[data-action="ai-report-type"][data-type="${typeId}"].active`);
 }
 
+async function readFundDates(page) {
+  await page.waitForFunction(() => Array.from(document.querySelectorAll('[data-fund-report-date] option')).some((option) => option.value));
+  return page.$$eval('[data-fund-report-date] option', (options) => options.map((option) => option.value));
+}
+
 async function badgeText(page) {
   const badge = page.locator('#bottomNav [data-view="more"] .nav-badge');
   return await badge.count()
@@ -117,6 +124,7 @@ async function verifyMixedWhitelist(browser) {
     ["AIフィードバック", "feedback"], ["コンテンツ総括", "content"], ["自己分析", "self"],
     ["週次レビュー", "weekly"], ["未来からの手紙", "letter"], ["言い訳レポート", "excuse"],
     ["FABLE FUND日誌", "fundJournal"], ["朝の投資ブリーフ", "market"],
+    ["CODEX FUND日誌", "fundJournalCodex"], ["朝の投資ブリーフ_CODEX", "marketCodex"],
     ["英語表現集", "english"], ["日報", "journal"], ["未知", "unknown"]
   ].map(([prefix, kind]) => ({ name: `${prefix}_${TODAY}.md`, date: TODAY, kind }));
   const fixture = {
@@ -125,21 +133,21 @@ async function verifyMixedWhitelist(browser) {
   };
   const { context, page } = await gatedPage(browser, fixture);
   try {
-    await page.waitForFunction(() => document.querySelector('#bottomNav [data-view="more"] .nav-badge')?.textContent === "8");
-    check("既存6kindと新2kindを各1件ずつ数える", await badgeText(page) === "8");
+    await page.waitForFunction(() => document.querySelector('#bottomNav [data-view="more"] .nav-badge')?.textContent === "10");
+    check("既存6kindと新2kindをとCODEX2kindを各1件ずつ数える", await badgeText(page) === "10");
     await openAiType(page, "english");
     await page.waitForFunction(() => document.querySelector(".md-render")?.textContent.includes("通知外でも閲覧可能_v286"));
     const tabs = await page.$$eval('[data-action="ai-report-type"]', (elements) => elements.map((element) => [element.dataset.type, element.textContent.trim()]));
-    check("既存7セグメント不変・新2セグメント末尾表示",
+    check("既存7セグメント不変・FABLE/CODEXの4セグメントを表示",
       JSON.stringify(tabs) === JSON.stringify(EXPECTED_TYPES.map(([id, label]) => [id, label])), JSON.stringify(tabs));
     check("englishは通知外のままタブでは読める", (await page.locator(".md-render").textContent()).includes("通知外でも閲覧可能_v286"));
-    check("englishを開いても通知8件は不変", await badgeText(page) === "8", String(await badgeText(page)));
+    check("englishを開いても通知10件は不変", await badgeText(page) === "10", String(await badgeText(page)));
   } finally { await context.close(); }
 }
 
 async function verifySingleKindCounts(browser) {
   console.log("[3] fundJournal/market単独fixtureで各1件カウント");
-  for (const [kind, prefix] of [["fundJournal", "FABLE FUND日誌"], ["market", "朝の投資ブリーフ"]]) {
+  for (const [kind, prefix] of [["fundJournal", "FABLE FUND日誌"], ["market", "朝の投資ブリーフ"], ["fundJournalCodex", "CODEX FUND日誌"], ["marketCodex", "朝の投資ブリーフ_CODEX"]]) {
     const fixture = {
       index: { generatedAt: FRESH_GENERATED_AT, files: [{ name: `${prefix}_${TODAY}.md`, date: TODAY, kind }] },
       bodies: {}
@@ -168,9 +176,9 @@ async function verifyBoundary(browser) {
     await page.waitForFunction(() => document.querySelector('#bottomNav [data-view="more"] .nav-badge')?.textContent === "2");
     check("今日から13日前は両kindとも14日窓内、14日前は両kindとも窓外", await badgeText(page) === "2");
     await openAiType(page, "fundJournal");
-    const fundDates = await page.$$eval("[data-ai-report-date] option", (options) => options.map((option) => option.value));
+    const fundDates = await readFundDates(page);
     await page.click('[data-action="ai-report-type"][data-type="market"]');
-    const marketDates = await page.$$eval("[data-ai-report-date] option", (options) => options.map((option) => option.value));
+    const marketDates = await readFundDates(page);
     check("両kindの日付は月次補完不要のYYYY-MM-DDだけで日付降順",
       [fundDates, marketDates].every((dates) => JSON.stringify(dates) === JSON.stringify([INSIDE_WINDOW, OUTSIDE_WINDOW])),
       JSON.stringify({ fundDates, marketDates }));
@@ -200,7 +208,7 @@ async function verifyReadAndBodyFlows(browser) {
     await openAiType(page, "fundJournal");
     await page.waitForFunction(() => document.querySelector(".md-render")?.textContent.includes("FUND本文成功_v286"));
     await page.waitForFunction((name) => JSON.parse(localStorage.getItem("taskchute-journal-pwa-state-v1")).aiReportReadIds.includes(name), fundLatest);
-    const fundDates = await page.$$eval("[data-ai-report-date] option", (options) => options.map((option) => option.value));
+    const fundDates = await readFundDates(page);
     check("FUND日誌一覧は日付降順で最新本文を取得", JSON.stringify(fundDates) === JSON.stringify([TODAY, "2026-08-26"]));
     check("FUND日誌表示でファイル名を既読化しバッジ即時減", await badgeText(page) === "2");
 
@@ -237,10 +245,11 @@ async function verifyReadAndBodyFlows(browser) {
   const empty = await gatedPage(browser, emptyFixture);
   try {
     await openAiType(empty.page, "market");
-    await empty.page.waitForSelector('.md-render[data-report-loaded="0"]');
+    await empty.page.waitForFunction(() => document.querySelector("[data-fund-report-view] .fund-status-line")?.textContent.includes("本文の形式を確認できません"));
     const state = await empty.page.evaluate((key) => JSON.parse(localStorage.getItem(key)), STATE_KEY);
     check("朝ブリーフ空本文は取得失敗表示になり既読化しない",
-      (await empty.page.locator(".md-render").textContent()).includes("本文を取得できませんでした")
+      (await empty.page.locator("[data-fund-report-view] .fund-status-line").textContent()).includes("本文の形式を確認できません")
+        && await empty.page.locator("[data-fund-report-view] .md-render").count() === 0
         && !state.aiReportReadIds.includes(marketLatest));
     check("空本文では未読バッジ1件を維持", await badgeText(empty.page) === "1");
   } finally { await empty.context.close(); }
@@ -286,9 +295,13 @@ async function verifyNoReportsDegradation(browser) {
   try {
     check("新kind未到着時は未読0件・バッジ非表示", await badgeText(page) === null);
     await openAiType(page, "fundJournal");
-    check("FUND日誌タブは空一覧メッセージへ縮退", (await page.locator("main").textContent()).includes("まだ生成されていません。"));
+    check("FUND日誌タブは空一覧メッセージへ縮退", (await page.locator("[data-fund-report-view]").textContent()).includes("読みたい日付の記録がまだありません")
+      && await page.locator("[data-fund-report-date]").inputValue() === ""
+      && await page.locator("[data-fund-report-view] .md-render").count() === 0);
     await page.click('[data-action="ai-report-type"][data-type="market"]');
-    check("朝ブリーフタブも空一覧メッセージへ縮退", (await page.locator("main").textContent()).includes("まだ生成されていません。"));
+    check("朝ブリーフタブも空一覧メッセージへ縮退", (await page.locator("[data-fund-report-view]").textContent()).includes("読みたい日付の記録がまだありません")
+      && await page.locator("[data-fund-report-date]").inputValue() === ""
+      && await page.locator("[data-fund-report-view] .md-render").count() === 0);
     check("空一覧縮退でpageerror/console errorなし", pageErrors.length === 0 && consoleErrors.length === 0,
       JSON.stringify({ pageErrors, consoleErrors }));
   } finally { await context.close(); }

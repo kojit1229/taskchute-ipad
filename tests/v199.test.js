@@ -234,11 +234,16 @@ function check(name, cond, extra = "") {
     // (d) confirmで既存Blockの時刻更新+updatedAt bump・新規Block非生成
     // ============================================================
     console.log("[d] confirmで既存Blockの時刻更新+updatedAt bump・新規Block非生成");
+    await seed({tasks:[wbsTask("task-sent", "先送り済み")], blocks:[{...planBlock({id:"sent",date:TODAY,title:"先送り済み",taskId:"task-sent",startMin:7*60,endMin:7*60+30}),migratedTo:"target-block",carryCount:2}]});
+    const sentBefore = (await stateNow()).blocks;
+    await runAiSchedule();
+    check("先送り済みBlockは採用契約どおり再配置候補にしない", await page.locator('.draft-block').count() === 0 && await page.locator('[data-action="draft-confirm"]').count() === 0);
+    check("先送り済みBlockのID・時刻・送り先・回数は変えない", JSON.stringify((await stateNow()).blocks) === JSON.stringify(sentBefore));
     const OLD_UPDATED_AT = "2020-01-01T00:00:00";
-    // 軽微8: migratedTo/carryCountに非既定値を仕込み、confirm後も不変(=繰越専用パスを通らない)ことを確認する
+    // 採用K16では先送り済みは候補外。未送付と非既定carryCountがconfirm後も不変(=繰越専用パスを通らない)ことを確認する
     await seed({
       tasks: [wbsTask("task-d1", "確定検証タスク")],
-      blocks: [{ ...planBlock({ id: "blk-d1", date: TODAY, title: "確定検証タスク", taskId: "task-d1", startMin: 7 * 60, endMin: 7 * 60 + 30 }), updatedAt: OLD_UPDATED_AT, migratedTo: "dummy-migrated-to", carryCount: 2 }]
+      blocks: [{ ...planBlock({ id: "blk-d1", date: TODAY, title: "確定検証タスク", taskId: "task-d1", startMin: 7 * 60, endMin: 7 * 60 + 30 }), updatedAt: OLD_UPDATED_AT, migratedTo: "", carryCount: 2 }]
     });
     await runAiSchedule();
     const beforeConfirm = await stateNow();
@@ -253,7 +258,7 @@ function check(name, cond, extra = "") {
       !!bD && bD.plannedStartAt === `${TODAY}T10:00` && bD.plannedEndAt === `${TODAY}T10:30`, JSON.stringify(bD));
     check("updatedAtがbumpされる(旧タイムスタンプのままではない)", !!bD && bD.updatedAt !== OLD_UPDATED_AT, JSON.stringify(bD));
     check("migratedTo/carryCountは不変(軽微8・繰越専用パス非経由の直接確認)",
-      !!bD && bD.migratedTo === "dummy-migrated-to" && bD.carryCount === 2, JSON.stringify(bD));
+      !!bD && bD.migratedTo === "" && bD.carryCount === 2, JSON.stringify(bD));
     check("確定してもaiScheduleHistoryへ新規記録しない",
       (afterConfirm.aiScheduleHistory || []).length === 0, JSON.stringify(afterConfirm.aiScheduleHistory));
 

@@ -61,8 +61,8 @@ const block = (id, ruleId, title = "朝の読書") => ({
 
     console.log("[1] PCサイドバーからINSTRUMENTS/IRON LOGへ直接遷移しmobileNavは不変");
     const navLabels = await page.locator(".nav-list .nav-label").allTextContents();
-    // v281: FUNDタブがIRON LOGの後へ常設されたため期待列を追従(INSTRUMENTS→IRON LOGの隣接と0秒思考〜その他の位置関係は維持して検証)。
-    check("zeroとmoreの間にINSTRUMENTS→IRON LOG(→FUND)", navLabels.slice(-6).join("|") === "0秒思考|INSTRUMENTS|IRON LOG|FUND|その他|設定", JSON.stringify(navLabels));
+    // v360: 12WYのPCサイドバー追加へ追随。既存6項目の順序を保ち、FUNDとその他の間に12WYを厳密に要求する。
+    check("zeroから設定までINSTRUMENTS→IRON LOG→FUND→12WYの順序を保つ", navLabels.slice(-7).join("|") === "0秒思考|INSTRUMENTS|IRON LOG|FUND|12WY|その他|設定", JSON.stringify(navLabels));
     const mobileItems = await page.$$eval("#bottomNav button", (elements) => elements.map((element) => ({
       id: element.dataset.view, label: element.childNodes[0].textContent
     })));

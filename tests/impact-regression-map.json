@@ -25,9 +25,59 @@
     "v255",
     "v262",
     "v266",
-    "xss-sanitizer"
+    "xss-sanitizer",
+    "data-contract-gate",
+    "fund-data-contract"
   ],
   "areas": {
+    "work-list-ui": {
+      "paths": [
+        "^src/(core|features)/work-list\\.js$"
+      ],
+      "patterns": [
+        "configureWorkList|renderWorkList|handleWorkList|restoreWorkList|rememberWorkList|execDoneListHTML|renderExecDoneRow|block-row-toggle|exec-row-copy"
+      ],
+      "suites": [
+        "work-list-model",
+        "work-list-focus",
+        "work-list-render-focus",
+        "work-list-e2e",
+        "ui-a-layout",
+        "today-detail-integration-e2e"
+      ]
+    },
+    "detail-draft-guard": {
+      "paths": [
+        "^src/features/draft-(leave|save)\\.js$"
+      ],
+      "patterns": [
+        "draftSaveTransaction|requestDraftLeave|modalDraftSnapshot|modalDeleteMessage|detail-columns|draft-leave-|openBodyScanModal|body-scan-fatigue"
+      ],
+      "suites": [
+        "draft-leave",
+        "draft-save-transaction",
+        "modal-delete-impact",
+        "detail-draft-e2e",
+        "zero-draft-e2e",
+        "today-detail-integration-e2e",
+        "v293"
+      ]
+    },
+    "archive-safety": {
+      "paths": [
+        "^src/features/archive-date-protection\\.js$"
+      ],
+      "patterns": [
+        "prepareArchiveMerge|archiveProof|runArchive|ArchiveTextConflict",
+        "isArchivedDate|ARCHIVED_READONLY_MESSAGE|journal\\.archived"
+      ],
+      "suites": [
+        "archive-date-protection",
+        "archive-date-protection-e2e",
+        "archive-tombstone-sync",
+        "archive-snapshot-safety"
+      ]
+    },
     "legacy-app": {
       "paths": [
         "^app\\.js$"
@@ -63,15 +113,34 @@
     },
     "fund-feature": {
       "paths": [
-        "^src/(?:features/fund|state/fund-cache)\\.js$"
+        "^src/(?:features/fund|state/fund-cache)\\.js$",
+        "^src/features/fund/"
       ],
       "patterns": [
-        "renderFund|hydrateFundData|dashboard/fund\\.json|data-view=[\"']fund"
+        "renderFund|hydrateFundData|dashboard/fund\\.json|data-view=[\"']fund",
+        "fundReportsUI|fund-report|fund-comparison|fund-content|invalidateFundConnection"
       ],
       "suites": [
-        "v82",
+        "bridge-epoch-independent",
+        "directory-fallback",
+        "fund-comparison-view",
+        "fund-controller",
+        "fund-dom-bridge",
+        "fund-integration-e2e",
+        "fund-read",
+        "fund-read-transport",
+        "fund-report",
+        "fund-workspace",
+        "independent-picker",
+        "individual",
+        "legacy-raw-fixtures",
+        "legacy-restoration",
+        "report-view",
         "v148",
-        "v281"
+        "v281",
+        "v301",
+        "v356",
+        "v82"
       ]
     },
     "journal-feature": {
@@ -292,6 +361,99 @@
         "v254",
         "v262",
         "v267"
+      ]
+    },
+    "twelve-week-plan-core": {
+      "paths": [
+        "^src/core/plan\\.js$"
+      ],
+      "suites": [
+        "plan-core",
+        "r0-twyplan",
+        "r1-twelveweek",
+        "r2-twelveweek-plan"
+      ]
+    },
+    "twelve-week-feature": {
+      "paths": [
+        "^src/features/twelve-week\\.js$"
+      ],
+      "suites": [
+        "r1-twelveweek",
+        "r2-twelveweek-plan"
+      ]
+    },
+    "remaining-integrated-features": {
+      "paths": [
+        "^src/(?:features|core|sync)/(?:karada|health|placement|iron-log|vision)"
+      ],
+      "patterns": [
+        "configureKaradaImport|invalidateKaradaImport|invalidateVision|openTaskPlacement|captureIronSetDraft"
+      ],
+      "suites": [
+        "iron-input-safety-e2e",
+        "iron-log-core",
+        "iron-log-input-core",
+        "karada-import-core",
+        "karada-import-e2e",
+        "placement-core",
+        "placement-e2e",
+        "vision-connection",
+        "vision-connection-e2e",
+        "vision-overview"
+      ]
+    },
+    "feedback-regeneration-integration": {
+      "paths": [
+        "^src/features/feedback/",
+        "^src/storage/local\\.js$",
+        "^src/sync/github\\.js$",
+        "^tests/feedback-",
+        "^tests/support/(?:app-connection-transform|prepare|sync-proof-transform|ui-transform)\\.cjs$"
+      ],
+      "patterns": [
+        "feedback-|feedbackUiController|feedbackReportController|feedbackCanonicalReader|invalidateFeedbackConnection|renderFeedbackUiSlot|patchFeedbackUi|hydrateStaticMarkdown|ensureFeedbackClients|captureProof|buildReportMarkdown"
+      ],
+      "suites": [
+        "feedback-busy-boundary",
+        "feedback-busy-coordinator",
+        "feedback-canonical",
+        "feedback-canonical-e2e",
+        "feedback-canonical-wiring",
+        "feedback-date-contract",
+        "feedback-http-entry",
+        "feedback-input-e2e",
+        "feedback-lifecycle-e2e",
+        "feedback-readonly-scroll",
+        "feedback-recovery-e2e",
+        "feedback-refresh-guard",
+        "feedback-save-proof",
+        "feedback-ui-core"
+      ]
+    },
+    "data-contract": {
+      "paths": [
+        "^src/features/fund(?:\\.js$|/)"
+      ],
+      "patterns": [
+        "configureFund|hydrateFundData"
+      ],
+      "suites": [
+        "data-contract-gate",
+        "fund-data-contract"
+      ]
+    },
+    "fill-gap-layout": {
+      "paths": [
+        "^styles[.]css$"
+      ],
+      "patterns": [
+        "fillGap|FillGap|_execLandscapeMediaQuery|renderExecView"
+      ],
+      "suites": [
+        "exec-layout-media",
+        "fill-gap-layout-inputs-e2e",
+        "v357"
       ]
     }
   }

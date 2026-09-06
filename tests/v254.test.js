@@ -30,7 +30,7 @@ function functionSource(name) {
   throw new Error(`${name} closing brace not found`);
 }
 
-const instrumentedAppSource = appSource
+const instrumentedAppSource = (appSource + "\nglobalThis.__v254ReadLiveState = () => state;\n")
   .replace("function saveState() {", `function saveState() {
   globalThis.__v254SaveCalls?.push("save");
   globalThis.__v254HookOrder?.push("save");`)
@@ -197,18 +197,30 @@ console.log("[0] 共通フック契約と全経路の機械検査");
   }
 
   const stored = () => page.evaluate((key) => JSON.parse(localStorage.getItem(key)), KEY);
-  const resetHookSpies = () => page.evaluate(() => {
+  const resetHookSpies = () => page.evaluate((key) => {
+    globalThis.__v254Writes = [];
+    globalThis.__v254StorageOriginal ||= Storage.prototype.setItem;
+    Storage.prototype.setItem = function(k, value) {
+      if (k === key && globalThis.__v254FailNextWrite) {
+        globalThis.__v254FailNextWrite = false;
+        throw new DOMException("v254 synthetic storage failure", "QuotaExceededError");
+      }
+      const result = globalThis.__v254StorageOriginal.call(this, k, value);
+      if (k === key) globalThis.__v254Writes.push(JSON.parse(value));
+      return result;
+    };
     globalThis.__v254StartCalls = [];
     globalThis.__v254CompletionCalls = [];
     globalThis.__v254ToastCalls = [];
     globalThis.__v254SaveCalls = [];
     globalThis.__v254HookOrder = [];
-  });
+  }, KEY);
   const hookSpies = () => page.evaluate(() => ({
     starts: globalThis.__v254StartCalls || [],
     completions: globalThis.__v254CompletionCalls || [],
     toasts: globalThis.__v254ToastCalls || [],
     saves: globalThis.__v254SaveCalls || [],
+    writes: globalThis.__v254Writes || [],
     order: globalThis.__v254HookOrder || []
   }));
   async function clickAction(action, dataset = {}) {
@@ -233,6 +245,28 @@ console.log("[0] 共通フック契約と全経路の機械検査");
         entry.id === `wci_${WEEK_START}_${blockId}` && entry.completedAt));
     }, { KEY, WEEK_START, blockId }, { timeout: 5000 }).then(() => true).catch(() => false);
   }
+  async function atomicModalSave(label) {
+    const before = await page.evaluate((key) => ({
+      stored: localStorage.getItem(key), live: JSON.stringify(globalThis.__v254ReadLiveState()),
+      fields: JSON.stringify(Array.from(document.querySelectorAll("#modalRoot [data-modal-field]"),
+        (el) => [el.dataset.modalField, el.type === "checkbox" ? el.checked : el.value]))
+    }), KEY);
+    await resetHookSpies();
+    await page.evaluate(() => { globalThis.__v254FailNextWrite = true; });
+    await page.locator('[data-action="modal-save"]').click();
+    const failed = await page.evaluate((key) => ({
+      stored: localStorage.getItem(key), live: JSON.stringify(globalThis.__v254ReadLiveState()),
+      fields: JSON.stringify(Array.from(document.querySelectorAll("#modalRoot [data-modal-field]"),
+        (el) => [el.dataset.modalField, el.type === "checkbox" ? el.checked : el.value])),
+      injected: !globalThis.__v254FailNextWrite, writes: globalThis.__v254Writes.length
+    }), KEY);
+    check(`${label}: 保存失敗はメモリ・保存済み内容を戻し入力を保持`, failed.injected
+      && failed.writes === 0 && failed.stored === before.stored && failed.live === before.live
+      && failed.fields === before.fields
+      && await page.locator('#modalRoot.open [data-action="modal-save"]').count() === 1);
+    await resetHookSpies();
+    await page.locator('[data-action="modal-save"]').click();
+  }
   async function assertCompletionRoute(label, blockId, interactive, expectedSaveCalls) {
     await page.waitForFunction((blockId) => (globalThis.__v254CompletionCalls || [])
       .some((call) => call.blockId === blockId), blockId);
@@ -246,8 +280,19 @@ console.log("[0] 共通フック契約と全経路の機械検査");
       JSON.stringify(routeCalls));
     check(`${label}: interactive経路だけ進捗トースト判定を1回呼ぶ`,
       spies.toasts.filter((id) => id === blockId).length === (interactive ? 1 : 0), JSON.stringify(spies));
-    check(`${label}: saveState呼び出し回数`, spies.saves.length === expectedSaveCalls,
-      JSON.stringify(spies.order));
+    if (expectedSaveCalls === "atomic") {
+      const saved = spies.writes[0];
+      const savedBlock = saved?.blocks.find((entry) => entry.id === blockId);
+      const savedItem = saved?.weeklyCommitments.find((entry) => entry.id === `wci_${WEEK_START}_${blockId}`);
+      check(`${label}: 完了Blockと刻印を同じsnapshotで1回だけ永続化`, spies.writes.length === 1
+        && savedBlock?.completed === true && Boolean(savedItem?.completedAt)
+        && savedItem.completedChangedAt === savedItem.updatedAt
+        && savedItem.updatedAt === saved.dataModifiedAt && savedItem.updatedAt > OLD,
+        JSON.stringify({ writes: spies.writes.length, savedBlock, savedItem }));
+    } else {
+      check(`${label}: saveState呼び出し回数`, spies.saves.length === expectedSaveCalls,
+        JSON.stringify(spies.order));
+    }
     const completionIndex = spies.order.indexOf("completion");
     check(`${label}: 保存確定後にフック、刻印後にも保存`,
       spies.order.slice(0, completionIndex).includes("save")
@@ -302,13 +347,13 @@ console.log("[0] 共通フック契約と全経路の機械検査");
       await clickAction("complete-block-with-actual", { id: "actual-route" });
       await page.locator('[data-action="modal-save"]').click();
     });
-    await runCommittedCompletion("Block編集モーダル完了保存", "block-modal-route", false, 4, async () => {
+    await runCommittedCompletion("Block編集モーダル完了保存", "block-modal-route", false, "atomic", async () => {
       await clickAction("edit-block", { id: "block-modal-route" });
       // v366追随: 完了済み(Block)チェックは頻度の低い項目として「詳細 ›」(既定閉)へ移設された。
       await page.waitForSelector(".modal-card details.tower-fold", { state: "attached" });
       await page.locator(".modal-card details.tower-fold").evaluate((el) => { el.open = true; });
       await page.locator('[data-modal-field="completed"]').check();
-      await page.locator('[data-action="modal-save"]').click();
+      await atomicModalSave("Block編集モーダル完了保存");
     });
 
     check("廃止済みAI作業ボタンを本番DOMへ戻さない",
@@ -483,9 +528,9 @@ console.log("[0] 共通フック契約と全経路の機械検査");
         await page.locator('[data-modal-field="expectedCharge"]').selectOption(expectedCharge);
       }
       await resetHookSpies();
-      await page.locator('[data-action="modal-save"]').click();
+      await atomicModalSave(label);
       await waitForStamp(blockId);
-      await assertCompletionRoute(label, blockId, false, 4);
+      await assertCompletionRoute(label, blockId, false, "atomic");
     }
 
     await seed({ blocks: [], weeklyCommitments: [] });
@@ -498,12 +543,12 @@ console.log("[0] 共通フック契約と全経路の機械検査");
     await page.locator('[data-modal-field="completed"]').check();
     await page.locator('[data-modal-field="recurrenceKind"]').selectOption("daily");
     await resetHookSpies();
-    await page.locator('[data-action="modal-save"]').click();
+    await atomicModalSave("新規繰り返し保存出口");
     await page.waitForFunction(() => (globalThis.__v254CompletionCalls || []).length === 1);
     const newRecurringSpies = await hookSpies();
     const newRecurringId = newRecurringSpies.completions[0]?.blockId;
     await waitForStamp(newRecurringId);
-    await assertCompletionRoute("新規繰り返し保存出口", newRecurringId, false, 4);
+    await assertCompletionRoute("新規繰り返し保存出口", newRecurringId, false, "atomic");
     check("新規繰り返し保存でルールを作成", (await stored()).recurrences.some((entry) => !entry.deleted));
 
     await seed({

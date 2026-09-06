@@ -124,7 +124,7 @@ function check(name, cond, extra = "") {
   }
   async function openTaskEditor(id) {
     await page.locator(`[data-wbs-row-id="${id}"] > .wbs-task-row > .wbs-row-menu-toggle`).click();
-    await page.locator(`[data-action="edit-task"][data-id="${id}"]`).click();
+    await page.locator(`.wbs-row-menu-panel [data-action="edit-task"][data-id="${id}"]`).click();
   }
 
   try {

@@ -36,7 +36,10 @@ function check(name, cond, extra = "") {
 
     console.log("[1] 専用キー未設定の既定は全表示で、固定GATEを含む既存DOM構造を維持する");
     check("専用キー未設定では3系統と固定GATEを描画",
-      await page.locator(".tower-col-left > *").count() === 3
+      await page.locator(".tower-col-left > *").count() === 2
+      && await page.locator('.tower-col-left > [data-work-list="today"]').count() === 1
+      && await page.locator('.tower-col-left > .sec-log').count() === 1
+      && await page.locator('.tower-col-center > .sec-bodymind').count() === 1
       && await page.locator(".tower-col-center > .sec-gates").count() === 1
       && await page.locator(".tower-col-right > .sec-journal").count() === 1);
     check("右カラム直下はJOURNAL 1個だけ", await page.locator(".tower-col-right > *").count() === 1);
@@ -71,11 +74,11 @@ function check(name, cond, extra = "") {
     await page.click('[data-action="focus-toggle-side"]');
     await page.waitForSelector('.today-tower[data-view-side="0"]');
     check("左列だけ消え、固定GATEとJOURNALは残る",
-      await page.locator(".tower-col-left > *").count() === 0
+      await page.locator(".tower-col-left > *, .sec-bodymind").count() === 0
       && await page.locator(".sec-gates").count() === 1 && await page.locator(".sec-journal").count() === 1);
     await page.reload();
     await page.waitForSelector(".today-tower");
-    check("左列非表示はリロード後も維持", await page.locator(".tower-col-left > *").count() === 0);
+    check("左列非表示はリロード後も維持", await page.locator(".tower-col-left > *, .sec-bodymind").count() === 0);
     await page.click('[data-action="focus-toggle-side"]');
     await page.waitForSelector('.today-tower[data-view-side="1"]');
     await page.click('[data-action="focus-toggle-journal"]');
@@ -86,12 +89,15 @@ function check(name, cond, extra = "") {
     await page.click('[data-action="focus-mode"]');
     await page.waitForSelector('.today-tower[data-focus-mode="1"]');
     check("FOCUSで3系統のDOMがすべて無く固定GATEだけ残る",
-      await page.locator(".tower-col-left > *, .sec-journal, .tower-band1, .so-row").count() === 0
+      await page.locator(".tower-col-left > *, .sec-bodymind, .sec-journal, .tower-band1, .so-row").count() === 0
       && await page.locator(".sec-gates").count() === 1);
     await page.click('[data-action="focus-mode"]');
     await page.waitForSelector('.today-tower[data-focus-mode="0"]');
     check("解除で直前状態(side/life表示・journal非表示)へ復元",
-      await page.locator(".tower-col-left > *").count() === 3 && await page.locator(".tower-band1, .so-row").count() === 2
+      await page.locator(".tower-col-left > *").count() === 2
+      && await page.locator('.tower-col-left > [data-work-list="today"]').count() === 1
+      && await page.locator('.tower-col-left > .sec-log').count() === 1
+      && await page.locator('.tower-col-center > .sec-bodymind').count() === 1 && await page.locator(".tower-band1, .so-row").count() === 2
       && await page.locator(".sec-gates").count() === 1 && await page.locator(".sec-journal").count() === 0);
     await page.click('[data-action="focus-toggle-journal"]');
     await page.waitForSelector(".sec-journal");
@@ -136,16 +142,22 @@ function check(name, cond, extra = "") {
       const timer = document.querySelector(".today-pomodoro");
       const runway = document.querySelector(".tower-runway").getBoundingClientRect();
       const timerRect = timer.getBoundingClientRect();
+      const mit = document.querySelector(".tower-mit").getBoundingClientRect();
       const standing = document.querySelector(".so-row").getBoundingClientRect();
       const focus = document.querySelector(".today-focus-bar").getBoundingClientRect();
-      return { inBand2: timer.parentElement.classList.contains("tower-band2"), standingBottom: standing.bottom,
+      return { mitTop: mit.top, mitBottom: mit.bottom, mitWidth: mit.width, mitHeight: mit.height,
+        inBand2: timer.parentElement.classList.contains("tower-band2"), standingTop: standing.top, standingBottom: standing.bottom,
         runwayTop: runway.top, runwayBottom: runway.bottom, timerTop: timerRect.top, timerBottom: timerRect.bottom,
         focusTop: focus.top, ringWidth: timer.querySelector(".pomo-circle-wrap").getBoundingClientRect().width };
     });
-    check("iPhoneはSTANDING ORDERS→NOW LANDING→CABIN TIMER→FOCUSの縦順",
-      mobileNormal.inBand2 && mobileNormal.standingBottom <= mobileNormal.runwayTop
+    check("iPhoneはNOW LANDING→CABIN TIMER→STANDING ORDERS→FOCUSの縦順",
+      mobileNormal.inBand2 && mobileNormal.timerBottom <= mobileNormal.standingTop && mobileNormal.standingBottom <= mobileNormal.focusTop
       && mobileNormal.runwayBottom <= mobileNormal.timerTop && mobileNormal.timerBottom <= mobileNormal.focusTop
       && Math.abs(mobileNormal.ringWidth - 112) < 0.5, JSON.stringify(mobileNormal));
+    check("iPhoneの独立MITは可視でタイマー後・信条前に重ならず配置",
+      mobileNormal.mitWidth > 0 && mobileNormal.mitHeight > 0
+      && mobileNormal.timerBottom <= mobileNormal.mitTop && mobileNormal.mitBottom <= mobileNormal.standingTop,
+      JSON.stringify(mobileNormal));
     await page.click('[data-action="focus-mode"]');
     await page.waitForSelector('.today-tower[data-focus-mode="1"]');
     const mobileLayout = await page.evaluate(() => {

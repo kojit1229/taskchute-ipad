@@ -81,8 +81,12 @@ function check(name, condition, extra = "") {
     const signal = page.locator('.life-band [data-action="twy-score-toggle"]');
     await signal.click();
     const countdown = page.locator(".life-band .twy-track-line");
+    await countdown.waitFor();
+    check(`${track.id}: COUNTDOWNの実トラックは1行で判定語を表示しない`,
+      await countdown.count() === 1 && await countdown.locator(".t-state").count() === 0
+      && await countdown.locator(".t-name").textContent() === track.name);
     const result = { countdown: {
-      state: await countdown.locator(".t-state").textContent(),
+      state: (await countdown.locator(".t-fact").allTextContents()).join("|"),
       pace: await countdown.locator(".t-pace").textContent(),
       cls: await countdown.locator(".t-pace").getAttribute("class")
     }, countdownSaveCalls: await page.evaluate(() => window.__v268SaveCalls || 0) };
@@ -116,15 +120,15 @@ function check(name, condition, extra = "") {
     const current = numericTrack("current", "p-current");
     await seed(current, `${TODAY}T09:00:00`, 7);
     const currentView = await readBoth(current);
-    check("更新済みnumericは両画面で状態・具体ペースを表示", currentView.countdown.state === "順調"
+    check("更新済みnumericは両画面で状態・具体ペースを表示", currentView.countdown.state === ""
       && currentView.wbs.state === "順調" && currentView.countdown.pace === "0章" && currentView.wbs.pace === "0章",
     JSON.stringify(currentView));
 
     const milestone = milestoneTrack("milestone", "p-milestone");
     await seed(milestone);
     const milestoneView = await readBoth(milestone);
-    check("milestoneは古いstartDateでも未更新にせず両画面へ表示", milestoneView.countdown.state !== "未更新"
-      && milestoneView.wbs.state === milestoneView.countdown.state && milestoneView.countdown.pace === "—"
+    check("milestoneは古いstartDateでも未更新にせず両画面へ表示", milestoneView.countdown.state === ""
+      && milestoneView.wbs.state === "順調" && milestoneView.countdown.pace === "—"
       && milestoneView.wbs.pace.includes("次:"), JSON.stringify(milestoneView));
     check("表示・展開・読取はsaveState 0回", [staleView, currentView, milestoneView]
       .every((view) => view.countdownSaveCalls === 0 && view.wbsSaveCalls === 0));
@@ -133,7 +137,7 @@ function check(name, condition, extra = "") {
     const inside = numericTrack("inside", "p-inside");
     await seed(inside, `${TODAY}T09:00:00`, 4.5);
     const insideView = await readBoth(inside);
-    check("-tolerance境界の内側+1は両画面pos", insideView.countdown.state === "順調"
+    check("-tolerance境界の内側+1は両画面pos", insideView.countdown.state === ""
       && insideView.wbs.state === "順調" && insideView.countdown.cls.includes("pos")
       && insideView.wbs.cls.includes("pos") && !insideView.countdown.cls.includes("neg")
       && !insideView.wbs.cls.includes("neg"), JSON.stringify(insideView));
@@ -141,7 +145,7 @@ function check(name, condition, extra = "") {
     const outside = numericTrack("outside", "p-outside");
     await seed(outside, `${TODAY}T09:00:00`, 2.5);
     const outsideView = await readBoth(outside);
-    check("-tolerance境界の外側-1は両画面neg", outsideView.countdown.state === "要注意"
+    check("-tolerance境界の外側-1は両画面neg", outsideView.countdown.state === ""
       && outsideView.wbs.state === "要注意" && outsideView.countdown.cls.includes("neg")
       && outsideView.wbs.cls.includes("neg") && !outsideView.countdown.cls.includes("pos")
       && !outsideView.wbs.cls.includes("pos"), JSON.stringify(outsideView));

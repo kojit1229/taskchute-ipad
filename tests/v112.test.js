@@ -86,132 +86,83 @@ function check(name, cond, extra = "") {
   }
 
   function openItem(taskId) {
-    return page.locator(`.item:has([data-action="task-today"][data-id="${taskId}"])`);
+    return page.locator(`[data-work-list="wbs"] [data-work-key="task:${taskId}"]`);
   }
 
   try {
     await page.clock.setFixedTime(now0);
     await page.goto(`http://localhost:${PORT}/`);
-    await page.waitForTimeout(500);
     await passGithubGate(page);
-
-    // ============================================================
-    // (a) 未登録タスクは一覧に出る→「今日へ追加」クリックでBlock1件、一覧に残る+バッジ表示
-    // ============================================================
-    console.log("[1] 当日Block未登録タスクは一覧に出る→「今日へ追加」クリックでBlockが作られ、一覧に残ったままバッジが出る");
-    await seed({
-      tasks: [wbsTask("task-A", "複数回今日へ追加検証Task")],
-      blocks: [],
-      projects: [testProject()],
-      view: "tasks"
-    });
-    check("初期状態で一覧に出る", await openItem("task-A").count() === 1);
-    check("初期状態ではバッジは出ない", !(await openItem("task-A").textContent())?.includes("Block 追加済み"));
-    await page.click('[data-action="task-today"][data-id="task-A"]');
-    await page.waitForTimeout(300);
-    const s1 = await stateNow();
-    const blocksForA1 = s1.blocks.filter((b) => b.taskId === "task-A" && !b.deleted);
-    check("Blockが1件作られる", blocksForA1.length === 1, JSON.stringify(blocksForA1));
-    check("1回目クリック後も一覧に残る", await openItem("task-A").count() === 1);
-    check("「本日 1 件 Block 追加済み」バッジが出る", (await openItem("task-A").textContent())?.includes("本日 1 件 Block 追加済み"),
-      await openItem("task-A").textContent());
-
-    // ============================================================
-    // (b) 同じタスクへもう一度「今日へ追加」→2件目のBlockが作られる。バッジは「本日 2 件」
-    // ============================================================
-    console.log("[2] 同じタスクへもう一度「今日へ追加」をクリックすると2件目のBlockが作られ、バッジが更新される");
-    await page.click('[data-action="task-today"][data-id="task-A"]');
-    await page.waitForTimeout(300);
-    const s2 = await stateNow();
-    const blocksForA2 = s2.blocks.filter((b) => b.taskId === "task-A" && !b.deleted);
-    check("Blockが2件になる(同一taskId、別id)", blocksForA2.length === 2, JSON.stringify(blocksForA2));
-    check("2件のBlock idは別々", blocksForA2[0].id !== blocksForA2[1].id, JSON.stringify(blocksForA2));
-    check("2回目クリック後も一覧に残る", await openItem("task-A").count() === 1);
-    check("「本日 2 件 Block 追加済み」バッジに更新される", (await openItem("task-A").textContent())?.includes("本日 2 件 Block 追加済み"),
-      await openItem("task-A").textContent());
-    // タスクシュート画面のBlock一覧(v331 A-1a: .exec-rowカード)にも2件のBlockが実際に
-    // 描画されていること(Block化自体のUI確認)
-    const blockCardCount = await page.locator(
-      `.exec-row:has([data-action="toggle-block"][data-id="${blocksForA2[0].id}"]), .exec-row:has([data-action="toggle-block"][data-id="${blocksForA2[1].id}"])`
-    ).count();
-    check("タスクシュートのBlock一覧に2件描画される", blockCardCount === 2, `blockCardCount=${blockCardCount}`);
-
-    // ============================================================
-    // (c) タスクを完了にすると一覧から消える(v107回帰の維持確認)
-    // ============================================================
-    console.log("[3] タスクを完了にすると一覧から消える(v107回帰の維持確認)");
-    // v146でBlockシュート行から🏁(toggle-task-complete)がBlock編集モーダルへ移設されたため、
-    // 行内の直接クリックではなくモーダルを開いてから操作する(tests/v107.test.jsと同じパターン)。
-    // v331 A-1a: 「これから」行の編集ボタンは展開後(block-row-toggle)にしか出ない。
-    await page.click(`[data-action="block-row-toggle"][data-id="${blocksForA2[0].id}"]`);
-    await page.waitForSelector(`[data-action="edit-block"][data-id="${blocksForA2[0].id}"]`);
-    await page.click(`[data-action="edit-block"][data-id="${blocksForA2[0].id}"]`);
-    await page.waitForTimeout(200);
-    // v366追随: 🏁タスク完了トグルは頻度の低い項目として「詳細 ›」(既定閉)へ移設された。
-    await page.evaluate(() => {
-      const d = document.querySelector(".modal-card details.tower-fold");
-      if (d) d.open = true;
-    });
-    await page.click(`.modal-card [data-action="toggle-task-complete"][data-id="${blocksForA2[0].id}"]`);
-    await page.waitForTimeout(300);
-    // v293追随: 新規完了(justCompleted)のため編集モーダルは身体スキャンモーダルへ
-    // 置き換わっている(modal-closeボタンはもう存在しない)。記録せず閉じるで代替する。
+    const nav = view => page.locator(`.sidebar [data-action="nav"][data-view="${view}"]`).click();
+    const placed = async id => (await stateNow()).blocks.filter(b => !b.deleted && b.taskId === id && b.date === TODAY);
+    const open = async id => {
+      await page.locator(`.wbs-projects [data-action="task-today"][data-id="${id}"]`).click();
+      await page.locator('#modalRoot').evaluate(async root => { await Promise.all(root.getAnimations({subtree:true}).map(a => a.finished)); });
+    };
+    const taskIds = () => page.locator('[data-work-list="wbs"] [data-work-key^="task:"]').evaluateAll(els => els.map(el => el.dataset.workKey.slice(5)));
+    console.log('[1] 未配置TaskはWBSに残り、時刻を確認するまでBlockを作らない');
+    await seed({tasks:[wbsTask('task-A','複数回今日へ追加検証Task')],projects:[testProject()],view:'wbs'});
+    check('初期状態で一覧に出る',await openItem('task-A').count()===1);
+    check('初期状態は当日Block未登録', (await placed('task-A')).length===0);
+    await open('task-A');
+    check('開始時刻は空で、フォームを開くだけでは0件',await page.locator('#placement-time').inputValue()==='' && (await placed('task-A')).length===0);
+    await page.locator('[data-action="modal-save"]').click();
+    check('空時刻で確定しても0件・エラーを表示', (await placed('task-A')).length===0 && (await page.locator('#placement-error').textContent()).includes('開始時刻'));
+    await page.locator('#placement-time').fill('11:40');
+    await page.locator('.modal-footer [data-action="modal-close"]').click();
+    await page.locator('[data-action="draft-leave-stay"]').click();
+    check('取消確認から戻ると入力保持・未保存',await page.locator('#placement-time').inputValue()==='11:40' && (await placed('task-A')).length===0);
+    await page.locator('.modal-footer [data-action="modal-close"]').click();
+    await page.locator('[data-action="draft-leave-discard"]').click();
+    check('破棄ではBlockを追加しない', (await placed('task-A')).length===0);
+    await open('task-A'); await page.locator('#placement-time').fill('11:40');
+    await page.locator('[data-action="modal-save"]').click();
+    const first=(await placed('task-A'));
+    check('Blockが1件作られる',first.length===1,JSON.stringify(first));
+    check('同じTask・今日・指定開始終了を保存',first[0]?.taskId==='task-A' && first[0]?.date===TODAY && first[0]?.plannedStartAt===`${TODAY}T11:40` && first[0]?.plannedEndAt===`${TODAY}T12:10`);
+    check('追加結果に保存した時刻を表示', (await page.locator('.modal-card').textContent()).includes('11:40') && (await page.locator('.modal-card').textContent()).includes('12:10'));
+    await page.locator('[data-action="placement-return"]').click();
+    check('1回目配置後も元WBSにTaskが残る',await openItem('task-A').count()===1);
+    console.log('[2] 同日同Taskへの再訪は既存予定へ進み、時刻編集しても件数とidを保持');
+    await open('task-A');
+    check('再訪では同じBlock idで1件のまま', (await placed('task-A')).length===1 && await page.locator('[data-action="placement-edit"]').getAttribute('data-id')===first[0].id);
+    check('再訪結果は重複追加していないと表示', (await page.locator('.modal-card').textContent()).includes('重複追加はしていません'));
+    check('再訪時に新規配置フォームは出さない',await page.locator('#placement-time').count()===0);
+    await page.locator('[data-action="placement-edit"]').click();
+    await page.locator('[data-modal-field="plannedStartAt"]').fill(`${TODAY}T11:45`);
+    await page.locator('[data-action="modal-save"]').click();
+    const revised=await placed('task-A');
+    check('時刻変更後も同じBlockが1件',revised.length===1 && revised[0].id===first[0].id && revised[0].plannedStartAt===`${TODAY}T11:45:00`);
+    await nav('wbs');
+    check('再訪・編集後もTaskを保持',await openItem('task-A').count()===1 && (await stateNow()).tasks.find(t=>t.id==='task-A')?.status!=='completed');
+    await nav('exec');
+    check('実行の予定一覧に同じBlockが1件描画される',await page.locator(`[data-work-list="exec"] [data-work-key="block:${first[0].id}"]`).count()===1);
+    console.log('[3] Task完了は保存され、未完了filterから消え、全件には残る');
+    await page.locator(`[data-work-list="exec"] [data-action="block-row-toggle"][data-id="${first[0].id}"]`).click();
+    await page.locator(`[data-work-list="exec"] [data-action="edit-block"][data-id="${first[0].id}"]`).click();
+    await page.locator('.modal-card details.tower-fold > summary').click();
+    await page.locator(`.modal-card [data-action="toggle-task-complete"][data-id="${first[0].id}"]`).click();
     await dismissBodyScanIfOpen(page);
-    await page.waitForTimeout(150);
-    const s3 = await stateNow();
-    const tA3 = s3.tasks.find((t) => t.id === "task-A");
-    check("Taskがcompletedになる", tA3?.status === "completed", JSON.stringify(tA3));
-    check("完了後は一覧から消える", await openItem("task-A").count() === 0);
+    check('Taskがcompletedになる',(await stateNow()).tasks.find(t=>t.id==='task-A')?.status==='completed');
+    await nav('wbs');
+    await page.locator('[data-work-list="wbs"] [data-work-filter="status"]').selectOption('open');
+    check('完了後は未完了filterから消える',await openItem('task-A').count()===0);
+    await page.locator('[data-work-list="wbs"] [data-work-filter="status"]').selectOption('');
+    check('全件filterには完了Taskを保持',await openItem('task-A').count()===1 && (await openItem('task-A').textContent()).includes('完了'));
+    console.log('[4][5] 期限なしも含めた全Taskを元順で保持し、配置が期限情報や並びを変えない');
+    const tasks=[wbsTask('task-nodue','期日未設定Task',{dueDate:''}),wbsTask('task-overdue','期日超過Task',{dueDate:addDaysStr(-3)}),wbsTask('task-today2','当日Task',{dueDate:TODAY}),wbsTask('task-tomorrow','翌日Task',{dueDate:addDaysStr(1)})];
+    await seed({tasks,projects:[testProject()],view:'wbs'});
+    check('期日未設定Taskは一覧に表示される',await openItem('task-nodue').count()===1);
+    check('期限で削らず全4Taskを元配列順で表示',JSON.stringify(await taskIds())===JSON.stringify(tasks.map(t=>t.id)));
+    const beforeTasks=(await stateNow()).tasks;
+    await open('task-today2');await page.locator('#placement-time').fill('15:00');await page.locator('[data-action="modal-save"]').click();
+    await page.locator('[data-action="placement-return"]').click();
+    check('Block登録後も全件の並びは変わらない',JSON.stringify(await taskIds())===JSON.stringify(tasks.map(t=>t.id)));
+    check('Block登録はTask情報を変更しない',JSON.stringify((await stateNow()).tasks)===JSON.stringify(beforeTasks));
+    check('Block登録したTaskは一覧に残ったまま',await openItem('task-today2').count()===1);
+    await seed({tasks:[wbsTask('task-home','旧home複数回追加検証Task')],projects:[testProject()],view:'home'});
+    check('旧home viewはtodayへフォールバックする',await page.locator('#app[data-view="today"]').count()===1);
 
-    // ============================================================
-    // (d) 期日なしTaskは表示されない/期日昇順(v97/v107回帰の維持確認)
-    // ============================================================
-    // v332: 母集団再編(effectiveDueDateが空 or 今日+7日以内)により、期日未設定Taskは
-    // 「表示しない」から「一覧の末尾に表示する」へ仕様変更された(発注v332 §B)。
-    console.log("[4] 期日なしTaskは一覧の末尾に表示される/未完了一覧は期日昇順で表示される(v97/v107から仕様変更・v332で追随)");
-    await seed({
-      tasks: [
-        wbsTask("task-nodue", "期日未設定Task", { dueDate: "" }),
-        wbsTask("task-overdue", "期日超過Task", { dueDate: addDaysStr(-3) }),
-        wbsTask("task-today2", "当日Task", { dueDate: TODAY }),
-        wbsTask("task-tomorrow", "翌日Task", { dueDate: addDaysStr(1) })
-      ],
-      blocks: [],
-      projects: [testProject()],
-      view: "tasks"
-    });
-    check("期日未設定Taskは一覧に表示される(v332で末尾表示へ変更)", await openItem("task-nodue").count() === 1);
-    const idsInOrder = await page.locator('.item [data-action="task-today"]').evaluateAll((els) => els.map((el) => el.dataset.id));
-    check("期日昇順(超過→当日→翌日→期日なしは末尾)で表示される",
-      JSON.stringify(idsInOrder) === JSON.stringify(["task-overdue", "task-today2", "task-tomorrow", "task-nodue"]),
-      JSON.stringify(idsInOrder));
-
-    // ============================================================
-    // (e) 当日Block登録済みタスクへ2つ目を追加した状態でも期日超過は最上位のまま(表示順回帰)
-    // ============================================================
-    console.log("[5] 当日Block登録済み(バッジ有り)タスクが混在しても期日昇順の並びは崩れない");
-    await page.click('[data-action="task-today"][data-id="task-today2"]');
-    await page.waitForTimeout(300);
-    const idsInOrder2 = await page.locator('.item [data-action="task-today"]').evaluateAll((els) => els.map((el) => el.dataset.id));
-    check("Block登録後も期日昇順の並びは変わらない",
-      JSON.stringify(idsInOrder2) === JSON.stringify(["task-overdue", "task-today2", "task-tomorrow", "task-nodue"]),
-      JSON.stringify(idsInOrder2));
-    check("Block登録したタスクは一覧に残ったまま", await openItem("task-today2").count() === 1);
-
-    // ============================================================
-    // (f)(g) ホームタブの「未完了タスク」パネル(homeBacklog): v112でdisabled解除。
-    //        当日登録済み・未完了でも再追加ボタンが押せ、2件目のBlockが作られる
-    //        (K指摘: Kの体感の原因はここのdisabledだった可能性が高い)
-    // ============================================================
-    console.log("[6][7] v230: 旧home backlog導線は描画されない");
-    await seed({
-      tasks: [wbsTask("task-home", "旧home複数回追加検証Task")],
-      blocks: [],
-      projects: [testProject()],
-      view: "home"
-    });
-    check("旧home viewはtodayへフォールバックする", await page.locator('#app[data-view="today"]').count() === 1);
-    // 現行タスクシュートでの複数回追加契約は本スイート(a)〜(e)で維持している。
   } finally {
     await browser.close();
     server.close();

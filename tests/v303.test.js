@@ -206,11 +206,18 @@ function functionBlock(source, name, nextName) {
     const raceBanner = await waitForBanner();
     check("進行中pull中の不正token差し替えで認証バナーが表示される",
       raceBanner.includes("使用できない文字"), raceBanner);
+    const raceBefore = await storedState();
+    const pullAtBeforeRace = await page.evaluate(key => localStorage.getItem(key), PULL_AT_KEY);
+    const requestsBeforeRelease = api.requests.length;
     releasePull();
-    await waitForToast("GitHubから読み込みました");
-    check("旧tokenのpull成功後も現在tokenの認証バナーが残る",
+    await waitForToast("GitHub読込失敗: アーカイブと一致しない記録");
+    const raceAfter = await storedState();
+    check("接続変更後の旧応答は端末記録と更新時刻を変更しない", ["tasks", "projects", "blocks", "dataModifiedAt"].every(key => JSON.stringify(raceAfter[key]) === JSON.stringify(raceBefore[key])));
+    check("接続変更で中止した読込は成功時刻を進めない", await page.evaluate(key => localStorage.getItem(key), PULL_AT_KEY) === pullAtBeforeRace);
+    check("接続変更後は控え保存を含む追加通信を開始しない", api.requests.length === requestsBeforeRelease);
+    check("旧token応答の採用中止後も現在tokenの認証バナーが残る",
       await page.locator(".pd-auth-banner").count() === 1);
-    check("旧tokenのpull成功後も不正token設定を維持する",
+    check("旧token応答の採用中止後も不正token設定を維持する",
       (await storedState()).settings.github.token === INVALID_TOKEN);
 
     console.log("[6] autoSync pull/pushの各不正文字経路でも認証バナーを表示");

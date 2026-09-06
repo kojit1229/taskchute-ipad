@@ -1,3 +1,4 @@
+import { isArchivedDate, ARCHIVED_READONLY_MESSAGE } from "./archive-date-protection.js";
 // src/features/journal.js — app.js分割・段階4-3(ジャーナルタブ本体+コンディションOS
 // (朝/夜の体調・服薬・余力)・運動記録・今日行ったお店ログの抽出)。
 //
@@ -648,6 +649,7 @@ const JOURNAL_PROMPTS = {
 };
 
 function ensureJournal(date) {
+  if (isArchivedDate(state, date)) return;
   if (!state.journals[date]) {
     // v38: journalTemplate には作成時の日付が「# YYYY-MM-DD のジャーナル」として
     //      焼き込まれているため、その日の日付に置き換えてから使う
@@ -782,8 +784,8 @@ function renderJournal() {
             <div class="fold-body">${renderStoreVisitsCard(date)}</div>
           </section>
           ${fundSummary ? `<details class="fold journal-segment" data-journal-section="money" ${moneyOpen ? "open" : ""}>
-            <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="money"><span class="fold-chevron">▶</span>MONEY <span>FABLE FUND日誌</span></summary>
-            <div class="fold-body">${escapeHTML(fundSummary)}</div>
+            <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="money"><span class="fold-chevron">▶</span>MONEY <span>FABLE / CODEX FUND日誌</span></summary>
+            <div class="fold-body">${fundSummary}</div>
           </details>` : ""}
           <details class="fold journal-segment journal-segment-body" data-journal-section="journal" ${bodyOpen ? "open" : ""}>
             <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="body"><span class="fold-chevron">▶</span>自由記述 <span>本文</span></summary>
@@ -806,7 +808,8 @@ function renderJournal() {
                   `).join("")}
                 </div>
               </details>
-              <textarea id="journalFreeText" class="textarea journal-free" data-journal-date="${date}" placeholder="気づき・所感をそのまま書く&#10;AIへの依頼は本文の『### 依頼』見出しの下に書く">${escapeHTML(state.journals[date])}</textarea>
+              ${isArchivedDate(state, date) ? `<p role="status">${ARCHIVED_READONLY_MESSAGE}</p>` : ""}
+              <textarea ${isArchivedDate(state, date) ? "readonly" : ""} id="journalFreeText" class="textarea journal-free" data-journal-date="${date}" placeholder="気づき・所感をそのまま書く&#10;AIへの依頼は本文の『### 依頼』見出しの下に書く">${escapeHTML(state.journals[date] || "")}</textarea>
             </div>
           </details>
         </div>
@@ -819,7 +822,9 @@ function setMorningEnergy(value) {
   state.settings.morningEnergyLog[state.selectedDate] = value;
   ensureJournal(state.selectedDate);
   const label = energyLevels.find((level) => level.value === value)?.label || "";
-  state.journals[state.selectedDate] = upsertMorningLine(state.journals[state.selectedDate], `朝の体調: ${label} (${value})`);
+  if (!isArchivedDate(state, state.selectedDate)) {
+    state.journals[state.selectedDate] = upsertMorningLine(state.journals[state.selectedDate], `朝の体調: ${label} (${value})`);
+  }
   // v73: 「今週書けた日数」の加点式カウントに乗せるため、既存の朝の体調ピッカーだけを
   //      使った日もコンディションログの記録印(morningRecordedAt)を残す。
   ensureConditionLog(state.selectedDate).morningRecordedAt ||= nowDateTime();

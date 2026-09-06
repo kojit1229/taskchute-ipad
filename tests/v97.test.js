@@ -88,7 +88,7 @@ function check(name, cond, extra = "") {
   }
 
   function taskTodayBtn(id) {
-    return page.locator(`.item [data-action="task-today"][data-id="${id}"]`);
+    return page.locator(`[data-work-list="wbs"] [data-work-key="task:${id}"]`);
   }
 
   try {
@@ -102,17 +102,26 @@ function check(name, cond, extra = "") {
     // ============================================================
     console.log("[1] 既定表示は当日〜7日後(境界含む)+期日超過+期日未設定(末尾)。8日後以降は出ない(v332で仕様変更・追随)");
     await seed({ tasks: TASKS, projects: [testProject()], view: "tasks" });
+    check("期限のみTaskは予定へ混ぜない", await page.locator('[data-work-list="exec"] [data-work-key^="task:"]').count() === 0);
+    check("全件WBSへの実導線がある", await page.locator('[data-work-list="exec"] [data-action="nav"][data-view="wbs"]').count() === 1);
+    await page.locator('[data-work-list="exec"] [data-action="nav"][data-view="wbs"]').click();
     check("当日期日Taskが表示される", await taskTodayBtn("task-today").count() === 1);
     check("境界(7日後)Taskが表示される", await taskTodayBtn("task-7days").count() === 1);
     check("期日超過Taskが表示される", await taskTodayBtn("task-overdue").count() === 1);
     // v332: 母集団再編(effectiveDueDateが空 or 7日以内)により、期日未設定Taskは
     // 「表示しない」(v107)から「末尾に表示する」へ再度仕様変更された。
     check("期日未設定Taskは末尾に表示される(v332で表示へ変更)", await taskTodayBtn("task-nodue").count() === 1);
-    check("8日後Taskは表示されない(母集団外)", await taskTodayBtn("task-8days").count() === 0);
-    const idsInOrder = await page.locator('.item [data-action="task-today"]').evaluateAll((els) => els.map((el) => el.dataset.id));
-    check("期日昇順: 超過→当日→7日後(境界)→期日なし(末尾)",
-      JSON.stringify(idsInOrder) === JSON.stringify(["task-overdue", "task-today", "task-7days", "task-nodue"]),
-      JSON.stringify(idsInOrder));
+    check("8日後Taskも全件WBSに保持", await taskTodayBtn("task-8days").count() === 1);
+    const result = page.locator('[data-work-list="wbs"]');
+    const ids = () => result.locator('[data-work-key^="task:"]').evaluateAll(els=>els.map(el=>el.dataset.workKey.slice(5)));
+    await result.locator('[data-work-filter="project"]').selectOption("test-proj");
+    const allIds = await ids();
+    check("元5件が正確に1件ずつ存在する", allIds.length === TASKS.length && TASKS.every(t=>allIds.filter(id=>id===t.id).length===1));
+    await result.locator('[data-work-filter="due"]').selectOption("overdue");
+    check("超過条件は超過Taskだけ", JSON.stringify(await ids())===JSON.stringify(["task-overdue"]));
+    await result.locator('[data-work-filter="due"]').selectOption("today");
+    check("今日条件に未来/超過/期限なしを混ぜない", JSON.stringify(await ids())===JSON.stringify(["task-today"]));
+    await result.locator('[data-action="work-list-clear"]').click();
 
     // ============================================================
     // (b) 8日後以降を表示するトグルUIはもう存在しない(WBS導線へ一本化。発注v332 §B)
@@ -120,7 +129,7 @@ function check(name, cond, extra = "") {
     console.log("[2] 8日後以降を表示するトグル(toggle-tasks-show-future)はもう出ない。WBSへの導線がある");
     check("toggle-tasks-show-futureボタンは出ない(v332でWBS導線へ一本化・廃止)",
       await page.locator('[data-action="toggle-tasks-show-future"]').count() === 0);
-    check("「WBSで全部見る」導線がある", await page.locator('[data-action="nav"][data-view="wbs"]').filter({ hasText: "WBSで全部見る" }).count() === 1);
+    check("導線で実全件WBSに到達した", await result.count() === 1);
 
     // ============================================================
     // (c) 母集団から外れたTask(8日後)もstate.tasksからは消えない(データは消えていない)
@@ -137,16 +146,16 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(200);
     check("WBSタブでは8日後Taskが見える(表示から消えただけでデータは健在)",
       (await page.textContent("body"))?.includes("8日後Task(母集団外)"));
-    await page.click('[data-action="nav"][data-view="exec"]');
+    await result.locator('[data-work-key="task:task-overdue"] [data-action="wbs-search-jump"]').click();
     await page.waitForTimeout(200);
 
     // ============================================================
     // (d) 期日超過タスクはアンバー表示(.exec-task-overdue)になる(赤系背景ではない)
     // ============================================================
     console.log("[4] 期日超過Taskは.exec-task-overdue(アンバー)で表示され、赤系背景ではない");
-    const overdueRow = page.locator('.exec-task-row', { has: page.locator('[data-action="task-today"][data-id="task-overdue"]') }).first();
+    const overdueRow = page.locator('.wbs-projects [data-wbs-row-id="task-overdue"] > .wbs-task-row');
     check("期日超過Taskの行に.exec-task-overdue(アンバー)クラスが付く",
-      ((await overdueRow.locator(".exec-row-meta").getAttribute("class")) || "").includes("exec-task-overdue"));
+      ((await overdueRow.locator(".wbs-overdue").getAttribute("class")) || "").includes("wbs-overdue"));
     const overdueRowStyle = await overdueRow.evaluate((el) => el.getAttribute("style") || "");
     check("期日超過Taskの行に赤系背景(var(--red-soft))は付かない(v332でアンバー表現へ統一)",
       !overdueRowStyle.includes("var(--red-soft)"), overdueRowStyle);
@@ -173,7 +182,7 @@ function check(name, cond, extra = "") {
       }];
       s2.blocks = [];
       s2.selectedDate = TODAY;
-      s2.currentView = "tasks";
+      s2.currentView = "wbs";
       localStorage.setItem(KEY, JSON.stringify(s2));
     }, { KEY, TASKS, TODAY });
     await pageMobile.reload();
@@ -182,7 +191,9 @@ function check(name, cond, extra = "") {
     const defaultPath = path.join(screenshotDir, "v97-taskchute-390px-default.png");
     const expandedPath = path.join(screenshotDir, "v97-taskchute-390px-row-expanded.png");
     await pageMobile.screenshot({ path: defaultPath, fullPage: true });
-    await pageMobile.click('[data-action="task-row-toggle"][data-id="task-overdue"]');
+    await pageMobile.locator('[data-work-list="wbs"] [data-work-key="task:task-overdue"] [data-action="wbs-search-jump"]').click();
+    await pageMobile.locator('.wbs-projects [data-wbs-row-id="task-overdue"] .wbs-row-menu-toggle').click();
+    check("390pxで同Task副操作へ到達", await pageMobile.locator('.wbs-projects [data-wbs-row-id="task-overdue"] [data-action="edit-task"]').isVisible());
     await pageMobile.waitForTimeout(200);
     await pageMobile.screenshot({ path: expandedPath, fullPage: true });
     check("スクショ2枚が生成された",

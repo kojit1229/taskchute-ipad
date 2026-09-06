@@ -15,6 +15,14 @@ function check(name, cond, extra = "") {
   else { failures++; console.log(`  ❌ ${name} ${extra}`); }
 }
 
+
+// Contents API representations follow the request's Accept header.
+function fulfillContents(route, text) {
+  const raw = (route.request().headers().accept || "").includes("raw");
+  return route.fulfill({ status: 200, contentType: raw ? "text/plain" : "application/json",
+    body: raw ? text : JSON.stringify({ encoding: "base64", sha: "a".repeat(40), content: Buffer.from(text, "utf8").toString("base64") }) });
+}
+
 (async () => {
   const server = startServer(PORT);
   const browser = await chromium.launch(launchOptions());
@@ -34,20 +42,22 @@ function check(name, cond, extra = "") {
   };
   await page.route((url) => url.hostname === GITHUB_API_HOST, (route) => {
     const pathname = decodeURIComponent(new URL(route.request().url()).pathname);
+    if (route.request().method() !== "GET") return route.fulfill({ status: 405, body: "{}" });
+    if (pathname.includes("/contents/taskchute/requests/")) return route.fulfill({ status: 404, body: "{}" });
     if (/\/contents\/taskchute\/report-index\.json$/.test(pathname)) {
-      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      return fulfillContents(route, JSON.stringify({
         generatedAt: "2026-08-27T01:00:00Z",
         files: [
           { name: latestName, date: TODAY, kind: "feedback" },
           { name: oldName, date: PREVIOUS, kind: "feedback" }
         ]
-      }) });
+      }));
     }
     if (/\/contents\/taskchute$/.test(pathname)) {
       return route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
     }
     const md = pathname.match(/\/contents\/taskchute\/([^/]+\.md)$/);
-    if (md) return route.fulfill({ status: 200, contentType: "text/markdown", body: bodies[md[1]] || "" });
+    if (md) return fulfillContents(route, bodies[md[1]] || "");
     return route.fulfill({ status: 200, contentType: "text/plain", body: "" });
   });
 
@@ -73,20 +83,27 @@ function check(name, cond, extra = "") {
     const latestText = await page.locator(".md-render").textContent();
     check("新形式サマリーを読める", latestText.includes("新形式サマリー_v251"), latestText);
     check("新形式の詳細まで省略せず読める", latestText.includes("新形式全文詳細_v251"), latestText);
-    check("feedback一覧は日付降順", JSON.stringify(await page.$$eval('[data-ai-report-date] option', (nodes) => nodes.map((node) => node.value))) === JSON.stringify([TODAY, PREVIOUS]));
+    check("feedback一覧は日付降順", JSON.stringify(await page.$$eval('[data-feedback-report-overlay] [data-action="feedback-report-date"]', (nodes) => nodes.map((node) => node.dataset.feedbackDate))) === JSON.stringify([TODAY, PREVIOUS]));
     check("攻撃fixtureのscript要素/onerror属性を実DOM化しない",
       await page.locator('.md-render script[data-v251-script], .md-render [onerror]').count() === 0);
     check("攻撃fixtureのイベントコードを実行しない", await page.evaluate(() => globalThis.__v251FeedbackXss) === undefined);
+    const history = page.locator('[data-feedback-report-overlay] details[data-feedback-detail-key="history"]');
+    check("再作成履歴は初期折畳みで本文を隠さない", await history.count() === 1 && await history.getAttribute("open") === null
+      && await page.locator('[data-feedback-report-overlay] .feedback-version-body').isVisible());
+    await history.locator('summary').click();
+    check("履歴を開閉しても既存全文を保持", await history.getAttribute("open") !== null
+      && (await page.locator('[data-feedback-report-overlay] .feedback-version-body').textContent()).includes("新形式全文詳細_v251"));
+    await history.locator('summary').click();
     const initialReadIds = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).aiReportReadIds, STATE_KEY);
     check("初期表示した新形式ファイルを既読化", initialReadIds.includes(latestName), JSON.stringify(initialReadIds));
     check("新形式ファイルの既読IDを重複登録しない", initialReadIds.filter((name) => name === latestName).length === 1, JSON.stringify(initialReadIds));
 
     console.log("[2] 日付切替後も旧形式フィードバック全文を表示する");
-    await page.selectOption("[data-ai-report-date]", PREVIOUS);
+    await page.locator(`[data-action="feedback-report-date"][data-feedback-date="${PREVIOUS}"]`).click();
     await page.waitForFunction((marker) => document.querySelector(".md-render")?.textContent.includes(marker), "旧形式全文_v251");
     const oldText = await page.locator(".md-render").textContent();
     check("旧形式の見出しと本文を読める", oldText.includes("良かった点") && oldText.includes("旧形式全文_v251"), oldText);
-    check("日付selectは旧形式の日付を選択済み", await page.locator("[data-ai-report-date]").inputValue() === PREVIOUS);
+    check("日付ボタンは旧形式の日付を選択済み", await page.locator(`[data-action="feedback-report-date"][data-feedback-date="${PREVIOUS}"][aria-pressed="true"]`).count() === 1);
     check("日付切替で旧形式ファイルも既読化", await page.evaluate(({ key, name }) => JSON.parse(localStorage.getItem(key)).aiReportReadIds.includes(name), { key: STATE_KEY, name: oldName }));
     const finalReadIds = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).aiReportReadIds, STATE_KEY);
     check("新旧2ファイルの既読IDをソート保持", JSON.stringify(finalReadIds) === JSON.stringify([oldName, latestName]), JSON.stringify(finalReadIds));

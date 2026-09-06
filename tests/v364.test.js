@@ -16,7 +16,10 @@ function normalizeCore(value) {
   });
 }
 const coreKeys = vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../src/sync/github.js"), "utf8")
-  .match(/const SYNC_CORE_COMPARE_KEYS = (\[[\s\S]*?\]);/)[1]);
+  .match(/const SYNC_CORE_COMPARE_KEYS = (\[[\s\S]*?\]);/)[1], {
+    PRIMARY_SETTINGS_COMPARE_KEYS: vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../src/sync/github.js"), "utf8")
+      .match(/const PRIMARY_SETTINGS_COMPARE_KEYS = (\[[\s\S]*?\]);/)[1])
+  });
 const coreJSON = s => JSON.stringify(coreKeys.map(k => k.split(".").reduce((v, p) => v?.[p], s)));
 let currentStore, timerCalls = [], timers = new Map(), timerId = 0;
 global.setTimeout = (fn, ms) => { const id = ++timerId; timers.set(id, fn); timerCalls.push(ms); return id; };
@@ -167,13 +170,24 @@ function makeFixture({ localDataModifiedAt = "2026-09-06T06:00:00", remoteDataMo
   return { local: normalizeCore(local), remote: normalizeCore(remote) };
 }
 
+// Record-merge cases keep primary settings equal; conflict behavior has its own full matrix.
+function makeRecordFixture(options) {
+  const pair = makeFixture(options);
+  for (const key of coreKeys.filter(key => key.startsWith("settings."))) {
+    const name = key.slice(9), value = pair.local.settings[name];
+    if (value === undefined) delete pair.remote.settings[name];
+    else pair.remote.settings[name] = clone(value);
+  }
+  return pair;
+}
+
 async function run() {
   const { storeMod, syncMod } = await loadModules();
   currentStore = storeMod;
 
   console.log("[1] runAutoSyncPull: hasUnpushed + コア不一致 → バナーなしで自動マージ、直後のpushでPUT1回");
   {
-    const { local, remote } = makeFixture();
+    const { local, remote } = makeRecordFixture();
     storeMod.setState(local);
     const calls = installNodeStubs(syncMod, { remoteBodyText: JSON.stringify(remote) });
     advanceClockPastPullThrottle();
@@ -199,7 +213,7 @@ async function run() {
 
   console.log("[2] runAutoSyncPush: push前ガードでリモートが新しい+コア不一致 → 自動マージ→同tickでpush");
   {
-    const { local, remote } = makeFixture({ localDataModifiedAt: "2026-09-06T06:00:00", remoteDataModifiedAt: "2026-09-06T06:30:00" });
+    const { local, remote } = makeRecordFixture({ localDataModifiedAt: "2026-09-06T06:00:00", remoteDataModifiedAt: "2026-09-06T06:30:00" });
     local.settings.lastPushedAt = "2026-09-06T05:00:00";
     storeMod.setState(local);
     const calls = installNodeStubs(syncMod, { remoteBodyText: JSON.stringify(remote) });
@@ -216,7 +230,7 @@ async function run() {
 
   console.log("[3] syncFromGitHubOnStartup: 編集中に取得(コア不一致) → 自動マージ、ローカル限定の記録が残る");
   {
-    const { local, remote } = makeFixture({ localDataModifiedAt: "2026-09-06T06:00:00", remoteDataModifiedAt: "2026-09-06T06:30:00" });
+    const { local, remote } = makeRecordFixture({ localDataModifiedAt: "2026-09-06T06:00:00", remoteDataModifiedAt: "2026-09-06T06:30:00" });
     storeMod.setState(local);
     // GET待ち中の編集を実際の並行処理無しに再現するため、GETをgateで止めておく
     // (_startupDataModifiedAtは起動時点=06:00:00のスナップショット。呼び出し直後・GET解決前に
@@ -239,7 +253,7 @@ async function run() {
 
   console.log("[4] ローカルの方が新しいtaskはローカル勝ち、deleted:trueのtombstoneは復活しない");
   {
-    const { local, remote } = makeFixture();
+    const { local, remote } = makeRecordFixture();
     // taskAをローカルの方が新しくする(バッチではなくユーザー編集が最新のケース)
     local.tasks = [{ id: "task-a", title: "ユーザーが直した最新タイトル", updatedAt: "2026-09-06T06:20:00", deleted: false }];
     remote.tasks = [
@@ -263,7 +277,7 @@ async function run() {
 
   console.log("[5] 控え失敗: helperは不変、その後callerはv135適用へ");
   {
-    const { local, remote } = makeFixture();
+    const { local, remote } = makeRecordFixture();
     storeMod.setState(local);
     const calls = installNodeStubs(syncMod, {
       remoteBodyText: JSON.stringify(remote),
@@ -374,17 +388,18 @@ async function run() {
   }
   console.log("[10] two devices: A merge/push -> B merge/push -> A core-equal pull");
   {
-    const {local: a, remote: b} = makeFixture();
+    const {local: a, remote: b} = makeRecordFixture();
     b.settings.lastPushedAt = "2026-09-06T05:00:00";
     storeMod.setState(a);
     const ca = installNodeStubs(syncMod, {remoteBodyText: JSON.stringify(b), now: "2026-09-06T07:00:00"});
     await syncMod.runAutoSyncPush();
     const aAfter = clone(storeMod.state);
     const aWire = JSON.parse(JSON.parse(ca.putBodies[0]).content);
-    check("A push contains merged categories", aWire.settings.categories.length === 3);
+    check("A push retains agreed categories", JSON.stringify(aWire.settings.categories) === JSON.stringify(a.settings.categories));
     b.journals["2026-09-07"] = "B pending journal";
     storeMod.setState(b);
     const cb = installNodeStubs(syncMod, {remoteBodyText: JSON.stringify(aWire), now: "2026-09-06T07:01:00"});
+    localStorage.setItem("taskchute-journal-last-synced-sha", "sha-before-remote-edit");
     await syncMod.runAutoSyncPush();
     const bAfter = clone(storeMod.state);
     const bWire = JSON.parse(JSON.parse(cb.putBodies[0]).content);
@@ -456,7 +471,7 @@ async function run() {
   }
   console.log("[13] disjoint capped declarations converge in two rounds");
   {
-    const {local: a, remote: b} = makeFixture();
+    const {local: a, remote: b} = makeRecordFixture();
     const records = Array.from({length: 600}, (_, i) => ({id: `d${String(i).padStart(3, "0")}`,
       declaredAt: i < 300 ? "2026-09-05T06:00:00" : "2026-09-06T06:00:00"}));
     a.declarations = records.filter((_, i) => i % 2 === 0).reverse();
@@ -466,13 +481,13 @@ async function run() {
       if (round) { left.journals["2026-09-10"] = "round two"; left.dataModifiedAt = "2026-09-06T07:01:30"; }
       storeMod.setState(left);
       const ca = installNodeStubs(syncMod, {remoteBodyText: JSON.stringify(right), now: `2026-09-06T07:0${round * 2}:00`});
-      localStorage.setItem("taskchute-journal-last-synced-sha", "sha-remote-1");
+      localStorage.setItem("taskchute-journal-last-synced-sha", "sha-before-remote-edit");
       await syncMod.runAutoSyncPush(); left = clone(storeMod.state);
       const wire = JSON.parse(JSON.parse(ca.putBodies[0]).content);
       if (round) { right.journals["2026-09-11"] = "B round two"; right.dataModifiedAt = "2026-09-06T07:01:40"; }
       storeMod.setState(right);
       const cb = installNodeStubs(syncMod, {remoteBodyText: JSON.stringify(wire), now: `2026-09-06T07:0${round * 2 + 1}:00`});
-      localStorage.setItem("taskchute-journal-last-synced-sha", "sha-remote-1");
+      localStorage.setItem("taskchute-journal-last-synced-sha", "sha-before-remote-edit");
       await syncMod.runAutoSyncPush(); right = clone(storeMod.state);
       check(`capped round ${round} PUTs finite`, ca.putBodies.length === 1 && cb.putBodies.length === 1);
     }
@@ -483,7 +498,7 @@ async function run() {
   for (const [origin, outcome] of [["pull", "backup-false"], ["pull", "normalize-throw"],
     ["startup", "backup-false"], ["startup", "normalize-throw"], ["pull", "success"]]) {
     const label = `${origin}/${outcome}`;
-    const {local, remote} = makeFixture();
+    const {local, remote} = makeRecordFixture();
     storeMod.setState(local);
     const sameSecond = origin === "startup" ? "2026-09-06T06:05:00" : local.dataModifiedAt;
     let releaseBackup, enterBackup, releaseGet, backupResolved = false, normalizeThrows = 0;
@@ -517,6 +532,10 @@ async function run() {
     // coreValuesの無条件再計算も検証する(ローカル限定のid配列要素)。
     storeMod.state.recurrences.push({id: "during-backup", title: "same-second rule"});
     check(`${label}: data stamp unchanged`, storeMod.state.dataModifiedAt === beforeStamp);
+    const beforeFailure = JSON.stringify(storeMod.state);
+    localStorage.setItem("taskchute-journal-pwa-state-v1", beforeFailure);
+    localStorage.setItem("taskchute-journal-last-synced-sha", "fixture-sha-before");
+    localStorage.setItem("taskchute-journal-last-sync-pull-at", "fixture-pull-before");
     backupResolved = true;
     releaseBackup(outcome !== "backup-false");
     await pending;
@@ -524,10 +543,25 @@ async function run() {
     check(`${label}: core edit survives`, storeMod.state.recurrences.some(r => r.id === "during-backup"));
     check(`${label}: backup remains once`, calls.snapshotCalls === 1);
     check(`${label}: normalize failure exercised`, normalizeThrows === (outcome === "normalize-throw" ? 1 : 0));
-    check(`${label}: remote collection applied`, storeMod.state.tasks.some(t => t.id === "task-b"));
+    // S2a: normalization failure must not fall back to partial collection adoption.
+    check(`${label}: remote collection follows acceptance`, storeMod.state.tasks.some(t => t.id === "task-b") === (outcome !== "normalize-throw"));
+    if (outcome === "normalize-throw") {
+      check(`${label}: full edited state preserved`, JSON.stringify(storeMod.state) === beforeFailure);
+      check(`${label}: persisted raw preserved`, localStorage.getItem("taskchute-journal-pwa-state-v1") === beforeFailure);
+      check(`${label}: successful SHA unchanged`, localStorage.getItem("taskchute-journal-last-synced-sha") === "fixture-sha-before");
+      check(`${label}: successful pull stamp unchanged`, localStorage.getItem("taskchute-journal-last-sync-pull-at") === "fixture-pull-before");
+    }
     check(`${label}: expected caller branch`, outcome === "success"
       ? !syncMod._syncBanner && calls.toast.includes("他端末の記録を取り込みました(自動マージ)")
       : !!syncMod._syncBanner && !calls.toast.includes("他端末の記録を取り込みました(自動マージ)"));
+    if (outcome === "normalize-throw") {
+      installNodeStubs(syncMod, { remoteBodyText: JSON.stringify(remote), startupDataModifiedAt: "" });
+      advanceClockPastPullThrottle();
+      await syncMod.runAutoSyncPull();
+      check(`${label}: valid retry accepts remote records`, storeMod.state.tasks.some(t => t.id === "task-b"));
+      check(`${label}: valid retry preserves unsent journal`, storeMod.state.journals["2026-09-09"] === "same-second backup edit");
+      check(`${label}: valid retry preserves unsent rule`, storeMod.state.recurrences.some(r => r.id === "during-backup"));
+    }
   }
   console.log(failures === 0 ? "\nv364: 全チェック通過" : `\nv364: ${failures}件失敗`);
 }

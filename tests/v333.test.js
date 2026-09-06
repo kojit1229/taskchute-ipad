@@ -86,7 +86,7 @@ async function seed(page, values) {
     });
     check("execヘッダ「TOWER / 実行」が出る", (await page.textContent(".exec-header-line")).includes("TOWER / 実行"));
     check("初期表示は計画モードがactive", await page.locator('[data-action="exec-mode-toggle"][data-mode="plan"]').first().evaluate((el) => el.classList.contains("active")));
-    check("計画モードで「これから」セクションが出る(v331/v332の3段)", await page.locator(".exec-lower .exec-upcoming-section").count() === 1);
+    check("計画モードで今日・これからの全件予定一覧が出る", await page.locator(".work-list[data-work-list=exec]").count() === 1);
     check("計画モードでTIMELINE RADARは出ない", await page.locator(".tl-radar-panel").count() === 0);
 
     await resetSetItemLog(page);
@@ -97,14 +97,14 @@ async function seed(page, values) {
     check("実績モードでDRIFT/TIME COMBが折りたたみ(既定閉)で出る",
       await page.locator("details.exec-analysis-fold").count() === 1
       && (await page.evaluate(() => document.querySelector("details.exec-analysis-fold")?.open)) === false);
-    check("実績モードで計画側の「これから」セクションは出ない", await page.locator(".exec-lower").count() === 0);
+    check("実績モードで計画側の全件予定一覧は出ない", await page.locator(".work-list[data-work-list=exec]").count() === 0);
     const afterToggle = await page.evaluate((key) => localStorage.getItem(key), STATE_KEY);
     check("モード切替はlocalStorage(state)を書き換えない(文字列比較)", beforeToggle === afterToggle);
     check("モード切替は内容変更を伴うsetItemを1回も呼ばない", await contentChangingWrites(page, STATE_KEY) === 0);
 
     await page.click('[data-action="exec-mode-toggle"][data-mode="plan"]');
-    await page.waitForSelector(".exec-lower");
-    check("計画へ戻せる", await page.locator(".exec-lower .exec-upcoming-section").count() === 1);
+    await page.waitForSelector(".work-list[data-work-list=exec]");
+    check("計画へ戻せる", await page.locator(".work-list[data-work-list=exec]").count() === 1);
 
     console.log("[2] 日付バー操作は両モードで同じ日を指す(state.selectedDateは1つ・renderDateBar共通)");
     await page.click('[data-action="date-next"]');
@@ -118,7 +118,7 @@ async function seed(page, values) {
     const dateAfterActual = await page.evaluate(() => JSON.parse(localStorage.getItem("taskchute-journal-pwa-state-v1")).selectedDate);
     check("実績モードの前日操作でselectedDateが戻る(元日付)", dateAfterActual === TODAY, dateAfterActual);
     await page.click('[data-action="exec-mode-toggle"][data-mode="plan"]');
-    await page.waitForSelector(".exec-lower");
+    await page.waitForSelector(".work-list[data-work-list=exec]");
     const dateShownPlan = await page.inputValue('[data-date-picker]');
     check("計画モードへ戻しても同じ日のまま", dateShownPlan === TODAY, dateShownPlan);
 
@@ -261,7 +261,7 @@ async function seed(page, values) {
     await page.waitForSelector('#app[data-view="exec"]');
     check("execを離れて戻ると計画モードへリセットされる(reloadなし、M-1)",
       await page.locator('.exec-mode-segmented [data-mode="plan"]').evaluate((el) => el.classList.contains("active"))
-      && await page.locator(".exec-lower").count() === 1);
+      && await page.locator(".work-list[data-work-list=exec]").count() === 1);
 
     console.log("[6] 390px横スクロールなし・pageerror 0・モード切替以外は既存どおりstateが動く");
     const scrollW390 = await page.evaluate(() => document.documentElement.scrollWidth);

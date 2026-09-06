@@ -120,12 +120,20 @@ function commitmentItem(weekStart, blockId, taskId, projectId, plannedDate, comp
     console.log("[2] 今日へは既存task-todayを再利用");
     const beforeBlocks = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).blocks.length, STATE_KEY);
     await page.locator(`[data-wbs-week-row-id="${stepOpen.id}"] [data-action="task-today"]`).click();
+    await page.waitForSelector('#placement-time');
+    check("今日への配置は時刻確認前にBlockを増やさない", await page.evaluate(({key,before}) => JSON.parse(localStorage.getItem(key)).blocks.length === before, {key:STATE_KEY,before:beforeBlocks}) && await page.locator('#placement-time').inputValue() === "");
+    await page.locator('#placement-time').fill('14:00');
+    await page.locator('[data-action="modal-save"]').click();
+
     await page.waitForFunction(({ key, before }) => JSON.parse(localStorage.getItem(key)).blocks.length === before + 1,
       { key: STATE_KEY, before: beforeBlocks });
     check("Blockが1件増えtaskIdを引き継ぐ", await page.evaluate(({ key, id, before }) => {
       const blocks = JSON.parse(localStorage.getItem(key)).blocks;
       return blocks.length === before + 1 && blocks.at(-1).taskId === id;
     }, { key: STATE_KEY, id: stepOpen.id, before: beforeBlocks }));
+
+    check("確認した時刻で同じTaskを配置する", await page.evaluate(({key,id,date}) => JSON.parse(localStorage.getItem(key)).blocks.find(b => !b.deleted && b.taskId === id)?.plannedStartAt === `${date}T14:00`, {key:STATE_KEY,id:stepOpen.id,date:TODAY}));
+    await page.locator('[data-action="placement-return"]').click();
 
     console.log("[3] PC 2ペイン・12WY優先の既定選択・選択は非永続");
     check("1280pxは380px一覧+選択詳細", await page.locator(".wbs-projects.is-desktop").isVisible()

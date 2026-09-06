@@ -114,7 +114,7 @@ function check(name, cond, extra = "") {
     // v230: homeを削除。現行サイドバー順を固定する。
     // v278: 固定化ルーティンを確認する計器盤2画面を「その他」の前へ常設したため期待順を更新。
     const expectedOrder = [
-      "今日", "タスクシュート", "タイムライン", "WBS",
+      "今日", "実行", "WBS",
       "ジャーナル", "AIレポート", "やりたい", "ビジョン", "0秒思考",
       "INSTRUMENTS", "IRON LOG", "FUND", "12WY", "その他", "設定"
     ];
@@ -126,7 +126,7 @@ function check(name, cond, extra = "") {
     console.log("[1b] 下部タブ(mobileNav)は 今日/ジャーナル/実行/時間/その他(v182でhome→todayに入替)");
     const bottomLabels = await page.locator("#bottomNav button").allTextContents();
     // v182 D2: mobileNav先頭差替え/moreGroups計画群へhome追加
-    check("mobileNavはv182の新構成", JSON.stringify(bottomLabels) === JSON.stringify(["今日", "ジャーナル", "実行", "時間", "その他"]), JSON.stringify(bottomLabels));
+    check("mobileNavはv182の新構成", JSON.stringify(bottomLabels) === JSON.stringify(["今日", "ジャーナル", "実行", "その他"]), JSON.stringify(bottomLabels));
 
     // v230: home本体と専用fold群は描画コードごと撤去。移設先のないUIは不存在を固定する。
     console.log("[2] v230: homeナビ・タブ・専用fold群が存在せず、旧home stateはtodayへ縮退する");

@@ -64,12 +64,12 @@ function check(name, cond, extra = "") {
         pomodoroCount: 0, migratedTo: "", carryCount: 0, orderIndex: 0,
         createdAt: dataModifiedAt, updatedAt: dataModifiedAt, deleted: false
       }],
-      projects: [], tasks: [], settings: {}
+      projects: [], tasks: [], settings: fixtures.remoteSettings
     };
     return JSON.stringify(remote);
   }
 
-  const fixtures = { blobMode: "ok", remoteDataModifiedAt: "" };  // blobMode: "ok" | "fail"
+  const fixtures = { blobMode: "ok", remoteDataModifiedAt: "", remoteSettings: null };  // blobMode: "ok" | "fail"
   const requestedPaths = [];
 
   await blockGithubApiByDefault(page);
@@ -103,6 +103,8 @@ function check(name, cond, extra = "") {
     await page.clock.setFixedTime(now0);
     await page.goto(`http://localhost:${PORT}/`);
     await page.waitForTimeout(400);
+    // Blob読み取りの検査に、未送信の一次設定差分を混ぜない。接続前の合成stateから複製する。
+    fixtures.remoteSettings = (await stateNow()).settings;
     await passGithubGate(page);  // token/dataOwner/dataRepo投入 + reload。ここで初回起動sync(成功)が走る
 
     console.log("[1] app-state.jsonがencoding:\"none\"で返っても、Blob API経由でリモートのタスクが取り込まれ画面に表示される");

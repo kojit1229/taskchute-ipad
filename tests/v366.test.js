@@ -135,8 +135,21 @@ function staticChecks() {
     check(`${label}: 実state不変`, after.state === before.state);
     check(`${label}: localStorage全キー不変`, after.storage === before.storage);
   }
-  async function cancelAndReopen(id, pg = page) {
+  async function cancelAndReopen(id, pg = page, expectDirty = false) {
+    const editor = await pg.locator('.modal-card').elementHandle();
+    const beforeCancel = await snapshot(pg);
     await pg.locator('.modal-card [data-action="modal-close"]').first().click();
+    const dialog = pg.locator('dialog.draft-leave-dialog[open]');
+    if (expectDirty) {
+      await dialog.waitFor();
+      check(id + " dirty cancel shows explicit save/stay/discard", await dialog.locator('[data-action]').count() === 3);
+      await dialog.locator('[data-action="draft-leave-stay"]').click();
+      check(id + " stay preserves editor DOM", await editor.evaluate(e => e.isConnected && e === document.querySelector('.modal-card')));
+      await unchanged(id + " stay", beforeCancel, pg);
+      await pg.locator('.modal-card [data-action="modal-close"]').first().click();
+      await dialog.waitFor();
+      await dialog.locator('[data-action="draft-leave-discard"]').click();
+    } else check(id + " clean cancel needs no dirty dialog", await dialog.count() === 0);
     await waitForModalClosed(pg);
     await openEditor(id, pg);
   }
@@ -195,7 +208,7 @@ function staticChecks() {
       check(`${min}分チップのみ選択`, JSON.stringify(active) === JSON.stringify([String(min)]));
       await unchanged(`${min}分チップ保存前`, beforeChips);
     }
-    await cancelAndReopen("b1");
+    await cancelAndReopen("b1", page, true);
     check("チップ変更をキャンセルすると元の空欄へ戻る", await estimateInput.inputValue() === "");
     check("キャンセル再表示で選択なし", await page.locator('.modal-card .estimate-chip.active').count() === 0);
     await unchanged("チップキャンセル再表示", beforeChips);
@@ -271,7 +284,7 @@ function staticChecks() {
     check("plannedEndAtの日付部も2026-02-01へ追従(時刻09:30は維持)",
       await plannedEndInput.inputValue() === "2026-02-01T09:30", await plannedEndInput.inputValue());
     await unchanged("日付1保存前", beforepageJan, pageJan);
-    await cancelAndReopen("b2", pageJan);
+    await cancelAndReopen("b2", pageJan, true);
     for (const [field, value] of Object.entries({ date: "2026-01-28", plannedStartAt: "2026-01-28T09:00", plannedEndAt: "2026-01-28T09:30" })) {
       check(`日付1キャンセル再表示: ${field}復元`, await pageJan.locator(`[data-modal-field="${field}"]`).inputValue() === value);
     }
@@ -311,7 +324,7 @@ function staticChecks() {
     check("plannedStartAtの日付部も2027-01-04へ追従",
       await plannedStartInput2.inputValue() === "2027-01-04T09:00", await plannedStartInput2.inputValue());
     await unchanged("日付7保存前", beforepageDec, pageDec);
-    await cancelAndReopen("b2b", pageDec);
+    await cancelAndReopen("b2b", pageDec, true);
     for (const [field, value] of Object.entries({ date: "2026-12-20", plannedStartAt: "2026-12-20T09:00", plannedEndAt: "2026-12-20T09:30" })) {
       check(`日付7キャンセル再表示: ${field}復元`, await pageDec.locator(`[data-modal-field="${field}"]`).inputValue() === value);
     }

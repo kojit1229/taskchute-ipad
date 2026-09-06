@@ -67,9 +67,12 @@ function check(name, cond, extra = "") {
     // 意図的に大昔にした200応答を返す成功モックを登録し、この副作用を止める(remoteが常に
     // ローカルより古い扱いになるため、実際の状態上書きは起きない=他セクションへの影響もない)。
     // [3e]だけは401専用の後発route登録で明示的に上書きし、認証エラーを検証する。
+    let emptySettingsFixture = false, emptySettingsRequests = 0, startupStateMock;
     await page.route((url) => url.hostname === "api.github.com" && url.pathname.includes("/contents/taskchute/app-state.json"),
-      (route) => {
-        const body = JSON.stringify({ dataModifiedAt: "2000-01-01T00:00:00", currentView: "today", selectedDate: "2000-01-01", blocks: [], projects: [], tasks: [], settings: {} });
+      startupStateMock = async (route) => {
+        const fixtureSettings = emptySettingsFixture ? {} : await page.evaluate(KEY => JSON.parse(localStorage.getItem(KEY)).settings, KEY);
+        if (emptySettingsFixture) emptySettingsRequests++;
+        const body = JSON.stringify({ dataModifiedAt: "2000-01-01T00:00:00", currentView: "today", selectedDate: "2000-01-01", blocks: [], projects: [], tasks: [], settings: fixtureSettings });
         const content = Buffer.from(body, "utf-8").toString("base64");
         route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ sha: "sha-startup-mock", content, encoding: "base64" }) });
       });
@@ -363,6 +366,46 @@ function check(name, cond, extra = "") {
       await railEnergyOverlay.locator(".battery-curve").count() === 0);
     check("compact表示ではエネルギー系のpolylineが描画される(空グラフにならない)",
       await railEnergyOverlay.locator("polyline").count() >= 1);
+
+
+    console.log('[7] empty remote settings retains the primary-conflict warning and opens connection details');
+    emptySettingsFixture = true;
+    // Override the earlier intentional 401 route with the original empty-settings 200 response.
+    await page.route((url) => url.hostname === "api.github.com" && url.pathname.includes("/contents/taskchute/app-state.json"), startupStateMock);
+    await page.evaluate(KEY => {
+      const local = JSON.parse(localStorage.getItem(KEY));
+      local.currentView = 'settings';
+      local.settings.vision = 'synthetic pending primary setting';
+      local.settings.autoSync = false;
+      local.settings.lastPushedAt = '2000-01-01T00:00:00';
+      local.dataModifiedAt = '2026-09-06T10:00:00';
+      localStorage.setItem(KEY, JSON.stringify(local));
+      localStorage.removeItem('taskchute-journal-last-synced-sha');
+    }, KEY);
+    await page.reload();
+    await page.waitForFunction(async () => (await import('/src/sync/github.js'))._syncBanner?.includes('未送信の一次設定'));
+    await page.evaluate(() => {
+      const now = new Date(), pad = n => String(n).padStart(2,'0');
+      localStorage.setItem('taskchute-journal-last-sync-pull-at',
+        now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+'T'+pad(now.getHours())+':'+pad(now.getMinutes())+':00');
+    });
+    await page.click('[data-action="nav"][data-view="settings"]');
+    const conflictState = await page.evaluate(async KEY => ({
+      warning:(await import('/src/sync/github.js'))._syncBanner,
+      vision:(await import('/src/state/store.js')).state.settings.vision,
+      storedVision:JSON.parse(localStorage.getItem(KEY)).settings.vision
+    }), KEY);
+    check('元の空settings成功応答を実際に取得した', emptySettingsRequests > 0);
+    check('最終pull時刻が新しくても一次設定の同期警告を保持する', conflictState.warning.includes('未送信の一次設定'));
+    check('空remote設定は未送信の一次設定を上書きしない',
+      conflictState.vision === 'synthetic pending primary setting' && conflictState.storedVision === conflictState.vision);
+    check('一次設定の同期警告だけでも接続の詳細を自動で開く',
+      await syncGroupLoc.evaluate(el => el.open) === true && await page.locator('.pd-auth-banner').count() === 0);
+
+    const primaryWarning = page.locator('[data-sync-error-detail-slot] .sync-error-detail');
+    await primaryWarning.waitFor({ state: 'visible' });
+    check('開いた設定の警告欄に未送信の一次設定を表示する',
+      await primaryWarning.isVisible() && (await primaryWarning.innerText()).includes('未送信の一次設定'));
 
     console.log(failures === 0 ? "\n✅ v148 ALL PASS" : `\n❌ v148: ${failures} 件失敗`);
   } finally {

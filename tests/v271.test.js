@@ -30,7 +30,8 @@ check("ラベルは時刻+タイトル", /flightTime\(flight\.plannedMin\)\}\s+\
 check("タイトル編集とnow-startは同じ選択idを使う", towerSource.includes('data-action="edit-block" data-id="${id}"')
   && towerSource.includes('data-action="now-start" data-id="${id}"'));
 check("change配線はsetter+renderだけで保存しない", /if \(target\.matches\("\[data-tower-arrival-select\]"\)\) \{\s*setTowerArrivalSelection\(target\.value\);\s*render\(\);\s*\}/.test(appSource));
-check("selectフォーカス中の全体renderをfocusoutまで保留", appSource.includes('document.activeElement?.matches?.("[data-tower-arrival-select]")')
+// FUND共有日付picker追加後も、今日の選択欄を含む完全な保護selectorを検査する。
+check("selectフォーカス中の全体renderをfocusoutまで保留", appSource.includes('document.activeElement?.matches?.("[data-tower-arrival-select], [data-fund-report-date]")')
   && appSource.includes("_deferredRenderPending = true"));
 
 console.log("[2] FLIGHT LOGは既存edit-blockを使う44px button");
@@ -44,7 +45,7 @@ console.log("[3] 回帰テストとService Worker版を更新する");
 check("tower-coreは選択・保存0回・フォールバック・行タップを実DOM検証",
   towerTestSource.includes("選択操作はstate保存0回")
   && towerTestSource.includes("declare-confirm後のactualStartAtは選択Blockだけに付く")
-  && towerTestSource.includes("tick窓移動でselectもw2..w12へ追従")
+  && towerTestSource.includes("tick窓移動でselectもw6..w11へ追従し、窓外選択w5はqueue先頭w0へ戻る")
   && towerTestSource.includes("選択候補が削除されたら既定の次便へフォールバック")
   && towerTestSource.includes("完了済み「やったこと」行タップでも対象Block編集モーダルを開く"));
 check(`CACHE_NAMEはreleases最大版v${maxRelease}`, new RegExp(
@@ -54,6 +55,8 @@ check(`CACHE_NAMEはreleases最大版v${maxRelease}`, new RegExp(
   console.log("[4] 候補選定本体を実行し、stale除外とフォールバックを検証する");
   const tower = await import(pathToFileURL(path.join(ROOT, "src", "features", "today-tower.js")).href);
   tower.configureTodayTower({
+    // app.jsの通常clampと同じ依存を注入し、表示窓の選定本体まで到達させる。
+    clamp: (value, min, max) => Math.min(max, Math.max(min, Number(value) || 0)),
     queueBlocksOf: (blocks) => blocks.filter((item) => item.id === "fallback"),
     isStaleBlock: (block) => block?.taskId === "stale"
   });

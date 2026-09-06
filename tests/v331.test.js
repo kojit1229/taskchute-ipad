@@ -76,9 +76,16 @@ async function seed(page, values) {
     check("行順は いま(b-doing) → これから(b-up-b→b-up-a、開始予定昇順)",
       JSON.stringify(rowIds) === JSON.stringify(["b-doing", "b-up-b", "b-up-a"]), JSON.stringify(rowIds));
     const bodyText = await page.textContent("body");
-    check("完了Block(b-done)のタイトルはDOMに出ない", !bodyText.includes("b-done"));
-    check("いまセクションの見出しがある", bodyText.includes("いま"));
-    check("これからセクションの見出しがある", bodyText.includes("これから"));
+    check("完了Block(b-done)も今日の一覧へ1件保持", await page.locator('[data-work-list="exec"] [data-work-key="block:b-done"] .exec-row-done').count() === 1);
+    check("実行中の実行操作を予定一覧に保持", await page.locator('[data-work-list="exec"] [data-work-key="block:b-doing"] .exec-row-now [data-action="now-end"]').count() === 1);
+    await page.locator('[data-work-list="exec"] [data-work-filter="status"]').selectOption("completed");
+    check("完了条件で完了Blockだけを表示", await page.locator('[data-work-list="exec"] [data-work-key]').count() === 1
+      && await page.locator('[data-work-key="block:b-done"]').count() === 1);
+    await page.locator('[data-work-list="exec"] [data-work-filter="status"]').selectOption("running");
+    check("実行中条件で開始済みだけを表示", await page.locator('[data-work-list="exec"] [data-work-key]').count() === 1
+      && await page.locator('[data-work-key="block:b-doing"]').count() === 1);
+    await page.locator('[data-work-list="exec"] [data-action="work-list-clear"]').click();
+    check("これから期間も選べる一覧を表示", await page.locator('[data-work-list="exec"] [data-work-filter="mode"] option[value="upcoming"]').count() === 1);
 
     console.log("[2] 常時要素は☐/タイトル/meta/▶開始のみ、行タップで展開、別行タップで前が閉じる、state非書込");
     const upARow = page.locator(".exec-row-upcoming", { has: page.locator('[data-id="b-up-a"]') }).first();
@@ -130,12 +137,12 @@ async function seed(page, values) {
     await page.click('.exec-row-upcoming:has(strong:has-text("b-up-b")) [data-action="now-start"]');
     await page.waitForSelector('[data-action="declare-skip"]');
     await page.click('[data-action="declare-skip"]');
-    await page.waitForSelector('.exec-row-now:has(strong:has-text("b-up-b"))');
+    await page.waitForSelector('.exec-row-now:has([data-action="edit-block"][data-id="b-up-b"])');
     check("b-up-bが「いま」に移動した",
       await page.locator('.exec-row-now [data-id="b-up-b"]').count() > 0);
-    await page.click('.exec-row-now:has(strong:has-text("b-doing")) [data-action="toggle-block"]');
+    await page.click('.exec-row-now:has([data-action="edit-block"][data-id="b-doing"]) [data-action="toggle-block"]');
     await page.waitForFunction(() => !document.body.textContent.includes("見つからないダミー_v331"));
-    const stillThere = await page.locator('.exec-row-now:has(strong:has-text("b-doing"))').count();
+    const stillThere = await page.locator('.exec-row-now:has([data-action="edit-block"][data-id="b-doing"])').count();
     check("完了操作したb-doingは「いま」から消える(実行中ではなくなる)", stillThere === 0);
 
     console.log("[4] 390px/1280px 横スクロールなし・pageerror 0");

@@ -177,7 +177,7 @@ async function checkDoingBadgesWidth(browser, width) {
     // v331 A-1a: 実行中(doing)Blockは「いま」行に描画され、タイトルstrongは従来どおり
     // data-action="edit-block"を持つ。
     const metrics = await blockTitleMetrics(
-      page, `.exec-row-now strong[data-action="edit-block"][data-id="${DOING_BLOCK_ID}"]`
+      page, `.exec-row-now .exec-row-copy > button[data-action="edit-block"][data-id="${DOING_BLOCK_ID}"]`
     );
     const overflow = await page.evaluate(() => ({
       scrollWidth: document.documentElement.scrollWidth, innerWidth: window.innerWidth

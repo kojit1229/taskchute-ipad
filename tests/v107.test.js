@@ -110,13 +110,36 @@ function check(name, cond, extra = "") {
   // el.open=trueの直接代入ではなくsummaryを実クリックする(390pxでのタップ可能性・
   // summary自体の到達可能性を経路として検証するため、review-v363-claude-a M-4対応)。
   async function openBlockDetails(pg = page) {
-    await pg.waitForSelector(".modal-card details.tower-fold summary", { state: "visible" });
-    await pg.click(".modal-card details.tower-fold summary");
+    await pg.waitForSelector(".modal-card details.tower-fold > summary", { state: "visible" });
+    await pg.click(".modal-card details.tower-fold > summary");
+  }
+
+  // The accepted exec view lists Blocks; Task membership belongs to WBS filters.
+  async function openTaskCount(taskId) {
+    const previous = await page.locator('#app').getAttribute('data-view');
+    const beforeDate = (await stateNow()).selectedDate;
+    const returnView = ['tasks', 'timeline'].includes(previous) ? 'exec' : previous;
+    const returnMode = previous === 'timeline' ? 'actual' : previous === 'tasks' ? 'plan'
+      : previous === 'exec' ? await page.locator('.exec-mode-segmented .active[data-action="exec-mode-toggle"]').getAttribute('data-mode') : null;
+    await page.locator('.sidebar [data-action="nav"][data-view="wbs"]').click();
+    const root = page.locator('[data-work-list="wbs"]');
+    await root.locator('[data-work-filter="status"]').selectOption('');
+    check('全件WBSは対象Taskを保持: ' + taskId, await root.locator(`[data-work-key="task:${taskId}"]`).count() === 1);
+    await root.locator('[data-work-filter="status"]').selectOption('open');
+    const count = await root.locator(`[data-work-key="task:${taskId}"]`).count();
+    await root.locator('[data-work-filter="status"]').selectOption('');
+    await page.locator(`.sidebar [data-action="nav"][data-view="${returnView}"]`).click();
+    if (returnMode) await page.locator(`.exec-mode-segmented [data-action="exec-mode-toggle"][data-mode="${returnMode}"]`).click();
+    check('WBS確認後は元の論理view・日付・実行modeへ戻る: ' + taskId,
+      await page.locator('#app').getAttribute('data-view') === returnView
+      && (await stateNow()).selectedDate === beforeDate
+      && (!returnMode || await page.locator('.exec-mode-segmented .active[data-action="exec-mode-toggle"]').getAttribute('data-mode') === returnMode));
+    return count;
   }
 
   function wbsBadge(taskId) {
     // v328 WBS TOWER化で完了表示は .badge から .wbs-task-done(「完了」)へ移った(表示契約は同じ)。
-    return page.locator(`.row:has([data-action="edit-task"][data-id="${taskId}"]) .wbs-task-done, .row:has([data-action="edit-task"][data-id="${taskId}"]) .badge`).first();
+    return page.locator(`.wbs-projects .row:has([data-action="edit-task"][data-id="${taskId}"]) .wbs-task-done, .wbs-projects .row:has([data-action="edit-task"][data-id="${taskId}"]) .badge`).first();
   }
 
   try {
@@ -135,8 +158,8 @@ function check(name, cond, extra = "") {
       projects: [testProject()],
       view: "tasks"
     });
-    check("Block完了前は未完了タスク一覧に出る", await page.locator('.item [data-action="task-today"][data-id="task-A"]').count() === 1);
-    await page.click('[data-action="toggle-block"][data-id="block-A"]');
+    check("Block完了前は未完了タスク一覧に出る", await openTaskCount("task-A") === 1);
+    await page.locator('[data-work-list="exec"] [data-work-key="block:block-A"] [data-action="toggle-block"][data-id="block-A"]').click();
     await page.waitForTimeout(300);
     const s1 = await stateNow();
     const t1 = s1.tasks.find((t) => t.id === "task-A");
@@ -144,7 +167,9 @@ function check(name, cond, extra = "") {
     check("Blockはcompletedになる", b1?.completed === true, JSON.stringify(b1));
     check("Taskのstatusはcompletedにならない(doingのまま)", t1?.status === "doing", JSON.stringify(t1));
     check("Taskの進捗(分子)は変化しない", t1?.progressNum === 0, JSON.stringify(t1));
-    check("Blockチェック後も未完了タスク一覧に残る", await page.locator('.item [data-action="task-today"][data-id="task-A"]').count() === 1);
+    await dismissBodyScanIfOpen(page);
+    await page.locator("#modalRoot.open").waitFor({ state: "detached" });
+    check("Blockチェック後も未完了タスク一覧に残る", await openTaskCount("task-A") === 1);
 
     // ============================================================
     // (b) タスク完了チェック(🏁)→Blockも完了+Task側もv95連動込みで完了。他Blockは不変
@@ -189,7 +214,7 @@ function check(name, cond, extra = "") {
     // もう存在しない)。旧来の「モーダルを閉じる」操作は身体スキャンの記録せず閉じるで代替する。
     await dismissBodyScanIfOpen(page);
     await page.waitForTimeout(150);
-    check("未完了タスク一覧から消える", await page.locator('.item [data-action="task-today"][data-id="task-B"]').count() === 0);
+    check("未完了タスク一覧から消える", await openTaskCount("task-B") === 0);
 
     // ============================================================
     // (c) タスク完了チェックを外す→Taskの完了だけ解除、Blockは完了のまま
@@ -231,7 +256,7 @@ function check(name, cond, extra = "") {
     // へ戻るにはヘッダのセグメントで明示的に計画へ切り替える。
     await page.click('[data-action="exec-mode-toggle"][data-mode="plan"]');
     await page.waitForTimeout(150);
-    check("未完了タスク一覧へ戻る", await page.locator('.item [data-action="task-today"][data-id="task-B"]').count() === 1);
+    check("未完了タスク一覧へ戻る", await openTaskCount("task-B") === 1);
 
     // ============================================================
     // (d) 🏁はBlock行から編集モーダルへ移設されている(v146 誤タップ対策)
@@ -242,12 +267,12 @@ function check(name, cond, extra = "") {
     // 未完了のblock-B2(実行タブ「これから」に残る)で確認する(検証意図=チェックボタンの
     // class/アイコンは変わっていない、を維持)。
     await page.click('[data-action="nav"][data-view="exec"]');
-    await page.waitForSelector('#main [data-action="toggle-block"][data-id="block-B2"]');
+    await page.waitForSelector('[data-work-list="exec"] [data-work-key="block:block-B2"] [data-action="toggle-block"][data-id="block-B2"]');
     // v335(§C追随): #timelineRailは「タスクシュート」(旧view)専用のまま(§C対応の対象外。
     // 詳細はsrc/features/timeline.jsのrenderTimelineRail()コメント参照)で、直前に一度でも
     // literal "tasks" を経由していると非表示後もinnerHTMLが更新されず残留するため、
     // #mainへ明示的にスコープしてrail側の同一data-idボタン(class違い)との衝突を避ける。
-    const blockCheck = page.locator('#main [data-action="toggle-block"][data-id="block-B2"]');
+    const blockCheck = page.locator('[data-work-list="exec"] [data-work-key="block:block-B2"] [data-action="toggle-block"][data-id="block-B2"]');
     check("Block完了チェックは.checkbox-buttonクラス", await blockCheck.evaluate((el) => el.classList.contains("checkbox-button")));
     check("Block完了チェックのアイコンは✓", (await blockCheck.textContent())?.trim() === "✓");
     // block-B1(完了済み)は実績モードのタイムラインから編集モーダルを開いてタスク完了ボタンを確認する。
@@ -265,26 +290,45 @@ function check(name, cond, extra = "") {
     // (d2) v146レビュー対応: 🏁押下時の再描画は編集中の他フィールドを破棄しない
     //      (renderModal(buildBlockModal(...))直呼びからrerenderActiveModal(["completed"])へ変更)
     // ============================================================
-    console.log("[4b] Block編集モーダルでタイトルを書きかけの状態で🏁を押しても、書きかけの内容が残る");
+    console.log("[4b] 未保存操作は保留し、継続で入力を保持、保存後に完了操作する");
     await page.click('[data-action="edit-block"][data-id="block-B1"]');
-    await page.waitForTimeout(200);
     const titleField = page.locator('.modal-card [data-modal-field="title"]');
     await titleField.fill("書きかけタイトルXYZ");
     await openBlockDetails();
+    const beforeBlocked = await stateNow();
     await page.click('.modal-card [data-action="toggle-task-complete"][data-id="block-B1"]');
-    await page.waitForTimeout(300);
-    check("🏁押下後もモーダルは開いたまま", await page.locator(".modal-card").count() === 1);
+    await page.locator('.draft-leave-dialog').waitFor({ state: 'visible' });
+    check("未保存タイトルがあると完了操作の確認を表示する", await page.locator('.draft-leave-dialog').isVisible());
+    check("完了操作の確認には破棄して実行する選択肢が無い", await page.locator('.draft-leave-dialog [data-action="draft-leave-discard"]').count() === 0);
+    const blocked = await stateNow();
+    check("確認中はTaskとBlockを変更しない", JSON.stringify(blocked.tasks) === JSON.stringify(beforeBlocked.tasks)
+      && JSON.stringify(blocked.blocks) === JSON.stringify(beforeBlocked.blocks));
+    await page.locator('[data-action="draft-leave-stay"]').click();
+    await page.locator('.draft-leave-dialog').waitFor({ state: 'detached' });
+    check("編集を続けるとモーダルは開いたまま", await page.locator("#modalRoot").evaluate(root => root.classList.contains("open")));
     check("書きかけのタイトルが保持されている(古い保存値へ巻き戻らない)",
       await titleField.inputValue() === "書きかけタイトルXYZ", await titleField.inputValue());
+    check("継続を選ぶとTaskの完了操作を行わない", (await stateNow()).tasks.find(t => t.id === "task-B")?.status === beforeBlocked.tasks.find(t => t.id === "task-B")?.status);
+    await page.locator('.modal-card [data-action="modal-save"]').click();
+    await page.waitForFunction(() => !document.querySelector("#modalRoot").classList.contains("open"));
+    const saved = await stateNow();
+    check("完了操作前にタイトルだけを明示保存する", saved.blocks.find(b => b.id === "block-B1")?.title === "書きかけタイトルXYZ"
+      && saved.tasks.find(t => t.id === "task-B")?.status === beforeBlocked.tasks.find(t => t.id === "task-B")?.status);
+    await page.click('[data-action="edit-block"][data-id="block-B1"]');
+    await openBlockDetails();
+    await page.click('.modal-card [data-action="toggle-task-complete"][data-id="block-B1"]');
+    check("保存後の完了操作では未保存確認を出さない", await page.locator('.draft-leave-dialog').count() === 0);
+    check("保存後の🏁押下でもモーダルは開いたまま", await page.locator("#modalRoot").evaluate(root => root.classList.contains("open")));
     const s4b = await stateNow();
     check("🏁の効果自体は反映される(taskBが再度completedになる)",
       s4b.tasks.find((t) => t.id === "task-B")?.status === "completed", JSON.stringify(s4b.tasks.find((t) => t.id === "task-B")));
+    check("保存したタイトルは完了後のstateと編集欄で一致する", s4b.blocks.find(b => b.id === "block-B1")?.title === "書きかけタイトルXYZ"
+      && await page.locator('.modal-card [data-modal-field="title"]').inputValue() === "書きかけタイトルXYZ");
     check("🏁ボタンのラベルも最新状態(完了済み)を反映する(古いキャッシュ値へ巻き戻らない)",
       (await page.locator('.modal-card [data-action="toggle-task-complete"][data-id="block-B1"]').textContent())?.includes("完了済み"));
     check("完了済み(Block)チェックボックスも最新値を反映する(completedを復元対象から除外済み)",
       await page.locator('.modal-card [data-modal-field="completed"]').isChecked());
     await page.click('[data-action="modal-close"]');
-    await page.waitForTimeout(150);
 
     // ============================================================
     // (e) 390px幅で横スクロールが発生せず、Block完了チェック(行)が表示される
@@ -364,11 +408,11 @@ function check(name, cond, extra = "") {
       projects: [testProject()],
       view: "tasks"
     });
-    check("保存前は未完了タスク一覧に出る", await page.locator('.item [data-action="task-today"][data-id="task-C"]').count() === 1);
+    check("保存前は未完了タスク一覧に出る", await openTaskCount("task-C") === 1);
     // v332: 「タスク」行の編集ボタンは行タップ展開(task-row-toggle)後にしか出ない(セレクタ追随)。
-    await page.click('[data-action="task-row-toggle"][data-id="task-C"]');
+    await page.locator('[data-action="nav"][data-view="wbs"]').click();
     await page.waitForSelector('[data-action="edit-task"][data-id="task-C"]');
-    await page.click('[data-action="edit-task"][data-id="task-C"]');
+    await page.locator('[data-work-list="wbs"] [data-action="edit-task"][data-id="task-C"]').click();
     await page.waitForTimeout(200);
     await page.selectOption('[data-modal-field="status"]', "completed");
     await page.click('[data-action="modal-save"]');
@@ -377,7 +421,7 @@ function check(name, cond, extra = "") {
     const t6 = s6.tasks.find((t) => t.id === "task-C");
     check("保存後、分子が分母(10)と同じになる(v95連動)", t6?.progressNum === 10, JSON.stringify(t6));
     check("保存後、statusがcompletedになる", t6?.status === "completed", JSON.stringify(t6));
-    check("保存後、未完了タスク一覧から消える", await page.locator('.item [data-action="task-today"][data-id="task-C"]').count() === 0);
+    check("保存後、未完了タスク一覧から消える", await openTaskCount("task-C") === 0);
     await page.click('[data-action="nav"][data-view="wbs"]');
     await page.waitForTimeout(200);
     check("WBSタブのバッジが「完了」になる", (await wbsBadge("task-C").textContent())?.includes("完了"), await wbsBadge("task-C").textContent());
@@ -392,7 +436,7 @@ function check(name, cond, extra = "") {
       projects: [testProject()],
       view: "tasks"
     });
-    check("WBS操作前は未完了タスク一覧(tasks画面)に出る", await page.locator('.item [data-action="task-today"][data-id="task-D"]').count() === 1);
+    check("WBS操作前は未完了タスク一覧(tasks画面)に出る", await openTaskCount("task-D") === 1);
     await page.click('[data-action="nav"][data-view="wbs"]');
     await page.waitForTimeout(200);
     await page.click('[data-action="toggle-task"][data-id="task-D"]');
@@ -402,7 +446,7 @@ function check(name, cond, extra = "") {
     check("WBSチェックで分子が分母に揃う(既存v95連動)", t7?.progressNum === 10, JSON.stringify(t7));
     await page.click('[data-action="nav"][data-view="exec"]');
     await page.waitForTimeout(200);
-    check("WBS完了後、タスクシュートの未完了一覧から消える", await page.locator('.item [data-action="task-today"][data-id="task-D"]').count() === 0);
+    check("WBS完了後、タスクシュートの未完了一覧から消える", await openTaskCount("task-D") === 0);
 
     // ============================================================
     // (h) 期日未設定Taskは未完了一覧の末尾に表示される(v332で母集団再編。v97「常に表示」廃止→
@@ -415,7 +459,7 @@ function check(name, cond, extra = "") {
       projects: [testProject()],
       view: "tasks"
     });
-    check("期日未設定Taskは表示される(v332で末尾表示へ変更)", await page.locator('.item [data-action="task-today"][data-id="task-nodue"]').count() === 1);
+    check("期日未設定Taskは表示される(v332で末尾表示へ変更)", await openTaskCount("task-nodue") === 1);
 
     // ============================================================
     // (i)(j) 未完了一覧は期日昇順(超過が最上位・期日なしは末尾)。v332で母集団は「空 or 今日+7日
@@ -434,10 +478,17 @@ function check(name, cond, extra = "") {
       wbsTask("task-nodue2", "期日未設定Task(末尾)", { dueDate: "" })
     ];
     await seed({ tasks: SORT_TASKS, blocks: [], projects: [testProject()], view: "tasks" });
-    const idsInOrder = await page.locator('.item [data-action="task-today"]').evaluateAll((els) => els.map((el) => el.dataset.id));
-    check("期日昇順: 超過→当日→翌日→3日後→7日後(境界)→期日なし(末尾)。8日後は出ない",
-      JSON.stringify(idsInOrder) === JSON.stringify(["task-overdue", "task-today2", "task-tomorrow", "task-in3days", "task-in7days", "task-nodue2"]),
-      JSON.stringify(idsInOrder));
+    await page.locator('[data-action="nav"][data-view="wbs"]').click();
+    const rows = page.locator('[data-work-list="wbs"] [data-work-key^="task:"]');
+    const idsInOrder = await rows.evaluateAll(els => els.map(el => el.dataset.workKey.slice(5)));
+    check("全件WBSは期限7日・8日・未設定を落とさず元Task順で表示する",
+      JSON.stringify(idsInOrder) === JSON.stringify(SORT_TASKS.map(task => task.id)), JSON.stringify(idsInOrder));
+    await page.locator('[data-work-list="wbs"] [data-work-filter="due"]').selectOption('overdue');
+    check("期限超過filterは超過Taskだけを表示する", JSON.stringify(await rows.evaluateAll(els => els.map(el => el.dataset.workKey))) === JSON.stringify(['task:task-overdue']));
+    await page.locator('[data-work-list="wbs"] [data-work-filter="due"]').selectOption('none');
+    check("期限なしfilterは未設定Taskだけを表示する", JSON.stringify(await rows.evaluateAll(els => els.map(el => el.dataset.workKey))) === JSON.stringify(['task:task-nodue2']));
+    await page.locator('[data-action="nav"][data-view="exec"]').click();
+    check("Task期限から架空の予定Blockを作らない", await page.locator('[data-work-list="exec"] [data-work-key]').count() === 0 && (await stateNow()).blocks.length === 0);
   } finally {
     await browser.close();
     server.close();

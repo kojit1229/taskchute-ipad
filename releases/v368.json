@@ -1,0 +1,84 @@
+{
+  "version": 368,
+  "date": "2026-09-06",
+  "title": "再設計前のデータ保全・検証基盤修復",
+  "summary": "再設計に先行してローカル・リモートの不正データ、一次設定、退避済み本文を保護し、現行仕様と検証基盤を整合する隔離候補。",
+  "changedFiles": [
+    ".github/workflows/test.yml",
+    "AGENTS.md",
+    "CHANGES_v368.md",
+    "CLAUDE.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/development-workflow.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v368.json",
+    "scripts/impact-regression.js",
+    "scripts/release-gate.js",
+    "scripts/test-manifest.js",
+    "src/features/archive-date-protection.js",
+    "src/features/journal.js",
+    "src/features/today-tower.js",
+    "src/features/today.js",
+    "src/state/store.js",
+    "src/storage/local.js",
+    "src/sync/github.js",
+    "sw.js",
+    "tests/archive-date-protection-e2e.test.js",
+    "tests/archive-date-protection.test.js",
+    "tests/archive-snapshot-safety.test.js",
+    "tests/archive-tombstone-sync.test.js",
+    "tests/impact-regression-coverage.test.js",
+    "tests/impact-regression-map.json",
+    "tests/primary-settings-conflict.test.js",
+    "tests/release-gate.test.js",
+    "tests/remote-invalid-fail-close.test.js",
+    "tests/run-all-results.test.js",
+    "tests/run-all.js",
+    "tests/state-container-recovery-e2e.test.js",
+    "tests/state-container-recovery.test.js",
+    "tests/suite-manifest.json",
+    "tests/sw-self-heal.test.js",
+    "tests/test-manifest-generator.test.js",
+    "tests/v118.test.js",
+    "tests/v123.test.js",
+    "tests/v135.test.js",
+    "tests/v271.test.js",
+    "tests/v364.test.js"
+  ],
+  "intent": [
+    "v367を起点に再設計を進める前に、データ保全と検証の欠落を修復する。"
+  ],
+  "changes": [
+    "S1: journals/recurrencesの不正型をnormalizeState先頭で拒否。ローカル起動ではrawを保持し、保存・同期の開始前に復旧通知を表示して停止する。正常データへ復旧後の再読み込みを維持。",
+    "G1: SW APP_SHELLにsrc/features/twelve-week.jsを復旧しCACHE_NAMEをv368へ更新。",
+    "G2: E2Eのlegacy-crosscutting分類を生成物書込み前に拒否。既存4本と新規S1 E2Eのdomainを明示。正常・不正・出力不変のfixtureを追加。",
+    "G3: release-gateメタテストをv164固定の実checkout依存から隔離fixtureへ移し、precache欠落負例/復旧正例と従来の版増分条件を維持。",
+    "開発運用の正本をdocs/development-workflow.mdへ集約し、CIにcode-index/manifest鮮度検査を追加。既存4シャードと配信条件を維持。",
+    "S2: 不正remote全体を拒否し、一次設定の競合や控え待機中の編集を検知して端末データを保持する。",
+    "S3: 退避中の編集は再照合し、既退避本文は年archiveとの完全一致を証明した場合だけ除去する。確認失敗・既存追記は保持し同期を停止する。",
+    "G4/G5/G6: runnerの改行比較と終了理由・drain期限、dry-run schema検証、全runtimeのimpact分類を修復する。",
+    "v118/v123/v271を現行操作へ整合し、SW更新中の観測再取得は期限と再読み込み上限を維持する。",
+    "v118: 質問ID和集合の成功・控え保存失敗・vision競合を分離し、RAW/live state保全、本体PUT0、控え先行、具体案内を検査。v135: 同期済みlegacy同値のremote採用と未送信local保持の対ケースを検査し、元の外部修正・削除・参照保全を維持。"
+  ],
+  "uncertainties": [
+    "機械検査と独立レビューの対象限定結果はexecution配下に記録。最終ゲート・CI・実機を通過したリリースではない。"
+  ],
+  "reviewFocus": [
+    "一次設定と本文が失敗・同秒編集・接続変更で消えないこと、正常同期が成立すること。",
+    "検査保証を削減せず、失敗原因・対象範囲・未実施を明示すること。"
+  ],
+  "verification": [
+    "S1/S2/S3とG1–G6の単位検査・限定レビューはexecution/phase2とgate-repair/s3bに保存。",
+    "S3b: 新47観点、既存保存同期回帰、独立逆期待、合成GitHubによる実UI3ケースが成功。",
+    "v118/v123/SW/v271は個別成功と二系統限定レビューを実施。根拠はgate-repair配下。",
+    "この記録の更新後に生成物を更新し、基盤候補の最終gateを実行する。実施結果は別ログで判定。",
+    "SAFEのv118/v135修復版は合成GitHub応答で単独実走exit0。旧保証との対応表と差分はgate-repair/safety-two-testsに保存。独立レビューと最終gateは別ログで確認。"
+  ],
+  "knownLimitations": [
+    "S1はjournals/recurrences型不正の保護。その他JSON破損の既存fallbackは対象外。",
+    "既退避日の新規追記は自動統合せず保持して同期停止。本文の選択・復元操作は未提供。",
+    "UI一式とからだ機能はこの基盤候補へ未統合。本番配信・実機iOS・全量CI・最終DONE判定は未実施。"
+  ]
+}

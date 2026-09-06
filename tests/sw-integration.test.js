@@ -27,6 +27,12 @@ function check(name, cond, extra = "") {
   // SWを実際に動かして検証する(既定は"allow")。
   const ctx = await browser.newContext({ viewport: { width: 1100, height: 900 } });
   const page = await ctx.newPage();
+  await page.addInitScript(() => {
+    sessionStorage.setItem('tcj-sw-integration-boots', String(Number(sessionStorage.getItem('tcj-sw-integration-boots') || 0) + 1));
+    document.addEventListener('load', event => {
+      if (event.target?.id === 'appEntry') window.__swIntegrationAppLoaded = true;
+    }, true);
+  });
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
   await blockGithubApiByDefault(page);
 
@@ -36,13 +42,17 @@ function check(name, cond, extra = "") {
   try {
     console.log("[1] install/activate: navigator.serviceWorker.ready が解決し、controllerがセットされる");
     await page.goto(`http://localhost:${PORT}/`);
+    // Initial clients.claim triggers a real reload. Do not seed into the old
+    // execution context while that navigation is replacing it.
+    await page.waitForFunction(() => Number(sessionStorage.getItem('tcj-sw-integration-boots')) >= 2
+      && window.__swIntegrationAppLoaded === true && !!navigator.serviceWorker.controller, null, { timeout: 15000 });
     await passGithubGate(page);
 
     // registerServiceWorker() は window "load" 後にregisterするため、readyの解決を待つ。
     // 初回installはclients.claim()によりcontrollerchangeが飛び、app.js側のリスナーが
     // 1回だけreloadする(refreshingガード付き)ので、そのreload後の状態まで少し余裕をもって待つ。
-    await page.waitForFunction(() => navigator.serviceWorker.ready.then(() => true), { timeout: 15000 }).catch(() => {});
-    await page.waitForTimeout(3000);  // controllerchange経由の自動reload(あれば)が収まるのを待つ
+    await page.waitForFunction(() => navigator.serviceWorker.ready.then(reg =>
+      reg.active?.state === 'activated' && !!navigator.serviceWorker.controller), null, { timeout: 15000 });
 
     const swState = await page.evaluate(async () => {
       const reg = await navigator.serviceWorker.ready;

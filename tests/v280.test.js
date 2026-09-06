@@ -73,11 +73,18 @@ function contentsBodyFor(jsonText, sha) {
   const context = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
   const page = await context.newPage();
   page.on("pageerror", (error) => { failures++; console.log("  ❌ pageerror:", error.message); });
-  const syncFixtures = { remoteJson: null, sha: "remote-sha-v280", puts: [], holdGet: false, releaseGet: null };
+  const syncFixtures = { remoteJson: null, sha: "remote-sha-v280", puts: [], backups: [], failBackup: false, holdGet: false, releaseGet: null };
   await blockGithubApiByDefault(page);
   await page.route((url) => url.hostname === API_HOST, async (route) => {
     const request = route.request();
-    if (!new URL(request.url()).pathname.endsWith("/contents/taskchute/app-state.json")) {
+    const pathname = new URL(request.url()).pathname;
+    if (request.method() === "PUT" && /\/contents\/taskchute\/backups\/app-state-\d{4}-\d{2}-\d{2}-preload-\d{6}\.json$/.test(pathname)) {
+      const payload = JSON.parse(request.postData());
+      syncFixtures.backups.push({ state: JSON.parse(Buffer.from(payload.content, "base64").toString("utf8")), ok: !syncFixtures.failBackup });
+      return route.fulfill({ status: syncFixtures.failBackup ? 500 : 200, contentType: "application/json",
+        body: JSON.stringify(syncFixtures.failBackup ? { message: "synthetic backup failure" } : { content: { sha: "b".repeat(40) } }) });
+    }
+    if (!pathname.endsWith("/contents/taskchute/app-state.json")) {
       return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
     }
     if (request.method() === "PUT") {
@@ -219,13 +226,28 @@ function contentsBodyFor(jsonText, sha) {
     remote.dataModifiedAt = "2026-08-27T13:00:00";
     syncFixtures.remoteJson = JSON.stringify(remote);
     syncFixtures.sha = "remote-sha-auto-pull-v280";
+    syncFixtures.backups.length = 0;
+    syncFixtures.failBackup = true;
+    const beforeFailedPull = JSON.stringify(await liveState());
+    const beforeFailedStored = JSON.stringify(await storedState());
     await page.evaluate(async () => (await import("./src/sync/github.js")).runAutoSyncPull());
-    await page.locator('.sync-banner-message [data-view="settings"]').click();
-    const autoPullBanner = await page.locator(".sync-error-detail").textContent();
-    check("自動pullの未push競合経路は履歴差分を自動和集合しない", autoPullBanner.includes("ローカルにも未push")
-      && await page.locator(".sync-error-banner").count() === 1, autoPullBanner);
-    check("自動pull中止後もローカル履歴を保持", JSON.stringify((await liveState()).habitPinHistory) === JSON.stringify(localHistory));
-    await page.locator('[data-action="nav"][data-view="today"]:visible').click();
+    check("控え保存失敗なら履歴を含むメモリを変更せず本体PUTもしない",
+      JSON.stringify(await liveState()) === beforeFailedPull
+      && JSON.stringify(await storedState()) === beforeFailedStored && syncFixtures.puts.length === 0
+      && syncFixtures.backups.length === 1 && syncFixtures.backups[0].ok === false);
+    check("控え失敗を同期エラーとして表示する", await page.locator(".sync-error-banner").count() === 1);
+    syncFixtures.failBackup = false;
+    syncFixtures.backups.length = 0;
+    await page.clock.setFixedTime(new Date(2026, 7, 27, 10, 2, 0)); // runAutoSyncPullの60秒抑止を越える
+    await page.evaluate(async () => (await import("./src/sync/github.js")).runAutoSyncPull());
+    check("自動pullは控え成功後に新側の履歴キーを採用し自動和集合しない",
+      JSON.stringify((await liveState()).habitPinHistory) === JSON.stringify(remoteHistory)
+      && JSON.stringify((await storedState()).habitPinHistory) === JSON.stringify(remoteHistory)
+      && await page.locator(".sync-error-banner").count() === 0 && syncFixtures.puts.length === 0);
+    check("自動pull前の未送信ローカル履歴を控え1件へ保持",
+      syncFixtures.backups.length === 1 && syncFixtures.backups[0].ok
+      && JSON.stringify(syncFixtures.backups[0].state.habitPinHistory) === JSON.stringify(localHistory)
+      && syncFixtures.backups[0].state.dataModifiedAt === "2026-08-27T12:00:00");
 
     await setLiveSyncState(localHistory, {
       autoSync: false, dataModifiedAt: "2026-08-27T14:00:00", lastPushedAt: "2026-08-27T14:00:00"
@@ -235,6 +257,7 @@ function contentsBodyFor(jsonText, sha) {
     remote.dataModifiedAt = "2027-01-02T00:00:00";
     syncFixtures.remoteJson = JSON.stringify(remote);
     syncFixtures.sha = "remote-sha-startup-v280";
+    syncFixtures.backups.length = 0;
     syncFixtures.holdGet = true;
     const startupGet = page.waitForRequest((request) => request.method() === "GET"
       && new URL(request.url()).pathname.endsWith("/contents/taskchute/app-state.json"));
@@ -248,14 +271,15 @@ function contentsBodyFor(jsonText, sha) {
     });
     syncFixtures.holdGet = false;
     syncFixtures.releaseGet?.();
-    await page.waitForSelector(".sync-error-banner");
-    await page.locator('.sync-banner-message [data-view="settings"]').click();
-    await page.waitForFunction(() => document.querySelector(".sync-error-detail")?.textContent.includes("編集中に取得したため"));
-    const startupBanner = await page.locator(".sync-error-detail").textContent();
-    check("起動時pullの編集中競合経路も履歴差分で自動取込を中止", startupBanner.includes("自動取込を中止")
-      && await page.locator(".sync-error-banner").count() === 1, startupBanner);
-    check("起動時pull中止後もローカル履歴を保持", JSON.stringify((await liveState()).habitPinHistory) === JSON.stringify(localHistory));
-    await page.locator('[data-action="nav"][data-view="today"]:visible').click();
+    await page.evaluate(() => window.__v280StartupSync);
+    check("起動時pullは編集中でも控え成功後に新側履歴キーを採用し和集合しない",
+      JSON.stringify((await liveState()).habitPinHistory) === JSON.stringify(remoteHistory)
+      && JSON.stringify((await storedState()).habitPinHistory) === JSON.stringify(remoteHistory)
+      && await page.locator(".sync-error-banner").count() === 0 && syncFixtures.puts.length === 0);
+    check("起動時pullの控えは取得待機中の変更後のローカル履歴を保持",
+      syncFixtures.backups.length === 1 && syncFixtures.backups[0].ok
+      && JSON.stringify(syncFixtures.backups[0].state.habitPinHistory) === JSON.stringify(localHistory)
+      && syncFixtures.backups[0].state.dataModifiedAt === "2026-08-27T14:01:00");
     syncFixtures.remoteJson = null;
     await page.evaluate(async () => {
       const { state } = await import("./src/state/store.js");

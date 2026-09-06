@@ -1,3 +1,21 @@
+import { createFeedbackReadonlyPatch } from "./src/features/feedback/feedback-readonly-patch.js";
+import { createFeedbackCanonicalReader } from "./src/features/feedback/feedback-canonical-reader.js";
+import { createFeedbackUiGateway } from "./src/features/feedback/feedback-ui-gateway.js";
+import { createFeedbackUiController } from "./src/features/feedback/feedback-ui-controller.js";
+import { createFeedbackUiView } from "./src/features/feedback/feedback-ui-view.js";
+import { createFeedbackReportOverlay } from "./src/features/feedback/feedback-report-overlay.js";
+import { makeRequest } from "./src/features/feedback/request-contract.js";
+import { createFeedbackHttp } from "./src/features/feedback/feedback-http.js";
+import { createLocalReportCommit } from "./src/features/feedback/local-report-commit.js";
+import { createReportProofAdapter } from "./src/features/feedback/report-proof-adapter.js";
+import { createFeedbackCoordinator } from "./src/features/feedback/feedback-coordinator.js";
+import { createFeedbackEntry, boundProtectedSync } from "./src/features/feedback/feedback-entry.js";
+import { captureReportInput } from "./src/features/feedback/report-input.js";
+import { buildReportMarkdown } from "./src/features/feedback/report-builder.js";
+import { deriveReportValues } from "./src/features/feedback/report-derived.js";
+import { createKaradaTransport } from "./src/sync/karada.js";
+import { configureKaradaImport, invalidateKaradaImport } from "./src/features/karada-import.js";
+import { isArchivedDate, ARCHIVED_READONLY_MESSAGE } from "./src/features/archive-date-protection.js";
 // v164: app.js分割・段階1(最初の抽出)。純粋関数はsrc/core/**へ抽出し、依存グラフの葉として
 //   importする(src/core/**はstateを一切参照しない。claude-review-result.md §7の契約)。
 import { mergeById, mergeByIdPreferNewer, normalizeGymSetIds } from "./src/core/merge.js";
@@ -11,19 +29,26 @@ import {
 // v336: 12WY週次目安(task.twyPlan)の正規化純関数。plan.jsもstate/store.js/app.jsを
 // importしない葉モジュール(track.jsと同じ契約)。
 import { normalizeTwyPlan } from "./src/core/plan.js";
+import { createVisionRead } from "./src/features/vision-read.js";
+import { createVisionOverview } from "./src/features/vision-overview.js";
+import { createDraftLeaveGuard } from "./src/features/draft-leave.js";
+import { createDraftSaveTransaction } from "./src/features/draft-save.js";
+import { configureWorkList, renderWorkList, handleWorkListInput, handleWorkListComposition, rememberWorkListOrigin, restoreWorkListOrigin, rememberWorkListScroll, restoreWorkListScroll } from "./src/features/work-list.js";
 // v166: app.js分割・段階3(state store + storage/sync gateway)。stateの再代入はsetState()
 //   経由のみ(claude-review-result.md §2 Blocker-1)。store.jsは何もimportしない真の葉。
 import { state, setState } from "./src/state/store.js";
 // loadState/persistLocalNoScheduleはsrc/storage/local.jsへ抽出済み。saveStateはscheduleAutoSave等
 // app.js側の多数の関数へ依存するためapp.js側に残す(src/storage/local.js冒頭コメント参照)。
-import { loadState, persistLocalNoSchedule, _lastSaveError } from "./src/storage/local.js";
+import { loadState, persistLocalNoSchedule, _lastSaveError, readStoredStateForFeedback, restoreStoredStateForFeedback } from "./src/storage/local.js";
+import { configurePlacement, openTaskPlacement, placementInput, commitPlacement, placementBackHTML, savePlacementDraft } from "./src/features/placement.js";
 // cachedFeedbackはHomeの「AIから」カードが使う共有キャッシュ
 // (src/state/feedback-cache.js冒頭コメント参照)。
 import { cachedFeedback } from "./src/state/feedback-cache.js";
-import { configureFund, hydrateFundData, renderFund } from "./src/features/fund.js";
+import { configureFund, hydrateFundData, renderFund, invalidateFundConnection, hydrateFundSurfaces, fundReportsUI } from "./src/features/fund.js";
+import { classifyFundReport, unionReportEntries } from "./src/features/fund/report-selection.js";
 import { configureTwelveWeek, renderTwelveWeek } from "./src/features/twelve-week.js"; // v356: 12WYタブR1a(fund.js方式のfeature)
 import {
-  HEALTH_REFRESH_INTERVAL_MS, configureHealth, hydrateHealthData, invalidateHealthCache,
+  HEALTH_REFRESH_INTERVAL_MS, configureHealth, hydrateHealthData, invalidateHealthCache, forceHealthData,
   latestHealthWithin, healthForDate, healthSummaryHTML,
   conditionFromCachedHealth, conditionCommentText
 } from "./src/features/health.js";
@@ -31,7 +56,7 @@ import {
 import { configureTopband, cycleWeekForDate, toggleTwyScoreExpanded } from "./src/features/topband.js";
 // v233: P4第2弾。v232で配置済みのIRON LOG/INSTRUMENTSを画面結線する。
 import {
-  configureIronLog, renderIronLog, linkedGymBlock, gymCommentSummary, runIronImport
+  captureIronSetDraft, configureIronLog, renderIronLog, linkedGymBlock, gymCommentSummary, runIronImport
 } from "./src/features/iron-log.js";
 import { configureInstruments, renderInstruments } from "./src/features/instruments.js";
 import { configureTrackUi, maybeShowTrackProgressToast } from "./src/features/track-ui.js";
@@ -141,7 +166,7 @@ import {
 //      ガイド文は丸括弧で囲み、抽出スクリプト側で「丸括弧だけの行は例示であり実際の依頼では
 //      ない」と判定できるようにする(空欄のまま運用してもバッチが誤検出しない設計)。
 //      定義位置に注意: defaultJournal() の直前ではなくファイル先頭に置く必要がある。
-//      理由 = 下の `setState(loadState(normalizeState, seedState));`(旧く言えば起動処理、
+//      理由 = 下の loadState 呼び出し(起動処理、
 //      v166でsrc/state/store.js導入に伴い記法を変更)が起動直後の同期実行で
 //      normalizeState() を呼び、そこがこの定数を参照するため。normalizeState() 経由の初回呼び出し
 //      はファイル末尾の起動処理(v38コメント参照)より前に走るので、const をその位置に置くと
@@ -251,7 +276,13 @@ const toastEl = document.querySelector("#toast");
 
 // v166: state本体の所有はsrc/state/store.jsへ移した。stateの初期化はここで明示的に行う
 //   (store.js自身の先頭でloadStateを呼ぶとTDZ相当のリスクを生むため。store.js冒頭コメント参照)。
-setState(loadState(normalizeState, seedState));
+try {
+  setState(loadState(normalizeState, seedState));
+} catch (error) {
+  // 不正な保存データの上に初期データを書かず、同期や移行の開始前に停止する。
+  app.innerHTML = '<main role="alert"><h1>保存データを読み込めませんでした</h1><p>端末のデータを保持したまま、保存と同期を停止しています。復旧後に再読み込みしてください。</p><a href="./">再読み込み</a></main>';
+  throw error;
+}
 // v234: normalizeState後に一度だけ過去のジムBlockコメントをIRON LOG累計へ移行する。
 // doneをlocalStorageへ即時保存し、起動を繰り返しても再集計しない。
 if (!state.ironImport.done) {
@@ -272,8 +303,11 @@ configureGithubSync({
   gitHubContentsURL, githubHeaders, gitHubErrorMessage, fromBase64, toBase64,
   sanitizedStateForGitHub, maybeWriteBackupSnapshot, writeBackupSnapshotBeforeLoad, updateAutoSaveStatus, updateSyncDot,
   renderSyncBanner, clearSyncBannerDismissal, clearPersonalDataAuthError, pruneExpiredSuggestedThemes,
-  _startupDataModifiedAt
+  _startupDataModifiedAt,
+  readArchiveForSync: async (year, cfg) => (await fetchGitHubJSONFile(cfg, personalDataPath(`archive/archive-${year}.json`)))?.obj
 });
+configureWorkList({ escapeHTML, todayISO, dueDate: effectiveDueDate, resolveEstimateMin,
+  renderBlock: block => block.completed || block.actualEndAt ? renderExecDoneRow(block) : block.actualStartAt && !block.actualEndAt ? renderExecNowRow(block) : renderExecUpcomingRow(block) });
 configureToday({
   escapeHTML, todayISO, addDays, blocksForDate, minutesOf, timeFromDateTime,
   localDateTimeToMs, resolveEstimateMin,
@@ -295,6 +329,7 @@ configureTopband({
 configureTrackUi({ escapeHTML, todayISO, saveAndRender, generateReport, recordTrackMeasurement });
 configureIronLog({
   getState: () => state,
+  isLocalSaveSuccessful: () => !_lastSaveError && !draftSaveTransaction?.active,
   escapeHTML, todayISO, renderHeader, saveAndRender, registerActions
 });
 configureInstruments({
@@ -307,6 +342,17 @@ configureInstruments({
   })
 });
 // v168: src/features/wish.jsも同じ理由(循環import回避)で依存注入する。
+configurePlacement({
+  requestLeave: requestDraftLeave,
+  escapeHTML, todayISO, nowDateTime, makeBlock, projectName, modalHeaderHTML,
+  renderModal, closeModal, openBlockEditor, setView, showToast,
+  commit: candidate => commitPlacement(state, candidate, {
+    stamp: nowDateTime(),
+    persist: () => { persistLocalNoSchedule(); return !_lastSaveError; },
+    schedule: () => { scheduleAutoSave(); scheduleAutoSync(); }
+  })
+});
+
 configureWish({
   escapeHTML, renderHeader, todayISO, localDateTimeToMs, makeTask, makeBlock,
   defaultPlannedTimes, showToast, nowDateTime, saveAndRender, render, updateTaskField,
@@ -314,7 +360,10 @@ configureWish({
   maybeQueueNextAiStep  // v198(第3弾3e): 完了6経路#6(Wish詳細のサブタスクチェックボックス)
 });
 // v301: FUND日誌も既存のsanitize済みMarkdown描画経路へ結線する。
-configureFund({ escapeHTML, renderHeader, renderMarkdown, personalDataReady, fetchGitHubRawText, render });
+configureFund({ root: main, escapeHTML, renderHeader, renderMarkdown, personalDataReady, personalDataConn,
+  githubHeaders, render, setView, requestDraftLeave, markRead: maybeMarkAiReportRead,
+  onAuthorized: clearPersonalDataAuthError,
+  onUnauthorized: () => setPersonalDataAuthError("個人データの読み取り権限を確認してください") });
 // v356: 12WYタブ。GOALSカードは編集不可のrenderTwyTrackReadOnlyを渡す(renderTwyTrackRowはWBS専用)。
 // v357: 達成トラック数判定用にtwyTrackIsDoneを追加注入(B-H1)。
 configureTwelveWeek({
@@ -322,7 +371,19 @@ configureTwelveWeek({
   modalHeaderHTML, renderModal, saveAndRender, closeModal, twyTrackIsDone,
   render  // v360(R2): PLAN面切替(非永続)の再描画用
 });
+const karadaTransport = createKaradaTransport({
+  connection: () => personalDataReady(state.settings.github) ? personalDataConn(state.settings.github) : null,
+  headers: githubHeaders
+});
+configureKaradaImport({ transport: karadaTransport, forceHealthData, escapeHTML, registerActions, renderDeferringForFocus });
+function invalidateKaradaConnection() {
+  karadaTransport.invalidate();
+  invalidateHealthCache();
+  invalidateKaradaImport();
+}
 configureHealth({
+  connectionIdentity: karadaTransport.identity,
+  fetchHealthText: () => karadaTransport.read("karada/health-daily.json"),
   escapeHTML, personalDataReady: () => personalDataReady(state.settings.github),
   // v334修正(単位13・S-K2): health-daily.jsonはpersonal-dataリポジトリ直下にあるため
   // taskchute/前置なしのfetchGitHubRawTextAtRootを渡す(fetchGitHubRawTextを渡すと404で無音失敗する)。
@@ -386,6 +447,7 @@ registerActions({
   "open-iron-log": () => setView("iron-log"),
   "save-tower-journal": ({ target }) => {
     const date = target.dataset.date || todayISO();
+    if (isArchivedDate(state, date)) return showToast(ARCHIVED_READONLY_MESSAGE);
     const free = document.getElementById("towerJournalFree");
     if (!free) return;
     state.journals[date] = free.value;
@@ -879,6 +941,9 @@ registerActions({
   "twy-carry-confirm": () => confirmCarryProjectCycle(),
   // --- モーダル起動系(3、modal-saveは残置) ---
   "modal-close": () => closeFillGapAware(),
+  "draft-leave-save": () => draftLeaveGuard.resolve("save"),
+  "draft-leave-stay": () => draftLeaveGuard.resolve("stay"),
+  "draft-leave-discard": () => draftLeaveGuard.resolve("discard"),
   "modal-delete": () => deleteFromModal(),
   "lev-judge": ({ target }) => {
     const card = target.closest(".modal-card");
@@ -957,13 +1022,14 @@ registerActions({
   "vision-section": ({ target }) => setVisionSection(target.dataset.section),
   // --- v367: 「この画面で編集」(K承認2026-09-05。Vision.mdのみ・新しい認証経路は作らない) ---
   "vision-edit-open": () => {
+    const connectionKey = ensureVisionConnection();
     // 描画側のcanEditVision判定と同じガード(未接続/401/500では開けない)を二重に効かせておく。
     if (!(personalDataReady(state.settings.github) && visionMdFetchStatus.vision.ok === true)) return;
     const original = cachedVisionMd || "";
     // v366-fix(独立レビューM-1): HTMLTextAreaElement.valueはCRLF/CRをLFへ正規化して返す仕様の
     // ため、元本文がCRLFならフラグを持ち保存時に復元する(無編集保存でも全行LF化=425行全書き換え
     // の差分ノイズが入るのを防ぐ)。
-    visionEditDraft = { text: original, crlf: /\r\n/.test(original) };
+    visionEditDraft = { text: original, crlf: /\r\n/.test(original), connectionKey };
     render();
     // v366-fix(独立レビューH-1): 開いた直後に本文量へ合わせて高さを算出する(rows固定/40vh固定の
     // 箱にしない)。
@@ -976,6 +1042,12 @@ registerActions({
   "vision-edit-save": async () => {
     if (!visionEditDraft || visionEditSaving) return;
     const draft = visionEditDraft;
+    const connectionKey = ensureVisionConnection();
+    if (!connectionKey || draft.connectionKey !== connectionKey) {
+      showToast("接続先が変わったため保存できません。入力は保持しています。元の接続先へ戻すか、編集をキャンセルしてください");
+      return;
+    }
+    const connectionGeneration = visionConnectionGeneration;
     const textarea = document.querySelector("[data-vision-edit-textarea]");
     const rawText = (textarea ? textarea.value : draft.text).replace(/\r\n?/g, "\n");
     // v366-fix(独立レビューM-1): 元がCRLFだった場合はここで復元してからPUTする。
@@ -984,18 +1056,23 @@ registerActions({
     draft.text = rawText;
     visionEditSaving = true;
     document.querySelector('[data-action="vision-edit-save"]').disabled = true;
-    const result = await pushFileToGitHub("content/Vision.md", text, "Vision.md", { silent: true });
+    const result = await pushFileToGitHub("content/Vision.md", text, "Vision.md", { silent: true, isCurrent: () => visionConnectionKey() === connectionKey && visionConnectionGeneration === connectionGeneration });
     visionEditSaving = false;
-    if (result.ok) {
+    const sameConnection = ensureVisionConnection() === connectionKey && visionConnectionGeneration === connectionGeneration;
+    if (result.ok && sameConnection) {
+      visionLegacyGeneration++; // A GET started before this successful save must not restore an older version.
       cachedVisionMd = text;
+      visionMdFetchStatus.vision = { attemptedAt: Date.now(), ok: true, status: 200 };
       // v366-fix2: 送信後の追記や、キャンセルして開き直した別の下書きは破棄しない。
       if (visionEditDraft === draft && draft.text === rawText) visionEditDraft = null;
       showToast("保存しました");
+    } else if (result.ok) {
+      showToast("元の接続先に保存しました。現在の接続先の表示には反映していません");
     } else {
       showToast(`保存に失敗しました: ${result.error || "不明なエラー"}`);
     }
     const saveButton = document.querySelector('[data-action="vision-edit-save"]');
-    if (saveButton) saveButton.disabled = false;
+    if (saveButton) saveButton.disabled = Boolean(visionEditDraft && visionEditDraft.connectionKey !== ensureVisionConnection());
     if (!visionEditDraft) renderDeferringForFocus();
   },
   "vision-board-tab": ({ target }) => setVisionBoardIndex(Number(target.dataset.index)),
@@ -1060,7 +1137,7 @@ registerActions({
 // (v174方式)へ移行した。ロジック無改変。
 registerActions({
   // --- Block作成(WBSからの「今日へ追加」) ---
-  "task-today": ({ id }) => createBlockFromTask(id),
+  "task-today": ({ id }) => openTaskPlacement(id),
   // --- v354: 「空き時間を補う」シート(TIME COMB「補う」・実行ヘッダ「＋Block」の2導線から開く) ---
   "fill-gap-open": ({ target }) => openFillGapSheet(target.dataset.start, target.dataset.end, target.dataset.date || state.selectedDate),
   "fill-gap-place": ({ target, id }) => fillGapPlace(id, target.dataset.split === "1"),
@@ -1076,7 +1153,16 @@ registerActions({
   "bulk-approve-planned": () => bulkApproveAsPlanned(),
   "now-conveyor-complete": ({ id }) => nowConveyorComplete(id),
   // v331: 実行タブA-1a「これから」行の展開トグル(表示専用、state非書込)。
-  "block-row-toggle": ({ id }) => { _execExpandedBlockId = _execExpandedBlockId === id ? "" : id; render(); },
+  "block-row-toggle": ({ id, target }) => {
+    const scope = target?.matches('button') && document.activeElement === target
+      ? target.closest('[data-work-list]')?.dataset.workList : null;
+    const view = state.currentView;
+    _execExpandedBlockId = _execExpandedBlockId === id ? "" : id;
+    render();
+    if (scope && state.currentView === view && !state.modal && !document.querySelector('dialog[open]')) {
+      document.querySelector(`[data-work-list="${CSS.escape(scope)}"] button[data-action="block-row-toggle"][data-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
+    }
+  },
   "task-row-toggle": ({ id }) => { _execExpandedTaskId = _execExpandedTaskId === id ? "" : id; render(); },  // v332: タスク行展開(表示専用)
   // v333: 実行ラッパーの計画/実績切替(表示専用、state/localStorage非書込)。
   "exec-mode-toggle": ({ target }) => { _execMode = target.dataset.mode === "actual" ? "actual" : "plan"; render(); },
@@ -1208,7 +1294,38 @@ function scrollToSettingsGroup(groupId) {
   el?.scrollIntoView({ block: "start" });
 }
 let cachedVisionMd = "";
+const visionReader = createVisionRead({
+  connection: () => personalDataReady(state.settings.github) ? personalDataConn(state.settings.github) : null,
+  key: visionConnectionKey, path: personalDataPath, headers: githubHeaders,
+  setAuthError: setPersonalDataAuthError, clearAuthError: clearPersonalDataAuthError
+});
+const visionOverview = createVisionOverview({
+  read: visionReader.read, escape: escapeHTML, markdown: renderMarkdown,
+  connectionKey: visionConnectionKey
+});
 let cachedAffirmationMd = "";
+let visionLegacyKey = "", visionLegacyGeneration = 0, visionConnectionGeneration = 0;
+function visionConnectionKey() {
+  return personalDataReady(state.settings.github) ? JSON.stringify(personalDataConn(state.settings.github)) : "";
+}
+function invalidateVisionConnection() {
+  visionLegacyKey = visionConnectionKey();
+  visionLegacyGeneration++;
+  visionConnectionGeneration++;
+  visionReader.invalidate();
+  visionOverview.reset();
+  cachedVisionMd = "";
+  cachedAffirmationMd = "";
+  visionMdFetchStatus = {
+    vision: { attemptedAt: 0, ok: null, status: 0 },
+    affirmation: { attemptedAt: 0, ok: null, status: 0 }
+  };
+}
+function ensureVisionConnection() {
+  const key = visionConnectionKey();
+  if (key !== visionLegacyKey) invalidateVisionConnection();
+  return key;
+}
 // v361: Vision/Affirmation本文の3状態(読み込み中/未接続/取得失敗)判定用。
 // ok: null=未試行・true=直近成功・false=直近失敗(cachedXxxが残っていれば「時点(古い)」表示に使う)。
 // status: v361-fix(B-H1)で追加。HTTPステータス(401は「未接続」と同じ扱いにするため区別する)。
@@ -1412,10 +1529,13 @@ function foldSection(id, defaultOpen, wrapperClass, summaryClass, summaryText, b
 //      未初期化のまま参照され、最後に開いていた画面によっては起動時に例外で全停止していた。
 
 document.addEventListener("click", (event) => {
+  const reportLink = event.target.closest('.fund-report-view .readonly-md a, .fund-view .readonly-md a');
+  if (reportLink && fundReportsUI.link(reportLink.getAttribute('href'))) { event.preventDefault(); return; }
   const target = event.target.closest("[data-action]");
   if (!target) return;
 
   const action = target.dataset.action;
+  rememberWorkListOrigin(target);
   const id = target.dataset.id;
 
   // v172: レジストリ経由のactionが登録されていればそちらを優先する(段階5-1時点では
@@ -1518,9 +1638,10 @@ document.addEventListener("toggle", (event) => {
 // 変換確定/フォーカス離脱のタイミングでの保留render実行。
 // v140(Med-2): compositionendはフォーカスがまだ入力欄に残っていれば延期を継続する
 // (attemptFlushDeferredRenderが両条件を見て判定する)。
-document.addEventListener("compositionstart", () => { _imeComposing = true; });
-document.addEventListener("compositionend", () => {
+document.addEventListener("compositionstart", (event) => { _imeComposing = true; handleWorkListComposition(event.target, true); });
+document.addEventListener("compositionend", (event) => {
   _imeComposing = false;
+  handleWorkListComposition(event.target, false);
   attemptFlushDeferredRender();
 });
 document.addEventListener("focusout", () => {
@@ -1536,12 +1657,19 @@ document.addEventListener("focusout", () => {
 
 document.addEventListener("input", (event) => {
   const target = event.target;
+  if (handleWorkListInput(target)) return;
   // v315: ユーザーが編集したIRON LOG入力はプリフィル所有権を外す。
-  if (target.matches("#ironFormWeight, #ironFormReps")) delete target.dataset.prefilled;
+  placementInput(target);
+  if (target.matches("#ironFormWeight, #ironFormReps")) {
+    delete target.dataset.prefilled;
+    captureIronSetDraft();
+  }
   if (target.closest("[data-twy-track]")) refreshTrackForm();
   if (target.matches("[data-journal-date]")) {
     const d = target.dataset.journalDate;
+    if (isArchivedDate(state, d)) return showToast(ARCHIVED_READONLY_MESSAGE);
     state.journals[d] = target.value;
+    feedbackUiController?.inputChanged(d); feedbackReportController?.inputChanged(d);
     // v106: 本文の編集時刻を記録(端末間マージの新旧判定に使用)
     const meta = (state.journalMeta[d] ||= { aiImported: false, ideal: "", aiTaskCandidates: [], aiRequest: "" });
     meta.textUpdatedAt = nowDateTime();
@@ -1587,6 +1715,10 @@ document.addEventListener("input", (event) => {
     //      チェックボックスは change ハンドラ側で処理するのでここでは除外する。
     if (target.type === "checkbox") return;
     state.settings.github[target.dataset.githubField] = target.value.trim();
+    invalidateFeedbackConnection();
+    invalidateKaradaConnection();
+    invalidateFundConnection();
+    invalidateVisionConnection();
     saveState();
   }
   // v49: 横断検索(結果リストだけ差し替え = 入力フォーカス維持。0秒思考検索と同じ手法)
@@ -1623,6 +1755,7 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("change", (event) => {
+  if (handleWorkListInput(event.target)) return;
   const target = event.target;
   // v315: selectの登録済みdata-actionはchangeでもレジストリ経由で処理する。
   if (target.matches("select[data-action]")
@@ -1645,6 +1778,7 @@ document.addEventListener("change", (event) => {
   }
   if (target.matches("[data-date-picker]")) setSelectedDate(target.value);
   // v92: AIレポートビューアの履歴セレクタ(種類ごとに選択中の日付をUIキャッシュに保持)
+  if (fundReportsUI.dateChange(target)) return;
   if (target.matches("[data-ai-report-date]")) {
     _aiReportSelectedDate[target.dataset.typeId] = target.value;
     render();
@@ -1842,8 +1976,10 @@ document.addEventListener("input", (event) => {
 // _lastSaveErrorも同ファイルからimport済み(読み取り専用。再代入はpersistLocalNoSchedule内のみ)。
 
 let _quotaToastShown = false;
+let draftSaveTransaction = null;
 
 function saveState() {
+  if (draftSaveTransaction?.active) return; // The editor boundary persists the complete candidate once.
   // v25: 実データの変更時刻を記録(端末間の「新しい方が勝つ」判定に使用)。
   //      persistLocalNoSchedule(リモート採用・GitHub保存)では更新しない。
   state.dataModifiedAt = nowDateTime();
@@ -1900,7 +2036,19 @@ function compactMap(o) {
   return out;
 }
 
+function validateStateContainers(value) {
+  const invalidJournals = value.journals != null &&
+    (typeof value.journals !== "object" || Array.isArray(value.journals));
+  const invalidRecurrences = value.recurrences != null && !Array.isArray(value.recurrences);
+  if (invalidJournals || invalidRecurrences) {
+    const error = new TypeError("保存データの journals または recurrences の形式が不正です");
+    error.name = "StateContainerError";
+    throw error;
+  }
+}
+
 function normalizeState(value) {
+  validateStateContainers(value);
   const actualSettings = value.settings && typeof value.settings === "object" && !Array.isArray(value.settings)
     ? value.settings
     : {};
@@ -3046,8 +3194,9 @@ function makeBlock(input) {
 }
 
 function render() {
+  if (draftSaveTransaction?.defer(() => render())) return;
   // v271: iOSのネイティブpickerを開いている間はselectを含む全体DOMを差し替えず、focusout後に1回反映する。
-  if (document.activeElement?.matches?.("[data-tower-arrival-select]")) {
+  if (document.activeElement?.matches?.("[data-tower-arrival-select], [data-fund-report-date]")) {
     if (!_deferredRenderPending) _deferredRenderPendingSince = Date.now();
     _deferredRenderPending = true;
     return;
@@ -3066,13 +3215,16 @@ function render() {
   app.dataset.view = state.currentView;
   renderSidebar();
   renderBottomNav();
+  rememberWorkListScroll();
   renderMain();
+  restoreWorkListScroll();
   renderTimelineRail();
   renderSyncBanner();  // v43: 全再描画で消えるバナーを再注入
   renderPersonalDataAuthBanner();  // v72: 401時の案内(全再描画で消えるため再注入)
   maybeMarkAiReportRead();  // v283: 本文取得成功後の描画だけを既読化する単一フック
   // v40: 着手ジュースは1回の描画で消費する(次の描画では付かない)。CSS アニメは挿入時に1回再生。
   state._justStartedBlockId = null;
+  restoreFillGapLayoutInputs();
   // v366-fix(独立レビューH-1): render()がビジョン編集画面を作り直すたびに、新しいtextarea要素は
   // ブラウザ既定の高さ(40vh未満)に戻るため、都度scrollHeightへ合わせ直す(vision-edit-open/
   // inputハンドラ自体からの呼び出しだけでは、他要因での再render(hydrate反映等)を取りこぼす)。
@@ -3240,7 +3392,7 @@ function renderMain() {
     if (shouldAutoScroll) {
       const targetId = currentOrNextTaskchuteBlockId(state.selectedDate);
       if (targetId) {
-        setTimeout(() => document.querySelector(`[data-action="block-row-toggle"][data-id="${targetId}"]`)?.scrollIntoView({ block: "center" }) /* v333: v331の行1段化でstrong[edit-block]が無くなったため行の展開トリガを目印にする */, 50);
+        setTimeout(() => document.querySelector(`[data-work-list="exec"] [data-work-key="block:${CSS.escape(targetId)}"]`)?.scrollIntoView({ block: "center" }) /* v333: v331の行1段化でstrong[edit-block]が無くなったため行の展開トリガを目印にする */, 50);
       }
     }
   }
@@ -3259,11 +3411,14 @@ function renderMain() {
     } else if (shouldAutoScroll) {
       const targetId = currentOrNextTaskchuteBlockId(state.selectedDate);
       if (targetId) {
-        setTimeout(() => document.querySelector(`[data-action="block-row-toggle"][data-id="${targetId}"]`)?.scrollIntoView({ block: "center" }) /* v333: v331の行1段化でstrong[edit-block]が無くなったため行の展開トリガを目印にする */, 50);
+        setTimeout(() => document.querySelector(`[data-work-list="exec"] [data-work-key="block:${CSS.escape(targetId)}"]`)?.scrollIntoView({ block: "center" }) /* v333: v331の行1段化でstrong[edit-block]が無くなったため行の展開トリガを目印にする */, 50);
       }
     }
   }
-  if (view === "journal") main.innerHTML = renderJournal();
+  if (view === "journal") {
+    main.innerHTML = renderJournal();
+    main.querySelector(".journal-tower").insertAdjacentHTML("beforeend", renderFeedbackUiSlot(state.selectedDate));
+  }
   if (view === "iron-log") main.innerHTML = renderIronLog();
   if (view === "instruments") main.innerHTML = renderInstruments();
   if (view === "zero") main.innerHTML = renderZeroThinking();
@@ -3271,6 +3426,7 @@ function renderMain() {
   if (view === "ai-reports") main.innerHTML = renderAiReports();
   if (view === "settings") main.innerHTML = renderSettings();
   if (view === "more") main.innerHTML = renderMore();
+  hydrateFundSurfaces();
 }
 
 // v175: renderTimelineRailはsrc/features/timeline.jsへ移動した(app.js分割・段階4-6・段階B③)。
@@ -5008,10 +5164,7 @@ function renderWBS() {
   const cycleMeta = `${state.settings.twelveWeekStartDate ? `12WY 第${cycleWeekForDate(todayISO())}週 ・ ` : ""}${mdFmt(week.weekStart)} – ${mdFmt(week.weekEnd)}`;
   const wbsTools = `<div class="wbs-toolbar">
     <details class="wbs-view-menu"><summary class="btn ghost" data-action="wbs-view-menu-toggle">表示 ▾</summary>
-      <div class="wbs-view-popover"><div class="wbs-search-shell">
-        <input id="wbs-search-input" class="input" type="search" autocomplete="off" placeholder="Project / Task を検索" data-action="wbs-search-input">
-        <div id="wbs-search-results" class="search-results"><div class="muted">2文字以上で検索します。</div></div>
-      </div><div class="wbs-view-options">
+      <div class="wbs-view-popover"><div class="wbs-view-options">
         <label class="wbs-view-filter"><span>カテゴリ絞り込み</span>${categorySelect}</label>
         ${viewOption("toggle-wbs-hide-done", "完了を隠す", hideDone)}
         ${viewOption("toggle-wbs-hide-done-projects", "完了Projectを隠す", hideDoneProjects)}
@@ -5030,6 +5183,7 @@ function renderWBS() {
 
   return `
     <div class="tower-skin wbs-tower"><header class="view-header wbs-header"><div class="wbs-heading"><h1>TOWER / WBS</h1><span>${cycleMeta}</span></div>${wbsTools}</header>
+    ${renderWorkList("wbs")}
     ${renderWipBanner()}
     ${renderWbsThisWeek()}
     <section class="section grid wbs-projects${desktop ? " is-desktop" : ""}">
@@ -5104,6 +5258,7 @@ function ensurePlanSiblingOrders(task, changedAt, force = false) {
 // prevStatusは呼び出し元(各完了経路)が遷移前の値を渡す(updateTaskFieldのような汎用setter内には
 // 置かない。実装設計書F節)。
 function maybeQueueNextAiStep(stepTaskId, prevStatus) {
+  if (draftSaveTransaction?.defer(() => maybeQueueNextAiStep(stepTaskId, prevStatus), { post: true })) return;
   if (prevStatus === "completed") return;  // 条件1: 遷移でのみ発火(再保存では発火しない)
   const step = state.tasks.find((t) => t.id === stepTaskId && !t.deleted);
   if (!step || step.status !== "completed") return;
@@ -5955,7 +6110,7 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false, 
   const progressNum = Number.isFinite(task.progressNum) ? task.progressNum : 0;
   const progressDen = Number.isFinite(task.progressDen) ? task.progressDen : 10;
   const progressPct = taskProgressPct(task);
-  const progressHTML = editMode ? `
+  const progressHTML = !hideProgress && !compact ? `
     <div class="wbs-progress-row">
       <input class="wbs-inline-input wbs-progress-input" type="number" inputmode="numeric" min="0" step="1"
         data-wbs-progress="num" data-id="${task.id}" value="${progressNum}" aria-label="進捗 分子">
@@ -5980,7 +6135,7 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false, 
   return `
     <div class="row wbs-task-row${compact ? " is-compact" : ""}${suspended ? " is-suspended" : ""}${task.status === "completed" ? " is-completed" : ""}">
       <div class="wbs-task-check">${depth > 0 ? `<span class="wbs-branch">└</span>` : ""}${caret}<button class="checkbox-button ${task.status === "completed" ? "done" : ""}" data-action="toggle-task" data-id="${task.id}">✓</button></div>
-      <div class="wbs-task-copy"><span class="wbs-task-title" data-id="${task.id}">${escapeHTML(task.title)}</span>${metaHTML}${editMode && !compact ? `${inlineEdit}${progressHTML}` : ""}</div>
+      <div class="wbs-task-copy"><span class="wbs-task-title" data-id="${task.id}">${escapeHTML(task.title)}</span>${metaHTML}${editMode && !compact ? inlineEdit : ""}${progressHTML}</div>
       ${task.status === "completed" ? `<span class="wbs-task-done">完了</span>` : `<button class="btn wbs-today-btn" data-action="task-today" data-id="${task.id}">今日へ</button>`}
       <button class="wbs-row-menu-toggle" data-action="wbs-row-menu-toggle" aria-expanded="false" aria-label="${escapeHTML(task.title)}の副操作">…</button>
       <div class="wbs-row-menu-panel" hidden>
@@ -6056,12 +6211,12 @@ function renderExecDoneRow(block) {
   const end = block.actualEndAt ? timeFromDateTime(block.actualEndAt) : "";
   const chargeInfo = (block.charge != null || block.discharge != null)
     ? ` ・ 充${block.charge ?? "-"}/放${block.discharge ?? "-"}` : "";
-  const metaHTML = `${start}${end ? `–${end}` : ""}${chargeInfo}${block.category ? ` ・ ${escapeHTML(block.category)}` : ""}`;
+  const metaHTML = `${start}${end ? `–${end}` : ""}${chargeInfo}${block.category ? ` ・ ${escapeHTML(block.category)}` : ""} ・ ${block.completed ? "完了" : "終了・未完了"}`;
   return `
     <div class="item exec-row exec-row-done">
-      <span class="checkbox-button done" aria-hidden="true">✓</span>
+      ${block.completed ? `<button type="button" class="checkbox-button done" data-action="toggle-block" data-id="${block.id}" aria-label="Block完了を解除" title="Block完了を解除">✓</button>` : `<span class="checkbox-button" aria-hidden="true">■</span>`}
       <div class="exec-row-copy">
-        <strong data-action="edit-block" data-id="${block.id}" title="${escapeHTML(block.title)}">${escapeHTML(block.title)}</strong>
+        <button type="button" class="btn ghost" data-action="edit-block" data-id="${block.id}" title="${escapeHTML(block.title)}">${escapeHTML(block.title)}</button>
         <div class="exec-row-meta">${metaHTML}</div>
       </div>
       <button class="btn" data-action="edit-block" data-id="${block.id}">編集</button>
@@ -6070,11 +6225,8 @@ function renderExecDoneRow(block) {
 }
 
 function execDoneListHTML() {
-  // v334レビュー(A-M2)対応: 母集団は発注文言どおり「選択日の完了Block全件」とし、
-  // execTargetBlocks()のルーティン/単発/非Project紐づけ除外は適用しない
-  // (isStaleBlockは完了Blockに対して常にfalseを返すため、blocksForDateからの
-  // 直接フィルタで足りる)。
-  const done = blocksForDate(state.selectedDate).filter((b) => b.completed)
+  // 実績は完了Blockと終了時刻がある未完了Blockを保持する。予定母集団の除外は適用しない。
+  const done = blocksForDate(state.selectedDate).filter((b) => b.completed || Boolean(b.actualEndAt))
     .sort((a, b) => (a.actualStartAt || "").localeCompare(b.actualStartAt || ""));
   return `
     <section class="section exec-panel exec-amber exec-done-section">
@@ -6101,7 +6253,7 @@ function execDoneListHTML() {
 // 表示するフォールバック(発注書§B「無理なら右列は実績のみ+計画は破線に切替可、と報告」に該当)。
 function renderExecView() {
   const isActual = _execMode === "actual";
-  const desktop = Boolean(window.matchMedia?.("(min-width: 1280px)").matches);
+  const desktop = Boolean(window.matchMedia?.("(min-width: 1280px), (min-width: 1024px) and (orientation: landscape)").matches);
   const endText = projectedEndText() || "見込み終了 —";
   const bufferInfo = computeBufferRemaining(state.selectedDate);
   const bufferText = (state.selectedDate === todayISO() && bufferInfo.hasBuffer)
@@ -6120,7 +6272,7 @@ function renderExecView() {
   const listHTML = isActual ? execDoneListHTML() : renderTasks({ embedded: true });
   // v357(§3): PC(1280px以上)で「空き時間を補うシート」が開いている間は、左列を一覧ではなく
   // シート本体に差し替える(閉じる/置く/作るで一覧に戻る。右の時間軸は動かさない)。
-  const fillGapDesktopActive = desktop && state.modal?.type === "fillGap" && state.modal.date === state.selectedDate;
+  const fillGapDesktopActive = fillGapExecDesktop() && state.modal?.type === "fillGap" && state.modal.date === state.selectedDate;
   const leftHTML = fillGapDesktopActive ? buildFillGapModal(state.modal) : listHTML;
   // v355(退行修正): 1280px未満はrunAiSchedule()後もisActual===falseのままのため、
   // 従来はlistHTML(一覧)しか描かれずrenderTimelineView自体が呼ばれず.draft-blockが
@@ -6153,44 +6305,17 @@ function renderExecView() {
       </div>
     </div>
     ${!isActual ? bufferMeterHTML() : ""}
-    ${renderDateBar()}
+    <div class="exec-date-context">時間軸・実績の対象日: ${escapeHTML(state.selectedDate)}</div>${renderDateBar()}
     ${bodyHTML}
   `;
 }
 
 function renderTasks(opts = {}) {
   const embedded = opts.embedded === true;
-  const targets = execTargetBlocks();
-  // v331: 実行中=開始済み・未終了・未完了(旧renderBlockItemのdoing判定と同じ条件)。
-  //       最大1件を想定するが、複数あっても取りこぼさない。それ以外の未完了は「これから」へ
-  //       (実績時刻はあるが未完了登録、のような境界状態も取りこぼさず「これから」で拾う)。
-  const isExecDoing = (b) => !b.completed && Boolean(b.actualStartAt) && !b.actualEndAt;
-  const doing = targets.filter(isExecDoing);
-  const upcoming = targets
-    .filter((b) => !b.completed && !isExecDoing(b))
-    .sort((a, b) => (a.plannedStartAt || "").localeCompare(b.plannedStartAt || ""));
-  return `
-    ${embedded ? "" : execHeaderHTML()}
-    ${embedded ? "" : renderDateBar()}
-    ${carryOverPanel()}
-
-    ${doing.length ? `
-    <section class="section exec-panel exec-amber">
-      <h2>いま</h2>
-      <div class="grid">${doing.map(renderExecNowRow).join("")}</div>
-    </section>` : ""}
-
-    <div class="exec-lower">
-      <section class="section exec-upcoming-section">
-        <h2>これから</h2>
-        <div class="grid">${upcoming.length ? upcoming.map(renderExecUpcomingRow).join("") : emptyPanel("未着手のBlockはありません")}</div>
-      </section>
-      <section class="section exec-panel exec-amber exec-tasks-section">${renderOpenTasks()}</section>
-    </div>
-    ${embedded ? `<div class="exec-switch-footer"><button class="btn ghost" data-action="exec-mode-toggle" data-mode="actual">実績を見る ›</button></div>` : ""}
-  `;
+  return `${embedded ? "" : execHeaderHTML() + renderDateBar()}
+    ${carryOverPanel()}${renderWorkList("exec")}
+    ${embedded ? `<div class="exec-switch-footer"><button class="btn ghost" data-action="exec-mode-toggle" data-mode="actual">実績を見る ›</button></div>` : ""}`;
 }
-
 // v331修正: 「いま」行(実行中Block1件)。常時要素は☐(toggle-block)・タイトル+meta・
 // 完了(toggle-block再掲)・終了報告(now-end)のみ。充放電select・実行中メモtextareaは
 // meta部タップ(block-row-toggle、これから行と共通の_execExpandedBlockId)で開く展開行へ。
@@ -6205,7 +6330,7 @@ function renderExecNowRow(block) {
     <div class="item exec-row exec-row-now${expanded ? " is-expanded" : ""}">
       <button class="checkbox-button" data-action="toggle-block" data-id="${block.id}" title="Block完了" aria-label="Block完了">✓</button>
       <div class="exec-row-copy">
-        <strong data-action="edit-block" data-id="${block.id}" title="${escapeHTML(block.title)}">${isMIT ? `<span class="mit-star" style="color:#F5A623">★</span> ` : ""}${escapeHTML(block.title)}</strong>
+        <button type="button" class="btn ghost" data-action="edit-block" data-id="${block.id}" title="${escapeHTML(block.title)}">${isMIT ? `<span class="mit-star" style="color:#F5A623">★</span> ` : ""}${escapeHTML(block.title)}</button>
         <div class="exec-row-meta" data-action="block-row-toggle" data-id="${block.id}"><span class="exec-row-meta-text">${metaHTML}</span>${leverageTypeMarkHTML(block.leverageType)}</div>
       </div>
       <div class="exec-row-actions">
@@ -6236,10 +6361,10 @@ function renderExecUpcomingRow(block) {
   return `
     <div class="item exec-row exec-row-upcoming${expanded ? " is-expanded" : ""}">
       <button class="checkbox-button" data-action="toggle-block" data-id="${block.id}" title="Block完了" aria-label="Block完了">✓</button>
-      <div class="exec-row-copy" data-action="block-row-toggle" data-id="${block.id}">
+      <button type="button" class="btn ghost exec-row-copy" data-action="block-row-toggle" data-id="${block.id}" aria-expanded="${expanded}">
         <strong title="${escapeHTML(block.title)}">${isMIT ? `<span class="mit-star" style="color:#F5A623">★</span> ` : ""}${escapeHTML(block.title)}</strong>
-        <div class="exec-row-meta"><span class="exec-row-meta-text">${metaHTML}</span>${leverageTypeMarkHTML(block.leverageType)}</div>
-      </div>
+        <span class="exec-row-meta"><span class="exec-row-meta-text">${metaHTML}</span>${leverageTypeMarkHTML(block.leverageType)}</span>
+      </button>
       <button class="btn exec-start-btn" data-action="now-start" data-id="${block.id}">▶開始</button>
       ${expanded ? `
       <div class="exec-row-expand">
@@ -6769,7 +6894,9 @@ const AI_REPORT_TYPES = [
     guide: "毎週、未完了だったタスクのコメントからパターンを淡々とまとめます。しばらく実行されていない場合は生成されません" },
   { id: "fundJournal", label: "FABLE FUND日誌", prefix: "FABLE FUND日誌_",
     guide: "FABLE FUND模擬運用のAI投資判断日誌。平日朝夜バッチが生成します" },
-  { id: "market", label: "朝の投資ブリーフ", prefix: "朝の投資ブリーフ_",
+  { id: "fundJournalCodex", label: "CODEX FUND日誌", prefix: "CODEX FUND日誌_", guide: "CODEX FUNDの模擬運用日誌" },
+  { id: "marketCodex", label: "朝の投資ブリーフ CODEX", prefix: "朝の投資ブリーフ_CODEX_", guide: "CODEXの朝ブリーフ" },
+  { id: "market", label: "朝の投資ブリーフ FABLE", prefix: "朝の投資ブリーフ_",
     guide: "前夜の米国市場と当日の注目材料を寄り付き前にまとめます" }
 ];
 
@@ -6777,6 +6904,9 @@ const AI_REPORT_TYPES = [
 // 日付降順(新しい順)で返す。一覧未取得ならnullを返し、呼び出し側で読み込みをトリガーさせる。
 function aiReportFilesForType(prefix) {
   if (!Array.isArray(_aiReportDirCache)) return null;
+  const fundType = AI_REPORT_TYPES.find(type => type.prefix === prefix && fundReportsUI.isType(type.id));
+  if (fundType) return _aiReportDirCache.map(classifyFundReport).filter(entry => entry?.kind === fundType.id)
+    .map(({ name, date }) => ({ name, date })).sort((a, b) => b.date.localeCompare(a.date));
   return _aiReportDirCache
     .filter((entry) => entry && entry.type === "file" && entry.name.startsWith(prefix) && entry.name.endsWith(".md"))
     .map((entry) => ({ name: entry.name, date: entry.name.slice(prefix.length, -3) }))
@@ -6784,13 +6914,7 @@ function aiReportFilesForType(prefix) {
 }
 
 // v317: AIレポート画面で取得済みのFUND日誌本文だけを、ジャーナルへ表示専用の1行として渡す。
-function fundJournalSummaryForDate(date) {
-  const fileName = `FABLE FUND日誌_${date}.md`;
-  const body = _aiReportBodyCache[fileName];
-  if (typeof body !== "string") return "";
-  const line = body.split(/\r?\n/).map((item) => item.trim()).find(Boolean) || "";
-  return line.replace(/^#{1,6}\s*/, "").slice(0, 60);
-}
+function fundJournalSummaryForDate(date) { return fundReportsUI.money(date); }
 
 // v140: report-index.jsonのgeneratedAt("YYYY-MM-DDTHH:mm:ssZ"、UTC)をmsへ変換する。
 // localDateTimeToMs(ローカル時刻文字列専用、Zサフィックス無し)とは別に用意する理由:
@@ -6840,11 +6964,12 @@ async function fetchReportIndex() {
 // v287: v283の未読判定を一覧とバッジの単一ソースにする。index取得不能時は空配列へ静かに縮退する。
 function aiReportUnreadEntries() {
   if (!Array.isArray(_aiReportNotifyFiles)) return [];
-  const notifyKinds = new Set(["feedback", "content", "self", "weekly", "letter", "excuse", "fundJournal", "market"]);
+  const notifyKinds = new Set(["feedback", "content", "self", "weekly", "letter", "excuse", "fundJournal", "fundJournalCodex", "market", "marketCodex"]);
   const cutoff = addDays(todayISO(), -(AI_REPORT_NOTIFY_WINDOW_DAYS - 1));
   const readIds = new Set(Array.isArray(state.aiReportReadIds) ? state.aiReportReadIds : []);
   return _aiReportNotifyFiles.filter((entry) => {
     if (!entry || !notifyKinds.has(entry.kind) || typeof entry.date !== "string") return false;
+    if (fundReportsUI.isType(entry.kind) && !classifyFundReport(entry)) return false;
     const effectiveDate = /^\d{4}-\d{2}$/.test(entry.date)
       ? `${entry.date}-01`
       : (/^\d{4}-\d{2}-\d{2}$/.test(entry.date) ? entry.date : "");
@@ -6900,12 +7025,7 @@ function maybeMarkAiReportRead() {
 // ([{name,type,path}]、Contents API由来)をname単位でunionする。dirList側を正(type/path等の
 // 完全な情報を持つ)とし、dirListに無い名前だけindexFiles側から補う。いずれかがnull/配列以外の
 // 場合は無視する(両方失敗の場合は呼び出し元で_aiReportDirCacheへ代入しない=再試行対象に残す)。
-function unionAiReportEntries(indexFiles, dirList) {
-  const merged = new Map();
-  (Array.isArray(dirList) ? dirList : []).forEach((e) => { if (e && e.name) merged.set(e.name, e); });
-  (Array.isArray(indexFiles) ? indexFiles : []).forEach((e) => { if (e && e.name && !merged.has(e.name)) merged.set(e.name, e); });
-  return [...merged.values()];
-}
+function unionAiReportEntries(indexFiles, dirList) { return unionReportEntries(indexFiles, dirList); }
 
 // v159 2026-07-28レビュー対応・必須修正2: report-index.jsonは日次バッチ(coach-daily.sh)が
 // 再生成する索引であり、月次の未来からの手紙_*.mdの新着が同日中に反映されない期間が起こりうる
@@ -7000,6 +7120,7 @@ async function triggerAiReportBodyLoad(fileName) {
 //       残り、内容が更新されていても古い本文が表示され続けるバグがあった。失敗クールダウン
 //       (_aiReportBodyFailedAt)も明示的にクリアし、直近失敗直後でも手動更新は即座に再試行する。
 function refreshAiReports() {
+  if (fundReportsUI.isType(fundReportsUI.type() || state.settings.aiReportType)) { void fundReportsUI.refresh(); return; }
   const type = AI_REPORT_TYPES.find((t) => t.id === (state.settings.aiReportType || "feedback")) || AI_REPORT_TYPES[0];
   const filesBefore = aiReportFilesForType(type.prefix);
   const sel = (_aiReportSelectedDate[type.id] && filesBefore && filesBefore.some((f) => f.date === _aiReportSelectedDate[type.id]))
@@ -7026,14 +7147,15 @@ function renderAiReports() {
       <div class="panel"><p>設定画面で個人データリポジトリ(Owner/Repository/Token)を接続すると読めます。</p></div>
     `;
   }
-  const requestedId = state.settings.aiReportType || "feedback";
+  const requestedId = fundReportsUI.type() || state.settings.aiReportType || "feedback";
+  if (fundReportsUI.isType(requestedId) && !fundReportsUI.type()) fundReportsUI.select(requestedId);
   const activeType = AI_REPORT_TYPES.find((t) => t.id === requestedId) || AI_REPORT_TYPES[0];
   const activeId = activeType.id;
   const refreshBtn = `<button class="btn ghost" data-action="ai-report-refresh">🔄 一覧を更新</button>`;
   return `
     ${renderHeader("AIが書いた振り返りをまとめて読む", "AIレポート", refreshBtn)}
     ${renderAiReportUnreadList()}
-    <div class="segmented">
+    <div class="segmented ai-report-types">
       ${AI_REPORT_TYPES.map((t) => `
         <button class="${t.id === activeId ? "active" : ""}" data-action="ai-report-type" data-type="${t.id}">${escapeHTML(t.label)}</button>
       `).join("")}
@@ -7043,6 +7165,8 @@ function renderAiReports() {
 }
 
 function renderAiReportBody(type) {
+  if(type.id === "feedback"){ensureFeedbackClients();if(!feedbackOverlayLoaded){feedbackOverlayLoaded=true;queueMicrotask(()=>{void feedbackCanonicalReader.refresh();void feedbackReportOverlay.refresh();});}return '<div data-feedback-overlay-slot>'+feedbackReportOverlay.render()+'</div>';}
+  if (fundReportsUI.isType(type.id)) return fundReportsUI.render();
   if (_aiReportDirError) {
     return `
       <div class="panel">
@@ -7244,7 +7368,9 @@ function renderVisionAlignment() {
 // 2ペインにする(当初の.exec-two-pane再利用は左右比率がモックTabVisionPC.pngと逆で、
 // 1920px以上で本文より広いALIGNMENTになっていた。独立レビューM-1/B-M4)。
 function renderVision() {
+  ensureVisionConnection();
   const section = state.settings.visionSection || "vision";
+  const overview = section === "board" || visionEditDraft ? "" : visionOverview.render(section);
   return `
     ${renderHeader("方向性を見失わないための場所", "ビジョン")}
     <div class="segmented">
@@ -7252,11 +7378,14 @@ function renderVision() {
       <button class="${section === "affirmation" ? "active" : ""}" data-action="vision-section" data-section="affirmation">アファメーション</button>
       <button class="${section === "board" ? "active" : ""}" data-action="vision-section" data-section="board">ビジョンボード</button>
     </div>
-    <div class="vision-stage vision-two-pane">
+    <div class="vision-stage ${overview ? "vision-overview-stage" : "vision-two-pane"}">
       <div class="exec-pane-left">
+        ${overview}
+        ${overview ? '<details class="vision-legacy-content"><summary>既存の全文・目標・編集を開く</summary>' : ""}
         ${section === "vision" ? renderVisionMd("vision") : ""}
         ${section === "affirmation" ? renderVisionMd("affirmation") : ""}
         ${section === "board" ? renderVisionBoard() : ""}
+        ${overview ? "</details>" : ""}
       </div>
       <div class="exec-pane-right">${renderVisionAlignment()}</div>
     </div>
@@ -7275,6 +7404,7 @@ function visionMdStatusLine(status) {
 const VISION_MD_DISCONNECTED_TEXT = "個人データ未接続のため表示できません(設定へ)";
 
 function renderVisionMd(kind) {
+  ensureVisionConnection();
   const path = kind === "vision" ? "Vision.md" : "Daily_Affirmation.md";
   // v367: 編集中はkind="vision"の間だけ読む画面の代わりにtextareaを描く。textarea入力中の
   // 自動再描画(hydrate等)はisFocusInEditableElementガード(既存、renderDeferringForFocus)で
@@ -7341,13 +7471,15 @@ function autoGrowVisionEditTextarea(el) {
 // personal-data書込関数、silentオプションで独自トースト文言に差し替えて再利用)を使う。
 function renderVisionEdit() {
   const draft = visionEditDraft;
+  const differentConnection = draft.connectionKey !== ensureVisionConnection();
   return `
     <div class="vision-edit">
+      ${differentConnection ? '<p class="vision-status" role="status">接続先が変わりました。この入力は元の接続先の下書きです。保存するには元の接続先へ戻してください。入力は保持しています。</p>' : ""}
       <textarea class="vision-edit-textarea" data-vision-edit-textarea>${escapeHTML(draft.text)}</textarea>
     </div>
     <div class="vision-edit-bar">
       <button class="btn" data-action="vision-edit-cancel">キャンセル</button>
-      <button class="btn primary" data-action="vision-edit-save" ${visionEditSaving ? "disabled" : ""}>保存</button>
+      <button class="btn primary" data-action="vision-edit-save" ${visionEditSaving || differentConnection ? "disabled" : ""}>保存</button>
     </div>
   `;
 }
@@ -9155,15 +9287,20 @@ function openZtWrite(id) {
 }
 
 function discardZtWrite(inputSelector = "#zt-write-input") {
-  const body = (document.querySelector(inputSelector)?.value || "").trim();
-  if (body && !confirm("入力を破棄して一覧へ戻りますか?")) return;
-  stopZtTimer();
-  ztCurrent = null;
-  ztWriteStartedAt = null;  // v104
-  render();
+  const leave = () => {
+    stopZtTimer();
+    ztCurrent = null;
+    ztWriteStartedAt = null;
+    render();
+  };
+  if (!requestDraftLeave(leave, { inputSelector })) leave();
 }
 
-function saveZtEntry(inputSelector = "#zt-write-input") {
+function saveZtEntry(inputSelector = "#zt-write-input", options) {
+  return draftSaveTransaction.run(() => applyZtEntry(inputSelector), options);
+}
+
+function applyZtEntry(inputSelector) {
   if (!ztCurrent) return;
   const body = (document.querySelector(inputSelector)?.value || "").trim();
   if (!body) return showToast("空のままでは保存できません");
@@ -9191,9 +9328,11 @@ function saveZtEntry(inputSelector = "#zt-write-input") {
   if (!cur.fav) {
     state.zeroThinking.themes = state.zeroThinking.themes.filter((x) => x.id !== cur.id);
   }
-  stopZtTimer();
-  ztCurrent = null;
-  ztWriteStartedAt = null;  // v104
+  draftSaveTransaction.defer(() => {
+    stopZtTimer();
+    ztCurrent = null;
+    ztWriteStartedAt = null;
+  });
   saveAndRender(cur.fav ? "保存しました(★は残ります) — 日報に追加" : "保存しました — 日報に追加");
 }
 
@@ -9213,17 +9352,18 @@ function openZtEntry(id) {
 
 // 未保存の変更があるときだけ確認する(discardZtWriteと同じ「変更があれば確認」方針)。
 function closeZtEdit() {
-  const e = (state.zeroThinking?.entries || []).find((x) => x.id === ztEditId);
-  const ta = document.querySelector("#zt-edit-input");
-  if (e && ta && ta.value.trim() !== (e.body || "").trim() && !confirm("編集中の内容を破棄して戻りますか?")) return;
-  ztEditId = null;
-  render();
+  const leave = () => { ztEditId = null; render(); };
+  if (!requestDraftLeave(leave)) leave();
 }
 
 // 保存: 本文を丸ごと差し替え、updatedAtだけ更新する。date/createdAt(元の帰属日・回答日時)は
 // 変更しない — export先(zero-thinking-export.py)が date でその日のmdへ振り分ける契約のため、
 // 追記編集で日付が変わってしまうと過去の日報側の記録が壊れる。
-function saveZtEdit(id) {
+function saveZtEdit(id, options) {
+  return draftSaveTransaction.run(() => applyZtEdit(id), options);
+}
+
+function applyZtEdit(id) {
   const ta = document.querySelector("#zt-edit-input");
   const body = (ta?.value || "").trim();
   if (!body) return showToast("空のままでは保存できません");
@@ -9231,7 +9371,7 @@ function saveZtEdit(id) {
   if (!found) return;
   state.zeroThinking.entries = state.zeroThinking.entries.map((e) =>
     e.id === id ? { ...e, body, updatedAt: nowDateTime() } : e);
-  ztEditId = null;
+  draftSaveTransaction.defer(() => { ztEditId = null; });
   saveAndRender("追記を保存しました");
 }
 
@@ -9549,6 +9689,45 @@ function fillGapSortCompare(a, b) {
 // v357(§3): PC(1280px以上)のexecタブでは、シートをモーダルではなく左列(一覧の位置)に
 // 差し替える(閉じると一覧に戻る)。1279px以下・execタブ以外(TIME COMBは旧timelineビューにも
 // あるため)は従来どおりオーバーレイモーダルのまま。
+// v373: Keep the active gap's DOM-only input across left-pane/overlay relocation.
+const FILL_GAP_LAYOUT_FIELDS = ["fillGapTitle", "fillGapLength", "fillGapCategory", "fillGapProject", "fillGapRoutine"];
+let fillGapLayoutInputDraft = null;
+function captureFillGapLayoutInputs() {
+  const owner = state.modal;
+  if (state.currentView !== "exec" || owner?.type !== "fillGap" || owner.date !== state.selectedDate) {
+    fillGapLayoutInputDraft = null; return;
+  }
+  const key = JSON.stringify([owner.date, owner.start, owner.end]);
+  if (fillGapLayoutInputDraft && (fillGapLayoutInputDraft.owner !== owner || fillGapLayoutInputDraft.key !== key)) fillGapLayoutInputDraft = null;
+  const sheets = document.querySelectorAll(".exec-pane-left .fill-gap-sheet, #modalRoot.open .fill-gap-sheet");
+  if (sheets.length !== 1) return;
+  const fields = FILL_GAP_LAYOUT_FIELDS.map(id => sheets[0].querySelector(`#${id}`));
+  if (fields.some(field => !field)) return;
+  const active = document.activeElement, index = fields.indexOf(active);
+  fillGapLayoutInputDraft = { owner, key, values: fields.map(field => field.value), active, index,
+    selection: index >= 0 && typeof active.selectionStart === "number" ? [active.selectionStart, active.selectionEnd] : null };
+}
+function restoreFillGapLayoutInputs() {
+  const saved = fillGapLayoutInputDraft;
+  if (!saved) return;
+  const owner = state.modal;
+  if (state.currentView !== "exec" || owner !== saved.owner || owner?.type !== "fillGap" || owner.date !== state.selectedDate
+      || JSON.stringify([owner.date, owner.start, owner.end]) !== saved.key) { fillGapLayoutInputDraft = null; return; }
+  const sheet = document.querySelector(fillGapExecDesktop() ? ".exec-pane-left .fill-gap-sheet" : "#modalRoot.open .fill-gap-sheet");
+  if (!sheet) return; // render() may be deferred; apply only after the destination actually exists.
+  const fields = FILL_GAP_LAYOUT_FIELDS.map(id => sheet.querySelector(`#${id}`));
+  if (fields.some(field => !field)) return;
+  if (fields.some((field, i) => field.tagName === "SELECT" && saved.values[i] !== ""
+      && !Array.from(field.options).some(option => option.value === saved.values[i]))) return;
+  fields.forEach((field, i) => { field.value = saved.values[i]; });
+  fillGapLayoutInputDraft = null;
+  const active = document.activeElement;
+  if (saved.index >= 0 && (active === saved.active || active === document.body || !active?.isConnected)) {
+    const field = fields[saved.index]; field.focus({ preventScroll: true });
+    if (saved.selection && field.setSelectionRange) field.setSelectionRange(...saved.selection);
+  }
+}
+
 function fillGapExecDesktop() {
   return state.currentView === "exec" && Boolean(window.matchMedia?.("(min-width: 1280px)").matches);
 }
@@ -9562,6 +9741,11 @@ function openFillGapSheet(start, end, date) {
 // v357修正: モーダル(×)/Escapeで閉じた際、PC左列差し替え中だった場合だけ一覧へ戻す再描画を足す
 // (通常のオーバーレイモーダルはmodalRootの消去だけで足りるため、既存の挙動は変えない)。
 function closeFillGapAware() {
+  if (requestDraftLeave(() => closeFillGapNow())) return;
+  closeFillGapNow();
+}
+
+function closeFillGapNow() {
   const needsExecRerender = fillGapExecDesktop() && state.modal?.type === "fillGap";
   closeModal();
   if (needsExecRerender) render();
@@ -9839,7 +10023,8 @@ function transferIronLogToCompletedBlock(blockId, { suppressEmptyToast = false }
   if (!summary) {
     if (!suppressEmptyToast) {
       // 呼び出し元の完了トーストより後に表示し、警告が同一スタック内で上書きされるのを防ぐ。
-      Promise.resolve().then(() => showToast("IRON LOGのセットが未記録です"));
+      const notify = () => Promise.resolve().then(() => showToast("IRON LOGのセットが未記録です"));
+      if (!draftSaveTransaction?.defer(notify, { post: true })) notify();
     }
     return;
   }
@@ -9961,6 +10146,8 @@ function toggleBlock(id) {
 //        Block側は解除しない(実績を消さないため。逆方向=Block解除だけではTaskは変えない、
 //        という既存方針と対称)。
 function toggleTaskCompleteFromBlock(blockId) {
+  if (state.modal?.type === "block" && state.modal.id === blockId
+      && requestDraftLeave(() => toggleTaskCompleteFromBlock(blockId), { allowDiscard: false })) return;
   const block = state.blocks.find((b) => b.id === blockId);
   if (!block || !block.taskId) return;
   const task = state.tasks.find((t) => t.id === block.taskId);
@@ -10195,361 +10382,13 @@ function deleteBlock(id) {
 //      quiet = 画面遷移・トーストなしで生成だけ行う(バックグラウンド用)。
 function generateReport(dateArg, { quiet = false } = {}) {
   const date = dateArg || state.selectedDate;
+  if (isArchivedDate(state, date)) {
+    if (!quiet) showToast(ARCHIVED_READONLY_MESSAGE);
+    return state.reports[date] || "";
+  }
   ensureJournal(date);
-  const blocks = blocksForDate(date);
-  const completed = blocks.filter((block) => block.completed);
-  const charge = blocks.reduce((sum, block) => sum + Number(block.charge || 0), 0);
-  const discharge = blocks.reduce((sum, block) => sum + Number(block.discharge || 0), 0);
-  const morning = state.settings.morningEnergyLog[date] ?? 5;
-  const net = morning + charge - discharge;
-
-  // v61: 今日の理想ワンライナー(提案8)。達成/未達は判定しない(「翌日以降も残る」旨の文言は v230 のHome撤去で虚偽化したため単位11で削除)。
-  const idealText = state.journalMeta[date]?.ideal || "";
-
-  // v17: MIT(今日の主役)
-  const mitBlocks = blocks.filter((b) => b.isMIT);
-  const mitDone = mitBlocks.filter((b) => b.completed).length;
-
-  // v17: ポモドーロ完了数
-  const pomodoroCount = blocks.reduce((sum, b) => sum + Number(b.pomodoroCount || 0), 0);
-
-  // v33: ホームの4つの達成率(スコアボードと同一ロジック)
-  const rateTaskchute = taskchuteStartRate(blocks);
-  const rateMIT = {
-    done: mitDone,
-    total: mitBlocks.length,
-    pct: mitBlocks.length ? Math.round((mitDone / mitBlocks.length) * 100) : 0
-  };
-  const rateRoutine = routineRate(blocks, state.recurrences || []);
-  const rateCycleWeek = cycleWeekProgress(date);
-  const cycleWeek = cycleWeekForDate(date);
-  const rateDeferral = deferralStats(blocks);
-
-  // v17: 計画 vs 実行
-  const plannedMinutes = blocks.reduce((sum, b) => {
-    if (b.plannedStartAt && b.plannedEndAt) {
-      const s = minutesOf(b.plannedStartAt);
-      const e = minutesOf(b.plannedEndAt);
-      return sum + Math.max(0, e - s);
-    }
-    return sum;
-  }, 0);
-  const reportDurationMinutes = (b) => {
-    if (b.actualStartAt && b.actualEndAt) {
-      const actual = Math.max(0, minutesOf(b.actualEndAt) - minutesOf(b.actualStartAt));
-      // v276(K指示2026-08-27): FLIGHT LOGは0分実績を保持し、日報集計だけ予定所要で補完する。
-      if (actual > 0 || !b.plannedStartAt || !b.plannedEndAt) return actual;
-    }
-    if (!b.plannedStartAt || !b.plannedEndAt) return 0;
-    return Math.max(0, minutesOf(b.plannedEndAt) - minutesOf(b.plannedStartAt));
-  };
-  const actualMinutes = blocks.filter((b) => b.completed)
-    .reduce((sum, b) => sum + reportDurationMinutes(b), 0);
-  const blockCompletionRate = blocks.length === 0 ? 0 : Math.round((completed.length / blocks.length) * 100);
-  const timeCompletionRate = plannedMinutes === 0 ? 0 : Math.round((actualMinutes / plannedMinutes) * 100);
-  const fmtMinutes = (m) => `${Math.floor(m / 60)}h${m % 60 > 0 ? `${m % 60}m` : ""}`;
-
-  // v17: カテゴリ別時間配分(完了 Block のみ)
-  const catTime = {};
-  completed.forEach((b) => {
-    const dur = reportDurationMinutes(b);
-    const cat = b.category || "未分類";
-    catTime[cat] = (catTime[cat] || 0) + dur;
-  });
-  const catTimeRows = Object.entries(catTime)
-    .sort((a, b) => b[1] - a[1])
-    .map(([cat, min]) => `- ${cat}: ${fmtMinutes(min)}`);
-
-  // v17: 12WY プロジェクトの今日進んだこと(完了 Block を Project ごとに集約)
-  const projectProgress = {};
-  completed.forEach((b) => {
-    if (!b.taskId) return;
-    const task = state.tasks.find((t) => t.id === b.taskId);
-    if (!task) return;
-    const project = state.projects.find((p) => p.id === task.projectId);
-    if (!project || project.kind === "wish") return;  // Wish は別セクション
-    if (!project.twelveWeekStartDate) return;  // 12WY プロジェクトのみ
-    projectProgress[project.title] = projectProgress[project.title] || [];
-    projectProgress[project.title].push(b.title);
-  });
-
-  // v17: 進んだ Wish(完了したサブタスクの親 Wish)
-  const wishProgress = {};
-  completed.forEach((b) => {
-    if (!b.taskId) return;
-    const task = state.tasks.find((t) => t.id === b.taskId);
-    if (!task || !task.parentTaskId) return;
-    const wish = state.tasks.find((t) => t.id === task.parentTaskId);
-    if (!wish) return;
-    const wishProject = state.projects.find((p) => p.id === wish.projectId);
-    if (!wishProject || wishProject.kind !== "wish") return;
-    wishProgress[wish.title] = wishProgress[wish.title] || [];
-    wishProgress[wish.title].push(b.title);
-  });
-
-  // v17: やり残し
-  const incomplete = blocks.filter((b) => !b.completed);
-
-  // v17: Block コメント抽出(comment があるもの)
-  const commentedBlocks = blocks.filter((b) => b.comment && b.comment.trim());
-
-  // v162 2系統レビュー対応(必須1・必須2): 未完了理由(state.blocksを直接見る。仕分けの
-  // 手放す/延期はBlockをdeleted:true化するため、!deleted限定のblocksForDate=blocksからは
-  // 既に外れている。それでも「その日なぜ完了しなかったか」の記録は残すため、deleted済みも
-  // 含めて拾う)。対象日の条件は2つのORで判定する:
-  //  (a) b.date === date — その日の予定だったBlock(日次締めで当日に理由記録した通常ケース)
-  //  (b) incompleteReason.at がdate — 仕分け対象(carryableBlocks、前日Block)は b.date が
-  //      前日のままなので(a)だけでは当日の日報に一切載らない(=台帳に永久に届かない)。
-  //      記録した「その日」の日報に載せるため、記録時刻(at)の日付でも拾う。
-  // (必須2): !b.completed も条件に加える。記録後にBlockが完了へ転じた場合、偽の「言い訳」を
-  // 台帳へ流さないよう欄から除外する(incompleteReason自体は削除しない。履歴として残すが
-  // 表示条件から外すだけ)。
-  const incompleteReasonAtDate = (b) => String(b.incompleteReason?.at || "").slice(0, 10);
-  const incompleteReasons = state.blocks.filter((b) =>
-    hasIncompleteReason(b) && !b.completed && (b.date === date || incompleteReasonAtDate(b) === date));
-
-  // v128: 体力予算。当日ログがある日のみ達成率表の後に1行出力する(データなし日は省略)。
-  const conditionBudgetToday = conditionBudget(date);
-
-  const lines = [
-    `# 日報 ${date} (${weekdayLabel(date)})`,
-    "",
-    // v61: 今日の理想ワンライナー(未入力日は行ごと出さない)
-    ...(idealText ? [`> 🌱 今日の理想: ${idealText}`, ""] : []),
-    "## 1. サマリ",
-    "| 指標 | 値 |",
-    "|---|---|",
-    `| 朝の体調 | ${morning} / 10 |`,
-    `| 充電収支 | +${charge} / -${discharge} = ${signed(net - morning)} (起点${morning}→終値${net}) |`,
-    `| Block 実行 | ${completed.length} / ${blocks.length} (${blockCompletionRate}%) |`,
-    `| 時間実行 | ${fmtMinutes(actualMinutes)} / ${fmtMinutes(plannedMinutes)} (${timeCompletionRate}%) |`,
-    `| MIT 達成 | ${mitDone} / ${mitBlocks.length} |`,
-    `| ポモドーロ | ${pomodoroCount} 回 |`,
-    "",
-    "### 達成率",
-    "| 指標 | 達成 | 率 |",
-    "|---|---|---|",
-    `| タスクシュート着手率 | ${rateTaskchute.done} / ${rateTaskchute.total} | ${rateTaskchute.pct}% |`,
-    `| 今日の主役 (MIT) | ${rateMIT.done} / ${rateMIT.total} | ${rateMIT.pct}% |`,
-    `| ルーティン実行率 | ${rateRoutine.done} / ${rateRoutine.total} | ${rateRoutine.pct}% |`,
-    `| 12週 今週の進捗(Week ${cycleWeek}/12) | ${rateCycleWeek.done} / ${rateCycleWeek.total} | ${rateCycleWeek.pct}% |`,
-    `| 先送り | ${rateDeferral.pending}件 | ${rateDeferral.started} / ${rateDeferral.total} |`,
-    "",
-    ...(conditionBudgetToday.level !== "none"
-      ? [`体力予算: ${CONDITION_BUDGET_LABELS[conditionBudgetToday.level]}${conditionBudgetToday.reason ? `(${conditionBudgetToday.reason})` : ""}`, ""]
-      : []),
-  ];
-
-  // 修正フェーズ単位11(2026-09-04): v68の「## AIへの質問」節はK6裁定で撤去(#reportAskInput
-  // 入力欄がv214で失われて以来、origin:"user"の問いが積まれる経路が無く節は永久に空だった)。
-
-  // v34/v39: 0秒思考(その日に書いたもの、書いた順)。v39 で問い別にグルーピング。
-  const ztToday = (state.zeroThinking?.entries || [])
-    .filter((e) => e.date === date)
-    .sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
-  if (ztToday.length) {
-    lines.push("## 🧠 0秒思考");
-    lines.push("");
-    const underQuestion = ztToday.filter((e) => e.questionId);
-    const standalone = ztToday.filter((e) => !e.questionId);
-    // 問いに紐づくものは問いごとにまとめる
-    const byQ = {};
-    underQuestion.forEach((e) => { (byQ[e.questionId] ||= []).push(e); });
-    Object.entries(byQ).forEach(([qid, entries]) => {
-      const q = (state.questions || []).find((x) => x.id === qid);
-      lines.push(`### 【問い】${q ? q.text : entries[0].theme}`);
-      lines.push("");
-      entries.forEach((e) => {
-        if (e.theme && e.theme !== (q && q.text)) lines.push(`**${e.theme}**`);
-        lines.push(e.body);
-        lines.push("");
-      });
-    });
-    standalone.forEach((e) => {
-      lines.push(`### ${e.theme}`);
-      lines.push("");
-      lines.push(e.body);
-      lines.push("");
-    });
-  }
-
-  // MIT セクション
-  if (mitBlocks.length > 0) {
-    lines.push("## 2. 今日の主役 (MIT)");
-    mitBlocks.forEach((b) => {
-      lines.push(`- ${b.completed ? "✅" : "⬜"} ${b.title}`);
-    });
-    lines.push("");
-  }
-
-  // 12WY プロジェクト進捗
-  if (Object.keys(projectProgress).length > 0) {
-    lines.push("## 3. 12WY プロジェクトの進捗");
-    Object.entries(projectProgress).forEach(([projectName, items]) => {
-      lines.push(`### ${projectName}`);
-      items.forEach((t) => lines.push(`- ${t}`));
-    });
-    lines.push("");
-  }
-
-  // 進んだ Wish
-  if (Object.keys(wishProgress).length > 0) {
-    lines.push("## 4. 今日進んだ Wish");
-    Object.entries(wishProgress).forEach(([wishTitle, items]) => {
-      lines.push(`### ${wishTitle}`);
-      items.forEach((t) => lines.push(`- ${t}`));
-    });
-    lines.push("");
-  }
-
-  // 時間の使い方
-  lines.push("## 5. 時間の使い方");
-  if (catTimeRows.length > 0) {
-    lines.push("### カテゴリ別配分");
-    lines.push(...catTimeRows);
-    lines.push("");
-  }
-  lines.push("### 実行 Block(時刻順)");
-  lines.push("| 時刻 | 内容 | カテゴリ | 充電/放電 | コメント |");
-  lines.push("|---|---|---|---|---|");
-  const sortedBlocks = [...blocks].sort((a, b) => (a.plannedStartAt || "").localeCompare(b.plannedStartAt || ""));
-  sortedBlocks.forEach((b) => {
-    const time = b.plannedStartAt ? timeFromDateTime(b.plannedStartAt) : "—";
-    const status = b.completed ? "✅" : (b.isMIT ? "★" : "⬜");
-    const comment = (b.comment || "").replace(/\|/g, "\\|").replace(/\n/g, " ");
-    lines.push(`| ${time} | ${status} ${b.title} | ${b.category || "—"} | +${b.charge || 0}/-${b.discharge || 0} | ${comment} |`);
-  });
-  lines.push("");
-
-  // v129/v295: 当日分の身体スキャン(Block完了時の疲労0-5+回復0-5+任意部位)。時刻順。
-  // 1件も無い日は節ごと省略。recoveryが無い過去レコード(v295以前)は「—」表示(0と区別)。
-  const bodyScansToday = (state.bodyScans || [])
-    .filter((s) => (s.dateTime || "").startsWith(date))
-    .sort((a, b) => (a.dateTime || "").localeCompare(b.dateTime || ""));
-  if (bodyScansToday.length > 0) {
-    lines.push("### 身体スキャン");
-    lines.push("| 時刻 | 疲労 | 回復 | 部位 |");
-    lines.push("|---|---|---|---|");
-    bodyScansToday.forEach((s) => {
-      const time = s.dateTime ? timeFromDateTime(s.dateTime) : "—";
-      lines.push(`| ${time} | ${s.fatigue ?? "—"} | ${s.recovery ?? "—"} | ${s.part || "—"} |`);
-    });
-    lines.push("");
-  }
-
-  // やり残し
-  if (incomplete.length > 0) {
-    lines.push("## 6. やり残し");
-    incomplete.forEach((b) => {
-      lines.push(`- ${b.isMIT ? "★ " : ""}${b.title}${b.category ? ` (${b.category})` : ""}${blockEverStarted(b) ? "" : " (未着手)"}`);
-    });
-    lines.push("");
-  }
-
-  // Block コメント抜粋
-  if (commentedBlocks.length > 0) {
-    lines.push("## 7. Block 内のコメント");
-    commentedBlocks.forEach((b) => {
-      lines.push(`### ${b.title}`);
-      lines.push(b.comment.trim());
-      lines.push("");
-    });
-  }
-
-  // v162: 未完了理由(理由が1件以上ある日のみ節を出す。excuse-ledger-extract.pyが
-  // この節のみを機械パースする=FORMAT_CONTRACT.md参照。あえて番号を振らず既存の
-  // 「## 6.」「## 7.」等の連番を崩さない=「## AIへの質問」等と同じ非番号見出しの型)
-  if (incompleteReasons.length > 0) {
-    lines.push("## 未完了理由");
-    incompleteReasons.forEach((b) => {
-      const note = (b.incompleteReason.note || "").replace(/\n/g, " ").trim();
-      lines.push(`- [${b.title}] ${b.incompleteReason.chip}${note ? `: ${note}` : ""}`);
-    });
-    lines.push("");
-  }
-
-  // v294: 書く瞑想(充放電ログ改善R1a)。独立state(state.writeMeditations)を出力するだけで、
-  // state.journals[date]には一切書き込まない(journal-anatomy.md §3のFREE NOTE二重上書き
-  // リスクを回避する設計)。当日レコードが無い/全空の日は節ごと省略(bodyScans節と同じ作法)。
-  const writeMeditationEntry = (state.writeMeditations || []).find((w) => w.date === date && !w.deleted);
-  const wmDischarge = writeMeditationEntry?.discharge || [];
-  const wmCharge = writeMeditationEntry?.charge || [];
-  const wmDischargeTalk = (writeMeditationEntry?.dischargeTalk || "").trim();
-  const wmChargeTalk = (writeMeditationEntry?.chargeTalk || "").trim();
-  if (wmDischarge.length > 0 || wmCharge.length > 0 || wmDischargeTalk || wmChargeTalk) {
-    lines.push("## 書く瞑想");
-    if (wmDischarge.length > 0) {
-      lines.push("### 放電");
-      wmDischarge.forEach((c) => lines.push(`- ${c.text}`));
-      lines.push("");
-    }
-    if (wmCharge.length > 0) {
-      lines.push("### 充電");
-      wmCharge.forEach((c) => lines.push(`- ${c.text}`));
-      lines.push("");
-    }
-    if (wmDischargeTalk) lines.push("### 深掘り(放電)", wmDischargeTalk, "");
-    if (wmChargeTalk) lines.push("### 深掘り(充電)", wmChargeTalk, "");
-  }
-
-  // ジャーナル
-  lines.push("## 8. ジャーナル");
-  lines.push(state.journals[date] || "(ジャーナル記載なし)");
-  lines.push("");
-
-  // 明日への接続
-  lines.push("## 9. 明日への接続");
-  // 修正フェーズ単位11(2026-09-04): 「明日・明後日もホームに小さく残ります…3日目に続けるか
-  // 手放すか」の文言はv230のHome撤去で当該UI(3日リトライ)自体が無くなり虚偽記述と化していたため
-  // 削除(2-H1裁定)。理想ワンライナー自体は冒頭`> 🌱 今日の理想:`行で引き続き表示する。
-  lines.push("明日への一言:");
-  lines.push("");
-  lines.push("明日の MIT 候補:");
-  lines.push("- ");
-  lines.push("- ");
-  lines.push("- ");
-  lines.push("");
-
-  // AI フィードバック用プロンプト(コピペ用)
-  lines.push("---");
-  lines.push("");
-  lines.push("## 📋 AI へのコピペ用プロンプト");
-  lines.push("```");
-  lines.push("以下は今日の日報です。");
-  lines.push("");
-  lines.push("1. 客観事実から見える「良かった点・改善できる点」");
-  lines.push("2. パターンとして気をつけたいこと");
-  lines.push("3. 明日への具体的な提案(2〜3個)");
-  lines.push("4. この日報を踏まえ、明日「0秒思考」で思考を深めるべきテーマ(2〜3個)");
-  lines.push("   ※ 各テーマは1分で書き出せる問い形式で示すこと");
-  lines.push("5. 明日の MIT 候補(最大3つ)");
-  lines.push("   ※ 「明日のMIT候補」という見出しの下に「- 」の箇条書きで示すこと");
-  // v39: 開いている問い(10x)を提示し、問いを一段深める明日のテーマを求める
-  const openQuestions = (state.questions || []).filter((q) => !q.deleted && q.status !== "settled");
-  if (openQuestions.length) {
-    lines.push("");
-    lines.push("いま持ち続けている「問い」:");
-    openQuestions.slice(0, 5).forEach((q) => lines.push(`- ${q.text}`));
-    lines.push("");
-    lines.push("6. 上の各問いを一段深める明日のテーマを最大2つ提案せよ。");
-    lines.push("   答えを出すのではなく、より良い問いへの分解を優先すること。");
-  }
-  lines.push("");
-  lines.push("の観点で、簡潔にフィードバックをください。");
-  lines.push("(辛口でも構いません、ただし行動に繋がる具体性を重視)");
-  lines.push("");
-  lines.push("レビュー結果は Markdown 形式の .md ファイルとして出力してください。");
-  // v42: 出力フォーマットを固定(アプリのパーサ前提)。頑健性はプロンプト側で買う。
-  lines.push("");
-  lines.push("回答は必ず次の見出し構成で出力してください。各候補は「- 」で始まる箇条書き。");
-  lines.push("## フィードバック");
-  lines.push("## 明日の0秒思考テーマ");
-  lines.push("## MIT候補");
-  lines.push("## 問い候補");
-  lines.push("該当がないセクションは見出しごと省略してください。");
-  lines.push("```");
-
-  const report = lines.join("\n");
+  const input = captureReportInput(state, date, deriveReportValues);
+  const report = buildReportMarkdown(input);
   state.reports[date] = report;
   if (quiet) { saveState(); return report; }  // v51: バックグラウンド生成(画面を動かさない)
   // v214: 独立した日報タブを廃止したため、生成後もジャーナルに留まる。
@@ -10603,6 +10442,10 @@ function importData(file) {
       // バックアップはトークンを含まないので、この端末のトークンを引き継ぐ
       if (!next.settings.github.token) next.settings.github.token = token;
       setState(next);
+      invalidateFeedbackConnection();
+      invalidateKaradaConnection();
+      invalidateFundConnection();
+    invalidateVisionConnection();
       maintainRecurrences({ purge: true });
       saveAndRender("データをインポートしました");
     } catch {
@@ -10744,6 +10587,10 @@ function syncGitHubFieldsFromDOM() {
     const val = (el.value || "").trim();
     if (val !== (state.settings.github[key] || "")) {
       state.settings.github[key] = val;
+      invalidateFeedbackConnection();
+      invalidateKaradaConnection();
+      invalidateFundConnection();
+    invalidateVisionConnection();
     }
   });
 }
@@ -10930,7 +10777,7 @@ function githubHeaders(token) {
   };
 }
 
-async function gitHubErrorMessage(response) {
+async function gitHubErrorMessage(response, isCurrent = () => true) {
   let raw;
   try {
     const payload = await response.json();
@@ -10962,7 +10809,7 @@ async function gitHubErrorMessage(response) {
     404: "ファイルが見つからないか、トークンがこのリポジトリにアクセスできません。Owner / Repository / Branch / 保存先パスの綴り(保存先パスに taskchute/ を含めないでください。自動で付与されます)、またはFine-grained tokenの Repository access(対象repoが選択されているか)・Contents: Read and write 権限を確認してください"
   };
   const hint = hints[response.status];
-  if ([401, 403, 404].includes(response.status)) {
+  if ([401, 403, 404].includes(response.status) && isCurrent()) {
     setPersonalDataAuthError("GitHub保存/読込に失敗しました。トークンのRepository access(personal-data)・Contents権限、またはOwner/Repository/Branch/パスの設定を確認してください");
   }
   return hint ? `${raw} — ${hint}` : raw;
@@ -10976,6 +10823,97 @@ function sanitizedStateForGitHub() {
   delete copy._trackToastLog;  // v243: 12WY進捗トーストの1日1回制御は端末単位
   return copy;
 }
+
+let feedbackHttpClient = null;
+let feedbackEntryClient = null;
+let feedbackReadonlyPatch;
+let feedbackCanonicalReader = null;
+let feedbackUiController = null;
+let feedbackReportController = null;
+let feedbackUiGateway = null;
+let feedbackReportOverlay = null;
+let feedbackOverlayLoaded = false;
+const feedbackUiView = createFeedbackUiView({escapeHTML,renderMarkdown});
+function invalidateFeedbackConnection() { feedbackHttpClient?.invalidate(); feedbackCanonicalReader?.invalidate(); feedbackUiController?.invalidate(); feedbackReportController?.invalidate(); feedbackOverlayLoaded=false; }
+function feedbackInputOwner() {
+  const date = state.selectedDate;
+  if (_imeComposing || !/^\d{4}-\d{2}-\d{2}$/.test(date) || isArchivedDate(state, date)) throw Error("feedback_input_unavailable");
+  const element = document.querySelector('[data-journal-date="' + date + '"]');
+  if (!element?.isConnected) throw Error("feedback_input_unavailable");
+  return { date, view: state.currentView, element };
+}
+function ownsFeedbackInput(owner) {
+  return !_imeComposing && owner.element.isConnected && state.selectedDate === owner.date && state.currentView === owner.view
+    && document.querySelector('[data-journal-date="' + owner.date + '"]') === owner.element && !isArchivedDate(state, owner.date);
+}
+function reflectFeedbackInput(owner) {
+  if (!ownsFeedbackInput(owner) || draftSaveTransaction?.active || draftLeaveGuard.active) throw Error("feedback_input_unavailable");
+  if (state.journals[owner.date] !== owner.element.value) {
+    state.journals[owner.date] = owner.element.value;
+    const meta = (state.journalMeta[owner.date] ||= { aiImported: false, ideal: "", aiTaskCandidates: [], aiRequest: "" });
+    meta.textUpdatedAt = nowDateTime();
+  }
+  ensureJournal(owner.date);
+}
+function ensureFeedbackClients() {
+  if (!feedbackEntryClient) {
+    feedbackHttpClient = createFeedbackHttp({
+      connection: () => personalDataReady(state.settings.github) ? personalDataFileConfig(state.settings.github) : null,
+      headers: githubHeaders
+    });
+    const localCommit = createLocalReportCommit({ getState: () => state,
+      canSave: () => !_imeComposing && !draftSaveTransaction?.active && !draftLeaveGuard.active,
+      persist: () => { persistLocalNoSchedule(); return !_lastSaveError; },
+      readStored: readStoredStateForFeedback, writeStored: restoreStoredStateForFeedback, now: nowDateTime });
+    const proof = createReportProofAdapter({ get: feedbackHttpClient.get, putReport: feedbackHttpClient.putReport,
+      syncProtectedState: boundProtectedSync(value => saveToGitHub(true, value)) });
+    const run = createFeedbackCoordinator({ getState: () => state, identity: feedbackHttpClient.identity,
+      selectedDate: () => state.selectedDate, today: todayISO, now: () => new Date().toISOString(), crypto: globalThis.crypto,
+      localCommit, serializePrimary: () => JSON.stringify(sanitizedStateForGitHub(), null, 2), proof, queueTransport: feedbackHttpClient, onPrepared: request => feedbackUiController.prepared(request), onProven: request => feedbackUiController.proven(request) });
+    feedbackEntryClient = createFeedbackEntry({ isComposing: () => _imeComposing, captureOwner: feedbackInputOwner,
+      isOwner: ownsFeedbackInput, requestLeave: requestDraftLeave, reflectInput: reflectFeedbackInput, run,
+      onSettled: () => feedbackUiController.settled(), onResult: result => feedbackUiController.accepted(result),
+      onError: error => { feedbackUiController.failed(error); if(error.message === "finish_composition_first")showToast("文字の変換を確定してから操作してください"); } });
+    feedbackUiGateway = createFeedbackUiGateway({http:feedbackHttpClient,crypto:globalThis.crypto,today:todayISO});
+    feedbackUiController = createFeedbackUiController({ gateway: feedbackUiGateway,
+      startEntry: lifecycle => feedbackEntryClient(lifecycle), onUpdate: patchFeedbackUi,
+      currentHash: async date => { const input = captureReportInput(state,date,deriveReportValues); const report=buildReportMarkdown(input);
+        return (await makeRequest(date,report,input.state.journals[date],new Date().toISOString(),globalThis.crypto)).inputHash; } });
+    feedbackReportController = createFeedbackUiController({gateway:feedbackUiGateway,startEntry:()=>false,onUpdate:patchFeedbackUi,
+      currentHash:async date=>{const input=captureReportInput(state,date,deriveReportValues);return (await makeRequest(date,buildReportMarkdown(input),input.state.journals[date],new Date().toISOString(),globalThis.crypto)).inputHash;}});
+    feedbackCanonicalReader = createFeedbackCanonicalReader({http:feedbackHttpClient,onUpdate:()=>queueMicrotask(patchFeedbackUi)});
+    feedbackReportOverlay = createFeedbackReportOverlay({gateway:feedbackUiGateway,controller:feedbackReportController,view:(snapshot,body)=>feedbackCanonicalNotice(snapshot.date)+feedbackUiView(snapshot,body),escapeHTML,onUpdate:patchFeedbackUi,
+      getCanonicalFiles:()=>feedbackCanonicalReader.files(),getCanonicalBody:file=>feedbackCanonicalReader.body(file.date)});
+  }
+  return feedbackEntryClient;
+}
+function feedbackCanonicalNotice(date) {
+  const status=feedbackCanonicalReader?.status(date);
+  return status?.failed ? '<p role="status">以前の本文を再取得できません。'+(status.hasBody?'同じ接続で確認済みの本文を表示しています。':'本文は未確認です。')+'</p>' : '';
+}
+function renderFeedbackUiSlot(date) {
+  ensureFeedbackClients(); feedbackUiController.selectDate(date);
+  return '<div data-feedback-ui-slot>'+feedbackCanonicalNotice(date)+feedbackUiView(feedbackUiController.snapshot(),feedbackCanonicalReader.body(date))+'</div>';
+}
+function patchFeedbackUi() {
+  feedbackReadonlyPatch ||= createFeedbackReadonlyPatch({document,root:document.getElementById("main")});
+  const slot=document.querySelector('[data-feedback-ui-slot]');
+  if(state.currentView === 'ai-reports'){const reportSlot=document.querySelector('[data-feedback-overlay-slot]');if(reportSlot){const snapshot=feedbackReportController.snapshot();feedbackReadonlyPatch(reportSlot,feedbackReportOverlay.render(),{date:snapshot.date,busy:snapshot.busy||feedbackCanonicalReader.status(snapshot.date).loading});}return;}
+  if(!slot || state.currentView !== 'journal')return;
+  const snapshot=feedbackUiController.snapshot();
+  if(snapshot.date!==state.selectedDate)return;
+  feedbackReadonlyPatch(slot,feedbackCanonicalNotice(snapshot.date)+feedbackUiView(snapshot,feedbackCanonicalReader.body(snapshot.date)),{date:snapshot.date,busy:snapshot.busy||feedbackCanonicalReader.status(snapshot.date).loading});
+}
+registerActions({
+ "feedback-regenerate":()=>{ensureFeedbackClients();feedbackUiController.selectDate(state.selectedDate);feedbackUiController.begin();},
+ "feedback-refresh":()=>{const controller=state.currentView === "ai-reports" ? feedbackReportController : feedbackUiController;void feedbackCanonicalReader?.refresh(controller?.snapshot().date);return controller?.refresh();},
+ "feedback-report-refresh":()=>Promise.all([feedbackCanonicalReader?.refresh(feedbackReportController?.snapshot().date),feedbackReportOverlay?.refresh()]),
+ "feedback-report-date":({target})=>{feedbackReportOverlay?.select(target.dataset.feedbackDate);feedbackReportController?.refresh();},
+ "feedback-version":({target})=>(state.currentView === "ai-reports" ? feedbackReportController : feedbackUiController)?.selectVersion(target.dataset.feedbackVersion),
+ "feedback-resume":({target})=>(state.currentView === "ai-reports" ? feedbackReportController : feedbackUiController)?.resume(target.dataset.feedbackId),
+ "feedback-retry":({target})=>(state.currentView === "ai-reports" ? feedbackReportController : feedbackUiController)?.resume(target.dataset.feedbackId,Number(target.dataset.feedbackAttempt))
+});
+
 
 function toBase64(text) {
   const bytes = new TextEncoder().encode(text);
@@ -11243,7 +11181,15 @@ async function runArchive({ manual = false } = {}) {
     return;
   }
   const cfg = personalDataConn(raw);  // v72: 個人データリポジトリへ
-  const { byYear, textCut, blockCut } = collectArchivable();
+  const capture = () => {
+    const collected = collectArchivable();
+    // Include empty entries too: cleanup must not erase a newly cleared/created date.
+    const textEntries = Object.fromEntries(["reports", "feedback", "journals"].map(key =>
+      [key, Object.entries(state[key] || {}).filter(([date]) => date < collected.textCut)]));
+    return JSON.stringify({ ...collected, textEntries });
+  };
+  const startSnapshot = capture();
+  const { byYear, textCut, blockCut } = JSON.parse(startSnapshot);
   const years = Object.keys(byYear).sort();
   if (!years.length) {
     if (manual) showToast(`アーカイブ対象はありません(日報等は${ARCHIVE_TEXT_KEEP_DAYS}日・Blockは${ARCHIVE_BLOCK_KEEP_DAYS}日より古い分が対象)`);
@@ -11255,14 +11201,28 @@ async function runArchive({ manual = false } = {}) {
       const filePath = personalDataPath(`archive/archive-${year}.json`);
       // 既存アーカイブを読み込んでマージ(日付キー / Block id で冪等)
       const existing = await fetchGitHubJSONFile(cfg, filePath);
-      const merged = existing?.obj && typeof existing.obj === "object"
-        ? { reports: {}, feedback: {}, journals: {}, blocks: [], ...existing.obj }
-        : { reports: {}, feedback: {}, journals: {}, blocks: [] };
-      Object.assign(merged.reports, byYear[year].reports);
-      Object.assign(merged.feedback, byYear[year].feedback);
-      Object.assign(merged.journals, byYear[year].journals);
-      const seen = new Set(merged.blocks.map((b) => b.id));
-      byYear[year].blocks.forEach((b) => { if (!seen.has(b.id)) merged.blocks.push(b); });
+      const isMap = value => value && typeof value === "object" && !Array.isArray(value);
+      if (existing && !isMap(existing.obj)) throw new Error(`${year}年のアーカイブ形式を確認できません`);
+      const merged = { reports: {}, feedback: {}, journals: {}, blocks: [], ...(existing?.obj || {}) };
+      for (const key of ["reports", "feedback", "journals"]) {
+        if (!isMap(merged[key])) throw new Error(`${year}年の${key}形式を確認できません`);
+        for (const [date, text] of Object.entries(byYear[year][key])) {
+          if (Object.prototype.hasOwnProperty.call(merged[key], date) && merged[key][date] !== text) {
+            throw Object.assign(new Error(`${date}の${key}が既存アーカイブと異なります。両方を保持して退避を中止しました`), { name: "ArchiveConflict" });
+          }
+        }
+        Object.assign(merged[key], byYear[year][key]);
+      }
+      if (!Array.isArray(merged.blocks)) throw new Error(`${year}年のBlock形式を確認できません`);
+      const seen = new Map();
+      for (const block of [...merged.blocks, ...byYear[year].blocks]) {
+        if (!isMap(block) || !block.id) throw new Error(`${year}年のBlock IDを確認できません`);
+        if (seen.has(block.id) && JSON.stringify(seen.get(block.id)) !== JSON.stringify(block)) {
+          throw Object.assign(new Error(`${year}年のBlockが既存アーカイブと異なります。両方を保持して退避を中止しました`), { name: "ArchiveConflict" });
+        }
+        seen.set(block.id, block);
+      }
+      merged.blocks = [...seen.values()];
       const put = await fetch(gitHubFileURL(cfg, filePath), {
         method: "PUT",
         headers: githubHeaders(cfg.token),
@@ -11275,7 +11235,11 @@ async function runArchive({ manual = false } = {}) {
       });
       if (!put.ok) throw new Error(await gitHubErrorMessage(put));
     }
-    // ここまで到達 = 全ての年の書き込みに成功。初めてローカルから削除する。
+    if (capture() !== startSnapshot) {
+      showToast("アーカイブ待機中に記録が変更されたため、端末の記録はすべて保持しました。確認後に再実行してください");
+      return;
+    }
+    // All years were saved and the complete cleanup set still matches the snapshot.
     // 単位16: 日付キー(reports/feedback/journals)はここでローカルから消してよいが、
     // 同期マージ(mergeDateStringMap)は片側にしか無いキーを無条件で合流させるため、
     // 「この日付は退避済み」を state.archivedDates(和集合マージ対象)に記録し、
@@ -11305,7 +11269,7 @@ async function runArchive({ manual = false } = {}) {
     showToast(`📦 ${removed}件をアーカイブへ退避しました(archive/)`);
   } catch (error) {
     // 何も削除していないので安全。手動時のみ通知、自動時は静かに。
-    if (manual) showToast(`アーカイブ失敗: ${error.message}`);
+    if (manual || error.name === "ArchiveConflict") showToast(`アーカイブ失敗: ${error.message}`);
     else console.warn("自動アーカイブをスキップ:", error.message);
   }
 }
@@ -11380,6 +11344,10 @@ async function loadArchiveForSearch() {
 function resetDemoData() {
   if (!window.confirm("この端末の全データ(Block・ジャーナル・0秒思考・IRON LOG等)をデモデータへ置き換えます。\nGitHub同期設定(トークン)も初期化され、取り消せません。よろしいですか?")) return;
   setState(normalizeState(seedState()));
+  invalidateFeedbackConnection();
+  invalidateKaradaConnection();
+  invalidateFundConnection();
+    invalidateVisionConnection();
   saveAndRender("デモデータに戻しました");
 }
 
@@ -11627,6 +11595,7 @@ let _pendingBodyScanCtx = null;
 const BODY_SCAN_PARTS = ["目", "肩", "胃", "頭"];
 
 function openBodyScanModal(pomodoroBlockId) {
+  if (draftSaveTransaction?.defer(() => openBodyScanModal(pomodoroBlockId), { post: true })) return;
   const block = pomodoroBlockId ? state.blocks.find((b) => b.id === pomodoroBlockId) : null;
   _pendingBodyScanCtx = {
     pomodoroBlockId: pomodoroBlockId || "",
@@ -11637,6 +11606,7 @@ function openBodyScanModal(pomodoroBlockId) {
   };
   state.modal = { type: "bodyScan" };
   renderModal(buildBodyScanModal());
+  modalRoot.querySelector('[data-action="body-scan-fatigue"]')?.focus({ preventScroll: true });
 }
 
 // 選択ボタン再描画のたびにモーダルHTMLを丸ごと差し替えるため、コメントtextareaの
@@ -12246,6 +12216,7 @@ function startTimerTicker() {
     // 値が変わるが、render()を呼ぶきっかけ(Block操作等)が無い限り表示が凍ったままになる。
     // 全再描画はせず該当要素だけを差分更新する(内部で1分間隔にスロットル)。
     updateBatteryTick();
+    (state.currentView === "ai-reports" ? feedbackReportController : feedbackUiController)?.tick(document.visibilityState === "visible" && ["journal","ai-reports"].includes(state.currentView));
     // v77: AIフィードバック等の定期再fetch(30分毎)。visibilitychange側と同じ入口・スロットルを共有する。
     if (Date.now() - _lastFeedbackHydrateAt >= FEEDBACK_REFRESH_INTERVAL_MS) maybeRefreshFeedback();
     // v140(Med-3): 延期中のrenderがcompositionend/focusoutを取りこぼして固着した場合の
@@ -12255,7 +12226,10 @@ function startTimerTicker() {
   }, 500);
 }
 
-function setView(view = "today") {
+function setView(view = "today", skipDraftGuard = false) {
+  if (!skipDraftGuard && requestDraftLeave(() => setView(view, true))) return;
+  if (["task", "project", "block", "placement"].includes(state.modal?.type)) closeModal();
+  if (view !== state.currentView) ztEditId = null;
   // v34/v183: 0秒思考の書く画面(単体/今日インライン)から離脱するときは
   // タイマー停止 + 共通一時状態をリセットする。
   if ((state.currentView === "zero" && view !== "zero")
@@ -12292,6 +12266,10 @@ function shiftSelectedDate(delta) {
 
 // v150: 第2引数toastOptsはshowToastへそのまま渡す(「実績を編集」トースト用、任意)。
 function saveAndRender(message, toastOpts) {
+  if (draftSaveTransaction?.complete(() => {
+    render();
+    if (message) showToast(message, toastOpts);
+  })) return;
   saveState();
   render();
   // v23: 端末内保存に失敗したら、その旨を優先して伝える(操作自体は反映済み)
@@ -12411,13 +12389,22 @@ function aiInsightsPanelHTML(kind, taskId = "") {
 }
 
 async function hydrateStaticMarkdown() {
+  const connectionKey = ensureVisionConnection();
+  const generation = ++visionLegacyGeneration;
+  // Optional images must not delay legacy copy, feedback, or the other read-only panels.
+  visionOverview.hydrate().then(changed => {
+    if (changed && state.currentView === "vision") renderDeferringForFocus();
+  }).catch(() => console.warn("ビジョン概要の更新をスキップしました"));
   // v72: 個人データリポジトリ(taskchute/content/配下)からのGitHub API取得に切替(同一オリジンfetch廃止)
   // v361: 3状態(読み込み中/未接続/取得失敗)判定のためok/statusも要るので、
   //       fetchGitHubRawText(本文のみ)ではなくfetchGitHubRawResultへ切替える。
-  const visionPromise = fetchGitHubRawResult("content/Vision.md");
-  const affirmPromise = fetchGitHubRawResult("content/Daily_Affirmation.md");
+  const visionPromise = visionReader.read("content/Vision.md");
+  const affirmPromise = visionReader.read("content/Daily_Affirmation.md");
   const reportIndexPromise = fetchReportIndex();
-  const [visionResult, affirmResult, reportIndexFiles] = await Promise.all([visionPromise, affirmPromise, reportIndexPromise]);
+  const [visionResult, affirmResult, reportIndexFiles] = await Promise.all([
+    visionPromise, affirmPromise, reportIndexPromise
+  ]);
+  if (ensureVisionConnection() !== connectionKey || generation !== visionLegacyGeneration) return;
   _aiReportNotifyFiles = reportIndexFiles;
   // v283: ゲート中はrenderGate()が空にしたナビを復活させない。接続済み時だけ通知を即時反映する。
   if (personalDataReady(state.settings.github)) {
@@ -12426,6 +12413,7 @@ async function hydrateStaticMarkdown() {
     patchAiReportUnreadList();
   }
   let changed = false;
+  if (generation === visionLegacyGeneration) {
   const prevVisionOk = visionMdFetchStatus.vision.ok;
   const prevAffirmOk = visionMdFetchStatus.affirmation.ok;
   visionMdFetchStatus = {
@@ -12443,6 +12431,7 @@ async function hydrateStaticMarkdown() {
     changed = true;
   } else if (affirmResult.ok !== prevAffirmOk) {
     changed = true;
+  }
   }
   // AI フィードバック: 当日と前日を取得
   // v56: push 済みが判っていて、かつ手元に本文が無い日付のみ fetch。
@@ -12466,6 +12455,7 @@ async function hydrateStaticMarkdown() {
     wantFetch(today) ? fetchGitHubRawText(`AIフィードバック_${today}.md`) : Promise.resolve(""),
     wantFetchPrev(prev) ? fetchGitHubRawText(`AIフィードバック_${prev}.md`) : Promise.resolve("")
   ]);
+  if (ensureVisionConnection() !== connectionKey || generation !== visionLegacyGeneration) return;
   if (todayFb && todayFb !== cachedFeedback[today]) {
     cachedFeedback[today] = todayFb;
     changed = true;
@@ -12523,7 +12513,7 @@ async function hydrateStaticMarkdown() {
     hydrateFundData(FEEDBACK_REFRESH_INTERVAL_MS),
     hydrateHealthData(HEALTH_REFRESH_INTERVAL_MS),
   ]);
-  if (fundChanged) changed = true;
+  if (fundChanged && state.currentView === "fund") changed = true;
   if (healthChanged) changed = true;
   if (wantFutureLetterFetch) {
     cachedFutureLetterMd[realCurrentMonth] = futureLetterMd || undefined;
@@ -12631,6 +12621,8 @@ function setVisionBoardIndex(index) {
 // v92: AIレポートビューアの種類タブ切替(UI選択のみ、dataModifiedAtは汚さない)
 function setAiReportType(typeId) {
   if (!AI_REPORT_TYPES.some((t) => t.id === typeId)) return;
+  if (fundReportsUI.isType(typeId)) { fundReportsUI.select(typeId); render(); return; }
+  fundReportsUI.leave();
   state.settings.aiReportType = typeId;
   persistLocalNoSchedule();
   render();
@@ -12640,6 +12632,12 @@ function setAiReportType(typeId) {
 function openUnreadAiReport(kind, fileName) {
   const type = AI_REPORT_TYPES.find((item) => item.id === kind);
   if (!type) return;
+  if (fundReportsUI.isType(kind)) {
+    const file = classifyFundReport({ kind, name: fileName });
+    if (file) { fundReportsUI.select(kind, file.date); render(); }
+    return;
+  }
+  fundReportsUI.leave();
   if (typeof fileName === "string" && fileName.startsWith(type.prefix) && fileName.endsWith(".md")) {
     const selectedDate = fileName.slice(type.prefix.length, -3);
     _aiReportSelectedDate[kind] = selectedDate;
@@ -13467,8 +13465,83 @@ function openBlockEditor(id) {
   renderModal(buildBlockModal(block));
 }
 
+const draftLeaveGuard = createDraftLeaveGuard(document);
+draftSaveTransaction = createDraftSaveTransaction({
+  getState: () => state, setState,
+  persist: () => {
+    state.dataModifiedAt = nowDateTime();
+    persistLocalNoSchedule();
+    return !_lastSaveError;
+  },
+  schedule: () => { scheduleAutoSave(); scheduleAutoSync(); },
+  onFailure: error => {
+    if (error) console.error("編集の保存を中止しました", error);
+    showToast("端末に保存できませんでした。入力は残しています。保存先を確認して再試行してください");
+  },
+  onEffectError: error => {
+    console.error("保存後の画面更新に失敗しました", error);
+    showToast("保存は成功しましたが、画面の更新に失敗しました。画面を開き直してください");
+  }
+});
+let modalDraftBaseline = null;
+
+function modalDraftSnapshot() {
+  const fields = Array.from(modalRoot.querySelectorAll("[data-modal-field]"), el =>
+    [el.dataset.modalField, el.type === "checkbox" ? el.checked : el.value]);
+  const milestones = Array.from(modalRoot.querySelectorAll(".twy-ms-edit-row"), row => [
+    row.dataset.twyMsId || "", row.querySelector("[data-twy-ms-label]")?.value || "",
+    row.querySelector("[data-twy-ms-date]")?.value || ""
+  ]);
+  return JSON.stringify({ fields, milestones });
+}
+
+// Only adapters for legacy private draft state remain here; the decision UI is a feature.
+function requestDraftLeave(leave, { allowDiscard = true, inputSelector = "#zt-write-input" } = {}) {
+  if (draftLeaveGuard.active) return true;
+  let save = null;
+  let isCurrentOwner = null;
+  if (["task", "project", "block", "placement"].includes(state.modal?.type)) {
+    if (modalDraftSnapshot() !== modalDraftBaseline) {
+      const { type, id } = state.modal;
+      const view = state.currentView;
+      const session = modalRoot.firstElementChild;
+      isCurrentOwner = () => Boolean(session?.isConnected && modalRoot.classList.contains("open")
+        && modalRoot.firstElementChild === session && state.modal?.type === type && state.modal?.id === id && state.currentView === view);
+      save = type === "placement"
+        ? () => savePlacementDraft(readModalFields())
+        : () => submitModal({ deferPost: true });
+    }
+  } else if (ztEditId) {
+    const id = ztEditId;
+    const entry = state.zeroThinking?.entries.find(row => row.id === id);
+    const input = document.querySelector("#zt-edit-input");
+    if (input && input.value !== (entry?.body || "")) {
+      const date = entry?.date;
+      const view = state.currentView;
+      isCurrentOwner = () => Boolean(input.isConnected && document.querySelector("#zt-edit-input") === input
+        && ztEditId === id && state.zeroThinking?.entries.find(row => row.id === id)?.date === date
+        && state.currentView === view && !state.modal && !modalRoot.classList.contains("open"));
+      save = () => saveZtEdit(id, { deferPost: true });
+    }
+  } else if (ztCurrent && document.querySelector(inputSelector)?.value) {
+    const session = ztCurrent;
+    const id = session.id;
+    const date = todayISO();
+    const input = document.querySelector(inputSelector);
+    const view = state.currentView;
+    isCurrentOwner = () => Boolean(input?.isConnected && document.querySelector(inputSelector) === input
+      && ztCurrent === session && ztCurrent.id === id && todayISO() === date && state.currentView === view
+      && !state.modal && !modalRoot.classList.contains("open"));
+    save = () => saveZtEntry(inputSelector, { deferPost: true });
+  }
+  if (!save) return false;
+  draftLeaveGuard.request({ save, leave, isCurrentOwner, allowDiscard });
+  return true;
+}
+
 function renderModal(innerHTML) {
   modalRoot.innerHTML = innerHTML;
+  modalDraftBaseline = modalDraftSnapshot();
   modalRoot.classList.add("open");
   modalRoot.setAttribute("aria-hidden", "false");
   // 背景クリックで閉じる
@@ -13484,13 +13557,16 @@ function renderModal(innerHTML) {
     // v296(R1b): 書く瞑想ゲートの背景タップも「スキップして生成」と同じ扱い(強制しない・
     // 記録せず軽く抜けられる)。
     if (state.modal && state.modal.type === "writeMeditationGate") { writeMeditationGateSkip(); return; }
-    closeModal();
+    closeFillGapAware();
   };
 }
 
 function closeModal() {
+  if (draftSaveTransaction?.defer(() => closeModal())) return;
+  modalDraftBaseline = null;
   state.modal = null;
   modalRoot.classList.remove("open");
+  restoreWorkListOrigin();
   modalRoot.setAttribute("aria-hidden", "true");
   modalRoot.innerHTML = "";
   modalRoot.onclick = null;
@@ -13518,24 +13594,43 @@ function readModalFields() {
   return fields;
 }
 
-function submitModal() {
+function submitModal(options) {
   if (!state.modal) return;
   const fields = readModalFields();
   // v178: project/task/block/actualEntry/question/experiment/storeVisitを
   // registerModalHandlerへ移行済みのため、if-else連鎖は撤去した(dispatchModalSaveが必ずtrueを
   // 返す。未登録typeが将来増えた場合はfalseで素通りし、何もしない=移行前の「どのtypeにも
   // マッチしない」場合と同じ挙動)。
-  dispatchModalSave(state.modal.type, state.modal.id, fields);
+  const { type, id } = state.modal;
+  if (["task", "project", "block"].includes(type)) {
+    return draftSaveTransaction.run(() => dispatchModalSave(type, id, fields), options);
+  }
+  dispatchModalSave(type, id, fields);
+}
+
+function modalDeleteMessage(modal = state.modal) {
+  if (!modal?.id) return null;
+  const collections = { project: "projects", task: "tasks", block: "blocks",
+    question: "questions", experiment: "experiments", storeVisit: "storeVisits" };
+  const item = (state[collections[modal.type]] || []).find(row => row.id === modal.id && !row.deleted);
+  if (!item || (modal.type === "project" && item.kind === "wish")) return null;
+  const names = { project: "Project", task: "Task", block: "Block", question: "問い",
+    experiment: "人生実験", storeVisit: "お店の記録" };
+  const title = item.title || item.text || item.hypothesis || "";
+  const subject = `${names[modal.type]}${title ? `「${title}」` : ""}を削除しますか？`;
+  if (modal.type === "project") return `${subject}\nこのProjectの有効な12週トラックも削除されます。配下のTaskとBlockは削除しません。`;
+  if (modal.type === "task") return `${subject}\n紐づくBlockはTaskとの紐付けを外して残します。実績とサブTaskは削除しません。`;
+  if (modal.type === "block") return `${subject}\n${item.date || "この日"}のBlockが削除されます。紐づくTaskは削除しません。${item.recurrenceGroupId ? "\nこの日を繰り返しの例外にします。ほかの日とシリーズは残ります。繰り返し全体の終了は別の操作です。" : ""}`;
+  return subject;
 }
 
 function deleteFromModal() {
-  if (!state.modal) return;
-  const ok = window.confirm("削除しますか? この操作は取り消せます(deleted フラグ)。");
+  const message = modalDeleteMessage();
+  if (!message) return;
+  const ok = window.confirm(message);
   if (!ok) return;
-  // v178: 同上(submitModal参照)。project/task/block/question/experiment/storeVisitは
-  // dispatchModalDelete経由でcloseModal()まで実行する。actualEntryはdelete未登録
-  // (従来からdeleteFromModal側に対応する型が無い)ため、dispatchModalDeleteがfalseを返し
-  // 下のcloseModal()だけが実行される(移行前と同じ挙動)。
+  // v368: 保存済みの削除対象だけを既存dispatcherへ渡す。
+  // actualEntryなど削除操作を持たない型は確認前のガードで終了する。
   if (dispatchModalDelete(state.modal.type, state.modal.id)) {
     closeModal();
     return;
@@ -13937,7 +14032,9 @@ function buildTaskModal(task) {
     ...parentCandidates.map((t) => `<option value="${t.id}" ${task.parentTaskId === t.id ? "selected" : ""}>${escapeHTML(t.title)}</option>`)
   ].join("");
   return `
-    ${modalHeaderHTML(task.id ? "Task を編集" : "Task を追加")}
+    ${modalHeaderHTML(task.id ? "Task を編集" : "Task を追加", "task-modal detail-sheet")}
+        <div class="detail-columns"><section class="detail-column" aria-label="基本・完了条件">
+        <h4 class="tower-section-title">基本・完了条件</h4>
         ${task.id ? "" : `<input type="hidden" data-modal-field="order" data-modal-kind="number" value="${Number.isFinite(task.order) ? task.order : ""}">`}
         <div class="field">
           <label class="field-label">タイトル</label>
@@ -13992,6 +14089,8 @@ function buildTaskModal(task) {
           </select>
           ${leverageJudgeHelperHTML(task.leverageType)}
         </div>
+        </section><section class="detail-column" aria-label="ステップ・実行計画・メモ">
+        <h4 class="tower-section-title">ステップ・実行計画</h4>
         <div class="field">
           <label class="field-label">🤝 AI作業ワーカー連携(任意)</label>
           <label class="checkbox-line">
@@ -14017,6 +14116,7 @@ function buildTaskModal(task) {
           <label class="field-label">説明 / メモ</label>
           <textarea class="textarea" data-modal-field="description" style="min-height:120px">${escapeHTML(task.description || "")}</textarea>
         </div>
+        </section></div>
       </div>
       <div class="modal-footer">
         ${task.id ? `<button class="btn danger" data-action="modal-delete">削除</button>` : ""}
@@ -14162,7 +14262,9 @@ function buildBlockModal(block) {
     ? (state.recurrences || []).find((r) => r.id === block.recurrenceGroupId && !r.deleted)
     : null;
   return `
-    ${modalHeaderHTML("Block を編集", "tower-sheet")}
+    ${modalHeaderHTML(block._isNew ? "Block を追加" : "Block を編集", "tower-sheet detail-sheet")}
+    ${placementBackHTML(block)}
+        <div class="detail-columns"><div class="detail-column">
         <section class="tower-section">
           <h4 class="tower-section-title">基本</h4>
           <div class="field">
@@ -14224,6 +14326,7 @@ function buildBlockModal(block) {
             </div>
           </div>
         </section>
+        </div><div class="detail-column">
         <section class="tower-section">
           <h4 class="tower-section-title">エネルギー</h4>
           <div class="field-row">
@@ -14325,11 +14428,12 @@ function buildBlockModal(block) {
           ${taskCompleteHTML}
           </div>
         </details>
+        </div></div>
       </div>
       <div class="modal-footer">
-        <button class="btn danger" data-action="modal-delete" style="margin-right:auto">削除</button>
+        ${block._isNew ? "" : `<button class="btn danger" data-action="modal-delete" style="margin-right:auto">削除</button>`}
         <button class="btn" data-action="modal-close">キャンセル</button>
-        <button class="btn primary" data-action="modal-save">保存</button>
+        <button class="btn primary" data-action="modal-save">${block._isNew ? "追加" : "保存"}</button>
       </div>
     </div>
   `;
@@ -14678,7 +14782,15 @@ document.addEventListener("keydown", (event) => {
     addWriteMeditationChipFromInput(event.target.id === "km-discharge-input" ? "discharge" : "charge", state.selectedDate);
     return;
   }
+  if (event.key === "Escape" && draftLeaveGuard.active) {
+    if (_imeComposing || event.isComposing) return;
+    event.preventDefault();
+    draftLeaveGuard.resolve("stay");
+    return;
+  }
   if (event.key === "Escape" && state.modal) {
+    if (_imeComposing || event.isComposing) return;
+    event.preventDefault();
     closeFillGapAware();
   }
 });
@@ -14700,6 +14812,7 @@ function recordFeedbackFile(date) {
 
 async function pushReportToGitHub() {
   const date = state.selectedDate;
+  if (isArchivedDate(state, date)) return showToast(ARCHIVED_READONLY_MESSAGE);
   const report = state.reports[date];
   if (!report) {
     showToast("日報がまだ生成されていません");
@@ -14746,6 +14859,7 @@ async function pushFileToGitHub(filename, content, label, opts = {}) {
     } catch (e) {
       // 新規ファイル
     }
+    if (opts.isCurrent && !opts.isCurrent()) throw new Error("接続先が変わったため送信を中止しました");
     const response = await fetch(url, {
       method: "PUT",
       headers: githubHeaders(cfg.token),
@@ -14757,7 +14871,7 @@ async function pushFileToGitHub(filename, content, label, opts = {}) {
       })
     });
     if (!response.ok) {
-      throw new Error(await gitHubErrorMessage(response));
+      throw new Error(await gitHubErrorMessage(response, opts.isCurrent));
     }
     if (!opts.silent) showToast(`📤 ${label} をGitHubへpushしました`);
     return { ok: true };
@@ -15148,6 +15262,7 @@ if (window.matchMedia) {
   // オーバーレイ⇔左列差し替えの表示形態を切り替える(state.modal自体はどちらでも同じ)。
   const _onWbsLayoutChange = () => {
     if (state.currentView === "exec" && state.modal?.type === "fillGap") {
+      captureFillGapLayoutInputs();
       const activeModal = state.modal;
       if (fillGapExecDesktop()) {
         // 左列へ差し替えるので、オーバーレイ側だけ畳む(closeModal()はstate.modalもnullにするため使わない)
@@ -15164,6 +15279,11 @@ if (window.matchMedia) {
   };
   if (_wbsDesktopMediaQuery.addEventListener) _wbsDesktopMediaQuery.addEventListener("change", _onWbsLayoutChange);
   else if (_wbsDesktopMediaQuery.addListener) _wbsDesktopMediaQuery.addListener(_onWbsLayoutChange);
+  // Exec layout also changes below 1280 when tablet landscape enters/leaves two panes.
+  const _execLandscapeMediaQuery = window.matchMedia("(min-width: 1024px) and (orientation: landscape)");
+  const _onExecLandscapeChange = () => { if (state.currentView === "exec" && !fillGapExecDesktop()) render(); };
+  if (_execLandscapeMediaQuery.addEventListener) _execLandscapeMediaQuery.addEventListener("change", _onExecLandscapeChange);
+  else if (_execLandscapeMediaQuery.addListener) _execLandscapeMediaQuery.addListener(_onExecLandscapeChange);
 }
 // v23/v41: 起動時に繰り返し Block を実体化(期間外・未編集は破棄)+ 日次オープン記録
 runDailyOpen({ force: true });
@@ -15188,5 +15308,11 @@ document.addEventListener("visibilitychange", () => {
   if (state.settings.autoSync) runAutoSyncPull();
   else if (runDailyOpen()) renderDeferringForFocus();
   setTimeout(maybeAutoArchive, 8000);        // v53: 同上
+  if(state.currentView === "ai-reports") feedbackReportOverlay?.refresh();
+  else if(state.currentView === "journal") feedbackUiController?.refresh();
   maybeRefreshFeedback();                    // v77: フォアグラウンド復帰時にAIフィードバック等を再fetch
 });
+
+
+
+

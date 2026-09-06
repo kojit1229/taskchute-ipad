@@ -402,7 +402,8 @@ async function verifyExistingFiltersAndSearch(page) {
     check(`${mode.name}: category絞り込みを維持`, await page.locator(`[data-wbs-row-id="${learn.id}"]`).count() === 1
       && await page.locator(`[data-wbs-row-id="${work.id}"]`).count() === 0);
 
-    await openViewMenu(page);
+    const viewMenu = page.locator("details.wbs-view-menu");
+    if (await viewMenu.evaluate(el => el.open)) await viewMenu.locator("summary").click();
     const input = page.locator("#wbs-search-input");
     await input.fill("検索対象");
     await page.waitForFunction((id) => document.querySelector(`[data-action="wbs-search-jump"][data-id="${id}"]`), openTask.id);

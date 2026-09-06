@@ -150,7 +150,7 @@ function check(name, condition, extra = "") {
     }));
     check("日本語見出し・併記・ジャーナルラベルを描画",
       todayHeadings.runway.includes("NOW LANDING") && todayHeadings.runway.includes("いま")
-      && todayHeadings.arrivals.includes("次の予定") && todayHeadings.arrivals.includes("本日")
+      && todayHeadings.arrivals === `今日の予定・実績 今日 ${TODAY}`
       && todayHeadings.log.includes("やったこと") && todayHeadings.log.includes("本日の終了実績")
       && todayHeadings.gate.includes("ルーティン") && todayHeadings.body.includes("からだのきろく")
       && todayHeadings.journal.includes("ジャーナル") && todayHeadings.journal.includes("本日")

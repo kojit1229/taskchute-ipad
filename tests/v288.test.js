@@ -76,8 +76,8 @@ async function search(page, query) {
   const input = page.locator("#wbs-search-input");
   await input.fill(query);
   await page.waitForFunction((q) => {
-    const results = document.querySelector("#wbs-search-results");
-    return results?.textContent.toLowerCase().includes(q.trim().toLowerCase());
+    const root = document.querySelector('[data-work-list="wbs"]');
+    return document.querySelector("#wbs-search-input")?.value === q && root?.dataset.workComposing !== "1";
   }, query);
 }
 
@@ -87,7 +87,7 @@ async function clickResult(page, id) {
 }
 
 async function verifySearchAndDebounce(page) {
-  console.log("[1] 検索: Project/Task部分一致・案内・0件・削除/XSS負例・上限50件");
+  console.log("[1] 検索: Project/Task部分一致・空検索・1文字・0件・削除/XSS負例・全51件");
   const p = project("p-search", "ALPHA案件");
   const tasks = [
     task("t-alpha", p.id, "alpha設計"),
@@ -98,9 +98,15 @@ async function verifySearchAndDebounce(page) {
     projects: [p, project("p-uncat", "危険<img src=x onerror=alert(1)>", { category: "" }),
       project("p-deleted", "削除済みProject", { deleted: true })], tasks
   });
-  check("初期案内は2文字以上", (await page.locator("#wbs-search-results").textContent()).trim() === "2文字以上で検索します。");
-  await page.locator("#wbs-search-input").fill("a");
-  await page.waitForFunction(() => document.querySelector("#wbs-search-results")?.textContent.trim() === "2文字以上で検索します。");
+  check("空検索は未削除Project/Taskを表示し、削除親の生Taskも保持する",
+    await page.locator("#wbs-search-input").inputValue() === ""
+    && await page.locator('#wbs-search-results [data-work-key="project:p-search"]').count() === 1
+    && await page.locator('#wbs-search-results [data-work-key="project:p-uncat"]').count() === 1
+    && await page.locator('#wbs-search-results [data-work-key="task:t-alpha"]').count() === 1
+    && await page.locator('#wbs-search-results [data-work-key="task:t-live-under-deleted"]').count() === 1
+    && await page.locator('#wbs-search-results [data-work-key="project:p-deleted"], #wbs-search-results [data-work-key="task:t-deleted"]').count() === 0);
+  await search(page, "設");
+  check("1文字でも一致Taskだけを表示する", JSON.stringify(await page.locator('#wbs-search-results [data-work-key]').evaluateAll(rows => rows.map(row => row.dataset.workKey))) === JSON.stringify(["task:t-alpha"]));
 
   await search(page, "alpha");
   const alphaRows = await page.$$eval('[data-action="wbs-search-jump"]', (rows) => rows.map((row) => ({
@@ -119,18 +125,27 @@ async function verifySearchAndDebounce(page) {
     && (await page.locator('[data-id="p-uncat"] .search-snippet').textContent()).includes("<img")
     && await page.locator('[data-id="p-uncat"] .search-date').textContent() === "未分類");
   await search(page, "削除");
-  check("削除Project/Taskと削除Project配下Taskはヒットしない",
-    await page.locator('[data-action="wbs-search-jump"]').count() === 0
-    && (await page.locator("#wbs-search-results").textContent()).includes("一致するものはありません"));
+  check("削除Project/Taskは除外し、削除親の生Taskは全件検索に残す",
+    JSON.stringify(await page.locator('#wbs-search-results [data-work-key]').evaluateAll(rows => rows.map(row => row.dataset.workKey))) === JSON.stringify(["task:t-live-under-deleted"])
+    && await page.locator('[data-action="wbs-search-jump"]').count() === 0);
   await search(page, "存在しない");
-  check("0件メッセージは入力値を表示", (await page.locator("#wbs-search-results").textContent()).includes("「存在しない」に一致するものはありません。"));
+  check("0件案内と検索入力値を保ち、結果を作らない",
+    (await page.locator("#wbs-search-results").textContent()).trim() === "条件に一致する項目はありません。"
+    && await page.locator("#wbs-search-input").inputValue() === "存在しない"
+    && await page.locator('#wbs-search-results [data-work-key]').count() === 0);
 
   await seed(page, { projects: Array.from({ length: 51 }, (_, index) => project(`p-limit-${index}`, `上限対象${String(index).padStart(2, "0")}`)) });
+  const expectedSearchTotal = await page.evaluate((key) => {
+    const stored = JSON.parse(localStorage.getItem(key));
+    return [...stored.projects, ...stored.tasks].filter(item => !item.deleted).length;
+  }, STATE_KEY);
   await search(page, "上限");
-  check("51件中上位50件だけ表示", await page.locator('[data-action="wbs-search-jump"]').count() === 50
-    && (await page.locator("#wbs-search-results > .muted").textContent()).trim() === "51件(上位50件を表示)");
+  check("51件を打ち切らず元順で全件表示し件数も一致",
+    JSON.stringify(await page.locator('#wbs-search-results [data-work-key]').evaluateAll(rows => rows.map(row => row.dataset.workKey))) === JSON.stringify(Array.from({ length: 51 }, (_, index) => "project:p-limit-" + index))
+    && await page.locator('[data-action="wbs-search-jump"]').count() === 51
+    && (await page.locator('[data-work-list="wbs"] .work-list-count').textContent()).trim() === "51 / " + expectedSearchTotal + "件 ・ 全件スクロール");
 
-  console.log("[2] 150msデバウンスは結果だけを差分更新し、focus/IME相当のinput同一性を維持");
+  console.log("[2] 入力は結果だけを差分更新し、focus/IME相当のinput同一性を維持");
   await seed(page, { projects: [project("p-focus", "連続入力検索対象")] });
   await page.evaluate(() => {
     const input = document.querySelector("#wbs-search-input");

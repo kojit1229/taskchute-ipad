@@ -105,7 +105,9 @@ function block(id, date, start, end, completed, charge = 0, discharge = 0) {
     await seed();
 
     console.log("[1] 全種別と節のDOM順");
-    check("本文キャッシュ無しでは一覧に日誌があってもMONEY節を省略", await page.locator('[data-journal-section="money"]').count() === 0);
+    check("MONEYは未取得でも両者名と同日の閲覧導線を表示", await page.locator('[data-fund-money][data-date="' + TODAY + '"] .fund-money-summary').count() === 2
+      && (await page.locator('[data-fund-money] h4').allTextContents()).join('|') === `FABLE FUND ${TODAY}|CODEX FUND ${TODAY}`
+      && await page.locator('[data-fund-money] [data-action="fund-report-open"][data-date="' + TODAY + '"]').count() === 2);
     await page.locator('[data-action="nav"][data-view="ai-reports"]').first().evaluate((button) => button.click());
     await page.waitForSelector(`[data-report-file="FABLE FUND日誌_${TODAY}.md"][data-report-loaded="1"]`);
     await page.locator('[data-action="nav"][data-view="journal"]').first().evaluate((button) => button.click());
@@ -117,7 +119,11 @@ function block(id, date, start, end, completed, charge = 0, discharge = 0) {
     check("筋トレ2セット・身体スキャン集計・健康日次・睡眠・書く瞑想・お店が同じ日付ページにある",
       ["スクワット", "ベンチプレス", "疲労Σ5・回復Σ5・2件", "歩数 8,000", "前夜の睡眠", "疲れ", "テスト書店"].every((text) => journalText.includes(text)), journalText);
     check("FLIGHT LOGは終了実績3件だけ", await page.locator(".journal-flight-row").count() === 3);
-    check("MONEYは取得済み本文の見出し記号を除いた先頭60字だけ表示", (await page.locator('[data-journal-section="money"] > .fold-body').textContent()).trim() === FUND_SUMMARY_60);
+    check("MONEYはFABLEの取得済み本文だけ先頭60字を表示しCODEXへ混ぜない", (await page.locator('.fund-money-summary').first().locator('p').allTextContents()).includes(FUND_SUMMARY_60)
+      && !(await page.locator('.fund-money-summary').first().textContent()).includes('切り捨て対象')
+      && !(await page.locator('.fund-money-summary').first().textContent()).includes('2行目')
+      && !(await page.locator('.fund-money-summary').nth(1).textContent()).includes(FUND_SUMMARY_60)
+      && await page.locator('.fund-money-summary').nth(1).locator('[data-engine="codex"][data-date="' + TODAY + '"]').count() === 1);
     check("日報ボタン群はJOURNAL LOG節の先頭", await page.locator('[data-journal-section="journal"] > .fold-body > .row [data-action="generate-report"]').count() === 1);
     check("新設3節は既定open", await page.locator('[data-journal-section="body"][open], [data-journal-section="flight"][open], [data-journal-section="money"][open]').count() === 3);
     for (const section of ["body", "flight", "money"]) await page.locator(`[data-journal-section="${section}"] > summary`).click();
@@ -182,7 +188,10 @@ function block(id, date, start, end, completed, charge = 0, discharge = 0) {
     await page.click('[data-action="date-prev"]');
     check("前日は前日の完了Blockだけ", await page.locator(".journal-flight-row").count() === 1 && (await page.locator(".journal-flight-row").textContent()).includes("prev-done"));
     check("前日健康行がある時だけ前日値", (await page.locator('[data-journal-section="morning"] .bm-health').textContent()).includes("歩数 7,000"));
-    check("FUND日誌が無い過去日はMONEY節ごと省略", await page.locator('[data-journal-section="money"]').count() === 0);
+    check("FUND日誌が無い過去日は両者の同日案内を残し今日本文を代用しない", await page.locator('[data-fund-money][data-date="' + PREV + '"] .fund-money-summary').count() === 2
+      && (await page.locator('[data-fund-money] h4').allTextContents()).join('|') === `FABLE FUND ${PREV}|CODEX FUND ${PREV}`
+      && !(await page.locator('[data-fund-money]').textContent()).includes(FUND_SUMMARY_60)
+      && await page.locator('[data-fund-money] [data-action="fund-report-open"][data-date="' + PREV + '"]').count() === 2);
     await page.click('[data-action="date-prev"]');
     check("同日健康行が無い過去日は健康日次を省略", await page.locator('[data-journal-section="morning"] .bm-health').count() === 0);
     check("stateに無い過去日のBlockはFLIGHT LOG節ごと省略", await page.locator('[data-journal-section="flight"]').count() === 0);

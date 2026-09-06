@@ -14,6 +14,9 @@ const stylesSource = fs.readFileSync(path.join(ROOT, "styles.css"), "utf8");
 const swSource = fs.readFileSync(path.join(ROOT, "sw.js"), "utf8");
 const maxRelease = Math.max(...fs.readdirSync(path.join(ROOT, "releases"))
   .map((file) => /^v(\d+)\.json$/.exec(file)?.[1]).filter(Boolean).map(Number));
+const importedNames = require("acorn").parse(appSource, {ecmaVersion:"latest",sourceType:"module"}).body
+  .filter(node => node.type === "ImportDeclaration")
+  .flatMap(node => node.specifiers.filter(item => item.type === "ImportSpecifier").map(item => item.imported.name));
 let failures = 0;
 
 function check(name, condition, extra = "") {
@@ -46,8 +49,8 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
 
 (async () => {
   console.log("[1] 静的契約・import実測・iOS/SW/CSSガード");
-  check("weeklyScore importは既存1件だけで、selectTrackFooterを1件追加", countMatches(appSource.slice(0, 800), /\bweeklyScore\b/g) === 1
-    && countMatches(appSource.slice(0, 800), /\bselectTrackFooter\b/g) === 1);
+  check("weeklyScore importは既存1件だけで、selectTrackFooterを1件追加", importedNames.filter(name => name === "weeklyScore").length === 1
+    && importedNames.filter(name => name === "selectTrackFooter").length === 1);
   check("toggleTwyScoreExpanded import/呼出とaction登録は重複なし", countMatches(appSource, /\btoggleTwyScoreExpanded\b/g) === 2
     && countMatches(appSource, /"twy-score-toggle"\s*:/g) === 1);
   check("表示トグルはsaveState/generateReportを呼ばずrenderだけ", /"twy-score-toggle"\s*:\s*\(\)\s*=>\s*\{\s*toggleTwyScoreExpanded\(\);\s*render\(\);\s*\}/.test(appSource));

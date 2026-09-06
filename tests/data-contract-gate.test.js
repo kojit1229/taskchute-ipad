@@ -133,10 +133,10 @@ console.log("[7] loop/ディレクトリ自体が無いケース(追補指摘2):
 console.log("[8] 実運用の契約表(CONTRACT)を本物のscripts/data-contract-gate.js require結果で確認");
 {
   const { CONTRACT } = require("../scripts/data-contract-gate.js");
-  check("CONTRACTに3エントリ(health/ai-insights/fund参考)", CONTRACT.length === 3, CONTRACT.length);
+  check("CONTRACTに6エントリ(health/ai-insights/FUND4source)", CONTRACT.length === 6, CONTRACT.length);
   check("health-dailyの実配置パスがtaskchute/前置なし", CONTRACT.some((e) => e.resolvedPath === "karada/health-daily.json"));
   check("ai-insightsの実配置パスがdashboard/配下", CONTRACT.some((e) => e.resolvedPath === "taskchute/dashboard/ai-insights.json"));
-  check("全エントリにconsumerSnippetがある((c)検査の対象)", CONTRACT.every((e) => typeof e.consumerSnippet === "string" && e.consumerSnippet.length > 0));
+  check("全エントリに文字列検査か実経路検査がある", CONTRACT.every((e) => (typeof e.consumerSnippet === "string" && e.consumerSnippet.length > 0) || e.consumerProbe === "fund"));
 }
 
 console.log("[9] 実物のapp.js/src/features/*.jsに対して本番CONTRACTをsourceRoot既定(引数省略)で実行 → (c)は全件一致");

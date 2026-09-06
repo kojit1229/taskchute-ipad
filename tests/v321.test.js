@@ -1,4 +1,4 @@
-// v321: Today TOWERのMITカード・ARRIVALS 6/8件・MIT星・空状態文言を固定する。
+// v321: Today TOWERのMITカード・当日一覧全件・MIT星・空状態文言を固定する。
 const {
   chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY
 } = require("./helpers");
@@ -132,7 +132,7 @@ function block(id, title, start, end, extra = {}) {
     check("LIFE表示切替は同期state非書込", await page.evaluate((key) => localStorage.getItem(key), STATE_KEY) === beforeLifeToggle
       && await changedStateWrites() === 0);
 
-    console.log("[3] ARRIVALSは末尾クランプし、390pxで6件・1280pxで8件");
+    console.log("[3] 当日一覧は390px/1280pxとも時刻順全件");
     const arrivalsFrom = (firstMinute) => Array.from({ length: 12 }, (_, index) => {
       const minute = firstMinute + index * 30;
       const hour = Math.floor(minute / 60);
@@ -142,25 +142,25 @@ function block(id, title, start, end, extra = {}) {
       const end = `${String(Math.floor(endMinute / 60)).padStart(2, "0")}:${String(endMinute % 60).padStart(2, "0")}`;
       return block(`arrival-${index}`, `予定${index + 1}`, start, end);
     });
-    const arrivalIds = () => page.locator(".tower-flight-row").evaluateAll((rows) => rows.map((row) => row.dataset.flightId));
+    const arrivalIds = () => page.locator('[data-work-list="today"] [data-work-key]').evaluateAll((rows) => rows.map((row) => row.dataset.workKey.replace(/^block:/, "")));
     await page.setViewportSize({ width: 390, height: 900 });
     await seed([
       block("past-1", "過去1", "06:00", "06:30"), block("past-2", "過去2", "07:00", "07:30"),
       block("past-3", "過去3", "08:00", "08:30"), block("past-4", "過去4", "09:00", "09:30")
     ]);
-    check("4便すべて過去でも4件全表示・さらに無し", await page.locator(".tower-flight-row").count() === 4
-      && (await page.locator("#towerArrivalSummary").textContent()).trim() === "");
+    check("4便すべて過去でも4件全表示・件数一致", await page.locator('[data-work-list="today"] [data-work-key]').count() === 4
+      && (await page.locator('[data-work-list="today"] .work-list-count').textContent()).trim() === "4 / 4件 ・ 全件スクロール");
     await seed(arrivalsFrom(10 * 60 + 30));
-    check("中心が先頭なら先頭6件+さらに6件", JSON.stringify(await arrivalIds()) === JSON.stringify(Array.from({ length: 6 }, (_, index) => `arrival-${index}`))
-      && (await page.locator("#towerArrivalSummary").textContent()).trim() === "さらに6件", JSON.stringify(await arrivalIds()));
+    check("現在時刻より後の12件も全件表示", JSON.stringify(await arrivalIds()) === JSON.stringify(Array.from({ length: 12 }, (_, index) => `arrival-${index}`))
+      && (await page.locator('[data-work-list="today"] .work-list-count').textContent()).trim() === "12 / 12件 ・ 全件スクロール", JSON.stringify(await arrivalIds()));
     await seed(arrivalsFrom(4 * 60));
-    check("中心が末尾なら末尾6件+さらに6件", JSON.stringify(await arrivalIds()) === JSON.stringify(Array.from({ length: 6 }, (_, index) => `arrival-${index + 6}`))
-      && (await page.locator("#towerArrivalSummary").textContent()).trim() === "さらに6件", JSON.stringify(await arrivalIds()));
+    check("現在時刻より前の12件も全件表示", JSON.stringify(await arrivalIds()) === JSON.stringify(Array.from({ length: 12 }, (_, index) => `arrival-${index}`))
+      && (await page.locator('[data-work-list="today"] .work-list-count').textContent()).trim() === "12 / 12件 ・ 全件スクロール", JSON.stringify(await arrivalIds()));
     await page.setViewportSize({ width: 1280, height: 900 });
-    await page.waitForFunction(() => document.querySelectorAll(".tower-flight-row").length === 8
-      && document.querySelector(".tower-flight-row")?.dataset.flightId === "arrival-4");
-    check("1280pxも末尾8件+さらに4件", JSON.stringify(await arrivalIds()) === JSON.stringify(Array.from({ length: 8 }, (_, index) => `arrival-${index + 4}`))
-      && (await page.locator("#towerArrivalSummary").textContent()).trim() === "さらに4件", JSON.stringify(await arrivalIds()));
+    await page.waitForFunction(() => document.querySelectorAll('[data-work-list="today"] [data-work-key]').length === 12
+      && document.querySelector('[data-work-list="today"] [data-work-key]')?.dataset.workKey === "block:arrival-0");
+    check("1280pxでも同じ12件を全件表示", JSON.stringify(await arrivalIds()) === JSON.stringify(Array.from({ length: 12 }, (_, index) => `arrival-${index}`))
+      && (await page.locator('[data-work-list="today"] .work-list-count').textContent()).trim() === "12 / 12件 ・ 全件スクロール", JSON.stringify(await arrivalIds()));
 
     console.log("[4] 次の予定・やったこと・NOW LANDINGへMIT★を復元する");
     await page.setViewportSize({ width: 390, height: 900 });
@@ -172,8 +172,9 @@ function block(id, title, start, end, extra = {}) {
       block("star-next", "予定MIT", "11:00", "11:30", { isMIT: true })
     ];
     await seed(starBlocks);
-    check("次の予定のMIT行に★", await page.locator('.tower-arrival-row[data-flight-id="star-next"] .mit-star').count() === 1);
+    check("次の予定のMIT行に★", await page.locator('[data-work-list="today"] [data-work-key="block:star-next"] .mit-star').count() === 1);
     check("やったことのMIT行に★", await page.locator('.tower-log-row[data-flight-id="star-done"] .mit-star').count() === 1);
+    check("今日の全件一覧の完了MIT行にも★", await page.locator('[data-work-list="today"] [data-work-key="block:star-done"] .mit-star').count() === 1);
     check("NOW LANDINGのMITタイトルに★", await page.locator('.tower-now-title[data-id="star-running"] .mit-star').count() === 1);
 
     console.log("[5] スキャン0件の健康行あり/なしで空状態文言を分ける");
@@ -186,8 +187,9 @@ function block(id, title, start, end, extra = {}) {
     console.log("[6][7] 予定0件HUD・390px横スクロール・pageerror・state非書込");
     await seed([]);
     const beforeDisplay = await page.evaluate((key) => localStorage.getItem(key), STATE_KEY);
-    check("予定0件は新HUD文言", (await page.locator('.tower-nowhud[data-status="empty"]').textContent()).trim()
+    check("予定0件は新HUD文言", (await page.locator('.tower-nowhud[data-status="empty"]').evaluate(el => [...el.childNodes].filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent).join(''))).trim()
       === "本日の予定はありません ─ タイムラインで追加できます");
+    check("予定0件は実行の追加操作を残す", await page.locator('.tower-nowhud[data-status="empty"] [data-action="nav"][data-view="exec"]').count() === 1);
     const widths = await page.evaluate(() => ({
       scrollWidth: document.documentElement.scrollWidth, viewportWidth: window.innerWidth
     }));
