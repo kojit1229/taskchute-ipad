@@ -147,6 +147,11 @@ function check(name, cond, extra = "") {
     await page.waitForSelector(`[data-action="edit-block"][data-id="${blocksForA2[0].id}"]`);
     await page.click(`[data-action="edit-block"][data-id="${blocksForA2[0].id}"]`);
     await page.waitForTimeout(200);
+    // v366追随: 🏁タスク完了トグルは頻度の低い項目として「詳細 ›」(既定閉)へ移設された。
+    await page.evaluate(() => {
+      const d = document.querySelector(".modal-card details.tower-fold");
+      if (d) d.open = true;
+    });
     await page.click(`.modal-card [data-action="toggle-task-complete"][data-id="${blocksForA2[0].id}"]`);
     await page.waitForTimeout(300);
     // v293追随: 新規完了(justCompleted)のため編集モーダルは身体スキャンモーダルへ

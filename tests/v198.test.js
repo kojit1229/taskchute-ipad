@@ -187,6 +187,9 @@ function check(name, cond, extra = "") {
       };
       await resetState({ tasks: [parent, kStep, aiStep], blocks: [block], view: "tasks" });
       await page.click(`[data-action="edit-block"][data-id="${block.id}"]`);
+      // v366追随: 🏁タスク完了トグルは頻度の低い項目として「詳細 ›」(既定閉)へ移設された。
+      await page.waitForSelector(".modal-card details.tower-fold", { state: "attached" });
+      await page.locator(".modal-card details.tower-fold").evaluate((el) => { el.open = true; });
       await page.click(`.modal-card [data-action="toggle-task-complete"][data-id="${block.id}"]`);
       // v293追随: toggleTaskCompleteFromBlock内ではmaybeQueueNextAiStep()(引き継ぎシートを開く)
       // →openBodyScanModal()(身体スキャンを開く)の順に同期呼び出しされる。どちらもrenderModal()で

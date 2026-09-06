@@ -486,6 +486,8 @@ function check(name, cond, extra = "") {
     await page.locator("[data-tower-arrival-select]").selectOption("complete-selected");
     await page.evaluate(() => document.activeElement.blur());
     await page.locator('.tower-now-title[data-id="complete-selected"]').click();
+    // v366追随: 完了済み(Block)は「詳細 ›」(既定閉)へ移設された。
+    await page.locator(".modal-card details.tower-fold").evaluate((el) => { el.open = true; });
     await page.locator('[data-modal-field="completed"]').check();
     await page.locator('.modal-card [data-action="modal-save"]').click();
     await page.waitForFunction(() => document.querySelector("[data-tower-arrival-select]")?.value === "complete-first");

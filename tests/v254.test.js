@@ -304,6 +304,9 @@ console.log("[0] 共通フック契約と全経路の機械検査");
     });
     await runCommittedCompletion("Block編集モーダル完了保存", "block-modal-route", false, 4, async () => {
       await clickAction("edit-block", { id: "block-modal-route" });
+      // v366追随: 完了済み(Block)チェックは頻度の低い項目として「詳細 ›」(既定閉)へ移設された。
+      await page.waitForSelector(".modal-card details.tower-fold", { state: "attached" });
+      await page.locator(".modal-card details.tower-fold").evaluate((el) => { el.open = true; });
       await page.locator('[data-modal-field="completed"]').check();
       await page.locator('[data-action="modal-save"]').click();
     });
@@ -469,6 +472,9 @@ console.log("[0] 共通フック契約と全経路の機械検査");
     console.log("[4] saveBlockFromModalの全正常保存出口");
     async function completeExistingModalExit(label, blockId, { recurrenceKind = "", expectedCharge = "" } = {}) {
       await clickAction("edit-block", { id: blockId });
+      // v366追随: 完了済み(Block)は「詳細 ›」(既定閉)へ移設。expectedChargeは繰り返し節に残る。
+      await page.waitForSelector(".modal-card details.tower-fold", { state: "attached" });
+      await page.locator(".modal-card details.tower-fold").evaluate((el) => { el.open = true; });
       await page.locator('[data-modal-field="completed"]').check();
       if (recurrenceKind) {
         await page.locator('[data-modal-field="recurrenceKind"]').selectOption(recurrenceKind);
@@ -486,6 +492,9 @@ console.log("[0] 共通フック契約と全経路の機械検査");
     await clickAction("timeline-new-block", { minute: "540" });
     await page.locator('[data-modal-field="title"]').fill("新規繰り返し出口_v254");
     await page.locator('[data-modal-field="taskId"]').selectOption("t1");
+    // v366追随: 完了済み(Block)は「詳細 ›」(既定閉)へ移設された。
+    await page.waitForSelector(".modal-card details.tower-fold", { state: "attached" });
+    await page.locator(".modal-card details.tower-fold").evaluate((el) => { el.open = true; });
     await page.locator('[data-modal-field="completed"]').check();
     await page.locator('[data-modal-field="recurrenceKind"]').selectOption("daily");
     await resetHookSpies();

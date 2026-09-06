@@ -174,6 +174,8 @@ async function openWbsRowMenuIfClosed(page, taskTitle) {
     await page.click('[data-action="edit-block"][data-id="block-lev1"]');
     await page.waitForTimeout(200);
     check("Block編集モーダルにレバレッジselectがある", await page.locator('[data-modal-field="leverageType"]').count() === 1);
+    // v366追随: レバレッジ種別は「詳細 ›」(既定閉)へ移設された。
+    await page.locator(".modal-card details.tower-fold").evaluate((el) => { el.open = true; });
     await page.selectOption('[data-modal-field="leverageType"]', "eliminate");
     await page.click('[data-action="modal-save"]');
     await page.waitForTimeout(300);

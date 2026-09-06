@@ -76,6 +76,14 @@ function check(name, cond, extra = "") {
     { KEY, TODAY, ruleId });
   }
 
+  // v366追随: completed/toggle-task-completeは頻度の低い項目として「詳細 ›」
+  // (既定閉、<details class="tower-fold">)へ移設された。操作前に開く。
+  // (streakFixedは監督者裁定2026-09-05で🔁繰り返し節へ戻ったため開く必要はない)
+  async function openBlockDetails() {
+    await page.waitForSelector(".modal-card details.tower-fold", { state: "attached" });
+    await page.locator(".modal-card details.tower-fold").evaluate((el) => { el.open = true; });
+  }
+
   async function checkCompletionLog(label, ruleId = "habit") {
     const log = await habitLog(ruleId);
     check(`${label}で当日ログを生成`, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(log?.doneAt || ""), JSON.stringify(log));
@@ -144,11 +152,13 @@ function check(name, cond, extra = "") {
     console.log("[4] 固定化UI: daily/weekdaysのみ表示し最大3件で静かに拒否");
     await seed([rule("toggle", "weekdays")], [block("toggle-block", "toggle", "固定化切替")]);
     await page.locator('[data-action="edit-block"][data-id="toggle-block"]').evaluate((element) => element.click());
+    await page.locator('[data-modal-field="streakFixed"]').waitFor();
     await page.locator('[data-modal-field="streakFixed"]').check();
     await page.locator('[data-action="modal-save"]').click();
     let toggled = await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).recurrences.find((item) => item.id === "toggle"), KEY);
     check("固定化時にstreakSinceへ今日を記録", toggled.streakSince === TODAY && toggled.updatedAt !== `${TODAY}T07:00`, JSON.stringify(toggled));
     await page.locator('[data-action="edit-block"][data-id="toggle-block"]').evaluate((element) => element.click());
+    await page.locator('[data-modal-field="streakFixed"]').waitFor();
     await page.locator('[data-modal-field="streakFixed"]').uncheck();
     await page.locator('[data-action="modal-save"]').click();
     toggled = await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).recurrences.find((item) => item.id === "toggle"), KEY);
@@ -180,6 +190,7 @@ function check(name, cond, extra = "") {
     await page.locator('[data-action="timeline-mode"][data-mode="actual"]').click();
     await page.waitForSelector('[data-action="edit-block"][data-id="habit-block"]');
     await page.locator('[data-action="edit-block"][data-id="habit-block"]').evaluate((element) => element.click());
+    await openBlockDetails();
     await page.locator('[data-modal-field="completed"]').uncheck();
     await page.locator('[data-action="modal-save"]').click();
     await page.waitForFunction(({ KEY, TODAY }) => !JSON.parse(localStorage.getItem(KEY)).habitStreaks?.habit?.logs?.[TODAY], { KEY, TODAY });
@@ -195,6 +206,7 @@ function check(name, cond, extra = "") {
       }]
     });
     await page.locator('[data-action="edit-block"][data-id="task-block"]').evaluate((element) => element.click());
+    await openBlockDetails();
     await page.locator('[data-action="toggle-task-complete"][data-id="task-block"]').click();
     await checkCompletionLog("toggleTaskCompleteFromBlock");
 
@@ -219,6 +231,7 @@ function check(name, cond, extra = "") {
 
     await seed(habitRule(), [block("modal-block", "habit", "編集保存で完了")]);
     await page.locator('[data-action="edit-block"][data-id="modal-block"]').evaluate((element) => element.click());
+    await openBlockDetails();
     await page.locator('[data-modal-field="completed"]').check();
     await page.locator('[data-action="modal-save"]').click();
     await checkCompletionLog("saveBlockFromModal完了保存");

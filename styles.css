@@ -1709,6 +1709,38 @@ h3 {
   letter-spacing: .04em;
   color: var(--muted);
 }
+/* v366: 頻度の低い項目(レバレッジ種別・完了済み(Block)・🏁タスク完了)の
+   「詳細 ›」折りたたみ(既定閉・非永続)。.tower-sectionと違いborder-bottomは持たない。 */
+/* v366: 狭幅では日時入力の固有幅を確保し、終了欄の横はみ出しを防ぐ。 */
+@media (max-width: 480px) {
+  .tower-sheet .block-time-row { grid-template-columns: minmax(0, 1fr); }
+}
+.tower-sheet details.tower-fold {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+/* 既存の.fold規約(styles.css内「共有の折りたたみカード」)に合わせ、displayは<details>自身
+   ではなく中身のラッパー(.tower-fold-body)へ当てる。マーカー非表示もWebKit向けの
+   ::-webkit-details-marker(iOS Safariが実際に解釈する擬似要素)を使う(::markerはWebKit未対応)。*/
+.tower-sheet details.tower-fold summary {
+  cursor: pointer;
+  list-style: none;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+}
+.tower-sheet details.tower-fold summary::-webkit-details-marker { display: none; }
+.tower-sheet details.tower-fold[open] summary { margin-bottom: 10px; }
+.tower-sheet .tower-fold-body { display: grid; gap: 10px; }
+/* v366: 見積チップ(15/25/40/60分)。選択中は.activeで強調。 */
+.tower-sheet .estimate-chip.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
 
 /* v258: Projectモーダル内12WYトラック登録フォーム。 */
 .twy-track-section { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }

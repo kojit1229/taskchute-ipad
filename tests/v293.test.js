@@ -137,11 +137,10 @@ function check(name, cond, extra = "") {
       button.click();
     }, { action, dataset });
   }
-  // 実UI由来のdata-action要素(app.js/src/features/*.jsが実際に描画したもの)を、
-  // 要素自身の.click()経由でクリックする(座標クリックでの重なり誤爆を避けるための
-  // 既存踏襲パターン。v252/v278等と同じ考え方)。
+  // v366 fix3: 起動後の再描画で取得済み要素がdetachされると、evaluate(el.click())は
+  // documentのイベント委譲へ届かず無操作になる。通常clickで再取得・操作可能性確認を行う。
   async function clickReal(selector) {
-    await page.locator(selector).evaluate((el) => el.click());
+    await page.locator(selector).click();
   }
   // v295(2026-08-29、身体スキャン2軸化): 2ステップ(疲労→部位)モーダルが1シート
   // (疲労+回復+部位チップ+コメント欄)へ再構成されたため、モーダルタイトルは
@@ -185,6 +184,11 @@ function check(name, cond, extra = "") {
       tasks: [makeTask("t2")]
     });
     await clickAction("edit-block", { id: "r2" });  // モーダルを開く導線自体はこの接続点の対象外
+    // v366追随: 🏁は「詳細 ›」(既定閉)へ移設された。他の実操作系テストと同じく、
+    // 実際に開いてから可視性を確認してクリックする(非表示要素への直接クリックは
+    // ユーザーが辿れない経路になるため避ける)。
+    await page.locator('[data-action="toggle-task-complete"][data-id="r2"]').waitFor({ state: "attached" });
+    await page.locator(".modal-card details.tower-fold").evaluate((el) => { el.open = true; });
     await page.locator('[data-action="toggle-task-complete"][data-id="r2"]').waitFor();
     await clickReal('[data-action="toggle-task-complete"][data-id="r2"]');
     await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor();
@@ -198,6 +202,9 @@ function check(name, cond, extra = "") {
     console.log("[3] Block編集モーダルの「完了」チェック保存で開く(モーダルの掛け替えが正しい順序で起きる)");
     await seed({ blocks: [makeBlock({ id: "r3", title: "対象3", startMin: 11 * 60 })] });
     await clickAction("edit-block", { id: "r3" });
+    // v366追随: 完了済み(Block)は「詳細 ›」(既定閉)へ移設された。開いてから可視性を確認する。
+    await page.locator('[data-modal-field="completed"]').waitFor({ state: "attached" });
+    await page.locator(".modal-card details.tower-fold").evaluate((el) => { el.open = true; });
     await page.locator('[data-modal-field="completed"]').waitFor();
     await page.locator('[data-modal-field="completed"]').check();
     await page.locator('[data-action="modal-save"]').click();
@@ -388,7 +395,7 @@ function check(name, cond, extra = "") {
     }, { KEY, blocks: [makeBlock({ id: "r11", title: "対象11", startMin: 9 * 60 })], TODAY });
     await narrowPage.reload();
     await narrowPage.waitForSelector('#app[data-view="timeline"]');
-    await narrowPage.locator('[data-action="toggle-block"][data-id="r11"]').evaluate((el) => el.click());
+    await narrowPage.locator('[data-action="toggle-block"][data-id="r11"]').click();
     await narrowPage.locator(".modal-title", { hasText: "身体スキャン" }).waitFor();
     check("390px幅でも身体スキャンモーダル(疲労)が開く",
       await narrowPage.locator(".modal-title", { hasText: "身体スキャン" }).count() === 1);

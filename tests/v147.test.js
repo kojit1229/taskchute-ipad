@@ -197,6 +197,11 @@ function check(name, cond, extra = "") {
     check(".lev-helperはdetails要素で既定closed", await levHelper.evaluate((el) => el.open) === false);
     const levSummaryUnjudged = await levHelper.locator("summary").textContent();
     check("未判定時のsummaryは招待文", levSummaryUnjudged.includes("10秒で判定する"), levSummaryUnjudged);
+    // v366追随: レバレッジ種別selectは頻度の低い項目として「詳細 ›」(既定閉)へ移設された。
+    await page.evaluate(() => {
+      const d = document.querySelector(".modal-card details.tower-fold");
+      if (d) d.open = true;
+    });
     await page.selectOption('.modal-card [data-modal-field="leverageType"]', "asset");
     await page.click('[data-action="modal-save"]');
     await page.waitForTimeout(200);

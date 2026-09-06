@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v365";  // v365: 12WY タブ R2(PLAN 面: 連動図5ノード+12週グリッド、土曜丸め、開始前は当週なし)
+const CACHE_NAME = "taskchute-journal-pwa-v366";  // v366: Block 編集シート残り(見積チップ・明日へ/来週へ・詳細折りたたみ・planned 追従・狭幅1列化)
 // v353: 12WY R0 task.twyPlan のデータ契約+plan.js 純関数+Task編集モーダル3項目
 // v334: 実行タブPC 2ペイン(§B。ナビ統合§Cは持ち越し)
 // v333: 実行ラッパー(計画/実績切替)・モバイルナビ4項目
@@ -339,7 +339,6 @@ const APP_SHELL = [
   "./src/features/track-ui.js",
   "./src/features/wish.js",
   "./src/features/fund.js",
-  "./src/features/twelve-week.js",
   "./src/features/health.js",
   "./src/state/feedback-cache.js",
   "./src/state/fund-cache.js",

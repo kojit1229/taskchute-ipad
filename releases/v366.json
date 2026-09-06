@@ -1,0 +1,85 @@
+{
+  "version": 366,
+  "date": "2026-09-06",
+  "title": "Block 編集シート(残り): 見積チップ・明日へ/来週へ・詳細折りたたみ",
+  "summary": "Block編集シートに見積チップ15/25/40/60分と「明日へ」「来週へ」を追加。明日へは今日+1日、来週へは今日+7日を設定し、plannedStartAt/plannedEndAtの日付部も移動先へ追従、時刻は維持する。チップと日付変更は保存前にはstate/永続値へ反映せず、既存modal-saveで保存する。詳細(既定閉・開閉非永続)へ移すのはレバレッジ種別・完了済み(Block)・タスク完了の3項目のみ。シリーズ設定の新規/既存分岐、固定化・既定充放電・アンカーは繰り返し節に残す。",
+  "changedFiles": [
+    "CHANGES_v366.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v366.json",
+    "styles.css",
+    "tests/action-registry-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/tower-core.test.js",
+    "tests/v107.test.js",
+    "tests/v108.test.js",
+    "tests/v112.test.js",
+    "tests/v147.test.js",
+    "tests/v198.test.js",
+    "tests/v252.test.js",
+    "tests/v254.test.js",
+    "tests/v267.test.js",
+    "tests/v280.test.js",
+    "tests/v293.test.js",
+    "tests/v359.test.js",
+    "tests/v366.test.js",
+    "tests/v65.test.js",
+    "sw.js"
+  ],
+  "intent": [
+    "v359で「実行コード200行予算」超過のため持ち越した3項目(見積チップ・明日へ/来週へ・詳細折りたたみ)を実装し、K確定モック(BlockEditSheet.png)の最終形に近づける。",
+    "高頻度の入力を維持し、レバレッジ種別・完了済み(Block)・タスク完了のみ詳細へまとめる。シリーズ設定は繰り返し節で操作できる状態を維持する。"
+  ],
+  "changes": [
+    "app.js: buildBlockModal()の時間節に見積チップ4つ(15/25/40/60分、[15,25,40,60].map()で生成)を追加。日付フィールドの下に「明日へ」「来週へ」ボタン(field-row内)を追加。",
+    "app.js: leverageType・completed・taskCompleteHTMLをメモ節後のdetails.tower-foldへ移動(既定閉・data-fold-idなし)。繰り返し節はliveRuleの有無による両分岐と、固定化・既定充放電・アンカーを維持する。",
+    "app.js: estimate-chipは見積入力と選択表示を更新。block-date-shiftはtodayISO()+1/+7をdateへ設定し、plannedStartAt/plannedEndAtの日付部も同じ移動先へ変更する(時刻維持、実績は据え置き)。保存前はmodal DOMのみ変更し、保存は既存modal-save経由。手入力時のチップ表示同期も追加。",
+    "styles.css: .tower-sheet details.tower-fold(区切り線・開いた時のgridレイアウト)・.tower-sheet .estimate-chip.active(選択中チップの強調)を追加。既存.tower-section/.modal-card系のCSSは変更していない。 fix2: 390px実測で日時入力の横はみ出しを検出したため、480px以下のBlock予定/実績日時行のみ1列にして入力幅を確保する。",
+    "tests: v363で4種チップの値・排他選択・保存済み見積の初期選択、今日基準の日付移動・planned追従、保存前の実state/全localStorage不変、キャンセル再表示の復元、詳細開閉・再表示の非永続性を検証。390/1280pxの詳細開閉両状態でページとmodal-bodyの横幅・入力/ボタン境界を実測する。v359節所属pinとaction登録契約を維持。詳細内項目を触る既存テストは展開を維持し、繰り返し節の固定化を触るv278の不要な展開のみ削除。"
+  ],
+  "uncertainties": [
+    "fix3: v293は切り離されたDOMへのevaluate(el.click())がdocumentのイベント委譲へ届かないテスト手順の競合を確認し、通常のlocator.click()へ修正。単独2回と指定6スイート束はPASS。独立レビュー・iOS Safari実機・監督者担当のリリース生成物確認は未完了。",
+    "監督者実測(2026-09-06、main f9d70a4): v252 と tower-core:343/344 は main でも失敗(既存赤、v118 も同様)。Claude 再検証(review-v363-claude-a3.md)では起点 b6be5c6 で緑、worktree で tower-core が 7回中3回失敗=原因未特定(製品差分に再描画追加なし)。today-core:1345 / tower-core:683/695 は負荷 flake 扱い。",
+    "plannedStartAt/plannedEndAtの日付部はどちらも移動先の日付へ置換する既存carryOverBlock規約。日跨ぎの翌日差を保持する仕様変更は含まない。",
+    "前回報告のv198起点失敗は今回再検証していない。",
+    "見積を「25.0」のように小数表記で手入力すると文字列比較でチップ選択が外れる(保存値には影響なし。Codex review-v363-codex2.md low、後続版で数値比較へ)。"
+  ],
+  "reviewFocus": [
+    "詳細はleverageType/completed/taskCompleteHTMLの3項目のみで、シリーズ設定・固定化・既定充放電・アンカーは繰り返し節に残ること。",
+    "繰り返し節の新規/既存シリーズ選択肢がliveRuleの有無により排他表示されること。",
+    "明日へ=今日+1・来週へ=今日+7、planned日付追従と時刻維持。保存前の実state/永続値不変とキャンセル復元を確認すること。",
+    "見積チップ4種の値・排他選択・初期選択、詳細開閉の非永続性、390/1280px開閉両状態のmodal-body横幅と入力/ボタン境界を検証すること。"
+  ],
+  "verification": [
+    "fix3: CHROME_PATH=C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe。node tests/run-all.js v366 v293 v359 v278 v254 action-registry-core は6/6 PASS・exit 0。v366の390/1280px詳細開閉両状態で横はみ出しなし、pageerror 0。",
+    "fix3: npm.cmd run test:manifest:write → node scripts/test-manifest.js --check は228 suitesでPASS。npm.cmd run code:index:write → node scripts/code-index.js --check は658 functionsでPASS。製品追加差分0行、テスト追加差分4追加/5削除。報告はworktree直下v366-fix3-report.md。コミット・pushなし。",
+    "fix3: f9d70a4とのソース比較、全ケースへのクリック前後観測、[8]/[9]の集中反復で切り分け。[9] r9cのクリック直前isConnected=falseと身体スキャン待ち30000ms失敗を観測。完了・一括承認・身体スキャン主要5関数は比較元と一致し、Blockタイトルとtower-sheetも既存。v366の項目移動による製品回帰ではなく、再描画に耐えないクリック手順と判断した。",
+    "fix3: node tests/run-all.js v293 を単独2回実行し、双方ALL PASS・exit 0。30個のcheckと既存state/モーダル待機条件は維持。修正前単独は[9]で進行停止しrunner180秒上限で失敗。観測付き全ケースは全assert成功・exit 0。以下はfix2時点の履歴。",
+    "fix2: node --check app.jsおよび変更テストの構文検査、git diff --check、release JSON必須項目の非空検査はPASS。",
+    "M-4の変異検証: 正常ソース0失敗、終端消失2失敗、日付ハンドラ消失2失敗、文字列Date混入1失敗。空範囲で検査が無効になる穴を検出する。",
+    "v366初回単独は390pxの横はみ出しで4件失敗。日時行を480px以下で1列化し、修正後は390/1280pxの詳細開閉両状態でmodal-bodyが350/350px・560/560px、入力/ボタン左右境界もPASS。修正途中の単独には全assert成功後のrunner180秒タイムアウトも記録された。",
+    "最終コードのrun-all単独2回: v293は1回目324行のr8.completed待ちで30000msタイムアウト、2回目成功。v366は1回目成功、2回目全assert成功の表示があるがrunner180秒タイムアウトで失敗。成功扱いにはしていない。",
+    "node tests/run-all.js v366 v293 v359 v278 v254 action-registry-core: 2回ともv293のみ失敗、他5本成功。v293は1回目343行の身体スキャン表示待ち、2回目324行のr8.completed待ちで各30000msタイムアウト。",
+    "node tests/run-all.js tower-core today-core v107 v108 v252: 1回目today-core/tower-core/v252が失敗、2回目tower-coreのみ失敗。v107/v108は2回とも成功。today-coreは1345行journal表示待ちとrunner180秒、tower-coreは343/344行フォーカス保持assert、v252はcompletePomodoro当日ログnull・234行details待ちとrunner180秒。",
+    "直接実行(node tests/<suite>.test.js)で各2回再確認: v366は2回成功、v293は336行/343行の身体スキャン表示待ちで2回失敗。today-coreは成功/1345行journal表示待ち失敗。tower-coreは2回とも343/344行失敗、1回目のみ683/695行の演出assertも失敗。v252は170行streakFixed表示待ち/225行report-skipクリック待ちで2回失敗。セレクタ待ちは各30000ms。",
+    "CHROME_PATH=C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe。各呼出しtimeoutは600000ms設定。5スイート束1回目は実測702.6秒、outer timeout例外なしで失敗終了(理由未特定)。実測時間・全ログはv366-fix2-report.mdおよび.tmp/v366-fix2に記録。",
+    "実行コード差分はgit diff --stat -- app.js src styles.cssで96追加/19削除、計115行。SW・manifest・code-index・release-record生成/検査・着地時採番は監督者担当。コミット・pushなし。",
+    "監督者(2026-09-06): node tests/run-all.js v366(旧v363) v293 v359 v278 v254 action-registry-core → 6スイート全通過。v293 は main で PASS・worktree で FAIL だった回帰を fix3(テスト手順を locator.click() へ)で解消。",
+    "レビュー: Claude reviewer 3回(review-v363-claude-a/a2/a3.md、最終=条件付き合格・medium は記録のみ)、Codex 2回(review-v363-codex.md FAIL → codex2 条件付き合格・low 1)。版番号は着地順で v363→v366(発注時番号は v363)。"
+  ],
+  "notes": [
+    "Codex利用上限のため実装はimplementer(Claude)。",
+    "コミット不要・push禁止の指示どおり、本worktreeでは変更を作業ツリーに留めている。",
+    "2026-09-05: review-v363-claude-a.md/-b.mdの2系統レビュー指摘(H-1/M-1〜M-6、B-M1〜B-M4、L-1/L-6)を監督者裁定どおり修正。",
+    "2026-09-06: fix2はCodexがreview-v363-claude-a2.mdとreview-v363-codex.mdの統合指摘を対応。コミット・pushなし。",
+    "版番号は着地順(発注時 v363、着地 v366)。レビューファイル名は review-v363-* のまま。"
+  ],
+  "knownLimitations": [
+    "fix3でv293のクリック競合を修正。対象外の既存赤・負荷flakeと過去の失敗履歴はuncertainties/verificationを参照。",
+    "v198の起点b6be5c6での失敗は前回報告の記録であり、fix2では再実行していない。",
+    "詳細はレバレッジ種別・完了済み(Block)・タスク完了の3項目。シリーズ設定・固定化・既定充放電・アンカーは繰り返し節に残す。"
+  ]
+}

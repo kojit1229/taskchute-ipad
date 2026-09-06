@@ -152,6 +152,8 @@ const GOLDEN_CLICK_ACTIONS = [
   "twy-add-item", "twy-add-item-confirm", "twy-add-item-cancel",
   "modal-close", "modal-save", "modal-delete",
   "lev-judge",
+  // v366: 見積チップ・日付シフト(明日へ/来週へ)
+  "estimate-chip", "block-date-shift",
   "vision-section", "vision-board-tab", "vision-board-load",
   "vision-board-load-images", "vision-board-retry-images",
   "open-md-in-github", "reload-md", "ai-report-type", "ai-report-open-unread", "ai-report-refresh",
@@ -315,6 +317,8 @@ const APP_JS_REGISTERED_ACTIONS = [
   "twy-add-item", "twy-add-item-confirm", "twy-add-item-cancel",
   // --- v178: モーダル起動系(3、modal-saveはreturn意味論のためif連鎖に残置) ---
   "modal-close", "modal-delete", "lev-judge",
+  // --- v366: 見積チップ・日付シフト(明日へ/来週へ、2) ---
+  "estimate-chip", "block-date-shift",
   // --- v179: ビジョンボード(5。open-vision-boardはv291孤児掃除で削除) ---
   "vision-section", "vision-board-tab", "vision-board-load",
   "vision-board-load-images", "vision-board-retry-images",

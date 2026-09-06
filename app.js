@@ -888,6 +888,28 @@ registerActions({
       select.value = checkedCount >= 2 ? "asset" : "";
       showToast(checkedCount >= 2 ? "⚙ 「資産」を提案しました(保存で反映)" : "迷うなら未設定のままでOK");
     }
+  },
+  // v366: 見積チップ・日付シフト(明日へ/来週へ)。いずれもmodal DOMを直接書き換えるだけの
+  // 非永続UI操作で、実際の保存は既存modal-save(saveBlockFromModal)経由のまま変えない。
+  "estimate-chip": ({ target }) => {
+    const card = target.closest(".modal-card");
+    const input = card?.querySelector('[data-modal-field="estimateMin"]');
+    if (input) input.value = target.dataset.min || "";
+    card?.querySelectorAll(".estimate-chip").forEach((btn) => btn.classList.toggle("active", btn === target));
+  },
+  // 「明日へ」「来週へ」は表示中Blockの日付ではなく、既存postponeBlockToNextDay/
+  // carryOverBlockと同じ基準(todayISO()+N日)で計算する(ラベルの意味と一致させる)。
+  // plannedStartAt/plannedEndAtの日付部も、既存carryOverBlockのshift規約
+  // (`${toDate}${dt.slice(10)}`、時刻HH:mmは維持)に合わせて追従させる。
+  "block-date-shift": ({ target }) => {
+    const card = target.closest(".modal-card");
+    const toDate = addDays(todayISO(), Number(target.dataset.days) || 0);
+    const dateInput = card?.querySelector('[data-modal-field="date"]');
+    if (dateInput) dateInput.value = toDate;
+    ["plannedStartAt", "plannedEndAt"].forEach((field) => {
+      const input = card?.querySelector(`[data-modal-field="${field}"]`);
+      if (input && input.value) input.value = `${toDate}${input.value.slice(10)}`;
+    });
   }
 });
 // v178: app.js分割・段階5-8。submitModal/deleteFromModalのstate.modal.typeによるif-else連鎖
@@ -1523,6 +1545,12 @@ document.addEventListener("input", (event) => {
   // === v9: カテゴリ編集 ===
   if (target.matches("[data-cat-id][data-cat-field]")) {
     updateCategoryField(target.dataset.catId, target.dataset.catField, target.value);
+  }
+  // v366: 見積チップの手入力ハイライト同期(入力値がチップの分数と一致すればそのチップを
+  // 強調、外れれば全解除。state/localStorage には書き込まない=非永続)。
+  if (target.matches('.modal-card [data-modal-field="estimateMin"]')) {
+    const card = target.closest(".modal-card");
+    card?.querySelectorAll(".estimate-chip").forEach((btn) => btn.classList.toggle("active", btn.dataset.min === target.value));
   }
   // v34: ここにあった Wish のクリック処理(add-wish 等)は
   //      input リスナーでは action/id が未定義で動かず、毎入力で例外を投げていた。
@@ -14007,6 +14035,12 @@ function buildBlockModal(block) {
             🏁 ${linkedTask.status === "completed" ? "タスク完了済み(タップで戻す)" : "紐づくTaskも完了にする"}
           </button>
         </div>` : "";
+  // v366: 繰り返し節の新規/既存シリーズ分岐に使うルールをここで解決する。
+  // 両分岐とも繰り返し節に残し、既存シリーズの維持/変更/終了・固定化・既定充放電・
+  // アンカーも同節に表示する。詳細へ移すのはレバレッジ種別・Block完了・Task完了のみ。
+  const liveRule = block.recurrenceGroupId
+    ? (state.recurrences || []).find((r) => r.id === block.recurrenceGroupId && !r.deleted)
+    : null;
   return `
     ${modalHeaderHTML("Block を編集", "tower-sheet")}
         <section class="tower-section">
@@ -14029,21 +14063,18 @@ function buildBlockModal(block) {
               ★ 今日の主役(MIT)
             </label>
           </div>
-          <div class="field">
-            <label class="field-label">レバレッジ(10x機構・任意)</label>
-            <select class="select" data-modal-field="leverageType">
-              ${leverageTypeOptionsHTML(block.leverageType || "")}
-            </select>
-            ${leverageJudgeHelperHTML(block.leverageType)}
-          </div>
         </section>
         <section class="tower-section">
           <h4 class="tower-section-title">時間</h4>
           <div class="field">
             <label class="field-label">日付</label>
             <input class="input" type="date" data-modal-field="date" value="${block.date || todayISO()}">
+            <div class="field-row" style="margin-top:6px">
+              <button type="button" class="btn ghost" data-action="block-date-shift" data-days="1" style="min-height:44px">明日へ</button>
+              <button type="button" class="btn ghost" data-action="block-date-shift" data-days="7" style="min-height:44px">来週へ</button>
+            </div>
           </div>
-          <div class="field-row">
+          <div class="field-row block-time-row">
             <div class="field">
               <label class="field-label">予定開始</label>
               <input class="input" type="datetime-local" step="300" data-modal-field="plannedStartAt" value="${toLocalInput(block.plannedStartAt)}">
@@ -14056,8 +14087,13 @@ function buildBlockModal(block) {
           <div class="field">
             <label class="field-label">見積時間(分・任意)</label>
             <input class="input" type="number" min="0" step="5" data-modal-field="estimateMin" data-modal-kind="number" value="${block.estimateMin ?? ""}" placeholder="空欄なら過去実績/30分で自動">
+            <div class="field-row" style="grid-template-columns: repeat(4, minmax(0, 1fr)); gap:6px; margin-top:6px">
+              ${[15, 25, 40, 60].map((min) => `
+              <button type="button" class="btn ghost estimate-chip${Number(block.estimateMin) === min ? " active" : ""}" data-action="estimate-chip" data-min="${min}" style="min-height:44px">${min}分</button>
+              `).join("")}
+            </div>
           </div>
-          <div class="field-row">
+          <div class="field-row block-time-row">
             <div class="field">
               <label class="field-label">実績開始</label>
               <input class="input" type="datetime-local" step="300" data-modal-field="actualStartAt" value="${toLocalInput(block.actualStartAt)}">
@@ -14067,13 +14103,6 @@ function buildBlockModal(block) {
               <input class="input" type="datetime-local" step="300" data-modal-field="actualEndAt" value="${toLocalInput(block.actualEndAt)}">
             </div>
           </div>
-          <div class="field">
-            <label class="checkbox-line">
-              <input type="checkbox" data-modal-field="completed" ${block.completed ? "checked" : ""}>
-              完了済み(Block)
-            </label>
-          </div>
-          ${taskCompleteHTML}
         </section>
         <section class="tower-section">
           <h4 class="tower-section-title">エネルギー</h4>
@@ -14095,9 +14124,6 @@ function buildBlockModal(block) {
         <section class="tower-section" style="background:var(--accent-soft); padding:10px; border-radius:8px">
           <h4 class="tower-section-title" style="color:var(--accent)">🔁 繰り返し</h4>
           ${(() => {
-            const liveRule = block.recurrenceGroupId
-              ? (state.recurrences || []).find((r) => r.id === block.recurrenceGroupId && !r.deleted)
-              : null;
             if (liveRule) {
               return `
                 <select class="select" data-modal-field="recurrenceKind">
@@ -14160,6 +14186,25 @@ function buildBlockModal(block) {
             <textarea class="textarea" data-modal-field="comment" style="min-height:100px">${escapeHTML(block.comment || "")}</textarea>
           </div>
         </section>
+        <details class="tower-fold">
+          <summary class="tower-section-title">詳細 ›</summary>
+          <div class="tower-fold-body">
+          <div class="field">
+            <label class="field-label">レバレッジ(10x機構・任意)</label>
+            <select class="select" data-modal-field="leverageType">
+              ${leverageTypeOptionsHTML(block.leverageType || "")}
+            </select>
+            ${leverageJudgeHelperHTML(block.leverageType)}
+          </div>
+          <div class="field">
+            <label class="checkbox-line">
+              <input type="checkbox" data-modal-field="completed" ${block.completed ? "checked" : ""}>
+              完了済み(Block)
+            </label>
+          </div>
+          ${taskCompleteHTML}
+          </div>
+        </details>
       </div>
       <div class="modal-footer">
         <button class="btn danger" data-action="modal-delete" style="margin-right:auto">削除</button>

@@ -363,6 +363,7 @@ function contentsBodyFor(jsonText, sha) {
       blocks: [block("series-end-block", "series-end", "終了ルーティン")], view: "timeline"
     });
     await page.locator('[data-action="edit-block"][data-id="series-end-block"]').evaluate((element) => element.click());
+    await page.locator('[data-modal-field="recurrenceKind"]').waitFor();
     await page.locator('[data-modal-field="recurrenceKind"]').selectOption("__end__");
     await page.locator('[data-action="modal-save"]').click();
     await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).habitPinHistory?.["series-end"]?.length === 1, KEY);
@@ -375,6 +376,7 @@ function contentsBodyFor(jsonText, sha) {
       blocks: [block("kind-change-block", "kind-change", "種別変更")], view: "timeline"
     });
     await page.locator('[data-action="edit-block"][data-id="kind-change-block"]').evaluate((element) => element.click());
+    await page.locator('[data-modal-field="recurrenceKind"]').waitFor();
     await page.locator('[data-modal-field="recurrenceKind"]').selectOption("weekly");
     await page.locator('[data-action="modal-save"]').click();
     await page.waitForFunction((KEY) => {

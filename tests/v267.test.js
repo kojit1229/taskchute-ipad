@@ -214,6 +214,11 @@ function configureSync(syncMod) {
     await page.waitForTimeout(200);
     await page.click(`[data-action="edit-block"][data-id="${completionSeed.blockId}"]`);
     await page.waitForSelector('[data-modal-field="completed"]', { state: "attached" });
+    // v366追随: 完了済み(Block)チェックは頻度の低い項目として「詳細 ›」(既定閉)へ移設された。
+    // 開いた後にvisible待ちで実際に到達可能であることを確認する(attachedだけでは
+    // detailsが壊れて開かなくなっても検出できないため)。
+    await page.locator(".modal-card details.tower-fold").evaluate((el) => { el.open = true; });
+    await page.waitForSelector('[data-modal-field="completed"]');
     await page.uncheck('[data-modal-field="completed"]');
     await page.click('[data-action="modal-save"]');
     await page.waitForTimeout(200);

@@ -103,6 +103,17 @@ function check(name, cond, extra = "") {
     return page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
   }
 
+  // v366追随: 🏁タスク完了トグル・完了済み(Block)チェックは頻度の低い項目として
+  // 「詳細 ›」(既定閉、<details class="tower-fold">)へ移設された。既存の操作は
+  // ロジック不変のまま維持されているため、開いてから触るだけで従来どおり検証できる
+  // (state/localStorageへは書き込まれない開閉操作なので他assertionへの影響はない)。
+  // el.open=trueの直接代入ではなくsummaryを実クリックする(390pxでのタップ可能性・
+  // summary自体の到達可能性を経路として検証するため、review-v363-claude-a M-4対応)。
+  async function openBlockDetails(pg = page) {
+    await pg.waitForSelector(".modal-card details.tower-fold summary", { state: "visible" });
+    await pg.click(".modal-card details.tower-fold summary");
+  }
+
   function wbsBadge(taskId) {
     // v328 WBS TOWER化で完了表示は .badge から .wbs-task-done(「完了」)へ移った(表示契約は同じ)。
     return page.locator(`.row:has([data-action="edit-task"][data-id="${taskId}"]) .wbs-task-done, .row:has([data-action="edit-task"][data-id="${taskId}"]) .badge`).first();
@@ -160,6 +171,7 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(200);
     const modalTaskCheck1 = page.locator('.modal-card [data-action="toggle-task-complete"][data-id="block-B1"]');
     check("Block編集モーダル内にタスク完了トグルが表示される(Task紐づきBlockのみ)", await modalTaskCheck1.count() === 1);
+    await openBlockDetails();
     await modalTaskCheck1.click();
     await page.waitForTimeout(300);
     const s2 = await stateNow();
@@ -200,6 +212,7 @@ function check(name, cond, extra = "") {
     await page.waitForSelector('[data-action="edit-block"][data-id="block-B1"]');
     await page.click('[data-action="edit-block"][data-id="block-B1"]');
     await page.waitForTimeout(200);
+    await openBlockDetails();
     await page.click('.modal-card [data-action="toggle-task-complete"][data-id="block-B1"]');
     await page.waitForTimeout(300);
     const s3 = await stateNow();
@@ -257,6 +270,7 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(200);
     const titleField = page.locator('.modal-card [data-modal-field="title"]');
     await titleField.fill("書きかけタイトルXYZ");
+    await openBlockDetails();
     await page.click('.modal-card [data-action="toggle-task-complete"][data-id="block-B1"]');
     await page.waitForTimeout(300);
     check("🏁押下後もモーダルは開いたまま", await page.locator(".modal-card").count() === 1);
@@ -332,6 +346,9 @@ function check(name, cond, extra = "") {
     await pageMobile.click('.exec-row-upcoming [data-action="edit-block"][data-id="block-M"]');
     await pageMobile.waitForTimeout(200);
     const modalTaskCheckMobile = pageMobile.locator('.modal-card [data-action="toggle-task-complete"][data-id="block-M"]');
+    // v366追随: 🏁は「詳細 ›」(既定閉)に移設されたため、開いた状態での可視性を確認する
+    // (「モーダルを開けば到達可能」の検証意図はv107時点から変わっていない)。
+    await openBlockDetails(pageMobile);
     check("390px幅でBlock編集モーダルを開くと🏁ボタンが可視状態である", await modalTaskCheckMobile.isVisible());
     await pageMobile.click('[data-action="modal-close"]');
     await pageMobile.waitForTimeout(150);

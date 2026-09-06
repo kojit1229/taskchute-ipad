@@ -212,6 +212,11 @@ function check(name, cond, extra = "") {
       }]
     });
     await page.click('.timeline-card[data-action="edit-block"][data-id="modal-complete-report"]');
+    // v366追随: 完了済み(Block)チェックは頻度の低い項目として「詳細 ›」(既定閉)へ移設された。
+    await page.evaluate(() => {
+      const d = document.querySelector(".modal-card details.tower-fold");
+      if (d) d.open = true;
+    });
     await page.check('[data-modal-field="completed"]');
     await page.click('[data-action="modal-save"]');
     await page.waitForTimeout(300);
