@@ -267,7 +267,7 @@ const _startupDataModifiedAt = state.dataModifiedAt || "";
 configureGithubSync({
   normalizeState, nowDateTime, todayISO, addDays, isTouchedBlock,
   RECURRENCE_KEEP_PAST_DAYS, RECURRENCE_FUTURE_DAYS, SWIPE_TRIAGE_LOG_MAX,
-  showToast, maintainRecurrences, render, runDailyOpen, saveState, renderDeferringForFocus,
+  showToast, maintainRecurrences, render: () => isVisionEditTextareaFocused() ? renderDeferringForFocus() : render(), runDailyOpen, saveState, renderDeferringForFocus,
   requireGitHubConfig, fetchGitHubFileSHA, personalDataReady, personalDataFileConfig,
   gitHubContentsURL, githubHeaders, gitHubErrorMessage, fromBase64, toBase64,
   sanitizedStateForGitHub, maybeWriteBackupSnapshot, writeBackupSnapshotBeforeLoad, updateAutoSaveStatus, updateSyncDot,
@@ -955,6 +955,49 @@ registerActions({
   // --- ビジョンボード(5。open-vision-boardはv291孤児掃除でopenVisionBoard()ごと削除。
   //     vision-board-tab(data-index版)に統一済み=低優先度棚卸しK裁定2026-08-29) ---
   "vision-section": ({ target }) => setVisionSection(target.dataset.section),
+  // --- v367: 「この画面で編集」(K承認2026-09-05。Vision.mdのみ・新しい認証経路は作らない) ---
+  "vision-edit-open": () => {
+    // 描画側のcanEditVision判定と同じガード(未接続/401/500では開けない)を二重に効かせておく。
+    if (!(personalDataReady(state.settings.github) && visionMdFetchStatus.vision.ok === true)) return;
+    const original = cachedVisionMd || "";
+    // v366-fix(独立レビューM-1): HTMLTextAreaElement.valueはCRLF/CRをLFへ正規化して返す仕様の
+    // ため、元本文がCRLFならフラグを持ち保存時に復元する(無編集保存でも全行LF化=425行全書き換え
+    // の差分ノイズが入るのを防ぐ)。
+    visionEditDraft = { text: original, crlf: /\r\n/.test(original) };
+    render();
+    // v366-fix(独立レビューH-1): 開いた直後に本文量へ合わせて高さを算出する(rows固定/40vh固定の
+    // 箱にしない)。
+    autoGrowVisionEditTextarea(document.querySelector("[data-vision-edit-textarea]"));
+  },
+  "vision-edit-cancel": () => {
+    visionEditDraft = null;
+    render();
+  },
+  "vision-edit-save": async () => {
+    if (!visionEditDraft || visionEditSaving) return;
+    const draft = visionEditDraft;
+    const textarea = document.querySelector("[data-vision-edit-textarea]");
+    const rawText = (textarea ? textarea.value : draft.text).replace(/\r\n?/g, "\n");
+    // v366-fix(独立レビューM-1): 元がCRLFだった場合はここで復元してからPUTする。
+    const text = visionEditDraft.crlf ? rawText.replace(/\n/g, "\r\n") : rawText;
+    if (!window.confirm("Vision.mdを上書きします。よろしいですか?")) return;
+    draft.text = rawText;
+    visionEditSaving = true;
+    document.querySelector('[data-action="vision-edit-save"]').disabled = true;
+    const result = await pushFileToGitHub("content/Vision.md", text, "Vision.md", { silent: true });
+    visionEditSaving = false;
+    if (result.ok) {
+      cachedVisionMd = text;
+      // v366-fix2: 送信後の追記や、キャンセルして開き直した別の下書きは破棄しない。
+      if (visionEditDraft === draft && draft.text === rawText) visionEditDraft = null;
+      showToast("保存しました");
+    } else {
+      showToast(`保存に失敗しました: ${result.error || "不明なエラー"}`);
+    }
+    const saveButton = document.querySelector('[data-action="vision-edit-save"]');
+    if (saveButton) saveButton.disabled = false;
+    if (!visionEditDraft) renderDeferringForFocus();
+  },
   "vision-board-tab": ({ target }) => setVisionBoardIndex(Number(target.dataset.index)),
   "vision-board-load": ({ target }) => loadVisionBoardPdf(target.dataset.file),
   "vision-board-load-images": ({ target }) => loadVisionBoardImages(target.dataset.file),
@@ -1173,8 +1216,11 @@ let visionMdFetchStatus = {
   vision: { attemptedAt: 0, ok: null, status: 0 },
   affirmation: { attemptedAt: 0, ok: null, status: 0 }
 };
-// v361注記: 「この画面で編集」(4)は実行コード差分200行予算のため本バージョンでは未着手
-// (読む画面主役化+ALIGNMENT事実表示+3状態=(1)(2)(3)のみ実装。分割方針は発注文どおり)。
+// v367: 「この画面で編集」(K承認2026-09-05)。Vision.md本文をtextareaで編集する間だけ持つ
+// 一時状態(非永続・moduleレベル変数)。{ text } | null。Daily_Affirmation.mdは対象外
+// (発注「Vision.md以外へ書かない」)なのでkindを持たず常にvision専用として扱う。
+let visionEditDraft = null;
+let visionEditSaving = false;  // v366-fix2: キャンセル・再編集をまたぐ送信中の二重保存も防ぐ。
 // v85: ビジョンボード(45/80/nowの各PDF)はpersonal-dataリポジトリのtaskchute/content/配下にあり、
 // GitHub Pages(このアプリの同一オリジン)にはv72移行時から存在しない。Contents APIから認証ヘッダ付きで
 // バイナリ取得し、Blob URL化してから<object>に埋め込む(取得できるまでは埋め込まない=公開URLへの
@@ -1273,12 +1319,24 @@ function renderDeferringForFocus() {
   }
   render();
 }
+// v366-fix(独立レビューM-2): ビジョン「この画面で編集」のtextareaへフォーカス中かどうか。
+function isVisionEditTextareaFocused() {
+  const el = document.activeElement;
+  return !!el && typeof el.matches === "function" && el.matches("[data-vision-edit-textarea]");
+}
 // compositionend/focusoutの両方から呼ばれる共通の実行判定。
 // 60秒以上延期され続けている場合は、取りこぼしイベントへの保険としてフォーカス/IME状態に
 // 関わらず強制的に実行する(それ以外は「まだフォーカス中/IME変換中なら延期を継続」)。
+// v366-fix(独立レビューM-2): ただしビジョン編集中のtextareaに限っては、60秒を過ぎても
+// この強制flushの対象から除外する(フォーカスが外れた時点のfocusoutで通常どおり反映される)。
+// 値はinputハンドラでvisionEditDraft.textへ既に同期済みのためデータロスは無い一方、強制flushは
+// render()によるtextareaの作り直しでキャレット位置・スクロール位置・フォーカスを失わせ
+// (iOSではキーボードが閉じる)、425行規模の本文編集では入力が60秒を超えるのが常態のため
+// 実害が大きい(独立レビューM-2)。他の入力欄(journal等)は従来どおり60秒フェイルセーフの対象。
 function attemptFlushDeferredRender() {
   if (!_deferredRenderPending) return;
   const overdue = _deferredRenderPendingSince > 0 && (Date.now() - _deferredRenderPendingSince > DEFERRED_RENDER_FAILSAFE_MS);
+  if (overdue && isVisionEditTextareaFocused()) return;  // ビジョン編集中は60秒を過ぎても延期を継続
   if (!overdue && (_imeComposing || isFocusInEditableElement())) return;  // まだ延期を継続
   _deferredRenderPending = false;
   _deferredRenderPendingSince = 0;
@@ -1515,6 +1573,13 @@ document.addEventListener("input", (event) => {
   if (target.matches("[data-vision-field]")) {
     state.settings[target.dataset.visionField] = target.value;
     saveState();
+  }
+  // v367: 編集中のtextarea値をvisionEditDraftへ同期する(state/localStorageへは書かない。
+  // 保存されるのはvision-edit-save経由でGitHubへPUTする時だけ)。
+  if (target.matches("[data-vision-edit-textarea]")) {
+    if (visionEditDraft) visionEditDraft.text = target.value;
+    // v366-fix(独立レビューH-1): 入力のたびに本文量へ高さを合わせ直す(40vh固定の箱にしない)。
+    autoGrowVisionEditTextarea(target);
   }
   if (target.matches("[data-github-field]")) {
     // v37: autoSave チェックボックスもこのセレクタに一致してしまい、
@@ -3008,6 +3073,12 @@ function render() {
   maybeMarkAiReportRead();  // v283: 本文取得成功後の描画だけを既読化する単一フック
   // v40: 着手ジュースは1回の描画で消費する(次の描画では付かない)。CSS アニメは挿入時に1回再生。
   state._justStartedBlockId = null;
+  // v366-fix(独立レビューH-1): render()がビジョン編集画面を作り直すたびに、新しいtextarea要素は
+  // ブラウザ既定の高さ(40vh未満)に戻るため、都度scrollHeightへ合わせ直す(vision-edit-open/
+  // inputハンドラ自体からの呼び出しだけでは、他要因での再render(hydrate反映等)を取りこぼす)。
+  if (visionEditDraft && state.currentView === "vision") {
+    autoGrowVisionEditTextarea(document.querySelector("[data-vision-edit-textarea]"));
+  }
 }
 
 // v72: 起動時セットアップ画面(トークンゲート)。sidebar/bottomNav/timelineRailは空にし、
@@ -7205,6 +7276,15 @@ const VISION_MD_DISCONNECTED_TEXT = "個人データ未接続のため表示で�
 
 function renderVisionMd(kind) {
   const path = kind === "vision" ? "Vision.md" : "Daily_Affirmation.md";
+  // v367: 編集中はkind="vision"の間だけ読む画面の代わりにtextareaを描く。textarea入力中の
+  // 自動再描画(hydrate等)はisFocusInEditableElementガード(既存、renderDeferringForFocus)で
+  // 保留される。値自体はinputハンドラでvisionEditDraft.textへ同期済みのため、作り直されても
+  // 表示内容が失われることはない。ただし60秒フェイルセーフ(attemptFlushDeferredRender)は
+  // v366-fix(独立レビューM-2)まで、この保留を無視して強制render()し得た(その場合textareaが
+  // 作り直されキャレット位置・スクロール位置・フォーカスを失う=iOSではキーボードが閉じる)。
+  // 現在はattemptFlushDeferredRender側でこのtextareaへのフォーカス中は60秒経過後もフェイルセーフ
+  // 対象から除外しているため、フォーカスが外れるまでrender()自体が起きない。
+  if (kind === "vision" && visionEditDraft) return renderVisionEdit();
   const cached = kind === "vision" ? cachedVisionMd : cachedAffirmationMd;
   const fetchStatus = visionMdFetchStatus[kind];
   if (!cached) {
@@ -7219,15 +7299,55 @@ function renderVisionMd(kind) {
   }
   const staleBadge = (cached && !fetchStatus.ok && fetchStatus.attemptedAt)
     ? `<span class="vision-stale-badge">${visionTimeOfDay(fetchStatus.attemptedAt)}時点(古い)</span>` : "";
+  // v367: 編集ボタンはVision.md(kind==="vision")かつ「取得済み・現在も最新(直近フェッチ成功)」
+  // の時だけ出す。未接続/401/500(取得失敗)はfetchGitHubRawResultがok:falseを返すため、
+  // このok===true判定だけで両方を自然に除外できる(古い本文の上書き防止。発注仕様)。
+  const canEditVision = kind === "vision" && fetchStatus.ok === true;
+  const blockedReason = (kind === "vision" && !canEditVision)
+    ? `<p class="muted vision-edit-blocked">最新を確認できるまでこの画面では編集できません(古い本文の上書きを防ぐため)</p>` : "";
   const rendered = renderMarkdown(cached || "");
   return `
     <div class="vision-actions">
       <span class="vision-source">📄 <code>${path}</code></span>${staleBadge}
       <button class="btn" data-action="reload-md">最新を取得</button>
+      ${canEditVision ? `<button class="btn primary" data-action="vision-edit-open">この画面で編集</button>` : ""}
       <button class="btn ghost" data-action="open-md-in-github" data-path="${path}">GitHubで編集(上級)</button>
     </div>
+    ${blockedReason}
     <div class="panel vision-read">
       <div class="md-render">${rendered}</div>
+    </div>
+  `;
+}
+
+// v366-fix(独立レビューH-1): textareaの高さを本文量(scrollHeight)に合わせて自動伸長する。
+// CSSのmin-height:40vhは下限としてそのまま効くため、短い本文はmin-heightのまま、
+// 長い本文(例: 実データのVision.mdは425行)は全文が見える高さまで伸びる。
+// height:auto→scrollHeight反映の2段は、一度縮めてから測らないと削除時に高さが伸びたまま
+// 残る(scrollHeightは現在の高さより縮まない)ため必須。
+function autoGrowVisionEditTextarea(el) {
+  if (!el) return;
+  el.style.height = "auto";
+  // v366-fix(独立レビューH-1追補): box-sizing:border-boxの`height`は境界線(border)まで含むが、
+  // scrollHeightは境界線を含まない(padding-box)。境界線ぶんを足さずheight=scrollHeightにすると
+  // 実際のclientHeightがscrollHeightよりborder幅ぶん小さくなり(overflow:hiddenでも解消しない)、
+  // わずかに文字が隠れる。overflow:hiddenでスクロールバー幅は0のため、この差分は常にborder幅と
+  // 一致する(offsetHeight-clientHeight)。
+  const borderHeight = el.offsetHeight - el.clientHeight;
+  el.style.height = `${el.scrollHeight + borderHeight}px`;
+}
+
+// v367: 「この画面で編集」の編集画面(K承認2026-09-05)。保存はpushFileToGitHub(既存の
+// personal-data書込関数、silentオプションで独自トースト文言に差し替えて再利用)を使う。
+function renderVisionEdit() {
+  const draft = visionEditDraft;
+  return `
+    <div class="vision-edit">
+      <textarea class="vision-edit-textarea" data-vision-edit-textarea>${escapeHTML(draft.text)}</textarea>
+    </div>
+    <div class="vision-edit-bar">
+      <button class="btn" data-action="vision-edit-cancel">キャンセル</button>
+      <button class="btn primary" data-action="vision-edit-save" ${visionEditSaving ? "disabled" : ""}>保存</button>
     </div>
   `;
 }
@@ -14600,7 +14720,10 @@ async function pushReportToGitHub() {
 //      本体側は直っていなかった(v74レビューのnit)。日報_*.md 等の呼び出し元(filenameに"/"を
 //      含まない)では旧実装と生成URLは完全に一致する(既存の正常系は無変更)ため、
 //      安全な統一である。fetchGitHubRawResult/gitHubContentsURL/pushGitHubPathと同じ方式。
-async function pushFileToGitHub(filename, content, label) {
+// v367: opts.silent(既定false)を追加。vision-edit-save等、呼び出し側が独自のトースト文言
+// (「保存しました」等)を出したい場合に既定トーストを抑止し、成否を戻り値{ok, error}で返す。
+// 既存呼び出し元(日報push、opts省略)は戻り値を見ておらず、silent省略時の挙動は完全に不変。
+async function pushFileToGitHub(filename, content, label, opts = {}) {
   try {
     const raw = state.settings.github;
     if (!personalDataReady(raw)) {
@@ -14636,9 +14759,11 @@ async function pushFileToGitHub(filename, content, label) {
     if (!response.ok) {
       throw new Error(await gitHubErrorMessage(response));
     }
-    showToast(`📤 ${label} をGitHubへpushしました`);
+    if (!opts.silent) showToast(`📤 ${label} をGitHubへpushしました`);
+    return { ok: true };
   } catch (e) {
-    showToast(`push失敗: ${e.message}`);
+    if (!opts.silent) showToast(`push失敗: ${e.message}`);
+    return { ok: false, error: e.message };
   }
 }
 

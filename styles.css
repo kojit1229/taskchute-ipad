@@ -1991,6 +1991,52 @@ h3 {
   color: var(--muted);
 }
 
+/* v367: 「この画面で編集」— textarea(16px/1.6・最小40vh)+下部固定バー(44px)。
+   position:stickyはこのアプリがdocument/html側でスクロールする前提(414行目コメント参照)と
+   矛盾しないため採用(viewport固定のposition:fixedより安全側)。
+   v366-fix(独立レビューH-1): 高さはmin-height:40vhを下限にJS側(autoGrowVisionEditTextarea)が
+   本文量(scrollHeight)に合わせて自動伸長する。overflow:hiddenで内部スクロールバーを消し
+   (伸長後は要素自体が伸びるため不要)、resizeハンドルは自動伸長と競合する(手動で縮めても次の
+   入力で高さが再計算され直る)ため外した。 */
+.vision-edit-textarea {
+  width: 100%;
+  min-height: 40vh;
+  box-sizing: border-box;
+  padding: 12px;
+  font-size: var(--text-md);
+  line-height: 1.6;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--text);
+  overflow: hidden;
+  resize: none;
+}
+
+.vision-edit-bar {
+  position: sticky;
+  bottom: 0;
+  min-height: 44px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 8px;
+  padding: 8px 0;
+  background: var(--bg);
+}
+
+.vision-edit-blocked {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  margin-top: 8px;
+}
+
+.vision-edit-bar .btn {
+  min-width: 44px;
+  min-height: 44px;
+}
+
 .vision-pdf-tabs {
   display: flex;
   gap: 4px;

@@ -101,6 +101,8 @@ function check(name, cond, extra = "") {
 // v311: CABIN TIMERのLINK FLIGHT選択・一時停止・再開4actionを意図的に追加。
 // v316: 生活記録6ボタン共通のlife-export actionを意図的に追加。
 // v356: FUNDタブのヘッダ「再取得」ボタン(fund-refresh)を意図的に追加(221→222)。
+// v367: 「この画面で編集」(vision-edit-open/vision-edit-cancel/vision-edit-save)を
+//       意図的に追加(222→225)。
 const GOLDEN_CLICK_ACTIONS = [
   "nav", "sync-banner-dismiss", "open-iron-log", "instruments-open-iron-log", "save-tower-journal",
   "focus-toggle-side", "focus-toggle-journal", "focus-toggle-life", "focus-mode",
@@ -156,6 +158,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "estimate-chip", "block-date-shift",
   "vision-section", "vision-board-tab", "vision-board-load",
   "vision-board-load-images", "vision-board-retry-images",
+  "vision-edit-open", "vision-edit-cancel", "vision-edit-save",  // v367: この画面で編集(K承認2026-09-05)の意図的追加
   "open-md-in-github", "reload-md", "ai-report-type", "ai-report-open-unread", "ai-report-refresh",
   "experiment-add", "edit-experiment", "experiment-keep", "experiment-drop",
   "experiment-copy-conclusion",
@@ -322,6 +325,8 @@ const APP_JS_REGISTERED_ACTIONS = [
   // --- v179: ビジョンボード(5。open-vision-boardはv291孤児掃除で削除) ---
   "vision-section", "vision-board-tab", "vision-board-load",
   "vision-board-load-images", "vision-board-retry-images",
+  // --- v367: 「この画面で編集」(3。K承認2026-09-05。Vision.mdのみ) ---
+  "vision-edit-open", "vision-edit-cancel", "vision-edit-save",
   // --- v179: 実験ログ(5) ---
   "experiment-add", "edit-experiment", "experiment-keep", "experiment-drop",
   "experiment-copy-conclusion",

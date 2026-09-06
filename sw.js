@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v366";  // v366: Block 編集シート残り(見積チップ・明日へ/来週へ・詳細折りたたみ・planned 追従・狭幅1列化)
+const CACHE_NAME = "taskchute-journal-pwa-v367";  // v367: ビジョン画面内編集(textarea 自動伸長・CRLF 保持・保存中の下書き保護・編集中は再描画延期)
 // v353: 12WY R0 task.twyPlan のデータ契約+plan.js 純関数+Task編集モーダル3項目
 // v334: 実行タブPC 2ペイン(§B。ナビ統合§Cは持ち越し)
 // v333: 実行ラッパー(計画/実績切替)・モバイルナビ4項目
