@@ -89,14 +89,23 @@ function check(name, cond, extra = "") {
       url.hostname === "api.github.com" && decodeURIComponent(url.pathname).endsWith(`/taskchute/AIフィードバック_${YESTERDAY}.md`),
     (route) => {
       if (feedbackFixture === null) return route.fulfill({ status: 404, body: "not found (test-fixture)" });
-      route.fulfill({ status: 200, contentType: "text/markdown", body: feedbackFixture });
+      // v374: Contents APIはAcceptヘッダで表現が変わる(raw+json=生本文 / それ以外=base64 JSON)。
+      const raw = (route.request().headers().accept || "").includes("raw");
+      route.fulfill({ status: 200, contentType: raw ? "text/markdown" : "application/json",
+        body: raw ? feedbackFixture : JSON.stringify({ encoding: "base64", sha: "a".repeat(40), content: Buffer.from(feedbackFixture, "utf8").toString("base64") }) });
     });
     await page.route((url) =>
       url.hostname === "api.github.com" && decodeURIComponent(url.pathname).endsWith("/taskchute/report-index.json"),
-    (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
-      generatedAt: now0.toISOString(),
-      files: [{ name: `AIフィードバック_${YESTERDAY}.md`, date: YESTERDAY, kind: "feedback" }]
-    }) }));
+    (route) => {
+      // v374: 索引もAcceptヘッダに応じて生JSON / Contents JSON(base64)を返す(フィードバック専用読取は後者)。
+      const text = JSON.stringify({
+        generatedAt: now0.toISOString(),
+        files: [{ name: `AIフィードバック_${YESTERDAY}.md`, date: YESTERDAY, kind: "feedback" }]
+      });
+      const rawIndex = (route.request().headers().accept || "").includes("raw");
+      route.fulfill({ status: 200, contentType: "application/json",
+        body: rawIndex ? text : JSON.stringify({ encoding: "base64", sha: "a".repeat(40), content: Buffer.from(text, "utf8").toString("base64") }) });
+    });
     await page.route((url) =>
       url.hostname === "api.github.com" && decodeURIComponent(url.pathname).endsWith("/contents/taskchute"),
     (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([
@@ -180,6 +189,13 @@ function check(name, cond, extra = "") {
     // v83-done-blockはcompleted:trueなので.doneが付いている
     const checkboxButtonDoneBg = await bgColor(cbSel);
     const checkboxButtonDoneText = await page.locator(cbSel).textContent();
+    // v374: v334の実行タブ2ペイン化で、実行行の完了チェックは「塗りなし+緑の✓」(.exec-row-done .checkbox-button.done)へ変更済み。
+    //       塗り色の一致ではなく、完了状態の色が同じ緑系トークン(--green-text)で表現されることを検査する。
+    const checkboxButtonDoneColor = await page.locator(cbSel).evaluate((el) => getComputedStyle(el).color);
+    const greenTextToken = await page.evaluate(() => {
+      const probe = document.createElement("span"); probe.style.color = "var(--green-text)"; document.body.appendChild(probe);
+      const value = getComputedStyle(probe).color; probe.remove(); return value;
+    });
 
     await page.evaluate(({ KEY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
@@ -214,10 +230,19 @@ function check(name, cond, extra = "") {
     // ---- チェック済み状態(塗り+✓)も統一されているか ----
     console.log("[B4-1] チェック済み状態(塗り+✓)の表現統一");
     // .checkbox-buttonは自身に.doneが付く。.wish-checkは:checked。
+    // v374: 実行行の完了チェックは塗りなし(v334)。wish側の塗りは従来どおり緑。
     check(
-      "チェック済みの塗り色が.checkbox-button/.wish-checkで一致する(var(--green)に統一)",
-      checkboxButtonDoneBg === wishCheckedBg,
-      JSON.stringify({ checkboxButtonDoneBg, wishCheckedBg })
+      "チェック済みの.checkbox-button(実行行)は塗りなしで文字色が--green-text(v334の意匠)",
+      checkboxButtonDoneBg === "rgba(0, 0, 0, 0)" && checkboxButtonDoneColor === greenTextToken,
+      JSON.stringify({ checkboxButtonDoneBg, checkboxButtonDoneColor, greenTextToken })
+    );
+    check(
+      "チェック済みの.wish-checkは緑(var(--green))で塗られる",
+      wishCheckedBg !== "rgba(0, 0, 0, 0)" && wishCheckedBg === await page.evaluate(() => {
+        const probe = document.createElement("span"); probe.style.backgroundColor = "var(--green)"; document.body.appendChild(probe);
+        const value = getComputedStyle(probe).backgroundColor; probe.remove(); return value;
+      }),
+      JSON.stringify({ wishCheckedBg })
     );
     check("チェック済みの.checkbox-buttonに✓が表示される", (checkboxButtonDoneText || "").includes("✓"), checkboxButtonDoneText);
     const wishCheckedAfter = await afterContent(wishSel2);

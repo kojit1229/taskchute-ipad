@@ -85,6 +85,8 @@ async function installRoutes(page, fixture) {
   await page.route((url) => url.hostname === GITHUB_API_HOST, (route) => {
     const pathname = decodeURIComponent(new URL(route.request().url()).pathname);
     if (route.request().method() !== "GET") return route.fulfill({ status: 405, body: "{}" });
+    // v374: 再作成キュー・からだ取り込み等の未作成ファイルは実運用どおり404で応える(キュー取得失敗時の経路も含めて被覆)。
+    //       ブラウザーは404を「Failed to load resource」としてconsole errorに記録するため、後段でURL単位に照合する。
     if (pathname.includes("/contents/taskchute/requests/")) return route.fulfill({ status: 404, body: "{}" });
     if (/\/contents\/taskchute\/report-index\.json$/.test(pathname)) {
       fixture.reportRequests = (fixture.reportRequests || 0) + 1;
@@ -112,15 +114,17 @@ async function gatedPage(browser, fixture, viewport = { width: 390, height: 844 
   const page = await context.newPage();
   const pageErrors = [];
   const consoleErrors = [];
+  const notFound = [];  // v374: 404応答のURL(想定=taskchute/requests/配下だけ)
   page.on("pageerror", (e) => pageErrors.push(e.message));
   page.on("console", (msg) => { if (msg.type() === "error") consoleErrors.push(msg.text()); });
+  page.on("response", (response) => { if (response.status() === 404) notFound.push(decodeURIComponent(new URL(response.url()).pathname)); });
   await page.clock.setFixedTime(FIXED_NOW);
   await installRoutes(page, fixture);
   await page.goto(`http://localhost:${PORT}/`);
   const indexResponse = page.waitForResponse((res) => /\/contents\/taskchute\/report-index\.json$/.test(decodeURIComponent(new URL(res.url()).pathname)));
   await passGithubGate(page);
   await indexResponse;
-  return { context, page, pageErrors, consoleErrors };
+  return { context, page, pageErrors, consoleErrors, notFound };
 }
 
 async function connectedStartupPage(browser, fixture) {
@@ -382,7 +386,7 @@ async function verifyNegativeCases(browser) {
       dir: [{ name: fallbackName, path: `taskchute/${fallbackName}`, type: "file" }],
       bodies: { [fallbackName]: `# fallback\n\n${variant.name}でも閲覧可能_v283` }
     };
-    const { context, page, pageErrors, consoleErrors } = await gatedPage(browser, fixture);
+    const { context, page, pageErrors, consoleErrors, notFound } = await gatedPage(browser, fixture);
     try {
       check(`${variant.name}: バッジ非表示`, await page.locator(UNREAD_BADGES).count() === 0);
       await page.evaluate((KEY) => {
@@ -397,7 +401,14 @@ async function verifyNegativeCases(browser) {
         `${variant.name}でも閲覧可能_v283`
       )).jsonValue();
       check(`${variant.name}: Contents APIフォールバックでタブ閲覧可能`, readable === true);
-      check(`${variant.name}: pageerror/console errorなし`, pageErrors.length === 0 && consoleErrors.length === 0, JSON.stringify({ pageErrors, consoleErrors }));
+      // v374: 404はtaskchute/requests/配下(再作成キュー・からだ取り込みの未作成ファイル)だけを許容し、その件数分の
+      //       「Failed to load resource(404)」だけconsole errorから除く。それ以外のconsole error/pageerror/404は0件を要求する。
+      const resource404 = consoleErrors.filter((message) => /Failed to load resource: the server responded with a status of 404/.test(message));
+      const otherConsoleErrors = consoleErrors.filter((message) => !resource404.includes(message));
+      const unexpected404 = notFound.filter((pathname) => !pathname.includes("/contents/taskchute/requests/"));
+      check(`${variant.name}: pageerror/console errorなし(requests/配下の想定404を除く)`,
+        pageErrors.length === 0 && otherConsoleErrors.length === 0 && unexpected404.length === 0,
+        JSON.stringify({ pageErrors, consoleErrors, notFound }));
     } finally { await context.close(); }
   }
 

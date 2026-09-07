@@ -1,0 +1,70 @@
+{
+  "version": 374,
+  "date": "2026-09-07",
+  "title": "フィードバック既読の保存修復と旧検査の整合(全量CI失敗分を含む)",
+  "summary": "AIレポートでフィードバック本文を読んだときに既読が保存されない不具合を修復し、旧検査(v83/v107/v112/v283/v287)を採用済みの取得形式・画面構成へ整合させる。",
+  "changedFiles": [
+    "CHANGES_v374.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v374.json",
+    "src/features/work-list.js",
+    "styles.css",
+    "sw.js",
+    "tests/feedback-canonical-wiring.test.js",
+    "tests/suite-manifest.json",
+    "tests/v107.test.js",
+    "tests/v112.test.js",
+    "tests/v196.test.js",
+    "tests/v283.test.js",
+    "tests/v287.test.js",
+    "tests/v302.test.js",
+    "tests/v307.test.js",
+    "tests/v310.test.js",
+    "tests/v329.test.js",
+    "tests/v332.test.js",
+    "tests/v334.test.js",
+    "tests/v358.test.js",
+    "tests/v55.test.js",
+    "tests/v65.test.js",
+    "tests/v72.test.js",
+    "tests/v83.test.js",
+    "tests/v96.test.js"
+  ],
+  "intent": [
+    "読んだフィードバックが未読のまま残らないようにし、既存の検査保証を弱めずに旧検査を現在の仕様へ合わせる。"
+  ],
+  "changes": [
+    "AIレポートのフィードバック本文を非同期で差し替えた直後にも、render()と同じ既読化フック(maybeMarkAiReportRead)を通す。",
+    "v287/v83の本文fixtureはAcceptヘッダに応じて生本文とContents JSON(base64)の両方を返す(実GitHubと同じ)。",
+    "v283のfixtureは再作成キュー(queue.json)を空の有効なキューで応え、404によるconsole errorを検査対象から外さずに解消する。",
+    "v107のWBSナビ操作はサイドバーのボタンに限定し、今日画面の「WBSで見る」との重複一致を避ける。",
+    "v112の全件順序検査は、正規化が自動追加する「その他」受け皿Task1件だけを母集団から除き、順序・欠落・重複の保証は維持する。",
+    "v83の完了チェックは、v334で採用した実行行の『塗りなし+緑の✓』とWishの『緑の塗り』をそれぞれ厳密に検査する。",
+    "未読一覧から選んだ日付をフィードバック専用画面へ渡し、見ていない最新日を既読化しない(独立レビューA-1)。",
+    "既読化で未読一覧が縮む分だけスクロール位置を補正し、読み始めた本文の位置を保つ(独立レビューB-1)。",
+    "WBS一覧のTask行に⚙資産/✂削減マーク(10x機構)を再表示する(汎用行描画への統合で漏れていた)。",
+    "起動時の権限案内バナー(401)を、app-state未作成(404)の汎用文言で上書きしない。",
+    "全量CIで失敗した旧検査10本を現在の仕様(入力保護ダイアログ・検索常設・狭幅メニュー・×ボタン・進捗常時表示・空き時間シート・横長2ペイン・受け皿Task)へ移行し、保証は維持する。",
+    "日付変更などの全再描画でChromium系ブラウザーの scroll anchoring がスクロール位置を動かす事象(390px幅で300→392を実測)を、ページの anchoring を切って防ぐ(styles.css body)。iOS Safari は anchoring 未実装のため効果なしの見込みで、実機の事象は未確認。",
+    "⚙資産/✂削減マークの描画関数は複製せず configureWorkList へ注入し、正本を app.js の1箇所に保つ。",
+    "起動時バナーは401/403の具体案内を保ちつつ、後発の404案内を併記して利用者に届ける。"
+  ],
+  "uncertainties": [
+    "実機での既読同期(iPhone/iPad)・PWA更新・オフラインは未確認。",
+    "CI(Linux)でだけ失敗する検査は、ローカル再現の有無を別記する。"
+  ],
+  "reviewFocus": [
+    "既読化が本文表示成功時だけに限定されること(欠測・失敗・別版表示で既読化しない)。",
+    "検査の期待変更が仕様移行であり、保証の削除・弱体化になっていないこと。"
+  ],
+  "verification": [
+    "(検査後に更新)"
+  ],
+  "knownLimitations": [
+    "全量CIで失敗し手元では成功する8本(v355/v308/r2-twelveweek-plan/feedback-recovery-e2e/v99/r0-twyplan/v325/v317)はCI環境依存の疑い。分析と最小修正案は evidence/ci-only-failures-analysis.md。未適用。",
+    "実機・本番接続は未確認。"
+  ]
+}

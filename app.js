@@ -306,7 +306,7 @@ configureGithubSync({
   _startupDataModifiedAt,
   readArchiveForSync: async (year, cfg) => (await fetchGitHubJSONFile(cfg, personalDataPath(`archive/archive-${year}.json`)))?.obj
 });
-configureWorkList({ escapeHTML, todayISO, dueDate: effectiveDueDate, resolveEstimateMin,
+configureWorkList({ escapeHTML, todayISO, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML,
   renderBlock: block => block.completed || block.actualEndAt ? renderExecDoneRow(block) : block.actualStartAt && !block.actualEndAt ? renderExecNowRow(block) : renderExecUpcomingRow(block) });
 configureToday({
   escapeHTML, todayISO, addDays, blocksForDate, minutesOf, timeFromDateTime,
@@ -7136,6 +7136,12 @@ function refreshAiReports() {
   // v140(Codexレビュー High-1 (iii)): 手動更新は必ずContents API listingも取得し、
   // report-index.jsonとname単位でunionする(triggerAiReportDirLoad参照)。
   _aiReportForceUnionRefresh = true;
+  // v374: フィードバックは専用の読取(canonical reader/overlay)が本文を持つため、ヘッダーの「一覧を更新」でも
+  //       同じ日付の本文と再作成キューを再取得する(旧cache削除だけでは本文が古いまま残る)。
+  if (type.id === "feedback" && feedbackCanonicalReader) {
+    void feedbackCanonicalReader.refresh(feedbackReportController?.snapshot().date);
+    void feedbackReportOverlay?.refresh();
+  }
   render();
   showToast("最新の一覧を取得しています…");
 }
@@ -10809,8 +10815,27 @@ async function gitHubErrorMessage(response, isCurrent = () => true) {
     404: "ファイルが見つからないか、トークンがこのリポジトリにアクセスできません。Owner / Repository / Branch / 保存先パスの綴り(保存先パスに taskchute/ を含めないでください。自動で付与されます)、またはFine-grained tokenの Repository access(対象repoが選択されているか)・Contents: Read and write 権限を確認してください"
   };
   const hint = hints[response.status];
+  // v374: 起動時は hydrateStaticMarkdown(AIフィードバック401→固有文言)と
+  // syncFromGitHubOnStartup(app-state.json 404→本関数の汎用文言)が並行実行される。
+  // app-state.json未作成の404は「ファイルが無いだけ」の可能性が高く権限エラーと確定できない
+  // (他の読込系 fetchGitHubRawResult/fetchPersonalDataDirList も404では専用バナーを立てず
+  // 静かに扱う既存の慣行と同じ)。401/403は判定が明確なので従来どおり常に上書きする
+  // (意味論は不変)。
+  // v374(B-2修正): 404の汎用文言は「まだ何も出ていない時だけ」ではなく、既存の案内が
+  // 無いか汎用文言をまだ含まないときに"併記"する。理由: 401→トークン修正→保存先パス誤りで
+  // 404、という経路では成功が一度も起きずclearPersonalDataAuthErrorが呼ばれないため、
+  // 単純な「既存があれば上書きしない」ガードだと404の案内が永久に届かなくなる(レビュー指摘
+  // evidence/claude-review-r3.md B-2)。併記なら401/403由来の先行案内も消さず、後発404の
+  // 案内も利用者に見える。
   if ([401, 403, 404].includes(response.status) && isCurrent()) {
-    setPersonalDataAuthError("GitHub保存/読込に失敗しました。トークンのRepository access(personal-data)・Contents権限、またはOwner/Repository/Branch/パスの設定を確認してください");
+    const generic = "GitHub保存/読込に失敗しました。トークンのRepository access(personal-data)・Contents権限、またはOwner/Repository/Branch/パスの設定を確認してください";
+    if (response.status !== 404) {
+      setPersonalDataAuthError(generic);
+    } else if (!_personalDataAuthError) {
+      setPersonalDataAuthError(generic);
+    } else if (!_personalDataAuthError.includes(generic)) {
+      setPersonalDataAuthError(`${_personalDataAuthError} / ${generic}`);
+    }
   }
   return hint ? `${raw} — ${hint}` : raw;
 }
@@ -10898,11 +10923,24 @@ function renderFeedbackUiSlot(date) {
 function patchFeedbackUi() {
   feedbackReadonlyPatch ||= createFeedbackReadonlyPatch({document,root:document.getElementById("main")});
   const slot=document.querySelector('[data-feedback-ui-slot]');
-  if(state.currentView === 'ai-reports'){const reportSlot=document.querySelector('[data-feedback-overlay-slot]');if(reportSlot){const snapshot=feedbackReportController.snapshot();feedbackReadonlyPatch(reportSlot,feedbackReportOverlay.render(),{date:snapshot.date,busy:snapshot.busy||feedbackCanonicalReader.status(snapshot.date).loading});}return;}
+  if(state.currentView === 'ai-reports'){const reportSlot=document.querySelector('[data-feedback-overlay-slot]');if(reportSlot){const snapshot=feedbackReportController.snapshot();feedbackReadonlyPatch(reportSlot,feedbackReportOverlay.render(),{date:snapshot.date,busy:snapshot.busy||feedbackCanonicalReader.status(snapshot.date).loading});markFeedbackReadKeepingScroll();}return;}  // v374: 非同期の本文差替え後も既読化フックを通す(render()と同じ単一フック)
   if(!slot || state.currentView !== 'journal')return;
   const snapshot=feedbackUiController.snapshot();
   if(snapshot.date!==state.selectedDate)return;
   feedbackReadonlyPatch(slot,feedbackCanonicalNotice(snapshot.date)+feedbackUiView(snapshot,feedbackCanonicalReader.body(snapshot.date)),{date:snapshot.date,busy:snapshot.busy||feedbackCanonicalReader.status(snapshot.date).loading});
+}
+// v374(独立レビューB-1): 既読化は未読一覧(専用画面より上)の行を1件減らすため、その高さ分だけ
+//       スクロール位置を補正し、読み始めた本文の位置が飛ばないようにする(利用者が動かした後は触らない)。
+//       注意(独立レビューr4 B-3): この補正は feedbackReadonlyPatch の後に scrollTop を変えるため、次のパッチでは
+//       「利用者が動かした」と判定され、そのパッチ以降は補正後の現在位置を基準に復元される(位置が飛ぶことはない)。
+function markFeedbackReadKeepingScroll() {
+  const scrollers = [...new Set([document.scrollingElement, document.getElementById("app"), main])].filter(Boolean);
+  const before = scrollers.map((element) => element.scrollTop);
+  const listHeight = () => main.querySelector("[data-ai-report-unread-list]")?.offsetHeight || 0;
+  const height0 = listHeight();
+  maybeMarkAiReportRead();
+  const delta = height0 - listHeight();
+  if (delta > 0) scrollers.forEach((element, index) => { if (element.scrollTop === before[index] && before[index] > 0) element.scrollTop = Math.max(0, before[index] - delta); });
 }
 registerActions({
  "feedback-regenerate":()=>{ensureFeedbackClients();feedbackUiController.selectDate(state.selectedDate);feedbackUiController.begin();},
@@ -12641,6 +12679,12 @@ function openUnreadAiReport(kind, fileName) {
   if (typeof fileName === "string" && fileName.startsWith(type.prefix) && fileName.endsWith(".md")) {
     const selectedDate = fileName.slice(type.prefix.length, -3);
     _aiReportSelectedDate[kind] = selectedDate;
+    // v374(独立レビューA-1): フィードバックは専用画面が日付を持つ。未読一覧で選んだ日を専用画面へ渡さないと
+    //       最新日が自動選択され、見ていない最新日を既読化してしまう。不正な日付は従来どおり(最新日)に任せる。
+    if (kind === "feedback" && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) {
+      ensureFeedbackClients();
+      try { feedbackReportOverlay.select(selectedDate); } catch { /* invalid_date: 専用画面側の既定選択に任せる */ }
+    }
     if (Array.isArray(_aiReportDirCache) && !aiReportFilesForType(type.prefix).some((file) => file.date === selectedDate)) _aiReportDirCache = null;
   }
   state.settings.aiReportType = kind;

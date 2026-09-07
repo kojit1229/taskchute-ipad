@@ -429,6 +429,9 @@ async function verifyExistingFiltersAndSearch(page) {
   await waitSetting(page, { wbsHideDoneProjects: true });
   check("検索前は完了Project非表示", await page.locator('[data-wbs-row-id="p-search-done"]').count() === 0);
   await openViewMenu(page);
+  // v374: 開いたままの「表示▾」メニューが検索結果へのクリックを遮るため、405-406行と同じく検索前に閉じる
+  const viewMenu2 = page.locator("details.wbs-view-menu");
+  if (await viewMenu2.evaluate(el => el.open)) await viewMenu2.locator("summary").click();
   await page.locator("#wbs-search-input").fill("完了検索");
   await page.waitForSelector('[data-action="wbs-search-jump"][data-id="t-search-done"]');
   await page.evaluate(() => {

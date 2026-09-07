@@ -49,13 +49,14 @@ async function installRoutes(page, fixture) {
   await page.route((url) => url.hostname === GITHUB_API_HOST, (route) => {
     const pathname = decodeURIComponent(new URL(route.request().url()).pathname);
     if (/\/contents\/taskchute\/report-index\.json$/.test(pathname)) {
+      // v374: 索引もAcceptヘッダに応じて生JSON / Contents JSON(base64)を返す(フィードバック専用読取は後者)。
+      const rawIndex = (route.request().headers().accept || "").includes("raw");
+      const envelope = (text) => route.fulfill({ status: 200, contentType: "application/json",
+        body: rawIndex ? text : JSON.stringify({ encoding: "base64", sha: "a".repeat(40), content: Buffer.from(text, "utf8").toString("base64") }) });
       if (fixture.indexRaw !== undefined) {
-        return route.fulfill({ status: 200, contentType: "application/json", body: fixture.indexRaw });
+        return envelope(fixture.indexRaw);
       }
-      return route.fulfill({
-        status: 200, contentType: "application/json",
-        body: JSON.stringify(fixture.index || { generatedAt: FRESH_GENERATED_AT, files: [] })
-      });
+      return envelope(JSON.stringify(fixture.index || { generatedAt: FRESH_GENERATED_AT, files: [] }));
     }
     if (/\/contents\/taskchute$/.test(pathname)) {
       return route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
@@ -63,7 +64,12 @@ async function installRoutes(page, fixture) {
     const md = pathname.match(/\/contents\/taskchute\/([^/]+\.md)$/);
     if (md) {
       const body = fixture.bodies?.[md[1]];
-      return route.fulfill({ status: 200, contentType: "text/markdown", body: body === undefined ? "" : body });
+      const text = body === undefined ? "" : body;
+      // v374: Contents APIはAcceptヘッダで表現が変わる(raw+json=生本文 / それ以外=base64 JSON)。
+      //       フィードバック専用読取(src/features/feedback/feedback-http.js)は後者を使うため、両方に応える。
+      const raw = (route.request().headers().accept || "").includes("raw");
+      return route.fulfill({ status: 200, contentType: raw ? "text/markdown" : "application/json",
+        body: raw ? text : JSON.stringify({ encoding: "base64", sha: "a".repeat(40), content: Buffer.from(text, "utf8").toString("base64") }) });
     }
     return route.fulfill({ status: 200, contentType: "text/plain", body: "" });
   });
@@ -179,7 +185,8 @@ async function verifyUnreadList(browser) {
     await page.locator(`[data-action="ai-report-open-unread"][data-file="${feedbackName}"]`).click();
     await page.waitForSelector('[data-action="ai-report-type"][data-type="feedback"].active');
     await page.waitForFunction((name) => JSON.parse(localStorage.getItem("taskchute-journal-pwa-state-v1")).aiReportReadIds.includes(name), feedbackName);
-    check("行タップで種類・ファイル名由来の日付・本文へ遷移", await page.locator("[data-ai-report-date]").inputValue() === TODAY
+    // v374: フィードバックは専用画面(日付ボタン aria-pressed)で日付を示す。他種類は従来の日付入力。
+    check("行タップで種類・ファイル名由来の日付・本文へ遷移", await page.locator('[data-action="feedback-report-date"][aria-pressed="true"]').getAttribute("data-feedback-date") === TODAY
       && (await page.locator(".md-render").textContent()).includes("feedback本文_v287"));
     check("本文成功後に一覧から行が消えnav未読も3へ減る", await page.locator(`[data-file="${feedbackName}"]`).count() === 0
       && await page.locator('[data-action="ai-report-open-unread"]').count() === 3
@@ -194,6 +201,36 @@ async function verifyUnreadList(browser) {
       && await badgeText(page, "#bottomNav", "exec") === "1");
     check("未読一覧主要経路でpageerror/console errorなし", pageErrors.length === 0 && consoleErrors.length === 0,
       JSON.stringify({ pageErrors, consoleErrors }));
+  } finally { await context.close(); }
+}
+
+// v374(独立レビューA-1の回帰検査): 未読が2日分あるとき古い方をタップしても、専用画面は最新日を自動選択せず
+//       タップした日の本文を表示し、その日だけを既読化する。
+async function verifyOlderUnreadFeedbackOpen(browser) {
+  console.log("[2b] 未読2日分のうち古い方をタップ→その日を表示・その日だけ既読化");
+  const oldName = `AIフィードバック_${YESTERDAY}.md`;
+  const newName = `AIフィードバック_${TODAY}.md`;
+  const fixture = {
+    index: { generatedAt: FRESH_GENERATED_AT, files: [
+      { name: newName, date: TODAY, kind: "feedback" }, { name: oldName, date: YESTERDAY, kind: "feedback" }
+    ] },
+    bodies: { [oldName]: "# 旧レポート\n\nolder本文_v287", [newName]: "# 新着レポート\n\nnewer本文_v287" }
+  };
+  const { context, page, pageErrors } = await connectedPage(browser, fixture);
+  try {
+    await seed(page, { currentView: "ai-reports", aiReportReadIds: [], settings: { aiReportType: "english", lastOpenedDate: TODAY } });
+    await page.waitForSelector(`[data-action="ai-report-open-unread"][data-file="${oldName}"]`);
+    check("未読一覧に2日分が並ぶ", await page.locator('[data-action="ai-report-open-unread"]').count() === 2);
+    await page.locator(`[data-action="ai-report-open-unread"][data-file="${oldName}"]`).click();
+    await page.waitForFunction((name) => JSON.parse(localStorage.getItem("taskchute-journal-pwa-state-v1")).aiReportReadIds.includes(name), oldName);
+    const readIds = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).aiReportReadIds, STATE_KEY);
+    check("古い方をタップ→その日が選択され本文が出る", await page.locator('[data-action="feedback-report-date"][aria-pressed="true"]').getAttribute("data-feedback-date") === YESTERDAY
+      && (await page.locator(".md-render").textContent()).includes("older本文_v287")
+      && !(await page.locator(".md-render").textContent()).includes("newer本文_v287"));
+    check("既読化はタップした日だけ(最新日は未読のまま)", readIds.includes(oldName) && !readIds.includes(newName), JSON.stringify(readIds));
+    check("最新日の未読行とmoreバッジ1件は残る", await page.locator(`[data-action="ai-report-open-unread"][data-file="${newName}"]`).count() === 1
+      && await badgeText(page, "#bottomNav", "more") === "1");
+    check("古い未読を開く経路でpageerrorなし", pageErrors.length === 0, JSON.stringify(pageErrors));
   } finally { await context.close(); }
 }
 
@@ -223,7 +260,7 @@ async function verifyHydrateRefreshAndFreshOpen(browser) {
     await page.locator(`[data-action="ai-report-open-unread"][data-file="${newName}"]`).click();
     await page.waitForFunction((name) => document.querySelector(`[data-report-file="${name}"][data-report-loaded="1"]`), newName);
     const readIds = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).aiReportReadIds, STATE_KEY);
-    check("新着行タップは古いdir cacheのfiles[0]でなく正しい本文を開いて既読化", await page.locator("[data-ai-report-date]").inputValue() === TODAY
+    check("新着行タップは古いdir cacheのfiles[0]でなく正しい本文を開いて既読化", await page.locator('[data-action="feedback-report-date"][aria-pressed="true"]').getAttribute("data-feedback-date") === TODAY
       && (await page.locator(".md-render").textContent()).includes("new本文_v287")
       && readIds.includes(newName) && !readIds.includes(oldName), JSON.stringify(readIds));
   } finally { await context.close(); }
@@ -260,7 +297,8 @@ async function verifyUnreadNegatives(browser) {
       })));
       check(`${variant.name}: 必須タブが存在しfeedbackがactive`, REQUIRED_AI_REPORT_TABS.every((id) => tabs.some((tab) => tab.id === id))
         && tabs.some((tab) => tab.id === "feedback" && tab.active)
-        && (await current.page.locator("main").textContent()).includes("まだ生成されていません"), JSON.stringify(tabs));
+        // v374: フィードバックは専用画面のため、一覧を確認できないときの文言はその画面のもの(対象日未確認)。
+        && (await current.page.locator("main").textContent()).includes("対象日をまだ確認できていません"), JSON.stringify(tabs));
       check(`${variant.name}: pageerror/console errorなし`, current.pageErrors.length === 0 && current.consoleErrors.length === 0,
         JSON.stringify({ pageErrors: current.pageErrors, consoleErrors: current.consoleErrors }));
     } finally { await current.context.close(); }
@@ -277,7 +315,11 @@ async function verifyUnreadNegatives(browser) {
   try {
     await seed(bodyFailure.page, { currentView: "ai-reports", aiReportReadIds: [], settings: { aiReportType: "english", lastOpenedDate: TODAY } });
     await bodyFailure.page.locator(`[data-action="ai-report-open-unread"][data-file="${failedName}"]`).click();
-    await bodyFailure.page.waitForFunction(() => document.querySelector("main")?.textContent.includes("本文を取得できませんでした"));
+    // v374: フィードバック専用画面では空本文は空のまま表示し、読み込み済み属性を付けない(v283と同じ契約。既読化しない)。
+    await bodyFailure.page.waitForFunction(() => {
+      const body = document.querySelector('[data-feedback-report-overlay] .feedback-version-body');
+      return body && body.textContent.trim() === "" && !body.hasAttribute("data-report-loaded") && !body.hasAttribute("data-report-file");
+    });
     const readIds = await bodyFailure.page.evaluate((key) => JSON.parse(localStorage.getItem(key)).aiReportReadIds, STATE_KEY);
     check("空本文は既読化されない", !readIds.includes(failedName), JSON.stringify(readIds));
     check("空本文の未読行とmoreバッジは残る", await bodyFailure.page.locator(`[data-file="${failedName}"]`).count() === 1
@@ -331,18 +373,23 @@ async function verifyTaskBadges(browser) {
       recurrence: await page.locator('.exec-row [data-action="now-start"][data-id="recurrence-block"]').count(),
       unlinked: await page.locator('.exec-row [data-action="now-start"][data-id="unlinked-block"]').count()
     };
-    check("母集団境界はoneTap・taskId無しが対象、recurrence・Project未紐づけは非対象", boundary.badge === "2"
-      && boundary.oneTap === 1 && boundary.taskless === 1 && boundary.recurrence === 0 && boundary.unlinked === 0, JSON.stringify(boundary));
+    // v374: 実行タブは全件表示(recurrence・Project未紐づけの行も一覧に出る。K要件)。バッジの母集団だけがoneTap・taskId無しに限られる。
+    check("母集団境界はoneTap・taskId無しが対象、recurrence・Project未紐づけは行に出てもバッジに数えない", boundary.badge === "2"
+      && boundary.oneTap === 1 && boundary.taskless === 1 && boundary.recurrence === 1 && boundary.unlinked === 1, JSON.stringify(boundary));
 
     const base = taskFixture();
     await seed(page, {
-      ...base, currentView: "tasks", selectedDate: TODAY,
+      ...base, recurrences: [], currentView: "tasks", selectedDate: TODAY,  // v374: 直前の境界seedのルーティン規則を持ち越さない
       settings: { lastOpenedDate: TODAY, focusTimerAuto: false }
     });
     await page.waitForSelector('.exec-row [data-action="now-start"][data-id="valid-start-block"]');
     check("開始済み・完了・削除・昨日・timeline・routine・staleを除外し未着手2件", await badgeText(page, "#sidebar", "exec") === "2"
       && await badgeText(page, "#bottomNav", "exec") === "2");
-    check("バッジ件数はタスクシュートに見える未着手行数と一致", await page.locator('.exec-row [data-action="now-start"]').count() === 2);
+    // v374: 全件表示のため開始ボタンは未開始・未完了・非削除の今日のBlock全部に付く(fixtureでは valid-start / valid-complete /
+    //       timeline / routine / stale の5件)。バッジはそのうちoneTap・taskId無しの母集団だけ(2件)。上限も固定して回帰を検出する。
+    const startableIds = (await page.locator('.exec-row [data-action="now-start"]').evaluateAll((els) => els.map((el) => el.dataset.id))).sort();
+    check("バッジ対象の未着手2件を含め、開始ボタンは今日の未開始Blockちょうど", JSON.stringify(startableIds)
+      === JSON.stringify(["routine-block", "stale-block", "timeline-block", "valid-complete-block", "valid-start-block"]), JSON.stringify(startableIds));
 
     const mobileItems = await page.$$eval("#bottomNav button", (elements) => elements.map((element) => ({
       id: element.dataset.view, label: element.childNodes[0].textContent
@@ -371,7 +418,7 @@ async function verifyTaskBadges(browser) {
     await page.setViewportSize({ width: 390, height: 844 });
 
     await seed(page, {
-      ...base, currentView: "tasks", selectedDate: TODAY,
+      ...base, recurrences: [], currentView: "tasks", selectedDate: TODAY,  // v374: 直前の境界seedのルーティン規則を持ち越さない
       settings: { lastOpenedDate: TODAY, focusTimerAuto: false }
     });
     await page.locator('[data-action="date-prev"]').click();
@@ -383,8 +430,10 @@ async function verifyTaskBadges(browser) {
       rows: await page.locator(".exec-row-now, .exec-row-upcoming").count(),
       selectedDate: await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).selectedDate, STATE_KEY)
     };
+    // v374: 実行の一覧は実時計の今日を基準に全件表示する(v373)。過去日を閲覧中も今日の非削除Block 7件
+    //       のうち未完了の6件(valid-start/valid-complete/started/timeline/routine/stale)が now/upcoming 行として出る。バッジも今日基準のまま。
     check("過去日閲覧中もバッジは今日基準の2件で不変", pastSnapshot.sidebar === "2"
-      && pastSnapshot.bottom === "2" && pastSnapshot.rows === 1 && pastSnapshot.selectedDate === YESTERDAY,
+      && pastSnapshot.bottom === "2" && pastSnapshot.rows === 6 && pastSnapshot.selectedDate === YESTERDAY,
       JSON.stringify(pastSnapshot));
 
     const manyBlocks = Array.from({ length: 101 }, (_, index) => block(`many-${index}`, "many-task", TODAY, {
@@ -420,6 +469,7 @@ async function verifyTaskBadges(browser) {
   const browser = await chromium.launch(launchOptions());
   try {
     await verifyUnreadList(browser);
+    await verifyOlderUnreadFeedbackOpen(browser);
     await verifyHydrateRefreshAndFreshOpen(browser);
     await verifyUnreadNegatives(browser);
     await verifyTaskBadges(browser);

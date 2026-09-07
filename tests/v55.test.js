@@ -52,9 +52,17 @@ function check(name, cond, extra = "") {
 
   // ---- [1] インライン編集モード ----
   console.log("[1] インライン編集モード");
+  // v374: 1280px未満では.wbs-edit-toggleは非表示(styles.css:2968)になり、
+  // 「表示▾」メニュー内の.wbs-menu-edit-toggleに切替わる(狭幅なのでビューポートは変えず、メニュー経由で操作する)。
   check("編集モードトグルがある", await page.locator('.wbs-edit-toggle[data-action="toggle-wbs-edit"]').count() === 1);
   check("通常時はインライン入力が出ない", await page.locator('[data-wbs-edit]').count() === 0);
-  await page.click('.wbs-edit-toggle[data-action="toggle-wbs-edit"]');
+  async function toggleWbsEditViaMenu() {
+    const viewMenu = page.locator("details.wbs-view-menu");
+    if (!await viewMenu.evaluate((el) => el.open)) await viewMenu.locator("summary").click();
+    await page.locator('.wbs-menu-edit-toggle[data-action="toggle-wbs-edit"]').click();
+    if (await viewMenu.evaluate((el) => el.open)) await viewMenu.locator("summary").click();
+  }
+  await toggleWbsEditViaMenu();
   await page.waitForTimeout(300);
   check("編集モードで各タスクに3項目(状態/期限/カテゴリ)の行内フォーム",
     await page.locator('[data-wbs-edit][data-id="task-A"]').count() === 3
@@ -64,8 +72,11 @@ function check(name, cond, extra = "") {
   const fs = await page.locator('.wbs-inline-input').first().evaluate((el) => getComputedStyle(el).fontSize);
   check("インライン入力のfont-sizeが16px以上", parseFloat(fs) >= 16, fs);
   // task-A の期限を直接編集
-  await page.locator('input[data-wbs-edit="dueDate"][data-id="task-A"]').fill(NEXTWK);
-  await page.locator('input[data-wbs-edit="dueDate"][data-id="task-A"]').dispatchEvent("change");
+  // v374: 期限をNEXTWKへ変更すると「今週やること」パネル(renderWbsThisWeek、data-wbs-week-row-id)にも
+  // 同じdata-wbs-edit入力が現れ2件ヒットするため、メインWBS行(data-wbs-row-id)側だけを指定する。
+  const taskARow = page.locator('[data-wbs-row-id="task-A"]');
+  await taskARow.locator('input[data-wbs-edit="dueDate"][data-id="task-A"]').fill(NEXTWK);
+  await taskARow.locator('input[data-wbs-edit="dueDate"][data-id="task-A"]').dispatchEvent("change");
   await page.waitForTimeout(300);
   check("期限がモーダルなしで保存される", await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).tasks.find((t) => t.id === "task-A").dueDate, KEY) === NEXTWK);
   // task-B の状態を中断に
@@ -78,7 +89,7 @@ function check(name, cond, extra = "") {
   check("カテゴリがその場で保存される", await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).tasks.find((t) => t.id === "task-C").category, KEY) === "開発");
   check("dataModifiedAtが更新される(実データ変更)", await page.evaluate((KEY) => !!JSON.parse(localStorage.getItem(KEY)).dataModifiedAt, KEY));
   // 編集モードOFFで通常表示に戻る(中断表示のため中断を表示に)
-  await page.click('.wbs-edit-toggle[data-action="toggle-wbs-edit"]');
+  await toggleWbsEditViaMenu();
   await page.waitForTimeout(300);
   check("編集モードOFFでフォームが消える", await page.locator('[data-wbs-edit]').count() === 0);
 

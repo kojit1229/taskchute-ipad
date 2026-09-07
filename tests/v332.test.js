@@ -252,10 +252,17 @@ async function seed(page, values) {
       return out;
     });
     check("実行タブ全テキスト要素がfont-size 11px以上", smallText390.length === 0, JSON.stringify(smallText390));
-    await page.click("details.exec-add summary");
-    const inputFontSizes = await page.$$eval("#blockTitle, #blockCategory", (els) => els.map((el) => parseFloat(getComputedStyle(el).fontSize)));
+    // v374: 実行タブ(exec nav)の「＋Block」はv355で空き時間シート([data-action="fill-gap-open"])へ
+    // 統合済み(旧details.exec-add summary/#blockTitleは currentView==="tasks" 直遷移でしか
+    // 到達できない残置コードで、この時点(currentView==="exec")では出現しない)。同じ16px保証を
+    // 現行UI(シート内の新規Block作成欄 #fillGapTitle / #fillGapCategory)へ向ける。
+    await page.click('[data-action="fill-gap-open"]');
+    await page.waitForSelector(".fill-gap-sheet");
+    const inputFontSizes = await page.$$eval("#fillGapTitle, #fillGapCategory", (els) => els.map((el) => parseFloat(getComputedStyle(el).fontSize)));
     check("input/selectはfont-size 16px以上(iOS自動ズーム防止)",
       inputFontSizes.length === 2 && inputFontSizes.every((fs2) => fs2 >= 16), JSON.stringify(inputFontSizes));
+    await page.locator(".fill-gap-sheet .modal-close").click();
+    await page.waitForSelector(".fill-gap-sheet", { state: "detached" });
 
     await resetSetItemLog(page);
     const stateBeforeResize = await page.evaluate((key) => localStorage.getItem(key), STATE_KEY);

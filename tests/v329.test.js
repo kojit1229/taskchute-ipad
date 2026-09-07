@@ -138,11 +138,22 @@ function task(id, projectId, title, extra = {}) {
     check("担当K/AI切替が既存actionで動く", (await stored()).tasks.find((item) => item.id === "t-step")?.owner === "ai");
 
     console.log("[3] 編集モード・Project見出し・レスポンシブ品質");
-    check("編集OFFでは行内入力無し", await page.locator(".wbs-inline-input").count() === 0);
+    // v374: 進捗入力は編集モードに関わらず常時表示(app.js v95)だが、12WY進行中サイクルのProjectは
+    // 旧進捗(hideOldProgress)を隠す(app.js:5997)。t-plan(12WY進行中サイクル所属)は編集OFFで行内入力0、
+    // t-suspended(非12WY)は編集OFFでも進捗入力2個が常時表示される、に検査を分離する。
+    check("編集OFF・12WY進行中サイクルのTaskは行内入力無し", await row("t-plan").locator(".wbs-inline-input").count() === 0);
+    // v374 B-3(a): 編集OFFでは進捗入力以外の行内入力がページ全体で1つも出ない(旧「編集OFFでは行内入力無し」のページ全体保証を復元)。
+    check("編集OFFでは進捗入力以外の行内入力がページ全体で無い", await page.locator(".wbs-inline-input:not(.wbs-progress-input)").count() === 0);
+    check("編集OFF・非12WYのTaskは進捗入力2個を常時表示", await row("t-suspended").locator(".wbs-inline-input").count() === 2
+      && await row("t-suspended").locator(".wbs-progress-input").count() === 2);
     await page.locator(".wbs-view-menu > summary").click();
     await page.locator('[data-action="toggle-wbs-edit"].wbs-menu-edit-toggle').click();
-    check("編集ONだけ行内入力を表示し進捗入力は2つ/行", await row("t-plan").locator(".wbs-inline-input").count() >= 5
-      && await row("t-plan").locator(".wbs-progress-input").count() === 2);
+    check("編集ON・非12WYのTaskは行内入力(状態/期限/カテゴリ+進捗2つ)を表示", await row("t-suspended").locator(".wbs-inline-input").count() >= 5
+      && await row("t-suspended").locator(".wbs-progress-input").count() === 2);
+    // v374 B-3: 12WY進行中サイクルのTask(t-plan)は hideOldProgress で進捗入力2個が常時非表示のため、
+    // 編集ONでも行内入力は状態/期限/カテゴリの3個のみ・進捗入力0個になる保証を復活させる。
+    check("編集ON・12WY進行中サイクルのTaskは進捗を除く行内入力(状態/期限/カテゴリ)のみ表示", await row("t-plan").locator(".wbs-inline-input").count() === 3
+      && await row("t-plan").locator(".wbs-progress-input").count() === 0);
     const projectRow = page.locator('[data-wbs-row-id="p-cycle"]');
     const otherProjectRow = page.locator('[data-wbs-row-id="p-other"]');
     check("Project見出しはタグ・進捗・完了数と…を表示", (await projectRow.locator(".wbs-project-meta").textContent()).includes("[12WY]")

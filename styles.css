@@ -196,6 +196,10 @@
 html,
 body {
   height: 100%;
+  /* v374: 日付変更などで main.innerHTML を丸ごと差し替えると、ブラウザーの scroll anchoring が
+     ページの scrollTop を勝手に動かす(390px幅で300→392を実測、evidence/scroll-probe)。アプリ側は
+     位置を書き換えていないので、.work-list-rows と同じく anchoring を切って位置を保つ(スクロール要素の html と body の両方)。 */
+  overflow-anchor: none;
 }
 
 body {

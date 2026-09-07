@@ -184,7 +184,10 @@ function check(name, cond, extra = "") {
     check("応答到着後もWBSビューから強制遷移しない", await page.locator("#app[data-view='wbs']").count() === 1);
 
     console.log("[1b] v299: 削除済み再プラン経路のソース不存在");
+    // v374: 未保存入力(description/doneCriteria)が残ったままモーダルを閉じるため、
+    // 入力保護ダイアログ(draft-leave)が出る仕様。破棄して次へ進む(tests/v366.test.js等と同じ手順)。
     await page.locator('[data-action="modal-close"]').first().click();
+    await page.locator('dialog.draft-leave-dialog[open] [data-action="draft-leave-discard"]').click();
     await page.locator('#sidebar [data-action="nav"][data-view="today"]').click();
     await page.waitForSelector(".today-tower");
     check("today-replan actionが存在しない", !appSource.includes('"today-replan"'));

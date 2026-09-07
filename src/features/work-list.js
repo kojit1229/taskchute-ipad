@@ -2,7 +2,7 @@ import { state } from "../state/store.js";
 import { registerActions } from "../ui/actions.js";
 import { workListRows, filterWorkList } from "../core/work-list.js";
 
-let escapeHTML, todayISO, dueDate, renderBlock, resolveEstimateMin;
+let escapeHTML, todayISO, dueDate, renderBlock, resolveEstimateMin, leverageTypeMarkHTML;
 let modalOrigin;
 let renderFocus;
 const views = new Map();
@@ -11,7 +11,7 @@ function view(scope) {
   return views.get(scope);
 }
 function configureWorkList(deps) {
-  ({ escapeHTML, todayISO, dueDate, renderBlock, resolveEstimateMin } = deps);
+  ({ escapeHTML, todayISO, dueDate, renderBlock, resolveEstimateMin, leverageTypeMarkHTML } = deps);
   registerActions({ "work-list-clear": ({ target }) => {
     const scope = target.closest("[data-work-list]").dataset.workList;
     Object.assign(view(scope), { query: "", status: "", project: "", category: "", due: "", scroll: 0 });
@@ -25,6 +25,10 @@ function rowsFor(scope) {
   const rows = workListRows(state, { scope, date, mode: view(scope).mode, dueDate });
   return { date, rows, shown: filterWorkList(rows, view(scope), date) };
 }
+// v374(B-1修正): WBSのTask行(旧app.js renderTaskRow)が持っていた⚙資産/✂削減マーク
+// (leverageTypeMarkHTML)は、app.js→src循環依存を避けるため複製していたが、timelineが既に
+// 同じ関数をconfigureTimeline()経由で注入している前例(app.js:423)に倣い、こちらもDIへ統一した。
+// 未注入(configureWorkList呼び出し漏れ)でも例外にせず空文字を返す(listRow内で分岐)。
 function option(value, label, selected) { return `<option value="${escapeHTML(value)}"${value === selected ? " selected" : ""}>${escapeHTML(label)}</option>`; }
 function select(scope, key, label, entries) {
   return `<label>${label}<select class="select" data-work-filter="${key}" aria-label="${label}">${entries.map(([value, title]) => option(value, title, view(scope)[key])).join("")}</select></label>`;
@@ -36,7 +40,7 @@ function listRow(row, scope) {
   const externalDue = (row.task || row.item).dueDate || "";
   return `<div class="work-list-row" data-work-key="${escapeHTML(row.key)}">
     <button type="button" class="btn ghost work-list-title" data-action="edit-${row.kind}" data-id="${escapeHTML(row.id)}">${row.kind === "block" && row.item.isMIT === true ? '<span class="mit-star" aria-label="MIT">★</span> ' : ""}${escapeHTML(row.title || "（名称なし）")}</button>
-    <div class="work-list-meta">${escapeHTML([row.kind === "block" ? row.date + " " + (row.time.slice(11, 16) || "時刻未定") : row.kind === "project" ? "Project" : "Task", row.project?.title, row.category, estimate ? `見積${estimate}分` : "", row.due ? `作業期限 ${row.due}` : "期限なし", externalDue && externalDue !== row.due ? `外部期限 ${externalDue}` : "", status].filter(Boolean).join(" ・ "))}</div>
+    <div class="work-list-meta">${escapeHTML([row.kind === "block" ? row.date + " " + (row.time.slice(11, 16) || "時刻未定") : row.kind === "project" ? "Project" : "Task", row.project?.title, row.category, estimate ? `見積${estimate}分` : "", row.due ? `作業期限 ${row.due}` : "期限なし", externalDue && externalDue !== row.due ? `外部期限 ${externalDue}` : "", status].filter(Boolean).join(" ・ "))}${row.kind === "task" && leverageTypeMarkHTML ? leverageTypeMarkHTML(row.item.leverageType) : ""}</div>
     ${scope === "wbs" && row.project && !row.project.deleted ? `<button class="btn ghost search-hit" data-action="wbs-search-jump" data-kind="${row.kind}" data-id="${escapeHTML(row.id)}"><span class="search-kind">${row.kind === "task" ? "Task" : "Project"}</span> <span class="search-date">${escapeHTML(row.category || "未分類")}</span> <span class="search-snippet">${escapeHTML(row.title)}</span> — ツリーで見る</button>` : ""}
   </div>`;
 }

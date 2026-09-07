@@ -160,11 +160,13 @@ function check(name, cond, extra = "") {
     await work.locator('[data-work-key="task:task-B"] [data-action="edit-task"]').click();
     check("同Task詳細で完了条件全文が読める", await page.locator('[data-modal-field="doneCriteria"]').inputValue() === "報告書が上長にメール送信済み");
     check("同Task詳細で第一歩全文が読める", await page.locator('[data-modal-field="firstStep"]').inputValue() === "報告書の雛形を開く");
-    await page.locator('#modalRoot [data-action="modal-close"]').click();
+    // v374: 閉じるボタン(×)とキャンセルの2つがdata-action="modal-close"を共有する(app.js:5303等)。
+    // aria-label="閉じる"で×だけを一意に指定する。
+    await page.locator('#modalRoot [data-action="modal-close"][aria-label="閉じる"]').click();
     await work.locator('[data-work-key="task:task-C"] [data-action="edit-task"]').click();
     check("空Taskの完了条件に別Task本文を混ぜない", await page.locator('[data-modal-field="doneCriteria"]').inputValue() === "");
     check("空Taskの第一歩に別Task本文を混ぜない", await page.locator('[data-modal-field="firstStep"]').inputValue() === "");
-    await page.locator('#modalRoot [data-action="modal-close"]').click();
+    await page.locator('#modalRoot [data-action="modal-close"][aria-label="閉じる"]').click();
     check("読むだけでTask本文を書き換えない", JSON.stringify((await stateNow()).tasks) === JSON.stringify(beforeRead.tasks));
     await work.locator('[data-work-filter="query"]').fill("報告書が上長");
     check("完了条件検索は入力済みTaskだけに一致", await work.locator('[data-work-key]').count() === 1 && await work.locator('[data-work-key="task:task-B"]').count() === 1);

@@ -257,6 +257,7 @@ async function stateNow(page) {
 
     await page.setViewportSize({ width: 768, height: 1024 });
     await page.waitForFunction((w) => document.documentElement.clientWidth === w, 768);
+    await page.locator(".settings-connect").waitFor({ state: "visible" });  // v374: 同上
     check("768pxで横スクロールしない", !(await hasHorizontalOverflow()));
     // v358修正(B-M9): 720px超では.settings-gridが2列になるため、grid-column指定がないと
     // 「接続と保存」がiPad幅でも2列の1セルに落ちてしまう(A2=PC2列はv359持ち越しだが、これは
@@ -269,9 +270,20 @@ async function stateNow(page) {
 
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.waitForFunction((w) => document.documentElement.clientWidth === w, 1280);
+    // v374: 1280pxへの幅変更は横長/PC判定の再描画(v373 の媒体クエリ購読)を伴い、直後に測ると差し替え中の
+    //       要素を掴んで boundingBox が null になることがある(手元で2回に1回再現)。表示成立を待ってから測る。
+    await page.locator(".settings-connect").waitFor({ state: "visible" });
     check("1280pxで横スクロールしない", !(await hasHorizontalOverflow()));
-    const connectBox1280 = await page.locator(".settings-connect").boundingBox();
-    const gridBox1280 = await page.locator(".settings-grid").boundingBox();
+    // v374: 2要素を別々の呼び出しで測ると、その間の再描画で片方が差し替え中(null)になる(CIで再現)。
+    //       同じ1回の評価で両方の矩形を取り、両方そろうまで待つ(検査条件は不変)。
+    const boxes1280 = await page.waitForFunction(() => {
+      const connect = document.querySelector(".settings-connect"), grid = document.querySelector(".settings-grid");
+      if (!connect || !grid) return null;
+      const c = connect.getBoundingClientRect(), g = grid.getBoundingClientRect();
+      return c.width && g.width ? { connect: { x: c.x, y: c.y, width: c.width, height: c.height }, grid: { x: g.x, y: g.y, width: g.width, height: g.height } } : null;
+    }, null, { timeout: 5000 }).then((handle) => handle.jsonValue());
+    const connectBox1280 = boxes1280.connect;
+    const gridBox1280 = boxes1280.grid;
     check("1280pxでも「接続と保存」が最上段フルバンド(PC2列=A2持ち越しとは独立)",
       !!connectBox1280 && !!gridBox1280 && connectBox1280.width >= gridBox1280.width * 0.9,
       JSON.stringify({ connectBox1280, gridBox1280 }));
