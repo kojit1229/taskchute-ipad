@@ -267,18 +267,27 @@ async function openWbsRowMenuIfClosed(page, taskTitle) {
     const upcomingOneoffMarks = page.locator('.exec-row-upcoming:has([data-action="block-row-toggle"][data-id="block-mark3"]) .lev-mark');
     check("oneoff行は.lev-markが0件(視覚ノイズ回避)", await upcomingOneoffMarks.count() === 0);
 
-    const taskMarks = page.locator('.exec-task-row:has([data-action="toggle-task"][data-id="task-mark1"]) .lev-mark');
-    check("「タスク」行(renderExecTaskRow)に⚙資産マークが1件出る", await taskMarks.count() === 1);
+    // v374: 実行タブには未配置Taskの行が無くなり(v371〜の全件一覧はBlock行のみ。未配置TaskはWBSへ一本化し「WBSで見る」導線だけ)、
+    //       旧renderExecTaskRow/.exec-task-rowは到達不能。Task行のマーク保証はWBS一覧側(上のwbsMarks)で検査し、
+    //       ここでは実行タブに旧Task行が復活していないこと(重複表示の回帰防止)とWBSへの導線があることを確認する。
+    check("実行タブに旧「タスク」行は無くWBSへの導線がある", await page.locator('.exec-task-row').count() === 0
+      && await page.locator('[data-work-list="exec"] [data-work-key="task:task-mark1"]').count() === 0
+      && await page.locator('[data-action="nav"][data-view="wbs"]').count() >= 1);
 
     const nowMarkFontSize = await nowMarks.first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
     check("「いま」行の.lev-markは11px以上", nowMarkFontSize >= 11, String(nowMarkFontSize));
-    const taskMarkFontSize = await taskMarks.first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
-    check("「タスク」行の.lev-markは11px以上", taskMarkFontSize >= 11, String(taskMarkFontSize));
 
     await page.click('[data-action="nav"][data-view="wbs"]');
     await page.waitForTimeout(300);
-    const wbsMarks = page.locator('.wbs-task-row:has([data-action="toggle-task"][data-id="task-mark1"]) .lev-mark');
+    // v374: WBS一覧のTask行は旧renderTaskRow(.wbs-task-row/toggle-task)から汎用work-list.jsの
+    // listRow()(.work-list-row、行キーdata-work-key="task:<id>"、開くボタンはdata-action="edit-task")
+    // へ描画元が変わっている(旧セレクタは0件になり保証内容と無関係にタイムアウトしていた)。
+    // 保証内容(⚙資産マークが1件出る)は変えず、現行DOMのセレクタへ追随させるだけ。
+    const wbsMarks = page.locator('[data-work-list="wbs"] [data-work-key="task:task-mark1"] .lev-mark');
     check("WBS一覧のTask行(renderTaskRow)に⚙資産マークが1件出る", await wbsMarks.count() === 1);
+    // v374: Task行のマーク文字サイズは(実行タブのTask行が無くなったため)WBS一覧のTask行で検査する。
+    const taskMarkFontSize = await wbsMarks.first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    check("「タスク」行(WBS)の.lev-markは11px以上", taskMarkFontSize >= 11, String(taskMarkFontSize));
     const wbsMarkFontSize = await wbsMarks.first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
     check("WBS行の.lev-markは11px以上", wbsMarkFontSize >= 11, String(wbsMarkFontSize));
 

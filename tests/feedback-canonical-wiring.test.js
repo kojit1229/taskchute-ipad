@@ -6,7 +6,7 @@ const load=name=>import(pathToFileURL(path.join(ROOT,'src/features/feedback',nam
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const acorn=require('acorn'),app=fs.readFileSync(path.join(ROOT,'app.js'),'utf8');
 const ast=acorn.parse(app,{ecmaVersion:'latest',sourceType:'module'});
-const functions={},properties={},wanted=['invalidateFeedbackConnection','renderFeedbackUiSlot','patchFeedbackUi','feedbackCanonicalNotice','hydrateStaticMarkdown'];
+const functions={},properties={},wanted=['invalidateFeedbackConnection','renderFeedbackUiSlot','patchFeedbackUi','feedbackCanonicalNotice','hydrateStaticMarkdown','markFeedbackReadKeepingScroll','maybeMarkAiReportRead'];
 function visit(node){if(!node||typeof node!=='object')return;
  if(node.type==='FunctionDeclaration'&&wanted.includes(node.id.name)){assert.equal(functions[node.id.name],undefined);functions[node.id.name]=app.slice(node.start,node.end);}
  if(node.type==='Property'&&['getCanonicalFiles','getCanonicalBody'].includes(node.key.name)){assert.equal(properties[node.key.name],undefined);properties[node.key.name]=app.slice(node.value.start,node.value.end);}
@@ -33,7 +33,7 @@ test('actual repaired journal/overlay callbacks never read any unscoped legacy c
  const journal=controller(),report=controller(),view=createFeedbackUiView({escapeHTML:String,renderMarkdown:String});
  const c={state:{currentView:'journal',selectedDate:date,feedback:trap},cachedFeedback:trap,_aiReportDirCache:trap,_aiReportBodyCache:trap,
  feedbackCanonicalReader:reader,feedbackHttpClient:{invalidate:()=>key++},feedbackUiController:journal,feedbackReportController:report,feedbackOverlayLoaded:true,
- feedbackUiView:view,createFeedbackReadonlyPatch,feedbackReadonlyPatch:null,ensureFeedbackClients(){},document:{querySelector:()=>slot,getElementById:()=>root,scrollingElement:root,body,activeElement:body,addEventListener(){}}};vm.createContext(c);
+ feedbackUiView:view,createFeedbackReadonlyPatch,feedbackReadonlyPatch:null,ensureFeedbackClients(){},main:{querySelector:()=>null,querySelectorAll:()=>[]},markAiReportRead(){throw Error('unexpected read mark');},document:{querySelector:()=>slot,getElementById:()=>root,scrollingElement:root,body,activeElement:body,addEventListener(){}}};vm.createContext(c);
  vm.runInContext(Object.entries(functions).filter(([k])=>k!=='hydrateSegment').map(([,v])=>v).join('\n')+`\nthis.files=(${properties.getCanonicalFiles});this.body=(${properties.getCanonicalBody});`,c);
  c.feedbackReportOverlay=createFeedbackReportOverlay({gateway:{key:()=>key,dates:async()=>[]},controller:report,view,escapeHTML:String,getCanonicalFiles:c.files,getCanonicalBody:c.body,onUpdate(){}});
  assert.match(c.renderFeedbackUiSlot(date),/verified 1/);c.patchFeedbackUi();assert.match(slot.innerHTML,/verified 1/);

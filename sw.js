@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v373";  // v369: Today・検索・詳細保存ガードの選択統合
+const CACHE_NAME = "taskchute-journal-pwa-v374";  // v374: フィードバック既読保存の修復
 
 // v353: 12WY R0 task.twyPlan のデータ契約+plan.js 純関数+Task編集モーダル3項目
 

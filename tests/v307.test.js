@@ -224,7 +224,10 @@ async function runScenario(browser, { width, height, navContainer, viewA, viewB 
       afterAutoScroll.page > 0, JSON.stringify(afterAutoScroll));
 
     // [3] 同一ビュー内の日付だけの切替では、リセットが発火しない(スコープを超えない回帰防止)
-    const anchoringStyle = await page.addStyleTag({ content: "html, body, #app, #main { overflow-anchor: none !important; }" });
+    // v374(独立レビューr4 B-2): 検査側でCSSを注入せず、製品CSS(styles.css body { overflow-anchor: none })が
+    //       scroll anchoring を切っていることを保証する(製品CSSを消すとこの検査が赤になる)。
+    const bodyAnchor = await page.evaluate(() => getComputedStyle(document.body).overflowAnchor);
+    check(`${width}px: 製品CSSがbodyのscroll anchoringを無効化している`, bodyAnchor === "none", String(bodyAnchor));
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     await setScrollPos(page, 300);
     before = await scrollPos(page);
@@ -235,7 +238,6 @@ async function runScenario(browser, { width, height, navContainer, viewA, viewB 
       after.page === 300 && after.view === viewA && after.writes.length === 0, JSON.stringify(after));
     check(`${width}px: 日付切替観測中はscroll anchoringを明示無効化`, after.anchor === "none", JSON.stringify(after));
     console.log("  v307 date observation", JSON.stringify(after));
-    await anchoringStyle.evaluate(node => node.remove());
     await page.waitForFunction((tomorrow) =>
       document.querySelector('[data-date-picker]')?.value === tomorrow, TOMORROW, { timeout: 2000 });
 

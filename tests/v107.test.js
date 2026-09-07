@@ -410,7 +410,7 @@ function check(name, cond, extra = "") {
     });
     check("保存前は未完了タスク一覧に出る", await openTaskCount("task-C") === 1);
     // v332: 「タスク」行の編集ボタンは行タップ展開(task-row-toggle)後にしか出ない(セレクタ追随)。
-    await page.locator('[data-action="nav"][data-view="wbs"]').click();
+    await page.locator('.sidebar [data-action="nav"][data-view="wbs"]').click();
     await page.waitForSelector('[data-action="edit-task"][data-id="task-C"]');
     await page.locator('[data-work-list="wbs"] [data-action="edit-task"][data-id="task-C"]').click();
     await page.waitForTimeout(200);
@@ -422,7 +422,7 @@ function check(name, cond, extra = "") {
     check("保存後、分子が分母(10)と同じになる(v95連動)", t6?.progressNum === 10, JSON.stringify(t6));
     check("保存後、statusがcompletedになる", t6?.status === "completed", JSON.stringify(t6));
     check("保存後、未完了タスク一覧から消える", await openTaskCount("task-C") === 0);
-    await page.click('[data-action="nav"][data-view="wbs"]');
+    await page.click('.sidebar [data-action="nav"][data-view="wbs"]');
     await page.waitForTimeout(200);
     check("WBSタブのバッジが「完了」になる", (await wbsBadge("task-C").textContent())?.includes("完了"), await wbsBadge("task-C").textContent());
 
@@ -437,7 +437,7 @@ function check(name, cond, extra = "") {
       view: "tasks"
     });
     check("WBS操作前は未完了タスク一覧(tasks画面)に出る", await openTaskCount("task-D") === 1);
-    await page.click('[data-action="nav"][data-view="wbs"]');
+    await page.click('.sidebar [data-action="nav"][data-view="wbs"]');
     await page.waitForTimeout(200);
     await page.click('[data-action="toggle-task"][data-id="task-D"]');
     await page.waitForTimeout(300);
@@ -478,16 +478,22 @@ function check(name, cond, extra = "") {
       wbsTask("task-nodue2", "期日未設定Task(末尾)", { dueDate: "" })
     ];
     await seed({ tasks: SORT_TASKS, blocks: [], projects: [testProject()], view: "tasks" });
-    await page.locator('[data-action="nav"][data-view="wbs"]').click();
+    await page.locator('.sidebar [data-action="nav"][data-view="wbs"]').click();
+    // v374: normalizeState(app.js v28)が自動追加する「その他」受け皿Task(期日なし)は全件一覧にも出る。
+    //       受け皿は高々1件だけを母集団から除き、順序・欠落・重複の保証は投入fixtureで判定する。
+    const receptacleKeys = (await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).tasks, KEY))
+      .filter(task => task.title === "その他" && !task.deleted).map(task => `task:${task.id}`);
+    check("受け皿「その他」Taskは高々1件", receptacleKeys.length <= 1, JSON.stringify(receptacleKeys));
     const rows = page.locator('[data-work-list="wbs"] [data-work-key^="task:"]');
-    const idsInOrder = await rows.evaluateAll(els => els.map(el => el.dataset.workKey.slice(5)));
+    const rowKeys = async () => (await rows.evaluateAll(els => els.map(el => el.dataset.workKey))).filter(key => !receptacleKeys.includes(key));
+    const idsInOrder = (await rowKeys()).map(key => key.slice(5));
     check("全件WBSは期限7日・8日・未設定を落とさず元Task順で表示する",
       JSON.stringify(idsInOrder) === JSON.stringify(SORT_TASKS.map(task => task.id)), JSON.stringify(idsInOrder));
     await page.locator('[data-work-list="wbs"] [data-work-filter="due"]').selectOption('overdue');
-    check("期限超過filterは超過Taskだけを表示する", JSON.stringify(await rows.evaluateAll(els => els.map(el => el.dataset.workKey))) === JSON.stringify(['task:task-overdue']));
+    check("期限超過filterは超過Taskだけを表示する", JSON.stringify(await rowKeys()) === JSON.stringify(['task:task-overdue']));
     await page.locator('[data-work-list="wbs"] [data-work-filter="due"]').selectOption('none');
-    check("期限なしfilterは未設定Taskだけを表示する", JSON.stringify(await rows.evaluateAll(els => els.map(el => el.dataset.workKey))) === JSON.stringify(['task:task-nodue2']));
-    await page.locator('[data-action="nav"][data-view="exec"]').click();
+    check("期限なしfilterは未設定Taskだけを表示する", JSON.stringify(await rowKeys()) === JSON.stringify(['task:task-nodue2']));
+    await page.locator('.sidebar [data-action="nav"][data-view="exec"]').click();
     check("Task期限から架空の予定Blockを作らない", await page.locator('[data-work-list="exec"] [data-work-key]').count() === 0 && (await stateNow()).blocks.length === 0);
   } finally {
     await browser.close();

@@ -198,20 +198,33 @@ async function seedSettingsPatch(page, patch) {
     await page.click('.modal-card .modal-footer [data-action="modal-close"]');
     await page.waitForSelector(".modal-card", { state: "detached" });
 
-    console.log("[5] 1280↔1279pxの1列⇄2列切替はsetViewportSizeだけ(クリックを挟まない)で成立する(A-M1/B-H1対応)");
+    console.log("[5] 1280px境界の1列⇄2列切替はsetViewportSizeだけ(クリックを挟まない)で成立する(A-M1/B-H1対応)。");
+    // v374: desktop判定はv373で `(min-width:1280px) or (min-width:1024px and landscape)` へ拡張済み
+    // (app.js renderExecView() の matchMedia)。1279pxは幅だけでは判定できず、1279px×横長は
+    // 引き続き2ペイン、1279px×縦長または1023pxは1列になる。両方を検査する(保証内容自体は
+    // 「resizeイベントだけで1列⇄2列が追随する」ことのまま変えていない)。
     await page.setViewportSize({ width: 1279, height: 900 });
     await page.waitForTimeout(150);
-    check("1279pxではexec-two-paneが出ない(1列、resizeイベントだけで再描画される)", await page.locator(".exec-two-pane").count() === 0);
-    check("1279px実績モードは埋め込み時間軸のみ(従来のv333a単一列)", await page.locator(".tl-radar-panel").count() === 1);
+    check("1279px×横長(実績モード)は2ペインを維持する(v373: 1024px以上×横長もdesktop扱い)",
+      await page.locator(".exec-two-pane").count() === 1);
+    await page.setViewportSize({ width: 1279, height: 1400 });
+    await page.waitForTimeout(150);
+    check("1279px×縦長(実績モード)ではexec-two-paneが出ない(1列、resizeイベントだけで再描画される)",
+      await page.locator(".exec-two-pane").count() === 0);
+    check("1279px×縦長実績モードは埋め込み時間軸のみ(従来のv333a単一列)", await page.locator(".tl-radar-panel").count() === 1);
+    await page.setViewportSize({ width: 1023, height: 900 });
+    await page.waitForTimeout(150);
+    check("1023px×横長でも幅不足のため1列のまま(v373: 1024px未満はorientation不問でdesktop対象外)",
+      await page.locator(".exec-two-pane").count() === 0);
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.waitForTimeout(150);
     check("1280pxへ戻すとexec-two-paneが復活する(クリック無し)", await page.locator(".exec-two-pane").count() === 1);
     await page.click('[data-action="exec-mode-toggle"][data-mode="plan"]');
     await page.waitForSelector(".work-list[data-work-list=exec]");
-    await page.setViewportSize({ width: 1279, height: 900 });
+    await page.setViewportSize({ width: 1279, height: 1400 });
     await page.waitForTimeout(150);
-    check("計画モードでも1279pxでexec-two-paneが消える(resizeだけで反映)", await page.locator(".exec-two-pane").count() === 0);
-    check("1279px計画モードは一覧のみ(exec-pane-leftは無い)", await page.locator(".exec-pane-left").count() === 0);
+    check("計画モードでも1279px×縦長でexec-two-paneが消える(resizeだけで反映)", await page.locator(".exec-two-pane").count() === 0);
+    check("1279px×縦長計画モードは一覧のみ(exec-pane-leftは無い)", await page.locator(".exec-pane-left").count() === 0);
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.waitForTimeout(150);
     check("計画モードで1280pxへ戻すとexec-two-paneが復活する", await page.locator(".exec-two-pane").count() === 1);

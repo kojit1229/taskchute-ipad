@@ -150,9 +150,15 @@ function runningBlock() {
       && await empty.locator('[data-action="now-start"]').count() === 0);
     await empty.locator('[data-action="nav"][data-view="exec"]').click();
     await page.waitForSelector('#app[data-view="exec"]');
+    // v374修正: normalizeState()は「その他」Project/Task(kind:"other")の存在を必ず保証する
+    // (v28からの既定仕様。seed()のreload時にも必ず再生成される、実行タブへの遷移とは無関係の
+    // 常設プレースホルダ)。この検査の意図は「実行タブへの遷移そのものが予定/Taskを自動生成
+    // しない」ことの確認なので、この常設の「その他」Task以外に新規Task/Blockが増えていない
+    // ことを見る(tasks.length===0という以前の前提はこの既定Taskを踏まえておらず誤り)。
     check("空状態の追加導線で実行へ移動しても予定を自動作成しない", await page.evaluate((key) => {
       const value = JSON.parse(localStorage.getItem(key));
-      return value.blocks.length === 0 && value.tasks.length === 0;
+      const nonOtherTasks = value.tasks.filter((t) => t.kind !== "other");
+      return value.blocks.length === 0 && nonOtherTasks.length === 0;
     }, STATE_KEY));
 
     console.log("[5] 旧POMODORO右列退避コードと文字列replaceハックを残さない");

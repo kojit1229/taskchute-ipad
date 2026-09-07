@@ -99,7 +99,15 @@ function check(name, cond, extra = "") {
       await page.locator(`.wbs-projects [data-action="task-today"][data-id="${id}"]`).click();
       await page.locator('#modalRoot').evaluate(async root => { await Promise.all(root.getAnimations({subtree:true}).map(a => a.finished)); });
     };
-    const taskIds = () => page.locator('[data-work-list="wbs"] [data-work-key^="task:"]').evaluateAll(els => els.map(el => el.dataset.workKey.slice(5)));
+    // v374: normalizeState(app.js v28)は「その他」Project直下の受け皿Task 1件を自動追加し、全件一覧はそれも表示する。
+    //       順序・欠落の保証は投入fixture側で判定し、受け皿は「その他」タイトルの1件だけを除外する(他の追加行は許さない)。
+    const receptacleIds = async () => (await stateNow()).tasks.filter(t => t.title === 'その他' && !t.deleted).map(t => t.id);
+    const taskIds = async () => {
+      const ids = await page.locator('[data-work-list="wbs"] [data-work-key^="task:"]').evaluateAll(els => els.map(el => el.dataset.workKey.slice(5)));
+      const receptacle = await receptacleIds();
+      if (receptacle.length > 1) check('受け皿「その他」Taskは高々1件', false, JSON.stringify(receptacle));
+      return ids.filter(id => !receptacle.includes(id));
+    };
     console.log('[1] 未配置TaskはWBSに残り、時刻を確認するまでBlockを作らない');
     await seed({tasks:[wbsTask('task-A','複数回今日へ追加検証Task')],projects:[testProject()],view:'wbs'});
     check('初期状態で一覧に出る',await openItem('task-A').count()===1);
