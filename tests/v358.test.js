@@ -257,6 +257,7 @@ async function stateNow(page) {
 
     await page.setViewportSize({ width: 768, height: 1024 });
     await page.waitForFunction((w) => document.documentElement.clientWidth === w, 768);
+    await page.locator(".settings-connect").waitFor({ state: "visible" });  // v374: 同上
     check("768pxで横スクロールしない", !(await hasHorizontalOverflow()));
     // v358修正(B-M9): 720px超では.settings-gridが2列になるため、grid-column指定がないと
     // 「接続と保存」がiPad幅でも2列の1セルに落ちてしまう(A2=PC2列はv359持ち越しだが、これは
@@ -269,6 +270,9 @@ async function stateNow(page) {
 
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.waitForFunction((w) => document.documentElement.clientWidth === w, 1280);
+    // v374: 1280pxへの幅変更は横長/PC判定の再描画(v373 の媒体クエリ購読)を伴い、直後に測ると差し替え中の
+    //       要素を掴んで boundingBox が null になることがある(手元で2回に1回再現)。表示成立を待ってから測る。
+    await page.locator(".settings-connect").waitFor({ state: "visible" });
     check("1280pxで横スクロールしない", !(await hasHorizontalOverflow()));
     const connectBox1280 = await page.locator(".settings-connect").boundingBox();
     const gridBox1280 = await page.locator(".settings-grid").boundingBox();

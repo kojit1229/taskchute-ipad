@@ -29,6 +29,7 @@ AIレポートでフィードバック本文を読んだときに既読が保存
 - tests/v329.test.js
 - tests/v332.test.js
 - tests/v334.test.js
+- tests/v358.test.js
 - tests/v55.test.js
 - tests/v65.test.js
 - tests/v72.test.js
