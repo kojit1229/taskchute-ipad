@@ -58,6 +58,13 @@ const task = (id, projectId, extra = {}) => ({
   // M3: nowDateTime()は秒精度なので、直前の保存と同一秒内に次の保存が起きると
   // updatedAtが偶然一致しうる。固定sleepで秒境界を跨ぐのではなく、実際にstateが
   // 変化するまでポーリング待機する(タイムアウトすれば「bumpしなかった」という事実として扱う)。
+  // v374: CI(shard3)で「無変更再保存でもtask.updatedAtは常にbumpされる(既存慣行)」が
+  // `2026-09-06T23:27:22 -> 2026-09-06T23:27:22`(変化なし)のまま3000msでタイムアウト
+  // (ci-run-34066885834/shard3-101577103350.log 1168行)。app.jsのsaveTaskFromModalは
+  // 無条件でupdatedAtをbumpする実装で分岐は無く、直前の同種チェックはCIでも通っている
+  // ため単発の境界事例と見られる。nowDateTime()が秒精度である以上、保存ボタンクリック→
+  // ハンドラ実行→localStorage書き込みの一連がCIの共有ランナーで3000ms以内に収まらない
+  // ケースへ余裕を持たせるため、待つ内容(実際のupdatedAt変化)は変えずタイムアウトのみ延長する。
   async function waitForTaskUpdatedAtChange(taskId, prevUpdatedAt, timeout = 3000) {
     try {
       await page.waitForFunction(({ key, taskId, prevUpdatedAt }) => {
@@ -230,6 +237,12 @@ const task = (id, projectId, extra = {}) => ({
     const beforeUnchangedTask = beforeUnchanged.tasks.find((t) => t.id === "t-12wy");
     const beforeUnchangedDataModifiedAt = beforeUnchanged.dataModifiedAt;
     await openTaskMenu("t-12wy");
+    // v375: updatedAt は秒精度(nowDateTime)。直前の保存と同じ秒内に再保存すると値が一致して「bumpなし」に見える
+    //       (CIとローカル双方で `19:34:54 -> 19:34:54` を実測)。待ち時間の延長ではなく、秒が進んだことを確認してから保存する。
+    await page.waitForFunction((prev) => {
+      const d = new Date(), pad = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}` !== prev;
+    }, beforeUnchangedTask.updatedAt, { timeout: 3000 });
     // フィールドは一切変更せずそのまま保存する
     await page.click('[data-action="modal-save"]');
     await page.waitForSelector('[data-action="modal-save"]', { state: "detached" });

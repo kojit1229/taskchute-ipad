@@ -127,6 +127,16 @@ function block(id, date, start, end, completed, charge = 0, discharge = 0) {
     check("日報ボタン群はJOURNAL LOG節の先頭", await page.locator('[data-journal-section="journal"] > .fold-body > .row [data-action="generate-report"]').count() === 1);
     check("新設3節は既定open", await page.locator('[data-journal-section="body"][open], [data-journal-section="flight"][open], [data-journal-section="money"][open]').count() === 3);
     for (const section of ["body", "flight", "money"]) await page.locator(`[data-journal-section="${section}"] > summary`).click();
+    // v374: CI(shard4)で`[data-action="toggle-meds"]`クリックが
+    // `page.click: Timeout 30000ms exceeded. element is not visible`で失敗
+    // (ci-run-34066885834/shard4-101577103448.log 2917行)。直前の3セクション連続クリックは
+    // 各回journal.jsが対象<details>を含むjournalパネル全体を再render(innerHTML差し替え)する
+    // ため、CIの低速な描画が追いつく前に無関係な"morning"セクション内のtoggle-medsを叩くと、
+    // 差し替え中の旧DOMをつかんで一時的に不可視/未接続な要素をクリックしうる。3クリック分の
+    // 再renderが実際に反映済み(3セクションとも閉じたDOM状態)であることを待ってから進める
+    // (固定sleepではなく実際の描画結果を待つだけで、検査内容=閉じたことの確認は変えない)。
+    await page.waitForFunction(() => ["body", "flight", "money"].every(
+      (name) => document.querySelector(`[data-journal-section="${name}"]`)?.open === false));
     await page.click('[data-action="toggle-meds"]');
     check("bodyLog/flightLog/moneyの手動closedを再描画後も記憶", await page.locator('[data-journal-section="body"]:not([open]), [data-journal-section="flight"]:not([open]), [data-journal-section="money"]:not([open])').count() === 3);
 

@@ -598,6 +598,12 @@ h3 {
 .segmented button {
   flex: 1;
   min-width: 72px;
+  /* v374: 2行構成(ラベル+small注記)のチップはpadding+フォントメトリクス依存で高さが決まり、
+     CIのLinuxフォールバックフォントではローカル(height:45px)よりheight:43pxと1〜2px低く
+     実測される事例を確認(ci-only-failures-analysis.md r2-twelveweek-plan節、shard1 log 1001行)。
+     44pxタッチターゲット基準を環境非依存で満たすため明示する。 */
+  min-height: 44px;
+  box-sizing: border-box;
   padding: 8px 10px;
   border-radius: 6px;
   color: var(--muted);

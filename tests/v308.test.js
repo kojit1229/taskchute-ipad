@@ -74,6 +74,14 @@ async function openSeededPage(browser, width) {
 // タイトルstrongはdata-action/data-idを持たず、親の.exec-row-copy(data-action="block-row-toggle")
 // 側にdata-idがあるため、そちら経由で選ぶ(「いま」行のstrongはedit-block/data-idを従来どおり持つ)。
 async function blockTitleMetrics(page, selector = `.exec-row-copy[data-id="${BLOCK_ID}"] strong`) {
+  // v374: CI(Linux共有ランナー)で、#app[data-view="tasks"]の出現後まだ.exec-row-copy strongが
+  // 実レイアウト(幅>0)を持つ前に測定してしまい、clientWidth/scrollWidth/offsetHeightが
+  // すべて0で返る事例を確認(ci-only-failures-analysis.md v308節、shard1 log 2437行)。
+  // レイアウト確定(幅>0)を待ってから計測する(assertion自体は無改変)。
+  await page.waitForFunction(
+    (sel) => (document.querySelector(sel)?.clientWidth ?? 0) > 0,
+    selector
+  );
   return page.locator(selector).evaluate((element) => {
     const style = getComputedStyle(element);
     // line-heightが"normal"だとparseFloatがNaNになるため、font-sizeから1行分の上限目安を作る。

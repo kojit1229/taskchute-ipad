@@ -135,6 +135,12 @@ async function stateNow(page) {
     await page.waitForSelector(".fill-gap-sheet", { state: "detached" });
 
     await page.click('[data-action="exec-mode-toggle"][data-mode="plan"]');
+    // v374: CI(Linux)でこの直後の「＋Block」実測時刻がFIXED_NOW(10:00)ではなく実時刻風の
+    // 値(19:00)になる事例を確認(ci-only-failures-analysis.md v355節)。nextFillGapWindow()の
+    // 「actualGapsが無い場合は現在時刻直後30分」フォールバック分岐がnew Date()を直読みするため、
+    // page.clockのモックが何らかの理由で反映されないまま評価された疑い。検証直前でクロックを
+    // 再固定する防御的な二重固定(assertion自体は無改変)。
+    await page.clock.setFixedTime(FIXED_NOW);
     await page.waitForSelector(".exec-header-actions");
     await page.click('.exec-header-actions [data-action="fill-gap-open"]');
     await page.waitForSelector(".fill-gap-sheet");
