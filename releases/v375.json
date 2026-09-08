@@ -11,14 +11,17 @@
     "releases/v375.json",
     "styles.css",
     "sw.js",
-    "tests/suite-manifest.json",
     "tests/feedback-recovery-e2e.test.js",
     "tests/r0-twyplan.test.js",
     "tests/r2-twelveweek-plan.test.js",
+    "tests/suite-manifest.json",
     "tests/v308.test.js",
     "tests/v317.test.js",
     "tests/v325.test.js",
     "tests/v355.test.js",
+    "tests/v50.test.js",
+    "tests/v59.test.js",
+    "tests/v70.test.js",
     "tests/v99.test.js"
   ],
   "intent": [
@@ -31,16 +34,21 @@
     "v99: 固定待ちを、行トグルが1個に収束する成立条件待ちへ。",
     "v317: セクション折りたたみ後のパネル再描画完了を待ってから次の操作。",
     "feedback-recovery-e2e: Tab後のフォーカス確定を待ってから判定。",
-    "r0-twyplan / v325: 待ち条件は不変のまま待ち時間だけ延長(CIの低速環境)。"
+    "r0-twyplan / v325: 待ち条件は不変のまま待ち時間だけ延長(CIの低速環境)。",
+    "v317/v325/v355: Nodeの地域設定に依存しないUTC指定へ固定時計を修正。日本時間の日跨ぎも同じ基準で検査。",
+    "最終ゲートで見つかったv50/v59/v70の同じ時計依存も、Clock APIへ渡す時点だけUTC指定に統一。",
+    "独立検証F1対応：v50/v59/v70のbrowser.newContextにAsia/Tokyoを明示し、ブラウザー内の地域・見本日・10時・UTCオフセットを直接検査。",
+    "独立検証F2対応：v325の日跨ぎ復帰テストは、トグルによるapp-state通信のrequestfinishedを待ち、計数ルートの加算後に基準値を採る。固定待ち・期待値・製品コードの変更なし。"
   ],
   "uncertainties": [
-    "手元(Windows)では修正前から通るため、効果の確認はCIの実行結果による。"
+    "F1対応版の独立判定は02 FAIL (F2) / 03 PASS。F2修正後の独立再検証・全量CIは未実施。"
   ],
   "reviewFocus": [
     "検査条件の弱体化がないこと。"
   ],
   "verification": [
-    "正規ゲート --final(8本明示)の結果は evidence/gate-v375.log を参照。PR CI と main CI の結果を別記。"
+    "前回の成功ログは地域設定不足を検出できなかったためF1の解消証拠にしない。修正版の検査ログはtaskchute/projects/2026-09-08-daily-use-plan/reports/foundation-r2/に別保存。",
+    "F2の順序実測・修正前後の負例・UTC/日本時間の反復・6組・最終ゲートの実行結果はtaskchute/projects/2026-09-08-daily-use-plan/reports/foundation-r3/へ別保存し、results.jsonと終了コード付きログを正本とする。"
   ],
   "knownLimitations": [
     "実機は未確認。"

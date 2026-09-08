@@ -1,3 +1,4 @@
+// 固定時計は日本時間の時点をUTCで指定し、実行するPCの地域設定に依存させない。
 // v325: MIT直下の体調コメントを健康日次から決定論で描画し、stateへ保存しない。
 const fs = require("fs");
 const path = require("path");
@@ -9,7 +10,7 @@ const {
 const PORT = randomPort();
 const TODAY = "2026-09-04";
 const TOMORROW = "2026-09-05";
-const FIXED_NOW = new Date(2026, 8, 4, 10, 0, 0, 0);
+const FIXED_NOW = new Date(Date.UTC(2026, 8, 4, 1, 0, 0, 0));
 const HEALTH_PATH = path.join(__dirname, "..", "src", "features", "health.js");
 let failures = 0;
 
@@ -216,7 +217,7 @@ function healthDays({ today = TODAY, sleepMin = 442, yesterdaySteps = 7000, othe
     let resumeDays = healthDays({ sleepMin: 442 });
     let resumeHealthRequests = 0;
     let resumePullRequests = 0;
-    await resumePage.clock.install({ time: new Date(2026, 8, 4, 23, 57, 0, 0) });
+    await resumePage.clock.install({ time: new Date(Date.UTC(2026, 8, 4, 14, 57, 0, 0)) });
     await blockGithubApiByDefault(resumePage);
     await resumePage.route((url) => url.hostname === "api.github.com", (route) => {
       const pathname = decodeURIComponent(new URL(route.request().url()).pathname);
@@ -238,8 +239,9 @@ function healthDays({ today = TODAY, sleepMin = 442, yesterdaySteps = 7000, othe
     // 残るのは応答後の再render(state反映→DOM更新)がCIの共有ランナーで既定30秒に収まらない
     // ケース。待つ条件(実際のDOM文言)は変えずタイムアウトのみ余裕を持たせる。
     await resumePage.waitForFunction(() => document.querySelector(".tower-condition-text")?.textContent.includes("睡眠 7h22m"), null, { timeout: 45000 });
-    await resumePage.clock.pauseAt(new Date(2026, 8, 4, 23, 59, 50, 0));
-    const recentPull = resumePage.waitForRequest((request) => request.url().includes("taskchute/app-state.json"));
+    await resumePage.clock.pauseAt(new Date(Date.UTC(2026, 8, 4, 14, 59, 50, 0)));
+    // 通信開始の通知は計数ルートより先に届くため、加算済みになる通信完了まで待つ。
+    const recentPull = resumePage.waitForEvent("requestfinished", (request) => request.url().includes("taskchute/app-state.json"));
     await resumePage.evaluate(() => {
       const input = document.createElement("input");
       input.type = "checkbox";
@@ -252,7 +254,7 @@ function healthDays({ today = TODAY, sleepMin = 442, yesterdaySteps = 7000, othe
     await recentPull;
     const requestsBeforeResume = { health: resumeHealthRequests, pull: resumePullRequests };
     resumeDays = healthDays({ today: TOMORROW, sleepMin: 260 });
-    await resumePage.clock.setSystemTime(new Date(2026, 8, 5, 0, 0, 10, 0));
+    await resumePage.clock.setSystemTime(new Date(Date.UTC(2026, 8, 4, 15, 0, 10, 0)));
     await resumePage.evaluate(() => {
       Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
       document.dispatchEvent(new Event("visibilitychange"));
