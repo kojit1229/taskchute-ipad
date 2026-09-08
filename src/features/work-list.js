@@ -1,6 +1,7 @@
 import { state } from "../state/store.js";
 import { registerActions } from "../ui/actions.js";
 import { workListRows, filterWorkList } from "../core/work-list.js";
+import { renderSearchFrame, patchSearchFrame } from "../ui/daily-parts/search-frame.js";
 
 let escapeHTML, todayISO, dueDate, renderBlock, resolveEstimateMin, leverageTypeMarkHTML;
 let modalOrigin;
@@ -12,13 +13,15 @@ function view(scope) {
 }
 function configureWorkList(deps) {
   ({ escapeHTML, todayISO, dueDate, renderBlock, resolveEstimateMin, leverageTypeMarkHTML } = deps);
-  registerActions({ "work-list-clear": ({ target }) => {
+  const clear = ({ target }) => {
     const scope = target.closest("[data-work-list]").dataset.workList;
     Object.assign(view(scope), { query: "", status: "", project: "", category: "", due: "", scroll: 0 });
     const root = document.querySelector(`[data-work-list="${scope}"]`);
     root.querySelectorAll("[data-work-filter]").forEach(input => { if (input.dataset.workFilter !== "mode") input.value = ""; });
     patchWorkList(root, true);
-  }});
+  };
+  registerActions({ "work-list-clear": clear, "daily-search-clear": clear,
+    "daily-search-change": ({ target }) => handleWorkListInput(target) });
 }
 function rowsFor(scope) {
   const date = todayISO();
@@ -29,10 +32,6 @@ function rowsFor(scope) {
 // (leverageTypeMarkHTML)は、app.js→src循環依存を避けるため複製していたが、timelineが既に
 // 同じ関数をconfigureTimeline()経由で注入している前例(app.js:423)に倣い、こちらもDIへ統一した。
 // 未注入(configureWorkList呼び出し漏れ)でも例外にせず空文字を返す(listRow内で分岐)。
-function option(value, label, selected) { return `<option value="${escapeHTML(value)}"${value === selected ? " selected" : ""}>${escapeHTML(label)}</option>`; }
-function select(scope, key, label, entries) {
-  return `<label>${label}<select class="select" data-work-filter="${key}" aria-label="${label}">${entries.map(([value, title]) => option(value, title, view(scope)[key])).join("")}</select></label>`;
-}
 function listRow(row, scope) {
   if (scope === "exec" && row.kind === "block") return `<div data-work-key="${escapeHTML(row.key)}"><div class="work-list-date">${escapeHTML(row.date)}</div>${renderBlock(row.item)}</div>`;
   const status = { completed: "完了", ended: "終了・未完了", running: "実行中", open: "未完了", suspended: "中断" }[row.status];
@@ -44,43 +43,40 @@ function listRow(row, scope) {
     ${scope === "wbs" && row.project && !row.project.deleted ? `<button class="btn ghost search-hit" data-action="wbs-search-jump" data-kind="${row.kind}" data-id="${escapeHTML(row.id)}"><span class="search-kind">${row.kind === "task" ? "Task" : "Project"}</span> <span class="search-date">${escapeHTML(row.category || "未分類")}</span> <span class="search-snippet">${escapeHTML(row.title)}</span> — ツリーで見る</button>` : ""}
   </div>`;
 }
-function rowsHTML(model, scope) { return model.shown.length ? model.shown.map(row => listRow(row, scope)).join("") : '<p class="muted work-list-empty">条件に一致する項目はありません。</p>'; }
+function rowsHTML(model, scope) { return model.shown.map(row => listRow(row, scope)).join(""); }
+function searchModel(scope, model, composing = false) {
+  const ui = view(scope);
+  const projects = state.projects.filter(project => !project.deleted).map(project => [String(project.id ?? ""), String(project.title ?? "")]);
+  const categories = [...new Set(model.rows.map(row => String(row.category ?? "")).filter(Boolean))].sort();
+  return { scope, query: ui.query, mode: ui.mode, composing,
+    filters: { status: ui.status, project: ui.project, category: ui.category, due: ui.due },
+    options: {
+      status: [["", "すべて"], ["open", "未完了"], ["running", "実行中"], ["completed", "完了"], ...(scope !== "wbs" ? [["ended", "終了・未完了"]] : []), ...(scope === "wbs" ? [["suspended", "中断"]] : [])],
+      project: [["", "すべて"], ["__none__", "Projectなし"], ...projects],
+      category: [["", "すべて"], ...categories.map(name => [name, name])],
+      due: [["", "すべて"], ["today", "対象日"], ["overdue", "超過"], ["none", "なし"]]
+    }, shownCount: model.shown.length, totalCount: model.rows.length,
+    emptyMessage: "条件に一致する項目はありません。",
+    resultRegionId: scope === "wbs" ? "wbs-search-results" : scope + "-search-results" };
+}
 function renderWorkList(scope) {
-  const model = rowsFor(scope), ui = view(scope);
-  const projects = state.projects.filter(project => !project.deleted).map(project => [project.id, project.title]);
-  const categories = [...new Set(model.rows.map(row => row.category).filter(Boolean))].sort();
+  const model = rowsFor(scope);
   return `<section class="work-list tower-panel-box${scope === "today" ? " sec-arrivals" : ""}" data-work-list="${scope}">
     <h2>${scope === "wbs" ? "Project / Task を探す" : scope === "today" ? "今日の予定・実績" : "予定一覧"}${scope === "wbs" ? "" : ` <span>今日 ${escapeHTML(model.date)}</span>`}</h2>
-    <div class="work-list-filters">
-      ${scope === "exec" ? select(scope, "mode", "表示期間", [["today", "今日"], ["upcoming", "これから"]]) : ""}
-      <label class="work-list-query">検索<input ${scope === "wbs" ? 'id="wbs-search-input"' : ""} class="input" type="search" data-work-filter="query" value="${escapeHTML(ui.query)}" placeholder="名称・メモ・完了条件・Project" aria-label="名称・メモ・完了条件・Projectを検索"></label>
-      ${select(scope, "status", "状態", [["", "すべて"], ["open", "未完了"], ["running", "実行中"], ["completed", "完了"], ...(scope !== "wbs" ? [["ended", "終了・未完了"]] : []), ...(scope === "wbs" ? [["suspended", "中断"]] : [])])}
-      ${select(scope, "project", "Project", [["", "すべて"], ["__none__", "Projectなし"], ...projects])}
-      ${select(scope, "category", "カテゴリ", [["", "すべて"], ...categories.map(name => [name, name])])}
-      ${select(scope, "due", "作業期限（自分締切）", [["", "すべて"], ["today", "対象日"], ["overdue", "超過"], ["none", "なし"]])}
-      <button type="button" class="btn" data-action="work-list-clear">条件を解除</button>
-    </div>
-    <p class="work-list-count" aria-live="polite">${model.shown.length} / ${model.rows.length}件 ・ 全件スクロール</p>
-    <div ${scope === "wbs" ? 'id="wbs-search-results"' : ""} class="work-list-rows" data-work-list-rows tabindex="0" aria-label="${scope === "wbs" ? "検索結果" : "予定一覧"}">${rowsHTML(model, scope)}</div>
+    ${renderSearchFrame(searchModel(scope, model), { escapeHTML, resultsHTML: rowsHTML(model, scope), clearAction: "work-list-clear" })}
     ${scope === "exec" ? '<p class="muted">未配置のTaskは <button class="btn ghost" data-action="nav" data-view="wbs">WBSで見る</button></p>' : ""}
   </section>`;
 }
 function patchWorkList(root, reset = false) {
   if (root.dataset.workComposing === "1") return;
-  const scope = root.dataset.workList, model = rowsFor(scope), rows = root.querySelector("[data-work-list-rows]");
-  // Expanded Block memo/select edits must survive the Today ticker too.
-  if (rows.contains(document.activeElement) && !reset) return;
-  const html = rowsHTML(model, scope);
-  if (rows.innerHTML !== html) {
-    const top = reset ? 0 : rows.scrollTop;
-    rows.innerHTML = html; rows.scrollTop = top;
-  } else if (reset) rows.scrollTop = 0;
-  root.querySelector(".work-list-count").textContent = `${model.shown.length} / ${model.rows.length}件 ・ 全件スクロール`;
+  const scope = root.dataset.workList, model = rowsFor(scope);
+  patchSearchFrame(root, searchModel(scope, model), { escapeHTML, resultsHTML: rowsHTML(model, scope), reset });
 }
 function handleWorkListInput(target) {
   const root = target.closest?.("[data-work-list]");
   if (!root || !target.matches("[data-work-filter]")) return false;
   const ui = view(root.dataset.workList), key = target.dataset.workFilter;
+  if (!["query", "status", "project", "category", "due", "mode"].includes(key)) return false;
   // Native change fires again on query blur: do not scroll away the clicked row.
   if (ui[key] === target.value) return true;
   ui[key] = target.value;
