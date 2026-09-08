@@ -9,10 +9,12 @@ const {createFundReportGateway} = await import('../src/features/fund/report-gate
 const esc=v=>String(v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 const good=text=>({ok:true,status:200,text});
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
+// 固定時計: 一覧の生成時刻(2026-09-06)から48時間以内に固定し、実行日が進んでも stale 判定へ落ちないようにする。
+const clock=()=>{let t=Date.parse('2026-09-06T12:00:00Z');return ()=>t++;};
 test('partial history names the failed source and never invents a generation time',async()=>{
   const name=fundReportFile('fundJournal','2026-09-05');
   let indexOK=false,dirOK=true;
-  const gateway=createFundReportGateway({captureConnection:()=>({ready:true,revision:1}),
+  const gateway=createFundReportGateway({captureConnection:()=>({ready:true,revision:1}),now:clock(),
     read:path=>path==='report-index.json'?(indexOK?good(JSON.stringify({generatedAt:'2026-09-06T00:00:00Z',files:[{name}]})):{ok:false,status:404}):good('Synthetic report'),
     readDirectory:()=>dirOK?good(JSON.stringify([{name,type:'file'}])):{ok:false,status:503}});
   const view=createFundReportView({selection:createFundReportSelection(),gateway,escapeHTML:esc,renderMarkdown:esc});
