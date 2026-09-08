@@ -1,0 +1,77 @@
+{
+  "version": 376,
+  "date": "2026-09-08",
+  "title": "日常操作の共通部品の先行統合",
+  "summary": "単位0・02〜06の共通部品と検査基盤を先行統合する。予定行・実績行・詳細枠の画面接続は次版。検索枠は既存の作業一覧に接続済み。",
+  "changedFiles": [
+    ".gitattributes",
+    "docs/test-impact-map.generated.md",
+    "scripts/test-manifest.js",
+    "src/features/work-list.js",
+    "src/ui/daily-parts/actual-row.js",
+    "src/ui/daily-parts/contract.js",
+    "src/ui/daily-parts/daily-parts.css",
+    "src/ui/daily-parts/detail-frame.js",
+    "src/ui/daily-parts/plan-row.js",
+    "src/ui/daily-parts/search-frame.js",
+    "sw.js",
+    "tests/daily-actual-row.test.js",
+    "tests/daily-detail-frame.test.js",
+    "tests/daily-parts-contract.test.js",
+    "tests/daily-plan-row.test.js",
+    "tests/daily-search-e2e.test.js",
+    "tests/helpers.js",
+    "tests/suite-manifest.json",
+    "releases/v376.json",
+    "CHANGES_v376.md"
+  ],
+  "intent": [
+    "日常操作の共通表示・操作通知・結果の境界を固定し、後続の画面接続に備える。",
+    "入力中のDOM・日本語変換・検索条件と復帰位置を保持する。",
+    "固定日付・通信待ち・地域設定の検査上の落とし穴を可視化する。"
+  ],
+  "changes": [
+    "単位0: test-manifestに固定日付・通信開始待ち直後の計数・地域未指定contextの警告を追加。tests/helpers.jsに日本時間の既定と固定時計注入を集約し、改行規則と生成manifestを更新。",
+    "単位02: 表示データ・通知・操作結果の許可リストを純粋な契約として検査し、未知の操作や任意HTMLを拒否。",
+    "単位03: 予定行で未定・実行中・予定完了・Task完了を区別し、未接続操作を隠す。",
+    "単位04: 実績行で終了未完了・時刻未記録・計測0分を区別し、TaskなしのTask完了操作を出さない。",
+    "単位05: 検索枠を共用し、work-listに接続。IME変換中・結果欄の編集中はDOMを保持し、条件解除・詳細復帰・件数更新を扱う。",
+    "単位06: 詳細枠の見出し・許可欄型・エラー・dirty/busy・保存取消表示を共用。保存・削除の実処理は含めない。",
+    "共通JS/CSSはAPP_SHELLに列挙済み。CACHE_NAMEをv375からv376へ更新。"
+  ],
+  "uncertainties": [
+    "本発注の検査結果はreports/impl-r1/v376/command-results.jsonlと各ログを正本とし、成功と未実施を区別する。",
+    "独立レビュー・全量CI・iOS実機での更新とオフライン確認は本発注では未実施。"
+  ],
+  "reviewFocus": [
+    "単位0・02〜06と後続画面接続の境界、既存の保存・同期・操作登録を変更していないこと。",
+    "入力DOM・IME・フォーカスと復帰位置、安全な表示と未接続操作の扱い。",
+    "基準896efadとchanges.patchのSHA-256、検査の終了コード・件数・未実施を照合する。"
+  ],
+  "verification": [
+    "関連スイート: daily-parts-contract, daily-plan-row, daily-actual-row, daily-search-e2e, daily-detail-frame, work-list-model, work-list-focus, work-list-render-focus, work-list-e2e, action-registry-core, draft-leave, v331, v334, v317",
+    "npm run test:manifest:write → node scripts/test-manifest.js --check; npm run code:index。既存索引のCRLF差は記録のみ。",
+    "node scripts/release-record.js releases/v376.json --write / --check。RELEASE_HANDOFF_PATHは案件reports/impl-r1/v376/handoff-preview.md。",
+    "node scripts/release-gate.js releases/v376.json --impact-base=896efad --final。追加対象は--suiteで明示し、実行結果は案件reports/impl-r1/v376/に保存。"
+  ],
+  "knownLimitations": [
+    "共通部品の先行統合であり、日常操作の全画面の完成・公開を意味しない。",
+    "最終ゲートの実行結果はcommand-results.jsonlとrelease-gate-final.logを参照。全量CI・実機確認の代替ではない。"
+  ],
+  "relatedSuites": [
+    "daily-parts-contract",
+    "daily-plan-row",
+    "daily-actual-row",
+    "daily-search-e2e",
+    "daily-detail-frame",
+    "work-list-model",
+    "work-list-focus",
+    "work-list-render-focus",
+    "work-list-e2e",
+    "action-registry-core",
+    "draft-leave",
+    "v331",
+    "v334",
+    "v317"
+  ]
+}
