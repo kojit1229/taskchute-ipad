@@ -5245,11 +5245,12 @@
       "kind": "e2e",
       "tier": "full",
       "domains": [
+        "planning-execution",
         "journal-health"
       ],
       "assertionSignals": 23,
       "assertionHash": "f9fab353de768605",
-      "sourceHash": "b12491d581e5df4b",
+      "sourceHash": "d4fb6b8e09173e16",
       "waits": {
         "fixedCount": 1,
         "numericMilliseconds": 200,
@@ -5436,12 +5437,13 @@
       "tier": "full",
       "domains": [
         "sync-storage",
+        "planning-execution",
         "journal-health",
         "ui-responsive"
       ],
       "assertionSignals": 24,
       "assertionHash": "3939b298d2a02854",
-      "sourceHash": "dae9ad1f86669332",
+      "sourceHash": "ed4d4b7b362b43b1",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -5702,7 +5704,7 @@
       ],
       "assertionSignals": 40,
       "assertionHash": "806aa4e073f61d52",
-      "sourceHash": "2ec69ec5addd9e43",
+      "sourceHash": "31dfb8dc225cf702",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -5994,9 +5996,9 @@
         "planning-execution",
         "ui-responsive"
       ],
-      "assertionSignals": 16,
-      "assertionHash": "449f8bf4f2be5bbf",
-      "sourceHash": "456d2f7d8be99eae",
+      "assertionSignals": 17,
+      "assertionHash": "038ff77d607c87a1",
+      "sourceHash": "0ba22acf689bc647",
       "waits": {
         "fixedCount": 12,
         "numericMilliseconds": 4200,
@@ -6137,9 +6139,9 @@
         "planning-execution",
         "content-ai"
       ],
-      "assertionSignals": 22,
-      "assertionHash": "967e985b311d4279",
-      "sourceHash": "188a6e2823fc8437",
+      "assertionSignals": 23,
+      "assertionHash": "dc9cae6c9a1d835a",
+      "sourceHash": "3be91d3893ff06be",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -6326,9 +6328,9 @@
       "domains": [
         "planning-execution"
       ],
-      "assertionSignals": 41,
-      "assertionHash": "7aca6f1d0653aa46",
-      "sourceHash": "ba2b78cdcc82d716",
+      "assertionSignals": 42,
+      "assertionHash": "98d0b4de2442fe09",
+      "sourceHash": "34e618f6a4611d0f",
       "waits": {
         "fixedCount": 16,
         "numericMilliseconds": 4850,

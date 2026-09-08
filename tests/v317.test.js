@@ -1,3 +1,4 @@
+// 固定時計は日本時間の時点をUTCで指定し、実行するPCの地域設定に依存させない。
 // v317: ジャーナルを日付軸ライフログ(朝→身体→行動→心→暮らし→お金→本文)へ再配置する。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY } = require("./helpers");
 
@@ -98,7 +99,7 @@ function block(id, date, start, end, completed, charge = 0, discharge = 0) {
   }
 
   try {
-    await page.clock.setFixedTime(new Date(2026, 8, 2, 10, 0, 0));
+    await page.clock.setFixedTime(new Date(Date.UTC(2026, 8, 2, 1, 0, 0)));
     await page.goto(`http://localhost:${PORT}/`);
     await passGithubGate(page);
     await page.waitForFunction(() => document.querySelector(".bm-health-src")?.textContent.includes("09-02時点"));

@@ -1,3 +1,4 @@
+// 固定時計は日本時間の時点をUTCで指定し、実行するPCの地域設定に依存させない。
 // v355a: 「空き時間を補う」シート(TIME COMB「補う」/実行ヘッダ「＋Block」→タスクから選ぶ/
 // 分割して置く/新しいBlockを作る)。
 // v355a独立レビュー(review-v355-claude-a/b)対応でスコープを見直した: 「新しいBlockを作る」
@@ -15,7 +16,7 @@ const path = require("path");
 
 const PORT = randomPort();
 const TODAY = "2026-09-04";
-const FIXED_NOW = new Date(2026, 8, 4, 10, 0, 0);
+const FIXED_NOW = new Date(Date.UTC(2026, 8, 4, 1, 0, 0));
 
 let failures = 0;
 function check(name, cond, extra = "") {
@@ -135,11 +136,7 @@ async function stateNow(page) {
     await page.waitForSelector(".fill-gap-sheet", { state: "detached" });
 
     await page.click('[data-action="exec-mode-toggle"][data-mode="plan"]');
-    // v374: CI(Linux)でこの直後の「＋Block」実測時刻がFIXED_NOW(10:00)ではなく実時刻風の
-    // 値(19:00)になる事例を確認(ci-only-failures-analysis.md v355節)。nextFillGapWindow()の
-    // 「actualGapsが無い場合は現在時刻直後30分」フォールバック分岐がnew Date()を直読みするため、
-    // page.clockのモックが何らかの理由で反映されないまま評価された疑い。検証直前でクロックを
-    // 再固定する防御的な二重固定(assertion自体は無改変)。
+    // ヘッダ操作でも同じ日本時間10:00を使う。UTC環境の19:00ずれはNode側の日時生成が原因。
     await page.clock.setFixedTime(FIXED_NOW);
     await page.waitForSelector(".exec-header-actions");
     await page.click('.exec-header-actions [data-action="fill-gap-open"]');
