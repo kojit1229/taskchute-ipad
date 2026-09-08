@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v375";  // v375: CI環境依存の検査安定化(12週計画ボタンの最低高さ)
+const CACHE_NAME = "taskchute-journal-pwa-v376";  // v376: 日常操作の共通部品(予定行・実績行・検索枠・詳細枠)の先行統合。画面接続は次版
 
 // v353: 12WY R0 task.twyPlan のデータ契約+plan.js 純関数+Task編集モーダル3項目
 
@@ -755,7 +755,13 @@ const APP_SHELL = [
 
   "./src/sync/github.js",
 
-  "./src/ui/actions.js"
+  "./src/ui/actions.js",
+  "./src/ui/daily-parts/contract.js",
+  "./src/ui/daily-parts/plan-row.js",
+  "./src/ui/daily-parts/actual-row.js",
+  "./src/ui/daily-parts/search-frame.js",
+  "./src/ui/daily-parts/detail-frame.js",
+  "./src/ui/daily-parts/daily-parts.css"
 
 ];
 

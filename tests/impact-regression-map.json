@@ -46,6 +46,22 @@
         "today-detail-integration-e2e"
       ]
     },
+    "daily-parts": {
+      "paths": [
+        "^src/ui/daily-parts/"
+      ],
+      "patterns": [
+        "renderPlanRow|renderActualRow|renderSearchFrame|patchSearchFrame|renderDetailFrame|DAILY_ACTIONS|daily-search-"
+      ],
+      "suites": [
+        "daily-parts-contract",
+        "daily-plan-row",
+        "daily-actual-row",
+        "daily-search-e2e",
+        "daily-detail-frame",
+        "work-list-e2e"
+      ]
+    },
     "detail-draft-guard": {
       "paths": [
         "^src/features/draft-(leave|save)\\.js$"

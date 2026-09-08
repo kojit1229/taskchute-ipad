@@ -1,0 +1,122 @@
+.daily-plan-row {
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line, #999);
+  border-radius: 12px;
+  color: inherit;
+  overflow-wrap: anywhere;
+}
+.daily-plan-row *, .daily-plan-row *::before, .daily-plan-row *::after {
+  box-sizing: border-box;
+}
+.daily-plan-row.is-plan-completed { opacity: .65; }
+.daily-plan-row.is-highlighted { outline: 2px solid var(--accent, #526dba); }
+.daily-plan-heading, .daily-plan-times, .daily-plan-status, .daily-plan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.daily-plan-heading { justify-content: space-between; }
+.daily-plan-title { min-width: 0; flex: 1 1 160px; }
+.daily-plan-meta, .daily-plan-times, .daily-plan-status, .daily-plan-actions {
+  margin-block-start: 8px;
+}
+.daily-plan-draft {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  gap: 8px;
+  margin-block-start: 8px;
+}
+.daily-plan-draft label { min-width: 0; display: grid; gap: 4px; }
+.daily-plan-row input, .daily-plan-row select, .daily-plan-row textarea {
+  font-size: 16px;
+  min-width: 0;
+  max-width: 100%;
+}
+.daily-plan-row input[type="time"] { width: 100%; min-height: 44px; }
+.daily-plan-draft .daily-plan-next-day {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+.daily-plan-next-day input { width: 24px; height: 24px; }
+.daily-plan-actions button {
+  min-width: 44px;
+  min-height: 44px;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font: inherit;
+}
+.daily-plan-error { margin-block-start: 8px; color: var(--danger, #b42318); }
+
+.daily-actual-row {
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line, #999);
+  border-radius: 12px;
+  color: inherit;
+  overflow-wrap: anywhere;
+}
+.daily-actual-row *, .daily-actual-row *::before, .daily-actual-row *::after {
+  box-sizing: border-box;
+}
+.daily-actual-heading, .daily-actual-times, .daily-actual-status,
+.daily-actual-energy, .daily-actual-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.daily-actual-heading { justify-content: space-between; }
+.daily-actual-title { min-width: 0; flex: 1 1 160px; }
+.daily-actual-meta, .daily-actual-times, .daily-actual-status, .daily-actual-energy,
+.daily-actual-comment, .daily-actual-missing, .daily-actual-error, .daily-actual-actions {
+  margin-block-start: 8px;
+}
+.daily-actual-comment { white-space: pre-wrap; }
+.daily-actual-actions button {
+  min-width: 44px;
+  min-height: 44px;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font: inherit;
+}
+.daily-actual-error { color: var(--danger, #b42318); }
+
+.daily-detail-frame {
+  box-sizing: border-box;
+  display: block;
+  padding: 16px;
+  width: 100%;
+  min-width: 0;
+  max-width: 720px;
+  max-height: 90vh;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+.daily-detail-frame *, .daily-detail-frame *::before, .daily-detail-frame *::after { box-sizing: border-box; }
+.daily-detail-body { border: 0; margin: 0; padding: 0; min-width: 0; }
+.daily-detail-field { display: grid; gap: 4px; min-width: 0; margin-block: 12px; }
+.daily-detail-frame input, .daily-detail-frame select, .daily-detail-frame textarea {
+  font-size: 16px;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  min-height: 44px;
+}
+.daily-detail-frame input[type="checkbox"] { width: 24px; min-height: 24px; height: 24px; }
+.daily-detail-frame textarea { min-height: 96px; resize: vertical; }
+.daily-detail-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.daily-detail-actions button {
+  min-width: 44px;
+  min-height: 44px;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.daily-detail-error { color: var(--danger, #b42318); }
