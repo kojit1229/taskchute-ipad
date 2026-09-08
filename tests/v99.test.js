@@ -4,7 +4,7 @@
 // (e) 390px幅で横スクロールが発生しない
 // 方針: v96/v95と同じく、app.js は type="module" のため内部関数はwindowに露出しない。
 // ブラウザ操作 + localStorage 状態の直接注入で観測する。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, defaultContextOptions, fixedClock, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -18,19 +18,17 @@ function check(name, cond, extra = "") {
 (async () => {
   const server = startServer(PORT);
   const browser = await chromium.launch(launchOptions());
-  const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
+  const ctx = await browser.newContext({ ...defaultContextOptions(), serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
   await blockGithubApiByDefault(page);
 
-  const pad2 = (n) => String(n).padStart(2, "0");
-  // v108: 実時刻依存フレーク対策 — TODAYをハードコードせず実行時の「今日」10:00に固定する
-  //       (v89/v90/v97/v98と同じ流儀)。app.js起動時にstate.selectedDate=todayISO()(実時計)へ
-  //       強制されるため、TODAYがハードコード日付のままだと実行日によって選択日とフィクスチャが
-  //       ズレる可能性がある(2026-07-16のCI赤=v97/v98で顕在化した既知のクラス)。
-  const now0 = new Date();
-  now0.setHours(10, 0, 0, 0);
-  const TODAY = `${now0.getFullYear()}-${pad2(now0.getMonth() + 1)}-${pad2(now0.getDate())}`;
+  // 案件行の検証を火曜に固定する。既定の自己締切(2日前)は前週日曜となり、
+  // 「今週」パネルにも同じTaskが載る水曜以降と違って、各トグルが1個になる。
+  // fixtureと両画面の時計を共通の日時から作り、実行日・ホストの地域に依存させない。
+  const fixedNow = "2026-09-08T10:00:00+09:00";
+  const now0 = new Date(fixedClock(fixedNow)());
+  const TODAY = fixedNow.slice(0, 10);
   function task(id, title, extra = {}) {
     return {
       id, projectId: "test-proj", parentTaskId: "", title, category: "", status: "todo", dueDate: TODAY,
@@ -51,14 +49,9 @@ function check(name, cond, extra = "") {
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, tasks, projects, TODAY, view });
     await page.reload();
-    // v374: 固定400ms待機のままだと、CIの低速な共有ランナーでWBSセクション分類の再描画が
-    // 完了する前(=同一Taskが一時的に複数セクションへ二重描画される過渡状態)を捕まえ、
-    // toggle-criteria-requestボタンが同一data-idで複数件見つかる事例を確認
-    // (ci-only-failures-analysis.md v99節、shard3 log 3320行。「task-Aで2件」=task-A自身の
-    // 二重描画。normalizeState()が常に補完する「その他」受け皿Taskの分だけ、ページ全体の
-    // 総数は元々tasks.length+1のため、総数一致では待てない)。固定sleepの延長ではなく、
-    // 「seedした各taskのIDそれぞれがトグルボタン1個に収束する」ことを直接待つ
-    // (assertion自体は無改変)。
+    // 固定したfixtureでは各Taskが案件行にだけ現れるまで待つ。「今週」にも載る場合の
+    // 2個表示は過渡状態ではなく仕様なので、待機延長では解消しない。
+    // normalizeStateが補完する「その他」Taskを除き、seedしたIDごとに検証する。
     if (view === "wbs" && tasks.length) {
       await page.waitForFunction(
         (ids) => ids.every((id) =>
@@ -166,7 +159,7 @@ function check(name, cond, extra = "") {
 
     // (e) 390px幅で横スクロールが発生しない
     console.log("[5] 390px幅のWBSタブでトグルON状態でも横スクロールが発生しない");
-    const ctxMobile = await browser.newContext({ serviceWorkers: "block", viewport: { width: 390, height: 844 } });
+    const ctxMobile = await browser.newContext({ ...defaultContextOptions(), serviceWorkers: "block", viewport: { width: 390, height: 844 } });
     const pageMobile = await ctxMobile.newPage();
     pageMobile.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror(mobile):", e.message); });
     await blockGithubApiByDefault(pageMobile);

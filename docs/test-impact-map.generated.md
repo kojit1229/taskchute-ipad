@@ -322,7 +322,7 @@
 
 ## Test pitfall warnings (advisory)
 
-警告候補 275 件 / 181 ファイル。警告自体は終了コードに影響しない。
+警告候補 274 件 / 181 ファイル。警告自体は終了コードに影響しない。
 
 fixed-date: 時計注入のない固定日付、request-counter: 通信開始待ち直後の基準値読み取り、missing-timezone: 地域未指定。
 構文上の候補であり、変数解決は同名宣言の最後を使う簡易検査。別ファイルの設定や時計注入先の対応は追跡しない。scan-unavailable は構文解析不可。
@@ -515,6 +515,6 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | missing-timezone | 2 | tests/v96.test.js | 27, 181 |
 | missing-timezone | 2 | tests/v97.test.js | 35, 167 |
 | missing-timezone | 2 | tests/v98.test.js | 120, 145 |
-| missing-timezone | 2 | tests/v99.test.js | 21, 169 |
+| fixed-date | 1 | tests/v99.test.js | 30 |
 | missing-timezone | 2 | tests/vision-connection-e2e.test.js | 29, 37 |
 | missing-timezone | 1 | tests/xss-sanitizer.test.js | 44 |
