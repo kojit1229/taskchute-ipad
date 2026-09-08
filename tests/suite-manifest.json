@@ -241,6 +241,32 @@
       }
     },
     {
+      "file": "daily-detail-fields-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution",
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 55,
+      "assertionHash": "5982b9cb08e51a32",
+      "sourceHash": "bbbca59ddcc78c89",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": true,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
       "file": "daily-detail-frame.test.js",
       "kind": "e2e",
       "tier": "full",
@@ -249,9 +275,9 @@
         "content-ai",
         "ui-responsive"
       ],
-      "assertionSignals": 40,
-      "assertionHash": "6434e5e080ff7483",
-      "sourceHash": "3b3a873283134456",
+      "assertionSignals": 47,
+      "assertionHash": "099b18546ac85431",
+      "sourceHash": "01f16c66c7051afb",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -314,6 +340,29 @@
       }
     },
     {
+      "file": "daily-preview-server.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 34,
+      "assertionHash": "fc86154a252f4c15",
+      "sourceHash": "5c91077f0b686f1a",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": true,
+        "fileWrite": true,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
       "file": "daily-search-e2e.test.js",
       "kind": "e2e",
       "tier": "full",
@@ -332,6 +381,31 @@
         "browser": true,
         "server": true,
         "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "daily-view-model.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 82,
+      "assertionHash": "d6f5c129071772c2",
+      "sourceHash": "f0973fdcbdc2ca32",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": true,
         "networkMock": true,
         "clock": true
       }
