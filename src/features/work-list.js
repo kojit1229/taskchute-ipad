@@ -3,7 +3,7 @@ import { registerActions } from "../ui/actions.js";
 import { workListRows, filterWorkList } from "../core/work-list.js";
 import { renderSearchFrame, patchSearchFrame } from "../ui/daily-parts/search-frame.js";
 
-let escapeHTML, todayISO, dueDate, renderBlock, resolveEstimateMin, leverageTypeMarkHTML;
+let escapeHTML, todayISO, dueDate, renderBlock, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails;
 let modalOrigin;
 let renderFocus;
 const views = new Map();
@@ -12,7 +12,7 @@ function view(scope) {
   return views.get(scope);
 }
 function configureWorkList(deps) {
-  ({ escapeHTML, todayISO, dueDate, renderBlock, resolveEstimateMin, leverageTypeMarkHTML } = deps);
+  ({ escapeHTML, todayISO, dueDate, renderBlock, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails } = deps);
   const clear = ({ target }) => {
     const scope = target.closest("[data-work-list]").dataset.workList;
     Object.assign(view(scope), { query: "", status: "", project: "", category: "", due: "", scroll: 0 });
@@ -40,6 +40,7 @@ function listRow(row, scope) {
   return `<div class="work-list-row" data-work-key="${escapeHTML(row.key)}">
     <button type="button" class="btn ghost work-list-title" data-action="edit-${row.kind}" data-id="${escapeHTML(row.id)}">${row.kind === "block" && row.item.isMIT === true ? '<span class="mit-star" aria-label="MIT">★</span> ' : ""}${escapeHTML(row.title || "（名称なし）")}</button>
     <div class="work-list-meta">${escapeHTML([row.kind === "block" ? row.date + " " + (row.time.slice(11, 16) || "時刻未定") : row.kind === "project" ? "Project" : "Task", row.project?.title, row.category, estimate ? `見積${estimate}分` : "", row.due ? `作業期限 ${row.due}` : "期限なし", externalDue && externalDue !== row.due ? `外部期限 ${externalDue}` : "", status].filter(Boolean).join(" ・ "))}${row.kind === "task" && leverageTypeMarkHTML ? leverageTypeMarkHTML(row.item.leverageType) : ""}</div>
+    ${scope === "today" && row.kind === "block" && dailyBlockDetails ? dailyBlockDetails(row.item, Boolean(row.item.completed || row.item.actualEndAt), false) : ""}
     ${scope === "wbs" && row.project && !row.project.deleted ? `<button class="btn ghost search-hit" data-action="wbs-search-jump" data-kind="${row.kind}" data-id="${escapeHTML(row.id)}"><span class="search-kind">${row.kind === "task" ? "Task" : "Project"}</span> <span class="search-date">${escapeHTML(row.category || "未分類")}</span> <span class="search-snippet">${escapeHTML(row.title)}</span> — ツリーで見る</button>` : ""}
   </div>`;
 }
