@@ -3,6 +3,9 @@
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+let acorn;
+try { acorn = require("acorn"); }
+catch { acorn = null; }
 
 const root = path.resolve(__dirname, "..");
 const testsDir = path.join(root, "tests");
@@ -178,6 +181,92 @@ function countMatches(source, pattern) {
   return (source.match(pattern) || []).length;
 }
 
+// 保守的な構文検査。候補の報告だけを行い、既存テストを失敗にしない。
+function testPitfalls(source) {
+  const warnings = { "fixed-date": [], "request-counter": [], "missing-timezone": [] };
+  if (!acorn) return { ...warnings, "scan-unavailable": [1] };
+  const walk = (node, visit) => {
+    if (!node || typeof node.type !== "string") return;
+    visit(node);
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) value.forEach((child) => walk(child, visit));
+      else if (value && typeof value === "object") walk(value, visit);
+    }
+  };
+  const has = (node, predicate) => {
+    let found = false;
+    walk(node, (child) => { if (predicate(child)) found = true; });
+    return found;
+  };
+  const name = (node) => node?.name ?? node?.value;
+  const method = (node, key) => node?.type === "CallExpression"
+    && node.callee.type === "MemberExpression" && name(node.callee.property) === key;
+  const property = (node, key) => node.type === "Property" && name(node.key) === key;
+  let tree;
+  try { tree = acorn.parse(source, { ecmaVersion: "latest", sourceType: "module", locations: true }); }
+  catch { return { ...warnings, "scan-unavailable": [1] }; }
+  const declarations = new Map();
+  walk(tree, (node) => {
+    if (node.type === "VariableDeclarator" && node.id.type === "Identifier") declarations.set(node.id.name, node.init);
+  });
+  const resolves = (node, predicate, seen = new Set()) => has(node, (child) => {
+    if (predicate(child)) return true;
+    if (child.type !== "Identifier" || seen.has(child.name) || !declarations.has(child.name)) return false;
+    seen.add(child.name);
+    return resolves(declarations.get(child.name), predicate, seen);
+  });
+  const clockInjected = has(tree, (node) => property(node, "now")
+    || (method(node, "install") && (name(node.callee.object) === "clock" || name(node.callee.object?.property) === "clock")));
+  const fixedDate = (node) => node.type === "Literal" && typeof node.value === "string"
+    && /20\d\d-\d\d-\d\d/.test(node.value);
+  const requestWait = (node) => method(node, "waitForRequest");
+  walk(tree, (node) => {
+    const dateCall = node.type === "NewExpression" && name(node.callee) === "Date";
+    const utcCall = method(node, "UTC") && name(node.callee.object) === "Date";
+    if (!clockInjected && ((dateCall && node.arguments.some((arg) => resolves(arg, fixedDate)))
+      || (utcCall && (resolves(node, fixedDate) || /^20\d\d$/.test(String(node.arguments[0]?.value))))
+      || (property(node, "generatedAt") && resolves(node.value, fixedDate)))) {
+      warnings["fixed-date"].push(node.loc.start.line);
+    }
+    if (method(node, "newContext") && !node.arguments.some((arg) => resolves(arg, (child) =>
+      property(child, "timezoneId") || method(child, "defaultContextOptions")
+      || (child.type === "CallExpression" && name(child.callee) === "defaultContextOptions")))) {
+      warnings["missing-timezone"].push(node.loc.start.line);
+    }
+    if (node.type !== "BlockStatement" && node.type !== "Program") return;
+    node.body.forEach((statement, index) => {
+      // await page.waitForRequest(...) と、保存したPromiseの await の両方を扱う。
+      if (!has(statement, requestWait) && !has(statement, (child) => child.type === "AwaitExpression"
+        && resolves(child.argument, requestWait))) return;
+      const next = node.body[index + 1];
+      const reads = next?.type === "VariableDeclaration" ? next.declarations.map((d) => d.init)
+        : next?.expression?.type === "AssignmentExpression" ? [next.expression.right] : [];
+      if (reads.some((read) => read && ["Identifier", "MemberExpression"].includes(read.type))) {
+        warnings["request-counter"].push(next.loc.start.line);
+      }
+    });
+  });
+  return Object.fromEntries(Object.entries(warnings).map(([key, lines]) => [key, [...new Set(lines)].sort((a, b) => a - b)]));
+}
+
+function generatePitfallReport(files) {
+  const rows = [];
+  for (const file of files) {
+    const warnings = testPitfalls(fs.readFileSync(path.join(testsDir, file), "utf8"));
+    for (const [kind, lines] of Object.entries(warnings)) {
+      if (lines.length) rows.push({ file, kind, lines });
+    }
+  }
+  const total = rows.reduce((sum, row) => sum + row.lines.length, 0);
+  if (checkMode) console.warn(`WARN: test pitfalls ${total} candidates in ${new Set(rows.map((r) => r.file)).size} files (advisory; see docs/test-impact-map.generated.md)`);
+  return `\n## Test pitfall warnings (advisory)\n\n`
+    + `警告候補 ${total} 件 / ${new Set(rows.map((r) => r.file)).size} ファイル。警告自体は終了コードに影響しない。\n\n`
+    + `fixed-date: 時計注入のない固定日付、request-counter: 通信開始待ち直後の基準値読み取り、missing-timezone: 地域未指定。\n`
+    + `構文上の候補であり、変数解決は同名宣言の最後を使う簡易検査。別ファイルの設定や時計注入先の対応は追跡しない。scan-unavailable は構文解析不可。\n\n`
+    + `| Warning | Count | File | Lines |\n|---|---:|---|---|\n`
+    + rows.map((r) => `| ${r.kind} | ${r.lines.length} | tests/${r.file} | ${r.lines.join(", ")} |`).join("\n") + "\n";
+}
+
 function classify(file) {
   const source = fs.readFileSync(path.join(testsDir, file), "utf8").replace(/\r\n/g, "\n");
   const summaryComments = [];
@@ -262,7 +351,8 @@ const impactText = `<!-- generated by scripts/test-manifest.js; edit the generat
   + `# Test impact map\n\n`
   + `| Suite | Kind | Tier | Domains | Assertion signals | Fixed waits | Numeric wait ms |\n`
   + `|---|---|---|---|---:|---:|---:|\n${impactRows.join("\n")}\n`
-  + generateAreaSuiteMap(manifest.suites);
+  + generateAreaSuiteMap(manifest.suites)
+  + generatePitfallReport(files);
 
 if (checkMode) {
   const currentManifest = fs.existsSync(manifestPath) ? fs.readFileSync(manifestPath, "utf8") : "";

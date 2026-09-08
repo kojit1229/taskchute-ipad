@@ -35,6 +35,22 @@ function launchOptions() {
   return { ...(exe ? { executablePath: exe } : {}), args: ["--no-sandbox"] };
 }
 
+// 新規テストで明示的に使う。既存のcontext設定は変更しない。
+function defaultContextOptions() {
+  return { timezoneId: "Asia/Tokyo" };
+}
+
+// now: fixedClock(...) として注入。初回は指定時刻、以後1msずつ進む。
+function fixedClock(isoOrMs) {
+  const zonedISO = typeof isoOrMs === "string"
+    && /^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(isoOrMs);
+  let ms = zonedISO ? Date.parse(isoOrMs) : isoOrMs;
+  if (!Number.isSafeInteger(ms) || Math.abs(ms) > 8640000000000000) {
+    throw new TypeError("fixedClock requires epoch milliseconds or an ISO timestamp with Z/offset");
+  }
+  return () => ms++;
+}
+
 // リポジトリルートを配信する使い捨て静的サーバ
 // v137追加調査(2026-07-22、review.md:34と同時期にK指示で判明): CI(ubuntu-latest)で
 // 全量npm test実行中にEADDRINUSEでスイートが1件クラッシュする事象を観測した(run-all.jsは
@@ -263,7 +279,7 @@ function randomPort(min = 20000, max = 40000) {
 }
 
 module.exports = {
-  chromium, ROOT, launchOptions, startServer,
+  chromium, ROOT, launchOptions, defaultContextOptions, fixedClock, startServer,
   blockGithubApiByDefault, passGithubGate, GITHUB_API_HOST, STATE_KEY, randomPort,
   openSettingsGroup, dispatchRegisteredAction, dismissBodyScanIfOpen,
   dismissWriteMeditationGateIfOpen, generateReportThroughGate
