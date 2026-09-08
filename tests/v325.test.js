@@ -232,7 +232,12 @@ function healthDays({ today = TODAY, sleepMin = 442, yesterdaySteps = 7000, othe
     const initialHealth = resumePage.waitForResponse((response) => response.url().includes("karada/health-daily.json"));
     await passGithubGate(resumePage);
     await initialHealth;
-    await resumePage.waitForFunction(() => document.querySelector(".tower-condition-text")?.textContent.includes("睡眠 7h22m"));
+    // v374: CI(shard4)で`page.waitForFunction: Timeout 30000ms exceeded.`が
+    // tests/v325.test.js:235で発生(ci-run-34066885834/shard4-101577103448.log 3012-3018行)。
+    // health-daily.jsonのレスポンス自体は`initialHealth`で待機済み(=fetchは完了している)ため、
+    // 残るのは応答後の再render(state反映→DOM更新)がCIの共有ランナーで既定30秒に収まらない
+    // ケース。待つ条件(実際のDOM文言)は変えずタイムアウトのみ余裕を持たせる。
+    await resumePage.waitForFunction(() => document.querySelector(".tower-condition-text")?.textContent.includes("睡眠 7h22m"), null, { timeout: 45000 });
     await resumePage.clock.pauseAt(new Date(2026, 8, 4, 23, 59, 50, 0));
     const recentPull = resumePage.waitForRequest((request) => request.url().includes("taskchute/app-state.json"));
     await resumePage.evaluate(() => {

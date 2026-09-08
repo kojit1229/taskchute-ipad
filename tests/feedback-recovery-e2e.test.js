@@ -13,6 +13,14 @@ run(async(browser,server)=>{for(const width of [390,768,1024]){const f=await rea
   const selected=focusTarget==='version'?page.locator('[data-action="feedback-version"][data-feedback-version="original"]'):focusTarget==='summary'?page.locator('.feedback-regeneration > details > summary'):f.editor();
   if(focusTarget==='summary'){
    await page.locator('[data-action="feedback-version"][data-feedback-version="original"]').focus();await page.keyboard.press('Tab');
+   // v374: CI(shard?)で`Tab actually moves to history summary`が`actual: false, expected: true`
+   // で失敗(evidence/ci-only-failures-analysis.md 39-44節。原文書のログ引用: AssertionError,
+   // actual: false, expected: true)。原因はTab送出からブラウザ内部のフォーカス確定(タブ順計算・
+   // focusイベント発火)までの間を置かず同期的に1回だけ確認していたこと。CIの低速な共有ランナー
+   // ではこの確定がその1ステップ内で間に合わないことがあるため、固定sleepではなく実際に
+   // activeElementがsummaryへ切り替わるまでポーリング待機してから同じ条件でassertする
+   // (assertion自体・比較対象は変えない)。
+   await page.waitForFunction(()=>document.activeElement===document.querySelector('.feedback-regeneration > details > summary'),null,{timeout:2000}).catch(()=>{});
    assert(await selected.evaluate(el=>el===document.activeElement),'Tab actually moves to history summary');
   }else await selected.focus();
   if(focusTarget==='outside')await f.editor().fill('synthetic focus outside preserves input');

@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v374";  // v374: フィードバック既読保存の修復
+const CACHE_NAME = "taskchute-journal-pwa-v375";  // v375: CI環境依存の検査安定化(12週計画ボタンの最低高さ)
 
 // v353: 12WY R0 task.twyPlan のデータ契約+plan.js 純関数+Task編集モーダル3項目
 

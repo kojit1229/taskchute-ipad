@@ -51,7 +51,23 @@ function check(name, cond, extra = "") {
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, tasks, projects, TODAY, view });
     await page.reload();
-    await page.waitForTimeout(400);
+    // v374: 固定400ms待機のままだと、CIの低速な共有ランナーでWBSセクション分類の再描画が
+    // 完了する前(=同一Taskが一時的に複数セクションへ二重描画される過渡状態)を捕まえ、
+    // toggle-criteria-requestボタンが同一data-idで複数件見つかる事例を確認
+    // (ci-only-failures-analysis.md v99節、shard3 log 3320行。「task-Aで2件」=task-A自身の
+    // 二重描画。normalizeState()が常に補完する「その他」受け皿Taskの分だけ、ページ全体の
+    // 総数は元々tasks.length+1のため、総数一致では待てない)。固定sleepの延長ではなく、
+    // 「seedした各taskのIDそれぞれがトグルボタン1個に収束する」ことを直接待つ
+    // (assertion自体は無改変)。
+    if (view === "wbs" && tasks.length) {
+      await page.waitForFunction(
+        (ids) => ids.every((id) =>
+          document.querySelectorAll(`[data-action="toggle-criteria-request"][data-id="${id}"]`).length === 1),
+        tasks.map((t) => t.id)
+      );
+    } else {
+      await page.waitForTimeout(400);
+    }
   }
 
   async function stateNow() {
