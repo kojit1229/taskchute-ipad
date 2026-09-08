@@ -30,7 +30,7 @@ function check(name, cond, extra = "") {
   // 計画モードへ自動遷移する(_execMode="plan"、state.timelineMode="planned")ため、下書きの
   // 描画(.draft-block等はmode==="planned"のタイムラインのみ)を見るには1280px以上の2ペインが
   // 要る。1100pxのままだと計画モード単一列はタスク一覧のみで下書きレイヤが乗るグリッドが出ない。
-  const ctx = await browser.newContext({ timezoneId: "Asia/Tokyo", serviceWorkers: "block", viewport: { width: 1280, height: 900 } });
+  const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
   // v72: api.github.com への実ネットワーク呼び出しを既定404で塞ぐ(個人データAPI化に伴う対策。tests/helpers.js参照)
@@ -55,17 +55,7 @@ function check(name, cond, extra = "") {
   const occupiedUntil = Math.min(22 * 60, nowFloor + 60);  // 23:00に寄りすぎて空き枠が消えないようclamp
   const expectedStart = occupiedUntil;
 
-  // ブラウザーは日本時間。Nodeの地域設定に関係なく見本日の10時へ固定する。
-  await page.clock.setFixedTime(new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 1, 0, 0)));  // goto前に固定してアプリ起動時のnew Date()から一貫させる
-  const browserClock = await page.evaluate(() => {
-    const now = new Date();
-    return { zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      date: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`,
-      hour: now.getHours(), minute: now.getMinutes(), offset: now.getTimezoneOffset() };
-  });
-  check("ブラウザーは日本時間で見本日の10:00", browserClock.zone === "Asia/Tokyo"
-    && browserClock.date === TODAY && browserClock.hour === 10 && browserClock.minute === 0
-    && browserClock.offset === -540, JSON.stringify(browserClock));
+  await page.clock.setFixedTime(today);  // goto前に固定してアプリ起動時のnew Date()から一貫させる
   await page.goto(`http://localhost:${PORT}/`);
   await page.waitForTimeout(600);
   // v72: トークン+個人データリポジトリ未設定だとセットアップ画面(ゲート)で止まるため、

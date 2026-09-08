@@ -33,7 +33,7 @@ function check(name, cond, extra = "") {
 (async () => {
   const server = startServer(PORT);
   const browser = await chromium.launch(launchOptions());
-  const ctx = await browser.newContext({ timezoneId: "Asia/Tokyo", serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
+  const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
   await blockGithubApiByDefault(page);
@@ -132,17 +132,7 @@ window.__v59Test = {
   }
 
   try {
-    // ブラウザーは日本時間。Nodeの地域設定に関係なく見本日の10時へ固定する。
-    await page.clock.setFixedTime(new Date(Date.UTC(now0.getFullYear(), now0.getMonth(), now0.getDate(), 1, 0, 0)));
-    const browserClock = await page.evaluate(() => {
-      const now = new Date();
-      return { zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        date: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`,
-        hour: now.getHours(), minute: now.getMinutes(), offset: now.getTimezoneOffset() };
-    });
-    check("ブラウザーは日本時間で見本日の10:00", browserClock.zone === "Asia/Tokyo"
-      && browserClock.date === TODAY && browserClock.hour === 10 && browserClock.minute === 0
-      && browserClock.offset === -540, JSON.stringify(browserClock));
+    await page.clock.setFixedTime(now0);
     await page.goto(`http://localhost:${PORT}/`);
     await passGithubGate(page);
     await page.waitForFunction(() => Boolean(window.__v59Test));

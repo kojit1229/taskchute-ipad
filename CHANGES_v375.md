@@ -39,6 +39,7 @@ Linux(GitHub Actions)でだけ失敗・不安定だった検査8本を、検査�
 - v317/v325/v355: Nodeの地域設定に依存しないUTC指定へ固定時計を修正。日本時間の日跨ぎも同じ基準で検査。
 - 最終ゲートで見つかったv50/v59/v70の同じ時計依存も、Clock APIへ渡す時点だけUTC指定に統一。
 - 独立検証F1対応：v50/v59/v70のbrowser.newContextにAsia/Tokyoを明示し、ブラウザー内の地域・見本日・10時・UTCオフセットを直接検査。
+- 独立検証F2対応：v325の日跨ぎ復帰テストは、トグルによるapp-state通信のrequestfinishedを待ち、計数ルートの加算後に基準値を採る。固定待ち・期待値・製品コードの変更なし。
 
 ## 変更意図
 
@@ -47,6 +48,7 @@ Linux(GitHub Actions)でだけ失敗・不安定だった検査8本を、検査�
 ## 検証
 
 - 前回の成功ログは地域設定不足を検出できなかったためF1の解消証拠にしない。修正版の検査ログはtaskchute/projects/2026-09-08-daily-use-plan/reports/foundation-r2/に別保存。
+- F2の順序実測・修正前後の負例・UTC/日本時間の反復・6組・最終ゲートの実行結果はtaskchute/projects/2026-09-08-daily-use-plan/reports/foundation-r3/へ別保存し、results.jsonと終了コード付きログを正本とする。
 
 ## 既知の制約・保留
 

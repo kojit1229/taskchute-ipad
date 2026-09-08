@@ -240,7 +240,8 @@ function healthDays({ today = TODAY, sleepMin = 442, yesterdaySteps = 7000, othe
     // ケース。待つ条件(実際のDOM文言)は変えずタイムアウトのみ余裕を持たせる。
     await resumePage.waitForFunction(() => document.querySelector(".tower-condition-text")?.textContent.includes("睡眠 7h22m"), null, { timeout: 45000 });
     await resumePage.clock.pauseAt(new Date(Date.UTC(2026, 8, 4, 14, 59, 50, 0)));
-    const recentPull = resumePage.waitForRequest((request) => request.url().includes("taskchute/app-state.json"));
+    // 通信開始の通知は計数ルートより先に届くため、加算済みになる通信完了まで待つ。
+    const recentPull = resumePage.waitForEvent("requestfinished", (request) => request.url().includes("taskchute/app-state.json"));
     await resumePage.evaluate(() => {
       const input = document.createElement("input");
       input.type = "checkbox";
