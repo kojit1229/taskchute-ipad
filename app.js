@@ -33,6 +33,8 @@ import { createVisionRead } from "./src/features/vision-read.js";
 import { createVisionOverview } from "./src/features/vision-overview.js";
 import { createDraftLeaveGuard } from "./src/features/draft-leave.js";
 import { createDraftSaveTransaction } from "./src/features/draft-save.js";
+import { renderDetailFrame } from "./src/ui/daily-parts/detail-frame.js";
+import { renderDailyBlockDetails } from "./src/features/daily-view-model.js";
 import { configureWorkList, renderWorkList, handleWorkListInput, handleWorkListComposition, rememberWorkListOrigin, restoreWorkListOrigin, rememberWorkListScroll, restoreWorkListScroll } from "./src/features/work-list.js";
 // v166: app.js分割・段階3(state store + storage/sync gateway)。stateの再代入はsetState()
 //   経由のみ(claude-review-result.md §2 Blocker-1)。store.jsは何もimportしない真の葉。
@@ -306,7 +308,7 @@ configureGithubSync({
   _startupDataModifiedAt,
   readArchiveForSync: async (year, cfg) => (await fetchGitHubJSONFile(cfg, personalDataPath(`archive/archive-${year}.json`)))?.obj
 });
-configureWorkList({ escapeHTML, todayISO, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML,
+configureWorkList({ escapeHTML, todayISO, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails,
   renderBlock: block => block.completed || block.actualEndAt ? renderExecDoneRow(block) : block.actualStartAt && !block.actualEndAt ? renderExecNowRow(block) : renderExecUpcomingRow(block) });
 configureToday({
   escapeHTML, todayISO, addDays, blocksForDate, minutesOf, timeFromDateTime,
@@ -6206,6 +6208,11 @@ function execHeaderHTML() {
 // (v334レビューA-M2対応: execTargetBlocksのルーティン/単発/非Project紐づけ除外は適用しない)。
 // 行= ☐(完了済み表示・非活性)/ タイトル+meta(実績HH:MM–HH:MM・充放電)/
 // 編集(既存edit-block、ロジック無改変)。
+function dailyBlockDetails(block, actual = false, canEdit = true) {
+  return renderDailyBlockDetails(block, { getTask: id => state.tasks.find(task => task.id === id),
+    projectName, estimateMinutesForBlock, timeFromDateTime, localDateTimeToMs, escapeHTML, canEdit }, actual);
+}
+
 function renderExecDoneRow(block) {
   const start = block.actualStartAt ? timeFromDateTime(block.actualStartAt) : "";
   const end = block.actualEndAt ? timeFromDateTime(block.actualEndAt) : "";
@@ -6220,6 +6227,7 @@ function renderExecDoneRow(block) {
         <div class="exec-row-meta">${metaHTML}</div>
       </div>
       <button class="btn" data-action="edit-block" data-id="${block.id}">編集</button>
+      <details style="grid-column:1/-1;min-width:0"><summary>実績の内訳</summary>${dailyBlockDetails(block, true)}</details>
     </div>
   `;
 }
@@ -6344,6 +6352,7 @@ function renderExecNowRow(block) {
         <textarea class="textarea block-inline-memo" style="min-height:56px; font-size:16px"
           data-block-comment data-id="${block.id}"
           placeholder="実行中のメモ…">${escapeHTML(block.comment || "")}</textarea>
+        <div style="flex-basis:100%;min-width:0">${dailyBlockDetails(block)}</div>
       </div>` : ""}
     </div>
   `;
@@ -6373,6 +6382,7 @@ function renderExecUpcomingRow(block) {
         <button class="btn orange" data-action="start-pomodoro" data-block-id="${block.id}">25分</button>
         <button class="btn ${isMIT ? "" : "ghost"}" data-action="toggle-mit" data-id="${block.id}">${isMIT ? "★" : "☆"}</button>
         <button class="btn" data-action="edit-block" data-id="${block.id}">編集</button>
+        <div style="flex-basis:100%;min-width:0">${dailyBlockDetails(block, false, false)}</div>
       </div>` : ""}
     </div>
   `;
@@ -13295,6 +13305,11 @@ function registerServiceWorker() {
 // ============================================================
 
 const modalRoot = document.querySelector("#modalRoot");
+// The shared frame's stylesheet is cached already; load it from the existing module location.
+const dailyDetailStyles = document.createElement("link");
+dailyDetailStyles.rel = "stylesheet";
+dailyDetailStyles.href = new URL("./src/ui/daily-parts/daily-parts.css", import.meta.url).href;
+document.head.append(dailyDetailStyles);
 
 // v238: 完全同型の標準モーダル骨格だけを共通化する。専用class/actionの骨格は呼び出し側に残す。
 // titleは呼び出し側でエスケープ済みであること(リテラル文字列のみ渡す)。
@@ -13836,6 +13851,16 @@ function saveProjectTrackFromModal(id, fields) {
   return false;
 }
 
+// The slot is supplied only by the legacy renderers below, never by saved HTML.
+// Keep their layout classes and controls; the existing modal transaction owns the draft.
+function legacyDetailFrame(kind, record, title, className, canDelete, saveLabel, fields) {
+  return renderDetailFrame({
+    kind, id: record.id || `new-${kind}`, draftId: null, title, dateLabel: "",
+    sections: [{ title: "", fields: [], slot: "legacyFields" }],
+    dirty: false, busy: false, errors: [], saveLabel, canDelete, origin: state.currentView
+  }, { slots: { legacyFields: fields }, className });
+}
+
 function buildProjectModal(project) {
   const status = project.status || "active";
   const kind = project.kind || "normal";
@@ -13851,8 +13876,8 @@ function buildProjectModal(project) {
   // 種別プルダウンをdisabledにして固定表示にし、削除ボタン自体を出さない(deleteProject側の
   // ガードと二重防御)。
   const isWishSingleton = kind === "wish";
-  return `
-    ${modalHeaderHTML("Project を編集", "project-modal")}
+  return legacyDetailFrame("project", project, "Project を編集", "project-modal", !isWishSingleton, "保存", () => `
+      <div class="modal-body">
         <div class="field">
           <label class="field-label">タイトル</label>
           <input class="input" data-modal-field="title" value="${escapeHTML(project.title || "")}">
@@ -13965,13 +13990,7 @@ function buildProjectModal(project) {
           <textarea class="textarea" data-modal-field="description" style="min-height:120px">${escapeHTML(project.description || "")}</textarea>
         </div>
       </div>
-      <div class="modal-footer">
-        ${isWishSingleton ? "" : `<button class="btn danger" data-action="modal-delete">削除</button>`}
-        <button class="btn" data-action="modal-close">キャンセル</button>
-        <button class="btn primary" data-action="modal-save">保存</button>
-      </div>
-    </div>
-  `;
+  `);
 }
 
 function saveProjectFromModal(id, fields) {
@@ -14075,8 +14094,9 @@ function buildTaskModal(task) {
     `<option value="" ${!task.parentTaskId ? "selected" : ""}>(親なし = ルート)</option>`,
     ...parentCandidates.map((t) => `<option value="${t.id}" ${task.parentTaskId === t.id ? "selected" : ""}>${escapeHTML(t.title)}</option>`)
   ].join("");
-  return `
-    ${modalHeaderHTML(task.id ? "Task を編集" : "Task を追加", "task-modal detail-sheet")}
+  return legacyDetailFrame("task", task, task.id ? "Task を編集" : "Task を追加",
+    "task-modal detail-sheet", Boolean(task.id), task.id ? "保存" : "追加", () => `
+      <div class="modal-body">
         <div class="detail-columns"><section class="detail-column" aria-label="基本・完了条件">
         <h4 class="tower-section-title">基本・完了条件</h4>
         ${task.id ? "" : `<input type="hidden" data-modal-field="order" data-modal-kind="number" value="${Number.isFinite(task.order) ? task.order : ""}">`}
@@ -14162,13 +14182,7 @@ function buildTaskModal(task) {
         </div>
         </section></div>
       </div>
-      <div class="modal-footer">
-        ${task.id ? `<button class="btn danger" data-action="modal-delete">削除</button>` : ""}
-        <button class="btn" data-action="modal-close">キャンセル</button>
-        <button class="btn primary" data-action="modal-save">${task.id ? "保存" : "追加"}</button>
-      </div>
-    </div>
-  `;
+  `);
 }
 
 // 循環参照防止: targetId が ancestor の子孫かチェック
@@ -14305,8 +14319,9 @@ function buildBlockModal(block) {
   const liveRule = block.recurrenceGroupId
     ? (state.recurrences || []).find((r) => r.id === block.recurrenceGroupId && !r.deleted)
     : null;
-  return `
-    ${modalHeaderHTML(block._isNew ? "Block を追加" : "Block を編集", "tower-sheet detail-sheet")}
+  return legacyDetailFrame("block", block, block._isNew ? "Block を追加" : "Block を編集",
+    "tower-sheet detail-sheet", !block._isNew, block._isNew ? "追加" : "保存", () => `
+      <div class="modal-body">
     ${placementBackHTML(block)}
         <div class="detail-columns"><div class="detail-column">
         <section class="tower-section">
@@ -14474,13 +14489,7 @@ function buildBlockModal(block) {
         </details>
         </div></div>
       </div>
-      <div class="modal-footer">
-        ${block._isNew ? "" : `<button class="btn danger" data-action="modal-delete" style="margin-right:auto">削除</button>`}
-        <button class="btn" data-action="modal-close">キャンセル</button>
-        <button class="btn primary" data-action="modal-save">${block._isNew ? "追加" : "保存"}</button>
-      </div>
-    </div>
-  `;
+  `);
 }
 
 function saveBlockFromModal(id, fields) {
