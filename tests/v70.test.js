@@ -35,7 +35,7 @@ function check(name, cond, extra = "") {
 (async () => {
   const server = startServer(PORT);
   const browser = await chromium.launch(launchOptions());
-  const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
+  const ctx = await browser.newContext({ timezoneId: "Asia/Tokyo", serviceWorkers: "block", viewport: { width: 1100, height: 900 } });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => { failures++; console.log("  ❌ pageerror:", e.message); });
   // v72: api.github.com への実ネットワーク呼び出しを既定404で塞ぐ(個人データAPI化に伴う対策。tests/helpers.js参照)
@@ -115,7 +115,17 @@ function check(name, cond, extra = "") {
   }
 
   try {
-    await page.clock.setFixedTime(now0);
+    // ブラウザーは日本時間。Nodeの地域設定に関係なく見本日の10時へ固定する。
+    await page.clock.setFixedTime(new Date(Date.UTC(now0.getFullYear(), now0.getMonth(), now0.getDate(), 1, 0, 0)));
+    const browserClock = await page.evaluate(() => {
+      const now = new Date();
+      return { zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        date: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`,
+        hour: now.getHours(), minute: now.getMinutes(), offset: now.getTimezoneOffset() };
+    });
+    check("ブラウザーは日本時間で見本日の10:00", browserClock.zone === "Asia/Tokyo"
+      && browserClock.date === TODAY && browserClock.hour === 10 && browserClock.minute === 0
+      && browserClock.offset === -540, JSON.stringify(browserClock));
     await page.goto(`http://localhost:${PORT}/`);
     await page.waitForTimeout(500);
     // v72: トークン+個人データリポジトリ未設定だとセットアップ画面(ゲート)で止まるため、
