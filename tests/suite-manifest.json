@@ -340,6 +340,29 @@
       }
     },
     {
+      "file": "daily-parts-snapshot.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 45,
+      "assertionHash": "f885f36de14eb2b9",
+      "sourceHash": "359e957bc39951b1",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": true,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
       "file": "daily-plan-row.test.js",
       "kind": "e2e",
       "tier": "full",
