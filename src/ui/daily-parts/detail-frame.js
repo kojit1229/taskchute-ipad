@@ -44,7 +44,7 @@ function validate(model, slots) {
 }
 // slots: own named functions supplied by trusted UI code, each receiving only escapeHTML.
 // They must be pure safe renderers, never callbacks or HTML loaded from saved state.
-export function renderDetailFrame(model, { slots = {} } = {}) {
+export function renderDetailFrame(model, { slots = {}, className = "" } = {}) {
   validate(model, slots);
   const e = escapeHTML;
   const fieldHTML = field => {
@@ -58,15 +58,15 @@ export function renderDetailFrame(model, { slots = {} } = {}) {
     else control = `<input type="${field.type}" ${attrs} value="${e(field.value)}"${locked ? " readonly" : ""}${["time", "datetime-local"].includes(field.type) ? ' step="300"' : ""}>`;
     return `<label class="daily-detail-field"><span>${e(field.label)}</span>${control}${field.help ? `<small>${e(field.help)}</small>` : ""}${field.error ? `<span class="daily-detail-error" role="alert">${e(field.error)}</span>` : ""}</label>`;
   };
-  const button = (action, label, disabled = model.busy) => `<button type="button" class="btn" data-action="${action}" data-kind="${e(model.kind)}" data-id="${e(model.id)}" data-draft-id="${e(model.draftId)}"${disabled ? " disabled" : ""}>${e(label)}</button>`;
-  return `<div class="modal-card daily-detail-frame" role="dialog" aria-modal="true" aria-label="${e(model.title)}" aria-busy="${model.busy}" data-kind="${e(model.kind)}" data-id="${e(model.id)}" data-draft-id="${e(model.draftId)}" data-origin="${e(model.origin)}" data-dirty="${model.dirty}">
-    <header><h2>${e(model.title)}</h2><p>${e(model.dateLabel)}</p><p role="status">${model.busy ? "保存中…" : model.dirty ? "未保存の変更があります" : ""}</p></header>
+  const button = (action, label, disabled = model.busy) => `<button type="button" class="btn${action === "modal-save" ? " primary" : action === "modal-delete" ? " danger" : ""}" data-action="${action}" data-kind="${e(model.kind)}" data-id="${e(model.id)}" data-draft-id="${e(model.draftId)}"${action === "modal-delete" ? ' style="margin-right:auto"' : ""}${disabled ? " disabled" : ""}>${e(label)}</button>`;
+  return `<div class="modal-card daily-detail-frame${className ? ` ${e(className)}` : ""}" role="dialog" aria-modal="true" aria-label="${e(model.title)}" aria-busy="${model.busy}" data-kind="${e(model.kind)}" data-id="${e(model.id)}" data-draft-id="${e(model.draftId)}" data-origin="${e(model.origin)}" data-dirty="${model.dirty}">
+    <header><div class="modal-header"><h2 class="modal-title">${e(model.title)}</h2><button class="modal-close" data-action="modal-close" aria-label="閉じる"${model.busy ? " disabled" : ""}>×</button></div><p>${e(model.dateLabel)}</p><p role="status">${model.busy ? "保存中…" : model.dirty ? "未保存の変更があります" : ""}</p></header>
     ${model.errors.map(error => `<p class="daily-detail-error" role="alert">${e(error)}</p>`).join("")}
     <fieldset class="daily-detail-body"${model.busy ? " disabled" : ""}>${model.sections.map(section => {
       const slot = section.slot === undefined ? "" : Object.getOwnPropertyDescriptor(slots, section.slot).value(e);
       if (!text(slot)) throw new TypeError("Invalid daily detail slot output");
       return `<section><h3>${e(section.title)}</h3>${section.fields.map(fieldHTML).join("")}${slot}</section>`;
     }).join("")}</fieldset>
-    <footer class="daily-detail-actions">${button("modal-save", model.saveLabel)}${button("modal-close", "取消")}${model.canDelete ? button("modal-delete", "削除") : ""}</footer>
+    <footer class="daily-detail-actions modal-footer">${model.canDelete ? button("modal-delete", "削除") : ""}${button("modal-close", "取消")}${button("modal-save", model.saveLabel)}</footer>
   </div>`;
 }

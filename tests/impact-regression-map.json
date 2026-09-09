@@ -49,10 +49,11 @@
     },
     "daily-parts": {
       "paths": [
-        "^src/ui/daily-parts/"
+        "^src/ui/daily-parts/",
+        "^src/features/daily-view-model\\.js$"
       ],
       "patterns": [
-        "renderPlanRow|renderActualRow|renderSearchFrame|patchSearchFrame|renderDetailFrame|DAILY_ACTIONS|daily-search-"
+        "renderPlanRow|renderActualRow|renderSearchFrame|patchSearchFrame|renderDetailFrame|DAILY_ACTIONS|daily-search-|buildDailyViewModel"
       ],
       "suites": [
         "daily-parts-contract",
@@ -60,8 +61,16 @@
         "daily-actual-row",
         "daily-search-e2e",
         "daily-detail-frame",
+        "v96",
+        "v147",
+        "v277",
+        "v357",
         "work-list-e2e",
-        "normalize-null-defense"
+        "normalize-null-defense",
+        "daily-view-model",
+        "today-core",
+        "v331",
+        "v334"
       ]
     },
     "detail-draft-guard": {

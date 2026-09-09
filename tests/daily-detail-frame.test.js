@@ -29,6 +29,17 @@ function check(label, fn) { fn(); checks++; console.log(`PASS ${label}`); }
     assert.match(html, /value="0"/); assert.match(html, /value="b" selected/); assert.match(html, / checked/);
     assert.doesNotMatch(render(model({ canDelete: false })), /modal-delete/);
   });
+  check("保存/削除の強調と追加クラス、未指定時の互換性", () => {
+    const html = render(model());
+    for (const [action, classes] of [["modal-save", "btn primary"], ["modal-close", "btn"], ["modal-delete", "btn danger"]])
+      assert.match(html, new RegExp(`class="${classes}" data-action="${action}"`));
+    assert.match(html, /class="modal-card daily-detail-frame"/);
+    assert.equal(html, render(model(), { className: "" }));
+    const legacy = render(model({ sections: [{ title: "", fields: [], slot: "legacy" }] }),
+      { className: "task-modal-card extra", slots: { legacy: e => `<p>${e("<legacy>")}</p>` } });
+    assert.match(legacy, /class="modal-card daily-detail-frame task-modal-card extra"/);
+    assert.match(legacy, /<p>&lt;legacy&gt;<\/p>/);
+  });
   check("dirty/busy/保存失敗を明示し入力を保持、描画は保存しない", () => {
     const frozen = freeze(model({ dirty: true, errors: ["模擬保存失敗"] }));
     const html = render(frozen);
@@ -93,25 +104,26 @@ function check(label, fn) { fn(); checks++; console.log(`PASS ${label}`); }
     input.sections[0].fields[1].value = `</textarea>${malicious}`;
     input.sections[0].fields[6].value = malicious;
     input.sections[0].fields[6].options = [[malicious, malicious]];
-    const mount = async data => {
-      await page.locator("#fixture").evaluate(async (el, data) => {
+    const mount = async (data, options = {}) => {
+      await page.locator("#fixture").evaluate(async (el, { data, options }) => {
         const { renderDetailFrame } = await import("/src/ui/daily-parts/detail-frame.js");
-        el.innerHTML = renderDetailFrame(data);
+        el.innerHTML = renderDetailFrame(data, options);
         // Measure the settled layout after the modal's scale animation, without a fixed wait.
         await Promise.all(el.getAnimations({ subtree: true }).map(animation => animation.finished));
-      }, data);
+      }, { data, options });
     };
-    await mount(input);
+    await mount(input, { className: malicious });
     const dom = await page.locator(".daily-detail-frame").evaluate(el => ({ title: el.querySelector("h2").textContent,
       attrs: { ...el.dataset }, text: el.querySelector('[data-modal-field="text"]').value,
       textarea: el.querySelector("textarea").value, option: el.querySelector("select").value,
       unsafe: el.querySelectorAll("img,script,[onerror],[data-injected]").length,
-      effects: window.effects, injected: Boolean(window.injected) }));
+      className: el.getAttribute("class"), effects: window.effects, injected: Boolean(window.injected) }));
     check("実DOMで本文/属性/textarea/selectの注入なし、副作用0", () => {
       assert.equal(dom.title, malicious); assert.equal(dom.attrs.id, malicious); assert.equal(dom.attrs.draftId, malicious);
       assert.equal(dom.attrs.origin, malicious); assert.equal(dom.text, malicious);
       assert.equal(dom.textarea, `</textarea>${malicious}`); assert.equal(dom.option, malicious);
       assert.equal(dom.unsafe, 0); assert.equal(dom.injected, false);
+      assert.equal(dom.className, `modal-card daily-detail-frame ${malicious}`);
       assert.deepEqual(dom.effects, { saved: 0, deleted: 0, storage: 0, network: 0 });
     });
     await mount(model({ busy: true }));
