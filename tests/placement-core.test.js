@@ -14,13 +14,13 @@ const assert = require('node:assert/strict');
     ['2026-09-06','11:60',30],['2026-09-06','11:40',0],['2026-09-06','11:40',1.5],
     ['2026-09-06','11:40',null],['2026-09-06','11:40',Infinity]
   ]) assert.equal(placementTimes(date,time,duration),null);
-  const model = { selectedDate:'2020-01-01', dataModifiedAt:'old', blocks:[
+  const model = { selectedDate:'2020-01-01', dataModifiedAt:'2026-09-06T12:00:00', blocks:[
     {id:'future',taskId:'t1',date:'2026-09-07'},
     {id:'deleted',taskId:'t1',date:'2026-09-06',deleted:true}
   ], tasks:[{id:'t1',title:'Step',parentTaskId:'wish-root',status:'todo',projectId:'wish',estimateMin:25}] };
   const input={taskId:'t1',source:'wish',date:'2026-09-06',time:'23:50',duration:25};
   let creations=0;
-  const deps={today:'2026-09-06',stamp:'new',makeBlock: input=>({id:`new-${++creations}`,...input}),projectName:()=> 'Project'};
+  const deps={today:'2026-09-06',stamp:'2026-09-06T12:30:00',makeBlock: input=>({id:`new-${++creations}`,...input}),projectName:()=> 'Project'};
   const before=JSON.stringify(model);
   assert.equal(existingPlacement(model.blocks,'t1',deps.today),null);
   assert.ok(placementCandidate(model,{...input,time:''},deps).error);
@@ -38,12 +38,12 @@ const assert = require('node:assert/strict');
   const oldBlocks=model.blocks,oldTasks=model.tasks;
   let schedules=0;
   for(const persist of [()=>false,()=>{throw Error('quota');}]) {
-    assert.equal(commitPlacement(model,result,{stamp:'new',persist,schedule:()=>schedules++}),false);
+    assert.equal(commitPlacement(model,result,{now:'2026-09-06T12:30:00',persist,schedule:()=>schedules++}),false);
     assert.equal(model.blocks,oldBlocks); assert.equal(model.tasks,oldTasks);
-    assert.equal(model.dataModifiedAt,'old'); assert.equal(schedules,0);
+    assert.equal(model.dataModifiedAt,'2026-09-06T12:00:00'); assert.equal(schedules,0);
   }
   const sequence=[];
-  assert.equal(commitPlacement(model,result,{stamp:'new',persist:()=>{sequence.push('persist');assert.equal(model.blocks.at(-1).taskId,'t1');return true;},schedule:()=>sequence.push('schedule')}),true);
+  assert.equal(commitPlacement(model,result,{now:'2026-09-06T12:30:00',persist:()=>{sequence.push('persist');assert.equal(model.blocks.at(-1).taskId,'t1');return true;},schedule:()=>sequence.push('schedule')}),true);
   assert.deepEqual(sequence,['persist','schedule']);
   const count=creations;
   assert.equal(placementCandidate(model,input,deps).existing.id,result.block.id);

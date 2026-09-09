@@ -1,19 +1,19 @@
 import { state } from "../state/store.js";
 import { registerActions, registerModalHandler } from "../ui/actions.js";
 import { existingPlacement, placementTimes, placementCandidate } from "../core/placement.js";
+import { commitCandidate } from "../core/commit.js";
 
 let api;
 let origin;
 let draft;
 // Synchronous adapter: failure restores exact references before any timer can run.
 export function commitPlacement(model, candidate, deps) {
-  const previous = { blocks: model.blocks, tasks: model.tasks, dataModifiedAt: model.dataModifiedAt };
-  Object.assign(model, { blocks: candidate.blocks, tasks: candidate.tasks, dataModifiedAt: deps.stamp });
-  let saved = false;
-  try { saved = deps.persist() === true; } catch { saved = false; }
-  if (!saved) { Object.assign(model, previous); return false; }
-  deps.schedule();
-  return true;
+  return commitCandidate({ state: model, now: deps.now || deps.stamp, floors: deps.floors,
+    build: before => ({ records: ["blocks", "tasks"].flatMap(kind =>
+      candidate[kind].filter(after => !model[kind].includes(after)).map(after =>
+        ({ kind, before: before[kind].find(item => item.id === after.id), after }))) }),
+    persist: deps.persist, effects: result => { if (!result.unchanged) deps.schedule?.(result); }
+  }).ok;
 }
 export function configurePlacement(deps) {
   if (typeof deps.requestLeave !== "function") throw new TypeError("placement requires requestLeave adapter");

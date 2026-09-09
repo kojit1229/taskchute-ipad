@@ -38,13 +38,13 @@ function fixture(mode='ok'){
   fetch:async(url,options)=>{assert.equal(url,'synthetic://primary');assert.equal(options.method,'PUT');primaryWrites++;
     const payload=JSON.parse(options.body);assert.equal(payload.sha,'a'.repeat(40));primary=Buffer.from(payload.content,'base64').toString();
     return {ok:true,json:async()=>{if(mode==='primary-json-aba')generation+=2;return {content:{sha:hash(primary)}};}};},
-  clearPersonalDataAuthError(){},setLastSyncedSha(){},recordSyncPushSuccess(){},nowDateTime:()=>date+'T12:00',
+  clearPersonalDataAuthError(){},setLastSyncedSha(){},recordSyncPushSuccess(){},nowDateTime:()=>date+'T12:00:00',
   clearSyncBanner(){},showToast(){},updateAutoSaveStatus(){},maybeWriteBackupSnapshot(){},setSyncBanner(){}};
  // Primary-setting proof is reached only on a changed remote head.
  if(mode==='primary-setting')box.fetchGitHubFileSHA=async()=> 'b'.repeat(40);
  vm.createContext(box);vm.runInContext(storage+'\n'+sync,box);
  const localCommit=createLocalReportCommit({getState:()=>state,canSave:()=>mode!=='local-blocked',
-  persist:()=>{box.persistLocalNoSchedule();return !box._lastSaveError;},readStored:()=>raw,writeStored:value=>{raw=value;},now:()=>date+'T12:00'});
+  persist:()=>{box.persistLocalNoSchedule();return !box._lastSaveError;},readStored:()=>raw,writeStored:value=>{raw=value;},now:()=>date+'T12:00:00'});
  const proof=createReportProofAdapter({syncProtectedState:async options=>{
     if(mode==='edit-before-sync')state.journals[date]+=' later edit';
     if(mode==='aba')generation+=2;
@@ -88,13 +88,13 @@ for(const mode of ['ok','put-uncertain'])test('actual protected sync + readbacks
 });
 test('local readback and timestamp failures restore exact memory and raw storage',()=>{
  for(const mode of ['readback','stamp','rollback-failure']){
-  const state={reports:{old:'old'},journals:{'2026-09-06':'synthetic'},dataModifiedAt:'old'};
+  const state={reports:{old:'old'},journals:{'2026-09-06':'synthetic'},dataModifiedAt:'2026-09-06T11:00:00'};
   const reports=state.reports,initial=JSON.stringify(state);let raw=initial,reads=0;
-  const commit=createLocalReportCommit({getState:()=>state,canSave:()=>true,now:()=>{if(mode==='stamp')throw Error('synthetic');return 'new';},
+  const commit=createLocalReportCommit({getState:()=>state,canSave:()=>true,now:()=>{if(mode==='stamp')throw Error('synthetic');return '2026-09-06T12:00:00';},
    persist:()=>{raw=JSON.stringify(state);return true;},readStored:()=>++reads===2?'{}':raw,
    writeStored:value=>{if(mode==='rollback-failure')throw Error('synthetic');raw=value;}});
   const result=commit({date:'2026-09-06',journalText:'synthetic',reportMarkdown:'new report'});
-  assert.equal(result.ok,false);assert.equal(state.reports,reports);assert.equal(state.dataModifiedAt,'old');
+  assert.equal(result.ok,false);assert.equal(state.reports,reports);assert.equal(state.dataModifiedAt,'2026-09-06T11:00:00');
   if(mode==='rollback-failure')assert.equal(result.reason,'local_rollback_unconfirmed');else assert.equal(raw,initial);
  }
 });
@@ -105,4 +105,13 @@ test('configuration never defaults to successful save or proof',()=>{
  assert.throws(()=>transformSync(transformSync(syncSource)),/already integrated/);
 });
 
+test('re-saving the same report text issues no stamp and no persist (design 03 / K decision D06)',()=>{
+ const state={reports:{'2026-09-06':'same report'},journals:{'2026-09-06':'synthetic'},dataModifiedAt:'2026-09-06T11:00:00'};
+ let raw=JSON.stringify(state),persists=0,nows=0;
+ const commit=createLocalReportCommit({getState:()=>state,canSave:()=>true,now:()=>{nows++;return '2026-09-06T12:00:00';},
+  persist:()=>{persists++;raw=JSON.stringify(state);return true;},readStored:()=>raw,writeStored:value=>{raw=value;}});
+ const result=commit({date:'2026-09-06',journalText:'synthetic',reportMarkdown:'same report'});
+ assert.equal(result.ok,true);assert.equal(persists,0);assert.equal(nows,0);assert.equal(state.dataModifiedAt,'2026-09-06T11:00:00');
+ assert.equal(state.reports['2026-09-06'],'same report');
+});
 })().catch(error=>{console.error(error);process.exitCode=1;});
