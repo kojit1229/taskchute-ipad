@@ -7,7 +7,7 @@ const vm = require("node:vm");
 const { pathToFileURL } = require("node:url");
 const acorn = require("acorn");
 const { chromium, launchOptions, defaultContextOptions, fixedClock, startServer, randomPort,
-  passGithubGate, STATE_KEY } = require("./helpers");
+  passGithubGate, STATE_KEY, setViewportAndWaitForStableLayout } = require("./helpers");
 const root = path.resolve(__dirname, "..");
 const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
 const names = ["escapeHTML", "pad2", "timeFromDateTime", "minutesOf", "localDateTimeToMs", "estimateMinutesForBlock"];
@@ -195,13 +195,15 @@ function check(name, fn) { fn(); checks++; console.log(`PASS ${name}`); }
       assert.ok(emitted.length >= 3); assert.ok(emitted.every(action => DAILY_ACTIONS.includes(action) && registry.includes(action)));
     });
     for (const width of [390, 768, 1024, 1280]) {
-      await page.setViewportSize({ width, height: 900 });
-      // Measure each restored layout after navigation, not during the media-query rebuild.
-      await page.reload(); await page.locator('[data-work-list="exec"]').waitFor();
-      const runningMeta = page.locator('.exec-row-now:has([data-id="running"]) .exec-row-meta');
-      await runningMeta.click(); await page.locator('[data-daily-key="block:running"]').waitFor();
-      const summary = page.locator('.exec-row-done:has([data-id="done"]) summary');
-      await summary.click(); await page.locator('[data-daily-key="actual:done"]').waitFor();
+      await setViewportAndWaitForStableLayout(page, { width, height: 900 },
+        '.exec-row-expand input,.exec-row-expand select,.exec-row-expand textarea', async () => {
+          // Restore expanded rows after the responsive DOM rebuild, then wait before measuring.
+          await page.reload(); await page.locator('[data-work-list="exec"]').waitFor();
+          const runningMeta = page.locator('.exec-row-now:has([data-id="running"]) .exec-row-meta');
+          await runningMeta.click(); await page.locator('[data-daily-key="block:running"]').waitFor();
+          const summary = page.locator('.exec-row-done:has([data-id="done"]) summary');
+          await summary.click(); await page.locator('[data-daily-key="actual:done"]').waitFor();
+        });
       const sample = await page.locator('[data-daily-key="actual:done"]').evaluate(el => {
         const row = el.getBoundingClientRect();
         return { width: innerWidth, row: { left: row.left, right: row.right, height: row.height },
