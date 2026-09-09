@@ -1,0 +1,5 @@
+{
+  "revision": 0,
+  "entities": [{ "id": "mock-plan-1", "kind": "block", "title": "架空の読書", "start": "09:00", "end": "09:30", "endNextDay": false, "planCompleted": false }],
+  "receipts": []
+}

@@ -86,6 +86,8 @@ async function startServer(product, mock, port = PORT) {
       "product/marked.min.js": "// synthetic markdown library",
       "product/sw.js": "// synthetic service worker", "product/manifest.webmanifest": "{}",
       "product/src/ui/daily-parts/plan-row.js": sharedJS,
+      "product/scripts/daily-mock/mock-adapter.js": "export const mock = true;",
+      "product/scripts/daily-mock/fixtures.json": "{\"synthetic\":true}",
       "product/src/ui/daily-parts/daily-parts.css": sharedCSS,
       "product/assets/icon.svg": "<svg xmlns='http://www.w3.org/2000/svg'/>",
       "m04/preview.html": html, "m04/preview.js": `import '${moduleURL}';`,
@@ -96,7 +98,8 @@ async function startServer(product, mock, port = PORT) {
     const forbidden = [".git/config", "tools/admin.js", "scripts/build.js", "tests/test.js", "docs/help.html",
       "personal-data/secret.js", "auth/token.js", "credentials/token.js", "app-state.json",
       "src/.private.js", "src/tools/admin.js", "src/auth/token.js", "src/model.json",
-      "assets/personal-data/photo.svg", "assets/.hidden.svg", "unlisted.js", "README.md", "dump.json"];
+      "assets/personal-data/photo.svg", "assets/.hidden.svg", "unlisted.js", "README.md", "dump.json",
+      "scripts/other/mock-adapter.js", "scripts/daily-mock/secret.txt", "scripts/daily-mock/auth/token.js"];
     for (const route of ["product", "m04"]) for (const name of forbidden) write(`${route}/${name}`);
     write("outside/escape.js");
     write("outside/photo.svg");
@@ -119,6 +122,7 @@ async function startServer(product, mock, port = PORT) {
         assert.equal(get.headers["x-content-type-options"], "nosniff");
         if (url.endsWith(".js")) assert.match(get.headers["content-type"], /^text\/javascript/);
         if (url.endsWith(".css")) assert.match(get.headers["content-type"], /^text\/css/);
+        if (url.endsWith(".json")) assert.match(get.headers["content-type"], /^application\/json/);
       });
     }
     const productPage = (await request(PORT, "/product/index.html")).body.toString();

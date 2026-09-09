@@ -9,6 +9,7 @@ from urllib.parse import unquote, urlsplit
 
 
 MIME = {
+    ".json": "application/json; charset=utf-8",
     ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
     ".css": "text/css; charset=utf-8", ".webmanifest": "application/manifest+json",
     ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg",
@@ -24,9 +25,12 @@ IMAGES = {".svg", ".png", ".jpg", ".jpeg", ".webp", ".ico", ".woff", ".woff2"}
 
 def allowed(route, parts):
     """Positive asset rules, also applied after resolving filesystem links."""
-    if any(p.startswith(".") or p.lower() in BLOCKED for p in parts):
+    mock_asset = route == "product" and tuple(parts[:2]) == ("scripts", "daily-mock")
+    if any(p.startswith(".") or p.lower() in BLOCKED for p in (parts[1:] if mock_asset else parts)):
         return False
     suffix = Path(parts[-1]).suffix
+    if mock_asset:
+        return len(parts) > 2 and suffix in {".js", ".json"}
     if route == "product":
         return ("/".join(parts) in PRODUCT_FILES
                 or (parts[0] == "src" and suffix in {".js", ".css"})
