@@ -93,6 +93,49 @@ test('normal snapshot: closed imports, independent hashes, untracked assets and 
   assert.equal(cli(f).status, 0);
   assert.deepEqual(inventory(f.version), fixed, 'repeat build is idempotent');
 });
+test('snapshot preserves comments and original bytes except recorded reference rewrites', t => {
+  const f = setup(t);
+  const helper = '\uFEFF/** 日本語 😀\r\n * import(variable); /product/ignored\r\n */\r\n// helper comment\nexport const value = 1;\r\n';
+  const row = '/** 部品 😀 */\r\n// row comment\r\nexport { value } /* keep\r\nthis comment */ from "/product/src/ui/daily-parts/helper.js";\r\n' +
+    'export const data = fetch("/product/scripts/daily-mock/fixtures.json");\n';
+  const css = '/* 日本語\r\n url(/product/ignored) */\r\n.row{color:black}\r\n';
+  const data = '{\r\n  "synthetic": true, "label": "日本語"\r\n}\r\n';
+  write(f.source, 'src/ui/daily-parts/helper.js', helper);
+  write(f.source, 'src/ui/daily-parts/row.js', row);
+  write(f.source, 'src/ui/daily-parts/daily-parts.css', css);
+  write(f.source, 'scripts/daily-mock/fixtures.json', data);
+  const result = cli(f);
+  assert.equal(result.status, 0, result.stderr);
+  const metadata = JSON.parse(fs.readFileSync(path.join(f.version, 'version.json'), 'utf8'));
+  for (const file of metadata.shared_files) {
+    const source = fs.readFileSync(path.join(f.source, file.source_path));
+    const copied = fs.readFileSync(path.join(f.version, file.snapshot_path));
+    assert.equal(file.source_sha256, hash(source));
+    assert.equal(file.snapshot_sha256, hash(copied));
+    if (file.source_path.endsWith('/row.js')) {
+      const refs = ['/product/src/ui/daily-parts/helper.js', '/product/scripts/daily-mock/fixtures.json'];
+      const targets = ['./helper.js', '../../../scripts/daily-mock/fixtures.json'];
+      assert.deepEqual(file.rewrites, refs.map((from, i) => ({ byte_offset: Buffer.byteLength(row.slice(0, row.indexOf(from))), from, to: targets[i] })));
+      assert.deepEqual(copied, Buffer.from(row.replace(refs[0], targets[0]).replace(refs[1], targets[1])));
+      assert.notEqual(file.source_sha256, file.snapshot_sha256);
+    } else {
+      assert.deepEqual(copied, source, file.source_path);
+      assert.equal(file.source_sha256, file.snapshot_sha256, file.source_path);
+      assert.equal(Object.hasOwn(file, 'rewrites'), false, file.source_path);
+    }
+  }
+  assert.equal(cli(f, '--check').status, 0);
+});
+
+test('line comment dependency markers still fail closed without output', t => {
+  const f = setup(t), before = inventory(f.version);
+  for (const comment of ['// /product/ignored\n', '// import(variable);\n']) {
+    write(f.source, 'src/ui/daily-parts/helper.js', comment + 'export const value = 1;\n');
+    assert.equal(cli(f).status, 1, comment);
+    assert.deepEqual(inventory(f.version), before);
+  }
+});
+
 test('source changes during staging: refusal leaves no output', t => {
   const f = setup(t), before = inventory(f.version), originalWrite = fs.writeFileSync;
   let injected = false;

@@ -48,12 +48,14 @@ function snapshot(versionDir, sourceRoot, check = false) {
     const file = safe(product ? source : version, name), bytes = fs.readFileSync(file);
     inputs.set(file, sha(bytes));
     output.set(destination, bytes); // Reserve before recursion, including cyclic module imports.
+    const rewrites = [];
     if (/\.(html|js|css)$/.test(name)) {
       let text = bytes.toString('utf8');
-      if (/\.(js|css)$/.test(name)) text = text.replace(/("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)|\/\*[\s\S]*?\*\//g,
-        (_, quoted) => quoted || ' ');
       if (name.endsWith('.html')) text = text.replace(/<meta\b[^>]*http-equiv=["']Content-Security-Policy["'][^>]*>/gi,
         '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'self\'; style-src \'self\'; connect-src \'self\'; img-src \'self\'; font-src \'self\'; base-uri \'none\'; form-action \'none\'">');
+      const originalText = text;
+      if (/\.(js|css)$/.test(name)) text = text.replace(/("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)|\/\*[\s\S]*?\*\//g,
+        (comment, quoted) => quoted || comment.replace(/[^\r\n]/g, ' '));
       const reference = raw => {
         if (raw.startsWith('#')) return raw;
         if (!raw || /[\\%?#\s]|\$\{|^[a-z]+:/i.test(raw)) throw new Error(`Unresolved reference: ${raw}`);
@@ -70,16 +72,28 @@ function snapshot(versionDir, sourceRoot, check = false) {
         if (!/^["'`][^"'`]*["'`]\s*[,)]/.test(call[1])) throw new Error(`Dynamic dependency: ${name}`);
       for (const call of text.matchAll(/\bnew\s+URL\s*\(([^)]*)\)/g))
         if (!/^[\s]*["'`][^"'`]*["'`]\s*,\s*import\.meta\.url\s*$/.test(call[1])) throw new Error(`Dynamic URL base: ${name}`);
-      text = text.replace(/(\b(?:import|export)\s+(?:[^;"'`]*?\s+from\s*)?|\b(?:import|fetch|new\s+URL)\s*\(\s*|@import\s*|\b(?:src|href|poster)\s*=\s*|\burl\(\s*)(["'`])([^"'`]*?)\2/g,
-        (_, prefix, quote, raw) => prefix + quote + reference(raw) + quote);
-      text = text.replace(/(\burl\(\s*)([^\s"')]+)(\s*\))/g, (_, prefix, raw, suffix) => prefix + reference(raw) + suffix);
-      if (name.endsWith('.html')) text = text.replace(/(\b(?:src|href|poster)\s*=\s*)([^\s"'`=<>]+)/g,
-        (_, prefix, raw) => prefix + '"' + reference(raw) + '"');
+      const record = (raw, offset, unquoted = false) => {
+        const target = reference(raw), replacement = unquoted ? '"' + target + '"' : target;
+        if (replacement !== raw) rewrites.push({ byte_offset: Buffer.byteLength(originalText.slice(0, offset)), from: raw, to: replacement, offset });
+      };
+      for (const match of text.matchAll(/(\b(?:import|export)\s+(?:[^;"'`]*?\s+from\s*)?|\b(?:import|fetch|new\s+URL)\s*\(\s*|@import\s*|\b(?:src|href|poster)\s*=\s*|\burl\(\s*)(["'`])([^"'`]*?)\2/g))
+        record(match[3], match.index + match[1].length + match[2].length);
+      for (const match of text.matchAll(/(\burl\(\s*)([^\s"')]+)(\s*\))/g)) record(match[2], match.index + match[1].length);
+      if (name.endsWith('.html')) for (const match of text.matchAll(/(\b(?:src|href|poster)\s*=\s*)([^\s"'`=<>]+)/g))
+        record(match[2], match.index + match[1].length, true);
+      let result = name.endsWith('.html') ? Buffer.from(originalText) : bytes;
+      if (rewrites.length && !Buffer.from(originalText).equals(result)) throw new Error(`Invalid UTF-8: ${name}`);
+      rewrites.sort((a, b) => a.offset - b.offset);
+      for (const edit of [...rewrites].reverse()) {
+        text = text.slice(0, edit.offset) + edit.to + text.slice(edit.offset + edit.from.length);
+        result = Buffer.concat([result.subarray(0, edit.byte_offset), Buffer.from(edit.to), result.subarray(edit.byte_offset + Buffer.byteLength(edit.from))]);
+      }
       if (/\/product\/|\bsrcset\b|<base\b/i.test(text)) throw new Error(`Unresolved dependency: ${name}`);
-      output.set(destination, Buffer.from(text));
+      output.set(destination, result);
     }
     if (product) shared.set(name, { source_path: name, snapshot_path: destination,
-      source_sha256: sha(bytes), snapshot_sha256: sha(output.get(destination)) });
+      source_sha256: sha(bytes), snapshot_sha256: sha(output.get(destination)),
+      ...(rewrites.length ? { rewrites: rewrites.map(({ offset, ...edit }) => edit) } : {}) });
     return destination;
   }
   for (const ext of ['html', 'js', 'css']) visit(`preview.${ext}`, false);
