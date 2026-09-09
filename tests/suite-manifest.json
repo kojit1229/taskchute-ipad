@@ -340,6 +340,31 @@
       }
     },
     {
+      "file": "daily-parts-isolation-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 47,
+      "assertionHash": "bf171bbe83212da7",
+      "sourceHash": "ec0386f201d18e54",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": false,
+        "fileWrite": true,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
       "file": "daily-parts-snapshot.test.js",
       "kind": "node",
       "tier": "full",
