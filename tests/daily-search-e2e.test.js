@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const { chromium, launchOptions, defaultContextOptions, fixedClock, startServer, randomPort,
-  STATE_KEY, passGithubGate } = require('./helpers');
+  STATE_KEY, passGithubGate, setViewportAndWaitForStableLayout } = require('./helpers');
 
 (async () => {
   let server, browser;
@@ -143,7 +143,8 @@ const { chromium, launchOptions, defaultContextOptions, fixedClock, startServer,
     assert.equal(contract.emptyText, '<img src=x>');
     pass('invalid contracts / injected rendering failure / escaped text / shared composition guard');
     for (const width of [390, 768, 1024]) {
-      await page.setViewportSize({ width, height: 844 });
+      await setViewportAndWaitForStableLayout(page, { width, height: 844 },
+        '[data-work-list="wbs"] input,[data-work-list="wbs"] select');
       const layout = await page.locator('[data-work-list="wbs"]').evaluate(root => ({
         inputSizes: [...root.querySelectorAll('input,select')].map(el => parseFloat(getComputedStyle(el).fontSize)),
         width: root.getBoundingClientRect().width, viewport: innerWidth, pageWidth: document.documentElement.scrollWidth
