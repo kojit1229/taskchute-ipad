@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v377";  // v377: 既存詳細を共通枠へ接続・本番の表示データ変換・確認用サーバー(画面配置は次版)
+const CACHE_NAME = "taskchute-journal-pwa-v378";  // v378: 変更順時刻の計算(mutation-stamp)を単独追加。保存経路への接続は次版
 
 // v353: 12WY R0 task.twyPlan のデータ契約+plan.js 純関数+Task編集モーダル3項目
 
@@ -660,6 +660,7 @@ const APP_SHELL = [
   "./assets/icon.svg",
 
   "./src/core/merge.js",
+  "./src/core/mutation-stamp.js",
 
   "./src/core/life-export.js",
 
