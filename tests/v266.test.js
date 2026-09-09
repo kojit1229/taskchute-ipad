@@ -81,7 +81,7 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
   // 一度も設定しないため元々no-op実質だった)は、R3(v290)でcachedAiWorkResults/
   // hydrateAiWorkResults本体を削除したため撤去(K裁定2026-08-27=ATIS6機能の完全廃止の最終段階)。
   const instrumentedApp = appSource
-    .replace("function saveState() {", "function saveState() { window.__v266SaveCalls = (window.__v266SaveCalls || 0) + 1;")
+    .replace(/function saveState\((?:[^()]|\([^()]*\))*\) \{/, (m) => m + " window.__v266SaveCalls = (window.__v266SaveCalls || 0) + 1;") // v379: saveState は引数付きになったので署名を保ったまま計数を差し込む
     .replace("function render() {", "function render() { window.__v266RenderCalls = (window.__v266RenderCalls || 0) + 1;")
     .replace("function generateReport(dateArg, { quiet = false } = {}) {",
       "function generateReport(dateArg, { quiet = false } = {}) { window.__v266GenerateReportCalls = (window.__v266GenerateReportCalls || 0) + 1;");

@@ -508,7 +508,7 @@ function check(name, cond, extra = "") {
         s.settings.lastPushedAt = LOCAL_T;   // 未push差分なし→自動採用経路(applySyncMergeToRemote)を通す
         s.settings.autoSync = true;          // v198(レビューR2再現): visibilitychange→runAutoSyncPullを有効化
         localStorage.setItem(key, JSON.stringify(s));
-        return { tasks: s.tasks, projects: s.projects, blocks: s.blocks };
+        return { tasks: s.tasks, projects: s.projects, blocks: s.blocks, settings: s.settings };
       }, { key: STATE_KEY, parent, kStep, aiStep, project, LOCAL_T });
       await pageR2.reload();
       await pageR2.waitForSelector('#app[data-view="wbs"]');
@@ -522,7 +522,10 @@ function check(name, cond, extra = "") {
       const { tasks: remoteTasks, mutatedId } = mutateRemote({ parent, kStep, aiStep, mirror });
       const remoteObj = {
         dataModifiedAt: REMOTE_T, currentView: "wbs", selectedDate: TODAY,
-        blocks: mirror.blocks, projects: mirror.projects, tasks: remoteTasks, settings: {},
+        // 監督者決定 2026-09-09: 新しい全体時刻(比較対象と実時計の最大値+1秒)では同秒の完了保存も正しく「未push」になり、
+        // 一次設定の安全確認(assertPrimarySettingsSafe)が働く。remote の settings:{} は実データでは起きない非現実的な fixture なので、
+        // このケースの変更対象は Task だけとし、設定は同じに保つ(assert は不変)。
+        blocks: mirror.blocks, projects: mirror.projects, tasks: remoteTasks, settings: mirror.settings,
         aiStepProcessedIds: [], aiStepDismissedIds: [], aiStepPendingRequests: []
       };
       const b64 = Buffer.from(JSON.stringify(remoteObj), "utf-8").toString("base64");

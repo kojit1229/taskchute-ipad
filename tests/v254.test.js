@@ -31,7 +31,7 @@ function functionSource(name) {
 }
 
 const instrumentedAppSource = (appSource + "\nglobalThis.__v254ReadLiveState = () => state;\n")
-  .replace("function saveState() {", `function saveState() {
+  .replace(/function saveState\((?:[^()]|\([^()]*\))*\) \{/, (m) => m + ` // v379: 署名を保ったまま計数
   globalThis.__v254SaveCalls?.push("save");
   globalThis.__v254HookOrder?.push("save");`)
   .replace("function trackOnBlockStarted(block) {", `function trackOnBlockStarted(block) {
@@ -286,8 +286,11 @@ console.log("[0] 共通フック契約と全経路の機械検査");
       const savedItem = saved?.weeklyCommitments.find((entry) => entry.id === `wci_${WEEK_START}_${blockId}`);
       check(`${label}: 完了Blockと刻印を同じsnapshotで1回だけ永続化`, spies.writes.length === 1
         && savedBlock?.completed === true && Boolean(savedItem?.completedAt)
-        && savedItem.completedChangedAt === savedItem.updatedAt
-        && savedItem.updatedAt === saved.dataModifiedAt && savedItem.updatedAt > OLD,
+        // v379: 観測時刻(completedChangedAt)は実時計のまま、updatedAt は変更順の時刻(候補の最大値+1秒)なので同値にならない(設計03)。
+        && savedItem.updatedAt >= savedItem.completedChangedAt
+        // v379(設計03 §「新旧の保存が交差しても更新時刻を戻さない」、K決定C 2026-09-09): 全体時刻は候補の最大値+1秒なので
+        // 記録の updatedAt と同値ではなく「それより古くならない」ことを確認する。
+        && saved.dataModifiedAt >= savedItem.updatedAt && savedItem.updatedAt > OLD,
         JSON.stringify({ writes: spies.writes.length, savedBlock, savedItem }));
     } else {
       check(`${label}: saveState呼び出し回数`, spies.saves.length === expectedSaveCalls,
@@ -298,8 +301,8 @@ console.log("[0] 共通フック契約と全経路の機械検査");
       spies.order.slice(0, completionIndex).includes("save")
         && spies.order.slice(completionIndex + 1).includes("save"), JSON.stringify(spies.order));
     check(`${label}: completedChangedAt/item.updatedAt/dataModifiedAtを同時刻で永続化`,
-      Boolean(record?.completedChangedAt) && record.completedChangedAt === record.updatedAt
-        && record.updatedAt === state.dataModifiedAt && record.updatedAt > OLD,
+      Boolean(record?.completedChangedAt) && record.updatedAt >= record.completedChangedAt // v379: 観測時刻≦変更順時刻(設計03)
+        && state.dataModifiedAt >= record.updatedAt && record.updatedAt > OLD, // v379: 全体時刻は記録の時刻+1秒以上(設計03、K決定C)
       JSON.stringify({ record, dataModifiedAt: state.dataModifiedAt }));
     return record;
   }
