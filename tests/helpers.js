@@ -40,6 +40,36 @@ function defaultContextOptions() {
   return { timezoneId: "Asia/Tokyo" };
 }
 
+// Wait for responsive styles/DOM to settle, without waiting for an asserted font size.
+async function setViewportAndWaitForStableLayout(page, viewport, controlsSelector, prepareLayout) {
+  await page.setViewportSize(viewport);
+  if (prepareLayout) await prepareLayout();
+  await page.waitForFunction(async ({ width, height, controlsSelector }) => {
+    const sample = () => {
+      if (innerWidth !== width || innerHeight !== height
+        || matchMedia("(max-width: 720px)").matches !== (width <= 720)) return null;
+      const controls = [...document.querySelectorAll(controlsSelector)];
+      if (!controls.length) return null;
+      const values = controls.map(el => {
+        const fontSize = parseFloat(getComputedStyle(el).fontSize);
+        const { x, y, width, height } = el.getBoundingClientRect();
+        return { fontSize, x, y, width, height };
+      });
+      if (values.some(value => !Number.isFinite(value.fontSize))
+        || controls.some(el => el.getAnimations().some(animation =>
+          animation.pending || animation.playState === "running"))) return null;
+      return { controls, values: JSON.stringify(values) };
+    };
+    const before = sample();
+    if (!before) return false;
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    const after = sample();
+    return after !== null && before.values === after.values
+      && before.controls.length === after.controls.length
+      && before.controls.every((el, index) => el === after.controls[index]);
+  }, { ...viewport, controlsSelector });
+}
+
 // now: fixedClock(...) として注入。初回は指定時刻、以後1msずつ進む。
 function fixedClock(isoOrMs) {
   const zonedISO = typeof isoOrMs === "string"
@@ -279,7 +309,7 @@ function randomPort(min = 20000, max = 40000) {
 }
 
 module.exports = {
-  chromium, ROOT, launchOptions, defaultContextOptions, fixedClock, startServer,
+  chromium, ROOT, launchOptions, defaultContextOptions, setViewportAndWaitForStableLayout, fixedClock, startServer,
   blockGithubApiByDefault, passGithubGate, GITHUB_API_HOST, STATE_KEY, randomPort,
   openSettingsGroup, dispatchRegisteredAction, dismissBodyScanIfOpen,
   dismissWriteMeditationGateIfOpen, generateReportThroughGate
