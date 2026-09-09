@@ -30,6 +30,15 @@
     "fund-data-contract"
   ],
   "areas": {
+    "mutation-stamp": {
+      "paths": [
+        "^src/core/mutation-stamp\\.js$"
+      ],
+      "suites": [
+        "mutation-stamp-core",
+        "store-core"
+      ]
+    },
     "work-list-ui": {
       "paths": [
         "^src/(core|features)/work-list\\.js$"

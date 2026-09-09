@@ -1,0 +1,50 @@
+{
+  "version": 378,
+  "date": "2026-09-09",
+  "title": "変更順時刻の計算部品を追加",
+  "summary": "単位13: 変更順時刻の計算(mutation-stamp)を単独追加。保存経路への接続は次版。利用者から見える変更: なし(内部部品の追加のみ)。",
+  "changedFiles": [
+    "docs/test-impact-map.generated.md",
+    "sw.js",
+    "tests/impact-regression-map.json",
+    "tests/suite-manifest.json",
+    "src/core/mutation-stamp.js",
+    "tests/mutation-stamp-core.test.js",
+    "releases/v378.json",
+    "CHANGES_v378.md",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md"
+  ],
+  "intent": [
+    "保存処理へ接続する前に、変更順を表す時刻の計算を独立した部品として用意する。"
+  ],
+  "changes": [
+    "単位13: nextMutationStampで現在時刻と候補時刻の最大値から1秒進める。空の候補を除外し、不正な日時を拒否する。stampedで元のレコードを変更せずupdatedAtを付けたコピーを返す。",
+    "単位13の既存変更: mutation-stamp-coreテスト、影響分類、SWのAPP_SHELL登録を含む。単位13とfix13の未コミット差分は本発注で変更しない。",
+    "リリース準備: CACHE_NAMEをv377からv378へ更新し、正規コマンドでCHANGES・handoff・テストmanifest・コード索引を生成する。",
+    "利用者から見える変更: なし(内部部品の追加のみ)。保存経路への接続は次版。"
+  ],
+  "uncertainties": [
+    "最終ゲートの実走結果と終了コードはreports/impl-r1/v378/command-results.jsonlおよびrelease-gate-final.logを参照。"
+  ],
+  "reviewFocus": [
+    "単位13とfix13の既存差分の保持、SW版番号と生成記録の整合性。",
+    "基準52f51d5と作業開始時点を区別し、changes.patchは本発注の差分だけを収録する。"
+  ],
+  "verification": [
+    "関連スイート: mutation-stamp-core / store-core / sw-integration / sw-self-heal。最終ゲートの実走ログで実行を確認する。",
+    "npm run test:manifest:write → node scripts/test-manifest.js --check。npm run code:index:write → node scripts/code-index.js --check。",
+    "node scripts/release-record.js releases/v378.json --write / --check。RELEASE_HANDOFF_PATH=reports/impl-r1/v378/handoff-preview.md。",
+    "TZ=Asia/Tokyo RELEASE_HANDOFF_PATH=<handoff-preview.mdの絶対パス> node scripts/release-gate.js releases/v378.json --impact-base=52f51d5 --final。"
+  ],
+  "knownLimitations": [
+    "保存経路への接続は次版。",
+    "独立レビュー・全量CI・iOS実機確認・公開は本発注の対象外。"
+  ],
+  "relatedSuites": [
+    "mutation-stamp-core",
+    "store-core",
+    "sw-integration",
+    "sw-self-heal"
+  ]
+}
