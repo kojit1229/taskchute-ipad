@@ -92,14 +92,13 @@
   box-sizing: border-box;
   display: block;
   padding: 16px;
-  width: 100%;
   min-width: 0;
-  max-width: 720px;
   max-height: 90vh;
   overflow-y: auto;
   overflow-wrap: anywhere;
 }
 .daily-detail-frame *, .daily-detail-frame *::before, .daily-detail-frame *::after { box-sizing: border-box; }
+.daily-detail-frame .modal-close { min-width: 44px; min-height: 44px; flex-shrink: 0; }
 .daily-detail-body { border: 0; margin: 0; padding: 0; min-width: 0; }
 .daily-detail-field { display: grid; gap: 4px; min-width: 0; margin-block: 12px; }
 .daily-detail-frame input, .daily-detail-frame select, .daily-detail-frame textarea {

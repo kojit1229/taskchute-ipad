@@ -219,14 +219,14 @@ function check(name, fn) { fn(); checks++; console.log(`PASS ${name}`); }
     await page.locator('[data-daily-key="actual:done"] [data-action="edit-block"]').click();
     await page.locator('#modalRoot .daily-detail-frame[data-id="done"]').waitFor();
     assert.equal(await page.locator('#modalRoot [data-modal-field="title"]').inputValue(), "架空完了");
-    await page.locator('#modalRoot [data-action="modal-close"]').click();
+    await page.locator('#modalRoot [data-action="modal-close"][aria-label="閉じる"]').click();
     await page.locator('[data-action="nav"][data-view="today"]').first().click();
     await page.locator('[data-work-list="today"]').waitFor();
     // Today uses work-list.js's separate compact row (outside this card's edit scope).
     await page.locator('[data-work-list="today"] [data-work-key="block:up"] [data-action="edit-block"]').click();
     await page.locator('#modalRoot .daily-detail-frame[data-id="up"]').waitFor();
     assert.equal(await page.locator('#modalRoot [data-modal-field="title"]').inputValue(), "架空これから");
-    await page.locator('#modalRoot [data-action="modal-close"]').click();
+    await page.locator('#modalRoot [data-action="modal-close"][aria-label="閉じる"]').click();
     check("common edit and the existing today row both open the correct legacy detail", () => assert.deepEqual(errors, []));
     const todayBefore = await read();
     for (const width of [390, 768, 1024, 1280]) {
