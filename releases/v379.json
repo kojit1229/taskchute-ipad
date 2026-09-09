@@ -1,0 +1,66 @@
+{
+  "version": 379,
+  "date": "2026-09-09",
+  "title": "端末側の全体更新時刻を候補保存へ接続",
+  "summary": "単位14: 端末側の全体更新時刻を候補保存境界(commitCandidate)へ接続。保存が失敗したときに入力と状態が元へ戻る。更新時刻が古い方へ戻らない。同期側は次版。",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "src/core/commit.js",
+    "src/core/mutation-stamp.js",
+    "src/features/draft-save.js",
+    "src/features/feedback/local-report-commit.js",
+    "src/features/placement.js",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/draft-save-transaction.test.js",
+    "tests/feedback-save-proof.test.js",
+    "tests/helpers.js",
+    "tests/impact-regression-map.json",
+    "tests/mutation-global-e2e.test.js",
+    "tests/mutation-stamp-core.test.js",
+    "tests/placement-core.test.js",
+    "tests/r0-twyplan.test.js",
+    "tests/suite-manifest.json",
+    "tests/v198.test.js",
+    "tests/v278.test.js",
+    "releases/v379.json",
+    "CHANGES_v379.md"
+  ],
+  "intent": [
+    "端末側の候補保存と全体更新時刻をまとめて確定し、保存失敗時に入力と状態を復元する。"
+  ],
+  "changes": [
+    "単位14: commitCandidateで候補を作り、レコードと全体更新時刻を更新して同期的に保存する。保存失敗時は状態と対象入力を復元する。",
+    "全体更新時刻は既存の更新時刻・送信済み時刻・候補時刻を下回らないよう計算する。同期側への接続は次版。",
+    "利用者から見える変更: 保存が失敗したときに入力と状態が元へ戻る。更新時刻が古い方へ戻らない。",
+    "リリース準備: CACHE_NAMEをv378からv379へ更新し、正規コマンドでCHANGES・handoff・テストmanifest・コード索引を生成する。単位14の開始時点の未コミット差分は保持する。"
+  ],
+  "uncertainties": [
+    "最終ゲートの実走結果と終了コードはreports/impl-r1/v379/command-results.jsonlおよびrelease-gate-final.logを参照。"
+  ],
+  "reviewFocus": [
+    "単位14の既存差分の保持、SW版番号と生成記録の整合性。",
+    "基準b830485と作業開始時点を区別し、changes.patchは本発注の差分だけを収録する。"
+  ],
+  "verification": [
+    "関連スイート: mutation-global-e2e / store-core / draft-save-transaction / v364 / v136 / sw-integration。最終ゲートの実走ログで実行を確認する。",
+    "npm run test:manifest:write → node scripts/test-manifest.js --check。npm run code:index:write → node scripts/code-index.js --check。",
+    "node scripts/release-record.js releases/v379.json --write / --check。RELEASE_HANDOFF_PATH=reports/impl-r1/v379/handoff-preview.md。",
+    "TZ=Asia/Tokyo RELEASE_HANDOFF_PATH=<handoff-preview.mdの絶対パス> node scripts/release-gate.js releases/v379.json --impact-base=b830485 --final。"
+  ],
+  "knownLimitations": [
+    "同期側への接続は次版。",
+    "独立レビュー・全量CI・iOS実機確認・公開は本発注の対象外。"
+  ],
+  "relatedSuites": [
+    "mutation-global-e2e",
+    "store-core",
+    "draft-save-transaction",
+    "v364",
+    "v136",
+    "sw-integration"
+  ]
+}

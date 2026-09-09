@@ -54,7 +54,7 @@ function harness(legacy, preserve = false) {
     querySelectorAll: () => Object.values(sheets).filter(Boolean),
     querySelector: selector => selector.includes("exec-pane-left") ? sheets.left : sheets.overlay },
   draftSaveTransaction: null, personalDataReady: () => true, app: { dataset: {} }, visionEditDraft: null,
-  renderSidebar() {}, renderBottomNav() {}, rememberWorkListScroll() {}, restoreWorkListScroll() {},
+  renderSidebar() {}, renderBottomNav() {}, rememberWorkListScroll() {}, restoreWorkListScroll() {}, restoreGlobalInputs() {},
   renderTimelineRail() {}, renderSyncBanner() {}, renderPersonalDataAuthBanner() {}, maybeMarkAiReportRead() {},
   renderMain() { renders++; html = vm.runInContext("renderExecView()", ctx); replaceSheet("left", html.includes("fill-gap-sheet")); } };
   vm.createContext(ctx);

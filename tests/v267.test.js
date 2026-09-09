@@ -39,7 +39,7 @@ function configureSync(syncMod) {
   configureSync(syncMod);
 
   const instrumentedApp = appSource
-    .replace("function saveState() {", "function saveState() { window.__v267SaveCalls = (window.__v267SaveCalls || 0) + 1;")
+    .replace(/function saveState\((?:[^()]|\([^()]*\))*\) \{/, (m) => m + " window.__v267SaveCalls = (window.__v267SaveCalls || 0) + 1;") // v379: 署名を保ったまま計数
     .replace("function candidateBlocksForWeek(value, weekStart) {",
       "window.__v267WeekStart = () => weekRange(todayISO()).weekStart;\nfunction candidateBlocksForWeek(value, weekStart) {");
   check("テスト計器のsource markerは各1件", instrumentedApp !== appSource

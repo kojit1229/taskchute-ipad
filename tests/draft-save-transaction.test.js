@@ -14,7 +14,9 @@ const extracted = names.map(name => {
   assert(node, name); assert.equal(node.async, false, `${name} must remain synchronous`);
   return source.slice(node.start, node.end);
 }).join('\n');
-const factory = ['draft-save', 'draft-leave'].map(name => fs.readFileSync(path.join(root, `src/features/${name}.js`), 'utf8').replace('export function', 'function')).join('\n');
+const factory = ['core/mutation-stamp', 'core/commit', 'features/draft-save', 'features/draft-leave']
+  .map(name => fs.readFileSync(path.join(root, `src/${name}.js`), 'utf8')
+    .replace(/^import .*;\r?$/gm, '').replace(/export (function|const)\b/g, '$1')).join('\n');
 const init = ast.body.find(n => n.type === 'ExpressionStatement' && n.expression.type === 'AssignmentExpression'
   && n.expression.left.name === 'draftSaveTransaction');
 assert(init, 'actual app transaction dependency wiring exists');
@@ -35,7 +37,7 @@ function setup(mode, { storageFail = true, completed = false, track = false } = 
   const modalRoot = { innerHTML: 'original-form', firstElementChild: { isConnected: true }, classList: { remove() {}, contains: () => Boolean(ctx.state.modal && modalRoot.innerHTML) }, setAttribute() {},
     querySelectorAll: selector => !modalRoot.innerHTML ? [] : selector === '[data-modal-field]' ? fields : selector === '.twy-ms-edit-row' ? rows : [],
     querySelector: () => null };
-  const data = { currentView: 'zero', selectedDate: '2026-09-06', dataModifiedAt: 'before',
+  const data = { currentView: 'zero', selectedDate: '2026-09-06', dataModifiedAt: '2026-09-06T12:00:00',
     modal: mode.startsWith('zero') ? null : { type: mode === 'new-task' ? 'task' : mode, id: mode === 'new-task' ? '' : mode === 'block' ? 'b' : 'p' },
     settings: { twelveWeekStartDate: '2026-09-05' }, projects: [{ id: 'p', title: 'old project' }],
     tasks: mode === 'block' ? [{ id: 't', status: 'todo' }] : mode === 'task' ? [{ id: 'p', title: 'old task', status: 'todo' }] : [], blocks: mode === 'block' ? [{ id: 'b', title: 'old block', date: '2026-09-06', taskId: 't', completed: false,
@@ -180,11 +182,12 @@ test('native dialog cancellation clears the pending leave without losing draft',
 });
 test('committed saves remain successful through schedule/render/post errors and finish all remaining effects once', () => {
   const x = setup('project', { storageFail: false }); const events = []; let writes = 0;
-  const transaction = x.ctx.createDraftSaveTransaction({ getState: () => x.state(), setState: value => { x.ctx.state = value; },
+  const transaction = x.ctx.createDraftSaveTransaction({ now: x.ctx.nowDateTime, getState: () => x.state(), setState: value => { x.ctx.state = value; },
     persist: () => { writes++; return true; }, schedule: () => { events.push('schedule'); throw new Error('schedule'); },
     onFailure: () => { throw new Error('must not mark committed save failed'); },
     onEffectError: () => { events.push('effect-error'); throw new Error('reporter also failed'); } });
   const result = transaction.run(() => {
+    x.state().projects[0].title = 'changed for committed-effects test';
     transaction.defer(() => { events.push('close'); x.ctx.state.modal = null; });
     transaction.complete(() => { events.push('render'); throw new Error('render'); });
     transaction.defer(() => events.push('remaining-ui'));
@@ -199,10 +202,27 @@ test('committed saves remain successful through schedule/render/post errors and 
 });
 test('a throwing failure reporter cannot prevent state restoration or block the next transaction', () => {
   const x = setup('project'), original = x.state(); let failing = true;
-  const transaction = x.ctx.createDraftSaveTransaction({ getState: () => x.state(), setState: value => { x.ctx.state = value; },
+  const transaction = x.ctx.createDraftSaveTransaction({ now: x.ctx.nowDateTime, getState: () => x.state(), setState: value => { x.ctx.state = value; },
     persist: () => !failing, schedule() {}, onFailure: () => { throw new Error('reporter failed'); } });
   const save = () => transaction.run(() => { x.state().projects[0].title = 'candidate'; transaction.complete(); });
   assert.equal(save().reason, 'storage-failed'); assert.equal(x.state(), original); assert.equal(transaction.active, false);
   failing = false; assert.equal(save().ok, true);
 });
+// D06 / 設計03「新旧の保存が交差しても更新時刻を戻さない」: 内容無変更は発行しない。
+for (const [mode, kind] of [['task', 'tasks'], ['project', 'projects'], ['block', 'blocks']]) {
+  test(`${mode}: unchanged opened record keeps stamps and bypasses persistence even when storage fails`, () => {
+    const x = setup(mode, { storageFail: true });
+    x.state()[kind][0].updatedAt = '2026-09-06T12:30:00';
+    x.state()[kind].push({ id: 'unrelated', updatedAt: '2400-01-01T00:00:00' });
+    const original = x.state(), before = copy(original);
+    const save = () => x.ctx.draftSaveTransaction.run(() => x.ctx.draftSaveTransaction.complete());
+    for (const failing of [true, false]) {
+      x.fail(failing); assert.equal(save().ok, true);
+      assert.equal(x.state(), original); assert.deepEqual(x.state(), before);
+      assert.equal(x.state()[kind][0].updatedAt, '2026-09-06T12:30:00');
+      assert.equal(x.state().dataModifiedAt, '2026-09-06T12:00:00');
+      assert.equal(x.effects.persisted.length, 0); assert.equal(x.effects.schedules, 0);
+    }
+  });
+}
 console.log(`PASS draft save transaction: ${count} cases`);

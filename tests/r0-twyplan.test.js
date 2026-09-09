@@ -55,27 +55,13 @@ const task = (id, projectId, extra = {}) => ({
     await page.waitForSelector('[data-action="modal-save"]', { state: "visible" });
   }
 
-  // M3: nowDateTime()は秒精度なので、直前の保存と同一秒内に次の保存が起きると
-  // updatedAtが偶然一致しうる。固定sleepで秒境界を跨ぐのではなく、実際にstateが
-  // 変化するまでポーリング待機する(タイムアウトすれば「bumpしなかった」という事実として扱う)。
-  // v374: CI(shard3)で「無変更再保存でもtask.updatedAtは常にbumpされる(既存慣行)」が
-  // `2026-09-06T23:27:22 -> 2026-09-06T23:27:22`(変化なし)のまま3000msでタイムアウト
-  // (ci-run-34066885834/shard3-101577103350.log 1168行)。app.jsのsaveTaskFromModalは
-  // 無条件でupdatedAtをbumpする実装で分岐は無く、直前の同種チェックはCIでも通っている
-  // ため単発の境界事例と見られる。nowDateTime()が秒精度である以上、保存ボタンクリック→
-  // ハンドラ実行→localStorage書き込みの一連がCIの共有ランナーで3000ms以内に収まらない
-  // ケースへ余裕を持たせるため、待つ内容(実際のupdatedAt変化)は変えずタイムアウトのみ延長する。
-  async function waitForTaskUpdatedAtChange(taskId, prevUpdatedAt, timeout = 3000) {
-    try {
-      await page.waitForFunction(({ key, taskId, prevUpdatedAt }) => {
-        const st = JSON.parse(localStorage.getItem(key) || "null");
-        const t = st?.tasks?.find((x) => x.id === taskId);
-        return Boolean(t) && t.updatedAt !== prevUpdatedAt;
-      }, { key: STATE_KEY, taskId, prevUpdatedAt }, { timeout });
-      return true;
-    } catch {
-      return false;
-    }
+  // D06 / 設計03「新旧の保存が交差しても更新時刻を戻さない」: 保存完了後に不変を確認。
+  async function waitForTaskStampsUnchanged(taskId, updatedAt, dataModifiedAt) {
+    await page.waitForFunction(() => !document.querySelector('#modalRoot')?.classList.contains('open'));
+    return page.evaluate(({ key, taskId, updatedAt, dataModifiedAt }) => {
+      const st = JSON.parse(localStorage.getItem(key));
+      return st.tasks.find(t => t.id === taskId)?.updatedAt === updatedAt && st.dataModifiedAt === dataModifiedAt;
+    }, { key: STATE_KEY, taskId, updatedAt, dataModifiedAt });
   }
 
   try {
@@ -224,29 +210,15 @@ const task = (id, projectId, extra = {}) => ({
       && reloadedTask.twyPlan.toWeek === 9 && reloadedTask.twyPlan.keystone === true, JSON.stringify(reloadedTask.twyPlan));
 
     // ============================================================
-    // C: 12WY配下Taskを無変更で再保存したときの実挙動を固定する(B-H2)。
-    // 発注§Cは「変更があったときだけbump。既存が『常に bump』ならそれに従い報告」と定めており、
-    // 実装(app.js:saveTaskFromModal のtask更新分岐)は他フィールド同様スプレッド+
-    // `updatedAt: changedAt` の無条件bumpで、twyPlanだけ特別扱いしていない。
-    // このテストは「値は変わらないがtask.updatedAt/state.dataModifiedAtは常にbumpされる」
-    // という既存の常時bump慣行そのものを固定する(将来「変更なしなら不変」の実装が
-    // 紛れ込んでも退行として検知できるようにする)。
-    // ============================================================
-    console.log("[9] Task編集モーダル: 12WYタスクの無変更再保存はtwyPlanの値を変えないがupdatedAt/dataModifiedAtは常にbumpされる(既存の常時bump慣行、B-H2)");
+    // D06 / 設計03「新旧の保存が交差しても更新時刻を戻さない」: 無変更再保存では発行しない。
+    console.log("[9] Unchanged task save preserves updatedAt/dataModifiedAt");
     const beforeUnchanged = await stateNow();
     const beforeUnchangedTask = beforeUnchanged.tasks.find((t) => t.id === "t-12wy");
     const beforeUnchangedDataModifiedAt = beforeUnchanged.dataModifiedAt;
     await openTaskMenu("t-12wy");
-    // v375: updatedAt は秒精度(nowDateTime)。直前の保存と同じ秒内に再保存すると値が一致して「bumpなし」に見える
-    //       (CIとローカル双方で `19:34:54 -> 19:34:54` を実測)。待ち時間の延長ではなく、秒が進んだことを確認してから保存する。
-    await page.waitForFunction((prev) => {
-      const d = new Date(), pad = (n) => String(n).padStart(2, "0");
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}` !== prev;
-    }, beforeUnchangedTask.updatedAt, { timeout: 3000 });
-    // フィールドは一切変更せずそのまま保存する
     await page.click('[data-action="modal-save"]');
     await page.waitForSelector('[data-action="modal-save"]', { state: "detached" });
-    const bumpedOnUnchangedSave = await waitForTaskUpdatedAtChange("t-12wy", beforeUnchangedTask.updatedAt);
+    const stampsUnchanged = await waitForTaskStampsUnchanged("t-12wy", beforeUnchangedTask.updatedAt, beforeUnchangedDataModifiedAt);
     const afterUnchanged = await stateNow();
     const afterUnchangedTask = afterUnchanged.tasks.find((t) => t.id === "t-12wy");
     check("無変更再保存でもtwyPlanの値そのものは変わらない",
@@ -255,10 +227,10 @@ const task = (id, projectId, extra = {}) => ({
       && afterUnchangedTask.twyPlan.toWeek === beforeUnchangedTask.twyPlan.toWeek
       && afterUnchangedTask.twyPlan.keystone === beforeUnchangedTask.twyPlan.keystone,
       JSON.stringify({ before: beforeUnchangedTask.twyPlan, after: afterUnchangedTask.twyPlan }));
-    check("無変更再保存でもtask.updatedAtは常にbumpされる(既存慣行)", bumpedOnUnchangedSave,
+    check("Unchanged save preserves task.updatedAt", stampsUnchanged && afterUnchangedTask.updatedAt === beforeUnchangedTask.updatedAt,
       `${beforeUnchangedTask.updatedAt} -> ${afterUnchangedTask.updatedAt}`);
-    check("無変更再保存でもstate.dataModifiedAtは常にbumpされる(既存慣行)",
-      afterUnchanged.dataModifiedAt !== beforeUnchangedDataModifiedAt,
+    check("Unchanged save preserves state.dataModifiedAt",
+      afterUnchanged.dataModifiedAt === beforeUnchangedDataModifiedAt,
       `${beforeUnchangedDataModifiedAt} -> ${afterUnchanged.dataModifiedAt}`);
 
     // ============================================================

@@ -16,8 +16,8 @@ function check(name, condition, extra = "") {
 }
 
 (async () => {
-  const instrumentedApp = appSource.replace("function saveState() {",
-    "function saveState() { window.__v268SaveCalls = (window.__v268SaveCalls || 0) + 1;");
+  const instrumentedApp = appSource.replace(/function saveState\((?:[^()]|\([^()]*\))*\) \{/, // v379: 署名を保ったまま計数
+    (m) => m + " window.__v268SaveCalls = (window.__v268SaveCalls || 0) + 1;");
   const server = startServer(PORT);
   const browser = await chromium.launch(launchOptions());
   const context = await browser.newContext({

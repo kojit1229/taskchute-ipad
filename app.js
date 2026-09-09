@@ -33,6 +33,7 @@ import { createVisionRead } from "./src/features/vision-read.js";
 import { createVisionOverview } from "./src/features/vision-overview.js";
 import { createDraftLeaveGuard } from "./src/features/draft-leave.js";
 import { createDraftSaveTransaction } from "./src/features/draft-save.js";
+import { commitCandidate, assertNotInsideBuild } from "./src/core/commit.js";
 import { renderDetailFrame } from "./src/ui/daily-parts/detail-frame.js";
 import { renderDailyBlockDetails } from "./src/features/daily-view-model.js";
 import { configureWorkList, renderWorkList, handleWorkListInput, handleWorkListComposition, rememberWorkListOrigin, restoreWorkListOrigin, rememberWorkListScroll, restoreWorkListScroll } from "./src/features/work-list.js";
@@ -349,9 +350,10 @@ configurePlacement({
   escapeHTML, todayISO, nowDateTime, makeBlock, projectName, modalHeaderHTML,
   renderModal, closeModal, openBlockEditor, setView, showToast,
   commit: candidate => commitPlacement(state, candidate, {
-    stamp: nowDateTime(),
+    now: nowDateTime,
+    floors: () => [saveState.pendingStamp],
     persist: () => { persistLocalNoSchedule(); return !_lastSaveError; },
-    schedule: () => { scheduleAutoSave(); scheduleAutoSync(); }
+    schedule: () => { saveState.pendingStamp = state.dataModifiedAt; scheduleAutoSave(); scheduleAutoSync(); }
   })
 });
 
@@ -1670,27 +1672,17 @@ document.addEventListener("input", (event) => {
   if (target.matches("[data-journal-date]")) {
     const d = target.dataset.journalDate;
     if (isArchivedDate(state, d)) return showToast(ARCHIVED_READONLY_MESSAGE);
-    state.journals[d] = target.value;
-    feedbackUiController?.inputChanged(d); feedbackReportController?.inputChanged(d);
-    // v106: 本文の編集時刻を記録(端末間マージの新旧判定に使用)
-    const meta = (state.journalMeta[d] ||= { aiImported: false, ideal: "", aiTaskCandidates: [], aiRequest: "" });
-    meta.textUpdatedAt = nowDateTime();
-    saveState();
+    return saveGlobalInput(target, "journal", d);
   }
   // v61: 今日の理想ワンライナー(入力中も保存。全再描画しないのでフォーカスは維持される)
   if (target.matches("[data-ideal-date]")) {
     const d = target.dataset.idealDate;
-    const meta = (state.journalMeta[d] ||= { aiImported: false, ideal: "", aiTaskCandidates: [], aiRequest: "" });
-    meta.ideal = target.value;
-    saveState();
+    return saveGlobalInput(target, "ideal", d);
   }
   // v73: コンディションOS — 夜のひとこと(入力中も保存。全再描画しないのでフォーカスは維持される)
   if (target.matches("[data-condition-note-date]")) {
     const d = target.dataset.conditionNoteDate;
-    const log = ensureConditionLog(d);
-    log.eveningNote = target.value;
-    log.eveningRecordedAt ||= nowDateTime();
-    saveState();
+    return saveGlobalInput(target, "condition", d);
   }
   // v34: 0秒思考の履歴検索(全体を再描画せず履歴リストだけ更新 → 入力フォーカス維持)
   if (target.matches("#zt-search")) {
@@ -1701,8 +1693,7 @@ document.addEventListener("input", (event) => {
     if (cntEl) cntEl.textContent = ztHistoryCountLabel();
   }
   if (target.matches("[data-vision-field]")) {
-    state.settings[target.dataset.visionField] = target.value;
-    saveState();
+    return saveGlobalInput(target, "vision", target.dataset.visionField);
   }
   // v367: 編集中のtextarea値をvisionEditDraftへ同期する(state/localStorageへは書かない。
   // 保存されるのはvision-edit-save経由でGitHubへPUTする時だけ)。
@@ -1979,14 +1970,57 @@ document.addEventListener("input", (event) => {
 
 let _quotaToastShown = false;
 let draftSaveTransaction = null;
+let globalInputDrafts = {};
 
-function saveState() {
-  if (draftSaveTransaction?.active) return; // The editor boundary persists the complete candidate once.
-  // v25: 実データの変更時刻を記録(端末間の「新しい方が勝つ」判定に使用)。
-  //      persistLocalNoSchedule(リモート採用・GitHub保存)では更新しない。
-  state.dataModifiedAt = nowDateTime();
-  // v23: localStorage 書き込み失敗で例外を投げない(画面が固まるのを防ぐ)
-  persistLocalNoSchedule();
+function saveGlobalInput(target, kind, date) {
+  const key = `${kind}:${date}`;
+  const beforeValue = (kind === "journal" ? state.journals[date] : kind === "ideal" ? state.journalMeta[date]?.ideal
+    : kind === "condition" ? state.condition?.logs?.[date]?.eveningNote : state.settings[date]) || "";
+  const input = globalInputDrafts[key]?.value === target.value ? globalInputDrafts[key] : {
+    kind, date, value: target.value, start: target.selectionStart, end: target.selectionEnd,
+    beforeValue, observedAt: nowDateTime(), candidateId: crypto.randomUUID(), operation: "input"
+  };
+  globalInputDrafts[key] = input;
+  try { sessionStorage.setItem("taskchute-global-inputs", JSON.stringify(globalInputDrafts)); } catch { /* Keep the in-tab copy. */ }
+  if (input.beforeValue !== beforeValue) { showToast("保存前の本文が変わりました。入力を確認して編集し直してください"); return false; }
+  const result = draftSaveTransaction.run(() => {
+    if (kind === "condition") {
+      const log = ensureConditionLog(date); log.eveningNote = input.value; log.eveningRecordedAt ||= input.observedAt;
+    } else if (kind === "vision") state.settings[date] = input.value;
+    else {
+      const meta = (state.journalMeta[date] ||= { aiImported: false, ideal: "", aiTaskCandidates: [], aiRequest: "" });
+      if (kind === "journal") { state.journals[date] = input.value; meta.textUpdatedAt = input.observedAt; }
+      else meta.ideal = input.value;
+    }
+    draftSaveTransaction.complete(() => {
+      delete globalInputDrafts[key];
+      try { sessionStorage.setItem("taskchute-global-inputs", JSON.stringify(globalInputDrafts)); } catch { globalInputDrafts[key] = null; }
+      if (kind === "journal") { feedbackUiController?.inputChanged(date); feedbackReportController?.inputChanged(date); }
+    });
+  }, { kinds: kind === "condition" ? ["condition"] : kind === "vision" ? ["settings"] : ["journals", "journalMeta"] });
+  if (!result.ok) { target.value = ["condition", "vision"].includes(kind) ? beforeValue : input.value; target.setSelectionRange(input.start, input.end); }
+  return result.ok;
+}
+
+function restoreGlobalInputs() {
+  try { globalInputDrafts = { ...JSON.parse(sessionStorage.getItem("taskchute-global-inputs") || "{}"), ...globalInputDrafts }; } catch { /* Retain memory on storage failure. */ }
+  for (const target of document.querySelectorAll("[data-journal-date], [data-ideal-date]")) {
+    const kind = target.dataset.journalDate ? "journal" : "ideal", date = target.dataset.journalDate || target.dataset.idealDate;
+    const input = globalInputDrafts[`${kind}:${date}`];
+    if (!input || typeof input.value !== "string") continue;
+    target.value = input.value;
+    target.setSelectionRange(input.start, input.end);
+  }
+}
+
+function saveState(now = nowDateTime(), candidates = []) {
+  if (draftSaveTransaction?.active) return true; // The owning boundary persists once.
+  assertNotInsideBuild("saveState");
+  const result = commitCandidate({ state, now, floors: [saveState.pendingStamp],
+    build: () => ({ candidates }),
+    persist: () => { persistLocalNoSchedule(); return !_lastSaveError; },
+    effects: () => { saveState.pendingStamp = state.dataModifiedAt; scheduleAutoSave(); scheduleAutoSync(); }
+  });
   // v37: 容量超過などで保存できていない場合、黙って入力を失わせず一度は知らせる
   //      (ジャーナル入力は keystroke ごとにここを通るため、毎回は出さない)
   if (_lastSaveError && !_quotaToastShown) {
@@ -1995,8 +2029,7 @@ function saveState() {
   } else if (!_lastSaveError) {
     _quotaToastShown = false;
   }
-  scheduleAutoSave();
-  scheduleAutoSync();  // v43: 自動同期 ON のとき 3分デバウンスで push
+  return result.ok;
 }
 
 // v151: テーマ解決・適用。index.htmlの起動時同期スクリプト(フラッシュ防止用、
@@ -3219,6 +3252,7 @@ function render() {
   renderBottomNav();
   rememberWorkListScroll();
   renderMain();
+  restoreGlobalInputs();
   restoreWorkListScroll();
   renderTimelineRail();
   renderSyncBanner();  // v43: 全再描画で消えるバナーを再注入
@@ -10898,6 +10932,7 @@ function ensureFeedbackClients() {
     });
     const localCommit = createLocalReportCommit({ getState: () => state,
       canSave: () => !_imeComposing && !draftSaveTransaction?.active && !draftLeaveGuard.active,
+      floors: () => [saveState.pendingStamp],
       persist: () => { persistLocalNoSchedule(); return !_lastSaveError; },
       readStored: readStoredStateForFeedback, writeStored: restoreStoredStateForFeedback, now: nowDateTime });
     const proof = createReportProofAdapter({ get: feedbackHttpClient.get, putReport: feedbackHttpClient.putReport,
@@ -12317,15 +12352,12 @@ function saveAndRender(message, toastOpts) {
   if (draftSaveTransaction?.complete(() => {
     render();
     if (message) showToast(message, toastOpts);
-  })) return;
-  saveState();
+  })) return true;
+  const saved = saveState();
   render();
-  // v23: 端末内保存に失敗したら、その旨を優先して伝える(操作自体は反映済み)
-  if (_lastSaveError) {
-    showToast("⚠️ 端末内保存に失敗(容量超過の可能性)。設定からGitHubへ保存してください");
-  } else if (message) {
-    showToast(message, toastOpts);
-  }
+  if (!saved) return false;
+  if (message) showToast(message, toastOpts);
+  return true;
 }
 
 // v300: AIフィードバック_<date>.md の新着本文から「## 0秒思考テーマ」だけを
@@ -13526,13 +13558,13 @@ function openBlockEditor(id) {
 
 const draftLeaveGuard = createDraftLeaveGuard(document);
 draftSaveTransaction = createDraftSaveTransaction({
-  getState: () => state, setState,
+  getState: () => state, setState, now: nowDateTime,
+  floors: () => [state.settings?.lastPushedAt, saveState.pendingStamp],
   persist: () => {
-    state.dataModifiedAt = nowDateTime();
     persistLocalNoSchedule();
     return !_lastSaveError;
   },
-  schedule: () => { scheduleAutoSave(); scheduleAutoSync(); },
+  schedule: () => { saveState.pendingStamp = state.dataModifiedAt; scheduleAutoSave(); scheduleAutoSync(); },
   onFailure: error => {
     if (error) console.error("編集の保存を中止しました", error);
     showToast("端末に保存できませんでした。入力は残しています。保存先を確認して再試行してください");
@@ -15365,7 +15397,5 @@ document.addEventListener("visibilitychange", () => {
   else if(state.currentView === "journal") feedbackUiController?.refresh();
   maybeRefreshFeedback();                    // v77: フォアグラウンド復帰時にAIフィードバック等を再fetch
 });
-
-
 
 

@@ -65,7 +65,7 @@ test("empty candidates are ignored, while an empty real clock throws TypeError",
   }
 });
 
-test("malformed and impossible timestamps fail even when older than the maximum", async () => {
+test("malformed candidates are ignored while malformed real clocks fail", async () => {
   const { nextMutationStamp } = await api();
   const invalid = [" ", "2026-09-09", "2026-09-09T10:00", "2026-9-09T10:00:00",
     "2026-09-09 10:00:00", `${NOW}Z`, `${NOW}+09:00`, `${NOW}.000`, `${NOW}\n`,
@@ -75,10 +75,25 @@ test("malformed and impossible timestamps fail even when older than the maximum"
     0, NaN, false, {}, [NOW]];
   for (const value of invalid) {
     assert.throws(() => nextMutationStamp({ now: value, candidates: [NOW] }), TypeError);
-    assert.throws(() => nextMutationStamp({ now: NOW, candidates: [value, "2400-01-01T00:00:00"] }), TypeError);
+    assert.equal(nextMutationStamp({ now: NOW, candidates: [value, "2400-01-01T00:00:00"] }), "2400-01-01T00:00:01");
   }
   for (const candidates of [NOW, 0, false, {}]) {
     assert.throws(() => nextMutationStamp({ now: NOW, candidates }), TypeError);
+  }
+});
+
+test("minute and date candidates use zero seconds and midnight; invalid short dates are ignored", async () => {
+  const { nextMutationStamp } = await api();
+  for (const [candidate, expected] of [
+    ["2026-09-10T12:34", "2026-09-10T12:34:01"],
+    ["2026-09-10", "2026-09-10T00:00:01"],
+    ["2400-02-29", "2400-02-29T00:00:01"],
+    ["2026-02-29", "2026-09-09T10:00:01"],
+    ["2026-09-10T24:00", "2026-09-09T10:00:01"],
+    ["2026-09-10\n", "2026-09-09T10:00:01"]
+  ]) {
+    assert.equal(nextMutationStamp({ now: NOW, candidates: [candidate] }), expected);
+    assert.throws(() => nextMutationStamp({ now: candidate }), TypeError);
   }
 });
 
