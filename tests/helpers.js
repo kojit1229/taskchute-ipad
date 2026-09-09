@@ -308,7 +308,44 @@ function randomPort(min = 20000, max = 40000) {
   return min + Math.floor(Math.random() * (max - min));
 }
 
+// Inject a local persistence failure without replacing shared/global storage.
+function withLocalSaveFailure(fn) {
+  const error = new Error("Injected local save failure");
+  let calls = 0;
+  return fn(() => { calls++; throw error; }, { error, get calls() { return calls; } });
+}
+
+function expectRestored(before, after) {
+  require("node:assert/strict").deepEqual(after, before);
+}
+
+// Optional deep verification is injected only by contract tests.
+function deepCommitGuard(state, reject) {
+  const snapshots = new Map();
+  const remember = value => {
+    if (!value || typeof value !== "object" || snapshots.has(value)) return;
+    snapshots.set(value, Object.getOwnPropertyDescriptors(value));
+    Object.values(value).forEach(remember);
+  };
+  remember(state);
+  const verify = () => {
+    const changed = [...snapshots].filter(([target, before]) => {
+      const after = Object.getOwnPropertyDescriptors(target);
+      return Object.keys(before).length !== Object.keys(after).length || Object.entries(before)
+        .some(([key, descriptor]) => Object.entries(descriptor).some(([field, value]) => after[key]?.[field] !== value));
+    });
+    for (const [target, before] of changed) {
+      for (const key of Object.getOwnPropertyNames(target)) if (!Object.hasOwn(before, key)) delete target[key];
+      Object.defineProperties(target, before);
+    }
+    if (changed.length) reject();
+  };
+  return verify;
+}
+
 module.exports = {
+  deepCommitGuard,
+  withLocalSaveFailure, expectRestored,
   chromium, ROOT, launchOptions, defaultContextOptions, setViewportAndWaitForStableLayout, fixedClock, startServer,
   blockGithubApiByDefault, passGithubGate, GITHUB_API_HOST, STATE_KEY, randomPort,
   openSettingsGroup, dispatchRegisteredAction, dismissBodyScanIfOpen,
