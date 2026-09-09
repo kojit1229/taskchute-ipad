@@ -32,10 +32,12 @@
   "areas": {
     "mutation-stamp": {
       "paths": [
-        "^src/core/mutation-stamp\\.js$"
+        "^src/core/mutation-stamp\\.js$",
+        "^src/core/commit\\.js$"
       ],
       "suites": [
         "mutation-stamp-core",
+        "mutation-global-e2e",
         "store-core"
       ]
     },
