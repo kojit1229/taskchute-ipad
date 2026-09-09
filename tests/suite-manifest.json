@@ -292,6 +292,29 @@
       }
     },
     {
+      "file": "daily-mock-adapter.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 78,
+      "assertionHash": "237483239c5212ed",
+      "sourceHash": "cfd64889a7f7814e",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
       "file": "daily-parts-contract.test.js",
       "kind": "node",
       "tier": "full",
@@ -346,9 +369,9 @@
       "domains": [
         "content-ai"
       ],
-      "assertionSignals": 34,
-      "assertionHash": "fc86154a252f4c15",
-      "sourceHash": "5c91077f0b686f1a",
+      "assertionSignals": 35,
+      "assertionHash": "2f24e75bd269c349",
+      "sourceHash": "e71fa088a6d16aea",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
