@@ -49,6 +49,7 @@
         "configureWorkList|renderWorkList|handleWorkList|restoreWorkList|rememberWorkList|execDoneListHTML|renderExecDoneRow|block-row-toggle|exec-row-copy"
       ],
       "suites": [
+        "daily-add-e2e",
         "work-list-model",
         "work-list-focus",
         "work-list-render-focus",
@@ -511,6 +512,7 @@
         "configureKaradaImport|invalidateKaradaImport|invalidateVision|openTaskPlacement|captureIronSetDraft"
       ],
       "suites": [
+        "daily-add-e2e",
         "iron-input-safety-e2e",
         "iron-log-core",
         "iron-log-input-core",

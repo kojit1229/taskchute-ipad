@@ -17,7 +17,7 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY } = require(
       Object.assign(s.settings.github, { token: 'fixture-token', dataOwner: 'fixture-owner', dataRepo: 'fixture-repo', autoSave: false });
       s.settings.autoSync = false; s.settings.lastOpenedDate = '2026-09-10';
       s.projects = [{ id: 'p', title: '検査Project', kind: 'project', status: 'active' }];
-      s.tasks = ['a', 'b', 'c'].map(id => ({ id, title: '時刻なし検査 ' + id, projectId: 'p', status: 'todo', estimateMin: 25 }));
+      s.tasks = ['a', 'b', 'c', 'edited', 'overnight'].map(id => ({ id, title: '時刻なし検査 ' + id, projectId: 'p', status: 'todo', estimateMin: 25 }));
       s.blocks = [{ id: 'prior', taskId: 'a', date: '2026-09-09', title: '既存実績',
         plannedStartAt: '', plannedEndAt: '', actualStartAt: '2026-09-09T10:00', actualEndAt: '2026-09-09T10:20', completed: true }];
       s.recurrences = []; s.currentView = 'wbs';
@@ -48,6 +48,45 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY } = require(
       const key = Object.keys(sessionStorage).find(key => key.startsWith('taskchute-journal-placement-v1:') && JSON.parse(sessionStorage.getItem(key)).block.taskId === id);
       return JSON.parse(sessionStorage.getItem(key));
     }, id);
+    await browse();
+    const reopenFailures = [];
+    for (const id of ['edited', 'overnight']) {
+      await open(id);
+      const oldRequest = await request(id);
+      await page.locator('.modal-footer [data-action="modal-close"]').click();
+      if (id === 'edited') {
+        await page.evaluate(async () => {
+          (await import('/src/state/store.js')).state.tasks.find(t => t.id === 'edited').title = '????Task';
+        });
+      } else {
+        await page.clock.setFixedTime(new Date(2026, 8, 11, 0, 1));
+        await page.reload(); await browse(); // Restore the previous day's request from sessionStorage.
+      }
+      await open(id);
+      try {
+        const fresh = await request(id);
+        const today = id === 'edited' ? '2026-09-10' : '2026-09-11';
+        assert.notEqual(fresh.requestId, oldRequest.requestId, id + ': reopening allocates a new request');
+        if (id === 'edited') {
+          assert.notEqual(fresh.baseFingerprint, oldRequest.baseFingerprint);
+          assert.equal(fresh.block.title, '????Task');
+        }
+        assert.equal(await page.locator('.placement-form strong').textContent(), today);
+        assert.equal(fresh.block.date, today);
+        await confirm();
+        const blocks = (await state()).blocks.filter(b => b.taskId === id);
+        assert.equal(blocks.length, 1);
+        assert.equal(blocks[0].id, fresh.requestId);
+        assert.equal(blocks[0].date, today);
+        console.log('PASS fixL22: ' + id);
+      } catch (error) {
+        console.error('FAIL fixL22: ' + id, error);
+        reopenFailures.push(id);
+        await page.locator('.modal-footer [data-action="modal-close"]').click();
+      }
+    }
+    assert.deepEqual(reopenFailures, [], 'both stale-request reopening cases pass');
+    await page.clock.setFixedTime(new Date(2026, 8, 10, 23, 55));
     await browse();
     const before = await state();
     await open('a');
@@ -120,7 +159,9 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY } = require(
     saved = await state();
     assert.equal(saved.blocks.find(b => b.id === midnightRequest.block.id).date, '2026-09-11');
     assert.equal(saved.selectedDate, '2026-09-09');
+    await page.clock.setFixedTime(new Date(2026, 8, 10, 23, 55));
     await open('c');
+    await page.clock.setFixedTime(new Date(2026, 8, 11, 0, 1));
     await page.evaluate(async () => { (await import('/src/state/store.js')).state.tasks.find(t => t.id === 'c').status = 'completed'; });
     await confirm();
     assert.match(await page.locator('#placement-error').textContent(), /日付が変わりました/);

@@ -97,6 +97,7 @@ export function openTaskPlacement(taskId, source = "wbs", { separate = false } =
     if (!request) try { request = JSON.parse(sessionStorage.getItem(key)); } catch { /* Use the in-memory request. */ }
     const saved = request?.block && state.blocks.find(block => block.id === request.block.id && !block.deleted);
     if (!request?.requestId || request.block?.taskId !== taskId || request.connection !== connection
+        || (request.status !== "saved" && (request.baseFingerprint !== dailyFingerprint(task) || request.block.date !== draft.date))
         || request.operation !== operation || (request.status === "saved" && (separate || (saved && saved.date !== draft.date)))) {
       const block = api.makeBlock({ taskId, date: draft.date, title: task.title,
         category: task.category || api.projectName(task.projectId), estimateMin: task.estimateMin ?? null,
