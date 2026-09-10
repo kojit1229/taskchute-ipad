@@ -340,6 +340,29 @@
       }
     },
     {
+      "file": "daily-operations-registry.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 15,
+      "assertionHash": "c3c3c996facc863b",
+      "sourceHash": "57478e6fd9c07c4a",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
       "file": "daily-parts-contract.test.js",
       "kind": "node",
       "tier": "full",
@@ -479,6 +502,29 @@
         "fileWrite": false,
         "networkMock": true,
         "clock": true
+      }
+    },
+    {
+      "file": "daily-stamp-e2e.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 14,
+      "assertionHash": "d40be4a33f6d52f4",
+      "sourceHash": "6de4bb171c65a431",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
       }
     },
     {
