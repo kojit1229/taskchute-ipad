@@ -3,6 +3,9 @@ const fs = require('node:fs'), path = require('node:path');
 const { COPY_DEFAULTS, copyBlockPlan } = require('../src/core/block-copy.js');
 const { runDailyOperation: run, dailyFingerprint } = require('../src/features/daily-operations.js');
 const { commitCandidate } = require('../src/core/commit.js');
+const { createCopyUndoTicket, canUndoCopy } = require('../src/core/copy-undo.js');
+const { getCopyUndoTicket } = require('../src/features/daily-operations.js');
+const { mergeRecords } = require('../src/core/merge.js');
 const { chromium, launchOptions, startServer, randomPort, passGithubGate } = require('./helpers');
 const date = '2026-09-10';
 const original = { ...COPY_DEFAULTS, id: 'b', taskId: 't', date, title: '計画', category: '仕事',
@@ -77,6 +80,62 @@ for (const patch of [{ externalRef: 'daily-reading:v1:{"kind":"affirmation"}', r
 }
 console.log('PASS whitelist, source/copy failure separation, request replay, date change and reading owner exclusions');
 
+const undoInput = id => ({ id, kind: 'block' });
+const merge = (local, remote) => mergeRecords(local, remote, { compareAt: b => b.updatedAt || b.createdAt || '',
+  tieBreak: (local, remote) => Boolean(local.deleted) === Boolean(remote.deleted) || local.deleted ? local : remote });
+{
+  const { state, deps, controls, trace } = setup(); run('daily-block-duplicate', input(), deps);
+  const copy = state.blocks[1], ticket = getCopyUndoTicket(deps, copy.id);
+  assert(ticket); assert.equal(controls.effect.undoAvailable, true); assert.equal(canUndoCopy(copy, ticket, dailyFingerprint), true);
+  const omitted = { ...copy }; for (const key of ['comment', 'oneTap', 'incompleteReason', 'carryCount']) delete omitted[key];
+  assert.equal(canUndoCopy(omitted, ticket, dailyFingerprint), true, 'missing optional defaults equal explicit defaults');
+  const unknown = { ...copy, custom: { b: 1, a: ['x', { z: 2, y: 3 }] } };
+  const reordered = { ...copy, custom: { a: ['x', { y: 3, z: 2 }], b: 1 } };
+  assert.equal(canUndoCopy(reordered, createCopyUndoTicket(unknown, dailyFingerprint), dailyFingerprint), true);
+  assert.equal(canUndoCopy({ ...reordered, custom: { a: ['changed'] } }, createCopyUndoTicket(unknown, dailyFingerprint), dailyFingerprint), false);
+  for (const patch of [{ actualStartAt: date + 'T12:01:00' }, { actualEndAt: date + 'T12:02:00' }, { completed: true }, { everStartedAt: date + 'T12:01:00' }]) {
+    const started = { ...copy, ...patch };
+    assert.equal(canUndoCopy(started, createCopyUndoTicket(started, dailyFingerprint), dailyFingerprint), false, 'started/completed never undo even with matching ticket');
+  }
+  const other = JSON.stringify({ source: state.blocks[0], tasks: state.tasks, journals: state.journals });
+  const stamp = state.dataModifiedAt, saves = controls.saves;
+  const reloaded = { ...deps };
+  assert.equal(getCopyUndoTicket(reloaded, copy.id), null);
+  assert.equal(run('daily-duplicate-undo', { ...undoInput(copy.id), undoTicket: ticket }, reloaded).undoStatus, 'hidden', 'cannot inject a foreign ticket');
+  assert.equal(controls.saves, saves);
+  const realPersist = deps.persist; deps.persist = () => false;
+  assert.equal(run('daily-duplicate-undo', undoInput(copy.id), deps).ok, false);
+  assert.equal(state.blocks[1], copy); assert.equal(state.dataModifiedAt, stamp);
+  deps.persist = realPersist;
+  const result = run('daily-duplicate-undo', undoInput(copy.id), deps);
+  assert.equal(result.ok, true); const tombstone = state.blocks[1]; assert.equal(tombstone.deleted, true);
+  assert(tombstone.updatedAt > copy.updatedAt); assert(state.dataModifiedAt > stamp);
+  assert.equal(JSON.stringify({ source: state.blocks[0], tasks: state.tasks, journals: state.journals }), other);
+  assert.deepEqual(Object.keys(tombstone).sort(), Object.keys(copy).sort(), 'no new persisted undo fields');
+  assert(!JSON.stringify(state).includes('undoBaseFingerprint')); assert(!JSON.stringify(state).includes('fingerprint'));
+  assert(trace.includes('この端末で取消・同期待ち'));
+  const deletedStamp = state.dataModifiedAt, deletedSaves = controls.saves;
+  assert.equal(run('daily-duplicate-undo', undoInput(copy.id), deps).unchanged, true);
+  assert.equal(state.dataModifiedAt, deletedStamp); assert.equal(controls.saves, deletedSaves);
+  assert.equal(merge([tombstone], [{ ...copy, title: 'later remote', updatedAt: date + 'T13:00:00' }])[0].deleted, false);
+  assert.equal(merge([tombstone], [{ ...copy, title: 'older remote' }])[0].deleted, true);
+  assert.equal(merge([tombstone], [{ ...copy, updatedAt: tombstone.updatedAt }])[0].deleted, true);
+  state.blocks = [state.blocks[0]];
+  assert.equal(run('daily-duplicate-undo', undoInput(copy.id), deps).unchanged, true, 'physically absent is a no-op');
+}
+for (const patch of [{ comment: 'same-second edit' }, { plannedStartAt: date + 'T11:01:00' }, { taskId: 'other-task' },
+  { unknown: { edited: true } }, { completed: true }, { actualStartAt: date + 'T12:00:00' }, { date: '2026-09-11' }]) {
+  const { state, deps, controls, trace } = setup(); run('daily-block-duplicate', input(), deps);
+  const copy = state.blocks[1], saves = controls.saves;
+  // Simulate already received edits, including edits made inside the same timestamp second.
+  state.blocks[1] = { ...copy, ...patch };
+  const before = JSON.stringify(state);
+  assert.equal(run('daily-duplicate-undo', undoInput(copy.id), deps).undoStatus, 'changed');
+  assert.equal(JSON.stringify(state), before); assert.equal(controls.saves, saves);
+  assert(trace.some(message => message.includes('詳細から削除')));
+}
+console.log('PASS ticket/default/full-field checks; changed/start/completion refusal, save failure, tombstone replay and ordinary merge');
+
 (async () => {
   const server = startServer(randomPort()), browser = await chromium.launch(launchOptions());
   try {
@@ -108,6 +167,21 @@ console.log('PASS whitelist, source/copy failure separation, request replay, dat
     await page.evaluate(() => { window.failAt = 0; }); await click(); await click();
     const blocks = await page.evaluate(() => testDeps.state.blocks); assert.equal(blocks.length, 2); checkCopy(blocks[1], blocks[0]);
     assert.equal(await page.evaluate(() => window.saveCount), 4);
+    await page.evaluate(() => {
+      window.browserCopy = structuredClone(testDeps.state.blocks[1]);
+      const button = document.createElement('button'); button.dataset.action = 'daily-duplicate-undo';
+      button.dataset.kind = 'block'; button.dataset.id = 'browser-copy'; button.textContent = 'undo'; document.body.append(button);
+      testDeps.state.blocks[1].comment = 'received edit';
+    });
+    const undo = () => page.locator('[data-action="daily-duplicate-undo"]').click();
+    await undo(); assert.equal(await page.evaluate(() => testDeps.state.blocks[1].deleted), false);
+    assert.equal(await page.evaluate(() => window.saveCount), 4);
+    await page.evaluate(() => { testDeps.state.blocks[1] = structuredClone(window.browserCopy); window.failAt = 5; });
+    await undo(); assert.equal(await page.evaluate(() => testDeps.state.blocks[1].deleted), false);
+    await page.evaluate(() => { window.failAt = 0; }); await undo(); await undo();
+    assert.equal(await page.evaluate(() => testDeps.state.blocks[1].deleted), true);
+    assert.equal(await page.evaluate(() => testDeps.state.blocks[0].deleted), false);
+    assert.equal(await page.evaluate(() => window.saveCount), 6);
     for (const patch of [{ externalRef: 'daily-reading:v1:{}' }, { recurrenceGroupId: 'affirmation-rule' },
       { recurrenceGroupId: 'vision-rule' }, { id: 'fixture-feedback' }]) {
       await page.evaluate(({ patch, original }) => {
@@ -116,8 +190,8 @@ console.log('PASS whitelist, source/copy failure separation, request replay, dat
       }, { patch, original });
       await click(); assert.equal(await page.evaluate(() => testDeps.state.blocks.length), 1);
     }
-    assert.equal(await page.evaluate(() => window.saveCount), 4);
+    assert.equal(await page.evaluate(() => window.saveCount), 6);
     assert.deepEqual(errors, []);
-    console.log('PASS real data-action: two saves, both failure phases, retry/replay and all four reading cases');
+    console.log('PASS real data-action: two saves, both failure phases, retry/replay, reading cases, edited undo refusal and failed/successful/repeated undo');
   } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

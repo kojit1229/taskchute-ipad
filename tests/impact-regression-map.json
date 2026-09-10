@@ -65,7 +65,8 @@
         "^src/features/daily-operations\\.js$",
         "^src/core/daily-time\\.js$",
         "^src/core/daily-order\\.js$",
-        "^src/core/block-copy\\.js$"
+        "^src/core/block-copy\\.js$",
+        "^src/core/copy-undo\\.js$"
       ],
       "patterns": [
         "renderPlanRow|renderActualRow|renderSearchFrame|patchSearchFrame|renderDetailFrame|DAILY_ACTIONS|daily-search-|buildDailyViewModel"

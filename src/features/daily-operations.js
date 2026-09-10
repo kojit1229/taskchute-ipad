@@ -2,9 +2,12 @@ import { assertNotInsideBuild } from "../core/commit.js";
 import { buildDailyTimes, cancelDailyTimes } from "../core/daily-time.js";
 import { assertCopyable, buildBlockCopy } from "../core/block-copy.js";
 import { orderDailyBlocks } from "../core/daily-order.js";
+import { createCopyUndoTicket, buildCopyUndo } from "../core/copy-undo.js";
 
 const copyReady = Symbol("saved copy source");
 const copyRequests = new WeakMap();
+const undoReady = Symbol("copy undo owner");
+const copyTickets = new WeakMap();
 
 const invalid = message => Object.assign(new Error(message), { code: "DAILY_OPERATION_INVALID" });
 const unwired = name => ({ build: () => { throw invalid(`not wired: ${name}`); } });
@@ -17,7 +20,7 @@ export const DAILY_OPERATIONS = {
   "daily-block-start": unwired("daily-block-start"),
   "daily-block-end": unwired("daily-block-end"),
   "daily-block-duplicate": { build: buildBlockCopy, effects: copyEffects },
-  "daily-duplicate-undo": unwired("daily-duplicate-undo"),
+  "daily-duplicate-undo": { build: (state, input, deps) => buildCopyUndo(state, input, { copyFingerprint: dailyFingerprint }), effects: copyUndoEffects },
   "daily-schedule-edit": unwired("daily-schedule-edit"),
   "daily-actual-edit": unwired("daily-actual-edit"),
   "daily-task-complete": unwired("daily-task-complete"),
@@ -56,12 +59,24 @@ function dailyInput(input) {
 
 function copyEffects(result, input, deps) {
   const copy = result.records[0].after;
-  deps.copyEffect?.({ copy, ordered: orderDailyBlocks(deps.state.blocks), highlightedId: copy.id });
+  if (!copyTickets.has(deps)) copyTickets.set(deps, new Map());
+  copyTickets.get(deps).set(copy.id, createCopyUndoTicket(copy, dailyFingerprint));
+  deps.copyEffect?.({ copy, ordered: orderDailyBlocks(deps.state.blocks), highlightedId: copy.id, undoAvailable: true });
   deps.notify?.(copy.plannedStartAt ? "複製しました。同じ予定時刻の枠があります" : "複製しました");
 }
 
+export function getCopyUndoTicket(deps, copyId) {
+  return copyTickets.get(deps)?.get(copyId) || null;
+}
+
+function copyUndoEffects(result, input, deps) {
+  if (result.undoStatus === "changed") deps.notify?.("複製は変更されています。詳細から削除してください");
+  else if (!result.unchanged) deps.notify?.("この端末で取消・同期待ち");
+  deps.copyUndoEffect?.({ id: input.id, status: result.undoStatus, unchanged: Boolean(result.unchanged) });
+}
+
 function duplicateDailyBlock(input, deps) {
-  const source = deps.state.blocks.find(row => row.id === input.id && !row.deleted);
+  const source = deps.state.blocks?.find(row => row.id === input.id && !row.deleted);
   assertCopyable(source, deps.isReadingBlock, deps.state);
   if (input.kind !== "block") throw invalid("Blockを指定してください");
   const key = input.requestId ?? Symbol("copy request");
@@ -108,15 +123,15 @@ export function dailyFingerprint(value) {
 function validateCurrent(state, input, deps) {
   const collections = { block: "blocks", schedule: "blocks", actual: "blocks", task: "tasks", project: "projects" };
   let record;
-  if (input.id != null) {
+  if (input.id != null && !input[undoReady]) {
     const kind = Object.hasOwn(collections, input.kind) && collections[input.kind];
     record = kind && state[kind]?.find(row => row.id === input.id && !row.deleted);
     if (!record) throw invalid("target changed");
   }
   const date = input.date ?? record?.date ?? input.values?.date;
-  if (!input[copyReady] && date != null && (date !== state.selectedDate || (record?.date && date !== record.date)))
+  if (!input[copyReady] && !input[undoReady] && date != null && (date !== state.selectedDate || (record?.date && date !== record.date)))
     throw invalid("date changed");
-  if (input.baseFingerprint != null
+  if (!input[undoReady] && input.baseFingerprint != null
       && (!record || (deps.fingerprint || dailyFingerprint)(record) !== input.baseFingerprint))
     throw invalid("fingerprint changed");
   // Request owners provide a synchronous lookup against this latest state.
@@ -135,6 +150,7 @@ export function runDailyOperation(name, input, deps) {
   const op = DAILY_OPERATIONS[name];
   if (op.legacy) return op.run(input, deps);
   if (["daily-plan-times-save", "daily-plan-times-cancel", "daily-block-duplicate"].includes(name)) input = dailyInput(input);
+  if (name === "daily-duplicate-undo") input = { ...input, undoTicket: getCopyUndoTicket(deps, input.id), [undoReady]: true };
   try {
     if (name === "daily-block-duplicate" && !input[copyReady]) return duplicateDailyBlock(input, deps);
     return deps.commitCandidate({

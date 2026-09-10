@@ -14,7 +14,7 @@
 | commit-size-gate.test.js | node | full | legacy-crosscutting | 9 | 0 | 0 |
 | daily-actual-row.test.js | e2e | full | content-ai | 43 | 0 | 0 |
 | daily-block-merge.test.js | node | full | sync-storage, planning-execution, content-ai | 25 | 0 | 0 |
-| daily-copy-e2e.test.js | e2e | full | content-ai | 34 | 0 | 0 |
+| daily-copy-e2e.test.js | e2e | full | content-ai | 65 | 0 | 0 |
 | daily-detail-fields-e2e.test.js | e2e | full | sync-storage, planning-execution, content-ai, ui-responsive | 55 | 0 | 0 |
 | daily-detail-frame.test.js | e2e | full | sync-storage, content-ai, ui-responsive | 47 | 0 | 0 |
 | daily-draft-e2e.test.js | e2e | full | content-ai | 37 | 0 | 0 |
