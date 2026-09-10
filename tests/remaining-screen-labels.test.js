@@ -96,9 +96,90 @@ async function healthJapanese(page) {
   console.log("PASS health: Japanese labels/units/reasons, raw HR/HRV reasons, missing/stale/failed values and controls");
 }
 
+async function fundJapanese(page) {
+  const date = "2026-07-25", previous = "2026-07-24", generatedAt = "2026-07-25T00:00:00Z";
+  const individual = engine => ({ version: 1, generatedAt, engine: { id: engine, actualModel: "fixture", costUsd: null },
+    start: { date: previous, capital: 100 }, nav: { current: engine === "fable" ? 90 : 110, dayChangePct: 0,
+      totalReturnPct: engine === "fable" ? -10 : 10, series: [{ date: previous, nav: 100, n225: null, spx: null },
+        { date, nav: engine === "fable" ? 90 : 110, n225: null, spx: null }] }, cash: 50,
+    benchmark: { n225ReturnPct: null, spxReturnPct: null, excessVsN225: null, excessVsSpx: null },
+    positions: [], openOrders: [], recentTrades: [], journal: { date, markdown: "架空の" + engine + "日誌" } });
+  const files = new Map([
+    ["dashboard/fund.json", individual("fable")], ["dashboard/fund-codex.json", individual("codex")],
+    ["dashboard/fund-codex-status.json", { version: 1, engine: "codex", status: "not_started", checkedAt: generatedAt, lastAttemptAt: null, lastSuccessAt: null }],
+    ["dashboard/fund-comparison.json", { version: 1, generatedAt, status: "ready", startDate: previous, valuationDate: date,
+      series: [{ date: previous, fable: 100, codex: 100 }, { date, fable: 90, codex: 110 }],
+      metrics: { fable: { returnPct: -10, maxDrawdownPct: -10 }, codex: { returnPct: 10, maxDrawdownPct: 0 } }, codexMinusFablePctPoints: 20 }]
+  ]);
+  for (const engine of ["FABLE", "CODEX"]) for (const day of [previous, date]) {
+    files.set(engine + " FUND日誌_" + day + ".md", engine + "の架空日誌 " + day);
+    files.set("朝の投資ブリーフ_" + (engine === "CODEX" ? "CODEX_" : "") + day + ".md", engine + "の架空ブリーフ " + day);
+  }
+  files.set("report-index.json", { generatedAt, files: [...files.keys()].filter(name => name.endsWith(".md")).map(name => ({ name })) });
+  await page.route(url => url.hostname === "api.github.com", route => {
+    const name = decodeURIComponent(new URL(route.request().url()).pathname).split("/contents/taskchute/")[1];
+    if (!name) return route.fallback();
+    assert.equal(route.request().method(), "GET", "synthetic fund reads never write");
+    const value = files.get(name);
+    return route.fulfill({ status: value === undefined ? 404 : 200,
+      contentType: typeof value === "string" ? "text/plain" : "application/json",
+      body: typeof value === "string" ? value : JSON.stringify(value ?? {}) });
+  });
+  // 4回-10 追記2: fund-integration-e2eと同じ保存前提・可視ナビ・取得完了条件を使う。
+  await page.evaluate(({ key, date }) => {
+    const s = JSON.parse(localStorage.getItem(key));
+    s.currentView = s.view = "journal";
+    s.selectedDate = date;
+    s.journals[date] = "架空の日報";
+    s.settings.autoSync = false;
+    Object.assign(s.settings.github, { token: "synthetic-only", dataOwner: "fixture-owner",
+      dataRepo: "fixture-repo", branch: "main", autoSave: false });
+    localStorage.setItem(key, JSON.stringify(s));
+  }, { key: require("./helpers").STATE_KEY, date });
+  await page.reload();
+  await page.locator('[data-action="nav"]:visible').first().waitFor();
+  let fundButton = page.locator('[data-action="nav"][data-view="fund"]:visible').first();
+  if (!await fundButton.count()) {
+    await page.locator('[data-action="nav"][data-view="more"]:visible').first().click();
+    fundButton = page.locator('[data-action="nav"][data-view="fund"]:visible').first();
+  }
+  await fundButton.click();
+  await page.waitForFunction(() => document.getElementById("app").dataset.view === "fund");
+  await page.locator(".fund-content").getByText("+20.00ポイント", { exact: false }).waitFor();
+  const root = page.locator(".fund-view");
+  assert.equal(await root.locator("h1").innerText(), "資産");
+  assert.equal(await root.locator(".eyebrow").innerText(), "模擬運用");
+  assert.equal(await root.locator(".fund-switches").getAttribute("aria-label"), "資産の表示");
+  assert.deepEqual(await root.locator(".fund-switches button").allTextContents(), ["比較", "FABLE", "CODEX"]);
+  assert.equal(await root.locator('[data-action="fund-refresh"]').innerText(), "再取得");
+  assert.equal(await root.locator('.fund-compare-cards [data-action="fund-select"]').count(), 2);
+  assert.equal(await root.locator('.fund-compare-cards [data-action="fund-report-open"]').count(), 2);
+  assert.equal(await root.locator(".fund-chart summary").innerText(), "評価日ごとの値を見る");
+  for (const engine of ["fable", "codex"]) {
+    await root.locator('.fund-switches [data-engine="' + engine + '"]').click();
+    assert.equal(await root.locator(".fund-status h2").innerText(), engine.toUpperCase() + " FUND");
+    assert.ok((await root.innerText()).includes("成績の正常取得時刻（協定世界時・UTC）"));
+    assert.ok((await root.innerText()).includes("保有銘柄はありません"));
+    assert.equal(await root.locator('.fund-report-links [data-action="fund-report-open"]').count(), 3);
+    assert.equal(await root.locator('.fund-report-links [data-family="brief"]').innerText(), date + "の朝ブリーフ");
+    assert.equal(await root.locator('.fund-report-links [data-history="true"]').innerText(), "過去の日誌を選ぶ");
+  }
+  await root.locator('.fund-report-links [data-family="journal"]:not([data-history])').click();
+  const report = page.locator(".fund-report-view");
+  await page.waitForSelector('.fund-report-view [data-report-loaded="1"]');
+  for (const [action, label] of [["fund-report-previous", "前の日"], ["fund-report-next", "次の日"],
+    ["fund-report-refresh", "再取得"], ["fund-report-back", "戻る"]]) assert.equal(await report.locator('[data-action="' + action + '"]').innerText(), label);
+  assert.deepEqual(await report.locator('[data-action="fund-report-engine"]').allTextContents(), ["FABLE", "CODEX"]);
+  assert.deepEqual(await report.locator('[data-action="fund-report-family"]').allTextContents(), ["日誌", "朝の投資ブリーフ"]);
+  assert.equal(await report.locator("[data-fund-report-date]").inputValue(), date);
+  assert.ok((await report.innerText()).includes("正常取得時刻（協定世界時・UTC）"));
+  // 4回-10 追記3（監督者決定 2026-09-10）: 本文保持・IME・戻り先は既存回帰で検査する。
+  console.log("PASS fund: Japanese headings/time explanations, proper names and all comparison/individual/report/refresh controls");
+}
+
 async function run() {
   const { page, browser, server } = await setup();
-  try { await twelveWeek(page); await healthJapanese(page); }
+  try { await twelveWeek(page); await healthJapanese(page); await fundJapanese(page); }
   finally { await page.context().close(); await browser.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });
