@@ -1,13 +1,31 @@
 import { state } from "../state/store.js";
 import { registerActions, registerModalHandler } from "../ui/actions.js";
-import { existingPlacement, placementTimes, placementCandidate } from "../core/placement.js";
+import { existingPlacement, placementTimes, placementCandidate, buildTodayPlacement } from "../core/placement.js";
 import { commitCandidate } from "../core/commit.js";
+import { dailyFingerprint } from "./daily-operations.js";
 
 let api;
 let origin;
 let draft;
+let placing = false;
+const requestKey = request => "taskchute-journal-placement-v1:" + JSON.stringify([request.connection, request.block.taskId]);
+const placementConnection = () => JSON.stringify([state.settings?.github?.dataOwner || "", state.settings?.github?.dataRepo || ""]);
+function keepRequest(request) {
+  try { sessionStorage.setItem(requestKey(request), JSON.stringify(request)); } catch { /* In-memory retry remains available. */ }
+}
 // Synchronous adapter: failure restores exact references before any timer can run.
 export function commitPlacement(model, candidate, deps) {
+  if (candidate.request) {
+    try {
+      return commitCandidate({ state: model, input: candidate, now: deps.now || deps.stamp, floors: deps.floors,
+        build: (before, input) => buildTodayPlacement(before, input, dailyFingerprint),
+        persist: deps.persist, effects: result => { if (!result.unchanged) deps.schedule?.(result); }
+      }).ok;
+    } catch (error) {
+      if (error.code !== "PLACEMENT_INVALID") throw error;
+      candidate.error = error.message; return false;
+    }
+  }
   return commitCandidate({ state: model, now: deps.now || deps.stamp, floors: deps.floors,
     build: before => ({ records: ["blocks", "tasks"].flatMap(kind =>
       candidate[kind].filter(after => !model[kind].includes(after)).map(after =>
@@ -20,6 +38,7 @@ export function configurePlacement(deps) {
   api = deps;
   registerModalHandler("placement", { save: (_id, fields) => confirmPlacement(fields) });
   registerActions({
+    "placement-add-today": ({ id }) => openTaskPlacement(id),
     "placement-edit": ({ id }) => api.openBlockEditor(id),
     "placement-return": () => {
       if (!origin) return;
@@ -65,12 +84,36 @@ export function openTaskPlacement(taskId, source = "wbs") {
   draft = { taskId, source, date: api.todayISO(), time: "", duration: Number(task.estimateMin) > 0 ? Number(task.estimateMin) : 30 };
   const existing = existingPlacement(state.blocks, taskId, draft.date);
   if (existing) return showPlaced(existing, true);
+  if (source === "wbs") {
+    if (task.status === "completed") return api.showToast("元のタスクは完了済みです。予定追加を中止しました。");
+    const connection = placementConnection();
+    let request;
+    try { request = JSON.parse(sessionStorage.getItem(requestKey({ connection, block: { taskId } }))); } catch { /* No usable session copy. */ }
+    if (!request?.requestId || request.block?.taskId !== taskId || request.connection !== connection) {
+      const block = api.makeBlock({ taskId, date: draft.date, title: task.title,
+        category: task.category || api.projectName(task.projectId), estimateMin: task.estimateMin ?? null,
+        plannedStartAt: "", plannedEndAt: "", actualStartAt: "", actualEndAt: "", completed: false });
+      request = { requestId: block.id, operation: "add-today", connection, block,
+        baseFingerprint: dailyFingerprint(task), status: "pending" };
+    }
+    draft.request = request; draft.date = request.block.date;
+    keepRequest(request);
+  }
   state.modal = { type: "placement", id: taskId };
   renderPlacement(task);
 }
 
 function renderPlacement(task, error = "") {
   const h = api.escapeHTML;
+  if (draft.request) {
+    api.renderModal(`${api.modalHeaderHTML("今日の予定を追加", "tower-sheet")}
+      <section class="tower-section placement-form"><h4>${h(task.title)}</h4>
+      <p>配置日：今日 <strong>${h(draft.date)}</strong></p><p>開始・終了は時刻なしで追加します。閲覧中の日付は変えません。</p>
+      <p id="placement-error" role="alert">${h(error)}</p></section></div>
+      <div class="modal-footer"><button class="btn" data-action="modal-close">取消</button>
+      <button class="btn primary" data-action="modal-save">今日へ追加を確定</button></div></div>`);
+    return;
+  }
   api.renderModal(`${api.modalHeaderHTML("今日の予定を追加", "tower-sheet")}
     <section class="tower-section placement-form">
       <h4>${h(task.title)}</h4><p>配置日：今日 <strong>${h(draft.date)}</strong></p>
@@ -99,6 +142,7 @@ export function savePlacementDraft(fields) {
 }
 function confirmPlacement(fields, { leaving = false } = {}) {
   if (state.modal?.type !== "placement" || !draft) return false;
+  if (draft.request) return confirmTodayPlacement();
   Object.assign(draft, { time: fields.time, duration: fields.duration });
   const today = api.todayISO();
   const result = placementCandidate(state, draft, { today, stamp: api.nowDateTime(), makeBlock: api.makeBlock, projectName: api.projectName });
@@ -122,6 +166,36 @@ function confirmPlacement(fields, { leaving = false } = {}) {
   if (leaving) { api.closeModal(); return true; }
   showPlaced(result.block, false);
   return true;
+}
+
+function confirmTodayPlacement() {
+  if (placing) return false;
+  const request = draft.request, today = api.todayISO();
+  // The global day rollover can run while the confirmation is open.
+  state.selectedDate = origin.date;
+  if (request.block.date !== today) {
+    request.block = { ...request.block, date: today }; draft.date = today;
+    keepRequest(request);
+    document.getElementById("placement-error").textContent = `日付が変わりました。追加先は今日 ${today} です。確認してもう一度確定してください。`;
+    const date = document.querySelector(".placement-form strong");
+    if (date) date.textContent = today;
+    return false;
+  }
+  placing = true;
+  const button = document.querySelector('.modal-footer [data-action="modal-save"]');
+  if (button) button.disabled = true;
+  try {
+    const candidate = { request, today: api.todayISO(), connection: placementConnection() };
+    if (!api.commit(candidate)) {
+      document.getElementById("placement-error").textContent = candidate.error || "端末への保存に失敗しました。入力は保持しています。同じ要求で再試行してください。";
+      return false;
+    }
+    request.status = "saved"; keepRequest(request);
+    api.closeModal();
+    state.selectedDate = origin.date;
+    api.showToast("今日の予定に時刻なしで追加しました。");
+    return true;
+  } finally { placing = false; if (button) button.disabled = false; }
 }
 
 function showPlaced(block, existing) {

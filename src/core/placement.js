@@ -20,6 +20,25 @@ export function existingPlacement(blocks, taskId, today) {
   return blocks.find(b => !b.deleted && b.taskId === taskId && b.date === today) || null;
 }
 
+// Request candidates are allocated once by the placement owner, outside build.
+export function buildTodayPlacement(model, { request, today, connection }, fingerprint) {
+  const reject = message => { throw Object.assign(new Error(message), { code: "PLACEMENT_INVALID" }); };
+  if (!request?.requestId || request.requestId !== request.block?.id || request.connection !== connection)
+    reject("追加要求が変わりました。閉じて確認し直してください。");
+  const saved = model.blocks.find(block => block.id === request.block.id);
+  if (saved?.deleted) reject("この要求の予定は削除済みです。再追加はしていません。");
+  if (saved) return { records: [], block: saved };
+  if (request.status === "saved") reject("保存済みの予定が見つかりません。再追加はしていません。");
+  if (request.block.date !== today) reject("日付が変わりました。今日の日付を確認し直してください。");
+  const task = model.tasks.find(task => !task.deleted && task.id === request.block.taskId);
+  if (!task || task.status === "completed") reject("元のタスクが存在しないか完了済みです。追加を中止しました。");
+  if (fingerprint(task) !== request.baseFingerprint) reject("元のタスクが変わりました。閉じて確認し直してください。");
+  const block = request.block;
+  if (block.plannedStartAt !== "" || block.plannedEndAt !== "" || block.actualStartAt !== ""
+      || block.actualEndAt !== "" || block.completed) reject("時刻なし追加の候補が不正です。");
+  return { records: [{ kind: "blocks", before: undefined, after: block }], block };
+}
+
 // Candidate calculation is read-only. Persistence and side effects belong to the adapter.
 export function placementCandidate(model, input, deps) {
   const task = model.tasks.find(t => !t.deleted && t.id === input.taskId);
