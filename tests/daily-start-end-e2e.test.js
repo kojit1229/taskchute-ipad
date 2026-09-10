@@ -155,6 +155,26 @@ try {
       values: { actualEndAt: '2026-09-11T00:25:00' } }, reloadedDeps).ok);
     assert.equal(state.declarations.length, 1); assert.equal(state.declarations[0].id, request.endDraft.fallbackId);
   }
+  for (const existing of [false, true]) {
+    const { state, deps } = endFixture();
+    if (!existing) state.declarations = [];
+    const before = structuredClone(state.declarations);
+    const skip = { kind: 'block', id: 'b', outcome: '', note: '', completeTask: false };
+    assert(run('daily-block-end', skip, deps).ok);
+    assert.deepEqual(state.declarations, before, 'skip neither creates nor updates a declaration/report');
+    assert.equal(state.blocks[0].actualEndAt, '2026-09-11T00:10:00');
+    assert.equal(state.pomodoro.running, false);
+    assert.equal(run('daily-block-end', skip, deps).unchanged, true);
+    assert.deepEqual(state.declarations, before);
+    if (!existing) {
+      assert(run('daily-block-end', { ...skip, note: '報告あり' }, deps).ok);
+      assert.equal(state.declarations.length, 1, 'report without start declaration creates one record');
+      assert.equal(state.declarations[0].resultNote, '報告あり');
+      assert.equal(run('daily-block-end', { ...skip, note: '報告あり' }, deps).unchanged, true);
+      assert.equal(state.declarations.length, 1);
+    }
+  }
+  console.log('PASS 29b: skip preserves declarations; report without declaration creates exactly one');
   {
     const { state, deps, input } = endFixture();
     state.declarations.push({ ...state.declarations[0], id: 'ambiguous' });
@@ -272,6 +292,83 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY, passGithubG
       assert.equal(saved.declarations[0].note, '失敗しても残る宣言');
       await page.evaluate(() => { Storage.prototype.setItem = window.__setStart; });
       console.log(`PASS 28b: ${action} atomic save, rollback/input retention, fixed ID retry and double click`);
+    }
+    for (const action of ['now-end', 'daily-block-end']) {
+      await page.evaluate(key => {
+        const s = JSON.parse(localStorage.getItem(key));
+        s.selectedDate = '2026-09-10'; s.settings.lastOpenedDate = '2026-09-11';
+        s.tasks = [{ id: 'end-task', title: 'fixture task', status: 'doing', progressDen: 5, progressNum: 1 }];
+        s.blocks = [{ id: 'end-block', taskId: 'end-task', date: '2026-09-10', title: '日跨ぎ終了',
+          plannedStartAt: '2026-09-10T23:30:00', plannedEndAt: '2026-09-10T23:55:00',
+          actualStartAt: '2026-09-10T23:50:00', actualEndAt: '', completed: false, comment: '元コメント' }];
+        s.declarations = [{ id: 'midnight-declaration', blockId: 'end-block', date: '2026-09-10',
+          title: '日跨ぎ終了', declaredAt: '2026-09-10T23:50:00', reportedAt: '', note: '開始宣言' }];
+        s.weeklyCommitments = []; s.recurrences = [];
+        s.pomodoro = { running: true, blockId: 'end-block', startedAt: '2026-09-10T23:50:00',
+          endsAt: '2026-09-11T00:15:00', mode: 'focus', paused: false, pausedRemainMs: 0 };
+        localStorage.setItem(key, JSON.stringify(s));
+      }, STATE_KEY);
+      await page.clock.setFixedTime(new Date(2026, 8, 11, 0, 10));
+      await page.reload();
+      await page.evaluate(action => {
+        const el = document.createElement('button'); el.id = 'endTestTrigger'; el.textContent = 'fixture end';
+        Object.assign(el.dataset, { action, kind: 'block', id: 'end-block' }); document.body.append(el);
+      }, action);
+      await page.locator('#endTestTrigger').click();
+      const note = page.locator('[data-report-note]'), end = page.locator('[data-modal-field="actualEndAt"]');
+      await note.fill('終了の入力を保持');
+      assert((await end.inputValue()).startsWith('2026-09-11T00:10'));
+      assert.equal(await end.getAttribute('type'), 'datetime-local'); assert.equal(await end.getAttribute('step'), '300');
+      assert(await end.evaluate(el => parseFloat(getComputedStyle(el).fontSize) >= 16));
+      await page.locator('[data-modal-field="completeTask"]').check();
+      if (action === 'daily-block-end') {
+        await page.evaluate(async () => { (await import('/src/state/store.js')).state.blocks[0].date = '2026-09-12'; });
+        await page.locator('[data-action="report-outcome"][data-outcome="partial"]').click();
+        assert.equal(await note.inputValue(), '終了の入力を保持');
+        assert(await page.evaluate(() => document.body.textContent.includes('帰属日が2026-09-12に変わりました')));
+        assert.equal(await page.evaluate(async () => (await import('/src/state/store.js')).state.blocks[0].actualEndAt), '');
+      }
+      const before = await page.evaluate(async () => {
+        const s = (await import('/src/state/store.js')).state; window.__endInput = document.querySelector('[data-report-note]');
+        return JSON.parse(JSON.stringify({ blocks:s.blocks,tasks:s.tasks,declarations:s.declarations,pomodoro:s.pomodoro,dataModifiedAt:s.dataModifiedAt }));
+      });
+      await page.evaluate(key => {
+        window.__setEnd = Storage.prototype.setItem; window.__endFail = true; window.__endWrites = 0;
+        Storage.prototype.setItem = function(k,v) {
+          if (k === key) { window.__endWrites++; if (window.__endFail) throw new DOMException('fixture quota', 'QuotaExceededError'); }
+          return window.__setEnd.call(this,k,v);
+        };
+      }, STATE_KEY);
+      await page.locator('[data-action="report-outcome"][data-outcome="partial"]').click();
+      assert.equal(await note.inputValue(), '終了の入力を保持'); assert(await note.evaluate(el => el === window.__endInput));
+      assert(await page.locator('[data-modal-field="completeTask"]').isChecked());
+      assert.equal(await page.evaluate(() => window.__endWrites), 1);
+      const failed = await page.evaluate(async () => {
+        const s = (await import('/src/state/store.js')).state;
+        return JSON.parse(JSON.stringify({ blocks:s.blocks,tasks:s.tasks,declarations:s.declarations,pomodoro:s.pomodoro,dataModifiedAt:s.dataModifiedAt }));
+      });
+      assert.deepEqual(failed, before);
+      await page.evaluate(() => { window.__endFail = false; });
+      await page.locator('[data-action="report-outcome"][data-outcome="partial"]').evaluate(el => { el.click(); el.click(); });
+      await page.waitForFunction(() => !document.querySelector('#modalRoot').classList.contains('open'));
+      let saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), STATE_KEY);
+      assert.equal(await page.evaluate(() => window.__endWrites), 2);
+      assert.equal(saved.blocks[0].actualEndAt, '2026-09-11T00:10:00');
+      assert.equal(saved.blocks[0].date, action === 'daily-block-end' ? '2026-09-12' : '2026-09-10');
+      assert.equal(saved.blocks[0].completed, false); assert.equal(saved.blocks[0].comment, '元コメント\n終了の入力を保持');
+      assert.equal(saved.tasks[0].status, 'completed'); assert.equal(saved.tasks[0].progressNum, 5);
+      assert.equal(saved.pomodoro.running, false); assert.equal(saved.declarations.length, 1);
+      assert.equal(saved.declarations[0].id, 'midnight-declaration'); assert.equal(saved.declarations[0].date, '2026-09-10');
+      assert.equal(saved.declarations[0].reportedAt, '2026-09-11T00:10:00');
+      await page.locator('#endTestTrigger').click(); await end.fill('2026-09-11T00:20');
+      await note.fill('終了の入力を保持');
+      await page.locator('[data-action="report-outcome"][data-outcome="partial"]').click();
+      saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), STATE_KEY);
+      assert.equal(saved.declarations.length, 1); assert.equal(saved.declarations[0].id, 'midnight-declaration');
+      assert.equal(saved.declarations[0].reportedAt, '2026-09-11T00:20:00');
+      assert.equal(saved.blocks[0].comment, '元コメント\n終了の入力を保持');
+      await page.evaluate(() => { Storage.prototype.setItem = window.__setEnd; });
+      console.log(`PASS 29b: ${action} midnight binding, atomic rollback/Task/comment/timer, input retention, retry/correction/date confirmation`);
     }
     assert.deepEqual(errors, []);
   } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }

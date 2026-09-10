@@ -21,9 +21,11 @@ export function buildBlockEnd(state, input, deps) {
   const actualEndAt = timestamp(values.actualEndAt ?? draft.actualEndAt);
   if (block.actualStartAt && actualEndAt < timestamp(block.actualStartAt)) throw invalid("終了は開始以降にしてください");
   const list = state.declarations || [];
+  const outcome = input.outcome || "", note = String(input.note || "").trim();
+  const hasReport = Boolean(outcome || note || input.completeTask === true);
   let entry = list.find(row => row.id === draft.declarationId) || list.find(row => row.id === draft.fallbackId);
   if (entry && entry.blockId !== block.id) throw invalid("開始宣言の対象が違います");
-  if (!entry && !draft.declarationId) {
+  if (hasReport && !entry && !draft.declarationId) {
     let matches = list.filter(row => row.blockId === block.id && block.actualStartAt
       && row.declaredAt === block.actualStartAt && !row.reportedAt);
     if (!matches.length && block.actualEndAt) matches = list.filter(row => row.blockId === block.id
@@ -31,7 +33,6 @@ export function buildBlockEnd(state, input, deps) {
     if (matches.length > 1) throw invalid("開始宣言が複数あります。宣言番号を確認してください");
     entry = matches[0];
   }
-  const outcome = input.outcome || "", note = String(input.note || "").trim();
   if (!["", "done", "partial", "derailed"].includes(outcome)) throw invalid("終了結果を確認してください");
   const reported = { ...(entry || { id: draft.fallbackId, blockId: block.id, date: block.date,
     title: block.title || "", estimateMin: null, note: "", declaredAt: "" }),
@@ -51,11 +52,13 @@ export function buildBlockEnd(state, input, deps) {
   };
   if (input.timer === true && !block.actualEndAt) after.pomodoroCount = Number(block.pomodoroCount || 0) + 1;
   add("blocks", block, after);
-  add("declarations", entry || null, reported);
-  const merged = mergeRecords(list, [reported], { compareAt: row => row.updatedAt || row.reportedAt || row.declaredAt,
-    tieBreak: (_, remote) => remote });
-  for (const row of merged.slice(0, Math.max(0, merged.length - 300)))
-    if (row.id !== reported.id) add("declarations", list.find(old => old.id === row.id), null);
+  if (hasReport) {
+    add("declarations", entry || null, reported);
+    const merged = mergeRecords(list, [reported], { compareAt: row => row.updatedAt || row.reportedAt || row.declaredAt,
+      tieBreak: (_, remote) => remote });
+    for (const row of merged.slice(0, Math.max(0, merged.length - 300)))
+      if (row.id !== reported.id) add("declarations", list.find(old => old.id === row.id), null);
+  }
   if (input.completeTask !== undefined && typeof input.completeTask !== "boolean") throw invalid("Task完了を確認してください");
   if (input.completeTask === true) {
     const task = state.tasks?.find(row => row.id === block.taskId && !row.deleted);
@@ -66,6 +69,6 @@ export function buildBlockEnd(state, input, deps) {
   if (state.pomodoro?.running && state.pomodoro.blockId === block.id) valuesToSave.push({ kind: null,
     key: "pomodoro", before: state.pomodoro, after: { ...state.pomodoro, running: false, blockId: "",
       startedAt: "", endsAt: "", mode: "focus", paused: false, pausedRemainMs: 0 } });
-  return { records, values: valuesToSave, block: after, declaration: reported,
-    declarationId: reported.id, justCompleted: !block.completed && after.completed };
+  return { records, values: valuesToSave, block: after, declaration: hasReport ? reported : null,
+    declarationId: hasReport ? reported.id : draft.declarationId, justCompleted: !block.completed && after.completed };
 }
