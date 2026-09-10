@@ -1,0 +1,73 @@
+{
+  "version": 383,
+  "date": "2026-09-10",
+  "title": "時刻の組の検査、複製の並び、計画だけの複製、未変更の複製の取消",
+  "summary": "予定の開始・終了時刻は保存時に1組で検査(両方空は未定、片方だけ・逆転は拒否、24時は翌日0時)。Block の複製は計画の欄だけを写し、元の直後に並ぶ。複製をまだ触っていなければ取消で普通に削除できる",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "src/core/block-copy.js",
+    "src/core/copy-undo.js",
+    "src/core/daily-order.js",
+    "src/core/daily-time.js",
+    "src/features/daily-operations.js",
+    "sw.js",
+    "tests/daily-copy-e2e.test.js",
+    "tests/daily-operations-registry.test.js",
+    "tests/daily-order-core.test.js",
+    "tests/daily-time-e2e.test.js",
+    "tests/impact-regression-map.json",
+    "tests/suite-manifest.json",
+    "releases/v383.json",
+    "CHANGES_v383.md"
+  ],
+  "intent": [
+    "束B4の24・25・26・27をまとめ、予定時刻の保存とBlock複製・取消の操作を整える。"
+  ],
+  "changes": [
+    "24: 開始・終了・翌日を保存時に一括検証する。両方空は未定、片方だけと逆転は拒否し、24時は翌日0時として扱う。保存失敗時は入力・選択日・保存済み値を保持する。",
+    "25: 同時刻の複製を元の直後に並べる。親不在・削除・別日・時刻違い・循環は通常の並びとし、予定未定は最後に置く。",
+    "26: 計画の許可10欄だけを複写し、実績・進行・コメント等は既定値に戻す。元の時刻下書き保存と複製を別候補で処理し、複製失敗後の再試行は複製だけを行う。",
+    "27: 同じタブで保持する取消券と全保存欄の指紋が一致し、未開始・未完了なら通常の候補保存で削除する。変更済みの複製は詳細削除へ案内する。",
+    "CACHE_NAMEをv382からv383へ更新し、CHANGES・handoff・テストmanifest・コード索引を正規コマンドで生成する。"
+  ],
+  "uncertainties": [
+    "最終ゲートの終了コード・失敗箇所はreports/impl-r1/v383/command-results.jsonlとrelease-gate-final.logに記録する。",
+    "fixB4の独立再確認recheck83は監督者側で並行確認中。"
+  ],
+  "reviewFocus": [
+    "予定時刻の組の検証、計画だけの複製、元の直後の並びと未変更の複製の取消。",
+    "既存B4差分を保持し、この発注の製品コード変更はSW先頭行だけであること。"
+  ],
+  "verification": [
+    "関連スイート: daily-time-e2e / daily-order-core / daily-copy-e2e / daily-operations-registry / daily-stamp-e2e / detail-draft-e2e / draft-save-transaction / merge-core / store-core / work-list-model / v106 / v108 / v134 / v136 / v359 / mutation-block-e2e / sw-integration。",
+    "npm run test:manifest:write → node scripts/test-manifest.js --check。npm run code:index:write → node scripts/code-index.js --check。",
+    "RELEASE_HANDOFF_PATH=<reports/impl-r1/v383/handoff-preview.md> node scripts/release-record.js releases/v383.json --write。",
+    "発注79の指定どおり、TZ=Asia/Tokyo RELEASE_HANDOFF_PATH=<reports/impl-r1/v383/handoff-preview.md> node scripts/release-gate.js releases/v382.json --impact-base=8bc1252 --final を1回実走する。起動前の対象一覧照合と実行結果を証拠へ記録する。"
+  ],
+  "knownLimitations": [
+    "iOS実機と配信は本発注で実施しない。",
+    "最終ゲートで失敗したテストは本発注では修正しない。"
+  ],
+  "relatedSuites": [
+    "daily-time-e2e",
+    "daily-order-core",
+    "daily-copy-e2e",
+    "daily-operations-registry",
+    "daily-stamp-e2e",
+    "detail-draft-e2e",
+    "draft-save-transaction",
+    "merge-core",
+    "store-core",
+    "work-list-model",
+    "v106",
+    "v108",
+    "v134",
+    "v136",
+    "v359",
+    "mutation-block-e2e",
+    "sw-integration"
+  ]
+}

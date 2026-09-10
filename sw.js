@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v382";  // v382: Block 合流の共通関数、日常操作の登録表と配線、下書き控えの共通管理
+const CACHE_NAME = "taskchute-journal-pwa-v383";  // v383: 時刻の組の検査、複製の並び、計画だけの複製、未変更の複製の取消
 
 // v353: 12WY R0 task.twyPlan のデータ契約+plan.js 純関数+Task編集モーダル3項目
 
