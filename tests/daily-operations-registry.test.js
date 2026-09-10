@@ -70,6 +70,14 @@ try {
   assert.equal(schedules, schedulesBefore + 1, 'no sync schedule after a failed save');
   expectRestored(before, state);
   console.log('PASS sync schedule survives effects failure and is skipped on save failure');
+  // fixB4(78b 中1): 日付なし入力は対象 Block の date が selectedDate と違っても拒否しない。日付あり入力の不一致は拒否。
+  state.blocks.push({ id: 'y', date: '2026-09-09', title: 'yesterday' });
+  rows[fixture] = { build: () => ({ records: [] }) };
+  assert.equal(run(fixture, { kind: 'block', id: 'y' }, deps).ok, true, 'no-date input tolerates a block on another day');
+  assert.equal(run(fixture, { kind: 'block', id: 'y', date: '2026-09-09' }, deps).status, 'invalid', 'explicit date must match selectedDate');
+  assert.equal(run(fixture, { kind: 'block', id: 'b', date: '2026-09-10' }, deps).ok, true, 'explicit matching date passes');
+  state.blocks.pop();
+  console.log('PASS date check applies only to inputs that carry a date');
 } finally { delete rows[fixture]; setCommitGuard(null); }
 
 // Execute the actual app dispatcher/dependency wiring without importing the app UI.

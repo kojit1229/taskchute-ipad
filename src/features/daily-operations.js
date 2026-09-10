@@ -128,7 +128,9 @@ function validateCurrent(state, input, deps) {
     record = kind && state[kind]?.find(row => row.id === input.id && !row.deleted);
     if (!record) throw invalid("target changed");
   }
-  const date = input.date ?? record?.date ?? input.values?.date;
+  // fixB4(78b 中1): 日付の照合は入力が日付を持つときだけ行う(対象 Block の date を既定にすると、
+  // 日付なしの操作=開始・終了・複製・取消が閲覧日と違う日の Block(前日から続く実行中など)で拒否される)。
+  const date = input.date ?? input.values?.date;
   if (!input[copyReady] && !input[undoReady] && date != null && (date !== state.selectedDate || (record?.date && date !== record.date)))
     throw invalid("date changed");
   if (!input[undoReady] && input.baseFingerprint != null
