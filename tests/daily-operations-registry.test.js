@@ -55,6 +55,21 @@ try {
   rows[fixture] = { build: () => ({ records: [] }) };
   assert.equal(run(fixture, {}, deps).ok, true, 'guard released after rejection');
   console.log('PASS deep mutation, nested and async rejection; guard recovery');
+  // fixB3(73a F1): 保存成功後に effects が例外を投げても同期予約は1回行われ、保存失敗なら予約0回。
+  const changed = s => ({ records: [{ kind: 'blocks', before: s.blocks[0], after: { ...s.blocks[0], title: 'after' } }] });
+  rows[fixture] = { build: changed, effects: () => { throw new Error('effects boom'); } };
+  const savesBefore = saves, schedulesBefore = schedules;
+  assert.throws(() => run(fixture, {}, deps), /effects boom/);
+  assert.equal(saves, savesBefore + 1, 'device save happened before effects');
+  assert.equal(schedules, schedulesBefore + 1, 'sync is scheduled even when effects throw');
+  assert.equal(state.blocks[0].title, 'after', 'successful save is kept');
+  state.blocks[0].title = 'before';
+  const failing = { ...deps, persist: () => { saves++; return false; } };
+  const before = JSON.parse(JSON.stringify(state));
+  assert.equal(run(fixture, {}, failing).ok, false);
+  assert.equal(schedules, schedulesBefore + 1, 'no sync schedule after a failed save');
+  expectRestored(before, state);
+  console.log('PASS sync schedule survives effects failure and is skipped on save failure');
 } finally { delete rows[fixture]; setCommitGuard(null); }
 
 // Execute the actual app dispatcher/dependency wiring without importing the app UI.

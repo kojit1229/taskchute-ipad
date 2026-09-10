@@ -369,9 +369,9 @@
       "domains": [
         "content-ai"
       ],
-      "assertionSignals": 26,
-      "assertionHash": "826c1580f92be6f4",
-      "sourceHash": "e16a5c05b7c2e7fc",
+      "assertionSignals": 33,
+      "assertionHash": "b57ee7f3451e99b6",
+      "sourceHash": "c27bcde603b6dd09",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

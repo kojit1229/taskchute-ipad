@@ -70,8 +70,10 @@ export function runDailyOperation(name, input, deps) {
         return op.build(state, values, deps);
       },
       effects: result => {
-        op.effects?.(result, input, deps);
-        if (!result.unchanged) deps.scheduleSync?.(result);
+        // fixB3(73a F1): 保存はすでに成立しているので、同期予約は effects(描画・通知)の成否に依存させない。
+        // effects の例外は commitCandidate の契約どおり呼び出し元へ伝える(飲み込まない)。
+        try { op.effects?.(result, input, deps); }
+        finally { if (!result.unchanged) deps.scheduleSync?.(result); }
       }
     });
   } catch (error) {

@@ -18,7 +18,7 @@
 | daily-detail-frame.test.js | e2e | full | sync-storage, content-ai, ui-responsive | 47 | 0 | 0 |
 | daily-draft-e2e.test.js | e2e | full | content-ai | 37 | 0 | 0 |
 | daily-mock-adapter.test.js | node | full | content-ai | 78 | 0 | 0 |
-| daily-operations-registry.test.js | node | full | content-ai | 26 | 0 | 0 |
+| daily-operations-registry.test.js | node | full | content-ai | 33 | 0 | 0 |
 | daily-parts-contract.test.js | node | full | sync-storage, content-ai, ui-responsive | 32 | 0 | 0 |
 | daily-parts-isolation-e2e.test.js | e2e | full | sync-storage, content-ai, ui-responsive | 47 | 0 | 0 |
 | daily-parts-snapshot.test.js | node | full | content-ai | 57 | 0 | 0 |
