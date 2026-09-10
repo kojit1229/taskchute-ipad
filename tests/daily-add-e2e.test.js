@@ -1,39 +1,66 @@
 const assert = require('node:assert/strict');
-const { chromium, launchOptions, startServer, randomPort, STATE_KEY } = require('./helpers');
+const { chromium, launchOptions, startServer, randomPort, STATE_KEY, defaultContextOptions } = require('./helpers');
 
 (async () => {
   const server = startServer(randomPort()); let browser;
   try {
     browser = await chromium.launch(launchOptions());
-    const page = await browser.newPage({ viewport: { width: 1280, height: 844 },
-      timezoneId: 'Asia/Tokyo', locale: 'ja-JP', serviceWorkers: 'block' });
+    let context, page;
     const errors = [];
-    page.on('pageerror', error => errors.push(error.message));
-    await page.route('**/*', route => new URL(route.request().url()).hostname === 'localhost' ? route.continue() : route.abort());
-    await page.clock.setFixedTime(new Date(2026, 8, 10, 23, 55));
-    await page.goto('http://localhost:' + server.address().port + '/');
-    await page.evaluate(key => {
-      const s = JSON.parse(localStorage.getItem(key));
-      Object.assign(s.settings.github, { token: 'fixture-token', dataOwner: 'fixture-owner', dataRepo: 'fixture-repo', autoSave: false });
-      s.settings.autoSync = false; s.settings.lastOpenedDate = '2026-09-10';
-      s.projects = [{ id: 'p', title: '検査Project', kind: 'project', status: 'active' }];
-      s.tasks = ['a', 'b', 'c', 'edited', 'overnight'].map(id => ({ id, title: '時刻なし検査 ' + id, projectId: 'p', status: 'todo', estimateMin: 25 }));
-      s.blocks = [{ id: 'prior', taskId: 'a', date: '2026-09-09', title: '既存実績',
-        plannedStartAt: '', plannedEndAt: '', actualStartAt: '2026-09-09T10:00', actualEndAt: '2026-09-09T10:20', completed: true }];
-      s.recurrences = []; s.currentView = 'wbs';
-      localStorage.setItem(key, JSON.stringify(s));
-    }, STATE_KEY);
-    await page.reload();
-    // Normalize the automatically created fallback Task before capturing the baseline.
-    await page.reload();
+    const anchor = new Date();
+    const timeAt = (offset, hour, minute = 0) => new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() + offset, hour, minute);
+    const dateAt = offset => {
+      const date = timeAt(offset, 12);
+      return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-');
+    };
+    const fixtureDates = { yesterday: dateAt(-1), today: dateAt(0), tomorrow: dateAt(1), continuous: dateAt(2) };
+    async function startScenario(name, { continuous = false } = {}) {
+      if (context) await context.close();
+      context = await browser.newContext({ ...defaultContextOptions(), viewport: { width: 1280, height: 844 },
+        locale: 'ja-JP', serviceWorkers: 'block', reducedMotion: 'reduce' });
+      page = await context.newPage();
+      page.on('pageerror', error => errors.push(name + ': ' + error.message));
+      await page.route('**/*', route => new URL(route.request().url()).hostname === 'localhost' ? route.continue() : route.abort());
+      const time = continuous ? timeAt(2, 12) : timeAt(0, 23, 55);
+      await page.clock.install({ time });
+      await page.clock.setFixedTime(time);
+      await page.addInitScript(dates => { window.fixtureDates = dates; }, fixtureDates);
+      await page.goto('http://localhost:' + server.address().port + '/');
+      await page.evaluate(({ key, continuous }) => {
+        const s = JSON.parse(localStorage.getItem(key));
+        Object.assign(s.settings.github, { token: 'fixture-token', dataOwner: 'fixture-owner', dataRepo: 'fixture-repo', autoSave: false });
+        s.settings.autoSync = false;
+        s.settings.lastOpenedDate = continuous ? fixtureDates.continuous : fixtureDates.today;
+        s.selectedDate = fixtureDates.yesterday; s.modal = null;
+        s.projects = [{ id: 'p', title: '検査Project', kind: 'project', status: 'active' }];
+        s.tasks = continuous
+          ? Array.from({ length: 30 }, (_, i) => ({ id: 'continuous-' + i, title: '連続追加 ' + String(i).padStart(2, '0'), projectId: 'p', status: 'todo' }))
+          : ['a', 'b', 'c', 'edited', 'overnight'].map(id => ({ id, title: '時刻なし検査 ' + id, projectId: 'p', status: 'todo', estimateMin: 25 }));
+        s.blocks = continuous ? [] : [{ id: 'prior', taskId: 'a', date: fixtureDates.yesterday, title: '既存実績',
+          plannedStartAt: '', plannedEndAt: '', actualStartAt: fixtureDates.yesterday + 'T10:00', actualEndAt: fixtureDates.yesterday + 'T10:20', completed: true }];
+        s.recurrences = []; s.currentView = 'wbs';
+        sessionStorage.clear();
+        localStorage.setItem(key, JSON.stringify(s));
+      }, { key: STATE_KEY, continuous });
+      await page.reload();
+      // Normalize the automatically created fallback Task before capturing the baseline.
+      await page.reload();
+      await browse();
+      const initial = await state();
+      assert.equal(initial.settings.lastOpenedDate, continuous ? fixtureDates.continuous : fixtureDates.today);
+      assert.equal(initial.selectedDate, fixtureDates.yesterday);
+      assert.equal(initial.modal, null);
+      assert.equal(await page.evaluate(() => sessionStorage.length), 0);
+      console.log('SCENARIO ' + name);
+    }
     const state = () => page.evaluate(async () => JSON.parse(JSON.stringify((await import('/src/state/store.js')).state)));
     const nav = async view => {
       await page.locator(`#sidebar [data-view="${view}"]:visible, #bottomNav [data-view="${view}"]:visible`).first().click();
     };
     const browse = async () => {
       await nav('exec');
-      await page.locator('[data-date-picker]').fill('2026-09-09');
-      await page.waitForFunction(async () => (await import('/src/state/store.js')).state.selectedDate === '2026-09-09');
+      await page.locator('[data-date-picker]').fill(fixtureDates.yesterday);
+      await page.waitForFunction(async () => (await import('/src/state/store.js')).state.selectedDate === fixtureDates.yesterday);
       await nav('wbs');
     };
     const open = async id => {
@@ -48,9 +75,9 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY } = require(
       const key = Object.keys(sessionStorage).find(key => key.startsWith('taskchute-journal-placement-v1:') && JSON.parse(sessionStorage.getItem(key)).block.taskId === id);
       return JSON.parse(sessionStorage.getItem(key));
     }, id);
-    await browse();
     const reopenFailures = [];
     for (const id of ['edited', 'overnight']) {
+      await startScenario(id);
       await open(id);
       const oldRequest = await request(id);
       await page.locator('.modal-footer [data-action="modal-close"]').click();
@@ -59,13 +86,13 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY } = require(
           (await import('/src/state/store.js')).state.tasks.find(t => t.id === 'edited').title = '????Task';
         });
       } else {
-        await page.clock.setFixedTime(new Date(2026, 8, 11, 0, 1));
+        await page.clock.setFixedTime(timeAt(1, 0, 1));
         await page.reload(); await browse(); // Restore the previous day's request from sessionStorage.
       }
       await open(id);
       try {
         const fresh = await request(id);
-        const today = id === 'edited' ? '2026-09-10' : '2026-09-11';
+        const today = id === 'edited' ? fixtureDates.today : fixtureDates.tomorrow;
         assert.notEqual(fresh.requestId, oldRequest.requestId, id + ': reopening allocates a new request');
         if (id === 'edited') {
           assert.notEqual(fresh.baseFingerprint, oldRequest.baseFingerprint);
@@ -86,18 +113,17 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY } = require(
       }
     }
     assert.deepEqual(reopenFailures, [], 'both stale-request reopening cases pass');
-    await page.clock.setFixedTime(new Date(2026, 8, 10, 23, 55));
-    await browse();
+    await startScenario('save failure and same-tab restore');
     const before = await state();
     await open('a');
     assert.match(await page.locator('#modalRoot').textContent(), /今日の予定を追加/);
-    assert.equal(await page.locator('.placement-form strong').textContent(), '2026-09-10');
+    assert.equal(await page.locator('.placement-form strong').textContent(), fixtureDates.today);
     assert.equal(await page.locator('#placement-time, #placement-duration').count(), 0);
     const saveBox = await page.locator('.modal-footer [data-action="modal-save"]').boundingBox();
     assert(saveBox && saveBox.height >= 44 && saveBox.y + saveBox.height <= 844);
     const firstRequest = await request('a');
     assert.equal(firstRequest.requestId, firstRequest.block.id);
-    assert.equal(firstRequest.block.date, '2026-09-10');
+    assert.equal(firstRequest.block.date, fixtureDates.today);
     assert.equal(firstRequest.block.plannedStartAt, '');
     assert.equal(firstRequest.block.plannedEndAt, '');
     await page.evaluate(key => {
@@ -121,19 +147,19 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY } = require(
     let saved = await state();
     const added = saved.blocks.find(block => block.id === firstRequest.block.id);
     assert(added);
-    assert.equal(added.date, '2026-09-10');
+    assert.equal(added.date, fixtureDates.today);
     for (const field of ['plannedStartAt', 'plannedEndAt', 'actualStartAt', 'actualEndAt']) assert.equal(added[field], '');
     assert.equal(added.completed, false);
-    assert.equal(saved.currentView, 'wbs'); assert.equal(saved.selectedDate, '2026-09-09');
+    assert.equal(saved.currentView, 'wbs'); assert.equal(saved.selectedDate, fixtureDates.yesterday);
     assert.deepEqual(saved.tasks, before.tasks); assert.deepEqual(saved.blocks[0], before.blocks[0]);
     assert(added.updatedAt); assert.notEqual(saved.dataModifiedAt, before.dataModifiedAt);
     const replay = await page.evaluate(async request => {
       const { state } = await import('/src/state/store.js');
       const { commitPlacement } = await import('/src/features/placement.js');
       const stamp = state.dataModifiedAt;
-      const input = { request, today: '2026-09-10', connection: request.connection };
+      const input = { request, today: fixtureDates.today, connection: request.connection };
       let writes = 0;
-      const ok = commitPlacement(state, input, { now: '2026-09-10T23:55:00', persist: () => { writes++; return true; } });
+      const ok = commitPlacement(state, input, { now: fixtureDates.today + 'T23:55:00', persist: () => { writes++; return true; } });
       return { ok, writes, unchanged: stamp === state.dataModifiedAt, count: state.blocks.filter(b => b.id === request.block.id).length };
     }, await request('a'));
     assert.deepEqual(replay, { ok: true, writes: 0, unchanged: true, count: 1 });
@@ -141,27 +167,31 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY } = require(
     assert.equal((await state()).modal.id, added.id, 'reopen selects saved result');
     assert.equal((await state()).blocks.filter(b => b.id === added.id).length, 1);
     await page.locator('[data-action="placement-return"]').click();
-    assert.equal((await state()).selectedDate, '2026-09-09');
+    assert.equal((await state()).selectedDate, fixtureDates.yesterday);
+    await startScenario('cancel');
     await open('c');
     await page.locator('.modal-footer [data-action="modal-close"]').click();
     assert.equal((await state()).modal, null);
     assert.equal((await state()).blocks.some(b => b.taskId === 'c'), false, 'cancel creates none');
     console.log('PASS 22: yesterday browsing / untimed / failure / same-tab restore / same-id replay');
 
+    await startScenario('midnight reconfirmation');
     await open('b');
     const midnightRequest = await request('b');
-    await page.clock.setFixedTime(new Date(2026, 8, 11, 0, 1));
+    await page.clock.setFixedTime(timeAt(1, 0, 1));
     await confirm();
-    assert.match(await page.locator('#placement-error').textContent(), /2026-09-11/);
+    assert.match(await page.locator('#placement-error').textContent(), new RegExp(fixtureDates.tomorrow));
     assert.equal((await state()).blocks.some(b => b.taskId === 'b'), false);
     assert.equal((await request('b')).block.id, midnightRequest.block.id);
     await confirm();
     saved = await state();
-    assert.equal(saved.blocks.find(b => b.id === midnightRequest.block.id).date, '2026-09-11');
-    assert.equal(saved.selectedDate, '2026-09-09');
-    await page.clock.setFixedTime(new Date(2026, 8, 10, 23, 55));
+    assert.equal(saved.blocks.find(b => b.id === midnightRequest.block.id).date, fixtureDates.tomorrow);
+    assert.equal(saved.selectedDate, fixtureDates.yesterday);
+    await startScenario('cancelled request and completed Task at midnight');
     await open('c');
-    await page.clock.setFixedTime(new Date(2026, 8, 11, 0, 1));
+    await page.locator('.modal-footer [data-action="modal-close"]').click();
+    await open('c');
+    await page.clock.setFixedTime(timeAt(1, 0, 1));
     await page.evaluate(async () => { (await import('/src/state/store.js')).state.tasks.find(t => t.id === 'c').status = 'completed'; });
     await confirm();
     assert.match(await page.locator('#placement-error').textContent(), /日付が変わりました/);
@@ -169,31 +199,24 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY } = require(
     await confirm();
     assert.match(await page.locator('#placement-error').textContent(), /完了済み/);
     assert.equal((await state()).blocks.some(b => b.taskId === 'c'), false);
+    await startScenario('deleted request never resurrects');
+    await open('a');
+    const deletedRequest = await request('a');
+    await confirm();
     const rejected = await page.evaluate(async request => {
       const { state } = await import('/src/state/store.js');
       const { commitPlacement } = await import('/src/features/placement.js');
-      const deps = { now: '2026-09-11T00:01:00', persist: () => { throw Error('invalid request must not persist'); } };
+      const deps = { now: fixtureDates.today + 'T23:55:00', persist: () => { throw Error('invalid request must not persist'); } };
       state.blocks.find(b => b.id === request.block.id).deleted = true;
-      const candidate = { request, today: '2026-09-11', connection: request.connection };
+      const candidate = { request, today: fixtureDates.today, connection: request.connection };
       const ok = commitPlacement(state, candidate, deps);
       return { ok, error: candidate.error, deleted: state.blocks.find(b => b.id === request.block.id).deleted };
-    }, firstRequest);
+    }, deletedRequest);
     assert.equal(rejected.ok, false); assert.match(rejected.error, /削除済み/); assert.equal(rejected.deleted, true);
     assert.deepEqual(errors, []);
     console.log('PASS 22: midnight reconfirmation / completed Task rejection / deleted request never resurrects');
 
-    await page.clock.setFixedTime(new Date(2026, 8, 12, 12, 0));
-    await page.evaluate(async key => {
-      const { setState } = await import('/src/state/store.js');
-      const s = JSON.parse(localStorage.getItem(key));
-      s.tasks = Array.from({ length: 30 }, (_, i) => ({ id: 'continuous-' + i,
-        title: '連続追加 ' + String(i).padStart(2, '0'), projectId: 'p', status: 'todo' }));
-      s.blocks = []; s.currentView = 'wbs'; s.settings.lastOpenedDate = '2026-09-12';
-      // Keep the running state consistent if an earlier scheduled save fires before reload.
-      setState(s);
-      localStorage.setItem(key, JSON.stringify(s));
-    }, STATE_KEY);
-    await page.reload(); await browse();
+    await startScenario('continuous additions, extras and rendering', { continuous: true });
     const query = page.locator('[data-work-list="wbs"] [data-work-filter="query"]');
     await query.fill('連続追加');
     await query.evaluate(input => { input.setSelectionRange(1, 3); window.continuousQuery = input; });
@@ -211,7 +234,7 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY } = require(
     assert.deepEqual(await position(), firstPosition, 'first save keeps input node, selection and scroll');
     assert.equal(await page.evaluate(() => document.activeElement.dataset.id), 'continuous-8', 'focus returns to originating row');
     assert.equal((await state()).currentView, 'wbs');
-    assert.equal((await state()).selectedDate, '2026-09-09');
+    assert.equal((await state()).selectedDate, fixtureDates.yesterday);
     assert.equal(await page.locator('[data-work-list="wbs"] [data-action="placement-add-today"][data-id="continuous-8"]').textContent(), '予定を見る');
     const firstSaved = (await state()).blocks.find(b => b.id === continuousFirst.block.id);
     const persistedFirst = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).blocks, STATE_KEY);
@@ -263,8 +286,8 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY } = require(
         const { state } = await import('/src/state/store.js');
         const { commitPlacement } = await import('/src/features/placement.js');
         let writes = 0;
-        const ok = commitPlacement(state, { request, today: '2026-09-12', connection: request.connection },
-          { now: '2026-09-12T12:00:00', persist: () => { writes++; return true; } });
+        const ok = commitPlacement(state, { request, today: fixtureDates.continuous, connection: request.connection },
+          { now: fixtureDates.continuous + 'T12:00:00', persist: () => { writes++; return true; } });
         return { ok, writes, count: state.blocks.length };
       }, separate);
       assert.deepEqual(resend, { ok: true, writes: 0, count });
