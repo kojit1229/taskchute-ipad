@@ -62,7 +62,8 @@
       "paths": [
         "^src/ui/daily-parts/",
         "^src/features/daily-view-model\\.js$",
-        "^src/features/daily-operations\\.js$"
+        "^src/features/daily-operations\\.js$",
+        "^src/core/daily-time\\.js$"
       ],
       "patterns": [
         "renderPlanRow|renderActualRow|renderSearchFrame|patchSearchFrame|renderDetailFrame|DAILY_ACTIONS|daily-search-|buildDailyViewModel"
@@ -85,7 +86,8 @@
         "today-core",
         "v331",
         "v334",
-        "daily-detail-fields-e2e"
+        "daily-detail-fields-e2e",
+        "daily-time-e2e"
       ]
     },
     "detail-draft-guard": {

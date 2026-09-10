@@ -1,12 +1,13 @@
 import { assertNotInsideBuild } from "../core/commit.js";
+import { buildDailyTimes, cancelDailyTimes } from "../core/daily-time.js";
 
 const invalid = message => Object.assign(new Error(message), { code: "DAILY_OPERATION_INVALID" });
 const unwired = name => ({ build: () => { throw invalid(`not wired: ${name}`); } });
 const legacy = name => ({ legacy: true, run: (input, deps) => deps.legacy[name](input) });
 
 export const DAILY_OPERATIONS = {
-  "daily-plan-times-save": unwired("daily-plan-times-save"),
-  "daily-plan-times-cancel": unwired("daily-plan-times-cancel"),
+  "daily-plan-times-save": { build: buildDailyTimes, effects: dailyTimesEffects },
+  "daily-plan-times-cancel": { build: cancelDailyTimes, effects: dailyTimesEffects },
   "daily-plan-complete": unwired("daily-plan-complete"),
   "daily-block-start": unwired("daily-block-start"),
   "daily-block-end": unwired("daily-block-end"),
@@ -25,6 +26,29 @@ export const DAILY_OPERATIONS = {
   "modal-delete": legacy("modal-delete")
 };
 
+function dailyTimesEffects(result, input, deps) {
+  const block = result.records[0]?.after || result.block;
+  const row = input.target?.closest?.("[data-daily-key]");
+  if (row) {
+    for (const [name, value] of Object.entries({ start: block.plannedStartAt?.slice(11, 16) || "",
+      end: block.plannedEndAt?.slice(11, 16) || "", endNextDay: Boolean(block.plannedEndAt && block.plannedEndAt.slice(0, 10) > block.date) })) {
+      const field = row.querySelector(`[data-daily-field="${name}"]`);
+      if (field) { if (name === "endNextDay") field.checked = value; else field.value = value; }
+    }
+  }
+  deps.planTimesEffect?.(block, input);
+}
+
+// The delegated app entry supplies the element; read draft inputs before entering the pure build.
+function dailyInput(input) {
+  if (input.values) return input;
+  const row = input.target?.closest?.("[data-daily-key]");
+  const start = row?.querySelector('[data-daily-field="start"]');
+  const end = row?.querySelector('[data-daily-field="end"]');
+  return start && end ? { ...input, values: { start: start.value, end: end.value,
+    endNextDay: Boolean(row.querySelector('[data-daily-field="endNextDay"]')?.checked) } } : input;
+}
+
 // Supply normalized records (including optional defaults) when issuing fingerprints.
 export function dailyFingerprint(value) {
   const ordered = item => !item || typeof item !== "object" ? item
@@ -41,7 +65,7 @@ function validateCurrent(state, input, deps) {
     record = kind && state[kind]?.find(row => row.id === input.id && !row.deleted);
     if (!record) throw invalid("target changed");
   }
-  const date = input.date ?? input.values?.date;
+  const date = input.date ?? record?.date ?? input.values?.date;
   if (date != null && (date !== state.selectedDate || (record?.date && date !== record.date)))
     throw invalid("date changed");
   if (input.baseFingerprint != null
@@ -62,6 +86,7 @@ export function runDailyOperation(name, input, deps) {
   assertNotInsideBuild("runDailyOperation");
   const op = DAILY_OPERATIONS[name];
   if (op.legacy) return op.run(input, deps);
+  if (["daily-plan-times-save", "daily-plan-times-cancel"].includes(name)) input = dailyInput(input);
   try {
     return deps.commitCandidate({
       state: deps.state, input, persist: deps.persist, now: deps.now, floors: deps.floors,

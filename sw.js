@@ -663,6 +663,7 @@ const APP_SHELL = [
   "./src/core/merge.js",
   "./src/core/mutation-stamp.js",
   "./src/core/commit.js",
+  "./src/core/daily-time.js",
 
   "./src/core/life-export.js",
 
@@ -1027,4 +1028,3 @@ self.addEventListener("fetch", (event) => {
   );
 
 });
-

@@ -551,6 +551,29 @@
       }
     },
     {
+      "file": "daily-time-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 28,
+      "assertionHash": "1c68399940e89e38",
+      "sourceHash": "e2f9fc3a659cbaea",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
       "file": "daily-view-model.test.js",
       "kind": "e2e",
       "tier": "full",
