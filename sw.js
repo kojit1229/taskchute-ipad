@@ -661,6 +661,7 @@ const APP_SHELL = [
   "./assets/icon.svg",
 
   "./src/core/merge.js",
+  "./src/core/single-schedule-merge.js",
   "./src/core/mutation-stamp.js",
   "./src/core/commit.js",
   "./src/core/daily-time.js",

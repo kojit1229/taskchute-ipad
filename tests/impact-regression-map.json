@@ -297,6 +297,7 @@
     },
     "sync-storage": {
       "paths": [
+        "^src/core/single-schedule-merge\\.js$",
         "^src/(?:sync/|storage/|core/merge)"
       ],
       "patterns": [
@@ -304,6 +305,7 @@
       ],
       "suites": [
         "merge-core",
+        "single-schedule-merge",
         "store-core",
         "v72",
         "v118",
