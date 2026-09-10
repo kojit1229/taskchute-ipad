@@ -14,6 +14,85 @@ const functions = names => names.map(name => {
   return source.slice(node.start, node.end);
 }).join('\n');
 const clone = value => JSON.parse(JSON.stringify(value));
+
+async function deletionFixture() {
+  const f = await fixture(['deleteBlock', 'carryOverBlock', 'resolveMigrationRitual', 'bodyScanRecord', 'closeBodyScanFlow']);
+  Object.assign(f.ctx, {
+    window: { confirm: () => false }, _migrationRitualCtx: { srcId: 'b', origin: 'draft', draftItemId: 'draft-b' },
+    logMigrationRitual: () => {}, bodyScanSyncCommentFromDom() {},
+    _pendingBodyScanCtx: { fatigue: 2, recovery: 3, parts: ['neck'], comment: 'typed scan', pomodoroBlockId: 'b' }
+  });
+  f.ctx._scheduleDraft = { items: [{ id: 'draft-b' }] };
+  f.ctx.state.bodyScans = [];
+  return f;
+}
+const deletionEdits = [
+  ['series deletion', f => {
+    f.ctx.state.blocks[0].recurrenceGroupId = 'rule';
+    Object.assign(f.ctx.state.recurrences[0], { kind: 'weekly', anchorDate: DATE, exceptionDates: [], updatedAt: FUTURE });
+    return () => f.ctx.deleteBlock('b');
+  }],
+  ['carry', f => () => f.ctx.carryOverBlock('b', { toDate: '2026-09-11' })],
+  ['release', f => () => f.ctx.resolveMigrationRitual('release')],
+  ['ritual today', f => { f.ctx._migrationRitualCtx.origin = 'panel'; return () => f.ctx.resolveMigrationRitual('today'); }],
+  ['ritual carry', f => { f.ctx._migrationRitualCtx.origin = 'panel'; return () => f.ctx.resolveMigrationRitual('carry'); }],
+  ['body scan', f => () => f.ctx.bodyScanRecord()]
+];
+for (const [name, prepare] of deletionEdits) test(`15c ${name}: failure restores Blocks and editable context; retry succeeds`, async () => {
+  const f = await deletionFixture(), execute = prepare(f), before = clone(f.ctx.state);
+  const blocks = f.ctx.state.blocks, rules = f.ctx.state.recurrences;
+  const ritual = f.ctx._migrationRitualCtx, scan = f.ctx._pendingBodyScanCtx, draft = clone(f.ctx._scheduleDraft);
+  await withLocalSaveFailure(async (fail, injection) => {
+    f.fail(fail);
+    assert.equal(execute(), false);
+    assert.equal(injection.calls, 1);
+    assert.equal(f.ctx.state.blocks, blocks);
+    assert.equal(f.ctx.state.recurrences, rules);
+    expectRestored(before.blocks, clone(f.ctx.state.blocks));
+    expectRestored(before.recurrences, clone(f.ctx.state.recurrences));
+    assert.equal(f.ctx.state.dataModifiedAt, before.dataModifiedAt);
+    assert.equal(f.ctx._migrationRitualCtx, ritual);
+    assert.equal(f.ctx._pendingBodyScanCtx, scan);
+    expectRestored(draft, clone(f.ctx._scheduleDraft));
+    assert.equal(f.counts.render + f.counts.close + f.counts.timer + f.counts.autoSync + f.counts.autoSave, 0);
+    if (name === 'body scan') assert.equal(f.ctx.state.bodyScans.length, 1); // related record retains its original position
+    f.fail(null);
+    execute();
+    assert.equal(f.ctx.state.blocks[0].updatedAt, '2026-09-10T10:05:01');
+    assert.equal(f.ctx.state.blocks[0].createdAt, before.blocks[0].createdAt);
+    assert.deepEqual(f.persisted[0].blocks, clone(f.ctx.state.blocks));
+    assert.deepEqual(clone(f.ctx.state.blocks[1]), before.blocks[1]);
+    if (name === 'series deletion') {
+      const { configureRecurrence, recurrenceMatchesDate } = await import('../src/core/recurrence.js');
+      configureRecurrence({ parseDate: value => { const [y, m, d] = value.split('-').map(Number); return new Date(y, m - 1, d); } });
+      assert.equal(f.ctx.state.blocks[0].deleted, true);
+      assert.deepEqual(clone(f.ctx.state.recurrences[0].exceptionDates), [DATE]);
+      assert.equal(f.ctx.state.recurrences[0].updatedAt, '2026-09-10T10:05:01');
+      assert.equal(recurrenceMatchesDate(f.ctx.state.recurrences[0], DATE), false);
+      assert.equal(recurrenceMatchesDate(f.ctx.state.recurrences[0], '2026-09-17'), true);
+      assert.deepEqual(f.persisted[0].recurrences, clone(f.ctx.state.recurrences));
+      assert.equal(f.counts.writes, 2);
+    } else if (name.includes('carry') || name === 'ritual today') {
+      const carried = f.ctx.state.blocks.find(b => b.id === f.ctx.state.blocks[0].migratedTo);
+      assert.ok(carried);
+      assert.equal(carried.carryCount, 1);
+      // 監督者 2026-09-10: 非MIT の表現は既存どおり未設定(undefined)も可。MIT かどうかの真偽だけを検査する。
+      assert.equal(Boolean(carried.isMIT), name === 'ritual today');
+    } else if (name === 'release') assert.equal(f.ctx.state.blocks[0].deleted, true);
+    else assert.equal(f.ctx.state.blocks[0].comment, 'typed scan');
+  });
+});
+
+test('15c repeated deletion and unchanged scan do not stamp Blocks again', async () => {
+  const f = await deletionFixture();
+  f.ctx.deleteBlock('b');
+  const block = clone(f.ctx.state.blocks[0]), writes = f.counts.writes;
+  f.ctx.deleteBlock('b');
+  assert.equal(f.counts.writes, writes);
+  f.ctx._pendingBodyScanCtx.comment = block.comment;
+  f.ctx.bodyScanRecord();
+  expectRestored(block, clone(f.ctx.state.blocks[0]));
+});
 const NOW = '2026-09-10T10:00:00', FUTURE = '2026-09-10T10:05:00', DATE = NOW.slice(0, 10);
 
 async function fixture(extraNames = []) {

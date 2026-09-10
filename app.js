@@ -4850,10 +4850,9 @@ function carryOverBlock(id, { forceMIT = false, toDate = todayISO(), toastMessag
     const sameDayMITs = state.blocks.filter((b) => !b.deleted && b.date === toDate && b.isMIT);
     if (sameDayMITs.length < 3) block.isMIT = true;
   }
-  state.blocks.push(block);
   // 旧ブロックを「繰り越し済み」に(未完了リストから外れ、再提案されない)
-  state.blocks = state.blocks.map((b) => b.id === src.id ? { ...b, migratedTo: block.id, updatedAt: nowDateTime() } : b);
-  saveAndRender(toastMessage);
+  return commitBlockChanges([...state.blocks.map((b) => b.id === src.id ? { ...b, migratedTo: block.id } : b), block],
+    () => { render(); showToast(toastMessage); });
 }
 
 // v186 F2: DRIFTの提案は確認儀式を挟まず、既存の繰り越し意味論で今日から明日へ送る。
@@ -4936,7 +4935,6 @@ function resolveMigrationRitual(choice) {
   const { srcId, origin, draftItemId } = _migrationRitualCtx;
   const src = blockById(srcId);
   logMigrationRitual(src, choice);
-  _migrationRitualCtx = null;
 
   if (choice === "release") {
     const toWish = window.confirm(`「${src?.title || ""}」をWishへ移動しますか?\n(キャンセルで削除)`);
@@ -4946,7 +4944,8 @@ function resolveMigrationRitual(choice) {
     if (toWish) {
       releaseMsg = moveBlockToWish(srcId) ? "Wishへ移動しました" : "Blockを削除しました(Wishプロジェクトなし)";
     }
-    state.blocks = state.blocks.map((b) => b.id === srcId ? { ...b, deleted: true, updatedAt: nowDateTime() } : b);
+    if (!commitBlockChanges(state.blocks.map((b) => b.id === srcId ? { ...b, deleted: true } : b))) return false;
+    _migrationRitualCtx = null;
     if (origin === "draft" && _scheduleDraft) {
       _scheduleDraft.items = _scheduleDraft.items.filter((x) => x.id !== draftItemId);
       if (!_scheduleDraft.items.length) _scheduleDraft = null;
@@ -4957,6 +4956,7 @@ function resolveMigrationRitual(choice) {
   }
 
   if (choice === "decompose") {
+    _migrationRitualCtx = null;
     if (origin === "draft" && _scheduleDraft) {
       _scheduleDraft.items = _scheduleDraft.items.filter((x) => x.id !== draftItemId);
       if (!_scheduleDraft.items.length) _scheduleDraft = null;
@@ -4971,14 +4971,17 @@ function resolveMigrationRitual(choice) {
 
   if (choice === "today") {
     if (origin === "panel") {
-      carryOverBlock(srcId, { forceMIT: true });
+      if (carryOverBlock(srcId, { forceMIT: true }) === false) return false;
+      _migrationRitualCtx = null;
       closeModal();
     } else if (origin === "draft" && _scheduleDraft) {
+      _migrationRitualCtx = null;
       const it = _scheduleDraft.items.find((x) => x.id === draftItemId);
       if (it) { it.forceMIT = true; it._ritualResolved = true; }
       closeModal();
       confirmScheduleDraft();  // この項目は解決済みなので再スキャンでスキップされ、そのまま確定処理へ進む
     } else {
+      _migrationRitualCtx = null;
       closeModal();
     }
     return;
@@ -4986,14 +4989,17 @@ function resolveMigrationRitual(choice) {
 
   // choice === "carry"(それでも繰り越す)
   if (origin === "panel") {
-    carryOverBlock(srcId);
+    if (carryOverBlock(srcId) === false) return false;
+    _migrationRitualCtx = null;
     closeModal();
   } else if (origin === "draft" && _scheduleDraft) {
+    _migrationRitualCtx = null;
     const it = _scheduleDraft.items.find((x) => x.id === draftItemId);
     if (it) it._ritualResolved = true;
     closeModal();
     confirmScheduleDraft();
   } else {
+    _migrationRitualCtx = null;
     closeModal();
   }
 }
@@ -10415,19 +10421,22 @@ function nowConveyorComplete(id) {
   }
 }
 
-// Block-only adapter; an active editor draft remains the single commit owner.
-function commitBlockChanges(blocks, effects = () => {}) {
+// Block adapter with optional recurrence changes; an active draft owns the commit.
+function commitBlockChanges(blocks, effects = () => {}, recurrences = state.recurrences) {
   if (draftSaveTransaction?.active) {
     state.blocks = blocks;
+    if (recurrences !== state.recurrences) state.recurrences = recurrences;
     draftSaveTransaction.complete(effects);
     return true;
   }
   const result = commitCandidate({ state, now: nowDateTime(), floors: [saveState.pendingStamp],
     build: snapshot => {
-      const beforeById = new Map(snapshot.blocks.map(block => [block.id, block]));
-      return { records: blocks.flatMap(after => {
-        const before = beforeById.get(after.id);
-        return JSON.stringify(before) === JSON.stringify(after) ? [] : [{ kind: "blocks", before, after }];
+      return { records: [["blocks", blocks], ["recurrences", recurrences]].flatMap(([kind, afterRecords]) => {
+        const beforeById = new Map((snapshot[kind] || []).map(record => [record.id, record]));
+        return (afterRecords || []).flatMap(after => {
+          const before = beforeById.get(after.id);
+          return JSON.stringify(before) === JSON.stringify(after) ? [] : [{ kind, before, after }];
+        });
       }) };
     },
     persist: () => { persistLocalNoSchedule(); return !_lastSaveError; },
@@ -10451,15 +10460,16 @@ function updateBlockField(id, field, value) {
 
 function deleteBlock(id) {
   const target = state.blocks.find((b) => b.id === id);
+  let recurrences = state.recurrences;
   // v23: 繰り返し実体を削除したら、ルールの例外日に追加(再生成を防ぐ)
   if (target && target.recurrenceGroupId) {
-    state.recurrences = (state.recurrences || []).map((r) =>
+    recurrences = (state.recurrences || []).map((r) =>
       r.id === target.recurrenceGroupId
-        ? { ...r, exceptionDates: [...new Set([...(r.exceptionDates || []), target.date])], updatedAt: nowDateTime() }
+        ? { ...r, exceptionDates: [...new Set([...(r.exceptionDates || []), target.date])] }
         : r);
   }
-  state.blocks = state.blocks.map((block) => block.id === id ? { ...block, deleted: true, updatedAt: nowDateTime() } : block);
-  saveAndRender("Blockを削除しました");
+  return commitBlockChanges(state.blocks.map((block) => block.id === id ? { ...block, deleted: true } : block),
+    () => { render(); showToast("Blockを削除しました"); }, recurrences);
 }
 
 // v169: setMorningEnergy/ensureConditionLog/conditionRecordedDates/conditionRecordedCountThisWeek/
@@ -11832,9 +11842,9 @@ function bodyScanRecord() {
     // 同じ「変更があるときだけ書く」パターン。無変更再保存が他端末のBlock編集をmergeByIdで
     // 負かす経路を断つ)。
     if (targetBlock && trimmedComment !== String(targetBlock.comment || "")) {
-      state.blocks = state.blocks.map((b) => b.id === ctx.pomodoroBlockId
-        ? { ...b, comment: commentText, updatedAt: nowDateTime() }
-        : b);
+      if (!commitBlockChanges(state.blocks.map((b) => b.id === ctx.pomodoroBlockId
+        ? { ...b, comment: commentText }
+        : b))) return false;
     }
   }
   closeBodyScanFlow(true);
