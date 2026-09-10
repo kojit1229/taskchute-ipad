@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v383";  // v383: 時刻の組の検査、複製の並び、計画だけの複製、未変更の複製の取消
+const CACHE_NAME = "taskchute-journal-pwa-v384";  // v384: 単発予定の合流、時刻なしで今日へ追加・連続追加、12週のPC表示、健康・資産の日本語
 
 // v353: 12WY R0 task.twyPlan のデータ契約+plan.js 純関数+Task編集モーダル3項目
 

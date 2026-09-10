@@ -23,7 +23,9 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY, defaultCont
       await page.route('**/*', route => new URL(route.request().url()).hostname === 'localhost' ? route.continue() : route.abort());
       const time = continuous ? timeAt(2, 12) : timeAt(0, 23, 55);
       await page.clock.install({ time });
-      await page.clock.setFixedTime(time);
+      // Freeze timers too: the 500ms daily-open ticker otherwise changes selectedDate
+      // after setFixedTime crosses midnight, racing the placement-only assertions.
+      await page.clock.pauseAt(time);
       await page.addInitScript(dates => { window.fixtureDates = dates; }, fixtureDates);
       await page.goto('http://localhost:' + server.address().port + '/');
       await page.evaluate(({ key, continuous }) => {
@@ -301,7 +303,8 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY, defaultCont
     await page.reload(); await nav('wbs');
     assert.equal((await state()).blocks.length, 4, 'reload does not resend requests');
     assert.deepEqual((await state()).blocks.find(b => b.id === firstSaved.id),
-      { ...firstSaved, isMIT: false, source: '' }, 'reload adds only existing normalization defaults');
+      // B4 25: normalizeState fills missing copiedFromId on reload; compare the full record.
+      { ...firstSaved, isMIT: false, source: '', copiedFromId: '' }, 'reload adds only existing normalization defaults');
     await page.evaluate(connection => {
       sessionStorage.setItem('taskchute-journal-placement-v1:' + JSON.stringify([connection, 'continuous-10']),
         JSON.stringify({ requestId: 'invalid-fixture' }));
