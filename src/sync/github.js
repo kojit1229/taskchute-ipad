@@ -55,6 +55,7 @@ import {
   mergeById, mergeByIdPreferNewer, mergeGymSets, mergeTracksPreferNewer, mergeWeeklyCommitments
 } from "../core/merge.js";
 import { commitCandidate } from "../core/commit.js";
+import { nextMutationStamp, stamped } from "../core/mutation-stamp.js";
 import { persistLocalNoSchedule, _lastSaveError } from "../storage/local.js";
 
 // ---- 依存注入(configureGithubSync) ----
@@ -855,8 +856,8 @@ function reconcileSingletonDuplicates(mergedTasks, mergedProjects, mergedBlocks)
     if (live.length <= 1) continue;
     const canonical = pickCanonicalSingleton(live);
     const dupIds = new Set(live.filter((p) => p.id !== canonical.id).map((p) => p.id));
-    projects = projects.map((p) => dupIds.has(p.id) ? { ...p, deleted: true, updatedAt: now } : p);
-    tasks = tasks.map((t) => dupIds.has(t.projectId) ? { ...t, projectId: canonical.id, updatedAt: now } : t);
+    projects = projects.map((p) => dupIds.has(p.id) ? stamped({ ...p, deleted: true }, nextMutationStamp({ now, candidates: [p.updatedAt || p.createdAt] })) : p);
+    tasks = tasks.map((t) => dupIds.has(t.projectId) ? stamped({ ...t, projectId: canonical.id }, nextMutationStamp({ now, candidates: [t.updatedAt || t.createdAt] })) : t);
   }
   // Task側シングルトン(その他Task、getOtherTask)。Block.taskid参照を正本へ付け替える。
   let blocks = mergedBlocks;
@@ -864,8 +865,8 @@ function reconcileSingletonDuplicates(mergedTasks, mergedProjects, mergedBlocks)
   if (liveOtherTasks.length > 1) {
     const canonical = pickCanonicalSingleton(liveOtherTasks);
     const dupIds = new Set(liveOtherTasks.filter((t) => t.id !== canonical.id).map((t) => t.id));
-    tasks = tasks.map((t) => dupIds.has(t.id) ? { ...t, deleted: true, updatedAt: now } : t);
-    blocks = blocks.map((b) => dupIds.has(b.taskId) ? { ...b, taskId: canonical.id, updatedAt: now } : b);
+    tasks = tasks.map((t) => dupIds.has(t.id) ? stamped({ ...t, deleted: true }, nextMutationStamp({ now, candidates: [t.updatedAt || t.createdAt] })) : t);
+    blocks = blocks.map((b) => dupIds.has(b.taskId) ? stamped({ ...b, taskId: canonical.id }, nextMutationStamp({ now, candidates: [b.updatedAt || b.createdAt] })) : b);
   }
   return { tasks, projects, blocks };
 }

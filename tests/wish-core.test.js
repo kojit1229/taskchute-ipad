@@ -97,7 +97,8 @@ function makeBlock(input) {
 let toastCalls = [];
 function showToast(message, opts) { toastCalls.push({ message, opts }); }
 let saveAndRenderCalls = [];
-function saveAndRender(message, opts) { saveAndRenderCalls.push({ message, opts }); }
+let taskTransaction;
+function saveAndRender(message, opts) { taskTransaction.complete(() => saveAndRenderCalls.push({ message, opts })); }
 let renderCalls = 0;
 function render() { renderCalls++; }
 let updateTaskFieldCalls = [];
@@ -113,7 +114,12 @@ async function loadModules() {
   const { storeMod, wishMod } = await loadModules();
   storeModRef = storeMod;
 
+  const { createDraftSaveTransaction } = await import(pathToFileURL(path.join(ROOT, 'src/features/draft-save.js')).href);
+  taskTransaction = createDraftSaveTransaction({ getState: () => storeMod.state, setState: storeMod.setState,
+    now: nowDateTime, persist: () => true, schedule: () => {}, onFailure: error => { throw error; } });
+
   wishMod.configureWish({
+    taskTransaction: () => taskTransaction,
     escapeHTML, renderHeader, todayISO, localDateTimeToMs, makeTask, makeBlock,
     defaultPlannedTimes, showToast, nowDateTime, saveAndRender, render, updateTaskField
   });
