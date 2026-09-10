@@ -1,3 +1,4 @@
+// 4回-08/4回-10 日本語化の契約追随(監督者決定 2026-09-10)
 // v327: 計器盤A-2「からだ ─ 今日」と直近7日の集計・描画・非書込を固定する。
 const fs = require("fs");
 const path = require("path");
@@ -104,7 +105,7 @@ const stateFixture = {
     const instrumentsState = await seedAndReload("instruments");
     await page.waitForSelector(".instr-kpi");
     const kpiText = await page.locator(".instr-today").textContent();
-    check("今日KPIとgenerated_at", ["7h22m", "21:30→05:04", "69", "68", "4,584", "16", "439", "Apple Health 9/7 05:50"]
+    check("今日KPIとgenerated_at", ["7時間22分", "21:30→05:04", "69", "68", "4,584", "16", "439", "Apple Health 9/7 05:50"]
       .every((text) => kpiText.includes(text)), kpiText);
     check("体調コメントはToday TOWERと同一", (await page.locator(".instr-condition-text").textContent()).trim() === towerComment,
       JSON.stringify({ towerComment, instruments: await page.locator(".instr-condition-text").textContent() }));
@@ -148,7 +149,7 @@ const stateFixture = {
     healthBody = { ...health, days: health.days.map((day) => day.date === TODAY ? { ...day, sleep_min: 478 } : day) };
     await seedAndReload("instruments");
     const roundedSleep = await page.locator('[data-series="sleep"] strong').textContent();
-    check("睡眠平均359.6分は総分を丸めて6h00m", roundedSleep.includes("6h00m") && !roundedSleep.includes("5h60m"), roundedSleep);
+    check("睡眠平均359.6分は総分を丸めて6時間00分", roundedSleep.includes("6時間00分") && !roundedSleep.includes("5時間60分"), roundedSleep);
 
     healthBody = { ...health, days: health.days.map((day) => day.date === TODAY
       ? { ...day, bed_time: "<b>21:30</b>", wake_time: "<img src=x onerror=alert(1)>05:04" } : day) };
@@ -159,7 +160,7 @@ const stateFixture = {
 
     healthBody = { ...health, days: health.days.map((day) => day.date === TODAY ? { ...day, resting_hr: null } : day) };
     await seedAndReload("instruments");
-    const restingHr = await page.locator(".instr-kpi").filter({ hasText: "安静時HR" }).textContent();
+    const restingHr = await page.locator(".instr-kpi").filter({ hasText: "安静時心拍数" }).textContent();
     check("部分欠測KPIは—・未記録", restingHr.includes("—") && restingHr.includes("未記録"), restingHr);
 
     healthBody = health;

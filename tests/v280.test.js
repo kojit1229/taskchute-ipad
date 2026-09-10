@@ -1,3 +1,4 @@
+// 4回-08/4回-10 日本語化の契約追随(監督者決定 2026-09-10)
 // v280: 固定化解除履歴(habitPinHistory)とINSTRUMENTSのPIN ARCHIVE。
 const path = require("path");
 const { pathToFileURL } = require("url");
@@ -323,7 +324,7 @@ function contentsBodyFor(jsonText, sha) {
     await firstCard.waitFor();
     const firstText = await firstCard.textContent();
     check("カードにタイトル・期間を表示", firstText.includes("朝の読書") && firstText.includes(`2026-08-20 〜 ${TODAY}`), firstText);
-    check("期間外ログを除きbest=2/累計=4/実施率=50%", /連続BEST\s*2\s*日/.test(firstText)
+    check("期間外ログを除きbest=2/累計=4/実施率=50%", /連続の自己ベスト\s*2\s*日/.test(firstText)
       && /累計\s*4\s*回/.test(firstText) && /実施率\s*50\s*%/.test(firstText), firstText);
     await page.reload();
     await page.waitForSelector('.instr-pin-archive-card[data-rule-id="archive"]');
@@ -460,7 +461,7 @@ function contentsBodyFor(jsonText, sha) {
       }, view: "instruments"
     });
     const historicalKindText = await page.locator('.instr-pin-archive-card[data-rule-id="historical-kind"]').textContent();
-    check("現在ruleがdailyでも履歴weekdaysを優先して金→月をBEST=2", /連続BEST\s*2\s*日/.test(historicalKindText), historicalKindText);
+    check("現在ruleがdailyでも履歴weekdaysを優先して金→月をBEST=2", /連続の自己ベスト\s*2\s*日/.test(historicalKindText), historicalKindText);
     check("論理削除ルールはrecurrencesから元タイトルを逆引き", (await page.locator(
       '.instr-pin-archive-card[data-rule-id="deleted"]'
     ).textContent()).includes("終了した読書"));

@@ -13,7 +13,7 @@
 | code-index.test.js | node | full | legacy-crosscutting | 18 | 0 | 0 |
 | commit-size-gate.test.js | node | full | legacy-crosscutting | 9 | 0 | 0 |
 | daily-actual-row.test.js | e2e | full | content-ai | 43 | 0 | 0 |
-| daily-add-e2e.test.js | e2e | full | content-ai | 91 | 0 | 0 |
+| daily-add-e2e.test.js | e2e | full | content-ai | 101 | 0 | 0 |
 | daily-block-merge.test.js | node | full | sync-storage, planning-execution, content-ai | 25 | 0 | 0 |
 | daily-copy-e2e.test.js | e2e | full | content-ai | 65 | 0 | 0 |
 | daily-detail-fields-e2e.test.js | e2e | full | sync-storage, planning-execution, content-ai, ui-responsive | 55 | 0 | 0 |
@@ -142,7 +142,7 @@
 | v109.test.js | e2e | full | planning-execution, ui-responsive | 24 | 12 | 3900 |
 | v110.test.js | e2e | full | sync-storage, planning-execution, content-ai | 20 | 2 | 1000 |
 | v111.test.js | e2e | full | ui-responsive | 24 | 18 | 6550 |
-| v112.test.js | e2e | full | planning-execution, ui-responsive | 29 | 1 | 400 |
+| v112.test.js | e2e | full | planning-execution, ui-responsive | 28 | 1 | 400 |
 | v113.test.js | e2e | full | sync-storage, planning-execution, journal-health, content-ai, ui-responsive | 15 | 8 | 3200 |
 | v116.test.js | e2e | full | planning-execution | 7 | 4 | 1300 |
 | v117.test.js | e2e | full | planning-execution | 17 | 6 | 2200 |
@@ -259,7 +259,7 @@
 | v327.test.js | e2e | full | ui-responsive | 22 | 0 | 0 |
 | v328.test.js | e2e | full | planning-execution, ui-responsive | 21 | 0 | 0 |
 | v329.test.js | e2e | full | planning-execution | 27 | 0 | 0 |
-| v330.test.js | e2e | full | planning-execution | 24 | 1 | 50 |
+| v330.test.js | e2e | full | planning-execution | 23 | 1 | 50 |
 | v331.test.js | e2e | full | planning-execution, ui-responsive | 20 | 1 | 50 |
 | v332.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 53 | 1 | 50 |
 | v333.test.js | e2e | full | planning-execution | 47 | 3 | 150 |
@@ -462,7 +462,7 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | fixed-date | 3 | tests/v276.test.js | 77, 198, 261 |
 | missing-timezone | 1 | tests/v277.test.js | 18 |
 | missing-timezone | 1 | tests/v278.test.js | 31 |
-| missing-timezone | 1 | tests/v280.test.js | 73 |
+| missing-timezone | 1 | tests/v280.test.js | 74 |
 | missing-timezone | 1 | tests/v282.test.js | 225 |
 | fixed-date | 12 | tests/v283.test.js | 160, 243, 283, 316, 354, 379, 380, 416, 440, 444, 458, 470 |
 | missing-timezone | 2 | tests/v283.test.js | 113, 131 |

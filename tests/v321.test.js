@@ -1,3 +1,4 @@
+// 4回-08/4回-10 日本語化の契約追随(監督者決定 2026-09-10)
 // v321: Today TOWERのMITカード・当日一覧全件・MIT星・空状態文言を固定する。
 const {
   chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY
@@ -182,7 +183,7 @@ function block(id, title, start, end, extra = {}) {
     healthReady = true;
     await page.reload();
     await page.waitForFunction(() => document.querySelector(".bm-health-src")?.textContent.includes("09-03時点"));
-    check("健康行ありは身体スキャンの事実文言", (await page.locator(".bm-empty").textContent()).trim() === "身体スキャンは Block 完了時に記録");
+    check("健康行ありは身体スキャンの事実文言", (await page.locator(".bm-empty").textContent()).trim() === "身体スキャンは作業の完了時に記録");
 
     console.log("[6][7] 予定0件HUD・390px横スクロール・pageerror・state非書込");
     await seed([]);

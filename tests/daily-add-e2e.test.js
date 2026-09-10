@@ -77,6 +77,33 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY, defaultCont
       const key = Object.keys(sessionStorage).find(key => key.startsWith('taskchute-journal-placement-v1:') && JSON.parse(sessionStorage.getItem(key)).block.taskId === id);
       return JSON.parse(sessionStorage.getItem(key));
     }, id);
+    {
+    await startScenario('fixV384d untimed existing block time edit');
+    await open('a'); await confirm();
+    const untimed = await state();
+    const added = untimed.blocks.find(b => b.taskId === 'a' && b.date === fixtureDates.today);
+    assert.equal(added.plannedStartAt, ''); assert.equal(added.plannedEndAt, '');
+    await page.locator('[data-work-list="wbs"] [data-action="placement-add-today"][data-id="a"]').click();
+    await page.locator('[data-action="placement-edit"]').click();
+    assert.deepEqual((await state()).blocks, untimed.blocks, 'opening the editor does not mutate blocks');
+    await page.locator('[data-modal-field="plannedStartAt"]').fill(fixtureDates.today + 'T11:45');
+    console.log('fixV384d live before save', JSON.stringify({ modal: (await state()).modal, blocks: (await state()).blocks,
+      end: await page.locator('[data-modal-field="plannedEndAt"]').inputValue() }));
+    await confirm();
+    const edited = await state();
+    console.log('fixV384d live after save', JSON.stringify({ modal: edited.modal, blocks: edited.blocks }));
+    assert.equal(edited.modal, null, 'saving closes the block editor');
+    assert.equal(edited.blocks.length, untimed.blocks.length);
+    const saved = edited.blocks.find(b => b.id === added.id);
+    assert.equal(saved.plannedStartAt, fixtureDates.today + 'T11:45:00');
+    assert.equal(saved.plannedEndAt, fixtureDates.today + 'T12:10:00');
+    assert.equal(saved.date, added.date);
+    assert.deepEqual(edited.blocks.filter(b => b.id !== added.id), untimed.blocks.filter(b => b.id !== added.id));
+    assert.deepEqual(edited.tasks, untimed.tasks);
+    const persisted = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), STATE_KEY);
+    assert.deepEqual(persisted.blocks, edited.blocks);
+    console.log('PASS fixV384d: same id/count/date; time edit persisted; other blocks/tasks unchanged');
+    }
     const reopenFailures = [];
     for (const id of ['edited', 'overnight']) {
       await startScenario(id);

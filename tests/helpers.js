@@ -343,7 +343,62 @@ function deepCommitGuard(state, reject) {
   return verify;
 }
 
+
+// 発注96: WBSの時刻なし追加契約。既存枠/wishの時刻編集は呼出元に残す。
+async function browseYesterdayForPlacement(page) {
+  const date = await page.evaluate(() => {
+    const now = new Date(); now.setDate(now.getDate() - 1);
+    return [now.getFullYear(), String(now.getMonth() + 1).padStart(2, "0"), String(now.getDate()).padStart(2, "0")].join("-");
+  });
+  await page.locator('[data-action="nav"][data-view="exec"]:visible').first().click();
+  await page.locator('[data-date-picker]').fill(date);
+  await page.waitForFunction(async date => (await import('/src/state/store.js')).state.selectedDate === date, date);
+  await page.locator('[data-action="nav"][data-view="wbs"]:visible').first().click();
+  return date;
+}
+async function assertUntimedTodayPlacement(page, { key, taskId, today, browsingDate, confirm = true }) {
+  const assert = require('node:assert/strict');
+  const read = () => page.evaluate(async () => {
+    const { state } = await import('/src/state/store.js');
+    return { blocks: state.blocks, tasks: state.tasks, selectedDate: state.selectedDate, modal: state.modal, currentView: state.currentView };
+  });
+  const before = await read();
+  assert.equal(before.selectedDate, browsingDate);
+  assert.notEqual(browsingDate, today, '閲覧日と実時計の今日を分けて検査');
+  assert.equal(before.blocks.filter(b => !b.deleted && b.taskId === taskId && b.date === today).length, 0);
+  await page.locator('.placement-form').waitFor();
+  assert.match(await page.locator('#modalRoot').textContent(), /今日の予定を追加/);
+  assert.equal(await page.locator('.placement-form strong').textContent(), today);
+  assert.equal(await page.locator('#placement-time, #placement-duration').count(), 0);
+  const save = page.locator('.modal-footer [data-action="modal-save"]');
+  await save.scrollIntoViewIfNeeded();
+  await page.locator('#modalRoot').evaluate(async root => { await Promise.all(root.getAnimations({subtree:true}).map(a => a.finished)); });
+  const box = await save.boundingBox(), viewport = page.viewportSize();
+  assert.ok(await save.isEnabled());
+  assert.ok(box && box.x >= 0 && box.y >= 0 && box.x + box.width <= viewport.width + 1 && box.y + box.height <= viewport.height + 1 && box.height >= 44, '確定ボタンが画面内で44px以上');
+  if (!confirm) return;
+  await save.click();
+  await page.waitForFunction(({key, taskId, today}) => JSON.parse(localStorage.getItem(key)).blocks.some(b => !b.deleted && b.taskId === taskId && b.date === today), {key, taskId, today});
+  const after = await read(), placed = after.blocks.filter(b => !b.deleted && b.taskId === taskId);
+  assert.equal(after.blocks.length, before.blocks.length + 1);
+  assert.equal(placed.length, 1);
+  assert.equal(placed[0].date, today);
+  for (const field of ['plannedStartAt', 'plannedEndAt', 'actualStartAt', 'actualEndAt']) assert.equal(placed[0][field], '');
+  assert.equal(placed[0].completed, false);
+  assert.equal(after.selectedDate, browsingDate);
+  assert.equal(after.modal, null, "新規追加の確定後は確認画面を閉じる");
+  assert.equal(after.currentView, "wbs");
+  assert.deepEqual(after.tasks, before.tasks);
+  assert.deepEqual(after.blocks.filter(b => b.id !== placed[0].id), before.blocks);
+  const persisted = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), key);
+  assert.deepEqual(persisted.blocks, after.blocks);
+  assert.equal(persisted.selectedDate, browsingDate);
+  console.log('  PASS 時刻なし追加: 今日1件・両時刻空・閲覧日/Task/既存Block保護');
+  return placed[0];
+}
+
 module.exports = {
+  browseYesterdayForPlacement, assertUntimedTodayPlacement,
   deepCommitGuard,
   withLocalSaveFailure, expectRestored,
   chromium, ROOT, launchOptions, defaultContextOptions, setViewportAndWaitForStableLayout, fixedClock, startServer,

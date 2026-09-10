@@ -1,6 +1,6 @@
 // v330 A-2: WBS「今週やること」と1280px以上のProject 2ペイン。
 const {
-  chromium, launchOptions, startServer, blockGithubApiByDefault,
+  browseYesterdayForPlacement, assertUntimedTodayPlacement, chromium, launchOptions, startServer, blockGithubApiByDefault,
   passGithubGate, randomPort, STATE_KEY
 } = require("./helpers");
 
@@ -118,12 +118,10 @@ function commitmentItem(weekStart, blockId, taskId, projectId, plannedDate, comp
       && (await weekRows.nth(1).locator(".wbs-task-meta").textContent()).includes("期限 9/1 超過"));
 
     console.log("[2] 今日へは既存task-todayを再利用");
+    const placementBrowsingDate = await browseYesterdayForPlacement(page);
     const beforeBlocks = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).blocks.length, STATE_KEY);
     await page.locator(`[data-wbs-week-row-id="${stepOpen.id}"] [data-action="task-today"]`).click();
-    await page.waitForSelector('#placement-time');
-    check("今日への配置は時刻確認前にBlockを増やさない", await page.evaluate(({key,before}) => JSON.parse(localStorage.getItem(key)).blocks.length === before, {key:STATE_KEY,before:beforeBlocks}) && await page.locator('#placement-time').inputValue() === "");
-    await page.locator('#placement-time').fill('14:00');
-    await page.locator('[data-action="modal-save"]').click();
+    await assertUntimedTodayPlacement(page, { key: STATE_KEY, taskId: stepOpen.id, today: TODAY, browsingDate: placementBrowsingDate });
 
     await page.waitForFunction(({ key, before }) => JSON.parse(localStorage.getItem(key)).blocks.length === before + 1,
       { key: STATE_KEY, before: beforeBlocks });
@@ -132,8 +130,7 @@ function commitmentItem(weekStart, blockId, taskId, projectId, plannedDate, comp
       return blocks.length === before + 1 && blocks.at(-1).taskId === id;
     }, { key: STATE_KEY, id: stepOpen.id, before: beforeBlocks }));
 
-    check("確認した時刻で同じTaskを配置する", await page.evaluate(({key,id,date}) => JSON.parse(localStorage.getItem(key)).blocks.find(b => !b.deleted && b.taskId === id)?.plannedStartAt === `${date}T14:00`, {key:STATE_KEY,id:stepOpen.id,date:TODAY}));
-    await page.locator('[data-action="placement-return"]').click();
+    check("閲覧日を変更せず今日に配置する", await page.evaluate(async date => (await import('/src/state/store.js')).state.selectedDate === date, placementBrowsingDate));
 
     console.log("[3] PC 2ペイン・12WY優先の既定選択・選択は非永続");
     check("1280pxは380px一覧+選択詳細", await page.locator(".wbs-projects.is-desktop").isVisible()

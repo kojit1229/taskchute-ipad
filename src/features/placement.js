@@ -139,6 +139,18 @@ function renderPlacement(task, error = "") {
 }
 
 export function placementInput(target) {
+  if (state.modal?.type === "block" && state.modal.id === origin?.blockId && target.dataset.modalField === "plannedStartAt") {
+    const block = state.blocks.find(row => row.id === state.modal.id && !row.deleted);
+    const end = document.querySelector('#modalRoot [data-modal-field="plannedEndAt"]');
+    const start = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::00)?$/.exec(target.value);
+    // Untimed placements need an end in the legacy editor; keep this in the unsaved inputs only.
+    if (block && !block.plannedEndAt && end && !end.value && start) {
+      const estimate = Number(document.querySelector('#modalRoot [data-modal-field="estimateMin"]')?.value);
+      const times = placementTimes(start[1], start[2], estimate > 0 ? estimate : 30);
+      if (times) end.value = times.plannedEndAt;
+    }
+    return;
+  }
   if (state.modal?.type !== "placement" || !["time", "duration"].includes(target.dataset.modalField)) return;
   draft[target.dataset.modalField] = target.value;
   const times = placementTimes(draft.date, draft.time, draft.duration);

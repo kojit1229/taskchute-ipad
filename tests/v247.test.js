@@ -1,3 +1,4 @@
+// 4回-08/4回-10 日本語化の契約追随(監督者決定 2026-09-10)
 // v247: INSTRUMENTSの早起き・構造化IRON期間統計と積み上げ棒DOMを固定するNodeテスト。
 const path = require("path");
 const { pathToFileURL } = require("url");
@@ -90,7 +91,7 @@ const stateWith = (sets, extra = {}) => ({
   check("当月まで8本の月棒", (html.match(/class="instr-chart-month"/g) || []).length === 8);
   check("2種目×8月のsegment", (html.match(/data-exercise=/g) || []).length === 16);
   check("種目数と同じ2件の凡例", (html.match(/class="instr-chart-legend-item"/g) || []).length === 2);
-  check("画面注記に移行分除外を明記", html.includes("日付のない過去コメント移行分は含みません"));
+  check("画面注記に移行分除外を明記", html.includes("日付のない過去の記録は含みません"));
 
   console.log("[5] データなしの縮退");
   const empty = ironPeriodStats({}, TODAY);
