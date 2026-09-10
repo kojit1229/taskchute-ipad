@@ -61,7 +61,8 @@ function fixtureDays(dates) {
     ready = true;
     check("正常JSONを採用する", await health.hydrateHealthData(health.HEALTH_REFRESH_INTERVAL_MS));
     const normal = health.healthSummaryHTML("2026-09-02");
-    check("睡眠・HR・HRV・歩数・null体重を整形", ["7h05m", "安静HR 58", "HRV 41", "歩数 8,120", "体重 —"].every((text) => normal.includes(text)), normal);
+    // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
+    check("睡眠・HR・HRV・歩数・null体重を整形", ["7時間05分", "安静時心拍数 58拍/分", "心拍変動 41ミリ秒", "歩数 8,120", "体重 —"].every((text) => normal.includes(text)), normal);
     check("generated_atではなく末尾dateを時点表示に使う", normal.includes("Apple Health経由 · 09-02時点") && !normal.includes("06-01"), normal);
     ready = false;
     check("設定解除後は残存キャッシュを表示しない", health.healthSummaryHTML("2026-09-02").includes("健康データ 未取得"));
@@ -200,7 +201,8 @@ function fixtureDays(dates) {
     await page.waitForFunction(() => document.querySelector(".bm-health-src")?.textContent.includes("09-02時点"));
 
     const healthText = await page.locator(".bm-health").textContent();
-    check("BODY/MINDに睡眠・HR・歩数を表示", ["睡眠 7h05m(23:46→06:51)", "安静HR 58", "歩数 8,120"].every((text) => healthText.includes(text)), healthText);
+    // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
+    check("BODY/MINDに睡眠・HR・歩数を表示", ["睡眠 7時間05分(23:46→06:51)", "安静時心拍数 58拍/分", "歩数 8,120"].every((text) => healthText.includes(text)), healthText);
     check("出所と表示行の日付を表示", healthText.includes("Apple Health経由 · 09-02時点"), healthText);
     check("bodyScansが0件でも健康行とbm-emptyが共存", await page.locator(".sec-bodymind .bm-health").count() === 1 && await page.locator(".sec-bodymind .bm-empty").count() === 1);
     const stateAfter = await page.evaluate((key) => ({

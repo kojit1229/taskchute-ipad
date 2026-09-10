@@ -192,6 +192,11 @@ function cachedHealthData() {
   return typeof personalDataReady === "function" && personalDataReady() ? healthCache.data : undefined;
 }
 
+function formatHealthReason(reason) {
+  return String(reason).replace(/^HRV /, "心拍変動 ").replace(/^HR /, "安静時心拍数 ")
+    .replace(/bpm\b/g, "拍/分").replace(/(\d+)h(\d+)m/g, "$1時間$2分");
+}
+
 function conditionCommentText(cond) {
   if (cond?.level === "unknown") return "今朝の睡眠データはまだありません";
   const steps = healthNumber(cond?.ySteps);
@@ -205,12 +210,12 @@ function conditionCommentText(cond) {
     activity = `昨日の活動は控えめ(歩数 ${steps.toLocaleString("ja-JP")}${gym}) ─ `;
   }
   const hasSleep = Number.isFinite(cond?.sleepMin);
-  const sleep = sleepText(cond?.sleepMin);
-  const reasonSentence = (reason) => `${reason} ${reason.startsWith("HRV ") ? "が低めです。" : reason.startsWith("HR ") ? "が高めです。" : "と短めです。"}`;
+  const sleep = formatHealthReason(sleepText(cond?.sleepMin));
+  const reasonSentence = (reason) => `${formatHealthReason(reason)} ${reason.startsWith("HRV ") ? "が低めです。" : reason.startsWith("HR ") ? "が高めです。" : "と短めです。"}`;
   if (cond.level === "deficit") {
     return `${reasonSentence(cond.reasons?.[0] || "体調データ")}${activity}今日は重要なこと1つに絞り、午後に15分の休憩を入れましょう`;
   }
-  if (cond.level === "low") return `${hasSleep ? `睡眠 ${sleep}。` : reasonSentence(cond.reasons?.[0] || "体調データ")}${activity}今日は詰め込まず MIT を優先しましょう`;
+  if (cond.level === "low") return `${hasSleep ? `睡眠 ${sleep}。` : reasonSentence(cond.reasons?.[0] || "体調データ")}${activity}今日は詰め込まず最も大切なことを優先しましょう`;
   return `${hasSleep ? `睡眠 ${sleep} で十分。` : "今朝の睡眠データは未取得。"}${activity}今日は集中の山を1つ作る日に`;
 }
 
@@ -220,12 +225,12 @@ function healthSummaryHTML(todayIso, exact = false) {
   const finite = (value) => typeof value === "number" && Number.isFinite(value);
   const value = (item) => finite(item) ? item.toLocaleString("ja-JP") : "—";
   const sleep = finite(row.sleep_min)
-    ? `${Math.floor(row.sleep_min / 60)}h${String(row.sleep_min % 60).padStart(2, "0")}m` : "—";
+    ? `${Math.floor(row.sleep_min / 60)}時間${String(row.sleep_min % 60).padStart(2, "0")}分` : "—";
   const bed = typeof row.bed_time === "string" ? row.bed_time : "—";
   const wake = typeof row.wake_time === "string" ? row.wake_time : "—";
   const ageDays = (localDateMs(todayIso) - localDateMs(row.date)) / 86400000;
   const source = `Apple Health経由 · ${row.date.slice(5)}時点${ageDays >= 2 ? " (古い)" : ""}`;
-  const summary = `💤 睡眠 ${sleep}(${bed}→${wake})・安静HR ${value(row.resting_hr)}・HRV ${value(row.hrv_sdnn)}・歩数 ${value(row.steps)}・体重 ${value(row.weight_kg)}`;
+  const summary = `💤 睡眠 ${sleep}(${bed}→${wake})・安静時心拍数 ${value(row.resting_hr)}拍/分・心拍変動 ${value(row.hrv_sdnn)}ミリ秒・歩数 ${value(row.steps)}歩・体重 ${value(row.weight_kg)}kg`;
   return `<div class="bm-health"><div>${escapeHTML(summary)}</div><div class="bm-health-src">${escapeHTML(source)}</div></div>`;
 }
 

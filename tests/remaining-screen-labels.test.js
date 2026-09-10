@@ -30,9 +30,75 @@ async function twelveWeek(page) {
   assert.equal(await root.locator('[data-action="edit-task"][data-id="layout-no-plan"]').innerText(), "目安を設定 ›");
   console.log("PASS twelve-week: headings, both faces, all existing controls and 12 columns");
 }
+
+async function healthJapanese(page) {
+  const days = Array.from({ length: 8 }, (_, i) => ({
+    date: "2026-07-" + String(18 + i), sleep_min: i === 7 ? 450 : 420,
+    bed_time: "22:00", wake_time: "05:30", resting_hr: i === 7 ? 73 : 60,
+    hrv_sdnn: i === 7 ? 80 : 100, steps: 7000, exercise_min: 30,
+    active_kcal: 400, weight_kg: null
+  }));
+  let failFetch = false;
+  await page.route(url => url.pathname.endsWith("/karada/health-daily.json"), route =>
+    route.fulfill({ status: failFetch ? 500 : 200, contentType: "application/json",
+      body: failFetch ? "{}" : JSON.stringify({ schema: 1, generated_at: "2026-07-25T08:00:00", days }) }));
+  const response = page.waitForResponse(res => new URL(res.url()).pathname.endsWith("/karada/health-daily.json"));
+  await page.reload(); await response;
+  await nav(page, "instruments");
+  await page.waitForFunction(() => document.querySelectorAll(".instr-kpi").length === 6);
+  const root = page.locator(".instr-view");
+  assert.equal(await root.locator("h1").innerText(), "健康");
+  const text = await root.innerText();
+  for (const expected of ["7時間30分", "安静時心拍数", "拍/分", "心拍変動", "ミリ秒", "キロカロリー",
+    "直近7日", "欠測 0日", "早起き(06:00まで)", "月別の積み上げ", "記録した日時が今年のセットのみ"]) assert.ok(text.includes(expected), expected);
+  assert.ok((await root.locator(".instr-condition-text").innerText()).includes("心拍変動 −20% が低めです。"));
+  assert.ok(await root.locator('[data-action="karada-import"]').isVisible());
+  assert.equal(await root.locator('button[data-action="instruments-open-iron-log"]').innerText(), "筋トレの記録を開く ›");
+  const checks = await page.evaluate(async days => {
+    const health = await import("/src/features/health.js");
+    const cond = health.conditionFromHealth(days, "2026-07-25");
+    return { reasons: cond.reasons, level: cond.level,
+      summary: health.healthSummaryHTML("2026-07-25", true),
+      stale: health.healthSummaryHTML("2026-07-27"),
+      missing: health.healthSummaryHTML("2026-07-26", true),
+      comment: health.conditionCommentText({ ...cond, reasons: ["HR +13bpm"] }),
+      low: health.conditionCommentText({ ...cond, level: "low", sleepMin: 380 }),
+      unknown: health.conditionCommentText({ level: "unknown" }) };
+  }, days);
+  assert.equal(checks.level, "deficit");
+  assert.ok(checks.reasons.includes("HRV −20%"));
+  assert.ok(checks.reasons.includes("HR +13bpm"));
+  for (const expected of ["安静時心拍数 73拍/分", "心拍変動 80ミリ秒", "歩数 7,000歩", "体重 —kg", "07-25時点"])
+    assert.ok(checks.summary.includes(expected), expected);
+  assert.ok(checks.stale.includes("07-25時点 (古い)"));
+  assert.ok(checks.missing.includes("健康データ 未取得"));
+  assert.ok(checks.comment.startsWith("安静時心拍数 +13拍/分 が高めです。"));
+  assert.ok(checks.low.includes("睡眠 6時間20分。") && checks.low.includes("最も大切なことを優先"));
+  assert.equal(checks.unknown, "今朝の睡眠データはまだありません");
+  failFetch = true;
+  const failed = await page.evaluate(async () => {
+    const health = await import("/src/features/health.js");
+    const result = await health.forceHealthData();
+    return { ok: result.ok, summary: health.healthSummaryHTML("2026-07-25", true) };
+  });
+  assert.equal(failed.ok, false);
+  assert.equal(failed.summary, checks.summary, "failed fetch retains the previous values");
+  await root.locator('button[data-action="instruments-open-iron-log"]').click();
+  await page.waitForSelector('#app[data-view="iron-log"]', { state: "attached" });
+  await nav(page, "instruments");
+  assert.equal(await page.locator(".instr-view h1").innerText(), "健康");
+  await nav(page, "today");
+  // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
+  assert.equal(await page.locator(".tower-condition").count(), 1, "Today condition panel count matches the baseline");
+  assert.equal(await page.locator(".tower-condition > .tower-condition-label").count(), 1);
+  assert.equal(await page.locator(".tower-condition > .tower-condition-text").count(), 1);
+  assert.equal(await page.locator(".tower-condition > .tower-condition-meta").count(), 1);
+  console.log("PASS health: Japanese labels/units/reasons, raw HR/HRV reasons, missing/stale/failed values and controls");
+}
+
 async function run() {
   const { page, browser, server } = await setup();
-  try { await twelveWeek(page); }
+  try { await twelveWeek(page); await healthJapanese(page); }
   finally { await page.context().close(); await browser.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });

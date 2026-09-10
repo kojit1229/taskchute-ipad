@@ -269,7 +269,8 @@ function logsFor(dates) {
     check("累計回数欄を含む", html.includes("累計"));
     // "instr-dots"(ラッパー)自体も部分一致してしまうため、class="instr-dot(空白かis-checked)"に絞る。
     check("直近4週ドットカレンダー(instr-dot)を28個含む", (html.match(/class="instr-dot[" ]/g) || []).length === 28);
-    check("IRON LOGサマリ見出しを含む", html.includes("IRON LOG"));
+    // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
+    check("筋トレの記録サマリ見出しを含む", html.includes("筋トレの記録"));
     check("IRON LOG遷移導線data-action=instruments-open-iron-logを含む", html.includes('data-action="instruments-open-iron-log"'));
     check("旧計器盤の分析グラフ用語(ヒートマップ/相関/ドーナツ)を持ち込んでいない", !/ヒートマップ|相関|ドーナツ/.test(html));
     check(

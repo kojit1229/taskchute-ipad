@@ -70,7 +70,8 @@ function healthDays({ today = TODAY, sleepMin = 442, yesterdaySteps = 7000, othe
     && medianResult.reasons.includes("HRV −20%") && !medianResult.reasons.some((reason) => reason.startsWith("睡眠")), JSON.stringify(medianResult));
   const mixedResult = health.conditionFromHealth(healthDays({ sleepMin: 380, hrv: 80 }), TODAY);
   check("low睡眠とdeficit HRVの混合時は重い根拠を先頭にする", mixedResult.reasons[0] === "HRV −20%"
-    && health.conditionCommentText(mixedResult).startsWith("HRV −20% が低めです。"), JSON.stringify(mixedResult));
+    // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
+    && health.conditionCommentText(mixedResult).startsWith("心拍変動 −20% が低めです。"), JSON.stringify(mixedResult));
 
   const tooFew = health.conditionFromHealth(healthDays({ hrv: 1 }).slice(1), TODAY);
   check("HRV標本が7件未満なら判定をスキップ", tooFew.level === "normal" && tooFew.reasons.length === 0, JSON.stringify(tooFew));
@@ -147,21 +148,28 @@ function healthDays({ today = TODAY, sleepMin = 442, yesterdaySteps = 7000, othe
     await page.goto(`http://localhost:${PORT}/`);
     await passGithubGate(page);
 
-    const deficitState = await seedAndOpen(healthDays({ sleepMin: 260 }), "睡眠 4h20m");
+    // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
+    const deficitState = await seedAndOpen(healthDays({ sleepMin: 260 }), "睡眠 4時間20分");
     check("260分はdeficit文言", (await page.locator(".tower-condition-text").textContent()).trim()
-      === "睡眠 4h20m と短めです。今日は重要なこと1つに絞り、午後に15分の休憩を入れましょう");
+      // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
+      === "睡眠 4時間20分 と短めです。今日は重要なこと1つに絞り、午後に15分の休憩を入れましょう");
     check("knownは睡眠・HR・HRV・昨日歩数meta", (await page.locator(".tower-condition-meta").textContent()).trim()
-      === "睡眠 4h20m ・ HR 60 ・ HRV 100ms ・ 昨日 7,000歩");
+      // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
+      === "睡眠 4時間20分 ・ 安静時心拍数 60拍/分 ・ 心拍変動 100ミリ秒 ・ 昨日 7,000歩");
 
     const gym = [{ id: "v325-gym", exercise: "スクワット", weight: 50, reps: 10,
       at: "2026-09-03T18:00", createdAt: "2026-09-03T18:00", updatedAt: "2026-09-03T18:00" }];
-    await seedAndOpen(healthDays({ sleepMin: 380, yesterdaySteps: 9000, otherSteps: 5500 }), "睡眠 6h20m", gym);
+    // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
+    await seedAndOpen(healthDays({ sleepMin: 380, yesterdaySteps: 9000, otherSteps: 5500 }), "睡眠 6時間20分", gym);
     check("380分+昨日歩数1.5倍はlowで筋トレも活動句へ付加", (await page.locator(".tower-condition-text").textContent()).trim()
-      === "睡眠 6h20m。昨日は歩数 9,000・筋トレ 500kg と活動量が多め ─ 今日は詰め込まず MIT を優先しましょう");
+      // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
+      === "睡眠 6時間20分。昨日は歩数 9,000・筋トレ 500kg と活動量が多め ─ 今日は詰め込まず最も大切なことを優先しましょう");
 
-    await seedAndOpen(healthDays({ sleepMin: 442, yesterdaySteps: 4500, otherSteps: 8000 }), "睡眠 7h22m");
+    // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
+    await seedAndOpen(healthDays({ sleepMin: 442, yesterdaySteps: 4500, otherSteps: 8000 }), "睡眠 7時間22分");
     check("442分+昨日歩数0.6倍はnormalで控えめ句", (await page.locator(".tower-condition-text").textContent()).trim()
-      === "睡眠 7h22m で十分。昨日の活動は控えめ(歩数 4,500) ─ 今日は集中の山を1つ作る日に");
+      // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
+      === "睡眠 7時間22分 で十分。昨日の活動は控えめ(歩数 4,500) ─ 今日は集中の山を1つ作る日に");
 
     const unknownState = await seedAndOpen(healthDays({ includeToday: false }), "今朝の睡眠データはまだありません");
     const unknownText = (await page.locator(".tower-condition-text").textContent()).trim();
@@ -169,9 +177,11 @@ function healthDays({ today = TODAY, sleepMin = 442, yesterdaySteps = 7000, othe
     check("当日行なしはunknown文言のみ", unknownText === "今朝の睡眠データはまだありません" && unknownMetaCount === 0,
       JSON.stringify({ unknownText, unknownMetaCount }));
 
-    await seedAndOpen(healthDays({ sleepMin: 442, hrv: 80 }), "HRV −20%");
+    // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
+    await seedAndOpen(healthDays({ sleepMin: 442, hrv: 80 }), "心拍変動 −20%");
     check("HRV −20%だけでもdeficit", (await page.locator(".tower-condition-text").textContent()).trim()
-      === "HRV −20% が低めです。今日は重要なこと1つに絞り、午後に15分の休憩を入れましょう");
+      // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
+      === "心拍変動 −20% が低めです。今日は重要なこと1つに絞り、午後に15分の休憩を入れましょう");
 
     const layout = await page.locator(".tower-condition").evaluate((condition) => {
       const parent = condition.parentElement;
@@ -238,7 +248,8 @@ function healthDays({ today = TODAY, sleepMin = 442, yesterdaySteps = 7000, othe
     // health-daily.jsonのレスポンス自体は`initialHealth`で待機済み(=fetchは完了している)ため、
     // 残るのは応答後の再render(state反映→DOM更新)がCIの共有ランナーで既定30秒に収まらない
     // ケース。待つ条件(実際のDOM文言)は変えずタイムアウトのみ余裕を持たせる。
-    await resumePage.waitForFunction(() => document.querySelector(".tower-condition-text")?.textContent.includes("睡眠 7h22m"), null, { timeout: 45000 });
+    // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
+    await resumePage.waitForFunction(() => document.querySelector(".tower-condition-text")?.textContent.includes("睡眠 7時間22分"), null, { timeout: 45000 });
     await resumePage.clock.pauseAt(new Date(Date.UTC(2026, 8, 4, 14, 59, 50, 0)));
     // 通信開始の通知は計数ルートより先に届くため、加算済みになる通信完了まで待つ。
     const recentPull = resumePage.waitForEvent("requestfinished", (request) => request.url().includes("taskchute/app-state.json"));
@@ -259,7 +270,8 @@ function healthDays({ today = TODAY, sleepMin = 442, yesterdaySteps = 7000, othe
       Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
       document.dispatchEvent(new Event("visibilitychange"));
     });
-    await resumePage.waitForFunction(() => document.querySelector(".tower-condition-text")?.textContent.includes("睡眠 4h20m"));
+    // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
+    await resumePage.waitForFunction(() => document.querySelector(".tower-condition-text")?.textContent.includes("睡眠 4時間20分"));
     check("pullスロットル中はapp-state fetchを増やさない", resumePullRequests === requestsBeforeResume.pull,
       JSON.stringify({ before: requestsBeforeResume, health: resumeHealthRequests, pull: resumePullRequests }));
     check("日跨ぎ復帰でhealth fetchを1回再発行して当日値へ更新", resumeHealthRequests === requestsBeforeResume.health + 1,

@@ -169,9 +169,9 @@ function renderTowerCondition(today) {
   const cond = conditionFromCachedHealth(today);
   const withGym = { ...cond, yGymKg: yesterdayGymKg(today) };
   const meta = cond.level === "unknown" ? "" : [
-    Number.isFinite(cond.sleepMin) ? `睡眠 ${Math.floor(cond.sleepMin / 60)}h${String(Math.round(cond.sleepMin % 60)).padStart(2, "0")}m` : "",
-    Number.isFinite(cond.restingHr) ? `HR ${cond.restingHr.toLocaleString("ja-JP")}` : "",
-    Number.isFinite(cond.hrv) ? `HRV ${cond.hrv.toLocaleString("ja-JP")}ms` : "",
+    Number.isFinite(cond.sleepMin) ? `睡眠 ${Math.floor(cond.sleepMin / 60)}時間${String(Math.round(cond.sleepMin % 60)).padStart(2, "0")}分` : "",
+    Number.isFinite(cond.restingHr) ? `安静時心拍数 ${cond.restingHr.toLocaleString("ja-JP")}拍/分` : "",
+    Number.isFinite(cond.hrv) ? `心拍変動 ${cond.hrv.toLocaleString("ja-JP")}ミリ秒` : "",
     Number.isFinite(cond.ySteps) ? `昨日 ${cond.ySteps.toLocaleString("ja-JP")}歩` : ""
   ].filter(Boolean).join(" ・ ");
   return `<section class="tower-condition sec-condition"><span class="tower-condition-label">からだ ─ 今日</span><span class="tower-condition-text">${escapeHTML(conditionCommentText(withGym))}</span>${meta ? `<span class="tower-condition-meta">${escapeHTML(meta)}</span>` : ""}${karadaImportHTML()}</section>`;
@@ -521,7 +521,7 @@ function renderTowerBodyMind(today, blocks) {
     return `<section class="tower-panel-box sec-bodymind">
       <h2>からだのきろく <span>今日の積み上げ</span></h2>
       ${health}
-      <div class="bm-empty">${hasHealthRow ? "身体スキャンは Block 完了時に記録" : "今日の記録はまだありません"}</div>
+      <div class="bm-empty">${hasHealthRow ? "身体スキャンは作業の完了時に記録" : "今日の記録はまだありません"}</div>
     </section>`;
   }
   const summary = bmSummary(scans);

@@ -55,9 +55,11 @@ const {chromium,launchOptions,startServer,randomPort,passGithubGate,STATE_KEY,di
  assert.equal(await page.locator('#synthetic-draft').inputValue(),'未保存の架空入力');assert.equal(await page.locator('#synthetic-draft').evaluate(n=>n===document.activeElement),true);
  await page.evaluate(()=>{const t=document.querySelector('#synthetic-draft');t.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true}));t.blur();t.remove();});
  await page.evaluate(async()=>{const s=await import('/src/state/store.js');s.state.currentView='instruments';});
- await dispatchRegisteredAction(page,'karada-recheck');await page.waitForSelector('.instr-today');assert((await page.locator('.instr-today').innerText()).includes('8h'));
+ // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
+ await dispatchRegisteredAction(page,'karada-recheck');await page.waitForSelector('.instr-today');assert((await page.locator('.instr-today').innerText()).includes('8時間00分'));
  for(const width of [390,768,1024,1280]){await page.setViewportSize({width,height:900});assert(await page.locator('.instr-today [data-karada-import]').count());assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));if(process.env.ARTIFACT_DIR)await page.screenshot({path:require('node:path').join(process.env.ARTIFACT_DIR,`app-ui-${width}-${puts}.png`)});}
- failHealth=true;await dispatchRegisteredAction(page,'karada-recheck');await page.waitForFunction(()=>document.querySelector('[data-karada-import]').textContent.includes('画面の更新に失敗'));assert((await page.locator('.instr-today').innerText()).includes('8h'));
+ // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
+ failHealth=true;await dispatchRegisteredAction(page,'karada-recheck');await page.waitForFunction(()=>document.querySelector('[data-karada-import]').textContent.includes('画面の更新に失敗'));assert((await page.locator('.instr-today').innerText()).includes('8時間00分'));
  failHealth=false;await page.locator('[data-action="karada-recheck"]').click();await page.waitForFunction(()=>document.querySelector('[data-karada-import]').textContent.includes('画面更新が完了'));
 
  // Saved remotely but response lost: recheck is GET-only and joins the original request.

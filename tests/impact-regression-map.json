@@ -285,7 +285,8 @@
         "today-core",
         "tower-core",
         "tower-model-core",
-        "coach-core"
+        "coach-core",
+        "remaining-screen-labels"
       ]
     },
     "action-dispatch": {
@@ -435,7 +436,8 @@
         "v325",
         "v327",
         "instruments-core",
-        "v326"
+        "v326",
+        "remaining-screen-labels"
       ]
     },
     "instruments-feature": {
@@ -448,7 +450,8 @@
         "v247",
         "v284",
         "v326",
-        "v327"
+        "v327",
+        "remaining-screen-labels"
       ]
     },
     "iron-log-feature": {
@@ -524,7 +527,8 @@
         "placement-e2e",
         "vision-connection",
         "vision-connection-e2e",
-        "vision-overview"
+        "vision-overview",
+        "remaining-screen-labels"
       ]
     },
     "feedback-regeneration-integration": {
