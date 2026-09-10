@@ -8,13 +8,14 @@ const names = ['saveState', 'saveAndRender', 'closeModal', 'submitModal', 'readM
   'saveZtEntry', 'applyZtEntry', 'saveZtEdit', 'applyZtEdit', 'saveTrackFromForm', 'saveProjectTrackFromModal',
   'readTrackDraft', 'autoCloseStaleRoutineRuns', 'resetPomodoroForBlock', 'transferIronLogToCompletedBlock',
   'trackOnBlockStarted', 'trackOnBlockCompletionChanged', 'autoCommitWeekIfNeeded', 'stampCommitmentCompletion',
-  'toggleTaskCompleteFromBlock'];
+  'toggleTaskCompleteFromBlock', 'commitBlockChanges'];
 const extracted = names.map(name => {
   const node = ast.body.find(n => n.type === 'FunctionDeclaration' && n.id.name === name);
   assert(node, name); assert.equal(node.async, false, `${name} must remain synchronous`);
   return source.slice(node.start, node.end);
 }).join('\n');
-const factory = ['core/mutation-stamp', 'core/commit', 'features/draft-save', 'features/draft-leave']
+const { commitCandidate, assertNotInsideBuild } = require('../src/core/commit.js');
+const factory = ['core/mutation-stamp', 'features/draft-save', 'features/draft-leave']
   .map(name => fs.readFileSync(path.join(root, `src/${name}.js`), 'utf8')
     .replace(/^import .*;\r?$/gm, '').replace(/export (function|const)\b/g, '$1')).join('\n');
 const init = ast.body.find(n => n.type === 'ExpressionStatement' && n.expression.type === 'AssignmentExpression'
@@ -52,7 +53,7 @@ function setup(mode, { storageFail = true, completed = false, track = false } = 
   const document = { activeElement: input, addEventListener: (name, handler) => { listeners[name] = handler; }, querySelector: selector => input.isConnected &&
     ((mode === 'zero-new' && selector === '#zt-write-input') || (mode === 'zero-edit' && selector === '#zt-edit-input')) ? input : null,
     createElement: () => ({ close() {}, remove() {}, showModal() {}, setAttribute() {} }), body: { append: dialog => effects.dialogs.push(dialog) } };
-  const ctx = vm.createContext({ state: data, document, modalRoot, modalDraftBaseline: null,
+  const ctx = vm.createContext({ commitCandidate, assertNotInsideBuild, state: data, document, modalRoot, modalDraftBaseline: null,
     draftSaveTransaction: null, _lastSaveError: null, _quotaToastShown: false, _blockSaveInFlight: false,
     _migrationRitualCtx: null, _pendingLifecycleCtx: null, _pendingBodyScanCtx: null, _aiStepConfirmCtx: null, _aiStepPending: null,
     ztCurrent: mode === 'zero-new' ? { id: 'theme', text: 'theme', fav: false, questionId: 'q' } : null,

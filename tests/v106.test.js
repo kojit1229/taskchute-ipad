@@ -154,7 +154,9 @@ function check(name, cond, extra = "") {
     check("リモートのジャーナルが自動で合流する", (s3.journals["2000-01-02"] || "").includes("朝ジャーナル"));
     check("リモートの体調記録が自動で合流する", s3.condition.logs["2000-01-02"]?.sleepHours === 7);
     check("lastPushedAtがリモートに追いつく(push見送り解除)", s3.settings.lastPushedAt === `${YESTERDAY}T13:00`);
-    check("和集合が未pushとして残る", s3.dataModifiedAt > `${YESTERDAY}T13:00`);
+    // v380/14b 契約追随(設計03 K決定C 2026-09-09、監督者 2026-09-10): この fixture の remote は base の複製+追加なので
+    // 合流後の中身は相手と同じ=「内容差分がないときは相手の全体時刻を採用し再送しない」。旧期待「和集合は必ず未pushで残る」は旧規則。
+    check("中身が相手と同じなら相手の全体時刻を採用する(再送しない)", s3.dataModifiedAt === `${YESTERDAY}T13:00`);
     check("競合バナーが出ない", await page.locator(".sync-banner").count() === 0);
   } catch (e) {
     failures++;

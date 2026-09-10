@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v379";  // v379: 端末側の全体更新時刻を候補保存境界(commitCandidate)へ接続。同期側は次版
+const CACHE_NAME = "taskchute-journal-pwa-v380";  // v380: 同期側の全体更新時刻を adoptSyncResult に集約(内容差分があるときだけ発行)、Block の編集・開始・終了・完了を候補保存境界へ接続
 
 // v353: 12WY R0 task.twyPlan のデータ契約+plan.js 純関数+Task編集モーダル3項目
 

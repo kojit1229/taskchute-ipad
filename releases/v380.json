@@ -1,0 +1,64 @@
+{
+  "version": 380,
+  "date": "2026-09-10",
+  "title": "同期の同内容再送を停止し、Block操作の保存失敗から復元",
+  "summary": "束B1: 同期で中身が同じなら再送しない(往復が止まる)。Block の編集・開始・終了・完了の保存が失敗したときに入力と状態が元へ戻る",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "src/core/commit.js",
+    "src/sync/github.js",
+    "tests/draft-save-transaction.test.js",
+    "tests/feedback-save-proof.test.js",
+    "tests/impact-regression-map.json",
+    "tests/mutation-block-e2e.test.js",
+    "tests/mutation-global-e2e.test.js",
+    "tests/suite-manifest.json",
+    "tests/v106.test.js",
+    "tests/v276.test.js",
+    "tests/v364.test.js",
+    "sw.js",
+    "releases/v380.json",
+    "CHANGES_v380.md"
+  ],
+  "intent": [
+    "同期の全体更新時刻を内容差分に合わせて発行し、Block操作の保存失敗時に入力と状態を保持する。"
+  ],
+  "changes": [
+    "14b: 同期側の全体更新時刻をadoptSyncResultへ集約。相手と同内容なら相手時刻を採用し、内容差分があるときだけ新たな時刻を発行する。",
+    "15: Block編集・カテゴリ編集・下書き確定を候補保存境界へ接続。保存失敗時は元stateと入力を保持し、下書き確定の儀式は保存前に判定する。",
+    "15b: Blockの開始・終了・完了、古いルーティン終了、一括承認を候補保存境界へ接続。保存成功後に後続処理へ進む。",
+    "CACHE_NAMEをv379からv380へ更新し、リリース記録・CHANGES・handoff・テストmanifest・コード索引を正規手順で生成する。"
+  ],
+  "uncertainties": [
+    "最終ゲートの実行結果・失敗したスイート名はreports/impl-r1/v380/command-results.jsonlとrelease-gate-final.logに記録する。"
+  ],
+  "reviewFocus": [
+    "同内容の同期が再送し続けず、Block保存失敗時に入力と状態が復元されること。",
+    "既存の束B1差分を保持し、本発注の製品コード変更がSW先頭行だけであること。"
+  ],
+  "verification": [
+    "関連スイート: mutation-global-e2e / mutation-block-e2e / store-core / v106 / v136 / v198 / v364 / v317 / today-core / sw-integration。",
+    "npm run test:manifest:write → node scripts/test-manifest.js --check、npm run code:index:write → node scripts/code-index.js --check。",
+    "RELEASE_HANDOFF_PATH=<reports/impl-r1/v380/handoff-preview.md> node scripts/release-record.js releases/v380.json --write。",
+    "TZ=Asia/Tokyo RELEASE_HANDOFF_PATH=<reports/impl-r1/v380/handoff-preview.md> node scripts/release-gate.js releases/v380.json --impact-base=006759f --final を1回実走。"
+  ],
+  "knownLimitations": [
+    "iOS実機と配信は本発注で実施しない。",
+    "PUT成功後の端末保存失敗の表示、採用候補にない余剰キー、Block保存後の全体時刻の二重発行は次周の対象。"
+  ],
+  "relatedSuites": [
+    "mutation-global-e2e",
+    "mutation-block-e2e",
+    "store-core",
+    "v106",
+    "v136",
+    "v198",
+    "v364",
+    "v317",
+    "today-core",
+    "sw-integration"
+  ]
+}

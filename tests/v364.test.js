@@ -413,8 +413,10 @@ async function run() {
     advanceClockPastPullThrottle(); await syncMod.runAutoSyncPull();
     check("final pull imports B and retains A journal", storeMod.state.journals["2026-09-07"] === "B pending journal"
       && storeMod.state.journals["2026-09-08"] === "A pending journal");
+    // v379/14b 契約追随(設計03 K決定C 2026-09-09): 和集合の再送は「比較対象(変更前 07:00:30・相手 bWire)と実時計 07:02:00 の大きい方+1秒」= 07:02:01。
+    // 旧期待値 07:02:00 は実時計そのままの旧規則(監督者 2026-09-10、v278 と同じ扱い)。
     check("final pull records remote stamp", storeMod.state.settings.lastPushedAt === bWire.dataModifiedAt
-      && storeMod.state.dataModifiedAt === "2026-09-06T07:02:00");
+      && storeMod.state.dataModifiedAt === "2026-09-06T07:02:01");
     const scheduled = timers.get(syncMod._autoSyncTimer);
     check("final pull schedules push", timerCalls.length === 1 && !!scheduled);
     if (scheduled) await scheduled();

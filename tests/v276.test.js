@@ -201,7 +201,8 @@ check("丸めヘルパーにnew Dateが混入しない", !/new\s+Date\s*\(/.test
     saved = await storedBlock("routine-tap");
     const pushedAt = `${TODAY}T10:03:45`;
     check("未開始ルーティンは描画時刻でなく押下時刻でstart=end", saved.actualStartAt === pushedAt && saved.actualEndAt === pushedAt, JSON.stringify(saved));
-    check("0分実績をsaveState経由で永続化", saved.completed === true && saved.updatedAt === pushedAt, JSON.stringify(saved));
+    // 設計03 K決定C: 更新時刻は比較対象と実時計の最大値+1秒。実績の観測時刻は押下時刻を保つ。
+    check("0分実績をsaveState経由で永続化", saved.completed === true && saved.updatedAt >= pushedAt, JSON.stringify(saved));
     const flightDuration = await page.locator('.tower-log-row[data-id="routine-tap"] .tower-log-dur').textContent();
     check("FLIGHT LOGは0分と表示", flightDuration?.trim() === "0分", flightDuration || "");
     await dispatch("generate-report");
