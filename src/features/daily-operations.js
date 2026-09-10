@@ -1,5 +1,10 @@
 import { assertNotInsideBuild } from "../core/commit.js";
 import { buildDailyTimes, cancelDailyTimes } from "../core/daily-time.js";
+import { assertCopyable, buildBlockCopy } from "../core/block-copy.js";
+import { orderDailyBlocks } from "../core/daily-order.js";
+
+const copyReady = Symbol("saved copy source");
+const copyRequests = new WeakMap();
 
 const invalid = message => Object.assign(new Error(message), { code: "DAILY_OPERATION_INVALID" });
 const unwired = name => ({ build: () => { throw invalid(`not wired: ${name}`); } });
@@ -11,7 +16,7 @@ export const DAILY_OPERATIONS = {
   "daily-plan-complete": unwired("daily-plan-complete"),
   "daily-block-start": unwired("daily-block-start"),
   "daily-block-end": unwired("daily-block-end"),
-  "daily-block-duplicate": unwired("daily-block-duplicate"),
+  "daily-block-duplicate": { build: buildBlockCopy, effects: copyEffects },
   "daily-duplicate-undo": unwired("daily-duplicate-undo"),
   "daily-schedule-edit": unwired("daily-schedule-edit"),
   "daily-actual-edit": unwired("daily-actual-edit"),
@@ -49,6 +54,49 @@ function dailyInput(input) {
     endNextDay: Boolean(row.querySelector('[data-daily-field="endNextDay"]')?.checked) } } : input;
 }
 
+function copyEffects(result, input, deps) {
+  const copy = result.records[0].after;
+  deps.copyEffect?.({ copy, ordered: orderDailyBlocks(deps.state.blocks), highlightedId: copy.id });
+  deps.notify?.(copy.plannedStartAt ? "複製しました。同じ予定時刻の枠があります" : "複製しました");
+}
+
+function duplicateDailyBlock(input, deps) {
+  const source = deps.state.blocks.find(row => row.id === input.id && !row.deleted);
+  assertCopyable(source, deps.isReadingBlock, deps.state);
+  if (input.kind !== "block") throw invalid("Blockを指定してください");
+  const key = input.requestId ?? Symbol("copy request");
+  if (!copyRequests.has(deps)) copyRequests.set(deps, new Map());
+  const requests = copyRequests.get(deps), signature = dailyFingerprint({ id: input.id, values: input.values || null });
+  let request = requests.get(key);
+  if (request && request.signature !== signature) throw invalid("request changed");
+  if (request?.pending) return { ok: false, status: "busy" };
+  if (request?.result) return { ...request.result, unchanged: true };
+  if (!request) {
+    validateCurrent(deps.state, input, deps);
+    request = { signature, originDate: deps.state.selectedDate,
+      identity: { id: (deps.newId || (() => crypto.randomUUID()))(), createdAt: typeof deps.now === "function" ? deps.now() : deps.now } };
+    requests.set(key, request);
+  }
+  request.pending = true;
+  try {
+    if (!request.savedInput) {
+      const saved = runDailyOperation("daily-plan-times-save", { ...input,
+        values: input.values || { start: source.plannedStartAt || "", end: source.plannedEndAt || "" } }, deps);
+      if (!saved.ok) {
+        if (saved.status === "invalid") requests.delete(key);
+        return { ...saved, sourceSaved: false };
+      }
+      const current = deps.state.blocks.find(row => row.id === input.id);
+      request.savedInput = { ...input, values: undefined, date: current.date, originDate: request.originDate,
+        baseFingerprint: (deps.fingerprint || dailyFingerprint)(current), copyIdentity: request.identity, [copyReady]: true };
+    }
+    const result = runDailyOperation("daily-block-duplicate", request.savedInput, deps);
+    if (result.ok) request.result = { ...result, sourceSaved: true };
+    else deps.notify?.("元の保存は成功しました。複製は保存できませんでした");
+    return request.result || { ...result, sourceSaved: true };
+  } finally { request.pending = false; }
+}
+
 // Supply normalized records (including optional defaults) when issuing fingerprints.
 export function dailyFingerprint(value) {
   const ordered = item => !item || typeof item !== "object" ? item
@@ -66,7 +114,7 @@ function validateCurrent(state, input, deps) {
     if (!record) throw invalid("target changed");
   }
   const date = input.date ?? record?.date ?? input.values?.date;
-  if (date != null && (date !== state.selectedDate || (record?.date && date !== record.date)))
+  if (!input[copyReady] && date != null && (date !== state.selectedDate || (record?.date && date !== record.date)))
     throw invalid("date changed");
   if (input.baseFingerprint != null
       && (!record || (deps.fingerprint || dailyFingerprint)(record) !== input.baseFingerprint))
@@ -86,8 +134,9 @@ export function runDailyOperation(name, input, deps) {
   assertNotInsideBuild("runDailyOperation");
   const op = DAILY_OPERATIONS[name];
   if (op.legacy) return op.run(input, deps);
-  if (["daily-plan-times-save", "daily-plan-times-cancel"].includes(name)) input = dailyInput(input);
+  if (["daily-plan-times-save", "daily-plan-times-cancel", "daily-block-duplicate"].includes(name)) input = dailyInput(input);
   try {
+    if (name === "daily-block-duplicate" && !input[copyReady]) return duplicateDailyBlock(input, deps);
     return deps.commitCandidate({
       state: deps.state, input, persist: deps.persist, now: deps.now, floors: deps.floors,
       build: (state, values) => {

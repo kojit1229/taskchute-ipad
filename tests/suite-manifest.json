@@ -266,6 +266,29 @@
       }
     },
     {
+      "file": "daily-copy-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 34,
+      "assertionHash": "a2b9ac9202e70883",
+      "sourceHash": "82a17a57347238bf",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
       "file": "daily-detail-fields-e2e.test.js",
       "kind": "e2e",
       "tier": "full",
