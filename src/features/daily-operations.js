@@ -5,6 +5,7 @@ import { orderDailyBlocks } from "../core/daily-order.js";
 import { createCopyUndoTicket, buildCopyUndo } from "../core/copy-undo.js";
 import { buildBlockStart } from "../core/daily-start.js";
 import { buildBlockEnd } from "../core/daily-end.js";
+import { buildPlanCompletion } from "../core/daily-completion.js";
 import { createDailyDraftStore } from "./daily-draft.js";
 
 const copyReady = Symbol("saved copy source");
@@ -20,7 +21,7 @@ const legacy = name => ({ legacy: true, run: (input, deps) => deps.legacy[name](
 export const DAILY_OPERATIONS = {
   "daily-plan-times-save": { build: buildDailyTimes, effects: dailyTimesEffects },
   "daily-plan-times-cancel": { build: cancelDailyTimes, effects: dailyTimesEffects },
-  "daily-plan-complete": unwired("daily-plan-complete"),
+  "daily-plan-complete": { build: buildPlanCompletion, effects: planCompletionEffects },
   "daily-block-start": { build: buildBlockStart, effects: startEffects },
   "daily-block-end": { build: buildBlockEnd, effects: endEffects },
   "daily-block-duplicate": { build: buildBlockCopy, effects: copyEffects },
@@ -98,6 +99,11 @@ function endEffects(result, input, deps) {
   store.put({ ...input.endDraft, ...owner, declarationId: result.declarationId,
     actualEndAt: result.block.actualEndAt, saved: true });
   deps.endEffect?.(result, input);
+}
+
+function planCompletionEffects(result, input, deps) {
+  if (result.confirmEnd) deps.requestPlanEnd?.(result.block, input);
+  else if (!result.unchanged) deps.planCompletionEffect?.(result.block, input);
 }
 
 function dailyTimesEffects(result, input, deps) {

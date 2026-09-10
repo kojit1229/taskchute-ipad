@@ -1555,6 +1555,15 @@ const dailyOperationDeps = {
     if (result.timerStarted) queueMicrotask(() => maybeShowGuidedAccessHint());
   },
   completedTask: task => ({ ...task, status: "completed", progressNum: fillProgressOnComplete(task) }),
+  requestPlanEnd: block => {
+    openReportModal(block.id, "block");
+    _pendingLifecycleCtx.endInput.values = { completed: true };
+  },
+  planCompletionEffect: block => {
+    trackOnBlockCompletionChanged(block, block.completed, { interactive: true });
+    render();
+    showToast(block.completed ? "予定を完了しました" : "予定を未完了に戻しました");
+  },
   endEffect: (result, input) => {
     _pendingLifecycleCtx = null;
     closeModal();
@@ -12098,7 +12107,7 @@ function reportForBlock(blockId, outcome, resultNote, ctx = {}) {
     outcome, note: resultNote, timer: ctx.kind === "pomodoro",
     declarationId: modalRoot.querySelector('[data-modal-field="declarationId"]')?.value || undefined,
     completeTask: Boolean(modalRoot.querySelector('[data-modal-field="completeTask"]')?.checked),
-    values: { actualEndAt: modalRoot.querySelector('[data-modal-field="actualEndAt"]')?.value
+    values: { ...ctx.endInput?.values, actualEndAt: modalRoot.querySelector('[data-modal-field="actualEndAt"]')?.value
       ?? ctx.endInput?.endDraft.actualEndAt ?? blockById(blockId)?.actualEndAt ?? nowDateTime() }
   }, dailyOperationDeps);
 }
