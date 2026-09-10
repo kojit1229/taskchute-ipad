@@ -2,10 +2,11 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const { execFileSync } = require("node:child_process");
+const os = require("node:os");
+const layoutBaseline = require("./fixtures/twy-layout-baseline.json");
 const { chromium, launchOptions, startServer, randomPort, STATE_KEY, setViewportAndWaitForStableLayout } = require("./helpers");
 const widths = [390, 768, 1024, 1280, 1440];
-const evidence = process.env.L21_EVIDENCE_DIR || path.join(__dirname, ".artifacts", "remaining-twelveweek-layout");
+const evidence = process.env.L21_EVIDENCE_DIR || (process.env.ARTIFACT_DIR && path.join(process.env.ARTIFACT_DIR, "remaining-twelveweek-layout")) || fs.mkdtempSync(path.join(os.tmpdir(), "remaining-twelveweek-layout-"));
 async function setup() {
   const server = startServer(randomPort());
   if (!server.listening) await new Promise(resolve => server.once("listening", resolve));
@@ -72,17 +73,32 @@ async function run() {
   const { page, browser, server } = await setup();
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
-  const baselineCss = execFileSync("git", ["show", "7723450398e04025946631f35e8f4280842e5a94:styles.css"], { encoding: "utf8", cwd: path.join(__dirname, "..") });
   const results = [];
   try {
     const baseline = new Map();
-    await page.route("**/styles.css*", route => route.fulfill({ contentType: "text/css", body: baselineCss }));
-    await page.reload(); await nav(page, "today");
+    // Read the current stylesheet through CSSOM; only column-layout rules are frozen.
+    const columnRules = await page.evaluate(({ selectors, properties }) => {
+      const found = [];
+      const walk = (rules, media = []) => {
+        for (const rule of rules) {
+          if (rule.cssRules && !rule.selectorText) walk(rule.cssRules, [...media, rule.conditionText]);
+          else if (selectors.includes(rule.selectorText)) {
+            const declarations = Object.fromEntries(properties.filter(p => rule.style.getPropertyValue(p))
+              .map(p => [p, rule.style.getPropertyValue(p).trim()]));
+            if (Object.keys(declarations).length) found.push({ media, selector: rule.selectorText, declarations });
+          }
+        }
+      };
+      for (const sheet of document.styleSheets)
+        if (sheet.href && new URL(sheet.href).pathname.endsWith("/styles.css")) walk(sheet.cssRules);
+      return found;
+    }, layoutBaseline);
+    assert.deepEqual(columnRules, layoutBaseline.rules, "today column-layout CSS matches fixed fixture");
+    await nav(page, "today");
     for (const width of widths) {
       await setViewportAndWaitForStableLayout(page, { width, height: 1000 }, ".today-tower");
       baseline.set(width, await todayMetrics(page));
     }
-    await page.unroute("**/styles.css*");
     await page.reload();
     for (const width of widths) {
       await nav(page, "today");
