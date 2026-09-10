@@ -14,6 +14,26 @@
 
 // idキー和集合マージ(v103)。updatedAtが無ければcreatedAtへフォールバックする。
 // 削除(tombstone)の概念を持たない旧世代のマージヘルパー(zeroThinking/blocks等で使用)。
+export function mergeRecords(local, remote, { compareAt, tieBreak }) {
+  const merged = new Map();
+  for (const record of Array.isArray(local) ? local : []) {
+    if (record && record.id) merged.set(record.id, record);
+  }
+  for (const record of Array.isArray(remote) ? remote : []) {
+    if (!record || !record.id) continue;
+    const current = merged.get(record.id);
+    if (!current) {
+      merged.set(record.id, record);
+      continue;
+    }
+    const localAt = compareAt(current);
+    const remoteAt = compareAt(record);
+    if (remoteAt > localAt) merged.set(record.id, record);
+    else if (remoteAt === localAt) merged.set(record.id, tieBreak(current, record));
+  }
+  return [...merged.values()];
+}
+
 function mergeById(localList, remoteList) {
   const merged = new Map();
   (Array.isArray(localList) ? localList : []).forEach((item) => {
