@@ -140,6 +140,139 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY } = require(
     assert.equal(rejected.ok, false); assert.match(rejected.error, /削除済み/); assert.equal(rejected.deleted, true);
     assert.deepEqual(errors, []);
     console.log('PASS 22: midnight reconfirmation / completed Task rejection / deleted request never resurrects');
+
+    await page.clock.setFixedTime(new Date(2026, 8, 12, 12, 0));
+    await page.evaluate(async key => {
+      const { setState } = await import('/src/state/store.js');
+      const s = JSON.parse(localStorage.getItem(key));
+      s.tasks = Array.from({ length: 30 }, (_, i) => ({ id: 'continuous-' + i,
+        title: '連続追加 ' + String(i).padStart(2, '0'), projectId: 'p', status: 'todo' }));
+      s.blocks = []; s.currentView = 'wbs'; s.settings.lastOpenedDate = '2026-09-12';
+      // Keep the running state consistent if an earlier scheduled save fires before reload.
+      setState(s);
+      localStorage.setItem(key, JSON.stringify(s));
+    }, STATE_KEY);
+    await page.reload(); await browse();
+    const query = page.locator('[data-work-list="wbs"] [data-work-filter="query"]');
+    await query.fill('連続追加');
+    await query.evaluate(input => { input.setSelectionRange(1, 3); window.continuousQuery = input; });
+    const position = () => page.evaluate(() => {
+      const input = document.querySelector('[data-work-list="wbs"] [data-work-filter="query"]');
+      return { sameInput: input === window.continuousQuery, query: input.value,
+        start: input.selectionStart, end: input.selectionEnd,
+        scroll: document.querySelector('[data-work-list="wbs"] [data-work-list-rows]').scrollTop };
+    });
+    await open('continuous-8');
+    const firstPosition = await position();
+    assert(firstPosition.scroll > 0, 'fixture exercises scrolled list');
+    const continuousFirst = await request('continuous-8');
+    await confirm();
+    assert.deepEqual(await position(), firstPosition, 'first save keeps input node, selection and scroll');
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.id), 'continuous-8', 'focus returns to originating row');
+    assert.equal((await state()).currentView, 'wbs');
+    assert.equal((await state()).selectedDate, '2026-09-09');
+    assert.equal(await page.locator('[data-work-list="wbs"] [data-action="placement-add-today"][data-id="continuous-8"]').textContent(), '予定を見る');
+    const firstSaved = (await state()).blocks.find(b => b.id === continuousFirst.block.id);
+    const persistedFirst = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).blocks, STATE_KEY);
+    assert.deepEqual(persistedFirst, [firstSaved]);
+
+    await open('continuous-9');
+    const secondPosition = await position(), secondRequest = await request('continuous-9');
+    await page.evaluate(key => {
+      window.fixtureSetItem = Storage.prototype.setItem;
+      Storage.prototype.setItem = function(k, value) {
+        if (this === localStorage && k === key) throw new DOMException('second save fixture', 'QuotaExceededError');
+        return window.fixtureSetItem.call(this, k, value);
+      };
+    }, STATE_KEY);
+    await confirm();
+    assert.match(await page.locator('#placement-error').textContent(), /保存に失敗/);
+    assert.deepEqual((await state()).blocks, [firstSaved], 'second failure retains first success exactly');
+    assert.deepEqual(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).blocks, STATE_KEY), persistedFirst);
+    assert.deepEqual(await position(), secondPosition, 'failure retains search and input position');
+    assert.equal((await request('continuous-9')).requestId, secondRequest.requestId);
+    await page.evaluate(() => { Storage.prototype.setItem = window.fixtureSetItem; });
+    await confirm();
+    assert.deepEqual(await position(), secondPosition);
+    assert.equal((await state()).blocks.length, 2);
+    assert.deepEqual((await state()).blocks.find(b => b.id === firstSaved.id), firstSaved);
+    assert((await state()).blocks.some(b => b.id === secondRequest.block.id));
+    assert.notEqual(firstSaved.id, secondRequest.block.id);
+    assert.equal((await state()).currentView, 'wbs');
+    console.log('PASS 23: continuous tasks / second failure retains first / search node, selection and scroll');
+
+    await page.locator('[data-work-list="wbs"] [data-action="placement-add-today"][data-id="continuous-8"]').click();
+    assert.equal((await state()).modal.id, firstSaved.id, 'normal action views saved Block');
+    assert.equal((await state()).blocks.length, 2);
+    await page.locator('[data-action="placement-return"]').click();
+    for (const count of [3, 4]) {
+      await page.locator('[data-work-list="wbs"] [data-action="placement-add-another"][data-id="continuous-8"]').evaluate(button => {
+        button.click(); button.click();
+      });
+      assert.match(await page.locator('.placement-form').textContent(), /別の予定/);
+      const separate = await request('continuous-8');
+      assert.notEqual(separate.requestId, continuousFirst.requestId);
+      assert.equal((await state()).blocks.some(b => b.id === separate.block.id), false, 'each intentional extra gets a fresh id');
+      await page.locator('.modal-footer [data-action="modal-save"]').evaluate(button => { button.click(); button.click(); });
+      assert.equal((await state()).blocks.length, count, 'double activation saves one request');
+      assert.equal((await state()).blocks.filter(b => b.id === separate.block.id).length, 1);
+      assert.equal((await state()).currentView, 'wbs');
+      assert.deepEqual((await state()).blocks.find(b => b.id === firstSaved.id), firstSaved);
+      const resend = await page.evaluate(async request => {
+        const { state } = await import('/src/state/store.js');
+        const { commitPlacement } = await import('/src/features/placement.js');
+        let writes = 0;
+        const ok = commitPlacement(state, { request, today: '2026-09-12', connection: request.connection },
+          { now: '2026-09-12T12:00:00', persist: () => { writes++; return true; } });
+        return { ok, writes, count: state.blocks.length };
+      }, separate);
+      assert.deepEqual(resend, { ok: true, writes: 0, count });
+    }
+    const staleButton = page.locator('[data-work-list="wbs"] [data-action="placement-add-another"][data-id="continuous-8"]');
+    await page.evaluate(async () => { (await import('/src/state/store.js')).state.tasks.find(t => t.id === 'continuous-8').status = 'completed'; });
+    await staleButton.click();
+    assert.equal((await state()).modal, null, 'completed Task is rejected before new candidate selection');
+    assert.equal((await state()).blocks.length, 4);
+    assert.equal((await state()).tasks.find(t => t.id === 'continuous-8').status, 'completed');
+    await page.reload(); await nav('wbs');
+    assert.equal((await state()).blocks.length, 4, 'reload does not resend requests');
+    assert.deepEqual((await state()).blocks.find(b => b.id === firstSaved.id),
+      { ...firstSaved, isMIT: false, source: '' }, 'reload adds only existing normalization defaults');
+    await page.evaluate(connection => {
+      sessionStorage.setItem('taskchute-journal-placement-v1:' + JSON.stringify([connection, 'continuous-10']),
+        JSON.stringify({ requestId: 'invalid-fixture' }));
+    }, continuousFirst.connection);
+    await open('continuous-10');
+    assert.notEqual((await request('continuous-10')).requestId, 'invalid-fixture');
+    assert.equal((await request('continuous-10')).block.taskId, 'continuous-10');
+    await page.locator('.modal-footer [data-action="modal-close"]').click();
+    assert.equal((await state()).blocks.length, 4, 'malformed local draft never auto-saves');
+    for (const scope of ['today', 'exec', 'wbs']) {
+      await nav(scope);
+      const unchanged = await page.evaluate(async scope => {
+        const { updateWorkLists } = await import('/src/features/work-list.js');
+        const root = document.querySelector(`[data-work-list="${scope}"]`);
+        const rows = [...root.querySelectorAll('[data-work-key]')];
+        window.stableWorkRows = rows;
+        updateWorkLists(); updateWorkLists();
+        return rows.length > 0 && rows.every(row => row.isConnected && root.contains(row));
+      }, scope);
+      assert(unchanged, scope + ' unchanged updates preserve the original row nodes');
+      await page.clock.runFor(1100);
+      assert(await page.evaluate(() => window.stableWorkRows.every(row => row.isConnected)), scope + ' ticker preserves row nodes');
+    }
+    await nav('today');
+    const changedTitle = '変更確認 < & >';
+    await page.evaluate(async ({ id, title }) => {
+      const { state } = await import('/src/state/store.js');
+      state.blocks.find(block => block.id === id).title = title;
+      (await import('/src/features/work-list.js')).updateWorkLists();
+    }, { id: firstSaved.id, title: changedTitle });
+    assert.equal(await page.locator(`[data-work-list="today"] [data-work-key="block:${firstSaved.id}"] .work-list-title`).textContent(), changedTitle,
+      'actual content changes still update the row with escaped text');
+    console.log('PASS 23: unchanged rows survive patch/ticker across three views; changed content updates');
+    assert.deepEqual(errors, []);
+    console.log('PASS 23: view existing / two intentional extras / double activation and replay one / completed rejection / reload');
   } finally {
     if (browser) await browser.close();
     await new Promise(resolve => server.close(resolve));
