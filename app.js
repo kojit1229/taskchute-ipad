@@ -1790,18 +1790,14 @@ document.addEventListener("change", (event) => {
     // v198(第3弾3e): updateTaskFieldは汎用setterのためprevStatusをここで確保する(完了6経路#3)
     const prevStatus = state.tasks.find((x) => x.id === id)?.status;
     // v95: ステータスを手動で「完了」にした時も、分子を分母へ揃える(チェックボックス完了と挙動を揃える)
-    if (field === "status" && target.value === "completed") {
-      const t = state.tasks.find((x) => x.id === id);
-      if (t) updateTaskField(id, "progressNum", fillProgressOnComplete(t));
-    }
-    updateTaskField(id, field, target.value);
+    if (!updateTaskField(id, field, target.value)) return;
     if (field === "status") maybeQueueNextAiStep(id, prevStatus);  // v198(第3弾3e): 完了6経路#3
     render();  // 状態変更での並び替え・完了非表示などを即反映(change なので入力を妨げない)
   }
   // v95: WBS進捗(分子/分母)のインライン編集。ステータス連動込みで updateTaskProgress が処理する
   if (target.matches("[data-wbs-progress]")) {
     const field = target.dataset.wbsProgress === "num" ? "progressNum" : "progressDen";
-    updateTaskProgress(target.dataset.id, field, target.value);
+    if (!updateTaskProgress(target.dataset.id, field, target.value)) return;
     render();
   }
   // v305修正: blurを伴うボタンクリックをDOM再生成で奪わないよう、メモだけ描画を次タスクへ送る。
@@ -2952,8 +2948,8 @@ function updateCategoryField(catId, field, value) {
   if (field === "name" && value && value !== oldCat.name) {
     // v135: カテゴリ改名は実質的な内容変更のため、追従させるProject/Task/BlockのupdatedAtも
     // 更新する(更新しないと、同期マージ時に「新しい方が勝つ」判定を素通りして改名が消える)。
-    state.projects = state.projects.map((p) => p.category === oldCat.name ? { ...p, category: value, updatedAt: nowDateTime() } : p);
-    state.tasks = state.tasks.map((t) => t.category === oldCat.name ? { ...t, category: value, updatedAt: nowDateTime() } : t);
+    state.projects = state.projects.map((p) => p.category === oldCat.name ? { ...p, category: value } : p);
+    state.tasks = state.tasks.map((t) => t.category === oldCat.name ? { ...t, category: value } : t);
     state.blocks = state.blocks.map((b) => b.category === oldCat.name ? { ...b, category: value } : b);
     // v37: 繰り返しルールにも追従(これを忘れると、明日以降に実体化されるブロックが旧名のまま生成され、
     //      「ルーティン」カテゴリの改名ではルーティン画面から消える)
@@ -5014,10 +5010,11 @@ function resolveMigrationRitual(choice) {
 
 // 汎用: Task のフィールド更新(saveState のみ、再描画なし)
 function updateTaskField(id, field, value) {
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => updateTaskField(id, field, value), { kinds: ["tasks"] }).ok;
   state.tasks = state.tasks.map((t) => t.id === id
-    ? { ...t, [field]: value, updatedAt: nowDateTime() }
+    ? { ...t, [field]: value, ...(field === "status" && value === "completed" ? { progressNum: fillProgressOnComplete(t) } : {}) }
     : t);
-  saveState();
+  draftSaveTransaction.complete();
 }
 
 // v95: 進捗(分子/分母)からステータスを導出する。
@@ -5038,6 +5035,7 @@ function fillProgressOnComplete(task) {
 }
 // v95: WBS進捗の分子/分母インライン編集。値のクランプ + ステータス連動をまとめて行う
 function updateTaskProgress(id, field, rawValue) {
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => updateTaskProgress(id, field, rawValue), { kinds: ["tasks"] }).ok;
   const task = state.tasks.find((t) => t.id === id);
   if (!task) return;
   const n = Number(rawValue);
@@ -5047,9 +5045,9 @@ function updateTaskProgress(id, field, rawValue) {
   if (den > 0 && num > den) num = den;  // 分子>分母は分母に丸める
   const status = deriveStatusFromProgress(task.status, num, den);
   state.tasks = state.tasks.map((t) => t.id === id
-    ? { ...t, progressNum: num, progressDen: den, status, updatedAt: nowDateTime() }
+    ? { ...t, progressNum: num, progressDen: den, status }
     : t);
-  saveState();
+  draftSaveTransaction.complete();
   maybeQueueNextAiStep(id, task.status);  // v198(第3弾3e): 完了6経路#5。task.statusはmap前のprevStatus
 }
 
@@ -9476,10 +9474,11 @@ function renderDateBar() {
 }
 
 function addProject() {
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => addProject(), { kinds: ["projects"] }).ok;
   const title = document.querySelector("#projectTitle")?.value.trim();
   const kind = document.querySelector("#projectKind")?.value || "normal";
   if (!title) return showToast("Project名を入力してください");
-  state.projects.push({
+  state.projects.push(stamped({
     id: crypto.randomUUID(),
     kind,
     title,
@@ -9489,13 +9488,13 @@ function addProject() {
     collapsed: true,  // v288: 新規Projectは既定で閉じ、WBS初期表示の探索ノイズを抑える
     twelveWeekStartDate: kind === "normal" ? state.settings.twelveWeekStartDate || "" : "",
     createdAt: nowDateTime(),
-    updatedAt: nowDateTime(),
     deleted: false
-  });
+  }, nowDateTime()));
   saveAndRender("Projectを追加しました");
 }
 
 function deleteProject(id) {
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => deleteProject(id), { kinds: ["projects", "tracks"] }).ok;
   // v127追補(Codex P1): やりたいことの唯一のコンテナ(kind:"wish")は削除させない。
   // 削除するとgetWishProject()が見つからなくなり、normalizeStateが新しい空のWish Projectを
   // 再生成してしまい、既存のWishタスクは旧projectIdのままWishタブから見えなくなる。
@@ -9507,11 +9506,12 @@ function deleteProject(id) {
   const now = nowDateTime();
   state.tracks = (state.tracks || []).map((track) => track.ownerType === "project" && track.ownerId === id
     && !track.deleted && track.status === "active" ? { ...track, deleted: true, updatedAt: now } : track);
-  state.projects = state.projects.map((project) => project.id === id ? { ...project, deleted: true, updatedAt: now } : project);
+  state.projects = state.projects.map((project) => project.id === id ? { ...project, deleted: true } : project);
   saveAndRender("Projectを削除しました");
 }
 
 function addTask() {
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => addTask(), { kinds: ["tasks"] }).ok;
   const title = document.querySelector("#taskTitle")?.value.trim();
   const projectId = document.querySelector("#taskProject")?.value || "";
   if (!title) return showToast("Task名を入力してください");
@@ -9530,7 +9530,7 @@ function makeTask({ projectId = "", parentTaskId = "", title = "", category = ""
   //      Wish Project配下は明示的なdueDate引数も無視し、常に空にする(意図的な期日はWishタブの
   //      期限入力[wish-set-duedate、v79]から作成後に設定する運用のまま変えない)。
   const isWishProject = state.projects.some((p) => p.id === projectId && p.kind === "wish");
-  return {
+  return stamped({
     id: crypto.randomUUID(),
     projectId,
     parentTaskId,
@@ -9569,9 +9569,8 @@ function makeTask({ projectId = "", parentTaskId = "", title = "", category = ""
     // v18: ルーティン連携(カテゴリ「ルーティン」の Task のみ意味を持つ)
     nextRoutineId: "",  // 完了時に「次:○○」として表示する後続ルーティン Task の ID
     createdAt: nowDateTime(),
-    updatedAt: nowDateTime(),
     deleted: false
-  };
+  }, nowDateTime());
 }
 
 // Project 配下に Task を直接追加(prompt でタイトル入力)
@@ -9626,33 +9625,35 @@ function getTaskDepth(task) {
 }
 
 function toggleTask(id) {
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => toggleTask(id), { kinds: ["tasks", "blocks"] }).ok;
   const task = state.tasks.find((t) => t.id === id);
   if (!task) return;
   if (task.status === "completed") {
     // v48: 完了解除時、Block の着手実績があれば doing に戻す(todo に落とすと実績が見えなくなる)
     const hasProgress = state.blocks.some((b) => !b.deleted && b.taskId === id && (b.completed || b.actualStartAt));
     state.tasks = state.tasks.map((t) => t.id === id
-      ? { ...t, status: hasProgress ? "doing" : "todo", updatedAt: nowDateTime() } : t);
-    closeAiStepConfirmIfUndone(id);  // v198(第3弾3e): 確認シート表示中に完了取消されたら閉じる
+      ? { ...t, status: hasProgress ? "doing" : "todo" } : t);
+    draftSaveTransaction.defer(() => closeAiStepConfirmIfUndone(id));
     saveAndRender("Taskを未完了に戻しました");
     return;
   }
   state.tasks = state.tasks.map((t) => t.id === id
-    ? { ...t, status: "completed", progressNum: fillProgressOnComplete(t), updatedAt: nowDateTime() } : t);
+    ? { ...t, status: "completed", progressNum: fillProgressOnComplete(t) } : t);
   // v48: 完了した Task の今日以降の「未着手」予定 Block(ゾンビ予定)を確認つきで整理。
   //      完了済みはもちろん、着手済み(actualStartAt あり)も実績なので対象外。
   const stale = state.blocks.filter((b) => !b.deleted && b.taskId === id && !b.completed && !b.actualStartAt && b.date >= todayISO());
   if (stale.length && window.confirm(`このTaskの今日以降の未完了Block ${stale.length}件も削除しますか?\n(完了済みの実績はそのまま残ります)`)) {
     const ids = new Set(stale.map((b) => b.id));
-    state.blocks = state.blocks.map((b) => ids.has(b.id) ? { ...b, deleted: true, updatedAt: nowDateTime() } : b);
+    state.blocks = state.blocks.map((b) => ids.has(b.id) ? { ...b, deleted: true } : b);
   }
   saveAndRender("Taskを完了しました");
   maybeQueueNextAiStep(id, task.status);  // v198(第3弾3e): 完了6経路#1(WBS/一覧のチェックボタン)
 }
 
 function deleteTask(id) {
-  state.tasks = state.tasks.map((task) => task.id === id ? { ...task, deleted: true, updatedAt: nowDateTime() } : task);
-  state.blocks = state.blocks.map((block) => block.taskId === id ? { ...block, taskId: "", updatedAt: nowDateTime() } : block);
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => deleteTask(id), { kinds: ["tasks", "blocks"] }).ok;
+  state.tasks = state.tasks.map((task) => task.id === id ? { ...task, deleted: true } : task);
+  state.blocks = state.blocks.map((block) => block.taskId === id ? { ...block, taskId: "" } : block);
   saveAndRender("Taskを削除しました");
 }
 
@@ -10261,6 +10262,7 @@ function toggleTaskCompleteFromBlock(blockId) {
 
 // v17: MIT(今日の主役)の切り替え。1日最大3個
 function toggleMIT(blockId) {
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => toggleMIT(blockId), { kinds: ["tasks", "blocks"] }).ok;
   const block = state.blocks.find((b) => b.id === blockId);
   if (!block) return;
   if (!block.isMIT) {
@@ -10271,7 +10273,7 @@ function toggleMIT(blockId) {
     }
   }
   state.blocks = state.blocks.map((b) => b.id === blockId
-    ? { ...b, isMIT: !b.isMIT, updatedAt: nowDateTime() }
+    ? { ...b, isMIT: !b.isMIT }
     : b);
   saveAndRender(block.isMIT ? "今日の主役から外しました" : "✦ 今日の主役に設定しました");
 }
@@ -13166,7 +13168,8 @@ function taskStatusLabel(s) {
 
 // v237: Project/Taskの中断・再開で共通のstatus更新と保存描画を一元化する。
 function setEntityStatus(collectionKey, id, status, message) {
-  state[collectionKey] = state[collectionKey].map((entity) => entity.id === id ? { ...entity, status, updatedAt: nowDateTime() } : entity);
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => setEntityStatus(collectionKey, id, status, message), { kinds: [collectionKey] }).ok;
+  state[collectionKey] = state[collectionKey].map((entity) => entity.id === id ? { ...entity, status } : entity);
   saveAndRender(message);
 }
 function suspendProject(id) { setEntityStatus("projects", id, "paused", "プロジェクトを中断しました"); }
@@ -13763,6 +13766,11 @@ function deleteFromModal() {
   if (!message) return;
   const ok = window.confirm(message);
   if (!ok) return;
+  if (state.modal.type === "task" || state.modal.type === "project") {
+    const remove = state.modal.type === "task" ? deleteTask : deleteProject;
+    if (remove(state.modal.id)) closeModal();
+    return;
+  }
   // v368: 保存済みの削除対象だけを既存dispatcherへ渡す。
   // actualEntryなど削除操作を持たない型は確認前のガードで終了する。
   if (dispatchModalDelete(state.modal.type, state.modal.id)) {
@@ -14069,6 +14077,7 @@ function buildProjectModal(project) {
 }
 
 function saveProjectFromModal(id, fields) {
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => saveProjectFromModal(id, fields), { kinds: ["projects", "tracks", "settings"] }).ok;
   const existing = state.projects.find((project) => project.id === id);
   const previousCycleStartDate = state.settings.twelveWeekStartDate || "";
   // K裁定2026-09-05: 新規サイクル開始(previousCycleStartDate/既存Projectの値がどちらも
@@ -14099,8 +14108,7 @@ function saveProjectFromModal(id, fields) {
       dueDate: fields.dueDate || "",
       description: fields.description || "",
       twelveWeekStartDate,
-      showProgress: Boolean(fields.showProgress),  // v95: WBS進捗率(Σ分子/Σ分母)の表示トグル
-      updatedAt: nowDateTime()
+      showProgress: Boolean(fields.showProgress)  // v95: WBS進捗率(Σ分子/Σ分母)の表示トグル
     };
   });
   closeModal();
@@ -14286,6 +14294,7 @@ function twyPlanFromFields(fields, existingPlan) {
 }
 
 function saveTaskFromModal(id, fields) {
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => saveTaskFromModal(id, fields), { kinds: ["tasks"] }).ok;
   // v47: id 空 = 新規作成モード(WBS の「+ タスク」「+ サブ」から)
   // v198(第3弾3e): この新規作成分岐はmaybeQueueNextAiStepの対象外(意図的な除外)。作成時点では
   // taskがまだstate.tasksに存在せず、parentTaskIdがあってもplanParentFor()の判定が成立しないため
@@ -14357,7 +14366,6 @@ function saveTaskFromModal(id, fields) {
       //      (以前は保存のたびに "" で消えていた)
       nextRoutineId: fields.nextRoutineId !== undefined ? fields.nextRoutineId : (t.nextRoutineId || ""),
       twyPlan: twyPlanFromFields(fields, t.twyPlan),  // v336: 12週プラン(週次目安/対象週/keystone)
-      updatedAt: changedAt
     };
   });
   closeModal();
@@ -15438,5 +15446,3 @@ document.addEventListener("visibilitychange", () => {
   else if(state.currentView === "journal") feedbackUiController?.refresh();
   maybeRefreshFeedback();                    // v77: フォアグラウンド復帰時にAIフィードバック等を再fetch
 });
-
-

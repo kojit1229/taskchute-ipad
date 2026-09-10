@@ -1825,6 +1825,29 @@
       }
     },
     {
+      "file": "mutation-task-project-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 32,
+      "assertionHash": "bf71d8223e6f2fcf",
+      "sourceHash": "3593315a05543b5a",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
       "file": "normalize-null-defense.test.js",
       "kind": "e2e",
       "tier": "full",
