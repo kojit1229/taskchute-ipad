@@ -1195,7 +1195,7 @@ registerActions({
     }
   },
   "interrupt-reason": ({ target }) => {
-    if (_pendingInterruptBlockId) recordBlockInterruption(_pendingInterruptBlockId, target.dataset.reason || "その他");
+    if (_pendingInterruptBlockId && recordBlockInterruption(_pendingInterruptBlockId, target.dataset.reason || "その他") !== true) { render(); return; }
     _pendingInterruptBlockId = null;
     stopPomodoro();
   },
@@ -11625,10 +11625,9 @@ const INTERRUPT_REASONS = ["割込み", "疲労", "迷い", "その他"];
 
 function recordBlockInterruption(blockId, reason) {
   if (!blockId) return;
-  state.blocks = state.blocks.map((b) => b.id === blockId
-    ? { ...b, interruptions: [...(b.interruptions || []), { at: nowDateTime(), reason }], updatedAt: nowDateTime() }
-    : b);
-  saveState();
+  return commitBlockChanges(state.blocks.map((b) => b.id === blockId
+    ? { ...b, interruptions: [...(b.interruptions || []), { at: nowDateTime(), reason }] }
+    : b));
 }
 
 // 「終了」ボタン押下直後だけ出す軽量な理由ピッカー(v62の却下理由ピッカーと同じ思想)。
@@ -11656,11 +11655,8 @@ function renderPomodoroInterruptControls(defaultHTML) {
 function stopPomodoro() {
   // v13/v311: 終了時、紐づくBlockの actualStartAt を消す(旧「中断」の完全停止挙動を温存)
   const blockId = state.pomodoro.blockId;
-  if (blockId) {
-    state.blocks = state.blocks.map((block) => block.id === blockId
-      ? { ...block, actualStartAt: "", updatedAt: nowDateTime() }
-      : block);
-  }
+  return commitBlockChanges(state.blocks.map((block) => block.id === blockId
+    ? { ...block, actualStartAt: "" } : block), () => {
   // v14: state.pomodoro を完全再構築(再開時に確実に 50:00 から)
   state.pomodoro = {
     running: false,
@@ -11672,6 +11668,7 @@ function stopPomodoro() {
     pausedRemainMs: 0
   };
   saveAndRender("ポモドーロを終了しました(実績開始時刻をクリア)");
+  });
 }
 
 // v311レビュー(Codex)で発見: 旧actualEndAt残置Blockの再ポモ連動で古い時刻を誤再利用する実害
@@ -11679,17 +11676,16 @@ function stopPomodoro() {
 function completePomodoro(preserveActualEndAt = false) {
   const blockId = state.pomodoro.blockId;
   const wasCompleted = Boolean(blockId && blockById(blockId)?.completed);
-  if (blockId) {
     // v19: 完了時、Block の完了フラグも立てる + 実績終了時刻記録
-    state.blocks = state.blocks.map((block) => block.id === blockId
+  return commitBlockChanges(state.blocks.map((block) => block.id === blockId
       ? {
           ...block,
           pomodoroCount: Number(block.pomodoroCount || 0) + 1,
           actualEndAt: preserveActualEndAt ? (block.actualEndAt || nowDateTime()) : nowDateTime(),
-          completed: true,
-          updatedAt: nowDateTime()
+          completed: true
         }
-      : block);
+      : block), () => {
+  if (blockId) {
     syncHabitStreakForBlock(state.blocks.find((block) => block.id === blockId));
     transferIronLogToCompletedBlock(blockId);
   }
@@ -11714,6 +11710,7 @@ function completePomodoro(preserveActualEndAt = false) {
   // (v117(C)過集中ゲートはv219のroutine.js削除で撤去済み。当時の「閉じた後にゲート判定」
   // という順序前提は現在は対応する呼び出し先が無く、身体スキャン単体の表示のみが残る)。
   openBodyScanModal(blockId);
+  });
 }
 
 // v129/v295: 身体スキャン ====================================================
@@ -11985,11 +11982,9 @@ function recordIncompleteReasonChip(chip) {
   if (!_pendingIncompleteReasonCtx || !chip) { skipIncompleteReasonModal(); return; }
   const blockId = _pendingIncompleteReasonCtx.queue[0];
   const note = (modalRoot.querySelector("[data-incomplete-reason-note]")?.value || "").trim();
-  state.blocks = state.blocks.map((b) => b.id === blockId
-    ? { ...b, incompleteReason: { chip, note, at: nowDateTime() }, updatedAt: nowDateTime() }
-    : b);
-  saveState();
-  advanceIncompleteReasonQueue();
+  return commitBlockChanges(state.blocks.map((b) => b.id === blockId
+    ? { ...b, incompleteReason: { chip, note, at: nowDateTime() } }
+    : b), advanceIncompleteReasonQueue);
 }
 
 // 「スキップ」/× / 背景タップ共通: 記録せず次のキューへ(罰なしトーンで軽く抜けられる)。
@@ -12255,11 +12250,8 @@ function finishReport(outcome, note) {
 // pomodoroCount加算のみ維持する(手動「☕ 休憩へ」・自動発火どちらの呼び出しも同じ関数のため統一)。
 function goBreakPomodoro() {
   const blockId = state.pomodoro.blockId;
-  if (blockId) {
-    state.blocks = state.blocks.map((block) => block.id === blockId
-      ? { ...block, pomodoroCount: Number(block.pomodoroCount || 0) + 1, updatedAt: nowDateTime() }
-      : block);
-  }
+  return commitBlockChanges(state.blocks.map((block) => block.id === blockId
+    ? { ...block, pomodoroCount: Number(block.pomodoroCount || 0) + 1 } : block), () => {
   // v14: 完全再構築 + 5分休憩開始
   // v19: lastFocusBlockId に保存(休憩後に「続ける/完了」選択用)
   const now = Date.now();
@@ -12274,6 +12266,7 @@ function goBreakPomodoro() {
     pausedRemainMs: 0
   };
   saveAndRender("休憩を開始しました");
+  });
 }
 
 // v9: 「✓ 休憩終了」: break セッションを終わって未起動状態に

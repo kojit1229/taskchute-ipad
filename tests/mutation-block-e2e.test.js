@@ -95,6 +95,99 @@ test('15c repeated deletion and unchanged scan do not stamp Blocks again', async
 });
 const NOW = '2026-09-10T10:00:00', FUTURE = '2026-09-10T10:05:00', DATE = NOW.slice(0, 10);
 
+async function pomodoroFixture() {
+  const f = await fixture(['recordBlockInterruption', 'stopPomodoro', 'completePomodoro',
+    'goBreakPomodoro', 'recordIncompleteReasonChip']);
+  f.ctx.state.blocks[0].actualStartAt = `${DATE}T09:00:00`;
+  f.ctx.state.pomodoro = { running: true, blockId: 'b', mode: 'focus',
+    startedAt: `${DATE}T09:00:00`, endsAt: `${DATE}T10:30:00`, paused: false };
+  Object.assign(f.ctx, {
+    _pendingInterruptBlockId: 'b', _pendingIncompleteReasonCtx: { queue: ['b'] },
+    dateToLocalDateTime: date => date.toISOString().slice(0, 19),
+    advanceIncompleteReasonQueue: () => { f.ctx._pendingIncompleteReasonCtx.queue.shift(); f.counts.close++; },
+    skipIncompleteReasonModal: () => { throw Error('unexpected skip'); },
+    openBodyScanModal: () => f.counts.close++
+  });
+  f.note = { value: 'typed reason' };
+  f.ctx.modalRoot.querySelector = () => f.note;
+  return f;
+}
+const pomodoroEdits = [
+  ['interruption', f => f.ctx.recordBlockInterruption('b', 'fatigue')],
+  ['stop', f => f.ctx.stopPomodoro()],
+  ['complete', f => f.ctx.completePomodoro()],
+  ['break', f => f.ctx.goBreakPomodoro()],
+  ['incomplete reason', f => f.ctx.recordIncompleteReasonChip('fatigue')]
+];
+for (const [name, execute] of pomodoroEdits) test(`15d ${name}: failure retains Block, timer and input; retry commits`, async () => {
+  const f = await pomodoroFixture(), before = clone(f.ctx.state), blocks = f.ctx.state.blocks;
+  const queue = clone(f.ctx._pendingIncompleteReasonCtx), pending = f.ctx._pendingInterruptBlockId;
+  await withLocalSaveFailure(async (fail, injection) => {
+    f.fail(fail);
+    assert.equal(execute(f), false);
+    assert.equal(injection.calls, 1);
+    assert.equal(f.ctx.state.blocks, blocks);
+    expectRestored(before, clone(f.ctx.state));
+    expectRestored(queue, clone(f.ctx._pendingIncompleteReasonCtx));
+    assert.equal(f.ctx._pendingInterruptBlockId, pending);
+    assert.equal(f.note.value, 'typed reason');
+    assert.equal(f.counts.render + f.counts.close + f.counts.tracking + f.counts.autoSync + f.counts.autoSave, 0);
+    f.fail(null);
+    assert.equal(execute(f), true);
+    const block = f.ctx.state.blocks[0];
+    assert.equal(block.updatedAt, '2026-09-10T10:05:01');
+    assert.equal(block.createdAt, before.blocks[0].createdAt);
+    assert.deepEqual(f.persisted[0].blocks, clone(f.ctx.state.blocks));
+    assert.deepEqual(clone(f.ctx.state.blocks[1]), before.blocks[1]);
+    if (name === 'interruption') assert.deepEqual(clone(block.interruptions), [{ at: NOW, reason: 'fatigue' }]);
+    if (name === 'stop') { assert.equal(block.actualStartAt, ''); assert.equal(f.ctx.state.pomodoro.running, false); }
+    if (name === 'complete') { assert.equal(block.completed, true); assert.equal(block.actualEndAt, NOW); assert.equal(block.pomodoroCount, 1); }
+    if (name === 'break') { assert.equal(block.pomodoroCount, 1); assert.equal(f.ctx.state.pomodoro.mode, 'break'); assert.equal(f.ctx.state.pomodoro.running, true); }
+    if (name === 'incomplete reason') { assert.deepEqual(clone(block.incompleteReason), { chip: 'fatigue', note: 'typed reason', at: NOW }); assert.equal(f.ctx._pendingIncompleteReasonCtx.queue.length, 0); }
+  });
+});
+
+test('15d all five writers alternate with candidate edits in the same second', async () => {
+  const { mergeById } = await import('../src/core/merge.js');
+  for (const [, execute] of pomodoroEdits) {
+    const f = await pomodoroFixture();
+    execute(f);
+    const older = clone(f.ctx.state.blocks[0]);
+    f.ctx.commitBlockChanges(f.ctx.state.blocks.map(b => b.id === 'b' ? { ...b, comment: 'candidate' } : b));
+    const candidate = clone(f.ctx.state.blocks[0]);
+    f.ctx.updateBlockField('b', 'comment', 'latest');
+    const latest = clone(f.ctx.state.blocks[0]);
+    assert.ok(latest.updatedAt > candidate.updatedAt && candidate.updatedAt > older.updatedAt);
+    assert.deepEqual(mergeById([older, candidate], [latest]), [latest]);
+    assert.equal(latest.actualStartAt, older.actualStartAt);
+    assert.equal(latest.actualEndAt, older.actualEndAt);
+  }
+});
+
+test('15d interruption click retains its reason picker after a failed Block save', async () => {
+  const f = await pomodoroFixture();
+  let action;
+  const visit = node => {
+    if (!node || typeof node !== 'object') return;
+    if (node.type === 'Property' && node.key.value === 'interrupt-reason') action = node.value;
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) value.forEach(visit);
+      else if (value && typeof value === 'object') visit(value);
+    }
+  };
+  visit(ast);
+  assert.ok(action, 'actual delegated interruption action');
+  const click = vm.runInContext(`(${source.slice(action.start, action.end)})`, f.ctx);
+  const before = clone(f.ctx.state);
+  await withLocalSaveFailure(async fail => {
+    f.fail(fail);
+    click({ target: { dataset: { reason: 'fatigue' } } });
+    expectRestored(before, clone(f.ctx.state));
+    assert.equal(f.ctx._pendingInterruptBlockId, 'b', 'failed save must retain the editable reason picker');
+    assert.equal(f.counts.writes, 1, 'failed interruption must not proceed to stopPomodoro');
+  });
+});
+
 async function fixture(extraNames = []) {
   const core = await import('../src/core/commit.js');
   core.setCommitGuard(deepCommitGuard);
