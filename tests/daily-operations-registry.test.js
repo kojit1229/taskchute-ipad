@@ -106,7 +106,9 @@ const ctx = { DAILY_ACTIONS, state: { modal: null },
   dispatchAction: name => { calls.push(['other', name]); return true; }
 };
 const weeklyNames = ['weekRange', 'candidateBlocksForWeek', 'commitmentItemForBlock',
-  'parseDate', 'addDays', 'dateToISO', 'pad2', 'dateToLocalDateTime', 'localDateTimeToMs'];
+  'parseDate', 'addDays', 'dateToISO', 'pad2', 'dateToLocalDateTime', 'localDateTimeToMs',
+  // v385(fixV385b、監督者): deps.completedTask が名前付き関数 completedTaskRecord(v198 の追随)を参照するので、その依存ごと取り込む
+  'completedTaskRecord', 'fillProgressOnComplete'];
 const weeklyNodes = ast.body.filter(n => (n.type === 'FunctionDeclaration' && weeklyNames.includes(n.id.name))
   || (n.type === 'VariableDeclaration' && n.declarations.some(d => d.id.name === 'COMMITMENT_SOURCE_PRIORITY')));
 vm.runInNewContext(weeklyNodes.map(n => source.slice(n.start, n.end)).join('\n') + '\n'

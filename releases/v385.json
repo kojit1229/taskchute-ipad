@@ -1,0 +1,70 @@
+{
+  "version": 385,
+  "date": "2026-09-11",
+  "title": "開始と宣言・終了と報告・予定完了・Task完了を1回の保存へ",
+  "summary": "開始ボタンで開始時刻・Task の進行中・宣言・12週の記録・ポモドーロが1回の保存でまとめて確定し、失敗すれば全部元に戻る。終了ボタンの報告は開始時の宣言に結び付き、報告なしなら宣言も報告も作らない。ポモドーロの休憩中でも終了で止まる。開始済みの予定でもポモドーロを再開できる。予定完了と Task 完了もそれぞれ1回の保存",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "src/core/daily-completion.js",
+    "src/core/daily-end.js",
+    "src/core/daily-start.js",
+    "src/features/daily-operations.js",
+    "sw.js",
+    "tests/daily-completion-e2e.test.js",
+    "tests/daily-operations-registry.test.js",
+    "tests/daily-start-end-e2e.test.js",
+    "tests/impact-regression-map.json",
+    "tests/mutation-block-e2e.test.js",
+    "tests/suite-manifest.json",
+    "releases/v385.json",
+    "CHANGES_v385.md"
+  ],
+  "intent": [
+    "束B5（操作9の28a/28b、操作10の29a/29b、操作11の30、操作12の31）をv385としてまとめる。"
+  ],
+  "changes": [
+    "開始ボタンで開始時刻・Task の進行中・宣言・12週の記録・ポモドーロが1回の保存でまとめて確定し、失敗すれば全部元に戻る。終了ボタンの報告は開始時の宣言に結び付き、報告なしなら宣言も報告も作らない。ポモドーロの休憩中でも終了で止まる。開始済みの予定でもポモドーロを再開できる。予定完了と Task 完了もそれぞれ1回の保存",
+    "CACHE_NAMEをv384からv385へ更新し、CHANGES・handoff-preview・テストmanifest・コード索引を正規コマンドで生成する。"
+  ],
+  "uncertainties": [
+    "最終release-gateは監督者が実走する。本発注では未実施。"
+  ],
+  "reviewFocus": [
+    "既存の束B5差分を保持し、本発注の製品コード差分がSW先頭行だけであること。",
+    "開始と宣言・終了と報告・予定完了・Task完了が各1回の保存で成立し、保存失敗時に復元すること。",
+    "報告なし、休憩中の終了、開始済み予定のポモドーロ再開。"
+  ],
+  "verification": [
+    "関連スイート: daily-start-end-e2e / daily-completion-e2e / daily-operations-registry / daily-stamp-e2e / v70 / v87 / v107 / v135 / v136 / v150 / v293 / v304 / v312 / today-core / today-detail-integration-e2e / detail-draft-e2e / mutation-block-e2e / sw-integration。本発注では実走せず、最終ゲートは監督者が実走する。",
+    "npm run test:manifest:write → node scripts/test-manifest.js --check。npm run code:index:write → node scripts/code-index.js --check。",
+    "TZ=Asia/Tokyo RELEASE_HANDOFF_PATH=<reports/impl-r1/v385/handoff-preview.md> node scripts/release-record.js releases/v385.json --write。",
+    "検査の実測終了コードはreports/impl-r1/v385/command-results.jsonlを参照。"
+  ],
+  "knownLimitations": [
+    "release-gateは発注102の指定により未実施（監督者担当）。",
+    "iOS実機・配信・commit/push/stashは実施しない。"
+  ],
+  "relatedSuites": [
+    "daily-start-end-e2e",
+    "daily-completion-e2e",
+    "daily-operations-registry",
+    "daily-stamp-e2e",
+    "v70",
+    "v87",
+    "v107",
+    "v135",
+    "v136",
+    "v150",
+    "v293",
+    "v304",
+    "v312",
+    "today-core",
+    "today-detail-integration-e2e",
+    "detail-draft-e2e",
+    "mutation-block-e2e",
+    "sw-integration"
+  ]
+}
