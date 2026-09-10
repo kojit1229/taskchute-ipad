@@ -18,7 +18,7 @@ import { configureKaradaImport, invalidateKaradaImport } from "./src/features/ka
 import { isArchivedDate, ARCHIVED_READONLY_MESSAGE } from "./src/features/archive-date-protection.js";
 // v164: app.js分割・段階1(最初の抽出)。純粋関数はsrc/core/**へ抽出し、依存グラフの葉として
 //   importする(src/core/**はstateを一切参照しない。claude-review-result.md §7の契約)。
-import { mergeById, mergeByIdPreferNewer, normalizeGymSetIds } from "./src/core/merge.js";
+import { mergeById, mergeByIdPreferNewer, normalizeGymSetIds, mergeWeeklyCommitments } from "./src/core/merge.js";
 import { LIFE_EXPORT_COLUMNS, exportRows, toCSV } from "./src/core/life-export.js";
 import {
   activeTrackForProject, dateParts, isProjectInCurrentCycle, latestMeasurement, numericGoalReached,
@@ -1544,6 +1544,16 @@ const dailyOperationDeps = {
   floors: () => [state.settings?.lastPushedAt, saveState.pendingStamp],
   persist: () => { persistLocalNoSchedule(); return !_lastSaveError; },
   scheduleSync: () => { saveState.pendingStamp = state.dataModifiedAt; scheduleAutoSave(); scheduleAutoSync(); },
+  weekRange, candidateBlocksForWeek, commitmentItemForBlock, mergeWeeklyCommitments,
+  pomodoroForStart: (at, blockId) => ({ running: true, blockId, startedAt: at,
+    endsAt: dateToLocalDateTime(new Date(localDateTimeToMs(at) + 25 * 60 * 1000)),
+    mode: "focus", paused: false, pausedRemainMs: 0 }),
+  startEffect: result => {
+    state._justStartedBlockId = result.block.id;
+    render();
+    showToast(result.timerStarted ? "ポモドーロを開始しました" : "開始時刻を入れました");
+    if (result.timerStarted) queueMicrotask(() => maybeShowGuidedAccessHint());
+  },
   legacy: {
     "edit-block": ({ id }) => openBlockEditor(id),
     "edit-task": ({ id }) => openTaskEditor(id),
@@ -1568,6 +1578,7 @@ document.addEventListener("click", (event) => {
   // どのfeatureもまだ何も登録していないため常にfalseで、既存if連鎖が今までどおり
   // 全件実行される。フォールバック分岐は1行も変更していない)。
   if (DAILY_ACTIONS.includes(action)) {
+    if (action === "daily-block-start") { openDeclareModal(id, "block"); return; }
     const input = { ...target.dataset, event, target, id };
     if (action === "modal-save") {
       input.save = () => {
@@ -10386,33 +10397,11 @@ function autoCloseStaleRoutineRuns(blockId) {
 }
 
 function setBlockTime(id, field) {
-  const wasStarted = Boolean(blockById(id)?.actualStartAt);
+  if (field === "actualStartAt") return resumeLifecycleStart({ blockId: id, kind: "block" })?.ok;
   const result = draftSaveTransaction.run(() => {
-    if (field === "actualStartAt") autoCloseStaleRoutineRuns(id);
     updateBlockField(id, field, nowDateTime());
   }, { kinds: ["blocks"] });
   if (!result.ok) return false;
-  if (field === "actualStartAt") {
-    // v48: 着手した瞬間に Task を doing へ(従来は Block 完了時のみで、
-    //      「着手率>完了率」の哲学に反して着手が Task に反映されていなかった)
-    const blk = blockById(id);
-    if (!wasStarted && blk?.actualStartAt) trackOnBlockStarted(blk);
-    if (blk?.taskId) {
-      state.tasks = state.tasks.map((t) => t.id === blk.taskId && t.status === "todo"
-        ? { ...t, status: "doing", updatedAt: nowDateTime() } : t);
-      saveState();
-    }
-    // v40: 着手ジュース — 着手の瞬間だけ、その行に一度きりの感覚フィードバック。非永続。
-    state._justStartedBlockId = id;
-    // v70: Block開始でフォーカスタイマー(ポモドーロ)を自動起動(設定focusTimerAuto、既定ON)。
-    //      既に別セッションが動いている場合は乗っ取らない(既存の集中を尊重)。
-    //      startPomodoro自身がrender/toastまで行うので、この分岐では末尾のrender/toastを重ねない。
-    if (state.settings.focusTimerAuto && !state.pomodoro.running) {
-      forceResetPomodoroSession();
-      startPomodoro(id);
-      return;
-    }
-  }
   render();
   showToast(field === "actualStartAt" ? "開始時刻を入れました" : "終了時刻を入れました");
 }
@@ -11577,6 +11566,8 @@ function buildGuidedAccessHintModal() {
 function startPomodoro(blockId) {
   blockId = blockId || "";
   if (blockId && !blockById(blockId)) return showToast("Blockが見つかりません");
+  if (blockId && !blockById(blockId).actualStartAt)
+    return resumeLifecycleStart({ blockId, kind: "pomodoro" });
   const wasStarted = Boolean(blockById(blockId)?.actualStartAt);
   if (blockId) autoCloseStaleRoutineRuns(blockId);  // v215: 旧prepareTimeswitchForTaskStartのタブ非依存部
   // v14: state.pomodoro を完全再構築(spread を使わず、必要なフィールドだけ明示的に作成)
@@ -12078,22 +12069,8 @@ function estimateMinutesForBlock(block, kind) {
 }
 
 // 宣言ログを1件追加(上限300件は正規化側でも担保するが、ここでも即時に切り詰める)
-function logDeclaration(blockId, note, estimateMin) {
-  const block = state.blocks.find((b) => b.id === blockId);
-  const entry = {
-    id: crypto.randomUUID(),
-    blockId,
-    date: todayISO(),
-    title: block?.title || "",
-    estimateMin: estimateMin != null ? estimateMin : null,
-    note: (note || "").trim(),
-    declaredAt: nowDateTime(),
-    reportedAt: "",
-    outcome: "",
-    resultNote: ""
-  };
-  state.declarations = [...(state.declarations || []), entry].slice(-300);
-  return entry;
+function logDeclaration(blockId, note, estimateMin, kind = "block") {
+  return resumeLifecycleStart({ blockId, kind, declare: true, note, estimateMin });
 }
 
 // 終了報告を記録する。当日・同じBlockで未報告の宣言があればそこに合流、無ければ
@@ -12165,6 +12142,7 @@ function openDeclareModal(blockId, kind) {
     resumeLifecycleStart({ blockId, kind });
     return;
   }
+  if (block.actualStartAt) return resumeLifecycleStart({ blockId, kind });
   _pendingLifecycleCtx = { blockId, phase: "declare", kind };
   state.modal = { type: "declare", id: blockId };
   renderModal(buildDeclareModal(block, estimateMinutesForBlock(block, kind)));
@@ -12189,12 +12167,15 @@ function buildDeclareModal(block, estimateMin) {
 }
 
 function resumeLifecycleStart(ctx) {
-  if (ctx.kind === "pomodoro") {
-    forceResetPomodoroSession();
+  if (!ctx.blockId && ctx.kind === "pomodoro") {
     startPomodoro(ctx.blockId);
-  } else {
-    setBlockTime(ctx.blockId, "actualStartAt");
+    return { ok: true };
   }
+  const result = runDailyOperation("daily-block-start", { kind: "block", id: ctx.blockId,
+    declare: ctx.declare === true, note: ctx.note, estimateMin: ctx.estimateMin,
+    timer: ctx.kind === "pomodoro" }, dailyOperationDeps);
+  if (!result.ok) showToast("開始を保存できませんでした。入力を残しています");
+  return result;
 }
 
 function confirmDeclare() {
@@ -12203,18 +12184,18 @@ function confirmDeclare() {
   const note = modalRoot.querySelector("[data-declare-note]")?.value || "";
   const block = state.blocks.find((b) => b.id === ctx.blockId);
   const estimateMin = estimateMinutesForBlock(block, ctx.kind);
-  logDeclaration(ctx.blockId, note, estimateMin);
+  const result = logDeclaration(ctx.blockId, note, estimateMin, ctx.kind);
+  if (!result?.ok) return;
   _pendingLifecycleCtx = null;
   closeModal();
-  resumeLifecycleStart(ctx);
 }
 
 function skipDeclare() {
   if (!_pendingLifecycleCtx) return;
   const ctx = _pendingLifecycleCtx;
+  if (!resumeLifecycleStart(ctx)?.ok) return;
   _pendingLifecycleCtx = null;
   closeModal();
-  resumeLifecycleStart(ctx);
 }
 
 // ---------- 終了報告モーダル ----------

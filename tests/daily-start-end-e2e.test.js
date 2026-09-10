@@ -101,3 +101,101 @@ try {
     console.log('PASS 28a: declaration cap maintained in candidate');
   }
 } finally { setCommitGuard(null); }
+
+// Real delegated entrances share the same candidate and preserve the declaration UI on failure.
+const { chromium, launchOptions, startServer, randomPort, STATE_KEY, passGithubGate } = require('./helpers');
+(async () => {
+  const server = startServer(randomPort());
+  let browser;
+  try {
+    browser = await chromium.launch(launchOptions());
+    const context = await browser.newContext({ timezoneId: 'Asia/Tokyo', locale: 'ja-JP',
+      serviceWorkers: 'block', viewport: { width: 1100, height: 900 } });
+    const page = await context.newPage(), errors = [];
+    page.on('pageerror', error => { errors.push(error.message); console.error('pageerror:', error.message); });
+    await page.route('**/*', route => {
+      const url = new URL(route.request().url());
+      if (url.hostname !== 'localhost') return route.abort();
+      if (/personal-data|AIプラン|AIフィードバック|週次レビュー/.test(decodeURIComponent(url.pathname)))
+        return route.fulfill({ status: 404, body: 'fixture only' });
+      return route.continue();
+    });
+    await page.clock.setFixedTime(new Date(2026, 8, 10, 23, 50));
+    await page.goto(`http://localhost:${server.address().port}/`);
+    await passGithubGate(page);
+    for (const action of ['now-start', 'daily-block-start', 'start-pomodoro']) {
+      await page.evaluate(({ key, action }) => {
+        const s = JSON.parse(localStorage.getItem(key));
+        s.selectedDate = '2026-09-10'; s.currentView = 'timeline';
+        s.settings.lastOpenedDate = '2026-09-10'; s.settings.autoSync = false;
+        s.settings.github.autoSave = false; s.settings.focusTimerAuto = true;
+        s.settings.twelveWeekStartDate = ''; s.settings.guidedAccessHintDismissed = true;
+        s.projects = []; s.tasks = [{ id: 'start-task', title: 'fixture task', status: 'todo' }];
+        s.blocks = [{ id: 'start-block', taskId: 'start-task', title: '開始の架空予定', date: '2026-09-10',
+          plannedStartAt: '2026-09-10T23:30:00', plannedEndAt: '2026-09-10T23:55:00',
+          actualStartAt: '', actualEndAt: '', everStartedAt: '', completed: false }];
+        s.declarations = []; s.weeklyCommitments = []; s.recurrences = [];
+        s.pomodoro = { running: false, blockId: '', startedAt: '', endsAt: '', mode: 'focus', paused: false, pausedRemainMs: 0 };
+        localStorage.setItem(key, JSON.stringify(s));
+      }, { key: STATE_KEY, action });
+      await page.reload();
+      await page.locator('[data-action="now-start"][data-id="start-block"]').first().waitFor();
+      // New UI is not shipped yet. Stable fixture controls exercise the real document delegation;
+      // do not rewrite a rendered row, since a pending render can replace it before the click.
+      if (action === 'now-start') await page.locator('[data-action="now-start"][data-id="start-block"]').first().click();
+      else {
+        await page.evaluate(action => {
+          const el = document.createElement('button'); el.id = 'startTestTrigger'; el.textContent = 'fixture start';
+          Object.assign(el.dataset, { action, kind: 'block', id: 'start-block', blockId: 'start-block' });
+          document.body.append(el);
+        }, action);
+        await page.locator('#startTestTrigger').click();
+      }
+      const note = page.locator('[data-declare-note]');
+      await note.fill('失敗しても残る宣言');
+      const original = await page.evaluate(async () => {
+        const s = (await import('/src/state/store.js')).state;
+        window.__startInput = document.querySelector('[data-declare-note]');
+        return JSON.parse(JSON.stringify({ blocks:s.blocks,tasks:s.tasks,declarations:s.declarations,
+          weeklyCommitments:s.weeklyCommitments,pomodoro:s.pomodoro,dataModifiedAt:s.dataModifiedAt }));
+      });
+      await page.evaluate(key => {
+        window.__setStart = Storage.prototype.setItem; window.__startWrites = 0; window.__startFail = true;
+        Storage.prototype.setItem = function(k,v) {
+          if (k === key) { window.__startWrites++; if (window.__startFail) throw new DOMException('fixture quota', 'QuotaExceededError'); }
+          return window.__setStart.call(this,k,v);
+        };
+      }, STATE_KEY);
+      await page.locator('[data-action="declare-confirm"]').click();
+      assert.equal(await note.inputValue(), '失敗しても残る宣言');
+      assert(await note.evaluate(el => el === window.__startInput));
+      const failed = await page.evaluate(async () => {
+        const s = (await import('/src/state/store.js')).state;
+        return JSON.parse(JSON.stringify({ blocks:s.blocks,tasks:s.tasks,declarations:s.declarations,
+          weeklyCommitments:s.weeklyCommitments,pomodoro:s.pomodoro,dataModifiedAt:s.dataModifiedAt }));
+      });
+      assert.deepEqual(failed, original, action + ': all candidate fields rollback');
+      assert.equal(await page.evaluate(() => window.__startWrites), 1);
+      const failedDraft = await page.evaluate(() => Object.keys(sessionStorage)
+        .filter(key => key.startsWith('taskchute-journal-daily-draft-v1:')).map(key => JSON.parse(sessionStorage.getItem(key)))
+        .find(draft => draft.id === 'start-block' && draft.draftId === 'start'));
+      assert(failedDraft.declarationId);
+      await page.evaluate(() => { window.__startFail = false; });
+      await page.locator('[data-action="declare-confirm"]').evaluate(el => { el.click(); el.click(); });
+      await page.waitForFunction(() => !(document.querySelector('#modalRoot')?.classList.contains('open')));
+      const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), STATE_KEY);
+      assert.equal(await page.evaluate(() => window.__startWrites), 2, 'one successful persistence despite double click');
+      assert.equal(saved.blocks[0].actualStartAt, '2026-09-10T23:50:00');
+      assert.equal(saved.blocks[0].everStartedAt, saved.blocks[0].actualStartAt);
+      assert.equal(saved.tasks[0].status, 'doing'); assert(saved.pomodoro.running);
+      assert.equal(saved.pomodoro.blockId, 'start-block'); assert.equal(saved.declarations.length, 1);
+      assert.equal(saved.declarations[0].id, failedDraft.declarationId);
+      assert.equal(saved.declarations[0].date, '2026-09-10');
+      assert.equal(saved.declarations[0].declaredAt, saved.blocks[0].actualStartAt);
+      assert.equal(saved.declarations[0].note, '失敗しても残る宣言');
+      await page.evaluate(() => { Storage.prototype.setItem = window.__setStart; });
+      console.log(`PASS 28b: ${action} atomic save, rollback/input retention, fixed ID retry and double click`);
+    }
+    assert.deepEqual(errors, []);
+  } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }
+})().catch(error => { console.error(error); process.exitCode = 1; });
