@@ -34,6 +34,7 @@ import { createVisionOverview } from "./src/features/vision-overview.js";
 import { createDraftLeaveGuard } from "./src/features/draft-leave.js";
 import { createDraftSaveTransaction } from "./src/features/draft-save.js";
 import { commitCandidate, assertNotInsideBuild } from "./src/core/commit.js";
+import { stamped } from "./src/core/mutation-stamp.js";
 import { renderDetailFrame } from "./src/ui/daily-parts/detail-frame.js";
 import { renderDailyBlockDetails } from "./src/features/daily-view-model.js";
 import { configureWorkList, renderWorkList, handleWorkListInput, handleWorkListComposition, rememberWorkListOrigin, restoreWorkListOrigin, rememberWorkListScroll, restoreWorkListScroll } from "./src/features/work-list.js";
@@ -2939,6 +2940,9 @@ function countCategoryUsage(name) {
 
 // v9: カテゴリのフィールド編集(name / color)
 function updateCategoryField(catId, field, value) {
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => {
+    updateCategoryField(catId, field, value);
+  }, { kinds: ["settings", "projects", "tasks", "blocks", "recurrences"] }).ok;
   const cats = state.settings.categories || [];
   const idx = cats.findIndex((c) => c.id === catId);
   if (idx < 0) return;
@@ -2950,7 +2954,7 @@ function updateCategoryField(catId, field, value) {
     // 更新する(更新しないと、同期マージ時に「新しい方が勝つ」判定を素通りして改名が消える)。
     state.projects = state.projects.map((p) => p.category === oldCat.name ? { ...p, category: value, updatedAt: nowDateTime() } : p);
     state.tasks = state.tasks.map((t) => t.category === oldCat.name ? { ...t, category: value, updatedAt: nowDateTime() } : t);
-    state.blocks = state.blocks.map((b) => b.category === oldCat.name ? { ...b, category: value, updatedAt: nowDateTime() } : b);
+    state.blocks = state.blocks.map((b) => b.category === oldCat.name ? { ...b, category: value } : b);
     // v37: 繰り返しルールにも追従(これを忘れると、明日以降に実体化されるブロックが旧名のまま生成され、
     //      「ルーティン」カテゴリの改名ではルーティン画面から消える)
     state.recurrences = (state.recurrences || []).map((r) => r.category === oldCat.name ? { ...r, category: value } : r);
@@ -2960,8 +2964,7 @@ function updateCategoryField(catId, field, value) {
       .map((n) => n === oldCat.name ? value : n);
   }
   state.settings.categories = cats.map((c, i) => i === idx ? newCat : c);
-  saveState();
-  scheduleAutoSave();
+  draftSaveTransaction.complete();
   // 色変更はリアルタイムで見えてほしいので、メイン画面のみ再描画(設定画面入力中はフォーカスを失わないように)
   if (field === "color") {
     // 設定画面では再描画しない(カラーピッカーが閉じる) → タイムライン rail などは次回ナビ時に更新される
@@ -3196,7 +3199,7 @@ function seedState() {
 }
 
 function makeBlock(input) {
-  return {
+  return stamped({
     id: crypto.randomUUID(),
     taskId: input.taskId || "",
     date: input.date || todayISO(),
@@ -3223,9 +3226,8 @@ function makeBlock(input) {
     incompleteReason: null,  // v162: 未完了理由クイック入力 {chip, note, at} | null
     orderIndex: 0,
     createdAt: nowDateTime(),
-    updatedAt: nowDateTime(),
     deleted: false
-  };
+  }, nowDateTime());
 }
 
 function render() {
@@ -4406,6 +4408,7 @@ function confirmScheduleDraft() {
       { origin: "draft", draftItemId: ritualItem.id });
     return;
   }
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => confirmScheduleDraft(), { kinds: ["blocks"] }).ok;
   let updatedCount = 0, createdCount = 0;  // v199(軽微3): 確定トーストを「登録」と「時刻更新」で書き分ける
   items.forEach((it) => {
     // v199: blockId付き項目(当日タスクシュート再配置)は既存Blockの時刻だけ更新する。
@@ -4447,12 +4450,11 @@ function confirmScheduleDraft() {
     state.blocks.push(block);
     // v59: 繰り越し由来の下書きは元Blockに migratedTo を設定(carryOverBlockと同じ二重繰越防止セマンティクス)
     if (it.carryFromId) {
-      state.blocks = state.blocks.map((b) => b.id === it.carryFromId ? { ...b, migratedTo: block.id, updatedAt: nowDateTime() } : b);
+      state.blocks = state.blocks.map((b) => b.id === it.carryFromId ? { ...b, migratedTo: block.id } : b);
     }
     createdCount += 1;
   });
-  _scheduleDraft = null;
-  _draftUndo = null;  // v62: 確定済みの下書きへのUndoは意味を持たない
+  draftSaveTransaction.defer(() => { _scheduleDraft = null; _draftUndo = null; });  // v62: 確定済みの下書きへのUndoは意味を持たない
   // v199(軽微3): blockId分岐は「登録」ではなく「時刻更新」のため、件数に応じて文言を書き分ける
   //   (旧文言「📋 N件のBlockを登録しました」を再配置フローにそのまま流用していたのは不正確だった)
   const confirmParts = [];
@@ -10109,13 +10111,14 @@ function toggleBlock(id) {
   let justCompleted = false;
   let completedBlock = null;
   let changedBlock = null;
-  state.blocks = state.blocks.map((block) => {
+  const priorSnapshot = _quickCompleteSnapshots[id];
+  const blocks = state.blocks.map((block) => {
     if (block.id !== id) return block;
     const completed = !block.completed;
     if (completed && block.taskId) {
       state.tasks = state.tasks.map((task) => task.id === block.taskId && task.status === "todo" ? { ...task, status: "doing", updatedAt: nowDateTime() } : task);
     }
-    let next = { ...block, completed, updatedAt: nowDateTime() };
+    let next = { ...block, completed };
     if (completed) {
       justCompleted = true;
       const snapshot = {};
@@ -10159,6 +10162,11 @@ function toggleBlock(id) {
     changedBlock = next;
     return next;
   });
+  if (!commitBlockChanges(blocks)) {
+    if (priorSnapshot === undefined) delete _quickCompleteSnapshots[id];
+    else _quickCompleteSnapshots[id] = priorSnapshot;
+    return false;
+  }
   syncHabitStreakForBlock(state.blocks.find((block) => block.id === id));
   // v115: アンカー配置(提案G③)。完了したBlockが繰り返しルーティンに属していれば、
   // それをアンカーにする後続のルーティン/チェーンを直後の時刻に自動配置する。
@@ -10208,9 +10216,9 @@ function toggleTaskCompleteFromBlock(blockId) {
     state.tasks = state.tasks.map((t) => t.id === task.id
       ? { ...t, status: "completed", progressNum: fillProgressOnComplete(t), updatedAt: nowDateTime() }
       : t);
-    state.blocks = state.blocks.map((b) => b.id === blockId
-      ? { ...b, completed: true, actualEndAt: b.actualEndAt || nowDateTime(), updatedAt: nowDateTime() }
-      : b);
+    if (!commitBlockChanges(state.blocks.map((b) => b.id === blockId
+      ? { ...b, completed: true, actualEndAt: b.actualEndAt || nowDateTime() }
+      : b))) return false;
     syncHabitStreakForBlock(state.blocks.find((b) => b.id === blockId));
     transferIronLogToCompletedBlock(blockId);
     generateReport(block.date, { quiet: true });
@@ -10311,23 +10319,31 @@ function resetPomodoroForBlock(blockId) {
 
 function autoCloseStaleRoutineRuns(blockId) {
   const at = nowDateTime();
-  state.blocks.forEach((block) => {
-    if (block.id === blockId || block.deleted || block.actualEndAt || !block.actualStartAt) return;
+  const closed = [];
+  const blocks = state.blocks.map((block) => {
+    if (block.id === blockId || block.deleted || block.actualEndAt || !block.actualStartAt) return block;
     if (block.category === "ルーティン") {
       // 過去日のBlockへ当日の終了時刻を書かない(旧finishBlockの二重防御を踏襲)。
       const finishedAt = block.date < todayISO() ? `${block.date}T23:59:00` : at;
-      block.actualEndAt = finishedAt;
-      block.completed = false;
-      block.updatedAt = finishedAt;
-      resetPomodoroForBlock(block.id);
+      closed.push(block.id);
+      return { ...block, actualEndAt: finishedAt, completed: false };
     }
+    return block;
+  });
+  return commitBlockChanges(blocks, () => {
+    const previousTimer = state.pomodoro;
+    closed.forEach(id => resetPomodoroForBlock(id));
+    if (state.pomodoro !== previousTimer) saveState();
   });
 }
 
 function setBlockTime(id, field) {
   const wasStarted = Boolean(blockById(id)?.actualStartAt);
-  if (field === "actualStartAt") autoCloseStaleRoutineRuns(id);
-  updateBlockField(id, field, nowDateTime());
+  const result = draftSaveTransaction.run(() => {
+    if (field === "actualStartAt") autoCloseStaleRoutineRuns(id);
+    updateBlockField(id, field, nowDateTime());
+  }, { kinds: ["blocks"] });
+  if (!result.ok) return false;
   if (field === "actualStartAt") {
     // v48: 着手した瞬間に Task を doing へ(従来は Block 完了時のみで、
     //      「着手率>完了率」の哲学に反して着手が Task に反映されていなかった)
@@ -10365,9 +10381,9 @@ function bulkApproveAsPlanned() {
   if (!targets.length) return showToast("対象のBlockがありません(すでに実績があるか、予定が無いBlockのみ)");
   if (!window.confirm(`${targets.length}件のBlockを「予定通り」実績として記録しますか?\n(計画時刻をそのまま実績にコピーし、完了にします)`)) return;
   const ids = new Set(targets.map((b) => b.id));
-  state.blocks = state.blocks.map((b) => ids.has(b.id)
-    ? { ...b, actualStartAt: b.plannedStartAt, everStartedAt: b.everStartedAt || b.plannedStartAt, actualEndAt: b.plannedEndAt || b.plannedStartAt, completed: true, updatedAt: nowDateTime() }
-    : b);
+  if (!commitBlockChanges(state.blocks.map((b) => ids.has(b.id)
+    ? { ...b, actualStartAt: b.plannedStartAt, everStartedAt: b.everStartedAt || b.plannedStartAt, actualEndAt: b.plannedEndAt || b.plannedStartAt, completed: true }
+    : b))) return false;
   targets.forEach((block) => syncHabitStreakForBlock(state.blocks.find((b) => b.id === block.id)));
   targets.forEach((block) => transferIronLogToCompletedBlock(block.id, { suppressEmptyToast: true }));
   generateReport(today, { quiet: true });
@@ -10399,14 +10415,38 @@ function nowConveyorComplete(id) {
   }
 }
 
+// Block-only adapter; an active editor draft remains the single commit owner.
+function commitBlockChanges(blocks, effects = () => {}) {
+  if (draftSaveTransaction?.active) {
+    state.blocks = blocks;
+    draftSaveTransaction.complete(effects);
+    return true;
+  }
+  const result = commitCandidate({ state, now: nowDateTime(), floors: [saveState.pendingStamp],
+    build: snapshot => {
+      const beforeById = new Map(snapshot.blocks.map(block => [block.id, block]));
+      return { records: blocks.flatMap(after => {
+        const before = beforeById.get(after.id);
+        return JSON.stringify(before) === JSON.stringify(after) ? [] : [{ kind: "blocks", before, after }];
+      }) };
+    },
+    persist: () => { persistLocalNoSchedule(); return !_lastSaveError; },
+    effects: result => {
+      if (!result.unchanged) { saveState.pendingStamp = state.dataModifiedAt; scheduleAutoSave(); scheduleAutoSync(); }
+      effects();
+    }
+  });
+  if (!result.ok) showToast("端末に保存できませんでした。入力は残しています。再試行してください");
+  return result.ok;
+}
+
 function updateBlockField(id, field, value) {
-  state.blocks = state.blocks.map((block) => {
+  return commitBlockChanges(state.blocks.map((block) => {
     if (block.id !== id) return block;
     const normalized = ["charge", "discharge"].includes(field) ? Number(value) : value;
-    const next = { ...block, [field]: normalized, updatedAt: nowDateTime() };
+    const next = { ...block, [field]: normalized };
     return field === "actualStartAt" ? stampEverStarted(next) : next;
-  });
-  saveState();
+  }));
 }
 
 function deleteBlock(id) {
@@ -14528,6 +14568,7 @@ function saveBlockFromModal(id, fields) {
   // v108: 保存の二重送信ガード(iOS Safari 保存ボタン二重発火対策、2026-05-22実害の再発防止)。
   //       実行中の多重呼び出しはブロックし、完了/失敗いずれも finally で必ず解除する。
   //       (以下、本体のインデントは変更なし=差分最小化のため)
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => saveBlockFromModal(id, fields)).ok;
   if (_blockSaveInFlight) return;
   _blockSaveInFlight = true;
   let _bodyScanBlockId = "";  // v293: 分岐(6箇所)が合流するfinallyでまとめて1回だけ開く
@@ -14567,7 +14608,6 @@ function saveBlockFromModal(id, fields) {
     label: existing?.label || "",
     timeswitchStart: existing?.timeswitchStart || false,
     createdAt: existing?.createdAt || nowDateTime(),
-    updatedAt: nowDateTime(),
     deleted: false
   };
   // v359: MIT(今日の主役)はBlock編集シート内の★トグルから、保存時にまとめて反映する
@@ -14772,7 +14812,7 @@ function openTimelineNewBlock(startMinute) {
   const date = state.selectedDate;
   const startISO = `${date}T${pad2(Math.floor(clampedStart / 60))}:${pad2(clampedStart % 60)}:00`;
   const endISO = `${date}T${pad2(Math.floor(endMinute / 60))}:${pad2(endMinute % 60)}:00`;
-  const newBlock = {
+  const newBlock = stamped({
     id: crypto.randomUUID(),
     title: "",
     date,
@@ -14795,9 +14835,8 @@ function openTimelineNewBlock(startMinute) {
     source: "timeline",  // v15: タイムライン由来。タスクシュート画面では非表示
     _isNew: true,  // モーダル表示時に繰り返し設定を表示するためのフラグ
     createdAt: nowDateTime(),
-    updatedAt: nowDateTime(),
     deleted: false
-  };
+  }, nowDateTime());
   state.modal = { type: "block", id: newBlock.id };
   // state.blocks に push せずに、モーダル表示してから保存時に push する
   renderModal(buildBlockModal(newBlock));
@@ -15058,7 +15097,7 @@ function buildActualEntryModal(block, defaultStart, defaultEnd) {
 function saveActualEntryFromModal(blockId, fields) {
   const previousBlock = state.blocks.find((b) => b.id === blockId);
   const wasCompleted = Boolean(previousBlock?.completed);
-  state.blocks = state.blocks.map((b) => {
+  if (!commitBlockChanges(state.blocks.map((b) => {
     if (b.id !== blockId) return b;
     return {
       ...b,
@@ -15068,10 +15107,9 @@ function saveActualEntryFromModal(blockId, fields) {
       charge: Number(fields.charge) || 0,
       discharge: Number(fields.discharge) || 0,
       comment: fields.comment || "",
-      completed: true,
-      updatedAt: nowDateTime()
+      completed: true
     };
-  });
+  }))) return false;
   if (!wasCompleted) transferIronLogToCompletedBlock(blockId);
   // Task の状態を doing に
   const block = state.blocks.find((b) => b.id === blockId);
