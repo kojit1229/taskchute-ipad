@@ -44,7 +44,18 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
     saveState: () => { sandbox.saveCount += 1; },
     saveAndRender: () => { sandbox.saveAndRenderCount += 1; sandbox.saveState(); },
     closeModal: () => { sandbox.closeModalCount += 1; },
-    showToast: () => { sandbox.toastCount += 1; }
+    showToast: () => { sandbox.toastCount += 1; },
+    // v381(束B2 16a): deleteProject は候補保存境界(draftSaveTransaction→commitCandidate)経由で、Project の更新時刻は
+    // 境界が刻印する。この隔離試験では境界の代役が「実行中フラグ」と「kinds の変更レコードへ now を刻印」だけを行う。
+    stamped: (record, stamp) => ({ ...record, updatedAt: stamp }),
+    draftSaveTransaction: { active: false, run(work, { kinds = [] } = {}) {
+      const listKinds = kinds.filter((kind) => Array.isArray(sandbox.state[kind]));
+      const before = Object.fromEntries(listKinds.map((kind) => [kind, new Set(sandbox.state[kind])]));
+      this.active = true;
+      try { work(); } finally { this.active = false; }
+      for (const kind of listKinds) sandbox.state[kind] = sandbox.state[kind].map((row) => before[kind].has(row) ? row : { ...row, updatedAt: currentNow });
+      return { ok: true };
+    } }
   };
   vm.createContext(sandbox);
   vm.runInContext(trackSource + deleteSource + projectTrackSaveSource + projectSaveSource, sandbox);

@@ -97,9 +97,10 @@ function makeBlock(input) {
 let toastCalls = [];
 function showToast(message, opts) { toastCalls.push({ message, opts }); }
 let saveAndRenderCalls = [];
-function saveAndRender(message, opts) { saveAndRenderCalls.push({ message, opts }); }
+let taskTransaction;
+function saveAndRender(message, opts) { taskTransaction.complete(() => saveAndRenderCalls.push({ message, opts })); }
 let renderCalls = 0;
-function render() { renderCalls++; }
+function render() { if (!taskTransaction.defer(() => render())) renderCalls++; }
 let updateTaskFieldCalls = [];
 function updateTaskField(id, field, value) { updateTaskFieldCalls.push({ id, field, value }); }
 
@@ -113,7 +114,12 @@ async function loadModules() {
   const { storeMod, wishMod } = await loadModules();
   storeModRef = storeMod;
 
+  const { createDraftSaveTransaction } = await import(pathToFileURL(path.join(ROOT, 'src/features/draft-save.js')).href);
+  taskTransaction = createDraftSaveTransaction({ getState: () => storeMod.state, setState: storeMod.setState,
+    now: nowDateTime, persist: () => true, schedule: () => {}, onFailure: error => { throw error; } });
+
   wishMod.configureWish({
+    taskTransaction: () => taskTransaction,
     escapeHTML, renderHeader, todayISO, localDateTimeToMs, makeTask, makeBlock,
     defaultPlannedTimes, showToast, nowDateTime, saveAndRender, render, updateTaskField
   });
@@ -240,7 +246,9 @@ async function loadModules() {
     setBaseState({ tasks: [{ id: "w1", parentTaskId: "", deleted: false, realized: false }] });
     confirmImpl = () => false;
     renderCalls = 0;
+    const beforeCancel = JSON.stringify(storeMod.state), reference = storeMod.state;
     wishMod.realizeWish("w1");
+    check("キャンセルでstate全体と参照が変わらない", storeMod.state === reference && JSON.stringify(storeMod.state) === beforeCancel);
     check("realizedは変更されない", storeMod.state.tasks[0].realized === false);
     check("render()が1回呼ばれる(checkboxの見た目を戻すため)", renderCalls === 1, String(renderCalls));
 

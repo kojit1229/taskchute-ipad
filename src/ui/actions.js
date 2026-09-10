@@ -58,8 +58,9 @@ function dispatchModalSave(type, id, fields) {
 function dispatchModalDelete(type, id) {
   const handler = modalHandlerRegistry.get(type);
   if (!handler?.delete) return false;
-  handler.delete(id);
-  return true;
+  // v381(束B2): ハンドラが false を返したら保存失敗(候補保存境界で復元済み)。呼び出し元はモーダルを閉じない。
+  // undefined(旧ハンドラ)は従来どおり成功扱い。
+  return handler.delete(id) !== false;
 }
 
 // characterization test(tests/action-registry-core.test.js)専用のデバッグ用エクスポート。

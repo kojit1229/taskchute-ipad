@@ -359,6 +359,7 @@ configurePlacement({
 });
 
 configureWish({
+  taskTransaction: () => draftSaveTransaction,
   escapeHTML, renderHeader, todayISO, localDateTimeToMs, makeTask, makeBlock,
   defaultPlannedTimes, showToast, nowDateTime, saveAndRender, render, updateTaskField,
   aiInsightsPanelHTML,
@@ -1195,9 +1196,11 @@ registerActions({
     }
   },
   "interrupt-reason": ({ target }) => {
-    if (_pendingInterruptBlockId) recordBlockInterruption(_pendingInterruptBlockId, target.dataset.reason || "その他");
-    _pendingInterruptBlockId = null;
-    stopPomodoro();
+    const reason = target.dataset.reason || "その他";
+    const previous = blockById(_pendingInterruptBlockId)?.interruptions?.at(-1);
+    if (_pendingInterruptBlockId && previous?.reason !== reason && recordBlockInterruption(_pendingInterruptBlockId, reason) !== true) { render(); return; }
+    if (stopPomodoro() === true) _pendingInterruptBlockId = null;
+    else render();
   },
   "interrupt-reason-cancel": () => {
     _pendingInterruptBlockId = null;
@@ -1790,18 +1793,14 @@ document.addEventListener("change", (event) => {
     // v198(第3弾3e): updateTaskFieldは汎用setterのためprevStatusをここで確保する(完了6経路#3)
     const prevStatus = state.tasks.find((x) => x.id === id)?.status;
     // v95: ステータスを手動で「完了」にした時も、分子を分母へ揃える(チェックボックス完了と挙動を揃える)
-    if (field === "status" && target.value === "completed") {
-      const t = state.tasks.find((x) => x.id === id);
-      if (t) updateTaskField(id, "progressNum", fillProgressOnComplete(t));
-    }
-    updateTaskField(id, field, target.value);
+    if (!updateTaskField(id, field, target.value)) return;
     if (field === "status") maybeQueueNextAiStep(id, prevStatus);  // v198(第3弾3e): 完了6経路#3
     render();  // 状態変更での並び替え・完了非表示などを即反映(change なので入力を妨げない)
   }
   // v95: WBS進捗(分子/分母)のインライン編集。ステータス連動込みで updateTaskProgress が処理する
   if (target.matches("[data-wbs-progress]")) {
     const field = target.dataset.wbsProgress === "num" ? "progressNum" : "progressDen";
-    updateTaskProgress(target.dataset.id, field, target.value);
+    if (!updateTaskProgress(target.dataset.id, field, target.value)) return;
     render();
   }
   // v305修正: blurを伴うボタンクリックをDOM再生成で奪わないよう、メモだけ描画を次タスクへ送る。
@@ -2396,7 +2395,7 @@ function normalizeState(value) {
   }));
   // v16: Wish Project が削除/未作成なら自動作成(必ず1つ存在を保証)
   if (!value.projects.some((p) => p.kind === "wish" && !p.deleted)) {
-    value.projects.push({
+    value.projects.push(stamped({
       id: crypto.randomUUID(),
       kind: "wish",
       title: "Wish",
@@ -2404,15 +2403,14 @@ function normalizeState(value) {
       status: "active",
       twelveWeekStartDate: "",
       createdAt: nowDateTime(),
-      updatedAt: nowDateTime(),
       deleted: false
-    });
+    }, nowDateTime()));
   }
   // v28: 「その他」Project(タスクシュート画面から直接追加した Block の受け皿)。
   //      必ず1つ存在を保証する。
   let otherProject = value.projects.find((p) => p.kind === "other" && !p.deleted);
   if (!otherProject) {
-    otherProject = {
+    otherProject = stamped({
       id: crypto.randomUUID(),
       kind: "other",
       title: "その他",
@@ -2420,16 +2418,15 @@ function normalizeState(value) {
       status: "active",
       twelveWeekStartDate: "",
       createdAt: nowDateTime(),
-      updatedAt: nowDateTime(),
       deleted: false
-    };
+    }, nowDateTime());
     value.projects.push(otherProject);
   }
   // v28: 「その他」Project 直下の受け皿 Task。直接追加した Block はこれに紐づく。
   //      normalizeState は state 確定前にも走るため、makeTask は使わず直接構築する。
   let otherTask = value.tasks.find((t) => t.kind === "other" && !t.deleted);
   if (!otherTask) {
-    otherTask = {
+    otherTask = stamped({
       id: crypto.randomUUID(),
       kind: "other",
       projectId: otherProject.id,
@@ -2447,9 +2444,8 @@ function normalizeState(value) {
       realizedDate: "",
       nextRoutineId: "",
       createdAt: nowDateTime(),
-      updatedAt: nowDateTime(),
       deleted: false
-    };
+    }, nowDateTime());
     value.tasks.push(otherTask);
   }
   // v28: 既存の孤立 Block(タスクシュート画面で追加されたが Task 未紐づけ)を
@@ -2952,8 +2948,8 @@ function updateCategoryField(catId, field, value) {
   if (field === "name" && value && value !== oldCat.name) {
     // v135: カテゴリ改名は実質的な内容変更のため、追従させるProject/Task/BlockのupdatedAtも
     // 更新する(更新しないと、同期マージ時に「新しい方が勝つ」判定を素通りして改名が消える)。
-    state.projects = state.projects.map((p) => p.category === oldCat.name ? { ...p, category: value, updatedAt: nowDateTime() } : p);
-    state.tasks = state.tasks.map((t) => t.category === oldCat.name ? { ...t, category: value, updatedAt: nowDateTime() } : t);
+    state.projects = state.projects.map((p) => p.category === oldCat.name ? { ...p, category: value } : p);
+    state.tasks = state.tasks.map((t) => t.category === oldCat.name ? { ...t, category: value } : t);
     state.blocks = state.blocks.map((b) => b.category === oldCat.name ? { ...b, category: value } : b);
     // v37: 繰り返しルールにも追従(これを忘れると、明日以降に実体化されるブロックが旧名のまま生成され、
     //      「ルーティン」カテゴリの改名ではルーティン画面から消える)
@@ -3116,7 +3112,7 @@ function seedState() {
       github: defaultGitHubSettings()
     },
     projects: [
-      {
+      stamped({
         id: wishId,
         kind: "wish",
         title: "Wish",
@@ -3124,10 +3120,9 @@ function seedState() {
         status: "active",
         twelveWeekStartDate: "",
         createdAt: nowDateTime(),
-        updatedAt: nowDateTime(),
         deleted: false
-      },
-      {
+      }, nowDateTime()),
+      stamped({
         id: projectId,
         kind: "normal",
         title: "Web版 TaskChute Journal を育てる",
@@ -3136,12 +3131,11 @@ function seedState() {
         // review-r2-claude-a L3: settings.twelveWeekStartDateと同じ丸め(直前の土曜)に揃える。
         twelveWeekStartDate: weekRange(today).weekStart,
         createdAt: nowDateTime(),
-        updatedAt: nowDateTime(),
         deleted: false
-      }
+      }, nowDateTime())
     ],
     tasks: [
-      {
+      stamped({
         id: taskA,
         projectId,
         title: "PWA版のMVPを確認する",
@@ -3149,10 +3143,9 @@ function seedState() {
         status: "doing",
         dueDate: today,
         createdAt: nowDateTime(),
-        updatedAt: nowDateTime(),
         deleted: false
-      },
-      {
+      }, nowDateTime()),
+      stamped({
         id: taskB,
         projectId,
         title: "GitHub Pages公開手順を決める",
@@ -3160,10 +3153,9 @@ function seedState() {
         status: "todo",
         dueDate: addDays(today, 1),
         createdAt: nowDateTime(),
-        updatedAt: nowDateTime(),
         deleted: false
-      },
-      {
+      }, nowDateTime()),
+      stamped({
         id: taskC,
         projectId: wishId,
         title: "気分が上がる散歩コースを試す",
@@ -3171,9 +3163,8 @@ function seedState() {
         status: "todo",
         dueDate: "",
         createdAt: nowDateTime(),
-        updatedAt: nowDateTime(),
         deleted: false
-      }
+      }, nowDateTime())
     ],
     blocks: [
       makeBlock({ taskId: taskA, date: today, title: "PWA版をiPadで触る", category: "開発", plannedStartAt: `${today}T09:00:00`, plannedEndAt: `${today}T10:00:00`, charge: 2, discharge: 1 }),
@@ -4850,10 +4841,9 @@ function carryOverBlock(id, { forceMIT = false, toDate = todayISO(), toastMessag
     const sameDayMITs = state.blocks.filter((b) => !b.deleted && b.date === toDate && b.isMIT);
     if (sameDayMITs.length < 3) block.isMIT = true;
   }
-  state.blocks.push(block);
   // 旧ブロックを「繰り越し済み」に(未完了リストから外れ、再提案されない)
-  state.blocks = state.blocks.map((b) => b.id === src.id ? { ...b, migratedTo: block.id, updatedAt: nowDateTime() } : b);
-  saveAndRender(toastMessage);
+  return commitBlockChanges([...state.blocks.map((b) => b.id === src.id ? { ...b, migratedTo: block.id } : b), block],
+    () => { render(); showToast(toastMessage); });
 }
 
 // v186 F2: DRIFTの提案は確認儀式を挟まず、既存の繰り越し意味論で今日から明日へ送る。
@@ -4936,7 +4926,6 @@ function resolveMigrationRitual(choice) {
   const { srcId, origin, draftItemId } = _migrationRitualCtx;
   const src = blockById(srcId);
   logMigrationRitual(src, choice);
-  _migrationRitualCtx = null;
 
   if (choice === "release") {
     const toWish = window.confirm(`「${src?.title || ""}」をWishへ移動しますか?\n(キャンセルで削除)`);
@@ -4946,7 +4935,8 @@ function resolveMigrationRitual(choice) {
     if (toWish) {
       releaseMsg = moveBlockToWish(srcId) ? "Wishへ移動しました" : "Blockを削除しました(Wishプロジェクトなし)";
     }
-    state.blocks = state.blocks.map((b) => b.id === srcId ? { ...b, deleted: true, updatedAt: nowDateTime() } : b);
+    if (!commitBlockChanges(state.blocks.map((b) => b.id === srcId ? { ...b, deleted: true } : b))) return false;
+    _migrationRitualCtx = null;
     if (origin === "draft" && _scheduleDraft) {
       _scheduleDraft.items = _scheduleDraft.items.filter((x) => x.id !== draftItemId);
       if (!_scheduleDraft.items.length) _scheduleDraft = null;
@@ -4957,6 +4947,7 @@ function resolveMigrationRitual(choice) {
   }
 
   if (choice === "decompose") {
+    _migrationRitualCtx = null;
     if (origin === "draft" && _scheduleDraft) {
       _scheduleDraft.items = _scheduleDraft.items.filter((x) => x.id !== draftItemId);
       if (!_scheduleDraft.items.length) _scheduleDraft = null;
@@ -4971,14 +4962,17 @@ function resolveMigrationRitual(choice) {
 
   if (choice === "today") {
     if (origin === "panel") {
-      carryOverBlock(srcId, { forceMIT: true });
+      if (carryOverBlock(srcId, { forceMIT: true }) === false) return false;
+      _migrationRitualCtx = null;
       closeModal();
     } else if (origin === "draft" && _scheduleDraft) {
+      _migrationRitualCtx = null;
       const it = _scheduleDraft.items.find((x) => x.id === draftItemId);
       if (it) { it.forceMIT = true; it._ritualResolved = true; }
       closeModal();
       confirmScheduleDraft();  // この項目は解決済みなので再スキャンでスキップされ、そのまま確定処理へ進む
     } else {
+      _migrationRitualCtx = null;
       closeModal();
     }
     return;
@@ -4986,14 +4980,17 @@ function resolveMigrationRitual(choice) {
 
   // choice === "carry"(それでも繰り越す)
   if (origin === "panel") {
-    carryOverBlock(srcId);
+    if (carryOverBlock(srcId) === false) return false;
+    _migrationRitualCtx = null;
     closeModal();
   } else if (origin === "draft" && _scheduleDraft) {
+    _migrationRitualCtx = null;
     const it = _scheduleDraft.items.find((x) => x.id === draftItemId);
     if (it) it._ritualResolved = true;
     closeModal();
     confirmScheduleDraft();
   } else {
+    _migrationRitualCtx = null;
     closeModal();
   }
 }
@@ -5008,10 +5005,11 @@ function resolveMigrationRitual(choice) {
 
 // 汎用: Task のフィールド更新(saveState のみ、再描画なし)
 function updateTaskField(id, field, value) {
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => updateTaskField(id, field, value), { kinds: ["tasks"] }).ok;
   state.tasks = state.tasks.map((t) => t.id === id
-    ? { ...t, [field]: value, updatedAt: nowDateTime() }
+    ? { ...t, [field]: value, ...(field === "status" && value === "completed" ? { progressNum: fillProgressOnComplete(t) } : {}) }
     : t);
-  saveState();
+  draftSaveTransaction.complete();
 }
 
 // v95: 進捗(分子/分母)からステータスを導出する。
@@ -5032,6 +5030,7 @@ function fillProgressOnComplete(task) {
 }
 // v95: WBS進捗の分子/分母インライン編集。値のクランプ + ステータス連動をまとめて行う
 function updateTaskProgress(id, field, rawValue) {
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => updateTaskProgress(id, field, rawValue), { kinds: ["tasks"] }).ok;
   const task = state.tasks.find((t) => t.id === id);
   if (!task) return;
   const n = Number(rawValue);
@@ -5041,9 +5040,9 @@ function updateTaskProgress(id, field, rawValue) {
   if (den > 0 && num > den) num = den;  // 分子>分母は分母に丸める
   const status = deriveStatusFromProgress(task.status, num, den);
   state.tasks = state.tasks.map((t) => t.id === id
-    ? { ...t, progressNum: num, progressDen: den, status, updatedAt: nowDateTime() }
+    ? { ...t, progressNum: num, progressDen: den, status }
     : t);
-  saveState();
+  draftSaveTransaction.complete();
   maybeQueueNextAiStep(id, task.status);  // v198(第3弾3e): 完了6経路#5。task.statusはmap前のprevStatus
 }
 
@@ -5279,13 +5278,18 @@ function planStepVisibleSiblings(task) {
 }
 
 function ensurePlanSiblingOrders(task, changedAt, force = false) {
+  if (!draftSaveTransaction.active) {
+    let numbered;
+    const result = draftSaveTransaction.run(() => { numbered = ensurePlanSiblingOrders(task, changedAt, force); draftSaveTransaction.complete(); }, { kinds: ["tasks"] });
+    return result.ok ? numbered : false;
+  }
   const sorted = planStepSiblings(task);
   const needsNumbering = force || sorted.some((t, i) =>
     !Number.isFinite(t.order) || (i > 0 && t.order <= sorted[i - 1].order));
   if (!needsNumbering) return { siblings: sorted, changed: false };
   const orderById = new Map(sorted.map((t, i) => [t.id, (i + 1) * 1000]));
   state.tasks = state.tasks.map((t) => orderById.has(t.id)
-    ? { ...t, order: orderById.get(t.id), updatedAt: changedAt }
+    ? { ...t, order: orderById.get(t.id) }
     : t);
   const refreshed = new Map(state.tasks.map((t) => [t.id, t]));
   return { siblings: sorted.map((t) => refreshed.get(t.id)), changed: true };
@@ -5380,20 +5384,20 @@ function resolveAiStepConfirmSend() {
     showToast("状況が変わったため送信を取りやめました");
     return;
   }
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => resolveAiStepConfirmSend(), { kinds: ["tasks", "aiStepPendingRequests"] }).ok;
   const nextStep = recomputedNext;
   const noteEl = document.querySelector("[data-ai-step-confirm-note]");
   const handoffNote = (noteEl?.value || "").trim();
   const now = new Date();
   const requestId = `${now.getTime()}-${crypto.randomUUID().slice(0, 8)}`;
   const requestedAt = now.toISOString();  // C-9: ミリ秒付きUTC形式
-  const changedAt = nowDateTime();
   state.tasks = state.tasks.map((t) => t.id === nextStepTaskId
-    ? { ...t, handoffNote, aiStatus: "queued", aiStepRequestId: requestId, aiStepRequestedAt: requestedAt, updatedAt: changedAt }
+    ? { ...t, handoffNote, aiStatus: "queued", aiStepRequestId: requestId, aiStepRequestedAt: requestedAt }
     : t);
   state.aiStepPendingRequests = [...state.aiStepPendingRequests, { requestId, taskId: nextStepTaskId, requestedAt }];
-  saveState();
+  draftSaveTransaction.complete();
   closeModal();
-  putAiStepRequest({ requestId, taskId: nextStepTaskId, handoffNote, requestedAt });
+  draftSaveTransaction.defer(() => putAiStepRequest({ requestId, taskId: nextStepTaskId, handoffNote, requestedAt }), { post: true });
 }
 
 // v198(第3弾3e): request PUT・占有チェック(GET-then-PUT)は3f+3gの担当。この単位では
@@ -5410,30 +5414,32 @@ function putAiStepRequest(payload) {
 // aiStepRequestId/aiStepRequestedAtをnullへ戻す。取消と同じ規律(dismissed追加により、後から
 // 届く応答があっても採用しない)。
 function compensateAiStepRequest(requestId, taskId) {
-  const changedAt = nowDateTime();
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => compensateAiStepRequest(requestId, taskId), { kinds: ["tasks", "aiStepDismissedIds", "aiStepPendingRequests"] }).ok;
   if (requestId && !state.aiStepDismissedIds.includes(requestId)) {
     state.aiStepDismissedIds = [...state.aiStepDismissedIds, requestId];
   }
   state.tasks = state.tasks.map((t) => t.id === taskId
-    ? { ...t, aiStatus: "error", aiStepRequestId: null, aiStepRequestedAt: null, updatedAt: changedAt }
+    ? { ...t, aiStatus: "error", aiStepRequestId: null, aiStepRequestedAt: null }
     : t);
   state.aiStepPendingRequests = state.aiStepPendingRequests.filter((e) => e.requestId !== requestId);
-  saveState();
+  draftSaveTransaction.complete();
 }
 
 function togglePlanStepOwner(id) {
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => togglePlanStepOwner(id), { kinds: ["tasks"] }).ok;
   const task = state.tasks.find((t) => t.id === id && !t.deleted);
   if (!task || !planParentFor(task)) return;
   const changedAt = nowDateTime();
   ensurePlanSiblingOrders(task, changedAt);
   const owner = task.owner === "ai" ? "k" : "ai";
   state.tasks = state.tasks.map((t) => t.id === id
-    ? { ...t, owner, aiWork: owner === "ai", updatedAt: changedAt }
+    ? { ...t, owner, aiWork: owner === "ai" }
     : t);
   saveAndRender(`担当を${owner === "ai" ? "AI" : "K"}に変更しました`);
 }
 
 function movePlanStep(id, direction) {
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => movePlanStep(id, direction), { kinds: ["tasks"] }).ok;
   if (direction !== -1 && direction !== 1) return;
   const task = state.tasks.find((t) => t.id === id && !t.deleted);
   if (!task || !planParentFor(task)) return;
@@ -5449,14 +5455,15 @@ function movePlanStep(id, direction) {
   }
   const ownOrder = visible[index].order;
   state.tasks = state.tasks.map((t) => {
-    if (t.id === id) return { ...t, order: other.order, updatedAt: changedAt };
-    if (t.id === other.id) return { ...t, order: ownOrder, updatedAt: changedAt };
+    if (t.id === id) return { ...t, order: other.order };
+    if (t.id === other.id) return { ...t, order: ownOrder };
     return t;
   });
   saveAndRender("ステップを移動しました");
 }
 
 function addPlanStepBelow(id) {
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => addPlanStepBelow(id), { kinds: ["tasks"] }).ok;
   const task = state.tasks.find((t) => t.id === id && !t.deleted);
   if (!task || !planParentFor(task)) return;
   const changedAt = nowDateTime();
@@ -5470,8 +5477,7 @@ function addPlanStepBelow(id) {
     after = numbered.siblings[index + 1];
     order = midpointOrder(numbered.siblings[index].order, after.order);
   }
-  if (numbered.changed) saveState();
-  openTaskCreator({ projectId: task.projectId, parentTaskId: task.parentTaskId, category: task.category || "", order });
+  draftSaveTransaction.complete(() => openTaskCreator({ projectId: task.projectId, parentTaskId: task.parentTaskId, category: task.category || "", order }));
 }
 
 function aiStepStatusLabel(status) {
@@ -5641,6 +5647,7 @@ async function pollPlanStepResponse() {
 // 承認: ステップをサブタスクとして作成する(既存サブタスクは触らない・追加のみ)。
 // orderは既存兄弟の後ろへ1000刻み、親のplanTargetを自動ON、owner==="ai"ならaiWorkも揃える(v195の規則)。
 function approvePlanStepDraft() {
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => approvePlanStepDraft(), { kinds: ["tasks"] }).ok;
   if (!_planStepDraft) return;
   const { taskId, steps } = _planStepDraft;
   const task = state.tasks.find((t) => !t.deleted && t.id === taskId);
@@ -5667,15 +5674,13 @@ function approvePlanStepDraft() {
     // 明示的に空へ戻す(期日が付くと朝プラン候補・ホームの期限リストへ最大7件が無言で流入する)。
     t.dueDate = "";
     t.order = order;
-    t.updatedAt = changedAt;
     order += 1000;
     return t;
   });
-  state.tasks = state.tasks.map((t) => t.id === taskId ? { ...t, planTarget: true, updatedAt: changedAt } : t);
+  state.tasks = state.tasks.map((t) => t.id === taskId ? { ...t, planTarget: true } : t);
   state.tasks.push(...newTasks);
   const count = newTasks.length;
-  _planStepDraft = null;
-  _planStepUi = { kind: "idle", message: "", taskId: "" };
+  draftSaveTransaction.defer(() => { _planStepDraft = null; _planStepUi = { kind: "idle", message: "", taskId: "" }; });
   closeModal();
   saveAndRender(`実行計画から${count}個のサブタスクを作成しました`);
 }
@@ -7315,6 +7320,7 @@ function parseSuggestedTaskTitle(raw) {
 }
 
 function addWeeklySuggestedTask(week, idx) {
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => addWeeklySuggestedTask(week, idx), { kinds: ["tasks"] }).ok;
   if (!week || !Number.isInteger(idx)) return;
   const key = `${week}:${idx}`;
   if (_weeklySuggestRegistered.has(key)) return;
@@ -7329,7 +7335,7 @@ function addWeeklySuggestedTask(week, idx) {
   const task = makeTask({ projectId: otherProject.id, title });
   if (estimateMin) task.estimateMin = estimateMin;
   state.tasks.push(task);
-  _weeklySuggestRegistered.add(key);
+  draftSaveTransaction.defer(() => _weeklySuggestRegistered.add(key));
   saveAndRender(`「${title}」をWBSに登録しました`);
 }
 
@@ -8654,6 +8660,7 @@ function buildQuestionBridgeModal(q) {
     </div>`;
 }
 function submitQuestionBridge() {
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => submitQuestionBridge(), { kinds: ["tasks", "projects", "questions"] }).ok;
   if (!state.modal || state.modal.type !== "questionBridge") return;
   const qId = state.modal.id;
   const q = state.questions.find((x) => x.id === qId);
@@ -8662,11 +8669,11 @@ function submitQuestionBridge() {
   if (!text || target === "__skip__") { closeModal(); return saveAndRender(); }
   const note = `問いから: ${q ? q.text : ""}`;
   if (target === "__new__") {
-    const proj = {
+    const proj = stamped({
       id: crypto.randomUUID(), kind: "normal", title: text, category: "", status: "active",
       twelveWeekStartDate: state.settings.twelveWeekStartDate || todayISO(),
-      description: note, createdAt: nowDateTime(), updatedAt: nowDateTime(), deleted: false
-    };
+      description: note, createdAt: nowDateTime(), deleted: false
+    }, nowDateTime());
     state.projects.push(proj);
     if (q) { q.linkedProjectId = proj.id; q.updatedAt = nowDateTime(); }
     closeModal();
@@ -8679,7 +8686,7 @@ function submitQuestionBridge() {
     closeModal();
     saveAndRender("結論をタスクにしました");
   }
-  setView("wbs");  // 実行先(WBS)へ。view 遷移は永続化される。
+  draftSaveTransaction.defer(() => setView("wbs"));  // 保存成功後に実行先へ移動する。
 }
 
 function reopenQuestion(qId) {
@@ -9470,10 +9477,11 @@ function renderDateBar() {
 }
 
 function addProject() {
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => addProject(), { kinds: ["projects"] }).ok;
   const title = document.querySelector("#projectTitle")?.value.trim();
   const kind = document.querySelector("#projectKind")?.value || "normal";
   if (!title) return showToast("Project名を入力してください");
-  state.projects.push({
+  state.projects.push(stamped({
     id: crypto.randomUUID(),
     kind,
     title,
@@ -9483,13 +9491,13 @@ function addProject() {
     collapsed: true,  // v288: 新規Projectは既定で閉じ、WBS初期表示の探索ノイズを抑える
     twelveWeekStartDate: kind === "normal" ? state.settings.twelveWeekStartDate || "" : "",
     createdAt: nowDateTime(),
-    updatedAt: nowDateTime(),
     deleted: false
-  });
+  }, nowDateTime()));
   saveAndRender("Projectを追加しました");
 }
 
 function deleteProject(id) {
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => deleteProject(id), { kinds: ["projects", "tracks"] }).ok;
   // v127追補(Codex P1): やりたいことの唯一のコンテナ(kind:"wish")は削除させない。
   // 削除するとgetWishProject()が見つからなくなり、normalizeStateが新しい空のWish Projectを
   // 再生成してしまい、既存のWishタスクは旧projectIdのままWishタブから見えなくなる。
@@ -9500,12 +9508,13 @@ function deleteProject(id) {
   }
   const now = nowDateTime();
   state.tracks = (state.tracks || []).map((track) => track.ownerType === "project" && track.ownerId === id
-    && !track.deleted && track.status === "active" ? { ...track, deleted: true, updatedAt: now } : track);
-  state.projects = state.projects.map((project) => project.id === id ? { ...project, deleted: true, updatedAt: now } : project);
+    && !track.deleted && track.status === "active" ? stamped({ ...track, deleted: true }, now) : track);
+  state.projects = state.projects.map((project) => project.id === id ? { ...project, deleted: true } : project);
   saveAndRender("Projectを削除しました");
 }
 
 function addTask() {
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => addTask(), { kinds: ["tasks"] }).ok;
   const title = document.querySelector("#taskTitle")?.value.trim();
   const projectId = document.querySelector("#taskProject")?.value || "";
   if (!title) return showToast("Task名を入力してください");
@@ -9524,7 +9533,7 @@ function makeTask({ projectId = "", parentTaskId = "", title = "", category = ""
   //      Wish Project配下は明示的なdueDate引数も無視し、常に空にする(意図的な期日はWishタブの
   //      期限入力[wish-set-duedate、v79]から作成後に設定する運用のまま変えない)。
   const isWishProject = state.projects.some((p) => p.id === projectId && p.kind === "wish");
-  return {
+  return stamped({
     id: crypto.randomUUID(),
     projectId,
     parentTaskId,
@@ -9563,9 +9572,8 @@ function makeTask({ projectId = "", parentTaskId = "", title = "", category = ""
     // v18: ルーティン連携(カテゴリ「ルーティン」の Task のみ意味を持つ)
     nextRoutineId: "",  // 完了時に「次:○○」として表示する後続ルーティン Task の ID
     createdAt: nowDateTime(),
-    updatedAt: nowDateTime(),
     deleted: false
-  };
+  }, nowDateTime());
 }
 
 // Project 配下に Task を直接追加(prompt でタイトル入力)
@@ -9620,33 +9628,35 @@ function getTaskDepth(task) {
 }
 
 function toggleTask(id) {
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => toggleTask(id), { kinds: ["tasks", "blocks"] }).ok;
   const task = state.tasks.find((t) => t.id === id);
   if (!task) return;
   if (task.status === "completed") {
     // v48: 完了解除時、Block の着手実績があれば doing に戻す(todo に落とすと実績が見えなくなる)
     const hasProgress = state.blocks.some((b) => !b.deleted && b.taskId === id && (b.completed || b.actualStartAt));
     state.tasks = state.tasks.map((t) => t.id === id
-      ? { ...t, status: hasProgress ? "doing" : "todo", updatedAt: nowDateTime() } : t);
-    closeAiStepConfirmIfUndone(id);  // v198(第3弾3e): 確認シート表示中に完了取消されたら閉じる
+      ? { ...t, status: hasProgress ? "doing" : "todo" } : t);
+    draftSaveTransaction.defer(() => closeAiStepConfirmIfUndone(id));
     saveAndRender("Taskを未完了に戻しました");
     return;
   }
   state.tasks = state.tasks.map((t) => t.id === id
-    ? { ...t, status: "completed", progressNum: fillProgressOnComplete(t), updatedAt: nowDateTime() } : t);
+    ? { ...t, status: "completed", progressNum: fillProgressOnComplete(t) } : t);
   // v48: 完了した Task の今日以降の「未着手」予定 Block(ゾンビ予定)を確認つきで整理。
   //      完了済みはもちろん、着手済み(actualStartAt あり)も実績なので対象外。
   const stale = state.blocks.filter((b) => !b.deleted && b.taskId === id && !b.completed && !b.actualStartAt && b.date >= todayISO());
   if (stale.length && window.confirm(`このTaskの今日以降の未完了Block ${stale.length}件も削除しますか?\n(完了済みの実績はそのまま残ります)`)) {
     const ids = new Set(stale.map((b) => b.id));
-    state.blocks = state.blocks.map((b) => ids.has(b.id) ? { ...b, deleted: true, updatedAt: nowDateTime() } : b);
+    state.blocks = state.blocks.map((b) => ids.has(b.id) ? { ...b, deleted: true } : b);
   }
   saveAndRender("Taskを完了しました");
   maybeQueueNextAiStep(id, task.status);  // v198(第3弾3e): 完了6経路#1(WBS/一覧のチェックボタン)
 }
 
 function deleteTask(id) {
-  state.tasks = state.tasks.map((task) => task.id === id ? { ...task, deleted: true, updatedAt: nowDateTime() } : task);
-  state.blocks = state.blocks.map((block) => block.taskId === id ? { ...block, taskId: "", updatedAt: nowDateTime() } : block);
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => deleteTask(id), { kinds: ["tasks", "blocks"] }).ok;
+  state.tasks = state.tasks.map((task) => task.id === id ? { ...task, deleted: true } : task);
+  state.blocks = state.blocks.map((block) => block.taskId === id ? { ...block, taskId: "" } : block);
   saveAndRender("Taskを削除しました");
 }
 
@@ -10255,6 +10265,7 @@ function toggleTaskCompleteFromBlock(blockId) {
 
 // v17: MIT(今日の主役)の切り替え。1日最大3個
 function toggleMIT(blockId) {
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => toggleMIT(blockId), { kinds: ["tasks", "blocks"] }).ok;
   const block = state.blocks.find((b) => b.id === blockId);
   if (!block) return;
   if (!block.isMIT) {
@@ -10265,7 +10276,7 @@ function toggleMIT(blockId) {
     }
   }
   state.blocks = state.blocks.map((b) => b.id === blockId
-    ? { ...b, isMIT: !b.isMIT, updatedAt: nowDateTime() }
+    ? { ...b, isMIT: !b.isMIT }
     : b);
   saveAndRender(block.isMIT ? "今日の主役から外しました" : "✦ 今日の主役に設定しました");
 }
@@ -10415,19 +10426,22 @@ function nowConveyorComplete(id) {
   }
 }
 
-// Block-only adapter; an active editor draft remains the single commit owner.
-function commitBlockChanges(blocks, effects = () => {}) {
+// Block adapter with optional recurrence changes; an active draft owns the commit.
+function commitBlockChanges(blocks, effects = () => {}, recurrences = state.recurrences) {
   if (draftSaveTransaction?.active) {
     state.blocks = blocks;
+    if (recurrences !== state.recurrences) state.recurrences = recurrences;
     draftSaveTransaction.complete(effects);
     return true;
   }
   const result = commitCandidate({ state, now: nowDateTime(), floors: [saveState.pendingStamp],
     build: snapshot => {
-      const beforeById = new Map(snapshot.blocks.map(block => [block.id, block]));
-      return { records: blocks.flatMap(after => {
-        const before = beforeById.get(after.id);
-        return JSON.stringify(before) === JSON.stringify(after) ? [] : [{ kind: "blocks", before, after }];
+      return { records: [["blocks", blocks], ["recurrences", recurrences]].flatMap(([kind, afterRecords]) => {
+        const beforeById = new Map((snapshot[kind] || []).map(record => [record.id, record]));
+        return (afterRecords || []).flatMap(after => {
+          const before = beforeById.get(after.id);
+          return JSON.stringify(before) === JSON.stringify(after) ? [] : [{ kind, before, after }];
+        });
       }) };
     },
     persist: () => { persistLocalNoSchedule(); return !_lastSaveError; },
@@ -10451,15 +10465,16 @@ function updateBlockField(id, field, value) {
 
 function deleteBlock(id) {
   const target = state.blocks.find((b) => b.id === id);
+  let recurrences = state.recurrences;
   // v23: 繰り返し実体を削除したら、ルールの例外日に追加(再生成を防ぐ)
   if (target && target.recurrenceGroupId) {
-    state.recurrences = (state.recurrences || []).map((r) =>
+    recurrences = (state.recurrences || []).map((r) =>
       r.id === target.recurrenceGroupId
-        ? { ...r, exceptionDates: [...new Set([...(r.exceptionDates || []), target.date])], updatedAt: nowDateTime() }
+        ? { ...r, exceptionDates: [...new Set([...(r.exceptionDates || []), target.date])] }
         : r);
   }
-  state.blocks = state.blocks.map((block) => block.id === id ? { ...block, deleted: true, updatedAt: nowDateTime() } : block);
-  saveAndRender("Blockを削除しました");
+  return commitBlockChanges(state.blocks.map((block) => block.id === id ? { ...block, deleted: true } : block),
+    () => { render(); showToast("Blockを削除しました"); }, recurrences);
 }
 
 // v169: setMorningEnergy/ensureConditionLog/conditionRecordedDates/conditionRecordedCountThisWeek/
@@ -11615,10 +11630,9 @@ const INTERRUPT_REASONS = ["割込み", "疲労", "迷い", "その他"];
 
 function recordBlockInterruption(blockId, reason) {
   if (!blockId) return;
-  state.blocks = state.blocks.map((b) => b.id === blockId
-    ? { ...b, interruptions: [...(b.interruptions || []), { at: nowDateTime(), reason }], updatedAt: nowDateTime() }
-    : b);
-  saveState();
+  return commitBlockChanges(state.blocks.map((b) => b.id === blockId
+    ? { ...b, interruptions: [...(b.interruptions || []), { at: nowDateTime(), reason }] }
+    : b));
 }
 
 // 「終了」ボタン押下直後だけ出す軽量な理由ピッカー(v62の却下理由ピッカーと同じ思想)。
@@ -11646,11 +11660,8 @@ function renderPomodoroInterruptControls(defaultHTML) {
 function stopPomodoro() {
   // v13/v311: 終了時、紐づくBlockの actualStartAt を消す(旧「中断」の完全停止挙動を温存)
   const blockId = state.pomodoro.blockId;
-  if (blockId) {
-    state.blocks = state.blocks.map((block) => block.id === blockId
-      ? { ...block, actualStartAt: "", updatedAt: nowDateTime() }
-      : block);
-  }
+  return commitBlockChanges(state.blocks.map((block) => block.id === blockId
+    ? { ...block, actualStartAt: "" } : block), () => {
   // v14: state.pomodoro を完全再構築(再開時に確実に 50:00 から)
   state.pomodoro = {
     running: false,
@@ -11662,6 +11673,7 @@ function stopPomodoro() {
     pausedRemainMs: 0
   };
   saveAndRender("ポモドーロを終了しました(実績開始時刻をクリア)");
+  });
 }
 
 // v311レビュー(Codex)で発見: 旧actualEndAt残置Blockの再ポモ連動で古い時刻を誤再利用する実害
@@ -11669,17 +11681,16 @@ function stopPomodoro() {
 function completePomodoro(preserveActualEndAt = false) {
   const blockId = state.pomodoro.blockId;
   const wasCompleted = Boolean(blockId && blockById(blockId)?.completed);
-  if (blockId) {
     // v19: 完了時、Block の完了フラグも立てる + 実績終了時刻記録
-    state.blocks = state.blocks.map((block) => block.id === blockId
+  return commitBlockChanges(state.blocks.map((block) => block.id === blockId
       ? {
           ...block,
           pomodoroCount: Number(block.pomodoroCount || 0) + 1,
           actualEndAt: preserveActualEndAt ? (block.actualEndAt || nowDateTime()) : nowDateTime(),
-          completed: true,
-          updatedAt: nowDateTime()
+          completed: true
         }
-      : block);
+      : block), () => {
+  if (blockId) {
     syncHabitStreakForBlock(state.blocks.find((block) => block.id === blockId));
     transferIronLogToCompletedBlock(blockId);
   }
@@ -11704,6 +11715,7 @@ function completePomodoro(preserveActualEndAt = false) {
   // (v117(C)過集中ゲートはv219のroutine.js削除で撤去済み。当時の「閉じた後にゲート判定」
   // という順序前提は現在は対応する呼び出し先が無く、身体スキャン単体の表示のみが残る)。
   openBodyScanModal(blockId);
+  });
 }
 
 // v129/v295: 身体スキャン ====================================================
@@ -11832,9 +11844,9 @@ function bodyScanRecord() {
     // 同じ「変更があるときだけ書く」パターン。無変更再保存が他端末のBlock編集をmergeByIdで
     // 負かす経路を断つ)。
     if (targetBlock && trimmedComment !== String(targetBlock.comment || "")) {
-      state.blocks = state.blocks.map((b) => b.id === ctx.pomodoroBlockId
-        ? { ...b, comment: commentText, updatedAt: nowDateTime() }
-        : b);
+      if (!commitBlockChanges(state.blocks.map((b) => b.id === ctx.pomodoroBlockId
+        ? { ...b, comment: commentText }
+        : b))) return false;
     }
   }
   closeBodyScanFlow(true);
@@ -11975,11 +11987,9 @@ function recordIncompleteReasonChip(chip) {
   if (!_pendingIncompleteReasonCtx || !chip) { skipIncompleteReasonModal(); return; }
   const blockId = _pendingIncompleteReasonCtx.queue[0];
   const note = (modalRoot.querySelector("[data-incomplete-reason-note]")?.value || "").trim();
-  state.blocks = state.blocks.map((b) => b.id === blockId
-    ? { ...b, incompleteReason: { chip, note, at: nowDateTime() }, updatedAt: nowDateTime() }
-    : b);
-  saveState();
-  advanceIncompleteReasonQueue();
+  return commitBlockChanges(state.blocks.map((b) => b.id === blockId
+    ? { ...b, incompleteReason: { chip, note, at: nowDateTime() } }
+    : b), advanceIncompleteReasonQueue);
 }
 
 // 「スキップ」/× / 背景タップ共通: 記録せず次のキューへ(罰なしトーンで軽く抜けられる)。
@@ -12245,11 +12255,8 @@ function finishReport(outcome, note) {
 // pomodoroCount加算のみ維持する(手動「☕ 休憩へ」・自動発火どちらの呼び出しも同じ関数のため統一)。
 function goBreakPomodoro() {
   const blockId = state.pomodoro.blockId;
-  if (blockId) {
-    state.blocks = state.blocks.map((block) => block.id === blockId
-      ? { ...block, pomodoroCount: Number(block.pomodoroCount || 0) + 1, updatedAt: nowDateTime() }
-      : block);
-  }
+  return commitBlockChanges(state.blocks.map((block) => block.id === blockId
+    ? { ...block, pomodoroCount: Number(block.pomodoroCount || 0) + 1 } : block), () => {
   // v14: 完全再構築 + 5分休憩開始
   // v19: lastFocusBlockId に保存(休憩後に「続ける/完了」選択用)
   const now = Date.now();
@@ -12264,6 +12271,7 @@ function goBreakPomodoro() {
     pausedRemainMs: 0
   };
   saveAndRender("休憩を開始しました");
+  });
 }
 
 // v9: 「✓ 休憩終了」: break セッションを終わって未起動状態に
@@ -13163,7 +13171,8 @@ function taskStatusLabel(s) {
 
 // v237: Project/Taskの中断・再開で共通のstatus更新と保存描画を一元化する。
 function setEntityStatus(collectionKey, id, status, message) {
-  state[collectionKey] = state[collectionKey].map((entity) => entity.id === id ? { ...entity, status, updatedAt: nowDateTime() } : entity);
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => setEntityStatus(collectionKey, id, status, message), { kinds: [collectionKey] }).ok;
+  state[collectionKey] = state[collectionKey].map((entity) => entity.id === id ? { ...entity, status } : entity);
   saveAndRender(message);
 }
 function suspendProject(id) { setEntityStatus("projects", id, "paused", "プロジェクトを中断しました"); }
@@ -13762,11 +13771,11 @@ function deleteFromModal() {
   if (!ok) return;
   // v368: 保存済みの削除対象だけを既存dispatcherへ渡す。
   // actualEntryなど削除操作を持たない型は確認前のガードで終了する。
+  // v381(束B2): 削除の成否はレジストリのハンドラ(deleteBlock / deleteTask / deleteProject の戻り値)で決め、
+  // 成功時だけ閉じる(設計03「削除イベント: 成功時だけ閉じる」)。型ごとの if 連鎖は置かない(登録表の網羅検査 action-registry-core [5])。
   if (dispatchModalDelete(state.modal.type, state.modal.id)) {
     closeModal();
-    return;
   }
-  closeModal();
 }
 
 // ---------- Project モーダル ----------
@@ -14066,6 +14075,7 @@ function buildProjectModal(project) {
 }
 
 function saveProjectFromModal(id, fields) {
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => saveProjectFromModal(id, fields), { kinds: ["projects", "tracks", "settings"] }).ok;
   const existing = state.projects.find((project) => project.id === id);
   const previousCycleStartDate = state.settings.twelveWeekStartDate || "";
   // K裁定2026-09-05: 新規サイクル開始(previousCycleStartDate/既存Projectの値がどちらも
@@ -14096,8 +14106,7 @@ function saveProjectFromModal(id, fields) {
       dueDate: fields.dueDate || "",
       description: fields.description || "",
       twelveWeekStartDate,
-      showProgress: Boolean(fields.showProgress),  // v95: WBS進捗率(Σ分子/Σ分母)の表示トグル
-      updatedAt: nowDateTime()
+      showProgress: Boolean(fields.showProgress)  // v95: WBS進捗率(Σ分子/Σ分母)の表示トグル
     };
   });
   closeModal();
@@ -14283,6 +14292,7 @@ function twyPlanFromFields(fields, existingPlan) {
 }
 
 function saveTaskFromModal(id, fields) {
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => saveTaskFromModal(id, fields), { kinds: ["tasks"] }).ok;
   // v47: id 空 = 新規作成モード(WBS の「+ タスク」「+ サブ」から)
   // v198(第3弾3e): この新規作成分岐はmaybeQueueNextAiStepの対象外(意図的な除外)。作成時点では
   // taskがまだstate.tasksに存在せず、parentTaskIdがあってもplanParentFor()の判定が成立しないため
@@ -14354,7 +14364,6 @@ function saveTaskFromModal(id, fields) {
       //      (以前は保存のたびに "" で消えていた)
       nextRoutineId: fields.nextRoutineId !== undefined ? fields.nextRoutineId : (t.nextRoutineId || ""),
       twyPlan: twyPlanFromFields(fields, t.twyPlan),  // v336: 12週プラン(週次目安/対象週/keystone)
-      updatedAt: changedAt
     };
   });
   closeModal();
@@ -15435,5 +15444,3 @@ document.addEventListener("visibilitychange", () => {
   else if(state.currentView === "journal") feedbackUiController?.refresh();
   maybeRefreshFeedback();                    // v77: フォアグラウンド復帰時にAIフィードバック等を再fetch
 });
-
-

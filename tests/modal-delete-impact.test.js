@@ -28,8 +28,14 @@ function setup(type, id, accept = true) {
   const effects = { messages: [], saved: 0, closed: 0 };
   const ctx = vm.createContext({ state: { ...fixture(), modal: { type, id } },
     window: { confirm: text => { effects.messages.push(text); return accept; } },
-    nowDateTime: () => "2026-09-06T12:00:00", saveAndRender: () => effects.saved++, showToast: () => {},
-    closeModal: () => effects.closed++ });
+    nowDateTime: () => "2026-09-06T12:00:00", saveAndRender: () => effects.saved++, showToast: () => {}, render: () => {},
+    closeModal: () => effects.closed++,
+    // v381(束B2 16a): Task/Project の削除は候補保存境界(draftSaveTransaction→commitCandidate)経由になった。
+    // この隔離試験は削除の影響範囲だけを見るので、境界は最小の代役(実行中フラグ・成功応答)で置き換える。
+    stamped: (record, stamp) => ({ ...record, updatedAt: stamp }),
+    draftSaveTransaction: { active: false, run(work) { this.active = true; try { work(); return { ok: true }; } finally { this.active = false; } } },
+    // v381(束B2 15c): Block の削除は commitBlockChanges(Block+例外日を1候補)経由。代役は候補をそのまま採用して成功を返す。
+    commitBlockChanges: (blocks, after, recurrences) => { ctx.state.blocks = blocks; if (recurrences) ctx.state.recurrences = recurrences; effects.saved++; if (typeof after === "function") after(); return true; } });
   vm.runInContext(extracted, ctx);
   ctx.dispatchModalDelete = (kind, key) => {
     const fn = { project: ctx.deleteProject, task: ctx.deleteTask, block: ctx.deleteBlock }[kind];

@@ -32,14 +32,15 @@ import { registerActions } from "../ui/actions.js";
 // ---- 依存注入(configureWish) ----
 let escapeHTML, renderHeader, todayISO, localDateTimeToMs, makeTask, makeBlock;
 let defaultPlannedTimes, showToast, nowDateTime, saveAndRender, render, updateTaskField;
-let maybeQueueNextAiStep;
+let maybeQueueNextAiStep, taskTransaction;
+let wishSubtaskDraft = null;
 let aiInsightsPanelHTML = () => "";
 
 function configureWish(deps) {
   ({
     escapeHTML, renderHeader, todayISO, localDateTimeToMs, makeTask, makeBlock,
     defaultPlannedTimes, showToast, nowDateTime, saveAndRender, render, updateTaskField,
-    maybeQueueNextAiStep
+    maybeQueueNextAiStep, taskTransaction
   } = deps);
   aiInsightsPanelHTML = deps.aiInsightsPanelHTML || (() => "");
   // v173: app.js分割・段階5-2(prep-stage5-dispatcher.md案A)。Wish CRUD分岐を登録する。
@@ -383,6 +384,7 @@ function renderWishSubtask(sub) {
 }
 
 function addWish() {
+  if (!taskTransaction().active) return taskTransaction().run(() => addWish(), { kinds: ["tasks", "wishOpenId"] }).ok;
   const titleEl = document.querySelector("#wishTitle");
   const title = titleEl?.value.trim();
   if (!title) return showToast("やりたいことを入力してください");
@@ -394,7 +396,7 @@ function addWish() {
   task.dueDate = "";
   state.tasks.push(task);
   state.wishOpenId = task.id;  // 追加後すぐに開く
-  if (titleEl) titleEl.value = "";
+  taskTransaction().defer(() => { if (titleEl) titleEl.value = ""; });
   saveAndRender("やりたいことを追加しました(サブタスクを書いて一歩を)");
 }
 
@@ -404,8 +406,16 @@ function toggleWishOpen(id) {
 }
 
 function addWishSubtask(parentTaskId) {
-  const title = window.prompt("サブタスク(次の一歩)を入力してください") || "";
-  if (!title.trim()) return;
+  if (!taskTransaction().active) {
+    const title = wishSubtaskDraft?.parentTaskId === parentTaskId ? wishSubtaskDraft.title
+      : window.prompt("サブタスク(次の一歩)を入力してください") || "";
+    if (!title.trim()) return false;
+    wishSubtaskDraft = { parentTaskId, title };
+    const result = taskTransaction().run(() => addWishSubtask(parentTaskId), { kinds: ["tasks"] });
+    if (result.ok) wishSubtaskDraft = null;
+    return result.ok;
+  }
+  const title = wishSubtaskDraft.title;
   const parent = state.tasks.find((t) => t.id === parentTaskId);
   if (!parent) return;
   const sub = makeTask({ projectId: parent.projectId, parentTaskId, title: title.trim() });
@@ -417,13 +427,13 @@ function addWishSubtask(parentTaskId) {
 }
 
 function toggleWishSubtask(id) {
+  if (!taskTransaction().active) return taskTransaction().run(() => toggleWishSubtask(id), { kinds: ["tasks"] }).ok;
   // v198(第3弾3e): updateTaskFieldと同じ理由でprevStatusをここで確保する(完了6経路#6)
   const prevStatus = state.tasks.find((t) => t.id === id)?.status;
   state.tasks = state.tasks.map((t) => t.id === id
     ? {
         ...t,
-        status: t.status === "completed" ? "todo" : "completed",
-        updatedAt: nowDateTime()
+        status: t.status === "completed" ? "todo" : "completed"
       }
     : t);
   saveAndRender("");
@@ -436,28 +446,33 @@ function wishSubtaskToTasks(taskId) {
 }
 
 function realizeWish(id) {
+  if (!taskTransaction().active) {
+    if (!window.confirm("このやりたいことを「実現済み」にしますか?")) { render(); return; }
+    return taskTransaction().run(() => realizeWish(id), { kinds: ["tasks"] }).ok;
+  }
   // v198(第3弾3e): maybeQueueNextAiStepは意図的に配線しない(対象外)。addWish()が作るWishは
   // 常にトップレベル(parentTaskIdは既定""のまま)でplanParentFor()がnullを返すため、発火条件2が
   // 構造的に不成立(監督者裁定・実装設計書H節)。前提はtests/v198.test.jsで固定する。
   // v79: ネイティブcheckboxはクリック時点でchecked属性が先に反転済みのため、confirmを
   // キャンセルしてここでreturnするだけだとチェックが見た目だけONに残ってしまう(state.realized
   // は変わっていないのに)。render()でDOMをstateに合わせて戻す。
-  if (!window.confirm("このやりたいことを「実現済み」にしますか?")) { render(); return; }
   const today = todayISO();
   state.tasks = state.tasks.map((t) => t.id === id
-    ? { ...t, realized: true, realizedDate: today, status: "completed", updatedAt: nowDateTime() }
+    ? { ...t, realized: true, realizedDate: today, status: "completed" }
     : t);
   saveAndRender("🎉 おめでとうございます!実現済みにしました");
 }
 
 function unrealizeWish(id) {
+  if (!taskTransaction().active) return taskTransaction().run(() => unrealizeWish(id), { kinds: ["tasks"] }).ok;
   state.tasks = state.tasks.map((t) => t.id === id
-    ? { ...t, realized: false, realizedDate: "", status: "todo", updatedAt: nowDateTime() }
+    ? { ...t, realized: false, realizedDate: "", status: "todo" }
     : t);
   saveAndRender("未実現に戻しました");
 }
 
 function deleteWish(id) {
+  if (!taskTransaction().active) return taskTransaction().run(() => deleteWish(id), { kinds: ["tasks", "wishOpenId"] }).ok;
   if (!window.confirm("このやりたいこと(およびサブタスク)を削除しますか?")) return;
   // 本体 + 子孫サブタスクをすべて deleted フラグ
   const allIds = new Set([id]);
@@ -471,7 +486,7 @@ function deleteWish(id) {
     });
   };
   collect(id);
-  state.tasks = state.tasks.map((t) => allIds.has(t.id) ? { ...t, deleted: true, updatedAt: nowDateTime() } : t);
+  state.tasks = state.tasks.map((t) => allIds.has(t.id) ? { ...t, deleted: true } : t);
   if (state.wishOpenId === id) state.wishOpenId = "";
   saveAndRender("削除しました");
 }
