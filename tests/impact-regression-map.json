@@ -501,7 +501,9 @@
       ],
       "suites": [
         "r1-twelveweek",
-        "r2-twelveweek-plan"
+        "r2-twelveweek-plan",
+        "remaining-twelveweek-layout",
+        "remaining-screen-labels"
       ]
     },
     "remaining-integrated-features": {
