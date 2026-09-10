@@ -2400,6 +2400,7 @@ function normalizeState(value) {
     return "";
   };
   value.blocks = value.blocks.map((block) => ({
+    copiedFromId: "",
     isMIT: false,
     source: "",
     estimateMin: null,   // v41: 見積時間(分)。null は解決順で埋める(入力必須にしない)
@@ -14678,6 +14679,7 @@ function saveBlockFromModal(id, fields) {
     carryCount: existing?.carryCount || 0,  // v61: マイグレーション儀式(繰り越し回数、編集では変えない)
     leverageType: fields.leverageType !== undefined ? fields.leverageType : (existing?.leverageType || ""),  // v65: 10x機構
     orderIndex: existing?.orderIndex || 0,
+    copiedFromId: existing && Object.hasOwn(existing, "copiedFromId") ? existing.copiedFromId : "",
     isMIT: existing?.isMIT || false,
     source: existing?.source || "",
     // v41: 見積時間(分)。空欄は null(解決順で補完)

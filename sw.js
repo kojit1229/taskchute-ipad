@@ -664,6 +664,7 @@ const APP_SHELL = [
   "./src/core/mutation-stamp.js",
   "./src/core/commit.js",
   "./src/core/daily-time.js",
+  "./src/core/daily-order.js",
 
   "./src/core/life-export.js",
 

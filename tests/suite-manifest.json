@@ -386,6 +386,29 @@
       }
     },
     {
+      "file": "daily-order-core.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 20,
+      "assertionHash": "ec5b42ab14266346",
+      "sourceHash": "44a03da275d31884",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
       "file": "daily-parts-contract.test.js",
       "kind": "node",
       "tier": "full",
