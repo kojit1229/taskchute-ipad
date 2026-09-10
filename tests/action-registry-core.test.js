@@ -107,6 +107,8 @@ const GOLDEN_CLICK_ACTIONS = [
   // v382(束B3 20b、監督者の契約追随 2026-09-10): 日常操作の登録表(DAILY_ACTIONS→runDailyOperation)への配線が
   // click dispatcher の先頭に入り、"modal-save" の分岐(保存ボタンの二重発火防止)はその配線の内側へ移った。
   // if連鎖の字句順は先頭になるため、順序込みの一致検査に合わせてここへ移す(集合・件数は不変)。
+  // v385 契約追随(監督者決定 2026-09-11): app.js の直接静的登録(同じ抽出順)。
+  "daily-block-start", "daily-block-end",
   "modal-save",
   "nav", "sync-banner-dismiss", "open-iron-log", "instruments-open-iron-log", "save-tower-journal",
   "focus-toggle-side", "focus-toggle-journal", "focus-toggle-life", "focus-mode",

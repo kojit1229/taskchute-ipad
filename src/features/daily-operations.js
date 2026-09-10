@@ -92,7 +92,7 @@ export function prepareDailyEnd(input, deps) {
     const declarations = deps.state.declarations?.filter(row => row.blockId === block.id && !row.deleted
       && block.actualStartAt && row.declaredAt === block.actualStartAt) || [];
     draft = { ...owner, requestId: input.requestId ?? null, date: block.date, actualStartAt: block.actualStartAt,
-      actualEndAt: block.actualEndAt || (typeof deps.now === "function" ? deps.now() : deps.now),
+      actualEndAt: (block.completed && block.actualEndAt) || (typeof deps.now === "function" ? deps.now() : deps.now),
       declarationId: started?.saved && started.at === block.actualStartAt ? started.declarationId
         : declarations.length === 1 ? declarations[0].id : "",
       fallbackId: (deps.newId || (() => crypto.randomUUID()))() };

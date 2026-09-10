@@ -1554,7 +1554,7 @@ const dailyOperationDeps = {
     showToast(result.timerStarted ? "ポモドーロを開始しました" : "開始時刻を入れました");
     if (result.timerStarted) queueMicrotask(() => maybeShowGuidedAccessHint());
   },
-  completedTask: task => ({ ...task, status: "completed", progressNum: fillProgressOnComplete(task) }),
+  completedTask: completedTaskRecord,
   requestPlanEnd: block => {
     openReportModal(block.id, "block");
     _pendingLifecycleCtx.endInput.values = { completed: true };
@@ -10295,6 +10295,10 @@ function toggleBlock(id) {
 //   OFF: Task の完了だけ解除する(toggleTask の完了解除と同じ方針でdoing/todoを判定)。
 //        Block側は解除しない(実績を消さないため。逆方向=Block解除だけではTaskは変えない、
 //        という既存方針と対称)。
+function completedTaskRecord(task) {
+  return { ...task, status: "completed", progressNum: fillProgressOnComplete(task) };
+}
+
 function toggleTaskCompleteFromBlock(blockId) {
   if (state.modal?.type === "block" && state.modal.id === blockId
       && requestDraftLeave(() => toggleTaskCompleteFromBlock(blockId), { allowDiscard: false })) return;

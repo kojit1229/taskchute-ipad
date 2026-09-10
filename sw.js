@@ -668,6 +668,9 @@ const APP_SHELL = [
   "./src/core/daily-order.js",
   "./src/core/block-copy.js",
   "./src/core/copy-undo.js",
+  "./src/core/daily-start.js",
+  "./src/core/daily-end.js",
+  "./src/core/daily-completion.js",
 
   "./src/core/life-export.js",
 

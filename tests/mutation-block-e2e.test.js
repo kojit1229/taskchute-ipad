@@ -340,7 +340,8 @@ async function lifecycleFixture() {
   const f = await fixture(['setBlockTime', 'resumeLifecycleStart', 'toggleBlock', 'autoCloseStaleRoutineRuns',
     'weekRange', 'candidateBlocksForWeek', 'commitmentItemForBlock', 'parseDate', 'addDays',
     'dateToISO', 'dateToLocalDateTime', 'localDateTimeToMs',
-    'saveActualEntryFromModal', 'toggleTaskCompleteFromBlock', 'bulkApproveAsPlanned']);
+    'saveActualEntryFromModal', 'toggleTaskCompleteFromBlock', 'bulkApproveAsPlanned',
+    'completedTaskRecord']); // v385: extracted production dependency; assertions unchanged
   Object.assign(f.ctx, {
     runDailyOperation: (await import('../src/features/daily-operations.js')).runDailyOperation,
     mergeWeeklyCommitments: (await import('../src/core/merge.js')).mergeWeeklyCommitments,

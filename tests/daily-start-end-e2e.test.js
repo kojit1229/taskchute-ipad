@@ -438,6 +438,35 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY, passGithubG
       await page.evaluate(() => { Storage.prototype.setItem = window.__setEnd; });
       console.log(`PASS 29b: ${action} midnight binding, atomic rollback/Task/comment/timer, input retention, retry/correction/date confirmation`);
     }
+    // v385 契約追随(監督者決定 2026-09-11): stale end versus completed correction.
+    for (const completed of [false, true]) {
+      await page.clock.setFixedTime(new Date(2026, 8, 11, 0, 10));
+      await page.evaluate(({ key, completed }) => {
+        const s = JSON.parse(localStorage.getItem(key));
+        s.blocks[0].date = '2026-09-10';
+        s.blocks[0].actualStartAt = '2026-09-10T23:50:00';
+        s.blocks[0].actualEndAt = '2026-09-11T00:05:00';
+        s.blocks[0].completed = completed;
+        s.declarations = []; s.weeklyCommitments = [];
+        s.pomodoro = { running: !completed, blockId: 'end-block', mode: 'focus',
+          startedAt: '2026-09-10T23:50:00', endsAt: '2026-09-11T00:15:00' };
+        localStorage.setItem(key, JSON.stringify(s));
+      }, { key: STATE_KEY, completed });
+      await page.reload();
+      await page.evaluate(completed => {
+        const el = document.createElement('button'); el.id = 'staleEndTrigger';
+        Object.assign(el.dataset, { action: completed ? 'daily-block-end' : 'complete-pomodoro',
+          kind: 'block', id: 'end-block' }); document.body.append(el);
+      }, completed);
+      await page.locator('#staleEndTrigger').click();
+      assert.equal(await page.locator('[data-modal-field="actualEndAt"]').inputValue(),
+        completed ? '2026-09-11T00:05' : '2026-09-11T00:10');
+      await page.locator('[data-action="report-skip"]').click();
+      const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), STATE_KEY);
+      assert.equal(saved.blocks[0].actualEndAt, completed ? '2026-09-11T00:05:00' : '2026-09-11T00:10:00');
+      assert.equal(saved.blocks[0].completed, true);
+      console.log('PASS fixV385: ' + (completed ? 'completed correction retains end' : 'complete-pomodoro/report-skip overwrites stale end'));
+    }
     assert.deepEqual(errors, []);
   } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

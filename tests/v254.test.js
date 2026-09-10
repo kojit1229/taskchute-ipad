@@ -102,9 +102,13 @@ console.log("[0] 共通フック契約と全経路の機械検査");
     check(`${name}のinteractive=${interactive}`,
       new RegExp(`interactive:\\s*${interactive}`).test(source));
   }
-  for (const name of ["setBlockTime", "startPomodoro", "saveBlockFromModal", "saveActualEntryFromModal"]) {
+  for (const name of ["startPomodoro", "saveBlockFromModal", "saveActualEntryFromModal"]) {
     check(`${name}が開始フックへ結線`, functionSource(name).includes("trackOnBlockStarted"));
   }
+  // v385 契約追随(監督者決定 2026-09-11): 開始候補が週メタを同時保存。
+  check("setBlockTime(actualStartAt)は登録表の開始経路へ委譲",
+    /if \(field === "actualStartAt"\) return resumeLifecycleStart\(\{ blockId: id, kind: "block" \}\)/.test(functionSource("setBlockTime"))
+      && functionSource("resumeLifecycleStart").includes("daily-block-start"));
   check("restore系は共通フック対象外", !/trackOnBlock(?:Started|CompletionChanged)/.test(functionSource("restoreBackup")));
   check("IRON LOG転記は共通フック対象外", !/trackOnBlock(?:Started|CompletionChanged)/.test(functionSource("transferIronLogToCompletedBlock")));
 }
@@ -199,6 +203,7 @@ console.log("[0] 共通フック契約と全経路の機械検査");
   const stored = () => page.evaluate((key) => JSON.parse(localStorage.getItem(key)), KEY);
   const resetHookSpies = () => page.evaluate((key) => {
     globalThis.__v254Writes = [];
+    globalThis.__v254WriteOrders = [];
     globalThis.__v254StorageOriginal ||= Storage.prototype.setItem;
     Storage.prototype.setItem = function(k, value) {
       if (k === key && globalThis.__v254FailNextWrite) {
@@ -206,7 +211,10 @@ console.log("[0] 共通フック契約と全経路の機械検査");
         throw new DOMException("v254 synthetic storage failure", "QuotaExceededError");
       }
       const result = globalThis.__v254StorageOriginal.call(this, k, value);
-      if (k === key) globalThis.__v254Writes.push(JSON.parse(value));
+      if (k === key) {
+        globalThis.__v254Writes.push(JSON.parse(value));
+        globalThis.__v254WriteOrders.push([...globalThis.__v254HookOrder]);
+      }
       return result;
     };
     globalThis.__v254StartCalls = [];
@@ -221,6 +229,7 @@ console.log("[0] 共通フック契約と全経路の機械検査");
     toasts: globalThis.__v254ToastCalls || [],
     saves: globalThis.__v254SaveCalls || [],
     writes: globalThis.__v254Writes || [],
+    writeOrders: globalThis.__v254WriteOrders || [],
     order: globalThis.__v254HookOrder || []
   }));
   async function clickAction(action, dataset = {}) {
@@ -292,12 +301,25 @@ console.log("[0] 共通フック契約と全経路の機械検査");
         // 記録の updatedAt と同値ではなく「それより古くならない」ことを確認する。
         && saved.dataModifiedAt >= savedItem.updatedAt && savedItem.updatedAt > OLD,
         JSON.stringify({ writes: spies.writes.length, savedBlock, savedItem }));
+    } else if (expectedSaveCalls === "daily-end") {
+      // v385 契約追随(監督者決定 2026-09-11): commitCandidate→hook→stamp save→final save。
+      check(`${label}: 候補保存1回がフックに先行し刻印後にも保存`,
+        spies.writes.length === 3 && spies.saves.length === 2
+        && JSON.stringify(spies.order) === JSON.stringify(["completion", "save", "toast", "save"])
+        && JSON.stringify(spies.writeOrders) === JSON.stringify([[], ["completion", "save"], ["completion", "save", "toast", "save"]])
+        && spies.writes.every(s => s.blocks.find(b => b.id === blockId)?.completed === true)
+        && spies.writes[0].weeklyCommitments.find(e => e.id === `wci_${WEEK_START}_${blockId}`)?.completedAt === ""
+        && spies.writes.slice(1).every(s => {
+          const item = s.weeklyCommitments.find(e => e.id === `wci_${WEEK_START}_${blockId}`);
+          return Boolean(item?.completedAt) && item.completedAt === record.completedAt
+            && item.completedChangedAt === record.completedChangedAt;
+        }), JSON.stringify(spies));
     } else {
       check(`${label}: saveState呼び出し回数`, spies.saves.length === expectedSaveCalls,
         JSON.stringify(spies.order));
     }
     const completionIndex = spies.order.indexOf("completion");
-    check(`${label}: 保存確定後にフック、刻印後にも保存`,
+    if (expectedSaveCalls !== "daily-end") check(`${label}: 保存確定後にフック、刻印後にも保存`,
       spies.order.slice(0, completionIndex).includes("save")
         && spies.order.slice(completionIndex + 1).includes("save"), JSON.stringify(spies.order));
     check(`${label}: completedChangedAt/item.updatedAt/dataModifiedAtを同時刻で永続化`,
@@ -335,7 +357,7 @@ console.log("[0] 共通フック契約と全経路の機械検査");
 
     await runCommittedCompletion("toggleTaskCompleteFromBlock", "task-route", true, 4,
       () => clickAction("toggle-task-complete", { id: "task-route" }));
-    await runCommittedCompletion("completePomodoro", "pomo-route", true, 4, async () => {
+    await runCommittedCompletion("completePomodoro", "pomo-route", true, "daily-end", async () => {
       await clickAction("complete-pomodoro");
       await page.locator('[data-action="report-skip"]').click();
     }, { pomodoro: { running: true, blockId: "pomo-route", startedAt: `${TODAY}T10:00:00`, endsAt: `${TODAY}T10:50:00`, mode: "focus" } });
@@ -371,7 +393,16 @@ console.log("[0] 共通フック契約と全経路の機械検査");
     // 残り、廃止の事実は引き続き検証される。
 
     console.log("[2] 開始3経路を個別に自動確定");
-    async function checkAutoCommit(label, blockId, action, { completions = 0 } = {}) {
+    function checkCandidateStart(label, blockId, spies, meta) {
+      const saved = spies.writes[0];
+      check(`${label}: 開始スパイ0回、開始とauto週メタを同じ保存1回で永続化`,
+        spies.starts.length === 0 && spies.writes.length === 1
+        && Boolean(saved?.blocks.find(b => b.id === blockId)?.actualStartAt)
+        && meta?.committedVia === "auto"
+        && JSON.stringify(saved?.weeklyCommitments.find(e => e.id === `wcw_${WEEK_START}`)) === JSON.stringify(meta),
+        JSON.stringify(spies));
+    }
+    async function checkAutoCommit(label, blockId, action, { completions = 0, candidate = false } = {}) {
       await seed({ blocks: [block(blockId)], weeklyCommitments: [] });
       await resetHookSpies();
       await action();
@@ -381,7 +412,9 @@ console.log("[0] 共通フック契約と全経路の機械検査");
       const meta = state.weeklyCommitments.find((entry) => entry.id === `wcw_${WEEK_START}`);
       check(`${label}でauto確定`, meta?.committedVia === "auto", JSON.stringify(meta));
       const spies = await hookSpies();
-      check(`${label}で開始フックを1回呼ぶ`,
+      // v385 契約追随(監督者決定 2026-09-11): 旧モーダルのフック検査は維持。
+      if (candidate) checkCandidateStart(label, blockId, spies, meta);
+      else check(`${label}で開始フックを1回呼ぶ`,
         spies.starts.filter((id) => id === blockId).length === 1, JSON.stringify(spies));
       check(`${label}の開始スパイは完了スパイと独立`,
         spies.completions.filter((call) => call.blockId === blockId).length === completions,
@@ -390,11 +423,11 @@ console.log("[0] 共通フック契約と全経路の機械検査");
     await checkAutoCommit("setBlockTime", "start-set", async () => {
       await clickAction("now-start", { id: "start-set" });
       await page.locator('[data-action="declare-skip"]').click();
-    });
+    }, { candidate: true });
     await checkAutoCommit("startPomodoro", "start-pomo", async () => {
       await clickAction("start-pomodoro", { blockId: "start-pomo" });
       await page.locator('[data-action="declare-skip"]').click();
-    });
+    }, { candidate: true });
     await checkAutoCommit("Block編集モーダル開始保存", "start-modal", async () => {
       await clickAction("edit-block", { id: "start-modal" });
       await page.locator('[data-modal-field="actualStartAt"]').fill(`${TODAY}T09:05`);
@@ -417,8 +450,8 @@ console.log("[0] 共通フック契約と全経路の機械検査");
       .some((entry) => entry.id === `wcw_${WEEK_START}`), { KEY, WEEK_START });
     const doubleState = await stored();
     const doubleSpies = await hookSpies();
-    check("setBlockTime→startPomodoroでも実変化ガードで開始フックは1回", doubleSpies.starts
-      .filter((id) => id === "auto-double").length === 1, JSON.stringify(doubleSpies));
+    checkCandidateStart("setBlockTime→startPomodoro", "auto-double", doubleSpies,
+      doubleState.weeklyCommitments.find(e => e.id === `wcw_${WEEK_START}`));
     check("二重開始経路でも週メタは1件", doubleState.weeklyCommitments
       .filter((entry) => entry.id === `wcw_${WEEK_START}`).length === 1,
       JSON.stringify(doubleState.weeklyCommitments));
