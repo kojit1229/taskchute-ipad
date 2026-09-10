@@ -49,6 +49,7 @@
         "configureWorkList|renderWorkList|handleWorkList|restoreWorkList|rememberWorkList|execDoneListHTML|renderExecDoneRow|block-row-toggle|exec-row-copy"
       ],
       "suites": [
+        "daily-add-e2e",
         "work-list-model",
         "work-list-focus",
         "work-list-render-focus",
@@ -258,7 +259,8 @@
         "v281",
         "v301",
         "v356",
-        "v82"
+        "v82",
+        "remaining-screen-labels"
       ]
     },
     "journal-feature": {
@@ -284,7 +286,8 @@
         "today-core",
         "tower-core",
         "tower-model-core",
-        "coach-core"
+        "coach-core",
+        "remaining-screen-labels"
       ]
     },
     "action-dispatch": {
@@ -297,6 +300,7 @@
     },
     "sync-storage": {
       "paths": [
+        "^src/core/single-schedule-merge\\.js$",
         "^src/(?:sync/|storage/|core/merge)"
       ],
       "patterns": [
@@ -304,6 +308,7 @@
       ],
       "suites": [
         "merge-core",
+        "single-schedule-merge",
         "store-core",
         "v72",
         "v118",
@@ -432,7 +437,8 @@
         "v325",
         "v327",
         "instruments-core",
-        "v326"
+        "v326",
+        "remaining-screen-labels"
       ]
     },
     "instruments-feature": {
@@ -445,7 +451,8 @@
         "v247",
         "v284",
         "v326",
-        "v327"
+        "v327",
+        "remaining-screen-labels"
       ]
     },
     "iron-log-feature": {
@@ -498,7 +505,9 @@
       ],
       "suites": [
         "r1-twelveweek",
-        "r2-twelveweek-plan"
+        "r2-twelveweek-plan",
+        "remaining-twelveweek-layout",
+        "remaining-screen-labels"
       ]
     },
     "remaining-integrated-features": {
@@ -509,6 +518,7 @@
         "configureKaradaImport|invalidateKaradaImport|invalidateVision|openTaskPlacement|captureIronSetDraft"
       ],
       "suites": [
+        "daily-add-e2e",
         "iron-input-safety-e2e",
         "iron-log-core",
         "iron-log-input-core",
@@ -518,7 +528,8 @@
         "placement-e2e",
         "vision-connection",
         "vision-connection-e2e",
-        "vision-overview"
+        "vision-overview",
+        "remaining-screen-labels"
       ]
     },
     "feedback-regeneration-integration": {

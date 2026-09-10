@@ -67,7 +67,7 @@ export function createFundIndividualView({escapeHTML,renderMarkdown,readState}) 
     const operationText=engine==='codex'?(operation[status?.status]||'未確認'):'処理状態の記録なし';
     const statusHTML=`<section class="panel fund-status"><h2>${labels[engine]}</h2><p>運用状態：${operationText}</p>
       <p class="fund-status-line" role="status">成績：${text(readState(snapshot))}${data && snapshot.state!=='available'?'。前回正常に取得した成績を表示しています':''}</p>
-      <p>成績の正常取得時刻（UTC）：${received(snapshot.lastSuccessAt)} ／ 今回の取得試行（UTC）：${received(snapshot.lastAttemptAt)}</p>
+      <p>成績の正常取得時刻（協定世界時・UTC）：${received(snapshot.lastSuccessAt)} ／ 今回の取得試行（協定世界時・UTC）：${received(snapshot.lastAttemptAt)}</p>
       ${engine==='codex'?`<p>処理状態の取得：${text(readState(statusSnapshot))}</p><p>処理状態の確認時刻：${text(status?.checkedAt)}</p>
       <p>直近の試行：${text(status?.lastAttemptAt)} ／ 直近の成功：${text(status?.lastSuccessAt)}</p>`:''}</section>`;
     if(!record(data)) return `${statusHTML}<section class="panel fund-loading"><p>表示できる成績がまだありません</p></section>`;

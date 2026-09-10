@@ -75,8 +75,10 @@ function check(name, cond, extra = "") {
       "2025-01-01": { checkedAt: "2025-01-01T06:00" }
     };
     await seed({ earlyBirdLogs: logsCase1 });
-    check("ヘッダは計器盤/INSTRUMENTS", (await page.locator(".eyebrow").textContent()) === "計器盤"
-      && (await page.locator(".view-header h1").textContent()) === "INSTRUMENTS");
+    // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
+    check("ヘッダはからだと継続の記録/健康", (await page.locator(".eyebrow").textContent()) === "からだと継続の記録"
+      // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
+      && (await page.locator(".view-header h1").textContent()) === "健康");
     check("当日未チェックの現在ストリークは3(前日以前の連続)", (await page.locator(".instr-streak-hero strong").textContent()) === "3日連続");
     const stats1 = await page.locator(".instr-stat-cell strong").allTextContents();
     check("自己ベストは3・今年5・累計6", stats1[0] === "3日" && stats1[1] === "5回" && stats1[2] === "6回", JSON.stringify(stats1));

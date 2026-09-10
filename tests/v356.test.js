@@ -372,8 +372,9 @@ test('v301:62-64 raw two-point paths use separate provided units; every series h
   assert.match(render({state:'idle'}),/成績：未取得/);
   assert.match(render({state:'idle',loading:true}),/成績：読み込み中/);
   const failed=render({state:'failed',lastAttemptAt:1000});
+  // R4-10: approved UTC explanation; keep every assertion and the timestamp.
   assert.match(failed,/取得に失敗しました/);
-  assert.match(failed,/今回の取得試行（UTC）：1970-01-01T00:00:01.000Z/);
+  assert.match(failed,/今回の取得試行（協定世界時・UTC）：1970-01-01T00:00:01.000Z/);
   assert.match(failed,/表示できる成績がまだありません/);
  });
 }

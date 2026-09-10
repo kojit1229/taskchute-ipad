@@ -2,7 +2,7 @@
 // today-core.test.jsと同じく、localStorage seed + 既存nav + Playwright clockで検証する。
 const fs = require("fs");
 const path = require("path");
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY, dismissBodyScanIfOpen } = require("./helpers");
+const { browseYesterdayForPlacement, assertUntimedTodayPlacement, chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY, dismissBodyScanIfOpen } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = STATE_KEY;
@@ -303,15 +303,11 @@ function check(name, cond, extra = "") {
     const wbsTask = id => page.locator(`[data-work-list="wbs"] [data-work-key="task:${id}"]`);
     check("見積35分の未配置TaskはWBSで未完了として残る", (await wbsTask('task-plan').textContent()).includes('見積35分') && (await wbsTask('task-plan').textContent()).includes('未完了'));
     check("配置済み・見積なし・未来期日・ProjectなしTaskもWBSで全件到達", (await Promise.all(tasks.map(task => wbsTask(task.id).count()))).every(count => count === 1));
+    const placementBrowsingDate = await browseYesterdayForPlacement(page);
     await page.locator('[data-action="task-today"][data-id="task-plan"]').first().click();
-    await page.waitForSelector('#placement-time');
-    check("配置確認前はBlockを作らず今日と見積35分を提示", await page.locator('#placement-duration').inputValue() === '35'
-      && await page.evaluate(KEY => !JSON.parse(localStorage.getItem(KEY)).blocks.some(item => item.taskId === 'task-plan'), KEY));
-    await page.locator('#placement-time').fill('14:00');
-    await page.locator('[data-action="modal-save"]').click();
-    await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).blocks.some((item) => item.taskId === "task-plan"), KEY);
-    const placedId = await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).blocks.find(item => item.taskId === 'task-plan').id, KEY);
-    await page.locator('.modal-card [data-action="modal-close"]').first().click();
+    const placedBlock = await assertUntimedTodayPlacement(page, { key: KEY, taskId: 'task-plan', today, browsingDate: placementBrowsingDate });
+    check('見積35分を保存したBlockへ引き継ぐ', placedBlock.estimateMin === 35);
+    const placedId = placedBlock.id;
     await page.locator('#sidebar [data-action="nav"][data-view="today"]').click();
     await page.waitForSelector('[data-work-list="today"]');
     check("既存task-todayで生成したBlockは今日一覧に1件だけ表示", await todayRow(placedId).count() === 1 && await page.locator('[data-work-list="today"] [data-work-key="task:task-plan"]').count() === 0);

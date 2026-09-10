@@ -1,0 +1,132 @@
+{
+  "selectors": [
+    ".today-tower, .tower-skin",
+    ".tower-col-left, .tower-col-center, .tower-col-right",
+    ".today-tower",
+    ".today-tower .tower-col-left",
+    ".today-tower .tower-col-center",
+    ".today-tower .tower-col-right",
+    "#app[data-view=\"today\"] .today-tower",
+    "#app[data-view=\"today\"] .today-tower .tower-col-left",
+    "#app[data-view=\"today\"] .today-tower .tower-col-center"
+  ],
+  "properties": [
+    "display",
+    "grid-template-columns",
+    "grid-template-areas",
+    "grid-area",
+    "grid-column",
+    "column-gap",
+    "row-gap",
+    "gap",
+    "order"
+  ],
+  "rules": [
+    {
+      "media": [],
+      "selector": ".today-tower, .tower-skin",
+      "declarations": {
+        "display": "flex"
+      }
+    },
+    {
+      "media": [],
+      "selector": ".tower-col-left, .tower-col-center, .tower-col-right",
+      "declarations": {
+        "display": "contents"
+      }
+    },
+    {
+      "media": [
+        "(min-width: 1280px)"
+      ],
+      "selector": ".today-tower",
+      "declarations": {
+        "display": "grid",
+        "grid-template-columns": "340px 320px minmax(0px, 1fr)",
+        "grid-template-areas": "\"mit mit mit\" \"cond cond cond\" \"alert alert alert\" \"life life so\" \"band2 band2 band2\" \"focus focus focus\" \"left center right\"",
+        "column-gap": "12px",
+        "row-gap": "0px",
+        "gap": "0px 12px"
+      }
+    },
+    {
+      "media": [
+        "(min-width: 1280px)"
+      ],
+      "selector": ".today-tower .tower-col-left",
+      "declarations": {
+        "display": "block",
+        "grid-area": "left",
+        "grid-column": "left"
+      }
+    },
+    {
+      "media": [
+        "(min-width: 1280px)"
+      ],
+      "selector": ".today-tower .tower-col-center",
+      "declarations": {
+        "display": "block",
+        "grid-area": "center",
+        "grid-column": "center"
+      }
+    },
+    {
+      "media": [
+        "(min-width: 1280px)"
+      ],
+      "selector": ".today-tower .tower-col-right",
+      "declarations": {
+        "display": "flex",
+        "grid-area": "right",
+        "grid-column": "right"
+      }
+    },
+    {
+      "media": [
+        "(min-width: 1024px) and (max-width: 1279px) and (orientation: landscape)"
+      ],
+      "selector": "#app[data-view=\"today\"] .today-tower",
+      "declarations": {
+        "display": "grid",
+        "grid-template-columns": "minmax(0px, 1fr) minmax(0px, 1fr)",
+        "column-gap": "12px",
+        "row-gap": "12px",
+        "gap": "12px"
+      }
+    },
+    {
+      "media": [
+        "(min-width: 1024px) and (max-width: 1279px) and (orientation: landscape)"
+      ],
+      "selector": "#app[data-view=\"today\"] .today-tower .tower-col-left",
+      "declarations": {
+        "display": "block",
+        "grid-column": "1",
+        "order": "2"
+      }
+    },
+    {
+      "media": [
+        "(min-width: 1024px) and (max-width: 1279px) and (orientation: landscape)"
+      ],
+      "selector": "#app[data-view=\"today\"] .today-tower .tower-col-center",
+      "declarations": {
+        "display": "block",
+        "grid-column": "2",
+        "order": "2"
+      }
+    },
+    {
+      "media": [
+        "(min-width: 1280px)"
+      ],
+      "selector": "#app[data-view=\"today\"] .today-tower",
+      "declarations": {
+        "grid-template-columns": "minmax(0px, 38fr) minmax(0px, 29fr) minmax(0px, 33fr)",
+        "grid-template-areas": "\"mit mit clock\" \"cond cond cond\" \"alert alert alert\" \"life life life\" \"so so so\" \"band2 band2 band2\" \"focus focus focus\" \"left center right\""
+      }
+    }
+  ]
+}

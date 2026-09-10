@@ -25,7 +25,7 @@
 // (f) ホームタブ「未完了タスク」パネル: 当日登録済み・未完了のタスクでも「＋今日に追加」ボタンが
 //     disabledにならず押せる状態を維持する(v112でdisabled解除)
 // (g) 同じくホームタブで、もう一度クリックすると2件目のBlockが作られ、バッジが更新される
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dismissBodyScanIfOpen } = require("./helpers");
+const { browseYesterdayForPlacement, assertUntimedTodayPlacement, chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dismissBodyScanIfOpen } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -112,24 +112,19 @@ function check(name, cond, extra = "") {
     await seed({tasks:[wbsTask('task-A','複数回今日へ追加検証Task')],projects:[testProject()],view:'wbs'});
     check('初期状態で一覧に出る',await openItem('task-A').count()===1);
     check('初期状態は当日Block未登録', (await placed('task-A')).length===0);
+    const placementBrowsingDate = await browseYesterdayForPlacement(page);
     await open('task-A');
-    check('開始時刻は空で、フォームを開くだけでは0件',await page.locator('#placement-time').inputValue()==='' && (await placed('task-A')).length===0);
-    await page.locator('[data-action="modal-save"]').click();
-    check('空時刻で確定しても0件・エラーを表示', (await placed('task-A')).length===0 && (await page.locator('#placement-error').textContent()).includes('開始時刻'));
-    await page.locator('#placement-time').fill('11:40');
+    await assertUntimedTodayPlacement(page, { key: KEY, taskId: 'task-A', today: TODAY, browsingDate: placementBrowsingDate, confirm: false });
+    check('確認画面を開くだけでは0件', (await placed('task-A')).length === 0);
     await page.locator('.modal-footer [data-action="modal-close"]').click();
-    await page.locator('[data-action="draft-leave-stay"]').click();
-    check('取消確認から戻ると入力保持・未保存',await page.locator('#placement-time').inputValue()==='11:40' && (await placed('task-A')).length===0);
-    await page.locator('.modal-footer [data-action="modal-close"]').click();
-    await page.locator('[data-action="draft-leave-discard"]').click();
-    check('破棄ではBlockを追加しない', (await placed('task-A')).length===0);
-    await open('task-A'); await page.locator('#placement-time').fill('11:40');
-    await page.locator('[data-action="modal-save"]').click();
+    check('取消はモーダルを閉じ未保存を保つ', (await stateNow()).modal === null && (await placed('task-A')).length === 0);
+    check('取消しても閲覧日を保持', (await stateNow()).selectedDate === placementBrowsingDate);
+    await open('task-A');
+    await assertUntimedTodayPlacement(page, { key: KEY, taskId: 'task-A', today: TODAY, browsingDate: placementBrowsingDate });
     const first=(await placed('task-A'));
     check('Blockが1件作られる',first.length===1,JSON.stringify(first));
-    check('同じTask・今日・指定開始終了を保存',first[0]?.taskId==='task-A' && first[0]?.date===TODAY && first[0]?.plannedStartAt===`${TODAY}T11:40` && first[0]?.plannedEndAt===`${TODAY}T12:10`);
-    check('追加結果に保存した時刻を表示', (await page.locator('.modal-card').textContent()).includes('11:40') && (await page.locator('.modal-card').textContent()).includes('12:10'));
-    await page.locator('[data-action="placement-return"]').click();
+    check('同じTask・今日・両時刻空を保存',first[0]?.taskId==='task-A' && first[0]?.date===TODAY && first[0]?.plannedStartAt==='' && first[0]?.plannedEndAt==='');
+    check('新規追加後は確認を閉じWBSへ戻る', (await stateNow()).modal === null && await openItem('task-A').count() === 1);
     check('1回目配置後も元WBSにTaskが残る',await openItem('task-A').count()===1);
     console.log('[2] 同日同Taskへの再訪は既存予定へ進み、時刻編集しても件数とidを保持');
     await open('task-A');
@@ -140,6 +135,7 @@ function check(name, cond, extra = "") {
     await page.locator('[data-modal-field="plannedStartAt"]').fill(`${TODAY}T11:45`);
     await page.locator('[data-action="modal-save"]').click();
     const revised=await placed('task-A');
+    console.log('fixV384d L138 observation', JSON.stringify({ modal: await page.evaluate(async () => (await import('/src/state/store.js')).state.modal), blocks: revised, modalText: await page.locator('#modalRoot').innerText() }));
     check('時刻変更後も同じBlockが1件',revised.length===1 && revised[0].id===first[0].id && revised[0].plannedStartAt===`${TODAY}T11:45:00`);
     await nav('wbs');
     check('再訪・編集後もTaskを保持',await openItem('task-A').count()===1 && (await stateNow()).tasks.find(t=>t.id==='task-A')?.status!=='completed');
@@ -163,8 +159,9 @@ function check(name, cond, extra = "") {
     check('期日未設定Taskは一覧に表示される',await openItem('task-nodue').count()===1);
     check('期限で削らず全4Taskを元配列順で表示',JSON.stringify(await taskIds())===JSON.stringify(tasks.map(t=>t.id)));
     const beforeTasks=(await stateNow()).tasks;
-    await open('task-today2');await page.locator('#placement-time').fill('15:00');await page.locator('[data-action="modal-save"]').click();
-    await page.locator('[data-action="placement-return"]').click();
+    const secondBrowsingDate = await browseYesterdayForPlacement(page);
+    await open('task-today2');
+    await assertUntimedTodayPlacement(page, { key: KEY, taskId: 'task-today2', today: TODAY, browsingDate: secondBrowsingDate });
     check('Block登録後も全件の並びは変わらない',JSON.stringify(await taskIds())===JSON.stringify(tasks.map(t=>t.id)));
     check('Block登録はTask情報を変更しない',JSON.stringify((await stateNow()).tasks)===JSON.stringify(beforeTasks));
     check('Block登録したTaskは一覧に残ったまま',await openItem('task-today2').count()===1);

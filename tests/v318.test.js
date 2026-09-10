@@ -1,3 +1,4 @@
+// 4回-08/4回-10 日本語化の契約追随(監督者決定 2026-09-10)
 // v318: タップ領域44px / FUND失敗表示 / 睡眠未記録の中立化 / 同期バナー閉じる。
 const os = require("os");
 const path = require("path");
@@ -55,7 +56,7 @@ const HEALTH_FIXTURE = {
     const unavailable=fund.render(),failure=fund.snapshot('fable');
     check("失敗メタデータ更新は再描画対象", updates>beforeUpdates && failure.attemptId===1 && failure.lastAttemptAt===1000);
     check("404は最終試行時刻と再取得導線を表示", failure.state==='not_created' && unavailable.includes('まだ作成されていません')
-      && unavailable.includes('今回の取得試行（UTC）：1970-01-01T00:00:01.000Z') && unavailable.includes('data-action="fund-refresh"'));
+      && unavailable.includes('今回の取得試行（協定世界時・UTC）：1970-01-01T00:00:01.000Z') && unavailable.includes('data-action="fund-refresh"'));
     check("失敗表示に赤・警告クラスを使わない", !/class="[^"]*(?:danger|error|warning|red)/i.test(unavailable));
     result={ok:true,status:200,text:'{broken'};clock=2000;await fund.load({force:true});
     check("壊れたJSONも取得失敗表示", fund.snapshot('fable').state==='invalid' && fund.snapshot('fable').error==='invalid_json'
@@ -218,7 +219,7 @@ const HEALTH_FIXTURE = {
     await page.waitForFunction(()=>document.querySelector('.fund-status-line')?.textContent.includes('前回正常に取得した成績'));
     check("FUNDは前回成功後の404でも従来データを表示", await page.locator('.fund-summary').count()===1
       && (await page.locator('.fund-status-line').textContent()).includes('まだ作成されていません')
-      && (await page.locator('.fund-status').textContent()).includes('今回の取得試行（UTC）：2026-09-02'));
+      && (await page.locator('.fund-status').textContent()).includes('今回の取得試行（協定世界時・UTC）：2026-09-02'));
     await page.reload();await page.waitForSelector('.fund-switches');await selectFable();
     await page.waitForFunction(()=>document.querySelector('.fund-status-line')?.textContent.includes('まだ作成されていません'));
     check("キャッシュ無し404は中立の失敗表示", await page.locator('.fund-summary').count()===0
@@ -227,7 +228,7 @@ const HEALTH_FIXTURE = {
     fundMode = "broken";await page.reload();await page.waitForSelector('.fund-switches');await selectFable();
     await page.waitForFunction(()=>document.querySelector('.fund-status-line')?.textContent.includes('データの形式を確認できません'));
     check("キャッシュ無し壊れJSONも中立の失敗表示", await page.locator('.fund-summary').count()===0
-      && (await page.locator('.fund-status').textContent()).includes('今回の取得試行（UTC）：2026-09-02')
+      && (await page.locator('.fund-status').textContent()).includes('今回の取得試行（協定世界時・UTC）：2026-09-02')
       && await page.locator('.fund-status.danger, .fund-status.error, .fund-status.warning').count()===0);
 
     await page.evaluate(async () => (await import("./src/sync/github.js")).setSyncBanner("同期エラーA: 詳細メッセージ"));

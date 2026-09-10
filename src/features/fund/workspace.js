@@ -30,8 +30,8 @@ export function createFundWorkspace({ transport, escapeHTML, renderHeader, rende
   }
   function render() {
     const controls = `<p class="fund-note">模擬運用・閲覧専用</p><button class="btn ghost" data-action="fund-refresh">再取得</button>`;
-    return `<div class="fund-view">${renderHeader('PAPER TRADE', 'FUND', controls)}
-      <div class="fund-switches" role="group" aria-label="FUNDの表示">${Object.entries(choices).map(([engine, label]) =>
+    return `<div class="fund-view">${renderHeader('模擬運用', '資産', controls)}
+      <div class="fund-switches" role="group" aria-label="資産の表示">${Object.entries(choices).map(([engine, label]) =>
         `<button class="btn ghost" data-action="fund-select" data-engine="${engine}" aria-pressed="${selected === engine}">${label}</button>`).join('')}</div>
       <div class="fund-content" data-fund-selection="${selected}">${content()}</div></div>`;
   }

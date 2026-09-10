@@ -1,6 +1,7 @@
 import { state } from "../state/store.js";
 import { registerActions } from "../ui/actions.js";
 import { workListRows, filterWorkList } from "../core/work-list.js";
+import { existingPlacement } from "../core/placement.js";
 import { renderSearchFrame, patchSearchFrame } from "../ui/daily-parts/search-frame.js";
 
 let escapeHTML, todayISO, dueDate, renderBlock, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails;
@@ -32,6 +33,14 @@ function rowsFor(scope) {
 // (leverageTypeMarkHTML)は、app.js→src循環依存を避けるため複製していたが、timelineが既に
 // 同じ関数をconfigureTimeline()経由で注入している前例(app.js:423)に倣い、こちらもDIへ統一した。
 // 未注入(configureWorkList呼び出し漏れ)でも例外にせず空文字を返す(listRow内で分岐)。
+function placementActions(row, scope) {
+  if (scope !== "wbs" || row.kind !== "task") return "";
+  const existing = existingPlacement(state.blocks, row.id, todayISO());
+  const active = row.item.status !== "completed";
+  if (!existing && !active) return "";
+  return `<button class="btn" data-action="placement-add-today" data-id="${escapeHTML(row.id)}">${existing ? "予定を見る" : "今日へ追加"}</button>`
+    + (existing && active ? `<button class="btn" data-action="placement-add-another" data-id="${escapeHTML(row.id)}">別の予定を追加</button>` : "");
+}
 function listRow(row, scope) {
   if (scope === "exec" && row.kind === "block") return `<div data-work-key="${escapeHTML(row.key)}"><div class="work-list-date">${escapeHTML(row.date)}</div>${renderBlock(row.item)}</div>`;
   const status = { completed: "完了", ended: "終了・未完了", running: "実行中", open: "未完了", suspended: "中断" }[row.status];
@@ -41,6 +50,7 @@ function listRow(row, scope) {
     <button type="button" class="btn ghost work-list-title" data-action="edit-${row.kind}" data-id="${escapeHTML(row.id)}">${row.kind === "block" && row.item.isMIT === true ? '<span class="mit-star" aria-label="MIT">★</span> ' : ""}${escapeHTML(row.title || "（名称なし）")}</button>
     <div class="work-list-meta">${escapeHTML([row.kind === "block" ? row.date + " " + (row.time.slice(11, 16) || "時刻未定") : row.kind === "project" ? "Project" : "Task", row.project?.title, row.category, estimate ? `見積${estimate}分` : "", row.due ? `作業期限 ${row.due}` : "期限なし", externalDue && externalDue !== row.due ? `外部期限 ${externalDue}` : "", status].filter(Boolean).join(" ・ "))}${row.kind === "task" && leverageTypeMarkHTML ? leverageTypeMarkHTML(row.item.leverageType) : ""}</div>
     ${scope === "today" && row.kind === "block" && dailyBlockDetails ? dailyBlockDetails(row.item, Boolean(row.item.completed || row.item.actualEndAt), false) : ""}
+    ${placementActions(row, scope)}
     ${scope === "wbs" && row.project && !row.project.deleted ? `<button class="btn ghost search-hit" data-action="wbs-search-jump" data-kind="${row.kind}" data-id="${escapeHTML(row.id)}"><span class="search-kind">${row.kind === "task" ? "Task" : "Project"}</span> <span class="search-date">${escapeHTML(row.category || "未分類")}</span> <span class="search-snippet">${escapeHTML(row.title)}</span> — ツリーで見る</button>` : ""}
   </div>`;
 }
@@ -71,7 +81,10 @@ function renderWorkList(scope) {
 function patchWorkList(root, reset = false) {
   if (root.dataset.workComposing === "1") return;
   const scope = root.dataset.workList, model = rowsFor(scope);
-  patchSearchFrame(root, searchModel(scope, model), { escapeHTML, resultsHTML: rowsHTML(model, scope), reset });
+  // Compare browser-serialized HTML so attribute whitespace never replaces unchanged rows.
+  const template = root.ownerDocument.createElement("template");
+  template.innerHTML = rowsHTML(model, scope);
+  patchSearchFrame(root, searchModel(scope, model), { escapeHTML, resultsHTML: template.innerHTML, reset });
 }
 function handleWorkListInput(target) {
   const root = target.closest?.("[data-work-list]");

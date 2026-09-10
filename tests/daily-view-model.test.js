@@ -114,11 +114,12 @@ function check(name, fn) { fn(); checks++; console.log(`PASS ${name}`); }
 
   const listSource = fs.readFileSync(path.join(root, "src/features/work-list.js"), "utf8");
   const listAst = acorn.parse(listSource, { ecmaVersion: "latest", sourceType: "module" });
+  const { existingPlacement } = await import(pathToFileURL(path.join(root, "src/core/placement.js")).href);
   const listHarness = vm.runInNewContext(listAst.body.filter(node => node.type === "VariableDeclaration"
-    || node.type === "FunctionDeclaration" && ["configureWorkList", "listRow"].includes(node.id.name))
+    || node.type === "FunctionDeclaration" && ["configureWorkList", "placementActions", "listRow"].includes(node.id.name))
     .map(node => listSource.slice(node.start, node.end)).join("\n") + "\n({configureWorkList,listRow})",
-    { registerActions: () => {} });
-  const listDeps = { escapeHTML: helpers.escapeHTML, resolveEstimateMin: () => 30 };
+    { registerActions: () => {}, existingPlacement, state: { blocks: [] } });
+  const listDeps = { todayISO: () => DAY, escapeHTML: helpers.escapeHTML, resolveEstimateMin: () => 30 };
   const listBlock = (b = block()) => ({ kind: "block", key: `block:${b.id}`, id: b.id, item: b,
     date: DAY, time: b.plannedStartAt, title: b.title, status: "open" });
   check("today Block rows render injected production plan and actual details", () => {

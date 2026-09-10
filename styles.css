@@ -5203,6 +5203,30 @@ details.settings-row > .fold-summary.settings-row-summary {
 }
 
 /* v274: Today統合画面だけをS2 GLASSへ完全移行する。計器盤など.tower-skin系の現行意匠は維持。 */
+
+/* R4-01: Keep the twelve-week header, face selector and panels in one column. */
+.twy-tower {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+}
+.twy-tower > * {
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.twy-tower .twy-plan-grid-wrap {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.twy-tower .twy-plan-grid {
+  width: 100%;
+}
+
 /* v356: 12WYタブ(R1a)へS2 GLASSを拡張(design.md §2.1裁定5)。使うルールだけ拡張対象にする。 */
 #app[data-view="today"] .today-tower,
 #app[data-view="twelveweek"] .today-tower {

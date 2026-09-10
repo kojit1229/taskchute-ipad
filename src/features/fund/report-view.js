@@ -79,7 +79,7 @@ export function createFundReportView({selection,gateway,escapeHTML,renderMarkdow
       ${partial?`<p class="fund-note" role="status">${partial}</p>`:''}
       <section class="panel fund-journal"><h3>${labels[s.engine]} ${text(s.date||'日付未選択')} ${family}</h3>
       <p class="fund-status-line" role="status">${status}${validBody && report.state!=='available'?'。前回正常に取得した本文を表示しています':''}</p>
-      <p class="fund-note">正常取得時刻（UTC）：${received(report?.lastSuccessAt)} ／ 今回の取得試行（UTC）：${received(report?.lastAttemptAt)}</p>
+      <p class="fund-note">正常取得時刻（協定世界時・UTC）：${received(report?.lastSuccessAt)} ／ 今回の取得試行（協定世界時・UTC）：${received(report?.lastAttemptAt)}</p>
       ${validBody?`<div class="md-render readonly-md" data-report-file="${text(s.name)}" data-report-loaded="${report.state==='available'?'1':'0'}">${renderMarkdown(report.data)}</div>`:''}
       ${!s.date?'<p>読みたい日付の記録がまだありません</p>':''}</section></section>`;
   }
@@ -90,7 +90,7 @@ export function createFundReportView({selection,gateway,escapeHTML,renderMarkdow
       const body=typeof s.data==='string'?s.data:'',summary=body.split(/\r?\n/).map(v=>v.trim()).find(Boolean)||'';
       return `<article class="fund-money-summary"><h4>${labels[engine]} FUND ${date}</h4><p>${stateText(s,'journal')}${body && s.state!=='available'?'。前回取得した本文の要約です':''}</p>
         ${summary?`<p>${text(summary.replace(/^#{1,6}\s*/, '').slice(0,60))}</p>`:''}
-        <p class="fund-note">正常取得時刻（UTC）：${received(s.lastSuccessAt)}</p>
+        <p class="fund-note">正常取得時刻（協定世界時・UTC）：${received(s.lastSuccessAt)}</p>
         <button type="button" class="btn ghost" style="min-height:44px" data-action="fund-report-open" data-engine="${engine}" data-family="journal" data-date="${date}">この日の日誌を読む</button></article>`;
     }).join('')}</section>`;
   }

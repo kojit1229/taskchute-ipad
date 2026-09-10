@@ -2,7 +2,7 @@
 // 下部「タスク」一覧の母集団再編(未完了 or 期限が今日+7日以内、Wish除外、期限昇順)。
 // renderBlockItem(死コード)削除は実行コード差分200行の都合で本バージョンでは対象外。
 const {
-  chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate,
+  browseYesterdayForPlacement, assertUntimedTodayPlacement, chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate,
   randomPort, STATE_KEY
 } = require("./helpers");
 const fs = require("fs");
@@ -166,18 +166,15 @@ async function seed(page, values) {
       && await page.evaluate(key => JSON.parse(localStorage.getItem(key)).blocks.length, STATE_KEY) === beforeExisting);
     await page.locator('[data-action="placement-return"]').click();
 
-    console.log("[3] WBSの今日へは時刻確認を経てBlock配置しTaskを残す");
+    console.log("[3] WBSの今日へは時刻なし確認でBlock配置しTaskを残す");
+    const placementBrowsingDate = await browseYesterdayForPlacement(page);
     const countBefore = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).blocks.length, STATE_KEY);
     await tree("t-plus7").locator('[data-action="task-today"]').click();
     await page.waitForSelector('.placement-form');
     check("今日へだけではまだBlockを増やさない", await page.evaluate(key => JSON.parse(localStorage.getItem(key)).blocks.length, STATE_KEY) === countBefore);
-    await page.locator('#placement-time').fill("14:00");
-    await page.locator('#placement-duration').fill("30");
-    await page.locator('[data-action="modal-save"]').click();
-    await page.waitForSelector('[data-action="placement-return"]');
+    await assertUntimedTodayPlacement(page, { key: STATE_KEY, taskId: 't-plus7', today: TODAY, browsingDate: placementBrowsingDate });
     const placed = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).blocks.filter(b => !b.deleted && b.taskId === "t-plus7"), STATE_KEY);
-    check("時刻確定で今日14:00のBlockを1件だけ配置", placed.length === 1 && placed[0].date === TODAY && placed[0].plannedStartAt === `${TODAY}T14:00` && placed[0].plannedEndAt === `${TODAY}T14:30`);
-    await page.locator('[data-action="placement-return"]').click();
+    check("確認確定で今日の時刻なしBlockを1件だけ配置", placed.length === 1 && placed[0].date === TODAY && placed[0].plannedStartAt === "" && placed[0].plannedEndAt === "");
     check("配置後も元TaskをWBSに保持", await results.locator('[data-work-key="task:t-plus7"]').count() === 1);
     await page.locator('[data-action="nav"][data-view="exec"]:visible').first().click();
     check("配置済みBlockは実行予定へ現れる", await page.locator(`[data-work-list="exec"] [data-work-key="block:${placed[0].id}"] .exec-row-upcoming`).count() === 1);

@@ -161,7 +161,7 @@ function weekSummary(days, state, todayIso) {
 function durationText(minutes) {
   if (minutes === null) return "—";
   const rounded = Math.round(minutes);
-  return `${Math.floor(rounded / 60)}h${String(rounded % 60).padStart(2, "0")}m`;
+  return `${Math.floor(rounded / 60)}時間${String(rounded % 60).padStart(2, "0")}分`;
 }
 function shortDate(iso) { return iso ? `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}` : "—"; }
 function generatedTime(value) {
@@ -180,11 +180,11 @@ function todayPanelHTML(state, todayIso, health) {
   const detail = (value, text) => value === null ? "未記録" : text;
   const kpis = [
     metricHTML("睡眠", durationText(cond.sleepMin), detail(cond.sleepMin, cond.bedTime && cond.wakeTime ? `${cond.bedTime}→${cond.wakeTime}` : "未記録")),
-    metricHTML("安静時HR", cond.restingHr?.toLocaleString("ja-JP") ?? "—", detail(cond.restingHr, "bpm")),
-    metricHTML("HRV", cond.hrv?.toLocaleString("ja-JP") ?? "—", detail(cond.hrv, "ms")),
+    metricHTML("安静時心拍数", cond.restingHr?.toLocaleString("ja-JP") ?? "—", detail(cond.restingHr, "拍/分")),
+    metricHTML("心拍変動", cond.hrv?.toLocaleString("ja-JP") ?? "—", detail(cond.hrv, "ミリ秒")),
     metricHTML("昨日の歩数", cond.ySteps?.toLocaleString("ja-JP") ?? "—", detail(cond.ySteps, "歩")),
     metricHTML("昨日の運動", cond.yExerciseMin?.toLocaleString("ja-JP") ?? "—", detail(cond.yExerciseMin, "分"), true),
-    metricHTML("昨日の活動", cond.yActiveKcal?.toLocaleString("ja-JP") ?? "—", detail(cond.yActiveKcal, "kcal"), true)
+    metricHTML("昨日の活動", cond.yActiveKcal?.toLocaleString("ja-JP") ?? "—", detail(cond.yActiveKcal, "キロカロリー"), true)
   ].join("");
   const comment = conditionCommentText({ ...cond, yGymKg: gymKgForDate(state, shiftIso(todayIso, -1)) });
   return `<section class="instr-panel-box instr-today">${heading}<div class="instr-kpis">${kpis}</div><div class="instr-condition-text">${escapeHTML(comment)}</div></section>`;
@@ -208,7 +208,7 @@ function weekPanelHTML(summary) {
   return `<section class="instr-panel-box instr-week"><h2>直近7日 <span>${shortDate(summary.from)} – ${shortDate(summary.to)} ・ 平均</span></h2>
     ${line("sleep", "睡眠", sparklineHTML(summary.sleep.points, "line", "#55d9e8"), `平均 ${durationText(summary.sleep.average)} ・ 欠測 ${summary.sleep.missing}日`)}
     ${line("steps", "歩数", sparklineHTML(summary.steps.points, "bar", "#25384d", shiftIso(summary.to, -1)), `平均 ${number(summary.steps.average)} ・ 昨日 ${number(summary.steps.yesterday)}`)}
-    ${line("hrv", "HRV", sparklineHTML(summary.hrv.points, "line", "#55d9e8"), `${number(summary.hrv.first)} → ${number(summary.hrv.middle)} → ${number(summary.hrv.last)}ms`)}
+    ${line("hrv", "心拍変動", sparklineHTML(summary.hrv.points, "line", "#55d9e8"), `${number(summary.hrv.first)} → ${number(summary.hrv.middle)} → ${number(summary.hrv.last)}ミリ秒`)}
     ${line("gym", "筋トレ", sparklineHTML(summary.gym.points, "bar", "#f2b84b"), `${summary.gym.count}回 ・ ${number(summary.gym.maxKg)}kg(${shortDate(summary.gym.maxDate)})`)}
     ${line("body", "身体スキャン", sparklineHTML(summary.bodyScans.points, "bar", "#25384d"), bodySummary, "instr-week-body")}
   </section>`;
@@ -332,7 +332,7 @@ function pinArchiveHTML(state) {
       <h3>${escapeHTML(title)}</h3>
       <time datetime="${escapeHTML(period.from)}">${escapeHTML(period.from)} 〜 ${escapeHTML(period.to)}</time>
       <div class="instr-stats-row">
-        <div class="instr-stat-cell"><span>連続BEST</span><strong>${stats.bestStreak}<small>日</small></strong></div>
+        <div class="instr-stat-cell"><span>連続の自己ベスト</span><strong>${stats.bestStreak}<small>日</small></strong></div>
         <div class="instr-stat-cell"><span>累計</span><strong>${stats.totalCount}<small>回</small></strong></div>
         <div class="instr-stat-cell"><span>実施率</span><strong>${stats.successRate}<small>%</small></strong></div>
       </div>
@@ -385,7 +385,7 @@ function renderInstruments() {
 
   return `
     <div class="today-tower instr-view${archivePanel ? " has-pin-archive" : ""}">
-      ${renderHeader("計器盤", "INSTRUMENTS")}
+      ${renderHeader("からだと継続の記録", "健康")}
 
       ${todayPanelHTML(state, todayIso, health)}
 
@@ -397,7 +397,7 @@ function renderInstruments() {
       </section>
 
       <section class="instr-panel-box instr-iron-log" data-action="instruments-open-iron-log">
-        <h2>筋トレの記録 <span>IRON LOG</span></h2>
+        <h2>筋トレの記録 <span>重量・回数</span></h2>
         <div class="instr-stats-row instr-iron-stats">
           <div class="instr-stat-cell instr-iron-today"><span>今週</span><strong>${period.weekKg.toLocaleString()}<small>kg</small></strong></div>
           <div class="instr-stat-cell"><span>今年</span><strong>${(period.yearKg / 1000).toFixed(1)}<small>t</small></strong></div>
@@ -405,13 +405,13 @@ function renderInstruments() {
         </div>
         <div class="instr-fact-row"><span>内訳</span><strong>${breakdown}</strong></div>
         <div class="instr-fact-row"><span>自己ベスト</span><strong>${bestText}</strong></div>
-        <button type="button" class="instr-open-btn" data-action="instruments-open-iron-log">IRON LOG を開く ›</button>
+        <button type="button" class="instr-open-btn" data-action="instruments-open-iron-log">筋トレの記録を開く ›</button>
       </section>
 
       <section class="instr-panel-box instr-iron-chart">
         <h2>月別の積み上げ <span>今年 ・ 種目別</span></h2>
         ${ironChartHTML(period)}
-        <div class="instr-panel-foot">今年の構造化セット(at基準)のみ。日付のない過去コメント移行分は含みません</div>
+        <div class="instr-panel-foot">記録した日時が今年のセットのみ。日付のない過去の記録は含みません</div>
       </section>
 
       ${archivePanel}
