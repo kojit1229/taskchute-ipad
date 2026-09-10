@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { runDailyOperation: run, getDailyStartDraft } = require('../src/features/daily-operations.js');
+const { runDailyOperation: run, getDailyStartDraft, prepareDailyEnd } = require('../src/features/daily-operations.js');
 const { commitCandidate, setCommitGuard } = require('../src/core/commit.js');
 const { mergeWeeklyCommitments } = require('../src/core/merge.js');
 const { deepCommitGuard, expectRestored } = require('./helpers');
@@ -100,6 +100,83 @@ try {
     assert.equal(state.declarations.at(-1).id, 'declaration-1');
     console.log('PASS 28a: declaration cap maintained in candidate');
   }
+} finally { setCommitGuard(null); }
+
+function endFixture() {
+  const f = fixture();
+  f.state.blocks[0].actualStartAt = at;
+  f.state.declarations = [{ id: 'started', blockId: 'b', date: '2026-09-10', declaredAt: at, reportedAt: '', note: 'original' }];
+  f.state.pomodoro = { running: true, blockId: 'b', startedAt: at };
+  f.deps.now = () => '2026-09-11T00:10:00';
+  f.deps.persist = () => { f.seen.saves++; return !f.seen.fail; };
+  f.deps.completedTask = task => ({ ...task, status: 'completed', progressNum: 10 });
+  f.deps.endEffect = () => { assert(!f.seen.fail); f.seen.effects++; };
+  f.input = { kind: 'block', id: 'b', requestId: 'end-1', outcome: 'done', note: 'result', completeTask: true };
+  return f;
+}
+setCommitGuard(deepCommitGuard);
+try {
+  {
+    const { state, deps, seen, input } = endFixture();
+    const captured = prepareDailyEnd(input, deps), before = structuredClone(state), refs = { ...state };
+    seen.fail = true;
+    assert.equal(run('daily-block-end', captured, deps).ok, false);
+    expectRestored(before, state); for (const key of Object.keys(refs)) assert.equal(state[key], refs[key]);
+    assert.equal(seen.effects, 0); assert.equal(seen.sync, 0);
+    assert.equal(prepareDailyEnd(input, deps).endDraft.fallbackId, captured.endDraft.fallbackId);
+    seen.fail = false;
+    const result = run('daily-block-end', captured, deps);
+    assert(result.ok); assert.equal(seen.saves, 2); assert.equal(seen.effects, 1);
+    assert.equal(state.declarations.length, 1); assert.equal(state.declarations[0].id, 'started');
+    assert.equal(state.declarations[0].date, '2026-09-10'); assert.equal(state.declarations[0].reportedAt, '2026-09-11T00:10:00');
+    assert.equal(state.declarations[0].declaredAt, at); assert.equal(state.declarations[0].note, 'original');
+    assert.equal(state.blocks[0].actualEndAt, state.declarations[0].reportedAt);
+    assert.equal(state.blocks[0].comment, 'result'); assert.equal(state.blocks[0].completed, true);
+    assert.equal(state.tasks[0].status, 'completed'); assert.equal(state.tasks[0].progressNum, 10);
+    assert.equal(state.pomodoro.running, false);
+    assert.deepEqual(state.blocks.slice(1), before.blocks.slice(1)); assert.deepEqual(state.tasks[1], before.tasks[1]);
+    const saved = structuredClone(state);
+    assert.equal(run('daily-block-end', input, deps).unchanged, true); expectRestored(saved, state);
+    assert.equal(seen.saves, 2); assert.equal(seen.effects, 1);
+    assert(run('daily-block-end', { ...input, values: { actualEndAt: '2026-09-11T00:20:00' } }, deps).ok);
+    assert.equal(state.declarations.length, 1); assert.equal(state.declarations[0].id, 'started');
+    assert.equal(state.declarations[0].reportedAt, '2026-09-11T00:20:00');
+    console.log('PASS 29a: cross-midnight identity/date, report/comment/Task/timer atomic rollback, retry and correction');
+  }
+  for (const lost of [false, true]) {
+    const { state, deps, input } = endFixture(); state.declarations = [];
+    const request = prepareDailyEnd({ ...input, declarationId: lost ? 'lost-start' : '', outcome: '', completeTask: false }, deps);
+    assert(run('daily-block-end', request, deps).ok);
+    assert.equal(state.declarations.length, 1); assert.equal(state.declarations[0].id, request.endDraft.fallbackId);
+    assert.equal(state.declarations[0].date, '2026-09-10'); assert.equal(state.declarations[0].declaredAt, '');
+    // Saved ID is recovered after reload without a start draft, and corrections update that report.
+    const reloadedDeps = { ...deps };
+    assert(run('daily-block-end', { ...input, outcome: '', completeTask: false,
+      values: { actualEndAt: '2026-09-11T00:25:00' } }, reloadedDeps).ok);
+    assert.equal(state.declarations.length, 1); assert.equal(state.declarations[0].id, request.endDraft.fallbackId);
+  }
+  {
+    const { state, deps, input } = endFixture();
+    state.declarations.push({ ...state.declarations[0], id: 'ambiguous' });
+    const captured = prepareDailyEnd(input, deps), before = structuredClone(state);
+    assert.equal(run('daily-block-end', captured, deps).status, 'invalid'); expectRestored(before, state);
+    assert(run('daily-block-end', { ...captured, declarationId: 'started' }, deps).ok);
+    assert.equal(state.declarations[1].reportedAt, '');
+  }
+  {
+    const { state, deps, input } = endFixture();
+    const captured = prepareDailyEnd(input, deps); state.blocks[0].date = '2026-09-12';
+    const before = structuredClone(state);
+    assert.equal(run('daily-block-end', captured, deps).status, 'invalid'); expectRestored(before, state);
+    assert(run('daily-block-end', { ...captured, confirmDate: '2026-09-12' }, deps).ok);
+    assert.equal(state.blocks[0].date, '2026-09-12'); assert.equal(state.declarations[0].date, '2026-09-10');
+  }
+  for (const invalidEnd of ['2026-02-30T10:00:00', '2026-09-10T22:00:00', 'bad']) {
+    const { state, deps, input } = endFixture(), before = structuredClone(state);
+    assert.equal(run('daily-block-end', { ...input, values: { actualEndAt: invalidEnd } }, deps).status, 'invalid');
+    expectRestored(before, state);
+  }
+  console.log('PASS 29a: missing/lost declaration, reload correction, ambiguity, date reconfirmation and invalid time');
 } finally { setCommitGuard(null); }
 
 // Real delegated entrances share the same candidate and preserve the declaration UI on failure.

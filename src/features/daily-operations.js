@@ -4,6 +4,7 @@ import { assertCopyable, buildBlockCopy } from "../core/block-copy.js";
 import { orderDailyBlocks } from "../core/daily-order.js";
 import { createCopyUndoTicket, buildCopyUndo } from "../core/copy-undo.js";
 import { buildBlockStart } from "../core/daily-start.js";
+import { buildBlockEnd } from "../core/daily-end.js";
 import { createDailyDraftStore } from "./daily-draft.js";
 
 const copyReady = Symbol("saved copy source");
@@ -21,7 +22,7 @@ export const DAILY_OPERATIONS = {
   "daily-plan-times-cancel": { build: cancelDailyTimes, effects: dailyTimesEffects },
   "daily-plan-complete": unwired("daily-plan-complete"),
   "daily-block-start": { build: buildBlockStart, effects: startEffects },
-  "daily-block-end": unwired("daily-block-end"),
+  "daily-block-end": { build: buildBlockEnd, effects: endEffects },
   "daily-block-duplicate": { build: buildBlockCopy, effects: copyEffects },
   "daily-duplicate-undo": { build: (state, input, deps) => buildCopyUndo(state, input, { copyFingerprint: dailyFingerprint }), effects: copyUndoEffects },
   "daily-schedule-edit": unwired("daily-schedule-edit"),
@@ -68,6 +69,35 @@ function startEffects(result, input, deps) {
   const { store, owner } = startOwner(deps, input.id);
   store.put({ ...owner, ...input.startDraft, declarationId: result.declarationId, saved: true });
   deps.startEffect?.(result, input);
+}
+
+export function prepareDailyEnd(input, deps) {
+  const block = deps.state.blocks?.find(row => row.id === input.id && !row.deleted);
+  if (!block || input.kind !== "block") throw invalid("終了する予定を確認してください");
+  const { store, owner } = startOwner(deps, input.id);
+  owner.draftId = "end";
+  let draft = input.endDraft || store.get(owner);
+  if (draft && input.requestId != null && draft.requestId !== input.requestId) throw invalid("request changed");
+  if (!draft) {
+    const started = getDailyStartDraft(deps, input.id);
+    draft = { ...owner, requestId: input.requestId ?? null, date: block.date, actualStartAt: block.actualStartAt,
+      actualEndAt: block.actualEndAt || (typeof deps.now === "function" ? deps.now() : deps.now),
+      declarationId: started?.saved && started.at === block.actualStartAt ? started.declarationId : "",
+      fallbackId: (deps.newId || (() => crypto.randomUUID()))() };
+  }
+  if (input.confirmDate === block.date) draft = { ...draft, date: block.date };
+  if (input.declarationId !== undefined) draft = { ...draft, declarationId: input.declarationId };
+  store.put(draft);
+  return { ...input, endDraft: draft };
+}
+
+function endEffects(result, input, deps) {
+  if (result.unchanged) return;
+  const { store, owner } = startOwner(deps, input.id);
+  owner.draftId = "end";
+  store.put({ ...input.endDraft, ...owner, declarationId: result.declarationId,
+    actualEndAt: result.block.actualEndAt, saved: true });
+  deps.endEffect?.(result, input);
 }
 
 function dailyTimesEffects(result, input, deps) {
@@ -191,6 +221,7 @@ export function runDailyOperation(name, input, deps) {
   if (name === "daily-duplicate-undo") input = { ...input, undoTicket: getCopyUndoTicket(deps, input.id), [undoReady]: true };
   try {
     if (name === "daily-block-start") input = startInput(input, deps);
+    if (name === "daily-block-end") input = prepareDailyEnd(input, deps);
     if (name === "daily-block-duplicate" && !input[copyReady]) return duplicateDailyBlock(input, deps);
     return deps.commitCandidate({
       state: deps.state, input, persist: deps.persist, now: deps.now, floors: deps.floors,

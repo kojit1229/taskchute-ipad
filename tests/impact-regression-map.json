@@ -65,7 +65,8 @@
         "^src/features/daily-view-model\\.js$",
         "^src/features/daily-operations\\.js$",
         "^src/core/daily-time\\.js$",
-        "^src/core/daily-start\\.js$",
+          "^src/core/daily-start\\.js$",
+          "^src/core/daily-end\\.js$",
         "^src/core/daily-order\\.js$",
         "^src/core/block-copy\\.js$",
         "^src/core/copy-undo\\.js$"
