@@ -13769,18 +13769,13 @@ function deleteFromModal() {
   if (!message) return;
   const ok = window.confirm(message);
   if (!ok) return;
-  if (["task", "project", "block"].includes(state.modal.type)) {
-    const remove = state.modal.type === "block" ? deleteBlock : state.modal.type === "task" ? deleteTask : deleteProject;
-    if (remove(state.modal.id)) closeModal();
-    return;
-  }
   // v368: 保存済みの削除対象だけを既存dispatcherへ渡す。
   // actualEntryなど削除操作を持たない型は確認前のガードで終了する。
+  // v381(束B2): 削除の成否はレジストリのハンドラ(deleteBlock / deleteTask / deleteProject の戻り値)で決め、
+  // 成功時だけ閉じる(設計03「削除イベント: 成功時だけ閉じる」)。型ごとの if 連鎖は置かない(登録表の網羅検査 action-registry-core [5])。
   if (dispatchModalDelete(state.modal.type, state.modal.id)) {
     closeModal();
-    return;
   }
-  closeModal();
 }
 
 // ---------- Project モーダル ----------

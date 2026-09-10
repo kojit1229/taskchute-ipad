@@ -3,7 +3,7 @@
   "generatedBy": "scripts/code-index.js",
   "parser": "acorn@8.18.0",
   "source": "app.js",
-  "sourceLines": 15452,
+  "sourceLines": 15447,
   "functions": [
     {
       "name": "pruneExpiredSuggestedThemes",
@@ -9471,8 +9471,8 @@
       "name": "deleteFromModal",
       "kind": "function",
       "startLine": 13767,
-      "endLine": 13784,
-      "lines": 18,
+      "endLine": 13779,
+      "lines": 13,
       "area": [
         "ui"
       ],
@@ -9484,8 +9484,8 @@
     {
       "name": "trackMilestoneRowHTML",
       "kind": "function",
-      "startLine": 13789,
-      "endLine": 13794,
+      "startLine": 13784,
+      "endLine": 13789,
       "lines": 6,
       "area": [
         "core"
@@ -9496,8 +9496,8 @@
     {
       "name": "trackCarryMilestoneRowsHTML",
       "kind": "function",
-      "startLine": 13796,
-      "endLine": 13803,
+      "startLine": 13791,
+      "endLine": 13798,
       "lines": 8,
       "area": [
         "core"
@@ -9508,8 +9508,8 @@
     {
       "name": "readCarryDraft",
       "kind": "function",
-      "startLine": 13805,
-      "endLine": 13816,
+      "startLine": 13800,
+      "endLine": 13811,
       "lines": 12,
       "area": [
         "core"
@@ -9522,8 +9522,8 @@
     {
       "name": "canCarryProjectCycle",
       "kind": "function",
-      "startLine": 13819,
-      "endLine": 13823,
+      "startLine": 13814,
+      "endLine": 13818,
       "lines": 5,
       "area": [
         "journal-health"
@@ -9536,8 +9536,8 @@
     {
       "name": "confirmCarryProjectCycle",
       "kind": "function",
-      "startLine": 13825,
-      "endLine": 13846,
+      "startLine": 13820,
+      "endLine": 13841,
       "lines": 22,
       "area": [
         "state",
@@ -9558,8 +9558,8 @@
     {
       "name": "readTrackDraft",
       "kind": "function",
-      "startLine": 13848,
-      "endLine": 13857,
+      "startLine": 13843,
+      "endLine": 13852,
       "lines": 10,
       "area": [
         "core"
@@ -9572,8 +9572,8 @@
     {
       "name": "trackDraftMatchesExisting",
       "kind": "function",
-      "startLine": 13859,
-      "endLine": 13873,
+      "startLine": 13854,
+      "endLine": 13868,
       "lines": 15,
       "area": [
         "core"
@@ -9584,8 +9584,8 @@
     {
       "name": "trackGuardHTML",
       "kind": "function",
-      "startLine": 13875,
-      "endLine": 13897,
+      "startLine": 13870,
+      "endLine": 13892,
       "lines": 23,
       "area": [
         "core"
@@ -9600,8 +9600,8 @@
     {
       "name": "refreshTrackForm",
       "kind": "function",
-      "startLine": 13899,
-      "endLine": 13911,
+      "startLine": 13894,
+      "endLine": 13906,
       "lines": 13,
       "area": [
         "ui"
@@ -9617,8 +9617,8 @@
     {
       "name": "setTrackKind",
       "kind": "function",
-      "startLine": 13913,
-      "endLine": 13916,
+      "startLine": 13908,
+      "endLine": 13911,
       "lines": 4,
       "area": [
         "core"
@@ -9631,8 +9631,8 @@
     {
       "name": "saveProjectTrackFromModal",
       "kind": "function",
-      "startLine": 13918,
-      "endLine": 13938,
+      "startLine": 13913,
+      "endLine": 13933,
       "lines": 21,
       "area": [
         "state",
@@ -9648,8 +9648,8 @@
     {
       "name": "legacyDetailFrame",
       "kind": "function",
-      "startLine": 13942,
-      "endLine": 13948,
+      "startLine": 13937,
+      "endLine": 13943,
       "lines": 7,
       "area": [
         "ui"
@@ -9662,8 +9662,8 @@
     {
       "name": "buildProjectModal",
       "kind": "function",
-      "startLine": 13950,
-      "endLine": 14080,
+      "startLine": 13945,
+      "endLine": 14075,
       "lines": 131,
       "area": [
         "journal-health",
@@ -9679,8 +9679,8 @@
     {
       "name": "saveProjectFromModal",
       "kind": "function",
-      "startLine": 14082,
-      "endLine": 14119,
+      "startLine": 14077,
+      "endLine": 14114,
       "lines": 38,
       "area": [
         "state",
@@ -9698,8 +9698,8 @@
     {
       "name": "twyWeekOptionsHTML",
       "kind": "function",
-      "startLine": 14124,
-      "endLine": 14130,
+      "startLine": 14119,
+      "endLine": 14125,
       "lines": 7,
       "area": [
         "core"
@@ -9710,8 +9710,8 @@
     {
       "name": "twyPlanSectionHTML",
       "kind": "function",
-      "startLine": 14134,
-      "endLine": 14165,
+      "startLine": 14129,
+      "endLine": 14160,
       "lines": 32,
       "area": [
         "state"
@@ -9724,8 +9724,8 @@
     {
       "name": "buildTaskModal",
       "kind": "function",
-      "startLine": 14167,
-      "endLine": 14272,
+      "startLine": 14162,
+      "endLine": 14267,
       "lines": 106,
       "area": [
         "ui"
@@ -9739,8 +9739,8 @@
     {
       "name": "isDescendantOf",
       "kind": "function",
-      "startLine": 14275,
-      "endLine": 14284,
+      "startLine": 14270,
+      "endLine": 14279,
       "lines": 10,
       "area": [
         "core"
@@ -9753,8 +9753,8 @@
     {
       "name": "twyPlanFromFields",
       "kind": "function",
-      "startLine": 14289,
-      "endLine": 14297,
+      "startLine": 14284,
+      "endLine": 14292,
       "lines": 9,
       "area": [
         "state"
@@ -9765,8 +9765,8 @@
     {
       "name": "saveTaskFromModal",
       "kind": "function",
-      "startLine": 14299,
-      "endLine": 14377,
+      "startLine": 14294,
+      "endLine": 14372,
       "lines": 79,
       "area": [
         "state",
@@ -9782,8 +9782,8 @@
     {
       "name": "buildBlockModal",
       "kind": "function",
-      "startLine": 14385,
-      "endLine": 14579,
+      "startLine": 14380,
+      "endLine": 14574,
       "lines": 195,
       "area": [
         "execution",
@@ -9798,8 +9798,8 @@
     {
       "name": "saveBlockFromModal",
       "kind": "function",
-      "startLine": 14581,
-      "endLine": 14818,
+      "startLine": 14576,
+      "endLine": 14813,
       "lines": 238,
       "area": [
         "sync",
@@ -9819,8 +9819,8 @@
     {
       "name": "openTimelineNewBlock",
       "kind": "function",
-      "startLine": 14821,
-      "endLine": 14862,
+      "startLine": 14816,
+      "endLine": 14857,
       "lines": 42,
       "area": [
         "execution",
@@ -9839,8 +9839,8 @@
     {
       "name": "toLocalInput",
       "kind": "function",
-      "startLine": 14866,
-      "endLine": 14871,
+      "startLine": 14861,
+      "endLine": 14866,
       "lines": 6,
       "area": [
         "core"
@@ -9851,8 +9851,8 @@
     {
       "name": "fromLocalInput",
       "kind": "function",
-      "startLine": 14873,
-      "endLine": 14898,
+      "startLine": 14868,
+      "endLine": 14893,
       "lines": 26,
       "area": [
         "core"
@@ -9861,10 +9861,10 @@
       "effects": []
     },
     {
-      "name": "event:keydown@14901",
+      "name": "event:keydown@14896",
       "kind": "event-listener",
-      "startLine": 14901,
-      "endLine": 14934,
+      "startLine": 14896,
+      "endLine": 14929,
       "lines": 34,
       "area": [
         "execution"
@@ -9878,8 +9878,8 @@
     {
       "name": "recordFeedbackFile",
       "kind": "function",
-      "startLine": 14943,
-      "endLine": 14949,
+      "startLine": 14938,
+      "endLine": 14944,
       "lines": 7,
       "area": [
         "state",
@@ -9895,8 +9895,8 @@
     {
       "name": "pushReportToGitHub",
       "kind": "function",
-      "startLine": 14951,
-      "endLine": 14964,
+      "startLine": 14946,
+      "endLine": 14959,
       "lines": 14,
       "area": [
         "sync",
@@ -9913,8 +9913,8 @@
     {
       "name": "pushFileToGitHub",
       "kind": "function",
-      "startLine": 14977,
-      "endLine": 15020,
+      "startLine": 14972,
+      "endLine": 15015,
       "lines": 44,
       "area": [
         "sync",
@@ -9931,8 +9931,8 @@
     {
       "name": "completeBlockWithActual",
       "kind": "function",
-      "startLine": 15051,
-      "endLine": 15059,
+      "startLine": 15046,
+      "endLine": 15054,
       "lines": 9,
       "area": [
         "execution",
@@ -9947,8 +9947,8 @@
     {
       "name": "buildActualEntryModal",
       "kind": "function",
-      "startLine": 15061,
-      "endLine": 15109,
+      "startLine": 15056,
+      "endLine": 15104,
       "lines": 49,
       "area": [
         "journal-health",
@@ -9960,8 +9960,8 @@
     {
       "name": "saveActualEntryFromModal",
       "kind": "function",
-      "startLine": 15111,
-      "endLine": 15151,
+      "startLine": 15106,
+      "endLine": 15146,
       "lines": 41,
       "area": [
         "sync",
@@ -9983,8 +9983,8 @@
     {
       "name": "runDailyOpen",
       "kind": "function",
-      "startLine": 15161,
-      "endLine": 15179,
+      "startLine": 15156,
+      "endLine": 15174,
       "lines": 19,
       "area": [
         "state",
@@ -10001,8 +10001,8 @@
     {
       "name": "_energyMedian",
       "kind": "function",
-      "startLine": 15182,
-      "endLine": 15187,
+      "startLine": 15177,
+      "endLine": 15182,
       "lines": 6,
       "area": [
         "journal-health"
@@ -10013,8 +10013,8 @@
     {
       "name": "_actualDurationMin",
       "kind": "function",
-      "startLine": 15188,
-      "endLine": 15192,
+      "startLine": 15183,
+      "endLine": 15187,
       "lines": 5,
       "area": [
         "core"
@@ -10025,8 +10025,8 @@
     {
       "name": "resolveEstimateMin",
       "kind": "function",
-      "startLine": 15194,
-      "endLine": 15204,
+      "startLine": 15189,
+      "endLine": 15199,
       "lines": 11,
       "area": [
         "journal-health"
@@ -10039,8 +10039,8 @@
     {
       "name": "computeProjectedEnd",
       "kind": "function",
-      "startLine": 15206,
-      "endLine": 15221,
+      "startLine": 15201,
+      "endLine": 15216,
       "lines": 16,
       "area": [
         "execution"
@@ -10051,8 +10051,8 @@
     {
       "name": "projectedEndText",
       "kind": "function",
-      "startLine": 15223,
-      "endLine": 15234,
+      "startLine": 15218,
+      "endLine": 15229,
       "lines": 12,
       "area": [
         "execution"
@@ -10067,8 +10067,8 @@
     {
       "name": "updateProjectedEndTick",
       "kind": "function",
-      "startLine": 15237,
-      "endLine": 15240,
+      "startLine": 15232,
+      "endLine": 15235,
       "lines": 4,
       "area": [
         "core"
@@ -10081,8 +10081,8 @@
     {
       "name": "updateBatteryTick",
       "kind": "function",
-      "startLine": 15248,
-      "endLine": 15265,
+      "startLine": 15243,
+      "endLine": 15260,
       "lines": 18,
       "area": [
         "execution",
@@ -10102,8 +10102,8 @@
     {
       "name": "computeBufferRemaining",
       "kind": "function",
-      "startLine": 15276,
-      "endLine": 15294,
+      "startLine": 15271,
+      "endLine": 15289,
       "lines": 19,
       "area": [
         "execution"
@@ -10116,8 +10116,8 @@
     {
       "name": "bufferMeterLevel",
       "kind": "function",
-      "startLine": 15296,
-      "endLine": 15301,
+      "startLine": 15291,
+      "endLine": 15296,
       "lines": 6,
       "area": [
         "core"
@@ -10128,8 +10128,8 @@
     {
       "name": "computeDailyOverload",
       "kind": "function",
-      "startLine": 15315,
-      "endLine": 15330,
+      "startLine": 15310,
+      "endLine": 15325,
       "lines": 16,
       "area": [
         "state",
@@ -10143,8 +10143,8 @@
     {
       "name": "bufferMeterHTML",
       "kind": "function",
-      "startLine": 15336,
-      "endLine": 15355,
+      "startLine": 15331,
+      "endLine": 15350,
       "lines": 20,
       "area": [
         "state"
@@ -10158,8 +10158,8 @@
     {
       "name": "prefillEnergy",
       "kind": "function",
-      "startLine": 15359,
-      "endLine": 15371,
+      "startLine": 15354,
+      "endLine": 15366,
       "lines": 13,
       "area": [
         "journal-health"
@@ -10170,10 +10170,10 @@
       "effects": []
     },
     {
-      "name": "event:visibilitychange@15437",
+      "name": "event:visibilitychange@15432",
       "kind": "event-listener",
-      "startLine": 15437,
-      "endLine": 15451,
+      "startLine": 15432,
+      "endLine": 15446,
       "lines": 15,
       "area": [
         "sync",

@@ -39,7 +39,10 @@ async function fixture() {
     closeModal: () => { if (ctx.draftSaveTransaction.defer(() => ctx.closeModal())) return; counts.close++; ctx.state.modal = null; },
     maybeQueueNextAiStep: () => { if (ctx.draftSaveTransaction.defer(() => ctx.maybeQueueNextAiStep(), { post: true })) return; counts.queue++; },
     closeAiStepConfirmIfUndone: () => { counts.close++; },
-    modalDeleteMessage: () => 'delete?', dispatchModalDelete: () => { throw new Error('Task/Project must propagate save result'); }
+    modalDeleteMessage: () => 'delete?',
+    // v381(監督者追随): deleteFromModal は型の if 連鎖を持たず、レジストリ(dispatchModalDelete)がハンドラの戻り値
+    // (false=保存失敗)を返す。代役はハンドラ登録と同じ経路(deleteTask/deleteProject の戻り値)を再現する。
+    dispatchModalDelete: (type, id) => { const remove = { task: () => ctx.deleteTask(id), project: () => ctx.deleteProject(id) }[type]; return remove ? remove() !== false : false; }
   });
   vm.runInContext(names.map(extract).join('\n'), ctx);
   ctx.state = { selectedDate: '2026-09-10', dataModifiedAt: FUTURE, lastPushedAt: NOW,

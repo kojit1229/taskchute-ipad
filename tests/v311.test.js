@@ -136,7 +136,10 @@ const idlePomodoro = () => ({
     const stoppedBlock = state.blocks.find((item) => item.id === "now-flight");
     check("終了は完全停止しactualStartAtをクリア", !state.pomodoro.running && stoppedBlock.actualStartAt === "", JSON.stringify(state.pomodoro));
     check("終了理由を退行なく記録", stoppedBlock.interruptions.length === 1 && stoppedBlock.interruptions[0].reason === "疲労");
-    check("理由記録+完全停止を各1回保存", await writeCount() === 2, String(await writeCount()));
+    // v381(束B2 15d)の契約追随(監督者決定 2026-09-10): 中断理由の記録(Block候補1回)と停止(Block候補1回)に加え、
+    // K決定「Block本体のみ候補保存。関連記録(ポモドーロ状態)は現状の位置のまま」により state.pomodoro の旧保存が
+    // 停止の effects で1回走る=合計3回。旧期待値2は 15d 接続前(停止が Block とポモドーロを1回で保存)の規則。
+    check("理由記録+完全停止(Block候補)+ポモドーロ状態の旧保存で計3回保存", await writeCount() === 3, String(await writeCount()));
 
     console.log("[4] ARRIVALS便と連動なしで開始する");
     await page.clock.setFixedTime(new Date(2026, 7, 31, 10, 0, 0));

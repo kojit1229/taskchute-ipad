@@ -78,7 +78,7 @@
 | mutation-block-e2e.test.js | e2e | full | planning-execution, content-ai | 154 | 0 | 0 |
 | mutation-global-e2e.test.js | e2e | full | sync-storage | 178 | 0 | 0 |
 | mutation-stamp-core.test.js | node | full | sync-storage | 34 | 0 | 0 |
-| mutation-task-project-e2e.test.js | e2e | full | planning-execution | 67 | 0 | 0 |
+| mutation-task-project-e2e.test.js | e2e | full | planning-execution | 66 | 0 | 0 |
 | normalize-null-defense.test.js | e2e | full | sync-storage | 20 | 0 | 0 |
 | placement-core.test.js | node | full | content-ai, sync-storage, ui-responsive, security-offline | 30 | 0 | 0 |
 | placement-e2e.test.js | e2e | full | content-ai, sync-storage, ui-responsive, security-offline | 24 | 0 | 0 |
