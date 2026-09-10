@@ -61,13 +61,16 @@
     "daily-parts": {
       "paths": [
         "^src/ui/daily-parts/",
-        "^src/features/daily-view-model\\.js$"
+        "^src/features/daily-view-model\\.js$",
+        "^src/features/daily-operations\\.js$"
       ],
       "patterns": [
         "renderPlanRow|renderActualRow|renderSearchFrame|patchSearchFrame|renderDetailFrame|DAILY_ACTIONS|daily-search-|buildDailyViewModel"
       ],
       "suites": [
         "daily-parts-contract",
+        "daily-stamp-e2e",
+        "daily-operations-registry",
         "daily-plan-row",
         "daily-actual-row",
         "daily-search-e2e",
@@ -87,13 +90,15 @@
     },
     "detail-draft-guard": {
       "paths": [
-        "^src/features/draft-(leave|save)\\.js$"
+        "^src/features/draft-(leave|save)\\.js$",
+        "^src/features/daily-draft\\.js$"
       ],
       "patterns": [
         "draftSaveTransaction|requestDraftLeave|modalDraftSnapshot|modalDeleteMessage|detail-columns|draft-leave-|openBodyScanModal|body-scan-fatigue"
       ],
       "suites": [
         "draft-leave",
+        "daily-draft-e2e",
         "draft-save-transaction",
         "modal-delete-impact",
         "detail-draft-e2e",

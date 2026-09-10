@@ -52,7 +52,7 @@
 import { createArchiveProtection, archiveConflict } from "../features/archive-date-protection.js";
 import { state, setState } from "../state/store.js";
 import {
-  mergeById, mergeByIdPreferNewer, mergeGymSets, mergeTracksPreferNewer, mergeWeeklyCommitments
+  mergeRecords, mergeById, mergeByIdPreferNewer, mergeGymSets, mergeTracksPreferNewer, mergeWeeklyCommitments
 } from "../core/merge.js";
 import { commitCandidate } from "../core/commit.js";
 import { nextMutationStamp, stamped } from "../core/mutation-stamp.js";
@@ -811,13 +811,17 @@ function mergeBlockLists(localBlocks, remoteBlocks) {
   const from = addDays(today, -RECURRENCE_KEEP_PAST_DAYS);
   const to = addDays(today, RECURRENCE_FUTURE_DAYS);
   const addable = (remoteBlocks || []).filter((b) => {
-    if (!b || !b.id || localIds.has(b.id)) return true;  // 既知idは mergeById の新旧判定に任せる
+    if (!b || !b.id || localIds.has(b.id)) return true;  // 既知idは mergeRecords の新旧判定に任せる
     // リモートにしか無いblockのうち、maintainRecurrencesのパージ対象(期間外・未編集の
     // 繰り返し実体)は合流させない(パージ→合流→パージの往復と蘇生を防ぐ)
     if (b.recurrenceGroupId && (b.date < from || b.date > to) && !isTouchedBlock(b)) return false;
     return true;
   });
-  return mergeById(localBlocks, addable);
+  return mergeRecords(localBlocks, addable, {
+    compareAt: (block) => block.updatedAt || block.createdAt || "",
+    tieBreak: (local, remote) => !!local.deleted !== !!remote.deleted
+      ? (remote.deleted ? remote : local) : local
+  });
 }
 
 // mergeByIdPreferNewer: src/core/merge.js へ抽出済み(v164。tasks/projectsマージ保護の

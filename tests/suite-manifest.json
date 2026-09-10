@@ -15,7 +15,7 @@
       ],
       "assertionSignals": 41,
       "assertionHash": "62a3789070e26349",
-      "sourceHash": "bdfe01ed20ccad23",
+      "sourceHash": "aed09c41d5398ccc",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -241,6 +241,31 @@
       }
     },
     {
+      "file": "daily-block-merge.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution",
+        "content-ai"
+      ],
+      "assertionSignals": 25,
+      "assertionHash": "e91a8d8687a24c87",
+      "sourceHash": "63ef39907c71b626",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
       "file": "daily-detail-fields-e2e.test.js",
       "kind": "e2e",
       "tier": "full",
@@ -292,6 +317,29 @@
       }
     },
     {
+      "file": "daily-draft-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 37,
+      "assertionHash": "870d89d02b470b4a",
+      "sourceHash": "294e506bc13fb338",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
       "file": "daily-mock-adapter.test.js",
       "kind": "node",
       "tier": "full",
@@ -301,6 +349,29 @@
       "assertionSignals": 78,
       "assertionHash": "237483239c5212ed",
       "sourceHash": "cfd64889a7f7814e",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "daily-operations-registry.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 33,
+      "assertionHash": "b57ee7f3451e99b6",
+      "sourceHash": "c27bcde603b6dd09",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -454,6 +525,29 @@
         "fileWrite": false,
         "networkMock": true,
         "clock": true
+      }
+    },
+    {
+      "file": "daily-stamp-e2e.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 14,
+      "assertionHash": "d40be4a33f6d52f4",
+      "sourceHash": "6de4bb171c65a431",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
       }
     },
     {

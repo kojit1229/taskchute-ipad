@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v381";  // v381: Block の削除・繰越・移行・身体スキャン・ポモドーロ・中断・未完了理由、Task/Project の作成・編集・完了・削除を候補保存境界へ接続
+const CACHE_NAME = "taskchute-journal-pwa-v382";  // v382: Block 合流の共通関数、日常操作の登録表と配線、下書き控えの共通管理
 
 // v353: 12WY R0 task.twyPlan のデータ契約+plan.js 純関数+Task編集モーダル3項目
 
@@ -625,6 +625,7 @@ const CACHE_NAME = "taskchute-journal-pwa-v381";  // v381: Block の削除・繰
 // 「ビジョンボードが見れない」原因調査で見つかった同根の残骸なので合わせて削除する。
 
 const APP_SHELL = [
+  "./src/features/daily-operations.js",
   "./src/features/feedback/feedback-coordinator.js",
   "./src/features/feedback/feedback-entry.js",
   "./src/features/feedback/feedback-http.js",
@@ -688,6 +689,7 @@ const APP_SHELL = [
   "./src/features/archive-date-protection.js",
 
   "./src/features/draft-leave.js",
+  "./src/features/daily-draft.js",
 
   "./src/features/draft-save.js",
 
