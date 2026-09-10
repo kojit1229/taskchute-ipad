@@ -39,10 +39,11 @@ function buildView(state) {
 
 /** records: {kind: state collection key, key?: map key, before, after}; null means absent.
  * values: {kind, key, before, after}; replace values without adding record stamps.
+ * values with kind:null replace a root field; syncStamp preserves an adopted/acknowledged clock.
  * inputs: {target, key, before}; candidates: pending/merged global stamp lower bounds.
  * persist(state) is synchronous and returns true/{ok:true}; effects errors propagate.
  */
-export function commitCandidate({ state, input, build, effects = () => {}, persist, now, floors = [] }) {
+export function commitCandidate({ state, input, build, effects = () => {}, persist, now, floors = [], syncStamp }) {
   assertNotInsideBuild("nested commitCandidate");
   if (active) throw new Error("nested commitCandidate is forbidden");
   active = true;
@@ -75,7 +76,7 @@ export function commitCandidate({ state, input, build, effects = () => {}, persi
         return { ...record, before, after: after == null ? after : stamped(after,
           nextMutationStamp({ now: clock, candidates: [before?.updatedAt || before?.createdAt, after.updatedAt] })) };
       });
-      const stamp = nextMutationStamp({ now: clock, candidates: [state.dataModifiedAt,
+      const stamp = syncStamp ?? nextMutationStamp({ now: clock, candidates: [state.dataModifiedAt,
         state.lastPushedAt, state.settings?.lastPushedAt, ...(typeof floors === "function" ? floors() : floors), ...(candidate.candidates || []),
         ...records.flatMap(record => [record.before?.updatedAt || record.before?.createdAt, record.after?.updatedAt])] });
       // Work on replacement collections first; failure restores the exact prior references.
@@ -99,8 +100,10 @@ export function commitCandidate({ state, input, build, effects = () => {}, persi
       }
       for (const value of candidate.values || []) {
         const { kind, key } = value, before = view.unwrap(value.before), after = view.unwrap(value.after);
-        if (!state[kind] || typeof state[kind] !== "object" || key == null || state[kind][key] !== before)
+        const target = kind == null ? state : state[kind];
+        if (!target || typeof target !== "object" || key == null || target[key] !== before)
           throw new Error("value kind/key/before is stale");
+        if (kind == null) { collections.set(key, after); continue; }
         if (!collections.has(kind)) collections.set(kind,
           Array.isArray(state[kind]) ? [...state[kind]] : { ...state[kind] });
         const collection = collections.get(kind);

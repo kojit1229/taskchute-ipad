@@ -9,6 +9,7 @@ const {fileURLToPath}=await import("node:url");
 const {createRequire}=await import("node:module");
 const {createHash,webcrypto}=await import("node:crypto");
 const {createLocalReportCommit}=await import("../src/features/feedback/local-report-commit.js");
+const {commitCandidate}=await import("../src/core/commit.js");
 const {createReportProofAdapter}=await import("../src/features/feedback/report-proof-adapter.js");
 const {createFeedbackCoordinator}=await import("../src/features/feedback/feedback-coordinator.js");
 const here=__dirname;
@@ -17,7 +18,7 @@ const acorn=require('acorn');
 function getFunction(source,name){const nodes=acorn.parse(source,{ecmaVersion:'latest',sourceType:'module'}).body.map(n=>n.type==='ExportNamedDeclaration'?n.declaration:n).filter(n=>n?.type==='FunctionDeclaration'&&n.id.name===name);assert.equal(nodes.length,1,'one actual runtime function '+name);return source.slice(nodes[0].start,nodes[0].end);}
 const safe=path.resolve(here,'..');
 const syncSource=fs.readFileSync(path.join(safe,'src/sync/github.js'),'utf8');
-const sync=getFunction(syncSource,'saveToGitHub');
+const sync=['adoptSyncResult','saveToGitHub'].map(name=>getFunction(syncSource,name)).join('\n');
 const storage=getFunction(fs.readFileSync(path.join(safe,'src/storage/local.js'),'utf8'),'persistLocalNoSchedule');
 const hash=bytes=>createHash('sha1').update(bytes).digest('hex');
 function fixture(mode='ok'){
@@ -26,8 +27,10 @@ function fixture(mode='ok'){
   archivedDates:mode==='archived'?[date]:[],settings:{morningEnergyLog:{},github:{token:'SYNTHETIC_TOKEN'}},sleep:{logs:{}},blocks:[],tasks:[],projects:[],recurrences:[]};
  raw=JSON.stringify(state);const initialRaw=raw,initialReports=state.reports;
  const serialize=()=>{const copy=structuredClone(state);delete copy.settings.github.token;return JSON.stringify(copy,null,2);};
- const box={state,STORAGE_KEY:'fixture-only',_lastSaveError:null,_githubSaveInFlight:mode==='inflight',autoSaveTimer:null,
-  console:{error(){}},localStorage:{setItem(k,value){if(mode==='quota')throw Error('synthetic quota');raw=value;}},
+ const syncErrors=[];
+ const box={state,commitCandidate,setState:value=>{box.state=value;},saveState:Object.assign(()=>{},{pendingStamp:null}),
+  STORAGE_KEY:'fixture-only',_lastSaveError:null,_githubSaveInFlight:mode==='inflight',autoSaveTimer:null,
+  console:{error:(...args)=>syncErrors.push(args.map(String).join(' '))},localStorage:{setItem(k,value){if(mode==='quota')throw Error('synthetic quota');raw=value;}},
   archiveConnectionKey:()=>generation,capturePrimarySyncState:()=>({}),requireGitHubConfig:()=>({branch:'fixture',token:'SYNTHETIC_TOKEN'}),
   fetchGitHubFileSHA:async()=>mode==='conflict'?'b'.repeat(40):'a'.repeat(40),getLastSyncedSha:()=> 'a'.repeat(40),
   clearTimeout(){},downloadGitHubStateText:async()=>({text:'{}'}),normalizedRemoteCopy:()=>({}),
@@ -70,7 +73,7 @@ function fixture(mode='ok'){
   }};
  const run=createFeedbackCoordinator({getState:()=>state,identity:()=>generation,selectedDate:()=>selected,today:()=>today,
   now:()=>date+'T12:00:00Z',crypto:webcrypto,localCommit,serializePrimary:serialize,proof,queueTransport});
- return {run:()=>run(date,()=>true),state,initialReports,initialRaw,inspect:()=>({raw,primary,report,queueWrites,reportWrites,primaryWrites})};
+ return {run:()=>run(date,()=>true),state,initialReports,initialRaw,inspect:()=>({raw,primary,report,queueWrites,reportWrites,primaryWrites,syncErrors})};
 }
 for(const mode of ['quota','local-blocked','archived','inflight','conflict','primary-setting','archive-proof','edit-before-sync','aba','primary-json-aba','state-mismatch','report-get500','report-never-saved','date-change','date-in-queue-read'])
  test('unconfirmed '+mode+' cannot write request or queue',async()=>{
@@ -84,6 +87,11 @@ for(const mode of ['quota','local-blocked','archived','inflight','conflict','pri
 for(const mode of ['ok','put-uncertain'])test('actual protected sync + readbacks + real queue '+mode,async()=>{
  const f=fixture(mode),result=await f.run(),got=f.inspect();
  assert.equal(got.primaryWrites,1);assert.equal(got.reportWrites,1);assert.equal(got.queueWrites,2);
+ // The real PUT-success adoption must persist exactly the transmitted version's stamp.
+ const sentStamp=JSON.parse(got.primary).dataModifiedAt;
+ assert.ok(sentStamp);assert.deepEqual(got.syncErrors,[]);
+ assert.equal(f.state.settings.lastPushedAt,sentStamp);
+ assert.equal(JSON.parse(got.raw).settings.lastPushedAt,sentStamp);
  assert.ok(result);assert.equal(got.report,f.state.reports['2026-09-06']);
 });
 test('local readback and timestamp failures restore exact memory and raw storage',()=>{

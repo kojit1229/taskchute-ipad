@@ -493,3 +493,208 @@ test('reordering unchanged records persists order without altering their stamps'
   assert.deepEqual(Array.from(f.ctx.state.tasks, row => row.updatedAt), [stamp(90), stamp(0)]);
   assert.equal(f.counts.writes, 1);
 });
+
+// 14b: execute the real eight sync entrances with isolated network/storage adapters.
+async function syncStampFixture({ pending = true, localOnly = true } = {}) {
+  const fs = require('node:fs'), vm = require('node:vm'), acorn = require('acorn');
+  const source = fs.readFileSync(path.join(__dirname, '../src/sync/github.js'), 'utf8');
+  const ast = acorn.parse(source, { ecmaVersion: 'latest', sourceType: 'module' });
+  const names = ['beginSyncCandidate', 'adoptSyncResult', 'saveToGitHub', 'runAutoSyncPush',
+    'autoMergeRemote', 'runAutoSyncPull', 'loadFromGitHub', 'syncFromGitHubOnStartup'];
+  const functions = names.map(name => {
+    const node = ast.body.map(n => n.declaration || n).find(n => n.type === 'FunctionDeclaration' && n.id.name === name);
+    assert.ok(node, name); return source.slice(node.start, node.end);
+  }).join('\n');
+  const config = { token: 'fixture', branch: 'test' };
+  const local = { dataModifiedAt: stamp(10), settings: { github: config, lastPushedAt: stamp(pending ? 0 : 10) },
+    blocks: localOnly ? [{ id: 'local', title: 'local', updatedAt: stamp(0) }] : [], core: 'same' };
+  const remote = { ...structuredClone(local), dataModifiedAt: stamp(100),
+    blocks: [{ id: 'remote', title: 'remote', updatedAt: stamp(1) }] };
+  const counts = { puts: 0, saves: 0, scheduled: 0, adopted: 0 };
+  let fail = false, stored = JSON.stringify(local), sent, onPut = () => {}, onDownload = () => {};
+  const noop = () => {}, { commitCandidate } = await api();
+  const ctx = vm.createContext({ JSON, state: local, commitCandidate, _lastSaveError: null, console: { warn: noop },
+    nowDateTime: () => stamp(0), saveState: Object.assign(noop, { pendingStamp: stamp(20) }),
+    setState: value => { ctx.state = value; }, normalizeState: x => x,
+    persistLocalNoSchedule: () => { counts.saves++; ctx._lastSaveError = null;
+      if (fail) withLocalSaveFailure((persist, injected) => {
+        assert.throws(persist, error => error === injected.error); ctx._lastSaveError = injected.error;
+      });
+      if (!fail) stored = JSON.stringify(ctx.state); },
+    archiveConnectionKey: () => 'fixture', capturePrimarySyncState: () => ({ pending }),
+    _githubSaveInFlight: false, autoSaveTimer: null, clearTimeout: noop,
+    requireGitHubConfig: () => config, fetchGitHubFileSHA: async () => 'remote-sha', getLastSyncedSha: () => 'old-sha',
+    setLastSyncedSha: noop, window: { confirm: () => true },
+    downloadGitHubStateText: async () => { onDownload(); return { text: JSON.stringify(remote), sha: 'remote-sha' }; },
+    normalizedRemoteCopy: JSON.parse, prepareArchiveMerge: async () => {}, assertPrimarySettingsSafe: noop,
+    requireSyncMerge: r => {
+      const blocks = [...new Map([...r.blocks, ...ctx.state.blocks].map(b => [b.id, b])).values()];
+      return { blocks, changedVsRemote: JSON.stringify(blocks) !== JSON.stringify(r.blocks) };
+    },
+    applySyncMergeToLocal: merge => { ctx.state.blocks = merge.blocks; return true; },
+    applySyncMergeToRemote: (merge, r) => { r.blocks = merge.blocks; return merge.changedVsRemote; },
+    syncCoreEqual: () => true, archiveProof: { assert: noop },
+    sanitizedStateForGitHub: () => ctx.state, toBase64: x => x, gitHubContentsURL: () => 'mock', githubHeaders: () => ({}),
+    fetch: async (_url, options) => { counts.puts++; sent = JSON.parse(JSON.parse(options.body).content); await onPut();
+      return { ok: true, json: async () => ({ content: { sha: 'sent-sha' } }) }; },
+    clearPersonalDataAuthError: noop, recordSyncPushSuccess: noop, recordSyncPullSuccess: noop,
+    clearSyncBanner: noop, setSyncBanner: noop, showToast: noop, updateAutoSaveStatus: noop, updateSyncDot: noop,
+    maybeWriteBackupSnapshot: noop, writeBackupSnapshotBeforeLoad: async () => true,
+    scheduleAutoSave: () => counts.scheduled++, scheduleAutoSync: () => counts.scheduled++,
+    autoSyncReady: () => true, personalDataReady: () => true, personalDataFileConfig: x => x,
+    normalizeDataStamp: x => x, remoteShaUnchanged: () => false, primarySettingsDifferWhilePending: () => false,
+    mergeCoreKeys: r => ({ core: r.core }), SYNC_CORE_COMPARE_KEYS: ['core'], LOSS_RISK_KEYS: [],
+    getByPath: (x, k) => x[k], setByPath: (x, k, v) => { x[k] = v; },
+    _lastPullCheckAt: 0, AUTO_SYNC_PULL_THROTTLE_MS: 0, _startupDataModifiedAt: stamp(10),
+    maintainRecurrences: noop, runDailyOpen: () => false, render: noop, renderDeferringForFocus: noop });
+  vm.runInContext(functions, ctx);
+  const adopt = ctx.adoptSyncResult;
+  ctx.adoptSyncResult = (...args) => { counts.adopted++; return adopt(...args); };
+  return { ctx, remote, counts, raw: () => stored, sent: () => sent, fail: value => { fail = value; },
+    onPut: fn => { onPut = fn; }, onDownload: fn => { onDownload = fn; } };
+}
+
+const syncEntrances = [
+  ['manual merge', 'saveToGitHub', true], ['auto push merge', 'runAutoSyncPush', true],
+  ['core auto merge', 'autoMergeRemote', true], ['pull merge', 'runAutoSyncPull', true],
+  ['pull adopt', 'runAutoSyncPull', false], ['manual load', 'loadFromGitHub', false],
+  ['startup pending', 'syncFromGitHubOnStartup', true], ['startup adopt', 'syncFromGitHubOnStartup', false]
+];
+for (const [name, method, pending] of syncEntrances) {
+  for (const localOnly of [false, true]) test('sync ' + name + ': ' + (localOnly ? 'union advances future clock' : 'pure adoption retains remote clock'), async () => {
+    const f = await syncStampFixture({ pending, localOnly });
+    await f.ctx[method](...(method === 'autoMergeRemote' ? [f.remote, stamp(100), 'remote-sha'] : []));
+    assert.ok(f.counts.adopted > 0, 'entrance reaches common adoption');
+    assert.equal(f.ctx.state.dataModifiedAt, stamp(localOnly ? 101 : 100));
+    assert.deepEqual(f.ctx.state.blocks.map(b => b.id).sort(), localOnly ? ['local', 'remote'] : ['remote']);
+    assert.equal(f.ctx.state.settings.lastPushedAt, stamp(f.counts.puts ? (localOnly ? 101 : 100) : 100));
+    assert.equal(JSON.parse(f.raw()).dataModifiedAt, f.ctx.state.dataModifiedAt);
+  });
+  test('sync ' + name + ': failed save restores original state and suppresses PUT', async () => {
+    const f = await syncStampFixture({ pending }), before = JSON.stringify(f.ctx.state), raw = f.raw();
+    f.fail(true);
+    await f.ctx[method](...(method === 'autoMergeRemote' ? [f.remote, stamp(100), 'remote-sha'] : []));
+    expectRestored(JSON.parse(before), JSON.parse(JSON.stringify(f.ctx.state))); assert.equal(f.raw(), raw);
+    assert.equal(f.counts.puts, 0); assert.equal(f.counts.scheduled, 0);
+    f.fail(false);
+    await f.ctx[method](...(method === 'autoMergeRemote' ? [f.remote, stamp(100), 'remote-sha'] : []));
+    assert.equal(f.ctx.state.dataModifiedAt, stamp(101));
+  });
+}
+for (const method of ['saveToGitHub', 'runAutoSyncPush']) test(method + ': PUT-wait edits remain unpushed after reload', async () => {
+  const f = await syncStampFixture();
+  f.onPut(() => { f.ctx.state.blocks.push({ id: 'waiting-edit' }); f.ctx.state.dataModifiedAt = stamp(102); });
+  await f.ctx[method]();
+  assert.equal(f.sent().dataModifiedAt, stamp(101));
+  assert.equal(f.ctx.state.settings.lastPushedAt, stamp(101));
+  assert.equal(f.ctx.state.dataModifiedAt, stamp(102));
+  const reloaded = JSON.parse(f.raw()); assert.equal(reloaded.dataModifiedAt, stamp(102));
+  assert.ok(reloaded.blocks.some(b => b.id === 'waiting-edit'));
+});
+test('sync: two alternating devices stop sending within three round trips', async () => {
+  const fs = require('node:fs');
+  const { chromium, launchOptions, startServer, randomPort, blockGithubApiByDefault } = require('./helpers');
+  const port = randomPort(), server = startServer(port);
+  let browser;
+  try {
+    await server.ready;
+    browser = await chromium.launch(launchOptions());
+    const devices = [];
+    for (let index = 0; index < 2; index++) {
+      const context = await browser.newContext({ serviceWorkers: 'block' });
+      await blockGithubApiByDefault(context);
+      const page = await context.newPage();
+      await page.route('**/app.js', route => route.fulfill({ contentType: 'text/javascript',
+        body: fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8')
+          + '\nwindow.__stampApp = { normalizeState, makeBlock, getState: () => state, setState };' }));
+      await page.route('**/src/sync/github.js', route => route.fulfill({ contentType: 'text/javascript',
+        body: fs.readFileSync(path.join(__dirname, '../src/sync/github.js'), 'utf8')
+          + '\nwindow.__stampSync = { configureGithubSync, computeSyncMerge, applySyncMergeToLocal, syncCoreEqual, autoMergeRemote, runAutoSyncPush };' }));
+      await page.goto('http://localhost:' + port);
+      await page.waitForFunction(() => Boolean(window.__stampApp && window.__stampSync));
+      devices.push(page);
+    }
+    const seed = await devices[0].evaluate(() => {
+      const app = window.__stampApp, value = JSON.parse(JSON.stringify(app.getState()));
+      value.blocks = [app.makeBlock({ title: 'shared', date: '2026-09-10' })];
+      value.dataModifiedAt = '2026-09-10T10:05:00';
+      value.settings.lastPushedAt = '2026-09-10T10:00:00';
+      value.settings.autoSync = true;
+      value.settings.github = { token: 'fixture', owner: 'fixture', repo: 'fixture', branch: 'test' };
+      return value;
+    });
+    for (const page of devices) await page.evaluate(value => {
+      const app = window.__stampApp, sync = window.__stampSync, noop = () => {};
+      app.setState(app.normalizeState(value));
+      window.__stampIO = { puts: 0, remote: null, sequence: 0, merges: 0 };
+      const io = window.__stampIO;
+      window.fetch = async (url, options = {}) => {
+        if (url !== 'fixture-sync' && url !== 'fixture-sync?ref=test') throw new Error('Unexpected network: ' + url);
+        if (options.method === 'PUT') {
+          io.puts++;
+          io.sent = JSON.parse(JSON.parse(options.body).content);
+          return { ok: true, json: async () => ({ content: { sha: 'sent-' + io.sequence } }) };
+        }
+        return { ok: true, json: async () => ({ content: JSON.stringify(io.remote), encoding: 'base64', sha: 'remote-' + io.sequence }) };
+      };
+      sync.configureGithubSync({ normalizeState: app.normalizeState,
+        nowDateTime: () => '2026-09-10T10:00:00', todayISO: () => '2026-09-10', addDays: d => d,
+        isTouchedBlock: b => Boolean(b.actualStartAt), RECURRENCE_KEEP_PAST_DAYS: 7,
+        RECURRENCE_FUTURE_DAYS: 31, SWIPE_TRIAGE_LOG_MAX: 200,
+        showToast: noop, maintainRecurrences: noop, render: noop, runDailyOpen: () => false,
+        saveState: noop, renderDeferringForFocus: noop,
+        requireGitHubConfig: () => app.getState().settings.github,
+        fetchGitHubFileSHA: async () => 'remote-' + io.sequence,
+        personalDataReady: () => true, personalDataFileConfig: c => c,
+        gitHubContentsURL: () => 'fixture-sync', githubHeaders: () => ({}),
+        gitHubErrorMessage: async () => 'fixture error', fromBase64: x => x, toBase64: x => x,
+        sanitizedStateForGitHub: () => JSON.parse(JSON.stringify(app.getState())),
+        maybeWriteBackupSnapshot: async () => {}, writeBackupSnapshotBeforeLoad: async () => true,
+        updateAutoSaveStatus: noop, updateSyncDot: noop, renderSyncBanner: noop,
+        clearSyncBannerDismissal: noop, clearPersonalDataAuthError: noop,
+        pruneExpiredSuggestedThemes: x => x, _startupDataModifiedAt: value.dataModifiedAt
+      });
+    }, structuredClone(seed));
+    const rounds = [];
+    for (let round = 0; round < 3; round++) {
+      let puts = 0;
+      for (const [page, other] of [[devices[0], devices[1]], [devices[1], devices[0]]]) {
+        const remote = await other.evaluate(() => window.__stampApp.getState());
+        const result = await page.evaluate(async remote => {
+          const app = window.__stampApp, sync = window.__stampSync, io = window.__stampIO;
+          io.remote = remote; io.sequence++;
+          const norm = app.normalizeState(JSON.parse(JSON.stringify(remote)));
+          const coreEqual = sync.syncCoreEqual(norm);
+          const separateBlocks = app.getState().blocks[0] !== norm.blocks[0];
+          const merged = sync.computeSyncMerge(norm, 'local');
+          if (!merged) throw new Error('Real computeSyncMerge failed');
+          io.merges++;
+          const count = io.puts;
+          const adopted = await sync.autoMergeRemote(norm, norm.dataModifiedAt, 'merge-' + io.sequence);
+          await sync.runAutoSyncPush();
+          return { adopted, coreEqual, separateBlocks, puts: io.puts - count,
+            stamp: app.getState().dataModifiedAt, pushed: app.getState().settings.lastPushedAt,
+            blocks: app.getState().blocks.length };
+        }, remote);
+        assert.equal(result.adopted, true, 'real merge adoption succeeds');
+        assert.equal(result.coreEqual, true, 'real syncCoreEqual compares normalized state');
+        assert.equal(result.separateBlocks, true, 'same Block has separate object identity');
+        assert.equal(result.blocks, 1);
+        puts += result.puts;
+      }
+      rounds.push(puts);
+    }
+    console.log('real merge round-trip PUT counts:', JSON.stringify(rounds));
+    assert.equal(rounds[2], 0, 'PUT stops within three complete round trips');
+    assert.deepEqual(rounds, [0, 0, 0], 'identical content never needs a resend');
+    for (const page of devices) {
+      const final = await page.evaluate(() => ({ state: window.__stampApp.getState(), io: window.__stampIO }));
+      assert.equal(final.io.merges, 3);
+      assert.equal(final.state.dataModifiedAt, seed.dataModifiedAt);
+      assert.equal(final.state.dataModifiedAt, final.state.settings.lastPushedAt);
+    }
+  } finally {
+    await browser?.close();
+    await new Promise(resolve => server.close(resolve));
+  }
+});

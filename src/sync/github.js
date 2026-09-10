@@ -54,7 +54,8 @@ import { state, setState } from "../state/store.js";
 import {
   mergeById, mergeByIdPreferNewer, mergeGymSets, mergeTracksPreferNewer, mergeWeeklyCommitments
 } from "../core/merge.js";
-import { persistLocalNoSchedule } from "../storage/local.js";
+import { commitCandidate } from "../core/commit.js";
+import { persistLocalNoSchedule, _lastSaveError } from "../storage/local.js";
 
 // ---- 依存注入(configureGithubSync) ----
 // app.jsが起動時に一度だけ呼ぶ。ここに列挙した識別子は元のapp.js側の関数・定数そのものへの
@@ -90,6 +91,41 @@ function configureGithubSync(deps) {
     renderSyncBanner, clearSyncBannerDismissal, clearPersonalDataAuthError, pruneExpiredSuggestedThemes,
     _startupDataModifiedAt, readArchiveForSync
   } = deps);
+}
+
+// Stage merge writes on a detached state; commitCandidate owns persistence and rollback.
+function beginSyncCandidate() {
+  const before = state;
+  setState(JSON.parse(JSON.stringify(state)));
+  return before;
+}
+export function adoptSyncResult(before, remoteT, mode, remoteNorm) {
+  const candidate = { ...state, settings: { ...state.settings, lastPushedAt: remoteT } };
+  const content = value => JSON.stringify(value, (key, item) =>
+    ["dataModifiedAt", "updatedAt", "lastPushedAt", "lastPulledAt", "lastSavedAt"].includes(key) ? undefined : item);
+  if (remoteNorm && mode !== "pushed") {
+    const keys = [...SYNC_CORE_COMPARE_KEYS, "journals", "journalMeta", "feedback", "condition.logs",
+      "sleep.logs", "settings.morningEnergyLog", "blocks", "dailyDeclarations", "weeklyWishes",
+      "bodyScans", "writeMeditations", "tasks", "projects", "storeVisits", "tracks", "trackMeasurements",
+      "weeklyCommitments", "swipeTriageLog", "gardenLog", "coachLog.meals", "aiStepProcessedIds",
+      "aiStepDismissedIds", "aiReportReadIds", "aiStepPendingRequests", "archivedDates", "reports",
+      "chainRuns", "zeroSecThemeLog", "migrationRitualLog", "feedbackFiles", "feedbackIngestedDates",
+      "aiWorkProcessedIds", "zeroThinking.entries", "zeroThinking.suggestedThemes", "zeroThinking.groups"];
+    mode = keys.some(key => content(getByPath(candidate, key) ?? null)
+      !== content(getByPath(remoteNorm, key) ?? null)) ? "merge" : "adopt";
+  }
+  const keepStamp = mode === "pushed" || (mode === "merge" && before.dataModifiedAt > remoteT
+    && content(before) === content(candidate));
+  setState(before);
+  const result = commitCandidate({ state: before, now: nowDateTime,
+    floors: [saveState?.pendingStamp, candidate.dataModifiedAt, remoteT],
+    syncStamp: keepStamp ? before.dataModifiedAt : mode === "merge" ? undefined : remoteT,
+    build: model => ({ values: Object.keys(candidate).filter(key => key !== "dataModifiedAt")
+      .map(key => ({ kind: null, key, before: model[key], after: candidate[key] })) }),
+    persist: () => { persistLocalNoSchedule(); return !_lastSaveError; }
+  });
+  if (!result.ok) throw result.error;
+  return result;
 }
 
 // ---- ここから抽出したコード本体(app.js:v165時点から移動。ロジック無改変) ----
@@ -197,8 +233,9 @@ async function saveToGitHub(silent = false, captureProof = null) {
         if (syncCoreEqual(remoteNorm)) {
           // マージ未対応のコア(recurrences等)は一致 → tasks/projects等の差分は
           // マージ可能コレクションとして合流させ、そのままpushしてよい。
+          const before = beginSyncCandidate();
           applySyncMergeToLocal(syncMerge);
-          state.dataModifiedAt = nowDateTime();  // 和集合が最新であることを明示
+          adoptSyncResult(before, remoteNorm.dataModifiedAt, "adopt", remoteNorm);
         } else {
           const msg = "GitHub側にこの端末とは別の変更があります。「GitHubから読込」で取り込んでから保存してください";
           if (silent) { updateAutoSaveStatus(`見送り: ${msg}`); return; }
@@ -212,6 +249,7 @@ async function saveToGitHub(silent = false, captureProof = null) {
     if (captureProof && captureProof.isCurrent() !== true) return;
     archiveProof.assert(null);
     const content = JSON.stringify(sanitizedStateForGitHub(), null, 2);
+    const sentStamp = state.dataModifiedAt;
     if (captureProof && (captureProof.isCurrent() !== true || content !== captureProof.expectedContent)) return;
     const response = await fetch(gitHubContentsURL(config), {
       method: "PUT",
@@ -249,7 +287,7 @@ async function saveToGitHub(silent = false, captureProof = null) {
     // 「6時間後に赤帯」の偽陽性を招いていた。push経路を問わず、成功時は必ずlastPushedAtを
     // dataModifiedAtへ揃える(runAutoSyncPushもこの関数を経由するため、呼び出し元の
     // 個別更新と重複するが害はない)。
-    state.settings.lastPushedAt = state.dataModifiedAt;
+    adoptSyncResult(state, sentStamp, "pushed");
     state.settings.github.lastSavedAt = nowDateTime();
     clearSyncBanner({ clearDismissal: true });  // v136: fail-closed等で出したバナーが残っていれば、成功したので消す
     persistLocalNoSchedule();  // v25: 自動保存タイマーを再セットしない(無限保存ループ防止)
@@ -331,10 +369,9 @@ async function runAutoSyncPush() {
         // tieWinner="local": ここもapplySyncMergeToLocal(ローカルを基準に残す)経路。
         const syncMerge = requireSyncMerge(remoteNorm, "local");
         if (syncMerge) {
+          const before = beginSyncCandidate();
           applySyncMergeToLocal(syncMerge);
-          state.settings.lastPushedAt = remoteT;   // リモート分は取り込み済み
-          state.dataModifiedAt = nowDateTime();    // 和集合を今回のpushで届ける
-          persistLocalNoSchedule();
+          adoptSyncResult(before, remoteT, "adopt", remoteNorm);
           resolved = true;
         }
       }
@@ -345,16 +382,8 @@ async function runAutoSyncPush() {
         return;
       }
     }
-    const before = state.settings.github.lastSavedAt;
-    await saveToGitHub(true);  // 既存の手動push経路(SHAガード付き)を共用
-    if (state.settings.github.lastSavedAt !== before) {  // 成功
-      // v135: pushedはsaveToGitHub呼び出し後のdataModifiedAtを見る(呼び出し前の値をここで
-      // 変数に控えておく旧実装だと、saveToGitHub内部のv135マージでdataModifiedAtが
-      // さらに進んだ場合に古い値をlastPushedAtへ記録してしまい、未push判定が消えなくなる)。
-      state.settings.lastPushedAt = state.dataModifiedAt;
-      clearSyncBanner({ clearDismissal: true });
-      persistLocalNoSchedule();
-    }
+    if (!(state.dataModifiedAt > (state.settings.lastPushedAt || ""))) return;
+    await saveToGitHub(true);
     updateSyncDot();
   } catch (error) {
     if (["InvalidRemoteStateError", "PrimarySettingsConflict", "ArchiveTextConflict"].includes(error?.name)) setSyncBanner(error.message);
@@ -1218,16 +1247,14 @@ async function autoMergeRemote(remoteNorm, remoteT, sha, { origin, renderFn, rej
     syncMerge = requireSyncMerge(remoteNorm, "local");
     if (!syncMerge) return false;
     coreValues = mergeCoreKeys(remoteNorm, remoteT);
-    before = JSON.parse(JSON.stringify(state));
+    before = beginSyncCandidate();
     applySyncMergeToLocal(syncMerge);
     // normalizeState mutates its input: normalize the detached candidate before adopting core values.
     const candidate = JSON.parse(JSON.stringify(state));
     for (const key of SYNC_CORE_COMPARE_KEYS) setByPath(candidate, key, coreValues[key]);
     setState(normalizeState(candidate));
-    state.settings.lastPushedAt = remoteT;
+    adoptSyncResult(before, remoteT, "adopt", remoteNorm);
     setLastSyncedSha(sha);
-    state.dataModifiedAt = nowDateTime();
-    persistLocalNoSchedule();
   } catch (error) {
     if (before) setState(before);
     console.warn("autoMergeRemote failed:", error.message, origin);
@@ -1292,12 +1319,12 @@ async function runAutoSyncPull() {
       // tieWinner="local": ここもapplySyncMergeToLocal(ローカルを基準に残す)経路。
       const syncMerge = remoteNorm ? requireSyncMerge(remoteNorm, "local") : null;
       if (syncMerge && syncCoreEqual(remoteNorm)) {
+        const before = beginSyncCandidate();
         applySyncMergeToLocal(syncMerge);
-        state.settings.lastPushedAt = remoteT;   // リモート分は取り込み済み
+        adoptSyncResult(before, remoteT, "adopt", remoteNorm);
         recordSyncPullSuccess();
         setLastSyncedSha(sha);
-        state.dataModifiedAt = nowDateTime();    // 和集合を次のpushで届ける
-        persistLocalNoSchedule();
+
         scheduleAutoSync();
         clearSyncBanner({ clearDismissal: true });
         runDailyOpen();
@@ -1334,9 +1361,10 @@ async function runAutoSyncPull() {
       if (merged) remote.zeroThinking = { ...remoteZtBefore, ...merged };
       adopted = normalizeState(remote);
     }
+    const before = state;
     setState(adopted);
     state.settings.github = { ...cfg, token };
-    state.settings.lastPushedAt = remoteT;   // 取り込んだ = リモートと一致
+    adoptSyncResult(before, remoteT, "adopt", normalizedRemoteCopy(text));
     state.settings.lastPulledAt = nowDateTime();
     recordSyncPullSuccess();
     setLastSyncedSha(sha);
@@ -1346,7 +1374,6 @@ async function runAutoSyncPull() {
     if (addedLocal) {
       // 合流分はリモートの元スナップショットに無かった変更 → 次回pushで届くようにする
       // (lastPushedAtより新しいdataModifiedAtにして「未push」を成立させる)。
-      state.dataModifiedAt = nowDateTime();
       scheduleAutoSave();
       scheduleAutoSync();
     }
@@ -1467,6 +1494,7 @@ async function loadFromGitHub() {
       if (merged) loaded.zeroThinking = { ...remoteZtBefore, ...merged };
       adopted = normalizeState(loaded);
     }
+    const before = state;
     setState(adopted);
     state.settings.github = { ...rawSettings };
     // unit15差し戻し(d): runAutoSyncPullの自動採用経路と同じパターンで、採用した内容の
@@ -1475,13 +1503,12 @@ async function loadFromGitHub() {
     // (独立レビュー指摘のA2-M11偽警告の根治)。addedLocal(ローカル限定データの合流)がある
     // 場合は直後にdataModifiedAtがnowへ進むため、その分だけは正しく「未push」のまま残る
     // (合流分を次回pushで届けるため。runAutoSyncPullと同じ考え方、下記参照)。
-    state.settings.lastPushedAt = adopted.dataModifiedAt || "";
+    adoptSyncResult(before, adopted.dataModifiedAt || "", "adopt", normalizedRemoteCopy(text));
     maintainRecurrences({ purge: true });
     if (addedLocal) {
       // 合流で内容がリモートの元スナップショットから乖離した場合だけ例外的にdataModifiedAtを
       // 進める(通常の手動読込は「採用のためdataModifiedAtは更新しない」が原則。合流分を
       // 次回pushで届けるための例外)。
-      state.dataModifiedAt = nowDateTime();
       scheduleAutoSave();
       scheduleAutoSync();
     }
@@ -1538,12 +1565,12 @@ async function syncFromGitHubOnStartup() {
         // tieWinner="local": ここはapplySyncMergeToLocal(ローカルを基準に残す)経路。
         const syncMerge = remoteNorm ? requireSyncMerge(remoteNorm, "local") : null;
         if (syncMerge && syncCoreEqual(remoteNorm)) {
+          const before = beginSyncCandidate();
           applySyncMergeToLocal(syncMerge);
-          state.settings.lastPushedAt = remoteT;
+          adoptSyncResult(before, remoteT, "adopt", remoteNorm);
           recordSyncPullSuccess();
           setLastSyncedSha(sha);
-          state.dataModifiedAt = nowDateTime();
-          persistLocalNoSchedule();
+
           clearSyncBanner({ clearDismissal: true });
           renderDeferringForFocus();
           showToast("他端末の記録を取り込みました");
@@ -1576,12 +1603,13 @@ async function syncFromGitHubOnStartup() {
         if (merged) remote.zeroThinking = { ...remoteZtBefore, ...merged };
         adopted = normalizeState(remote);
       }
+      const before = state;
       setState(adopted);
       state.settings.github = { ...cfg, token };
+      adoptSyncResult(before, remoteT, "adopt", normalizedRemoteCopy(text));
       maintainRecurrences({ purge: true });
       if (addedLocal) {
         // 合流分はリモートの元スナップショットに無かった変更 → 次回pushで届くようにする
-        state.dataModifiedAt = nowDateTime();
         scheduleAutoSave();
         scheduleAutoSync();
       }
