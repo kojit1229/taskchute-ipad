@@ -31,6 +31,8 @@ import {
 import { normalizeTwyPlan } from "./src/core/plan.js";
 import { createVisionRead } from "./src/features/vision-read.js";
 import { createVisionOverview } from "./src/features/vision-overview.js";
+import { DAILY_ACTIONS } from "./src/ui/daily-parts/contract.js";
+import { runDailyOperation } from "./src/features/daily-operations.js";
 import { createDraftLeaveGuard } from "./src/features/draft-leave.js";
 import { createDraftSaveTransaction } from "./src/features/draft-save.js";
 import { commitCandidate, assertNotInsideBuild } from "./src/core/commit.js";
@@ -1536,6 +1538,21 @@ function foldSection(id, defaultOpen, wrapperClass, summaryClass, summaryText, b
 //      ここで render() を呼ぶと、後方で宣言される const(JOURNAL_PROMPTS 等)が
 //      未初期化のまま参照され、最後に開いていた画面によっては起動時に例外で全停止していた。
 
+const dailyOperationDeps = {
+  get state() { return state; }, commitCandidate, now: nowDateTime, notify: showToast,
+  floors: () => [state.settings?.lastPushedAt, saveState.pendingStamp],
+  persist: () => { persistLocalNoSchedule(); return !_lastSaveError; },
+  scheduleSync: () => { saveState.pendingStamp = state.dataModifiedAt; scheduleAutoSave(); scheduleAutoSync(); },
+  legacy: {
+    "edit-block": ({ id }) => openBlockEditor(id),
+    "edit-task": ({ id }) => openTaskEditor(id),
+    "edit-project": ({ id }) => openProjectEditor(id),
+    "modal-close": () => closeFillGapAware(),
+    "modal-delete": () => deleteFromModal(),
+    "modal-save": ({ save }) => save()
+  }
+};
+
 document.addEventListener("click", (event) => {
   const reportLink = event.target.closest('.fund-report-view .readonly-md a, .fund-view .readonly-md a');
   if (reportLink && fundReportsUI.link(reportLink.getAttribute('href'))) { event.preventDefault(); return; }
@@ -1549,6 +1566,27 @@ document.addEventListener("click", (event) => {
   // v172: レジストリ経由のactionが登録されていればそちらを優先する(段階5-1時点では
   // どのfeatureもまだ何も登録していないため常にfalseで、既存if連鎖が今までどおり
   // 全件実行される。フォールバック分岐は1行も変更していない)。
+  if (DAILY_ACTIONS.includes(action)) {
+    const input = { ...target.dataset, event, target, id };
+    if (action === "modal-save") {
+      input.save = () => {
+        // v108: Block編集モーダルの保存ボタンのみ、連打・二重発火防止でdisableする
+        //       (他モーダルの保存ボタンはスコープ外)。バリデーション失敗等でモーダルが
+        //       開いたまま戻った場合は再度押せるよう再有効化する。
+        if (state.modal?.type === "block") {
+          if (target.disabled) return;
+          target.disabled = true;
+          submitModal();
+          if (state.modal) target.disabled = false;
+        } else {
+          submitModal();
+        }
+      };
+    }
+    const result = runDailyOperation(action, input, dailyOperationDeps);
+    if (result?.status === "invalid") showToast("この操作はまだ利用できません");
+    return;
+  }
   if (dispatchAction(action, { event, target, id })) return;
 
   // v174: navはapp.js内のregisterActionsへ移行した。
@@ -1581,19 +1619,6 @@ document.addEventListener("click", (event) => {
   // v178: edit-project/edit-task/edit-block/modal-close/modal-delete/lev-judgeはapp.js内の
   // registerActionsへ移行した。modal-saveは過去判定どおりreturn意味論(disable連動のearly
   // return)がありif連鎖に残置する。
-  if (action === "modal-save") {
-    // v108: Block編集モーダルの保存ボタンのみ、連打・二重発火防止でdisableする
-    //       (他モーダルの保存ボタンはスコープ外)。バリデーション失敗等でモーダルが
-    //       開いたまま戻った場合は再度押せるよう再有効化する。
-    if (state.modal?.type === "block") {
-      if (target.disabled) return;
-      target.disabled = true;
-      submitModal();
-      if (state.modal) target.disabled = false;
-    } else {
-      submitModal();
-    }
-  }
   // v179: vision-section〜vision-board-retry-images(ビジョンボード6)はapp.js内の
   // registerActionsへ移行した。
   if (action === "open-md-in-github") openMdInGithub(target.dataset.path);
