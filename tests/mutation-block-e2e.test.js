@@ -337,9 +337,16 @@ test('factories keep unsaved timeline input out of state; persistence owns the s
 });
 
 async function lifecycleFixture() {
-  const f = await fixture(['setBlockTime', 'toggleBlock', 'autoCloseStaleRoutineRuns',
+  const f = await fixture(['setBlockTime', 'resumeLifecycleStart', 'toggleBlock', 'autoCloseStaleRoutineRuns',
+    'weekRange', 'candidateBlocksForWeek', 'commitmentItemForBlock', 'parseDate', 'addDays',
+    'dateToISO', 'dateToLocalDateTime', 'localDateTimeToMs',
     'saveActualEntryFromModal', 'toggleTaskCompleteFromBlock', 'bulkApproveAsPlanned']);
   Object.assign(f.ctx, {
+    runDailyOperation: (await import('../src/features/daily-operations.js')).runDailyOperation,
+    mergeWeeklyCommitments: (await import('../src/core/merge.js')).mergeWeeklyCommitments,
+    ...await import('../src/core/track.js'),
+    queueMicrotask: callback => callback(),
+    maybeShowGuidedAccessHint: () => { f.counts.guidedAccess = (f.counts.guidedAccess || 0) + 1; },
     _quickCompleteSnapshots: {}, requestDraftLeave: () => false,
     resetPomodoroForBlock: () => f.counts.timer++, forceResetPomodoroSession() {},
     startPomodoro: () => { f.counts.timer++; f.ctx.state.pomodoro.running = true; },
@@ -349,6 +356,9 @@ async function lifecycleFixture() {
     maybeQueueNextAiStep() {}, closeAiStepConfirmIfUndone() {}, rerenderActiveModal() {},
     isStaleBlock: () => false, window: { confirm: () => true }, completePomodoro: () => f.counts.timer++
   });
+  const wiring = ast.body.filter(n => n.type === 'VariableDeclaration'
+    && n.declarations.some(d => ['dailyOperationDeps', 'COMMITMENT_SOURCE_PRIORITY'].includes(d.id.name)));
+  vm.runInContext(wiring.map(n => source.slice(n.start, n.end)).join('\n'), f.ctx);
   return f;
 }
 const lifecycle = [

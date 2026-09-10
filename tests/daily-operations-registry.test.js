@@ -2,6 +2,8 @@ const assert = require('node:assert/strict');
 const { DAILY_ACTIONS } = require('../src/ui/daily-parts/contract.js');
 const { DAILY_OPERATIONS: rows, runDailyOperation: run, dailyFingerprint } = require('../src/features/daily-operations.js');
 const { commitCandidate, setCommitGuard } = require('../src/core/commit.js');
+const { mergeWeeklyCommitments } = require('../src/core/merge.js');
+const { activeTrackForProject, isProjectInCurrentCycle } = require('../src/core/track.js');
 const { deepCommitGuard, expectRestored } = require('./helpers');
 setCommitGuard(deepCommitGuard);
 const state = { selectedDate: '2026-09-10', blocks: [{ id: 'b', date: '2026-09-10', title: 'before' }] };
@@ -90,6 +92,9 @@ const click = ast.body.find(n => n.type === 'ExpressionStatement' && n.expressio
 assert(wiring && click, 'one shared dependency object and actual delegated click entry');
 let listener, calls = [], routes = [], blockSaveCount = 0;
 const ctx = { DAILY_ACTIONS, state: { modal: null },
+  mergeWeeklyCommitments, activeTrackForProject, isProjectInCurrentCycle,
+  openDeclareModal: (...args) => calls.push(['open-declare', ...args]),
+  openReportModal: (...args) => calls.push(['open-report', ...args]),
   runDailyOperation: (name, input, injected) => { routes.push(name); return run(name, input, injected); },
   commitCandidate: () => { throw Error('legacy entered candidate boundary'); }, nowDateTime() {},
   saveState: {}, persistLocalNoSchedule() {}, _lastSaveError: null, scheduleAutoSave() {}, scheduleAutoSync() {},
@@ -100,7 +105,12 @@ const ctx = { DAILY_ACTIONS, state: { modal: null },
   document: { addEventListener: (name, handler) => { assert.equal(name, 'click'); listener = handler; } },
   dispatchAction: name => { calls.push(['other', name]); return true; }
 };
-vm.runInNewContext(source.slice(wiring.start, wiring.end) + '\n' + source.slice(click.start, click.end), ctx);
+const weeklyNames = ['weekRange', 'candidateBlocksForWeek', 'commitmentItemForBlock',
+  'parseDate', 'addDays', 'dateToISO', 'pad2', 'dateToLocalDateTime', 'localDateTimeToMs'];
+const weeklyNodes = ast.body.filter(n => (n.type === 'FunctionDeclaration' && weeklyNames.includes(n.id.name))
+  || (n.type === 'VariableDeclaration' && n.declarations.some(d => d.id.name === 'COMMITMENT_SOURCE_PRIORITY')));
+vm.runInNewContext(weeklyNodes.map(n => source.slice(n.start, n.end)).join('\n') + '\n'
+  + source.slice(wiring.start, wiring.end) + '\n' + source.slice(click.start, click.end), ctx);
 const fire = (action, disabled = false) => {
   const target = { dataset: { action, id: 'b' }, disabled };
   listener({ target: { closest: selector => selector === '[data-action]' ? target : null } });
