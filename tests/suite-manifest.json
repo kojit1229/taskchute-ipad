@@ -632,7 +632,7 @@
       ],
       "assertionSignals": 56,
       "assertionHash": "36851fda98c2f1fa",
-      "sourceHash": "2c27ebd7ff21e2d0",
+      "sourceHash": "964d41dfa9c1bda1",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -992,9 +992,9 @@
         "ui-responsive",
         "security-offline"
       ],
-      "assertionSignals": 23,
-      "assertionHash": "6596bd968aa40552",
-      "sourceHash": "8408249f82aa390c",
+      "assertionSignals": 26,
+      "assertionHash": "2edf1860e5e9b7c4",
+      "sourceHash": "4de03d2a85cbdff2",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -1755,25 +1755,49 @@
       }
     },
     {
-      "file": "mutation-global-e2e.test.js",
-      "kind": "node",
+      "file": "mutation-block-e2e.test.js",
+      "kind": "e2e",
       "tier": "full",
       "domains": [
-        "sync-storage"
+        "planning-execution",
+        "content-ai"
       ],
-      "assertionSignals": 152,
-      "assertionHash": "2fe3455b4b7d536e",
-      "sourceHash": "a80c09aceb5ca05e",
+      "assertionSignals": 85,
+      "assertionHash": "0446889025b47dce",
+      "sourceHash": "39492d1068be82ae",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
         "unresolvedCount": 0
       },
       "sideEffects": {
-        "browser": false,
-        "server": false,
+        "browser": true,
+        "server": true,
         "fileWrite": false,
-        "networkMock": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "mutation-global-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage"
+      ],
+      "assertionSignals": 178,
+      "assertionHash": "26c695e12722b4cb",
+      "sourceHash": "35a52fd3c64c5545",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
         "clock": false
       }
     },
@@ -2912,8 +2936,8 @@
         "journal-health"
       ],
       "assertionSignals": 18,
-      "assertionHash": "b0386c54c73aebc5",
-      "sourceHash": "3441f85b35cee814",
+      "assertionHash": "c9293ca2fdb37141",
+      "sourceHash": "aa2485b9f586a48d",
       "waits": {
         "fixedCount": 5,
         "numericMilliseconds": 5600,
@@ -4708,8 +4732,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 33,
-      "assertionHash": "b8c57971e99ebab1",
-      "sourceHash": "4057bb8d38ab9c98",
+      "assertionHash": "136d40f9d4dc0e80",
+      "sourceHash": "22a04aadf80cab6e",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -6210,7 +6234,7 @@
       ],
       "assertionSignals": 88,
       "assertionHash": "321be1ec646832a7",
-      "sourceHash": "9f83b82fb7bb0318",
+      "sourceHash": "0c47b88b20311a9d",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
