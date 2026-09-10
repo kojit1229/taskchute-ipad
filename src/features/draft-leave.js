@@ -1,5 +1,5 @@
 // A transient leave decision: no persisted state, no per-element listeners.
-export function createDraftLeaveGuard(document) {
+export function createDraftLeaveGuard(document, { drafts, readDraft, isComposing = () => false, notify = () => {} } = {}) {
   let pending = null;
   let dialog = null;
   let origin = null;
@@ -8,7 +8,7 @@ export function createDraftLeaveGuard(document) {
     try {
       const result = typeof action?.isCurrentOwner === "function" && action.isCurrentOwner();
       if (result && typeof result.then === "function") { Promise.resolve(result).catch(() => {}); return false; }
-      return result === true;
+      return result === true && (!action.draft || drafts.matches(action.draft, readDraft(action.inputSelector)));
     }
     catch { return false; }
   }
@@ -39,9 +39,13 @@ export function createDraftLeaveGuard(document) {
   }, true);
   return {
     get active() { return Boolean(pending); },
-    request({ save, leave, isCurrentOwner, allowDiscard = true }) {
+    request({ save, leave, isCurrentOwner, allowDiscard = true, inputSelector }) {
       if (pending) return;
-      pending = { save, leave, isCurrentOwner, allowDiscard };
+      const draft = readDraft?.(inputSelector);
+      if (draft && !drafts.put(draft).ok) notify("控えを保存できません。この画面内にだけ残っています。再読込せず、必要なら文字をコピーしてください");
+      if (draft?.current === false) { notify("接続先または対象が変わりました。入力の控えは残しています"); return; }
+      if (isComposing()) { notify("文字の変換を確定してから操作してください。入力は残しています"); return; }
+      pending = { save, leave, isCurrentOwner, allowDiscard, draft, inputSelector };
       const element = lastEditor?.isConnected ? lastEditor : document.activeElement;
       origin = { element, start: element?.selectionStart, end: element?.selectionEnd, direction: element?.selectionDirection };
       dialog = document.createElement("dialog");
@@ -61,7 +65,8 @@ export function createDraftLeaveGuard(document) {
       if (!pending) return;
       if (!["save", "stay", "discard"].includes(choice)) return;
       if (choice === "discard" && !pending.allowDiscard) return;
-      if (!owns(pending)) { dismiss(false); return; }
+      if (!owns(pending)) { notify("接続先または対象が変わったため操作を中止しました。入力の控えは残しています"); dismiss(false); return; }
+      if (isComposing()) { notify("文字の変換を確定してから操作してください"); dismiss(true); return; }
       if (choice === "stay") { dismiss(true); return; }
       const action = pending;
       const savedFocus = origin;
@@ -69,6 +74,7 @@ export function createDraftLeaveGuard(document) {
       dismiss(false);
       const result = choice === "save" ? action.save() : true;
       if (result !== true && !result?.ok) { if (owns(action)) restoreFocus(savedFocus); return; }
+      if (action.draft) drafts.clear(action.draft, choice === "save" ? "saved" : "discard");
       try { action.leave(); } finally { result?.afterLeave?.(); }
     }
   };

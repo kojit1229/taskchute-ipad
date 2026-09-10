@@ -34,6 +34,7 @@ import { createVisionOverview } from "./src/features/vision-overview.js";
 import { DAILY_ACTIONS } from "./src/ui/daily-parts/contract.js";
 import { runDailyOperation } from "./src/features/daily-operations.js";
 import { createDraftLeaveGuard } from "./src/features/draft-leave.js";
+import { createDailyDraftStore } from "./src/features/daily-draft.js";
 import { createDraftSaveTransaction } from "./src/features/draft-save.js";
 import { commitCandidate, assertNotInsideBuild } from "./src/core/commit.js";
 import { stamped } from "./src/core/mutation-stamp.js";
@@ -9366,6 +9367,7 @@ function beginZtWrite(id) {
 function openZtWrite(id) {
   if (!beginZtWrite(id)) return;
   render();          // 書く画面を描画(DOM 確定)
+  readDailyDraft();
   startZtTimer();    // その後にタイマー開始
   setTimeout(() => document.querySelector("#zt-write-input")?.focus(), 60);
 }
@@ -9381,7 +9383,11 @@ function discardZtWrite(inputSelector = "#zt-write-input") {
 }
 
 function saveZtEntry(inputSelector = "#zt-write-input", options) {
-  return draftSaveTransaction.run(() => applyZtEntry(inputSelector), options);
+  const draft = draftSaveTransaction.readDraft?.(inputSelector);
+  if (draft && !draft.current) return showToast("対象が変わりました。入力は残しています"), { ok: false };
+  const result = draftSaveTransaction.run(() => applyZtEntry(inputSelector), options);
+  if (result?.ok && draft) draftSaveTransaction.clearDraft(draft);
+  return result;
 }
 
 function applyZtEntry(inputSelector) {
@@ -9428,6 +9434,7 @@ function openZtEntry(id) {
   if (!e) return;
   ztEditId = id;
   render();
+  readDailyDraft();
   setTimeout(() => {
     const ta = document.querySelector("#zt-edit-input");
     if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }  // カーソルを末尾へ(追記しやすく)
@@ -9444,7 +9451,11 @@ function closeZtEdit() {
 // 変更しない — export先(zero-thinking-export.py)が date でその日のmdへ振り分ける契約のため、
 // 追記編集で日付が変わってしまうと過去の日報側の記録が壊れる。
 function saveZtEdit(id, options) {
-  return draftSaveTransaction.run(() => applyZtEdit(id), options);
+  const draft = draftSaveTransaction.readDraft?.();
+  if (draft && !draft.current) return showToast("対象が変わりました。入力は残しています"), { ok: false };
+  const result = draftSaveTransaction.run(() => applyZtEdit(id), options);
+  if (result?.ok && draft) draftSaveTransaction.clearDraft(draft);
+  return result;
 }
 
 function applyZtEdit(id) {
@@ -13630,7 +13641,11 @@ function openBlockEditor(id) {
   renderModal(buildBlockModal(block));
 }
 
-const draftLeaveGuard = createDraftLeaveGuard(document);
+const dailyDrafts = createDailyDraftStore();
+const dailyDraftSessions = new WeakMap();
+const draftLeaveGuard = createDraftLeaveGuard(document, {
+  drafts: dailyDrafts, readDraft: readDailyDraft, isComposing: () => _imeComposing, notify: showToast
+});
 draftSaveTransaction = createDraftSaveTransaction({
   getState: () => state, setState, now: nowDateTime,
   floors: () => [state.settings?.lastPushedAt, saveState.pendingStamp],
@@ -13648,6 +13663,9 @@ draftSaveTransaction = createDraftSaveTransaction({
     showToast("保存は成功しましたが、画面の更新に失敗しました。画面を開き直してください");
   }
 });
+// Existing editor adapters receive the optional draft lifecycle through their save service.
+draftSaveTransaction.readDraft = readDailyDraft;
+draftSaveTransaction.clearDraft = draft => dailyDrafts.clear(draft, "saved");
 let modalDraftBaseline = null;
 
 function modalDraftSnapshot() {
@@ -13658,6 +13676,27 @@ function modalDraftSnapshot() {
     row.querySelector("[data-twy-ms-date]")?.value || ""
   ]);
   return JSON.stringify({ fields, milestones });
+}
+
+function readDailyDraft(inputSelector = "#zt-write-input") {
+  const modal = ["task", "project", "block", "placement"].includes(state.modal?.type) && modalRoot.classList.contains("open");
+  const root = modal ? modalRoot.firstElementChild : document.querySelector(ztEditId ? "#zt-edit-input" : inputSelector);
+  if (!root || (!modal && !ztEditId && !ztCurrent)) return null;
+  if (!dailyDraftSessions.has(root)) dailyDraftSessions.set(root, { draftId: crypto.randomUUID() });
+  const session = dailyDraftSessions.get(root), { draftId } = session, kind = modal ? state.modal.type : "zero";
+  const id = String((modal ? state.modal.id : ztEditId || ztCurrent.id) || draftId);
+  const record = modal ? state[{ task: "tasks", project: "projects", block: "blocks" }[kind]]?.find(row => row.id === id)
+    : state.zeroThinking?.entries.find(row => row.id === ztEditId);
+  const cfg = personalDataFileConfig(state.settings.github || {});
+  const connection = JSON.stringify([cfg.owner || "", cfg.repo || "", cfg.branch || "", cfg.path || ""]);
+  const fingerprint = JSON.stringify(record || null), date = record?.date || todayISO();
+  if (!session.connection) Object.assign(session, { connection, fingerprint, date });
+  const elements = modal ? modalRoot.querySelectorAll("[data-modal-field], [data-twy-ms-label], [data-twy-ms-date]") : [root];
+  const inputs = Array.from(elements, el => ({ field: el.dataset.modalField || el.id || "", value: el.value,
+    checked: el.type === "checkbox" ? el.checked : undefined, start: el.selectionStart, end: el.selectionEnd, direction: el.selectionDirection }));
+  return { kind, id, ...session, current: session.connection === connection && session.fingerprint === fingerprint && session.date === date,
+    requestId: draftId, candidateIds: record ? [id] : [],
+    inputs, snapshot: modal ? modalDraftSnapshot() : root.value };
 }
 
 // Only adapters for legacy private draft state remain here; the decision UI is a feature.
@@ -13700,7 +13739,7 @@ function requestDraftLeave(leave, { allowDiscard = true, inputSelector = "#zt-wr
     save = () => saveZtEntry(inputSelector, { deferPost: true });
   }
   if (!save) return false;
-  draftLeaveGuard.request({ save, leave, isCurrentOwner, allowDiscard });
+  draftLeaveGuard.request({ save, leave, isCurrentOwner, allowDiscard, inputSelector });
   return true;
 }
 
@@ -13708,6 +13747,7 @@ function renderModal(innerHTML) {
   modalRoot.innerHTML = innerHTML;
   modalDraftBaseline = modalDraftSnapshot();
   modalRoot.classList.add("open");
+  readDailyDraft();
   modalRoot.setAttribute("aria-hidden", "false");
   // 背景クリックで閉じる
   modalRoot.onclick = (event) => {
@@ -13768,7 +13808,13 @@ function submitModal(options) {
   // マッチしない」場合と同じ挙動)。
   const { type, id } = state.modal;
   if (["task", "project", "block"].includes(type)) {
-    return draftSaveTransaction.run(() => dispatchModalSave(type, id, fields), options);
+    const draft = draftSaveTransaction.readDraft?.(), owner = state.modal;
+    if (draft && !draft.current) return showToast("対象が変わりました。入力は残しています"), { ok: false };
+    try {
+      return draftSaveTransaction.run(() => dispatchModalSave(type, id, fields), options);
+    } finally {
+      if (draft && state.modal !== owner) draftSaveTransaction.clearDraft(draft);
+    }
   }
   dispatchModalSave(type, id, fields);
 }

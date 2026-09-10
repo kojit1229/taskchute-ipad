@@ -317,6 +317,29 @@
       }
     },
     {
+      "file": "daily-draft-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 37,
+      "assertionHash": "870d89d02b470b4a",
+      "sourceHash": "294e506bc13fb338",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
       "file": "daily-mock-adapter.test.js",
       "kind": "node",
       "tier": "full",

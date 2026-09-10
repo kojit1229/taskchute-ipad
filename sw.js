@@ -689,6 +689,7 @@ const APP_SHELL = [
   "./src/features/archive-date-protection.js",
 
   "./src/features/draft-leave.js",
+  "./src/features/daily-draft.js",
 
   "./src/features/draft-save.js",
 
