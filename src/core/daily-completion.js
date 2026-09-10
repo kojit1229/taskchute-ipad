@@ -16,3 +16,14 @@ export function buildPlanCompletion(state, input) {
   return { records: [{ kind: "blocks", before: block, after: { ...block, completed } }],
     block: { ...block, completed } };
 }
+
+export function buildTaskCompletion(state, input, deps) {
+  const task = state.tasks?.find(row => row.id === input.id && !row.deleted);
+  if (!task || input.kind !== "task") throw invalid("完了するTaskを確認してください");
+  const completed = desiredCompletion(input);
+  if ((task.status === "completed") === completed) return { records: [], task };
+  const hasProgress = state.blocks?.some(block => !block.deleted && block.taskId === task.id
+    && (block.completed || block.actualStartAt));
+  const after = completed ? deps.completedTask(task) : { ...task, status: hasProgress ? "doing" : "todo" };
+  return { records: [{ kind: "tasks", before: task, after }], task: after, previousStatus: task.status };
+}

@@ -5,7 +5,7 @@ import { orderDailyBlocks } from "../core/daily-order.js";
 import { createCopyUndoTicket, buildCopyUndo } from "../core/copy-undo.js";
 import { buildBlockStart } from "../core/daily-start.js";
 import { buildBlockEnd } from "../core/daily-end.js";
-import { buildPlanCompletion } from "../core/daily-completion.js";
+import { buildPlanCompletion, buildTaskCompletion } from "../core/daily-completion.js";
 import { createDailyDraftStore } from "./daily-draft.js";
 
 const copyReady = Symbol("saved copy source");
@@ -28,7 +28,7 @@ export const DAILY_OPERATIONS = {
   "daily-duplicate-undo": { build: (state, input, deps) => buildCopyUndo(state, input, { copyFingerprint: dailyFingerprint }), effects: copyUndoEffects },
   "daily-schedule-edit": unwired("daily-schedule-edit"),
   "daily-actual-edit": unwired("daily-actual-edit"),
-  "daily-task-complete": unwired("daily-task-complete"),
+  "daily-task-complete": { build: buildTaskCompletion, effects: taskCompletionEffects },
   "daily-search-change": unwired("daily-search-change"),
   "daily-search-clear": unwired("daily-search-clear"),
   "edit-block": legacy("edit-block"),
@@ -104,6 +104,10 @@ function endEffects(result, input, deps) {
 function planCompletionEffects(result, input, deps) {
   if (result.confirmEnd) deps.requestPlanEnd?.(result.block, input);
   else if (!result.unchanged) deps.planCompletionEffect?.(result.block, input);
+}
+
+function taskCompletionEffects(result, input, deps) {
+  if (!result.unchanged) deps.taskCompletionEffect?.(result, input);
 }
 
 function dailyTimesEffects(result, input, deps) {

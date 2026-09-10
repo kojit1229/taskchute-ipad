@@ -72,6 +72,65 @@ try {
   }
 } finally { setCommitGuard(null); }
 
+function taskFixture() {
+  const f = fixture();
+  f.input = { kind: 'task', id: 't', desiredCompleted: true };
+  f.deps.completedTask = task => ({ ...task, status: 'completed', progressNum: Number(task.progressDen) || Number(task.progressNum) || 0 });
+  f.deps.taskCompletionEffect = result => {
+    assert(!f.seen.fail); assert.equal(f.state.tasks[0].status, result.task.status);
+    assert(f.seen.saves > 0, 'notify after successful save'); f.seen.effects++;
+  };
+  return f;
+}
+setCommitGuard(deepCommitGuard);
+try {
+  {
+    const { state, deps, seen, input } = taskFixture();
+    // A replacement from synchronization must be used rather than an earlier Task reference.
+    state.tasks[0] = { ...state.tasks[0], title: '同期後のTask', progressDen: 8 };
+    const before = structuredClone(state), refs = { ...state };
+    seen.fail = true;
+    assert.equal(run('daily-task-complete', input, deps).ok, false); expectRestored(before, state);
+    for (const key of Object.keys(refs)) assert.equal(state[key], refs[key]);
+    assert.equal(seen.effects, 0); assert.equal(seen.sync, 0);
+    seen.fail = false;
+    const result = run('daily-task-complete', input, deps);
+    assert(result.ok); assert.equal(result.records.length, 1); assert.equal(result.records[0].kind, 'tasks');
+    assert.equal(state.tasks[0].status, 'completed'); assert.equal(state.tasks[0].progressNum, 8);
+    assert.equal(state.tasks[0].title, '同期後のTask'); assert(state.tasks[0].updatedAt);
+    assert.deepEqual(state.tasks[1], before.tasks[1]); assert.equal(state.blocks, refs.blocks);
+    assert.deepEqual(state.declarations, before.declarations); assert.deepEqual(state.pomodoro, before.pomodoro);
+    const saved = structuredClone(state);
+    assert.equal(run('daily-task-complete', input, deps).unchanged, true); expectRestored(saved, state);
+    assert.equal(seen.saves, 2); assert.equal(seen.effects, 1); assert.equal(seen.sync, 1);
+    assert(run('daily-task-complete', { ...input, desiredCompleted: false }, deps).ok);
+    assert.equal(state.tasks[0].status, 'todo'); assert.equal(state.tasks[0].progressNum, 8);
+    assert.equal(state.blocks, refs.blocks);
+    assert.equal(run('daily-task-complete', { ...input, desiredCompleted: false }, deps).unchanged, true);
+    console.log('PASS 31: latest Task only, atomic rollback, progress fill, stamps, post-save notification, replay and todo undo');
+  }
+  for (const progress of ['actualStartAt', 'completed', 'deleted']) {
+    const { state, deps, input } = taskFixture(); state.tasks[0].status = 'completed';
+    state.blocks[1].actualStartAt = progress === 'completed' ? '' : '2026-09-11T09:00:00';
+    state.blocks[1].completed = progress === 'completed'; state.blocks[1].deleted = progress === 'deleted';
+    const blocks = structuredClone(state.blocks);
+    assert(run('daily-task-complete', { ...input, desiredCompleted: false }, deps).ok);
+    assert.equal(state.tasks[0].status, progress === 'deleted' ? 'todo' : 'doing');
+    assert.deepEqual(state.blocks, blocks);
+  }
+  {
+    const { state, deps, seen, input } = taskFixture();
+    for (const changes of [{ desiredCompleted: undefined }, { desiredCompleted: 'toggle' }, { desiredCompleted: 0 },
+      { kind: 'block' }, { id: '' }, { id: 'missing' }, { requestId: 'unowned' }]) {
+      const before = structuredClone(state);
+      assert.equal(run('daily-task-complete', { ...input, ...changes }, deps).status, 'invalid'); expectRestored(before, state);
+    }
+    state.tasks[0].deleted = true;
+    assert.equal(run('daily-task-complete', input, deps).status, 'invalid'); assert.equal(seen.saves, 0);
+    console.log('PASS 31: doing/todo undo ignores deleted Blocks; invalid desired state, missing Task and requests rejected');
+  }
+} finally { setCommitGuard(null); }
+
 (async () => {
   const server = startServer(randomPort()); let browser;
   try {
@@ -89,14 +148,15 @@ try {
     });
     await page.clock.setFixedTime(new Date(2026, 8, 10, 10));
     await page.goto(`http://localhost:${server.address().port}/`); await passGithubGate(page);
-    const seed = async () => {
-      await page.evaluate(({ key, fixtureState }) => {
+    const seed = async (planned = false) => {
+      await page.evaluate(({ key, fixtureState, planned }) => {
         const s = JSON.parse(localStorage.getItem(key)); Object.assign(s, fixtureState);
+        if (planned) Object.assign(s.blocks[0], { plannedStartAt: '2026-09-10T09:00:00', plannedEndAt: '2026-09-10T09:30:00' });
         s.currentView = 'timeline'; s.recurrences = []; s.projects = []; s.bodyScans = [];
         s.settings.lastOpenedDate = '2026-09-10'; s.settings.autoSync = false;
         s.settings.github.autoSave = false; s.settings.focusTimerAuto = false; s.settings.twelveWeekStartDate = '';
         localStorage.setItem(key, JSON.stringify(s));
-      }, { key: STATE_KEY, fixtureState: fixture().state });
+      }, { key: STATE_KEY, fixtureState: fixture().state, planned });
       await page.reload(); await page.locator('#app[data-view="timeline"]').waitFor();
     };
     const stored = () => page.evaluate(key => JSON.parse(localStorage.getItem(key)), STATE_KEY);
@@ -148,6 +208,45 @@ try {
     assert.equal(saved.blocks[0].actualEndAt, '2026-09-10T10:00:00');
     assert.equal(saved.tasks[0].status, 'todo');
     console.log('PASS 30: running confirmation/cancel preserve measurement; confirmed partial report honors desired plan completion');
+    await seed(true); // Existing detail save requires planned times; actuals remain empty.
+    await trigger('edit-block', 'block', 'b', false);
+    const comment = page.locator('#modalRoot [data-modal-field="comment"]');
+    await comment.fill('未保存の日本語コメント');
+    await comment.evaluate(el => { window.__completionComment = el; });
+    const taskBefore = await stored();
+    await page.evaluate(key => {
+      window.__taskSet = Storage.prototype.setItem; window.__taskFail = true; window.__taskWrites = 0;
+      Storage.prototype.setItem = function(k, v) {
+        if (k === key) { window.__taskWrites++; if (window.__taskFail) throw new DOMException('fixture quota', 'QuotaExceededError'); }
+        return window.__taskSet.call(this, k, v);
+      };
+    }, STATE_KEY);
+    await trigger('daily-task-complete', 'task', 't', true);
+    assert.deepEqual(await stored(), taskBefore);
+    assert.equal(await comment.inputValue(), '未保存の日本語コメント');
+    assert(await comment.evaluate(el => el === window.__completionComment));
+    assert.equal(await page.evaluate(async () => (await import('/src/state/store.js')).state.tasks[0].status), 'todo');
+    await page.evaluate(() => { window.__taskFail = false; });
+    await trigger('daily-task-complete', 'task', 't', true);
+    await trigger('daily-task-complete', 'task', 't', true);
+    saved = await stored(); assert.equal(saved.tasks[0].status, 'completed'); assert.equal(saved.tasks[0].progressNum, 5);
+    assert.deepEqual(saved.blocks, taskBefore.blocks); assert.deepEqual(saved.tasks[1], taskBefore.tasks[1]);
+    assert.equal(await comment.inputValue(), '未保存の日本語コメント');
+    assert(await comment.evaluate(el => el === window.__completionComment));
+    assert.equal(await page.evaluate(() => window.__taskWrites), 2);
+    await trigger('daily-task-complete', 'task', 't', false);
+    await trigger('daily-task-complete', 'task', 't', false);
+    saved = await stored(); assert.equal(saved.tasks[0].status, 'todo'); assert.equal(saved.tasks[0].progressNum, 5);
+    assert.deepEqual(saved.blocks, taskBefore.blocks); assert.equal(await comment.inputValue(), '未保存の日本語コメント');
+    assert.equal(await page.evaluate(() => window.__taskWrites), 3);
+    await page.evaluate(() => { Storage.prototype.setItem = window.__taskSet; });
+    // Saving the still-open detail afterwards must not undo the separately completed/undone Task.
+    await page.locator('#modalRoot [data-action="modal-save"]').click();
+    await page.waitForFunction(() => !document.querySelector('#modalRoot').classList.contains('open'));
+    saved = await stored(); assert.equal(saved.blocks[0].comment, '未保存の日本語コメント');
+    assert.equal(saved.tasks[0].status, 'todo'); assert.equal(saved.blocks[1].completed, false);
+    await page.reload(); assert.equal((await stored()).tasks[0].status, 'todo');
+    console.log('PASS 31: delegated completion/undo, failure and replay, other Blocks unchanged, unsaved comment retained and later saved');
     assert.deepEqual(errors, []);
   } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -1564,6 +1564,12 @@ const dailyOperationDeps = {
     render();
     showToast(block.completed ? "予定を完了しました" : "予定を未完了に戻しました");
   },
+  taskCompletionEffect: result => {
+    render();
+    showToast(result.task.status === "completed" ? "Taskを完了しました" : "Taskを未完了に戻しました");
+    if (result.task.status === "completed") maybeQueueNextAiStep(result.task.id, result.previousStatus);
+    else closeAiStepConfirmIfUndone(result.task.id);
+  },
   endEffect: (result, input) => {
     _pendingLifecycleCtx = null;
     closeModal();
