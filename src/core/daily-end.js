@@ -66,7 +66,9 @@ export function buildBlockEnd(state, input, deps) {
     if (task.status !== "completed") add("tasks", task, deps.completedTask(task));
   }
   const valuesToSave = [];
-  if (state.pomodoro?.running && state.pomodoro.blockId === block.id) valuesToSave.push({ kind: null,
+  if (state.pomodoro?.running && (state.pomodoro.blockId === block.id
+      || ((input.timer === true || outcome === "done") && state.pomodoro.mode === "break"
+        && state.pomodoro.lastFocusBlockId === block.id))) valuesToSave.push({ kind: null,
     key: "pomodoro", before: state.pomodoro, after: { ...state.pomodoro, running: false, blockId: "",
       startedAt: "", endsAt: "", mode: "focus", paused: false, pausedRemainMs: 0 } });
   return { records, values: valuesToSave, block: after, declaration: hasReport ? reported : null,

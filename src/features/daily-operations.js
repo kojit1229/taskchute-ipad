@@ -47,14 +47,18 @@ function startOwner(deps, id) {
 
 export function getDailyStartDraft(deps, id) {
   const { store, owner } = startOwner(deps, id);
-  return store.get(owner);
+  const draft = store.get(owner), block = deps.state.blocks?.find(row => row.id === id && !row.deleted);
+  if (draft?.saved && (draft.at !== block?.actualStartAt || (draft.declarationId
+      && !deps.state.declarations?.some(row => row.id === draft.declarationId && row.blockId === id
+        && row.declaredAt === block.actualStartAt && !row.deleted)))) return undefined;
+  return draft;
 }
 
 function startInput(input, deps) {
   if (input.kind !== "block" || !deps.state.blocks?.some(row => row.id === input.id && !row.deleted))
     throw invalid("開始する予定を確認してください");
   const { store, owner } = startOwner(deps, input.id);
-  let draft = store.get(owner);
+  let draft = getDailyStartDraft(deps, input.id);
   if (draft && input.requestId != null && draft.requestId !== input.requestId) throw invalid("request changed");
   if (!draft) {
     draft = { ...owner, requestId: input.requestId ?? null, date: deps.state.blocks.find(row => row.id === input.id).date,
@@ -78,12 +82,19 @@ export function prepareDailyEnd(input, deps) {
   const { store, owner } = startOwner(deps, input.id);
   owner.draftId = "end";
   let draft = input.endDraft || store.get(owner);
+  if (!input.endDraft && draft && (draft.actualStartAt !== block.actualStartAt
+      || (draft.saved && draft.actualEndAt !== block.actualEndAt)
+      || (draft.declarationId && !deps.state.declarations?.some(row => row.id === draft.declarationId
+        && row.blockId === block.id && !row.deleted && (!row.declaredAt || row.declaredAt === block.actualStartAt))))) draft = null;
   if (draft && input.requestId != null && draft.requestId !== input.requestId) throw invalid("request changed");
   if (!draft) {
     const started = getDailyStartDraft(deps, input.id);
+    const declarations = deps.state.declarations?.filter(row => row.blockId === block.id && !row.deleted
+      && block.actualStartAt && row.declaredAt === block.actualStartAt) || [];
     draft = { ...owner, requestId: input.requestId ?? null, date: block.date, actualStartAt: block.actualStartAt,
       actualEndAt: block.actualEndAt || (typeof deps.now === "function" ? deps.now() : deps.now),
-      declarationId: started?.saved && started.at === block.actualStartAt ? started.declarationId : "",
+      declarationId: started?.saved && started.at === block.actualStartAt ? started.declarationId
+        : declarations.length === 1 ? declarations[0].id : "",
       fallbackId: (deps.newId || (() => crypto.randomUUID()))() };
   }
   if (input.confirmDate === block.date) draft = { ...draft, date: block.date };

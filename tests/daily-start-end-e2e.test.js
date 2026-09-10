@@ -37,6 +37,10 @@ function fixture() {
 try {
   {
     const { state, deps, seen, input } = fixture();
+    state.weeklyCommitments = [
+      { id: "wcw_2026-09-07", recordType: "week", updatedAt: at, deleted: true },
+      { id: "wci_2026-09-07_b", recordType: "item", updatedAt: at, deleted: true }
+    ];
     const original = structuredClone(state), refs = { ...state };
     seen.fail = true;
     assert.equal(run('daily-block-start', input, deps).ok, false);
@@ -59,6 +63,7 @@ try {
     assert.equal(state.declarations[0].note, '宣言'); assert.equal(result.declarationId, failedDraft.declarationId);
     assert.equal(getDailyStartDraft(deps, 'b').saved, true);
     for (const row of result.records) if (row.after) assert(row.after.updatedAt, `stamp ${row.kind}`);
+    for (const row of state.weeklyCommitments) assert.equal(row.updatedAt, "2026-09-10T23:50:01", "single stamp above comparison floor");
     const saved = structuredClone(state);
     deps.now = () => '2026-09-11T00:01:00';
     assert.equal(run('daily-block-start', input, deps).unchanged, true);
@@ -199,6 +204,47 @@ try {
   console.log('PASS 29a: missing/lost declaration, reload correction, ambiguity, date reconfirmation and invalid time');
 } finally { setCommitGuard(null); }
 
+
+// fixB5c: stale drafts must follow corrected records within the same tab.
+{
+  const { state, deps, input } = fixture();
+  deps.persist = () => true;
+  assert(run('daily-block-start', input, deps).ok);
+  const old = getDailyStartDraft(deps, 'b');
+  state.blocks[0].actualStartAt = '';
+  deps.now = () => '2026-09-10T23:55:00';
+  assert(run('daily-block-start', input, deps).ok);
+  assert.equal(state.blocks[0].actualStartAt, '2026-09-10T23:55:00');
+  assert.notEqual(getDailyStartDraft(deps, 'b').declarationId, old.declarationId);
+  assert.equal(state.declarations.length, 2);
+  console.log('PASS fixB5c: start draft renewed after clearing actual start');
+}
+{
+  const { state, deps, input } = endFixture();
+  assert(run('daily-block-end', input, deps).ok);
+  state.blocks[0].actualEndAt = '2026-09-11T00:15:00';
+  assert.equal(prepareDailyEnd(input, deps).endDraft.actualEndAt, state.blocks[0].actualEndAt);
+  state.blocks[0].actualStartAt = '2026-09-10T23:45:00';
+  state.declarations = [{ ...state.declarations[0], id: 'corrected', declaredAt: state.blocks[0].actualStartAt }];
+  const next = prepareDailyEnd(input, deps);
+  assert.equal(next.endDraft.actualStartAt, state.blocks[0].actualStartAt);
+  assert(run('daily-block-end', next, deps).ok);
+  assert.equal(state.declarations.length, 1);
+  assert.equal(state.declarations[0].id, 'corrected');
+  console.log('PASS fixB5c: end draft renewed after actual/declaration correction');
+}
+{
+  const { state, deps, seen, input } = endFixture();
+  const captured = prepareDailyEnd({ ...input, timer: true }, deps);
+  state.pomodoro = { running: true, blockId: '', lastFocusBlockId: 'b', mode: 'break' };
+  assert(run('daily-block-end', captured, deps).ok);
+  assert.equal(state.pomodoro.running, false);
+  assert.equal(state.pomodoro.blockId, '');
+  assert.equal(state.blocks[0].completed, true);
+  assert.equal(seen.saves, 1);
+  console.log('PASS fixB5c: focus to break then done stops timer and completes in one save');
+}
+
 // Real delegated entrances share the same candidate and preserve the declaration UI on failure.
 const { chromium, launchOptions, startServer, randomPort, STATE_KEY, passGithubGate } = require('./helpers');
 (async () => {
@@ -290,6 +336,28 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY, passGithubG
       assert.equal(saved.declarations[0].date, '2026-09-10');
       assert.equal(saved.declarations[0].declaredAt, saved.blocks[0].actualStartAt);
       assert.equal(saved.declarations[0].note, '失敗しても残る宣言');
+      if (action === 'start-pomodoro') {
+        await page.evaluate(async () => {
+          // A break session can be stopped without clearing the Block's actual start.
+          const s = (await import('/src/state/store.js')).state;
+          s.pomodoro = { ...s.pomodoro, mode: 'break', blockId: '', lastFocusBlockId: 'start-block' };
+          const el = document.createElement('button'); el.id = 'stopTestTrigger';
+          el.dataset.action = 'stop-pomodoro'; document.body.append(el);
+        });
+        await page.locator('#stopTestTrigger').click();
+        assert.equal(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).pomodoro.running, STATE_KEY), false);
+        await page.clock.setFixedTime(new Date(2026, 8, 10, 23, 55));
+        await page.evaluate(() => { window.__startWrites = 0; });
+        await page.locator('#startTestTrigger').click();
+        const restarted = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), STATE_KEY);
+        assert.equal(await page.evaluate(() => window.__startWrites), 1, 'restart persists once');
+        assert.equal(restarted.blocks[0].actualStartAt, saved.blocks[0].actualStartAt);
+        assert.equal(restarted.declarations.length, 1);
+        assert.equal(restarted.pomodoro.running, true);
+        assert.equal(restarted.pomodoro.blockId, 'start-block');
+        assert.equal(restarted.pomodoro.startedAt, '2026-09-10T23:55:00');
+        console.log('PASS fixB5c: delegated pomodoro restart preserves actual start');
+      }
       await page.evaluate(() => { Storage.prototype.setItem = window.__setStart; });
       console.log(`PASS 28b: ${action} atomic save, rollback/input retention, fixed ID retry and double click`);
     }
