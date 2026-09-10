@@ -75,10 +75,10 @@
 | life-export-core.test.js | node | full | sync-storage, journal-health | 21 | 0 | 0 |
 | merge-core.test.js | node | full | sync-storage | 23 | 0 | 0 |
 | modal-delete-impact.test.js | node | full | ui-responsive | 15 | 0 | 0 |
-| mutation-block-e2e.test.js | e2e | full | planning-execution, content-ai | 134 | 0 | 0 |
+| mutation-block-e2e.test.js | e2e | full | planning-execution, content-ai | 154 | 0 | 0 |
 | mutation-global-e2e.test.js | e2e | full | sync-storage | 178 | 0 | 0 |
 | mutation-stamp-core.test.js | node | full | sync-storage | 34 | 0 | 0 |
-| mutation-task-project-e2e.test.js | e2e | full | planning-execution | 63 | 0 | 0 |
+| mutation-task-project-e2e.test.js | e2e | full | planning-execution | 67 | 0 | 0 |
 | normalize-null-defense.test.js | e2e | full | sync-storage | 20 | 0 | 0 |
 | placement-core.test.js | node | full | content-ai, sync-storage, ui-responsive, security-offline | 30 | 0 | 0 |
 | placement-e2e.test.js | e2e | full | content-ai, sync-storage, ui-responsive, security-offline | 24 | 0 | 0 |
@@ -308,7 +308,7 @@
 | vision-connection-e2e.test.js | e2e | full | content-ai, sync-storage, ui-responsive, security-offline | 15 | 0 | 0 |
 | vision-connection.test.js | node | full | content-ai, sync-storage, ui-responsive, security-offline | 17 | 0 | 0 |
 | vision-overview.test.js | node | full | content-ai, sync-storage, ui-responsive, security-offline | 17 | 0 | 0 |
-| wish-core.test.js | node | full | content-ai, ui-responsive | 36 | 0 | 0 |
+| wish-core.test.js | node | full | content-ai, ui-responsive | 37 | 0 | 0 |
 | work-list-e2e.test.js | e2e | full | planning-execution, ui-responsive | 31 | 0 | 0 |
 | work-list-focus.test.js | node | full | legacy-crosscutting | 6 | 0 | 0 |
 | work-list-model.test.js | node | full | legacy-crosscutting | 19 | 0 | 0 |

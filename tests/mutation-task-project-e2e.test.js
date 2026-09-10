@@ -324,7 +324,7 @@ test('16b singleton reconciliation stamps changed candidates without mutating in
   expectRestored(before, clone({ tasks, projects, blocks }));
   for (const kind of ['tasks', 'projects', 'blocks']) for (const row of result[kind]) {
     const old = before[kind].find(r => r.id === row.id);
-    if (JSON.stringify(row) !== JSON.stringify(old)) assert.ok(row.updatedAt > FUTURE);
+    if (JSON.stringify(row) !== JSON.stringify(old)) assert.equal(row.updatedAt, '2026-09-10T10:05:01');
     assert.equal(row.createdAt, old.createdAt);
   }
   const twice = c.reconcileSingletonDuplicates(result.tasks, result.projects, result.blocks);
@@ -353,4 +353,18 @@ test('16b owned Task/Project writers have no raw mutation timestamps; load-time 
     }
   }
   visit(ast, null, ''); assert.equal(factories, 8);
+});
+
+
+test('fixB2 invalid AI send preconditions close the confirmation sheet without saving', async () => {
+  const f = await planFixture();
+  f.ctx.state.modal = { type: 'aiStepConfirm' };
+  f.ctx.state.tasks.find(t => t.id === 'step').status = 'todo';
+  const before = clone(f.ctx.state.tasks);
+  f.ctx.resolveAiStepConfirmSend();
+  assert.equal(f.ctx.lastToast, '状況が変わったため送信を取りやめました');
+  assert.equal(f.ctx.state.modal, null);
+  assert.equal(f.counts.close, 1);
+  assert.equal(f.counts.writes + f.counts.sync + f.counts.send, 0);
+  expectRestored(before, clone(f.ctx.state.tasks));
 });

@@ -542,3 +542,71 @@ test('third carry-over draft confirmation keeps migration ritual outside the sav
   assert.deepEqual(clone(f.ctx._scheduleDraft), draft);
   assert.equal(f.counts.writes + f.counts.autoSave + f.counts.autoSync, 0);
 });
+
+
+test('fixB2 Block modal deletion failure retains modal, Block and recurrence exceptions', async () => {
+  const f = await deletionFixture();
+  vm.runInContext(functions(['deleteFromModal']), f.ctx);
+  f.ctx.window.confirm = () => true;
+  f.ctx.modalDeleteMessage = () => 'delete?';
+  const actionSource = fs.readFileSync(path.join(__dirname, '../src/ui/actions.js'), 'utf8');
+  const actionAst = acorn.parse(actionSource, { ecmaVersion: 'latest', sourceType: 'module' });
+  const dispatcher = actionAst.body.find(n => n.type === 'FunctionDeclaration' && n.id.name === 'dispatchModalDelete');
+  f.ctx.modalHandlerRegistry = new Map([['block', { delete: id => f.ctx.deleteBlock(id) }]]);
+  vm.runInContext(actionSource.slice(dispatcher.start, dispatcher.end), f.ctx);
+  f.ctx.state.blocks[0].recurrenceGroupId = 'rule';
+  Object.assign(f.ctx.state.recurrences[0], { kind: 'weekly', anchorDate: DATE, exceptionDates: [], updatedAt: FUTURE });
+  const before = clone(f.ctx.state), blocks = f.ctx.state.blocks, rules = f.ctx.state.recurrences;
+  await withLocalSaveFailure(async fail => {
+    f.fail(fail);
+    f.ctx.deleteFromModal();
+    expectRestored(before, clone(f.ctx.state));
+    assert.equal(f.ctx.state.blocks, blocks);
+    assert.equal(f.ctx.state.recurrences, rules);
+    assert.equal(f.counts.close + f.counts.autoSync, 0);
+    f.fail(null);
+    f.ctx.deleteFromModal();
+    assert.equal(f.ctx.state.modal, null);
+    assert.equal(f.ctx.state.blocks[0].deleted, true);
+    assert.deepEqual(clone(f.ctx.state.recurrences[0].exceptionDates), [DATE]);
+    assert.equal(f.counts.close, 1);
+    assert.equal(f.counts.writes, 2);
+  });
+});
+
+test('fixB2 interruption click retries only stop after the second Block save fails', async () => {
+  const f = await pomodoroFixture();
+  let action;
+  const visit = node => {
+    if (!node || typeof node !== 'object') return;
+    if (node.type === 'Property' && node.key.value === 'interrupt-reason') action = node.value;
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) value.forEach(visit);
+      else if (value && typeof value === 'object') visit(value);
+    }
+  };
+  visit(ast);
+  const click = vm.runInContext('(' + source.slice(action.start, action.end) + ')', f.ctx);
+  vm.runInContext(functions(['renderPomodoroInterruptControls']), f.ctx);
+  f.ctx.interruptReasonPickerHTML = () => 'reason picker';
+  const timer = clone(f.ctx.state.pomodoro);
+  await withLocalSaveFailure(async (fail, injection) => {
+    f.fail(() => { if (f.counts.writes === 2) fail(); });
+    click({ target: { dataset: { reason: 'fatigue' } } });
+    assert.equal(injection.calls, 1);
+    assert.equal(f.counts.writes, 2);
+    assert.equal(f.ctx._pendingInterruptBlockId, 'b');
+    assert.equal(f.ctx.renderPomodoroInterruptControls('default'), 'reason picker');
+    expectRestored(timer, clone(f.ctx.state.pomodoro));
+    assert.equal(f.ctx.state.blocks[0].actualStartAt, DATE + 'T09:00:00');
+    assert.deepEqual(clone(f.ctx.state.blocks[0].interruptions), [{ at: NOW, reason: 'fatigue' }]);
+    f.fail(null);
+    click({ target: { dataset: { reason: 'fatigue' } } });
+    assert.equal(f.ctx._pendingInterruptBlockId, null);
+    assert.equal(f.ctx.state.pomodoro.running, false);
+    assert.equal(f.ctx.state.blocks[0].actualStartAt, '');
+    assert.equal(f.ctx.state.blocks[0].interruptions.length, 1);
+    assert.equal(f.counts.writes, 4); // reason, failed stop, retry stop, timer effects
+    assert.equal(f.ctx.state.blocks[0].updatedAt, '2026-09-10T10:05:02');
+  });
+});

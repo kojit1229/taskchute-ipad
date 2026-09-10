@@ -446,14 +446,16 @@ function wishSubtaskToTasks(taskId) {
 }
 
 function realizeWish(id) {
-  if (!taskTransaction().active) return taskTransaction().run(() => realizeWish(id), { kinds: ["tasks"] }).ok;
+  if (!taskTransaction().active) {
+    if (!window.confirm("このやりたいことを「実現済み」にしますか?")) { render(); return; }
+    return taskTransaction().run(() => realizeWish(id), { kinds: ["tasks"] }).ok;
+  }
   // v198(第3弾3e): maybeQueueNextAiStepは意図的に配線しない(対象外)。addWish()が作るWishは
   // 常にトップレベル(parentTaskIdは既定""のまま)でplanParentFor()がnullを返すため、発火条件2が
   // 構造的に不成立(監督者裁定・実装設計書H節)。前提はtests/v198.test.jsで固定する。
   // v79: ネイティブcheckboxはクリック時点でchecked属性が先に反転済みのため、confirmを
   // キャンセルしてここでreturnするだけだとチェックが見た目だけONに残ってしまう(state.realized
   // は変わっていないのに)。render()でDOMをstateに合わせて戻す。
-  if (!window.confirm("このやりたいことを「実現済み」にしますか?")) { render(); return; }
   const today = todayISO();
   state.tasks = state.tasks.map((t) => t.id === id
     ? { ...t, realized: true, realizedDate: today, status: "completed" }

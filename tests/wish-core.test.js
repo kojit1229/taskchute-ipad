@@ -100,7 +100,7 @@ let saveAndRenderCalls = [];
 let taskTransaction;
 function saveAndRender(message, opts) { taskTransaction.complete(() => saveAndRenderCalls.push({ message, opts })); }
 let renderCalls = 0;
-function render() { renderCalls++; }
+function render() { if (!taskTransaction.defer(() => render())) renderCalls++; }
 let updateTaskFieldCalls = [];
 function updateTaskField(id, field, value) { updateTaskFieldCalls.push({ id, field, value }); }
 
@@ -246,7 +246,9 @@ async function loadModules() {
     setBaseState({ tasks: [{ id: "w1", parentTaskId: "", deleted: false, realized: false }] });
     confirmImpl = () => false;
     renderCalls = 0;
+    const beforeCancel = JSON.stringify(storeMod.state), reference = storeMod.state;
     wishMod.realizeWish("w1");
+    check("キャンセルでstate全体と参照が変わらない", storeMod.state === reference && JSON.stringify(storeMod.state) === beforeCancel);
     check("realizedは変更されない", storeMod.state.tasks[0].realized === false);
     check("render()が1回呼ばれる(checkboxの見た目を戻すため)", renderCalls === 1, String(renderCalls));
 

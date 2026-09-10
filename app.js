@@ -1196,9 +1196,11 @@ registerActions({
     }
   },
   "interrupt-reason": ({ target }) => {
-    if (_pendingInterruptBlockId && recordBlockInterruption(_pendingInterruptBlockId, target.dataset.reason || "その他") !== true) { render(); return; }
-    _pendingInterruptBlockId = null;
-    stopPomodoro();
+    const reason = target.dataset.reason || "その他";
+    const previous = blockById(_pendingInterruptBlockId)?.interruptions?.at(-1);
+    if (_pendingInterruptBlockId && previous?.reason !== reason && recordBlockInterruption(_pendingInterruptBlockId, reason) !== true) { render(); return; }
+    if (stopPomodoro() === true) _pendingInterruptBlockId = null;
+    else render();
   },
   "interrupt-reason-cancel": () => {
     _pendingInterruptBlockId = null;
@@ -5359,7 +5361,6 @@ function buildAiStepConfirmModal(nextStep) {
 // 「AIに渡す」押下時の状態確定(design§1「保留状態の永続化」)。この順で行う:
 // handoffNote保存 → requestId発行 → aiStatus=queued永続化 → 保留台帳へ追記 → 送信シームを呼ぶ。
 function resolveAiStepConfirmSend() {
-  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => resolveAiStepConfirmSend(), { kinds: ["tasks", "aiStepPendingRequests"] }).ok;
   if (!_aiStepConfirmCtx) return;
   const { stepTaskId, nextStepTaskId } = _aiStepConfirmCtx;
   // v198(レビューR2→堅牢性レビュー修正4): シート表示中でも同期pull(visibilitychange→
@@ -5383,6 +5384,7 @@ function resolveAiStepConfirmSend() {
     showToast("状況が変わったため送信を取りやめました");
     return;
   }
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => resolveAiStepConfirmSend(), { kinds: ["tasks", "aiStepPendingRequests"] }).ok;
   const nextStep = recomputedNext;
   const noteEl = document.querySelector("[data-ai-step-confirm-note]");
   const handoffNote = (noteEl?.value || "").trim();
@@ -9506,7 +9508,7 @@ function deleteProject(id) {
   }
   const now = nowDateTime();
   state.tracks = (state.tracks || []).map((track) => track.ownerType === "project" && track.ownerId === id
-    && !track.deleted && track.status === "active" ? { ...track, deleted: true, updatedAt: now } : track);
+    && !track.deleted && track.status === "active" ? stamped({ ...track, deleted: true }, now) : track);
   state.projects = state.projects.map((project) => project.id === id ? { ...project, deleted: true } : project);
   saveAndRender("Projectを削除しました");
 }
@@ -13767,8 +13769,8 @@ function deleteFromModal() {
   if (!message) return;
   const ok = window.confirm(message);
   if (!ok) return;
-  if (state.modal.type === "task" || state.modal.type === "project") {
-    const remove = state.modal.type === "task" ? deleteTask : deleteProject;
+  if (["task", "project", "block"].includes(state.modal.type)) {
+    const remove = state.modal.type === "block" ? deleteBlock : state.modal.type === "task" ? deleteTask : deleteProject;
     if (remove(state.modal.id)) closeModal();
     return;
   }

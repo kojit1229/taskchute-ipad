@@ -857,7 +857,7 @@ function reconcileSingletonDuplicates(mergedTasks, mergedProjects, mergedBlocks)
     const canonical = pickCanonicalSingleton(live);
     const dupIds = new Set(live.filter((p) => p.id !== canonical.id).map((p) => p.id));
     projects = projects.map((p) => dupIds.has(p.id) ? stamped({ ...p, deleted: true }, nextMutationStamp({ now, candidates: [p.updatedAt || p.createdAt] })) : p);
-    tasks = tasks.map((t) => dupIds.has(t.projectId) ? stamped({ ...t, projectId: canonical.id }, nextMutationStamp({ now, candidates: [t.updatedAt || t.createdAt] })) : t);
+    tasks = tasks.map((t) => dupIds.has(t.projectId) ? { ...t, projectId: canonical.id } : t);
   }
   // Task側シングルトン(その他Task、getOtherTask)。Block.taskid参照を正本へ付け替える。
   let blocks = mergedBlocks;
@@ -865,9 +865,11 @@ function reconcileSingletonDuplicates(mergedTasks, mergedProjects, mergedBlocks)
   if (liveOtherTasks.length > 1) {
     const canonical = pickCanonicalSingleton(liveOtherTasks);
     const dupIds = new Set(liveOtherTasks.filter((t) => t.id !== canonical.id).map((t) => t.id));
-    tasks = tasks.map((t) => dupIds.has(t.id) ? stamped({ ...t, deleted: true }, nextMutationStamp({ now, candidates: [t.updatedAt || t.createdAt] })) : t);
+    tasks = tasks.map((t) => dupIds.has(t.id) ? { ...t, deleted: true } : t);
     blocks = blocks.map((b) => dupIds.has(b.taskId) ? stamped({ ...b, taskId: canonical.id }, nextMutationStamp({ now, candidates: [b.updatedAt || b.createdAt] })) : b);
   }
+  tasks = tasks.map((t, index) => t === mergedTasks[index] ? t
+    : stamped(t, nextMutationStamp({ now, candidates: [mergedTasks[index].updatedAt || mergedTasks[index].createdAt] })));
   return { tasks, projects, blocks };
 }
 
