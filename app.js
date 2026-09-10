@@ -18,7 +18,7 @@ import { configureKaradaImport, invalidateKaradaImport } from "./src/features/ka
 import { isArchivedDate, ARCHIVED_READONLY_MESSAGE } from "./src/features/archive-date-protection.js";
 // v164: app.js分割・段階1(最初の抽出)。純粋関数はsrc/core/**へ抽出し、依存グラフの葉として
 //   importする(src/core/**はstateを一切参照しない。claude-review-result.md §7の契約)。
-import { mergeById, mergeByIdPreferNewer, normalizeGymSetIds } from "./src/core/merge.js";
+import { mergeById, mergeByIdPreferNewer, normalizeGymSetIds, mergeWeeklyCommitments } from "./src/core/merge.js";
 import { LIFE_EXPORT_COLUMNS, exportRows, toCSV } from "./src/core/life-export.js";
 import {
   activeTrackForProject, dateParts, isProjectInCurrentCycle, latestMeasurement, numericGoalReached,
@@ -32,7 +32,7 @@ import { normalizeTwyPlan } from "./src/core/plan.js";
 import { createVisionRead } from "./src/features/vision-read.js";
 import { createVisionOverview } from "./src/features/vision-overview.js";
 import { DAILY_ACTIONS } from "./src/ui/daily-parts/contract.js";
-import { runDailyOperation } from "./src/features/daily-operations.js";
+import { runDailyOperation, prepareDailyEnd } from "./src/features/daily-operations.js";
 import { createDraftLeaveGuard } from "./src/features/draft-leave.js";
 import { createDailyDraftStore } from "./src/features/daily-draft.js";
 import { createDraftSaveTransaction } from "./src/features/draft-save.js";
@@ -1544,6 +1544,49 @@ const dailyOperationDeps = {
   floors: () => [state.settings?.lastPushedAt, saveState.pendingStamp],
   persist: () => { persistLocalNoSchedule(); return !_lastSaveError; },
   scheduleSync: () => { saveState.pendingStamp = state.dataModifiedAt; scheduleAutoSave(); scheduleAutoSync(); },
+  weekRange, candidateBlocksForWeek, commitmentItemForBlock, mergeWeeklyCommitments,
+  pomodoroForStart: (at, blockId) => ({ running: true, blockId, startedAt: at,
+    endsAt: dateToLocalDateTime(new Date(localDateTimeToMs(at) + 25 * 60 * 1000)),
+    mode: "focus", paused: false, pausedRemainMs: 0 }),
+  startEffect: result => {
+    state._justStartedBlockId = result.block.id;
+    render();
+    showToast(result.timerStarted ? "ポモドーロを開始しました" : "開始時刻を入れました");
+    if (result.timerStarted) queueMicrotask(() => maybeShowGuidedAccessHint());
+  },
+  completedTask: completedTaskRecord,
+  requestPlanEnd: block => {
+    openReportModal(block.id, "block");
+    _pendingLifecycleCtx.endInput.values = { completed: true };
+  },
+  planCompletionEffect: block => {
+    trackOnBlockCompletionChanged(block, block.completed, { interactive: true });
+    render();
+    showToast(block.completed ? "予定を完了しました" : "予定を未完了に戻しました");
+  },
+  taskCompletionEffect: result => {
+    render();
+    showToast(result.task.status === "completed" ? "Taskを完了しました" : "Taskを未完了に戻しました");
+    if (result.task.status === "completed") maybeQueueNextAiStep(result.task.id, result.previousStatus);
+    else closeAiStepConfirmIfUndone(result.task.id);
+  },
+  endEffect: (result, input) => {
+    _pendingLifecycleCtx = null;
+    closeModal();
+    const block = blockById(input.id);
+    if (result.justCompleted) {
+      syncHabitStreakForBlock(block);
+      if (block.recurrenceGroupId) triggerAnchorPlacements(block.recurrenceGroupId, block.actualEndAt);
+      transferIronLogToCompletedBlock(block.id);
+      trackOnBlockCompletionChanged(block, true, { interactive: true });
+      generateReport(block.date, { quiet: true });
+      triggerCompletionEffect(getRandomCelebrate(), block.isMIT);
+    }
+    render();
+    showToast((result.declaration && buildDeclareFeedback(result.declaration)) || "終了を保存しました",
+      result.justCompleted ? { blockId: block.id, actionLabel: "実績を編集" } : undefined);
+    if (result.justCompleted || input.timer === true) openBodyScanModal(block.id);
+  },
   legacy: {
     "edit-block": ({ id }) => openBlockEditor(id),
     "edit-task": ({ id }) => openTaskEditor(id),
@@ -1568,6 +1611,8 @@ document.addEventListener("click", (event) => {
   // どのfeatureもまだ何も登録していないため常にfalseで、既存if連鎖が今までどおり
   // 全件実行される。フォールバック分岐は1行も変更していない)。
   if (DAILY_ACTIONS.includes(action)) {
+    if (action === "daily-block-start") { openDeclareModal(id, "block"); return; }
+    if (action === "daily-block-end") { openReportModal(id, "block"); return; }
     const input = { ...target.dataset, event, target, id };
     if (action === "modal-save") {
       input.save = () => {
@@ -10250,6 +10295,10 @@ function toggleBlock(id) {
 //   OFF: Task の完了だけ解除する(toggleTask の完了解除と同じ方針でdoing/todoを判定)。
 //        Block側は解除しない(実績を消さないため。逆方向=Block解除だけではTaskは変えない、
 //        という既存方針と対称)。
+function completedTaskRecord(task) {
+  return { ...task, status: "completed", progressNum: fillProgressOnComplete(task) };
+}
+
 function toggleTaskCompleteFromBlock(blockId) {
   if (state.modal?.type === "block" && state.modal.id === blockId
       && requestDraftLeave(() => toggleTaskCompleteFromBlock(blockId), { allowDiscard: false })) return;
@@ -10386,33 +10435,11 @@ function autoCloseStaleRoutineRuns(blockId) {
 }
 
 function setBlockTime(id, field) {
-  const wasStarted = Boolean(blockById(id)?.actualStartAt);
+  if (field === "actualStartAt") return resumeLifecycleStart({ blockId: id, kind: "block" })?.ok;
   const result = draftSaveTransaction.run(() => {
-    if (field === "actualStartAt") autoCloseStaleRoutineRuns(id);
     updateBlockField(id, field, nowDateTime());
   }, { kinds: ["blocks"] });
   if (!result.ok) return false;
-  if (field === "actualStartAt") {
-    // v48: 着手した瞬間に Task を doing へ(従来は Block 完了時のみで、
-    //      「着手率>完了率」の哲学に反して着手が Task に反映されていなかった)
-    const blk = blockById(id);
-    if (!wasStarted && blk?.actualStartAt) trackOnBlockStarted(blk);
-    if (blk?.taskId) {
-      state.tasks = state.tasks.map((t) => t.id === blk.taskId && t.status === "todo"
-        ? { ...t, status: "doing", updatedAt: nowDateTime() } : t);
-      saveState();
-    }
-    // v40: 着手ジュース — 着手の瞬間だけ、その行に一度きりの感覚フィードバック。非永続。
-    state._justStartedBlockId = id;
-    // v70: Block開始でフォーカスタイマー(ポモドーロ)を自動起動(設定focusTimerAuto、既定ON)。
-    //      既に別セッションが動いている場合は乗っ取らない(既存の集中を尊重)。
-    //      startPomodoro自身がrender/toastまで行うので、この分岐では末尾のrender/toastを重ねない。
-    if (state.settings.focusTimerAuto && !state.pomodoro.running) {
-      forceResetPomodoroSession();
-      startPomodoro(id);
-      return;
-    }
-  }
   render();
   showToast(field === "actualStartAt" ? "開始時刻を入れました" : "終了時刻を入れました");
 }
@@ -11577,6 +11604,8 @@ function buildGuidedAccessHintModal() {
 function startPomodoro(blockId) {
   blockId = blockId || "";
   if (blockId && !blockById(blockId)) return showToast("Blockが見つかりません");
+  if (blockId && !blockById(blockId).actualStartAt)
+    return resumeLifecycleStart({ blockId, kind: "pomodoro" });
   const wasStarted = Boolean(blockById(blockId)?.actualStartAt);
   if (blockId) autoCloseStaleRoutineRuns(blockId);  // v215: 旧prepareTimeswitchForTaskStartのタブ非依存部
   // v14: state.pomodoro を完全再構築(spread を使わず、必要なフィールドだけ明示的に作成)
@@ -12078,63 +12107,19 @@ function estimateMinutesForBlock(block, kind) {
 }
 
 // 宣言ログを1件追加(上限300件は正規化側でも担保するが、ここでも即時に切り詰める)
-function logDeclaration(blockId, note, estimateMin) {
-  const block = state.blocks.find((b) => b.id === blockId);
-  const entry = {
-    id: crypto.randomUUID(),
-    blockId,
-    date: todayISO(),
-    title: block?.title || "",
-    estimateMin: estimateMin != null ? estimateMin : null,
-    note: (note || "").trim(),
-    declaredAt: nowDateTime(),
-    reportedAt: "",
-    outcome: "",
-    resultNote: ""
-  };
-  state.declarations = [...(state.declarations || []), entry].slice(-300);
-  return entry;
+function logDeclaration(blockId, note, estimateMin, kind = "block") {
+  return resumeLifecycleStart({ blockId, kind, declare: true, note, estimateMin });
 }
 
-// 終了報告を記録する。当日・同じBlockで未報告の宣言があればそこに合流、無ければ
-// 「宣言なしの終了報告」として新規エントリを作る(宣言・報告いずれも独立して任意のため)。
-function reportForBlock(blockId, outcome, resultNote) {
-  const today = todayISO();
-  const trimmedNote = String(resultNote || "").trim();
-  // v304: 終了報告の一言は既存コメントを保ち、同じ行が無いときだけ追記する。
-  if (trimmedNote) {
-    state.blocks = state.blocks.map((block) => {
-      if (block.id !== blockId) return block;
-      const comment = String(block.comment || "");
-      if (comment.split(/\r?\n/).includes(trimmedNote)) return block;
-      return { ...block, comment: comment ? `${comment}${comment.endsWith("\n") ? "" : "\n"}${trimmedNote}` : trimmedNote };
-    });
-  }
-  const list = state.declarations || [];
-  let idx = -1;
-  for (let i = list.length - 1; i >= 0; i--) {
-    if (list[i].blockId === blockId && list[i].date === today && !list[i].reportedAt) { idx = i; break; }
-  }
-  if (idx === -1) {
-    const block = state.blocks.find((b) => b.id === blockId);
-    const entry = {
-      id: crypto.randomUUID(),
-      blockId,
-      date: today,
-      title: block?.title || "",
-      estimateMin: null,
-      note: "",
-      declaredAt: "",
-      reportedAt: nowDateTime(),
-      outcome: outcome || "",
-      resultNote: trimmedNote
-    };
-    state.declarations = [...list, entry].slice(-300);
-    return entry;
-  }
-  const updated = { ...list[idx], reportedAt: nowDateTime(), outcome: outcome || "", resultNote: trimmedNote };
-  state.declarations = [...list.slice(0, idx), updated, ...list.slice(idx + 1)];
-  return updated;
+// 終了候補へ委譲し、開始時の宣言と帰属日を保持して報告を確定する。
+function reportForBlock(blockId, outcome, resultNote, ctx = {}) {
+  return runDailyOperation("daily-block-end", { ...ctx.endInput, kind: "block", id: blockId,
+    outcome, note: resultNote, timer: ctx.kind === "pomodoro",
+    declarationId: modalRoot.querySelector('[data-modal-field="declarationId"]')?.value || undefined,
+    completeTask: Boolean(modalRoot.querySelector('[data-modal-field="completeTask"]')?.checked),
+    values: { ...ctx.endInput?.values, actualEndAt: modalRoot.querySelector('[data-modal-field="actualEndAt"]')?.value
+      ?? ctx.endInput?.endDraft.actualEndAt ?? blockById(blockId)?.actualEndAt ?? nowDateTime() }
+  }, dailyOperationDeps);
 }
 
 // 決定論フィードバック(定型文+簡易集計のみ。AI呼び出しはしない)
@@ -12165,6 +12150,7 @@ function openDeclareModal(blockId, kind) {
     resumeLifecycleStart({ blockId, kind });
     return;
   }
+  if (block.actualStartAt) return resumeLifecycleStart({ blockId, kind });
   _pendingLifecycleCtx = { blockId, phase: "declare", kind };
   state.modal = { type: "declare", id: blockId };
   renderModal(buildDeclareModal(block, estimateMinutesForBlock(block, kind)));
@@ -12189,12 +12175,15 @@ function buildDeclareModal(block, estimateMin) {
 }
 
 function resumeLifecycleStart(ctx) {
-  if (ctx.kind === "pomodoro") {
-    forceResetPomodoroSession();
+  if (!ctx.blockId && ctx.kind === "pomodoro") {
     startPomodoro(ctx.blockId);
-  } else {
-    setBlockTime(ctx.blockId, "actualStartAt");
+    return { ok: true };
   }
+  const result = runDailyOperation("daily-block-start", { kind: "block", id: ctx.blockId,
+    declare: ctx.declare === true, note: ctx.note, estimateMin: ctx.estimateMin,
+    timer: ctx.kind === "pomodoro" }, dailyOperationDeps);
+  if (!result.ok) showToast("開始を保存できませんでした。入力を残しています");
+  return result;
 }
 
 function confirmDeclare() {
@@ -12203,18 +12192,18 @@ function confirmDeclare() {
   const note = modalRoot.querySelector("[data-declare-note]")?.value || "";
   const block = state.blocks.find((b) => b.id === ctx.blockId);
   const estimateMin = estimateMinutesForBlock(block, ctx.kind);
-  logDeclaration(ctx.blockId, note, estimateMin);
+  const result = logDeclaration(ctx.blockId, note, estimateMin, ctx.kind);
+  if (!result?.ok) return;
   _pendingLifecycleCtx = null;
   closeModal();
-  resumeLifecycleStart(ctx);
 }
 
 function skipDeclare() {
   if (!_pendingLifecycleCtx) return;
   const ctx = _pendingLifecycleCtx;
+  if (!resumeLifecycleStart(ctx)?.ok) return;
   _pendingLifecycleCtx = null;
   closeModal();
-  resumeLifecycleStart(ctx);
 }
 
 // ---------- 終了報告モーダル ----------
@@ -12232,7 +12221,8 @@ function openReportModal(blockId, kind) {
     resumeLifecycleFinish({ blockId, kind });
     return;
   }
-  _pendingLifecycleCtx = { blockId, phase: "report", kind };
+  _pendingLifecycleCtx = { blockId, phase: "report", kind,
+    endInput: prepareDailyEnd({ kind: "block", id: blockId }, dailyOperationDeps) };
   state.modal = { type: "report", id: blockId };
   renderModal(buildReportModal(block));
 }
@@ -12241,6 +12231,11 @@ function buildReportModal(block) {
   return `
     ${modalHeaderHTML("終了報告")}
         <div style="font-size:14px">「${escapeHTML(block.title)}」お疲れさまでした</div>
+        <div class="field"><label class="field-label">実績終了（帰属日 ${escapeHTML(block.date)}）</label>
+          <input class="input" type="datetime-local" step="300" style="font-size:16px" data-modal-field="actualEndAt" value="${escapeHTML(_pendingLifecycleCtx.endInput.endDraft.actualEndAt)}"></div>
+        ${block.taskId ? '<label><input type="checkbox" style="font-size:16px" data-modal-field="completeTask">Taskも完了する</label>' : ""}
+        ${(state.declarations || []).filter(d => d.blockId === block.id && d.declaredAt === block.actualStartAt && !d.reportedAt).length > 1
+          ? `<label>開始宣言<select style="font-size:16px" data-modal-field="declarationId"><option value="">宣言を確認してください</option>${state.declarations.filter(d => d.blockId === block.id && d.declaredAt === block.actualStartAt && !d.reportedAt).map(d => `<option value="${escapeHTML(d.id)}">${escapeHTML(d.note || d.id)}</option>`).join("")}</select></label>` : ""}
         <div class="field" style="margin-top:10px">
           <label class="field-label">一言(任意)</label>
           <input class="input" style="font-size:16px" data-report-note placeholder="成果・気づきなど">
@@ -12255,34 +12250,24 @@ function buildReportModal(block) {
 }
 
 function resumeLifecycleFinish(ctx) {
-  if (ctx.kind === "pomodoro") completePomodoro();
-  else setBlockTime(ctx.blockId, "actualEndAt");
+  if (!ctx.blockId && ctx.kind === "pomodoro") return completePomodoro();
+  return reportForBlock(ctx.blockId, "", "", ctx);
 }
 
-// outcome が空("スキップ")の場合はログを残さず従来どおりの完了トーストのまま終える。
+// スキップも終了の確定として記録し、失敗時は画面と入力を保持する。
 function finishReport(outcome, note) {
   if (!_pendingLifecycleCtx) return;
   const ctx = _pendingLifecycleCtx;
-  _pendingLifecycleCtx = null;
-  closeModal();
-  const entry = outcome ? reportForBlock(ctx.blockId, outcome, note) : null;
-  resumeLifecycleFinish(ctx);
-  // v312: 「できた」報告は既存の完了手続きを再利用する。toggle関数なので未完了時だけ呼ぶ。
-  // toggleBlock自体が出す完了トースト(「実績を編集」アクション付き)は、直後のフィードバック
-  // トースト(showToastは単一表示で直前の内容を上書きする)に消されてしまうため、
-  // 実際にこの経路で完了させた場合はblockIdを引き継いでフィードバックトースト側へ統合する。
-  let autoCompletedBlockId = "";
-  if (outcome === "done" && ctx.blockId) {
-    const block = blockById(ctx.blockId);
-    if (block && !block.completed) {
-      toggleBlock(ctx.blockId);
-      autoCompletedBlockId = ctx.blockId;
-    }
+  const block = blockById(ctx.blockId);
+  if (block && block.date !== (ctx.endInput.confirmDate || ctx.endInput.endDraft.date)) {
+    ctx.endInput.confirmDate = block.date;
+    showToast(`帰属日が${block.date}に変わりました。入力を確認し、もう一度確定してください`);
+    return false;
   }
-  if (entry) {
-    const feedback = buildDeclareFeedback(entry);
-    if (feedback) showToast(feedback, autoCompletedBlockId ? { blockId: autoCompletedBlockId } : undefined);
-  }
+  const result = reportForBlock(ctx.blockId, outcome, note, ctx);
+  if (!result.ok) showToast(result.error?.message || "終了を保存できませんでした。入力を残しています");
+  else if (result.unchanged) { _pendingLifecycleCtx = null; closeModal(); }
+  return result.ok;
 }
 
 // v9: 「☕ 休憩へ」: focus → break に遷移(+5分休憩開始)

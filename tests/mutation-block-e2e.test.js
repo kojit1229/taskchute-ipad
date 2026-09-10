@@ -337,9 +337,17 @@ test('factories keep unsaved timeline input out of state; persistence owns the s
 });
 
 async function lifecycleFixture() {
-  const f = await fixture(['setBlockTime', 'toggleBlock', 'autoCloseStaleRoutineRuns',
-    'saveActualEntryFromModal', 'toggleTaskCompleteFromBlock', 'bulkApproveAsPlanned']);
+  const f = await fixture(['setBlockTime', 'resumeLifecycleStart', 'toggleBlock', 'autoCloseStaleRoutineRuns',
+    'weekRange', 'candidateBlocksForWeek', 'commitmentItemForBlock', 'parseDate', 'addDays',
+    'dateToISO', 'dateToLocalDateTime', 'localDateTimeToMs',
+    'saveActualEntryFromModal', 'toggleTaskCompleteFromBlock', 'bulkApproveAsPlanned',
+    'completedTaskRecord']); // v385: extracted production dependency; assertions unchanged
   Object.assign(f.ctx, {
+    runDailyOperation: (await import('../src/features/daily-operations.js')).runDailyOperation,
+    mergeWeeklyCommitments: (await import('../src/core/merge.js')).mergeWeeklyCommitments,
+    ...await import('../src/core/track.js'),
+    queueMicrotask: callback => callback(),
+    maybeShowGuidedAccessHint: () => { f.counts.guidedAccess = (f.counts.guidedAccess || 0) + 1; },
     _quickCompleteSnapshots: {}, requestDraftLeave: () => false,
     resetPomodoroForBlock: () => f.counts.timer++, forceResetPomodoroSession() {},
     startPomodoro: () => { f.counts.timer++; f.ctx.state.pomodoro.running = true; },
@@ -349,6 +357,19 @@ async function lifecycleFixture() {
     maybeQueueNextAiStep() {}, closeAiStepConfirmIfUndone() {}, rerenderActiveModal() {},
     isStaleBlock: () => false, window: { confirm: () => true }, completePomodoro: () => f.counts.timer++
   });
+  const wiring = ast.body.filter(n => n.type === 'VariableDeclaration'
+    && n.declarations.some(d => ['dailyOperationDeps', 'COMMITMENT_SOURCE_PRIORITY'].includes(d.id.name)));
+  vm.runInContext(wiring.map(n => source.slice(n.start, n.end)).join('\n'), f.ctx);
+  // B5 の契約追随(監督者決定 2026-09-10)
+  f.counts.startEffect = 0;
+  f.ctx.observeStartEffect = result => {
+    f.counts.startEffect++;
+    assert.equal(f.persisted.length, 1, 'startEffect runs after the successful candidate save');
+    assert.deepEqual(f.persisted[0].pomodoro, clone(f.ctx.state.pomodoro));
+    assert.equal(result.block.id, 'b');
+  };
+  vm.runInContext(`const originalStartEffect = dailyOperationDeps.startEffect;
+    dailyOperationDeps.startEffect = result => { observeStartEffect(result); originalStartEffect(result); };`, f.ctx);
   return f;
 }
 const lifecycle = [
@@ -408,7 +429,14 @@ for (const [name, prepare] of lifecycle) test(`${name}: Block failure prevents l
       assert.equal(changed.actualStartAt, NOW);
       assert.equal(f.ctx.state.blocks[2].actualEndAt, '2026-09-09T23:59:00');
       assert.equal(f.ctx.state.blocks[2].updatedAt, '2026-09-10T10:05:01');
-      assert.equal(f.counts.timer, 2);
+      // B5 の契約追随(監督者決定 2026-09-10)
+      assert.equal(f.counts.timer, 0, 'legacy timer functions are not called directly');
+      assert.equal(f.counts.startEffect, 1);
+      assert.deepEqual(f.persisted[0].pomodoro, {
+        running: true, blockId: 'b', startedAt: NOW, endsAt: `${DATE}T10:25:00`,
+        mode: 'focus', paused: false, pausedRemainMs: 0
+      });
+      assert.deepEqual(clone(f.ctx.state.pomodoro), f.persisted[0].pomodoro);
     }
     if (name === 'end') assert.equal(changed.actualEndAt, NOW);
     if (name === 'actual modal') {
@@ -438,7 +466,7 @@ test('failed completion undo retains the snapshot for a successful retry', async
   });
 });
 
-test('stale timer reset is persisted after the Block commit without stamping Blocks again', async () => {
+test('stale timer reset is persisted in the Block candidate without stamping Blocks again', async () => {
   const f = await lifecycleFixture();
   vm.runInContext(functions(['resetPomodoroForBlock']), f.ctx);
   f.ctx.state.blocks.push({ ...clone(f.ctx.state.blocks[0]), id: 'stale', category: 'ルーティン',
@@ -451,12 +479,17 @@ test('stale timer reset is persisted after the Block commit without stamping Blo
     expectRestored(before, clone(f.ctx.state));
     f.fail(null);
     f.ctx.setBlockTime('b', 'actualStartAt');
-    assert.equal(f.counts.writes, 3); // failed Block write, successful Block write, related timer write
+    // B5 の契約追随(監督者決定 2026-09-10)
+    assert.equal(f.counts.writes, 2); // failed candidate write, successful Block + timer candidate write
     const saved = JSON.parse(f.raw());
     assert.equal(saved.pomodoro.running, false);
     assert.equal(saved.pomodoro.blockId, '');
     assert.equal(saved.blocks[0].actualStartAt, NOW);
-    assert.deepEqual(f.persisted[0].blocks, f.persisted[1].blocks);
+    assert.equal(f.persisted.length, 1, 'Block and timer share one successful save');
+    assert.deepEqual(f.persisted[0].blocks, clone(f.ctx.state.blocks));
+    assert.deepEqual(f.persisted[0].pomodoro, clone(f.ctx.state.pomodoro));
+    assert.deepEqual(f.persisted[0].blocks, saved.blocks);
+    assert.deepEqual(f.persisted[0].pomodoro, saved.pomodoro);
     assert.equal(saved.blocks[0].updatedAt, '2026-09-10T10:05:01');
   });
 });

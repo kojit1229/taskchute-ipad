@@ -2,6 +2,8 @@ const assert = require('node:assert/strict');
 const { DAILY_ACTIONS } = require('../src/ui/daily-parts/contract.js');
 const { DAILY_OPERATIONS: rows, runDailyOperation: run, dailyFingerprint } = require('../src/features/daily-operations.js');
 const { commitCandidate, setCommitGuard } = require('../src/core/commit.js');
+const { mergeWeeklyCommitments } = require('../src/core/merge.js');
+const { activeTrackForProject, isProjectInCurrentCycle } = require('../src/core/track.js');
 const { deepCommitGuard, expectRestored } = require('./helpers');
 setCommitGuard(deepCommitGuard);
 const state = { selectedDate: '2026-09-10', blocks: [{ id: 'b', date: '2026-09-10', title: 'before' }] };
@@ -90,6 +92,9 @@ const click = ast.body.find(n => n.type === 'ExpressionStatement' && n.expressio
 assert(wiring && click, 'one shared dependency object and actual delegated click entry');
 let listener, calls = [], routes = [], blockSaveCount = 0;
 const ctx = { DAILY_ACTIONS, state: { modal: null },
+  mergeWeeklyCommitments, activeTrackForProject, isProjectInCurrentCycle,
+  openDeclareModal: (...args) => calls.push(['open-declare', ...args]),
+  openReportModal: (...args) => calls.push(['open-report', ...args]),
   runDailyOperation: (name, input, injected) => { routes.push(name); return run(name, input, injected); },
   commitCandidate: () => { throw Error('legacy entered candidate boundary'); }, nowDateTime() {},
   saveState: {}, persistLocalNoSchedule() {}, _lastSaveError: null, scheduleAutoSave() {}, scheduleAutoSync() {},
@@ -100,7 +105,14 @@ const ctx = { DAILY_ACTIONS, state: { modal: null },
   document: { addEventListener: (name, handler) => { assert.equal(name, 'click'); listener = handler; } },
   dispatchAction: name => { calls.push(['other', name]); return true; }
 };
-vm.runInNewContext(source.slice(wiring.start, wiring.end) + '\n' + source.slice(click.start, click.end), ctx);
+const weeklyNames = ['weekRange', 'candidateBlocksForWeek', 'commitmentItemForBlock',
+  'parseDate', 'addDays', 'dateToISO', 'pad2', 'dateToLocalDateTime', 'localDateTimeToMs',
+  // v385(fixV385b、監督者): deps.completedTask が名前付き関数 completedTaskRecord(v198 の追随)を参照するので、その依存ごと取り込む
+  'completedTaskRecord', 'fillProgressOnComplete'];
+const weeklyNodes = ast.body.filter(n => (n.type === 'FunctionDeclaration' && weeklyNames.includes(n.id.name))
+  || (n.type === 'VariableDeclaration' && n.declarations.some(d => d.id.name === 'COMMITMENT_SOURCE_PRIORITY')));
+vm.runInNewContext(weeklyNodes.map(n => source.slice(n.start, n.end)).join('\n') + '\n'
+  + source.slice(wiring.start, wiring.end) + '\n' + source.slice(click.start, click.end), ctx);
 const fire = (action, disabled = false) => {
   const target = { dataset: { action, id: 'b' }, disabled };
   listener({ target: { closest: selector => selector === '[data-action]' ? target : null } });
@@ -121,8 +133,53 @@ ctx.commitCandidate = commitCandidate;
 // The dependency captures commitCandidate; re-create it for unconnected candidate rows.
 const unwiredContext = { ...ctx, document: ctx.document };
 vm.runInNewContext(source.slice(wiring.start, wiring.end) + '\n' + source.slice(click.start, click.end), unwiredContext);
-for (const name of DAILY_ACTIONS.filter(name => !rows[name].legacy)) fire(name);
-assert(DAILY_ACTIONS.every(name => routes.includes(name)), 'all 18 data-actions reach the daily registry');
+// B5 の契約追随(監督者決定 2026-09-10)
+const deferred = ['daily-block-start', 'daily-block-end'];
+for (const name of DAILY_ACTIONS.filter(name => !rows[name].legacy && !deferred.includes(name))) fire(name);
+const immediate = DAILY_ACTIONS.filter(name => !deferred.includes(name));
+assert.equal(immediate.length, 16);
+assert(immediate.every(name => routes.includes(name)), 'other 16 data-actions reach the registry immediately');
+const confirmationActions = {};
+const visit = node => {
+  if (!node || typeof node !== 'object') return;
+  if (node.type === 'Property' && ['declare-confirm', 'report-outcome'].includes(node.key.value))
+    confirmationActions[node.key.value] = vm.runInNewContext(`(${source.slice(node.value.start, node.value.end)})`, unwiredContext);
+  for (const value of Object.values(node)) {
+    if (Array.isArray(value)) value.forEach(visit); else if (value && typeof value === 'object') visit(value);
+  }
+};
+const lifecycleNames = ['confirmDeclare', 'estimateMinutesForBlock', 'logDeclaration',
+  'resumeLifecycleStart', 'finishReport', 'reportForBlock'];
+vm.runInNewContext(ast.body.filter(n => n.type === 'FunctionDeclaration' && lifecycleNames.includes(n.id.name))
+  .map(n => source.slice(n.start, n.end)).join('\n'), unwiredContext);
+Object.assign(unwiredContext, {
+  modalRoot: { querySelector: () => null }, closeModal() {},
+  blockById: id => unwiredContext.state.blocks.find(b => b.id === id),
+  dispatchAction: (name, context) => {
+    if (!confirmationActions[name]) { calls.push(['other', name]); return true; }
+    confirmationActions[name](context); return true;
+  }
+});
+unwiredContext.state.blocks = [{ id: 'b', date: '2026-09-10' }];
+visit(ast);
+for (const [name, opener, confirmation] of [
+  ['daily-block-start', 'openDeclareModal', 'declare-confirm'],
+  ['daily-block-end', 'openReportModal', 'report-outcome']
+]) {
+  const before = routes.length;
+  unwiredContext[opener] = (id, kind) => {
+    calls.push([opener, id, kind]);
+    unwiredContext._pendingLifecycleCtx = { blockId: id, kind,
+      endInput: { endDraft: { kind: 'block', id, draftId: 'end', connection: 'registry-test',
+        date: '2026-09-10', actualEndAt: '2026-09-10T12:00:00' } } };
+  };
+  fire(name);
+  assert.deepEqual(calls.at(-1), [opener, 'b', 'block']);
+  assert.equal(routes.length, before, 'opening the input screen does not reach the registry');
+  fire(confirmation);
+  assert.deepEqual(routes.slice(before), [name], 'confirmation reaches the matching registry row once');
+}
+assert(DAILY_ACTIONS.every(name => routes.includes(name)), 'all 18 operations reach the registry including confirmations');
 const count = routes.length; fire('other-action');
 assert.equal(routes.length, count); assert.deepEqual(calls.at(-1), ['other', 'other-action']);
 console.log('PASS actual app routing, legacy save result/disabled semantics and unrelated action fallback');

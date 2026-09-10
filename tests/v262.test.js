@@ -341,8 +341,10 @@ class FakeToast {
     check("#5フックのauto→stamp→toast順とシグネチャは不変", /function trackOnBlockCompletionChanged\(block, isNowCompleted, \{ interactive = false \} = \{\}\)/.test(hookSource)
       && hookSource.indexOf("autoCommitWeekIfNeeded") < hookSource.indexOf("stampCommitmentCompletion")
       && hookSource.indexOf("stampCommitmentCompletion") < hookSource.indexOf("maybeShowTrackProgressToast"));
-    check("既存quiet日報7箇所(#10の1+従来6)を維持し、#11はfeature内1箇所だけ追加",
-      (appSource.match(/generateReport\([^\n]+\{ quiet: true \}\)/g) || []).length === 7
+    // v385 契約追随(監督者決定 2026-09-11): 登録表終了ハンドラが1件追加。
+    // 旧completePomodoroはnow-conveyor-complete→nowConveyorCompleteおよびsaveActualEntryFromModalから到達。
+    check("quiet日報8箇所(登録表終了1+既存7)、#11はfeature内1箇所",
+      (appSource.match(/generateReport\([^\n]+\{ quiet: true \}\)/g) || []).length === 8
       && (trackUiSource.match(/generateReport\(todayISO\(\), \{ quiet: true \}\)/g) || []).length === 1);
     check("#9/#10所有関数をtrack-uiへ複製せずrecordTrackMeasurementをDI再利用", appSource.includes("function renderTwyTrackRow(track)")
       && appSource.includes("function recordTrackMeasurement(trackId, value,")

@@ -49,6 +49,8 @@ function check(name, cond, extra = "") {
     // 作る類の変更ではないため対象外)。加えて意図的な対象外1件を許可リストに含める
     // (実装設計書H節の監督者裁定・§B「呼んではいけない場所」)。
     const ALLOWED = {
+      // v385 契約追随(監督者決定 2026-09-11)
+      completedTaskRecord: "app.js(完了6経路#2 の登録表経路 daily-task-complete、v385)",
       toggleTask: "app.js(完了6経路#1)",
       toggleTaskCompleteFromBlock: "app.js(完了6経路#2)",
       toggleWishSubtask: "wish.js(完了6経路#6)",
