@@ -122,6 +122,8 @@
         "^app\\.js$"
       ],
       "suites": [
+        "v254",
+        "exec-layout-media",
         "action-registry-core",
         "r0-twyplan",
         "r1-twelveweek",
