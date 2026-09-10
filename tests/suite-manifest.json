@@ -266,6 +266,29 @@
       }
     },
     {
+      "file": "daily-copy-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 65,
+      "assertionHash": "5fb374c1b99b2852",
+      "sourceHash": "d4f72b14ed4e3e58",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
       "file": "daily-detail-fields-e2e.test.js",
       "kind": "e2e",
       "tier": "full",
@@ -369,9 +392,32 @@
       "domains": [
         "content-ai"
       ],
-      "assertionSignals": 33,
-      "assertionHash": "b57ee7f3451e99b6",
-      "sourceHash": "c27bcde603b6dd09",
+      "assertionSignals": 36,
+      "assertionHash": "8e48a9a511408122",
+      "sourceHash": "9fea447fdd635248",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "daily-order-core.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 20,
+      "assertionHash": "ec5b42ab14266346",
+      "sourceHash": "44a03da275d31884",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -548,6 +594,29 @@
         "fileWrite": false,
         "networkMock": false,
         "clock": false
+      }
+    },
+    {
+      "file": "daily-time-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 28,
+      "assertionHash": "1c68399940e89e38",
+      "sourceHash": "e2f9fc3a659cbaea",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
       }
     },
     {
