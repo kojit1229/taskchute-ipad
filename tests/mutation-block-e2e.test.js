@@ -193,11 +193,13 @@ async function fixture(extraNames = []) {
   core.setCommitGuard(deepCommitGuard);
   const { stamped } = await import('../src/core/mutation-stamp.js');
   const { createDraftSaveTransaction } = await import('../src/features/draft-save.js');
+  // v388 契約追随(監督者決定 2026-09-11、束B8 41c+fixB8): confirmScheduleDraft が daily-gap-placement.js の validatePlannedDraft / gapWarning を呼ぶため実物を砂場へ渡す(製品変更なし、design/CHANGELOG.md)。
+  const { validatePlannedDraft, gapWarning } = await import('../src/features/daily-gap-placement.js');
   const clock = fixedClock(Date.UTC(2026, 8, 10, 10));
   const counts = { writes: 0, autoSave: 0, autoSync: 0, render: 0, close: 0, timer: 0, tracking: 0 };
   let failure, raw, id = 0;
   const persisted = [];
-  const ctx = vm.createContext({ ...core, stamped, createDraftSaveTransaction, console: { error() {} },
+  const ctx = vm.createContext({ ...core, stamped, createDraftSaveTransaction, validatePlannedDraft, gapWarning, console: { error() {} },
     nowDateTime: () => new Date(clock()).toISOString().slice(0, 19), todayISO: () => DATE,
     draftSaveTransaction: null, _lastSaveError: null, _quotaToastShown: false, _blockSaveInFlight: false,
     _scheduleDraft: null, _draftUndo: { retained: true }, MIGRATION_RITUAL_THRESHOLD: 3,
@@ -226,7 +228,7 @@ async function fixture(extraNames = []) {
   });
   vm.runInContext(functions(['makeBlock', 'openTimelineNewBlock', 'commitBlockChanges', 'updateBlockField',
     'updateCategoryField', 'confirmScheduleDraft', 'saveBlockFromModal', 'saveState', 'saveAndRender', ...extraNames]), ctx);
-  ctx.state = { blocks: [], tasks: [{ id: 'task', category: 'work', status: 'todo', updatedAt: NOW }],
+  ctx.state = { blocks: [], singleSchedules: [] /* v388 契約追随: normalizeState が常に配列へ揃える前提(未取得は配置停止)。監督者決定 2026-09-11 */, tasks: [{ id: 'task', category: 'work', status: 'todo', updatedAt: NOW }],
     projects: [{ id: 'project', category: 'work', updatedAt: NOW }],
     recurrences: [{ id: 'rule', category: 'work', updatedAt: NOW }],
     weeklyCommitments: [{ id: 'week', updatedAt: NOW }],
@@ -250,8 +252,8 @@ const edits = [
   ['modal edit', f => { const input = fields(f); f.input = input; return () => f.ctx.saveBlockFromModal('b', input); }],
   ['modal create', f => { const input = fields(f); f.input = input; return () => f.ctx.saveBlockFromModal('fresh', input); }],
   ['draft update/create/carry', f => {
-    f.ctx._scheduleDraft = { date: DATE, items: [{ blockId: 'b', start: 630, minutes: 30 },
-      { title: 'new', start: 700, minutes: 20, carryFromId: 'b' }] };
+    f.ctx._scheduleDraft = { date: DATE, items: [{ id: 'd1', blockId: 'b', start: 630, minutes: 30 },  // v388 契約追随: 実物の下書き項目は必ず id を持つ(app.js _scheduleDraft の定義)。新しい占有検査は id 無しを拒否(監督者決定 2026-09-11)
+      { id: 'd2', title: 'new', start: 700, minutes: 20, carryFromId: 'b' }] };
     return () => f.ctx.confirmScheduleDraft();
   }]
 ];
@@ -565,7 +567,7 @@ test('third carry-over draft confirmation keeps migration ritual outside the sav
   f.ctx._migrationRitualCtx = null;
   f.ctx.buildMigrationRitualModal = (block, count) => ({ id: block.id, count });
   f.ctx.state.blocks[0].carryCount = 2;
-  f.ctx._scheduleDraft = { date: DATE, items: [{ id: 'draft', carryFromId: 'b', title: 'carry', start: 600, minutes: 30 }] };
+  f.ctx._scheduleDraft = { date: DATE, items: [{ id: 'draft', carryFromId: 'b', title: 'carry', start: 690, minutes: 30 }] };  // v388 契約追随: 繰越元 Block(9〜11時)と重ならない時刻へ(同日固定の便宜。新しい占有検査は繰越先の重なりを拒否する。監督者決定 2026-09-11)
   const blocks = clone(f.ctx.state.blocks), draft = clone(f.ctx._scheduleDraft);
   f.ctx.confirmScheduleDraft();
   assert.equal(f.ctx.state.modal.type, 'migrationRitual');

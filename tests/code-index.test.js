@@ -58,12 +58,13 @@ function areaOf(name) {
   return fn.area;
 }
 
-// computeFreeGaps(app.js:4471-4498): blocksForDate/clamp/minutesOfを呼ぶ純粋な空き時間計算。
-// `merged.push(...)`/`gaps.push(...)` はArray.prototype.pushでGitHub同期と無関係。
+// computeFreeGaps: v388(束B8 41c+fixB8、監督者決定 2026-09-11)で plannedAvailability(src/features/daily-gap-placement.js)へ
+// 委譲する5行の薄い入口になり、blocksForDate を直接呼ばなくなった(当日 Block への絞り込みは委譲先)。
+// 旧期待「blocksForDate 呼び出しにより execution を含む」は契約追随で「core だけ・sync を含まない」へ(design/CHANGELOG.md)。
 assert(!areaOf("computeFreeGaps").includes("sync"),
   "computeFreeGaps(空き時間計算)はsyncを含まない");
-assert(areaOf("computeFreeGaps").includes("execution"),
-  "computeFreeGaps はblocksForDate呼び出しによりexecutionを含む");
+assert(areaOf("computeFreeGaps").includes("core") && !areaOf("computeFreeGaps").includes("execution"),
+  "computeFreeGaps は plannedAvailability へ委譲する薄い入口(core のみ、v388 契約追随)");
 
 // v166: computeSyncMerge/runAutoSyncPull/syncFromGitHubOnStartup/mergeZeroThinkingListsは
 // src/sync/github.jsへ抽出済み。app.jsの索引に残っていたら二重定義の疑い(mergeByIdと同じ扱い)。
