@@ -32,6 +32,7 @@ import { normalizeTwyPlan } from "./src/core/plan.js";
 import { createVisionRead } from "./src/features/vision-read.js";
 import { createVisionOverview } from "./src/features/vision-overview.js";
 import { DAILY_ACTIONS } from "./src/ui/daily-parts/contract.js";
+import { affectedReportDates, REPORT_PENDING } from "./src/core/daily-report.js";
 import { dailyActuals, actualDurationMinutes } from "./src/core/daily-actuals.js";
 import { runDailyOperation, prepareDailyEnd } from "./src/features/daily-operations.js";
 import { createDraftLeaveGuard } from "./src/features/draft-leave.js";
@@ -1588,8 +1589,16 @@ const dailyOperationDeps = {
       result.justCompleted ? { blockId: block.id, actionLabel: "実績を編集" } : undefined);
     if (result.justCompleted || input.timer === true) openBodyScanModal(block.id);
   },
+  captureReport: (source, date) => captureReportInput(source, date, deriveReportValues),
+  buildReport: buildReportMarkdown,
+  refreshActualReports: result => {
+    for (const date of affectedReportDates(state, result)) generateReport(date, { quiet: true });
+  },
+  reportEffect: (result, input) => {
+    if (!input.quiet) render();
+    if (result.pending || !input.quiet) showToast(result.pending ? REPORT_PENDING : "日報を生成しました");
+  },
   actualEditEffect: result => {
-    if (!result.unchanged) generateReport(result.block.date, { quiet: true });
     closeModal();
     state.timelineMode = "actual";
     render();
@@ -4139,7 +4148,7 @@ function updateTrackMilestone(trackId, milestoneId, patch) {
 // v39: 開いている問い(Zone 3)。最大3件、deepening を lastTouchedAt 降順で優先。
 //      バッチ思考対策として全表示しない(CONCEPT §5.1)。空なら何も出さない。
 async function copyReportToClipboard() {
-  const report = state.reports[state.selectedDate];
+  const report = generateReport(state.selectedDate, { quiet: true });
   if (!report) return showToast("先に日報を生成してください");
   try {
     await navigator.clipboard.writeText(report);
@@ -4161,7 +4170,7 @@ async function copyReportToClipboard() {
   }
 }
 async function shareReport() {
-  const report = state.reports[state.selectedDate];
+  const report = generateReport(state.selectedDate, { quiet: true });
   if (!report) return showToast("先に日報を生成してください");
   try { await navigator.share({ text: report }); } catch { /* キャンセル等は無視 */ }
 }
@@ -10560,20 +10569,17 @@ function generateReport(dateArg, { quiet = false } = {}) {
   const date = dateArg || state.selectedDate;
   if (isArchivedDate(state, date)) {
     if (!quiet) showToast(ARCHIVED_READONLY_MESSAGE);
-    return state.reports[date] || "";
+    return state.reports[date] === REPORT_PENDING ? "" : state.reports[date] || "";
   }
+  if (draftSaveTransaction?.defer(() => generateReport(date, { quiet }), { post: true })) return "";
   ensureJournal(date);
-  const input = captureReportInput(state, date, deriveReportValues);
-  const report = buildReportMarkdown(input);
-  state.reports[date] = report;
-  if (quiet) { saveState(); return report; }  // v51: バックグラウンド生成(画面を動かさない)
-  // v214: 独立した日報タブを廃止したため、生成後もジャーナルに留まる。
-  saveAndRender("日報を生成しました");
-  return report;
+  const result = runDailyOperation("daily-report-refresh", { reportDate: date, quiet }, dailyOperationDeps);
+  if (!result.ok) showToast(REPORT_PENDING);
+  return result.ok && !result.pending ? result.report : "";
 }
 
 function downloadReport() {
-  const report = state.reports[state.selectedDate] || "";
+  const report = generateReport(state.selectedDate, { quiet: true });
   if (!report) return showToast("先に日報を生成してください");
   downloadText(`日報_${state.selectedDate}.md`, report, "text/markdown");
 }
@@ -14759,6 +14765,9 @@ function saveBlockFromModal(id, fields) {
           : r);
     }
     state.blocks = state.blocks.map((b) => b.id === id ? updated : b);
+    if (existing.actualEndAt || updated.actualEndAt) {
+      for (const date of new Set([existing.date, updated.date])) generateReport(date, { quiet: true });
+    }
     if (currentRule && currentRule.streakSince !== streakEdit.value) {
       state.recurrences = state.recurrences.map((r) => r.id === currentRule.id
         ? { ...r, streakSince: streakEdit.value, updatedAt: nowDateTime() }
@@ -15012,7 +15021,7 @@ function recordFeedbackFile(date) {
 async function pushReportToGitHub() {
   const date = state.selectedDate;
   if (isArchivedDate(state, date)) return showToast(ARCHIVED_READONLY_MESSAGE);
-  const report = state.reports[date];
+  const report = generateReport(date, { quiet: true });
   if (!report) {
     showToast("日報がまだ生成されていません");
     return;
@@ -15088,7 +15097,7 @@ const _originalGenerateReport = generateReport;
 generateReport = function(dateArg, opts = {}) {
   const result = _originalGenerateReport(dateArg, opts);
   const cfg = state.settings.github;
-  if (!opts.quiet && cfg?.autoSave && personalDataReady(cfg)) {
+  if (result && !opts.quiet && cfg?.autoSave && personalDataReady(cfg)) {
     const date = dateArg || state.selectedDate;
     const report = state.reports[date];
     if (report) {

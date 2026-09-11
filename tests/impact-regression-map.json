@@ -69,6 +69,7 @@
           "^src/core/daily-end\\.js$",
         "^src/core/daily-completion\\.js$",
         "^src/core/daily-actuals\\.js$",
+        "^src/core/daily-report\\.js$",
         "^src/core/daily-order\\.js$",
         "^src/core/block-copy\\.js$",
         "^src/core/copy-undo\\.js$"
@@ -99,6 +100,7 @@
         "daily-start-end-e2e",
         "daily-completion-e2e",
         "daily-actuals-e2e",
+        "daily-report-e2e",
         "daily-order-core",
         "daily-copy-e2e"
       ]

@@ -8,6 +8,7 @@ import { buildBlockEnd } from "../core/daily-end.js";
 import { buildPlanCompletion, buildTaskCompletion } from "../core/daily-completion.js";
 import { createDailyDraftStore } from "./daily-draft.js";
 import { buildActualEdit } from "../core/daily-actuals.js";
+import { buildDailyReport } from "../core/daily-report.js";
 
 const copyReady = Symbol("saved copy source");
 const copyRequests = new WeakMap();
@@ -29,6 +30,7 @@ export const DAILY_OPERATIONS = {
   "daily-duplicate-undo": { build: (state, input, deps) => buildCopyUndo(state, input, { copyFingerprint: dailyFingerprint }), effects: copyUndoEffects },
   "daily-schedule-edit": unwired("daily-schedule-edit"),
   "daily-actual-edit": { build: buildActualEdit, effects: actualEditEffects },
+  "daily-report-refresh": { build: buildDailyReport, effects: (result, input, deps) => deps.reportEffect?.(result, input) },
   "daily-task-complete": { build: buildTaskCompletion, effects: taskCompletionEffects },
   "daily-search-change": unwired("daily-search-change"),
   "daily-search-clear": unwired("daily-search-clear"),
@@ -259,7 +261,12 @@ export function runDailyOperation(name, input, deps) {
         // fixB3(73a F1): 保存はすでに成立しているので、同期予約は effects(描画・通知)の成否に依存させない。
         // effects の例外は commitCandidate の契約どおり呼び出し元へ伝える(飲み込まない)。
         try { op.effects?.(result, input, deps); }
-        finally { if (!result.unchanged) deps.scheduleSync?.(result); }
+        finally {
+          if (!result.unchanged) {
+            try { deps.refreshActualReports?.(result); }
+            finally { deps.scheduleSync?.(result); }
+          }
+        }
       }
     });
   } catch (error) {
