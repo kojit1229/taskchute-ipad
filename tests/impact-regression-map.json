@@ -65,8 +65,8 @@
         "^src/features/daily-view-model\\.js$",
         "^src/features/daily-operations\\.js$",
         "^src/core/daily-time\\.js$",
-          "^src/core/daily-start\\.js$",
-          "^src/core/daily-end\\.js$",
+        "^src/core/daily-start\\.js$",
+        "^src/core/daily-end\\.js$",
         "^src/core/daily-completion\\.js$",
         "^src/core/daily-actuals\\.js$",
         "^src/core/daily-report\\.js$",
@@ -103,7 +103,10 @@
         "daily-report-e2e",
         "daily-adapters-e2e",
         "daily-order-core",
-        "daily-copy-e2e"
+        "daily-copy-e2e",
+        "v261",
+        "v267",
+        "archive-date-protection"
       ]
     },
     "detail-draft-guard": {

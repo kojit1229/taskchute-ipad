@@ -166,8 +166,10 @@ function configureSync(syncMod) {
     await resetSaveProbe(); await completionButton.click();
     await page.waitForSelector("#trackToast:not([hidden])"); state = await savedState();
     const completedItem = state.weeklyCommitments.find((record) => record.id === completionSeed.id);
-    check("条件2 完了刻印は同秒tie契約・既存4保存", completedItem?.completedAt === NOW
-      && completedItem.completedChangedAt === NOW && completedItem.updatedAt === NOW && await saveCalls() === 4,
+    // v386 契約追随(監督者決定 2026-09-11、束B6): 完了後の quiet 日報が候補保存になり saveState は 4→3(日報の存在は下で断言)。
+    check("条件2 完了刻印は同秒tie契約・既存3保存+日報", completedItem?.completedAt === NOW
+      && completedItem.completedChangedAt === NOW && completedItem.updatedAt === NOW && await saveCalls() === 3
+      && typeof state.reports?.[TODAY] === "string" && state.reports[TODAY].length > 0,
     JSON.stringify({ completedItem, saves: await saveCalls() }));
     // v293追随: この完了(toggle-block、新規完了)は身体スキャンモーダルを開く。以降のnavクリック等が
     // 遮られるため、後続操作の前に片付ける(検証意図=完了刻印・保存回数は上のcheckで既に確定済み)。
@@ -183,7 +185,8 @@ function configureSync(syncMod) {
     const recorded = state.trackMeasurements.find((measurement) => measurement.sourceKind === "toast");
     check("条件3 トースト1タップは絶対値1・同秒永続化・保存3回", recorded?.trackId === numeric.id
       && recorded.value === 1 && recorded.blockId === completionSeed.blockId && recorded.observedAt === recorded.updatedAt
-      && recorded.createdAt === recorded.updatedAt && await saveCalls() === 3, JSON.stringify({ recorded, saves: await saveCalls() }));
+      // v386 契約追随: quiet 日報は候補保存=saveState 3→2。
+      && recorded.createdAt === recorded.updatedAt && await saveCalls() === 2, JSON.stringify({ recorded, saves: await saveCalls() }));
     await page.evaluate((key) => { const state = JSON.parse(localStorage.getItem(key)); state.currentView = "wbs";
       localStorage.setItem(key, JSON.stringify(state)); }, STATE_KEY);
     await page.reload(); await page.waitForSelector(`[data-twy-track-id="${numeric.id}"]`);

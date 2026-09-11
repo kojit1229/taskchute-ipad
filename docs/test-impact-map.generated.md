@@ -456,12 +456,12 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | missing-timezone | 1 | tests/v258.test.js | 99 |
 | missing-timezone | 1 | tests/v259.test.js | 133 |
 | missing-timezone | 1 | tests/v260.test.js | 83 |
-| missing-timezone | 1 | tests/v261.test.js | 279 |
+| missing-timezone | 1 | tests/v261.test.js | 283 |
 | missing-timezone | 1 | tests/v262.test.js | 362 |
 | missing-timezone | 1 | tests/v263.test.js | 135 |
 | missing-timezone | 1 | tests/v264.test.js | 150 |
 | missing-timezone | 1 | tests/v266.test.js | 90 |
-| fixed-date | 5 | tests/v267.test.js | 104, 107, 111, 262, 266 |
+| fixed-date | 5 | tests/v267.test.js | 104, 107, 111, 265, 269 |
 | missing-timezone | 1 | tests/v274.test.js | 66 |
 | missing-timezone | 1 | tests/v275.test.js | 57 |
 | fixed-date | 3 | tests/v276.test.js | 77, 198, 261 |
