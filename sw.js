@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v388";  // v388: 単発予定と Block の占有を1つの計算に統合、今日・実行・詳細に同じ単発予定を表示、空き時間への手動配置(未定 Block の時刻決め・Task から新規)、やりたいこと画面の日本語化
+const CACHE_NAME = "taskchute-journal-pwa-v389";  // v389: 自動配置も単発予定の占有を使う、単発予定の通し試験、日報の別表、系列の型・合流・導出(第2回の下地、画面接続なし)
 
 // v353: 12WY R0 task.twyPlan のデータ契約+plan.js 純関数+Task編集モーダル3項目
 
@@ -663,6 +663,9 @@ const APP_SHELL = [
   "./src/core/merge.js",
   "./src/core/single-schedule-merge.js",
   "./src/core/single-schedule.js",
+  "./src/core/schedule-series.js",
+  "./src/core/schedule-series-merge.js",
+  "./src/core/schedule-series-derive.js",
   "./src/core/planned-occupancy.js",
   "./src/core/mutation-stamp.js",
   "./src/core/commit.js",

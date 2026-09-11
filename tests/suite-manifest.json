@@ -2401,9 +2401,9 @@
         "sync-storage",
         "planning-execution"
       ],
-      "assertionSignals": 58,
-      "assertionHash": "516c535e8e4522a7",
-      "sourceHash": "2ca44f36eb1c199e",
+      "assertionSignals": 87,
+      "assertionHash": "60bbd6128bc50a72",
+      "sourceHash": "438fc813992672d2",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2628,6 +2628,99 @@
       }
     },
     {
+      "file": "schedule-series-core.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 55,
+      "assertionHash": "7bf43a4db1ee4bab",
+      "sourceHash": "790b056df56dce04",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "schedule-series-derive.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 43,
+      "assertionHash": "0752259b2f8f13cd",
+      "sourceHash": "9fdfcbc6759c417b",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "schedule-series-merge.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution"
+      ],
+      "assertionSignals": 38,
+      "assertionHash": "2274fdbc601fa099",
+      "sourceHash": "1445f510d74f92e8",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "single-schedule-auto-placement.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 32,
+      "assertionHash": "99aad14d6f463ca7",
+      "sourceHash": "22242dce3e284aca",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
       "file": "single-schedule-core.test.js",
       "kind": "e2e",
       "tier": "full",
@@ -2648,6 +2741,29 @@
         "fileWrite": false,
         "networkMock": true,
         "clock": false
+      }
+    },
+    {
+      "file": "single-schedule-flow-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 42,
+      "assertionHash": "5446d23074eea353",
+      "sourceHash": "b3959086f9e23cc0",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
       }
     },
     {
@@ -2695,6 +2811,30 @@
         "fileWrite": false,
         "networkMock": true,
         "clock": true
+      }
+    },
+    {
+      "file": "single-schedule-report.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "journal-health"
+      ],
+      "assertionSignals": 34,
+      "assertionHash": "8fa3f5e482fcb841",
+      "sourceHash": "c04314af5146265d",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
       }
     },
     {
