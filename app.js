@@ -1,3 +1,4 @@
+import { normalizeSingleSchedules, validateSingleScheduleContainer } from "./src/core/single-schedule.js";
 import { createFeedbackReadonlyPatch } from "./src/features/feedback/feedback-readonly-patch.js";
 import { createFeedbackCanonicalReader } from "./src/features/feedback/feedback-canonical-reader.js";
 import { createFeedbackUiGateway } from "./src/features/feedback/feedback-ui-gateway.js";
@@ -2164,6 +2165,7 @@ function compactMap(o) {
 }
 
 function validateStateContainers(value) {
+  validateSingleScheduleContainer(value.singleSchedules);
   const invalidJournals = value.journals != null &&
     (typeof value.journals !== "object" || Array.isArray(value.journals));
   const invalidRecurrences = value.recurrences != null && !Array.isArray(value.recurrences);
@@ -2176,6 +2178,7 @@ function validateStateContainers(value) {
 
 function normalizeState(value) {
   validateStateContainers(value);
+  value.singleSchedules = normalizeSingleSchedules(value.singleSchedules).stored;
   const actualSettings = value.settings && typeof value.settings === "object" && !Array.isArray(value.settings)
     ? value.settings
     : {};

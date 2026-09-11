@@ -24,7 +24,7 @@ function validDateTime(value) {
 }
 
 // 予定1の検査関数が公開されたら rules.isValid から注入できる暫定境界。
-function validSchedule(record) {
+export function validSchedule(record) {
   if (!record || typeof record !== "object" || Array.isArray(record)
     || typeof record.id !== "string" || !record.id.trim()
     || typeof record.title !== "string" || !record.title.trim()) return false;
