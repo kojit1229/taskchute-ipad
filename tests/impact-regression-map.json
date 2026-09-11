@@ -416,6 +416,11 @@
       "patterns": ["mergeScheduleSeries|createSeriesMergeCandidate|legacySeriesOccurrence|chooseSeriesChange|mergeSeriesOverrides"],
       "suites": ["schedule-series-merge", "single-schedule-merge", "merge-core"]
     },
+    "schedule-series-derive": {
+      "paths": ["^src/core/schedule-series-derive\\.js$"],
+      "patterns": ["deriveScheduleSeries|schedulesWithSeriesForDate"],
+      "suites": ["schedule-series-derive", "schedule-series-core"]
+    },
     "schedule-series-core": {
       "paths": ["^src/core/schedule-series\\.js$"],
       "patterns": ["createScheduleSeries|scheduleSeriesDates|scheduleSeriesFingerprint|normalizeSeriesTime"],
