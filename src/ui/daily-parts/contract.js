@@ -6,6 +6,8 @@ export const DAILY_ACTIONS = Object.freeze([
   "edit-block", "daily-schedule-edit", "daily-actual-edit", "daily-task-complete",
   // 38: registry-only schedule writes; D01 keeps their controls unpublished.
   "daily-schedule-add", "daily-schedule-complete", "daily-schedule-delete",
+  // B8/41: separate same-Block placement and Task-to-new-Block requests.
+  "daily-gap-place", "daily-gap-create",
   "daily-search-change", "daily-search-clear", "modal-save", "modal-close", "modal-delete",
   "edit-task", "edit-project",
   "daily-report-refresh" // 33 の日報再生成の登録行(監督者決定 2026-09-11、fixB6)

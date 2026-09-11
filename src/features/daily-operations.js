@@ -10,6 +10,7 @@ import { createDailyDraftStore } from "./daily-draft.js";
 import { singleScheduleOperation } from "./single-schedule.js";
 import { buildActualEdit } from "../core/daily-actuals.js";
 import { buildDailyReport, affectedReportDates } from "../core/daily-report.js";
+import { gapPlacementOperation } from "./daily-gap-placement.js";
 
 const copyReady = Symbol("saved copy source");
 const copyRequests = new WeakMap();
@@ -33,6 +34,8 @@ export const DAILY_OPERATIONS = {
   "daily-schedule-edit": singleScheduleOperation("edit"),
   "daily-schedule-complete": singleScheduleOperation("complete"),
   "daily-schedule-delete": singleScheduleOperation("delete"),
+  "daily-gap-place": gapPlacementOperation("block"),
+  "daily-gap-create": gapPlacementOperation("task"),
   "daily-actual-edit": { build: buildActualEdit, effects: actualEditEffects },
   "daily-report-refresh": { build: buildDailyReport, effects: (result, input, deps) => deps.reportEffect?.(result, input) },
   "daily-task-complete": { build: buildTaskCompletion, effects: taskCompletionEffects },
