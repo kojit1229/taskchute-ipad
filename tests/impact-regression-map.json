@@ -311,6 +311,10 @@
         "action-registry-core"
       ]
     },
+    "single-schedule-view": {
+      "paths": ["^src/features/single-schedule-view\\.js$"],
+      "suites": ["single-schedule-view-e2e", "today-core", "v334", "v355", "v357"]
+    },
     "planned-occupancy": {
       "paths": ["^src/core/planned-occupancy\\.js$"],
       "suites": ["planned-occupancy-core", "v59", "v199"]

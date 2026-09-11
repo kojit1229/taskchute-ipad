@@ -1,10 +1,13 @@
 import { validateDailyContract } from "../ui/daily-parts/contract.js";
 import { renderPlanRow } from "../ui/daily-parts/plan-row.js";
 import { renderActualRow } from "../ui/daily-parts/actual-row.js";
+import { isValidSingleSchedule } from "../core/single-schedule.js";
+import { plannedMinute } from "../core/planned-occupancy.js";
 
 // Read-only projection. app.js supplies live Task lookup and the existing time/estimate helpers.
 // No draft, action registration or persistence belongs to this adapter.
 export function buildDailyViewModel(block, deps, actual = false) {
+  if (deps.kind === "schedule") return buildScheduleModel(block, deps.date, actual);
   const invalid = () => { const error = new TypeError("Invalid daily Block display");
     error.code = "DAILY_VIEW_MODEL_INVALID"; throw error; };
   if (!block || typeof block !== "object" || Array.isArray(block)
@@ -63,6 +66,21 @@ export function buildDailyViewModel(block, deps, actual = false) {
       draftId: null, requestId: null, baseFingerprint: null, values }).valid) invalid();
   }
   return { display, plan, actual: actualRow };
+}
+
+function buildScheduleModel(record, date, actual) {
+  if (actual || !isValidSingleSchedule(record) || record.deleted || !Number.isFinite(plannedMinute(record.plannedStartAt, date)))
+    throw Object.assign(new TypeError("Invalid single schedule display"), { code: "DAILY_VIEW_MODEL_INVALID" });
+  const start = plannedMinute(record.plannedStartAt, date), end = plannedMinute(record.plannedEndAt, date);
+  const range = [Math.max(240, start), Math.min(1440, end)];
+  return { display: { key: `schedule:${record.id}`, kind: "schedule", id: record.id,
+    dateLabel: record.date, title: `${start < 0 ? "前日から · " : ""}${record.title}`,
+    subtitle: "単発予定", statusLabel: record.completed ? "予定完了" : "予定", busy: false, error: "", actions: {} },
+    plan: { planCompleted: Boolean(record.completed), canStart: false, canEnd: false,
+      plannedStartText: record.plannedStartAt.slice(11,16), plannedEndText: record.plannedEndAt.slice(11,16),
+      endNextDay: record.plannedEndAt.slice(0,10) > record.date, start, end,
+      range: range[0] < range[1] ? range : null, outsideWindow: end <= 240 || start >= 1440 },
+    note: record.note || "" };
 }
 
 export function renderDailyBlockDetails(block, deps, actual = false) {
