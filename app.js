@@ -1542,6 +1542,11 @@ function foldSection(id, defaultOpen, wrapperClass, summaryClass, summaryText, b
 //      未初期化のまま参照され、最後に開いていた画面によっては起動時に例外で全停止していた。
 
 const dailyOperationDeps = {
+  isReadingBlock: function isReadingBlock(block) {
+  return Boolean(block?.externalRef?.startsWith("daily-reading:v1:")
+    || ["daily-reading-auto", "daily-reading-manual"].includes(block?.source)
+    || block?.id?.startsWith("daily-reading-feedback_"));
+  },
   get state() { return state; }, commitCandidate, now: nowDateTime, notify: showToast,
   floors: () => [state.settings?.lastPushedAt, saveState.pendingStamp],
   persist: () => { persistLocalNoSchedule(); return !_lastSaveError; },
@@ -15178,9 +15183,50 @@ function buildActualEntryModal(block, defaultStart, defaultEnd) {
 }
 
 function saveActualEntryFromModal(blockId, fields) {
+  if (state.blocks.find((b) => b.id === blockId)?.actualEndAt) {
   const result = runDailyOperation("daily-actual-edit", { kind: "actual", id: blockId, values: fields }, dailyOperationDeps);
   if (!result.ok) showToast(result.error?.message || "保存できませんでした。入力は残しています");
-  return result;
+  return result.ok === true;
+  }
+  const previousBlock = state.blocks.find((b) => b.id === blockId);
+  const wasCompleted = Boolean(previousBlock?.completed);
+  if (!commitBlockChanges(state.blocks.map((b) => {
+    if (b.id !== blockId) return b;
+    return {
+      ...b,
+      actualStartAt: fromLocalInput(fields.actualStartAt),
+      everStartedAt: b.everStartedAt || fromLocalInput(fields.actualStartAt),
+      actualEndAt: fromLocalInput(fields.actualEndAt),
+      charge: Number(fields.charge) || 0,
+      discharge: Number(fields.discharge) || 0,
+      comment: fields.comment || "",
+      completed: true
+    };
+  }))) return false;
+  if (!wasCompleted) transferIronLogToCompletedBlock(blockId);
+  // Task の状態を doing に
+  const block = state.blocks.find((b) => b.id === blockId);
+  if (!wasCompleted && block) syncHabitStreakForBlock(block);
+  if (block?.taskId) {
+    state.tasks = state.tasks.map((t) =>
+      t.id === block.taskId && t.status === "todo"
+        ? { ...t, status: "doing", updatedAt: nowDateTime() }
+        : t
+    );
+  }
+  if (block) generateReport(block.date, { quiet: true });
+  if (state.pomodoro.running && state.pomodoro.blockId === blockId) completePomodoro(true);
+  closeModal();
+  // 実績モードに切り替えて表示
+  state.timelineMode = "actual";
+  saveState();
+  if (!previousBlock?.actualStartAt && block?.actualStartAt) trackOnBlockStarted(block);
+  if (!wasCompleted && block?.completed) {
+    trackOnBlockCompletionChanged(block, true, { interactive: false });
+  }
+  saveAndRender("✅ 実績を登録しました");
+  // v293: 身体スキャン復活(実績登録モーダルは保存前に既にcloseModal済みのため直接開いてよい)。
+  if (!wasCompleted && block?.completed) openBodyScanModal(block.id);
 }
 
 // ============================================================

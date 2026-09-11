@@ -27,7 +27,7 @@ for (const name of DAILY_ACTIONS) {
 }
 for (const name of ['missing', 'toString', '__proto__']) assert.throws(() => run(name, {}, deps), /unknown operation/);
 assert.equal(saves, 0); assert.equal(schedules, 0);
-console.log('PASS all 18 rows, 12 unwired rejections, 6 legacy delegates and unknown names');
+console.log('PASS all 19 rows, 12 unwired rejections, 6 legacy delegates and unknown names');
 const fixture = '__fixture';
 try {
   rows[fixture] = { build: () => ({ records: [] }) };

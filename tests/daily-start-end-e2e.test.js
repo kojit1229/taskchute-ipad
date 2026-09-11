@@ -403,7 +403,7 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY, passGithubG
       await page.evaluate(key => {
         window.__setEnd = Storage.prototype.setItem; window.__endFail = true; window.__endWrites = 0;
         Storage.prototype.setItem = function(k,v) {
-          if (k === key) { window.__endWrites++; if (window.__endFail) throw new DOMException('fixture quota', 'QuotaExceededError'); }
+          if (k === key) { window.__endWrites++; if (window.__endWrites === 3) window.__endReportWrite = JSON.parse(v); if (window.__endFail) throw new DOMException('fixture quota', 'QuotaExceededError'); }
           return window.__setEnd.call(this,k,v);
         };
       }, STATE_KEY);
@@ -420,7 +420,11 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY, passGithubG
       await page.locator('[data-action="report-outcome"][data-outcome="partial"]').evaluate(el => { el.click(); el.click(); });
       await page.waitForFunction(() => !document.querySelector('#modalRoot').classList.contains('open'));
       let saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), STATE_KEY);
-      assert.equal(await page.evaluate(() => window.__endWrites), 2);
+      // v386 契約追随(監督者決定 2026-09-11、design/03 §5、fixB6)
+       assert.equal(await page.evaluate(() => window.__endWrites), 3);
+       const thirdWrite = await page.evaluate(() => window.__endReportWrite);
+       assert(thirdWrite.reports[saved.blocks[0].date].includes(saved.blocks[0].title));
+       assert(thirdWrite.reports[saved.blocks[0].date].includes(saved.blocks[0].id));
       assert.equal(saved.blocks[0].actualEndAt, '2026-09-11T00:10:00');
       assert.equal(saved.blocks[0].date, action === 'daily-block-end' ? '2026-09-12' : '2026-09-10');
       assert.equal(saved.blocks[0].completed, false); assert.equal(saved.blocks[0].comment, '元コメント\n終了の入力を保持');
