@@ -662,6 +662,7 @@ const APP_SHELL = [
 
   "./src/core/merge.js",
   "./src/core/single-schedule-merge.js",
+  "./src/core/single-schedule.js",
   "./src/core/mutation-stamp.js",
   "./src/core/commit.js",
   "./src/core/daily-time.js",
@@ -700,6 +701,7 @@ const APP_SHELL = [
 
   "./src/features/draft-leave.js",
   "./src/features/daily-draft.js",
+  "./src/features/single-schedule.js",
 
   "./src/features/draft-save.js",
 

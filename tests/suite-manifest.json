@@ -485,8 +485,8 @@
         "content-ai"
       ],
       "assertionSignals": 41,
-      "assertionHash": "a8591db173a38769",
-      "sourceHash": "0b87986bdf9d71b7",
+      "assertionHash": "acfd31a11bd4028c",
+      "sourceHash": "c4071e4cd7da2c4e",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -534,7 +534,7 @@
       ],
       "assertionSignals": 32,
       "assertionHash": "b8efe116407bcdde",
-      "sourceHash": "8379135800e842d4",
+      "sourceHash": "d7a7444dee76f293",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2582,6 +2582,29 @@
       }
     },
     {
+      "file": "single-schedule-core.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 21,
+      "assertionHash": "99e8884e09792d62",
+      "sourceHash": "273822d55091f32b",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": false
+      }
+    },
+    {
       "file": "single-schedule-merge.test.js",
       "kind": "node",
       "tier": "full",
@@ -2603,6 +2626,53 @@
         "fileWrite": false,
         "networkMock": false,
         "clock": false
+      }
+    },
+    {
+      "file": "single-schedule-ops-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 41,
+      "assertionHash": "930f5047d9c9f56e",
+      "sourceHash": "b051a1b1ed31c296",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "single-schedule-sync-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution"
+      ],
+      "assertionSignals": 26,
+      "assertionHash": "42aa52818289ae43",
+      "sourceHash": "a33d7337d49a2e2a",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
       }
     },
     {
