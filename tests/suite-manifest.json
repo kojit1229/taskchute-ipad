@@ -63,7 +63,7 @@
       ],
       "assertionSignals": 49,
       "assertionHash": "2e331866208b3523",
-      "sourceHash": "b8b9528b62640e11",
+      "sourceHash": "f126b7020de05c41",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -227,6 +227,52 @@
       "assertionSignals": 43,
       "assertionHash": "e04e7732103030c5",
       "sourceHash": "1d3adbc0f0c2e4f0",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "daily-actuals-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 25,
+      "assertionHash": "0c5329b17b86a465",
+      "sourceHash": "8dceeeccefdbb7e5",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "daily-adapters-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 43,
+      "assertionHash": "f8ad682391363de3",
+      "sourceHash": "32ddf56b7a5d6944",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -439,8 +485,8 @@
         "content-ai"
       ],
       "assertionSignals": 41,
-      "assertionHash": "20210e5bb7daa2d6",
-      "sourceHash": "823546a047dd3f57",
+      "assertionHash": "a8591db173a38769",
+      "sourceHash": "0b87986bdf9d71b7",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -488,7 +534,7 @@
       ],
       "assertionSignals": 32,
       "assertionHash": "b8efe116407bcdde",
-      "sourceHash": "66c42bad5f1c42ff",
+      "sourceHash": "8379135800e842d4",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -597,6 +643,30 @@
       }
     },
     {
+      "file": "daily-report-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "journal-health",
+        "content-ai"
+      ],
+      "assertionSignals": 30,
+      "assertionHash": "face4a5f58835ccd",
+      "sourceHash": "652582d428963c1e",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
       "file": "daily-search-e2e.test.js",
       "kind": "e2e",
       "tier": "full",
@@ -649,9 +719,9 @@
       "domains": [
         "content-ai"
       ],
-      "assertionSignals": 140,
-      "assertionHash": "57ce2259732b7cfc",
-      "sourceHash": "2823318b5cdaf7fe",
+      "assertionSignals": 142,
+      "assertionHash": "9ca473a12d9ea16a",
+      "sourceHash": "4eb9bf570b80e1a1",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -4668,9 +4738,9 @@
         "planning-execution",
         "sync-storage"
       ],
-      "assertionSignals": 49,
-      "assertionHash": "7b6fabd52932aee3",
-      "sourceHash": "27038f84829f68aa",
+      "assertionSignals": 50,
+      "assertionHash": "fe0746b4ea5f09af",
+      "sourceHash": "34297660f94b88f5",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -4815,8 +4885,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 60,
-      "assertionHash": "62ec66a932b62e1e",
-      "sourceHash": "195060e8e9a8a24a",
+      "assertionHash": "725899b4aa2e5332",
+      "sourceHash": "b1ecb1154def1ad2",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -4842,8 +4912,8 @@
         "security-offline"
       ],
       "assertionSignals": 59,
-      "assertionHash": "7d7ca662a41417b6",
-      "sourceHash": "f3be679cc366c78c",
+      "assertionHash": "2d734e5125a81419",
+      "sourceHash": "69014d392d85516e",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -4943,8 +5013,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 22,
-      "assertionHash": "4f7ed803d7f9d889",
-      "sourceHash": "cd91418dca5abc21",
+      "assertionHash": "273ddcea01e7586c",
+      "sourceHash": "3a55daedb1d8f997",
       "waits": {
         "fixedCount": 3,
         "numericMilliseconds": 550,

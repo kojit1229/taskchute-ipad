@@ -5,7 +5,8 @@ export const DAILY_ACTIONS = Object.freeze([
   "daily-block-start", "daily-block-end", "daily-block-duplicate", "daily-duplicate-undo",
   "edit-block", "daily-schedule-edit", "daily-actual-edit", "daily-task-complete",
   "daily-search-change", "daily-search-clear", "modal-save", "modal-close", "modal-delete",
-  "edit-task", "edit-project"
+  "edit-task", "edit-project",
+  "daily-report-refresh" // 33 の日報再生成の登録行(監督者決定 2026-09-11、fixB6)
 ]);
 export const DAILY_RESULT_STATUSES = Object.freeze([
   "saved", "unchanged", "invalid", "storage-failed", "conflict", "cancelled"

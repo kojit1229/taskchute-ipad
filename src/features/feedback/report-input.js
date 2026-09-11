@@ -1,3 +1,4 @@
+import { reportActuals } from "../../core/daily-report.js";
 // Capture only report dependencies. No application globals, authentication, persistence, or async work.
 const fields = {
   blocks: 'id date title taskId category completed charge discharge isMIT pomodoroCount plannedStartAt plannedEndAt actualStartAt actualEndAt comment source recurrenceGroupId migratedTo deleted everStartedAt oneTap',
@@ -63,5 +64,6 @@ export function captureReportInput(source, date, derive) {
   derived.conditionLabel = result.conditionLabel;
   const blocks = fixed.blocks.filter(block => !block.deleted && block.date === date)
     .sort((a, b) => (a.plannedStartAt || '99').localeCompare(b.plannedStartAt || '99'));
-  return { date, state: fixed, blocks, derived };
+  const actuals = reportActuals(fixed, date);
+  return { date, state: fixed, blocks, derived, actuals };
 }

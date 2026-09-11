@@ -32,6 +32,8 @@ import { normalizeTwyPlan } from "./src/core/plan.js";
 import { createVisionRead } from "./src/features/vision-read.js";
 import { createVisionOverview } from "./src/features/vision-overview.js";
 import { DAILY_ACTIONS } from "./src/ui/daily-parts/contract.js";
+import { REPORT_PENDING } from "./src/core/daily-report.js";
+import { dailyActuals, actualDurationMinutes } from "./src/core/daily-actuals.js";
 import { runDailyOperation, prepareDailyEnd } from "./src/features/daily-operations.js";
 import { createDraftLeaveGuard } from "./src/features/draft-leave.js";
 import { createDailyDraftStore } from "./src/features/daily-draft.js";
@@ -1540,6 +1542,11 @@ function foldSection(id, defaultOpen, wrapperClass, summaryClass, summaryText, b
 //      未初期化のまま参照され、最後に開いていた画面によっては起動時に例外で全停止していた。
 
 const dailyOperationDeps = {
+  isReadingBlock: function isReadingBlock(block) {
+  return Boolean(block?.externalRef?.startsWith("daily-reading:v1:")
+    || ["daily-reading-auto", "daily-reading-manual"].includes(block?.source)
+    || block?.id?.startsWith("daily-reading-feedback_"));
+  },
   get state() { return state; }, commitCandidate, now: nowDateTime, notify: showToast,
   floors: () => [state.settings?.lastPushedAt, saveState.pendingStamp],
   persist: () => { persistLocalNoSchedule(); return !_lastSaveError; },
@@ -1579,13 +1586,27 @@ const dailyOperationDeps = {
       if (block.recurrenceGroupId) triggerAnchorPlacements(block.recurrenceGroupId, block.actualEndAt);
       transferIronLogToCompletedBlock(block.id);
       trackOnBlockCompletionChanged(block, true, { interactive: true });
-      generateReport(block.date, { quiet: true });
       triggerCompletionEffect(getRandomCelebrate(), block.isMIT);
     }
     render();
     showToast((result.declaration && buildDeclareFeedback(result.declaration)) || "終了を保存しました",
       result.justCompleted ? { blockId: block.id, actionLabel: "実績を編集" } : undefined);
     if (result.justCompleted || input.timer === true) openBodyScanModal(block.id);
+  },
+  captureReport: (source, date) => captureReportInput(source, date, deriveReportValues),
+  buildReport: input => buildReportMarkdown(input),
+  refreshActualReports: dates => {
+    for (const date of dates) generateReport(date, { quiet: true });
+  },
+  reportEffect: (result, input) => {
+    if (!input.quiet) render();
+    if (result.pending || !input.quiet) showToast(result.pending ? REPORT_PENDING : "日報を生成しました");
+  },
+  actualEditEffect: result => {
+    closeModal();
+    state.timelineMode = "actual";
+    render();
+    showToast("実績を訂正しました");
   },
   legacy: {
     "edit-block": ({ id }) => openBlockEditor(id),
@@ -4131,7 +4152,7 @@ function updateTrackMilestone(trackId, milestoneId, patch) {
 // v39: 開いている問い(Zone 3)。最大3件、deepening を lastTouchedAt 降順で優先。
 //      バッチ思考対策として全表示しない(CONCEPT §5.1)。空なら何も出さない。
 async function copyReportToClipboard() {
-  const report = state.reports[state.selectedDate];
+  const report = generateReport(state.selectedDate, { quiet: true });
   if (!report) return showToast("先に日報を生成してください");
   try {
     await navigator.clipboard.writeText(report);
@@ -4153,7 +4174,7 @@ async function copyReportToClipboard() {
   }
 }
 async function shareReport() {
-  const report = state.reports[state.selectedDate];
+  const report = generateReport(state.selectedDate, { quiet: true });
   if (!report) return showToast("先に日報を生成してください");
   try { await navigator.share({ text: report }); } catch { /* キャンセル等は無視 */ }
 }
@@ -6331,7 +6352,8 @@ function renderExecDoneRow(block) {
   const end = block.actualEndAt ? timeFromDateTime(block.actualEndAt) : "";
   const chargeInfo = (block.charge != null || block.discharge != null)
     ? ` ・ 充${block.charge ?? "-"}/放${block.discharge ?? "-"}` : "";
-  const metaHTML = `${start}${end ? `–${end}` : ""}${chargeInfo}${block.category ? ` ・ ${escapeHTML(block.category)}` : ""} ・ ${block.completed ? "完了" : "終了・未完了"}`;
+  const duration = actualDurationMinutes(block);
+  const metaHTML = `${duration == null ? "未記録" : `${duration}分`} ・ ${start}${end ? `–${end}` : ""}${chargeInfo}${block.category ? ` ・ ${escapeHTML(block.category)}` : ""} ・ ${block.completed ? "完了" : "終了・未完了"}`;
   return `
     <div class="item exec-row exec-row-done">
       ${block.completed ? `<button type="button" class="checkbox-button done" data-action="toggle-block" data-id="${block.id}" aria-label="Block完了を解除" title="Block完了を解除">✓</button>` : `<span class="checkbox-button" aria-hidden="true">■</span>`}
@@ -6346,9 +6368,7 @@ function renderExecDoneRow(block) {
 }
 
 function execDoneListHTML() {
-  // 実績は完了Blockと終了時刻がある未完了Blockを保持する。予定母集団の除外は適用しない。
-  const done = blocksForDate(state.selectedDate).filter((b) => b.completed || Boolean(b.actualEndAt))
-    .sort((a, b) => (a.actualStartAt || "").localeCompare(b.actualStartAt || ""));
+  const done = dailyActuals(state.blocks, state.selectedDate);
   return `
     <section class="section exec-panel exec-amber exec-done-section">
       <h2>やったこと</h2>
@@ -10553,20 +10573,17 @@ function generateReport(dateArg, { quiet = false } = {}) {
   const date = dateArg || state.selectedDate;
   if (isArchivedDate(state, date)) {
     if (!quiet) showToast(ARCHIVED_READONLY_MESSAGE);
-    return state.reports[date] || "";
+    return state.reports[date] === REPORT_PENDING ? "" : state.reports[date] || "";
   }
+  if (draftSaveTransaction?.defer(() => generateReport(date, { quiet }), { post: true })) return "";
   ensureJournal(date);
-  const input = captureReportInput(state, date, deriveReportValues);
-  const report = buildReportMarkdown(input);
-  state.reports[date] = report;
-  if (quiet) { saveState(); return report; }  // v51: バックグラウンド生成(画面を動かさない)
-  // v214: 独立した日報タブを廃止したため、生成後もジャーナルに留まる。
-  saveAndRender("日報を生成しました");
-  return report;
+  const result = runDailyOperation("daily-report-refresh", { reportDate: date, quiet }, dailyOperationDeps);
+  if (!result.ok) showToast(REPORT_PENDING);
+  return result.ok && !result.pending ? result.report : "";
 }
 
 function downloadReport() {
-  const report = state.reports[state.selectedDate] || "";
+  const report = generateReport(state.selectedDate, { quiet: true });
   if (!report) return showToast("先に日報を生成してください");
   downloadText(`日報_${state.selectedDate}.md`, report, "text/markdown");
 }
@@ -13802,6 +13819,7 @@ function submitModal(options) {
       if (draft && state.modal !== owner) draftSaveTransaction.clearDraft(draft);
     }
   }
+  if (type === "actualEntry") return saveActualEntryFromModal(id, fields);
   dispatchModalSave(type, id, fields);
 }
 
@@ -14751,6 +14769,9 @@ function saveBlockFromModal(id, fields) {
           : r);
     }
     state.blocks = state.blocks.map((b) => b.id === id ? updated : b);
+    if (existing.actualEndAt || updated.actualEndAt) {
+      for (const date of new Set([existing.date, updated.date])) generateReport(date, { quiet: true });
+    }
     if (currentRule && currentRule.streakSince !== streakEdit.value) {
       state.recurrences = state.recurrences.map((r) => r.id === currentRule.id
         ? { ...r, streakSince: streakEdit.value, updatedAt: nowDateTime() }
@@ -15004,7 +15025,7 @@ function recordFeedbackFile(date) {
 async function pushReportToGitHub() {
   const date = state.selectedDate;
   if (isArchivedDate(state, date)) return showToast(ARCHIVED_READONLY_MESSAGE);
-  const report = state.reports[date];
+  const report = generateReport(date, { quiet: true });
   if (!report) {
     showToast("日報がまだ生成されていません");
     return;
@@ -15080,7 +15101,7 @@ const _originalGenerateReport = generateReport;
 generateReport = function(dateArg, opts = {}) {
   const result = _originalGenerateReport(dateArg, opts);
   const cfg = state.settings.github;
-  if (!opts.quiet && cfg?.autoSave && personalDataReady(cfg)) {
+  if (result && !opts.quiet && cfg?.autoSave && personalDataReady(cfg)) {
     const date = dateArg || state.selectedDate;
     const report = state.reports[date];
     if (report) {
@@ -15105,7 +15126,7 @@ function completeBlockWithActual(blockId) {
   const block = state.blocks.find((b) => b.id === blockId);
   if (!block) return;
   // 予定をデフォルトに、なければ現在時刻
-  const defaultStart = block.actualStartAt || block.plannedStartAt || nowDateTime();
+  const defaultStart = block.actualStartAt || (block.actualEndAt ? "" : block.plannedStartAt || nowDateTime());
   const defaultEnd = block.actualEndAt || block.plannedEndAt || nowDateTime();
   state.modal = { type: "actualEntry", id: blockId };
   renderModal(buildActualEntryModal(block, defaultStart, defaultEnd));
@@ -15155,13 +15176,18 @@ function buildActualEntryModal(block, defaultStart, defaultEnd) {
       </div>
       <div class="modal-footer">
         <button class="btn" data-action="modal-close">キャンセル</button>
-        <button class="btn green" data-action="modal-save">完了として登録</button>
+        <button class="btn green" data-action="modal-save">実績を保存</button>
       </div>
     </div>
   `;
 }
 
 function saveActualEntryFromModal(blockId, fields) {
+  if (state.blocks.find((b) => b.id === blockId)?.actualEndAt) {
+  const result = runDailyOperation("daily-actual-edit", { kind: "actual", id: blockId, values: fields }, dailyOperationDeps);
+  if (!result.ok) showToast(result.error?.message || "保存できませんでした。入力は残しています");
+  return result.ok === true;
+  }
   const previousBlock = state.blocks.find((b) => b.id === blockId);
   const wasCompleted = Boolean(previousBlock?.completed);
   if (!commitBlockChanges(state.blocks.map((b) => {

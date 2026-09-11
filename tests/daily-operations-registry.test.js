@@ -27,7 +27,7 @@ for (const name of DAILY_ACTIONS) {
 }
 for (const name of ['missing', 'toString', '__proto__']) assert.throws(() => run(name, {}, deps), /unknown operation/);
 assert.equal(saves, 0); assert.equal(schedules, 0);
-console.log('PASS all 18 rows, 12 unwired rejections, 6 legacy delegates and unknown names');
+console.log('PASS all 19 rows, 12 unwired rejections, 6 legacy delegates and unknown names');
 const fixture = '__fixture';
 try {
   rows[fixture] = { build: () => ({ records: [] }) };
@@ -137,8 +137,9 @@ vm.runInNewContext(source.slice(wiring.start, wiring.end) + '\n' + source.slice(
 const deferred = ['daily-block-start', 'daily-block-end'];
 for (const name of DAILY_ACTIONS.filter(name => !rows[name].legacy && !deferred.includes(name))) fire(name);
 const immediate = DAILY_ACTIONS.filter(name => !deferred.includes(name));
-assert.equal(immediate.length, 16);
-assert(immediate.every(name => routes.includes(name)), 'other 16 data-actions reach the registry immediately');
+// v386 契約追随(監督者決定 2026-09-11、fixB6): 33 の daily-report-refresh が即時経路に1行増えて 16→17
+assert.equal(immediate.length, 17);
+assert(immediate.every(name => routes.includes(name)), 'other 17 data-actions reach the registry immediately');
 const confirmationActions = {};
 const visit = node => {
   if (!node || typeof node !== 'object') return;

@@ -342,6 +342,15 @@ export function buildReportMarkdown(input) {
     if (wmChargeTalk) lines.push("### 深掘り(充電)", wmChargeTalk, "");
   }
 
+  // Measured values are independent of the legacy planned-time fallback above.
+  const actuals = input.actuals || [];
+  const cell = value => String(value).replace(/\|/g, "\\|").replace(/[\r\n]/g, " ");
+  lines.push("## 計測した実績", "", "| Block番号 | 帰属日 | 開始 | 終了 | 時間 | Task完了 |",
+    "|---|---|---|---|---|---|");
+  actuals.forEach(row => lines.push(`| ${cell(row.blockId)} | ${cell(row.date)} | ${cell(row.actualStartAt) || "未記録"} | ${cell(row.actualEndAt)} | ${row.minutes == null ? "未記録" : `${row.minutes}分`} | ${row.taskCompleted ? "完了" : "未完了"} |`));
+  lines.push("", `計測合計: ${actuals.reduce((sum, row) => sum + (row.minutes ?? 0), 0)}分`,
+    `予定時間を補った集計(従来): ${fmtMinutes(actualMinutes)}`, "");
+
   // ジャーナル
   lines.push("## 8. ジャーナル");
   lines.push(state.journals[date] || "(ジャーナル記載なし)");

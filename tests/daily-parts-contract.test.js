@@ -14,7 +14,8 @@ const actions = [
   "daily-block-start", "daily-block-end", "daily-block-duplicate", "daily-duplicate-undo",
   "edit-block", "daily-schedule-edit", "daily-actual-edit", "daily-task-complete",
   "daily-search-change", "daily-search-clear", "modal-save", "modal-close", "modal-delete",
-  "edit-task", "edit-project"
+  "edit-task", "edit-project",
+  "daily-report-refresh" // v386 契約追随(監督者決定 2026-09-11、fixB6): 33 の日報再生成の登録行
 ];
 const statuses = ["saved", "unchanged", "invalid", "storage-failed", "conflict", "cancelled"];
 const syncStatuses = [null, "pending", "syncing", "synced", "failed"];

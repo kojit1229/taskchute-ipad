@@ -1,3 +1,4 @@
+import { reportActuals } from "../../core/daily-report.js";
 // Generated from verified current helpers; state is one detached capture clone. No shared mutable state.
 const CONDITION_BUDGET_BASELINE_LOOKBACK_DAYS = 28;
 const CONDITION_BUDGET_BASELINE_MIN_SAMPLES = 7;
@@ -213,7 +214,8 @@ function cycleWeekForDate(dateISO) {
 }
   const blocks = blocksForDate(date);
   const budget = conditionBudget(date);
-  return { rateTaskchute: taskchuteStartRate(blocks), rateRoutine: routineRate(blocks, state.recurrences || []),
+  return { measuredMinutes: reportActuals(state, date).reduce((sum, row) => sum + (row.minutes ?? 0), 0),
+    rateTaskchute: taskchuteStartRate(blocks), rateRoutine: routineRate(blocks, state.recurrences || []),
     rateCycleWeek: cycleWeekProgress(date), cycleWeek: cycleWeekForDate(date), rateDeferral: deferralStats(blocks),
     conditionBudget: budget, conditionLabel: CONDITION_BUDGET_LABELS[budget.level] || "" };
 }

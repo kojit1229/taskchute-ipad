@@ -1,15 +1,35 @@
 import { validateDailyContract } from "../../src/ui/daily-parts/contract.js";
 
+// fixB6(監督者 2026-09-11): モックは製品の src/core に依存しない(daily-parts-isolation-e2e の隔離契約)。
+// 架空データ用の最小の時刻計算をここに持つ(製品 daily-actuals.js と同じ意味: 日付込みの分差、不正・逆転は null)。
+const actualTime = value => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(value || "");
+  if (!m) return null;
+  const [y, mo, d, h, mi, s] = m.slice(1).map(v => Number(v || 0));
+  // 107: Date.UTC は年 0〜99 を 1900 年代に読み替えるので、製品と同じく setUTCFullYear で組み立てる。
+  const date = new Date(0); date.setUTCFullYear(y, mo - 1, d); date.setUTCHours(h, mi, s, 0); const t = date.getTime();
+  // 106a F1: 存在しない日時(25:00 や 2月30日)を繰り上げて受け入れない(製品 daily-actuals.js と同じ往復検証)。
+  return date.getUTCFullYear() === y && date.getUTCMonth() === mo - 1 && date.getUTCDate() === d
+    && date.getUTCHours() === h && date.getUTCMinutes() === mi && date.getUTCSeconds() === s ? t : null;
+};
+const actualDurationMinutes = item => {
+  const start = actualTime(item.actualStartAt), end = actualTime(item.actualEndAt);
+  return start == null || end == null || end < start ? null : Math.round((end - start) / 60000);
+};
+
 export const MOCK_STORAGE_KEY = "taskchute-daily-mock-m04";
 const clone = value => JSON.parse(JSON.stringify(value));
 const time = value => typeof value === "string" && /^(?:|(?:[01]\d|2[0-3]):[0-5]\d)$/.test(value);
-const actions = ["daily-plan-times-save", "daily-plan-times-cancel", "daily-plan-complete", "daily-block-duplicate", "daily-duplicate-undo"];
+const actions = ["modal-save", "daily-block-start", "daily-block-end", "daily-actual-edit", "daily-report-refresh", "daily-plan-times-save", "daily-plan-times-cancel", "daily-plan-complete", "daily-block-duplicate", "daily-duplicate-undo"];
 const envelope = values => ({ action: "modal-save", kind: "block", id: null, draftId: null, requestId: null, baseFingerprint: null, values });
 const entityValid = item => item && item.kind === "block" && typeof item.id === "string" && item.id.startsWith("mock-")
   && typeof item.title === "string" && time(item.start) && time(item.end)
+  && ["actualStartAt", "actualEndAt"].every(key => item[key] == null || item[key] === "" || actualDurationMinutes({ actualStartAt: item[key], actualEndAt: item[key] }) === 0)
+  && (item.completed == null || typeof item.completed === "boolean")
   && typeof item.endNextDay === "boolean" && typeof item.planCompleted === "boolean";
 function stateValid(value) {
   return validateDailyContract("notification", envelope(value)).valid && Number.isSafeInteger(value.revision) && value.revision >= 0
+    && (value.reports == null || (typeof value.reports === "object" && !Array.isArray(value.reports) && Object.values(value.reports).every(text => typeof text === "string")))
     && Array.isArray(value.entities) && value.entities.every(entityValid)
     && new Set(value.entities.map(item => item.id)).size === value.entities.length
     && Array.isArray(value.receipts) && value.receipts.every(item => typeof item.requestId === "string"
@@ -41,14 +61,44 @@ export function createMockAdapter({ fixtures, storage }) {
     if (previous && previous.signature !== signature) return result("conflict", id, ["要求番号が重複しています"]);
     if (previous && previous.result.status !== "storage-failed") return clone(previous.result);
     const index = state.entities.findIndex(item => item.id === id);
-    if (index < 0 || baseFingerprint !== fingerprint()) return result("conflict", id, ["対象が変更されています"]);
+    if ((index < 0 && !(action === "modal-save" && id === null) && action !== "daily-report-refresh") || baseFingerprint !== fingerprint()) return result("conflict", id, ["対象が変更されています"]);
     if (action === "daily-plan-times-cancel" || scenario === "cancel") {
       candidate = null; const answer = result("cancelled", id); attempts.set(requestId, { signature, result: answer }); return clone(answer);
     }
     candidate = clone(state);
     const item = candidate.entities[index];
     let entityId = id, undoToken = null;
-    if (action === "daily-plan-times-save") {
+    if (action === "modal-save") {
+      const added = { ...item, ...values, kind: "block", id: id ?? `mock-${state.revision + 1}`, planCompleted: item?.planCompleted ?? false };
+      if (Object.keys(values).some(key => !["title", "date", "start", "end", "endNextDay"].includes(key)) || !entityValid(added) || !/^\d{4}-\d{2}-\d{2}$/.test(added.date)
+        || Boolean(added.start) !== Boolean(added.end) || (added.start && !added.endNextDay && added.end <= added.start)) { candidate = null; return result("invalid", id); }
+      entityId = added.id;
+      if (id === null) { if (state.entities.some(row => row.id === entityId)) { candidate = null; return result("conflict", id); } candidate.entities.push(added); }
+      else candidate.entities[index] = added;
+    } else if (["daily-block-start", "daily-block-end", "daily-actual-edit"].includes(action)) {
+      try {
+        if (action === "daily-actual-edit") {
+          // 製品の訂正入口と同じ意味: 終了実績のない行は拒否、帰属日は変えない、時刻は日付込みで検査。
+          if (!item.actualEndAt) throw new Error("終了実績がありません。先に終了を保存してください");
+          if (values.date != null && values.date !== item.date) throw new Error("実績訂正では帰属日を変更できません");
+          const after = { ...item };
+          for (const key of ["actualStartAt", "actualEndAt"]) if (values[key] != null) after[key] = values[key];
+          if (values.comment != null) after.comment = String(values.comment);
+          if (!after.actualEndAt || !entityValid(after) || (after.actualStartAt && actualDurationMinutes(after) == null)) throw new Error("実績時刻を確認してください");
+          candidate.entities[index] = after;
+        } else {
+          const key = action === "daily-block-start" ? "actualStartAt" : "actualEndAt";
+          if (Object.keys(values).some(field => ![key, ...(key === "actualEndAt" ? ["completed"] : [])].includes(field)) || !values[key]
+            || (key === "actualEndAt" && typeof values.completed !== "boolean")) throw new Error("実績入力が不正です");
+          Object.assign(item, values);
+          if (!entityValid(item) || (item.actualStartAt && item.actualEndAt && actualDurationMinutes(item) == null)) throw new Error("実績時刻が不正です");
+        }
+      } catch (error) { candidate = null; return result("invalid", id, [error.message]); }
+    } else if (action === "daily-report-refresh") {
+      if (Object.keys(values).length !== 1 || !/^\d{4}-\d{2}-\d{2}$/.test(values.reportDate)) { candidate = null; return result("invalid", id); }
+      const total = candidate.entities.filter(row => row.date === values.reportDate).reduce((sum, row) => sum + (actualDurationMinutes(row) ?? 0), 0);
+      (candidate.reports ??= {})[values.reportDate] = `計測合計: ${total}分`; entityId = values.reportDate;
+    } else if (action === "daily-plan-times-save") {
       if (Object.keys(values).some(key => !["start", "end", "endNextDay"].includes(key))
         || !time(values.start) || !time(values.end) || typeof values.endNextDay !== "boolean"
         || Boolean(values.start) !== Boolean(values.end)

@@ -20,6 +20,8 @@ let clock = Date.now(); Date.now = () => clock;
   const sync = await import(pathToFileURL(path.join(ROOT, 'src/sync/github.js')));
   const mod = await import(pathToFileURL(path.join(ROOT, 'src/features/archive-date-protection.js')));
   const journal = await import(pathToFileURL(path.join(ROOT, 'src/features/journal.js')));
+  // v386 追随(監督者決定 2026-09-11): generateReport は保管済み日付でも REPORT_PENDING(日報更新待ち)を参照する。砂場へ同じ定数を渡す。
+  const { REPORT_PENDING } = await import(pathToFileURL(path.join(ROOT, 'src/core/daily-report.js')));
   for (const kind of ['equal', 'missing', 'malformed', 'different', 'read-error', 'same-second-edit', 'connection']) {
     await check('proof/' + kind, async () => {
       let current = clone(base()), cfg = { repo: 'synthetic', token: 'synthetic' };
@@ -161,7 +163,7 @@ let clock = Date.now(); Date.now = () => clock;
     const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
     const local = clone(base()); local.archivedDates = [d]; local.selectedDate = d; Object.assign(local, clone(archive));
     let notices = 0;
-    const env = { state: local, isArchivedDate: mod.isArchivedDate, ARCHIVED_READONLY_MESSAGE: mod.ARCHIVED_READONLY_MESSAGE,
+    const env = { state: local, isArchivedDate: mod.isArchivedDate, ARCHIVED_READONLY_MESSAGE: mod.ARCHIVED_READONLY_MESSAGE, REPORT_PENDING,
       showToast: () => notices++, ensureJournal: () => { throw Error('must stop before generation'); } };
     let start = app.indexOf('function generateReport('), end = app.indexOf('\nfunction ', start + 1);
     const generate = vm.runInNewContext(app.slice(start, end) + ';generateReport', env);

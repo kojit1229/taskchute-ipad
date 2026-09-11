@@ -11,6 +11,10 @@ const ROOT = path.join(__dirname, "..");
 const PORT = randomPort();
 // 監督者裁定A: 成功1操作はデータ層1回 + generateReport quiet既存保存1回 + saveAndRender 1回。
 const SUCCESS_SAVE_CALLS = 3;
+// v386 契約追随(監督者決定 2026-09-11、束B6 単位33/34、design/CHANGELOG.md): 節目の切替・予定日変更で呼ぶ quiet 日報は
+// 登録行 daily-report-refresh の候補保存(commitCandidate の persist)になり saveState を呼ばない=保存全体 3→2。
+// 日報が書かれたこと(reports[TODAY])は各 check で断言済み。
+const MILESTONE_SAVE_CALLS = 2;
 let failures = 0;
 function check(name, condition, extra = "") {
   if (condition) console.log(`  ✅ ${name}`);
@@ -413,8 +417,8 @@ function clone(value) { return JSON.parse(JSON.stringify(value)); }
     check("B-5 #7 節目ONはdoneAt=today・親updatedAt伝播・開いたまま", msState.doneAt === TODAY
       && msState.doneChangedAt === NOW && msTrackState.updatedAt === NOW
       && await msRow.locator(".twy-editor").count() === 1);
-    check("節目ONはquiet日報・保存全体3回", !!stateAfter.reports[TODAY]
-      && await page.evaluate(() => window.__v261SaveCalls) === SUCCESS_SAVE_CALLS);
+    check("節目ONはquiet日報・保存全体2回(日報は候補保存)", !!stateAfter.reports[TODAY]
+      && await page.evaluate(() => window.__v261SaveCalls) === MILESTONE_SAVE_CALLS);
 
     await resetReportAndCounter();
     await checkbox("ms-a").click();
@@ -423,7 +427,7 @@ function clone(value) { return JSON.parse(JSON.stringify(value)); }
     msState = msTrackState.milestones.find((entry) => entry.id === "ms-a");
     check("B-5 #8 節目OFF訂正はdoneAt空・original不変・開いたまま", msState.doneAt === ""
       && msState.originalPlannedDate === "2026-08-30" && await msRow.locator(".twy-editor").count() === 1
-      && !!stateAfter.reports[TODAY] && await page.evaluate(() => window.__v261SaveCalls) === SUCCESS_SAVE_CALLS);
+      && !!stateAfter.reports[TODAY] && await page.evaluate(() => window.__v261SaveCalls) === MILESTONE_SAVE_CALLS);
     const doneChangedBeforeDate = msState.doneChangedAt;
 
     await resetReportAndCounter();
@@ -435,8 +439,8 @@ function clone(value) { return JSON.parse(JSON.stringify(value)); }
     msState = msTrackState.milestones.find((entry) => entry.id === "ms-a");
     check("B-5 #9 サイクル前予定日も保存しoriginal/doneChangedAt不変", msState.plannedDate === "2026-01-01"
       && msState.originalPlannedDate === "2026-08-30" && msState.doneChangedAt === doneChangedBeforeDate);
-    check("予定日成功もエディタ維持・quiet日報・保存全体3回", await msRow.locator(".twy-editor").count() === 1
-      && !!stateAfter.reports[TODAY] && await page.evaluate(() => window.__v261SaveCalls) === SUCCESS_SAVE_CALLS);
+    check("予定日成功もエディタ維持・quiet日報・保存全体2回(日報は候補保存)", await msRow.locator(".twy-editor").count() === 1
+      && !!stateAfter.reports[TODAY] && await page.evaluate(() => window.__v261SaveCalls) === MILESTONE_SAVE_CALLS);
 
     await resetReportAndCounter();
     await msItem.locator("[data-twy-ms-date-input]").fill("");
