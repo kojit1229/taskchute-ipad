@@ -1,0 +1,78 @@
+{
+  "version": 389,
+  "date": "2026-09-11",
+  "title": "自動配置の単発予定占有対応と日報の別表、予定系列の内部部品",
+  "summary": "朝の自動配置と下書きの一括確定が、単発予定の入っている時間を空きとして使わなくなる(いまは単発予定が0件なので見た目は変わらない)。日報の末尾に、その日の単発予定の別表(時刻・名前・予定完了)が付く(0件なら何も付かない)。予定の系列(繰り返しの単発予定)の型・合流・導出の部品が裏側に入る(画面にはまだ出ない)",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "src/core/schedule-series-derive.js",
+    "src/core/schedule-series-merge.js",
+    "src/core/schedule-series.js",
+    "src/features/daily-gap-placement.js",
+    "src/features/feedback/report-builder.js",
+    "src/features/feedback/report-input.js",
+    "sw.js",
+    "tests/impact-regression-map.json",
+    "tests/recurrence-core.test.js",
+    "tests/schedule-series-core.test.js",
+    "tests/schedule-series-derive.test.js",
+    "tests/schedule-series-merge.test.js",
+    "tests/single-schedule-auto-placement.test.js",
+    "tests/single-schedule-flow-e2e.test.js",
+    "tests/single-schedule-report.test.js",
+    "tests/suite-manifest.json",
+    "releases/v389.json",
+    "CHANGES_v389.md"
+  ],
+  "intent": [
+    "束B9（予定8の42・予定9の43・予定10の44+fixB9）とR2-A/B（2回-01〜04の系列の型・合流・導出）をv389としてまとめる。"
+  ],
+  "changes": [
+    "朝の自動配置と下書きの一括確定が、単発予定の入っている時間を空きとして使わなくなる(いまは単発予定が0件なので見た目は変わらない)。日報の末尾に、その日の単発予定の別表(時刻・名前・予定完了)が付く(0件なら何も付かない)。予定の系列(繰り返しの単発予定)の型・合流・導出の部品が裏側に入る(画面にはまだ出ない)",
+    "CACHE_NAMEをv388からv389へ更新し、CHANGES・handoff-preview・コード索引・テストmanifestを正規コマンドで生成する。"
+  ],
+  "uncertainties": [
+    "最終release-gateは監督者が実走する。本発注では未実施。"
+  ],
+  "reviewFocus": [
+    "既存の束B9+R2-A/B+fixB9差分を保持し、本発注の製品コード差分がSW先頭行だけであること。",
+    "朝の自動配置と下書き一括確定が単発予定の占有を使い、保存失敗時の再試行を維持すること。",
+    "日報の単発予定別表と既存本文の保持。予定系列の型・合流・導出は裏側の部品のみで画面接続がないこと。"
+  ],
+  "verification": [
+    "関連スイート: single-schedule-auto-placement / daily-placement-e2e / single-schedule-flow-e2e / single-schedule-report / planned-occupancy-core / v59 / v199 / v355 / recurrence-core / journal-core / v70 / v107 / v276 / schedule-series-core / schedule-series-merge / schedule-series-derive / daily-operations-registry / daily-parts-contract / mutation-block-e2e / daily-parts-isolation-e2e / sw-integration。本発注では実走せず、最終ゲートは監督者が実走する。",
+    "npm run code:index:write → npm run code:index -- --check が0の後、npm run test:manifest:write → npm run test:manifest。",
+    "TZ=Asia/Tokyo RELEASE_HANDOFF_PATH=<reports/impl-r1/v389/handoff-preview.md> node scripts/release-record.js releases/v389.json --write。",
+    "検査の実測終了コードはreports/impl-r1/v389/command-results.jsonlを参照。"
+  ],
+  "knownLimitations": [
+    "release-gateは発注132の指定により未実施（監督者担当）。",
+    "iOS実機・配信は未実施。"
+  ],
+  "relatedSuites": [
+    "single-schedule-auto-placement",
+    "daily-placement-e2e",
+    "single-schedule-flow-e2e",
+    "single-schedule-report",
+    "planned-occupancy-core",
+    "v59",
+    "v199",
+    "v355",
+    "recurrence-core",
+    "journal-core",
+    "v70",
+    "v107",
+    "v276",
+    "schedule-series-core",
+    "schedule-series-merge",
+    "schedule-series-derive",
+    "daily-operations-registry",
+    "daily-parts-contract",
+    "mutation-block-e2e",
+    "daily-parts-isolation-e2e",
+    "sw-integration"
+  ]
+}

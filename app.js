@@ -4273,9 +4273,10 @@ function subtractOccupiedIntervals(gaps, occupied) {
 // v199: excludeBlockIds(Set|null)を渡すと、そのidのBlockを占有計算から除外する
 //   (再配置対象=可動Blockを一時的に「無いもの」として空き枠を算出するために使う。
 //   省略時(null)は従来どおり全Blockを占有として扱うため既存呼び出し元は無改修)。
-function computeFreeGaps(date, dayStartMin = 5 * 60, dayEndMin = 23 * 60, excludeBlockIds = null) {
+function computeFreeGaps(date, dayStartMin = 5 * 60, dayEndMin = 23 * 60, excludeBlockIds = null, draftIntervals = []) {
   if (dayEndMin <= dayStartMin) return [];
-  const availability = plannedAvailability(state, date, { window: [dayStartMin, dayEndMin], excludeBlockIds });
+  // v389(42)+fixB8 の統合(監督者 2026-09-11): 明示した下書き区間も占有に含め(42)、表示・自動配置の経路は不正行を除外して空きを採用(fixB8)。
+  const availability = plannedAvailability(state, date, { window: [dayStartMin, dayEndMin], excludeBlockIds, draftIntervals });
   return displayPlannedGaps(availability);
 }
 
@@ -4320,7 +4321,7 @@ function movableBlockMinutes(b) {
 //   可動Block = taskchuteBlocks条件を満たす当日Blockのうち !completed && !actualStartAt。
 //   それ以外の当日Block(ルーティン・timeline由来・完了済み・着手済み・単発Task由来)は
 //   computeFreeGapsの占有計算にそのまま残す(可動Blockだけを占有から除外する)。
-function runAiSchedule() {
+function runAiSchedule(otherDraftIntervals = []) {
   const date = state.selectedDate;
   const todayBlocks = blocksForDate(date);
   const movable = taskchuteBlocks(todayBlocks).filter((b) => !b.completed && !b.actualStartAt);
@@ -4345,7 +4346,7 @@ function runAiSchedule() {
     // 占有として数える(reoccupySkipの特別扱いを廃し、computeFreeGapsの通常経路に一本化)。
     const activeMovable = movable.filter((b) => !skipSet.has(b.id));
     const activeIds = new Set(activeMovable.map((b) => b.id));
-    let gaps = computeFreeGaps(date, DAY_START, DAY_END, activeIds)
+    let gaps = computeFreeGaps(date, DAY_START, DAY_END, activeIds, otherDraftIntervals)
       .map(([s, e]) => [Math.max(s, nowFloor), e])
       .filter(([s, e]) => e - s >= 15);
     // plannedStartAt昇順(安定)で前詰め。空き枠プールは全Block共有(仕事/プライベートでウィンドウが
@@ -4380,7 +4381,7 @@ function runAiSchedule() {
   const skipped = movable
     .filter((b) => skipSet.has(b.id))
     .map((b) => ({ title: b.title, reason: skipReasonById.get(b.id) }));
-  _scheduleDraft = capturePlannedDraft(state, { date, items: finalItems, skipped, source: "deterministic" });
+  _scheduleDraft = capturePlannedDraft(state, { date, items: finalItems, skipped, source: "deterministic", otherDraftIntervals });
   _draftUndo = null;  // v62: 新規下書きでは前セッションのUndoを持ち越さない
   state.timelineMode = "planned";
   // v335(§C): 旧timelineビュー直行をexecへ寄せる。energy-open-categoryと異なり、この呼び出しは
@@ -4524,6 +4525,7 @@ function confirmScheduleDraft() {
       plannedEndAt: planned.plannedEndAt,
       estimateMin: it.minutes
     })), plannedStartAt: planned.plannedStartAt, plannedEndAt: planned.plannedEndAt, estimateMin: it.minutes };
+    it.candidateId = it.candidateBlock.id;  // 保存失敗後も makeBlock が発行した候補 id を使う。
     // v52: 決定論配置の元値を Block に残す(確定・実績との突き合わせ = 実績データ。フィールド名は互換のため維持)
     block.aiPlan = { start: minToHHMM(it.aiStart ?? it.start), minutes: it.aiMinutes ?? it.minutes };
     // v65: AIプランのtitle先頭「[資産]」検出分は確定時にleverageType=assetを引き継ぐ

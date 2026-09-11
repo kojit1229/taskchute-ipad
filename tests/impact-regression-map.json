@@ -317,7 +317,7 @@
     },
     "daily-gap-placement": {
       "paths": ["^src/features/daily-gap-placement\\.js$", "^src/features/daily-gap-sheet\\.js$"],
-      "suites": ["daily-placement-e2e", "placement-core", "placement-e2e", "v356", "v357", "daily-operations-registry", "daily-parts-contract", "code-index", "mutation-block-e2e"]
+      "suites": ["single-schedule-auto-placement", "daily-placement-e2e", "placement-core", "placement-e2e", "v356", "v357", "daily-operations-registry", "daily-parts-contract", "code-index", "mutation-block-e2e"]
     },
     "planned-occupancy": {
       "paths": ["^src/core/planned-occupancy\\.js$"],
@@ -345,6 +345,7 @@
         "single-schedule-core",
         "single-schedule-sync-e2e",
         "single-schedule-ops-e2e",
+        "single-schedule-flow-e2e",
         "state-container-recovery",
         "remote-invalid-fail-close",
         "mutation-global-e2e",
@@ -409,6 +410,21 @@
         "v140",
         "xss-sanitizer"
       ]
+    },
+    "schedule-series-merge": {
+      "paths": ["^src/core/schedule-series-merge\\.js$"],
+      "patterns": ["mergeScheduleSeries|createSeriesMergeCandidate|legacySeriesOccurrence|chooseSeriesChange|mergeSeriesOverrides"],
+      "suites": ["schedule-series-merge", "single-schedule-merge", "merge-core"]
+    },
+    "schedule-series-derive": {
+      "paths": ["^src/core/schedule-series-derive\\.js$"],
+      "patterns": ["deriveScheduleSeries|schedulesWithSeriesForDate"],
+      "suites": ["schedule-series-derive", "schedule-series-core"]
+    },
+    "schedule-series-core": {
+      "paths": ["^src/core/schedule-series\\.js$"],
+      "patterns": ["createScheduleSeries|scheduleSeriesDates|scheduleSeriesFingerprint|normalizeSeriesTime"],
+      "suites": ["schedule-series-core", "recurrence-core", "v59"]
     },
     "recurrence-engine": {
       "paths": [
@@ -579,6 +595,7 @@
         "feedback-|feedbackUiController|feedbackReportController|feedbackCanonicalReader|invalidateFeedbackConnection|renderFeedbackUiSlot|patchFeedbackUi|hydrateStaticMarkdown|ensureFeedbackClients|captureProof|buildReportMarkdown"
       ],
       "suites": [
+        "single-schedule-report",
         "feedback-busy-boundary",
         "feedback-busy-coordinator",
         "feedback-canonical",

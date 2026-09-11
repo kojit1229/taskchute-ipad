@@ -37,13 +37,17 @@ export function validatePlannedDraft(state, draft) {
         || (item.baseFingerprint && item.baseFingerprint !== contentKey(source)))
       return rejected("下書きの元Blockが更新されています。下書きを残して再計算してください");
   }
-  const availability = plannedAvailability(state, draft.date, { draftIntervals: intervals,
+  const others = draft.otherDraftIntervals === undefined ? [] : draft.otherDraftIntervals;
+  if (!Array.isArray(others)) return rejected("別下書きの区間が不正です");
+  const availability = plannedAvailability(state, draft.date, { draftIntervals: [...intervals, ...others],
     excludeBlockIds: new Set(draft.items.map(item => item.blockId).filter(Boolean)) });
   if (availability.error) return { ...availability, intervals };
   if (intervals.some(row => plannedMinute(row.plannedStartAt, draft.date) < 240
       || plannedMinute(row.plannedEndAt, draft.date) > 1440 || row.estimateMin < 15))
     return rejected("下書きは4〜24時・15分以上で配置してください");
-  return { intervals, warnings: availability.warnings, error: availability.overlaps.some(pair => pair.left.kind === "draft" || pair.right.kind === "draft")
+  const ownDraftIds = new Set(intervals.map(row => row.id));
+  return { intervals, warnings: availability.warnings, error: availability.overlaps.some(pair =>
+    [pair.left, pair.right].some(row => row.kind === "draft" && ownDraftIds.has(row.id)))
     ? "下書きの予定が重なりました。下書きを残して再計算してください" : "" };
 }
 
