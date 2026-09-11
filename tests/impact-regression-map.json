@@ -345,6 +345,7 @@
         "single-schedule-core",
         "single-schedule-sync-e2e",
         "single-schedule-ops-e2e",
+        "single-schedule-flow-e2e",
         "state-container-recovery",
         "remote-invalid-fail-close",
         "mutation-global-e2e",
