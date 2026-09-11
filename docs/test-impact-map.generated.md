@@ -105,7 +105,7 @@
 | release-record.test.js | node | full | legacy-crosscutting | 11 | 0 | 0 |
 | remaining-screen-labels.test.js | e2e | full | content-ai, ui-responsive | 54 | 0 | 0 |
 | remaining-twelveweek-layout.test.js | e2e | full | content-ai, ui-responsive | 11 | 0 | 0 |
-| remote-invalid-fail-close.test.js | node | full | content-ai | 17 | 0 | 0 |
+| remote-invalid-fail-close.test.js | node | full | content-ai | 18 | 0 | 0 |
 | report-view.test.js | node | full | journal-health, content-ai | 30 | 0 | 0 |
 | reset-demo-confirm.test.js | node | full | ui-responsive | 9 | 0 | 0 |
 | run-all-options.test.js | node | full | legacy-crosscutting | 21 | 0 | 0 |
@@ -115,7 +115,7 @@
 | single-schedule-ops-e2e.test.js | e2e | full | planning-execution | 41 | 0 | 0 |
 | single-schedule-sync-e2e.test.js | e2e | full | sync-storage, planning-execution | 26 | 0 | 0 |
 | state-container-recovery-e2e.test.js | e2e | full | sync-storage | 6 | 0 | 0 |
-| state-container-recovery.test.js | node | full | content-ai | 23 | 0 | 0 |
+| state-container-recovery.test.js | node | full | content-ai | 24 | 0 | 0 |
 | store-core.test.js | node | full | sync-storage, planning-execution, content-ai | 44 | 0 | 0 |
 | suite-manifest.test.js | node | full | legacy-crosscutting | 9 | 0 | 0 |
 | sw-integration.test.js | e2e | smoke | planning-execution, security-offline | 15 | 1 | 500 |
@@ -373,7 +373,7 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | missing-timezone | 1 | tests/layout-rail-columns.test.js | 56 |
 | fixed-date | 2 | tests/legacy-raw-fixtures.test.js | 9, 25 |
 | fixed-date | 1 | tests/legacy-restoration.test.js | 11 |
-| missing-timezone | 1 | tests/mutation-global-e2e.test.js | 604 |
+| missing-timezone | 1 | tests/mutation-global-e2e.test.js | 607 |
 | missing-timezone | 1 | tests/normalize-null-defense.test.js | 44 |
 | fixed-date | 1 | tests/plan-core.test.js | 359 |
 | missing-timezone | 2 | tests/r0-twyplan.test.js | 29, 285 |

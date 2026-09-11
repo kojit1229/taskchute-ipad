@@ -5,7 +5,11 @@ const vm = require('node:vm');
 const { pathToFileURL } = require('node:url');
 const ROOT = path.resolve(__dirname, '..');
 const app = fs.readFileSync(path.join(ROOT,'app.js'),'utf8');
-const validate = vm.runInNewContext(app.slice(app.indexOf('function validateStateContainers('),app.indexOf('function normalizeState('))+';validateStateContainers');
+// v387 ハーネス追随(監督者決定 2026-09-11、束B7 単位35): validateStateContainers が単発予定の容器検査 validateSingleScheduleContainer(src/core/single-schedule.js)を呼ぶようになったので、実物の関数本文を砂場へ同梱する(製品変更なし)。
+const singleScheduleSource = fs.readFileSync(path.join(ROOT, 'src/core/single-schedule.js'), 'utf8').replace(/\r\n/g, '\n');
+const containerCheck = singleScheduleSource.slice(singleScheduleSource.indexOf('export function validateSingleScheduleContainer('), singleScheduleSource.indexOf('\n}\n', singleScheduleSource.indexOf('export function validateSingleScheduleContainer(')) + 3).replace('export ', '');
+assert.ok(containerCheck.includes('StateContainerError'), 'the real single-schedule container check must exist');
+const validate = vm.runInNewContext(containerCheck+'\n'+app.slice(app.indexOf('function validateStateContainers('),app.indexOf('function normalizeState('))+';validateStateContainers');
 const clone = x => JSON.parse(JSON.stringify(x));
 function base(stamp='2026-09-06T10:00:00') {
   return {
