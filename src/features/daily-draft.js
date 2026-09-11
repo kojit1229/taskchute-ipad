@@ -1,7 +1,7 @@
 export const DAILY_DRAFT_KEY = "taskchute-journal-daily-draft-v1:";
 
-// Deliberately memory-only reads: restoring a previous page session is a later release.
-export function createDailyDraftStore({ storage = () => globalThis.sessionStorage } = {}) {
+// Existing owners stay memory-only; single schedules opt into same-session restoration.
+export function createDailyDraftStore({ storage = () => globalThis.sessionStorage, restore = false } = {}) {
   const drafts = new Map();
   const keyOf = owner => {
     if (!owner || ![owner.kind, owner.id, owner.draftId, owner.connection].every(v => typeof v === "string" && v))
@@ -17,7 +17,14 @@ export function createDailyDraftStore({ storage = () => globalThis.sessionStorag
       catch (error) { return { ok: false, memoryOnly: true, error }; }
     },
     get(owner) {
-      const value = drafts.get(keyOf(owner));
+      const key = keyOf(owner);
+      if (restore && !drafts.has(key)) {
+        try {
+          const saved = JSON.parse(storage().getItem(key));
+          if (saved && keyOf(saved) === key) drafts.set(key, saved);
+        } catch { /* A broken draft never changes synchronized state. */ }
+      }
+      const value = drafts.get(key);
       return value ? copy(value) : null;
     },
     clear(owner, reason) {

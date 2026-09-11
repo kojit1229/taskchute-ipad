@@ -485,8 +485,8 @@
         "content-ai"
       ],
       "assertionSignals": 41,
-      "assertionHash": "a8591db173a38769",
-      "sourceHash": "0b87986bdf9d71b7",
+      "assertionHash": "acfd31a11bd4028c",
+      "sourceHash": "c4071e4cd7da2c4e",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -534,7 +534,7 @@
       ],
       "assertionSignals": 32,
       "assertionHash": "b8efe116407bcdde",
-      "sourceHash": "8379135800e842d4",
+      "sourceHash": "d7a7444dee76f293",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -1140,7 +1140,7 @@
       ],
       "assertionSignals": 26,
       "assertionHash": "94adf4bda5d102a2",
-      "sourceHash": "0227adc00bc58d7d",
+      "sourceHash": "bc36ba12f2c6dea7",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -1296,7 +1296,7 @@
       ],
       "assertionSignals": 26,
       "assertionHash": "2edf1860e5e9b7c4",
-      "sourceHash": "4de03d2a85cbdff2",
+      "sourceHash": "73efe45eee67cf44",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2089,7 +2089,7 @@
       ],
       "assertionSignals": 178,
       "assertionHash": "26c695e12722b4cb",
-      "sourceHash": "35a52fd3c64c5545",
+      "sourceHash": "e0029eefcfffcd37",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2472,9 +2472,9 @@
       "domains": [
         "content-ai"
       ],
-      "assertionSignals": 17,
-      "assertionHash": "f8db6d6d35f84875",
-      "sourceHash": "1208691789f6b7e5",
+      "assertionSignals": 18,
+      "assertionHash": "00ef8a10ad7c9944",
+      "sourceHash": "a1ecda132ee57aae",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2582,6 +2582,29 @@
       }
     },
     {
+      "file": "single-schedule-core.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 21,
+      "assertionHash": "99e8884e09792d62",
+      "sourceHash": "273822d55091f32b",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": false
+      }
+    },
+    {
       "file": "single-schedule-merge.test.js",
       "kind": "node",
       "tier": "full",
@@ -2603,6 +2626,53 @@
         "fileWrite": false,
         "networkMock": false,
         "clock": false
+      }
+    },
+    {
+      "file": "single-schedule-ops-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 41,
+      "assertionHash": "930f5047d9c9f56e",
+      "sourceHash": "b051a1b1ed31c296",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "single-schedule-sync-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution"
+      ],
+      "assertionSignals": 26,
+      "assertionHash": "42aa52818289ae43",
+      "sourceHash": "a33d7337d49a2e2a",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
       }
     },
     {
@@ -2635,9 +2705,9 @@
       "domains": [
         "content-ai"
       ],
-      "assertionSignals": 23,
-      "assertionHash": "d2ab520bf178d287",
-      "sourceHash": "c68057f724a3ffad",
+      "assertionSignals": 24,
+      "assertionHash": "7f3041463eb9391b",
+      "sourceHash": "506db848ffebcc85",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

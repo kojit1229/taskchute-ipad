@@ -7,7 +7,11 @@ const ROOT = path.resolve(__dirname, '..');
 const source = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8').replace(/\r\n/g, '\n');
 const validation = source.slice(source.indexOf('function validateStateContainers('), source.indexOf('function normalizeState('));
 assert.ok(validation, 'the real validation function must exist');
-const validate = vm.runInNewContext(validation + ';validateStateContainers');
+// v387 ハーネス追随(監督者決定 2026-09-11、束B7 単位35): validateStateContainers が単発予定の容器検査 validateSingleScheduleContainer(src/core/single-schedule.js)を呼ぶようになったので、実物の関数本文を砂場へ同梱する(製品変更なし)。
+const singleScheduleSource = fs.readFileSync(path.join(ROOT, 'src/core/single-schedule.js'), 'utf8').replace(/\r\n/g, '\n');
+const containerCheck = singleScheduleSource.slice(singleScheduleSource.indexOf('export function validateSingleScheduleContainer('), singleScheduleSource.indexOf('\n}\n', singleScheduleSource.indexOf('export function validateSingleScheduleContainer(')) + 3).replace('export ', '');
+assert.ok(containerCheck.includes('StateContainerError'), 'the real single-schedule container check must exist');
+const validate = vm.runInNewContext(containerCheck + '\n' + validation + ';validateStateContainers');
 const startupStart = source.indexOf('try {\n  setState(loadState(');
 const startupEnd = source.indexOf('// v234:', startupStart);
 assert.ok(startupStart > 0 && startupEnd > startupStart);

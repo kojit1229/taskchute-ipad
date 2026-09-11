@@ -7,6 +7,7 @@ import { buildBlockStart } from "../core/daily-start.js";
 import { buildBlockEnd } from "../core/daily-end.js";
 import { buildPlanCompletion, buildTaskCompletion } from "../core/daily-completion.js";
 import { createDailyDraftStore } from "./daily-draft.js";
+import { singleScheduleOperation } from "./single-schedule.js";
 import { buildActualEdit } from "../core/daily-actuals.js";
 import { buildDailyReport, affectedReportDates } from "../core/daily-report.js";
 
@@ -28,7 +29,10 @@ export const DAILY_OPERATIONS = {
   "daily-block-end": { build: buildBlockEnd, effects: endEffects },
   "daily-block-duplicate": { build: buildBlockCopy, effects: copyEffects },
   "daily-duplicate-undo": { build: (state, input, deps) => buildCopyUndo(state, input, { copyFingerprint: dailyFingerprint }), effects: copyUndoEffects },
-  "daily-schedule-edit": unwired("daily-schedule-edit"),
+  "daily-schedule-add": singleScheduleOperation("add"),
+  "daily-schedule-edit": singleScheduleOperation("edit"),
+  "daily-schedule-complete": singleScheduleOperation("complete"),
+  "daily-schedule-delete": singleScheduleOperation("delete"),
   "daily-actual-edit": { build: buildActualEdit, effects: actualEditEffects },
   "daily-report-refresh": { build: buildDailyReport, effects: (result, input, deps) => deps.reportEffect?.(result, input) },
   "daily-task-complete": { build: buildTaskCompletion, effects: taskCompletionEffects },
@@ -248,13 +252,15 @@ export function runDailyOperation(name, input, deps) {
   if (["daily-plan-times-save", "daily-plan-times-cancel", "daily-block-duplicate"].includes(name)) input = dailyInput(input);
   if (name === "daily-duplicate-undo") input = { ...input, undoTicket: getCopyUndoTicket(deps, input.id), [undoReady]: true };
   try {
+    if (op.prepare) input = op.prepare(input, deps);
     if (name === "daily-block-start") input = startInput(input, deps);
     if (name === "daily-block-end") input = prepareDailyEnd(input, deps);
     if (name === "daily-block-duplicate" && !input[copyReady]) return duplicateDailyBlock(input, deps);
     return deps.commitCandidate({
       state: deps.state, input, persist: deps.persist, now: deps.now, floors: deps.floors,
       build: (state, values) => {
-        validateCurrent(state, values, deps);
+        // Schedule owners validate candidate id/fingerprint, independent of the viewed date.
+        if (!op.prepare) validateCurrent(state, values, deps);
         return op.build(state, values, deps);
       },
       effects: result => {
