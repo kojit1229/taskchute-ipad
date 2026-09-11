@@ -4,7 +4,13 @@ import { validateDailyContract } from "../../src/ui/daily-parts/contract.js";
 // 架空データ用の最小の時刻計算をここに持つ(製品 daily-actuals.js と同じ意味: 日付込みの分差、不正・逆転は null)。
 const actualTime = value => {
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(value || "");
-  return m ? Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0)) : null;
+  if (!m) return null;
+  const [y, mo, d, h, mi, s] = m.slice(1).map(v => Number(v || 0));
+  // 107: Date.UTC は年 0〜99 を 1900 年代に読み替えるので、製品と同じく setUTCFullYear で組み立てる。
+  const date = new Date(0); date.setUTCFullYear(y, mo - 1, d); date.setUTCHours(h, mi, s, 0); const t = date.getTime();
+  // 106a F1: 存在しない日時(25:00 や 2月30日)を繰り上げて受け入れない(製品 daily-actuals.js と同じ往復検証)。
+  return date.getUTCFullYear() === y && date.getUTCMonth() === mo - 1 && date.getUTCDate() === d
+    && date.getUTCHours() === h && date.getUTCMinutes() === mi && date.getUTCSeconds() === s ? t : null;
 };
 const actualDurationMinutes = item => {
   const start = actualTime(item.actualStartAt), end = actualTime(item.actualEndAt);

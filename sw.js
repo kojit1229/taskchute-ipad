@@ -671,6 +671,8 @@ const APP_SHELL = [
   "./src/core/daily-start.js",
   "./src/core/daily-end.js",
   "./src/core/daily-completion.js",
+  "./src/core/daily-actuals.js",
+  "./src/core/daily-report.js",
 
   "./src/core/life-export.js",
 

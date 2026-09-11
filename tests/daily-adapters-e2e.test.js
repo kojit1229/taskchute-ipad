@@ -125,6 +125,13 @@ async function check(name, work) {
   ]) await check(`mock: ${action} uses the same saved meaning`, () => {
     const r = adapter.dispatchMockOperation(request(action, values)); assert.equal(r.status, 'saved');
   });
+  await check('mock: invalid datetime is rejected like the product (106a F1)', () => {
+    const before = adapter.getState();
+    for (const actualEndAt of [`${DAY}T25:00:00`, '2026-02-30T10:00:00', `${DAY}T11:00:00`]) {
+      const r = adapter.dispatchMockOperation(request('daily-actual-edit', { actualEndAt }));
+      assert.equal(r.status, 'invalid', actualEndAt); assert.deepEqual(adapter.getState(), before); assert.equal(adapter.getCandidate(), null);
+    }
+  });
   await check('mock: isolation, fixed fixture and measured report', () => {
     assert(keys.every(key => key === MOCK_STORAGE_KEY)); assert.equal(data.get(STATE_KEY), 'product sentinel');
     assert.equal(fs.readFileSync(path.join(__dirname, '../scripts/daily-mock/fixtures.json'), 'utf8'), bytes);
