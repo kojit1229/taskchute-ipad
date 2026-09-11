@@ -44,7 +44,7 @@ import { stamped } from "./src/core/mutation-stamp.js";
 import { renderDetailFrame } from "./src/ui/daily-parts/detail-frame.js";
 import { renderDailyBlockDetails } from "./src/features/daily-view-model.js";
 import { configureScheduleView } from "./src/features/single-schedule-view.js";
-import { plannedAvailability, draftPlannedIntervals, capturePlannedDraft, validatePlannedDraft, gapWarning } from "./src/features/daily-gap-placement.js";
+import { plannedAvailability, displayPlannedGaps, draftPlannedIntervals, capturePlannedDraft, validatePlannedDraft, gapWarning } from "./src/features/daily-gap-placement.js";
 import { createDailyGapSheet } from "./src/features/daily-gap-sheet.js";
 import { configureWorkList, renderWorkList, handleWorkListInput, handleWorkListComposition, rememberWorkListOrigin, restoreWorkListOrigin, rememberWorkListScroll, restoreWorkListScroll } from "./src/features/work-list.js";
 // v166: app.js分割・段階3(state store + storage/sync gateway)。stateの再代入はsetState()
@@ -4276,7 +4276,7 @@ function subtractOccupiedIntervals(gaps, occupied) {
 function computeFreeGaps(date, dayStartMin = 5 * 60, dayEndMin = 23 * 60, excludeBlockIds = null) {
   if (dayEndMin <= dayStartMin) return [];
   const availability = plannedAvailability(state, date, { window: [dayStartMin, dayEndMin], excludeBlockIds });
-  return availability.error ? [] : availability.gaps;
+  return displayPlannedGaps(availability);
 }
 
 // v199: 再配置の配置ウィンドウ(2026-08-10 K指示。空いていても早朝・深夜に詰め込まない)。
@@ -4515,7 +4515,7 @@ function confirmScheduleDraft() {
       updatedCount += 1;
       return;
     }
-    const block = makeBlock({
+    const block = { ...(it.candidateBlock ||= makeBlock({
       date,
       title: it.title,
       taskId: it.taskId || "",
@@ -4523,7 +4523,7 @@ function confirmScheduleDraft() {
       plannedStartAt: planned.plannedStartAt,
       plannedEndAt: planned.plannedEndAt,
       estimateMin: it.minutes
-    });
+    })), plannedStartAt: planned.plannedStartAt, plannedEndAt: planned.plannedEndAt, estimateMin: it.minutes };
     // v52: 決定論配置の元値を Block に残す(確定・実績との突き合わせ = 実績データ。フィールド名は互換のため維持)
     block.aiPlan = { start: minToHHMM(it.aiStart ?? it.start), minutes: it.aiMinutes ?? it.minutes };
     // v65: AIプランのtitle先頭「[資産]」検出分は確定時にleverageType=assetを引き継ぐ

@@ -3,8 +3,45 @@ const assert=require('node:assert/strict');
   const {runDailyOperation}=await import('../src/features/daily-operations.js');
   const {commitCandidate}=await import('../src/core/commit.js');
   const {contentKey}=await import('../src/core/single-schedule-merge.js');
-  const {plannedAvailability,capturePlannedDraft,validatePlannedDraft,draftPlannedIntervals}=await import('../src/features/daily-gap-placement.js');
+  const {plannedAvailability,displayPlannedGaps,gapWarning,capturePlannedDraft,validatePlannedDraft,draftPlannedIntervals}=await import('../src/features/daily-gap-placement.js');
   const date='2026-09-11',stamp=`${date}T10:00:00`;
+  const appSource=require('node:fs').readFileSync(require('node:path').join(__dirname,'../app.js'),'utf8');
+  const computeSource=appSource.match(/function computeFreeGaps\([^]*?\n\}/)[0];
+  const gapState={singleSchedules:[],blocks:[{id:'a',date,plannedStartAt:`${date}T09:00`,plannedEndAt:`${date}T10:00`}]};
+  const computeFreeGaps=new Function('state','plannedAvailability','displayPlannedGaps',`${computeSource};return computeFreeGaps;`)(gapState,plannedAvailability,displayPlannedGaps);
+  assert.deepEqual(computeFreeGaps(date,540,1080),[[600,1080]]);
+  gapState.blocks.push({id:'old',date:'2026-01-05',plannedStartAt:'2026-01-06T09:00',plannedEndAt:'2026-01-06T10:00'});
+  assert.deepEqual(computeFreeGaps(date,540,1080),[[600,1080]],'unrelated historical Block cannot erase today gaps');
+  gapState.blocks.push({id:'bad-today',date,plannedStartAt:'bad'});
+  assert.deepEqual(computeFreeGaps(date,540,1080),[[600,1080]],'display excludes invalid same-day rows');
+  assert.ok(plannedAvailability(gapState,date).error,'manual placement still stops on same-day invalid rows');
+  // Run the actual legacy confirm function with the production save boundary.
+  const {createDraftSaveTransaction}=await import('../src/features/draft-save.js');
+  const confirmSource=appSource.match(/function confirmScheduleDraft\(\) \{[^]*?\n\}/)[0];
+  const legacy=new Function('createDraftSaveTransaction','validatePlannedDraft','gapWarning','date','stamp',`
+    let state={blocks:[],singleSchedules:[],tasks:[]},allowSave=false,created=0,synced=0;
+    let _scheduleDraft={date,items:[{id:'draft-new',title:'new',start:600,minutes:30}]},_draftUndo={marker:'keep'};
+    const attempted=[];
+    const draftSaveTransaction=createDraftSaveTransaction({getState:()=>state,setState:value=>state=value,
+      persist:()=>{attempted.push(state.blocks.map(row=>row.id));return allowSave;},now:()=>stamp,
+      schedule:()=>synced++,onFailure:()=>{}});
+    const makeBlock=values=>({id:'legacy-'+(++created),createdAt:stamp,updatedAt:stamp,...values});
+    const nowDateTime=()=>stamp,minToHHMM=value=>String(value),showToast=()=>{};
+    const saveAndRender=()=>draftSaveTransaction.complete();
+    ${confirmSource}
+    return {confirm:confirmScheduleDraft,retry:()=>{allowSave=true;},
+      read:()=>({state,draft:_scheduleDraft,undo:_draftUndo,attempted,created,synced})};
+  `)(createDraftSaveTransaction,validatePlannedDraft,gapWarning,date,stamp);
+  assert.equal(legacy.confirm(),false);
+  let legacyResult=legacy.read();
+  assert.equal(legacyResult.state.blocks.length,0);assert.equal(legacyResult.synced,0);
+  assert.equal(legacyResult.draft.items[0].candidateBlock.id,legacyResult.attempted[0][0]);
+  assert.deepEqual(legacyResult.undo,{marker:'keep'});
+  legacy.retry();assert.equal(legacy.confirm(),true);legacyResult=legacy.read();
+  assert.deepEqual(legacyResult.attempted,[['legacy-1'],['legacy-1']]);
+  assert.equal(legacyResult.created,1);assert.equal(legacyResult.state.blocks.length,1);
+  assert.equal(legacyResult.draft,null);assert.equal(legacyResult.undo,null);assert.equal(legacyResult.synced,1);
+  legacy.confirm();assert.equal(legacy.read().state.blocks.length,1,'repeat confirm cannot duplicate saved candidate');
   const source={id:'unset',date,title:'existing',plannedStartAt:'',plannedEndAt:'',estimateMin:30};
   const task={id:'task',title:'new',status:'todo',estimateMin:30};
   const schedule={id:'schedule',date,title:'occupied',plannedStartAt:`${date}T11:00:00`,plannedEndAt:`${date}T12:00:00`,completed:true};
@@ -66,7 +103,7 @@ const assert=require('node:assert/strict');
     f=>{f.state.singleSchedules={};},f=>{delete f.state.singleSchedules;},
     f=>{f.deps.readSchedules=()=>({status:'failed',value:[]});},f=>{f.deps.readSchedules=()=>({status:'unavailable',value:[]});},
     f=>{f.deps.readSchedules=()=>{throw Error('fetch failed');};},
-    f=>{f.state.blocks.push({id:'bad',plannedStartAt:'bad'});},f=>{f.deps.draftIntervals=()=>[{id:'bad'}];},
+    f=>{f.state.blocks.push({id:'bad',date,plannedStartAt:'bad'});},f=>{f.deps.draftIntervals=()=>[{id:'bad'}];},
     f=>{f.deps.draftIntervals=()=>null;},f=>{f.state.blocks={};}
   ]){
     f=fixture();i=f.input('task');setup(f);const before=JSON.stringify(f.state);
@@ -148,6 +185,15 @@ const assert=require('node:assert/strict');
       }),{date});
       await page.locator('.fill-gap-sheet [data-action="fill-gap-create"]').click();
       assert.equal((await read()).blocks.length,2);assert.equal(await page.locator('#fillGapLength').inputValue(),'20');
+      assert.equal(await page.locator('#fillGapProject').inputValue(),'task');
+      await page.locator('.fill-gap-sheet .modal-close').click();
+      await seed();await open();await page.locator('#fillGapProject').selectOption('task');await page.locator('#fillGapLength').fill('20');
+      await page.evaluate(date=>import('/src/state/store.js').then(({state})=>{
+        state.blocks.push({id:'bad-today',date,plannedStartAt:'bad'});
+      }),date);
+      await page.locator('.fill-gap-sheet [data-action="fill-gap-create"]').click();
+      assert.equal((await read()).blocks.length,3,'invalid same-day Block stops manual creation');
+      assert.equal(await page.locator('#fillGapLength').inputValue(),'20');
       assert.equal(await page.locator('#fillGapProject').inputValue(),'task');
       await page.locator('.fill-gap-sheet .modal-close').click();
       await seed();await open();await page.locator('#fillGapProject').selectOption('task');await page.locator('#fillGapLength').fill('20');

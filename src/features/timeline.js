@@ -47,7 +47,7 @@ import { persistLocalNoSchedule } from "../storage/local.js";
 import { assignBlocksToLanes, adjustLaneTopPositions } from "./timeline-layout.js";
 import { registerActions } from "../ui/actions.js";
 import { scheduleDisplay, scheduleWarning, scheduleTimelineRows, renderSchedule } from "./single-schedule-view.js";
-import { plannedAvailability } from "./daily-gap-placement.js";
+import { plannedAvailability, displayPlannedGaps } from "./daily-gap-placement.js";
 let plannedDraftIntervals = () => [];
 
 // ---- 依存注入(configureTimeline) ----
@@ -342,7 +342,7 @@ function mergedIntervalsFor(blocks, startField, endField) {
 function execRowFreeRange(rowStart, rowEnd, mode) {
   if (mode === "planned") {
     const availability = plannedAvailability(state, state.selectedDate, { draftIntervals: plannedDraftIntervals() });
-    return availability.error ? null : availability.gaps.map(([s,e]) => [Math.max(s,rowStart),Math.min(e,rowEnd)]).find(([s,e]) => e - s >= 15) || null;
+    return displayPlannedGaps(availability).map(([s,e]) => [Math.max(s,rowStart),Math.min(e,rowEnd)]).find(([s,e]) => e - s >= 15) || null;
   }
   const field = mode === "actual" ? ["actualStartAt", "actualEndAt"] : ["plannedStartAt", "plannedEndAt"];
   const merged = mergedIntervalsFor(blocksForDate(state.selectedDate), field[0], field[1]);
@@ -367,6 +367,7 @@ function fillGapSelectedOverlayHTML(modal, rowHeight, startHour) {
 }
 
 function renderTimeline({ compact, mode = "planned", embedded = false }) {
+  const schedules = mode === "planned" ? scheduleDisplay(state, state.selectedDate) : null;
   const allBlocks = blocksForDate(state.selectedDate);
   // モードに応じてフィルタリングと表示位置決定
   let blocksToRender;
@@ -455,8 +456,8 @@ function renderTimeline({ compact, mode = "planned", embedded = false }) {
 
   return `
     ${timelineControls}
-    ${mode === "planned" ? scheduleWarning(scheduleDisplay(state, state.selectedDate), escapeHTML) : ""}
-    ${mode === "planned" && scheduleDisplay(state, state.selectedDate).records.length ? `<details class="timeline-schedule-list"><summary>単発予定の一覧</summary>${scheduleDisplay(state, state.selectedDate).records.map(record => renderSchedule(record, state.selectedDate, escapeHTML)).join("")}</details>` : ""}
+    ${schedules ? scheduleWarning(schedules, escapeHTML) : ""}
+    ${schedules?.records.length ? `<details class="timeline-schedule-list"><summary>単発予定の一覧</summary>${schedules.records.map(record => renderSchedule(record, state.selectedDate, escapeHTML)).join("")}</details>` : ""}
     <div class="timeline" style="position:relative; min-height:${rowHeight * (endHour - startHour + 1)}px">
       ${rowsHTML}
       <div class="timeline-cards-area" style="position:absolute; top:0; left:60px; right:100px; height:100%;">

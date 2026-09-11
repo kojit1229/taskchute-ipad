@@ -4,6 +4,7 @@ import { contentKey } from "../core/single-schedule-merge.js";
 import { placementTimes } from "../core/placement.js";
 
 const requests = new WeakMap();
+let availabilityWarned = false;
 const invalid = message => Object.assign(new Error(message), { code: "DAILY_OPERATION_INVALID" });
 
 export function draftPlannedIntervals(draft) {
@@ -57,7 +58,9 @@ export function plannedAvailability(state, date, options = {}) {
   if (!Array.isArray(source.value)) return stopped("単発予定の容器が不正です。配置を停止しています");
   if (!Array.isArray(state.blocks)) return stopped("Blockの容器が不正です。配置を停止しています");
   const schedules = normalizeSingleSchedules(source.value);
-  const result = plannedOccupancy({ blocks: state.blocks.filter(row => !options.excludeBlockIds?.has(row?.id)),
+  const result = plannedOccupancy({ blocks: state.blocks.filter(row =>
+    (row?.date === date || (typeof row?.plannedStartAt === "string" && row.plannedStartAt.slice(0, 10) === date))
+    && !options.excludeBlockIds?.has(row?.id)),
     schedules: schedules.records, draftIntervals: options.draftIntervals === undefined ? [] : options.draftIntervals }, date, options.window || [240,1440]);
   return { ...result, warnings: schedules.warnings, error: result.invalid.length
     ? result.invalid.map(row => `${row.kind}:${row.id ?? "?"} ${row.reason}`).join(" / ") : "" };
@@ -66,6 +69,14 @@ export function plannedAvailability(state, date, options = {}) {
 export function gapWarning(warnings) {
   const count = warnings.reduce((sum, warning) => sum + warning.count, 0);
   return count ? `不正な単発予定${count}件を除外しました。除外分との重なりは判定できません。` : "";
+}
+
+export function displayPlannedGaps(availability) {
+  if (availability.error && !availabilityWarned) {
+    console.warn("計画の空き計算で不正な行等を除外しました:", availability.error);
+    availabilityWarned = true;
+  }
+  return availability.gaps;
 }
 
 function prepareGap(kind, input, deps) {
