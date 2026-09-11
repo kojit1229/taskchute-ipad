@@ -311,6 +311,10 @@
         "action-registry-core"
       ]
     },
+    "planned-occupancy": {
+      "paths": ["^src/core/planned-occupancy\\.js$"],
+      "suites": ["planned-occupancy-core", "v59", "v199"]
+    },
     "sync-storage": {
       "paths": [
         "^src/features/single-schedule\\.js$",
