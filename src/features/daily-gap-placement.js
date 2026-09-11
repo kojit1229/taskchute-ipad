@@ -37,7 +37,9 @@ export function validatePlannedDraft(state, draft) {
         || (item.baseFingerprint && item.baseFingerprint !== contentKey(source)))
       return rejected("下書きの元Blockが更新されています。下書きを残して再計算してください");
   }
-  const availability = plannedAvailability(state, draft.date, { draftIntervals: intervals,
+  const others = draft.otherDraftIntervals === undefined ? [] : draft.otherDraftIntervals;
+  if (!Array.isArray(others)) return rejected("別下書きの区間が不正です");
+  const availability = plannedAvailability(state, draft.date, { draftIntervals: [...intervals, ...others],
     excludeBlockIds: new Set(draft.items.map(item => item.blockId).filter(Boolean)) });
   if (availability.error) return { ...availability, intervals };
   if (intervals.some(row => plannedMinute(row.plannedStartAt, draft.date) < 240
