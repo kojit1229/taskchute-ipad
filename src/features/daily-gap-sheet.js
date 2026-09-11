@@ -3,23 +3,49 @@ import { contentKey } from "../core/single-schedule-merge.js";
 import { gapWarning } from "./daily-gap-placement.js";
 
 export function createDailyGapSheet(deps) {
-  const blocked = () => {
-    let input = deps.isComposing() ? document.activeElement : null;
+  const blocked = leave => {
+    if (deps.isComposing()) { deps.notify("文字の変換を確定してください。入力は残しています"); return true; }
+    const state = deps.state(), view = state.currentView, date = state.selectedDate;
     for (const row of document.querySelectorAll('[data-daily-key^="block:"]')) {
-      const block = deps.state().blocks.find(item => item.id === row.dataset.dailyKey.slice(6));
+      const block = state.blocks.find(item => item.id === row.dataset.dailyKey.slice(6));
       const start = row.querySelector('[data-daily-field="start"]'), end = row.querySelector('[data-daily-field="end"]');
       const next = row.querySelector('[data-daily-field="endNextDay"]');
       if (block && start && end && (start.value !== (block.plannedStartAt || "").slice(11,16)
           || end.value !== (block.plannedEndAt || "").slice(11,16)
-          || Boolean(next?.checked) !== Boolean(block.plannedEndAt && block.plannedEndAt.slice(0,10) > block.date))) input = start;
+          || Boolean(next?.checked) !== Boolean(block.plannedEndAt && block.plannedEndAt.slice(0,10) > block.date))) {
+        const fingerprint = deps.fingerprint(block), current = () => deps.state().blocks.find(item => item.id === block.id);
+        start.focus();
+        deps.resolveInput({ inputSelector: '[data-daily-field="start"]',
+          isCurrentOwner: () => row.isConnected && deps.state().currentView === view && deps.state().selectedDate === date && deps.fingerprint(current()) === fingerprint,
+          save: () => {
+            const result = deps.run("daily-plan-times-save", { kind: "block", id: block.id, date: block.date, baseFingerprint: fingerprint,
+              target: start, values: { start: start.value, end: end.value, endNextDay: Boolean(next?.checked) } });
+            if (!result.ok) deps.notify(result.error?.message || "入力を保存できません");
+            return result;
+          },
+          leave: () => {
+            const saved = current();
+            start.value = (saved.plannedStartAt || "").slice(11,16); end.value = (saved.plannedEndAt || "").slice(11,16);
+            if (next) next.checked = Boolean(saved.plannedEndAt && saved.plannedEndAt.slice(0,10) > saved.date);
+            leave();
+          } });
+        return true;
+      }
     }
-    if (deps.state().modal?.basis === "planned") input ||= [...document.querySelectorAll('#fillGapLength, #fillGapProject')].find(field => field.value);
-    if (!input) return false;
-    input.focus(); deps.notify("入力を保存または取消してから、計画の空きを選んでください"); return true;
+    const modal = state.modal, fields = [...document.querySelectorAll('#fillGapLength, #fillGapProject')];
+    if (modal?.basis !== "planned" || !fields.some(field => field.value)) return false;
+    const selected = document.querySelector('#fillGapProject')?.value;
+    const target = selected ? { kind: "task", id: selected } : modal.gapTarget || { kind: "task", id: "" };
+    deps.resolveInput({ inputSelector: '#fillGapLength',
+      isCurrentOwner: () => deps.state().modal === modal && fields.every(field => field.isConnected)
+        && deps.state().currentView === view && deps.state().selectedDate === date,
+      save: () => place(target.kind, target.id),
+      leave: () => { fields.forEach(field => { field.value = ""; }); leave(); } });
+    return true;
   };
   const open = (start, end, date) => {
     const show = () => {
-      if (blocked()) return;
+      if (blocked(show)) return;
       const availability = deps.availability(date), from = plannedMinute(`${date}T${start}`, date), to = plannedMinute(`${date}T${end}`, date);
       if (date !== deps.state().selectedDate || availability.error || to - from < 15
           || !availability.gaps.some(([s,e]) => s <= from && to <= e)) {
@@ -34,7 +60,7 @@ export function createDailyGapSheet(deps) {
   };
   const choose = () => {
     const show = () => {
-      if (blocked()) return;
+      if (blocked(show)) return;
       const date = deps.state().selectedDate, availability = deps.availability(date), escape = deps.escapeHTML;
       const time = minute => `${String(Math.floor(minute / 60)).padStart(2,"0")}:${String(minute % 60).padStart(2,"0")}`;
       deps.showPicker(deps.modalHeaderHTML("計画の空き", "planned-gap-picker")
@@ -58,18 +84,20 @@ export function createDailyGapSheet(deps) {
       <div class="fill-gap-new"><label>見積なし・15分未満の配置長さ（分）<input class="input" id="fillGapLength" type="number" min="15" step="5" data-modal-field="duration" style="font-size:16px" value=""></label>
       <h3>未完了Taskから新しいBlockを作る</h3><select class="select" id="fillGapProject" style="font-size:16px"><option value="">Taskを選ぶ</option>${tasks.map(row => `<option value="${escape(row.id)}" ${tooLong(row) ? "disabled" : ""}>${escape(label(row))}</option>`).join("")}</select>
       <button type="button" class="btn primary" data-action="fill-gap-create" ${availability.error ? "disabled" : ""}>新Blockを作る</button></div>
-      <p>短縮・分割はしません。確定前に選んだ区間全体を確認します。</p></div></div>`;
+      <p>短縮・分割はしません。確定前に選んだ区間全体を確認します。</p><button type="button" class="btn" data-action="daily-gap-choose">計画の空きを選び直す</button></div></div>`;
   };
   const place = (kind, id, target) => {
     const modal = deps.state().modal;
     if (modal?.basis !== "planned" || target?.disabled || deps.isComposing()) return;
     if (target) target.disabled = true;
+    modal.gapTarget = { kind, id };
     const input = { kind, id, date: modal.date, start: modal.start, end: modal.end, basis: "planned",
       requestId: `${modal.gapRequestId}:${kind}:${id}`, baseFingerprint: modal.fingerprints[`${kind}:${id}`],
       duration: document.querySelector('#fillGapLength')?.value };
     const result = deps.run(kind === "block" ? "daily-gap-place" : "daily-gap-create", input);
-    if (!result.ok) { if (target) target.disabled = false; deps.notify(result.error?.message || "保存できません。入力を残しています"); return; }
+    if (!result.ok) { if (target) target.disabled = false; deps.notify(result.error?.message || "保存できません。入力を残しています"); return result; }
     deps.done(); deps.notify(`${gapWarning(result.warnings)}${modal.start} に配置・この端末で保存・同期待ち`);
+    return result;
   };
   return { open, build, place, choose };
 }

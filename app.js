@@ -35,7 +35,7 @@ import { createVisionOverview } from "./src/features/vision-overview.js";
 import { DAILY_ACTIONS } from "./src/ui/daily-parts/contract.js";
 import { REPORT_PENDING } from "./src/core/daily-report.js";
 import { dailyActuals, actualDurationMinutes } from "./src/core/daily-actuals.js";
-import { runDailyOperation, prepareDailyEnd } from "./src/features/daily-operations.js";
+import { runDailyOperation, prepareDailyEnd, dailyFingerprint } from "./src/features/daily-operations.js";
 import { createDraftLeaveGuard } from "./src/features/draft-leave.js";
 import { createDailyDraftStore } from "./src/features/daily-draft.js";
 import { createDraftSaveTransaction } from "./src/features/draft-save.js";
@@ -1631,6 +1631,8 @@ configureScheduleView({ state: () => state, escapeHTML, render, renderModal, mod
   run: input => runDailyOperation("daily-schedule-complete", input, dailyOperationDeps) });
 
 const dailyGapSheet = createDailyGapSheet({ state: () => state, escapeHTML, modalHeaderHTML,
+  fingerprint: dailyFingerprint,
+  resolveInput: input => draftLeaveGuard.request(input),
   isComposing: () => _imeComposing, requestLeave: requestDraftLeave, notify: showToast,
   availability: date => plannedAvailability(state, date, { draftIntervals: draftPlannedIntervals(_scheduleDraft) }),
   show: modal => { closeModal(); state.modal = modal; if (fillGapExecDesktop()) render(); else renderModal(buildFillGapModal(modal)); },
