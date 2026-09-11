@@ -411,6 +411,11 @@
         "xss-sanitizer"
       ]
     },
+    "schedule-series-merge": {
+      "paths": ["^src/core/schedule-series-merge\\.js$"],
+      "patterns": ["mergeScheduleSeries|createSeriesMergeCandidate|legacySeriesOccurrence|chooseSeriesChange|mergeSeriesOverrides"],
+      "suites": ["schedule-series-merge", "single-schedule-merge", "merge-core"]
+    },
     "schedule-series-core": {
       "paths": ["^src/core/schedule-series\\.js$"],
       "patterns": ["createScheduleSeries|scheduleSeriesDates|scheduleSeriesFingerprint|normalizeSeriesTime"],
