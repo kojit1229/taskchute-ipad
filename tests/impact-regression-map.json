@@ -580,6 +580,7 @@
         "feedback-|feedbackUiController|feedbackReportController|feedbackCanonicalReader|invalidateFeedbackConnection|renderFeedbackUiSlot|patchFeedbackUi|hydrateStaticMarkdown|ensureFeedbackClients|captureProof|buildReportMarkdown"
       ],
       "suites": [
+        "single-schedule-report",
         "feedback-busy-boundary",
         "feedback-busy-coordinator",
         "feedback-canonical",

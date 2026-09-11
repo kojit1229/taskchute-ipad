@@ -1,4 +1,6 @@
 import { reportActuals } from "../../core/daily-report.js";
+import { normalizeSingleSchedules } from "../../core/single-schedule.js";
+import { plannedMinute } from "../../core/planned-occupancy.js";
 // Capture only report dependencies. No application globals, authentication, persistence, or async work.
 const fields = {
   blocks: 'id date title taskId category completed charge discharge isMIT pomodoroCount plannedStartAt plannedEndAt actualStartAt actualEndAt comment source recurrenceGroupId migratedTo deleted everStartedAt oneTap',
@@ -29,10 +31,27 @@ function rate(value, names) {
   for (const key of names.split(' ')) if (typeof result[key] !== 'number' || !Number.isFinite(result[key])) fail('invalid_report_derived');
   return result;
 }
+function captureScheduleReport(source, date) {
+  const normalized = normalizeSingleSchedules(source);
+  const records = [], excluded = { deleted: 0, invalid: normalized.preserved.length, otherDate: 0, continuation: 0 };
+  for (const record of normalized.records) {
+    if (record.deleted) { excluded.deleted++; continue; }
+    if (record.date !== date) {
+      excluded.otherDate++;
+      if (plannedMinute(record.plannedStartAt, date) < 0 && plannedMinute(record.plannedEndAt, date) > 0)
+        excluded.continuation++; // A subset of otherDate, not an additional excluded record.
+      continue;
+    }
+    records.push(pick(record, 'id date title plannedStartAt plannedEndAt completed'));
+  }
+  records.sort((a, b) => a.plannedStartAt.localeCompare(b.plannedStartAt) || a.id.localeCompare(b.id));
+  return { records, count: records.length, completed: records.filter(row => row.completed).length, excluded };
+}
 export function captureReportInput(source, date, derive) {
   if (!source || typeof date !== 'string' || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date) || typeof derive !== 'function') fail('report_input_required');
   if ((source.archivedDates || []).includes(date)) fail('archived_readonly');
   if (typeof source.journals?.[date] !== 'string' || !source.journals[date]) fail('journal_initialization_required');
+  const singleSchedules = captureScheduleReport(source.singleSchedules, date);
   const state = {};
   for (const key of ['blocks', 'tasks', 'projects', 'recurrences', 'questions', 'bodyScans']) state[key] = rows(source[key] || [], fields[key]);
   state.blocks.forEach((block, i) => {
@@ -65,5 +84,5 @@ export function captureReportInput(source, date, derive) {
   const blocks = fixed.blocks.filter(block => !block.deleted && block.date === date)
     .sort((a, b) => (a.plannedStartAt || '99').localeCompare(b.plannedStartAt || '99'));
   const actuals = reportActuals(fixed, date);
-  return { date, state: fixed, blocks, derived, actuals };
+  return { date, state: fixed, blocks, derived, actuals, singleSchedules };
 }
