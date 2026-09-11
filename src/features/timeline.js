@@ -47,6 +47,8 @@ import { persistLocalNoSchedule } from "../storage/local.js";
 import { assignBlocksToLanes, adjustLaneTopPositions } from "./timeline-layout.js";
 import { registerActions } from "../ui/actions.js";
 import { scheduleDisplay, scheduleWarning, scheduleTimelineRows, renderSchedule } from "./single-schedule-view.js";
+import { plannedAvailability } from "./daily-gap-placement.js";
+let plannedDraftIntervals = () => [];
 
 // ---- 依存注入(configureTimeline) ----
 let escapeHTML, getCategoryColor, migrationBadgeHTML, leverageTypeMarkHTML;
@@ -59,6 +61,7 @@ let makeBlock, getOtherTask, openBlockEditor, saveState, isStaleBlock;
 let timelineRailEl, appRootEl;
 
 function configureTimeline(deps) {
+  plannedDraftIntervals = deps.plannedDraftIntervals || (() => []);
   ({
     escapeHTML, getCategoryColor, migrationBadgeHTML, leverageTypeMarkHTML,
     minutesOf, todayISO, pad2, clamp, formatDisplayDate, computeProjectedEnd, resolveEstimateMin,
@@ -337,6 +340,10 @@ function mergedIntervalsFor(blocks, startField, endField) {
 // 既存Blockに占有されているかだけを見て、占有されていなければ従来どおり「行頭〜次のBlock開始
 // or 行末」を返す(占有されていれば何もしない=null)。
 function execRowFreeRange(rowStart, rowEnd, mode) {
+  if (mode === "planned") {
+    const availability = plannedAvailability(state, state.selectedDate, { draftIntervals: plannedDraftIntervals() });
+    return availability.error ? null : availability.gaps.map(([s,e]) => [Math.max(s,rowStart),Math.min(e,rowEnd)]).find(([s,e]) => e - s >= 15) || null;
+  }
   const field = mode === "actual" ? ["actualStartAt", "actualEndAt"] : ["plannedStartAt", "plannedEndAt"];
   const merged = mergedIntervalsFor(blocksForDate(state.selectedDate), field[0], field[1]);
   if (merged.some(([s, e]) => s <= rowStart && rowStart < e)) return null;
@@ -438,7 +445,7 @@ function renderTimeline({ compact, mode = "planned", embedded = false }) {
     }
     const s = `${pad2(Math.floor(free[0] / 60))}:${pad2(free[0] % 60)}`;
     const e = `${pad2(Math.floor(free[1] / 60))}:${pad2(free[1] % 60)}`;
-    return `<div class="time-row" data-action="fill-gap-open" data-start="${s}" data-end="${e}" data-date="${state.selectedDate}" data-minute="${rowStart}"
+    return `<div class="time-row" data-action="fill-gap-open" data-basis="${mode}" data-start="${s}" data-end="${e}" data-date="${state.selectedDate}" data-minute="${rowStart}"
              style="top:${top}px;height:${rowHeight}px; cursor:pointer;">${String(hour).padStart(2, "0")}:00</div>`;
   }).join("");
 

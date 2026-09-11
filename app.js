@@ -44,6 +44,8 @@ import { stamped } from "./src/core/mutation-stamp.js";
 import { renderDetailFrame } from "./src/ui/daily-parts/detail-frame.js";
 import { renderDailyBlockDetails } from "./src/features/daily-view-model.js";
 import { configureScheduleView } from "./src/features/single-schedule-view.js";
+import { plannedAvailability, draftPlannedIntervals } from "./src/features/daily-gap-placement.js";
+import { createDailyGapSheet } from "./src/features/daily-gap-sheet.js";
 import { configureWorkList, renderWorkList, handleWorkListInput, handleWorkListComposition, rememberWorkListOrigin, restoreWorkListOrigin, rememberWorkListScroll, restoreWorkListScroll } from "./src/features/work-list.js";
 // v166: app.js分割・段階3(state store + storage/sync gateway)。stateの再代入はsetState()
 //   経由のみ(claude-review-result.md §2 Blocker-1)。store.jsは何もimportしない真の葉。
@@ -433,6 +435,7 @@ configureTimelineLayout({ minutesOf, nowDateTime });
 // v175: src/features/timeline.jsも同じ理由(循環import回避)で依存注入する。timelineRail/app
 // (起動時に1回だけdocument.querySelectorした固定DOM参照)はtimelineRailEl/appRootElとして渡す。
 configureTimeline({
+  plannedDraftIntervals: () => draftPlannedIntervals(_scheduleDraft),
   escapeHTML, getCategoryColor, migrationBadgeHTML, leverageTypeMarkHTML,
   minutesOf, todayISO, pad2, clamp, formatDisplayDate, computeProjectedEnd, resolveEstimateMin,
   renderHeader, renderDateBar,
@@ -1152,10 +1155,11 @@ registerActions({
   // --- Block作成(WBSからの「今日へ追加」) ---
   "task-today": ({ id }) => openTaskPlacement(id),
   // --- v354: 「空き時間を補う」シート(TIME COMB「補う」・実行ヘッダ「＋Block」の2導線から開く) ---
-  "fill-gap-open": ({ target }) => openFillGapSheet(target.dataset.start, target.dataset.end, target.dataset.date || state.selectedDate),
-  "fill-gap-place": ({ target, id }) => fillGapPlace(id, target.dataset.split === "1"),
-  "fill-gap-create": () => fillGapCreate(),
+  "fill-gap-open": ({ target }) => openFillGapSheet(target.dataset.start, target.dataset.end, target.dataset.date || state.selectedDate, target.dataset.basis),
+  "fill-gap-place": ({ target, id }) => fillGapPlace(id, target.dataset.split === "1", target),
+  "fill-gap-create": ({ target }) => fillGapCreate(target),
   "fill-gap-prefill": ({ target }) => fillGapPrefillFromRoutine(target.value),
+  "daily-gap-choose": () => dailyGapSheet.choose(),
   // --- Block/Now(6。now-mode-open/now-mode-close/now-conveyor-skipはv87で到達不能化、
   //     v292孤児掃除で削除(K裁定2026-08-29)。now-conveyor-completeはsrc/features/
   //     today-tower.js(TOWER UI)から現役で発行されるため残置=監査の見落としを現物確認で訂正) ---
@@ -1544,6 +1548,8 @@ function foldSection(id, defaultOpen, wrapperClass, summaryClass, summaryText, b
 //      未初期化のまま参照され、最後に開いていた画面によっては起動時に例外で全停止していた。
 
 const dailyOperationDeps = {
+  makeBlock: input => makeBlock(input), projectName: id => projectName(id),
+  draftIntervals: () => draftPlannedIntervals(_scheduleDraft),
   isReadingBlock: function isReadingBlock(block) {
   return Boolean(block?.externalRef?.startsWith("daily-reading:v1:")
     || ["daily-reading-auto", "daily-reading-manual"].includes(block?.source)
@@ -1623,6 +1629,13 @@ const dailyOperationDeps = {
 configureScheduleView({ state: () => state, escapeHTML, render, renderModal, modalHeaderHTML,
   notify: showToast, requestLeave: requestDraftLeave,
   run: input => runDailyOperation("daily-schedule-complete", input, dailyOperationDeps) });
+
+const dailyGapSheet = createDailyGapSheet({ state: () => state, escapeHTML, modalHeaderHTML,
+  isComposing: () => _imeComposing, requestLeave: requestDraftLeave, notify: showToast,
+  availability: date => plannedAvailability(state, date, { draftIntervals: draftPlannedIntervals(_scheduleDraft) }),
+  show: modal => { closeModal(); state.modal = modal; if (fillGapExecDesktop()) render(); else renderModal(buildFillGapModal(modal)); },
+  showPicker: html => { state.modal = { type: "plannedGapPicker" }; renderModal(html); },
+  run: (name, input) => runDailyOperation(name, input, dailyOperationDeps), done: () => { closeModal(); render(); } });
 
 document.addEventListener("click", (event) => {
   const reportLink = event.target.closest('.fund-report-view .readonly-md a, .fund-view .readonly-md a');
@@ -6463,7 +6476,7 @@ function renderTasks(opts = {}) {
   const embedded = opts.embedded === true;
   return `${embedded ? "" : execHeaderHTML() + renderDateBar()}
     ${carryOverPanel()}${renderWorkList("exec")}
-    ${embedded ? `<div class="exec-switch-footer"><button class="btn ghost" data-action="exec-mode-toggle" data-mode="actual">実績を見る ›</button></div>` : ""}`;
+    ${embedded ? `<div class="exec-switch-footer"><button class="btn ghost" data-action="daily-gap-choose">計画の空きへ配置</button><button class="btn ghost" data-action="exec-mode-toggle" data-mode="actual">実績を見る ›</button></div>` : ""}`;
 }
 // v331修正: 「いま」行(実行中Block1件)。常時要素は☐(toggle-block)・タイトル+meta・
 // 完了(toggle-block再掲)・終了報告(now-end)のみ。充放電select・実行中メモtextareaは
@@ -9904,7 +9917,8 @@ function fillGapExecDesktop() {
   return state.currentView === "exec" && Boolean(window.matchMedia?.("(min-width: 1280px)").matches);
 }
 
-function openFillGapSheet(start, end, date) {
+function openFillGapSheet(start, end, date, basis) {
+  if (basis === "planned") return dailyGapSheet.open(start, end, date || state.selectedDate);
   state.modal = { type: "fillGap", start, end, date: date || state.selectedDate };
   if (fillGapExecDesktop()) { render(); return; }
   renderModal(buildFillGapModal(state.modal));
@@ -9994,6 +10008,7 @@ function fillGapPrefillFromRoutine(ruleId) {
 }
 
 function buildFillGapModal(modal) {
+  if (modal.basis === "planned") return dailyGapSheet.build(modal);
   const { start, end, date } = modal;
   const durMin = Math.max(0, minuteFromHHMM(end) - minuteFromHHMM(start));
   const pool = fillGapTaskPool(date);
@@ -10013,7 +10028,8 @@ function buildFillGapModal(modal) {
 // M-2復元: v186レビューM-2(旧createBlockForActualGap)の重複防止を踏襲する。
 // 同じ日付・同じ計画開始時刻に同じTaskのBlockが既にあれば新規作成せず、その編集モーダルを開く
 // (2回押しても2件できない=冪等)。
-function fillGapPlace(taskId, split) {
+function fillGapPlace(taskId, split, target) {
+  if (state.modal?.basis === "planned") return dailyGapSheet.place("block", taskId, target);
   const modal = state.modal;
   if (!modal || modal.type !== "fillGap") return;
   const { start, end, date } = modal;
@@ -10039,7 +10055,8 @@ function fillGapPlace(taskId, split) {
 
 // H-1/H-2対応: シート内「新しいBlockを作る」。既存addBlock()と同様「その他」Task紐づけ+
 // makeBlock()に委譲するだけで、開始時刻=空き時間の頭・長さ=選択値(既定は空き時間まで)を渡す。
-function fillGapCreate() {
+function fillGapCreate(target) {
+  if (state.modal?.basis === "planned") return dailyGapSheet.place("task", document.querySelector('#fillGapProject')?.value, target);
   const modal = state.modal;
   if (!modal || modal.type !== "fillGap") return;
   const { start, end, date } = modal;

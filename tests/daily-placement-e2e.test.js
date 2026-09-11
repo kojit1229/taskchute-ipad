@@ -74,5 +74,76 @@ const assert=require('node:assert/strict');
   }
   const full={...schedule,plannedStartAt:`${date}T00:00:00`,plannedEndAt:'2026-09-12T00:00:00'};
   assert.deepEqual(plannedAvailability({blocks:[],singleSchedules:[full]},date).gaps,[]);
+  f=fixture();f.state.blocks.push({...source});assert.equal(f.run(f.input()).status,'invalid');
+  const {chromium,launchOptions,startServer,randomPort,blockGithubApiByDefault,passGithubGate,STATE_KEY}=require('./helpers');
+  const server=startServer(randomPort()),browser=await chromium.launch(launchOptions());
+  try{
+    const page=await browser.newPage({timezoneId:'Asia/Tokyo',locale:'ja-JP',serviceWorkers:'block'});
+    const errors=[];page.on('pageerror',error=>errors.push(error.message));
+    await blockGithubApiByDefault(page);await page.clock.setFixedTime(new Date(2026,8,11,10));
+    await page.goto(`http://localhost:${server.address().port}/`);await passGithubGate(page);
+    const cover={id:'cover',date,title:'occupied Block',plannedStartAt:`${date}T04:00:00`,plannedEndAt:`${date}T10:00:00`,completed:true};
+    const rows=[{...schedule,plannedEndAt:'2026-09-12T00:00:00'},{id:'invalid'}];
+    const seed=async(extra={})=>{
+      await page.evaluate(({key,values})=>{
+        const state=JSON.parse(localStorage.getItem(key));Object.assign(state,values);localStorage.setItem(key,JSON.stringify(state));
+      },{key:STATE_KEY,values:{currentView:'exec',selectedDate:date,blocks:[{...source},cover],tasks:[{...task,estimateMin:null}],
+        projects:[],recurrences:[],singleSchedules:rows,...extra}});
+      await page.reload();await page.waitForSelector('[data-action="daily-gap-choose"]');
+    };
+    const read=()=>page.evaluate(async()=>{const {state}=await import('/src/state/store.js');return JSON.parse(JSON.stringify(state));});
+    const open=async()=>{
+      await page.locator('[data-action="daily-gap-choose"]').click();
+      await page.locator('.planned-gap-picker [data-start="10:00"][data-end="11:00"]').click();
+      await page.waitForSelector('.fill-gap-sheet');
+    };
+    for(const width of [1280,390]){
+      await page.setViewportSize({width,height:900});await seed();
+      const initial=JSON.stringify((await read()).blocks);await open();
+      assert.match(await page.locator('.fill-gap-sheet').innerText(),/不正な単発予定1件/);
+      assert.equal(JSON.stringify((await read()).blocks),initial,'opening does not create or change Blocks');
+      await page.locator('.fill-gap-sheet [data-action="fill-gap-place"][data-id="unset"]').click();
+      await page.waitForSelector('.fill-gap-sheet',{state:'detached'});
+      let state=await read();assert.equal(state.blocks.length,2);
+      assert.equal(state.blocks.find(row=>row.id==='unset').plannedStartAt,`${date}T10:00:00`);
+      assert.equal(state.blocks.find(row=>row.id==='unset').plannedEndAt,`${date}T10:30:00`);
+      await seed();await open();await page.locator('#fillGapProject').selectOption('task');
+      await page.locator('.fill-gap-sheet [data-action="fill-gap-create"]').click();
+      assert.equal((await read()).blocks.length,2,'missing estimate requires an explicit duration');
+      assert.equal(await page.locator('#fillGapProject').inputValue(),'task');
+      await page.locator('#fillGapLength').fill('20');
+      // Failure does not replace the sheet or its inputs, and the retry keeps one candidate ID.
+      await page.evaluate(key=>{
+        window.originalGapSet=Storage.prototype.setItem;
+        Storage.prototype.setItem=function(k,v){if(k===key)throw new DOMException('fixture quota','QuotaExceededError');return window.originalGapSet.call(this,k,v);};
+      },STATE_KEY);
+      await page.locator('.fill-gap-sheet [data-action="fill-gap-create"]').click();
+      assert.equal((await read()).blocks.length,2);assert.equal(await page.locator('#fillGapLength').inputValue(),'20');
+      await page.evaluate(()=>{Storage.prototype.setItem=window.originalGapSet;});
+      await page.locator('.fill-gap-sheet [data-action="fill-gap-create"]').dblclick();
+      await page.waitForSelector('.fill-gap-sheet',{state:'detached'});
+      state=await read();assert.equal(state.blocks.length,3);
+      const created=state.blocks.find(row=>row.id!=='cover'&&row.id!=='unset');
+      assert.equal(created.taskId,'task');assert.equal(created.plannedEndAt,`${date}T10:20:00`);
+      assert.equal(state.tasks[0].estimateMin,null);
+      await page.reload();await page.waitForSelector('[data-action="daily-gap-choose"]');
+      state=await read();assert.equal(state.blocks.filter(row=>row.id===created.id).length,1);
+      assert.deepEqual(state.singleSchedules.find(row=>row.id==='invalid'),{id:'invalid'});
+      await seed();await open();await page.locator('#fillGapProject').selectOption('task');await page.locator('#fillGapLength').fill('20');
+      await page.evaluate(({date})=>import('/src/state/store.js').then(({state})=>{
+        state.singleSchedules.push({id:'late',date,title:'late conflict',plannedStartAt:`${date}T10:45:00`,plannedEndAt:`${date}T11:00:00`});
+      }),{date});
+      await page.locator('.fill-gap-sheet [data-action="fill-gap-create"]').click();
+      assert.equal((await read()).blocks.length,2);assert.equal(await page.locator('#fillGapLength').inputValue(),'20');
+      assert.equal(await page.locator('#fillGapProject').inputValue(),'task');
+      await page.locator('.fill-gap-sheet .modal-close').click();
+      await seed({singleSchedules:[full]});await page.locator('[data-action="daily-gap-choose"]').click();
+      assert.match(await page.locator('.planned-gap-picker').innerText(),/配置できる空き時間がありません/);
+      assert.equal(await page.locator('.planned-gap-picker [data-action="fill-gap-open"]').count(),0);
+      assert.ok(await page.locator('body').evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+      console.log(`PASS browser planned placement ${width}: same/new ID, explicit length, failure/retry, full-gap recheck, invalid preservation, all-day occupied`);
+    }
+    assert.deepEqual(errors,[]);
+  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
   console.log('PASS gap registry: identity, latest full-gap check, invalid/container/load failure stops, unchanged source, retry, calendar');
 })().catch(error=>{console.error(error);process.exitCode=1;});

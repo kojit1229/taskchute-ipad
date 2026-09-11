@@ -6,6 +6,17 @@ import { placementTimes } from "../core/placement.js";
 const requests = new WeakMap();
 const invalid = message => Object.assign(new Error(message), { code: "DAILY_OPERATION_INVALID" });
 
+export function draftPlannedIntervals(draft) {
+  if (draft == null) return [];
+  if (!Array.isArray(draft.items)) return null;
+  return draft.items.map(item => {
+    const time = item && Number.isInteger(item.start)
+      ? `${String(Math.floor(item.start / 60)).padStart(2,"0")}:${String(item.start % 60).padStart(2,"0")}` : "";
+    return { id: item?.id, ...(placementTimes(draft.date, time, item?.minutes)
+      || { plannedStartAt: "", plannedEndAt: "" }) };
+  });
+}
+
 export function plannedAvailability(state, date, options = {}) {
   const stopped = error => ({ error, warnings: [], invalid: [], intervals: [], occupied: [], gaps: [], overlaps: [] });
   let source;
@@ -61,6 +72,8 @@ export function buildGapPlacement(state, input, deps) {
     return { records: [], block: existing, warnings: [] };
   }
   const source = state[draft.kind === "block" ? "blocks" : "tasks"]?.find(row => row?.id === draft.id);
+  if (state[draft.kind === "block" ? "blocks" : "tasks"].filter(row => row?.id === draft.id).length !== 1)
+    throw invalid("対象の識別子が重複しています");
   if (!source || source.deleted || contentKey(source) !== draft.baseFingerprint)
     throw invalid("対象の日付・見積・状態が変わりました。入力を残しています");
   if (draft.kind === "block" && (source.date !== input.date || source.completed || source.migratedTo
