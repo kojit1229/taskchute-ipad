@@ -2,6 +2,38 @@ import { normalizeSingleSchedules } from "../core/single-schedule.js";
 import { plannedMinute } from "../core/planned-occupancy.js";
 import { contentKey } from "../core/single-schedule-merge.js";
 import { buildDailyViewModel } from "./daily-view-model.js";
+import { registerActions } from "../ui/actions.js";
+
+export function configureScheduleView(deps) {
+  const open = (id, date) => {
+    const record = scheduleDisplay(deps.state(), date).records.find(row => row.id === id);
+    if (!record) { deps.notify("予定を表示できません。最新の保存値を確認してください"); return; }
+    deps.state().modal = { type: "singleScheduleView", id, date };
+    deps.renderModal(deps.modalHeaderHTML("単発予定", "single-schedule-detail")
+      + renderSchedule(record, date, deps.escapeHTML, { detail: true }) + "</div></div>");
+  };
+  registerActions({
+    "schedule-view-details": ({ id, target }) => {
+      const action = () => open(id, target.dataset.date);
+      if (!deps.requestLeave(action)) action();
+    },
+    "schedule-view-complete": ({ id, target }) => {
+      const action = () => {
+        if (target.disabled) return;
+        target.disabled = true;
+        target.dataset.requestId ||= crypto.randomUUID();
+        const detail = deps.state().modal?.type === "singleScheduleView";
+        const result = deps.run({ kind: "schedule", id, requestId: target.dataset.requestId,
+          baseFingerprint: target.dataset.fingerprint, desiredCompleted: target.dataset.completed === "true" });
+        if (!result.ok) { target.disabled = false; deps.notify(result.error?.message || "保存できません。操作を残しています"); return; }
+        deps.render();
+        if (detail) open(id, target.dataset.date);
+        deps.notify("この端末で保存・同期待ち");
+      };
+      if (!deps.requestLeave(action)) action();
+    }
+  });
+}
 
 // Same source records/IDs on all three surfaces, including the previous day's continuation.
 export function scheduleDisplay(state, date) {

@@ -46,6 +46,7 @@ import { state } from "../state/store.js";
 import { persistLocalNoSchedule } from "../storage/local.js";
 import { assignBlocksToLanes, adjustLaneTopPositions } from "./timeline-layout.js";
 import { registerActions } from "../ui/actions.js";
+import { scheduleDisplay, scheduleWarning, scheduleTimelineRows, renderSchedule } from "./single-schedule-view.js";
 
 // ---- 依存注入(configureTimeline) ----
 let escapeHTML, getCategoryColor, migrationBadgeHTML, leverageTypeMarkHTML;
@@ -373,10 +374,11 @@ function renderTimeline({ compact, mode = "planned", embedded = false }) {
   // v39: エネルギー構造分析からのカテゴリフィルタ(UI状態)
   const catFilter = state.settings.timelineCategoryFilter || "";
   if (catFilter) blocksToRender = blocksToRender.filter((b) => (b.category || "未分類") === catFilter);
+  if (mode === "planned") blocksToRender.push(...scheduleTimelineRows(state, state.selectedDate));
   // v10: ズームレベル(state.timelineZoom: 1.0 / 2.0 / 4.0 のいずれか)
   const zoom = compact ? 1 : (state.timelineZoom || 1);
   const rowHeight = (compact ? 48 : 60) * zoom;
-  const startHour = 5;
+  const startHour = mode === "planned" ? 4 : 5;
   const endHour = 24;
   const rows = Array.from({ length: endHour - startHour + 1 }, (_, index) => startHour + index);
   // v10: レーン分割(PC 5、iPhone 3)
@@ -446,6 +448,8 @@ function renderTimeline({ compact, mode = "planned", embedded = false }) {
 
   return `
     ${timelineControls}
+    ${mode === "planned" ? scheduleWarning(scheduleDisplay(state, state.selectedDate), escapeHTML) : ""}
+    ${mode === "planned" && scheduleDisplay(state, state.selectedDate).records.length ? `<details class="timeline-schedule-list"><summary>単発予定の一覧</summary>${scheduleDisplay(state, state.selectedDate).records.map(record => renderSchedule(record, state.selectedDate, escapeHTML)).join("")}</details>` : ""}
     <div class="timeline" style="position:relative; min-height:${rowHeight * (endHour - startHour + 1)}px">
       ${rowsHTML}
       <div class="timeline-cards-area" style="position:absolute; top:0; left:60px; right:100px; height:100%;">
@@ -467,6 +471,8 @@ function renderTimelineCard(positioned, mode = "planned", maxLanes = 5) {
   const lanes = Math.max(1, laneCount || 1);
   const widthPercent = 100 / lanes;
   const leftPercent = lane * widthPercent;
+  if (block.scheduleRecord) return renderSchedule(block.scheduleRecord, state.selectedDate, escapeHTML,
+    { style: `position:absolute;top:${top}px;height:${height}px;left:${leftPercent}%;width:calc(${widthPercent}% - 4px);` });
 
   const isActual = mode === "actual";
   // カテゴリ色を反映

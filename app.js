@@ -43,6 +43,7 @@ import { commitCandidate, assertNotInsideBuild } from "./src/core/commit.js";
 import { stamped } from "./src/core/mutation-stamp.js";
 import { renderDetailFrame } from "./src/ui/daily-parts/detail-frame.js";
 import { renderDailyBlockDetails } from "./src/features/daily-view-model.js";
+import { configureScheduleView } from "./src/features/single-schedule-view.js";
 import { configureWorkList, renderWorkList, handleWorkListInput, handleWorkListComposition, rememberWorkListOrigin, restoreWorkListOrigin, rememberWorkListScroll, restoreWorkListScroll } from "./src/features/work-list.js";
 // v166: app.js分割・段階3(state store + storage/sync gateway)。stateの再代入はsetState()
 //   経由のみ(claude-review-result.md §2 Blocker-1)。store.jsは何もimportしない真の葉。
@@ -1618,6 +1619,10 @@ const dailyOperationDeps = {
     "modal-save": ({ save }) => save()
   }
 };
+
+configureScheduleView({ state: () => state, escapeHTML, render, renderModal, modalHeaderHTML,
+  notify: showToast, requestLeave: requestDraftLeave,
+  run: input => runDailyOperation("daily-schedule-complete", input, dailyOperationDeps) });
 
 document.addEventListener("click", (event) => {
   const reportLink = event.target.closest('.fund-report-view .readonly-md a, .fund-view .readonly-md a');

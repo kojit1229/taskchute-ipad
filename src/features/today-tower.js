@@ -1,3 +1,5 @@
+import { scheduleDisplay, scheduleWarning, renderSchedule } from "./single-schedule-view.js";
+import { state } from "../state/store.js";
 import { dailyActuals, actualDurationMinutes } from "../core/daily-actuals.js";
 import { karadaImportHTML } from "./karada-import.js";
 import { ARCHIVED_READONLY_MESSAGE } from "./archive-date-protection.js";
@@ -100,7 +102,7 @@ function glassBlurOff() {
   }
 }
 
-function boardFlights(blocks, nowMin, tasks = []) {
+function boardFlights(blocks, nowMin, tasks = [], schedules = []) {
   const candidates = blocks.filter((block) => !block.completed && !block.actualEndAt && block.category !== "ルーティン" && !block.oneTap);
   const byId = new Map(candidates.map((block) => [String(block.id), block]));
   const blockFlights = towerFlights(candidates, nowMin).map((flight) => ({
@@ -111,7 +113,7 @@ function boardFlights(blocks, nowMin, tasks = []) {
     id: `task:${task.id}`, taskId: task.id, kind: "task-plan", title: task.title,
     plannedMin: null, estimateMin: Number(task.estimateMin), status: "scheduled", label: "予定"
   }));
-  return [...blockFlights, ...taskFlights];
+  return [...blockFlights, ...taskFlights, ...schedules.map(record => ({ kind: "schedule", id: record.id, record }))];
 }
 
 // v311: ARRIVALSのBlock便を再利用し、NOW LANDING便だけを先頭の強調枠へ分離する。
@@ -273,6 +275,7 @@ function renderTowerRunway(now, blocks, flights) {
 }
 
 function flightRow(flight) {
+  if (flight.kind === "schedule") return renderSchedule(flight.record, todayISO(), escapeHTML);
   const status = `<span class="tower-status" data-status="${escapeHTML(flight.status)}">${escapeHTML(flight.label)}</span>`;
   if (flight.kind === "task-plan") {
     return `<button type="button" class="tower-flight-row tower-arrival-row tower-task-plan" data-flight-id="${escapeHTML(flight.id)}" data-kind="task-plan" data-status="scheduled" data-action="task-today" data-id="${escapeHTML(flight.taskId)}">
@@ -287,12 +290,13 @@ function flightRow(flight) {
   </div>`;
 }
 
-function renderTowerBoard(arrivalFlights) {
-  const arrivals = arrivalWindow(arrivalFlights);
+function renderTowerBoard() {
+  const schedules = scheduleDisplay(state, todayISO());
+  if (!schedules.records.length && !schedules.warnings.length && !schedules.error) return "";
   return `<section class="tower-board sec-arrivals">
-    <div class="tower-arrivals"><h2>次の予定 <span>本日</span></h2>
-      <div id="towerArrivalRows" data-flight-set="${flightSetKey(arrivalFlights)}">${arrivals.rows.map((flight) => flightRow(flight)).join("")}</div>
-      <div class="tower-flight-summary" id="towerArrivalSummary">${arrivals.omitted ? `さらに${arrivals.omitted}件` : ""}</div>
+    <div class="tower-arrivals"><h2>単発予定 <span>本日</span></h2>
+      ${scheduleWarning(schedules, escapeHTML)}
+      <div class="today-single-schedules">${boardFlights([], 0, [], schedules.records).map(flightRow).join("")}</div>
     </div>
   </section>`;
 }
@@ -570,6 +574,7 @@ function renderTodayTower() {
     ${renderTodayFocusBar(focusVisibility)}
     <div class="tower-col-left">
       ${focusVisibility.side ? renderWorkList("today") : ""}
+      ${focusVisibility.side ? renderTowerBoard() : ""}
       ${focusVisibility.side ? renderFlightLog(today, blocks) : ""}
     </div>
     <div class="tower-col-center">${renderTowerGates(blocks)}${focusVisibility.side ? renderTowerBodyMind(today, blocks) : ""}</div>
