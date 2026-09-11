@@ -1,3 +1,4 @@
+import { dailyActuals, actualDurationMinutes } from "../core/daily-actuals.js";
 import { karadaImportHTML } from "./karada-import.js";
 import { ARCHIVED_READONLY_MESSAGE } from "./archive-date-protection.js";
 // src/features/today-tower.js — v229: ARRIVALS見積列・GATE編集・早起きゲートを統合。
@@ -297,20 +298,17 @@ function renderTowerBoard(arrivalFlights) {
 }
 
 function flightLogDuration(block) {
-  if (!block.actualStartAt || !block.actualEndAt) return "—";
-  const minutes = Math.max(0, Math.round((localDateTimeToMs(block.actualEndAt) - localDateTimeToMs(block.actualStartAt)) / 60000));
-  return `${minutes}分`;
+  const minutes = actualDurationMinutes(block);
+  return minutes == null ? "未記録" : `${minutes}分`;
 }
 
 // v317: 「今日」TOWERとジャーナルの日付ページで、終了実績の母集団を共有する。
-function flightLogBlocks(blocks) {
-  return blocks
-    .filter((block) => block.actualEndAt)
-    .sort((a, b) => String(a.actualEndAt).localeCompare(String(b.actualEndAt)));
+function flightLogBlocks(blocks, date) {
+  return dailyActuals(blocks, date);
 }
 
 function renderFlightLog(date, blocks) {
-  const completed = flightLogBlocks(blocks);
+  const completed = flightLogBlocks(blocks, date);
   const keys = new Set(completed.map((block) => `${block.id}:${block.actualEndAt}`));
   const latest = completed[completed.length - 1];
   const latestKey = latest ? `${latest.id}:${latest.actualEndAt}` : "";

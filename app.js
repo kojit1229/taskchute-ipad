@@ -32,6 +32,7 @@ import { normalizeTwyPlan } from "./src/core/plan.js";
 import { createVisionRead } from "./src/features/vision-read.js";
 import { createVisionOverview } from "./src/features/vision-overview.js";
 import { DAILY_ACTIONS } from "./src/ui/daily-parts/contract.js";
+import { dailyActuals, actualDurationMinutes } from "./src/core/daily-actuals.js";
 import { runDailyOperation, prepareDailyEnd } from "./src/features/daily-operations.js";
 import { createDraftLeaveGuard } from "./src/features/draft-leave.js";
 import { createDailyDraftStore } from "./src/features/daily-draft.js";
@@ -1586,6 +1587,13 @@ const dailyOperationDeps = {
     showToast((result.declaration && buildDeclareFeedback(result.declaration)) || "終了を保存しました",
       result.justCompleted ? { blockId: block.id, actionLabel: "実績を編集" } : undefined);
     if (result.justCompleted || input.timer === true) openBodyScanModal(block.id);
+  },
+  actualEditEffect: result => {
+    if (!result.unchanged) generateReport(result.block.date, { quiet: true });
+    closeModal();
+    state.timelineMode = "actual";
+    render();
+    showToast("実績を訂正しました");
   },
   legacy: {
     "edit-block": ({ id }) => openBlockEditor(id),
@@ -6331,7 +6339,8 @@ function renderExecDoneRow(block) {
   const end = block.actualEndAt ? timeFromDateTime(block.actualEndAt) : "";
   const chargeInfo = (block.charge != null || block.discharge != null)
     ? ` ・ 充${block.charge ?? "-"}/放${block.discharge ?? "-"}` : "";
-  const metaHTML = `${start}${end ? `–${end}` : ""}${chargeInfo}${block.category ? ` ・ ${escapeHTML(block.category)}` : ""} ・ ${block.completed ? "完了" : "終了・未完了"}`;
+  const duration = actualDurationMinutes(block);
+  const metaHTML = `${duration == null ? "未記録" : `${duration}分`} ・ ${start}${end ? `–${end}` : ""}${chargeInfo}${block.category ? ` ・ ${escapeHTML(block.category)}` : ""} ・ ${block.completed ? "完了" : "終了・未完了"}`;
   return `
     <div class="item exec-row exec-row-done">
       ${block.completed ? `<button type="button" class="checkbox-button done" data-action="toggle-block" data-id="${block.id}" aria-label="Block完了を解除" title="Block完了を解除">✓</button>` : `<span class="checkbox-button" aria-hidden="true">■</span>`}
@@ -6346,9 +6355,7 @@ function renderExecDoneRow(block) {
 }
 
 function execDoneListHTML() {
-  // 実績は完了Blockと終了時刻がある未完了Blockを保持する。予定母集団の除外は適用しない。
-  const done = blocksForDate(state.selectedDate).filter((b) => b.completed || Boolean(b.actualEndAt))
-    .sort((a, b) => (a.actualStartAt || "").localeCompare(b.actualStartAt || ""));
+  const done = dailyActuals(state.blocks, state.selectedDate);
   return `
     <section class="section exec-panel exec-amber exec-done-section">
       <h2>やったこと</h2>
@@ -13802,6 +13809,7 @@ function submitModal(options) {
       if (draft && state.modal !== owner) draftSaveTransaction.clearDraft(draft);
     }
   }
+  if (type === "actualEntry") return saveActualEntryFromModal(id, fields);
   dispatchModalSave(type, id, fields);
 }
 
@@ -15105,7 +15113,7 @@ function completeBlockWithActual(blockId) {
   const block = state.blocks.find((b) => b.id === blockId);
   if (!block) return;
   // 予定をデフォルトに、なければ現在時刻
-  const defaultStart = block.actualStartAt || block.plannedStartAt || nowDateTime();
+  const defaultStart = block.actualStartAt || (block.actualEndAt ? "" : block.plannedStartAt || nowDateTime());
   const defaultEnd = block.actualEndAt || block.plannedEndAt || nowDateTime();
   state.modal = { type: "actualEntry", id: blockId };
   renderModal(buildActualEntryModal(block, defaultStart, defaultEnd));
@@ -15155,52 +15163,16 @@ function buildActualEntryModal(block, defaultStart, defaultEnd) {
       </div>
       <div class="modal-footer">
         <button class="btn" data-action="modal-close">キャンセル</button>
-        <button class="btn green" data-action="modal-save">完了として登録</button>
+        <button class="btn green" data-action="modal-save">実績を保存</button>
       </div>
     </div>
   `;
 }
 
 function saveActualEntryFromModal(blockId, fields) {
-  const previousBlock = state.blocks.find((b) => b.id === blockId);
-  const wasCompleted = Boolean(previousBlock?.completed);
-  if (!commitBlockChanges(state.blocks.map((b) => {
-    if (b.id !== blockId) return b;
-    return {
-      ...b,
-      actualStartAt: fromLocalInput(fields.actualStartAt),
-      everStartedAt: b.everStartedAt || fromLocalInput(fields.actualStartAt),
-      actualEndAt: fromLocalInput(fields.actualEndAt),
-      charge: Number(fields.charge) || 0,
-      discharge: Number(fields.discharge) || 0,
-      comment: fields.comment || "",
-      completed: true
-    };
-  }))) return false;
-  if (!wasCompleted) transferIronLogToCompletedBlock(blockId);
-  // Task の状態を doing に
-  const block = state.blocks.find((b) => b.id === blockId);
-  if (!wasCompleted && block) syncHabitStreakForBlock(block);
-  if (block?.taskId) {
-    state.tasks = state.tasks.map((t) =>
-      t.id === block.taskId && t.status === "todo"
-        ? { ...t, status: "doing", updatedAt: nowDateTime() }
-        : t
-    );
-  }
-  if (block) generateReport(block.date, { quiet: true });
-  if (state.pomodoro.running && state.pomodoro.blockId === blockId) completePomodoro(true);
-  closeModal();
-  // 実績モードに切り替えて表示
-  state.timelineMode = "actual";
-  saveState();
-  if (!previousBlock?.actualStartAt && block?.actualStartAt) trackOnBlockStarted(block);
-  if (!wasCompleted && block?.completed) {
-    trackOnBlockCompletionChanged(block, true, { interactive: false });
-  }
-  saveAndRender("✅ 実績を登録しました");
-  // v293: 身体スキャン復活(実績登録モーダルは保存前に既にcloseModal済みのため直接開いてよい)。
-  if (!wasCompleted && block?.completed) openBodyScanModal(block.id);
+  const result = runDailyOperation("daily-actual-edit", { kind: "actual", id: blockId, values: fields }, dailyOperationDeps);
+  if (!result.ok) showToast(result.error?.message || "保存できませんでした。入力は残しています");
+  return result;
 }
 
 // ============================================================

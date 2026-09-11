@@ -7,6 +7,7 @@ import { buildBlockStart } from "../core/daily-start.js";
 import { buildBlockEnd } from "../core/daily-end.js";
 import { buildPlanCompletion, buildTaskCompletion } from "../core/daily-completion.js";
 import { createDailyDraftStore } from "./daily-draft.js";
+import { buildActualEdit } from "../core/daily-actuals.js";
 
 const copyReady = Symbol("saved copy source");
 const copyRequests = new WeakMap();
@@ -27,7 +28,7 @@ export const DAILY_OPERATIONS = {
   "daily-block-duplicate": { build: buildBlockCopy, effects: copyEffects },
   "daily-duplicate-undo": { build: (state, input, deps) => buildCopyUndo(state, input, { copyFingerprint: dailyFingerprint }), effects: copyUndoEffects },
   "daily-schedule-edit": unwired("daily-schedule-edit"),
-  "daily-actual-edit": unwired("daily-actual-edit"),
+  "daily-actual-edit": { build: buildActualEdit, effects: actualEditEffects },
   "daily-task-complete": { build: buildTaskCompletion, effects: taskCompletionEffects },
   "daily-search-change": unwired("daily-search-change"),
   "daily-search-clear": unwired("daily-search-clear"),
@@ -119,6 +120,10 @@ function planCompletionEffects(result, input, deps) {
 
 function taskCompletionEffects(result, input, deps) {
   if (!result.unchanged) deps.taskCompletionEffect?.(result, input);
+}
+
+function actualEditEffects(result, input, deps) {
+  deps.actualEditEffect?.(result, input);
 }
 
 function dailyTimesEffects(result, input, deps) {
