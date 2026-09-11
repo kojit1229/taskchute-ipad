@@ -46,6 +46,9 @@ import { state } from "../state/store.js";
 import { persistLocalNoSchedule } from "../storage/local.js";
 import { assignBlocksToLanes, adjustLaneTopPositions } from "./timeline-layout.js";
 import { registerActions } from "../ui/actions.js";
+import { scheduleDisplay, scheduleWarning, scheduleTimelineRows, renderSchedule } from "./single-schedule-view.js";
+import { plannedAvailability, displayPlannedGaps } from "./daily-gap-placement.js";
+let plannedDraftIntervals = () => [];
 
 // ---- 依存注入(configureTimeline) ----
 let escapeHTML, getCategoryColor, migrationBadgeHTML, leverageTypeMarkHTML;
@@ -58,6 +61,7 @@ let makeBlock, getOtherTask, openBlockEditor, saveState, isStaleBlock;
 let timelineRailEl, appRootEl;
 
 function configureTimeline(deps) {
+  plannedDraftIntervals = deps.plannedDraftIntervals || (() => []);
   ({
     escapeHTML, getCategoryColor, migrationBadgeHTML, leverageTypeMarkHTML,
     minutesOf, todayISO, pad2, clamp, formatDisplayDate, computeProjectedEnd, resolveEstimateMin,
@@ -336,6 +340,10 @@ function mergedIntervalsFor(blocks, startField, endField) {
 // 既存Blockに占有されているかだけを見て、占有されていなければ従来どおり「行頭〜次のBlock開始
 // or 行末」を返す(占有されていれば何もしない=null)。
 function execRowFreeRange(rowStart, rowEnd, mode) {
+  if (mode === "planned") {
+    const availability = plannedAvailability(state, state.selectedDate, { draftIntervals: plannedDraftIntervals() });
+    return displayPlannedGaps(availability).map(([s,e]) => [Math.max(s,rowStart),Math.min(e,rowEnd)]).find(([s,e]) => e - s >= 15) || null;
+  }
   const field = mode === "actual" ? ["actualStartAt", "actualEndAt"] : ["plannedStartAt", "plannedEndAt"];
   const merged = mergedIntervalsFor(blocksForDate(state.selectedDate), field[0], field[1]);
   if (merged.some(([s, e]) => s <= rowStart && rowStart < e)) return null;
@@ -359,6 +367,7 @@ function fillGapSelectedOverlayHTML(modal, rowHeight, startHour) {
 }
 
 function renderTimeline({ compact, mode = "planned", embedded = false }) {
+  const schedules = mode === "planned" ? scheduleDisplay(state, state.selectedDate) : null;
   const allBlocks = blocksForDate(state.selectedDate);
   // モードに応じてフィルタリングと表示位置決定
   let blocksToRender;
@@ -373,10 +382,11 @@ function renderTimeline({ compact, mode = "planned", embedded = false }) {
   // v39: エネルギー構造分析からのカテゴリフィルタ(UI状態)
   const catFilter = state.settings.timelineCategoryFilter || "";
   if (catFilter) blocksToRender = blocksToRender.filter((b) => (b.category || "未分類") === catFilter);
+  if (mode === "planned") blocksToRender.push(...scheduleTimelineRows(state, state.selectedDate));
   // v10: ズームレベル(state.timelineZoom: 1.0 / 2.0 / 4.0 のいずれか)
   const zoom = compact ? 1 : (state.timelineZoom || 1);
   const rowHeight = (compact ? 48 : 60) * zoom;
-  const startHour = 5;
+  const startHour = mode === "planned" ? 4 : 5;
   const endHour = 24;
   const rows = Array.from({ length: endHour - startHour + 1 }, (_, index) => startHour + index);
   // v10: レーン分割(PC 5、iPhone 3)
@@ -436,7 +446,7 @@ function renderTimeline({ compact, mode = "planned", embedded = false }) {
     }
     const s = `${pad2(Math.floor(free[0] / 60))}:${pad2(free[0] % 60)}`;
     const e = `${pad2(Math.floor(free[1] / 60))}:${pad2(free[1] % 60)}`;
-    return `<div class="time-row" data-action="fill-gap-open" data-start="${s}" data-end="${e}" data-date="${state.selectedDate}" data-minute="${rowStart}"
+    return `<div class="time-row" data-action="fill-gap-open" data-basis="${mode}" data-start="${s}" data-end="${e}" data-date="${state.selectedDate}" data-minute="${rowStart}"
              style="top:${top}px;height:${rowHeight}px; cursor:pointer;">${String(hour).padStart(2, "0")}:00</div>`;
   }).join("");
 
@@ -446,6 +456,8 @@ function renderTimeline({ compact, mode = "planned", embedded = false }) {
 
   return `
     ${timelineControls}
+    ${schedules ? scheduleWarning(schedules, escapeHTML) : ""}
+    ${schedules?.records.length ? `<details class="timeline-schedule-list"><summary>単発予定の一覧</summary>${schedules.records.map(record => renderSchedule(record, state.selectedDate, escapeHTML)).join("")}</details>` : ""}
     <div class="timeline" style="position:relative; min-height:${rowHeight * (endHour - startHour + 1)}px">
       ${rowsHTML}
       <div class="timeline-cards-area" style="position:absolute; top:0; left:60px; right:100px; height:100%;">
@@ -467,6 +479,8 @@ function renderTimelineCard(positioned, mode = "planned", maxLanes = 5) {
   const lanes = Math.max(1, laneCount || 1);
   const widthPercent = 100 / lanes;
   const leftPercent = lane * widthPercent;
+  if (block.scheduleRecord) return renderSchedule(block.scheduleRecord, state.selectedDate, escapeHTML,
+    { style: `position:absolute;top:${top}px;height:${height}px;left:${leftPercent}%;width:calc(${widthPercent}% - 4px);` });
 
   const isActual = mode === "actual";
   // カテゴリ色を反映

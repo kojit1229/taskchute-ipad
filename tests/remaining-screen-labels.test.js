@@ -177,9 +177,61 @@ async function fundJapanese(page) {
   console.log("PASS fund: Japanese headings/time explanations, proper names and all comparison/individual/report/refresh controls");
 }
 
+async function wishJapanese(page) {
+  const { STATE_KEY } = require("./helpers");
+  await page.evaluate(key => {
+    const s = JSON.parse(localStorage.getItem(key));
+    const project = s.projects.find(p => p.kind === "wish" && !p.deleted);
+    if (!project) throw new Error("fixture wish project missing");
+    s.tasks = s.tasks.filter(t => t.projectId !== project.id);
+    s.wishFilter = { area: "", showRealized: false };
+    s.wishOpenId = "";
+    localStorage.setItem(key, JSON.stringify(s));
+  }, STATE_KEY);
+  await page.reload();
+  await nav(page, "wish");
+  const root = page.locator(".wish-tower");
+  assert.equal(await root.locator("h1").innerText(), "やりたいこと");
+  assert.deepEqual(await root.locator("h2").evaluateAll(nodes => nodes.map(n => n.firstChild.textContent)), ["実現の状況", "追加・絞り込み"]);
+  assert.ok((await root.innerText()).includes("やりたいことを追加してみましょう（大きな夢でも大丈夫）"));
+  assert.equal(await root.locator("#wishTitle").getAttribute("placeholder"), "やりたいこと（大きな夢でも大丈夫）");
+  await root.locator("#wishTitle").fill("架空の旅行");
+  await root.locator('[data-action="add-wish"]').click();
+  await root.locator(".wish-detail").waitFor();
+  assert.equal(await root.locator(".wish-group-panel h2").evaluate(n => n.firstChild.textContent), "時期別の一覧");
+  assert.ok((await root.innerText()).includes("最初の一歩を1〜3個書いてみましょう。完璧でなくて大丈夫。"));
+  const wishId = await root.locator('[data-action="open-wish"]').getAttribute("data-id");
+  page.once("dialog", dialog => {
+    assert.equal(dialog.message(), "サブタスク（次の一歩）を入力してください");
+    return dialog.accept("架空の次の一歩");
+  });
+  await root.locator('[data-action="add-wish-subtask"]').click();
+  await root.locator('[data-action="wish-subtask-title"]').waitFor();
+  for (const action of ["add-wish", "wish-filter-area", "wish-toggle-realized", "open-wish",
+    "wish-set-year", "wish-set-area", "wish-set-duedate", "wish-set-motivation", "add-wish-subtask",
+    "toggle-wish-subtask", "wish-subtask-title", "wish-subtask-to-tasks", "delete-task", "wish-realize", "delete-wish"]) {
+    assert.ok(await root.locator('[data-action="' + action + '"]').first().isVisible(), action);
+  }
+  assert.equal(await root.locator('[data-action="wish-set-duedate"]').getAttribute("type"), "date");
+  await root.locator('[data-action="wish-toggle-realized"]').check();
+  page.once("dialog", dialog => {
+    assert.equal(dialog.message(), "このやりたいことを「実現済み」にしますか?");
+    return dialog.accept();
+  });
+  await root.locator('button[data-action="wish-realize"]').click();
+  await root.locator('button[data-action="wish-unrealize"]').waitFor();
+  assert.equal(await root.locator('button[data-action="wish-unrealize"]').getAttribute("data-id"), wishId);
+  assert.ok((await root.innerText()).includes("実現済み"));
+  await root.locator('button[data-action="wish-unrealize"]').click();
+  await root.locator('button[data-action="wish-realize"]').waitFor();
+  assert.equal(await root.locator('[data-action="open-wish"]').getAttribute("data-id"), wishId);
+  assert.ok(!/WISH RADAR|WISH DECK|FLIGHT PLAN|Wish Project/.test(await root.innerText()));
+  console.log("PASS wish: Japanese headings/empty states, all controls, realization and existing IDs");
+}
+
 async function run() {
   const { page, browser, server } = await setup();
-  try { await twelveWeek(page); await healthJapanese(page); await fundJapanese(page); }
+  try { await twelveWeek(page); await healthJapanese(page); await fundJapanese(page); await wishJapanese(page); }
   finally { await page.context().close(); await browser.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });

@@ -35,7 +35,7 @@ import { createVisionOverview } from "./src/features/vision-overview.js";
 import { DAILY_ACTIONS } from "./src/ui/daily-parts/contract.js";
 import { REPORT_PENDING } from "./src/core/daily-report.js";
 import { dailyActuals, actualDurationMinutes } from "./src/core/daily-actuals.js";
-import { runDailyOperation, prepareDailyEnd } from "./src/features/daily-operations.js";
+import { runDailyOperation, prepareDailyEnd, dailyFingerprint } from "./src/features/daily-operations.js";
 import { createDraftLeaveGuard } from "./src/features/draft-leave.js";
 import { createDailyDraftStore } from "./src/features/daily-draft.js";
 import { createDraftSaveTransaction } from "./src/features/draft-save.js";
@@ -43,6 +43,9 @@ import { commitCandidate, assertNotInsideBuild } from "./src/core/commit.js";
 import { stamped } from "./src/core/mutation-stamp.js";
 import { renderDetailFrame } from "./src/ui/daily-parts/detail-frame.js";
 import { renderDailyBlockDetails } from "./src/features/daily-view-model.js";
+import { configureScheduleView } from "./src/features/single-schedule-view.js";
+import { plannedAvailability, displayPlannedGaps, draftPlannedIntervals, capturePlannedDraft, validatePlannedDraft, gapWarning } from "./src/features/daily-gap-placement.js";
+import { createDailyGapSheet } from "./src/features/daily-gap-sheet.js";
 import { configureWorkList, renderWorkList, handleWorkListInput, handleWorkListComposition, rememberWorkListOrigin, restoreWorkListOrigin, rememberWorkListScroll, restoreWorkListScroll } from "./src/features/work-list.js";
 // v166: app.js分割・段階3(state store + storage/sync gateway)。stateの再代入はsetState()
 //   経由のみ(claude-review-result.md §2 Blocker-1)。store.jsは何もimportしない真の葉。
@@ -432,6 +435,7 @@ configureTimelineLayout({ minutesOf, nowDateTime });
 // v175: src/features/timeline.jsも同じ理由(循環import回避)で依存注入する。timelineRail/app
 // (起動時に1回だけdocument.querySelectorした固定DOM参照)はtimelineRailEl/appRootElとして渡す。
 configureTimeline({
+  plannedDraftIntervals: () => draftPlannedIntervals(_scheduleDraft),
   escapeHTML, getCategoryColor, migrationBadgeHTML, leverageTypeMarkHTML,
   minutesOf, todayISO, pad2, clamp, formatDisplayDate, computeProjectedEnd, resolveEstimateMin,
   renderHeader, renderDateBar,
@@ -1151,10 +1155,11 @@ registerActions({
   // --- Block作成(WBSからの「今日へ追加」) ---
   "task-today": ({ id }) => openTaskPlacement(id),
   // --- v354: 「空き時間を補う」シート(TIME COMB「補う」・実行ヘッダ「＋Block」の2導線から開く) ---
-  "fill-gap-open": ({ target }) => openFillGapSheet(target.dataset.start, target.dataset.end, target.dataset.date || state.selectedDate),
-  "fill-gap-place": ({ target, id }) => fillGapPlace(id, target.dataset.split === "1"),
-  "fill-gap-create": () => fillGapCreate(),
+  "fill-gap-open": ({ target }) => openFillGapSheet(target.dataset.start, target.dataset.end, target.dataset.date || state.selectedDate, target.dataset.basis),
+  "fill-gap-place": ({ target, id }) => fillGapPlace(id, target.dataset.split === "1", target),
+  "fill-gap-create": ({ target }) => fillGapCreate(target),
   "fill-gap-prefill": ({ target }) => fillGapPrefillFromRoutine(target.value),
+  "daily-gap-choose": () => dailyGapSheet.choose(),
   // --- Block/Now(6。now-mode-open/now-mode-close/now-conveyor-skipはv87で到達不能化、
   //     v292孤児掃除で削除(K裁定2026-08-29)。now-conveyor-completeはsrc/features/
   //     today-tower.js(TOWER UI)から現役で発行されるため残置=監査の見落としを現物確認で訂正) ---
@@ -1543,6 +1548,8 @@ function foldSection(id, defaultOpen, wrapperClass, summaryClass, summaryText, b
 //      未初期化のまま参照され、最後に開いていた画面によっては起動時に例外で全停止していた。
 
 const dailyOperationDeps = {
+  makeBlock: input => makeBlock(input), projectName: id => projectName(id),
+  draftIntervals: () => draftPlannedIntervals(_scheduleDraft),
   isReadingBlock: function isReadingBlock(block) {
   return Boolean(block?.externalRef?.startsWith("daily-reading:v1:")
     || ["daily-reading-auto", "daily-reading-manual"].includes(block?.source)
@@ -1618,6 +1625,19 @@ const dailyOperationDeps = {
     "modal-save": ({ save }) => save()
   }
 };
+
+configureScheduleView({ state: () => state, escapeHTML, render, renderModal, modalHeaderHTML,
+  notify: showToast, requestLeave: requestDraftLeave,
+  run: input => runDailyOperation("daily-schedule-complete", input, dailyOperationDeps) });
+
+const dailyGapSheet = createDailyGapSheet({ state: () => state, escapeHTML, modalHeaderHTML,
+  fingerprint: dailyFingerprint,
+  resolveInput: input => draftLeaveGuard.request(input),
+  isComposing: () => _imeComposing, requestLeave: requestDraftLeave, notify: showToast,
+  availability: date => plannedAvailability(state, date, { draftIntervals: draftPlannedIntervals(_scheduleDraft) }),
+  show: modal => { closeModal(); state.modal = modal; if (fillGapExecDesktop()) render(); else renderModal(buildFillGapModal(modal)); },
+  showPicker: html => { state.modal = { type: "plannedGapPicker" }; renderModal(html); },
+  run: (name, input) => runDailyOperation(name, input, dailyOperationDeps), done: () => { closeModal(); render(); } });
 
 document.addEventListener("click", (event) => {
   const reportLink = event.target.closest('.fund-report-view .readonly-md a, .fund-view .readonly-md a');
@@ -4255,28 +4275,8 @@ function subtractOccupiedIntervals(gaps, occupied) {
 //   省略時(null)は従来どおり全Blockを占有として扱うため既存呼び出し元は無改修)。
 function computeFreeGaps(date, dayStartMin = 5 * 60, dayEndMin = 23 * 60, excludeBlockIds = null) {
   if (dayEndMin <= dayStartMin) return [];
-  const occupied = blocksForDate(date)
-    .filter((b) => !excludeBlockIds || !excludeBlockIds.has(b.id))
-    .filter((b) => !b.migratedTo)  // 1-H1+K16(2026-09-05回答): 送済Blockは空き時間計算でも占有から外す
-    .map((b) => blockOccupiedRange(b, dayStartMin, dayEndMin))
-    .filter(Boolean)
-    .sort((a, b) => a[0] - b[0]);
-  // 重複・隣接区間をマージ
-  const merged = [];
-  occupied.forEach(([s, e]) => {
-    const last = merged[merged.length - 1];
-    if (last && s <= last[1]) last[1] = Math.max(last[1], e);
-    else merged.push([s, e]);
-  });
-  // マージ済み占有区間の「隙間」を空き枠として拾う
-  const gaps = [];
-  let cursor = dayStartMin;
-  merged.forEach(([s, e]) => {
-    if (s > cursor) gaps.push([cursor, s]);
-    cursor = Math.max(cursor, e);
-  });
-  if (cursor < dayEndMin) gaps.push([cursor, dayEndMin]);
-  return gaps;
+  const availability = plannedAvailability(state, date, { window: [dayStartMin, dayEndMin], excludeBlockIds });
+  return displayPlannedGaps(availability);
 }
 
 // v199: 再配置の配置ウィンドウ(2026-08-10 K指示。空いていても早朝・深夜に詰め込まない)。
@@ -4380,7 +4380,7 @@ function runAiSchedule() {
   const skipped = movable
     .filter((b) => skipSet.has(b.id))
     .map((b) => ({ title: b.title, reason: skipReasonById.get(b.id) }));
-  _scheduleDraft = { date, items: finalItems, skipped, source: "deterministic" };  // v62: source区別
+  _scheduleDraft = capturePlannedDraft(state, { date, items: finalItems, skipped, source: "deterministic" });
   _draftUndo = null;  // v62: 新規下書きでは前セッションのUndoを持ち越さない
   state.timelineMode = "planned";
   // v335(§C): 旧timelineビュー直行をexecへ寄せる。energy-open-categoryと異なり、この呼び出しは
@@ -4486,6 +4486,8 @@ const SCHED_BANDS = [
 function confirmScheduleDraft() {
   if (!_scheduleDraft || !_scheduleDraft.items.length) return;
   const { date, items } = _scheduleDraft;
+  const checked = validatePlannedDraft(state, _scheduleDraft);
+  if (checked.error) { showToast(checked.error); return false; }
   // v61: マイグレーション儀式 — 繰越由来(carryFromId)の項目が3回目の繰り越しになる場合は、
   //      一括確定の前に一呼吸置く。既に選択済み(_ritualResolved)の項目はスキップする。
   const ritualItem = items.find((it) =>
@@ -4498,6 +4500,7 @@ function confirmScheduleDraft() {
   if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => confirmScheduleDraft(), { kinds: ["blocks"] }).ok;
   let updatedCount = 0, createdCount = 0;  // v199(軽微3): 確定トーストを「登録」と「時刻更新」で書き分ける
   items.forEach((it) => {
+    const planned = checked.intervals.find(row => row.id === it.id);
     // v199: blockId付き項目(当日タスクシュート再配置)は既存Blockの時刻だけ更新する。
     //   makeBlockしない=新規Block化しない。migratedTo/carryCount系(繰越専用)も通さない。
     if (it.blockId) {
@@ -4505,22 +4508,22 @@ function confirmScheduleDraft() {
       if (!state.blocks.some((b) => b.id === it.blockId)) return;
       state.blocks = state.blocks.map((b) => b.id === it.blockId ? {
         ...b,
-        plannedStartAt: `${date}T${minToHHMM(it.start)}`,
-        plannedEndAt: `${date}T${minToHHMM(it.start + it.minutes)}`,
+        plannedStartAt: planned.plannedStartAt,
+        plannedEndAt: planned.plannedEndAt,
         updatedAt: nowDateTime()  // v135以降のid+updatedAtマージ対策
       } : b);
       updatedCount += 1;
       return;
     }
-    const block = makeBlock({
+    const block = { ...(it.candidateBlock ||= makeBlock({
       date,
       title: it.title,
       taskId: it.taskId || "",
       category: it.category || "",
-      plannedStartAt: `${date}T${minToHHMM(it.start)}`,
-      plannedEndAt: `${date}T${minToHHMM(it.start + it.minutes)}`,
+      plannedStartAt: planned.plannedStartAt,
+      plannedEndAt: planned.plannedEndAt,
       estimateMin: it.minutes
-    });
+    })), plannedStartAt: planned.plannedStartAt, plannedEndAt: planned.plannedEndAt, estimateMin: it.minutes };
     // v52: 決定論配置の元値を Block に残す(確定・実績との突き合わせ = 実績データ。フィールド名は互換のため維持)
     block.aiPlan = { start: minToHHMM(it.aiStart ?? it.start), minutes: it.aiMinutes ?? it.minutes };
     // v65: AIプランのtitle先頭「[資産]」検出分は確定時にleverageType=assetを引き継ぐ
@@ -4547,7 +4550,7 @@ function confirmScheduleDraft() {
   const confirmParts = [];
   if (updatedCount) confirmParts.push(`${updatedCount}件の時刻を更新`);
   if (createdCount) confirmParts.push(`${createdCount}件を登録`);
-  saveAndRender(confirmParts.length ? `📋 ${confirmParts.join("・")}しました` : "対象のBlockが見つからず、確定できませんでした");
+  saveAndRender(gapWarning(checked.warnings) + (confirmParts.length ? `📋 ${confirmParts.join("・")}しました` : "対象のBlockが見つからず、確定できませんでした"));
 }
 
 // v77: AIフィードバック_<date>.md 本文の「## 0秒思考テーマ」見出し(- [ ] テーマ: 理由 形式、
@@ -6458,7 +6461,7 @@ function renderTasks(opts = {}) {
   const embedded = opts.embedded === true;
   return `${embedded ? "" : execHeaderHTML() + renderDateBar()}
     ${carryOverPanel()}${renderWorkList("exec")}
-    ${embedded ? `<div class="exec-switch-footer"><button class="btn ghost" data-action="exec-mode-toggle" data-mode="actual">実績を見る ›</button></div>` : ""}`;
+    ${embedded ? `<div class="exec-switch-footer"><button class="btn ghost" data-action="daily-gap-choose">計画の空きへ配置</button><button class="btn ghost" data-action="exec-mode-toggle" data-mode="actual">実績を見る ›</button></div>` : ""}`;
 }
 // v331修正: 「いま」行(実行中Block1件)。常時要素は☐(toggle-block)・タイトル+meta・
 // 完了(toggle-block再掲)・終了報告(now-end)のみ。充放電select・実行中メモtextareaは
@@ -9899,7 +9902,8 @@ function fillGapExecDesktop() {
   return state.currentView === "exec" && Boolean(window.matchMedia?.("(min-width: 1280px)").matches);
 }
 
-function openFillGapSheet(start, end, date) {
+function openFillGapSheet(start, end, date, basis) {
+  if (basis === "planned") return dailyGapSheet.open(start, end, date || state.selectedDate);
   state.modal = { type: "fillGap", start, end, date: date || state.selectedDate };
   if (fillGapExecDesktop()) { render(); return; }
   renderModal(buildFillGapModal(state.modal));
@@ -9989,6 +9993,7 @@ function fillGapPrefillFromRoutine(ruleId) {
 }
 
 function buildFillGapModal(modal) {
+  if (modal.basis === "planned") return dailyGapSheet.build(modal);
   const { start, end, date } = modal;
   const durMin = Math.max(0, minuteFromHHMM(end) - minuteFromHHMM(start));
   const pool = fillGapTaskPool(date);
@@ -10008,7 +10013,8 @@ function buildFillGapModal(modal) {
 // M-2復元: v186レビューM-2(旧createBlockForActualGap)の重複防止を踏襲する。
 // 同じ日付・同じ計画開始時刻に同じTaskのBlockが既にあれば新規作成せず、その編集モーダルを開く
 // (2回押しても2件できない=冪等)。
-function fillGapPlace(taskId, split) {
+function fillGapPlace(taskId, split, target) {
+  if (state.modal?.basis === "planned") return dailyGapSheet.place("block", taskId, target);
   const modal = state.modal;
   if (!modal || modal.type !== "fillGap") return;
   const { start, end, date } = modal;
@@ -10034,7 +10040,8 @@ function fillGapPlace(taskId, split) {
 
 // H-1/H-2対応: シート内「新しいBlockを作る」。既存addBlock()と同様「その他」Task紐づけ+
 // makeBlock()に委譲するだけで、開始時刻=空き時間の頭・長さ=選択値(既定は空き時間まで)を渡す。
-function fillGapCreate() {
+function fillGapCreate(target) {
+  if (state.modal?.basis === "planned") return dailyGapSheet.place("task", document.querySelector('#fillGapProject')?.value, target);
   const modal = state.modal;
   if (!modal || modal.type !== "fillGap") return;
   const { start, end, date } = modal;

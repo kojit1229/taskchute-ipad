@@ -175,7 +175,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "ai-step-confirm-send", "ai-step-confirm-later",  // v198: 完了トリガー→引き継ぎシート
   "timeline-new-block", "timeline-mode", "complete-block-with-actual",
   "drift-postpone",  // v186: F2 DRIFT(明日へ送る)の意図的追加
-  "fill-gap-open", "fill-gap-place", "fill-gap-create", "fill-gap-prefill",  // v354/v357: 「空き時間を補う」シート(旧time-comb-fillを統合・置換。prefillはv357でルーティン雛形選択に追加)
+  "fill-gap-open", "fill-gap-place", "fill-gap-create", "fill-gap-prefill", "daily-gap-choose",  /* v388 契約追随(束B8 41b、監督者決定 2026-09-11) */  // v354/v357: 「空き時間を補う」シート(旧time-comb-fillを統合・置換。prefillはv357でルーティン雛形選択に追加)
 
   "add-category", "delete-category",
   "toggle-vision-direct-category", "vision-open-direct-settings",  // v189: F7 直結カテゴリ選択+誘導(設定ビュー)
@@ -351,6 +351,7 @@ const APP_JS_REGISTERED_ACTIONS = [
   // --- v354: 「空き時間を補う」シート(TIME COMB「補う」+実行ヘッダ「＋Block」から開く。
   //     旧time-comb-fillを統合・置換) ---
   "fill-gap-open", "fill-gap-place", "fill-gap-create", "fill-gap-prefill",  // v357: ルーティン雛形プリフィル
+  "daily-gap-choose",  // v388 契約追随(監督者決定 2026-09-11、束B8 41b): 空き選択シート(daily-gap-sheet.js)の候補選択を app.js が直接登録(215→216、和集合 272→273)。design/CHANGELOG.md
   // --- v180: Block/Now(6。now-mode-open/now-mode-close/now-conveyor-skipはv87でUI導線を
   //     撤去して以来到達不能化、v292孤児掃除で削除。now-conveyor-completeはsrc/features/
   //     today-tower.js(TOWER UI)から現役で発行されるため残置=低優先度棚卸しK裁定2026-08-29) ---

@@ -15,6 +15,8 @@ const actions = [
   "edit-block", "daily-schedule-edit", "daily-actual-edit", "daily-task-complete",
   // v387 契約追随(監督者決定 2026-09-11、束B7 単位38): 単発予定の登録・完了・削除の登録行3件(画面公開は D01 まで保留)
   "daily-schedule-add", "daily-schedule-complete", "daily-schedule-delete",
+  // B8/41 order explicitly adds the two placement registry paths to the fixed contract.
+  "daily-gap-place", "daily-gap-create",
   "daily-search-change", "daily-search-clear", "modal-save", "modal-close", "modal-delete",
   "edit-task", "edit-project",
   "daily-report-refresh" // v386 契約追随(監督者決定 2026-09-11、fixB6): 33 の日報再生成の登録行

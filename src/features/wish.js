@@ -168,8 +168,8 @@ function renderWish() {
   if (!wishProject) {
     return `
       <div class="tower-skin wish-tower">
-        ${renderHeader("やりたいことリスト", "Wish")}
-        <section class="panel tower-panel-box">Wish Project が存在しません。リロードしてください。</section>
+        ${renderHeader("やりたいことリスト", "やりたいこと")}
+        <section class="panel tower-panel-box">やりたいことの保存先が見つかりません</section>
       </div>
     `;
   }
@@ -208,9 +208,9 @@ function renderWish() {
 
   return `
     <div class="tower-skin wish-tower">
-    ${renderHeader("やりたいことリスト", "Wish")}
+    ${renderHeader("やりたいことリスト", "やりたいこと")}
     <section class="panel tower-panel-box wish-rate-panel" style="margin-bottom:12px">
-      <h2>WISH RADAR<span>実現率</span></h2>
+      <h2>実現の状況<span>実現率</span></h2>
       <div class="row" style="align-items:center; gap:8px; flex-wrap:wrap">
         <strong>実現率</strong>
         <div style="font-size:20px; font-weight:700; color:var(--accent)">${realizedCount} / ${allWishes.length}</div>
@@ -220,9 +220,9 @@ function renderWish() {
     </section>
 
     <section class="panel tower-panel-box wish-deck-panel">
-      <h2>WISH DECK<span>追加・絞り込み</span></h2>
+      <h2>追加・絞り込み<span>条件で探す</span></h2>
       <section class="form-strip">
-        <input id="wishTitle" class="input" placeholder="やりたいこと(壮大でOK)">
+        <input id="wishTitle" class="input" placeholder="やりたいこと（大きな夢でも大丈夫）">
         <button class="btn primary" data-action="add-wish">追加</button>
       </section>
 
@@ -239,10 +239,10 @@ function renderWish() {
     </section>
 
     ${groupOrder.length === 0
-      ? `<section class="panel tower-panel-box" style="margin-top:12px; text-align:center; padding:32px"><div class="muted">${filter.area ? `「${escapeHTML(filter.area)}」のやりたいことはまだありません` : "やりたいことを追加してみましょう(壮大なものでもOK)"}</div></section>`
+      ? `<section class="panel tower-panel-box" style="margin-top:12px; text-align:center; padding:32px"><div class="muted">${filter.area ? `「${escapeHTML(filter.area)}」のやりたいことはまだありません` : "やりたいことを追加してみましょう（大きな夢でも大丈夫）"}</div></section>`
       : groupOrder.map((key) => `
         <section class="section tower-panel-box wish-group-panel" style="margin-top:14px">
-          <h2>FLIGHT PLAN<span>${wishGroupLabel(key)} ・ ${groups[key].length} 件</span></h2>
+          <h2>時期別の一覧<span>${wishGroupLabel(key)} ・ ${groups[key].length} 件</span></h2>
           <div class="grid">
             ${groups[key].map(renderWishCard).join("")}
           </div>
@@ -389,7 +389,7 @@ function addWish() {
   const title = titleEl?.value.trim();
   if (!title) return showToast("やりたいことを入力してください");
   const wishProject = getWishProject();
-  if (!wishProject) return showToast("Wish Project が見つかりません");
+  if (!wishProject) return showToast("やりたいことの保存先が見つかりません");
   const task = makeTask({ projectId: wishProject.id, title });
   // v79: makeTask の dueDate 既定(未指定時="今日")はタスクシュート実行前提の値で、
   //      長期的な「やりたいこと」には合わないため、Wish作成時だけ空に戻す(期限は任意)。
@@ -397,7 +397,7 @@ function addWish() {
   state.tasks.push(task);
   state.wishOpenId = task.id;  // 追加後すぐに開く
   taskTransaction().defer(() => { if (titleEl) titleEl.value = ""; });
-  saveAndRender("やりたいことを追加しました(サブタスクを書いて一歩を)");
+  saveAndRender("やりたいことを追加しました（サブタスクを書いて一歩を）");
 }
 
 function toggleWishOpen(id) {
@@ -408,7 +408,7 @@ function toggleWishOpen(id) {
 function addWishSubtask(parentTaskId) {
   if (!taskTransaction().active) {
     const title = wishSubtaskDraft?.parentTaskId === parentTaskId ? wishSubtaskDraft.title
-      : window.prompt("サブタスク(次の一歩)を入力してください") || "";
+      : window.prompt("サブタスク（次の一歩）を入力してください") || "";
     if (!title.trim()) return false;
     wishSubtaskDraft = { parentTaskId, title };
     const result = taskTransaction().run(() => addWishSubtask(parentTaskId), { kinds: ["tasks"] });
@@ -473,7 +473,7 @@ function unrealizeWish(id) {
 
 function deleteWish(id) {
   if (!taskTransaction().active) return taskTransaction().run(() => deleteWish(id), { kinds: ["tasks", "wishOpenId"] }).ok;
-  if (!window.confirm("このやりたいこと(およびサブタスク)を削除しますか?")) return;
+  if (!window.confirm("このやりたいこと（およびサブタスク）を削除しますか?")) return;
   // 本体 + 子孫サブタスクをすべて deleted フラグ
   const allIds = new Set([id]);
   // 子孫を再帰的に集める

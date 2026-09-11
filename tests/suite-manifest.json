@@ -15,7 +15,7 @@
       ],
       "assertionSignals": 41,
       "assertionHash": "62a3789070e26349",
-      "sourceHash": "5e74935094d0a789",
+      "sourceHash": "0d33f849f592c590",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -179,8 +179,8 @@
         "legacy-crosscutting"
       ],
       "assertionSignals": 18,
-      "assertionHash": "43dc1ba9f15b0abe",
-      "sourceHash": "4254bb90894176af",
+      "assertionHash": "50920dde24dfb029",
+      "sourceHash": "7e58159375e1b0de",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -485,8 +485,8 @@
         "content-ai"
       ],
       "assertionSignals": 41,
-      "assertionHash": "acfd31a11bd4028c",
-      "sourceHash": "c4071e4cd7da2c4e",
+      "assertionHash": "14682f2a08c8710c",
+      "sourceHash": "1ab454a3fee67ffe",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -534,7 +534,7 @@
       ],
       "assertionSignals": 32,
       "assertionHash": "b8efe116407bcdde",
-      "sourceHash": "d7a7444dee76f293",
+      "sourceHash": "aa78ccc4729b1bd4",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -594,6 +594,29 @@
         "fileWrite": true,
         "networkMock": false,
         "clock": false
+      }
+    },
+    {
+      "file": "daily-placement-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "content-ai"
+      ],
+      "assertionSignals": 76,
+      "assertionHash": "937a7b80c9f3a014",
+      "sourceHash": "f0d3c4009498e4b1",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
       }
     },
     {
@@ -2066,7 +2089,7 @@
       ],
       "assertionSignals": 164,
       "assertionHash": "b2532981d832359d",
-      "sourceHash": "1624e3e2bfc16bb1",
+      "sourceHash": "617c29a7aabc81ba",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2235,6 +2258,29 @@
       "assertionSignals": 103,
       "assertionHash": "f38727c82ac5b6c4",
       "sourceHash": "f5ee3141eedfd6b8",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "planned-occupancy-core.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "legacy-crosscutting"
+      ],
+      "assertionSignals": 28,
+      "assertionHash": "19a3a4031c42e213",
+      "sourceHash": "4faa81f6de182d2c",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2425,9 +2471,9 @@
         "content-ai",
         "ui-responsive"
       ],
-      "assertionSignals": 54,
-      "assertionHash": "304dad588140b3c7",
-      "sourceHash": "75306e8021b6285f",
+      "assertionSignals": 70,
+      "assertionHash": "9cf7e3e893e3e0b3",
+      "sourceHash": "0158f104cbffb03c",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2672,6 +2718,29 @@
         "server": true,
         "fileWrite": false,
         "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "single-schedule-view-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 35,
+      "assertionHash": "542dd7eeda41b073",
+      "sourceHash": "2157512753b4a1bb",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": false,
         "clock": true
       }
     },
@@ -7808,9 +7877,9 @@
         "content-ai",
         "ui-responsive"
       ],
-      "assertionSignals": 37,
-      "assertionHash": "5a1453a5a450aa37",
-      "sourceHash": "7bc87a2bc898e797",
+      "assertionSignals": 48,
+      "assertionHash": "e8e5d8f0cc2a6201",
+      "sourceHash": "ad376d6716cace09",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

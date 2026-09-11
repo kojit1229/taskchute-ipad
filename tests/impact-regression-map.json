@@ -311,6 +311,18 @@
         "action-registry-core"
       ]
     },
+    "single-schedule-view": {
+      "paths": ["^src/features/single-schedule-view\\.js$"],
+      "suites": ["single-schedule-view-e2e", "today-core", "v334", "v355", "v357"]
+    },
+    "daily-gap-placement": {
+      "paths": ["^src/features/daily-gap-placement\\.js$", "^src/features/daily-gap-sheet\\.js$"],
+      "suites": ["daily-placement-e2e", "placement-core", "placement-e2e", "v356", "v357", "daily-operations-registry", "daily-parts-contract", "code-index", "mutation-block-e2e"]
+    },
+    "planned-occupancy": {
+      "paths": ["^src/core/planned-occupancy\\.js$"],
+      "suites": ["planned-occupancy-core", "v59", "v199"]
+    },
     "sync-storage": {
       "paths": [
         "^src/features/single-schedule\\.js$",

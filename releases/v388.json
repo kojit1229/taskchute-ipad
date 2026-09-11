@@ -1,0 +1,79 @@
+{
+  "version": 388,
+  "date": "2026-09-11",
+  "title": "単発予定の表示と空き時間への手動配置、やりたいこと画面の日本語化",
+  "summary": "今日・実行の時間軸・詳細に、保存済みの単発予定が同じ内容で表示される(いまは0件なので見た目は変わらない)。空き時間に未定の予定を置く・作業一覧から予定を作る操作の裏側が共通の保存の仕組みに乗り、失敗すると入力が残る。空き時間の計算が単発予定も占有として数える。『やりたいこと』画面の文言が日本語になる",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "src/features/daily-operations.js",
+    "src/features/daily-view-model.js",
+    "src/features/timeline.js",
+    "src/features/today-tower.js",
+    "src/features/wish.js",
+    "src/ui/daily-parts/contract.js",
+    "sw.js",
+    "tests/daily-operations-registry.test.js",
+    "tests/daily-parts-contract.test.js",
+    "tests/impact-regression-map.json",
+    "tests/remaining-screen-labels.test.js",
+    "tests/suite-manifest.json",
+    "tests/wish-core.test.js",
+    "src/core/planned-occupancy.js",
+    "src/features/daily-gap-placement.js",
+    "src/features/daily-gap-sheet.js",
+    "src/features/single-schedule-view.js",
+    "tests/daily-placement-e2e.test.js",
+    "tests/planned-occupancy-core.test.js",
+    "tests/single-schedule-view-e2e.test.js",
+    "releases/v388.json",
+    "CHANGES_v388.md"
+  ],
+  "intent": [
+    "束B8（予定5の39・予定6の40a/40b・予定7の41a〜41d+fixB8）とL2-4a（4回-05）をv388としてまとめる。"
+  ],
+  "changes": [
+    "今日・実行の時間軸・詳細に、保存済みの単発予定が同じ内容で表示される(いまは0件なので見た目は変わらない)。空き時間に未定の予定を置く・作業一覧から予定を作る操作の裏側が共通の保存の仕組みに乗り、失敗すると入力が残る。空き時間の計算が単発予定も占有として数える。『やりたいこと』画面の文言が日本語になる",
+    "CACHE_NAMEをv387からv388へ更新し、CHANGES・handoff-preview・コード索引・テストmanifestを正規コマンドで生成する。"
+  ],
+  "uncertainties": [
+    "最終release-gateは監督者が実走する。本発注では未実施。"
+  ],
+  "reviewFocus": [
+    "既存の束B8+L2-4a差分を保持し、本発注の製品コード差分がSW先頭行だけであること。",
+    "単発予定とBlockの占有計算、今日・実行・詳細の同じ単発予定表示、手動配置の共通保存と失敗時の入力保持。",
+    "やりたいこと画面の日本語化。同日不正等で手動配置を停止し、TIME COMBの実績空き計算を保持すること。"
+  ],
+  "verification": [
+    "関連スイート: planned-occupancy-core / v59 / v199 / single-schedule-view-e2e / today-core / v334 / v355 / v357 / daily-placement-e2e / placement-core / placement-e2e / v356 / daily-operations-registry / daily-parts-contract / wish-core / remaining-screen-labels / daily-parts-isolation-e2e / sw-integration。本発注では実走せず、最終ゲートは監督者が実走する。",
+    "npm run code:index:write → npm run code:index -- --check が0の後、npm run test:manifest:write → npm run test:manifest。",
+    "TZ=Asia/Tokyo RELEASE_HANDOFF_PATH=<reports/impl-r1/v388/handoff-preview.md> node scripts/release-record.js releases/v388.json --write。",
+    "検査の実測終了コードはreports/impl-r1/v388/command-results.jsonlを参照。"
+  ],
+  "knownLimitations": [
+    "release-gateは発注121の指定により未実施（監督者担当）。",
+    "iOS実機・配信は未実施。"
+  ],
+  "relatedSuites": [
+    "planned-occupancy-core",
+    "v59",
+    "v199",
+    "single-schedule-view-e2e",
+    "today-core",
+    "v334",
+    "v355",
+    "v357",
+    "daily-placement-e2e",
+    "placement-core",
+    "placement-e2e",
+    "v356",
+    "daily-operations-registry",
+    "daily-parts-contract",
+    "wish-core",
+    "remaining-screen-labels",
+    "daily-parts-isolation-e2e",
+    "sw-integration"
+  ]
+}

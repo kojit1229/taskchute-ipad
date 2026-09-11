@@ -257,7 +257,10 @@ async function loadModules() {
     saveAndRenderCalls = [];
     wishMod.realizeWish("w1");
     check("realized:trueになる", storeMod.state.tasks[0].realized === true);
+    check("実現後も既存idを保持", storeMod.state.tasks.length === 1 && storeMod.state.tasks[0].id === "w1");
     check("saveAndRenderが呼ばれる", saveAndRenderCalls.length === 1);
+    wishMod.unrealizeWish("w1");
+    check("未実現へ戻しても既存idを保持", storeMod.state.tasks.length === 1 && storeMod.state.tasks[0].id === "w1" && storeMod.state.tasks[0].realized === false);
   }
 
   console.log("[7] wishSubtaskToTasks: 既に今日Block化済みなら二重登録せずtoast、新規Blockは常にtodayISO()基準");
@@ -284,6 +287,7 @@ async function loadModules() {
     check("新規BlockはtodayISO()基準の日付(2026-07-28)で作られる(selectedDateの2026-01-01ではない)",
       newBlock?.date === "2026-07-28", newBlock?.date);
     check("タスクのstatusがdoingになる", storeMod.state.tasks[0].status === "doing");
+    check("予定化は既存タスク番号を使いタスクを増やさない", newBlock.taskId === "s2" && storeMod.state.tasks.length === 1 && storeMod.state.tasks[0].id === "s2");
   }
 
   console.log("[9] wishGroupKey/wishGroupLabel: realized/someday/年ラベルの判定");
@@ -306,6 +310,27 @@ async function loadModules() {
     try { cardHTML = wishMod.renderWishCard(storeMod.state.tasks[0]); } catch (e) { threw = true; console.log(e); }
     check("renderWishCardが例外を投げない", threw === false);
     check("タイトルが描画される", cardHTML.includes("旅行"));
+  }
+
+  console.log("[11] renderWish: 日本語の見出し・空状態・保存先不在");
+  {
+    setBaseState();
+    const empty = wishMod.renderWish();
+    check("画面タイトルが日本語", empty.includes("やりたいことリスト/やりたいこと"));
+    check("実現の状況・追加と絞り込みの見出し", empty.includes("<h2>実現の状況<span>") && empty.includes("<h2>追加・絞り込み<span>"));
+    check("未登録の案内が日本語", empty.includes("やりたいことを追加してみましょう（大きな夢でも大丈夫）"));
+    setBaseState({ wishFilter: { area: "学び", showRealized: false } });
+    check("領域で絞り込んだ空状態", wishMod.renderWish().includes("「学び」のやりたいことはまだありません"));
+    setBaseState({ tasks: [{ id: "w-jp", projectId: WISH_PROJECT_ID, title: "架空の夢", deleted: false }] });
+    const populated = wishMod.renderWish();
+    check("時期別の一覧といつかの見出し", populated.includes("<h2>時期別の一覧<span>いつか ・ 1 件</span></h2>"));
+    check("旧英語の見出しが残らない", !/WISH RADAR|WISH DECK|FLIGHT PLAN/.test(populated));
+    setBaseState({ projects: [] });
+    check("保存先不在の案内が日本語", wishMod.renderWish().includes("やりたいことの保存先が見つかりません"));
+    domStubs["#wishTitle"] = { value: "架空の夢" };
+    toastCalls = [];
+    wishMod.addWish();
+    check("保存先不在の追加は日本語で通知し作成しない", toastCalls.length === 1 && toastCalls[0].message === "やりたいことの保存先が見つかりません" && storeMod.state.tasks.length === 0);
   }
 
   console.log(failures === 0 ? "\nwish-core: 全件成功" : `\nwish-core: ${failures}件失敗`);
