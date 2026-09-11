@@ -3,6 +3,10 @@
 // `node recurrence-core.test.js` で実行する。
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { parse } from "acorn";
+import vm from "node:vm";
+import { mergeRecords, mergeByIdPreferNewer } from "../src/core/merge.js";
 import {
   configureRecurrence,
   routineRate,
@@ -359,6 +363,117 @@ test("getState: state再代入後もmaintainRecurrencesは最新のstateへ書�
 
   assert.equal(oldState.blocks.length, 0, "古いstateオブジェクトには書き込まれないべき");
   assert.ok(newState.blocks.some((b) => b.recurrenceGroupId === "new1"), "新しいstateオブジェクトに書き込まれるべき");
+});
+
+// 114b / R2-01: run the actual legacy functions with isolated state and effect adapters.
+// Extract declarations by AST boundaries; never copy their implementation into fixtures.
+const legacyApp = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+const legacySync = readFileSync(new URL("../src/sync/github.js", import.meta.url), "utf8");
+function declarations(source, names) {
+  const nodes = parse(source, { ecmaVersion: "latest", sourceType: "module" }).body;
+  return names.map(name => {
+    const node = nodes.find(n => n.type === "FunctionDeclaration" && n.id.name === name
+      || n.type === "VariableDeclaration" && n.declarations.some(d => d.id.name === name));
+    assert.ok(node, `production declaration exists: ${name}`);
+    return source.slice(node.start, node.end);
+  }).join("\n");
+}
+const legacyCode = declarations(legacyApp, ["RECURRENCE_KEEP_PAST_DAYS", "RECURRENCE_FUTURE_DAYS",
+  "isTouchedBlock", "removeUntouchedInstances", "archiveHabitPinPeriod", "endRecurrenceSeries",
+  "deleteBlock", "saveBlockFromModal"])
+  + "\n" + declarations(legacySync, ["PRIMARY_SETTINGS_COMPARE_KEYS", "SYNC_CORE_COMPARE_KEYS",
+    "mergeCoreKeys", "mergeBlockLists"]);
+function legacyFixture() {
+  const rule = { id: "baseline", title: "朝の読書", kind: "daily", category: "仕事",
+    anchorDate: "2026-08-06", startTime: "09:00", endTime: "09:30", streakSince: null, deleted: false };
+  const state = { ...freshState(), recurrences: [rule], dataModifiedAt: "2026-08-20T10:00:00" };
+  const context = vm.createContext({ state, _blockSaveInFlight: false, draftSaveTransaction: { active: true },
+    todayISO: () => "2026-08-20", nowDateTime: () => "2026-08-20T10:00:00", addDays: addDaysISO,
+    fromLocalInput: value => value || "", habitStreakEdit: () => ({ ok: true, value: null }),
+    saveState() {}, saveAndRender() {}, closeModal() {}, showToast() {}, render() {},
+    document: { querySelector: () => null, querySelectorAll: () => [] },
+    mergeRecords, mergeByIdPreferNewer, normalizeDataStamp: value => value,
+    getByPath: (object, path) => path.split(".").reduce((v, key) => v?.[key], object),
+    maintainRecurrences,
+    commitBlockChanges(blocks, effects, recurrences) { state.blocks = blocks; state.recurrences = recurrences; effects(); return true; }
+  });
+  vm.runInContext(legacyCode, context);
+  currentState = state;
+  configureRecurrence({ RECURRENCE_KEEP_PAST_DAYS: 7, RECURRENCE_FUTURE_DAYS: 31,
+    isTouchedBlock: context.isTouchedBlock, getState: () => currentState,
+    todayISO: () => TODAY, addDays: addDaysISO, parseDate: parseDateISO,
+    minutesOf: minutesOfDT, pad2, nowDateTime: () => NOW_DT, showToast: fakeShowToast });
+  TODAY = "2026-08-20";
+  maintainRecurrences();
+  return context;
+}
+test("R2-01: production window is past 7 / future 31, inclusive and idempotent", () => {
+  const c = legacyFixture();
+  assert.equal(vm.runInContext("RECURRENCE_KEEP_PAST_DAYS", c), 7);
+  assert.equal(vm.runInContext("RECURRENCE_FUTURE_DAYS", c), 31);
+  assert.equal(c.state.blocks.length, 39);
+  assert.equal(c.state.blocks[0].date, "2026-08-13");
+  assert.equal(c.state.blocks.at(-1).date, "2026-09-20");
+  maintainRecurrences();
+  assert.equal(c.state.blocks.length, 39);
+});
+test("R2-01: modal single edit moves the occurrence and excludes its original day", () => {
+  const c = legacyFixture(), before = structuredClone(c.state.recurrences);
+  const block = c.state.blocks.find(b => b.date === TODAY);
+  c.saveBlockFromModal(block.id, { ...block, title: "その回だけ", date: "2026-08-21",
+    plannedStartAt: "2026-08-21T09:00", plannedEndAt: "2026-08-21T09:30", recurrenceKind: "__keep__" });
+  assert.equal(c.state.blocks.find(b => b.id === block.id).title, "その回だけ");
+  assert.equal(c.state.recurrences[0].title, before[0].title);
+  assert.deepEqual(Array.from(c.state.recurrences[0].exceptionDates), [TODAY]);
+  maintainRecurrences();
+  assert.equal(c.state.blocks.filter(b => b.date === TODAY).length, 0);
+});
+test("R2-01: modal frequency edit removes untouched future instances and preserves history", () => {
+  const c = legacyFixture(), block = c.state.blocks.find(b => b.date === TODAY);
+  c.state.blocks.find(b => b.date === "2026-08-21").comment = "残す実績";
+  c.saveBlockFromModal(block.id, { ...block, recurrenceKind: "weekly" });
+  assert.equal(c.state.recurrences[0].kind, "weekly");
+  maintainRecurrences();
+  assert.ok(c.state.blocks.some(b => b.date === "2026-08-19"));
+  assert.ok(c.state.blocks.some(b => b.date === "2026-08-21" && b.comment));
+  assert.ok(!c.state.blocks.some(b => b.date === "2026-08-22"));
+  assert.ok(c.state.blocks.some(b => b.date === "2026-08-27"));
+});
+test("R2-01: occurrence deletion records a tombstone and exception, never regenerates", () => {
+  const c = legacyFixture(), block = c.state.blocks.find(b => b.date === TODAY);
+  assert.equal(c.deleteBlock(block.id), true);
+  maintainRecurrences();
+  assert.equal(c.state.blocks.filter(b => b.date === TODAY).length, 1);
+  assert.equal(c.state.blocks.find(b => b.id === block.id).deleted, true);
+  assert.deepEqual(Array.from(c.state.recurrences[0].exceptionDates), [TODAY]);
+  assert.equal(c.state.recurrences[0].deleted, false);
+});
+test("R2-01: ending series preserves touched future and past occurrences", () => {
+  const c = legacyFixture();
+  c.state.blocks.find(b => b.date === "2026-08-21").title = "編集済み";
+  assert.equal(c.endRecurrenceSeries("baseline"), true);
+  maintainRecurrences();
+  assert.equal(c.state.recurrences[0].deleted, true);
+  assert.equal(c.state.blocks.length, 8);
+  assert.ok(c.state.blocks.some(b => b.title === "編集済み"));
+});
+test("R2-01: sync excludes remote-only untouched instances outside production window", () => {
+  const c = legacyFixture();
+  const row = (id, date, extra = {}) => ({ id, date, title: "朝の読書", recurrenceGroupId: "baseline", ...extra });
+  const merged = c.mergeBlockLists([], [row("old", "2026-08-12"), row("start", "2026-08-13"),
+    row("end", "2026-09-20"), row("future", "2026-09-21"), row("edited", "2026-09-21", { comment: "保持" })]);
+  assert.deepEqual(Array.from(merged, b => b.id), ["start", "end", "edited"]);
+});
+test("R2-01: recurrence sync unions ids, resolves timestamps and retains tombstones", () => {
+  const c = legacyFixture();
+  c.state.recurrences = [{ id: "both", updatedAt: "2026-08-20T09:00:00", title: "local" }, { id: "local-only" }];
+  const remote = { recurrences: [{ id: "both", updatedAt: "2026-08-20T10:00:00", deleted: true }, { id: "remote-only" }] };
+  for (const stamp of ["2026-08-20T08:00:00", "2026-08-20T11:00:00"]) {
+    const result = c.mergeCoreKeys(remote, stamp).recurrences;
+    assert.deepEqual(Array.from(result, r => r.id).sort(), ["both", "local-only", "remote-only"]);
+    assert.equal(result.find(r => r.id === "both").deleted, true);
+  }
+  assert.equal(c.state.recurrences[0].title, "local", "merge calculation is pure");
 });
 
 // ---- 結果出力 ----
