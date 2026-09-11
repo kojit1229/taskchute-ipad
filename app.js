@@ -4498,8 +4498,6 @@ function confirmScheduleDraft() {
       { origin: "draft", draftItemId: ritualItem.id });
     return;
   }
-  // Candidates belong to the draft, so a failed save retries the same identities.
-  for (const item of items) if (!item.blockId) item.candidateId ||= crypto.randomUUID();
   if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => confirmScheduleDraft(), { kinds: ["blocks"] }).ok;
   let updatedCount = 0, createdCount = 0;  // v199(軽微3): 確定トーストを「登録」と「時刻更新」で書き分ける
   items.forEach((it) => {
@@ -4527,7 +4525,7 @@ function confirmScheduleDraft() {
       plannedEndAt: planned.plannedEndAt,
       estimateMin: it.minutes
     })), plannedStartAt: planned.plannedStartAt, plannedEndAt: planned.plannedEndAt, estimateMin: it.minutes };
-    if (it.candidateId) block.id = it.candidateId;  // v389(42): 候補 id を下書き項目に固定(fixB8 の candidateBlock キャッシュと両立)
+    it.candidateId = it.candidateBlock.id;  // 保存失敗後も makeBlock が発行した候補 id を使う。
     // v52: 決定論配置の元値を Block に残す(確定・実績との突き合わせ = 実績データ。フィールド名は互換のため維持)
     block.aiPlan = { start: minToHHMM(it.aiStart ?? it.start), minutes: it.aiMinutes ?? it.minutes };
     // v65: AIプランのtitle先頭「[資産]」検出分は確定時にleverageType=assetを引き継ぐ

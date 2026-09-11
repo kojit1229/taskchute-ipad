@@ -83,6 +83,7 @@ window.autoTest = {
     assert.equal(failed.undo.marker, 'keep undo');
     assert.equal(failed.draft.items[0].title, 'new midnight');
     assert.ok(failed.draft.items[0].candidateId);
+    assert.equal(failed.draft.items[0].candidateId, failed.draft.items[0].candidateBlock.id);
     await page.evaluate(() => { Storage.prototype.setItem = originalSetItem; });
     assert.equal(await page.evaluate(() => autoTest.confirm()), true);
     result = await get();
