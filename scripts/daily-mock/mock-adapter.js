@@ -1,6 +1,15 @@
 import { validateDailyContract } from "../../src/ui/daily-parts/contract.js";
 
-import { actualDurationMinutes, buildActualEdit } from "../../src/core/daily-actuals.js";
+// fixB6(監督者 2026-09-11): モックは製品の src/core に依存しない(daily-parts-isolation-e2e の隔離契約)。
+// 架空データ用の最小の時刻計算をここに持つ(製品 daily-actuals.js と同じ意味: 日付込みの分差、不正・逆転は null)。
+const actualTime = value => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(value || "");
+  return m ? Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0)) : null;
+};
+const actualDurationMinutes = item => {
+  const start = actualTime(item.actualStartAt), end = actualTime(item.actualEndAt);
+  return start == null || end == null || end < start ? null : Math.round((end - start) / 60000);
+};
 
 export const MOCK_STORAGE_KEY = "taskchute-daily-mock-m04";
 const clone = value => JSON.parse(JSON.stringify(value));
@@ -62,8 +71,16 @@ export function createMockAdapter({ fixtures, storage }) {
       else candidate.entities[index] = added;
     } else if (["daily-block-start", "daily-block-end", "daily-actual-edit"].includes(action)) {
       try {
-        if (action === "daily-actual-edit") candidate.entities[index] = buildActualEdit({ blocks: candidate.entities }, notification).block;
-        else {
+        if (action === "daily-actual-edit") {
+          // 製品の訂正入口と同じ意味: 終了実績のない行は拒否、帰属日は変えない、時刻は日付込みで検査。
+          if (!item.actualEndAt) throw new Error("終了実績がありません。先に終了を保存してください");
+          if (values.date != null && values.date !== item.date) throw new Error("実績訂正では帰属日を変更できません");
+          const after = { ...item };
+          for (const key of ["actualStartAt", "actualEndAt"]) if (values[key] != null) after[key] = values[key];
+          if (values.comment != null) after.comment = String(values.comment);
+          if (!after.actualEndAt || !entityValid(after) || (after.actualStartAt && actualDurationMinutes(after) == null)) throw new Error("実績時刻を確認してください");
+          candidate.entities[index] = after;
+        } else {
           const key = action === "daily-block-start" ? "actualStartAt" : "actualEndAt";
           if (Object.keys(values).some(field => ![key, ...(key === "actualEndAt" ? ["completed"] : [])].includes(field)) || !values[key]
             || (key === "actualEndAt" && typeof values.completed !== "boolean")) throw new Error("実績入力が不正です");
