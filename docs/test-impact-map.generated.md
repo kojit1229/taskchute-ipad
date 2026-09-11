@@ -200,7 +200,7 @@
 | v251.test.js | e2e | full | content-ai | 21 | 0 | 0 |
 | v252.test.js | e2e | full | sync-storage | 26 | 0 | 0 |
 | v253.test.js | e2e | full | planning-execution, ui-responsive | 17 | 0 | 0 |
-| v254.test.js | e2e | full | planning-execution, sync-storage | 49 | 0 | 0 |
+| v254.test.js | e2e | full | planning-execution, sync-storage | 50 | 0 | 0 |
 | v255.test.js | e2e | full | ui-responsive, security-offline | 11 | 0 | 0 |
 | v256.test.js | e2e | full | journal-health, ui-responsive | 17 | 0 | 0 |
 | v258.test.js | e2e | full | sync-storage | 41 | 1 | 150 |

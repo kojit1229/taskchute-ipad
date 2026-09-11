@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v385";  // v385: 開始と宣言・終了と報告・予定完了・Task完了を日常操作の登録表へ(1回の保存で成立)
+const CACHE_NAME = "taskchute-journal-pwa-v386";  // v386: 今日と実行の実績を同じ抽出に、実績の訂正は完了を変えず1回の保存、日報に計測した実績の表
 
 // v353: 12WY R0 task.twyPlan のデータ契約+plan.js 純関数+Task編集モーダル3項目
 

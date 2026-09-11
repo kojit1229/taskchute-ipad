@@ -289,11 +289,26 @@ console.log("[0] 共通フック契約と全経路の機械検査");
       JSON.stringify(routeCalls));
     check(`${label}: interactive経路だけ進捗トースト判定を1回呼ぶ`,
       spies.toasts.filter((id) => id === blockId).length === (interactive ? 1 : 0), JSON.stringify(spies));
-    if (expectedSaveCalls === "atomic") {
+    // v386 契約追随(監督者決定 2026-09-11、束B6 単位33/34、design/CHANGELOG.md): 完了で日報の内容が変わるため、
+    // 完了の保存が成立した後に登録行 daily-report-refresh が日報を候補保存で書く(旧 generateReport(quiet) の
+    // saveState() ではなく commitCandidate の persist)。よって完了経路は saveState が1回減り、
+    // 最後の localStorage 書き込みに対象日の日報が入る。日報が書かれたことを断言して検査を減らさない。
+    // 例外: "atomic-new"(新規繰り返し保存出口)は実績(actualEndAt)のない新規 Block なので日報の対象外
+    // (src/core/daily-report.js affectedReportDates は actualEndAt のある Block だけ)=B6 前と同じ書き込み1回。
+    const expectsReport = expectedSaveCalls !== "atomic-new";
+    const lastWrite = spies.writes[spies.writes.length - 1];
+    const lastDate = lastWrite?.blocks.find((entry) => entry.id === blockId)?.date;
+    const lastReport = lastWrite?.reports?.[lastDate];
+    if (expectsReport) check(`${label}: 最後の書き込みに対象日の日報(更新待ちでない)`,
+      typeof lastReport === "string" && lastReport.length > 0 && lastReport !== "日報更新待ち",
+      JSON.stringify({ lastDate, lastReport: String(lastReport).slice(0, 80) }));
+    if (expectedSaveCalls === "atomic" || expectedSaveCalls === "atomic-new") {
       const saved = spies.writes[0];
       const savedBlock = saved?.blocks.find((entry) => entry.id === blockId);
       const savedItem = saved?.weeklyCommitments.find((entry) => entry.id === `wci_${WEEK_START}_${blockId}`);
-      check(`${label}: 完了Blockと刻印を同じsnapshotで1回だけ永続化`, spies.writes.length === 1
+      // v386 契約追随: 2回目の書き込みは日報の候補保存(上で断言)。Block と刻印は1回目の snapshot で一緒に永続化。
+      check(`${label}: 完了Blockと刻印を同じsnapshotで1回だけ永続化${expectsReport ? "(2回目は日報)" : ""}`,
+        spies.writes.length === (expectsReport ? 2 : 1)
         && savedBlock?.completed === true && Boolean(savedItem?.completedAt)
         // v379: 観測時刻(completedChangedAt)は実時計のまま、updatedAt は変更順の時刻(候補の最大値+1秒)なので同値にならない(設計03)。
         && savedItem.updatedAt >= savedItem.completedChangedAt
@@ -303,10 +318,12 @@ console.log("[0] 共通フック契約と全経路の機械検査");
         JSON.stringify({ writes: spies.writes.length, savedBlock, savedItem }));
     } else if (expectedSaveCalls === "daily-end") {
       // v385 契約追随(監督者決定 2026-09-11): commitCandidate→hook→stamp save→final save。
-      check(`${label}: 候補保存1回がフックに先行し刻印後にも保存`,
-        spies.writes.length === 3 && spies.saves.length === 2
-        && JSON.stringify(spies.order) === JSON.stringify(["completion", "save", "toast", "save"])
-        && JSON.stringify(spies.writeOrders) === JSON.stringify([[], ["completion", "save"], ["completion", "save", "toast", "save"]])
+      // v386 契約追随(監督者決定 2026-09-11、束B6): 旧 final save(generateReport quiet の saveState)は
+      // 登録行 daily-report-refresh の候補保存に置き換わった=saveState 2→1、書き込みは3回のまま(3回目が日報)。
+      check(`${label}: 候補保存1回がフックに先行し刻印後に日報を候補保存`,
+        spies.writes.length === 3 && spies.saves.length === 1
+        && JSON.stringify(spies.order) === JSON.stringify(["completion", "save", "toast"])
+        && JSON.stringify(spies.writeOrders) === JSON.stringify([[], ["completion", "save"], ["completion", "save", "toast"]])
         && spies.writes.every(s => s.blocks.find(b => b.id === blockId)?.completed === true)
         && spies.writes[0].weeklyCommitments.find(e => e.id === `wci_${WEEK_START}_${blockId}`)?.completedAt === ""
         && spies.writes.slice(1).every(s => {
@@ -348,14 +365,15 @@ console.log("[0] 共通フック契約と全経路の機械検査");
     await passGithubGate(page);
 
     console.log("[1] 完了6経路を個別に刻印");
-    await runCommittedCompletion("toggleBlock", "toggle", true, 4,
+    // v386 契約追随(監督者決定 2026-09-11、束B6): 各経路の saveState は 4→3(日報の裏側再生成が候補保存へ移った。assertCompletionRoute の断言を参照)。
+    await runCommittedCompletion("toggleBlock", "toggle", true, 3,
       () => clickAction("toggle-block", { id: "toggle" }));
     await clickAction("toggle-block", { id: "toggle" });
     await page.waitForFunction(({ KEY, WEEK_START }) => !JSON.parse(localStorage.getItem(KEY)).weeklyCommitments
       .find((entry) => entry.id === `wci_${WEEK_START}_toggle`)?.completedAt, { KEY, WEEK_START });
     check("toggleBlock完了取消で刻印を解除", (await stamped("toggle"))?.completedAt === "");
 
-    await runCommittedCompletion("toggleTaskCompleteFromBlock", "task-route", true, 4,
+    await runCommittedCompletion("toggleTaskCompleteFromBlock", "task-route", true, 3,
       () => clickAction("toggle-task-complete", { id: "task-route" }));
     await runCommittedCompletion("completePomodoro", "pomo-route", true, "daily-end", async () => {
       await clickAction("complete-pomodoro");
@@ -364,11 +382,11 @@ console.log("[0] 共通フック契約と全経路の機械検査");
     // Test-Reduction: finishBlockFromBreak(休憩中「✅ ここで完了する」経路)の週次刻印検証は、
     // end-break単独UIへの統一で選択分岐自体が孤立し関数本体ごと削除したため削除した
     // (v292孤児掃除・低優先度棚卸しK裁定2026-08-29)。検証対象自体が消滅しており移行先はない。
-    await runCommittedCompletion("bulkApproveAsPlanned", "bulk-route", false, 4, async () => {
+    await runCommittedCompletion("bulkApproveAsPlanned", "bulk-route", false, 3, async () => {
       page.once("dialog", (dialog) => dialog.accept());
       await clickAction("bulk-approve-planned");
     });
-    await runCommittedCompletion("saveActualEntryFromModal", "actual-route", false, 4, async () => {
+    await runCommittedCompletion("saveActualEntryFromModal", "actual-route", false, 3, async () => {
       await clickAction("complete-block-with-actual", { id: "actual-route" });
       await page.locator('[data-action="modal-save"]').click();
     });
@@ -584,7 +602,7 @@ console.log("[0] 共通フック契約と全経路の機械検査");
     const newRecurringSpies = await hookSpies();
     const newRecurringId = newRecurringSpies.completions[0]?.blockId;
     await waitForStamp(newRecurringId);
-    await assertCompletionRoute("新規繰り返し保存出口", newRecurringId, false, "atomic");
+    await assertCompletionRoute("新規繰り返し保存出口", newRecurringId, false, "atomic-new");
     check("新規繰り返し保存でルールを作成", (await stored()).recurrences.some((entry) => !entry.deleted));
 
     await seed({
