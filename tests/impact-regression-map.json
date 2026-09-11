@@ -411,6 +411,11 @@
         "xss-sanitizer"
       ]
     },
+    "schedule-series-core": {
+      "paths": ["^src/core/schedule-series\\.js$"],
+      "patterns": ["createScheduleSeries|scheduleSeriesDates|scheduleSeriesFingerprint|normalizeSeriesTime"],
+      "suites": ["schedule-series-core", "recurrence-core", "v59"]
+    },
     "recurrence-engine": {
       "paths": [
         "^src/core/recurrence"
