@@ -313,6 +313,7 @@
     },
     "sync-storage": {
       "paths": [
+        "^src/features/single-schedule\\.js$",
         "^src/core/single-schedule\\.js$",
         "^src/core/single-schedule-merge\\.js$",
         "^src/(?:sync/|storage/|core/merge)"
@@ -330,7 +331,8 @@
         "v135",
         "v136",
         "single-schedule-core",
-        "single-schedule-sync-e2e"
+        "single-schedule-sync-e2e",
+        "single-schedule-ops-e2e"
       ]
     },
     "state-migration": {
