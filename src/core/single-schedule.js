@@ -1,6 +1,17 @@
-import { validSchedule } from "./single-schedule-merge.js";
+import { validSchedule, mergeSingleSchedules, contentKey } from "./single-schedule-merge.js";
 
 export const isValidSingleSchedule = validSchedule;
+
+export function singleSchedulesEqual(left, right) {
+  const keys = value => normalizeSingleSchedules(value).stored.map(contentKey).sort();
+  return JSON.stringify(keys(left)) === JSON.stringify(keys(right));
+}
+
+export function mergeStoredSingleSchedules(local, remote) {
+  const result = mergeSingleSchedules(normalizeSingleSchedules(local).stored,
+    normalizeSingleSchedules(remote).stored, { isValid: isValidSingleSchedule });
+  return { ...result, stored: [...result.records, ...result.preserved] };
+}
 
 export function validateSingleScheduleContainer(value) {
   if (value !== undefined && !Array.isArray(value)) {

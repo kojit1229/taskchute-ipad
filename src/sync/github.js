@@ -55,6 +55,7 @@ import {
   mergeRecords, mergeById, mergeByIdPreferNewer, mergeGymSets, mergeTracksPreferNewer, mergeWeeklyCommitments
 } from "../core/merge.js";
 import { commitCandidate } from "../core/commit.js";
+import { mergeStoredSingleSchedules, singleSchedulesEqual, validateSingleScheduleContainer } from "../core/single-schedule.js";
 import { nextMutationStamp, stamped } from "../core/mutation-stamp.js";
 import { persistLocalNoSchedule, _lastSaveError } from "../storage/local.js";
 
@@ -112,11 +113,13 @@ export function adoptSyncResult(before, remoteT, mode, remoteNorm) {
       "aiStepDismissedIds", "aiReportReadIds", "aiStepPendingRequests", "archivedDates", "reports",
       "chainRuns", "zeroSecThemeLog", "migrationRitualLog", "feedbackFiles", "feedbackIngestedDates",
       "aiWorkProcessedIds", "zeroThinking.entries", "zeroThinking.suggestedThemes", "zeroThinking.groups"];
+    // Schedule changes are measured as whole records, including their ordering timestamps.
+    const schedulesChanged = !singleSchedulesEqual(candidate.singleSchedules, remoteNorm.singleSchedules);
     mode = keys.some(key => content(getByPath(candidate, key) ?? null)
-      !== content(getByPath(remoteNorm, key) ?? null)) ? "merge" : "adopt";
+      !== content(getByPath(remoteNorm, key) ?? null)) || schedulesChanged ? "merge" : "adopt";
   }
   const keepStamp = mode === "pushed" || (mode === "merge" && before.dataModifiedAt > remoteT
-    && content(before) === content(candidate));
+    && content(before) === content(candidate) && singleSchedulesEqual(before.singleSchedules, candidate.singleSchedules));
   setState(before);
   const result = commitCandidate({ state: before, now: nowDateTime,
     floors: [saveState?.pendingStamp, candidate.dataModifiedAt, remoteT],
@@ -612,6 +615,9 @@ function getByPath(obj, path) {
 function syncCoreEqual(remoteNorm) {
   if (!remoteNorm) return false;
   try {
+    // Schedules merge independently; content differences must not become a core conflict.
+    validateSingleScheduleContainer(state.singleSchedules);
+    validateSingleScheduleContainer(remoteNorm.singleSchedules);
     return SYNC_CORE_COMPARE_KEYS.every((k) =>
       JSON.stringify(getByPath(remoteNorm, k) ?? null) === JSON.stringify(getByPath(state, k) ?? null));
   } catch { return false; }
@@ -886,6 +892,9 @@ function reconcileSingletonDuplicates(mergedTasks, mergedProjects, mergedBlocks)
 function computeSyncMerge(remoteNorm, tieWinner) {
   try {
     archiveProof.assert(remoteNorm);
+    // The device is always local, even when other collections prefer the remote snapshot.
+    const schedules = mergeStoredSingleSchedules(state.singleSchedules, remoteNorm.singleSchedules);
+    for (const warning of schedules.warnings) console.warn("single-schedule", warning);
     // 単位16: archivedDates自体は文字列集合の和集合(mergeStringIdSetを再利用)。この和集合が
     // 「退避済み日付」の全体像になるため、journals/feedback(reportsを合流させる際も同様)の
     // 日付キーマージより先に計算し、Setとして各mergeDateStringMap呼び出しへ渡す。
@@ -998,6 +1007,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
     const zeroThinkingGroups = mergeById(state.zeroThinking?.groups, remoteNorm.zeroThinking?.groups);
     const jsonChanged = (obj, base) => JSON.stringify(obj) !== JSON.stringify(base || {});
     const changedVsLocal =
+      !singleSchedulesEqual(schedules.stored, state.singleSchedules) ||
       journals.changedVsLocal ||
       jsonChanged(journalMeta, state.journalMeta) ||
       feedback.changedVsLocal ||
@@ -1039,6 +1049,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(aiWorkProcessedIds, state.aiWorkProcessedIds || []) ||
       !sameArrayByReference(zeroThinkingGroups, state.zeroThinking?.groups || []);
     const changedVsRemote =
+      !singleSchedulesEqual(schedules.stored, remoteNorm.singleSchedules) ||
       journals.changedVsRemote ||
       jsonChanged(journalMeta, remoteNorm.journalMeta) ||
       feedback.changedVsRemote ||
@@ -1077,6 +1088,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(zeroThinkingGroups, remoteNorm.zeroThinking?.groups || []);
     const merged = {
       values: {
+        singleSchedules: schedules.stored,
         journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans, writeMeditations, tasks, projects, storeVisits, tracks, trackMeasurements, weeklyCommitments, swipeTriageLog, gardenLog, coachMeals, aiStepProcessedIds, aiStepDismissedIds, aiReportReadIds, aiStepPendingRequests,
         archivedDates,  // 単位16
         // unit14b追加分
@@ -1108,6 +1120,7 @@ function applySyncMergeToLocal(merged) {
   state.sleep.logs = v.sleepLogs;
   state.settings.morningEnergyLog = v.morningEnergyLog;
   state.blocks = v.blocks;
+  state.singleSchedules = v.singleSchedules;
   state.dailyDeclarations = v.dailyDeclarations;  // v117(A)
   state.weeklyWishes = v.weeklyWishes;  // v121
   state.bodyScans = v.bodyScans;  // v129
@@ -1161,6 +1174,7 @@ function applySyncMergeToRemote(merged, remoteNorm) {
   remoteNorm.sleep.logs = v.sleepLogs;
   remoteNorm.settings.morningEnergyLog = v.morningEnergyLog;
   remoteNorm.blocks = v.blocks;
+  remoteNorm.singleSchedules = v.singleSchedules;
   remoteNorm.dailyDeclarations = v.dailyDeclarations;  // v117(A)
   remoteNorm.weeklyWishes = v.weeklyWishes;  // v121
   remoteNorm.bodyScans = v.bodyScans;  // v129
@@ -1199,6 +1213,7 @@ function applySyncMergeToRemote(merged, remoteNorm) {
 // v364: K rules 2026-09-06: id union in the newer state's order; whole-key replacement otherwise.
 // Physical deletions without tombstones can reappear through the id union.
 function mergeCoreKeys(remoteNorm, remoteT) {
+  // singleSchedules is already handled by computeSyncMerge, never by whole-key replacement.
   const remoteNewer = normalizeDataStamp(state.dataModifiedAt || "") <= normalizeDataStamp(remoteT || "");
   const out = {};
   const idArray = (value) => Array.isArray(value) && value.every((item) =>

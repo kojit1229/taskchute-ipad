@@ -1,7 +1,7 @@
 import { mergeRecords } from "./merge.js";
 
 // JSON保存値のキー順だけを揃える。元のレコードは変更しない。
-function contentKey(value) {
+export function contentKey(value) {
   if (Array.isArray(value)) return `[${value.map(contentKey).join(",")}]`;
   if (value && typeof value === "object") return `{${Object.keys(value).sort()
     .map(key => `${JSON.stringify(key)}:${contentKey(value[key])}`).join(",")}}`;

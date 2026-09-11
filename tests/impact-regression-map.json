@@ -329,7 +329,8 @@
         "v134",
         "v135",
         "v136",
-        "single-schedule-core"
+        "single-schedule-core",
+        "single-schedule-sync-e2e"
       ]
     },
     "state-migration": {

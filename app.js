@@ -1,4 +1,4 @@
-import { normalizeSingleSchedules, validateSingleScheduleContainer } from "./src/core/single-schedule.js";
+import { normalizeSingleSchedules, validateSingleScheduleContainer, mergeStoredSingleSchedules } from "./src/core/single-schedule.js";
 import { createFeedbackReadonlyPatch } from "./src/features/feedback/feedback-readonly-patch.js";
 import { createFeedbackCanonicalReader } from "./src/features/feedback/feedback-canonical-reader.js";
 import { createFeedbackUiGateway } from "./src/features/feedback/feedback-ui-gateway.js";
@@ -10627,7 +10627,9 @@ function importData(file) {
       //      途中で例外が出ると「読み込めませんでした」と表示しつつ
       //      中途半端な state で動き続ける事故を防ぐ。
       const token = state.settings?.github?.token || "";
-      const next = normalizeState(JSON.parse(String(reader.result)));
+      const loaded = JSON.parse(String(reader.result));
+      loaded.singleSchedules = mergeStoredSingleSchedules(state.singleSchedules, loaded.singleSchedules).stored;
+      const next = normalizeState(loaded);
       // バックアップはトークンを含まないので、この端末のトークンを引き継ぐ
       if (!next.settings.github.token) next.settings.github.token = token;
       setState(next);
@@ -11024,6 +11026,7 @@ async function gitHubErrorMessage(response, isCurrent = () => true) {
 }
 
 function sanitizedStateForGitHub() {
+  validateSingleScheduleContainer(state.singleSchedules);
   const copy = structuredClone(state);
   if (copy.settings?.github) copy.settings.github.token = "";
   copy.modal = null;  // v37: ローカル保存(persistLocalNoSchedule)と同様、モーダル状態は共有しない
@@ -11333,7 +11336,9 @@ async function restoreBackup(name) {
     //  壊れる。token を含め素の raw 設定を丸ごと引き継ぐのが正しい)。
     const currentGithubSettings = state.settings.github;
     clearTimeout(autoSaveTimer);
-    const next = normalizeState(JSON.parse(text));
+    const loaded = JSON.parse(text);
+    loaded.singleSchedules = mergeStoredSingleSchedules(state.singleSchedules, loaded.singleSchedules).stored;
+    const next = normalizeState(loaded);
     next.settings.github = { ...next.settings.github, ...currentGithubSettings };
     setState(next);
     maintainRecurrences({ purge: true });
@@ -11384,6 +11389,7 @@ async function fetchGitHubJSONFile(cfg, filePath) {
 
 // 退避対象を年ごとに集める(削除はまだしない)
 function collectArchivable() {
+  // Single schedules and their tombstones stay live until every device can acknowledge deletion.
   const today = todayISO();
   const textCut = addDays(today, -ARCHIVE_TEXT_KEEP_DAYS);
   const blockCut = addDays(today, -ARCHIVE_BLOCK_KEEP_DAYS);
