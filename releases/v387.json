@@ -1,0 +1,74 @@
+{
+  "version": 387,
+  "date": "2026-09-11",
+  "title": "単発予定の保存形式と補完、保存・同期と内部操作の接続",
+  "summary": "保存データに『単発の予定』の入れ物が加わり、同期(取り込み・送信・全量採用・持ち出し・控え)で予定と削除の印が消えなくなる(古い端末や外部処理が予定の配列を持っていなくても保持)。予定の登録・編集・完了・削除は内部の登録表まで実装済みで、画面のボタンは全端末の更新後(次回)に公開する。今の画面と操作に見える変更はない",
+  "changedFiles": [
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "src/core/single-schedule-merge.js",
+    "src/features/daily-draft.js",
+    "src/features/daily-operations.js",
+    "src/storage/local.js",
+    "src/sync/github.js",
+    "src/ui/daily-parts/contract.js",
+    "sw.js",
+    "tests/daily-operations-registry.test.js",
+    "tests/daily-parts-contract.test.js",
+    "tests/impact-regression-map.json",
+    "tests/suite-manifest.json",
+    "src/core/single-schedule.js",
+    "src/features/single-schedule.js",
+    "tests/single-schedule-core.test.js",
+    "tests/single-schedule-ops-e2e.test.js",
+    "tests/single-schedule-sync-e2e.test.js",
+    "releases/v387.json",
+    "CHANGES_v387.md"
+  ],
+  "intent": [
+    "束B7（予定1の35、予定3の37、予定4の38とfix1）をv387としてまとめる。"
+  ],
+  "changes": [
+    "保存データに『単発の予定』の入れ物が加わり、同期(取り込み・送信・全量採用・持ち出し・控え)で予定と削除の印が消えなくなる(古い端末や外部処理が予定の配列を持っていなくても保持)。予定の登録・編集・完了・削除は内部の登録表まで実装済みで、画面のボタンは全端末の更新後(次回)に公開する。今の画面と操作に見える変更はない",
+    "CACHE_NAMEをv386からv387へ更新し、CHANGES・handoff-preview・コード索引・テストmanifestを正規コマンドで生成する。"
+  ],
+  "uncertainties": [
+    "最終release-gateは監督者が実走する。本発注では未実施。"
+  ],
+  "reviewFocus": [
+    "既存の束B7差分を保持し、本発注の製品コード差分がSW先頭行だけであること。",
+    "単発予定の後方互換補完と不正な保存値の保全、全保存・同期経路で予定と削除印を保持すること。",
+    "登録・編集・完了・削除は内部登録表までで、画面公開は全端末更新後の次回であること。"
+  ],
+  "verification": [
+    "関連スイート: single-schedule-core / store-core / single-schedule-sync-e2e / sync-load-confirm-snapshot / v103 / v106 / v134 / v136 / v364 / archive-tombstone-sync / single-schedule-ops-e2e / detail-draft-e2e / daily-operations-registry / daily-parts-contract / single-schedule-merge / daily-parts-isolation-e2e / sw-integration。本発注では実走せず、最終ゲートは監督者が実走する。",
+    "npm run code:index:write → npm run code:index -- --check が0の後、npm run test:manifest:write → npm run test:manifest。",
+    "TZ=Asia/Tokyo RELEASE_HANDOFF_PATH=<reports/impl-r1/v387/handoff-preview.md> node scripts/release-record.js releases/v387.json --write。",
+    "検査の実測終了コードはreports/impl-r1/v387/command-results.jsonlを参照。"
+  ],
+  "knownLimitations": [
+    "release-gateは発注113の指定により未実施（監督者担当）。",
+    "iOS実機・配信は未実施。"
+  ],
+  "relatedSuites": [
+    "single-schedule-core",
+    "store-core",
+    "single-schedule-sync-e2e",
+    "sync-load-confirm-snapshot",
+    "v103",
+    "v106",
+    "v134",
+    "v136",
+    "v364",
+    "archive-tombstone-sync",
+    "single-schedule-ops-e2e",
+    "detail-draft-e2e",
+    "daily-operations-registry",
+    "daily-parts-contract",
+    "single-schedule-merge",
+    "daily-parts-isolation-e2e",
+    "sw-integration"
+  ]
+}

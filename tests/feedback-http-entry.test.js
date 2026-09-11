@@ -91,7 +91,9 @@ test('actual wiring owns journal DOM, reflects current draft, uses actual saniti
  const out=app,acorn=require('acorn');acorn.parse(out,{ecmaVersion:'latest',sourceType:'module'});
  assert.equal(out.match(/invalidateFeedbackConnection\(\);/g).length,4);assert.throws(()=>transformApp(out),/already integrated/);
  const element={isConnected:true,value:'synthetic current draft'},state={selectedDate:'2026-09-06',currentView:'journal',journals:{'2026-09-06':'old'},journalMeta:{},settings:{github:{token:'SYNTHETIC_SECRET'}}};
- const c={state,_imeComposing:false,document:{querySelector:()=>element},isArchivedDate:()=>false,draftSaveTransaction:{active:false},draftLeaveGuard:{active:false},nowDateTime:()=> 'fixture stamp',ensureJournal(){},structuredClone};
+ const c={state,_imeComposing:false,document:{querySelector:()=>element},isArchivedDate:()=>false,draftSaveTransaction:{active:false},draftLeaveGuard:{active:false},nowDateTime:()=> 'fixture stamp',ensureJournal(){},structuredClone,
+  // v387 ハーネス追随(監督者決定 2026-09-11、束B7 単位35): sanitizedStateForGitHub が単発予定の容器検査 validateSingleScheduleContainer を呼ぶ。砂場には配列でなければ止める最小の代役を置く(製品変更なし)。
+  validateSingleScheduleContainer(v){if(v!==undefined&&!Array.isArray(v))throw Error('fixture: single-schedule container');}};
  vm.createContext(c);vm.runInContext(['feedbackInputOwner','ownsFeedbackInput','reflectFeedbackInput'].map(n=>getFunction(out,n)).join('\n')+'\n'+getFunction(app,'sanitizedStateForGitHub'),c);
  const owner=c.feedbackInputOwner();c.reflectFeedbackInput(owner);assert.equal(state.journals[owner.date],element.value);assert.equal(state.journalMeta[owner.date].textUpdatedAt,'fixture stamp');
  assert.equal(c.sanitizedStateForGitHub().settings.github.token,'');assert.equal(state.settings.github.token,'SYNTHETIC_SECRET');

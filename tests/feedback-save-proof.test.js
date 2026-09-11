@@ -12,6 +12,8 @@ const {createLocalReportCommit}=await import("../src/features/feedback/local-rep
 const {commitCandidate}=await import("../src/core/commit.js");
 const {createReportProofAdapter}=await import("../src/features/feedback/report-proof-adapter.js");
 const {createFeedbackCoordinator}=await import("../src/features/feedback/feedback-coordinator.js");
+// v387 ハーネス追随(監督者決定 2026-09-11、束B7 単位37): adoptSyncResult が単発予定の比較 singleSchedulesEqual を参照するようになったので、実物を砂場へ渡す(製品変更なし)。
+const {singleSchedulesEqual,validateSingleScheduleContainer}=await import("../src/core/single-schedule.js");
 const here=__dirname;
 const {transformSync}=require('./support/sync-proof-transform.cjs');
 const acorn=require('acorn');
@@ -28,7 +30,7 @@ function fixture(mode='ok'){
  raw=JSON.stringify(state);const initialRaw=raw,initialReports=state.reports;
  const serialize=()=>{const copy=structuredClone(state);delete copy.settings.github.token;return JSON.stringify(copy,null,2);};
  const syncErrors=[];
- const box={state,commitCandidate,setState:value=>{box.state=value;},saveState:Object.assign(()=>{},{pendingStamp:null}),
+ const box={state,commitCandidate,singleSchedulesEqual,validateSingleScheduleContainer,setState:value=>{box.state=value;},saveState:Object.assign(()=>{},{pendingStamp:null}),
   STORAGE_KEY:'fixture-only',_lastSaveError:null,_githubSaveInFlight:mode==='inflight',autoSaveTimer:null,
   console:{error:(...args)=>syncErrors.push(args.map(String).join(' '))},localStorage:{setItem(k,value){if(mode==='quota')throw Error('synthetic quota');raw=value;}},
   archiveConnectionKey:()=>generation,capturePrimarySyncState:()=>({}),requireGitHubConfig:()=>({branch:'fixture',token:'SYNTHETIC_TOKEN'}),

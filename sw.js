@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v386";  // v386: 今日と実行の実績を同じ抽出に、実績の訂正は完了を変えず1回の保存、日報に計測した実績の表
+const CACHE_NAME = "taskchute-journal-pwa-v387";  // v387: 単発予定の保存形式と補完、全保存・同期で予定と削除印を保持、登録・編集・完了・削除の登録行(画面公開は次回)
 
 // v353: 12WY R0 task.twyPlan のデータ契約+plan.js 純関数+Task編集モーダル3項目
 
