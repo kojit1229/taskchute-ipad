@@ -19,6 +19,18 @@ function fixture() {
     settings: { morningEnergyLog: {}, twelveWeekStartDate: DAY }, sleep: { logs: {} }, bodyScans: [], questions: [] };
 }
 {
+  const state = fixture(), refreshed = [];
+  const deps = { state, commitCandidate, now: () => `${NEXT}T01:00:00`, persist: () => true,
+    refreshActualReports: dates => refreshed.push(dates) };
+  assert(run('daily-plan-times-save', { kind: 'block', id: 'overnight', date: DAY,
+    values: { start: '09:00', end: '09:45' } }, deps).ok);
+  assert.deepEqual(refreshed, [], 'planned times alone must not insert a report save into source/copy persistence');
+  assert(run('daily-plan-times-save', { kind: 'block', id: 'overnight', date: DAY,
+    values: { date: NEXT, start: '09:00', end: '09:45' } }, deps).ok);
+  assert.deepEqual(refreshed, [[DAY, NEXT]], 'explicit attribution still refreshes old and new days');
+  console.log('PASS refresh effects: planned time edit is separate; explicit date move refreshes both days');
+}
+{
   const state = fixture(), original = structuredClone(state), input = captureReportInput(state, DAY, deriveReportValues);
   assert.deepEqual(input.actuals.map(r => r.blockId), dailyActuals(state.blocks, DAY).map(b => b.id));
   assert.deepEqual(input.actuals.map(r => r.minutes), dailyActuals(state.blocks, DAY).map(actualDurationMinutes));

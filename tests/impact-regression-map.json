@@ -101,6 +101,7 @@
         "daily-completion-e2e",
         "daily-actuals-e2e",
         "daily-report-e2e",
+        "daily-adapters-e2e",
         "daily-order-core",
         "daily-copy-e2e"
       ]

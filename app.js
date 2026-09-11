@@ -32,7 +32,7 @@ import { normalizeTwyPlan } from "./src/core/plan.js";
 import { createVisionRead } from "./src/features/vision-read.js";
 import { createVisionOverview } from "./src/features/vision-overview.js";
 import { DAILY_ACTIONS } from "./src/ui/daily-parts/contract.js";
-import { affectedReportDates, REPORT_PENDING } from "./src/core/daily-report.js";
+import { REPORT_PENDING } from "./src/core/daily-report.js";
 import { dailyActuals, actualDurationMinutes } from "./src/core/daily-actuals.js";
 import { runDailyOperation, prepareDailyEnd } from "./src/features/daily-operations.js";
 import { createDraftLeaveGuard } from "./src/features/draft-leave.js";
@@ -1581,7 +1581,6 @@ const dailyOperationDeps = {
       if (block.recurrenceGroupId) triggerAnchorPlacements(block.recurrenceGroupId, block.actualEndAt);
       transferIronLogToCompletedBlock(block.id);
       trackOnBlockCompletionChanged(block, true, { interactive: true });
-      generateReport(block.date, { quiet: true });
       triggerCompletionEffect(getRandomCelebrate(), block.isMIT);
     }
     render();
@@ -1590,9 +1589,9 @@ const dailyOperationDeps = {
     if (result.justCompleted || input.timer === true) openBodyScanModal(block.id);
   },
   captureReport: (source, date) => captureReportInput(source, date, deriveReportValues),
-  buildReport: buildReportMarkdown,
-  refreshActualReports: result => {
-    for (const date of affectedReportDates(state, result)) generateReport(date, { quiet: true });
+  buildReport: input => buildReportMarkdown(input),
+  refreshActualReports: dates => {
+    for (const date of dates) generateReport(date, { quiet: true });
   },
   reportEffect: (result, input) => {
     if (!input.quiet) render();

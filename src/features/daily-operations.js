@@ -8,7 +8,7 @@ import { buildBlockEnd } from "../core/daily-end.js";
 import { buildPlanCompletion, buildTaskCompletion } from "../core/daily-completion.js";
 import { createDailyDraftStore } from "./daily-draft.js";
 import { buildActualEdit } from "../core/daily-actuals.js";
-import { buildDailyReport } from "../core/daily-report.js";
+import { buildDailyReport, affectedReportDates } from "../core/daily-report.js";
 
 const copyReady = Symbol("saved copy source");
 const copyRequests = new WeakMap();
@@ -263,7 +263,13 @@ export function runDailyOperation(name, input, deps) {
         try { op.effects?.(result, input, deps); }
         finally {
           if (!result.unchanged) {
-            try { deps.refreshActualReports?.(result); }
+            try {
+              if (deps.refreshActualReports && (name !== "daily-plan-times-save"
+                  || result.records.some(row => row.before?.date !== row.after?.date))) {
+                const dates = affectedReportDates(deps.state, result);
+                if (dates.length) deps.refreshActualReports(dates);
+              }
+            }
             finally { deps.scheduleSync?.(result); }
           }
         }
