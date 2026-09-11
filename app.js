@@ -44,7 +44,7 @@ import { stamped } from "./src/core/mutation-stamp.js";
 import { renderDetailFrame } from "./src/ui/daily-parts/detail-frame.js";
 import { renderDailyBlockDetails } from "./src/features/daily-view-model.js";
 import { configureScheduleView } from "./src/features/single-schedule-view.js";
-import { plannedAvailability, draftPlannedIntervals } from "./src/features/daily-gap-placement.js";
+import { plannedAvailability, draftPlannedIntervals, capturePlannedDraft, validatePlannedDraft, gapWarning } from "./src/features/daily-gap-placement.js";
 import { createDailyGapSheet } from "./src/features/daily-gap-sheet.js";
 import { configureWorkList, renderWorkList, handleWorkListInput, handleWorkListComposition, rememberWorkListOrigin, restoreWorkListOrigin, rememberWorkListScroll, restoreWorkListScroll } from "./src/features/work-list.js";
 // v166: app.js分割・段階3(state store + storage/sync gateway)。stateの再代入はsetState()
@@ -4273,28 +4273,8 @@ function subtractOccupiedIntervals(gaps, occupied) {
 //   省略時(null)は従来どおり全Blockを占有として扱うため既存呼び出し元は無改修)。
 function computeFreeGaps(date, dayStartMin = 5 * 60, dayEndMin = 23 * 60, excludeBlockIds = null) {
   if (dayEndMin <= dayStartMin) return [];
-  const occupied = blocksForDate(date)
-    .filter((b) => !excludeBlockIds || !excludeBlockIds.has(b.id))
-    .filter((b) => !b.migratedTo)  // 1-H1+K16(2026-09-05回答): 送済Blockは空き時間計算でも占有から外す
-    .map((b) => blockOccupiedRange(b, dayStartMin, dayEndMin))
-    .filter(Boolean)
-    .sort((a, b) => a[0] - b[0]);
-  // 重複・隣接区間をマージ
-  const merged = [];
-  occupied.forEach(([s, e]) => {
-    const last = merged[merged.length - 1];
-    if (last && s <= last[1]) last[1] = Math.max(last[1], e);
-    else merged.push([s, e]);
-  });
-  // マージ済み占有区間の「隙間」を空き枠として拾う
-  const gaps = [];
-  let cursor = dayStartMin;
-  merged.forEach(([s, e]) => {
-    if (s > cursor) gaps.push([cursor, s]);
-    cursor = Math.max(cursor, e);
-  });
-  if (cursor < dayEndMin) gaps.push([cursor, dayEndMin]);
-  return gaps;
+  const availability = plannedAvailability(state, date, { window: [dayStartMin, dayEndMin], excludeBlockIds });
+  return availability.error ? [] : availability.gaps;
 }
 
 // v199: 再配置の配置ウィンドウ(2026-08-10 K指示。空いていても早朝・深夜に詰め込まない)。
@@ -4398,7 +4378,7 @@ function runAiSchedule() {
   const skipped = movable
     .filter((b) => skipSet.has(b.id))
     .map((b) => ({ title: b.title, reason: skipReasonById.get(b.id) }));
-  _scheduleDraft = { date, items: finalItems, skipped, source: "deterministic" };  // v62: source区別
+  _scheduleDraft = capturePlannedDraft(state, { date, items: finalItems, skipped, source: "deterministic" });
   _draftUndo = null;  // v62: 新規下書きでは前セッションのUndoを持ち越さない
   state.timelineMode = "planned";
   // v335(§C): 旧timelineビュー直行をexecへ寄せる。energy-open-categoryと異なり、この呼び出しは
@@ -4504,6 +4484,8 @@ const SCHED_BANDS = [
 function confirmScheduleDraft() {
   if (!_scheduleDraft || !_scheduleDraft.items.length) return;
   const { date, items } = _scheduleDraft;
+  const checked = validatePlannedDraft(state, _scheduleDraft);
+  if (checked.error) { showToast(checked.error); return false; }
   // v61: マイグレーション儀式 — 繰越由来(carryFromId)の項目が3回目の繰り越しになる場合は、
   //      一括確定の前に一呼吸置く。既に選択済み(_ritualResolved)の項目はスキップする。
   const ritualItem = items.find((it) =>
@@ -4516,6 +4498,7 @@ function confirmScheduleDraft() {
   if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => confirmScheduleDraft(), { kinds: ["blocks"] }).ok;
   let updatedCount = 0, createdCount = 0;  // v199(軽微3): 確定トーストを「登録」と「時刻更新」で書き分ける
   items.forEach((it) => {
+    const planned = checked.intervals.find(row => row.id === it.id);
     // v199: blockId付き項目(当日タスクシュート再配置)は既存Blockの時刻だけ更新する。
     //   makeBlockしない=新規Block化しない。migratedTo/carryCount系(繰越専用)も通さない。
     if (it.blockId) {
@@ -4523,8 +4506,8 @@ function confirmScheduleDraft() {
       if (!state.blocks.some((b) => b.id === it.blockId)) return;
       state.blocks = state.blocks.map((b) => b.id === it.blockId ? {
         ...b,
-        plannedStartAt: `${date}T${minToHHMM(it.start)}`,
-        plannedEndAt: `${date}T${minToHHMM(it.start + it.minutes)}`,
+        plannedStartAt: planned.plannedStartAt,
+        plannedEndAt: planned.plannedEndAt,
         updatedAt: nowDateTime()  // v135以降のid+updatedAtマージ対策
       } : b);
       updatedCount += 1;
@@ -4535,8 +4518,8 @@ function confirmScheduleDraft() {
       title: it.title,
       taskId: it.taskId || "",
       category: it.category || "",
-      plannedStartAt: `${date}T${minToHHMM(it.start)}`,
-      plannedEndAt: `${date}T${minToHHMM(it.start + it.minutes)}`,
+      plannedStartAt: planned.plannedStartAt,
+      plannedEndAt: planned.plannedEndAt,
       estimateMin: it.minutes
     });
     // v52: 決定論配置の元値を Block に残す(確定・実績との突き合わせ = 実績データ。フィールド名は互換のため維持)
@@ -4565,7 +4548,7 @@ function confirmScheduleDraft() {
   const confirmParts = [];
   if (updatedCount) confirmParts.push(`${updatedCount}件の時刻を更新`);
   if (createdCount) confirmParts.push(`${createdCount}件を登録`);
-  saveAndRender(confirmParts.length ? `📋 ${confirmParts.join("・")}しました` : "対象のBlockが見つからず、確定できませんでした");
+  saveAndRender(gapWarning(checked.warnings) + (confirmParts.length ? `📋 ${confirmParts.join("・")}しました` : "対象のBlockが見つからず、確定できませんでした"));
 }
 
 // v77: AIフィードバック_<date>.md 本文の「## 0秒思考テーマ」見出し(- [ ] テーマ: 理由 形式、
