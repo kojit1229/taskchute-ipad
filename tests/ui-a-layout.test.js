@@ -48,7 +48,9 @@ function block(id, extra={}) { return {id,title:'記録を整理する '+id,date
       overflow:document.documentElement.scrollWidth>innerWidth,plans:tower.querySelectorAll('[data-work-list="today"] [data-work-key]').length,
       creeds:tower.querySelectorAll('.so-item').length,subtitles:[...tower.querySelectorAll('.so-item small')].map(x=>x.textContent),
       alert:!!tower.querySelector('.sync-alert-banner'),clockCount:tower.querySelectorAll('#towerClock').length,
-      rings:tower.querySelectorAll('.pomo-circle-wrap').length,pomodoro:JSON.parse(localStorage.getItem(key)).pomodoro,
+      ringsInside:tower.querySelectorAll('.tower-runway > .today-pomodoro .pomo-circle-wrap').length,
+      ringsOutside:[...document.querySelectorAll('.pomo-circle-wrap')].filter(el=>!tower.querySelector('.tower-runway > .today-pomodoro')?.contains(el)).length,
+      timer:rect('.tower-runway > .today-pomodoro'),runway,pomodoro:JSON.parse(localStorage.getItem(key)).pomodoro,
       sections:selectors.map(selector=>({selector,count:tower.querySelectorAll(selector).length,visible:!!tower.querySelector(selector)?.getClientRects().length})),
       life:rect('.life-band'),so:rect('.so-row'),plansBox:rect('#dailyTodayPlans'),records:rect('.daily-today-records'),
       recordOrder:[...tower.querySelector('.daily-today-records').children].map(el=>el.matches('.sec-journal')?'journal':el.matches('.sec-gates')?'gates':'actuals'),
@@ -63,7 +65,8 @@ function block(id, extra={}) { return {id,title:'記録を整理する '+id,date
      assert(metrics.action.height>=44,'44px main action');assert(metrics.jump.height>=44,'44px plans jump');
      assert.equal(metrics.plans,mode==='empty'?0:3);
      assert.equal(metrics.clockCount,1,'live time remains unique');if(mode==='alert')assert(metrics.alert,'real sync warning rendered');
-     assert.equal(metrics.rings,0,'timer is outside the new Today layout');assert.deepEqual(metrics.pomodoro,original.pomodoro,'timer state retained');
+     assert.equal(metrics.ringsInside,1,'one timer inside current work');assert.equal(metrics.ringsOutside,0,'no timer outside current work');
+     assert(metrics.timer.x>=metrics.runway.x&&metrics.timer.right<=metrics.runway.right&&metrics.timer.y>=metrics.runway.y&&metrics.timer.bottom<=metrics.runway.bottom,'timer bounds stay inside current work');assert.deepEqual(metrics.pomodoro,original.pomodoro,'timer state retained');
      assert.equal(metrics.creeds,3);assert.deepEqual(metrics.subtitles,['決めた一つを100%やり切る','実行率より、進んだ量','朝は集中、夜は充電']);
      assert.equal(metrics.sections.length,8);assert(metrics.sections.every(s=>s.count===1&&s.visible),'eight sections remain visible with old focus settings');
      assert.deepEqual(metrics.recordOrder,['actuals','gates','journal']);

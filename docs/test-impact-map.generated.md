@@ -146,7 +146,7 @@
 | track-merge-core.test.js | node | full | sync-storage | 20 | 0 | 0 |
 | track-normalize.test.js | e2e | full | sync-storage, security-offline | 22 | 0 | 0 |
 | track-sync-characterization.test.js | node | full | sync-storage | 15 | 0 | 0 |
-| ui-a-layout.test.js | e2e | full | planning-execution, journal-health, ui-responsive | 21 | 0 | 0 |
+| ui-a-layout.test.js | e2e | full | planning-execution, journal-health, ui-responsive | 22 | 0 | 0 |
 | unit9-carryover-fields.test.js | e2e | full | planning-execution | 40 | 5 | 1800 |
 | v100.test.js | e2e | full | content-ai, ui-responsive | 31 | 9 | 3300 |
 | v101.test.js | e2e | full | content-ai, ui-responsive | 22 | 6 | 1400 |

@@ -26,4 +26,6 @@ jobs:
       - run: npm ci
       # playwright-core は CLI を同梱している(ブラウザだけ取得)
       - run: npx playwright-core install --with-deps chromium
+      # v392(監督者 2026-09-12): 日本語フォントの有無で行の高さが変わり幅別配置の実測(1440×1000 で予定4件+本文入力欄)が手元と食い違うため、CI 側に CJK フォントを入れて環境差を吸収する(rules/env.md: 環境差はテスト個別に直さず CI 設定で吸収)
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk > /dev/null
       - run: npm test -- --shard=${{ matrix.shard }}/4
