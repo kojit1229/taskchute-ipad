@@ -155,7 +155,7 @@
 | v104.test.js | e2e | full | sync-storage, ui-responsive | 19 | 14 | 5550 |
 | v105.test.js | e2e | smoke | sync-storage, journal-health, ui-responsive | 20 | 5 | 2900 |
 | v106.test.js | e2e | full | sync-storage, planning-execution, journal-health | 18 | 5 | 5600 |
-| v107.test.js | e2e | full | planning-execution | 57 | 23 | 6050 |
+| v107.test.js | e2e | full | planning-execution | 58 | 23 | 6050 |
 | v108.test.js | e2e | full | sync-storage, planning-execution | 21 | 6 | 1800 |
 | v109.test.js | e2e | full | planning-execution, ui-responsive | 24 | 12 | 3900 |
 | v110.test.js | e2e | full | sync-storage, planning-execution, content-ai | 20 | 2 | 1000 |
@@ -222,9 +222,9 @@
 | v261.test.js | e2e | full | sync-storage, planning-execution, journal-health, ui-responsive | 60 | 0 | 0 |
 | v262.test.js | e2e | full | sync-storage, planning-execution, journal-health, ui-responsive, security-offline | 59 | 0 | 0 |
 | v263.test.js | e2e | full | planning-execution, sync-storage, ui-responsive | 42 | 2 | 300 |
-| v264.test.js | e2e | full | planning-execution, sync-storage, ui-responsive | 50 | 1 | 150 |
+| v264.test.js | e2e | full | planning-execution, sync-storage, ui-responsive | 50 | 0 | 0 |
 | v266.test.js | e2e | full | planning-execution, sync-storage, ui-responsive | 61 | 0 | 0 |
-| v267.test.js | e2e | full | planning-execution, sync-storage, journal-health, ui-responsive | 22 | 3 | 550 |
+| v267.test.js | e2e | full | planning-execution, sync-storage, journal-health, ui-responsive | 22 | 2 | 400 |
 | v268.test.js | e2e | full | planning-execution | 11 | 0 | 0 |
 | v271.test.js | node | full | legacy-crosscutting | 16 | 0 | 0 |
 | v274.test.js | e2e | full | ui-responsive | 18 | 0 | 0 |
@@ -240,7 +240,7 @@
 | v285.test.js | e2e | full | content-ai, sync-storage, planning-execution, ui-responsive | 26 | 0 | 0 |
 | v286.test.js | e2e | full | content-ai, ui-responsive | 27 | 0 | 0 |
 | v287.test.js | e2e | full | content-ai, planning-execution, ui-responsive | 43 | 0 | 0 |
-| v288.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 30 | 0 | 0 |
+| v288.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 32 | 0 | 0 |
 | v293.test.js | e2e | full | planning-execution, ui-responsive | 34 | 0 | 0 |
 | v294.test.js | e2e | full | sync-storage, planning-execution, journal-health, content-ai | 42 | 0 | 0 |
 | v295.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 43 | 0 | 0 |
@@ -389,7 +389,7 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | missing-timezone | 1 | tests/mutation-global-e2e.test.js | 607 |
 | missing-timezone | 1 | tests/normalize-null-defense.test.js | 44 |
 | fixed-date | 1 | tests/plan-core.test.js | 359 |
-| missing-timezone | 2 | tests/r0-twyplan.test.js | 29, 285 |
+| missing-timezone | 2 | tests/r0-twyplan.test.js | 29, 287 |
 | fixed-date | 3 | tests/remaining-screen-labels.test.js | 125, 134, 142 |
 | missing-timezone | 2 | tests/state-container-recovery-e2e.test.js | 7, 19 |
 | missing-timezone | 1 | tests/sw-integration.test.js | 28 |
@@ -410,7 +410,7 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | missing-timezone | 4 | tests/v104.test.js | 47, 73, 102, 129 |
 | missing-timezone | 1 | tests/v105.test.js | 36 |
 | missing-timezone | 1 | tests/v106.test.js | 25 |
-| missing-timezone | 2 | tests/v107.test.js | 45, 337 |
+| missing-timezone | 2 | tests/v107.test.js | 45, 338 |
 | missing-timezone | 1 | tests/v108.test.js | 44 |
 | missing-timezone | 2 | tests/v109.test.js | 31, 190 |
 | fixed-date | 1 | tests/v110.test.js | 43 |
@@ -454,11 +454,11 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | missing-timezone | 1 | tests/v160.test.js | 42 |
 | missing-timezone | 1 | tests/v162.test.js | 54 |
 | missing-timezone | 1 | tests/v194.test.js | 14 |
-| missing-timezone | 2 | tests/v195.test.js | 14, 246 |
+| missing-timezone | 2 | tests/v195.test.js | 14, 251 |
 | fixed-date | 1 | tests/v196.test.js | 84 |
 | missing-timezone | 1 | tests/v196.test.js | 17 |
 | missing-timezone | 4 | tests/v197.test.js | 128, 173, 252, 349 |
-| missing-timezone | 3 | tests/v198.test.js | 94, 342, 484 |
+| missing-timezone | 3 | tests/v198.test.js | 94, 343, 485 |
 | missing-timezone | 1 | tests/v199.test.js | 41 |
 | missing-timezone | 1 | tests/v231.test.js | 35 |
 | missing-timezone | 1 | tests/v241.test.js | 19 |
@@ -477,7 +477,7 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | missing-timezone | 1 | tests/v263.test.js | 135 |
 | missing-timezone | 1 | tests/v264.test.js | 150 |
 | missing-timezone | 1 | tests/v266.test.js | 90 |
-| fixed-date | 5 | tests/v267.test.js | 104, 107, 111, 265, 269 |
+| fixed-date | 5 | tests/v267.test.js | 97, 100, 104, 261, 265 |
 | missing-timezone | 1 | tests/v274.test.js | 66 |
 | missing-timezone | 1 | tests/v275.test.js | 57 |
 | fixed-date | 3 | tests/v276.test.js | 77, 198, 261 |
@@ -493,7 +493,7 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | missing-timezone | 1 | tests/v286.test.js | 81 |
 | fixed-date | 9 | tests/v287.test.js | 59, 124, 214, 242, 249, 273, 287, 309, 351 |
 | missing-timezone | 1 | tests/v287.test.js | 79 |
-| missing-timezone | 1 | tests/v288.test.js | 357 |
+| missing-timezone | 1 | tests/v288.test.js | 334 |
 | missing-timezone | 2 | tests/v293.test.js | 70, 378 |
 | missing-timezone | 1 | tests/v294.test.js | 150 |
 | missing-timezone | 2 | tests/v295.test.js | 59, 306 |
@@ -556,8 +556,8 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | missing-timezone | 2 | tests/v93.test.js | 82, 141 |
 | missing-timezone | 1 | tests/v94.test.js | 57 |
 | missing-timezone | 2 | tests/v95.test.js | 32, 178 |
-| missing-timezone | 2 | tests/v96.test.js | 27, 181 |
-| missing-timezone | 2 | tests/v97.test.js | 35, 167 |
+| missing-timezone | 2 | tests/v96.test.js | 27, 182 |
+| missing-timezone | 2 | tests/v97.test.js | 35, 168 |
 | missing-timezone | 2 | tests/v98.test.js | 120, 145 |
 | fixed-date | 1 | tests/v99.test.js | 30 |
 | missing-timezone | 2 | tests/vision-connection-e2e.test.js | 29, 37 |

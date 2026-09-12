@@ -67,11 +67,11 @@ const block = (id, ruleId, title = "朝の読書") => ({
       id: element.dataset.view, label: element.childNodes[0].textContent
     })));
     // v333: 実行タブ統合(タスクシュート+タイムライン=exec)でモバイル下部ナビは
-    // 今日/ジャーナル/実行/その他の4枠へ変わった(「時間」廃止)。仕様変更としてセレクタ追随。
-    check("mobileNavは今日/ジャーナル/実行/その他の4枠",
+    // 今日/実行/作業一覧/その他の4枠へ変わった(「時間」廃止)。仕様変更としてセレクタ追随。
+    check("mobileNavは今日/実行/作業一覧/その他の4枠",
       JSON.stringify(mobileItems) === JSON.stringify([
-        { id: "today", label: "今日" }, { id: "journal", label: "ジャーナル" },
-        { id: "exec", label: "実行" }, { id: "more", label: "その他" }
+        { id: "today", label: "今日" }, { id: "exec", label: "実行" },
+        { id: "wbs", label: "作業一覧" }, { id: "more", label: "その他" }
       ]), JSON.stringify(mobileItems));
     await page.locator('.nav-button[data-view="instruments"]').click();
     await page.waitForSelector('.instr-view');

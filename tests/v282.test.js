@@ -252,7 +252,7 @@ function syncState(extra = {}) {
     const row = page.locator('.twy-row[data-twy-track-id="t1"]');
     await row.waitFor();
     check("壊れたprogressはnormalize後に非表示", await row.locator(".twy-ms-progress").count() === 0);
-    const projectProgress = page.locator('[data-wbs-row-id="p1"] > .wbs-project-head .wbs-project-meta');
+    const projectProgress = page.locator('[data-action="wbs-select-project"][data-id="p1"] .wbs-project-meta');
     async function readProjectProgress() {
       const text = await projectProgress.textContent();
       const progress = /進捗\s+(\d+)\/(\d+)\s+・\s+(\d+)%/.exec(text || "");
@@ -381,7 +381,8 @@ function syncState(extra = {}) {
       localStorage.setItem(key, JSON.stringify(state));
     }, { key: STATE_KEY, progress: carryProgress });
     await page.reload();
-    await page.locator('[data-work-list="wbs"] [data-action="edit-project"][data-id="p1"]').click();
+    await page.locator('[data-action="wbs-select-project"][data-id="p1"]').click();
+    await page.locator('.wbs-detail-actions [data-action="edit-project"][data-id="p1"]').click();
     await page.locator('[data-action="twy-carry-cycle"]').click();
     await page.locator("[data-twy-carry-ms-date]").fill("2026-11-07");
     await page.locator('[data-action="twy-carry-confirm"]').click();

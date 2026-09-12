@@ -171,6 +171,7 @@ check("週跨ぎ送信はデータ不変・偽成功なしで当週シートへ�
     // 後者は既定非表示のためvisible待ちだと詰まる。ここではクリックせず存在確認だけなので
     // attachedで待つ(セレクタ追随・assert不変)
     await page.reload(); await page.waitForSelector('[data-action="toggle-wbs-edit"]', { state: "attached" });
+    if (cycleStart) await page.locator('[data-action="wbs-select-project"][data-id="p1"]').click();
     if (cycleStart) await page.waitForSelector('button[data-action="twy-open-commit"]', { state: "attached" });
   }
   async function resetSaveProbe() {
@@ -186,7 +187,7 @@ check("週跨ぎ送信はデータ不変・偽成功なしで当週シートへ�
   // p1/p2とも12WY projectのため行ごとに同じボタンが2件出る。twy-open-commitはproject非依存の
   // グローバルシートを開くためどちらでもよく、.first()で明示する(v329とは無関係の既存事象・
   // セレクタ追随・assert不変)
-  const openSheet = () => page.locator('.twy-commit-open[data-action="twy-open-commit"]').first().click();
+  const openSheet = () => page.locator('.wbs-detail-actions [data-action="twy-open-commit"]').first().click();
   const group = (taskId) => page.locator(`.twy-commit-row[data-twy-task-id="${taskId.replaceAll('"', '\\"')}"]`);
   try {
     await page.clock.setFixedTime(new Date(2026, 7, 25, 10, 0, 0));
@@ -265,9 +266,13 @@ check("週跨ぎ送信はデータ不変・偽成功なしで当週シートへ�
     check("確定後はrenderModalでC'へ切替", (await page.locator(".twy-commit-meta").textContent()).includes("確定済")
       && await page.locator('[data-twy-commit-item]').count() === 2
       && await page.locator('[data-action="twy-commit-week"]').count() === 0);
-    check("saveAndRender後も各12WY ProjectのWBS入口に退行なし",
-      await page.locator('[data-wbs-row-id="p1"] > .wbs-project-head > .twy-commit-open[data-action="twy-open-commit"]').count() === 1
-      && await page.locator('[data-wbs-row-id="p2"] > .wbs-project-head > .twy-commit-open[data-action="twy-open-commit"]').count() === 1);
+    await page.locator('#modalRoot [data-action="modal-close"]').first().click();
+    const entryCounts = [];
+    for (const id of ['p1', 'p2']) {
+      await page.locator(`[data-action="wbs-select-project"][data-id="${id}"]`).click();
+      entryCounts.push(await page.locator(`[data-wbs-detail-id="${id}"] [data-action="twy-open-commit"]`).count());
+    }
+    check("saveAndRender後も各12WY ProjectのWBS入口に退行なし", JSON.stringify(entryCounts) === '[1,1]');
 
     await seed(); await openSheet();
     for (const checkbox of await page.locator('.twy-commit-row input[data-action="twy-commit-toggle-group"]').all()) await checkbox.click();
@@ -291,7 +296,7 @@ check("週跨ぎ送信はデータ不変・偽成功なしで当週シートへ�
     await seed();
     // v329: 行の副操作は…メニュー(排他)の中。reload直後は必ず閉じているため先に開く
     // (セレクタ追随・assert不変)
-    await page.click('[data-wbs-row-id="p1"] [data-action="wbs-row-menu-toggle"]');
+    await page.click('[data-action="wbs-select-project"][data-id="p1"]');
     await page.waitForTimeout(150);
     await page.locator('[data-action="edit-project"][data-id="p1"]').first().click();
     await page.locator('[data-modal-field="title"]').fill("Project saved"); await page.locator('[data-action="modal-save"]').click();

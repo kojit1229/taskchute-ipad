@@ -122,7 +122,8 @@ function check(name, cond, extra = "") {
     const returnMode = previous === 'timeline' ? 'actual' : previous === 'tasks' ? 'plan'
       : previous === 'exec' ? await page.locator('.exec-mode-segmented .active[data-action="exec-mode-toggle"]').getAttribute('data-mode') : null;
     await page.locator('.sidebar [data-action="nav"][data-view="wbs"]').click();
-    const root = page.locator('[data-work-list="wbs"]');
+    await page.locator('[data-action="wbs-select-project"][data-id="test-proj"]').click();
+    const root = page.locator('[data-work-list="wbs-tasks-test-proj"]');
     await root.locator('[data-work-filter="status"]').selectOption('');
     check('全件WBSは対象Taskを保持: ' + taskId, await root.locator(`[data-work-key="task:${taskId}"]`).count() === 1);
     await root.locator('[data-work-filter="status"]').selectOption('open');
@@ -411,8 +412,9 @@ function check(name, cond, extra = "") {
     check("保存前は未完了タスク一覧に出る", await openTaskCount("task-C") === 1);
     // v332: 「タスク」行の編集ボタンは行タップ展開(task-row-toggle)後にしか出ない(セレクタ追随)。
     await page.locator('.sidebar [data-action="nav"][data-view="wbs"]').click();
+    await page.locator('[data-action="wbs-select-project"][data-id="test-proj"]').click();
     await page.waitForSelector('[data-action="edit-task"][data-id="task-C"]');
-    await page.locator('[data-work-list="wbs"] [data-action="edit-task"][data-id="task-C"]').click();
+    await page.locator('[data-work-list="wbs-tasks-test-proj"] .wbs-task-title[data-action="edit-task"][data-id="task-C"]').click();
     await page.waitForTimeout(200);
     await page.selectOption('[data-modal-field="status"]', "completed");
     await page.click('[data-action="modal-save"]');
@@ -423,6 +425,7 @@ function check(name, cond, extra = "") {
     check("保存後、statusがcompletedになる", t6?.status === "completed", JSON.stringify(t6));
     check("保存後、未完了タスク一覧から消える", await openTaskCount("task-C") === 0);
     await page.click('.sidebar [data-action="nav"][data-view="wbs"]');
+    await page.locator('[data-action="wbs-select-project"][data-id="test-proj"]').click();
     await page.waitForTimeout(200);
     check("WBSタブのバッジが「完了」になる", (await wbsBadge("task-C").textContent())?.includes("完了"), await wbsBadge("task-C").textContent());
 
@@ -438,6 +441,7 @@ function check(name, cond, extra = "") {
     });
     check("WBS操作前は未完了タスク一覧(tasks画面)に出る", await openTaskCount("task-D") === 1);
     await page.click('.sidebar [data-action="nav"][data-view="wbs"]');
+    await page.locator('[data-action="wbs-select-project"][data-id="test-proj"]').click();
     await page.waitForTimeout(200);
     await page.click('[data-action="toggle-task"][data-id="task-D"]');
     await page.waitForTimeout(300);
@@ -479,19 +483,21 @@ function check(name, cond, extra = "") {
     ];
     await seed({ tasks: SORT_TASKS, blocks: [], projects: [testProject()], view: "tasks" });
     await page.locator('.sidebar [data-action="nav"][data-view="wbs"]').click();
+    await page.locator('[data-action="wbs-select-project"][data-id="test-proj"]').click();
     // v374: normalizeState(app.js v28)が自動追加する「その他」受け皿Task(期日なし)は全件一覧にも出る。
     //       受け皿は高々1件だけを母集団から除き、順序・欠落・重複の保証は投入fixtureで判定する。
     const receptacleKeys = (await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).tasks, KEY))
       .filter(task => task.title === "その他" && !task.deleted).map(task => `task:${task.id}`);
     check("受け皿「その他」Taskは高々1件", receptacleKeys.length <= 1, JSON.stringify(receptacleKeys));
-    const rows = page.locator('[data-work-list="wbs"] [data-work-key^="task:"]');
+    const rows = page.locator('[data-work-list="wbs-tasks-test-proj"] [data-work-key^="task:"]');
     const rowKeys = async () => (await rows.evaluateAll(els => els.map(el => el.dataset.workKey))).filter(key => !receptacleKeys.includes(key));
     const idsInOrder = (await rowKeys()).map(key => key.slice(5));
-    check("全件WBSは期限7日・8日・未設定を落とさず元Task順で表示する",
-      JSON.stringify(idsInOrder) === JSON.stringify(SORT_TASKS.map(task => task.id)), JSON.stringify(idsInOrder));
-    await page.locator('[data-work-list="wbs"] [data-work-filter="due"]').selectOption('overdue');
+    check("選択Projectは期限7日・8日・未設定を落とさず既存ツリーの期限順で表示する",
+      JSON.stringify(idsInOrder) === JSON.stringify(["task-overdue", "task-today2", "task-tomorrow", "task-in3days", "task-in7days", "task-8days", "task-nodue2"]), JSON.stringify(idsInOrder));
+    check("表示順を変えても保存された元Task順は変えない", JSON.stringify((await stateNow()).tasks.filter(task => SORT_TASKS.some(seed => seed.id === task.id)).map(task => task.id)) === JSON.stringify(SORT_TASKS.map(task => task.id)));
+    await page.locator('[data-work-list="wbs-tasks-test-proj"] [data-work-filter="due"]').selectOption('overdue');
     check("期限超過filterは超過Taskだけを表示する", JSON.stringify(await rowKeys()) === JSON.stringify(['task:task-overdue']));
-    await page.locator('[data-work-list="wbs"] [data-work-filter="due"]').selectOption('none');
+    await page.locator('[data-work-list="wbs-tasks-test-proj"] [data-work-filter="due"]').selectOption('none');
     check("期限なしfilterは未設定Taskだけを表示する", JSON.stringify(await rowKeys()) === JSON.stringify(['task:task-nodue2']));
     await page.locator('.sidebar [data-action="nav"][data-view="exec"]').click();
     check("Task期限から架空の予定Blockを作らない", await page.locator('[data-work-list="exec"] [data-work-key]').count() === 0 && (await stateNow()).blocks.length === 0);

@@ -52,7 +52,7 @@ const BLOCK_FIELDS = ["title", "category", "taskId", "isMIT", "date", "plannedSt
       s.journals[day] = "架空本文";
       localStorage.setItem(key, JSON.stringify(s));
     }, { key: STATE_KEY, day: DAY, cycle: CYCLE, due: DUE });
-    const reload = async () => { await page.reload(); await page.locator('[data-work-list="wbs"]').waitFor(); };
+    const reload = async () => { await page.reload(); await page.locator('[data-work-list="wbs-projects"]').waitFor(); };
     await reload();
     const action = (name, id) => dispatchRegisteredAction(page, name, id ? { id } : {});
     const field = name => page.locator(`#modalRoot [data-modal-field="${name}"]`);

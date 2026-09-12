@@ -50,6 +50,8 @@ const task = (id, projectId, extra = {}) => ({
   }
 
   async function openTaskMenu(taskId) {
+    const projectId = (await stateNow()).tasks.find(task => task.id === taskId).projectId || '';
+    await page.locator(`[data-action="wbs-select-project"][data-id="${projectId}"]`).click();
     await page.locator(`[data-wbs-row-id="${taskId}"] .wbs-row-menu-toggle`).click();
     await page.locator(`.wbs-row-menu-panel [data-action="edit-task"][data-id="${taskId}"]`).click();
     await page.waitForSelector('[data-action="modal-save"]', { state: "visible" });
@@ -308,6 +310,7 @@ const task = (id, projectId, extra = {}) => ({
     }, { key: STATE_KEY, today: TODAY });
     await pageMobile.reload();
     await pageMobile.waitForSelector("main");
+    await pageMobile.locator('[data-action="wbs-select-project"][data-id="p-mobile"]').click();
     await pageMobile.locator('[data-wbs-row-id="t-mobile"] .wbs-row-menu-toggle').click();
     await pageMobile.locator('.wbs-row-menu-panel [data-action="edit-task"][data-id="t-mobile"]').click();
     await pageMobile.waitForSelector('[data-action="modal-save"]', { state: "visible" });

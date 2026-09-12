@@ -121,7 +121,8 @@ function check(name, cond, extra = "") {
     // (編集は…メニュー内のedit-taskボタンに分離。表示検証はタイトル要素で行う・assert不変)
     check("Wish配下のTaskタイトルがWBSに表示される",
       await page.locator('.wbs-task-title', { hasText: WISH_TITLE_A }).count() === 1);
-    check("通常ProjectのTaskタイトルも引き続き表示される",
+    await page.locator('[data-action="wbs-select-project"][data-id="test-proj"]').click();
+    check("通常Projectを選ぶと同ProjectのTaskタイトルが表示される",
       await page.locator('.wbs-task-title', { hasText: WBS_TITLE_A }).count() === 1);
 
     // インライン編集モードで、Wishタスクの期限を直接編集できる(既存のwbs-edit機構がそのまま効くこと)
@@ -132,6 +133,7 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(150);
     await page.click('button.wbs-menu-edit-toggle[data-action="toggle-wbs-edit"]');
     await page.waitForTimeout(300);
+    await page.locator('[data-action="wbs-select-project"][data-id="wish-1"]').click();
     const wishDueInput = page.locator('input[data-wbs-edit="dueDate"][data-id="w-1"]');
     check("Wishタスクにも期限のインライン入力が出る", await wishDueInput.count() === 1);
     await wishDueInput.fill(TODAY);
@@ -146,7 +148,7 @@ function check(name, cond, extra = "") {
     // ============================================================
     console.log("[1b] Wish Projectの削除ボタン非表示 + 削除ガード + 種別ロック");
     // v329: 行の副操作は…メニュー(排他)の中。先に開く(セレクタ追随・assert不変)
-    await page.click('[data-wbs-row-id="wish-1"] [data-action="wbs-row-menu-toggle"]');
+    await page.locator('[data-action="wbs-select-project"][data-id="wish-1"]').click();
     await page.waitForTimeout(150);
     await page.click('button[data-action="edit-project"][data-id="wish-1"]');
     await page.waitForTimeout(200);
@@ -186,7 +188,7 @@ function check(name, cond, extra = "") {
       return panel ? !panel.hidden : false;
     });
     if (!wish1MenuOpen) {
-      await page.click('[data-wbs-row-id="wish-1"] [data-action="wbs-row-menu-toggle"]');
+      await page.locator('[data-action="wbs-select-project"][data-id="wish-1"]').click();
       await page.waitForTimeout(150);
     }
     await page.click('button[data-action="add-task-to-project"][data-id="wish-1"]');

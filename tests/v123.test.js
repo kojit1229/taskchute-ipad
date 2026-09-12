@@ -105,9 +105,9 @@ function check(name, cond, extra = "") {
       });
     });
     // v333の統合仕様: 廃止された時間項目を復活させず、順序・表示名・全遷移を固定する。
-    check("下部ナビは今日/ジャーナル/実行/その他の4項目がこの順序で重複なく並ぶ",
+    check("下部ナビは今日/実行/作業一覧/その他の4項目がこの順序で重複なく並ぶ",
       JSON.stringify(navButtons.map(b => [b.id, b.label])) === JSON.stringify([
-        ["today", "今日"], ["journal", "ジャーナル"], ["exec", "実行"], ["more", "その他"]]), JSON.stringify(navButtons));
+        ["today", "今日"], ["exec", "実行"], ["wbs", "作業一覧"], ["more", "その他"]]), JSON.stringify(navButtons));
     check("すべてのボタンにラベルテキストがある", navButtons.every((b) => b.text.length > 0), JSON.stringify(navButtons));
     check("すべてのボタンが可視(opacity>0・visibility:visible・サイズ>0)",
       navButtons.every((b) => b.opacity > 0 && b.visibility === "visible" && b.width > 0 && b.height > 0),
@@ -120,7 +120,7 @@ function check(name, cond, extra = "") {
       return JSON.stringify({ projects: s.projects, tasks: s.tasks, blocks: s.blocks });
     }, KEY);
     const beforeNavigation = await primaryData();
-    for (const view of ["journal", "exec", "more", "today"]) {
+    for (const view of ["exec", "wbs", "more", "today"]) {
       await page.locator(`#bottomNav [data-view="${view}"]`).click();
       await page.waitForSelector(`#app[data-view="${view}"]`);
       check(`${view}: 遷移先・active項目・保存された現在地が一致する`,
@@ -138,8 +138,8 @@ function check(name, cond, extra = "") {
     await page.locator('#bottomNav [data-view="more"]').click();
     await page.locator('.more-tower-grid [data-view="wbs"]').click();
     await page.waitForSelector('#app[data-view="wbs"]');
-    check("下部ナビにないWBSはその他から到達し、その他がactiveになる",
-      await page.locator('#bottomNav [data-view="more"].active').count() === 1);
+    check("その他からWBSへ到達しても作業一覧ナビがactiveになる",
+      await page.locator('#bottomNav [data-view="wbs"].active').count() === 1);
     check("ナビ全遷移と実行内切替でProject/Task/Blockの保存内容を変えない",
       await primaryData() === beforeNavigation);
 

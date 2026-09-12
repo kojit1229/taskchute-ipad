@@ -114,7 +114,7 @@ function handleWorkListComposition(target, composing) {
   }
 }
 function rememberWorkListOrigin(target) {
-  if (!target.matches?.('[data-action="edit-task"],[data-action="edit-project"],[data-action="edit-block"]')) return;
+  if (!target.matches?.('[data-action="edit-task"],[data-action="edit-project"],[data-action="edit-block"],[data-action="task-today"],[data-action="placement-add-today"]')) return;
   const root = target.closest("[data-work-list]"), row = target.closest("[data-work-key]");
   if (root && row) modalOrigin = { scope: root.dataset.workList, key: row.dataset.workKey, action: target.dataset.action, view: state.currentView };
 }
@@ -126,7 +126,10 @@ function restoreWorkListOrigin() {
     // A save post-effect or navigation may already own focus in a new surface.
     if (state.modal || state.currentView !== origin.view || document.querySelector('#modalRoot.open, dialog[open]')) return;
     const root = document.querySelector(`[data-work-list="${origin.scope}"]`);
-    const button = root?.querySelector(`[data-work-key="${CSS.escape(origin.key)}"] button[data-action="${origin.action}"]:not(:disabled)`);
+    const row = `[data-work-key="${CSS.escape(origin.key)}"]`;
+    const button = root?.querySelector(`${row} button[data-action="${origin.action}"]:not(:disabled)`)
+      || root?.querySelector(`${row} button[data-action="task-today"]:not(:disabled), ${row} button[data-action="placement-add-today"]:not(:disabled)`)
+      || root?.querySelector(`${row} button:not(:disabled)`);
     (button || root?.querySelector('[data-work-filter="query"]'))?.focus({ preventScroll: true });
   });
 }

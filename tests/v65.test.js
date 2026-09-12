@@ -92,6 +92,7 @@ async function openWbsRowMenuIfClosed(page, taskTitle) {
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, blocks, tasks, projects, TODAY, view });
     await page.reload();
+    if (view === "wbs") await page.locator('[data-action="wbs-select-project"][data-id="test-proj"]').click();
     await page.waitForTimeout(500);
   }
 
@@ -154,7 +155,7 @@ async function openWbsRowMenuIfClosed(page, taskTitle) {
       view: "wbs"
     });
     await openWbsRowMenuIfClosed(page, "leverageType保存検証Task");  // v329: 行メニュー(…)を開いてからedit-task
-    await page.click('[data-work-list="wbs"] [data-action="edit-task"][data-id="task-lev1"]');
+    await page.click('[data-work-list="wbs-tasks-test-proj"] .wbs-task-title[data-action="edit-task"][data-id="task-lev1"]');
     await page.waitForTimeout(200);
     check("Task編集モーダルにレバレッジselectがある", await page.locator('[data-modal-field="leverageType"]').count() === 1);
     await page.selectOption('[data-modal-field="leverageType"]', "asset");
@@ -193,7 +194,7 @@ async function openWbsRowMenuIfClosed(page, taskTitle) {
       view: "wbs"
     });
     await openWbsRowMenuIfClosed(page, "10秒判定検証Task");  // v329: 行メニュー(…)を開いてからedit-task
-    await page.click('[data-work-list="wbs"] [data-action="edit-task"][data-id="task-lev2"]');
+    await page.click('[data-work-list="wbs-tasks-test-proj"] .wbs-task-title[data-action="edit-task"][data-id="task-lev2"]');
     await page.waitForTimeout(200);
     check("10秒判定ヘルプ(details)がある", await page.locator(".lev-helper").count() === 1);
     await page.click(".lev-helper summary");  // 開く(details既定は閉じているため)
@@ -207,7 +208,7 @@ async function openWbsRowMenuIfClosed(page, taskTitle) {
     await page.locator('dialog[open] [data-action="draft-leave-discard"]').click();
     await page.waitForSelector('dialog[open]', { state: "detached" });
     await page.waitForTimeout(150);
-    await page.click('[data-work-list="wbs"] [data-action="edit-task"][data-id="task-lev2"]');  // 開き直す
+    await page.click('[data-work-list="wbs-tasks-test-proj"] .wbs-task-title[data-action="edit-task"][data-id="task-lev2"]');  // 開き直す
     await page.waitForTimeout(150);
     const selValAfterCancel = await page.locator('[data-modal-field="leverageType"]').inputValue();
     check("保存せずキャンセルすると判定結果は反映されない(強制しない)", selValAfterCancel === "", selValAfterCancel);
@@ -278,12 +279,13 @@ async function openWbsRowMenuIfClosed(page, taskTitle) {
     check("「いま」行の.lev-markは11px以上", nowMarkFontSize >= 11, String(nowMarkFontSize));
 
     await page.click('[data-action="nav"][data-view="wbs"]');
+    await page.locator('[data-action="wbs-select-project"][data-id="test-proj"]').click();
     await page.waitForTimeout(300);
     // v374: WBS一覧のTask行は旧renderTaskRow(.wbs-task-row/toggle-task)から汎用work-list.jsの
     // listRow()(.work-list-row、行キーdata-work-key="task:<id>"、開くボタンはdata-action="edit-task")
     // へ描画元が変わっている(旧セレクタは0件になり保証内容と無関係にタイムアウトしていた)。
     // 保証内容(⚙資産マークが1件出る)は変えず、現行DOMのセレクタへ追随させるだけ。
-    const wbsMarks = page.locator('[data-work-list="wbs"] [data-work-key="task:task-mark1"] .lev-mark');
+    const wbsMarks = page.locator('[data-work-list="wbs-tasks-test-proj"] [data-work-key="task:task-mark1"] .lev-mark');
     check("WBS一覧のTask行(renderTaskRow)に⚙資産マークが1件出る", await wbsMarks.count() === 1);
     // v374: Task行のマーク文字サイズは(実行タブのTask行が無くなったため)WBS一覧のTask行で検査する。
     const taskMarkFontSize = await wbsMarks.first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));

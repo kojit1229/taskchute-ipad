@@ -200,7 +200,7 @@ for (const name of ["twy-excuse", "twy-excuse-cancel", "twy-add-item", "twy-add-
   const callCounts = () => page.evaluate(() => ({ generateReport: window.__v264GenerateReportCalls || 0,
     excuse: window.__v264ExcuseCalls || 0, unexcuse: window.__v264UnexcuseCalls || 0, add: window.__v264AddCalls || 0 }));
   const savedState = () => page.evaluate((key) => JSON.parse(localStorage.getItem(key)), STATE_KEY);
-  const openSheet = () => page.locator('.twy-commit-open[data-action="twy-open-commit"]').click();
+  const openSheet = () => page.locator('.wbs-detail-actions [data-action="twy-open-commit"]').click();
   const row = (id) => page.locator(`[data-twy-commit-item][data-id="wci_${WEEK}_${id}"]`);
   try {
     await page.clock.setFixedTime(new Date(2026, 7, 25, 10, 0, 0));
@@ -360,14 +360,7 @@ for (const name of ["twy-excuse", "twy-excuse-cancel", "twy-add-item", "twy-add-
       .evaluate((el) => getComputedStyle(el).cursor !== "pointer"));
     await page.locator('[data-action="modal-close"]').click();
     // v329: 行の副操作は…メニュー(排他)の中。閉じている時だけ開く(セレクタ追随・assert不変)
-    const p1MenuOpen = await page.evaluate(() => {
-      const panel = document.querySelector('[data-wbs-row-id="p1"] .wbs-row-menu-panel');
-      return panel ? !panel.hidden : false;
-    });
-    if (!p1MenuOpen) {
-      await page.click('[data-wbs-row-id="p1"] [data-action="wbs-row-menu-toggle"]');
-      await page.waitForTimeout(150);
-    }
+    await page.locator('[data-action="wbs-select-project"][data-id="p1"]').click();
     await page.locator('[data-action="edit-project"][data-id="p1"]').first().click();
     await page.locator('[data-modal-field="title"]').fill("Project saved"); await page.locator('[data-action="modal-save"]').click();
     check("既存projectモーダル保存に退行なし", (await savedState()).projects.find((entry) => entry.id === "p1").title === "Project saved");

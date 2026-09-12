@@ -88,7 +88,7 @@ function check(name, cond, extra = "") {
   }
 
   function taskTodayBtn(id) {
-    return page.locator(`[data-work-list="wbs"] [data-work-key="task:${id}"]`);
+    return page.locator(`[data-work-list="wbs-tasks-test-proj"] [data-work-key="task:${id}"]`);
   }
 
   try {
@@ -105,6 +105,7 @@ function check(name, cond, extra = "") {
     check("期限のみTaskは予定へ混ぜない", await page.locator('[data-work-list="exec"] [data-work-key^="task:"]').count() === 0);
     check("全件WBSへの実導線がある", await page.locator('[data-work-list="exec"] [data-action="nav"][data-view="wbs"]').count() === 1);
     await page.locator('[data-work-list="exec"] [data-action="nav"][data-view="wbs"]').click();
+    await page.locator('[data-action="wbs-select-project"][data-id="test-proj"]').click();
     check("当日期日Taskが表示される", await taskTodayBtn("task-today").count() === 1);
     check("境界(7日後)Taskが表示される", await taskTodayBtn("task-7days").count() === 1);
     check("期日超過Taskが表示される", await taskTodayBtn("task-overdue").count() === 1);
@@ -112,9 +113,8 @@ function check(name, cond, extra = "") {
     // 「表示しない」(v107)から「末尾に表示する」へ再度仕様変更された。
     check("期日未設定Taskは末尾に表示される(v332で表示へ変更)", await taskTodayBtn("task-nodue").count() === 1);
     check("8日後Taskも全件WBSに保持", await taskTodayBtn("task-8days").count() === 1);
-    const result = page.locator('[data-work-list="wbs"]');
+    const result = page.locator('[data-work-list="wbs-tasks-test-proj"]');
     const ids = () => result.locator('[data-work-key^="task:"]').evaluateAll(els=>els.map(el=>el.dataset.workKey.slice(5)));
-    await result.locator('[data-work-filter="project"]').selectOption("test-proj");
     const allIds = await ids();
     check("元5件が正確に1件ずつ存在する", allIds.length === TASKS.length && TASKS.every(t=>allIds.filter(id=>id===t.id).length===1));
     await result.locator('[data-work-filter="due"]').selectOption("overdue");
@@ -143,10 +143,11 @@ function check(name, cond, extra = "") {
       (s.tasks || []).find((t) => t.id === "task-8days")?.dueDate === addDaysStr(8));
     // WBSタブへ移動すれば8日後Taskも見える(導線の実証)
     await page.click('[data-action="nav"][data-view="wbs"]');
+    await page.locator('[data-action="wbs-select-project"][data-id="test-proj"]').click();
     await page.waitForTimeout(200);
     check("WBSタブでは8日後Taskが見える(表示から消えただけでデータは健在)",
       (await page.textContent("body"))?.includes("8日後Task(母集団外)"));
-    await result.locator('[data-work-key="task:task-overdue"] [data-action="wbs-search-jump"]').click();
+    await result.locator('[data-work-key="task:task-overdue"] .wbs-task-title').scrollIntoViewIfNeeded();
     await page.waitForTimeout(200);
 
     // ============================================================
@@ -191,9 +192,10 @@ function check(name, cond, extra = "") {
     const defaultPath = path.join(screenshotDir, "v97-taskchute-390px-default.png");
     const expandedPath = path.join(screenshotDir, "v97-taskchute-390px-row-expanded.png");
     await pageMobile.screenshot({ path: defaultPath, fullPage: true });
-    await pageMobile.locator('[data-work-list="wbs"] [data-work-key="task:task-overdue"] [data-action="wbs-search-jump"]').click();
+    await pageMobile.locator('[data-action="wbs-select-project"][data-id="test-proj"]').click();
+    await pageMobile.locator('[data-work-list="wbs-tasks-test-proj"] [data-work-key="task:task-overdue"] .wbs-task-title').scrollIntoViewIfNeeded();
     await pageMobile.locator('.wbs-projects [data-wbs-row-id="task-overdue"] .wbs-row-menu-toggle').click();
-    check("390pxで同Task副操作へ到達", await pageMobile.locator('.wbs-projects [data-wbs-row-id="task-overdue"] [data-action="edit-task"]').isVisible());
+    check("390pxで同Task副操作へ到達", await pageMobile.locator('.wbs-projects [data-wbs-row-id="task-overdue"] .wbs-row-menu-panel [data-action="edit-task"]').isVisible());
     await pageMobile.waitForTimeout(200);
     await pageMobile.screenshot({ path: expandedPath, fullPage: true });
     check("スクショ2枚が生成された",

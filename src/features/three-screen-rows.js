@@ -1,3 +1,4 @@
+import { dailyActuals } from "../core/daily-actuals.js";
 import { workListRows, filterWorkList } from "../core/work-list.js";
 
 // Read-only classification: Today uses the clock; execution uses the selected day.
@@ -10,7 +11,7 @@ export function candidateTasks(state, date, conditions = {}, deps) {
 
 export function screenRowGroup(row) {
   if (row.kind !== "block") return "candidates";
-  if (row.item.completed || row.item.actualEndAt) return "actuals";
+  if (row.item.actualEndAt) return "actuals";
   if (row.item.category === "ルーティン" && !row.item.oneTap) return "routines";
   if (!row.task || row.task.deleted || row.task.kind === "other") return "unlinked";
   return row.time ? "plans" : "untimed";
@@ -22,6 +23,8 @@ export function buildThreeScreenRows(state, { scope, today, conditions }, deps) 
   let rows = candidates
     ? workListRows({ ...state, tasks: candidateTasks(state, date, conditions, deps) }, { scope: "wbs", date, dueDate: deps.dueDate }).filter(row => row.kind === "task")
     : workListRows(state, { scope, date, mode: conditions.mode, dueDate: deps.dueDate });
+  const actualOrder = new Map(dailyActuals(rows.filter(row => row.kind === "block").map(row => row.item)).map((block, index) => [block.id, index]));
+  rows.sort((a, b) => (a.kind === "block" ? actualOrder.get(a.id) ?? -1 : -1) - (b.kind === "block" ? actualOrder.get(b.id) ?? -1 : -1));
   if (scope === "exec-actual") rows = rows.filter(row => screenRowGroup(row) === "actuals");
   const filters = candidates ? { ...conditions, status: "", due: conditions.due === "week" ? "" : conditions.due } : conditions;
   return { date, rows, shown: filterWorkList(rows, filters, date) };

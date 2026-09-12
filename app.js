@@ -747,7 +747,10 @@ registerActions({
   },
   "wbs-search-input": () => {},  // inputイベント側で差分更新。click時は意図的no-op
   "wbs-search-jump": ({ target }) => jumpToWbsSearchResult(target.dataset.kind, target.dataset.id),
-  "wbs-select-project": ({ id }) => { _wbsSelectedProjectId = id; render(); },
+  "wbs-select-project": ({ id }) => {
+    if (id !== "" && !state.projects.some(project => !project.deleted && project.id === id)) return;
+    _wbsSelectedProjectId = id; render();
+  },
   "suspend-project": ({ id }) => suspendProject(id),
   "resume-project": ({ id }) => resumeProject(id),
   "suspend-task": ({ id }) => suspendTask(id),

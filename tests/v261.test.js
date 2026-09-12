@@ -331,6 +331,7 @@ function clone(value) { return JSON.parse(JSON.stringify(value)); }
       projects: [project("p-num"), project("p-done"), project("p-ms"), project("p-closed")], tracks,
       measurements: [measurement("trm-open", "n-open", 5), measurement("trm-done", "n-done", 10)] });
     await page.reload();
+    await page.locator('[data-action="wbs-select-project"][data-id="p-num"]').click();
     await page.waitForSelector('.twy-row[data-twy-track-id="n-open"]');
     await page.evaluate((key) => {
       window.__v261OriginalSetItem = Storage.prototype.setItem;
@@ -340,54 +341,62 @@ function clone(value) { return JSON.parse(JSON.stringify(value)); }
         return window.__v261OriginalSetItem.call(this, k, value);
       };
     }, STATE_KEY);
-    const row = (id) => page.locator(`.twy-row[data-twy-track-id="${id}"]`);
+  async function selectProject(projectId) {
+    if (await page.locator('.wbs-project-detail').getAttribute('data-wbs-detail-id') !== projectId)
+      await page.locator(`[data-action="wbs-select-project"][data-id="${projectId}"]`).click();
+  }
+  const row = async (trackId) => {
+    const ownerId = await page.evaluate(({ key, trackId }) => JSON.parse(localStorage.getItem(key)).tracks.find(track => track.id === trackId).ownerId, { key: STATE_KEY, trackId });
+    await selectProject(ownerId);
+    return page.locator(`.twy-row[data-twy-track-id="${trackId}"]`);
+  };
 
-    check("B-5 #12 closed trackは行・openボタンとも非描画", await row("n-closed").count() === 0
+    check("B-5 #12 closed trackは行・openボタンとも非描画", await (await row("n-closed")).count() === 0
       && await page.locator('[data-action="twy-open-editor"][data-id="n-closed"]').count() === 0);
-    await row("n-open").locator('[data-action="twy-open-editor"]').click();
-    const numericInput = row("n-open").locator("[data-twy-editor-value]");
+    await (await row("n-open")).locator('[data-action="twy-open-editor"]').click();
+    const numericInput = (await row("n-open")).locator("[data-twy-editor-value]");
     check("B-5 #1 numericを最新値5で展開", await numericInput.inputValue() === "5");
     check("numeric inputはiOS属性と16pxを満たす", await numericInput.getAttribute("type") === "number"
       && await numericInput.getAttribute("inputmode") === "decimal" && await numericInput.getAttribute("step") === "1"
       && await numericInput.evaluate((el) => getComputedStyle(el).fontSize) === "16px");
-    await row("m-track").locator('[data-action="twy-open-editor"]').click();
-    check("B-5 #6 複数行同時展開・節目昇順/deleted除外", await page.locator(".twy-editor").count() === 2
-      && await row("m-track").locator(".twy-ms-edit-item").count() === 2
-      && (await row("m-track").locator(".checkbox-line").allTextContents()).join("|") === "先の節目|後の節目");
-    const dateInput = row("m-track").locator('[data-twy-ms-id="ms-a"]').locator("xpath=ancestor::div[contains(@class,'twy-ms-edit-item')]").locator("[data-twy-ms-date-input]");
+    await (await row("m-track")).locator('[data-action="twy-open-editor"]').click();
+    check("B-5 #6 複数行同時展開・節目昇順/deleted除外", (await (await row("n-open")).locator(".twy-editor").count() + await (await row("m-track")).locator(".twy-editor").count()) === 2
+      && await (await row("m-track")).locator(".twy-ms-edit-item").count() === 2
+      && (await (await row("m-track")).locator(".checkbox-line").allTextContents()).join("|") === "先の節目|後の節目");
+    const dateInput = (await row("m-track")).locator('[data-twy-ms-id="ms-a"]').locator("xpath=ancestor::div[contains(@class,'twy-ms-edit-item')]").locator("[data-twy-ms-date-input]");
     check("milestone date inputはtype=date・16px", await dateInput.getAttribute("type") === "date"
       && await dateInput.evaluate((el) => getComputedStyle(el).fontSize) === "16px");
 
     const beforeCancel = await savedState();
-    await row("n-open").locator('[data-action="twy-close-editor"]').click();
+    await (await row("n-open")).locator('[data-action="twy-close-editor"]').click();
     const afterCancel = await savedState();
-    check("B-5 #4 numeric取消は未保存・対象だけ閉じる", await row("n-open").locator(".twy-editor").count() === 0
-      && await row("m-track").locator(".twy-editor").count() === 1
+    check("B-5 #4 numeric取消は未保存・対象だけ閉じる", await (await row("n-open")).locator(".twy-editor").count() === 0
+      && await (await row("m-track")).locator(".twy-editor").count() === 1
       && afterCancel.trackMeasurements.length === beforeCancel.trackMeasurements.length
       && await page.evaluate(() => window.__v261SaveCalls) === 0);
 
-    await row("n-open").locator('[data-action="twy-open-editor"]').click();
+    await (await row("n-open")).locator('[data-action="twy-open-editor"]').click();
     await resetReportAndCounter();
-    await row("n-open").locator("[data-twy-editor-value]").fill("");
-    await row("n-open").locator('[data-action="twy-save-measurement"]').click();
+    await (await row("n-open")).locator("[data-twy-editor-value]").fill("");
+    await (await row("n-open")).locator('[data-action="twy-save-measurement"]').click();
     let stateAfter = await savedState();
     check("B-5 #3 空欄はtoast・開いたまま・保存/日報なし", (await page.locator(".toast").textContent()).includes("有効な数値")
-      && await row("n-open").locator(".twy-editor").count() === 1 && stateAfter.trackMeasurements.length === 2
+      && await (await row("n-open")).locator(".twy-editor").count() === 1 && stateAfter.trackMeasurements.length === 2
       && !stateAfter.reports[TODAY] && await page.evaluate(() => window.__v261SaveCalls) === 0);
 
     await resetReportAndCounter();
-    await row("n-open").locator("[data-twy-editor-value]").fill("1");
-    await row("n-open").locator('[data-action="twy-save-measurement"]').evaluate((el) => { el.dataset.id = "missing"; });
-    await row("n-open").locator('[data-action="twy-save-measurement"]').click();
+    await (await row("n-open")).locator("[data-twy-editor-value]").fill("1");
+    await (await row("n-open")).locator('[data-action="twy-save-measurement"]').evaluate((el) => { el.dataset.id = "missing"; });
+    await (await row("n-open")).locator('[data-action="twy-save-measurement"]').click();
     stateAfter = await savedState();
     check("B-5 #13 stale data-idはデータ層ok:false→toast・state不変", (await page.locator(".toast").textContent()).includes("見つかりません")
       && stateAfter.trackMeasurements.length === 2 && !stateAfter.reports[TODAY]
       && await page.evaluate(() => window.__v261SaveCalls) === 0);
-    await row("n-open").locator('[data-action="twy-save-measurement"]').evaluate((el) => { el.dataset.id = "n-open"; });
+    await (await row("n-open")).locator('[data-action="twy-save-measurement"]').evaluate((el) => { el.dataset.id = "n-open"; });
 
     await resetReportAndCounter();
-    await row("n-open").locator("[data-twy-editor-value]").fill("0");
-    await row("n-open").locator('[data-action="twy-save-measurement"]').click();
+    await (await row("n-open")).locator("[data-twy-editor-value]").fill("0");
+    await (await row("n-open")).locator('[data-action="twy-save-measurement"]').click();
     await page.waitForFunction(() => !document.querySelector('[data-twy-track-id="n-open"] .twy-editor'));
     stateAfter = await savedState();
     const latestNumeric = stateAfter.trackMeasurements.at(-1);
@@ -397,17 +406,17 @@ function clone(value) { return JSON.parse(JSON.stringify(value)); }
     check("numeric成功はWBS表示・quiet日報・保存全体3回", (!stateAfter.currentView || stateAfter.currentView === "wbs")
       && !!stateAfter.reports[TODAY] && await page.evaluate(() => window.__v261SaveCalls) === SUCCESS_SAVE_CALLS);
 
-    check("B-5 #5 done trackは訂正ボタン", await row("n-done").locator(".twy-correct").textContent() === "訂正");
-    await row("n-done").locator(".twy-correct").click();
-    check("訂正は通常numericと同じエディタ", await row("n-done").locator("[data-twy-editor-value]").inputValue() === "10");
+    check("B-5 #5 done trackは訂正ボタン", await (await row("n-done")).locator(".twy-correct").textContent() === "訂正");
+    await (await row("n-done")).locator(".twy-correct").click();
+    check("訂正は通常numericと同じエディタ", await (await row("n-done")).locator("[data-twy-editor-value]").inputValue() === "10");
     await resetReportAndCounter();
-    await row("n-done").locator("[data-twy-editor-value]").fill("9");
-    await row("n-done").locator('[data-action="twy-save-measurement"]').click();
+    await (await row("n-done")).locator("[data-twy-editor-value]").fill("9");
+    await (await row("n-done")).locator('[data-action="twy-save-measurement"]').click();
     stateAfter = await savedState();
     check("done後訂正は新measurementを追記", stateAfter.trackMeasurements.at(-1).trackId === "n-done"
       && stateAfter.trackMeasurements.at(-1).value === 9 && !!stateAfter.reports[TODAY]);
 
-    const msRow = row("m-track");
+    const msRow = (await row("m-track"));
     const checkbox = (id) => msRow.locator(`[data-action="twy-ms-toggle-done"][data-twy-ms-id="${id}"]`);
     await resetReportAndCounter();
     await checkbox("ms-a").click();
@@ -454,11 +463,12 @@ function clone(value) { return JSON.parse(JSON.stringify(value)); }
     check("B-5 #11 milestone閉じるは保存せずエディタだけ閉じる", await msRow.locator(".twy-editor").count() === 0
       && await page.evaluate(() => window.__v261SaveCalls) === 0);
 
-    await page.locator('[data-action="toggle-project-collapse"][data-id="p-num"]').click();
+    const beforeSelection = await savedState();
+    await selectProject('p-num');
     stateAfter = await savedState();
-    check("既存WBS Project折りたたみ操作は退行なし", stateAfter.projects.find((entry) => entry.id === "p-num").collapsed === true);
-    await page.locator('[data-action="toggle-project-collapse"][data-id="p-num"]').click();
-    await row("m-track").locator('[data-action="twy-open-editor"]').click();
+    check("Project選択で対象詳細へ到達し保存状態を変更しない", await page.locator('[data-wbs-detail-id="p-num"]').count() === 1 && JSON.stringify(stateAfter) === JSON.stringify(beforeSelection));
+    await selectProject('p-ms');
+    await (await row("m-track")).locator('[data-action="twy-open-editor"]').click();
     await page.setViewportSize({ width: 390, height: 844 });
     check("390pxでもエディタが外側横スクロールを作らない", await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   } catch (error) {

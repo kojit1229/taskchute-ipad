@@ -40,7 +40,8 @@ const { chromium, launchOptions, defaultContextOptions, fixedClock, startServer,
     await page.locator('[data-work-list="today"]').waitFor();
     for (const scope of ['today', 'exec', 'wbs']) {
       if (scope !== 'today') await page.locator(`#sidebar [data-action="nav"][data-view="${scope}"]`).click();
-      const root = page.locator(`[data-work-list="${scope}"]`);
+      if (scope === 'wbs') await page.locator('[data-action="wbs-select-project"][data-id="search-project"]').click();
+      const root = page.locator(`[data-work-list="${scope === 'wbs' ? 'wbs-tasks-search-project' : scope}"]`);
       await root.waitFor();
       const query = root.locator('[data-work-filter="query"]'), rows = root.locator('[data-work-list-rows]');
       const stored = await page.evaluate(key => localStorage.getItem(key), STATE_KEY);
@@ -76,7 +77,8 @@ const { chromium, launchOptions, defaultContextOptions, fixedClock, startServer,
         'search and filters do not save primary data');
       await root.locator('[data-action="work-list-clear"]').click();
       await query.fill('検索対象');
-      await root.locator('[data-work-filter="project"]').selectOption('search-project');
+      if (scope === 'wbs') await page.locator('[data-action="wbs-select-project"][data-id="search-project"]').click();
+      else await root.locator('[data-work-filter="project"]').selectOption('search-project');
       await rows.evaluate(el => { el.scrollTop = el.scrollHeight; });
       const top = await rows.evaluate(el => el.scrollTop);
       assert(top > 0, 'fixture exercises a scrolled result');
@@ -103,7 +105,7 @@ const { chromium, launchOptions, defaultContextOptions, fixedClock, startServer,
       await page.locator('[data-action="modal-close"]').first().click();
       await page.waitForFunction(key => document.activeElement?.closest('[data-work-key]')?.dataset.workKey === key, id);
       assert.equal(await query.inputValue(), '検索対象');
-      assert.equal(await root.locator('[data-work-filter="project"]').inputValue(), 'search-project');
+      assert.equal(scope === 'wbs' ? await page.locator('.wbs-project-choice.selected').getAttribute('data-id') : await root.locator('[data-work-filter="project"]').inputValue(), 'search-project');
       assert(Math.abs(await rows.evaluate(el => el.scrollTop) - detailTop) < 3);
       assert(await button.evaluate(el => el === document.activeElement));
       pass(scope + ' filters / no save / detail return / scroll');
@@ -144,8 +146,8 @@ const { chromium, launchOptions, defaultContextOptions, fixedClock, startServer,
     pass('invalid contracts / injected rendering failure / escaped text / shared composition guard');
     for (const width of [390, 768, 1024]) {
       await setViewportAndWaitForStableLayout(page, { width, height: 844 },
-        '[data-work-list="wbs"] input,[data-work-list="wbs"] select');
-      const layout = await page.locator('[data-work-list="wbs"]').evaluate(root => ({
+        '[data-work-list="wbs-tasks-search-project"] input,[data-work-list="wbs-tasks-search-project"] select');
+      const layout = await page.locator('[data-work-list="wbs-tasks-search-project"]').evaluate(root => ({
         inputSizes: [...root.querySelectorAll('input,select')].map(el => parseFloat(getComputedStyle(el).fontSize)),
         width: root.getBoundingClientRect().width, viewport: innerWidth, pageWidth: document.documentElement.scrollWidth
       }));
