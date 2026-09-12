@@ -119,8 +119,9 @@ console.log('PASS explicit provenance, original date on deletion/move, orphan/le
     assert.equal(captured.actuals[0].minutes, block.source ? minutes : 0);
     assert.deepEqual(state, snapshot);
     const capturedMark = captured.blocks[0].externalRef;
-    const detached = structuredClone(block); detached.externalRef = 'other';
+    block.externalRef = 'edited-after-capture';
     assert.equal(captured.blocks[0].externalRef, capturedMark);
+    block.externalRef = capturedMark;
   }
   state.blocks = [{ ...ai, oneTap: false }, auto];
   assert.deepEqual(routineRate(state.blocks, state.recurrences), { done: 1, total: 1, pct: 100 });
@@ -144,4 +145,54 @@ console.log('PASS explicit provenance, original date on deletion/move, orphan/le
   const retried = buildDailyReport(state, { reportDate: DAY }, { captureReport: capture, buildReport: buildReportMarkdown });
   assert.equal(retried.pending, false); assert.deepEqual(retried.records, []); assert.deepEqual(state.blocks, saved);
   console.log('PASS S3-12 report: provenance, 0/12 minutes, ordinary fallback, AI rate exclusion, invalid timestamps, timer and report-only retry');
+}
+
+// S5-02: isolated reading records survive report failure, replay/reload and the next day.
+{
+  const { runDailyOperation } = require('../src/features/daily-operations.js');
+  const { commitCandidate } = require('../src/core/commit.js');
+  const { captureReportInput } = require('../src/features/feedback/report-input.js');
+  const { deriveReportValues } = require('../src/features/feedback/report-derived.js');
+  const { buildReportMarkdown } = require('../src/features/feedback/report-builder.js');
+  const { REPORT_PENDING } = require('../src/core/daily-report.js');
+  const state = fixture();
+  Object.assign(state, { projects: [], reports: {}, singleSchedules: [], journals: { [DAY]: '閲覧後も保持する本文' } });
+  let saves = 0, reportFails = true;
+  const operationDeps = { ...deps, state, commitCandidate, now: () => AT,
+    persist: () => { saves++; return true; }, scheduleSync: () => {},
+    captureReport: (source, date) => captureReportInput(source, date, deriveReportValues),
+    buildReport: captured => { if (reportFails) throw Error('fixture report failure'); return buildReportMarkdown(captured); } };
+  const run = (name, value) => runDailyOperation(name, value, operationDeps);
+  state.settings.dailyReadingRecordEnabled = false;
+  for (const kind of ['affirmation', 'visionBoard', 'feedback'])
+    assert(run('daily-reading-record', { ...input(state, kind), sequence: 1 }).discarded);
+  assert.equal(saves, 0); assert.equal(state.blocks.length, 0);
+  state.settings.dailyReadingRecordEnabled = true;
+  for (const kind of ['affirmation', 'visionBoard', 'feedback'])
+    assert(run('daily-reading-record', { ...input(state, kind), sequence: 2 }).ok);
+  assert.equal(saves, 3); assert.equal(state.blocks.length, 3); assert.equal(state.tasks.length, 0); assert.equal(state.recurrences.length, 2);
+  const originalBlocks = structuredClone(state.blocks), originalHabits = structuredClone(state.habitStreaks);
+  assert(run('daily-report-refresh', { reportDate: DAY }).ok); assert.equal(state.reports[DAY], REPORT_PENDING);
+  assert.deepEqual(state.blocks, originalBlocks); assert.deepEqual(state.habitStreaks, originalHabits);
+  Object.assign(state, JSON.parse(JSON.stringify(state)));
+  const afterReload = saves;
+  for (const kind of ['affirmation', 'visionBoard', 'feedback'])
+    assert(run('daily-reading-record', { ...input(state, kind), sequence: 3 }).unchanged);
+  assert.equal(saves, afterReload);
+  reportFails = false; assert(run('daily-report-refresh', { reportDate: DAY }).ok);
+  assert(state.reports[DAY].includes('| 時間実行 | 0h /'));
+  assert.deepEqual(state.blocks, originalBlocks);
+  const ai = state.blocks.find(b => b.id.startsWith('daily-reading-feedback_'));
+  assert(run('daily-actual-edit', { kind: 'actual', id: ai.id, values: { actualEndAt: DAY + 'T10:12:00' } }).ok);
+  assert(run('daily-report-refresh', { reportDate: DAY }).ok);
+  assert(state.reports[DAY].includes('| 時間実行 | 0h12m /'));
+  const [year, month, day] = DAY.split('-').map(Number), next = new Date(year, month - 1, day + 1);
+  const nextDay = [next.getFullYear(), String(next.getMonth() + 1).padStart(2, '0'), String(next.getDate()).padStart(2, '0')].join('-');
+  const previous = structuredClone(state.blocks); operationDeps.today = () => nextDay; operationDeps.now = () => nextDay + 'T10:00:00';
+  assert(run('daily-reading-record', { ...input(state, 'feedback'), sequence: 4, date: nextDay, referenceDate: DAY, recordedAt: nextDay + 'T10:00:00' }).ok);
+  assert.equal(state.blocks.length, 4);
+  assert.deepEqual(state.blocks.filter(b => b.date === DAY), previous);
+  assert.deepEqual(state.habitStreaks, originalHabits);
+  assert.equal(state.journals[DAY], '閲覧後も保持する本文');
+  console.log('PASS S5-02 three readers: flag off, report-only failure/retry, serialized reload, replay, manual 12 minutes and next-day identity');
 }
